@@ -1,7 +1,9 @@
 import type {
   AppSettings,
+  OwnedWeaponId,
   ISODateTimeString,
   RngState,
+  TargetWeaponId,
 } from './common'
 import type { OwnedWeapon, TargetWeapon } from './entities'
 
@@ -21,6 +23,18 @@ export type CreateTargetWeaponInput = Omit<
 
 function currentIsoTime(): ISODateTimeString {
   return new Date().toISOString()
+}
+
+function randomId(): string {
+  return globalThis.crypto.randomUUID()
+}
+
+export function createOwnedWeaponId(createId: () => string = randomId): OwnedWeaponId {
+  return createId() as OwnedWeaponId
+}
+
+export function createTargetWeaponId(createId: () => string = randomId): TargetWeaponId {
+  return createId() as TargetWeaponId
 }
 
 export function createInitialRngState(

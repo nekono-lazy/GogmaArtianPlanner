@@ -13,13 +13,13 @@ import { NotFoundPage } from './pages/NotFoundPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { SearchPage } from './pages/SearchPage'
 import { BuildListPage } from './pages/BuildListPage'
+import { RngSetupPage } from './pages/RngSetupPage'
+import { NormalCountersPage } from './pages/NormalCountersPage'
+import { OwnedWeaponsPage } from './pages/OwnedWeaponsPage'
+import { TargetWeaponsPage } from './pages/TargetWeaponsPage'
 import {
   ExecutionNavigatorPage,
-  NormalCountersPage,
-  OwnedWeaponsPage,
   ProductionPlanPage,
-  RngSetupPage,
-  TargetWeaponsPage,
 } from './pages/StaticPages'
 
 const masterData = loadMasterData()
