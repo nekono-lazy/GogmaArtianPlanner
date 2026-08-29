@@ -14,6 +14,7 @@ import type {
   SkippedRouteReason,
 } from '../domain/search'
 import type { RngCapabilityMissingRequirement } from '../domain/rng/capabilities'
+import type { PlannerWarningKind } from '../domain/planner'
 
 export const ownedWeaponStatusLabels: Record<OwnedWeaponStatus, string> = {
   material: '素材',
@@ -51,6 +52,19 @@ export const planStepOperationLabels: Record<PlanStepOperationType, string> = {
   use_weapon_as_material: '素材武器として使用',
   change_owned_weapon_status: '所持武器の状態を変更',
   confirm_result: '結果を確認',
+}
+
+export const plannerWarningLabels: Record<PlannerWarningKind, string> = {
+  no_build_list_entries: '利用できるビルドリスト項目がありません',
+  rng_state_missing: '必要なRNG状態または予測機能が不足しています',
+  material_weapon_shortage: '素材用巨戟アーティアが不足しています',
+  protected_weapon_required: '保護中の武器が必要なため実行できません',
+  build_list_entry_stale: '再検索が必要なビルドリスト項目があります',
+  calculation_context_incompatible: '計算に使用したバージョンに互換性がありません',
+  all_targets_already_satisfied: 'すべての目標武器をすでに満たしています',
+  invalid_conflict_resolution: '選択した競合解決を現在の状態へ適用できません',
+  max_steps_reached: '計画ステップ数の上限に到達しました',
+  max_expanded_states_reached: '探索状態数の上限に到達しました',
 }
 
 export const candidateRouteFilterLabels: Record<CandidateRouteFilter, string> = {

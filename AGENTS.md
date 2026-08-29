@@ -756,6 +756,21 @@ Do not mutate IndexedDB while searching for a plan.
 
 Persist only after the calculation returns to the application/persistence layer.
 
+`PlannerInput` contains structured-clone data only. It must not contain an
+`RngEngine` instance or a duplicate `engineCapabilities` snapshot. A Planner
+Worker creates its Engine, ID factory, and clock inside the Worker module and
+injects them into the pure Planner calculation as runtime dependencies.
+
+Planner calculation must not call `crypto.randomUUID()`, `new Date()`, or
+`Date.now()` directly. Production adapters may wrap UUID and UTC time; tests use
+deterministic ID and clock dependencies.
+
+Planner must not rewrite a Candidate Snapshot's `BuildRoute.operations` or
+replace the concrete OwnedWeapon ID in a Candidate-derived
+`UseWeaponAsMaterialOperation`. Planner-only replenishment, registration,
+material consumption, reservation, and confirmed status changes are separate
+PlanSteps.
+
 Target satisfaction is derived only from owned Gogma Artian weapons. Owned
 normal Artian weapons are inventory/conversion resources and never satisfy a
 Target. For Gogma weapons, do not use `status` alone: evaluate the actual
@@ -776,6 +791,10 @@ beamWidth = 50
 maxExpandedStates = 10000
 maxPlanSteps = 300
 ```
+
+These three positive integers are the complete v1 `PlannerOptions` contract.
+Practical-before-Ideal behavior is fixed by v1 priority rules; do not add or
+retain `preferPracticalBeforeIdeal`.
 
 Do not replace Beam Search with a simple Candidate sort.
 
@@ -811,6 +830,13 @@ Respect search bounds and return the best state available within the limits.
 Planner inventory is strict for both owned rarity-8 normal Artian and Gogma Artian weapon resources. Rarity 6 and 7 normal Artian weapons are not v1 inventory entities.
 
 When an owned normal Artian weapon is converted to Gogma, the source normal weapon is consumed from inventory and a Gogma weapon is generated. The same normal weapon must not be reused by multiple routes. Protected normal weapons are never automatic conversion sources.
+
+For `owned_normal_artian_to_gogma`, consume and remove the source Normal at the
+`convert_normal_to_gogma` Step. The converted Gogma remains an unregistered
+route output through any `reset_skills(sourceOwnedWeaponId = null)` Step.
+`reserve_weapon` later adds a new Gogma ID and must not remove the Normal again,
+reuse its ID, assign a future ID at conversion time, or add a route-local weapon
+reference.
 
 Material items are not a hard inventory constraint in v1; display required quantities instead.
 
@@ -852,6 +878,24 @@ All RNG effects of replenishment must be included in simulation.
 
 Do not reuse a consumed weapon.
 
+Planner-only general Gogma material demand is separate from Candidate
+RouteOperations and must not add guessed weapon type, element, bonus, or cost
+constraints. Assign an available Material/unprotected Gogma; if none exists,
+replenish and reserve a future OwnedWeapon ID inside ProductionPlan only. The ID
+must not enter BuildRoute or IndexedDB before `create_material_gogma` succeeds.
+
+`reserve_weapon` has Route-specific inventory semantics:
+
+- `normal_artian_to_gogma`: add a new protected Gogma with a reserved ID
+- `owned_normal_artian_to_gogma`: add a new protected Gogma with a different
+  reserved ID; its source Normal was already consumed by the conversion Step
+- `existing_gogma_*`: update the same source Gogma ID, do not add a new weapon
+
+The secured weapon uses Candidate result bonuses and skills, has status Ideal or
+Practical from the Candidate category, and includes the Target ID once without
+dropping existing Target references. Target satisfaction changes only when the
+weapon is reserved, not merely when an RNG operation is simulated or confirmed.
+
 ---
 
 ## Conflict Rules
@@ -865,6 +909,29 @@ Protected destructive use is not merely a scoring penalty or resolvable conflict
 It is an invalid expansion.
 
 Do not let conflict resolution override protection rules.
+
+User conflict choices return to Planner as local
+`PlannerConflictResolution(conflictKey, selectedBuildListEntryId)` inputs. They
+do not fix the entire Plan order. Ignore an invalid, deleted, stale, disabled,
+capability-incompatible, or newly protected selection and return a warning that
+requires reselection.
+
+`PlanConflict.id` is the stable conflict key, never a random Planner ID. Build it
+from ConflictKind, the kind-specific semantic position (Gogma Counter, Skill
+Counter, Normal Counter ID and position, or consumed OwnedWeapon ID), and sorted
+BuildListEntry IDs. Do not use Candidate IDs. During Beam Search, a resolution
+applies only when the conflict key is rediscovered and its selected Entry is a
+participant in that conflict.
+
+Planner results are deterministic for the same PlannerInput, Engine fixture, ID
+factory, clock, and Planner constants. `max_steps_reached` reports only the
+maxPlanSteps bound; `max_expanded_states_reached` reports only the
+maxExpandedStates bound. A best partial Plan may be returned with either warning.
+
+Active Plan existence is not a pure Planner input. Planner calculates a new
+Draft without merging an existing Active Plan into search state. Active Plan
+replacement, abandonment, recalculation, and the single-active constraint are
+Application / Persistence responsibilities.
 
 ---
 
@@ -1150,7 +1217,12 @@ Rules:
 - Support cancellation
 - Do not access React state from Workers
 - Do not access Dexie directly from candidate-search Workers
+- Do not access Dexie directly from Planner Workers
 - Send the required input and Master subset through messages
+
+Candidate-search and Planner Worker messages must never structured-clone an
+RngEngine instance. The Worker module obtains the Engine factory locally and
+injects runtime dependencies into the calculation function.
 
 Do not return guessed production results from a Fake RNG implementation without making the fake/debug status explicit.
 

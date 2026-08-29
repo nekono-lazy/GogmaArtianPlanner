@@ -412,6 +412,7 @@ Plannerが生成した作成計画を確認する。
 - 採用BuildListEntryとCandidate Snapshot
 - RejectedBuildListEntryと理由
 - BuildListEntry基準の競合と解決結果
+- 競合ごとの推奨候補とユーザー選択
 - 必要素材合計
 - タイムライン形式のPlanStep
 
@@ -422,6 +423,11 @@ Plannerが生成した作成計画を確認する。
 - Plan破棄
 - Debug詳細表示
 - 生成時CalculationContext
+
+競合候補を選択した場合は `PlannerConflictResolution` として現在PlannerInputへ追加し、
+Plannerを再実行する。これは局所的な候補選択であり、Plan全体の手動作成順固定UIには
+しない。選択Entryが削除済み、stale、Target無効、Capability不足、または保護状態変更で
+実行不能な場合はwarningを表示して再選択を求める。
 
 PlanStep表示。
 

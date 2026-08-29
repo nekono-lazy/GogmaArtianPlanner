@@ -861,6 +861,59 @@ export interface PlanningInputSnapshot {
 }
 ```
 
+Planner計算へ渡す非永続入力と実行時dependencyは次の契約とする。
+
+```ts
+export interface PlannerInput {
+  rngState: RngState;
+  normalCounters: NormalArtianCounter[];
+  ownedWeapons: OwnedWeapon[];
+  targetWeapons: TargetWeapon[];
+  buildListEntries: BuildListEntry[];
+  calculationContext: CalculationContext;
+  options: PlannerOptions;
+  master: PlannerMasterSubset;
+  conflictResolutions: PlannerConflictResolution[];
+}
+
+export interface PlannerOptions {
+  maxPlanSteps: number;
+  beamWidth: number;
+  maxExpandedStates: number;
+}
+
+export interface PlannerConflictResolution {
+  conflictKey: string;
+  selectedBuildListEntryId: BuildListEntryId;
+}
+
+export interface PlannerDependencies {
+  rngEngine: RngEngine;
+  idFactory: PlannerIdFactory;
+  clock: PlannerClock;
+}
+```
+
+`PlannerInput` はstructured clone可能なデータだけを持ち、Engine instance、
+engineCapabilities、existingActivePlanを含めない。`PlannerDependencies` は永続Domainではなく、
+WorkerまたはApplication moduleからPlanner pure calculationへ注入するruntime境界である。
+ID FactoryはProductionPlan / PlanStep / future OwnedWeapon IDを、ClockはISO UTC時刻を供給する。
+Active Plan単一制約はApplication / Persistence層で扱う。
+
+v1のPlannerOptionsは3つの1以上の整数だけとし、実用品優先を切り替える
+`preferPracticalBeforeIdeal` は持たない。
+
+```ts
+export interface PlannerMaterialRequirement {
+  id: string;
+  sourceBuildListEntryId: BuildListEntryId | null;
+  purpose: "gogma_rng_progression";
+}
+```
+
+これはPlanner-onlyの一般素材武器需要であり、Candidate Routeの
+UseWeaponAsMaterialOperationとは別契約である。未確認の武器種・属性・Bonus条件を追加しない。
+
 各hashは、該当データを安定ソートしたJSONから生成する。
 
 目的。
@@ -930,6 +983,12 @@ export interface PlanStep {
 - `create_material_gogma.rngAdvance` はGogma / Skill / Normalのいずれも進行させず、`expectedStateBefore` には予約武器が存在せず、`expectedStateAfter.ownedWeaponsHash` には追加後の在庫を反映する
 - 予約IDは後続 `use_weapon_as_material` から同じ武器を参照するために使用してよいが、Step確定前にDBへ追加せず、BuildRouteへ未来OwnedWeapon IDを入れない
 - `create_material_gogma` は既存PracticalをMaterial / unprotectedへ変える `change_owned_weapon_status`、Target候補を確保する `reserve_weapon` と役割を分ける
+- `reserve_weapon` は結果確認だけの `confirm_result` と異なり、Target候補をInventoryへ正式確保してTargetSatisfactionを更新する
+- `normal_artian_to_gogma` のreserveは予約した新IDでGogmaを追加し、Candidate categoryに対応するstatus、protected、Candidate完成結果、Target参照を保持する
+- `owned_normal_artian_to_gogma` のconvert Stepは元Normal IDをInventoryから削除し、変換後Gogmaをまだ登録しない。後続Reset SkillsはsourceOwnedWeaponId = nullを維持する
+- `owned_normal_artian_to_gogma` のreserveは元Normalを再削除せず、別の予約IDでGogmaだけを追加する。元IDのkind変更では表現しない
+- `existing_gogma_*` のreserveは新規追加せず、Route sourceと同じGogma IDをCandidate結果、status、protected、Target参照で更新する。既存Target参照とcreatedAtを失わない
+- reserveによるInventoryChangeはexpectedStateBefore / expectedStateAfterへ反映し、relatedTargetWeaponIdsへTarget IDを重複なく追加する
 - 再計算はstale Planに対するUI / Planner操作であり、`recalculate_plan` PlanStepを旧Planへ追加しない
 
 ## 11.4 ExpectedResult
@@ -997,6 +1056,31 @@ export interface PlanConflict {
   resolutionNote: string | null;
 }
 ```
+
+競合選択は `PlannerConflictResolution` として次回PlannerInputへ渡す。
+`conflictKey` は安定したPlanConflict IDに対応し、選択はその局所競合だけを解決する。
+削除済み、stale、Target無効、Capability不足、保護状態変更で実行不能なEntry選択は適用せずwarningとする。
+
+`PlanConflict.id` はPlannerIdFactoryで生成せず、次のsemantic dataをstable serialize / hashして
+決定的に生成する。BuildListEntry IDは重複排除してsortし、Candidate IDは使用しない。
+
+- same_gogma_counter: kind、Gogma Counter位置、BuildListEntry IDs
+- same_skill_counter: kind、Skill Counter位置、BuildListEntry IDs
+- same_normal_counter: kind、NormalArtianCounter ID、Normal Counter位置、BuildListEntry IDs
+- same_owned_weapon_consumed: kind、OwnedWeapon ID、BuildListEntry IDs
+
+同じ論理競合は再Plannerでも同じID、位置・参加Entry・対象資源が変われば別IDになる。
+第9の競合適用時はconflictKeyが再検出した競合と一致し、selectedBuildListEntryIdがその
+競合のbuildListEntryIdsに含まれる場合だけresolutionを適用する。
+
+Planner warningの探索上限は次の2種を区別する。
+
+```text
+max_steps_reached
+max_expanded_states_reached
+```
+
+前者はmaxPlanSteps、後者はmaxExpandedStates到達時だけ使用し、途中のbest Planとwarningを同時に返してよい。
 
 ## 11.9 RejectedBuildListEntry
 
@@ -1297,6 +1381,12 @@ type Migration = (input: unknown) => unknown;
 - OwnedWeaponのname、memo、日時変更だけでは両Hashが変わらない
 - `create_material_gogma` Stepがunprotected Material Gogmaの追加、予約ID一致、RNG進行0、Target / BuildList / Candidate参照nullを満たす
 - `recalculate_plan` がPlanStepOperationTypeとして受理されない
+- PlannerInputへRngEngine / engineCapabilities / existingActivePlanを含めずstructured cloneできる
+- PlannerOptionsはmaxPlanSteps、beamWidth、maxExpandedStatesだけを受け付け、各1以上を要求する
+- normal新規、所持Normal、既存Gogmaのreserve InventoryChangeがそれぞれadd、add-only、same-ID updateになる。所持Normalのremoveはconvert Stepで検証する
+- Candidate BuildRouteを変更せず、Planner-only future Material IDを登録後の消費Stepだけで使用する
+- 有効な競合選択だけを適用し、削除済み・staleな選択をwarningにする
+- max_steps_reachedとmax_expanded_states_reachedを別kindとして検証する
 - TargetWeapon変更で `targetWeaponsHash` が変わる
 - BuildListEntry変更で `buildListEntriesHash` が変わる
 - 同じRoute依存RNG状態から同じ `searchStateHash` が生成される

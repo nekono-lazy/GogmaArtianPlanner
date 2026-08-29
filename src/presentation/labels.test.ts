@@ -5,6 +5,7 @@ import {
   getRouteOperationLabel,
   ownedWeaponStatusLabels,
   planStepOperationLabels,
+  plannerWarningLabels,
   rngStateSourceLabels,
   routeKindLabels,
   skippedRouteReasonLabels,
@@ -18,6 +19,8 @@ describe('presentation labels', () => {
     expect(routeKindLabels.normal_artian_to_gogma).toContain('新規通常アーティア')
     expect(routeKindLabels.existing_gogma_reset_skills).toContain('スキル再抽選')
     expect(planStepOperationLabels.create_material_gogma).toBe('素材用巨戟アーティアとして登録')
+    expect(plannerWarningLabels.max_steps_reached).toContain('ステップ数')
+    expect(plannerWarningLabels.max_expanded_states_reached).toContain('探索状態数')
     expect(getRouteOperationLabel({ type: 'reset_skills', sourceOwnedWeaponId: null, skillCounterBefore: 1, skillCounterAfter: 2 })).toBe('スキルをリセット')
     expect(skippedRouteReasonLabels.master_data_unavailable).toContain('マスターデータ')
     expect(staleReasonLabels.target_definition_changed).toContain('目標武器')

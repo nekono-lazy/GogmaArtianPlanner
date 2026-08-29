@@ -463,6 +463,15 @@ export interface SeedMatchPosition {
 - Search Specで定義する候補検索
 - Plannerで必要な長いシミュレーション
 
+Candidate SearchとPlannerはいずれもWorker messageへRngEngine instanceを含めない。
+PlannerWorker requestはstructured clone可能なPlannerInputだけを持ち、Worker module内部で
+Engine factoryを取得する。生成したEngine、ID Factory、ClockはPlannerDependenciesとして
+pure Planner calculationへ注入する。PlannerInputへengineCapabilitiesを重複保存せず、
+`dependencies.rngEngine.capabilities` をCapability判定に使用する。
+
+Plannerが素材補充やRoute実行の予測を必要とする場合も注入EngineのPrediction / advance
+契約だけを使用し、Bonus Type Mapping、固定Counter delta、Skill、Keep結果を推測しない。
+
 ## 10.2 Message
 
 ```ts

@@ -55,16 +55,20 @@ export interface PlannerInput {
   targetWeapons: TargetWeapon[];
   buildListEntries: BuildListEntry[];
   calculationContext: CalculationContext;
-  existingActivePlan: ProductionPlan | null;
   options: PlannerOptions;
   master: PlannerMasterSubset;
+  conflictResolutions: PlannerConflictResolution[];
 }
 
 export interface PlannerOptions {
   maxPlanSteps: number;
-  preferPracticalBeforeIdeal: boolean;
   beamWidth: number;
   maxExpandedStates: number;
+}
+
+export interface PlannerConflictResolution {
+  conflictKey: string;
+  selectedBuildListEntryId: BuildListEntryId;
 }
 
 export interface PlannerMasterSubset {
@@ -78,11 +82,36 @@ export interface PlannerMasterSubset {
 ```ts
 const defaultPlannerOptions = {
   maxPlanSteps: 300,
-  preferPracticalBeforeIdeal: true,
   beamWidth: 50,
   maxExpandedStates: 10000,
 };
 ```
+
+`PlannerInput` はstructured clone可能なデータだけを保持する。`RngEngine` instance、
+Engine method、`RngEngineCapabilities` の複製、ID generator、Clockを含めない。
+
+Plannerの実行時dependencyは次の非永続境界から注入する。
+
+```ts
+export interface PlannerDependencies {
+  rngEngine: RngEngine;
+  idFactory: PlannerIdFactory;
+  clock: PlannerClock;
+}
+
+export interface PlannerIdFactory {
+  productionPlanId(): ProductionPlanId;
+  planStepId(): PlanStepId;
+  ownedWeaponId(): OwnedWeaponId;
+}
+
+export interface PlannerClock {
+  now(): ISODateTimeString;
+}
+```
+
+本番adapterは `crypto.randomUUID()` と現在UTC時刻をラップしてよい。Planner計算内で
+直接呼び出さない。テストは連番IDと固定時刻を注入する。
 
 制約。
 
@@ -93,7 +122,9 @@ const defaultPlannerOptions = {
 - `deriveRngCapabilities(rngState, normalCounters, requiredOperations, engineCapabilities)` で、各BuildListEntryの全RouteOperationに必要なKnownValueと現在Engineのsupportが揃うか確認する
 - Capability不足またはCalculationContext非互換のBuildListEntryだけを除外し、理由をwarningへ出す。無関係なEntryを一括無効化しない
 - `targetWeapons` は `isEnabled = true` のみ対象
-- `beamWidth` と `maxExpandedStates` は1以上
+- `maxPlanSteps`、`beamWidth`、`maxExpandedStates` は1以上
+- 実用品を先に確保する優先順位はv1固定であり、`preferPracticalBeforeIdeal` のような切替Optionを持たない
+- Active Planの有無はPlanner pure calculationの入力に含めない。PlannerはDraft Planを計算し、Active Plan単一制約、置換、破棄、再計算の制御はApplication / Persistence層で行う
 
 ---
 
@@ -117,10 +148,16 @@ export interface PlannerWarning {
     | "build_list_entry_stale"
     | "calculation_context_incompatible"
     | "all_targets_already_satisfied"
-    | "max_steps_reached";
+    | "invalid_conflict_resolution"
+    | "max_steps_reached"
+    | "max_expanded_states_reached";
   message: string;
 }
 ```
+
+`max_steps_reached` は `maxPlanSteps`、`max_expanded_states_reached` は
+`maxExpandedStates` に到達した場合だけ使用する。両方へ到達した場合は両方を返してよい。
+探索途中のbest Stateが存在する場合、上限warningと `plan != null` を同時に返せる。
 
 ---
 
@@ -271,7 +308,8 @@ export interface SimulatedInventory {
 - Practical: 消費しない
 - Ideal: 消費しない
 - `isProtected = true`: 素材消費・Reset Bonuses・Keep Bonusesへ使用しない
-- 所持レア8通常アーティアを巨戟化したStateでは元通常アーティアをInventoryから除き、生成した巨戟アーティアを追加する。同じ通常アーティアを二重使用しない
+- 所持レア8通常アーティアを巨戟化したStateでは元通常アーティアをInventoryから除き、同じ通常アーティアを二重使用しない
+- `owned_normal_artian_to_gogma` ではconvert_normal_to_gogma適用時に元NormalをInventoryから削除し、変換後GogmaはまだOwnedWeaponとして追加しない。以後そのNormal IDは別Routeへ利用できない
 - 通常アーティアはstatusを持たず、旧PracticalのMaterial化規則を適用しない
 
 素材用巨戟が不足する場合。
@@ -283,6 +321,25 @@ export interface SimulatedInventory {
 → 後続Stepで素材として使用
 ```
 
+PlannerがCandidate Routeとは別に必要とする一般素材需要は、次のPlanner-only型で管理する。
+
+```ts
+export interface PlannerMaterialRequirement {
+  id: string;
+  sourceBuildListEntryId: BuildListEntryId | null;
+  purpose: "gogma_rng_progression";
+}
+
+export interface PlannerMaterialAssignment {
+  requirementId: string;
+  ownedWeaponId: OwnedWeaponId;
+}
+```
+
+未確認の武器種、属性、Bonus、素材コスト制約をこの型へ追加しない。利用可能な
+Material / unprotected Gogmaを割り当て、不足時だけ補充し、最終Planでは具体的な
+`use_weapon_as_material` Stepへ変換する。
+
 制約。
 
 - 初期版では素材アイテムの所持数不足はPlan不可理由にしない
@@ -291,6 +348,8 @@ export interface SimulatedInventory {
 - RNG進行は通常アーティア作成と巨戟化の実ゲーム操作Stepで行い、`create_material_gogma` 自体はCounterを進めない
 - Plannerは補充武器のOwnedWeaponIdをPlan生成時に予約し、`create_material_gogma.inventoryChange.addOwnedWeapon.id` と後続 `use_weapon_as_material` で同じIDを使ってよい
 - 予約武器は `create_material_gogma` 確定前のInventoryへ追加せず、登録前に素材消費・Reset Bonuses・Keep Bonusesの起点として使わない
+- Candidate Searchが生成した `UseWeaponAsMaterialOperation.ownedWeaponId` は検索時点の具体的既存武器を要求するため、Plannerは別IDへ差し替えない
+- Planner-only素材需要、補充、登録、消費、旧Practical素材化、reserveはBuildRouteを書き換えず、Planner-only Stepとして追加する
 - protected武器への素材消費・Reset Bonuses・Keep Bonusesが必要な探索展開は生成せず、該当BuildListEntryを不採用として理由を残す
 - Search後に起点武器がprotectedへ変わった場合、素材消費・Reset Bonuses・Keep Bonusesを必要とするEntryはPlanner入力validationで実行不能とする。Reset SkillsのみのEntryは実行可能とする
 - v1では、Plannerは同一TargetのIdeal武器を先に確保できる場合だけ、旧Practical武器の確認付き素材化Stepを探索へ追加してよい
@@ -336,6 +395,23 @@ export interface SimulatedInventory {
 - score差が小さい
 - どちらも高優先度Targetの初回実用品
 
+競合をユーザーが選択した場合は、現在入力へ `PlannerConflictResolution` を追加して
+Plannerを再実行する。`conflictKey` は検出された `PlanConflict.id` と対応し、その競合では
+選択Entryを優先して相反Entryを採用しない。これは局所的な競合解決であり、全Planの
+作成順固定ではない。
+
+`PlanConflict.id` はrandom IDではなく、ConflictKind、kind別の競合位置、sort済みの
+BuildListEntry IDsからstable hashで生成する。same_gogma_counterはGogma Counter、
+same_skill_counterはSkill Counter、same_normal_counterはNormalArtianCounter IDと位置、
+same_owned_weapon_consumedはOwnedWeapon IDを位置情報として使う。Candidate IDと
+PlannerIdFactoryは使用しない。
+
+第9の適用時には、再検出された競合のIDがconflictKeyと一致し、選択Entryがその競合の
+参加BuildListEntryに含まれる場合だけresolutionを適用する。
+
+選択Entryが削除済み、stale、Target無効、Capability不足、または保護状態変更により
+実行不能ならresolutionを適用せず `invalid_conflict_resolution` warningを返し、再選択を促す。
+
 protected武器への素材消費・Reset Bonuses・Keep Bonusesは競合として解決せず、常に実行不能として `requires_protected_weapon` の不採用理由を付ける。確認付き素材化Stepが先行し、期待状態どおりMaterial / unprotectedへ変わった後の素材消費はこの禁止に該当しない。
 
 ---
@@ -354,7 +430,7 @@ protected武器への素材消費・Reset Bonuses・Keep Bonusesは競合とし�
 8. 競合を検出し、実行不能な展開を除外
 9. 最良Stateから採用BuildListEntryとRejectedBuildListEntryを決定
 10. 必要に応じて素材用巨戟補充Stepを追加
-11. RouteOperation列からPlanStep列を生成
+11. CandidateのBuildRoute.operationsを変更せずRouteOperation列からPlanStep列を生成し、Planner-only Stepを別に挿入する
 12. 各PlanStepの期待状態Before / Afterを計算
 13. requiredMaterialsを集計
 14. ProductionPlanを返す
@@ -365,8 +441,9 @@ protected武器への素材消費・Reset Bonuses・Keep Bonusesは競合とし�
 - PlanStepは実行ナビで1つずつ確認できる粒度にする
 - 高速モード用のまとめStepは作らない
 - Plan生成時点では実際のDBを更新しない。保存は呼び出し側Repositoryが行う
-- Beam Searchの打切り時は `max_steps_reached` または探索上限warningを返す
+- Beam Searchの打切り時は到達した上限に応じて `max_steps_reached` / `max_expanded_states_reached` を返す
 - `ProductionPlan.calculationContext` はPlannerInputと一致させる
+- 同じPlannerInput、RngEngine fixture、ID Factory、Clock、Planner constantsから、採用Entry、操作列、PlanStep、score、warning、予約IDが同一になる
 
 ---
 
@@ -387,6 +464,10 @@ UseWeaponAsMaterialOperation -> use_weapon_as_material
 
 各変換後、必要に応じて `reserve_weapon` または結果確認Stepを追加する。
 
+`confirm_result` は予測結果の確認だけを表し、Target武器をInventoryへ正式確保しない。
+Target候補をOwnedWeaponとして確保し、TargetSatisfactionを更新するのは
+`reserve_weapon` Stepだけである。
+
 Route別の典型例。
 
 ## 11.1 通常アーティア経由
@@ -402,6 +483,11 @@ Route別の典型例。
 
 完成武器をreserve_weaponでOwnedWeaponとして登録した後は、後続の別検索で既存巨戟Keep Bonuses Routeの起点にできる。
 
+`reserve_weapon` はPlanner生成時に新しいOwnedWeapon IDを予約し、Candidate Snapshotの
+finalBonuses / Series Skill / Group Skillを持つ `kind = "gogma"` の武器を追加する。
+Ideal候補はstatus Ideal、Practical候補はstatus Practicalとし、いずれもprotectedとする。
+`relatedTargetWeaponIds` へTarget IDを重複なく追加する。
+
 UI実行は1操作ずつ。
 
 ## 11.2 所持通常アーティア経由
@@ -412,7 +498,11 @@ UI実行は1操作ずつ。
 3. reserve_weapon
 ```
 
-変換元の所持通常アーティアはレア8かつ非保護であることを要求する。変換時に元通常アーティアをInventoryから除き、同じIDを別Routeで再利用しない。変換直後のreset_skillsは `sourceOwnedWeaponId = null` とする。完成ボーナスとCounter進行はRNG Engine結果に従い、Bonus Type MappingからRank変換を推測しない。
+変換元の所持通常アーティアはレア8かつ非保護であることを要求する。`convert_normal_to_gogma` StepのInventoryChangeで元通常アーティアを除き、その時点以降同じIDを別Routeで再利用しない。変換後GogmaはまだOwnedWeaponへ登録せず未来IDも割り当てない。変換直後のreset_skillsは `sourceOwnedWeaponId = null` とする。完成ボーナスとCounter進行はRNG Engine結果に従い、Bonus Type MappingからRank変換を推測しない。
+
+`reserve_weapon` は元OwnedNormalArtianWeaponを再削除せず、別の予約IDで新しい
+OwnedGogmaArtianWeaponだけを追加する。元IDをkind変更して再利用しない。追加武器のstatus、
+protection、Candidate結果、Target参照は11.1と同じ契約とする。
 
 ## 11.3 既存巨戟 Reset Bonuses
 
@@ -422,6 +512,10 @@ UI実行は1操作ずつ。
 3. reserve_weapon
 ```
 
+既存巨戟Routeの `reserve_weapon` は新しい武器を追加せず、Routeの
+`sourceOwnedWeaponId` と同じOwnedGogmaArtianWeaponを更新する。Candidate結果、categoryに
+対応するstatus、`isProtected = true`、Target参照を反映し、既存Target参照は失わない。
+
 ## 11.4 既存巨戟 Reset Skills
 
 ```text
@@ -430,6 +524,9 @@ UI実行は1操作ずつ。
 ```
 
 起点OwnedWeaponの復元ボーナス5枠を変更せず、Skill CounterとSkill Prediction結果だけを反映する。Reset Skillsは非破壊操作として扱うため、protectedなPractical / Ideal武器も起点にできる。
+
+`reserve_weapon` では同じIDのseriesSkillId、groupSkillId、status、isProtected、
+relatedTargetWeaponIds、updatedAtを更新し、復元ボーナスとcreatedAtを維持する。
 
 ## 11.5 既存巨戟 Keep Bonuses
 
@@ -482,6 +579,10 @@ UI実行は1操作ずつ。
 - 「保管」: 状態を変更せず、expectedStateAfter不一致としてPlanをstaleにする
 - ユーザー操作前に状態変更を適用しない
 - 確認結果をExecutionHistoryへ保存する
+
+すべての `reserve_weapon` Stepは上記Route別InventoryChangeを
+`expectedStateBefore` / `expectedStateAfter` へ反映する。RNG操作Stepだけでは
+TargetSatisfactionを更新せず、reserve完了時にPractical / Ideal充足を更新する。
 
 ---
 
@@ -598,7 +699,10 @@ export type PlannerWorkerResponse =
   | {
       type: "progress";
       requestId: string;
-      message: string;
+      progress: {
+        expandedStates: number;
+        maxExpandedStates: number;
+      };
     }
   | {
       type: "error";
@@ -606,6 +710,12 @@ export type PlannerWorkerResponse =
       message: string;
     };
 ```
+
+Worker messageはstructured clone可能なPlannerInputだけを受け取る。RngEngine instanceを
+postMessageしない。Worker moduleがEngine、ID Factory、Clockを生成して
+`PlannerDependencies` とし、pure Planner calculationへ注入する。PlannerInputへ
+`engineCapabilities` を重複保存せず、validationは
+`dependencies.rngEngine.capabilities` を `deriveRngCapabilities` へ渡す。
 
 ---
 
@@ -635,7 +745,9 @@ export type PlannerWorkerResponse =
 - 複数Routeの共有RNG prefixを重複実行せず、各Entryのroute progressが進む
 - `beamWidth` を超えたStateが評価順に枝刈りされる
 - `maxExpandedStates` 到達時に探索を停止してwarningを返す
+- `maxPlanSteps` と `maxExpandedStates` のwarning kindを区別する
 - 同じ入力と同じ定数から決定的なPlanが生成される
+- 同じEngine fixture、ID Factory、ClockでもID、時刻、予約素材IDを含め決定的になる
 - 完全最適解を要求せず、探索上限内の最良Stateを返す
 
 ## 15.4 Inventory Test
@@ -669,6 +781,7 @@ export type PlannerWorkerResponse =
 - currentStepIdが最初の未完了Stepを指す
 - maxPlanSteps超過でwarningが出る
 - Plan生成が入力を破壊しない
+- Candidate SnapshotのBuildRoute.operationsを書き換えない
 - BuildRoute.operationsと同じ順序でPlanStepが生成される
 - `normal_artian_to_gogma` からkeep_bonuses PlanStepを生成しない
 - `existing_gogma_reset_skills` からreset_skillsと結果確認または確保Stepを生成する
@@ -677,6 +790,8 @@ export type PlannerWorkerResponse =
 - BuildListEntry IDとCalculationContextがPlanへ保存される
 - Candidate由来PlanStepの主参照がBuildListEntry IDである
 - `recalculate_plan` PlanStepを生成しない
+- Route別reserve_weaponのadd / remove / update契約が守られる
+- Planner-only未来素材IDが登録前に使われず、BuildRouteへ入らない
 
 ## 15.7 Invalidation Test
 
@@ -697,3 +812,6 @@ export type PlannerWorkerResponse =
 
 - detect_invalidation requestがplan、input、runtimeState、phaseをすべて保持する
 - Workerが同じ引数をdetectPlanInvalidationへ渡す
+- create_plan requestはserializable PlannerInputだけを保持し、Engine instanceを持たない
+- Worker module内で生成したPlannerDependenciesがPlanner計算へ渡される
+- 有効、削除済み、staleな競合選択を区別し、無効選択をwarningにする
