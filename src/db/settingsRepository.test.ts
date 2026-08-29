@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AppSettings } from '../domain/models/publicTypes'
+import { validateAppSettings } from '../domain/models/validation'
 import {
   SettingsRepository,
   createDefaultSettings,
@@ -32,6 +33,7 @@ describe('SettingsRepository', () => {
     const settings = await repository.getOrCreateDefault('2026-08-29T00:00:00.000Z')
 
     expect(settings).toEqual(createDefaultSettings('2026-08-29T00:00:00.000Z'))
+    expect(validateAppSettings(settings).isValid).toBe(true)
     expect(dataSource.addCount).toBe(1)
   })
 

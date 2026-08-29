@@ -158,5 +158,6 @@ export interface ExecutionUndoSnapshot {
   affectedOwnedWeaponsBefore: OwnedWeapon[]
   addedOwnedWeaponIds: OwnedWeaponId[]
   removedOwnedWeaponsBefore: OwnedWeapon[]
+  /** Undo restores this snapshot verbatim; it must not infer new stale reasons. */
   productionPlanBefore: ProductionPlan
 }

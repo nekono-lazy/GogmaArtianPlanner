@@ -1,0 +1,871 @@
+import type {
+  AppSettings,
+  CalculationContext,
+  KnownValue,
+  NormalArtianCounter,
+  RestorationBonus,
+  RngState,
+} from './common'
+import type {
+  AlternativeBonusConditionGroup,
+  BonusCondition,
+  BuildCandidate,
+  BuildListEntry,
+  BuildRoute,
+  MaterialRequirement,
+  OwnedWeapon,
+  RouteOperation,
+  SkillCondition,
+  TargetWeapon,
+} from './entities'
+import type {
+  ActualResult,
+  ExecutionHistory,
+  ExpectedPlanState,
+  PlanStep,
+  ProductionPlan,
+} from './planning'
+import {
+  areRestorationBonusSetsEqual,
+  canKeepBonuses,
+  canResetBonuses,
+  canUseAsMaterial,
+  isCalculationContextCompatible,
+} from './domainRules'
+
+export type DomainValidationIssueCode =
+  | 'invalid_id'
+  | 'invalid_literal'
+  | 'invalid_integer'
+  | 'invalid_range'
+  | 'invalid_structure'
+  | 'invalid_reference'
+  | 'invalid_route_operation'
+  | 'protected_destructive_use'
+  | 'inconsistent_snapshot'
+  | 'invalid_state'
+
+export interface DomainValidationIssue {
+  path: string
+  code: DomainValidationIssueCode
+  message: string
+}
+
+export interface DomainValidationResult {
+  isValid: boolean
+  issues: DomainValidationIssue[]
+}
+
+function result(issues: DomainValidationIssue[]): DomainValidationResult {
+  return { isValid: issues.length === 0, issues }
+}
+
+function addIssue(
+  issues: DomainValidationIssue[],
+  path: string,
+  code: DomainValidationIssueCode,
+  message: string,
+) {
+  issues.push({ path, code, message })
+}
+
+function appendIssues(
+  issues: DomainValidationIssue[],
+  prefix: string,
+  nested: DomainValidationResult,
+) {
+  nested.issues.forEach((issue) =>
+    issues.push({
+      ...issue,
+      path: issue.path
+        ? `${prefix}${issue.path.startsWith('[') ? '' : '.'}${issue.path}`
+        : prefix,
+    }),
+  )
+}
+
+function validateId(
+  value: string,
+  path: string,
+  issues: DomainValidationIssue[],
+) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    addIssue(issues, path, 'invalid_id', 'ID must be a non-empty string.')
+  }
+}
+
+function validateNonNegativeInteger(
+  value: number,
+  path: string,
+  issues: DomainValidationIssue[],
+) {
+  if (!Number.isInteger(value) || value < 0) {
+    addIssue(
+      issues,
+      path,
+      'invalid_integer',
+      'Value must be a non-negative integer.',
+    )
+  }
+}
+
+function validatePositiveInteger(
+  value: number,
+  path: string,
+  issues: DomainValidationIssue[],
+) {
+  if (!Number.isInteger(value) || value < 1) {
+    addIssue(
+      issues,
+      path,
+      'invalid_integer',
+      'Value must be a positive integer.',
+    )
+  }
+}
+
+function validateCalculationContext(
+  context: CalculationContext,
+  path: string,
+  issues: DomainValidationIssue[],
+) {
+  if (!context.gameVersion.trim()) {
+    addIssue(issues, `${path}.gameVersion`, 'invalid_structure', 'gameVersion is required.')
+  }
+  if (!context.rngEngineVersion.trim()) {
+    addIssue(
+      issues,
+      `${path}.rngEngineVersion`,
+      'invalid_structure',
+      'rngEngineVersion is required.',
+    )
+  }
+  validatePositiveInteger(
+    context.masterDataVersion,
+    `${path}.masterDataVersion`,
+    issues,
+  )
+  validatePositiveInteger(
+    context.appSchemaVersion,
+    `${path}.appSchemaVersion`,
+    issues,
+  )
+}
+
+export function validateKnownValue<T>(
+  known: KnownValue<T>,
+): DomainValidationResult {
+  const issues: DomainValidationIssue[] = []
+  if (
+    known.source !== null &&
+    !['gogma_seed_finder_import', 'manual', 'observation'].includes(known.source)
+  ) {
+    addIssue(issues, 'source', 'invalid_literal', 'KnownValue source is invalid.')
+  }
+  if (known.isConfirmed && known.value === null) {
+    addIssue(
+      issues,
+      'value',
+      'invalid_state',
+      'A confirmed KnownValue must have a value.',
+    )
+  }
+  if (known.value === null && known.isConfirmed) {
+    addIssue(
+      issues,
+      'isConfirmed',
+      'invalid_state',
+      'A null KnownValue cannot be confirmed.',
+    )
+  }
+  return result(issues)
+}
+
+function validateCounterKnownValue(
+  known: KnownValue<number>,
+  path: string,
+  issues: DomainValidationIssue[],
+) {
+  appendIssues(issues, path, validateKnownValue(known))
+  if (known.value !== null) {
+    validateNonNegativeInteger(known.value, `${path}.value`, issues)
+  }
+}
+
+export function validateRngState(state: RngState): DomainValidationResult {
+  const issues: DomainValidationIssue[] = []
+  if (state.id !== 'current') {
+    addIssue(issues, 'id', 'invalid_literal', "RngState id must be 'current'.")
+  }
+  if (state.schemaVersion !== 1) {
+    addIssue(
+      issues,
+      'schemaVersion',
+      'invalid_literal',
+      'RngState schemaVersion must be 1.',
+    )
+  }
+  appendIssues(issues, 'baseSeed', validateKnownValue(state.baseSeed))
+  validateCounterKnownValue(state.gogmaCounter, 'gogmaCounter', issues)
+  validateCounterKnownValue(state.skillCounter, 'skillCounter', issues)
+  validateCounterKnownValue(state.counterGate, 'counterGate', issues)
+  return result(issues)
+}
+
+export function validateNormalArtianCounter(
+  counter: NormalArtianCounter,
+): DomainValidationResult {
+  const issues: DomainValidationIssue[] = []
+  validateId(counter.weaponTypeId, 'weaponTypeId', issues)
+  if (!['rare6', 'rare7', 'rare8'].includes(counter.rarity)) {
+    addIssue(issues, 'rarity', 'invalid_literal', 'Normal Artian rarity is invalid.')
+  }
+  const expectedId = `${counter.weaponTypeId}:${counter.rarity}`
+  if (counter.id !== expectedId) {
+    addIssue(
+      issues,
+      'id',
+      'invalid_literal',
+      `NormalArtianCounter id must be '${expectedId}'.`,
+    )
+  }
+  if (counter.counter !== null) {
+    validateNonNegativeInteger(counter.counter, 'counter', issues)
+  }
+  if (counter.isConfirmed && counter.counter === null) {
+    addIssue(
+      issues,
+      'counter',
+      'invalid_state',
+      'A confirmed NormalArtianCounter requires a counter value.',
+    )
+  }
+  validateNonNegativeInteger(counter.observationCount, 'observationCount', issues)
+  if (counter.candidateCount !== null) {
+    validateNonNegativeInteger(counter.candidateCount, 'candidateCount', issues)
+  }
+  return result(issues)
+}
+
+function validateRestorationBonus(
+  bonus: RestorationBonus,
+  path: string,
+  issues: DomainValidationIssue[],
+) {
+  if (!bonus || typeof bonus !== 'object') {
+    addIssue(issues, path, 'invalid_structure', 'Restoration bonus is required.')
+    return
+  }
+  validateId(bonus.bonusTypeId, `${path}.bonusTypeId`, issues)
+  validateId(bonus.bonusRankId, `${path}.bonusRankId`, issues)
+}
+
+export function validateRestorationBonusSet(
+  bonuses: readonly RestorationBonus[],
+): DomainValidationResult {
+  const issues: DomainValidationIssue[] = []
+  if (!Array.isArray(bonuses) || bonuses.length !== 5) {
+    addIssue(
+      issues,
+      '',
+      'invalid_structure',
+      'RestorationBonusSet must contain exactly five entries.',
+    )
+  }
+  bonuses.forEach((bonus, index) =>
+    validateRestorationBonus(bonus, `[${index}]`, issues),
+  )
+  return result(issues)
+}
+
+export function validateOwnedWeapon(
+  weapon: OwnedWeapon,
+): DomainValidationResult {
+  const issues: DomainValidationIssue[] = []
+  validateId(weapon.id, 'id', issues)
+  validateId(weapon.weaponTypeId, 'weaponTypeId', issues)
+  validateId(weapon.elementId, 'elementId', issues)
+  appendIssues(
+    issues,
+    'restorationBonuses',
+    validateRestorationBonusSet(weapon.restorationBonuses),
+  )
+  if (!['material', 'practical', 'ideal'].includes(weapon.status)) {
+    addIssue(issues, 'status', 'invalid_literal', 'OwnedWeapon status is invalid.')
+  }
+  weapon.relatedTargetWeaponIds.forEach((id, index) =>
+    validateId(id, `relatedTargetWeaponIds[${index}]`, issues),
+  )
+  return result(issues)
+}
+
+function validateBonusCondition(
+  condition: BonusCondition,
+  path: string,
+  issues: DomainValidationIssue[],
+) {
+  validateId(condition.id, `${path}.id`, issues)
+  validateId(condition.bonusTypeId, `${path}.bonusTypeId`, issues)
+  validateId(condition.minimumRankId, `${path}.minimumRankId`, issues)
+  if (!Number.isInteger(condition.requiredCount) || condition.requiredCount < 1 || condition.requiredCount > 5) {
+    addIssue(
+      issues,
+      `${path}.requiredCount`,
+      'invalid_range',
+      'requiredCount must be an integer from 1 through 5.',
+    )
+  }
+  if (
+    !Number.isInteger(condition.requiredExCount) ||
+    condition.requiredExCount < 0 ||
+    condition.requiredExCount > condition.requiredCount
+  ) {
+    addIssue(
+      issues,
+      `${path}.requiredExCount`,
+      'invalid_range',
+      'requiredExCount must be between 0 and requiredCount.',
+    )
+  }
+}
+
+function validateAlternativeGroup(
+  group: AlternativeBonusConditionGroup,
+  path: string,
+  issues: DomainValidationIssue[],
+) {
+  validateId(group.id, `${path}.id`, issues)
+  if (!Number.isInteger(group.requiredCount) || group.requiredCount < 1 || group.requiredCount > 5) {
+    addIssue(
+      issues,
+      `${path}.requiredCount`,
+      'invalid_range',
+      'Alternative group requiredCount must be an integer from 1 through 5.',
+    )
+  }
+  if (!Array.isArray(group.options) || group.options.length < 1) {
+    addIssue(
+      issues,
+      `${path}.options`,
+      'invalid_structure',
+      'Alternative group requires at least one option.',
+    )
+  }
+  group.options.forEach((option, index) => {
+    validateId(option.bonusTypeId, `${path}.options[${index}].bonusTypeId`, issues)
+    validateId(option.minimumRankId, `${path}.options[${index}].minimumRankId`, issues)
+  })
+}
+
+function validateSkillCondition(
+  condition: SkillCondition,
+  path: string,
+  issues: DomainValidationIssue[],
+) {
+  if (!['all', 'any'].includes(condition.matchMode)) {
+    addIssue(issues, `${path}.matchMode`, 'invalid_literal', 'Skill matchMode is invalid.')
+  }
+  if (condition.seriesSkillId !== null) {
+    validateId(condition.seriesSkillId, `${path}.seriesSkillId`, issues)
+  }
+  if (condition.groupSkillId !== null) {
+    validateId(condition.groupSkillId, `${path}.groupSkillId`, issues)
+  }
+}
+
+export function validateTargetWeapon(
+  target: TargetWeapon,
+): DomainValidationResult {
+  const issues: DomainValidationIssue[] = []
+  validateId(target.id, 'id', issues)
+  validateId(target.weaponTypeId, 'weaponTypeId', issues)
+  validateId(target.elementId, 'elementId', issues)
+  if (!Number.isInteger(target.priority) || target.priority < 1 || target.priority > 5) {
+    addIssue(issues, 'priority', 'invalid_range', 'Target priority must be 1 through 5.')
+  }
+  appendIssues(issues, 'idealBonuses', validateRestorationBonusSet(target.idealBonuses))
+  target.practicalBonusConditions.forEach((condition, index) =>
+    validateBonusCondition(condition, `practicalBonusConditions[${index}]`, issues),
+  )
+  target.practicalAlternativeGroups.forEach((group, index) =>
+    validateAlternativeGroup(group, `practicalAlternativeGroups[${index}]`, issues),
+  )
+  validateSkillCondition(target.idealSkillCondition, 'idealSkillCondition', issues)
+  validateSkillCondition(target.practicalSkillCondition, 'practicalSkillCondition', issues)
+  return result(issues)
+}
+
+function validateRouteOperation(
+  operation: RouteOperation,
+  path: string,
+  issues: DomainValidationIssue[],
+) {
+  if (
+    ![
+      'create_normal_artian',
+      'convert_normal_to_gogma',
+      'reset_bonuses',
+      'keep_bonuses',
+      'reset_skills',
+      'use_weapon_as_material',
+    ].includes(operation.type)
+  ) {
+    addIssue(issues, `${path}.type`, 'invalid_literal', 'Route operation type is invalid.')
+    return
+  }
+  if (operation.type === 'create_normal_artian') {
+    validateId(operation.weaponTypeId, `${path}.weaponTypeId`, issues)
+    validatePositiveInteger(operation.count, `${path}.count`, issues)
+    validateNonNegativeInteger(operation.normalCounterBefore, `${path}.normalCounterBefore`, issues)
+    validateNonNegativeInteger(operation.normalCounterAfter, `${path}.normalCounterAfter`, issues)
+  } else if (operation.type === 'convert_normal_to_gogma') {
+    validateId(operation.weaponTypeId, `${path}.weaponTypeId`, issues)
+    validateNonNegativeInteger(operation.gogmaCounterBefore, `${path}.gogmaCounterBefore`, issues)
+    validateNonNegativeInteger(operation.gogmaCounterAfter, `${path}.gogmaCounterAfter`, issues)
+  } else if (operation.type === 'reset_bonuses') {
+    validateId(operation.sourceOwnedWeaponId, `${path}.sourceOwnedWeaponId`, issues)
+    validateNonNegativeInteger(operation.gogmaCounterBefore, `${path}.gogmaCounterBefore`, issues)
+    validateNonNegativeInteger(operation.gogmaCounterAfter, `${path}.gogmaCounterAfter`, issues)
+  } else if (operation.type === 'keep_bonuses') {
+    validateId(operation.sourceOwnedWeaponId, `${path}.sourceOwnedWeaponId`, issues)
+    validateNonNegativeInteger(operation.gogmaCounterBefore, `${path}.gogmaCounterBefore`, issues)
+    validateNonNegativeInteger(operation.gogmaCounterAfter, `${path}.gogmaCounterAfter`, issues)
+    if (operation.selection.mode === 'slot_indices') {
+      const slots = operation.selection.keptSlotIndices
+      if (new Set(slots).size !== slots.length || slots.some((slot) => !Number.isInteger(slot) || slot < 0 || slot > 4)) {
+        addIssue(
+          issues,
+          `${path}.selection.keptSlotIndices`,
+          'invalid_range',
+          'Kept slot indices must be unique integers from 0 through 4.',
+        )
+      }
+    } else if (operation.selection.mode === 'bonus_types') {
+      operation.selection.keptBonusTypeIds.forEach((id, index) =>
+        validateId(id, `${path}.selection.keptBonusTypeIds[${index}]`, issues),
+      )
+    }
+  } else if (operation.type === 'reset_skills') {
+    if (operation.sourceOwnedWeaponId !== null) {
+      validateId(operation.sourceOwnedWeaponId, `${path}.sourceOwnedWeaponId`, issues)
+    }
+    validateNonNegativeInteger(operation.skillCounterBefore, `${path}.skillCounterBefore`, issues)
+    validateNonNegativeInteger(operation.skillCounterAfter, `${path}.skillCounterAfter`, issues)
+  } else if (operation.type === 'use_weapon_as_material') {
+    validateId(operation.ownedWeaponId, `${path}.ownedWeaponId`, issues)
+  }
+}
+
+function validateProtectedRouteUse(
+  route: BuildRoute,
+  ownedWeapons: readonly OwnedWeapon[],
+  issues: DomainValidationIssue[],
+) {
+  const byId = new Map(ownedWeapons.map((weapon) => [weapon.id, weapon]))
+  if (
+    route.sourceOwnedWeaponId !== null &&
+    !byId.has(route.sourceOwnedWeaponId)
+  ) {
+    addIssue(
+      issues,
+      'sourceOwnedWeaponId',
+      'invalid_reference',
+      `Referenced OwnedWeapon '${route.sourceOwnedWeaponId}' does not exist.`,
+    )
+  }
+  route.operations.forEach((operation, index) => {
+    const path = `operations[${index}]`
+    const id =
+      operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses'
+        ? operation.sourceOwnedWeaponId
+        : operation.type === 'use_weapon_as_material'
+          ? operation.ownedWeaponId
+          : null
+    if (id === null) return
+    const weapon = byId.get(id)
+    if (!weapon) {
+      addIssue(issues, path, 'invalid_reference', `Referenced OwnedWeapon '${id}' does not exist.`)
+      return
+    }
+    const allowed =
+      operation.type === 'reset_bonuses'
+        ? canResetBonuses(weapon)
+        : operation.type === 'keep_bonuses'
+          ? canKeepBonuses(weapon)
+          : canUseAsMaterial(weapon)
+    if (!allowed) {
+      addIssue(
+        issues,
+        path,
+        'protected_destructive_use',
+        `OwnedWeapon '${id}' cannot be used by this destructive operation.`,
+      )
+    }
+  })
+}
+
+export function validateBuildRoute(
+  route: BuildRoute,
+  ownedWeapons?: readonly OwnedWeapon[],
+): DomainValidationResult {
+  const issues: DomainValidationIssue[] = []
+  if (
+    ![
+      'normal_artian_to_gogma',
+      'existing_gogma_reset_bonuses',
+      'existing_gogma_keep_bonuses',
+      'existing_gogma_reset_skills',
+      'existing_gogma_mixed',
+    ].includes(route.kind)
+  ) {
+    addIssue(issues, 'kind', 'invalid_literal', 'BuildRoute kind is invalid.')
+  }
+  if (!Array.isArray(route.operations) || route.operations.length === 0) {
+    addIssue(issues, 'operations', 'invalid_structure', 'BuildRoute operations cannot be empty.')
+  }
+  route.operations.forEach((operation, index) =>
+    validateRouteOperation(operation, `operations[${index}]`, issues),
+  )
+
+  if (route.kind === 'normal_artian_to_gogma') {
+    if (route.sourceOwnedWeaponId !== null) {
+      addIssue(
+        issues,
+        'sourceOwnedWeaponId',
+        'invalid_state',
+        'normal_artian_to_gogma cannot reference an existing OwnedWeapon.',
+      )
+    }
+    route.operations.forEach((operation, index) => {
+      if (!['create_normal_artian', 'convert_normal_to_gogma', 'reset_skills'].includes(operation.type)) {
+        addIssue(
+          issues,
+          `operations[${index}]`,
+          'invalid_route_operation',
+          `Operation '${operation.type}' is not allowed in normal_artian_to_gogma.`,
+        )
+      }
+      if (operation.type === 'reset_skills' && operation.sourceOwnedWeaponId !== null) {
+        addIssue(
+          issues,
+          `operations[${index}].sourceOwnedWeaponId`,
+          'invalid_state',
+          'A normal-route Reset Skills operation must target the unregistered route output.',
+        )
+      }
+    })
+  } else if (route.sourceOwnedWeaponId === null) {
+    addIssue(
+      issues,
+      'sourceOwnedWeaponId',
+      'invalid_state',
+      'An existing-Gogma route requires sourceOwnedWeaponId.',
+    )
+  }
+
+  if (route.kind === 'existing_gogma_reset_skills') {
+    route.operations.forEach((operation, index) => {
+      if (operation.type !== 'reset_skills') {
+        addIssue(
+          issues,
+          `operations[${index}]`,
+          'invalid_route_operation',
+          'existing_gogma_reset_skills may contain only Reset Skills operations.',
+        )
+      } else if (operation.sourceOwnedWeaponId !== route.sourceOwnedWeaponId) {
+        addIssue(
+          issues,
+          `operations[${index}].sourceOwnedWeaponId`,
+          'invalid_reference',
+          'Reset Skills source must match the BuildRoute source.',
+        )
+      }
+    })
+  }
+  if (
+    route.kind === 'existing_gogma_mixed' &&
+    route.operations.every(({ type }) => type === 'reset_skills')
+  ) {
+    addIssue(
+      issues,
+      'kind',
+      'invalid_state',
+      'A Reset-Skills-only route must use existing_gogma_reset_skills.',
+    )
+  }
+  if (ownedWeapons) validateProtectedRouteUse(route, ownedWeapons, issues)
+  return result(issues)
+}
+
+function validateMaterialRequirement(
+  requirement: MaterialRequirement,
+  path: string,
+  issues: DomainValidationIssue[],
+) {
+  validateId(requirement.materialId, `${path}.materialId`, issues)
+  validatePositiveInteger(requirement.quantity, `${path}.quantity`, issues)
+}
+
+export function validateBuildCandidate(
+  candidate: BuildCandidate,
+  ownedWeapons?: readonly OwnedWeapon[],
+): DomainValidationResult {
+  const issues: DomainValidationIssue[] = []
+  validateId(candidate.id, 'id', issues)
+  validateId(candidate.targetWeaponId, 'targetWeaponId', issues)
+  if (!['ideal', 'practical'].includes(candidate.category)) {
+    addIssue(issues, 'category', 'invalid_literal', 'Candidate category is invalid.')
+  }
+  appendIssues(issues, 'finalBonuses', validateRestorationBonusSet(candidate.finalBonuses))
+  appendIssues(issues, 'route', validateBuildRoute(candidate.route, ownedWeapons))
+  validateNonNegativeInteger(candidate.estimatedOperationCount, 'estimatedOperationCount', issues)
+  validateNonNegativeInteger(candidate.estimatedGogmaAdvance, 'estimatedGogmaAdvance', issues)
+  validateNonNegativeInteger(candidate.estimatedSkillAdvance, 'estimatedSkillAdvance', issues)
+  if (candidate.estimatedNormalAdvance !== null) {
+    validateNonNegativeInteger(candidate.estimatedNormalAdvance, 'estimatedNormalAdvance', issues)
+  }
+  candidate.requiredMaterials.forEach((requirement, index) =>
+    validateMaterialRequirement(requirement, `requiredMaterials[${index}]`, issues),
+  )
+  if (candidate.idealDifference.matchedBonusCount < 0 || candidate.idealDifference.matchedBonusCount > 5) {
+    addIssue(issues, 'idealDifference.matchedBonusCount', 'invalid_range', 'matchedBonusCount must be 0 through 5.')
+  }
+  if (candidate.category === 'ideal' && candidate.isSimilarToIdeal) {
+    addIssue(
+      issues,
+      'isSimilarToIdeal',
+      'invalid_state',
+      'Only practical candidates may be similar to ideal.',
+    )
+  }
+  if (
+    candidate.similarityScore !== null &&
+    (!Number.isFinite(candidate.similarityScore) || candidate.similarityScore < 0 || candidate.similarityScore > 1)
+  ) {
+    addIssue(issues, 'similarityScore', 'invalid_range', 'similarityScore must be null or 0 through 1.')
+  }
+  validateId(candidate.searchStateHash, 'searchStateHash', issues)
+  if (candidate.referencedOwnedWeaponsHash !== null) {
+    validateId(candidate.referencedOwnedWeaponsHash, 'referencedOwnedWeaponsHash', issues)
+  }
+  validateCalculationContext(candidate.calculationContext, 'calculationContext', issues)
+  validateId(candidate.searchRunId, 'searchRunId', issues)
+
+  if (candidate.route.kind === 'existing_gogma_reset_skills' && ownedWeapons) {
+    const source = ownedWeapons.find(({ id }) => id === candidate.route.sourceOwnedWeaponId)
+    if (source && !areRestorationBonusSetsEqual(candidate.finalBonuses, source.restorationBonuses)) {
+      addIssue(
+        issues,
+        'finalBonuses',
+        'invalid_state',
+        'Reset-Skills-only candidates must preserve source restoration bonuses.',
+      )
+    }
+  }
+  return result(issues)
+}
+
+export function validateBuildListEntry(
+  entry: BuildListEntry,
+): DomainValidationResult {
+  const issues: DomainValidationIssue[] = []
+  validateId(entry.id, 'id', issues)
+  validateId(entry.candidateId, 'candidateId', issues)
+  validateId(entry.targetWeaponId, 'targetWeaponId', issues)
+  appendIssues(issues, 'candidateSnapshot', validateBuildCandidate(entry.candidateSnapshot))
+  if (entry.candidateSnapshot.id !== entry.candidateId) {
+    addIssue(issues, 'candidateId', 'inconsistent_snapshot', 'candidateId must match candidateSnapshot.id.')
+  }
+  if (entry.candidateSnapshot.targetWeaponId !== entry.targetWeaponId) {
+    addIssue(issues, 'targetWeaponId', 'inconsistent_snapshot', 'targetWeaponId must match the candidate snapshot.')
+  }
+  if (entry.searchStateHash !== entry.candidateSnapshot.searchStateHash) {
+    addIssue(issues, 'searchStateHash', 'inconsistent_snapshot', 'searchStateHash must be copied from the candidate snapshot.')
+  }
+  if (entry.referencedOwnedWeaponsHash !== entry.candidateSnapshot.referencedOwnedWeaponsHash) {
+    addIssue(issues, 'referencedOwnedWeaponsHash', 'inconsistent_snapshot', 'OwnedWeapon hash must be copied from the candidate snapshot.')
+  }
+  if (!isCalculationContextCompatible(entry.calculationContext, entry.candidateSnapshot.calculationContext)) {
+    addIssue(issues, 'calculationContext', 'inconsistent_snapshot', 'CalculationContext must match the candidate snapshot.')
+  }
+  if (entry.isStale !== (entry.staleReasons.length > 0)) {
+    addIssue(issues, 'isStale', 'invalid_state', 'isStale must match the presence of staleReasons.')
+  }
+  const allowedStaleReasons = [
+    'target_definition_changed',
+    'rng_state_changed',
+    'owned_weapon_changed',
+    'calculation_context_changed',
+  ]
+  entry.staleReasons.forEach((reason, index) => {
+    if (!allowedStaleReasons.includes(reason)) {
+      addIssue(
+        issues,
+        `staleReasons[${index}]`,
+        'invalid_literal',
+        'BuildListEntry stale reason is invalid.',
+      )
+    }
+  })
+  validateId(entry.targetDefinitionHash, 'targetDefinitionHash', issues)
+  return result(issues)
+}
+
+function validateExpectedPlanState(
+  state: ExpectedPlanState,
+  path: string,
+  issues: DomainValidationIssue[],
+) {
+  validateId(state.rngStateHash, `${path}.rngStateHash`, issues)
+  validateId(state.normalCountersHash, `${path}.normalCountersHash`, issues)
+  validateId(state.ownedWeaponsHash, `${path}.ownedWeaponsHash`, issues)
+}
+
+function validatePlanStep(
+  step: PlanStep,
+  expectedOrder: number,
+  issues: DomainValidationIssue[],
+) {
+  const path = `steps[${expectedOrder - 1}]`
+  validateId(step.id, `${path}.id`, issues)
+  if (step.order !== expectedOrder) {
+    addIssue(issues, `${path}.order`, 'invalid_state', 'PlanStep order must be a one-based contiguous sequence.')
+  }
+  if (step.isCompleted && step.completedAt === null) {
+    addIssue(issues, `${path}.completedAt`, 'invalid_state', 'A completed PlanStep requires completedAt.')
+  }
+  if (step.operationType === 'change_owned_weapon_status' && !step.requiresUserConfirmation) {
+    addIssue(issues, `${path}.requiresUserConfirmation`, 'invalid_state', 'Weapon status changes require explicit confirmation.')
+  }
+  validateExpectedPlanState(step.expectedStateBefore, `${path}.expectedStateBefore`, issues)
+  validateExpectedPlanState(step.expectedStateAfter, `${path}.expectedStateAfter`, issues)
+  if (step.expectedResult?.restorationBonuses !== null && step.expectedResult) {
+    appendIssues(
+      issues,
+      `${path}.expectedResult.restorationBonuses`,
+      validateRestorationBonusSet(step.expectedResult.restorationBonuses),
+    )
+  }
+  step.inventoryChange?.materialRequirements.forEach((requirement, index) =>
+    validateMaterialRequirement(requirement, `${path}.inventoryChange.materialRequirements[${index}]`, issues),
+  )
+}
+
+export function validateProductionPlan(
+  plan: ProductionPlan,
+): DomainValidationResult {
+  const issues: DomainValidationIssue[] = []
+  validateId(plan.id, 'id', issues)
+  if (!['draft', 'active', 'completed', 'stale', 'abandoned'].includes(plan.status)) {
+    addIssue(issues, 'status', 'invalid_literal', 'ProductionPlan status is invalid.')
+  }
+  validateCalculationContext(plan.calculationContext, 'calculationContext', issues)
+  validateCalculationContext(plan.baseSnapshot.calculationContext, 'baseSnapshot.calculationContext', issues)
+  if (!isCalculationContextCompatible(plan.calculationContext, plan.baseSnapshot.calculationContext)) {
+    addIssue(issues, 'baseSnapshot.calculationContext', 'inconsistent_snapshot', 'Plan and base snapshot CalculationContext must match.')
+  }
+  validateExpectedPlanState(plan.baseSnapshot.initialExecutionState, 'baseSnapshot.initialExecutionState', issues)
+  validateId(plan.baseSnapshot.targetWeaponsHash, 'baseSnapshot.targetWeaponsHash', issues)
+  validateId(plan.baseSnapshot.buildListEntriesHash, 'baseSnapshot.buildListEntriesHash', issues)
+  plan.steps.forEach((step, index) => validatePlanStep(step, index + 1, issues))
+  if (new Set(plan.steps.map(({ id }) => id)).size !== plan.steps.length) {
+    addIssue(issues, 'steps', 'invalid_id', 'PlanStep IDs must be unique within a plan.')
+  }
+  if (plan.currentStepId !== null) {
+    const current = plan.steps.find(({ id }) => id === plan.currentStepId)
+    if (!current || current.isCompleted) {
+      addIssue(issues, 'currentStepId', 'invalid_reference', 'currentStepId must reference an incomplete PlanStep.')
+    }
+  }
+  plan.requiredMaterials.forEach((requirement, index) =>
+    validateMaterialRequirement(requirement, `requiredMaterials[${index}]`, issues),
+  )
+  plan.conflicts.forEach((conflict, index) => {
+    validateId(conflict.id, `conflicts[${index}].id`, issues)
+    conflict.buildListEntryIds.forEach((id, idIndex) =>
+      validateId(id, `conflicts[${index}].buildListEntryIds[${idIndex}]`, issues),
+    )
+  })
+  plan.rejectedBuildListEntries.forEach((entry, index) =>
+    validateId(entry.buildListEntryId, `rejectedBuildListEntries[${index}].buildListEntryId`, issues),
+  )
+  return result(issues)
+}
+
+function validateActualResult(
+  actual: ActualResult,
+  path: string,
+  issues: DomainValidationIssue[],
+) {
+  if (actual.restorationBonuses !== null) {
+    appendIssues(issues, `${path}.restorationBonuses`, validateRestorationBonusSet(actual.restorationBonuses))
+  }
+  if (actual.securedOwnedWeaponId !== null) {
+    validateId(actual.securedOwnedWeaponId, `${path}.securedOwnedWeaponId`, issues)
+  }
+}
+
+export function validateExecutionHistory(
+  history: ExecutionHistory,
+): DomainValidationResult {
+  const issues: DomainValidationIssue[] = []
+  validateId(history.id, 'id', issues)
+  validateId(history.planId, 'planId', issues)
+  validateId(history.planStepId, 'planStepId', issues)
+  if (
+    ![
+      'confirmed_expected',
+      'secured_weapon',
+      'confirmed_weapon_status_change',
+      'declined_weapon_status_change',
+      'actual_result_different',
+      'skipped_candidate',
+    ].includes(history.action)
+  ) {
+    addIssue(issues, 'action', 'invalid_literal', 'Execution action is invalid.')
+  }
+  if (history.actualResult !== null) validateActualResult(history.actualResult, 'actualResult', issues)
+  appendIssues(issues, 'undoSnapshot.rngStateBefore', validateRngState(history.undoSnapshot.rngStateBefore))
+  history.undoSnapshot.normalCountersBefore.forEach((counter, index) =>
+    appendIssues(issues, `undoSnapshot.normalCountersBefore[${index}]`, validateNormalArtianCounter(counter)),
+  )
+  history.undoSnapshot.affectedOwnedWeaponsBefore.forEach((weapon, index) =>
+    appendIssues(issues, `undoSnapshot.affectedOwnedWeaponsBefore[${index}]`, validateOwnedWeapon(weapon)),
+  )
+  history.undoSnapshot.removedOwnedWeaponsBefore.forEach((weapon, index) =>
+    appendIssues(issues, `undoSnapshot.removedOwnedWeaponsBefore[${index}]`, validateOwnedWeapon(weapon)),
+  )
+  appendIssues(issues, 'undoSnapshot.productionPlanBefore', validateProductionPlan(history.undoSnapshot.productionPlanBefore))
+  if (history.planId !== history.undoSnapshot.productionPlanBefore.id) {
+    addIssue(issues, 'planId', 'inconsistent_snapshot', 'History planId must match productionPlanBefore.id.')
+  }
+  if (!history.wasExpected && history.recalculationReason === null) {
+    addIssue(issues, 'recalculationReason', 'invalid_state', 'Unexpected execution requires a recalculation reason.')
+  }
+  const affected = new Set(history.undoSnapshot.affectedOwnedWeaponsBefore.map(({ id }) => id))
+  const added = new Set(history.undoSnapshot.addedOwnedWeaponIds)
+  const removed = new Set(history.undoSnapshot.removedOwnedWeaponsBefore.map(({ id }) => id))
+  const overlaps = [...affected].some((id) => added.has(id) || removed.has(id)) || [...added].some((id) => removed.has(id))
+  if (overlaps) {
+    addIssue(issues, 'undoSnapshot', 'invalid_state', 'Undo OwnedWeapon roles must not overlap.')
+  }
+  history.undoSnapshot.addedOwnedWeaponIds.forEach((id, index) =>
+    validateId(id, `undoSnapshot.addedOwnedWeaponIds[${index}]`, issues),
+  )
+  return result(issues)
+}
+
+export function validateAppSettings(
+  settings: AppSettings,
+): DomainValidationResult {
+  const issues: DomainValidationIssue[] = []
+  if (settings.id !== 'settings') {
+    addIssue(issues, 'id', 'invalid_literal', "AppSettings id must be 'settings'.")
+  }
+  if (settings.schemaVersion !== 1) {
+    addIssue(issues, 'schemaVersion', 'invalid_literal', 'AppSettings schemaVersion must be 1.')
+  }
+  validatePositiveInteger(settings.resultPageSize, 'resultPageSize', issues)
+  validatePositiveInteger(settings.defaultSearchLimit, 'defaultSearchLimit', issues)
+  return result(issues)
+}

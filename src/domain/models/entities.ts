@@ -210,3 +210,13 @@ export interface MaterialRequirement {
   materialId: MaterialId
   quantity: number
 }
+
+export interface RngCapabilities {
+  canPredictGogma: boolean
+  canPredictSkills: boolean
+  canSearchSeed: boolean
+  canSearchNormalArtian: boolean
+  normalArtianSearchableCounterIds: string[]
+  canRunPlanner: boolean
+  missingRequirements: string[]
+}

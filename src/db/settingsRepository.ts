@@ -1,4 +1,5 @@
 import type { AppSettings, ISODateTimeString } from '../domain/models/publicTypes'
+import { createDefaultAppSettings } from '../domain/models/factories'
 import { appDatabase } from './AppDatabase'
 
 export interface SettingsDataSource {
@@ -7,19 +8,7 @@ export interface SettingsDataSource {
   put(settings: AppSettings): Promise<unknown>
 }
 
-export function createDefaultSettings(
-  now: ISODateTimeString = new Date().toISOString(),
-): AppSettings {
-  return {
-    id: 'settings',
-    schemaVersion: 1,
-    debugMode: false,
-    resultPageSize: 50,
-    defaultSearchLimit: 5000,
-    createdAt: now,
-    updatedAt: now,
-  }
-}
+export { createDefaultAppSettings as createDefaultSettings }
 
 export class SettingsRepository {
   private readonly dataSource: SettingsDataSource
@@ -34,7 +23,7 @@ export class SettingsRepository {
     const existing = await this.dataSource.get('settings')
     if (existing) return existing
 
-    const initial = createDefaultSettings(now)
+    const initial = createDefaultAppSettings(now)
     try {
       await this.dataSource.add(initial)
       return initial
