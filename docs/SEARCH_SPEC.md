@@ -122,6 +122,7 @@ export interface SkippedRoute {
     | "gogma_capability_missing"
     | "skill_capability_missing"
     | "keep_prediction_unsupported"
+    | "master_data_unavailable"
     | "calculation_context_incompatible"
     | "disabled_by_filter";
   detail: string;
@@ -132,6 +133,8 @@ export interface CandidateSearchWarning {
   message: string;
 }
 ```
+
+`master_data_unavailable` は、Route実行に必要なMaster Dataが存在しない、無効、または利用不能な場合に使用する。対象武器種・レア度の通常アーティアLotteryを利用できない場合、通常アーティアRouteをこの理由でskipする。
 
 すべてのBuildCandidateとCandidateSearchResultに、入力の `calculationContext` をそのまま保存する。各BuildCandidateには検索開始時のRoute依存RNG状態から生成した `searchStateHash` と、Routeが参照するOwnedWeaponだけから生成した `referencedOwnedWeaponsHash` を保存する。参照武器がないRouteでは後者を `null` とする。Worker実行中に現在環境のCalculationContext、検索開始状態、またはCandidateが参照するOwnedWeapon状態が変わった場合、そのrequestIdの結果を現行候補として保存しない。
 
@@ -547,6 +550,8 @@ export type SearchWorkerResponse =
 - UI側は最新requestId以外の結果を破棄する
 - cancel後の結果は反映しない
 - Worker内ではDexieに直接アクセスしない。必要な入力をmessageで受け取る
+- Worker messageはstructured clone可能な `requestId` と `CandidateSearchInput` だけを保持し、メソッドを持つ `RngEngine` instanceを含めない
+- Worker module内でEngineまたはEngine Factoryを取得し、Worker Handlerのdependencyとして注入する
 
 ---
 
@@ -581,6 +586,7 @@ export type SearchWorkerResponse =
 ## 13.2 Route Test
 
 - 通常Counter未確定なら通常アーティア経由をskipする
+- 対象武器種・レア度の通常アーティアLotteryが利用不能なら `master_data_unavailable` で通常アーティア経由をskipする
 - 既存巨戟がない場合、既存巨戟Routeをskipする
 - Keep選択をRNG Engineから取得し、Search側でsubsetを推測しない
 - Keep後の完成5枠がRNG Engine Predictionだけから生成される

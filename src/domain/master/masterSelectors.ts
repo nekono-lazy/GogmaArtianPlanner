@@ -168,6 +168,14 @@ export function getMaterialCosts(
   weaponTypeId: WeaponTypeId,
 ): MaterialCostMaster[] {
   requireById(master.weaponTypes, weaponTypeId, 'WeaponTypeMaster')
+  return getMaterialCostsFromSubset(master, operationType, weaponTypeId)
+}
+
+export function getMaterialCostsFromSubset(
+  master: Pick<MasterDataRoot, 'materialCosts'>,
+  operationType: MaterialCostOperationType,
+  weaponTypeId: WeaponTypeId,
+): MaterialCostMaster[] {
   return master.materialCosts
     .filter(
       (cost) =>

@@ -340,6 +340,7 @@ TargetWeaponごとに候補を検索し、作成リストへ追加する。
 - 選択対象の全Routeが実行不能な場合のみ検索開始不可
 - TargetWeaponなしなら検索開始不可
 - 通常Counter未確定Routeはskip理由を表示
+- Route実行に必要なMaster Dataが利用不能な場合は `master_data_unavailable` としてskip理由を表示
 - protected武器を起点とするReset Bonuses / Keep Bonuses Routeは検索結果へ表示しない
 - Reset Bonuses / Keep Bonusesの起点候補がprotected武器だけの場合は「保護されていない起点武器がない」とskip理由を表示する
 - Reset Skillsのみの経路は非破壊操作として扱い、protectedなPractical / Ideal武器からも検索結果へ表示できる
@@ -733,6 +734,7 @@ export interface SearchUiState {
 - 観測検索でSeed検索とCounter検索の入力・結果が混在しない
 - Seed検索中に進捗表示とキャンセルが使える
 - 通常Counter未確定時に通常Route skipが表示される
+- 通常アーティアLottery不足時に `master_data_unavailable` の通常Route skipが表示される
 - 既存武器の復元ボーナスを維持したスキルのみ再付与Routeを表示できる
 - protectedなPractical / Ideal武器でもスキルのみ再付与Routeを表示できる
 - Skill Capability不足時にスキルのみ再付与Routeのskip理由が表示される
