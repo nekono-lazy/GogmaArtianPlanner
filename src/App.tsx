@@ -11,14 +11,14 @@ import { DashboardPage } from './pages/DashboardPage'
 import { DebugPage } from './pages/DebugPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { SearchPage } from './pages/SearchPage'
+import { BuildListPage } from './pages/BuildListPage'
 import {
-  BuildListPage,
   ExecutionNavigatorPage,
   NormalCountersPage,
   OwnedWeaponsPage,
   ProductionPlanPage,
   RngSetupPage,
-  SearchPage,
   TargetWeaponsPage,
 } from './pages/StaticPages'
 
