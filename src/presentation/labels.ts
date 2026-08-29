@@ -3,6 +3,7 @@ import type {
   CandidateCategory,
   NormalArtianRarity,
   OwnedWeaponStatus,
+  PlanStepOperationType,
   RngStateSource,
   RouteKind,
   RouteOperation,
@@ -31,12 +32,25 @@ export const candidateCategoryLabels: Record<CandidateCategory, string> = {
 }
 
 export const routeKindLabels: Record<RouteKind, string> = {
-  normal_artian_to_gogma: '通常アーティア経由',
+  normal_artian_to_gogma: '新規通常アーティアから巨戟化',
   owned_normal_artian_to_gogma: '所持通常アーティアから巨戟化',
-  existing_gogma_reset_bonuses: '所持武器：復元ボーナスリセット',
-  existing_gogma_keep_bonuses: '所持武器：復元ボーナス保持',
-  existing_gogma_reset_skills: '所持武器：スキルリセット',
-  existing_gogma_mixed: '所持武器：複合ルート',
+  existing_gogma_reset_bonuses: '所持巨戟の復元ボーナス再抽選',
+  existing_gogma_keep_bonuses: '所持巨戟の復元ボーナス保持再抽選',
+  existing_gogma_reset_skills: '所持巨戟のスキル再抽選',
+  existing_gogma_mixed: '所持巨戟の複合ルート',
+}
+
+export const planStepOperationLabels: Record<PlanStepOperationType, string> = {
+  create_normal_artian: '通常アーティアを作成',
+  convert_normal_to_gogma: '巨戟アーティアへ変換',
+  create_material_gogma: '素材用巨戟アーティアとして登録',
+  reset_bonuses: '復元ボーナスをリセット',
+  keep_bonuses: '復元ボーナスを保持して再抽選',
+  reset_skills: 'スキルをリセット',
+  reserve_weapon: '目標武器として確保',
+  use_weapon_as_material: '素材武器として使用',
+  change_owned_weapon_status: '所持武器の状態を変更',
+  confirm_result: '結果を確認',
 }
 
 export const candidateRouteFilterLabels: Record<CandidateRouteFilter, string> = {

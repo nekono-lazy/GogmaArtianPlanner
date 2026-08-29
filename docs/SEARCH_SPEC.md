@@ -116,7 +116,7 @@ export interface TargetCandidateSearchResult {
 }
 
 export interface SkippedRoute {
-  route: CandidateRouteFilter;
+  route: RouteKind;
   reason:
     | "normal_counter_unconfirmed"
     | "no_owned_weapon_available"
@@ -136,7 +136,9 @@ export interface CandidateSearchWarning {
 }
 ```
 
-`master_data_unavailable` は、Route実行に必要なMaster Dataが存在しない、無効、または利用不能な場合に使用する。対象武器種のレア8通常アーティアLotteryを利用できない場合、通常アーティアRouteをこの理由でskipする。
+`master_data_unavailable` は、Route実行に必要なMaster Dataが存在しない、無効、または利用不能な場合に使用する。対象武器種のレア8通常アーティアLotteryを利用できない場合、`route = "normal_artian_to_gogma"`、`reason = "master_data_unavailable"` として個別Routeをskipする。
+
+`CandidateRouteFilter` はRouteグループを選ぶ入力であり、SkippedRouteの粒度には使用しない。`normal_artian` は `normal_artian_to_gogma` と `owned_normal_artian_to_gogma`、`existing_gogma` は4つの `existing_gogma_*` RouteKindを対象とする。`disabled_by_filter` も除外された具体的なRouteKindごとに返す。`searchedRoutes` と `skippedRoutes[].route` は同じRouteKind粒度で、同じRouteを両方へ含めない。
 
 すべてのBuildCandidateとCandidateSearchResultに、入力の `calculationContext` をそのまま保存する。各BuildCandidateには検索開始時のRoute依存RNG状態から生成した `searchStateHash` と、Routeが参照するOwnedWeaponだけから生成した `referencedOwnedWeaponsHash` を保存する。参照武器がないRouteでは後者を `null` とする。Worker実行中に現在環境のCalculationContext、検索開始状態、またはCandidateが参照するOwnedWeapon状態が変わった場合、そのrequestIdの結果を現行候補として保存しない。
 
@@ -518,7 +520,7 @@ createBuildListEntry(
 
 生成時に、Candidate Snapshot、Target定義Hash、`candidate.searchStateHash`、`candidate.referencedOwnedWeaponsHash`、CalculationContextを固定する。追加時の現在RNG状態と現在OwnedWeaponから同じHashを再計算し、どちらかがCandidateと不一致なら追加を拒否して再検索を促す。再検索でCandidateが消えてもBuildListEntryは直ちに削除しない。
 
-`referencedOwnedWeaponsHash` は[DATA_MODEL.md](./DATA_MODEL.md)の正規化規則に従う。参照IDはRouteとReset Bonuses、Keep Bonuses、Reset Skills、素材消費Operationから収集し、`id`、武器種、属性、復元ボーナス、シリーズスキル、グループスキル、status、isProtectedだけをHashへ含める。name、memo、日時およびRouteに無関係なOwnedWeaponは含めない。
+`referencedOwnedWeaponsHash` は[DATA_MODEL.md](./DATA_MODEL.md)の正規化規則に従う。参照IDはRouteとReset Bonuses、Keep Bonuses、Reset Skills、素材消費Operationから収集する。共通項目は `id`、`kind`、武器種、属性、保存中の復元ボーナス5枠順、isProtectedとし、巨戟だけシリーズスキル、グループスキル、statusを加える。name、memo、日時およびRouteに無関係なOwnedWeaponは含めない。
 
 追加方式。
 
@@ -636,6 +638,10 @@ export type SearchWorkerResponse =
 - 所持通常アーティア経由は保護中または武器種・属性非互換の通常アーティアを使用しない
 - 所持通常アーティア経由はcreate_normal_artianを含めず、sourceOwnedWeaponIdとreferencedOwnedWeaponsHashへ元通常アーティアを設定する
 - 所持通常アーティア経由のResetSkillsOperationは `sourceOwnedWeaponId = null` とする
+- Route Filter `normal_artian` が新規通常と所持通常の2 RouteKindを対象とする
+- Route Filter `existing_gogma` が既存巨戟4 RouteKindを対象とする
+- Counter不足、所持通常なし、Skill Capability不足、filter除外がそれぞれ具体的なRouteKindで報告される
+- 同じRouteKindをsearchedRoutesとskippedRoutesの両方へ含めない
 
 ## 13.3 Candidate Test
 

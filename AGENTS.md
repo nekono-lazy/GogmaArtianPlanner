@@ -242,6 +242,12 @@ Use capability derivation so that:
 - Normal Artian search only requires the relevant normal counter and other actual dependencies
 - Planner only requires capabilities needed by the selected route operations
 
+Each capability requires both the relevant confirmed `KnownValue` inputs and
+explicit support from the active `RngEngineCapabilities`. Values alone must
+not enable an unverified Engine feature. Planner validation applies this per
+BuildListEntry route and excludes only entries whose required operations are
+unsupported.
+
 A missing capability disables only dependent routes.
 
 Do not disable unrelated routes.
@@ -534,13 +540,17 @@ Deduplicate and stably sort IDs.
 Include semantic weapon data such as:
 
 - ID
+- Kind
 - Weapon type
 - Element
 - Stored restoration bonus slots
+- Protection
+
+For Gogma Artian weapons, also include:
+
 - Series skill
 - Group skill
 - Status
-- Protection
 
 Exclude:
 
@@ -746,6 +756,13 @@ Do not mutate IndexedDB while searching for a plan.
 
 Persist only after the calculation returns to the application/persistence layer.
 
+Target satisfaction is derived only from owned Gogma Artian weapons. Owned
+normal Artian weapons are inventory/conversion resources and never satisfy a
+Target. For Gogma weapons, do not use `status` alone: evaluate the actual
+restoration bonus and series/group skill conditions with the Target evaluation
+engine. `hasPractical`, `hasIdeal`, and their OwnedWeapon ID lists all follow
+this rule.
+
 ---
 
 ## Planner Search Strategy
@@ -818,9 +835,18 @@ If a material Gogma weapon is required but unavailable, the Planner may schedule
 ```text
 create normal Artian
 -> convert to Gogma
--> register as material
+-> create_material_gogma
 -> consume later
 ```
+
+`create_material_gogma` is a Planner-only registration PlanStep, not a
+`RouteOperation` and not an additional RNG draw. It registers the already
+created predicted/observed Gogma weapon as `kind = gogma`,
+`status = material`, and `isProtected = false`, with zero RNG advancement.
+The Planner may reserve the future OwnedWeapon ID when constructing the Plan so
+the later material-consumption Step can reference the same weapon. Do not write
+that weapon to IndexedDB before the registration Step is confirmed, and do not
+put the future ID into a BuildRoute.
 
 All RNG effects of replenishment must be included in simulation.
 
@@ -908,10 +934,27 @@ Plan steps may represent operations such as:
 - Keep Bonuses
 - Reset Skills
 - Reserve/secure weapon
+- Register an already-created Gogma weapon as material
 - Consume material weapon
 - Confirm old-Practical status change
 
 Every Step stores expected state before and after the operation.
+
+For `ExpectedPlanState.ownedWeaponsHash`, include OwnedWeapon `kind` in
+addition to the other semantic inventory fields. A kind change must change this
+hash and `referencedOwnedWeaponsHash`; name, memo, and timestamps remain
+excluded.
+
+`create_material_gogma` has null Target, BuildListEntry, and Candidate
+references, uses the reserved OwnedWeapon ID as `ownedWeaponId`, requires user
+confirmation, and adds the same unprotected Material Gogma weapon through
+`inventoryChange.addOwnedWeapon`. It is distinct from
+`change_owned_weapon_status` (an existing Practical weapon conversion) and
+`reserve_weapon` (securing a Target candidate).
+
+Plan recalculation is a user-initiated UI/Planner action for a stale Plan. It is
+not a `PlanStepOperationType`, and no `recalculate_plan` Step is inserted into
+the old Plan.
 
 For a planned old-Practical materialization:
 

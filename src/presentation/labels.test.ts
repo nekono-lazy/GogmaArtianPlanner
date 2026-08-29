@@ -4,6 +4,7 @@ import {
   getRngMissingRequirementLabel,
   getRouteOperationLabel,
   ownedWeaponStatusLabels,
+  planStepOperationLabels,
   rngStateSourceLabels,
   routeKindLabels,
   skippedRouteReasonLabels,
@@ -14,7 +15,9 @@ describe('presentation labels', () => {
   it('maps normal UI Domain values to shared Japanese labels', () => {
     expect(ownedWeaponStatusLabels).toEqual({ material: '素材', practical: '実用', ideal: '理想' })
     expect(candidateCategoryLabels.practical).toBe('実用')
-    expect(routeKindLabels.existing_gogma_reset_skills).toContain('スキルリセット')
+    expect(routeKindLabels.normal_artian_to_gogma).toContain('新規通常アーティア')
+    expect(routeKindLabels.existing_gogma_reset_skills).toContain('スキル再抽選')
+    expect(planStepOperationLabels.create_material_gogma).toBe('素材用巨戟アーティアとして登録')
     expect(getRouteOperationLabel({ type: 'reset_skills', sourceOwnedWeaponId: null, skillCounterBefore: 1, skillCounterAfter: 2 })).toBe('スキルをリセット')
     expect(skippedRouteReasonLabels.master_data_unavailable).toContain('マスターデータ')
     expect(staleReasonLabels.target_definition_changed).toContain('目標武器')

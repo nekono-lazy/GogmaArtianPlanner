@@ -137,6 +137,7 @@ export interface ElementMaster {
   "displayNameJa": "雷",
   "displayNameEn": "Thunder",
   "sortOrder": 4,
+  "allowsElementBonus": true,
   "isEnabled": true
 }
 ```
@@ -270,8 +271,9 @@ weapon_bonus.{scope}.{weaponTypeId}.{bonusTypeId}.{bonusRankId}
 
 制約。
 
-- TargetWeaponとOwnedWeaponは完成巨戟アーティアなので、`gogma_artian` scopeだけを出す
-- 通常アーティアPrediction・Debugは `normal_artian` scopeを使う
+- TargetWeaponとOwnedGogmaArtianWeaponは完成巨戟アーティアなので、`gogma_artian` scopeだけを使う
+- OwnedNormalArtianWeaponと通常アーティアPrediction・Debugは `normal_artian` scopeを使う
+- UIやDomain validationはOwnedWeaponを暗黙に巨戟とみなさず、`weaponTypeId + elementId + ArtianBonusScope` を明示してSelectorを呼ぶ
 - 同一 `scope + weaponTypeId + bonusTypeId + bonusRankId` は1件のみ
 - `effectValue` は表示用文字列。計算ロジックは効果値に依存しない
 - 武器種によって存在しないBonusTypeやRankは定義しない

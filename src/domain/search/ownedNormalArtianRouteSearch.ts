@@ -35,7 +35,7 @@ export async function searchOwnedNormalArtianRoutes(
 
   if (compatible.length === 0) {
     result.skippedRoutes.push({
-      route: 'normal_artian',
+      route: 'owned_normal_artian_to_gogma',
       reason: 'no_owned_weapon_available',
       detail: 'No compatible owned Normal Artian weapon is available.',
     })
@@ -45,7 +45,7 @@ export async function searchOwnedNormalArtianRoutes(
   const sources = compatible.filter(({ isProtected }) => !isProtected)
   if (sources.length === 0) {
     result.skippedRoutes.push({
-      route: 'normal_artian',
+      route: 'owned_normal_artian_to_gogma',
       reason: 'no_unprotected_source_weapon',
       detail: 'Only protected owned Normal Artian sources are available.',
     })
@@ -66,7 +66,7 @@ export async function searchOwnedNormalArtianRoutes(
   )
   if (!capabilities.canPredictGogma) {
     result.skippedRoutes.push({
-      route: 'normal_artian',
+      route: 'owned_normal_artian_to_gogma',
       reason: 'gogma_capability_missing',
       detail: 'Gogma prediction capability is required for conversion.',
     })

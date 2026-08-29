@@ -187,8 +187,9 @@ Seed検索とCounter検索を別モードとして提供する。
 観測入力。
 
 - 武器種
-- レア度
 - 復元ボーナス5枠
+
+通常アーティア観測の `rarity` はDomain上に保持するが、v1 UIでは8を内部的に自動設定し、レア度選択を表示しない。
 
 制約。
 
@@ -239,7 +240,8 @@ Seed検索とCounter検索を別モードとして提供する。
 - 通常アーティアはレア8として自動登録し、レア度選択UIを表示しない
 - 巨戟アーティアの従来のstatusと保護初期値を維持する
 - 既存武器の種類変更は互換項目の初期化を伴うためv1 UIでは禁止する
-- statusがPracticalまたはIdealに変わった場合、初期値を保護ONにする
+- 新規巨戟アーティア作成時だけ、Materialは保護OFF、Practical / Idealは保護ONを初期値にする
+- 登録済み巨戟アーティアの通常のstatus変更ではProtectionを自動上書きしない。Protectionは独立項目とする
 - `isProtected = true` の武器はPlannerが素材消費・Reset Bonuses・Keep Bonusesへ使用しない
 - Plannerが消費できるのはMaterialかつ保護OFFの武器だけ
 - 旧実用品を素材用に変更する場合は確認後に `status = Material` と保護OFFを同時適用する
@@ -428,6 +430,8 @@ PlanStep表示。
 - 使用する武器
 - 想定結果
 - 確保対象かどうか
+
+`create_material_gogma` は「素材用巨戟アーティアとして登録」と表示する。追加のRNG抽選ではなく、直前までに作成した巨戟をMaterial / 保護OFFでツールへ登録する確認Stepとして示す。`change_owned_weapon_status`（既存Practicalの素材化）や `reserve_weapon`（Target候補の確保）とは別表示にする。
 
 制約。
 
@@ -735,6 +739,7 @@ export interface SearchUiState {
 - Debug Mode ONで内部情報が表示される
 - Normal Counterの手動修正がDebug Mode OFFで表示されない
 - Normal Counter画面が14武器種のレア8だけを表示し、Debug Modeでもレア6・7を扱わない
+- Normal Artian観測入力にレア度選択を表示せず、内部値を8に固定する
 - RNG項目を一部だけ入力して保存できる
 - Capability不足の機能だけが無効表示になる
 

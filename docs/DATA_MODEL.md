@@ -215,8 +215,7 @@ export type PlanStepOperationType =
   | "reserve_weapon"
   | "use_weapon_as_material"
   | "change_owned_weapon_status"
-  | "confirm_result"
-  | "recalculate_plan";
+  | "confirm_result";
 
 export type ExecutionAction =
   | "confirmed_expected"
@@ -330,15 +329,16 @@ export interface RngCapabilities {
 deriveRngCapabilities(
   rngState: RngState,
   normalCounters: NormalArtianCounter[],
-  requiredOperations: RouteOperation[]
+  requiredOperations: RouteOperation[],
+  engineCapabilities: RngEngineCapabilities
 ): RngCapabilities;
 ```
 
 基本依存関係。
 
-- Gogma予測は確定済みBase Seed、Gogma Counter、Counter Gateを要求する
-- Skill予測は確定済みBase Seed、Skill Counter、Counter Gateを要求する
-- 通常アーティア予測は確定済みBase Seedと対象武器種のレア8 NormalArtianCounterを要求する
+- Gogma予測は確定済みBase Seed、Gogma Counter、Counter GateとEngineのGogma Prediction supportを要求する
+- Skill予測は確定済みBase Seed、Skill Counter、Counter GateとEngineのSkill Prediction supportを要求する
+- 通常アーティア予測は確定済みBase Seed、対象武器種のレア8 NormalArtianCounter、EngineのNormal Artian Prediction supportを要求する
 - PlannerはBuildListEntry内の全RouteOperationを実行できるCapabilityがある場合のみ実行可能
 - 不足値に依存するRouteだけを無効化し、他Routeは利用可能なままにする
 
@@ -881,7 +881,7 @@ export interface ExpectedPlanState {
 
 - `rngStateHash`: 各KnownValueの正規化valueとisConfirmedを含み、source、notes、日時を除外する
 - `normalCountersHash`: id、counter、isConfirmedを含み、観測日時を除外する
-- `ownedWeaponsHash`: ID、武器種、属性、ボーナス、スキル、status、isProtected、計画に関係するTarget参照を含み、名称、memo、日時を除外する
+- `ownedWeaponsHash`: 共通項目としてID、kind、武器種、属性、保存中のボーナス5枠順、isProtected、計画に関係するTarget参照を含む。巨戟だけseriesSkillId、groupSkillId、statusを加える。通常に存在しないSkill / statusへ仮値を設定しない。名称、memo、日時は除外する
 - `buildListEntriesHash`: Entry ID、Candidate Snapshot、Target定義Hash、searchStateHash、CalculationContextを含み、派生値のisStale、staleReasons、日時を除外する
 
 ## 11.3 PlanStep
@@ -924,6 +924,13 @@ export interface PlanStep {
 - ユーザーが予定どおり素材化した場合は `expectedStateAfter` と一致するためstaleにしない
 - ユーザーが「保管」を選択した場合は状態を変更せず、`expectedStateAfter` 不一致としてstaleにする
 - Candidate由来のStepは `buildListEntryId` を判断記録の主参照とし、`candidateId` はSnapshot内の追跡情報としてのみ使用する
+- `operationType = "create_material_gogma"` は直前までの作成・巨戟化結果を素材用OwnedWeaponとして登録するPlanner-only Stepであり、RouteOperationまたは追加のRNG操作ではない
+- `create_material_gogma` の `targetWeaponId`、`buildListEntryId`、`candidateId` は `null`、`ownedWeaponId` はPlanner生成時に予約した追加予定ID、`requiresUserConfirmation = true` とする
+- `create_material_gogma.inventoryChange.addOwnedWeapon` は `ownedWeaponId` と同じIDの `kind = "gogma"`、`status = "material"`、`isProtected = false` の武器を保持し、直前の予測／実結果のボーナス・Series Skill・Group Skillを失わない
+- `create_material_gogma.rngAdvance` はGogma / Skill / Normalのいずれも進行させず、`expectedStateBefore` には予約武器が存在せず、`expectedStateAfter.ownedWeaponsHash` には追加後の在庫を反映する
+- 予約IDは後続 `use_weapon_as_material` から同じ武器を参照するために使用してよいが、Step確定前にDBへ追加せず、BuildRouteへ未来OwnedWeapon IDを入れない
+- `create_material_gogma` は既存PracticalをMaterial / unprotectedへ変える `change_owned_weapon_status`、Target候補を確保する `reserve_weapon` と役割を分ける
+- 再計算はstale Planに対するUI / Planner操作であり、`recalculate_plan` PlanStepを旧Planへ追加しない
 
 ## 11.4 ExpectedResult
 
@@ -1286,6 +1293,10 @@ type Migration = (input: unknown) => unknown;
 - Route参照OwnedWeapon IDの入力順に依存せず、ID安定ソートと保存中のボーナス5枠順から決定的なHashが生成される
 - CalculationContextのいずれかが変わると互換性判定が失敗する
 - OwnedWeapon変更で `ownedWeaponsHash` が変わる
+- OwnedWeaponのkind変更で `ownedWeaponsHash` と `referencedOwnedWeaponsHash` が変わる
+- OwnedWeaponのname、memo、日時変更だけでは両Hashが変わらない
+- `create_material_gogma` Stepがunprotected Material Gogmaの追加、予約ID一致、RNG進行0、Target / BuildList / Candidate参照nullを満たす
+- `recalculate_plan` がPlanStepOperationTypeとして受理されない
 - TargetWeapon変更で `targetWeaponsHash` が変わる
 - BuildListEntry変更で `buildListEntriesHash` が変わる
 - 同じRoute依存RNG状態から同じ `searchStateHash` が生成される

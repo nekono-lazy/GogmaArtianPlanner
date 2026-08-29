@@ -219,4 +219,27 @@ describe('ExpectedPlanState hashing', () => {
     weapon.updatedAt = '2026-08-30T00:00:00.000Z'
     expect(createExpectedPlanState(state, [counter], [weapon])).toEqual(before)
   })
+
+  it('includes kind while excluding OwnedWeapon name and memo', () => {
+    const state = createValidRngState()
+    const counter = createValidNormalArtianCounter()
+    const gogma = createValidOwnedWeapon()
+    const before = createExpectedPlanState(state, [counter], [gogma])
+
+    gogma.name = '表示名だけ変更'
+    gogma.memo = 'メモだけ変更'
+    expect(createExpectedPlanState(state, [counter], [gogma])).toEqual(before)
+
+    const normal = {
+      ...gogma,
+      kind: 'normal' as const,
+      rarity: 8 as const,
+      seriesSkillId: null,
+      groupSkillId: null,
+      status: null,
+    }
+    expect(createExpectedPlanState(state, [counter], [normal])).not.toEqual(
+      before,
+    )
+  })
 })

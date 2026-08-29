@@ -27,6 +27,7 @@ import {
   validateRngState,
   validateTargetWeapon,
 } from './validation'
+import { createExpectedPlanState } from './hashing'
 import {
   DOMAIN_FIXTURE_TIME,
   createRestorationBonusSet,
@@ -39,6 +40,8 @@ import {
   createValidRngState,
   createValidTargetWeapon,
   domainFixtureContext,
+  ownedWeaponId,
+  targetWeaponId,
 } from '../../test/fixtures/domainData'
 import { createDefaultAppSettings } from './factories'
 
@@ -249,5 +252,104 @@ describe('complete Domain fixture validation', () => {
     const history = createValidExecutionHistory()
     history.wasExpected = false
     expect(validateExecutionHistory(history).isValid).toBe(false)
+  })
+
+  it('validates create_material_gogma as a zero-RNG Material registration step', () => {
+    const plan = createValidProductionPlan()
+    const material = {
+      ...createValidOwnedWeapon(),
+      status: 'material' as const,
+      isProtected: false,
+    }
+    const rngState = createValidRngState()
+    const counters = [createValidNormalArtianCounter()]
+    plan.steps[0] = {
+      ...plan.steps[0],
+      operationType: 'create_material_gogma',
+      targetWeaponId: null,
+      buildListEntryId: null,
+      candidateId: null,
+      ownedWeaponId: material.id,
+      expectedResult: {
+        restorationBonuses: material.restorationBonuses,
+        seriesSkillId: material.seriesSkillId,
+        groupSkillId: material.groupSkillId,
+        candidateCategory: null,
+        isSimilarToIdeal: false,
+        shouldSecure: true,
+      },
+      expectedStateBefore: createExpectedPlanState(rngState, counters, []),
+      expectedStateAfter: createExpectedPlanState(
+        rngState,
+        counters,
+        [material],
+      ),
+      inventoryChange: {
+        addOwnedWeapon: material,
+        removeOwnedWeaponIds: [],
+        updateOwnedWeapons: [],
+        materialRequirements: [],
+      },
+      rngAdvance: {
+        gogmaCounterDelta: 0,
+        skillCounterDelta: 0,
+        normalCounterDelta: null,
+        affectedNormalCounterId: null,
+      },
+      requiresUserConfirmation: true,
+    }
+    expect(validateProductionPlan(plan).isValid).toBe(true)
+
+    plan.steps[0].rngAdvance.gogmaCounterDelta = 1
+    expect(validateProductionPlan(plan).issues).toContainEqual(
+      expect.objectContaining({
+        path: 'steps[0].rngAdvance',
+        code: 'invalid_state',
+      }),
+    )
+    plan.steps[0].rngAdvance.gogmaCounterDelta = 0
+    plan.steps[0].targetWeaponId = targetWeaponId('target.fixture.unexpected')
+    expect(validateProductionPlan(plan).issues).toContainEqual(
+      expect.objectContaining({
+        path: 'steps[0]',
+        code: 'invalid_state',
+      }),
+    )
+    plan.steps[0].targetWeaponId = null
+    plan.steps[0].ownedWeaponId = ownedWeaponId('owned.fixture.other')
+    expect(validateProductionPlan(plan).issues).toContainEqual(
+      expect.objectContaining({
+        path: 'steps[0].ownedWeaponId',
+        code: 'invalid_reference',
+      }),
+    )
+    plan.steps[0].ownedWeaponId = material.id
+    const inventoryChange = plan.steps[0].inventoryChange
+    if (inventoryChange === null) throw new Error('fixture inventoryChange is required')
+    plan.steps[0].inventoryChange = {
+      ...inventoryChange,
+      addOwnedWeapon: {
+        ...material,
+        status: 'practical',
+      },
+    }
+    expect(validateProductionPlan(plan).issues).toContainEqual(
+      expect.objectContaining({
+        path: 'steps[0].inventoryChange.addOwnedWeapon',
+        code: 'invalid_state',
+      }),
+    )
+  })
+
+  it('rejects recalculate_plan as a PlanStep operation', () => {
+    const plan = createValidProductionPlan()
+    plan.steps[0].operationType =
+      'recalculate_plan' as typeof plan.steps[0]['operationType']
+    expect(validateProductionPlan(plan).issues).toContainEqual(
+      expect.objectContaining({
+        path: 'steps[0].operationType',
+        code: 'invalid_literal',
+      }),
+    )
   })
 })

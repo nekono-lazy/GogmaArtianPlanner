@@ -27,7 +27,10 @@ describe('Candidate Search routes', () => {
     )
     expect(result.targetResults[0].candidates).toEqual([])
     expect(result.targetResults[0].skippedRoutes).toContainEqual(
-      expect.objectContaining({ reason: 'normal_counter_unconfirmed' }),
+      expect.objectContaining({
+        route: 'normal_artian_to_gogma',
+        reason: 'normal_counter_unconfirmed',
+      }),
     )
   })
 
@@ -51,7 +54,10 @@ describe('Candidate Search routes', () => {
       'normal_artian_to_gogma',
     )
     expect(result.targetResults[0].skippedRoutes).toContainEqual(
-      expect.objectContaining({ reason: 'normal_counter_unconfirmed' }),
+      expect.objectContaining({
+        route: 'normal_artian_to_gogma',
+        reason: 'normal_counter_unconfirmed',
+      }),
     )
   })
 
@@ -67,7 +73,7 @@ describe('Candidate Search routes', () => {
     expect(result.targetResults[0].searchedRoutes).toEqual([])
     expect(result.targetResults[0].candidates).toEqual([])
     expect(result.targetResults[0].skippedRoutes).toContainEqual({
-      route: 'normal_artian',
+      route: 'normal_artian_to_gogma',
       reason: 'master_data_unavailable',
       detail:
         "Normal Artian Lottery master data is unavailable for 'weapon.fixture.a:8'.",
@@ -108,6 +114,12 @@ describe('Candidate Search routes', () => {
     expect(candidate.estimatedNormalAdvance).toBe(1)
     expect(candidate.estimatedGogmaAdvance).toBe(1)
     expect(candidate.estimatedSkillAdvance).toBe(1)
+    expect(result.targetResults[0].skippedRoutes).toContainEqual(
+      expect.objectContaining({
+        route: 'owned_normal_artian_to_gogma',
+        reason: 'no_owned_weapon_available',
+      }),
+    )
   })
 
   it('converts an unprotected owned Normal Artian through explicit Engine fixtures', async () => {
@@ -183,7 +195,10 @@ describe('Candidate Search routes', () => {
       'owned_normal_artian_to_gogma',
     )
     expect(result.targetResults[0].skippedRoutes).toContainEqual(
-      expect.objectContaining({ reason: 'no_unprotected_source_weapon' }),
+      expect.objectContaining({
+        route: 'owned_normal_artian_to_gogma',
+        reason: 'no_unprotected_source_weapon',
+      }),
     )
   })
 
@@ -281,7 +296,10 @@ describe('Candidate Search routes', () => {
       'existing_gogma_reset_skills',
     )
     expect(result.targetResults[0].skippedRoutes).toContainEqual(
-      expect.objectContaining({ reason: 'skill_capability_missing' }),
+      expect.objectContaining({
+        route: 'existing_gogma_reset_skills',
+        reason: 'skill_capability_missing',
+      }),
     )
   })
 
@@ -469,8 +487,19 @@ describe('Candidate Search routes', () => {
     )
     expect(result.targetResults[0].searchedRoutes).toEqual([])
     expect(result.targetResults[0].skippedRoutes).toEqual([
-      expect.objectContaining({ reason: 'calculation_context_incompatible' }),
-      expect.objectContaining({ reason: 'calculation_context_incompatible' }),
+      ...[
+        'normal_artian_to_gogma',
+        'owned_normal_artian_to_gogma',
+        'existing_gogma_reset_bonuses',
+        'existing_gogma_keep_bonuses',
+        'existing_gogma_reset_skills',
+        'existing_gogma_mixed',
+      ].map((route) =>
+        expect.objectContaining({
+          route,
+          reason: 'calculation_context_incompatible',
+        }),
+      ),
     ])
   })
 
@@ -495,7 +524,42 @@ describe('Candidate Search routes', () => {
       'normal_artian_to_gogma',
     ])
     expect(normalOnly.targetResults[0].skippedRoutes).toContainEqual(
-      expect.objectContaining({ reason: 'disabled_by_filter' }),
+      expect.objectContaining({
+        route: 'existing_gogma_reset_skills',
+        reason: 'disabled_by_filter',
+      }),
     )
+    expect(
+      normalOnly.targetResults[0].skippedRoutes
+        .filter(({ reason }) => reason === 'disabled_by_filter')
+        .map(({ route }) => route),
+    ).toEqual([
+      'existing_gogma_reset_bonuses',
+      'existing_gogma_keep_bonuses',
+      'existing_gogma_reset_skills',
+      'existing_gogma_mixed',
+    ])
+
+    input.routeFilter = 'existing_gogma'
+    const existingOnly = await searchCandidates(
+      input,
+      createCandidateSearchEngine(input),
+      deterministicExecution,
+    )
+    expect(
+      existingOnly.targetResults[0].skippedRoutes
+        .filter(({ reason }) => reason === 'disabled_by_filter')
+        .map(({ route }) => route),
+    ).toEqual([
+      'normal_artian_to_gogma',
+      'owned_normal_artian_to_gogma',
+    ])
+    const overlap = existingOnly.targetResults[0].searchedRoutes.filter(
+      (route) =>
+        existingOnly.targetResults[0].skippedRoutes.some(
+          (skipped) => skipped.route === route,
+        ),
+    )
+    expect(overlap).toEqual([])
   })
 })

@@ -70,7 +70,7 @@ export type SkippedRouteReason =
   | 'disabled_by_filter'
 
 export interface SkippedRoute {
-  route: CandidateRouteFilter
+  route: RouteKind
   reason: SkippedRouteReason
   detail: string
 }

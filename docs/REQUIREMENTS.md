@@ -461,9 +461,13 @@ Plannerが確認なしで保護を解除または素材化すること、protect
 ```text
 通常アーティア作成
 → 巨戟化
-→ 素材用巨戟として登録
-→ 後続のRNG進行に使用
+→ `create_material_gogma` で素材用巨戟として登録
+→ 必要になった位置で素材消費
 ```
+
+`create_material_gogma` は追加のゲーム内RNG操作ではなく、直前までに作成済みの巨戟アーティアを `kind = Gogma`、`status = Material`、保護OFFとしてツールのInventoryへ登録するPlanner-only PlanStepである。Plannerは後続の素材消費と結ぶOwnedWeapon IDをPlan生成時に予約してよいが、登録Step確定前にDBまたはシミュレーション在庫へ追加せず、BuildRouteへ未来武器IDを入れない。
+
+既存PracticalをMaterialへ変える `change_owned_weapon_status`、Target候補を確保する `reserve_weapon` とは役割を分離する。再計算はstale Planに対するユーザー操作であり、旧Plan内の `recalculate_plan` Stepとして表現しない。
 
 素材アイテムそのものは初期版では厳密な所持数制約にしない。必要数または必要量のみ表示する。
 

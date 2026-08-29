@@ -37,11 +37,15 @@ class ControlledClient implements SearchWorkerClient {
   reject(error: Error) { this.rejectSearch?.(error) }
 }
 
-function resultFor(target: TargetWeapon, candidates: BuildCandidate[]): CandidateSearchResult {
+function resultFor(
+  target: TargetWeapon,
+  candidates: BuildCandidate[],
+  skippedRoutes: CandidateSearchResult['targetResults'][number]['skippedRoutes'] = [],
+): CandidateSearchResult {
   return {
     searchRunId: 'ui-run',
     calculationContext: createFixtureInput().calculationContext,
-    targetResults: [{ targetWeaponId: target.id, candidates, searchedRoutes: ['normal_artian_to_gogma'], skippedRoutes: [] }],
+    targetResults: [{ targetWeaponId: target.id, candidates, searchedRoutes: ['normal_artian_to_gogma'], skippedRoutes }],
     relaxationSuggestions: [],
     warnings: [],
     elapsedMs: 1,
@@ -114,6 +118,21 @@ describe('SearchPage', () => {
     await user.click(await screen.findByRole('button', { name: '検索開始' }))
     errorClient.reject(new Error('Worker fixture error'))
     expect(await screen.findByText('Worker fixture error')).toBeInTheDocument()
+  })
+
+  it('shows skipped routes with their concrete RouteKind label', async () => {
+    const user = userEvent.setup()
+    const target = createValidTargetWeapon()
+    const client = new ControlledClient()
+    render(<SearchPage dependencies={dependencies(client, [target])} />)
+    await user.click(await screen.findByRole('button', { name: '検索開始' }))
+    client.resolve(resultFor(target, [], [{
+      route: 'owned_normal_artian_to_gogma',
+      reason: 'no_owned_weapon_available',
+      detail: 'fixture',
+    }]))
+    await user.click(await screen.findByText('実行できなかった作成ルート'))
+    expect(await screen.findByText(/所持通常アーティアから巨戟化/)).toBeInTheDocument()
   })
 
   it('cancels and ignores a late result for the obsolete request', async () => {

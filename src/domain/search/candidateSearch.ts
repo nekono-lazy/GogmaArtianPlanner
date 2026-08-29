@@ -29,6 +29,24 @@ const routeOrder: RouteKind[] = [
   'existing_gogma_reset_skills',
   'existing_gogma_mixed',
 ]
+const normalRouteKinds: RouteKind[] = [
+  'normal_artian_to_gogma',
+  'owned_normal_artian_to_gogma',
+]
+const existingGogmaRouteKinds: RouteKind[] = [
+  'existing_gogma_reset_bonuses',
+  'existing_gogma_keep_bonuses',
+  'existing_gogma_reset_skills',
+  'existing_gogma_mixed',
+]
+
+function routeKindsForFilter(
+  filter: CandidateSearchInput['routeFilter'],
+): RouteKind[] {
+  if (filter === 'normal_artian') return normalRouteKinds
+  if (filter === 'existing_gogma') return existingGogmaRouteKinds
+  return routeOrder
+}
 
 function compareTargets(left: TargetWeapon, right: TargetWeapon): number {
   return (
@@ -77,36 +95,11 @@ function selectedTargets(
 
 function contextSkippedRoutes(input: CandidateSearchInput): SkippedRoute[] {
   const detail = 'The RNG Engine version does not match CalculationContext.'
-  if (input.routeFilter === 'normal_artian') {
-    return [
-      {
-        route: 'normal_artian',
-        reason: 'calculation_context_incompatible',
-        detail,
-      },
-    ]
-  }
-  if (input.routeFilter === 'existing_gogma') {
-    return [
-      {
-        route: 'existing_gogma',
-        reason: 'calculation_context_incompatible',
-        detail,
-      },
-    ]
-  }
-  return [
-    {
-      route: 'normal_artian',
-      reason: 'calculation_context_incompatible',
-      detail,
-    },
-    {
-      route: 'existing_gogma',
-      reason: 'calculation_context_incompatible',
-      detail,
-    },
-  ]
+  return routeKindsForFilter(input.routeFilter).map((route) => ({
+    route,
+    reason: 'calculation_context_incompatible',
+    detail,
+  }))
 }
 
 async function searchTarget(
@@ -134,11 +127,11 @@ async function searchTarget(
   }
 
   if (input.routeFilter === 'existing_gogma') {
-    skippedRoutes.push({
-      route: 'normal_artian',
+    skippedRoutes.push(...normalRouteKinds.map((route) => ({
+      route,
       reason: 'disabled_by_filter',
       detail: 'Normal Artian routes are disabled by routeFilter.',
-    })
+    } as const)))
   } else {
     const normalResult = await searchNormalArtianRoutes({
       target,
@@ -163,11 +156,11 @@ async function searchTarget(
   }
 
   if (input.routeFilter === 'normal_artian') {
-    skippedRoutes.push({
-      route: 'existing_gogma',
+    skippedRoutes.push(...existingGogmaRouteKinds.map((route) => ({
+      route,
       reason: 'disabled_by_filter',
       detail: 'Existing Gogma routes are disabled by routeFilter.',
-    })
+    } as const)))
   } else {
     const existingResult = await searchExistingGogmaRoutes({
       target,
@@ -186,12 +179,18 @@ async function searchTarget(
     input.resultFilter,
   )
   const truncated = processed.length > input.settings.maxCandidatesPerTarget
+  const orderedSearchedRoutes = routeOrder.filter((route) =>
+    searchedRoutes.includes(route),
+  )
+  const searchedRouteSet = new Set(orderedSearchedRoutes)
   return {
     result: {
       targetWeaponId: target.id,
       candidates: processed.slice(0, input.settings.maxCandidatesPerTarget),
-      searchedRoutes: routeOrder.filter((route) => searchedRoutes.includes(route)),
-      skippedRoutes: uniqueSkippedRoutes(skippedRoutes),
+      searchedRoutes: orderedSearchedRoutes,
+      skippedRoutes: uniqueSkippedRoutes(skippedRoutes).filter(
+        ({ route }) => !searchedRouteSet.has(route),
+      ),
     },
     warnings,
     truncated,

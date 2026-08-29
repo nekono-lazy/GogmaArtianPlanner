@@ -3,6 +3,7 @@ import type {
   CalculationContext,
   KnownValue,
   NormalArtianCounter,
+  PlanStepOperationType,
   RestorationBonus,
   RngState,
 } from './common'
@@ -805,6 +806,26 @@ function validatePlanStep(
 ) {
   const path = `steps[${expectedOrder - 1}]`
   validateId(step.id, `${path}.id`, issues)
+  const allowedOperationTypes: readonly PlanStepOperationType[] = [
+    'create_normal_artian',
+    'convert_normal_to_gogma',
+    'create_material_gogma',
+    'reset_bonuses',
+    'keep_bonuses',
+    'reset_skills',
+    'reserve_weapon',
+    'use_weapon_as_material',
+    'change_owned_weapon_status',
+    'confirm_result',
+  ]
+  if (!allowedOperationTypes.includes(step.operationType)) {
+    addIssue(
+      issues,
+      `${path}.operationType`,
+      'invalid_literal',
+      'PlanStep operation type is invalid.',
+    )
+  }
   if (step.order !== expectedOrder) {
     addIssue(issues, `${path}.order`, 'invalid_state', 'PlanStep order must be a one-based contiguous sequence.')
   }
@@ -813,6 +834,116 @@ function validatePlanStep(
   }
   if (step.operationType === 'change_owned_weapon_status' && !step.requiresUserConfirmation) {
     addIssue(issues, `${path}.requiresUserConfirmation`, 'invalid_state', 'Weapon status changes require explicit confirmation.')
+  }
+  if (step.operationType === 'create_material_gogma') {
+    if (
+      step.targetWeaponId !== null ||
+      step.buildListEntryId !== null ||
+      step.candidateId !== null
+    ) {
+      addIssue(
+        issues,
+        path,
+        'invalid_state',
+        'A material Gogma registration step must not reference a Target, BuildListEntry, or Candidate.',
+      )
+    }
+    if (step.ownedWeaponId === null) {
+      addIssue(
+        issues,
+        `${path}.ownedWeaponId`,
+        'invalid_reference',
+        'A material Gogma registration step requires its reserved OwnedWeapon ID.',
+      )
+    }
+    if (!step.requiresUserConfirmation) {
+      addIssue(
+        issues,
+        `${path}.requiresUserConfirmation`,
+        'invalid_state',
+        'A material Gogma registration step requires explicit confirmation.',
+      )
+    }
+    const addedWeapon = step.inventoryChange?.addOwnedWeapon
+    if (!addedWeapon) {
+      addIssue(
+        issues,
+        `${path}.inventoryChange.addOwnedWeapon`,
+        'invalid_structure',
+        'A material Gogma registration step must add the predicted weapon.',
+      )
+    } else {
+      appendIssues(
+        issues,
+        `${path}.inventoryChange.addOwnedWeapon`,
+        validateOwnedWeapon(addedWeapon),
+      )
+      if (
+        addedWeapon.kind !== 'gogma' ||
+        addedWeapon.status !== 'material' ||
+        addedWeapon.isProtected
+      ) {
+        addIssue(
+          issues,
+          `${path}.inventoryChange.addOwnedWeapon`,
+          'invalid_state',
+          'The added weapon must be an unprotected Material Gogma Artian weapon.',
+        )
+      }
+      if (step.ownedWeaponId !== addedWeapon.id) {
+        addIssue(
+          issues,
+          `${path}.ownedWeaponId`,
+          'invalid_reference',
+          'ownedWeaponId must match inventoryChange.addOwnedWeapon.id.',
+        )
+      }
+      const expected = step.expectedResult
+      if (
+        expected === null ||
+        expected.restorationBonuses === null ||
+        !areRestorationBonusSetsEqual(
+          expected.restorationBonuses,
+          addedWeapon.restorationBonuses,
+        ) ||
+        expected.seriesSkillId !== addedWeapon.seriesSkillId ||
+        expected.groupSkillId !== addedWeapon.groupSkillId ||
+        expected.candidateCategory !== null ||
+        expected.isSimilarToIdeal ||
+        !expected.shouldSecure
+      ) {
+        addIssue(
+          issues,
+          `${path}.expectedResult`,
+          'inconsistent_snapshot',
+          'ExpectedResult must describe the material Gogma weapon being registered without a Target category.',
+        )
+      }
+    }
+    if (
+      step.rngAdvance.gogmaCounterDelta !== 0 ||
+      step.rngAdvance.skillCounterDelta !== 0 ||
+      step.rngAdvance.normalCounterDelta !== null ||
+      step.rngAdvance.affectedNormalCounterId !== null
+    ) {
+      addIssue(
+        issues,
+        `${path}.rngAdvance`,
+        'invalid_state',
+        'Registering a material Gogma weapon must not advance RNG counters.',
+      )
+    }
+    if (
+      step.expectedStateBefore.ownedWeaponsHash ===
+      step.expectedStateAfter.ownedWeaponsHash
+    ) {
+      addIssue(
+        issues,
+        `${path}.expectedStateAfter.ownedWeaponsHash`,
+        'inconsistent_snapshot',
+        'The expected OwnedWeapon state must include the registered material weapon.',
+      )
+    }
   }
   validateExpectedPlanState(step.expectedStateBefore, `${path}.expectedStateBefore`, issues)
   validateExpectedPlanState(step.expectedStateAfter, `${path}.expectedStateAfter`, issues)

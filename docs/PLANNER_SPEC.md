@@ -90,8 +90,8 @@ const defaultPlannerOptions = {
 - PlannerはBuildListEntryの `candidateSnapshot` を入力候補として使う
 - Planner入力validationでTarget定義Hash、searchStateHash、referencedOwnedWeaponsHash、CalculationContextを現在値から再確認し、保存済み `isStale` だけを信用しない
 - RngState全体の確定は要求しない
-- `deriveRngCapabilities` で全RouteOperationに必要なCapabilityが揃う場合のみPlannerを実行する
-- Capability不足またはCalculationContext非互換のBuildListEntryだけを除外し、理由をwarningへ出す
+- `deriveRngCapabilities(rngState, normalCounters, requiredOperations, engineCapabilities)` で、各BuildListEntryの全RouteOperationに必要なKnownValueと現在Engineのsupportが揃うか確認する
+- Capability不足またはCalculationContext非互換のBuildListEntryだけを除外し、理由をwarningへ出す。無関係なEntryを一括無効化しない
 - `targetWeapons` は `isEnabled = true` のみ対象
 - `beamWidth` と `maxExpandedStates` は1以上
 
@@ -145,13 +145,15 @@ export interface PlannerTargetSatisfaction {
 
 判定。
 
-- `hasPractical`: OwnedWeaponがTargetの実用条件を満たす
-- `hasIdeal`: OwnedWeaponがTargetの理想条件を満たす
+- `hasPractical`: `kind = "gogma"` のOwnedWeaponがTargetの実用条件を満たす
+- `hasIdeal`: `kind = "gogma"` のOwnedWeaponがTargetの理想条件を満たす
 
 制約。
 
 - `status` だけで判定しない。実際のボーナス・スキル条件で判定する
 - `status` はユーザー管理ラベルとして扱う
+- `hasPractical`、`hasIdeal`、`practicalOwnedWeaponIds`、`idealOwnedWeaponIds` はすべてOwnedGogmaArtianWeaponだけから導出する
+- OwnedNormalArtianWeaponはInventory資源・巨戟化元であり、Target充足武器として評価しない
 - 既に理想品があるTargetは原則Planner対象から外す
 - 既に実用品があるTargetでは、理想候補を優先度に応じて後回しにする
 - PlannerSearchStateの初期 `targetSatisfaction` はTargetSatisfactionから生成する
@@ -277,7 +279,7 @@ export interface SimulatedInventory {
 ```text
 通常アーティア作成
 → 巨戟化
-→ 素材用巨戟として登録
+→ create_material_gogma（素材用巨戟として登録）
 → 後続Stepで素材として使用
 ```
 
@@ -286,6 +288,9 @@ export interface SimulatedInventory {
 - 初期版では素材アイテムの所持数不足はPlan不可理由にしない
 - 巨戟アーティア武器の不足はPlanに補充Stepを追加して解決する
 - 補充StepでもRNG進行を伴うため、後続候補のCounterと整合させる
+- RNG進行は通常アーティア作成と巨戟化の実ゲーム操作Stepで行い、`create_material_gogma` 自体はCounterを進めない
+- Plannerは補充武器のOwnedWeaponIdをPlan生成時に予約し、`create_material_gogma.inventoryChange.addOwnedWeapon.id` と後続 `use_weapon_as_material` で同じIDを使ってよい
+- 予約武器は `create_material_gogma` 確定前のInventoryへ追加せず、登録前に素材消費・Reset Bonuses・Keep Bonusesの起点として使わない
 - protected武器への素材消費・Reset Bonuses・Keep Bonusesが必要な探索展開は生成せず、該当BuildListEntryを不採用として理由を残す
 - Search後に起点武器がprotectedへ変わった場合、素材消費・Reset Bonuses・Keep Bonusesを必要とするEntryはPlanner入力validationで実行不能とする。Reset SkillsのみのEntryは実行可能とする
 - v1では、Plannerは同一TargetのIdeal武器を先に確保できる場合だけ、旧Practical武器の確認付き素材化Stepを探索へ追加してよい
@@ -434,15 +439,32 @@ UI実行は1操作ずつ。
 3. reserve_weapon
 ```
 
-## 11.5 素材補充
+## 11.6 素材補充
 
 ```text
 1. create_normal_artian
 2. convert_normal_to_gogma
-3. change_owned_weapon_status(material)
+3. create_material_gogma
+4. 必要になった位置で use_weapon_as_material
 ```
 
-## 11.6 旧実用品の素材化
+`create_material_gogma` は作成済み巨戟をツールのOwnedWeapon Inventoryへ登録するPlanner-only PlanStepであり、RouteOperationまたは追加の巨戟化ではない。
+
+- `targetWeaponId = null`
+- `buildListEntryId = null`
+- `candidateId = null`
+- `ownedWeaponId` はPlan生成時に予約した追加予定Material OwnedWeapon ID
+- `requiresUserConfirmation = true`
+- `inventoryChange.addOwnedWeapon` は同じIDの `kind = "gogma"`、`status = "material"`、`isProtected = false` の武器
+- 復元ボーナス、Series Skill、Group Skillは直前の予測／実結果を保持する
+- `rngAdvance` はGogma / Skill / Normalすべて0
+- `expectedStateBefore` では予約武器は未登録、`expectedStateAfter.ownedWeaponsHash` では登録済み
+
+`ExpectedResult` を保持する場合は、直前結果の復元ボーナスとSkillを設定し、`candidateCategory = null`、`isSimilarToIdeal = false`、`shouldSecure = true` とする。Target候補として扱わない。
+
+`create_material_gogma` は、既存PracticalをMaterial / unprotectedへ変更する `change_owned_weapon_status` と、TargetのPractical / Ideal候補を確保する `reserve_weapon` のどちらにも流用しない。予約IDはBuildRoute内の未来武器参照ではなく、ProductionPlan内で登録Stepと後続消費Stepを結ぶためだけに使う。
+
+## 11.7 旧実用品の素材化
 
 同一TargetのIdeal武器の確保後に旧Practical武器を後続素材へ使うPlanでは、次のStepを生成できる。
 
@@ -466,6 +488,9 @@ UI実行は1操作ずつ。
 ## 12. 再計算
 
 計画どおり進行している場合は再計算しない。
+
+再計算はstale Planに対してユーザーが開始するUI / Planner操作であり、
+`PlanStepOperationType` ではない。旧Planへ `recalculate_plan` Stepを追加しない。
 
 Plan開始時の `baseSnapshot.initialExecutionState` と現在の可変状態を毎回比較してはならない。正常なStep実行でもRNG Counterと所持武器が変化するためである。
 
@@ -588,6 +613,8 @@ export type PlannerWorkerResponse =
 
 ## 15.1 Satisfaction Test
 
+- 通常アーティアをTargetのPractical / Ideal所持判定に含めない
+- 巨戟アーティアだけを実際のTarget条件で評価する
 - statusではなく条件で実用品所持を判定する
 - 理想品所持TargetをPlanner対象から外す
 - 実用品所持Targetでは理想候補が後回しになる
@@ -619,6 +646,8 @@ export type PlannerWorkerResponse =
 - `isProtected = true` のPractical / Ideal武器でもReset Skillsのみの探索展開を生成できる
 - 素材消費・Reset Bonuses・Keep Bonusesで保護武器を必要とするEntryは `requires_protected_weapon` で不採用になる
 - 素材用巨戟不足時に補充Stepが追加される
+- `create_material_gogma` が予約IDと同じunprotected Material Gogmaを追加し、RNGを進めない
+- 予約素材武器を登録Step前に使用せず、登録後も二重消費しない
 - 消費済み武器を再利用しない
 - 同一TargetのIdeal確保後に確認必須のchange_owned_weapon_status Stepを生成できる
 - 別のPractical確保だけを理由にchange_owned_weapon_status Stepを生成しない
@@ -647,6 +676,7 @@ export type PlannerWorkerResponse =
 - 各PlanStepにexpectedStateBefore / Afterが設定される
 - BuildListEntry IDとCalculationContextがPlanへ保存される
 - Candidate由来PlanStepの主参照がBuildListEntry IDである
+- `recalculate_plan` PlanStepを生成しない
 
 ## 15.7 Invalidation Test
 

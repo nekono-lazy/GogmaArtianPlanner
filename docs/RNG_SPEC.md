@@ -36,7 +36,11 @@ Domain Modelは `DATA_MODEL.md` の `RngState` と `NormalArtianCounter` を使�
 
 Base Seed、Gogma Counter、Skill Counter、Counter Gateは `KnownValue<T>` として独立に確定・未確定を保持する。RngState全体の確定フラグは使用しない。
 
-予測前に `deriveRngCapabilities` を呼び、必要な確定値が揃った機能だけを有効化する。不足値に依存するRouteだけをskipする。
+予測前に、RngState、レア8通常Counter、必要なRouteOperation、現在の
+`RngEngineCapabilities` を渡して `deriveRngCapabilities` を呼ぶ。
+Capabilityは必要なKnownValueが確定済みであり、かつ現在のEngineが該当Predictionを
+supportする場合だけ有効にする。値が揃っていてもEngine未対応ならfalseとし、
+不足に依存するRouteだけをskipする。
 
 ---
 

@@ -42,7 +42,7 @@ import {
   SearchCancelledError,
   type SearchWorkerClient,
 } from '../services/search/searchWorkerClient'
-import { candidateRouteFilterLabels, skippedRouteReasonLabels } from '../presentation/labels'
+import { routeKindLabels, skippedRouteReasonLabels } from '../presentation/labels'
 
 const loadedMaster = loadMasterData()
 const defaultMaster = loadedMaster.ok ? loadedMaster.data : null
@@ -266,7 +266,7 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
           const target = targetById.get(targetResult.targetWeaponId) ?? null
           const idealCount = targetResult.candidates.filter(({ category }) => category === 'ideal').length
           const practicalCount = targetResult.candidates.length - idealCount
-          return <Stack spacing={2} key={targetResult.targetWeaponId}><Typography variant="h2">{target?.name ?? '不明な目標武器'}</Typography><Typography>理想候補 {idealCount}件 ／ 実用候補 {practicalCount}件</Typography>{targetResult.candidates.length === 0 && <Alert severity="info">条件を満たす候補は見つかりませんでした。</Alert>}{targetResult.candidates.map((candidate) => <CandidateCard key={candidate.id} candidate={candidate} target={target} master={masterForDisplay} ownedWeapons={ownedWeapons} debugMode={debugMode} onAdd={(selected) => void addToBuildList(selected)} />)}{targetResult.skippedRoutes.length > 0 && <Accordion><AccordionSummary><Typography>実行できなかった作成ルート</Typography></AccordionSummary><AccordionDetails><Stack spacing={1}>{targetResult.skippedRoutes.map((skipped, index) => <Alert severity={skipped.reason === 'master_data_unavailable' ? 'warning' : 'info'} key={`${skipped.route}:${skipped.reason}:${index}`}>{candidateRouteFilterLabels[skipped.route]}: {skippedRouteReasonLabels[skipped.reason]}</Alert>)}</Stack></AccordionDetails></Accordion>}</Stack>
+          return <Stack spacing={2} key={targetResult.targetWeaponId}><Typography variant="h2">{target?.name ?? '不明な目標武器'}</Typography><Typography>理想候補 {idealCount}件 ／ 実用候補 {practicalCount}件</Typography>{targetResult.candidates.length === 0 && <Alert severity="info">条件を満たす候補は見つかりませんでした。</Alert>}{targetResult.candidates.map((candidate) => <CandidateCard key={candidate.id} candidate={candidate} target={target} master={masterForDisplay} ownedWeapons={ownedWeapons} debugMode={debugMode} onAdd={(selected) => void addToBuildList(selected)} />)}{targetResult.skippedRoutes.length > 0 && <Accordion><AccordionSummary><Typography>実行できなかった作成ルート</Typography></AccordionSummary><AccordionDetails><Stack spacing={1}>{targetResult.skippedRoutes.map((skipped, index) => <Alert severity={skipped.reason === 'master_data_unavailable' ? 'warning' : 'info'} key={`${skipped.route}:${skipped.reason}:${index}`}>{routeKindLabels[skipped.route]}: {skippedRouteReasonLabels[skipped.reason]}</Alert>)}</Stack></AccordionDetails></Accordion>}</Stack>
         })}
       </Stack>
     </PageShell>

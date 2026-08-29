@@ -52,7 +52,6 @@ export type PlanStepOperationType =
   | 'use_weapon_as_material'
   | 'change_owned_weapon_status'
   | 'confirm_result'
-  | 'recalculate_plan'
 export type ExecutionAction =
   | 'confirmed_expected'
   | 'secured_weapon'

@@ -42,7 +42,7 @@ export async function searchNormalArtianRoutes(
 
   if (matchingCounters.length === 0) {
     result.skippedRoutes.push({
-      route: 'normal_artian',
+      route: 'normal_artian_to_gogma',
       reason: 'normal_counter_unconfirmed',
       detail: `No confirmed Normal Artian Counter is available for '${target.weaponTypeId}'.`,
     })
@@ -52,7 +52,7 @@ export async function searchNormalArtianRoutes(
   const usableCounters = matchingCounters.filter((counter) => {
     if (hasNormalArtianLottery(context, counter.rarity)) return true
     result.skippedRoutes.push({
-      route: 'normal_artian',
+      route: 'normal_artian_to_gogma',
       reason: 'master_data_unavailable',
       detail: `Normal Artian Lottery master data is unavailable for '${counter.id}'.`,
     })
@@ -92,7 +92,7 @@ export async function searchNormalArtianRoutes(
   )
   if (!capabilities.canPredictGogma) {
     result.skippedRoutes.push({
-      route: 'normal_artian',
+      route: 'normal_artian_to_gogma',
       reason: 'gogma_capability_missing',
       detail: 'Gogma prediction capability is required for conversion.',
     })
@@ -100,7 +100,7 @@ export async function searchNormalArtianRoutes(
   }
   if (!capabilities.canPredictSkills) {
     result.skippedRoutes.push({
-      route: 'normal_artian',
+      route: 'normal_artian_to_gogma',
       reason: 'skill_capability_missing',
       detail: 'Skill prediction capability is required for a completed normal route.',
     })
