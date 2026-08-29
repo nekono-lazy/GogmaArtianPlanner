@@ -186,6 +186,12 @@ function exclusiveConsumedWeaponId(
   ) {
     return entry.candidateSnapshot.route.sourceOwnedWeaponId
   }
+  if (
+    operation.type === 'reset_bonuses' ||
+    operation.type === 'keep_bonuses'
+  ) {
+    return operation.sourceOwnedWeaponId
+  }
   return null
 }
 

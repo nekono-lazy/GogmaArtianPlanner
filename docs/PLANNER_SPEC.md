@@ -213,7 +213,14 @@ export interface PlannerSearchState {
   >;
   selectedBuildListEntryIds: BuildListEntryId[];
   routeProgressByEntryId: Record<BuildListEntryId, number>;
-  steps: PlanStep[];
+  routeRuntimeByEntryId: Record<BuildListEntryId, PlannerRouteRuntimeState>;
+  sourceMutationVersionByOwnedWeaponId: Record<OwnedWeaponId, number>;
+  candidateReadySourceVersionByEntryId: Record<BuildListEntryId, number>;
+  inFlightExistingSourceByOwnedWeaponId: Record<OwnedWeaponId, true>;
+  securedOwnedWeaponIdByEntryId: Record<BuildListEntryId, OwnedWeaponId>;
+  trace: PlannerSearchAction[];
+  practicalFirstProgressTargetIds: TargetWeaponId[];
+  consumedMaterialWeaponCount: number;
   totalCost: number;
   evaluationScore: number;
 }
@@ -235,8 +242,16 @@ export interface PlannerSearchState {
 
 候補確保時の状態遷移。
 
-- Practical候補: 対象Targetの `hasPractical = true`
-- Ideal候補: 対象Targetの `hasPractical = true`、`hasIdeal = true`
+- Candidate reserveまたはMaterial Gogma消費など、SimulatedInventoryの意味的変更後は、
+  enabled Target全体のTargetSatisfactionを現在InventoryのOwnedGogmaだけから再導出する。
+  statusだけで判定せず、Idealは常にPracticalも満たす。1武器が複数Targetを満たす場合は
+  すべてへ反映し、削除・更新で満たさなくなったTargetはtrueを保持しない。
+- 既存Gogmaのreset_bonuses、keep_bonuses、またはsourceを持つreset_skillsを実行したら、
+  そのsourceのmutation versionを進め、Candidate reserveまでin-flightとして
+  TargetSatisfaction評価から除外する。EntryのRoute完了時にそのsource versionを記録し、
+  reserveは記録versionと現在versionが一致するときだけ許可する。後続操作でsourceが
+  変更された古いCandidateはreserveできない。同一physical actionを共有して同時に
+  完了したEntryは同じversionを記録してよい。
 - Practical確保済みでもIdeal未所持なら、そのTargetは理想更新候補として探索に残す
 
 ### 7.1 Planner Search Action / Trace

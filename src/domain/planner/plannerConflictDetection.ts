@@ -16,6 +16,7 @@ import type {
 export interface PlannerConflictDetectionResult {
   conflicts: PlanConflict[]
   conflictIdsByUnitKey: ReadonlyMap<string, readonly string[]>
+  selectedPhysicalActionKeysByConflictId: ReadonlyMap<string, readonly string[]>
   warnings: PlannerWarning[]
 }
 
@@ -169,7 +170,9 @@ function consumedWeaponGroups(
     })
   })
   return [...groups.values()].filter(
-    ({ units }) => sortedEntryIds(units).length > 1,
+    ({ units }) =>
+      sortedEntryIds(units).length > 1 &&
+      !allOneShareablePhysicalAction(units),
   )
 }
 
@@ -231,6 +234,7 @@ export function detectPlannerConflicts(
     resolutions.map((resolution) => [resolution.conflictKey, resolution]),
   )
   const conflictIdsByUnitKey = new Map<string, string[]>()
+  const selectedPhysicalActionKeysByConflictId = new Map<string, string[]>()
   const conflicts = [...counterGroups(unitPlans), ...consumedWeaponGroups(unitPlans)]
     .map((group) => {
       const buildListEntryIds = sortedEntryIds(group.units)
@@ -260,6 +264,16 @@ export function detectPlannerConflicts(
             : `Applied local resolution for BuildListEntry '${selectedBuildListEntryId}'.`,
       }
       appendUnitConflict(conflictIdsByUnitKey, conflict, group.units)
+      if (selectedBuildListEntryId !== null) {
+        selectedPhysicalActionKeysByConflictId.set(
+          conflict.id,
+          [...new Set(
+            group.units
+              .filter(({ entryId }) => entryId === selectedBuildListEntryId)
+              .map(({ physicalActionKey }) => physicalActionKey),
+          )].sort(compareStableStrings),
+        )
+      }
       return conflict
     })
     .sort((left, right) => compareStableStrings(left.id, right.id))
@@ -281,22 +295,34 @@ export function detectPlannerConflicts(
     }
     return []
   })
-  return { conflicts, conflictIdsByUnitKey, warnings }
+  return {
+    conflicts,
+    conflictIdsByUnitKey,
+    selectedPhysicalActionKeysByConflictId,
+    warnings,
+  }
 }
 
 export function isUnitBlockedByConflictResolution(
   unit: PlannerRouteUnit,
   conflictsById: ReadonlyMap<string, PlanConflict>,
   conflictIdsByUnitKey: ReadonlyMap<string, readonly string[]>,
+  selectedPhysicalActionKeysByConflictId: ReadonlyMap<string, readonly string[]>,
+  isSelectedEntryStillRelevant: (entryId: BuildListEntryId) => boolean,
 ): boolean {
   return (conflictIdsByUnitKey.get(plannerRouteUnitKey(unit)) ?? []).some(
     (conflictId) => {
       const conflict = conflictsById.get(conflictId)
-      return (
-        conflict?.selectedBuildListEntryId !== null &&
-        conflict?.selectedBuildListEntryId !== unit.entryId
+      if (
+        !conflict ||
+        conflict.selectedBuildListEntryId === null ||
+        !isSelectedEntryStillRelevant(conflict.selectedBuildListEntryId)
+      ) return false
+      return !(
+        selectedPhysicalActionKeysByConflictId
+          .get(conflictId)
+          ?.includes(unit.physicalActionKey) ?? false
       )
     },
   )
 }
-

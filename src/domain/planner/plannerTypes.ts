@@ -191,7 +191,15 @@ export interface PlannerSearchState {
   selectedBuildListEntryIds: BuildListEntryId[]
   routeProgressByEntryId: Record<string, number>
   routeRuntimeByEntryId: Record<string, PlannerRouteRuntimeState>
+  /** Incremented whenever an existing Gogma's physical state is changed in-flight. */
+  sourceMutationVersionByOwnedWeaponId: Record<string, number>
+  /** Existing-source Candidate snapshots are reservable only at this recorded version. */
+  candidateReadySourceVersionByEntryId: Record<string, number>
+  /** Existing sources are excluded from satisfaction until a Candidate result is reserved. */
+  inFlightExistingSourceByOwnedWeaponId: Record<string, true>
   securedOwnedWeaponIdByEntryId: Record<string, OwnedWeaponId>
+  /** Targets initially lacking a Practical weapon that this branch has started to secure. */
+  practicalFirstProgressTargetIds: TargetWeaponId[]
   trace: PlannerSearchAction[]
   consumedMaterialWeaponCount: number
   totalCost: number

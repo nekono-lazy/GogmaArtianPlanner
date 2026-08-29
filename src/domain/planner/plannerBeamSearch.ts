@@ -49,6 +49,7 @@ import type {
   PlannerWarning,
 } from './plannerTypes'
 import { validatePlannerInput } from './plannerValidation'
+import { deriveTargetSatisfaction } from './targetSatisfaction'
 
 function compareStableStrings(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
@@ -76,6 +77,74 @@ function rngSnapshot(state: PlannerSearchState): PlannerSearchRngSnapshot {
 
 function cloneState(state: PlannerSearchState): PlannerSearchState {
   return structuredClone(state)
+}
+
+function entryIsRelevantForState(
+  state: PlannerSearchState,
+  entry: BuildListEntry,
+): boolean {
+  const satisfaction = state.targetSatisfaction[entry.targetWeaponId]
+  return Boolean(
+    satisfaction &&
+      !satisfaction.hasIdeal &&
+      (!satisfaction.hasPractical || entry.candidateSnapshot.category === 'ideal'),
+  )
+}
+
+function isExistingGogmaRoute(entry: BuildListEntry): boolean {
+  return entry.candidateSnapshot.route.kind.startsWith('existing_gogma')
+}
+
+function sourceMutatedByOperation(
+  operation: PlannerRouteUnit['operation'],
+): OwnedWeaponId | null {
+  if (
+    operation.type === 'reset_bonuses' ||
+    operation.type === 'keep_bonuses'
+  ) return operation.sourceOwnedWeaponId
+  if (
+    operation.type === 'reset_skills' &&
+    operation.sourceOwnedWeaponId !== null
+  ) return operation.sourceOwnedWeaponId
+  return null
+}
+
+function refreshTargetSatisfaction(
+  state: PlannerSearchState,
+  targets: readonly TargetWeapon[],
+  master: PlannerInput['master'],
+): PlannerSearchAction['satisfactionChanges'] {
+  const before = structuredClone(state.targetSatisfaction)
+  const derived = deriveTargetSatisfaction(
+    targets,
+    state.simulatedInventory.ownedWeapons.filter(
+      ({ id }) => state.inFlightExistingSourceByOwnedWeaponId[id] === undefined,
+    ),
+    master,
+  )
+  const next = Object.fromEntries(
+    derived.map(({ targetWeaponId, hasPractical, hasIdeal }) => [
+      targetWeaponId,
+      { hasPractical, hasIdeal },
+    ]),
+  ) as PlannerSearchState['targetSatisfaction']
+  state.targetSatisfaction = next
+  return [...new Set([...Object.keys(before), ...Object.keys(next)])]
+    .sort(compareStableStrings)
+    .flatMap((targetWeaponId) => {
+      const previous = before[targetWeaponId as TargetWeaponId] ?? {
+        hasPractical: false,
+        hasIdeal: false,
+      }
+      const current = next[targetWeaponId as TargetWeaponId] ?? {
+        hasPractical: false,
+        hasIdeal: false,
+      }
+      return previous.hasPractical === current.hasPractical &&
+        previous.hasIdeal === current.hasIdeal
+        ? []
+        : [{ targetWeaponId: targetWeaponId as TargetWeaponId, before: previous, after: current }]
+    })
 }
 
 function rejection(
@@ -367,15 +436,6 @@ function applyRouteInventoryEffect(
     effect.removedOwnedWeaponIds.push(operation.ownedWeaponId)
     return { rejection: null, effect }
   }
-  if (
-    operation.type === 'reset_bonuses' ||
-    operation.type === 'keep_bonuses' ||
-    (operation.type === 'reset_skills' &&
-      operation.sourceOwnedWeaponId !== null)
-  ) {
-    const sourceId = operation.sourceOwnedWeaponId
-    if (sourceId !== null) effect.updatedOwnedWeaponIds.push(sourceId)
-  }
   return { rejection: null, effect }
 }
 
@@ -403,6 +463,7 @@ function mergedProgressedEntries(
   unitPlans: ReadonlyMap<BuildListEntryId, readonly PlannerRouteUnit[]>,
   conflictsById: ReadonlyMap<string, PlanConflict>,
   conflictIdsByUnitKey: ReadonlyMap<string, readonly string[]>,
+  selectedPhysicalActionKeysByConflictId: ReadonlyMap<string, readonly string[]>,
 ): PlannerRouteUnit[] {
   const shared = [primary]
   if (!primary.shareable) return shared
@@ -428,6 +489,11 @@ function mergedProgressedEntries(
         next,
         conflictsById,
         conflictIdsByUnitKey,
+        selectedPhysicalActionKeysByConflictId,
+        (entryId) => {
+          const selected = entriesById.get(entryId)
+          return selected !== undefined && entryIsRelevantForState(state, selected)
+        },
       )
     ) {
       shared.push(next)
@@ -450,6 +516,9 @@ function applyRouteAction(
   unitPlans: ReadonlyMap<BuildListEntryId, readonly PlannerRouteUnit[]>,
   conflictsById: ReadonlyMap<string, PlanConflict>,
   conflictIdsByUnitKey: ReadonlyMap<string, readonly string[]>,
+  selectedPhysicalActionKeysByConflictId: ReadonlyMap<string, readonly string[]>,
+  targets: readonly TargetWeapon[],
+  master: PlannerInput['master'],
 ): AppliedActionResult {
   const primaryEntry = entriesById.get(primary.entryId)
   if (!primaryEntry) {
@@ -482,6 +551,12 @@ function applyRouteAction(
     return { state: null, rejection: appliedInventory.rejection }
   }
   if (primary.counterStream !== null) setCurrentCounter(state, primary)
+  const mutatedSourceId = sourceMutatedByOperation(primary.operation)
+  if (mutatedSourceId !== null) {
+    state.sourceMutationVersionByOwnedWeaponId[mutatedSourceId] =
+      (state.sourceMutationVersionByOwnedWeaponId[mutatedSourceId] ?? 0) + 1
+    state.inFlightExistingSourceByOwnedWeaponId[mutatedSourceId] = true
+  }
   const progressedUnits = mergedProgressedEntries(
     sourceState,
     primary,
@@ -489,6 +564,7 @@ function applyRouteAction(
     unitPlans,
     conflictsById,
     conflictIdsByUnitKey,
+    selectedPhysicalActionKeysByConflictId,
   )
   const progressedRoutePositions: PlannerSearchAction['progressedRoutePositions'] =
     {}
@@ -502,6 +578,28 @@ function applyRouteAction(
         hasUnregisteredGogmaOutput: true,
       }
       appliedInventory.effect.routeOutputChangedForEntryIds.push(entry.id)
+    }
+    const entryUnits = entry ? unitPlans.get(entry.id) : undefined
+    if (
+      entry &&
+      entryUnits !== undefined &&
+      isExistingGogmaRoute(entry) &&
+      state.routeProgressByEntryId[entry.id] === entryUnits.length &&
+      entry.candidateSnapshot.route.sourceOwnedWeaponId !== null
+    ) {
+      const sourceId = entry.candidateSnapshot.route.sourceOwnedWeaponId
+      state.candidateReadySourceVersionByEntryId[entry.id] =
+        state.sourceMutationVersionByOwnedWeaponId[sourceId] ?? 0
+    }
+    if (
+      entry &&
+      !sourceState.targetSatisfaction[entry.targetWeaponId]?.hasPractical &&
+      !state.practicalFirstProgressTargetIds.includes(entry.targetWeaponId)
+    ) {
+      state.practicalFirstProgressTargetIds = [
+        ...state.practicalFirstProgressTargetIds,
+        entry.targetWeaponId,
+      ].sort(compareStableStrings)
     }
   })
   const progressedBuildListEntryIds = progressedUnits.map(
@@ -522,7 +620,10 @@ function applyRouteAction(
     rngBefore: before,
     rngAfter: rngSnapshot(state),
     inventoryEffect: appliedInventory.effect,
-    satisfactionChanges: [],
+    satisfactionChanges:
+      mutatedSourceId !== null || primary.operation.type === 'use_weapon_as_material'
+        ? refreshTargetSatisfaction(state, targets, master)
+        : [],
   }
   state.trace.push(action)
   state.totalCost = state.trace.length + state.consumedMaterialWeaponCount * 10
@@ -533,12 +634,7 @@ function targetCanUseEntry(
   state: PlannerSearchState,
   entry: BuildListEntry,
 ): boolean {
-  const satisfaction = state.targetSatisfaction[entry.targetWeaponId]
-  if (!satisfaction || satisfaction.hasIdeal) return false
-  return (
-    !satisfaction.hasPractical ||
-    entry.candidateSnapshot.category === 'ideal'
-  )
+  return entryIsRelevantForState(state, entry)
 }
 
 function createReservedWeapon(
@@ -570,6 +666,8 @@ function applyReserveAction(
   entry: BuildListEntry,
   target: TargetWeapon,
   dependencies: PlannerDependencies,
+  targets: readonly TargetWeapon[],
+  master: PlannerInput['master'],
 ): AppliedActionResult {
   if (!targetCanUseEntry(sourceState, entry)) {
     return {
@@ -651,6 +749,19 @@ function applyReserveAction(
         ),
       }
     }
+    const readyVersion = state.candidateReadySourceVersionByEntryId[entry.id]
+    const currentVersion = state.sourceMutationVersionByOwnedWeaponId[sourceId] ?? 0
+    if (readyVersion === undefined || readyVersion !== currentVersion) {
+      return {
+        state: null,
+        rejection: rejection(
+          entry.id,
+          'reserve_weapon',
+          'inventory_precondition_failed',
+          'The existing Gogma Candidate was superseded by a later source mutation.',
+        ),
+      }
+    }
     ownedWeaponId = sourceId
     const updated: OwnedGogmaArtianWeapon = {
       ...source,
@@ -677,18 +788,10 @@ function applyReserveAction(
     }
     state.simulatedInventory = result.inventory
     effect.updatedOwnedWeaponIds.push(ownedWeaponId)
+    delete state.inFlightExistingSourceByOwnedWeaponId[ownedWeaponId]
     state.securedOwnedWeaponIdByEntryId[entry.id] = ownedWeaponId
   }
-  const previous = state.targetSatisfaction[entry.targetWeaponId] ?? {
-    hasPractical: false,
-    hasIdeal: false,
-  }
-  const next = {
-    hasPractical: true,
-    hasIdeal:
-      previous.hasIdeal || entry.candidateSnapshot.category === 'ideal',
-  }
-  state.targetSatisfaction[entry.targetWeaponId] = next
+  const satisfactionChanges = refreshTargetSatisfaction(state, targets, master)
   state.selectedBuildListEntryIds = [
     ...state.selectedBuildListEntryIds,
     entry.id,
@@ -706,11 +809,7 @@ function applyReserveAction(
     rngBefore: before,
     rngAfter: rngSnapshot(state),
     inventoryEffect: effect,
-    satisfactionChanges: [{
-      targetWeaponId: entry.targetWeaponId,
-      before: previous,
-      after: next,
-    }],
+    satisfactionChanges,
   }
   state.trace.push(action)
   state.totalCost = state.trace.length + state.consumedMaterialWeaponCount * 10
@@ -794,26 +893,36 @@ export async function runPlannerBeamSearch(
       validation.excludedBuildListEntries,
     )
   }
+  const initialSearchState = initial.state
   const routePlans = createPlannerRouteUnitPlans(
     validation.validBuildListEntries.map(({ entry }) => entry),
     dependencies.rngEngine,
   )
   const rejections = [...routePlans.rejections]
   const rejectionKeys = new Set(rejections.map(rejectionKey))
-  const entries = validation.validBuildListEntries
+  const candidateEntries = validation.validBuildListEntries
     .map(({ entry }) => entry)
     .filter((entry) => routePlans.unitPlans.has(entry.id))
     .sort((left, right) => compareStableStrings(left.id, right.id))
-  const entriesById = new Map(entries.map((entry) => [entry.id, entry]))
   const targets = input.targetWeapons
     .filter(({ isEnabled }) => isEnabled)
     .sort((left, right) => compareStableStrings(left.id, right.id))
   const targetsById = new Map(targets.map((target) => [target.id, target]))
+  const entries = candidateEntries.filter((entry) =>
+    entryIsRelevantForState(initialSearchState, entry),
+  )
+  const entriesById = new Map(entries.map((entry) => [entry.id, entry]))
+  const unitPlans = new Map(
+    entries.flatMap((entry) => {
+      const units = routePlans.unitPlans.get(entry.id)
+      return units === undefined ? [] : [[entry.id, units] as const]
+    }),
+  )
   const conflictDetection = detectPlannerConflicts(
     entries,
-    routePlans.unitPlans,
+    unitPlans,
     targets,
-    initial.state,
+    initialSearchState,
     validation.validConflictResolutions,
   )
   warnings.push(...conflictDetection.warnings)
@@ -830,7 +939,7 @@ export async function runPlannerBeamSearch(
     })
   })
   const routeUnitCountByEntryId = new Map(
-    [...routePlans.unitPlans].map(([entryId, units]) => [
+    [...unitPlans].map(([entryId, units]) => [
       entryId,
       units.length,
     ]),
@@ -841,7 +950,7 @@ export async function runPlannerBeamSearch(
     routeUnitCountByEntryId,
     conflictCountByEntryId,
   }
-  const initialState = cloneState(initial.state)
+  const initialState = cloneState(initialSearchState)
   Object.keys(initialState.routeProgressByEntryId).forEach((entryId) => {
     if (!entriesById.has(entryId as BuildListEntryId)) {
       delete initialState.routeProgressByEntryId[entryId]
@@ -895,7 +1004,7 @@ export async function runPlannerBeamSearch(
       for (const entry of entries) {
         if (state.selectedBuildListEntryIds.includes(entry.id)) continue
         if (!targetCanUseEntry(state, entry)) continue
-        const units = routePlans.unitPlans.get(entry.id) ?? []
+        const units = unitPlans.get(entry.id) ?? []
         const progress = state.routeProgressByEntryId[entry.id] ?? 0
         let applied: AppliedActionResult
         if (progress < units.length) {
@@ -905,6 +1014,11 @@ export async function runPlannerBeamSearch(
               unit,
               conflictsById,
               conflictDetection.conflictIdsByUnitKey,
+              conflictDetection.selectedPhysicalActionKeysByConflictId,
+              (entryId) => {
+                const selected = entriesById.get(entryId)
+                return selected !== undefined && entryIsRelevantForState(state, selected)
+              },
             )
           ) {
             appendUniqueRejection(
@@ -923,14 +1037,24 @@ export async function runPlannerBeamSearch(
             state,
             unit,
             entriesById,
-            routePlans.unitPlans,
+            unitPlans,
             conflictsById,
             conflictDetection.conflictIdsByUnitKey,
+            conflictDetection.selectedPhysicalActionKeysByConflictId,
+            targets,
+            input.master,
           )
         } else {
           const target = targetsById.get(entry.targetWeaponId)
           if (!target) continue
-          applied = applyReserveAction(state, entry, target, dependencies)
+          applied = applyReserveAction(
+            state,
+            entry,
+            target,
+            dependencies,
+            targets,
+            input.master,
+          )
         }
         if (applied.rejection) {
           appendUniqueRejection(

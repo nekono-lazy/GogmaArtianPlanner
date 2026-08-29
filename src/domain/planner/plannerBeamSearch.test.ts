@@ -48,6 +48,11 @@ function plannerEngine(): FakeRngEngine {
   const gogmaCounterAdvances: FakeRngFixtures['gogmaCounterAdvances'] = []
   const skillCounterAdvances: FakeRngFixtures['skillCounterAdvances'] = []
   const normalCounterAdvances: FakeRngFixtures['normalCounterAdvances'] = []
+  const keepSelection = {
+    mode: 'slot_indices' as const,
+    keptSlotIndices: [0, 1],
+    engineParameters: {},
+  }
   for (let counter = 0; counter < 30; counter += 1) {
     gogmaCounterAdvances.push(
       {
@@ -58,6 +63,11 @@ function plannerEngine(): FakeRngEngine {
       {
         current: counter,
         operation: { type: 'reset_bonuses' },
+        result: counter + 1,
+      },
+      {
+        current: counter,
+        operation: { type: 'keep_bonuses', selection: keepSelection },
         result: counter + 1,
       },
     )
@@ -79,7 +89,7 @@ function plannerEngine(): FakeRngEngine {
       supportsNormalArtianPrediction: true,
       supportsGogmaPrediction: true,
       supportsSkillPrediction: true,
-      supportsKeepBonusesPrediction: false,
+      supportsKeepBonusesPrediction: true,
     },
     normalizedSeeds: [],
     gogmaPredictions: [],
@@ -1030,7 +1040,7 @@ describe('Planner Beam Search', () => {
 
   it('uses fixed Practical-first priority in Beam pruning', async () => {
     const uncovered = {
-      ...target('target.priority.uncovered'),
+      ...target('target.priority.uncovered', 1),
       idealBonuses: [
         ...createRestorationBonusSet().slice(0, 4),
         {
@@ -1040,7 +1050,7 @@ describe('Planner Beam Search', () => {
       ] as TargetWeapon['idealBonuses'],
     }
     const upgrade = {
-      ...target('target.priority.upgrade'),
+      ...target('target.priority.upgrade', 5),
       weaponTypeId: 'weapon.fixture.b',
     }
     const uncoveredSource = sourceWeapon('owned.priority.uncovered')
@@ -1078,5 +1088,331 @@ describe('Planner Beam Search', () => {
     expect(result.bestState?.trace[0].primaryBuildListEntryId).toBe(
       practical.id,
     )
+  })
+
+  it('rederives every Target satisfied by one reserved Gogma weapon', async () => {
+    const firstTarget = target('target.rederive.first')
+    const secondTarget = target('target.rederive.second')
+    const source = sourceWeapon('owned.rederive.shared')
+    const entry = routeEntry(
+      'entry.rederive.shared',
+      firstTarget,
+      resetRoute(source.id),
+    )
+    const { input, dependencies } = fixture(
+      [firstTarget, secondTarget],
+      [entry],
+      [source],
+    )
+    const result = await runPlannerBeamSearch(input, dependencies)
+    const reserve = result.bestState?.trace.find(
+      ({ actionType }) => actionType === 'reserve_weapon',
+    )
+    expect(reserve?.satisfactionChanges.map(({ targetWeaponId }) => targetWeaponId))
+      .toEqual([firstTarget.id, secondTarget.id])
+    expect(result.bestState?.targetSatisfaction[firstTarget.id]).toEqual({
+      hasPractical: true,
+      hasIdeal: true,
+    })
+    expect(result.bestState?.targetSatisfaction[secondTarget.id]).toEqual({
+      hasPractical: true,
+      hasIdeal: true,
+    })
+  })
+
+  it('removes satisfaction when its only Material Gogma is consumed', async () => {
+    const satisfiedTarget = target('target.consume.satisfied')
+    const remainingTarget = {
+      ...target('target.consume.remaining'),
+      weaponTypeId: 'weapon.fixture.b',
+    }
+    const material = {
+      ...createValidOwnedWeapon(ownedWeaponId('owned.consume.material')),
+      status: 'material' as const,
+      isProtected: false,
+      relatedTargetWeaponIds: [],
+    }
+    const routeSource = {
+      ...sourceWeapon('owned.consume.route-source'),
+      weaponTypeId: 'weapon.fixture.b',
+    }
+    const entry = routeEntry('entry.consume.material', remainingTarget, {
+      kind: 'existing_gogma_mixed',
+      sourceOwnedWeaponId: routeSource.id,
+      operations: [{ type: 'use_weapon_as_material', ownedWeaponId: material.id }],
+    })
+    const { input, dependencies } = fixture(
+      [satisfiedTarget, remainingTarget],
+      [entry],
+      [material, routeSource],
+    )
+    const result = await runPlannerBeamSearch(input, dependencies)
+    expect(result.bestState?.targetSatisfaction[satisfiedTarget.id]).toEqual({
+      hasPractical: false,
+      hasIdeal: false,
+    })
+    expect(result.bestState?.trace[0].satisfactionChanges).toContainEqual({
+      targetWeaponId: satisfiedTarget.id,
+      before: { hasPractical: true, hasIdeal: true },
+      after: { hasPractical: false, hasIdeal: false },
+    })
+  })
+
+  it('excludes an in-flight existing source and restores only its new satisfaction', async () => {
+    const attackOnly = Array.from({ length: 5 }, () => ({
+      bonusTypeId: 'bonus_type.fixture.attack',
+      bonusRankId: 'bonus_rank.fixture.high',
+    })) as unknown as TargetWeapon['idealBonuses']
+    const previousTarget = {
+      ...target('target.in-flight.previous'),
+      idealBonuses: attackOnly,
+      practicalBonusConditions: [{
+        id: 'condition.in-flight.attack',
+        bonusTypeId: 'bonus_type.fixture.attack',
+        minimumRankId: 'bonus_rank.fixture.high',
+        requiredCount: 5,
+        requiredExCount: 0,
+      }],
+      practicalAlternativeGroups: [],
+    }
+    const nextTarget = target('target.in-flight.next')
+    const source = {
+      ...sourceWeapon('owned.in-flight.source'),
+      restorationBonuses: attackOnly,
+      seriesSkillId: 'series_skill.fixture.a',
+      status: 'material' as const,
+    }
+    const entry = routeEntry(
+      'entry.in-flight.next',
+      nextTarget,
+      resetRoute(source.id),
+    )
+    const { input, dependencies } = fixture(
+      [previousTarget, nextTarget],
+      [entry],
+      [source],
+    )
+    const result = await runPlannerBeamSearch(input, dependencies)
+    expect(result.bestState?.targetSatisfaction[previousTarget.id]).toEqual({
+      hasPractical: false,
+      hasIdeal: false,
+    })
+    expect(result.bestState?.targetSatisfaction[nextTarget.id]).toEqual({
+      hasPractical: true,
+      hasIdeal: true,
+    })
+  })
+
+  it('rejects an older existing-source Candidate after a later source mutation', async () => {
+    const firstTarget = target('target.version.first')
+    const secondTarget = target('target.version.second')
+    const source = sourceWeapon('owned.version.source')
+    const first = routeEntry(
+      'entry.version.first',
+      firstTarget,
+      resetRoute(source.id, 10),
+    )
+    const second = routeEntry(
+      'entry.version.second',
+      secondTarget,
+      resetRoute(source.id, 11),
+    )
+    const { input, dependencies } = fixture(
+      [firstTarget, secondTarget],
+      [first, second],
+      [source],
+    )
+    const result = await runPlannerBeamSearch(input, dependencies)
+    expect(result.rejections).toContainEqual(expect.objectContaining({
+      buildListEntryId: first.id,
+      actionType: 'reserve_weapon',
+      detail: 'The existing Gogma Candidate was superseded by a later source mutation.',
+    }))
+  })
+
+  it('reports different destructive existing-source operations as exclusive', () => {
+    const firstTarget = target('target.destructive.first')
+    const secondTarget = target('target.destructive.second')
+    const sourceId = ownedWeaponId('owned.destructive.source')
+    const first = routeEntry(
+      'entry.destructive.first',
+      firstTarget,
+      resetRoute(sourceId, 10),
+    )
+    const second = routeEntry(
+      'entry.destructive.second',
+      secondTarget,
+      resetRoute(sourceId, 11),
+    )
+    const plans = createPlannerRouteUnitPlans([first, second], plannerEngine())
+    const conflicts = detectPlannerConflicts(
+      [first, second],
+      plans.unitPlans,
+      [firstTarget, secondTarget],
+      { targetSatisfaction: {
+        [firstTarget.id]: { hasPractical: false, hasIdeal: false },
+        [secondTarget.id]: { hasPractical: false, hasIdeal: false },
+      } } as PlannerSearchState,
+      [],
+    )
+    expect(conflicts.conflicts).toContainEqual(expect.objectContaining({
+      kind: 'same_owned_weapon_consumed',
+      buildListEntryIds: [first.id, second.id],
+    }))
+  })
+
+  it('does not conflict Entries that share the exact destructive physical action', () => {
+    const firstTarget = target('target.destructive.shared.first')
+    const secondTarget = target('target.destructive.shared.second')
+    const sourceId = ownedWeaponId('owned.destructive.shared')
+    const first = routeEntry(
+      'entry.destructive.shared.first', firstTarget, resetRoute(sourceId, 10),
+    )
+    const second = routeEntry(
+      'entry.destructive.shared.second', secondTarget, resetRoute(sourceId, 10),
+    )
+    const plans = createPlannerRouteUnitPlans([first, second], plannerEngine())
+    const conflicts = detectPlannerConflicts(
+      [first, second],
+      plans.unitPlans,
+      [firstTarget, secondTarget],
+      { targetSatisfaction: {
+        [firstTarget.id]: { hasPractical: false, hasIdeal: false },
+        [secondTarget.id]: { hasPractical: false, hasIdeal: false },
+      } } as PlannerSearchState,
+      [],
+    )
+    expect(conflicts.conflicts).toEqual([])
+  })
+
+  it('keeps compatible physical-action Entries unblocked by a local resolution', async () => {
+    const firstTarget = target('target.resolution.group.first')
+    const secondTarget = target('target.resolution.group.second')
+    const thirdTarget = target('target.resolution.group.third')
+    const sharedSource = sourceWeapon('owned.resolution.group.shared')
+    const otherSource = sourceWeapon('owned.resolution.group.other')
+    const first = routeEntry(
+      'entry.resolution.group.first', firstTarget, resetRoute(sharedSource.id),
+    )
+    const second = routeEntry(
+      'entry.resolution.group.second', secondTarget, resetRoute(sharedSource.id),
+    )
+    const third = routeEntry(
+      'entry.resolution.group.third', thirdTarget, resetRoute(otherSource.id),
+    )
+    const unresolved = fixture(
+      [firstTarget, secondTarget, thirdTarget],
+      [first, second, third],
+      [sharedSource, otherSource],
+    )
+    const unresolvedResult = await runPlannerBeamSearch(
+      unresolved.input,
+      unresolved.dependencies,
+    )
+    const conflictKey = unresolvedResult.conflicts.find(
+      ({ kind }) => kind === 'same_gogma_counter',
+    )?.id
+    expect(conflictKey).toBeDefined()
+    const resolved = fixture(
+      [firstTarget, secondTarget, thirdTarget],
+      [structuredClone(first), structuredClone(second), structuredClone(third)],
+      [structuredClone(sharedSource), structuredClone(otherSource)],
+    )
+    resolved.input.conflictResolutions = [{
+      conflictKey: conflictKey as string,
+      selectedBuildListEntryId: first.id,
+    }]
+    const result = await runPlannerBeamSearch(resolved.input, resolved.dependencies)
+    expect(result.bestState?.trace[0].progressedBuildListEntryIds).toEqual([
+      first.id,
+      second.id,
+    ])
+    expect(result.rejections).toContainEqual(expect.objectContaining({
+      buildListEntryId: third.id,
+      reason: 'conflict_resolution_not_selected',
+    }))
+  })
+
+  it('excludes initially Ideal and already-Practical Entries from conflicts', async () => {
+    const idealTarget = target('target.conflict.irrelevant.ideal')
+    const practicalTarget = target('target.conflict.irrelevant.practical')
+    const activeTarget = target('target.conflict.irrelevant.active')
+    const idealSource = createValidOwnedWeapon(ownedWeaponId('owned.conflict.ideal'))
+    const practicalSource = {
+      ...createValidOwnedWeapon(ownedWeaponId('owned.conflict.practical')),
+      restorationBonuses: [
+        ...createRestorationBonusSet().slice(0, 4),
+        {
+          bonusTypeId: 'bonus_type.fixture.sharpness',
+          bonusRankId: 'bonus_rank.fixture.special',
+        },
+      ] as TargetWeapon['idealBonuses'],
+      isProtected: false,
+      relatedTargetWeaponIds: [],
+    }
+    const activeSource = sourceWeapon('owned.conflict.irrelevant.active')
+    const ideal = routeEntry(
+      'entry.conflict.irrelevant.ideal', idealTarget, resetRoute(idealSource.id),
+    )
+    const practical = routeEntry(
+      'entry.conflict.irrelevant.practical', practicalTarget,
+      resetRoute(practicalSource.id), 'practical',
+    )
+    const active = routeEntry(
+      'entry.conflict.irrelevant.active', activeTarget, resetRoute(activeSource.id),
+    )
+    const { input, dependencies } = fixture(
+      [idealTarget, practicalTarget, activeTarget],
+      [ideal, practical, active],
+      [idealSource, practicalSource, activeSource],
+    )
+    const result = await runPlannerBeamSearch(input, dependencies)
+    expect(result.conflicts).toEqual([])
+  })
+
+  it('records only actual simulated Inventory changes in route action effects', async () => {
+    const selection = {
+      mode: 'slot_indices' as const,
+      keptSlotIndices: [0, 1],
+      engineParameters: {},
+    }
+    const cases: Array<{ route: BuildRoute; source: OwnedGogmaArtianWeapon }> = [
+      { route: resetRoute('owned.effect.reset'), source: sourceWeapon('owned.effect.reset') },
+      {
+        route: {
+          kind: 'existing_gogma_keep_bonuses',
+          sourceOwnedWeaponId: ownedWeaponId('owned.effect.keep'),
+          operations: [{
+            type: 'keep_bonuses',
+            sourceOwnedWeaponId: ownedWeaponId('owned.effect.keep'),
+            selection,
+            gogmaCounterBefore: 10,
+            gogmaCounterAfter: 11,
+          }],
+        },
+        source: sourceWeapon('owned.effect.keep'),
+      },
+      {
+        route: {
+          kind: 'existing_gogma_reset_skills',
+          sourceOwnedWeaponId: ownedWeaponId('owned.effect.skills'),
+          operations: [{
+            type: 'reset_skills',
+            sourceOwnedWeaponId: ownedWeaponId('owned.effect.skills'),
+            skillCounterBefore: 7,
+            skillCounterAfter: 8,
+          }],
+        },
+        source: sourceWeapon('owned.effect.skills'),
+      },
+    ]
+    for (const [index, item] of cases.entries()) {
+      const goal = target(`target.effect.${index}`)
+      const entry = routeEntry(`entry.effect.${index}`, goal, item.route)
+      const { input, dependencies } = fixture([goal], [entry], [item.source])
+      const result = await runPlannerBeamSearch(input, dependencies)
+      expect(result.bestState?.trace[0].inventoryEffect.updatedOwnedWeaponIds)
+        .toEqual([])
+    }
   })
 })
