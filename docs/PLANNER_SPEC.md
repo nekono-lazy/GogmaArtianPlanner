@@ -568,10 +568,12 @@ input.ownedWeapons)`で生成する。独自Hashを再実装しない。
 createTargetDefinitionHash(target) }`をstable hash化する。Target definitionのsemantic fieldと
 nameの扱いは既存`createTargetDefinitionHash`契約を正本とし、Plannerが別契約を加えない。
 
-`buildListEntriesHash` はEntry IDの辞書順で、`id`、non-timestamp Candidate Snapshot、
+`buildListEntriesHash` はEntry IDの辞書順で、実行意味を持つCandidate Snapshot、
 `targetDefinitionHash`、`searchStateHash`、`referencedOwnedWeaponsHash`、
-`calculationContext`をstable hash化する。BuildListEntryの`isStale`、`staleReasons`、
-`createdAt`、Candidate Snapshotの`createdAt`は含めない。いずれのsortにもlocale依存比較を
+`calculationContext`をstable hash化する。Candidate ID、searchRunId、Candidate createdAt、
+idealDifference、similarity表示値、BuildListEntryの`candidateId`、`isStale`、`staleReasons`、
+`createdAt`は含めない。finalBonusesはbonus type/rankのmultiset、requiredMaterialsは重複を保った
+materialId/quantity順で正規化し、RouteOperationの実行順は変えない。いずれのsortにもlocale依存比較を
 使わない。
 
 #### DraftからPlanStepへの変換
@@ -596,7 +598,13 @@ title / instructionはoperation typeと、存在する場合だけTarget名か�
 `conflicts`はBeam Searchが返したstable conflict IDを再生成せずstructured cloneして保存する。
 `currentStepId`は最初のStep ID（Stepなしならnull）である。
 
-RejectedBuildListEntryは、最終selectedでない検討可能Entryと明確なprotected destructive
+Beam SearchがcancelledならReplay、Clock、Plan/Step ID生成、Plan組み立てを行わず、`plan = null`で
+conflicts / warningsだけを返す。partial Stateではtraceのprimary/progressed EntryをRejectedへ入れない。
+`completed = false`では、protected destructive useと、選択済みConflictによって明確に除外された
+resource conflictだけをRejectedとしてよく、未決定Entryへalready_satisfied、longer_route、
+dominated_by_better_candidateを付けない。
+
+complete PlanではTraceに登場したこと自体をRejected除外理由にしない。RejectedBuildListEntryは、最終selectedでない検討可能Entryと明確なprotected destructive
 rejectionだけをEntry IDごとに1件作る。理由は証明できる順に
 `requires_protected_weapon`、選択済みConflictによる`resource_conflict`、
 `candidate_already_satisfied`による`already_satisfied`、同一Target・同一categoryで短い採用Routeが
@@ -606,8 +614,9 @@ rejectionだけをEntry IDごとに1件作る。理由は証明できる順に
 
 `requiredMaterials`はselected BuildListEntryの`candidateSnapshot.requiredMaterials`だけを
 materialIdごとに合算し、materialId辞書順で返す。master materialCostsからの再推測はしない。
-shared physical actionとCandidate別requiredMaterialsの二重計上を解消する補正式は第9C-Bでは
-定義しない。
+shared physical actionとCandidate別requiredMaterialsの二重計上は既知の未解決境界である。Candidate単位の
+total requiredMaterialsをphysical action単位へ安全に分解する契約がないため、第9C-Bではmasterからの
+再計算、Entry数での除算、補正式の追加を行わない。
 
 上限到達時でもtraceが1件以上あるbest partial Stateは、その到達点までのDraft Planとして返して
 既存warningを維持する。一般素材Gogma補充、`create_material_gogma`、

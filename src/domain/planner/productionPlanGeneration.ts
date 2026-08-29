@@ -43,12 +43,31 @@ function sameExpectedPlanState(
   return stableStringify(left) === stableStringify(right)
 }
 
+function normalizeCandidateBonuses(candidate: BuildCandidate) {
+  return candidate.finalBonuses
+    .map(({ bonusTypeId, bonusRankId }) => ({ bonusTypeId, bonusRankId }))
+    .sort((left, right) => {
+      const type = compareStableStrings(left.bonusTypeId, right.bonusTypeId)
+      return type !== 0
+        ? type
+        : compareStableStrings(left.bonusRankId, right.bonusRankId)
+    })
+}
+
+function normalizeCandidateMaterials(candidate: BuildCandidate) {
+  return candidate.requiredMaterials
+    .map(({ materialId, quantity }) => ({ materialId, quantity }))
+    .sort((left, right) => {
+      const material = compareStableStrings(left.materialId, right.materialId)
+      return material !== 0 ? material : left.quantity - right.quantity
+    })
+}
+
 function normalizeCandidateSnapshot(candidate: BuildCandidate) {
   return {
-    id: candidate.id,
     targetWeaponId: candidate.targetWeaponId,
     category: candidate.category,
-    finalBonuses: candidate.finalBonuses,
+    finalBonuses: normalizeCandidateBonuses(candidate),
     seriesSkillId: candidate.seriesSkillId,
     groupSkillId: candidate.groupSkillId,
     route: candidate.route,
@@ -56,14 +75,10 @@ function normalizeCandidateSnapshot(candidate: BuildCandidate) {
     estimatedGogmaAdvance: candidate.estimatedGogmaAdvance,
     estimatedSkillAdvance: candidate.estimatedSkillAdvance,
     estimatedNormalAdvance: candidate.estimatedNormalAdvance,
-    requiredMaterials: candidate.requiredMaterials,
-    idealDifference: candidate.idealDifference,
-    isSimilarToIdeal: candidate.isSimilarToIdeal,
-    similarityScore: candidate.similarityScore,
+    requiredMaterials: normalizeCandidateMaterials(candidate),
     searchStateHash: candidate.searchStateHash,
     referencedOwnedWeaponsHash: candidate.referencedOwnedWeaponsHash,
     calculationContext: candidate.calculationContext,
-    searchRunId: candidate.searchRunId,
   }
 }
 
@@ -300,7 +315,13 @@ export function createRejectedBuildListEntries(
     entries.push(rejection)
     rejectionsByEntryId.set(rejection.buildListEntryId, entries)
   })
-  return input.buildListEntries
+  const traceEntryIds = new Set<BuildListEntryId>(
+    beamResult.bestState?.trace.flatMap((action) => [
+      action.primaryBuildListEntryId,
+      ...action.progressedBuildListEntryIds,
+    ]) ?? [],
+  )
+  const baseRejectedEntries = input.buildListEntries
     .filter((entry) => !selected.has(entry.id))
     .filter((entry) => {
       const rejections = rejectionsByEntryId.get(entry.id) ?? []
@@ -309,6 +330,26 @@ export function createRejectedBuildListEntries(
       )
     })
     .filter((entry) => !hasOnlyNonSearchRejections(rejectionsByEntryId.get(entry.id) ?? []))
+
+  if (!beamResult.completed) {
+    return baseRejectedEntries
+      .filter((entry) => !traceEntryIds.has(entry.id))
+      .map((entry) => ({
+        entry,
+        reason: rejectedReason(entry, selected, input, beamResult),
+      }))
+      .filter(({ reason }) =>
+        reason === 'requires_protected_weapon' || reason === 'resource_conflict',
+      )
+      .map(({ entry, reason }) => ({
+        buildListEntryId: entry.id,
+        reason,
+        detail: 'Beam Searchの途中結果で、このBuildListEntryは実行不能と確定しました。',
+      }))
+      .sort((left, right) => compareStableStrings(left.buildListEntryId, right.buildListEntryId))
+  }
+
+  return baseRejectedEntries
     .map((entry) => ({
       buildListEntryId: entry.id,
       reason: rejectedReason(entry, selected, input, beamResult),
@@ -344,7 +385,11 @@ export const createProductionPlan: CreateProductionPlanCalculation = async (
   options: PlannerExecutionOptions | undefined,
 ) => {
   const beamResult = await runPlannerBeamSearch(input, dependencies, options)
-  if (beamResult.bestState === null || beamResult.bestState.trace.length === 0) {
+  if (
+    beamResult.cancelled ||
+    beamResult.bestState === null ||
+    beamResult.bestState.trace.length === 0
+  ) {
     return {
       plan: null,
       conflicts: structuredClone(beamResult.conflicts),

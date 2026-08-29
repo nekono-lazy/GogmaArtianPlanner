@@ -266,13 +266,43 @@ describe('Production plan generation', () => {
     expect(plan?.steps[0].inventoryChange).toBeNull()
     expect(plan?.steps[1].inventoryChange?.updateOwnedWeapons[0]?.id).toBe(source.id)
   })
-  it('returns a partial Plan while preserving the Beam Search limit warning', async () => {
+  it('does not reject in-progress or undecided Entries in a partial Plan', async () => {
     const { input, dependencies } = fixture()
+    const undecided = structuredClone(input.buildListEntries[0])
+    undecided.id = buildListEntryId('build-list.fixture.undecided')
+    input.buildListEntries.push(undecided)
     input.options.maxPlanSteps = 1
     const result = await createProductionPlan(input, dependencies)
-    expect(result.plan?.steps).toHaveLength(1)
-    expect(result.plan?.steps[0].operationType).toBe('create_normal_artian')
+    const plan = result.plan
+    expect(plan?.steps).toHaveLength(1)
+    expect(plan?.steps[0].operationType).toBe('create_normal_artian')
     expect(result.warnings.map(({ kind }) => kind)).toContain('max_steps_reached')
+    const rejectedIds = plan?.rejectedBuildListEntries.map(({ buildListEntryId }) => buildListEntryId) ?? []
+    expect(rejectedIds).not.toContain(plan?.steps[0].buildListEntryId)
+    expect(rejectedIds).not.toContain(undecided.id)
+  })
+
+  it('returns no Plan and consumes no finalization IDs or clock value when Beam Search is cancelled', async () => {
+    const { input, dependencies } = fixture()
+    let clockCalls = 0
+    let planIdCalls = 0
+    let stepIdCalls = 0
+    const result = await createProductionPlan(input, {
+      ...dependencies,
+      idFactory: {
+        ...dependencies.idFactory,
+        productionPlanId: () => `plan.cancelled.${++planIdCalls}` as never,
+        planStepId: () => `step.cancelled.${++stepIdCalls}` as never,
+      },
+      clock: { now: () => {
+        clockCalls += 1
+        return '2026-08-30T00:00:00.000Z'
+      } },
+    }, { shouldCancel: () => true })
+    expect(result.plan).toBeNull()
+    expect(clockCalls).toBe(0)
+    expect(planIdCalls).toBe(0)
+    expect(stepIdCalls).toBe(0)
   })
 
   it('does not create an empty Plan when enabled targets are already ideal', async () => {
@@ -314,6 +344,45 @@ describe('Production plan generation', () => {
     })
   })
 
+  it('normalizes BuildList candidate semantic hashes without tracking or display-only fields', () => {
+    const { input } = fixture()
+    input.buildListEntries[0].candidateSnapshot.requiredMaterials = [
+      { materialId: 'material.fixture.b', quantity: 2 },
+      { materialId: 'material.fixture.a', quantity: 1 },
+    ]
+    const base = createPlanningBuildListEntriesHash(input.buildListEntries)
+    const unchanged = structuredClone(input)
+    unchanged.buildListEntries[0].candidateSnapshot.id = 'candidate.changed' as never
+    unchanged.buildListEntries[0].candidateSnapshot.searchRunId = 'search-run.changed'
+    unchanged.buildListEntries[0].candidateSnapshot.createdAt = '2026-09-01T00:00:00.000Z'
+    unchanged.buildListEntries[0].candidateSnapshot.finalBonuses = [
+      unchanged.buildListEntries[0].candidateSnapshot.finalBonuses[1],
+      unchanged.buildListEntries[0].candidateSnapshot.finalBonuses[0],
+      ...unchanged.buildListEntries[0].candidateSnapshot.finalBonuses.slice(2),
+    ] as never
+    unchanged.buildListEntries[0].candidateSnapshot.requiredMaterials.reverse()
+    unchanged.buildListEntries[0].candidateSnapshot.idealDifference.summary = 'display-only change'
+    expect(createPlanningBuildListEntriesHash(unchanged.buildListEntries)).toBe(base)
+
+    const expectChanged = (mutate: (value: PlannerInput) => void) => {
+      const changed = structuredClone(input)
+      mutate(changed)
+      expect(createPlanningBuildListEntriesHash(changed.buildListEntries)).not.toBe(base)
+    }
+    expectChanged((value) => {
+      value.buildListEntries[0].candidateSnapshot.finalBonuses[0].bonusRankId = 'bonus_rank.fixture.low'
+    })
+    expectChanged((value) => {
+      const operation = value.buildListEntries[0].candidateSnapshot.route.operations[0]
+      if (operation.type !== 'create_normal_artian') throw new Error('Fixture route changed.')
+      operation.count = 2
+    })
+    expectChanged((value) => { value.buildListEntries[0].candidateSnapshot.category = 'ideal' })
+    expectChanged((value) => { value.buildListEntries[0].candidateSnapshot.requiredMaterials[0].quantity = 3 })
+    expectChanged((value) => { value.buildListEntries[0].searchStateHash = 'hash.changed.search' })
+    expectChanged((value) => { value.buildListEntries[0].referencedOwnedWeaponsHash = 'hash.changed.owned' })
+    expectChanged((value) => { value.buildListEntries[0].calculationContext.appSchemaVersion = 2 })
+  })
   it('keeps deterministic Plan IDs, timestamps, selected IDs, and required material totals', async () => {
     const first = fixture()
     const second = fixture()
@@ -328,6 +397,39 @@ describe('Production plan generation', () => {
     ])
   })
 
+  it('rejects an unselected Entry traced only through a shared complete action', () => {
+    const { input } = fixture()
+    const selectedEntry = structuredClone(input.buildListEntries[0])
+    selectedEntry.id = buildListEntryId('build-list.fixture.shared.selected')
+    const progressedEntry = structuredClone(input.buildListEntries[0])
+    progressedEntry.id = buildListEntryId('build-list.fixture.shared.progressed')
+    const beamResult = {
+      bestState: {
+        trace: [{
+          primaryBuildListEntryId: selectedEntry.id,
+          progressedBuildListEntryIds: [selectedEntry.id, progressedEntry.id],
+        }],
+      } as never,
+      conflicts: [],
+      warnings: [],
+      validationIssues: [],
+      excludedBuildListEntries: [],
+      rejections: [],
+      expandedStates: 1,
+      completed: true,
+      cancelled: false,
+    } satisfies PlannerBeamSearchResult
+    expect(createRejectedBuildListEntries(
+      { ...input, buildListEntries: [selectedEntry, progressedEntry] },
+      beamResult,
+      [selectedEntry.id],
+    )).toEqual([
+      expect.objectContaining({
+        buildListEntryId: progressedEntry.id,
+        reason: 'dominated_by_better_candidate',
+      }),
+    ])
+  })
   it('uses only proven rejection classifications and retains the fallback without pairwise inference', () => {
     const { input } = fixture()
     const protectedEntry = structuredClone(input.buildListEntries[0])
@@ -359,7 +461,7 @@ describe('Production plan generation', () => {
         detail: 'protected',
       }],
       expandedStates: 0,
-      completed: false,
+      completed: true,
       cancelled: false,
     } satisfies PlannerBeamSearchResult
     const rejected = createRejectedBuildListEntries(
