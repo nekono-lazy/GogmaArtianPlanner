@@ -8,20 +8,24 @@ Project root:
 GogmaArtianPlanner/
 ```
 
-This repository contains a Web application for planning Monster Hunter Wilds Gogma Artian weapon creation.
+This repository contains a static Web application for planning Monster Hunter Wilds Gogma Artian weapon creation.
 
-The application is intended to:
+The initial-release application is intended to:
 
-- Predict future Artian / Gogma Artian restoration bonuses and skills from RNG state
+- Manage partially known RNG state
 - Search ideal and practical target weapon candidates
 - Compare normal Artian routes and existing Gogma Artian routes
 - Plan multiple target weapons together using shared RNG progression
 - Track owned Gogma Artian weapons individually
-- Guide the user through the generated plan one operation at a time
+- Guide the user through a finalized production plan one operation at a time
+- Detect divergence from the expected plan state and support explicit recalculation
+- Persist user data locally in the browser and support JSON export/import
 
 ---
 
-## Required Specifications
+## Specification Authority
+
+The files under `docs/` are the v1 implementation specification.
 
 Before making changes, read:
 
@@ -29,7 +33,7 @@ Before making changes, read:
 docs/REQUIREMENTS.md
 ```
 
-Then read the specification related to the current task.
+Then read every detailed specification relevant to the task:
 
 ```text
 docs/DATA_MODEL.md
@@ -40,25 +44,28 @@ docs/PLANNER_SPEC.md
 docs/UI_FLOW.md
 ```
 
-The specification hierarchy is:
+Use this hierarchy:
 
 1. `docs/REQUIREMENTS.md`
-2. Task-specific detailed specification
+2. The task-specific detailed specification
 3. Existing implementation and tests
 
-If specifications conflict, do not silently choose one interpretation.
+The current specification set is frozen as the initial-release v1 baseline.
 
-Report the conflict before changing behavior.
+If documents conflict, or the requested implementation would change a documented domain contract:
 
-Do not invent requirements that are not present in the specifications.
+1. Identify the conflicting or affected specification
+2. Report the mismatch
+3. Do not silently choose a new interpretation
+4. Update the specification or obtain an explicit decision before changing domain meaning
+
+Do not invent missing game mechanics or product requirements.
 
 ---
 
-## Initial Release Scope
+## Initial Release Technology and Scope
 
-The initial release is a static Web application.
-
-Expected technology stack:
+The initial release is a static browser application using:
 
 - React
 - TypeScript
@@ -69,103 +76,195 @@ Expected technology stack:
 - Vitest
 - GitHub Pages
 
-The application should run without a required backend server.
+The application must not require:
 
-User data should remain in the browser unless explicitly exported by the user.
+- A backend server
+- A server-side database
+- A user account
+- Cloud synchronization
+
+Persistent user data remains in the browser unless the user explicitly exports it.
+
+The initial release manages one character/profile at a time.
 
 ---
 
-## Out of Scope
+## Out of Scope for v1
 
-Do not implement the following unless the specifications are explicitly updated:
+Do not implement the following unless the specifications are explicitly changed:
 
 - OCR
-- OCR-based owned weapon import
+- OCR-based owned weapon bulk registration
 - Direct REFramework integration
-- High-speed execution mode
+- High-speed or batch execution mode
 - Multiple character/profile switching
 - Cloud synchronization
 - User accounts
 - Manual fixed production ordering
-- Arbitrary user-defined planner scoring
-- Server-side database
+- Arbitrary user-defined Planner scoring
 - Server-side RNG processing
+- Server-side persistence
+- Practical-versus-Practical quality ranking for automatic materialization
+- Route-local references to newly generated weapons
+- Keep Bonuses applied to the newly converted Gogma weapon inside the same `normal_artian_to_gogma` route
 
-Do not add speculative future functionality while implementing an initial-release task.
+Do not add speculative future functionality while implementing a v1 task.
 
 ---
 
 ## Architecture Rules
 
-Keep UI, domain logic, RNG logic, search logic, planner logic, and persistence separated.
+Keep UI, domain logic, RNG logic, candidate search, Planner logic, Workers, master data, and persistence separated.
 
-Recommended responsibility boundaries:
+The exact folder layout may evolve, but these boundaries are mandatory:
+
+- RNG Engine must not depend on React
+- Candidate search logic must not depend on React
+- Planner logic must not depend on React
+- Planner calculation must not mutate IndexedDB
+- Domain logic must not directly depend on IndexedDB
+- Web Workers must not directly manipulate React state
+- Workers receive the data required for calculation through typed messages
+- Pure calculations should be pure functions where practical
+- Persistence should be accessed through repository/service boundaries
+- Master data must use stable IDs, never display names as identifiers
+- Core game logic must not live inside React components
+
+Recommended responsibility areas include:
 
 ```text
 src/
   app/
   components/
   domain/
-  engine/
   workers/
   db/
   data/
 ```
 
-The exact directory structure may evolve, but the following rules are mandatory:
+Temporary UI state may use React state or Zustand.
 
-- RNG Engine must not depend on React
-- Search logic must not depend on React
-- Planner logic must not depend on React
-- Domain logic must not directly depend on IndexedDB
-- Web Workers must not directly manipulate React state
-- Pure calculations should be implemented as pure functions where practical
-- Persistence should be accessed through repository/service boundaries
-- Master data must be referenced by stable IDs, not display names
-
-Do not place core game logic directly inside React components.
+Persistent domain state follows `DATA_MODEL.md` and belongs in Dexie.
 
 ---
 
 ## TypeScript Rules
 
-Prefer strict, explicit TypeScript types.
+Prefer strict, explicit TypeScript.
 
-Avoid `any`.
+- Avoid `any`
+- Use `unknown` plus validation for untrusted/external data
+- Prefer discriminated unions for routes, operations, worker messages, and results
+- Do not silently coerce invalid domain values
+- Do not use display strings as IDs
+- Follow the ID definitions in `DATA_MODEL.md` and `MASTER_DATA.md`
+- Preserve tuple and union invariants defined by the specification
 
-Use `unknown` plus validation when accepting external or untrusted data.
+A restoration bonus set is exactly five entries.
 
-Prefer discriminated unions for operation types, route types, worker messages, and result types.
+---
 
-Do not use display strings as identifiers.
+## Calculation Context
 
-IDs must follow the definitions in `DATA_MODEL.md` and `MASTER_DATA.md`.
+All calculation-dependent persisted results must track:
 
-Do not silently coerce invalid domain values.
+```text
+gameVersion
+masterDataVersion
+rngEngineVersion
+appSchemaVersion
+```
+
+These form `CalculationContext`.
+
+Unless compatibility is explicitly guaranteed, a CalculationContext change makes previous:
+
+- `BuildCandidate`
+- `BuildListEntry`
+- `ProductionPlan`
+
+incompatible/stale.
+
+Use the specified stale or recalculation reason:
+
+```text
+calculation_context_changed
+```
+
+Do not silently reuse incompatible calculation output.
 
 ---
 
 ## RNG Rules
 
-RNG behavior is a critical part of the application.
+RNG behavior is critical.
 
-Do not guess or approximate unknown game RNG behavior.
+Do not guess, approximate, or reverse-engineer missing game behavior by assumption.
 
-If the real RNG algorithm is not yet confirmed:
+If production RNG behavior is not verified:
 
-1. Define the interface and input/output types
-2. Implement validation
-3. Use fixture-based fake/test implementations where needed
-4. Keep the real engine replaceable
-5. Clearly mark unverified behavior
+1. Define typed interfaces
+2. Define validation
+3. Implement fixture-based Fake Engine behavior where needed
+4. Keep production and fake engines replaceable
+5. Keep fake behavior separated by an explicit feature flag
+6. Show the active engine in Debug Mode where specified
+7. Replace fake fixtures with verified production fixtures only when real behavior is known
 
-Never make production behavior depend on guessed lottery weights, counter advancement, Keep Bonuses behavior, or other unverified mechanics.
+Never make production behavior depend on guessed:
 
-Known RNG state may be partially available.
+- Lottery weights
+- Internal Lottery values
+- Counter advancement
+- Counter Gate behavior
+- Keep Bonuses behavior
+- Seed behavior
+- Other unverified game mechanics
 
-Do not assume that all RNG values must always be known at the same time.
+`LotteryMaster` is provisional.
 
-Features and routes should be enabled based on the state they actually require.
+Do not force verified RNG behavior to fit the provisional `LotteryMaster` schema. If real analysis requires a different representation, update the specification before changing the production model.
+
+---
+
+## Partial RNG State and Capabilities
+
+RNG state is not all-or-nothing.
+
+Base Seed, Gogma Counter, Skill Counter, and Counter Gate are independent `KnownValue<T>` fields.
+
+Do not require all RNG values merely because one feature needs some of them.
+
+Use capability derivation so that:
+
+- Gogma prediction only requires its actual dependencies
+- Skill prediction only requires its actual dependencies
+- Normal Artian search only requires the relevant normal counter and other actual dependencies
+- Planner only requires capabilities needed by the selected route operations
+
+A missing capability disables only dependent routes.
+
+Do not disable unrelated routes.
+
+---
+
+## Observation and Search Input Rules
+
+Seed search and Counter search are separate contracts.
+
+Do not merge their request or result semantics.
+
+Observation validation is kind-specific.
+
+Current v1 rules include:
+
+- Normal Artian observations require rarity and restoration bonuses
+- Normal Artian `elementId` may be null only when the Engine does not require element
+- Gogma Bonus observations require element and restoration bonuses
+- Skill observations require element and at least one observed series/group skill
+- Mixed counter streams must not be combined in one Counter search input
+
+Heavy Seed/Counter search runs in a Web Worker and supports progress and cancellation.
 
 ---
 
@@ -175,26 +274,32 @@ Restoration bonuses are weapon-type dependent.
 
 Use:
 
-- Common bonus type master
-- Common rank master
-- Weapon-specific bonus definitions
+- Common Bonus Type master
+- Common Bonus Rank master
+- Weapon-specific `WeaponBonusDefinition`
 
-Do not hard-code weapon-specific bonus availability inside UI components.
+Do not hard-code weapon-specific availability in UI components.
 
-A restoration bonus set always contains exactly five bonuses.
+A `RestorationBonusSet`:
 
-The five bonuses are displayed as slots, but ideal-condition equality is evaluated as an unordered multiset unless a detailed specification explicitly says otherwise.
+- Contains exactly five bonuses
+- Stores five UI-visible slots
+- Is compared as an unordered multiset for ideal/practical equality unless the specification explicitly says otherwise
+
+Do not lose duplicate-count semantics.
+
+For `referencedOwnedWeaponsHash`, preserve the stored five-slot order because Keep slot semantics remain unresolved.
 
 ---
 
 ## Owned Weapon Rules
 
-All owned Gogma Artian weapons are tracked individually.
+All owned Gogma Artian weapons are tracked individually, including material weapons.
 
-This includes weapons used as materials.
+Each `OwnedWeapon` retains:
 
-Each owned weapon retains its current:
-
+- ID
+- Name
 - Weapon type
 - Element
 - Five restoration bonuses
@@ -202,37 +307,87 @@ Each owned weapon retains its current:
 - Group skill
 - Status
 - Protection state
+- Related target references
+- Memo and timestamps as specified
 
-Statuses:
+Statuses are:
 
 ```text
-Material
-Practical
-Ideal
+material
+practical
+ideal
 ```
 
-Protection and status are separate concepts.
+Status and protection are separate concepts.
 
-Practical and Ideal weapons are protected by default.
+Defaults:
 
-A protected weapon must not be consumed automatically by the Planner.
+- Practical: protected
+- Ideal: protected
+- Material: unprotected
 
-If a previously practical weapon becomes unnecessary after obtaining a better weapon, the user must explicitly choose whether to:
+Protected weapons must not be used by the Planner for:
 
-- Keep it
-- Change it to Material
+- Material consumption
+- Reset Bonuses
+- Keep Bonuses
 
-Do not automatically convert it to Material.
+Reset Skills is treated as non-destructive in v1.
+
+A protected Practical or Ideal weapon may be the source of an `existing_gogma_reset_skills` route.
+
+The Planner must never silently remove protection.
+
+---
+
+## Old Practical Weapon Materialization
+
+Do not automatically convert a Practical weapon to Material.
+
+In v1, the Planner may schedule a confirmation-required:
+
+```text
+change_owned_weapon_status
+```
+
+step for an old Practical weapon only when:
+
+- The same Target already has an Ideal weapon, or
+- The same Plan secures that Target's Ideal weapon in an earlier step
+- Another weapon continues to satisfy that Target as Ideal after materialization
+- A later material-consumption step actually needs the old weapon
+
+The status-change step must occur before material consumption.
+
+If the user confirms:
+
+```text
+status = material
+isProtected = false
+```
+
+must be applied together.
+
+If the user chooses to keep the weapon:
+
+- Do not change status
+- Do not change protection
+- Record `planned_status_change_declined`
+- Mark the Plan stale and require recalculation
+
+Do not infer "better Practical".
+
+Obtaining another Practical weapon alone must never trigger automatic materialization of the previous Practical weapon in v1.
 
 ---
 
 ## Target Weapon Rules
 
-One desired configuration equals one TargetWeapon.
+One desired build equals one `TargetWeapon`.
 
-Do not merge different desired configurations merely because weapon type and element are the same.
+Do not merge targets just because weapon type and element match.
 
-Target priority is:
+Priority:
 
 ```text
 1 - 5
@@ -244,150 +399,563 @@ Default:
 3
 ```
 
-Target priority influences Planner decisions but is not the only conflict-resolution factor.
+A Target separately defines:
+
+- Ideal five-bonus configuration
+- Practical bonus conditions
+- Practical alternative groups
+- Ideal skill condition
+- Practical skill condition
+
+Do not introduce "any one target in this group completes the group" behavior in v1.
 
 ---
 
-## Candidate and Build List Rules
+## Candidate Categories and Similarity
 
-Search results and Planner input are separate concepts.
+Candidate categories are only:
 
-A search result is a `BuildCandidate`.
+```text
+ideal
+practical
+```
 
-A user-selected Planner input belongs to the Build List.
+Similarity is not a third category.
 
-Do not make BuildCandidate persistence implicitly represent Build List membership unless the current specification explicitly requires that design.
+`isSimilarToIdeal` and `similarityScore` are attributes of Practical candidates.
 
-A Build List entry should retain enough information to detect whether it became stale because of:
+Rules:
 
-- Target definition changes
-- RNG state changes
-- Master data version changes
-- RNG Engine version changes
+- Ideal candidates take category precedence over Practical
+- Ideal candidates are not duplicated in the Similar filter
+- Candidates below the Practical line are normally not persisted/displayed in v1
+- Target relaxation may be suggested, but must never be applied without explicit user action
+
+Do not create an ambiguous "similar" category.
 
 ---
 
-## Search Rules
+## Build Candidate and Build List Separation
 
-Search runs per target weapon but may process multiple targets in one worker request.
+`BuildCandidate` is a search result.
 
-Candidate search must consider applicable routes only.
+`BuildListEntry` is a separate persisted entity representing a user-selected Planner input.
 
-If a normal Artian counter for the required weapon type and rarity is unknown, skip only the normal Artian route.
+Do not use `BuildCandidate` persistence as Build List membership.
 
-Do not disable unrelated existing-Gogma routes.
+When a candidate is added to the Build List, preserve:
 
-Target conditions must never be automatically weakened.
+- Candidate snapshot
+- Target definition hash
+- `searchStateHash`
+- `referencedOwnedWeaponsHash`
+- `CalculationContext`
 
-Condition relaxation may be suggested, but the target definition changes only after explicit user action.
+Deleting/replacing an old `BuildCandidate` during a later search must not automatically delete its `BuildListEntry` snapshot.
 
-Ideal matching and practical matching must follow `SEARCH_SPEC.md`.
+The originating Candidate ID is traceability information, not the source of truth for an existing Build List entry.
 
-Similarity to the ideal target is a separate concern from whether a candidate satisfies practical conditions.
+---
 
-Do not create ambiguous overlapping candidate categories.
+## Build List Stale Rules
+
+A `BuildListEntry` can become stale for:
+
+```text
+target_definition_changed
+rng_state_changed
+owned_weapon_changed
+calculation_context_changed
+```
+
+Recalculate stale reasons from current data.
+
+Do not trust only the persisted `isStale` flag.
+
+### `searchStateHash`
+
+Hash only route-dependent RNG state.
+
+Include, when relevant:
+
+- Base Seed value and confirmation state
+- Gogma Counter value and confirmation state
+- Skill Counter value and confirmation state
+- Counter Gate value and confirmation state
+- Relevant Normal Artian counter value and confirmation state
+
+Exclude non-semantic fields such as:
+
+- RNG source
+- Notes
+- Observation timestamps
+- Display-only fields
+
+For v1, if the route-dependent RNG hash changes, use the safe behavior:
+
+```text
+rng_state_changed
+```
+
+### `referencedOwnedWeaponsHash`
+
+Hash only OwnedWeapons actually referenced by the route.
+
+Collect references from:
+
+- `BuildRoute.sourceOwnedWeaponId`
+- Reset Bonuses source
+- Keep Bonuses source
+- Non-null Reset Skills source
+- Material-consumption operations
+
+Deduplicate and stably sort IDs.
+
+Include semantic weapon data such as:
+
+- ID
+- Weapon type
+- Element
+- Stored restoration bonus slots
+- Series skill
+- Group skill
+- Status
+- Protection
+
+Exclude:
+
+- Name
+- Memo
+- `createdAt`
+- `updatedAt`
+
+Unrelated OwnedWeapon changes must not stale the entry.
+
+If a referenced weapon disappears or semantically changes, use:
+
+```text
+owned_weapon_changed
+```
+
+Routes that reference no OwnedWeapon use:
+
+```text
+referencedOwnedWeaponsHash = null
+```
+
+---
+
+## Search Route Rules
+
+Candidate search runs per TargetWeapon, even if one Worker request handles multiple targets.
+
+Search only routes whose capabilities and prerequisites are available.
+
+### Normal Artian Route
+
+Route kind:
+
+```text
+normal_artian_to_gogma
+```
+
+If the required weapon-type/rarity Normal Artian counter is unknown, skip only this route.
+
+v1 operation sequence may contain:
+
+- `create_normal_artian`
+- `convert_normal_to_gogma`
+- Required `reset_skills`
+
+It must not contain:
+
+- `keep_bonuses`
+
+For this route:
+
+```text
+BuildRoute.sourceOwnedWeaponId = null
+```
+
+If Reset Skills is performed immediately after conversion, its:
+
+```text
+sourceOwnedWeaponId = null
+```
+
+because the route output is not yet a persisted OwnedWeapon.
+
+Do not invent an OwnedWeapon ID for the just-created route output.
+
+After the weapon is secured and registered as an OwnedWeapon, a later search may use it as an existing-Gogma Keep Bonuses source.
+
+Do not add a route-output weapon reference type in v1.
+
+### Existing Gogma Reset Bonuses
+
+Route kind:
+
+```text
+existing_gogma_reset_bonuses
+```
+
+The source must be unprotected.
+
+Do not generate this destructive route from a protected weapon.
+
+### Existing Gogma Keep Bonuses
+
+Route kind:
+
+```text
+existing_gogma_keep_bonuses
+```
+
+The source must be unprotected.
+
+Keep selection and final result must come from the RNG Engine contract.
+
+Search code must not infer:
+
+- Slot subset behavior
+- Rank preservation
+- Remaining-slot behavior
+- Final kept bonuses
+
+If Keep prediction is unsupported, do not generate production Keep routes.
+
+### Existing Gogma Reset Skills
+
+Route kind:
+
+```text
+existing_gogma_reset_skills
+```
+
+This route:
+
+- Uses an existing OwnedWeapon
+- Keeps the source weapon's restoration bonus set unchanged
+- Changes only predicted series/group skills
+- Advances only Skill RNG as defined by the Engine
+- Uses a non-null source OwnedWeapon ID
+- May use protected Practical or Ideal weapons in v1
+
+It does not require Gogma prediction or Keep prediction.
+
+Its `referencedOwnedWeaponsHash` must include the source weapon.
+
+### Existing Gogma Mixed
+
+Route kind:
+
+```text
+existing_gogma_mixed
+```
+
+If the route includes Reset Bonuses or Keep Bonuses, the source must be unprotected.
+
+A Reset-Skills-only route must use `existing_gogma_reset_skills`, not Mixed.
+
+---
+
+## Concrete Route Operations
+
+A `BuildRoute` must store its real ordered `RouteOperation[]`.
+
+Do not reconstruct operations later from only endpoint counters or route kind.
+
+Planner and execution navigation must use the concrete operation sequence.
+
+This is required for:
+
+- Correct shared RNG simulation
+- Correct inventory simulation
+- Correct PlanStep creation
+- Correct invalidation behavior
+- Correct user instructions
 
 ---
 
 ## Planner Rules
 
-The Planner operates across multiple target weapons.
+The Planner operates globally across multiple targets.
 
-It must account for shared RNG progression and weapon inventory.
+Do not optimize each Target in isolation.
 
-The Planner should favor:
+The Planner accounts for:
 
-1. Obtaining practical weapons for currently uncovered targets
-2. Taking advantage of shared RNG progression to obtain other useful targets
-3. Upgrading practical weapons to ideal weapons
-4. Reducing weapon consumption and operation count when alternatives are otherwise similar
+- Shared Gogma RNG progression
+- Shared Skill RNG progression
+- Weapon-type/rarity Normal Artian counters
+- Owned weapon inventory
+- Protected/unprotected state
+- Target priority
+- Practical versus Ideal satisfaction
+- Weapon consumption
+- Operation count
+- Conflicts
 
-The Planner must not treat each target weapon as an isolated optimization problem.
-
-Planner execution must use simulated state.
+The Planner is a pure calculation module.
 
 Do not mutate IndexedDB while searching for a plan.
 
-Persist the finalized plan only after the planner result is returned to the application layer.
+Persist only after the calculation returns to the application/persistence layer.
 
 ---
 
-## Planner Recalculation Rule
+## Planner Search Strategy
+
+v1 uses bounded Beam Search.
+
+Default constants:
+
+```text
+beamWidth = 50
+maxExpandedStates = 10000
+maxPlanSteps = 300
+```
+
+Do not replace Beam Search with a simple Candidate sort.
+
+Planner search state must distinguish target satisfaction:
+
+```text
+hasPractical
+hasIdeal
+```
+
+Rules:
+
+- Practical candidate -> `hasPractical = true`
+- Ideal candidate -> `hasPractical = true`, `hasIdeal = true`
+- A Practical-secured but non-Ideal target remains eligible for Ideal improvement
+- A target that already has Ideal is normally removed from further planning
+
+Planning priority:
+
+1. Obtain Practical weapons for uncovered targets early
+2. Exploit shared RNG progression to obtain useful results for other targets
+3. Upgrade Practical targets to Ideal
+4. Reduce weapon consumption and operation count among otherwise similar states
+
+Complete optimality is not required.
+
+Respect search bounds and return the best state available within the limits.
+
+---
+
+## Planner Inventory Rules
+
+Planner inventory is strict for Gogma Artian weapon resources.
+
+Material items are not a hard inventory constraint in v1; display required quantities instead.
+
+Material weapon consumption is allowed only when:
+
+```text
+status = material
+AND
+isProtected = false
+```
+
+Protected weapons are never used for:
+
+- Material consumption
+- Reset Bonuses
+- Keep Bonuses
+
+Reset Skills remains allowed on protected weapons.
+
+If a material Gogma weapon is required but unavailable, the Planner may schedule replenishment:
+
+```text
+create normal Artian
+-> convert to Gogma
+-> register as material
+-> consume later
+```
+
+All RNG effects of replenishment must be included in simulation.
+
+Do not reuse a consumed weapon.
+
+---
+
+## Conflict Rules
+
+Planner conflicts and rejection records use `BuildListEntryId`, not volatile Candidate IDs.
+
+Conflict kinds follow `DATA_MODEL.md`.
+
+Protected destructive use is not merely a scoring penalty or resolvable conflict.
+
+It is an invalid expansion.
+
+Do not let conflict resolution override protection rules.
+
+---
+
+## Plan Recalculation Invariant
 
 This is a core invariant:
 
-> Do not recalculate while execution follows the finalized plan. Recalculate only when the plan's assumptions diverge from actual state.
+> Do not recalculate while execution follows the finalized Plan. Recalculate only when the Plan's assumptions diverge from actual state.
 
-Normal planned changes do not invalidate a plan.
+Do not compare the mutable runtime state against only the original Plan-start state after execution has begun.
 
-Examples that must NOT trigger recalculation:
+Use each current PlanStep's:
 
-- Counters advance exactly as predicted
-- A planned practical weapon is secured
-- A planned ideal weapon is secured
-- A planned material weapon is created
-- A planned inventory change occurs
+```text
+expectedStateBefore
+expectedStateAfter
+```
 
-Examples that DO trigger recalculation:
+Normal planned changes must not invalidate the Plan.
 
-- Actual RNG state differs from the expected state for the current step
-- User manually changes RNG state
-- Target conditions change
-- Target priority changes in a way that affects the plan
+Examples that must not stale a Plan when expected hashes match:
+
+- Counters advance as predicted
+- A Practical weapon is secured as planned
+- An Ideal weapon is secured as planned
+- A material weapon is created as planned
+- Planned inventory changes occur
+- A planned old-Practical status change is confirmed
+- Referenced OwnedWeapon state changes exactly as the Plan predicted
+
+Active Plan execution takes precedence over BuildListEntry derivative staleness caused solely by normal planned progression.
+
+Do not stop an Active Plan merely because current values no longer match the BuildListEntry's original `searchStateHash` or `referencedOwnedWeaponsHash`.
+
+Examples that do require stale/recalculation behavior:
+
+- Runtime RNG state differs from the current step expectation
+- Normal Artian counter differs from the current step expectation
+- Target definition changes
 - Build List changes
-- Owned weapon inventory changes outside the plan
-- A predicted result does not match the observed result
-- A planned candidate is skipped
+- OwnedWeapon changes outside the Plan
+- CalculationContext becomes incompatible
+- Predicted result differs from observed result
+- Planned candidate is not secured
 - A different candidate is secured
+- User declines a planned old-Practical materialization
 
-Plan invalidation must compare actual state against the expected state for the current execution point.
+Use the specified recalculation reason where applicable.
 
-Do not compare only against the original plan-start snapshot.
+Do not automatically replace a stale Plan.
+
+The user explicitly initiates recalculation.
 
 ---
 
 ## Plan Step Rules
 
-Execution navigation is one operation at a time in the initial release.
+Execution navigation is one operation at a time in v1.
 
-A route must contain enough information to reproduce its sequence of operations.
+Do not introduce batch completion.
 
-Plan steps should represent actual user operations such as:
+Plan steps may represent operations such as:
 
 - Create normal Artian
 - Convert to Gogma Artian
-- Reset bonuses
-- Keep bonuses
-- Reset skills
-- Secure weapon
-- Change weapon status
+- Reset Bonuses
+- Keep Bonuses
+- Reset Skills
+- Reserve/secure weapon
 - Consume material weapon
+- Confirm old-Practical status change
 
-Do not introduce batch execution behavior in the initial release.
+Every Step stores expected state before and after the operation.
 
-Plan view may visually collapse repeated steps, but execution must still proceed one operation at a time.
+For a planned old-Practical materialization:
+
+- It is a separate `change_owned_weapon_status` Step
+- `requiresUserConfirmation = true`
+- `expectedStateBefore` includes Practical/protected
+- Confirming produces Material/unprotected
+- Declining leaves the weapon unchanged and makes the Plan stale
+- Material consumption must not occur before the confirmation Step succeeds
 
 ---
 
 ## Execution History and Undo
 
-Expected plan state and actual execution history are separate.
+Expected Plan state and `ExecutionHistory` are separate.
 
-Execution history records what the user confirmed actually happened.
+Execution history records what the application/user confirmed happened.
 
-Undo only corrects an application-side mistaken confirmation.
+Before finalizing a Step, save an `ExecutionUndoSnapshot` containing the state required to restore that Step.
 
-Undo does not reverse actions performed in the game.
+The snapshot includes the required pre-Step state defined in `DATA_MODEL.md`, including:
 
-After Undo, re-evaluate whether the current application state still matches the expected plan state.
+- RngState
+- Normal Artian counters
+- Affected OwnedWeapons
+- Added OwnedWeapon IDs
+- Removed OwnedWeapons
+- Previous ProductionPlan
+
+Undo:
+
+- Applies only to the most recent ExecutionHistory entry
+- Restores application state
+- Deletes that ExecutionHistory entry
+- Does not add a new "Undo" history record
+- Does not reverse the actual in-game operation
+
+After restoring the snapshot, use the restored ProductionPlan status and recalculation reasons as stored.
+
+Do not invent a new post-Undo invalidation decision merely because the game action itself cannot be reversed.
+
+UI must clearly state that Undo only changes the tool state.
+
+---
+
+## Atomic Execution Transactions
+
+Execution Navigator Step finalization is atomic.
+
+For applicable actions, use one Dexie read-write transaction that includes the related:
+
+- Current-state read
+- `expectedStateBefore` validation
+- Undo snapshot creation
+- RngState update
+- Normal Artian counter update
+- OwnedWeapon add/update/delete
+- ExecutionHistory write
+- PlanStep update
+- ProductionPlan update
+- `expectedStateAfter` validation for expected-success paths
+
+Expected-success paths such as:
+
+- Confirm expected result
+- Secure weapon
+- Confirm planned materialization
+
+must rollback the entire transaction if the resulting state does not match `expectedStateAfter`.
+
+Unexpected-result and declined-materialization paths intentionally persist stale state and the corresponding reason within the same transaction.
+
+On any storage/validation failure:
+
+- Leave no partial update
+- Keep the pre-Step state
+- Keep the UI on the current Step
+- Surface a retryable save error
+
+Undo is also one Dexie transaction.
+
+Undo failure must leave the pre-Undo state and history unchanged.
 
 ---
 
 ## Master Data Rules
 
-Master data should be stored separately from application logic.
+Master data is separate from application logic.
 
-Expected data includes:
+Expected master sets include:
 
 - Weapon types
 - Elements
@@ -396,22 +964,24 @@ Expected data includes:
 - Weapon bonus definitions
 - Series skills
 - Group skills
-- RNG lottery data
+- RNG Lottery data
 - Materials
 - Material costs
 
-Master data must be versioned.
+Master data is versioned.
 
-At minimum track:
+At minimum, preserve:
 
 - Game version
 - Master data version
-- RNG Engine version where calculation compatibility matters
-- User-data schema version
+- User schema version
+- RNG Engine version in CalculationContext
 
-Do not force unverified RNG behavior to fit a provisional LotteryMaster schema.
+Run master validation immediately after loading.
 
-If the RNG implementation requires a different representation after verification, update the specification before changing the production data model.
+If master validation fails, do not continue normal application startup with invalid data.
+
+Do not make production RNG correctness depend on unverified Lottery fixture data.
 
 ---
 
@@ -419,45 +989,63 @@ If the RNG implementation requires a different representation after verification
 
 Use IndexedDB through Dexie.js for persistent user data.
 
-Do not persist temporary UI state unless there is a clear requirement.
+Persist entities defined by `DATA_MODEL.md`.
 
-External/imported JSON must be validated before persistence.
+Do not persist transient UI state without a specification requirement.
 
-Import must not partially overwrite existing data when validation fails.
+Initial import behavior is full replacement only.
 
-Initial release supports full-replacement import only unless the specification changes.
+Before applying imported data:
 
-Exported user data must contain a schema version.
+- Parse and validate it
+- Validate schema version
+- Validate references
+- Validate Master IDs
+- Validate domain invariants
+
+If validation fails:
+
+- Do not partially apply data
+- Keep the current data unchanged
+
+Export must include the specified schema version and user entities.
+
+Master Data itself is not copied into the user export.
 
 ---
 
 ## Web Worker Rules
 
-Long-running operations must not block the UI thread.
+Long-running calculations must not block the UI thread.
 
-Use Web Workers for:
+Use Workers for:
 
-- Seed/counter search
-- Large candidate searches
-- Planner search where computation is non-trivial
+- Seed search
+- Counter search
+- Large candidate search
+- Planner search where non-trivial
 
-Worker requests and responses must have typed messages and request IDs.
+Worker messages must be typed and use request IDs.
 
-Old responses from obsolete request IDs must not overwrite newer results.
+Rules:
 
-Long-running requests should support cancellation.
+- Ignore obsolete response IDs
+- Do not apply results after cancellation
+- Support progress for long-running work
+- Support cancellation
+- Do not access React state from Workers
+- Do not access Dexie directly from candidate-search Workers
+- Send the required input and Master subset through messages
 
-Workers should receive the data required for the calculation through messages.
-
-Do not make Workers depend directly on React state.
+Do not return guessed production results from a Fake RNG implementation without making the fake/debug status explicit.
 
 ---
 
 ## UI Rules
 
-The application is mobile-friendly first, while also supporting desktop browsers.
+The application is mobile-friendly first and must also work on desktop browsers.
 
-Normal UI must hide internal RNG details such as:
+Normal UI hides internal RNG values:
 
 - Base Seed
 - Gogma Counter
@@ -465,13 +1053,29 @@ Normal UI must hide internal RNG details such as:
 - Counter Gate
 - Normal Artian counters
 
-These values may be shown in Debug Mode.
+Debug Mode may show them.
 
-Debug Mode must not change calculation behavior.
+Debug Mode must not change calculation semantics.
 
-Do not expose controls for out-of-scope features.
+Normal UI must not expose out-of-scope v1 controls.
 
-Important destructive operations require confirmation.
+Important destructive operations require explicit confirmation.
+
+Search UI must:
+
+- Show Ideal / Practical / Similar filtering correctly
+- Show skipped-route reasons
+- Allow existing-Gogma Reset Skills candidates from protected weapons
+- Never show Keep Bonuses inside a v1 normal-Artian route
+
+Execution UI must:
+
+- Present one operation at a time
+- Show expected result
+- Support result confirmation
+- Support actual-result mismatch recording
+- Support Undo
+- Show stale/recalculation reason when execution diverges
 
 ---
 
@@ -479,11 +1083,16 @@ Important destructive operations require confirmation.
 
 The production build must support GitHub Pages.
 
-Do not introduce backend routing requirements.
+Do not introduce a backend-routing requirement.
 
-Ensure the chosen router strategy works when hosted under the repository path.
+Routing and Vite configuration must work when hosted under the repository path.
 
-When changing routing or Vite configuration, verify the production build rather than relying only on the development server.
+The UI specification permits a Hash Router for v1 if needed.
+
+When routing or Vite configuration changes:
+
+- Verify the production build
+- Do not rely only on the dev server
 
 ---
 
@@ -491,59 +1100,83 @@ When changing routing or Vite configuration, verify the production build rather 
 
 For every meaningful domain change, add or update tests.
 
-At minimum, before considering a task complete, run:
+Do not delete or weaken tests merely to make implementation pass.
+
+Important logic should use deterministic fixtures.
+
+Unverified RNG behavior must not be treated as production-correct merely because a Fake fixture passes.
+
+Relevant test areas include:
+
+- Domain invariants
+- Restoration bonus multiset comparison
+- Master validation/selectors
+- Partial RNG capability derivation
+- Observation validation
+- Search route eligibility
+- `existing_gogma_reset_skills`
+- No Keep inside `normal_artian_to_gogma`
+- BuildCandidate / BuildListEntry separation
+- Stale hash behavior
+- OwnedWeapon protection
+- Beam Search behavior
+- Inventory simulation
+- Expected state Before/After invalidation
+- Old-Practical confirmation flow
+- Atomic Execution transactions
+- Undo snapshot restoration
+- Worker request/response/cancellation behavior
+- Export/import validation
+- Mobile UI flows where applicable
+
+Before considering a coding task complete, run the project's applicable quality checks.
+
+Current standard checks are:
 
 ```bash
+npm run lint
 npm test
 npm run build
 ```
 
-If the project has a dedicated type-check command, run it as well.
-
-Examples:
-
-```bash
-npm run typecheck
-```
-
-Do not remove or weaken existing tests just to make a change pass.
-
-Important logic should have deterministic fixture-based tests.
-
-RNG implementations must be validated against known fixtures before being treated as production-correct.
+If a dedicated type-check command is added, run it as well.
 
 ---
 
 ## Change Discipline
 
-Keep each task focused.
+Keep each coding task focused.
 
-Do not refactor unrelated areas unless necessary for the requested change.
+Do not refactor unrelated areas unless required for the task.
 
-Do not perform large architecture rewrites without a specification requirement.
+Do not perform architecture rewrites without specification support.
 
-If a required change would alter a documented public/domain contract:
+Do not silently change a documented domain contract.
 
-1. Identify the affected specification
-2. Report the mismatch
-3. Update the specification or request confirmation
-4. Then implement the code change
+When the implementation reveals a genuine specification gap:
 
-Do not silently change domain meaning.
+1. Stop only the affected behavior
+2. Identify the exact specification gap
+3. Report it clearly
+4. Do not guess the missing game/product rule
+5. Continue unaffected work when possible
+
+Prefer small, testable changes over broad rewrites.
 
 ---
 
 ## Completion Report
 
-After completing a coding task, report:
+After a coding task, report:
 
-- What was changed
+- What changed
 - Which specification files were followed
 - Files added or modified
 - Tests added or modified
 - Commands executed
-- Test/build result
-- Remaining limitations or unverified RNG behavior
+- Lint/test/build result
+- Remaining limitations
+- Any RNG/Keep/Lottery behavior still unverified
 
 Keep the report concise and factual.
 
@@ -551,12 +1184,18 @@ Keep the report concise and factual.
 
 ## Definition of Done
 
-A task is not complete unless the requested scope is implemented and:
+A task is complete only when its requested scope is implemented and:
 
 - TypeScript compiles without errors
-- Tests pass
-- Production build succeeds
+- `npm run lint` passes
+- `npm test` passes
+- `npm run build` passes
+- Relevant tests cover new or changed logic
 - Domain invariants remain valid
-- No unrelated features were added
+- Persistence/reference integrity is preserved
+- No unrelated feature was added
 - No unverified RNG behavior was silently invented
 - GitHub Pages compatibility is preserved
+- The implementation remains within the frozen v1 specifications
+
+If real game behavior is not yet verified, completion means the typed boundary, validation, Fake Engine/fixtures, and integration contract are correct. It does not mean the production RNG algorithm is proven.

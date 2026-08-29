@@ -1,0 +1,774 @@
+# モンハンワイルズ 巨戟アーティア厳選Planner
+## UI_FLOW.md
+
+## 1. この文書の目的
+
+この文書は、初期版アプリの画面構成、主要導線、入力制約、表示ルール、実行ナビ、再計算導線、スマートフォン対応、テスト観点を定義する。
+
+UIはReactで実装する。RNG、Search、Plannerの詳細ロジックはUIから分離し、Domain ServiceまたはWeb Worker経由で呼び出す。
+
+---
+
+## 2. 全体画面
+
+初期版の主要画面。
+
+```text
+Home / Dashboard
+RNG Setup
+Normal Counter Setup
+Owned Weapons
+Target Weapons
+Search Results
+Build List
+Production Plan
+Execution Navigator
+Settings / Import Export
+Debug Details
+```
+
+スマートフォンを主要利用環境として想定する。
+
+---
+
+## 3. 共通UI方針
+
+- 通常画面ではSeed / Counterを表示しない
+- Debug Mode ONの場合のみ内部RNG情報を表示する
+- 重要な操作は1画面1目的にする
+- 復元ボーナス5枠は常に5つの固定スロットとして表示する
+- ただし判定上は順不同であることをUI内で軽く示す
+- 長時間検索中は進捗とキャンセルを表示する
+- 作成ナビは必ず1操作ずつ進める
+- 高速モードは表示しない
+- 手動作成順固定UIは表示しない
+
+---
+
+## 4. Home / Dashboard
+
+目的。
+
+現在の準備状況と次にやるべき操作を示す。
+
+表示。
+
+- RNG状態: 項目ごとの未設定 / 確定 / 要確認
+- 利用可能機能: Gogma予測 / Skill予測 / 通常アーティア検索 / Planner
+- 通常アーティアCounter: 確定済み武器種数
+- 所持巨戟数
+- 有効な目標武器数
+- 作成リスト候補数
+- Active Planの有無
+
+主要アクション。
+
+- RNGを設定する
+- 通常Counterを特定する
+- 所持武器を登録する
+- 目標武器を登録する
+- 候補検索を開始する
+- 作成プランを見る
+- 実行ナビを再開する
+
+状態別CTA。
+
+- RNG未設定: RNG Setupへ誘導
+- TargetWeaponなし: Target Weaponsへ誘導
+- Search結果なし: Search Resultsへ誘導
+- Active Planあり: Execution Navigatorへ誘導
+- Plan stale: 再計算へ誘導
+
+---
+
+## 5. RNG Setup
+
+目的。
+
+Base Seed、Gogma Counter、Skill Counter、Counter Gateを項目ごとに設定する。判明している値だけの適用を許可する。
+
+タブ。
+
+1. GogmaSeedFinder Import
+2. 直接入力
+3. 観測から検索
+
+## 5.1 GogmaSeedFinder Import
+
+入力。
+
+- 貼り付けテキスト
+
+操作。
+
+- 解析
+- 適用
+
+表示。
+
+- 読み取れた値
+- 読み取れなかった値
+- warning
+
+制約。
+
+- 読み取れた項目だけを選択して適用可能
+- 読み取れない項目があっても、他の項目の適用を妨げない
+- 適用した各KnownValueのsourceを `gogma_seed_finder_import` にする
+
+## 5.2 直接入力
+
+入力。
+
+- Base Seed
+- Gogma Counter
+- Skill Counter
+- Counter Gate
+
+制約。
+
+- Counterは0以上の整数
+- Base Seedは正規化後に保存
+- 4項目をすべて入力する必要はない
+- 入力した各KnownValueのsourceを `manual` にする
+- 空欄は既存値を削除しない。確定解除は別操作にする
+
+## 5.3 観測から検索
+
+Seed検索とCounter検索を別モードとして提供する。
+
+入力。
+
+- 観測種別
+- 武器種
+- 属性（Gogma Bonus / Skillでは必須、Normal ArtianではEngineが不要なら省略可）
+- 復元ボーナスまたはスキル
+- Seed検索範囲またはCounter検索範囲
+- 既知Counter / Counter Gate候補
+
+結果。
+
+- 一致なし
+- 複数候補
+- 一意候補
+
+一意候補の場合のみ適用可能。
+
+- Seed検索ではBase Seed候補を表示する
+- Counter検索では既知Base Seedに対するCounter候補を表示する
+- Normal Artian、Gogma Bonus、Skillの観測を追加できる
+- 長時間処理中は進捗とキャンセルを表示する
+- RNG Engineが本番Seed検索未対応の場合は利用不可理由を表示し、推測結果を出さない
+- Gogma Bonus / Skill観測では属性未選択のまま検索できない
+- Normal Artian観測ではEngineが属性を使わない場合に属性入力を省略できる
+
+---
+
+## 6. Normal Counter Setup
+
+目的。
+
+通常アーティアの武器種・レア度別Counterを観測結果から特定する。
+
+一覧表示。
+
+- 武器種
+- レア度
+- 状態: 未設定 / 候補複数 / 確定
+- 観測数
+- 最終観測日時
+
+操作。
+
+- 観測を追加
+- Counter検索
+- 確定解除
+
+観測入力。
+
+- 武器種
+- レア度
+- 復元ボーナス5枠
+
+制約。
+
+- 一致が1件なら確定
+- 複数一致なら追加観測を促す
+- 未確定の武器種・レア度は通常アーティア経由検索に使わない
+- Counterの直接修正は通常UIに表示しない
+- Debug Mode ONの場合のみ、警告と確認を伴う手動修正を許可してよい
+
+---
+
+## 7. Owned Weapons
+
+目的。
+
+所持している巨戟アーティアを個別管理する。
+
+一覧表示。
+
+- 名称
+- 武器種
+- 属性
+- 復元ボーナス5枠
+- シリーズスキル
+- グループスキル
+- 状態
+- 保護
+- 関連目標
+
+操作。
+
+- 新規登録
+- 編集
+- 複製
+- 削除
+- Material / Practical / Ideal切替
+- 保護ON/OFF
+- 旧実用品を素材用に変更
+
+入力制約。
+
+- 復元ボーナスは必ず5枠
+- 選択肢は武器種に対応したWeaponBonusDefinitionだけ
+- statusがPracticalまたはIdealに変わった場合、初期値を保護ONにする
+- `isProtected = true` の武器はPlannerが素材消費・Reset Bonuses・Keep Bonusesへ使用しない
+- Plannerが消費できるのはMaterialかつ保護OFFの武器だけ
+- 旧実用品を素材用に変更する場合は確認後に `status = Material` と保護OFFを同時適用する
+- 削除時にActive Planで参照されている場合は警告する
+
+Plan外で旧実用品を素材用へ変更する場合は、この画面で確認ダイアログを表示する。Active Plan中に計画された素材化は、Execution Navigatorの独立した `change_owned_weapon_status` Stepで確認する。
+
+選択肢。
+
+- 素材用に変更: `status = Material`、`isProtected = false` とし、計画外変更ならActive Planをstale判定する
+- 保管: 状態と保護を維持する
+
+自動的な素材化、Plannerによる保護解除、確認前の状態変更は禁止する。
+
+---
+
+## 8. Target Weapons
+
+目的。
+
+欲しい完成武器の条件を登録する。
+
+一覧表示。
+
+- 名称
+- 武器種
+- 属性
+- 優先度
+- 検索対象ON/OFF
+- 理想ボーナス要約
+- 実用ライン要約
+- スキル条件要約
+
+操作。
+
+- 新規登録
+- 編集
+- 複製
+- 削除
+- 検索対象ON/OFF
+
+入力セクション。
+
+1. 基本情報
+2. 理想復元ボーナス
+3. 実用ライン
+4. 理想スキル
+5. 実用スキル
+
+制約。
+
+- 優先度デフォルトは3
+- 理想復元ボーナスは5枠完全指定
+- 実用ラインはBonusConditionとAlternativeBonusConditionGroupで表現する
+- 複雑な任意論理式UIは作らない
+
+---
+
+## 9. Search Results
+
+目的。
+
+TargetWeaponごとに候補を検索し、作成リストへ追加する。
+
+表示構造。
+
+- TargetWeapon切替
+- 結果フィルタ: すべて / 理想 / 実用 / 近似
+- 経路フィルタ: すべて / 通常アーティア経由 / 既存巨戟から
+- 候補一覧
+
+スマートフォン。
+
+- TargetWeaponは横スワイプまたはタブで切替
+- 候補カードは縦スクロール
+- フィルタは上部に固定してよい
+
+候補表示。
+
+- 完成復元ボーナス
+- シリーズスキル
+- グループスキル
+- 理想との差分
+- 到達までのおおよその操作量
+- 推奨作成経路
+- 既存巨戟のスキルのみ再付与経路では、復元ボーナスを維持すること
+- 必要素材
+- 作成リスト追加状態
+- 近似表示と類似度（該当する実用品のみ）
+
+操作。
+
+- 検索開始
+- 検索キャンセル
+- 個別追加
+- 理想候補一括追加
+- 実用候補一括追加
+- 理想＋実用一括追加
+- 条件緩和案を確認
+
+制約。
+
+- RngState全体の確定は要求しない
+- CapabilityがあるRouteだけを検索し、不足値に依存するRouteはskip理由を表示する
+- 選択対象の全Routeが実行不能な場合のみ検索開始不可
+- TargetWeaponなしなら検索開始不可
+- 通常Counter未確定Routeはskip理由を表示
+- protected武器を起点とするReset Bonuses / Keep Bonuses Routeは検索結果へ表示しない
+- Reset Bonuses / Keep Bonusesの起点候補がprotected武器だけの場合は「保護されていない起点武器がない」とskip理由を表示する
+- Reset Skillsのみの経路は非破壊操作として扱い、protectedなPractical / Ideal武器からも検索結果へ表示できる
+- 通常アーティア経由では巨戟化後のスキル再付与までを表示し、同一RouteにKeep Bonusesを含めない
+- 巨戟化した武器を確保した後は、次回以降の検索で既存巨戟Keep Bonuses経路の起点として表示できる
+- 条件緩和案は選択されるまでTargetWeaponへ適用しない
+- 「実用」は `category = practical`、「近似」は `category = practical AND isSimilarToIdeal = true` を表示する
+
+---
+
+## 10. Build List
+
+目的。
+
+Plannerに検討させる候補集合を確認・調整する。
+
+表示。
+
+- TargetWeaponごとのBuildListEntry
+- category
+- Candidate Snapshot
+- route
+- estimatedOperationCount
+- 競合しそうな資源
+- 優先度
+- stale状態と理由
+
+操作。
+
+- 候補を外す
+- TargetWeapon優先度を変更
+- Planner実行
+
+制約。
+
+- 作成順の手動固定は提供しない
+- Plannerが採用しない可能性があることを表示する
+- BuildCandidateの検索結果とBuildListEntryを同一Entityとして扱わない
+- staleなBuildListEntryはPlanner入力に含めず、再検索または再追加を促す
+- 有効なBuildListEntryが0件ならPlanner実行不可
+- Target条件、検索に使用したRNG状態、Routeが参照する起点武器・素材武器、CalculationContext変更時にEntryのstale理由を表示する
+- RNG変更によるstaleは `rng_state_changed` と表示し、再検索・再追加へ誘導する
+- Route参照武器のボーナス、スキル、status、isProtected変更によるstaleは `owned_weapon_changed` と表示し、再検索・再追加へ誘導する
+- Routeと無関係なOwnedWeapon変更、または参照武器の名前、メモ、日時だけの変更ではEntryをstale表示しない
+- CalculationContext非互換は `calculation_context_changed` と表示する
+
+---
+
+## 11. Production Plan
+
+目的。
+
+Plannerが生成した作成計画を確認する。
+
+表示。
+
+- Plan status
+- 採用BuildListEntryとCandidate Snapshot
+- RejectedBuildListEntryと理由
+- BuildListEntry基準の競合と解決結果
+- 必要素材合計
+- タイムライン形式のPlanStep
+
+操作。
+
+- 作成開始
+- 再計算
+- Plan破棄
+- Debug詳細表示
+- 生成時CalculationContext
+
+PlanStep表示。
+
+- 順番
+- 今回行う作業
+- 使用する武器
+- 想定結果
+- 確保対象かどうか
+
+制約。
+
+- Active Planは同時に1件まで
+- stale Planでは作成開始不可。再計算を促す
+- 現在CalculationContextと非互換なPlanはstaleとする
+- Debug Mode OFFではSeed / Counterを表示しない
+
+---
+
+## 12. Execution Navigator
+
+目的。
+
+作成プランに従ってゲーム操作を1ステップずつ案内する。
+
+表示。
+
+- 現在Step番号
+- 今回行う作業
+- 使用する武器
+- 想定結果
+- 確保対象かどうか
+- 完了済み / 残りStep数
+
+基本操作。
+
+- 結果一致・次へ
+- 確保
+- 結果が違う
+- Undo
+- プラン全体を見る
+
+## 12.1 結果一致・次へ
+
+処理。
+
+- 操作前に実状態が現在Stepの `expectedStateBefore` と一致することを確認
+- 実行前状態からExecutionUndoSnapshotを作成
+- RNG状態を想定どおり進める
+- NormalArtianCounterを想定どおり進める
+- InventoryChangeを適用する
+- 更新後の実状態が `expectedStateAfter` と一致することを確認
+- ExecutionHistory追加
+- PlanStepとProductionPlan更新
+- 次Stepへ進む
+
+これらは12.6の共通Dexie transactionで確定する。両方の期待状態と一致する正常進行ではPlanをstaleにしない。不一致の場合はStep完了を確定せず、差分と再計算導線を表示する。
+
+## 12.2 確保
+
+処理。
+
+- ExpectedResultをOwnedWeaponとして登録または更新
+- statusをPracticalまたはIdealに設定
+- 保護ON
+- 実行前状態をExecutionUndoSnapshotへ保存
+- ExecutionHistory追加
+- PlanStepとProductionPlan更新
+- 旧実用品の素材化がPlanに含まれる場合でも、このStepでは状態を変更せず、後続の確認Stepへ進む
+- 次Stepへ進む
+
+武器追加・更新からPlan更新までを12.6の共通Dexie transactionで確定する。
+
+## 12.3 予定された旧実用品の素材化
+
+`operationType = "change_owned_weapon_status"` のStepで表示する。
+
+表示。
+
+- 対象となる旧実用品
+- 先に確保した同一TargetのIdeal武器
+- 後続で素材として使う予定
+
+選択肢と処理。
+
+- 素材用に変更: `status = Material`、`isProtected = false` を同一トランザクションで適用し、`confirmed_weapon_status_change` としてExecutionHistoryへ記録する。`expectedStateAfter` と一致すればPlanをstaleにせず次Stepへ進む
+- 保管: 状態と保護を変更せず、`declined_weapon_status_change` と `planned_status_change_declined` をExecutionHistoryへ記録する。`expectedStateAfter` と不一致になるためPlanをstaleにして再計算を促す
+
+制約。
+
+- ユーザー選択前に状態を変更しない
+- 確認ダイアログを閉じただけではStepを完了しない
+- 素材化Step完了前に後続の `use_weapon_as_material` Stepへ進めない
+- v1では同一TargetのIdeal武器が先行確保されている場合だけこのStepを表示する。別のPractical取得を理由とするPlanner提案は行わない
+- どちらの選択もExecutionHistory、OwnedWeapon変更の有無、PlanStep、ProductionPlanを12.6の共通Dexie transactionで確定する
+
+## 12.4 結果が違う
+
+処理。
+
+- 実結果入力画面を開く
+- ActualResultを保存
+- 実行前状態をExecutionUndoSnapshotへ保存
+- ExecutionHistory追加
+- `expectedStateAfter` との不一致理由を記録してPlanをstaleにする
+- 再計算導線を表示
+
+ActualResult、RNG / Counter / Inventoryの実変更、ExecutionHistory、PlanStep、ProductionPlanを12.6の共通Dexie transactionで確定する。
+
+## 12.5 Undo
+
+処理。
+
+- 最後のExecutionHistoryのExecutionUndoSnapshotを読み込む
+- RngStateと全NormalArtianCounterを実行前へ戻す
+- Stepで追加したOwnedWeaponを削除し、更新・削除したOwnedWeaponを実行前へ戻す
+- ProductionPlanを実行前Snapshotへ戻す
+- 最後のExecutionHistoryを削除する
+
+Undoは上記すべてを1つのDexie transactionで行う。途中で失敗した場合は部分復元を残さず、Undo前の状態と履歴を維持する。Undo自体のExecutionHistoryは追加しない。
+
+注意表示。
+
+```text
+Undoはツール上の操作を戻すだけです。ゲーム内の操作は戻りません。
+```
+
+## 12.6 Step確定Transaction
+
+結果一致、武器確保、予定された旧実用品の素材化確認、想定外結果記録では、次の関連更新を1つのDexie read-write transactionで原子的に行う。
+
+- RngState更新
+- NormalArtianCounter更新
+- OwnedWeapon追加・更新・削除
+- ExecutionHistory追加
+- PlanStep完了または取消
+- ProductionPlan更新
+
+操作開始前に同じtransaction内で実状態を読み、`expectedStateBefore` のvalidationとExecutionUndoSnapshot生成を行う。結果一致、武器確保、「素材用に変更」では `expectedStateAfter` 不一致をvalidation失敗としてtransaction全体をrollbackする。想定外結果と「保管」は不一致を意図して記録する経路であるため、実状態とstale理由を同じtransactionで保存する。各経路で必要な読み書きまたはvalidationが失敗した場合は部分更新を残さず、Step確定前の状態を維持する。UIは次Stepへ遷移せず、再試行可能な保存エラーを表示する。
+
+---
+
+## 13. Plan Overview During Navigation
+
+目的。
+
+実行ナビ中に全体の現在地を確認する。
+
+表示。
+
+- 完了済みStep
+- 現在Step
+- 今後のStep
+- 確保予定武器
+- 素材補充予定
+
+操作。
+
+- 現在の作業に戻る
+
+制約。
+
+- 初期版ではOverviewからPlan編集をしない
+
+---
+
+## 14. Settings / Import Export
+
+表示。
+
+- Debug Mode ON/OFF
+- Master Data gameVersion
+- Master Data dataVersion
+- RNG Engine version
+- App schemaVersion
+- Export
+- Import
+- 全データクリア
+
+Import制約。
+
+- 初期版は全置換Importのみ
+- Import前に現在データExportを促す
+- schemaVersion不一致は拒否する
+- Master ID不一致は拒否または明示警告する
+
+全データクリア。
+
+- 確認ダイアログを必須にする
+- クリア後は初期状態へ戻る
+
+---
+
+## 15. Debug Details
+
+Debug Mode ONの場合のみ表示。
+
+表示対象。
+
+- Base Seed
+- Gogma Counter
+- Skill Counter
+- Counter Gate
+- NormalArtianCounter
+- PlanStep内部情報
+- RNG予測情報
+- Planner判定理由
+- 再計算理由
+- 使用中RngEngine名
+- Master Data version
+
+制約。
+
+- Debug Mode OFFでは通常導線に内部値を表示しない
+- ExportにはDebug Modeに関係なく必要な内部状態を含める
+
+---
+
+## 16. 再計算導線
+
+Planがstaleになる条件。
+
+- 現在StepのexpectedStateBefore / Afterと一致しないRNG状態変更
+- 現在StepのexpectedStateBefore / Afterと一致しないNormalArtianCounter変更
+- TargetWeapon変更
+- 作成リスト変更
+- 現在StepのexpectedStateBefore / Afterと一致しないOwnedWeapon変更
+- 想定外結果
+- 予定候補未確保
+- 別候補確保
+- 予定された素材化に対して「保管」を選択（`planned_status_change_declined`）
+- CalculationContext非互換（`calculation_context_changed`）
+
+PlanどおりのStep完了でCounterまたは所持武器が変化しても、現在StepのexpectedStateAfterおよび次StepのexpectedStateBeforeと一致する限りstaleにしない。予定された素材化でMaterial / unprotectedへ変わる場合も同じである。Plan開始時Snapshotとの単純比較は行わない。
+
+Active Planの正常進行によってBuildListEntryのsearchStateHashまたはreferencedOwnedWeaponsHashと現在値が一致しなくなっても、その派生staleだけを理由に進行中Planを停止しない。Execution NavigatorではPlanStep期待状態を優先する。
+
+UI表示。
+
+- stale理由
+- 期待状態と実状態の差分
+- 影響を受けるPlan
+- 再計算ボタン
+- 現在Planを破棄するボタン
+
+制約。
+
+- 自動で新Planへ置き換えない
+- ユーザーが再計算を実行した場合のみ新Planを作成する
+
+---
+
+## 17. ルーティング
+
+React Routerを使う場合の推奨path。
+
+```text
+/
+/rng
+/normal-counters
+/owned-weapons
+/target-weapons
+/search
+/build-list
+/plans/:planId
+/plans/:planId/run
+/settings
+/debug
+```
+
+GitHub Pages対応。
+
+- Viteの `base` を公開リポジトリ名に合わせる
+- SPA fallbackが必要な場合はHash Routerも検討する
+- 初期版ではHash Routerを採用してもよい
+
+---
+
+## 18. 状態管理
+
+推奨。
+
+- Dexie: 永続化
+- React state / Zustand: 画面状態
+- Web Worker: 重い計算
+
+UI state例。
+
+```ts
+export interface SearchUiState {
+  activeTargetWeaponId: TargetWeaponId | null;
+  resultFilter: CandidateResultFilter;
+  routeFilter: CandidateRouteFilter;
+  isSearching: boolean;
+  currentRequestId: string | null;
+}
+```
+
+制約。
+
+- 永続化すべきデータはDATA_MODEL.mdに従う
+- フィルタや開閉状態など一時UI状態はIndexedDBへ保存しなくてよい
+
+---
+
+## 19. テスト観点
+
+## 19.1 Component Test
+
+- 復元ボーナス5枠入力が5枠未満で保存できない
+- 武器種変更時に無効なボーナス選択が解除される
+- TargetWeapon優先度のデフォルトが3になる
+- Debug Mode OFFでSeed / Counterが表示されない
+- Debug Mode ONで内部情報が表示される
+- Normal Counterの手動修正がDebug Mode OFFで表示されない
+- RNG項目を一部だけ入力して保存できる
+- Capability不足の機能だけが無効表示になる
+
+## 19.2 Flow Test
+
+- RNG設定から候補検索まで進める
+- 観測検索でSeed検索とCounter検索の入力・結果が混在しない
+- Seed検索中に進捗表示とキャンセルが使える
+- 通常Counter未確定時に通常Route skipが表示される
+- 既存武器の復元ボーナスを維持したスキルのみ再付与Routeを表示できる
+- protectedなPractical / Ideal武器でもスキルのみ再付与Routeを表示できる
+- Skill Capability不足時にスキルのみ再付与Routeのskip理由が表示される
+- 通常アーティア経由の操作列にKeep Bonusesが表示されない
+- 巨戟化した武器を確保後、別検索で既存巨戟Keep Bonuses経路の起点にできる
+- Search Resultsから候補を作成リストへ追加できる
+- Build ListからPlannerを実行できる
+- Production PlanからExecution Navigatorへ進める
+- 結果一致で次Stepへ進む
+- PlanどおりのStepで期待状態Afterに一致した場合はstaleにならない
+- Plan開始時からCounterが進んでも現在Step期待状態と一致すれば実行を継続できる
+- 結果が違う場合にPlanがstaleになる
+- Undoで最後の操作を戻せる
+- Undoで最後のStepが変更したRNG、通常Counter、OwnedWeapon、ProductionPlanを完全に戻せる
+- Step確定またはUndoの途中で保存失敗しても部分更新が残らない
+- Planに旧実用品の素材化がある場合、確保Stepとは別の確認Stepが表示される
+- 同一TargetのIdeal確保後だけ、Planner予定の旧Practical素材化確認が表示される
+- 別のPractical確保だけでは、Planner予定の旧Practical素材化確認が表示されない
+- 予定どおり「素材用に変更」でMaterial / 保護OFFになり、Planがstaleにならず次Stepへ進む
+- 素材化予定に対する「保管」で状態と保護が維持され、Planがstaleになる
+- 素材化確認前に後続の素材消費Stepへ進めない
+- staleなBuildListEntryからPlannerを実行できない
+- RNG変更理由があるBuildListEntryに `rng_state_changed` が表示される
+- Route参照武器変更理由があるBuildListEntryに `owned_weapon_changed` が表示される
+- CalculationContext非互換のEntryまたはPlanに `calculation_context_changed` が表示される
+
+## 19.3 Import / Export Test
+
+- ExportボタンでJSONを出力できる
+- ExportしたJSONをImportできる
+- 不正schemaVersionを拒否する
+- Master ID不一致を検出する
+
+## 19.4 Responsive Test
+
+- スマートフォン幅で主要画面が横スクロールなしで使える
+- Search ResultsのTarget切替が操作できる
+- Execution Navigatorの主要ボタンが片手操作しやすい位置にある
+- 復元ボーナス5枠が小画面でも判読できる
