@@ -13,19 +13,19 @@ describe('App', () => {
   it('renders the Dashboard', () => {
     render(<App />)
 
-    expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'ダッシュボード' })).toBeInTheDocument()
   })
 
   it.each([
-    ['#/rng', 'RNG Setup'],
-    ['#/normal-counters', 'Normal Counters'],
-    ['#/owned-weapons', 'Owned Weapons'],
-    ['#/target-weapons', 'Target Weapons'],
-    ['#/search', 'Search Results'],
-    ['#/build-list', 'Build List'],
-    ['#/plans/plan-1', 'Production Plan'],
-    ['#/plans/plan-1/run', 'Execution Navigator'],
-    ['#/settings', 'Settings'],
+    ['#/rng', 'RNG状態設定'],
+    ['#/normal-counters', '通常アーティアカウンター'],
+    ['#/owned-weapons', '所持武器'],
+    ['#/target-weapons', '目標武器'],
+    ['#/search', '候補検索'],
+    ['#/build-list', 'ビルドリスト'],
+    ['#/plans/plan-1', '生産計画'],
+    ['#/plans/plan-1/run', '実行ナビゲーション'],
+    ['#/settings', '設定'],
   ])('navigates %s to %s', (hash, heading) => {
     window.location.hash = hash
     render(<App />)
@@ -37,7 +37,7 @@ describe('App', () => {
     window.location.hash = '#/not-a-route'
     render(<App />)
 
-    expect(screen.getByRole('heading', { name: 'Page Not Found' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'ページが見つかりません' })).toBeInTheDocument()
   })
 
   it('does not show internal values when Debug Mode is off', () => {
@@ -52,7 +52,7 @@ describe('App', () => {
     const user = userEvent.setup()
     window.location.hash = '#/settings'
     render(<App />)
-    const debugSwitch = screen.getByRole('switch', { name: 'Debug Mode' })
+    const debugSwitch = screen.getByRole('switch', { name: 'デバッグモード' })
 
     expect(debugSwitch).not.toBeChecked()
     await user.click(debugSwitch)

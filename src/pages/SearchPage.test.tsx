@@ -79,7 +79,7 @@ function dependencies(client: ControlledClient, targets = [createValidTargetWeap
 describe('SearchPage', () => {
   it('shows the Target empty state', async () => {
     render(<SearchPage dependencies={dependencies(new ControlledClient(), [])} />)
-    expect(await screen.findByText('Target武器を登録してください。')).toBeInTheDocument()
+    expect(await screen.findByText('目標武器を登録してください。')).toBeInTheDocument()
   })
 
   it('starts search, shows progress, and renders Ideal/Practical/Similar results', async () => {
@@ -138,8 +138,8 @@ describe('SearchPage', () => {
     await user.click(await screen.findByRole('button', { name: '検索開始' }))
     const candidate = createValidBuildCandidate()
     client.resolve(resultFor(target, [candidate]))
-    await user.click(await screen.findByRole('button', { name: 'Build Listへ追加' }))
+    await user.click(await screen.findByRole('button', { name: 'ビルドリストへ追加' }))
     expect(deps.addCandidate).toHaveBeenCalledWith(candidate, target)
-    expect(screen.getByText('Build Listへ追加しました。')).toBeInTheDocument()
+    expect(screen.getByText('ビルドリストへ追加しました。')).toBeInTheDocument()
   })
 })

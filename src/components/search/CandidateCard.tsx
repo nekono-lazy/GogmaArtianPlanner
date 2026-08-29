@@ -79,17 +79,17 @@ export function CandidateCard({
             {groupSkillLabel(candidate.groupSkillId, master)}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            操作 {candidate.estimatedOperationCount}回 ・ Normal {candidate.estimatedNormalAdvance ?? '—'} ・
-            Gogma {candidate.estimatedGogmaAdvance} ・ Skill {candidate.estimatedSkillAdvance}
+            操作 {candidate.estimatedOperationCount}回 ・ 通常進行 {candidate.estimatedNormalAdvance ?? '—'} ・
+            巨戟進行 {candidate.estimatedGogmaAdvance} ・ スキル進行 {candidate.estimatedSkillAdvance}
           </Typography>
           {sourceName && <Alert severity={sourceName.startsWith('参照元') ? 'warning' : 'info'}>起点武器: {sourceName}</Alert>}
           <Accordion disableGutters elevation={0}>
             <AccordionSummary aria-controls={`candidate-${candidate.id}-detail`}>
-              <Typography>候補詳細・Route</Typography>
+              <Typography>候補詳細・作成ルート</Typography>
             </AccordionSummary>
             <AccordionDetails>
               <Stack spacing={2}>
-                <Typography variant="subtitle2">Idealとの差分</Typography>
+                <Typography variant="subtitle2">理想との差分</Typography>
                 <Typography variant="body2">
                   ボーナス一致 {candidate.idealDifference.matchedBonusCount}/5 ／ シリーズ
                   {candidate.idealDifference.seriesSkillMatches ? '一致' : '不一致'} ／ グループ
@@ -121,7 +121,7 @@ export function CandidateCard({
               </Stack>
             </AccordionDetails>
           </Accordion>
-          {onAdd && <Button variant="contained" onClick={() => onAdd(candidate)} disabled={addDisabled}>Build Listへ追加</Button>}
+          {onAdd && <Button variant="contained" onClick={() => onAdd(candidate)} disabled={addDisabled}>ビルドリストへ追加</Button>}
         </Stack>
       </CardContent>
     </Card>

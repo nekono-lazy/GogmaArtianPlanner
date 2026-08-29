@@ -78,10 +78,10 @@ function App() {
       ) : (
         <Box sx={{ maxWidth: 720, mx: 'auto', p: 4 }}>
           <Typography component="h1" variant="h1" gutterBottom>
-            Startup Error
+            起動エラー
           </Typography>
           <Alert severity="error">
-            Master Dataの検証に失敗しました:{' '}
+            マスターデータの検証に失敗しました:{' '}
             {masterData.issues.map((issue) => issue.message).join(' / ')}
           </Alert>
         </Box>

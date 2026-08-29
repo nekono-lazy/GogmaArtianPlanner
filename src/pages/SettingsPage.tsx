@@ -19,13 +19,13 @@ export function SettingsPage() {
   }
 
   return (
-    <PageShell title="Settings" description="アプリの表示設定とバージョン情報を確認します。">
+    <PageShell title="設定" description="アプリの表示設定とバージョン情報を確認します。">
       <Stack spacing={2}>
         {saveError && <Alert severity="warning">設定を保存できませんでした。再度お試しください。</Alert>}
         <Paper variant="outlined" sx={{ p: 3 }}>
           <FormControlLabel
             control={<Switch checked={debugMode} onChange={(_, checked) => handleDebugMode(checked)} />}
-            label="Debug Mode"
+            label="デバッグモード"
           />
           <Typography variant="body2" color="text.secondary">
             表示だけを切り替えます。ゲーム計算の意味には影響しません。
@@ -33,17 +33,17 @@ export function SettingsPage() {
         </Paper>
         <Paper variant="outlined" sx={{ p: 3 }}>
           <Typography component="h2" variant="h2" gutterBottom>
-            Version information
+            バージョン情報
           </Typography>
           {masterData.ok ? (
             <Stack spacing={0.5}>
-              <Typography>Game version: {masterData.data.manifest.gameVersion}</Typography>
-              <Typography>Master data version: {masterData.data.manifest.dataVersion}</Typography>
-              <Typography>App schema version: 1</Typography>
-              <Typography>RNG Engine: not configured</Typography>
+              <Typography>ゲームバージョン: {masterData.data.manifest.gameVersion === 'unknown-initial' ? '未確認' : masterData.data.manifest.gameVersion}</Typography>
+              <Typography>マスターデータバージョン: {masterData.data.manifest.dataVersion}</Typography>
+              <Typography>アプリスキーマバージョン: 1</Typography>
+              <Typography>RNG予測エンジン: 未設定</Typography>
             </Stack>
           ) : (
-            <Alert severity="error">Master Dataを読み込めません。</Alert>
+            <Alert severity="error">マスターデータを読み込めません。</Alert>
           )}
         </Paper>
       </Stack>

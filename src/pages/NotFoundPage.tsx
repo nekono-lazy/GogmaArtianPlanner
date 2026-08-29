@@ -4,9 +4,9 @@ import { PageShell } from '../components/PageShell'
 
 export function NotFoundPage() {
   return (
-    <PageShell title="Page Not Found" description="指定された画面は見つかりませんでした。">
+    <PageShell title="ページが見つかりません" description="指定された画面は見つかりませんでした。">
       <Button component={RouterLink} to="/" variant="contained">
-        Dashboardへ戻る
+        ダッシュボードへ戻る
       </Button>
     </PageShell>
   )

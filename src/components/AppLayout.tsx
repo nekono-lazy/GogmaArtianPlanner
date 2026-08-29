@@ -20,13 +20,13 @@ import { useSettingsStore } from '../stores/settingsStore'
 const drawerWidth = 256
 
 const primaryNavigation = [
-  { label: 'Dashboard', to: '/' },
-  { label: 'RNG Setup', to: '/rng' },
-  { label: 'Normal Counters', to: '/normal-counters' },
-  { label: 'Owned Weapons', to: '/owned-weapons' },
-  { label: 'Target Weapons', to: '/target-weapons' },
-  { label: 'Search', to: '/search' },
-  { label: 'Build List', to: '/build-list' },
+  { label: 'ダッシュボード', to: '/' },
+  { label: 'RNG状態設定', to: '/rng' },
+  { label: '通常アーティアカウンター', to: '/normal-counters' },
+  { label: '所持武器', to: '/owned-weapons' },
+  { label: '目標武器', to: '/target-weapons' },
+  { label: '候補検索', to: '/search' },
+  { label: 'ビルドリスト', to: '/build-list' },
 ]
 
 function MenuIcon() {
@@ -68,11 +68,11 @@ export function AppLayout() {
       <Divider />
       <List>
         <ListItemButton component={NavLink} to="/settings" onClick={() => setMobileOpen(false)}>
-          <ListItemText primary="Settings" />
+          <ListItemText primary="設定" />
         </ListItemButton>
         {debugMode && (
           <ListItemButton component={NavLink} to="/debug" onClick={() => setMobileOpen(false)}>
-            <ListItemText primary="Debug" />
+            <ListItemText primary="デバッグ" />
           </ListItemButton>
         )}
       </List>

@@ -19,7 +19,7 @@ export function createDefaultBonusSet(
   )
   if (!definition) {
     throw new MasterOptionsUnavailableError(
-      '選択した武器種の復元ボーナスMaster Dataが利用できません。',
+      '選択した武器種の復元ボーナスのマスターデータが利用できません。',
     )
   }
   const bonus = {
@@ -44,7 +44,7 @@ function baseOptions(master: MasterDataRoot) {
   const element = getEnabledElements(master)[0]
   if (!weaponType || !element) {
     throw new MasterOptionsUnavailableError(
-      '武器種または属性Master Dataが利用できません。',
+      '武器種または属性のマスターデータが利用できません。',
     )
   }
   return { weaponTypeId: weaponType.id, elementId: element.id }

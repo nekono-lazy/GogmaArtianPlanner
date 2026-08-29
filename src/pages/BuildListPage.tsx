@@ -47,7 +47,7 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
   const [ownedWeapons, setOwnedWeapons] = useState<OwnedWeapon[]>([])
   const [loading, setLoading] = useState(dependencies !== undefined)
   const [error, setError] = useState<string | null>(
-    dependencies ? null : 'Master Dataを読み込めません。',
+    dependencies ? null : 'マスターデータを読み込めません。',
   )
   const masterForDisplay = dependencies?.master ?? defaultMaster
 
@@ -62,7 +62,7 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
       setTargets(loaded.targets)
       setOwnedWeapons(loaded.ownedWeapons)
     }).catch((caught: unknown) => {
-      if (active) setError(caught instanceof Error ? caught.message : 'Build Listの読み込みに失敗しました。')
+      if (active) setError(caught instanceof Error ? caught.message : 'ビルドリストの読み込みに失敗しました。')
     }).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [dependencies])
@@ -73,25 +73,25 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
       await dependencies.deleteEntry(id)
       setEntries((current) => current.filter((entry) => entry.id !== id))
     } catch (caught: unknown) {
-      setError(caught instanceof Error ? caught.message : 'Build Listから削除できませんでした。')
+      setError(caught instanceof Error ? caught.message : 'ビルドリストから削除できませんでした。')
     }
   }
 
   return (
-    <PageShell title="Build List" description="Plannerに検討させる候補を確認します。">
+    <PageShell title="ビルドリスト" description="生産計画で検討する候補を確認します。">
       <Stack spacing={3}>
-        {loading && <LinearProgress aria-label="Build Listを読み込み中" />}
+        {loading && <LinearProgress aria-label="ビルドリストを読み込み中" />}
         {error && <Alert severity="error">{error}</Alert>}
-        {!loading && !error && entries.length === 0 && <Alert severity="info">Build Listは空です。検索結果から候補を追加してください。</Alert>}
+        {!loading && !error && entries.length === 0 && <Alert severity="info">ビルドリストは空です。検索結果から候補を追加してください。</Alert>}
         {entries.map((entry) => {
           const target = targets.find(({ id }) => id === entry.targetWeaponId) ?? null
           return <Stack spacing={1} key={entry.id}>
-            <Typography variant="h2">{target?.name ?? '削除済みTarget'}</Typography>
+            <Typography variant="h2">{target?.name ?? '削除済みの目標武器'}</Typography>
             {entry.isStale && <Alert severity="warning"><Typography variant="subtitle2">再検索が必要</Typography>{entry.staleReasons.map((reason) => <Typography variant="body2" key={reason}>{staleReasonLabels[reason]}</Typography>)}</Alert>}
             {masterForDisplay && <CandidateCard candidate={entry.candidateSnapshot} target={target} master={masterForDisplay} ownedWeapons={ownedWeapons} debugMode={debugMode} />}
             {debugMode && <Alert severity="info">targetDefinitionHash: {entry.targetDefinitionHash}</Alert>}
             <Typography variant="caption">追加日時: {entry.createdAt}</Typography>
-            <Button color="error" variant="outlined" onClick={() => void remove(entry.id)}>Build Listから削除</Button>
+            <Button color="error" variant="outlined" onClick={() => void remove(entry.id)}>ビルドリストから削除</Button>
           </Stack>
         })}
       </Stack>
