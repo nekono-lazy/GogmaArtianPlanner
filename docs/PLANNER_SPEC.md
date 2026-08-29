@@ -540,6 +540,79 @@ PlanStep変換用 `PlannerPlanStepDraft` を生成する。
 - Replay完了時はRNG、Normal Counter、persistent simulated inventoryがbest Search Stateと一致しなければ
   Draftを返さない。confirm_result、一般素材Gogma補充、create_material_gogma、ProductionPlan、ID/Clock生成は第9C-Aの対象外である。
 
+
+### 11.0-B 第9C-B: ProductionPlan組み立て
+
+`createProductionPlan(input, dependencies, options)` はBeam Searchと9C-A Replayを再実装せず、
+次の順でDraft ProductionPlanを組み立てる。
+
+1. `runPlannerBeamSearch` を実行する。
+2. `bestState` がnullならPlanを作らず、Beam Searchのconflicts / warningsをそのまま返す。
+3. `bestState.trace` が空なら（初期状態ですべての有効TargetがIdealを満たす場合を含む）空Planを作らず `plan = null` とする。
+4. `replayPlannerSearchTrace(input, bestState, dependencies.rngEngine)` を実行する。Replay failureはwarningへ変換せず、issue code / message / actionIndexを含むPlanner内部エラーとして失敗させる。
+5. Replayが成功したDraftを順序を変えずにPlanStepへ1対1で変換する。
+6. PlanningInputSnapshot、採用/不採用Entry、素材表示、ProductionPlanを作る。
+
+Replay後、ProductionPlan IDを1回生成し、その後Draft順にPlanStep IDを1回ずつ生成する。
+Searchで確定したreserve用OwnedWeapon IDはDraftの値をそのまま使用し、再生成しない。Clockは
+Replay成功後に1回だけ呼び、その同じ値を`baseSnapshot.createdAt`、`plan.createdAt`、
+`plan.updatedAt`へ設定する。PlannerはPlanを`status = "draft"`で返し、active化や保存は
+Application / Persistence層の責務である。
+
+#### PlanningInputSnapshot
+
+`initialExecutionState` は既存の`createExpectedPlanState(input.rngState, input.normalCounters,
+input.ownedWeapons)`で生成する。独自Hashを再実装しない。
+
+`targetWeaponsHash` はTarget IDの辞書順で、各`{ id, definitionHash:
+createTargetDefinitionHash(target) }`をstable hash化する。Target definitionのsemantic fieldと
+nameの扱いは既存`createTargetDefinitionHash`契約を正本とし、Plannerが別契約を加えない。
+
+`buildListEntriesHash` はEntry IDの辞書順で、`id`、non-timestamp Candidate Snapshot、
+`targetDefinitionHash`、`searchStateHash`、`referencedOwnedWeaponsHash`、
+`calculationContext`をstable hash化する。BuildListEntryの`isStale`、`staleReasons`、
+`createdAt`、Candidate Snapshotの`createdAt`は含めない。いずれのsortにもlocale依存比較を
+使わない。
+
+#### DraftからPlanStepへの変換
+
+1 Draftは共有されたEntry数に関係なく1 physical operation、1 PlanStepである。
+`PlanStep.buildListEntryId` は`draft.primaryBuildListEntryId`だけを保存し、
+`progressedBuildListEntryIds`の数だけ複製しない。Candidate IDその他のoperation、expected result、
+expected state、inventory change、RngAdvance、debugはReplay Draftからstructured cloneする。
+PredictionやCandidate Snapshotからの中間結果再構成は行わない。
+
+StepはReplay時系列のままorder 1から連番にし、初期状態を未完了とする。最初の
+`expectedStateBefore`はbase snapshotのinitialExecutionStateと一致し、各隣接Stepの
+`expectedStateAfter` / `expectedStateBefore`が連鎖しなければ内部エラーとする。今回の対象
+operationはすべて`requiresUserConfirmation = true`とする。`confirm_result`を自動追加しない。
+
+title / instructionはoperation typeと、存在する場合だけTarget名から決定的に生成する。未確認の
+ゲームUI名、ボタン、座標、画面遷移を文言へ推測してはならない。
+
+#### ProductionPlanの集約値
+
+`selectedBuildListEntryIds`はbest Search Stateの値だけをdedupeして辞書順にする。
+`conflicts`はBeam Searchが返したstable conflict IDを再生成せずstructured cloneして保存する。
+`currentStepId`は最初のStep ID（Stepなしならnull）である。
+
+RejectedBuildListEntryは、最終selectedでない検討可能Entryと明確なprotected destructive
+rejectionだけをEntry IDごとに1件作る。理由は証明できる順に
+`requires_protected_weapon`、選択済みConflictによる`resource_conflict`、
+`candidate_already_satisfied`による`already_satisfied`、同一Target・同一categoryで短い採用Routeが
+ある`longer_route`を使う。これらを証明できない場合だけ
+`dominated_by_better_candidate`を使う。stale / CalculationContext / capability等のvalidation除外は
+このunionへ押し込まず、既存warning/validation結果の責務とする。
+
+`requiredMaterials`はselected BuildListEntryの`candidateSnapshot.requiredMaterials`だけを
+materialIdごとに合算し、materialId辞書順で返す。master materialCostsからの再推測はしない。
+shared physical actionとCandidate別requiredMaterialsの二重計上を解消する補正式は第9C-Bでは
+定義しない。
+
+上限到達時でもtraceが1件以上あるbest partial Stateは、その到達点までのDraft Planとして返して
+既存warningを維持する。一般素材Gogma補充、`create_material_gogma`、
+`change_owned_weapon_status`、Execution、Invalidation、Undo、Worker契約追加、Dexie保存は
+第9C-Bでは生成・実装しない。
 BuildCandidateの `BuildRoute.operations` を順にPlanStepへ変換する。Route kindやCounter endpointだけから操作列を再構成しない。
 
 基本変換。
@@ -553,7 +626,7 @@ ResetSkillsOperation       -> reset_skills
 UseWeaponAsMaterialOperation -> use_weapon_as_material
 ```
 
-各変換後、必要に応じて `reserve_weapon` または結果確認Stepを追加する。
+第9C-BではReplay Traceに存在する `reserve_weapon` だけを変換し、`confirm_result`を自動追加しない。
 
 `confirm_result` は予測結果の確認だけを表し、Target武器をInventoryへ正式確保しない。
 Target候補をOwnedWeaponとして確保し、TargetSatisfactionを更新するのは

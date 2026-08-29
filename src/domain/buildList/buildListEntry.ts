@@ -8,7 +8,9 @@ import type {
 import { hashStableValue, stableStringify } from '../models/hashing'
 
 function compareStable(left: unknown, right: unknown): number {
-  return stableStringify(left).localeCompare(stableStringify(right))
+  const leftValue = stableStringify(left)
+  const rightValue = stableStringify(right)
+  return leftValue < rightValue ? -1 : leftValue > rightValue ? 1 : 0
 }
 
 function normalizeBonuses(bonuses: readonly RestorationBonus[]) {

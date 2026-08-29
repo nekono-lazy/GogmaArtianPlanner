@@ -1,0 +1,376 @@
+import { describe, expect, it } from 'vitest'
+import { createTargetDefinitionHash } from '../buildList'
+import {
+  createReferencedOwnedWeaponsHash,
+  createSearchStateHash,
+} from '../models/hashing'
+import {
+  buildListEntryId,
+  createValidBuildListEntry,
+  createValidOwnedWeapon,
+  ownedWeaponId,
+} from '../../test/fixtures/domainData'
+import {
+  createCandidateSearchEngine,
+  createCandidateSearchInput,
+} from '../../test/fixtures/candidateSearch'
+import {
+  collectRequiredMaterials,
+  createPlanningBuildListEntriesHash,
+  createPlanningInputSnapshot,
+  createPlanningTargetWeaponsHash,
+  createProductionPlan,
+  createRejectedBuildListEntries,
+} from './productionPlanGeneration'
+import { defaultPlannerOptions, type PlannerBeamSearchResult, type PlannerDependencies, type PlannerInput } from './plannerTypes'
+
+function fixture(): { input: PlannerInput; dependencies: PlannerDependencies } {
+  const searchInput = createCandidateSearchInput()
+  const entry = createValidBuildListEntry()
+  entry.calculationContext = structuredClone(searchInput.calculationContext)
+  entry.candidateSnapshot.calculationContext = structuredClone(searchInput.calculationContext)
+  entry.targetDefinitionHash = createTargetDefinitionHash(searchInput.targetWeapons[0])
+  entry.searchStateHash = createSearchStateHash(
+    entry.candidateSnapshot.route,
+    searchInput.rngState,
+    searchInput.normalCounters,
+  )
+  entry.candidateSnapshot.searchStateHash = entry.searchStateHash
+  entry.referencedOwnedWeaponsHash = createReferencedOwnedWeaponsHash(
+    entry.candidateSnapshot.route,
+    [],
+  )
+  entry.candidateSnapshot.referencedOwnedWeaponsHash = entry.referencedOwnedWeaponsHash
+  let planCount = 0
+  let stepCount = 0
+  let ownedCount = 0
+  return {
+    input: {
+      rngState: structuredClone(searchInput.rngState),
+      normalCounters: structuredClone(searchInput.normalCounters),
+      ownedWeapons: [],
+      targetWeapons: structuredClone(searchInput.targetWeapons),
+      buildListEntries: [entry],
+      calculationContext: structuredClone(searchInput.calculationContext),
+      options: { ...defaultPlannerOptions },
+      master: structuredClone(searchInput.master),
+      conflictResolutions: [],
+    },
+    dependencies: {
+      rngEngine: createCandidateSearchEngine(searchInput),
+      idFactory: {
+        productionPlanId: () => `plan.fixed.${++planCount}` as never,
+        planStepId: () => `step.fixed.${++stepCount}` as never,
+        ownedWeaponId: () => `owned.fixed.${++ownedCount}` as never,
+      },
+      clock: { now: () => '2026-08-30T00:00:00.000Z' },
+    },
+  }
+}
+
+function synchronizeEntry(input: PlannerInput) {
+  const entry = input.buildListEntries[0]
+  entry.targetDefinitionHash = createTargetDefinitionHash(input.targetWeapons[0])
+  entry.searchStateHash = createSearchStateHash(
+    entry.candidateSnapshot.route,
+    input.rngState,
+    input.normalCounters,
+  )
+  entry.candidateSnapshot.searchStateHash = entry.searchStateHash
+  entry.referencedOwnedWeaponsHash = createReferencedOwnedWeaponsHash(
+    entry.candidateSnapshot.route,
+    input.ownedWeapons,
+  )
+  entry.candidateSnapshot.referencedOwnedWeaponsHash = entry.referencedOwnedWeaponsHash
+}
+describe('Production plan generation', () => {
+  it('replays a new Normal route into ordered PlanSteps without regenerating its reserved weapon ID', async () => {
+    const { input, dependencies } = fixture()
+    const before = structuredClone(input)
+    const result = await createProductionPlan(input, dependencies)
+    const plan = result.plan
+    expect(plan).not.toBeNull()
+    expect(plan?.id).toBe('plan.fixed.1')
+    expect(plan?.status).toBe('draft')
+    expect(plan?.steps.map(({ operationType }) => operationType)).toEqual([
+      'create_normal_artian',
+      'convert_normal_to_gogma',
+      'reset_skills',
+      'reserve_weapon',
+    ])
+    expect(plan?.steps.map(({ order }) => order)).toEqual([1, 2, 3, 4])
+    expect(plan?.steps.map(({ id }) => id)).toEqual([
+      'step.fixed.1', 'step.fixed.2', 'step.fixed.3', 'step.fixed.4',
+    ])
+    expect(plan?.currentStepId).toBe('step.fixed.1')
+    expect(plan?.steps.every((step) => step.requiresUserConfirmation)).toBe(true)
+    expect(plan?.steps.every((step) => !step.isCompleted && step.completedAt === null)).toBe(true)
+    expect(plan?.steps[3].ownedWeaponId).toBe('owned.fixed.1')
+    expect(plan?.steps[3].inventoryChange?.addOwnedWeapon?.id).toBe('owned.fixed.1')
+    expect(plan?.steps[0].expectedStateBefore).toEqual(plan?.baseSnapshot.initialExecutionState)
+    plan?.steps.slice(0, -1).forEach((step, index) => {
+      expect(step.expectedStateAfter).toEqual(plan.steps[index + 1].expectedStateBefore)
+    })
+    expect(plan?.steps.every(({ title, instruction }) => title.length > 0 && instruction.length > 0)).toBe(true)
+    expect(plan?.steps.some(({ title, instruction }) => /ボタン|画面|座標/.test(title + instruction))).toBe(false)
+    expect(input).toEqual(before)
+  })
+
+  it('replays owned Normal conversion by removing the source once and reserving a different Gogma ID', async () => {
+    const { input, dependencies } = fixture()
+    const source = {
+      ...createValidOwnedWeapon(ownedWeaponId('owned.normal.source')),
+      kind: 'normal' as const,
+      rarity: 8 as const,
+      seriesSkillId: null,
+      groupSkillId: null,
+      status: null,
+      isProtected: false,
+    }
+    input.ownedWeapons = [source]
+    const entry = input.buildListEntries[0]
+    entry.candidateSnapshot.route = {
+      kind: 'owned_normal_artian_to_gogma',
+      sourceOwnedWeaponId: source.id,
+      operations: [{
+        type: 'convert_normal_to_gogma',
+        weaponTypeId: source.weaponTypeId,
+        gogmaCounterBefore: 10,
+        gogmaCounterAfter: 11,
+      }],
+    }
+    entry.candidateSnapshot.seriesSkillId = null
+    entry.candidateSnapshot.groupSkillId = null
+    synchronizeEntry(input)
+    const plan = (await createProductionPlan(input, dependencies)).plan
+    expect(plan?.steps.map(({ operationType }) => operationType)).toEqual([
+      'convert_normal_to_gogma', 'reserve_weapon',
+    ])
+    expect(plan?.steps[0].inventoryChange?.removeOwnedWeaponIds).toEqual([source.id])
+    expect(plan?.steps[1].inventoryChange?.removeOwnedWeaponIds).toEqual([])
+    expect(plan?.steps[1].inventoryChange?.addOwnedWeapon?.id).not.toBe(source.id)
+    expect(plan?.steps.every(({ buildListEntryId }) => buildListEntryId === entry.id)).toBe(true)
+  })
+
+  it('replays existing Reset Bonuses as a persistent update only at reserve', async () => {
+    const { input, dependencies } = fixture()
+    const source = createValidOwnedWeapon(ownedWeaponId('owned.reset.source'))
+    source.isProtected = false
+    source.groupSkillId = null
+    source.restorationBonuses = [
+      { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: 'bonus_rank.fixture.low' },
+      { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: 'bonus_rank.fixture.low' },
+      { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: 'bonus_rank.fixture.low' },
+      { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: 'bonus_rank.fixture.low' },
+      { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: 'bonus_rank.fixture.low' },
+    ]
+    input.ownedWeapons = [source]
+    dependencies.rngEngine = createCandidateSearchEngine(createCandidateSearchInput(), {
+      resetResult: createValidOwnedWeapon().restorationBonuses,
+    })
+    const entry = input.buildListEntries[0]
+    entry.candidateSnapshot.route = {
+      kind: 'existing_gogma_reset_bonuses',
+      sourceOwnedWeaponId: source.id,
+      operations: [{
+        type: 'reset_bonuses',
+        sourceOwnedWeaponId: source.id,
+        gogmaCounterBefore: 10,
+        gogmaCounterAfter: 11,
+      }],
+    }
+    entry.candidateSnapshot.finalBonuses = structuredClone(createValidOwnedWeapon().restorationBonuses)
+    entry.candidateSnapshot.seriesSkillId = source.seriesSkillId
+    entry.candidateSnapshot.groupSkillId = source.groupSkillId
+    synchronizeEntry(input)
+    const plan = (await createProductionPlan(input, dependencies)).plan
+    expect(plan?.steps.map(({ operationType }) => operationType)).toEqual([
+      'reset_bonuses', 'reserve_weapon',
+    ])
+    expect(plan?.steps[0].inventoryChange).toBeNull()
+    expect(plan?.steps[1].ownedWeaponId).toBe(source.id)
+    expect(plan?.steps[1].inventoryChange?.updateOwnedWeapons[0]?.id).toBe(source.id)
+  })
+
+  it('replays existing Keep Bonuses once and does not update inventory before reserve', async () => {
+    const { input, dependencies } = fixture()
+    const source = createValidOwnedWeapon(ownedWeaponId('owned.keep.source'))
+    source.isProtected = false
+    source.groupSkillId = null
+    source.restorationBonuses = [
+      { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: 'bonus_rank.fixture.low' },
+      { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: 'bonus_rank.fixture.low' },
+      { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: 'bonus_rank.fixture.low' },
+      { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: 'bonus_rank.fixture.low' },
+      { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: 'bonus_rank.fixture.low' },
+    ]
+    input.ownedWeapons = [source]
+    dependencies.rngEngine = createCandidateSearchEngine(createCandidateSearchInput(), {
+      keepSupported: true,
+    })
+    const entry = input.buildListEntries[0]
+    const selection = { mode: 'engine_defined' as const, engineParameters: { fixture: 'explicit' } }
+    entry.candidateSnapshot.route = {
+      kind: 'existing_gogma_keep_bonuses',
+      sourceOwnedWeaponId: source.id,
+      operations: [{
+        type: 'keep_bonuses',
+        sourceOwnedWeaponId: source.id,
+        selection,
+        gogmaCounterBefore: 10,
+        gogmaCounterAfter: 11,
+      }],
+    }
+    entry.candidateSnapshot.seriesSkillId = source.seriesSkillId
+    entry.candidateSnapshot.groupSkillId = source.groupSkillId
+    synchronizeEntry(input)
+    const plan = (await createProductionPlan(input, dependencies)).plan
+    expect(plan?.steps.map(({ operationType }) => operationType)).toEqual([
+      'keep_bonuses', 'reserve_weapon',
+    ])
+    expect(plan?.steps).toHaveLength(2)
+    expect(plan?.steps[0].inventoryChange).toBeNull()
+    expect(plan?.steps[1].inventoryChange?.updateOwnedWeapons[0]?.id).toBe(source.id)
+  })
+
+  it('allows protected existing Gogma Reset Skills and preserves bonuses until same-ID reserve', async () => {
+    const { input, dependencies } = fixture()
+    const source = createValidOwnedWeapon(ownedWeaponId('owned.skills.source'))
+    source.isProtected = true
+    source.seriesSkillId = null
+    source.groupSkillId = null
+    input.ownedWeapons = [source]
+    const entry = input.buildListEntries[0]
+    entry.candidateSnapshot.route = {
+      kind: 'existing_gogma_reset_skills',
+      sourceOwnedWeaponId: source.id,
+      operations: [{
+        type: 'reset_skills',
+        sourceOwnedWeaponId: source.id,
+        skillCounterBefore: 7,
+        skillCounterAfter: 8,
+      }],
+    }
+    entry.candidateSnapshot.category = 'ideal'
+    entry.candidateSnapshot.isSimilarToIdeal = false
+    entry.candidateSnapshot.similarityScore = null
+    entry.candidateSnapshot.finalBonuses = structuredClone(source.restorationBonuses)
+    entry.candidateSnapshot.seriesSkillId = 'series_skill.fixture.a'
+    entry.candidateSnapshot.groupSkillId = null
+    synchronizeEntry(input)
+    const plan = (await createProductionPlan(input, dependencies)).plan
+    expect(plan?.steps.map(({ operationType }) => operationType)).toEqual([
+      'reset_skills', 'reserve_weapon',
+    ])
+    expect(plan?.steps[0].expectedResult?.restorationBonuses).toEqual(source.restorationBonuses)
+    expect(plan?.steps[0].inventoryChange).toBeNull()
+    expect(plan?.steps[1].inventoryChange?.updateOwnedWeapons[0]?.id).toBe(source.id)
+  })
+  it('returns a partial Plan while preserving the Beam Search limit warning', async () => {
+    const { input, dependencies } = fixture()
+    input.options.maxPlanSteps = 1
+    const result = await createProductionPlan(input, dependencies)
+    expect(result.plan?.steps).toHaveLength(1)
+    expect(result.plan?.steps[0].operationType).toBe('create_normal_artian')
+    expect(result.warnings.map(({ kind }) => kind)).toContain('max_steps_reached')
+  })
+
+  it('does not create an empty Plan when enabled targets are already ideal', async () => {
+    const { input, dependencies } = fixture()
+    const owned = createValidOwnedWeapon(ownedWeaponId('owned.already-ideal'))
+    owned.groupSkillId = null
+    input.ownedWeapons = [owned]
+    const result = await createProductionPlan(input, dependencies)
+    expect(result.plan).toBeNull()
+    expect(result.warnings.map(({ kind }) => kind)).toContain('all_targets_already_satisfied')
+  })
+
+  it('creates stable snapshots excluding presentation-only data and stale flags', () => {
+    const { input } = fixture()
+    const targetsHash = createPlanningTargetWeaponsHash(input.targetWeapons)
+    const entriesHash = createPlanningBuildListEntriesHash(input.buildListEntries)
+    const presentationOnly = structuredClone(input)
+    presentationOnly.targetWeapons[0].memo = 'changed only for display'
+    presentationOnly.targetWeapons[0].updatedAt = '2026-09-01T00:00:00.000Z'
+    presentationOnly.buildListEntries[0].isStale = true
+    presentationOnly.buildListEntries[0].staleReasons = ['rng_state_changed']
+    presentationOnly.buildListEntries[0].createdAt = '2026-09-01T00:00:00.000Z'
+    presentationOnly.buildListEntries[0].candidateSnapshot.createdAt = '2026-09-01T00:00:00.000Z'
+    expect(createPlanningTargetWeaponsHash(presentationOnly.targetWeapons)).toBe(targetsHash)
+    expect(createPlanningBuildListEntriesHash(presentationOnly.buildListEntries)).toBe(entriesHash)
+    const semantic = structuredClone(input)
+    semantic.targetWeapons[0].priority = 5
+    semantic.buildListEntries[0].candidateSnapshot.requiredMaterials = [{
+      materialId: 'material.fixture.a', quantity: 2,
+    }]
+    expect(createPlanningTargetWeaponsHash(semantic.targetWeapons)).not.toBe(targetsHash)
+    expect(createPlanningBuildListEntriesHash(semantic.buildListEntries)).not.toBe(entriesHash)
+    const snapshot = createPlanningInputSnapshot(input, '2026-08-30T00:00:00.000Z')
+    expect(snapshot).toMatchObject({
+      targetWeaponsHash: targetsHash,
+      buildListEntriesHash: entriesHash,
+      calculationContext: input.calculationContext,
+      createdAt: '2026-08-30T00:00:00.000Z',
+    })
+  })
+
+  it('keeps deterministic Plan IDs, timestamps, selected IDs, and required material totals', async () => {
+    const first = fixture()
+    const second = fixture()
+    const firstResult = await createProductionPlan(first.input, first.dependencies)
+    const secondResult = await createProductionPlan(second.input, second.dependencies)
+    expect(secondResult).toEqual(firstResult)
+    const materialEntry = structuredClone(first.input.buildListEntries[0])
+    materialEntry.id = buildListEntryId('build-list.fixture.material')
+    materialEntry.candidateSnapshot.requiredMaterials = [{ materialId: 'material.fixture.a', quantity: 2 }]
+    expect(collectRequiredMaterials({ ...first.input, buildListEntries: [first.input.buildListEntries[0], materialEntry] }, [first.input.buildListEntries[0].id, materialEntry.id])).toEqual([
+      { materialId: 'material.fixture.a', quantity: 3 },
+    ])
+  })
+
+  it('uses only proven rejection classifications and retains the fallback without pairwise inference', () => {
+    const { input } = fixture()
+    const protectedEntry = structuredClone(input.buildListEntries[0])
+    protectedEntry.id = buildListEntryId('build-list.fixture.protected')
+    const fallbackEntry = structuredClone(input.buildListEntries[0])
+    fallbackEntry.id = buildListEntryId('build-list.fixture.fallback')
+    const unprovenEntry = structuredClone(input.buildListEntries[0])
+    unprovenEntry.id = buildListEntryId('build-list.fixture.unproven')
+    const selectedEntry = structuredClone(input.buildListEntries[0])
+    selectedEntry.id = buildListEntryId('build-list.fixture.selected')
+    const beamResult = {
+      bestState: null,
+      conflicts: [{
+        id: 'conflict.fixture',
+        kind: 'same_gogma_counter' as const,
+        buildListEntryIds: [selectedEntry.id, fallbackEntry.id],
+        reason: 'same physical operation',
+        recommendedBuildListEntryId: selectedEntry.id,
+        selectedBuildListEntryId: selectedEntry.id,
+        resolutionNote: null,
+      }],
+      warnings: [],
+      validationIssues: [],
+      excludedBuildListEntries: [],
+      rejections: [{
+        buildListEntryId: protectedEntry.id,
+        actionType: 'reset_bonuses' as const,
+        reason: 'protected_destructive_use' as const,
+        detail: 'protected',
+      }],
+      expandedStates: 0,
+      completed: false,
+      cancelled: false,
+    } satisfies PlannerBeamSearchResult
+    const rejected = createRejectedBuildListEntries(
+      { ...input, buildListEntries: [selectedEntry, protectedEntry, fallbackEntry, unprovenEntry] },
+      beamResult,
+      [selectedEntry.id],
+    )
+    expect(rejected).toEqual([
+      expect.objectContaining({ buildListEntryId: fallbackEntry.id, reason: 'resource_conflict' }),
+      expect.objectContaining({ buildListEntryId: protectedEntry.id, reason: 'requires_protected_weapon' }),
+      expect.objectContaining({ buildListEntryId: unprovenEntry.id, reason: 'dominated_by_better_candidate' }),
+    ])
+  })
+})
