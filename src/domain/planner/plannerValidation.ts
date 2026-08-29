@@ -9,12 +9,16 @@ import type {
   PlanStep,
 } from '../models/publicTypes'
 import {
-  isCalculationContextCompatible,
   stableStringify,
+  validateBuildCandidate,
   validateBuildRoute,
+  validateOwnedWeapon,
 } from '../models/publicTypes'
+import { evaluateBuildListEntryStaleness } from '../buildList'
+import { collectReferencedOwnedWeaponIds } from '../models/hashing'
 import { deriveRngCapabilities } from '../rng/capabilities'
 import type {
+  ExcludedBuildListEntry,
   PlannerConflictResolution,
   PlannerDependencies,
   PlannerInput,
@@ -22,11 +26,14 @@ import type {
   PlannerMaterialRequirement,
   PlannerOptions,
   PlannerWarning,
+  ValidatedBuildListEntry,
 } from './plannerTypes'
 import { plannerWarningKinds } from './plannerTypes'
 
 export interface PlannerInputValidationResult extends DomainValidationResult {
   validConflictResolutions: PlannerConflictResolution[]
+  validBuildListEntries: ValidatedBuildListEntry[]
+  excludedBuildListEntries: ExcludedBuildListEntry[]
   warnings: PlannerWarning[]
 }
 
@@ -118,26 +125,61 @@ function invalidResolutionWarning(
   }
 }
 
-function resolutionIsExecutable(
+function compareStableStrings(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0
+}
+
+function entryWarning(
+  kind: PlannerWarning['kind'],
+  entry: BuildListEntry,
+  message: string,
+): PlannerWarning {
+  return { kind, message: `BuildListEntry '${entry.id}' ${message}` }
+}
+
+function appendUniqueEntryWarning(
+  warnings: PlannerWarning[], warningKeys: Set<string>, entry: BuildListEntry,
+  kind: PlannerWarning['kind'], message: string,
+) {
+  const key = `${kind}:${entry.id}`
+  if (warningKeys.has(key)) return
+  warningKeys.add(key)
+  warnings.push(entryWarning(kind, entry, message))
+}
+
+function currentEntryEligibility(
   input: PlannerInput,
   dependencies: PlannerDependencies,
   entry: BuildListEntry,
-): string | null {
-  if (entry.isStale || entry.staleReasons.length > 0) return 'the entry is stale.'
-  const target = input.targetWeapons.find(({ id }) => id === entry.targetWeaponId)
-  if (!target) return 'the TargetWeapon no longer exists.'
-  if (!target.isEnabled) return 'the TargetWeapon is disabled.'
-  if (!isCalculationContextCompatible(entry.calculationContext, input.calculationContext)) {
-    return 'the CalculationContext is incompatible.'
+): { valid: ValidatedBuildListEntry | null; reason: string; warningKind: PlannerWarning['kind'] } {
+  const target = input.targetWeapons.find(({ id }) => id === entry.targetWeaponId) ?? null
+  const staleness = evaluateBuildListEntryStaleness(entry, {
+    target, rngState: input.rngState, normalCounters: input.normalCounters,
+    ownedWeapons: input.ownedWeapons, calculationContext: input.calculationContext,
+  })
+  if (target === null || !target.isEnabled) {
+    return { valid: null, reason: target === null ? 'references a missing TargetWeapon.' : 'references a disabled TargetWeapon.', warningKind: 'build_list_entry_stale' }
   }
   if (dependencies.rngEngine.version !== input.calculationContext.rngEngineVersion) {
-    return 'the injected RNG Engine version is incompatible.'
+    return { valid: null, reason: 'uses an RNG Engine incompatible with CalculationContext.', warningKind: 'calculation_context_incompatible' }
+  }
+
+  if (!validateBuildCandidate(entry.candidateSnapshot).isValid) {
+    return { valid: null, reason: 'has an invalid Candidate snapshot.', warningKind: 'build_list_entry_stale' }
+  }
+  for (const ownedWeaponId of collectReferencedOwnedWeaponIds(entry.candidateSnapshot.route)) {
+    const weapon = input.ownedWeapons.find(({ id }) => id === ownedWeaponId)
+    if (!weapon || !validateOwnedWeapon(weapon).isValid) {
+      return { valid: null, reason: `references an invalid or missing OwnedWeapon '${ownedWeaponId}'.`, warningKind: 'build_list_entry_stale' }
+    }
   }
   const routeValidation = validateBuildRoute(
     entry.candidateSnapshot.route,
     input.ownedWeapons,
   )
-  if (!routeValidation.isValid) return 'the candidate route is no longer executable.'
+  if (!routeValidation.isValid) {
+    return { valid: null, reason: 'requires an invalid or no-longer-executable BuildRoute.', warningKind: routeValidation.issues.some(({ code }) => code === 'protected_destructive_use') ? 'protected_weapon_required' : 'build_list_entry_stale' }
+  }
   const capabilities = deriveRngCapabilities(
     input.rngState,
     input.normalCounters,
@@ -145,9 +187,21 @@ function resolutionIsExecutable(
     dependencies.rngEngine.capabilities,
   )
   if (!capabilities.canRunPlanner) {
-    return `required RNG capability is unavailable (${capabilities.missingRequirements.join(', ')}).`
+    return { valid: null, reason: `requires unavailable RNG capability (${capabilities.missingRequirements.join(', ')}).`, warningKind: 'rng_state_missing' }
   }
-  return null
+  if (staleness.isStale) {
+    const contextChanged = staleness.staleReasons.includes(
+      'calculation_context_changed',
+    )
+    return {
+      valid: null,
+      reason: `is stale (${staleness.staleReasons.join(', ')}).`,
+      warningKind: contextChanged
+        ? 'calculation_context_incompatible'
+        : 'build_list_entry_stale',
+    }
+  }
+  return { valid: { entry, missingRngRequirements: [...capabilities.missingRequirements] }, reason: '', warningKind: 'build_list_entry_stale' }
 }
 
 export function validatePlannerInput(
@@ -158,6 +212,27 @@ export function validatePlannerInput(
   const issues = [...options.issues]
   const warnings: PlannerWarning[] = []
   const validConflictResolutions: PlannerConflictResolution[] = []
+  const warningKeys = new Set<string>()
+  const eligibilityByEntryId = new Map<string, ReturnType<typeof currentEntryEligibility>>()
+  const validBuildListEntries: ValidatedBuildListEntry[] = []
+  const excludedBuildListEntries: ExcludedBuildListEntry[] = []
+
+  const entriesByStableId = [...input.buildListEntries]
+    .sort((left, right) => compareStableStrings(left.id, right.id))
+  entriesByStableId.forEach((entry) => {
+      const eligibility = currentEntryEligibility(input, dependencies, entry)
+      eligibilityByEntryId.set(entry.id, eligibility)
+      if (eligibility.valid) {
+        validBuildListEntries.push(eligibility.valid)
+        return
+      }
+      excludedBuildListEntries.push({ entry, reason: eligibility.reason })
+      appendUniqueEntryWarning(warnings, warningKeys, entry, eligibility.warningKind, eligibility.reason)
+    })
+
+  if (input.buildListEntries.length === 0) {
+    warnings.push({ kind: 'no_build_list_entries', message: 'No BuildListEntry is available for Planner input.' })
+  }
   const conflictKeys = new Set<string>()
 
   input.conflictResolutions.forEach((resolution, index) => {
@@ -171,20 +246,13 @@ export function validatePlannerInput(
       return
     }
     conflictKeys.add(resolution.conflictKey)
-    const entry = input.buildListEntries.find(
-      ({ id }) => id === resolution.selectedBuildListEntryId,
-    )
-    if (!entry) {
+    const eligibility = eligibilityByEntryId.get(resolution.selectedBuildListEntryId)
+    if (!eligibility) {
       warnings.push(invalidResolutionWarning(resolution, 'the entry no longer exists.'))
       return
     }
-    const unavailableReason = resolutionIsExecutable(
-      input,
-      dependencies,
-      entry,
-    )
-    if (unavailableReason !== null) {
-      warnings.push(invalidResolutionWarning(resolution, unavailableReason))
+    if (eligibility.valid === null) {
+      warnings.push(invalidResolutionWarning(resolution, eligibility.reason))
       return
     }
     validConflictResolutions.push(resolution)
@@ -194,6 +262,8 @@ export function validatePlannerInput(
     isValid: issues.length === 0,
     issues,
     validConflictResolutions,
+    validBuildListEntries,
+    excludedBuildListEntries,
     warnings,
   }
 }

@@ -14,6 +14,11 @@ import {
   ownedWeaponId,
 } from '../../test/fixtures/domainData'
 import {
+  createReferencedOwnedWeaponsHash,
+  createSearchStateHash,
+} from '../models/hashing'
+import { createTargetDefinitionHash } from '../buildList'
+import {
   createCandidateSearchEngine,
   createCandidateSearchInput,
 } from '../../test/fixtures/candidateSearch'
@@ -44,6 +49,18 @@ function createPlannerFixture(): {
   const entry = createValidBuildListEntry()
   entry.calculationContext = { ...searchInput.calculationContext }
   entry.candidateSnapshot.calculationContext = { ...searchInput.calculationContext }
+  entry.targetDefinitionHash = createTargetDefinitionHash(searchInput.targetWeapons[0])
+  entry.searchStateHash = createSearchStateHash(
+    entry.candidateSnapshot.route,
+    searchInput.rngState,
+    searchInput.normalCounters,
+  )
+  entry.candidateSnapshot.searchStateHash = entry.searchStateHash
+  entry.referencedOwnedWeaponsHash = createReferencedOwnedWeaponsHash(
+    entry.candidateSnapshot.route,
+    searchInput.ownedWeapons,
+  )
+  entry.candidateSnapshot.referencedOwnedWeaponsHash = entry.referencedOwnedWeaponsHash
   const engine = createCandidateSearchEngine(searchInput)
   let planSequence = 0
   let stepSequence = 0
@@ -153,6 +170,10 @@ describe('Planner contracts', () => {
     const stale = createPlannerFixture()
     stale.input.buildListEntries[0].isStale = true
     stale.input.buildListEntries[0].staleReasons = ['rng_state_changed']
+    stale.input.rngState.skillCounter = {
+      ...stale.input.rngState.skillCounter,
+      value: 8,
+    }
     stale.input.conflictResolutions = [{
       conflictKey: 'conflict.fixture.stale',
       selectedBuildListEntryId: stale.input.buildListEntries[0].id,

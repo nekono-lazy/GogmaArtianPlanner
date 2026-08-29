@@ -12,6 +12,7 @@ import type {
   ProductionPlanId,
   RngState,
   TargetWeapon,
+  TargetWeaponId,
 } from '../models/publicTypes'
 import type {
   BonusRankMaster,
@@ -68,6 +69,51 @@ export interface PlannerInput {
   options: PlannerOptions
   master: PlannerMasterSubset
   conflictResolutions: PlannerConflictResolution[]
+}
+
+/** Current-state eligibility; the referenced input snapshot is never mutated. */
+export interface ValidatedBuildListEntry {
+  entry: BuildListEntry
+  missingRngRequirements: string[]
+}
+
+export interface ExcludedBuildListEntry {
+  entry: BuildListEntry
+  reason: string
+}
+
+export interface TargetSatisfaction {
+  targetWeaponId: TargetWeaponId
+  hasPractical: boolean
+  hasIdeal: boolean
+  practicalOwnedWeaponIds: OwnedWeaponId[]
+  idealOwnedWeaponIds: OwnedWeaponId[]
+}
+
+/** Beam-search form of Target satisfaction, indexed for direct lookup. */
+export interface PlannerTargetSatisfaction {
+  hasPractical: boolean
+  hasIdeal: boolean
+}
+
+/** Immutable, branch-safe inventory used only by Planner calculations. */
+export interface SimulatedInventory {
+  ownedWeapons: OwnedWeapon[]
+  consumedWeaponIds: OwnedWeaponId[]
+  reservedWeaponIds: OwnedWeaponId[]
+  createdWeaponIds: OwnedWeaponId[]
+}
+
+/** The minimal state needed for the later Beam Search implementation. */
+export interface PlannerSearchState {
+  currentRngState: RngState
+  currentNormalCounters: NormalArtianCounter[]
+  simulatedInventory: SimulatedInventory
+  targetSatisfaction: Record<TargetWeaponId, PlannerTargetSatisfaction>
+  selectedBuildListEntryIds: BuildListEntryId[]
+  routeProgressByEntryId: Record<string, number>
+  totalCost: number
+  evaluationScore: number
 }
 
 export type PlannerWarningKind =
