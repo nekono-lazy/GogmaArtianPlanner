@@ -227,6 +227,7 @@ export function detectPlannerConflicts(
   targets: readonly TargetWeapon[],
   state: PlannerSearchState,
   resolutions: readonly PlannerConflictResolution[],
+  reportInvalidResolutions = true,
 ): PlannerConflictDetectionResult {
   const entriesById = new Map(entries.map((entry) => [entry.id, entry]))
   const targetsById = new Map(targets.map((target) => [target.id, target]))
@@ -279,7 +280,7 @@ export function detectPlannerConflicts(
     .sort((left, right) => compareStableStrings(left.id, right.id))
 
   const conflictById = new Map(conflicts.map((conflict) => [conflict.id, conflict]))
-  const warnings = resolutions.flatMap((resolution): PlannerWarning[] => {
+  const warnings = reportInvalidResolutions ? resolutions.flatMap((resolution): PlannerWarning[] => {
     const conflict = conflictById.get(resolution.conflictKey)
     if (!conflict) {
       return [{
@@ -294,7 +295,7 @@ export function detectPlannerConflicts(
       }]
     }
     return []
-  })
+  }) : []
   return {
     conflicts,
     conflictIdsByUnitKey,

@@ -266,6 +266,64 @@ function resetRoute(sourceId: string, counter = 10): BuildRoute {
   }
 }
 
+function dynamicConflictScenario() {
+  const restoredTarget = target('target.dynamic-conflict.restored')
+  const consumingTarget = {
+    ...target('target.dynamic-conflict.consumer'),
+    weaponTypeId: 'weapon.fixture.b',
+  }
+  const onlySatisfiedWeapon = {
+    ...createValidOwnedWeapon(ownedWeaponId('owned.dynamic-conflict.only')),
+    status: 'material' as const,
+    isProtected: false,
+    relatedTargetWeaponIds: [],
+  }
+  const consumingSource = {
+    ...sourceWeapon('owned.dynamic-conflict.source'),
+    weaponTypeId: 'weapon.fixture.b',
+  }
+  const restoredEntry = routeEntry('entry.dynamic-conflict.restored', restoredTarget, {
+    kind: 'normal_artian_to_gogma',
+    sourceOwnedWeaponId: null,
+    operations: [
+      {
+        type: 'create_normal_artian',
+        weaponTypeId: 'weapon.fixture.a',
+        rarity: 8,
+        count: 1,
+        normalCounterBefore: 4,
+        normalCounterAfter: 5,
+      },
+      {
+        type: 'convert_normal_to_gogma',
+        weaponTypeId: 'weapon.fixture.a',
+        gogmaCounterBefore: 10,
+        gogmaCounterAfter: 11,
+      },
+    ],
+  })
+  const consumingEntry = routeEntry('entry.dynamic-conflict.consume', consumingTarget, {
+    kind: 'existing_gogma_mixed',
+    sourceOwnedWeaponId: consumingSource.id,
+    operations: [
+      { type: 'use_weapon_as_material', ownedWeaponId: onlySatisfiedWeapon.id },
+      {
+        type: 'reset_bonuses',
+        sourceOwnedWeaponId: consumingSource.id,
+        gogmaCounterBefore: 10,
+        gogmaCounterAfter: 11,
+      },
+    ],
+  })
+  return {
+    targets: [restoredTarget, consumingTarget],
+    entries: [restoredEntry, consumingEntry],
+    ownedWeapons: [onlySatisfiedWeapon, consumingSource],
+    restoredEntry,
+    consumingEntry,
+  }
+}
+
 describe('Planner Beam Search', () => {
   it('finishes one Candidate and updates satisfaction only at reserve', async () => {
     const goal = target('target.beam.single')
@@ -1576,5 +1634,123 @@ describe('Planner Beam Search', () => {
     expect(second.candidateSnapshot.route.operations).toEqual(
       before.buildListEntries[1].candidateSnapshot.route.operations,
     )
+  })
+
+  it('detects a Counter conflict when a previously Ideal Target becomes relevant', async () => {
+    const scenario = dynamicConflictScenario()
+    const { input, dependencies } = fixture(
+      scenario.targets,
+      scenario.entries,
+      scenario.ownedWeapons,
+    )
+    const result = await runPlannerBeamSearch(input, dependencies)
+    expect(result.conflicts).toContainEqual(expect.objectContaining({
+      kind: 'same_gogma_counter',
+      buildListEntryIds: [scenario.consumingEntry.id, scenario.restoredEntry.id],
+    }))
+  })
+
+  it('applies a Resolution only when its dynamic Conflict is rediscovered', async () => {
+    const unresolvedScenario = dynamicConflictScenario()
+    const unresolved = fixture(
+      unresolvedScenario.targets,
+      unresolvedScenario.entries,
+      unresolvedScenario.ownedWeapons,
+    )
+    const unresolvedResult = await runPlannerBeamSearch(
+      unresolved.input,
+      unresolved.dependencies,
+    )
+    const conflictKey = unresolvedResult.conflicts.find(
+      ({ kind }) => kind === 'same_gogma_counter',
+    )?.id
+    expect(conflictKey).toBeDefined()
+
+    const resolvedScenario = dynamicConflictScenario()
+    const resolved = fixture(
+      resolvedScenario.targets,
+      resolvedScenario.entries,
+      resolvedScenario.ownedWeapons,
+    )
+    resolved.input.conflictResolutions = [{
+      conflictKey: conflictKey as string,
+      selectedBuildListEntryId: resolvedScenario.restoredEntry.id,
+    }]
+    const result = await runPlannerBeamSearch(resolved.input, resolved.dependencies)
+    expect(result.warnings.some(({ kind }) =>
+      kind === 'invalid_conflict_resolution',
+    )).toBe(false)
+    expect(result.conflicts.find(({ id }) => id === conflictKey))
+      .toMatchObject({ selectedBuildListEntryId: resolvedScenario.restoredEntry.id })
+    expect(result.rejections).toContainEqual(expect.objectContaining({
+      buildListEntryId: resolvedScenario.consumingEntry.id,
+      reason: 'conflict_resolution_not_selected',
+    }))
+  })
+
+  it('adds cross-target Practical satisfaction to the Practical-first tier', async () => {
+    const candidateBonuses = [
+      { bonusTypeId: 'bonus_type.fixture.attack', bonusRankId: 'bonus_rank.fixture.high' },
+      { bonusTypeId: 'bonus_type.fixture.attack', bonusRankId: 'bonus_rank.fixture.high' },
+      { bonusTypeId: 'bonus_type.fixture.attack', bonusRankId: 'bonus_rank.fixture.high' },
+      { bonusTypeId: 'bonus_type.fixture.element', bonusRankId: 'bonus_rank.fixture.middle' },
+      { bonusTypeId: 'bonus_type.fixture.sharpness', bonusRankId: 'bonus_rank.fixture.high' },
+    ] as TargetWeapon['idealBonuses']
+    const firstTarget = {
+      ...target('target.cross-tier.first'),
+      idealBonuses: candidateBonuses,
+    }
+    const secondTarget = {
+      ...target('target.cross-tier.second'),
+      practicalBonusConditions: [{
+        id: 'condition.cross-tier.attack',
+        bonusTypeId: 'bonus_type.fixture.attack',
+        minimumRankId: 'bonus_rank.fixture.high',
+        requiredCount: 3,
+        requiredExCount: 0,
+      }],
+      practicalAlternativeGroups: [],
+    }
+    const initiallyPractical = {
+      ...createValidOwnedWeapon(ownedWeaponId('owned.cross-tier.practical')),
+      restorationBonuses: [
+        ...createRestorationBonusSet().slice(0, 4),
+        {
+          bonusTypeId: 'bonus_type.fixture.sharpness',
+          bonusRankId: 'bonus_rank.fixture.special',
+        },
+      ] as TargetWeapon['idealBonuses'],
+      relatedTargetWeaponIds: [],
+    }
+    const candidateSource = sourceWeapon('owned.cross-tier.candidate')
+    const entry = routeEntry(
+      'entry.cross-tier.first',
+      firstTarget,
+      resetRoute(candidateSource.id),
+    )
+    entry.candidateSnapshot.finalBonuses = candidateBonuses
+    const { input, dependencies } = fixture(
+      [firstTarget, secondTarget],
+      [entry],
+      [initiallyPractical, candidateSource],
+    )
+    const result = await runPlannerBeamSearch(input, dependencies)
+    expect(result.bestState?.targetSatisfaction[secondTarget.id].hasPractical)
+      .toBe(true)
+    expect(result.bestState?.practicalFirstProgressTargetIds).toContain(
+      secondTarget.id,
+    )
+  })
+
+  it('prefers a completed cross-target Practical state over an unfinished one', () => {
+    const unfinished = {
+      practicalFirstProgressTargetIds: [targetWeaponId('target.cross-tier')],
+      evaluationScore: 10,
+    } as PlannerSearchState
+    const completed = {
+      practicalFirstProgressTargetIds: [targetWeaponId('target.cross-tier')],
+      evaluationScore: 20,
+    } as PlannerSearchState
+    expect(comparePlannerSearchStates(completed, unfinished)).toBeLessThan(0)
   })
 })

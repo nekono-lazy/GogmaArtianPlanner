@@ -237,10 +237,14 @@ export interface PlannerSearchState {
 5. `count` を持つ操作は実行ナビ用の1操作単位へ分割し、現在Counterまで正常に通過済みのprefixを重複生成しない
 6. 操作前提が現在Stateより過去にあり、副作用または必要資源が満たされていないEntryは実行不能とする
 7. 実行可能な操作を適用し、共有RNGと在庫を進めた次Stateへ展開する
-8. 実用品確保、理想品更新、操作数、武器消費、競合を評価する
-9. 同じ深さで評価値の高い上位 `beamWidth` 件だけを残す
-10. `maxExpandedStates` または `maxPlanSteps` 到達時に打ち切る
-11. 完了Stateのうち最良、完了Stateがなければ最も充足度の高いStateからPlanを生成する
+8. Satisfaction、Route progress、Inventory変化後の現在Stateで、未実行のcurrent / future
+   Route unitだけを対象にConflictを再評価する。通過済みRoute prefixを再Conflict化しない
+   ConflictResolutionは探索中に同じstable Conflict IDが再検出され、selected Entryがその
+   Stateで有効なparticipantである場合だけ適用する
+9. 実用品確保、理想品更新、操作数、武器消費、現在Stateで意味のある競合を評価する
+10. 同じ深さで評価値の高い上位 `beamWidth` 件だけを残す
+11. `maxExpandedStates` または `maxPlanSteps` 到達時に打ち切る
+12. 完了Stateのうち最良、完了Stateがなければ最も充足度の高いStateからPlanを生成する
 
 候補確保時の状態遷移。
 
@@ -258,6 +262,9 @@ export interface PlannerSearchState {
   現在source versionの一致を要求する。共有physical actionで進行したEntryは操作後の
   versionへ同時に更新する。共有prefix後に別Entryがsourceを変更した場合、古いversionの
   Routeは後続操作・reserveとも実行しない。
+- Practical-first tierはEntry自身のTargetだけでなく、reserve後の再導出で未所持Targetが
+  Practical以上になった場合も満たす。複数Targetを満たす1武器は、そのすべてのTargetを
+  tier対象へ反映する。
 - Practical確保済みでもIdeal未所持なら、そのTargetは理想更新候補として探索に残す
 
 ### 7.1 Planner Search Action / Trace

@@ -47,6 +47,7 @@ import type {
   PlannerSearchRngSnapshot,
   PlannerSearchState,
   PlannerWarning,
+  PlannerConflictResolution,
 } from './plannerTypes'
 import { validatePlannerInput } from './plannerValidation'
 import { deriveTargetSatisfaction } from './targetSatisfaction'
@@ -830,6 +831,17 @@ function applyReserveAction(
     state.securedOwnedWeaponIdByEntryId[entry.id] = ownedWeaponId
   }
   const satisfactionChanges = refreshTargetSatisfaction(state, targets, master)
+  const newlyPracticalTargetIds = satisfactionChanges
+    .filter(({ before, after }) => !before.hasPractical && after.hasPractical)
+    .map(({ targetWeaponId }) => targetWeaponId)
+  if (newlyPracticalTargetIds.length > 0) {
+    state.practicalFirstProgressTargetIds = [
+      ...new Set([
+        ...state.practicalFirstProgressTargetIds,
+        ...newlyPracticalTargetIds,
+      ]),
+    ].sort(compareStableStrings)
+  }
   state.selectedBuildListEntryIds = [
     ...state.selectedBuildListEntryIds,
     entry.id,
@@ -885,6 +897,59 @@ function addWarning(
     return
   }
   warnings.push({ kind, message })
+}
+
+function detectCurrentPlannerConflicts(
+  state: PlannerSearchState,
+  allSearchEntries: readonly BuildListEntry[],
+  allUnitPlans: ReadonlyMap<BuildListEntryId, readonly PlannerRouteUnit[]>,
+  targets: readonly TargetWeapon[],
+  resolutions: readonly PlannerConflictResolution[],
+) {
+  const entries = allSearchEntries.filter((entry) =>
+    entryIsRelevantForState(state, entry),
+  )
+  const unitPlans = new Map(
+    entries.flatMap((entry) => {
+      const units = allUnitPlans.get(entry.id) ?? []
+      const progress = state.routeProgressByEntryId[entry.id] ?? 0
+      return [[entry.id, units.slice(progress)] as const]
+    }),
+  )
+  return detectPlannerConflicts(entries, unitPlans, targets, state, resolutions, false)
+}
+
+function conflictCountByEntryId(
+  conflicts: readonly PlanConflict[],
+): Map<BuildListEntryId, number> {
+  const counts = new Map<BuildListEntryId, number>()
+  conflicts.forEach((conflict) => {
+    conflict.buildListEntryIds.forEach((entryId) => {
+      counts.set(entryId, (counts.get(entryId) ?? 0) + 1)
+    })
+  })
+  return counts
+}
+
+function conflictResolutionWarnings(
+  resolutions: readonly PlannerConflictResolution[],
+  conflictsById: ReadonlyMap<string, PlanConflict>,
+): PlannerWarning[] {
+  return resolutions.flatMap((resolution) => {
+    const conflict = conflictsById.get(resolution.conflictKey)
+    if (!conflict) {
+      return [{
+        kind: 'invalid_conflict_resolution' as const,
+        message: `Conflict resolution '${resolution.conflictKey}' does not match a currently detected conflict.`,
+      }]
+    }
+    return conflict.buildListEntryIds.includes(resolution.selectedBuildListEntryId)
+      ? []
+      : [{
+          kind: 'invalid_conflict_resolution' as const,
+          message: `BuildListEntry '${resolution.selectedBuildListEntryId}' is not a participant in conflict '${resolution.conflictKey}'.`,
+        }]
+  })
 }
 
 function initialFailureResult(
@@ -964,26 +1029,6 @@ export async function runPlannerBeamSearch(
       return units === undefined ? [] : [[entry.id, units] as const]
     }),
   )
-  const conflictDetection = detectPlannerConflicts(
-    initialConflictEntries,
-    initialConflictUnitPlans,
-    targets,
-    initialSearchState,
-    validation.validConflictResolutions,
-  )
-  warnings.push(...conflictDetection.warnings)
-  const conflictsById = new Map(
-    conflictDetection.conflicts.map((conflict) => [conflict.id, conflict]),
-  )
-  const conflictCountByEntryId = new Map<BuildListEntryId, number>()
-  conflictDetection.conflicts.forEach((conflict) => {
-    conflict.buildListEntryIds.forEach((entryId) => {
-      conflictCountByEntryId.set(
-        entryId,
-        (conflictCountByEntryId.get(entryId) ?? 0) + 1,
-      )
-    })
-  })
   const routeUnitCountByEntryId = new Map(
     [...allUnitPlans].map(([entryId, units]) => [
       entryId,
@@ -994,7 +1039,7 @@ export async function runPlannerBeamSearch(
     entries: allSearchEntries,
     targetsById,
     routeUnitCountByEntryId,
-    conflictCountByEntryId,
+    conflictCountByEntryId: new Map<BuildListEntryId, number>(),
   }
   const initialState = cloneState(initialSearchState)
   Object.keys(initialState.routeProgressByEntryId).forEach((entryId) => {
@@ -1004,15 +1049,45 @@ export async function runPlannerBeamSearch(
       delete initialState.routeSourceVersionByEntryId[entryId]
     }
   })
+  const discoveredConflictsById = new Map<string, PlanConflict>()
+  const recordDetectedConflicts = (
+    detection: ReturnType<typeof detectPlannerConflicts>,
+  ) => {
+    detection.conflicts.forEach((conflict) => {
+      if (!discoveredConflictsById.has(conflict.id)) {
+        discoveredConflictsById.set(conflict.id, conflict)
+      }
+    })
+  }
+  const initialConflictDetection = detectPlannerConflicts(
+    initialConflictEntries,
+    initialConflictUnitPlans,
+    targets,
+    initialState,
+    validation.validConflictResolutions,
+    false,
+  )
+  recordDetectedConflicts(initialConflictDetection)
   initialState.evaluationScore = evaluatePlannerSearchState(
     initialState,
-    scoreContext,
+    {
+      ...scoreContext,
+      conflictCountByEntryId: conflictCountByEntryId(
+        initialConflictDetection.conflicts,
+      ),
+    },
   )
   const enabledTargetIds = targets.map(({ id }) => id)
   if (isComplete(initialState, enabledTargetIds)) {
+    conflictResolutionWarnings(
+      validation.validConflictResolutions,
+      discoveredConflictsById,
+    ).forEach(({ kind, message }) => addWarning(warnings, kind, message))
     return {
       bestState: initialState,
-      conflicts: conflictDetection.conflicts,
+      conflicts: [...discoveredConflictsById.values()].sort((left, right) =>
+        compareStableStrings(left.id, right.id),
+      ),
       warnings,
       validationIssues: [],
       excludedBuildListEntries: validation.excludedBuildListEntries,
@@ -1048,6 +1123,17 @@ export async function runPlannerBeamSearch(
         reachedStepLimit = true
         continue
       }
+      const stateConflictDetection = detectCurrentPlannerConflicts(
+        state,
+        allSearchEntries,
+        allUnitPlans,
+        targets,
+        validation.validConflictResolutions,
+      )
+      recordDetectedConflicts(stateConflictDetection)
+      const conflictsById = new Map(
+        stateConflictDetection.conflicts.map((conflict) => [conflict.id, conflict]),
+      )
       for (const entry of allSearchEntries) {
         if (state.selectedBuildListEntryIds.includes(entry.id)) continue
         if (!targetCanUseEntry(state, entry)) continue
@@ -1060,8 +1146,8 @@ export async function runPlannerBeamSearch(
             isUnitBlockedByConflictResolution(
               unit,
               conflictsById,
-              conflictDetection.conflictIdsByUnitKey,
-              conflictDetection.selectedPhysicalActionKeysByConflictId,
+              stateConflictDetection.conflictIdsByUnitKey,
+              stateConflictDetection.selectedPhysicalActionKeysByConflictId,
               (entryId) => {
                 const selected = entriesById.get(entryId)
                 return selected !== undefined && entryIsRelevantForState(state, selected)
@@ -1086,8 +1172,8 @@ export async function runPlannerBeamSearch(
             entriesById,
             allUnitPlans,
             conflictsById,
-            conflictDetection.conflictIdsByUnitKey,
-            conflictDetection.selectedPhysicalActionKeysByConflictId,
+            stateConflictDetection.conflictIdsByUnitKey,
+            stateConflictDetection.selectedPhysicalActionKeysByConflictId,
             targets,
             input.master,
           )
@@ -1117,10 +1203,20 @@ export async function runPlannerBeamSearch(
           stop = true
           break
         }
-        applied.state.evaluationScore = evaluatePlannerSearchState(
+        const successorConflictDetection = detectCurrentPlannerConflicts(
           applied.state,
-          scoreContext,
+          allSearchEntries,
+          allUnitPlans,
+          targets,
+          validation.validConflictResolutions,
         )
+        recordDetectedConflicts(successorConflictDetection)
+        applied.state.evaluationScore = evaluatePlannerSearchState(applied.state, {
+          ...scoreContext,
+          conflictCountByEntryId: conflictCountByEntryId(
+            successorConflictDetection.conflicts,
+          ),
+        })
         if (applied.state.trace.length >= input.options.maxPlanSteps) {
           reachedStepLimit = true
         }
@@ -1203,9 +1299,15 @@ export async function runPlannerBeamSearch(
     )
   }
   const bestState = bestComplete ?? bestPartial
+  conflictResolutionWarnings(
+    validation.validConflictResolutions,
+    discoveredConflictsById,
+  ).forEach(({ kind, message }) => addWarning(warnings, kind, message))
   return {
     bestState,
-    conflicts: conflictDetection.conflicts,
+    conflicts: [...discoveredConflictsById.values()].sort((left, right) =>
+      compareStableStrings(left.id, right.id),
+    ),
     warnings,
     validationIssues: [],
     excludedBuildListEntries: validation.excludedBuildListEntries,
