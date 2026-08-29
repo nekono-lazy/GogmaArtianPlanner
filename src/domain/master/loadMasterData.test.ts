@@ -10,7 +10,7 @@ describe('Master Data loading', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.data.manifest.gameVersion).toBe('unknown-initial')
-      expect(result.data.manifest.dataVersion).toBe(2)
+      expect(result.data.manifest.dataVersion).toBe(3)
       expect(result.data.manifest.notes).toContain('project-owner verified')
       expect(result.data.weaponTypes).toHaveLength(14)
       expect(result.data.elements).toHaveLength(10)
@@ -32,6 +32,7 @@ describe('Master Data loading', () => {
       const definitions = getBonusDefinitionsForWeapon(
         result.data,
         'weapon.dual_blades',
+        'element.thunder',
         'gogma_artian',
       )
       expect(definitions).toHaveLength(13)

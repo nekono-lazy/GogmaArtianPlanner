@@ -36,7 +36,10 @@ export class ReferencedEntityDeleteError extends Error {
   }
 }
 
-export type OwnedWeaponDraft = Omit<OwnedWeapon, 'id' | 'createdAt' | 'updatedAt'>
+type WithoutPersistenceFields<T> = T extends unknown
+  ? Omit<T, 'id' | 'createdAt' | 'updatedAt'>
+  : never
+export type OwnedWeaponDraft = WithoutPersistenceFields<OwnedWeapon>
 export type TargetWeaponDraft = Omit<TargetWeapon, 'id' | 'createdAt' | 'updatedAt'>
 
 function domainMessages(result: { issues: Array<{ path: string; message: string }> }): string[] {

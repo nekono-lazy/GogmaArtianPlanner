@@ -1,4 +1,5 @@
 import type { NormalArtianCounter, OwnedWeaponId, RngState } from './common'
+import { V1_NORMAL_ARTIAN_RARITY } from './common'
 import type { BuildRoute, OwnedWeapon } from './entities'
 import type { ExpectedPlanState } from './planning'
 
@@ -82,7 +83,7 @@ function normalCounterId(
     { type: 'create_normal_artian' }
   >,
 ): string {
-  return `${operation.weaponTypeId}:${operation.rarity}`
+  return `${operation.weaponTypeId}:${V1_NORMAL_ARTIAN_RARITY}`
 }
 
 export function createSearchStateHash(
@@ -167,19 +168,25 @@ export function collectReferencedOwnedWeaponIds(
 }
 
 function normalizeOwnedWeapon(weapon: OwnedWeapon) {
-  return {
+  const common = {
     id: weapon.id,
+    kind: weapon.kind,
     weaponTypeId: weapon.weaponTypeId,
     elementId: weapon.elementId,
     restorationBonuses: weapon.restorationBonuses.map((bonus) => ({
       bonusTypeId: bonus.bonusTypeId,
       bonusRankId: bonus.bonusRankId,
     })),
-    seriesSkillId: weapon.seriesSkillId,
-    groupSkillId: weapon.groupSkillId,
-    status: weapon.status,
     isProtected: weapon.isProtected,
   }
+  return weapon.kind === 'normal'
+    ? common
+    : {
+        ...common,
+        seriesSkillId: weapon.seriesSkillId,
+        groupSkillId: weapon.groupSkillId,
+        status: weapon.status,
+      }
 }
 
 export function createReferencedOwnedWeaponsHash(

@@ -36,21 +36,22 @@ const weapons = [
 }))
 
 const elements = [
-  ['element.none', '無属性'],
-  ['element.fire', '火'],
-  ['element.water', '水'],
-  ['element.thunder', '雷'],
-  ['element.ice', '氷'],
-  ['element.dragon', '龍'],
-  ['element.poison', '毒'],
-  ['element.paralysis', '麻痺'],
-  ['element.sleep', '睡眠'],
-  ['element.blast', '爆破'],
-].map(([id, name], index) => ({
+  ['element.none', '無属性', false],
+  ['element.fire', '火', true],
+  ['element.water', '水', true],
+  ['element.thunder', '雷', true],
+  ['element.ice', '氷', true],
+  ['element.dragon', '龍', true],
+  ['element.poison', '毒', true],
+  ['element.paralysis', '麻痺', true],
+  ['element.sleep', '睡眠', true],
+  ['element.blast', '爆破', true],
+].map(([id, name, allowsElementBonus], index) => ({
   id,
   displayNameJa: name,
   displayNameEn: name,
   sortOrder: index + 1,
+  allowsElementBonus,
   isEnabled: true,
 }))
 
@@ -142,19 +143,21 @@ const groupSkillNames = [
   '護竜の守り', 'ヌシの憤激', '先達の導き', '栄光の誉れ', '祝祭の巡り',
   'ヌシの魂', '拳を極めし者',
 ]
-const skillMaster = (prefix, names, preservedIds = {}) => names.map((name, index) => ({
+const disabledSeriesSkills = new Set(['花舞の祈り', '踊火の祈り', '夢灯の祈り', '祝謡の祈り'])
+const disabledGroupSkills = new Set(['拳を極めし者'])
+const skillMaster = (prefix, names, disabledNames, preservedIds = {}) => names.map((name, index) => ({
   id: preservedIds[name] ?? `${prefix}.verified_${String(index + 1).padStart(2, '0')}`,
   displayNameJa: name,
   displayNameEn: name,
   sortOrder: index + 1,
-  isEnabled: true,
+  isEnabled: !disabledNames.has(name),
 }))
 
 writeJson('manifest.json', {
   gameTitle: 'Monster Hunter Wilds',
   appDataKind: 'gogma-artian-planner-master',
   gameVersion: 'unknown-initial',
-  dataVersion: 2,
+  dataVersion: 3,
   generatedAt: null,
   notes: 'Weapon, element, bonus, rank, applicability, mapping, series skill, and group skill masters are project-owner verified. Lottery and material data remain disabled and unverified.',
 })
@@ -165,13 +168,13 @@ writeJson('bonus-ranks.json', bonusRanks)
 writeJson('weapon-bonus-definitions.json', definitions)
 writeJson(
   'series-skills.json',
-  skillMaster('series_skill', seriesSkillNames, {
+  skillMaster('series_skill', seriesSkillNames, disabledSeriesSkills, {
     '黒蝕竜の力': 'series_skill.gore_magala',
   }),
 )
 writeJson(
   'group-skills.json',
-  skillMaster('group_skill', groupSkillNames, {
+  skillMaster('group_skill', groupSkillNames, disabledGroupSkills, {
     'ヌシの魂': 'group_skill.apex',
   }),
 )

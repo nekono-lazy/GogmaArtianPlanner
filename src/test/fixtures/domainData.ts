@@ -7,7 +7,7 @@ import type {
   ExecutionHistory,
   ExecutionHistoryId,
   NormalArtianCounter,
-  OwnedWeapon,
+  OwnedGogmaArtianWeapon,
   OwnedWeaponId,
   PlanStepId,
   ProductionPlan,
@@ -81,9 +81,9 @@ export function createValidRngState(): RngState {
 
 export function createValidNormalArtianCounter(): NormalArtianCounter {
   return {
-    id: 'weapon.fixture.a:rare7',
+    id: 'weapon.fixture.a:8',
     weaponTypeId: 'weapon.fixture.a',
-    rarity: 'rare7',
+    rarity: 8,
     counter: 4,
     isConfirmed: true,
     observationCount: 1,
@@ -96,9 +96,10 @@ export function createValidNormalArtianCounter(): NormalArtianCounter {
 
 export function createValidOwnedWeapon(
   id: OwnedWeaponId = ownedWeaponId('owned.fixture.a'),
-): OwnedWeapon {
+): OwnedGogmaArtianWeapon {
   return {
     id,
+    kind: 'gogma',
     name: 'Domain fixture weapon',
     weaponTypeId: 'weapon.fixture.a',
     elementId: 'element.fixture.a',
@@ -175,7 +176,7 @@ export function createValidBuildCandidate(): BuildCandidate {
         {
           type: 'create_normal_artian',
           weaponTypeId: 'weapon.fixture.a',
-          rarity: 'rare7',
+          rarity: 8,
           count: 1,
           normalCounterBefore: 4,
           normalCounterAfter: 5,

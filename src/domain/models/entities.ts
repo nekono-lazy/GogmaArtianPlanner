@@ -1,4 +1,5 @@
 import type {
+  ArtianWeaponKind,
   BonusRankId,
   BonusTypeId,
   BuildCandidateId,
@@ -21,21 +22,36 @@ import type {
   WeaponTypeId,
 } from './common'
 
-export interface OwnedWeapon {
+export interface OwnedWeaponBase {
   id: OwnedWeaponId
+  kind: ArtianWeaponKind
   name: string
   weaponTypeId: WeaponTypeId
   elementId: ElementId
   restorationBonuses: RestorationBonusSet
-  seriesSkillId: SeriesSkillId | null
-  groupSkillId: GroupSkillId | null
-  status: OwnedWeaponStatus
   isProtected: boolean
   relatedTargetWeaponIds: TargetWeaponId[]
   memo: string | null
   createdAt: ISODateTimeString
   updatedAt: ISODateTimeString
 }
+
+export interface OwnedNormalArtianWeapon extends OwnedWeaponBase {
+  kind: 'normal'
+  rarity: NormalArtianRarity
+  seriesSkillId: null
+  groupSkillId: null
+  status: null
+}
+
+export interface OwnedGogmaArtianWeapon extends OwnedWeaponBase {
+  kind: 'gogma'
+  seriesSkillId: SeriesSkillId | null
+  groupSkillId: GroupSkillId | null
+  status: OwnedWeaponStatus
+}
+
+export type OwnedWeapon = OwnedNormalArtianWeapon | OwnedGogmaArtianWeapon
 
 export interface TargetWeapon {
   id: TargetWeaponId

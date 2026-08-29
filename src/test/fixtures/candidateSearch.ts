@@ -20,10 +20,10 @@ export const searchMasterFixture: SearchMasterSubset = {
   bonusRanks: targetEvaluationMaster.bonusRanks.map((rank) => ({ ...rank })),
   lotteries: [
     {
-      id: 'lottery.fixture.normal.a.rare7',
+      id: 'lottery.fixture.normal.a.8',
       lotteryKind: 'normal_artian_bonus',
       weaponTypeId: 'weapon.fixture.a',
-      rarity: 'rare7',
+      rarity: 8,
       resultType: 'bonus',
       bonusTypeId: 'bonus_type.fixture.attack',
       bonusRankId: 'bonus_rank.fixture.high',
@@ -126,7 +126,7 @@ export function createCandidateSearchEngine(
         input: {
           baseSeed: input.rngState.baseSeed.value as string,
           weaponTypeId: input.targetWeapons[0].weaponTypeId,
-          rarity: 'rare7',
+          rarity: 8,
           normalCounter: 4,
           master: input.master,
         },
@@ -141,7 +141,10 @@ export function createCandidateSearchEngine(
           counterGate: input.rngState.counterGate.value as number,
           weaponTypeId: input.targetWeapons[0].weaponTypeId,
           elementId: input.targetWeapons[0].elementId,
-          operation: { type: 'new_gogma' },
+          operation: {
+            type: 'new_gogma',
+            sourceNormalBonuses: normalResult,
+          },
           master: input.master,
         },
         result: gogmaNewResult,

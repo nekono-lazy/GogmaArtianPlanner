@@ -170,7 +170,12 @@ export type RngStateSource =
   | "manual"
   | "observation";
 
-export type NormalArtianRarity = "rare6" | "rare7" | "rare8";
+export const V1_NORMAL_ARTIAN_RARITY = 8 as const;
+export type NormalArtianRarity = typeof V1_NORMAL_ARTIAN_RARITY;
+
+export type ArtianWeaponKind =
+  | "normal"
+  | "gogma";
 
 export type OwnedWeaponStatus =
   | "material"
@@ -183,6 +188,7 @@ export type CandidateCategory =
 
 export type RouteKind =
   | "normal_artian_to_gogma"
+  | "owned_normal_artian_to_gogma"
   | "existing_gogma_reset_bonuses"
   | "existing_gogma_keep_bonuses"
   | "existing_gogma_reset_skills"
@@ -332,13 +338,13 @@ deriveRngCapabilities(
 
 - Gogma予測は確定済みBase Seed、Gogma Counter、Counter Gateを要求する
 - Skill予測は確定済みBase Seed、Skill Counter、Counter Gateを要求する
-- 通常アーティア予測は確定済みBase Seedと対象武器種・レア度のNormalArtianCounterを要求する
+- 通常アーティア予測は確定済みBase Seedと対象武器種のレア8 NormalArtianCounterを要求する
 - PlannerはBuildListEntry内の全RouteOperationを実行できるCapabilityがある場合のみ実行可能
 - 不足値に依存するRouteだけを無効化し、他Routeは利用可能なままにする
 
 ## 6.2 NormalArtianCounter
 
-通常アーティアの現在位置を、武器種・レア度ごとに保存する。
+v1で管理するレア8通常アーティアの現在位置を、武器種ごとに1件保存する。レア6・7は管理・検索対象外とする。
 
 ```ts
 export interface NormalArtianCounter {
@@ -364,44 +370,67 @@ id = `${weaponTypeId}:${rarity}`;
 不変条件。
 
 - 同じ `weaponTypeId + rarity` は1件のみ
+- v1の `rarity` は必ず8。IDは `${weaponTypeId}:8` とし、有効武器種14件について最大14件を管理する
 - `isConfirmed = true` の場合、`counter` は0以上の整数
 - `isConfirmed = false` の場合、通常アーティア経由の候補検索には使わない
 - `candidateCount` は観測検索時の残候補数。未検索なら `null`
 
 ---
 
-## 7. 所持巨戟アーティア
+## 7. 所持アーティア
 
 ## 7.1 OwnedWeapon
 
 ```ts
-export interface OwnedWeapon {
+export interface OwnedWeaponBase {
   id: OwnedWeaponId;
+  kind: ArtianWeaponKind;
   name: string;
   weaponTypeId: WeaponTypeId;
   elementId: ElementId;
   restorationBonuses: RestorationBonusSet;
-  seriesSkillId: SeriesSkillId | null;
-  groupSkillId: GroupSkillId | null;
-  status: OwnedWeaponStatus;
   isProtected: boolean;
   relatedTargetWeaponIds: TargetWeaponId[];
   memo: string | null;
   createdAt: ISODateTimeString;
   updatedAt: ISODateTimeString;
 }
+
+export interface OwnedNormalArtianWeapon extends OwnedWeaponBase {
+  kind: "normal";
+  rarity: 8;
+  seriesSkillId: null;
+  groupSkillId: null;
+  status: null;
+}
+
+export interface OwnedGogmaArtianWeapon extends OwnedWeaponBase {
+  kind: "gogma";
+  seriesSkillId: SeriesSkillId | null;
+  groupSkillId: GroupSkillId | null;
+  status: OwnedWeaponStatus;
+}
+
+export type OwnedWeapon =
+  | OwnedNormalArtianWeapon
+  | OwnedGogmaArtianWeapon;
 ```
 
 不変条件。
 
-- 所持武器は巨戟アーティアのみを表す
+- `kind` で通常アーティアと巨戟アーティアを明示的に区別する
+- 通常アーティアはレア8に限定し、`normal_artian` scopeの復元ボーナスだけを5枠保持し、シリーズスキル、グループスキル、statusは持たない
+- 巨戟アーティアは `gogma_artian` scopeの復元ボーナスだけを5枠保持し、従来どおりスキルとstatusを保持する
+- 無属性武器はscopeにかかわらず属性強化を保持できない
 - 素材用でも `restorationBonuses` は必ず5枠保持する
 - `status = "ideal"` の場合、初期値として `isProtected = true`
 - `status = "practical"` の場合、初期値として `isProtected = true`
 - `status = "material"` の場合、初期値として `isProtected = false`
 - `isProtected = true` はPlannerによる破壊的操作から武器を保護する
 - `isProtected = true` の武器を、素材消費、Reset Bonuses、Keep Bonusesの対象にしない
-- Plannerが素材として消費できるのは `status = "material" AND isProtected = false` の武器だけ
+- Plannerが素材として消費できる巨戟アーティアは `status = "material" AND isProtected = false` の武器だけ
+- 通常アーティアの新規保護初期値はfalseとし、ユーザーが手動で保護できる
+- 保護中の通常アーティアは巨戟化Routeの変換元にしない
 - Plannerに保護武器の消費を許可するoverride設定は持たない
 - 旧実用品の素材化は確認必須の `change_owned_weapon_status` PlanStepとして予定できる
 - ユーザーが素材化を確認した場合だけ、`status = "material"` と `isProtected = false` を同一トランザクションで適用する
@@ -659,6 +688,11 @@ export interface UseWeaponAsMaterialOperation {
 - v1の `normal_artian_to_gogma` はCreateNormalArtianOperation、ConvertToGogmaOperation、必要なResetSkillsOperationだけを持ち、KeepBonusesOperationを含めない
 - `normal_artian_to_gogma` の `BuildRoute.sourceOwnedWeaponId` は `null` とする
 - `normal_artian_to_gogma` のResetSkillsOperationは巨戟化直後のRoute出力を対象とするため `sourceOwnedWeaponId = null` とし、未登録武器用のOwnedWeaponIdを生成しない
+- `owned_normal_artian_to_gogma` はレア8、非保護、かつTargetと武器種・属性が一致する所持通常アーティアを変換元とする
+- `owned_normal_artian_to_gogma` の `BuildRoute.sourceOwnedWeaponId` は変換元の通常アーティアIDとする
+- `owned_normal_artian_to_gogma` はConvertToGogmaOperationと必要なResetSkillsOperationだけを持ち、CreateNormalArtianOperationとKeepBonusesOperationを含めない
+- 変換直後のResetSkillsOperationは未登録のRoute出力を対象とするため `sourceOwnedWeaponId = null` とする
+- 変換後の最終ボーナスはRNG Engine Predictionから取得し、Bonus Type Mappingや未確認のRank変換から生成しない
 - `existing_gogma_reset_skills` は非nullの `sourceOwnedWeaponId` を持つResetSkillsOperationだけでスキルを再付与し、復元ボーナスを変更するOperationを含めない
 - `existing_gogma_reset_skills` のBuildRoute.sourceOwnedWeaponIdと各ResetSkillsOperation.sourceOwnedWeaponIdは同じ起点武器を参照する
 - `existing_gogma_reset_skills` から生成するBuildCandidateの `finalBonuses` は起点OwnedWeaponの `restorationBonuses` と一致し、seriesSkillId / groupSkillIdだけをRNG EngineのSkill Prediction結果から設定する
@@ -734,14 +768,15 @@ export type BuildListEntryStaleReason =
 - Base SeedのvalueとisConfirmed
 - RouteがGogma予測を使う場合はGogma CounterとCounter GateのvalueとisConfirmed
 - RouteがSkill予測を使う場合はSkill CounterとCounter GateのvalueとisConfirmed
-- Routeが通常アーティアを使う場合は対象武器種・レア度のNormalArtianCounterのcounterとisConfirmed
+- Routeが新規通常アーティアを使う場合は対象武器種のレア8 NormalArtianCounterのcounterとisConfirmed
 - source、notes、観測日時、表示用フィールドは除外する
 
 `referencedOwnedWeaponsHash` の正規化対象。
 
 - 参照IDは `BuildRoute.sourceOwnedWeaponId`、`ResetBonusesOperation.sourceOwnedWeaponId`、`KeepBonusesOperation.sourceOwnedWeaponId`、非nullの `ResetSkillsOperation.sourceOwnedWeaponId`、`UseWeaponAsMaterialOperation.ownedWeaponId` から収集する
 - 同じIDを重複排除し、ID順に安定ソートする
-- 各参照武器について `id`、`weaponTypeId`、`elementId`、`restorationBonuses`、`seriesSkillId`、`groupSkillId`、`status`、`isProtected` を含める
+- 各参照武器について `id`、`kind`、`weaponTypeId`、`elementId`、`restorationBonuses`、`isProtected` を含める
+- 巨戟アーティアについてはさらに `seriesSkillId`、`groupSkillId`、`status` を含める
 - `restorationBonuses` は保存中の5枠配列順を保持する。Keepのslot意味が確定するまでHash生成時に並べ替えない
 - `name`、`memo`、`createdAt`、`updatedAt` は除外する
 - Routeが参照しないOwnedWeaponの追加、更新、削除はHashへ影響させない
@@ -1169,8 +1204,8 @@ type Migration = (input: unknown) => unknown;
 
 - RngStateは1件のみ
 - AppSettingsは1件のみ
-- NormalArtianCounterは `weaponTypeId + rarity` ごとに1件のみ
-- OwnedWeaponはすべて巨戟アーティア
+- NormalArtianCounterは各武器種のレア8について1件のみ。レア6・7を保存・検索しない
+- OwnedWeaponは `kind` により通常アーティアまたは巨戟アーティアを表す
 - TargetWeaponは1構成につき1件
 - RestorationBonusSetは必ず5枠
 - 復元ボーナス比較は順不同

@@ -124,6 +124,7 @@ export interface ElementMaster {
   displayNameJa: string;
   displayNameEn: string;
   sortOrder: number;
+  allowsElementBonus: boolean;
   isEnabled: boolean;
 }
 ```
@@ -340,6 +341,7 @@ export interface SeriesSkillMaster {
 
 - 未指定はマスターデータではなくDomain Model上の `null` で表す
 - UIでは「指定なし」を選択肢として追加表示する
+- 登録25件のうち、巨戟アーティアに出現しない花舞の祈り、踊火の祈り、夢灯の祈り、祝謡の祈りは履歴参照用IDを維持して `isEnabled = false` とする。通常UIは有効21件だけを表示する
 
 ---
 
@@ -367,7 +369,7 @@ export interface GroupSkillMaster {
 }
 ```
 
-制約はSeriesSkillMasterと同じ。
+制約はSeriesSkillMasterと同じ。登録17件のうち、巨戟アーティアに出現しない拳を極めし者は履歴参照用IDを維持して `isEnabled = false` とし、通常UIは有効16件だけを表示する。
 
 ---
 
@@ -520,8 +522,8 @@ export interface MasterDataRoot {
 ```ts
 getEnabledWeaponTypes(master): WeaponTypeMaster[]
 getEnabledElements(master): ElementMaster[]
-getBonusDefinitionsForWeapon(master, weaponTypeId, scope): WeaponBonusDefinition[]
-getRanksForBonusType(master, weaponTypeId, bonusTypeId, scope): BonusRankMaster[]
+getBonusDefinitionsForWeapon(master, weaponTypeId, elementId, scope): WeaponBonusDefinition[]
+getRanksForBonusType(master, weaponTypeId, elementId, bonusTypeId, scope): BonusRankMaster[]
 getGogmaBonusTypeForNormalBonus(master, normalBonusTypeId): BonusTypeId
 getNormalBonusTypesForGogmaBonus(master, gogmaBonusTypeId): BonusTypeId[]
 getBonusRankOrder(master, bonusRankId): number
@@ -536,6 +538,8 @@ getLotteryEntries(master, lotteryKind, weaponTypeId, rarity): LotteryMaster[]
 
 - selectorは純粋関数
 - selectorはUIに依存しない
+- Bonus Definition selectorはscope、武器種、属性を必須入力とし、ElementMasterの `allowsElementBonus` がfalseなら属性強化を除外する
+- 無属性は `allowsElementBonus = false`、その他の現在有効な属性はtrueとする。実行時にElement ID文字列から意味を推測しない
 - 存在しないIDを指定された場合は明示的なDomain Errorを返す
 
 ---
@@ -548,6 +552,7 @@ Master Data読み込み時に以下を検証する。
 - 各Master内でIDが一意
 - 参照IDが存在する
 - `sortOrder` が数値
+- ElementMasterの `allowsElementBonus` がboolean
 - `dataVersion` が正の整数
 - WeaponBonusDefinitionの `scope + weaponTypeId + bonusTypeId + bonusRankId` が一意
 - WeaponBonusDefinitionが参照するBonusTypeとBonusRankが有効

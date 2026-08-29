@@ -19,6 +19,7 @@ function compatibleWeapons(context: RouteSearchContext): OwnedWeapon[] {
   return context.input.ownedWeapons
     .filter(
       (weapon) =>
+        weapon.kind === 'gogma' &&
         weapon.weaponTypeId === context.target.weaponTypeId &&
         weapon.elementId === context.target.elementId,
     )

@@ -6,6 +6,7 @@ import type {
   RngStateSource,
   RouteKind,
   RouteOperation,
+  ArtianWeaponKind,
 } from '../domain/models/publicTypes'
 import type {
   CandidateRouteFilter,
@@ -19,6 +20,11 @@ export const ownedWeaponStatusLabels: Record<OwnedWeaponStatus, string> = {
   ideal: '理想',
 }
 
+export const artianWeaponKindLabels: Record<ArtianWeaponKind, string> = {
+  normal: '通常アーティア',
+  gogma: '巨戟アーティア',
+}
+
 export const candidateCategoryLabels: Record<CandidateCategory, string> = {
   ideal: '理想',
   practical: '実用',
@@ -26,6 +32,7 @@ export const candidateCategoryLabels: Record<CandidateCategory, string> = {
 
 export const routeKindLabels: Record<RouteKind, string> = {
   normal_artian_to_gogma: '通常アーティア経由',
+  owned_normal_artian_to_gogma: '所持通常アーティアから巨戟化',
   existing_gogma_reset_bonuses: '所持武器：復元ボーナスリセット',
   existing_gogma_keep_bonuses: '所持武器：復元ボーナス保持',
   existing_gogma_reset_skills: '所持武器：スキルリセット',
@@ -64,9 +71,7 @@ export const rngStateSourceLabels: Record<RngStateSource, string> = {
 }
 
 export const normalArtianRarityLabels: Record<NormalArtianRarity, string> = {
-  rare6: 'レア6',
-  rare7: 'レア7',
-  rare8: 'レア8',
+  8: 'レア8',
 }
 
 export function getPersistenceReferenceKindLabel(kind: string): string {

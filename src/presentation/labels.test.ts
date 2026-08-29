@@ -23,7 +23,7 @@ describe('presentation labels', () => {
 
   it('translates fixed and counter-specific RNG requirements', () => {
     expect(getRngMissingRequirementLabel('base_seed')).toContain('基準シード')
-    expect(getRngMissingRequirementLabel('normal_artian_counter:weapon.dual_blades:rare7')).toContain('通常アーティアカウンター')
+    expect(getRngMissingRequirementLabel('normal_artian_counter:weapon.dual_blades:8')).toContain('通常アーティアカウンター')
     expect(getRngMissingRequirementLabel('engine:gogma_prediction')).toContain('予測エンジン')
   })
 })

@@ -1,6 +1,7 @@
 export * from './candidateFactory'
 export * from './candidateProcessing'
 export * from './candidateSearch'
+export * from './ownedNormalArtianRouteSearch'
 export * from './searchExecution'
 export * from './searchTypes'
 export * from './searchValidation'

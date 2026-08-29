@@ -36,7 +36,10 @@ export interface GogmaBonusPredictionInput {
   weaponTypeId: WeaponTypeId
   elementId: ElementId
   operation:
-    | { type: 'new_gogma' }
+    | {
+        type: 'new_gogma'
+        sourceNormalBonuses: RestorationBonusSet
+      }
     | { type: 'reset_bonuses' }
     | { type: 'keep_bonuses'; selection: KeepBonusSelection }
   master: RngMasterSubset

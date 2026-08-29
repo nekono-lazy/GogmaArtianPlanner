@@ -1,6 +1,11 @@
-import type { MasterDataRoot } from '../master/masterTypes'
-import { getEnabledElements, getEnabledWeaponTypes } from '../master/masterSelectors'
-import type { RestorationBonusSet } from '../models/publicTypes'
+import type { ArtianBonusScope, MasterDataRoot } from '../master/masterTypes'
+import { getBonusDefinitionsForWeapon, getEnabledElements, getEnabledWeaponTypes } from '../master/masterSelectors'
+import type {
+  ArtianWeaponKind,
+  OwnedWeaponStatus,
+  RestorationBonusSet,
+} from '../models/publicTypes'
+import { V1_NORMAL_ARTIAN_RARITY } from '../models/publicTypes'
 import type { OwnedWeaponDraft, TargetWeaponDraft } from '../../services/crud/entityCrudServices'
 
 export class MasterOptionsUnavailableError extends Error {
@@ -13,13 +18,15 @@ export class MasterOptionsUnavailableError extends Error {
 export function createDefaultBonusSet(
   master: MasterDataRoot,
   weaponTypeId: string,
+  elementId: string,
+  scope: ArtianBonusScope = 'gogma_artian',
 ): RestorationBonusSet {
-  const definition = master.weaponBonusDefinitions.find(
-    (entry) =>
-      entry.isEnabled &&
-      entry.weaponTypeId === weaponTypeId &&
-      entry.scope === 'gogma_artian',
-  )
+  const definition = getBonusDefinitionsForWeapon(
+    master,
+    weaponTypeId,
+    elementId,
+    scope,
+  )[0]
   if (!definition) {
     throw new MasterOptionsUnavailableError(
       '選択した武器種の復元ボーナスのマスターデータが利用できません。',
@@ -38,16 +45,16 @@ export function createDefaultBonusSet(
   ]
 }
 
-function baseOptions(master: MasterDataRoot) {
-  const weaponType = getEnabledWeaponTypes(master).find((type) =>
-    master.weaponBonusDefinitions.some(
-      (definition) =>
-        definition.isEnabled &&
-        definition.weaponTypeId === type.id &&
-        definition.scope === 'gogma_artian',
-    ),
-  )
+function baseOptions(master: MasterDataRoot, scope: ArtianBonusScope) {
   const element = getEnabledElements(master)[0]
+  if (!element) {
+    throw new MasterOptionsUnavailableError(
+      '属性のマスターデータが利用できません。',
+    )
+  }
+  const weaponType = getEnabledWeaponTypes(master).find((type) =>
+    getBonusDefinitionsForWeapon(master, type.id, element.id, scope).length > 0,
+  )
   if (!weaponType || !element) {
     throw new MasterOptionsUnavailableError(
       '武器種または属性のマスターデータが利用できません。',
@@ -58,30 +65,62 @@ function baseOptions(master: MasterDataRoot) {
 
 export function createOwnedWeaponDraft(
   master: MasterDataRoot,
-  status: OwnedWeaponDraft['status'] = 'material',
+  kindOrStatus: ArtianWeaponKind | OwnedWeaponStatus = 'gogma',
+  requestedStatus: OwnedWeaponStatus = 'material',
 ): OwnedWeaponDraft {
-  const base = baseOptions(master)
-  return {
+  const kind: ArtianWeaponKind =
+    kindOrStatus === 'normal' || kindOrStatus === 'gogma'
+      ? kindOrStatus
+      : 'gogma'
+  const status: OwnedWeaponStatus =
+    kindOrStatus === 'material' ||
+    kindOrStatus === 'practical' ||
+    kindOrStatus === 'ideal'
+      ? kindOrStatus
+      : requestedStatus
+  const scope = kind === 'normal' ? 'normal_artian' : 'gogma_artian'
+  const base = baseOptions(master, scope)
+  const common = {
+    kind,
     name: '',
     ...base,
-    restorationBonuses: createDefaultBonusSet(master, base.weaponTypeId),
-    seriesSkillId: null,
-    groupSkillId: null,
-    status,
-    isProtected: status !== 'material',
+    restorationBonuses: createDefaultBonusSet(
+      master,
+      base.weaponTypeId,
+      base.elementId,
+      scope,
+    ),
     relatedTargetWeaponIds: [],
     memo: null,
   }
+  return kind === 'normal'
+    ? {
+        ...common,
+        kind: 'normal',
+        rarity: V1_NORMAL_ARTIAN_RARITY,
+        seriesSkillId: null,
+        groupSkillId: null,
+        status: null,
+        isProtected: false,
+      }
+    : {
+        ...common,
+        kind: 'gogma',
+        seriesSkillId: null,
+        groupSkillId: null,
+        status,
+        isProtected: status !== 'material',
+      }
 }
 
 export function createTargetWeaponDraft(master: MasterDataRoot): TargetWeaponDraft {
-  const base = baseOptions(master)
+  const base = baseOptions(master, 'gogma_artian')
   return {
     name: '',
     ...base,
     priority: 3,
     isEnabled: true,
-    idealBonuses: createDefaultBonusSet(master, base.weaponTypeId),
+    idealBonuses: createDefaultBonusSet(master, base.weaponTypeId, base.elementId),
     practicalBonusConditions: [],
     practicalAlternativeGroups: [],
     idealSkillCondition: { seriesSkillId: null, groupSkillId: null, matchMode: 'all' },

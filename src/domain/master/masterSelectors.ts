@@ -1,4 +1,4 @@
-import type { BonusRankId, BonusTypeId, WeaponTypeId } from '../models/publicTypes'
+import type { BonusRankId, BonusTypeId, ElementId, WeaponTypeId } from '../models/publicTypes'
 import type {
   ArtianBonusScope,
   BonusRankMaster,
@@ -89,15 +89,24 @@ export function getEnabledElements(master: MasterDataRoot): ElementMaster[] {
 export function getBonusDefinitionsForWeapon(
   master: MasterDataRoot,
   weaponTypeId: WeaponTypeId,
+  elementId: ElementId,
   scope: ArtianBonusScope,
 ): WeaponBonusDefinition[] {
   requireById(master.weaponTypes, weaponTypeId, 'WeaponTypeMaster')
+  const element = requireById(master.elements, elementId, 'ElementMaster')
+  const elementBonusTypeIds = new Set(
+    master.bonusTypes
+      .filter(({ category }) => category === 'element')
+      .map(({ id }) => id),
+  )
   return master.weaponBonusDefinitions
     .filter(
       (definition) =>
         definition.isEnabled &&
         definition.weaponTypeId === weaponTypeId &&
-        definition.scope === scope,
+        definition.scope === scope &&
+        (element.allowsElementBonus ||
+          !elementBonusTypeIds.has(definition.bonusTypeId)),
     )
     .sort(compareBySortOrderAndId)
 }
@@ -105,21 +114,17 @@ export function getBonusDefinitionsForWeapon(
 export function getRanksForBonusType(
   master: MasterDataRoot,
   weaponTypeId: WeaponTypeId,
+  elementId: ElementId,
   bonusTypeId: BonusTypeId,
   scope: ArtianBonusScope,
 ): BonusRankMaster[] {
   requireById(master.weaponTypes, weaponTypeId, 'WeaponTypeMaster')
+  requireById(master.elements, elementId, 'ElementMaster')
   requireById(master.bonusTypes, bonusTypeId, 'BonusTypeMaster')
 
   const rankIds = new Set(
-    master.weaponBonusDefinitions
-      .filter(
-        (definition) =>
-          definition.isEnabled &&
-          definition.weaponTypeId === weaponTypeId &&
-          definition.bonusTypeId === bonusTypeId &&
-          definition.scope === scope,
-      )
+    getBonusDefinitionsForWeapon(master, weaponTypeId, elementId, scope)
+      .filter((definition) => definition.bonusTypeId === bonusTypeId)
       .map(({ bonusRankId }) => bonusRankId),
   )
 

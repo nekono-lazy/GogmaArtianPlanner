@@ -9,6 +9,7 @@ export type MasterValidationIssueCode =
   | 'empty_id'
   | 'duplicate_id'
   | 'invalid_sort_order'
+  | 'invalid_element_bonus_capability'
   | 'invalid_rank_order'
   | 'missing_reference'
   | 'inactive_reference'
@@ -200,6 +201,16 @@ export function validateMasterData(master: MasterDataRoot): MasterValidationResu
   orderedCollections.forEach(([name, values]) =>
     validateSortOrders(name, values, issues),
   )
+  master.elements.forEach((element, index) => {
+    if (typeof element.allowsElementBonus !== 'boolean') {
+      addIssue(
+        issues,
+        `elements[${index}].allowsElementBonus`,
+        'invalid_element_bonus_capability',
+        'Element allowsElementBonus must be boolean.',
+      )
+    }
+  })
   master.bonusRanks.forEach((rank, index) => {
     if (!Number.isFinite(rank.order)) {
       addIssue(

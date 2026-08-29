@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TargetWeapon } from './publicTypes'
+import type { NormalArtianCounter, TargetWeapon } from './publicTypes'
 import {
   createOwnedWeapon,
   createTargetWeapon,
@@ -77,6 +77,19 @@ describe('KnownValue and RNG validation', () => {
     counter.id = 'wrong'
     counter.observationCount = -1
     expect(validateNormalArtianCounter(counter).isValid).toBe(false)
+  })
+
+  it.each([6, 7])('rejects rarity %i NormalArtianCounter in v1', (rarity) => {
+    const counter = {
+      ...createValidNormalArtianCounter(),
+      id: `weapon.fixture.a:${rarity}`,
+      rarity,
+    }
+    expect(
+      validateNormalArtianCounter(
+        counter as unknown as NormalArtianCounter,
+      ).isValid,
+    ).toBe(false)
   })
 })
 

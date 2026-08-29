@@ -4,6 +4,7 @@ import type {
   RngState,
   RouteOperation,
 } from '../models/publicTypes'
+import { V1_NORMAL_ARTIAN_RARITY } from '../models/publicTypes'
 import type { RngEngineCapabilities } from './rngEngine'
 
 export type RngCapabilityMissingRequirement =
@@ -27,7 +28,7 @@ function isKnown<T>(knownValue: {
 function normalCounterId(
   operation: Extract<RouteOperation, { type: 'create_normal_artian' }>,
 ): string {
-  return `${operation.weaponTypeId}:${operation.rarity}`
+  return `${operation.weaponTypeId}:${V1_NORMAL_ARTIAN_RARITY}`
 }
 
 function compareRequirement(
@@ -73,7 +74,12 @@ export function deriveRngCapabilities(
 
   const confirmedNormalCounterIds = new Set(
     normalCounters
-      .filter((counter) => counter.isConfirmed && counter.counter !== null)
+      .filter(
+        (counter) =>
+          counter.rarity === V1_NORMAL_ARTIAN_RARITY &&
+          counter.isConfirmed &&
+          counter.counter !== null,
+      )
       .map(({ id }) => id),
   )
   const normalArtianSearchableCounterIds =

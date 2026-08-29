@@ -6,6 +6,7 @@ import type {
   RestorationBonus,
   RngState,
 } from './common'
+import { V1_NORMAL_ARTIAN_RARITY } from './common'
 import type {
   AlternativeBonusConditionGroup,
   BonusCondition,
@@ -217,8 +218,8 @@ export function validateNormalArtianCounter(
 ): DomainValidationResult {
   const issues: DomainValidationIssue[] = []
   validateId(counter.weaponTypeId, 'weaponTypeId', issues)
-  if (!['rare6', 'rare7', 'rare8'].includes(counter.rarity)) {
-    addIssue(issues, 'rarity', 'invalid_literal', 'Normal Artian rarity is invalid.')
+  if (counter.rarity !== V1_NORMAL_ARTIAN_RARITY) {
+    addIssue(issues, 'rarity', 'invalid_literal', 'v1 supports only rarity 8 Normal Artian counters.')
   }
   const expectedId = `${counter.weaponTypeId}:${counter.rarity}`
   if (counter.id !== expectedId) {
@@ -290,8 +291,23 @@ export function validateOwnedWeapon(
     'restorationBonuses',
     validateRestorationBonusSet(weapon.restorationBonuses),
   )
-  if (!['material', 'practical', 'ideal'].includes(weapon.status)) {
-    addIssue(issues, 'status', 'invalid_literal', 'OwnedWeapon status is invalid.')
+  if (!['normal', 'gogma'].includes(weapon.kind)) {
+    addIssue(issues, 'kind', 'invalid_literal', 'OwnedWeapon kind is invalid.')
+  } else if (weapon.kind === 'normal') {
+    if (weapon.rarity !== V1_NORMAL_ARTIAN_RARITY) {
+      addIssue(issues, 'rarity', 'invalid_literal', 'v1 supports only rarity 8 owned Normal Artian weapons.')
+    }
+    if (weapon.seriesSkillId !== null) {
+      addIssue(issues, 'seriesSkillId', 'invalid_state', 'Normal Artian weapons cannot have a Series Skill.')
+    }
+    if (weapon.groupSkillId !== null) {
+      addIssue(issues, 'groupSkillId', 'invalid_state', 'Normal Artian weapons cannot have a Group Skill.')
+    }
+    if (weapon.status !== null) {
+      addIssue(issues, 'status', 'invalid_state', 'Normal Artian weapons cannot have an OwnedWeapon status.')
+    }
+  } else if (!['material', 'practical', 'ideal'].includes(weapon.status)) {
+    addIssue(issues, 'status', 'invalid_literal', 'Gogma Artian weapons require a valid status.')
   }
   weapon.relatedTargetWeaponIds.forEach((id, index) =>
     validateId(id, `relatedTargetWeaponIds[${index}]`, issues),
@@ -415,6 +431,9 @@ function validateRouteOperation(
   }
   if (operation.type === 'create_normal_artian') {
     validateId(operation.weaponTypeId, `${path}.weaponTypeId`, issues)
+    if (operation.rarity !== V1_NORMAL_ARTIAN_RARITY) {
+      addIssue(issues, `${path}.rarity`, 'invalid_literal', 'v1 can create only rarity 8 Normal Artian weapons.')
+    }
     validatePositiveInteger(operation.count, `${path}.count`, issues)
     validateNonNegativeInteger(operation.normalCounterBefore, `${path}.normalCounterBefore`, issues)
     validateNonNegativeInteger(operation.normalCounterAfter, `${path}.normalCounterAfter`, issues)
@@ -512,6 +531,7 @@ export function validateBuildRoute(
   if (
     ![
       'normal_artian_to_gogma',
+      'owned_normal_artian_to_gogma',
       'existing_gogma_reset_bonuses',
       'existing_gogma_keep_bonuses',
       'existing_gogma_reset_skills',
@@ -554,6 +574,52 @@ export function validateBuildRoute(
         )
       }
     })
+  } else if (route.kind === 'owned_normal_artian_to_gogma') {
+    if (route.sourceOwnedWeaponId === null) {
+      addIssue(
+        issues,
+        'sourceOwnedWeaponId',
+        'invalid_state',
+        'owned_normal_artian_to_gogma requires a source OwnedWeapon.',
+      )
+    }
+    let hasConversion = false
+    route.operations.forEach((operation, index) => {
+      if (!['convert_normal_to_gogma', 'reset_skills'].includes(operation.type)) {
+        addIssue(
+          issues,
+          `operations[${index}]`,
+          'invalid_route_operation',
+          `Operation '${operation.type}' is not allowed in owned_normal_artian_to_gogma.`,
+        )
+      }
+      if (operation.type === 'convert_normal_to_gogma') hasConversion = true
+      if (operation.type === 'reset_skills' && operation.sourceOwnedWeaponId !== null) {
+        addIssue(
+          issues,
+          `operations[${index}].sourceOwnedWeaponId`,
+          'invalid_state',
+          'A post-conversion Reset Skills operation must target the unregistered route output.',
+        )
+      }
+    })
+    if (!hasConversion) {
+      addIssue(
+        issues,
+        'operations',
+        'invalid_route_operation',
+        'owned_normal_artian_to_gogma requires a conversion operation.',
+      )
+    }
+    if (ownedWeapons && route.sourceOwnedWeaponId !== null) {
+      const source = ownedWeapons.find(({ id }) => id === route.sourceOwnedWeaponId)
+      if (source && source.kind !== 'normal') {
+        addIssue(issues, 'sourceOwnedWeaponId', 'invalid_reference', 'The conversion source must be a Normal Artian weapon.')
+      }
+      if (source?.isProtected) {
+        addIssue(issues, 'sourceOwnedWeaponId', 'protected_destructive_use', 'A protected Normal Artian weapon cannot be converted.')
+      }
+    }
   } else if (route.sourceOwnedWeaponId === null) {
     addIssue(
       issues,
@@ -661,6 +727,17 @@ export function validateBuildCandidate(
         'Reset-Skills-only candidates must preserve source restoration bonuses.',
       )
     }
+  }
+  if (
+    candidate.route.kind === 'owned_normal_artian_to_gogma' &&
+    candidate.referencedOwnedWeaponsHash === null
+  ) {
+    addIssue(
+      issues,
+      'referencedOwnedWeaponsHash',
+      'invalid_state',
+      'Owned-Normal conversion candidates must reference their source weapon.',
+    )
   }
   return result(issues)
 }

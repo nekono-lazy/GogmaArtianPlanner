@@ -4,6 +4,7 @@
     "displayNameJa": "無属性",
     "displayNameEn": "無属性",
     "sortOrder": 1,
+    "allowsElementBonus": false,
     "isEnabled": true
   },
   {
@@ -11,6 +12,7 @@
     "displayNameJa": "火",
     "displayNameEn": "火",
     "sortOrder": 2,
+    "allowsElementBonus": true,
     "isEnabled": true
   },
   {
@@ -18,6 +20,7 @@
     "displayNameJa": "水",
     "displayNameEn": "水",
     "sortOrder": 3,
+    "allowsElementBonus": true,
     "isEnabled": true
   },
   {
@@ -25,6 +28,7 @@
     "displayNameJa": "雷",
     "displayNameEn": "雷",
     "sortOrder": 4,
+    "allowsElementBonus": true,
     "isEnabled": true
   },
   {
@@ -32,6 +36,7 @@
     "displayNameJa": "氷",
     "displayNameEn": "氷",
     "sortOrder": 5,
+    "allowsElementBonus": true,
     "isEnabled": true
   },
   {
@@ -39,6 +44,7 @@
     "displayNameJa": "龍",
     "displayNameEn": "龍",
     "sortOrder": 6,
+    "allowsElementBonus": true,
     "isEnabled": true
   },
   {
@@ -46,6 +52,7 @@
     "displayNameJa": "毒",
     "displayNameEn": "毒",
     "sortOrder": 7,
+    "allowsElementBonus": true,
     "isEnabled": true
   },
   {
@@ -53,6 +60,7 @@
     "displayNameJa": "麻痺",
     "displayNameEn": "麻痺",
     "sortOrder": 8,
+    "allowsElementBonus": true,
     "isEnabled": true
   },
   {
@@ -60,6 +68,7 @@
     "displayNameJa": "睡眠",
     "displayNameEn": "睡眠",
     "sortOrder": 9,
+    "allowsElementBonus": true,
     "isEnabled": true
   },
   {
@@ -67,6 +76,7 @@
     "displayNameJa": "爆破",
     "displayNameEn": "爆破",
     "sortOrder": 10,
+    "allowsElementBonus": true,
     "isEnabled": true
   }
 ]

@@ -16,7 +16,7 @@ The initial-release application is intended to:
 - Search ideal and practical target weapon candidates
 - Compare normal Artian routes and existing Gogma Artian routes
 - Plan multiple target weapons together using shared RNG progression
-- Track owned Gogma Artian weapons individually
+- Track owned rarity-8 normal Artian and Gogma Artian weapons individually
 - Guide the user through a finalized production plan one operation at a time
 - Detect divergence from the expected plan state and support explicit recalculation
 - Persist user data locally in the browser and support JSON export/import
@@ -258,7 +258,7 @@ Observation validation is kind-specific.
 
 Current v1 rules include:
 
-- Normal Artian observations require rarity and restoration bonuses
+- v1 Normal Artian observations are fixed to rarity 8 and require restoration bonuses
 - Normal Artian `elementId` may be null only when the Engine does not require element
 - Gogma Bonus observations require element and restoration bonuses
 - Skill observations require element and at least one observed series/group skill
@@ -294,21 +294,41 @@ For `referencedOwnedWeaponsHash`, preserve the stored five-slot order because Ke
 
 ## Owned Weapon Rules
 
-All owned Gogma Artian weapons are tracked individually, including material weapons.
+`OwnedWeapon` tracks both normal Artian and Gogma Artian weapons as a discriminated union:
+
+```ts
+type ArtianWeaponKind = "normal" | "gogma";
+```
 
 Each `OwnedWeapon` retains:
 
 - ID
+- Kind
 - Name
 - Weapon type
 - Element
 - Five restoration bonuses
-- Series skill
-- Group skill
-- Status
 - Protection state
 - Related target references
 - Memo and timestamps as specified
+
+A normal Artian weapon:
+
+- Is always rarity 8 in v1
+- Uses five `normal_artian` scope restoration bonuses
+- Has no Series Skill
+- Has no Group Skill
+- Has no Material / Practical / Ideal status
+- Retains an independent protection state
+- Defaults to unprotected when newly registered
+- Must not be used by an automatic Gogma-conversion route while protected
+
+A Gogma Artian weapon:
+
+- Uses five `gogma_artian` scope restoration bonuses
+- Retains Series Skill and Group Skill
+- Retains Material / Practical / Ideal status
+- Retains protection independently from status
 
 Statuses are:
 
@@ -559,7 +579,7 @@ Route kind:
 normal_artian_to_gogma
 ```
 
-If the required weapon-type/rarity Normal Artian counter is unknown, skip only this route.
+v1 searches only rarity-8 normal Artian weapons. If the required weapon-type rarity-8 Normal Artian counter is unknown, skip only this route.
 
 v1 operation sequence may contain:
 
@@ -590,6 +610,30 @@ Do not invent an OwnedWeapon ID for the just-created route output.
 After the weapon is secured and registered as an OwnedWeapon, a later search may use it as an existing-Gogma Keep Bonuses source.
 
 Do not add a route-output weapon reference type in v1.
+
+### Owned Normal Artian Route
+
+Route kind:
+
+```text
+owned_normal_artian_to_gogma
+```
+
+The source must be an unprotected owned rarity-8 normal Artian weapon whose weapon type and element are compatible with the Target. Rarity 6 and 7 normal Artian weapons are out of scope and must not be registered or searched in v1.
+
+The operation sequence may contain only:
+
+- `convert_normal_to_gogma`
+- Optional `reset_skills`
+
+It must not contain:
+
+- `create_normal_artian`
+- `keep_bonuses`
+
+`BuildRoute.sourceOwnedWeaponId` is the source normal Artian weapon ID. A Reset Skills operation performed immediately after conversion uses `sourceOwnedWeaponId = null` because the converted route output is not yet registered as a separate OwnedWeapon.
+
+The conversion result must come from the RNG Engine. Bonus Type mapping must not be used to infer the resulting ranks or completed Gogma bonus set.
 
 ### Existing Gogma Reset Bonuses
 
@@ -687,8 +731,8 @@ The Planner accounts for:
 
 - Shared Gogma RNG progression
 - Shared Skill RNG progression
-- Weapon-type/rarity Normal Artian counters
-- Owned weapon inventory
+- One rarity-8 Normal Artian counter per weapon type
+- Owned normal Artian and owned Gogma Artian inventory as hard constraints
 - Protected/unprotected state
 - Target priority
 - Practical versus Ideal satisfaction
@@ -747,7 +791,9 @@ Respect search bounds and return the best state available within the limits.
 
 ## Planner Inventory Rules
 
-Planner inventory is strict for Gogma Artian weapon resources.
+Planner inventory is strict for both owned rarity-8 normal Artian and Gogma Artian weapon resources. Rarity 6 and 7 normal Artian weapons are not v1 inventory entities.
+
+When an owned normal Artian weapon is converted to Gogma, the source normal weapon is consumed from inventory and a Gogma weapon is generated. The same normal weapon must not be reused by multiple routes. Protected normal weapons are never automatic conversion sources.
 
 Material items are not a hard inventory constraint in v1; display required quantities instead.
 
@@ -967,6 +1013,32 @@ Expected master sets include:
 - RNG Lottery data
 - Materials
 - Material costs
+
+Restoration bonus availability is selected from Master Data using all of:
+
+- Weapon type
+- Element
+- `ArtianBonusScope`
+
+Do not infer availability from ID string patterns. Elementless weapons cannot use Element Bonus. Light Bowgun and Heavy Bowgun cannot use Element Bonus regardless of element.
+
+The verified normal-to-Gogma Bonus Type mapping is:
+
+```text
+通常 基礎攻撃力強化 -> 巨戟 基礎攻撃力強化
+通常 会心率強化 -> 巨戟 会心率強化
+通常 属性強化 -> 巨戟 属性強化
+通常 斬れ味強化 --+
+                   +-> 巨戟 斬れ味・装填強化
+通常 装填数強化 ---+
+```
+
+This mapping is many-to-one for Sharpness and Capacity. Normal-to-Gogma rank conversion is unverified. Search and RNG code must not infer ranks, Counter behavior, or completed results from this mapping.
+
+The enabled skill options are 21 Series Skills and 16 Group Skills. Keep the following IDs in Master Data with `isEnabled = false`:
+
+- Series: 花舞の祈り, 踊火の祈り, 夢灯の祈り, 祝謡の祈り
+- Group: 拳を極めし者
 
 Master data is versioned.
 

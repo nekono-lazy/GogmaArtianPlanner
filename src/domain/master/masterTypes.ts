@@ -34,6 +34,7 @@ export interface ElementMaster {
   displayNameJa: string
   displayNameEn: string
   sortOrder: number
+  allowsElementBonus: boolean
   isEnabled: boolean
 }
 

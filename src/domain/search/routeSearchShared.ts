@@ -35,6 +35,7 @@ export interface SkillVariantBase {
   bonuses: RestorationBonusSet
   operations: RouteOperation[]
   sourceOwnedWeaponId: OwnedWeaponId | null
+  resetSkillsSourceOwnedWeaponId?: OwnedWeaponId | null
   kind: BuildRoute['kind']
 }
 
@@ -51,6 +52,10 @@ export async function searchResetSkillVariants(
   }
 
   const candidates: BuildCandidate[] = []
+  const resetSkillsSourceOwnedWeaponId =
+    base.resetSkillsSourceOwnedWeaponId === undefined
+      ? base.sourceOwnedWeaponId
+      : base.resetSkillsSourceOwnedWeaponId
   let currentCounter = skillCounter
   const resetOperations: RouteOperation[] = []
   for (let index = 0; index < input.settings.maxSkillAdvance; index += 1) {
@@ -68,7 +73,7 @@ export async function searchResetSkillVariants(
     })
     resetOperations.push({
       type: 'reset_skills',
-      sourceOwnedWeaponId: base.sourceOwnedWeaponId,
+      sourceOwnedWeaponId: resetSkillsSourceOwnedWeaponId,
       skillCounterBefore: currentCounter,
       skillCounterAfter: nextCounter,
     })

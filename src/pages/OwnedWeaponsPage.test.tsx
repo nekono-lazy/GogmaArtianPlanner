@@ -12,7 +12,7 @@ function dependencies() {
 
 function existingWeapon(): OwnedWeapon {
   return {
-    id: 'owned-ui' as OwnedWeapon['id'], name: '既存武器', weaponTypeId: 'weapon.dual_blades', elementId: 'element.thunder',
+    id: 'owned-ui' as OwnedWeapon['id'], kind: 'gogma', name: '既存武器', weaponTypeId: 'weapon.dual_blades', elementId: 'element.thunder',
     restorationBonuses: Array.from({ length: 5 }, () => ({ bonusTypeId: 'bonus_type.attack', bonusRankId: 'bonus_rank.ex' })) as OwnedWeapon['restorationBonuses'],
     seriesSkillId: null, groupSkillId: null, status: 'practical', isProtected: true, relatedTargetWeaponIds: [], memo: null, createdAt: 'created', updatedAt: 'updated',
   }
@@ -60,11 +60,60 @@ describe('OwnedWeaponsPage', () => {
     expect(screen.getAllByRole('combobox', { name: /ランク/ })[0]).toHaveTextContent('I')
     await user.click(screen.getByLabelText('シリーズスキル'))
     expect(await screen.findByRole('option', { name: '闢獣の力' })).toBeInTheDocument()
-    expect(screen.getAllByRole('option')).toHaveLength(26)
+    expect(screen.getAllByRole('option')).toHaveLength(22)
+    expect(screen.queryByRole('option', { name: '花舞の祈り' })).not.toBeInTheDocument()
     await user.keyboard('{Escape}')
     await user.click(screen.getByLabelText('グループスキル'))
     expect(await screen.findByRole('option', { name: '鱗張りの技法' })).toBeInTheDocument()
-    expect(screen.getAllByRole('option')).toHaveLength(18)
+    expect(screen.getAllByRole('option')).toHaveLength(17)
+    expect(screen.queryByRole('option', { name: '拳を極めし者' })).not.toBeInTheDocument()
+  })
+
+  it('defaults to Gogma and switches new input to Normal-only fields and bonuses', async () => {
+    const user = userEvent.setup()
+    const deps = dependencies()
+    render(<OwnedWeaponsPage dependencies={deps} />)
+    await user.click(
+      await screen.findByRole('button', { name: '所持武器を追加' }),
+    )
+    const normalToggle = screen.getByRole('checkbox', {
+      name: '通常アーティアとして登録',
+    })
+    expect(normalToggle).not.toBeChecked()
+    expect(screen.getByLabelText('シリーズスキル')).toBeInTheDocument()
+    expect(screen.getByLabelText('状態')).toBeInTheDocument()
+    await user.click(normalToggle)
+    expect(screen.queryByLabelText('シリーズスキル')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('グループスキル')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('状態')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('レア度')).not.toBeInTheDocument()
+    await user.click(
+      screen.getAllByRole('combobox', { name: /ボーナス種別/ })[0],
+    )
+    expect(
+      screen.getByRole('option', { name: '斬れ味強化' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('option', { name: '斬れ味・装填強化' }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('option', { name: '属性強化' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('registers owned Normal Artian as rarity 8 without a rarity selector', async () => {
+    const user = userEvent.setup()
+    const deps = dependencies()
+    render(<OwnedWeaponsPage dependencies={deps} />)
+    await user.click(await screen.findByRole('button', { name: '所持武器を追加' }))
+    await user.click(screen.getByRole('checkbox', { name: '通常アーティアとして登録' }))
+    await user.type(screen.getByRole('textbox', { name: /名前/ }), 'レア8通常')
+    expect(screen.queryByLabelText('レア度')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '保存' }))
+    expect(deps.save).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'normal', rarity: 8 }),
+      null,
+    )
   })
 
   it('deletes an unreferenced weapon after confirmation', async () => {

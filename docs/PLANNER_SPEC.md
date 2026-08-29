@@ -250,7 +250,7 @@ conflictPenalty = conflictCount * 5000
 
 ## 8. 在庫シミュレーション
 
-PlannerはOwnedWeaponを資源として扱う。
+Plannerは所持レア8通常アーティアと所持巨戟アーティアの両方を有限のOwnedWeapon資源として扱う。レア6・7通常アーティアはv1 Inventoryへ含めない。
 
 ```ts
 export interface SimulatedInventory {
@@ -263,10 +263,14 @@ export interface SimulatedInventory {
 
 武器状態の扱い。
 
-- Materialかつ保護OFF: 消費可能
+- レア8通常アーティアかつ保護OFF: `owned_normal_artian_to_gogma` の変換元として使用可能
+- 通常アーティアかつ保護ON: 変換元として使用しない
+- 巨戟アーティアのMaterialかつ保護OFF: 素材消費可能
 - Practical: 消費しない
 - Ideal: 消費しない
 - `isProtected = true`: 素材消費・Reset Bonuses・Keep Bonusesへ使用しない
+- 所持レア8通常アーティアを巨戟化したStateでは元通常アーティアをInventoryから除き、生成した巨戟アーティアを追加する。同じ通常アーティアを二重使用しない
+- 通常アーティアはstatusを持たず、旧PracticalのMaterial化規則を適用しない
 
 素材用巨戟が不足する場合。
 
@@ -395,7 +399,17 @@ Route別の典型例。
 
 UI実行は1操作ずつ。
 
-## 11.2 既存巨戟 Reset Bonuses
+## 11.2 所持通常アーティア経由
+
+```text
+1. convert_normal_to_gogma
+2. 必要なら reset_skills
+3. reserve_weapon
+```
+
+変換元の所持通常アーティアはレア8かつ非保護であることを要求する。変換時に元通常アーティアをInventoryから除き、同じIDを別Routeで再利用しない。変換直後のreset_skillsは `sourceOwnedWeaponId = null` とする。完成ボーナスとCounter進行はRNG Engine結果に従い、Bonus Type MappingからRank変換を推測しない。
+
+## 11.3 既存巨戟 Reset Bonuses
 
 ```text
 1. reset_bonuses
@@ -403,7 +417,7 @@ UI実行は1操作ずつ。
 3. reserve_weapon
 ```
 
-## 11.3 既存巨戟 Reset Skills
+## 11.4 既存巨戟 Reset Skills
 
 ```text
 1. reset_skills
@@ -412,7 +426,7 @@ UI実行は1操作ずつ。
 
 起点OwnedWeaponの復元ボーナス5枠を変更せず、Skill CounterとSkill Prediction結果だけを反映する。Reset Skillsは非破壊操作として扱うため、protectedなPractical / Ideal武器も起点にできる。
 
-## 11.4 既存巨戟 Keep Bonuses
+## 11.5 既存巨戟 Keep Bonuses
 
 ```text
 1. keep_bonuses

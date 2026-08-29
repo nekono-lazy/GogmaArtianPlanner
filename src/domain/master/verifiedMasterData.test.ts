@@ -19,11 +19,12 @@ function loadVerifiedMaster(): MasterDataRoot {
 function bonusTypeIds(
   master: MasterDataRoot,
   weaponTypeId: string,
+  elementId: string,
   scope: ArtianBonusScope,
 ) {
   return [
     ...new Set(
-      getBonusDefinitionsForWeapon(master, weaponTypeId, scope).map(
+      getBonusDefinitionsForWeapon(master, weaponTypeId, elementId, scope).map(
         ({ bonusTypeId }) => bonusTypeId,
       ),
     ),
@@ -51,7 +52,7 @@ describe('project-owner verified Master Data', () => {
     ['weapon.light_bowgun', ['bonus_type.attack', 'bonus_type.affinity', 'bonus_type.normal_capacity']],
     ['weapon.heavy_bowgun', ['bonus_type.attack', 'bonus_type.affinity', 'bonus_type.normal_capacity']],
   ])('filters normal Artian bonus types for %s', (weaponTypeId, expected) => {
-    expect(bonusTypeIds(loadVerifiedMaster(), weaponTypeId, 'normal_artian')).toEqual(expected)
+    expect(bonusTypeIds(loadVerifiedMaster(), weaponTypeId, 'element.thunder', 'normal_artian')).toEqual(expected)
   })
 
   it.each([
@@ -60,8 +61,50 @@ describe('project-owner verified Master Data', () => {
     ['weapon.light_bowgun', ['bonus_type.attack', 'bonus_type.affinity', 'bonus_type.gogma_sharpness_capacity']],
     ['weapon.heavy_bowgun', ['bonus_type.attack', 'bonus_type.affinity', 'bonus_type.gogma_sharpness_capacity']],
   ])('filters Gogma Artian bonus types for %s', (weaponTypeId, expected) => {
-    expect(bonusTypeIds(loadVerifiedMaster(), weaponTypeId, 'gogma_artian')).toEqual(expected)
+    expect(bonusTypeIds(loadVerifiedMaster(), weaponTypeId, 'element.thunder', 'gogma_artian')).toEqual(expected)
   })
+
+  it('excludes Element bonuses for none while retaining them for elemental weapons', () => {
+    const master = loadVerifiedMaster()
+    expect(
+      bonusTypeIds(
+        master,
+        'weapon.great_sword',
+        'element.none',
+        'gogma_artian',
+      ),
+    ).not.toContain('bonus_type.element')
+    expect(
+      bonusTypeIds(
+        master,
+        'weapon.great_sword',
+        'element.thunder',
+        'gogma_artian',
+      ),
+    ).toContain('bonus_type.element')
+    expect(
+      bonusTypeIds(
+        master,
+        'weapon.great_sword',
+        'element.none',
+        'normal_artian',
+      ),
+    ).not.toContain('bonus_type.element')
+  })
+
+  it.each(['weapon.light_bowgun', 'weapon.heavy_bowgun'])(
+    'never exposes Element bonuses for %s',
+    (weaponTypeId) => {
+      expect(
+        bonusTypeIds(
+          loadVerifiedMaster(),
+          weaponTypeId,
+          'element.thunder',
+          'gogma_artian',
+        ),
+      ).not.toContain('bonus_type.element')
+    },
+  )
 
   it.each([
     ['bonus_type.attack', ['I', 'II', 'III', 'EX']],
@@ -72,6 +115,7 @@ describe('project-owner verified Master Data', () => {
     const ranks = getRanksForBonusType(
       loadVerifiedMaster(),
       'weapon.great_sword',
+      'element.thunder',
       bonusTypeId,
       'gogma_artian',
     )
@@ -91,12 +135,14 @@ describe('project-owner verified Master Data', () => {
     ])
   })
 
-  it('loads 25 Series Skills and 17 Group Skills for UI selection', () => {
+  it('keeps all skill IDs while exposing only verified Gogma skill options', () => {
     const master = loadVerifiedMaster()
-    expect(getSeriesSkillOptions(master)).toHaveLength(25)
-    expect(getGroupSkillOptions(master)).toHaveLength(17)
+    expect(master.seriesSkills).toHaveLength(25)
+    expect(master.groupSkills).toHaveLength(17)
+    expect(getSeriesSkillOptions(master)).toHaveLength(21)
+    expect(getGroupSkillOptions(master)).toHaveLength(16)
     expect(getSeriesSkillOptions(master).map(({ displayNameJa }) => displayNameJa)).toContain('巨戟龍の黙示録')
-    expect(getGroupSkillOptions(master).map(({ displayNameJa }) => displayNameJa)).toContain('拳を極めし者')
+    expect(getGroupSkillOptions(master).map(({ displayNameJa }) => displayNameJa)).not.toContain('拳を極めし者')
   })
 
   it('keeps Lottery and material cost placeholders disabled', () => {

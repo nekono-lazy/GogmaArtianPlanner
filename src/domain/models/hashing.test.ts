@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { BuildRoute } from './publicTypes'
+import type { BuildRoute, NormalArtianCounter } from './publicTypes'
 import {
   createExpectedPlanState,
   createReferencedOwnedWeaponsHash,
@@ -67,6 +67,25 @@ describe('searchStateHash', () => {
     const before = createSearchStateHash(route, state, [counter])
     counter.counter = 5
     expect(createSearchStateHash(route, state, [counter])).not.toBe(before)
+  })
+
+  it('hashes only the target weapon type rarity 8 Counter', () => {
+    const route = createValidBuildCandidate().route
+    const state = createValidRngState()
+    const rarity8 = createValidNormalArtianCounter()
+    const before = createSearchStateHash(route, state, [rarity8])
+    const outOfScopeCounters = [6, 7].map((rarity) => ({
+      ...rarity8,
+      id: `${rarity8.weaponTypeId}:${rarity}`,
+      rarity,
+      counter: 999,
+    }))
+    expect(
+      createSearchStateHash(route, state, [
+        rarity8,
+        ...(outOfScopeCounters as unknown as NormalArtianCounter[]),
+      ]),
+    ).toBe(before)
   })
 })
 
@@ -137,6 +156,53 @@ describe('referencedOwnedWeaponsHash', () => {
       source.restorationBonuses[0],
     ]
     expect(createReferencedOwnedWeaponsHash(route, [source])).not.toBe(before)
+  })
+
+  it('hashes Normal bonus and protection but ignores its name', () => {
+    const source = {
+      ...createValidOwnedWeapon(),
+      kind: 'normal' as const,
+      rarity: 8 as const,
+      seriesSkillId: null,
+      groupSkillId: null,
+      status: null,
+      isProtected: false,
+    }
+    const route: BuildRoute = {
+      kind: 'owned_normal_artian_to_gogma',
+      sourceOwnedWeaponId: source.id,
+      operations: [
+        {
+          type: 'convert_normal_to_gogma',
+          weaponTypeId: source.weaponTypeId,
+          gogmaCounterBefore: 1,
+          gogmaCounterAfter: 2,
+        },
+      ],
+    }
+    const before = createReferencedOwnedWeaponsHash(route, [source])
+    source.name = '表示名だけ変更'
+    expect(createReferencedOwnedWeaponsHash(route, [source])).toBe(before)
+    source.isProtected = true
+    expect(createReferencedOwnedWeaponsHash(route, [source])).not.toBe(before)
+    source.isProtected = false
+    source.restorationBonuses[0].bonusRankId = 'bonus_rank.fixture.changed'
+    expect(createReferencedOwnedWeaponsHash(route, [source])).not.toBe(before)
+  })
+
+  it('changes when the referenced weapon kind changes', () => {
+    const gogma = createValidOwnedWeapon()
+    const route = referencedRoute()
+    const before = createReferencedOwnedWeaponsHash(route, [gogma])
+    const normal = {
+      ...gogma,
+      kind: 'normal' as const,
+      rarity: 8 as const,
+      seriesSkillId: null,
+      groupSkillId: null,
+      status: null,
+    }
+    expect(createReferencedOwnedWeaponsHash(route, [normal])).not.toBe(before)
   })
 })
 

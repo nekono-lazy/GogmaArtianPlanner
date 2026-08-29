@@ -35,6 +35,7 @@ describe('Master Data selectors', () => {
     const result = getBonusDefinitionsForWeapon(
       createValidMasterDataFixture(),
       'weapon.fixture.a',
+      'element.fixture.a',
       'gogma_artian',
     )
     expect(result.map(({ id }) => id)).toEqual([
@@ -47,6 +48,7 @@ describe('Master Data selectors', () => {
     const result = getRanksForBonusType(
       createValidMasterDataFixture(),
       'weapon.fixture.a',
+      'element.fixture.a',
       'bonus_type.fixture.attack',
       'gogma_artian',
     )
@@ -103,7 +105,7 @@ describe('Master Data selectors', () => {
       createValidMasterDataFixture(),
       'gogma_bonus',
       'weapon.fixture.a',
-      'rare7',
+      8,
     )
     expect(result.map(({ id }) => id)).toEqual(['lottery.fixture.a.bonus'])
   })
@@ -113,6 +115,7 @@ describe('Master Data selectors', () => {
       getBonusDefinitionsForWeapon(
         createValidMasterDataFixture(),
         'weapon.fixture.missing',
+        'element.fixture.a',
         'gogma_artian',
       ),
     ).toThrow(MasterDataDomainError)

@@ -44,6 +44,20 @@ describe('TargetWeaponsPage', () => {
     expect(screen.queryByText('Alternative Bonus Groups')).not.toBeInTheDocument()
   })
 
+  it('does not offer Element bonuses for an element.none Target', async () => {
+    const user = userEvent.setup()
+    render(<TargetWeaponsPage dependencies={dependencies()} />)
+    await user.click(
+      await screen.findByRole('button', { name: '目標武器を追加' }),
+    )
+    await user.click(
+      screen.getAllByRole('combobox', { name: /ボーナス種別/ })[0],
+    )
+    expect(
+      screen.queryByRole('option', { name: '属性強化' }),
+    ).not.toBeInTheDocument()
+  })
+
   it('edits enabled state while preserving the existing Entity identity boundary', async () => {
     const user = userEvent.setup(); const target = existingTarget(); const deps = dependencies(); deps.getAll = vi.fn(async () => [target])
     render(<TargetWeaponsPage dependencies={deps} />)

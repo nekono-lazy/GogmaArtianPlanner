@@ -16,7 +16,7 @@
 - 初期版では実用ラインを満たさない候補を原則表示しない
 - 候補カテゴリは理想 / 実用とし、理想への近さは別属性で表す
 - 通常アーティア経由と既存巨戟アーティア経由を比較する
-- 通常アーティアCounterが未確定の武器種・レア度では通常アーティア経由を検索しない
+- 対象武器種のレア8通常アーティアCounterが未確定なら新規通常アーティア経由を検索しない
 - 条件は自動変更せず、緩和案だけを提示する
 - 重い検索はWeb Workerで行う
 
@@ -136,7 +136,7 @@ export interface CandidateSearchWarning {
 }
 ```
 
-`master_data_unavailable` は、Route実行に必要なMaster Dataが存在しない、無効、または利用不能な場合に使用する。対象武器種・レア度の通常アーティアLotteryを利用できない場合、通常アーティアRouteをこの理由でskipする。
+`master_data_unavailable` は、Route実行に必要なMaster Dataが存在しない、無効、または利用不能な場合に使用する。対象武器種のレア8通常アーティアLotteryを利用できない場合、通常アーティアRouteをこの理由でskipする。
 
 すべてのBuildCandidateとCandidateSearchResultに、入力の `calculationContext` をそのまま保存する。各BuildCandidateには検索開始時のRoute依存RNG状態から生成した `searchStateHash` と、Routeが参照するOwnedWeaponだけから生成した `referencedOwnedWeaponsHash` を保存する。参照武器がないRouteでは後者を `null` とする。Worker実行中に現在環境のCalculationContext、検索開始状態、またはCandidateが参照するOwnedWeapon状態が変わった場合、そのrequestIdの結果を現行候補として保存しない。
 
@@ -211,6 +211,7 @@ isSimilarToIdeal =
 - UIの「近似」は `category = "practical" AND isSimilarToIdeal = true` を抽出する
 - 実用ラインを満たさない「惜しい候補」は初期版では原則表示しない
 - 将来版で「惜しいが未実用」のカテゴリを追加する場合は別仕様とする
+- `normal_artian` Filterは新規通常アーティア作成経由と所持通常アーティア経由の両方を対象とする
 
 ---
 
@@ -230,7 +231,8 @@ RouteKind。
 - 巨戟化を予測する場合は `canPredictGogma = true`
 - Skill操作を含む場合は `canPredictSkills = true`
 - 対象武器種・対象レア度のNormalArtianCounterが確定している
-- Master Dataに対象武器種の通常アーティアLotteryが存在する
+- 対象レア度はv1固定の8
+- Master Dataに対象武器種・レア8の通常アーティアLotteryが存在する
 
 検索手順。
 
@@ -244,6 +246,7 @@ RouteKind。
 制約。
 
 - 通常Counter未確定ならこのRouteはskipする
+- レア6・7のCounterまたはLotteryを探索しない
 - すべての武器種Counter確定を要求しない
 - 検索対象はTargetWeaponの武器種だけでよい
 - v1の操作列はCreateNormalArtianOperation、ConvertToGogmaOperation、必要なResetSkillsOperationまでとし、KeepBonusesOperationを含めない
@@ -251,7 +254,32 @@ RouteKind。
 - 巨戟化直後にスキルを再付与するResetSkillsOperationは `sourceOwnedWeaponId = null` とし、未登録武器用のOwnedWeaponIdを生成しない
 - 巨戟化した武器を完成・確保してOwnedWeaponとして登録した後は、後続の別検索で `existing_gogma_keep_bonuses` の起点にできる
 
-## 6.2 既存巨戟 Reset Bonuses経由
+## 6.2 所持通常アーティア経由
+
+RouteKind。
+
+```ts
+"owned_normal_artian_to_gogma"
+```
+
+必要条件。
+
+- `kind = "normal"`、`rarity = 8`、かつ非保護のOwnedWeaponが存在する
+- 変換元の `weaponTypeId` と `elementId` がTargetと一致する
+- `canPredictGogma = true`
+- Reset Skillsを含める場合は `canPredictSkills = true`
+
+制約。
+
+- `BuildRoute.sourceOwnedWeaponId` は変換元の所持通常アーティアIDとする
+- 操作列はConvertToGogmaOperationと必要なResetSkillsOperationだけとし、CreateNormalArtianOperationとKeepBonusesOperationを含めない
+- 変換直後のResetSkillsOperationはRoute出力を対象とするため `sourceOwnedWeaponId = null` とする
+- `sourceNormalBonuses` として変換元の `normal_artian` scopeの5枠をRNG Engineへ渡す
+- 最終 `finalBonuses` はRNG Engine Predictionが返す `gogma_artian` scopeの5枠だけを使い、Mappingや未確認のRank変換から生成しない
+- 変換元を `referencedOwnedWeaponsHash` へ含め、保護・bonus・kindの変更または削除を `owned_weapon_changed` として検出できるようにする
+- 同じ所持通常アーティアを1回の変換資源として扱い、Searchまたは将来Plannerで二重利用しない
+
+## 6.3 既存巨戟 Reset Bonuses経由
 
 RouteKind。
 
@@ -280,7 +308,7 @@ RouteKind。
 
 利用可能な起点がprotected武器だけの場合は `no_unprotected_source_weapon` としてRouteをskipする。
 
-## 6.3 既存巨戟 Keep Bonuses経由
+## 6.4 既存巨戟 Keep Bonuses経由
 
 RouteKind。
 
@@ -314,7 +342,7 @@ RouteKind。
 - `isProtected = true` のOwnedWeaponを素材消費するRouteも生成しない
 - Keepの起点候補がprotected武器だけの場合も `no_unprotected_source_weapon` としてskipする
 
-## 6.4 既存巨戟 Reset Skills経由
+## 6.5 既存巨戟 Reset Skills経由
 
 RouteKind。
 
@@ -370,7 +398,7 @@ BuildRoute例。
 - `canPredictGogma` とKeep Prediction Capabilityは要求しない
 - Skill Capability不足時は `skill_capability_missing` としてこのRouteをskipする
 
-## 6.5 既存巨戟 Mixed経由
+## 6.6 既存巨戟 Mixed経由
 
 RouteKind。
 
@@ -588,7 +616,7 @@ export type SearchWorkerResponse =
 ## 13.2 Route Test
 
 - 通常Counter未確定なら通常アーティア経由をskipする
-- 対象武器種・レア度の通常アーティアLotteryが利用不能なら `master_data_unavailable` で通常アーティア経由をskipする
+- 対象武器種・レア8の通常アーティアLotteryが利用不能なら `master_data_unavailable` で通常アーティア経由をskipする
 - 既存巨戟がない場合、既存巨戟Routeをskipする
 - Keep選択をRNG Engineから取得し、Search側でsubsetを推測しない
 - Keep後の完成5枠がRNG Engine Predictionだけから生成される
@@ -605,6 +633,9 @@ export type SearchWorkerResponse =
 - Skill Capability不足時はReset Skills Routeを `skill_capability_missing` でskipする
 - `normal_artian_to_gogma` RouteにKeepBonusesOperationを含めない
 - 巨戟化直後の未登録武器へOwnedWeaponIdを生成せず、確保後の別検索でKeep Bonuses起点にできる
+- 所持通常アーティア経由は保護中または武器種・属性非互換の通常アーティアを使用しない
+- 所持通常アーティア経由はcreate_normal_artianを含めず、sourceOwnedWeaponIdとreferencedOwnedWeaponsHashへ元通常アーティアを設定する
+- 所持通常アーティア経由のResetSkillsOperationは `sourceOwnedWeaponId = null` とする
 
 ## 13.3 Candidate Test
 

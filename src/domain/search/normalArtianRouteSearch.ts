@@ -2,6 +2,7 @@ import type {
   CreateNormalArtianOperation,
   RouteOperation,
 } from '../models/publicTypes'
+import { V1_NORMAL_ARTIAN_RARITY } from '../models/publicTypes'
 import { deriveRngCapabilities } from '../rng/capabilities'
 import type { RouteSearchContext, RouteSearchResult } from './routeSearchShared'
 import { searchResetSkillVariants } from './routeSearchShared'
@@ -33,6 +34,7 @@ export async function searchNormalArtianRoutes(
     .filter(
       (counter) =>
         counter.weaponTypeId === target.weaponTypeId &&
+        counter.rarity === V1_NORMAL_ARTIAN_RARITY &&
         counter.isConfirmed &&
         counter.counter !== null,
     )
@@ -124,7 +126,7 @@ export async function searchNormalArtianRoutes(
 
     for (let index = 0; index < maximumPairedAdvance; index += 1) {
       await execution.checkpoint()
-      engine.predictNormalArtian({
+      const sourceNormalBonuses = engine.predictNormalArtian({
         baseSeed,
         weaponTypeId: target.weaponTypeId,
         rarity: normalCounter.rarity,
@@ -141,7 +143,7 @@ export async function searchNormalArtianRoutes(
         counterGate,
         weaponTypeId: target.weaponTypeId,
         elementId: target.elementId,
-        operation: { type: 'new_gogma' },
+        operation: { type: 'new_gogma', sourceNormalBonuses },
         master: input.master,
       })
       const nextGogmaCounter = engine.advanceGogmaCounter(

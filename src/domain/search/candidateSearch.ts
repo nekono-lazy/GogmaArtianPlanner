@@ -7,6 +7,7 @@ import {
 } from './candidateProcessing'
 import { searchExistingGogmaRoutes } from './existingGogmaRouteSearch'
 import { searchNormalArtianRoutes } from './normalArtianRouteSearch'
+import { searchOwnedNormalArtianRoutes } from './ownedNormalArtianRouteSearch'
 import {
   createSearchExecutionContext,
   type CandidateSearchExecutionOptions,
@@ -22,6 +23,7 @@ import { assertCandidateSearchInput } from './searchValidation'
 
 const routeOrder: RouteKind[] = [
   'normal_artian_to_gogma',
+  'owned_normal_artian_to_gogma',
   'existing_gogma_reset_bonuses',
   'existing_gogma_keep_bonuses',
   'existing_gogma_reset_skills',
@@ -148,6 +150,16 @@ async function searchTarget(
     searchedRoutes.push(...normalResult.searchedRoutes)
     skippedRoutes.push(...normalResult.skippedRoutes)
     warnings.push(...normalResult.warnings)
+    const ownedNormalResult = await searchOwnedNormalArtianRoutes({
+      target,
+      input,
+      engine,
+      execution,
+    })
+    candidates.push(...ownedNormalResult.candidates)
+    searchedRoutes.push(...ownedNormalResult.searchedRoutes)
+    skippedRoutes.push(...ownedNormalResult.skippedRoutes)
+    warnings.push(...ownedNormalResult.warnings)
   }
 
   if (input.routeFilter === 'normal_artian') {

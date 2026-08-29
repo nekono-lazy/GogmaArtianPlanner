@@ -1,20 +1,36 @@
 import type { MasterDataRoot } from './masterTypes'
 import type { OwnedWeapon, RestorationBonus, TargetWeapon } from '../models/publicTypes'
+import { getBonusDefinitionsForWeapon } from './masterSelectors'
 
 function validateBonus(
   master: MasterDataRoot,
   weaponTypeId: string,
+  elementId: string,
+  scope: 'normal_artian' | 'gogma_artian',
   bonus: RestorationBonus,
   path: string,
   issues: string[],
 ) {
-  const available = master.weaponBonusDefinitions.some(
+  if (
+    !master.weaponTypes.some(
+      ({ id, isEnabled }) => id === weaponTypeId && isEnabled,
+    ) ||
+    !master.elements.some(
+      ({ id, isEnabled }) => id === elementId && isEnabled,
+    )
+  ) {
+    issues.push(`${path}: 武器種または属性のマスターデータが利用できません。`)
+    return
+  }
+  const available = getBonusDefinitionsForWeapon(
+    master,
+    weaponTypeId,
+    elementId,
+    scope,
+  ).some(
     (definition) =>
-      definition.isEnabled &&
-      definition.weaponTypeId === weaponTypeId &&
       definition.bonusTypeId === bonus.bonusTypeId &&
-      definition.bonusRankId === bonus.bonusRankId &&
-      definition.scope === 'gogma_artian',
+      definition.bonusRankId === bonus.bonusRankId,
   )
   if (!available) issues.push(`${path}: 選択した武器種では利用できないボーナス／Rankです。`)
 }
@@ -44,8 +60,10 @@ export function validateOwnedWeaponMasterReferences(
 ): string[] {
   const issues: string[] = []
   validateCommon(weapon, master, issues)
+  const scope =
+    weapon.kind === 'normal' ? 'normal_artian' : 'gogma_artian'
   weapon.restorationBonuses.forEach((bonus, index) =>
-    validateBonus(master, weapon.weaponTypeId, bonus, `restorationBonuses[${index}]`, issues),
+    validateBonus(master, weapon.weaponTypeId, weapon.elementId, scope, bonus, `restorationBonuses[${index}]`, issues),
   )
   return issues
 }
@@ -67,8 +85,8 @@ export function validateTargetWeaponMasterReferences(
   )
   if (target.practicalSkillCondition.seriesSkillId !== null && !master.seriesSkills.some(({ id, isEnabled }) => id === target.practicalSkillCondition.seriesSkillId && isEnabled)) issues.push('practicalSkillCondition.seriesSkillId: 利用できません。')
   if (target.practicalSkillCondition.groupSkillId !== null && !master.groupSkills.some(({ id, isEnabled }) => id === target.practicalSkillCondition.groupSkillId && isEnabled)) issues.push('practicalSkillCondition.groupSkillId: 利用できません。')
-  target.idealBonuses.forEach((bonus, index) => validateBonus(master, target.weaponTypeId, bonus, `idealBonuses[${index}]`, issues))
-  target.practicalBonusConditions.forEach((condition, index) => validateBonus(master, target.weaponTypeId, { bonusTypeId: condition.bonusTypeId, bonusRankId: condition.minimumRankId }, `practicalBonusConditions[${index}]`, issues))
-  target.practicalAlternativeGroups.forEach((group, groupIndex) => group.options.forEach((option, optionIndex) => validateBonus(master, target.weaponTypeId, { bonusTypeId: option.bonusTypeId, bonusRankId: option.minimumRankId }, `practicalAlternativeGroups[${groupIndex}].options[${optionIndex}]`, issues)))
+  target.idealBonuses.forEach((bonus, index) => validateBonus(master, target.weaponTypeId, target.elementId, 'gogma_artian', bonus, `idealBonuses[${index}]`, issues))
+  target.practicalBonusConditions.forEach((condition, index) => validateBonus(master, target.weaponTypeId, target.elementId, 'gogma_artian', { bonusTypeId: condition.bonusTypeId, bonusRankId: condition.minimumRankId }, `practicalBonusConditions[${index}]`, issues))
+  target.practicalAlternativeGroups.forEach((group, groupIndex) => group.options.forEach((option, optionIndex) => validateBonus(master, target.weaponTypeId, target.elementId, 'gogma_artian', { bonusTypeId: option.bonusTypeId, bonusRankId: option.minimumRankId }, `practicalAlternativeGroups[${groupIndex}].options[${optionIndex}]`, issues)))
   return issues
 }

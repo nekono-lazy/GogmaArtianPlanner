@@ -5,14 +5,21 @@ import type {
   RngState,
   TargetWeaponId,
 } from './common'
-import type { OwnedWeapon, TargetWeapon } from './entities'
-
-export type CreateOwnedWeaponInput = Omit<
+import type {
+  OwnedGogmaArtianWeapon,
+  OwnedNormalArtianWeapon,
   OwnedWeapon,
+  TargetWeapon,
+} from './entities'
+
+type CreateOwnedWeaponInputFor<T extends OwnedWeapon> = Omit<
+  T,
   'isProtected' | 'createdAt' | 'updatedAt'
-> & {
-  isProtected?: boolean
-}
+> & { isProtected?: boolean }
+
+export type CreateOwnedWeaponInput =
+  | CreateOwnedWeaponInputFor<OwnedNormalArtianWeapon>
+  | CreateOwnedWeaponInputFor<OwnedGogmaArtianWeapon>
 
 export type CreateTargetWeaponInput = Omit<
   TargetWeapon,
@@ -57,6 +64,14 @@ export function createOwnedWeapon(
   input: CreateOwnedWeaponInput,
   now: ISODateTimeString = currentIsoTime(),
 ): OwnedWeapon {
+  if (input.kind === 'normal') {
+    return {
+      ...input,
+      isProtected: input.isProtected ?? false,
+      createdAt: now,
+      updatedAt: now,
+    }
+  }
   return {
     ...input,
     isProtected: input.isProtected ?? input.status !== 'material',

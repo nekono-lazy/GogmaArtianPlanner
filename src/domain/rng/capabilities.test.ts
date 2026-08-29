@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type {
+  NormalArtianCounter,
   RngState,
   RouteOperation,
 } from '../models/publicTypes'
@@ -48,7 +49,7 @@ function createNormalOperation(): RouteOperation {
   return {
     type: 'create_normal_artian',
     weaponTypeId: 'weapon.fixture.a',
-    rarity: 'rare7',
+    rarity: 8,
     count: 1,
     normalCounterBefore: 4,
     normalCounterAfter: 5,
@@ -104,28 +105,31 @@ describe('deriveRngCapabilities', () => {
 
   it('returns only confirmed Normal Counter IDs in deterministic order', () => {
     const confirmed = createValidNormalArtianCounter()
-    const otherConfirmed = {
+    const rarity6 = {
       ...confirmed,
-      id: 'weapon.fixture.a:rare6',
-      rarity: 'rare6' as const,
-    }
+      id: 'weapon.fixture.a:6',
+      rarity: 6,
+    } as unknown as NormalArtianCounter
+    const rarity7 = {
+      ...confirmed,
+      id: 'weapon.fixture.a:7',
+      rarity: 7,
+    } as unknown as NormalArtianCounter
     const unconfirmed = {
       ...confirmed,
-      id: 'weapon.fixture.b:rare8',
+      id: 'weapon.fixture.b:8',
       weaponTypeId: 'weapon.fixture.b',
-      rarity: 'rare8' as const,
       counter: null,
       isConfirmed: false,
     }
     const result = deriveRngCapabilities(
       confirmedRngState(),
-      [confirmed, unconfirmed, otherConfirmed],
+      [rarity6, confirmed, unconfirmed, rarity7],
       [],
       supportedEngine,
     )
     expect(result.normalArtianSearchableCounterIds).toEqual([
-      'weapon.fixture.a:rare6',
-      'weapon.fixture.a:rare7',
+      'weapon.fixture.a:8',
     ])
     expect(result.canSearchNormalArtian).toBe(true)
   })
@@ -136,7 +140,7 @@ describe('deriveRngCapabilities', () => {
       confirmedRngState(),
       [
         confirmed,
-        { ...confirmed, id: 'other:rare8', counter: null, isConfirmed: false },
+        { ...confirmed, id: 'other:8', counter: null, isConfirmed: false },
       ],
       [createNormalOperation()],
       supportedEngine,
@@ -237,7 +241,7 @@ describe('deriveRngCapabilities', () => {
       'gogma_counter',
       'skill_counter',
       'counter_gate',
-      'normal_artian_counter:weapon.fixture.a:rare7',
+      'normal_artian_counter:weapon.fixture.a:8',
       'engine:gogma_prediction',
       'engine:skill_prediction',
       'engine:normal_artian_prediction',

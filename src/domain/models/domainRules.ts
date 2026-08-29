@@ -39,20 +39,23 @@ export function isCalculationContextCompatible(
 }
 
 export function canUseAsMaterial(weapon: OwnedWeapon): boolean {
-  return weapon.status === 'material' && !weapon.isProtected
+  return (
+    weapon.kind === 'gogma' &&
+    weapon.status === 'material' &&
+    !weapon.isProtected
+  )
 }
 
 export function canResetBonuses(weapon: OwnedWeapon): boolean {
-  return !weapon.isProtected
+  return weapon.kind === 'gogma' && !weapon.isProtected
 }
 
 export function canKeepBonuses(weapon: OwnedWeapon): boolean {
-  return !weapon.isProtected
+  return weapon.kind === 'gogma' && !weapon.isProtected
 }
 
-export function canResetSkills(_weapon: OwnedWeapon): boolean {
-  void _weapon
-  return true
+export function canResetSkills(weapon: OwnedWeapon): boolean {
+  return weapon.kind === 'gogma'
 }
 
 export function isSkillConditionUnconstrained(

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { BuildRoute } from './publicTypes'
 import { validateBuildRoute } from './validation'
 import {
+  createRestorationBonusSet,
   createValidBuildCandidate,
   createValidOwnedWeapon,
   ownedWeaponId,
@@ -9,6 +10,28 @@ import {
 
 function normalRoute(): BuildRoute {
   return createValidBuildCandidate().route
+}
+
+function ownedNormalRoute(): BuildRoute {
+  const sourceId = ownedWeaponId('owned.fixture.normal')
+  return {
+    kind: 'owned_normal_artian_to_gogma',
+    sourceOwnedWeaponId: sourceId,
+    operations: [
+      {
+        type: 'convert_normal_to_gogma',
+        weaponTypeId: 'weapon.fixture.a',
+        gogmaCounterBefore: 1,
+        gogmaCounterAfter: 2,
+      },
+      {
+        type: 'reset_skills',
+        sourceOwnedWeaponId: null,
+        skillCounterBefore: 1,
+        skillCounterAfter: 2,
+      },
+    ],
+  }
 }
 
 function resetSkillsRoute(): BuildRoute {
@@ -103,6 +126,45 @@ describe('BuildRoute validation', () => {
       ],
     }
     expect(validateBuildRoute(route, [weapon]).issues).toContainEqual(
+      expect.objectContaining({ code: 'protected_destructive_use' }),
+    )
+  })
+
+  it('accepts an unprotected owned Normal conversion without create operation', () => {
+    const source = {
+      ...createValidOwnedWeapon(ownedWeaponId('owned.fixture.normal')),
+      kind: 'normal' as const,
+      rarity: 8 as const,
+      restorationBonuses: createRestorationBonusSet(),
+      seriesSkillId: null,
+      groupSkillId: null,
+      status: null,
+      isProtected: false,
+    }
+    const validation = validateBuildRoute(ownedNormalRoute(), [source])
+    expect(validation.isValid).toBe(true)
+    expect(ownedNormalRoute().operations).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'create_normal_artian' }),
+      ]),
+    )
+  })
+
+  it('rejects protected or non-Normal sources for owned Normal conversion', () => {
+    const source = createValidOwnedWeapon(ownedWeaponId('owned.fixture.normal'))
+    expect(validateBuildRoute(ownedNormalRoute(), [source]).isValid).toBe(false)
+    const protectedNormal = {
+      ...source,
+      kind: 'normal' as const,
+      rarity: 8 as const,
+      seriesSkillId: null,
+      groupSkillId: null,
+      status: null,
+      isProtected: true,
+    }
+    expect(
+      validateBuildRoute(ownedNormalRoute(), [protectedNormal]).issues,
+    ).toContainEqual(
       expect.objectContaining({ code: 'protected_destructive_use' }),
     )
   })

@@ -7,6 +7,7 @@ import {
   SEARCH_FIXTURE_TIME,
 } from '../../test/fixtures/candidateSearch'
 import { createRestorationBonusSet } from '../../test/fixtures/domainData'
+import type { NormalArtianCounter, OwnedWeapon } from '../models/publicTypes'
 
 const deterministicExecution = {
   now: () => SEARCH_FIXTURE_TIME,
@@ -30,6 +31,30 @@ describe('Candidate Search routes', () => {
     )
   })
 
+  it.each([6, 7])('does not search a newly-created rarity %i Normal route', async (rarity) => {
+    const input = createCandidateSearchInput()
+    input.routeFilter = 'normal_artian'
+    input.normalCounters = [
+      {
+        ...input.normalCounters[0],
+        id: `${input.normalCounters[0].weaponTypeId}:${rarity}`,
+        rarity,
+      } as unknown as NormalArtianCounter,
+    ]
+    input.ownedWeapons = []
+    const result = await searchCandidates(
+      input,
+      createCandidateSearchEngine(input),
+      deterministicExecution,
+    )
+    expect(result.targetResults[0].searchedRoutes).not.toContain(
+      'normal_artian_to_gogma',
+    )
+    expect(result.targetResults[0].skippedRoutes).toContainEqual(
+      expect.objectContaining({ reason: 'normal_counter_unconfirmed' }),
+    )
+  })
+
   it('skips a Normal route with master_data_unavailable when its Lottery is missing', async () => {
     const input = createCandidateSearchInput()
     input.routeFilter = 'normal_artian'
@@ -45,7 +70,7 @@ describe('Candidate Search routes', () => {
       route: 'normal_artian',
       reason: 'master_data_unavailable',
       detail:
-        "Normal Artian Lottery master data is unavailable for 'weapon.fixture.a:rare7'.",
+        "Normal Artian Lottery master data is unavailable for 'weapon.fixture.a:8'.",
     })
   })
 
@@ -66,6 +91,9 @@ describe('Candidate Search routes', () => {
       'convert_normal_to_gogma',
       'reset_skills',
     ])
+    expect(candidate.route.operations[0]).toEqual(
+      expect.objectContaining({ rarity: 8 }),
+    )
     expect(candidate.route.operations).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ type: 'keep_bonuses' })]),
     )
@@ -80,6 +108,109 @@ describe('Candidate Search routes', () => {
     expect(candidate.estimatedNormalAdvance).toBe(1)
     expect(candidate.estimatedGogmaAdvance).toBe(1)
     expect(candidate.estimatedSkillAdvance).toBe(1)
+  })
+
+  it('converts an unprotected owned Normal Artian through explicit Engine fixtures', async () => {
+    const input = createCandidateSearchInput()
+    input.routeFilter = 'normal_artian'
+    input.normalCounters = []
+    const source = input.ownedWeapons[0]
+    input.ownedWeapons = [
+      {
+        ...source,
+        kind: 'normal',
+        rarity: 8,
+        restorationBonuses: createRestorationBonusSet(),
+        seriesSkillId: null,
+        groupSkillId: null,
+        status: null,
+        isProtected: false,
+      },
+    ]
+    const result = await searchCandidates(
+      input,
+      createCandidateSearchEngine(input),
+      deterministicExecution,
+    )
+    const candidate = result.targetResults[0].candidates.find(
+      ({ route }) =>
+        route.kind === 'owned_normal_artian_to_gogma' &&
+        route.operations.some(({ type }) => type === 'reset_skills'),
+    )
+    expect(candidate).toBeDefined()
+    expect(candidate?.route.sourceOwnedWeaponId).toBe(source.id)
+    expect(candidate?.route.operations.map(({ type }) => type)).toEqual([
+      'convert_normal_to_gogma',
+      'reset_skills',
+    ])
+    expect(candidate?.route.operations).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'create_normal_artian' }),
+      ]),
+    )
+    expect(candidate?.route.operations[1]).toEqual(
+      expect.objectContaining({ sourceOwnedWeaponId: null }),
+    )
+    expect(candidate?.referencedOwnedWeaponsHash).toMatch(/^fnv1a32:/)
+    expect(candidate?.estimatedOperationCount).toBe(2)
+    expect(result.targetResults[0].searchedRoutes).toContain(
+      'owned_normal_artian_to_gogma',
+    )
+  })
+
+  it('does not convert a protected owned Normal Artian', async () => {
+    const input = createCandidateSearchInput()
+    input.routeFilter = 'normal_artian'
+    input.normalCounters = []
+    const source = input.ownedWeapons[0]
+    input.ownedWeapons = [
+      {
+        ...source,
+        kind: 'normal',
+        rarity: 8,
+        seriesSkillId: null,
+        groupSkillId: null,
+        status: null,
+        isProtected: true,
+      },
+    ]
+    const result = await searchCandidates(
+      input,
+      createCandidateSearchEngine(input),
+      deterministicExecution,
+    )
+    expect(result.targetResults[0].searchedRoutes).not.toContain(
+      'owned_normal_artian_to_gogma',
+    )
+    expect(result.targetResults[0].skippedRoutes).toContainEqual(
+      expect.objectContaining({ reason: 'no_unprotected_source_weapon' }),
+    )
+  })
+
+  it.each([6, 7])('does not convert an owned rarity %i Normal Artian', async (rarity) => {
+    const input = createCandidateSearchInput()
+    input.routeFilter = 'normal_artian'
+    input.normalCounters = []
+    const source = input.ownedWeapons[0]
+    input.ownedWeapons = [
+      {
+        ...source,
+        kind: 'normal',
+        rarity,
+        seriesSkillId: null,
+        groupSkillId: null,
+        status: null,
+        isProtected: false,
+      } as unknown as OwnedWeapon,
+    ]
+    const result = await searchCandidates(
+      input,
+      createCandidateSearchEngine(input),
+      deterministicExecution,
+    )
+    expect(result.targetResults[0].searchedRoutes).not.toContain(
+      'owned_normal_artian_to_gogma',
+    )
   })
 
   it('does not create candidates below the Practical line', async () => {

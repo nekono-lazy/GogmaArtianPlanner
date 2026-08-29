@@ -22,11 +22,14 @@ export type RngStateSource =
   | 'manual'
   | 'observation'
 
-export type NormalArtianRarity = 'rare6' | 'rare7' | 'rare8'
+export const V1_NORMAL_ARTIAN_RARITY = 8 as const
+export type NormalArtianRarity = typeof V1_NORMAL_ARTIAN_RARITY
+export type ArtianWeaponKind = 'normal' | 'gogma'
 export type OwnedWeaponStatus = 'material' | 'practical' | 'ideal'
 export type CandidateCategory = 'ideal' | 'practical'
 export type RouteKind =
   | 'normal_artian_to_gogma'
+  | 'owned_normal_artian_to_gogma'
   | 'existing_gogma_reset_bonuses'
   | 'existing_gogma_keep_bonuses'
   | 'existing_gogma_reset_skills'

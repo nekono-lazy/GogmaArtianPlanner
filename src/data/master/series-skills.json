@@ -116,7 +116,7 @@
     "displayNameJa": "花舞の祈り",
     "displayNameEn": "花舞の祈り",
     "sortOrder": 17,
-    "isEnabled": true
+    "isEnabled": false
   },
   {
     "id": "series_skill.verified_18",
@@ -137,7 +137,7 @@
     "displayNameJa": "踊火の祈り",
     "displayNameEn": "踊火の祈り",
     "sortOrder": 20,
-    "isEnabled": true
+    "isEnabled": false
   },
   {
     "id": "series_skill.verified_21",
@@ -158,7 +158,7 @@
     "displayNameJa": "夢灯の祈り",
     "displayNameEn": "夢灯の祈り",
     "sortOrder": 23,
-    "isEnabled": true
+    "isEnabled": false
   },
   {
     "id": "series_skill.verified_24",
@@ -172,6 +172,6 @@
     "displayNameJa": "祝謡の祈り",
     "displayNameEn": "祝謡の祈り",
     "sortOrder": 25,
-    "isEnabled": true
+    "isEnabled": false
   }
 ]

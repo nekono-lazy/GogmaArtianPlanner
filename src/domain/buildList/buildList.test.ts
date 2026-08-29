@@ -109,7 +109,7 @@ describe('BuildListEntry staleness', () => {
     const base = createFixtureEntry()
     const rngState = structuredClone(base.rngState)
     rngState.baseSeed.source = 'observation'
-    const unrelated = { ...createValidNormalArtianCounter(), id: 'weapon.other:rare8', weaponTypeId: 'weapon.other', rarity: 'rare8' as const, counter: 999 }
+    const unrelated = { ...createValidNormalArtianCounter(), id: 'weapon.other:8', weaponTypeId: 'weapon.other', rarity: 8 as const, counter: 999 }
     expect(evaluateBuildListEntryStaleness(base.entry, { target: base.target, rngState, normalCounters: [...base.normalCounters, unrelated], ownedWeapons: [], calculationContext: domainFixtureContext }).isStale).toBe(false)
   })
 
@@ -136,6 +136,54 @@ describe('BuildListEntry staleness', () => {
     const changed = structuredClone(source)
     changed.restorationBonuses[0].bonusRankId = 'rank.changed'
     expect(evaluateBuildListEntryStaleness(entry, { ...context, ownedWeapons: [changed] }).staleReasons).toContain('owned_weapon_changed')
+  })
+
+  it('marks an owned-Normal route stale when its source bonuses change', () => {
+    const base = createFixtureEntry()
+    const gogma = createValidOwnedWeapon(ownedWeaponId('owned.fixture.normal'))
+    const source = {
+      ...gogma,
+      kind: 'normal' as const,
+      rarity: 8 as const,
+      seriesSkillId: null,
+      groupSkillId: null,
+      status: null,
+      isProtected: false,
+    }
+    base.candidate.route = {
+      kind: 'owned_normal_artian_to_gogma',
+      sourceOwnedWeaponId: source.id,
+      operations: [
+        {
+          type: 'convert_normal_to_gogma',
+          weaponTypeId: source.weaponTypeId,
+          gogmaCounterBefore: 10,
+          gogmaCounterAfter: 11,
+        },
+      ],
+    }
+    base.candidate.searchStateHash = createSearchStateHash(
+      base.candidate.route,
+      base.rngState,
+      base.normalCounters,
+    )
+    base.candidate.referencedOwnedWeaponsHash =
+      createReferencedOwnedWeaponsHash(base.candidate.route, [source])
+    const entry = createBuildListEntry(base.candidate, base.target, {
+      id: buildListEntryId('build-list.owned-normal'),
+      createdAt: base.entry.createdAt,
+    })
+    const changed = structuredClone(source)
+    changed.restorationBonuses[0].bonusRankId = 'rank.changed'
+    expect(
+      evaluateBuildListEntryStaleness(entry, {
+        target: base.target,
+        rngState: base.rngState,
+        normalCounters: base.normalCounters,
+        ownedWeapons: [changed],
+        calculationContext: domainFixtureContext,
+      }).staleReasons,
+    ).toContain('owned_weapon_changed')
   })
 
   it('detects CalculationContext changes', () => {

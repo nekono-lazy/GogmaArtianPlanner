@@ -30,7 +30,7 @@
 - Gogma Counter
 - Skill Counter
 - Counter Gate
-- 通常アーティアの武器種・レア度別Counter
+- 通常アーティアの武器種別レア8 Counter
 
 Domain Modelは `DATA_MODEL.md` の `RngState` と `NormalArtianCounter` を使用する。
 
@@ -115,7 +115,10 @@ export interface GogmaBonusPredictionInput {
   weaponTypeId: WeaponTypeId;
   elementId: ElementId;
   operation:
-    | { type: "new_gogma" }
+    | {
+        type: "new_gogma";
+        sourceNormalBonuses: RestorationBonusSet;
+      }
     | { type: "reset_bonuses" }
     | {
         type: "keep_bonuses";
@@ -135,6 +138,8 @@ export interface KeepSelectionEnumerationInput {
 Keep Bonusesの正確な選択単位がslotかBonus Typeか、それ以外かはRNG Engineの解析結果に従う。Domain側は `KeepBonusSelection` を不透明な入力として保持し、現在のType + Rankがそのまま完成結果へ残るとは仮定しない。
 
 `predictGogmaBonus` が返す `RestorationBonusSet` だけを完成結果として使用する。EngineがKeep仕様を未対応の場合、`supportsKeepBonusesPrediction = false` としてRouteを生成しない。
+
+`new_gogma.sourceNormalBonuses` は新規作成または所持中の通常アーティアに付いている `normal_artian` scopeの5枠をEngineへ渡す入力である。Engineは明示fixtureまたは検証済み実装だけで結果を返し、Search側はBonus Type Mappingから巨戟Rank、Counter進行、完成5枠を推測しない。
 
 ## 6.2 SkillPredictionInput
 
@@ -165,6 +170,8 @@ export interface NormalArtianPredictionInput {
   master: RngMasterSubset;
 }
 ```
+
+v1の `rarity` は必ず8であり、レア6・7のPrediction、Counter、Lotteryは扱わない。
 
 ## 6.4 RngMasterSubset
 
@@ -279,7 +286,7 @@ export interface GogmaSeedFinderImportResult {
 
 初期版の主用途。
 
-- 通常アーティアの武器種・レア度別Counter特定
+- 通常アーティアの武器種別レア8 Counter特定
 - 必要に応じたRNG状態の検証
 
 ## 9.2 Observation
@@ -303,7 +310,7 @@ export interface Observation {
 
 制約。
 
-- `kind = "normal_artian"` の場合、`rarity` と `restorationBonuses` は必須。現在のEngineで属性を使わない場合、`elementId = null` を許可する
+- `kind = "normal_artian"` の場合、`rarity = 8` と `restorationBonuses` は必須。現在のEngineで属性を使わない場合、`elementId = null` を許可する
 - `kind = "gogma_bonus"` の場合、`elementId` と `restorationBonuses` は必須
 - `kind = "skill"` の場合、`elementId` は必須で、seriesまたはgroupの少なくとも一方が必須
 - `elementId` が指定される場合はMaster Dataに存在し、対象武器種で有効でなければならない
@@ -332,7 +339,7 @@ export interface CounterSearchInput {
 - `startCounter` と `endCounter` は0以上の整数
 - `endCounter >= startCounter`
 - 検索範囲はUIから指定可能にしてよいが、初期値は設定の `defaultSearchLimit` を使用する
-- `searchKind = "normal_artian_counter"` では、すべてのObservationを `kind = "normal_artian"` とし、入力の武器種・レア度と一致させる
+- `searchKind = "normal_artian_counter"` では、すべてのObservationを `kind = "normal_artian"` とし、入力の武器種とレア8に一致させる
 - `searchKind = "gogma_counter"` では、すべてのObservationを `kind = "gogma_bonus"` とし、各Observationの `elementId` を必須とする
 - `searchKind = "skill_counter"` では、すべてのObservationを `kind = "skill"` とし、各Observationの `elementId` を必須とする
 - 異なるCounterストリームのObservationを1つのCounterSearchInputへ混在させない
