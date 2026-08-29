@@ -61,6 +61,15 @@ function requireById<T extends { id: string }>(
   return value
 }
 
+export type BonusRankMasterLookup = Pick<MasterDataRoot, 'bonusRanks'>
+
+export function getBonusRank(
+  master: BonusRankMasterLookup,
+  bonusRankId: BonusRankId,
+): BonusRankMaster {
+  return requireById(master.bonusRanks, bonusRankId, 'BonusRankMaster')
+}
+
 export function getEnabledWeaponTypes(
   master: MasterDataRoot,
 ): WeaponTypeMaster[] {
@@ -124,17 +133,17 @@ export function getRanksForBonusType(
 }
 
 export function getBonusRankOrder(
-  master: MasterDataRoot,
+  master: BonusRankMasterLookup,
   bonusRankId: BonusRankId,
 ): number {
-  return requireById(master.bonusRanks, bonusRankId, 'BonusRankMaster').order
+  return getBonusRank(master, bonusRankId).order
 }
 
 export function isExRank(
-  master: MasterDataRoot,
+  master: BonusRankMasterLookup,
   bonusRankId: BonusRankId,
 ): boolean {
-  return requireById(master.bonusRanks, bonusRankId, 'BonusRankMaster').isEx
+  return getBonusRank(master, bonusRankId).isEx
 }
 
 export function getSeriesSkillOptions(
