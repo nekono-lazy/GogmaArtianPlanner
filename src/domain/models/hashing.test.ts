@@ -207,6 +207,44 @@ describe('referencedOwnedWeaponsHash', () => {
 })
 
 describe('ExpectedPlanState hashing', () => {
+  it('keeps referenced-weapon hashing independent from Normal rarity', () => {
+    const route = referencedRoute()
+    const normal = {
+      ...createValidOwnedWeapon(), kind: 'normal' as const, rarity: 8 as const,
+      seriesSkillId: null, groupSkillId: null, status: null,
+    }
+    const alteredRarity = { ...normal, rarity: 7 as 8 }
+    expect(createReferencedOwnedWeaponsHash(route, [alteredRarity])).toBe(
+      createReferencedOwnedWeaponsHash(route, [normal]),
+    )
+  })
+
+  it('includes Normal rarity only in ExpectedPlanState owned weapons', () => {
+    const state = createValidRngState(); const counter = createValidNormalArtianCounter()
+    const normal = { ...createValidOwnedWeapon(), kind: 'normal' as const, rarity: 8 as const, seriesSkillId: null, groupSkillId: null, status: null }
+    const alteredRarity = { ...normal, rarity: 7 as 8 }
+    expect(createExpectedPlanState(state, [counter], [alteredRarity]).ownedWeaponsHash)
+      .not.toBe(createExpectedPlanState(state, [counter], [normal]).ownedWeaponsHash)
+  })
+
+  it('includes related Targets only in ExpectedPlanState', () => {
+    const state = createValidRngState(); const counter = createValidNormalArtianCounter(); const route = referencedRoute()
+    const weapon = createValidOwnedWeapon()
+    const changed = { ...weapon, relatedTargetWeaponIds: ['target.changed' as never] }
+    expect(createExpectedPlanState(state, [counter], [changed]).ownedWeaponsHash)
+      .not.toBe(createExpectedPlanState(state, [counter], [weapon]).ownedWeaponsHash)
+    expect(createReferencedOwnedWeaponsHash(route, [changed])).toBe(
+      createReferencedOwnedWeaponsHash(route, [weapon]),
+    )
+  })
+
+  it('excludes name, memo, and timestamps from both weapon hash contracts', () => {
+    const state = createValidRngState(); const counter = createValidNormalArtianCounter(); const route = referencedRoute(); const weapon = createValidOwnedWeapon()
+    const changed = { ...weapon, name: 'Renamed', memo: 'Changed', createdAt: '2027-01-01T00:00:00.000Z', updatedAt: '2027-01-01T00:00:00.000Z' }
+    expect(createExpectedPlanState(state, [counter], [changed])).toEqual(createExpectedPlanState(state, [counter], [weapon]))
+    expect(createReferencedOwnedWeaponsHash(route, [changed])).toBe(createReferencedOwnedWeaponsHash(route, [weapon]))
+  })
+
   it('excludes notes and timestamps while retaining semantic state', () => {
     const state = createValidRngState()
     const counter = createValidNormalArtianCounter()

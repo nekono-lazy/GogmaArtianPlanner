@@ -72,6 +72,8 @@ export interface PlannerConflictResolution {
 }
 
 export interface PlannerMasterSubset {
+  weaponBonusDefinitions: WeaponBonusDefinition[];
+  lotteries: LotteryMaster[];
   materialCosts: MaterialCostMaster[];
   bonusRanks: BonusRankMaster[];
 }
@@ -500,6 +502,43 @@ protected武器への素材消費・Reset Bonuses・Keep Bonusesは競合とし�
 ---
 
 ## 11. PlanStep生成
+
+### 11.0 第9C-A: Search Trace Replay Draft
+
+第9C-AではProductionPlanや永続PlanStepを生成しない。Beam Searchで確定した
+`PlannerSearchState.trace` を、開始 `PlannerInput` から順にpureにReplayし、将来の
+PlanStep変換用 `PlannerPlanStepDraft` を生成する。
+
+- `PlannerMasterSubset` はSearchのRNG Predictionと同じ `weaponBonusDefinitions`、
+  `lotteries`、`bonusRanks` を保持する。PredictionはRngEngineのみから取得し、Lottery、
+  Bonus Rank、Keep、Counter Gateを推測しない。
+- `ExpectedPlanState` はKnownValueのvalue/isConfirmed、stable sorted Normal Counter、
+  OwnedWeaponのsemantic fields（kindを含む）をstable hash化する。名前、memo、日時、
+  RNG source/notes、観測表示項目は除く。関連Target IDはsort/dedupeする。
+- `ExpectedPlanState.ownedWeaponsHash` とBuild Listの`referencedOwnedWeaponsHash`は別契約である。
+  前者はNormal rarityとrelatedTargetWeaponIdsを含むが、後者は既存Search契約どおり両方を
+  含めない。両者ともname、memo、timestampsを含めない。
+- 1 Search Actionは、共有されるEntry数にかかわらず1 physical operation、1 Draftである。
+  Draftはprimary Entryと全progressed Entryを別々に保持する。
+- Replay RuntimeはRngState、Normal Counter、persistent OwnedWeapon Inventoryと、未登録の
+  Normal/Gogma出力を保持する。Normal出力はEntryごとに分離し、複数作成後のconvertは
+  そのEntryの最後に作成したNormalだけを使用して全Normal transientを破棄する。未登録出力へ
+  永続OwnedWeapon IDを割り当てない。
+- 各Actionの`rngBefore`一致を検証し、`rngAfter`との差分からRngAdvanceを作る。複数Normal
+  Counterの変化やunknown→knownの差分は現行RngAdvanceで表せないためReplay failureとする。
+- create/convert/reset/keep/reset-skillsは現在のRngEngine predictionを再実行する。Keepは保存済み
+  selectionをそのまま渡し、所持Normal変換は所持武器の5-slot bonusesを入力に使う。
+- normal/owned-Normalの巨戟化直後のSkillは、現在のSearch実装が`createBaseCandidate(..., null, null)`
+  で明示する`null/null`である。Skillは`reset_skills`だけがRngEngine predictionで設定する。
+- reserve前にEntry固有transient Gogmaのbonuses、Series Skill、Group SkillがCandidate Snapshotと
+  完全一致することを検証する。不一致またはtransient不足はReplay failureであり、Candidate Snapshotで
+  transientを上書きしてはならない。成功したEntryのtransientだけを破棄する。
+- Predictionはvalueだけでなくconfirmed入力を要求する。Base Seed、Gogma/Skill Counter、Counter Gate、
+  対象Normal Counterの未確認値はReplay failureとする。
+- reset/keep/reset-skillsによるpersistent inventory更新はreserveまで行わない。所持Normalはconvertで
+  削除し、new/owned-Normal reserveは予約済みIDのGogmaを追加、existing Gogma reserveは同一IDを更新する。
+- Replay完了時はRNG、Normal Counter、persistent simulated inventoryがbest Search Stateと一致しなければ
+  Draftを返さない。confirm_result、一般素材Gogma補充、create_material_gogma、ProductionPlan、ID/Clock生成は第9C-Aの対象外である。
 
 BuildCandidateの `BuildRoute.operations` を順にPlanStepへ変換する。Route kindやCounter endpointだけから操作列を再構成しない。
 

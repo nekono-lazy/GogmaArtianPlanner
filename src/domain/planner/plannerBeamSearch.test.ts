@@ -231,6 +231,8 @@ function fixture(
       maxExpandedStates: 10_000,
     },
     master: {
+      weaponBonusDefinitions: [],
+      lotteries: [],
       materialCosts: [],
       bonusRanks: targetEvaluationMaster.bonusRanks,
     },

@@ -19,7 +19,9 @@ import type {
 } from '../models/publicTypes'
 import type {
   BonusRankMaster,
+  LotteryMaster,
   MaterialCostMaster,
+  WeaponBonusDefinition,
 } from '../master/masterTypes'
 import type { RngEngine } from '../rng/rngEngine'
 
@@ -36,6 +38,9 @@ export const defaultPlannerOptions: Readonly<PlannerOptions> = {
 }
 
 export interface PlannerMasterSubset {
+  /** Matches RngMasterSubset so trace replay can repeat Search predictions. */
+  weaponBonusDefinitions: WeaponBonusDefinition[]
+  lotteries: LotteryMaster[]
   materialCosts: MaterialCostMaster[]
   bonusRanks: BonusRankMaster[]
 }

@@ -167,7 +167,7 @@ export function collectReferencedOwnedWeaponIds(
   return [...ids].sort()
 }
 
-function normalizeOwnedWeapon(weapon: OwnedWeapon) {
+function normalizeReferencedOwnedWeapon(weapon: OwnedWeapon) {
   const common = {
     id: weapon.id,
     kind: weapon.kind,
@@ -189,6 +189,13 @@ function normalizeOwnedWeapon(weapon: OwnedWeapon) {
       }
 }
 
+function normalizeExpectedOwnedWeapon(weapon: OwnedWeapon) {
+  const referenced = normalizeReferencedOwnedWeapon(weapon)
+  return weapon.kind === 'normal'
+    ? { ...referenced, rarity: weapon.rarity }
+    : referenced
+}
+
 export function createReferencedOwnedWeaponsHash(
   route: BuildRoute,
   ownedWeapons: readonly OwnedWeapon[],
@@ -199,7 +206,7 @@ export function createReferencedOwnedWeaponsHash(
   const weaponById = new Map(ownedWeapons.map((weapon) => [weapon.id, weapon]))
   const normalized = referencedIds.map((id) => {
     const weapon = weaponById.get(id)
-    return weapon ? normalizeOwnedWeapon(weapon) : { id, missing: true }
+    return weapon ? normalizeReferencedOwnedWeapon(weapon) : { id, missing: true }
   })
   return hashStableValue(normalized)
 }
@@ -216,13 +223,14 @@ export function createExpectedPlanState(
     counterGate: normalizeKnownValue(rngState.counterGate),
   }
   const normalizedCounters = [...normalCounters]
-    .sort((left, right) => left.id.localeCompare(right.id))
+    .sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0)
     .map(({ id, counter, isConfirmed }) => ({ id, counter, isConfirmed }))
   const normalizedWeapons = [...ownedWeapons]
-    .sort((left, right) => left.id.localeCompare(right.id))
+    .sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0)
     .map((weapon) => ({
-      ...normalizeOwnedWeapon(weapon),
-      relatedTargetWeaponIds: [...weapon.relatedTargetWeaponIds].sort(),
+      ...normalizeExpectedOwnedWeapon(weapon),
+      relatedTargetWeaponIds: [...new Set(weapon.relatedTargetWeaponIds)]
+        .sort((left, right) => left < right ? -1 : left > right ? 1 : 0),
     }))
 
   return {

@@ -66,7 +66,12 @@ function fixture(): { input: PlannerInput; dependencies: PlannerDependencies } {
     buildListEntries: [entry],
     calculationContext: search.calculationContext,
     options: { maxPlanSteps: 300, beamWidth: 50, maxExpandedStates: 10_000 },
-    master: { materialCosts: search.master.materialCosts, bonusRanks: search.master.bonusRanks },
+    master: {
+      weaponBonusDefinitions: search.master.weaponBonusDefinitions,
+      lotteries: search.master.lotteries,
+      materialCosts: search.master.materialCosts,
+      bonusRanks: search.master.bonusRanks,
+    },
     conflictResolutions: [],
   }
   synchronizeEntry(entry, input)

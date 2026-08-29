@@ -75,6 +75,8 @@ function createPlannerFixture(): {
       calculationContext: searchInput.calculationContext,
       options: { ...defaultPlannerOptions },
       master: {
+        weaponBonusDefinitions: searchInput.master.weaponBonusDefinitions,
+        lotteries: searchInput.master.lotteries,
         materialCosts: searchInput.master.materialCosts,
         bonusRanks: searchInput.master.bonusRanks,
       },

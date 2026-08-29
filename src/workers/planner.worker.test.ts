@@ -29,6 +29,8 @@ function fixture(): { input: PlannerInput; dependencies: PlannerDependencies } {
       calculationContext: search.calculationContext,
       options: { ...defaultPlannerOptions },
       master: {
+        weaponBonusDefinitions: search.master.weaponBonusDefinitions,
+        lotteries: search.master.lotteries,
         materialCosts: search.master.materialCosts,
         bonusRanks: search.master.bonusRanks,
       },
