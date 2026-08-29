@@ -2,32 +2,32 @@
 
 ## 目的
 
-v1に同梱する静的Master Dataの確認状況を記録する。
-Manifestは `gameVersion: unknown-initial` であり、notesにも未検証placeholderであることが明記されている。
-このため、以下の有効レコードも本番用の確認済みゲームデータとしては扱わない。
+v1に同梱する静的Master Dataの確認状況を記録する。2026-08-29の第8.2実装で、プロジェクトオーナー確認済み情報を入力・条件評価用Masterへ反映した。
 
-`MASTER_DATA.md` に記載された具体的IDはスキーマ例であり、ゲームデータ一式の正確性を保証する情報源ではない。
+Manifestの `dataVersion` は2。`gameVersion` は引き続き `unknown-initial` であり、特定ゲームバージョンへの適合確認は未完了である。
 
 ## 監査結果（2026-08-29）
 
-| Master | 登録件数 | 有効件数 | 確認済み件数 | 本番利用 | 現在の情報源 / 今後必要な情報 |
+| Master | 登録件数 | 有効件数 | 確認済み件数 | 本番UI利用 | 情報源 / 未確認事項 |
 | --- | ---: | ---: | ---: | --- | --- |
-| MasterManifest | 1 | — | 0 | 不可 | `manifest.json`。確認済みゲームバージョンとデータセットの出典が必要。 |
-| WeaponTypeMaster | 1 | 1 | 0 | 不可 | `MASTER_DATA.md` の例に対応するplaceholder。全武器種と各属性の確認済み一覧が必要。 |
-| ElementMaster | 1 | 1 | 0 | 不可 | 仕様例に対応するplaceholder。利用可能な全属性の確認済み一覧が必要。 |
-| BonusTypeMaster | 1 | 1 | 0 | 不可 | 仕様例に対応するplaceholder。全種別・カテゴリ・順序の確認済み情報が必要。 |
-| BonusRankMaster | 1 | 1 | 0 | 不可 | 仕様例に対応するplaceholder。全ランク・順序・EX判定の確認済み情報が必要。 |
-| WeaponBonusDefinition | 1 | 1 | 0 | 不可 | 1組だけのplaceholder。全対応武器種の組み合わせと効果値の確認済み情報が必要。 |
-| SeriesSkillMaster | 1 | 1 | 0 | 不可 | 仕様例に対応するplaceholder。選択可能な全シリーズスキルの確認済み一覧が必要。 |
-| GroupSkillMaster | 1 | 1 | 0 | 不可 | 仕様例に対応するplaceholder。選択可能な全グループスキルの確認済み一覧が必要。 |
-| LotteryMaster | 1 | 0 | 0 | 不可 | 無効化されたValidation用レコード。確認済み表現とデータが必要。weight/internalValueは推測しない。 |
-| MaterialMaster | 1 | 0 | 0 | 不可 | 無効化されたValidation用レコード。確認済み素材ID・名称が必要。 |
-| MaterialCostMaster | 1 | 0 | 0 | 不可 | 無効化されたValidation用レコード。確認済み操作コストが必要。推測しない。 |
+| MasterManifest | 1 | — | 1 | 部分可 | dataVersion 2。ゲームバージョンは未確認。 |
+| WeaponTypeMaster | 14 | 14 | 14 | 可 | プロジェクトオーナー確認済み14武器種。 |
+| ElementMaster | 10 | 10 | 10 | 可 | プロジェクトオーナー確認済み10属性。 |
+| BonusTypeMaster | 6 | 6 | 6 | 可 | 共通3種、通常専用2種、巨戟専用1種。 |
+| BonusRankMaster | 5 | 5 | 5 | 可 | 通常 / I / II / III / EX。通常→巨戟Rank変換は未確認。 |
+| WeaponBonusDefinition | 227 | 227 | 227 | 可 | scope別の武器種・Bonus Type・Rank組み合わせ。効果実数値は未確認で、計算に使用しない。 |
+| ArtianBonusTypeMapping | 5 | — | 5 | 可 | 通常→巨戟のBonus Type対応。斬れ味／装填から統合TypeへのMany-to-Oneを含む。 |
+| SeriesSkillMaster | 25 | 25 | 25 | 可 | プロジェクトオーナー確認済みUI選択肢。抽選確率は未確認。 |
+| GroupSkillMaster | 17 | 17 | 17 | 可 | プロジェクトオーナー確認済みUI選択肢。抽選確率は未確認。 |
+| LotteryMaster | 1 | 0 | 0 | 不可 | 無効化されたValidation用placeholder。weight、pool、internalValue、確率は未確認。 |
+| MaterialMaster | 1 | 0 | 0 | 不可 | 無効化されたValidation用placeholder。素材名は未確認。 |
+| MaterialCostMaster | 1 | 0 | 0 | 不可 | 無効化されたValidation用placeholder。必要数量は未確認。 |
 
 ## UIへの影響
 
-型付きUIとValidation境界を動作させるため、LoaderとSelectorは有効なplaceholderを引き続き返す。
-所持武器・目標武器・候補検索画面では、表示中の選択肢が不完全かつ未検証であることを警告する。
-無効化されたLotteryと素材関連fixtureは本番計算用Selectorの結果に含まれない。
-
-第8.1実装では、追加のゲームデータを確認できるリポジトリ内資料が存在しなかったため、Master JSONのレコード追加は行っていない。
+- 所持武器・目標武器の武器種、属性、scope別復元ボーナス、Rank、シリーズ／グループスキルは正式選択肢として利用できる。
+- 所持武器・目標武器・BuildCandidateの復元ボーナスは `gogma_artian` scopeに限定する。
+- 通常アーティアPrediction・Debug用の復元ボーナス定義は `normal_artian` scopeを使用する。
+- Lotteryが無効なため、通常アーティアLotteryを必要とする検索Routeは `master_data_unavailable` でskipする。
+- 素材名とMaterial Costは未検証のため、必要素材を推測して表示しない。
+- Bonus Type Mappingから巨戟Rankまたは完成5枠を生成しない。最終結果は将来の検証済みRNG Engineに委ねる。

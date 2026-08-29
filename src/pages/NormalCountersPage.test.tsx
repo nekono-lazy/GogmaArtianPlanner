@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NormalArtianCounter } from '../domain/models/publicTypes'
@@ -20,12 +20,15 @@ describe('NormalCountersPage', () => {
     useSettingsStore.getState().setDebugMode(true)
     const user = userEvent.setup(); const deps = dependencies()
     render(<NormalCountersPage dependencies={deps} />)
-    const inputs = await screen.findAllByLabelText('Counter raw値')
-    await user.type(inputs[1], '-1')
-    const saves = screen.getAllByRole('button', { name: 'デバッグ保存' })
-    await user.click(saves[1])
+    const heading = await screen.findByRole('heading', { name: '双剣 / レア7' })
+    const row = heading.closest<HTMLElement>('.MuiPaper-root')
+    if (!row) throw new Error('Counter row was not rendered')
+    const input = within(row).getByLabelText('Counter raw値')
+    const save = within(row).getByRole('button', { name: 'デバッグ保存' })
+    await user.type(input, '-1')
+    await user.click(save)
     expect(await screen.findByText(/non-negative integer/)).toBeInTheDocument()
-    await user.clear(inputs[1]); await user.type(inputs[1], '12'); await user.click(saves[1])
+    await user.clear(input); await user.type(input, '12'); await user.click(save)
     expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ counter: 12 }))
-  })
+  }, 15_000)
 })

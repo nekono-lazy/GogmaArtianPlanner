@@ -4,14 +4,18 @@ import { getBonusDefinitionsForWeapon } from './masterSelectors'
 import { parseMasterManifest } from './validateMasterData'
 
 describe('Master Data loading', () => {
-  it('loads the unverified placeholder manifest', () => {
+  it('loads verified UI masters while keeping Lottery disabled', () => {
     const result = loadMasterData()
 
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.data.manifest.gameVersion).toBe('unknown-initial')
-      expect(result.data.manifest.notes).toContain('not yet verified')
-      expect(result.data.weaponTypes).not.toHaveLength(0)
+      expect(result.data.manifest.dataVersion).toBe(2)
+      expect(result.data.manifest.notes).toContain('project-owner verified')
+      expect(result.data.weaponTypes).toHaveLength(14)
+      expect(result.data.elements).toHaveLength(10)
+      expect(result.data.seriesSkills).toHaveLength(25)
+      expect(result.data.groupSkills).toHaveLength(17)
       expect(result.data.lotteries).toEqual([
         expect.objectContaining({
           internalValue: 'unverified-placeholder',
@@ -28,10 +32,10 @@ describe('Master Data loading', () => {
       const definitions = getBonusDefinitionsForWeapon(
         result.data,
         'weapon.dual_blades',
+        'gogma_artian',
       )
-      expect(definitions.map(({ id }) => id)).toEqual([
-        'weapon_bonus.weapon.dual_blades.bonus_type.attack.bonus_rank.ex',
-      ])
+      expect(definitions).toHaveLength(13)
+      expect(definitions.every(({ scope }) => scope === 'gogma_artian')).toBe(true)
     }
   })
 

@@ -221,12 +221,21 @@ export interface BonusRankMaster {
 
 武器種ごとに利用可能な復元ボーナス、表示、効果値を定義する。
 
+通常アーティアと巨戟アーティアのボーナス体系は文字列IDから推測せず、次のscopeで明示する。
+
+```ts
+export type ArtianBonusScope =
+  | "normal_artian"
+  | "gogma_artian";
+```
+
 ```ts
 export interface WeaponBonusDefinition {
   id: string;
   weaponTypeId: WeaponTypeId;
   bonusTypeId: BonusTypeId;
   bonusRankId: BonusRankId;
+  scope: ArtianBonusScope;
   displayNameJa: string;
   displayNameEn: string;
   effectValue: string;
@@ -238,20 +247,21 @@ export interface WeaponBonusDefinition {
 ID規則。
 
 ```text
-weapon_bonus.{weaponTypeId}.{bonusTypeId}.{bonusRankId}
+weapon_bonus.{scope}.{weaponTypeId}.{bonusTypeId}.{bonusRankId}
 ```
 
 例。
 
 ```json
 {
-  "id": "weapon_bonus.weapon.dual_blades.bonus_type.attack.bonus_rank.ex",
+  "id": "weapon_bonus.gogma_artian.dual_blades.attack.ex",
   "weaponTypeId": "weapon.dual_blades",
   "bonusTypeId": "bonus_type.attack",
   "bonusRankId": "bonus_rank.ex",
+  "scope": "gogma_artian",
   "displayNameJa": "基礎攻撃力強化EX",
   "displayNameEn": "Attack Boost EX",
-  "effectValue": "+8",
+  "effectValue": "未検証",
   "sortOrder": 1010,
   "isEnabled": true
 }
@@ -259,11 +269,46 @@ weapon_bonus.{weaponTypeId}.{bonusTypeId}.{bonusRankId}
 
 制約。
 
-- TargetWeapon入力画面の復元ボーナス候補は、選択中の `weaponTypeId` に紐づく有効な定義だけを出す
-- 所持武器登録でも同じ制約を使う
-- 同一 `weaponTypeId + bonusTypeId + bonusRankId` は1件のみ
+- TargetWeaponとOwnedWeaponは完成巨戟アーティアなので、`gogma_artian` scopeだけを出す
+- 通常アーティアPrediction・Debugは `normal_artian` scopeを使う
+- 同一 `scope + weaponTypeId + bonusTypeId + bonusRankId` は1件のみ
 - `effectValue` は表示用文字列。計算ロジックは効果値に依存しない
 - 武器種によって存在しないBonusTypeやRankは定義しない
+
+## 8.1 通常／巨戟Bonus Type体系
+
+確認済みの体系は次のとおり。
+
+- 共通概念: 基礎攻撃力強化、会心率強化、属性強化
+- 通常アーティア専用: 斬れ味強化、装填数強化（別々のBonus Type）
+- 巨戟アーティア専用: 斬れ味・装填強化（近接とボウガンで共通の1 Bonus Type）
+- 弓は斬れ味強化、装填数強化、斬れ味・装填強化を利用しない
+- ライト／ヘビィボウガンは属性強化を利用しない
+
+巨戟側の確認済みRankは、基礎攻撃力強化・会心率強化が I / II / III / EX、属性強化が I / II / EX、斬れ味・装填強化が通常 / EX。通常アーティア側の基本Bonusはsuffixなしの通常Rankを使う。このRank順は比較用であり、通常Rankと巨戟Rankの変換規則を意味しない。
+
+## 8.2 ArtianBonusTypeMapping
+
+通常から巨戟への意味上のBonus Type対応を明示Masterとして保持する。
+
+```ts
+export interface ArtianBonusTypeMapping {
+  id: string;
+  normalBonusTypeId: BonusTypeId;
+  gogmaBonusTypeId: BonusTypeId;
+}
+```
+
+```text
+通常 基礎攻撃力強化 -> 巨戟 基礎攻撃力強化
+通常 会心率強化     -> 巨戟 会心率強化
+通常 属性強化       -> 巨戟 属性強化
+通常 斬れ味強化     -+
+                       +-> 巨戟 斬れ味・装填強化
+通常 装填数強化     -+
+```
+
+複数の通常Bonus Typeから同一巨戟Bonus TypeへのMany-to-Oneは有効。逆引きは配列として扱う。MappingはBonus Typeの意味対応だけであり、Rank変換、抽選、完成ボーナス生成には使用しない。最終巨戟結果はRNG Engine Predictionが返す。
 
 ---
 
@@ -450,6 +495,7 @@ export interface MasterDataRoot {
   bonusTypes: BonusTypeMaster[];
   bonusRanks: BonusRankMaster[];
   weaponBonusDefinitions: WeaponBonusDefinition[];
+  artianBonusTypeMappings: ArtianBonusTypeMapping[];
   seriesSkills: SeriesSkillMaster[];
   groupSkills: GroupSkillMaster[];
   lotteries: LotteryMaster[];
@@ -474,8 +520,10 @@ export interface MasterDataRoot {
 ```ts
 getEnabledWeaponTypes(master): WeaponTypeMaster[]
 getEnabledElements(master): ElementMaster[]
-getBonusDefinitionsForWeapon(master, weaponTypeId): WeaponBonusDefinition[]
-getRanksForBonusType(master, weaponTypeId, bonusTypeId): BonusRankMaster[]
+getBonusDefinitionsForWeapon(master, weaponTypeId, scope): WeaponBonusDefinition[]
+getRanksForBonusType(master, weaponTypeId, bonusTypeId, scope): BonusRankMaster[]
+getGogmaBonusTypeForNormalBonus(master, normalBonusTypeId): BonusTypeId
+getNormalBonusTypesForGogmaBonus(master, gogmaBonusTypeId): BonusTypeId[]
 getBonusRankOrder(master, bonusRankId): number
 isExRank(master, bonusRankId): boolean
 getSeriesSkillOptions(master): SeriesSkillMaster[]
@@ -501,8 +549,12 @@ Master Data読み込み時に以下を検証する。
 - 参照IDが存在する
 - `sortOrder` が数値
 - `dataVersion` が正の整数
-- WeaponBonusDefinitionの `weaponTypeId + bonusTypeId + bonusRankId` が一意
+- WeaponBonusDefinitionの `scope + weaponTypeId + bonusTypeId + bonusRankId` が一意
 - WeaponBonusDefinitionが参照するBonusTypeとBonusRankが有効
+- `scope` が `normal_artian` または `gogma_artian`
+- Mapping元が有効なnormal scope定義、Mapping先が有効なgogma scope定義で利用される
+- 同一normalBonusTypeIdから複数のgogmaBonusTypeIdへ対応しない
+- 複数normalBonusTypeIdから同一gogmaBonusTypeIdへの対応は許可する
 - LotteryMasterのresultType別必須フィールドが正しい
 - LotteryMasterのweightが0以上
 - MaterialCostMasterのquantityが1以上

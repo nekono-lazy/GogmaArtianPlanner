@@ -68,6 +68,8 @@ export interface SearchMasterSubset {
 }
 ```
 
+`BuildCandidate.finalBonuses` は最終的な巨戟アーティアの結果であり、`gogma_artian` scopeで利用可能なBonus Type + Rankだけを持つ。通常アーティアPredictionは `normal_artian` scopeを扱うが、SearchはBonus Type Mappingから巨戟のRankや完成5枠を推測せず、必ずRNG EngineのGogma Prediction結果を使用する。
+
 初期値。
 
 ```ts

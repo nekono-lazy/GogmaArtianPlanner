@@ -4,12 +4,14 @@ import elementsJson from '../../data/master/elements.json'
 import bonusTypesJson from '../../data/master/bonus-types.json'
 import bonusRanksJson from '../../data/master/bonus-ranks.json'
 import weaponBonusDefinitionsJson from '../../data/master/weapon-bonus-definitions.json'
+import artianBonusTypeMappingsJson from '../../data/master/artian-bonus-type-mappings.json'
 import seriesSkillsJson from '../../data/master/series-skills.json'
 import groupSkillsJson from '../../data/master/group-skills.json'
 import lotteryJson from '../../data/master/lottery.json'
 import materialsJson from '../../data/master/materials.json'
 import materialCostsJson from '../../data/master/material-costs.json'
 import type {
+  ArtianBonusTypeMapping,
   BonusRankMaster,
   BonusTypeMaster,
   ElementMaster,
@@ -41,6 +43,8 @@ function createStaticMasterDataRoot(): MasterDataRoot {
     bonusRanks: bonusRanksJson as BonusRankMaster[],
     weaponBonusDefinitions:
       weaponBonusDefinitionsJson as WeaponBonusDefinition[],
+    artianBonusTypeMappings:
+      artianBonusTypeMappingsJson as ArtianBonusTypeMapping[],
     seriesSkills: seriesSkillsJson as SeriesSkillMaster[],
     groupSkills: groupSkillsJson as GroupSkillMaster[],
     lotteries: lotteryJson as LotteryMaster[],

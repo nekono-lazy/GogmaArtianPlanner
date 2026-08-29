@@ -15,7 +15,10 @@ export function createDefaultBonusSet(
   weaponTypeId: string,
 ): RestorationBonusSet {
   const definition = master.weaponBonusDefinitions.find(
-    (entry) => entry.isEnabled && entry.weaponTypeId === weaponTypeId,
+    (entry) =>
+      entry.isEnabled &&
+      entry.weaponTypeId === weaponTypeId &&
+      entry.scope === 'gogma_artian',
   )
   if (!definition) {
     throw new MasterOptionsUnavailableError(
@@ -38,7 +41,10 @@ export function createDefaultBonusSet(
 function baseOptions(master: MasterDataRoot) {
   const weaponType = getEnabledWeaponTypes(master).find((type) =>
     master.weaponBonusDefinitions.some(
-      (definition) => definition.isEnabled && definition.weaponTypeId === type.id,
+      (definition) =>
+        definition.isEnabled &&
+        definition.weaponTypeId === type.id &&
+        definition.scope === 'gogma_artian',
     ),
   )
   const element = getEnabledElements(master)[0]

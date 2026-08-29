@@ -2,7 +2,7 @@
   "gameTitle": "Monster Hunter Wilds",
   "appDataKind": "gogma-artian-planner-master",
   "gameVersion": "unknown-initial",
-  "dataVersion": 1,
+  "dataVersion": 2,
   "generatedAt": null,
-  "notes": "Initial placeholder master data. Game data is not yet verified. Lottery and material-cost fixture records are disabled and must not be used as production game mechanics."
+  "notes": "Weapon, element, bonus, rank, applicability, mapping, series skill, and group skill masters are project-owner verified. Lottery and material data remain disabled and unverified."
 }

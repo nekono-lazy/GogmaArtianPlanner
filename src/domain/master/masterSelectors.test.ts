@@ -6,8 +6,10 @@ import {
   getEnabledElements,
   getEnabledWeaponTypes,
   getGroupSkillOptions,
+  getGogmaBonusTypeForNormalBonus,
   getLotteryEntries,
   getMaterialCosts,
+  getNormalBonusTypesForGogmaBonus,
   getRanksForBonusType,
   getSeriesSkillOptions,
   isExRank,
@@ -33,6 +35,7 @@ describe('Master Data selectors', () => {
     const result = getBonusDefinitionsForWeapon(
       createValidMasterDataFixture(),
       'weapon.fixture.a',
+      'gogma_artian',
     )
     expect(result.map(({ id }) => id)).toEqual([
       'weapon_bonus.fixture.a.attack.high',
@@ -45,6 +48,7 @@ describe('Master Data selectors', () => {
       createValidMasterDataFixture(),
       'weapon.fixture.a',
       'bonus_type.fixture.attack',
+      'gogma_artian',
     )
     expect(result.map(({ id }) => id)).toEqual([
       'bonus_rank.fixture.high',
@@ -109,6 +113,34 @@ describe('Master Data selectors', () => {
       getBonusDefinitionsForWeapon(
         createValidMasterDataFixture(),
         'weapon.fixture.missing',
+        'gogma_artian',
+      ),
+    ).toThrow(MasterDataDomainError)
+  })
+
+  it('maps a normal bonus type through the explicit mapping master', () => {
+    expect(
+      getGogmaBonusTypeForNormalBonus(
+        createValidMasterDataFixture(),
+        'bonus_type.fixture.attack',
+      ),
+    ).toBe('bonus_type.fixture.attack')
+  })
+
+  it('returns reverse mappings as an array', () => {
+    expect(
+      getNormalBonusTypesForGogmaBonus(
+        createValidMasterDataFixture(),
+        'bonus_type.fixture.attack',
+      ),
+    ).toEqual(['bonus_type.fixture.attack'])
+  })
+
+  it('throws an explicit error when a normal Bonus Type has no mapping', () => {
+    expect(() =>
+      getGogmaBonusTypeForNormalBonus(
+        createValidMasterDataFixture(),
+        'bonus_type.fixture.unused',
       ),
     ).toThrow(MasterDataDomainError)
   })

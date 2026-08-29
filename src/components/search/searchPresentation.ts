@@ -17,7 +17,8 @@ export function bonusLabel(
       (definition) =>
         definition.weaponTypeId === weaponTypeId &&
         definition.bonusTypeId === bonus.bonusTypeId &&
-        definition.bonusRankId === bonus.bonusRankId,
+        definition.bonusRankId === bonus.bonusRankId &&
+        definition.scope === 'gogma_artian',
     )?.displayNameJa
   const genericLabel = [
       master.bonusTypes.find(({ id }) => id === bonus.bonusTypeId)?.displayNameJa,

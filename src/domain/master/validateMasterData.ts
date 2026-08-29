@@ -13,6 +13,9 @@ export type MasterValidationIssueCode =
   | 'missing_reference'
   | 'inactive_reference'
   | 'duplicate_weapon_bonus_definition'
+  | 'invalid_artian_bonus_scope'
+  | 'duplicate_bonus_type_mapping'
+  | 'invalid_bonus_type_mapping'
   | 'invalid_lottery_result'
   | 'invalid_lottery_weight'
   | 'invalid_material_quantity'
@@ -172,6 +175,7 @@ export function validateMasterData(master: MasterDataRoot): MasterValidationResu
     ['bonusTypes', master.bonusTypes],
     ['bonusRanks', master.bonusRanks],
     ['weaponBonusDefinitions', master.weaponBonusDefinitions],
+    ['artianBonusTypeMappings', master.artianBonusTypeMappings],
     ['seriesSkills', master.seriesSkills],
     ['groupSkills', master.groupSkills],
     ['lotteries', master.lotteries],
@@ -232,6 +236,17 @@ export function validateMasterData(master: MasterDataRoot): MasterValidationResu
   const definitionKeys = new Map<string, number>()
   master.weaponBonusDefinitions.forEach((definition, index) => {
     const path = `weaponBonusDefinitions[${index}]`
+    if (
+      definition.scope !== 'normal_artian' &&
+      definition.scope !== 'gogma_artian'
+    ) {
+      addIssue(
+        issues,
+        `${path}.scope`,
+        'invalid_artian_bonus_scope',
+        'Weapon bonus scope must be normal_artian or gogma_artian.',
+      )
+    }
     validateReference(
       `${path}.weaponTypeId`,
       definition.weaponTypeId,
@@ -268,7 +283,7 @@ export function validateMasterData(master: MasterDataRoot): MasterValidationResu
       issues,
     )
 
-    const key = `${definition.weaponTypeId}:${definition.bonusTypeId}:${definition.bonusRankId}`
+    const key = `${definition.scope}:${definition.weaponTypeId}:${definition.bonusTypeId}:${definition.bonusRankId}`
     const firstIndex = definitionKeys.get(key)
     if (firstIndex !== undefined) {
       addIssue(
@@ -279,6 +294,82 @@ export function validateMasterData(master: MasterDataRoot): MasterValidationResu
       )
     } else {
       definitionKeys.set(key, index)
+    }
+  })
+
+  const normalBonusTypes = new Set(
+    master.weaponBonusDefinitions
+      .filter(
+        (definition) =>
+          definition.isEnabled && definition.scope === 'normal_artian',
+      )
+      .map((definition) => definition.bonusTypeId),
+  )
+  const gogmaBonusTypes = new Set(
+    master.weaponBonusDefinitions
+      .filter(
+        (definition) =>
+          definition.isEnabled && definition.scope === 'gogma_artian',
+      )
+      .map((definition) => definition.bonusTypeId),
+  )
+  const mappingIndexByNormalType = new Map<string, number>()
+  master.artianBonusTypeMappings.forEach((mapping, index) => {
+    const path = `artianBonusTypeMappings[${index}]`
+    validateReference(
+      `${path}.normalBonusTypeId`,
+      mapping.normalBonusTypeId,
+      'BonusTypeMaster',
+      bonusTypeIds,
+      issues,
+    )
+    validateActiveReference(
+      `${path}.normalBonusTypeId`,
+      mapping.normalBonusTypeId,
+      'BonusTypeMaster',
+      bonusTypeActive,
+      issues,
+    )
+    validateReference(
+      `${path}.gogmaBonusTypeId`,
+      mapping.gogmaBonusTypeId,
+      'BonusTypeMaster',
+      bonusTypeIds,
+      issues,
+    )
+    validateActiveReference(
+      `${path}.gogmaBonusTypeId`,
+      mapping.gogmaBonusTypeId,
+      'BonusTypeMaster',
+      bonusTypeActive,
+      issues,
+    )
+    if (!normalBonusTypes.has(mapping.normalBonusTypeId)) {
+      addIssue(
+        issues,
+        `${path}.normalBonusTypeId`,
+        'invalid_bonus_type_mapping',
+        'Mapping source must be used by a normal_artian bonus definition.',
+      )
+    }
+    if (!gogmaBonusTypes.has(mapping.gogmaBonusTypeId)) {
+      addIssue(
+        issues,
+        `${path}.gogmaBonusTypeId`,
+        'invalid_bonus_type_mapping',
+        'Mapping target must be used by a gogma_artian bonus definition.',
+      )
+    }
+    const firstIndex = mappingIndexByNormalType.get(mapping.normalBonusTypeId)
+    if (firstIndex !== undefined) {
+      addIssue(
+        issues,
+        path,
+        'duplicate_bonus_type_mapping',
+        `Normal bonus type mapping duplicates index ${firstIndex}.`,
+      )
+    } else {
+      mappingIndexByNormalType.set(mapping.normalBonusTypeId, index)
     }
   })
 

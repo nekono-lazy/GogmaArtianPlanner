@@ -13,7 +13,8 @@ function validateBonus(
       definition.isEnabled &&
       definition.weaponTypeId === weaponTypeId &&
       definition.bonusTypeId === bonus.bonusTypeId &&
-      definition.bonusRankId === bonus.bonusRankId,
+      definition.bonusRankId === bonus.bonusRankId &&
+      definition.scope === 'gogma_artian',
   )
   if (!available) issues.push(`${path}: 選択した武器種では利用できないボーナス／Rankです。`)
 }

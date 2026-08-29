@@ -4,11 +4,15 @@ import { getMasterDataStatus } from './masterDataStatus'
 import { createValidMasterDataFixture } from '../../test/fixtures/masterData'
 
 describe('getMasterDataStatus', () => {
-  it('marks the bundled placeholder data as unavailable for production use', () => {
+  it('marks the bundled core UI masters as production-ready', () => {
     const result = loadMasterData()
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(getMasterDataStatus(result.data)).toMatchObject({ isProductionReady: false })
+    expect(getMasterDataStatus(result.data)).toEqual({ isProductionReady: true, reason: null })
+    expect(getMasterDataStatus(result.data, 'search')).toMatchObject({
+      isProductionReady: false,
+      reason: expect.stringContaining('抽選マスターデータは未検証'),
+    })
   })
 
   it('does not invent a warning for explicitly versioned non-placeholder metadata', () => {

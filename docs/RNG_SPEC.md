@@ -178,6 +178,8 @@ export interface RngMasterSubset {
 }
 ```
 
+Normal Artian Predictionが扱う復元ボーナス定義は `normal_artian` scope、Gogma Predictionが返す完成復元ボーナスは `gogma_artian` scopeである。通常→巨戟Bonus Type Mappingは意味上の対応とValidation補助であり、RNG EngineやSearchがMappingからRank・抽選結果・完成5枠を生成してはならない。
+
 ---
 
 ## 7. Counter進行

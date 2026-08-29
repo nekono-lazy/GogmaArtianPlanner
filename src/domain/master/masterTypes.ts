@@ -55,16 +55,25 @@ export interface BonusRankMaster {
   isEnabled: boolean
 }
 
+export type ArtianBonusScope = 'normal_artian' | 'gogma_artian'
+
 export interface WeaponBonusDefinition {
   id: string
   weaponTypeId: WeaponTypeId
   bonusTypeId: BonusTypeId
   bonusRankId: BonusRankId
+  scope: ArtianBonusScope
   displayNameJa: string
   displayNameEn: string
   effectValue: string
   sortOrder: number
   isEnabled: boolean
+}
+
+export interface ArtianBonusTypeMapping {
+  id: string
+  normalBonusTypeId: BonusTypeId
+  gogmaBonusTypeId: BonusTypeId
 }
 
 export interface SeriesSkillMaster {
@@ -132,6 +141,7 @@ export interface MasterDataRoot {
   bonusTypes: BonusTypeMaster[]
   bonusRanks: BonusRankMaster[]
   weaponBonusDefinitions: WeaponBonusDefinition[]
+  artianBonusTypeMappings: ArtianBonusTypeMapping[]
   seriesSkills: SeriesSkillMaster[]
   groupSkills: GroupSkillMaster[]
   lotteries: LotteryMaster[]

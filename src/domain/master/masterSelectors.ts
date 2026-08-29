@@ -1,5 +1,6 @@
 import type { BonusRankId, BonusTypeId, WeaponTypeId } from '../models/publicTypes'
 import type {
+  ArtianBonusScope,
   BonusRankMaster,
   ElementMaster,
   GroupSkillMaster,
@@ -16,6 +17,7 @@ import type {
 export type MasterDataDomainErrorCode =
   | 'master_id_not_found'
   | 'master_reference_invalid'
+  | 'master_mapping_not_found'
 
 export class MasterDataDomainError extends Error {
   readonly code: MasterDataDomainErrorCode
@@ -87,12 +89,15 @@ export function getEnabledElements(master: MasterDataRoot): ElementMaster[] {
 export function getBonusDefinitionsForWeapon(
   master: MasterDataRoot,
   weaponTypeId: WeaponTypeId,
+  scope: ArtianBonusScope,
 ): WeaponBonusDefinition[] {
   requireById(master.weaponTypes, weaponTypeId, 'WeaponTypeMaster')
   return master.weaponBonusDefinitions
     .filter(
       (definition) =>
-        definition.isEnabled && definition.weaponTypeId === weaponTypeId,
+        definition.isEnabled &&
+        definition.weaponTypeId === weaponTypeId &&
+        definition.scope === scope,
     )
     .sort(compareBySortOrderAndId)
 }
@@ -101,6 +106,7 @@ export function getRanksForBonusType(
   master: MasterDataRoot,
   weaponTypeId: WeaponTypeId,
   bonusTypeId: BonusTypeId,
+  scope: ArtianBonusScope,
 ): BonusRankMaster[] {
   requireById(master.weaponTypes, weaponTypeId, 'WeaponTypeMaster')
   requireById(master.bonusTypes, bonusTypeId, 'BonusTypeMaster')
@@ -111,7 +117,8 @@ export function getRanksForBonusType(
         (definition) =>
           definition.isEnabled &&
           definition.weaponTypeId === weaponTypeId &&
-          definition.bonusTypeId === bonusTypeId,
+          definition.bonusTypeId === bonusTypeId &&
+          definition.scope === scope,
       )
       .map(({ bonusRankId }) => bonusRankId),
   )
@@ -130,6 +137,43 @@ export function getRanksForBonusType(
     })
     .filter(({ isEnabled }) => isEnabled)
     .sort(compareByRankOrderAndId)
+}
+
+export function getGogmaBonusTypeForNormalBonus(
+  master: MasterDataRoot,
+  normalBonusTypeId: BonusTypeId,
+): BonusTypeId {
+  requireById(master.bonusTypes, normalBonusTypeId, 'BonusTypeMaster')
+  const mapping = master.artianBonusTypeMappings.find(
+    (entry) => entry.normalBonusTypeId === normalBonusTypeId,
+  )
+  if (!mapping) {
+    throw new MasterDataDomainError(
+      'master_mapping_not_found',
+      'ArtianBonusTypeMapping',
+      normalBonusTypeId,
+    )
+  }
+  return mapping.gogmaBonusTypeId
+}
+
+export function getNormalBonusTypesForGogmaBonus(
+  master: MasterDataRoot,
+  gogmaBonusTypeId: BonusTypeId,
+): BonusTypeId[] {
+  requireById(master.bonusTypes, gogmaBonusTypeId, 'BonusTypeMaster')
+  const values = master.artianBonusTypeMappings
+    .filter((entry) => entry.gogmaBonusTypeId === gogmaBonusTypeId)
+    .map((entry) => entry.normalBonusTypeId)
+    .sort((left, right) => left.localeCompare(right))
+  if (values.length === 0) {
+    throw new MasterDataDomainError(
+      'master_mapping_not_found',
+      'ArtianBonusTypeMapping',
+      gogmaBonusTypeId,
+    )
+  }
+  return values
 }
 
 export function getBonusRankOrder(

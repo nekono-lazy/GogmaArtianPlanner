@@ -221,7 +221,7 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
   return (
     <PageShell title="候補検索" description="目標武器ごとに利用可能な作成候補を検索します。">
       <Stack spacing={3}>
-        {masterForDisplay && <MasterDataStatusAlert master={masterForDisplay} />}
+        {masterForDisplay && <MasterDataStatusAlert master={masterForDisplay} feature="search" />}
         {loading && <LinearProgress aria-label="検索データを読み込み中" />}
         {error && <Alert severity="error">{error}</Alert>}
         {notice && <Alert severity="info">{notice}</Alert>}

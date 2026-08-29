@@ -49,20 +49,22 @@ describe('OwnedWeaponsPage', () => {
     confirm.mockRestore()
   })
 
-  it('shows Master-backed Japanese choices and warns that placeholder data is incomplete', async () => {
+  it('shows verified Japanese Master choices without the old core-data warning', async () => {
     const user = userEvent.setup(); const deps = dependencies()
     render(<OwnedWeaponsPage dependencies={deps} />)
-    expect(await screen.findByText(/一部のゲームデータは未登録または未検証/)).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: '所持武器を追加' }))
-    expect(screen.getByLabelText('武器種')).toHaveTextContent('双剣')
-    expect(screen.getByLabelText('属性')).toHaveTextContent('雷')
-    expect(screen.getAllByRole('combobox', { name: /ボーナス種別/ })[0]).toHaveTextContent('攻撃')
-    expect(screen.getAllByRole('combobox', { name: /ランク/ })[0]).toHaveTextContent('EX')
+    await user.click(await screen.findByRole('button', { name: '所持武器を追加' }))
+    expect(screen.queryByText(/一部のゲームデータは未登録または未検証/)).not.toBeInTheDocument()
+    expect(screen.getByLabelText('武器種')).toHaveTextContent('大剣')
+    expect(screen.getByLabelText('属性')).toHaveTextContent('無属性')
+    expect(screen.getAllByRole('combobox', { name: /ボーナス種別/ })[0]).toHaveTextContent('基礎攻撃力強化')
+    expect(screen.getAllByRole('combobox', { name: /ランク/ })[0]).toHaveTextContent('I')
     await user.click(screen.getByLabelText('シリーズスキル'))
-    expect(await screen.findByRole('option', { name: '黒蝕竜の力' })).toBeInTheDocument()
+    expect(await screen.findByRole('option', { name: '闢獣の力' })).toBeInTheDocument()
+    expect(screen.getAllByRole('option')).toHaveLength(26)
     await user.keyboard('{Escape}')
     await user.click(screen.getByLabelText('グループスキル'))
-    expect(await screen.findByRole('option', { name: 'ヌシの魂' })).toBeInTheDocument()
+    expect(await screen.findByRole('option', { name: '鱗張りの技法' })).toBeInTheDocument()
+    expect(screen.getAllByRole('option')).toHaveLength(18)
   })
 
   it('deletes an unreferenced weapon after confirmation', async () => {

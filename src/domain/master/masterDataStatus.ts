@@ -5,21 +5,38 @@ export interface MasterDataStatus {
   reason: string | null
 }
 
-export function getMasterDataStatus(master: MasterDataRoot): MasterDataStatus {
-  const metadata = `${master.manifest.gameVersion} ${master.manifest.notes ?? ''}`.toLowerCase()
-  const isPlaceholder = [
-    'unknown-initial',
-    'placeholder',
-    'not yet verified',
-    'unverified',
-    'fixture-only',
-    'validation-only',
-  ].some((marker) => metadata.includes(marker))
+export type MasterDataFeature = 'core_ui' | 'search'
 
-  return isPlaceholder
-    ? {
-        isProductionReady: false,
-        reason: '現在、一部のゲームデータは未登録または未検証です。表示される選択肢がゲーム全体を網羅しているとは限りません。',
-      }
-    : { isProductionReady: true, reason: null }
+export function getMasterDataStatus(
+  master: MasterDataRoot,
+  feature: MasterDataFeature = 'core_ui',
+): MasterDataStatus {
+  const hasCoreData =
+    master.weaponTypes.some(({ isEnabled }) => isEnabled) &&
+    master.elements.some(({ isEnabled }) => isEnabled) &&
+    master.weaponBonusDefinitions.some(
+      ({ isEnabled, scope }) => isEnabled && scope === 'normal_artian',
+    ) &&
+    master.weaponBonusDefinitions.some(
+      ({ isEnabled, scope }) => isEnabled && scope === 'gogma_artian',
+    ) &&
+    master.artianBonusTypeMappings.length > 0 &&
+    master.seriesSkills.some(({ isEnabled }) => isEnabled) &&
+    master.groupSkills.some(({ isEnabled }) => isEnabled)
+
+  if (!hasCoreData) {
+    return {
+      isProductionReady: false,
+      reason: '武器入力に必要なマスターデータが不足しています。推測した選択肢は表示しません。',
+    }
+  }
+
+  if (feature === 'search' && !master.lotteries.some(({ isEnabled }) => isEnabled)) {
+    return {
+      isProductionReady: false,
+      reason: '抽選マスターデータは未検証のため無効です。通常アーティア経由の検索は利用できません。素材コストも未検証です。',
+    }
+  }
+
+  return { isProductionReady: true, reason: null }
 }
