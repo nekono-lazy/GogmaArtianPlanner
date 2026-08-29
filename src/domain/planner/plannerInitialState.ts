@@ -25,7 +25,11 @@ export function createInitialPlannerSearchState(input: PlannerInput, validEntrie
     return { isValid: false, state: null, issues: inventory.issues, warnings: [] }
   }
   const routeProgressByEntryId: Record<string, number> = {}
-  validEntries.forEach(({ entry }) => { routeProgressByEntryId[entry.id] = 0 })
+  const routeRuntimeByEntryId: PlannerSearchState['routeRuntimeByEntryId'] = {}
+  validEntries.forEach(({ entry }) => {
+    routeProgressByEntryId[entry.id] = 0
+    routeRuntimeByEntryId[entry.id] = { hasUnregisteredGogmaOutput: false }
+  })
   const targetSatisfaction = deriveTargetSatisfaction(
     input.targetWeapons,
     input.ownedWeapons,
@@ -48,6 +52,13 @@ export function createInitialPlannerSearchState(input: PlannerInput, validEntrie
     currentNormalCounters: structuredClone(input.normalCounters),
     simulatedInventory: inventory.inventory,
     targetSatisfaction: targetSatisfactionById,
-    selectedBuildListEntryIds: [], routeProgressByEntryId, totalCost: 0, evaluationScore: 0,
+    selectedBuildListEntryIds: [],
+    routeProgressByEntryId,
+    routeRuntimeByEntryId,
+    securedOwnedWeaponIdByEntryId: {},
+    trace: [],
+    consumedMaterialWeaponCount: 0,
+    totalCost: 0,
+    evaluationScore: 0,
   } }
 }

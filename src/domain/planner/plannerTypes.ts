@@ -2,6 +2,8 @@ import type {
   BuildListEntry,
   BuildListEntryId,
   CalculationContext,
+  CandidateCategory,
+  DomainValidationIssue,
   ISODateTimeString,
   NormalArtianCounter,
   OwnedWeapon,
@@ -11,6 +13,7 @@ import type {
   ProductionPlan,
   ProductionPlanId,
   RngState,
+  RouteOperation,
   TargetWeapon,
   TargetWeaponId,
 } from '../models/publicTypes'
@@ -104,7 +107,82 @@ export interface SimulatedInventory {
   createdWeaponIds: OwnedWeaponId[]
 }
 
-/** The minimal state needed for the later Beam Search implementation. */
+export interface CandidateScore {
+  targetPriorityScore: number
+  satisfactionScore: number
+  categoryScore: number
+  distancePenalty: number
+  resourcePenalty: number
+  conflictPenalty: number
+  total: number
+}
+
+export interface PlannerSearchRngSnapshot {
+  gogmaCounter: number | null
+  skillCounter: number | null
+  normalCounters: Array<{ id: string; counter: number | null }>
+}
+
+export interface PlannerSearchInventoryEffect {
+  addedOwnedWeaponIds: OwnedWeaponId[]
+  removedOwnedWeaponIds: OwnedWeaponId[]
+  updatedOwnedWeaponIds: OwnedWeaponId[]
+  reservedOwnedWeaponIds: OwnedWeaponId[]
+  routeOutputChangedForEntryIds: BuildListEntryId[]
+}
+
+export interface PlannerSearchSatisfactionChange {
+  targetWeaponId: TargetWeaponId
+  before: PlannerTargetSatisfaction
+  after: PlannerTargetSatisfaction
+}
+
+export interface PlannerSearchRoutePosition {
+  operationIndex: number
+  unitIndex: number
+  unitCount: number
+}
+
+export interface PlannerSearchRouteAction {
+  kind: 'route_operation'
+  actionType: RouteOperation['type']
+  primaryBuildListEntryId: BuildListEntryId
+  progressedBuildListEntryIds: BuildListEntryId[]
+  progressedRoutePositions: Record<string, PlannerSearchRoutePosition>
+  routeOperation: RouteOperation
+  ownedWeaponId: OwnedWeaponId | null
+  plannerOnly: false
+  rngBefore: PlannerSearchRngSnapshot
+  rngAfter: PlannerSearchRngSnapshot
+  inventoryEffect: PlannerSearchInventoryEffect
+  satisfactionChanges: PlannerSearchSatisfactionChange[]
+}
+
+export interface PlannerSearchReserveAction {
+  kind: 'reserve_candidate'
+  actionType: 'reserve_weapon'
+  primaryBuildListEntryId: BuildListEntryId
+  progressedBuildListEntryIds: BuildListEntryId[]
+  progressedRoutePositions: Record<string, PlannerSearchRoutePosition>
+  routeOperation: null
+  ownedWeaponId: OwnedWeaponId
+  plannerOnly: true
+  candidateCategory: CandidateCategory
+  rngBefore: PlannerSearchRngSnapshot
+  rngAfter: PlannerSearchRngSnapshot
+  inventoryEffect: PlannerSearchInventoryEffect
+  satisfactionChanges: PlannerSearchSatisfactionChange[]
+}
+
+export type PlannerSearchAction =
+  | PlannerSearchRouteAction
+  | PlannerSearchReserveAction
+
+export interface PlannerRouteRuntimeState {
+  hasUnregisteredGogmaOutput: boolean
+}
+
+/** Immutable Beam Search state. Trace actions are not RouteOperations or PlanSteps. */
 export interface PlannerSearchState {
   currentRngState: RngState
   currentNormalCounters: NormalArtianCounter[]
@@ -112,8 +190,41 @@ export interface PlannerSearchState {
   targetSatisfaction: Record<TargetWeaponId, PlannerTargetSatisfaction>
   selectedBuildListEntryIds: BuildListEntryId[]
   routeProgressByEntryId: Record<string, number>
+  routeRuntimeByEntryId: Record<string, PlannerRouteRuntimeState>
+  securedOwnedWeaponIdByEntryId: Record<string, OwnedWeaponId>
+  trace: PlannerSearchAction[]
+  consumedMaterialWeaponCount: number
   totalCost: number
   evaluationScore: number
+}
+
+export type PlannerSearchRejectionReason =
+  | 'counter_before_current'
+  | 'counter_after_mismatch'
+  | 'counter_unavailable'
+  | 'inventory_precondition_failed'
+  | 'protected_destructive_use'
+  | 'conflict_resolution_not_selected'
+  | 'candidate_already_satisfied'
+  | 'rng_contract_unavailable'
+
+export interface PlannerSearchRejection {
+  buildListEntryId: BuildListEntryId
+  actionType: RouteOperation['type'] | 'reserve_weapon'
+  reason: PlannerSearchRejectionReason
+  detail: string
+}
+
+export interface PlannerBeamSearchResult {
+  bestState: PlannerSearchState | null
+  conflicts: PlanConflict[]
+  warnings: PlannerWarning[]
+  validationIssues: DomainValidationIssue[]
+  excludedBuildListEntries: ExcludedBuildListEntry[]
+  rejections: PlannerSearchRejection[]
+  expandedStates: number
+  completed: boolean
+  cancelled: boolean
 }
 
 export type PlannerWarningKind =

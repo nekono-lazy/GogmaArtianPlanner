@@ -239,6 +239,30 @@ export interface PlannerSearchState {
 - Ideal候補: 対象Targetの `hasPractical = true`、`hasIdeal = true`
 - Practical確保済みでもIdeal未所持なら、そのTargetは理想更新候補として探索に残す
 
+### 7.1 Planner Search Action / Trace
+
+Beam SearchはCandidate Snapshotの `BuildRoute.operations` を変更せず、実際に採用した
+操作を非永続のPlanner Search Action / Traceとして別に保持する。
+
+- `RouteOperation`、Planner Search Action、`PlanStep` は別の型・責務である
+- Search Actionは元RouteOperation、主対象BuildListEntry、同じ物理操作で進んだEntry、
+  route progress位置、OwnedWeapon ID、RNG Before / After、Inventory効果、Target充足効果を保持する
+- `count > 1` のRouteOperationは元Snapshotを変更せず、Trace上で1操作単位に分割する
+- Candidateを確保するSearch ActionはPlanner-onlyであり、RouteOperationではない。第9Cで
+  `reserve_weapon` PlanStepへ変換する
+- Search Traceは非永続で、PlanStep IDまたは日時を生成しない
+
+### 7.2 expandedStates
+
+`expandedStates` は次の定義で数える。
+
+- 初期Stateは数えない
+- 実行前提を満たさずsuccessor生成前にrejectした展開は数えない
+- successor PlannerSearchStateを実際に構築し、評価対象にした時点で1増やす
+- beamWidthによる枝刈り前でも、構築・評価したsuccessorは数える
+- `maxExpandedStates = N` の場合はN件まで許可し、N+1件目を構築しない
+- N件へ到達した場合だけ `max_expanded_states_reached` warningを返す
+
 `beamWidth = 50`、`maxExpandedStates = 10000` は初期値であり、UI設定ではなく将来調整可能な定数とする。完全最適解は保証せず、実用的な時間内で十分良いPlanを返す。
 
 Planner内部ではBeam Searchの状態評価用にCandidate Scoreを計算する。
