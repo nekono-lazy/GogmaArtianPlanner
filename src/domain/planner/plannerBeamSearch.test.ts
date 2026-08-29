@@ -40,6 +40,7 @@ import type {
   PlannerSearchState,
 } from './plannerTypes'
 import { createInitialPlannerSearchState } from './plannerInitialState'
+import { comparePlannerSearchStates } from './plannerScoring'
 import { validatePlannerInput } from './plannerValidation'
 
 const ENGINE_VERSION = 'fake-fixture:planner-beam-v1'
@@ -1203,7 +1204,7 @@ describe('Planner Beam Search', () => {
     })
   })
 
-  it('rejects an older existing-source Candidate after a later source mutation', async () => {
+  it('rejects an unstarted existing-source Route after a later source mutation', async () => {
     const firstTarget = target('target.version.first')
     const secondTarget = target('target.version.second')
     const source = sourceWeapon('owned.version.source')
@@ -1224,9 +1225,9 @@ describe('Planner Beam Search', () => {
     )
     const result = await runPlannerBeamSearch(input, dependencies)
     expect(result.rejections).toContainEqual(expect.objectContaining({
-      buildListEntryId: first.id,
-      actionType: 'reserve_weapon',
-      detail: 'The existing Gogma Candidate was superseded by a later source mutation.',
+      buildListEntryId: second.id,
+      actionType: 'reset_bonuses',
+      detail: 'The existing Gogma Route was superseded by a later source mutation.',
     }))
   })
 
@@ -1414,5 +1415,166 @@ describe('Planner Beam Search', () => {
       expect(result.bestState?.trace[0].inventoryEffect.updatedOwnedWeaponIds)
         .toEqual([])
     }
+  })
+
+  it('restores an initially unnecessary Entry after its Target loses its only weapon', async () => {
+    const restoredTarget = target('target.restore.after-consumption')
+    const consumingTarget = {
+      ...target('target.restore.consumer'),
+      weaponTypeId: 'weapon.fixture.b',
+    }
+    const onlySatisfiedWeapon = {
+      ...createValidOwnedWeapon(ownedWeaponId('owned.restore.only')),
+      status: 'material' as const,
+      isProtected: false,
+      relatedTargetWeaponIds: [],
+    }
+    const consumingSource = {
+      ...sourceWeapon('owned.restore.consumer-source'),
+      weaponTypeId: 'weapon.fixture.b',
+    }
+    const restorationEntry = routeEntry('entry.restore.target', restoredTarget, {
+      kind: 'normal_artian_to_gogma',
+      sourceOwnedWeaponId: null,
+      operations: [
+        {
+          type: 'create_normal_artian',
+          weaponTypeId: 'weapon.fixture.a',
+          rarity: 8,
+          count: 1,
+          normalCounterBefore: 4,
+          normalCounterAfter: 5,
+        },
+        {
+          type: 'convert_normal_to_gogma',
+          weaponTypeId: 'weapon.fixture.a',
+          gogmaCounterBefore: 10,
+          gogmaCounterAfter: 11,
+        },
+      ],
+    })
+    const consumingEntry = routeEntry('entry.restore.consume', consumingTarget, {
+      kind: 'existing_gogma_mixed',
+      sourceOwnedWeaponId: consumingSource.id,
+      operations: [{
+        type: 'use_weapon_as_material',
+        ownedWeaponId: onlySatisfiedWeapon.id,
+      }],
+    })
+    const { input, dependencies } = fixture(
+      [restoredTarget, consumingTarget],
+      [restorationEntry, consumingEntry],
+      [onlySatisfiedWeapon, consumingSource],
+    )
+    const result = await runPlannerBeamSearch(input, dependencies)
+    expect(result.bestState?.trace.map(({ primaryBuildListEntryId }) =>
+      primaryBuildListEntryId,
+    )).toContain(restorationEntry.id)
+    expect(result.bestState?.selectedBuildListEntryIds).toContain(
+      restorationEntry.id,
+    )
+  })
+
+  it('uses Practical-first as a tier instead of counting started Targets', () => {
+    const twoStarted = {
+      practicalFirstProgressTargetIds: [
+        targetWeaponId('target.tier.first'),
+        targetWeaponId('target.tier.second'),
+      ],
+      evaluationScore: 10,
+    } as PlannerSearchState
+    const oneSecured = {
+      practicalFirstProgressTargetIds: [targetWeaponId('target.tier.secured')],
+      evaluationScore: 20,
+    } as PlannerSearchState
+    expect(comparePlannerSearchStates(oneSecured, twoStarted)).toBeLessThan(0)
+  })
+
+  it('synchronizes source versions for shared actions and compatible continuations', async () => {
+    const firstTarget = target('target.source-version.shared.first')
+    const secondTarget = target('target.source-version.shared.second')
+    const source = sourceWeapon('owned.source-version.shared')
+    const route = (): BuildRoute => ({
+      kind: 'existing_gogma_mixed',
+      sourceOwnedWeaponId: source.id,
+      operations: [
+        {
+          type: 'reset_bonuses',
+          sourceOwnedWeaponId: source.id,
+          gogmaCounterBefore: 10,
+          gogmaCounterAfter: 11,
+        },
+        {
+          type: 'reset_skills',
+          sourceOwnedWeaponId: source.id,
+          skillCounterBefore: 7,
+          skillCounterAfter: 8,
+        },
+      ],
+    })
+    const first = routeEntry('entry.source-version.shared.first', firstTarget, route())
+    const second = routeEntry('entry.source-version.shared.second', secondTarget, route())
+    const { input, dependencies } = fixture(
+      [firstTarget, secondTarget],
+      [first, second],
+      [source],
+    )
+    const result = await runPlannerBeamSearch(input, dependencies)
+    expect(result.bestState?.routeSourceVersionByEntryId[first.id]).toBe(2)
+    expect(result.bestState?.routeSourceVersionByEntryId[second.id]).toBe(2)
+    expect(result.bestState?.sourceMutationVersionByOwnedWeaponId[source.id]).toBe(2)
+    expect(result.bestState?.trace.slice(0, 2).map(
+      ({ progressedBuildListEntryIds }) => progressedBuildListEntryIds,
+    )).toEqual([[first.id, second.id], [first.id, second.id]])
+  })
+
+  it('rejects a diverged shared-prefix Route at its old source version', async () => {
+    const firstTarget = target('target.source-version.diverged.first')
+    const secondTarget = target('target.source-version.diverged.second')
+    const source = sourceWeapon('owned.source-version.diverged')
+    const first = routeEntry('entry.source-version.diverged.first', firstTarget, {
+      kind: 'existing_gogma_mixed',
+      sourceOwnedWeaponId: source.id,
+      operations: [
+        {
+          type: 'reset_bonuses',
+          sourceOwnedWeaponId: source.id,
+          gogmaCounterBefore: 10,
+          gogmaCounterAfter: 11,
+        },
+        {
+          type: 'reset_skills',
+          sourceOwnedWeaponId: source.id,
+          skillCounterBefore: 7,
+          skillCounterAfter: 8,
+        },
+      ],
+    })
+    const second = routeEntry('entry.source-version.diverged.second', secondTarget, {
+      kind: 'existing_gogma_reset_bonuses',
+      sourceOwnedWeaponId: source.id,
+      operations: [{
+        type: 'reset_bonuses',
+        sourceOwnedWeaponId: source.id,
+        gogmaCounterBefore: 10,
+        gogmaCounterAfter: 11,
+      }],
+    })
+    const { input, dependencies } = fixture(
+      [firstTarget, secondTarget],
+      [first, second],
+      [source],
+    )
+    const before = structuredClone(input)
+    const result = await runPlannerBeamSearch(input, dependencies)
+    expect(result.rejections).toContainEqual(expect.objectContaining({
+      buildListEntryId: second.id,
+      actionType: 'reserve_weapon',
+      detail: 'The existing Gogma Candidate was superseded by a later source mutation.',
+    }))
+    expect(input).toEqual(before)
+    expect(second.candidateSnapshot.route.operations).toEqual(
+      before.buildListEntries[1].candidateSnapshot.route.operations,
+    )
   })
 })

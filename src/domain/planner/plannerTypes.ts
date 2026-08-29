@@ -195,6 +195,8 @@ export interface PlannerSearchState {
   sourceMutationVersionByOwnedWeaponId: Record<string, number>
   /** Existing-source Candidate snapshots are reservable only at this recorded version. */
   candidateReadySourceVersionByEntryId: Record<string, number>
+  /** The existing-source version each Route is currently allowed to continue from. */
+  routeSourceVersionByEntryId: Record<string, number>
   /** Existing sources are excluded from satisfaction until a Candidate result is reserved. */
   inFlightExistingSourceByOwnedWeaponId: Record<string, true>
   securedOwnedWeaponIdByEntryId: Record<string, OwnedWeaponId>

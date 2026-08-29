@@ -185,6 +185,7 @@ export function createPlannerSearchStateSemanticKey(
     sourceMutationVersionByOwnedWeaponId: state.sourceMutationVersionByOwnedWeaponId,
     candidateReadySourceVersionByEntryId:
       state.candidateReadySourceVersionByEntryId,
+    routeSourceVersionByEntryId: state.routeSourceVersionByEntryId,
     inFlightExistingSourceByOwnedWeaponId:
       state.inFlightExistingSourceByOwnedWeaponId,
     practicalFirstProgressTargetIds: [...state.practicalFirstProgressTargetIds]
@@ -218,14 +219,13 @@ export function comparePlannerSearchStates(
   left: PlannerSearchState,
   right: PlannerSearchState,
 ): number {
-  if (
-    left.practicalFirstProgressTargetIds.length !==
-    right.practicalFirstProgressTargetIds.length
-  ) {
-    return (
-      right.practicalFirstProgressTargetIds.length -
-      left.practicalFirstProgressTargetIds.length
-    )
+  const leftHasPracticalFirstProgress =
+    left.practicalFirstProgressTargetIds.length > 0
+  const rightHasPracticalFirstProgress =
+    right.practicalFirstProgressTargetIds.length > 0
+  if (leftHasPracticalFirstProgress !== rightHasPracticalFirstProgress) {
+    return Number(rightHasPracticalFirstProgress) -
+      Number(leftHasPracticalFirstProgress)
   }
   if (left.evaluationScore !== right.evaluationScore) {
     return right.evaluationScore - left.evaluationScore

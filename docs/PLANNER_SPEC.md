@@ -115,7 +115,8 @@ export interface PlannerClock {
 
 制約。
 
-- `buildListEntries` は `isStale = false` の項目のみ
+- 保存済みの `isStale` / `staleReasons` だけでは採否を決めない。Planner実行時に
+  現在状態から再validationし、実行可能なBuildListEntryだけを使用する
 - PlannerはBuildListEntryの `candidateSnapshot` を入力候補として使う
 - Planner入力validationでTarget定義Hash、searchStateHash、referencedOwnedWeaponsHash、CalculationContextを現在値から再確認し、保存済み `isStale` だけを信用しない
 - RngState全体の確定は要求しない
@@ -216,6 +217,7 @@ export interface PlannerSearchState {
   routeRuntimeByEntryId: Record<BuildListEntryId, PlannerRouteRuntimeState>;
   sourceMutationVersionByOwnedWeaponId: Record<OwnedWeaponId, number>;
   candidateReadySourceVersionByEntryId: Record<BuildListEntryId, number>;
+  routeSourceVersionByEntryId: Record<BuildListEntryId, number>;
   inFlightExistingSourceByOwnedWeaponId: Record<OwnedWeaponId, true>;
   securedOwnedWeaponIdByEntryId: Record<BuildListEntryId, OwnedWeaponId>;
   trace: PlannerSearchAction[];
@@ -252,6 +254,10 @@ export interface PlannerSearchState {
   reserveは記録versionと現在versionが一致するときだけ許可する。後続操作でsourceが
   変更された古いCandidateはreserveできない。同一physical actionを共有して同時に
   完了したEntryは同じversionを記録してよい。
+- 既存Gogma Routeは開始時にsource version 0を前提とし、Route全体で前提versionと
+  現在source versionの一致を要求する。共有physical actionで進行したEntryは操作後の
+  versionへ同時に更新する。共有prefix後に別Entryがsourceを変更した場合、古いversionの
+  Routeは後続操作・reserveとも実行しない。
 - Practical確保済みでもIdeal未所持なら、そのTargetは理想更新候補として探索に残す
 
 ### 7.1 Planner Search Action / Trace

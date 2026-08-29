@@ -95,6 +95,36 @@ function isExistingGogmaRoute(entry: BuildListEntry): boolean {
   return entry.candidateSnapshot.route.kind.startsWith('existing_gogma')
 }
 
+function existingRouteSourceId(entry: BuildListEntry): OwnedWeaponId | null {
+  return isExistingGogmaRoute(entry)
+    ? entry.candidateSnapshot.route.sourceOwnedWeaponId
+    : null
+}
+
+function entryUsesCurrentSourceVersion(
+  state: PlannerSearchState,
+  entry: BuildListEntry,
+): boolean {
+  const sourceId = existingRouteSourceId(entry)
+  if (sourceId === null) return true
+  return (
+    (state.routeSourceVersionByEntryId[entry.id] ?? 0) ===
+    (state.sourceMutationVersionByOwnedWeaponId[sourceId] ?? 0)
+  )
+}
+
+function sourceVersionRejection(
+  entry: BuildListEntry,
+  unit: PlannerRouteUnit,
+): PlannerSearchRejection {
+  return rejection(
+    entry.id,
+    unit.operation.type,
+    'inventory_precondition_failed',
+    'The existing Gogma Route was superseded by a later source mutation.',
+  )
+}
+
 function sourceMutatedByOperation(
   operation: PlannerRouteUnit['operation'],
 ): OwnedWeaponId | null {
@@ -472,6 +502,7 @@ function mergedProgressedEntries(
     if (state.selectedBuildListEntryIds.includes(entryId)) return
     const entry = entriesById.get(entryId)
     if (!entry) return
+    if (!entryUsesCurrentSourceVersion(state, entry)) return
     const satisfaction = state.targetSatisfaction[entry.targetWeaponId]
     if (
       satisfaction?.hasIdeal ||
@@ -532,6 +563,9 @@ function applyRouteAction(
       ),
     }
   }
+  if (!entryUsesCurrentSourceVersion(sourceState, primaryEntry)) {
+    return { state: null, rejection: sourceVersionRejection(primaryEntry, primary) }
+  }
   const counterIssue = counterPreconditionRejection(sourceState, primary)
   if (counterIssue) return { state: null, rejection: counterIssue }
   const inventoryIssue = inventoryPreconditionRejection(
@@ -580,16 +614,20 @@ function applyRouteAction(
       appliedInventory.effect.routeOutputChangedForEntryIds.push(entry.id)
     }
     const entryUnits = entry ? unitPlans.get(entry.id) : undefined
+    const sourceId = entry ? existingRouteSourceId(entry) : null
+    if (entry && sourceId !== null) {
+      state.routeSourceVersionByEntryId[entry.id] =
+        state.sourceMutationVersionByOwnedWeaponId[sourceId] ?? 0
+    }
     if (
       entry &&
       entryUnits !== undefined &&
       isExistingGogmaRoute(entry) &&
       state.routeProgressByEntryId[entry.id] === entryUnits.length &&
-      entry.candidateSnapshot.route.sourceOwnedWeaponId !== null
+      sourceId !== null
     ) {
-      const sourceId = entry.candidateSnapshot.route.sourceOwnedWeaponId
       state.candidateReadySourceVersionByEntryId[entry.id] =
-        state.sourceMutationVersionByOwnedWeaponId[sourceId] ?? 0
+        state.routeSourceVersionByEntryId[entry.id]
     }
     if (
       entry &&
@@ -900,7 +938,7 @@ export async function runPlannerBeamSearch(
   )
   const rejections = [...routePlans.rejections]
   const rejectionKeys = new Set(rejections.map(rejectionKey))
-  const candidateEntries = validation.validBuildListEntries
+  const allSearchEntries = validation.validBuildListEntries
     .map(({ entry }) => entry)
     .filter((entry) => routePlans.unitPlans.has(entry.id))
     .sort((left, right) => compareStableStrings(left.id, right.id))
@@ -908,19 +946,27 @@ export async function runPlannerBeamSearch(
     .filter(({ isEnabled }) => isEnabled)
     .sort((left, right) => compareStableStrings(left.id, right.id))
   const targetsById = new Map(targets.map((target) => [target.id, target]))
-  const entries = candidateEntries.filter((entry) =>
+  const initialConflictEntries = allSearchEntries.filter((entry) =>
     entryIsRelevantForState(initialSearchState, entry),
   )
-  const entriesById = new Map(entries.map((entry) => [entry.id, entry]))
-  const unitPlans = new Map(
-    entries.flatMap((entry) => {
+  const entriesById = new Map(
+    allSearchEntries.map((entry) => [entry.id, entry]),
+  )
+  const allUnitPlans = new Map(
+    allSearchEntries.flatMap((entry) => {
       const units = routePlans.unitPlans.get(entry.id)
       return units === undefined ? [] : [[entry.id, units] as const]
     }),
   )
+  const initialConflictUnitPlans = new Map(
+    initialConflictEntries.flatMap((entry) => {
+      const units = allUnitPlans.get(entry.id)
+      return units === undefined ? [] : [[entry.id, units] as const]
+    }),
+  )
   const conflictDetection = detectPlannerConflicts(
-    entries,
-    unitPlans,
+    initialConflictEntries,
+    initialConflictUnitPlans,
     targets,
     initialSearchState,
     validation.validConflictResolutions,
@@ -939,13 +985,13 @@ export async function runPlannerBeamSearch(
     })
   })
   const routeUnitCountByEntryId = new Map(
-    [...unitPlans].map(([entryId, units]) => [
+    [...allUnitPlans].map(([entryId, units]) => [
       entryId,
       units.length,
     ]),
   )
   const scoreContext = {
-    entries,
+    entries: allSearchEntries,
     targetsById,
     routeUnitCountByEntryId,
     conflictCountByEntryId,
@@ -955,6 +1001,7 @@ export async function runPlannerBeamSearch(
     if (!entriesById.has(entryId as BuildListEntryId)) {
       delete initialState.routeProgressByEntryId[entryId]
       delete initialState.routeRuntimeByEntryId[entryId]
+      delete initialState.routeSourceVersionByEntryId[entryId]
     }
   })
   initialState.evaluationScore = evaluatePlannerSearchState(
@@ -1001,10 +1048,10 @@ export async function runPlannerBeamSearch(
         reachedStepLimit = true
         continue
       }
-      for (const entry of entries) {
+      for (const entry of allSearchEntries) {
         if (state.selectedBuildListEntryIds.includes(entry.id)) continue
         if (!targetCanUseEntry(state, entry)) continue
-        const units = unitPlans.get(entry.id) ?? []
+        const units = allUnitPlans.get(entry.id) ?? []
         const progress = state.routeProgressByEntryId[entry.id] ?? 0
         let applied: AppliedActionResult
         if (progress < units.length) {
@@ -1037,7 +1084,7 @@ export async function runPlannerBeamSearch(
             state,
             unit,
             entriesById,
-            unitPlans,
+            allUnitPlans,
             conflictsById,
             conflictDetection.conflictIdsByUnitKey,
             conflictDetection.selectedPhysicalActionKeysByConflictId,

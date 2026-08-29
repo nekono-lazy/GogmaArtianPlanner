@@ -26,9 +26,16 @@ export function createInitialPlannerSearchState(input: PlannerInput, validEntrie
   }
   const routeProgressByEntryId: Record<string, number> = {}
   const routeRuntimeByEntryId: PlannerSearchState['routeRuntimeByEntryId'] = {}
+  const routeSourceVersionByEntryId: PlannerSearchState['routeSourceVersionByEntryId'] = {}
   validEntries.forEach(({ entry }) => {
     routeProgressByEntryId[entry.id] = 0
     routeRuntimeByEntryId[entry.id] = { hasUnregisteredGogmaOutput: false }
+    if (
+      entry.candidateSnapshot.route.kind.startsWith('existing_gogma') &&
+      entry.candidateSnapshot.route.sourceOwnedWeaponId !== null
+    ) {
+      routeSourceVersionByEntryId[entry.id] = 0
+    }
   })
   const targetSatisfaction = deriveTargetSatisfaction(
     input.targetWeapons,
@@ -57,6 +64,7 @@ export function createInitialPlannerSearchState(input: PlannerInput, validEntrie
     routeRuntimeByEntryId,
     sourceMutationVersionByOwnedWeaponId: {},
     candidateReadySourceVersionByEntryId: {},
+    routeSourceVersionByEntryId,
     inFlightExistingSourceByOwnedWeaponId: {},
     securedOwnedWeaponIdByEntryId: {},
     practicalFirstProgressTargetIds: [],
