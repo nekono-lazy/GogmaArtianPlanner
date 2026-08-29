@@ -1,0 +1,10 @@
+[
+  {
+    "id": "bonus_type.attack",
+    "displayNameJa": "攻撃",
+    "displayNameEn": "Attack",
+    "sortOrder": 10,
+    "category": "offense",
+    "isEnabled": true
+  }
+]

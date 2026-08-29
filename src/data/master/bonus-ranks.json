@@ -1,0 +1,10 @@
+[
+  {
+    "id": "bonus_rank.ex",
+    "displayNameJa": "EX",
+    "displayNameEn": "EX",
+    "order": 4,
+    "isEx": true,
+    "isEnabled": true
+  }
+]

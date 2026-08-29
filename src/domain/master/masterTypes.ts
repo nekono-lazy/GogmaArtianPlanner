@@ -1,6 +1,7 @@
 import type {
   BonusRankId,
   BonusTypeId,
+  ElementId,
   GroupSkillId,
   MaterialId,
   NormalArtianRarity,
@@ -29,7 +30,7 @@ export interface WeaponTypeMaster {
 }
 
 export interface ElementMaster {
-  id: string
+  id: ElementId
   displayNameJa: string
   displayNameEn: string
   sortOrder: number
@@ -137,3 +138,7 @@ export interface MasterDataRoot {
   materials: MaterialMaster[]
   materialCosts: MaterialCostMaster[]
 }
+
+export type LotteryKind = LotteryMaster['lotteryKind']
+export type LotteryResultType = LotteryMaster['resultType']
+export type MaterialCostOperationType = MaterialCostMaster['operationType']

@@ -1,0 +1,13 @@
+[
+  {
+    "id": "weapon_bonus.weapon.dual_blades.bonus_type.attack.bonus_rank.ex",
+    "weaponTypeId": "weapon.dual_blades",
+    "bonusTypeId": "bonus_type.attack",
+    "bonusRankId": "bonus_rank.ex",
+    "displayNameJa": "基礎攻撃力強化EX",
+    "displayNameEn": "Attack Boost EX",
+    "effectValue": "+8",
+    "sortOrder": 1010,
+    "isEnabled": true
+  }
+]

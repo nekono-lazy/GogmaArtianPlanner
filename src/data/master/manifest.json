@@ -4,5 +4,5 @@
   "gameVersion": "unknown-initial",
   "dataVersion": 1,
   "generatedAt": null,
-  "notes": "Initial placeholder master data. Game data is not yet verified."
+  "notes": "Initial placeholder master data. Game data is not yet verified. Lottery and material-cost fixture records are disabled and must not be used as production game mechanics."
 }

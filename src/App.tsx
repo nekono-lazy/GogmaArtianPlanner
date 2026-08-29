@@ -81,7 +81,8 @@ function App() {
             Startup Error
           </Typography>
           <Alert severity="error">
-            Master Dataの検証に失敗しました: {masterData.errors.join(' / ')}
+            Master Dataの検証に失敗しました:{' '}
+            {masterData.issues.map((issue) => issue.message).join(' / ')}
           </Alert>
         </Box>
       )}

@@ -1,0 +1,12 @@
+[
+  {
+    "id": "weapon.dual_blades",
+    "displayNameJa": "双剣",
+    "displayNameEn": "Dual Blades",
+    "sortOrder": 4,
+    "category": "melee",
+    "supportsElement": true,
+    "supportsSharpness": true,
+    "isEnabled": true
+  }
+]

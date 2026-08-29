@@ -1,32 +1,58 @@
 import manifestJson from '../../data/master/manifest.json'
-import type { MasterDataRoot } from './masterTypes'
-import { parseMasterManifest, validateMasterData } from './validateMasterData'
+import weaponTypesJson from '../../data/master/weapon-types.json'
+import elementsJson from '../../data/master/elements.json'
+import bonusTypesJson from '../../data/master/bonus-types.json'
+import bonusRanksJson from '../../data/master/bonus-ranks.json'
+import weaponBonusDefinitionsJson from '../../data/master/weapon-bonus-definitions.json'
+import seriesSkillsJson from '../../data/master/series-skills.json'
+import groupSkillsJson from '../../data/master/group-skills.json'
+import lotteryJson from '../../data/master/lottery.json'
+import materialsJson from '../../data/master/materials.json'
+import materialCostsJson from '../../data/master/material-costs.json'
+import type {
+  BonusRankMaster,
+  BonusTypeMaster,
+  ElementMaster,
+  GroupSkillMaster,
+  LotteryMaster,
+  MasterDataRoot,
+  MasterManifest,
+  MaterialCostMaster,
+  MaterialMaster,
+  SeriesSkillMaster,
+  WeaponBonusDefinition,
+  WeaponTypeMaster,
+} from './masterTypes'
+import {
+  validateMasterData,
+  type MasterValidationIssue,
+} from './validateMasterData'
 
 export type MasterDataLoadResult =
   | { ok: true; data: MasterDataRoot }
-  | { ok: false; errors: string[] }
+  | { ok: false; issues: MasterValidationIssue[] }
+
+function createStaticMasterDataRoot(): MasterDataRoot {
+  return {
+    manifest: manifestJson as MasterManifest,
+    weaponTypes: weaponTypesJson as WeaponTypeMaster[],
+    elements: elementsJson as ElementMaster[],
+    bonusTypes: bonusTypesJson as BonusTypeMaster[],
+    bonusRanks: bonusRanksJson as BonusRankMaster[],
+    weaponBonusDefinitions:
+      weaponBonusDefinitionsJson as WeaponBonusDefinition[],
+    seriesSkills: seriesSkillsJson as SeriesSkillMaster[],
+    groupSkills: groupSkillsJson as GroupSkillMaster[],
+    lotteries: lotteryJson as LotteryMaster[],
+    materials: materialsJson as MaterialMaster[],
+    materialCosts: materialCostsJson as MaterialCostMaster[],
+  }
+}
 
 export function loadMasterData(): MasterDataLoadResult {
-  const manifest = parseMasterManifest(manifestJson as unknown)
-  if (!manifest) {
-    return { ok: false, errors: ['Master Data manifest is invalid.'] }
-  }
-
-  const data: MasterDataRoot = {
-    manifest,
-    weaponTypes: [],
-    elements: [],
-    bonusTypes: [],
-    bonusRanks: [],
-    weaponBonusDefinitions: [],
-    seriesSkills: [],
-    groupSkills: [],
-    lotteries: [],
-    materials: [],
-    materialCosts: [],
-  }
+  const data = createStaticMasterDataRoot()
   const validation = validateMasterData(data)
   return validation.isValid
     ? { ok: true, data }
-    : { ok: false, errors: validation.errors }
+    : { ok: false, issues: validation.issues }
 }
