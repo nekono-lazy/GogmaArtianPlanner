@@ -115,8 +115,8 @@ export function predictReferenceNormalArtian(
 }
 
 /**
- * Predicts raw Normal lottery IDs with the narrowly scoped game-verified Bow
- * elemental pool. This is not a replacement for reference parity prediction.
+ * Predicts raw Normal lottery IDs with a narrowly scoped game-verified pool.
+ * This is not a replacement for reference parity prediction.
  */
 export function predictGameVerifiedNormalRaw(
   input: ReferenceNormalPredictionInput,

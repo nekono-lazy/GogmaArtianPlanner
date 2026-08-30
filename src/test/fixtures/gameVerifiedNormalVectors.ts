@@ -104,6 +104,37 @@ export const gameVerifiedLightBowgunNoneNormalVectors = [
   },
 ] as const
 
+/** HBG observations begin at the uniquely matched Normal Counter 4. */
+export const gameVerifiedHeavyBowgunFireNormalVectors = [
+  {
+    baseSeed: 51231782, weaponTypeId: 'weapon.heavy_bowgun', elementId: 'element.fire', rarity: 8, normalCounter: 4,
+    gameLotteryIds: [8, 6, 7, 6, 6], bonuses: set(affinity, attack, capacity, attack, attack),
+  },
+  {
+    baseSeed: 51231782, weaponTypeId: 'weapon.heavy_bowgun', elementId: 'element.fire', rarity: 8, normalCounter: 5,
+    gameLotteryIds: [7, 6, 6, 7, 8], bonuses: set(capacity, attack, attack, capacity, affinity),
+  },
+  {
+    baseSeed: 51231782, weaponTypeId: 'weapon.heavy_bowgun', elementId: 'element.fire', rarity: 8, normalCounter: 6,
+    gameLotteryIds: [7, 6, 8, 7, 6], bonuses: set(capacity, attack, affinity, capacity, attack),
+  },
+] as const
+
+export const gameVerifiedHeavyBowgunNoneNormalVectors = [
+  {
+    baseSeed: 51231782, weaponTypeId: 'weapon.heavy_bowgun', elementId: 'element.none', rarity: 8, normalCounter: 4,
+    gameLotteryIds: [8, 6, 7, 6, 6], bonuses: set(affinity, attack, capacity, attack, attack),
+  },
+  {
+    baseSeed: 51231782, weaponTypeId: 'weapon.heavy_bowgun', elementId: 'element.none', rarity: 8, normalCounter: 5,
+    gameLotteryIds: [7, 6, 6, 7, 8], bonuses: set(capacity, attack, attack, capacity, affinity),
+  },
+  {
+    baseSeed: 51231782, weaponTypeId: 'weapon.heavy_bowgun', elementId: 'element.none', rarity: 8, normalCounter: 6,
+    gameLotteryIds: [7, 6, 8, 7, 6], bonuses: set(capacity, attack, affinity, capacity, attack),
+  },
+] as const
+
 export const gameVerifiedLongSwordFireNormalVectors = [
   {
     baseSeed: 51231782, weaponTypeId: 'weapon.long_sword', elementId: 'element.fire', rarity: 8, normalCounter: 0,

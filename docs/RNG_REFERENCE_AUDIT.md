@@ -213,6 +213,7 @@ Bowでもfamily 7を含むreference poolをそのまま保持する。現Domain�
 |---|---|---|
 | Bow | `[6, 4, 8]` | `[6, 8]` |
 | Light Bowgun | `[6, 7, 8]` | `[6, 7, 8]` |
+| Heavy Bowgun | `[6, 7, 8]` | `[6, 7, 8]` |
 | Long Sword | `[6, 4, 7, 8]` | `[6, 7, 8]` |
 
 属性ありBowは属性種類では分岐しない。実測fixtureはすべて `baseSeed=51231782` / display
@@ -221,12 +222,18 @@ Fire/none、Long Sword Fire/noneの5追加条件・75slotは、PRNG、seed、100
 block、family 7上限、raw値のskip/retryを変えずcandidate poolだけで実ゲーム観測と完全一致
 した。LBG Fireとnoneは同じ15slotであり、LBGのNormal poolにfamily 4は含まれない。
 
+HBG Fire/noneは `baseSeed=51231782` / display rarity 8 / Normal Counter 4, 5, 6 の各3本・
+15slotが同一である。`[6, 7, 8]` poolは開始Counter 0..5000のうち `k=4` の1件だけでこの
+連続15slotに完全一致する。一方Fireのreference elemental pool `[6, 4, 7, 8]` には同範囲で
+完全一致がない。従ってHBGについてもcandidate pool以外のPRNG、seed、100 mix、10-step block、
+family 7上限、raw値のskip/retryを変更せず、属性あり／noneとも `[6, 7, 8]` をgame-verifiedとする。
+
 reference full poolでは、Fire Bowの開始Counter 0..5000に同じ3本連続の完全一致はない。
 この差異はfamily 7を抽選後にskip/retryするのではなく、candidate pool自体から除外する
 game-adjusted predictionの根拠である。reference-verified poolとgame-verified poolは別に
 維持する。
 
-このgame-verified APIは上表以外を明示unsupportedとする。HBG、その他の近接武器、その他
+このgame-verified APIは上表以外を明示unsupportedとする。その他の近接武器、その他
 referenceとDomain制約が衝突する条件の実ゲームRNG poolは未検証であり、reference-only結果を
 game-verifiedとしてfallback返却してはならない。この観測は全weapon・全game versionを確定
 するものではない。

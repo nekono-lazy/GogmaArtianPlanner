@@ -25,6 +25,13 @@ export const GAME_VERIFIED_LIGHT_BOWGUN_NORMAL_CANDIDATES: readonly ReferenceNor
   { referenceId: 8, maximumOccurrences: 5 },
 ]
 
+/** Game-verified for both elemental and elementless rarity-8 Heavy Bowgun results. */
+export const GAME_VERIFIED_HEAVY_BOWGUN_NORMAL_CANDIDATES: readonly ReferenceNormalCandidate[] = [
+  { referenceId: 6, maximumOccurrences: 5 },
+  { referenceId: 7, maximumOccurrences: 2 },
+  { referenceId: 8, maximumOccurrences: 5 },
+]
+
 /** Game-verified for an elemental rarity-8 Long Sword Normal Artian result. */
 export const GAME_VERIFIED_LONG_SWORD_ELEMENTAL_NORMAL_CANDIDATES: readonly ReferenceNormalCandidate[] = [
   { referenceId: 6, maximumOccurrences: 5 },
@@ -65,6 +72,8 @@ export function gameVerifiedNormalCandidatesForWeaponAndElement(
         : GAME_VERIFIED_BOW_ELEMENTAL_NORMAL_CANDIDATES
     case 'weapon.light_bowgun':
       return GAME_VERIFIED_LIGHT_BOWGUN_NORMAL_CANDIDATES
+    case 'weapon.heavy_bowgun':
+      return GAME_VERIFIED_HEAVY_BOWGUN_NORMAL_CANDIDATES
     case 'weapon.long_sword':
       return finalAttribute === 1
         ? GAME_VERIFIED_LONG_SWORD_NONE_NORMAL_CANDIDATES
