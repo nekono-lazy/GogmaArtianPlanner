@@ -1,5 +1,6 @@
-import type { ElementId, NormalArtianRarity, WeaponTypeId } from '../../models/publicTypes'
+import type { ElementId, NormalArtianRarity, RestorationBonusSet, WeaponTypeId } from '../../models/publicTypes'
 import { toReferenceNormalFinalAttribute } from './referenceAdapters'
+import { gameVerifiedNormalCandidatesForWeaponAndElement } from './gameNormalBonuses'
 import {
   mapReferenceNormalResult,
   REFERENCE_NORMAL_ELEMENTAL_CANDIDATES,
@@ -61,15 +62,12 @@ function mutablePool(candidates: readonly ReferenceNormalCandidate[]): MutableRe
   return candidates.map((candidate) => ({ ...candidate, count: 0 }))
 }
 
-/**
- * Bit-for-bit reference Normal lottery prediction. It uses the first five
- * post-step words of exactly one ten-step, zero-based Normal block.
- */
-export function predictReferenceNormalRaw(
+function predictNormalRawFromCandidates(
   input: ReferenceNormalPredictionInput,
+  candidates: readonly ReferenceNormalCandidate[],
 ): ReferenceNormalRawPredictionResult {
   requireNonNegativeSafeInteger(input.normalCounter, 'Normal Artian counter')
-  const pool = mutablePool(referenceNormalCandidatesForElement(input.elementId))
+  const pool = mutablePool(candidates)
   const seed = deriveNormalArtianSeed(input.baseSeed, input.weaponTypeId, input.rarity)
   const rawValues = readReferenceRngBlock(seed, input.normalCounter).values
   const selected: ReferenceNormalLotteryId[] = []
@@ -95,6 +93,16 @@ export function predictReferenceNormalRaw(
   }
 }
 
+/**
+ * Bit-for-bit reference Normal lottery prediction. It uses the first five
+ * post-step words of exactly one ten-step, zero-based Normal block.
+ */
+export function predictReferenceNormalRaw(
+  input: ReferenceNormalPredictionInput,
+): ReferenceNormalRawPredictionResult {
+  return predictNormalRawFromCandidates(input, referenceNormalCandidatesForElement(input.elementId))
+}
+
 /** Combines raw parity output with its deliberately safe Domain mapping. */
 export function predictReferenceNormalArtian(
   input: ReferenceNormalPredictionInput,
@@ -104,4 +112,29 @@ export function predictReferenceNormalArtian(
     ...rawResult,
     semanticResult: mapReferenceNormalResult(input.weaponTypeId, rawResult.referenceIds),
   }
+}
+
+/**
+ * Predicts raw Normal lottery IDs with the narrowly scoped game-verified Bow
+ * elemental pool. This is not a replacement for reference parity prediction.
+ */
+export function predictGameVerifiedNormalRaw(
+  input: ReferenceNormalPredictionInput,
+): ReferenceNormalRawPredictionResult {
+  return predictNormalRawFromCandidates(
+    input,
+    gameVerifiedNormalCandidatesForWeaponAndElement(input.weaponTypeId, input.elementId),
+  )
+}
+
+/** Production-facing semantic result for the supported game-adjusted Normal pool. */
+export function predictGameVerifiedNormalArtian(
+  input: ReferenceNormalPredictionInput,
+): RestorationBonusSet {
+  const rawResult = predictGameVerifiedNormalRaw(input)
+  const semanticResult = mapReferenceNormalResult(input.weaponTypeId, rawResult.referenceIds)
+  if (semanticResult.kind !== 'mapped') {
+    throw new Error('Game-adjusted Normal prediction produced an unmappable bonus result')
+  }
+  return semanticResult.bonuses
 }

@@ -1,13 +1,19 @@
 import { describe, expect, it } from 'vitest'
+import { gameVerifiedBowElementalNormalVectors } from '../../../test/fixtures/gameVerifiedNormalVectors'
 import { referenceNormalVectors } from '../../../test/fixtures/referenceNormalVectors'
 import {
+  GAME_VERIFIED_BOW_ELEMENTAL_NORMAL_CANDIDATES,
+  gameVerifiedNormalCandidatesForWeaponAndElement,
   mapReferenceNormalResult,
+  predictGameVerifiedNormalArtian,
+  predictGameVerifiedNormalRaw,
   predictReferenceNormalArtian,
   predictReferenceNormalRaw,
   REFERENCE_NORMAL_ELEMENTAL_CANDIDATES,
   REFERENCE_NORMAL_NONE_CANDIDATES,
   referenceNormalCandidatesForElement,
   toReferenceNormalFinalAttribute,
+  UnsupportedGameVerifiedNormalPredictionError,
 } from '.'
 
 describe('reference-verified Production Normal Artian prediction', () => {
@@ -34,6 +40,45 @@ describe('reference-verified Production Normal Artian prediction', () => {
         blockIndex: vector.normalCounter,
       })
     }
+  })
+
+  it('keeps the reference raw Bow sequence separate from the game-adjusted predictor', () => {
+    for (const vector of gameVerifiedBowElementalNormalVectors) {
+      expect(predictReferenceNormalRaw(vector).referenceIds).toEqual(vector.referenceIds)
+      expect(predictGameVerifiedNormalRaw(vector).referenceIds).toEqual(vector.gameLotteryIds)
+    }
+  })
+
+  it('matches the game-observed elemental Bow 15-slot sequence with pool [6, 4, 8]', () => {
+    expect(GAME_VERIFIED_BOW_ELEMENTAL_NORMAL_CANDIDATES).toEqual([
+      { referenceId: 6, maximumOccurrences: 5 },
+      { referenceId: 4, maximumOccurrences: 5 },
+      { referenceId: 8, maximumOccurrences: 5 },
+    ])
+    for (const vector of gameVerifiedBowElementalNormalVectors) {
+      expect(predictGameVerifiedNormalArtian(vector)).toEqual(vector.bonuses)
+      expect(predictGameVerifiedNormalRaw(vector).referenceIds).not.toContain(7)
+    }
+  })
+
+  it('uses one game-verified candidate pool for every attribute-present Bow element', () => {
+    for (const elementId of [
+      'element.fire', 'element.water', 'element.thunder', 'element.ice', 'element.dragon',
+      'element.poison', 'element.paralysis', 'element.sleep', 'element.blast',
+    ]) {
+      expect(gameVerifiedNormalCandidatesForWeaponAndElement('weapon.bow', elementId))
+        .toBe(GAME_VERIFIED_BOW_ELEMENTAL_NORMAL_CANDIDATES)
+    }
+  })
+
+  it('rejects attribute-none Bow and LBG/HBG instead of returning a reference fallback as game-verified', () => {
+    const input = gameVerifiedBowElementalNormalVectors[0]
+    expect(() => predictGameVerifiedNormalRaw({ ...input, elementId: 'element.none' }))
+      .toThrow(UnsupportedGameVerifiedNormalPredictionError)
+    expect(() => predictGameVerifiedNormalRaw({ ...input, weaponTypeId: 'weapon.light_bowgun' }))
+      .toThrow(UnsupportedGameVerifiedNormalPredictionError)
+    expect(() => predictGameVerifiedNormalRaw({ ...input, weaponTypeId: 'weapon.heavy_bowgun' }))
+      .toThrow(UnsupportedGameVerifiedNormalPredictionError)
   })
 
   it('matches a raw reference golden for every weapon type without changing the shared pool', () => {

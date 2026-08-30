@@ -201,10 +201,23 @@ Normal seed自体にはelement/attributeを含めないが、pool選択には最
 参照のconfigured poolはweapon typeで分岐しない。Bowからfamily 7を除外せず、LBG/HBGのelement familyも除外しない。これは現行Master制約と衝突するが、参照repositoryだけから「参照実装が省略している」のか「現行Domain制約が誤り」なのかは確定できない。Production poolへ採用する前に実機fixtureで確認し、現行Domain制約を勝手に変更しない。
 
 固定commitのBow / Blast / `baseSeed=42` / `normalCounter=0` は lottery ID
-`[4, 8, 7, 4, 7]` を返す。現Domain/game restrictionではBowにfamily 7
-（Sharpness/Capacity）のsemantic対応がないため、このraw結果はDomain bonusへ
-推測変換してはならない。Bow Normal Predictionのgame verificationはpendingであり、
-ID 7を含むBow raw resultは明示的にunmappableとして扱う。
+`[4, 8, 7, 4, 7]` を返す。これは **reference-verified** のraw parityであり、
+Bowでもfamily 7を含むreference poolをそのまま保持する。現DomainではBowにfamily 7
+（Sharpness/Capacity）のsemantic対応がないため、このreference raw結果はDomain bonusへ
+推測変換してはならず、ID 7を含む結果は明示的にunmappableとして扱う。
+
+別途、game ruleとしてNormalの付与可能bonusは武器種と属性有無で分岐する。今回の
+**game-verified RNG parity** は、属性ありBow（属性種類では分岐しない）のcandidate pool
+`[6, 4, 8]` に限定する。実測fixtureは `baseSeed=51231782` / Fire Bow / display rarity 8 /
+Normal Counter 0, 1, 2 であり、実ゲーム15slotがこのpoolと完全一致した。PRNG、seed、
+100 mix、10-step blockを変えないreference full poolでは、開始Counter 0..5000のいずれにも
+同じ3本連続の完全一致はない。これはfamily 7を抽選後にskip/retryするのではなく、candidate
+pool自体から除外するgame-adjusted predictionの根拠である。
+
+このgame-verified APIは属性ありBow以外を明示unsupportedとする。無属性の実ゲームRNG
+pool、LBG/HBGの実ゲームRNG pool補正、その他referenceとDomain制約が衝突する条件は
+未検証であり、reference-only結果をgame-verifiedとしてfallback返却してはならない。この
+観測はattribute-none Bow、全Bow、全game versionを確定するものではない。
 
 ### 5.4 numeric ID namespace注意
 
