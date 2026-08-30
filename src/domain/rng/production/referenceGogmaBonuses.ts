@@ -1,0 +1,75 @@
+import type { RestorationBonus, RestorationBonusSet } from '../../models/publicTypes'
+
+/** Reference-only mapping from the pinned app.js Gogma lottery namespace. */
+export type ReferenceGogmaBonusFamily = 'attack' | 'affinity' | 'element' | 'sharpness_capacity'
+
+export interface ReferenceGogmaBonus {
+  readonly referenceId: number
+  readonly family: ReferenceGogmaBonusFamily
+  readonly repeatPenalty: 50 | 80
+  readonly bonus: Readonly<RestorationBonus>
+}
+
+/** Exact `gogmaBonusIds` candidate order from the pinned reference app.js. */
+export const REFERENCE_GOGMA_RESET_CANDIDATES: readonly ReferenceGogmaBonus[] = [
+  { referenceId: 8, family: 'attack', repeatPenalty: 50, bonus: { bonusTypeId: 'bonus_type.attack', bonusRankId: 'bonus_rank.ii' } },
+  { referenceId: 12, family: 'attack', repeatPenalty: 50, bonus: { bonusTypeId: 'bonus_type.attack', bonusRankId: 'bonus_rank.iii' } },
+  { referenceId: 15, family: 'attack', repeatPenalty: 80, bonus: { bonusTypeId: 'bonus_type.attack', bonusRankId: 'bonus_rank.ex' } },
+  { referenceId: 9, family: 'affinity', repeatPenalty: 50, bonus: { bonusTypeId: 'bonus_type.affinity', bonusRankId: 'bonus_rank.ii' } },
+  { referenceId: 13, family: 'affinity', repeatPenalty: 50, bonus: { bonusTypeId: 'bonus_type.affinity', bonusRankId: 'bonus_rank.iii' } },
+  { referenceId: 16, family: 'affinity', repeatPenalty: 80, bonus: { bonusTypeId: 'bonus_type.affinity', bonusRankId: 'bonus_rank.ex' } },
+  { referenceId: 11, family: 'element', repeatPenalty: 50, bonus: { bonusTypeId: 'bonus_type.element', bonusRankId: 'bonus_rank.ii' } },
+  { referenceId: 14, family: 'element', repeatPenalty: 80, bonus: { bonusTypeId: 'bonus_type.element', bonusRankId: 'bonus_rank.ex' } },
+  { referenceId: 6, family: 'sharpness_capacity', repeatPenalty: 50, bonus: { bonusTypeId: 'bonus_type.gogma_sharpness_capacity', bonusRankId: 'bonus_rank.base' } },
+  { referenceId: 10, family: 'sharpness_capacity', repeatPenalty: 80, bonus: { bonusTypeId: 'bonus_type.gogma_sharpness_capacity', bonusRankId: 'bonus_rank.ex' } },
+]
+
+const BONUS_BY_REFERENCE_ID = new Map(REFERENCE_GOGMA_RESET_CANDIDATES.map((entry) => [entry.referenceId, entry]))
+
+function semanticBonusKey(bonus: RestorationBonus): string {
+  return `${bonus.bonusTypeId}\u0000${bonus.bonusRankId}`
+}
+
+const REFERENCE_ID_BY_SEMANTIC_BONUS = new Map(REFERENCE_GOGMA_RESET_CANDIDATES.map((entry) => [semanticBonusKey(entry.bonus), entry.referenceId]))
+
+function requireReferenceBonus(referenceId: number): ReferenceGogmaBonus {
+  const entry = BONUS_BY_REFERENCE_ID.get(referenceId)
+  if (!entry) throw new RangeError(`Unsupported reference Gogma bonus ID: ${referenceId}`)
+  return entry
+}
+
+/** Converts a private reference ID into a fresh semantic Domain bonus value. */
+export function restorationBonusFromReferenceGogmaId(referenceId: number): RestorationBonus {
+  return { ...requireReferenceBonus(referenceId).bonus }
+}
+
+/** Rejects a semantic bonus that cannot participate in reference Gogma Keep. */
+export function referenceGogmaIdFromRestorationBonus(bonus: RestorationBonus): number {
+  const referenceId = REFERENCE_ID_BY_SEMANTIC_BONUS.get(semanticBonusKey(bonus))
+  if (referenceId === undefined) {
+    throw new RangeError(`Unsupported semantic Gogma bonus for Keep prediction: ${bonus.bonusTypeId} / ${bonus.bonusRankId}`)
+  }
+  return referenceId
+}
+
+export function referenceGogmaBonusFamily(referenceId: number): ReferenceGogmaBonusFamily {
+  return requireReferenceBonus(referenceId).family
+}
+
+/** The exact reference `keepFamily` candidate order for one current bonus. */
+export function referenceGogmaKeepFamilyCandidates(referenceId: number): readonly ReferenceGogmaBonus[] {
+  const family = referenceGogmaBonusFamily(referenceId)
+  return REFERENCE_GOGMA_RESET_CANDIDATES.filter((entry) => entry.family === family)
+}
+
+/** Builds a strongly typed five-slot Domain result from reference IDs. */
+export function restorationBonusSetFromReferenceGogmaIds(referenceIds: readonly number[]): RestorationBonusSet {
+  if (referenceIds.length !== 5) throw new RangeError('Reference Gogma result must contain exactly five bonuses')
+  return [
+    restorationBonusFromReferenceGogmaId(referenceIds[0]!),
+    restorationBonusFromReferenceGogmaId(referenceIds[1]!),
+    restorationBonusFromReferenceGogmaId(referenceIds[2]!),
+    restorationBonusFromReferenceGogmaId(referenceIds[3]!),
+    restorationBonusFromReferenceGogmaId(referenceIds[4]!),
+  ]
+}
