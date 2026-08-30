@@ -4,6 +4,7 @@ import type {
   ArtianWeaponKind,
   OwnedWeaponStatus,
   RestorationBonusSet,
+  RestorationBonusScope,
 } from '../models/publicTypes'
 import { V1_NORMAL_ARTIAN_RARITY } from '../models/publicTypes'
 import type { OwnedWeaponDraft, TargetWeaponDraft } from '../../services/crud/entityCrudServices'
@@ -78,12 +79,14 @@ export function createOwnedWeaponDraft(
     kindOrStatus === 'ideal'
       ? kindOrStatus
       : requestedStatus
-  const scope = kind === 'normal' ? 'normal_artian' : 'gogma_artian'
+  const scope: RestorationBonusScope =
+    kind === 'normal' ? 'normal_artian' : 'gogma_artian'
   const base = baseOptions(master, scope)
   const common = {
     kind,
     name: '',
     ...base,
+    restorationBonusScope: scope,
     restorationBonuses: createDefaultBonusSet(
       master,
       base.weaponTypeId,

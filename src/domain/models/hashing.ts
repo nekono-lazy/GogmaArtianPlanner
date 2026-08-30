@@ -92,12 +92,12 @@ export function createSearchStateHash(
   normalCounters: readonly NormalArtianCounter[],
 ): string {
   const usesGogmaPrediction = route.operations.some((operation) =>
-    ['convert_normal_to_gogma', 'reset_bonuses', 'keep_bonuses'].includes(
+    ['reset_bonuses', 'keep_bonuses'].includes(
       operation.type,
     ),
   )
   const usesSkillPrediction = route.operations.some(
-    ({ type }) => type === 'reset_skills',
+    ({ type }) => type === 'convert_normal_to_gogma' || type === 'reset_skills',
   )
   const relevantNormalCounterIds = [
     ...new Set(
@@ -152,13 +152,13 @@ export function collectReferencedOwnedWeaponIds(
       operation.type === 'reset_bonuses' ||
       operation.type === 'keep_bonuses'
     ) {
-      ids.add(operation.sourceOwnedWeaponId)
+      if (operation.sourceOwnedWeaponId !== null) ids.add(operation.sourceOwnedWeaponId)
     }
     if (
       operation.type === 'reset_skills' &&
       operation.sourceOwnedWeaponId !== null
     ) {
-      ids.add(operation.sourceOwnedWeaponId)
+      if (operation.sourceOwnedWeaponId !== null) ids.add(operation.sourceOwnedWeaponId)
     }
     if (operation.type === 'use_weapon_as_material') {
       ids.add(operation.ownedWeaponId)
@@ -173,6 +173,7 @@ function normalizeReferencedOwnedWeapon(weapon: OwnedWeapon) {
     kind: weapon.kind,
     weaponTypeId: weapon.weaponTypeId,
     elementId: weapon.elementId,
+    restorationBonusScope: weapon.restorationBonusScope,
     restorationBonuses: weapon.restorationBonuses.map((bonus) => ({
       bonusTypeId: bonus.bonusTypeId,
       bonusRankId: bonus.bonusRankId,

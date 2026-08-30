@@ -57,7 +57,7 @@ describe('BuildListService', () => {
     candidate.searchStateHash = createSearchStateHash(candidate.route, memory.rngState, memory.normalCounters)
     const original = createBuildListEntry(candidate, memory.target, { createdAt: '2026-08-29T04:00:00.000Z' })
     memory.entries.push(original)
-    memory.rngState.gogmaCounter.value = 99
+    memory.rngState.skillCounter.value = 99
     const service = new BuildListService(memory.repositories)
     const refreshed = await service.refreshStaleness(domainFixtureContext)
     expect(refreshed.entries[0].staleReasons).toContain('rng_state_changed')

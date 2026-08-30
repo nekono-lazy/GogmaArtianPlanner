@@ -206,8 +206,8 @@ describe('Planner contracts', () => {
       operations: [{
         type: 'convert_normal_to_gogma',
         weaponTypeId: sourceNormal.weaponTypeId,
-        gogmaCounterBefore: 10,
-        gogmaCounterAfter: 11,
+        skillCounterBefore: 10,
+        skillCounterAfter: 11,
       }],
     }
     const converted = { ...reservedGogma(ownedNormalEntry), id: ownedWeaponId('owned.fixture.converted') }

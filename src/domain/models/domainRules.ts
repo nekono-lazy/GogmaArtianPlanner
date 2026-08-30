@@ -51,7 +51,11 @@ export function canResetBonuses(weapon: OwnedWeapon): boolean {
 }
 
 export function canKeepBonuses(weapon: OwnedWeapon): boolean {
-  return weapon.kind === 'gogma' && !weapon.isProtected
+  return (
+    weapon.kind === 'gogma' &&
+    !weapon.isProtected &&
+    weapon.restorationBonusScope === 'gogma_artian'
+  )
 }
 
 export function canResetSkills(weapon: OwnedWeapon): boolean {

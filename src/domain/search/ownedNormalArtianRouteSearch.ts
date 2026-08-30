@@ -1,134 +1,72 @@
 import type { RouteOperation } from '../models/publicTypes'
 import { V1_NORMAL_ARTIAN_RARITY } from '../models/publicTypes'
-import { deriveRngCapabilities } from '../rng/capabilities'
-import type { RouteSearchContext, RouteSearchResult } from './routeSearchShared'
 import {
   createBaseCandidate,
+  hasConfirmedGogmaInputs,
+  hasConfirmedSkillInputs,
+  searchBonusAmendmentVariants,
   searchResetSkillVariants,
+  type RouteSearchContext,
+  type RouteSearchResult,
 } from './routeSearchShared'
 
-/**
- * Searches only explicitly registered Normal Artian weapons.
- *
- * The conversion result is always supplied by RngEngine. The explicit Master
- * mapping is not a rank conversion algorithm and is deliberately not used here.
- */
 export async function searchOwnedNormalArtianRoutes(
   context: RouteSearchContext,
 ): Promise<RouteSearchResult> {
-  const { target, input, engine, execution } = context
-  const result: RouteSearchResult = {
-    candidates: [],
-    searchedRoutes: [],
-    skippedRoutes: [],
-    warnings: [],
-  }
-  const compatible = input.ownedWeapons
-    .filter(
-      (weapon) =>
-        weapon.kind === 'normal' &&
-        weapon.rarity === V1_NORMAL_ARTIAN_RARITY &&
-        weapon.weaponTypeId === target.weaponTypeId &&
-        weapon.elementId === target.elementId,
-    )
-    .sort((left, right) => left.id.localeCompare(right.id))
+  const { engine, execution, input, target } = context
+  const result: RouteSearchResult = { candidates: [], searchedRoutes: [], skippedRoutes: [], warnings: [] }
+  const compatible = input.ownedWeapons.filter((weapon) => weapon.kind === 'normal'
+    && weapon.rarity === V1_NORMAL_ARTIAN_RARITY
+    && weapon.weaponTypeId === target.weaponTypeId
+    && weapon.elementId === target.elementId)
+  const sources = compatible.filter((weapon) => !weapon.isProtected).sort((left, right) => left.id.localeCompare(right.id))
 
-  if (compatible.length === 0) {
-    result.skippedRoutes.push({
-      route: 'owned_normal_artian_to_gogma',
-      reason: 'no_owned_weapon_available',
-      detail: 'No compatible owned Normal Artian weapon is available.',
-    })
-    return result
-  }
-
-  const sources = compatible.filter(({ isProtected }) => !isProtected)
   if (sources.length === 0) {
     result.skippedRoutes.push({
       route: 'owned_normal_artian_to_gogma',
-      reason: 'no_unprotected_source_weapon',
-      detail: 'Only protected owned Normal Artian sources are available.',
+      reason: compatible.length > 0 ? 'no_unprotected_source_weapon' : 'no_owned_weapon_available',
+      detail: compatible.length > 0 ? 'Only protected owned Normal Artian sources are available.' : 'No compatible owned Normal Artian weapon is available.',
     })
     return result
   }
-
-  const sampleOperation: RouteOperation = {
-    type: 'convert_normal_to_gogma',
-    weaponTypeId: target.weaponTypeId,
-    gogmaCounterBefore: input.rngState.gogmaCounter.value ?? 0,
-    gogmaCounterAfter: input.rngState.gogmaCounter.value ?? 0,
-  }
-  const capabilities = deriveRngCapabilities(
-    input.rngState,
-    input.normalCounters,
-    [sampleOperation],
-    engine.capabilities,
-  )
-  if (!capabilities.canPredictGogma) {
-    result.skippedRoutes.push({
-      route: 'owned_normal_artian_to_gogma',
-      reason: 'gogma_capability_missing',
-      detail: 'Gogma prediction capability is required for conversion.',
-    })
+  if (!hasConfirmedSkillInputs(input)) {
+    result.skippedRoutes.push({ route: 'owned_normal_artian_to_gogma', reason: 'rng_state_unconfirmed', detail: 'Confirmed Base Seed, Skill Counter, and Counter Gate are required for conversion.' })
     return result
   }
-
-  const baseSeed = input.rngState.baseSeed.value
-  const currentCounter = input.rngState.gogmaCounter.value
-  const counterGate = input.rngState.counterGate.value
-  if (baseSeed === null || currentCounter === null || counterGate === null) {
+  if (!engine.capabilities.supportsSkillPrediction) {
+    result.skippedRoutes.push({ route: 'owned_normal_artian_to_gogma', reason: 'skill_prediction_unsupported', detail: 'The active RNG Engine does not support Skill prediction required for conversion.' })
     return result
   }
-
+  const baseSeed = input.rngState.baseSeed.value!
+  const skillCounter = input.rngState.skillCounter.value!
+  const counterGate = input.rngState.counterGate.value!
   result.searchedRoutes.push('owned_normal_artian_to_gogma')
+
   for (const source of sources) {
     await execution.checkpoint()
-    const finalBonuses = engine.predictGogmaBonus({
-      baseSeed,
-      gogmaCounter: currentCounter,
-      counterGate,
-      weaponTypeId: target.weaponTypeId,
-      elementId: target.elementId,
-      operation: {
-        type: 'new_gogma',
-        sourceNormalBonuses: source.restorationBonuses,
-      },
-      master: input.master,
-    })
-    const nextCounter = engine.advanceGogmaCounter(currentCounter, {
-      type: 'create_gogma_from_normal',
-    })
-    const operations: RouteOperation[] = [
-      {
-        type: 'convert_normal_to_gogma',
-        weaponTypeId: target.weaponTypeId,
-        gogmaCounterBefore: currentCounter,
-        gogmaCounterAfter: nextCounter,
-      },
-    ]
-    const baseCandidate = createBaseCandidate(
-      context,
-      finalBonuses,
-      null,
-      null,
-      {
-        kind: 'owned_normal_artian_to_gogma',
-        sourceOwnedWeaponId: source.id,
-        operations,
-      },
-    )
-    if (baseCandidate) result.candidates.push(baseCandidate)
-
-    if (capabilities.canPredictSkills) {
-      result.candidates.push(
-        ...(await searchResetSkillVariants(context, {
-          bonuses: finalBonuses,
-          operations,
-          sourceOwnedWeaponId: source.id,
-          resetSkillsSourceOwnedWeaponId: null,
-          kind: 'owned_normal_artian_to_gogma',
-        })),
-      )
+    const skillCounterAfter = engine.advanceSkillCounter(skillCounter, { type: 'convert_normal_to_gogma' })
+    const skills = engine.predictSkills({ baseSeed, skillCounter, counterGate, weaponTypeId: target.weaponTypeId, elementId: target.elementId, master: input.master })
+    const operations: RouteOperation[] = [{ type: 'convert_normal_to_gogma', weaponTypeId: target.weaponTypeId, skillCounterBefore: skillCounter, skillCounterAfter }]
+    const base = {
+      bonuses: source.restorationBonuses,
+      restorationBonusScope: 'normal_artian' as const,
+      operations,
+      sourceOwnedWeaponId: source.id,
+      resetSkillsSourceOwnedWeaponId: null,
+      skillCounterBefore: skillCounterAfter,
+      kind: 'owned_normal_artian_to_gogma' as const,
+    }
+    const candidate = createBaseCandidate(context, source.restorationBonuses, 'normal_artian', skills.seriesSkillId, skills.groupSkillId, { kind: base.kind, sourceOwnedWeaponId: source.id, operations })
+    if (candidate) result.candidates.push(candidate)
+    result.candidates.push(...await searchResetSkillVariants(context, base))
+    if (hasConfirmedGogmaInputs(input) && engine.capabilities.supportsGogmaPrediction) {
+      result.candidates.push(...await searchBonusAmendmentVariants(context, {
+        ...base,
+        seriesSkillId: skills.seriesSkillId,
+        groupSkillId: skills.groupSkillId,
+        gogmaCounterBefore: input.rngState.gogmaCounter.value!,
+        amendmentSourceOwnedWeaponId: null,
+      }))
     }
   }
   return result

@@ -83,6 +83,11 @@ export const skippedRouteReasonLabels: Record<SkippedRouteReason, string> = {
   calculation_context_incompatible: '計算に使用したバージョンに互換性がありません',
   disabled_by_filter: '検索条件で除外されています',
   master_data_unavailable: '作成ルートに必要なマスターデータが利用できません',
+  rng_state_unconfirmed: '確認済みのRNG状態が不足しています',
+  normal_prediction_unsupported: '通常アーティア予測は現在のRNGエンジンで未対応です',
+  skill_prediction_unsupported: 'スキル予測は現在のRNGエンジンで未対応です',
+  gogma_prediction_unsupported: '巨戟アーティア予測は現在のRNGエンジンで未対応です',
+  normal_scope_requires_reset: '通常アーティア継承状態では最初にリセットが必要です',
 }
 
 export const staleReasonLabels: Record<BuildListEntryStaleReason, string> = {

@@ -157,7 +157,6 @@ describe('deriveRngCapabilities', () => {
     const keepOperation: RouteOperation = {
       type: 'keep_bonuses',
       sourceOwnedWeaponId: ownedWeaponId('owned.fixture.a'),
-      selection: { mode: 'engine_defined', engineParameters: {} },
       gogmaCounterBefore: 10,
       gogmaCounterAfter: 11,
     }
@@ -199,8 +198,8 @@ describe('deriveRngCapabilities', () => {
         {
           type: 'convert_normal_to_gogma',
           weaponTypeId: 'weapon.fixture.a',
-          gogmaCounterBefore: 10,
-          gogmaCounterAfter: 11,
+          skillCounterBefore: 10,
+          skillCounterAfter: 11,
         },
         resetSkillsOperation(),
       ],
@@ -226,7 +225,6 @@ describe('deriveRngCapabilities', () => {
     const keepOperation: RouteOperation = {
       type: 'keep_bonuses',
       sourceOwnedWeaponId: ownedWeaponId('owned.fixture.a'),
-      selection: { mode: 'engine_defined', engineParameters: {} },
       gogmaCounterBefore: 10,
       gogmaCounterAfter: 11,
     }

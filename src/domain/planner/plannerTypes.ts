@@ -185,6 +185,7 @@ export type PlannerSearchAction =
 
 export interface PlannerRouteRuntimeState {
   hasUnregisteredGogmaOutput: boolean
+  transientRestorationBonusScope: 'normal_artian' | 'gogma_artian' | null
 }
 
 /** Immutable Beam Search state. Trace actions are not RouteOperations or PlanSteps. */

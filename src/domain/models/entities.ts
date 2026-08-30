@@ -15,6 +15,7 @@ import type {
   OwnedWeaponStatus,
   RestorationBonus,
   RestorationBonusSet,
+  RestorationBonusScope,
   RouteKind,
   SeriesSkillId,
   SkillMatchMode,
@@ -29,6 +30,8 @@ export interface OwnedWeaponBase {
   weaponTypeId: WeaponTypeId
   elementId: ElementId
   restorationBonuses: RestorationBonusSet
+  /** All five stored slots belong to this family; mixed scope is invalid. */
+  restorationBonusScope: RestorationBonusScope
   isProtected: boolean
   relatedTargetWeaponIds: TargetWeaponId[]
   memo: string | null
@@ -100,6 +103,7 @@ export interface BuildCandidate {
   targetWeaponId: TargetWeaponId
   category: CandidateCategory
   finalBonuses: RestorationBonusSet
+  restorationBonusScope: RestorationBonusScope
   seriesSkillId: SeriesSkillId | null
   groupSkillId: GroupSkillId | null
   route: BuildRoute
@@ -144,39 +148,22 @@ export interface CreateNormalArtianOperation {
 export interface ConvertToGogmaOperation {
   type: 'convert_normal_to_gogma'
   weaponTypeId: WeaponTypeId
-  gogmaCounterBefore: number
-  gogmaCounterAfter: number
+  skillCounterBefore: number
+  skillCounterAfter: number
 }
 
 export interface ResetBonusesOperation {
   type: 'reset_bonuses'
-  sourceOwnedWeaponId: OwnedWeaponId
+  /** null denotes the transient Gogma created by this route. */
+  sourceOwnedWeaponId: OwnedWeaponId | null
   gogmaCounterBefore: number
   gogmaCounterAfter: number
 }
 
-type EngineParameters = Readonly<Record<string, string | number | boolean>>
-
-export type KeepBonusSelection =
-  | {
-      mode: 'slot_indices'
-      keptSlotIndices: number[]
-      engineParameters: EngineParameters
-    }
-  | {
-      mode: 'bonus_types'
-      keptBonusTypeIds: BonusTypeId[]
-      engineParameters: EngineParameters
-    }
-  | {
-      mode: 'engine_defined'
-      engineParameters: EngineParameters
-    }
-
 export interface KeepBonusesOperation {
   type: 'keep_bonuses'
-  sourceOwnedWeaponId: OwnedWeaponId
-  selection: KeepBonusSelection
+  /** null denotes the transient Gogma created by this route. */
+  sourceOwnedWeaponId: OwnedWeaponId | null
   gogmaCounterBefore: number
   gogmaCounterAfter: number
 }

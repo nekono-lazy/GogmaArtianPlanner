@@ -3,10 +3,10 @@ import type {
   OwnedWeaponId,
   OwnedWeaponStatus,
 } from '../../domain/models/publicTypes'
+import { normalizeOwnedWeaponRestorationBonusScope } from '../../domain/models/persistenceCompatibility'
 import { validateOwnedWeapon } from '../../domain/models/validation'
 import { appDatabase, type AppDatabase } from '../AppDatabase'
 import { assertRepositoryValidation } from '../repositoryError'
-
 export class OwnedWeaponRepository {
   private readonly database: AppDatabase
 
@@ -14,16 +14,25 @@ export class OwnedWeaponRepository {
     this.database = database
   }
 
-  getOwnedWeapon(id: OwnedWeaponId): Promise<OwnedWeapon | undefined> {
-    return this.database.ownedWeapons.get(id)
+  async getOwnedWeapon(id: OwnedWeaponId): Promise<OwnedWeapon | undefined> {
+    const weapon = await this.database.ownedWeapons.get(id)
+    return weapon
+      ? normalizeOwnedWeaponRestorationBonusScope(weapon)
+      : undefined
   }
 
-  getAllOwnedWeapons(): Promise<OwnedWeapon[]> {
-    return this.database.ownedWeapons.toArray()
+  async getAllOwnedWeapons(): Promise<OwnedWeapon[]> {
+    return (await this.database.ownedWeapons.toArray()).map(
+      normalizeOwnedWeaponRestorationBonusScope,
+    )
   }
 
-  getOwnedWeaponsByStatus(status: OwnedWeaponStatus): Promise<OwnedWeapon[]> {
-    return this.database.ownedWeapons.where('status').equals(status).toArray()
+  async getOwnedWeaponsByStatus(
+    status: OwnedWeaponStatus,
+  ): Promise<OwnedWeapon[]> {
+    return (await this.database.ownedWeapons.where('status').equals(status).toArray()).map(
+      normalizeOwnedWeaponRestorationBonusScope,
+    )
   }
 
   async putOwnedWeapon(weapon: OwnedWeapon): Promise<OwnedWeapon> {

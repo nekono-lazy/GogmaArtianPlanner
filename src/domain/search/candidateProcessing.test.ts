@@ -123,7 +123,7 @@ describe('Candidate sorting and filters', () => {
     const base = candidate('base')
     expect(compareCandidates(candidate('ideal', { category: 'ideal' }), base)).toBeLessThan(0)
     expect(compareCandidates(candidate('ops', { estimatedOperationCount: 1 }), base)).toBeLessThan(0)
-    expect(compareCandidates(candidate('gogma', { estimatedGogmaAdvance: 0 }), base)).toBeLessThan(0)
+    expect(compareCandidates(candidate('gogma', { estimatedGogmaAdvance: 0 }), candidate('base-gogma', { estimatedGogmaAdvance: 1 }))).toBeLessThan(0)
     expect(compareCandidates(candidate('skill', { estimatedSkillAdvance: 0 }), base)).toBeLessThan(0)
     expect(compareCandidates(candidate('normal', { estimatedNormalAdvance: 0 }), candidate('null', { estimatedNormalAdvance: null }))).toBeLessThan(0)
     expect(compareCandidates(candidate('similar', { similarityScore: 1 }), base)).toBeLessThan(0)

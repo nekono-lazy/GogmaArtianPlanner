@@ -29,7 +29,7 @@ export function createInitialPlannerSearchState(input: PlannerInput, validEntrie
   const routeSourceVersionByEntryId: PlannerSearchState['routeSourceVersionByEntryId'] = {}
   validEntries.forEach(({ entry }) => {
     routeProgressByEntryId[entry.id] = 0
-    routeRuntimeByEntryId[entry.id] = { hasUnregisteredGogmaOutput: false }
+    routeRuntimeByEntryId[entry.id] = { hasUnregisteredGogmaOutput: false, transientRestorationBonusScope: null }
     if (
       entry.candidateSnapshot.route.kind.startsWith('existing_gogma') &&
       entry.candidateSnapshot.route.sourceOwnedWeaponId !== null

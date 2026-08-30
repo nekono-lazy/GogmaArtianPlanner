@@ -21,6 +21,7 @@ function normalWeapon(): OwnedNormalArtianWeapon {
     name: '通常fixture',
     weaponTypeId: 'weapon.great_sword',
     elementId: 'element.thunder',
+    restorationBonusScope: 'normal_artian',
     restorationBonuses: Array.from({ length: 5 }, () => ({
       bonusTypeId: 'bonus_type.attack',
       bonusRankId: 'bonus_rank.base',
@@ -43,6 +44,7 @@ function gogmaWeapon(): OwnedGogmaArtianWeapon {
     ...normal,
     id: ownedWeaponId('owned.gogma.fixture'),
     kind: 'gogma',
+    restorationBonusScope: 'normal_artian',
     restorationBonuses: Array.from({ length: 5 }, () => ({
       bonusTypeId: 'bonus_type.attack',
       bonusRankId: 'bonus_rank.i',
@@ -79,6 +81,16 @@ describe('OwnedWeapon Artian kind', () => {
     ).toBe(false)
   })
 
+  it('rejects a Normal weapon with gogma_artian scope', () => {
+    const invalid = { ...normalWeapon(), restorationBonusScope: 'gogma_artian' as const }
+    expect(validateOwnedWeapon(invalid as unknown as OwnedWeapon).isValid).toBe(false)
+  })
+
+  it('rejects a current Domain weapon whose restoration scope is missing', () => {
+    const { restorationBonusScope: _scope, ...legacyShape } = gogmaWeapon()
+    void _scope
+    expect(validateOwnedWeapon(legacyShape as unknown as OwnedWeapon).isValid).toBe(false)
+  })
   it('uses unprotected as the Normal creation default', () => {
     const {
       isProtected: _isProtected,

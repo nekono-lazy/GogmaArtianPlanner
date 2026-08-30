@@ -128,6 +128,9 @@ export function deriveRngCapabilities(
         requireNormalArtianPrediction(operation)
         break
       case 'convert_normal_to_gogma':
+      case 'reset_skills':
+        requireSkillPrediction()
+        break
       case 'reset_bonuses':
         requireGogmaPrediction()
         break
@@ -136,9 +139,6 @@ export function deriveRngCapabilities(
         if (!engineCapabilities.supportsKeepBonusesPrediction) {
           missingRequirements.add('engine:keep_prediction')
         }
-        break
-      case 'reset_skills':
-        requireSkillPrediction()
         break
       case 'use_weapon_as_material':
         break

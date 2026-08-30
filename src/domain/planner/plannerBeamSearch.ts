@@ -301,28 +301,24 @@ function inventoryPreconditionRejection(
   unit: PlannerRouteUnit,
 ): PlannerSearchRejection | null {
   const operation = unit.operation
-  if (
-    operation.type === 'reset_bonuses' ||
-    operation.type === 'keep_bonuses'
-  ) {
-    const source = findOwnedWeapon(
-      state.simulatedInventory,
-      operation.sourceOwnedWeaponId,
-    )
+  if (operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses') {
+    if (operation.sourceOwnedWeaponId === null) {
+      return state.routeRuntimeByEntryId[entry.id]?.hasUnregisteredGogmaOutput && (operation.type !== 'keep_bonuses' || state.routeRuntimeByEntryId[entry.id]?.transientRestorationBonusScope === 'gogma_artian')
+        ? null
+        : rejection(
+            entry.id,
+            operation.type,
+            'inventory_precondition_failed',
+            'The unregistered converted Gogma route output does not exist.',
+          )
+    }
+    const source = findOwnedWeapon(state.simulatedInventory, operation.sourceOwnedWeaponId)
     if (!source) {
-      return rejection(
-        entry.id,
-        operation.type,
-        'inventory_precondition_failed',
-        `OwnedWeapon '${operation.sourceOwnedWeaponId}' is unavailable.`,
-      )
+      return rejection(entry.id, operation.type, 'inventory_precondition_failed', `OwnedWeapon '${operation.sourceOwnedWeaponId}' is unavailable.`)
     }
     return canUseAsDestructiveGogmaSource(source)
       ? null
-      : protectedRejection(
-          unit,
-          `OwnedWeapon '${operation.sourceOwnedWeaponId}' is protected or is not a Gogma source.`,
-        )
+      : protectedRejection(unit, `OwnedWeapon '${operation.sourceOwnedWeaponId}' is protected or is not a Gogma source.`)
   }
   if (operation.type === 'reset_skills') {
     if (operation.sourceOwnedWeaponId === null) {
@@ -482,9 +478,22 @@ function routeOutputChanges(
     )
   }
   return (
-    unit.operation.type === 'reset_skills' &&
+    (unit.operation.type === 'reset_bonuses' ||
+      unit.operation.type === 'keep_bonuses' ||
+      unit.operation.type === 'reset_skills') &&
     unit.operation.sourceOwnedWeaponId === null
   )
+}
+
+function nextTransientRestorationBonusScope(
+  current: PlannerSearchState['routeRuntimeByEntryId'][BuildListEntryId],
+  operation: PlannerRouteUnit['operation'],
+): PlannerSearchState['routeRuntimeByEntryId'][BuildListEntryId]['transientRestorationBonusScope'] {
+  if (operation.type === 'convert_normal_to_gogma') return 'normal_artian'
+  if (operation.type === 'reset_bonuses' && operation.sourceOwnedWeaponId === null) {
+    return 'gogma_artian'
+  }
+  return current?.transientRestorationBonusScope ?? null
 }
 
 function mergedProgressedEntries(
@@ -609,8 +618,13 @@ function applyRouteAction(
     progressedRoutePositions[unit.entryId] = unit.position
     const entry = entriesById.get(unit.entryId)
     if (entry && routeOutputChanges(entry, unit)) {
+      const currentRuntime = state.routeRuntimeByEntryId[entry.id]
       state.routeRuntimeByEntryId[entry.id] = {
         hasUnregisteredGogmaOutput: true,
+        transientRestorationBonusScope: nextTransientRestorationBonusScope(
+          currentRuntime,
+          unit.operation,
+        ),
       }
       appliedInventory.effect.routeOutputChangedForEntryIds.push(entry.id)
     }
@@ -689,6 +703,7 @@ function createReservedWeapon(
     weaponTypeId: target.weaponTypeId,
     elementId: target.elementId,
     restorationBonuses: structuredClone(candidate.finalBonuses),
+    restorationBonusScope: candidate.restorationBonusScope,
     seriesSkillId: candidate.seriesSkillId,
     groupSkillId: candidate.groupSkillId,
     status: candidate.category,

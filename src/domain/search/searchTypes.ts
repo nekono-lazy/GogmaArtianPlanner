@@ -66,6 +66,11 @@ export type SkippedRouteReason =
   | 'skill_capability_missing'
   | 'keep_prediction_unsupported'
   | 'master_data_unavailable'
+  | 'rng_state_unconfirmed'
+  | 'normal_prediction_unsupported'
+  | 'skill_prediction_unsupported'
+  | 'gogma_prediction_unsupported'
+  | 'normal_scope_requires_reset'
   | 'calculation_context_incompatible'
   | 'disabled_by_filter'
 

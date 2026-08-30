@@ -116,7 +116,7 @@ describe('BuildListEntry staleness', () => {
   it('detects a route-dependent RNG change', () => {
     const base = createFixtureEntry()
     const rngState = structuredClone(base.rngState)
-    rngState.gogmaCounter.value = 99
+    rngState.skillCounter.value = 99
     expect(evaluateBuildListEntryStaleness(base.entry, { target: base.target, rngState, normalCounters: base.normalCounters, ownedWeapons: [], calculationContext: domainFixtureContext }).staleReasons).toContain('rng_state_changed')
   })
 
@@ -157,8 +157,8 @@ describe('BuildListEntry staleness', () => {
         {
           type: 'convert_normal_to_gogma',
           weaponTypeId: source.weaponTypeId,
-          gogmaCounterBefore: 10,
-          gogmaCounterAfter: 11,
+          skillCounterBefore: 10,
+          skillCounterAfter: 11,
         },
       ],
     }
@@ -197,7 +197,7 @@ describe('BuildListEntry staleness', () => {
     const target = structuredClone(base.target)
     target.priority = 5
     const rngState = structuredClone(base.rngState)
-    rngState.gogmaCounter.value = 999
+    rngState.skillCounter.value = 999
     const result = evaluateBuildListEntryStaleness(base.entry, { target, rngState, normalCounters: base.normalCounters, ownedWeapons: [], calculationContext: { ...domainFixtureContext, gameVersion: 'changed' } })
     expect(result.staleReasons).toEqual(['target_definition_changed', 'rng_state_changed', 'calculation_context_changed'])
   })

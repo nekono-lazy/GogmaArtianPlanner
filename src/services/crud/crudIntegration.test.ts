@@ -60,7 +60,7 @@ describe('CRUD integration', () => {
     const target = createValidTargetWeapon(); const candidate = createValidBuildCandidate(); const rng = createValidRngState(); rng.skillCounter = { value: 7, isConfirmed: true, source: 'manual' }; const counters = [createValidNormalArtianCounter()]
     candidate.searchStateHash = createSearchStateHash(candidate.route, rng, counters)
     const entry = createBuildListEntry(candidate, target, { createdAt: 'now' })
-    const memory = buildListMemory(entry, target, []); memory.rngState.skillCounter = rng.skillCounter; memory.rngState.gogmaCounter.value = 99
+    const memory = buildListMemory(entry, target, []); memory.rngState.skillCounter = rng.skillCounter; memory.rngState.skillCounter.value = 99
     expect((await memory.service.refreshStaleness(domainFixtureContext)).entries[0].staleReasons).toContain('rng_state_changed')
   })
 })

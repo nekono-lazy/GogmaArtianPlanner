@@ -16,6 +16,7 @@ import type {
   ProductionPlanStatus,
   RecalculationReason,
   RestorationBonusSet,
+  RestorationBonusScope,
   RngState,
   SeriesSkillId,
   TargetWeaponId,
@@ -78,6 +79,7 @@ export interface PlanStep {
 
 export interface ExpectedResult {
   restorationBonuses: RestorationBonusSet | null
+  restorationBonusScope: RestorationBonusScope | null
   seriesSkillId: SeriesSkillId | null
   groupSkillId: GroupSkillId | null
   candidateCategory: CandidateCategory | null
@@ -146,6 +148,7 @@ export interface ExecutionHistory {
 
 export interface ActualResult {
   restorationBonuses: RestorationBonusSet | null
+  restorationBonusScope: RestorationBonusScope | null
   seriesSkillId: SeriesSkillId | null
   groupSkillId: GroupSkillId | null
   securedOwnedWeaponId: OwnedWeaponId | null

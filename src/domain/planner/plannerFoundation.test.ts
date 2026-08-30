@@ -154,7 +154,7 @@ describe('Planner current-state entry validation', () => {
     expect(result.warnings.some(({ kind }) => kind === 'build_list_entry_stale')).toBe(false)
   })
 
-  it('excludes only routes missing their capability and retains usable entries', () => {
+  it('excludes conversion and Reset-Skills routes when Skill prediction is unsupported', () => {
     const { input } = fixture()
     const normal = input.buildListEntries[0]
     normal.id = 'build-list.foundation.normal' as never
@@ -167,8 +167,8 @@ describe('Planner current-state entry validation', () => {
       { skillSupported: false },
     ) }
     const result = validatePlannerInput(input, dependencies)
-    expect(result.validBuildListEntries.map(({ entry }) => entry.id)).toEqual([normal.id])
-    expect(result.excludedBuildListEntries).toHaveLength(1)
+    expect(result.validBuildListEntries).toEqual([])
+    expect(result.excludedBuildListEntries).toHaveLength(2)
     expect(result.warnings.some(({ kind }) => kind === 'rng_state_missing')).toBe(true)
   })
 

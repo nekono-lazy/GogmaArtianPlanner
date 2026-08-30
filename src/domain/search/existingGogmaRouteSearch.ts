@@ -1,422 +1,120 @@
-import { getBonusRank } from '../master/masterSelectors'
-import { areRestorationBonusSetsEqual } from '../models/domainRules'
-import type {
-  BuildRoute,
-  OwnedWeapon,
-  RestorationBonusSet,
-  RouteOperation,
-} from '../models/publicTypes'
-import { deriveRngCapabilities } from '../rng/capabilities'
-import { evaluatePracticalBonusConditions } from '../target'
+import type { BuildRoute, OwnedGogmaArtianWeapon, RouteOperation } from '../models/publicTypes'
 import {
-  createBaseCandidate,
+
+  hasConfirmedGogmaInputs,
+  hasConfirmedSkillInputs,
+  searchBonusAmendmentVariants,
   searchResetSkillVariants,
   type RouteSearchContext,
   type RouteSearchResult,
 } from './routeSearchShared'
 
-function compatibleWeapons(context: RouteSearchContext): OwnedWeapon[] {
+const destructiveKinds = ['existing_gogma_reset_bonuses', 'existing_gogma_keep_bonuses', 'existing_gogma_mixed'] as const
+
+function compatibleSources(context: RouteSearchContext): OwnedGogmaArtianWeapon[] {
   return context.input.ownedWeapons
-    .filter(
-      (weapon) =>
-        weapon.kind === 'gogma' &&
-        weapon.weaponTypeId === context.target.weaponTypeId &&
-        weapon.elementId === context.target.elementId,
-    )
+    .filter((weapon): weapon is OwnedGogmaArtianWeapon => weapon.kind === 'gogma'
+      && weapon.weaponTypeId === context.target.weaponTypeId
+      && weapon.elementId === context.target.elementId)
     .sort((left, right) => left.id.localeCompare(right.id))
 }
 
-function bonusesCanMeetTarget(
-  context: RouteSearchContext,
-  weapon: OwnedWeapon,
-): boolean {
-  return (
-    areRestorationBonusSetsEqual(
-      weapon.restorationBonuses,
-      context.target.idealBonuses,
-    ) ||
-    evaluatePracticalBonusConditions(
-      context.target.practicalBonusConditions,
-      context.target.practicalAlternativeGroups,
-      weapon.restorationBonuses,
-      context.input.master,
-    )
-  )
+function pushAll(result: RouteSearchResult, routes: readonly BuildRoute['kind'][], reason: Parameters<RouteSearchResult['skippedRoutes']['push']>[0]['reason'], detail: string) {
+  routes.forEach((route) => result.skippedRoutes.push({ route, reason, detail }))
 }
 
-function hasUsefulKeepBonus(
-  context: RouteSearchContext,
-  weapon: OwnedWeapon,
-): boolean {
-  return weapon.restorationBonuses.some((bonus) => {
-    if (
-      context.target.idealBonuses.some(
-        (ideal) =>
-          ideal.bonusTypeId === bonus.bonusTypeId &&
-          ideal.bonusRankId === bonus.bonusRankId,
-      )
-    ) {
-      return true
-    }
-    const rankOrder = getBonusRank(
-      context.input.master,
-      bonus.bonusRankId,
-    ).order
-    return (
-      context.target.practicalBonusConditions.some(
-        (condition) =>
-          condition.bonusTypeId === bonus.bonusTypeId &&
-          rankOrder >=
-            getBonusRank(context.input.master, condition.minimumRankId).order,
-      ) ||
-      context.target.practicalAlternativeGroups.some((group) =>
-        group.options.some(
-          (option) =>
-            option.bonusTypeId === bonus.bonusTypeId &&
-            rankOrder >=
-              getBonusRank(
-                context.input.master,
-                option.minimumRankId,
-              ).order,
-        ),
-      )
-    )
-  })
+function kindForAmendment(source: OwnedGogmaArtianWeapon, operations: RouteOperation[]): BuildRoute['kind'] {
+  const amendments = operations.filter((operation) => operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses')
+  const hasReset = amendments.some((operation) => operation.type === 'reset_bonuses')
+  const hasKeep = amendments.some((operation) => operation.type === 'keep_bonuses')
+  if (hasReset && !hasKeep) return 'existing_gogma_reset_bonuses'
+  if (hasKeep && !hasReset) return 'existing_gogma_keep_bonuses'
+  void source
+  return 'existing_gogma_mixed'
 }
 
-async function searchResetSkillsOnly(
-  context: RouteSearchContext,
-  sources: readonly OwnedWeapon[],
-  result: RouteSearchResult,
-): Promise<void> {
-  const sourceCandidates = sources.filter((source) =>
-    bonusesCanMeetTarget(context, source),
-  )
-  if (sourceCandidates.length === 0) {
-    result.skippedRoutes.push({
-      route: 'existing_gogma_reset_skills',
-      reason: 'no_owned_weapon_available',
-      detail: 'No compatible OwnedWeapon has bonuses that can meet the Target.',
-    })
-    return
-  }
-  const sampleSource = sourceCandidates[0]
-  const sampleOperation: RouteOperation = {
-    type: 'reset_skills',
-    sourceOwnedWeaponId: sampleSource.id,
-    skillCounterBefore: context.input.rngState.skillCounter.value ?? 0,
-    skillCounterAfter: context.input.rngState.skillCounter.value ?? 0,
-  }
-  const capability = deriveRngCapabilities(
-    context.input.rngState,
-    context.input.normalCounters,
-    [sampleOperation],
-    context.engine.capabilities,
-  )
-  if (!capability.canPredictSkills) {
-    result.skippedRoutes.push({
-      route: 'existing_gogma_reset_skills',
-      reason: 'skill_capability_missing',
-      detail: 'Skill prediction capability is unavailable.',
-    })
-    return
+export async function searchExistingGogmaRoutes(context: RouteSearchContext): Promise<RouteSearchResult> {
+  const { engine, input } = context
+  const result: RouteSearchResult = { candidates: [], searchedRoutes: [], skippedRoutes: [], warnings: [] }
+  const all = compatibleSources(context)
+  if (all.length === 0) {
+    pushAll(result, ['existing_gogma_reset_bonuses', 'existing_gogma_keep_bonuses', 'existing_gogma_reset_skills', 'existing_gogma_mixed'], 'no_owned_weapon_available', 'No compatible owned Gogma weapon is available.')
+    return result
   }
 
-  result.searchedRoutes.push('existing_gogma_reset_skills')
-  for (const source of sourceCandidates) {
-    result.candidates.push(
-      ...(await searchResetSkillVariants(context, {
+  const canSkill = hasConfirmedSkillInputs(input) && engine.capabilities.supportsSkillPrediction
+  if (canSkill) {
+    result.searchedRoutes.push('existing_gogma_reset_skills')
+    for (const source of all) {
+      result.candidates.push(...await searchResetSkillVariants(context, {
         bonuses: source.restorationBonuses,
+        restorationBonusScope: source.restorationBonusScope,
         operations: [],
         sourceOwnedWeaponId: source.id,
+        skillCounterBefore: input.rngState.skillCounter.value!,
         kind: 'existing_gogma_reset_skills',
-      })),
-    )
+      }))
+    }
+  } else {
+    result.skippedRoutes.push({ route: 'existing_gogma_reset_skills', reason: hasConfirmedSkillInputs(input) ? 'skill_prediction_unsupported' : 'rng_state_unconfirmed', detail: hasConfirmedSkillInputs(input) ? 'The active RNG Engine does not support Skill prediction.' : 'Confirmed Base Seed, Skill Counter, and Counter Gate are required.' })
   }
-}
 
-async function searchResetBonuses(
-  context: RouteSearchContext,
-  sources: readonly OwnedWeapon[],
-  result: RouteSearchResult,
-): Promise<void> {
-  const sample = sources[0]
-  const sampleOperation: RouteOperation = {
-    type: 'reset_bonuses',
-    sourceOwnedWeaponId: sample.id,
-    gogmaCounterBefore: context.input.rngState.gogmaCounter.value ?? 0,
-    gogmaCounterAfter: context.input.rngState.gogmaCounter.value ?? 0,
+  const destructive = all.filter((weapon) => !weapon.isProtected)
+  if (destructive.length === 0) {
+    pushAll(result, destructiveKinds, 'no_unprotected_source_weapon', 'Only protected sources are available for destructive routes.')
+    return result
   }
-  const capabilities = deriveRngCapabilities(
-    context.input.rngState,
-    context.input.normalCounters,
-    [sampleOperation],
-    context.engine.capabilities,
-  )
-  if (!capabilities.canPredictGogma) {
-    result.skippedRoutes.push(
-      {
-        route: 'existing_gogma_reset_bonuses',
-        reason: 'gogma_capability_missing',
-        detail: 'Gogma prediction capability is unavailable.',
-      },
-      {
-        route: 'existing_gogma_mixed',
-        reason: 'gogma_capability_missing',
-        detail: 'Gogma prediction capability is unavailable.',
-      },
-    )
-    return
+  if (!hasConfirmedGogmaInputs(input) || !engine.capabilities.supportsGogmaPrediction) {
+    pushAll(result, destructiveKinds, hasConfirmedGogmaInputs(input) ? 'gogma_prediction_unsupported' : 'rng_state_unconfirmed', hasConfirmedGogmaInputs(input) ? 'The active RNG Engine does not support Gogma prediction.' : 'Confirmed Base Seed, Gogma Counter, and Counter Gate are required.')
+    return result
   }
-  const baseSeed = context.input.rngState.baseSeed.value
-  const initialCounter = context.input.rngState.gogmaCounter.value
-  const counterGate = context.input.rngState.counterGate.value
-  if (baseSeed === null || initialCounter === null || counterGate === null) return
 
+  const canKeep = engine.capabilities.supportsKeepBonusesPrediction
+  const canMixed = canSkill || canKeep
   result.searchedRoutes.push('existing_gogma_reset_bonuses')
-  if (capabilities.canPredictSkills) {
+  if (canMixed) {
     result.searchedRoutes.push('existing_gogma_mixed')
   } else {
     result.skippedRoutes.push({
       route: 'existing_gogma_mixed',
-      reason: 'skill_capability_missing',
-      detail: 'Skill prediction capability is unavailable for a mixed route.',
+      reason: hasConfirmedSkillInputs(input)
+        ? 'skill_prediction_unsupported'
+        : 'rng_state_unconfirmed',
+      detail: hasConfirmedSkillInputs(input)
+        ? 'Mixed routes require Skill prediction or Keep Bonuses prediction.'
+        : 'Mixed routes require confirmed Skill inputs or Keep Bonuses prediction.',
     })
   }
-  for (const source of sources) {
-    let currentCounter = initialCounter
-    const operations: RouteOperation[] = []
-    for (
-      let index = 0;
-      index < context.input.settings.maxGogmaAdvance;
-      index += 1
-    ) {
-      await context.execution.checkpoint()
-      const bonuses = context.engine.predictGogmaBonus({
-        baseSeed,
-        gogmaCounter: currentCounter,
-        counterGate,
-        weaponTypeId: context.target.weaponTypeId,
-        elementId: context.target.elementId,
-        operation: { type: 'reset_bonuses' },
-        master: context.input.master,
-      })
-      const nextCounter = context.engine.advanceGogmaCounter(currentCounter, {
-        type: 'reset_bonuses',
-      })
-      operations.push({
-        type: 'reset_bonuses',
-        sourceOwnedWeaponId: source.id,
-        gogmaCounterBefore: currentCounter,
-        gogmaCounterAfter: nextCounter,
-      })
-      const route: BuildRoute = {
-        kind: 'existing_gogma_reset_bonuses',
-        sourceOwnedWeaponId: source.id,
-        operations: [...operations],
-      }
-      const baseCandidate = createBaseCandidate(
-        context,
-        bonuses,
-        source.seriesSkillId,
-        source.groupSkillId,
-        route,
-      )
-      if (baseCandidate) result.candidates.push(baseCandidate)
-      if (capabilities.canPredictSkills) {
-        result.candidates.push(
-          ...(await searchResetSkillVariants(context, {
-            bonuses,
-            operations: [...operations],
-            sourceOwnedWeaponId: source.id,
-            kind: 'existing_gogma_mixed',
-          })),
-        )
-      }
-      currentCounter = nextCounter
-    }
-  }
-}
-
-async function searchKeepBonuses(
-  context: RouteSearchContext,
-  sources: readonly OwnedWeapon[],
-  result: RouteSearchResult,
-): Promise<void> {
-  interface KeepSearchState {
-    bonuses: RestorationBonusSet
-    counter: number
-    operations: RouteOperation[]
-  }
-  if (!context.engine.capabilities.supportsKeepBonusesPrediction) {
-    result.skippedRoutes.push({
-      route: 'existing_gogma_keep_bonuses',
-      reason: 'keep_prediction_unsupported',
-      detail: 'The active RNG Engine does not support Keep Bonuses prediction.',
-    })
-    return
-  }
-  const usefulSources = sources.filter((source) =>
-    hasUsefulKeepBonus(context, source),
+  const pureKeepSources = destructive.filter(
+    ({ restorationBonusScope }) => restorationBonusScope === 'gogma_artian',
   )
-  if (usefulSources.length === 0) {
-    result.skippedRoutes.push({
-      route: 'existing_gogma_keep_bonuses',
-      reason: 'no_owned_weapon_available',
-      detail: 'No compatible source has a bonus usable by Keep Bonuses.',
-    })
-    return
+  if (canKeep && pureKeepSources.length > 0) {
+    result.searchedRoutes.push('existing_gogma_keep_bonuses')
   }
-  const sample: RouteOperation = {
-    type: 'keep_bonuses',
-    sourceOwnedWeaponId: usefulSources[0].id,
-    selection: { mode: 'engine_defined', engineParameters: {} },
-    gogmaCounterBefore: context.input.rngState.gogmaCounter.value ?? 0,
-    gogmaCounterAfter: context.input.rngState.gogmaCounter.value ?? 0,
-  }
-  const capabilities = deriveRngCapabilities(
-    context.input.rngState,
-    context.input.normalCounters,
-    [sample],
-    context.engine.capabilities,
-  )
-  if (!capabilities.canPredictGogma) {
-    result.skippedRoutes.push({
-      route: 'existing_gogma_keep_bonuses',
-      reason: 'gogma_capability_missing',
-      detail: 'Gogma prediction capability is unavailable for Keep Bonuses.',
-    })
-    return
-  }
-  const baseSeed = context.input.rngState.baseSeed.value
-  const gogmaCounter = context.input.rngState.gogmaCounter.value
-  const counterGate = context.input.rngState.counterGate.value
-  if (baseSeed === null || gogmaCounter === null || counterGate === null) return
 
-  result.searchedRoutes.push('existing_gogma_keep_bonuses')
-  if (capabilities.canPredictSkills) {
-    if (!result.searchedRoutes.includes('existing_gogma_mixed')) {
-      result.searchedRoutes.push('existing_gogma_mixed')
+  for (const source of destructive) {
+    const base: RouteOperation[] = []
+    const common = {
+      bonuses: source.restorationBonuses,
+      restorationBonusScope: source.restorationBonusScope,
+      operations: base,
+      sourceOwnedWeaponId: source.id,
+      skillCounterBefore: input.rngState.skillCounter.value ?? undefined,
+      kind: 'existing_gogma_mixed' as const,
+      seriesSkillId: source.seriesSkillId,
+      groupSkillId: source.groupSkillId,
+      gogmaCounterBefore: input.rngState.gogmaCounter.value!,
+      amendmentSourceOwnedWeaponId: source.id,
+      kindForAmendment: (operations: RouteOperation[]) => kindForAmendment(source, operations),
+    }
+    result.candidates.push(...await searchBonusAmendmentVariants(context, common))
+    if (!canKeep && source.restorationBonusScope === 'gogma_artian') {
+      result.skippedRoutes.push({ route: 'existing_gogma_keep_bonuses', reason: 'keep_prediction_unsupported', detail: 'The active RNG Engine does not support Keep Bonuses prediction.' })
+    }
+    if (source.restorationBonusScope === 'normal_artian') {
+      result.skippedRoutes.push({ route: 'existing_gogma_keep_bonuses', reason: 'normal_scope_requires_reset', detail: 'Keep Bonuses cannot be the first amendment of inherited Normal-scope bonuses.' })
     }
   }
-  for (const source of usefulSources) {
-    let frontier: KeepSearchState[] = [
-      {
-        bonuses: source.restorationBonuses,
-        counter: gogmaCounter,
-        operations: [] as RouteOperation[],
-      },
-    ]
-    for (
-      let depth = 0;
-      depth < context.input.settings.maxGogmaAdvance && frontier.length > 0;
-      depth += 1
-    ) {
-      const nextFrontier: KeepSearchState[] = []
-      for (const state of frontier) {
-        await context.execution.checkpoint()
-        const selections = context.engine.enumerateKeepSelections({
-          sourceBonuses: state.bonuses,
-          weaponTypeId: context.target.weaponTypeId,
-          elementId: context.target.elementId,
-          master: context.input.master,
-        })
-        for (const selection of selections) {
-          await context.execution.checkpoint()
-          const bonuses = context.engine.predictGogmaBonus({
-            baseSeed,
-            gogmaCounter: state.counter,
-            counterGate,
-            weaponTypeId: context.target.weaponTypeId,
-            elementId: context.target.elementId,
-            operation: { type: 'keep_bonuses', selection },
-            master: context.input.master,
-          })
-          const nextCounter = context.engine.advanceGogmaCounter(
-            state.counter,
-            { type: 'keep_bonuses', selection },
-          )
-          const operation: RouteOperation = {
-            type: 'keep_bonuses',
-            sourceOwnedWeaponId: source.id,
-            selection,
-            gogmaCounterBefore: state.counter,
-            gogmaCounterAfter: nextCounter,
-          }
-          const operations = [...state.operations, operation]
-          const baseCandidate = createBaseCandidate(
-            context,
-            bonuses,
-            source.seriesSkillId,
-            source.groupSkillId,
-            {
-              kind: 'existing_gogma_keep_bonuses',
-              sourceOwnedWeaponId: source.id,
-              operations,
-            },
-          )
-          if (baseCandidate) result.candidates.push(baseCandidate)
-          if (capabilities.canPredictSkills) {
-            result.candidates.push(
-              ...(await searchResetSkillVariants(context, {
-                bonuses,
-                operations,
-                sourceOwnedWeaponId: source.id,
-                kind: 'existing_gogma_mixed',
-              })),
-            )
-          }
-          nextFrontier.push({ bonuses, counter: nextCounter, operations })
-        }
-      }
-      frontier = nextFrontier
-    }
-  }
-}
-
-export async function searchExistingGogmaRoutes(
-  context: RouteSearchContext,
-): Promise<RouteSearchResult> {
-  const result: RouteSearchResult = {
-    candidates: [],
-    searchedRoutes: [],
-    skippedRoutes: [],
-    warnings: [],
-  }
-  const compatible = compatibleWeapons(context)
-  if (compatible.length === 0) {
-    result.skippedRoutes.push(
-      ...([
-        'existing_gogma_reset_bonuses',
-        'existing_gogma_keep_bonuses',
-        'existing_gogma_reset_skills',
-        'existing_gogma_mixed',
-      ] as const).map((route) => ({
-        route,
-        reason: 'no_owned_weapon_available' as const,
-        detail: 'No OwnedWeapon matches the Target weapon type and element.',
-      })),
-    )
-    return result
-  }
-
-  await searchResetSkillsOnly(context, compatible, result)
-  const unprotected = compatible.filter((weapon) => !weapon.isProtected)
-  if (unprotected.length === 0) {
-    result.skippedRoutes.push(
-      ...([
-        'existing_gogma_reset_bonuses',
-        'existing_gogma_keep_bonuses',
-        'existing_gogma_mixed',
-      ] as const).map((route) => ({
-        route,
-        reason: 'no_unprotected_source_weapon' as const,
-        detail: 'Only protected sources are available for destructive routes.',
-      })),
-    )
-    return result
-  }
-  await searchResetBonuses(context, unprotected, result)
-  await searchKeepBonuses(context, unprotected, result)
+  result.skippedRoutes = result.skippedRoutes.filter((skipped) => !result.searchedRoutes.includes(skipped.route))
   return result
 }

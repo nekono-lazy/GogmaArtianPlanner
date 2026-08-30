@@ -25,6 +25,7 @@ export type RngStateSource =
 export const V1_NORMAL_ARTIAN_RARITY = 8 as const
 export type NormalArtianRarity = typeof V1_NORMAL_ARTIAN_RARITY
 export type ArtianWeaponKind = 'normal' | 'gogma'
+export type RestorationBonusScope = 'normal_artian' | 'gogma_artian'
 export type OwnedWeaponStatus = 'material' | 'practical' | 'ideal'
 export type CandidateCategory = 'ideal' | 'practical'
 export type RouteKind =

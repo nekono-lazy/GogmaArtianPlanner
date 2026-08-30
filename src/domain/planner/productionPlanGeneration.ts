@@ -68,6 +68,7 @@ function normalizeCandidateSnapshot(candidate: BuildCandidate) {
     targetWeaponId: candidate.targetWeaponId,
     category: candidate.category,
     finalBonuses: normalizeCandidateBonuses(candidate),
+    restorationBonusScope: candidate.restorationBonusScope,
     seriesSkillId: candidate.seriesSkillId,
     groupSkillId: candidate.groupSkillId,
     route: candidate.route,

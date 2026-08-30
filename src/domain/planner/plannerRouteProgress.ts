@@ -43,16 +43,11 @@ function engineAdvance(
         count: 1,
       })
     case 'convert_normal_to_gogma':
-      return engine.advanceGogmaCounter(current, {
-        type: 'create_gogma_from_normal',
-      })
+      return engine.advanceSkillCounter(current, { type: 'convert_normal_to_gogma' })
     case 'reset_bonuses':
       return engine.advanceGogmaCounter(current, { type: 'reset_bonuses' })
     case 'keep_bonuses':
-      return engine.advanceGogmaCounter(current, {
-        type: 'keep_bonuses',
-        selection: operation.selection,
-      })
+      return engine.advanceGogmaCounter(current, { type: 'keep_bonuses' })
     case 'reset_skills':
       return engine.advanceSkillCounter(current, { type: 'reset_skills' })
     case 'use_weapon_as_material':
@@ -104,7 +99,6 @@ function actionIdentity(
       key: stableStringify({
         type: operation.type,
         sourceOwnedWeaponId: operation.sourceOwnedWeaponId,
-        selection: operation.selection,
         before: operation.gogmaCounterBefore,
         after: operation.gogmaCounterAfter,
       }),
@@ -153,14 +147,10 @@ function counterDetails(
         after: operation.normalCounterAfter,
       }
     case 'convert_normal_to_gogma':
+      return { stream: 'skill', counterId: null, before: operation.skillCounterBefore, after: operation.skillCounterAfter }
     case 'reset_bonuses':
     case 'keep_bonuses':
-      return {
-        stream: 'gogma',
-        counterId: null,
-        before: operation.gogmaCounterBefore,
-        after: operation.gogmaCounterAfter,
-      }
+      return { stream: 'gogma', counterId: null, before: operation.gogmaCounterBefore, after: operation.gogmaCounterAfter }
     case 'reset_skills':
       return {
         stream: 'skill',

@@ -79,7 +79,7 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
   const capabilities = preview ? deriveRngCapabilities(preview, normalCounters, [], engine.capabilities) : null
   const displayedRequirements = useMemo(() => {
     if (!preview) return []
-    const gogma = deriveRngCapabilities(preview, normalCounters, [{ type: 'convert_normal_to_gogma', weaponTypeId: 'capability-display', gogmaCounterBefore: 0, gogmaCounterAfter: 0 }], engine.capabilities)
+    const gogma = deriveRngCapabilities(preview, normalCounters, [{ type: 'reset_bonuses', sourceOwnedWeaponId: null, gogmaCounterBefore: 0, gogmaCounterAfter: 0 }], engine.capabilities)
     const skills = deriveRngCapabilities(preview, normalCounters, [{ type: 'reset_skills', sourceOwnedWeaponId: null, skillCounterBefore: 0, skillCounterAfter: 0 }], engine.capabilities)
     return [...new Set<RngCapabilityMissingRequirement>([
       ...gogma.missingRequirements as RngCapabilityMissingRequirement[],

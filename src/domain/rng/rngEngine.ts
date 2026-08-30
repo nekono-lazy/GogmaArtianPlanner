@@ -1,7 +1,6 @@
 import type {
   ElementId,
   GroupSkillId,
-  KeepBonusSelection,
   NormalArtianRarity,
   RestorationBonusSet,
   SeriesSkillId,
@@ -36,19 +35,8 @@ export interface GogmaBonusPredictionInput {
   weaponTypeId: WeaponTypeId
   elementId: ElementId
   operation:
-    | {
-        type: 'new_gogma'
-        sourceNormalBonuses: RestorationBonusSet
-      }
     | { type: 'reset_bonuses' }
-    | { type: 'keep_bonuses'; selection: KeepBonusSelection }
-  master: RngMasterSubset
-}
-
-export interface KeepSelectionEnumerationInput {
-  sourceBonuses: RestorationBonusSet
-  weaponTypeId: WeaponTypeId
-  elementId: ElementId
+    | { type: 'keep_bonuses'; currentBonuses: RestorationBonusSet }
   master: RngMasterSubset
 }
 
@@ -69,19 +57,18 @@ export interface SkillPredictionResult {
 export interface NormalArtianPredictionInput {
   baseSeed: NormalizedSeed
   weaponTypeId: WeaponTypeId
+  elementId: ElementId
   rarity: NormalArtianRarity
   normalCounter: number
   master: RngMasterSubset
 }
 
 export type GogmaOperation =
-  | { type: 'create_gogma_from_normal' }
   | { type: 'reset_bonuses' }
-  | { type: 'keep_bonuses'; selection: KeepBonusSelection }
-  | { type: 'consume_as_material' }
+  | { type: 'keep_bonuses' }
 
 export type SkillOperation =
-  | { type: 'assign_skills' }
+  | { type: 'convert_normal_to_gogma' }
   | { type: 'reset_skills' }
 
 export type NormalArtianOperation = {
@@ -96,9 +83,6 @@ export interface RngEngine {
   predictGogmaBonus(input: GogmaBonusPredictionInput): RestorationBonusSet
   predictSkills(input: SkillPredictionInput): SkillPredictionResult
   predictNormalArtian(input: NormalArtianPredictionInput): RestorationBonusSet
-  enumerateKeepSelections(
-    input: KeepSelectionEnumerationInput,
-  ): KeepBonusSelection[]
   advanceGogmaCounter(current: number, operation: GogmaOperation): number
   advanceSkillCounter(current: number, operation: SkillOperation): number
   advanceNormalCounter(current: number, operation: NormalArtianOperation): number

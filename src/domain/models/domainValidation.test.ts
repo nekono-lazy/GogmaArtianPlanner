@@ -272,7 +272,7 @@ describe('complete Domain fixture validation', () => {
       ownedWeaponId: material.id,
       expectedResult: {
         restorationBonuses: material.restorationBonuses,
-        seriesSkillId: material.seriesSkillId,
+        restorationBonusScope: material.restorationBonusScope, seriesSkillId: material.seriesSkillId,
         groupSkillId: material.groupSkillId,
         candidateCategory: null,
         isSimilarToIdeal: false,

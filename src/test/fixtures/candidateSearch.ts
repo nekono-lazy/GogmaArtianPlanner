@@ -92,7 +92,6 @@ export function createCandidateSearchInput(): CandidateSearchInput {
 export interface CandidateSearchFixtureOptions {
   keepSupported?: boolean
   normalResult?: ReturnType<typeof createRestorationBonusSet>
-  gogmaNewResult?: ReturnType<typeof createRestorationBonusSet>
   resetResult?: ReturnType<typeof createRestorationBonusSet>
   keepResult?: ReturnType<typeof createRestorationBonusSet>
   skillSupported?: boolean
@@ -103,13 +102,8 @@ export function createCandidateSearchEngine(
   options: CandidateSearchFixtureOptions = {},
 ): FakeRngEngine {
   const normalResult = options.normalResult ?? createRestorationBonusSet()
-  const gogmaNewResult = options.gogmaNewResult ?? createRestorationBonusSet()
   const resetResult = options.resetResult ?? belowPracticalBonuses()
   const keepResult = options.keepResult ?? createRestorationBonusSet()
-  const keepSelection = {
-    mode: 'engine_defined' as const,
-    engineParameters: { fixture: 'explicit' },
-  }
   const source = input.ownedWeapons[0]
   const fixtures: FakeRngFixtures = {
     version: 'candidate-search-v1',
@@ -125,30 +119,14 @@ export function createCandidateSearchEngine(
       {
         input: {
           baseSeed: input.rngState.baseSeed.value as string,
-          weaponTypeId: input.targetWeapons[0].weaponTypeId,
-          rarity: 8,
+          weaponTypeId: input.targetWeapons[0].weaponTypeId, elementId: input.targetWeapons[0].elementId, rarity: 8,
           normalCounter: 4,
           master: input.master,
         },
         result: normalResult,
       },
     ],
-    gogmaPredictions: [
-      {
-        input: {
-          baseSeed: input.rngState.baseSeed.value as string,
-          gogmaCounter: 10,
-          counterGate: input.rngState.counterGate.value as number,
-          weaponTypeId: input.targetWeapons[0].weaponTypeId,
-          elementId: input.targetWeapons[0].elementId,
-          operation: {
-            type: 'new_gogma',
-            sourceNormalBonuses: normalResult,
-          },
-          master: input.master,
-        },
-        result: gogmaNewResult,
-      },
+    resetBonusPredictions: [
       {
         input: {
           baseSeed: input.rngState.baseSeed.value as string,
@@ -161,57 +139,12 @@ export function createCandidateSearchEngine(
         },
         result: resetResult,
       },
-      ...(options.keepSupported
-        ? [
-            {
-              input: {
-                baseSeed: input.rngState.baseSeed.value as string,
-                gogmaCounter: 10,
-                counterGate: input.rngState.counterGate.value as number,
-                weaponTypeId: input.targetWeapons[0].weaponTypeId,
-                elementId: input.targetWeapons[0].elementId,
-                operation: { type: 'keep_bonuses' as const, selection: keepSelection },
-                master: input.master,
-              },
-              result: keepResult,
-            },
-          ]
-        : []),
     ],
-    skillPredictions:
-      options.skillSupported === false
-        ? []
-        : [
-            {
-              input: {
-                baseSeed: input.rngState.baseSeed.value as string,
-                skillCounter: 7,
-                counterGate: input.rngState.counterGate.value as number,
-                weaponTypeId: input.targetWeapons[0].weaponTypeId,
-                elementId: input.targetWeapons[0].elementId,
-                master: input.master,
-              },
-              result: {
-                seriesSkillId: 'series_skill.fixture.a',
-                groupSkillId: null,
-              },
-            },
-          ],
-    keepSelections:
-      options.keepSupported && source
-        ? [
-            {
-              input: {
-                sourceBonuses: source.restorationBonuses,
-                weaponTypeId: input.targetWeapons[0].weaponTypeId,
-                elementId: input.targetWeapons[0].elementId,
-                master: input.master,
-              },
-              result: [keepSelection],
-            },
-          ]
-        : [],
-    normalCounterAdvances: [
+    skillPredictions: options.skillSupported === false ? [] : [
+      { input: { baseSeed: input.rngState.baseSeed.value as string, skillCounter: 7, counterGate: input.rngState.counterGate.value as number, weaponTypeId: input.targetWeapons[0].weaponTypeId, elementId: input.targetWeapons[0].elementId, master: input.master }, result: { seriesSkillId: 'series_skill.fixture.a', groupSkillId: null } },
+      { input: { baseSeed: input.rngState.baseSeed.value as string, skillCounter: 8, counterGate: input.rngState.counterGate.value as number, weaponTypeId: input.targetWeapons[0].weaponTypeId, elementId: input.targetWeapons[0].elementId, master: input.master }, result: { seriesSkillId: 'series_skill.fixture.a', groupSkillId: null } },
+    ],
+    keepBonusPredictions: options.keepSupported && source ? [{ input: { baseSeed: input.rngState.baseSeed.value as string, gogmaCounter: 10, counterGate: input.rngState.counterGate.value as number, weaponTypeId: input.targetWeapons[0].weaponTypeId, elementId: input.targetWeapons[0].elementId, operation: { type: 'keep_bonuses' as const, currentBonuses: source.restorationBonuses }, master: input.master }, result: keepResult }] : [],    normalCounterAdvances: [
       {
         current: 4,
         operation: { type: 'create_normal_artian', count: 1 },
@@ -221,7 +154,7 @@ export function createCandidateSearchEngine(
     gogmaCounterAdvances: [
       {
         current: 10,
-        operation: { type: 'create_gogma_from_normal' },
+        operation: { type: 'reset_bonuses' },
         result: 11,
       },
       { current: 10, operation: { type: 'reset_bonuses' }, result: 11 },
@@ -229,22 +162,17 @@ export function createCandidateSearchEngine(
         ? [
             {
               current: 10,
-              operation: { type: 'keep_bonuses' as const, selection: keepSelection },
+              operation: { type: 'keep_bonuses' as const },
               result: 11,
             },
           ]
         : []),
     ],
-    skillCounterAdvances:
-      options.skillSupported === false
-        ? []
-        : [
-            {
-              current: 7,
-              operation: { type: 'reset_skills' },
-              result: 8,
-            },
-          ],
+    skillCounterAdvances: options.skillSupported === false ? [] : [
+      { current: 7, operation: { type: 'convert_normal_to_gogma' }, result: 8 },
+      { current: 7, operation: { type: 'reset_skills' }, result: 8 },
+      { current: 8, operation: { type: 'reset_skills' }, result: 9 },
+    ],
   }
   return new FakeRngEngine(fixtures)
 }

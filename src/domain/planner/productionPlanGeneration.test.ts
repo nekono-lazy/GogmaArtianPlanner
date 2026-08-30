@@ -125,6 +125,7 @@ describe('Production plan generation', () => {
       seriesSkillId: null,
       groupSkillId: null,
       status: null,
+      restorationBonusScope: 'normal_artian' as const,
       isProtected: false,
     }
     input.ownedWeapons = [source]
@@ -135,11 +136,12 @@ describe('Production plan generation', () => {
       operations: [{
         type: 'convert_normal_to_gogma',
         weaponTypeId: source.weaponTypeId,
-        gogmaCounterBefore: 10,
-        gogmaCounterAfter: 11,
+        skillCounterBefore: 7,
+        skillCounterAfter: 8,
       }],
     }
-    entry.candidateSnapshot.seriesSkillId = null
+    entry.candidateSnapshot.restorationBonusScope = 'normal_artian'
+    entry.candidateSnapshot.seriesSkillId = 'series_skill.fixture.a'
     entry.candidateSnapshot.groupSkillId = null
     synchronizeEntry(input)
     const plan = (await createProductionPlan(input, dependencies)).plan
@@ -180,6 +182,8 @@ describe('Production plan generation', () => {
       }],
     }
     entry.candidateSnapshot.finalBonuses = structuredClone(createValidOwnedWeapon().restorationBonuses)
+    entry.candidateSnapshot.restorationBonusScope = 'gogma_artian'
+    entry.candidateSnapshot.restorationBonusScope = 'gogma_artian'
     entry.candidateSnapshot.seriesSkillId = source.seriesSkillId
     entry.candidateSnapshot.groupSkillId = source.groupSkillId
     synchronizeEntry(input)
@@ -205,22 +209,25 @@ describe('Production plan generation', () => {
       { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: 'bonus_rank.fixture.low' },
     ]
     input.ownedWeapons = [source]
-    dependencies.rngEngine = createCandidateSearchEngine(createCandidateSearchInput(), {
+    const keepFixtureInput = createCandidateSearchInput()
+    keepFixtureInput.ownedWeapons[0].restorationBonuses = structuredClone(
+      source.restorationBonuses,
+    )
+    dependencies.rngEngine = createCandidateSearchEngine(keepFixtureInput, {
       keepSupported: true,
     })
     const entry = input.buildListEntries[0]
-    const selection = { mode: 'engine_defined' as const, engineParameters: { fixture: 'explicit' } }
     entry.candidateSnapshot.route = {
       kind: 'existing_gogma_keep_bonuses',
       sourceOwnedWeaponId: source.id,
       operations: [{
         type: 'keep_bonuses',
         sourceOwnedWeaponId: source.id,
-        selection,
         gogmaCounterBefore: 10,
         gogmaCounterAfter: 11,
       }],
     }
+    entry.candidateSnapshot.restorationBonusScope = 'gogma_artian'
     entry.candidateSnapshot.seriesSkillId = source.seriesSkillId
     entry.candidateSnapshot.groupSkillId = source.groupSkillId
     synchronizeEntry(input)
@@ -255,6 +262,7 @@ describe('Production plan generation', () => {
     entry.candidateSnapshot.isSimilarToIdeal = false
     entry.candidateSnapshot.similarityScore = null
     entry.candidateSnapshot.finalBonuses = structuredClone(source.restorationBonuses)
+    entry.candidateSnapshot.restorationBonusScope = source.restorationBonusScope
     entry.candidateSnapshot.seriesSkillId = 'series_skill.fixture.a'
     entry.candidateSnapshot.groupSkillId = null
     synchronizeEntry(input)
@@ -382,6 +390,9 @@ describe('Production plan generation', () => {
     expectChanged((value) => { value.buildListEntries[0].searchStateHash = 'hash.changed.search' })
     expectChanged((value) => { value.buildListEntries[0].referencedOwnedWeaponsHash = 'hash.changed.owned' })
     expectChanged((value) => { value.buildListEntries[0].calculationContext.appSchemaVersion = 2 })
+    expectChanged((value) => {
+      value.buildListEntries[0].candidateSnapshot.restorationBonusScope = 'gogma_artian'
+    })
   })
   it('keeps deterministic Plan IDs, timestamps, selected IDs, and required material totals', async () => {
     const first = fixture()

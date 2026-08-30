@@ -175,8 +175,8 @@ describe('referencedOwnedWeaponsHash', () => {
         {
           type: 'convert_normal_to_gogma',
           weaponTypeId: source.weaponTypeId,
-          gogmaCounterBefore: 1,
-          gogmaCounterAfter: 2,
+          skillCounterBefore: 1,
+          skillCounterAfter: 2,
         },
       ],
     }

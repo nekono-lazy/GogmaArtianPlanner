@@ -42,6 +42,7 @@ import type {
 import { createInitialPlannerSearchState } from './plannerInitialState'
 import { comparePlannerSearchStates } from './plannerScoring'
 import { validatePlannerInput } from './plannerValidation'
+import { validateBuildRoute } from '../models/validation'
 
 const ENGINE_VERSION = 'fake-fixture:planner-beam-v1'
 
@@ -49,16 +50,11 @@ function plannerEngine(): FakeRngEngine {
   const gogmaCounterAdvances: FakeRngFixtures['gogmaCounterAdvances'] = []
   const skillCounterAdvances: FakeRngFixtures['skillCounterAdvances'] = []
   const normalCounterAdvances: FakeRngFixtures['normalCounterAdvances'] = []
-  const keepSelection = {
-    mode: 'slot_indices' as const,
-    keptSlotIndices: [0, 1],
-    engineParameters: {},
-  }
   for (let counter = 0; counter < 30; counter += 1) {
     gogmaCounterAdvances.push(
       {
         current: counter,
-        operation: { type: 'create_gogma_from_normal' },
+        operation: { type: 'reset_bonuses' },
         result: counter + 1,
       },
       {
@@ -68,15 +64,22 @@ function plannerEngine(): FakeRngEngine {
       },
       {
         current: counter,
-        operation: { type: 'keep_bonuses', selection: keepSelection },
+        operation: { type: 'keep_bonuses', },
         result: counter + 1,
       },
     )
-    skillCounterAdvances.push({
-      current: counter,
-      operation: { type: 'reset_skills' },
-      result: counter + 1,
-    })
+    skillCounterAdvances.push(
+      {
+        current: counter,
+        operation: { type: 'convert_normal_to_gogma' },
+        result: counter + 1,
+      },
+      {
+        current: counter,
+        operation: { type: 'reset_skills' },
+        result: counter + 1,
+      },
+    )
     normalCounterAdvances.push({
       current: counter,
       operation: { type: 'create_normal_artian', count: 1 },
@@ -93,10 +96,10 @@ function plannerEngine(): FakeRngEngine {
       supportsKeepBonusesPrediction: true,
     },
     normalizedSeeds: [],
-    gogmaPredictions: [],
+    resetBonusPredictions: [],
     skillPredictions: [],
     normalArtianPredictions: [],
-    keepSelections: [],
+    keepBonusPredictions: [],
     gogmaCounterAdvances,
     skillCounterAdvances,
     normalCounterAdvances,
@@ -153,13 +156,13 @@ function routeEntry(
       0,
     )
   entry.candidateSnapshot.estimatedGogmaAdvance =
-    route.operations.filter((operation) =>
-      ['convert_normal_to_gogma', 'reset_bonuses', 'keep_bonuses'].includes(
-        operation.type,
-      ),
+    route.operations.filter(({ type }) =>
+      ['reset_bonuses', 'keep_bonuses'].includes(type),
     ).length
   entry.candidateSnapshot.estimatedSkillAdvance =
-    route.operations.filter(({ type }) => type === 'reset_skills').length
+    route.operations.filter(({ type }) =>
+      ['convert_normal_to_gogma', 'reset_skills'].includes(type),
+    ).length
   entry.candidateSnapshot.estimatedNormalAdvance =
     route.operations.some(({ type }) => type === 'create_normal_artian')
       ? route.operations
@@ -299,8 +302,8 @@ function dynamicConflictScenario() {
       {
         type: 'convert_normal_to_gogma',
         weaponTypeId: 'weapon.fixture.a',
-        gogmaCounterBefore: 10,
-        gogmaCounterAfter: 11,
+        skillCounterBefore: 7,
+        skillCounterAfter: 8,
       },
     ],
   })
@@ -310,10 +313,10 @@ function dynamicConflictScenario() {
     operations: [
       { type: 'use_weapon_as_material', ownedWeaponId: onlySatisfiedWeapon.id },
       {
-        type: 'reset_bonuses',
+        type: 'reset_skills',
         sourceOwnedWeaponId: consumingSource.id,
-        gogmaCounterBefore: 10,
-        gogmaCounterAfter: 11,
+        skillCounterBefore: 7,
+        skillCounterAfter: 8,
       },
     ],
   })
@@ -367,8 +370,8 @@ describe('Planner Beam Search', () => {
         {
           type: 'convert_normal_to_gogma',
           weaponTypeId: 'weapon.fixture.a',
-          gogmaCounterBefore: 10,
-          gogmaCounterAfter: 11,
+          skillCounterBefore: 7,
+          skillCounterAfter: 8,
         },
       ],
     }
@@ -387,6 +390,234 @@ describe('Planner Beam Search', () => {
     )).toEqual([0, 1])
     expect(entry.candidateSnapshot.route).toEqual(snapshot)
     expect(entry.candidateSnapshot.route.operations[0]).toMatchObject({ count: 2 })
+  })
+
+  it.each([
+    {
+      name: 'rejects conversion then Keep without Reset',
+      amendments: ['keep_bonuses'] as const,
+      valid: false,
+    },
+    {
+      name: 'accepts conversion then Reset',
+      amendments: ['reset_bonuses'] as const,
+      valid: true,
+    },
+    {
+      name: 'accepts conversion then Reset then Keep',
+      amendments: ['reset_bonuses', 'keep_bonuses'] as const,
+      valid: true,
+    },
+  ])('$name for a newly forged Normal output', async ({ amendments, valid }) => {
+    const goal = target(`target.transient.new.${amendments.join('.')}`)
+    const operations: BuildRoute['operations'] = [
+      {
+        type: 'create_normal_artian',
+        weaponTypeId: goal.weaponTypeId,
+        rarity: 8,
+        count: 1,
+        normalCounterBefore: 4,
+        normalCounterAfter: 5,
+      },
+      {
+        type: 'convert_normal_to_gogma',
+        weaponTypeId: goal.weaponTypeId,
+        skillCounterBefore: 7,
+        skillCounterAfter: 8,
+      },
+      ...amendments.map((type, index) => ({
+        type,
+        sourceOwnedWeaponId: null,
+        gogmaCounterBefore: 10 + index,
+        gogmaCounterAfter: 11 + index,
+      })),
+    ] as BuildRoute['operations']
+    const entry = routeEntry('entry.transient.new', goal, {
+      kind: 'normal_artian_to_gogma',
+      sourceOwnedWeaponId: null,
+      operations,
+    })
+    const { input, dependencies } = fixture([goal], [entry])
+    const validation = validatePlannerInput(input, dependencies)
+    expect(validation.validBuildListEntries).toHaveLength(valid ? 1 : 0)
+    if (!valid) return
+
+    const result = await runPlannerBeamSearch(input, dependencies)
+    expect(result.bestState?.trace.map(({ actionType }) => actionType)).toEqual([
+      'create_normal_artian',
+      'convert_normal_to_gogma',
+      ...amendments,
+      'reserve_weapon',
+    ])
+    expect(result.bestState?.routeRuntimeByEntryId[entry.id]).toEqual({
+      hasUnregisteredGogmaOutput: true,
+      transientRestorationBonusScope: 'gogma_artian',
+    })
+  })
+
+  it.each([
+    {
+      name: 'rejects conversion then Keep without Reset',
+      amendments: ['keep_bonuses'] as const,
+      valid: false,
+    },
+    {
+      name: 'accepts conversion then Reset then Keep',
+      amendments: ['reset_bonuses', 'keep_bonuses'] as const,
+      valid: true,
+    },
+  ])('$name for an owned Normal output', async ({ amendments, valid }) => {
+    const goal = target(`target.transient.owned.${amendments.join('.')}`)
+    const source = {
+      ...createValidOwnedWeapon(ownedWeaponId('owned.transient.normal')),
+      kind: 'normal' as const,
+      rarity: 8 as const,
+      restorationBonusScope: 'normal_artian' as const,
+      seriesSkillId: null,
+      groupSkillId: null,
+      status: null,
+      isProtected: false,
+    }
+    const operations: BuildRoute['operations'] = [
+      {
+        type: 'convert_normal_to_gogma',
+        weaponTypeId: goal.weaponTypeId,
+        skillCounterBefore: 7,
+        skillCounterAfter: 8,
+      },
+      ...amendments.map((type, index) => ({
+        type,
+        sourceOwnedWeaponId: null,
+        gogmaCounterBefore: 10 + index,
+        gogmaCounterAfter: 11 + index,
+      })),
+    ] as BuildRoute['operations']
+    const entry = routeEntry('entry.transient.owned', goal, {
+      kind: 'owned_normal_artian_to_gogma',
+      sourceOwnedWeaponId: source.id,
+      operations,
+    })
+    const { input, dependencies } = fixture([goal], [entry], [source])
+    const validation = validatePlannerInput(input, dependencies)
+    expect(validation.validBuildListEntries).toHaveLength(valid ? 1 : 0)
+    if (!valid) return
+
+    const result = await runPlannerBeamSearch(input, dependencies)
+    expect(result.bestState?.trace.map(({ actionType }) => actionType)).toEqual([
+      'convert_normal_to_gogma',
+      ...amendments,
+      'reserve_weapon',
+    ])
+    expect(result.bestState?.routeRuntimeByEntryId[entry.id]).toEqual({
+      hasUnregisteredGogmaOutput: true,
+      transientRestorationBonusScope: 'gogma_artian',
+    })
+  })
+
+  it('keeps Normal-scope bonuses after transient Reset Skills', async () => {
+    const goal = target('target.transient.reset-skills-scope')
+    const entry = routeEntry('entry.transient.reset-skills-scope', goal, {
+      kind: 'normal_artian_to_gogma',
+      sourceOwnedWeaponId: null,
+      operations: [
+        {
+          type: 'create_normal_artian',
+          weaponTypeId: goal.weaponTypeId,
+          rarity: 8,
+          count: 1,
+          normalCounterBefore: 4,
+          normalCounterAfter: 5,
+        },
+        {
+          type: 'convert_normal_to_gogma',
+          weaponTypeId: goal.weaponTypeId,
+          skillCounterBefore: 7,
+          skillCounterAfter: 8,
+        },
+        {
+          type: 'reset_skills',
+          sourceOwnedWeaponId: null,
+          skillCounterBefore: 8,
+          skillCounterAfter: 9,
+        },
+      ],
+    })
+    const { input, dependencies } = fixture([goal], [entry])
+    const result = await runPlannerBeamSearch(input, dependencies)
+    expect(result.bestState?.routeRuntimeByEntryId[entry.id]).toEqual({
+      hasUnregisteredGogmaOutput: true,
+      transientRestorationBonusScope: 'normal_artian',
+    })
+  })
+
+  it('requires Reset after transient Reset Skills before Keep', () => {
+    const route = (operations: BuildRoute['operations']): BuildRoute => ({
+      kind: 'normal_artian_to_gogma',
+      sourceOwnedWeaponId: null,
+      operations,
+    })
+    const prefix: BuildRoute['operations'] = [
+      {
+        type: 'create_normal_artian', weaponTypeId: 'weapon.fixture.a', rarity: 8,
+        count: 1, normalCounterBefore: 4, normalCounterAfter: 5,
+      },
+      {
+        type: 'convert_normal_to_gogma', weaponTypeId: 'weapon.fixture.a',
+        skillCounterBefore: 7, skillCounterAfter: 8,
+      },
+      {
+        type: 'reset_skills', sourceOwnedWeaponId: null,
+        skillCounterBefore: 8, skillCounterAfter: 9,
+      },
+    ]
+    const keep = {
+      type: 'keep_bonuses' as const, sourceOwnedWeaponId: null,
+      gogmaCounterBefore: 10, gogmaCounterAfter: 11,
+    }
+    const reset = {
+      type: 'reset_bonuses' as const, sourceOwnedWeaponId: null,
+      gogmaCounterBefore: 10, gogmaCounterAfter: 11,
+    }
+    expect(validateBuildRoute(route([...prefix, keep])).isValid).toBe(false)
+    expect(validateBuildRoute(route([...prefix, reset, { ...keep, gogmaCounterBefore: 11, gogmaCounterAfter: 12 }])).isValid).toBe(true)
+  })
+
+  it('keeps Owned-Normal transient scope through Reset Skills', async () => {
+    const goal = target('target.transient.owned-reset-skills-scope')
+    const source = {
+      ...createValidOwnedWeapon(ownedWeaponId('owned.transient.reset-skills')),
+      kind: 'normal' as const,
+      rarity: 8 as const,
+      restorationBonusScope: 'normal_artian' as const,
+      seriesSkillId: null,
+      groupSkillId: null,
+      status: null,
+      isProtected: false,
+    }
+    const entry = routeEntry('entry.transient.owned-reset-skills-scope', goal, {
+      kind: 'owned_normal_artian_to_gogma',
+      sourceOwnedWeaponId: source.id,
+      operations: [
+        {
+          type: 'convert_normal_to_gogma',
+          weaponTypeId: goal.weaponTypeId,
+          skillCounterBefore: 7,
+          skillCounterAfter: 8,
+        },
+        {
+          type: 'reset_skills',
+          sourceOwnedWeaponId: null,
+          skillCounterBefore: 8,
+          skillCounterAfter: 9,
+        },
+      ],
+    })
+    const { input, dependencies } = fixture([goal], [entry], [source])
+    const result = await runPlannerBeamSearch(input, dependencies)
+    expect(result.bestState?.routeRuntimeByEntryId[entry.id]).toEqual({
+      hasUnregisteredGogmaOutput: true,
+      transientRestorationBonusScope: 'normal_artian',
+    })
   })
 
   it('scores an uncovered Practical above an Ideal upgrade at equal priority', () => {
@@ -862,6 +1093,7 @@ describe('Planner Beam Search', () => {
     expect(initial.state?.trace).toEqual([])
     expect(initial.state?.routeRuntimeByEntryId[entry.id]).toEqual({
       hasUnregisteredGogmaOutput: false,
+      transientRestorationBonusScope: null,
     })
     expect(initial.state?.simulatedInventory.ownedWeapons[0])
       .not.toBe(input.ownedWeapons[0])
@@ -962,6 +1194,7 @@ describe('Planner Beam Search', () => {
     const normal = {
       ...createValidOwnedWeapon(ownedWeaponId('owned.normal.shared')),
       kind: 'normal' as const,
+      restorationBonusScope: 'normal_artian' as const,
       rarity: 8 as const,
       seriesSkillId: null,
       groupSkillId: null,
@@ -976,8 +1209,8 @@ describe('Planner Beam Search', () => {
         operations: [{
           type: 'convert_normal_to_gogma',
           weaponTypeId: normal.weaponTypeId,
-          gogmaCounterBefore: 10,
-          gogmaCounterAfter: 11,
+          skillCounterBefore: 7,
+          skillCounterAfter: 8,
         }],
       })
     const first = ownedNormalEntry(
@@ -1431,13 +1664,7 @@ describe('Planner Beam Search', () => {
     expect(result.conflicts).toEqual([])
   })
 
-  it('records only actual simulated Inventory changes in route action effects', async () => {
-    const selection = {
-      mode: 'slot_indices' as const,
-      keptSlotIndices: [0, 1],
-      engineParameters: {},
-    }
-    const cases: Array<{ route: BuildRoute; source: OwnedGogmaArtianWeapon }> = [
+  it('records only actual simulated Inventory changes in route action effects', async () => {const cases: Array<{ route: BuildRoute; source: OwnedGogmaArtianWeapon }> = [
       { route: resetRoute('owned.effect.reset'), source: sourceWeapon('owned.effect.reset') },
       {
         route: {
@@ -1446,7 +1673,6 @@ describe('Planner Beam Search', () => {
           operations: [{
             type: 'keep_bonuses',
             sourceOwnedWeaponId: ownedWeaponId('owned.effect.keep'),
-            selection,
             gogmaCounterBefore: 10,
             gogmaCounterAfter: 11,
           }],
@@ -1508,8 +1734,8 @@ describe('Planner Beam Search', () => {
         {
           type: 'convert_normal_to_gogma',
           weaponTypeId: 'weapon.fixture.a',
-          gogmaCounterBefore: 10,
-          gogmaCounterAfter: 11,
+          skillCounterBefore: 7,
+          skillCounterAfter: 8,
         },
       ],
     })
@@ -1647,7 +1873,7 @@ describe('Planner Beam Search', () => {
     )
     const result = await runPlannerBeamSearch(input, dependencies)
     expect(result.conflicts).toContainEqual(expect.objectContaining({
-      kind: 'same_gogma_counter',
+      kind: 'same_skill_counter',
       buildListEntryIds: [scenario.consumingEntry.id, scenario.restoredEntry.id],
     }))
   })
@@ -1664,7 +1890,7 @@ describe('Planner Beam Search', () => {
       unresolved.dependencies,
     )
     const conflictKey = unresolvedResult.conflicts.find(
-      ({ kind }) => kind === 'same_gogma_counter',
+      ({ kind }) => kind === 'same_skill_counter',
     )?.id
     expect(conflictKey).toBeDefined()
 

@@ -21,8 +21,8 @@ function ownedNormalRoute(): BuildRoute {
       {
         type: 'convert_normal_to_gogma',
         weaponTypeId: 'weapon.fixture.a',
-        gogmaCounterBefore: 1,
-        gogmaCounterAfter: 2,
+        skillCounterBefore: 1,
+        skillCounterAfter: 2,
       },
       {
         type: 'reset_skills',
@@ -57,12 +57,11 @@ describe('BuildRoute validation', () => {
     expect(validateBuildRoute(route).isValid).toBe(false)
   })
 
-  it('rejects Keep Bonuses inside a normal route', () => {
+  it('rejects Keep Bonuses before the first Reset inside a normal route', () => {
     const route = normalRoute()
     route.operations.push({
       type: 'keep_bonuses',
       sourceOwnedWeaponId: ownedWeaponId('owned.fixture.a'),
-      selection: { mode: 'engine_defined', engineParameters: {} },
       gogmaCounterBefore: 1,
       gogmaCounterAfter: 2,
     })
@@ -71,8 +70,38 @@ describe('BuildRoute validation', () => {
     )
   })
 
+  it('allows Reset then Keep on a converted normal route', () => {
+    const route = normalRoute()
+    route.operations.push(
+      {
+        type: 'reset_bonuses',
+        sourceOwnedWeaponId: null,
+        gogmaCounterBefore: 1,
+        gogmaCounterAfter: 2,
+      },
+      {
+        type: 'keep_bonuses',
+        sourceOwnedWeaponId: null,
+        gogmaCounterBefore: 2,
+        gogmaCounterAfter: 3,
+      },
+    )
+    expect(validateBuildRoute(route).isValid).toBe(true)
+  })
+
   it('allows a normal-route Reset Skills operation with null source', () => {
     expect(validateBuildRoute(normalRoute()).isValid).toBe(true)
+  })
+
+  it('rejects an unknown RouteOperation instead of treating it as material use', () => {
+    const route = normalRoute()
+    route.operations.push({ type: 'unknown_operation' } as never)
+    expect(validateBuildRoute(route).issues).toContainEqual(
+      expect.objectContaining({
+        path: 'operations[3].type',
+        code: 'invalid_literal',
+      }),
+    )
   })
 
   it('requires existing_gogma_reset_skills to have a source', () => {

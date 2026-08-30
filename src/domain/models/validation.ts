@@ -280,6 +280,15 @@ export function validateRestorationBonusSet(
   return result(issues)
 }
 
+function validateRestorationBonusScope(
+  scope: unknown,
+  path: string,
+  issues: DomainValidationIssue[],
+) {
+  if (scope !== 'normal_artian' && scope !== 'gogma_artian') {
+    addIssue(issues, path, 'invalid_literal', 'Restoration bonus scope is required and must be valid.')
+  }
+}
 export function validateOwnedWeapon(
   weapon: OwnedWeapon,
 ): DomainValidationResult {
@@ -292,9 +301,13 @@ export function validateOwnedWeapon(
     'restorationBonuses',
     validateRestorationBonusSet(weapon.restorationBonuses),
   )
+  validateRestorationBonusScope(weapon.restorationBonusScope, 'restorationBonusScope', issues)
   if (!['normal', 'gogma'].includes(weapon.kind)) {
     addIssue(issues, 'kind', 'invalid_literal', 'OwnedWeapon kind is invalid.')
   } else if (weapon.kind === 'normal') {
+    if (weapon.restorationBonusScope !== 'normal_artian') {
+      addIssue(issues, 'restorationBonusScope', 'invalid_state', 'Normal Artian weapons require normal_artian scope.')
+    }
     if (weapon.rarity !== V1_NORMAL_ARTIAN_RARITY) {
       addIssue(issues, 'rarity', 'invalid_literal', 'v1 supports only rarity 8 owned Normal Artian weapons.')
     }
@@ -417,65 +430,54 @@ function validateRouteOperation(
   path: string,
   issues: DomainValidationIssue[],
 ) {
-  if (
-    ![
-      'create_normal_artian',
-      'convert_normal_to_gogma',
-      'reset_bonuses',
-      'keep_bonuses',
-      'reset_skills',
-      'use_weapon_as_material',
-    ].includes(operation.type)
-  ) {
-    addIssue(issues, `${path}.type`, 'invalid_literal', 'Route operation type is invalid.')
-    return
-  }
   if (operation.type === 'create_normal_artian') {
     validateId(operation.weaponTypeId, `${path}.weaponTypeId`, issues)
     if (operation.rarity !== V1_NORMAL_ARTIAN_RARITY) {
-      addIssue(issues, `${path}.rarity`, 'invalid_literal', 'v1 can create only rarity 8 Normal Artian weapons.')
+      addIssue(
+        issues,
+        `${path}.rarity`,
+        'invalid_literal',
+        'v1 can create only rarity 8 Normal Artian weapons.',
+      )
     }
     validatePositiveInteger(operation.count, `${path}.count`, issues)
     validateNonNegativeInteger(operation.normalCounterBefore, `${path}.normalCounterBefore`, issues)
     validateNonNegativeInteger(operation.normalCounterAfter, `${path}.normalCounterAfter`, issues)
-  } else if (operation.type === 'convert_normal_to_gogma') {
+    return
+  }
+  if (operation.type === 'convert_normal_to_gogma') {
     validateId(operation.weaponTypeId, `${path}.weaponTypeId`, issues)
-    validateNonNegativeInteger(operation.gogmaCounterBefore, `${path}.gogmaCounterBefore`, issues)
-    validateNonNegativeInteger(operation.gogmaCounterAfter, `${path}.gogmaCounterAfter`, issues)
-  } else if (operation.type === 'reset_bonuses') {
-    validateId(operation.sourceOwnedWeaponId, `${path}.sourceOwnedWeaponId`, issues)
-    validateNonNegativeInteger(operation.gogmaCounterBefore, `${path}.gogmaCounterBefore`, issues)
-    validateNonNegativeInteger(operation.gogmaCounterAfter, `${path}.gogmaCounterAfter`, issues)
-  } else if (operation.type === 'keep_bonuses') {
-    validateId(operation.sourceOwnedWeaponId, `${path}.sourceOwnedWeaponId`, issues)
-    validateNonNegativeInteger(operation.gogmaCounterBefore, `${path}.gogmaCounterBefore`, issues)
-    validateNonNegativeInteger(operation.gogmaCounterAfter, `${path}.gogmaCounterAfter`, issues)
-    if (operation.selection.mode === 'slot_indices') {
-      const slots = operation.selection.keptSlotIndices
-      if (new Set(slots).size !== slots.length || slots.some((slot) => !Number.isInteger(slot) || slot < 0 || slot > 4)) {
-        addIssue(
-          issues,
-          `${path}.selection.keptSlotIndices`,
-          'invalid_range',
-          'Kept slot indices must be unique integers from 0 through 4.',
-        )
-      }
-    } else if (operation.selection.mode === 'bonus_types') {
-      operation.selection.keptBonusTypeIds.forEach((id, index) =>
-        validateId(id, `${path}.selection.keptBonusTypeIds[${index}]`, issues),
-      )
+    validateNonNegativeInteger(operation.skillCounterBefore, `${path}.skillCounterBefore`, issues)
+    validateNonNegativeInteger(operation.skillCounterAfter, `${path}.skillCounterAfter`, issues)
+    return
+  }
+  if (operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses') {
+    if (operation.sourceOwnedWeaponId !== null) {
+      validateId(operation.sourceOwnedWeaponId, `${path}.sourceOwnedWeaponId`, issues)
     }
-  } else if (operation.type === 'reset_skills') {
+    validateNonNegativeInteger(operation.gogmaCounterBefore, `${path}.gogmaCounterBefore`, issues)
+    validateNonNegativeInteger(operation.gogmaCounterAfter, `${path}.gogmaCounterAfter`, issues)
+    return
+  }
+  if (operation.type === 'reset_skills') {
     if (operation.sourceOwnedWeaponId !== null) {
       validateId(operation.sourceOwnedWeaponId, `${path}.sourceOwnedWeaponId`, issues)
     }
     validateNonNegativeInteger(operation.skillCounterBefore, `${path}.skillCounterBefore`, issues)
     validateNonNegativeInteger(operation.skillCounterAfter, `${path}.skillCounterAfter`, issues)
-  } else if (operation.type === 'use_weapon_as_material') {
-    validateId(operation.ownedWeaponId, `${path}.ownedWeaponId`, issues)
+    return
   }
+  if (operation.type === 'use_weapon_as_material') {
+    validateId(operation.ownedWeaponId, `${path}.ownedWeaponId`, issues)
+    return
+  }
+  addIssue(
+    issues,
+    `${path}.type`,
+    'invalid_literal',
+    'Route operation type is invalid.',
+  )
 }
-
 function validateProtectedRouteUse(
   route: BuildRoute,
   ownedWeapons: readonly OwnedWeapon[],
@@ -557,14 +559,29 @@ export function validateBuildRoute(
         'normal_artian_to_gogma cannot reference an existing OwnedWeapon.',
       )
     }
+    let converted = false
+    let transientScope: 'normal_artian' | 'gogma_artian' | null = null
     route.operations.forEach((operation, index) => {
-      if (!['create_normal_artian', 'convert_normal_to_gogma', 'reset_skills'].includes(operation.type)) {
+      if (!['create_normal_artian', 'convert_normal_to_gogma', 'reset_bonuses', 'keep_bonuses', 'reset_skills'].includes(operation.type)) {
         addIssue(
           issues,
           `operations[${index}]`,
           'invalid_route_operation',
           `Operation '${operation.type}' is not allowed in normal_artian_to_gogma.`,
         )
+      }
+      if (operation.type === 'convert_normal_to_gogma') {
+        converted = true
+        transientScope = 'normal_artian'
+      }
+      if (operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses') {
+        if (operation.sourceOwnedWeaponId !== null || !converted) {
+          addIssue(issues, `operations[${index}].sourceOwnedWeaponId`, 'invalid_state', 'A normal-route bonus amendment must target the converted route output.')
+        }
+        if (operation.type === 'keep_bonuses' && transientScope !== 'gogma_artian') {
+          addIssue(issues, `operations[${index}]`, 'invalid_route_operation', 'Keep Bonuses requires a preceding Reset Bonuses operation after conversion.')
+        }
+        if (operation.type === 'reset_bonuses') transientScope = 'gogma_artian'
       }
       if (operation.type === 'reset_skills' && operation.sourceOwnedWeaponId !== null) {
         addIssue(
@@ -585,8 +602,9 @@ export function validateBuildRoute(
       )
     }
     let hasConversion = false
+    let transientScope: 'normal_artian' | 'gogma_artian' | null = null
     route.operations.forEach((operation, index) => {
-      if (!['convert_normal_to_gogma', 'reset_skills'].includes(operation.type)) {
+      if (!['convert_normal_to_gogma', 'reset_bonuses', 'keep_bonuses', 'reset_skills'].includes(operation.type)) {
         addIssue(
           issues,
           `operations[${index}]`,
@@ -594,7 +612,19 @@ export function validateBuildRoute(
           `Operation '${operation.type}' is not allowed in owned_normal_artian_to_gogma.`,
         )
       }
-      if (operation.type === 'convert_normal_to_gogma') hasConversion = true
+      if (operation.type === 'convert_normal_to_gogma') {
+        hasConversion = true
+        transientScope = 'normal_artian'
+      }
+      if (operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses') {
+        if (operation.sourceOwnedWeaponId !== null || !hasConversion) {
+          addIssue(issues, `operations[${index}].sourceOwnedWeaponId`, 'invalid_state', 'A post-conversion bonus amendment must target the converted route output.')
+        }
+        if (operation.type === 'keep_bonuses' && transientScope !== 'gogma_artian') {
+          addIssue(issues, `operations[${index}]`, 'invalid_route_operation', 'Keep Bonuses requires a preceding Reset Bonuses operation after conversion.')
+        }
+        if (operation.type === 'reset_bonuses') transientScope = 'gogma_artian'
+      }
       if (operation.type === 'reset_skills' && operation.sourceOwnedWeaponId !== null) {
         addIssue(
           issues,
@@ -649,6 +679,24 @@ export function validateBuildRoute(
       }
     })
   }
+  if (route.kind.startsWith('existing_gogma_') && route.kind !== 'existing_gogma_reset_skills') {
+    const bonusOperations = route.operations.filter(
+      ({ type }) => type === 'reset_bonuses' || type === 'keep_bonuses',
+    )
+    const hasReset = bonusOperations.some(({ type }) => type === 'reset_bonuses')
+    const hasKeep = bonusOperations.some(({ type }) => type === 'keep_bonuses')
+    const hasResetSkills = route.operations.some(({ type }) => type === 'reset_skills')
+    const expectedKind = hasResetSkills || (hasReset && hasKeep)
+      ? 'existing_gogma_mixed'
+      : hasReset
+        ? 'existing_gogma_reset_bonuses'
+        : hasKeep
+          ? 'existing_gogma_keep_bonuses'
+          : null
+    if (expectedKind !== null && route.kind !== expectedKind) {
+      addIssue(issues, 'kind', 'invalid_state', 'Existing Gogma route kind must match its bonus amendment operations.')
+    }
+  }
   if (
     route.kind === 'existing_gogma_mixed' &&
     route.operations.every(({ type }) => type === 'reset_skills')
@@ -684,6 +732,7 @@ export function validateBuildCandidate(
     addIssue(issues, 'category', 'invalid_literal', 'Candidate category is invalid.')
   }
   appendIssues(issues, 'finalBonuses', validateRestorationBonusSet(candidate.finalBonuses))
+  validateRestorationBonusScope(candidate.restorationBonusScope, 'restorationBonusScope', issues)
   appendIssues(issues, 'route', validateBuildRoute(candidate.route, ownedWeapons))
   validateNonNegativeInteger(candidate.estimatedOperationCount, 'estimatedOperationCount', issues)
   validateNonNegativeInteger(candidate.estimatedGogmaAdvance, 'estimatedGogmaAdvance', issues)

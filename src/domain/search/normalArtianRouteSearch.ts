@@ -1,36 +1,26 @@
-import type {
-  CreateNormalArtianOperation,
-  RouteOperation,
-} from '../models/publicTypes'
+import type { RouteOperation } from '../models/publicTypes'
 import { V1_NORMAL_ARTIAN_RARITY } from '../models/publicTypes'
-import { deriveRngCapabilities } from '../rng/capabilities'
-import type { RouteSearchContext, RouteSearchResult } from './routeSearchShared'
-import { searchResetSkillVariants } from './routeSearchShared'
-
-function hasNormalArtianLottery(
-  context: RouteSearchContext,
-  rarity: CreateNormalArtianOperation['rarity'],
-): boolean {
-  return context.input.master.lotteries.some(
-    (entry) =>
-      entry.isEnabled &&
-      entry.lotteryKind === 'normal_artian_bonus' &&
-      entry.weaponTypeId === context.target.weaponTypeId &&
-      entry.rarity === rarity,
-  )
-}
+import {
+  createBaseCandidate,
+  hasConfirmedGogmaInputs,
+  hasConfirmedSkillInputs,
+  searchBonusAmendmentVariants,
+  searchResetSkillVariants,
+  type RouteSearchContext,
+  type RouteSearchResult,
+} from './routeSearchShared'
 
 export async function searchNormalArtianRoutes(
   context: RouteSearchContext,
 ): Promise<RouteSearchResult> {
-  const { target, input, engine, execution } = context
+  const { engine, execution, input, target } = context
   const result: RouteSearchResult = {
     candidates: [],
     searchedRoutes: [],
     skippedRoutes: [],
     warnings: [],
   }
-  const matchingCounters = input.normalCounters
+  const counters = input.normalCounters
     .filter(
       (counter) =>
         counter.weaponTypeId === target.weaponTypeId &&
@@ -40,7 +30,7 @@ export async function searchNormalArtianRoutes(
     )
     .sort((left, right) => left.id.localeCompare(right.id))
 
-  if (matchingCounters.length === 0) {
+  if (counters.length === 0) {
     result.skippedRoutes.push({
       route: 'normal_artian_to_gogma',
       reason: 'normal_counter_unconfirmed',
@@ -48,135 +38,100 @@ export async function searchNormalArtianRoutes(
     })
     return result
   }
-
-  const usableCounters = matchingCounters.filter((counter) => {
-    if (hasNormalArtianLottery(context, counter.rarity)) return true
+  if (!input.rngState.baseSeed.isConfirmed || input.rngState.baseSeed.value === null) {
     result.skippedRoutes.push({
       route: 'normal_artian_to_gogma',
-      reason: 'master_data_unavailable',
-      detail: `Normal Artian Lottery master data is unavailable for '${counter.id}'.`,
-    })
-    return false
-  })
-  if (usableCounters.length === 0) return result
-
-  const sampleCounter = usableCounters[0]
-  const createOperation: CreateNormalArtianOperation = {
-    type: 'create_normal_artian',
-    weaponTypeId: target.weaponTypeId,
-    rarity: sampleCounter.rarity,
-    count: 1,
-    normalCounterBefore: sampleCounter.counter as number,
-    normalCounterAfter: sampleCounter.counter as number,
-  }
-  const requiredOperations: RouteOperation[] = [
-    createOperation,
-    {
-      type: 'convert_normal_to_gogma',
-      weaponTypeId: target.weaponTypeId,
-      gogmaCounterBefore: input.rngState.gogmaCounter.value ?? 0,
-      gogmaCounterAfter: input.rngState.gogmaCounter.value ?? 0,
-    },
-    {
-      type: 'reset_skills',
-      sourceOwnedWeaponId: null,
-      skillCounterBefore: input.rngState.skillCounter.value ?? 0,
-      skillCounterAfter: input.rngState.skillCounter.value ?? 0,
-    },
-  ]
-  const capabilities = deriveRngCapabilities(
-    input.rngState,
-    input.normalCounters,
-    requiredOperations,
-    engine.capabilities,
-  )
-  if (!capabilities.canPredictGogma) {
-    result.skippedRoutes.push({
-      route: 'normal_artian_to_gogma',
-      reason: 'gogma_capability_missing',
-      detail: 'Gogma prediction capability is required for conversion.',
+      reason: 'rng_state_unconfirmed',
+      detail: 'A confirmed Base Seed is required for Normal prediction.',
     })
     return result
   }
-  if (!capabilities.canPredictSkills) {
+  if (!engine.capabilities.supportsNormalArtianPrediction) {
     result.skippedRoutes.push({
       route: 'normal_artian_to_gogma',
-      reason: 'skill_capability_missing',
-      detail: 'Skill prediction capability is required for a completed normal route.',
+      reason: 'normal_prediction_unsupported',
+      detail: 'The active RNG Engine does not support Normal Artian prediction.',
+    })
+    return result
+  }
+  if (!hasConfirmedSkillInputs(input)) {
+    result.skippedRoutes.push({
+      route: 'normal_artian_to_gogma',
+      reason: 'rng_state_unconfirmed',
+      detail: 'Confirmed Base Seed, Skill Counter, and Counter Gate are required for conversion.',
+    })
+    return result
+  }
+  if (!engine.capabilities.supportsSkillPrediction) {
+    result.skippedRoutes.push({
+      route: 'normal_artian_to_gogma',
+      reason: 'skill_prediction_unsupported',
+      detail: 'The active RNG Engine does not support Skill prediction required for conversion.',
     })
     return result
   }
 
   const baseSeed = input.rngState.baseSeed.value
-  const initialGogmaCounter = input.rngState.gogmaCounter.value
+  const skillCounter = input.rngState.skillCounter.value
   const counterGate = input.rngState.counterGate.value
-  if (baseSeed === null || initialGogmaCounter === null || counterGate === null) {
-    return result
-  }
-
+  if (baseSeed === null || skillCounter === null || counterGate === null) return result
   result.searchedRoutes.push('normal_artian_to_gogma')
-  const maximumPairedAdvance = Math.min(
-    input.settings.maxNormalAdvance,
-    input.settings.maxGogmaAdvance,
-  )
-  for (const normalCounter of usableCounters) {
-    let currentNormalCounter = normalCounter.counter as number
-    let currentGogmaCounter = initialGogmaCounter
-    const convertOperations: RouteOperation[] = []
 
-    for (let index = 0; index < maximumPairedAdvance; index += 1) {
+  for (const counter of counters) {
+    if (counter.counter === null) continue
+    const start = counter.counter
+    for (let offset = 0; offset < input.settings.maxNormalAdvance; offset += 1) {
       await execution.checkpoint()
-      const sourceNormalBonuses = engine.predictNormalArtian({
+      const forgeCount = offset + 1
+      const candidateCounter = start + offset
+      const bonuses = engine.predictNormalArtian({
         baseSeed,
         weaponTypeId: target.weaponTypeId,
-        rarity: normalCounter.rarity,
-        normalCounter: currentNormalCounter,
+        elementId: target.elementId,
+        rarity: counter.rarity,
+        normalCounter: candidateCounter,
         master: input.master,
       })
-      const nextNormalCounter = engine.advanceNormalCounter(
-        currentNormalCounter,
-        { type: 'create_normal_artian', count: 1 },
-      )
-      const finalBonuses = engine.predictGogmaBonus({
+      const normalCounterAfter = engine.advanceNormalCounter(start, {
+        type: 'create_normal_artian',
+        count: forgeCount,
+      })
+      const skillCounterAfter = engine.advanceSkillCounter(skillCounter, {
+        type: 'convert_normal_to_gogma',
+      })
+      const skills = engine.predictSkills({
         baseSeed,
-        gogmaCounter: currentGogmaCounter,
+        skillCounter,
         counterGate,
         weaponTypeId: target.weaponTypeId,
         elementId: target.elementId,
-        operation: { type: 'new_gogma', sourceNormalBonuses },
         master: input.master,
       })
-      const nextGogmaCounter = engine.advanceGogmaCounter(
-        currentGogmaCounter,
-        { type: 'create_gogma_from_normal' },
-      )
-      convertOperations.push({
-        type: 'convert_normal_to_gogma',
-        weaponTypeId: target.weaponTypeId,
-        gogmaCounterBefore: currentGogmaCounter,
-        gogmaCounterAfter: nextGogmaCounter,
-      })
       const operations: RouteOperation[] = [
-        {
-          type: 'create_normal_artian',
-          weaponTypeId: target.weaponTypeId,
-          rarity: normalCounter.rarity,
-          count: index + 1,
-          normalCounterBefore: normalCounter.counter as number,
-          normalCounterAfter: nextNormalCounter,
-        },
-        ...convertOperations,
+        { type: 'create_normal_artian', weaponTypeId: target.weaponTypeId, rarity: counter.rarity, count: forgeCount, normalCounterBefore: start, normalCounterAfter },
+        { type: 'convert_normal_to_gogma', weaponTypeId: target.weaponTypeId, skillCounterBefore: skillCounter, skillCounterAfter },
       ]
-      result.candidates.push(
-        ...(await searchResetSkillVariants(context, {
-          bonuses: finalBonuses,
-          operations,
-          sourceOwnedWeaponId: null,
-          kind: 'normal_artian_to_gogma',
-        })),
-      )
-      currentNormalCounter = nextNormalCounter
-      currentGogmaCounter = nextGogmaCounter
+      const base = {
+        bonuses,
+        restorationBonusScope: 'normal_artian' as const,
+        operations,
+        sourceOwnedWeaponId: null,
+        resetSkillsSourceOwnedWeaponId: null,
+        skillCounterBefore: skillCounterAfter,
+        kind: 'normal_artian_to_gogma' as const,
+      }
+      const candidate = createBaseCandidate(context, bonuses, 'normal_artian', skills.seriesSkillId, skills.groupSkillId, { kind: base.kind, sourceOwnedWeaponId: null, operations })
+      if (candidate) result.candidates.push(candidate)
+      result.candidates.push(...await searchResetSkillVariants(context, base))
+      if (hasConfirmedGogmaInputs(input) && engine.capabilities.supportsGogmaPrediction) {
+        result.candidates.push(...await searchBonusAmendmentVariants(context, {
+          ...base,
+          seriesSkillId: skills.seriesSkillId,
+          groupSkillId: skills.groupSkillId,
+          gogmaCounterBefore: input.rngState.gogmaCounter.value!,
+          amendmentSourceOwnedWeaponId: null,
+        }))
+      }
     }
   }
   return result

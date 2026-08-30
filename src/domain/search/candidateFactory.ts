@@ -14,11 +14,12 @@ import type {
 import { validateBuildCandidate } from '../models/validation'
 import { evaluateTargetCandidate } from '../target'
 import type { SearchExecutionContext } from './searchExecution'
-import type { CandidateSearchInput } from './searchTypes'
 import { CandidateSearchError } from './searchTypes'
+import type { CandidateSearchInput } from './searchTypes'
 
 export interface CandidatePrediction {
   finalBonuses: BuildCandidate['finalBonuses']
+  restorationBonusScope: BuildCandidate['restorationBonusScope']
   seriesSkillId: BuildCandidate['seriesSkillId']
   groupSkillId: BuildCandidate['groupSkillId']
   route: BuildRoute
@@ -26,7 +27,15 @@ export interface CandidatePrediction {
 
 function materialOperation(
   operation: RouteOperation,
-): { type: 'create_normal_artian' | 'convert_normal_to_gogma' | 'reset_bonuses' | 'keep_bonuses' | 'reset_skills'; units: number } | null {
+): {
+  type:
+    | 'create_normal_artian'
+    | 'convert_normal_to_gogma'
+    | 'reset_bonuses'
+    | 'keep_bonuses'
+    | 'reset_skills'
+  units: number
+} | null {
   if (operation.type === 'use_weapon_as_material') return null
   return {
     type: operation.type,
@@ -41,19 +50,16 @@ export function collectRequiredMaterials(
 ): MaterialRequirement[] {
   const quantities = new Map<string, number>()
   route.operations.forEach((operation) => {
-    const materialOperationInfo = materialOperation(operation)
-    if (!materialOperationInfo) return
-    getMaterialCostsFromSubset(
-      input.master,
-      materialOperationInfo.type,
-      weaponTypeId,
-    ).forEach((cost) => {
-      quantities.set(
-        cost.materialId,
-        (quantities.get(cost.materialId) ?? 0) +
-          cost.quantity * materialOperationInfo.units,
-      )
-    })
+    const info = materialOperation(operation)
+    if (!info) return
+    getMaterialCostsFromSubset(input.master, info.type, weaponTypeId).forEach(
+      (cost) => {
+        quantities.set(
+          cost.materialId,
+          (quantities.get(cost.materialId) ?? 0) + cost.quantity * info.units,
+        )
+      },
+    )
   })
   return [...quantities]
     .sort(([left], [right]) => left.localeCompare(right))
@@ -70,27 +76,30 @@ export function countRouteOperations(route: BuildRoute): number {
 
 function operationAdvance(
   operations: readonly RouteOperation[],
-  type: 'gogma' | 'skill' | 'normal',
+  stream: 'gogma' | 'skill' | 'normal',
 ): number | null {
-  const differences = operations.flatMap((operation) => {
+  const values = operations.flatMap((operation) => {
+    if (stream === 'normal' && operation.type === 'create_normal_artian') {
+      return [operation.normalCounterAfter - operation.normalCounterBefore]
+    }
     if (
-      type === 'gogma' &&
+      stream === 'skill' &&
       (operation.type === 'convert_normal_to_gogma' ||
-        operation.type === 'reset_bonuses' ||
-        operation.type === 'keep_bonuses')
+        operation.type === 'reset_skills')
     ) {
-      return operation.gogmaCounterAfter - operation.gogmaCounterBefore
+      return [operation.skillCounterAfter - operation.skillCounterBefore]
     }
-    if (type === 'skill' && operation.type === 'reset_skills') {
-      return operation.skillCounterAfter - operation.skillCounterBefore
-    }
-    if (type === 'normal' && operation.type === 'create_normal_artian') {
-      return operation.normalCounterAfter - operation.normalCounterBefore
+    if (
+      stream === 'gogma' &&
+      (operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses')
+    ) {
+      return [operation.gogmaCounterAfter - operation.gogmaCounterBefore]
     }
     return []
   })
-  if (type === 'normal' && differences.length === 0) return null
-  return differences.reduce((total, difference) => total + difference, 0)
+  return stream === 'normal' && values.length === 0
+    ? null
+    : values.reduce((total, value) => total + value, 0)
 }
 
 export function createCandidateFromPrediction(
@@ -107,42 +116,35 @@ export function createCandidateFromPrediction(
     input.master,
     input.settings.similarityThreshold,
   )
-  if (evaluation.category === null) return null
+  if (!evaluation.category) return null
 
-  const requiredMaterials = collectRequiredMaterials(
-    prediction.route,
-    target.weaponTypeId,
-    input,
-  )
   const semanticHash = hashStableValue({
     searchRunId: input.searchRunId,
     targetWeaponId: target.id,
     finalBonuses: prediction.finalBonuses,
+    restorationBonusScope: prediction.restorationBonusScope,
     seriesSkillId: prediction.seriesSkillId,
     groupSkillId: prediction.groupSkillId,
     route: prediction.route,
   })
   const candidate: BuildCandidate = {
-    id: execution.createCandidateId({
-      targetWeaponId: target.id,
-      semanticHash,
-    }),
+    id: execution.createCandidateId({ targetWeaponId: target.id, semanticHash }),
     targetWeaponId: target.id,
     category: evaluation.category,
     finalBonuses: prediction.finalBonuses.map((bonus) => ({ ...bonus })) as BuildCandidate['finalBonuses'],
+    restorationBonusScope: prediction.restorationBonusScope,
     seriesSkillId: prediction.seriesSkillId,
     groupSkillId: prediction.groupSkillId,
     route: prediction.route,
     estimatedOperationCount: countRouteOperations(prediction.route),
-    estimatedGogmaAdvance:
-      operationAdvance(prediction.route.operations, 'gogma') ?? 0,
-    estimatedSkillAdvance:
-      operationAdvance(prediction.route.operations, 'skill') ?? 0,
-    estimatedNormalAdvance: operationAdvance(
-      prediction.route.operations,
-      'normal',
+    estimatedGogmaAdvance: operationAdvance(prediction.route.operations, 'gogma') ?? 0,
+    estimatedSkillAdvance: operationAdvance(prediction.route.operations, 'skill') ?? 0,
+    estimatedNormalAdvance: operationAdvance(prediction.route.operations, 'normal'),
+    requiredMaterials: collectRequiredMaterials(
+      prediction.route,
+      target.weaponTypeId,
+      input,
     ),
-    requiredMaterials,
     idealDifference: evaluation.idealDifference,
     isSimilarToIdeal: evaluation.isSimilarToIdeal,
     similarityScore: evaluation.similarityScore,
@@ -159,13 +161,11 @@ export function createCandidateFromPrediction(
     searchRunId: input.searchRunId,
     createdAt: execution.now(),
   }
-  const validation = validateBuildCandidate(candidate, input.ownedWeapons)
-  if (!validation.isValid) {
+  const valid = validateBuildCandidate(candidate, input.ownedWeapons)
+  if (!valid.isValid) {
     throw new CandidateSearchError(
       'invalid_candidate',
-      validation.issues
-        .map(({ path, message }) => `${path}: ${message}`)
-        .join('\n'),
+      valid.issues.map(({ path, message }) => `${path}: ${message}`).join('\n'),
     )
   }
   return candidate
