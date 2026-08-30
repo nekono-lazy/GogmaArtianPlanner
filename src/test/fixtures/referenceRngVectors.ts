@@ -3,7 +3,8 @@
  * WiseHorror/Gogma-Artian-Roll-Planner
  * commit eceb2bd9ca6f4897ec516387acab2ad6beb8b38b
  * source: app.js functions u32, rngStep, initializeRng, and the seed
- * expressions used by predictSkillRoute and initializeGogma.
+ * expressions used by predictSkillRoute and initializeGogma. Skill vectors
+ * were obtained by executing the pinned app.js directly, not this project.
  *
  * Do not regenerate these values from GogmaArtianPlanner production code.
  */
@@ -99,6 +100,78 @@ export const referenceRngVectors = {
       weaponTypeId: 'weapon.light_bowgun',
       elementId: 'element.blast',
       seed: 89817269,
+    },
+  ],
+  skillPredictions: [
+    {
+      baseSeed: 8524433,
+      weaponTypeId: 'weapon.insect_glaive',
+      elementId: 'element.thunder',
+      counterGate: 200,
+      skillCounter: 186,
+      combinationIndex: 275,
+      seriesSkillId: 'series_skill.verified_21',
+      groupSkillId: 'group_skill.verified_12',
+    },
+    {
+      baseSeed: 1,
+      weaponTypeId: 'weapon.great_sword',
+      elementId: 'element.none',
+      counterGate: 0,
+      skillCounter: 999,
+      combinationIndex: 107,
+      seriesSkillId: 'series_skill.verified_05',
+      groupSkillId: 'group_skill.verified_12',
+    },
+    {
+      baseSeed: 99999999,
+      weaponTypeId: 'weapon.light_bowgun',
+      elementId: 'element.blast',
+      counterGate: 54,
+      skillCounter: 0,
+      combinationIndex: 196,
+      seriesSkillId: 'series_skill.verified_15',
+      groupSkillId: 'group_skill.verified_04',
+    },
+    {
+      baseSeed: 42,
+      weaponTypeId: 'weapon.great_sword',
+      elementId: 'element.fire',
+      counterGate: 54,
+      skillCounter: 1,
+      combinationIndex: 162,
+      seriesSkillId: 'series_skill.gore_magala',
+      groupSkillId: 'group_skill.verified_06',
+    },
+    {
+      baseSeed: 42,
+      weaponTypeId: 'weapon.great_sword',
+      elementId: 'element.fire',
+      counterGate: 55,
+      skillCounter: 1,
+      combinationIndex: 162,
+      seriesSkillId: 'series_skill.gore_magala',
+      groupSkillId: 'group_skill.verified_06',
+    },
+    {
+      baseSeed: 42,
+      weaponTypeId: 'weapon.great_sword',
+      elementId: 'element.fire',
+      counterGate: 53,
+      skillCounter: 999,
+      combinationIndex: 234,
+      seriesSkillId: 'series_skill.verified_19',
+      groupSkillId: 'group_skill.verified_05',
+    },
+    {
+      baseSeed: 42,
+      weaponTypeId: 'weapon.great_sword',
+      elementId: 'element.fire',
+      counterGate: 54,
+      skillCounter: 999,
+      combinationIndex: 168,
+      seriesSkillId: 'series_skill.verified_14',
+      groupSkillId: 'group_skill.verified_04',
     },
   ],
 } as const

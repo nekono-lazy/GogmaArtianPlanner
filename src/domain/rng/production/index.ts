@@ -1,4 +1,6 @@
 export * from './baseSeed'
 export * from './referenceAdapters'
 export * from './referencePrng'
+export * from './referenceSkillPools'
 export * from './seedDerivation'
+export * from './skillPrediction'
