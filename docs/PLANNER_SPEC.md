@@ -73,7 +73,6 @@ export interface PlannerConflictResolution {
 
 export interface PlannerMasterSubset {
   weaponBonusDefinitions: WeaponBonusDefinition[];
-  lotteries: LotteryMaster[];
   materialCosts: MaterialCostMaster[];
   bonusRanks: BonusRankMaster[];
 }
@@ -123,7 +122,9 @@ export interface PlannerClock {
 - Planner入力validationでTarget定義Hash、searchStateHash、referencedOwnedWeaponsHash、CalculationContextを現在値から再確認し、保存済み `isStale` だけを信用しない
 - RngState全体の確定は要求しない
 - `deriveRngCapabilities(rngState, normalCounters, requiredOperations, engineCapabilities)` で、各BuildListEntryの全RouteOperationに必要なKnownValueと現在Engineのsupportが揃うか確認する
-- Capability不足またはCalculationContext非互換のBuildListEntryだけを除外し、理由をwarningへ出す。無関係なEntryを一括無効化しない
+- conversionだけのEntryはSkill Predictionと確定Base Seed / Skill Counter / Counter Gateを要求し、Gogma PredictionまたはGogma Counterを要求しない
+- Reset / Keepを含むEntryだけがGogma Predictionと確定Gogma Counter / Counter Gateを要求し、Keepを含む場合はKeep Prediction supportも要求する
+- RNG値不足とEngine capability不足を別warning reasonとして扱う。該当BuildListEntryだけを除外し、無関係なEntryを一括無効化しない
 - `targetWeapons` は `isEnabled = true` のみ対象
 - `maxPlanSteps`、`beamWidth`、`maxExpandedStates` は1以上
 - 実用品を先に確保する優先順位はv1固定であり、`preferPracticalBeforeIdeal` のような切替Optionを持たない
@@ -146,6 +147,8 @@ export interface PlannerWarning {
   kind:
     | "no_build_list_entries"
     | "rng_state_missing"
+    | "rng_engine_capability_missing"
+    | "material_rng_advance_unverified"
     | "material_weapon_shortage"
     | "protected_weapon_required"
     | "build_list_entry_stale"
@@ -191,6 +194,7 @@ export interface PlannerTargetSatisfaction {
 制約。
 
 - `status` だけで判定しない。実際のボーナス・スキル条件で判定する
+- `restorationBonusScope` に対応する実際のBonus Type / Rankを評価し、normal-tierをgogma-tierへ暗黙変換したりTarget条件を緩和したりしない
 - `status` はユーザー管理ラベルとして扱う
 - `hasPractical`、`hasIdeal`、`practicalOwnedWeaponIds`、`idealOwnedWeaponIds` はすべてOwnedGogmaArtianWeaponだけから導出する
 - OwnedNormalArtianWeaponはInventory資源・巨戟化元であり、Target充足武器として評価しない
@@ -381,7 +385,7 @@ PlannerがCandidate Routeとは別に必要とする一般素材需要は、次�
 export interface PlannerMaterialRequirement {
   id: string;
   sourceBuildListEntryId: BuildListEntryId | null;
-  purpose: "gogma_rng_progression";
+  purpose: "route_material_requirement";
 }
 
 export interface PlannerMaterialAssignment {
@@ -393,6 +397,8 @@ export interface PlannerMaterialAssignment {
 未確認の武器種、属性、Bonus、素材コスト制約をこの型へ追加しない。利用可能な
 Material / unprotected Gogmaを割り当て、不足時だけ補充し、最終Planでは具体的な
 `use_weapon_as_material` Stepへ変換する。
+
+`use_weapon_as_material` 単独のRNG進行はunverifiedである。`purpose` は在庫上の素材要求だけを表し、Gogma stream進行を意味しない。現行RngAdvanceはunknown deltaを表現できないため、素材使用後の予測位置がそのRNG効果に依存するProduction Planは、進行契約がgame-verifiedになるまで生成不可とし、0または+1を推測して後続Counterを計算しない。
 
 制約。
 
@@ -468,6 +474,8 @@ PlannerIdFactoryは使用しない。
 
 protected武器への素材消費・Reset Bonuses・Keep Bonusesは競合として解決せず、常に実行不能として `requires_protected_weapon` の不採用理由を付ける。確認付き素材化Stepが先行し、期待状態どおりMaterial / unprotectedへ変わった後の素材消費はこの禁止に該当しない。
 
+RouteOperation別のRNG位置は実際に消費するstreamで判定する。`convert_normal_to_gogma` は `same_skill_counter` の競合対象であり、`same_gogma_counter` として扱わない。Reset SkillsもSkill、Reset / KeepだけがGogma、forgeだけが該当Normal Counter位置を競合資源とする。
+
 ---
 
 ## 10. Plan生成手順
@@ -510,7 +518,7 @@ protected武器への素材消費・Reset Bonuses・Keep Bonusesは競合とし�
 PlanStep変換用 `PlannerPlanStepDraft` を生成する。
 
 - `PlannerMasterSubset` はSearchのRNG Predictionと同じ `weaponBonusDefinitions`、
-  `lotteries`、`bonusRanks` を保持する。PredictionはRngEngineのみから取得し、Lottery、
+  `bonusRanks` を保持する。PredictionはRngEngineのみから取得し、Lottery、
   Bonus Rank、Keep、Counter Gateを推測しない。
 - `ExpectedPlanState` はKnownValueのvalue/isConfirmed、stable sorted Normal Counter、
   OwnedWeaponのsemantic fields（kindを含む）をstable hash化する。名前、memo、日時、
@@ -524,17 +532,17 @@ PlanStep変換用 `PlannerPlanStepDraft` を生成する。
   Normal/Gogma出力を保持する。Normal出力はEntryごとに分離し、複数作成後のconvertは
   そのEntryの最後に作成したNormalだけを使用して全Normal transientを破棄する。未登録出力へ
   永続OwnedWeapon IDを割り当てない。
+- CreateNormalArtianOperationは `count = forgeCount` をReplayし、`normalCounterAfter = normalCounterBefore + forgeCount` を検証する。convert対象は最後の結果であり、その位置は `candidateCounter = normalCounterBefore + forgeCount - 1` である
 - 各Actionの`rngBefore`一致を検証し、`rngAfter`との差分からRngAdvanceを作る。複数Normal
   Counterの変化やunknown→knownの差分は現行RngAdvanceで表せないためReplay failureとする。
-- create/convert/reset/keep/reset-skillsは現在のRngEngine predictionを再実行する。Keepは保存済み
-  selectionをそのまま渡し、所持Normal変換は所持武器の5-slot bonusesを入力に使う。
-- normal/owned-Normalの巨戟化直後のSkillは、現在のSearch実装が`createBaseCandidate(..., null, null)`
-  で明示する`null/null`である。Skillは`reset_skills`だけがRngEngine predictionで設定する。
+- create/reset/keep/reset-skillsは現在のRngEngine predictionを再実行する。KeepはReplay時点のtransientまたは起点武器の現在5slotをslot順のまま入力し、selection branchを持たない。
+- convertはGogma Predictionを呼ばない。変換元Normalの `normal_artian` scope 5-slot bonusesをslot順のままtransient Gogmaへ継承し、現在Skill位置で `predictSkills` を実行して初回Series / Groupを設定する。
+- convertのRNG遷移はSkill Counter `+1`、Normal / Gogma Counter `+0` とする。変換時のSkill結果を無視するRouteや素材補充でも、実ゲームでconversionする限り同じSkill位置を消費する。
+- Reset / Keepはtransient Gogmaのscopeとslot順を追跡する。normal scopeなら最初のBonus amendmentはResetだけを許可し、Reset結果でgogma scopeへ置き換えた後に限りKeepを許可する。
 - reserve前にEntry固有transient Gogmaのbonuses、Series Skill、Group SkillがCandidate Snapshotと
   完全一致することを検証する。不一致またはtransient不足はReplay failureであり、Candidate Snapshotで
   transientを上書きしてはならない。成功したEntryのtransientだけを破棄する。
-- Predictionはvalueだけでなくconfirmed入力を要求する。Base Seed、Gogma/Skill Counter、Counter Gate、
-  対象Normal Counterの未確認値はReplay failureとする。
+- Predictionはvalueだけでなく、そのOperationが実際に依存するconfirmed入力を要求する。conversionはBase Seed / Skill Counter / Counter Gate、Reset / KeepはBase Seed / Gogma Counter / Counter Gate、forgeはBase Seed / 対象Normal Counterを要求する。Routeが使わないstreamの未確定値をReplay failureにしない。
 - reset/keep/reset-skillsによるpersistent inventory更新はreserveまで行わない。所持Normalはconvertで
   削除し、new/owned-Normal reserveは予約済みIDのGogmaを追加、existing Gogma reserveは同一IDを更新する。
 - Replay完了時はRNG、Normal Counter、persistent simulated inventoryがbest Search Stateと一致しなければ
@@ -573,7 +581,7 @@ nameの扱いは既存`createTargetDefinitionHash`契約を正本とし、Planne
 `calculationContext`をstable hash化する。Candidate ID、searchRunId、Candidate createdAt、
 idealDifference、similarity表示値、BuildListEntryの`candidateId`、`isStale`、`staleReasons`、
 `createdAt`は含めない。finalBonusesはbonus type/rankのmultiset、requiredMaterialsは重複を保った
-materialId/quantity順で正規化し、RouteOperationの実行順は変えない。いずれのsortにもlocale依存比較を
+  materialId/quantity順で正規化し、finalBonusScopeを含め、RouteOperationの実行順は変えない。いずれのsortにもlocale依存比較を
 使わない。
 
 #### DraftからPlanStepへの変換
@@ -635,6 +643,18 @@ ResetSkillsOperation       -> reset_skills
 UseWeaponAsMaterialOperation -> use_weapon_as_material
 ```
 
+OperationごとのExpectedResult / RngAdvance / debug before-afterは次を正式契約とする。
+
+| Operation | ExpectedResult | RngAdvance |
+| --- | --- | --- |
+| create normal | そのforge結果のnormal scope 5枠 | Normal +1 / forge、Skill 0、Gogma 0 |
+| convert normal to Gogma | 継承したnormal scope 5枠 + 初回Series / Group | Normal 0、Skill +1、Gogma 0 |
+| reset skills | bonusとscopeを維持し、次Series / Group | Normal 0、Skill +1、Gogma 0 |
+| reset bonuses | gogma scopeの次5枠 | Normal 0、Skill 0、Gogma +1 |
+| keep bonuses | familyをslotごとに維持したgogma scopeの次5枠 | Normal 0、Skill 0、Gogma +1 |
+
+PlanStepDebugInfoも同じbefore / afterを記録し、conversion StepではSkillだけが進みGogmaは同値であることを表示する。PRNG内部10 stepをRngAdvanceのCounter deltaへ記録しない。
+
 第9C-BではReplay Traceに存在する `reserve_weapon` だけを変換し、`confirm_result`を自動追加しない。
 
 `confirm_result` は予測結果の確認だけを表し、Target武器をInventoryへ正式確保しない。
@@ -646,18 +666,19 @@ Route別の典型例。
 ## 11.1 通常アーティア経由
 
 ```text
-1. create_normal_artian
+1. create_normal_artian（`candidateOffset = k` なら `forgeCount = k + 1`。先行k本は通常のまま見送る）
 2. convert_normal_to_gogma
-3. 必要なら reset_skills
-4. confirm_result または reserve_weapon
+3. Gogma-tier bonusが必要なら最初に reset_bonuses
+4. 最初のReset後、必要なら追加の reset_bonuses / keep_bonuses
+5. conversion時のSkillが不足する場合だけ reset_skills
+6. confirm_result または reserve_weapon
 ```
 
-必要に応じて通常アーティア作成を複数回挟む。v1ではこのRouteへKeepBonusesOperationを挿入しない。巨戟化直後のreset_skillsは `sourceOwnedWeaponId = null` とし、未登録武器用のOwnedWeaponIdを生成しない。
-
-完成武器をreserve_weaponでOwnedWeaponとして登録した後は、後続の別検索で既存巨戟Keep Bonuses Routeの起点にできる。
+`candidateOffset = k` を採用する場合のconversion直後の合計進行はNormal `+(k + 1)`、Skill `+1`、Gogma `+0` である。`forgeCount = k + 1` の最後の1本だけを巨戟化し、先行k本を巨戟化しない。conversionは通常5枠をslot順のまま継承し、初回Series / Groupを付与する。conversion後のReset / Keep / Reset Skillsは `sourceOwnedWeaponId = null` のtransient Gogmaを対象とし、最初のBonus amendmentだけは必ずResetとする。
 
 `reserve_weapon` はPlanner生成時に新しいOwnedWeapon IDを予約し、Candidate Snapshotの
-finalBonuses / Series Skill / Group Skillを持つ `kind = "gogma"` の武器を追加する。
+  finalBonuses / Series Skill / Group Skillを持つ `kind = "gogma"` の武器を追加する。
+その武器の `restorationBonusScope` はCandidate Snapshotの `finalBonusScope` と一致させる。
 Ideal候補はstatus Ideal、Practical候補はstatus Practicalとし、いずれもprotectedとする。
 `relatedTargetWeaponIds` へTarget IDを重複なく追加する。
 
@@ -667,11 +688,13 @@ UI実行は1操作ずつ。
 
 ```text
 1. convert_normal_to_gogma
-2. 必要なら reset_skills
-3. reserve_weapon
+2. Gogma-tier bonusが必要なら最初に reset_bonuses
+3. 最初のReset後、必要なら追加の reset_bonuses / keep_bonuses
+4. conversion時のSkillが不足する場合だけ reset_skills
+5. reserve_weapon
 ```
 
-変換元の所持通常アーティアはレア8かつ非保護であることを要求する。`convert_normal_to_gogma` StepのInventoryChangeで元通常アーティアを除き、その時点以降同じIDを別Routeで再利用しない。変換後GogmaはまだOwnedWeaponへ登録せず未来IDも割り当てない。変換直後のreset_skillsは `sourceOwnedWeaponId = null` とする。完成ボーナスとCounter進行はRNG Engine結果に従い、Bonus Type MappingからRank変換を推測しない。
+変換元の所持通常アーティアはレア8かつ非保護であることを要求する。`convert_normal_to_gogma` StepのInventoryChangeで元通常アーティアを除き、その時点以降同じIDを別Routeで再利用しない。変換後GogmaはまだOwnedWeaponへ登録せず未来IDも割り当てない。通常5枠をnormal scopeのまま継承し、初回Skillを予測してSkill Counterだけを1進める。後続Reset / Keep / Reset Skillsは `sourceOwnedWeaponId = null` とし、最初のBonus amendmentはResetとする。Bonus Type MappingからRank変換を推測しない。
 
 `reserve_weapon` は元OwnedNormalArtianWeaponを再削除せず、別の予約IDで新しい
 OwnedGogmaArtianWeaponだけを追加する。元IDをkind変更して再利用しない。追加武器のstatus、
@@ -696,7 +719,7 @@ protection、Candidate結果、Target参照は11.1と同じ契約とする。
 2. confirm_result または reserve_weapon
 ```
 
-起点OwnedWeaponの復元ボーナス5枠を変更せず、Skill CounterとSkill Prediction結果だけを反映する。Reset Skillsは非破壊操作として扱うため、protectedなPractical / Ideal武器も起点にできる。
+起点OwnedWeaponのrestorationBonusScopeと復元ボーナス5枠を変更せず、Skill CounterとSkill Prediction結果だけを反映する。Reset Skillsは非破壊操作として扱うため、protectedなPractical / Ideal武器も起点にできる。
 
 `reserve_weapon` では同じIDのseriesSkillId、groupSkillId、status、isProtected、
 relatedTargetWeaponIds、updatedAtを更新し、復元ボーナスとcreatedAtを維持する。
@@ -709,6 +732,8 @@ relatedTargetWeaponIds、updatedAtを更新し、復元ボーナスとcreatedAt�
 3. reserve_weapon
 ```
 
+起点は `restorationBonusScope = "gogma_artian"` でなければならない。Keepはcurrent 5slotのfamilyをslotごとに保持する単一操作であり、selection別のPlanStepを生成しない。
+
 ## 11.6 素材補充
 
 ```text
@@ -717,6 +742,8 @@ relatedTargetWeaponIds、updatedAtを更新し、復元ボーナスとcreatedAt�
 3. create_material_gogma
 4. 必要になった位置で use_weapon_as_material
 ```
+
+素材補充でもconversionは実ゲーム操作であるため、通常5枠を継承して初回Skillを予測し、Normalは必要forge数、Skillは1、Gogmaは0進める。素材用途でSkill結果を評価対象にしない場合でもSkill Counter消費を省略しない。
 
 `create_material_gogma` は作成済み巨戟をツールのOwnedWeapon Inventoryへ登録するPlanner-only PlanStepであり、RouteOperationまたは追加の巨戟化ではない。
 
@@ -921,6 +948,8 @@ postMessageしない。Worker moduleがEngine、ID Factory、Clockを生成し�
 - `maxPlanSteps` と `maxExpandedStates` のwarning kindを区別する
 - 同じ入力と同じ定数から決定的なPlanが生成される
 - 同じEngine fixture、ID Factory、ClockでもID、時刻、予約素材IDを含め決定的になる
+- offset kのNormal候補が `forgeCount = k + 1` だけNormalを進め、最後の1本だけのconversionでSkillを1進め、Gogmaを進めない
+- create operationの `normalCounterAfter = normalCounterBefore + forgeCount` と、採用候補位置 `normalCounterBefore + forgeCount - 1` を混同しない
 - 完全最適解を要求せず、探索上限内の最良Stateを返す
 
 ## 15.4 Inventory Test
@@ -941,6 +970,7 @@ postMessageしない。Worker moduleがEngine、ID Factory、Clockを生成し�
 ## 15.5 Conflict Test
 
 - 同じRNG位置の候補を競合にする
+- conversionを同じSkill Counter位置の競合にし、同じGogma Counter位置の競合にしない
 - 同じOwnedWeapon消費を競合にする
 - 推奨候補が優先順位どおり決まる
 - ユーザー選択が必要な競合を検出できる
@@ -956,7 +986,10 @@ postMessageしない。Worker moduleがEngine、ID Factory、Clockを生成し�
 - Plan生成が入力を破壊しない
 - Candidate SnapshotのBuildRoute.operationsを書き換えない
 - BuildRoute.operationsと同じ順序でPlanStepが生成される
-- `normal_artian_to_gogma` からkeep_bonuses PlanStepを生成しない
+- normal scopeのtransient Gogmaに最初のReset前のkeep_bonuses PlanStepを生成しない
+- 最初のReset後はnormal / owned-Normal Routeから後続keep_bonuses PlanStepを生成できる
+- conversion StepのExpectedResultが継承normal bonusと初回Skillを持ち、RngAdvanceがSkill +1 / Gogma +0になる
+- transient GogmaのReset / Keep / Reset Skills PlanStepがfake OwnedWeaponIdを持たない
 - `existing_gogma_reset_skills` からreset_skillsと結果確認または確保Stepを生成する
 - protected武器のReset Skills Routeを `requires_protected_weapon` として誤って不採用にしない
 - 各PlanStepにexpectedStateBefore / Afterが設定される

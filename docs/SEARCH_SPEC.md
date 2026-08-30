@@ -63,12 +63,11 @@ export interface CandidateSearchSettings {
 export interface SearchMasterSubset {
   weaponBonusDefinitions: WeaponBonusDefinition[];
   bonusRanks: BonusRankMaster[];
-  lotteries: LotteryMaster[];
   materialCosts: MaterialCostMaster[];
 }
 ```
 
-`BuildCandidate.finalBonuses` は最終的な巨戟アーティアの結果であり、`gogma_artian` scopeで利用可能なBonus Type + Rankだけを持つ。通常アーティアPredictionは `normal_artian` scopeを扱うが、SearchはBonus Type Mappingから巨戟のRankや完成5枠を推測せず、必ずRNG EngineのGogma Prediction結果を使用する。
+`BuildCandidate.finalBonusScope` と `finalBonuses` はRoute完了時の巨戟アーティアが実際に保持するscopeと5枠である。巨戟化だけなら `normal_artian` scopeの通常5枠をslot順のまま継承し、Reset / Keepを実行した後はRNG Engineが返した `gogma_artian` scopeの5枠を使う。SearchはBonus Type Mappingから巨戟Rankや完成5枠を推測しない。
 
 初期値。
 
@@ -90,6 +89,7 @@ const defaultCandidateSearchSettings = {
 - すべての選択Routeが実行不能な場合のみ検索を開始不可とする
 - `targetWeaponIds` は `isEnabled = true` のTargetWeaponのみ
 - `max*Advance` は1以上
+- `maxNormalAdvance` は既存設定・既存UIの意味を維持した「最大forge回数」であり、最大0-based offsetではない。探索する `candidateOffset` は `0 ... maxNormalAdvance - 1`
 - `maxCandidatesPerTarget` は1以上
 - `similarityThreshold` は0以上1以下
 
@@ -119,11 +119,17 @@ export interface SkippedRoute {
   route: RouteKind;
   reason:
     | "normal_counter_unconfirmed"
+    | "base_seed_unconfirmed"
+    | "gogma_counter_unconfirmed"
+    | "skill_counter_unconfirmed"
+    | "counter_gate_unconfirmed"
     | "no_owned_weapon_available"
     | "no_unprotected_source_weapon"
-    | "gogma_capability_missing"
-    | "skill_capability_missing"
+    | "normal_prediction_unsupported"
+    | "gogma_prediction_unsupported"
+    | "skill_prediction_unsupported"
     | "keep_prediction_unsupported"
+    | "material_rng_advance_unverified"
     | "master_data_unavailable"
     | "calculation_context_incompatible"
     | "disabled_by_filter";
@@ -136,7 +142,10 @@ export interface CandidateSearchWarning {
 }
 ```
 
-`master_data_unavailable` は、Route実行に必要なMaster Dataが存在しない、無効、または利用不能な場合に使用する。対象武器種のレア8通常アーティアLotteryを利用できない場合、`route = "normal_artian_to_gogma"`、`reason = "master_data_unavailable"` として個別Routeをskipする。
+未確定RNG値は `*_unconfirmed`、Engine機能不足は `*_prediction_unsupported`、所持source不足は `no_owned_weapon_available` / `no_unprotected_source_weapon` として区別する。値が確定していてもEngineが未対応なら予測可能とみなさず、逆にEngineが対応していても必要値が未確定なら該当RNG値のreasonを返す。
+`use_weapon_as_material` 後のRNG位置へ依存するRouteは、素材使用時の進行がgame-verifiedになるまで `material_rng_advance_unverified` としてskipし、0進行またはGogma +1を推測しない。
+
+`master_data_unavailable` は、Route実行に必要なWeaponBonusDefinition、BonusRank、Material等のMaster Dataが存在しない、無効、または利用不能な場合に使用する。Production RNG poolはEngineのreference-verified tableであり、disabled LotteryMasterだけを理由にこのreasonを返さない。reference-verifiedは参照repositoryとの一致を表し、全実ゲーム条件でのgame-verifiedを意味しない。
 
 `CandidateRouteFilter` はRouteグループを選ぶ入力であり、SkippedRouteの粒度には使用しない。`normal_artian` は `normal_artian_to_gogma` と `owned_normal_artian_to_gogma`、`existing_gogma` は4つの `existing_gogma_*` RouteKindを対象とする。`disabled_by_filter` も除外された具体的なRouteKindごとに返す。`searchedRoutes` と `skippedRoutes[].route` は同じRouteKind粒度で、同じRouteを両方へ含めない。
 
@@ -156,6 +165,8 @@ AND
 候補スキルが target.idealSkillCondition を満たす
 ```
 
+Idealの5枠完全一致は `finalBonusScope = "gogma_artian"` を要求し、normal / gogmaの同名Bonus TypeまたはRankを暗黙に同一視しない。
+
 分類。
 
 ```ts
@@ -173,6 +184,8 @@ finalBonuses がすべての practicalAlternativeGroups を満たす
 AND
 候補スキルが target.practicalSkillCondition を満たす
 ```
+
+Practical評価も `finalBonusScope` に対応するWeaponBonusDefinitionを使って、実際に保持するBonus Type / Rank / Skillだけを評価する。normal-tierをgogma-tierへ読み替えたり、Target条件を自動緩和したりしない。Bonus条件が空の場合までscopeだけで不合格にせず、定義された条件を通常どおり評価する。
 
 分類。
 
@@ -230,20 +243,22 @@ RouteKind。
 必要条件。
 
 - `canSearchNormalArtian = true`
-- 巨戟化を予測する場合は `canPredictGogma = true`
-- Skill操作を含む場合は `canPredictSkills = true`
+- EngineがNormal Artian PredictionとSkill Predictionをsupportする
+- Base Seed、Skill Counter、Counter Gateが確定している
 - 対象武器種・対象レア度のNormalArtianCounterが確定している
 - 対象レア度はv1固定の8
-- Master Dataに対象武器種・レア8の通常アーティアLotteryが存在する
+- 対象武器種・属性のnormal scope WeaponBonusDefinitionを利用できる。RNG poolはEngineのreference-verified tableを使い、現行LotteryMasterの有効性を要求しない
+- Reset / KeepをRouteへ含める場合だけ、Gogma Prediction Capability、確定Gogma Counter、Keepの場合はKeep Prediction Capabilityを追加で要求する
 
 検索手順。
 
-1. 現在NormalArtianCounterから `maxNormalAdvance` まで通常アーティア結果を予測する
-2. 巨戟化した場合の復元ボーナスとスキルを予測する
-3. TargetWeapon条件に照合する
-4. 条件を満たす場合、BuildCandidateを生成する
-5. `estimatedNormalAdvance`, `estimatedGogmaAdvance`, `estimatedSkillAdvance` を設定する
-6. 実行順の `RouteOperation[]` をBuildRouteへ設定する
+1. `candidateOffset = 0 ... maxNormalAdvance - 1` を走査し、`candidateCounter = normalCounterBefore + candidateOffset` をTargetの `elementId` とともに通常アーティアPredictionへ渡す
+2. 各候補の `forgeCount = candidateOffset + 1` とする。先行する `forgeCount - 1` 本を通常のまま見送り、候補である最後の1本だけを巨戟化する
+3. 変換元の通常5枠をslot順のまま継承し、現在Skill位置を `predictSkills` して初回Series / Groupを付与する
+4. conversion時のSkillがTarget条件を満たさなければ、Skill Counter +1後の位置からReset Skillsを探索する
+5. 継承したnormal-tier bonusのままでTarget条件を満たさない場合、最初にReset Bonusesを行い、その後は必要に応じて追加Reset / Keepを探索する
+6. TargetWeapon条件に照合し、条件を満たす場合はBuildCandidateを生成する
+7. `estimatedNormalAdvance`, `estimatedGogmaAdvance`, `estimatedSkillAdvance` と実行順の `RouteOperation[]` を設定する
 
 制約。
 
@@ -251,10 +266,14 @@ RouteKind。
 - レア6・7のCounterまたはLotteryを探索しない
 - すべての武器種Counter確定を要求しない
 - 検索対象はTargetWeaponの武器種だけでよい
-- v1の操作列はCreateNormalArtianOperation、ConvertToGogmaOperation、必要なResetSkillsOperationまでとし、KeepBonusesOperationを含めない
+- CreateNormalArtianOperationは `count = forgeCount`、`normalCounterAfter = normalCounterBefore + forgeCount` とし、候補位置は `candidateCounter = normalCounterBefore + forgeCount - 1` である。ConvertToGogmaOperationは最後の1本に対する1件だけを持つ
+- conversion直後のCounter進行はNormal `+0`、Skill `+1`、Gogma `+0` である。Normal / Gogma Counterをpaired advanceしない
+- conversionはGogma Predictionを呼ばず、通常5枠をslot順のまま継承する
+- conversionは初回Skill付与を内包し、別のassign操作へ分割しない
+- 操作列はconversion後にResetBonusesOperation、最初のReset以降のKeepBonusesOperation、必要なResetSkillsOperationを含めてよい
 - BuildRoute.sourceOwnedWeaponIdは `null` とする
-- 巨戟化直後にスキルを再付与するResetSkillsOperationは `sourceOwnedWeaponId = null` とし、未登録武器用のOwnedWeaponIdを生成しない
-- 巨戟化した武器を完成・確保してOwnedWeaponとして登録した後は、後続の別検索で `existing_gogma_keep_bonuses` の起点にできる
+- 同一Routeのtransient Gogmaへ適用するReset / Keep / Reset Skillsは `sourceOwnedWeaponId = null` とし、未登録武器用のOwnedWeaponIdを生成しない
+- normal scopeのtransient GogmaへKeepを直接適用せず、最初のBonus amendmentを必ずResetとする
 
 ## 6.2 所持通常アーティア経由
 
@@ -268,16 +287,17 @@ RouteKind。
 
 - `kind = "normal"`、`rarity = 8`、かつ非保護のOwnedWeaponが存在する
 - 変換元の `weaponTypeId` と `elementId` がTargetと一致する
-- `canPredictGogma = true`
-- Reset Skillsを含める場合は `canPredictSkills = true`
+- EngineがSkill Predictionをsupportし、Base Seed、Skill Counter、Counter Gateが確定している
+- Reset / Keepを含める場合だけ、Gogma Prediction Capability、確定Gogma Counter、Keepの場合はKeep Prediction Capabilityを追加で要求する
 
 制約。
 
 - `BuildRoute.sourceOwnedWeaponId` は変換元の所持通常アーティアIDとする
-- 操作列はConvertToGogmaOperationと必要なResetSkillsOperationだけとし、CreateNormalArtianOperationとKeepBonusesOperationを含めない
-- 変換直後のResetSkillsOperationはRoute出力を対象とするため `sourceOwnedWeaponId = null` とする
-- `sourceNormalBonuses` として変換元の `normal_artian` scopeの5枠をRNG Engineへ渡す
-- 最終 `finalBonuses` はRNG Engine Predictionが返す `gogma_artian` scopeの5枠だけを使い、Mappingや未確認のRank変換から生成しない
+- 操作列はConvertToGogmaOperation、その後の必要なReset / Keep / Reset Skillsを含めてよいが、CreateNormalArtianOperationを含めない
+- conversionは変換元の `normal_artian` scope 5枠をslot順のまま継承し、Skill Predictionで初回Skillを付与する。Gogma Predictionを呼ばない
+- conversion直後はSkill Counterだけを1進め、Gogma Counterを進めない
+- 変換後のReset / Keep / Reset SkillsはRoute出力を対象とするため `sourceOwnedWeaponId = null` とする
+- normal scopeからの最初のBonus amendmentはResetだけを許可し、その結果を `gogma_artian` scopeとして以後のReset / Keepへ渡す
 - 変換元を `referencedOwnedWeaponsHash` へ含め、保護・bonus・kindの変更または削除を `owned_weapon_changed` として検出できるようにする
 - 同じ所持通常アーティアを1回の変換資源として扱い、Searchまたは将来Plannerで二重利用しない
 
@@ -308,6 +328,8 @@ RouteKind。
 
 `isProtected = true` のOwnedWeaponを起点とするReset Bonuses Routeは生成しない。保護解除overrideは初期版に持たない。
 
+起点の `restorationBonusScope` はnormal / gogmaの双方を許可する。normal scopeならこのResetが最初のBonus amendmentとなり、結果のscopeをgogmaへ置き換える。
+
 利用可能な起点がprotected武器だけの場合は `no_unprotected_source_weapon` としてRouteをskipする。
 
 ## 6.4 既存巨戟 Keep Bonuses経由
@@ -322,24 +344,24 @@ RouteKind。
 
 - 起点OwnedWeaponがある
 - 起点OwnedWeaponの復元ボーナスの一部がTarget条件に有用
+- 起点OwnedWeaponの `restorationBonusScope = "gogma_artian"`
 - 起点OwnedWeaponの `isProtected = false`
 - `canPredictGogma = true`
 - RNG Engineが `supportsKeepBonusesPrediction = true`
 
 検索手順。
 
-1. `RngEngine.enumerateKeepSelections` からEngineが対応する保持選択を取得する
-2. 各 `KeepBonusSelection` を `predictGogmaBonus` へ渡す
-3. RNG Engineが返した完成5枠をTargetWeapon条件に照合する
+1. 起点の現在5slotをslot順のまま `predictGogmaBonus({ type: "keep_bonuses", currentBonuses })` へ渡す
+2. RNG Engineが返した次の一意な5枠をTargetWeapon条件に照合する
+3. 必要ならその結果を次のcurrent 5slotとしてKeep depth 2以降を時間方向に探索する
 4. 必要なSkill条件を照合する
-5. Keep / Skill操作を実行順の `RouteOperation[]` としてBuildRouteへ保存する
-6. BuildCandidateを生成する
+5. Keep / Skill操作を実行順の `RouteOperation[]` としてBuildRouteへ保存し、BuildCandidateを生成する
 
 制約。
 
-- Search側でslot subsetや残り枠の挙動を推測しない
-- 保持対象の現在Rankを最終結果へそのままコピーしない
-- 正確なKeep仕様が未確定の場合はFake Engineで契約だけを検証し、本番Routeを生成しない
+- 同一Counter位置にユーザーselectionまたはslot subsetのbranchを作らない
+- Keepは現在5slotのfamilyをslotごとに保持し、各slotのtierを同family内で再抽選する
+- Keep depth 1、2、...という時間方向の探索は許可する
 - `isProtected = true` のOwnedWeaponを起点とするKeep Bonuses Routeは生成しない
 - `isProtected = true` のOwnedWeaponを素材消費するRouteも生成しない
 - Keepの起点候補がprotected武器だけの場合も `no_unprotected_source_weapon` としてskipする
@@ -392,13 +414,14 @@ BuildRoute例。
 
 - 復元ボーナスのRNG予測または再抽選を行わない
 - BuildCandidate.finalBonusesは起点OwnedWeaponのrestorationBonusesと一致させる
+- BuildCandidate.finalBonusScopeは起点OwnedWeaponのrestorationBonusScopeと一致させる
 - BuildCandidate.seriesSkillId / groupSkillIdだけをRNG EngineのSkill Prediction結果から設定する
 - Search側でSkill RNGまたはCounter進行を推測しない
 - `estimatedGogmaAdvance = 0`、`estimatedNormalAdvance = null` とし、`estimatedSkillAdvance` だけに必要なSkill Counter進行量を設定する
 - 起点OwnedWeaponを `referencedOwnedWeaponsHash` の対象にする
 - Reset Skillsはv1で非破壊操作として扱い、`isProtected = true` のPractical / Ideal武器も起点にできる
 - `canPredictGogma` とKeep Prediction Capabilityは要求しない
-- Skill Capability不足時は `skill_capability_missing` としてこのRouteをskipする
+- Skill Counter等のRNG値不足とSkill Prediction未対応を、それぞれ対応する `*_unconfirmed` / `skill_prediction_unsupported` で区別してskipする
 
 ## 6.6 既存巨戟 Mixed経由
 
@@ -409,6 +432,8 @@ RouteKind。
 ```
 
 Reset Bonuses、Keep Bonuses、Reset Skillsを組み合わせる場合に使用する。
+
+起点がnormal scopeの巨戟なら、最初のBonus operationをReset Bonusesとし、その後に限りKeep Bonusesを組み合わせられる。起点がgogma scopeならReset / Keepのいずれから開始してよい。
 
 組み合わせた操作を実行順の `RouteOperation[]` として必ず保持する。Plannerはこの操作列からPlanStepを生成し、start / target Counterだけから中間操作を推測しない。
 
@@ -622,9 +647,9 @@ export type SearchWorkerResponse =
 ## 13.2 Route Test
 
 - 通常Counter未確定なら通常アーティア経由をskipする
-- 対象武器種・レア8の通常アーティアLotteryが利用不能なら `master_data_unavailable` で通常アーティア経由をskipする
+- 対象武器種・属性のnormal scope WeaponBonusDefinitionが利用不能なら `master_data_unavailable` で通常アーティア経由をskipする
 - 既存巨戟がない場合、既存巨戟Routeをskipする
-- Keep選択をRNG Engineから取得し、Search側でsubsetを推測しない
+- Keepがcurrent 5slotのfamilyを維持した一意の次結果を返し、同一Counterでselection branchを作らない
 - Keep後の完成5枠がRNG Engine Predictionだけから生成される
 - RNG EngineがKeep未対応ならRouteをskipする
 - BuildRouteの操作列から実行順を復元できる
@@ -636,15 +661,20 @@ export type SearchWorkerResponse =
 - Reset Skills候補ではSkill Prediction結果だけがseriesSkillId / groupSkillIdへ反映される
 - protectedなPractical / Ideal武器からReset Skills Routeを生成できる
 - Reset Skills Routeの起点武器変更でreferencedOwnedWeaponsHashが変わる
-- Skill Capability不足時はReset Skills Routeを `skill_capability_missing` でskipする
-- `normal_artian_to_gogma` RouteにKeepBonusesOperationを含めない
-- 巨戟化直後の未登録武器へOwnedWeaponIdを生成せず、確保後の別検索でKeep Bonuses起点にできる
+- Skill RNG値不足時とSkill Prediction未対応時を別reasonでskipする
+- normal / owned-Normal Routeでnormal scopeのtransient Gogmaへ最初のReset前のKeepBonusesOperationを生成しない
+- 最初のReset後はnormal / owned-Normal RouteでKeepBonusesOperationを生成できる
+- 巨戟化直後の未登録武器へOwnedWeaponIdを生成せず、後続Reset / Keep / Reset Skillsをnull sourceで表す
+- `candidateOffset = 0` で `forgeCount = 1`、一般のoffset kで `forgeCount = k + 1` となり、最後の1本だけを巨戟化する
+- `maxNormalAdvance` が最大forge回数として働き、最大候補offsetが `maxNormalAdvance - 1` になる
+- conversionでnormal bonusesをslot順のまま継承し、Skill +1 / Gogma +0になる
+- conversion Skillが条件を満たす場合はReset Skillsを生成せず、不足時は次Skill位置から探索する
 - 所持通常アーティア経由は保護中または武器種・属性非互換の通常アーティアを使用しない
 - 所持通常アーティア経由はcreate_normal_artianを含めず、sourceOwnedWeaponIdとreferencedOwnedWeaponsHashへ元通常アーティアを設定する
-- 所持通常アーティア経由のResetSkillsOperationは `sourceOwnedWeaponId = null` とする
+- 所持通常アーティア経由のResetBonusesOperation / KeepBonusesOperation / ResetSkillsOperationは `sourceOwnedWeaponId = null` とする
 - Route Filter `normal_artian` が新規通常と所持通常の2 RouteKindを対象とする
 - Route Filter `existing_gogma` が既存巨戟4 RouteKindを対象とする
-- Counter不足、所持通常なし、Skill Capability不足、filter除外がそれぞれ具体的なRouteKindで報告される
+- RNG値不足、Engine capability不足、source不足、filter除外がそれぞれ具体的なRouteKindと異なるreasonで報告される
 - 同じRouteKindをsearchedRoutesとskippedRoutesの両方へ含めない
 
 ## 13.3 Candidate Test

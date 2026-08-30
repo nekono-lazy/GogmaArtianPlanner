@@ -213,6 +213,7 @@ Seed検索とCounter検索を別モードとして提供する。
 - 種類（通常アーティア／巨戟アーティア）
 - 武器種
 - 属性
+- 復元ボーナスscope（通常継承／巨戟amendment）
 - 復元ボーナス5枠
 - シリーズスキル（巨戟のみ）
 - グループスキル（巨戟のみ）
@@ -234,7 +235,7 @@ Seed検索とCounter検索を別モードとして提供する。
 入力制約。
 
 - 復元ボーナスは必ず5枠
-- 選択肢は種類に対応するscope、武器種、属性に対応したWeaponBonusDefinitionだけ
+- 通常アーティアはscopeを `normal_artian` に固定する。巨戟アーティアは、最初のReset前の通常継承かReset後の巨戟amendmentかを明示入力し、選択scope、武器種、属性に対応したWeaponBonusDefinitionだけを表示する
 - 無属性では通常／巨戟とも属性強化を表示しない。ライト／ヘビィボウガンも属性にかかわらず表示しない
 - 通常アーティアではシリーズ／グループスキルとstatus入力を表示せず、保護初期値をOFFにする
 - 通常アーティアはレア8として自動登録し、レア度選択UIを表示しない
@@ -243,6 +244,7 @@ Seed検索とCounter検索を別モードとして提供する。
 - 新規巨戟アーティア作成時だけ、Materialは保護OFF、Practical / Idealは保護ONを初期値にする
 - 登録済み巨戟アーティアの通常のstatus変更ではProtectionを自動上書きしない。Protectionは独立項目とする
 - `isProtected = true` の武器はPlannerが素材消費・Reset Bonuses・Keep Bonusesへ使用しない
+- `restorationBonusScope = "normal_artian"` の巨戟アーティアにはKeep Bonusesを提示せず、最初のamendmentとしてReset Bonusesだけを提示する
 - Plannerが消費できるのはMaterialかつ保護OFFの武器だけ
 - 旧実用品を素材用に変更する場合は確認後に `status = Material` と保護OFFを同時適用する
 - 削除時にActive Planで参照されている場合は警告する
@@ -322,6 +324,7 @@ TargetWeaponごとに候補を検索し、作成リストへ追加する。
 候補表示。
 
 - 完成復元ボーナス
+- 復元ボーナスscope（変換直後のnormal-tierか、amendment後のgogma-tierかを誤認させない表示）
 - シリーズスキル
 - グループスキル
 - 理想との差分
@@ -350,12 +353,14 @@ TargetWeaponごとに候補を検索し、作成リストへ追加する。
 - 選択対象の全Routeが実行不能な場合のみ検索開始不可
 - TargetWeaponなしなら検索開始不可
 - 通常Counter未確定Routeはskip理由を表示
-- Route実行に必要なMaster Dataが利用不能な場合は `master_data_unavailable` としてskip理由を表示
+- Route実行に必要なWeaponBonusDefinition等のMaster Dataが利用不能な場合は `master_data_unavailable` としてskip理由を表示する。disabled LotteryMasterだけを理由にProduction Routeをskipしない
 - protected武器を起点とするReset Bonuses / Keep Bonuses Routeは検索結果へ表示しない
 - Reset Bonuses / Keep Bonusesの起点候補がprotected武器だけの場合は「保護されていない起点武器がない」とskip理由を表示する
 - Reset Skillsのみの経路は非破壊操作として扱い、protectedなPractical / Ideal武器からも検索結果へ表示できる
-- 通常アーティア経由では巨戟化後のスキル再付与までを表示し、同一RouteにKeep Bonusesを含めない
-- 巨戟化した武器を確保した後は、次回以降の検索で既存巨戟Keep Bonuses経路の起点として表示できる
+- 通常アーティア経由では、候補位置までのforge数、最後の1本だけの巨戟化、conversion時の初回Skill、必要なfirst Reset、その後のReset / Keep / Reset Skillsを実行順に表示する
+- 既存の「通常アーティア最大進行量」入力は `maxNormalAdvance`、すなわち最大forge回数を表す。最大0-based offsetではなく、候補offsetの表示が必要なら `0 ... maxNormalAdvance - 1` とする
+- normal-tier bonusを持つ巨戟ではKeepを最初に表示せず、first Reset後だけKeepを表示する
+- conversionだけのRouteでGogma Counter不足をskip理由にせず、Base Seed / Skill Counter / Counter GateまたはSkill Prediction Capability不足を区別して表示する
 - レア8、非保護、かつTargetと武器種・属性が一致する所持通常アーティアだけを変換元候補として表示する
 - 条件緩和案は選択されるまでTargetWeaponへ適用しない
 - 「実用」は `category = practical`、「近似」は `category = practical AND isSimilarToIdeal = true` を表示する
@@ -639,6 +644,7 @@ Debug Mode ONの場合のみ表示。
 - 再計算理由
 - 使用中RngEngine名
 - Master Data version
+- 各StepのNormal / Skill / Gogma Counter before-after。conversionはSkillだけが+1でGogmaは同値として表示する
 
 制約。
 
@@ -755,12 +761,14 @@ export interface SearchUiState {
 - 観測検索でSeed検索とCounter検索の入力・結果が混在しない
 - Seed検索中に進捗表示とキャンセルが使える
 - 通常Counter未確定時に通常Route skipが表示される
-- 通常アーティアLottery不足時に `master_data_unavailable` の通常Route skipが表示される
+- 通常アーティアのnormal scope WeaponBonusDefinition不足時に `master_data_unavailable` の通常Route skipが表示される
 - 既存武器の復元ボーナスを維持したスキルのみ再付与Routeを表示できる
 - protectedなPractical / Ideal武器でもスキルのみ再付与Routeを表示できる
 - Skill Capability不足時にスキルのみ再付与Routeのskip理由が表示される
-- 通常アーティア経由の操作列にKeep Bonusesが表示されない
-- 巨戟化した武器を確保後、別検索で既存巨戟Keep Bonuses経路の起点にできる
+- `candidateOffset = k` の通常アーティア経由で `forgeCount = k + 1` 本forgeし、最後の1本だけを巨戟化する操作列が表示される
+- conversion結果に継承normal bonus 5枠と初回Series / Groupが表示される
+- normal scopeの巨戟にfirst Reset前のKeepが表示されず、first Reset後は同一RouteのKeepを表示できる
+- transient GogmaのReset / Keep / Reset Skillsにfake OwnedWeapon IDを表示しない
 - Search Resultsから候補を作成リストへ追加できる
 - Build ListからPlannerを実行できる
 - Production PlanからExecution Navigatorへ進める

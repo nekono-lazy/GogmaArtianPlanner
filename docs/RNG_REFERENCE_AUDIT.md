@@ -15,6 +15,14 @@
 
 参照実装はユーザー指定の参照元である。ただし、本監査が確認したのは当該repositoryの実装内容であり、ゲーム本体の逆アセンブル、実機fixture、作者による正当性証明までは行っていない。参照実装内部で確認できない事項は未確認のまま残す。
 
+本監査および後続仕様では確認状態を次のように区別する。
+
+- `reference-verified` / 参照実装で確認済み: この監査commitのrepository実装と一致する
+- `game-verified` / 実機確認済み: ユーザーの実機確認または同等の実ゲームfixtureで一致を確認した
+- `unverified` / 未確認: 参照実装または実機から十分な根拠を得ていない
+
+本監査のアルゴリズム抽出結果は原則としてreference-verifiedであり、それだけで全weapon、attribute、game versionについてgame-verifiedであるとは扱わない。Master IDの `.verified_*` は既存の安定ID文字列であり、この確認状態を表さない。
+
 ---
 
 ## 1. 参照元commitとprovenance
@@ -479,7 +487,7 @@ Gate未満時も保存counterのDomain before/afterが+1するかどうかは、
 | method | 判定 | 理由・必要変更 |
 |---|---|---|
 | `normalizeSeed` | 入力意味の明確化が必要 | signatureは維持可能。raw qword/10進/16進を`mod 100000000`したcanonical decimal stringにする案。 |
-| `predictNormalArtian` | 入力変更が必要 | seedにはDomain rarity8→internal7 mapping。結果poolのためelement/recipe/finalAttributeまたはverified pool入力が不足。 |
+| `predictNormalArtian` | 入力変更が必要 | seedにはDomain rarity8→internal7 mapping。結果poolのためelement/recipe/finalAttributeまたはreference-verified pool入力が不足。 |
 | `predictGogmaBonus` | 意味が誤っている + 入力変更が必要 | `new_gogma`はGogma bonus predictionではない。Resetは利用可。Keepはcurrent 5slot入力が必要。 |
 | `predictSkills` | そのまま使える（意味明確化とID adapterは必要） | 次Skill blockのSeries/Groupを返す契約として適合。21×14固定tableを使う。 |
 | `enumerateKeepSelections` | 不要 | 参照Keepにユーザーselection/slot subset分岐がない。全slot family固定の単一動作。 |
@@ -487,7 +495,7 @@ Gate未満時も保存counterのDomain before/afterが+1するかどうかは、
 | `advanceSkillCounter` | そのまま使える | `assign_skills`と`reset_skills`はいずれも+1。Search/Routeが前者を現在表現していない。 |
 | `advanceNormalCounter` | そのまま使える | `count`分加算。Engine内部のPRNG step数10とDomain counter deltaを混同しない。 |
 
-不足契約の第一候補は、(a) conversionでinitial Skillを予測・記録するRoute表現、(b) current bonusesを受けるGogma amendment prediction、(c) Normal recipe/pool入力、(d) semantic IDと参照numeric/orderを分離するverified adapter tableである。新methodが必須か、既存method/operation inputを直すかは仕様決定事項。
+不足契約の第一候補は、(a) conversionでinitial Skillを予測・記録するRoute表現、(b) current bonusesを受けるGogma amendment prediction、(c) Normal recipe/pool入力、(d) semantic IDと参照numeric/orderを分離するreference-verified adapter tableである。新methodが必須か、既存method/operation inputを直すかは仕様決定事項。
 
 ---
 
@@ -557,7 +565,7 @@ Gate未満時も保存counterのDomain before/afterが+1するかどうかは、
 
 これらは表示・ユーザー選択用Masterではなくアルゴリズムそのもの。
 
-### RNG-specific verified table (B)
+### RNG-specific reference-verified table (B)
 
 - WeaponTypeId ↔ reference numeric value
 - ElementId ↔ display index ↔ attributeForce
@@ -641,7 +649,7 @@ current 5枠はReset結果へ影響しないことも同seed/counterで別curren
 5. `predictGogmaBonus(new_gogma)` と `create_gogma_from_normal` を削除/再定義する方針。
 6. Keep current bonus入力と、`enumerateKeepSelections`廃止方針。
 7. Normal Predictionへrecipe/finalAttribute/poolのどれを渡すか。
-8. Rarity8→internal7、Weapon、Element、Skill、Bonusのverified adapter配置。
+8. Rarity8→internal7、Weapon、Element、Skill、Bonusのreference-verified adapter配置。
 9. Bow/LBG/HBG/elementlessのpool restrictionを参照実装どおりにするか、現行Domain制約を維持するか。実機fixture必須。
 10. Current Masterにある参照pool外Group 2件、Gogma rank Iの意味。
 11. Gate未満で実ゲームcounter自体が操作後どう更新されるか。
@@ -658,7 +666,7 @@ current 5枠はReset結果へ影響しないことも同seed/counterで別curren
 
 上記18項を決定し、RNG_SPEC、DATA_MODEL、SEARCH_SPEC、PLANNER_SPECを先に改訂する。特にconversion stream、bonus scope、Keep input、Normal inputを固定する。ここを飛ばしてProduction Engineを実装しない。
 
-### B. Verified adapter tables + PRNG core
+### B. Reference-verified adapter tables + PRNG core
 
 reference commit/game version provenance付きtable、Base Seed normalize、uint32 PRNG、seed builder、Gate offset、mapping validationを実装。PRNG Goldenだけで独立検証する。
 
@@ -684,7 +692,7 @@ Unavailable factoryをProduction factoryへ切替え、Search/Planner Workerを�
 
 ### H. Reference-vs-production integration verification
 
-commit固定fixtureを両実装へ流し、Web/Lua/reference extractorとProduction Engineの出力を比較する。全capabilityを一括で有効にせず、検証済みstream単位で有効化する。
+commit固定fixtureを両実装へ流し、Web/Lua/reference extractorとProduction Engineの出力を比較する。全capabilityを一括で有効にせず、reference-verified stream単位で有効化する。実機fixtureを通過した範囲だけをgame-verifiedへ昇格する。
 
 ---
 

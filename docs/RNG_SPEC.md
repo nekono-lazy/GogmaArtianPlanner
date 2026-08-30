@@ -20,6 +20,22 @@
 - GogmaSeedFinderのソースコードはコピーしない
 - 外部ツール出力のImportは、出力テキストをparseして内部型へ変換するだけにする
 
+Production RNG契約のprovenanceは次のとおりとする。
+
+- Gogma-Artian-Roll-Planner: 単一武器のRNG予測と作成Routeの参照実装
+- GogmaArtianPlanner: 参照した単一武器契約を、複数Target、Inventory、Planner、Executionへ拡張する製品
+- Gogma Seed Finder系: Seed / Counterの観測・特定機能の参照元
+
+外部Repositoryはreference-verified algorithmの参照元として扱い、ソースコードをコピーして組み込まない。監査時点の参照file、function、commit、参照実装で確認済みの事項と未確認事項は [RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) に記録する。
+
+確認状態の用語を次のように固定する。
+
+- `reference-verified` / 参照実装で確認済み: 監査commitの参照repositoryに存在する実装内容を確認済み。全weapon、attribute、game versionでの実ゲーム一致を保証しない
+- `game-verified` / 実機確認済み: ユーザーの実機確認または同等の実ゲームfixtureで確認済み
+- `unverified` / 未確認: 十分な参照根拠または実機根拠がない
+
+文脈なしの `verified` をProduction correctnessの意味で使用しない。Masterの `.verified_*` は安定IDの一部であり、確認状態を意味しない。
+
 ---
 
 ## 3. RNG状態の構成
@@ -77,9 +93,6 @@ export interface RngEngine {
   predictGogmaBonus(input: GogmaBonusPredictionInput): RestorationBonusSet;
   predictSkills(input: SkillPredictionInput): SkillPredictionResult;
   predictNormalArtian(input: NormalArtianPredictionInput): RestorationBonusSet;
-  enumerateKeepSelections(
-    input: KeepSelectionEnumerationInput
-  ): KeepBonusSelection[];
   advanceGogmaCounter(current: number, operation: GogmaOperation): number;
   advanceSkillCounter(current: number, operation: SkillOperation): number;
   advanceNormalCounter(current: number, operation: NormalArtianOperation): number;
@@ -119,31 +132,20 @@ export interface GogmaBonusPredictionInput {
   weaponTypeId: WeaponTypeId;
   elementId: ElementId;
   operation:
-    | {
-        type: "new_gogma";
-        sourceNormalBonuses: RestorationBonusSet;
-      }
     | { type: "reset_bonuses" }
     | {
         type: "keep_bonuses";
-        selection: KeepBonusSelection;
+        currentBonuses: RestorationBonusSet;
       };
-  master: RngMasterSubset;
-}
-
-export interface KeepSelectionEnumerationInput {
-  sourceBonuses: RestorationBonusSet;
-  weaponTypeId: WeaponTypeId;
-  elementId: ElementId;
   master: RngMasterSubset;
 }
 ```
 
-Keep Bonusesの正確な選択単位がslotかBonus Typeか、それ以外かはRNG Engineの解析結果に従う。Domain側は `KeepBonusSelection` を不透明な入力として保持し、現在のType + Rankがそのまま完成結果へ残るとは仮定しない。
+`predictGogmaBonus` の対象は `reset_bonuses` と `keep_bonuses` だけである。通常アーティアからの巨戟化は復元ボーナスを再抽選せず、Gogma Predictionを呼ばない。
 
-`predictGogmaBonus` が返す `RestorationBonusSet` だけを完成結果として使用する。EngineがKeep仕様を未対応の場合、`supportsKeepBonusesPrediction = false` としてRouteを生成しない。
+Keep Bonusesにはユーザーが保持slotを選ぶ概念がない。入力した現在5slotのBonus familyをslotごとに保持し、各slotのtierだけを同じfamily内から再抽選する単一操作である。`currentBonuses` は必ず `gogma_artian` scopeの5枠であり、Engineはそのslot順を保持して抽選poolを構築する。Searchは同一Counter位置でselection branchを作らない。
 
-`new_gogma.sourceNormalBonuses` は新規作成または所持中の通常アーティアに付いている `normal_artian` scopeの5枠をEngineへ渡す入力である。Engineは明示fixtureまたは検証済み実装だけで結果を返し、Search側はBonus Type Mappingから巨戟Rank、Counter進行、完成5枠を推測しない。
+`predictGogmaBonus` が返す `RestorationBonusSet` だけをamendment後の完成結果として使用する。Resetは入力武器が `normal_artian` / `gogma_artian` のどちらのscopeでも実行でき、結果を `gogma_artian` scopeへ置き換える。Keepは入力も結果も `gogma_artian` scopeである。EngineがKeep仕様を未対応の場合、`supportsKeepBonusesPrediction = false` としてRouteを生成しない。
 
 ## 6.2 SkillPredictionInput
 
@@ -158,10 +160,12 @@ export interface SkillPredictionInput {
 }
 
 export interface SkillPredictionResult {
-  seriesSkillId: SeriesSkillId | null;
-  groupSkillId: GroupSkillId | null;
+  seriesSkillId: SeriesSkillId;
+  groupSkillId: GroupSkillId;
 }
 ```
+
+Production Skill PredictionはSeries / Groupを必ず1件ずつ返す。conversion直後の初回付与もReset Skills結果も同じ完全な結果型を使い、`null / null` を予測結果として生成しない。
 
 ## 6.3 NormalArtianPredictionInput
 
@@ -169,13 +173,14 @@ export interface SkillPredictionResult {
 export interface NormalArtianPredictionInput {
   baseSeed: NormalizedSeed;
   weaponTypeId: WeaponTypeId;
+  elementId: ElementId;
   rarity: NormalArtianRarity;
   normalCounter: number;
   master: RngMasterSubset;
 }
 ```
 
-v1の `rarity` は必ず8であり、レア6・7のPrediction、Counter、Lotteryは扱わない。
+v1のDomain `rarity` は必ず8であり、レア6・7のPrediction、Counter、Lotteryは扱わない。Production adapterは表示／Domain rarity 8を参照アルゴリズムの内部rarity値7へ明示変換する。`WeaponTypeId`、`ElementId`もProduction adapter内のreference-verified mappingでnumeric encodingへ変換し、Master配列indexやDomain IDの並びを暗黙利用しない。参照numeric値や `attributeForce` を `engineParameters` 等でDomainへ漏らさない。
 
 ## 6.4 RngMasterSubset
 
@@ -184,12 +189,13 @@ Web Workerへ渡すRNG用の最小マスター。
 ```ts
 export interface RngMasterSubset {
   weaponBonusDefinitions: WeaponBonusDefinition[];
-  lotteries: LotteryMaster[];
   bonusRanks: BonusRankMaster[];
 }
 ```
 
-Normal Artian Predictionが扱う復元ボーナス定義は `normal_artian` scope、Gogma Predictionが返す完成復元ボーナスは `gogma_artian` scopeである。通常→巨戟Bonus Type Mappingは意味上の対応とValidation補助であり、RNG EngineやSearchがMappingからRank・抽選結果・完成5枠を生成してはならない。
+Production RNGのseed式、pool order、weight、repeat penalty、skill order、semantic ID↔reference numeric mappingは、provenance付きRNG-specific reference-verified tableとEngine内部定数の責務であり、このDomain subsetへ参照numeric値を含めない。現行disabled `LotteryMaster` を有効化したり、Production Predictionの前提にしたりしない。reference-verified tableは参照repositoryとの一致を表し、それだけで全実ゲーム条件のgame-verifiedを意味しない。
+
+Normal Artian Predictionが扱う復元ボーナス定義は `normal_artian` scope、Gogma Predictionが返すamendment後の復元ボーナスは `gogma_artian` scopeである。通常→巨戟化時はNormal Predictionまたは所持Normalの `normal_artian` scope 5枠をslot順のまま継承し、通常→巨戟Bonus Type MappingからRank・抽選結果・完成5枠を生成しない。
 
 ---
 
@@ -199,13 +205,11 @@ Normal Artian Predictionが扱う復元ボーナス定義は `normal_artian` sco
 
 ```ts
 export type GogmaOperation =
-  | { type: "create_gogma_from_normal" }
   | { type: "reset_bonuses" }
-  | { type: "keep_bonuses"; selection: KeepBonusSelection }
-  | { type: "consume_as_material" };
+  | { type: "keep_bonuses" };
 ```
 
-進行量はRNG Engine内で定義する。
+Reset BonusesとKeep BonusesはそれぞれDomain Gogma Counterを1進める。通常→巨戟化はGogma streamを消費しない。`use_weapon_as_material` のRNG進行は未確認であり、この型へ含めたり0進行と推測したりしない。
 
 実装上は以下の関数で一元管理する。
 
@@ -217,9 +221,11 @@ getGogmaCounterDelta(operation: GogmaOperation): number
 
 ```ts
 export type SkillOperation =
-  | { type: "assign_skills" }
+  | { type: "convert_normal_to_gogma" }
   | { type: "reset_skills" };
 ```
+
+通常→巨戟化とReset SkillsはそれぞれDomain Skill Counterを1進める。巨戟化は1つのゲーム操作であり、別の `assign_skills` RouteOperationへ分割しない。変換時の `predictSkills` 結果を初回Series Skill / Group Skillとして付与する。
 
 ## 7.3 NormalArtianOperation
 
@@ -232,6 +238,46 @@ export type NormalArtianOperation =
 
 - `count` は1以上
 - 初期版では複数操作をまとめてUI実行しないが、検索内部では距離計算のため `count` を使ってよい
+
+NormalArtianCounterは「次にforgeされる結果の0-based block index」である。候補位置とforge数は次の数式で扱う。
+
+```text
+candidateOffset = 0:
+  candidateCounter = normalCounterBefore
+  forgeCount = 1
+
+candidateOffset = k:
+  candidateCounter = normalCounterBefore + k
+  forgeCount = k + 1
+
+CreateNormalArtianOperation.count = forgeCount
+normalCounterAfter = normalCounterBefore + forgeCount
+candidateCounter = normalCounterBefore + forgeCount - 1
+```
+
+stream進行は次を正式契約とする。Statusは確認根拠の範囲であり、正式契約として採用するかどうかとは別である。
+
+| Operation | Normal | Skill | Gogma | Status |
+| --- | ---: | ---: | ---: | --- |
+| create normal | +1 / forge | 0 | 0 | reference-verified |
+| convert normal to Gogma | 0 | +1 | 0 | game-verified |
+| reset skills | 0 | +1 | 0 | reference-verified |
+| reset bonuses | 0 | 0 | +1 | reference-verified |
+| keep bonuses | 0 | 0 | +1 | reference-verified |
+
+Domain Counterの `+1` は1回のforgeが次の予測位置へ進む意味であり、参照PRNG内部の1 blockあたり10 stepと混同しない。`candidateOffset = k` の通常候補を採用する場合、合計進行はNormal `+(k + 1)`、Skill `+1`、Gogma `+0` である。先行するk本は巨戟化せず、候補である最後の1本だけを巨戟化する。
+
+Counter Gateは予測時のeffective PRNG blockだけに作用する。
+
+```text
+Skill Gate < 54 -> effective Skill block = 0
+otherwise       -> effective Skill block = Domain Skill Counter
+
+Gogma Gate < 35 -> effective Gogma block = 0
+otherwise       -> effective Gogma block = Domain Gogma Counter
+```
+
+Domain Counterはアプリが保持するゲーム状態、effective PRNG blockは予測時にseed streamへ適用するoffsetであり、別概念である。Gate未満でゲーム内部に保存されたCounter自体が操作後にどう変化するかは未確認のため、`advance*Counter` 契約や永続Counterをeffective blockへ置き換えてはならない。Normal streamにはCounter Gateを適用しない。
 
 ---
 
@@ -532,7 +578,7 @@ RNG詳細が未確定の場合、以下の順で実装する。
 3. 既知サンプルが得られたらreal engineへ差し替える
 4. fake engineのテストをreal engine fixtureテストへ置き換える
 
-`LotteryMaster` の現行 `internalValue` / `weight` は暫定スキーマである。実ゲームのRNG解析結果と合わない場合、本番アルゴリズムをLotteryMasterへ無理に合わせず、Master schemaとEngine Interfaceを見直す。
+`LotteryMaster` の現行 `internalValue` / `weight` は暫定スキーマである。Production Engineはreference-verifiedのbonus order、weight、repeat penalty、skill order、numeric mappingをRNG-specific reference-verified tableまたはEngine内部定数としてDomain IDへadapter変換し、現行LotteryMasterへ機械的に流し込まない。表示MasterとRNG抽選表の一致がgame-verifiedになるまで、現行LotteryMasterをProduction correctnessの根拠にしない。
 
 Fake Engineの用途。
 
@@ -557,6 +603,10 @@ Fake Engineの制約。
 - 同じPredictionInputから同じ結果が返る
 - 復元ボーナス5枠の順不同比較が正しい
 - Counter deltaがoperationごとに一元管理される
+- conversionがSkill +1 / Gogma +0、Reset SkillsがSkill +1、Reset / KeepがGogma +1、forgeがNormal +1になる
+- `candidateOffset = k` で `forgeCount = k + 1`、Normal `+(k + 1)` / Skill +1 / Gogma +0となり、最後の1本だけを巨戟化する
+- `normalCounterAfter = normalCounterBefore + forgeCount` と `candidateCounter = normalCounterBefore + forgeCount - 1` の境界を取り違えない
+- Gate thresholdからDomain Counterを変更せず、effective Skill / Gogma blockだけを0へ切り替える
 - Observation validationがkind別に正しく動く
 - Gogma Bonus / Skill観測でelementId欠落を拒否する
 - Normal Artian観測でEngineが属性不要の場合にelementId nullを許可する
@@ -564,7 +614,8 @@ Fake Engineの制約。
 - SeedSearchInput内の全Observationへkind別validationを適用する
 - KnownValueが項目ごとに独立して確定できる
 - Capability判定が不足値に依存する機能だけをfalseにする
-- Keep入力を完成ボーナスとして扱わない
+- Keepがcurrent 5slotを明示入力し、slot familyを維持した単一結果を返す
+- Domain rarity 8を内部7へ、WeaponTypeId / ElementIdをreference-verified numeric値へ明示mappingする
 
 ## 12.2 Fixture Test
 
@@ -574,7 +625,8 @@ Fake Engineの制約。
 - 観測追加で一意になるケースを再現する
 - 一致なしケースを再現する
 - Seed検索でNormal Artian、Gogma Bonus、Skill観測を組み合わせて候補が絞られる
-- 未確定Keep仕様はFake Engineだけで検証し、本番Engineを推測実装しない
+- Keepで複数family layoutのcurrent 5slotから期待tier結果とslot family維持が一致する
+- conversion時のSkill fixtureと、Reset Skillsの次位置fixtureを区別して再現する
 
 ## 12.3 Worker Test
 

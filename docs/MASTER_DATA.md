@@ -271,8 +271,9 @@ weapon_bonus.{scope}.{weaponTypeId}.{bonusTypeId}.{bonusRankId}
 
 制約。
 
-- TargetWeaponとOwnedGogmaArtianWeaponは完成巨戟アーティアなので、`gogma_artian` scopeだけを使う
+- TargetWeaponの既存Ideal / Practical bonus定義は `gogma_artian` scopeを基準とし、今回の契約変更でnormal-tierへ自動緩和しない
 - OwnedNormalArtianWeaponと通常アーティアPrediction・Debugは `normal_artian` scopeを使う
+- OwnedGogmaArtianWeaponは、変換直後から最初のResetまでは `normal_artian`、Reset / Keep後は `gogma_artian` を使う。保存された `restorationBonusScope` を明示してSelectorを呼ぶ
 - UIやDomain validationはOwnedWeaponを暗黙に巨戟とみなさず、`weaponTypeId + elementId + ArtianBonusScope` を明示してSelectorを呼ぶ
 - 同一 `scope + weaponTypeId + bonusTypeId + bonusRankId` は1件のみ
 - `effectValue` は表示用文字列。計算ロジックは効果値に依存しない
@@ -288,7 +289,7 @@ weapon_bonus.{scope}.{weaponTypeId}.{bonusTypeId}.{bonusRankId}
 - 弓は斬れ味強化、装填数強化、斬れ味・装填強化を利用しない
 - ライト／ヘビィボウガンは属性強化を利用しない
 
-巨戟側の確認済みRankは、基礎攻撃力強化・会心率強化が I / II / III / EX、属性強化が I / II / EX、斬れ味・装填強化が通常 / EX。通常アーティア側の基本Bonusはsuffixなしの通常Rankを使う。このRank順は比較用であり、通常Rankと巨戟Rankの変換規則を意味しない。
+巨戟側の現在Master Rankは、基礎攻撃力強化・会心率強化が I / II / III / EX、属性強化が I / II / EX、斬れ味・装填強化が通常 / EX。通常アーティア側の基本Bonusはsuffixなしの通常Rankを使う。このRank順は比較用であり、通常Rankと巨戟Rankの変換規則を意味しない。通常→巨戟化ではRankを変換せずnormal scope 5枠をそのまま継承する。
 
 ## 8.2 ArtianBonusTypeMapping
 
@@ -311,7 +312,9 @@ export interface ArtianBonusTypeMapping {
 通常 装填数強化     -+
 ```
 
-複数の通常Bonus Typeから同一巨戟Bonus TypeへのMany-to-Oneは有効。逆引きは配列として扱う。MappingはBonus Typeの意味対応だけであり、Rank変換、抽選、完成ボーナス生成には使用しない。最終巨戟結果はRNG Engine Predictionが返す。
+複数の通常Bonus Typeから同一巨戟Bonus TypeへのMany-to-Oneは有効。逆引きは配列として扱う。MappingはBonus Typeの意味対応だけであり、conversion時のType / Rank変換、抽選、完成ボーナス生成には使用しない。巨戟化だけならnormal scopeを継承し、Reset / Keep後のgogma scope結果はRNG Engine Predictionが返す。
+
+BowのSharpness/Ammo family、LBG/HBGのElement family、elementless GogmaのElement bonus、栄光の誉れ、祝祭の巡り、Gogma rank Iは参照RNG poolとCurrent Masterの差分が未確認である。今回、既存Master JSONまたはDomain制約を変更せず、現在Masterの存在／有効性をProduction RNG抽選poolの検証根拠にしない。
 
 ---
 
@@ -381,7 +384,7 @@ RNG再現で使う抽選定義。表示用定義とは分離する。
 
 `LotteryMaster` はRNG解析結果に応じて変更可能な暫定スキーマである。`internalValue`、`weight`、および現在の抽選単位は、実ゲーム仕様が確定するまで永続的なRNG契約とみなさない。本番RNGロジックをこの形式へ無理に合わせず、解析結果が異なる場合はRNG Engine Interfaceとともに見直す。
 
-未確定期間はFixture用データとして使用してよいが、検証済みと未検証のレコードをmanifestのnotesまたは別の検証状態で区別する。`RNG_SPEC.md` の「未確定アルゴリズムを推測実装しない」という原則を優先する。
+未確定期間はFixture用データとして使用してよいが、reference-verified、game-verified、unverifiedのレコードをmanifestのnotesまたは別の確認状態で区別する。`RNG_SPEC.md` の「未確定アルゴリズムを推測実装しない」という原則を優先する。
 
 ```ts
 export interface LotteryMaster {
@@ -577,7 +580,7 @@ Master Data読み込み時に以下を検証する。
 - ID重複を検出する
 - 存在しない参照IDを検出する
 - 不正なLotteryMasterを検出する
-- 未検証Lottery fixtureを本番検証済みデータとして読み込まない
+- unverified Lottery fixtureをgame-verified Production dataとして読み込まない
 - 不正なMaterialCostMasterを検出する
 - 無効なBonusRank比較を検出する
 
@@ -593,5 +596,5 @@ Master Data読み込み時に以下を検証する。
 
 - TargetWeaponの入力候補がMaster Dataから生成できる
 - OwnedWeapon登録時に武器種別の有効ボーナスだけを許可する
-- Search WorkerへLotteryMaster subsetを渡せる
+- Production RNG用Worker入力へ参照numeric Lottery表をDomain Masterとして渡さず、Engineがprovenance付きreference-verified tableからsemantic ID結果を返す。これは参照repositoryとの一致を表し、全実ゲーム条件でのgame-verifiedを意味しない
 - MaterialCostMasterからPlan全体の必要素材を集計できる

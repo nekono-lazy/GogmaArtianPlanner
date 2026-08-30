@@ -106,7 +106,6 @@ Do not implement the following unless the specifications are explicitly changed:
 - Server-side persistence
 - Practical-versus-Practical quality ranking for automatic materialization
 - Route-local references to newly generated weapons
-- Keep Bonuses applied to the newly converted Gogma weapon inside the same `normal_artian_to_gogma` route
 
 Do not add speculative future functionality while implementing a v1 task.
 
@@ -201,7 +200,19 @@ RNG behavior is critical.
 
 Do not guess, approximate, or reverse-engineer missing game behavior by assumption.
 
-If production RNG behavior is not verified:
+Use these verification-status terms precisely:
+
+- `reference-verified`: confirmed in the pinned reference repository; this
+  does not imply agreement with every weapon, attribute, or game version
+- `game-verified`: confirmed by the user's real-game observation or an
+  equivalent real-game fixture
+- `unverified`: not supported by sufficient reference or real-game evidence
+
+Do not use bare `verified` as a Production RNG correctness status. The
+`.verified_*` fragments in stable Master IDs are legacy identifier text, not
+verification-status claims.
+
+If production RNG behavior is unverified:
 
 1. Define typed interfaces
 2. Define validation
@@ -209,7 +220,8 @@ If production RNG behavior is not verified:
 4. Keep production and fake engines replaceable
 5. Keep fake behavior separated by an explicit feature flag
 6. Show the active engine in Debug Mode where specified
-7. Replace fake fixtures with verified production fixtures only when real behavior is known
+7. Label fixture provenance: reference-verified fixtures prove reference parity,
+   while only game-verified fixtures prove real-game correctness
 
 Never make production behavior depend on guessed:
 
@@ -217,13 +229,67 @@ Never make production behavior depend on guessed:
 - Internal Lottery values
 - Counter advancement
 - Counter Gate behavior
-- Keep Bonuses behavior
+- Keep behavior absent from both the reference-verified algorithm and
+  game-verified fixtures
 - Seed behavior
 - Other unverified game mechanics
 
+`Gogma-Artian-Roll-Planner` is the provenance for reference-verified single-weapon RNG
+prediction and route behavior. GogmaArtianPlanner extends that behavior to
+multiple Targets, inventory, global planning, and guided execution; it must not
+invent different single-weapon RNG rules or copy external source code verbatim.
+Gogma Seed Finder-family tools are provenance for Seed and Counter observation
+and identification behavior.
+
+The formal domain-counter contract and its verification provenance are:
+
+| Operation | Normal | Skill | Gogma | Status |
+| --- | ---: | ---: | ---: | --- |
+| Create one normal Artian | +1 | 0 | 0 | reference-verified |
+| Convert normal to Gogma | 0 | +1 | 0 | game-verified |
+| Reset Skills | 0 | +1 | 0 | reference-verified |
+| Reset Bonuses | 0 | 0 | +1 | reference-verified |
+| Keep Bonuses | 0 | 0 | +1 | reference-verified |
+
+Internal PRNG steps are not Domain Counter increments. RNG advancement caused
+by `use_weapon_as_material` is unverified and must not be guessed.
+
+Conversion preserves the normal weapon's five restoration-bonus slots, in
+order and with `normal_artian` scope, assigns the initial Series and Group
+Skills from the Skill stream, advances Skill Counter by one, and does not
+advance Gogma Counter. It is not a Gogma-bonus lottery operation.
+
+Keep Bonuses has no user-selected slots and no selection branch. It preserves
+the bonus family at each of the current five slot positions and rerolls the tier
+within each family. Reset and Keep results come from the RNG Engine; Search and
+Planner must not synthesize them.
+
 `LotteryMaster` is provisional.
 
-Do not force verified RNG behavior to fit the provisional `LotteryMaster` schema. If real analysis requires a different representation, update the specification before changing the production model.
+Do not force reference-verified or game-verified RNG behavior to fit the provisional `LotteryMaster` schema. If real analysis requires a different representation, update the specification before changing the production model.
+
+Do not promote reference-verified behavior to game-verified merely because it
+matches the reference implementation. The following remain unverified:
+
+- Bow Sharpness/Ammo family behavior
+- LBG/HBG Element family behavior
+- Element bonus behavior for elementless Gogma weapons
+- 栄光の誉れ
+- 祝祭の巡り
+- Gogma rank I
+- Persisted Counter advancement while Counter Gate is below threshold
+- RNG advancement caused by `use_weapon_as_material`
+
+The Production RNG interface contract must preserve semantic Domain inputs:
+
+- `predictNormalArtian` receives `elementId`; the Production adapter maps
+  rarity 8 to internal rarity 7 and explicitly maps Weapon/Element IDs
+- Gogma-bonus prediction supports only `reset_bonuses` and `keep_bonuses`
+- Keep prediction receives the current ordered five bonuses
+- There is no conversion/new-Gogma bonus prediction operation
+- Keep slot-selection types and selection enumerators are not part of the
+  contract
+- Reference numeric encodings must not leak into Domain parameters
 
 ---
 
@@ -251,6 +317,17 @@ unsupported.
 A missing capability disables only dependent routes.
 
 Do not disable unrelated routes.
+
+Conversion requires a compatible Normal source, Skill prediction capability,
+and confirmed Base Seed, Skill Counter, and Counter Gate. Conversion alone does
+not require Gogma prediction capability or a confirmed Gogma Counter. Those are
+required only when Reset Bonuses or Keep Bonuses is included.
+
+Counter Gate affects the effective PRNG block separately from the persisted
+Domain Counter: Skill Gate below 54 uses effective Skill Counter zero, and
+Gogma Gate below 35 uses effective Gogma Counter zero. How the game's persisted
+Counter changes while a Gate is below its threshold is unverified; do not infer
+or encode that behavior.
 
 ---
 
@@ -294,7 +371,8 @@ A `RestorationBonusSet`:
 
 Do not lose duplicate-count semantics.
 
-For `referencedOwnedWeaponsHash`, preserve the stored five-slot order because Keep slot semantics remain unresolved.
+For `referencedOwnedWeaponsHash`, preserve the stored five-slot order because
+Keep preserves the family at each slot position, making slot order semantic.
 
 ---
 
@@ -331,10 +409,20 @@ A normal Artian weapon:
 
 A Gogma Artian weapon:
 
-- Uses five `gogma_artian` scope restoration bonuses
+- May retain five inherited `normal_artian` scope restoration bonuses before
+  its first Reset Bonuses operation
+- Uses five `gogma_artian` scope restoration bonuses after Reset Bonuses or
+  Keep Bonuses
+- Never mixes `normal_artian` and `gogma_artian` scopes within one weapon;
+  all five slots have the same scope
 - Retains Series Skill and Group Skill
 - Retains Material / Practical / Ideal status
 - Retains protection independently from status
+
+Converting a normal Artian weapon does not translate its bonus types or ranks
+to Gogma-tier values. The five normal-tier slots remain unchanged until the
+first Reset Bonuses operation. Keep Bonuses is invalid while a Gogma weapon
+still has `normal_artian` scope.
 
 Statuses are:
 
@@ -523,6 +611,11 @@ For v1, if the route-dependent RNG hash changes, use the safe behavior:
 rng_state_changed
 ```
 
+A conversion-only route hashes the confirmed Base Seed, Skill Counter, Counter
+Gate, and relevant Normal Counter when it forges. It does not hash Gogma
+Counter merely because the result is a Gogma weapon. A route that adds Reset or
+Keep also hashes the Gogma inputs those operations require.
+
 ### `referencedOwnedWeaponsHash`
 
 Hash only OwnedWeapons actually referenced by the route.
@@ -544,6 +637,7 @@ Include semantic weapon data such as:
 - Weapon type
 - Element
 - Stored restoration bonus slots
+- Restoration bonus scope
 - Protection
 
 For Gogma Artian weapons, also include:
@@ -591,15 +685,52 @@ normal_artian_to_gogma
 
 v1 searches only rarity-8 normal Artian weapons. If the required weapon-type rarity-8 Normal Artian counter is unknown, skip only this route.
 
-v1 operation sequence may contain:
+NormalArtianCounter is the 0-based block index of the result produced by the
+next forge. Keep candidate position and forge count distinct:
+
+```text
+candidateOffset = 0:
+  candidateCounter = normalCounterBefore
+  forgeCount = 1
+
+candidateOffset = k:
+  candidateCounter = normalCounterBefore + k
+  forgeCount = k + 1
+
+CreateNormalArtianOperation.count = forgeCount
+normalCounterAfter = normalCounterBefore + forgeCount
+candidateCounter = normalCounterBefore + forgeCount - 1
+```
+
+Forge `forgeCount` normal weapons and convert only the selected final weapon.
+Earlier forged weapons consume only the Normal stream. Immediately after
+conversion, cumulative advancement is Normal `+forgeCount`, Skill +1, and
+Gogma +0.
+
+`maxNormalAdvance` retains the existing Search setting and UI meaning:
+maximum forge count, with a minimum of 1. It is not the maximum 0-based offset.
+Search candidate offsets `0 ... maxNormalAdvance - 1`.
+
+The conversion operation:
+
+- Preserves the selected normal weapon's five bonus slots in order with
+  `normal_artian` scope
+- Predicts and assigns the initial Series and Group Skills
+- Advances Skill Counter by one and leaves Gogma Counter unchanged
+
+The operation sequence may contain:
 
 - `create_normal_artian`
 - `convert_normal_to_gogma`
-- Required `reset_skills`
-
-It must not contain:
-
+- `reset_bonuses`
 - `keep_bonuses`
+- `reset_skills`
+
+If bonus amendment is needed while the transient Gogma still has
+`normal_artian` scope, its first bonus operation must be `reset_bonuses`.
+That Reset produces five `gogma_artian` scope slots. Further
+`reset_bonuses` or `keep_bonuses` operations may then occur in the same
+route. Keep must never occur before that first Reset.
 
 For this route:
 
@@ -607,7 +738,8 @@ For this route:
 BuildRoute.sourceOwnedWeaponId = null
 ```
 
-If Reset Skills is performed immediately after conversion, its:
+Reset Bonuses, Keep Bonuses, and Reset Skills performed on the transient
+converted weapon use:
 
 ```text
 sourceOwnedWeaponId = null
@@ -615,11 +747,9 @@ sourceOwnedWeaponId = null
 
 because the route output is not yet a persisted OwnedWeapon.
 
-Do not invent an OwnedWeapon ID for the just-created route output.
-
-After the weapon is secured and registered as an OwnedWeapon, a later search may use it as an existing-Gogma Keep Bonuses source.
-
-Do not add a route-output weapon reference type in v1.
+Do not invent an OwnedWeapon ID or add a route-output weapon reference type for
+the just-created weapon. A null source is the explicit transient-Gogma contract,
+not a fake route-local identity.
 
 ### Owned Normal Artian Route
 
@@ -631,19 +761,27 @@ owned_normal_artian_to_gogma
 
 The source must be an unprotected owned rarity-8 normal Artian weapon whose weapon type and element are compatible with the Target. Rarity 6 and 7 normal Artian weapons are out of scope and must not be registered or searched in v1.
 
-The operation sequence may contain only:
+The operation sequence must not contain `create_normal_artian`, and may
+contain:
 
 - `convert_normal_to_gogma`
-- Optional `reset_skills`
-
-It must not contain:
-
-- `create_normal_artian`
+- `reset_bonuses`
 - `keep_bonuses`
+- `reset_skills`
 
-`BuildRoute.sourceOwnedWeaponId` is the source normal Artian weapon ID. A Reset Skills operation performed immediately after conversion uses `sourceOwnedWeaponId = null` because the converted route output is not yet registered as a separate OwnedWeapon.
+`BuildRoute.sourceOwnedWeaponId` is the source normal Artian weapon ID. At
+conversion, consume that source, preserve its five slots and
+`normal_artian` scope, assign the initial predicted Series and Group Skills,
+advance Skill Counter by one, and leave Gogma Counter unchanged.
 
-The conversion result must come from the RNG Engine. Bonus Type mapping must not be used to infer the resulting ranks or completed Gogma bonus set.
+Reset Bonuses, Keep Bonuses, and Reset Skills performed after conversion use
+`sourceOwnedWeaponId = null` because the converted route output is not yet
+registered as a separate OwnedWeapon. Do not invent a replacement ID.
+
+The first bonus amendment while the converted weapon has `normal_artian`
+scope must be Reset Bonuses. After it produces `gogma_artian` scope, further
+Reset Bonuses or Keep Bonuses may occur in the same route. Conversion itself
+does not map bonus types or ranks and does not call Gogma-bonus prediction.
 
 ### Existing Gogma Reset Bonuses
 
@@ -657,6 +795,10 @@ The source must be unprotected.
 
 Do not generate this destructive route from a protected weapon.
 
+If the source has inherited `normal_artian` scope, this Reset is its required
+first bonus amendment and changes the full five-slot result to
+`gogma_artian` scope.
+
 ### Existing Gogma Keep Bonuses
 
 Route kind:
@@ -667,14 +809,14 @@ existing_gogma_keep_bonuses
 
 The source must be unprotected.
 
-Keep selection and final result must come from the RNG Engine contract.
+The source must already have five `gogma_artian` scope slots. Keep has no slot
+selection and creates no same-counter selection branches. The current ordered
+five slots are an explicit RNG Engine input; the family at each slot remains in
+that position while the tier is rerolled, and the complete final result comes
+from the Engine.
 
-Search code must not infer:
-
-- Slot subset behavior
-- Rank preservation
-- Remaining-slot behavior
-- Final kept bonuses
+Search may explore Keep depth 1, Keep depth 2, and later results over time. It
+must not synthesize the tier result or branch on user-selected slots.
 
 If Keep prediction is unsupported, do not generate production Keep routes.
 
@@ -689,7 +831,7 @@ existing_gogma_reset_skills
 This route:
 
 - Uses an existing OwnedWeapon
-- Keeps the source weapon's restoration bonus set unchanged
+- Keeps the source weapon's restoration bonus set and scope unchanged
 - Changes only predicted series/group skills
 - Advances only Skill RNG as defined by the Engine
 - Uses a non-null source OwnedWeapon ID
@@ -708,6 +850,9 @@ existing_gogma_mixed
 ```
 
 If the route includes Reset Bonuses or Keep Bonuses, the source must be unprotected.
+
+A mixed route whose source still has `normal_artian` scope must perform Reset
+Bonuses before any Keep Bonuses operation.
 
 A Reset-Skills-only route must use `existing_gogma_reset_skills`, not Mixed.
 
@@ -728,6 +873,12 @@ This is required for:
 - Correct PlanStep creation
 - Correct invalidation behavior
 - Correct user instructions
+
+`convert_normal_to_gogma` is one operation that contains the initial Skill
+assignment. Do not split it into a synthetic assign-skills operation. Its
+expected result contains the inherited ordered normal-scope bonuses and the
+predicted Series and Group Skills. Its `RngAdvance` is Normal 0, Skill +1,
+Gogma 0.
 
 ---
 
@@ -777,6 +928,16 @@ Target. For Gogma weapons, do not use `status` alone: evaluate the actual
 restoration bonus and series/group skill conditions with the Target evaluation
 engine. `hasPractical`, `hasIdeal`, and their OwnedWeapon ID lists all follow
 this rule.
+
+Trace replay of conversion must preserve the five normal-scope slots, call
+Skill prediction at the conversion position, advance Skill Counter by one, and
+leave Gogma Counter unchanged. If the initial conversion Skill already meets
+the Target, do not add Reset Skills; otherwise, search Reset Skills beginning
+at the following Skill position.
+
+Conversion operations conflict at the same Skill Counter position, not the
+same Gogma Counter position. Only Reset Bonuses and Keep Bonuses consume and
+conflict on Gogma positions.
 
 ---
 
@@ -833,7 +994,8 @@ When an owned normal Artian weapon is converted to Gogma, the source normal weap
 
 For `owned_normal_artian_to_gogma`, consume and remove the source Normal at the
 `convert_normal_to_gogma` Step. The converted Gogma remains an unregistered
-route output through any `reset_skills(sourceOwnedWeaponId = null)` Step.
+route output through any Reset Bonuses, Keep Bonuses, or Reset Skills operation
+whose `sourceOwnedWeaponId = null`.
 `reserve_weapon` later adds a new Gogma ID and must not remove the Normal again,
 reuse its ID, assign a future ID at conversion time, or add a route-local weapon
 reference.
@@ -864,6 +1026,9 @@ create normal Artian
 -> create_material_gogma
 -> consume later
 ```
+
+Material replenishment conversion still consumes one Skill result and no Gogma
+result. Being created as material never suppresses that Skill advancement.
 
 `create_material_gogma` is a Planner-only registration PlanStep, not a
 `RouteOperation` and not an additional RNG draw. It registers the already
@@ -1007,10 +1172,10 @@ Plan steps may represent operations such as:
 
 Every Step stores expected state before and after the operation.
 
-For `ExpectedPlanState.ownedWeaponsHash`, include OwnedWeapon `kind` in
-addition to the other semantic inventory fields. A kind change must change this
-hash and `referencedOwnedWeaponsHash`; name, memo, and timestamps remain
-excluded.
+For `ExpectedPlanState.ownedWeaponsHash`, include OwnedWeapon `kind` and
+restoration-bonus scope in addition to the other semantic inventory fields. A
+kind or scope change must change this hash and `referencedOwnedWeaponsHash`;
+name, memo, and timestamps remain excluded.
 
 `create_material_gogma` has null Target, BuildListEntry, and Candidate
 references, uses the reserved OwnedWeapon ID as `ownedWeaponId`, requires user
@@ -1132,7 +1297,7 @@ Restoration bonus availability is selected from Master Data using all of:
 
 Do not infer availability from ID string patterns. Elementless weapons cannot use Element Bonus. Light Bowgun and Heavy Bowgun cannot use Element Bonus regardless of element.
 
-The verified normal-to-Gogma Bonus Type mapping is:
+The project-owner-confirmed semantic normal-to-Gogma Bonus Type mapping is:
 
 ```text
 通常 基礎攻撃力強化 -> 巨戟 基礎攻撃力強化
@@ -1143,7 +1308,11 @@ The verified normal-to-Gogma Bonus Type mapping is:
 通常 装填数強化 ---+
 ```
 
-This mapping is many-to-one for Sharpness and Capacity. Normal-to-Gogma rank conversion is unverified. Search and RNG code must not infer ranks, Counter behavior, or completed results from this mapping.
+This mapping is many-to-one for Sharpness and Capacity and is semantic Master
+metadata only. Conversion performs no bonus-type or rank conversion: it
+preserves the five `normal_artian` scope slots exactly. Search and RNG code
+must not use this mapping to infer Reset/Keep results, Counter behavior, or a
+completed Gogma-tier bonus set.
 
 The enabled skill options are 21 Series Skills and 16 Group Skills. Keep the following IDs in Master Data with `isEnabled = false`:
 
@@ -1253,7 +1422,12 @@ Search UI must:
 - Show Ideal / Practical / Similar filtering correctly
 - Show skipped-route reasons
 - Allow existing-Gogma Reset Skills candidates from protected weapons
-- Never show Keep Bonuses inside a v1 normal-Artian route
+- Show inherited normal-scope bonuses and the initial predicted Skills at
+  conversion
+- Show Reset Bonuses as the only valid first bonus amendment for a converted
+  normal-scope Gogma
+- Allow later Reset Bonuses or Keep Bonuses in the same route after that first
+  Reset; never present a Keep slot-selection control
 
 Execution UI must:
 
@@ -1291,7 +1465,7 @@ Do not delete or weaken tests merely to make implementation pass.
 
 Important logic should use deterministic fixtures.
 
-Unverified RNG behavior must not be treated as production-correct merely because a Fake fixture passes.
+Unverified or merely reference-verified RNG behavior must not be treated as game-correct merely because a Fake fixture passes.
 
 Relevant test areas include:
 
@@ -1302,7 +1476,14 @@ Relevant test areas include:
 - Observation validation
 - Search route eligibility
 - `existing_gogma_reset_skills`
-- No Keep inside `normal_artian_to_gogma`
+- Conversion advancement: Normal +0, Skill +1, Gogma +0
+- Conversion inheritance of ordered `normal_artian` scope bonuses and initial
+  Series/Group Skills
+- Keep is invalid before the first Reset in a normal-to-Gogma route
+- Reset or Keep after the first Reset in normal and owned-normal routes
+- Keep family preservation by slot with no selection branches
+- Null transient sources for post-conversion Reset Bonuses, Keep Bonuses, and
+  Reset Skills
 - BuildCandidate / BuildListEntry separation
 - Stale hash behavior
 - OwnedWeapon protection
@@ -1385,4 +1566,4 @@ A task is complete only when its requested scope is implemented and:
 - GitHub Pages compatibility is preserved
 - The implementation remains within the frozen v1 specifications
 
-If real game behavior is not yet verified, completion means the typed boundary, validation, Fake Engine/fixtures, and integration contract are correct. It does not mean the production RNG algorithm is proven.
+If real game behavior is not yet game-verified, completion means the typed boundary, validation, Fake Engine/fixtures, and integration contract are correct. It does not mean the production RNG algorithm is proven for every supported game condition.

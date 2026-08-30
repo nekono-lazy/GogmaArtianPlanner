@@ -29,6 +29,16 @@
 - 計画に沿ったゲーム操作を1ステップずつ案内する
 - 実際の結果が想定と異なった場合に状態を修正して計画を再生成する
 
+単一武器のRNG予測・作成RouteはGogma-Artian-Roll-Plannerの参照実装で確認済みのアルゴリズムを参照し、GogmaArtianPlannerはこれを複数Target、所持Inventory、共有RNG Planner、1 Step Executionへ拡張する。Seed / Counterの観測・特定はGogma Seed Finder系を参照する。外部Repositoryはalgorithm provenanceであり、コードをコピーして組み込むことを意味しない。
+
+RNG仕様の確認状態は次の3語で区別する。
+
+- `reference-verified` / 参照実装で確認済み: 固定commitの参照repositoryに実装されている動作・定数・順序を確認した状態。全weapon、attribute、game versionで実ゲームと一致することまでは意味しない
+- `game-verified` / 実機確認済み: ユーザーの実機確認または同等の実ゲームfixtureで確認した状態
+- `unverified` / 未確認: 参照実装または実機から十分な根拠を得ていない状態
+
+文脈なしの「verified / 検証済み」をProduction RNGの正当性レベルとして使用しない。Masterの安定IDに含まれる `.verified_*` は既存ID文字列であり、RNGアルゴリズムの実機確認状態を表さない。
+
 ---
 
 ## 3. 対象環境
@@ -78,11 +88,38 @@
 - Counter Gate
 - 通常アーティアの武器種別レア8 Counter
 
-v1の通常アーティア管理・検索対象はレア8だけとする。通常アーティアCounterは武器種ごとにレア8を1件、全14武器種で最大14件管理し、各Counterについて確定状態と観測回数を保持できること。レア6・7は管理しない。
+v1の通常アーティア管理・検索対象はレア8だけとする。通常アーティアCounterは武器種ごとにレア8を1件、全14武器種で最大14件管理し、各Counterについて確定状態と観測回数を保持できること。レア6・7は管理しない。NormalArtianCounterは「次にforgeされる結果の0-based block index」である。
+
+通常候補位置と必要forge数は次を正式契約とする。
+
+```text
+candidateOffset = 0:
+  candidateCounter = normalCounterBefore
+  forgeCount = 1
+
+candidateOffset = k:
+  candidateCounter = normalCounterBefore + k
+  forgeCount = k + 1
+
+normalCounterAfter = normalCounterBefore + forgeCount
+candidateCounter = normalCounterBefore + forgeCount - 1
+```
 
 Base Seed、Gogma Counter、Skill Counter、Counter Gateはそれぞれ独立した `KnownValue<T>` として、値、確定状態、取得元を保持する。一部だけ判明している状態を許可し、RNG状態全体を「全確定 / 未確定」の二択にしない。
 
 機能ごとに必要な値からCapabilityを判定する。例えばGogma予測、Skill予測、通常アーティア検索、Planner実行は、それぞれが依存する確定値だけを要求する。不足値に依存する経路のみを無効化し、利用可能な経路まで一括で無効化しない。
+
+stream進行は次を正式契約とする。Statusはprovenanceの確認範囲であり、正式契約かどうかとは別である。
+
+| Operation | Normal | Skill | Gogma | Status |
+| --- | ---: | ---: | ---: | --- |
+| create normal | +1 / forge | 0 | 0 | reference-verified |
+| convert normal to Gogma | 0 | +1 | 0 | game-verified |
+| reset skills | 0 | +1 | 0 | reference-verified |
+| reset bonuses | 0 | 0 | +1 | reference-verified |
+| keep bonuses | 0 | 0 | +1 | reference-verified |
+
+`use_weapon_as_material` のRNG進行は未確認であり推測しない。Domain Counter +1とPRNG内部1 blockの10 stepは別概念とする。Counter Gateは予測時のeffective PRNG blockにだけ適用し、Skill Gate < 54ならSkill offsetを0、Gogma Gate < 35ならGogma offsetを0とする。Gate未満で保存Counter自体が操作後にどう変化するかは未確認のまま維持する。
 
 通常画面では内部値を直接操作させない。詳細表示またはデバッグモードでのみ確認可能とする。
 
@@ -161,7 +198,7 @@ Seed検索とCounter検索は別の入力・結果型として扱う。Seed検�
 
 素材用武器にも復元ボーナス5枠とスキルを保持する。現在の復元構成がKeep Bonusesによって将来の目標武器作成に利用できる可能性があるためである。
 
-通常アーティアはレア8だけを登録でき、`normal_artian` scopeの復元ボーナス5枠を保持し、シリーズ／グループスキルとstatusを持たない。レア度選択UIは持たない。通常／巨戟の両方で保護を設定でき、保護中の通常アーティアを自動計画の巨戟化元にしない。
+通常アーティアはレア8だけを登録でき、`normal_artian` scopeの復元ボーナス5枠を保持し、シリーズ／グループスキルとstatusを持たない。巨戟アーティアは、変換直後から最初のResetまでは継承した `normal_artian` scopeの5枠、その後は `gogma_artian` scopeの5枠を保持できる。1本の5枠内でscopeを混在させない。レア度選択UIは持たない。通常／巨戟の両方で保護を設定でき、保護中の通常アーティアを自動計画の巨戟化元にしない。
 
 無属性武器では通常／巨戟とも属性強化を利用できない。ライト／ヘビィボウガンの属性強化不可ルールも維持し、ElementとWeaponBonusDefinitionのMasterから選択肢を決定する。
 
@@ -311,9 +348,11 @@ AND
 
 ### 16.1 通常アーティア経由
 
-レア8通常アーティアを作成し、有望な復元構成を利用して巨戟化する。v1では必要に応じたスキル再付与までを同一Routeに含める。レア6・7のCounter、Lottery、Predictionは検索しない。
+レア8通常アーティアを作成し、有望な復元構成を利用して巨戟化する。候補の `candidateOffset = k` には `forgeCount = k + 1` 回のforgeが必要であり、先行する `forgeCount - 1` 本は通常のまま見送り、最後の1本だけを巨戟化する。conversionは通常5枠をslot順のまま継承し、初回Series / Groupを付与してSkill Counterだけを1進める。
 
-同一Route内で巨戟化直後の未登録武器へKeep Bonusesを適用しない。巨戟化した武器を一度完成・確保してOwnedWeaponとして登録した後は、次回以降の検索で既存巨戟Keep Bonuses経路の起点にできる。
+`maxNormalAdvance` は既存UIの「通常アーティア最大進行量」と既存検索ループの意味を維持し、1以上の「最大forge回数」とする。最大0-based offsetではない。探索する `candidateOffset` は `0 ... maxNormalAdvance - 1`、最大候補位置での `forgeCount` は `maxNormalAdvance` である。
+
+Gogma-tierのTarget条件へ到達する必要がある場合、同一Route内でconversion後のReset Bonuses、最初のReset後の追加Reset / Keep、必要なReset Skillsまでを表現できる。normal scopeの巨戟に対する最初のBonus amendmentは必ずResetとし、Keepを直接適用しない。transient GogmaへのReset / Keep / Reset Skillsは `sourceOwnedWeaponId = null` で表し、fake IDまたはRoute-local IDを作らない。
 
 ### 16.2 既存巨戟アーティア経由
 
@@ -327,11 +366,11 @@ AND
 
 経路フィルタが「すべて」の場合、利用可能な経路を比較し、推奨経路を表示する。
 
-Keep Bonusesは保持対象のslot、Bonus Type、その他Engine入力と完成結果を分離する。保持対象が同じRankのまま残る、または残り枠だけが単純再抽選されるとは仮定しない。完成復元ボーナスは必ずRNG EngineのPrediction結果として得る。正確な仕様が未確定ならInterfaceとFake実装に留める。
+Keep Bonusesにユーザー選択slotはない。現在5slotのBonus familyをslotごとに保持し、同family内tierを再抽選する単一操作である。完成復元ボーナスは現在5slotを明示入力したRNG Engine Predictionから得る。同一Counter位置でselection branchを作らず、Keep depth 1、2、...の時間方向だけを探索する。
 
 ### 16.3 所持通常アーティア経由
 
-レア8、非保護でTargetと武器種・属性が一致する所持通常アーティアを、作成操作なしで巨戟化する。Routeは `convert_normal_to_gogma` と必要な `reset_skills` だけを持ち、BuildRouteは変換元IDを参照する。変換結果とCounter進行はRNG Engineだけが決定し、Bonus Type MappingからRankまたは完成5枠を推測しない。変換後は元通常アーティアを在庫から除き、二重利用しない。
+レア8、非保護でTargetと武器種・属性が一致する所持通常アーティアを、作成操作なしで巨戟化する。BuildRouteは変換元IDを参照し、conversion後の必要なReset / Keep / Reset Skillsを同一Routeへ含められる。conversionでは通常5枠を継承して初回Skillを付与し、Skill Counter +1、Gogma Counter +0とする。Bonus Type MappingからRankまたは完成5枠を推測しない。変換後は元通常アーティアを在庫から除き、二重利用しない。
 
 ---
 
@@ -444,7 +483,7 @@ BuildCandidateのRouteには、通常アーティア作成、巨戟化、Reset B
 - 保護中の通常アーティアは変換元にしない
 - 通常アーティアにはPractical / Ideal / Material状態を適用しない
 
-- Material武器は巨戟側のRNG進行に使用できる
+- Material武器はゲーム操作の素材として消費できるが、その操作単独のRNG進行は未確認である。Gogma Counterを進める目的と推測して使用しない
 - Keep Bonusesにより目標候補へ転用できるMaterial武器は温存を検討する
 - Practical武器は原則保護する
 - Ideal武器は原則保護する
@@ -475,6 +514,8 @@ Plannerが確認なしで保護を解除または素材化すること、protect
 ```
 
 `create_material_gogma` は追加のゲーム内RNG操作ではなく、直前までに作成済みの巨戟アーティアを `kind = Gogma`、`status = Material`、保護OFFとしてツールのInventoryへ登録するPlanner-only PlanStepである。Plannerは後続の素材消費と結ぶOwnedWeapon IDをPlan生成時に予約してよいが、登録Step確定前にDBまたはシミュレーション在庫へ追加せず、BuildRouteへ未来武器IDを入れない。
+
+素材補充のconversionも通常Routeと同じく初回Skillを1つ消費し、Gogma Counterは進めない。素材用途でSkill結果をTarget評価しない場合でも、実ゲーム操作のSkill進行を省略しない。
 
 既存PracticalをMaterialへ変える `change_owned_weapon_status`、Target候補を確保する `reserve_weapon` とは役割を分離する。再計算はstale Planに対するユーザー操作であり、旧Plan内の `recalculate_plan` Stepとして表現しない。
 
@@ -612,6 +653,8 @@ Plan開始前のBuildListEntryは検索開始RNG状態との不一致でstaleに
 - 設定
 
 データの関係、ID、トランザクション、不変条件は[DATA_MODEL.md](./DATA_MODEL.md)に従う。
+
+旧RNG契約のconversion Gogma Counter、巨戟化時のbonus再抽選、Keep selectionを保存したBuildCandidate / BuildListEntry Candidate Snapshotは新契約と非互換である。推測変換せずinvalid / staleとして再検索を要求する。Target、OwnedWeapon、RngStateなど意味を維持できるデータは不用意に削除しない。ProductionPlanは本契約確定時点で永続化前のためmigration対象外とし、Dexie migration手順は次のコード実装フェーズで決定する。
 
 Execution Navigatorの結果一致、武器確保、旧実用品の素材化確認、想定外結果記録は、RNG状態、通常アーティアCounter、OwnedWeapon、ExecutionHistory、PlanStep、ProductionPlanの関連更新を1つのDexie transactionで確定する。Undoも同じ範囲を1つのtransactionで復元する。transaction失敗時は部分更新を残さず、操作前の状態を維持する。
 
@@ -814,7 +857,7 @@ RNGの実データやアルゴリズムが未確定の段階では、推測値�
 
 本書および参照する詳細仕様書を、初期版実装のv1基準とする。実装中に意味変更が必要になった場合は、コードだけで吸収せず該当仕様書を更新して変更理由を記録する。
 
-実ゲームのRNG、Keep Bonuses、Lottery内部仕様など未確定事項はv1で推測固定しない。Interface、Capability、Fake Engine、Fixtureの境界を維持し、検証済み情報が得られた時点で別の仕様変更として扱う。
+conversionのNormal +0 / Skill +1 / Gogma +0、bonus継承、初回Skillはgame-verified（実機確認済み）である。create/reset/keepのstream進行、first Reset、Keep family保持はreference-verifiedであり、本書の正式製品契約として採用するが、全weapon、attribute、game versionでgame-verifiedという意味ではない。BowのSharpness/Ammo family、LBG/HBGのElement family、elementless GogmaのElement bonus、栄光の誉れ、祝祭の巡り、Gogma rank I、Gate未満の保存Counter進行、`use_weapon_as_material` のRNG進行はunverified（未確認）のため推測固定しない。Interface、Capability、Fake Engine、Fixtureの境界を維持する。
 
 Practical同士の優劣判定と、それに基づくPlannerからの旧Practical素材化提案は将来仕様とし、v1では実装しない。
 

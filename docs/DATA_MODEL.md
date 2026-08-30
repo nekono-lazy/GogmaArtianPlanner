@@ -312,6 +312,7 @@ export interface RngState {
 - Counterの確定値は0以上の整数
 - 各項目の確定状態と取得元は独立して保持する
 - RngState全体の `isConfirmed` は持たない
+- `gogmaCounter` / `skillCounter` はDomainが追跡するCounterであり、Counter Gate適用後のeffective PRNG blockを保存しない。Gate未満の保存Counter内部挙動は未確認のため推測migrationしない
 
 Capabilityは保存せず、現在値と実行対象から純粋関数で導出する。
 
@@ -339,12 +340,16 @@ deriveRngCapabilities(
 - Gogma予測は確定済みBase Seed、Gogma Counter、Counter GateとEngineのGogma Prediction supportを要求する
 - Skill予測は確定済みBase Seed、Skill Counter、Counter GateとEngineのSkill Prediction supportを要求する
 - 通常アーティア予測は確定済みBase Seed、対象武器種のレア8 NormalArtianCounter、EngineのNormal Artian Prediction supportを要求する
+- conversionはSkill予測の依存だけを要求し、Gogma予測またはGogma Counterを要求しない
+- Reset BonusesはGogma予測、Keep BonusesはGogma予測とKeep supportを要求する
+- conversion後のReset / Keepを含むRouteではOperationごとの依存を合成し、Route全体を実行できる場合だけ有効にする
 - PlannerはBuildListEntry内の全RouteOperationを実行できるCapabilityがある場合のみ実行可能
 - 不足値に依存するRouteだけを無効化し、他Routeは利用可能なままにする
+- `missingRequirements` は未確定RNG値、Engine support不足、source不足を同じ曖昧な文字列へ潰さず、呼び出し側が別reasonへ変換できる識別子を保持する
 
 ## 6.2 NormalArtianCounter
 
-v1で管理するレア8通常アーティアの現在位置を、武器種ごとに1件保存する。レア6・7は管理・検索対象外とする。
+v1で管理するレア8通常アーティアの現在位置を、武器種ごとに1件保存する。レア6・7は管理・検索対象外とする。`counter` は「次にforgeされる結果の0-based block index」であり、消費済みforge数や最後に消費したindexではない。
 
 ```ts
 export interface NormalArtianCounter {
@@ -375,6 +380,20 @@ id = `${weaponTypeId}:${rarity}`;
 - `isConfirmed = false` の場合、通常アーティア経由の候補検索には使わない
 - `candidateCount` は観測検索時の残候補数。未検索なら `null`
 
+候補位置の正式な関係は次のとおり。
+
+```text
+candidateOffset = 0:
+  candidateCounter = normalCounterBefore
+  forgeCount = 1
+
+candidateOffset = k:
+  candidateCounter = normalCounterBefore + k
+  forgeCount = k + 1
+
+candidateCounter = normalCounterBefore + forgeCount - 1
+```
+
 ---
 
 ## 7. 所持アーティア
@@ -388,6 +407,7 @@ export interface OwnedWeaponBase {
   name: string;
   weaponTypeId: WeaponTypeId;
   elementId: ElementId;
+  restorationBonusScope: ArtianBonusScope;
   restorationBonuses: RestorationBonusSet;
   isProtected: boolean;
   relatedTargetWeaponIds: TargetWeaponId[];
@@ -419,8 +439,11 @@ export type OwnedWeapon =
 不変条件。
 
 - `kind` で通常アーティアと巨戟アーティアを明示的に区別する
-- 通常アーティアはレア8に限定し、`normal_artian` scopeの復元ボーナスだけを5枠保持し、シリーズスキル、グループスキル、statusは持たない
-- 巨戟アーティアは `gogma_artian` scopeの復元ボーナスだけを5枠保持し、従来どおりスキルとstatusを保持する
+- 通常アーティアはレア8に限定し、`restorationBonusScope = "normal_artian"` の復元ボーナスだけを5枠保持し、シリーズスキル、グループスキル、statusは持たない
+- 巨戟アーティアは `restorationBonusScope = "normal_artian" | "gogma_artian"` を許可し、scopeに対応する復元ボーナス5枠とSeries Skill / Group Skill / statusを保持する
+- 通常→巨戟化直後は通常アーティアの5枠とslot順を変更せず、`restorationBonusScope = "normal_artian"` の巨戟アーティアになる。巨戟Rank I等への暗黙変換は行わない
+- `normal_artian` scopeを持つ巨戟アーティアへの最初のBonus amendmentはReset Bonusesだけを許可する。Reset結果で5枠全体とscopeを `gogma_artian` へ置き換え、その後はReset / Keepの両方を許可する
+- 1本の武器の5枠はすべて `restorationBonusScope` と一致させ、normal / gogma scopeを混在させない
 - 無属性武器はscopeにかかわらず属性強化を保持できない
 - 素材用でも `restorationBonuses` は必ず5枠保持する
 - `status = "ideal"` の場合、初期値として `isProtected = true`
@@ -469,6 +492,7 @@ export interface TargetWeapon {
 - `priority` のデフォルトは3
 - `isEnabled = false` の目標は候補検索・Plannerの対象外
 - `idealBonuses` は必ず5枠完全指定
+- v1のTarget bonus定義は `gogma_artian` scopeを基準とし、converted Gogmaのnormal-tier bonusへ暗黙に緩和しない
 
 ## 8.2 BonusCondition
 
@@ -563,6 +587,7 @@ export interface BuildCandidate {
   id: BuildCandidateId;
   targetWeaponId: TargetWeaponId;
   category: CandidateCategory;
+  finalBonusScope: ArtianBonusScope;
   finalBonuses: RestorationBonusSet;
   seriesSkillId: SeriesSkillId | null;
   groupSkillId: GroupSkillId | null;
@@ -595,6 +620,8 @@ export interface BuildCandidate {
 - `calculationContext` は候補生成時の値を保存し、互換性が失われた候補はstaleとして扱う
 - `searchStateHash` は候補検索開始時のRoute依存RNG状態から生成する
 - `referencedOwnedWeaponsHash` はRouteが参照するOwnedWeaponだけから生成し、参照がないRouteでは `null` とする
+- `finalBonusScope` はRoute完了時に実際に保持する5枠のscopeであり、巨戟化だけなら `normal_artian`、Reset / Keep後は `gogma_artian` とする
+- Production RNGが生成するCandidateのSeries Skill / Group SkillはconversionまたはReset Skillsの予測結果を保持し、conversion直後を `null / null` にしない
 
 ## 9.2 BuildRoute
 
@@ -627,43 +654,20 @@ export interface CreateNormalArtianOperation {
 export interface ConvertToGogmaOperation {
   type: "convert_normal_to_gogma";
   weaponTypeId: WeaponTypeId;
-  gogmaCounterBefore: number;
-  gogmaCounterAfter: number;
+  skillCounterBefore: number;
+  skillCounterAfter: number;
 }
 
 export interface ResetBonusesOperation {
   type: "reset_bonuses";
-  sourceOwnedWeaponId: OwnedWeaponId;
+  sourceOwnedWeaponId: OwnedWeaponId | null;
   gogmaCounterBefore: number;
   gogmaCounterAfter: number;
 }
 
-export type KeepBonusSelection =
-  | {
-      mode: "slot_indices";
-      keptSlotIndices: number[];
-      engineParameters: Readonly<
-        Record<string, string | number | boolean>
-      >;
-    }
-  | {
-      mode: "bonus_types";
-      keptBonusTypeIds: BonusTypeId[];
-      engineParameters: Readonly<
-        Record<string, string | number | boolean>
-      >;
-    }
-  | {
-      mode: "engine_defined";
-      engineParameters: Readonly<
-        Record<string, string | number | boolean>
-      >;
-    };
-
 export interface KeepBonusesOperation {
   type: "keep_bonuses";
-  sourceOwnedWeaponId: OwnedWeaponId;
-  selection: KeepBonusSelection;
+  sourceOwnedWeaponId: OwnedWeaponId | null;
   gogmaCounterBefore: number;
   gogmaCounterAfter: number;
 }
@@ -684,29 +688,30 @@ export interface UseWeaponAsMaterialOperation {
 制約。
 
 - `operations` は実行順に並べ、空配列を許可しない
+- CreateNormalArtianOperationの `count` は `forgeCount` で1以上、`normalCounterAfter = normalCounterBefore + count`
 - `normal_artian_to_gogma` は該当NormalArtianCounterが確定している場合のみ生成する
-- v1の `normal_artian_to_gogma` はCreateNormalArtianOperation、ConvertToGogmaOperation、必要なResetSkillsOperationだけを持ち、KeepBonusesOperationを含めない
+- `normal_artian_to_gogma` は1回以上のforgeを表すCreateNormalArtianOperation、最後の1本だけに対するConvertToGogmaOperation、その後の必要なResetBonusesOperation / KeepBonusesOperation / ResetSkillsOperationを実行順に持てる
 - `normal_artian_to_gogma` の `BuildRoute.sourceOwnedWeaponId` は `null` とする
-- `normal_artian_to_gogma` のResetSkillsOperationは巨戟化直後のRoute出力を対象とするため `sourceOwnedWeaponId = null` とし、未登録武器用のOwnedWeaponIdを生成しない
+- `candidateOffset = k` の通常候補Routeは `forgeCount = k + 1`、`candidateCounter = normalCounterBefore + k = normalCounterBefore + forgeCount - 1` とする。Normal Counterを `forgeCount` 進め、先行するk本は通常アーティアのまま破棄／不採用とし、最後の1本だけを巨戟化する
 - `owned_normal_artian_to_gogma` はレア8、非保護、かつTargetと武器種・属性が一致する所持通常アーティアを変換元とする
 - `owned_normal_artian_to_gogma` の `BuildRoute.sourceOwnedWeaponId` は変換元の通常アーティアIDとする
-- `owned_normal_artian_to_gogma` はConvertToGogmaOperationと必要なResetSkillsOperationだけを持ち、CreateNormalArtianOperationとKeepBonusesOperationを含めない
-- 変換直後のResetSkillsOperationは未登録のRoute出力を対象とするため `sourceOwnedWeaponId = null` とする
-- 変換後の最終ボーナスはRNG Engine Predictionから取得し、Bonus Type Mappingや未確認のRank変換から生成しない
+- `owned_normal_artian_to_gogma` はConvertToGogmaOperation、その後の必要なResetBonusesOperation / KeepBonusesOperation / ResetSkillsOperationを実行順に持てるが、CreateNormalArtianOperationを含めない
+- ConvertToGogmaOperationは通常ボーナス5枠をslot順のまま継承し、現在Skill位置のSeries / Groupを付与してSkill Counterを1進める。Normal / Gogma Counterは進めない
+- 変換時のSkillがTarget条件を満たす場合はResetSkillsOperationを追加しない。満たさない場合、変換後の次Skill位置からReset Skillsを探索する
+- 同一Route内で変換後の未登録Gogmaを対象にするResetBonusesOperation、KeepBonusesOperation、ResetSkillsOperationは `sourceOwnedWeaponId = null` とし、fake IDまたはRoute-local IDを生成しない
+- `sourceOwnedWeaponId = null` のReset / Keep / Reset Skillsは同じBuildRouteで直前に生成されたtransient Gogmaだけを対象とし、既存OwnedWeaponを表さない
+- transientまたはOwned Gogmaの `restorationBonusScope = "normal_artian"` なら最初のBonus amendmentはResetBonusesOperationでなければならない。最初のReset後だけKeepBonusesOperationを許可する
+- ResetBonusesOperationはGogma Counterを1進め、結果を `gogma_artian` scopeへ置き換える。KeepBonusesOperationもGogma Counterを1進める
+- KeepBonusesOperationはユーザーselectionを持たない。現在5slotのfamilyをslotごとに保持し、同family内tierを再抽選する一意の操作である
 - `existing_gogma_reset_skills` は非nullの `sourceOwnedWeaponId` を持つResetSkillsOperationだけでスキルを再付与し、復元ボーナスを変更するOperationを含めない
 - `existing_gogma_reset_skills` のBuildRoute.sourceOwnedWeaponIdと各ResetSkillsOperation.sourceOwnedWeaponIdは同じ起点武器を参照する
-- `existing_gogma_reset_skills` から生成するBuildCandidateの `finalBonuses` は起点OwnedWeaponの `restorationBonuses` と一致し、seriesSkillId / groupSkillIdだけをRNG EngineのSkill Prediction結果から設定する
-- Keep操作は保持するslot、Bonus Type、Engine固有入力だけを保持し、保持対象を最終ボーナスとみなさない
-- `mode = "slot_indices"` のindexは0始まりで0から4、重複不可
-- `mode = "bonus_types"` のBonus Typeは保持対象の種類を表すだけで、Rank維持または完成結果を保証しない
-- `mode = "engine_defined"` は解析で別の入力単位が判明した場合にのみRNG Engineが生成する
-- `engineParameters` の意味はRNG Engine versionに従い、Domain Modelでゲーム仕様を推測しない
+- `existing_gogma_reset_skills` から生成するBuildCandidateの `finalBonusScope` / `finalBonuses` は起点OwnedWeaponの `restorationBonusScope` / `restorationBonuses` と一致し、seriesSkillId / groupSkillIdだけをRNG EngineのSkill Prediction結果から設定する
 - Keep後を含む最終 `RestorationBonusSet` は必ずRNG EngineのPrediction結果からBuildCandidateへ設定する
 - `UseWeaponAsMaterialOperation.ownedWeaponId` が検索時点で保護中の場合、SearchはそのRouteを生成しない
 - ResetBonusesOperationまたはKeepBonusesOperationの起点OwnedWeaponが保護中の場合、SearchはそのRouteを生成しない
 - ResetSkillsOperationは非破壊操作として扱い、`isProtected = true` の起点OwnedWeaponにも使用できる
 - Route生成後に起点武器がprotectedへ変わった場合、素材消費・Reset Bonuses・Keep Bonusesを含むBuildListEntryだけをPlanner validationで実行不能とする。Reset SkillsのみのRouteは実行可能とする
-- v1ではRoute内で新規生成した武器を参照する専用型を持たず、巨戟化直後のRoute出力をKeepBonusesOperationの `sourceOwnedWeaponId` へ設定しない
+- Route内で新規生成した武器を参照する専用型は持たず、巨戟化直後のtransient Gogmaは後続Reset / Keep / Reset Skillsの `sourceOwnedWeaponId = null` で表す
 - Plannerは `operations` を順にPlanStepへ変換し、endpointのCounter差分から操作を推測復元しない
 
 ## 9.3 IdealDifference
@@ -773,11 +778,11 @@ export type BuildListEntryStaleReason =
 
 `referencedOwnedWeaponsHash` の正規化対象。
 
-- 参照IDは `BuildRoute.sourceOwnedWeaponId`、`ResetBonusesOperation.sourceOwnedWeaponId`、`KeepBonusesOperation.sourceOwnedWeaponId`、非nullの `ResetSkillsOperation.sourceOwnedWeaponId`、`UseWeaponAsMaterialOperation.ownedWeaponId` から収集する
+- 参照IDは `BuildRoute.sourceOwnedWeaponId`、非nullの `ResetBonusesOperation.sourceOwnedWeaponId`、非nullの `KeepBonusesOperation.sourceOwnedWeaponId`、非nullの `ResetSkillsOperation.sourceOwnedWeaponId`、`UseWeaponAsMaterialOperation.ownedWeaponId` から収集する。`null` transient sourceはOwnedWeapon参照に含めない
 - 同じIDを重複排除し、ID順に安定ソートする
-- 各参照武器について `id`、`kind`、`weaponTypeId`、`elementId`、`restorationBonuses`、`isProtected` を含める
+- 各参照武器について `id`、`kind`、`weaponTypeId`、`elementId`、`restorationBonusScope`、`restorationBonuses`、`isProtected` を含める
 - 巨戟アーティアについてはさらに `seriesSkillId`、`groupSkillId`、`status` を含める
-- `restorationBonuses` は保存中の5枠配列順を保持する。Keepのslot意味が確定するまでHash生成時に並べ替えない
+- `restorationBonuses` は保存中の5枠配列順を保持する。Keepがslotごとのfamilyを保持するため、Hash生成時に並べ替えない
 - `name`、`memo`、`createdAt`、`updatedAt` は除外する
 - Routeが参照しないOwnedWeaponの追加、更新、削除はHashへ影響させない
 - 参照武器が存在しない、または参照武器IDが現在在庫から消失した場合は、元Hashと一致しない値を生成して `owned_weapon_changed` とする
@@ -907,12 +912,13 @@ v1のPlannerOptionsは3つの1以上の整数だけとし、実用品優先を�
 export interface PlannerMaterialRequirement {
   id: string;
   sourceBuildListEntryId: BuildListEntryId | null;
-  purpose: "gogma_rng_progression";
+  purpose: "route_material_requirement";
 }
 ```
 
 これはPlanner-onlyの一般素材武器需要であり、Candidate Routeの
 UseWeaponAsMaterialOperationとは別契約である。未確認の武器種・属性・Bonus条件を追加しない。
+また、`purpose` はRNG進行を意味しない。`use_weapon_as_material` のCounter効果がgame-verifiedになるまで、RngAdvanceへ0または+1を記録せず、その後の予測が素材使用時のRNG効果に依存するPlanをProduction対応とみなさない。
 
 各hashは、該当データを安定ソートしたJSONから生成する。
 
@@ -934,7 +940,7 @@ export interface ExpectedPlanState {
 
 - `rngStateHash`: 各KnownValueの正規化valueとisConfirmedを含み、source、notes、日時を除外する
 - `normalCountersHash`: id、counter、isConfirmedを含み、観測日時を除外する
-- `ownedWeaponsHash`: 共通項目としてID、kind、武器種、属性、保存中のボーナス5枠順、isProtected、計画に関係するTarget参照を含む。巨戟だけseriesSkillId、groupSkillId、statusを加える。通常に存在しないSkill / statusへ仮値を設定しない。名称、memo、日時は除外する
+- `ownedWeaponsHash`: 共通項目としてID、kind、武器種、属性、restorationBonusScope、保存中のボーナス5枠順、isProtected、計画に関係するTarget参照を含む。巨戟だけseriesSkillId、groupSkillId、statusを加える。通常に存在しないSkill / statusへ仮値を設定しない。名称、memo、日時は除外する
 - `buildListEntriesHash`: Entry ID、Candidate Snapshot、Target定義Hash、searchStateHash、CalculationContextを含み、派生値のisStale、staleReasons、日時を除外する
 
 ## 11.3 PlanStep
@@ -979,13 +985,13 @@ export interface PlanStep {
 - Candidate由来のStepは `buildListEntryId` を判断記録の主参照とし、`candidateId` はSnapshot内の追跡情報としてのみ使用する
 - `operationType = "create_material_gogma"` は直前までの作成・巨戟化結果を素材用OwnedWeaponとして登録するPlanner-only Stepであり、RouteOperationまたは追加のRNG操作ではない
 - `create_material_gogma` の `targetWeaponId`、`buildListEntryId`、`candidateId` は `null`、`ownedWeaponId` はPlanner生成時に予約した追加予定ID、`requiresUserConfirmation = true` とする
-- `create_material_gogma.inventoryChange.addOwnedWeapon` は `ownedWeaponId` と同じIDの `kind = "gogma"`、`status = "material"`、`isProtected = false` の武器を保持し、直前の予測／実結果のボーナス・Series Skill・Group Skillを失わない
+- `create_material_gogma.inventoryChange.addOwnedWeapon` は `ownedWeaponId` と同じIDの `kind = "gogma"`、`status = "material"`、`isProtected = false` の武器を保持し、直前の予測／実結果のrestorationBonusScope、ボーナス、Series Skill、Group Skillを失わない
 - `create_material_gogma.rngAdvance` はGogma / Skill / Normalのいずれも進行させず、`expectedStateBefore` には予約武器が存在せず、`expectedStateAfter.ownedWeaponsHash` には追加後の在庫を反映する
 - 予約IDは後続 `use_weapon_as_material` から同じ武器を参照するために使用してよいが、Step確定前にDBへ追加せず、BuildRouteへ未来OwnedWeapon IDを入れない
 - `create_material_gogma` は既存PracticalをMaterial / unprotectedへ変える `change_owned_weapon_status`、Target候補を確保する `reserve_weapon` と役割を分ける
 - `reserve_weapon` は結果確認だけの `confirm_result` と異なり、Target候補をInventoryへ正式確保してTargetSatisfactionを更新する
-- `normal_artian_to_gogma` のreserveは予約した新IDでGogmaを追加し、Candidate categoryに対応するstatus、protected、Candidate完成結果、Target参照を保持する
-- `owned_normal_artian_to_gogma` のconvert Stepは元Normal IDをInventoryから削除し、変換後Gogmaをまだ登録しない。後続Reset SkillsはsourceOwnedWeaponId = nullを維持する
+- `normal_artian_to_gogma` のreserveは予約した新IDでGogmaを追加し、Candidate categoryに対応するstatus、protected、CandidateのfinalBonusScopeを含む完成結果、Target参照を保持する
+- `owned_normal_artian_to_gogma` のconvert Stepは元Normal IDをInventoryから削除し、変換後Gogmaをまだ登録しない。後続Reset / Keep / Reset SkillsはsourceOwnedWeaponId = nullを維持する
 - `owned_normal_artian_to_gogma` のreserveは元Normalを再削除せず、別の予約IDでGogmaだけを追加する。元IDのkind変更では表現しない
 - `existing_gogma_*` のreserveは新規追加せず、Route sourceと同じGogma IDをCandidate結果、status、protected、Target参照で更新する。既存Target参照とcreatedAtを失わない
 - reserveによるInventoryChangeはexpectedStateBefore / expectedStateAfterへ反映し、relatedTargetWeaponIdsへTarget IDを重複なく追加する
@@ -995,6 +1001,7 @@ export interface PlanStep {
 
 ```ts
 export interface ExpectedResult {
+  restorationBonusScope: ArtianBonusScope | null;
   restorationBonuses: RestorationBonusSet | null;
   seriesSkillId: SeriesSkillId | null;
   groupSkillId: GroupSkillId | null;
@@ -1003,6 +1010,10 @@ export interface ExpectedResult {
   shouldSecure: boolean;
 }
 ```
+
+Counter deltaの正式契約はcreate normalがNormal +1 / forge、conversionがSkill +1、Reset SkillsがSkill +1、Reset Bonuses / Keep BonusesがGogma +1である。conversionのGogma deltaは0とする。PRNG内部10 stepをDomain Counter deltaへ入れない。
+
+`convert_normal_to_gogma` のExpectedResultは、変換元Normalからslot順のまま継承した `restorationBonusScope = "normal_artian"` の5枠と、変換時のSkill Predictionで付与された初回Series Skill / Group Skillを同時に保持する。Reset Bonuses結果は `restorationBonusScope = "gogma_artian"`、Keep Bonuses結果も `gogma_artian` とする。
 
 ## 11.5 InventoryChange
 
@@ -1068,6 +1079,8 @@ export interface PlanConflict {
 - same_skill_counter: kind、Skill Counter位置、BuildListEntry IDs
 - same_normal_counter: kind、NormalArtianCounter ID、Normal Counter位置、BuildListEntry IDs
 - same_owned_weapon_consumed: kind、OwnedWeapon ID、BuildListEntry IDs
+
+`convert_normal_to_gogma` はsame_skill_counterの位置を使用し、same_gogma_counterへ分類しない。same_gogma_counterはReset Bonuses / Keep Bonusesが同じGogma位置を排他的に必要とする場合に使用する。
 
 同じ論理競合は再Plannerでも同じID、位置・参加Entry・対象資源が変われば別IDになる。
 第9の競合適用時はconflictKeyが再検出した競合と一致し、selectedBuildListEntryIdがその
@@ -1289,6 +1302,14 @@ type Migration = (input: unknown) => unknown;
 - migration前後のfixture testを必ず作成する
 - 破壊的変更では旧データを読み捨てず、可能な限り変換する
 
+Production RNG契約切替時の互換性は次のとおりとする。
+
+- conversionのGogma Counter進行、巨戟化時のbonus再抽選、Keep selectionのいずれかを含む旧契約のBuildCandidate / BuildListEntry Candidate Snapshotは、新契約へ推測変換または再利用しない
+- 該当BuildCandidateはinvalid、該当BuildListEntryはstaleとして扱い、ユーザーへ再検索を要求する
+- TargetWeapon、OwnedWeapon、RngState、NormalArtianCounterなど、新契約でも意味を維持できるユーザーデータは不用意に削除しない。OwnedWeaponのscopeを一意に決定できない場合は推測migrationせず、実装フェーズで明示的な確認／移行方針を決める
+- ProductionPlanは本契約確定時点で永続化実装前のため、この変更のmigration対象外とする
+- 具体的なDexie schemaVersionとmigration手順は次のコード実装フェーズで決定する
+
 ---
 
 ## 16. 不変条件まとめ
@@ -1307,7 +1328,8 @@ type Migration = (input: unknown) => unknown;
 - PlanとExecutionHistoryは分離する
 - 保護武器をPlannerは素材消費・Reset Bonuses・Keep Bonusesへ使用しない
 - protected武器でもReset SkillsのみのRouteには使用できる
-- `normal_artian_to_gogma` Route内ではKeep Bonusesを実行しない
+- 通常→巨戟化はNormal bonus 5枠をslot順のまま継承し、Skill Counterだけを1進め、Normal / Gogma Counterを進めない
+- normal scopeの巨戟に対する最初のBonus amendmentはReset Bonusesだけを許可し、その後は同一Route内でもReset / Keepを許可する
 - 旧実用品の素材化予定は確認必須PlanStepとしてのみ表現する
 - v1でPlannerが旧Practicalの素材化を予定できるのは、同一TargetのIdealを先に確保済み、または同一Plan内の先行Stepで確保する場合だけ
 - Practical同士の優劣を理由とする自動素材化は行わない
@@ -1334,7 +1356,11 @@ type Migration = (input: unknown) => unknown;
 - `existing_gogma_reset_skills` のfinalBonusesが起点OwnedWeaponと一致し、Skill Prediction結果だけがスキルへ反映される
 - Reset Skills Routeの起点OwnedWeapon状態変更で `referencedOwnedWeaponsHash` が変わる
 - Skill Capability不足時は `existing_gogma_reset_skills` を生成しない
-- `normal_artian_to_gogma` のRouteOperation列にKeepBonusesOperationを含めない
+- `candidateOffset = 0` の通常候補Routeが1本forgeし、一般のoffset kでは `forgeCount = k + 1` となり、最後の1本だけを巨戟化する
+- CreateNormalArtianOperationの `normalCounterAfter = normalCounterBefore + count` と候補位置 `normalCounterBefore + count - 1` が一致する
+- conversion直後のExpectedResultがnormal scope 5枠と初回Series / Groupを保持する
+- normal scopeのtransient GogmaへKeep Bonusesを直接適用できず、最初のReset後だけKeepできる
+- transient GogmaのReset / Keep / Reset Skillsが `sourceOwnedWeaponId = null` で表現され、fake OwnedWeaponIdを生成しない
 - 巨戟化直後の未登録武器用OwnedWeaponIdを生成しない
 - TargetWeapon priority未指定時に3になる
 - NormalArtianCounter未確定時に通常経由検索から除外される
@@ -1374,7 +1400,7 @@ type Migration = (input: unknown) => unknown;
 - 同じ入力から同じPlanningInputSnapshot hashが生成される
 - 配列順が意味を持たない項目は安定ソートされる
 - `updatedAt` やmemoの変更だけではExpectedPlanState hashが変わらない
-- Route参照OwnedWeapon IDの入力順に依存せず、ID安定ソートと保存中のボーナス5枠順から決定的なHashが生成される
+- Route参照OwnedWeapon IDの入力順に依存せず、ID安定ソート、restorationBonusScope、保存中のボーナス5枠順から決定的なHashが生成される
 - CalculationContextのいずれかが変わると互換性判定が失敗する
 - OwnedWeapon変更で `ownedWeaponsHash` が変わる
 - OwnedWeaponのkind変更で `ownedWeaponsHash` と `referencedOwnedWeaponsHash` が変わる
