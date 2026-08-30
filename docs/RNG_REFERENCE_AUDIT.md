@@ -200,6 +200,12 @@ Normal seed自体にはelement/attributeを含めないが、pool選択には最
 
 参照のconfigured poolはweapon typeで分岐しない。Bowからfamily 7を除外せず、LBG/HBGのelement familyも除外しない。これは現行Master制約と衝突するが、参照repositoryだけから「参照実装が省略している」のか「現行Domain制約が誤り」なのかは確定できない。Production poolへ採用する前に実機fixtureで確認し、現行Domain制約を勝手に変更しない。
 
+固定commitのBow / Blast / `baseSeed=42` / `normalCounter=0` は lottery ID
+`[4, 8, 7, 4, 7]` を返す。現Domain/game restrictionではBowにfamily 7
+（Sharpness/Capacity）のsemantic対応がないため、このraw結果はDomain bonusへ
+推測変換してはならない。Bow Normal Predictionのgame verificationはpendingであり、
+ID 7を含むBow raw resultは明示的にunmappableとして扱う。
+
 ### 5.4 numeric ID namespace注意
 
 参照Luaには別namespaceがある。

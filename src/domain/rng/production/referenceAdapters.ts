@@ -46,6 +46,20 @@ const REFERENCE_ATTRIBUTE_FORCE_BY_ELEMENT_ID: Readonly<Record<string, number>> 
   'element.blast': 9,
 }
 
+/** The one-based reference final-attribute selector used only by Normal pools. */
+const REFERENCE_NORMAL_FINAL_ATTRIBUTE_BY_ELEMENT_ID: Readonly<Record<string, number>> = {
+  'element.none': 1,
+  'element.fire': 2,
+  'element.water': 3,
+  'element.thunder': 4,
+  'element.ice': 5,
+  'element.dragon': 6,
+  'element.poison': 7,
+  'element.paralysis': 8,
+  'element.sleep': 9,
+  'element.blast': 10,
+}
+
 function missingReferenceAdapterValue(kind: string, semanticId: string): never {
   throw new RangeError(`Unsupported ${kind} for reference RNG adapter: ${semanticId}`)
 }
@@ -63,6 +77,14 @@ export function toReferenceAttributeForce(elementId: ElementId): number {
   const mapped = REFERENCE_ATTRIBUTE_FORCE_BY_ELEMENT_ID[elementId]
   return mapped === undefined
     ? missingReferenceAdapterValue('element', elementId)
+    : mapped
+}
+
+/** Maps a semantic Domain ElementId to the Normal lottery's display attribute. */
+export function toReferenceNormalFinalAttribute(elementId: ElementId): number {
+  const mapped = REFERENCE_NORMAL_FINAL_ATTRIBUTE_BY_ELEMENT_ID[elementId]
+  return mapped === undefined
+    ? missingReferenceAdapterValue('Normal final attribute element', elementId)
     : mapped
 }
 
