@@ -12,6 +12,34 @@ export const GAME_VERIFIED_BOW_ELEMENTAL_NORMAL_CANDIDATES: readonly ReferenceNo
   { referenceId: 8, maximumOccurrences: 5 },
 ]
 
+/** Game-verified for an elementless rarity-8 Bow Normal Artian result. */
+export const GAME_VERIFIED_BOW_NONE_NORMAL_CANDIDATES: readonly ReferenceNormalCandidate[] = [
+  { referenceId: 6, maximumOccurrences: 5 },
+  { referenceId: 8, maximumOccurrences: 5 },
+]
+
+/** Game-verified for both elemental and elementless rarity-8 Light Bowgun results. */
+export const GAME_VERIFIED_LIGHT_BOWGUN_NORMAL_CANDIDATES: readonly ReferenceNormalCandidate[] = [
+  { referenceId: 6, maximumOccurrences: 5 },
+  { referenceId: 7, maximumOccurrences: 2 },
+  { referenceId: 8, maximumOccurrences: 5 },
+]
+
+/** Game-verified for an elemental rarity-8 Long Sword Normal Artian result. */
+export const GAME_VERIFIED_LONG_SWORD_ELEMENTAL_NORMAL_CANDIDATES: readonly ReferenceNormalCandidate[] = [
+  { referenceId: 6, maximumOccurrences: 5 },
+  { referenceId: 4, maximumOccurrences: 5 },
+  { referenceId: 7, maximumOccurrences: 2 },
+  { referenceId: 8, maximumOccurrences: 5 },
+]
+
+/** Game-verified for an elementless rarity-8 Long Sword Normal Artian result. */
+export const GAME_VERIFIED_LONG_SWORD_NONE_NORMAL_CANDIDATES: readonly ReferenceNormalCandidate[] = [
+  { referenceId: 6, maximumOccurrences: 5 },
+  { referenceId: 7, maximumOccurrences: 2 },
+  { referenceId: 8, maximumOccurrences: 5 },
+]
+
 /** Game verification has not established a Normal pool for this input. */
 export class UnsupportedGameVerifiedNormalPredictionError extends Error {
   constructor(weaponTypeId: WeaponTypeId, elementId: ElementId) {
@@ -21,7 +49,7 @@ export class UnsupportedGameVerifiedNormalPredictionError extends Error {
 }
 
 /**
- * Returns candidates only for the game-verified elemental Bow contract.
+ * Returns candidates only for an explicitly game-verified Normal pool.
  * Callers needing a reference-only result must use predictReferenceNormalRaw.
  */
 export function gameVerifiedNormalCandidatesForWeaponAndElement(
@@ -30,8 +58,18 @@ export function gameVerifiedNormalCandidatesForWeaponAndElement(
 ): readonly ReferenceNormalCandidate[] {
   toReferenceWeaponType(weaponTypeId)
   const finalAttribute = toReferenceNormalFinalAttribute(elementId)
-  if (weaponTypeId === 'weapon.bow' && finalAttribute !== 1) {
-    return GAME_VERIFIED_BOW_ELEMENTAL_NORMAL_CANDIDATES
+  switch (weaponTypeId) {
+    case 'weapon.bow':
+      return finalAttribute === 1
+        ? GAME_VERIFIED_BOW_NONE_NORMAL_CANDIDATES
+        : GAME_VERIFIED_BOW_ELEMENTAL_NORMAL_CANDIDATES
+    case 'weapon.light_bowgun':
+      return GAME_VERIFIED_LIGHT_BOWGUN_NORMAL_CANDIDATES
+    case 'weapon.long_sword':
+      return finalAttribute === 1
+        ? GAME_VERIFIED_LONG_SWORD_NONE_NORMAL_CANDIDATES
+        : GAME_VERIFIED_LONG_SWORD_ELEMENTAL_NORMAL_CANDIDATES
+    default:
+      throw new UnsupportedGameVerifiedNormalPredictionError(weaponTypeId, elementId)
   }
-  throw new UnsupportedGameVerifiedNormalPredictionError(weaponTypeId, elementId)
 }

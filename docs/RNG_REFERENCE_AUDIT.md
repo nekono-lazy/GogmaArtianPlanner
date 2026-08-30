@@ -206,18 +206,30 @@ Bowでもfamily 7を含むreference poolをそのまま保持する。現Domain�
 （Sharpness/Capacity）のsemantic対応がないため、このreference raw結果はDomain bonusへ
 推測変換してはならず、ID 7を含む結果は明示的にunmappableとして扱う。
 
-別途、game ruleとしてNormalの付与可能bonusは武器種と属性有無で分岐する。今回の
-**game-verified RNG parity** は、属性ありBow（属性種類では分岐しない）のcandidate pool
-`[6, 4, 8]` に限定する。実測fixtureは `baseSeed=51231782` / Fire Bow / display rarity 8 /
-Normal Counter 0, 1, 2 であり、実ゲーム15slotがこのpoolと完全一致した。PRNG、seed、
-100 mix、10-step blockを変えないreference full poolでは、開始Counter 0..5000のいずれにも
-同じ3本連続の完全一致はない。これはfamily 7を抽選後にskip/retryするのではなく、candidate
-pool自体から除外するgame-adjusted predictionの根拠である。
+別途、game ruleとしてNormalの付与可能bonusは武器種と属性有無で分岐する。C4-C時点の
+**game-verified Normal pool** は次の限定されたmatrixである。
 
-このgame-verified APIは属性ありBow以外を明示unsupportedとする。無属性の実ゲームRNG
-pool、LBG/HBGの実ゲームRNG pool補正、その他referenceとDomain制約が衝突する条件は
-未検証であり、reference-only結果をgame-verifiedとしてfallback返却してはならない。この
-観測はattribute-none Bow、全Bow、全game versionを確定するものではない。
+| Weapon | Attribute present | None |
+|---|---|---|
+| Bow | `[6, 4, 8]` | `[6, 8]` |
+| Light Bowgun | `[6, 7, 8]` | `[6, 7, 8]` |
+| Long Sword | `[6, 4, 7, 8]` | `[6, 7, 8]` |
+
+属性ありBowは属性種類では分岐しない。実測fixtureはすべて `baseSeed=51231782` / display
+rarity 8 / Normal Counter 0, 1, 2 である。Fire Bow（C4-B）、Bow none、Light Bowgun
+Fire/none、Long Sword Fire/noneの5追加条件・75slotは、PRNG、seed、100 mix、10-step
+block、family 7上限、raw値のskip/retryを変えずcandidate poolだけで実ゲーム観測と完全一致
+した。LBG Fireとnoneは同じ15slotであり、LBGのNormal poolにfamily 4は含まれない。
+
+reference full poolでは、Fire Bowの開始Counter 0..5000に同じ3本連続の完全一致はない。
+この差異はfamily 7を抽選後にskip/retryするのではなく、candidate pool自体から除外する
+game-adjusted predictionの根拠である。reference-verified poolとgame-verified poolは別に
+維持する。
+
+このgame-verified APIは上表以外を明示unsupportedとする。HBG、その他の近接武器、その他
+referenceとDomain制約が衝突する条件の実ゲームRNG poolは未検証であり、reference-only結果を
+game-verifiedとしてfallback返却してはならない。この観測は全weapon・全game versionを確定
+するものではない。
 
 ### 5.4 numeric ID namespace注意
 

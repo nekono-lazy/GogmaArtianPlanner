@@ -1,8 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { gameVerifiedBowElementalNormalVectors } from '../../../test/fixtures/gameVerifiedNormalVectors'
+import {
+  gameVerifiedBowElementalNormalVectors,
+  gameVerifiedBowNoneNormalVectors,
+  gameVerifiedLightBowgunFireNormalVectors,
+  gameVerifiedLightBowgunNoneNormalVectors,
+  gameVerifiedLongSwordFireNormalVectors,
+  gameVerifiedLongSwordNoneNormalVectors,
+} from '../../../test/fixtures/gameVerifiedNormalVectors'
 import { referenceNormalVectors } from '../../../test/fixtures/referenceNormalVectors'
 import {
   GAME_VERIFIED_BOW_ELEMENTAL_NORMAL_CANDIDATES,
+  GAME_VERIFIED_BOW_NONE_NORMAL_CANDIDATES,
+  GAME_VERIFIED_LIGHT_BOWGUN_NORMAL_CANDIDATES,
+  GAME_VERIFIED_LONG_SWORD_ELEMENTAL_NORMAL_CANDIDATES,
+  GAME_VERIFIED_LONG_SWORD_NONE_NORMAL_CANDIDATES,
   gameVerifiedNormalCandidatesForWeaponAndElement,
   mapReferenceNormalResult,
   predictGameVerifiedNormalArtian,
@@ -61,6 +72,61 @@ describe('reference-verified Production Normal Artian prediction', () => {
     }
   })
 
+  it('matches every C4-C game-observed Normal result with no RNG change beyond the candidate pool', () => {
+    for (const vectors of [
+      gameVerifiedBowNoneNormalVectors,
+      gameVerifiedLightBowgunFireNormalVectors,
+      gameVerifiedLightBowgunNoneNormalVectors,
+      gameVerifiedLongSwordFireNormalVectors,
+      gameVerifiedLongSwordNoneNormalVectors,
+    ]) {
+      for (const vector of vectors) {
+        expect(predictGameVerifiedNormalRaw(vector).referenceIds).toEqual(vector.gameLotteryIds)
+        expect(predictGameVerifiedNormalArtian(vector)).toEqual(vector.bonuses)
+      }
+    }
+  })
+
+  it('uses exactly the six observed game-verified pool contracts', () => {
+    expect(GAME_VERIFIED_BOW_NONE_NORMAL_CANDIDATES).toEqual([
+      { referenceId: 6, maximumOccurrences: 5 },
+      { referenceId: 8, maximumOccurrences: 5 },
+    ])
+    expect(gameVerifiedNormalCandidatesForWeaponAndElement('weapon.bow', 'element.none'))
+      .toBe(GAME_VERIFIED_BOW_NONE_NORMAL_CANDIDATES)
+    expect(gameVerifiedNormalCandidatesForWeaponAndElement('weapon.light_bowgun', 'element.fire'))
+      .toBe(GAME_VERIFIED_LIGHT_BOWGUN_NORMAL_CANDIDATES)
+    expect(gameVerifiedNormalCandidatesForWeaponAndElement('weapon.light_bowgun', 'element.none'))
+      .toBe(GAME_VERIFIED_LIGHT_BOWGUN_NORMAL_CANDIDATES)
+    expect(gameVerifiedNormalCandidatesForWeaponAndElement('weapon.long_sword', 'element.fire'))
+      .toBe(GAME_VERIFIED_LONG_SWORD_ELEMENTAL_NORMAL_CANDIDATES)
+    expect(gameVerifiedNormalCandidatesForWeaponAndElement('weapon.long_sword', 'element.none'))
+      .toBe(GAME_VERIFIED_LONG_SWORD_NONE_NORMAL_CANDIDATES)
+  })
+
+  it('keeps Light Bowgun Fire and none identical, with no Element family', () => {
+    expect(gameVerifiedLightBowgunFireNormalVectors.map((vector) => vector.gameLotteryIds))
+      .toEqual(gameVerifiedLightBowgunNoneNormalVectors.map((vector) => vector.gameLotteryIds))
+    for (const vector of [...gameVerifiedLightBowgunFireNormalVectors, ...gameVerifiedLightBowgunNoneNormalVectors]) {
+      expect(predictGameVerifiedNormalRaw(vector).referenceIds).not.toContain(4)
+    }
+  })
+
+  it('keeps Bow none free from Element and family 7', () => {
+    for (const vector of gameVerifiedBowNoneNormalVectors) {
+      const result = predictGameVerifiedNormalRaw(vector).referenceIds
+      expect(result).not.toContain(4)
+      expect(result).not.toContain(7)
+    }
+  })
+
+  it('keeps both Long Sword conditions in reference parity', () => {
+    for (const vector of [...gameVerifiedLongSwordFireNormalVectors, ...gameVerifiedLongSwordNoneNormalVectors]) {
+      expect(predictGameVerifiedNormalRaw(vector).referenceIds).toEqual(vector.gameLotteryIds)
+      expect(predictReferenceNormalRaw(vector).referenceIds).toEqual(vector.gameLotteryIds)
+    }
+  })
+
   it('uses one game-verified candidate pool for every attribute-present Bow element', () => {
     for (const elementId of [
       'element.fire', 'element.water', 'element.thunder', 'element.ice', 'element.dragon',
@@ -71,13 +137,13 @@ describe('reference-verified Production Normal Artian prediction', () => {
     }
   })
 
-  it('rejects attribute-none Bow and LBG/HBG instead of returning a reference fallback as game-verified', () => {
+  it('rejects HBG and unobserved weapon types instead of returning a reference fallback as game-verified', () => {
     const input = gameVerifiedBowElementalNormalVectors[0]
-    expect(() => predictGameVerifiedNormalRaw({ ...input, elementId: 'element.none' }))
-      .toThrow(UnsupportedGameVerifiedNormalPredictionError)
-    expect(() => predictGameVerifiedNormalRaw({ ...input, weaponTypeId: 'weapon.light_bowgun' }))
-      .toThrow(UnsupportedGameVerifiedNormalPredictionError)
     expect(() => predictGameVerifiedNormalRaw({ ...input, weaponTypeId: 'weapon.heavy_bowgun' }))
+      .toThrow(UnsupportedGameVerifiedNormalPredictionError)
+    expect(() => predictGameVerifiedNormalRaw({ ...input, weaponTypeId: 'weapon.great_sword' }))
+      .toThrow(UnsupportedGameVerifiedNormalPredictionError)
+    expect(() => predictGameVerifiedNormalRaw({ ...input, weaponTypeId: 'weapon.sword_and_shield' }))
       .toThrow(UnsupportedGameVerifiedNormalPredictionError)
   })
 

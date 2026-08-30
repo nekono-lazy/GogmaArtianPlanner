@@ -22,6 +22,8 @@ function set(
 const attack = bonus('bonus_type.attack')
 const affinity = bonus('bonus_type.affinity')
 const element = bonus('bonus_type.element')
+const sharpness = bonus('bonus_type.normal_sharpness')
+const capacity = bonus('bonus_type.normal_capacity')
 
 export const gameVerifiedBowElementalNormalVectors = [
   {
@@ -53,5 +55,81 @@ export const gameVerifiedBowElementalNormalVectors = [
     referenceIds: [8, 6, 6, 4, 7],
     gameLotteryIds: [6, 6, 4, 4, 8],
     bonuses: set(attack, attack, element, element, affinity),
+  },
+] as const
+
+/** Additional game-observed C4-C Normal Artian results at Base Seed 51231782. */
+export const gameVerifiedBowNoneNormalVectors = [
+  {
+    baseSeed: 51231782, weaponTypeId: 'weapon.bow', elementId: 'element.none', rarity: 8, normalCounter: 0,
+    gameLotteryIds: [8, 8, 6, 6, 8], bonuses: set(affinity, affinity, attack, attack, affinity),
+  },
+  {
+    baseSeed: 51231782, weaponTypeId: 'weapon.bow', elementId: 'element.none', rarity: 8, normalCounter: 1,
+    gameLotteryIds: [8, 8, 6, 6, 6], bonuses: set(affinity, affinity, attack, attack, attack),
+  },
+  {
+    baseSeed: 51231782, weaponTypeId: 'weapon.bow', elementId: 'element.none', rarity: 8, normalCounter: 2,
+    gameLotteryIds: [8, 6, 6, 8, 6], bonuses: set(affinity, attack, attack, affinity, attack),
+  },
+] as const
+
+export const gameVerifiedLightBowgunFireNormalVectors = [
+  {
+    baseSeed: 51231782, weaponTypeId: 'weapon.light_bowgun', elementId: 'element.fire', rarity: 8, normalCounter: 0,
+    gameLotteryIds: [8, 8, 7, 7, 8], bonuses: set(affinity, affinity, capacity, capacity, affinity),
+  },
+  {
+    baseSeed: 51231782, weaponTypeId: 'weapon.light_bowgun', elementId: 'element.fire', rarity: 8, normalCounter: 1,
+    gameLotteryIds: [7, 8, 8, 6, 6], bonuses: set(capacity, affinity, affinity, attack, attack),
+  },
+  {
+    baseSeed: 51231782, weaponTypeId: 'weapon.light_bowgun', elementId: 'element.fire', rarity: 8, normalCounter: 2,
+    gameLotteryIds: [7, 6, 7, 6, 6], bonuses: set(capacity, attack, capacity, attack, attack),
+  },
+] as const
+
+export const gameVerifiedLightBowgunNoneNormalVectors = [
+  {
+    baseSeed: 51231782, weaponTypeId: 'weapon.light_bowgun', elementId: 'element.none', rarity: 8, normalCounter: 0,
+    gameLotteryIds: [8, 8, 7, 7, 8], bonuses: set(affinity, affinity, capacity, capacity, affinity),
+  },
+  {
+    baseSeed: 51231782, weaponTypeId: 'weapon.light_bowgun', elementId: 'element.none', rarity: 8, normalCounter: 1,
+    gameLotteryIds: [7, 8, 8, 6, 6], bonuses: set(capacity, affinity, affinity, attack, attack),
+  },
+  {
+    baseSeed: 51231782, weaponTypeId: 'weapon.light_bowgun', elementId: 'element.none', rarity: 8, normalCounter: 2,
+    gameLotteryIds: [7, 6, 7, 6, 6], bonuses: set(capacity, attack, capacity, attack, attack),
+  },
+] as const
+
+export const gameVerifiedLongSwordFireNormalVectors = [
+  {
+    baseSeed: 51231782, weaponTypeId: 'weapon.long_sword', elementId: 'element.fire', rarity: 8, normalCounter: 0,
+    gameLotteryIds: [7, 6, 8, 6, 4], bonuses: set(sharpness, attack, affinity, attack, element),
+  },
+  {
+    baseSeed: 51231782, weaponTypeId: 'weapon.long_sword', elementId: 'element.fire', rarity: 8, normalCounter: 1,
+    gameLotteryIds: [4, 7, 6, 7, 8], bonuses: set(element, sharpness, attack, sharpness, affinity),
+  },
+  {
+    baseSeed: 51231782, weaponTypeId: 'weapon.long_sword', elementId: 'element.fire', rarity: 8, normalCounter: 2,
+    gameLotteryIds: [6, 8, 7, 4, 7], bonuses: set(attack, affinity, sharpness, element, sharpness),
+  },
+] as const
+
+export const gameVerifiedLongSwordNoneNormalVectors = [
+  {
+    baseSeed: 51231782, weaponTypeId: 'weapon.long_sword', elementId: 'element.none', rarity: 8, normalCounter: 0,
+    gameLotteryIds: [7, 6, 6, 7, 8], bonuses: set(sharpness, attack, attack, sharpness, affinity),
+  },
+  {
+    baseSeed: 51231782, weaponTypeId: 'weapon.long_sword', elementId: 'element.none', rarity: 8, normalCounter: 1,
+    gameLotteryIds: [7, 7, 6, 6, 8], bonuses: set(sharpness, sharpness, attack, attack, affinity),
+  },
+  {
+    baseSeed: 51231782, weaponTypeId: 'weapon.long_sword', elementId: 'element.none', rarity: 8, normalCounter: 2,
+    gameLotteryIds: [6, 6, 6, 6, 7], bonuses: set(attack, attack, attack, attack, sharpness),
   },
 ] as const
