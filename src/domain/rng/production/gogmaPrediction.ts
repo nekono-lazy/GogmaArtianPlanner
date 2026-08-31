@@ -1,4 +1,5 @@
 import type { ElementId, RestorationBonusSet, WeaponTypeId } from '../../models/publicTypes'
+import { gameAdjustedGogmaResetCandidatesForWeaponAndElement } from './gameGogmaBonuses'
 import { readReferenceRngBlock } from './referencePrng'
 import {
   REFERENCE_GOGMA_RESET_CANDIDATES,
@@ -73,6 +74,25 @@ export function predictReferenceGogmaReset(input: ReferenceGogmaPredictionInput)
   const { effectiveBlock, rawValues } = referenceGogmaBlock(input)
   return {
     bonuses: predictReferenceGogmaSlots(rawValues, () => REFERENCE_GOGMA_RESET_CANDIDATES),
+    effectiveBlock,
+  }
+}
+
+/**
+ * Applies the game-verified pre-draw availability filtering behavior to the fixed reference
+ * Reset table, using formal Gogma-scope Master availability without changing
+ * seed derivation, block consumption, draw order, or repeat penalties.
+ */
+export function predictGameAdjustedGogmaReset(
+  input: ReferenceGogmaPredictionInput,
+): ReferenceGogmaPredictionResult {
+  const { effectiveBlock, rawValues } = referenceGogmaBlock(input)
+  const candidates = gameAdjustedGogmaResetCandidatesForWeaponAndElement(
+    input.weaponTypeId,
+    input.elementId,
+  )
+  return {
+    bonuses: predictReferenceGogmaSlots(rawValues, () => candidates),
     effectiveBlock,
   }
 }

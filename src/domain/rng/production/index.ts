@@ -1,5 +1,6 @@
 export * from './baseSeed'
 export * from './gogmaPrediction'
+export * from './gameGogmaBonuses'
 export * from './gameNormalBonuses'
 export * from './normalPrediction'
 export * from './referenceAdapters'

@@ -432,7 +432,33 @@ weight = max(0, 100 - n * repeatPenalty(id))
 
 `w % totalWeight` を候補順に減算して選択する。penaltyはfamily単位ではなくexact tier ID単位。いずれのIDも最大2回までだが、EXの2回目はweight 20、非EXの2回目はweight 50になる。
 
-参照実装のGogma poolはweapon/elementで候補を除外しない。noneでもElement、BowでもSharpness/Ammo、LBG/HBGでもElementが候補に残る。Current `WeaponBonusDefinition` はこれらを無効とするため衝突する。どちらを正すべきかは参照repositoryだけでは確定不能であり、Production採用前のfixture確認事項である。
+固定reference repository単独では、Gogma poolはweapon/elementで候補を除外しない。noneでもElement、BowでもSharpness/Ammo、LBG/HBGでもElementが候補に残る。Current `WeaponBonusDefinition` はこれらを無効とするため、reference repositoryだけではどちらを採用すべきか未確定だった。後続の実ゲームfixtureとProduction game-adjusted predictorでの扱いは10.4に記録する。
+
+### 10.4 Game-verified Reset availability filtering / Keep parity
+
+Gogma Resetの固定reference candidate順は `[8, 12, 15, 9, 13, 16, 11, 14, 6, 10]`
+のまま維持する。実ゲームfixtureでは、`WeaponBonusDefinition` のweapon type / element /
+`gogma_artian` scope availabilityで使用不能なcandidateを**weighted draw前**にfilterすると、
+同じseed、raw値、repeat penalty、slot順で一致した。これはretry、candidate replacement、ID置換、
+候補並べ替えではない。
+
+| Observed condition | Counter | Filtered IDs | Game result IDs |
+|---|---:|---|---|
+| Bow / Fire | 55 | `6, 10` | `[8, 9, 16, 11, 14]` |
+| Bow / none | 55 | `11, 14, 6, 10` | `[12, 13, 9, 13, 15]` |
+| LBG / Fire | 56 | `11, 14` | `[13, 12, 6, 9, 8]` |
+| HBG / Fire | 56 | `11, 14` | `[13, 10, 8, 8, 15]` |
+| Long Sword / none | 55 | `11, 14` | `[10, 15, 9, 13, 6]` |
+
+この5条件はgame-verified fixtureである。一方、同じMaster availability filterを未観測の
+weapon/elementへ適用することはDomain availabilityに基づくgame-adjusted generalizationであり、
+全weapon・全attribute・全game versionのgame verificationを意味しない。C3のPRNG、seed、100 mix、
+10-step block、Counter Gate、weighted draw、exact-ID repeat penalty、slot順は変更不要だった。
+
+Bow / FireでCounter 55 Reset後の `[8, 9, 16, 11, 14]` をcurrent ordered slotsとしてCounter 56で
+Keepした実ゲーム結果は `[8, 13, 16, 11, 11]` であり、C3 `predictReferenceGogmaKeep` が5slot完全一致した。
+Keepはslot family固定・family内tier再抽選のままとし、未確認の使用不能family current inputへの
+filter/retry/replacementは追加しない。
 
 Current Gogma MasterにはAttack/Affinity/Elementのrank Iも存在するが、参照Reset/Keep poolにはない。参照上、巨戟化直後は通常tierをそのまま持ち、rank Iへ変換しない。
 

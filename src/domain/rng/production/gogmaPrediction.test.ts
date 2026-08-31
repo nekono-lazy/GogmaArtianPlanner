@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest'
 import type { RestorationBonusSet } from '../../models/publicTypes'
 import { referenceGogmaVectors } from '../../../test/fixtures/referenceGogmaVectors'
 import {
+  gameVerifiedGogmaKeepVector,
+  gameVerifiedGogmaResetVectors,
+} from '../../../test/fixtures/gameVerifiedGogmaVectors'
+import {
   REFERENCE_GOGMA_COUNTER_GATE_THRESHOLD,
+  predictGameAdjustedGogmaReset,
   predictReferenceGogmaKeep,
   predictReferenceGogmaReset,
 } from './gogmaPrediction'
@@ -13,6 +18,7 @@ import {
   referenceGogmaKeepFamilyCandidates,
   restorationBonusFromReferenceGogmaId,
 } from './referenceGogmaBonuses'
+import { gameAdjustedGogmaResetCandidatesForWeaponAndElement } from './gameGogmaBonuses'
 import { buildReferenceWeightedGogmaPool } from './weightedDraw'
 
 function familyLayout(bonuses: RestorationBonusSet): string[] {
@@ -67,6 +73,26 @@ describe('reference-verified Production Gogma Reset / Keep prediction', () => {
     }
   })
 
+  it('matches every game-observed Reset with Master-availability filtering before weighted draws', () => {
+    for (const vector of gameVerifiedGogmaResetVectors) {
+      expect(gameAdjustedGogmaResetCandidatesForWeaponAndElement(vector.weaponTypeId, vector.elementId)
+        .map((candidate) => candidate.referenceId)).toEqual(vector.candidateIds)
+      const result = predictGameAdjustedGogmaReset(vector)
+      expect(result.bonuses).toEqual(vector.bonuses)
+      expect(result.bonuses.map(referenceGogmaIdFromRestorationBonus)).toEqual(vector.referenceIds)
+      expect(result.effectiveBlock).toBe(vector.gogmaCounter)
+    }
+  })
+
+  it('preserves reference candidate order and applies exact-ID penalties after availability filtering', () => {
+    const candidates = gameAdjustedGogmaResetCandidatesForWeaponAndElement('weapon.light_bowgun', 'element.fire')
+    expect(candidates.map((candidate) => candidate.referenceId)).toEqual([8, 12, 15, 9, 13, 16, 6, 10])
+    const afterOne = buildReferenceWeightedGogmaPool(candidates, [8, 15])
+    expect(afterOne.find((entry) => entry.bonus.referenceId === 8)?.weight).toBe(50)
+    expect(afterOne.find((entry) => entry.bonus.referenceId === 15)?.weight).toBe(20)
+    expect(afterOne.some((entry) => entry.bonus.referenceId === 11 || entry.bonus.referenceId === 14)).toBe(false)
+  })
+
   it('matches independent Keep golden vectors with preserved ordered families', () => {
     for (const vector of referenceGogmaVectors.keeps) {
       const result = predictReferenceGogmaKeep(vector)
@@ -76,6 +102,15 @@ describe('reference-verified Production Gogma Reset / Keep prediction', () => {
       })
       expect(familyLayout(result.bonuses)).toEqual(familyLayout(vector.currentBonuses))
     }
+  })
+
+  it('matches the game-observed Bow Fire Keep without changing C3 Keep semantics', () => {
+    const vector = gameVerifiedGogmaKeepVector
+    const result = predictReferenceGogmaKeep(vector)
+    expect(result.bonuses).toEqual(vector.bonuses)
+    expect(result.bonuses.map(referenceGogmaIdFromRestorationBonus)).toEqual(vector.referenceIds)
+    expect(familyLayout(result.bonuses)).toEqual(familyLayout(vector.currentBonuses))
+    expect(result.effectiveBlock).toBe(56)
   })
 
   it.each([0, 34])('uses Gogma block zero below Gate %i for Reset and Keep', (counterGate) => {
