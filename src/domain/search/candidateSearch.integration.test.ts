@@ -372,7 +372,7 @@ describe('Candidate Search routes', () => {
     )).toBe(false)
   })
 
-  it('reports Existing Gogma Mixed as searched only when Skill or Keep can extend Reset', async () => {
+  it('reports Existing Gogma Mixed as searched only when a concrete mixed operation sequence is explored', async () => {
     const neitherInput = createCandidateSearchInput()
     neitherInput.routeFilter = 'existing_gogma'
     neitherInput.ownedWeapons[0].isProtected = false
@@ -415,9 +415,13 @@ describe('Candidate Search routes', () => {
     const keepEngine = createCandidateSearchEngine(keepInput, { keepSupported: true })
     keepEngine.capabilities.supportsSkillPrediction = false
     const keep = await searchCandidates(keepInput, keepEngine, deterministicExecution)
-    expect(keep.targetResults[0].searchedRoutes).toContain(
-      'existing_gogma_mixed',
-    )
+    expect(keep.targetResults[0].searchedRoutes).toContain('existing_gogma_reset_bonuses')
+    expect(keep.targetResults[0].searchedRoutes).toContain('existing_gogma_keep_bonuses')
+    expect(keep.targetResults[0].searchedRoutes).not.toContain('existing_gogma_mixed')
+    expect(keep.targetResults[0].skippedRoutes).toContainEqual(expect.objectContaining({
+      route: 'existing_gogma_mixed',
+      reason: 'skill_prediction_unsupported',
+    }))
   })
 
   it('generates Reset Bonuses only from an unprotected source and uses Engine output', async () => {

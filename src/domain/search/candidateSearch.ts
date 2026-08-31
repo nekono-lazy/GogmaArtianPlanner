@@ -8,6 +8,7 @@ import {
 import { searchExistingGogmaRoutes } from './existingGogmaRouteSearch'
 import { searchNormalArtianRoutes } from './normalArtianRouteSearch'
 import { searchOwnedNormalArtianRoutes } from './ownedNormalArtianRouteSearch'
+import { createSearchPredictionSupport } from './routeSearchShared'
 import {
   createSearchExecutionContext,
   type CandidateSearchExecutionOptions,
@@ -126,6 +127,14 @@ async function searchTarget(
     }
   }
 
+  const routeContext = {
+    target,
+    input,
+    engine,
+    execution,
+    predictionSupport: createSearchPredictionSupport(engine, target, input.master),
+  }
+
   if (input.routeFilter === 'existing_gogma') {
     skippedRoutes.push(...normalRouteKinds.map((route) => ({
       route,
@@ -133,22 +142,12 @@ async function searchTarget(
       detail: 'Normal Artian routes are disabled by routeFilter.',
     } as const)))
   } else {
-    const normalResult = await searchNormalArtianRoutes({
-      target,
-      input,
-      engine,
-      execution,
-    })
+    const normalResult = await searchNormalArtianRoutes(routeContext)
     candidates.push(...normalResult.candidates)
     searchedRoutes.push(...normalResult.searchedRoutes)
     skippedRoutes.push(...normalResult.skippedRoutes)
     warnings.push(...normalResult.warnings)
-    const ownedNormalResult = await searchOwnedNormalArtianRoutes({
-      target,
-      input,
-      engine,
-      execution,
-    })
+    const ownedNormalResult = await searchOwnedNormalArtianRoutes(routeContext)
     candidates.push(...ownedNormalResult.candidates)
     searchedRoutes.push(...ownedNormalResult.searchedRoutes)
     skippedRoutes.push(...ownedNormalResult.skippedRoutes)
@@ -162,12 +161,7 @@ async function searchTarget(
       detail: 'Existing Gogma routes are disabled by routeFilter.',
     } as const)))
   } else {
-    const existingResult = await searchExistingGogmaRoutes({
-      target,
-      input,
-      engine,
-      execution,
-    })
+    const existingResult = await searchExistingGogmaRoutes(routeContext)
     candidates.push(...existingResult.candidates)
     searchedRoutes.push(...existingResult.searchedRoutes)
     skippedRoutes.push(...existingResult.skippedRoutes)

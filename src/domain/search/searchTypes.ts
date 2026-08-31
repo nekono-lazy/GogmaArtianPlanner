@@ -12,10 +12,13 @@ import type {
   TargetWeaponId,
 } from '../models/publicTypes'
 import type {
+  BonusTypeMaster,
   BonusRankMaster,
+  ElementMaster,
   LotteryMaster,
   MaterialCostMaster,
   WeaponBonusDefinition,
+  WeaponTypeMaster,
 } from '../master/masterTypes'
 
 export type CandidateRouteFilter = 'all' | 'normal_artian' | 'existing_gogma'
@@ -39,6 +42,9 @@ export const defaultCandidateSearchSettings: CandidateSearchSettings = {
 
 export interface SearchMasterSubset {
   weaponBonusDefinitions: WeaponBonusDefinition[]
+  weaponTypes: WeaponTypeMaster[]
+  elements: ElementMaster[]
+  bonusTypes: BonusTypeMaster[]
   bonusRanks: BonusRankMaster[]
   lotteries: LotteryMaster[]
   materialCosts: MaterialCostMaster[]

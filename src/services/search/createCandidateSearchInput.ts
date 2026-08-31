@@ -65,6 +65,9 @@ export async function createCandidateSearchInput(
     settings: { ...options.settings },
     master: {
       weaponBonusDefinitions: options.master.weaponBonusDefinitions,
+      weaponTypes: options.master.weaponTypes,
+      elements: options.master.elements,
+      bonusTypes: options.master.bonusTypes,
       bonusRanks: options.master.bonusRanks,
       lotteries: options.master.lotteries,
       materialCosts: options.master.materialCosts,

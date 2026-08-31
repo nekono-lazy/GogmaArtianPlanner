@@ -9,7 +9,12 @@ import type {
   SeriesSkillId,
   TargetWeapon,
 } from '../models/publicTypes'
-import type { RngEngine } from '../rng/rngEngine'
+import { V1_NORMAL_ARTIAN_RARITY } from '../models/publicTypes'
+import type {
+  RngEngine,
+  RngPredictionSupport,
+  RngPredictionUnsupportedReason,
+} from '../rng/rngEngine'
 import { createCandidateFromPrediction } from './candidateFactory'
 import type { SearchExecutionContext } from './searchExecution'
 import type { CandidateSearchInput, CandidateSearchWarning, SkippedRoute } from './searchTypes'
@@ -27,6 +32,58 @@ export interface RouteSearchContext {
   input: CandidateSearchInput
   engine: RngEngine
   execution: SearchExecutionContext
+  predictionSupport: SearchPredictionSupport
+}
+
+export interface SearchPredictionSupport {
+  normalArtian(): RngPredictionSupport
+  skill(): RngPredictionSupport
+  gogmaReset(): RngPredictionSupport
+  gogmaKeep(currentBonuses: RestorationBonusSet): RngPredictionSupport
+}
+
+export function createSearchPredictionSupport(
+  engine: RngEngine,
+  target: TargetWeapon,
+  master: CandidateSearchInput['master'],
+): SearchPredictionSupport {
+  let normalArtian: RngPredictionSupport | null = null
+  let skill: RngPredictionSupport | null = null
+  let gogmaReset: RngPredictionSupport | null = null
+  const gogmaKeep = new Map<string, RngPredictionSupport>()
+
+  return {
+    normalArtian: () => normalArtian ??= engine.getPredictionSupport({
+      type: 'normal_artian',
+      weaponTypeId: target.weaponTypeId,
+      elementId: target.elementId,
+      rarity: V1_NORMAL_ARTIAN_RARITY,
+    }),
+    skill: () => skill ??= engine.getPredictionSupport({
+      type: 'skill',
+      weaponTypeId: target.weaponTypeId,
+      elementId: target.elementId,
+    }),
+    gogmaReset: () => gogmaReset ??= engine.getPredictionSupport({
+      type: 'gogma_reset',
+      weaponTypeId: target.weaponTypeId,
+      elementId: target.elementId,
+      master,
+    }),
+    gogmaKeep: (currentBonuses) => {
+      const key = stableStringify(currentBonuses)
+      const cached = gogmaKeep.get(key)
+      if (cached) return cached
+      const support = engine.getPredictionSupport({
+        type: 'gogma_keep',
+        weaponTypeId: target.weaponTypeId,
+        elementId: target.elementId,
+        currentBonuses,
+      })
+      gogmaKeep.set(key, support)
+      return support
+    },
+  }
 }
 
 export interface SkillVariantBase {
@@ -77,6 +134,8 @@ export async function searchResetSkillVariants(
     counterGate === null ||
     start === null
   ) return []
+  if (!engine.capabilities.supportsSkillPrediction) return []
+  if (!context.predictionSupport.skill().supported) return []
 
   const resetSource = base.resetSkillsSourceOwnedWeaponId === undefined
     ? base.sourceOwnedWeaponId
@@ -130,11 +189,20 @@ export async function searchResetSkillVariants(
 export async function searchBonusAmendmentVariants(
   context: RouteSearchContext,
   base: AmendmentSearchBase,
-): Promise<BuildCandidate[]> {
+): Promise<BonusAmendmentSearchResult> {
   const { engine, execution, input, target } = context
   const baseSeed = input.rngState.baseSeed.value
   const counterGate = input.rngState.counterGate.value
-  if (baseSeed === null || counterGate === null) return []
+  const emptyResult = (): BonusAmendmentSearchResult => ({
+    candidates: [],
+    searchedRoutes: [],
+    unsupportedPredictions: [],
+  })
+  if (
+    baseSeed === null ||
+    counterGate === null ||
+    !engine.capabilities.supportsGogmaPrediction
+  ) return emptyResult()
 
   type State = {
     bonuses: RestorationBonusSet
@@ -165,6 +233,8 @@ export async function searchBonusAmendmentVariants(
     operations: [...base.operations],
   }]
   const candidates: BuildCandidate[] = []
+  const searchedRoutes = new Set<BuildRoute['kind']>()
+  const unsupportedPredictions = new Map<string, UnsupportedAmendmentPrediction>()
 
   for (let depth = 0; depth < input.settings.maxGogmaAdvance; depth += 1) {
     const nextFrontier = new Map<string, State>()
@@ -174,6 +244,14 @@ export async function searchBonusAmendmentVariants(
         : ['reset_bonuses', 'keep_bonuses'] as const
       for (const type of operations) {
         await execution.checkpoint()
+        const support = type === 'reset_bonuses'
+          ? context.predictionSupport.gogmaReset()
+          : context.predictionSupport.gogmaKeep(state.bonuses)
+        if (!support.supported) {
+          const unsupported = { type, reason: support.reason }
+          unsupportedPredictions.set(`${type}\u0000${support.reason}`, unsupported)
+          continue
+        }
         const prediction = engine.predictGogmaBonus({
           baseSeed,
           gogmaCounter: state.gogmaCounter,
@@ -199,6 +277,7 @@ export async function searchBonusAmendmentVariants(
           operations: [...state.operations, operation],
         }
         const kind = base.kindForAmendment?.(next.operations) ?? base.kind
+        searchedRoutes.add(kind)
         const candidate = createBaseCandidate(
           context,
           next.bonuses,
@@ -214,8 +293,12 @@ export async function searchBonusAmendmentVariants(
         if (candidate) candidates.push(candidate)
         if (
           hasConfirmedSkillInputs(input) &&
-          engine.capabilities.supportsSkillPrediction
+          engine.capabilities.supportsSkillPrediction &&
+          context.predictionSupport.skill().supported
         ) {
+          if (kind.startsWith('existing_gogma_')) {
+            searchedRoutes.add('existing_gogma_mixed')
+          }
           candidates.push(...await searchResetSkillVariants(context, {
             bonuses: next.bonuses,
             restorationBonusScope: next.scope,
@@ -243,7 +326,22 @@ export async function searchBonusAmendmentVariants(
     }
     frontier = [...nextFrontier.values()]
   }
-  return candidates
+  return {
+    candidates,
+    searchedRoutes: [...searchedRoutes],
+    unsupportedPredictions: [...unsupportedPredictions.values()],
+  }
+}
+
+export interface UnsupportedAmendmentPrediction {
+  type: 'reset_bonuses' | 'keep_bonuses'
+  reason: RngPredictionUnsupportedReason
+}
+
+export interface BonusAmendmentSearchResult {
+  candidates: BuildCandidate[]
+  searchedRoutes: BuildRoute['kind'][]
+  unsupportedPredictions: UnsupportedAmendmentPrediction[]
 }
 
 export function hasConfirmedSkillInputs(input: CandidateSearchInput): boolean {

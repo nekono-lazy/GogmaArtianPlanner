@@ -69,6 +69,9 @@ function dependencies(client: ControlledClient, targets = [createValidTargetWeap
         targetWeaponIds: options.targetWeaponIds,
         master: {
           weaponBonusDefinitions: master.weaponBonusDefinitions,
+          weaponTypes: master.weaponTypes,
+          elements: master.elements,
+          bonusTypes: master.bonusTypes,
           bonusRanks: master.bonusRanks,
           lotteries: master.lotteries,
           materialCosts: master.materialCosts,

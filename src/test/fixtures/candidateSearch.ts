@@ -17,6 +17,9 @@ export const SEARCH_FIXTURE_TIME = '2026-08-29T01:00:00.000Z'
 
 export const searchMasterFixture: SearchMasterSubset = {
   weaponBonusDefinitions: [],
+  weaponTypes: [],
+  elements: [],
+  bonusTypes: [],
   bonusRanks: targetEvaluationMaster.bonusRanks.map((rank) => ({ ...rank })),
   lotteries: [
     {
@@ -76,6 +79,9 @@ export function createCandidateSearchInput(): CandidateSearchInput {
       weaponBonusDefinitions: searchMasterFixture.weaponBonusDefinitions.map(
         (definition) => ({ ...definition }),
       ),
+      weaponTypes: searchMasterFixture.weaponTypes.map((weaponType) => ({ ...weaponType })),
+      elements: searchMasterFixture.elements.map((element) => ({ ...element })),
+      bonusTypes: searchMasterFixture.bonusTypes.map((bonusType) => ({ ...bonusType })),
       bonusRanks: searchMasterFixture.bonusRanks.map((rank) => ({ ...rank })),
       lotteries: searchMasterFixture.lotteries.map((lottery) => ({ ...lottery })),
       materialCosts: searchMasterFixture.materialCosts.map((cost) => ({ ...cost })),

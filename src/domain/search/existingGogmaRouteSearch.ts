@@ -42,7 +42,14 @@ export async function searchExistingGogmaRoutes(context: RouteSearchContext): Pr
     return result
   }
 
-  const canSkill = hasConfirmedSkillInputs(input) && engine.capabilities.supportsSkillPrediction
+  const hasSkillInputs = hasConfirmedSkillInputs(input)
+  let skillInputUnsupportedReason: string | null = null
+  let canSkill = false
+  if (hasSkillInputs && engine.capabilities.supportsSkillPrediction) {
+    const skillSupport = context.predictionSupport.skill()
+    canSkill = skillSupport.supported
+    if (!skillSupport.supported) skillInputUnsupportedReason = skillSupport.reason
+  }
   if (canSkill) {
     result.searchedRoutes.push('existing_gogma_reset_skills')
     for (const source of all) {
@@ -56,7 +63,15 @@ export async function searchExistingGogmaRoutes(context: RouteSearchContext): Pr
       }))
     }
   } else {
-    result.skippedRoutes.push({ route: 'existing_gogma_reset_skills', reason: hasConfirmedSkillInputs(input) ? 'skill_prediction_unsupported' : 'rng_state_unconfirmed', detail: hasConfirmedSkillInputs(input) ? 'The active RNG Engine does not support Skill prediction.' : 'Confirmed Base Seed, Skill Counter, and Counter Gate are required.' })
+    result.skippedRoutes.push({
+      route: 'existing_gogma_reset_skills',
+      reason: hasSkillInputs ? 'skill_prediction_unsupported' : 'rng_state_unconfirmed',
+      detail: !hasSkillInputs
+        ? 'Confirmed Base Seed, Skill Counter, and Counter Gate are required.'
+        : skillInputUnsupportedReason
+          ? `The active RNG Engine does not support this Skill input (${skillInputUnsupportedReason}).`
+          : 'The active RNG Engine does not support Skill prediction.',
+    })
   }
 
   const destructive = all.filter((weapon) => !weapon.isProtected)
@@ -69,28 +84,14 @@ export async function searchExistingGogmaRoutes(context: RouteSearchContext): Pr
     return result
   }
 
+  const resetSupport = context.predictionSupport.gogmaReset()
+  const canReset = resetSupport.supported
   const canKeep = engine.capabilities.supportsKeepBonusesPrediction
-  const canMixed = canSkill || canKeep
-  result.searchedRoutes.push('existing_gogma_reset_bonuses')
-  if (canMixed) {
-    result.searchedRoutes.push('existing_gogma_mixed')
-  } else {
-    result.skippedRoutes.push({
-      route: 'existing_gogma_mixed',
-      reason: hasConfirmedSkillInputs(input)
-        ? 'skill_prediction_unsupported'
-        : 'rng_state_unconfirmed',
-      detail: hasConfirmedSkillInputs(input)
-        ? 'Mixed routes require Skill prediction or Keep Bonuses prediction.'
-        : 'Mixed routes require confirmed Skill inputs or Keep Bonuses prediction.',
-    })
-  }
   const pureKeepSources = destructive.filter(
     ({ restorationBonusScope }) => restorationBonusScope === 'gogma_artian',
   )
-  if (canKeep && pureKeepSources.length > 0) {
-    result.searchedRoutes.push('existing_gogma_keep_bonuses')
-  }
+  const searchedAmendmentRoutes = new Set<BuildRoute['kind']>()
+  const keepUnsupportedSources = new Set<OwnedGogmaArtianWeapon['id']>()
 
   for (const source of destructive) {
     const base: RouteOperation[] = []
@@ -107,14 +108,63 @@ export async function searchExistingGogmaRoutes(context: RouteSearchContext): Pr
       amendmentSourceOwnedWeaponId: source.id,
       kindForAmendment: (operations: RouteOperation[]) => kindForAmendment(source, operations),
     }
-    result.candidates.push(...await searchBonusAmendmentVariants(context, common))
-    if (!canKeep && source.restorationBonusScope === 'gogma_artian') {
-      result.skippedRoutes.push({ route: 'existing_gogma_keep_bonuses', reason: 'keep_prediction_unsupported', detail: 'The active RNG Engine does not support Keep Bonuses prediction.' })
-    }
-    if (source.restorationBonusScope === 'normal_artian') {
-      result.skippedRoutes.push({ route: 'existing_gogma_keep_bonuses', reason: 'normal_scope_requires_reset', detail: 'Keep Bonuses cannot be the first amendment of inherited Normal-scope bonuses.' })
+    const amendmentResult = await searchBonusAmendmentVariants(context, common)
+    result.candidates.push(...amendmentResult.candidates)
+    amendmentResult.searchedRoutes.forEach((route) => searchedAmendmentRoutes.add(route))
+    for (const unsupported of amendmentResult.unsupportedPredictions) {
+      if (unsupported.type !== 'keep_bonuses') continue
+      keepUnsupportedSources.add(source.id)
+      const message = `Keep Bonuses branches from OwnedWeapon '${source.id}' were excluded by input support (${unsupported.reason}).`
+      if (!result.warnings.some((warning) => warning.message === message)) {
+        result.warnings.push({ targetWeaponId: context.target.id, message })
+      }
     }
   }
-  result.skippedRoutes = result.skippedRoutes.filter((skipped) => !result.searchedRoutes.includes(skipped.route))
+
+  if (searchedAmendmentRoutes.has('existing_gogma_reset_bonuses')) {
+    result.searchedRoutes.push('existing_gogma_reset_bonuses')
+  } else {
+    result.skippedRoutes.push({
+      route: 'existing_gogma_reset_bonuses',
+      reason: !canReset && resetSupport.reason === 'master_data_unavailable'
+        ? 'master_data_unavailable'
+        : 'gogma_prediction_unsupported',
+      detail: canReset
+        ? 'No Reset Bonuses branch was searchable for the available sources.'
+        : `Reset Bonuses input is unsupported (${resetSupport.reason}).`,
+    })
+  }
+
+  if (searchedAmendmentRoutes.has('existing_gogma_keep_bonuses')) {
+    result.searchedRoutes.push('existing_gogma_keep_bonuses')
+  } else if (pureKeepSources.length === 0) {
+    result.skippedRoutes.push({ route: 'existing_gogma_keep_bonuses', reason: 'normal_scope_requires_reset', detail: 'Keep Bonuses cannot be the first amendment of inherited Normal-scope bonuses.' })
+  } else {
+    result.skippedRoutes.push({
+      route: 'existing_gogma_keep_bonuses',
+      reason: 'keep_prediction_unsupported',
+      detail: canKeep
+        ? `Keep Bonuses input is unsupported for ${keepUnsupportedSources.size || pureKeepSources.length} available source(s).`
+        : 'The active RNG Engine does not support Keep Bonuses prediction.',
+    })
+  }
+
+  if (searchedAmendmentRoutes.has('existing_gogma_mixed')) {
+    result.searchedRoutes.push('existing_gogma_mixed')
+  } else {
+    result.skippedRoutes.push({
+      route: 'existing_gogma_mixed',
+      reason: !canReset && resetSupport.reason === 'master_data_unavailable'
+        ? 'master_data_unavailable'
+        : hasSkillInputs && !canSkill
+          ? 'skill_prediction_unsupported'
+          : !hasSkillInputs
+            ? 'rng_state_unconfirmed'
+            : !canKeep
+              ? 'keep_prediction_unsupported'
+              : 'gogma_prediction_unsupported',
+      detail: 'No supported mixed operation combination was searchable.',
+    })
+  }
   return result
 }
