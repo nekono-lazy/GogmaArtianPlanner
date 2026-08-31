@@ -539,12 +539,11 @@ Gate未満時も保存counterのDomain before/afterが+1するかどうかは、
 
 - `RngEngine` interfaceとfixture-only `FakeRngEngine`が存在する。
 - `FakeRngEngine` は入力全体のJSON一致fixtureだけを返し、weight/counter/Keepを推測しない。
-- production placeholderは `UnavailableRngEngine` で全capability false、全methodがunsupported error。
-- Candidate Search Worker entryは `UnavailableRngEngine` を生成する。
+- `ProductionRngEngine` facadeが存在し、Candidate Search Worker entryはWorker内部factoryからこれを生成する。`UnavailableRngEngine` は全capability falseのfallback/test用として残る。
 - Planner Worker controllerはdependency注入境界だけ存在し、現行treeにproduction entry/factory/client wiringはない。
 - Settingsは「RNG予測エンジン: 未設定」。Debug画面はEngine情報を含め全項目placeholder。
-- RNG Setupは4 KnownValueを独立保存するが、manual Base Seedをまだ`normalizeSeed()`へ通さない。
-- Lottery Masterは1件だけ、weight 0 / disabled / unverified placeholder。Normal Searchはenabled normal lotteryを要求するため現状skipされる。
+- RNG Setupは4 KnownValueを独立保存するが、capability表示は引き続き`UnavailableRngEngine`を使用し、manual Base Seedをまだ`normalizeSeed()`へ通さない。
+- Lottery Masterは1件だけ、weight 0 / disabled / unverified placeholder。Candidate Searchにenabled Lottery gateはなく、Production RNGもLotteryMasterへ依存しない。
 
 ### 14.2 method判定
 

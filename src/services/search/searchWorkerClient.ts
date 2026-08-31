@@ -5,6 +5,7 @@ import type {
   SearchWorkerRequest,
   SearchWorkerResponse,
 } from '../../domain/search'
+import { PRODUCTION_RNG_ENGINE_VERSION } from '../../domain/rng/production/productionRngEngine'
 
 export class SearchCancelledError extends Error {
   constructor() {
@@ -15,7 +16,7 @@ export class SearchCancelledError extends Error {
 
 export class ProductionRngEngineUnavailableError extends Error {
   constructor() {
-    super('検証済みの本番RNG Engineが未実装のため、現在は実検索を開始できません。')
+    super('この環境ではSearch Workerを利用できないため、現在は実検索を開始できません。')
     this.name = 'ProductionRngEngineUnavailableError'
   }
 }
@@ -132,6 +133,6 @@ export function createProductionSearchWorkerClient(): SearchWorkerClient {
   )
   return createSearchWorkerClient(
     worker as unknown as WorkerLike,
-    'production-engine-unavailable',
+    PRODUCTION_RNG_ENGINE_VERSION,
   )
 }

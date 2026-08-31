@@ -62,10 +62,18 @@ export interface CandidateSearchSettings {
 
 export interface SearchMasterSubset {
   weaponBonusDefinitions: WeaponBonusDefinition[];
+  weaponTypes: WeaponTypeMaster[];
+  elements: ElementMaster[];
+  bonusTypes: BonusTypeMaster[];
   bonusRanks: BonusRankMaster[];
+  lotteries: LotteryMaster[];
   materialCosts: MaterialCostMaster[];
 }
 ```
+
+`createCandidateSearchInput()` は同じvalidated `MasterDataRoot`から上記subsetを構成し、
+structured clone可能なrequest dataとしてWorkerへ渡す。`lotteries` はlegacy payloadとして
+型に残るが、Production RNGのeligibility、input support、predictionの根拠には使用しない。
 
 `BuildCandidate.finalBonusScope` と `finalBonuses` はRoute完了時の巨戟アーティアが実際に保持するscopeと5枠である。巨戟化だけなら `normal_artian` scopeの通常5枠をslot順のまま継承し、Reset / Keepを実行した後はRNG Engineが返した `gogma_artian` scopeの5枠を使う。SearchはBonus Type Mappingから巨戟Rankや完成5枠を推測しない。
 
@@ -86,6 +94,9 @@ const defaultCandidateSearchSettings = {
 - RngState全体の確定は要求しない
 - `deriveRngCapabilities` を使い、必要値が揃ったRouteだけを検索する
 - 不足Capabilityに依存するRouteは `skippedRoutes` へ理由を記録する
+- Engine capabilityがある場合は、Prediction前に具体的なsemantic inputを `getPredictionSupport()` で確認する
+- input supportがfalseの場合は、該当Route、operation、またはsourceの最小単位だけを正常系としてskipし、他のsupported探索を継続する
+- support queryの予期しない例外、またはsupport=true確認後のPrediction例外は通常skipへ変換せず、既存Search / Worker error経路へ伝播する
 - すべての選択Routeが実行不能な場合のみ検索を開始不可とする
 - `targetWeaponIds` は `isEnabled = true` のTargetWeaponのみ
 - `max*Advance` は1以上
@@ -613,6 +624,9 @@ export type SearchWorkerResponse =
 - Worker内ではDexieに直接アクセスしない。必要な入力をmessageで受け取る
 - Worker messageはstructured clone可能な `requestId` と `CandidateSearchInput` だけを保持し、メソッドを持つ `RngEngine` instanceを含めない
 - Worker module内でEngineまたはEngine Factoryを取得し、Worker Handlerのdependencyとして注入する
+- Production Search Worker entryはWorker内部factoryから `ProductionRngEngine` を生成する
+- Search Worker ClientとBuildListのcurrent CalculationContextは `PRODUCTION_RNG_ENGINE_VERSION` を共通のRNG Engine version authorityとして使用する
+- SearchのProduction接続はPlanner WorkerのProduction接続を意味しない
 
 ---
 

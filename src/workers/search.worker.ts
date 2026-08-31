@@ -80,8 +80,8 @@ export interface CandidateSearchWorkerScope {
 }
 
 /**
- * Creates the worker-local Engine from a module dependency and attaches the contract.
- * A verified production factory can replace a Fake factory without changing messages.
+ * Creates the worker-local Engine from the entry composition and attaches the
+ * structured-clone message contract.
  */
 export function attachSearchWorker(
   scope: CandidateSearchWorkerScope,

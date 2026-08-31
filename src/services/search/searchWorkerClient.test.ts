@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
+import { PRODUCTION_RNG_ENGINE_VERSION } from '../../domain/rng/production/productionRngEngine'
 import type { SearchWorkerRequest, SearchWorkerResponse } from '../../domain/search'
 import { createCandidateSearchInput } from '../../test/fixtures/candidateSearch'
-import { createSearchWorkerClient, SearchCancelledError, type WorkerLike } from './searchWorkerClient'
+import { createProductionSearchWorkerClient, createSearchWorkerClient, SearchCancelledError, type WorkerLike } from './searchWorkerClient'
 
 class FakeWorker implements WorkerLike {
   readonly posted: SearchWorkerRequest[] = []
@@ -14,6 +15,17 @@ class FakeWorker implements WorkerLike {
 }
 
 describe('SearchWorkerClient', () => {
+  it('uses the Production RNG version for the production Worker client', () => {
+    vi.stubGlobal('Worker', FakeWorker)
+    try {
+      const client = createProductionSearchWorkerClient()
+      expect(client.engineVersion).toBe(PRODUCTION_RNG_ENGINE_VERSION)
+      client.dispose()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('preserves requestId, forwards progress, and resolves a result', async () => {
     const worker = new FakeWorker()
     const client = createSearchWorkerClient(worker, 'fake-fixture:candidate-search-v1')

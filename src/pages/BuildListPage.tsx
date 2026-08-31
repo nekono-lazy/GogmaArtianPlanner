@@ -8,6 +8,7 @@ import type { MasterDataRoot } from '../domain/master/masterTypes'
 import type { BuildListEntry, BuildListEntryId, CalculationContext, OwnedWeapon, TargetWeapon } from '../domain/models/publicTypes'
 import { useSettingsStore } from '../stores/settingsStore'
 import { buildListService } from '../services/buildList/buildListService'
+import { createBuildListCalculationContext } from '../services/buildList/createBuildListCalculationContext'
 
 const loadedMaster = loadMasterData()
 const defaultMaster = loadedMaster.ok ? loadedMaster.data : null
@@ -19,23 +20,18 @@ export interface BuildListPageDependencies {
   deleteEntry(id: BuildListEntryId): Promise<void>
 }
 
+function createDefaultDependencies(master: MasterDataRoot): BuildListPageDependencies {
+  const calculationContext = createBuildListCalculationContext(master)
+  return {
+    master,
+    calculationContext,
+    refresh: () => buildListService.refreshStaleness(calculationContext),
+    deleteEntry: (id) => buildListService.deleteEntry(id),
+  }
+}
+
 const defaultDependencies: BuildListPageDependencies | null = defaultMaster
-  ? {
-      master: defaultMaster,
-      calculationContext: {
-        gameVersion: defaultMaster.manifest.gameVersion,
-        masterDataVersion: defaultMaster.manifest.dataVersion,
-        rngEngineVersion: 'production-engine-unavailable',
-        appSchemaVersion: 1,
-      },
-      refresh: () => buildListService.refreshStaleness({
-        gameVersion: defaultMaster.manifest.gameVersion,
-        masterDataVersion: defaultMaster.manifest.dataVersion,
-        rngEngineVersion: 'production-engine-unavailable',
-        appSchemaVersion: 1,
-      }),
-      deleteEntry: (id) => buildListService.deleteEntry(id),
-    }
+  ? createDefaultDependencies(defaultMaster)
   : null
 
 interface BuildListPageProps { dependencies?: BuildListPageDependencies }

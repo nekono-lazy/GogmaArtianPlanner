@@ -13,6 +13,8 @@ import {
   domainFixtureContext,
 } from '../test/fixtures/domainData'
 import { createValidMasterDataFixture } from '../test/fixtures/masterData'
+import { PRODUCTION_RNG_ENGINE_VERSION } from '../domain/rng/production/productionRngEngine'
+import { createBuildListCalculationContext } from '../services/buildList/createBuildListCalculationContext'
 import { BuildListPage, type BuildListPageDependencies } from './BuildListPage'
 
 function dependencies(staleReasons: BuildListEntryStaleReason[] = []): BuildListPageDependencies {
@@ -32,6 +34,11 @@ function dependencies(staleReasons: BuildListEntryStaleReason[] = []): BuildList
 }
 
 describe('BuildListPage', () => {
+  it('uses the Production RNG version as the current staleness authority', () => {
+    expect(createBuildListCalculationContext(createValidMasterDataFixture()).rngEngineVersion)
+      .toBe(PRODUCTION_RNG_ENGINE_VERSION)
+  })
+
   it('renders from Candidate Snapshot and shows stale reasons', async () => {
     render(<BuildListPage dependencies={dependencies(['rng_state_changed'])} />)
     expect(await screen.findByText('Domain fixture target')).toBeInTheDocument()

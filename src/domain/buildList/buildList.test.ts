@@ -20,6 +20,7 @@ import {
   domainFixtureContext,
   ownedWeaponId,
 } from '../../test/fixtures/domainData'
+import { PRODUCTION_RNG_ENGINE_VERSION } from '../rng/production/productionRngEngine'
 
 function createFixtureEntry() {
   const target = createValidTargetWeapon()
@@ -190,6 +191,33 @@ describe('BuildListEntry staleness', () => {
     const { fixture } = evaluate()
     const result = evaluateBuildListEntryStaleness(fixture.entry, { target: fixture.target, rngState: fixture.rngState, normalCounters: fixture.normalCounters, ownedWeapons: [], calculationContext: { ...domainFixtureContext, masterDataVersion: 2 } })
     expect(result.staleReasons).toEqual(['calculation_context_changed'])
+  })
+
+  it('keeps the current Production version fresh and stales the unavailable version', () => {
+    const base = createFixtureEntry()
+    base.entry.calculationContext.rngEngineVersion = PRODUCTION_RNG_ENGINE_VERSION
+    base.entry.candidateSnapshot.calculationContext.rngEngineVersion =
+      PRODUCTION_RNG_ENGINE_VERSION
+    const current = {
+      target: base.target,
+      rngState: base.rngState,
+      normalCounters: base.normalCounters,
+      ownedWeapons: [],
+      calculationContext: {
+        ...domainFixtureContext,
+        rngEngineVersion: PRODUCTION_RNG_ENGINE_VERSION,
+      },
+    }
+
+    expect(evaluateBuildListEntryStaleness(base.entry, current).staleReasons)
+      .not.toContain('calculation_context_changed')
+
+    const legacy = structuredClone(base.entry)
+    legacy.calculationContext.rngEngineVersion = 'production-engine-unavailable'
+    legacy.candidateSnapshot.calculationContext.rngEngineVersion =
+      'production-engine-unavailable'
+    expect(evaluateBuildListEntryStaleness(legacy, current).staleReasons)
+      .toContain('calculation_context_changed')
   })
 
   it('returns every reason in deterministic order', () => {

@@ -96,6 +96,12 @@ describe('SearchPage', () => {
     render(<SearchPage dependencies={deps} />)
     await user.click(await screen.findByRole('button', { name: '検索開始' }))
     expect(screen.getByText(/検索中 0 \/ 1/)).toBeInTheDocument()
+    expect(client.input?.calculationContext).toEqual({
+      gameVersion: deps.master.manifest.gameVersion,
+      masterDataVersion: deps.master.manifest.dataVersion,
+      rngEngineVersion: client.engineVersion,
+      appSchemaVersion: 1,
+    })
     client.progress({ completedTargets: 1, totalTargets: 1, currentTargetWeaponId: deps.master.weaponTypes[0].id as never })
     const target = createValidTargetWeapon()
     const ideal = { ...createValidBuildCandidate(), id: 'candidate.ideal' as BuildCandidate['id'], category: 'ideal' as const, isSimilarToIdeal: false }
