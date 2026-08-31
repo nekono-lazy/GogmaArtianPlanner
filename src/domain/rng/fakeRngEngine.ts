@@ -7,6 +7,8 @@ import type {
   NormalizedSeed,
   RngEngine,
   RngEngineCapabilities,
+  RngPredictionSupport,
+  RngPredictionSupportInput,
   SkillOperation,
   SkillPredictionInput,
   SkillPredictionResult,
@@ -58,6 +60,19 @@ export class FakeRngEngine implements RngEngine {
     const found = this.fixtures.normalizedSeeds.find((item) => item.input === input)
     if (!found) throw new UnsupportedRngOperationError('normalizeSeed')
     return found.result
+  }
+
+  getPredictionSupport(input: RngPredictionSupportInput): RngPredictionSupport {
+    const supported = input.type === 'normal_artian'
+      ? this.capabilities.supportsNormalArtianPrediction
+      : input.type === 'skill'
+        ? this.capabilities.supportsSkillPrediction
+        : input.type === 'gogma_reset'
+          ? this.capabilities.supportsGogmaPrediction
+          : this.capabilities.supportsGogmaPrediction && this.capabilities.supportsKeepBonusesPrediction
+    return supported
+      ? { supported: true }
+      : { supported: false, reason: 'engine_capability_unavailable' }
   }
 
   predictGogmaBonus(input: GogmaBonusPredictionInput): RestorationBonusSet {

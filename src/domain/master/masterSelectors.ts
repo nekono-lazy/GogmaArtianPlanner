@@ -86,8 +86,13 @@ export function getEnabledElements(master: MasterDataRoot): ElementMaster[] {
     .sort(compareBySortOrderAndId)
 }
 
+export type WeaponBonusDefinitionsMasterSubset = Pick<
+  MasterDataRoot,
+  'weaponTypes' | 'elements' | 'bonusTypes' | 'weaponBonusDefinitions'
+>
+
 export function getBonusDefinitionsForWeapon(
-  master: MasterDataRoot,
+  master: WeaponBonusDefinitionsMasterSubset,
   weaponTypeId: WeaponTypeId,
   elementId: ElementId,
   scope: ArtianBonusScope,

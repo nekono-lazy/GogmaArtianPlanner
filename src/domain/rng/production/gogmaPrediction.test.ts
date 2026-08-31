@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RestorationBonusSet } from '../../models/publicTypes'
+import { loadMasterData } from '../../master/loadMasterData'
 import { referenceGogmaVectors } from '../../../test/fixtures/referenceGogmaVectors'
 import {
   gameVerifiedGogmaKeepVector,
@@ -23,6 +24,12 @@ import { buildReferenceWeightedGogmaPool } from './weightedDraw'
 
 function familyLayout(bonuses: RestorationBonusSet): string[] {
   return bonuses.map((bonus) => referenceGogmaBonusFamily(referenceGogmaIdFromRestorationBonus(bonus)))
+}
+
+function master() {
+  const result = loadMasterData()
+  if (!result.ok) throw new Error(JSON.stringify(result.issues))
+  return result.data
 }
 
 describe('reference-verified Production Gogma Reset / Keep prediction', () => {
@@ -75,9 +82,9 @@ describe('reference-verified Production Gogma Reset / Keep prediction', () => {
 
   it('matches every game-observed Reset with Master-availability filtering before weighted draws', () => {
     for (const vector of gameVerifiedGogmaResetVectors) {
-      expect(gameAdjustedGogmaResetCandidatesForWeaponAndElement(vector.weaponTypeId, vector.elementId)
+      expect(gameAdjustedGogmaResetCandidatesForWeaponAndElement(vector.weaponTypeId, vector.elementId, master())
         .map((candidate) => candidate.referenceId)).toEqual(vector.candidateIds)
-      const result = predictGameAdjustedGogmaReset(vector)
+      const result = predictGameAdjustedGogmaReset(vector, master())
       expect(result.bonuses).toEqual(vector.bonuses)
       expect(result.bonuses.map(referenceGogmaIdFromRestorationBonus)).toEqual(vector.referenceIds)
       expect(result.effectiveBlock).toBe(vector.gogmaCounter)
@@ -85,7 +92,7 @@ describe('reference-verified Production Gogma Reset / Keep prediction', () => {
   })
 
   it('preserves reference candidate order and applies exact-ID penalties after availability filtering', () => {
-    const candidates = gameAdjustedGogmaResetCandidatesForWeaponAndElement('weapon.light_bowgun', 'element.fire')
+    const candidates = gameAdjustedGogmaResetCandidatesForWeaponAndElement('weapon.light_bowgun', 'element.fire', master())
     expect(candidates.map((candidate) => candidate.referenceId)).toEqual([8, 12, 15, 9, 13, 16, 6, 10])
     const afterOne = buildReferenceWeightedGogmaPool(candidates, [8, 15])
     expect(afterOne.find((entry) => entry.bonus.referenceId === 8)?.weight).toBe(50)

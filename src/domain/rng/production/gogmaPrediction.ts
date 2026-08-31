@@ -1,5 +1,5 @@
 import type { ElementId, RestorationBonusSet, WeaponTypeId } from '../../models/publicTypes'
-import { gameAdjustedGogmaResetCandidatesForWeaponAndElement } from './gameGogmaBonuses'
+import { gameAdjustedGogmaResetCandidatesForWeaponAndElement, type GameAdjustedGogmaMasterSubset } from './gameGogmaBonuses'
 import { readReferenceRngBlock } from './referencePrng'
 import {
   REFERENCE_GOGMA_RESET_CANDIDATES,
@@ -85,11 +85,13 @@ export function predictReferenceGogmaReset(input: ReferenceGogmaPredictionInput)
  */
 export function predictGameAdjustedGogmaReset(
   input: ReferenceGogmaPredictionInput,
+  master: GameAdjustedGogmaMasterSubset,
 ): ReferenceGogmaPredictionResult {
   const { effectiveBlock, rawValues } = referenceGogmaBlock(input)
   const candidates = gameAdjustedGogmaResetCandidatesForWeaponAndElement(
     input.weaponTypeId,
     input.elementId,
+    master,
   )
   return {
     bonuses: predictReferenceGogmaSlots(rawValues, () => candidates),

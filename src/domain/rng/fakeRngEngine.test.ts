@@ -39,4 +39,15 @@ describe('FakeRngEngine', () => {
       UnsupportedRngOperationError,
     )
   })
+
+  it('reports prediction support from fixture capabilities without modeling production coverage', () => {
+    const engine = new FakeRngEngine({
+      ...fixtures(),
+      capabilities: { supportsSeedSearch: false, supportsNormalArtianPrediction: true, supportsGogmaPrediction: true, supportsSkillPrediction: false, supportsKeepBonusesPrediction: false },
+    })
+    expect(engine.getPredictionSupport({ type: 'normal_artian', weaponTypeId: 'weapon.unknown', elementId: 'element.unknown', rarity: 8 })).toEqual({ supported: true })
+    expect(engine.getPredictionSupport({ type: 'skill', weaponTypeId: 'weapon.unknown', elementId: 'element.unknown' })).toEqual({ supported: false, reason: 'engine_capability_unavailable' })
+    expect(engine.getPredictionSupport({ type: 'gogma_reset', weaponTypeId: 'weapon.unknown', elementId: 'element.unknown', master: { weaponBonusDefinitions: [], bonusRanks: [], lotteries: [] } })).toEqual({ supported: true })
+    expect(engine.getPredictionSupport({ type: 'gogma_keep', weaponTypeId: 'weapon.unknown', elementId: 'element.unknown', currentBonuses: [] as never })).toEqual({ supported: false, reason: 'engine_capability_unavailable' })
+  })
 })

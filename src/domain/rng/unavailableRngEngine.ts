@@ -7,6 +7,8 @@ import type {
   NormalizedSeed,
   RngEngine,
   RngEngineCapabilities,
+  RngPredictionSupport,
+  RngPredictionSupportInput,
   SkillOperation,
   SkillPredictionInput,
   SkillPredictionResult,
@@ -27,6 +29,11 @@ export class UnavailableRngEngine implements RngEngine {
 
   private unsupported(name: string): never {
     throw new UnsupportedRngOperationError(name)
+  }
+
+  getPredictionSupport(_input: RngPredictionSupportInput): RngPredictionSupport {
+    void _input
+    return { supported: false, reason: 'engine_capability_unavailable' }
   }
 
   normalizeSeed(_input: string): NormalizedSeed {
