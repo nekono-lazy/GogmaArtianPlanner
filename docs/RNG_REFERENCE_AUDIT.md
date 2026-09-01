@@ -646,6 +646,16 @@ C5-E2C2完了時点では仕様先行でruntime implementationはC5-E2C3 pending
 - adoptionは調査前ゲーム状態へ戻した明示確認後にC5-E2C4だけを呼ぶ。重複adoptionをguardし、失敗時はreviewと確認を保持してretry可能とする。Coordinatorは両Worker Clientを所有し、cancel / restart / disposeを提供する
 - Coordinatorはimplemented、Wizard UIはinactiveである。Skill multi-worker、実Browser Worker benchmark、Skill live verificationはpendingで、Production activationは未完了である。Production versionは `production-rng:c5-e2`、`supportsSeedSearch = false`を維持する
 
+### 14.10 C5-E2C6 Skill Identification Multi-Worker Orchestration（2026-09-01）
+
+- 既存 `SkillIdentificationWorkerClient` interfaceを維持したProduction multi-worker clientを追加し、Coordinator Production factoryのSkill Clientだけを差し替えた。Gogma Counter Client、Coordinator state machine、Skill kernel、Production RNG coreは変更していない
+- logical coreが4以上なら4 Worker、2から3なら2 Worker、それ以外または取得不能なら1 Workerとし、最大4に制限する。Seed数が少ない場合は空chunkを生成せず、inclusive Seed rangeをcontiguous / non-overlapping / gap-freeに完全被覆する
+- 各childは同じSkill Counter rangeを受け、Seed rangeだけが異なる。child request IDはparent、logical token、chunk indexで分離し、同一active parent IDのduplicate reject、terminal後reuse、複数parent同時実行を維持する
+- parent `maxMatches`はchildへ渡さない。全chunkのnon-truncated完了を確認し、Seed / Counter順にdeterministic mergeしてからglobal limitを適用する。これにより `matches.length === 1 && !isTruncated` のunique契約をlocal truncationで偽造しない。欠落・overlap・truncated childは `incomplete_parallel_chunk` で全体failureになる
+- 各childのlatest progressを保持してglobal `searchedSeeds / totalSeeds / matchesFound`を集約し、out-of-order eventでもsearched値を巻き戻さない。cancelは全childへ伝播し、1 child failure / unavailableは全siblingをcancelしてpartial successを禁止する。late responseはlogical request identityで無視する
+- child factory creation failureとEngine version mismatchはfail closedとし、生成済みchildをdisposeする。Production Engine versionは `production-rng:c5-e2`、`supportsSeedSearch = false`、Wizard UI inactiveを維持する
+- Skill multi-worker orchestrationはimplementedである。実Browser Worker benchmarkと独立したSkill live-game verificationはpendingで、Identification Production activationは未完了である
+
 ---
 
 ## 15. 現在契約との仕様衝突

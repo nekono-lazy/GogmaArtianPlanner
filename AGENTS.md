@@ -396,9 +396,14 @@ not the legacy generic Seed Search contract:
   without observation-count advancement, and calls only the C5-E2C4 service for
   adoption after explicit game-restored confirmation. Its Wizard state is
   in-memory only; reruns invalidate downstream review/confirmation state.
-- The Identification Wizard UI remains inactive/not implemented. Skill
-  multi-worker orchestration, the real Browser Worker benchmark, and independent
-  Skill live-game verification remain pending before Production activation.
+- The C5-E2C6 Skill multi-worker orchestration is implemented behind the
+  existing `SkillIdentificationWorkerClient` interface. Production uses at most
+  four Workers, splits only the Seed range into contiguous, non-overlapping,
+  gap-free chunks, merges deterministically, aggregates global progress, and
+  propagates cancellation or any child failure to the whole logical request.
+- The Identification Wizard UI remains inactive/not implemented. The real
+  Browser Worker benchmark and independent Skill live-game verification remain
+  pending before Production activation.
 - `supportsSeedSearch` remains false because it describes the legacy generic
   Seed Search API. Identification availability belongs at the Worker/application
   level; do not add RngEngine capability flags without a separate specification
@@ -406,9 +411,11 @@ not the legacy generic Seed Search contract:
 - Skill live-game verification and a real Browser Worker benchmark are not
   Wizard-implementation blockers, but both are Production-activation blockers.
   A Node benchmark is not a Browser benchmark.
-- Before activation, Skill Seed search must use contiguous, non-overlapping
-  multi-worker chunks with deterministic merge, global progress, cancellation
-  propagation, and explicit Worker-failure errors.
+- Skill Seed search uses contiguous, non-overlapping, gap-free multi-worker
+  chunks with deterministic merge, global progress, cancellation propagation,
+  and explicit Worker-failure errors. Child Workers do not independently apply
+  the parent `maxMatches`; global limiting occurs only after complete chunk
+  results are available, preserving the non-truncated unique-result contract.
 
 ---
 

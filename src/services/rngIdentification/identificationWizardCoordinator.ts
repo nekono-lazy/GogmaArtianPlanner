@@ -1,12 +1,12 @@
 import type { RngState } from '../../domain/models/publicTypes'
 import {
-  createProductionSkillIdentificationWorkerClient,
   SkillIdentificationCancelledError,
   SkillIdentificationDuplicateRequestError,
   SkillIdentificationWorkerError,
   SkillIdentificationWorkerUnavailableError,
   type SkillIdentificationWorkerClient,
 } from './skillIdentificationWorkerClient'
+import { createProductionMultiWorkerSkillIdentificationClient } from './multiWorkerSkillIdentificationClient'
 import type {
   SkillIdentificationInput,
   SkillIdentificationProgress,
@@ -790,7 +790,7 @@ export class DefaultIdentificationWizardCoordinator
 
 export function createProductionIdentificationWizardCoordinator(): IdentificationWizardCoordinator {
   return new DefaultIdentificationWizardCoordinator({
-    skillClient: createProductionSkillIdentificationWorkerClient(),
+    skillClient: createProductionMultiWorkerSkillIdentificationClient(),
     gogmaClient: createProductionGogmaCounterIdentificationWorkerClient(),
     adoptionService: identificationAdoptionService,
   })

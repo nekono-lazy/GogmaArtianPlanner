@@ -633,7 +633,19 @@ Skill Identificationでcanonical Base Seedが確定した後のSTEP 2には、�
 - STEP 1再検索はSTEP 2、review、復元確認をinvalidateし、STEP 2再検索はSTEP 1 uniqueを保持してreview、復元確認をinvalidateする。request IDはstep / generation / sequenceで使い回さず、generation照合によってcancel後のlate responseがcurrent stateを上書きしない
 - cancelは再実行用input snapshotと有効な上流unique結果を保持する。restartはactive Worker requestをcancelして全transient stateを破棄し、disposeはCoordinatorが所有する両Worker Clientを停止する。Workerのinvalid / unsupported / cancelled / unavailable / duplicate / unexpected errorを0件へ変換しない
 - review後にユーザーが調査前ゲーム状態へ戻したことを明示確認しない限りadoptionを拒否する。adoption中および成功後の同一Coordinatorからの重複adoptionを拒否し、成功時はC5-E2C4が返す保存済みRngStateを保持する。persistence failure時はreviewと復元確認を保持して明示的retryを可能にする
-- Coordinatorはimplementedである。Wizard UI、Skill multi-worker orchestration、実Browser Worker benchmark、Skill live-game verificationは未完了で、Identification Production activationは完了していない。`production-rng:c5-e2`と`supportsSeedSearch = false`を維持する
+- Coordinatorはimplementedである。C5-E2C6 Skill multi-worker orchestrationも既存Client interfaceの背後でimplementedである。Wizard UI、実Browser Worker benchmark、Skill live-game verificationは未完了で、Identification Production activationは完了していない。`production-rng:c5-e2`と`supportsSeedSearch = false`を維持する
+
+## 9.11 C5-E2C6 Skill Identification Multi-Worker Orchestration current contract
+
+- Coordinatorから見える `SkillIdentificationWorkerClient` interfaceは変更せず、Production factoryだけがmulti-worker clientを注入する。Gogma Counter Identificationはsingle Workerのままとする
+- Production Worker数はlogical coreが4以上なら4、2から3なら2、それ以外または取得不能なら1とし、正式上限は4である。Seed数がWorker数未満なら空chunkを作らず、実使用Worker数をSeed数以下にする
+- defaultを含むinclusive Seed rangeだけを、contiguous / non-overlapping / gap-free chunkへ分割する。Skill Counter rangeとsemantic observation inputは全childで同一である
+- child request IDはparent request ID、logical request token、chunk indexから一意に生成する。同じactive parent request IDは拒否し、success / cancel / failure後は再利用できる。複数の異なるparent requestは既存Client interfaceどおり同時実行可能である
+- childにはparent `maxMatches`を渡さず全chunkを完全探索させ、Seed順・Counter順でdeterministic mergeした後にglobal limitを適用する。global `searchedSeedRange` / `isTruncated`はsingle kernelが同じinputを処理した場合のcompleted Seed prefix semanticsと一致させる。truncated、欠落、overlapのあるchild resultは `incomplete_parallel_chunk` とし、partial successへ変換しない
+- global progressは各childのlatest `searchedSeeds`と`matchesFound`を保持して合計し、元range全体を`totalSeeds`とする。out-of-order progressでも各child値を巻き戻さず、`searchedSeeds`を0から`totalSeeds`に収める。`matchesFound`はglobal limit前に発見済みの完全な候補数であり、`maxMatches`を超え得る
+- parent cancelは全active childへ伝播し、parent Promiseをcancelled errorでrejectする。1 childのfailure / unavailableは全active siblingをcancelしてlogical request全体をfailureにし、partial matchesを返さない。cancel / failure後のlate child result/progressはparent、次request、global progressへ反映しない
+- child Engine versionは全て同じProduction versionでなければならない。creation failureまたはversion mismatchはfail closedでWorker unavailableとし、生成済みchildをdisposeする。`dispose()`はactive childをcancelし、全child clientをdisposeする
+- C5-E2C6はorchestrationだけであり、Skill kernel、Production RNG semantics/version、`supportsSeedSearch`、Coordinator state machine、Gogma Identification、RngState、Search、Planner、React UIを変更しない。実Browser Worker benchmarkとSkill live-game verificationは引き続きProduction activation blockerであり、Wizard UIはinactiveである
 
 ---
 
