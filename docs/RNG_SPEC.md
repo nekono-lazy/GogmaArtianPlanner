@@ -575,6 +575,21 @@ export interface SeedMatchPosition {
 - Worker requestIdはactive中の再利用を禁止し、新requestを明示的に拒否する。cancel状態はrequest-scoped tokenに保持し、旧処理のterminal completionまで解除せず、その後に破棄する
 - 現在のbounded goldenはreference-generatedであり、独立したgame-verified fixtureではない。Production UI activationには後続のlive verificationが必要である
 
+## 9.8 C5-E2B2 Gogma Counter Identification current contract
+
+Skill Identificationでcanonical Base Seedが確定した後のSTEP 2には、次のReset-only専用契約を使用する。
+
+- 入力はknown canonical Base Seed、武器種、属性、連続するordered five-slot Reset観測、bounded inclusive Gogma Counter rangeである。Seed range、Keep、current bonuses、Counter Gateは入力に含めない
+- 開始Gogma Counterを`G`とすると、観測`i`は`G + i`（観測1を`i = 0`とする）に対応する。各slotのsemantic Bonus Type/Rankを同位置で完全一致させる
+- Counterのformal persisted domainとWizard coverageを分離する。Identification rangeはProduction PRNG block positioningが安全な`0..floor(Number.MAX_SAFE_INTEGER / 10)`内に制限する
+- Counter Gate exact値は探索・保存しない。Gogma active branchの内部代表値35を用いるが、actual Gate値ではない
+- callerは`weaponTypes`、`elements`、`bonusTypes`、`weaponBonusDefinitions`のMaster subsetをWorker inputへ渡す。LotteryMaster、Worker内Master load、Lottery availability gateは使用しない
+- Productionのavailability filter済みcandidate order、weighted draw、exact-ID repeat penaltyを共有し、raw reference Resetだけで照合しない
+- 候補は`startGogmaCounter`数値昇順で返す。`maxMatches`は最初のN候補で停止し、完了した連続Counter prefixを`searchedCounterRange`として返し、未探索範囲があればtruncatedとする
+- progressは完全にaccept/rejectした`searchedCounters / totalCounters`と`matchesFound`である。Counter chunk sizeはruntime tuning値で、永続Production契約ではない
+- game-verified Heavy Bowgun/Ice six-Reset fixture（Base Seed 86315169、start Counter 480）はCounter 475..485で480だけに一致する。Gate 35とfixture actual Gate 200は同じ30 ordered slotsを返す
+- kernelとProduction Worker foundationは存在するが、UI/adoptには未接続である。`supportsSeedSearch = false`と`production-rng:c5-b`を維持する
+
 ---
 
 ## 10. Web Worker

@@ -589,6 +589,16 @@ Gate未満時も保存counterのDomain before/afterが+1するかどうかは、
 - Worker foundationはstructured-clone可能なinputだけを受け、Worker内で`ProductionRngEngine`を生成する。requestId単位のprogress/cancelとlate response無視を持ち、active requestIdの再利用を拒否し、terminal時にrequest-scoped cancel tokenを破棄する。Production UIからは未接続である。
 - C5-E2B1では`supportsSeedSearch = false`、Production RNG version、RngState schema、Settings/RNG Setup、Search/Plannerを変更しない。
 
+### 14.5 C5-E2B2 Gogma Counter Identification foundation（2026-09-01）
+
+- STEP 1で確定したBase Seedを入力とし、Reset-onlyの連続ordered five-slot観測からbounded Gogma Counterだけを昇順探索する専用kernelを追加した。Seed再探索とKeep observationは行わない。
+- Counter Gate exact値を入力・探索・保存せず、active branchの内部代表値35を使う。固定live inputではGate 35/36/54/200が同一Predictionになる。
+- caller-supplied Master subsetは`weaponTypes`、`elements`、`bonusTypes`、`weaponBonusDefinitions`である。Worker内Master loadとLotteryMaster dependencyはない。
+- correctness authorityは`ProductionRngEngine.predictGogmaBonus(reset)`である。compiled kernelはProduction PRNG/seed derivation、availability filtering、candidate order、weighted draw、repeat penaltyを共有する。
+- `apeshinzo78/GogmaSeedFinder@b931079277224c82b37666c31feab2c28c36f1ad`の`gogma_heavy_bowgun_reset_stream_live_2026-08-23.json`から必要最小限のgame-verified vectorを記録した。Base Seed 86315169、Heavy Bowgun/Ice、Counter 480..485の6 Reset・30 slotsはProduction Gate 35/200の双方で完全一致し、475..485探索は480だけを返す。
+- WorkerはB1のactive requestId拒否、request-scoped cancel token、terminal cleanup、late response ignore、`production-engine-unavailable` contractを維持する。UIには未接続である。
+- C5-E2B2でも`supportsSeedSearch = false`、`production-rng:c5-b`、RngState schema、UI、Search/Plannerを変更しない。
+
 ---
 
 ## 15. 現在契約との仕様衝突

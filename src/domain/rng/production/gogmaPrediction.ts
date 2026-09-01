@@ -3,6 +3,7 @@ import { gameAdjustedGogmaResetCandidatesForWeaponAndElement, type GameAdjustedG
 import { readReferenceRngBlock } from './referencePrng'
 import {
   REFERENCE_GOGMA_RESET_CANDIDATES,
+  type ReferenceGogmaBonus,
   referenceGogmaIdFromRestorationBonus,
   referenceGogmaKeepFamilyCandidates,
   restorationBonusSetFromReferenceGogmaIds,
@@ -69,6 +70,14 @@ function predictReferenceGogmaSlots(
   return restorationBonusSetFromReferenceGogmaIds(selectedReferenceIds)
 }
 
+/** Shared game-adjusted Reset draw used after caller availability is compiled. */
+export function predictGameAdjustedGogmaResetSlotsFromRawValues(
+  rawValues: readonly number[],
+  candidates: readonly ReferenceGogmaBonus[],
+): RestorationBonusSet {
+  return predictReferenceGogmaSlots(rawValues, () => candidates)
+}
+
 /** Reset ignores the prior set and redraws all five slots from the fixed pool. */
 export function predictReferenceGogmaReset(input: ReferenceGogmaPredictionInput): ReferenceGogmaPredictionResult {
   const { effectiveBlock, rawValues } = referenceGogmaBlock(input)
@@ -94,7 +103,7 @@ export function predictGameAdjustedGogmaReset(
     master,
   )
   return {
-    bonuses: predictReferenceGogmaSlots(rawValues, () => candidates),
+    bonuses: predictGameAdjustedGogmaResetSlotsFromRawValues(rawValues, candidates),
     effectiveBlock,
   }
 }

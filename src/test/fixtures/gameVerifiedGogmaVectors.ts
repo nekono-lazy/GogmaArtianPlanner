@@ -69,3 +69,39 @@ export const gameVerifiedGogmaKeepVector = {
   currentBonuses: set(attackII, affinityII, affinityEX, elementII, elementEX),
   bonuses: set(attackII, affinityIII, affinityEX, elementII, elementII),
 } as const
+
+/**
+ * Six consecutive live Reset previews recorded without saving. Provenance:
+ * apeshinzo78/GogmaSeedFinder@b931079277224c82b37666c31feab2c28c36f1ad,
+ * tests/fixtures/gogma_heavy_bowgun_reset_stream_live_2026-08-23.json.
+ */
+export const gameVerifiedGogmaCounterIdentificationVector = {
+  provenance: {
+    status: 'game-verified',
+    liveObservationDate: '2026-08-23',
+    repository: 'https://github.com/apeshinzo78/GogmaSeedFinder',
+    auditedCommit: 'b931079277224c82b37666c31feab2c28c36f1ad',
+    fixturePath: 'tests/fixtures/gogma_heavy_bowgun_reset_stream_live_2026-08-23.json',
+  },
+  baseSeed: 86_315_169,
+  weaponTypeId: 'weapon.heavy_bowgun',
+  elementId: 'element.ice',
+  startGogmaCounter: 480,
+  actualCounterGate: 200,
+  referenceIds: [
+    [13, 6, 8, 12, 6],
+    [13, 10, 12, 15, 6],
+    [9, 15, 9, 16, 6],
+    [12, 16, 6, 8, 9],
+    [12, 13, 15, 6, 9],
+    [15, 9, 6, 16, 12],
+  ],
+  observations: [
+    set(affinityIII, sharpnessBase, attackII, attackIII, sharpnessBase),
+    set(affinityIII, sharpnessEX, attackIII, attackEX, sharpnessBase),
+    set(affinityII, attackEX, affinityII, affinityEX, sharpnessBase),
+    set(attackIII, affinityEX, sharpnessBase, attackII, affinityII),
+    set(attackIII, affinityIII, attackEX, sharpnessBase, affinityII),
+    set(attackEX, affinityII, sharpnessBase, affinityEX, attackIII),
+  ],
+} as const
