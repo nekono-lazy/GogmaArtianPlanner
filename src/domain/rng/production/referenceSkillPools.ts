@@ -84,3 +84,16 @@ export function referenceSkillCombinationFromIndex(index: number): ReferenceSkil
 
   return { combinationIndex: index, seriesSkillId, groupSkillId }
 }
+
+/** Converts one complete semantic Skill observation back to its reference table index. */
+export function referenceSkillCombinationIndexFromIds(
+  seriesSkillId: SeriesSkillId,
+  groupSkillId: GroupSkillId,
+): number {
+  const seriesIndex = REFERENCE_SERIES_SKILL_POOL.indexOf(seriesSkillId)
+  const groupIndex = REFERENCE_GROUP_SKILL_POOL.indexOf(groupSkillId)
+  if (seriesIndex < 0 || groupIndex < 0) {
+    throw new RangeError('Skill observation is outside the Production reference table')
+  }
+  return seriesIndex * REFERENCE_GROUP_SKILL_POOL.length + groupIndex
+}

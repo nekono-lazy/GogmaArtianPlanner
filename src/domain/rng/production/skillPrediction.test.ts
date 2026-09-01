@@ -7,6 +7,7 @@ import {
   REFERENCE_SKILL_COMBINATION_COUNT,
   REFERENCE_SKILL_COUNTER_GATE_THRESHOLD,
   predictReferenceSkills,
+  referenceSkillCombinationIndexFromIds,
   referenceSkillCombinationFromIndex,
 } from '.'
 
@@ -44,6 +45,16 @@ describe('reference-verified Production Skill prediction', () => {
       expect(first.groupSkillId).toBe(REFERENCE_GROUP_SKILL_POOL[0])
       expect(last.seriesSkillId).toBe(REFERENCE_SERIES_SKILL_POOL[seriesIndex])
       expect(last.groupSkillId).toBe(REFERENCE_GROUP_SKILL_POOL[13])
+    }
+  })
+
+  it('round-trips all 294 complete semantic Skill pairs through the reference table', () => {
+    for (let index = 0; index < REFERENCE_SKILL_COMBINATION_COUNT; index += 1) {
+      const combination = referenceSkillCombinationFromIndex(index)
+      expect(referenceSkillCombinationIndexFromIds(
+        combination.seriesSkillId,
+        combination.groupSkillId,
+      )).toBe(index)
     }
   })
 

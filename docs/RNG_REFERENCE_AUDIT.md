@@ -579,6 +579,16 @@ Gate未満時も保存counterのDomain before/afterが+1するかどうかは、
 - Production RNGとUIの有効判定はlegacy `LotteryMaster`へ依存しない。LotteryMaster cleanupと最終dependency auditはC5-E3へ残す。
 - persistent schema、`CalculationContext` contract、`PRODUCTION_RNG_ENGINE_VERSION`は変更していない。
 
+### 14.4 C5-E2B1 Skill Identification foundation（2026-09-01）
+
+- Skill Identificationは汎用Seed Searchではなく、Normal→Gogma conversion時の初回Skillと、それに続くReset Skillsの完全なSeries/Group観測列を使う専用kernelとして実装する。
+- Base Seedはcanonical `0..99,999,999` inclusive、Skill Counterはcaller-supplied bounded inclusive rangeを探索する。順序はBase Seed昇順、Skill Counter昇順である。
+- Counter Gate exact値はIdentification入力にしない。Skill active branchを選択するためだけに内部代表値54を使用し、RngStateへactual Gateとして保存しない。
+- compiled matcherのcorrectness authorityは`ProductionRngEngine.predictSkills()`である。ProductionのPRNG、Skill seed derivation、294通りのsemantic Skill mappingを再利用し、独立したRNG仕様を持たない。
+- reference-generated bounded fixture `Seed 8,500,000..8,550,000`、`Skill Counter 180..190`、Insect Glaive/Thunder、4観測は`{ baseSeed: 8524433, startSkillCounter: 186 }`のみを返す。これはreference-verified provenanceであり、独立したgame-verified fixtureではない。
+- Worker foundationはstructured-clone可能なinputだけを受け、Worker内で`ProductionRngEngine`を生成する。requestId単位のprogress/cancelとlate response無視を持ち、active requestIdの再利用を拒否し、terminal時にrequest-scoped cancel tokenを破棄する。Production UIからは未接続である。
+- C5-E2B1では`supportsSeedSearch = false`、Production RNG version、RngState schema、Settings/RNG Setup、Search/Plannerを変更しない。
+
 ---
 
 ## 15. 現在契約との仕様衝突

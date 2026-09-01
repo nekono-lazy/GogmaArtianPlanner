@@ -556,6 +556,25 @@ export interface SeedMatchPosition {
 - 一致なしの場合は観測入力、範囲、Counter Gate候補を見直す
 - RNG EngineがSeed検索に必要なPredictionを未実装なら、本番検索を無効化しFake EngineでInterfaceのみ検証する
 
+## 9.7 C5-E2B1 Skill Identification current contract
+
+9.5および9.6は汎用Seed Search案として保持する。Production Identification WizardのSkill-first経路には、次の専用契約を優先する。
+
+- 入力は武器種、属性、Series SkillとGroup Skillをともに持つ連続観測列、bounded inclusive Skill Counter rangeである
+- 観測1はNormal ArtianからGogma Artianへのconversion時に自動付与されたSkill、以後は連続するReset Skills結果である
+- 開始Skill Counterを`S`とすると、観測`i`は`S + i`（観測1を`i = 0`とする）に対応する
+- Base Seed探索domainはcanonical `0..99,999,999` inclusiveである。テストとbenchmarkでは、このdomain内のbounded inclusive Seed rangeを指定できる
+- Skill Counterのformal domainと1回の検索coverageは分離する。C5-E2B1時点の初期UX推奨幅は11候補だが、永久上限ではない
+- Counter Gateは入力、観測、探索対象にしない。kernelはSkill active branchを選ぶ内部代表値54を用いるが、これはactual Gate値ではなく永続化しない
+- Series SkillとGroup Skillはsemantic Domain IDで受け取り、両方を完全一致させる
+- 候補は`baseSeed`昇順、次に`startSkillCounter`昇順で返す
+- `maxMatches`を使用する場合、現在処理中のSeedに属する全Counterを完了したprefixだけを保持・切り詰め対象とする。並列chunkは全chunk完了後にSeed range順でmergeし、Worker完了順を結果順へ使わない
+- 結果は候補、実際に完了したSeed range、truncation状態を返す。RngStateへのadopt/persistはC5-E2B1の責務外である
+- Production正解authorityは`ProductionRngEngine.predictSkills()`であり、compiled matcherは既存Production PRNG、Skill seed adapter、Skill table mappingとdifferential parityを維持する高速化kernelである
+- kernelとProduction Worker foundationは存在するが、UIへは未接続であり、`supportsSeedSearch = false`とProduction RNG versionを維持する
+- Worker requestIdはactive中の再利用を禁止し、新requestを明示的に拒否する。cancel状態はrequest-scoped tokenに保持し、旧処理のterminal completionまで解除せず、その後に破棄する
+- 現在のbounded goldenはreference-generatedであり、独立したgame-verified fixtureではない。Production UI activationには後続のlive verificationが必要である
+
 ---
 
 ## 10. Web Worker
