@@ -564,6 +564,21 @@ Gate未満時も保存counterのDomain before/afterが+1するかどうかは、
 
 不足契約の第一候補は、(a) conversionでinitial Skillを予測・記録するRoute表現、(b) current bonusesを受けるGogma amendment prediction、(c) Normal recipe/pool入力、(d) semantic IDと参照numeric/orderを分離するreference-verified adapter tableである。新methodが必須か、既存method/operation inputを直すかは仕様決定事項。
 
+### 14.3 C5-E1完了後のcurrent state（2026-09-01）
+
+14.1と14.2はC5-A監査時点の記録として保持する。C5-E1完了後の実装状態は次のとおり。
+
+- `ProductionRngEngine` / `PRODUCTION_RNG_ENGINE_VERSION`からmode、version、capabilitiesを取得するnon-persistent runtime descriptorを追加した。version literalやUI専用Fake Engineは持たない。
+- SettingsはProduction Engine active、Engine version、`supportsSeedSearch = false`に基づくSeed Search未対応を表示する。Production RNG全体を未設定・未対応とは表示しない。
+- DebugはProduction mode/versionとNormal、Skill、Gogma、Keep、Seed Searchのoperation-level capabilityを表示する。具体的semantic input coverageとは混同しない。
+- RNG Setupは`UnavailableRngEngine`ではなくmain-thread Production authorityをcapability導出と表示に使用する。大量Candidate SearchとPlannerは引き続きWorkerで実行する。
+- manual Base Seedは保存直前に`ProductionRngEngine.normalizeSeed()`を通り、10進/16進rawをcanonical 10進文字列へ正規化する。不正入力は既存error経路で保存を拒否し、sourceは`manual`とする。
+- RNG Setupの4 KnownValueは独立更新を維持する。変更していない項目と空欄項目は既存値を保持し、Counter validation semanticsは変更しない。
+- `UnavailableRngEngine`自体はfallback/test/明示的unavailable用途のため残るが、本番RNG Setup/capability表示のauthorityからは外れた。
+- Search Production WorkerとPlanner Production Workerはactive、Seed Searchはinactiveのままである。`supportsSeedSearch`はfalseのままで、Seed Search algorithm/Worker/UIはC5-E2へ残す。
+- Production RNGとUIの有効判定はlegacy `LotteryMaster`へ依存しない。LotteryMaster cleanupと最終dependency auditはC5-E3へ残す。
+- persistent schema、`CalculationContext` contract、`PRODUCTION_RNG_ENGINE_VERSION`は変更していない。
+
 ---
 
 ## 15. 現在契約との仕様衝突

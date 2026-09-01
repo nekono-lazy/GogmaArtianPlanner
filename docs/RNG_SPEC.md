@@ -381,6 +381,8 @@ export interface GogmaSeedFinderImportResult {
 制約。
 
 - `baseSeed` は `normalizeSeed` で正規化して保存
+- manual Base SeedはProduction runtime authorityの`ProductionRngEngine.normalizeSeed()`を保存直前に使用し、10進/16進rawを`mod 100000000`したcanonical 10進文字列として`KnownValue<string>.value`へ保存する
+- 空文字は未入力として既存KnownValueを保持する。空白のみ、NaN相当、不正hex、unsigned 64-bit範囲外は`normalizeSeed()`のerrorとして保存しない
 - Counterは0以上の整数のみ
 - 入力した各KnownValueの `source` を `"manual"` とする
 - 空欄項目を既存値から削除する操作は、明示的な「確定解除」として別に扱う
@@ -582,6 +584,21 @@ pure Planner calculationへ注入する。PlannerInputへengineCapabilitiesを�
 
 Plannerが素材補充やRoute実行の予測を必要とする場合も注入EngineのPrediction / advance
 契約だけを使用し、Bonus Type Mapping、固定Counter delta、Skill、Keep結果を推測しない。
+
+Settings、Debug、RNG Setupのmain thread向け軽量操作は、
+`ProductionRngEngine`から生成したnon-persistent runtime descriptorを共通authorityとする。
+descriptorはmode `Production`、Engine version、operation-level capabilitiesを保持し、
+Settingsはmode/versionとSeed Search未対応を、Debugは全capabilityを表示する。
+RNG Setupは同じProduction Engine instanceの`normalizeSeed()`と`capabilities`を使用する。
+具体的weapon/element/inputの対応範囲はoperation-level capabilityとは別に
+`getPredictionSupport()`で判定する。Worker実行可否はEngineの存在・modeとは別概念であり、
+Worker unavailableをEngine未設定として表示しない。descriptorやcapability snapshotを
+BuildCandidate、BuildListEntry、ProductionPlanへ追加保存せず、永続provenanceは引き続き
+`CalculationContext.rngEngineVersion`をauthorityとする。
+
+現行Production capabilityはNormal Artian、Skill、Gogma Reset、Gogma KeepのPredictionがactive、
+Seed Searchはinactiveである。Seed Search algorithm/Worker/UIと`supportsSeedSearch`有効化は別工程とする。
+Production有効判定とPredictionはdisabled legacy `LotteryMaster`を要求しない。
 
 ## 10.2 Message
 

@@ -1,8 +1,10 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { createInitialRngState } from '../domain/models/factories'
 import type { RngState } from '../domain/models/publicTypes'
+import { PRODUCTION_RNG_ENGINE_VERSION } from '../domain/rng/production/productionRngEngine'
+import { productionRngEngine } from '../domain/rng/production/productionRngRuntime'
 import { RngSetupPage, type RngSetupPageDependencies } from './RngSetupPage'
 
 function dependencies(initial = createInitialRngState('2026-08-29T00:00:00.000Z')) {
@@ -16,58 +18,128 @@ function dependencies(initial = createInitialRngState('2026-08-29T00:00:00.000Z'
 }
 
 describe('RngSetupPage', () => {
-  it('saves partial-known state and preserves Base Seed as a string', async () => {
-    const user = userEvent.setup(); const fixture = dependencies()
+  it('normalizes a decimal Base Seed, marks it manual, and preserves untouched KnownValues', async () => {
+    const state = createInitialRngState('2026-08-29T00:00:00.000Z')
+    state.gogmaCounter = { value: 11, isConfirmed: true, source: 'observation' }
+    state.skillCounter = { value: 22, isConfirmed: false, source: 'gogma_seed_finder_import' }
+    state.counterGate = { value: 55, isConfirmed: true, source: 'manual' }
+    const untouched = {
+      gogmaCounter: { ...state.gogmaCounter },
+      skillCounter: { ...state.skillCounter },
+      counterGate: { ...state.counterGate },
+    }
+    const user = userEvent.setup()
+    const fixture = dependencies(state)
     render(<RngSetupPage dependencies={fixture.deps} />)
+
     const seed = await screen.findByLabelText('Base Seed（基準シード）')
     const seedPanel = seed.closest('.MuiPaper-root') as HTMLElement
-    expect(within(seedPanel).getByText('未入力')).toBeInTheDocument()
-    await user.type(seed, '000123')
-    expect(within(seedPanel).getByText('未確認')).toBeInTheDocument()
+    await user.type(seed, '100000001')
     await user.click(within(seedPanel).getByRole('checkbox', { name: 'この値を検索・予測に使用する' }))
-    expect(within(seedPanel).getByText('使用中')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '保存' }))
-    expect(fixture.getStored().baseSeed).toMatchObject({ value: '000123', isConfirmed: true })
-    expect(fixture.getStored().skillCounter.value).toBeNull()
+
+    expect(fixture.getStored().baseSeed).toEqual({
+      value: productionRngEngine.normalizeSeed('100000001'),
+      isConfirmed: true,
+      source: 'manual',
+    })
+    expect(fixture.getStored().gogmaCounter).toEqual(untouched.gogmaCounter)
+    expect(fixture.getStored().skillCounter).toEqual(untouched.skillCounter)
+    expect(fixture.getStored().counterGate).toEqual(untouched.counterGate)
   })
 
-  it('clearing a value forces isConfirmed false', async () => {
-    const state = createInitialRngState('2026-08-29T00:00:00.000Z'); state.baseSeed = { value: 'seed', isConfirmed: true, source: 'manual' }
-    const user = userEvent.setup(); const fixture = dependencies(state)
+  it('normalizes equivalent hexadecimal and decimal Base Seeds to the same stored value', async () => {
+    const user = userEvent.setup()
+    const fixture = dependencies()
     render(<RngSetupPage dependencies={fixture.deps} />)
     const seed = await screen.findByLabelText('Base Seed（基準シード）')
-    const seedPanel = seed.closest('.MuiPaper-root') as HTMLElement
-    await user.clear(seed)
-    expect(within(seedPanel).getByRole('checkbox', { name: 'この値を検索・予測に使用する' })).toBeDisabled()
-    expect(within(seedPanel).getByText('未入力')).toBeInTheDocument()
+    await user.type(seed, '0x5f5e101')
     await user.click(screen.getByRole('button', { name: '保存' }))
-    expect(fixture.getStored().baseSeed).toEqual({ value: null, isConfirmed: false, source: null })
+
+    expect(fixture.getStored().baseSeed).toEqual({
+      value: productionRngEngine.normalizeSeed('100000001'),
+      isConfirmed: false,
+      source: 'manual',
+    })
   })
 
-  it('rejects negative counters and explains unavailable production Engine capability', async () => {
-    const user = userEvent.setup(); const fixture = dependencies()
+  it.each(['not-a-seed', '0xnothex', '   '])('does not save invalid Base Seed input %j', async (input) => {
+    const user = userEvent.setup()
+    const fixture = dependencies()
+    render(<RngSetupPage dependencies={fixture.deps} />)
+    const seed = await screen.findByLabelText('Base Seed（基準シード）')
+    fireEvent.change(seed, { target: { value: input } })
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
+    expect(await screen.findByText('Base seed must be unsigned decimal or hexadecimal')).toBeInTheDocument()
+    expect(fixture.deps.save).not.toHaveBeenCalled()
+    expect(fixture.getStored().baseSeed.value).toBeNull()
+  })
+
+  it('keeps an existing KnownValue when its edited field is left blank', async () => {
+    const state = createInitialRngState('2026-08-29T00:00:00.000Z')
+    state.baseSeed = { value: '123', isConfirmed: true, source: 'manual' }
+    const user = userEvent.setup()
+    const fixture = dependencies(state)
+    render(<RngSetupPage dependencies={fixture.deps} />)
+    const seed = await screen.findByLabelText('Base Seed（基準シード）')
+    await user.clear(seed)
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
+    expect(fixture.getStored().baseSeed).toEqual({ value: '123', isConfirmed: true, source: 'manual' })
+    expect(seed).toHaveValue('123')
+  })
+
+  it('updates one Counter without changing the other KnownValues', async () => {
+    const state = createInitialRngState('2026-08-29T00:00:00.000Z')
+    state.baseSeed = { value: '42', isConfirmed: true, source: 'observation' }
+    state.gogmaCounter = { value: 1, isConfirmed: true, source: 'observation' }
+    state.skillCounter = { value: 2, isConfirmed: true, source: 'observation' }
+    state.counterGate = { value: 54, isConfirmed: true, source: 'observation' }
+    const user = userEvent.setup()
+    const fixture = dependencies(state)
     render(<RngSetupPage dependencies={fixture.deps} />)
     const counter = await screen.findByLabelText('巨戟カウンター')
-    await user.type(counter, '-1'); await user.click(screen.getByRole('button', { name: '保存' }))
+    await user.clear(counter)
+    await user.type(counter, '9')
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
+    expect(fixture.getStored().gogmaCounter).toEqual({ value: 9, isConfirmed: false, source: 'manual' })
+    expect(fixture.getStored().baseSeed).toEqual(state.baseSeed)
+    expect(fixture.getStored().skillCounter).toEqual(state.skillCounter)
+    expect(fixture.getStored().counterGate).toEqual(state.counterGate)
+  })
+
+  it('rejects negative counters without saving', async () => {
+    const user = userEvent.setup()
+    const fixture = dependencies()
+    render(<RngSetupPage dependencies={fixture.deps} />)
+    const counter = await screen.findByLabelText('巨戟カウンター')
+    await user.type(counter, '-1')
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
     expect(await screen.findByText('巨戟カウンターは0以上の整数で入力してください。')).toBeInTheDocument()
-    expect(screen.getAllByText(/本番RNG予測エンジン/).length).toBeGreaterThan(0)
     expect(fixture.deps.save).not.toHaveBeenCalled()
   })
 
-  it('disables search-use for an empty value and shows Japanese source/capability labels', async () => {
-    const user = userEvent.setup(); const fixture = dependencies()
+  it('shows Production authority capabilities independently from current KnownValues', async () => {
+    const user = userEvent.setup()
+    const fixture = dependencies()
     render(<RngSetupPage dependencies={fixture.deps} />)
     const seed = await screen.findByLabelText('Base Seed（基準シード）')
     const seedPanel = seed.closest('.MuiPaper-root') as HTMLElement
     const useValue = within(seedPanel).getByRole('checkbox', { name: 'この値を検索・予測に使用する' })
     expect(useValue).toBeDisabled()
-    await user.type(seed, 'candidate')
+    await user.type(seed, '42')
+
     expect(useValue).toBeEnabled()
-    const source = within(seedPanel).getByRole('combobox', { name: '取得方法' })
-    await user.click(source)
-    await user.click(await screen.findByRole('option', { name: '手動入力' }))
-    expect(source).toHaveTextContent('手動入力')
-    expect(screen.getByText(/巨戟アーティア予測: 利用不可/)).toBeInTheDocument()
-    expect(screen.queryByText('確定済み')).not.toBeInTheDocument()
+    expect(within(seedPanel).getByText('取得方法: 手動入力')).toBeInTheDocument()
+    expect(screen.getByText(`Engine version: ${PRODUCTION_RNG_ENGINE_VERSION}`)).toBeInTheDocument()
+    expect(screen.getByText('通常アーティア予測 capability: 対応')).toBeInTheDocument()
+    expect(screen.getByText('スキル予測 capability: 対応')).toBeInTheDocument()
+    expect(screen.getByText('巨戟アーティア予測 capability: 対応')).toBeInTheDocument()
+    expect(screen.getByText('Keep Bonuses予測 capability: 対応')).toBeInTheDocument()
+    expect(screen.getByText('Seed Search capability: 未対応')).toBeInTheDocument()
+    expect(screen.queryByText(/本番RNG予測エンジンが未実装/)).not.toBeInTheDocument()
   })
 })

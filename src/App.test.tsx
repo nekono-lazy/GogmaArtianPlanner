@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import App from './App'
+import { PRODUCTION_RNG_ENGINE_VERSION } from './domain/rng/production/productionRngEngine'
 import { useSettingsStore } from './stores/settingsStore'
 
 describe('App', () => {
@@ -59,5 +60,36 @@ describe('App', () => {
     expect(debugSwitch).toBeChecked()
     await user.click(debugSwitch)
     expect(debugSwitch).not.toBeChecked()
+  })
+
+  it('shows the active Production RNG provenance in Settings', () => {
+    window.location.hash = '#/settings'
+    render(<App />)
+
+    expect(screen.getByText('RNG予測エンジン: Production')).toBeInTheDocument()
+    expect(screen.getByText(`Engine version: ${PRODUCTION_RNG_ENGINE_VERSION}`)).toBeInTheDocument()
+    expect(screen.getByText('Seed Search: 未対応')).toBeInTheDocument()
+    expect(screen.queryByText('RNG予測エンジン: 未設定')).not.toBeInTheDocument()
+  })
+
+  it('shows Production Engine capabilities and version in Debug Details', () => {
+    useSettingsStore.setState({ debugMode: true })
+    window.location.hash = '#/debug'
+    render(<App />)
+    const provenance = screen.getByRole('list', { name: 'Production RNG Engine provenance' })
+
+    expect(within(provenance).getByText(PRODUCTION_RNG_ENGINE_VERSION)).toBeInTheDocument()
+    expect(within(within(provenance).getByText('Engine mode').closest('li') as HTMLElement).getByText('Production')).toBeInTheDocument()
+    for (const capability of [
+      'supportsNormalArtianPrediction',
+      'supportsSkillPrediction',
+      'supportsGogmaPrediction',
+      'supportsKeepBonusesPrediction',
+    ]) {
+      const row = within(provenance).getByText(capability).closest('li') as HTMLElement
+      expect(within(row).getByText('true')).toBeInTheDocument()
+    }
+    const seedSearchRow = within(provenance).getByText('supportsSeedSearch').closest('li') as HTMLElement
+    expect(within(seedSearchRow).getByText('false')).toBeInTheDocument()
   })
 })
