@@ -623,7 +623,17 @@ Skill Identificationでcanonical Base Seedが確定した後のSTEP 2には、�
 - NormalArtianCounter、BuildCandidate、BuildListEntry、ProductionPlanのrepositoryには依存せず、直接mutationまたはstale書込みを行わない
 - state未作成時は既存ensure契約に従ってinitial RngStateを作成してからadoptする。現repositoryにCAS/version checkはなくread-modify-put間の同時manual updateを上書きし得るため、Wizard側は同時編集を避ける。C5-E2C4だけの新concurrency機構は追加しない
 - persistence failureとunexpected failureはsuccessへ変換せずcallerへ伝播する。`RngState.counterGate` schema、Production RNG semantics/version、`supportsSeedSearch = false`は変更しない
-- Adoption Serviceはimplementedである。Wizard UIとSTEP 1/2 Coordinatorはinactive / not implementedのままである
+- Adoption Serviceはimplementedである。STEP 1/2 Coordinatorの契約は9.10、Wizard UIはinactive / not implementedのままである
+
+## 9.10 C5-E2C5 Identification Wizard Coordinator current contract
+
+- Reactから独立した非永続application Coordinatorは、Skill Identification Worker Client、Gogma Counter Identification Worker Client、C5-E2C4 Adoption Serviceをcomposeする。CoordinatorがRngState repositoryへ直接依存せず、途中結果をIndexedDB / localStorage / RngStateへ保存しない
+- STEP 1 / STEP 2とも `matches.length === 1 && isTruncated === false` だけをuniqueとする。truncatedは候補数に関係なくincompleteであり、0件、複数、incompleteを候補手動選択または自動range拡張で解決しない
+- STEP 1 uniqueからcanonical `baseSeed` と `startingSkillCounter`だけを保持する。STEP 2 caller inputにSeedを持たせず、CoordinatorがSTEP 1 Seedを注入する。STEP 2 uniqueと結合したreviewは `baseSeed` / `startingSkillCounter` / `startingGogmaCounter`だけで、観測回数をCounterへ加算しない
+- STEP 1再検索はSTEP 2、review、復元確認をinvalidateし、STEP 2再検索はSTEP 1 uniqueを保持してreview、復元確認をinvalidateする。request IDはstep / generation / sequenceで使い回さず、generation照合によってcancel後のlate responseがcurrent stateを上書きしない
+- cancelは再実行用input snapshotと有効な上流unique結果を保持する。restartはactive Worker requestをcancelして全transient stateを破棄し、disposeはCoordinatorが所有する両Worker Clientを停止する。Workerのinvalid / unsupported / cancelled / unavailable / duplicate / unexpected errorを0件へ変換しない
+- review後にユーザーが調査前ゲーム状態へ戻したことを明示確認しない限りadoptionを拒否する。adoption中および成功後の同一Coordinatorからの重複adoptionを拒否し、成功時はC5-E2C4が返す保存済みRngStateを保持する。persistence failure時はreviewと復元確認を保持して明示的retryを可能にする
+- Coordinatorはimplementedである。Wizard UI、Skill multi-worker orchestration、実Browser Worker benchmark、Skill live-game verificationは未完了で、Identification Production activationは完了していない。`production-rng:c5-e2`と`supportsSeedSearch = false`を維持する
 
 ---
 

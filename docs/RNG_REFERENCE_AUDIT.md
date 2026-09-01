@@ -638,6 +638,14 @@ C5-E2C2完了時点では仕様先行でruntime implementationはC5-E2C3 pending
 - invalid input / invalid persisted stateはwrite前に拒否し、repository failureはswallowしない。既存repositoryにCASはないためread-modify-put raceは残存riskである
 - Production versionは `production-rng:c5-e2`、`supportsSeedSearch = false`を維持する。Wizard UI、STEP 1/2 Coordinator、multi-worker orchestrationは未実装である
 
+### 14.9 C5-E2C5 Identification Wizard Coordinator（2026-09-01）
+
+- React非依存・非永続のapplication Coordinatorを追加し、専用Skill / Gogma Counter Worker ClientとC5-E2C4 Adoption Serviceをcomposeした。repository direct mutation、RngEngine Identification API、Wizard draft persistenceは追加していない
+- 両STEPとも1件かつnon-truncatedだけをuniqueとし、truncated、0件、複数、Worker errorを区別する。候補手動選択、自動range拡張、Seed再探索は行わず、STEP 2 SeedはSTEP 1 unique結果からのみ注入する
+- reviewはcanonical Base Seed、starting Skill Counter、starting Gogma Counterだけから生成し、観測数を加算しない。再検索は下流review / confirmationをinvalidateし、step / generation / sequence request IDとgeneration guardでlate responseを無視する
+- adoptionは調査前ゲーム状態へ戻した明示確認後にC5-E2C4だけを呼ぶ。重複adoptionをguardし、失敗時はreviewと確認を保持してretry可能とする。Coordinatorは両Worker Clientを所有し、cancel / restart / disposeを提供する
+- Coordinatorはimplemented、Wizard UIはinactiveである。Skill multi-worker、実Browser Worker benchmark、Skill live verificationはpendingで、Production activationは未完了である。Production versionは `production-rng:c5-e2`、`supportsSeedSearch = false`を維持する
+
 ---
 
 ## 15. 現在契約との仕様衝突

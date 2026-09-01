@@ -389,10 +389,16 @@ not the legacy generic Seed Search contract:
   Seed with the Production authority, validates the counters with the RngState
   domain contract, preserves every unrelated RngState field, and performs one
   whole-object RngState put. It never advances counters by observation count or
-  mutates Normal Counters, Candidates, Build List entries, or Plans. Unique and
-  non-truncated result checks remain a Wizard Coordinator responsibility.
-- The Identification adoption service is implemented, but the Wizard UI and
-  Step 1/Step 2 Coordinator remain inactive/not implemented.
+  mutates Normal Counters, Candidates, Build List entries, or Plans.
+- The C5-E2C5 application Coordinator is implemented. It composes the dedicated
+  Skill and Gogma Counter Worker Clients, treats only one non-truncated match as
+  unique, injects the unique Step 1 Seed into Step 2, retains starting counters
+  without observation-count advancement, and calls only the C5-E2C4 service for
+  adoption after explicit game-restored confirmation. Its Wizard state is
+  in-memory only; reruns invalidate downstream review/confirmation state.
+- The Identification Wizard UI remains inactive/not implemented. Skill
+  multi-worker orchestration, the real Browser Worker benchmark, and independent
+  Skill live-game verification remain pending before Production activation.
 - `supportsSeedSearch` remains false because it describes the legacy generic
   Seed Search API. Identification availability belongs at the Worker/application
   level; do not add RngEngine capability flags without a separate specification
