@@ -401,9 +401,10 @@ not the legacy generic Seed Search contract:
   four Workers, splits only the Seed range into contiguous, non-overlapping,
   gap-free chunks, merges deterministically, aggregates global progress, and
   propagates cancellation or any child failure to the whole logical request.
-- The Identification Wizard UI remains inactive/not implemented. The real
-  Browser Worker benchmark and independent Skill live-game verification remain
-  pending before Production activation.
+- The C5-E2C7 Identification Wizard UI is implemented and connected from RNG
+  Setup through the existing Coordinator. The real Browser Worker benchmark and
+  independent Skill live-game verification remain pending before Production
+  activation.
 - `supportsSeedSearch` remains false because it describes the legacy generic
   Seed Search API. Identification availability belongs at the Worker/application
   level; do not add RngEngine capability flags without a separate specification

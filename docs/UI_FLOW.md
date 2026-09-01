@@ -168,7 +168,7 @@ Base Seed、Gogma Counter、Skill CounterをProduction Prediction用に項目ご
 
 ## 5.4 Skill-first Identification Wizard
 
-RNG Setupから専用Wizardへ遷移し、完了後のreview / adoption結果をRNG Setupへ反映する。C5-E2C2では画面を実装済みと扱わない。
+RNG Setupから専用Wizardを開始し、完了後のreview / adoption結果をRNG Setupへ反映する。C5-E2C7でDialog UIとCoordinator接続を実装済みである。実Browser Worker benchmarkとSkill live-game verificationが未完了のため、Production Identification activationはまだ完了していない。
 
 対象ユーザー。
 

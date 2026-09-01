@@ -886,4 +886,4 @@ Practical同士の優劣判定と、それに基づくPlannerからの旧Practic
 
 同一Route内で新規生成した武器を後続Operationから参照するRoute内武器参照型は将来仕様とし、v1では追加しない。
 
-C5-E2C2で、本書および詳細仕様のProduction Counter Gate契約を「exact persisted Gate不要、operation別active representative使用」へ正式改訂した。C5-E2C3 Active Gate runtime integrationでProduction adapter、Domain Prediction input、Capability、Search、Planner、Trace Replay、semantic Hashを本仕様へ同期し、`PRODUCTION_RNG_ENGINE_VERSION`を `production-rng:c5-e2`へ更新した。`RngState.counterGate`は互換・診断用に保持し、`supportsSeedSearch = false`およびIdentification UI inactiveを維持する。
+C5-E2C2で、本書および詳細仕様のProduction Counter Gate契約を「exact persisted Gate不要、operation別active representative使用」へ正式改訂した。C5-E2C3 Active Gate runtime integrationでProduction adapter、Domain Prediction input、Capability、Search、Planner、Trace Replay、semantic Hashを本仕様へ同期し、`PRODUCTION_RNG_ENGINE_VERSION`を `production-rng:c5-e2`へ更新した。`RngState.counterGate`は互換・診断用に保持する。C5-E2C7でIdentification Wizard UIをRNG Setupへ接続したが、`supportsSeedSearch = false`を維持し、実Browser Worker benchmarkとSkill live-game verificationが完了するまでProduction Identification activationは未完了である。

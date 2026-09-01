@@ -656,6 +656,13 @@ C5-E2C2完了時点では仕様先行でruntime implementationはC5-E2C3 pending
 - child factory creation failureとEngine version mismatchはfail closedとし、生成済みchildをdisposeする。Production Engine versionは `production-rng:c5-e2`、`supportsSeedSearch = false`、Wizard UI inactiveを維持する
 - Skill multi-worker orchestrationはimplementedである。実Browser Worker benchmarkと独立したSkill live-game verificationはpendingで、Identification Production activationは未完了である
 
+### 14.11 C5-E2C7 Identification Wizard UI（2026-09-01）
+
+- RNG Setupから専用Identification Wizardを開始できるDialog UIを追加し、既存Coordinatorのstate / subscribe、STEP 1/2 identify / cancel、restart、復元確認、adoptへ接続した。UIはCoordinatorのclassification、review、invalidation、adoption guardを再実装せず、presentation用form draftだけを保持する
+- STEP 1は武器種、属性、ordered Series / Group観測、明示Seed range、概算Skill Counter ±幅を入力し、STEP 2はSTEP 1 Seedを再入力させずordered five-slot Reset観測と概算Gogma Counter ±幅だけを入力する。Counter Gate、Keep観測、Normal Counter Identification、candidate pickerを追加していない
+- ReviewはBase Seed、starting Skill Counter、starting Gogma Counterだけを表示し、調査前ゲーム状態への復元確認後にCoordinator経由でadoptする。DialogがRNG Setupで生成されたper-open Coordinatorのlifecycleを引き受け、close / unmount時にunsubscribeしてdisposeする
+- 実Browser Worker benchmarkと独立したSkill live-game verificationはpendingで、Production Identification activationは未完了である。Production Engine versionは `production-rng:c5-e2`、`supportsSeedSearch = false`を維持する
+
 ---
 
 ## 15. 現在契約との仕様衝突

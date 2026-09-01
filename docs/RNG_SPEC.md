@@ -623,7 +623,7 @@ Skill Identificationでcanonical Base Seedが確定した後のSTEP 2には、�
 - NormalArtianCounter、BuildCandidate、BuildListEntry、ProductionPlanのrepositoryには依存せず、直接mutationまたはstale書込みを行わない
 - state未作成時は既存ensure契約に従ってinitial RngStateを作成してからadoptする。現repositoryにCAS/version checkはなくread-modify-put間の同時manual updateを上書きし得るため、Wizard側は同時編集を避ける。C5-E2C4だけの新concurrency機構は追加しない
 - persistence failureとunexpected failureはsuccessへ変換せずcallerへ伝播する。`RngState.counterGate` schema、Production RNG semantics/version、`supportsSeedSearch = false`は変更しない
-- Adoption Serviceはimplementedである。STEP 1/2 Coordinatorの契約は9.10、Wizard UIはinactive / not implementedのままである
+- Adoption Serviceはimplementedである。STEP 1/2 Coordinatorの契約は9.10、C5-E2C7 Wizard UIはRNG Setupへ接続済みであるが、Production Identification activationは未完了である
 
 ## 9.10 C5-E2C5 Identification Wizard Coordinator current contract
 
@@ -633,7 +633,7 @@ Skill Identificationでcanonical Base Seedが確定した後のSTEP 2には、�
 - STEP 1再検索はSTEP 2、review、復元確認をinvalidateし、STEP 2再検索はSTEP 1 uniqueを保持してreview、復元確認をinvalidateする。request IDはstep / generation / sequenceで使い回さず、generation照合によってcancel後のlate responseがcurrent stateを上書きしない
 - cancelは再実行用input snapshotと有効な上流unique結果を保持する。restartはactive Worker requestをcancelして全transient stateを破棄し、disposeはCoordinatorが所有する両Worker Clientを停止する。Workerのinvalid / unsupported / cancelled / unavailable / duplicate / unexpected errorを0件へ変換しない
 - review後にユーザーが調査前ゲーム状態へ戻したことを明示確認しない限りadoptionを拒否する。adoption中および成功後の同一Coordinatorからの重複adoptionを拒否し、成功時はC5-E2C4が返す保存済みRngStateを保持する。persistence failure時はreviewと復元確認を保持して明示的retryを可能にする
-- Coordinatorはimplementedである。C5-E2C6 Skill multi-worker orchestrationも既存Client interfaceの背後でimplementedである。Wizard UI、実Browser Worker benchmark、Skill live-game verificationは未完了で、Identification Production activationは完了していない。`production-rng:c5-e2`と`supportsSeedSearch = false`を維持する
+- Coordinatorはimplementedである。C5-E2C6 Skill multi-worker orchestrationも既存Client interfaceの背後でimplementedであり、C5-E2C7 Wizard UIはRNG Setupへ接続済みである。実Browser Worker benchmarkとSkill live-game verificationは未完了で、Identification Production activationは完了していない。`production-rng:c5-e2`と`supportsSeedSearch = false`を維持する
 
 ## 9.11 C5-E2C6 Skill Identification Multi-Worker Orchestration current contract
 
@@ -692,7 +692,7 @@ generic Seed Searchはinactiveである。専用Skill / Gogma Identification Wor
 `supportsSeedSearch`ではなくWorker/application levelで個別に判定し、`supportsSeedSearch = false`を維持する。
 Production有効判定とPredictionはdisabled legacy `LotteryMaster`を要求しない。
 
-C5-E2C3でactive Gate policyをruntimeへ統合した。Production Domain Prediction inputはcaller-supplied Gateを持たず、Production adapterがCore/reference predictorへSkill 54、Gogma 35をoperation別のactive-branch representativeとして供給する。Capability、Search、Planner、Trace Replayはpersisted exact Gateを要求せず、semantic hashもlegacy Gateを除外する。observable semantics changeとして `PRODUCTION_RNG_ENGINE_VERSION` は `production-rng:c5-e2` である。`supportsSeedSearch = false`とIdentification UI inactiveは維持する。
+C5-E2C3でactive Gate policyをruntimeへ統合した。Production Domain Prediction inputはcaller-supplied Gateを持たず、Production adapterがCore/reference predictorへSkill 54、Gogma 35をoperation別のactive-branch representativeとして供給する。Capability、Search、Planner、Trace Replayはpersisted exact Gateを要求せず、semantic hashもlegacy Gateを除外する。observable semantics changeとして `PRODUCTION_RNG_ENGINE_VERSION` は `production-rng:c5-e2` である。C5-E2C7でIdentification UIは実装済みだが、`supportsSeedSearch = false`とProduction Identification activation未完了を維持する。
 
 ## 10.2 Message
 

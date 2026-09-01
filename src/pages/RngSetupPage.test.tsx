@@ -142,4 +142,21 @@ describe('RngSetupPage', () => {
     expect(screen.getByText('Seed Search capability: 未対応')).toBeInTheDocument()
     expect(screen.queryByText(/本番RNG予測エンジンが未実装/)).not.toBeInTheDocument()
   })
+
+  it('opens the dedicated Identification Wizard without replacing the manual workflow', async () => {
+    const user = userEvent.setup()
+    const fixture = dependencies()
+    render(<RngSetupPage dependencies={fixture.deps} />)
+
+    await screen.findByLabelText('Base Seed（基準シード）')
+    expect(screen.getByRole('button', { name: '保存' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Identification Wizardを開始' }))
+
+    expect(screen.getByRole('dialog', { name: 'RNG Identification Wizard' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Base Seed（基準シード）')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('dialog', { name: 'RNG Identification Wizard' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '保存' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Identification Wizardを開始' })).toBeEnabled()
+  })
 })
