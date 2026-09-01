@@ -384,6 +384,15 @@ not the legacy generic Seed Search contract:
   game state. Never persist counters advanced by the observation count.
 - Use existing source `observation` for adopted Base Seed, Skill Counter, and
   Gogma Counter; do not change Counter Gate or require a new `identified` source.
+- The C5-E2C4 application service accepts reviewed exact Base Seed, starting
+  Skill Counter, and starting Gogma Counter values only. It re-normalizes the
+  Seed with the Production authority, validates the counters with the RngState
+  domain contract, preserves every unrelated RngState field, and performs one
+  whole-object RngState put. It never advances counters by observation count or
+  mutates Normal Counters, Candidates, Build List entries, or Plans. Unique and
+  non-truncated result checks remain a Wizard Coordinator responsibility.
+- The Identification adoption service is implemented, but the Wizard UI and
+  Step 1/Step 2 Coordinator remain inactive/not implemented.
 - `supportsSeedSearch` remains false because it describes the legacy generic
   Seed Search API. Identification availability belongs at the Worker/application
   level; do not add RngEngine capability flags without a separate specification

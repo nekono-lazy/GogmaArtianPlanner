@@ -629,6 +629,15 @@ C5-E2C2完了時点では仕様先行でruntime implementationはC5-E2C3 pending
 - Normal Counter unknownでもexisting Gogma、Gogma-only、適合するowned Normal conversionをroute-localに利用できる。新規Normal forgeだけをunavailableにする
 - `supportsSeedSearch = false`を維持する。Skill / Gogma Identification kernelとWorker foundationは存在するが、Identification Production UIはinactiveのままである
 
+### 14.8 C5-E2C4 Identification Result Adoption Service（2026-09-01）
+
+- review済みexact `baseSeed` / `startingSkillCounter` / `startingGogmaCounter`だけを受けるapplication serviceを追加した。raw Worker resultのunique / truncation判定は後続Coordinatorへ残す
+- Base SeedをProduction normalizerで再validation / canonicalizeし、3つの採用値をconfirmed・source `observation`として保存する。観測数によるCounter加算は行わない
+- current RngStateを既存ensure契約で取得し、Counter Gate、notes、createdAt、その他fieldを保持した1つのvalidated stateを1回だけputする。成功時は保存済みRngStateを返す
+- Normal Counter、Candidate、Build List、Planのrepositoryには依存せず、直接mutationしない。Counter Gate unknown / 54 / 200のいずれもadoptionをblockしない
+- invalid input / invalid persisted stateはwrite前に拒否し、repository failureはswallowしない。既存repositoryにCASはないためread-modify-put raceは残存riskである
+- Production versionは `production-rng:c5-e2`、`supportsSeedSearch = false`を維持する。Wizard UI、STEP 1/2 Coordinator、multi-worker orchestrationは未実装である
+
 ---
 
 ## 15. 現在契約との仕様衝突

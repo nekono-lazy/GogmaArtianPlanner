@@ -612,6 +612,19 @@ Skill Identificationでcanonical Base Seedが確定した後のSTEP 2には、�
 - Wizard開始時と各観測Stepでは、観測中はゲーム状態を保存しないこと、開始前にバックアップ方法と自動保存の設定・挙動を確認すること、案内された操作だけを連続して行うこと、観測後は調査前状態へ戻してから採用することを表示する。ゲーム側の保存仕様や安全を断定・保証しない
 - `invalid_input` / `unsupported_input` / `cancelled` / `unexpected_error` / Worker unavailable / duplicate requestIdを区別する。`unexpected_error`またはWorker failureを候補0件へ変換しない
 
+## 9.9 C5-E2C4 Identification Result Adoption Service current contract
+
+- application serviceはreview済みexact値 `baseSeed`、`startingSkillCounter`、`startingGogmaCounter`だけを受ける。Workerのraw result、observation count、UI stateは入力に含めない
+- `matches.length === 1 && isTruncated === false` のunique判定と、調査前ゲーム状態へ戻したことの確認は後続Wizard Coordinatorの責務である
+- Base Seedは保存前にProduction `normalizeSeed()`で再validation / canonicalizeする。RNG Setupと同様、valid noncanonical入力はcanonical decimal stringへ変換し、invalid入力は永続化前に拒否する
+- starting Skill / Gogma Counterは既存 `validateRngState()` のpersisted Counter domainで検証する。Identification kernel固有のsearch range上限をadoption domainへ持ち込まない
+- repositoryの `ensureInitialRngState()`でcurrent stateを取得し、Base Seed、Skill Counter、Gogma Counterだけをconfirmed / source `observation`へoverrideする。Counter Gate、notes、createdAt、その他fieldを保持し、`updatedAt`をRNG Setupと同じく更新する
+- 観測回数によるCounter advanceは行わず、starting `S` / `G`をそのまま保存する。単一のvalidated RngStateを `putRngState()`へ1回渡し、保存されたRngStateを返す
+- NormalArtianCounter、BuildCandidate、BuildListEntry、ProductionPlanのrepositoryには依存せず、直接mutationまたはstale書込みを行わない
+- state未作成時は既存ensure契約に従ってinitial RngStateを作成してからadoptする。現repositoryにCAS/version checkはなくread-modify-put間の同時manual updateを上書きし得るため、Wizard側は同時編集を避ける。C5-E2C4だけの新concurrency機構は追加しない
+- persistence failureとunexpected failureはsuccessへ変換せずcallerへ伝播する。`RngState.counterGate` schema、Production RNG semantics/version、`supportsSeedSearch = false`は変更しない
+- Adoption Serviceはimplementedである。Wizard UIとSTEP 1/2 Coordinatorはinactive / not implementedのままである
+
 ---
 
 ## 10. Web Worker
