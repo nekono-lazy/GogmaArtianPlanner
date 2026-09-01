@@ -90,6 +90,21 @@ describe('deriveRngCapabilities', () => {
     expect(result.canPredictSkills).toBe(true)
   })
 
+  it('does not require a confirmed legacy Counter Gate for Skill or Gogma prediction', () => {
+    const rngState = confirmedRngState()
+    rngState.counterGate = { value: null, isConfirmed: false, source: null }
+    const result = deriveRngCapabilities(
+      rngState,
+      [],
+      [resetBonusesOperation(), resetSkillsOperation()],
+      supportedEngine,
+    )
+    expect(result.canPredictSkills).toBe(true)
+    expect(result.canPredictGogma).toBe(true)
+    expect(result.canRunPlanner).toBe(true)
+    expect(result.missingRequirements).toEqual([])
+  })
+
   it('disables Skill prediction when the Skill Counter is missing', () => {
     const rngState = confirmedRngState()
     rngState.skillCounter = { value: null, isConfirmed: false, source: null }
@@ -238,7 +253,6 @@ describe('deriveRngCapabilities', () => {
       'base_seed',
       'gogma_counter',
       'skill_counter',
-      'counter_gate',
       'normal_artian_counter:weapon.fixture.a:8',
       'engine:gogma_prediction',
       'engine:skill_prediction',

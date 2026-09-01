@@ -330,6 +330,90 @@ describe('Candidate Search routes', () => {
     expect(candidate?.estimatedNormalAdvance).toBeNull()
   })
 
+  it('keeps Gogma-only routes available with Gate and Normal Counter unknown', async () => {
+    const input = createCandidateSearchInput()
+    input.normalCounters = []
+    input.rngState.counterGate = { value: null, isConfirmed: false, source: null }
+    input.ownedWeapons[0].isProtected = false
+    const result = await searchCandidates(
+      input,
+      createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
+      deterministicExecution,
+    )
+    const targetResult = result.targetResults[0]
+    expect(targetResult.searchedRoutes).toContain('existing_gogma_reset_bonuses')
+    expect(targetResult.searchedRoutes).toContain('existing_gogma_reset_skills')
+    expect(targetResult.searchedRoutes).not.toContain('normal_artian_to_gogma')
+    expect(targetResult.skippedRoutes).toContainEqual(expect.objectContaining({
+      route: 'normal_artian_to_gogma',
+      reason: 'normal_counter_unconfirmed',
+    }))
+  })
+
+  it('keeps Search availability, results, and semantic hashes unchanged across legacy Gate states', async () => {
+    const base = createCandidateSearchInput()
+    base.routeFilter = 'existing_gogma'
+    base.ownedWeapons[0].isProtected = false
+    const unknown = structuredClone(base)
+    unknown.rngState.counterGate = { value: null, isConfirmed: false, source: null }
+    const imported = structuredClone(base)
+    imported.rngState.counterGate = {
+      value: 200,
+      isConfirmed: true,
+      source: 'gogma_seed_finder_import',
+    }
+    const run = (input: typeof base) => searchCandidates(
+      input,
+      createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
+      deterministicExecution,
+    )
+    const [unknownResult, importedResult] = await Promise.all([run(unknown), run(imported)])
+    expect(importedResult.targetResults[0].searchedRoutes)
+      .toEqual(unknownResult.targetResults[0].searchedRoutes)
+    expect(importedResult.targetResults[0].skippedRoutes)
+      .toEqual(unknownResult.targetResults[0].skippedRoutes)
+    expect(importedResult.targetResults[0].candidates.map(({ route, searchStateHash }) => ({ route, searchStateHash })))
+      .toEqual(unknownResult.targetResults[0].candidates.map(({ route, searchStateHash }) => ({ route, searchStateHash })))
+  })
+
+  it('keeps owned-Normal conversion available when Gogma Counter is unknown', async () => {
+    const input = createCandidateSearchInput()
+    input.routeFilter = 'normal_artian'
+    input.normalCounters = []
+    input.rngState.gogmaCounter = { value: null, isConfirmed: false, source: null }
+    input.rngState.counterGate = { value: null, isConfirmed: false, source: null }
+    const source = input.ownedWeapons[0]
+    input.ownedWeapons = [{
+      ...source,
+      kind: 'normal',
+      rarity: 8,
+      restorationBonusScope: 'normal_artian',
+      seriesSkillId: null,
+      groupSkillId: null,
+      status: null,
+      isProtected: false,
+    }]
+    const result = await searchCandidates(
+      input,
+      createCandidateSearchEngine(input),
+      deterministicExecution,
+    )
+    const targetResult = result.targetResults[0]
+    expect(targetResult.searchedRoutes).toContain('owned_normal_artian_to_gogma')
+    expect(targetResult.candidates).toContainEqual(expect.objectContaining({
+      route: expect.objectContaining({
+        kind: 'owned_normal_artian_to_gogma',
+        operations: expect.arrayContaining([
+          expect.objectContaining({ type: 'convert_normal_to_gogma' }),
+        ]),
+      }),
+    }))
+    expect(targetResult.skippedRoutes).toContainEqual(expect.objectContaining({
+      route: 'normal_artian_to_gogma',
+      reason: 'normal_counter_unconfirmed',
+    }))
+  })
+
   it('skips Reset Skills when Skill capability is missing', async () => {
     const input = createCandidateSearchInput()
     input.routeFilter = 'existing_gogma'
@@ -606,7 +690,6 @@ describe('Candidate Search routes', () => {
     keep[4] = firstKeepBonus
     input.ownedWeapons[0].restorationBonuses = keep
     const baseSeed = input.rngState.baseSeed.value as string
-    const counterGate = input.rngState.counterGate.value as number
     const makePrediction = (
       counter: number,
       operation: FakeRngFixtures['keepBonusPredictions'][number]['input']['operation'],
@@ -615,7 +698,6 @@ describe('Candidate Search routes', () => {
       input: {
         baseSeed,
         gogmaCounter: counter,
-        counterGate,
         weaponTypeId: input.targetWeapons[0].weaponTypeId,
         elementId: input.targetWeapons[0].elementId,
         operation,

@@ -243,7 +243,6 @@ function entryPredictionSupportFailure(
         currentBonuses = engine.predictGogmaBonus({
           baseSeed: input.rngState.baseSeed.value!,
           gogmaCounter: operation.gogmaCounterBefore,
-          counterGate: input.rngState.counterGate.value!,
           weaponTypeId: target.weaponTypeId,
           elementId: target.elementId,
           operation: { type: 'reset_bonuses' },
@@ -270,7 +269,6 @@ function entryPredictionSupportFailure(
         currentBonuses = engine.predictGogmaBonus({
           baseSeed: input.rngState.baseSeed.value!,
           gogmaCounter: operation.gogmaCounterBefore,
-          counterGate: input.rngState.counterGate.value!,
           weaponTypeId: target.weaponTypeId,
           elementId: target.elementId,
           operation: {

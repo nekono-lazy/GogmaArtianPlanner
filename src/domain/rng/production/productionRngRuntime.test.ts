@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createBuildListCalculationContext } from '../../../services/buildList/createBuildListCalculationContext'
 import { createPlannerCalculationContext } from '../../../services/planner/createPlannerInput'
+import { isCalculationContextCompatible } from '../../models/publicTypes'
 import { createValidMasterDataFixture } from '../../../test/fixtures/masterData'
 import { createProductionPlannerRngEngine } from '../../../workers/planner.worker.production'
 import { createProductionSearchRngEngine } from '../../../workers/search.worker.production'
@@ -20,5 +21,11 @@ describe('Production RNG runtime authority', () => {
     expect(createBuildListCalculationContext(master).rngEngineVersion).toBe(productionRngRuntime.version)
     expect(createPlannerCalculationContext(master, productionRngRuntime.version).rngEngineVersion)
       .toBe(PRODUCTION_RNG_ENGINE_VERSION)
+
+    const current = createPlannerCalculationContext(master, productionRngRuntime.version)
+    expect(isCalculationContextCompatible(
+      { ...current, rngEngineVersion: 'production-rng:c5-b' },
+      current,
+    )).toBe(false)
   })
 })

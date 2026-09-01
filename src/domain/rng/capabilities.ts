@@ -11,7 +11,6 @@ export type RngCapabilityMissingRequirement =
   | 'base_seed'
   | 'gogma_counter'
   | 'skill_counter'
-  | 'counter_gate'
   | `normal_artian_counter:${string}`
   | 'engine:gogma_prediction'
   | 'engine:skill_prediction'
@@ -39,7 +38,6 @@ function compareRequirement(
     base_seed: 0,
     gogma_counter: 1,
     skill_counter: 2,
-    counter_gate: 3,
     'engine:gogma_prediction': 5,
     'engine:skill_prediction': 6,
     'engine:normal_artian_prediction': 7,
@@ -59,17 +57,14 @@ export function deriveRngCapabilities(
   const hasBaseSeed = isKnown(rngState.baseSeed)
   const hasGogmaCounter = isKnown(rngState.gogmaCounter)
   const hasSkillCounter = isKnown(rngState.skillCounter)
-  const hasCounterGate = isKnown(rngState.counterGate)
 
   const canPredictGogma =
     hasBaseSeed &&
     hasGogmaCounter &&
-    hasCounterGate &&
     engineCapabilities.supportsGogmaPrediction
   const canPredictSkills =
     hasBaseSeed &&
     hasSkillCounter &&
-    hasCounterGate &&
     engineCapabilities.supportsSkillPrediction
 
   const confirmedNormalCounterIds = new Set(
@@ -96,7 +91,6 @@ export function deriveRngCapabilities(
   const requireGogmaPrediction = () => {
     requireBaseSeed()
     if (!hasGogmaCounter) missingRequirements.add('gogma_counter')
-    if (!hasCounterGate) missingRequirements.add('counter_gate')
     if (!engineCapabilities.supportsGogmaPrediction) {
       missingRequirements.add('engine:gogma_prediction')
     }
@@ -104,7 +98,6 @@ export function deriveRngCapabilities(
   const requireSkillPrediction = () => {
     requireBaseSeed()
     if (!hasSkillCounter) missingRequirements.add('skill_counter')
-    if (!hasCounterGate) missingRequirements.add('counter_gate')
     if (!engineCapabilities.supportsSkillPrediction) {
       missingRequirements.add('engine:skill_prediction')
     }

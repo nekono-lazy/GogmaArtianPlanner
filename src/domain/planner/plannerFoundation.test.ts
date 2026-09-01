@@ -147,6 +147,16 @@ describe('Planner current-state entry validation', () => {
     expect(validatePlannerInput(input, dependencies).validBuildListEntries).toHaveLength(1)
   })
 
+  it('keeps an existing Gogma Skill entry usable with Gate and Normal Counter unknown', () => {
+    const { input, dependencies } = fixture()
+    input.rngState.counterGate = { value: null, isConfirmed: false, source: null }
+    input.normalCounters = []
+    input.buildListEntries = [resetSkillsEntry(input)]
+    const result = validatePlannerInput(input, dependencies)
+    expect(result.validBuildListEntries).toHaveLength(1)
+    expect(result.excludedBuildListEntries).toEqual([])
+  })
+
   it('uses current validity when persisted stale flags are obsolete', () => {
     const { input, dependencies } = fixture()
     input.buildListEntries[0].isStale = true

@@ -344,11 +344,12 @@ not actual game Counter Gate values and must never be persisted, requested by
 the Identification Wizard, or presented as identified Gate values. Preserve
 the low-Gate Core/reference semantics and tests.
 
-C5-E2C2 updates the approved specification only. Until C5-E2C3 is implemented,
-the current runtime still incorrectly requires exact confirmed Gate in
-capability derivation, Search, Planner Trace Replay, and hashes. Do not describe
-that integration as complete. C5-E2C3 must update those components atomically
-and bump `PRODUCTION_RNG_ENGINE_VERSION` to `production-rng:c5-e2`.
+C5-E2C3 integrates this policy atomically in the Production adapter, Domain
+prediction inputs, capability derivation, Candidate Search, Planner validation,
+Trace Replay, and semantic hashes. `PRODUCTION_RNG_ENGINE_VERSION` is
+`production-rng:c5-e2`. Do not reintroduce caller-supplied or persisted Gate as
+Production authority. This runtime integration does not activate the Skill-first
+Identification UI; `supportsSeedSearch` remains `false`.
 
 ---
 

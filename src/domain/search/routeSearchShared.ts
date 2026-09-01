@@ -126,12 +126,10 @@ export async function searchResetSkillVariants(
 ): Promise<BuildCandidate[]> {
   const { engine, execution, input, target } = context
   const baseSeed = input.rngState.baseSeed.value
-  const counterGate = input.rngState.counterGate.value
   const start = base.skillCounterBefore ?? input.rngState.skillCounter.value
   if (
     !hasConfirmedSkillInputs(input) ||
     baseSeed === null ||
-    counterGate === null ||
     start === null
   ) return []
   if (!engine.capabilities.supportsSkillPrediction) return []
@@ -149,7 +147,6 @@ export async function searchResetSkillVariants(
     const skills = engine.predictSkills({
       baseSeed,
       skillCounter,
-      counterGate,
       weaponTypeId: target.weaponTypeId,
       elementId: target.elementId,
       master: input.master,
@@ -192,7 +189,6 @@ export async function searchBonusAmendmentVariants(
 ): Promise<BonusAmendmentSearchResult> {
   const { engine, execution, input, target } = context
   const baseSeed = input.rngState.baseSeed.value
-  const counterGate = input.rngState.counterGate.value
   const emptyResult = (): BonusAmendmentSearchResult => ({
     candidates: [],
     searchedRoutes: [],
@@ -200,7 +196,6 @@ export async function searchBonusAmendmentVariants(
   })
   if (
     baseSeed === null ||
-    counterGate === null ||
     !engine.capabilities.supportsGogmaPrediction
   ) return emptyResult()
 
@@ -255,7 +250,6 @@ export async function searchBonusAmendmentVariants(
         const prediction = engine.predictGogmaBonus({
           baseSeed,
           gogmaCounter: state.gogmaCounter,
-          counterGate,
           weaponTypeId: target.weaponTypeId,
           elementId: target.elementId,
           operation: type === 'reset_bonuses'
@@ -347,11 +341,9 @@ export interface BonusAmendmentSearchResult {
 export function hasConfirmedSkillInputs(input: CandidateSearchInput): boolean {
   return input.rngState.baseSeed.isConfirmed && input.rngState.baseSeed.value !== null
     && input.rngState.skillCounter.isConfirmed && input.rngState.skillCounter.value !== null
-    && input.rngState.counterGate.isConfirmed && input.rngState.counterGate.value !== null
 }
 
 export function hasConfirmedGogmaInputs(input: CandidateSearchInput): boolean {
   return input.rngState.baseSeed.isConfirmed && input.rngState.baseSeed.value !== null
     && input.rngState.gogmaCounter.isConfirmed && input.rngState.gogmaCounter.value !== null
-    && input.rngState.counterGate.isConfirmed && input.rngState.counterGate.value !== null
 }

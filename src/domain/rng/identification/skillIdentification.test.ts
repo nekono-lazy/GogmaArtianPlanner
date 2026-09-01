@@ -5,6 +5,7 @@ import {
   REFERENCE_GROUP_SKILL_POOL,
   referenceSkillCombinationFromIndex,
 } from '../production/referenceSkillPools'
+import { predictReferenceSkills } from '../production/skillPrediction'
 import { UnavailableRngEngine } from '../unavailableRngEngine'
 import {
   identifySkillSeedAndCounter,
@@ -38,7 +39,6 @@ function productionObservations(
     const prediction = engine.predictSkills({
       baseSeed: String(baseSeed),
       skillCounter: startSkillCounter + offset,
-      counterGate: SKILL_IDENTIFICATION_ACTIVE_GATE_REPRESENTATIVE,
       weaponTypeId,
       elementId,
       master: EMPTY_RNG_MASTER,
@@ -304,12 +304,15 @@ describe('Skill Identification kernel', () => {
       master: EMPTY_RNG_MASTER,
     }
     expect(SKILL_IDENTIFICATION_ACTIVE_GATE_REPRESENTATIVE).toBe(54)
-    expect(engine.predictSkills({ ...base, counterGate: 54 })).toEqual(
-      engine.predictSkills({ ...base, counterGate: 55 }),
-    )
-    expect(engine.predictSkills({ ...base, counterGate: 54 })).toEqual(
-      engine.predictSkills({ ...base, counterGate: 200 }),
-    )
+    const reference = predictReferenceSkills({
+      ...base,
+      baseSeed: Number(base.baseSeed),
+      counterGate: SKILL_IDENTIFICATION_ACTIVE_GATE_REPRESENTATIVE,
+    })
+    expect(engine.predictSkills(base)).toEqual({
+      seriesSkillId: reference.seriesSkillId,
+      groupSkillId: reference.groupSkillId,
+    })
   })
 })
 

@@ -617,7 +617,17 @@ Gate未満時も保存counterのDomain before/afterが+1するかどうかは、
 - Skill live verificationと実Browser Worker benchmarkはWizard implementation blockerではないがProduction activation blockerである。Node benchmarkはBrowser benchmarkの代用ではない
 - activation前のSkill Production UXにはcontiguous / non-overlapping Seed chunk、deterministic merge、global progress、cancel propagation、Worker failureの明示errorを持つmulti-worker orchestrationが必要である
 
-C5-E2C2は仕様文書だけを改訂する。完了直後のcurrent codeは依然としてexact confirmed GateをCapability、Search、Planner Trace Replay、Hashの一部で要求している。runtime implementationはC5-E2C3へ残し、その変更と同時に `PRODUCTION_RNG_ENGINE_VERSION` を `production-rng:c5-e2`へbumpする。従ってC5-E2C2時点は「specification approved / runtime implementation pending C5-E2C3」であり、統合済みとは扱わない。
+C5-E2C2完了時点では仕様先行でruntime implementationはC5-E2C3 pendingだった。次節のC5-E2C3でその差を解消した。
+
+### 14.7 C5-E2C3 Active Counter Gate runtime integration（2026-09-01）
+
+- Production Domain Prediction inputからcaller-supplied `counterGate`を除外し、Production adapterがCore/reference predictorへSkill 54、Gogma 35を内部供給する。Coreの低Gate branchとthreshold fixtureは変更しない
+- Capability、Candidate Search、Planner validation、Trace Replayからconfirmed Gate requirementを除外し、Base Seedとoperation別CounterおよびEngine/concrete semantic supportだけを要求する
+- `searchStateHash`と`ExpectedPlanState.rngStateHash`からlegacy Gateのvalue / isConfirmed / sourceを除外し、Gate-only変更によるfalse staleを防ぐ
+- `RngState.counterGate`、validation、manual/import互換性は保持し、schema migrationは行わない
+- `PRODUCTION_RNG_ENGINE_VERSION`を `production-rng:c5-e2`へbumpし、旧CalculationContextを `calculation_context_changed`としてstaleにする
+- Normal Counter unknownでもexisting Gogma、Gogma-only、適合するowned Normal conversionをroute-localに利用できる。新規Normal forgeだけをunavailableにする
+- `supportsSeedSearch = false`を維持する。Skill / Gogma Identification kernelとWorker foundationは存在するが、Identification Production UIはinactiveのままである
 
 ---
 

@@ -213,9 +213,9 @@ describe('BuildListEntry staleness', () => {
       .not.toContain('calculation_context_changed')
 
     const legacy = structuredClone(base.entry)
-    legacy.calculationContext.rngEngineVersion = 'production-engine-unavailable'
+    legacy.calculationContext.rngEngineVersion = 'production-rng:c5-b'
     legacy.candidateSnapshot.calculationContext.rngEngineVersion =
-      'production-engine-unavailable'
+      'production-rng:c5-b'
     expect(evaluateBuildListEntryStaleness(legacy, current).staleReasons)
       .toContain('calculation_context_changed')
   })

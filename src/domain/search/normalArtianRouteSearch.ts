@@ -67,7 +67,7 @@ export async function searchNormalArtianRoutes(
     result.skippedRoutes.push({
       route: 'normal_artian_to_gogma',
       reason: 'rng_state_unconfirmed',
-      detail: 'Confirmed Base Seed, Skill Counter, and Counter Gate are required for conversion.',
+      detail: 'Confirmed Base Seed and Skill Counter are required for conversion.',
     })
     return result
   }
@@ -91,8 +91,7 @@ export async function searchNormalArtianRoutes(
 
   const baseSeed = input.rngState.baseSeed.value
   const skillCounter = input.rngState.skillCounter.value
-  const counterGate = input.rngState.counterGate.value
-  if (baseSeed === null || skillCounter === null || counterGate === null) return result
+  if (baseSeed === null || skillCounter === null) return result
   let canSearchAmendments = hasConfirmedGogmaInputs(input) && engine.capabilities.supportsGogmaPrediction
   if (canSearchAmendments) {
     const resetSupport = context.predictionSupport.gogmaReset()
@@ -131,7 +130,6 @@ export async function searchNormalArtianRoutes(
       const skills = engine.predictSkills({
         baseSeed,
         skillCounter,
-        counterGate,
         weaponTypeId: target.weaponTypeId,
         elementId: target.elementId,
         master: input.master,

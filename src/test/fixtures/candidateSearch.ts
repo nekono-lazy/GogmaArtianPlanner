@@ -137,7 +137,6 @@ export function createCandidateSearchEngine(
         input: {
           baseSeed: input.rngState.baseSeed.value as string,
           gogmaCounter: 10,
-          counterGate: input.rngState.counterGate.value as number,
           weaponTypeId: input.targetWeapons[0].weaponTypeId,
           elementId: input.targetWeapons[0].elementId,
           operation: { type: 'reset_bonuses' },
@@ -147,10 +146,10 @@ export function createCandidateSearchEngine(
       },
     ],
     skillPredictions: options.skillSupported === false ? [] : [
-      { input: { baseSeed: input.rngState.baseSeed.value as string, skillCounter: 7, counterGate: input.rngState.counterGate.value as number, weaponTypeId: input.targetWeapons[0].weaponTypeId, elementId: input.targetWeapons[0].elementId, master: input.master }, result: { seriesSkillId: 'series_skill.fixture.a', groupSkillId: null } },
-      { input: { baseSeed: input.rngState.baseSeed.value as string, skillCounter: 8, counterGate: input.rngState.counterGate.value as number, weaponTypeId: input.targetWeapons[0].weaponTypeId, elementId: input.targetWeapons[0].elementId, master: input.master }, result: { seriesSkillId: 'series_skill.fixture.a', groupSkillId: null } },
+      { input: { baseSeed: input.rngState.baseSeed.value as string, skillCounter: 7, weaponTypeId: input.targetWeapons[0].weaponTypeId, elementId: input.targetWeapons[0].elementId, master: input.master }, result: { seriesSkillId: 'series_skill.fixture.a', groupSkillId: null } },
+      { input: { baseSeed: input.rngState.baseSeed.value as string, skillCounter: 8, weaponTypeId: input.targetWeapons[0].weaponTypeId, elementId: input.targetWeapons[0].elementId, master: input.master }, result: { seriesSkillId: 'series_skill.fixture.a', groupSkillId: null } },
     ],
-    keepBonusPredictions: options.keepSupported && source ? [{ input: { baseSeed: input.rngState.baseSeed.value as string, gogmaCounter: 10, counterGate: input.rngState.counterGate.value as number, weaponTypeId: input.targetWeapons[0].weaponTypeId, elementId: input.targetWeapons[0].elementId, operation: { type: 'keep_bonuses' as const, currentBonuses: source.restorationBonuses }, master: input.master }, result: keepResult }] : [],    normalCounterAdvances: [
+    keepBonusPredictions: options.keepSupported && source ? [{ input: { baseSeed: input.rngState.baseSeed.value as string, gogmaCounter: 10, weaponTypeId: input.targetWeapons[0].weaponTypeId, elementId: input.targetWeapons[0].elementId, operation: { type: 'keep_bonuses' as const, currentBonuses: source.restorationBonuses }, master: input.master }, result: keepResult }] : [],    normalCounterAdvances: [
       {
         current: 4,
         operation: { type: 'create_normal_artian', count: 1 },

@@ -121,9 +121,6 @@ export function createSearchStateHash(
   if (usesSkillPrediction) {
     normalized.skillCounter = normalizeKnownValue(rngState.skillCounter)
   }
-  if (usesGogmaPrediction || usesSkillPrediction) {
-    normalized.counterGate = normalizeKnownValue(rngState.counterGate)
-  }
   if (relevantNormalCounterIds.length > 0) {
     const counterById = new Map(
       normalCounters.map((counter) => [counter.id, counter]),
@@ -221,7 +218,6 @@ export function createExpectedPlanState(
     baseSeed: normalizeKnownValue(rngState.baseSeed),
     gogmaCounter: normalizeKnownValue(rngState.gogmaCounter),
     skillCounter: normalizeKnownValue(rngState.skillCounter),
-    counterGate: normalizeKnownValue(rngState.counterGate),
   }
   const normalizedCounters = [...normalCounters]
     .sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0)

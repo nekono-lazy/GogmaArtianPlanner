@@ -26,6 +26,7 @@ function master() {
 describe('ProductionRngEngine facade', () => {
   it('advertises production operations without activating UnavailableRngEngine', () => {
     const engine = new ProductionRngEngine()
+    expect(PRODUCTION_RNG_ENGINE_VERSION).toBe('production-rng:c5-e2')
     expect(engine.version).toBe(PRODUCTION_RNG_ENGINE_VERSION)
     expect(engine.capabilities).toEqual({ supportsSeedSearch: false, supportsNormalArtianPrediction: true, supportsGogmaPrediction: true, supportsSkillPrediction: true, supportsKeepBonusesPrediction: true })
     expect(Object.values(new UnavailableRngEngine().capabilities)).toEqual([false, false, false, false, false])
@@ -36,11 +37,38 @@ describe('ProductionRngEngine facade', () => {
     const normal = gameVerifiedBowElementalNormalVectors[0]!
     expect(engine.predictNormalArtian({ ...normal, baseSeed: String(normal.baseSeed), master: inputMaster })).toEqual(predictGameVerifiedNormalArtian(normal))
     const skill = referenceRngVectors.skillPredictions[0]!
-    expect(engine.predictSkills({ ...skill, baseSeed: String(skill.baseSeed), master: inputMaster })).toEqual({ seriesSkillId: predictReferenceSkills(skill).seriesSkillId, groupSkillId: predictReferenceSkills(skill).groupSkillId })
+    const { counterGate: _skillGate, ...skillDomainInput } = skill
+    expect(engine.predictSkills({ ...skillDomainInput, baseSeed: String(skill.baseSeed), master: inputMaster })).toEqual({ seriesSkillId: predictReferenceSkills(skill).seriesSkillId, groupSkillId: predictReferenceSkills(skill).groupSkillId })
     const reset = gameVerifiedGogmaResetVectors[0]!
-    expect(engine.predictGogmaBonus({ ...reset, baseSeed: String(reset.baseSeed), operation: { type: 'reset_bonuses' }, master: inputMaster })).toEqual(predictGameAdjustedGogmaReset(reset, inputMaster).bonuses)
+    const { counterGate: _resetGate, ...resetDomainInput } = reset
+    expect(engine.predictGogmaBonus({ ...resetDomainInput, baseSeed: String(reset.baseSeed), operation: { type: 'reset_bonuses' }, master: inputMaster })).toEqual(predictGameAdjustedGogmaReset(reset, inputMaster).bonuses)
     const keep = gameVerifiedGogmaKeepVector
-    expect(engine.predictGogmaBonus({ ...keep, baseSeed: String(keep.baseSeed), operation: { type: 'keep_bonuses', currentBonuses: keep.currentBonuses }, master: inputMaster })).toEqual(predictReferenceGogmaKeep(keep).bonuses)
+    const { counterGate: _keepGate, ...keepDomainInput } = keep
+    expect(engine.predictGogmaBonus({ ...keepDomainInput, baseSeed: String(keep.baseSeed), operation: { type: 'keep_bonuses', currentBonuses: keep.currentBonuses }, master: inputMaster })).toEqual(predictReferenceGogmaKeep(keep).bonuses)
+    void _skillGate; void _resetGate; void _keepGate
+  })
+
+  it('uses active-branch representatives for Skill, Reset, and Keep without caller Gate input', () => {
+    const engine = new ProductionRngEngine(); const inputMaster = master()
+    for (const vector of referenceRngVectors.skillPredictions.filter(({ counterGate }) => counterGate >= 54).slice(0, 4)) {
+      const { counterGate: _gate, ...domainInput } = vector
+      const reference = predictReferenceSkills({ ...vector, counterGate: 54 })
+      expect(engine.predictSkills({ ...domainInput, baseSeed: String(vector.baseSeed), master: inputMaster }))
+        .toEqual({
+          seriesSkillId: reference.seriesSkillId,
+          groupSkillId: reference.groupSkillId,
+        })
+      void _gate
+    }
+    const reset = gameVerifiedGogmaResetVectors[0]!
+    const { counterGate: _resetGate, ...resetInput } = reset
+    expect(engine.predictGogmaBonus({ ...resetInput, baseSeed: String(reset.baseSeed), operation: { type: 'reset_bonuses' }, master: inputMaster }))
+      .toEqual(predictGameAdjustedGogmaReset({ ...reset, counterGate: 35 }, inputMaster).bonuses)
+    const keep = gameVerifiedGogmaKeepVector
+    const { counterGate: _keepGate, ...keepInput } = keep
+    expect(engine.predictGogmaBonus({ ...keepInput, baseSeed: String(keep.baseSeed), operation: { type: 'keep_bonuses', currentBonuses: keep.currentBonuses }, master: inputMaster }))
+      .toEqual(predictReferenceGogmaKeep({ ...keep, counterGate: 35 }).bonuses)
+    void _resetGate; void _keepGate
   })
 
   it('uses only caller supplied Reset availability and reports unsupported inputs', () => {

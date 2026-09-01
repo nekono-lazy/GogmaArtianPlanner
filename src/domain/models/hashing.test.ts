@@ -60,6 +60,17 @@ describe('searchStateHash', () => {
     expect(createSearchStateHash(route, state, counters)).toBe(before)
   })
 
+  it('is unchanged by legacy Counter Gate value, confirmation, or source changes', () => {
+    const route = createValidBuildCandidate().route
+    const state = createValidRngState()
+    const counters = [createValidNormalArtianCounter()]
+    const before = createSearchStateHash(route, state, counters)
+    state.counterGate = { value: null, isConfirmed: false, source: null }
+    expect(createSearchStateHash(route, state, counters)).toBe(before)
+    state.counterGate = { value: 200, isConfirmed: true, source: 'observation' }
+    expect(createSearchStateHash(route, state, counters)).toBe(before)
+  })
+
   it('changes when the relevant NormalArtianCounter changes', () => {
     const route = createValidBuildCandidate().route
     const state = createValidRngState()
@@ -256,6 +267,22 @@ describe('ExpectedPlanState hashing', () => {
     weapon.memo = 'Changed'
     weapon.updatedAt = '2026-08-30T00:00:00.000Z'
     expect(createExpectedPlanState(state, [counter], [weapon])).toEqual(before)
+  })
+
+  it('excludes legacy Counter Gate while retaining Production semantic counters', () => {
+    const state = createValidRngState()
+    const counter = createValidNormalArtianCounter()
+    const weapon = createValidOwnedWeapon()
+    const before = createExpectedPlanState(state, [counter], [weapon])
+    state.counterGate = { value: null, isConfirmed: false, source: null }
+    expect(createExpectedPlanState(state, [counter], [weapon]).rngStateHash)
+      .toBe(before.rngStateHash)
+    state.counterGate = { value: 200, isConfirmed: true, source: 'observation' }
+    expect(createExpectedPlanState(state, [counter], [weapon]).rngStateHash)
+      .toBe(before.rngStateHash)
+    state.skillCounter.value = (state.skillCounter.value ?? 0) + 1
+    expect(createExpectedPlanState(state, [counter], [weapon]).rngStateHash)
+      .not.toBe(before.rngStateHash)
   })
 
   it('includes kind while excluding OwnedWeapon name and memo', () => {

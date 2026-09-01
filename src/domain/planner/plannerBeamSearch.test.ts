@@ -2105,6 +2105,9 @@ describe('Planner input-level RNG support', () => {
       }],
     })
     const { input, dependencies } = fixture([goal], [entry], [source])
+    input.rngState.counterGate = { value: null, isConfirmed: false, source: null }
+    input.rngState.gogmaCounter = { value: null, isConfirmed: false, source: null }
+    input.normalCounters = []
     const support = vi.spyOn(dependencies.rngEngine, 'getPredictionSupport')
 
     expect(validatePlannerInput(input, dependencies).validBuildListEntries)
@@ -2131,6 +2134,8 @@ describe('Planner input-level RNG support', () => {
     const entries = targets.map((goal, index) =>
       resetEntry(`entry.support.reset.${index}`, goal, sources[index]))
     const { input, dependencies } = fixture(targets, entries, sources)
+    input.rngState.counterGate = { value: null, isConfirmed: false, source: null }
+    input.rngState.skillCounter = { value: null, isConfirmed: false, source: null }
     const delegate = dependencies.rngEngine.getPredictionSupport.bind(
       dependencies.rngEngine,
     )

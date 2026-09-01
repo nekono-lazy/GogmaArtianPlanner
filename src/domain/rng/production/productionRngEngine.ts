@@ -20,14 +20,21 @@ import {
   GameAdjustedGogmaResetMasterDataError,
   gameAdjustedGogmaResetCandidatesForWeaponAndElement,
 } from './gameGogmaBonuses'
-import { predictGameAdjustedGogmaReset, predictReferenceGogmaKeep } from './gogmaPrediction'
+import {
+  predictGameAdjustedGogmaReset,
+  predictReferenceGogmaKeep,
+  REFERENCE_GOGMA_COUNTER_GATE_THRESHOLD,
+} from './gogmaPrediction'
 import { UnsupportedGameVerifiedNormalPredictionError, gameVerifiedNormalCandidatesForWeaponAndElement } from './gameNormalBonuses'
 import { predictGameVerifiedNormalArtian } from './normalPrediction'
 import { referenceGogmaIdFromRestorationBonus } from './referenceGogmaBonuses'
 import { toReferenceAttributeForce, toReferenceWeaponType } from './referenceAdapters'
-import { predictReferenceSkills } from './skillPrediction'
+import {
+  predictReferenceSkills,
+  REFERENCE_SKILL_COUNTER_GATE_THRESHOLD,
+} from './skillPrediction'
 
-export const PRODUCTION_RNG_ENGINE_VERSION = 'production-rng:c5-b'
+export const PRODUCTION_RNG_ENGINE_VERSION = 'production-rng:c5-e2'
 
 const capabilities: RngEngineCapabilities = {
   supportsSeedSearch: false,
@@ -131,12 +138,22 @@ export class ProductionRngEngine implements RngEngine {
 
   predictSkills(input: SkillPredictionInput): SkillPredictionResult {
     requireSupport(this.getPredictionSupport({ type: 'skill', weaponTypeId: input.weaponTypeId, elementId: input.elementId }), 'skill')
-    const result = predictReferenceSkills({ ...input, baseSeed: normalizedBaseSeed(input.baseSeed) })
+    const result = predictReferenceSkills({
+      ...input,
+      baseSeed: normalizedBaseSeed(input.baseSeed),
+      counterGate: REFERENCE_SKILL_COUNTER_GATE_THRESHOLD,
+    })
     return { seriesSkillId: result.seriesSkillId, groupSkillId: result.groupSkillId }
   }
 
   predictGogmaBonus(input: GogmaBonusPredictionInput): RestorationBonusSet {
-    const base = { baseSeed: normalizedBaseSeed(input.baseSeed), weaponTypeId: input.weaponTypeId, elementId: input.elementId, gogmaCounter: input.gogmaCounter, counterGate: input.counterGate }
+    const base = {
+      baseSeed: normalizedBaseSeed(input.baseSeed),
+      weaponTypeId: input.weaponTypeId,
+      elementId: input.elementId,
+      gogmaCounter: input.gogmaCounter,
+      counterGate: REFERENCE_GOGMA_COUNTER_GATE_THRESHOLD,
+    }
     if (input.operation.type === 'reset_bonuses') {
       requireSupport(this.getPredictionSupport({ type: 'gogma_reset', weaponTypeId: input.weaponTypeId, elementId: input.elementId, master: input.master }), 'gogma_reset')
       return predictGameAdjustedGogmaReset(base, input.master as Required<Pick<typeof input.master, 'weaponBonusDefinitions' | 'weaponTypes' | 'elements' | 'bonusTypes'>>).bonuses

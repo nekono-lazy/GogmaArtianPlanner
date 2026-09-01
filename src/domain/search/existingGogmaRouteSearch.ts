@@ -67,7 +67,7 @@ export async function searchExistingGogmaRoutes(context: RouteSearchContext): Pr
       route: 'existing_gogma_reset_skills',
       reason: hasSkillInputs ? 'skill_prediction_unsupported' : 'rng_state_unconfirmed',
       detail: !hasSkillInputs
-        ? 'Confirmed Base Seed, Skill Counter, and Counter Gate are required.'
+        ? 'Confirmed Base Seed and Skill Counter are required.'
         : skillInputUnsupportedReason
           ? `The active RNG Engine does not support this Skill input (${skillInputUnsupportedReason}).`
           : 'The active RNG Engine does not support Skill prediction.',
@@ -80,7 +80,7 @@ export async function searchExistingGogmaRoutes(context: RouteSearchContext): Pr
     return result
   }
   if (!hasConfirmedGogmaInputs(input) || !engine.capabilities.supportsGogmaPrediction) {
-    pushAll(result, destructiveKinds, hasConfirmedGogmaInputs(input) ? 'gogma_prediction_unsupported' : 'rng_state_unconfirmed', hasConfirmedGogmaInputs(input) ? 'The active RNG Engine does not support Gogma prediction.' : 'Confirmed Base Seed, Gogma Counter, and Counter Gate are required.')
+    pushAll(result, destructiveKinds, hasConfirmedGogmaInputs(input) ? 'gogma_prediction_unsupported' : 'rng_state_unconfirmed', hasConfirmedGogmaInputs(input) ? 'The active RNG Engine does not support Gogma prediction.' : 'Confirmed Base Seed and Gogma Counter are required.')
     return result
   }
 

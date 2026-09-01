@@ -4,6 +4,7 @@ import { loadMasterData } from '../../master/loadMasterData'
 import type { WeaponBonusDefinitionsMasterSubset } from '../../master/masterSelectors'
 import { gameVerifiedGogmaCounterIdentificationVector as live } from '../../../test/fixtures/gameVerifiedGogmaVectors'
 import { ProductionRngEngine } from '../production/productionRngEngine'
+import { predictGameAdjustedGogmaReset } from '../production/gogmaPrediction'
 import { referenceGogmaIdFromRestorationBonus } from '../production/referenceGogmaBonuses'
 import { identifyGogmaCounter } from './gogmaCounterIdentification'
 import {
@@ -60,16 +61,16 @@ describe('Gogma Counter Identification live Production parity', () => {
       }
       const representative = engine.predictGogmaBonus({
         ...shared,
-        counterGate: GOGMA_IDENTIFICATION_ACTIVE_GATE_REPRESENTATIVE,
       })
       expect(representative).toEqual(live.observations[offset])
       expect(representative.map(referenceGogmaIdFromRestorationBonus)).toEqual(
         live.referenceIds[offset],
       )
-      expect(representative).toEqual(engine.predictGogmaBonus({
+      expect(representative).toEqual(predictGameAdjustedGogmaReset({
         ...shared,
+        baseSeed: live.baseSeed,
         counterGate: live.actualCounterGate,
-      }))
+      }, master).bonuses)
     }
   })
 
@@ -84,10 +85,14 @@ describe('Gogma Counter Identification live Production parity', () => {
       operation: { type: 'reset_bonuses' } as const,
       master,
     }
-    const expected = engine.predictGogmaBonus({ ...shared, counterGate: 35 })
+    const expected = engine.predictGogmaBonus(shared)
     expect(GOGMA_IDENTIFICATION_ACTIVE_GATE_REPRESENTATIVE).toBe(35)
     for (const counterGate of [36, 54, 200]) {
-      expect(engine.predictGogmaBonus({ ...shared, counterGate })).toEqual(expected)
+      expect(predictGameAdjustedGogmaReset({
+        ...shared,
+        baseSeed: live.baseSeed,
+        counterGate,
+      }, master).bonuses).toEqual(expected)
     }
   })
 })
@@ -117,7 +122,6 @@ describe('Gogma Counter Identification kernel', () => {
           ...scenario,
           baseSeed: String(scenario.baseSeed),
           gogmaCounter: counter + offset,
-          counterGate: 35,
           operation: { type: 'reset_bonuses' },
           master,
         }))

@@ -146,7 +146,6 @@ export function getRngMissingRequirementLabel(
     base_seed: 'Base Seed（基準シード）を検索に使用できません',
     gogma_counter: '巨戟カウンターを検索に使用できません',
     skill_counter: 'スキルカウンターを検索に使用できません',
-    counter_gate: 'Counter Gate（カウンターゲート）を検索に使用できません',
     'engine:gogma_prediction': '巨戟アーティア予測エンジンが未対応です',
     'engine:skill_prediction': 'スキル予測エンジンが未対応です',
     'engine:normal_artian_prediction': '通常アーティア予測エンジンが未対応です',

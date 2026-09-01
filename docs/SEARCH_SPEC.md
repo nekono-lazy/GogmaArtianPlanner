@@ -133,7 +133,6 @@ export interface SkippedRoute {
     | "base_seed_unconfirmed"
     | "gogma_counter_unconfirmed"
     | "skill_counter_unconfirmed"
-    | "counter_gate_unconfirmed"
     | "no_owned_weapon_available"
     | "no_unprotected_source_weapon"
     | "normal_prediction_unsupported"
@@ -164,7 +163,7 @@ Production Searchはroute-local / operation-local supportを維持し、RngState
 
 すべてのBuildCandidateとCandidateSearchResultに、入力の `calculationContext` をそのまま保存する。各BuildCandidateには検索開始時のRoute依存RNG状態から生成した `searchStateHash` と、Routeが参照するOwnedWeaponだけから生成した `referencedOwnedWeaponsHash` を保存する。参照武器がないRouteでは後者を `null` とする。Worker実行中に現在環境のCalculationContext、検索開始状態、またはCandidateが参照するOwnedWeapon状態が変わった場合、そのrequestIdの結果を現行候補として保存しない。
 
-`searchStateHash` はProduction Predictionのsemantic authorityだけを含め、legacy `RngState.counterGate` のvalue / isConfirmed / sourceを含めない。Gateだけの変更によるfalse staleを発生させない。C5-E2C2完了時点の実装hashはまだGateを含むため、C5-E2C3で本契約へ同期する。
+`searchStateHash` はProduction Predictionのsemantic authorityだけを含め、legacy `RngState.counterGate` のvalue / isConfirmed / sourceを含めない。Gateだけの変更によるfalse staleを発生させない。C5-E2C3でruntime hashを本契約へ同期済みである。
 
 ---
 

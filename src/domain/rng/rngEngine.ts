@@ -40,7 +40,6 @@ export interface RngMasterSubset {
 export interface GogmaBonusPredictionInput {
   baseSeed: NormalizedSeed
   gogmaCounter: number
-  counterGate: number
   weaponTypeId: WeaponTypeId
   elementId: ElementId
   operation:
@@ -52,7 +51,6 @@ export interface GogmaBonusPredictionInput {
 export interface SkillPredictionInput {
   baseSeed: NormalizedSeed
   skillCounter: number
-  counterGate: number
   weaponTypeId: WeaponTypeId
   elementId: ElementId
   master: RngMasterSubset

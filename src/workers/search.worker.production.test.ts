@@ -40,9 +40,9 @@ function createProductionSearchInput(
     source: 'manual',
   }
   input.rngState.counterGate = {
-    value: 54,
-    isConfirmed: true,
-    source: 'manual',
+    value: null,
+    isConfirmed: false,
+    source: null,
   }
   input.normalCounters[0] = {
     ...input.normalCounters[0],
@@ -78,7 +78,6 @@ function createProductionSearchInput(
     weaponTypeId,
     elementId: vector.elementId,
     skillCounter: 0,
-    counterGate: 54,
     master: input.master,
   })
   target.idealSkillCondition = { ...skills, matchMode: 'all' }

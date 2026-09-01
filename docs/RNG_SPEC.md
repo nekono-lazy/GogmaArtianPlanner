@@ -657,7 +657,7 @@ generic Seed Searchはinactiveである。専用Skill / Gogma Identification Wor
 `supportsSeedSearch`ではなくWorker/application levelで個別に判定し、`supportsSeedSearch = false`を維持する。
 Production有効判定とPredictionはdisabled legacy `LotteryMaster`を要求しない。
 
-C5-E2C2は本仕様だけをactive Gate policyへ改訂する。C5-E2C2完了直後のcurrent runtime、Capability、Search、Planner、Trace Replay、Hashはまだpersisted exact Gateを要求するため、統合済みとは扱わない。C5-E2C3でProduction adapterの内部representative供給と関連実装を同期し、observable semantics changeとして `PRODUCTION_RNG_ENGINE_VERSION` を `production-rng:c5-e2` へbumpする。
+C5-E2C3でactive Gate policyをruntimeへ統合した。Production Domain Prediction inputはcaller-supplied Gateを持たず、Production adapterがCore/reference predictorへSkill 54、Gogma 35をoperation別のactive-branch representativeとして供給する。Capability、Search、Planner、Trace Replayはpersisted exact Gateを要求せず、semantic hashもlegacy Gateを除外する。observable semantics changeとして `PRODUCTION_RNG_ENGINE_VERSION` は `production-rng:c5-e2` である。`supportsSeedSearch = false`とIdentification UI inactiveは維持する。
 
 ## 10.2 Message
 
