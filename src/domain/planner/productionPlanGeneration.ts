@@ -21,6 +21,7 @@ import { runPlannerBeamSearch } from './plannerBeamSearch'
 import {
   replayPlannerSearchTrace,
   type PlannerPlanStepDraft,
+  type PlannerTraceReplayResult,
   type PlannerTraceReplayIssue,
 } from './plannerTraceReplay'
 import type {
@@ -30,6 +31,7 @@ import type {
   PlannerExecutionOptions,
   PlannerInput,
   PlannerSearchRejection,
+  PlannerWarning,
 } from './plannerTypes'
 
 function compareStableStrings(left: string, right: string): number {
@@ -385,7 +387,73 @@ export const createProductionPlan: CreateProductionPlanCalculation = async (
   dependencies,
   options: PlannerExecutionOptions | undefined,
 ) => {
-  const beamResult = await runPlannerBeamSearch(input, dependencies, options)
+  const runtimeUnsupported = new Map<BuildListEntryId, string>()
+  let beamResult: PlannerBeamSearchResult | null = null
+  let replay: PlannerTraceReplayResult | null = null
+
+  for (;;) {
+    const beamInput: PlannerInput = runtimeUnsupported.size === 0
+      ? input
+      : {
+          ...input,
+          buildListEntries: input.buildListEntries.filter(
+            ({ id }) => !runtimeUnsupported.has(id),
+          ),
+        }
+    beamResult = await runPlannerBeamSearch(beamInput, dependencies, options)
+    if (
+      beamResult.cancelled ||
+      beamResult.bestState === null ||
+      beamResult.bestState.trace.length === 0
+    ) break
+
+    replay = replayPlannerSearchTrace(
+      beamInput,
+      beamResult.bestState,
+      dependencies.rngEngine,
+    )
+    if (replay.unsupportedInput === null) break
+
+    const unsupported = replay.unsupportedInput
+    if (runtimeUnsupported.has(unsupported.buildListEntryId)) {
+      throw new PlannerPlanGenerationError(
+        `Planner repeatedly selected unsupported BuildListEntry '${unsupported.buildListEntryId}'.`,
+      )
+    }
+    runtimeUnsupported.set(
+      unsupported.buildListEntryId,
+      `requires unsupported RNG input (${unsupported.operationType}: ${unsupported.reason}).`,
+    )
+    replay = null
+  }
+
+  if (beamResult === null) {
+    throw new PlannerPlanGenerationError('Planner Beam Search did not return a result.')
+  }
+  const runtimeWarnings: PlannerWarning[] = [...runtimeUnsupported]
+    .sort(([left], [right]) => compareStableStrings(left, right))
+    .map(([entryId, reason]) => ({
+      kind: 'rng_prediction_unsupported',
+      message: `BuildListEntry '${entryId}' ${reason}`,
+    }))
+  if (runtimeUnsupported.size > 0) {
+    const alreadyExcluded = new Set(
+      beamResult.excludedBuildListEntries.map(({ entry }) => entry.id),
+    )
+    input.buildListEntries.forEach((entry) => {
+      const reason = runtimeUnsupported.get(entry.id)
+      if (reason && !alreadyExcluded.has(entry.id)) {
+        beamResult?.excludedBuildListEntries.push({ entry, reason })
+      }
+    })
+  }
+  const warnings = [...beamResult.warnings, ...runtimeWarnings]
+    .filter((warning, index, all) =>
+      all.findIndex((candidate) =>
+        candidate.kind === warning.kind &&
+        candidate.message === warning.message,
+      ) === index,
+    )
   if (
     beamResult.cancelled ||
     beamResult.bestState === null ||
@@ -394,18 +462,12 @@ export const createProductionPlan: CreateProductionPlanCalculation = async (
     return {
       plan: null,
       conflicts: structuredClone(beamResult.conflicts),
-      warnings: structuredClone(beamResult.warnings),
+      warnings: structuredClone(warnings),
     }
   }
-
-  const replay = replayPlannerSearchTrace(
-    input,
-    beamResult.bestState,
-    dependencies.rngEngine,
-  )
-  if (!replay.isValid) {
+  if (replay === null || !replay.isValid) {
     throw new PlannerPlanGenerationError(
-      `Planner trace replay failed: ${replayErrorMessage(replay.issues)}`,
+      `Planner trace replay failed: ${replayErrorMessage(replay?.issues ?? [])}`,
     )
   }
 
@@ -442,6 +504,6 @@ export const createProductionPlan: CreateProductionPlanCalculation = async (
   return {
     plan,
     conflicts: structuredClone(beamResult.conflicts),
-    warnings: structuredClone(beamResult.warnings),
+    warnings: structuredClone(warnings),
   }
 }

@@ -19,9 +19,12 @@ import type {
 } from '../models/publicTypes'
 import type {
   BonusRankMaster,
+  BonusTypeMaster,
+  ElementMaster,
   LotteryMaster,
   MaterialCostMaster,
   WeaponBonusDefinition,
+  WeaponTypeMaster,
 } from '../master/masterTypes'
 import type { RngEngine } from '../rng/rngEngine'
 
@@ -43,6 +46,12 @@ export interface PlannerMasterSubset {
   lotteries: LotteryMaster[]
   materialCosts: MaterialCostMaster[]
   bonusRanks: BonusRankMaster[]
+  /** Caller-supplied Production Gogma Reset availability inputs. */
+  elements: ElementMaster[]
+  /** Caller-supplied Production Gogma Reset availability inputs. */
+  bonusTypes: BonusTypeMaster[]
+  /** Caller-supplied Production Gogma Reset availability inputs. */
+  weaponTypes: WeaponTypeMaster[]
 }
 
 /** A local choice for one stable conflict key, not a manual Plan order. */
@@ -246,6 +255,7 @@ export interface PlannerBeamSearchResult {
 export type PlannerWarningKind =
   | 'no_build_list_entries'
   | 'rng_state_missing'
+  | 'rng_prediction_unsupported'
   | 'material_weapon_shortage'
   | 'protected_weapon_required'
   | 'build_list_entry_stale'
@@ -258,6 +268,7 @@ export type PlannerWarningKind =
 export const plannerWarningKinds: readonly PlannerWarningKind[] = [
   'no_build_list_entries',
   'rng_state_missing',
+  'rng_prediction_unsupported',
   'material_weapon_shortage',
   'protected_weapon_required',
   'build_list_entry_stale',

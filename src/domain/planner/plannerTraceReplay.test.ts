@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createExpectedPlanState } from '../models/hashing'
 import { FakeRngEngine } from '../rng/fakeRngEngine'
 import { buildListEntryId, candidateId, createRestorationBonusSet, createValidBuildListEntry, createValidNormalArtianCounter, createValidRngState, createValidTargetWeapon, ownedWeaponId } from '../../test/fixtures/domainData'
@@ -10,7 +10,7 @@ function fixture() {
   const entry = createValidBuildListEntry(); entry.id = buildListEntryId('entry.replay'); entry.candidateId = candidateId('candidate.replay'); entry.candidateSnapshot.id = entry.candidateId
   entry.candidateSnapshot.route = { kind: 'normal_artian_to_gogma', sourceOwnedWeaponId: null, operations: [{ type: 'create_normal_artian', weaponTypeId: 'weapon.fixture.a', rarity: 8, count: 2, normalCounterBefore: 4, normalCounterAfter: 6 }, { type: 'convert_normal_to_gogma', weaponTypeId: 'weapon.fixture.a', skillCounterBefore: 7, skillCounterAfter: 8 }] }
   const rngState = createValidRngState(); rngState.skillCounter = { value: 7, isConfirmed: true, source: 'manual' }; const normal = createValidNormalArtianCounter(); const target = createValidTargetWeapon()
-  const input: PlannerInput = { rngState, normalCounters: [normal], ownedWeapons: [], targetWeapons: [target], buildListEntries: [entry], calculationContext: { gameVersion: 'x', masterDataVersion: 1, rngEngineVersion: 'x', appSchemaVersion: 1 }, options: { maxPlanSteps: 300, beamWidth: 50, maxExpandedStates: 10000 }, master: { weaponBonusDefinitions: [], lotteries: [], bonusRanks: [], materialCosts: [] }, conflictResolutions: [] }
+  const input: PlannerInput = { rngState, normalCounters: [normal], ownedWeapons: [], targetWeapons: [target], buildListEntries: [entry], calculationContext: { gameVersion: 'x', masterDataVersion: 1, rngEngineVersion: 'x', appSchemaVersion: 1 }, options: { maxPlanSteps: 300, beamWidth: 50, maxExpandedStates: 10000 }, master: { weaponBonusDefinitions: [], weaponTypes: [], elements: [], bonusTypes: [], lotteries: [], bonusRanks: [], materialCosts: [] }, conflictResolutions: [] }
   const snap = (g: number, s: number, n: number) => ({ gogmaCounter: g, skillCounter: s, normalCounters: [{ id: normal.id, counter: n }] })
   const create = entry.candidateSnapshot.route.operations[0]
   const convert = entry.candidateSnapshot.route.operations[1]
@@ -31,12 +31,17 @@ describe('Planner trace replay', () => {
     const last = trace.at(-1)!.rngAfter
     trace.push({ kind: 'reserve_candidate', actionType: 'reserve_weapon', primaryBuildListEntryId: entry.id, progressedBuildListEntryIds: [entry.id], progressedRoutePositions: {}, routeOperation: null, ownedWeaponId: reservedId, plannerOnly: true, candidateCategory: entry.candidateSnapshot.category, rngBefore: last, rngAfter: last, inventoryEffect: { addedOwnedWeaponIds: [reservedId], removedOwnedWeaponIds: [], updatedOwnedWeaponIds: [], reservedOwnedWeaponIds: [reservedId], routeOutputChangedForEntryIds: [] }, satisfactionChanges: [] })
     state.simulatedInventory = createSimulatedInventory([{ id: reservedId, kind: 'gogma', name: '', weaponTypeId: target.weaponTypeId, elementId: target.elementId, restorationBonuses: structuredClone(b), restorationBonusScope: 'normal_artian', seriesSkillId: 'series_skill.fixture.a', groupSkillId: null, status: entry.candidateSnapshot.category, isProtected: true, relatedTargetWeaponIds: [entry.targetWeaponId], memo: null, createdAt: entry.candidateSnapshot.createdAt, updatedAt: entry.candidateSnapshot.createdAt }]).inventory!
+    const support = vi.spyOn(engine, 'getPredictionSupport')
     const replay = replayPlannerSearchTrace(input, state, engine)
     expect(replay.isValid, JSON.stringify(replay.issues)).toBe(true); expect(replay.drafts).toHaveLength(4)
     expect(replay.drafts[0].expectedResult?.restorationBonuses).toEqual(a); expect(replay.drafts[2].expectedResult?.restorationBonuses).toEqual(b); expect(replay.drafts[2].expectedResult?.restorationBonusScope).toBe('normal_artian'); expect(replay.drafts[2].expectedResult?.seriesSkillId).toBe('series_skill.fixture.a')
     expect(replay.drafts[0].rngAdvance.normalCounterDelta).toBe(1); expect(replay.drafts[0].rngAdvance.affectedNormalCounterId).toBe('weapon.fixture.a:8')
     expect(replay.drafts[1].expectedStateAfter).toEqual(replay.drafts[2].expectedStateBefore)
     expect(replay.drafts.at(-1)?.inventoryChange?.addOwnedWeapon?.id).toBe(reservedId)
+    expect(support.mock.calls.some(([value]) => value.type === 'skill')).toBe(true)
+    expect(support.mock.calls.some(([value]) =>
+      value.type === 'gogma_reset' || value.type === 'gogma_keep',
+    )).toBe(false)
   })
   it('rejects Candidate Snapshot bonus or skill mismatches before reserve can overwrite the replay output', () => {
     const { input, state, engine, entry, trace } = fixture(); const last = trace.at(-1)!.rngAfter
@@ -117,5 +122,108 @@ describe('Planner trace replay', () => {
     const before = createExpectedPlanState(state, [counter], [owned]); expect(createExpectedPlanState({ ...state, notes: 'x', updatedAt: 'b' }, [{ ...counter, updatedAt: 'b' }], [{ ...owned, name: 'B', memo: 'x', updatedAt: 'b', relatedTargetWeaponIds: ['z' as never] }])).toEqual(before)
     expect(createExpectedPlanState(state, [counter], [{ ...owned, kind: 'normal' as const, restorationBonusScope: 'normal_artian' as const, rarity: 8, seriesSkillId: null, groupSkillId: null, status: null }]).ownedWeaponsHash).not.toBe(before.ownedWeaponsHash)
     void weapon
+  })
+  it('uses the replayed ordered result of each bonus operation for the next Keep support query', () => {
+    const { input, state, engine, entry, target, normal } = fixture()
+    const source = {
+      id: ownedWeaponId('owned.replay.sequential-keep'),
+      kind: 'gogma' as const,
+      restorationBonusScope: 'gogma_artian' as const,
+      name: '',
+      weaponTypeId: target.weaponTypeId,
+      elementId: target.elementId,
+      restorationBonuses: createRestorationBonusSet(),
+      seriesSkillId: null,
+      groupSkillId: null,
+      status: 'material' as const,
+      isProtected: false,
+      relatedTargetWeaponIds: [],
+      memo: null,
+      createdAt: 'x',
+      updatedAt: 'x',
+    }
+    const resetResult = createRestorationBonusSet()
+    resetResult[0].bonusRankId = 'bonus_rank.fixture.low'
+    const firstKeepResult = structuredClone(resetResult)
+    firstKeepResult[1].bonusRankId = 'bonus_rank.fixture.middle'
+    const finalKeepResult = structuredClone(firstKeepResult)
+    finalKeepResult[2].bonusRankId = 'bonus_rank.fixture.high'
+    const operations = [
+      { type: 'reset_bonuses' as const, sourceOwnedWeaponId: source.id, gogmaCounterBefore: 10, gogmaCounterAfter: 11 },
+      { type: 'keep_bonuses' as const, sourceOwnedWeaponId: source.id, gogmaCounterBefore: 11, gogmaCounterAfter: 12 },
+      { type: 'keep_bonuses' as const, sourceOwnedWeaponId: source.id, gogmaCounterBefore: 12, gogmaCounterAfter: 13 },
+    ]
+    entry.candidateSnapshot.route = {
+      kind: 'existing_gogma_mixed',
+      sourceOwnedWeaponId: source.id,
+      operations,
+    }
+    input.ownedWeapons = [source]
+    const snap = (gogmaCounter: number) => ({
+      gogmaCounter,
+      skillCounter: 7,
+      normalCounters: [{ id: normal.id, counter: 4 }],
+    })
+    state.trace = operations.map((operation, index): PlannerSearchAction => ({
+      kind: 'route_operation',
+      actionType: operation.type,
+      primaryBuildListEntryId: entry.id,
+      progressedBuildListEntryIds: [entry.id],
+      progressedRoutePositions: {},
+      routeOperation: operation,
+      ownedWeaponId: source.id,
+      plannerOnly: false,
+      rngBefore: snap(10 + index),
+      rngAfter: snap(11 + index),
+      inventoryEffect: { addedOwnedWeaponIds: [], removedOwnedWeaponIds: [], updatedOwnedWeaponIds: [], reservedOwnedWeaponIds: [], routeOutputChangedForEntryIds: [entry.id] },
+      satisfactionChanges: [],
+    }))
+    state.currentRngState = structuredClone(input.rngState)
+    state.currentRngState.gogmaCounter.value = 13
+    state.currentNormalCounters = structuredClone(input.normalCounters)
+    state.simulatedInventory = createSimulatedInventory([source]).inventory!
+    engine.capabilities.supportsKeepBonusesPrediction = true
+    const keepSupportInputs: string[] = []
+    const delegate = engine.getPredictionSupport.bind(engine)
+    vi.spyOn(engine, 'getPredictionSupport').mockImplementation((supportInput) => {
+      if (supportInput.type === 'gogma_keep') {
+        keepSupportInputs.push(JSON.stringify(supportInput.currentBonuses))
+      }
+      return delegate(supportInput)
+    })
+    vi.spyOn(engine, 'predictGogmaBonus').mockImplementation((predictionInput) => {
+      if (predictionInput.operation.type === 'reset_bonuses') {
+        return structuredClone(resetResult)
+      }
+      return predictionInput.gogmaCounter === 11
+        ? structuredClone(firstKeepResult)
+        : structuredClone(finalKeepResult)
+    })
+
+    const replay = replayPlannerSearchTrace(input, state, engine)
+
+    expect(replay.isValid, JSON.stringify(replay.issues)).toBe(true)
+    expect(keepSupportInputs).toEqual([
+      JSON.stringify(resetResult),
+      JSON.stringify(firstKeepResult),
+    ])
+  })
+  it('propagates unexpected support query failures from Trace Replay', () => {
+    const { input, state, engine } = fixture()
+    const failure = new Error('unexpected replay support failure')
+    vi.spyOn(engine, 'getPredictionSupport').mockImplementation(() => {
+      throw failure
+    })
+
+    expect(() => replayPlannerSearchTrace(input, state, engine)).toThrow(failure)
+  })
+  it('propagates predictor failures after Trace Replay support succeeds', () => {
+    const { input, state, engine } = fixture()
+    const failure = new Error('unexpected replay prediction failure')
+    vi.spyOn(engine, 'predictNormalArtian').mockImplementation(() => {
+      throw failure
+    })
+
+    expect(() => replayPlannerSearchTrace(input, state, engine)).toThrow(failure)
   })
 })

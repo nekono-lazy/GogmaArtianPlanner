@@ -73,8 +73,12 @@ export interface PlannerConflictResolution {
 
 export interface PlannerMasterSubset {
   weaponBonusDefinitions: WeaponBonusDefinition[];
+  weaponTypes: WeaponTypeMaster[];
+  elements: ElementMaster[];
+  bonusTypes: BonusTypeMaster[];
   materialCosts: MaterialCostMaster[];
   bonusRanks: BonusRankMaster[];
+  lotteries: LotteryMaster[];
 }
 ```
 
@@ -124,6 +128,17 @@ export interface PlannerClock {
 - `deriveRngCapabilities(rngState, normalCounters, requiredOperations, engineCapabilities)` で、各BuildListEntryの全RouteOperationに必要なKnownValueと現在Engineのsupportが揃うか確認する
 - conversionだけのEntryはSkill Predictionと確定Base Seed / Skill Counter / Counter Gateを要求し、Gogma PredictionまたはGogma Counterを要求しない
 - Reset / Keepを含むEntryだけがGogma Predictionと確定Gogma Counter / Counter Gateを要求し、Keepを含む場合はKeep Prediction supportも要求する
+- capability確認後、Predictionが必要な各operationのsemantic inputを
+  `getPredictionSupport()` で確認する。Normalはweapon/element/rarity、conversionと
+  Reset SkillsはSkillのweapon/element、Resetはcaller-supplied Masterを含む
+  `gogma_reset`、Keepはその時点のordered 5slotを含む `gogma_keep` を使う
+- `supported: false` は既知unsupportedとして該当BuildListEntryだけを除外する。
+  他のsupported EntryはBeam Searchへ残す。support queryの例外と
+  support確認後のPrediction例外は除外へ変換せずPlanner error経路へ伝播する
+- Reset / Keepが連続する場合、後続Keepのsupport inputはRoute開始時のbonusではなく、
+  直前のReset / Keep Prediction結果を持つdeterministic preflight/replay stateから作る
+- concrete inputがsupported:falseの場合のwarningは、RNG状態不足を表す
+  rng_state_missingではなくrng_prediction_unsupportedを使用する
 - RNG値不足とEngine capability不足を別warning reasonとして扱う。該当BuildListEntryだけを除外し、無関係なEntryを一括無効化しない
 - `targetWeapons` は `isEnabled = true` のみ対象
 - `maxPlanSteps`、`beamWidth`、`maxExpandedStates` は1以上
@@ -147,6 +162,7 @@ export interface PlannerWarning {
   kind:
     | "no_build_list_entries"
     | "rng_state_missing"
+    | "rng_prediction_unsupported"
     | "rng_engine_capability_missing"
     | "material_rng_advance_unverified"
     | "material_weapon_shortage"
@@ -536,6 +552,10 @@ PlanStep変換用 `PlannerPlanStepDraft` を生成する。
 - 各Actionの`rngBefore`一致を検証し、`rngAfter`との差分からRngAdvanceを作る。複数Normal
   Counterの変化やunknown→knownの差分は現行RngAdvanceで表せないためReplay failureとする。
 - create/reset/keep/reset-skillsは現在のRngEngine predictionを再実行する。KeepはReplay時点のtransientまたは起点武器の現在5slotをslot順のまま入力し、selection branchを持たない。
+- Replayは各Predictionの直前にも同じsemantic inputで `getPredictionSupport()` を確認する。
+  既知unsupportedがpreflight後の実stateで判明した場合は該当BuildListEntryだけを除外して
+  Beam Searchを再実行する。support query例外とsupport=true後のPrediction例外は
+  `prediction_failed` 等へ変換せず呼出元へ伝播する。
 - convertはGogma Predictionを呼ばない。変換元Normalの `normal_artian` scope 5-slot bonusesをslot順のままtransient Gogmaへ継承し、現在Skill位置で `predictSkills` を実行して初回Series / Groupを設定する。
 - convertのRNG遷移はSkill Counter `+1`、Normal / Gogma Counter `+0` とする。変換時のSkill結果を無視するRouteや素材補充でも、実ゲームでconversionする限り同じSkill位置を消費する。
 - Reset / Keepはtransient Gogmaのscopeとslot順を追跡する。normal scopeなら最初のBonus amendmentはResetだけを許可し、Reset結果でgogma scopeへ置き換えた後に限りKeepを許可する。
@@ -916,6 +936,10 @@ postMessageしない。Worker moduleがEngine、ID Factory、Clockを生成し�
 `PlannerDependencies` とし、pure Planner calculationへ注入する。PlannerInputへ
 `engineCapabilities` を重複保存せず、validationは
 `dependencies.rngEngine.capabilities` を `deriveRngCapabilities` へ渡す。
+
+C5-D1時点ではPlanner domainとTrace ReplayがProduction RNGのinput-level support契約へ
+対応済みだが、Planner WorkerのProduction factory / entry / clientは未接続である。
+Production Worker activationとactive engine version authorityはC5-D2で行う。
 
 ---
 

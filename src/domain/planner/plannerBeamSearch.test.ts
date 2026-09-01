@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type {
   BuildListEntry,
   BuildRoute,
@@ -235,6 +235,9 @@ function fixture(
     },
     master: {
       weaponBonusDefinitions: [],
+      weaponTypes: [],
+      elements: [],
+      bonusTypes: [],
       lotteries: [],
       materialCosts: [],
       bonusRanks: targetEvaluationMaster.bonusRanks,
@@ -438,6 +441,10 @@ describe('Planner Beam Search', () => {
       operations,
     })
     const { input, dependencies } = fixture([goal], [entry])
+    if (amendments.some((type) => String(type) === 'keep_bonuses')) {
+      vi.spyOn(dependencies.rngEngine, 'predictGogmaBonus')
+        .mockReturnValue(createRestorationBonusSet())
+    }
     const validation = validatePlannerInput(input, dependencies)
     expect(validation.validBuildListEntries).toHaveLength(valid ? 1 : 0)
     if (!valid) return
@@ -498,6 +505,10 @@ describe('Planner Beam Search', () => {
       operations,
     })
     const { input, dependencies } = fixture([goal], [entry], [source])
+    if (amendments.some((type) => String(type) === 'keep_bonuses')) {
+      vi.spyOn(dependencies.rngEngine, 'predictGogmaBonus')
+        .mockReturnValue(createRestorationBonusSet())
+    }
     const validation = validatePlannerInput(input, dependencies)
     expect(validation.validBuildListEntries).toHaveLength(valid ? 1 : 0)
     if (!valid) return
@@ -1980,5 +1991,295 @@ describe('Planner Beam Search', () => {
       evaluationScore: 20,
     } as PlannerSearchState
     expect(comparePlannerSearchStates(completed, unfinished)).toBeLessThan(0)
+  })
+})
+
+describe('Planner input-level RNG support', () => {
+  function resetSkillsEntry(
+    id: string,
+    goal: TargetWeapon,
+    source: OwnedGogmaArtianWeapon,
+  ) {
+    return routeEntry(id, goal, {
+      kind: 'existing_gogma_reset_skills',
+      sourceOwnedWeaponId: source.id,
+      operations: [{
+        type: 'reset_skills',
+        sourceOwnedWeaponId: source.id,
+        skillCounterBefore: 7,
+        skillCounterAfter: 8,
+      }],
+    })
+  }
+
+  function resetEntry(
+    id: string,
+    goal: TargetWeapon,
+    source: OwnedGogmaArtianWeapon,
+  ) {
+    return routeEntry(id, goal, {
+      kind: 'existing_gogma_reset_bonuses',
+      sourceOwnedWeaponId: source.id,
+      operations: [{
+        type: 'reset_bonuses',
+        sourceOwnedWeaponId: source.id,
+        gogmaCounterBefore: 10,
+        gogmaCounterAfter: 11,
+      }],
+    })
+  }
+
+  function keepEntry(
+    id: string,
+    goal: TargetWeapon,
+    source: OwnedGogmaArtianWeapon,
+  ) {
+    return routeEntry(id, goal, {
+      kind: 'existing_gogma_keep_bonuses',
+      sourceOwnedWeaponId: source.id,
+      operations: [{
+        type: 'keep_bonuses',
+        sourceOwnedWeaponId: source.id,
+        gogmaCounterBefore: 10,
+        gogmaCounterAfter: 11,
+      }],
+    })
+  }
+
+  it('excludes only a Candidate whose concrete Skill input is unsupported', () => {
+    const targets = ['a', 'b', 'c'].map((suffix) =>
+      target(`target.support.skill.${suffix}`))
+    targets[1].weaponTypeId = 'weapon.fixture.b'
+    const sources = targets.map((goal, index) => {
+      const source = sourceWeapon(`owned.support.skill.${index}`)
+      source.weaponTypeId = goal.weaponTypeId
+      return source
+    })
+    const entries = targets.map((goal, index) =>
+      resetSkillsEntry(`entry.support.skill.${index}`, goal, sources[index]))
+    const { input, dependencies } = fixture(targets, entries, sources)
+    const delegate = dependencies.rngEngine.getPredictionSupport.bind(
+      dependencies.rngEngine,
+    )
+    vi.spyOn(dependencies.rngEngine, 'getPredictionSupport')
+      .mockImplementation((supportInput) =>
+        supportInput.type === 'skill' &&
+        supportInput.weaponTypeId === targets[1].weaponTypeId
+          ? { supported: false, reason: 'reference_adapter_unsupported' }
+          : delegate(supportInput))
+
+    const validation = validatePlannerInput(input, dependencies)
+
+    expect(validation.validBuildListEntries.map(({ entry }) => entry.id))
+      .toEqual([entries[0].id, entries[2].id])
+    expect(validation.excludedBuildListEntries).toContainEqual({
+      entry: entries[1],
+      reason: expect.stringContaining('reference_adapter_unsupported'),
+    })
+    expect(validation.warnings).toContainEqual(expect.objectContaining({
+      kind: 'rng_prediction_unsupported',
+      message: expect.stringContaining(String(entries[1].id)),
+    }))
+  })
+
+  it('requires Skill support for conversion without querying Gogma support', () => {
+    const goal = target('target.support.conversion')
+    const source = {
+      ...createValidOwnedWeapon(ownedWeaponId('owned.support.conversion')),
+      kind: 'normal' as const,
+      rarity: 8 as const,
+      restorationBonusScope: 'normal_artian' as const,
+      seriesSkillId: null,
+      groupSkillId: null,
+      status: null,
+      isProtected: false,
+    }
+    const entry = routeEntry('entry.support.conversion', goal, {
+      kind: 'owned_normal_artian_to_gogma',
+      sourceOwnedWeaponId: source.id,
+      operations: [{
+        type: 'convert_normal_to_gogma',
+        weaponTypeId: goal.weaponTypeId,
+        skillCounterBefore: 7,
+        skillCounterAfter: 8,
+      }],
+    })
+    const { input, dependencies } = fixture([goal], [entry], [source])
+    const support = vi.spyOn(dependencies.rngEngine, 'getPredictionSupport')
+
+    expect(validatePlannerInput(input, dependencies).validBuildListEntries)
+      .toHaveLength(1)
+    expect(support).toHaveBeenCalledWith({
+      type: 'skill',
+      weaponTypeId: goal.weaponTypeId,
+      elementId: goal.elementId,
+    })
+    expect(support.mock.calls.some(([value]) =>
+      value.type === 'gogma_reset' || value.type === 'gogma_keep',
+    )).toBe(false)
+  })
+
+  it('isolates an unsupported Gogma Reset Candidate', () => {
+    const targets = ['a', 'b', 'c'].map((suffix) =>
+      target(`target.support.reset.${suffix}`))
+    targets[1].weaponTypeId = 'weapon.fixture.b'
+    const sources = targets.map((goal, index) => {
+      const source = sourceWeapon(`owned.support.reset.${index}`)
+      source.weaponTypeId = goal.weaponTypeId
+      return source
+    })
+    const entries = targets.map((goal, index) =>
+      resetEntry(`entry.support.reset.${index}`, goal, sources[index]))
+    const { input, dependencies } = fixture(targets, entries, sources)
+    const delegate = dependencies.rngEngine.getPredictionSupport.bind(
+      dependencies.rngEngine,
+    )
+    vi.spyOn(dependencies.rngEngine, 'getPredictionSupport')
+      .mockImplementation((supportInput) =>
+        supportInput.type === 'gogma_reset' &&
+        supportInput.weaponTypeId === targets[1].weaponTypeId
+          ? { supported: false, reason: 'no_available_reset_candidates' }
+          : delegate(supportInput))
+
+    const validation = validatePlannerInput(input, dependencies)
+
+    expect(validation.validBuildListEntries.map(({ entry }) => entry.id))
+      .toEqual([entries[0].id, entries[2].id])
+    expect(validation.excludedBuildListEntries.map(({ entry }) => entry.id))
+      .toEqual([entries[1].id])
+  })
+
+  it('keeps ordered five-slot Keep support isolated per Candidate', () => {
+    const goal = target('target.support.keep')
+    const sources = ['a', 'b', 'c'].map((suffix) =>
+      sourceWeapon(`owned.support.keep.${suffix}`))
+    sources.forEach((source) => {
+      source.restorationBonusScope = 'gogma_artian'
+      source.restorationBonuses = createRestorationBonusSet()
+    })
+    ;[sources[1].restorationBonuses[0], sources[1].restorationBonuses[2]] =
+      [sources[1].restorationBonuses[2], sources[1].restorationBonuses[0]]
+    ;[sources[2].restorationBonuses[1], sources[2].restorationBonuses[3]] =
+      [sources[2].restorationBonuses[3], sources[2].restorationBonuses[1]]
+    const entries = sources.map((source, index) =>
+      keepEntry(`entry.support.keep.${index}`, goal, source))
+    const { input, dependencies } = fixture([goal], entries, sources)
+    const unsupportedSlots = JSON.stringify(sources[1].restorationBonuses)
+    const delegate = dependencies.rngEngine.getPredictionSupport.bind(
+      dependencies.rngEngine,
+    )
+    vi.spyOn(dependencies.rngEngine, 'getPredictionSupport')
+      .mockImplementation((supportInput) =>
+        supportInput.type === 'gogma_keep' &&
+        JSON.stringify(supportInput.currentBonuses) === unsupportedSlots
+          ? { supported: false, reason: 'unsupported_current_bonus' }
+          : delegate(supportInput))
+
+    const validation = validatePlannerInput(input, dependencies)
+
+    expect(validation.validBuildListEntries.map(({ entry }) => entry.id))
+      .toEqual([entries[0].id, entries[2].id])
+    expect(validation.excludedBuildListEntries.map(({ entry }) => entry.id))
+      .toEqual([entries[1].id])
+  })
+
+  it('uses each preceding Prediction result as the next Keep support input', () => {
+    const goal = target('target.support.sequential-keep')
+    const source = sourceWeapon('owned.support.sequential-keep')
+    source.restorationBonusScope = 'gogma_artian'
+    const resetResult = createRestorationBonusSet()
+    resetResult[0].bonusRankId = 'bonus_rank.fixture.low'
+    const firstKeepResult = structuredClone(resetResult)
+    firstKeepResult[1].bonusRankId = 'bonus_rank.fixture.middle'
+    const entry = routeEntry('entry.support.sequential-keep', goal, {
+      kind: 'existing_gogma_mixed',
+      sourceOwnedWeaponId: source.id,
+      operations: [
+        {
+          type: 'reset_bonuses',
+          sourceOwnedWeaponId: source.id,
+          gogmaCounterBefore: 10,
+          gogmaCounterAfter: 11,
+        },
+        {
+          type: 'keep_bonuses',
+          sourceOwnedWeaponId: source.id,
+          gogmaCounterBefore: 11,
+          gogmaCounterAfter: 12,
+        },
+        {
+          type: 'keep_bonuses',
+          sourceOwnedWeaponId: source.id,
+          gogmaCounterBefore: 12,
+          gogmaCounterAfter: 13,
+        },
+      ],
+    })
+    const { input, dependencies } = fixture([goal], [entry], [source])
+    const keepInputs: string[] = []
+    const delegate = dependencies.rngEngine.getPredictionSupport.bind(
+      dependencies.rngEngine,
+    )
+    vi.spyOn(dependencies.rngEngine, 'getPredictionSupport')
+      .mockImplementation((supportInput) => {
+        if (supportInput.type === 'gogma_keep') {
+          keepInputs.push(JSON.stringify(supportInput.currentBonuses))
+        }
+        return delegate(supportInput)
+      })
+    vi.spyOn(dependencies.rngEngine, 'predictGogmaBonus')
+      .mockImplementation(({ operation }) =>
+        operation.type === 'reset_bonuses'
+          ? structuredClone(resetResult)
+          : structuredClone(firstKeepResult))
+
+    expect(validatePlannerInput(input, dependencies).validBuildListEntries)
+      .toHaveLength(1)
+    expect(keepInputs).toEqual([
+      JSON.stringify(resetResult),
+      JSON.stringify(firstKeepResult),
+    ])
+  })
+
+  it('propagates unexpected support query errors', () => {
+    const goal = target('target.support.error')
+    const source = sourceWeapon('owned.support.error')
+    const entry = resetSkillsEntry('entry.support.error', goal, source)
+    const { input, dependencies } = fixture([goal], [entry], [source])
+    const failure = new Error('unexpected Planner support failure')
+    vi.spyOn(dependencies.rngEngine, 'getPredictionSupport')
+      .mockImplementation(() => { throw failure })
+
+    expect(() => validatePlannerInput(input, dependencies)).toThrow(failure)
+  })
+
+  it('propagates predictor failures after support succeeds', () => {
+    const goal = target('target.support.prediction-error')
+    const source = sourceWeapon('owned.support.prediction-error')
+    source.restorationBonusScope = 'gogma_artian'
+    const entry = routeEntry('entry.support.prediction-error', goal, {
+      kind: 'existing_gogma_mixed',
+      sourceOwnedWeaponId: source.id,
+      operations: [
+        {
+          type: 'reset_bonuses',
+          sourceOwnedWeaponId: source.id,
+          gogmaCounterBefore: 10,
+          gogmaCounterAfter: 11,
+        },
+        {
+          type: 'keep_bonuses',
+          sourceOwnedWeaponId: source.id,
+          gogmaCounterBefore: 11,
+          gogmaCounterAfter: 12,
+        },
+      ],
+    })
+    const { input, dependencies } = fixture([goal], [entry], [source])
+    const failure = new Error('unexpected Planner prediction failure')
+    vi.spyOn(dependencies.rngEngine, 'predictGogmaBonus')
+      .mockImplementation(() => { throw failure })
+
+    expect(() => validatePlannerInput(input, dependencies)).toThrow(failure)
   })
 })

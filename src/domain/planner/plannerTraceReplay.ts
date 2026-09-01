@@ -5,7 +5,12 @@ import type {
   RngAdvance, RngState, TargetWeapon, TargetWeaponId, BuildCandidateId,
 } from '../models/publicTypes'
 import { createExpectedPlanState } from '../models/publicTypes'
-import type { RngEngine } from '../rng/rngEngine'
+import type {
+  RngEngine,
+  RngPredictionSupportInput,
+  RngPredictionUnsupportedReason,
+} from '../rng/rngEngine'
+import { getPlannerPredictionSupport } from './plannerPredictionSupport'
 import type { PlannerInput, PlannerSearchAction, PlannerSearchRngSnapshot, PlannerSearchState } from './plannerTypes'
 
 /** Non-persistent bridge between one physical Search Action and a future PlanStep. */
@@ -28,9 +33,20 @@ export type PlannerTraceReplayIssueCode =
   | 'rng_before_mismatch' | 'rng_after_mismatch' | 'counter_difference_unrepresentable'
   | 'missing_entry' | 'missing_target' | 'missing_rng_requirement' | 'engine_capability_missing'
   | 'missing_transient_output' | 'missing_source_weapon' | 'invalid_source_weapon'
-  | 'inventory_transition_failed' | 'candidate_result_mismatch' | 'final_state_mismatch' | 'prediction_failed'
+  | 'inventory_transition_failed' | 'candidate_result_mismatch' | 'final_state_mismatch'
 export interface PlannerTraceReplayIssue { code: PlannerTraceReplayIssueCode; message: string; actionIndex: number | null }
-export interface PlannerTraceReplayResult { isValid: boolean; drafts: PlannerPlanStepDraft[]; issues: PlannerTraceReplayIssue[] }
+export interface PlannerUnsupportedPredictionInput {
+  buildListEntryId: BuildListEntryId
+  operationType: RngPredictionSupportInput['type']
+  reason: RngPredictionUnsupportedReason
+  actionIndex: number
+}
+export interface PlannerTraceReplayResult {
+  isValid: boolean
+  drafts: PlannerPlanStepDraft[]
+  issues: PlannerTraceReplayIssue[]
+  unsupportedInput: PlannerUnsupportedPredictionInput | null
+}
 
 interface TransientGogma { restorationBonuses: RestorationBonusSet; restorationBonusScope: 'normal_artian' | 'gogma_artian'; seriesSkillId: string | null; groupSkillId: string | null }
 interface Runtime {
@@ -85,7 +101,28 @@ function reservedWeapon(entry: BuildListEntry, target: TargetWeapon, id: OwnedWe
 export function replayPlannerSearchTrace(input: PlannerInput, bestState: PlannerSearchState, engine: RngEngine): PlannerTraceReplayResult {
   const runtime: Runtime = { rngState: structuredClone(input.rngState), normalCounters: structuredClone(input.normalCounters), ownedWeapons: structuredClone(input.ownedWeapons), normals: new Map(), gogmas: new Map() }
   const drafts: PlannerPlanStepDraft[] = []
-  const fail = (code: PlannerTraceReplayIssueCode, message: string, actionIndex: number | null): PlannerTraceReplayResult => ({ isValid: false, drafts: [], issues: [{ code, message, actionIndex }] })
+  const supportCache = new Map()
+  const fail = (code: PlannerTraceReplayIssueCode, message: string, actionIndex: number | null): PlannerTraceReplayResult => ({ isValid: false, drafts: [], issues: [{ code, message, actionIndex }], unsupportedInput: null })
+  const requireSupport = (
+    supportInput: RngPredictionSupportInput,
+    entryId: BuildListEntryId,
+    actionIndex: number,
+  ): PlannerTraceReplayResult | null => {
+    const support = getPlannerPredictionSupport(engine, supportInput, supportCache)
+    return support.supported
+      ? null
+      : {
+          isValid: false,
+          drafts: [],
+          issues: [],
+          unsupportedInput: {
+            buildListEntryId: entryId,
+            operationType: supportInput.type,
+            reason: support.reason,
+            actionIndex,
+          },
+        }
+  }
   for (let index = 0; index < bestState.trace.length; index += 1) {
     const action = bestState.trace[index]; if (!sameSnapshot(runtime, action.rngBefore)) return fail('rng_before_mismatch', 'Replay runtime does not match Search Action rngBefore.', index)
     const advance = rngAdvance(action.rngBefore, action.rngAfter); if (!advance) return fail('counter_difference_unrepresentable', 'Search Action changes multiple or unknown Normal counters.', index)
@@ -93,8 +130,7 @@ export function replayPlannerSearchTrace(input: PlannerInput, bestState: Planner
     const target = targetFor(input, entry); if (!target) return fail('missing_target', 'BuildListEntry references a missing TargetWeapon.', index)
     const expectedStateBefore = createExpectedPlanState(runtime.rngState, runtime.normalCounters, runtime.ownedWeapons)
     let expectedResult: ExpectedResult | null = null; let inventoryChange: InventoryChange | null = null
-    try {
-      if (action.kind === 'reserve_candidate') {
+    if (action.kind === 'reserve_candidate') {
         const transient = runtime.gogmas.get(entry.id)
         if (!transient) return fail('missing_transient_output', 'Reserve requires the Entry transient Gogma output.', index)
         const candidate = entry.candidateSnapshot
@@ -113,19 +149,26 @@ export function replayPlannerSearchTrace(input: PlannerInput, bestState: Planner
         }
         runtime.gogmas.delete(entry.id)
         expectedResult = result(cloneBonuses(entry.candidateSnapshot.finalBonuses), entry.candidateSnapshot.restorationBonusScope, entry.candidateSnapshot.seriesSkillId, entry.candidateSnapshot.groupSkillId, true, entry.candidateSnapshot.category, entry.candidateSnapshot.isSimilarToIdeal)
-      } else {
+    } else {
         const operation = action.routeOperation
         if (operation.type === 'create_normal_artian') {
           if (!engine.capabilities.supportsNormalArtianPrediction) return fail('engine_capability_missing', 'Normal prediction capability is unavailable.', index)
-          const missing = predictionIssue(runtime, index, false); if (missing) return { isValid: false, drafts: [], issues: [missing] }
+          const missing = predictionIssue(runtime, index, false); if (missing) return { isValid: false, drafts: [], issues: [missing], unsupportedInput: null }
           const normalCounter = runtime.normalCounters.find(({ id }) => id === operation.weaponTypeId + ':' + operation.rarity)
           const counter = normalCounter?.counter
           if (!normalCounter || counter === null || counter === undefined || !normalCounter.isConfirmed) return fail('missing_rng_requirement', 'A confirmed Normal Artian Counter is required.', index)
+          const unsupported = requireSupport({
+            type: 'normal_artian',
+            weaponTypeId: operation.weaponTypeId,
+            elementId: target.elementId,
+            rarity: operation.rarity,
+          }, entry.id, index)
+          if (unsupported) return unsupported
           const bonuses = engine.predictNormalArtian({ baseSeed: runtime.rngState.baseSeed.value!, weaponTypeId: operation.weaponTypeId, elementId: target.elementId, rarity: operation.rarity, normalCounter: counter, master: input.master })
           action.progressedBuildListEntryIds.forEach((id) => runtime.normals.set(id, [...(runtime.normals.get(id) ?? []), cloneBonuses(bonuses)])); expectedResult = result(cloneBonuses(bonuses), 'normal_artian', null, null)
         } else if (operation.type === 'convert_normal_to_gogma') {
           if (!engine.capabilities.supportsSkillPrediction) return fail('engine_capability_missing', 'Skill prediction capability is unavailable.', index)
-          const missing = predictionIssue(runtime, index, true); if (missing) return { isValid: false, drafts: [], issues: [missing] }
+          const missing = predictionIssue(runtime, index, true); if (missing) return { isValid: false, drafts: [], issues: [missing], unsupportedInput: null }
           if (runtime.rngState.skillCounter.value === null || !runtime.rngState.skillCounter.isConfirmed) return fail('missing_rng_requirement', 'A confirmed Skill Counter is required.', index)
           let inheritedNormalBonuses: RestorationBonusSet | undefined
           if (entry.candidateSnapshot.route.kind === 'owned_normal_artian_to_gogma') {
@@ -133,24 +176,53 @@ export function replayPlannerSearchTrace(input: PlannerInput, bestState: Planner
             if (!source) return fail('missing_source_weapon', 'Owned Normal conversion source is unavailable.', index); if (source.kind !== 'normal') return fail('invalid_source_weapon', 'Owned Normal conversion source is not Normal Artian.', index)
             inheritedNormalBonuses = cloneBonuses(source.restorationBonuses); runtime.ownedWeapons = runtime.ownedWeapons.filter(({ id }) => id !== source.id); inventoryChange = { ...emptyChange(), removeOwnedWeaponIds: [source.id] }
           } else { const normals = runtime.normals.get(entry.id) ?? []; inheritedNormalBonuses = normals.at(-1); if (!inheritedNormalBonuses) return fail('missing_transient_output', 'New Normal conversion requires a transient Normal result.', index); runtime.normals.delete(entry.id) }
+          const unsupported = requireSupport({
+            type: 'skill',
+            weaponTypeId: operation.weaponTypeId,
+            elementId: target.elementId,
+          }, entry.id, index)
+          if (unsupported) return unsupported
           const skills = engine.predictSkills({ baseSeed: runtime.rngState.baseSeed.value!, skillCounter: runtime.rngState.skillCounter.value!, counterGate: runtime.rngState.counterGate.value!, weaponTypeId: operation.weaponTypeId, elementId: target.elementId, master: input.master })
           assignGogma(runtime, action, { restorationBonuses: cloneBonuses(inheritedNormalBonuses), restorationBonusScope: 'normal_artian', seriesSkillId: skills.seriesSkillId, groupSkillId: skills.groupSkillId }); expectedResult = result(cloneBonuses(inheritedNormalBonuses), 'normal_artian', skills.seriesSkillId, skills.groupSkillId)
         } else if (operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses') {
           if (!engine.capabilities.supportsGogmaPrediction || operation.type === 'keep_bonuses' && !engine.capabilities.supportsKeepBonusesPrediction) return fail('engine_capability_missing', 'Gogma prediction capability is unavailable.', index)
-          const missing = predictionIssue(runtime, index, true); if (missing) return { isValid: false, drafts: [], issues: [missing] }; if (runtime.rngState.gogmaCounter.value === null || !runtime.rngState.gogmaCounter.isConfirmed) return fail('missing_rng_requirement', 'A confirmed Gogma Counter is required.', index)
+          const missing = predictionIssue(runtime, index, true); if (missing) return { isValid: false, drafts: [], issues: [missing], unsupportedInput: null }; if (runtime.rngState.gogmaCounter.value === null || !runtime.rngState.gogmaCounter.isConfirmed) return fail('missing_rng_requirement', 'A confirmed Gogma Counter is required.', index)
           const current = operation.sourceOwnedWeaponId === null ? runtime.gogmas.get(entry.id) ?? null : currentGogma(runtime, entry.id, operation.sourceOwnedWeaponId); if (!current) return fail('missing_source_weapon', 'Gogma source is unavailable.', index)
           if (operation.type === 'keep_bonuses' && current.restorationBonusScope !== 'gogma_artian') return fail('invalid_source_weapon', 'Keep Bonuses requires Gogma-scope bonuses.', index)
+          const unsupported = requireSupport(
+            operation.type === 'reset_bonuses'
+              ? {
+                  type: 'gogma_reset',
+                  weaponTypeId: target.weaponTypeId,
+                  elementId: target.elementId,
+                  master: input.master,
+                }
+              : {
+                  type: 'gogma_keep',
+                  weaponTypeId: target.weaponTypeId,
+                  elementId: target.elementId,
+                  currentBonuses: current.restorationBonuses,
+                },
+            entry.id,
+            index,
+          )
+          if (unsupported) return unsupported
           const bonuses = engine.predictGogmaBonus({ baseSeed: runtime.rngState.baseSeed.value!, gogmaCounter: runtime.rngState.gogmaCounter.value, counterGate: runtime.rngState.counterGate.value!, weaponTypeId: target.weaponTypeId, elementId: target.elementId, operation: operation.type === 'reset_bonuses' ? { type: 'reset_bonuses' } : { type: 'keep_bonuses', currentBonuses: current.restorationBonuses }, master: input.master })
           assignGogma(runtime, action, { ...current, restorationBonuses: cloneBonuses(bonuses), restorationBonusScope: 'gogma_artian' }); expectedResult = result(cloneBonuses(bonuses), 'gogma_artian', current.seriesSkillId, current.groupSkillId)
         } else if (operation.type === 'reset_skills') {
           if (!engine.capabilities.supportsSkillPrediction) return fail('engine_capability_missing', 'Skill prediction capability is unavailable.', index)
-          const missing = predictionIssue(runtime, index, true); if (missing) return { isValid: false, drafts: [], issues: [missing] }; if (runtime.rngState.skillCounter.value === null || !runtime.rngState.skillCounter.isConfirmed) return fail('missing_rng_requirement', 'A confirmed Skill Counter is required.', index)
+          const missing = predictionIssue(runtime, index, true); if (missing) return { isValid: false, drafts: [], issues: [missing], unsupportedInput: null }; if (runtime.rngState.skillCounter.value === null || !runtime.rngState.skillCounter.isConfirmed) return fail('missing_rng_requirement', 'A confirmed Skill Counter is required.', index)
           const current = operation.sourceOwnedWeaponId === null ? runtime.gogmas.get(entry.id) : currentGogma(runtime, entry.id, operation.sourceOwnedWeaponId); if (!current) return fail('missing_transient_output', 'Reset Skills requires a current Gogma result.', index)
+          const unsupported = requireSupport({
+            type: 'skill',
+            weaponTypeId: target.weaponTypeId,
+            elementId: target.elementId,
+          }, entry.id, index)
+          if (unsupported) return unsupported
           const skills = engine.predictSkills({ baseSeed: runtime.rngState.baseSeed.value!, skillCounter: runtime.rngState.skillCounter.value, counterGate: runtime.rngState.counterGate.value!, weaponTypeId: target.weaponTypeId, elementId: target.elementId, master: input.master })
           assignGogma(runtime, action, { restorationBonuses: cloneBonuses(current.restorationBonuses), restorationBonusScope: current.restorationBonusScope, seriesSkillId: skills.seriesSkillId, groupSkillId: skills.groupSkillId }); expectedResult = result(cloneBonuses(current.restorationBonuses), current.restorationBonusScope, skills.seriesSkillId, skills.groupSkillId)
         } else { const source = runtime.ownedWeapons.find(({ id }) => id === operation.ownedWeaponId); if (!source) return fail('missing_source_weapon', 'Material weapon is unavailable.', index); runtime.ownedWeapons = runtime.ownedWeapons.filter(({ id }) => id !== source.id); inventoryChange = { ...emptyChange(), removeOwnedWeaponIds: [source.id] } }
-      }
-    } catch (error) { return fail('prediction_failed', error instanceof Error ? error.message : 'RNG Engine prediction failed.', index) }
+    }
     applySnapshot(runtime, action.rngAfter); if (!sameSnapshot(runtime, action.rngAfter)) return fail('rng_after_mismatch', 'Replay runtime does not match Search Action rngAfter.', index)
     const normalBefore = advance.affectedNormalCounterId === null ? null : action.rngBefore.normalCounters.find(({ id }) => id === advance.affectedNormalCounterId)?.counter ?? null
     const normalAfter = advance.affectedNormalCounterId === null ? null : action.rngAfter.normalCounters.find(({ id }) => id === advance.affectedNormalCounterId)?.counter ?? null
@@ -158,5 +230,7 @@ export function replayPlannerSearchTrace(input: PlannerInput, bestState: Planner
   }
   const expected = createExpectedPlanState(bestState.currentRngState, bestState.currentNormalCounters, bestState.simulatedInventory.ownedWeapons)
   const actual = createExpectedPlanState(runtime.rngState, runtime.normalCounters, runtime.ownedWeapons)
-  return JSON.stringify(expected) === JSON.stringify(actual) ? { isValid: true, drafts, issues: [] } : fail('final_state_mismatch', 'Replay final state differs from best PlannerSearchState.', null)
+  return JSON.stringify(expected) === JSON.stringify(actual)
+    ? { isValid: true, drafts, issues: [], unsupportedInput: null }
+    : fail('final_state_mismatch', 'Replay final state differs from best PlannerSearchState.', null)
 }

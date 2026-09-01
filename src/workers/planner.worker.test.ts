@@ -30,6 +30,9 @@ function fixture(): { input: PlannerInput; dependencies: PlannerDependencies } {
       options: { ...defaultPlannerOptions },
       master: {
         weaponBonusDefinitions: search.master.weaponBonusDefinitions,
+        weaponTypes: search.master.weaponTypes,
+        elements: search.master.elements,
+        bonusTypes: search.master.bonusTypes,
         lotteries: search.master.lotteries,
         materialCosts: search.master.materialCosts,
         bonusRanks: search.master.bonusRanks,

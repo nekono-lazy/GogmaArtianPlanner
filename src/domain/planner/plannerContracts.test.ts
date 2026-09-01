@@ -76,6 +76,9 @@ function createPlannerFixture(): {
       options: { ...defaultPlannerOptions },
       master: {
         weaponBonusDefinitions: searchInput.master.weaponBonusDefinitions,
+        weaponTypes: searchInput.master.weaponTypes,
+        elements: searchInput.master.elements,
+        bonusTypes: searchInput.master.bonusTypes,
         lotteries: searchInput.master.lotteries,
         materialCosts: searchInput.master.materialCosts,
         bonusRanks: searchInput.master.bonusRanks,
@@ -147,6 +150,13 @@ describe('Planner contracts', () => {
       'max_steps_reached',
       'max_expanded_states_reached',
     ])
+  })
+
+  it('accepts the concrete prediction unsupported warning taxonomy', () => {
+    expect(validatePlannerWarning({
+      kind: 'rng_prediction_unsupported',
+      message: 'The concrete semantic RNG input is unsupported.',
+    }).isValid).toBe(true)
   })
 
   it('accepts an executable conflict choice and warns for missing or stale choices', () => {

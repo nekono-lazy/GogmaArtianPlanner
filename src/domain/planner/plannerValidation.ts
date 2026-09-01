@@ -7,6 +7,8 @@ import type {
   OwnedWeapon,
   OwnedWeaponId,
   PlanStep,
+  RestorationBonusSet,
+  TargetWeapon,
 } from '../models/publicTypes'
 import {
   stableStringify,
@@ -17,6 +19,11 @@ import {
 import { evaluateBuildListEntryStaleness } from '../buildList'
 import { collectReferencedOwnedWeaponIds } from '../models/hashing'
 import { deriveRngCapabilities } from '../rng/capabilities'
+import type { RngPredictionUnsupportedReason } from '../rng/rngEngine'
+import {
+  getPlannerPredictionSupport,
+  type PlannerPredictionSupportCache,
+} from './plannerPredictionSupport'
 import type {
   ExcludedBuildListEntry,
   PlannerConflictResolution,
@@ -147,10 +154,142 @@ function appendUniqueEntryWarning(
   warnings.push(entryWarning(kind, entry, message))
 }
 
+interface EntryPredictionSupportFailure {
+  operationType: 'normal_artian' | 'skill' | 'gogma_reset' | 'gogma_keep'
+  reason: RngPredictionUnsupportedReason
+}
+
+function nextBonusOperation(
+  operations: BuildListEntry['candidateSnapshot']['route']['operations'],
+  operationIndex: number,
+): 'reset_bonuses' | 'keep_bonuses' | null {
+  for (let index = operationIndex + 1; index < operations.length; index += 1) {
+    const type = operations[index].type
+    if (type === 'reset_bonuses' || type === 'keep_bonuses') return type
+  }
+  return null
+}
+
+function initialRouteBonuses(
+  input: PlannerInput,
+  entry: BuildListEntry,
+): RestorationBonusSet | null {
+  const sourceId = entry.candidateSnapshot.route.sourceOwnedWeaponId
+  if (sourceId === null) return null
+  const source = input.ownedWeapons.find(({ id }) => id === sourceId)
+  return source ? structuredClone(source.restorationBonuses) : null
+}
+
+/**
+ * Checks every static semantic input and deterministically advances bonus state
+ * only when a later Keep needs the preceding Reset/Keep result as its input.
+ * It never reconstructs or rewrites the saved RouteOperation sequence.
+ */
+function entryPredictionSupportFailure(
+  input: PlannerInput,
+  dependencies: PlannerDependencies,
+  entry: BuildListEntry,
+  target: TargetWeapon,
+  cache: PlannerPredictionSupportCache,
+): EntryPredictionSupportFailure | null {
+  const engine = dependencies.rngEngine
+  const operations = entry.candidateSnapshot.route.operations
+  let currentBonuses = initialRouteBonuses(input, entry)
+
+  const query = (
+    supportInput: Parameters<typeof getPlannerPredictionSupport>[1],
+  ): EntryPredictionSupportFailure | null => {
+    const support = getPlannerPredictionSupport(engine, supportInput, cache)
+    return support.supported
+      ? null
+      : { operationType: supportInput.type, reason: support.reason }
+  }
+
+  for (let operationIndex = 0; operationIndex < operations.length; operationIndex += 1) {
+    const operation = operations[operationIndex]
+    if (operation.type === 'create_normal_artian') {
+      const failure = query({
+        type: 'normal_artian',
+        weaponTypeId: operation.weaponTypeId,
+        elementId: target.elementId,
+        rarity: operation.rarity,
+      })
+      if (failure) return failure
+      continue
+    }
+    if (
+      operation.type === 'convert_normal_to_gogma' ||
+      operation.type === 'reset_skills'
+    ) {
+      const failure = query({
+        type: 'skill',
+        weaponTypeId: operation.type === 'convert_normal_to_gogma'
+          ? operation.weaponTypeId
+          : target.weaponTypeId,
+        elementId: target.elementId,
+      })
+      if (failure) return failure
+      continue
+    }
+    if (operation.type === 'reset_bonuses') {
+      const failure = query({
+        type: 'gogma_reset',
+        weaponTypeId: target.weaponTypeId,
+        elementId: target.elementId,
+        master: input.master,
+      })
+      if (failure) return failure
+      if (nextBonusOperation(operations, operationIndex) === 'keep_bonuses') {
+        currentBonuses = engine.predictGogmaBonus({
+          baseSeed: input.rngState.baseSeed.value!,
+          gogmaCounter: operation.gogmaCounterBefore,
+          counterGate: input.rngState.counterGate.value!,
+          weaponTypeId: target.weaponTypeId,
+          elementId: target.elementId,
+          operation: { type: 'reset_bonuses' },
+          master: input.master,
+        })
+      }
+      continue
+    }
+    if (operation.type === 'keep_bonuses') {
+      if (currentBonuses === null) {
+        return {
+          operationType: 'gogma_keep',
+          reason: 'unsupported_current_bonus',
+        }
+      }
+      const failure = query({
+        type: 'gogma_keep',
+        weaponTypeId: target.weaponTypeId,
+        elementId: target.elementId,
+        currentBonuses,
+      })
+      if (failure) return failure
+      if (nextBonusOperation(operations, operationIndex) === 'keep_bonuses') {
+        currentBonuses = engine.predictGogmaBonus({
+          baseSeed: input.rngState.baseSeed.value!,
+          gogmaCounter: operation.gogmaCounterBefore,
+          counterGate: input.rngState.counterGate.value!,
+          weaponTypeId: target.weaponTypeId,
+          elementId: target.elementId,
+          operation: {
+            type: 'keep_bonuses',
+            currentBonuses: structuredClone(currentBonuses),
+          },
+          master: input.master,
+        })
+      }
+    }
+  }
+  return null
+}
+
 function currentEntryEligibility(
   input: PlannerInput,
   dependencies: PlannerDependencies,
   entry: BuildListEntry,
+  supportCache: PlannerPredictionSupportCache,
 ): { valid: ValidatedBuildListEntry | null; reason: string; warningKind: PlannerWarning['kind'] } {
   const target = input.targetWeapons.find(({ id }) => id === entry.targetWeaponId) ?? null
   const staleness = evaluateBuildListEntryStaleness(entry, {
@@ -180,15 +319,6 @@ function currentEntryEligibility(
   if (!routeValidation.isValid) {
     return { valid: null, reason: 'requires an invalid or no-longer-executable BuildRoute.', warningKind: routeValidation.issues.some(({ code }) => code === 'protected_destructive_use') ? 'protected_weapon_required' : 'build_list_entry_stale' }
   }
-  const capabilities = deriveRngCapabilities(
-    input.rngState,
-    input.normalCounters,
-    entry.candidateSnapshot.route.operations,
-    dependencies.rngEngine.capabilities,
-  )
-  if (!capabilities.canRunPlanner) {
-    return { valid: null, reason: `requires unavailable RNG capability (${capabilities.missingRequirements.join(', ')}).`, warningKind: 'rng_state_missing' }
-  }
   if (staleness.isStale) {
     const contextChanged = staleness.staleReasons.includes(
       'calculation_context_changed',
@@ -199,6 +329,29 @@ function currentEntryEligibility(
       warningKind: contextChanged
         ? 'calculation_context_incompatible'
         : 'build_list_entry_stale',
+    }
+  }
+  const capabilities = deriveRngCapabilities(
+    input.rngState,
+    input.normalCounters,
+    entry.candidateSnapshot.route.operations,
+    dependencies.rngEngine.capabilities,
+  )
+  if (!capabilities.canRunPlanner) {
+    return { valid: null, reason: `requires unavailable RNG capability (${capabilities.missingRequirements.join(', ')}).`, warningKind: 'rng_state_missing' }
+  }
+  const unsupported = entryPredictionSupportFailure(
+    input,
+    dependencies,
+    entry,
+    target,
+    supportCache,
+  )
+  if (unsupported) {
+    return {
+      valid: null,
+      reason: `requires unsupported RNG input (${unsupported.operationType}: ${unsupported.reason}).`,
+      warningKind: 'rng_prediction_unsupported',
     }
   }
   return { valid: { entry, missingRngRequirements: [...capabilities.missingRequirements] }, reason: '', warningKind: 'build_list_entry_stale' }
@@ -213,6 +366,7 @@ export function validatePlannerInput(
   const warnings: PlannerWarning[] = []
   const validConflictResolutions: PlannerConflictResolution[] = []
   const warningKeys = new Set<string>()
+  const supportCache: PlannerPredictionSupportCache = new Map()
   const eligibilityByEntryId = new Map<string, ReturnType<typeof currentEntryEligibility>>()
   const validBuildListEntries: ValidatedBuildListEntry[] = []
   const excludedBuildListEntries: ExcludedBuildListEntry[] = []
@@ -220,7 +374,12 @@ export function validatePlannerInput(
   const entriesByStableId = [...input.buildListEntries]
     .sort((left, right) => compareStableStrings(left.id, right.id))
   entriesByStableId.forEach((entry) => {
-      const eligibility = currentEntryEligibility(input, dependencies, entry)
+      const eligibility = currentEntryEligibility(
+        input,
+        dependencies,
+        entry,
+        supportCache,
+      )
       eligibilityByEntryId.set(entry.id, eligibility)
       if (eligibility.valid) {
         validBuildListEntries.push(eligibility.valid)

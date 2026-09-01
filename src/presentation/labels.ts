@@ -57,6 +57,7 @@ export const planStepOperationLabels: Record<PlanStepOperationType, string> = {
 export const plannerWarningLabels: Record<PlannerWarningKind, string> = {
   no_build_list_entries: '利用できるビルドリスト項目がありません',
   rng_state_missing: '必要なRNG状態または予測機能が不足しています',
+  rng_prediction_unsupported: '指定されたRNG予測入力には対応していません',
   material_weapon_shortage: '素材用巨戟アーティアが不足しています',
   protected_weapon_required: '保護中の武器が必要なため実行できません',
   build_list_entry_stale: '再検索が必要なビルドリスト項目があります',
