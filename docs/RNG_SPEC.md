@@ -52,11 +52,15 @@ Domain Modelは `DATA_MODEL.md` の `RngState` と `NormalArtianCounter` を使�
 
 Base Seed、Gogma Counter、Skill Counter、Counter Gateは `KnownValue<T>` として独立に確定・未確定を保持する。RngState全体の確定フラグは使用しない。
 
+`RngState.counterGate` はlegacy/manual/import compatibility、将来のExport / Import round-trip、diagnostic / reference情報のために保持し、v1では削除またはmigrationしない。ただしpersisted exact GateはProduction Skill / Gogma Predictionのavailability、Candidate Search、Planner、Trace Replay、またはPrediction結果のauthorityに使用しない。
+
 予測前に、RngState、レア8通常Counter、必要なRouteOperation、現在の
 `RngEngineCapabilities` を渡して `deriveRngCapabilities` を呼ぶ。
 Capabilityは必要なKnownValueが確定済みであり、かつ現在のEngineが該当Predictionを
 supportする場合だけ有効にする。値が揃っていてもEngine未対応ならfalseとし、
 不足に依存するRouteだけをskipする。
+
+Production Skill Predictionは確定Base Seed、確定Skill Counter、Skill Prediction support、concrete semantic input supportを要求する。Production Gogma Predictionは確定Base Seed、確定Gogma Counter、Gogma Prediction support、concrete semantic input / Master supportを要求する。いずれもconfirmed Counter Gateを要求しない。Normal Counterは新規Normal Artian生成にだけ要求し、Skill Prediction、Gogma-only route、所持Normalからのconversionへ波及させない。
 
 ---
 
@@ -149,6 +153,8 @@ export type RngPredictionSupport =
   | { supported: false; reason: RngPredictionUnsupportedReason };
 ```
 
+`supportsSeedSearch` は旧generic `SeedSearchInput` / `SeedSearchResult` の実行Capabilityだけを表し、Skill-first Identification Wizardのavailability flagとして使用しない。C5-E2C2、C5-E2C3、Wizard activation後も現行設計では `false` を維持する。Identification可否はWorker/application levelでSkill STEP 1とGogma Counter STEP 2を個別に表すconcrete availabilityとし、新しいRngEngine capability flagは追加しない。
+
 Prediction可否は二段階で判定する。
 
 ```text
@@ -181,7 +187,6 @@ Capabilityがtrueでも `getPredictionSupport()` が `supported: false` を返�
 export interface GogmaBonusPredictionInput {
   baseSeed: NormalizedSeed;
   gogmaCounter: number;
-  counterGate: number;
   weaponTypeId: WeaponTypeId;
   elementId: ElementId;
   operation:
@@ -206,7 +211,6 @@ Keep Bonusesにはユーザーが保持slotを選ぶ概念がない。入力し�
 export interface SkillPredictionInput {
   baseSeed: NormalizedSeed;
   skillCounter: number;
-  counterGate: number;
   weaponTypeId: WeaponTypeId;
   elementId: ElementId;
   master: RngMasterSubset;
@@ -217,6 +221,8 @@ export interface SkillPredictionResult {
   groupSkillId: GroupSkillId;
 }
 ```
+
+上記はProduction Domain adapterのsemantic input契約である。Counter Gateはcaller-supplied Domain inputではなく、Production v1 adapterがoperation別active representativeを内部供給する。Core / reference predictorは低Gate branchの検証用にGate入力を保持してよいが、その内部inputをSearch、Planner、Worker message、またはpersisted RngState requirementとして公開しない。
 
 Production Skill PredictionはSeries / Groupを必ず1件ずつ返す。conversion直後の初回付与もReset Skills結果も同じ完全な結果型を使い、`null / null` を予測結果として生成しない。
 
@@ -326,7 +332,7 @@ stream進行は次を正式契約とする。Statusは確認根拠の範囲で�
 
 Domain Counterの `+1` は1回のforgeが次の予測位置へ進む意味であり、参照PRNG内部の1 blockあたり10 stepと混同しない。`candidateOffset = k` の通常候補を採用する場合、合計進行はNormal `+(k + 1)`、Skill `+1`、Gogma `+0` である。先行するk本は巨戟化せず、候補である最後の1本だけを巨戟化する。
 
-Counter Gateは予測時のeffective PRNG blockだけに作用する。
+Core / reference semanticsではCounter Gateは予測時のeffective PRNG blockだけに作用する。
 
 ```text
 Skill Gate < 54 -> effective Skill block = 0
@@ -337,6 +343,8 @@ otherwise       -> effective Gogma block = Domain Gogma Counter
 ```
 
 Domain Counterはアプリが保持するゲーム状態、effective PRNG blockは予測時にseed streamへ適用するoffsetであり、別概念である。Gate未満でゲーム内部に保存されたCounter自体が操作後にどう変化するかは未確認のため、`advance*Counter` 契約や永続Counterをeffective blockへ置き換えてはならない。Normal streamにはCounter Gateを適用しない。
+
+Production v1は通常アーティアおよび巨戟アーティアを利用可能なゲーム進行状態を対象とし、runtime adapterはactive branchを選択する。Skill operationでは54、Gogma operationでは35を内部representativeとしてCoreへ渡す。54 / 35はactual game Counter Gate値ではなく、ユーザー入力、Identification結果、または永続値として扱わない。persisted Gateが200、54、またはnullのいずれでも、他の必要入力とsupportが同じなら同じProduction active Predictionを行う。低Gate branch自体はCore / reference contractとfixture検証のために削除しない。
 
 ---
 
@@ -368,6 +376,7 @@ export interface GogmaSeedFinderImportResult {
 - 読み取れない項目があっても、読み取れた項目の適用を妨げない
 - 適用した各KnownValueの `source` を `"gogma_seed_finder_import"` とする
 - Importに含まれない既存項目を未確定へ戻さない
+- ImportでCounter Gateを取得した場合は従来どおりvalidation・保存し、将来のExport / Import round-trip対象にできる。ただしProduction active Predictionのauthorityにはしない
 
 禁止事項。
 
@@ -386,6 +395,7 @@ export interface GogmaSeedFinderImportResult {
 - Counterは0以上の整数のみ
 - 入力した各KnownValueの `source` を `"manual"` とする
 - 空欄項目を既存値から削除する操作は、明示的な「確定解除」として別に扱う
+- manual Counter Gateはlegacy / diagnostic / compatibility値として保存可能だが、Production active Predictionのavailabilityまたは結果を変更しない
 
 ---
 
@@ -486,6 +496,8 @@ export interface CounterMatch {
 
 Base Seedが不明な場合に、利用可能な観測情報からSeed候補を検索する。CounterSearchInputとは別の契約とする。
 
+本節と9.6は旧generic Seed Search案の履歴契約であり、Production v1 Identification Wizardのcurrent contractではsupersededである。ここに残るCounter Gate候補型はexternal referenceまたは将来のgeneric search設計を記録するもので、現在のProduction availability、Skill-first Identification入力、または `RngState.counterGate` requirementとして使用しない。generic Seed Searchはinactiveで、`supportsSeedSearch = false`を維持する。
+
 ```ts
 export interface SeedSearchInput {
   seedRange: SeedSearchRange;
@@ -574,6 +586,10 @@ export interface SeedMatchPosition {
 - kernelとProduction Worker foundationは存在するが、UIへは未接続であり、`supportsSeedSearch = false`とProduction RNG versionを維持する
 - Worker requestIdはactive中の再利用を禁止し、新requestを明示的に拒否する。cancel状態はrequest-scoped tokenに保持し、旧処理のterminal completionまで解除せず、その後に破棄する
 - 現在のbounded goldenはreference-generatedであり、独立したgame-verified fixtureではない。Production UI activationには後続のlive verificationが必要である
+- STEP 1は完全な探索で候補がexactly oneかつnon-truncatedの場合だけ一意とする。候補が複数なら候補をユーザーに選ばせず、次のReset Skills観測を追加して同じ検索を再実行する。候補0件では観測入力、Counter range、操作順を確認し、範囲を自動拡張しない
+- Skill live verificationはkernel blockerでもWizard implementation blockerでもないが、Production activation blockerである。known Base Seed / starting Skill Counter / weapon type / elementと、conversion自動Skillおよび後続Reset SkillsのSeries / Group両方を記録したgame-verified fixtureをactivation前に確認する
+- 実Browser Worker benchmarkはWizard implementation blockerではないがProduction activation blockerである。Node benchmarkをBrowser benchmarkとして扱わない
+- Production activation前にSeed rangeをcontiguous / non-overlapping chunkへ分割するmulti-worker orchestrationを実装する。chunk結果はSeed range順にdeterministic mergeし、global progress、全Workerへのcancel propagation、Worker failureの明示errorを提供する
 
 ## 9.8 C5-E2B2 Gogma Counter Identification current contract
 
@@ -589,6 +605,12 @@ Skill Identificationでcanonical Base Seedが確定した後のSTEP 2には、�
 - progressは完全にaccept/rejectした`searchedCounters / totalCounters`と`matchesFound`である。Counter chunk sizeはruntime tuning値で、永続Production契約ではない
 - game-verified Heavy Bowgun/Ice six-Reset fixture（Base Seed 86315169、start Counter 480）はCounter 475..485で480だけに一致する。Gate 35とfixture actual Gate 200は同じ30 ordered slotsを返す
 - kernelとProduction Worker foundationは存在するが、UI/adoptには未接続である。`supportsSeedSearch = false`と`production-rng:c5-b`を維持する
+- STEP 2へ進めるのはSTEP 1がexactly oneかつnon-truncatedのBase Seed候補を返した場合だけとする。STEP 2も完全な探索でstarting Gogma Counter候補がexactly oneかつnon-truncatedの場合だけreviewへ進める。複数なら追加Reset観測、0件なら観測入力、range、操作順の確認を要求する
+- WizardはCounter Gateを入力、探索、Observation、resultへ含めず、Skill 54 / Gogma 35をactual Gateとしてpersistしない
+- 採用前に調査前のゲーム状態へ戻したことをユーザーに確認させる。採用するCounterはstarting Skill Counter `S` とstarting Gogma Counter `G`であり、観測中の操作回数を加算した `S + N` / `G + M`ではない
+- adoption時はBase SeedをProduction `normalizeSeed()`で再validation / canonicalizeし、Base Seed、Skill Counter、Gogma Counterのsourceに既存の `observation` を使用する。Counter GateとNormal Counterを変更せず、新しい `identified` sourceはv1必須ではない
+- Wizard開始時と各観測Stepでは、観測中はゲーム状態を保存しないこと、開始前にバックアップ方法と自動保存の設定・挙動を確認すること、案内された操作だけを連続して行うこと、観測後は調査前状態へ戻してから採用することを表示する。ゲーム側の保存仕様や安全を断定・保証しない
+- `invalid_input` / `unsupported_input` / `cancelled` / `unexpected_error` / Worker unavailable / duplicate requestIdを区別する。`unexpected_error`またはWorker failureを候補0件へ変換しない
 
 ---
 
@@ -631,8 +653,11 @@ BuildCandidate、BuildListEntry、ProductionPlanへ追加保存せず、永続pr
 `CalculationContext.rngEngineVersion`をauthorityとする。
 
 現行Production capabilityはNormal Artian、Skill、Gogma Reset、Gogma KeepのPredictionがactive、
-Seed Searchはinactiveである。Seed Search algorithm/Worker/UIと`supportsSeedSearch`有効化は別工程とする。
+generic Seed Searchはinactiveである。専用Skill / Gogma Identification Workerのavailabilityは
+`supportsSeedSearch`ではなくWorker/application levelで個別に判定し、`supportsSeedSearch = false`を維持する。
 Production有効判定とPredictionはdisabled legacy `LotteryMaster`を要求しない。
+
+C5-E2C2は本仕様だけをactive Gate policyへ改訂する。C5-E2C2完了直後のcurrent runtime、Capability、Search、Planner、Trace Replay、Hashはまだpersisted exact Gateを要求するため、統合済みとは扱わない。C5-E2C3でProduction adapterの内部representative供給と関連実装を同期し、observable semantics changeとして `PRODUCTION_RNG_ENGINE_VERSION` を `production-rng:c5-e2` へbumpする。
 
 ## 10.2 Message
 

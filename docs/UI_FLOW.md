@@ -85,7 +85,7 @@ Debug Details
 
 目的。
 
-Base Seed、Gogma Counter、Skill Counter、Counter Gateを項目ごとに設定する。判明している値だけの適用を許可する。
+Base Seed、Gogma Counter、Skill CounterをProduction Prediction用に項目ごとに設定する。Counter Gateはlegacy / diagnostic / manual / import compatibility値として引き続き保存・表示できるが、Production Predictionの必須項目またはauthorityではない。判明している値だけの適用を許可する。
 
 タブ。
 
@@ -132,10 +132,14 @@ Base Seed、Gogma Counter、Skill Counter、Counter Gateを項目ごとに設定
 - 4項目をすべて入力する必要はない
 - 入力した各KnownValueのsourceを `manual` にする
 - 空欄は既存値を削除しない。確定解除は別操作にする
+- Counter Gate入力欄はC5-E2C2時点ではUIから削除済みと扱わない。後続UI taskで詳細値への移動や説明追加を検討する
+- persisted Gateが200、54、または未設定でも、他の必要値とsupportが同じならProduction active Predictionのavailabilityと結果は同じである
 
-## 5.3 観測から検索
+## 5.3 観測から検索（legacy generic Seed Search contract）
 
-Seed検索とCounter検索を別モードとして提供する。
+本節は旧generic Seed Search UI案を記録する履歴契約であり、現在のProduction v1では提供しない。Production v1のRNG特定UIは5.4 Skill-first Identification Wizardを使用する。
+
+旧generic案ではSeed検索とCounter検索を別モードとして想定していた。Counter Gate候補を含むこのgeneric Seed Search contractはcurrent Production v1 Identification Wizardではsupersededであり、`supportsSeedSearch = false` のためinactiveとする。専用Wizardのavailability flagとして流用しない。
 
 入力。
 
@@ -161,6 +165,65 @@ Seed検索とCounter検索を別モードとして提供する。
 - RNG Engineが本番Seed検索未対応の場合は利用不可理由を表示し、推測結果を出さない
 - Gogma Bonus / Skill観測では属性未選択のまま検索できない
 - Normal Artian観測ではEngineが属性を使わない場合に属性入力を省略できる
+
+## 5.4 Skill-first Identification Wizard
+
+RNG Setupから専用Wizardへ遷移し、完了後のreview / adoption結果をRNG Setupへ反映する。C5-E2C2では画面を実装済みと扱わない。
+
+対象ユーザー。
+
+- 通常アーティアおよび巨戟アーティアを利用可能なゲーム進行状態
+- Production Skill / Gogma Predictionはactive branchを使用する
+- Counter Gateを入力、探索、Observation、resultへ含めない
+- Skillの54、Gogmaの35はactive branch選択用の内部representativeであり、actual Gateとして表示・保存しない
+
+開始時の必須案内。
+
+- 観測中は結果の記録が終わるまでゲーム状態を保存しない
+- 開始前にセーブデータのバックアップ方法と自動保存の設定・挙動を確認する
+- 画面で案内された操作だけを順番に連続して行う
+- 観測終了後は調査前の状態へ戻してから結果を採用する
+- ゲーム側の保存仕様やセーブデータの安全をアプリが断定・保証しない
+
+STEP 1。
+
+1. Normal ArtianをGogma Artianへconversionし、自動付与されたSeries / Group SkillをObservation 1として記録する
+2. Reset Skillsを連続して行い、Observation 2以降へSeries / Groupの両方を記録する
+3. approximate Skill Counterはcenter + ±Nを基本入力とし、計算後のinclusive start / endを併記する。初期推奨幅は11候補である
+4. Base Seedとstarting Skill CounterをWorkerで探索する
+5. 完全・non-truncatedな結果がexactly oneになるまでSTEP 2へ進めない
+
+STEP 2。
+
+1. STEP 1の一意なcanonical Base Seedを使用する
+2. Reset Bonusesを連続して行い、各結果をordered five-slot Observationとして記録する
+3. approximate Gogma Counterはcenter + ±Nを基本入力とし、inclusive start / endを併記する
+4. starting Gogma CounterをWorkerで探索する
+5. 完全・non-truncatedな結果がexactly oneの場合だけreviewへ進む
+
+結果別UI。
+
+- `unique`: 次STEPまたはreviewへ進む
+- `multiple`: 候補をユーザーに選ばせず、追加のReset Skills / Reset Bonuses観測を要求して同じ検索を再実行する
+- `zero`: 観測入力、Counter範囲、操作順を確認させ、自動で範囲を拡張しない
+- `cancelled`: 入力を保持して観測画面へ戻し、新requestIdで再実行できる
+- `invalid_input` / `unsupported_input`: 該当入力またはsupport理由を表示する
+- `unexpected_error` / Worker unavailable / duplicate requestId: no-matchへ変換せず、system / request errorとしてretry導線を表示する
+
+review / adoption。
+
+- 調査前の開始Skill Counter `S`、調査前の開始Gogma Counter `G`と明記する
+- 観測中の操作回数を加えた `S + N` / `G + M`を保存しない
+- 調査前状態へ戻したことを明示確認してからadoptする
+- Base SeedをProduction `normalizeSeed()`で再validation / canonicalizeする
+- Base Seed、Skill Counter、Gogma Counterのsourceを既存の `observation` とし、Counter GateとNormal Counterを変更しない
+
+activation条件。
+
+- Skillのreference-generated fixtureはkernel / Wizard implementationをblockしないが、独立したlive-game verification完了前にProduction activationしない
+- 実Browser Worker benchmark完了前にProduction activationしない。Node benchmarkを代用しない
+- Skill Seed rangeのmulti-worker orchestrationはcontiguous / non-overlapping chunk、deterministic merge、global progress、全Workerへのcancel propagation、Worker failureの明示errorを満たす
+- Identification availabilityはWorker/application levelでSkill / Gogma Counterを個別に扱い、新しいRngEngine capability flagを追加しない
 
 ---
 
@@ -360,7 +423,7 @@ TargetWeaponごとに候補を検索し、作成リストへ追加する。
 - 通常アーティア経由では、候補位置までのforge数、最後の1本だけの巨戟化、conversion時の初回Skill、必要なfirst Reset、その後のReset / Keep / Reset Skillsを実行順に表示する
 - 既存の「通常アーティア最大進行量」入力は `maxNormalAdvance`、すなわち最大forge回数を表す。最大0-based offsetではなく、候補offsetの表示が必要なら `0 ... maxNormalAdvance - 1` とする
 - normal-tier bonusを持つ巨戟ではKeepを最初に表示せず、first Reset後だけKeepを表示する
-- conversionだけのRouteでGogma Counter不足をskip理由にせず、Base Seed / Skill Counter / Counter GateまたはSkill Prediction Capability不足を区別して表示する
+- conversionだけのRouteでGogma Counter不足をskip理由にせず、Base Seed / Skill Counter不足、Skill Predictionまたはconcrete semantic input support不足を区別して表示する。persisted Counter Gate不足をskip理由にしない
 - レア8、非保護、かつTargetと武器種・属性が一致する所持通常アーティアだけを変換元候補として表示する
 - 条件緩和案は選択されるまでTargetWeaponへ適用しない
 - 「実用」は `category = practical`、「近似」は `category = practical AND isSimilarToIdeal = true` を表示する
@@ -636,7 +699,7 @@ Debug Mode ONの場合のみ表示。
 - Base Seed
 - Gogma Counter
 - Skill Counter
-- Counter Gate
+- Counter Gate（legacy / diagnostic / compatibility値。Production active Predictionのauthorityではない）
 - NormalArtianCounter
 - PlanStep内部情報
 - RNG予測情報

@@ -64,6 +64,8 @@ RNG仕様の確認状態は次の3語で区別する。
 
 スマートフォンでゲームを見ながら操作する利用形態を重視する。PCブラウザでも同じ機能を利用できること。
 
+Production v1のSkill / Gogma PredictionとIdentification Wizardは、通常アーティアおよび巨戟アーティアを利用可能なゲーム進行状態のユーザーを対象とする。この製品前提により、Production runtimeはCounterのactive branchを使用する。これはユーザーのactual Counter Gate値を特定済みとみなすことを意味しない。
+
 ---
 
 ## 4. 初期版の基本方針
@@ -107,7 +109,13 @@ candidateCounter = normalCounterBefore + forgeCount - 1
 
 Base Seed、Gogma Counter、Skill Counter、Counter Gateはそれぞれ独立した `KnownValue<T>` として、値、確定状態、取得元を保持する。一部だけ判明している状態を許可し、RNG状態全体を「全確定 / 未確定」の二択にしない。
 
+`RngState.counterGate` はv1で削除しない。legacy compatibility、manual input compatibility、将来のExport / Import round-trip、diagnostic / reference情報のために保持する。ただし、persisted Counter Gateのvalueまたは確定状態は、Production Skill Prediction、Production Gogma Prediction、Candidate Search、Planner、Trace ReplayのavailabilityまたはPrediction結果のauthorityにしない。
+
 機能ごとに必要な値からCapabilityを判定する。例えばGogma予測、Skill予測、通常アーティア検索、Planner実行は、それぞれが依存する確定値だけを要求する。不足値に依存する経路のみを無効化し、利用可能な経路まで一括で無効化しない。
+
+- Production Skill Predictionは確定Base Seed、確定Skill Counter、EngineのSkill Prediction support、concrete semantic input supportを要求する
+- Production Gogma Predictionは確定Base Seed、確定Gogma Counter、EngineのGogma Prediction support、concrete semantic input / Master supportを要求する
+- 新規通常アーティア生成だけが対象武器種の確定Normal Counterを要求する。Skill Prediction、Gogma-only経路、所持通常アーティアからの巨戟化はNormal Counterを要求しない
 
 stream進行は次を正式契約とする。Statusはprovenanceの確認範囲であり、正式契約かどうかとは別である。
 
@@ -119,7 +127,9 @@ stream進行は次を正式契約とする。Statusはprovenanceの確認範囲�
 | reset bonuses | 0 | 0 | +1 | reference-verified |
 | keep bonuses | 0 | 0 | +1 | reference-verified |
 
-`use_weapon_as_material` のRNG進行は未確認であり推測しない。Domain Counter +1とPRNG内部1 blockの10 stepは別概念とする。Counter Gateは予測時のeffective PRNG blockにだけ適用し、Skill Gate < 54ならSkill offsetを0、Gogma Gate < 35ならGogma offsetを0とする。Gate未満で保存Counter自体が操作後にどう変化するかは未確認のまま維持する。
+`use_weapon_as_material` のRNG進行は未確認であり推測しない。Domain Counter +1とPRNG内部1 blockの10 stepは別概念とする。Core / reference semanticsではCounter Gateは予測時のeffective PRNG blockにだけ作用し、Skill Gate < 54ならSkill offsetを0、Gogma Gate < 35ならGogma offsetを0とする。Gate未満で保存Counter自体が操作後にどう変化するかは未確認のまま維持する。
+
+このCore / reference contractとProduction v1 runtime policyを区別する。Production v1 adapterはoperationに応じ、Skillでは54、Gogmaでは35をactive branch選択用の内部representativeとして使用する。54 / 35はactual game Counter Gate値ではなく、`RngState.counterGate`へ保存しない。低Gate branch自体はCore / reference semanticsとその検証のために残す。
 
 通常画面では内部値を直接操作させない。詳細表示またはデバッグモードでのみ確認可能とする。
 
@@ -150,13 +160,23 @@ GogmaSeedFinderのソースコードそのものをコピーして使用しな�
 
 判明している項目だけを入力でき、4項目すべてを必須としない。
 
+Counter Gateの直接入力はlegacy / diagnostic / compatibility情報の保存手段として維持する。値が200、54、または未設定のいずれでも、必要なBase Seed、該当Counter、Engine support、concrete semantic input supportが揃っていればProduction active predictionは成立する。入力されたexact GateをProduction Prediction結果のauthorityにしない。
+
 ### 6.3 観測結果から検索
 
 ゲーム内で確認した抽選結果を入力し、対応するSeedまたはCounter候補を検索できること。通常アーティアの現在位置特定はこの方式を主に使用する。
 
 一度の観測で候補が一意にならない場合は、追加観測が必要であることを明示する。
 
-Seed検索とCounter検索は別の入力・結果型として扱う。Seed検索は検索Seed範囲と、Normal Artian、Gogma Bonus、Skillの利用可能な観測情報を組み合わせて候補を絞り込む。いずれも重い処理としてWeb Workerで実行する。
+Seed検索とCounter検索は別の入力・結果型として扱う。旧generic Seed Search案は履歴契約として保持するが、Production v1のRNG特定にはSkill-first Identification Wizardの専用kernelを使用し、`supportsSeedSearch`を有効化しない。
+
+Identification WizardはCounter Gateを入力、探索、観測、特定、結果化しない。STEP 1はNormalからGogmaへのconversion時の自動Skillと連続Reset Skills観測からcanonical Base Seedとstarting Skill Counter `S`を特定し、STEP 2はそのBase Seedと連続ordered Reset Bonuses観測からstarting Gogma Counter `G`を特定する。STEP 1が完全な探索で一意になるまでSTEP 2へ進めず、複数候補では候補選択ではなく追加観測を要求する。
+
+Wizardの調査中に実行したSkill / Gogma操作でCounterが進んでも、調査中のゲーム状態は保存せず、調査前状態へ戻してから結果を採用する。採用値はstarting Counter `S` / `G`であり、観測数を加えた値ではない。Base Seed、Skill Counter、Gogma Counterのsourceにはv1で既存の `observation` を使用し、Counter Gateは変更しない。
+
+Wizard開始時と観測中は、観測結果の記録が終わるまでゲーム状態を保存しないこと、開始前にバックアップ方法と自動保存の設定・挙動を確認すること、案内された操作だけを連続して行うこと、観測後は調査前状態へ戻してから採用することを案内する。ゲーム側の保存仕様または安全性をアプリが断定・保証してはならない。
+
+Skill Identificationの現行fixtureはreference-generatedであり、独立したgame-verified fixtureではない。これはkernelおよびWizard実装のblockerではないが、Production activationのblockerである。Skill STEP 1の実Browser Worker benchmarkもWizard実装のblockerではないがProduction activation前に必要であり、Node benchmarkを代用しない。Production UXではactivation前にSeed rangeをcontiguous / non-overlapping chunkへ分割するmulti-worker orchestration、deterministic merge、global progress、cancel propagation、Worker failureの明示errorを実装する。
 
 通常アーティアCounterの直接修正は通常UIに置かず、必要な場合のみDebug Modeで提供する。
 
@@ -169,6 +189,7 @@ Seed検索とCounter検索は別の入力・結果型として扱う。Seed検�
 - Counterが未確定でも、既存巨戟アーティア経由の候補検索は利用可能とする
 - すべての武器種のレア8 Counterを事前に確定させる必要はない
 - Counter候補が複数ある状態を確定済みとして扱わない
+- Normal Counterが未確定でも、Skill Prediction、Gogma-only Prediction / Search / Planner、既存巨戟経路、適合する所持通常アーティアからの巨戟化を利用可能とする
 
 ---
 
@@ -705,6 +726,8 @@ Execution Navigatorの結果一致、武器確保、旧実用品の素材化確�
 
 これらをまとめたCalculationContextを定義する。BuildCandidate、BuildListEntry、ProductionPlanには生成時のCalculationContextを保存する。Master DataまたはRNG Engineの変更後、互換性が確認できないCandidate、BuildListEntry、Planをstale扱いにし、現行結果として使用しない。
 
+Production v1 adapterがpersisted exact Gateを要求せずactive representativeを使用する変更はobservable Production semantics changeである。runtime実装を行うC5-E2C3で `PRODUCTION_RNG_ENGINE_VERSION` を `production-rng:c5-e2` へ更新し、既存CalculationContextを `calculation_context_changed` として無効化する。C5-E2C2は仕様改訂だけでありversionを変更しない。
+
 ---
 
 ## 33. 詳細表示とデバッグモード
@@ -862,3 +885,5 @@ conversionのNormal +0 / Skill +1 / Gogma +0、bonus継承、初回Skillはgame-
 Practical同士の優劣判定と、それに基づくPlannerからの旧Practical素材化提案は将来仕様とし、v1では実装しない。
 
 同一Route内で新規生成した武器を後続Operationから参照するRoute内武器参照型は将来仕様とし、v1では追加しない。
+
+C5-E2C2で、本書および詳細仕様のProduction Counter Gate契約を「exact persisted Gate不要、operation別active representative使用」へ正式改訂した。C5-E2C2完了時点のruntime実装はまだexact confirmed Gateを要求しており、C5-E2C3 Active Gate runtime integrationでCapability、Search、Planner、Trace Replay、Hash、Production adapter、Engine versionを本仕様へ同期する。仕様先行期間の実装状態を、本仕様へ統合済みと誤記しない。

@@ -599,6 +599,26 @@ Gate未満時も保存counterのDomain before/afterが+1するかどうかは、
 - WorkerはB1のactive requestId拒否、request-scoped cancel token、terminal cleanup、late response ignore、`production-engine-unavailable` contractを維持する。UIには未接続である。
 - C5-E2B2でも`supportsSeedSearch = false`、`production-rng:c5-b`、RngState schema、UI、Search/Plannerを変更しない。
 
+### 14.6 C5-E2C2 Active Counter Gate Production contract（2026-09-01）
+
+14.4 / 14.5のIdentification kernel方針とC5-E2C1 Production Integration Contract Auditを受け、Production v1のcurrent approved contractを次のとおり確定した。本節は6.1 / 10.1に記録したexternal reference / CoreのGate semanticsを改変せず、GogmaArtianPlanner Product runtime policyを別に定義する。
+
+- Production v1は通常アーティアおよび巨戟アーティアを利用可能なゲーム進行状態を対象とし、Skill / Gogma Predictionでactive Counter branchを使用する
+- Skill operationは54、Gogma operationは35をactive branch選択用の内部representativeとして使用する。54 / 35はactual game Counter Gate値ではない
+- Core / reference semanticsの低Gate branchとthreshold testは保持する。変更対象はProduction v1 adapterが選択するbranchである
+- `RngState.counterGate` はlegacy/manual/import compatibility、将来のround-trip、diagnostic / reference情報としてschemaに保持するが、Production Prediction、Candidate Search、Planner、Trace Replayのavailabilityまたは結果のauthorityにしない
+- Identification WizardはGateを入力、探索、Observation、result、adoptionへ含めず、54 / 35をpersistしない
+- Production CapabilityはSkillでBase Seed / Skill Counter、GogmaでBase Seed / Gogma Counterと、該当Prediction / concrete semantic input supportを要求する。confirmed Gateは要求しない
+- Normal Counterは新規Normal Artian生成だけに必要であり、Gogma-only route、existing Gogma route、Skill Prediction、適合するowned Normalからのconversionには要求しない
+- `searchStateHash`、route-dependent RNG hash、`ExpectedPlanState.rngStateHash`からlegacy Gateを除外し、Gateだけの変更によるfalse staleを防ぐ
+- `supportsSeedSearch`は旧generic Seed Search capabilityであり、Identification availabilityに流用せず `false`を維持する。新しいRngEngine capability flagはC5-E2C2で追加しない
+- Identification adoptionはcanonical Base Seed、starting Skill Counter、starting Gogma Counterを採用し、sourceには既存の `observation` を使用する。Counter GateとNormal Counterは変更しない
+- 調査中はゲーム状態を保存せず、調査前状態へ戻してから採用する。観測操作数をstarting Counterへ加算しない
+- Skill live verificationと実Browser Worker benchmarkはWizard implementation blockerではないがProduction activation blockerである。Node benchmarkはBrowser benchmarkの代用ではない
+- activation前のSkill Production UXにはcontiguous / non-overlapping Seed chunk、deterministic merge、global progress、cancel propagation、Worker failureの明示errorを持つmulti-worker orchestrationが必要である
+
+C5-E2C2は仕様文書だけを改訂する。完了直後のcurrent codeは依然としてexact confirmed GateをCapability、Search、Planner Trace Replay、Hashの一部で要求している。runtime implementationはC5-E2C3へ残し、その変更と同時に `PRODUCTION_RNG_ENGINE_VERSION` を `production-rng:c5-e2`へbumpする。従ってC5-E2C2時点は「specification approved / runtime implementation pending C5-E2C3」であり、統合済みとは扱わない。
+
 ---
 
 ## 15. 現在契約との仕様衝突

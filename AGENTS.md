@@ -299,6 +299,12 @@ RNG state is not all-or-nothing.
 
 Base Seed, Gogma Counter, Skill Counter, and Counter Gate are independent `KnownValue<T>` fields.
 
+`RngState.counterGate` remains in the v1 schema for legacy/manual/import
+compatibility, future export/import round-tripping, and diagnostic/reference
+information. Do not delete or migrate it in v1. Its value and confirmation
+state are not Production Skill/Gogma Prediction authority and must not gate
+Candidate Search, Planner, or Trace Replay.
+
 Do not require all RNG values merely because one feature needs some of them.
 
 Use capability derivation so that:
@@ -319,15 +325,30 @@ A missing capability disables only dependent routes.
 Do not disable unrelated routes.
 
 Conversion requires a compatible Normal source, Skill prediction capability,
-and confirmed Base Seed, Skill Counter, and Counter Gate. Conversion alone does
+confirmed Base Seed and Skill Counter, and supported concrete semantic input.
+It does not require a persisted exact Counter Gate. Conversion alone does
 not require Gogma prediction capability or a confirmed Gogma Counter. Those are
 required only when Reset Bonuses or Keep Bonuses is included.
 
-Counter Gate affects the effective PRNG block separately from the persisted
-Domain Counter: Skill Gate below 54 uses effective Skill Counter zero, and
-Gogma Gate below 35 uses effective Gogma Counter zero. How the game's persisted
-Counter changes while a Gate is below its threshold is unverified; do not infer
-or encode that behavior.
+The Core/reference Counter Gate semantics remain separate from Product runtime
+policy: Skill Gate below 54 uses effective Skill Counter zero, and Gogma Gate
+below 35 uses effective Gogma Counter zero. How the game's persisted Counter
+changes while a Gate is below its threshold is unverified; do not infer or
+encode that behavior.
+
+The approved Production v1 policy targets users at game progression where
+normal and Gogma Artian systems are available and always selects the active
+branch. The Production adapter supplies 54 for Skill operations and 35 for
+Gogma operations as internal active-branch representatives. These numbers are
+not actual game Counter Gate values and must never be persisted, requested by
+the Identification Wizard, or presented as identified Gate values. Preserve
+the low-Gate Core/reference semantics and tests.
+
+C5-E2C2 updates the approved specification only. Until C5-E2C3 is implemented,
+the current runtime still incorrectly requires exact confirmed Gate in
+capability derivation, Search, Planner Trace Replay, and hashes. Do not describe
+that integration as complete. C5-E2C3 must update those components atomically
+and bump `PRODUCTION_RNG_ENGINE_VERSION` to `production-rng:c5-e2`.
 
 ---
 
@@ -348,6 +369,30 @@ Current v1 rules include:
 - Mixed counter streams must not be combined in one Counter search input
 
 Heavy Seed/Counter search runs in a Web Worker and supports progress and cancellation.
+
+The Production v1 RNG-identification path is the dedicated Skill-first Wizard,
+not the legacy generic Seed Search contract:
+
+- Step 1 identifies canonical Base Seed and starting Skill Counter from the
+  conversion-assigned Skill followed by consecutive Reset Skills observations.
+- Step 2 uses the unique Step 1 Seed and consecutive ordered Reset Bonuses
+  observations to identify the starting Gogma Counter.
+- Counter Gate is never a Wizard input, observation, search dimension, result,
+  or adopted field.
+- Adopt the starting counters after the user restores the pre-investigation
+  game state. Never persist counters advanced by the observation count.
+- Use existing source `observation` for adopted Base Seed, Skill Counter, and
+  Gogma Counter; do not change Counter Gate or require a new `identified` source.
+- `supportsSeedSearch` remains false because it describes the legacy generic
+  Seed Search API. Identification availability belongs at the Worker/application
+  level; do not add RngEngine capability flags without a separate specification
+  change.
+- Skill live-game verification and a real Browser Worker benchmark are not
+  Wizard-implementation blockers, but both are Production-activation blockers.
+  A Node benchmark is not a Browser benchmark.
+- Before activation, Skill Seed search must use contiguous, non-overlapping
+  multi-worker chunks with deterministic merge, global progress, cancellation
+  propagation, and explicit Worker-failure errors.
 
 ---
 
@@ -595,8 +640,11 @@ Include, when relevant:
 - Base Seed value and confirmation state
 - Gogma Counter value and confirmation state
 - Skill Counter value and confirmation state
-- Counter Gate value and confirmation state
 - Relevant Normal Artian counter value and confirmation state
+
+Exclude legacy Counter Gate value, confirmation state, and source. Production
+active Prediction does not use them, so changing only persisted Gate must not
+cause `rng_state_changed` or expected-plan false staleness.
 
 Exclude non-semantic fields such as:
 
@@ -611,10 +659,11 @@ For v1, if the route-dependent RNG hash changes, use the safe behavior:
 rng_state_changed
 ```
 
-A conversion-only route hashes the confirmed Base Seed, Skill Counter, Counter
-Gate, and relevant Normal Counter when it forges. It does not hash Gogma
-Counter merely because the result is a Gogma weapon. A route that adds Reset or
-Keep also hashes the Gogma inputs those operations require.
+A conversion-only route hashes the confirmed Base Seed and Skill Counter, plus
+the relevant Normal Counter only when it forges. It does not hash Gogma Counter
+merely because the result is a Gogma weapon. A route that adds Reset or Keep
+also hashes the Gogma inputs those operations require. It never hashes legacy
+Counter Gate.
 
 ### `referencedOwnedWeaponsHash`
 

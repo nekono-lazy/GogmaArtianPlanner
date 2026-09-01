@@ -313,6 +313,9 @@ export interface RngState {
 - 各項目の確定状態と取得元は独立して保持する
 - RngState全体の `isConfirmed` は持たない
 - `gogmaCounter` / `skillCounter` はDomainが追跡するCounterであり、Counter Gate適用後のeffective PRNG blockを保存しない。Gate未満の保存Counter内部挙動は未確認のため推測migrationしない
+- `counterGate` はlegacy/manual/import compatibility、将来のExport / Import round-trip、diagnostic / reference情報のために保持する。v1でschema migrationまたはfield削除を行わない
+- `counterGate.value` と `counterGate.isConfirmed` はProduction Skill / Gogma Prediction、Candidate Search、Planner、Trace Replayのavailabilityまたは結果のsemantic authorityにしない
+- Identification adoptionはBase Seed、Skill Counter、Gogma Counterのsourceを既存の `observation` とし、`counterGate`を変更しない。新しい `identified` sourceはv1必須ではない
 
 Capabilityは保存せず、現在値と実行対象から純粋関数で導出する。
 
@@ -337,8 +340,8 @@ deriveRngCapabilities(
 
 基本依存関係。
 
-- Gogma予測は確定済みBase Seed、Gogma Counter、Counter GateとEngineのGogma Prediction supportを要求する
-- Skill予測は確定済みBase Seed、Skill Counter、Counter GateとEngineのSkill Prediction supportを要求する
+- Gogma予測は確定済みBase Seed、Gogma Counter、EngineのGogma Prediction support、concrete semantic input / Master supportを要求する。persisted Counter Gateは要求しない
+- Skill予測は確定済みBase Seed、Skill Counter、EngineのSkill Prediction support、concrete semantic input supportを要求する。persisted Counter Gateは要求しない
 - 通常アーティア予測は確定済みBase Seed、対象武器種のレア8 NormalArtianCounter、EngineのNormal Artian Prediction supportを要求する
 - conversionはSkill予測の依存だけを要求し、Gogma予測またはGogma Counterを要求しない
 - Reset BonusesはGogma予測、Keep BonusesはGogma予測とKeep supportを要求する
@@ -771,9 +774,10 @@ export type BuildListEntryStaleReason =
 `searchStateHash` の正規化対象。
 
 - Base SeedのvalueとisConfirmed
-- RouteがGogma予測を使う場合はGogma CounterとCounter GateのvalueとisConfirmed
-- RouteがSkill予測を使う場合はSkill CounterとCounter GateのvalueとisConfirmed
+- RouteがGogma予測を使う場合はGogma CounterのvalueとisConfirmed
+- RouteがSkill予測を使う場合はSkill CounterのvalueとisConfirmed
 - Routeが新規通常アーティアを使う場合は対象武器種のレア8 NormalArtianCounterのcounterとisConfirmed
+- legacy `counterGate` のvalue、isConfirmed、sourceは除外する。Production active Prediction結果へ影響しないGate変更だけで `rng_state_changed` を発生させない
 - source、notes、観測日時、表示用フィールドは除外する
 
 `referencedOwnedWeaponsHash` の正規化対象。
@@ -938,7 +942,7 @@ export interface ExpectedPlanState {
 
 各hashは、Plan実行に影響する項目だけを安定ソートした正規化JSONから生成する。`updatedAt`、表示名、メモなど計算に影響しない項目を含めない。
 
-- `rngStateHash`: 各KnownValueの正規化valueとisConfirmedを含み、source、notes、日時を除外する
+- `rngStateHash`: Base Seed、Gogma Counter、Skill Counterの各KnownValueについて正規化valueとisConfirmedを含み、legacy `counterGate`、source、notes、日時を除外する
 - `normalCountersHash`: id、counter、isConfirmedを含み、観測日時を除外する
 - `ownedWeaponsHash`: 共通項目としてID、kind、武器種、属性、restorationBonusScope、保存中のボーナス5枠順、isProtected、計画に関係するTarget参照を含む。巨戟だけseriesSkillId、groupSkillId、statusを加える。通常に存在しないSkill / statusへ仮値を設定しない。名称、memo、日時は除外する
 - `buildListEntriesHash`: Entry ID、Candidate Snapshot、Target定義Hash、searchStateHash、CalculationContextを含み、派生値のisStale、staleReasons、日時を除外する

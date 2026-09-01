@@ -154,6 +154,8 @@ export interface CandidateSearchWarning {
 ```
 
 未確定RNG値は `*_unconfirmed`、Engine機能不足は `*_prediction_unsupported`、所持source不足は `no_owned_weapon_available` / `no_unprotected_source_weapon` として区別する。値が確定していてもEngineが未対応なら予測可能とみなさず、逆にEngineが対応していても必要値が未確定なら該当RNG値のreasonを返す。
+
+Production Searchはroute-local / operation-local supportを維持し、RngState全体のall-or-nothing availabilityを設けない。Skill-dependent routeはBase SeedまたはSkill Counter不足、Skill Prediction / concrete semantic input unsupportedでskipする。Gogma amendment routeはBase SeedまたはGogma Counter不足、Gogma Prediction / concrete semantic input / Master unsupportedでskipする。persisted Counter Gateの未設定・未確定はskip reasonにしない。Normal Counter不足は `create_normal_artian` を含むrouteだけに適用する。
 `use_weapon_as_material` 後のRNG位置へ依存するRouteは、素材使用時の進行がgame-verifiedになるまで `material_rng_advance_unverified` としてskipし、0進行またはGogma +1を推測しない。
 
 `master_data_unavailable` は、Route実行に必要なWeaponBonusDefinition、BonusRank、Material等のMaster Dataが存在しない、無効、または利用不能な場合に使用する。Production RNG poolはEngineのreference-verified tableであり、disabled LotteryMasterだけを理由にこのreasonを返さない。reference-verifiedは参照repositoryとの一致を表し、全実ゲーム条件でのgame-verifiedを意味しない。
@@ -161,6 +163,8 @@ export interface CandidateSearchWarning {
 `CandidateRouteFilter` はRouteグループを選ぶ入力であり、SkippedRouteの粒度には使用しない。`normal_artian` は `normal_artian_to_gogma` と `owned_normal_artian_to_gogma`、`existing_gogma` は4つの `existing_gogma_*` RouteKindを対象とする。`disabled_by_filter` も除外された具体的なRouteKindごとに返す。`searchedRoutes` と `skippedRoutes[].route` は同じRouteKind粒度で、同じRouteを両方へ含めない。
 
 すべてのBuildCandidateとCandidateSearchResultに、入力の `calculationContext` をそのまま保存する。各BuildCandidateには検索開始時のRoute依存RNG状態から生成した `searchStateHash` と、Routeが参照するOwnedWeaponだけから生成した `referencedOwnedWeaponsHash` を保存する。参照武器がないRouteでは後者を `null` とする。Worker実行中に現在環境のCalculationContext、検索開始状態、またはCandidateが参照するOwnedWeapon状態が変わった場合、そのrequestIdの結果を現行候補として保存しない。
+
+`searchStateHash` はProduction Predictionのsemantic authorityだけを含め、legacy `RngState.counterGate` のvalue / isConfirmed / sourceを含めない。Gateだけの変更によるfalse staleを発生させない。C5-E2C2完了時点の実装hashはまだGateを含むため、C5-E2C3で本契約へ同期する。
 
 ---
 
@@ -255,7 +259,7 @@ RouteKind。
 
 - `canSearchNormalArtian = true`
 - EngineがNormal Artian PredictionとSkill Predictionをsupportする
-- Base Seed、Skill Counter、Counter Gateが確定している
+- Base SeedとSkill Counterが確定している。persisted Counter Gateは要求しない
 - 対象武器種・対象レア度のNormalArtianCounterが確定している
 - 対象レア度はv1固定の8
 - 対象武器種・属性のnormal scope WeaponBonusDefinitionを利用できる。RNG poolはEngineのreference-verified tableを使い、現行LotteryMasterの有効性を要求しない
@@ -298,7 +302,7 @@ RouteKind。
 
 - `kind = "normal"`、`rarity = 8`、かつ非保護のOwnedWeaponが存在する
 - 変換元の `weaponTypeId` と `elementId` がTargetと一致する
-- EngineがSkill Predictionをsupportし、Base Seed、Skill Counter、Counter Gateが確定している
+- EngineがSkill Predictionをsupportし、Base SeedとSkill Counterが確定している。persisted Counter GateとNormal Counterは要求しない
 - Reset / Keepを含める場合だけ、Gogma Prediction Capability、確定Gogma Counter、Keepの場合はKeep Prediction Capabilityを追加で要求する
 
 制約。
@@ -393,7 +397,7 @@ RouteKind。
 - 起点OwnedWeaponのweaponTypeIdとelementIdが対象TargetWeaponと一致する
 - 起点OwnedWeaponの現在のrestorationBonusesがTargetWeaponのIdealまたはPracticalボーナス条件を満たす
 - `canPredictSkills = true`
-- Base Seed、Skill Counter、Counter Gateなど、RNG EngineがSkill予測に要求する値が確定している
+- Base SeedとSkill Counterが確定し、RNG EngineがSkill Predictionとconcrete semantic inputをsupportする。persisted Counter Gateは要求しない
 
 検索手順。
 

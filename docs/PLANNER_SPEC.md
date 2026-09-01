@@ -126,8 +126,9 @@ export interface PlannerClock {
 - Planner入力validationでTarget定義Hash、searchStateHash、referencedOwnedWeaponsHash、CalculationContextを現在値から再確認し、保存済み `isStale` だけを信用しない
 - RngState全体の確定は要求しない
 - `deriveRngCapabilities(rngState, normalCounters, requiredOperations, engineCapabilities)` で、各BuildListEntryの全RouteOperationに必要なKnownValueと現在Engineのsupportが揃うか確認する
-- conversionだけのEntryはSkill Predictionと確定Base Seed / Skill Counter / Counter Gateを要求し、Gogma PredictionまたはGogma Counterを要求しない
-- Reset / Keepを含むEntryだけがGogma Predictionと確定Gogma Counter / Counter Gateを要求し、Keepを含む場合はKeep Prediction supportも要求する
+- conversionだけのEntryはSkill Prediction、確定Base Seed / Skill Counter、concrete semantic input supportを要求し、persisted Counter Gate、Gogma Prediction、Gogma Counterを要求しない
+- Reset / Keepを含むEntryだけがGogma Prediction、確定Base Seed / Gogma Counter、concrete semantic input / Master supportを要求し、Keepを含む場合はKeep Prediction supportも要求する。persisted Counter Gateは要求しない
+- Normal Counterは `create_normal_artian` operationを含むEntryだけに要求する。Normal Counterが未確定でも、Gogma-only Entry、existing Gogma Entry、適合するowned Normalからのconversion Entryを個別にvalidationしてPlannerへ残す
 - capability確認後、Predictionが必要な各operationのsemantic inputを
   `getPredictionSupport()` で確認する。Normalはweapon/element/rarity、conversionと
   Reset SkillsはSkillのweapon/element、Resetはcaller-supplied Masterを含む
@@ -536,9 +537,9 @@ PlanStep変換用 `PlannerPlanStepDraft` を生成する。
 - `PlannerMasterSubset` はSearchのRNG Predictionと同じ `weaponBonusDefinitions`、
   `bonusRanks` を保持する。PredictionはRngEngineのみから取得し、Lottery、
   Bonus Rank、Keep、Counter Gateを推測しない。
-- `ExpectedPlanState` はKnownValueのvalue/isConfirmed、stable sorted Normal Counter、
+- `ExpectedPlanState` はProduction semantic RNG KnownValueのvalue/isConfirmed、stable sorted Normal Counter、
   OwnedWeaponのsemantic fields（kindを含む）をstable hash化する。名前、memo、日時、
-  RNG source/notes、観測表示項目は除く。関連Target IDはsort/dedupeする。
+  RNG source/notes、観測表示項目、legacy `counterGate` は除く。関連Target IDはsort/dedupeする。
 - `ExpectedPlanState.ownedWeaponsHash` とBuild Listの`referencedOwnedWeaponsHash`は別契約である。
   前者はNormal rarityとrelatedTargetWeaponIdsを含むが、後者は既存Search契約どおり両方を
   含めない。両者ともname、memo、timestampsを含めない。
@@ -562,7 +563,7 @@ PlanStep変換用 `PlannerPlanStepDraft` を生成する。
 - reserve前にEntry固有transient Gogmaのbonuses、Series Skill、Group SkillがCandidate Snapshotと
   完全一致することを検証する。不一致またはtransient不足はReplay failureであり、Candidate Snapshotで
   transientを上書きしてはならない。成功したEntryのtransientだけを破棄する。
-- Predictionはvalueだけでなく、そのOperationが実際に依存するconfirmed入力を要求する。conversionはBase Seed / Skill Counter / Counter Gate、Reset / KeepはBase Seed / Gogma Counter / Counter Gate、forgeはBase Seed / 対象Normal Counterを要求する。Routeが使わないstreamの未確定値をReplay failureにしない。
+- Predictionはvalueだけでなく、そのOperationが実際に依存するconfirmed入力を要求する。conversionとReset SkillsはBase Seed / Skill Counter、Reset / KeepはBase Seed / Gogma Counter、forgeはBase Seed / 対象Normal Counterを要求する。persisted exact GateはどのProduction Replay operationでも要求せず、Production forward runtimeと同じoperation別active representativeを使用する。Routeが使わないstreamの未確定値をReplay failureにしない。
 - reset/keep/reset-skillsによるpersistent inventory更新はreserveまで行わない。所持Normalはconvertで
   削除し、new/owned-Normal reserveは予約済みIDのGogmaを追加、existing Gogma reserveは同一IDを更新する。
 - Replay完了時はRNG、Normal Counter、persistent simulated inventoryがbest Search Stateと一致しなければ
@@ -943,6 +944,8 @@ Planner domainとTrace ReplayはProduction RNGのinput-level support契約へ対
 生成して `PlannerDependencies` として注入する。Engine instanceや関数をWorker messageへ
 含めない。Client、Plannerのcurrent `CalculationContext`、Worker内Engineは
 `PRODUCTION_RNG_ENGINE_VERSION` を共通authorityとして使用する。
+
+C5-E2C2で承認したactive Gate契約については仕様が先行しており、current Planner validation / Trace Replay / expected-state hashはまだexact persisted Gateを要求・hash化する。C5-E2C3でこれらを本節へ同期し、Production adapterのruntime policy変更と同時に `production-rng:c5-e2` へbumpする。C5-E2C2時点でruntime統合済みとは扱わない。
 
 Workerを利用できない環境ではClientのversionを `production-engine-unavailable` とし、
 計画実行を明示的なunavailable errorにする。これは
