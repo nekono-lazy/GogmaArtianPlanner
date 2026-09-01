@@ -572,7 +572,9 @@ Candidate SearchとPlannerはいずれもWorker messageへRngEngine instanceを�
 Production Candidate Search WorkerはWorker module内部のfactoryで
 `ProductionRngEngine`を生成する。Search ClientとBuildListのcurrent
 CalculationContextは`PRODUCTION_RNG_ENGINE_VERSION`を共通authorityとして使う。
-PlannerのProduction Engine接続は別境界であり、このSearch接続から推論しない。
+Production Planner Workerも独立したWorker-local factoryで同じ
+`PRODUCTION_RNG_ENGINE_VERSION` のEngineを生成し、Planner ClientとPlanner current
+CalculationContextの共通authorityにする。
 PlannerWorker requestはstructured clone可能なPlannerInputだけを持ち、Worker module内部で
 Engine factoryを取得する。生成したEngine、ID Factory、ClockはPlannerDependenciesとして
 pure Planner calculationへ注入する。PlannerInputへengineCapabilitiesを重複保存せず、

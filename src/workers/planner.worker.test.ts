@@ -101,4 +101,28 @@ describe('Planner Worker contract', () => {
       }),
     }))
   })
+
+  it('converts an unexpected Planner failure to the existing Worker error response', async () => {
+    const { dependencies } = fixture()
+    const responses: PlannerWorkerResponse[] = []
+    const calculate: CreateProductionPlanCalculation = vi.fn(async () => {
+      throw new Error('unexpected prediction failure')
+    })
+    const controller = attachPlannerWorker({
+      postMessage: (response) => responses.push(response),
+      addEventListener: () => undefined,
+    }, () => dependencies, calculate)
+
+    await controller.handleMessage({
+      type: 'create_plan',
+      requestId: 'planner.fixture.error',
+      input: fixture().input,
+    })
+
+    expect(responses).toEqual([{
+      type: 'error',
+      requestId: 'planner.fixture.error',
+      message: 'unexpected prediction failure',
+    }])
+  })
 })

@@ -937,9 +937,16 @@ postMessageしない。Worker moduleがEngine、ID Factory、Clockを生成し�
 `engineCapabilities` を重複保存せず、validationは
 `dependencies.rngEngine.capabilities` を `deriveRngCapabilities` へ渡す。
 
-C5-D1時点ではPlanner domainとTrace ReplayがProduction RNGのinput-level support契約へ
-対応済みだが、Planner WorkerのProduction factory / entry / clientは未接続である。
-Production Worker activationとactive engine version authorityはC5-D2で行う。
+Planner domainとTrace ReplayはProduction RNGのinput-level support契約へ対応済みである。
+本番経路はBuild List UIからProduction Planner Worker Clientを呼び、
+`planner.worker.entry.ts` がWorker内部で `ProductionRngEngine`、ID Factory、Clockを
+生成して `PlannerDependencies` として注入する。Engine instanceや関数をWorker messageへ
+含めない。Client、Plannerのcurrent `CalculationContext`、Worker内Engineは
+`PRODUCTION_RNG_ENGINE_VERSION` を共通authorityとして使用する。
+
+Workerを利用できない環境ではClientのversionを `production-engine-unavailable` とし、
+計画実行を明示的なunavailable errorにする。これは
+`getPredictionSupport() = supported: false` のBuildListEntry単位除外とは別経路である。
 
 ---
 

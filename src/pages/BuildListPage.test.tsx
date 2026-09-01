@@ -7,17 +7,36 @@ import type { BuildListEntryStaleReason } from '../domain/models/publicTypes'
 import {
   buildListEntryId,
   createValidBuildCandidate,
+  createValidBuildListEntry,
   createValidNormalArtianCounter,
+  createValidProductionPlan,
   createValidRngState,
   createValidTargetWeapon,
-  domainFixtureContext,
 } from '../test/fixtures/domainData'
 import { createValidMasterDataFixture } from '../test/fixtures/masterData'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../domain/rng/production/productionRngEngine'
+import { defaultPlannerOptions, type PlannerInput } from '../domain/planner'
 import { createBuildListCalculationContext } from '../services/buildList/createBuildListCalculationContext'
+import type { PlannerWorkerClient } from '../services/planner/plannerWorkerClient'
 import { BuildListPage, type BuildListPageDependencies } from './BuildListPage'
 
-function dependencies(staleReasons: BuildListEntryStaleReason[] = []): BuildListPageDependencies {
+function createPlannerClient(): PlannerWorkerClient {
+  return {
+    engineVersion: PRODUCTION_RNG_ENGINE_VERSION,
+    createPlan: vi.fn(async () => ({
+      plan: createValidProductionPlan(),
+      conflicts: [],
+      warnings: [],
+    })),
+    cancelPlan: vi.fn(),
+    dispose: vi.fn(),
+  }
+}
+
+function dependencies(
+  staleReasons: BuildListEntryStaleReason[] = [],
+  client: PlannerWorkerClient = createPlannerClient(),
+): BuildListPageDependencies {
   const target = createValidTargetWeapon()
   const candidate = createValidBuildCandidate()
   candidate.searchStateHash = createSearchStateHash(candidate.route, createValidRngState(), [createValidNormalArtianCounter()])
@@ -27,8 +46,28 @@ function dependencies(staleReasons: BuildListEntryStaleReason[] = []): BuildList
   entry.staleReasons = staleReasons
   return {
     master: createValidMasterDataFixture(),
-    calculationContext: domainFixtureContext,
+    createWorkerClient: () => client,
     refresh: vi.fn(async () => ({ entries: [entry], targets: [target], ownedWeapons: [] })),
+    createInput: vi.fn(async (calculationContext): Promise<PlannerInput> => ({
+      rngState: createValidRngState(),
+      normalCounters: [createValidNormalArtianCounter()],
+      ownedWeapons: [],
+      targetWeapons: [target],
+      buildListEntries: [createValidBuildListEntry()],
+      calculationContext,
+      options: { ...defaultPlannerOptions },
+      master: {
+        weaponBonusDefinitions: [],
+        weaponTypes: [],
+        elements: [],
+        bonusTypes: [],
+        bonusRanks: [],
+        lotteries: [],
+        materialCosts: [],
+      },
+      conflictResolutions: [],
+    })),
+    savePlan: vi.fn(async () => undefined),
     deleteEntry: vi.fn(async () => undefined),
   }
 }
@@ -37,6 +76,27 @@ describe('BuildListPage', () => {
   it('uses the Production RNG version as the current staleness authority', () => {
     expect(createBuildListCalculationContext(createValidMasterDataFixture()).rngEngineVersion)
       .toBe(PRODUCTION_RNG_ENGINE_VERSION)
+  })
+
+  it('executes the Production Planner client path and persists the returned draft Plan', async () => {
+    const user = userEvent.setup()
+    const client = createPlannerClient()
+    const deps = dependencies([], client)
+    render(<BuildListPage dependencies={deps} />)
+    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
+
+    expect(deps.refresh).toHaveBeenCalledWith(expect.objectContaining({
+      rngEngineVersion: PRODUCTION_RNG_ENGINE_VERSION,
+    }))
+    expect(deps.createInput).toHaveBeenCalledWith(expect.objectContaining({
+      rngEngineVersion: client.engineVersion,
+    }))
+    expect(client.createPlan).toHaveBeenCalledOnce()
+    expect(deps.savePlan).toHaveBeenCalledWith(expect.objectContaining({
+      id: createValidProductionPlan().id,
+      status: 'draft',
+    }))
+    expect(await screen.findByText(/生産計画を作成しました/)).toBeInTheDocument()
   })
 
   it('renders from Candidate Snapshot and shows stale reasons', async () => {

@@ -544,7 +544,7 @@ Gate未満時も保存counterのDomain before/afterが+1するかどうかは、
   `getPredictionSupport()` で確認し、既知unsupportedをBuildListEntry単位で除外する。
   Trace Replayはordered current bonusesを追跡してPrediction直前にsupportを再確認し、
   support query例外とsupport=true後のPrediction例外をfatal error経路へ伝播する。
-- Planner Worker controllerはdependency注入境界だけ存在し、現行treeにproduction entry/factory/client wiringはない。Planner WorkerのProduction activationはC5-D2対象である。
+- Planner Workerはproduction entry/factory/clientを持ち、Worker内部で`ProductionRngEngine`、ID Factory、Clockを生成してPlanner controllerへ注入する。Search/Planner Production Workerはactive、Seed Searchはinactiveである。
 - Settingsは「RNG予測エンジン: 未設定」。Debug画面はEngine情報を含め全項目placeholder。
 - RNG Setupは4 KnownValueを独立保存するが、capability表示は引き続き`UnavailableRngEngine`を使用し、manual Base Seedをまだ`normalizeSeed()`へ通さない。
 - Lottery Masterは1件だけ、weight 0 / disabled / unverified placeholder。Candidate Searchにenabled Lottery gateはなく、Production RNGもLotteryMasterへ依存しない。

@@ -1,31 +1,54 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, LinearProgress, Stack, Typography } from '@mui/material'
 import { PageShell } from '../components/PageShell'
 import { CandidateCard } from '../components/search/CandidateCard'
 import { staleReasonLabels } from '../components/search/searchPresentation'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import type { MasterDataRoot } from '../domain/master/masterTypes'
-import type { BuildListEntry, BuildListEntryId, CalculationContext, OwnedWeapon, TargetWeapon } from '../domain/models/publicTypes'
+import type {
+  BuildListEntry,
+  BuildListEntryId,
+  CalculationContext,
+  OwnedWeapon,
+  ProductionPlan,
+  TargetWeapon,
+} from '../domain/models/publicTypes'
+import type { PlannerInput, PlannerProgress, PlannerWarning } from '../domain/planner'
 import { useSettingsStore } from '../stores/settingsStore'
 import { buildListService } from '../services/buildList/buildListService'
 import { createBuildListCalculationContext } from '../services/buildList/createBuildListCalculationContext'
+import { productionPlanRepository } from '../db/repositories'
+import {
+  createPlannerCalculationContext,
+  createPlannerInput,
+} from '../services/planner/createPlannerInput'
+import {
+  createProductionPlannerWorkerClient,
+  PlannerCancelledError,
+  type PlannerWorkerClient,
+} from '../services/planner/plannerWorkerClient'
 
 const loadedMaster = loadMasterData()
 const defaultMaster = loadedMaster.ok ? loadedMaster.data : null
 
 export interface BuildListPageDependencies {
   master: MasterDataRoot
-  calculationContext: CalculationContext
-  refresh(): Promise<{ entries: BuildListEntry[]; targets: TargetWeapon[]; ownedWeapons: OwnedWeapon[] }>
+  createWorkerClient(): PlannerWorkerClient
+  refresh(calculationContext: CalculationContext): Promise<{ entries: BuildListEntry[]; targets: TargetWeapon[]; ownedWeapons: OwnedWeapon[] }>
+  createInput(calculationContext: CalculationContext): Promise<PlannerInput>
+  savePlan(plan: ProductionPlan): Promise<unknown>
   deleteEntry(id: BuildListEntryId): Promise<void>
 }
 
 function createDefaultDependencies(master: MasterDataRoot): BuildListPageDependencies {
-  const calculationContext = createBuildListCalculationContext(master)
   return {
     master,
-    calculationContext,
-    refresh: () => buildListService.refreshStaleness(calculationContext),
+    createWorkerClient: createProductionPlannerWorkerClient,
+    refresh: (calculationContext) =>
+      buildListService.refreshStaleness(calculationContext),
+    createInput: (calculationContext) =>
+      createPlannerInput(master, calculationContext),
+    savePlan: (plan) => productionPlanRepository.putProductionPlan(plan),
     deleteEntry: (id) => buildListService.deleteEntry(id),
   }
 }
@@ -42,9 +65,15 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
   const [targets, setTargets] = useState<TargetWeapon[]>([])
   const [ownedWeapons, setOwnedWeapons] = useState<OwnedWeapon[]>([])
   const [loading, setLoading] = useState(dependencies !== undefined)
+  const [planning, setPlanning] = useState(false)
+  const [progress, setProgress] = useState<PlannerProgress | null>(null)
+  const [warnings, setWarnings] = useState<PlannerWarning[]>([])
+  const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(
     dependencies ? null : 'マスターデータを読み込めません。',
   )
+  const clientRef = useRef<PlannerWorkerClient | null>(null)
+  const activeRequestRef = useRef<string | null>(null)
   const masterForDisplay = dependencies?.master ?? defaultMaster
 
   useEffect(() => {
@@ -52,7 +81,10 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
     if (!dependencies) {
       return
     }
-    void dependencies.refresh().then((loaded) => {
+    const client = dependencies.createWorkerClient()
+    clientRef.current = client
+    const calculationContext = createBuildListCalculationContext(dependencies.master)
+    void dependencies.refresh(calculationContext).then((loaded) => {
       if (!active) return
       setEntries(loaded.entries)
       setTargets(loaded.targets)
@@ -60,8 +92,64 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
     }).catch((caught: unknown) => {
       if (active) setError(caught instanceof Error ? caught.message : 'ビルドリストの読み込みに失敗しました。')
     }).finally(() => { if (active) setLoading(false) })
-    return () => { active = false }
+    return () => {
+      active = false
+      activeRequestRef.current = null
+      client.dispose()
+      clientRef.current = null
+    }
   }, [dependencies])
+
+  const startPlanning = async () => {
+    if (!dependencies || !clientRef.current) return
+    const client = clientRef.current
+    const requestId = globalThis.crypto?.randomUUID?.() ?? `planner-${Date.now()}`
+    activeRequestRef.current = requestId
+    setPlanning(true)
+    setProgress({ expandedStates: 0, maxExpandedStates: 1 })
+    setWarnings([])
+    setNotice(null)
+    setError(null)
+    try {
+      const calculationContext = createPlannerCalculationContext(
+        dependencies.master,
+        client.engineVersion,
+      )
+      const input = await dependencies.createInput(calculationContext)
+      if (activeRequestRef.current !== requestId) return
+      const result = await client.createPlan(requestId, input, {
+        onProgress: (nextProgress) => {
+          if (activeRequestRef.current === requestId) setProgress(nextProgress)
+        },
+      })
+      if (activeRequestRef.current !== requestId) return
+      setWarnings(result.warnings)
+      if (result.plan) {
+        await dependencies.savePlan(result.plan)
+        if (activeRequestRef.current !== requestId) return
+        setNotice(`生産計画を作成しました: ${result.plan.id}`)
+      } else {
+        setNotice('現在の入力から作成できる生産計画はありませんでした。')
+      }
+    } catch (caught: unknown) {
+      if (activeRequestRef.current !== requestId || caught instanceof PlannerCancelledError) return
+      setError(caught instanceof Error ? caught.message : '生産計画の作成に失敗しました。')
+    } finally {
+      if (activeRequestRef.current === requestId) {
+        activeRequestRef.current = null
+        setPlanning(false)
+      }
+    }
+  }
+
+  const cancelPlanning = () => {
+    const requestId = activeRequestRef.current
+    if (!requestId) return
+    activeRequestRef.current = null
+    clientRef.current?.cancelPlan(requestId)
+    setPlanning(false)
+    setNotice('生産計画の作成をキャンセルしました。')
+  }
 
   const remove = async (id: BuildListEntryId) => {
     if (!dependencies) return
@@ -78,7 +166,11 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
       <Stack spacing={3}>
         {loading && <LinearProgress aria-label="ビルドリストを読み込み中" />}
         {error && <Alert severity="error">{error}</Alert>}
+        {notice && <Alert severity="info">{notice}</Alert>}
+        {warnings.length > 0 && <Alert severity="warning"><Typography variant="subtitle2">Planner警告</Typography>{warnings.map((warning, index) => <Typography variant="body2" key={`${warning.kind}:${index}`}>{warning.message}</Typography>)}</Alert>}
         {!loading && !error && entries.length === 0 && <Alert severity="info">ビルドリストは空です。検索結果から候補を追加してください。</Alert>}
+        {!loading && entries.length > 0 && <Button variant="contained" disabled={planning} onClick={() => void startPlanning()}>生産計画を作成</Button>}
+        {planning && progress && <Stack spacing={1}><Typography>計画中 {progress.expandedStates} / {progress.maxExpandedStates}</Typography><LinearProgress variant="determinate" value={progress.maxExpandedStates > 0 ? progress.expandedStates / progress.maxExpandedStates * 100 : 0} /><Button onClick={cancelPlanning}>キャンセル</Button></Stack>}
         {entries.map((entry) => {
           const target = targets.find(({ id }) => id === entry.targetWeaponId) ?? null
           return <Stack spacing={1} key={entry.id}>
