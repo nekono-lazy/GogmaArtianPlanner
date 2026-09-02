@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { createInitialRngState } from '../../domain/models/factories'
@@ -287,8 +287,61 @@ function renderWizard(coordinator = new FakeCoordinator()) {
   return { coordinator, onAdopted, onClose, ...view }
 }
 
+function selectOption(
+  control: HTMLElement,
+  optionIndex = 1,
+) {
+  fireEvent.mouseDown(control)
+  const options = within(screen.getByRole('listbox')).getAllByRole('option')
+  fireEvent.click(options[optionIndex]!)
+}
+
+function fillSkillObservations(count = 4) {
+  for (let index = 1; index <= count; index += 1) {
+    const series = screen.getByLabelText(`Observation ${index} Series Skill`)
+    if (series.textContent?.includes('未入力')) selectOption(series)
+    const group = screen.getByLabelText(`Observation ${index} Group Skill`)
+    if (group.textContent?.includes('未入力')) selectOption(group)
+  }
+}
+
+async function fillSeedRange(
+  user: ReturnType<typeof userEvent.setup>,
+  start = '100',
+  end = '200',
+) {
+  const seedStart = screen.getByLabelText('Base Seed range start')
+  const seedEnd = screen.getByLabelText('Base Seed range end')
+  if ((seedStart as HTMLInputElement).value === '') await user.type(seedStart, start)
+  if ((seedEnd as HTMLInputElement).value === '') await user.type(seedEnd, end)
+}
+
+async function fillStep1(
+  user: ReturnType<typeof userEvent.setup>,
+) {
+  await fillSeedRange(user)
+  fillSkillObservations()
+}
+
 async function startSkillSearch(user: ReturnType<typeof userEvent.setup>) {
+  await fillStep1(user)
   await user.click(screen.getByRole('button', { name: 'STEP 1 Search' }))
+}
+
+function fillGogmaObservations(
+  observationCount = 4,
+  slotCount = 5,
+) {
+  for (let observationIndex = 1; observationIndex <= observationCount; observationIndex += 1) {
+    const editor = screen.getByText(`Reset Observation ${observationIndex}`)
+      .closest('.MuiStack-root') as HTMLElement
+    for (let slotIndex = 1; slotIndex <= slotCount; slotIndex += 1) {
+      const type = within(editor).getByLabelText(`枠${slotIndex} ボーナス種別`)
+      if (type.textContent?.includes('未入力')) selectOption(type)
+      const rank = within(editor).getByLabelText(`枠${slotIndex} ランク`)
+      if (rank.textContent?.includes('未入力')) selectOption(rank)
+    }
+  }
 }
 
 async function reachStep2(coordinator: FakeCoordinator, user: ReturnType<typeof userEvent.setup>) {
@@ -299,12 +352,50 @@ async function reachStep2(coordinator: FakeCoordinator, user: ReturnType<typeof 
 
 async function reachReview(coordinator: FakeCoordinator, user: ReturnType<typeof userEvent.setup>) {
   await reachStep2(coordinator, user)
+  fillGogmaObservations()
   await user.click(screen.getByRole('button', { name: 'STEP 2 Search' }))
   act(() => coordinator.completeGogma('unique'))
   await screen.findByText('Review')
 }
 
 describe('IdentificationWizardDialog STEP 1', () => {
+  it('starts with blank Seed range and unentered Skill observation drafts', () => {
+    renderWizard()
+
+    expect(screen.getByLabelText('Base Seed range start')).toHaveValue(null)
+    expect(screen.getByLabelText('Base Seed range end')).toHaveValue(null)
+    expect(screen.queryByText(/canonical Base Seed全域/)).not.toBeInTheDocument()
+    for (let index = 1; index <= 4; index += 1) {
+      expect(screen.getByLabelText(`Observation ${index} Series Skill`))
+        .toHaveTextContent('未入力')
+      expect(screen.getByLabelText(`Observation ${index} Group Skill`))
+        .toHaveTextContent('未入力')
+    }
+  })
+
+  it('does not call identifySkill while the Seed range is blank', async () => {
+    const user = userEvent.setup()
+    const { coordinator } = renderWizard()
+    fillSkillObservations()
+
+    await user.click(screen.getByRole('button', { name: 'STEP 1 Search' }))
+
+    expect(await screen.findByText(/Base Seed rangeの開始を入力してください/)).toBeInTheDocument()
+    expect(coordinator.skillInputs).toHaveLength(0)
+  })
+
+  it('does not call identifySkill while any Skill observation row is incomplete', async () => {
+    const user = userEvent.setup()
+    const { coordinator } = renderWizard()
+    await fillSeedRange(user)
+    fillSkillObservations(3)
+
+    await user.click(screen.getByRole('button', { name: 'STEP 1 Search' }))
+
+    expect(await screen.findByText(/Skill Observation 4のSeries SkillとGroup Skillを入力してください/)).toBeInTheDocument()
+    expect(coordinator.skillInputs).toHaveLength(0)
+  })
+
   it('passes ordered observations, semantic weapon/element, and explicit ranges to the Coordinator', async () => {
     const user = userEvent.setup()
     const { coordinator } = renderWizard()
@@ -317,9 +408,9 @@ describe('IdentificationWizardDialog STEP 1', () => {
     await user.clear(screen.getByLabelText('Skill Counterの±幅'))
     await user.type(screen.getByLabelText('Skill Counterの±幅'), '3')
     await user.click(screen.getByLabelText('Observation 2 Series Skill'))
-    await user.click(within(await screen.findByRole('listbox')).getAllByRole('option')[1]!)
+    await user.click(within(await screen.findByRole('listbox')).getAllByRole('option')[2]!)
     await user.click(screen.getByLabelText('Observation 2 Group Skill'))
-    await user.click(within(await screen.findByRole('listbox')).getAllByRole('option')[1]!)
+    await user.click(within(await screen.findByRole('listbox')).getAllByRole('option')[2]!)
 
     await startSkillSearch(user)
 
@@ -373,7 +464,22 @@ describe('IdentificationWizardDialog STEP 1', () => {
     await startSkillSearch(user)
     act(() => coordinator.completeSkill('multiple'))
     await user.click(screen.getByRole('button', { name: 'Skill Observationを追加' }))
-    expect(screen.getByLabelText('Observation 5 Series Skill')).toBeInTheDocument()
+    expect(screen.getByLabelText('Observation 5 Series Skill')).toHaveTextContent('未入力')
+    expect(screen.getByLabelText('Observation 5 Group Skill')).toHaveTextContent('未入力')
+  })
+
+  it('restart clears the explicitly entered Seed range and observations', async () => {
+    const user = userEvent.setup()
+    const { coordinator } = renderWizard()
+    await fillStep1(user)
+
+    await user.click(screen.getByRole('button', { name: 'Restart' }))
+
+    expect(coordinator.restartCalls).toBe(1)
+    expect(screen.getByLabelText('Base Seed range start')).toHaveValue(null)
+    expect(screen.getByLabelText('Base Seed range end')).toHaveValue(null)
+    expect(screen.getByLabelText('Observation 1 Series Skill')).toHaveTextContent('未入力')
+    expect(screen.getByLabelText('Observation 1 Group Skill')).toHaveTextContent('未入力')
   })
 
   it('shows a Worker failure as an error instead of no-match', async () => {
@@ -394,7 +500,50 @@ describe('IdentificationWizardDialog STEP 1', () => {
   })
 })
 
-describe('IdentificationWizardDialog STEP 2', () => {
+describe('IdentificationWizardDialog STEP 2', { timeout: 15_000 }, () => {
+  it('starts with four unentered five-slot Reset observation drafts', async () => {
+    const user = userEvent.setup()
+    const { coordinator } = renderWizard()
+    await reachStep2(coordinator, user)
+
+    for (let observationIndex = 1; observationIndex <= 4; observationIndex += 1) {
+      const editor = screen.getByText(`Reset Observation ${observationIndex}`)
+        .closest('.MuiStack-root') as HTMLElement
+      for (let slotIndex = 1; slotIndex <= 5; slotIndex += 1) {
+        expect(within(editor).getByLabelText(`枠${slotIndex} ボーナス種別`))
+          .toHaveTextContent('未入力')
+        expect(within(editor).getByLabelText(`枠${slotIndex} ランク`))
+          .toHaveTextContent('未入力')
+      }
+    }
+
+    await user.click(screen.getByRole('button', { name: 'Reset Observationを追加' }))
+    const addedEditor = screen.getByText('Reset Observation 5')
+      .closest('.MuiStack-root') as HTMLElement
+    expect(within(addedEditor).getByLabelText('枠1 ボーナス種別'))
+      .toHaveTextContent('未入力')
+    expect(within(addedEditor).getByLabelText('枠1 ランク'))
+      .toHaveTextContent('未入力')
+  })
+
+  it('does not call identifyGogma while any five-slot Reset observation is incomplete', async () => {
+    const user = userEvent.setup()
+    const { coordinator } = renderWizard()
+    await reachStep2(coordinator, user)
+    fillGogmaObservations(3)
+    const fourthEditor = screen.getByText('Reset Observation 4')
+      .closest('.MuiStack-root') as HTMLElement
+    for (let slotIndex = 1; slotIndex <= 4; slotIndex += 1) {
+      selectOption(within(fourthEditor).getByLabelText(`枠${slotIndex} ボーナス種別`))
+      selectOption(within(fourthEditor).getByLabelText(`枠${slotIndex} ランク`))
+    }
+
+    await user.click(screen.getByRole('button', { name: 'STEP 2 Search' }))
+
+    expect(await screen.findByText(/Reset Observation 4の枠5を完成させてください/)).toBeInTheDocument()
+    expect(coordinator.gogmaInputs).toHaveLength(0)
+  })
+
   it('uses STEP 1 authority, sends ordered five-slot Reset observations, and has no Seed/Keep input', async () => {
     const user = userEvent.setup()
     const { coordinator } = renderWizard()
@@ -402,9 +551,12 @@ describe('IdentificationWizardDialog STEP 2', () => {
 
     expect(screen.queryByLabelText(/^Base Seed$/)).not.toBeInTheDocument()
     expect(screen.queryByText(/Keep Observation/)).not.toBeInTheDocument()
+    fillGogmaObservations()
     const secondResetPanel = screen.getByText('Reset Observation 2')
       .closest('.MuiPaper-root') as HTMLElement
     await user.click(within(secondResetPanel).getAllByRole('combobox')[0]!)
+    await user.click(within(await screen.findByRole('listbox')).getAllByRole('option')[2]!)
+    await user.click(within(secondResetPanel).getAllByRole('combobox')[1]!)
     await user.click(within(await screen.findByRole('listbox')).getAllByRole('option')[1]!)
     await user.click(screen.getByRole('button', { name: 'STEP 2 Search' }))
 
@@ -430,6 +582,7 @@ describe('IdentificationWizardDialog STEP 2', () => {
     const user = userEvent.setup()
     const { coordinator } = renderWizard()
     await reachStep2(coordinator, user)
+    fillGogmaObservations()
     await user.click(screen.getByRole('button', { name: 'STEP 2 Search' }))
     act(() => coordinator.completeGogma(classification))
 
@@ -442,6 +595,7 @@ describe('IdentificationWizardDialog STEP 2', () => {
     const user = userEvent.setup()
     const { coordinator } = renderWizard()
     await reachStep2(coordinator, user)
+    fillGogmaObservations()
     await user.click(screen.getByRole('button', { name: 'STEP 2 Search' }))
     act(() => coordinator.progressGogma())
     expect(screen.getByLabelText('検索進捗')).toHaveTextContent('5 / 11')
@@ -456,7 +610,7 @@ describe('IdentificationWizardDialog STEP 2', () => {
   })
 })
 
-describe('IdentificationWizardDialog Review and lifecycle', () => {
+describe('IdentificationWizardDialog Review and lifecycle', { timeout: 15_000 }, () => {
   it('shows exact starting values, requires restoration confirmation, and adopts only through Coordinator', async () => {
     const user = userEvent.setup()
     const { coordinator, onAdopted } = renderWizard()

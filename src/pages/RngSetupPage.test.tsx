@@ -159,4 +159,53 @@ describe('RngSetupPage', () => {
     expect(screen.getByRole('button', { name: '保存' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Identification Wizardを開始' })).toBeEnabled()
   })
+
+  it('blocks Wizard start while a KnownField has an unsaved manual draft', async () => {
+    const user = userEvent.setup()
+    const fixture = dependencies()
+    render(<RngSetupPage dependencies={fixture.deps} />)
+
+    await user.type(await screen.findByLabelText('Base Seed（基準シード）'), '42')
+
+    expect(screen.getByRole('button', { name: 'Identification Wizardを開始' }))
+      .toBeDisabled()
+    expect(screen.getByText(
+      'Identification Wizardを開始する前に、RNG状態設定の変更を保存するか元に戻してください。',
+    )).toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'RNG Identification Wizard' }))
+      .not.toBeInTheDocument()
+  })
+
+  it('blocks Wizard start when Notes are the only unsaved change', async () => {
+    const user = userEvent.setup()
+    const fixture = dependencies()
+    render(<RngSetupPage dependencies={fixture.deps} />)
+
+    await user.type(await screen.findByLabelText('メモ'), '未保存メモ')
+
+    expect(screen.getByRole('button', { name: 'Identification Wizardを開始' }))
+      .toBeDisabled()
+    expect(screen.getByText(
+      'Identification Wizardを開始する前に、RNG状態設定の変更を保存するか元に戻してください。',
+    )).toBeInTheDocument()
+  })
+
+  it('allows Wizard start after the manual draft has been saved', async () => {
+    const user = userEvent.setup()
+    const fixture = dependencies()
+    render(<RngSetupPage dependencies={fixture.deps} />)
+
+    await user.type(await screen.findByLabelText('メモ'), '保存済みメモ')
+    expect(screen.getByRole('button', { name: 'Identification Wizardを開始' }))
+      .toBeDisabled()
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
+    expect(await screen.findByText('RNG状態を保存しました。')).toBeInTheDocument()
+    expect(fixture.getStored().notes).toBe('保存済みメモ')
+    const startWizard = screen.getByRole('button', { name: 'Identification Wizardを開始' })
+    expect(startWizard).toBeEnabled()
+    await user.click(startWizard)
+    expect(screen.getByRole('dialog', { name: 'RNG Identification Wizard' }))
+      .toBeInTheDocument()
+  })
 })

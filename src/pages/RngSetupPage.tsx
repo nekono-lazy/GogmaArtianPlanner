@@ -20,10 +20,22 @@ const masterResult = loadMasterData()
 type KnownKey = 'baseSeed' | 'gogmaCounter' | 'skillCounter' | 'counterGate'
 type FormKnown = { value: string; isConfirmed: boolean; source: RngStateSource | null }
 type RngForm = Record<KnownKey, FormKnown> & { notes: string }
+const knownKeys: readonly KnownKey[] = [
+  'baseSeed', 'gogmaCounter', 'skillCounter', 'counterGate',
+]
 
 function toForm(state: RngState): RngForm {
   const map = <T,>(known: KnownValue<T>): FormKnown => ({ value: known.value === null ? '' : String(known.value), isConfirmed: known.isConfirmed, source: known.source })
   return { baseSeed: map(state.baseSeed), gogmaCounter: map(state.gogmaCounter), skillCounter: map(state.skillCounter), counterGate: map(state.counterGate), notes: state.notes ?? '' }
+}
+
+function hasUnsavedRngFormChanges(form: RngForm, state: RngState): boolean {
+  const persisted = toForm(state)
+  return form.notes !== persisted.notes || knownKeys.some((key) => (
+    form[key].value !== persisted[key].value ||
+    form[key].isConfirmed !== persisted[key].isConfirmed ||
+    form[key].source !== persisted[key].source
+  ))
 }
 
 function parseCounter(value: string, label: string): number | null {
@@ -108,6 +120,10 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
   }
 
   const preview = useMemo(() => { if (!state || !form) return null; try { return toState(form, state, modifiedKeys, state.updatedAt, productionRngEngine) } catch { return state } }, [form, modifiedKeys, state])
+  const hasUnsavedChanges = useMemo(
+    () => state !== null && form !== null && hasUnsavedRngFormChanges(form, state),
+    [form, state],
+  )
   const capabilities = preview ? deriveRngCapabilities(preview, normalCounters, [], productionRngEngine.capabilities) : null
   const displayedRequirements = useMemo(() => {
     if (!preview) return []
@@ -134,6 +150,10 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
   const startIdentification = () => {
     setError(null)
     setNotice(null)
+    if (hasUnsavedChanges) {
+      setError('Identification Wizardを開始する前に、RNG状態設定の変更を保存するか元に戻してください。')
+      return
+    }
     try {
       setIdentificationCoordinator(
         (dependencies.createIdentificationCoordinator ??
@@ -153,7 +173,7 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
 
   return <PageShell title="RNG状態設定" description="検索や予測に使うRNG状態を項目ごとに設定します。"><Stack spacing={3}>
     {!form && !error && <LinearProgress />}{error && <Alert severity="error">{error}</Alert>}{notice && <Alert severity="success">{notice}</Alert>}
-    {form && <><Alert severity="info">正しいことを確認できた値だけ「この値を検索・予測に使用する」を選択してください。直接入力した値の取得方法は「手動入力」になります。空欄は既存値を変更しません。</Alert><Paper variant="outlined" sx={{ p: 2 }}><Stack spacing={1}><Typography variant="h2">値が分からない場合</Typography><Typography>Normal → Gogma conversionと連続Resetの観測から、Base Seedと調査開始前のSkill / Gogma Counterを専用Wizardで特定します。手動入力は引き続き利用できます。</Typography><Button variant="outlined" disabled={!masterResult.ok || identificationCoordinator !== null} onClick={startIdentification}>Identification Wizardを開始</Button>{!masterResult.ok && <Alert severity="error">マスターデータが利用できないためWizardを開始できません。</Alert>}</Stack></Paper><KnownField fieldId="base-seed" label="Base Seed（基準シード）" description="10進数または0xで始まる16進数を入力します。保存時に予測用の10進文字列へ正規化します。" value={form.baseSeed} onChange={(value) => updateField('baseSeed', value)} /><KnownField fieldId="gogma-counter" label="巨戟カウンター" description="巨戟アーティアの復元ボーナス予測に使う位置です。" numeric value={form.gogmaCounter} onChange={(value) => updateField('gogmaCounter', value)} /><KnownField fieldId="skill-counter" label="スキルカウンター" description="シリーズ・グループスキル予測に使う位置です。" numeric value={form.skillCounter} onChange={(value) => updateField('skillCounter', value)} /><KnownField fieldId="counter-gate" label="Counter Gate（カウンターゲート）" description="legacy / diagnostic / compatibility情報です。Production予測やIdentificationのauthorityではありません。" numeric value={form.counterGate} onChange={(value) => updateField('counterGate', value)} /><TextField label="メモ" multiline minRows={2} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /><Button variant="contained" onClick={() => void save()}>保存</Button></>}
+    {form && <><Alert severity="info">正しいことを確認できた値だけ「この値を検索・予測に使用する」を選択してください。直接入力した値の取得方法は「手動入力」になります。空欄は既存値を変更しません。</Alert><Paper variant="outlined" sx={{ p: 2 }}><Stack spacing={1}><Typography variant="h2">値が分からない場合</Typography><Typography>Normal → Gogma conversionと連続Resetの観測から、Base Seedと調査開始前のSkill / Gogma Counterを専用Wizardで特定します。手動入力は引き続き利用できます。</Typography><Button variant="outlined" disabled={!masterResult.ok || identificationCoordinator !== null || hasUnsavedChanges} onClick={startIdentification}>Identification Wizardを開始</Button>{hasUnsavedChanges && <Alert severity="warning">Identification Wizardを開始する前に、RNG状態設定の変更を保存するか元に戻してください。</Alert>}{!masterResult.ok && <Alert severity="error">マスターデータが利用できないためWizardを開始できません。</Alert>}</Stack></Paper><KnownField fieldId="base-seed" label="Base Seed（基準シード）" description="10進数または0xで始まる16進数を入力します。保存時に予測用の10進文字列へ正規化します。" value={form.baseSeed} onChange={(value) => updateField('baseSeed', value)} /><KnownField fieldId="gogma-counter" label="巨戟カウンター" description="巨戟アーティアの復元ボーナス予測に使う位置です。" numeric value={form.gogmaCounter} onChange={(value) => updateField('gogmaCounter', value)} /><KnownField fieldId="skill-counter" label="スキルカウンター" description="シリーズ・グループスキル予測に使う位置です。" numeric value={form.skillCounter} onChange={(value) => updateField('skillCounter', value)} /><KnownField fieldId="counter-gate" label="Counter Gate（カウンターゲート）" description="legacy / diagnostic / compatibility情報です。Production予測やIdentificationのauthorityではありません。" numeric value={form.counterGate} onChange={(value) => updateField('counterGate', value)} /><TextField label="メモ" multiline minRows={2} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /><Button variant="contained" onClick={() => void save()}>保存</Button></>}
     <Paper variant="outlined" sx={{ p: 2 }}><Typography variant="h2" gutterBottom>Production RNG Engine</Typography><Stack spacing={1}><Typography>Engine mode: {productionRngRuntime.mode}</Typography><Typography>Engine version: {productionRngRuntime.version}</Typography><Typography>通常アーティア予測 capability: {productionRngRuntime.capabilities.supportsNormalArtianPrediction ? '対応' : '未対応'}</Typography><Typography>スキル予測 capability: {productionRngRuntime.capabilities.supportsSkillPrediction ? '対応' : '未対応'}</Typography><Typography>巨戟アーティア予測 capability: {productionRngRuntime.capabilities.supportsGogmaPrediction ? '対応' : '未対応'}</Typography><Typography>Keep Bonuses予測 capability: {productionRngRuntime.capabilities.supportsKeepBonusesPrediction ? '対応' : '未対応'}</Typography><Typography>Seed Search capability: {productionRngRuntime.capabilities.supportsSeedSearch ? '対応' : '未対応'}</Typography></Stack></Paper>
     {capabilities && <Paper variant="outlined" sx={{ p: 2 }}><Typography variant="h2" gutterBottom>現在のRNG状態で利用可能な機能</Typography><Stack spacing={1}><Typography>巨戟アーティア予測: {capabilities.canPredictGogma ? '利用可能' : '利用不可'}</Typography><Typography>スキル予測: {capabilities.canPredictSkills ? '利用可能' : '利用不可'}</Typography><Typography>通常アーティア検索: {capabilities.canSearchNormalArtian ? '利用可能' : '利用不可'}</Typography><Typography>生産計画作成: Production Engine有効（必要項目は作成ルートにより異なります）</Typography>{displayedRequirements.length > 0 && <Alert severity="warning"><Typography variant="subtitle2">現在不足している項目</Typography>{displayedRequirements.map((requirement) => <Typography variant="body2" key={requirement}>{getRngMissingRequirementLabel(requirement)}</Typography>)}</Alert>}</Stack></Paper>}
     {identificationCoordinator && state && masterResult.ok && <IdentificationWizardDialog coordinator={identificationCoordinator} initialRngState={state} master={masterResult.data} onAdopted={handleIdentificationAdopted} onClose={() => setIdentificationCoordinator(null)} />}
