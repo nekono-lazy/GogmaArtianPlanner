@@ -402,16 +402,17 @@ not the legacy generic Seed Search contract:
   gap-free chunks, merges deterministically, aggregates global progress, and
   propagates cancellation or any child failure to the whole logical request.
 - The C5-E2C7 Identification Wizard UI is implemented and connected from RNG
-  Setup through the existing Coordinator. The real Browser Worker benchmark and
-  independent Skill live-game verification remain pending before Production
+  Setup through the existing Coordinator. The real Browser Worker benchmark was
+  completed in C5-E2C8 (see `docs/C5_E2C8_BROWSER_WORKER_BENCHMARK.md`); the
+  independent Skill live-game verification remains pending before Production
   activation.
 - `supportsSeedSearch` remains false because it describes the legacy generic
   Seed Search API. Identification availability belongs at the Worker/application
   level; do not add RngEngine capability flags without a separate specification
   change.
-- Skill live-game verification and a real Browser Worker benchmark are not
-  Wizard-implementation blockers, but both are Production-activation blockers.
-  A Node benchmark is not a Browser benchmark.
+- Skill live-game verification is not a Wizard-implementation blocker and
+  remains a Production-activation blocker. The real Browser Worker benchmark
+  was completed in C5-E2C8; a Node benchmark was not used as its substitute.
 - Skill Seed search uses contiguous, non-overlapping, gap-free multi-worker
   chunks with deterministic merge, global progress, cancellation propagation,
   and explicit Worker-failure errors. Child Workers do not independently apply

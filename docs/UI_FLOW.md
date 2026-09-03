@@ -168,7 +168,7 @@ Base Seed、Gogma Counter、Skill CounterをProduction Prediction用に項目ご
 
 ## 5.4 Skill-first Identification Wizard
 
-RNG Setupから専用Wizardを開始し、完了後のreview / adoption結果をRNG Setupへ反映する。C5-E2C7でDialog UIとCoordinator接続を実装済みである。実Browser Worker benchmarkとSkill live-game verificationが未完了のため、Production Identification activationはまだ完了していない。
+RNG Setupから専用Wizardを開始し、完了後のreview / adoption結果をRNG Setupへ反映する。C5-E2C7でDialog UIとCoordinator接続を実装済みである。実Browser Worker benchmarkはC5-E2C8で完了した（[C5_E2C8_BROWSER_WORKER_BENCHMARK.md](./C5_E2C8_BROWSER_WORKER_BENCHMARK.md)）が、Skill live-game verificationが未完了のため、Production Identification activationはまだ完了していない。
 
 対象ユーザー。
 
@@ -221,7 +221,7 @@ review / adoption。
 activation条件。
 
 - Skillのreference-generated fixtureはkernel / Wizard implementationをblockしないが、独立したlive-game verification完了前にProduction activationしない
-- 実Browser Worker benchmark完了前にProduction activationしない。Node benchmarkを代用しない
+- 実Browser Worker benchmarkはC5-E2C8で完了済みであり、測定記録は[C5_E2C8_BROWSER_WORKER_BENCHMARK.md](./C5_E2C8_BROWSER_WORKER_BENCHMARK.md)をauthorityとする。Skill live-game verification完了前にProduction activationしない
 - Skill Seed rangeのmulti-worker orchestrationはcontiguous / non-overlapping chunk、deterministic merge、global progress、全Workerへのcancel propagation、Worker failureの明示errorを満たす
 - Identification availabilityはWorker/application levelでSkill / Gogma Counterを個別に扱い、新しいRngEngine capability flagを追加しない
 

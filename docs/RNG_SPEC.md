@@ -588,7 +588,7 @@ export interface SeedMatchPosition {
 - 現在のbounded goldenはreference-generatedであり、独立したgame-verified fixtureではない。Production UI activationには後続のlive verificationが必要である
 - STEP 1は完全な探索で候補がexactly oneかつnon-truncatedの場合だけ一意とする。候補が複数なら候補をユーザーに選ばせず、次のReset Skills観測を追加して同じ検索を再実行する。候補0件では観測入力、Counter range、操作順を確認し、範囲を自動拡張しない
 - Skill live verificationはkernel blockerでもWizard implementation blockerでもないが、Production activation blockerである。known Base Seed / starting Skill Counter / weapon type / elementと、conversion自動Skillおよび後続Reset SkillsのSeries / Group両方を記録したgame-verified fixtureをactivation前に確認する
-- 実Browser Worker benchmarkはWizard implementation blockerではないがProduction activation blockerである。Node benchmarkをBrowser benchmarkとして扱わない
+- 実Browser Worker benchmarkはC5-E2C8で完了した（[C5_E2C8_BROWSER_WORKER_BENCHMARK.md](./C5_E2C8_BROWSER_WORKER_BENCHMARK.md)）。Skill live-game verificationはWizard implementation blockerではないがProduction activation blockerであり、Node benchmarkをBrowser benchmarkとして扱わない
 - Production activation前にSeed rangeをcontiguous / non-overlapping chunkへ分割するmulti-worker orchestrationを実装する。chunk結果はSeed range順にdeterministic mergeし、global progress、全Workerへのcancel propagation、Worker failureの明示errorを提供する
 
 ## 9.8 C5-E2B2 Gogma Counter Identification current contract
@@ -633,7 +633,7 @@ Skill Identificationでcanonical Base Seedが確定した後のSTEP 2には、�
 - STEP 1再検索はSTEP 2、review、復元確認をinvalidateし、STEP 2再検索はSTEP 1 uniqueを保持してreview、復元確認をinvalidateする。request IDはstep / generation / sequenceで使い回さず、generation照合によってcancel後のlate responseがcurrent stateを上書きしない
 - cancelは再実行用input snapshotと有効な上流unique結果を保持する。restartはactive Worker requestをcancelして全transient stateを破棄し、disposeはCoordinatorが所有する両Worker Clientを停止する。Workerのinvalid / unsupported / cancelled / unavailable / duplicate / unexpected errorを0件へ変換しない
 - review後にユーザーが調査前ゲーム状態へ戻したことを明示確認しない限りadoptionを拒否する。adoption中および成功後の同一Coordinatorからの重複adoptionを拒否し、成功時はC5-E2C4が返す保存済みRngStateを保持する。persistence failure時はreviewと復元確認を保持して明示的retryを可能にする
-- Coordinatorはimplementedである。C5-E2C6 Skill multi-worker orchestrationも既存Client interfaceの背後でimplementedであり、C5-E2C7 Wizard UIはRNG Setupへ接続済みである。実Browser Worker benchmarkとSkill live-game verificationは未完了で、Identification Production activationは完了していない。`production-rng:c5-e2`と`supportsSeedSearch = false`を維持する
+- Coordinatorはimplementedである。C5-E2C6 Skill multi-worker orchestrationも既存Client interfaceの背後でimplementedであり、C5-E2C7 Wizard UIはRNG Setupへ接続済みである。実Browser Worker benchmarkはC5-E2C8で完了した（[C5_E2C8_BROWSER_WORKER_BENCHMARK.md](./C5_E2C8_BROWSER_WORKER_BENCHMARK.md)）が、Skill live-game verificationは未完了で、Identification Production activationは完了していない。`production-rng:c5-e2`と`supportsSeedSearch = false`を維持する
 
 ## 9.11 C5-E2C6 Skill Identification Multi-Worker Orchestration current contract
 
@@ -645,7 +645,7 @@ Skill Identificationでcanonical Base Seedが確定した後のSTEP 2には、�
 - global progressは各childのlatest `searchedSeeds`と`matchesFound`を保持して合計し、元range全体を`totalSeeds`とする。out-of-order progressでも各child値を巻き戻さず、`searchedSeeds`を0から`totalSeeds`に収める。`matchesFound`はglobal limit前に発見済みの完全な候補数であり、`maxMatches`を超え得る
 - parent cancelは全active childへ伝播し、parent Promiseをcancelled errorでrejectする。1 childのfailure / unavailableは全active siblingをcancelしてlogical request全体をfailureにし、partial matchesを返さない。cancel / failure後のlate child result/progressはparent、次request、global progressへ反映しない
 - child Engine versionは全て同じProduction versionでなければならない。creation failureまたはversion mismatchはfail closedでWorker unavailableとし、生成済みchildをdisposeする。`dispose()`はactive childをcancelし、全child clientをdisposeする
-- C5-E2C6はorchestrationだけであり、Skill kernel、Production RNG semantics/version、`supportsSeedSearch`、Coordinator state machine、Gogma Identification、RngState、Search、Planner、React UIを変更しない。実Browser Worker benchmarkとSkill live-game verificationは引き続きProduction activation blockerであり、Wizard UIはinactiveである
+- C5-E2C6はorchestrationだけであり、Skill kernel、Production RNG semantics/version、`supportsSeedSearch`、Coordinator state machine、Gogma Identification、RngState、Search、Planner、React UIを変更しない。実Browser Worker benchmarkはC5-E2C8で完了済みであり、Skill live-game verificationは引き続きProduction activation blockerである。Wizard UIはC5-E2C7でRNG Setupへ接続済みだが、development StrictMode環境でCoordinator lifecycleに起因するとみられる既知不具合があり、hotfix pendingである
 
 ---
 
