@@ -614,7 +614,7 @@ Gate未満時も保存counterのDomain before/afterが+1するかどうかは、
 - `supportsSeedSearch`は旧generic Seed Search capabilityであり、Identification availabilityに流用せず `false`を維持する。新しいRngEngine capability flagはC5-E2C2で追加しない
 - Identification adoptionはcanonical Base Seed、starting Skill Counter、starting Gogma Counterを採用し、sourceには既存の `observation` を使用する。Counter GateとNormal Counterは変更しない
 - 調査中はゲーム状態を保存せず、調査前状態へ戻してから採用する。観測操作数をstarting Counterへ加算しない
-- 実Browser Worker benchmarkはC5-E2C8で完了した（[C5_E2C8_BROWSER_WORKER_BENCHMARK.md](./C5_E2C8_BROWSER_WORKER_BENCHMARK.md)）。Skill live verificationはWizard implementation blockerではないがProduction activation blockerである。Node benchmarkはBrowser benchmarkの代用ではない
+- 実Browser Worker benchmarkはC5-E2C8で完了した（[C5_E2C8_BROWSER_WORKER_BENCHMARK.md](./C5_E2C8_BROWSER_WORKER_BENCHMARK.md)）。Skill live-game verificationはC5-E2C9で完了した（[C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md](./C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md)）。Node benchmarkはBrowser benchmarkの代用ではなく、C9完了はC5-E2C10 Production activationの完了を意味しない
 - activation前のSkill Production UXにはcontiguous / non-overlapping Seed chunk、deterministic merge、global progress、cancel propagation、Worker failureの明示errorを持つmulti-worker orchestrationが必要である
 
 C5-E2C2完了時点では仕様先行でruntime implementationはC5-E2C3 pendingだった。次節のC5-E2C3でその差を解消した。
@@ -644,7 +644,7 @@ C5-E2C2完了時点では仕様先行でruntime implementationはC5-E2C3 pending
 - 両STEPとも1件かつnon-truncatedだけをuniqueとし、truncated、0件、複数、Worker errorを区別する。候補手動選択、自動range拡張、Seed再探索は行わず、STEP 2 SeedはSTEP 1 unique結果からのみ注入する
 - reviewはcanonical Base Seed、starting Skill Counter、starting Gogma Counterだけから生成し、観測数を加算しない。再検索は下流review / confirmationをinvalidateし、step / generation / sequence request IDとgeneration guardでlate responseを無視する
 - adoptionは調査前ゲーム状態へ戻した明示確認後にC5-E2C4だけを呼ぶ。重複adoptionをguardし、失敗時はreviewと確認を保持してretry可能とする。Coordinatorは両Worker Clientを所有し、cancel / restart / disposeを提供する
-- CoordinatorとWizard UIはimplementedである。Skill multi-workerと実Browser Worker benchmarkはC5-E2C8まで完了し、Skill live verificationはpendingで、Production activationは未完了である。測定記録は[C5_E2C8_BROWSER_WORKER_BENCHMARK.md](./C5_E2C8_BROWSER_WORKER_BENCHMARK.md)をauthorityとする。Production versionは `production-rng:c5-e2`、`supportsSeedSearch = false`を維持する
+- CoordinatorとWizard UIはimplementedである。Skill multi-workerと実Browser Worker benchmarkはC5-E2C8まで、Skill live-game verificationはC5-E2C9まで完了し、C5-E2C10 Production activationは未完了である。測定記録は[C5_E2C8_BROWSER_WORKER_BENCHMARK.md](./C5_E2C8_BROWSER_WORKER_BENCHMARK.md)、live verification記録は[C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md](./C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md)をauthorityとする。Production versionは `production-rng:c5-e2`、`supportsSeedSearch = false`を維持する
 
 ### 14.10 C5-E2C6 Skill Identification Multi-Worker Orchestration（2026-09-01）
 
@@ -654,14 +654,14 @@ C5-E2C2完了時点では仕様先行でruntime implementationはC5-E2C3 pending
 - parent `maxMatches`はchildへ渡さない。全chunkのnon-truncated完了を確認し、Seed / Counter順にdeterministic mergeしてからglobal limitを適用する。これにより `matches.length === 1 && !isTruncated` のunique契約をlocal truncationで偽造しない。欠落・overlap・truncated childは `incomplete_parallel_chunk` で全体failureになる
 - 各childのlatest progressを保持してglobal `searchedSeeds / totalSeeds / matchesFound`を集約し、out-of-order eventでもsearched値を巻き戻さない。cancelは全childへ伝播し、1 child failure / unavailableは全siblingをcancelしてpartial successを禁止する。late responseはlogical request identityで無視する
 - child factory creation failureとEngine version mismatchはfail closedとし、生成済みchildをdisposeする。Production Engine versionは `production-rng:c5-e2`、`supportsSeedSearch = false`を維持する。C5-E2C6時点ではWizard UIはinactiveであり、後続C5-E2C7でRNG Setupへ接続した。development StrictMode環境で報告されていたCoordinator lifecycle起因のWizard表示不具合は、C5-E2C7 lifecycle hotfixで解消済みである
-- Skill multi-worker orchestrationと実Browser Worker benchmarkはC5-E2C8まで完了している（測定記録は[C5_E2C8_BROWSER_WORKER_BENCHMARK.md](./C5_E2C8_BROWSER_WORKER_BENCHMARK.md)）。独立したSkill live-game verificationはpendingで、Identification Production activationは未完了である
+- Skill multi-worker orchestrationと実Browser Worker benchmarkはC5-E2C8まで完了している（測定記録は[C5_E2C8_BROWSER_WORKER_BENCHMARK.md](./C5_E2C8_BROWSER_WORKER_BENCHMARK.md)）。独立したSkill live-game verificationはC5-E2C9で完了した（[C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md](./C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md)）。C5-E2C10 Identification Production activationは未完了である
 
 ### 14.11 C5-E2C7 Identification Wizard UI（2026-09-01）
 
 - RNG Setupから専用Identification Wizardを開始できるDialog UIを追加し、既存Coordinatorのstate / subscribe、STEP 1/2 identify / cancel、restart、復元確認、adoptへ接続した。UIはCoordinatorのclassification、review、invalidation、adoption guardを再実装せず、presentation用form draftだけを保持する
 - STEP 1は武器種、属性、ordered Series / Group観測、明示Seed range、概算Skill Counter ±幅を入力し、STEP 2はSTEP 1 Seedを再入力させずordered five-slot Reset観測と概算Gogma Counter ±幅だけを入力する。Counter Gate、Keep観測、Normal Counter Identification、candidate pickerを追加していない
 - ReviewはBase Seed、starting Skill Counter、starting Gogma Counterだけを表示し、調査前ゲーム状態への復元確認後にCoordinator経由でadoptする。DialogはCoordinatorのsubscriptionとpresentation lifecycleだけを所有し、unmount時にunsubscribeする。per-open Coordinatorのlifetimeは生成元であるRNG Setup側が所有し、実際のClose時とowner unmount時にdisposeする。この所有分離により、development StrictModeのeffect replayが利用中のCoordinatorをpremature disposeしない
-- 実Browser Worker benchmarkはC5-E2C8で完了した（測定記録は[C5_E2C8_BROWSER_WORKER_BENCHMARK.md](./C5_E2C8_BROWSER_WORKER_BENCHMARK.md)）。独立したSkill live-game verificationはpendingで、Production Identification activationは未完了である。Production Engine versionは `production-rng:c5-e2`、`supportsSeedSearch = false`を維持する
+- 実Browser Worker benchmarkはC5-E2C8で完了した（測定記録は[C5_E2C8_BROWSER_WORKER_BENCHMARK.md](./C5_E2C8_BROWSER_WORKER_BENCHMARK.md)）。独立したSkill live-game verificationはC5-E2C9で完了した（[C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md](./C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md)）。C5-E2C10 Production Identification activationは未完了である。Production Engine versionは `production-rng:c5-e2`、`supportsSeedSearch = false`を維持する
 
 ---
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { loadMasterData } from '../../master/loadMasterData'
 import { referenceRngVectors } from '../../../test/fixtures/referenceRngVectors'
+import { gameVerifiedSkillIdentificationVector } from '../../../test/fixtures/gameVerifiedSkillVectors'
 import {
   REFERENCE_GROUP_SKILL_POOL,
   REFERENCE_SERIES_SKILL_POOL,
@@ -115,6 +116,33 @@ describe('reference-verified Production Skill prediction', () => {
     }
     expect(predictReferenceSkills(input)).toEqual(predictReferenceSkills(input))
     expect(predictReferenceSkills(input).effectiveBlock).toBe(5000)
+  })
+
+  it('resolves every live-game observed Skill display name to its fixture semantic ID', () => {
+    const master = verifiedMaster()
+    for (const observation of gameVerifiedSkillIdentificationVector.observations) {
+      expect(master.seriesSkills.find(({ id }) => id === observation.seriesSkillId)?.displayNameJa)
+        .toBe(observation.observedSeriesDisplayNameJa)
+      expect(master.groupSkills.find(({ id }) => id === observation.groupSkillId)?.displayNameJa)
+        .toBe(observation.observedGroupDisplayNameJa)
+    }
+  })
+
+  it('predicts each live-game observation from its own Skill Counter block', () => {
+    const live = gameVerifiedSkillIdentificationVector
+    for (const observation of live.observations) {
+      expect(predictReferenceSkills({
+        baseSeed: live.baseSeed,
+        weaponTypeId: live.weaponTypeId,
+        elementId: live.elementId,
+        skillCounter: observation.skillCounter,
+        counterGate: REFERENCE_SKILL_COUNTER_GATE_THRESHOLD,
+      })).toMatchObject({
+        seriesSkillId: observation.seriesSkillId,
+        groupSkillId: observation.groupSkillId,
+        effectiveBlock: observation.skillCounter,
+      })
+    }
   })
 
   it('rejects invalid counter inputs and unknown semantic stream inputs', () => {

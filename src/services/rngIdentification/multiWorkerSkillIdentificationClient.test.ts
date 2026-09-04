@@ -6,6 +6,7 @@ import {
   type SkillIdentificationProgress,
   type SkillIdentificationResult,
 } from '../../domain/rng/identification'
+import { gameVerifiedSkillIdentificationVector } from '../../test/fixtures/gameVerifiedSkillVectors'
 import { ProductionRngEngine } from '../../domain/rng/production/productionRngEngine'
 import { referenceSkillCombinationFromIndex } from '../../domain/rng/production/referenceSkillPools'
 import {
@@ -268,6 +269,33 @@ describe('Multi-Worker Skill Identification parity', () => {
     await expect(client.identify('limited', input)).resolves.toEqual(expected)
     expect(expected.matches).toHaveLength(10)
     expect(expected.isTruncated).toBe(true)
+    client.dispose()
+  }, 30_000)
+})
+
+describe('Multi-Worker Skill Identification live-game fixture', () => {
+  it('returns only the live-game Base Seed and starting Skill Counter across four Workers', async () => {
+    const live = gameVerifiedSkillIdentificationVector
+    const input: SkillIdentificationInput = {
+      weaponTypeId: live.weaponTypeId,
+      elementId: live.elementId,
+      observations: live.observations.map(({ seriesSkillId, groupSkillId }) => ({
+        seriesSkillId,
+        groupSkillId,
+      })),
+      seedRange: live.identificationSearch.seedRange,
+      skillCounterRange: live.identificationSearch.skillCounterRange,
+    }
+    const client = createMultiWorkerSkillIdentificationClient({
+      hardwareConcurrency: 4,
+      workerClientFactory: () => new KernelChildClient(),
+    })
+
+    await expect(client.identify('live.skill', input)).resolves.toEqual({
+      matches: [{ baseSeed: live.baseSeed, startSkillCounter: live.startSkillCounter }],
+      searchedSeedRange: live.identificationSearch.seedRange,
+      isTruncated: false,
+    })
     client.dispose()
   }, 30_000)
 })

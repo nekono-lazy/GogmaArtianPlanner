@@ -5,7 +5,7 @@
 ## Status
 
 - C8 Browser Worker benchmark: completed
-- Skill live-game verification (C9): pending
+- Skill live-game verification (C9): completed（[C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md](./C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md)）
 - Production Identification activation: pending
 
 この結果は `production-rng:c5-e2`、`supportsSeedSearch = false`、既存の
@@ -81,7 +81,8 @@ representative measurement only; it is not evidence for a 100M default.
 - Do not set a canonical 100M Seed range as the Wizard default from this C8
   run. The 500,001-seed bounded result is practical here, but extrapolation is
   not a default-range decision.
-- Production activation remains blocked by independent C9 Skill live-game
-  verification. C8 alone does not activate Identification.
+- Production activation was blocked by independent C9 Skill live-game
+  verification, which completed afterwards. Neither C8 nor C9 activates
+  Identification; C10 does.
 - C9 may proceed: the real Browser Worker performance, progress, cancellation,
   and deterministic-result checks did not reveal a C8 blocker.

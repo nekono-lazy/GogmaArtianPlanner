@@ -415,16 +415,28 @@ not the legacy generic Seed Search contract:
   propagates cancellation or any child failure to the whole logical request.
 - The C5-E2C7 Identification Wizard UI is implemented and connected from RNG
   Setup through the existing Coordinator. The real Browser Worker benchmark was
-  completed in C5-E2C8 (see `docs/C5_E2C8_BROWSER_WORKER_BENCHMARK.md`); the
-  independent Skill live-game verification remains pending before Production
-  activation.
+  completed in C5-E2C8 (see `docs/C5_E2C8_BROWSER_WORKER_BENCHMARK.md`), and the
+  independent Skill live-game verification was completed in C5-E2C9 (see
+  `docs/C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md`). C5-E2C10 Production
+  Identification activation remains pending.
 - `supportsSeedSearch` remains false because it describes the legacy generic
   Seed Search API. Identification availability belongs at the Worker/application
   level; do not add RngEngine capability flags without a separate specification
   change.
-- Skill live-game verification is not a Wizard-implementation blocker and
-  remains a Production-activation blocker. The real Browser Worker benchmark
-  was completed in C5-E2C8; a Node benchmark was not used as its substitute.
+- Skill live-game verification was completed in C5-E2C9. Base Seed 51231782 and
+  starting Skill Counter 341 came from an independent GARP live RNG state read;
+  `weapon.insect_glaive` / `element.ice` conversion plus three consecutive Reset
+  Skills produced four ordered Series/Group observations at Skill Counters
+  341-344. `ProductionRngEngine.predictSkills` reproduced all four exactly, and
+  bounded Identification over Seeds 51,206,782-51,256,782 with Skill Counters
+  336-346 returned only `(51231782, 341)`, non-truncated. The game state was
+  restored after observation, so the starting Counters are never advanced by the
+  observation count. The fixture is
+  `src/test/fixtures/gameVerifiedSkillVectors.ts`. It proves that weapon type,
+  element, and Counter window only. The real Browser Worker benchmark was
+  completed in C5-E2C8; a Node benchmark was not used as its substitute. C9
+  completion does not activate Production Identification and must not change
+  `supportsSeedSearch`.
 - Skill Seed search uses contiguous, non-overlapping, gap-free multi-worker
   chunks with deterministic merge, global progress, cancellation propagation,
   and explicit Worker-failure errors. Child Workers do not independently apply

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ElementId, WeaponTypeId } from '../../models/publicTypes'
+import { gameVerifiedSkillIdentificationVector } from '../../../test/fixtures/gameVerifiedSkillVectors'
 import { ProductionRngEngine } from '../production/productionRngEngine'
 import {
   REFERENCE_GROUP_SKILL_POOL,
@@ -158,6 +159,29 @@ describe('Skill Identification kernel', () => {
     expect(result).toEqual({
       matches: [{ baseSeed: 8_524_433, startSkillCounter: 186 }],
       searchedSeedRange: { startInclusive: 8_500_000, endInclusive: 8_550_000 },
+      isTruncated: false,
+    })
+  })
+
+  it('identifies the live-game Base Seed and starting Skill Counter as the only bounded match', async () => {
+    const live = gameVerifiedSkillIdentificationVector
+    const result = await identifySkillSeedAndCounter(
+      {
+        weaponTypeId: live.weaponTypeId,
+        elementId: live.elementId,
+        observations: live.observations.map(({ seriesSkillId, groupSkillId }) => ({
+          seriesSkillId,
+          groupSkillId,
+        })),
+        seedRange: live.identificationSearch.seedRange,
+        skillCounterRange: live.identificationSearch.skillCounterRange,
+      },
+      new ProductionRngEngine(),
+    )
+
+    expect(result).toEqual({
+      matches: [{ baseSeed: live.baseSeed, startSkillCounter: live.startSkillCounter }],
+      searchedSeedRange: live.identificationSearch.seedRange,
       isTruncated: false,
     })
   })

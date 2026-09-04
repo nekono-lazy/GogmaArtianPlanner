@@ -4,6 +4,7 @@ import { UnavailableRngEngine } from '../unavailableRngEngine'
 import { UnsupportedRngInputError } from '../rngEngine'
 import { gameVerifiedBowElementalNormalVectors } from '../../../test/fixtures/gameVerifiedNormalVectors'
 import { gameVerifiedGogmaKeepVector, gameVerifiedGogmaResetVectors } from '../../../test/fixtures/gameVerifiedGogmaVectors'
+import { gameVerifiedSkillIdentificationVector } from '../../../test/fixtures/gameVerifiedSkillVectors'
 import { referenceRngVectors } from '../../../test/fixtures/referenceRngVectors'
 import { predictGameAdjustedGogmaReset, predictReferenceGogmaKeep } from './gogmaPrediction'
 import { predictGameVerifiedNormalArtian } from './normalPrediction'
@@ -102,6 +103,31 @@ describe('ProductionRngEngine facade', () => {
     expect(() => engine.advanceNormalCounter(-1, { type: 'create_normal_artian', count: 1 })).toThrow(RangeError)
     expect(() => engine.advanceNormalCounter(1.5, { type: 'create_normal_artian', count: 1 })).toThrow(RangeError)
     expect(() => engine.advanceNormalCounter(Number.MAX_SAFE_INTEGER, { type: 'create_normal_artian', count: 1 })).toThrow(RangeError)
+  })
+
+  it('reproduces every live-game observed Skill result without caller Gate input', () => {
+    const engine = new ProductionRngEngine(); const inputMaster = master()
+    const live = gameVerifiedSkillIdentificationVector
+    let expectedCounter: number = live.startSkillCounter
+    for (const observation of live.observations) {
+      expect(observation.skillCounter).toBe(expectedCounter)
+      expect(engine.predictSkills({
+        baseSeed: String(live.baseSeed),
+        weaponTypeId: live.weaponTypeId,
+        elementId: live.elementId,
+        skillCounter: observation.skillCounter,
+        master: inputMaster,
+      })).toEqual({
+        seriesSkillId: observation.seriesSkillId,
+        groupSkillId: observation.groupSkillId,
+      })
+      expectedCounter = engine.advanceSkillCounter(
+        expectedCounter,
+        observation.operation === 'convert_normal_to_gogma'
+          ? { type: 'convert_normal_to_gogma' }
+          : { type: 'reset_skills' },
+      )
+    }
   })
 
   it('normalizes decimal, hex, boundaries, and values above Number.MAX_SAFE_INTEGER without precision loss', () => {
