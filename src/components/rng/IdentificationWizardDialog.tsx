@@ -260,12 +260,14 @@ export function IdentificationWizardDialog({
   const subscribe = useCallback((listener: () => void) => coordinator.subscribe(listener), [coordinator])
   const getSnapshot = useCallback(() => coordinator.getState(), [coordinator])
   const wizardState = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  // The Dialog owns only presentation lifecycle and the Coordinator subscription.
+  // Coordinator lifetime belongs to the Application side that created it, so a
+  // development StrictMode effect replay must never dispose a still-live Coordinator.
   const mounted = useRef(true)
   useEffect(() => {
     mounted.current = true
     return () => {
       mounted.current = false
-      coordinator.dispose()
     }
   }, [coordinator])
 

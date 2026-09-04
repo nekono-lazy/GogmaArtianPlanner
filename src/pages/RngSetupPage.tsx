@@ -114,6 +114,13 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
     useState<IdentificationWizardCoordinator | null>(null)
   useEffect(() => { let active = true; void Promise.all([dependencies.ensure(), dependencies.getNormalCounters()]).then(([loaded, counters]) => { if (active) { setState(loaded); setForm(toForm(loaded)); setNormalCounters(counters) } }).catch((caught: unknown) => { if (active) setError(caught instanceof Error ? caught.message : 'RNG状態を読み込めません。') }); return () => { active = false } }, [dependencies])
 
+  // The page owns Coordinator lifetime: the Wizard session ends only when the
+  // Coordinator is cleared by a real Close or when this page unmounts.
+  useEffect(() => {
+    if (!identificationCoordinator) return
+    return () => { identificationCoordinator.dispose() }
+  }, [identificationCoordinator])
+
   const updateField = (key: KnownKey, value: FormKnown) => {
     setForm((current) => current ? { ...current, [key]: value } : current)
     setModifiedKeys((current) => new Set(current).add(key))

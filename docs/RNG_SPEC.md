@@ -645,7 +645,7 @@ Skill Identificationでcanonical Base Seedが確定した後のSTEP 2には、�
 - global progressは各childのlatest `searchedSeeds`と`matchesFound`を保持して合計し、元range全体を`totalSeeds`とする。out-of-order progressでも各child値を巻き戻さず、`searchedSeeds`を0から`totalSeeds`に収める。`matchesFound`はglobal limit前に発見済みの完全な候補数であり、`maxMatches`を超え得る
 - parent cancelは全active childへ伝播し、parent Promiseをcancelled errorでrejectする。1 childのfailure / unavailableは全active siblingをcancelしてlogical request全体をfailureにし、partial matchesを返さない。cancel / failure後のlate child result/progressはparent、次request、global progressへ反映しない
 - child Engine versionは全て同じProduction versionでなければならない。creation failureまたはversion mismatchはfail closedでWorker unavailableとし、生成済みchildをdisposeする。`dispose()`はactive childをcancelし、全child clientをdisposeする
-- C5-E2C6はorchestrationだけであり、Skill kernel、Production RNG semantics/version、`supportsSeedSearch`、Coordinator state machine、Gogma Identification、RngState、Search、Planner、React UIを変更しない。実Browser Worker benchmarkはC5-E2C8で完了済みであり、Skill live-game verificationは引き続きProduction activation blockerである。Wizard UIはC5-E2C7でRNG Setupへ接続済みだが、development StrictMode環境でCoordinator lifecycleに起因するとみられる既知不具合があり、hotfix pendingである
+- C5-E2C6はorchestrationだけであり、Skill kernel、Production RNG semantics/version、`supportsSeedSearch`、Coordinator state machine、Gogma Identification、RngState、Search、Planner、React UIを変更しない。実Browser Worker benchmarkはC5-E2C8で完了済みであり、Skill live-game verificationは引き続きProduction activation blockerである。Wizard UIはC5-E2C7でRNG Setupへ接続済みであり、development StrictMode環境のCoordinator lifecycle起因の表示不具合はC5-E2C7 lifecycle hotfixで解消済みである
 
 ---
 

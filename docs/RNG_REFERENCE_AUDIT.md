@@ -653,14 +653,14 @@ C5-E2C2完了時点では仕様先行でruntime implementationはC5-E2C3 pending
 - 各childは同じSkill Counter rangeを受け、Seed rangeだけが異なる。child request IDはparent、logical token、chunk indexで分離し、同一active parent IDのduplicate reject、terminal後reuse、複数parent同時実行を維持する
 - parent `maxMatches`はchildへ渡さない。全chunkのnon-truncated完了を確認し、Seed / Counter順にdeterministic mergeしてからglobal limitを適用する。これにより `matches.length === 1 && !isTruncated` のunique契約をlocal truncationで偽造しない。欠落・overlap・truncated childは `incomplete_parallel_chunk` で全体failureになる
 - 各childのlatest progressを保持してglobal `searchedSeeds / totalSeeds / matchesFound`を集約し、out-of-order eventでもsearched値を巻き戻さない。cancelは全childへ伝播し、1 child failure / unavailableは全siblingをcancelしてpartial successを禁止する。late responseはlogical request identityで無視する
-- child factory creation failureとEngine version mismatchはfail closedとし、生成済みchildをdisposeする。Production Engine versionは `production-rng:c5-e2`、`supportsSeedSearch = false`を維持する。C5-E2C6時点ではWizard UIはinactiveであり、後続C5-E2C7でRNG Setupへ接続した。ただしdevelopment StrictMode環境ではCoordinator lifecycleに起因するとみられる既知不具合があり、hotfix pendingである
+- child factory creation failureとEngine version mismatchはfail closedとし、生成済みchildをdisposeする。Production Engine versionは `production-rng:c5-e2`、`supportsSeedSearch = false`を維持する。C5-E2C6時点ではWizard UIはinactiveであり、後続C5-E2C7でRNG Setupへ接続した。development StrictMode環境で報告されていたCoordinator lifecycle起因のWizard表示不具合は、C5-E2C7 lifecycle hotfixで解消済みである
 - Skill multi-worker orchestrationと実Browser Worker benchmarkはC5-E2C8まで完了している（測定記録は[C5_E2C8_BROWSER_WORKER_BENCHMARK.md](./C5_E2C8_BROWSER_WORKER_BENCHMARK.md)）。独立したSkill live-game verificationはpendingで、Identification Production activationは未完了である
 
 ### 14.11 C5-E2C7 Identification Wizard UI（2026-09-01）
 
 - RNG Setupから専用Identification Wizardを開始できるDialog UIを追加し、既存Coordinatorのstate / subscribe、STEP 1/2 identify / cancel、restart、復元確認、adoptへ接続した。UIはCoordinatorのclassification、review、invalidation、adoption guardを再実装せず、presentation用form draftだけを保持する
 - STEP 1は武器種、属性、ordered Series / Group観測、明示Seed range、概算Skill Counter ±幅を入力し、STEP 2はSTEP 1 Seedを再入力させずordered five-slot Reset観測と概算Gogma Counter ±幅だけを入力する。Counter Gate、Keep観測、Normal Counter Identification、candidate pickerを追加していない
-- ReviewはBase Seed、starting Skill Counter、starting Gogma Counterだけを表示し、調査前ゲーム状態への復元確認後にCoordinator経由でadoptする。DialogがRNG Setupで生成されたper-open Coordinatorのlifecycleを引き受け、close / unmount時にunsubscribeしてdisposeする
+- ReviewはBase Seed、starting Skill Counter、starting Gogma Counterだけを表示し、調査前ゲーム状態への復元確認後にCoordinator経由でadoptする。DialogはCoordinatorのsubscriptionとpresentation lifecycleだけを所有し、unmount時にunsubscribeする。per-open Coordinatorのlifetimeは生成元であるRNG Setup側が所有し、実際のClose時とowner unmount時にdisposeする。この所有分離により、development StrictModeのeffect replayが利用中のCoordinatorをpremature disposeしない
 - 実Browser Worker benchmarkはC5-E2C8で完了した（測定記録は[C5_E2C8_BROWSER_WORKER_BENCHMARK.md](./C5_E2C8_BROWSER_WORKER_BENCHMARK.md)）。独立したSkill live-game verificationはpendingで、Production Identification activationは未完了である。Production Engine versionは `production-rng:c5-e2`、`supportsSeedSearch = false`を維持する
 
 ---

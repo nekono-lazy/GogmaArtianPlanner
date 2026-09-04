@@ -705,11 +705,13 @@ describe('IdentificationWizardDialog Review and lifecycle', { timeout: 15_000 },
     expect(coordinator.getState().skill.status).toBe('cancelled')
   })
 
-  it('unsubscribes and disposes the owned Coordinator on unmount', () => {
+  it('unsubscribes on unmount and leaves Coordinator disposal to its owner', () => {
     const { coordinator, unmount } = renderWizard()
     expect(coordinator.listeners.size).toBe(1)
     unmount()
-    expect(coordinator.disposeCalls).toBe(1)
     expect(coordinator.listeners.size).toBe(0)
+    // The Dialog owns only the subscription. Disposing here would destroy a still
+    // live Coordinator during a development StrictMode effect replay.
+    expect(coordinator.disposeCalls).toBe(0)
   })
 })
