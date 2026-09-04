@@ -61,6 +61,18 @@ If documents conflict, or the requested implementation would change a documented
 
 Do not invent missing game mechanics or product requirements.
 
+AI coding-agent selection, execution, review, and handoff rules are defined in:
+
+```text
+docs/AI_DEVELOPMENT_WORKFLOW.md
+```
+
+Before starting or continuing a coding task, follow that workflow in addition to the
+relevant specifications.
+
+`AI_DEVELOPMENT_WORKFLOW.md` is an operational development guide, not a product or
+domain specification. It does not override the Specification Authority hierarchy above.
+
 ---
 
 ## Initial Release Technology and Scope
@@ -1588,6 +1600,13 @@ If a dedicated type-check command is added, run it as well.
 ## Change Discipline
 
 Keep each coding task focused.
+
+Before editing, inspect the current working tree. When work may have been started by
+the project owner or another coding agent, follow `docs/AI_DEVELOPMENT_WORKFLOW.md`
+and preserve pre-existing changes unless the project owner explicitly authorizes
+discarding them.
+
+Do not use destructive Git operations to erase existing work without explicit approval.
 
 Do not refactor unrelated areas unless required for the task.
 
