@@ -168,7 +168,7 @@ Base Seed、Gogma Counter、Skill CounterをProduction Prediction用に項目ご
 
 ## 5.4 Skill-first Identification Wizard
 
-RNG Setupから専用Wizardを開始し、完了後のreview / adoption結果をRNG Setupへ反映する。C5-E2C7でDialog UIとCoordinator接続を実装済みである。実Browser Worker benchmarkはC5-E2C8で、Skill live-game verificationはC5-E2C9で完了した（[C5_E2C8_BROWSER_WORKER_BENCHMARK.md](./C5_E2C8_BROWSER_WORKER_BENCHMARK.md) / [C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md](./C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md)）。C5-E2C10 Production Identification activationはまだ完了していない。
+RNG Setupから専用Wizardを開始し、完了後のreview / adoption結果をRNG Setupへ反映する。C5-E2C7でDialog UIとCoordinator接続を実装済みである。実Browser Worker benchmarkはC5-E2C8で、Skill live-game verificationはC5-E2C9で完了した（[C5_E2C8_BROWSER_WORKER_BENCHMARK.md](./C5_E2C8_BROWSER_WORKER_BENCHMARK.md) / [C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md](./C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md)）。C5-E2C10 Production Identification activationは完了した（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）。
 
 対象ユーザー。
 
@@ -220,8 +220,9 @@ review / adoption。
 
 activation条件。
 
-- 独立したSkill live-game verificationはC5-E2C9で完了した。それでもProduction activationはC5-E2C10の別タスクであり、C9完了を理由にIdentificationをProduction activationしない
-- 実Browser Worker benchmarkはC5-E2C8で完了済みであり、測定記録は[C5_E2C8_BROWSER_WORKER_BENCHMARK.md](./C5_E2C8_BROWSER_WORKER_BENCHMARK.md)、live verification記録は[C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md](./C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md)をauthorityとする。Production activationはC5-E2C10で別途判断する
+- 独立したSkill live-game verificationはC5-E2C9で完了した。Production activationはC5-E2C10の別タスクとして判断し、完了した
+- 実Browser Worker benchmarkはC5-E2C8で完了済みであり、測定記録は[C5_E2C8_BROWSER_WORKER_BENCHMARK.md](./C5_E2C8_BROWSER_WORKER_BENCHMARK.md)、live verification記録は[C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md](./C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md)、activation判断記録は[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)をauthorityとする
+- C5-E2C10 activationはdefault runtime経路の監査、integrated regression、dev / production previewのbrowser smokeによって判断した。新しいfeature flag、RngEngine capability、再配線、Production RNG semantics変更、Seed range defaultを追加していない
 - Skill Seed rangeのmulti-worker orchestrationはcontiguous / non-overlapping chunk、deterministic merge、global progress、全Workerへのcancel propagation、Worker failureの明示errorを満たす
 - Identification availabilityはWorker/application levelでSkill / Gogma Counterを個別に扱い、新しいRngEngine capability flagを追加しない
 

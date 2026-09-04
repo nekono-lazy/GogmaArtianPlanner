@@ -418,7 +418,12 @@ not the legacy generic Seed Search contract:
   completed in C5-E2C8 (see `docs/C5_E2C8_BROWSER_WORKER_BENCHMARK.md`), and the
   independent Skill live-game verification was completed in C5-E2C9 (see
   `docs/C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md`). C5-E2C10 Production
-  Identification activation remains pending.
+  Identification activation is completed (see
+  `docs/C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md`): the default runtime
+  path from RNG Setup already reaches the Production Coordinator, multi-worker
+  Skill client, Gogma Counter Worker client, and Adoption Service. Activation
+  did not add a feature flag, an RngEngine capability, or new wiring, and it did
+  not change Production RNG semantics.
 - `supportsSeedSearch` remains false because it describes the legacy generic
   Seed Search API. Identification availability belongs at the Worker/application
   level; do not add RngEngine capability flags without a separate specification

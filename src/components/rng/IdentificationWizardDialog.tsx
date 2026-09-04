@@ -417,7 +417,7 @@ export function IdentificationWizardDialog({
       <DialogContent dividers>
         <Stack spacing={3}>
           <Alert severity="warning">
-            このWizardはC7 UI実装段階です。実Browser Worker benchmarkと独立したSkill実機検証は未完了で、Production Identificationは正式activation前です。
+            Production Identificationとして有効です。ただし実機検証済みのSkill streamは操虫棍 / 氷の特定Counter位置のみ、Gogma Reset streamはヘヴィボウガン / 氷の記録のみです。全武器種・全属性・全ゲームバージョンの正しさを保証するものではないため、採用後の予測はゲーム側でも確認してください。
           </Alert>
           <Alert severity="info">
             観測結果の記録が終わるまでゲーム状態を保存しないでください。開始前にバックアップ方法と自動保存の設定・挙動を確認し、案内された操作だけを順番に連続して行ってください。観測後は調査前の状態へ戻してから採用します。ゲーム側の保存仕様や安全をこのアプリが保証するものではありません。
@@ -526,7 +526,7 @@ export function IdentificationWizardDialog({
                 />
               </Stack>
               <Typography variant="body2" color="text.secondary">
-                C8の実Browser Worker benchmarkで実用defaultを決定するまでは空欄です。検索するbounded rangeを明示入力してください。自動拡張やbackground wideningは行いません。
+                Production defaultは設定しません。検索するbounded rangeを毎回明示入力してください。自動拡張やbackground wideningは行いません。
               </Typography>
               <ApproximateCounterFields
                 label="Skill Counter"

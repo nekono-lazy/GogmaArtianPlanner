@@ -6,7 +6,7 @@
 
 - C8 Browser Worker benchmark: completed
 - Skill live-game verification (C9): completed（[C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md](./C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md)）
-- Production Identification activation: pending
+- Production Identification activation (C10): completed（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）
 
 この結果は `production-rng:c5-e2`、`supportsSeedSearch = false`、既存の
 Worker chunk / merge / fail-closed contractを変更していない。
@@ -82,7 +82,7 @@ representative measurement only; it is not evidence for a 100M default.
   run. The 500,001-seed bounded result is practical here, but extrapolation is
   not a default-range decision.
 - Production activation was blocked by independent C9 Skill live-game
-  verification, which completed afterwards. Neither C8 nor C9 activates
-  Identification; C10 does.
+  verification, which completed afterwards. Neither C8 nor C9 activated
+  Identification; C5-E2C10 did（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）。
 - C9 may proceed: the real Browser Worker performance, progress, cancellation,
   and deterministic-result checks did not reveal a C8 blocker.

@@ -8,7 +8,7 @@
 - C5-E2C7 StrictMode lifecycle hotfix: completed
 - C5-E2C8 real Browser Worker benchmark: completed
 - C5-E2C9 Skill live-game verification: completed
-- C5-E2C10 Production Identification activation: pending
+- C5-E2C10 Production Identification activation: completed（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）
 
 この結果は `production-rng:c5-e2`、`supportsSeedSearch = false`、Production RNG
 semantics、Worker protocol、Coordinator state machine、Wizard UXを変更していない。
@@ -113,5 +113,5 @@ fixtureのauthorityはsemantic IDである。日本語表示名はMaster解決�
 - Bow Sharpness/Ammo、LBG/HBG Element、elementless Gogmaのelement bonus、栄光の誉れ、
   祝祭の巡り、Gogma rank I、Counter Gate閾値未満の永続Counter挙動、
   `use_weapon_as_material` によるRNG advancementはいずれもunverifiedのままである
-- C5-E2C10 Production Identification activationはpendingである。C9を理由に
-  `supportsSeedSearch` を `true` へ変更しない
+- C5-E2C10 Production Identification activationは完了した（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）。activation後も
+  `supportsSeedSearch` は `false` のままである
