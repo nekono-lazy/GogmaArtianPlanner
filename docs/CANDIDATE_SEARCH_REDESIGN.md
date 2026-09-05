@@ -455,7 +455,7 @@ B11 は実ゲーム観測を前提とする独立系列
 | --- | --- | --- | --- |
 | B0 | 仕様確定 | 本記録と `AGENTS.md` / `docs/*` の契約更新 | 完了 |
 | B7 | Target Ideal ⇒ Practical validation | `docs/DATA_MODEL.md` 8.1 の包含不変条件をTargetWeapon validationへ実装。既存保存Targetの扱いを含む | 完了 |
-| B1 | Existing Gogma Skill stream独立化 | 共有Skill列、Ideal既達成時の0回化、`maxSkillAdvance` off-by-one整合、SEARCH_SPEC 6.5前提の早期判定。Gogma側は触らない | B0, **B7** |
+| B1 | Existing Gogma Skill stream独立化 | 共有Skill列、Ideal既達成時の0回化、`maxSkillAdvance` off-by-one整合、SEARCH_SPEC 6.5前提の早期判定。Gogma側は触らない | B0, **B7**。完了 |
 | B2 | Gogma Reset / Keep探索のstate search化 | depthごとReset 1回、family layout dedup、frontierから操作列を除去、Keep-only先行路、決定的representative | B1 |
 | B3 | Candidate生成 / route表現の整理 | Cross規則、stream-local anchor ordering、offset / source重複除去、分解評価と既存Target評価器の一致担保 | B1, B2 |
 | B4 | 初回Search終了条件とPractical保持 | canonical Ideal終了、`candidateStableKey` によるrun非依存tie-break、操作数D以下のPractical horizon、branch-and-bound / best-first、非劣位Practical列挙、保守的dominance、`maxCandidatesPerTarget` のIdeal枠確保 | B3, **B7** |
@@ -483,6 +483,37 @@ B7の実装判断として残してよいが、B1を先行させて不正Target�
 (`TargetWeaponCrudService.save()`) とCandidate Searchの対象Target選択時
 (`selectedTargets()`) の両方で実行する。既存保存Targetは自動修正せず、
 Searchがwarning付きで除外する。B1 / B4の早期終了前提は満たされた。
+
+**B1完了。** Skill streamを `src/domain/search/skillStream.ts` の
+`TargetSkillStream` として独立させた。`searchTarget()` がTargetごとに1つ生成し、
+`RouteSearchContext.skillStream` で全RouteKind・全Route baseが共有する。
+Prediction列は絶対Skill Counter位置単位でmemoizeし、解集合は開始Counter単位で
+memoizeする。したがって同一 `(TargetWeaponId, baseSeed, Skill Counter位置)` に対する
+`predictSkills()` は最大1回であり、Gogma state数・起点武器数・normal offset数に
+比例しない。
+
+`searchBonusAmendmentVariants()` はCandidateではなくBonus stateだけを返す
+Bonus stream専用の探索になり、内側からSkill探索を呼ばない。Candidate生成は
+`composeSkillCandidates()` がRoute base側でBonus解とSkill解を合成する。
+Ideal既達成のSkill stream早期終了は、既存巨戟のcurrent Skill(SEARCH_SPEC 6.5)と
+conversion時の初回Skill(同 6.1 手順4 / 6.2)の両方へ適用する。判定は共通の
+`skillsSatisfyIdeal()` で行い、該当する場合はそのRouteの `skillStream.solve()` を
+呼ばず ResetSkillsOperation も追加しない。conversion結果そのもののCandidateは
+通常どおり生成し、Bonus streamの探索も継続する。
+
+`maxSkillAdvance = M` のCounter範囲は既存実装が既にB0仕様どおりであり、
+今回はoff-by-oneを作らないことをテストで固定した。既存巨戟は `S ... S + M - 1` の
+M位置、conversionを含むRouteは conversion が `S`、Reset Skills が `S + 1 ... S + M`
+で、共有列全体は `M + 1` 位置、Reset上限は常にMである。conversion Skillが
+Idealの場合は `S` の1回だけで、Reset Skillsは0回になる。
+
+B1の範囲外として残したもの。Cross規則の正式実装(B3)前であるため、Bonus解と
+Skill解の合成件数は従来どおりBonus state数 × Skill解数のままである。B1で新設・
+拡大はしていない。Skill解のstream-local retention(同一 `(seriesSkillId,
+groupSkillId)` は最小 `resetCount` だけ残す)とdeterministic anchor orderingも
+B3 / B4へ残した。`existing_gogma_reset_skills` / `existing_gogma_mixed` の
+`searchedRoutes` 報告条件は従来どおりで、Ideal既達成による早期終了は
+skip reasonを新設しない。
 
 B8 / B9 / B10 はB1〜B3のstream独立化とは責務が異なるため、既存B1 / B2へ混ぜない。
 特にB8はPlanner側の新規orchestrationである。
@@ -519,8 +550,9 @@ B11の完了を待たない。
 以下はB0で決めきらず、実装時にコードを見て決める。
 Domain契約を変える判断が必要になった場合は、実装前に設計チャットへ戻す。
 
-1. 共有Skill列の保持場所。`searchTarget()` 内で生成してRouteSearchContextへ渡すか、
-   `CandidateSearchInput` から導出する専用モジュールを作るか
+1. ~~共有Skill列の保持場所。~~ B1で決定済み。専用モジュール
+   `src/domain/search/skillStream.ts` へ切り出し、`searchTarget()` が生成して
+   `RouteSearchContext.skillStream` で渡す
 2. 共有Bonus解集合(conversion後 `depth >= 1`)のキャッシュ境界。
    Target単位か、`(TargetWeaponId, baseSeed, gogmaCounterBefore)` 単位か
 3. `evaluateTargetCandidate` を分解版へ置換するか、既存APIを残して

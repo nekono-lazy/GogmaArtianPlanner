@@ -1,13 +1,14 @@
 import type { BuildRoute, OwnedGogmaArtianWeapon, RouteOperation } from '../models/publicTypes'
 import {
-
+  composeSkillCandidates,
   hasConfirmedGogmaInputs,
   hasConfirmedSkillInputs,
   searchBonusAmendmentVariants,
-  searchResetSkillVariants,
+  skillsSatisfyIdeal,
   type RouteSearchContext,
   type RouteSearchResult,
 } from './routeSearchShared'
+import type { SkillStreamSolutionSet } from './skillStream'
 
 const destructiveKinds = ['existing_gogma_reset_bonuses', 'existing_gogma_keep_bonuses', 'existing_gogma_mixed'] as const
 
@@ -50,17 +51,32 @@ export async function searchExistingGogmaRoutes(context: RouteSearchContext): Pr
     canSkill = skillSupport.supported
     if (!skillSupport.supported) skillInputUnsupportedReason = skillSupport.reason
   }
+
+  // The Skill stream is solved at most once for this Target, from the confirmed
+  // starting Skill Counter, and shared by every source and every Bonus state.
+  const startSkillCounter = input.rngState.skillCounter.value
+  const skillSolutionsFor = async (
+    source: OwnedGogmaArtianWeapon,
+  ): Promise<SkillStreamSolutionSet | null> => {
+    if (!canSkill || startSkillCounter === null) return null
+    if (skillsSatisfyIdeal(context, source.seriesSkillId, source.groupSkillId)) return null
+    return context.skillStream.solve(startSkillCounter)
+  }
+
   if (canSkill) {
     result.searchedRoutes.push('existing_gogma_reset_skills')
     for (const source of all) {
-      result.candidates.push(...await searchResetSkillVariants(context, {
+      const skillSolutions = await skillSolutionsFor(source)
+      if (!skillSolutions) continue
+      result.candidates.push(...await composeSkillCandidates(context, {
         bonuses: source.restorationBonuses,
         restorationBonusScope: source.restorationBonusScope,
         operations: [],
         sourceOwnedWeaponId: source.id,
-        skillCounterBefore: input.rngState.skillCounter.value!,
+        seriesSkillId: source.seriesSkillId,
+        groupSkillId: source.groupSkillId,
         kind: 'existing_gogma_reset_skills',
-      }))
+      }, skillSolutions))
     }
   } else {
     result.skippedRoutes.push({
@@ -94,23 +110,35 @@ export async function searchExistingGogmaRoutes(context: RouteSearchContext): Pr
   const keepUnsupportedSources = new Set<OwnedGogmaArtianWeapon['id']>()
 
   for (const source of destructive) {
-    const base: RouteOperation[] = []
-    const common = {
+    const amendmentResult = await searchBonusAmendmentVariants(context, {
       bonuses: source.restorationBonuses,
       restorationBonusScope: source.restorationBonusScope,
-      operations: base,
-      sourceOwnedWeaponId: source.id,
-      skillCounterBefore: input.rngState.skillCounter.value ?? undefined,
+      operations: [],
       kind: 'existing_gogma_mixed' as const,
-      seriesSkillId: source.seriesSkillId,
-      groupSkillId: source.groupSkillId,
       gogmaCounterBefore: input.rngState.gogmaCounter.value!,
       amendmentSourceOwnedWeaponId: source.id,
       kindForAmendment: (operations: RouteOperation[]) => kindForAmendment(source, operations),
-    }
-    const amendmentResult = await searchBonusAmendmentVariants(context, common)
-    result.candidates.push(...amendmentResult.candidates)
+    })
     amendmentResult.searchedRoutes.forEach((route) => searchedAmendmentRoutes.add(route))
+    const skillSolutions = await skillSolutionsFor(source)
+    for (const bonusResult of amendmentResult.results) {
+      if (canSkill && bonusResult.kind.startsWith('existing_gogma_')) {
+        searchedAmendmentRoutes.add('existing_gogma_mixed')
+      }
+      result.candidates.push(...await composeSkillCandidates(context, {
+        bonuses: bonusResult.bonuses,
+        restorationBonusScope: bonusResult.restorationBonusScope,
+        operations: bonusResult.operations,
+        sourceOwnedWeaponId: source.id,
+        seriesSkillId: source.seriesSkillId,
+        groupSkillId: source.groupSkillId,
+        kind: bonusResult.kind,
+        skillKind: bonusResult.kind.startsWith('existing_gogma_')
+          ? 'existing_gogma_mixed'
+          : bonusResult.kind,
+        resetSkillsSourceOwnedWeaponId: source.id,
+      }, skillSolutions))
+    }
     for (const unsupported of amendmentResult.unsupportedPredictions) {
       if (unsupported.type !== 'keep_bonuses') continue
       keepUnsupportedSources.add(source.id)

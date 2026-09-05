@@ -1,11 +1,11 @@
 import type { RouteOperation } from '../models/publicTypes'
 import { V1_NORMAL_ARTIAN_RARITY } from '../models/publicTypes'
 import {
-  createBaseCandidate,
+  composeSkillCandidates,
   hasConfirmedGogmaInputs,
   hasConfirmedSkillInputs,
   searchBonusAmendmentVariants,
-  searchResetSkillVariants,
+  skillsSatisfyIdeal,
   type RouteSearchContext,
   type RouteSearchResult,
 } from './routeSearchShared'
@@ -105,6 +105,23 @@ export async function searchNormalArtianRoutes(
   }
   result.searchedRoutes.push('normal_artian_to_gogma')
 
+  // The conversion Skill assignment and the post-conversion Reset Skills
+  // solutions come from the Target's shared Skill stream, so repeating the
+  // Normal offset loop never repeats a Skill prediction. When the conversion
+  // Skill already satisfies the Ideal Skill condition, this Route's Skill stream
+  // is finished and Reset Skills is not searched; the Bonus stream continues.
+  const skillCounterAfter = engine.advanceSkillCounter(skillCounter, {
+    type: 'convert_normal_to_gogma',
+  })
+  const skills = context.skillStream.predictAt(skillCounter)
+  const skillSolutions = skillsSatisfyIdeal(
+    context,
+    skills.seriesSkillId,
+    skills.groupSkillId,
+  )
+    ? null
+    : await context.skillStream.solve(skillCounterAfter)
+
   for (const counter of counters) {
     if (counter.counter === null) continue
     const start = counter.counter
@@ -124,41 +141,41 @@ export async function searchNormalArtianRoutes(
         type: 'create_normal_artian',
         count: forgeCount,
       })
-      const skillCounterAfter = engine.advanceSkillCounter(skillCounter, {
-        type: 'convert_normal_to_gogma',
-      })
-      const skills = engine.predictSkills({
-        baseSeed,
-        skillCounter,
-        weaponTypeId: target.weaponTypeId,
-        elementId: target.elementId,
-        master: input.master,
-      })
       const operations: RouteOperation[] = [
         { type: 'create_normal_artian', weaponTypeId: target.weaponTypeId, rarity: counter.rarity, count: forgeCount, normalCounterBefore: start, normalCounterAfter },
         { type: 'convert_normal_to_gogma', weaponTypeId: target.weaponTypeId, skillCounterBefore: skillCounter, skillCounterAfter },
       ]
-      const base = {
+      result.candidates.push(...await composeSkillCandidates(context, {
         bonuses,
-        restorationBonusScope: 'normal_artian' as const,
+        restorationBonusScope: 'normal_artian',
         operations,
         sourceOwnedWeaponId: null,
         resetSkillsSourceOwnedWeaponId: null,
-        skillCounterBefore: skillCounterAfter,
-        kind: 'normal_artian_to_gogma' as const,
-      }
-      const candidate = createBaseCandidate(context, bonuses, 'normal_artian', skills.seriesSkillId, skills.groupSkillId, { kind: base.kind, sourceOwnedWeaponId: null, operations })
-      if (candidate) result.candidates.push(candidate)
-      result.candidates.push(...await searchResetSkillVariants(context, base))
+        seriesSkillId: skills.seriesSkillId,
+        groupSkillId: skills.groupSkillId,
+        kind: 'normal_artian_to_gogma',
+      }, skillSolutions))
       if (canSearchAmendments) {
         const amendmentResult = await searchBonusAmendmentVariants(context, {
-          ...base,
-          seriesSkillId: skills.seriesSkillId,
-          groupSkillId: skills.groupSkillId,
+          bonuses,
+          restorationBonusScope: 'normal_artian',
+          operations,
+          kind: 'normal_artian_to_gogma',
           gogmaCounterBefore: input.rngState.gogmaCounter.value!,
           amendmentSourceOwnedWeaponId: null,
         })
-        result.candidates.push(...amendmentResult.candidates)
+        for (const bonusResult of amendmentResult.results) {
+          result.candidates.push(...await composeSkillCandidates(context, {
+            bonuses: bonusResult.bonuses,
+            restorationBonusScope: bonusResult.restorationBonusScope,
+            operations: bonusResult.operations,
+            sourceOwnedWeaponId: null,
+            resetSkillsSourceOwnedWeaponId: null,
+            seriesSkillId: skills.seriesSkillId,
+            groupSkillId: skills.groupSkillId,
+            kind: bonusResult.kind,
+          }, skillSolutions))
+        }
         for (const unsupported of amendmentResult.unsupportedPredictions) {
           const message = `${unsupported.type} was excluded from the Normal Artian route by input support (${unsupported.reason}).`
           if (!result.warnings.some((warning) => warning.message === message)) {

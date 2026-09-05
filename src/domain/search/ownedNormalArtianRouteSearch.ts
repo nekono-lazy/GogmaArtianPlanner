@@ -1,11 +1,11 @@
 import type { RouteOperation } from '../models/publicTypes'
 import { V1_NORMAL_ARTIAN_RARITY } from '../models/publicTypes'
 import {
-  createBaseCandidate,
+  composeSkillCandidates,
   hasConfirmedGogmaInputs,
   hasConfirmedSkillInputs,
   searchBonusAmendmentVariants,
-  searchResetSkillVariants,
+  skillsSatisfyIdeal,
   type RouteSearchContext,
   type RouteSearchResult,
 } from './routeSearchShared'
@@ -42,7 +42,6 @@ export async function searchOwnedNormalArtianRoutes(
     result.skippedRoutes.push({ route: 'owned_normal_artian_to_gogma', reason: 'skill_prediction_unsupported', detail: `The active RNG Engine does not support this Skill input (${skillSupport.reason}).` })
     return result
   }
-  const baseSeed = input.rngState.baseSeed.value!
   const skillCounter = input.rngState.skillCounter.value!
   let canSearchAmendments = hasConfirmedGogmaInputs(input) && engine.capabilities.supportsGogmaPrediction
   if (canSearchAmendments) {
@@ -57,32 +56,55 @@ export async function searchOwnedNormalArtianRoutes(
   }
   result.searchedRoutes.push('owned_normal_artian_to_gogma')
 
+  // The conversion Skill assignment and the post-conversion Reset Skills
+  // solutions come from the Target's shared Skill stream, so adding source
+  // weapons never adds a Skill prediction. When the conversion Skill already
+  // satisfies the Ideal Skill condition, this Route's Skill stream is finished
+  // and Reset Skills is not searched; the Bonus stream continues.
+  const skillCounterAfter = engine.advanceSkillCounter(skillCounter, { type: 'convert_normal_to_gogma' })
+  const skills = context.skillStream.predictAt(skillCounter)
+  const skillSolutions = skillsSatisfyIdeal(
+    context,
+    skills.seriesSkillId,
+    skills.groupSkillId,
+  )
+    ? null
+    : await context.skillStream.solve(skillCounterAfter)
+
   for (const source of sources) {
     await execution.checkpoint()
-    const skillCounterAfter = engine.advanceSkillCounter(skillCounter, { type: 'convert_normal_to_gogma' })
-    const skills = engine.predictSkills({ baseSeed, skillCounter, weaponTypeId: target.weaponTypeId, elementId: target.elementId, master: input.master })
     const operations: RouteOperation[] = [{ type: 'convert_normal_to_gogma', weaponTypeId: target.weaponTypeId, skillCounterBefore: skillCounter, skillCounterAfter }]
-    const base = {
+    result.candidates.push(...await composeSkillCandidates(context, {
       bonuses: source.restorationBonuses,
-      restorationBonusScope: 'normal_artian' as const,
+      restorationBonusScope: 'normal_artian',
       operations,
       sourceOwnedWeaponId: source.id,
       resetSkillsSourceOwnedWeaponId: null,
-      skillCounterBefore: skillCounterAfter,
-      kind: 'owned_normal_artian_to_gogma' as const,
-    }
-    const candidate = createBaseCandidate(context, source.restorationBonuses, 'normal_artian', skills.seriesSkillId, skills.groupSkillId, { kind: base.kind, sourceOwnedWeaponId: source.id, operations })
-    if (candidate) result.candidates.push(candidate)
-    result.candidates.push(...await searchResetSkillVariants(context, base))
+      seriesSkillId: skills.seriesSkillId,
+      groupSkillId: skills.groupSkillId,
+      kind: 'owned_normal_artian_to_gogma',
+    }, skillSolutions))
     if (canSearchAmendments) {
       const amendmentResult = await searchBonusAmendmentVariants(context, {
-        ...base,
-        seriesSkillId: skills.seriesSkillId,
-        groupSkillId: skills.groupSkillId,
+        bonuses: source.restorationBonuses,
+        restorationBonusScope: 'normal_artian',
+        operations,
+        kind: 'owned_normal_artian_to_gogma',
         gogmaCounterBefore: input.rngState.gogmaCounter.value!,
         amendmentSourceOwnedWeaponId: null,
       })
-      result.candidates.push(...amendmentResult.candidates)
+      for (const bonusResult of amendmentResult.results) {
+        result.candidates.push(...await composeSkillCandidates(context, {
+          bonuses: bonusResult.bonuses,
+          restorationBonusScope: bonusResult.restorationBonusScope,
+          operations: bonusResult.operations,
+          sourceOwnedWeaponId: source.id,
+          resetSkillsSourceOwnedWeaponId: null,
+          seriesSkillId: skills.seriesSkillId,
+          groupSkillId: skills.groupSkillId,
+          kind: bonusResult.kind,
+        }, skillSolutions))
+      }
       for (const unsupported of amendmentResult.unsupportedPredictions) {
         const message = `${unsupported.type} was excluded after converting OwnedWeapon '${source.id}' by input support (${unsupported.reason}).`
         if (!result.warnings.some((warning) => warning.message === message)) {

@@ -15,10 +15,18 @@ import type {
   RngPredictionSupport,
   RngPredictionUnsupportedReason,
 } from '../rng/rngEngine'
+import { evaluateSkillCondition } from '../target'
 import { createCandidateFromPrediction } from './candidateFactory'
 import type { SearchExecutionContext } from './searchExecution'
 import type { CandidateSearchInput, CandidateSearchWarning, SkippedRoute } from './searchTypes'
+import {
+  resetSkillsOperations,
+  type SkillStreamSolutionSet,
+  type TargetSkillStream,
+} from './skillStream'
 import { stableStringify } from '../models/publicTypes'
+
+export { hasConfirmedGogmaInputs, hasConfirmedSkillInputs } from './searchRngInputs'
 
 export interface RouteSearchResult {
   candidates: BuildCandidate[]
@@ -33,6 +41,8 @@ export interface RouteSearchContext {
   engine: RngEngine
   execution: SearchExecutionContext
   predictionSupport: SearchPredictionSupport
+  /** Solved once per Target; never re-entered from inside a Gogma state. */
+  skillStream: TargetSkillStream
 }
 
 export interface SearchPredictionSupport {
@@ -86,22 +96,41 @@ export function createSearchPredictionSupport(
   }
 }
 
-export interface SkillVariantBase {
+/**
+ * A Bonus-side Route base awaiting composition with the Skill stream.
+ * `operations` holds the Bonus-side operations in execution order; Reset Skills
+ * operations are appended after them.
+ */
+export interface SkillCompositionBase {
   bonuses: RestorationBonusSet
   restorationBonusScope: RestorationBonusScope
-  operations: RouteOperation[]
+  operations: readonly RouteOperation[]
   sourceOwnedWeaponId: OwnedWeaponId | null
-  resetSkillsSourceOwnedWeaponId?: OwnedWeaponId | null
-  skillCounterBefore?: number
-  kind: BuildRoute['kind']
-}
-
-export interface AmendmentSearchBase extends SkillVariantBase {
+  /** Skills of the `resetCount = 0` solution, which is Route-base specific. */
   seriesSkillId: SeriesSkillId | null
   groupSkillId: GroupSkillId | null
-  gogmaCounterBefore: number
-  amendmentSourceOwnedWeaponId: OwnedWeaponId | null
-  kindForAmendment?(operations: RouteOperation[]): BuildRoute['kind']
+  kind: BuildRoute['kind']
+  /** RouteKind used once Reset Skills operations are appended. */
+  skillKind?: BuildRoute['kind']
+  /** Source recorded on each appended Reset Skills operation. */
+  resetSkillsSourceOwnedWeaponId?: OwnedWeaponId | null
+}
+
+/**
+ * A Skill stream whose current Skills already satisfy the Ideal Skill condition
+ * is finished: Ideal implies Practical, so no later Skill position can produce a
+ * higher category. Only the Skill stream stops; the Bonus stream is unaffected.
+ */
+export function skillsSatisfyIdeal(
+  context: RouteSearchContext,
+  seriesSkillId: SeriesSkillId | null,
+  groupSkillId: GroupSkillId | null,
+): boolean {
+  return evaluateSkillCondition(
+    context.target.idealSkillCondition,
+    seriesSkillId,
+    groupSkillId,
+  )
 }
 
 export function createBaseCandidate(
@@ -120,68 +149,86 @@ export function createBaseCandidate(
   )
 }
 
-export async function searchResetSkillVariants(
+/**
+ * Composes one Bonus-side Route base with the already solved Skill stream.
+ * No Skill prediction happens here, so composing more Bonus states, more source
+ * weapons, or more Normal offsets never adds a `predictSkills` call.
+ */
+export async function composeSkillCandidates(
   context: RouteSearchContext,
-  base: SkillVariantBase,
+  base: SkillCompositionBase,
+  skillSolutions: SkillStreamSolutionSet | null,
 ): Promise<BuildCandidate[]> {
-  const { engine, execution, input, target } = context
-  const baseSeed = input.rngState.baseSeed.value
-  const start = base.skillCounterBefore ?? input.rngState.skillCounter.value
-  if (
-    !hasConfirmedSkillInputs(input) ||
-    baseSeed === null ||
-    start === null
-  ) return []
-  if (!engine.capabilities.supportsSkillPrediction) return []
-  if (!context.predictionSupport.skill().supported) return []
-
+  const candidates: BuildCandidate[] = []
   const resetSource = base.resetSkillsSourceOwnedWeaponId === undefined
     ? base.sourceOwnedWeaponId
     : base.resetSkillsSourceOwnedWeaponId
-  const candidates: BuildCandidate[] = []
-  const resetOperations: RouteOperation[] = []
-  let skillCounter = start
 
-  for (let index = 0; index < input.settings.maxSkillAdvance; index += 1) {
-    await execution.checkpoint()
-    const skills = engine.predictSkills({
-      baseSeed,
-      skillCounter,
-      weaponTypeId: target.weaponTypeId,
-      elementId: target.elementId,
-      master: input.master,
-    })
-    const nextSkillCounter = engine.advanceSkillCounter(skillCounter, {
-      type: 'reset_skills',
-    })
-    resetOperations.push({
-      type: 'reset_skills',
-      sourceOwnedWeaponId: resetSource,
-      skillCounterBefore: skillCounter,
-      skillCounterAfter: nextSkillCounter,
-    })
+  if (base.operations.length > 0) {
     const candidate = createBaseCandidate(
       context,
       base.bonuses,
       base.restorationBonusScope,
-      skills.seriesSkillId,
-      skills.groupSkillId,
+      base.seriesSkillId,
+      base.groupSkillId,
       {
         kind: base.kind,
         sourceOwnedWeaponId: base.sourceOwnedWeaponId,
-        operations: [...base.operations, ...resetOperations],
+        operations: [...base.operations],
       },
     )
     if (candidate) candidates.push(candidate)
-    skillCounter = nextSkillCounter
+  }
+  if (!skillSolutions) return candidates
+
+  for (const solution of skillSolutions.solutions) {
+    await context.execution.checkpoint()
+    const candidate = createBaseCandidate(
+      context,
+      base.bonuses,
+      base.restorationBonusScope,
+      solution.seriesSkillId,
+      solution.groupSkillId,
+      {
+        kind: base.skillKind ?? base.kind,
+        sourceOwnedWeaponId: base.sourceOwnedWeaponId,
+        operations: [
+          ...base.operations,
+          ...resetSkillsOperations(skillSolutions, solution.resetCount, resetSource),
+        ],
+      },
+    )
+    if (candidate) candidates.push(candidate)
   }
   return candidates
+}
+
+export interface AmendmentSearchBase {
+  bonuses: RestorationBonusSet
+  restorationBonusScope: RestorationBonusScope
+  operations: readonly RouteOperation[]
+  gogmaCounterBefore: number
+  amendmentSourceOwnedWeaponId: OwnedWeaponId | null
+  kind: BuildRoute['kind']
+  kindForAmendment?(operations: RouteOperation[]): BuildRoute['kind']
+}
+
+/** One reached Bonus state, returned as a Bonus-side Route base. */
+export interface BonusAmendmentResult {
+  bonuses: RestorationBonusSet
+  restorationBonusScope: RestorationBonusScope
+  operations: RouteOperation[]
+  kind: BuildRoute['kind']
 }
 
 /**
  * Explores only verified amendment operations. A normal-scope Gogma must Reset
  * before Keep; every later state may Reset or Keep, and Keep receives the last
  * complete five-slot result as its explicit input.
+ *
+ * This traversal belongs to the Bonus stream alone. It never reads or advances
+ * the Skill stream, so `predictSkills` call count cannot grow with the number of
+ * Gogma states.
  */
 export async function searchBonusAmendmentVariants(
   context: RouteSearchContext,
@@ -190,7 +237,7 @@ export async function searchBonusAmendmentVariants(
   const { engine, execution, input, target } = context
   const baseSeed = input.rngState.baseSeed.value
   const emptyResult = (): BonusAmendmentSearchResult => ({
-    candidates: [],
+    results: [],
     searchedRoutes: [],
     unsupportedPredictions: [],
   })
@@ -227,7 +274,7 @@ export async function searchBonusAmendmentVariants(
     gogmaCounter: base.gogmaCounterBefore,
     operations: [...base.operations],
   }]
-  const candidates: BuildCandidate[] = []
+  const results: BonusAmendmentResult[] = []
   const searchedRoutes = new Set<BuildRoute['kind']>()
   const unsupportedPredictions = new Map<string, UnsupportedAmendmentPrediction>()
 
@@ -272,40 +319,15 @@ export async function searchBonusAmendmentVariants(
         }
         const kind = base.kindForAmendment?.(next.operations) ?? base.kind
         searchedRoutes.add(kind)
-        const candidate = createBaseCandidate(
-          context,
-          next.bonuses,
-          next.scope,
-          base.seriesSkillId,
-          base.groupSkillId,
-          {
-            kind,
-            sourceOwnedWeaponId: base.sourceOwnedWeaponId,
-            operations: next.operations,
-          },
-        )
-        if (candidate) candidates.push(candidate)
-        if (
-          hasConfirmedSkillInputs(input) &&
-          engine.capabilities.supportsSkillPrediction &&
-          context.predictionSupport.skill().supported
-        ) {
-          if (kind.startsWith('existing_gogma_')) {
-            searchedRoutes.add('existing_gogma_mixed')
-          }
-          candidates.push(...await searchResetSkillVariants(context, {
-            bonuses: next.bonuses,
-            restorationBonusScope: next.scope,
-            operations: next.operations,
-            sourceOwnedWeaponId: base.sourceOwnedWeaponId,
-            resetSkillsSourceOwnedWeaponId: base.amendmentSourceOwnedWeaponId,
-            skillCounterBefore: base.skillCounterBefore,
-            kind: kind.startsWith('existing_gogma_') ? 'existing_gogma_mixed' : kind,
-          }))
-        }
+        results.push({
+          bonuses: next.bonuses,
+          restorationBonusScope: next.scope,
+          operations: next.operations,
+          kind,
+        })
         // Reset ignores the current bonuses, so several histories routinely
         // converge here. Keep the first canonical history for each state;
-        // every result is still emitted above as a candidate.
+        // every reached state is still returned above for composition.
         const semanticKey = stableStringify({
           bonuses: next.bonuses,
           gogmaCounter: next.gogmaCounter,
@@ -321,7 +343,7 @@ export async function searchBonusAmendmentVariants(
     frontier = [...nextFrontier.values()]
   }
   return {
-    candidates,
+    results,
     searchedRoutes: [...searchedRoutes],
     unsupportedPredictions: [...unsupportedPredictions.values()],
   }
@@ -333,17 +355,7 @@ export interface UnsupportedAmendmentPrediction {
 }
 
 export interface BonusAmendmentSearchResult {
-  candidates: BuildCandidate[]
+  results: BonusAmendmentResult[]
   searchedRoutes: BuildRoute['kind'][]
   unsupportedPredictions: UnsupportedAmendmentPrediction[]
-}
-
-export function hasConfirmedSkillInputs(input: CandidateSearchInput): boolean {
-  return input.rngState.baseSeed.isConfirmed && input.rngState.baseSeed.value !== null
-    && input.rngState.skillCounter.isConfirmed && input.rngState.skillCounter.value !== null
-}
-
-export function hasConfirmedGogmaInputs(input: CandidateSearchInput): boolean {
-  return input.rngState.baseSeed.isConfirmed && input.rngState.baseSeed.value !== null
-    && input.rngState.gogmaCounter.isConfirmed && input.rngState.gogmaCounter.value !== null
 }

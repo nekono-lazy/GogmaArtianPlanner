@@ -10,6 +10,7 @@ import { searchExistingGogmaRoutes } from './existingGogmaRouteSearch'
 import { searchNormalArtianRoutes } from './normalArtianRouteSearch'
 import { searchOwnedNormalArtianRoutes } from './ownedNormalArtianRouteSearch'
 import { createSearchPredictionSupport } from './routeSearchShared'
+import { createTargetSkillStream } from './skillStream'
 import {
   createSearchExecutionContext,
   type CandidateSearchExecutionOptions,
@@ -141,12 +142,21 @@ async function searchTarget(
     }
   }
 
+  const predictionSupport = createSearchPredictionSupport(engine, target, input.master)
   const routeContext = {
     target,
     input,
     engine,
     execution,
-    predictionSupport: createSearchPredictionSupport(engine, target, input.master),
+    predictionSupport,
+    // One Skill stream per Target, shared by every RouteKind and Route base.
+    skillStream: createTargetSkillStream(
+      target,
+      input,
+      engine,
+      execution,
+      () => predictionSupport.skill().supported,
+    ),
   }
 
   if (input.routeFilter === 'existing_gogma') {

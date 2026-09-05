@@ -140,6 +140,13 @@ describe('Candidate Search routes', () => {
     const input = createCandidateSearchInput()
     input.routeFilter = 'normal_artian'
     input.normalCounters = []
+    // The conversion Skill must stay below Ideal, otherwise the Skill stream of
+    // this Route is finished and Reset Skills is not searched.
+    input.targetWeapons[0].idealSkillCondition = {
+      seriesSkillId: 'series_skill.fixture.other',
+      groupSkillId: null,
+      matchMode: 'all',
+    }
     const source = input.ownedWeapons[0]
     input.ownedWeapons = [
       {
@@ -312,6 +319,9 @@ describe('Candidate Search routes', () => {
     const input = createCandidateSearchInput()
     input.routeFilter = 'existing_gogma'
     input.ownedWeapons[0].isProtected = true
+    // The Skill stream of a source that already satisfies the Ideal Skill
+    // condition is finished, so this source must still need a Reset.
+    input.ownedWeapons[0].seriesSkillId = 'series_skill.fixture.other'
     const engine = createCandidateSearchEngine(input)
     engine.capabilities.supportsGogmaPrediction = false
     engine.capabilities.supportsKeepBonusesPrediction = false
@@ -835,6 +845,9 @@ describe('Candidate Search routes', () => {
   it('applies route filters and candidate limits deterministically', async () => {
     const input = createCandidateSearchInput()
     input.settings.maxCandidatesPerTarget = 1
+    // Keep more than one candidate reachable: a source whose Skills already
+    // satisfy Ideal contributes no Reset Skills candidate.
+    input.ownedWeapons[0].seriesSkillId = 'series_skill.fixture.other'
     const result = await searchCandidates(
       input,
       createCandidateSearchEngine(input),
