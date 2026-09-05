@@ -1,5 +1,6 @@
 import type { RouteKind, TargetWeapon } from '../models/publicTypes'
 import type { RngEngine } from '../rng/rngEngine'
+import { validateTargetIdealImpliesPractical } from '../target'
 import {
   deduplicateCandidates,
   filterCandidates,
@@ -86,6 +87,19 @@ function selectedTargets(
       warnings.push({
         targetWeaponId: id,
         message: `TargetWeapon '${id}' is disabled and was not searched.`,
+      })
+      return []
+    }
+    const containment = validateTargetIdealImpliesPractical(
+      target,
+      input.master,
+    )
+    if (!containment.isValid) {
+      warnings.push({
+        targetWeaponId: id,
+        message: `TargetWeapon '${id}' violates the Ideal implies Practical containment invariant and was not searched: ${containment.issues
+          .map((issue) => `${issue.path}: ${issue.message}`)
+          .join(' / ')}`,
       })
       return []
     }

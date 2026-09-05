@@ -57,6 +57,32 @@ describe('TargetWeaponCrudService', () => {
     draft.practicalBonusConditions[0].requiredCount = 0
     await expect(service.save(draft, null, DOMAIN_FIXTURE_TIME)).rejects.toBeInstanceOf(EntityFormValidationError)
   })
+  it('rejects a Target whose idealBonuses break the Ideal implies Practical containment', async () => {
+    const service = new TargetWeaponCrudService(master, dependencies())
+    const draft = createTargetWeaponDraft(master); draft.name = 'target'
+    draft.practicalBonusConditions = [{ id: 'condition', bonusTypeId: 'bonus_type.fixture.element', minimumRankId: 'bonus_rank.fixture.high', requiredCount: 3, requiredExCount: 0 }]
+    const error = await service.save(draft, null, DOMAIN_FIXTURE_TIME).catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(EntityFormValidationError)
+    expect((error as EntityFormValidationError).issues).toContainEqual(expect.stringContaining('practicalBonusConditions[0]'))
+  })
+  it('rejects a Target whose Skill conditions break the Ideal implies Practical containment', async () => {
+    const service = new TargetWeaponCrudService(master, dependencies())
+    const draft = createTargetWeaponDraft(master); draft.name = 'target'
+    draft.idealSkillCondition = { seriesSkillId: 'series_skill.fixture.enabled', groupSkillId: 'group_skill.fixture.enabled', matchMode: 'any' }
+    draft.practicalSkillCondition = { seriesSkillId: 'series_skill.fixture.enabled', groupSkillId: 'group_skill.fixture.enabled', matchMode: 'all' }
+    const error = await service.save(draft, null, DOMAIN_FIXTURE_TIME).catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(EntityFormValidationError)
+    expect((error as EntityFormValidationError).issues).toContainEqual(expect.stringContaining('practicalSkillCondition'))
+  })
+  it('saves a Target whose Ideal is a strict upper bound of Practical', async () => {
+    const deps = dependencies(); const service = new TargetWeaponCrudService(master, deps)
+    const draft = createTargetWeaponDraft(master); draft.name = 'target'
+    draft.practicalBonusConditions = [{ id: 'condition', bonusTypeId: 'bonus_type.fixture.attack', minimumRankId: 'bonus_rank.fixture.high', requiredCount: 5, requiredExCount: 0 }]
+    draft.idealSkillCondition = { seriesSkillId: 'series_skill.fixture.enabled', groupSkillId: 'group_skill.fixture.enabled', matchMode: 'all' }
+    draft.practicalSkillCondition = { seriesSkillId: 'series_skill.fixture.enabled', groupSkillId: null, matchMode: 'all' }
+    await expect(service.save(draft, null, DOMAIN_FIXTURE_TIME)).resolves.toMatchObject({ practicalBonusConditions: draft.practicalBonusConditions })
+    expect(deps.put).toHaveBeenCalledTimes(1)
+  })
   it('blocks referenced Target deletion', async () => {
     const deps = dependencies(true); const service = new TargetWeaponCrudService(master, deps)
     await expect(service.delete(createValidTargetWeapon().id)).rejects.toBeInstanceOf(ReferencedEntityDeleteError)

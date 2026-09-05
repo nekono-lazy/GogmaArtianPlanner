@@ -891,4 +891,68 @@ describe('Candidate Search routes', () => {
     )
     expect(overlap).toEqual([])
   })
+
+  it('searches a Target that satisfies the Ideal implies Practical containment invariant', async () => {
+    const input = createCandidateSearchInput()
+    const result = await searchCandidates(
+      input,
+      createCandidateSearchEngine(input),
+      deterministicExecution,
+    )
+    expect(result.warnings).toEqual([])
+    expect(result.targetResults.map(({ targetWeaponId }) => targetWeaponId)).toEqual([
+      input.targetWeapons[0].id,
+    ])
+  })
+
+  it('excludes a Target whose idealBonuses break the containment invariant', async () => {
+    const input = createCandidateSearchInput()
+    input.targetWeapons[0].practicalBonusConditions = [
+      {
+        id: 'condition.fixture.unsatisfiable',
+        bonusTypeId: 'bonus_type.fixture.element',
+        minimumRankId: 'bonus_rank.fixture.high',
+        requiredCount: 3,
+        requiredExCount: 0,
+      },
+    ]
+    const result = await searchCandidates(
+      input,
+      createCandidateSearchEngine(input),
+      deterministicExecution,
+    )
+    expect(result.targetResults).toEqual([])
+    expect(result.warnings).toEqual([
+      {
+        targetWeaponId: input.targetWeapons[0].id,
+        message: expect.stringContaining('practicalBonusConditions[0]'),
+      },
+    ])
+  })
+
+  it('excludes a Target whose Skill conditions break the containment invariant', async () => {
+    const input = createCandidateSearchInput()
+    input.targetWeapons[0].idealSkillCondition = {
+      seriesSkillId: 'series_skill.fixture.a',
+      groupSkillId: 'group_skill.fixture.a',
+      matchMode: 'any',
+    }
+    input.targetWeapons[0].practicalSkillCondition = {
+      seriesSkillId: 'series_skill.fixture.a',
+      groupSkillId: 'group_skill.fixture.a',
+      matchMode: 'all',
+    }
+    const result = await searchCandidates(
+      input,
+      createCandidateSearchEngine(input),
+      deterministicExecution,
+    )
+    expect(result.targetResults).toEqual([])
+    expect(result.warnings).toEqual([
+      {
+        targetWeaponId: input.targetWeapons[0].id,
+        message: expect.stringContaining('practicalSkillCondition'),
+      },
+    ])
+  })
 })

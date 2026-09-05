@@ -661,17 +661,19 @@ must also satisfy `practicalSkillCondition` under that condition's
 `seriesSkillId` / `groupSkillId` / `matchMode` semantics, with `null` meaning
 unconstrained. A Target definition that breaks this containment is invalid.
 
-`docs/DATA_MODEL.md` 8.1 holds the formal invariant. v1 does not yet validate it,
-so Target validation is an unimplemented contract that must land before anything
-relies on the containment. Never make Search or Planner silently repair a Target
-that violates it.
+`docs/DATA_MODEL.md` 8.1 holds the formal invariant. `validateTargetIdealImpliesPractical()`
+implements it. It needs Master Data for Bonus Rank `order`, so it is a
+Master-aware validator separate from `validateTargetWeapon()`, and it runs both
+when a Target is saved and when Candidate Search selects its Targets. A stored
+Target that violates the containment is excluded from Candidate Search with a
+warning; it is never auto-repaired, auto-deleted, or silently relaxed. Never make
+Search or Planner silently repair a Target that violates it.
 
 This containment is what lets Candidate Search stop exploring a stream whose
 current state already satisfies the Ideal condition. That optimization is only
-sound once the validation is in force, so implement Target validation first and
-only then enable the Ideal-already-satisfied early exit. Until validation is
-enabled, do not assume a stored Target satisfies the containment and do not ship
-a search that terminates early on that assumption.
+sound once the validation is in force. The validation is now in force, but the
+early exit itself is a separate later change: do not ship a search that
+terminates early on that assumption until that change lands.
 
 Do not introduce "any one target in this group completes the group" behavior in v1.
 

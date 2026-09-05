@@ -735,6 +735,7 @@ Ideal ⇒ Practical 包含不変条件に依存する。Idealを満たす現在�
 実装する。validation有効化前に導入すると、包含を満たさない不正Targetに対して
 Practical候補を取りこぼす。Phase依存は
 [CANDIDATE_SEARCH_REDESIGN.md](./CANDIDATE_SEARCH_REDESIGN.md) 4章に従う。
+このvalidationはB7で実装済みであり、早期終了自体はB1で実装する。
 
 補足。
 
@@ -1484,12 +1485,14 @@ export type SearchWorkerResponse =
 ## 13.2.4 Target Invariant Test
 
 Target validation(B7)はIdeal既達成早期終了より先に実装する。
-以下はB7で追加する観点であり、13.2.3のIdeal既達成早期終了はB7完了後に有効化する。
+以下はB7で追加済みの観点であり、13.2.3のIdeal既達成早期終了はB1で有効化する。
 
 - `idealBonuses` が `practicalBonusConditions` と `practicalAlternativeGroups` をすべて満たす
 - `idealSkillCondition` を満たす `(seriesSkillId, groupSkillId)` が
   `practicalSkillCondition` も満たす
 - 包含が成立しないTargetWeapon定義を保存できない
+- 包含が成立しない保存済みTargetWeaponはCandidate Searchの対象から
+  warning付きで除外される
 
 ## 13.3 Candidate Test
 

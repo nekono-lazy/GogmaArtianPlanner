@@ -538,14 +538,25 @@ Skill側。`idealSkillCondition` を満たす完成Skillは、必ず
 
 この包含が成立しないTargetWeapon定義は不正である。
 
-**未実装契約。** v1現時点のTargetWeapon validationはこの包含を検証していない。
-Target validationの追加は後続Phaseの作業であり、
-`docs/CANDIDATE_SEARCH_REDESIGN.md` のPhase分割へ割り当てる。
+**B7で実装済み。** `validateTargetIdealImpliesPractical()` がこの包含を検証する。
+Bonus側はTarget評価器 (`evaluateBonusCondition()` /
+`evaluateAlternativeBonusConditionGroup()`) をそのまま再利用し、Rank比較は
+Master Dataの `order` をauthorityとする。Skill側は `evaluateSkillCondition()`
+に対する有限symbolic truth-tableとして論理包含を判定する。
+
+Master Dataを必要とするため、`validateTargetWeapon()` のsignatureは変更せず、
+Master-awareな別validatorとして次の境界で実行する。
+
+- TargetWeapon保存時 (`TargetWeaponCrudService.save()`)
+- Candidate Searchの対象Target選択時 (`selectedTargets()`)
+
+保存済みの不正Targetは自動修正・自動削除・Practical条件の暗黙緩和を行わず、
+Candidate Searchが `isEnabled = false` と同じ扱いでwarning付きに除外する。
 
 この包含に依存する最適化を、validation有効化より先に実装してはならない。
 Candidate SearchがIdeal既達成streamの探索を省略する最適化は、
-validationが有効になった後にのみ実装する。validation有効化前に早期終了を
-導入すると、包含を満たさない不正Targetに対してPractical候補を取りこぼす。
+validation有効化前に導入すると、包含を満たさない不正Targetに対して
+Practical候補を取りこぼす。B7完了により前提は満たされている。
 
 Search / Plannerがこの包含を暗黙に修正・緩和することは、
 validation有効化の前後を問わず認めない。

@@ -15,6 +15,7 @@ import {
   type TargetWeapon,
   type TargetWeaponId,
 } from '../../domain/models/publicTypes'
+import { validateTargetIdealImpliesPractical } from '../../domain/target'
 import { ownedWeaponRepository, targetWeaponRepository } from '../../db/repositories'
 import { referenceFinder, type PersistenceReference } from '../../db/referenceFinder'
 
@@ -124,6 +125,7 @@ export class TargetWeaponCrudService {
       ...(value.name.trim() ? [] : ['name: 名前を入力してください。']),
       ...domainMessages(validateTargetWeapon(value)),
       ...validateTargetWeaponMasterReferences(value, this.master),
+      ...domainMessages(validateTargetIdealImpliesPractical(value, this.master)),
     ]
     if (issues.length) throw new EntityFormValidationError(issues)
     return this.dependencies.put(value)

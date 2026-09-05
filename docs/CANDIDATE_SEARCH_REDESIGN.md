@@ -454,7 +454,7 @@ B11 は実ゲーム観測を前提とする独立系列
 | # | タスク | 内容 | 依存 |
 | --- | --- | --- | --- |
 | B0 | 仕様確定 | 本記録と `AGENTS.md` / `docs/*` の契約更新 | 完了 |
-| B7 | Target Ideal ⇒ Practical validation | `docs/DATA_MODEL.md` 8.1 の包含不変条件をTargetWeapon validationへ実装。既存保存Targetの扱いを含む | B0 |
+| B7 | Target Ideal ⇒ Practical validation | `docs/DATA_MODEL.md` 8.1 の包含不変条件をTargetWeapon validationへ実装。既存保存Targetの扱いを含む | 完了 |
 | B1 | Existing Gogma Skill stream独立化 | 共有Skill列、Ideal既達成時の0回化、`maxSkillAdvance` off-by-one整合、SEARCH_SPEC 6.5前提の早期判定。Gogma側は触らない | B0, **B7** |
 | B2 | Gogma Reset / Keep探索のstate search化 | depthごとReset 1回、family layout dedup、frontierから操作列を除去、Keep-only先行路、決定的representative | B1 |
 | B3 | Candidate生成 / route表現の整理 | Cross規則、stream-local anchor ordering、offset / source重複除去、分解評価と既存Target評価器の一致担保 | B1, B2 |
@@ -478,6 +478,12 @@ B7を「B1〜B3と独立なので後回しにできる作業」として扱わ�
 B7の実装判断として残してよいが、B1を先行させて不正Targetでも早期終了する状態を
 作ってはならない。
 
+**B7完了。** Master-awareな `validateTargetIdealImpliesPractical()` を
+`src/domain/target/targetInvariantValidation.ts` へ追加し、保存時
+(`TargetWeaponCrudService.save()`) とCandidate Searchの対象Target選択時
+(`selectedTargets()`) の両方で実行する。既存保存Targetは自動修正せず、
+Searchがwarning付きで除外する。B1 / B4の早期終了前提は満たされた。
+
 B8 / B9 / B10 はB1〜B3のstream独立化とは責務が異なるため、既存B1 / B2へ混ぜない。
 特にB8はPlanner側の新規orchestrationである。
 
@@ -491,7 +497,7 @@ B11の完了を待たない。
 
 | 項目 | 割り当て先 |
 | --- | --- |
-| Target Ideal ⇒ Practical validation | **B7(B1より先行)** |
+| Target Ideal ⇒ Practical validation | **B7(B1より先行、完了)** |
 | Candidate Searchのstream独立化 | B1 / B2 / B3(B7完了後) |
 | 初回Search終了条件とPractical保持 | B4(B7完了後) |
 | Planner-driven constrained re-search | B8 |
@@ -537,10 +543,10 @@ Domain契約を変える判断が必要になった場合は、実装前に設�
 8. 非劣位Practical集合の保持データ構造。5.5.6の10条件は比較コストが高いため、
    Bonus multiset / Skill / source によるバケット分割が必要かどうか
 9. `maxCandidatesPerTarget` 到達時のIdeal枠確保を、保持段で行うか出力段で行うか
-10. Target validation(B7)を既存の保存済みTargetへどう適用するか。
-    保存時のみ検証するか、読み込み時にwarningを出すか。
-    これはB7の実装判断として残すが、B1を先行させて不正Targetでも早期終了する
-    状態を作ってはならない
+10. ~~Target validation(B7)を既存の保存済みTargetへどう適用するか。~~
+    B7で決定済み。保存時に拒否し、加えてCandidate Searchの対象Target選択時に
+    warning付きで除外する。既存保存Targetの自動修正・自動削除・Practical条件の
+    暗黙緩和は行わない
 
 ## 6. 別Issueとして記録した事項
 
