@@ -43,6 +43,54 @@ const layoutA = (): RestorationBonusSet => createRestorationBonusSet()
 /** Layout A, one tier lower. */
 const layoutALower = (): RestorationBonusSet =>
   restorationBonusSet(attackHigh(), attackHigh(), elementMiddle(), utilityLow(), sharpnessLow())
+/** Layout A with a third sharpness tier; a completed outcome of its own. */
+const layoutAMiddle = (): RestorationBonusSet =>
+  restorationBonusSet(
+    attackHigh(),
+    attackHigh(),
+    elementMiddle(),
+    utilityLow(),
+    restorationBonus('bonus_type.fixture.sharpness', 'bonus_rank.fixture.middle'),
+  )
+/** Layout A with a fourth sharpness tier. */
+const layoutASpecial = (): RestorationBonusSet =>
+  restorationBonusSet(
+    attackHigh(),
+    attackHigh(),
+    elementMiddle(),
+    utilityLow(),
+    restorationBonus('bonus_type.fixture.sharpness', 'bonus_rank.fixture.special'),
+  )
+/** Layout S with a raised second utility slot. */
+const layoutSUtilityMiddle = (): RestorationBonusSet =>
+  restorationBonusSet(
+    elementMiddle(),
+    attackHigh(),
+    attackHigh(),
+    utilityLow(),
+    restorationBonus('bonus_type.fixture.utility', 'bonus_rank.fixture.middle'),
+  )
+/** Layout S with a raised second utility slot, one tier higher. */
+const layoutSUtilityHigh = (): RestorationBonusSet =>
+  restorationBonusSet(elementMiddle(), attackHigh(), attackHigh(), utilityLow(), utilityHigh())
+/** Layout B with an EX second utility slot. */
+const layoutBSpecial = (): RestorationBonusSet =>
+  restorationBonusSet(
+    attackHigh(),
+    elementMiddle(),
+    attackHigh(),
+    utilityLow(),
+    restorationBonus('bonus_type.fixture.utility', 'bonus_rank.fixture.special'),
+  )
+/** Layout S with both utility slots raised. */
+const layoutSUtilityMixed = (): RestorationBonusSet =>
+  restorationBonusSet(
+    elementMiddle(),
+    attackHigh(),
+    attackHigh(),
+    restorationBonus('bonus_type.fixture.utility', 'bonus_rank.fixture.middle'),
+    utilityHigh(),
+  )
 /** Layout B: attack / element / attack / utility / utility. */
 const layoutB = (): RestorationBonusSet =>
   restorationBonusSet(attackHigh(), elementMiddle(), attackHigh(), utilityLow(), utilityLow())
@@ -358,11 +406,14 @@ describe('Bonus stream state search', () => {
     // Reset at position 10 and Keep from the source both land on layout A, so
     // depth 1 holds two states of the same layout with different tiers.
     input.ownedWeapons = [gogmaSource(input, 'owned.fixture.bonus-fold', layoutALower())]
+    // The Keep-only state gets its own completed outcome, because the B3
+    // stream-local retention would otherwise fold it into the source's own
+    // `gogmaAdvance = 0` solution rather than publish it as a Candidate.
     const engine = createBonusFixtureEngine(input, {
       resets: [layoutA(), layoutC()],
       keepSupported: true,
       keeps: [
-        { counterOffset: 0, currentBonuses: layoutALower(), result: layoutALower() },
+        { counterOffset: 0, currentBonuses: layoutALower(), result: layoutAMiddle() },
         { counterOffset: 1, currentBonuses: layoutA(), result: layoutALower() },
       ],
     })
@@ -382,16 +433,21 @@ describe('Bonus stream state search', () => {
   it('rebuilds the canonical Reset-then-Keep operation sequence of every depth', async () => {
     const input = existingGogmaInput(3)
     input.ownedWeapons = [gogmaSource(input, 'owned.fixture.bonus-canonical', layoutS())]
+    // Every depth-3 state gets a distinct completed five-slot multiset. The B3
+    // stream-local retention keeps the smallest `gogmaAdvance` per outcome, so
+    // a fixture that repeats an earlier outcome could not show all four
+    // canonical histories. `layoutC` is not reused as the depth-3 Reset because
+    // its multiset equals `layoutA`, which is already reached at depth 1.
     const engine = createBonusFixtureEngine(input, {
-      resets: [layoutA(), layoutB(), layoutC()],
+      resets: [layoutA(), layoutB(), layoutASpecial()],
       keepSupported: true,
       keeps: [
-        { counterOffset: 0, currentBonuses: layoutS(), result: layoutS() },
+        { counterOffset: 0, currentBonuses: layoutS(), result: layoutSUtilityMiddle() },
         { counterOffset: 1, currentBonuses: layoutA(), result: layoutALower() },
-        { counterOffset: 1, currentBonuses: layoutS(), result: layoutS() },
-        { counterOffset: 2, currentBonuses: layoutB(), result: layoutBHigher() },
-        { counterOffset: 2, currentBonuses: layoutALower(), result: layoutALower() },
-        { counterOffset: 2, currentBonuses: layoutS(), result: layoutS() },
+        { counterOffset: 1, currentBonuses: layoutSUtilityMiddle(), result: layoutSUtilityHigh() },
+        { counterOffset: 2, currentBonuses: layoutB(), result: layoutBSpecial() },
+        { counterOffset: 2, currentBonuses: layoutALower(), result: layoutAMiddle() },
+        { counterOffset: 2, currentBonuses: layoutSUtilityHigh(), result: layoutSUtilityMixed() },
       ],
     })
     const result = await searchCandidates(input, engine, deterministicExecution)

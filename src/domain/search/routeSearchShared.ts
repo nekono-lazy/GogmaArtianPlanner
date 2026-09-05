@@ -12,11 +12,25 @@ import type {
 import { areRestorationBonusSetsEqual } from '../models/domainRules'
 import type { RngEngine } from '../rng/rngEngine'
 import { evaluateSkillCondition } from '../target'
-import type { TargetBonusStream } from './bonusStream'
+import {
+  bonusAmendmentOperations,
+  type BonusStreamSolutionSet,
+  type TargetBonusStream,
+} from './bonusStream'
 import { createCandidateFromPrediction } from './candidateFactory'
+import { crossStreamSolutions } from './crossComposition'
 import type { SearchExecutionContext } from './searchExecution'
 import type { SearchPredictionSupport } from './searchPredictionSupport'
 import type { CandidateSearchInput, CandidateSearchWarning, SkippedRoute } from './searchTypes'
+import {
+  buildBonusSolutionSet,
+  buildSkillSolutionSet,
+  selectBonusAxis,
+  selectSkillAxis,
+  type RouteBonusSolution,
+  type RouteSkillSolution,
+  type StreamCategoryPredicate,
+} from './streamSolutions'
 import {
   resetSkillsOperations,
   type SkillStreamSolutionSet,
@@ -28,6 +42,8 @@ export {
   createSearchPredictionSupport,
   type SearchPredictionSupport,
 } from './searchPredictionSupport'
+
+const streamCategories: readonly StreamCategoryPredicate[] = ['ideal', 'practical']
 
 export interface RouteSearchResult {
   candidates: BuildCandidate[]
@@ -49,23 +65,27 @@ export interface RouteSearchContext {
 }
 
 /**
- * A Bonus-side Route base awaiting composition with the Skill stream.
- * `operations` holds the Bonus-side operations in execution order; Reset Skills
- * operations are appended after them.
+ * A Route base as defined by SEARCH_SPEC 5.5.1: one Normal Counter and
+ * `candidateOffset`, one owned Normal source, or one owned Gogma source.
+ *
+ * The Bonus and Skill stream predictions are shared across Route bases, but the
+ * base itself is not: a different source OwnedWeapon, a different forge count,
+ * or different inherited five slots stay separate Route bases even when they
+ * reach the same completed result.
  */
-export interface SkillCompositionBase {
-  bonuses: RestorationBonusSet
-  restorationBonusScope: RestorationBonusScope
-  operations: readonly RouteOperation[]
+export interface RouteCompositionBase {
+  /**
+   * Conversion Routes have a fixed RouteKind. Existing-Gogma Routes derive it
+   * from the composed `(gogmaAdvance, resetCount)` pair instead.
+   */
+  kindResolution:
+    | { type: 'fixed'; kind: BuildRoute['kind'] }
+    | { type: 'existing_gogma' }
   sourceOwnedWeaponId: OwnedWeaponId | null
-  /** Skills of the `resetCount = 0` solution, which is Route-base specific. */
-  seriesSkillId: SeriesSkillId | null
-  groupSkillId: GroupSkillId | null
-  kind: BuildRoute['kind']
-  /** RouteKind used once Reset Skills operations are appended. */
-  skillKind?: BuildRoute['kind']
-  /** Source recorded on each appended Reset Skills operation. */
-  resetSkillsSourceOwnedWeaponId?: OwnedWeaponId | null
+  /** `create_normal_artian` / `convert_normal_to_gogma`, in execution order. */
+  baseOperations: readonly RouteOperation[]
+  bonusSolutions: readonly RouteBonusSolution[]
+  skillSolutions: readonly RouteSkillSolution[]
 }
 
 /**
@@ -98,6 +118,63 @@ export function bonusesSatisfyIdeal(
   return areRestorationBonusSetsEqual(context.target.idealBonuses, bonuses)
 }
 
+/**
+ * The Route base's Skill solutions: the zero-operation solution plus the shared
+ * stream's Reset Skills solutions (SEARCH_SPEC 5.5.2 / 5.5.5).
+ *
+ * `set` is `null` when the Skill stream was not solved for this base, either
+ * because Skill prediction is unavailable or because the current Skills already
+ * satisfy the Ideal condition. The zero-operation solution still exists.
+ */
+export function routeSkillSolutions(
+  set: SkillStreamSolutionSet | null,
+  zeroSolution: RouteSkillSolution,
+  sourceOwnedWeaponId: OwnedWeaponId | null,
+  skillAdvanceOffset: number,
+): RouteSkillSolution[] {
+  if (!set) return [zeroSolution]
+  return [
+    zeroSolution,
+    ...set.solutions.map((solution) => ({
+      resetCount: solution.resetCount,
+      seriesSkillId: solution.seriesSkillId,
+      groupSkillId: solution.groupSkillId,
+      estimatedSkillAdvance: solution.resetCount + skillAdvanceOffset,
+      operations: resetSkillsOperations(
+        set,
+        solution.resetCount,
+        sourceOwnedWeaponId,
+      ),
+    })),
+  ]
+}
+
+/**
+ * The Route base's Bonus solutions: the zero-operation solution plus the shared
+ * stream's amendment solutions (SEARCH_SPEC 5.5.3 / 5.5.5).
+ *
+ * `set` is `null` when no amendment was searched for this base, either because
+ * Gogma prediction is unavailable, the source is protected, or the current five
+ * slots already match `idealBonuses`.
+ */
+export function routeBonusSolutions(
+  set: BonusStreamSolutionSet | null,
+  zeroSolution: RouteBonusSolution,
+  sourceOwnedWeaponId: OwnedWeaponId | null,
+): RouteBonusSolution[] {
+  if (!set) return [zeroSolution]
+  return [
+    zeroSolution,
+    ...set.solutions.map((solution) => ({
+      gogmaAdvance: solution.depth,
+      lastResetDepth: solution.lastResetDepth,
+      finalBonuses: solution.bonuses,
+      restorationBonusScope: solution.restorationBonusScope,
+      operations: bonusAmendmentOperations(set, solution, sourceOwnedWeaponId),
+    })),
+  ]
+}
+
 export function createBaseCandidate(
   context: RouteSearchContext,
   bonuses: RestorationBonusSet,
@@ -115,55 +192,100 @@ export function createBaseCandidate(
 }
 
 /**
- * Composes one Bonus-side Route base with the already solved Skill stream.
- * No Skill prediction happens here, so composing more Bonus states, more source
- * weapons, or more Normal offsets never adds a `predictSkills` call.
+ * The existing-Gogma RouteKind of one composed `(d, k)` pair.
+ *
+ * The canonical amendment history is Reset for depths `1 ... lastResetDepth`
+ * and Keep afterwards, so the Bonus-only kind follows from those two numbers.
+ * `d = 0` with `k = 0` produces an empty operation list, which is not a
+ * Candidate: that weapon already satisfies the Target and the Planner derives
+ * the satisfaction from the owned Gogma directly (SEARCH_SPEC 5.5.5).
  */
-export async function composeSkillCandidates(
-  context: RouteSearchContext,
-  base: SkillCompositionBase,
-  skillSolutions: SkillStreamSolutionSet | null,
-): Promise<BuildCandidate[]> {
-  const candidates: BuildCandidate[] = []
-  const resetSource = base.resetSkillsSourceOwnedWeaponId === undefined
-    ? base.sourceOwnedWeaponId
-    : base.resetSkillsSourceOwnedWeaponId
-
-  if (base.operations.length > 0) {
-    const candidate = createBaseCandidate(
-      context,
-      base.bonuses,
-      base.restorationBonusScope,
-      base.seriesSkillId,
-      base.groupSkillId,
-      {
-        kind: base.kind,
-        sourceOwnedWeaponId: base.sourceOwnedWeaponId,
-        operations: [...base.operations],
-      },
-    )
-    if (candidate) candidates.push(candidate)
+export function existingGogmaRouteKind(
+  bonus: RouteBonusSolution,
+  skill: RouteSkillSolution,
+): BuildRoute['kind'] | null {
+  if (bonus.gogmaAdvance === 0) {
+    return skill.resetCount === 0 ? null : 'existing_gogma_reset_skills'
   }
-  if (!skillSolutions) return candidates
+  if (skill.resetCount > 0) return 'existing_gogma_mixed'
+  if (bonus.lastResetDepth === bonus.gogmaAdvance) {
+    return 'existing_gogma_reset_bonuses'
+  }
+  return bonus.lastResetDepth === 0
+    ? 'existing_gogma_keep_bonuses'
+    : 'existing_gogma_mixed'
+}
 
-  for (const solution of skillSolutions.solutions) {
-    await context.execution.checkpoint()
-    const candidate = createBaseCandidate(
-      context,
-      base.bonuses,
-      base.restorationBonusScope,
-      solution.seriesSkillId,
-      solution.groupSkillId,
-      {
-        kind: base.skillKind ?? base.kind,
-        sourceOwnedWeaponId: base.sourceOwnedWeaponId,
-        operations: [
-          ...base.operations,
-          ...resetSkillsOperations(skillSolutions, solution.resetCount, resetSource),
-        ],
-      },
+function routeKindFor(
+  base: RouteCompositionBase,
+  bonus: RouteBonusSolution,
+  skill: RouteSkillSolution,
+): BuildRoute['kind'] | null {
+  return base.kindResolution.type === 'fixed'
+    ? base.kindResolution.kind
+    : existingGogmaRouteKind(bonus, skill)
+}
+
+/**
+ * Composes one Route base's independently solved Bonus and Skill solutions with
+ * the Cross rule (SEARCH_SPEC 5.5.4).
+ *
+ * No prediction happens here, so composing more Bonus states, more source
+ * weapons, or more Normal offsets never adds a `predictSkills` or
+ * `predictGogmaBonus` call. The number of Candidates built per Route base is
+ * bounded by `|B(c)| + |K(c)| - 1` summed over the two category predicates,
+ * never by `|B(c)| * |K(c)|`.
+ *
+ * The category predicate only selects which stream solutions enter an axis. The
+ * final `category`, `idealDifference`, `similarityScore`, and `isSimilarToIdeal`
+ * always come from the existing Target evaluator inside
+ * `createCandidateFromPrediction()`.
+ */
+export async function composeRouteCandidates(
+  context: RouteSearchContext,
+  base: RouteCompositionBase,
+): Promise<BuildCandidate[]> {
+  const bonusSet = buildBonusSolutionSet(
+    context.target,
+    context.input,
+    base.bonusSolutions,
+  )
+  const skillSet = buildSkillSolutionSet(context.target, base.skillSolutions)
+  const candidates: BuildCandidate[] = []
+  // The Ideal and Practical Cross series can select the same pair; the pair is
+  // built once here so the Candidate count stays linear in the axis lengths.
+  const composed = new Set<string>()
+
+  for (const category of streamCategories) {
+    const pairs = crossStreamSolutions(
+      selectBonusAxis(bonusSet, category),
+      selectSkillAxis(skillSet, category),
     )
-    if (candidate) candidates.push(candidate)
+    for (const pair of pairs) {
+      const pairKey = `${pair.bonus.index},${pair.skill.index}`
+      if (composed.has(pairKey)) continue
+      composed.add(pairKey)
+      const bonus = pair.bonus.solution
+      const skill = pair.skill.solution
+      const kind = routeKindFor(base, bonus, skill)
+      if (kind === null) continue
+      const operations = [
+        ...base.baseOperations,
+        ...bonus.operations,
+        ...skill.operations,
+      ]
+      if (operations.length === 0) continue
+      await context.execution.checkpoint()
+      const candidate = createBaseCandidate(
+        context,
+        bonus.finalBonuses,
+        bonus.restorationBonusScope,
+        skill.seriesSkillId,
+        skill.groupSkillId,
+        { kind, sourceOwnedWeaponId: base.sourceOwnedWeaponId, operations },
+      )
+      if (candidate) candidates.push(candidate)
+    }
   }
   return candidates
 }

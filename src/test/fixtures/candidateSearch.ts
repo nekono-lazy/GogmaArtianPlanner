@@ -111,6 +111,13 @@ export function createCandidateSearchInput(): CandidateSearchInput {
 
 export interface CandidateSearchFixtureOptions {
   keepSupported?: boolean
+  /**
+   * Series Skill published at Skill Counter 8, the first Reset Skills position.
+   * It defaults to the conversion Skill, which the B3 stream-local retention
+   * folds into the `resetCount = 0` solution; pass a different Skill when the
+   * test needs a Reset Skills operation to survive retention.
+   */
+  resetSkillSeriesSkillId?: string
   normalResult?: ReturnType<typeof createRestorationBonusSet>
   resetResult?: ReturnType<typeof createRestorationBonusSet>
   keepResult?: ReturnType<typeof createRestorationBonusSet>
@@ -161,7 +168,7 @@ export function createCandidateSearchEngine(
     ],
     skillPredictions: options.skillSupported === false ? [] : [
       { input: { baseSeed: input.rngState.baseSeed.value as string, skillCounter: 7, weaponTypeId: input.targetWeapons[0].weaponTypeId, elementId: input.targetWeapons[0].elementId, master: input.master }, result: { seriesSkillId: 'series_skill.fixture.a', groupSkillId: null } },
-      { input: { baseSeed: input.rngState.baseSeed.value as string, skillCounter: 8, weaponTypeId: input.targetWeapons[0].weaponTypeId, elementId: input.targetWeapons[0].elementId, master: input.master }, result: { seriesSkillId: 'series_skill.fixture.a', groupSkillId: null } },
+      { input: { baseSeed: input.rngState.baseSeed.value as string, skillCounter: 8, weaponTypeId: input.targetWeapons[0].weaponTypeId, elementId: input.targetWeapons[0].elementId, master: input.master }, result: { seriesSkillId: options.resetSkillSeriesSkillId ?? 'series_skill.fixture.a', groupSkillId: null } },
     ],
     keepBonusPredictions: options.keepSupported && source ? [{ input: { baseSeed: input.rngState.baseSeed.value as string, gogmaCounter: 10, weaponTypeId: input.targetWeapons[0].weaponTypeId, elementId: input.targetWeapons[0].elementId, operation: { type: 'keep_bonuses' as const, currentBonuses: source.restorationBonuses }, master: input.master }, result: keepResult }] : [],    normalCounterAdvances: [
       {

@@ -43,13 +43,13 @@ function materialOperation(
   }
 }
 
-export function collectRequiredMaterials(
-  route: BuildRoute,
+export function collectRequiredMaterialsForOperations(
+  operations: readonly RouteOperation[],
   weaponTypeId: string,
   input: Pick<CandidateSearchInput, 'master'>,
 ): MaterialRequirement[] {
   const quantities = new Map<string, number>()
-  route.operations.forEach((operation) => {
+  operations.forEach((operation) => {
     const info = materialOperation(operation)
     if (!info) return
     getMaterialCostsFromSubset(input.master, info.type, weaponTypeId).forEach(
@@ -64,6 +64,37 @@ export function collectRequiredMaterials(
   return [...quantities]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([materialId, quantity]) => ({ materialId, quantity }))
+}
+
+export function collectRequiredMaterials(
+  route: BuildRoute,
+  weaponTypeId: string,
+  input: Pick<CandidateSearchInput, 'master'>,
+): MaterialRequirement[] {
+  return collectRequiredMaterialsForOperations(
+    route.operations,
+    weaponTypeId,
+    input,
+  )
+}
+
+/**
+ * The summed required quantity of one operation sequence.
+ *
+ * SEARCH_SPEC 5.5.3 uses this only as a deterministic tie-break inside one
+ * stream's anchor ordering. It is NOT the Practical dominance comparison,
+ * which stays component-wise per `materialId` (5.5.6.2).
+ */
+export function totalMaterialQuantity(
+  operations: readonly RouteOperation[],
+  weaponTypeId: string,
+  input: Pick<CandidateSearchInput, 'master'>,
+): number {
+  return collectRequiredMaterialsForOperations(
+    operations,
+    weaponTypeId,
+    input,
+  ).reduce((total, requirement) => total + requirement.quantity, 0)
 }
 
 export function countRouteOperations(route: BuildRoute): number {

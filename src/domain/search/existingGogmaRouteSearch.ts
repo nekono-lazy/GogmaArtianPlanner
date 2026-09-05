@@ -1,19 +1,21 @@
-import type { BuildRoute, OwnedGogmaArtianWeapon } from '../models/publicTypes'
-import {
-  bonusAmendmentOperations,
-  type BonusStreamSolution,
-  type BonusStreamSolutionSet,
-} from './bonusStream'
+import type {
+  BuildRoute,
+  OwnedGogmaArtianWeapon,
+  OwnedWeaponId,
+} from '../models/publicTypes'
+import type { BonusStreamSolution, BonusStreamSolutionSet } from './bonusStream'
 import {
   bonusesSatisfyIdeal,
-  composeSkillCandidates,
+  composeRouteCandidates,
   hasConfirmedGogmaInputs,
   hasConfirmedSkillInputs,
+  routeBonusSolutions,
+  routeSkillSolutions,
   skillsSatisfyIdeal,
   type RouteSearchContext,
   type RouteSearchResult,
 } from './routeSearchShared'
-import type { SkillStreamSolutionSet } from './skillStream'
+import type { RouteBonusSolution, RouteSkillSolution } from './streamSolutions'
 
 const destructiveKinds = ['existing_gogma_reset_bonuses', 'existing_gogma_keep_bonuses', 'existing_gogma_mixed'] as const
 
@@ -32,11 +34,35 @@ function pushAll(result: RouteSearchResult, routes: readonly BuildRoute['kind'][
 /**
  * The canonical amendment history is Reset for depths `1 ... lastResetDepth`
  * and Keep afterwards, so the RouteKind follows from those two numbers alone.
+ * This is the Bonus-only reporting kind; the composed RouteKind of a pair that
+ * also contains Reset Skills is decided by `existingGogmaRouteKind()`.
  */
 function kindForAmendment(solution: BonusStreamSolution): BuildRoute['kind'] {
   if (solution.lastResetDepth === solution.depth) return 'existing_gogma_reset_bonuses'
   if (solution.lastResetDepth === 0) return 'existing_gogma_keep_bonuses'
   return 'existing_gogma_mixed'
+}
+
+/** The `resetCount = 0` Skill solution of one owned Gogma Route base. */
+function zeroSkillSolution(source: OwnedGogmaArtianWeapon): RouteSkillSolution {
+  return {
+    resetCount: 0,
+    seriesSkillId: source.seriesSkillId,
+    groupSkillId: source.groupSkillId,
+    estimatedSkillAdvance: 0,
+    operations: [],
+  }
+}
+
+/** The `gogmaAdvance = 0` Bonus solution of one owned Gogma Route base. */
+function zeroBonusSolution(source: OwnedGogmaArtianWeapon): RouteBonusSolution {
+  return {
+    gogmaAdvance: 0,
+    lastResetDepth: 0,
+    finalBonuses: source.restorationBonuses,
+    restorationBonusScope: source.restorationBonusScope,
+    operations: [],
+  }
 }
 
 export async function searchExistingGogmaRoutes(context: RouteSearchContext): Promise<RouteSearchResult> {
@@ -62,27 +88,22 @@ export async function searchExistingGogmaRoutes(context: RouteSearchContext): Pr
   const startSkillCounter = input.rngState.skillCounter.value
   const skillSolutionsFor = async (
     source: OwnedGogmaArtianWeapon,
-  ): Promise<SkillStreamSolutionSet | null> => {
-    if (!canSkill || startSkillCounter === null) return null
-    if (skillsSatisfyIdeal(context, source.seriesSkillId, source.groupSkillId)) return null
-    return context.skillStream.solve(startSkillCounter)
+  ): Promise<RouteSkillSolution[]> => {
+    const zero = zeroSkillSolution(source)
+    if (!canSkill || startSkillCounter === null) return [zero]
+    if (skillsSatisfyIdeal(context, source.seriesSkillId, source.groupSkillId)) {
+      return [zero]
+    }
+    return routeSkillSolutions(
+      await context.skillStream.solve(startSkillCounter),
+      zero,
+      source.id,
+      0,
+    )
   }
 
   if (canSkill) {
     result.searchedRoutes.push('existing_gogma_reset_skills')
-    for (const source of all) {
-      const skillSolutions = await skillSolutionsFor(source)
-      if (!skillSolutions) continue
-      result.candidates.push(...await composeSkillCandidates(context, {
-        bonuses: source.restorationBonuses,
-        restorationBonusScope: source.restorationBonusScope,
-        operations: [],
-        sourceOwnedWeaponId: source.id,
-        seriesSkillId: source.seriesSkillId,
-        groupSkillId: source.groupSkillId,
-        kind: 'existing_gogma_reset_skills',
-      }, skillSolutions))
-    }
   } else {
     result.skippedRoutes.push({
       route: 'existing_gogma_reset_skills',
@@ -96,60 +117,76 @@ export async function searchExistingGogmaRoutes(context: RouteSearchContext): Pr
   }
 
   const destructive = all.filter((weapon) => !weapon.isProtected)
-  if (destructive.length === 0) {
-    pushAll(result, destructiveKinds, 'no_unprotected_source_weapon', 'Only protected sources are available for destructive routes.')
-    return result
-  }
-  if (!hasConfirmedGogmaInputs(input) || !engine.capabilities.supportsGogmaPrediction) {
-    pushAll(result, destructiveKinds, hasConfirmedGogmaInputs(input) ? 'gogma_prediction_unsupported' : 'rng_state_unconfirmed', hasConfirmedGogmaInputs(input) ? 'The active RNG Engine does not support Gogma prediction.' : 'Confirmed Base Seed and Gogma Counter are required.')
-    return result
-  }
-
-  const resetSupport = context.predictionSupport.gogmaReset()
-  const canReset = resetSupport.supported
+  const gogmaInputsConfirmed = hasConfirmedGogmaInputs(input)
+  const canAmend = destructive.length > 0
+    && gogmaInputsConfirmed
+    && engine.capabilities.supportsGogmaPrediction
   const canKeep = engine.capabilities.supportsKeepBonusesPrediction
   const pureKeepSources = destructive.filter(
     ({ restorationBonusScope }) => restorationBonusScope === 'gogma_artian',
   )
   const searchedAmendmentRoutes = new Set<BuildRoute['kind']>()
-  const keepUnsupportedSources = new Set<OwnedGogmaArtianWeapon['id']>()
+  const keepUnsupportedSources = new Set<OwnedWeaponId>()
 
-  for (const source of destructive) {
+  // One pass over every compatible source. A protected source contributes only
+  // its `gogmaAdvance = 0` Bonus solution, which keeps its non-destructive
+  // Reset Skills Candidates available without ever generating an amendment.
+  for (const source of all) {
+    const skillSolutions = await skillSolutionsFor(source)
+    let amendmentResult: BonusStreamSolutionSet | null = null
     // A source whose current five slots already match `idealBonuses` has a
     // finished Bonus stream: no amendment is searched and no Gogma prediction
     // is made for it. Its Skill stream is unaffected.
-    if (bonusesSatisfyIdeal(context, source.restorationBonuses)) continue
-    const amendmentResult: BonusStreamSolutionSet = await context.bonusStream.solve({
-      startGogmaCounter: input.rngState.gogmaCounter.value!,
-      bonuses: source.restorationBonuses,
-      restorationBonusScope: source.restorationBonusScope,
-    })
-    const skillSolutions = await skillSolutionsFor(source)
-    for (const solution of amendmentResult.solutions) {
-      const kind = kindForAmendment(solution)
-      searchedAmendmentRoutes.add(kind)
-      if (canSkill) searchedAmendmentRoutes.add('existing_gogma_mixed')
-      result.candidates.push(...await composeSkillCandidates(context, {
-        bonuses: solution.bonuses,
-        restorationBonusScope: solution.restorationBonusScope,
-        operations: bonusAmendmentOperations(amendmentResult, solution, source.id),
-        sourceOwnedWeaponId: source.id,
-        seriesSkillId: source.seriesSkillId,
-        groupSkillId: source.groupSkillId,
-        kind,
-        skillKind: 'existing_gogma_mixed',
-        resetSkillsSourceOwnedWeaponId: source.id,
-      }, skillSolutions))
-    }
-    for (const unsupported of amendmentResult.unsupportedPredictions) {
-      if (unsupported.type !== 'keep_bonuses') continue
-      keepUnsupportedSources.add(source.id)
-      const message = `Keep Bonuses branches from OwnedWeapon '${source.id}' were excluded by input support (${unsupported.reason}).`
-      if (!result.warnings.some((warning) => warning.message === message)) {
-        result.warnings.push({ targetWeaponId: context.target.id, message })
+    if (
+      canAmend &&
+      !source.isProtected &&
+      !bonusesSatisfyIdeal(context, source.restorationBonuses)
+    ) {
+      amendmentResult = await context.bonusStream.solve({
+        startGogmaCounter: input.rngState.gogmaCounter.value!,
+        bonuses: source.restorationBonuses,
+        restorationBonusScope: source.restorationBonusScope,
+      })
+      for (const solution of amendmentResult.solutions) {
+        searchedAmendmentRoutes.add(kindForAmendment(solution))
+        if (canSkill) searchedAmendmentRoutes.add('existing_gogma_mixed')
+      }
+      for (const unsupported of amendmentResult.unsupportedPredictions) {
+        if (unsupported.type !== 'keep_bonuses') continue
+        keepUnsupportedSources.add(source.id)
+        const message = `Keep Bonuses branches from OwnedWeapon '${source.id}' were excluded by input support (${unsupported.reason}).`
+        if (!result.warnings.some((warning) => warning.message === message)) {
+          result.warnings.push({ targetWeaponId: context.target.id, message })
+        }
       }
     }
+
+    result.candidates.push(...await composeRouteCandidates(context, {
+      kindResolution: { type: 'existing_gogma' },
+      sourceOwnedWeaponId: source.id,
+      baseOperations: [],
+      bonusSolutions: routeBonusSolutions(
+        amendmentResult,
+        zeroBonusSolution(source),
+        source.id,
+      ),
+      skillSolutions,
+    }))
   }
+
+  if (destructive.length === 0) {
+    pushAll(result, destructiveKinds, 'no_unprotected_source_weapon', 'Only protected sources are available for destructive routes.')
+    return result
+  }
+  if (!gogmaInputsConfirmed || !engine.capabilities.supportsGogmaPrediction) {
+    pushAll(result, destructiveKinds, gogmaInputsConfirmed ? 'gogma_prediction_unsupported' : 'rng_state_unconfirmed', gogmaInputsConfirmed ? 'The active RNG Engine does not support Gogma prediction.' : 'Confirmed Base Seed and Gogma Counter are required.')
+    return result
+  }
+
+  // Queried only once the destructive preconditions hold, so an unavailable
+  // source or unconfirmed Gogma input never triggers a support query.
+  const resetSupport = context.predictionSupport.gogmaReset()
+  const canReset = resetSupport.supported
 
   if (searchedAmendmentRoutes.has('existing_gogma_reset_bonuses')) {
     result.searchedRoutes.push('existing_gogma_reset_bonuses')

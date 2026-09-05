@@ -465,7 +465,7 @@ B11 は実ゲーム観測を前提とする独立系列
 | B7 | Target Ideal ⇒ Practical validation | `docs/DATA_MODEL.md` 8.1 の包含不変条件をTargetWeapon validationへ実装。既存保存Targetの扱いを含む | 完了 |
 | B1 | Existing Gogma Skill stream独立化 | 共有Skill列、Ideal既達成時の0回化、`maxSkillAdvance` off-by-one整合、SEARCH_SPEC 6.5前提の早期判定。Gogma側は触らない | B0, **B7**。完了 |
 | B2 | Gogma Reset / Keep探索のstate search化 | depthごとReset 1回、family layout dedup、frontierから操作列を除去、Keep-only先行路、決定的representative | B1。完了 |
-| B3 | Candidate生成 / route表現の整理 | Cross規則、stream-local anchor ordering、offset / source重複除去、分解評価と既存Target評価器の一致担保 | B1, B2 |
+| B3 | Candidate生成 / route表現の整理 | Cross規則、stream-local anchor ordering、offset / source重複除去、分解評価と既存Target評価器の一致担保 | B1, B2。完了 |
 | B4 | 初回Search終了条件とPractical保持 | canonical Ideal終了、`candidateStableKey` によるrun非依存tie-break、操作数D以下のPractical horizon、branch-and-bound / best-first、非劣位Practical列挙、保守的dominance、`maxCandidatesPerTarget` のIdeal枠確保 | B3, **B7** |
 | B5 | 実Browser Worker性能検証 | C5-E2C8と同形式の実測。checkpoint yield間隔の見直しを含む | B4 |
 | B6 | UI / default / labels修正 | default値、進捗表示粒度、`no_owned_weapon_available` 文言、`normal_scope_requires_reset` の誤表現是正 | B5 |
@@ -560,6 +560,46 @@ B2の範囲外として残したもの。Cross規則(B3)、stream-local anchor o
 Ideal既達成による早期終了は今回もskip reasonを新設していないため、全起点がBonus Ideal
 既達成の場合の `existing_gogma_reset_bonuses` skip reasonは従来どおり
 `gogma_prediction_unsupported` のままである。文言是正はB6の範囲とする。
+
+**B3完了。** Route baseごとのstream解集合、stream-local retention / ordering、Cross規則、
+分解評価をそれぞれ独立モジュールへ実装した。
+
+- `src/domain/search/streamSolutions.ts` が `RouteSkillSolution` / `RouteBonusSolution`
+  (いずれも操作0解を含む)、stream-local評価、retention、deterministic orderingを持つ
+- `src/domain/search/crossComposition.ts` が `crossStreamSolutions()` としてCross規則だけを
+  実装する。生成件数は `|B(c)| + |K(c)| - 1` であり、軸外pairを生成しない
+- `src/domain/search/routeSearchShared.ts` の `composeRouteCandidates()` が
+  ideal / practicalのcategory predicateごとにCrossし、重複pairを1回だけCandidate化する
+
+Skill retentionは同一 `(seriesSkillId, groupSkillId)` の最小 `resetCount`、Bonus retentionは
+同一完成5枠multisetの最小 `gogmaAdvance` を残す。`restorationBonusScope` は
+`RouteBonusSolution` には保持するが、retention identityには含めない(SEARCH_SPEC 5.5.3)。
+完成5枠のkeyはslotごとに `(bonusTypeId, bonusRankId)` を構造的にencodeしてから
+sortするため、区切り文字を含むMaster IDでも別pairが衝突しない。orderingは
+SEARCH_SPEC 5.5.2 / 5.5.3どおりで、比較はlocale非依存の文字列比較を使う。
+Bonus orderingの素材必要量合計はtie-break専用で、B4のcomponent-wise dominanceとは
+別物である。
+
+分解評価のauthorityは既存Domain関数のままとした。Bonus側は
+`areRestorationBonusSetsEqual()` / `evaluatePracticalBonusConditions()` と、
+`createIdealDifference()` から切り出した `createBonusIdealDifference()`、Skill側は
+`evaluateSkillCondition()` を使う。合成後の `category` / `idealDifference` /
+`similarityScore` / `isSimilarToIdeal` は従来どおり `evaluateTargetCandidate()` が決める。
+
+既存巨戟RouteKindは合成した `(d, k)` から決める。`d = 0` かつ `k = 0` はCandidate化しない。
+通常 / 所持通常経由は `create_normal_artian` / `convert_normal_to_gogma` を必ず含むため
+`d = 0` / `k = 0` でも合成する。操作列はRoute base → Bonus → Reset Skillsの順に連結する。
+Protected起点は `gogmaAdvance = 0` のBonus解しか持たないため、Skill軸のみのCandidateになる。
+
+B3の範囲外として残したもの。canonical Ideal、`candidateStableKey`、Practical horizon、
+Pareto dominance、`maxCandidatesPerTarget` のIdeal枠確保、初回Search終了条件はB4のままで、
+出力段のsort / dedup / truncationも現行実装を維持した。
+
+B1 / B2のテストのうち、同一結果を全depth・全位置で候補化する前提だったものは、
+各stateへ固有の完成結果を与えるfixtureへ更新した。stream-local retentionが
+「同一結果の後続位置を初回Searchの出力から省く」挙動そのものであり、
+テストを弱めずに元の観点(全depthのcanonical history、Reset 1 ... Mの被覆)を維持するための
+最小変更である。
 
 B8 / B9 / B10 はB1〜B3のstream独立化とは責務が異なるため、既存B1 / B2へ混ぜない。
 特にB8はPlanner側の新規orchestrationである。

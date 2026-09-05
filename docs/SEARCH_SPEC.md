@@ -512,6 +512,9 @@ Candidate(c) = { (B(c)[i], k0) | i = 0 ... |B(c)| - 1 }
 - `resultFilter` は出力段のフィルタであり、stream探索・解集合・合成規則へ影響しない。
   `similar` を選んでもideal解の探索を省略しない
 
+Cross規則と5.5.2 / 5.5.3のstream-local retention / orderingはB3で実装済みである。
+5.5.6のPractical dominanceと5.5.7のIdeal枠確保、5.6.2の終了条件はB4の範囲である。
+
 ### 5.5.5 操作0の扱い
 
 - Bonus stream `d = 0` は「現在の5枠をそのまま使う」ことを表す

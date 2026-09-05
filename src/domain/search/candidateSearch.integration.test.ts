@@ -168,7 +168,11 @@ describe('Candidate Search routes', () => {
     ]
     const result = await searchCandidates(
       input,
-      createCandidateSearchEngine(input),
+      // A distinct Reset Skills result, so the stream-local retention keeps the
+      // `resetCount = 1` solution instead of folding it into the conversion.
+      createCandidateSearchEngine(input, {
+        resetSkillSeriesSkillId: 'series_skill.fixture.b',
+      }),
       deterministicExecution,
     )
     const candidate = result.targetResults[0].candidates.find(
@@ -705,21 +709,55 @@ describe('Candidate Search routes', () => {
     input.calculationContext.rngEngineVersion = 'fake-fixture:bounded-amendment-frontier'
     input.ownedWeapons[0].isProtected = false
     input.ownedWeapons[0].restorationBonusScope = 'gogma_artian'
+    // Every state below gets its own completed five-slot multiset. The
+    // stream-local retention keeps the smallest `gogmaAdvance` per outcome, so
+    // repeating one Reset or Keep result across depths would collapse the
+    // canonical histories this test covers into a single Candidate.
     // Layout R: attack / attack / element / utility / sharpness.
-    const resetResult = createRestorationBonusSet()
-    // Same layout R, one tier lower, so Keep from R stays in R.
-    const keepFromReset = createRestorationBonusSet()
-    keepFromReset[4] = {
-      bonusTypeId: 'bonus_type.fixture.sharpness',
-      bonusRankId: 'bonus_rank.fixture.low',
+    const layoutR = (utilityRank: string, sharpnessRank: string) => {
+      const bonuses = createRestorationBonusSet()
+      bonuses[3] = { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: utilityRank }
+      bonuses[4] = { bonusTypeId: 'bonus_type.fixture.sharpness', bonusRankId: sharpnessRank }
+      return bonuses
     }
     // Layout K: element / attack / attack / utility / utility.
-    const sourceBonuses = createRestorationBonusSet()
-    sourceBonuses[0] = { bonusTypeId: 'bonus_type.fixture.element', bonusRankId: 'bonus_rank.fixture.middle' }
-    sourceBonuses[1] = { bonusTypeId: 'bonus_type.fixture.attack', bonusRankId: 'bonus_rank.fixture.high' }
-    sourceBonuses[2] = { bonusTypeId: 'bonus_type.fixture.attack', bonusRankId: 'bonus_rank.fixture.high' }
-    sourceBonuses[3] = { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: 'bonus_rank.fixture.low' }
-    sourceBonuses[4] = { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: 'bonus_rank.fixture.low' }
+    const layoutK = (firstUtilityRank: string, secondUtilityRank: string) => {
+      const bonuses = createRestorationBonusSet()
+      bonuses[0] = { bonusTypeId: 'bonus_type.fixture.element', bonusRankId: 'bonus_rank.fixture.middle' }
+      bonuses[1] = { bonusTypeId: 'bonus_type.fixture.attack', bonusRankId: 'bonus_rank.fixture.high' }
+      bonuses[2] = { bonusTypeId: 'bonus_type.fixture.attack', bonusRankId: 'bonus_rank.fixture.high' }
+      bonuses[3] = { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: firstUtilityRank }
+      bonuses[4] = { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: secondUtilityRank }
+      return bonuses
+    }
+    const low = 'bonus_rank.fixture.low'
+    const middle = 'bonus_rank.fixture.middle'
+    const high = 'bonus_rank.fixture.high'
+    const special = 'bonus_rank.fixture.special'
+    /** Reset result of depth `index + 1`, all in layout R. */
+    const resetResults = [
+      layoutR(low, low),
+      layoutR(low, middle),
+      layoutR(low, high),
+      layoutR(low, special),
+      layoutR(middle, low),
+    ]
+    /** Keep from the depth-`index + 1` Reset representative; stays in layout R. */
+    const keepFromResetResults = [
+      layoutR(high, low),
+      layoutR(high, middle),
+      layoutR(high, high),
+      layoutR(high, special),
+    ]
+    /** The Keep-only chain; every state stays in layout K. */
+    const sourceBonuses = layoutK(low, low)
+    const keepChainResults = [
+      layoutK(low, middle),
+      layoutK(low, high),
+      layoutK(low, special),
+      layoutK(middle, high),
+      layoutK(middle, special),
+    ]
     input.ownedWeapons[0].restorationBonuses = sourceBonuses
     const baseSeed = input.rngState.baseSeed.value as string
     const counters = [10, 11, 12, 13, 14]
@@ -748,15 +786,29 @@ describe('Candidate Search routes', () => {
         supportsKeepBonusesPrediction: true,
       },
       normalizedSeeds: [],
-      resetBonusPredictions: counters.map((counter) =>
-        makePrediction(counter, { type: 'reset_bonuses' }, resetResult),
+      resetBonusPredictions: counters.map((counter, index) =>
+        makePrediction(counter, { type: 'reset_bonuses' }, resetResults[index]),
       ),
       keepBonusPredictions: [
-        ...counters.map((counter) =>
-          makePrediction(counter, { type: 'keep_bonuses', currentBonuses: sourceBonuses }, sourceBonuses),
+        // The layout K chain: each Keep reads the previous depth's own result.
+        ...counters.map((counter, index) =>
+          makePrediction(
+            counter,
+            {
+              type: 'keep_bonuses',
+              currentBonuses: index === 0 ? sourceBonuses : keepChainResults[index - 1],
+            },
+            keepChainResults[index],
+          ),
         ),
-        ...counters.slice(1).map((counter) =>
-          makePrediction(counter, { type: 'keep_bonuses', currentBonuses: resetResult }, keepFromReset),
+        // Layout R appears from depth 2, and its representative is always that
+        // depth's own Reset state (the most recent Reset).
+        ...counters.slice(1).map((counter, index) =>
+          makePrediction(
+            counter,
+            { type: 'keep_bonuses', currentBonuses: resetResults[index] },
+            keepFromResetResults[index],
+          ),
         ),
       ],
       skillPredictions: [],

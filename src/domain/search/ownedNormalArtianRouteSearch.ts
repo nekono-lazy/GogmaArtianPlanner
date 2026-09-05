@@ -1,11 +1,12 @@
 import type { RouteOperation } from '../models/publicTypes'
 import { V1_NORMAL_ARTIAN_RARITY } from '../models/publicTypes'
-import { bonusAmendmentOperations } from './bonusStream'
 import {
   bonusesSatisfyIdeal,
-  composeSkillCandidates,
+  composeRouteCandidates,
   hasConfirmedGogmaInputs,
   hasConfirmedSkillInputs,
+  routeBonusSolutions,
+  routeSkillSolutions,
   skillsSatisfyIdeal,
   type RouteSearchContext,
   type RouteSearchResult,
@@ -64,55 +65,59 @@ export async function searchOwnedNormalArtianRoutes(
   // and Reset Skills is not searched; the Bonus stream continues.
   const skillCounterAfter = engine.advanceSkillCounter(skillCounter, { type: 'convert_normal_to_gogma' })
   const skills = context.skillStream.predictAt(skillCounter)
-  const skillSolutions = skillsSatisfyIdeal(
-    context,
-    skills.seriesSkillId,
-    skills.groupSkillId,
+  // The Skill solutions do not depend on the source weapon, so they are built
+  // once and shared by every owned Normal Route base.
+  const skillSolutions = routeSkillSolutions(
+    skillsSatisfyIdeal(context, skills.seriesSkillId, skills.groupSkillId)
+      ? null
+      : await context.skillStream.solve(skillCounterAfter),
+    {
+      resetCount: 0,
+      seriesSkillId: skills.seriesSkillId,
+      groupSkillId: skills.groupSkillId,
+      estimatedSkillAdvance: 1,
+      operations: [],
+    },
+    null,
+    1,
   )
-    ? null
-    : await context.skillStream.solve(skillCounterAfter)
 
   for (const source of sources) {
     await execution.checkpoint()
     const operations: RouteOperation[] = [{ type: 'convert_normal_to_gogma', weaponTypeId: target.weaponTypeId, skillCounterBefore: skillCounter, skillCounterAfter }]
-    result.candidates.push(...await composeSkillCandidates(context, {
-      bonuses: source.restorationBonuses,
-      restorationBonusScope: 'normal_artian',
-      operations,
-      sourceOwnedWeaponId: source.id,
-      resetSkillsSourceOwnedWeaponId: null,
-      seriesSkillId: skills.seriesSkillId,
-      groupSkillId: skills.groupSkillId,
-      kind: 'owned_normal_artian_to_gogma',
-    }, skillSolutions))
     // Inherited five slots that already match `idealBonuses` finish this Route
     // base's Bonus stream, so no amendment is searched for it.
-    if (canSearchAmendments && !bonusesSatisfyIdeal(context, source.restorationBonuses)) {
-      const amendmentResult = await context.bonusStream.solve({
-        startGogmaCounter: input.rngState.gogmaCounter.value!,
-        bonuses: source.restorationBonuses,
-        restorationBonusScope: 'normal_artian',
-      })
-      for (const solution of amendmentResult.solutions) {
-        result.candidates.push(...await composeSkillCandidates(context, {
-          bonuses: solution.bonuses,
-          restorationBonusScope: solution.restorationBonusScope,
-          operations: [
-            ...operations,
-            ...bonusAmendmentOperations(amendmentResult, solution, null),
-          ],
-          sourceOwnedWeaponId: source.id,
-          resetSkillsSourceOwnedWeaponId: null,
-          seriesSkillId: skills.seriesSkillId,
-          groupSkillId: skills.groupSkillId,
-          kind: 'owned_normal_artian_to_gogma',
-        }, skillSolutions))
-      }
-      for (const unsupported of amendmentResult.unsupportedPredictions) {
-        const message = `${unsupported.type} was excluded after converting OwnedWeapon '${source.id}' by input support (${unsupported.reason}).`
-        if (!result.warnings.some((warning) => warning.message === message)) {
-          result.warnings.push({ targetWeaponId: target.id, message })
-        }
+    const amendmentResult =
+      canSearchAmendments && !bonusesSatisfyIdeal(context, source.restorationBonuses)
+        ? await context.bonusStream.solve({
+            startGogmaCounter: input.rngState.gogmaCounter.value!,
+            bonuses: source.restorationBonuses,
+            restorationBonusScope: 'normal_artian',
+          })
+        : null
+
+    result.candidates.push(...await composeRouteCandidates(context, {
+      kindResolution: { type: 'fixed', kind: 'owned_normal_artian_to_gogma' },
+      sourceOwnedWeaponId: source.id,
+      baseOperations: operations,
+      bonusSolutions: routeBonusSolutions(
+        amendmentResult,
+        {
+          gogmaAdvance: 0,
+          lastResetDepth: 0,
+          finalBonuses: source.restorationBonuses,
+          restorationBonusScope: 'normal_artian',
+          operations: [],
+        },
+        null,
+      ),
+      skillSolutions,
+    }))
+
+    for (const unsupported of amendmentResult?.unsupportedPredictions ?? []) {
+      const message = `${unsupported.type} was excluded after converting OwnedWeapon '${source.id}' by input support (${unsupported.reason}).`
+      if (!result.warnings.some((warning) => warning.message === message)) {
+        result.warnings.push({ targetWeaponId: target.id, message })
       }
     }
   }

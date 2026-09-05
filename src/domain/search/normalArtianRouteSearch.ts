@@ -1,11 +1,12 @@
 import type { RouteOperation } from '../models/publicTypes'
 import { V1_NORMAL_ARTIAN_RARITY } from '../models/publicTypes'
-import { bonusAmendmentOperations } from './bonusStream'
 import {
   bonusesSatisfyIdeal,
-  composeSkillCandidates,
+  composeRouteCandidates,
   hasConfirmedGogmaInputs,
   hasConfirmedSkillInputs,
+  routeBonusSolutions,
+  routeSkillSolutions,
   skillsSatisfyIdeal,
   type RouteSearchContext,
   type RouteSearchResult,
@@ -115,13 +116,23 @@ export async function searchNormalArtianRoutes(
     type: 'convert_normal_to_gogma',
   })
   const skills = context.skillStream.predictAt(skillCounter)
-  const skillSolutions = skillsSatisfyIdeal(
-    context,
-    skills.seriesSkillId,
-    skills.groupSkillId,
+  // `resetCount = 0` is the conversion's own initial Skill assignment, whose
+  // Skill advance is already 1 (SEARCH_SPEC 5.5.2). The Skill solutions do not
+  // depend on the Normal offset, so they are built once for every Route base.
+  const skillSolutions = routeSkillSolutions(
+    skillsSatisfyIdeal(context, skills.seriesSkillId, skills.groupSkillId)
+      ? null
+      : await context.skillStream.solve(skillCounterAfter),
+    {
+      resetCount: 0,
+      seriesSkillId: skills.seriesSkillId,
+      groupSkillId: skills.groupSkillId,
+      estimatedSkillAdvance: 1,
+      operations: [],
+    },
+    null,
+    1,
   )
-    ? null
-    : await context.skillStream.solve(skillCounterAfter)
 
   for (const counter of counters) {
     if (counter.counter === null) continue
@@ -146,44 +157,39 @@ export async function searchNormalArtianRoutes(
         { type: 'create_normal_artian', weaponTypeId: target.weaponTypeId, rarity: counter.rarity, count: forgeCount, normalCounterBefore: start, normalCounterAfter },
         { type: 'convert_normal_to_gogma', weaponTypeId: target.weaponTypeId, skillCounterBefore: skillCounter, skillCounterAfter },
       ]
-      result.candidates.push(...await composeSkillCandidates(context, {
-        bonuses,
-        restorationBonusScope: 'normal_artian',
-        operations,
-        sourceOwnedWeaponId: null,
-        resetSkillsSourceOwnedWeaponId: null,
-        seriesSkillId: skills.seriesSkillId,
-        groupSkillId: skills.groupSkillId,
-        kind: 'normal_artian_to_gogma',
-      }, skillSolutions))
       // Inherited five slots that already match `idealBonuses` finish this
       // Route base's Bonus stream, so no amendment is searched for it.
-      if (canSearchAmendments && !bonusesSatisfyIdeal(context, bonuses)) {
-        const amendmentResult = await context.bonusStream.solve({
-          startGogmaCounter: input.rngState.gogmaCounter.value!,
-          bonuses,
-          restorationBonusScope: 'normal_artian',
-        })
-        for (const solution of amendmentResult.solutions) {
-          result.candidates.push(...await composeSkillCandidates(context, {
-            bonuses: solution.bonuses,
-            restorationBonusScope: solution.restorationBonusScope,
-            operations: [
-              ...operations,
-              ...bonusAmendmentOperations(amendmentResult, solution, null),
-            ],
-            sourceOwnedWeaponId: null,
-            resetSkillsSourceOwnedWeaponId: null,
-            seriesSkillId: skills.seriesSkillId,
-            groupSkillId: skills.groupSkillId,
-            kind: 'normal_artian_to_gogma',
-          }, skillSolutions))
-        }
-        for (const unsupported of amendmentResult.unsupportedPredictions) {
-          const message = `${unsupported.type} was excluded from the Normal Artian route by input support (${unsupported.reason}).`
-          if (!result.warnings.some((warning) => warning.message === message)) {
-            result.warnings.push({ targetWeaponId: target.id, message })
-          }
+      const amendmentResult =
+        canSearchAmendments && !bonusesSatisfyIdeal(context, bonuses)
+          ? await context.bonusStream.solve({
+              startGogmaCounter: input.rngState.gogmaCounter.value!,
+              bonuses,
+              restorationBonusScope: 'normal_artian',
+            })
+          : null
+
+      result.candidates.push(...await composeRouteCandidates(context, {
+        kindResolution: { type: 'fixed', kind: 'normal_artian_to_gogma' },
+        sourceOwnedWeaponId: null,
+        baseOperations: operations,
+        bonusSolutions: routeBonusSolutions(
+          amendmentResult,
+          {
+            gogmaAdvance: 0,
+            lastResetDepth: 0,
+            finalBonuses: bonuses,
+            restorationBonusScope: 'normal_artian',
+            operations: [],
+          },
+          null,
+        ),
+        skillSolutions,
+      }))
+
+      for (const unsupported of amendmentResult?.unsupportedPredictions ?? []) {
+        const message = `${unsupported.type} was excluded from the Normal Artian route by input support (${unsupported.reason}).`
+        if (!result.warnings.some((warning) => warning.message === message)) {
+          result.warnings.push({ targetWeaponId: target.id, message })
         }
       }
     }

@@ -37,6 +37,13 @@ interface StreamFixtureOptions {
   gogmaPositions: number
   /** Relative Skill position whose prediction satisfies the Ideal condition. */
   idealSkillIndex?: number
+  /**
+   * Publishes a different Series Skill per non-Ideal position. The B3
+   * stream-local retention keeps only the smallest `resetCount` per
+   * `(seriesSkillId, groupSkillId)`, so a fixture that repeats one Skill can
+   * never exercise the full `1 ... M` Reset range.
+   */
+  distinctSkills?: boolean
   /** Normal forge counts to publish, for conversion Routes. */
   normalForges?: number
   resetResult?: RestorationBonusSet
@@ -97,7 +104,9 @@ function createStreamFixtureEngine(
       result: {
         seriesSkillId: index === (options.idealSkillIndex ?? 0)
           ? IDEAL_SERIES_SKILL
-          : OTHER_SERIES_SKILL,
+          : options.distinctSkills
+            ? `${OTHER_SERIES_SKILL}.${index}`
+            : OTHER_SERIES_SKILL,
         groupSkillId: null,
       },
     })),
@@ -225,6 +234,7 @@ describe('Skill stream independence', () => {
     const engine = createStreamFixtureEngine(input, {
       skillPositions: 5,
       gogmaPositions: 1,
+      distinctSkills: true,
     })
     const calls = skillCounterCalls(engine)
     const result = await searchCandidates(input, engine, deterministicExecution)
@@ -369,6 +379,7 @@ describe('Skill stream independence', () => {
         skillPositions: 5,
         gogmaPositions: 1,
         idealSkillIndex: 1,
+        distinctSkills: true,
         normalForges: maxNormalAdvance,
       })
       const calls = skillCounterCalls(engine)
