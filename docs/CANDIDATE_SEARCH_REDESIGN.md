@@ -262,11 +262,19 @@ Practicalを満たさない可能性がある」と指摘したが、これは�
 採用しない。正式な不変条件は `docs/DATA_MODEL.md` 8.1 にある。
 
 この不変条件が2.7のIdeal既達成stream早期終了の前提である。
-現時点のTargetWeapon validationはこの包含を検証していない。
+TargetWeapon validationはB7でこの包含を検証するようになった。
 
-したがって包含を利用する最適化は、validation実装(B7)完了後にのみ実装する。
+包含を利用する最適化はvalidation実装(B7)完了後にのみ実装する。
 Phase順は `B0 -> B7 -> B1 -> ...` とし、B7を後回しにできる独立作業として
-扱わない(4.0参照)。
+扱わない(4.0参照)。この順序自体は変更しない。
+
+実装状況は次である。
+
+```text
+B7 : Ideal ⇒ Practical validation        完了
+B1 : Skill stream Ideal既達成 early exit  完了
+B2 : Bonus stream Ideal既達成 early exit  完了
+```
 
 ### 2.7 初回Searchの終了条件とcanonical Ideal
 
@@ -456,7 +464,7 @@ B11 は実ゲーム観測を前提とする独立系列
 | B0 | 仕様確定 | 本記録と `AGENTS.md` / `docs/*` の契約更新 | 完了 |
 | B7 | Target Ideal ⇒ Practical validation | `docs/DATA_MODEL.md` 8.1 の包含不変条件をTargetWeapon validationへ実装。既存保存Targetの扱いを含む | 完了 |
 | B1 | Existing Gogma Skill stream独立化 | 共有Skill列、Ideal既達成時の0回化、`maxSkillAdvance` off-by-one整合、SEARCH_SPEC 6.5前提の早期判定。Gogma側は触らない | B0, **B7**。完了 |
-| B2 | Gogma Reset / Keep探索のstate search化 | depthごとReset 1回、family layout dedup、frontierから操作列を除去、Keep-only先行路、決定的representative | B1 |
+| B2 | Gogma Reset / Keep探索のstate search化 | depthごとReset 1回、family layout dedup、frontierから操作列を除去、Keep-only先行路、決定的representative | B1。完了 |
 | B3 | Candidate生成 / route表現の整理 | Cross規則、stream-local anchor ordering、offset / source重複除去、分解評価と既存Target評価器の一致担保 | B1, B2 |
 | B4 | 初回Search終了条件とPractical保持 | canonical Ideal終了、`candidateStableKey` によるrun非依存tie-break、操作数D以下のPractical horizon、branch-and-bound / best-first、非劣位Practical列挙、保守的dominance、`maxCandidatesPerTarget` のIdeal枠確保 | B3, **B7** |
 | B5 | 実Browser Worker性能検証 | C5-E2C8と同形式の実測。checkpoint yield間隔の見直しを含む | B4 |
@@ -515,6 +523,44 @@ B3 / B4へ残した。`existing_gogma_reset_skills` / `existing_gogma_mixed` の
 `searchedRoutes` 報告条件は従来どおりで、Ideal既達成による早期終了は
 skip reasonを新設しない。
 
+**B2完了。** Bonus streamを `src/domain/search/bonusStream.ts` の `TargetBonusStream`
+として独立させた。`searchTarget()` がTargetごとに1つ生成し、`RouteSearchContext.bonusStream`
+で全RouteKind・全Route baseが共有する。
+
+Reset予測は絶対Gogma Counter位置単位でmemoizeするため、同一 `(TargetWeaponId, baseSeed,
+Gogma Counter位置)` に対する `predictGogmaBonus({ type: "reset_bonuses" })` は最大1回であり、
+frontier state数・起点武器数・normal offset数に比例しない。Keep予測は
+`(Gogma Counter位置, 順序付きfamily layout)` 単位でmemoizeする。family layout keyは
+`src/domain/rng/gogmaBonusFamily.ts` の `gogmaKeepFamilyLayoutKey()` がDomain semantic値
+(`bonusTypeId` の順序付き5枠) から求める。参照実装のprivate reference IDをSearchへ持ち込まず、
+normal-tier familyも定義していない。参照Keep family tableが `bonusTypeId` 単位で
+グルーピングされていることはテストで固定した。
+
+frontier stateは `{ depth, lastResetDepth, bonuses, scope, familyLayoutKey }` のcompact形で、
+`RouteOperation[]` を保持しない。同一depth・同一family layoutのstateは2.4.1の
+直近Reset優先(`lastResetDepth` 最大)で1代表へ畳み、同点は完成5枠のstable semantic keyで
+決定する。生成したstateはfrontier縮約の前にすべてBonus解として公開するため、
+畳み込みで候補を失わない。Candidateへ渡す操作列は `(depth, lastResetDepth)` から
+`bonusAmendmentOperations()` が再構成し、depth `1 ... r` をReset、以降をKeepとする
+canonical historyを与える。Counter進行値は `engine.advanceGogmaCounter()` から取る。
+
+`depth >= 1` のBonus解集合はキャッシュする。normal scope起点は最初のBonus操作が必ずResetで
+以後が起点非依存になるため `(startGogmaCounter)` 単位、gogma scope起点は
+`(startGogmaCounter, 順序付き5枠)` 単位で共有する(SEARCH_SPEC 5.5.3)。Keep prediction support
+判定は畳み込み後の代表の実際の5枠に対して行うため、layout共有がsupport判定を跨がない。
+
+現在BonusがTargetの `idealBonuses` と一致するRoute baseは、Bonus amendment探索を行わない。
+判定は既存Domain semanticsの `areRestorationBonusSetsEqual()` を使う。該当する場合
+`predictGogmaBonus` は0回、Reset / Keep操作も0件になり、Skill streamは独立に継続する。
+Practicalのみを満たす状態では探索を打ち切らない。
+
+B2の範囲外として残したもの。Cross規則(B3)、stream-local anchor ordering、同一結果の
+最小advance retention、Practical dominance、canonical Ideal、`candidateStableKey`、
+初回Search終了条件(B4)は未実装で、Bonus解とSkill解の合成件数はB1時点のままである。
+Ideal既達成による早期終了は今回もskip reasonを新設していないため、全起点がBonus Ideal
+既達成の場合の `existing_gogma_reset_bonuses` skip reasonは従来どおり
+`gogma_prediction_unsupported` のままである。文言是正はB6の範囲とする。
+
 B8 / B9 / B10 はB1〜B3のstream独立化とは責務が異なるため、既存B1 / B2へ混ぜない。
 特にB8はPlanner側の新規orchestrationである。
 
@@ -553,12 +599,19 @@ Domain契約を変える判断が必要になった場合は、実装前に設�
 1. ~~共有Skill列の保持場所。~~ B1で決定済み。専用モジュール
    `src/domain/search/skillStream.ts` へ切り出し、`searchTarget()` が生成して
    `RouteSearchContext.skillStream` で渡す
-2. 共有Bonus解集合(conversion後 `depth >= 1`)のキャッシュ境界。
-   Target単位か、`(TargetWeaponId, baseSeed, gogmaCounterBefore)` 単位か
+2. ~~共有Bonus解集合(conversion後 `depth >= 1`)のキャッシュ境界。~~
+   B2で決定済み。Target単位の `TargetBonusStream` が保持し、解集合キャッシュは
+   normal scope起点を `(startGogmaCounter)`、gogma scope起点を
+   `(startGogmaCounter, 順序付き5枠)` で分ける。Prediction memoはReset が
+   Gogma Counter位置単位、Keepが `(位置, family layout)` 単位
 3. `evaluateTargetCandidate` を分解版へ置換するか、既存APIを残して
    分解結果との一致をテストで固定するか。後者を推奨する
-4. frontier stateから操作列を除いた後、候補確定時に
-   `(lastResetDepth, depth)` から `RouteOperation[]` を再構成する具体形
+4. ~~frontier stateから操作列を除いた後、候補確定時に
+   `(lastResetDepth, depth)` から `RouteOperation[]` を再構成する具体形。~~
+   B2で決定済み。`bonusAmendmentOperations(set, solution, sourceOwnedWeaponId)` が
+   `steps[0 ... depth - 1]` を走査し、`depth <= lastResetDepth` をReset、
+   以降をKeepとして再構成する。Counterは解集合の `steps` が持つ
+   `engine.advanceGogmaCounter()` 由来の値を使う
 5. `searchExecution.ts` のcheckpoint / yield間隔を件数ベースから経過時間ベースへ
    変えるかどうか。B5の実測後に決める
 6. `candidateSearch.integration.test.ts` の

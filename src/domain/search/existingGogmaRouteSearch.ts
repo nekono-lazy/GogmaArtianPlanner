@@ -1,9 +1,14 @@
-import type { BuildRoute, OwnedGogmaArtianWeapon, RouteOperation } from '../models/publicTypes'
+import type { BuildRoute, OwnedGogmaArtianWeapon } from '../models/publicTypes'
 import {
+  bonusAmendmentOperations,
+  type BonusStreamSolution,
+  type BonusStreamSolutionSet,
+} from './bonusStream'
+import {
+  bonusesSatisfyIdeal,
   composeSkillCandidates,
   hasConfirmedGogmaInputs,
   hasConfirmedSkillInputs,
-  searchBonusAmendmentVariants,
   skillsSatisfyIdeal,
   type RouteSearchContext,
   type RouteSearchResult,
@@ -24,13 +29,13 @@ function pushAll(result: RouteSearchResult, routes: readonly BuildRoute['kind'][
   routes.forEach((route) => result.skippedRoutes.push({ route, reason, detail }))
 }
 
-function kindForAmendment(source: OwnedGogmaArtianWeapon, operations: RouteOperation[]): BuildRoute['kind'] {
-  const amendments = operations.filter((operation) => operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses')
-  const hasReset = amendments.some((operation) => operation.type === 'reset_bonuses')
-  const hasKeep = amendments.some((operation) => operation.type === 'keep_bonuses')
-  if (hasReset && !hasKeep) return 'existing_gogma_reset_bonuses'
-  if (hasKeep && !hasReset) return 'existing_gogma_keep_bonuses'
-  void source
+/**
+ * The canonical amendment history is Reset for depths `1 ... lastResetDepth`
+ * and Keep afterwards, so the RouteKind follows from those two numbers alone.
+ */
+function kindForAmendment(solution: BonusStreamSolution): BuildRoute['kind'] {
+  if (solution.lastResetDepth === solution.depth) return 'existing_gogma_reset_bonuses'
+  if (solution.lastResetDepth === 0) return 'existing_gogma_keep_bonuses'
   return 'existing_gogma_mixed'
 }
 
@@ -110,32 +115,29 @@ export async function searchExistingGogmaRoutes(context: RouteSearchContext): Pr
   const keepUnsupportedSources = new Set<OwnedGogmaArtianWeapon['id']>()
 
   for (const source of destructive) {
-    const amendmentResult = await searchBonusAmendmentVariants(context, {
+    // A source whose current five slots already match `idealBonuses` has a
+    // finished Bonus stream: no amendment is searched and no Gogma prediction
+    // is made for it. Its Skill stream is unaffected.
+    if (bonusesSatisfyIdeal(context, source.restorationBonuses)) continue
+    const amendmentResult: BonusStreamSolutionSet = await context.bonusStream.solve({
+      startGogmaCounter: input.rngState.gogmaCounter.value!,
       bonuses: source.restorationBonuses,
       restorationBonusScope: source.restorationBonusScope,
-      operations: [],
-      kind: 'existing_gogma_mixed' as const,
-      gogmaCounterBefore: input.rngState.gogmaCounter.value!,
-      amendmentSourceOwnedWeaponId: source.id,
-      kindForAmendment: (operations: RouteOperation[]) => kindForAmendment(source, operations),
     })
-    amendmentResult.searchedRoutes.forEach((route) => searchedAmendmentRoutes.add(route))
     const skillSolutions = await skillSolutionsFor(source)
-    for (const bonusResult of amendmentResult.results) {
-      if (canSkill && bonusResult.kind.startsWith('existing_gogma_')) {
-        searchedAmendmentRoutes.add('existing_gogma_mixed')
-      }
+    for (const solution of amendmentResult.solutions) {
+      const kind = kindForAmendment(solution)
+      searchedAmendmentRoutes.add(kind)
+      if (canSkill) searchedAmendmentRoutes.add('existing_gogma_mixed')
       result.candidates.push(...await composeSkillCandidates(context, {
-        bonuses: bonusResult.bonuses,
-        restorationBonusScope: bonusResult.restorationBonusScope,
-        operations: bonusResult.operations,
+        bonuses: solution.bonuses,
+        restorationBonusScope: solution.restorationBonusScope,
+        operations: bonusAmendmentOperations(amendmentResult, solution, source.id),
         sourceOwnedWeaponId: source.id,
         seriesSkillId: source.seriesSkillId,
         groupSkillId: source.groupSkillId,
-        kind: bonusResult.kind,
-        skillKind: bonusResult.kind.startsWith('existing_gogma_')
-          ? 'existing_gogma_mixed'
-          : bonusResult.kind,
+        kind,
+        skillKind: 'existing_gogma_mixed',
         resetSkillsSourceOwnedWeaponId: source.id,
       }, skillSolutions))
     }

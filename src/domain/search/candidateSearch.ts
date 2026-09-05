@@ -9,6 +9,7 @@ import {
 import { searchExistingGogmaRoutes } from './existingGogmaRouteSearch'
 import { searchNormalArtianRoutes } from './normalArtianRouteSearch'
 import { searchOwnedNormalArtianRoutes } from './ownedNormalArtianRouteSearch'
+import { createTargetBonusStream } from './bonusStream'
 import { createSearchPredictionSupport } from './routeSearchShared'
 import { createTargetSkillStream } from './skillStream'
 import {
@@ -156,6 +157,16 @@ async function searchTarget(
       engine,
       execution,
       () => predictionSupport.skill().supported,
+    ),
+    // One Bonus stream per Target. Reset is predicted once per Gogma Counter
+    // position and Keep once per (position, family layout), shared by every
+    // source weapon and every Normal offset.
+    bonusStream: createTargetBonusStream(
+      target,
+      input,
+      engine,
+      execution,
+      predictionSupport,
     ),
   }
 

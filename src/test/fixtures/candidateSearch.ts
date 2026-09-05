@@ -51,6 +51,20 @@ export function belowPracticalBonuses() {
   )
 }
 
+/**
+ * Satisfies the fixture Target's Practical bonus conditions without matching
+ * `idealBonuses`, so a Route base using it keeps searching the Bonus stream.
+ */
+export function practicalOnlyBonuses() {
+  return restorationBonusSet(
+    restorationBonus('bonus_type.fixture.attack', 'bonus_rank.fixture.high'),
+    restorationBonus('bonus_type.fixture.attack', 'bonus_rank.fixture.high'),
+    restorationBonus('bonus_type.fixture.element', 'bonus_rank.fixture.middle'),
+    restorationBonus('bonus_type.fixture.utility', 'bonus_rank.fixture.low'),
+    restorationBonus('bonus_type.fixture.utility', 'bonus_rank.fixture.low'),
+  )
+}
+
 export function createCandidateSearchInput(): CandidateSearchInput {
   const rngState = createValidRngState()
   rngState.skillCounter = { value: 7, isConfirmed: true, source: 'manual' }

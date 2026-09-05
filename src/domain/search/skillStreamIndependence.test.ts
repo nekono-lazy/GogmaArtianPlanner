@@ -3,6 +3,7 @@ import { searchCandidates } from './candidateSearch'
 import {
   belowPracticalBonuses,
   createCandidateSearchInput,
+  practicalOnlyBonuses,
   SEARCH_FIXTURE_TIME,
 } from '../../test/fixtures/candidateSearch'
 import {
@@ -39,6 +40,8 @@ interface StreamFixtureOptions {
   /** Normal forge counts to publish, for conversion Routes. */
   normalForges?: number
   resetResult?: RestorationBonusSet
+  /** Inherited five slots of a conversion Route base. */
+  normalResult?: RestorationBonusSet
 }
 
 function createStreamFixtureEngine(
@@ -48,6 +51,7 @@ function createStreamFixtureEngine(
   const baseSeed = input.rngState.baseSeed.value as string
   const target = input.targetWeapons[0]
   const resetResult = options.resetResult ?? belowPracticalBonuses()
+  const normalResult = options.normalResult ?? createRestorationBonusSet()
   const normalForges = options.normalForges ?? 0
   const fixtures: FakeRngFixtures = {
     version: 'skill-stream-independence',
@@ -68,7 +72,7 @@ function createStreamFixtureEngine(
         normalCounter: START_NORMAL_COUNTER + index,
         master: input.master,
       },
-      result: createRestorationBonusSet(),
+      result: normalResult,
     })),
     resetBonusPredictions: Array.from({ length: options.gogmaPositions }, (_, index) => ({
       input: {
@@ -246,7 +250,10 @@ describe('Skill stream independence', () => {
     const run = async (maxGogmaAdvance: number) => {
       const input = existingGogmaInput(3, maxGogmaAdvance)
       input.ownedWeapons = [
-        gogmaSource(input, 'owned.fixture.stream-gogma', { isProtected: false }),
+        gogmaSource(input, 'owned.fixture.stream-gogma', {
+          isProtected: false,
+          restorationBonuses: belowPracticalBonuses(),
+        }),
       ]
       const engine = createStreamFixtureEngine(input, {
         skillPositions: 4,
@@ -270,7 +277,10 @@ describe('Skill stream independence', () => {
     const run = async (maxSkillAdvance: number) => {
       const input = existingGogmaInput(maxSkillAdvance, 3)
       input.ownedWeapons = [
-        gogmaSource(input, 'owned.fixture.stream-skill', { isProtected: false }),
+        gogmaSource(input, 'owned.fixture.stream-skill', {
+          isProtected: false,
+          restorationBonuses: belowPracticalBonuses(),
+        }),
       ]
       const engine = createStreamFixtureEngine(input, {
         skillPositions: maxSkillAdvance + 1,
@@ -294,6 +304,7 @@ describe('Skill stream independence', () => {
       gogmaPositions: 1,
       idealSkillIndex: 0,
       normalForges: 1,
+      normalResult: practicalOnlyBonuses(),
       resetResult: createRestorationBonusSet(),
     })
     const calls = skillCounterCalls(engine)
@@ -322,7 +333,10 @@ describe('Skill stream independence', () => {
     const input = conversionInput(3, 1)
     input.normalCounters = []
     input.ownedWeapons = [
-      normalSource(input, 'owned.fixture.stream-owned-normal-ideal'),
+      {
+        ...normalSource(input, 'owned.fixture.stream-owned-normal-ideal'),
+        restorationBonuses: practicalOnlyBonuses(),
+      },
     ]
     const engine = createStreamFixtureEngine(input, {
       skillPositions: 5,

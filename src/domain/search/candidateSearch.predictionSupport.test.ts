@@ -8,8 +8,10 @@ import type {
 } from '../rng/rngEngine'
 import { searchCandidates } from './candidateSearch'
 import {
+  belowPracticalBonuses,
   createCandidateSearchEngine,
   createCandidateSearchInput,
+  practicalOnlyBonuses,
   SEARCH_FIXTURE_TIME,
 } from '../../test/fixtures/candidateSearch'
 import {
@@ -132,6 +134,7 @@ describe('Candidate Search input-level RNG support', () => {
     const input = createCandidateSearchInput()
     input.routeFilter = 'existing_gogma'
     input.ownedWeapons[0].isProtected = false
+    input.ownedWeapons[0].restorationBonuses = belowPracticalBonuses()
     const delegate = createCandidateSearchEngine(input, {
       resetResult: createRestorationBonusSet(),
     })
@@ -162,6 +165,7 @@ describe('Candidate Search input-level RNG support', () => {
     input.settings.maxGogmaAdvance = 1
     input.ownedWeapons[0].isProtected = false
     input.ownedWeapons[0].restorationBonusScope = 'gogma_artian'
+    input.ownedWeapons[0].restorationBonuses = belowPracticalBonuses()
     const delegate = createCandidateSearchEngine(input, {
       resetResult: createRestorationBonusSet(),
       keepResult: createRestorationBonusSet(),
@@ -195,6 +199,7 @@ describe('Candidate Search input-level RNG support', () => {
     input.routeFilter = 'existing_gogma'
     input.ownedWeapons[0].isProtected = false
     input.ownedWeapons[0].restorationBonusScope = 'gogma_artian'
+    input.ownedWeapons[0].restorationBonuses = belowPracticalBonuses()
     const delegate = createCandidateSearchEngine(input, {
       keepSupported: true,
       keepResult: createRestorationBonusSet(),
@@ -227,6 +232,9 @@ describe('Candidate Search input-level RNG support', () => {
     sourceA.id = ownedWeaponId('owned.fixture.keep-a')
     sourceA.isProtected = false
     sourceA.restorationBonusScope = 'gogma_artian'
+    // Below Ideal, so every source still searches Bonus amendments; the slot
+    // families stay distinct so A, B and C keep different family layouts.
+    sourceA.restorationBonuses = practicalOnlyBonuses()
     const sourceB = {
       ...structuredClone(sourceA),
       id: ownedWeaponId('owned.fixture.keep-b'),

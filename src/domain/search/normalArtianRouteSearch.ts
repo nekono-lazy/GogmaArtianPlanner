@@ -1,10 +1,11 @@
 import type { RouteOperation } from '../models/publicTypes'
 import { V1_NORMAL_ARTIAN_RARITY } from '../models/publicTypes'
+import { bonusAmendmentOperations } from './bonusStream'
 import {
+  bonusesSatisfyIdeal,
   composeSkillCandidates,
   hasConfirmedGogmaInputs,
   hasConfirmedSkillInputs,
-  searchBonusAmendmentVariants,
   skillsSatisfyIdeal,
   type RouteSearchContext,
   type RouteSearchResult,
@@ -155,25 +156,27 @@ export async function searchNormalArtianRoutes(
         groupSkillId: skills.groupSkillId,
         kind: 'normal_artian_to_gogma',
       }, skillSolutions))
-      if (canSearchAmendments) {
-        const amendmentResult = await searchBonusAmendmentVariants(context, {
+      // Inherited five slots that already match `idealBonuses` finish this
+      // Route base's Bonus stream, so no amendment is searched for it.
+      if (canSearchAmendments && !bonusesSatisfyIdeal(context, bonuses)) {
+        const amendmentResult = await context.bonusStream.solve({
+          startGogmaCounter: input.rngState.gogmaCounter.value!,
           bonuses,
           restorationBonusScope: 'normal_artian',
-          operations,
-          kind: 'normal_artian_to_gogma',
-          gogmaCounterBefore: input.rngState.gogmaCounter.value!,
-          amendmentSourceOwnedWeaponId: null,
         })
-        for (const bonusResult of amendmentResult.results) {
+        for (const solution of amendmentResult.solutions) {
           result.candidates.push(...await composeSkillCandidates(context, {
-            bonuses: bonusResult.bonuses,
-            restorationBonusScope: bonusResult.restorationBonusScope,
-            operations: bonusResult.operations,
+            bonuses: solution.bonuses,
+            restorationBonusScope: solution.restorationBonusScope,
+            operations: [
+              ...operations,
+              ...bonusAmendmentOperations(amendmentResult, solution, null),
+            ],
             sourceOwnedWeaponId: null,
             resetSkillsSourceOwnedWeaponId: null,
             seriesSkillId: skills.seriesSkillId,
             groupSkillId: skills.groupSkillId,
-            kind: bonusResult.kind,
+            kind: 'normal_artian_to_gogma',
           }, skillSolutions))
         }
         for (const unsupported of amendmentResult.unsupportedPredictions) {

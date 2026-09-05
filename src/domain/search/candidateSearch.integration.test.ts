@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { searchCandidates } from './candidateSearch'
 import {
   belowPracticalBonuses,
   createCandidateSearchEngine,
   createCandidateSearchInput,
+  practicalOnlyBonuses,
   SEARCH_FIXTURE_TIME,
 } from '../../test/fixtures/candidateSearch'
 import { createRestorationBonusSet } from '../../test/fixtures/domainData'
@@ -117,9 +118,14 @@ describe('Candidate Search routes', () => {
   it('searches a Normal conversion followed by transient Reset Bonuses', async () => {
     const input = createCandidateSearchInput()
     input.routeFilter = 'normal_artian'
+    // The inherited five slots must stay below Ideal, otherwise this Route
+    // base's Bonus stream is finished and no amendment is searched.
     const result = await searchCandidates(
       input,
-      createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
+      createCandidateSearchEngine(input, {
+        normalResult: practicalOnlyBonuses(),
+        resetResult: createRestorationBonusSet(),
+      }),
       deterministicExecution,
     )
     const candidate = result.targetResults[0].candidates.find(({ route }) =>
@@ -200,6 +206,8 @@ describe('Candidate Search routes', () => {
       kind: 'normal' as const,
       rarity: 8 as const,
       restorationBonusScope: 'normal_artian' as const,
+      // Below Ideal, so this Route base still searches Bonus amendments.
+      restorationBonuses: practicalOnlyBonuses(),
       seriesSkillId: null,
       groupSkillId: null,
       status: null,
@@ -345,6 +353,7 @@ describe('Candidate Search routes', () => {
     input.normalCounters = []
     input.rngState.counterGate = { value: null, isConfirmed: false, source: null }
     input.ownedWeapons[0].isProtected = false
+    input.ownedWeapons[0].restorationBonuses = belowPracticalBonuses()
     const result = await searchCandidates(
       input,
       createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
@@ -448,6 +457,7 @@ describe('Candidate Search routes', () => {
     const input = createCandidateSearchInput()
     input.routeFilter = 'existing_gogma'
     input.ownedWeapons[0].isProtected = false
+    input.ownedWeapons[0].restorationBonuses = belowPracticalBonuses()
     input.rngState.skillCounter = { value: 7, isConfirmed: false, source: 'manual' }
     const result = await searchCandidates(
       input,
@@ -470,6 +480,7 @@ describe('Candidate Search routes', () => {
     const neitherInput = createCandidateSearchInput()
     neitherInput.routeFilter = 'existing_gogma'
     neitherInput.ownedWeapons[0].isProtected = false
+    neitherInput.ownedWeapons[0].restorationBonuses = belowPracticalBonuses()
     const neitherEngine = createCandidateSearchEngine(neitherInput)
     neitherEngine.capabilities.supportsSkillPrediction = false
     neitherEngine.capabilities.supportsKeepBonusesPrediction = false
@@ -494,6 +505,7 @@ describe('Candidate Search routes', () => {
     const skillInput = createCandidateSearchInput()
     skillInput.routeFilter = 'existing_gogma'
     skillInput.ownedWeapons[0].isProtected = false
+    skillInput.ownedWeapons[0].restorationBonuses = belowPracticalBonuses()
     const skill = await searchCandidates(
       skillInput,
       createCandidateSearchEngine(skillInput),
@@ -506,6 +518,7 @@ describe('Candidate Search routes', () => {
     const keepInput = createCandidateSearchInput()
     keepInput.routeFilter = 'existing_gogma'
     keepInput.ownedWeapons[0].isProtected = false
+    keepInput.ownedWeapons[0].restorationBonuses = belowPracticalBonuses()
     const keepEngine = createCandidateSearchEngine(keepInput, { keepSupported: true })
     keepEngine.capabilities.supportsSkillPrediction = false
     const keep = await searchCandidates(keepInput, keepEngine, deterministicExecution)
@@ -563,7 +576,7 @@ describe('Candidate Search routes', () => {
     const input = createCandidateSearchInput()
     input.routeFilter = 'existing_gogma'
     input.ownedWeapons[0].isProtected = false
-    input.ownedWeapons[0].restorationBonuses = createRestorationBonusSet()
+    input.ownedWeapons[0].restorationBonuses = practicalOnlyBonuses()
     const predicted = [...createRestorationBonusSet()].reverse() as ReturnType<typeof createRestorationBonusSet>
     const result = await searchCandidates(
       input,
@@ -607,6 +620,7 @@ describe('Candidate Search routes', () => {
     input.routeFilter = 'existing_gogma'
     input.ownedWeapons[0].isProtected = false
     input.ownedWeapons[0].restorationBonusScope = 'normal_artian'
+    input.ownedWeapons[0].restorationBonuses = belowPracticalBonuses()
     const result = await searchCandidates(
       input,
       createCandidateSearchEngine(input, {
@@ -640,6 +654,7 @@ describe('Candidate Search routes', () => {
     input.routeFilter = 'existing_gogma'
     input.ownedWeapons[0].isProtected = false
     input.ownedWeapons[0].seriesSkillId = 'series_skill.fixture.other'
+    input.ownedWeapons[0].restorationBonuses = belowPracticalBonuses()
     const result = await searchCandidates(
       input,
       createCandidateSearchEngine(input, {
@@ -662,6 +677,7 @@ describe('Candidate Search routes', () => {
     input.routeFilter = 'existing_gogma'
     input.ownedWeapons[0].isProtected = false
     input.ownedWeapons[0].seriesSkillId = 'series_skill.fixture.other'
+    input.ownedWeapons[0].restorationBonuses = practicalOnlyBonuses()
     const result = await searchCandidates(
       input,
       createCandidateSearchEngine(input, {
@@ -682,24 +698,31 @@ describe('Candidate Search routes', () => {
     ])
   })
 
-  it('bounds amendment frontier growth while retaining Reset and Keep chains', async () => {
+  it('folds the amendment frontier by family layout and rebuilds canonical histories', async () => {
     const input = createCandidateSearchInput()
     input.routeFilter = 'existing_gogma'
-    input.settings.maxGogmaAdvance = 20
+    input.settings.maxGogmaAdvance = 5
     input.calculationContext.rngEngineVersion = 'fake-fixture:bounded-amendment-frontier'
     input.ownedWeapons[0].isProtected = false
     input.ownedWeapons[0].restorationBonusScope = 'gogma_artian'
-    const reset = createRestorationBonusSet()
-    reset[4] = {
-      bonusTypeId: 'bonus_type.fixture.element',
-      bonusRankId: 'bonus_rank.fixture.high',
+    // Layout R: attack / attack / element / utility / sharpness.
+    const resetResult = createRestorationBonusSet()
+    // Same layout R, one tier lower, so Keep from R stays in R.
+    const keepFromReset = createRestorationBonusSet()
+    keepFromReset[4] = {
+      bonusTypeId: 'bonus_type.fixture.sharpness',
+      bonusRankId: 'bonus_rank.fixture.low',
     }
-    const keep = structuredClone(reset)
-    const firstKeepBonus = keep[0]
-    keep[0] = keep[4]
-    keep[4] = firstKeepBonus
-    input.ownedWeapons[0].restorationBonuses = keep
+    // Layout K: element / attack / attack / utility / utility.
+    const sourceBonuses = createRestorationBonusSet()
+    sourceBonuses[0] = { bonusTypeId: 'bonus_type.fixture.element', bonusRankId: 'bonus_rank.fixture.middle' }
+    sourceBonuses[1] = { bonusTypeId: 'bonus_type.fixture.attack', bonusRankId: 'bonus_rank.fixture.high' }
+    sourceBonuses[2] = { bonusTypeId: 'bonus_type.fixture.attack', bonusRankId: 'bonus_rank.fixture.high' }
+    sourceBonuses[3] = { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: 'bonus_rank.fixture.low' }
+    sourceBonuses[4] = { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: 'bonus_rank.fixture.low' }
+    input.ownedWeapons[0].restorationBonuses = sourceBonuses
     const baseSeed = input.rngState.baseSeed.value as string
+    const counters = [10, 11, 12, 13, 14]
     const makePrediction = (
       counter: number,
       operation: FakeRngFixtures['keepBonusPredictions'][number]['input']['operation'],
@@ -715,13 +738,6 @@ describe('Candidate Search routes', () => {
       },
       result,
     })
-    const resetBonusPredictions = Array.from({ length: 20 }, (_, index) =>
-      makePrediction(10 + index, { type: 'reset_bonuses' }, reset),
-    )
-    const keepBonusPredictions = Array.from({ length: 20 }, (_, index) => [
-      makePrediction(10 + index, { type: 'keep_bonuses', currentBonuses: reset }, keep),
-      makePrediction(10 + index, { type: 'keep_bonuses', currentBonuses: keep }, keep),
-    ]).flat()
     const engine = new FakeRngEngine({
       version: 'bounded-amendment-frontier',
       capabilities: {
@@ -732,49 +748,103 @@ describe('Candidate Search routes', () => {
         supportsKeepBonusesPrediction: true,
       },
       normalizedSeeds: [],
-      resetBonusPredictions,
-      keepBonusPredictions,
+      resetBonusPredictions: counters.map((counter) =>
+        makePrediction(counter, { type: 'reset_bonuses' }, resetResult),
+      ),
+      keepBonusPredictions: [
+        ...counters.map((counter) =>
+          makePrediction(counter, { type: 'keep_bonuses', currentBonuses: sourceBonuses }, sourceBonuses),
+        ),
+        ...counters.slice(1).map((counter) =>
+          makePrediction(counter, { type: 'keep_bonuses', currentBonuses: resetResult }, keepFromReset),
+        ),
+      ],
       skillPredictions: [],
       normalArtianPredictions: [],
-      gogmaCounterAdvances: Array.from({ length: 20 }, (_, index) => [
-        { current: 10 + index, operation: { type: 'reset_bonuses' as const }, result: 11 + index },
-        { current: 10 + index, operation: { type: 'keep_bonuses' as const }, result: 11 + index },
-      ]).flat(),
+      gogmaCounterAdvances: counters.flatMap((counter) => [
+        { current: counter, operation: { type: 'reset_bonuses' as const }, result: counter + 1 },
+        { current: counter, operation: { type: 'keep_bonuses' as const }, result: counter + 1 },
+      ]),
       skillCounterAdvances: [],
       normalCounterAdvances: [],
     })
+    const predictGogmaBonus = vi.spyOn(engine, 'predictGogmaBonus')
     const result = await searchCandidates(input, engine, deterministicExecution)
     const candidates = result.targetResults[0].candidates
-    expect(candidates.length).toBeGreaterThan(20)
-    expect(candidates.length).toBeLessThanOrEqual(160)
-    expect(candidates.some(({ route }) =>
-      route.operations.map(({ type }) => type).join(',') === 'keep_bonuses,reset_bonuses',
-    )).toBe(true)
-    expect(candidates.map(({ route }) =>
+    const sequences = candidates.map(({ route }) =>
       route.operations.map(({ type }) => type).join(','),
-    )).toContain('reset_bonuses,keep_bonuses')
-    for (const [operations, kind] of [
-      ['reset_bonuses', 'existing_gogma_reset_bonuses'],
-      ['reset_bonuses,reset_bonuses', 'existing_gogma_reset_bonuses'],
-      ['keep_bonuses', 'existing_gogma_keep_bonuses'],
-      ['keep_bonuses,keep_bonuses', 'existing_gogma_keep_bonuses'],
-      ['reset_bonuses,keep_bonuses', 'existing_gogma_mixed'],
-      ['keep_bonuses,reset_bonuses', 'existing_gogma_mixed'],
+    )
+
+    // Reset ignores the current bonuses, so it is predicted once per position.
+    const resetCounters = predictGogmaBonus.mock.calls
+      .filter(([call]) => call.operation.type === 'reset_bonuses')
+      .map(([call]) => call.gogmaCounter)
+    expect(resetCounters).toEqual(counters)
+
+    // Keep is predicted once per (Counter position, ordered family layout).
+    const keepKeys = predictGogmaBonus.mock.calls
+      .filter(([call]) => call.operation.type === 'keep_bonuses')
+      .map(([call]) => [
+        call.gogmaCounter,
+        call.operation.type === 'keep_bonuses'
+          ? call.operation.currentBonuses.map(({ bonusTypeId }) => bonusTypeId).join(' ')
+          : '',
+      ].join('|'))
+    expect(new Set(keepKeys).size).toBe(keepKeys.length)
+    // Layout K survives at every position; layout R appears from depth 2.
+    expect(keepKeys).toHaveLength(counters.length + counters.length - 1)
+
+    // Each depth keeps one representative per family layout, so depth d yields
+    // the Reset state, the Keep of the Reset layout, and the Keep-only chain.
+    expect(sequences.sort()).toEqual([
+      'keep_bonuses',
+      'keep_bonuses,keep_bonuses',
+      'keep_bonuses,keep_bonuses,keep_bonuses',
+      'keep_bonuses,keep_bonuses,keep_bonuses,keep_bonuses',
+      'keep_bonuses,keep_bonuses,keep_bonuses,keep_bonuses,keep_bonuses',
+      'reset_bonuses',
+      'reset_bonuses,keep_bonuses',
+      'reset_bonuses,reset_bonuses',
+      'reset_bonuses,reset_bonuses,keep_bonuses',
+      'reset_bonuses,reset_bonuses,reset_bonuses',
+      'reset_bonuses,reset_bonuses,reset_bonuses,keep_bonuses',
+      'reset_bonuses,reset_bonuses,reset_bonuses,reset_bonuses',
+      'reset_bonuses,reset_bonuses,reset_bonuses,reset_bonuses,keep_bonuses',
+      'reset_bonuses,reset_bonuses,reset_bonuses,reset_bonuses,reset_bonuses',
+    ].sort())
+
+    // The canonical history places every Reset before every Keep, so the
+    // route-history duplicate `keep -> reset` is folded into `reset -> reset`.
+    expect(sequences.every((sequence) =>
+      !/keep_bonuses,.*reset_bonuses/.test(sequence),
+    )).toBe(true)
+
+    for (const [kind, sequence] of [
+      ['existing_gogma_reset_bonuses', 'reset_bonuses,reset_bonuses'],
+      ['existing_gogma_keep_bonuses', 'keep_bonuses,keep_bonuses'],
+      ['existing_gogma_mixed', 'reset_bonuses,reset_bonuses,keep_bonuses'],
     ]) {
       expect(candidates.some(({ route }) =>
         route.kind === kind &&
-        route.operations.map(({ type }) => type).join(',') === operations,
+        route.operations.map(({ type }) => type).join(',') === sequence,
       )).toBe(true)
     }
-    for (const operations of [
-      'reset_bonuses,reset_bonuses,reset_bonuses',
-      'keep_bonuses,keep_bonuses,keep_bonuses',
-      'reset_bonuses,keep_bonuses,reset_bonuses',
-    ]) {
-      expect(candidates.some(({ route }) =>
-        route.operations.map(({ type }) => type).join(',') === operations,
-      )).toBe(true)
-    }
+
+    const longest = candidates.find(({ route }) =>
+      route.operations.length === 5 && route.operations[4].type === 'keep_bonuses',
+    )
+    expect(longest?.route.operations.map((operation) =>
+      operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses'
+        ? [operation.gogmaCounterBefore, operation.gogmaCounterAfter, operation.sourceOwnedWeaponId]
+        : null,
+    )).toEqual([
+      [10, 11, input.ownedWeapons[0].id],
+      [11, 12, input.ownedWeapons[0].id],
+      [12, 13, input.ownedWeapons[0].id],
+      [13, 14, input.ownedWeapons[0].id],
+      [14, 15, input.ownedWeapons[0].id],
+    ])
+    expect(longest?.estimatedGogmaAdvance).toBe(5)
   })
 
   it('aggregates enabled Material Costs from concrete operations', async () => {

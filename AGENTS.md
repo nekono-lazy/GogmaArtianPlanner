@@ -671,9 +671,12 @@ Search or Planner silently repair a Target that violates it.
 
 This containment is what lets Candidate Search stop exploring a stream whose
 current state already satisfies the Ideal condition. That optimization is only
-sound once the validation is in force. The validation is now in force, but the
-early exit itself is a separate later change: do not ship a search that
-terminates early on that assumption until that change lands.
+sound once the validation is in force, so the validation always lands first.
+The validation is now in force, and both halves of the early exit have landed
+on top of it: the Skill stream stops when the current Series/Group Skills
+already satisfy `idealSkillCondition`, and the Bonus stream stops when the
+current five slots already match `idealBonuses`. Each stream stops
+independently; the other one keeps searching.
 
 Do not introduce "any one target in this group completes the group" behavior in v1.
 
