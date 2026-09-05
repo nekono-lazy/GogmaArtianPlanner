@@ -467,7 +467,7 @@ B11 は実ゲーム観測を前提とする独立系列
 | B2 | Gogma Reset / Keep探索のstate search化 | depthごとReset 1回、family layout dedup、frontierから操作列を除去、Keep-only先行路、決定的representative | B1。完了 |
 | B3 | Candidate生成 / route表現の整理 | Cross規則、stream-local anchor ordering、offset / source重複除去、分解評価と既存Target評価器の一致担保 | B1, B2。完了 |
 | B4 | 初回Search終了条件とPractical保持 | canonical Ideal終了、`candidateStableKey` によるrun非依存tie-break、操作数D以下のPractical horizon、branch-and-bound / best-first、非劣位Practical列挙、保守的dominance、`maxCandidatesPerTarget` のIdeal枠確保 | B3, **B7**。完了 |
-| B5 | 実Browser Worker性能検証 | C5-E2C8と同形式の実測。checkpoint yield間隔の見直しを含む | B4 |
+| B5 | 実Browser Worker性能検証 | C5-E2C8と同形式の実測。checkpoint yield間隔の見直しを含む | B4。完了 |
 | B6 | UI / default / labels修正 | default値、進捗表示粒度、`no_owned_weapon_available` 文言、`normal_scope_requires_reset` の誤表現是正 | B5 |
 | B8 | Planner-driven constrained re-search | conflict context DTO、制約付き再検索orchestration、Counter位置だけで除外しない判定、初回Search pruning全般を永久除外にしない保証 | B4, 既存Planner |
 | B9 | what-if比較 | 一方固定時の他方の次のPractical / Idealまでの距離算出と提示 | B8 |
@@ -616,7 +616,33 @@ Ideal枠を確保して件数上限を適用し、その後にresultFilterを適
 B1 / B2 / B3の回帰に加え、上限100 / 5000でもD=3でNormal 2回、Skill 3回、
 Reset 3回、Keep 4回に予測を限定するテストを追加した。Route base登録・depth評価・
 Cross評価の非再実行と、workなし時のscheduler step 0もテストで固定した。
-B5以降は未完了である。
+**B5 = 完了。** 実Browser Worker計測は
+[B5_CANDIDATE_SEARCH_BROWSER_WORKER_BENCHMARK.md](./B5_CANDIDATE_SEARCH_BROWSER_WORKER_BENCHMARK.md)
+に記録した。checkpoint間隔(50回)は測定上の問題が無かったため変更せず、
+yieldの手段だけを `setTimeout(resolve, 0)` からMessagePortのtask 1回へ置き換えた。
+同一条件のbefore / afterで保持集合は完全一致し、yield回数の多いworkloadで
+1.3〜3.4倍速くなった。cancelはWorker ackとWorker停止をbenchmark seamで実測し、
+ack 1.2〜16.5 ms、計算停止 1.3〜16.7 msである。cancel後のclient-visibleな
+progress callbackは0件だが、Workerが送出したraw response message自体は
+instrumentしていない。
+Search semantics、B4 scheduler、Cross規則、Production RNG semanticsは変更していない。
+
+B5で判明し、B5では修正しなかった事項が3つある。
+
+1. Candidate出力順がrun依存である。`compareCandidates()` の最終tie-breakが
+   `BuildCandidate.id`(= `searchRunId` を含む)であり、保持集合とcanonical Idealは
+   run非依存だが表示順だけが変わりうる
+2. `SearchWorkerClient` がWorkerの `error` / `messageerror` を購読しておらず、
+   Worker load失敗を自動検知できない(再現済み)。ユーザー操作が無ければ検索中
+   表示が続く。既存のCancelボタンによる手動復帰は可能
+3. `docs/SEARCH_SPEC.md` 5.1 はIdealに `finalBonusScope = "gogma_artian"` を
+   要求するが、`createCandidateFromPrediction()` が `restorationBonusScope` を
+   評価器へ渡していないため、`normal_artian` scopeのままでもIdealになり得る。
+   B5 benchmarkはこの挙動へ依存しないようfixtureを修正した。Production修正は
+   B5のscope外であり、設計チャットで独立したSearch correctness taskとして扱う
+   (B6の作業へ自動的に含めない)
+
+B6以降は未完了である。
 
 B8 / B9 / B10 はB1〜B3のstream独立化とは責務が異なるため、既存B1 / B2へ混ぜない。
 特にB8はPlanner側の新規orchestrationである。
@@ -644,7 +670,7 @@ B11の完了を待たない。
 | default値変更 | B6 |
 | Search progress改善 | B6 |
 | normal-scope Keep prediction | B11 |
-| Worker error handling | B5 / B6 で実測後に判断 |
+| Worker error handling | B5で再現済み。設計判断はB6 |
 
 ---
 
@@ -669,8 +695,11 @@ Domain契約を変える判断が必要になった場合は、実装前に設�
    `steps[0 ... depth - 1]` を走査し、`depth <= lastResetDepth` をReset、
    以降をKeepとして再構成する。Counterは解集合の `steps` が持つ
    `engine.advanceGogmaCounter()` 由来の値を使う
-5. `searchExecution.ts` のcheckpoint / yield間隔を件数ベースから経過時間ベースへ
-   変えるかどうか。B5の実測後に決める
+5. ~~`searchExecution.ts` のcheckpoint / yield間隔を件数ベースから経過時間ベースへ
+   変えるかどうか。~~ B5で決定済み。件数ベース(50回ごと)のまま変更しない。
+   yield間のsynchronous区間は実測で最大20〜50 ms、cancel到達も数ms〜十数msであり、
+   経過時間ベースへ変える必要を示す測定結果が出なかった。変更したのは
+   `search.worker.ts` の `workerYield()` の手段だけである
 6. `candidateSearch.integration.test.ts` の
    「bounds amendment frontier growth」fixtureを、depthごとに異なるReset結果を返す形へ
    強化する範囲
@@ -694,11 +723,14 @@ Domain契約を変える判断が必要になった場合は、実装前に設�
 
 1. 新規Normal → Gogma RouteがNormal Counter確定を必須にしている
 2. `no_owned_weapon_available` の日本語表示が所持通常アーティアRouteでも「所持巨戟」になる(B6)
-3. Candidate Search default `5000 / 5000 / 5000` の適正値(B5の実測後にB6で決定)
+3. Candidate Search default `5000 / 5000 / 5000` の適正値(B5の実測材料をもとにB6で決定)
 4. Normal Counter Identification
 5. Normal Bonus familyを利用した将来探索(7章)
 6. Searchのより詳細な進捗表示(B6)
-7. Worker error handlingの見直し(B5 / B6で実測後に判断)
+7. Worker error handlingの見直し(B5で再現済み。設計判断はB6へ差し戻し)
+8. Candidate出力順のrun依存(B5で判明。保持集合とcanonical Idealはrun非依存)
+9. Ideal分類が `restorationBonusScope` を評価していない(B5で判明。SEARCH_SPEC 5.1
+   との矛盾。独立したSearch correctness taskとして扱う)
 
 ---
 

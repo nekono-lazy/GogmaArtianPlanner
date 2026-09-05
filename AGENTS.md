@@ -955,7 +955,32 @@ never replayed at later layers. An empty queue terminates even without an Ideal.
 Incremental Skill prefixes and Bonus frontiers preserve B1/B2 sharing;
 B3 Cross composition remains unchanged. Run-independent selection, conservative
 Practical dominance, and an output cap reserving the canonical Ideal are active.
-B5 and Planner constrained re-search (B8) remain unimplemented.
+B5 is implemented as a measurement task. The real Browser Worker benchmark is
+recorded in `docs/B5_CANDIDATE_SEARCH_BROWSER_WORKER_BENCHMARK.md`. It changed no
+Search semantics, no B4 scheduler behavior, and no Production RNG semantics; the
+only production change is the Worker checkpoint yield mechanism in
+`search.worker.ts`, which must stay a macrotask so a pending `cancel` message is
+dispatched mid-search. The measured retained candidate set is unchanged. Two
+defects it reproduced are deliberately left to B6: the final Candidate output
+ordering is run-dependent because `compareCandidates()` ties on
+`BuildCandidate.id`, and `SearchWorkerClient` subscribes to no Worker `error` or
+`messageerror`, so a failed Worker is never detected automatically and its
+`startSearch()` stays pending until the user cancels (the existing Search page
+Cancel control still recovers the UI). The retained set and the canonical Ideal
+remain run-independent.
+
+B5 also reproduced a third, separate defect. SEARCH_SPEC 5.1 requires
+`finalBonusScope = "gogma_artian"` for an Ideal, but
+`createCandidateFromPrediction()` never passes `restorationBonusScope` to
+`evaluateTargetCandidate()`, so `satisfiesIdealTarget()` can classify a
+conversion-only `normal_artian` scope Candidate as Ideal. The B5 benchmark
+fixtures were changed so no workload depends on that behavior: a reachable Ideal
+is anchored on a Reset result or on an Owned Gogma source's Gogma-scope slots,
+never on the conversion output, and the fixture tests assert
+`restorationBonusScope === 'gogma_artian'` on the canonical Ideal. Fixing
+Production Search is outside B5 and is not part of B6 by default; it is an
+independent Search correctness task for the design discussion.
+Planner constrained re-search (B8) remains unimplemented.
 
 ### Normal Artian Route
 

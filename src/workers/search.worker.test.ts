@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createSearchWorkerController } from './search.worker'
+import { createSearchWorkerController, workerYield } from './search.worker'
 import type {
   SearchWorkerRequest,
   SearchWorkerResponse,
@@ -100,6 +100,31 @@ describe('Candidate Search Worker', () => {
     expect(
       responses.some(({ type }) => type === 'candidate_search_result'),
     ).toBe(false)
+  })
+
+  it('yields to a macrotask so a queued Worker message can be dispatched', async () => {
+    // A microtask yield would resolve inside the same task and never let the
+    // Worker dispatch a pending `cancel` message.
+    let resolved = false
+    const yielded = workerYield().then(() => {
+      resolved = true
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(resolved).toBe(false)
+    await yielded
+    expect(resolved).toBe(true)
+  })
+
+  it('resolves concurrent checkpoint yields in order', async () => {
+    const settled: number[] = []
+    await Promise.all([
+      workerYield().then(() => settled.push(1)),
+      workerYield().then(() => settled.push(2)),
+      workerYield().then(() => settled.push(3)),
+    ])
+    expect(settled).toEqual([1, 2, 3])
   })
 
   it('converts search failures into an error response', async () => {
