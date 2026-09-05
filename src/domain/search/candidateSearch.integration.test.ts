@@ -709,6 +709,8 @@ describe('Candidate Search routes', () => {
     input.calculationContext.rngEngineVersion = 'fake-fixture:bounded-amendment-frontier'
     input.ownedWeapons[0].isProtected = false
     input.ownedWeapons[0].restorationBonusScope = 'gogma_artian'
+    // No Ideal in bounds: retain the full-depth frontier/history coverage.
+    input.targetWeapons[0].idealSkillCondition.groupSkillId = 'group.unreached'
     // Every state below gets its own completed five-slot multiset. The
     // stream-local retention keeps the smallest `gogmaAdvance` per outcome, so
     // repeating one Reset or Keep result across depths would collapse the
@@ -967,6 +969,8 @@ describe('Candidate Search routes', () => {
   it('applies route filters and candidate limits deterministically', async () => {
     const input = createCandidateSearchInput()
     input.settings.maxCandidatesPerTarget = 1
+    // Practical overflow, rather than multiple Ideals omitted by B4 policy.
+    input.targetWeapons[0].idealSkillCondition.groupSkillId = 'group.unreached'
     // Keep more than one candidate reachable: a source whose Skills already
     // satisfy Ideal contributes no Reset Skills candidate.
     input.ownedWeapons[0].seriesSkillId = 'series_skill.fixture.other'

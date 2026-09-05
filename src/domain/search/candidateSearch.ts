@@ -1,11 +1,12 @@
-import type { RouteKind, TargetWeapon } from '../models/publicTypes'
+import { TargetSearchScheduler } from './targetSearchScheduler'
+import type { BuildCandidate, RestorationBonusSet, RouteKind, TargetWeapon } from '../models/publicTypes'
 import type { RngEngine } from '../rng/rngEngine'
 import { validateTargetIdealImpliesPractical } from '../target'
 import {
-  deduplicateCandidates,
   filterCandidates,
   sortCandidates,
 } from './candidateProcessing'
+import { retainInitialCandidates } from './candidateRetention'
 import { searchExistingGogmaRoutes } from './existingGogmaRouteSearch'
 import { searchNormalArtianRoutes } from './normalArtianRouteSearch'
 import { searchOwnedNormalArtianRoutes } from './ownedNormalArtianRouteSearch'
@@ -127,7 +128,7 @@ async function searchTarget(
 ): Promise<{ result: TargetCandidateSearchResult; warnings: CandidateSearchWarning[]; truncated: boolean }> {
   const skippedRoutes: SkippedRoute[] = []
   const searchedRoutes: RouteKind[] = []
-  const candidates = []
+  const candidates: BuildCandidate[] = []
   const warnings: CandidateSearchWarning[] = []
 
   if (engine.version !== input.calculationContext.rngEngineVersion) {
@@ -150,6 +151,7 @@ async function searchTarget(
     engine,
     execution,
     predictionSupport,
+    normalPredictions: new Map<number, RestorationBonusSet>(),
     // One Skill stream per Target, shared by every RouteKind and Route base.
     skillStream: createTargetSkillStream(
       target,
@@ -172,42 +174,40 @@ async function searchTarget(
 
   if (input.routeFilter === 'existing_gogma') {
     skippedRoutes.push(...normalRouteKinds.map((route) => ({
-      route,
-      reason: 'disabled_by_filter',
+      route, reason: 'disabled_by_filter' as const,
       detail: 'Normal Artian routes are disabled by routeFilter.',
-    } as const)))
-  } else {
-    const normalResult = await searchNormalArtianRoutes(routeContext)
-    candidates.push(...normalResult.candidates)
-    searchedRoutes.push(...normalResult.searchedRoutes)
-    skippedRoutes.push(...normalResult.skippedRoutes)
-    warnings.push(...normalResult.warnings)
-    const ownedNormalResult = await searchOwnedNormalArtianRoutes(routeContext)
-    candidates.push(...ownedNormalResult.candidates)
-    searchedRoutes.push(...ownedNormalResult.searchedRoutes)
-    skippedRoutes.push(...ownedNormalResult.skippedRoutes)
-    warnings.push(...ownedNormalResult.warnings)
+    })))
   }
-
   if (input.routeFilter === 'normal_artian') {
     skippedRoutes.push(...existingGogmaRouteKinds.map((route) => ({
-      route,
-      reason: 'disabled_by_filter',
+      route, reason: 'disabled_by_filter' as const,
       detail: 'Existing Gogma routes are disabled by routeFilter.',
-    } as const)))
-  } else {
-    const existingResult = await searchExistingGogmaRoutes(routeContext)
-    candidates.push(...existingResult.candidates)
-    searchedRoutes.push(...existingResult.searchedRoutes)
-    skippedRoutes.push(...existingResult.skippedRoutes)
-    warnings.push(...existingResult.warnings)
+    })))
   }
 
-  const processed = filterCandidates(
-    sortCandidates(deduplicateCandidates(candidates)),
-    input.resultFilter,
-  )
-  const truncated = processed.length > input.settings.maxCandidatesPerTarget
+  const scheduler = new TargetSearchScheduler(routeContext)
+  const searchers = [
+    ...(input.routeFilter === 'existing_gogma' ? [] : [searchNormalArtianRoutes, searchOwnedNormalArtianRoutes]),
+    ...(input.routeFilter === 'normal_artian' ? [] : [searchExistingGogmaRoutes]),
+  ]
+  const routeResults = []
+  for (const search of searchers) routeResults.push(await search(routeContext, scheduler))
+  await scheduler.run()
+  for (const found of routeResults) {
+    found.finalize?.()
+    candidates.push(...found.candidates)
+    searchedRoutes.push(...found.searchedRoutes)
+    skippedRoutes.push(...found.skippedRoutes)
+    for (const warning of found.warnings) {
+      if (!warnings.some((existing) => existing.message === warning.message)) warnings.push(warning)
+    }
+  }
+
+  const retention = retainInitialCandidates(candidates, input.master, target.weaponTypeId, input.settings.maxCandidatesPerTarget)
+  const processed = filterCandidates(sortCandidates(retention.bounded), input.resultFilter)
+  // Preserve the existing display-relative meaning: true if the cap omitted
+  // a candidate matching this filter. Horizon/dominance omissions are not truncation.
+  const truncated = filterCandidates(retention.retained, input.resultFilter).length > processed.length
   const orderedSearchedRoutes = routeOrder.filter((route) =>
     searchedRoutes.includes(route),
   )
@@ -215,7 +215,7 @@ async function searchTarget(
   return {
     result: {
       targetWeaponId: target.id,
-      candidates: processed.slice(0, input.settings.maxCandidatesPerTarget),
+      candidates: processed,
       searchedRoutes: orderedSearchedRoutes,
       skippedRoutes: uniqueSkippedRoutes(skippedRoutes).filter(
         ({ route }) => !searchedRouteSet.has(route),

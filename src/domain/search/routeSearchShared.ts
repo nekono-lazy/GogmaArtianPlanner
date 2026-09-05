@@ -50,9 +50,13 @@ export interface RouteSearchResult {
   searchedRoutes: BuildRoute['kind'][]
   skippedRoutes: SkippedRoute[]
   warnings: CandidateSearchWarning[]
+  /** Finalize reporting after scheduled work has settled. */
+  finalize?(): void
 }
 
 export interface RouteSearchContext {
+  /** Normal predictions shared across counter records. */
+  normalPredictions?: Map<number, RestorationBonusSet>
   target: TargetWeapon
   input: CandidateSearchInput
   engine: RngEngine

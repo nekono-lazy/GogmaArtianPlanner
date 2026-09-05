@@ -203,7 +203,10 @@ describe('Skill stream independence', () => {
       input.ownedWeapons = Array.from({ length: sourceCount }, (_, index) =>
         gogmaSource(input, `owned.fixture.stream-${index}`),
       )
+      // No Ideal in bounds: this test covers the full configured Reset range.
       const engine = createStreamFixtureEngine(input, {
+        idealSkillIndex: 99,
+        distinctSkills: true,
         skillPositions: 4,
         gogmaPositions: 1,
       })
@@ -231,7 +234,9 @@ describe('Skill stream independence', () => {
   it('predicts Skill Counter positions S ... S + M - 1 only, for Reset Skills 1 ... M', async () => {
     const input = existingGogmaInput(3, 1)
     input.ownedWeapons = [gogmaSource(input, 'owned.fixture.stream-range')]
-    const engine = createStreamFixtureEngine(input, {
+    // No Ideal in bounds: this test covers the full configured Reset range.
+      const engine = createStreamFixtureEngine(input, {
+        idealSkillIndex: 99,
       skillPositions: 5,
       gogmaPositions: 1,
       distinctSkills: true,
@@ -375,10 +380,11 @@ describe('Skill stream independence', () => {
       const input = conversionInput(3, 1)
       input.settings.maxNormalAdvance = maxNormalAdvance
       input.ownedWeapons = []
+      // No Ideal in bounds: this test covers the full configured Reset range.
       const engine = createStreamFixtureEngine(input, {
+        idealSkillIndex: 99,
         skillPositions: 5,
         gogmaPositions: 1,
-        idealSkillIndex: 1,
         distinctSkills: true,
         normalForges: maxNormalAdvance,
       })
@@ -408,10 +414,12 @@ describe('Skill stream independence', () => {
       input.ownedWeapons = Array.from({ length: sourceCount }, (_, index) =>
         normalSource(input, `owned.fixture.stream-owned-normal-${index}`),
       )
+      // No Ideal in bounds: this test covers the full configured Reset range.
       const engine = createStreamFixtureEngine(input, {
+        idealSkillIndex: 99,
+        distinctSkills: true,
         skillPositions: 5,
         gogmaPositions: 1,
-        idealSkillIndex: 1,
       })
       const calls = skillCounterCalls(engine)
       const result = await searchCandidates(input, engine, deterministicExecution)

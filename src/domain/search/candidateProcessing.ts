@@ -1,12 +1,8 @@
-import { hashStableValue } from '../models/hashing'
-import type { BuildCandidate, RestorationBonusSet } from '../models/publicTypes'
+import { hashStableValue, stableStringify } from '../models/hashing'
+import { canonicalBonusMultiset, compareStableKeys } from './semanticKeys'
+import type { BuildCandidate } from '../models/publicTypes'
 import type { CandidateResultFilter } from './searchTypes'
 
-function canonicalBonusMultiset(bonuses: RestorationBonusSet): string[] {
-  return bonuses
-    .map((bonus) => `${bonus.bonusTypeId}\u0000${bonus.bonusRankId}`)
-    .sort((left, right) => left.localeCompare(right))
-}
 
 export function candidateDeduplicationKey(candidate: BuildCandidate): string {
   return hashStableValue({
@@ -42,7 +38,7 @@ export function compareDuplicateCandidates(
     left.estimatedOperationCount - right.estimatedOperationCount ||
     materialQuantity(left) - materialQuantity(right) ||
     totalCounterAdvance(left) - totalCounterAdvance(right) ||
-    left.id.localeCompare(right.id)
+    compareStableKeys(left.id, right.id)
   )
 }
 
@@ -83,7 +79,7 @@ export function compareCandidates(
     (right.similarityScore ?? -1) - (left.similarityScore ?? -1) ||
     right.idealDifference.matchedBonusCount -
       left.idealDifference.matchedBonusCount ||
-    left.id.localeCompare(right.id)
+    compareStableKeys(left.id, right.id)
   )
 }
 
@@ -108,4 +104,37 @@ export function filterCandidates(
     (candidate) =>
       candidate.category === 'practical' && candidate.isSimilarToIdeal,
   )
+}
+
+/** Run-independent semantic identity; never change persisted Candidate IDs. */
+export function candidateStableKey(candidate: BuildCandidate): string {
+  return stableStringify({
+    finalBonuses: canonicalBonusMultiset(candidate.finalBonuses),
+    restorationBonusScope: candidate.restorationBonusScope,
+    seriesSkillId: candidate.seriesSkillId,
+    groupSkillId: candidate.groupSkillId,
+    routeKind: candidate.route.kind,
+    sourceOwnedWeaponId: candidate.route.sourceOwnedWeaponId,
+    operations: candidate.route.operations,
+  })
+}
+
+export function compareCanonicalIdeals(left: BuildCandidate, right: BuildCandidate): number {
+  return left.estimatedOperationCount - right.estimatedOperationCount ||
+    left.estimatedGogmaAdvance - right.estimatedGogmaAdvance ||
+    left.estimatedSkillAdvance - right.estimatedSkillAdvance ||
+    nullableAscending(left.estimatedNormalAdvance, right.estimatedNormalAdvance) ||
+    compareStableKeys(candidateStableKey(left), candidateStableKey(right))
+}
+
+/** Standard ordering with a semantic final tie for bounded selection only. */
+export function compareCandidateSelection(left: BuildCandidate, right: BuildCandidate): number {
+  return Number(left.category === 'practical') - Number(right.category === 'practical') ||
+    left.estimatedOperationCount - right.estimatedOperationCount ||
+    left.estimatedGogmaAdvance - right.estimatedGogmaAdvance ||
+    left.estimatedSkillAdvance - right.estimatedSkillAdvance ||
+    nullableAscending(left.estimatedNormalAdvance, right.estimatedNormalAdvance) ||
+    (right.similarityScore ?? -1) - (left.similarityScore ?? -1) ||
+    right.idealDifference.matchedBonusCount - left.idealDifference.matchedBonusCount ||
+    compareStableKeys(candidateStableKey(left), candidateStableKey(right))
 }

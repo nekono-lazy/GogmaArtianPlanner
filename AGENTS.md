@@ -947,6 +947,16 @@ RNG prediction semantics, `PRODUCTION_RNG_ENGINE_VERSION`, or
 alternatives, and the accepted limitations behind this contract. It is a design
 record, not specification authority.
 
+B4 is implemented: a target-wide pending-work queue settles the canonical
+Ideal and every Practical within its inclusive operation horizon before stopping.
+Each Normal offset/base is registered once; shared channels retain only new
+Skill/Bonus depths and publish deltas to per-base Cross anchors. Settled work is
+never replayed at later layers. An empty queue terminates even without an Ideal.
+Incremental Skill prefixes and Bonus frontiers preserve B1/B2 sharing;
+B3 Cross composition remains unchanged. Run-independent selection, conservative
+Practical dominance, and an output cap reserving the canonical Ideal are active.
+B5 and Planner constrained re-search (B8) remain unimplemented.
+
 ### Normal Artian Route
 
 Route kind:

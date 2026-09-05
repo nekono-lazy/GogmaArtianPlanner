@@ -513,7 +513,7 @@ Candidate(c) = { (B(c)[i], k0) | i = 0 ... |B(c)| - 1 }
   `similar` を選んでもideal解の探索を省略しない
 
 Cross規則と5.5.2 / 5.5.3のstream-local retention / orderingはB3で実装済みである。
-5.5.6のPractical dominanceと5.5.7のIdeal枠確保、5.6.2の終了条件はB4の範囲である。
+5.5.6のPractical dominance、5.5.7のIdeal枠確保、5.6.2の実探索終了条件、5.6.3のrun非依存canonical IdealはB4で実装済みである。
 
 ### 5.5.5 操作0の扱い
 
@@ -697,6 +697,16 @@ horizon内のPractical評価を打ち切ってはならない。
 - Practicalを溢れさせる場合は8章の並び順で下位から落とす
 - `maxCandidatesPerTarget` の型・既定値・検証範囲は変更しない
 
+`isTruncated` は、`maxCandidatesPerTarget` によるbounded retentionで、
+現在の `resultFilter` に該当する保持候補が1件以上除外された場合にtrueとする。
+horizon / dominance適用後のcap前保持集合をfilterした件数と、cap後の集合を
+同じfilterで絞った件数を比較する。Ideal枠確保によるPracticalの除外も含む。
+filterは探索・保持集合・終了位置に影響しない。
+
+canonical Idealによる探索終了、Practical horizon外、dominance、
+stream-local retention、family frontier dedup、Cross policyによる省略は
+truncationに含めない。
+
 ## 5.6 探索継続と初回Search終了条件
 
 ### 5.6.0 Candidate SearchとPlannerの責務分離
@@ -834,8 +844,8 @@ candidateStableKey = stableStringify({
 - `searchRunId`、`createdAt`、`BuildCandidate.id`、`calculationContext` を含めない
 - **同一入力なら検索runを跨いでも同じcanonical Idealを選ぶ**ことを契約とする
 
-B0では `BuildCandidate.id` の生成実装を変更しない。canonical orderingに
-`candidateStableKey` を導入する実装変更はB4へ割り当てる。
+B4でcanonical orderingへ `candidateStableKey` を導入済みである。
+`BuildCandidate.id` の生成実装は変更していない。
 
 実装要件。
 

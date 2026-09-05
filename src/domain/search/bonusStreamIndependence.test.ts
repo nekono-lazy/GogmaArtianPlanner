@@ -278,6 +278,9 @@ describe('Bonus stream state search', () => {
   it('predicts Reset once per Gogma Counter position regardless of the frontier size', async () => {
     const input = existingGogmaInput(3)
     input.ownedWeapons = [gogmaSource(input, 'owned.fixture.bonus-reset', layoutS())]
+    // Unreached Ideal keeps this full-depth frontier regression independent of B4.
+    input.targetWeapons[0].idealBonuses[3] = { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: 'bonus_rank.fixture.special' }
+    input.targetWeapons[0].idealBonuses[4] = { bonusTypeId: 'bonus_type.fixture.sharpness', bonusRankId: 'bonus_rank.fixture.special' }
     const engine = createBonusFixtureEngine(input, {
       resets: [layoutA(), layoutB(), layoutC()],
       keepSupported: true,
@@ -305,7 +308,10 @@ describe('Bonus stream state search', () => {
       input.ownedWeapons = Array.from({ length: sourceCount }, (_, index) =>
         gogmaSource(input, `owned.fixture.bonus-source-${index}`, belowPracticalBonuses()),
       )
-      const engine = createBonusFixtureEngine(input, {
+      // Unreached Ideal keeps this full-depth frontier regression independent of B4.
+    input.targetWeapons[0].idealBonuses[3] = { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: 'bonus_rank.fixture.special' }
+    input.targetWeapons[0].idealBonuses[4] = { bonusTypeId: 'bonus_type.fixture.sharpness', bonusRankId: 'bonus_rank.fixture.special' }
+    const engine = createBonusFixtureEngine(input, {
         resets: [layoutA(), layoutB(), layoutC()],
       })
       const calls = gogmaCalls(engine)
@@ -329,7 +335,10 @@ describe('Bonus stream state search', () => {
       input.settings.maxSkillAdvance = 1
       input.settings.maxNormalAdvance = maxNormalAdvance
       input.calculationContext.rngEngineVersion = 'fake-fixture:bonus-stream-independence'
-      const engine = createBonusFixtureEngine(input, {
+      // Unreached Ideal keeps this full-depth frontier regression independent of B4.
+    input.targetWeapons[0].idealBonuses[3] = { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: 'bonus_rank.fixture.special' }
+    input.targetWeapons[0].idealBonuses[4] = { bonusTypeId: 'bonus_type.fixture.sharpness', bonusRankId: 'bonus_rank.fixture.special' }
+    const engine = createBonusFixtureEngine(input, {
         resets: [layoutA(), layoutB(), layoutC()],
         skillSupported: true,
         skillPositions: 2,
@@ -409,6 +418,9 @@ describe('Bonus stream state search', () => {
     // The Keep-only state gets its own completed outcome, because the B3
     // stream-local retention would otherwise fold it into the source's own
     // `gogmaAdvance = 0` solution rather than publish it as a Candidate.
+    // Unreached Ideal keeps this full-depth frontier regression independent of B4.
+    input.targetWeapons[0].idealBonuses[3] = { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: 'bonus_rank.fixture.special' }
+    input.targetWeapons[0].idealBonuses[4] = { bonusTypeId: 'bonus_type.fixture.sharpness', bonusRankId: 'bonus_rank.fixture.special' }
     const engine = createBonusFixtureEngine(input, {
       resets: [layoutA(), layoutC()],
       keepSupported: true,
@@ -438,6 +450,9 @@ describe('Bonus stream state search', () => {
     // a fixture that repeats an earlier outcome could not show all four
     // canonical histories. `layoutC` is not reused as the depth-3 Reset because
     // its multiset equals `layoutA`, which is already reached at depth 1.
+    // Unreached Ideal keeps this full-depth frontier regression independent of B4.
+    input.targetWeapons[0].idealBonuses[3] = { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: 'bonus_rank.fixture.special' }
+    input.targetWeapons[0].idealBonuses[4] = { bonusTypeId: 'bonus_type.fixture.sharpness', bonusRankId: 'bonus_rank.fixture.special' }
     const engine = createBonusFixtureEngine(input, {
       resets: [layoutA(), layoutB(), layoutASpecial()],
       keepSupported: true,
@@ -500,6 +515,9 @@ describe('Bonus stream state search', () => {
       isProtected: false,
     } as unknown as CandidateSearchInput['ownedWeapons'][number]
     input.ownedWeapons = [source]
+    // Unreached Ideal keeps this full-depth frontier regression independent of B4.
+    input.targetWeapons[0].idealBonuses[3] = { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: 'bonus_rank.fixture.special' }
+    input.targetWeapons[0].idealBonuses[4] = { bonusTypeId: 'bonus_type.fixture.sharpness', bonusRankId: 'bonus_rank.fixture.special' }
     const engine = createBonusFixtureEngine(input, {
       resets: [layoutA(), layoutC()],
       keepSupported: true,
@@ -570,7 +588,8 @@ describe('Bonus stream state search', () => {
       resets: [layoutA(), layoutC()],
       keepSupported: true,
       keeps: [
-        { counterOffset: 0, currentBonuses: practicalOnlyBonuses(), result: layoutB() },
+        // A distinct Practical outcome at D=1 survives stream-local retention.
+        { counterOffset: 0, currentBonuses: practicalOnlyBonuses(), result: layoutBHigher() },
         { counterOffset: 1, currentBonuses: layoutA(), result: layoutALower() },
         { counterOffset: 1, currentBonuses: layoutB(), result: layoutBHigher() },
       ],
@@ -579,7 +598,8 @@ describe('Bonus stream state search', () => {
     const result = await searchCandidates(input, engine, deterministicExecution)
     const candidates = result.targetResults[0].candidates
 
-    expect(calls.resetCounters()).toEqual([10, 11])
+    // The first Reset reaches Ideal: B4 settles depth 1 and stops.
+    expect(calls.resetCounters()).toEqual([10])
     const ideal = candidates.find(({ category }) => category === 'ideal')
     expect(operationTypes(ideal?.route.operations ?? [])).toBe('reset_bonuses')
     expect(candidates.some(({ category }) => category === 'practical')).toBe(true)

@@ -11,6 +11,7 @@ import type { RngEngine, RngPredictionUnsupportedReason } from '../rng/rngEngine
 import type { SearchExecutionContext } from './searchExecution'
 import type { SearchPredictionSupport } from './searchPredictionSupport'
 import type { CandidateSearchInput } from './searchTypes'
+import { compareStableKeys } from './semanticKeys'
 
 export interface BonusStreamStep {
   gogmaCounterBefore: number
@@ -67,7 +68,9 @@ export interface BonusStreamBase {
  * number of source weapons and Normal offsets.
  */
 export interface TargetBonusStream {
-  solve(base: BonusStreamBase): Promise<BonusStreamSolutionSet>
+  readDepth(base: BonusStreamBase, depth: number): Promise<BonusStreamSolutionSet & { exhausted: boolean }>
+  /** Standalone full-prefix adapter; scheduling uses readDepth. */
+  solve(base: BonusStreamBase, through?: number): Promise<BonusStreamSolutionSet>
 }
 
 const EMPTY_SET = (startGogmaCounter: number): BonusStreamSolutionSet => ({
@@ -143,7 +146,7 @@ function compareRepresentative(
 ): number {
   return (
     right.lastResetDepth - left.lastResetDepth ||
-    stableStringify(left.bonuses).localeCompare(stableStringify(right.bonuses))
+    compareStableKeys(stableStringify(left.bonuses), stableStringify(right.bonuses))
   )
 }
 
@@ -156,7 +159,12 @@ export function createTargetBonusStream(
 ): TargetBonusStream {
   const resetPredictions = new Map<number, RestorationBonusSet>()
   const keepPredictions = new Map<string, RestorationBonusSet>()
-  const sets = new Map<string, Promise<BonusStreamSolutionSet>>()
+  const sets = new Map<string, {
+    iterator: AsyncGenerator<BonusStreamSolutionSet, BonusStreamSolutionSet>
+    value: BonusStreamSolutionSet
+    done: boolean
+    depths: BonusStreamSolution[][]
+  }>()
 
   function predictReset(gogmaCounter: number): RestorationBonusSet {
     const cached = resetPredictions.get(gogmaCounter)
@@ -212,7 +220,7 @@ export function createTargetBonusStream(
     }
   }
 
-  async function build(base: BonusStreamBase): Promise<BonusStreamSolutionSet> {
+  async function* build(base: BonusStreamBase): AsyncGenerator<BonusStreamSolutionSet, BonusStreamSolutionSet> {
     if (
       input.rngState.baseSeed.value === null ||
       !engine.capabilities.supportsGogmaPrediction
@@ -308,9 +316,14 @@ export function createTargetBonusStream(
         }
       }
       frontier = [...byLayout.values()].sort((left, right) =>
-        left.familyLayoutKey.localeCompare(right.familyLayoutKey),
+        compareStableKeys(left.familyLayoutKey, right.familyLayoutKey),
       )
       gogmaCounterBefore = gogmaCounterAfter
+      // Suspend with the frontier intact after one complete depth.
+      yield {
+        startGogmaCounter: base.startGogmaCounter,
+        steps, solutions, unsupportedPredictions: [...unsupported.values()],
+      }
     }
 
     return {
@@ -321,19 +334,49 @@ export function createTargetBonusStream(
     }
   }
 
+  async function ensure(base: BonusStreamBase, through: number) {
+    const key = bonusStreamBaseKey(base)
+    let cached = sets.get(key)
+    if (!cached) {
+      cached = { iterator: build(base), value: EMPTY_SET(base.startGogmaCounter), done: false, depths: [] }
+      sets.set(key, cached)
+    }
+    const limit = Math.min(input.settings.maxGogmaAdvance, Math.max(0, through))
+    while (!cached.done && cached.depths.length < limit) {
+      const previousCount = cached.value.solutions.length
+      const next = await cached.iterator.next()
+      cached.value = next.value
+      cached.done = next.done === true
+      // Slice only the newly generated suffix, never scan the previous prefix.
+      if (!cached.done) cached.depths.push(next.value.solutions.slice(previousCount))
+    }
+    return cached
+  }
+
   return {
-    solve: (base) => {
-      // A `normal_artian` scope base cannot Keep first, so its depth >= 1 set
-      // is the same for every Normal offset and every owned Normal source at
-      // the same starting Gogma Counter (SEARCH_SPEC 5.5.3).
-      const key = base.restorationBonusScope === 'normal_artian'
-        ? `normal_artian\u0000${base.startGogmaCounter}`
-        : `gogma_artian\u0000${base.startGogmaCounter}\u0000${stableStringify(base.bonuses)}`
-      const cached = sets.get(key)
-      if (cached) return cached
-      const pending = build(base)
-      sets.set(key, pending)
-      return pending
+    readDepth: async (base, depth) => {
+      const cached = await ensure(base, depth)
+      return {
+        ...cached.value,
+        solutions: cached.depths[depth - 1] ?? [],
+        exhausted: cached.done || depth >= input.settings.maxGogmaAdvance,
+      }
+    },
+    solve: async (base, through = input.settings.maxGogmaAdvance) => {
+      const cached = await ensure(base, through)
+      const limit = Math.min(input.settings.maxGogmaAdvance, Math.max(0, through))
+      return {
+        ...cached.value,
+        steps: cached.value.steps.slice(0, limit),
+        solutions: cached.depths.slice(0, limit).flat(),
+      }
     },
   }
+}
+
+/** Normal-scope first Reset makes every offset/source share one positive stream. */
+export function bonusStreamBaseKey(base: BonusStreamBase): string {
+  return stableStringify(base.restorationBonusScope === 'normal_artian'
+    ? [base.restorationBonusScope, base.startGogmaCounter]
+    : [base.restorationBonusScope, base.startGogmaCounter, base.bonuses])
 }

@@ -8,6 +8,8 @@ import type {
   TargetWeapon,
 } from '../models/publicTypes'
 import { stableStringify } from '../models/publicTypes'
+import { bonusOutcomeKey, compareStableKeys } from './semanticKeys'
+export { compareStableKeys } from './semanticKeys'
 import {
   createBonusIdealDifference,
   evaluatePracticalBonusConditions,
@@ -15,16 +17,6 @@ import {
 } from '../target'
 import { totalMaterialQuantity } from './candidateFactory'
 import type { CandidateSearchInput } from './searchTypes'
-
-/**
- * Locale-independent ordering. `String.prototype.localeCompare` can reorder
- * equal-looking keys per environment, which would move the stream anchors
- * `b0` / `k0` (SEARCH_SPEC 5.5.2 / 5.5.3).
- */
-export function compareStableKeys(left: string, right: string): number {
-  if (left === right) return 0
-  return left < right ? -1 : 1
-}
 
 /**
  * One Skill stream solution as seen by a single Route base, including the
@@ -106,29 +98,6 @@ function skillIdealCloseness(
     Number(
       condition.groupSkillId !== null && condition.groupSkillId === groupSkillId,
     )
-  )
-}
-
-/**
- * The completed outcome identity of SEARCH_SPEC 5.5.3: the unordered five-slot
- * multiset, and nothing else.
- *
- * `restorationBonusScope` stays on the solution but is deliberately not part of
- * this key: the retention contract is "the same completed five-slot multiset",
- * so an inherited `normal_artian` solution and a later `gogma_artian` one that
- * reach the same multiset keep only the smaller `gogmaAdvance`. As with every
- * other stream-local retention this is initial-Search omission, not permanent
- * dominance.
- *
- * Each slot is encoded structurally rather than by string concatenation.
- * Master IDs may contain any delimiter, so joining `bonusTypeId` and
- * `bonusRankId` with one would let different pairs collide into one key.
- */
-function bonusOutcomeKey(bonuses: RestorationBonusSet): string {
-  return stableStringify(
-    bonuses
-      .map((bonus) => stableStringify([bonus.bonusTypeId, bonus.bonusRankId]))
-      .sort(compareStableKeys),
   )
 }
 

@@ -466,7 +466,7 @@ B11 は実ゲーム観測を前提とする独立系列
 | B1 | Existing Gogma Skill stream独立化 | 共有Skill列、Ideal既達成時の0回化、`maxSkillAdvance` off-by-one整合、SEARCH_SPEC 6.5前提の早期判定。Gogma側は触らない | B0, **B7**。完了 |
 | B2 | Gogma Reset / Keep探索のstate search化 | depthごとReset 1回、family layout dedup、frontierから操作列を除去、Keep-only先行路、決定的representative | B1。完了 |
 | B3 | Candidate生成 / route表現の整理 | Cross規則、stream-local anchor ordering、offset / source重複除去、分解評価と既存Target評価器の一致担保 | B1, B2。完了 |
-| B4 | 初回Search終了条件とPractical保持 | canonical Ideal終了、`candidateStableKey` によるrun非依存tie-break、操作数D以下のPractical horizon、branch-and-bound / best-first、非劣位Practical列挙、保守的dominance、`maxCandidatesPerTarget` のIdeal枠確保 | B3, **B7** |
+| B4 | 初回Search終了条件とPractical保持 | canonical Ideal終了、`candidateStableKey` によるrun非依存tie-break、操作数D以下のPractical horizon、branch-and-bound / best-first、非劣位Practical列挙、保守的dominance、`maxCandidatesPerTarget` のIdeal枠確保 | B3, **B7**。完了 |
 | B5 | 実Browser Worker性能検証 | C5-E2C8と同形式の実測。checkpoint yield間隔の見直しを含む | B4 |
 | B6 | UI / default / labels修正 | default値、進捗表示粒度、`no_owned_weapon_available` 文言、`normal_scope_requires_reset` の誤表現是正 | B5 |
 | B8 | Planner-driven constrained re-search | conflict context DTO、制約付き再検索orchestration、Counter位置だけで除外しない判定、初回Search pruning全般を永久除外にしない保証 | B4, 既存Planner |
@@ -600,6 +600,23 @@ B1 / B2のテストのうち、同一結果を全depth・全位置で候補化�
 「同一結果の後続位置を初回Searchの出力から省く」挙動そのものであり、
 テストを弱めずに元の観点(全depthのcanonical history、Reset 1 ... Mの被覆)を維持するための
 最小変更である。
+
+**B4 = 完了。** Target全体のpending-work queueを総操作数の下界で処理し、
+D以下の全workをsettleした後、Idealがあれば終了する。Idealがなくてもqueueが
+空ならexhaustionとして終了し、空のoperation layerを回さない。
+Normalは次offsetだけを登録し、各Route baseを1回生成する。共有Skill / Bonus channelは
+新しいdepthだけをretentionへ投入し、保持された差分だけを各baseのCrossへ配信する。
+各categoryのanchorを固定し、新しいpairだけを1回評価する。計算済みprefixと
+Bonus frontier、B1 / B2のPrediction memoは保持する。
+
+完成multisetの構造化encodingを共有し、canonical Idealとbounded Practicalの選択には
+run非依存の `candidateStableKey` を使用する。操作数D以下のPracticalにだけ、
+Master rank vectorとmaterialIdごとのcomponent-wise比較を含む保守的dominanceを適用する。
+Ideal枠を確保して件数上限を適用し、その後にresultFilterを適用する。
+B1 / B2 / B3の回帰に加え、上限100 / 5000でもD=3でNormal 2回、Skill 3回、
+Reset 3回、Keep 4回に予測を限定するテストを追加した。Route base登録・depth評価・
+Cross評価の非再実行と、workなし時のscheduler step 0もテストで固定した。
+B5以降は未完了である。
 
 B8 / B9 / B10 はB1〜B3のstream独立化とは責務が異なるため、既存B1 / B2へ混ぜない。
 特にB8はPlanner側の新規orchestrationである。

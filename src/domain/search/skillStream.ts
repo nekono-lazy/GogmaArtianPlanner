@@ -49,8 +49,9 @@ export interface TargetSkillStream {
    * the same positions as the Reset Skills solutions.
    */
   predictAt(skillCounter: number): SkillPredictionResult
-  /** Solves the stream from `startSkillCounter`, reusing memoized predictions. */
-  solve(startSkillCounter: number): Promise<SkillStreamSolutionSet>
+  readDepth(startSkillCounter: number, depth: number): Promise<SkillStreamSolutionSet & { exhausted: boolean }>
+  /** Standalone full-prefix adapter; scheduling uses readDepth. */
+  solve(startSkillCounter: number, through?: number): Promise<SkillStreamSolutionSet>
 }
 
 export function resetSkillsOperations(
@@ -74,7 +75,7 @@ export function createTargetSkillStream(
   isSkillPredictionSupported: () => boolean,
 ): TargetSkillStream {
   const predictions = new Map<number, SkillPredictionResult>()
-  const sets = new Map<number, Promise<SkillStreamSolutionSet>>()
+  const sets = new Map<number, { steps: SkillStreamStep[]; solutions: SkillStreamSolution[]; counter: number }>()
 
   function predictAt(skillCounter: number): SkillPredictionResult {
     const cached = predictions.get(skillCounter)
@@ -90,25 +91,29 @@ export function createTargetSkillStream(
     return predicted
   }
 
-  async function build(startSkillCounter: number): Promise<SkillStreamSolutionSet> {
-    const steps: SkillStreamStep[] = []
-    const solutions: SkillStreamSolution[] = []
-    let skillCounter = startSkillCounter
-    for (let index = 0; index < input.settings.maxSkillAdvance; index += 1) {
+  async function ensure(startSkillCounter: number, through: number) {
+    const limit = Math.min(input.settings.maxSkillAdvance, Math.max(0, through))
+    let set = sets.get(startSkillCounter)
+    if (!set) {
+      set = { steps: [], solutions: [], counter: startSkillCounter }
+      sets.set(startSkillCounter, set)
+    }
+    while (set.steps.length < limit) {
       await execution.checkpoint()
+      const skillCounter = set.counter
       const skills = predictAt(skillCounter)
       const skillCounterAfter = engine.advanceSkillCounter(skillCounter, {
         type: 'reset_skills',
       })
-      steps.push({ skillCounterBefore: skillCounter, skillCounterAfter })
-      solutions.push({
-        resetCount: index + 1,
+      set.steps.push({ skillCounterBefore: skillCounter, skillCounterAfter })
+      set.solutions.push({
+        resetCount: set.steps.length,
         seriesSkillId: skills.seriesSkillId,
         groupSkillId: skills.groupSkillId,
       })
-      skillCounter = skillCounterAfter
+      set.counter = skillCounterAfter
     }
-    return { startSkillCounter, steps, solutions }
+    return set
   }
 
   return {
@@ -117,12 +122,16 @@ export function createTargetSkillStream(
       engine.capabilities.supportsSkillPrediction &&
       isSkillPredictionSupported(),
     predictAt,
-    solve: (startSkillCounter) => {
-      const cached = sets.get(startSkillCounter)
-      if (cached) return cached
-      const pending = build(startSkillCounter)
-      sets.set(startSkillCounter, pending)
-      return pending
+    readDepth: async (startSkillCounter, depth) => {
+      const set = await ensure(startSkillCounter, depth)
+      return { startSkillCounter, steps: set.steps,
+        solutions: set.solutions[depth - 1] ? [set.solutions[depth - 1]] : [],
+        exhausted: depth >= input.settings.maxSkillAdvance }
+    },
+    solve: async (startSkillCounter, through = input.settings.maxSkillAdvance) => {
+      const set = await ensure(startSkillCounter, through)
+      const limit = Math.min(input.settings.maxSkillAdvance, Math.max(0, through))
+      return { startSkillCounter, steps: set.steps.slice(0, limit), solutions: set.solutions.slice(0, limit) }
     },
   }
 }

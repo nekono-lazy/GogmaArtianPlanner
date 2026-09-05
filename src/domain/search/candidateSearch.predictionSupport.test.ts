@@ -228,6 +228,8 @@ describe('Candidate Search input-level RNG support', () => {
   it('isolates unsupported Keep sources while preserving supported Keep and Reset branches', async () => {
     const input = createCandidateSearchInput()
     input.routeFilter = 'existing_gogma'
+    // Keep every supported source in the Practical set; B4 retains only one Ideal.
+    input.targetWeapons[0].idealSkillCondition.groupSkillId = 'group.unreached'
     const sourceA = input.ownedWeapons[0] as OwnedGogmaArtianWeapon
     sourceA.id = ownedWeaponId('owned.fixture.keep-a')
     sourceA.isProtected = false
