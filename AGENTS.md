@@ -291,6 +291,9 @@ matches the reference implementation. The following remain unverified:
 - Gogma rank I
 - Persisted Counter advancement while Counter Gate is below threshold
 - RNG advancement caused by `use_weapon_as_material`
+- Keep Bonuses prediction whose current bonuses are `normal_artian` scope
+  (family mapping, candidate pool, weights, and repeat penalties are all
+  undefined in the pinned reference and have no game-verified fixture)
 
 The Production RNG interface contract must preserve semantic Domain inputs:
 
@@ -509,7 +512,7 @@ A normal Artian weapon:
 A Gogma Artian weapon:
 
 - May retain five inherited `normal_artian` scope restoration bonuses before
-  its first Reset Bonuses operation
+  its first bonus amendment
 - Uses five `gogma_artian` scope restoration bonuses after Reset Bonuses or
   Keep Bonuses
 - Never mixes `normal_artian` and `gogma_artian` scopes within one weapon;
@@ -520,8 +523,27 @@ A Gogma Artian weapon:
 
 Converting a normal Artian weapon does not translate its bonus types or ranks
 to Gogma-tier values. The five normal-tier slots remain unchanged until the
-first Reset Bonuses operation. Keep Bonuses is invalid while a Gogma weapon
-still has `normal_artian` scope.
+first bonus amendment.
+
+In the real game, both Reset Bonuses and Keep Bonuses are legal as the first
+bonus amendment of a `normal_artian` scope Gogma weapon. Conversion itself is
+not a Gogma-bonus lottery operation, so it does not force a later Reset.
+
+The current Production RNG Engine still cannot predict Keep from `normal_artian`
+scope slots: `getPredictionSupport({ type: "gogma_keep" })` returns
+`unsupported_current_bonus` because the reference Keep family table covers only
+Gogma-tier bonuses. Therefore v1 keeps three layers strictly separate:
+
+- Game operation legality: normal-scope Keep is legal
+- Production prediction support: normal-scope Keep is unsupported today
+- Product behavior: Search and Planner must not generate or schedule a
+  normal-scope Keep route while prediction support is missing, and Domain
+  validation continues to reject such a `keep_bonuses` operation because no
+  expected result can be defined for it
+
+State the reason as missing Production prediction support, never as a game rule
+that forbids Keep. Do not guess the normal-tier Keep family mapping, pool, or
+weights; that behavior stays unverified until a game-verified fixture exists.
 
 Statuses are:
 
@@ -619,6 +641,37 @@ A Target separately defines:
 - Practical alternative groups
 - Ideal skill condition
 - Practical skill condition
+
+Ideal is the strict upper bound of Practical, never a parallel alternative:
+
+```text
+Ideal    = the build the user actually wants
+Practical = below Ideal but still usable as a compromise
+```
+
+So the Ideal set is contained in the Practical set:
+
+```text
+{ results satisfying Ideal } ⊆ { results satisfying the Practical conditions }
+```
+
+`idealBonuses` must satisfy every `practicalBonusConditions` entry and every
+`practicalAlternativeGroups` entry. Any result satisfying `idealSkillCondition`
+must also satisfy `practicalSkillCondition` under that condition's
+`seriesSkillId` / `groupSkillId` / `matchMode` semantics, with `null` meaning
+unconstrained. A Target definition that breaks this containment is invalid.
+
+`docs/DATA_MODEL.md` 8.1 holds the formal invariant. v1 does not yet validate it,
+so Target validation is an unimplemented contract that must land before anything
+relies on the containment. Never make Search or Planner silently repair a Target
+that violates it.
+
+This containment is what lets Candidate Search stop exploring a stream whose
+current state already satisfies the Ideal condition. That optimization is only
+sound once the validation is in force, so implement Target validation first and
+only then enable the Ideal-already-satisfied early exit. Until validation is
+enabled, do not assume a stored Target satisfies the containment and do not ship
+a search that terminates early on that assumption.
 
 Do not introduce "any one target in this group completes the group" behavior in v1.
 
@@ -778,6 +831,117 @@ Candidate search runs per TargetWeapon, even if one Worker request handles multi
 
 Search only routes whose capabilities and prerequisites are available.
 
+### Candidate Search and Planner Responsibilities
+
+```text
+Candidate Search
+  For this Target alone, from the current RNG state, find the nearby
+  Practical and Ideal results quickly
+
+Planner
+  For several Targets at once, decide how to reconcile Counter operations
+```
+
+Candidate Search must not pre-read second and third copies of the same Ideal,
+distant alternative Ideals, or the Bonus-alternative by Skill-alternative product
+merely because the Planner might later hit a conflict. The initial search ends
+once one canonical Ideal is settled and every Practical within its operation
+count has been evaluated.
+
+Only when Counter conflicts actually occur across Targets does the Planner
+re-search the conflicting Targets, look up the next Practical/Ideal for the
+Target that yields, and compare how much further each choice pushes the other.
+`docs/SEARCH_SPEC.md` 5.6 and `docs/PLANNER_SPEC.md` 9.1-9.2 hold that contract;
+v1 does not implement Planner-driven constrained re-search.
+
+### Candidate Search Stream Separation
+
+Normal, Gogma, and Skill are independent RNG streams. Reset Skills advances only
+the Skill Counter. Reset Bonuses and Keep Bonuses advance only the Gogma
+Counter. Candidate Search must preserve that independence in its own control
+flow, not only in the recorded counters.
+
+- Never nest Skill exploration inside a Gogma state, and never nest Gogma
+  exploration inside a Skill result
+- The number of `predictSkills` calls must not grow with the number of Gogma
+  states, owned sources, or normal offsets
+- The number of `predictGogmaBonus` calls must not grow with the number of
+  Skill positions
+- Gogma Reset does not read the current bonuses, so compute it once per Gogma
+  Counter position instead of once per state
+- Keep depends only on the slot family layout of the previous bonuses, so two
+  states sharing a family layout reach exactly the same later Bonus outcomes;
+  dedup the Gogma frontier by family layout. That reduction is lossless for
+  Bonus reachability only — it collapses route-history diversity to one
+  deterministic representative, which is a known Planner limitation, so never
+  call it simply "lossless"
+- If the current Skills already satisfy the Target's ideal Skill condition, do
+  not search Reset Skills for that weapon
+- If the current bonuses already satisfy the Target's ideal bonus condition, do
+  not search bonus amendments for that weapon
+- A stream that currently satisfies only the Practical condition still yields a
+  zero-operation Practical solution for that stream, and Ideal exploration
+  continues on it
+
+Do not enumerate the Cartesian product of bonus results and Skill results, and
+do not reintroduce it as a lazily expanded priority queue or a small fixed
+diagonal band over the same product. Solve each stream independently, then
+compose only the routes the documented candidate composition rule requires. The
+Cross rule is the initial bounded search policy, not a complete search through
+the Planner. `docs/SEARCH_SPEC.md` is the authority for the stream solution sets,
+their deterministic ordering, the composition rule, the termination condition,
+and the meaning of `maxGogmaAdvance`, `maxSkillAdvance`, and
+`maxCandidatesPerTarget`.
+
+Terminate the initial search once one canonical Ideal is settled and every
+Practical within its operation count has been evaluated. The canonical Ideal is
+defined by the documented total order over Ideal candidates. Never let it depend
+on incidental traversal order — which RouteKind ran first, or which Promise
+settled first. Its final tie-break must be a stable semantic key over the
+candidate's result and route; `BuildCandidate.id` cannot serve there because the
+current implementation folds `searchRunId` into the hash, so the same input would
+pick a different Ideal on a second run.
+
+Keep the Practical retention range independent of discovery order too. With `D`
+the canonical Ideal's `estimatedOperationCount`, every Practical reachable within
+`estimatedOperationCount <= D` is evaluated for retention, then filtered by the
+conservative dominance below. Finding the Ideal first must never cause a nearer
+Practical to go unevaluated.
+
+Keep Practical candidates plural. Drop one only under a conservative Pareto
+dominance covering bonus composition, bonus rank, skills, source weapon,
+destructive/non-destructive kind, every advance and operation count, and
+material requirements. Compare bonus ranks as a per-`bonusTypeId` rank multiset,
+never by slot index, and treat a scope or type whose Master rank ordering cannot
+be compared safely as incomparable. Compare materials component-wise per
+`materialId`, never by a summed quantity — differing material kinds are
+incomparable. Never rank bonus types or skills against each other by assumed
+game strength; differing compositions are incomparable, so keep both.
+
+`maxGogmaAdvance` bounds the Gogma Counter positions the search covers, not the
+number of Engine calls; a bounded state search inside the Gogma stream is
+allowed. `maxSkillAdvance` is the maximum Reset Skills count, so a conversion
+route's shared Skill prediction array spans one extra position without raising
+that Reset bound. `maxCandidatesPerTarget` bounds the retained Practical set and
+must never stop the search before an Ideal is found.
+
+A later Counter position reaching the same result may be omitted from the initial
+search's retained output, but it is never permanently dominated. Some of those
+positions were genuinely never explored — the search stopped at the canonical
+Ideal — while others were evaluated and then dropped by stream-local retention.
+The Planner requires `counterBefore` to match the runtime counter, so those
+positions stay semantically different. A constrained re-search must be able to
+reconsider them: an earlier same-result solution that is unusable under the
+Planner's fixed Candidates must never permanently hide a usable later one.
+
+This is a Candidate Search orchestration contract. It does not change Production
+RNG prediction semantics, `PRODUCTION_RNG_ENGINE_VERSION`, or
+`supportsSeedSearch`.
+
+`docs/CANDIDATE_SEARCH_REDESIGN.md` records the audit measurements, the rejected
+alternatives, and the accepted limitations behind this contract. It is a design
+record, not specification authority.
+
 ### Normal Artian Route
 
 Route kind:
@@ -829,11 +993,13 @@ The operation sequence may contain:
 - `keep_bonuses`
 - `reset_skills`
 
-If bonus amendment is needed while the transient Gogma still has
-`normal_artian` scope, its first bonus operation must be `reset_bonuses`.
-That Reset produces five `gogma_artian` scope slots. Further
-`reset_bonuses` or `keep_bonuses` operations may then occur in the same
-route. Keep must never occur before that first Reset.
+While the transient Gogma still has `normal_artian` scope, the game allows
+either `reset_bonuses` or `keep_bonuses` as its first bonus operation. Because
+Production Keep prediction does not support normal-scope input, v1 Search emits
+only `reset_bonuses` there and reports the exclusion as
+`keep_prediction_unsupported`, never as a game rule. That Reset produces five
+`gogma_artian` scope slots, after which `reset_bonuses` or `keep_bonuses` may
+occur in the same route.
 
 For this route:
 
@@ -881,10 +1047,12 @@ Reset Bonuses, Keep Bonuses, and Reset Skills performed after conversion use
 `sourceOwnedWeaponId = null` because the converted route output is not yet
 registered as a separate OwnedWeapon. Do not invent a replacement ID.
 
-The first bonus amendment while the converted weapon has `normal_artian`
-scope must be Reset Bonuses. After it produces `gogma_artian` scope, further
-Reset Bonuses or Keep Bonuses may occur in the same route. Conversion itself
-does not map bonus types or ranks and does not call Gogma-bonus prediction.
+The first bonus amendment while the converted weapon has `normal_artian` scope
+may be Reset Bonuses or Keep Bonuses in the real game, but v1 Search emits only
+Reset Bonuses there while Production Keep prediction rejects normal-scope input.
+After a Reset produces `gogma_artian` scope, further Reset Bonuses or Keep
+Bonuses may occur in the same route. Conversion itself does not map bonus types
+or ranks and does not call Gogma-bonus prediction.
 
 ### Existing Gogma Reset Bonuses
 
@@ -898,9 +1066,9 @@ The source must be unprotected.
 
 Do not generate this destructive route from a protected weapon.
 
-If the source has inherited `normal_artian` scope, this Reset is its required
-first bonus amendment and changes the full five-slot result to
-`gogma_artian` scope.
+If the source has inherited `normal_artian` scope, this Reset changes the full
+five-slot result to `gogma_artian` scope. It is the only bonus amendment v1 can
+predict from that scope, but it is not the only amendment the game allows.
 
 ### Existing Gogma Keep Bonuses
 
@@ -912,8 +1080,10 @@ existing_gogma_keep_bonuses
 
 The source must be unprotected.
 
-The source must already have five `gogma_artian` scope slots. Keep has no slot
-selection and creates no same-counter selection branches. The current ordered
+In v1 the source must already have five `gogma_artian` scope slots, because
+Production Keep prediction supports only Gogma-tier current bonuses. This is a
+prediction-support restriction, not a game rule. Keep has no slot selection and
+creates no same-counter selection branches. The current ordered
 five slots are an explicit RNG Engine input; the family at each slot remains in
 that position while the tier is rerolled, and the complete final result comes
 from the Engine.
@@ -954,8 +1124,9 @@ existing_gogma_mixed
 
 If the route includes Reset Bonuses or Keep Bonuses, the source must be unprotected.
 
-A mixed route whose source still has `normal_artian` scope must perform Reset
-Bonuses before any Keep Bonuses operation.
+A mixed route whose source still has `normal_artian` scope performs Reset
+Bonuses before any Keep Bonuses operation in v1, because normal-scope Keep is
+unpredictable today, not because the game forbids it.
 
 A Reset-Skills-only route must use `existing_gogma_reset_skills`, not Mixed.
 
@@ -1041,6 +1212,29 @@ at the following Skill position.
 Conversion operations conflict at the same Skill Counter position, not the
 same Gogma Counter position. Only Reset Bonuses and Keep Bonuses consume and
 conflict on Gogma positions.
+
+Resolving Counter conflicts across Targets is the Planner's job, not something
+Candidate Search pre-computes. v1 does not implement Planner-driven constrained
+re-search, but the contract for it is fixed: never restart a re-search at
+`conflictingCounter + 1`, because a usable Practical may sit before the conflict;
+re-evaluate from the original Search/RNG origin under the fixed Candidate and
+conflict context instead. Never exclude a Candidate merely because it touches an
+occupied Counter position — the existing counter precondition, action identity,
+and shareable operation rules decide whether it can run alongside the fixed
+Candidate. Candidate Search must not duplicate that Planner logic; it offers
+Candidates in order while the Planner side judges coexistence.
+
+Every pruning the initial search applies — smallest-advance retention per
+identical result, Practical dominance, the Practical retention horizon, stopping
+at the canonical Ideal, and the Cross-only policy — exists to keep that
+single-Target search fast and simple. None of them is a Domain dominance that
+disqualifies a Candidate permanently. A constrained re-search must be able to
+re-evaluate anything they omitted, judged by whether it can coexist with the
+fixed Candidates. In particular, never carry the initial Practical dominance into
+the re-search, where a currently unusable dominant candidate would permanently
+hide a usable dominated one. Reaching those Candidates again does not require
+reviving the Cartesian product — the streams stay independent and the Cross-only
+initial policy stands.
 
 ---
 
@@ -1527,8 +1721,9 @@ Search UI must:
 - Allow existing-Gogma Reset Skills candidates from protected weapons
 - Show inherited normal-scope bonuses and the initial predicted Skills at
   conversion
-- Show Reset Bonuses as the only valid first bonus amendment for a converted
-  normal-scope Gogma
+- Present Reset Bonuses as the only currently predictable first bonus amendment
+  for a converted normal-scope Gogma, and explain the exclusion as missing
+  Production Keep prediction support rather than as a game restriction
 - Allow later Reset Bonuses or Keep Bonuses in the same route after that first
   Reset; never present a Keep slot-selection control
 
@@ -1582,9 +1777,38 @@ Relevant test areas include:
 - Conversion advancement: Normal +0, Skill +1, Gogma +0
 - Conversion inheritance of ordered `normal_artian` scope bonuses and initial
   Series/Group Skills
-- Keep is invalid before the first Reset in a normal-to-Gogma route
+- Normal-scope Keep is excluded as `keep_prediction_unsupported`, not as an
+  illegal game operation
 - Reset or Keep after the first Reset in normal and owned-normal routes
 - Keep family preservation by slot with no selection branches
+- Skill prediction count independent of Gogma state count, source count, and
+  normal offset count
+- Gogma prediction count independent of Skill position count
+- Zero Skill exploration when the current Skills already satisfy the ideal Skill
+  condition, and zero bonus amendment exploration when the current bonuses
+  already satisfy the ideal bonus condition
+- Candidate composition follows the documented Cross rule and never enumerates
+  the bonus-by-Skill product
+- The initial search stops at one canonical Ideal, and that Ideal is unchanged
+  when RouteKind evaluation order changes
+- The canonical Ideal is unchanged when `searchRunId` changes across runs
+- Every Practical within the canonical Ideal's operation count is evaluated, and
+  the retained set is unchanged across traversal orders
+- Stream anchors `b0` / `k0` come from the documented deterministic ordering
+- Practical candidates with differing bonus compositions, skill compositions, or
+  source weapons are kept as incomparable rather than dropped
+- Bonus rank dominance is decided per `bonusTypeId` rank multiset, not by slot
+  index, and an uncomparable Master rank ordering makes the pair incomparable
+- Material dominance is decided component-wise per `materialId`, so differing
+  material kinds and mixed trade-offs stay incomparable
+- The same result at a later Counter position is not excluded as dominated, and a
+  constrained re-search can still reach it
+- Target Ideal-implies-Practical validation lands before the Ideal-already-
+  satisfied early exit is enabled
+- Reaching `maxCandidatesPerTarget` still includes a found Ideal in the result
+- `maxSkillAdvance` caps Reset Skills at M for both existing-Gogma routes
+  (advance 0..M) and conversion routes (advance 1..M+1)
+- Target Ideal-implies-Practical containment, added with Target validation
 - Null transient sources for post-conversion Reset Bonuses, Keep Bonuses, and
   Reset Skills
 - BuildCandidate / BuildListEntry separation

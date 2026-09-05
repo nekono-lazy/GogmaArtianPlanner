@@ -205,6 +205,8 @@ Keep Bonusesにはユーザーが保持slotを選ぶ概念がない。入力し�
 
 `predictGogmaBonus` が返す `RestorationBonusSet` だけをamendment後の完成結果として使用する。Resetは入力武器が `normal_artian` / `gogma_artian` のどちらのscopeでも実行でき、結果を `gogma_artian` scopeへ置き換える。Keepは入力も結果も `gogma_artian` scopeである。EngineがKeep仕様を未対応の場合、`supportsKeepBonusesPrediction = false` としてRouteを生成しない。
 
+実ゲームでは巨戟化後の最初のBonus操作としてReset / Keepのどちらも選択できるが、現在のProduction RNGはnormal-tier Bonusを現在値とするKeepを予測できず、`getPredictionSupport({ type: "gogma_keep" })` が `unsupported_current_bonus` を返す。参照実装のKeep family tableは巨戟tierだけを対象とし、normal-tier枠のfamily対応・抽選pool・weightを定義していない。この挙動はunverifiedであり、game-verified fixtureが得られるまで推測して実装しない。Search / Plannerがnormal scope Keepを生成しない理由はこのprediction support不足であり、ゲームルール上の禁止ではない。
+
 ## 6.2 SkillPredictionInput
 
 ```ts

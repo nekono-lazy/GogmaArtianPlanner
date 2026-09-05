@@ -219,7 +219,7 @@ Skill Identificationはreference-generated fixtureに加えて、C5-E2C9で独�
 
 素材用武器にも復元ボーナス5枠とスキルを保持する。現在の復元構成がKeep Bonusesによって将来の目標武器作成に利用できる可能性があるためである。
 
-通常アーティアはレア8だけを登録でき、`normal_artian` scopeの復元ボーナス5枠を保持し、シリーズ／グループスキルとstatusを持たない。巨戟アーティアは、変換直後から最初のResetまでは継承した `normal_artian` scopeの5枠、その後は `gogma_artian` scopeの5枠を保持できる。1本の5枠内でscopeを混在させない。レア度選択UIは持たない。通常／巨戟の両方で保護を設定でき、保護中の通常アーティアを自動計画の巨戟化元にしない。
+通常アーティアはレア8だけを登録でき、`normal_artian` scopeの復元ボーナス5枠を保持し、シリーズ／グループスキルとstatusを持たない。巨戟アーティアは、変換直後から最初のBonus amendmentまでは継承した `normal_artian` scopeの5枠、その後は `gogma_artian` scopeの5枠を保持できる。1本の5枠内でscopeを混在させない。レア度選択UIは持たない。通常／巨戟の両方で保護を設定でき、保護中の通常アーティアを自動計画の巨戟化元にしない。
 
 無属性武器では通常／巨戟とも属性強化を利用できない。ライト／ヘビィボウガンの属性強化不可ルールも維持し、ElementとWeaponBonusDefinitionのMasterから選択肢を決定する。
 
@@ -267,6 +267,8 @@ Skill Identificationはreference-generated fixtureに加えて、C5-E2C9で独�
 ## 11. 実用ライン
 
 理想品が遠い場合でも、ゲームで使用できる妥協品を確保できるように実用ラインを設定する。
+
+実用ラインは「理想には届いていないが妥協して使用できるライン」であり、理想構成は必ず実用ラインを満たす。理想品の集合は実用ラインを満たす候補の集合に含まれる。理想構成が実用ラインを満たさない目標武器定義は不正とする。詳細な不変条件は[DATA_MODEL.md](./DATA_MODEL.md) 8.1に定義する。
 
 ### 11.1 通常条件
 
@@ -330,7 +332,9 @@ AND
 - 復元ボーナスが理想構成と一致する
 - スキルが理想条件と一致する
 
-理想品は実用品より上位のカテゴリとして扱い、同じ候補を重複表示しない。
+理想品は実用品より上位のカテゴリとして扱い、同じ候補を重複表示しない。理想品は実用ラインも必ず満たすため、実用ラインを満たさない理想品は存在しない。
+
+候補検索は、この目標武器単体を現在のRNG状態から作る場合に近い位置へある実用品と理想品を高速に求めることを主責務とする。複数目標武器を同時に作る場合のCounter操作の両立はPlannerの責務であり、将来競合し得るという理由だけで2本目以降の理想品や遠い代替を初回検索で先読みしない。
 
 ---
 
@@ -373,7 +377,7 @@ AND
 
 `maxNormalAdvance` は既存UIの「通常アーティア最大進行量」と既存検索ループの意味を維持し、1以上の「最大forge回数」とする。最大0-based offsetではない。探索する `candidateOffset` は `0 ... maxNormalAdvance - 1`、最大候補位置での `forgeCount` は `maxNormalAdvance` である。
 
-Gogma-tierのTarget条件へ到達する必要がある場合、同一Route内でconversion後のReset Bonuses、最初のReset後の追加Reset / Keep、必要なReset Skillsまでを表現できる。normal scopeの巨戟に対する最初のBonus amendmentは必ずResetとし、Keepを直接適用しない。transient GogmaへのReset / Keep / Reset Skillsは `sourceOwnedWeaponId = null` で表し、fake IDまたはRoute-local IDを作らない。
+Gogma-tierのTarget条件へ到達する必要がある場合、同一Route内でconversion後のReset Bonuses、最初のReset後の追加Reset / Keep、必要なReset Skillsまでを表現できる。normal scopeの巨戟に対する最初のBonus amendmentは、実ゲームではReset / Keepのどちらも選べるが、v1ではProduction RNGがnormal-tier BonusからのKeepを予測できないためResetだけを生成する([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.7参照)。transient GogmaへのReset / Keep / Reset Skillsは `sourceOwnedWeaponId = null` で表し、fake IDまたはRoute-local IDを作らない。
 
 ### 16.2 既存巨戟アーティア経由
 

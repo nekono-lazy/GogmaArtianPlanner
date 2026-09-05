@@ -445,7 +445,7 @@ export type OwnedWeapon =
 - 通常アーティアはレア8に限定し、`restorationBonusScope = "normal_artian"` の復元ボーナスだけを5枠保持し、シリーズスキル、グループスキル、statusは持たない
 - 巨戟アーティアは `restorationBonusScope = "normal_artian" | "gogma_artian"` を許可し、scopeに対応する復元ボーナス5枠とSeries Skill / Group Skill / statusを保持する
 - 通常→巨戟化直後は通常アーティアの5枠とslot順を変更せず、`restorationBonusScope = "normal_artian"` の巨戟アーティアになる。巨戟Rank I等への暗黙変換は行わない
-- `normal_artian` scopeを持つ巨戟アーティアへの最初のBonus amendmentはReset Bonusesだけを許可する。Reset結果で5枠全体とscopeを `gogma_artian` へ置き換え、その後はReset / Keepの両方を許可する
+- `normal_artian` scopeを持つ巨戟アーティアへの最初のBonus amendmentは、実ゲームではReset / Keepのどちらも選択できる。ただしv1のDomainモデルはReset Bonusesだけを許可する。Production RNGがnormal-tier BonusからのKeepを予測できず期待結果を定義できないためであり、ゲームルール上の制限ではない([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.7参照)。Reset結果で5枠全体とscopeを `gogma_artian` へ置き換え、その後はReset / Keepの両方を許可する
 - 1本の武器の5枠はすべて `restorationBonusScope` と一致させ、normal / gogma scopeを混在させない
 - 無属性武器はscopeにかかわらず属性強化を保持できない
 - 素材用でも `restorationBonuses` は必ず5枠保持する
@@ -496,6 +496,62 @@ export interface TargetWeapon {
 - `isEnabled = false` の目標は候補検索・Plannerの対象外
 - `idealBonuses` は必ず5枠完全指定
 - v1のTarget bonus定義は `gogma_artian` scopeを基準とし、converted Gogmaのnormal-tier bonusへ暗黙に緩和しない
+
+### Ideal ⇒ Practical 包含不変条件
+
+本アプリにおける意味は次である。
+
+```text
+Ideal    = 本来ほしい完成形
+Practical = Idealには届いていないが妥協して使用できるライン
+```
+
+したがってIdealはPracticalの完全上位であり、集合関係として次を不変条件とする。
+
+```text
+Ideal条件を満たす完成品の集合 ⊆ Practical条件を満たす完成品の集合
+```
+
+Bonus側。`idealBonuses` は必ず `practicalBonusConditions` のすべてと
+`practicalAlternativeGroups` のすべてを満たさなければならない。
+
+```text
+有効な例
+  Ideal     : 攻撃EX / 攻撃EX / ...
+  Practical : 攻撃III以上 × 2
+
+不正な例
+  Ideal     : 攻撃EX × 2
+  Practical : 属性III以上 × 3
+```
+
+Skill側。`idealSkillCondition` を満たす完成Skillは、必ず
+`practicalSkillCondition` も満たさなければならない。
+`seriesSkillId` / `groupSkillId` の `null`(指定しない)と
+`matchMode` の `all` / `any` を考慮した論理包含として扱う。
+
+```text
+すべての (seriesSkillId, groupSkillId) について
+  evaluateSkillCondition(idealSkillCondition, s, g)
+    ⇒ evaluateSkillCondition(practicalSkillCondition, s, g)
+```
+
+この包含が成立しないTargetWeapon定義は不正である。
+
+**未実装契約。** v1現時点のTargetWeapon validationはこの包含を検証していない。
+Target validationの追加は後続Phaseの作業であり、
+`docs/CANDIDATE_SEARCH_REDESIGN.md` のPhase分割へ割り当てる。
+
+この包含に依存する最適化を、validation有効化より先に実装してはならない。
+Candidate SearchがIdeal既達成streamの探索を省略する最適化は、
+validationが有効になった後にのみ実装する。validation有効化前に早期終了を
+導入すると、包含を満たさない不正Targetに対してPractical候補を取りこぼす。
+
+Search / Plannerがこの包含を暗黙に修正・緩和することは、
+validation有効化の前後を問わず認めない。
+
+この不変条件はCandidate Searchの早期終了規則の前提である
+([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6参照)。
 
 ## 8.2 BonusCondition
 
@@ -703,7 +759,7 @@ export interface UseWeaponAsMaterialOperation {
 - 変換時のSkillがTarget条件を満たす場合はResetSkillsOperationを追加しない。満たさない場合、変換後の次Skill位置からReset Skillsを探索する
 - 同一Route内で変換後の未登録Gogmaを対象にするResetBonusesOperation、KeepBonusesOperation、ResetSkillsOperationは `sourceOwnedWeaponId = null` とし、fake IDまたはRoute-local IDを生成しない
 - `sourceOwnedWeaponId = null` のReset / Keep / Reset Skillsは同じBuildRouteで直前に生成されたtransient Gogmaだけを対象とし、既存OwnedWeaponを表さない
-- transientまたはOwned Gogmaの `restorationBonusScope = "normal_artian"` なら最初のBonus amendmentはResetBonusesOperationでなければならない。最初のReset後だけKeepBonusesOperationを許可する
+- transientまたはOwned Gogmaの `restorationBonusScope = "normal_artian"` なら、v1の最初のBonus amendmentはResetBonusesOperationでなければならない。最初のReset後だけKeepBonusesOperationを許可する。この検証はProduction prediction supportの制限に由来し、normal-tier KeepのProduction prediction semanticsがgame-verifiedになった時点でSearch / Plannerの除外と同時に解除する。Keep操作自体のgame legalityは確定済みであり、再検証の対象ではない
 - ResetBonusesOperationはGogma Counterを1進め、結果を `gogma_artian` scopeへ置き換える。KeepBonusesOperationもGogma Counterを1進める
 - KeepBonusesOperationはユーザーselectionを持たない。現在5slotのfamilyをslotごとに保持し、同family内tierを再抽選する一意の操作である
 - `existing_gogma_reset_skills` は非nullの `sourceOwnedWeaponId` を持つResetSkillsOperationだけでスキルを再付与し、復元ボーナスを変更するOperationを含めない
@@ -1333,7 +1389,7 @@ Production RNG契約切替時の互換性は次のとおりとする。
 - 保護武器をPlannerは素材消費・Reset Bonuses・Keep Bonusesへ使用しない
 - protected武器でもReset SkillsのみのRouteには使用できる
 - 通常→巨戟化はNormal bonus 5枠をslot順のまま継承し、Skill Counterだけを1進め、Normal / Gogma Counterを進めない
-- normal scopeの巨戟に対する最初のBonus amendmentはReset Bonusesだけを許可し、その後は同一Route内でもReset / Keepを許可する
+- normal scopeの巨戟に対する最初のBonus amendmentは、v1ではprediction support上の理由でReset Bonusesだけを許可し、その後は同一Route内でもReset / Keepを許可する
 - 旧実用品の素材化予定は確認必須PlanStepとしてのみ表現する
 - v1でPlannerが旧Practicalの素材化を予定できるのは、同一TargetのIdealを先に確保済み、または同一Plan内の先行Stepで確保する場合だけ
 - Practical同士の優劣を理由とする自動素材化は行わない
@@ -1363,7 +1419,7 @@ Production RNG契約切替時の互換性は次のとおりとする。
 - `candidateOffset = 0` の通常候補Routeが1本forgeし、一般のoffset kでは `forgeCount = k + 1` となり、最後の1本だけを巨戟化する
 - CreateNormalArtianOperationの `normalCounterAfter = normalCounterBefore + count` と候補位置 `normalCounterBefore + count - 1` が一致する
 - conversion直後のExpectedResultがnormal scope 5枠と初回Series / Groupを保持する
-- normal scopeのtransient GogmaへKeep Bonusesを直接適用できず、最初のReset後だけKeepできる
+- normal scopeのtransient GogmaへKeep Bonusesを直接適用せず、最初のReset後だけKeepする。除外理由をprediction support不足として扱い、ゲームルール由来として扱わない
 - transient GogmaのReset / Keep / Reset Skillsが `sourceOwnedWeaponId = null` で表現され、fake OwnedWeaponIdを生成しない
 - 巨戟化直後の未登録武器用OwnedWeaponIdを生成しない
 - TargetWeapon priority未指定時に3になる

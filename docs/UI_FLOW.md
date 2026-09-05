@@ -299,7 +299,7 @@ activation条件。
 入力制約。
 
 - 復元ボーナスは必ず5枠
-- 通常アーティアはscopeを `normal_artian` に固定する。巨戟アーティアは、最初のReset前の通常継承かReset後の巨戟amendmentかを明示入力し、選択scope、武器種、属性に対応したWeaponBonusDefinitionだけを表示する
+- 通常アーティアはscopeを `normal_artian` に固定する。巨戟アーティアは、最初のBonus amendment前の通常継承かamendment後の巨戟tierかを明示入力し、選択scope、武器種、属性に対応したWeaponBonusDefinitionだけを表示する
 - 無属性では通常／巨戟とも属性強化を表示しない。ライト／ヘビィボウガンも属性にかかわらず表示しない
 - 通常アーティアではシリーズ／グループスキルとstatus入力を表示せず、保護初期値をOFFにする
 - 通常アーティアはレア8として自動登録し、レア度選択UIを表示しない
@@ -497,6 +497,29 @@ Plannerが生成した作成計画を確認する。
 Plannerを再実行する。これは局所的な候補選択であり、Plan全体の手動作成順固定UIには
 しない。選択Entryが削除済み、stale、Target無効、Capability不足、または保護状態変更で
 実行不能な場合はwarningを表示して再選択を求める。
+
+### 競合候補の表示
+
+Plannerの固定Candidateと共存できない候補の扱いは、次のどちらでもよい。
+
+- 通常の候補リストから除外する
+- 表示するが選択不可にし、理由を併記する
+
+いずれの場合も、ユーザーが理由を確認できる設計余地を残す。表示例。
+
+```text
+「〇〇とSkill Counter 351で競合するため作成できません」
+```
+
+Product契約は「競合理由をユーザーへ説明可能であること」である。B0ではUI詳細を
+固定せず、後続Phaseで具体化する。
+
+Counter位置が一致することだけを理由に「作成できない」と表示してはならない。
+同一Counter位置でもPlannerがshareableと判定するoperationは共同実行できる
+([PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.2参照)。
+
+将来のwhat-if比較では、一方のTargetを優先した場合に他方の次に実行可能な
+Practical / Idealまでの距離を並べて提示する。これも後続Phaseで実装する。
 
 PlanStep表示。
 
@@ -832,6 +855,7 @@ export interface SearchUiState {
 - `candidateOffset = k` の通常アーティア経由で `forgeCount = k + 1` 本forgeし、最後の1本だけを巨戟化する操作列が表示される
 - conversion結果に継承normal bonus 5枠と初回Series / Groupが表示される
 - normal scopeの巨戟にfirst Reset前のKeepが表示されず、first Reset後は同一RouteのKeepを表示できる
+- normal scopeでKeepが選べない理由を「現在のProduction RNGが予測できない」と表示し、「ゲーム上Reset必須」とは表示しない
 - transient GogmaのReset / Keep / Reset Skillsにfake OwnedWeapon IDを表示しない
 - Search Resultsから候補を作成リストへ追加できる
 - Build ListからPlannerを実行できる

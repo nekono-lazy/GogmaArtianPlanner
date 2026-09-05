@@ -273,7 +273,7 @@ weapon_bonus.{scope}.{weaponTypeId}.{bonusTypeId}.{bonusRankId}
 
 - TargetWeaponの既存Ideal / Practical bonus定義は `gogma_artian` scopeを基準とし、今回の契約変更でnormal-tierへ自動緩和しない
 - OwnedNormalArtianWeaponと通常アーティアPrediction・Debugは `normal_artian` scopeを使う
-- OwnedGogmaArtianWeaponは、変換直後から最初のResetまでは `normal_artian`、Reset / Keep後は `gogma_artian` を使う。保存された `restorationBonusScope` を明示してSelectorを呼ぶ
+- OwnedGogmaArtianWeaponは、変換直後から最初のBonus amendmentまでは `normal_artian`、Reset / Keep後は `gogma_artian` を使う。保存された `restorationBonusScope` を明示してSelectorを呼ぶ
 - UIやDomain validationはOwnedWeaponを暗黙に巨戟とみなさず、`weaponTypeId + elementId + ArtianBonusScope` を明示してSelectorを呼ぶ
 - 同一 `scope + weaponTypeId + bonusTypeId + bonusRankId` は1件のみ
 - `effectValue` は表示用文字列。計算ロジックは効果値に依存しない

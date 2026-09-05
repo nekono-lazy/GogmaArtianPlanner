@@ -493,6 +493,180 @@ protected武器への素材消費・Reset Bonuses・Keep Bonusesは競合とし�
 
 RouteOperation別のRNG位置は実際に消費するstreamで判定する。`convert_normal_to_gogma` は `same_skill_counter` の競合対象であり、`same_gogma_counter` として扱わない。Reset SkillsもSkill、Reset / KeepだけがGogma、forgeだけが該当Normal Counter位置を競合資源とする。
 
+## 9.1 Candidate SearchとPlannerの責務分離
+
+```text
+Candidate Search
+  このTarget単体を現在のRNG状態から作るなら、
+  近い位置にどの実用品・理想品があるかを高速に求める
+
+Planner
+  複数Targetを同時に作る場合に、Counter操作をどう両立させるかを決める
+```
+
+Candidate Searchは、Plannerで将来競合する可能性があるという理由だけで、2個目以降の
+同一Ideal、遠いCounter位置の代替Ideal、Bonus代替 × Skill代替のCartesian productを
+初回検索で先読みしない。初回検索はcanonical Idealを1件確定し、その
+`estimatedOperationCount = D` 以下で到達可能なPracticalの評価も確定した時点で終了する
+([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6参照)。
+
+複数Target間でCounter競合が実際に発生した場合にだけ、Plannerが必要に応じて次を調べる。
+
+- 競合したTargetの再検索
+- 一方を優先した場合の他方の次のPractical / Ideal
+- どちらを優先するとどの程度遠くなるか
+
+## 9.2 Planner-driven constrained re-search
+
+将来契約である。v1では実装しない。B0では責務と禁止事項だけを固定する。
+
+### 9.2.1 開始位置を後方固定しない
+
+再検索の開始位置を次のような単純な後方検索へ固定してはならない。
+
+```text
+禁止 : startCounter = conflictingCounter + 1
+```
+
+`Ideal +10` が競合していても、`Practical +4` や `Practical +6` のように競合位置より
+前に利用可能な実用品が存在し得る。再検索は元のSearch / RNG起点を基準に再評価し、
+Plannerが固定しているCandidateとconflict contextを制約として渡して、その制約下で
+実行可能かどうかを判定する。
+
+### 9.2.2 Counter位置だけで除外しない
+
+同一Counter位置でもPlanner上shareableなoperationが存在するため、次のような
+単純除外を行ってはならない。
+
+```text
+禁止 : Counter 351を使っている -> Counter 351を使うCandidateはすべて禁止
+```
+
+判定は本書の既存契約に基づく。
+
+- counter precondition(runtime counterと `counterBefore` の一致)
+- action identity
+- shareable operation
+
+Candidate Search側にこれらのPlannerロジックを複製してはならない。
+望ましい責務分担は次である。
+
+```text
+Candidate Search
+  -> Candidateを順次提示
+
+Planner / constrained search orchestration
+  -> 固定Candidateと共存可能か評価
+
+実行不能 -> 次のCandidate探索を継続
+実行可能 -> next Practical / Ideal として採用
+```
+
+### 9.2.3 Planner conflict context
+
+再検索へ渡す競合文脈として、少なくとも次を扱える必要がある。
+B0では概念契約のみを定義し、新しいTypeScript型を追加しない。
+具体的なDTO / APIは後続Phaseで設計する。
+
+| 項目 | 内容 |
+| --- | --- |
+| counter stream | Skill / Gogma / Normal |
+| `counterBefore` | 競合しているCounter位置 |
+| `counterAfter` | 操作後のCounter位置 |
+| operation type | `RouteOperation` の種別 |
+| `sourceOwnedWeaponId` | 必要な場合の起点武器 |
+| 競合参加者 | 競合しているBuildListEntry / TargetWeapon |
+| 固定制約 | 固定して残すCandidate / Plan側の制約 |
+
+`PlanConflict.id` は既存契約どおりstable conflict keyであり、conflict contextは
+その周辺情報を補う位置づけである。既存の `PlannerConflictResolution` を置き換えない。
+
+### 9.2.4 what-if比較
+
+複数武器で競合した場合、ユーザーが「どちらを優先すべきか」を判断できる情報を将来提供する。
+
+```text
+Target Aを優先した場合
+  Target B:
+    次に実行可能なPractical  +3
+    次に実行可能なIdeal      +47
+
+Target Bを優先した場合
+  Target A:
+    次に実行可能なPractical  +8
+    次に実行可能なIdeal      +12
+```
+
+契約。
+
+- 一方を固定したPlanner制約下で、他方の次に実行可能なPractical / Idealまでの距離を求める
+- 「競合Counter以降のIdealだけ」を探す仕様にしない。競合位置より前のPracticalも、
+  固定Candidateと共同実行可能なら候補である
+- 距離の表現は既存の `estimatedGogmaAdvance` / `estimatedSkillAdvance` /
+  `estimatedNormalAdvance` と `estimatedOperationCount` を用いる
+
+v1では実装しない。後続Phaseへ割り当てる。
+
+### 9.2.5 初回Search pruningを永久除外にしないこと
+
+初回Candidate Searchは、単体Targetの探索を高速・簡潔に保つために複数のpruningを
+適用する。これらはすべて**初回Search用のpolicy**であり、Planner制約下で候補を
+永久に無効化する**Domain dominanceではない**。
+
+| 初回Searchで省略される理由 | 定義 |
+| --- | --- |
+| 同一結果の最小advance retention | [SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.5.2 / 5.5.3 |
+| Practical dominance | 同 5.5.6 |
+| Practical保持のhorizon (`estimatedOperationCount <= D`) | 同 5.5.6.0 |
+| canonical Ideal到達による探索終了 | 同 5.6.2 / 5.6.3 |
+| Cross-onlyの初回bounded policy | 同 5.5.4 |
+
+契約。
+
+```text
+Planner-driven constrained re-searchでは、
+初回Search用pruningによって省略されたCandidateを、
+固定Candidateとの共存可能性に応じて再評価できなければならない。
+```
+
+例1。同一結果の後続Counter位置。
+
+```text
+Practical同一結果 earlier位置  -> 固定Candidateと競合し実行不能
+Practical同一結果 later位置    -> 固定Candidateと共存可能
+-> later solutionを次点として再評価・採用できる
+```
+
+例2。Practical dominanceで省略された候補。
+
+```text
++2 攻撃III Practical
++4 攻撃II  Practical
+
+初回Search : +2が+4を明確に上回るため+4を省略
+Planner    : 固定Candidateとの競合で+2が実行不能、+4は実行可能
+再検索     : +4を次点Practicalとして再評価・採用できる
+```
+
+規則。
+
+- 使用不能なearlier same-result solutionが、実行可能なlater same-result solutionを
+  恒久的に隠してはならない
+- **初回SearchのPractical dominanceをそのまま再検索へ持ち込み、現在実行不能な
+  dominant candidateが実行可能なdominated candidateを永久に隠してはならない**
+- canonical Ideal到達による探索終了と5.5.6.0のhorizonは初回Searchの範囲であり、
+  再検索の探索範囲を恒久的に制限しない
+- Cross-onlyは初回boundedポリシーであり、再検索で軸外解の必要性が実際に生じた場合は
+  そのTarget・その競合に限って評価できる
+- あるCandidateが実行不能であることだけを理由に、その完成結果や、そこから
+  派生し得る解の系列全体を除外しない
+
+これはCartesian productの復活を意味しない。Bonus streamとSkill streamは
+引き続き独立に解き、Cross-onlyの初回policyも維持する。追加で必要なのは、
+省略されたCandidateを固定Candidateとの共存可能性に応じて再評価できることだけである。
+
+v1では実装しない。後続Phaseへ割り当てる。
+
 ---
 
 ## 10. Plan生成手順
@@ -559,7 +733,7 @@ PlanStep変換用 `PlannerPlanStepDraft` を生成する。
   `prediction_failed` 等へ変換せず呼出元へ伝播する。
 - convertはGogma Predictionを呼ばない。変換元Normalの `normal_artian` scope 5-slot bonusesをslot順のままtransient Gogmaへ継承し、現在Skill位置で `predictSkills` を実行して初回Series / Groupを設定する。
 - convertのRNG遷移はSkill Counter `+1`、Normal / Gogma Counter `+0` とする。変換時のSkill結果を無視するRouteや素材補充でも、実ゲームでconversionする限り同じSkill位置を消費する。
-- Reset / Keepはtransient Gogmaのscopeとslot順を追跡する。normal scopeなら最初のBonus amendmentはResetだけを許可し、Reset結果でgogma scopeへ置き換えた後に限りKeepを許可する。
+- Reset / Keepはtransient Gogmaのscopeとslot順を追跡する。normal scopeならv1は最初のBonus amendmentとしてResetだけを許可し、Reset結果でgogma scopeへ置き換えた後に限りKeepを許可する。これはProduction prediction supportの制限であり、ゲームルール上の制限ではない([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.7参照)。
 - reserve前にEntry固有transient Gogmaのbonuses、Series Skill、Group SkillがCandidate Snapshotと
   完全一致することを検証する。不一致またはtransient不足はReplay failureであり、Candidate Snapshotで
   transientを上書きしてはならない。成功したEntryのtransientだけを破棄する。
@@ -695,7 +869,7 @@ Route別の典型例。
 6. confirm_result または reserve_weapon
 ```
 
-`candidateOffset = k` を採用する場合のconversion直後の合計進行はNormal `+(k + 1)`、Skill `+1`、Gogma `+0` である。`forgeCount = k + 1` の最後の1本だけを巨戟化し、先行k本を巨戟化しない。conversionは通常5枠をslot順のまま継承し、初回Series / Groupを付与する。conversion後のReset / Keep / Reset Skillsは `sourceOwnedWeaponId = null` のtransient Gogmaを対象とし、最初のBonus amendmentだけは必ずResetとする。
+`candidateOffset = k` を採用する場合のconversion直後の合計進行はNormal `+(k + 1)`、Skill `+1`、Gogma `+0` である。`forgeCount = k + 1` の最後の1本だけを巨戟化し、先行k本を巨戟化しない。conversionは通常5枠をslot順のまま継承し、初回Series / Groupを付与する。conversion後のReset / Keep / Reset Skillsは `sourceOwnedWeaponId = null` のtransient Gogmaを対象とし、v1では最初のBonus amendmentをResetとする(prediction support上の制限)。
 
 `reserve_weapon` はPlanner生成時に新しいOwnedWeapon IDを予約し、Candidate Snapshotの
   finalBonuses / Series Skill / Group Skillを持つ `kind = "gogma"` の武器を追加する。
@@ -715,7 +889,7 @@ UI実行は1操作ずつ。
 5. reserve_weapon
 ```
 
-変換元の所持通常アーティアはレア8かつ非保護であることを要求する。`convert_normal_to_gogma` StepのInventoryChangeで元通常アーティアを除き、その時点以降同じIDを別Routeで再利用しない。変換後GogmaはまだOwnedWeaponへ登録せず未来IDも割り当てない。通常5枠をnormal scopeのまま継承し、初回Skillを予測してSkill Counterだけを1進める。後続Reset / Keep / Reset Skillsは `sourceOwnedWeaponId = null` とし、最初のBonus amendmentはResetとする。Bonus Type MappingからRank変換を推測しない。
+変換元の所持通常アーティアはレア8かつ非保護であることを要求する。`convert_normal_to_gogma` StepのInventoryChangeで元通常アーティアを除き、その時点以降同じIDを別Routeで再利用しない。変換後GogmaはまだOwnedWeaponへ登録せず未来IDも割り当てない。通常5枠をnormal scopeのまま継承し、初回Skillを予測してSkill Counterだけを1進める。後続Reset / Keep / Reset Skillsは `sourceOwnedWeaponId = null` とし、v1では最初のBonus amendmentをResetとする(prediction support上の制限)。Bonus Type MappingからRank変換を推測しない。
 
 `reserve_weapon` は元OwnedNormalArtianWeaponを再削除せず、別の予約IDで新しい
 OwnedGogmaArtianWeaponだけを追加する。元IDをkind変更して再利用しない。追加武器のstatus、
@@ -1011,6 +1185,21 @@ Workerを利用できない環境ではClientのversionを `production-engine-un
 - PlanConflictの参照がBuildListEntry ID基準である
 - RejectedBuildListEntryの参照がBuildListEntry ID基準である
 
+Planner-driven constrained re-search実装後に追加する観点。
+
+- 再検索の開始位置を `conflictingCounter + 1` へ固定せず、競合位置より前のPracticalも候補になる
+- 同一Counter位置でもshareableなoperationを持つCandidateを除外しない
+- 固定Candidateと共存不能なCandidateを順次読み飛ばし、共存可能なものをnext Practical / Idealとして採用する
+- Candidate Search側にcounter precondition / action identity判定を複製していない
+- earlier same-result solutionが固定Candidateと競合して実行不能な場合に、
+  later same-result solutionを再評価して採用できる
+- 初回Search用の「同一結果なら最小advanceだけ保持」pruningが再検索へ持ち込まれていない
+- 初回SearchのPractical dominanceで省略された候補が、dominant candidate実行不能時に
+  再評価・採用できる
+- canonical Ideal到達による終了とhorizonが再検索の探索範囲を恒久的に制限しない
+- 再評価がCartesian productの列挙にならず、stream独立性とCross-only初回policyを保つ
+- what-if比較が双方向(A優先時のB、B優先時のA)で対称に求まる
+
 ## 15.6 Plan Test
 
 - PlanStep orderが連番になる
@@ -1020,7 +1209,7 @@ Workerを利用できない環境ではClientのversionを `production-engine-un
 - Plan生成が入力を破壊しない
 - Candidate SnapshotのBuildRoute.operationsを書き換えない
 - BuildRoute.operationsと同じ順序でPlanStepが生成される
-- normal scopeのtransient Gogmaに最初のReset前のkeep_bonuses PlanStepを生成しない
+- normal scopeのtransient Gogmaに最初のReset前のkeep_bonuses PlanStepを生成しない。除外理由をprediction support不足として扱う
 - 最初のReset後はnormal / owned-Normal Routeから後続keep_bonuses PlanStepを生成できる
 - conversion StepのExpectedResultが継承normal bonusと初回Skillを持ち、RngAdvanceがSkill +1 / Gogma +0になる
 - transient GogmaのReset / Keep / Reset Skills PlanStepがfake OwnedWeaponIdを持たない
