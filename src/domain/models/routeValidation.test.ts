@@ -198,3 +198,86 @@ describe('BuildRoute validation', () => {
     )
   })
 })
+
+describe('Existing Gogma route-local bonus scope', () => {
+  const sourceId = ownedWeaponId('owned.fixture.inherited')
+
+  function inheritedSource(overrides: Record<string, unknown> = {}) {
+    return {
+      ...createValidOwnedWeapon(sourceId),
+      restorationBonusScope: 'normal_artian' as const,
+      isProtected: false,
+      ...overrides,
+    }
+  }
+
+  function amendmentRoute(
+    kind: BuildRoute['kind'],
+    types: Array<'reset_bonuses' | 'keep_bonuses'>,
+  ): BuildRoute {
+    return {
+      kind,
+      sourceOwnedWeaponId: sourceId,
+      operations: types.map((type, index) => ({
+        type,
+        sourceOwnedWeaponId: sourceId,
+        gogmaCounterBefore: 10 + index,
+        gogmaCounterAfter: 11 + index,
+      })),
+    }
+  }
+
+  it('accepts Reset Bonuses followed by Keep Bonuses from an inherited normal scope', () => {
+    // AGENTS.md Existing Gogma Mixed: the Reset moves the route-local scope to
+    // gogma_artian, so the following Keep reads Gogma-tier current bonuses.
+    const validation = validateBuildRoute(
+      amendmentRoute('existing_gogma_mixed', ['reset_bonuses', 'keep_bonuses']),
+      [inheritedSource()],
+    )
+    expect(validation.issues).toEqual([])
+    expect(validation.isValid).toBe(true)
+  })
+
+  it('rejects Keep Bonuses as the first amendment of an inherited normal scope', () => {
+    const validation = validateBuildRoute(
+      amendmentRoute('existing_gogma_keep_bonuses', ['keep_bonuses']),
+      [inheritedSource()],
+    )
+    expect(validation.isValid).toBe(false)
+    expect(validation.issues).toContainEqual(
+      expect.objectContaining({ code: 'protected_destructive_use' }),
+    )
+    // The reason is missing Production Keep prediction support, not a game rule.
+    expect(validation.issues[0].message).toMatch(/Keep prediction/)
+  })
+
+  it('rejects Reset Bonuses followed by Keep Bonuses on a protected source', () => {
+    const validation = validateBuildRoute(
+      amendmentRoute('existing_gogma_mixed', ['reset_bonuses', 'keep_bonuses']),
+      [inheritedSource({ isProtected: true })],
+    )
+    expect(validation.isValid).toBe(false)
+    expect(validation.issues).toContainEqual(
+      expect.objectContaining({ code: 'protected_destructive_use' }),
+    )
+  })
+
+  it('still accepts Keep Bonuses directly from a gogma scope source', () => {
+    const validation = validateBuildRoute(
+      amendmentRoute('existing_gogma_keep_bonuses', ['keep_bonuses']),
+      [inheritedSource({ restorationBonusScope: 'gogma_artian' })],
+    )
+    expect(validation.isValid).toBe(true)
+  })
+
+  it('does not let Reset Skills change the route-local bonus scope', () => {
+    const route = amendmentRoute('existing_gogma_mixed', ['keep_bonuses'])
+    route.operations.unshift({
+      type: 'reset_skills',
+      sourceOwnedWeaponId: sourceId,
+      skillCounterBefore: 7,
+      skillCounterAfter: 8,
+    })
+    expect(validateBuildRoute(route, [inheritedSource()]).isValid).toBe(false)
+  })
+})

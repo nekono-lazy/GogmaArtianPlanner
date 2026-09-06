@@ -3,8 +3,10 @@ import type {
   CalculationContext,
   KnownValue,
   NormalArtianCounter,
+  OwnedWeaponId,
   PlanStepOperationType,
   RestorationBonus,
+  RestorationBonusScope,
   RngState,
 } from './common'
 import { V1_NORMAL_ARTIAN_RARITY } from './common'
@@ -29,7 +31,7 @@ import type {
 } from './planning'
 import {
   areRestorationBonusSetsEqual,
-  canKeepBonuses,
+  canKeepBonusesFromScope,
   canResetBonuses,
   canUseAsMaterial,
   isCalculationContextCompatible,
@@ -126,7 +128,7 @@ function validatePositiveInteger(
   }
 }
 
-function validateCalculationContext(
+export function validateCalculationContext(
   context: CalculationContext,
   path: string,
   issues: DomainValidationIssue[],
@@ -495,6 +497,20 @@ function validateProtectedRouteUse(
       `Referenced OwnedWeapon '${route.sourceOwnedWeaponId}' does not exist.`,
     )
   }
+  /**
+   * Route-local Bonus scope per referenced OwnedWeapon.
+   *
+   * Reset Bonuses replaces the source's five slots with Gogma-tier ones for the
+   * remainder of this Route, so a later Keep Bonuses in the same sequence reads
+   * Gogma-scope current bonuses. AGENTS.md Existing Gogma Mixed is the
+   * authority: a mixed Route from a `normal_artian` scope source performs Reset
+   * Bonuses before any Keep Bonuses. `normal scope -> Keep` stays rejected
+   * because Production Keep prediction does not support inherited Normal-tier
+   * current bonuses, not because the game forbids it. Reset Skills never
+   * changes the scope.
+   */
+  const routeLocalScope = new Map<OwnedWeaponId, RestorationBonusScope>()
+
   route.operations.forEach((operation, index) => {
     const path = `operations[${index}]`
     const id =
@@ -509,19 +525,29 @@ function validateProtectedRouteUse(
       addIssue(issues, path, 'invalid_reference', `Referenced OwnedWeapon '${id}' does not exist.`)
       return
     }
+    const currentScope =
+      routeLocalScope.get(weapon.id) ?? weapon.restorationBonusScope
     const allowed =
       operation.type === 'reset_bonuses'
         ? canResetBonuses(weapon)
         : operation.type === 'keep_bonuses'
-          ? canKeepBonuses(weapon)
+          ? canKeepBonusesFromScope(weapon, currentScope)
           : canUseAsMaterial(weapon)
     if (!allowed) {
       addIssue(
         issues,
         path,
         'protected_destructive_use',
-        `OwnedWeapon '${id}' cannot be used by this destructive operation.`,
+        operation.type === 'keep_bonuses' &&
+          weapon.kind === 'gogma' &&
+          !weapon.isProtected
+          ? `Keep Bonuses on OwnedWeapon '${id}' needs Gogma-scope current bonuses at this position; Production Keep prediction does not support inherited Normal-scope slots.`
+          : `OwnedWeapon '${id}' cannot be used by this destructive operation.`,
       )
+      return
+    }
+    if (operation.type === 'reset_bonuses') {
+      routeLocalScope.set(weapon.id, 'gogma_artian')
     }
   })
 }

@@ -200,6 +200,44 @@ export function compareBonusSolutions(
 }
 
 /**
+ * Evaluates and deterministically orders the Skill stream solutions of one
+ * Route base WITHOUT applying the initial-Search retention of SEARCH_SPEC
+ * 5.5.2.
+ *
+ * The Planner-driven constrained enumerator (5.6.7) must be able to offer the
+ * same Skill outcome reached at a later `resetCount`, because the Planner
+ * matches `RouteOperation.counterBefore` against the runtime Counter. Ordering
+ * is the same total order `buildSkillSolutionSet()` uses, so `K(c)[0]` is
+ * identical in both boundaries.
+ */
+export function evaluateSkillSolutions(
+  target: TargetWeapon,
+  solutions: readonly RouteSkillSolution[],
+): EvaluatedSkillSolution[] {
+  return solutions
+    .map((solution) => evaluateSkillSolution(target, solution))
+    .sort(compareSkillSolutions)
+    .map((evaluated, index) => ({ ...evaluated, index }))
+}
+
+/**
+ * The Bonus counterpart of `evaluateSkillSolutions()`: evaluation and ordering
+ * without the initial-Search `(scope, completed multiset)` retention of
+ * SEARCH_SPEC 5.5.3. The B2 family-layout frontier reduction is a Bonus stream
+ * concern and is unaffected: this function only sees what the stream published.
+ */
+export function evaluateBonusSolutions(
+  target: TargetWeapon,
+  input: Pick<CandidateSearchInput, 'master'>,
+  solutions: readonly RouteBonusSolution[],
+): EvaluatedBonusSolution[] {
+  return solutions
+    .map((solution) => evaluateBonusSolution(target, input, solution))
+    .sort(compareBonusSolutions)
+    .map((evaluated, index) => ({ ...evaluated, index }))
+}
+
+/**
  * Evaluates, retains, and deterministically orders the Skill stream solutions
  * of one Route base.
  *

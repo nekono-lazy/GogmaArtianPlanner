@@ -1,7 +1,29 @@
 import { hashStableValue, stableStringify } from '../models/hashing'
 import { canonicalBonusMultiset, compareStableKeys } from './semanticKeys'
-import type { BuildCandidate } from '../models/publicTypes'
+import type {
+  BuildCandidate,
+  BuildRoute,
+  GroupSkillId,
+  RestorationBonusScope,
+  RestorationBonusSet,
+  SeriesSkillId,
+} from '../models/publicTypes'
 import type { CandidateResultFilter } from './searchTypes'
+
+/**
+ * The run-independent semantic content of one composed Search result.
+ *
+ * `BuildCandidate` satisfies it, and so does the transient
+ * `ConstrainedCandidate` of SEARCH_SPEC 5.6.7, which keeps one stable-key
+ * authority across both boundaries.
+ */
+export interface CandidateStableKeyInput {
+  finalBonuses: RestorationBonusSet
+  restorationBonusScope: RestorationBonusScope
+  seriesSkillId: SeriesSkillId | null
+  groupSkillId: GroupSkillId | null
+  route: BuildRoute
+}
 
 
 export function candidateDeduplicationKey(candidate: BuildCandidate): string {
@@ -119,7 +141,7 @@ export function filterCandidates(
 }
 
 /** Run-independent semantic identity; never change persisted Candidate IDs. */
-export function candidateStableKey(candidate: BuildCandidate): string {
+export function candidateStableKey(candidate: CandidateStableKeyInput): string {
   return stableStringify({
     finalBonuses: canonicalBonusMultiset(candidate.finalBonuses),
     restorationBonusScope: candidate.restorationBonusScope,

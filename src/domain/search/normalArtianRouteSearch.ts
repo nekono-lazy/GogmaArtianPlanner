@@ -1,12 +1,12 @@
 import type { TargetSearchScheduler } from './targetSearchScheduler'
 import type { RouteOperation } from '../models/publicTypes'
-import { V1_NORMAL_ARTIAN_RARITY } from '../models/publicTypes'
 import {
   hasConfirmedGogmaInputs,
   hasConfirmedSkillInputs,
   type RouteSearchContext,
   type RouteSearchResult,
 } from './routeSearchShared'
+import { selectSearchableNormalCounters } from './routeEligibility'
 
 export async function searchNormalArtianRoutes(
   context: RouteSearchContext,
@@ -19,15 +19,7 @@ export async function searchNormalArtianRoutes(
     skippedRoutes: [],
     warnings: [],
   }
-  const counters = input.normalCounters
-    .filter(
-      (counter) =>
-        counter.weaponTypeId === target.weaponTypeId &&
-        counter.rarity === V1_NORMAL_ARTIAN_RARITY &&
-        counter.isConfirmed &&
-        counter.counter !== null,
-    )
-    .sort((left, right) => left.id.localeCompare(right.id))
+  const counters = selectSearchableNormalCounters(target, input.normalCounters)
 
   if (counters.length === 0) {
     result.skippedRoutes.push({

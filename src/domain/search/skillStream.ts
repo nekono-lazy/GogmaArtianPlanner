@@ -1,6 +1,7 @@
 import type {
   GroupSkillId,
   OwnedWeaponId,
+  RngState,
   RouteOperation,
   SeriesSkillId,
   TargetWeapon,
@@ -8,7 +9,26 @@ import type {
 import type { RngEngine, SkillPredictionResult } from '../rng/rngEngine'
 import { hasConfirmedSkillInputs } from './searchRngInputs'
 import type { SearchExecutionContext } from './searchExecution'
-import type { CandidateSearchInput } from './searchTypes'
+import type { SearchMasterSubset } from './searchTypes'
+
+/**
+ * The semantic Skill stream input plus one explicit depth bound.
+ *
+ * The stream needs the Skill RNG inputs, the Master subset, and how many Reset
+ * Skills positions it may cover. It deliberately does not take a
+ * `CandidateSearchInput`: `searchRunId`, the route/result filters, and the rest
+ * of `CandidateSearchSettings` are not stream inputs, and the Planner-driven
+ * constrained enumerator (SEARCH_SPEC 5.6.7) supplies its own bound from
+ * `ConstrainedEnumerationBounds` rather than from `CandidateSearchSettings`.
+ *
+ * `maxSkillAdvance` keeps its SEARCH_SPEC 3.1 meaning: the maximum Reset Skills
+ * count, not the number of covered Skill Counter positions.
+ */
+export interface SkillStreamInput {
+  rngState: RngState
+  master: SearchMasterSubset
+  maxSkillAdvance: number
+}
 
 export interface SkillStreamStep {
   skillCounterBefore: number
@@ -69,7 +89,7 @@ export function resetSkillsOperations(
 
 export function createTargetSkillStream(
   target: TargetWeapon,
-  input: CandidateSearchInput,
+  input: SkillStreamInput,
   engine: RngEngine,
   execution: SearchExecutionContext,
   isSkillPredictionSupported: () => boolean,
@@ -92,7 +112,7 @@ export function createTargetSkillStream(
   }
 
   async function ensure(startSkillCounter: number, through: number) {
-    const limit = Math.min(input.settings.maxSkillAdvance, Math.max(0, through))
+    const limit = Math.min(input.maxSkillAdvance, Math.max(0, through))
     let set = sets.get(startSkillCounter)
     if (!set) {
       set = { steps: [], solutions: [], counter: startSkillCounter }
@@ -126,11 +146,11 @@ export function createTargetSkillStream(
       const set = await ensure(startSkillCounter, depth)
       return { startSkillCounter, steps: set.steps,
         solutions: set.solutions[depth - 1] ? [set.solutions[depth - 1]] : [],
-        exhausted: depth >= input.settings.maxSkillAdvance }
+        exhausted: depth >= input.maxSkillAdvance }
     },
-    solve: async (startSkillCounter, through = input.settings.maxSkillAdvance) => {
+    solve: async (startSkillCounter, through = input.maxSkillAdvance) => {
       const set = await ensure(startSkillCounter, through)
-      const limit = Math.min(input.settings.maxSkillAdvance, Math.max(0, through))
+      const limit = Math.min(input.maxSkillAdvance, Math.max(0, through))
       return { startSkillCounter, steps: set.steps.slice(0, limit), solutions: set.solutions.slice(0, limit) }
     },
   }

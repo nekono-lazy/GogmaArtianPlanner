@@ -10,6 +10,10 @@ import { searchCandidates } from './candidateSearch'
 import { candidateStableKey, filterCandidates, deduplicateCandidates } from './candidateProcessing'
 import { createTargetSkillStream } from './skillStream'
 import { createTargetBonusStream } from './bonusStream'
+import {
+  bonusStreamInputForSearch,
+  skillStreamInputForSearch,
+} from './searchStreamInputs'
 import { createSearchExecutionContext } from './searchExecution'
 import { createSearchPredictionSupport, type RouteSearchContext } from './routeSearchShared'
 import { searchNormalArtianRoutes } from './normalArtianRouteSearch'
@@ -197,8 +201,8 @@ describe('B4 actual Target-wide termination', () => {
       const target = input.targetWeapons[0]
       const support = createSearchPredictionSupport(engine, target, input.master)
       const context: RouteSearchContext = { target, input, engine, execution, predictionSupport: support,
-        skillStream: createTargetSkillStream(target, input, engine, execution, () => true),
-        bonusStream: createTargetBonusStream(target, input, engine, execution, support),
+        skillStream: createTargetSkillStream(target, skillStreamInputForSearch(input), engine, execution, () => true),
+        bonusStream: createTargetBonusStream(target, bonusStreamInputForSearch(input), engine, execution, support),
         normalPredictions: new Map<number, RestorationBonusSet>() }
       const searchers = [searchNormalArtianRoutes, searchOwnedNormalArtianRoutes, searchExistingGogmaRoutes]
       if (reverse) searchers.reverse()
@@ -223,8 +227,8 @@ describe('B4 actual Target-wide termination', () => {
     const target = full.input.targetWeapons[0]
     const support = createSearchPredictionSupport(full.engine, target, full.input.master)
     const context: RouteSearchContext = { target, input: full.input, engine: full.engine, execution, predictionSupport: support,
-      skillStream: createTargetSkillStream(target, full.input, full.engine, execution, () => true),
-      bonusStream: createTargetBonusStream(target, full.input, full.engine, execution, support) }
+      skillStream: createTargetSkillStream(target, skillStreamInputForSearch(full.input), full.engine, execution, () => true),
+      bonusStream: createTargetBonusStream(target, bonusStreamInputForSearch(full.input), full.engine, execution, support) }
     const scheduler = new TargetSearchScheduler(context)
     const results = []
     for (const search of [searchNormalArtianRoutes, searchOwnedNormalArtianRoutes, searchExistingGogmaRoutes]) {

@@ -14,6 +14,10 @@ import { createTargetBonusStream } from './bonusStream'
 import { createSearchPredictionSupport } from './routeSearchShared'
 import { createTargetSkillStream } from './skillStream'
 import {
+  bonusStreamInputForSearch,
+  skillStreamInputForSearch,
+} from './searchStreamInputs'
+import {
   createSearchExecutionContext,
   type CandidateSearchExecutionOptions,
 } from './searchExecution'
@@ -155,7 +159,7 @@ async function searchTarget(
     // One Skill stream per Target, shared by every RouteKind and Route base.
     skillStream: createTargetSkillStream(
       target,
-      input,
+      skillStreamInputForSearch(input),
       engine,
       execution,
       () => predictionSupport.skill().supported,
@@ -165,7 +169,7 @@ async function searchTarget(
     // source weapon and every Normal offset.
     bonusStream: createTargetBonusStream(
       target,
-      input,
+      bonusStreamInputForSearch(input),
       engine,
       execution,
       predictionSupport,

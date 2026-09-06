@@ -1,12 +1,15 @@
 import type { TargetSearchScheduler } from './targetSearchScheduler'
 import type { RouteOperation } from '../models/publicTypes'
-import { V1_NORMAL_ARTIAN_RARITY } from '../models/publicTypes'
 import {
   hasConfirmedGogmaInputs,
   hasConfirmedSkillInputs,
   type RouteSearchContext,
   type RouteSearchResult,
 } from './routeSearchShared'
+import {
+  selectCompatibleOwnedNormalArtianWeapons,
+  selectConvertibleOwnedNormalArtianWeapons,
+} from './routeEligibility'
 
 export async function searchOwnedNormalArtianRoutes(
   context: RouteSearchContext,
@@ -14,11 +17,8 @@ export async function searchOwnedNormalArtianRoutes(
 ): Promise<RouteSearchResult> {
   const { engine, input, target } = context
   const result: RouteSearchResult = { candidates: [], searchedRoutes: [], skippedRoutes: [], warnings: [] }
-  const compatible = input.ownedWeapons.filter((weapon) => weapon.kind === 'normal'
-    && weapon.rarity === V1_NORMAL_ARTIAN_RARITY
-    && weapon.weaponTypeId === target.weaponTypeId
-    && weapon.elementId === target.elementId)
-  const sources = compatible.filter((weapon) => !weapon.isProtected).sort((left, right) => left.id.localeCompare(right.id))
+  const compatible = selectCompatibleOwnedNormalArtianWeapons(target, input.ownedWeapons)
+  const sources = selectConvertibleOwnedNormalArtianWeapons(target, input.ownedWeapons)
 
   if (sources.length === 0) {
     result.skippedRoutes.push({

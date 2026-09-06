@@ -2,6 +2,7 @@ import type {
   OwnedWeaponId,
   RestorationBonusScope,
   RestorationBonusSet,
+  RngState,
   RouteOperation,
   TargetWeapon,
 } from '../models/publicTypes'
@@ -10,8 +11,24 @@ import { gogmaKeepFamilyLayoutKey } from '../rng/gogmaBonusFamily'
 import type { RngEngine, RngPredictionUnsupportedReason } from '../rng/rngEngine'
 import type { SearchExecutionContext } from './searchExecution'
 import type { SearchPredictionSupport } from './searchPredictionSupport'
-import type { CandidateSearchInput } from './searchTypes'
+import type { SearchMasterSubset } from './searchTypes'
 import { compareStableKeys } from './semanticKeys'
+
+/**
+ * The semantic Bonus stream input plus one explicit depth bound.
+ *
+ * As with `SkillStreamInput`, the stream takes only what it actually needs, so
+ * the Planner-driven constrained enumerator (SEARCH_SPEC 5.6.7) can bound it
+ * with `ConstrainedEnumerationBounds` instead of `CandidateSearchSettings`.
+ *
+ * `maxGogmaAdvance` keeps its SEARCH_SPEC 3.1 meaning: the number of Gogma
+ * Counter positions covered, not the number of Engine calls.
+ */
+export interface BonusStreamInput {
+  rngState: RngState
+  master: SearchMasterSubset
+  maxGogmaAdvance: number
+}
 
 export interface BonusStreamStep {
   gogmaCounterBefore: number
@@ -152,7 +169,7 @@ function compareRepresentative(
 
 export function createTargetBonusStream(
   target: TargetWeapon,
-  input: CandidateSearchInput,
+  input: BonusStreamInput,
   engine: RngEngine,
   execution: SearchExecutionContext,
   predictionSupport: SearchPredictionSupport,
@@ -257,7 +274,7 @@ export function createTargetBonusStream(
     ]
     let gogmaCounterBefore = base.startGogmaCounter
 
-    for (let depth = 1; depth <= input.settings.maxGogmaAdvance; depth += 1) {
+    for (let depth = 1; depth <= input.maxGogmaAdvance; depth += 1) {
       if (frontier.length === 0) break
       const generated: GogmaScopeBonusState[] = []
       let gogmaCounterAfter: number | null = null
@@ -341,7 +358,7 @@ export function createTargetBonusStream(
       cached = { iterator: build(base), value: EMPTY_SET(base.startGogmaCounter), done: false, depths: [] }
       sets.set(key, cached)
     }
-    const limit = Math.min(input.settings.maxGogmaAdvance, Math.max(0, through))
+    const limit = Math.min(input.maxGogmaAdvance, Math.max(0, through))
     while (!cached.done && cached.depths.length < limit) {
       const previousCount = cached.value.solutions.length
       const next = await cached.iterator.next()
@@ -359,12 +376,12 @@ export function createTargetBonusStream(
       return {
         ...cached.value,
         solutions: cached.depths[depth - 1] ?? [],
-        exhausted: cached.done || depth >= input.settings.maxGogmaAdvance,
+        exhausted: cached.done || depth >= input.maxGogmaAdvance,
       }
     },
-    solve: async (base, through = input.settings.maxGogmaAdvance) => {
+    solve: async (base, through = input.maxGogmaAdvance) => {
       const cached = await ensure(base, through)
-      const limit = Math.min(input.settings.maxGogmaAdvance, Math.max(0, through))
+      const limit = Math.min(input.maxGogmaAdvance, Math.max(0, through))
       return {
         ...cached.value,
         steps: cached.value.steps.slice(0, limit),

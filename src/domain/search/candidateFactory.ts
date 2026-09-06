@@ -133,6 +133,36 @@ function operationAdvance(
     : values.reduce((total, value) => total + value, 0)
 }
 
+/**
+ * The route-derived estimate and material fields of one composed result.
+ *
+ * They are a pure function of the concrete `RouteOperation[]`, the weapon type,
+ * and the Master subset, so ordinary Candidate Search and the constrained
+ * enumerator (SEARCH_SPEC 5.6.7) share this single authority. Nothing here
+ * depends on `searchRunId`, the Clock, or any Candidate ID.
+ */
+export interface CandidateRouteEstimates {
+  estimatedOperationCount: number
+  estimatedGogmaAdvance: number
+  estimatedSkillAdvance: number
+  estimatedNormalAdvance: number | null
+  requiredMaterials: MaterialRequirement[]
+}
+
+export function createCandidateRouteEstimates(
+  route: BuildRoute,
+  weaponTypeId: string,
+  master: Pick<CandidateSearchInput, 'master'>,
+): CandidateRouteEstimates {
+  return {
+    estimatedOperationCount: countRouteOperations(route),
+    estimatedGogmaAdvance: operationAdvance(route.operations, 'gogma') ?? 0,
+    estimatedSkillAdvance: operationAdvance(route.operations, 'skill') ?? 0,
+    estimatedNormalAdvance: operationAdvance(route.operations, 'normal'),
+    requiredMaterials: collectRequiredMaterials(route, weaponTypeId, master),
+  }
+}
+
 export function createCandidateFromPrediction(
   target: TargetWeapon,
   prediction: CandidatePrediction,
@@ -168,11 +198,7 @@ export function createCandidateFromPrediction(
     seriesSkillId: prediction.seriesSkillId,
     groupSkillId: prediction.groupSkillId,
     route: prediction.route,
-    estimatedOperationCount: countRouteOperations(prediction.route),
-    estimatedGogmaAdvance: operationAdvance(prediction.route.operations, 'gogma') ?? 0,
-    estimatedSkillAdvance: operationAdvance(prediction.route.operations, 'skill') ?? 0,
-    estimatedNormalAdvance: operationAdvance(prediction.route.operations, 'normal'),
-    requiredMaterials: collectRequiredMaterials(
+    ...createCandidateRouteEstimates(
       prediction.route,
       target.weaponTypeId,
       input,

@@ -872,6 +872,167 @@ B8-A自体はProduction RNG semantics、`PRODUCTION_RNG_ENGINE_VERSION`、
 `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2`、`DATABASE_SCHEMA_VERSION = 1`、
 `AppSettings.schemaVersion = 1`、`supportsSeedSearch = false` を変更しない。
 
+### 4.3 B8-B1a implementation checkpoint
+
+**B8-B1aまで完了。B8-B1は未完了。** Phase表の `B8-B1` を完了扱いにしない。
+
+B8-B1b remaining。
+
+```text
+- off-axis (Bi, Kj), i>0,j>0 lazy frontier
+- maxOffAxisPairEvaluationsの実消費
+- deterministic incremental / sequential Candidate delivery
+- enumeration完了時のConstrainedEnumerationSummary
+- B8-Cが必要Candidate取得後に不要な列挙を続けなくてよいProduction境界
+```
+
+sequential delivery契約。B8-Aの最終architectureは
+「Candidateをdeterministic semantic orderで順次提示 → Planner orchestrationが
+Candidate trial」である。B8-B1aの
+`enumerateConstrainedCandidates(): Promise<ConstrainedEnumerationResult>` は
+全Candidateを収集・sortしてから返すcollector型であり、これはB8-B1a checkpoint
+限定の暫定形とする。**B8-B1完了時の唯一のProduction APIを「全bounded Candidate
+を生成し終わるまでcallerが1件も受け取れない」形にしてはならない。** current
+array collectorはtest / helperとして残してよい。
+
+具体APIはB8-B1b実装時に選択する。例。
+
+```text
+AsyncIterator / AsyncGenerator
+または
+ordered async visitor/callback + completion summary
+```
+
+いずれを選んでも、Search DomainがPlanner conflict DTOやPlanner trial boundを
+受け取らない契約は維持する(SEARCH_SPEC 5.6.7、PLANNER_SPEC 9.2.9 / 9.2.16)。
+
+B8-B1aで実装した範囲。
+
+```text
+ConstrainedEnumerationBounds / ConstrainedSearchOrigin
+ConstrainedCandidateSearchInput / ConstrainedCandidate
+ConstrainedEnumerationSummary / ConstrainedEnumerationResult
+input validation (既存Domain validatorによるorigin snapshot全体のfail closed)
+全legal Route baseの構築
+retention前Skill / Bonus depthの再利用
+軸Candidate列挙 (Cross規則)
+Target条件評価とmetadata算出
+deterministic ordering
+bounds
+cancellation / yield
+```
+
+追加ファイル。
+
+```text
+src/domain/search/constrained/constrainedTypes.ts
+src/domain/search/constrained/constrainedValidation.ts
+src/domain/search/constrained/constrainedCandidateFactory.ts
+src/domain/search/constrained/constrainedRouteBases.ts
+src/domain/search/constrained/constrainedEnumeration.ts
+src/domain/search/constrained/index.ts
+src/domain/search/routeEligibility.ts
+src/domain/search/searchStreamInputs.ts
+```
+
+既存streamのrefactorは意味を狭めるだけに留めた。`createTargetSkillStream()` /
+`createTargetBonusStream()` は `CandidateSearchInput` ではなく
+`SkillStreamInput` / `BonusStreamInput`(semantic RNG input、Master subset、
+explicit depth bound)を受け取る。通常Candidate Searchは
+`skillStreamInputForSearch()` / `bonusStreamInputForSearch()` 経由で
+`CandidateSearchSettings` を渡し続けるため、ダミーのCandidateSearchSettingsを
+B8のauthorityに仕立てる必要が無い。Route base可用性の選択は
+`routeEligibility.ts` へ抽出し、通常Searchの3 Route searcherと
+constrained enumeratorが同一authorityを使う。
+
+retentionを適用しない実装根拠。constrained enumeratorは
+`buildSkillSolutionSet()` / `buildBonusSolutionSet()` ではなく、新設した
+`evaluateSkillSolutions()` / `evaluateBonusSolutions()` を使う。両者は評価と
+5.5.2 / 5.5.3のdeterministic orderingだけを行い、同一結果の最小advance retention
+を行わない。Bonus側はstreamが公開するfrontier縮約前のdepth出力をそのまま使うため、
+B2のfamily-layout frontier dedupは維持される。
+
+`exhausted` / `stoppedByBound` の扱い。SEARCH_SPEC 5.6.7はこの2 flagを
+「区別する」「bound到達をexhaustionとして報告しない」とだけ定めており、
+互いの補集合とは規定していない。したがってB8-B1a暫定実装は次とした。
+
+```text
+stoppedByBound = enumeration boundが探索を打ち切った
+exhausted      = boundによる打ち切りが無く、かつ未評価のCross cellも無い
+両方false      = boundには達していないが、B8-B1a未実装の軸外cellが残っている
+```
+
+これによりB8-B1aが未カバーの範囲についてexhaustionを主張しない。
+
+未評価cellの判定はO(1)である。B8-B1aはoff-axis cellを列挙も計数もせず、
+`hasOffAxisCells(bonusAxisLength, skillAxisLength)` が2軸の長さから
+「reachable off-axis cellが1件でも存在するか」だけを返す。full Cartesianの
+事前生成禁止(5.6.7)はこの確認処理にも適用される。片方の軸が1件しか無い場合は
+off-axis cellが存在しないため、未評価扱いにしない。実際のcell評価と
+`maxOffAxisPairEvaluations` の消費はB8-B1bのlazy frontierが行う。
+
+B8-B1b完成後の最終契約は次とする。
+
+```text
+reachable off-axis cellが残り、
+maxOffAxisPairEvaluationsによって評価を止めた
+=> stoppedByBound = true
+=> exhausted = false
+```
+
+`maxOffAxisPairEvaluations = 0` は引き続きvalidな設定とする。B8-B1b最終実装で
+`0` かつreachable off-axis cellが存在する場合は、off-axis bound stopとして
+`stoppedByBound = true` / `exhausted = false` を返す。B8-B1aの「両方false」は
+軸外評価が未実装である期間限定の暫定状態であり、B8-B1bで解消する。
+
+`maxOffAxisPairEvaluations` の最小値は0とした。0は5.5.4のCross-onlyそのもので
+あり、意味のある設定を禁止しないためである。他3 boundsは既存
+`validateCandidateSearchSettings()` と同じ最小値1を維持した。Production default
+はB8-B2まで定義しない。
+
+SEARCH_SPEC 5.6.1のIdeal既達成早期終了は適用したままとした。5.6.7の
+「適用しない」列挙(Practical dominance、canonical Ideal終了、初回Practical
+horizon、`maxCandidatesPerTarget`、`resultFilter`、similar filter)に5.6.1は
+含まれておらず、操作0のstream解はCounter位置を消費しないため固定Candidateと
+競合し得ないためである。
+
+origin validation。`ConstrainedSearchOrigin` はPlanner開始時のcurrent validated
+snapshotだが、public Search Domain boundary自身もsnapshot全体を再確認する。
+`assertConstrainedCandidateSearchInput()` が `validateRngState` /
+`validateNormalArtianCounter` / `validateOwnedWeapon` / `validateTargetWeapon` /
+`validateCalculationContext` の結果を配列index付きpathで集約し、
+`origin.normalCounters[*]` / `origin.ownedWeapons[*]` / `origin.targetWeapons[*]`
+を全要素検証する。Ideal ⇒ Practical containmentだけは選択Targetに限定して
+`validateTargetIdealImpliesPractical` で確認する。新しいDomain制約は追加せず、
+Master DataやDBのvalidationも追加していない。invalid inputではEngine predictionが
+1回も実行されない。
+
+既存不整合の修正(B8-B1a review correction 1)。`AGENTS.md` の Existing Gogma
+Mixedは「normal scope起点のmixed routeはKeep Bonusesより前にReset Bonusesを行う」
+と定めるが、`canKeepBonuses()` は永続OwnedWeaponの
+`restorationBonusScope === "gogma_artian"` を要求していたため、normal scope起点の
+既存巨戟に対する `reset -> keep` routeがDomain validationで拒否されていた。通常
+`searchCandidates()` でも同一に発生する既存挙動であることを実測確認したうえで、
+`validateProtectedRouteUse()` にRoute sequenceのroute-local bonus scope追跡を
+追加した。
+
+```text
+initial scope = source.restorationBonusScope
+reset_bonuses -> route-local current scope = gogma_artian
+keep_bonuses  -> source unprotected AND current scope == gogma_artian のとき許可
+reset_skills  -> scopeを変更しない
+```
+
+結果。`normal scope -> Keep` は拒否、`normal scope -> Reset -> Keep` は許可、
+`gogma scope -> Keep` は従来どおり許可、protected sourceのReset / Keepは禁止のまま。
+`canKeepBonuses(weapon)` の意味は変更せず、新設の
+`canKeepBonusesFromScope(weapon, currentScope)` へ委譲するだけとした。したがって
+normal scope current bonusesからKeepを**直接**予測する経路は有効化しておらず、
+B11(normal-tier Keep family mapping / pool / weightsの実ゲーム検証)を先取りして
+いない。今回許可した経路のKeep入力はReset後のgogma-tier 5枠であり、既存Production
+Keep prediction supportの範囲内である。通常Candidate Searchとconstrained enumerator
+は同じ `validateBuildRoute()` を使うため、両者の結論は一致する。
+
 ---
 
 ## 5. B1 / B2に残る設計判断

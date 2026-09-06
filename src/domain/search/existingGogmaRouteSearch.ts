@@ -4,6 +4,7 @@ import type {
   OwnedGogmaArtianWeapon,
   OwnedWeaponId,
 } from '../models/publicTypes'
+import { selectCompatibleOwnedGogmaWeapons } from './routeEligibility'
 import {
   hasConfirmedGogmaInputs,
   hasConfirmedSkillInputs,
@@ -15,11 +16,7 @@ import type { RouteBonusSolution, RouteSkillSolution } from './streamSolutions'
 const destructiveKinds = ['existing_gogma_reset_bonuses', 'existing_gogma_keep_bonuses', 'existing_gogma_mixed'] as const
 
 function compatibleSources(context: RouteSearchContext): OwnedGogmaArtianWeapon[] {
-  return context.input.ownedWeapons
-    .filter((weapon): weapon is OwnedGogmaArtianWeapon => weapon.kind === 'gogma'
-      && weapon.weaponTypeId === context.target.weaponTypeId
-      && weapon.elementId === context.target.elementId)
-    .sort((left, right) => left.id.localeCompare(right.id))
+  return selectCompatibleOwnedGogmaWeapons(context.target, context.input.ownedWeapons)
 }
 
 function pushAll(result: RouteSearchResult, routes: readonly BuildRoute['kind'][], reason: Parameters<RouteSearchResult['skippedRoutes']['push']>[0]['reason'], detail: string) {
