@@ -39,6 +39,7 @@ Debug Details
 - 復元ボーナス5枠は常に5つの固定スロットとして表示する
 - ただし判定上は順不同であることをUI内で軽く示す
 - 長時間検索中は進捗とキャンセルを表示する
+- 総work量が探索中に増える処理では、推定percentを作らず活動中であることを示す
 - 作成ナビは必ず1操作ずつ進める
 - 高速モードは表示しない
 - 手動作成順固定UIは表示しない
@@ -423,11 +424,24 @@ TargetWeaponごとに候補を検索し、作成リストへ追加する。
 - Reset Skillsのみの経路は非破壊操作として扱い、protectedなPractical / Ideal武器からも検索結果へ表示できる
 - 通常アーティア経由では、候補位置までのforge数、最後の1本だけの巨戟化、conversion時の初回Skill、必要なfirst Reset、その後のReset / Keep / Reset Skillsを実行順に表示する
 - 既存の「通常アーティア最大進行量」入力は `maxNormalAdvance`、すなわち最大forge回数を表す。最大0-based offsetではなく、候補offsetの表示が必要なら `0 ... maxNormalAdvance - 1` とする
-- normal-tier bonusを持つ巨戟ではKeepを最初に表示せず、first Reset後だけKeepを表示する
+- normal-tier bonusを持つ巨戟ではKeepを最初に表示せず、first Reset後だけKeepを表示する。
+  これはProduction Keep predictionの未対応によるものであり、ゲームルール上の禁止ではない
 - conversionだけのRouteでGogma Counter不足をskip理由にせず、Base Seed / Skill Counter不足、Skill Predictionまたはconcrete semantic input support不足を区別して表示する。persisted Counter Gate不足をskip理由にしない
 - レア8、非保護、かつTargetと武器種・属性が一致する所持通常アーティアだけを変換元候補として表示する
 - 条件緩和案は選択されるまでTargetWeaponへ適用しない
 - 「実用」は `category = practical`、「近似」は `category = practical AND isSimilarToIdeal = true` を表示する
+- 検索中は Target単位の `completedTargets / totalTargets`、現在の目標武器名、
+  現在のphase（準備中 / 探索中 / 結果を整理中）、現Targetでsettleした探索ステップ数を表示する。
+  progress barはTarget単位の完了率だけをpercentとして扱い、Target内の探索ステップ数を
+  percentへ変換しない。Target内の総work量は探索中に増えるため未知である
+- 現在の目標武器はTarget探索の開始時点で表示する。Target完了までcurrent Targetが
+  分からない状態にしない
+- Search Worker自体が異常終了した場合は検索中表示を解除し、ページ再読み込みを促す
+  errorを表示する。v1ではWorkerの自動再生成やページ自動reloadを行わない
+- skip理由の文言は、ゲームルール上の禁止とProduction予測未対応を混同しない。
+  normal scope継承状態のKeepは「現在の予測エンジンでは予測未対応」と表示し、
+  「最初にReset必須」とは表示しない
+- `no_owned_weapon_available` の文言は武器種を限定しない。武器種はRouteKind labelが示す
 
 ---
 

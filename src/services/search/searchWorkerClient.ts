@@ -21,6 +21,32 @@ export class ProductionRngEngineUnavailableError extends Error {
   }
 }
 
+/**
+ * A native Worker `error` / `messageerror` event, which is separate from the
+ * `type: 'error'` Worker protocol response. The protocol response reports a
+ * handled search failure and leaves the Worker usable; a native event means the
+ * Worker itself is broken, so this client fails closed and never reuses it.
+ */
+export type SearchWorkerRuntimeErrorCode = 'worker_error' | 'worker_message_error'
+
+export class SearchWorkerRuntimeError extends Error {
+  readonly code: SearchWorkerRuntimeErrorCode
+  readonly detail: string | null
+
+  constructor(code: SearchWorkerRuntimeErrorCode, detail: string | null = null) {
+    super(
+      'Search Workerでエラーが発生したため検索を続行できません。ページを再読み込みしてください。',
+    )
+    this.name = 'SearchWorkerRuntimeError'
+    this.code = code
+    this.detail = detail
+  }
+}
+
+export interface SearchWorkerNativeErrorEvent {
+  message?: unknown
+}
+
 export interface SearchWorkerClientCallbacks {
   onProgress?: (progress: CandidateSearchProgress) => void
 }
@@ -35,15 +61,21 @@ export interface SearchWorkerClient {
   dispose: () => void
 }
 
+export interface SearchWorkerEventListenerMap {
+  message: (event: { data: SearchWorkerResponse }) => void
+  error: (event: SearchWorkerNativeErrorEvent) => void
+  messageerror: (event: SearchWorkerNativeErrorEvent) => void
+}
+
 export interface WorkerLike {
   postMessage(message: SearchWorkerRequest): void
-  addEventListener(
-    type: 'message',
-    listener: (event: { data: SearchWorkerResponse }) => void,
+  addEventListener<K extends keyof SearchWorkerEventListenerMap>(
+    type: K,
+    listener: SearchWorkerEventListenerMap[K],
   ): void
-  removeEventListener(
-    type: 'message',
-    listener: (event: { data: SearchWorkerResponse }) => void,
+  removeEventListener<K extends keyof SearchWorkerEventListenerMap>(
+    type: K,
+    listener: SearchWorkerEventListenerMap[K],
   ): void
   terminate(): void
 }
@@ -60,6 +92,7 @@ export function createSearchWorkerClient(
 ): SearchWorkerClient {
   const pending = new Map<string, PendingSearch>()
   let disposed = false
+  let runtimeFailure: SearchWorkerRuntimeError | null = null
 
   const handleMessage = ({ data }: { data: SearchWorkerResponse }) => {
     const current = pending.get(data.requestId)
@@ -69,6 +102,8 @@ export function createSearchWorkerClient(
         completedTargets: data.completedTargets,
         totalTargets: data.totalTargets,
         currentTargetWeaponId: data.currentTargetWeaponId,
+        phase: data.phase,
+        processedWorkItems: data.processedWorkItems,
       })
       return
     }
@@ -79,11 +114,50 @@ export function createSearchWorkerClient(
     }
     current.resolve(data.result)
   }
+
+  const detach = () => {
+    worker.removeEventListener('message', handleMessage)
+    worker.removeEventListener('error', handleError)
+    worker.removeEventListener('messageerror', handleMessageError)
+  }
+
+  /**
+   * Fail closed: reject every pending search, drop the listeners, terminate the
+   * broken Worker, and refuse later searches. No automatic Worker re-creation
+   * or page reload happens here.
+   */
+  const failClosed = (
+    code: SearchWorkerRuntimeErrorCode,
+    event: SearchWorkerNativeErrorEvent,
+  ) => {
+    if (runtimeFailure !== null || disposed) return
+    const failure = new SearchWorkerRuntimeError(
+      code,
+      typeof event?.message === 'string' ? event.message : null,
+    )
+    runtimeFailure = failure
+    disposed = true
+    pending.forEach(({ reject }) => reject(failure))
+    pending.clear()
+    detach()
+    worker.terminate()
+  }
+
+  function handleError(event: SearchWorkerNativeErrorEvent) {
+    failClosed('worker_error', event)
+  }
+  function handleMessageError(event: SearchWorkerNativeErrorEvent) {
+    failClosed('worker_message_error', event)
+  }
+
   worker.addEventListener('message', handleMessage)
+  worker.addEventListener('error', handleError)
+  worker.addEventListener('messageerror', handleMessageError)
 
   return {
     engineVersion,
     startSearch: (input, callbacks = {}) => {
+      if (runtimeFailure !== null) return Promise.reject(runtimeFailure)
       if (disposed) return Promise.reject(new Error('Search Worker Client is disposed.'))
       const requestId = input.searchRunId
       const existing = pending.get(requestId)
@@ -110,7 +184,7 @@ export function createSearchWorkerClient(
       disposed = true
       pending.forEach(({ reject }) => reject(new SearchCancelledError()))
       pending.clear()
-      worker.removeEventListener('message', handleMessage)
+      detach()
       worker.terminate()
     },
   }

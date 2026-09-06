@@ -92,13 +92,27 @@ structured clone可能なrequest dataとしてWorkerへ渡す。`lotteries` はl
 
 ```ts
 const defaultCandidateSearchSettings = {
-  maxNormalAdvance: 5000,
-  maxGogmaAdvance: 5000,
-  maxSkillAdvance: 5000,
+  maxNormalAdvance: 1000,
+  maxGogmaAdvance: 200,
+  maxSkillAdvance: 1000,
   maxCandidatesPerTarget: 200,
   similarityThreshold: 0.6,
 };
 ```
+
+この初期値はB6で `5000 / 5000 / 5000` から変更した。根拠は
+`docs/B5_CANDIDATE_SEARCH_BROWSER_WORKER_BENCHMARK.md` の実Browser Worker実測である。
+
+```text
+Normal 1000 ≈ 256 ms
+Skill  1000 ≈ 325 ms
+Gogma   200 ≈ 1961 ms
+```
+
+`5000 / 5000 / 5000` は近傍にIdealがあれば数ms〜数十msで終わるが、Idealが無い場合は
+60秒でも完了しなかった。これは上限機能の削除ではなく初期値の変更であり、
+ユーザーは詳細設定で各上限を引き上げられる。探索algorithm、canonical Ideal、
+Practical horizonは変更していない。
 
 制約。
 
@@ -196,6 +210,7 @@ export interface SkippedRoute {
     | "gogma_prediction_unsupported"
     | "skill_prediction_unsupported"
     | "keep_prediction_unsupported"
+    | "normal_scope_keep_prediction_unsupported"
     | "material_rng_advance_unverified"
     | "master_data_unavailable"
     | "calculation_context_incompatible"
@@ -209,7 +224,7 @@ export interface CandidateSearchWarning {
 }
 ```
 
-未確定RNG値は `*_unconfirmed`、Engine機能不足は `*_prediction_unsupported`、所持source不足は `no_owned_weapon_available` / `no_unprotected_source_weapon` として区別する。値が確定していてもEngineが未対応なら予測可能とみなさず、逆にEngineが対応していても必要値が未確定なら該当RNG値のreasonを返す。
+未確定RNG値は `*_unconfirmed`、Engine機能不足は `*_prediction_unsupported`、所持source不足は `no_owned_weapon_available` / `no_unprotected_source_weapon` として区別する。`no_owned_weapon_available` は `owned_normal_artian_to_gogma` と `existing_gogma_*` の両方で使うため、UI文言は武器種を限定しない汎用表現にする。武器種はRouteKind labelが示す。値が確定していてもEngineが未対応なら予測可能とみなさず、逆にEngineが対応していても必要値が未確定なら該当RNG値のreasonを返す。
 
 Production Searchはroute-local / operation-local supportを維持し、RngState全体のall-or-nothing availabilityを設けない。Skill-dependent routeはBase SeedまたはSkill Counter不足、Skill Prediction / concrete semantic input unsupportedでskipする。Gogma amendment routeはBase SeedまたはGogma Counter不足、Gogma Prediction / concrete semantic input / Master unsupportedでskipする。persisted Counter Gateの未設定・未確定はskip reasonにしない。Normal Counter不足は `create_normal_artian` を含むrouteだけに適用する。
 `use_weapon_as_material` 後のRNG位置へ依存するRouteは、素材使用時の進行がgame-verifiedになるまで `material_rng_advance_unverified` としてskipし、0進行またはGogma +1を推測しない。
@@ -986,7 +1001,9 @@ family対応を導けそうに見えても、抽選pool・weight・repeat penalt
 - skip / 除外理由は `keep_prediction_unsupported` 系を使う。
   「ゲーム上Reset必須」を意味する理由コードや文言を使わない
 - 実装上のskip reason `normal_scope_requires_reset` と、それに対応するUI文言は
-  この方針と矛盾するため廃止対象とする。除去はB6で行う
+  この方針と矛盾するため廃止した。B6で `normal_scope_keep_prediction_unsupported`
+  へ改称し、UI文言も「現在の予測エンジンでは予測未対応」という意味へ訂正済みである。
+  「ゲーム上できない」「最初にReset必須」を意味する理由コードや文言を再導入しない
 
 normal-tier Keepのprediction semanticsがgame-verifiedになった時点で、
 レイヤー2とレイヤー3の制限を同時に解除する。
@@ -1386,6 +1403,8 @@ export type SearchWorkerResponse =
       completedTargets: number;
       totalTargets: number;
       currentTargetWeaponId: TargetWeaponId | null;
+      phase: "preparing" | "searching" | "finalizing";
+      processedWorkItems: number;
     }
   | {
       type: "error";
@@ -1393,6 +1412,33 @@ export type SearchWorkerResponse =
       message: string;
     };
 ```
+
+progress契約(B6)。
+
+- Target探索の開始時に `completedTargets = index`、`currentTargetWeaponId = target.id`、
+  `phase = "preparing"`、`processedWorkItems = 0` を通知する。
+  Target完了までcurrent Targetが見えない状態にしない
+- Target探索中は、`TargetSearchScheduler` がsettleしたwork item数を一定間隔
+  (`SEARCH_ACTIVITY_PROGRESS_INTERVAL = 100`) で `phase = "searching"` として通知する。
+  work itemごとにWorker messageを送らない
+- Target完了時に `completedTargets = index + 1`、`phase = "finalizing"` を通知する
+- `processedWorkItems` はTargetごとに0から開始する
+- Target内の総work量は探索中に増えるため未知である。`processedWorkItems` と `phase` を
+  推定percentへ変換しない。Target単位の `completedTargets / totalTargets` だけがpercentである
+- progress間隔はSearch semanticsへ影響しない。canonical Ideal、保持集合、
+  checkpoint yield間隔(50回)を変更しない
+- progress callbackの有無でCandidate結果を変えない
+
+Worker error契約(B6)。
+
+- Worker protocolの `type: "error"` は、handled searchの失敗であり当該requestだけを
+  rejectする。Workerはそのまま再利用してよい
+- native Worker `error` / `messageerror` はWorker自体の異常であり、fail closedとする。
+  pending Searchをすべてreject、pendingをclear、listenerを解除、Workerをterminateし、
+  以降の `startSearch()` も即rejectする。壊れたWorkerを暗黙に再利用しない
+- 専用error型 `SearchWorkerRuntimeError` を使い、`error` と `messageerror` を
+  内部codeで区別する。ユーザー向けにはページ再読み込みを促す日本語messageを表示する
+- v1ではWorkerの自動再生成やページ自動reloadを行わない
 
 制約。
 
@@ -1571,6 +1617,13 @@ Skill stream側はB1で実装済み、Bonus stream側はB2で実装済みであ�
 ## 13.5 Worker Test
 
 - 複数TargetWeapon検索でprogressが返る
+- Target開始時点でcurrent Targetを含むprogressが返る
+- 長時間Targetで完了前にactivity progressが返り、`processedWorkItems` が単調増加する
+- Targetごとに `processedWorkItems` が0へresetされ、最終 `completedTargets` が
+  `totalTargets` へ到達する
+- progress callbackの有無でCandidate結果が変わらない
 - cancelで結果反映を止める
-- Worker errorがUIへ伝わる
+- Worker protocol errorがUIへ伝わり、Workerは再利用可能なまま残る
+- native `error` / `messageerror` で全pending Searchがrejectされ、listener解除・
+  terminate・以降のstartSearch即rejectまで行われる
 - 大量検索でもUIスレッドがブロックされない

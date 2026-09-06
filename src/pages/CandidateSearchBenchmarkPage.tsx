@@ -200,7 +200,10 @@ export function CandidateSearchBenchmarkPage() {
       }, options.cancelAfterMs)
     }
 
-    setProgress({ completedTargets: 0, totalTargets: input.targetWeaponIds.length, currentTargetWeaponId: null })
+    setProgress({
+      completedTargets: 0, totalTargets: input.targetWeaponIds.length,
+      currentTargetWeaponId: null, phase: 'preparing', processedWorkItems: 0,
+    })
     const startedAt = performance.now()
     let record: CandidateSearchBenchmarkRecord
     try {

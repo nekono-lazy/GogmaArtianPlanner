@@ -242,15 +242,16 @@ export async function searchCandidates(
   for (let index = 0; index < selection.targets.length; index += 1) {
     await execution.checkpoint()
     const target = selection.targets[index]
+    execution.beginTarget({
+      completedTargets: index,
+      totalTargets: selection.targets.length,
+      targetWeaponId: target.id,
+    })
     const searched = await searchTarget(target, input, engine, execution)
     targetResults.push(searched.result)
     warnings.push(...searched.warnings)
     isTruncated ||= searched.truncated
-    execution.onProgress({
-      completedTargets: index + 1,
-      totalTargets: selection.targets.length,
-      currentTargetWeaponId: target.id,
-    })
+    execution.completeTarget()
     await (options.yieldControl ?? (() => Promise.resolve()))()
   }
 

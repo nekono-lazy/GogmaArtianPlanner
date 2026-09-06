@@ -50,12 +50,25 @@ describe('Candidate Search Worker', () => {
         { type: 'progress' }
       > => response.type === 'progress',
     )
-    expect(progress).toHaveLength(2)
-    expect(progress.map((item) => item.requestId)).toEqual([
-      'request.fixture.progress',
-      'request.fixture.progress',
+    // Each Target reports its start and its completion, so the current Target
+    // is visible before it finishes.
+    expect(progress).toHaveLength(4)
+    expect(
+      progress.every(({ requestId }) => requestId === 'request.fixture.progress'),
+    ).toBe(true)
+    expect(progress.map((item) => item.phase)).toEqual([
+      'preparing',
+      'finalizing',
+      'preparing',
+      'finalizing',
     ])
-    expect(progress.map((item) => item.completedTargets)).toEqual([1, 2])
+    expect(progress.map((item) => item.completedTargets)).toEqual([0, 1, 1, 2])
+    expect(progress.map((item) => item.totalTargets)).toEqual([2, 2, 2, 2])
+    expect(
+      progress
+        .filter(({ phase }) => phase === 'preparing')
+        .every(({ processedWorkItems }) => processedWorkItems === 0),
+    ).toBe(true)
     expect(responses.at(-1)).toEqual(
       expect.objectContaining({
         type: 'candidate_search_result',

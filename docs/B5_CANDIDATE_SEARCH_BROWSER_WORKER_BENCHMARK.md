@@ -558,3 +558,87 @@ GCタイミングに依存する観測傾向であり、上限値ではない。
   意味のある比較ができない
 - 変更前後でMemoryに系統差が無いことは「観測されなかった」だけであり、
   上限の証明ではない
+- B6で追加したTarget内activity progressのmessage trafficがBrowser性能へ与える影響
+  （13章の追記を参照）
+
+---
+
+## 13. B6での反映（後日追記）
+
+この章はB6が本記録をどう使ったかの追記である。**11章までの測定値は変更していない。**
+
+### 13.1 default値
+
+11.1章の判断材料をもとに、`defaultCandidateSearchSettings` を変更した。
+
+```text
+maxNormalAdvance: 5000 -> 1000
+maxGogmaAdvance:  5000 -> 200
+maxSkillAdvance:  5000 -> 1000
+maxCandidatesPerTarget: 200（変更なし）
+similarityThreshold: 0.6（変更なし）
+```
+
+根拠は実測値 Normal 1000 ≈ 256 ms、Skill 1000 ≈ 325 ms、Gogma 200 ≈ 1961 ms である。
+上限機能は削除しておらず、ユーザーは詳細設定で引き上げられる。
+
+benchmark workloadは、B5測定当時の5設定すべてを `B5_MEASUREMENT_SETTINGS` として
+完全固定した。
+
+```text
+maxNormalAdvance: 5000
+maxGogmaAdvance: 5000
+maxSkillAdvance: 5000
+maxCandidatesPerTarget: 200
+similarityThreshold: 0.6
+```
+
+これは `defaultCandidateSearchSettings` を参照しない。今後defaultを変更しても
+historical workloadの意味が変わらないようにするためである。`*_default_bounds` は
+このpresetをそのまま使い、bounded sweepは対象boundだけを上書きする。
+labelも `(default bounds)` から `(B5 default bounds)` へ変更し、現行defaultと
+読み違えないようにした。workload IDは変更していない。
+
+### 13.2 progress
+
+11.2章のとおり、progress eventはTarget完了時の1回だけだった。B6で
+Target開始 / Target内activity / Target完了 の3点へ拡張し、
+`CandidateSearchProgress` へ `phase` と `processedWorkItems` を追加した。
+Target内の総work量は探索中に増えるため、推定percentは作っていない。
+
+この拡張により、同じworkloadを再測定した場合の `progressEvents` は本記録の値より
+増える。11章の記録値はB6以前のprogress粒度での測定値である。
+
+progress event数の増加は、そのままWorker → main threadのmessage trafficの増加である。
+checkpoint間隔50とMessagePort `workerYield` は変更していないが、
+message traffic自体は増えているため、11章の測定値をB6の性能値として読み替えない。
+
+### 13.3 Worker error handling
+
+9.1 / 11.3章で再現した「native `error` を検知できず pending が settle しない」問題を、
+B6でfail closed方式で修正した。native `error` / `messageerror` 受信時に
+pending Searchを全reject、listener解除、terminate、以降の `startSearch()` も即rejectする。
+Worker自動再生成とページ自動reloadはv1では実装しない。
+
+`probeSearchWorkerErrorHandling` は変更していないが、B6後の期待outcomeは
+`pending_after_timeout` から `rejected` へ変わる。9.1章の測定結果はB6以前のものである。
+`messageerror` の実挙動は依然として再現できておらず、12章の未測定事項のまま残る。
+
+### 13.4 B6で扱わなかった事項
+
+- Candidate出力順のrun依存（7章 / 11.4章）。保持集合とcanonical Idealはrun非依存のまま。
+  `compareCandidates()` の最終tie-breakが `BuildCandidate.id` である問題はB6後の別タスク
+- Browser性能の再測定。B6では実施していない。
+
+  正確な内訳は次のとおりである。
+
+  - checkpoint間隔50は変更なし
+  - MessagePort `workerYield` は変更なし
+  - ただしB6は、Target内activity progressによる **Worker → main threadの
+    message trafficを追加した**（`SEARCH_ACTIVITY_PROGRESS_INTERVAL = 100` 件ごと、
+    およびTarget開始 / 完了時）
+  - この追加trafficを含めたBrowser性能の再測定はB6では行っていない
+
+  「Worker性能に関わる実装を一切変更していない」とは言えない。変更していないのは
+  checkpoint / yield機構であり、progress message trafficは増えている。
+  B6時点で再測定は要求されていないが、11章の測定値は追加traffic以前のものである

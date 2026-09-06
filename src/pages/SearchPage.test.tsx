@@ -14,7 +14,11 @@ import {
   createValidTargetWeapon,
 } from '../test/fixtures/domainData'
 import { createCandidateSearchInput as createFixtureInput } from '../test/fixtures/candidateSearch'
-import type { SearchWorkerClient, SearchWorkerClientCallbacks } from '../services/search/searchWorkerClient'
+import {
+  SearchWorkerRuntimeError,
+  type SearchWorkerClient,
+  type SearchWorkerClientCallbacks,
+} from '../services/search/searchWorkerClient'
 import { SearchPage, type SearchPageDependencies } from './SearchPage'
 
 class ControlledClient implements SearchWorkerClient {
@@ -103,7 +107,7 @@ describe('SearchPage', () => {
       rngEngineVersion: client.engineVersion,
       appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
     })
-    client.progress({ completedTargets: 1, totalTargets: 1, currentTargetWeaponId: deps.master.weaponTypes[0].id as never })
+    client.progress({ completedTargets: 1, totalTargets: 1, currentTargetWeaponId: deps.master.weaponTypes[0].id as never, phase: 'finalizing', processedWorkItems: 42 })
     const target = createValidTargetWeapon()
     const ideal = { ...createValidBuildCandidate(), id: 'candidate.ideal' as BuildCandidate['id'], category: 'ideal' as const, isSimilarToIdeal: false }
     const practical = { ...createValidBuildCandidate(), id: 'candidate.practical' as BuildCandidate['id'], category: 'practical' as const, isSimilarToIdeal: true }
@@ -111,6 +115,42 @@ describe('SearchPage', () => {
     expect(await screen.findByText('理想候補 1件 ／ 実用候補 1件')).toBeInTheDocument()
     expect(screen.getByText('理想に近い')).toBeInTheDocument()
     expect(deps.saveCandidates).toHaveBeenCalledWith(target.id, [ideal, practical])
+  })
+
+  it('shows the current Target, phase, and settled work while one Target searches', async () => {
+    const user = userEvent.setup()
+    const client = new ControlledClient()
+    const target = createValidTargetWeapon()
+    render(<SearchPage dependencies={dependencies(client, [target])} />)
+    await user.click(await screen.findByRole('button', { name: '検索開始' }))
+    expect(screen.getByText('現在の目標武器: 準備中')).toBeInTheDocument()
+    expect(screen.getByText('準備中')).toBeInTheDocument()
+    expect(screen.getByText('探索ステップ: 0')).toBeInTheDocument()
+
+    // Target start: the Target is named before it completes.
+    client.progress({ completedTargets: 0, totalTargets: 1, currentTargetWeaponId: target.id, phase: 'preparing', processedWorkItems: 0 })
+    expect(await screen.findByText(`現在の目標武器: ${target.name}`)).toBeInTheDocument()
+
+    // Activity inside the same Target, still 0 / 1 completed.
+    client.progress({ completedTargets: 0, totalTargets: 1, currentTargetWeaponId: target.id, phase: 'searching', processedWorkItems: 1200 })
+    expect(await screen.findByText('探索ステップ: 1200')).toBeInTheDocument()
+    expect(screen.getByText('探索中')).toBeInTheDocument()
+    expect(screen.getByText(/検索中 0 \/ 1/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'キャンセル' })).toBeInTheDocument()
+  })
+
+  it('clears the searching state and shows the message on a native Worker failure', async () => {
+    const user = userEvent.setup()
+    const client = new ControlledClient()
+    const target = createValidTargetWeapon()
+    render(<SearchPage dependencies={dependencies(client, [target])} />)
+    await user.click(await screen.findByRole('button', { name: '検索開始' }))
+    client.reject(new SearchWorkerRuntimeError('worker_error', 'boom'))
+    expect(
+      await screen.findByText(/Search Workerでエラーが発生したため検索を続行できません。/),
+    ).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByText(/検索中 /)).not.toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'キャンセル' })).not.toBeInTheDocument()
   })
 
   it('shows a normal zero-result state and Worker errors separately', async () => {

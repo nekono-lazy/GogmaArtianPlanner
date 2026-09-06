@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   candidateCategoryLabels,
+  candidateSearchProgressPhaseLabels,
   getRngMissingRequirementLabel,
   getRouteOperationLabel,
   ownedWeaponStatusLabels,
@@ -26,6 +27,30 @@ describe('presentation labels', () => {
     expect(skippedRouteReasonLabels.master_data_unavailable).toContain('マスターデータ')
     expect(staleReasonLabels.target_definition_changed).toContain('目標武器')
     expect(rngStateSourceLabels.gogma_seed_finder_import).toBe('GogmaSeedFinderから取得')
+  })
+
+  it('names the Candidate Search progress phases', () => {
+    expect(candidateSearchProgressPhaseLabels).toEqual({
+      preparing: '準備中',
+      searching: '探索中',
+      finalizing: '結果を整理中',
+    })
+  })
+
+  it('states normal-scope Keep as a prediction limit, not a game rule', () => {
+    const label = skippedRouteReasonLabels.normal_scope_keep_prediction_unsupported
+    expect(label).toContain('予測未対応')
+    // The game allows Keep as the first amendment of inherited Normal-scope
+    // bonuses, so the label must not claim a Reset is required first.
+    expect(label).not.toContain('リセット')
+    expect(label).not.toContain('必要')
+  })
+
+  it('keeps no_owned_weapon_available neutral for Normal and Gogma source routes', () => {
+    const label = skippedRouteReasonLabels.no_owned_weapon_available
+    expect(label).toBe('条件に合う所持武器がありません')
+    expect(label).not.toContain('巨戟')
+    expect(label).not.toContain('通常')
   })
 
   it('translates fixed and counter-specific RNG requirements', () => {

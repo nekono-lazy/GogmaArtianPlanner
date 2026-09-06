@@ -32,10 +32,18 @@ export interface CandidateSearchSettings {
   similarityThreshold: number
 }
 
+/**
+ * B6 defaults, chosen from the real Browser Worker measurements recorded in
+ * `docs/B5_CANDIDATE_SEARCH_BROWSER_WORKER_BENCHMARK.md`: Normal 1000 ~ 256 ms,
+ * Skill 1000 ~ 325 ms, Gogma 200 ~ 1961 ms. The former `5000 / 5000 / 5000`
+ * finished quickly when an Ideal was near but did not complete within 60 s
+ * when none existed. These are defaults, not caps: the Search UI still lets the
+ * user raise every bound.
+ */
 export const defaultCandidateSearchSettings: CandidateSearchSettings = {
-  maxNormalAdvance: 5000,
-  maxGogmaAdvance: 5000,
-  maxSkillAdvance: 5000,
+  maxNormalAdvance: 1000,
+  maxGogmaAdvance: 200,
+  maxSkillAdvance: 1000,
   maxCandidatesPerTarget: 200,
   similarityThreshold: 0.6,
 }
@@ -76,7 +84,7 @@ export type SkippedRouteReason =
   | 'normal_prediction_unsupported'
   | 'skill_prediction_unsupported'
   | 'gogma_prediction_unsupported'
-  | 'normal_scope_requires_reset'
+  | 'normal_scope_keep_prediction_unsupported'
   | 'calculation_context_incompatible'
   | 'disabled_by_filter'
 
@@ -129,10 +137,23 @@ export interface CandidateSearchResult {
   isTruncated: boolean
 }
 
+/**
+ * `preparing` is emitted when a Target's search starts, `searching` while the
+ * Target's scheduler settles work, and `finalizing` once that Target is done.
+ */
+export type CandidateSearchProgressPhase = 'preparing' | 'searching' | 'finalizing'
+
 export interface CandidateSearchProgress {
   completedTargets: number
   totalTargets: number
   currentTargetWeaponId: TargetWeaponId | null
+  phase: CandidateSearchProgressPhase
+  /**
+   * Scheduler work items settled for the current Target, restarting at 0 for
+   * each Target. Total work is discovered while searching, so this is an
+   * activity signal only and must never be presented as a completion percent.
+   */
+  processedWorkItems: number
 }
 
 export type SearchWorkerRequest =

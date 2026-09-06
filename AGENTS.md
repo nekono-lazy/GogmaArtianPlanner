@@ -979,13 +979,14 @@ Search semantics, no B4 scheduler behavior, and no Production RNG semantics; the
 only production change is the Worker checkpoint yield mechanism in
 `search.worker.ts`, which must stay a macrotask so a pending `cancel` message is
 dispatched mid-search. The measured retained candidate set is unchanged. Two
-defects it reproduced are deliberately left to B6: the final Candidate output
+defects it reproduced were deliberately left to B6: the final Candidate output
 ordering is run-dependent because `compareCandidates()` ties on
-`BuildCandidate.id`, and `SearchWorkerClient` subscribes to no Worker `error` or
-`messageerror`, so a failed Worker is never detected automatically and its
-`startSearch()` stays pending until the user cancels (the existing Search page
-Cancel control still recovers the UI). The retained set and the canonical Ideal
-remain run-independent.
+`BuildCandidate.id`, and `SearchWorkerClient` subscribed to no Worker `error` or
+`messageerror`, so a failed Worker was never detected automatically and its
+`startSearch()` stayed pending until the user cancelled (the existing Search page
+Cancel control still recovers the UI). B6 fixed the Worker error handling; the
+Candidate output ordering defect is still open and belongs to a separate task.
+The retained set and the canonical Ideal remain run-independent.
 
 B5-F1 resolved the separate Ideal scope defect found in B5. SEARCH_SPEC 5.1
 remains the authority: Ideal Bonus requires `restorationBonusScope ===
@@ -1013,6 +1014,48 @@ shortcut still makes zero amendment predictions. B5's scope-safe benchmark
 workloads and measured values are unchanged; benchmark input calculation metadata
 now uses the shared schema version 2. B5-F1 is independent of B6.
 Planner constrained re-search (B8) remains unimplemented.
+
+B6 is implemented as a UI / defaults / progress / Worker error task. It changed
+no Search semantics: the Cross rule, the B4 scheduler, the canonical Ideal, the
+Practical horizon and dominance, the Similarity formula, resultFilter semantics,
+`CalculationContext.appSchemaVersion = 2`, Production RNG semantics and version,
+the checkpoint interval of 50, and the MessagePort `workerYield` are all
+unchanged, and normal-scope Keep prediction is still unimplemented.
+
+- `defaultCandidateSearchSettings` is `1000 / 200 / 1000` with
+  `maxCandidatesPerTarget = 200` and `similarityThreshold = 0.6`, from the B5
+  Browser Worker measurements (Normal 1000 ~ 256 ms, Skill 1000 ~ 325 ms, Gogma
+  200 ~ 1961 ms). This lowers a default, not a capability: the Search UI still
+  raises every bound. The benchmark workloads pin all five B5-era settings as
+  `B5_MEASUREMENT_SETTINGS` (`5000 / 5000 / 5000 / 200 / 0.6`), independent of
+  `defaultCandidateSearchSettings`, so a later default change cannot redefine a
+  historical workload; their labels say `B5 default bounds`, and the workload
+  IDs are unchanged.
+- `CandidateSearchProgress` adds `phase` (`preparing` / `searching` /
+  `finalizing`) and `processedWorkItems`. A Target reports its start before it
+  completes, reports settled scheduler work every
+  `SEARCH_ACTIVITY_PROGRESS_INTERVAL = 100` items while it runs, and reports
+  `completedTargets = index + 1` when it finishes; `processedWorkItems` restarts
+  at 0 per Target. Target-internal total work grows while searching, so neither
+  field may be turned into a percent, and no progress message is sent per work
+  item. Progress must never change Candidate results.
+- A native Worker `error` or `messageerror` fails closed: every pending search
+  is rejected with `SearchWorkerRuntimeError`, pending is cleared, listeners are
+  removed, the Worker is terminated, and later `startSearch()` calls reject
+  immediately. A broken Worker is never silently reused, and v1 adds no
+  automatic Worker re-creation or page reload. The Worker protocol
+  `type: 'error'` response stays a separate path that rejects only its own
+  request and leaves the Worker usable.
+- The skip reason `normal_scope_requires_reset` is renamed
+  `normal_scope_keep_prediction_unsupported`, and its label states missing
+  Production Keep prediction support. Never restate it as a game rule requiring
+  a Reset first. `no_owned_weapon_available` is used by both
+  `owned_normal_artian_to_gogma` and `existing_gogma_*`, so its label names no
+  weapon kind; the RouteKind label carries that.
+
+The run-dependent Candidate display ordering found in B5 is untouched by B6 and
+remains a separate task. Do not change `candidateStableKey` or the
+`BuildCandidate` ID generation rule as a side effect.
 
 ### Normal Artian Route
 
@@ -1895,6 +1938,16 @@ Relevant test areas include:
 - Atomic Execution transactions
 - Undo snapshot restoration
 - Worker request/response/cancellation behavior
+- `defaultCandidateSearchSettings` is `1000 / 200 / 1000 / 200 / 0.6`
+- A Target reports progress at its start, reports activity before it completes,
+  restarts `processedWorkItems` per Target, and ends at
+  `completedTargets === totalTargets`
+- Candidate results are identical with and without a progress callback
+- Native Worker `error` and `messageerror` reject every pending search, remove
+  every listener, terminate the Worker, and make later searches reject, while
+  the Worker protocol `type: 'error'` response keeps its existing behavior
+- Skip reason labels state normal-scope Keep as missing prediction support, and
+  `no_owned_weapon_available` reads naturally for Normal and Gogma source routes
 - Export/import validation
 - Mobile UI flows where applicable
 

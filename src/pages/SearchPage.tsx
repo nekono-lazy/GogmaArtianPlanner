@@ -43,7 +43,11 @@ import {
   SearchCancelledError,
   type SearchWorkerClient,
 } from '../services/search/searchWorkerClient'
-import { routeKindLabels, skippedRouteReasonLabels } from '../presentation/labels'
+import {
+  candidateSearchProgressPhaseLabels,
+  routeKindLabels,
+  skippedRouteReasonLabels,
+} from '../presentation/labels'
 
 const loadedMaster = loadMasterData()
 const defaultMaster = loadedMaster.ok ? loadedMaster.data : null
@@ -154,7 +158,13 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
     setError(null)
     setNotice(null)
     setResult(null)
-    setProgress({ completedTargets: 0, totalTargets: selectedIds.size, currentTargetWeaponId: null })
+    setProgress({
+      completedTargets: 0,
+      totalTargets: selectedIds.size,
+      currentTargetWeaponId: null,
+      phase: 'preparing',
+      processedWorkItems: 0,
+    })
     try {
       const calculationContext: CalculationContext = {
         gameVersion: dependencies.master.manifest.gameVersion,
@@ -261,7 +271,24 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
             </Stack>
           </Paper>
         )}
-        {searching && progress && <Paper variant="outlined" sx={{ p: 2 }}><Stack spacing={1}><Typography>検索中 {progress.completedTargets} / {progress.totalTargets}</Typography><LinearProgress variant={progress.totalTargets > 0 ? 'determinate' : 'indeterminate'} value={progress.totalTargets > 0 ? progress.completedTargets / progress.totalTargets * 100 : 0} /><Typography variant="body2">現在の目標武器: {progress.currentTargetWeaponId ? targetById.get(progress.currentTargetWeaponId)?.name ?? '不明' : '準備中'}</Typography><Button onClick={cancelSearch}>キャンセル</Button></Stack></Paper>}
+        {searching && progress && (
+          <Paper variant="outlined" sx={{ p: 2 }}>
+            <Stack spacing={1}>
+              <Typography>検索中 {progress.completedTargets} / {progress.totalTargets}</Typography>
+              {/* Target completion only. The work inside one Target is discovered
+                  while searching, so it is never converted into a percent. */}
+              <LinearProgress
+                aria-label="目標武器の検索進捗"
+                variant={progress.totalTargets > 0 ? 'determinate' : 'indeterminate'}
+                value={progress.totalTargets > 0 ? progress.completedTargets / progress.totalTargets * 100 : 0}
+              />
+              <Typography variant="body2">現在の目標武器: {progress.currentTargetWeaponId ? targetById.get(progress.currentTargetWeaponId)?.name ?? '不明' : '準備中'}</Typography>
+              <Typography variant="body2">{candidateSearchProgressPhaseLabels[progress.phase]}</Typography>
+              <Typography variant="body2">探索ステップ: {progress.processedWorkItems}</Typography>
+              <Button onClick={cancelSearch}>キャンセル</Button>
+            </Stack>
+          </Paper>
+        )}
         {result && result.warnings.length > 0 && <Alert severity="warning"><Typography variant="subtitle2">警告</Typography>{result.warnings.map((warning, index) => <Typography variant="body2" key={`${warning.targetWeaponId}:${index}`}>{warning.message}</Typography>)}</Alert>}
         {result && masterForDisplay && result.targetResults.map((targetResult) => {
           const target = targetById.get(targetResult.targetWeaponId) ?? null

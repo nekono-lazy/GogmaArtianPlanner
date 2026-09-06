@@ -139,9 +139,12 @@ export interface WorkerErrorProbeResult {
 }
 
 /**
- * Reproduces what the Production `SearchWorkerClient` does when its Worker
- * fails instead of replying. The client registers only a `message` listener, so
- * a Worker-level `error` or `messageerror` never reaches the pending request.
+ * Observes what the Production `SearchWorkerClient` does when its Worker fails
+ * instead of replying. At B5 the client registered only a `message` listener,
+ * so a Worker-level `error` never reached the pending request and the probe
+ * reported `pending_after_timeout`. B6 made the client fail closed on a native
+ * `error` / `messageerror`, so the same probe now reports `rejected` with a
+ * `SearchWorkerRuntimeError`. The B5 record keeps its measured outcome.
  *
  * The URL is a same-origin path that does not exist, built at runtime so the
  * bundler leaves it alone and the Worker genuinely fails to load. This probe

@@ -152,7 +152,9 @@ export async function searchExistingGogmaRoutes(context: RouteSearchContext, sch
     if (searchedAmendmentRoutes.has('existing_gogma_keep_bonuses')) {
       result.searchedRoutes.push('existing_gogma_keep_bonuses')
     } else if (pureKeepSources.length === 0) {
-      result.skippedRoutes.push({ route: 'existing_gogma_keep_bonuses', reason: 'normal_scope_requires_reset', detail: 'Keep Bonuses cannot be the first amendment of inherited Normal-scope bonuses.' })
+      // The game allows Keep as the first amendment of inherited Normal-scope
+      // bonuses. Only Production Keep prediction rejects that current input.
+      result.skippedRoutes.push({ route: 'existing_gogma_keep_bonuses', reason: 'normal_scope_keep_prediction_unsupported', detail: 'Keep Bonuses prediction does not support inherited Normal-scope current bonuses.' })
     } else {
       result.skippedRoutes.push({
         route: 'existing_gogma_keep_bonuses',

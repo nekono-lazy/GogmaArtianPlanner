@@ -191,6 +191,9 @@ export class TargetSearchScheduler {
       if (stopAtIdeal && this.idealCost !== null && this.queue.nextLowerBound > this.idealCost) break
       await this.context.execution.checkpoint()
       await this.queue.settleNext()
+      // Activity signal only. It counts settled work; it never gates, orders,
+      // or terminates the queue.
+      this.context.execution.onWorkSettled()
     }
   }
 }

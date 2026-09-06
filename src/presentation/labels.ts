@@ -11,6 +11,7 @@ import type {
 } from '../domain/models/publicTypes'
 import type {
   CandidateRouteFilter,
+  CandidateSearchProgressPhase,
   SkippedRouteReason,
 } from '../domain/search'
 import type { RngCapabilityMissingRequirement } from '../domain/rng/capabilities'
@@ -74,9 +75,21 @@ export const candidateRouteFilterLabels: Record<CandidateRouteFilter, string> = 
   existing_gogma: '所持巨戟アーティア経由',
 }
 
+/**
+ * The Target-internal work total is discovered while searching, so the phase is
+ * an activity signal. Never present it, or `processedWorkItems`, as a percent.
+ */
+export const candidateSearchProgressPhaseLabels: Record<CandidateSearchProgressPhase, string> = {
+  preparing: '準備中',
+  searching: '探索中',
+  finalizing: '結果を整理中',
+}
+
 export const skippedRouteReasonLabels: Record<SkippedRouteReason, string> = {
   normal_counter_unconfirmed: '対象の通常アーティアカウンターを検索に使用できません',
-  no_owned_weapon_available: '条件に合う所持巨戟アーティアがありません',
+  // Used by both owned Normal Artian and existing Gogma routes, so the label
+  // stays weapon-kind neutral; the RouteKind label names the concrete route.
+  no_owned_weapon_available: '条件に合う所持武器がありません',
   no_unprotected_source_weapon: '破壊的操作に使える未保護武器がありません',
   gogma_capability_missing: '巨戟アーティア予測に必要なRNG状態が不足しています',
   skill_capability_missing: 'スキル予測に必要なRNG状態が不足しています',
@@ -88,7 +101,8 @@ export const skippedRouteReasonLabels: Record<SkippedRouteReason, string> = {
   normal_prediction_unsupported: '通常アーティア予測は現在のRNGエンジンで未対応です',
   skill_prediction_unsupported: 'スキル予測は現在のRNGエンジンで未対応です',
   gogma_prediction_unsupported: '巨戟アーティア予測は現在のRNGエンジンで未対応です',
-  normal_scope_requires_reset: '通常アーティア継承状態では最初にリセットが必要です',
+  normal_scope_keep_prediction_unsupported:
+    '通常アーティア由来の復元ボーナスを保持する再抽選は、現在の予測エンジンでは予測未対応です',
 }
 
 export const staleReasonLabels: Record<BuildListEntryStaleReason, string> = {

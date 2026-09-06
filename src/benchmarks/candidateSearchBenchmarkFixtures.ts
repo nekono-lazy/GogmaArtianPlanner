@@ -21,7 +21,6 @@ import type {
   CandidateSearchSettings,
   SearchMasterSubset,
 } from '../domain/search'
-import { defaultCandidateSearchSettings } from '../domain/search'
 import { validateTargetIdealImpliesPractical } from '../domain/target'
 
 /**
@@ -125,41 +124,60 @@ export interface CandidateSearchBenchmarkWorkload {
   readonly note: string
 }
 
-function settings(
+/**
+ * The complete Candidate Search settings in force when the B5 measurements were
+ * taken, pinned field by field. These were the shipped defaults at that time;
+ * B6 lowered the shipped defaults to `1000 / 200 / 1000 / 200 / 0.6`. This
+ * preset deliberately does not read `defaultCandidateSearchSettings`, so a
+ * later default change can never silently redefine a historical workload and
+ * the values recorded in
+ * `docs/B5_CANDIDATE_SEARCH_BROWSER_WORKER_BENCHMARK.md` stay reproducible.
+ */
+export const B5_MEASUREMENT_SETTINGS: CandidateSearchSettings = {
+  maxNormalAdvance: 5000,
+  maxGogmaAdvance: 5000,
+  maxSkillAdvance: 5000,
+  maxCandidatesPerTarget: 200,
+  similarityThreshold: 0.6,
+}
+
+function b5Settings(
   overrides: Partial<CandidateSearchSettings> = {},
 ): CandidateSearchSettings {
-  return { ...defaultCandidateSearchSettings, ...overrides }
+  return { ...B5_MEASUREMENT_SETTINGS, ...overrides }
 }
 
 /**
  * Fixed presets, so every recorded measurement names one immutable workload.
- * The `*_default_bounds` entries use the shipped `5000 / 5000 / 5000` settings
- * unchanged; the bounded sweeps characterize one stream at a time.
+ * Every workload derives from `B5_MEASUREMENT_SETTINGS`: the `*_default_bounds`
+ * entries use it unchanged, and the bounded sweeps override only the bound they
+ * characterize. `default bounds` in a label means the B5-era defaults, not the
+ * current shipped defaults, so the labels say so explicitly.
  */
 export const candidateSearchBenchmarkWorkloads: readonly CandidateSearchBenchmarkWorkload[] = [
   {
     id: 'near_ideal_default_bounds',
-    label: 'A1. Near Ideal (default bounds)',
+    label: 'A1. Near Ideal (B5 default bounds)',
     ideal: { bonuses: { kind: 'gogma_reset', depth: 1 }, skills: { kind: 'conversion' } },
-    settings: settings(),
+    settings: b5Settings(),
     expectedIdealOperationCount: 3,
-    note: 'The conversion Skill is already Ideal and the first Reset Bonuses produces the Ideal Gogma-scope slots, so B4 stops at D = 3 (create + convert + reset) under the shipped defaults.',
+    note: 'The conversion Skill is already Ideal and the first Reset Bonuses produces the Ideal Gogma-scope slots, so B4 stops at D = 3 (create + convert + reset) under the pinned B5 settings.',
   },
   {
     id: 'skill_depth_8_default_bounds',
-    label: 'A2. Ideal at Skill depth 8 on an Owned Gogma source (default bounds)',
+    label: 'A2. Ideal at Skill depth 8 on an Owned Gogma source (B5 default bounds)',
     ideal: { bonuses: { kind: 'owned_gogma_current' }, skills: { kind: 'owned_reset', depth: 8 } },
-    settings: settings(),
+    settings: b5Settings(),
     expectedIdealOperationCount: 8,
     note: 'The Owned Gogma source already holds the Ideal Gogma-scope slots, so only the Skill stream searches; the Ideal Skill first appears at Reset Skills depth 8, giving D = 8.',
   },
   {
     id: 'bonus_depth_8_default_bounds',
-    label: 'A3. Ideal at Gogma Reset depth 8 (default bounds)',
+    label: 'A3. Ideal at Gogma Reset depth 8 (B5 default bounds)',
     ideal: { bonuses: { kind: 'gogma_reset', depth: 8 }, skills: { kind: 'conversion' } },
-    settings: settings(),
+    settings: b5Settings(),
     expectedIdealOperationCount: 10,
-    note: 'Reachable only after 8 Reset Bonuses, so the Bonus stream sets D = 10 under the shipped defaults.',
+    note: 'Reachable only after 8 Reset Bonuses, so the Bonus stream sets D = 10 under the pinned B5 settings.',
   },
   ...[10, 25, 50, 100, 200].map((depth) => ({
     id: `no_ideal_gogma_${depth}`,
@@ -168,7 +186,7 @@ export const candidateSearchBenchmarkWorkloads: readonly CandidateSearchBenchmar
       bonuses: { kind: 'unreachable' },
       skills: { kind: 'unreachable' },
     } as const,
-    settings: settings({
+    settings: b5Settings({
       maxNormalAdvance: 1,
       maxGogmaAdvance: depth,
       maxSkillAdvance: 1,
@@ -183,7 +201,7 @@ export const candidateSearchBenchmarkWorkloads: readonly CandidateSearchBenchmar
       bonuses: { kind: 'unreachable' },
       skills: { kind: 'unreachable' },
     } as const,
-    settings: settings({
+    settings: b5Settings({
       maxNormalAdvance: 1,
       maxGogmaAdvance: 1,
       maxSkillAdvance: depth,
@@ -198,7 +216,7 @@ export const candidateSearchBenchmarkWorkloads: readonly CandidateSearchBenchmar
       bonuses: { kind: 'unreachable' },
       skills: { kind: 'unreachable' },
     } as const,
-    settings: settings({
+    settings: b5Settings({
       maxNormalAdvance: depth,
       maxGogmaAdvance: 1,
       maxSkillAdvance: 1,
@@ -208,14 +226,14 @@ export const candidateSearchBenchmarkWorkloads: readonly CandidateSearchBenchmar
   })),
   {
     id: 'no_ideal_default_bounds',
-    label: 'D. No Ideal (default bounds)',
+    label: 'D. No Ideal (B5 default bounds)',
     ideal: {
       bonuses: { kind: 'unreachable' },
       skills: { kind: 'unreachable' },
     } as const,
-    settings: settings(),
+    settings: b5Settings(),
     expectedIdealOperationCount: null,
-    note: 'The shipped 5000 / 5000 / 5000 defaults with nothing to stop at. Intended for the cancellation and feasibility observations, not for a completion measurement.',
+    note: 'The pinned B5 5000 / 5000 / 5000 bounds with nothing to stop at. Intended for the cancellation and feasibility observations, not for a completion measurement.',
   },
 ]
 

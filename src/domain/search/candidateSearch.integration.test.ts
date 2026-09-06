@@ -650,7 +650,7 @@ describe('Candidate Search routes', () => {
     expect(result.targetResults[0].skippedRoutes).toContainEqual(
       expect.objectContaining({
         route: 'existing_gogma_keep_bonuses',
-        reason: 'normal_scope_requires_reset',
+        reason: 'normal_scope_keep_prediction_unsupported',
       }),
     )
   })

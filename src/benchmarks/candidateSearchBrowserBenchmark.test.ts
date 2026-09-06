@@ -16,7 +16,9 @@ type WorkerMessage = SearchWorkerResponse | CandidateSearchBenchmarkObservation
 class FakeBenchmarkWorker {
   readonly posted: unknown[] = []
   readonly terminate = vi.fn()
-  private listeners: Array<(event: { data: WorkerMessage }) => void> = []
+  // Keyed by event type: the Production client also listens for the native
+  // `error` / `messageerror` events, and a message must never reach those.
+  private listeners = new Map<string, Array<(event: { data: WorkerMessage }) => void>>()
 
   postMessage(message: unknown) {
     this.posted.push(message)
@@ -31,14 +33,17 @@ class FakeBenchmarkWorker {
       })
     }
   }
-  addEventListener(_type: string, listener: (event: { data: WorkerMessage }) => void) {
-    this.listeners.push(listener)
+  addEventListener(type: string, listener: (event: { data: WorkerMessage }) => void) {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener])
   }
-  removeEventListener(_type: string, listener: (event: { data: WorkerMessage }) => void) {
-    this.listeners = this.listeners.filter((entry) => entry !== listener)
+  removeEventListener(type: string, listener: (event: { data: WorkerMessage }) => void) {
+    this.listeners.set(
+      type,
+      (this.listeners.get(type) ?? []).filter((entry) => entry !== listener),
+    )
   }
   emit(data: WorkerMessage) {
-    for (const listener of [...this.listeners]) listener({ data })
+    for (const listener of [...(this.listeners.get('message') ?? [])]) listener({ data })
   }
 }
 

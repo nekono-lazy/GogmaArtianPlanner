@@ -241,8 +241,9 @@ Production RNG prediction semanticsだけである。必要なのは次である
 - normal-tier family -> Keep結果のprediction semantics確定
 
 実装上のskip reason `normal_scope_requires_reset` と対応するUI文言は
-この方針と矛盾するため廃止対象とする。この誤表現の廃止は
-RNG semantics検証の完了を待つ必要がなく、UI / skip reasonの是正だけで先行できる。
+この方針と矛盾するため廃止した。B6で `normal_scope_keep_prediction_unsupported`
+へ改称し、UI文言も予測未対応を意味する表現へ訂正した。この誤表現の廃止は
+RNG semantics検証の完了を待つ必要がなく、UI / skip reasonの是正だけで先行できた。
 
 ---
 
@@ -468,7 +469,7 @@ B11 は実ゲーム観測を前提とする独立系列
 | B3 | Candidate生成 / route表現の整理 | Cross規則、stream-local anchor ordering、offset / source重複除去、分解評価と既存Target評価器の一致担保 | B1, B2。完了 |
 | B4 | 初回Search終了条件とPractical保持 | canonical Ideal終了、`candidateStableKey` によるrun非依存tie-break、操作数D以下のPractical horizon、branch-and-bound / best-first、非劣位Practical列挙、保守的dominance、`maxCandidatesPerTarget` のIdeal枠確保 | B3, **B7**。完了 |
 | B5 | 実Browser Worker性能検証 | C5-E2C8と同形式の実測。checkpoint yield間隔の見直しを含む | B4。完了 |
-| B6 | UI / default / labels修正 | default値、進捗表示粒度、`no_owned_weapon_available` 文言、`normal_scope_requires_reset` の誤表現是正 | B5 |
+| B6 | UI / default / labels修正 | default値、進捗表示粒度、Worker native error handling、`no_owned_weapon_available` 文言、`normal_scope_requires_reset` の誤表現是正 | B5。完了 |
 | B8 | Planner-driven constrained re-search | conflict context DTO、制約付き再検索orchestration、Counter位置だけで除外しない判定、初回Search pruning全般を永久除外にしない保証 | B4, 既存Planner |
 | B9 | what-if比較 | 一方固定時の他方の次のPractical / Idealまでの距離算出と提示 | B8 |
 | B10 | 競合UI | 競合候補の除外 / 選択不可表示と理由提示 | B8 |
@@ -764,13 +765,24 @@ Domain契約を変える判断が必要になった場合は、実装前に設�
 ## 6. 別Issueとして記録した事項
 
 1. 新規Normal → Gogma RouteがNormal Counter確定を必須にしている
-2. `no_owned_weapon_available` の日本語表示が所持通常アーティアRouteでも「所持巨戟」になる(B6)
-3. Candidate Search default `5000 / 5000 / 5000` の適正値(B5の実測材料をもとにB6で決定)
+2. ~~`no_owned_weapon_available` の日本語表示が所持通常アーティアRouteでも「所持巨戟」になる~~
+   B6で「条件に合う所持武器がありません」へ汎用化。武器種はRouteKind labelが示す
+3. ~~Candidate Search default `5000 / 5000 / 5000` の適正値~~
+   B6で `1000 / 200 / 1000` へ変更。B5実測(Normal 1000 ≈ 256 ms、Skill 1000 ≈ 325 ms、
+   Gogma 200 ≈ 1961 ms)が根拠。上限機能は削除しておらず詳細設定で引き上げ可能
 4. Normal Counter Identification
 5. Normal Bonus familyを利用した将来探索(7章)
-6. Searchのより詳細な進捗表示(B6)
-7. Worker error handlingの見直し(B5で再現済み。設計判断はB6へ差し戻し)
-8. Candidate出力順のrun依存(B5で判明。保持集合とcanonical Idealはrun非依存)
+6. ~~Searchのより詳細な進捗表示~~
+   B6で Target開始 / Target内activity / Target完了 の3点へ拡張。
+   `CandidateSearchProgress` に `phase` と `processedWorkItems` を追加した。
+   Target内の総work量は探索中に増えるため、推定percentは作らない
+7. ~~Worker error handlingの見直し~~
+   B6で native `error` / `messageerror` をfail closedとして自動検知。
+   pending全rejectとterminateを行い、壊れたWorkerを再利用しない。
+   Worker自動再生成とページ自動reloadはv1では実装しない
+8. Candidate出力順のrun依存(B5で判明。保持集合とcanonical Idealはrun非依存)。
+   B6では未修正。`compareCandidates()` の最終tie-breakが `BuildCandidate.id` である
+   問題は、B6後の別タスクとして残す
 9. Ideal分類が `restorationBonusScope` を評価していない(B5で判明。SEARCH_SPEC 5.1
    との矛盾。独立したSearch correctness task **B5-F1で解決済み**。B6には含めない)
 
