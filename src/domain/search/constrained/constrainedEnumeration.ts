@@ -5,7 +5,7 @@ import type {
 import type { RngEngine } from '../../rng/rngEngine'
 import { evaluateSkillCondition, satisfiesIdealBonuses } from '../../target'
 import { createTargetBonusStream } from '../bonusStream'
-import { crossStreamSolutions } from '../crossComposition'
+import { countRouteOperationUnits } from '../candidateFactory'
 import { createSearchPredictionSupport } from '../searchPredictionSupport'
 import { createSearchExecutionContext } from '../searchExecution'
 import { createTargetSkillStream } from '../skillStream'
@@ -29,6 +29,12 @@ import {
   createConstrainedCandidate,
 } from './constrainedCandidateFactory'
 import {
+  ConstrainedWorkFrontier,
+  constrainedPairKey,
+  createConstrainedWorkPriority,
+  type ConstrainedWorkItem,
+} from './constrainedFrontier'
+import {
   createConstrainedRouteBases,
   type ConstrainedRouteBase,
 } from './constrainedRouteBases'
@@ -36,6 +42,8 @@ import {
   ConstrainedSearchError,
   type ConstrainedCandidate,
   type ConstrainedCandidateSearchInput,
+  type ConstrainedCandidateVisitor,
+  type ConstrainedEnumerationExecution,
   type ConstrainedEnumerationResult,
 } from './constrainedTypes'
 import { assertConstrainedCandidateSearchInput } from './constrainedValidation'
@@ -54,10 +62,9 @@ export interface ConstrainedEnumerationExecutionOptions {
 /**
  * The raw, retention-free position solutions of one Route base.
  *
- * B8-B1a composes only the two Cross axes over these arrays. B8-B1b adds lazy
- * off-axis `(B[i], K[j])` evaluation over the same arrays, capped by
- * `maxOffAxisPairEvaluations`, which is why the arrays and the pair evaluation
- * below are kept separate rather than fused into one traversal.
+ * Both the two Cross axes and the lazy off-axis frontier read these same
+ * arrays, so the streams are still solved once per base and the off-axis work
+ * adds no extra Engine prediction.
  */
 interface ConstrainedBaseSolutions {
   base: ConstrainedRouteBase
@@ -65,32 +72,42 @@ interface ConstrainedBaseSolutions {
   skillSolutions: EvaluatedSkillSolution[]
 }
 
+/**
+ * One `(Route base, stream category predicate)` lattice.
+ *
+ * `bonusAxis` / `skillAxis` are `B(c)` and `K(c)`. The matrix stores only the
+ * two axes and the base's fixed cost, never a cell array.
+ */
+interface ConstrainedMatrix {
+  index: number
+  base: ConstrainedRouteBase
+  categoryPredicate: StreamCategoryPredicate
+  baseOperationUnits: number
+  baseNormalAdvance: number | null
+  bonusAxis: EvaluatedBonusSolution[]
+  skillAxis: EvaluatedSkillSolution[]
+}
+
 interface StreamBoundStops {
   gogma: boolean
   skill: boolean
 }
 
-/**
- * Whether one category's two Cross axes make any off-axis cell (`i > 0` and
- * `j > 0`) available.
- *
- * This is decided in O(1) from the two axis lengths. SEARCH_SPEC 5.6.7 forbids
- * pre-generating the full Cartesian product, so B8-B1a never enumerates or
- * counts the cells: it only records that at least one exists, which is all
- * `exhausted` needs. An axis with a single solution has no off-axis cell at
- * all, so it must not mark the enumeration as incomplete. B8-B1b evaluates the
- * real cells through a lazy frontier and consumes `maxOffAxisPairEvaluations`.
- */
-export function hasOffAxisCells(
-  bonusAxisLength: number,
-  skillAxisLength: number,
-): boolean {
-  return bonusAxisLength > 1 && skillAxisLength > 1
+/** Normal Counter advance contributed by a Route base's own operations. */
+function baseNormalAdvance(operations: readonly RouteOperation[]): number | null {
+  const advances = operations.flatMap((operation) =>
+    operation.type === 'create_normal_artian'
+      ? [operation.normalCounterAfter - operation.normalCounterBefore]
+      : [],
+  )
+  return advances.length === 0
+    ? null
+    : advances.reduce((total, value) => total + value, 0)
 }
 
 /**
  * Planner-driven constrained candidate enumeration (SEARCH_SPEC 5.6.7,
- * PLANNER_SPEC 9.2.9).
+ * PLANNER_SPEC 9.2.9), delivering Candidates one at a time.
  *
  * This is a separate API from `searchCandidates()` and deliberately does NOT
  * reuse `TargetSearchScheduler`, whose same-result retention, Cross-only
@@ -105,16 +122,22 @@ export function hasOffAxisCells(
  * `maxCandidatesPerTarget`, `resultFilter`, or the similar filter. Its only
  * extent authority is `ConstrainedEnumerationBounds`.
  *
- * B8-B1a scope: this returns a fully collected, sorted array. That collector
- * shape is a checkpoint, not the final B8-B1 Production boundary; B8-B1b adds
- * deterministic incremental delivery plus the off-axis lazy frontier. See
- * `ConstrainedEnumerationResult` and `docs/CANDIDATE_SEARCH_REDESIGN.md` 4.3.
+ * `onCandidate` receives each Candidate as it is discovered, in the traversal's
+ * deterministic best-first order, and may return `'stop'` to end the
+ * enumeration without evaluating anything further. That consumer stop is a
+ * normal outcome, reported as `stoppedByConsumer`, and is not the
+ * `shouldCancel()` cancellation, which still rejects with a
+ * `CandidateSearchError('cancelled')`.
+ *
+ * The Search Domain never learns why the consumer stopped: no Planner conflict
+ * DTO, Planner orchestration bound, or Planner type crosses this boundary.
  */
-export async function enumerateConstrainedCandidates(
+export async function visitConstrainedCandidates(
   input: ConstrainedCandidateSearchInput,
   engine: RngEngine,
+  onCandidate: ConstrainedCandidateVisitor,
   options: ConstrainedEnumerationExecutionOptions = {},
-): Promise<ConstrainedEnumerationResult> {
+): Promise<ConstrainedEnumerationExecution> {
   const target = assertConstrainedCandidateSearchInput(input)
   const { origin, bounds } = input
 
@@ -181,62 +204,145 @@ export async function enumerateConstrainedCandidates(
   })
 
   const streamBounds: StreamBoundStops = { gogma: false, skill: false }
-  const solved: ConstrainedBaseSolutions[] = []
+  const matrices: ConstrainedMatrix[] = []
   for (const base of bases) {
     await execution.checkpoint()
-    solved.push(await solveBase(base))
+    const solved = await solveBase(base)
+    const baseOperationUnits = countRouteOperationUnits(base.baseOperations)
+    const normalAdvance = baseNormalAdvance(base.baseOperations)
+    for (const categoryPredicate of streamCategories) {
+      matrices.push({
+        index: matrices.length,
+        base,
+        categoryPredicate,
+        baseOperationUnits,
+        baseNormalAdvance: normalAdvance,
+        bonusAxis: selectBonusAxis(solved.bonusSolutions, categoryPredicate),
+        skillAxis: selectSkillAxis(solved.skillSolutions, categoryPredicate),
+      })
+    }
   }
 
-  const candidates = new Map<string, ConstrainedCandidate>()
+  const frontier = new ConstrainedWorkFrontier()
+  const enqueuedNodes = new Set<string>()
+  const evaluatedPairs = new Set<string>()
+  const deliveredCandidates = new Set<string>()
   let examinedCandidates = 0
-  let hasUnevaluatedOffAxisPairs = false
-  for (const entry of solved) {
-    // The Ideal and Practical Cross series can select the same pair, so the
-    // pair is composed once per Route base.
-    const composed = new Set<string>()
-    for (const category of streamCategories) {
-      const bonusAxis = selectBonusAxis(entry.bonusSolutions, category)
-      const skillAxis = selectSkillAxis(entry.skillSolutions, category)
-      hasUnevaluatedOffAxisPairs ||= hasOffAxisCells(
-        bonusAxis.length,
-        skillAxis.length,
-      )
-      const pairs = crossStreamSolutions(bonusAxis, skillAxis)
-      for (const pair of pairs) {
-        const pairKey = `${pair.bonus.index},${pair.skill.index}`
-        if (composed.has(pairKey)) continue
-        composed.add(pairKey)
-        await execution.checkpoint()
-        const candidate = evaluatePair(entry.base, pair.bonus, pair.skill)
-        if (candidate === null) continue
-        examinedCandidates += 1
-        if (candidate === 'rejected') continue
-        // Two solutions reaching the same result at different Counter positions
-        // carry different concrete operations, so only exact semantic
-        // duplicates collapse here. This is not a retention rule.
-        const key = constrainedCandidateStableKey(candidate)
-        if (!candidates.has(key)) candidates.set(key, candidate)
+  let evaluatedOffAxisPairs = 0
+  let offAxisBoundStop = false
+  let stoppedByConsumer = false
+
+  // One seed per matrix. An empty axis means the category has no solution on
+  // that stream, so the matrix contributes no cell at all.
+  for (const matrix of matrices) enqueue(matrix, 0, 0)
+
+  while (frontier.size > 0) {
+    await execution.checkpoint()
+    const item = frontier.pop() as ConstrainedWorkItem
+    const matrix = matrices[item.matrixIndex]
+
+    if (evaluatedPairs.has(item.pairKey)) {
+      // The Ideal and Practical axes overlap, so this actual pair was already
+      // evaluated from the other matrix. It is not re-evaluated and never
+      // recounted, but the frontier node still expands: dropping it would make
+      // this matrix's neighbouring cells unreachable.
+      expand(matrix, item)
+      continue
+    }
+
+    if (item.offAxis) {
+      if (evaluatedOffAxisPairs >= bounds.maxOffAxisPairEvaluations) {
+        // A reachable off-axis cell the cap refuses to evaluate. Every cell
+        // reachable from it is off-axis too, so nothing else becomes
+        // unreachable, and the enumeration is a bound stop rather than
+        // exhaustion.
+        offAxisBoundStop = true
+        continue
       }
+      evaluatedOffAxisPairs += 1
+    }
+    evaluatedPairs.add(item.pairKey)
+
+    const candidate = evaluatePair(matrix.base, item.bonus, item.skill)
+    expand(matrix, item)
+    if (candidate === null) continue
+    examinedCandidates += 1
+    if (candidate === 'rejected') continue
+    // Two solutions reaching the same result at different Counter positions
+    // carry different concrete operations, so only exact semantic duplicates
+    // collapse here. This is not a retention rule.
+    const key = constrainedCandidateStableKey(candidate)
+    if (deliveredCandidates.has(key)) continue
+    deliveredCandidates.add(key)
+    if ((await onCandidate(candidate)) === 'stop') {
+      stoppedByConsumer = true
+      break
     }
   }
 
   const stoppedByBound =
-    normalBoundReached || streamBounds.gogma || streamBounds.skill
+    normalBoundReached ||
+    streamBounds.gogma ||
+    streamBounds.skill ||
+    offAxisBoundStop
   return {
     targetWeaponId: target.id,
-    candidates: [...candidates.values()].sort(compareConstrainedCandidates),
     summary: {
       examinedCandidates,
-      // B8-B1a composes the two Cross axes only. Off-axis pairs, capped by
-      // `maxOffAxisPairEvaluations`, arrive with B8-B1b.
-      evaluatedOffAxisPairs: 0,
-      // The two flags are not complements. `stoppedByBound` says a bound
-      // truncated the search; `exhausted` says nothing was left uncovered.
-      // While off-axis pairs remain unevaluated, neither is true, so B8-B1a
-      // never claims exhaustion over an enumeration scope it has not covered.
-      exhausted: !stoppedByBound && !hasUnevaluatedOffAxisPairs,
+      evaluatedOffAxisPairs,
+      // `exhausted` claims that nothing reachable was left uncovered. A bound
+      // stop and a consumer stop both leave work behind, so neither may be
+      // reported as exhaustion. `stoppedByBound` stays true only when a bound
+      // actually truncated reachable work.
+      exhausted: !stoppedByBound && !stoppedByConsumer,
       stoppedByBound,
     },
+    stoppedByConsumer,
+  }
+
+  /** Queues one lattice cell, once per matrix coordinate pair. */
+  function enqueue(matrix: ConstrainedMatrix, i: number, j: number): void {
+    if (i >= matrix.bonusAxis.length || j >= matrix.skillAxis.length) return
+    const nodeKey = `${matrix.index}:${i},${j}`
+    if (enqueuedNodes.has(nodeKey)) return
+    enqueuedNodes.add(nodeKey)
+    const bonus = matrix.bonusAxis[i]
+    const skill = matrix.skillAxis[j]
+    frontier.push({
+      matrixIndex: matrix.index,
+      categoryPredicate: matrix.categoryPredicate,
+      i,
+      j,
+      nodeKey,
+      pairKey: constrainedPairKey(matrix.base.baseKey, bonus, skill),
+      offAxis: i > 0 && j > 0,
+      bonus,
+      skill,
+      // The single shared priority authority, so the traversal order stays
+      // coordinate-wise monotone against the two canonical stream orderings.
+      priority: createConstrainedWorkPriority(
+        {
+          baseKey: matrix.base.baseKey,
+          operationUnits: matrix.baseOperationUnits,
+          normalAdvance: matrix.baseNormalAdvance,
+        },
+        bonus,
+        skill,
+      ),
+    })
+  }
+
+  /**
+   * Discovers the two lattice neighbours of a settled cell.
+   *
+   * This is the whole reason no Cartesian product exists: cells are created
+   * only from a cell that was actually reached, so the live frontier stays
+   * proportional to the work performed rather than to the product of the two
+   * axis lengths.
+   */
+  function expand(matrix: ConstrainedMatrix, item: ConstrainedWorkItem): void {
+    enqueue(matrix, item.i + 1, item.j)
+    enqueue(matrix, item.i, item.j + 1)
   }
 
   /**
@@ -293,8 +399,9 @@ export async function enumerateConstrainedCandidates(
    * Returns `null` when the pair is not a Candidate at all (an existing-Gogma
    * base at `d = 0` and `k = 0`, whose operation list would be empty), and
    * `'rejected'` when a complete combination was evaluated against the Target
-   * conditions but satisfied neither. Both axis and, later, off-axis pairs go
-   * through this one function.
+   * conditions but satisfied neither. Axis and off-axis pairs go through this
+   * one function, so there is no off-axis-only Candidate factory and no
+   * off-axis-only classification, estimate or hash path.
    */
   function evaluatePair(
     base: ConstrainedRouteBase,
@@ -325,5 +432,39 @@ export async function enumerateConstrainedCandidates(
         },
       }) ?? 'rejected'
     )
+  }
+}
+
+/**
+ * Collects a complete constrained enumeration into one sorted array.
+ *
+ * This is the B8-B1a shape, kept as a helper over the sequential core: it
+ * consumes `visitConstrainedCandidates()` to the end and applies the existing
+ * `compareConstrainedCandidates()` final ordering. The two orders may differ,
+ * and deliberately so - a global sort that also covered not-yet-expanded
+ * off-axis cells could only be established by expanding them, which is exactly
+ * the Cartesian traversal SEARCH_SPEC 5.6.7 forbids. Incremental delivery is
+ * required to be deterministic, semantic, best-first and run-independent, not
+ * to equal this array's order. See `docs/CANDIDATE_SEARCH_REDESIGN.md` 4.3.
+ */
+export async function enumerateConstrainedCandidates(
+  input: ConstrainedCandidateSearchInput,
+  engine: RngEngine,
+  options: ConstrainedEnumerationExecutionOptions = {},
+): Promise<ConstrainedEnumerationResult> {
+  const candidates: ConstrainedCandidate[] = []
+  const execution = await visitConstrainedCandidates(
+    input,
+    engine,
+    (candidate) => {
+      candidates.push(candidate)
+      return 'continue'
+    },
+    options,
+  )
+  return {
+    targetWeaponId: execution.targetWeaponId,
+    candidates: candidates.sort(compareConstrainedCandidates),
+    summary: execution.summary,
   }
 }

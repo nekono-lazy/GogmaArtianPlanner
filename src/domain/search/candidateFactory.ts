@@ -97,12 +97,26 @@ export function totalMaterialQuantity(
   ).reduce((total, requirement) => total + requirement.quantity, 0)
 }
 
-export function countRouteOperations(route: BuildRoute): number {
-  return route.operations.reduce(
+/**
+ * Operation units of one ordered operation sequence, counting a
+ * `create_normal_artian` step as its forge `count`.
+ *
+ * Split out of `countRouteOperations()` so the constrained enumerator can score
+ * a not-yet-composed `(base, Bonus, Skill)` combination with the same authority
+ * the finished Candidate estimate uses (SEARCH_SPEC 5.6.7).
+ */
+export function countRouteOperationUnits(
+  operations: readonly RouteOperation[],
+): number {
+  return operations.reduce(
     (total, operation) =>
       total + (operation.type === 'create_normal_artian' ? operation.count : 1),
     0,
   )
+}
+
+export function countRouteOperations(route: BuildRoute): number {
+  return countRouteOperationUnits(route.operations)
 }
 
 function operationAdvance(

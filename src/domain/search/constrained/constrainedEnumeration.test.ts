@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   enumerateConstrainedCandidates,
-  hasOffAxisCells,
+  visitConstrainedCandidates,
 } from './constrainedEnumeration'
-import { constrainedCandidateStableKey } from './constrainedCandidateFactory'
+import {
+  compareConstrainedCandidates,
+  constrainedCandidateStableKey,
+} from './constrainedCandidateFactory'
 import type { ConstrainedCandidate } from './constrainedTypes'
 import { CandidateSearchError } from '../searchTypes'
 import { areRestorationBonusSetsEqual } from '../../models/publicTypes'
@@ -412,7 +415,8 @@ describe('Constrained enumeration summary', () => {
       engine,
     )
     expect(result.summary.examinedCandidates).toBe(3)
-    // B8-B1a composes the two Cross axes only; off-axis pairs arrive in B8-B1b.
+    // The default bounds cap off-axis evaluation at zero, which is the
+    // Cross-only policy, so only the two axes were composed here.
     expect(result.summary.evaluatedOffAxisPairs).toBe(0)
   })
 
@@ -439,7 +443,7 @@ describe('Constrained enumeration summary', () => {
     expect(result.summary.exhausted).toBe(false)
   })
 
-  it('claims neither exhaustion nor a bound stop while off-axis cells remain', async () => {
+  it('reports a bound stop while reachable off-axis cells stay unevaluated', async () => {
     const origin = createConstrainedSearchOrigin({
       normalCounters: [],
       ownedWeapons: [
@@ -460,8 +464,9 @@ describe('Constrained enumeration summary', () => {
       ),
       engine,
     )
-    // Both axes hold more than one solution, so off-axis Cross cells exist and
-    // B8-B1a has not evaluated them. Neither flag may be raised.
+    // Both axes hold more than one solution, so reachable off-axis Cross cells
+    // exist while the cap refuses them. Together with the Gogma and Skill
+    // stream bounds that is a bound stop, and never exhaustion.
     expect(result.summary.stoppedByBound).toBe(true)
     expect(result.summary.exhausted).toBe(false)
   })
@@ -541,41 +546,279 @@ describe('Constrained enumeration execution', () => {
   })
 })
 
-describe('Off-axis Cross cells in B8-B1a', () => {
-  it('decides off-axis availability from the two axis lengths alone', () => {
-    // A single-solution axis has no off-axis cell, so it must never mark the
-    // enumeration as incomplete.
-    expect(hasOffAxisCells(1, 1)).toBe(false)
-    expect(hasOffAxisCells(5, 1)).toBe(false)
-    expect(hasOffAxisCells(1, 5)).toBe(false)
-    expect(hasOffAxisCells(2, 2)).toBe(true)
-    expect(hasOffAxisCells(30, 30)).toBe(true)
+/**
+ * A Route base whose Bonus and Skill axes are both long enough to have off-axis
+ * Cross cells.
+ *
+ * Bonus depth `d` yields `practicalVariant(d)` and Skill reset `k` yields a
+ * distinct Series Skill, so `B(practical)` is `[d0, d1, ...]` and
+ * `K(practical)` is `[k0, k1, ...]`. Nothing satisfies the Ideal condition, so
+ * the Ideal matrix is empty and every cell belongs to one Practical lattice.
+ */
+function offAxisSetup() {
+  const origin = createConstrainedSearchOrigin({
+    normalCounters: [],
+    ownedWeapons: [
+      gogmaWeapon('owned.constrained.gogma', {
+        restorationBonuses: practicalVariant(0),
+      }),
+    ],
+  })
+  const engine = createConstrainedEngine(origin, {
+    resetResultAt: (gogmaCounter) => practicalVariant(gogmaCounter - 9),
+  })
+  return { origin, engine }
+}
+
+/**
+ * The same base with the Ideal five slots reachable at Gogma depth 1 and the
+ * Ideal Series Skill at Skill reset 1.
+ *
+ * That single pair is the Ideal matrix's own anchor `(0, 0)` and, at the same
+ * time, the Practical matrix's off-axis cell `(1, 1)`. It therefore also covers
+ * both `categoryRank` improvements inside the Practical matrix: along the Bonus
+ * axis `(0, 1) -> (1, 1)` with the Ideal Skill fixed, and along the Skill axis
+ * `(1, 0) -> (1, 1)` with the Ideal Bonus fixed.
+ */
+function overlappingCategorySetup() {
+  const origin = createConstrainedSearchOrigin({
+    normalCounters: [],
+    ownedWeapons: [
+      gogmaWeapon('owned.constrained.gogma', {
+        restorationBonuses: practicalVariant(0),
+      }),
+    ],
+  })
+  const engine = createConstrainedEngine(origin, {
+    resetResultAt: (gogmaCounter) =>
+      gogmaCounter === 10 ? idealBonuses() : practicalVariant(gogmaCounter - 9),
+    skillResultAt: (skillCounter) => ({
+      seriesSkillId:
+        skillCounter === 7 ? IDEAL_SKILL : `series_skill.fixture.s${skillCounter}`,
+      groupSkillId: null,
+    }),
+  })
+  return { origin, engine }
+}
+
+function offAxisBounds(maxOffAxisPairEvaluations: number) {
+  return constrainedBounds({
+    maxGogmaAdvance: 2,
+    maxSkillResetCount: 2,
+    maxOffAxisPairEvaluations,
+  })
+}
+
+/** `(gogmaAdvance, skillAdvance)` of each delivered Candidate, in order. */
+function positions(candidates: readonly ConstrainedCandidate[]): string[] {
+  return candidates.map(
+    (candidate) =>
+      `${candidate.estimatedGogmaAdvance},${candidate.estimatedSkillAdvance}`,
+  )
+}
+
+async function collectSequentially(
+  input: Parameters<typeof visitConstrainedCandidates>[0],
+  engine: Parameters<typeof visitConstrainedCandidates>[1],
+  onEach: (candidate: ConstrainedCandidate) => 'continue' | 'stop' = () => 'continue',
+) {
+  const candidates: ConstrainedCandidate[] = []
+  const execution = await visitConstrainedCandidates(input, engine, (candidate) => {
+    candidates.push(candidate)
+    return onEach(candidate)
+  })
+  return { candidates, execution }
+}
+
+describe('Off-axis Cross cells', () => {
+  it('reaches pairs the two Cross axes never compose once the cap allows it', async () => {
+    const { origin, engine } = offAxisSetup()
+    const axisOnly = await enumerateConstrainedCandidates(
+      constrainedInput(origin, offAxisBounds(0)),
+      engine,
+    )
+    const withOffAxis = await enumerateConstrainedCandidates(
+      constrainedInput(origin, offAxisBounds(4)),
+      createConstrainedEngine(origin, {
+        resetResultAt: (gogmaCounter) => practicalVariant(gogmaCounter - 9),
+      }),
+    )
+    // |B| = |K| = 3, so the Cross rule composes 3 + 3 - 1 = 5 cells and the
+    // existing-Gogma d = 0 / k = 0 cell is not a Candidate.
+    expect(positions(axisOnly.candidates).sort()).toEqual([
+      '0,1',
+      '0,2',
+      '1,0',
+      '2,0',
+    ])
+    expect(positions(withOffAxis.candidates).sort()).toEqual([
+      '0,1',
+      '0,2',
+      '1,0',
+      '1,1',
+      '1,2',
+      '2,0',
+      '2,1',
+      '2,2',
+    ])
+    expect(withOffAxis.summary.evaluatedOffAxisPairs).toBe(4)
+    expect(withOffAxis.summary.examinedCandidates).toBe(8)
   })
 
-  it('reports unevaluated off-axis cells when both axes hold several solutions', async () => {
+  it('classifies an off-axis pair with the same authority as an axis pair', async () => {
+    const { origin, engine } = offAxisSetup()
+    const result = await enumerateConstrainedCandidates(
+      constrainedInput(origin, offAxisBounds(4)),
+      engine,
+    )
+    const offAxis = result.candidates.filter(
+      (candidate) =>
+        candidate.estimatedGogmaAdvance > 0 && candidate.estimatedSkillAdvance > 0,
+    )
+    expect(offAxis).toHaveLength(4)
+    for (const candidate of offAxis) {
+      expect(candidate.category).toBe('practical')
+      expect(candidate.restorationBonusScope).toBe('gogma_artian')
+      expect(candidate.route.kind).toBe('existing_gogma_mixed')
+      expect(candidate.searchStateHash).toMatch(/^fnv1a32:/)
+      expect(candidate.referencedOwnedWeaponsHash).toMatch(/^fnv1a32:/)
+      expect(candidate.estimatedOperationCount).toBe(
+        candidate.route.operations.length,
+      )
+    }
+  })
+
+  it('evaluates no off-axis pair at all when the cap is zero', async () => {
+    const { origin, engine } = offAxisSetup()
+    const result = await enumerateConstrainedCandidates(
+      constrainedInput(origin, offAxisBounds(0)),
+      engine,
+    )
+    // Zero is a valid setting: it is exactly the Cross-only policy. The axis
+    // Candidates are still enumerated to the end.
+    expect(result.summary.evaluatedOffAxisPairs).toBe(0)
+    expect(result.candidates).toHaveLength(4)
+    expect(result.summary.stoppedByBound).toBe(true)
+    expect(result.summary.exhausted).toBe(false)
+  })
+
+  it('stops off-axis evaluation at the cap and keeps the remaining axis work', async () => {
+    const { origin, engine } = offAxisSetup()
+    const result = await enumerateConstrainedCandidates(
+      constrainedInput(origin, offAxisBounds(2)),
+      engine,
+    )
+    expect(result.summary.evaluatedOffAxisPairs).toBe(2)
+    expect(result.summary.examinedCandidates).toBe(6)
+    // The two cheapest off-axis cells are taken first, and every axis
+    // Candidate survives the off-axis cap.
+    expect(positions(result.candidates).sort()).toEqual([
+      '0,1',
+      '0,2',
+      '1,0',
+      '1,1',
+      '1,2',
+      '2,0',
+    ])
+    expect(result.summary.stoppedByBound).toBe(true)
+    expect(result.summary.exhausted).toBe(false)
+  })
+
+  it('does not truncate when the cap exactly covers every reachable off-axis cell', async () => {
+    const { origin } = offAxisSetup()
+    const run = (cap: number) =>
+      enumerateConstrainedCandidates(
+        constrainedInput(origin, offAxisBounds(cap)),
+        createConstrainedEngine(origin, {
+          resetResultAt: (gogmaCounter) => practicalVariant(gogmaCounter - 9),
+        }),
+      )
+    const exact = await run(4)
+    const generous = await run(5)
+    // Raising the cap past the reachable cells changes nothing, so the cap of
+    // 4 refused no cell. The Gogma and Skill stream bounds are still reported,
+    // because an off-axis cell can only exist once both streams were searched
+    // to their own bound.
+    expect(exact.summary.evaluatedOffAxisPairs).toBe(4)
+    expect(generous.summary.evaluatedOffAxisPairs).toBe(4)
+    expect(generous.candidates.map(constrainedCandidateStableKey)).toEqual(
+      exact.candidates.map(constrainedCandidateStableKey),
+    )
+  })
+
+  it('never re-evaluates or recounts a pair shared by the Ideal and Practical matrices', async () => {
+    const { origin, engine } = overlappingCategorySetup()
+    const result = await enumerateConstrainedCandidates(
+      constrainedInput(origin, offAxisBounds(4)),
+      engine,
+    )
+    const ideal = result.candidates.filter(({ category }) => category === 'ideal')
+    expect(ideal).toHaveLength(1)
+    expect(ideal[0].estimatedGogmaAdvance).toBe(1)
+    expect(ideal[0].estimatedSkillAdvance).toBe(1)
+    // The Ideal anchor and the Practical `(1, 1)` cell are the same actual
+    // pair. It is evaluated once, as axis work, so it consumes no off-axis
+    // budget, and the three remaining off-axis cells are still reached.
+    expect(result.summary.evaluatedOffAxisPairs).toBe(3)
+    expect(result.summary.examinedCandidates).toBe(8)
+    expect(positions(result.candidates).sort()).toEqual([
+      '0,1',
+      '0,2',
+      '1,0',
+      '1,1',
+      '1,2',
+      '2,0',
+      '2,1',
+      '2,2',
+    ])
+  })
+
+  it('keeps the frontier lazy instead of scanning the Cartesian product', async () => {
+    const axisDepth = 30
+    const callCounts = { normal: 0, skill: 0, gogmaReset: 0, gogmaKeep: 0 }
     const origin = createConstrainedSearchOrigin({
       normalCounters: [],
       ownedWeapons: [
         gogmaWeapon('owned.constrained.gogma', {
-          restorationBonuses: practicalBonuses(),
+          restorationBonuses: practicalVariant(0),
         }),
       ],
     })
     const engine = createConstrainedEngine(origin, {
-      resetResultAt: () => alternativePracticalBonuses(),
+      callCounts,
+      gogmaPositions: axisDepth + 2,
+      skillPositions: axisDepth + 2,
+      resetResultAt: (gogmaCounter) => practicalVariant(gogmaCounter - 9),
     })
     const result = await enumerateConstrainedCandidates(
       constrainedInput(
         origin,
-        constrainedBounds({ maxGogmaAdvance: 1, maxSkillResetCount: 1 }),
+        constrainedBounds({
+          maxGogmaAdvance: axisDepth,
+          maxSkillResetCount: axisDepth,
+          maxOffAxisPairEvaluations: 3,
+        }),
       ),
       engine,
     )
+
+    // |B| = |K| = 31. The two axes contribute 31 + 31 - 2 = 60 evaluated
+    // combinations, and exactly 3 off-axis cells are added. A Cartesian
+    // traversal would be 31 * 31 = 961.
+    const axisSize = axisDepth + 1
+    expect(result.summary.evaluatedOffAxisPairs).toBe(3)
+    expect(result.summary.examinedCandidates).toBe(axisSize + axisSize - 2 + 3)
+    expect(result.summary.examinedCandidates).toBeLessThan(axisSize * axisSize)
+    expect(result.candidates).toHaveLength(axisSize + axisSize - 2 + 3)
+    // Off-axis cells reuse the already solved stream positions, so they add no
+    // Engine prediction at all.
+    expect(callCounts.gogmaReset).toBe(axisDepth)
+    expect(callCounts.skill).toBe(axisDepth)
+    expect(result.summary.stoppedByBound).toBe(true)
     expect(result.summary.exhausted).toBe(false)
-    expect(result.summary.evaluatedOffAxisPairs).toBe(0)
   })
 
-  it('does not treat a single-solution axis as an unevaluated off-axis cell', async () => {
+  it('reports exhaustion when neither axis has an off-axis cell', async () => {
     const origin = createConstrainedSearchOrigin({
       normalCounters: [],
       ownedWeapons: [
@@ -598,10 +841,81 @@ describe('Off-axis Cross cells in B8-B1a', () => {
     expect(result.summary.exhausted).toBe(true)
     expect(result.summary.evaluatedOffAxisPairs).toBe(0)
   })
+})
 
-  it('stays linear in the axis lengths instead of scanning the Cartesian product', async () => {
-    const axisDepth = 30
-    const callCounts = { normal: 0, skill: 0, gogmaReset: 0, gogmaKeep: 0 }
+describe('Constrained sequential delivery', () => {
+  it('hands each Candidate to the consumer as it is found', async () => {
+    const { origin, engine } = offAxisSetup()
+    let settled = false
+    const seen: boolean[] = []
+    const execution = await visitConstrainedCandidates(
+      constrainedInput(origin, offAxisBounds(4)),
+      engine,
+      () => {
+        seen.push(settled)
+        return 'continue'
+      },
+    )
+    settled = true
+    // Every callback ran while the enumeration was still in progress, so the
+    // consumer never had to wait for the complete collected result.
+    expect(seen).toEqual([false, false, false, false, false, false, false, false])
+    expect(execution.stoppedByConsumer).toBe(false)
+    expect(execution.summary.examinedCandidates).toBe(8)
+  })
+
+  it('stops all further pair evaluation when the consumer stops', async () => {
+    const { origin, engine } = offAxisSetup()
+    const { candidates, execution } = await collectSequentially(
+      constrainedInput(origin, offAxisBounds(4)),
+      engine,
+      () => 'stop',
+    )
+    expect(candidates).toHaveLength(1)
+    expect(execution.stoppedByConsumer).toBe(true)
+    // No pair beyond the delivered one was carried to Target evaluation, and
+    // no further off-axis cell was expanded.
+    expect(execution.summary.examinedCandidates).toBe(1)
+    expect(execution.summary.evaluatedOffAxisPairs).toBe(0)
+    // A consumer stop is not exhaustion and is not a bound truncation on its
+    // own; it is also not the `shouldCancel()` cancellation.
+    expect(execution.summary.exhausted).toBe(false)
+  })
+
+  it('lets the consumer take a few Candidates and then stop', async () => {
+    const { origin, engine } = offAxisSetup()
+    let delivered = 0
+    const { candidates, execution } = await collectSequentially(
+      constrainedInput(origin, offAxisBounds(4)),
+      engine,
+      () => {
+        delivered += 1
+        return delivered === 3 ? 'stop' : 'continue'
+      },
+    )
+    expect(candidates).toHaveLength(3)
+    expect(execution.summary.examinedCandidates).toBe(3)
+    expect(execution.stoppedByConsumer).toBe(true)
+  })
+
+  it('awaits consumer work between Candidates', async () => {
+    const { origin, engine } = offAxisSetup()
+    const order: string[] = []
+    const execution = await visitConstrainedCandidates(
+      constrainedInput(origin, offAxisBounds(4)),
+      engine,
+      async (candidate) => {
+        order.push(`in:${candidate.estimatedGogmaAdvance}`)
+        await Promise.resolve()
+        order.push(`out:${candidate.estimatedGogmaAdvance}`)
+        return order.length >= 4 ? 'stop' : 'continue'
+      },
+    )
+    expect(order).toEqual(['in:0', 'out:0', 'in:1', 'out:1'])
+    expect(execution.stoppedByConsumer).toBe(true)
+  })
+
+  it('interleaves a near off-axis Candidate ahead of a distant axis Candidate', async () => {
     const origin = createConstrainedSearchOrigin({
       normalCounters: [],
       ownedWeapons: [
@@ -611,36 +925,244 @@ describe('Off-axis Cross cells in B8-B1a', () => {
       ],
     })
     const engine = createConstrainedEngine(origin, {
-      callCounts,
-      gogmaPositions: axisDepth + 2,
-      skillPositions: axisDepth + 2,
-      // Every Gogma position yields a distinct Practical result and every Skill
-      // position a distinct Series Skill, so both axes are long.
       resetResultAt: (gogmaCounter) => practicalVariant(gogmaCounter - 9),
     })
-    const result = await enumerateConstrainedCandidates(
+    const { candidates } = await collectSequentially(
       constrainedInput(
         origin,
         constrainedBounds({
-          maxGogmaAdvance: axisDepth,
-          maxSkillResetCount: axisDepth,
+          maxGogmaAdvance: 4,
+          maxSkillResetCount: 4,
+          maxOffAxisPairEvaluations: 100,
         }),
       ),
       engine,
     )
+    const delivered = positions(candidates)
+    // `(B1, K1)` costs two operations while `(B3, k0)` costs three, so a
+    // best-first traversal delivers the off-axis cell first. An "every axis
+    // cell first" traversal would invert this.
+    expect(delivered.indexOf('1,1')).toBeGreaterThanOrEqual(0)
+    expect(delivered.indexOf('1,1')).toBeLessThan(delivered.indexOf('3,0'))
+    expect(delivered.indexOf('1,1')).toBeLessThan(delivered.indexOf('0,3'))
+    expect(candidates).toHaveLength(24)
+  })
 
-    // |B(practical)| = |K(practical)| = 1 zero-operation solution + 30 stream
-    // solutions. The Cross rule composes |B| + |K| - 1 pairs, and the existing
-    // Gogma d = 0 / k = 0 pair is not a Candidate, so 60 combinations reach
-    // Target evaluation. A Cartesian traversal would be 31 * 31 = 961.
-    const axisSize = axisDepth + 1
-    expect(result.summary.examinedCandidates).toBe(axisSize + axisSize - 2)
-    expect(result.summary.examinedCandidates).toBeLessThan(axisSize * axisSize)
-    expect(result.candidates).toHaveLength(axisSize + axisSize - 2)
-    // Prediction stays one call per Counter position on each stream.
-    expect(callCounts.gogmaReset).toBe(axisDepth)
-    expect(callCounts.skill).toBe(axisDepth)
-    expect(result.summary.evaluatedOffAxisPairs).toBe(0)
-    expect(result.summary.exhausted).toBe(false)
+  it('repeats the identical delivery sequence regardless of stored input order', async () => {
+    const bounds = constrainedBounds({
+      maxGogmaAdvance: 2,
+      maxSkillResetCount: 2,
+      maxOffAxisPairEvaluations: 4,
+    })
+    const build = (reversed: boolean) => {
+      const weapons = [
+        gogmaWeapon('owned.constrained.gogma.b', {
+          restorationBonuses: practicalVariant(0),
+        }),
+        gogmaWeapon('owned.constrained.gogma.a', {
+          restorationBonuses: practicalVariant(0),
+        }),
+      ]
+      const origin = createConstrainedSearchOrigin({
+        normalCounters: [],
+        ownedWeapons: reversed ? [...weapons].reverse() : weapons,
+      })
+      return {
+        origin,
+        engine: createConstrainedEngine(origin, {
+          resetResultAt: (gogmaCounter) => practicalVariant(gogmaCounter - 9),
+        }),
+      }
+    }
+    const forward = build(false)
+    const reversed = build(true)
+    const first = await collectSequentially(
+      constrainedInput(forward.origin, bounds),
+      forward.engine,
+    )
+    const second = await collectSequentially(
+      constrainedInput(reversed.origin, bounds),
+      reversed.engine,
+    )
+    expect(first.candidates.length).toBeGreaterThan(8)
+    expect(second.candidates.map(constrainedCandidateStableKey)).toEqual(
+      first.candidates.map(constrainedCandidateStableKey),
+    )
+    expect(second.execution.summary).toEqual(first.execution.summary)
+  })
+
+  it('delivers no semantic duplicate to the consumer', async () => {
+    const { origin, engine } = overlappingCategorySetup()
+    const { candidates } = await collectSequentially(
+      constrainedInput(origin, offAxisBounds(4)),
+      engine,
+    )
+    const keys = candidates.map(constrainedCandidateStableKey)
+    expect(new Set(keys).size).toBe(keys.length)
+  })
+
+  it('matches the collector helper on Candidates and on the summary', async () => {
+    const bounds = offAxisBounds(4)
+    const sequential = offAxisSetup()
+    const collected = offAxisSetup()
+    const visited = await collectSequentially(
+      constrainedInput(sequential.origin, bounds),
+      sequential.engine,
+    )
+    const result = await enumerateConstrainedCandidates(
+      constrainedInput(collected.origin, bounds),
+      collected.engine,
+    )
+    expect(visited.candidates.map(constrainedCandidateStableKey).sort()).toEqual(
+      result.candidates.map(constrainedCandidateStableKey).sort(),
+    )
+    expect(visited.execution.summary).toEqual(result.summary)
+    // The collector applies the existing final ordering, which the incremental
+    // delivery order is not required to reproduce.
+    expect(result.candidates).toEqual(
+      [...visited.candidates].sort(compareConstrainedCandidates),
+    )
+  })
+
+  it('rejects with a cancellation error instead of reporting a consumer stop', async () => {
+    const { origin, engine } = offAxisSetup()
+    await expect(
+      visitConstrainedCandidates(
+        constrainedInput(origin, offAxisBounds(4)),
+        engine,
+        () => 'continue',
+        { shouldCancel: () => true },
+      ),
+    ).rejects.toMatchObject({ name: 'CandidateSearchError', code: 'cancelled' })
+  })
+})
+
+/**
+ * `practicalVariant(45)`: two attack at high, one element at middle and two
+ * sharpness at high.
+ *
+ * It matches four of the five Ideal slots, exactly like `practicalBonuses()`,
+ * so the two results tie on Ideal closeness. Its completed multiset sorts
+ * BEFORE `practicalBonuses()` because "sharpness" precedes "utility", which is
+ * what makes it the adversarial partner for a lexicographic-only ordering.
+ */
+function sharpnessPracticalBonuses() {
+  return practicalVariant(45)
+}
+
+/**
+ * Two owned Gogma sources that still carry inherited `normal_artian` scope
+ * slots, so their first amendment is a Reset and both share one Bonus stream.
+ *
+ * Nothing is Practical before Gogma depth 2. At depth 2 the stream publishes
+ * two Practical results that tie on every leading work priority - same depth,
+ * so the same operation count and Gogma advance, and the same matched Ideal
+ * slot count - and differ only in required material quantity:
+ *
+ * ```text
+ * reset -> reset   practicalBonuses()          material 1 + 1 = 2
+ * reset -> keep    sharpnessPracticalBonuses() material 1 + 5 = 6
+ * ```
+ *
+ * `compareBonusSolutions()` therefore puts the Reset result first, while its
+ * completed multiset sorts second.
+ */
+function materialOrderingSetup() {
+  const inherited = (id: string) =>
+    gogmaWeapon(id, {
+      restorationBonuses: belowPracticalBonuses(),
+      restorationBonusScope: 'normal_artian',
+    })
+  const origin = createConstrainedSearchOrigin({
+    normalCounters: [],
+    ownedWeapons: [
+      inherited('owned.constrained.gogma.a'),
+      inherited('owned.constrained.gogma.b'),
+    ],
+  })
+  origin.master.materialCosts = [
+    {
+      id: 'material_cost.fixture.reset',
+      operationType: 'reset_bonuses',
+      weaponTypeId: null,
+      materialId: 'material.fixture.a',
+      quantity: 1,
+      isEnabled: true,
+    },
+    {
+      id: 'material_cost.fixture.keep',
+      operationType: 'keep_bonuses',
+      weaponTypeId: null,
+      materialId: 'material.fixture.a',
+      quantity: 5,
+      isEnabled: true,
+    },
+  ]
+  const engine = createConstrainedEngine(origin, {
+    keepSupported: true,
+    keepInputs: [belowPracticalBonuses()],
+    resetResultAt: (gogmaCounter) =>
+      gogmaCounter === 11 ? practicalBonuses() : belowPracticalBonuses(),
+    keepResultAt: () => sharpnessPracticalBonuses(),
+  })
+  return { origin, engine }
+}
+
+function materialQuantity(candidate: ConstrainedCandidate): number {
+  return candidate.requiredMaterials.reduce(
+    (total, requirement) => total + requirement.quantity,
+    0,
+  )
+}
+
+/** `(source weapon suffix, summed required material quantity)` per Candidate. */
+function sourceAndMaterial(candidates: readonly ConstrainedCandidate[]): string[] {
+  return candidates.map(
+    (candidate) =>
+      `${String(candidate.route.sourceOwnedWeaponId).slice(-1)}:${materialQuantity(candidate)}`,
+  )
+}
+
+describe('Constrained delivery follows the canonical Bonus stream ordering', () => {
+  const bounds = constrainedBounds({
+    maxGogmaAdvance: 2,
+    maxSkillResetCount: 1,
+    maxOffAxisPairEvaluations: 0,
+  })
+
+  it('delivers the canonically cheaper Bonus result of every base before the dearer one', async () => {
+    const { origin, engine } = materialOrderingSetup()
+    const { candidates } = await collectSequentially(
+      constrainedInput(origin, bounds),
+      engine,
+    )
+    // A comparator that fell through to a stable key whose leading element is
+    // the Route base would deliver `a:2, a:6, b:2, b:6`: the dearer child of
+    // base `a` would outrank the cheaper seed of base `b`, which is exactly the
+    // coordinate-wise non-monotonicity a single-seed lazy lattice cannot
+    // tolerate.
+    expect(sourceAndMaterial(candidates).slice(0, 4)).toEqual([
+      'a:2',
+      'b:2',
+      'a:6',
+      'b:6',
+    ])
+    expect(candidates).toHaveLength(6)
+  })
+
+  it('gives a consumer stopping early the canonically best Candidates', async () => {
+    const { origin, engine } = materialOrderingSetup()
+    let delivered = 0
+    const { candidates, execution } = await collectSequentially(
+      constrainedInput(origin, bounds),
+      engine,
+      () => {
+        delivered += 1
+        return delivered === 2 ? 'stop' : 'continue'
+      },
+    )
+    expect(sourceAndMaterial(candidates)).toEqual(['a:2', 'b:2'])
+    expect(execution.stoppedByConsumer).toBe(true)
+    expect(execution.summary.examinedCandidates).toBe(2)
   })
 })

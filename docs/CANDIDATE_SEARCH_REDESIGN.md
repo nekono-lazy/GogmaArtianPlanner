@@ -480,7 +480,7 @@ B11 は実ゲーム観測を前提とする独立系列
 | B6 | UI / default / labels修正 | default値、進捗表示粒度、Worker native error handling、`no_owned_weapon_available` 文言、`normal_scope_requires_reset` の誤表現是正 | B5。完了 |
 | B6-F1 | Candidate出力順のrun非依存化 | `compareCandidates()` / `compareDuplicateCandidates()` の最終tie-breakを `BuildCandidate.id` から `candidateStableKey` へ変更。Candidate ID生成規則は不変 | B6。完了 |
 | B8-A | Planner-driven constrained re-search 仕様確定 | architecture、conflict context DTO、constrained search API、generated BuildListEntry、決定的ID、Persistence契約、bounds、task分割 | B4, 既存Planner。完了 |
-| B8-B1 | constrained candidate enumerator | Search Domain側の制約付き列挙。enumeration boundsはcaller必須指定 | B8-A |
+| B8-B1 | constrained candidate enumerator | Search Domain側の制約付き列挙。enumeration boundsはcaller必須指定 | B8-A。完了 |
 | B8-B2 | enumerator実Browser Worker benchmark | enumeration boundsのProduction default決定 | B8-B1 |
 | B8-C | Planner conflict orchestration | 固定Candidate判定、Conflict Resolution再対応付け、deterministic materializer、augmented-input完全再実行。orchestration boundsはcaller必須指定のまま | B8-B1 |
 | B8-D | Worker / Application / Persistence | atomic save、既存UIへの最小配線 | B8-C |
@@ -874,9 +874,9 @@ B8-A自体はProduction RNG semantics、`PRODUCTION_RNG_ENGINE_VERSION`、
 
 ### 4.3 B8-B1a implementation checkpoint
 
-**B8-B1aまで完了。B8-B1は未完了。** Phase表の `B8-B1` を完了扱いにしない。
+**この節はB8-B1a時点の記録である。B8-B1bで解消した暫定事項の最終形は4.4にある。**
 
-B8-B1b remaining。
+B8-B1a時点でのB8-B1b remaining。以下はすべて4.4で実装済みとなった。
 
 ```text
 - off-axis (Bi, Kj), i>0,j>0 lazy frontier
@@ -1032,6 +1032,257 @@ B11(normal-tier Keep family mapping / pool / weightsの実ゲーム検証)を先
 いない。今回許可した経路のKeep入力はReset後のgogma-tier 5枠であり、既存Production
 Keep prediction supportの範囲内である。通常Candidate Searchとconstrained enumerator
 は同じ `validateBuildRoute()` を使うため、両者の結論は一致する。
+
+### 4.4 B8-B1b implementation record
+
+**B8-B1a complete / B8-B1b complete / B8-B1 complete。次PhaseはB8-B2。**
+Phase表の `B8-B1` を完了扱いにしてよい。`B8-B2` 以降は未着手のままである。
+
+B8-B1bで実装した範囲。
+
+```text
+軸外(Bi, Kj) i>0,j>0 のlazy frontier
+maxOffAxisPairEvaluationsの実消費とglobal cap
+deterministic best-first incremental / sequential Candidate delivery
+consumerによる正常early stop境界
+ConstrainedEnumerationSummaryの最終semantics
+```
+
+追加ファイル。
+
+```text
+src/domain/search/constrained/constrainedFrontier.ts
+src/domain/search/constrained/constrainedFrontier.test.ts
+```
+
+B8-B1bはSearch orchestrationの追加だけであり、通常 `searchCandidates()` semantics、
+Cross-only初回policy、canonical Ideal終了、Practical horizon / dominance、
+stream-local retention、B2 family-layout frontier reduction、normal scope直接Keepの
+未対応、Production RNG semantics、Planner semanticsのいずれも変更していない。
+B8-B1aで追加した `validateProtectedRouteUse()` のroute-local bonus scope追跡
+(`normal scope -> Reset -> Keep` を許可し `normal scope -> Keep` を拒否する)も維持した。
+
+#### Production sequential boundary
+
+Production境界は `visitConstrainedCandidates()` とした。ordered async visitorであり、
+AsyncGeneratorは採用しなかった。
+
+```ts
+type ConstrainedCandidateDecision = 'continue' | 'stop'
+
+visitConstrainedCandidates(
+  input, engine, onCandidate, options
+): Promise<ConstrainedEnumerationExecution>
+```
+
+- Candidateは発見順に1件ずつ渡す。callerはcallbackの中で任意のasync処理を行える
+- callerが `'stop'` を返すと、以降のpair評価・Candidate通知・軸外frontier展開を行わない
+- Search Domainはcallbackの中身を知らない。Planner型、Conflict DTO、
+  orchestration boundsはこの境界を越えない
+- 正常early stopは `ConstrainedEnumerationSummary` の外側の
+  `ConstrainedEnumerationExecution.stoppedByConsumer` で報告する。`shouldCancel()` の
+  Cancellationとは別物であり、後者は従来どおり `CandidateSearchError('cancelled')` で
+  rejectする
+
+`enumerateConstrainedCandidates()` は残したが、Production境界ではなくcollector helper
+である。sequential coreを最後までconsumeし、既存 `compareConstrainedCandidates()` で
+最終sortして `ConstrainedEnumerationResult` を返す。B8-B1aの外部挙動は維持した。
+
+#### incremental orderとcollector final sortの役割差
+
+incremental deliveryとcollectorの最終sort配列が同一順であることは要求していない。
+未展開の軸外cellまで含めたglobal sortを先に確定するには、それらを展開するしかなく、
+それは5.6.7が禁止するCartesian走査そのものになるためである。
+
+incremental側へ要求するのは次だけである。
+
+```text
+deterministic
+semantic
+best-first
+run非依存
+```
+
+#### 軸外frontier
+
+Route base × stream category predicateごとに1つのlattice(matrix)を考え、cell `(i, j)`
+を `(B(c)[i], K(c)[j])` とする。full Cartesianは生成しない。
+
+```text
+seed        各matrixの (0,0) のみ
+展開        pop済みcellから (i+1, j) と (i, j+1) だけをenqueue
+frontier    compareConstrainedWorkItems によるbinary heap
+visited     matrix + local座標のnodeKey集合
+```
+
+`bonusAxis.flatMap(...)` のような全cell生成、全pairの事前登録、固定diagonal bandは
+行わない。live frontierとvisited集合のサイズは `O(seed数 + pop済みcell数)` であり、
+`|B| x |K|` に比例するデータ構造は存在しない。軸外cellは既に解いたstream位置解を
+そのまま組み合わせるだけなので、Engine prediction回数は軸のみの場合と変わらない。
+
+lattice上の任意のcell `(i, j)` は `(i,0) -> (i,1) -> ... -> (i,j)` という単調経路で
+到達可能なので、capで拒否したcellを展開しないことによって到達不能になるcellは無い。
+拒否したcellの子孫はすべて軸外であり、capが空くことはないため評価対象にもならない。
+
+既存 `SearchWorkQueue` は流用しなかった。tie-breakにinsertion sequenceを使っており
+5.6.7が禁止するrun依存tie-breakになること、および二次元latticeが満たさない
+monotone operation lower boundを強制することが理由である。
+
+#### work-item ordering
+
+priorityはEngineを呼ばずに、Route baseと既に解けた2つのstream解から算出する。
+
+```text
+ 1 Candidate category (両streamがIdeal一致なら0、それ以外1)
+ 2 estimated operation count (base単位数 + Bonus操作数 + Skill操作数)
+ 3 Gogma advance
+ 4 Skill advance
+ 5 Normal advance
+ 6 Ideal closeness (matchedIdealBonusCount + skill idealCloseness)
+ 7 Bonus material quantity (数値として比較)
+ 8 Bonus multiset key
+ 9 Bonus operation type key
+10 Bonus scope
+11 Skill semantic key
+12 stable semantic key (baseKeyを含む)
+13 軸上 -> 軸外
+14 category predicate
+15 i, j, matrix index
+```
+
+1-6は既存 `compareCandidateSelection()` / 8の優先順位と整合する。
+7-10は `compareBonusSolutions()`(5.5.3)のキー3-6、11は `compareSkillSolutions()`(5.5.2)
+のキー3と同じ意味・同じ順序である。12のstable keyは `baseKey` + Bonus解のretentionKey /
+operationTypeKey / gogmaAdvance / lastResetDepth + Skill解のsemanticKey / resetCountから
+作る。random UUID、Clock、Candidate ID、Map挿入順、Promise完了順、enumeration ordinalは
+一切使わない。数値量を文字列へ畳んで辞書順比較にしない。
+
+13-15は「同一actual pairを指す別matrixのfrontier node」だけを分離するためのもので、
+配信されるCandidate列には影響しない。13を入れているのは、ある実pairが片方のmatrixでは
+軸上・他方では軸外に現れる場合に、必ず軸上として評価させて軸外budgetを消費させない
+ためである。
+
+`maxOffAxisPairEvaluations` が十分大きい場合、遠い軸上Candidateより近い軸外Candidateが
+先に配信される。「全軸を吐き切ってから軸外へ移る」実装にはしていない。
+
+#### 1-seed lazy latticeがbest-firstになる根拠
+
+「binary heapを使っているからbest-first」ではない。各matrixを `(0,0)` だけでseedし、
+pop済みcellから右と下だけを公開する構造では、work comparatorが各座標方向へ
+**coordinate-wise monotone**でなければ、より高優先のcellがfrontierへ現れないまま
+低優先のcellをpopしてしまう。consumerの早期停止や小さい軸外capでは、それがそのまま
+誤ったCandidate選択になる。
+
+したがってwork comparatorは、各軸のcanonical stream orderingと一致させる。
+
+```text
+Bonus軸 (i -> i+1)
+  childは compareBonusSolutions() 順の次の解
+  key1 gogmaAdvance          -> priority 2 / 3
+  key2 matchedIdealBonusCount-> priority 6 (Skill側固定なら同値)
+  key3 materialQuantity      -> priority 7
+  key4 bonusKey              -> priority 8
+  key5 operationTypeKey      -> priority 9
+  key6 scope                 -> priority 10
+
+Skill軸 (j -> j+1)
+  childは compareSkillSolutions() 順の次の解
+  key1 resetCount            -> priority 2 / 4
+  key2 idealCloseness desc   -> priority 6 (Bonus側固定なら同値)
+  key3 semanticKey           -> priority 11
+  Bonus側fieldはすべて同値
+```
+
+親と子が最初に食い違うfieldで必ず親が先になるため、両方向へmonotoneである。
+
+B8-B1bの初版はpriority 7-11を持たず、6の直後に12のstable keyへ落ちていた。stable keyの
+Bonus部分はscope + 完成multisetであり、canonical順の `materialQuantity` を見ないため、
+同depth・同matched countで素材の多い後方解が親より高優先になり得た。独立レビューが
+この非単調性を指摘し、7-11を追加して解消した。
+
+唯一、priority 1 `categoryRank` だけは後方で改善し得る。`categoryRank` は
+`bonus.idealMatch && skill.idealMatch` なので、Practical matrixでは**両軸とも**
+rank 1 -> 0 の改善が起こり得る。
+
+```text
+Bonus軸  fixed SkillがIdealで、後方のBonus解がPractical-only -> Idealになる場合
+Skill軸  fixed BonusがIdealで、後方のSkill解がPractical-only -> Idealになる場合
+```
+
+安全性の理由は両軸で共通である。rank 0になるactual pairはBonus解とSkill解の両方が
+Idealを満たす場合だけであり、そのactual pairは同一baseのIdeal matrixにも存在する。
+Ideal matrixは両axisがIdeal解のみで構成されるためcategoryRankは常に0であり、
+rank 1のcellより先にmatrix全体がpopされる。したがってPractical matrix側のrank改善node
+はCandidate意味として新しいhidden high-priority Candidateではなく、Ideal matrix側でも
+到達する同一actual pairであり、到達時点では評価済みduplicateである。
+
+#### maxOffAxisPairEvaluationsのcount / stop semantics
+
+- Target enumeration全体でglobalに消費する。Route baseごと・categoryごとにresetしない
+- unique actual軸外pairをTarget評価した回数を数える。Ideal / Practical / 条件未達 /
+  semantic duplicateのいずれになっても、評価したなら1消費する
+- Ideal matrixとPractical matrixが同じactual pairを指す場合、評価は1回だけであり、
+  `examinedCandidates` も `evaluatedOffAxisPairs` も二重に増えない。重複側のfrontier
+  nodeは評価をskipしても隣接cellの展開だけは行う
+- 軸上pairは消費しない
+- `0` は引き続きvalidであり、5.5.4のCross-onlyそのものである。この場合軸外は1件も
+  評価せず、`evaluatedOffAxisPairs = 0` のまま、軸のCandidateは最後まで列挙する
+- capに到達したあとに未評価のreachable軸外cellが残った場合だけ、軸外を理由とする
+  bound stopとして扱う。ちょうど最後のreachable cellをcapが賄った場合は
+  truncateではない。未評価cellの有無はfrontier状態から判定しており、
+  Cartesian全走査は行わない
+
+現行v1では、軸外cellが存在する状況は「Bonus streamとSkill streamの両方を探索した」
+状況に限られ、両streamは探索すると必ず自分のboundまで進む。したがって
+`summary.stoppedByBound` を軸外capだけに帰属させて観測できるケースは実質存在しない。
+実装は軸外capによる拒否が実際に起きたときだけ軸外flagを立てており、テストは
+`evaluatedOffAxisPairs` と配信Candidate集合でcap境界を固定している。
+
+#### summary最終semantics
+
+B8-B1aの暫定状態(「boundには達していないが軸外未実装」の両方false)は廃止した。
+
+```text
+自然完走かつどのboundにもtruncateされていない
+  exhausted = true / stoppedByBound = false
+
+Normal / Gogma / Skill / 軸外のいずれかがreachable workをtruncate
+  exhausted = false / stoppedByBound = true
+
+consumerによる正常early stop
+  exhausted = false / stoppedByBound は実際にtruncateされた場合のみtrue
+  stoppedByConsumer = true (summary外)
+```
+
+`hasOffAxisCells()` はB8-B1a限定のO(1) proxyだったため削除した。実際のlazy frontierが
+未評価cellの有無を直接扱うようになり、役目が無くなったためである。
+
+#### Candidate semantic dedup
+
+Candidate通知は `constrainedCandidateStableKey()` で重複排除し、同一semantic Candidate
+を2回渡さない。同じ完成結果でもCounter位置が違えばconcrete operationsが違い、stable key
+も異なるため両方残る。これは初回Searchのretentionではない。
+
+#### テスト観点として構成できなかった項目
+
+「軸だけではTargetを満たさず (B1,K1) だけがPracticalになる」形のテストは、v1の
+Domain上構成できない。Practical判定はBonus streamとSkill streamで独立に評価され、
+`B(practical)` / `K(practical)` は各streamのPractical条件を満たす解だけを含む。
+したがって `(B1, K1)` がPracticalなら `(B0, K1)` と `(B1, K0)` も必ずPracticalになる。
+Idealについても、Ideal matrixのanchor `(0,0)` が該当pairそのものになるため、
+「軸外でしかIdealに到達できない」状況は生じない。
+
+軸外が実際に増やすのは「Cross規則が合成しない別のPractical組み合わせ」であり、
+Plannerが固定Candidateとの共存を探すときに必要になるのはこの部分である。そのため
+テストは次を固定した。
+
+```text
+軸のみでは到達しないpairが cap >= 1 で配信される
+cap = 0 では軸外0件・軸Candidateは維持・bound stop
+cap = N < reachable では evaluatedOffAxisPairs = N かつ残りが未評価
+cap = reachable ちょうどでは cap を上げても結果が変わらない
+Ideal / Practical双方に現れる同一pairは評価1回・count1回・配信1回
+```
 
 ---
 

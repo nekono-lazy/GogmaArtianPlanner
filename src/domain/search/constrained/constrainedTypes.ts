@@ -104,40 +104,81 @@ export interface ConstrainedEnumerationSummary {
   /**
    * Completed Candidate semantic combinations carried through Target condition
    * evaluation, including combinations that satisfied neither condition.
+   *
+   * One actual `(Bonus solution, Skill solution)` pair counts once. The Ideal
+   * and Practical axes of one Route base overlap, so the same pair can be
+   * reached from both; re-reaching it is not re-evaluated and not recounted.
    */
   examinedCandidates: number
-  /** Off-axis Cross pairs evaluated. B8-B1a evaluates none, so this is `0`. */
+  /**
+   * Unique actual off-axis Cross pairs (`i > 0` and `j > 0`) carried into
+   * Target evaluation, over the whole Target enumeration.
+   *
+   * The budget is global: it is never reset per Route base or per stream
+   * category. It counts evaluations, not adopted Candidates, so an off-axis
+   * pair that satisfied neither condition or duplicated an existing Candidate
+   * still consumed one. Axis pairs never consume it, and neither does
+   * re-reaching an already evaluated pair from the other category axis.
+   */
   evaluatedOffAxisPairs: number
   /**
-   * True only when nothing was left uncovered: no bound truncated the search
-   * and no reachable Cross cell went unevaluated. Reaching a bound is never
-   * reported as exhaustion.
+   * True only when nothing reachable was left uncovered: no bound truncated the
+   * enumeration and the consumer did not stop it early. Reaching a bound is
+   * never reported as exhaustion.
    *
-   * The two flags are not complements. Both are false while B8-B1a leaves the
-   * off-axis Cross cells (`i > 0` and `j > 0`) unevaluated without any bound
-   * having been reached, so a caller is never told the space is exhausted over
-   * a scope the current phase has not covered. That "neither" state is a
-   * B8-B1a-only interim: once B8-B1b evaluates off-axis cells, reachable cells
-   * left unevaluated because of `maxOffAxisPairEvaluations` (including the
-   * still-valid value `0`) become an off-axis bound stop, so
-   * `stoppedByBound = true` and `exhausted = false`.
+   * The two flags are not complements: a consumer early stop leaves
+   * `exhausted = false` with `stoppedByBound = false`, because the caller, not
+   * a bound, ended the enumeration.
    */
   exhausted: boolean
-  /** True when at least one `ConstrainedEnumerationBounds` value truncated it. */
+  /**
+   * True when at least one `ConstrainedEnumerationBounds` value truncated
+   * reachable work, including `maxOffAxisPairEvaluations` refusing a reachable,
+   * not-yet-evaluated off-axis cell. Covering exactly every reachable off-axis
+   * cell with the last unit of budget is not a truncation.
+   */
   stoppedByBound: boolean
 }
 
+/** Whether the consumer wants the next Candidate or no further work at all. */
+export type ConstrainedCandidateDecision = 'continue' | 'stop'
+
 /**
- * The B8-B1a collector shape.
+ * The ordered async visitor of the Production sequential boundary.
  *
- * `candidates` is fully materialized before the caller sees anything, which is
- * a checkpoint-only shape: B8-A's architecture has the enumerator present
- * Candidates in deterministic semantic order while Planner orchestration trials
- * them. B8-B1b replaces this as the Production entry point with an incremental
- * sequential delivery (AsyncIterator/AsyncGenerator, or an ordered async
- * visitor plus a completion summary) so B8-C need not drive the enumeration to
- * completion before receiving its first Candidate. This collector may then
- * survive as a test/helper. See `docs/CANDIDATE_SEARCH_REDESIGN.md` 4.3.
+ * It is called once per delivered Candidate, before the enumeration continues,
+ * so the consumer may run its own async work between Candidates and end the
+ * enumeration as soon as it has what it needs. The Search Domain knows nothing
+ * about what the consumer does: no Planner conflict DTO, Planner orchestration
+ * bound, or Planner type reaches this callback.
+ */
+export type ConstrainedCandidateVisitor = (
+  candidate: ConstrainedCandidate,
+) => ConstrainedCandidateDecision | Promise<ConstrainedCandidateDecision>
+
+/**
+ * The completion report of one sequential enumeration.
+ *
+ * `stoppedByConsumer` is execution-level, outside `ConstrainedEnumerationSummary`,
+ * because a consumer stop says nothing about the search space: it is a normal
+ * outcome, and it is not the `shouldCancel()` cancellation, which rejects with
+ * a `CandidateSearchError('cancelled')` instead of returning.
+ */
+export interface ConstrainedEnumerationExecution {
+  targetWeaponId: TargetWeaponId
+  summary: ConstrainedEnumerationSummary
+  stoppedByConsumer: boolean
+}
+
+/**
+ * The collector shape, kept as a helper over the sequential boundary.
+ *
+ * `candidates` is fully materialized before the caller sees anything, so this
+ * is not the Production entry point: `visitConstrainedCandidates()` is, and it
+ * hands each Candidate over as it is discovered. This collector consumes that
+ * visitor to the end and applies the existing final ordering, which need not
+ * equal the incremental delivery order. See
+ * `docs/CANDIDATE_SEARCH_REDESIGN.md` 4.3.
  */
 export interface ConstrainedEnumerationResult {
   targetWeaponId: TargetWeaponId
