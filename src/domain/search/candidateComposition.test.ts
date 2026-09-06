@@ -374,6 +374,7 @@ describe('Candidate composition follows the Cross rule (SEARCH_SPEC 5.5.4)', () 
       const expected = evaluateTargetCandidate(
         input.targetWeapons[0],
         candidate.finalBonuses,
+        candidate.restorationBonusScope,
         candidate.seriesSkillId,
         candidate.groupSkillId,
         input.master,

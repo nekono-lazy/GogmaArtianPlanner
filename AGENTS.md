@@ -188,6 +188,21 @@ appSchemaVersion
 
 These form `CalculationContext`.
 
+B5-F1 changes Candidate classification and Search calculation semantics, so current
+`CalculationContext.appSchemaVersion` is **2**, defined only by
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION` in `src/domain/models/common.ts`.
+Search, BuildList, Planner, and benchmark runtime creators share this authority.
+This is independent of Dexie `DATABASE_SCHEMA_VERSION = 1` and
+`AppSettings.schemaVersion = 1`; gameVersion, Master Data version,
+`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`, and `supportsSeedSearch = false`
+remain unchanged. Version 1 BuildCandidate, BuildListEntry, and ProductionPlan
+calculations are incompatible with version 2 and must not be reused as current
+results. Existing staleness checks mark old BuildListEntry records with
+`calculation_context_changed` and exclude them from Planner input. Preserve old
+Candidate categories and snapshots; obtain current Candidates by searching again.
+Do not delete historical results or add a migration or Export/Import semantic
+validation change as a substitute for CalculationContext compatibility.
+
 Unless compatibility is explicitly guaranteed, a CalculationContext change makes previous:
 
 - `BuildCandidate`
@@ -675,7 +690,8 @@ sound once the validation is in force, so the validation always lands first.
 The validation is now in force, and both halves of the early exit have landed
 on top of it: the Skill stream stops when the current Series/Group Skills
 already satisfy `idealSkillCondition`, and the Bonus stream stops when the
-current five slots already match `idealBonuses`. Each stream stops
+current five slots have `gogma_artian` scope and match `idealBonuses` as an
+unordered multiset. Normal-scope exact labels do not stop Bonus exploration. Each stream stops
 independently; the other one keeps searching.
 
 Do not introduce "any one target in this group completes the group" behavior in v1.
@@ -882,8 +898,10 @@ flow, not only in the recorded counters.
   call it simply "lossless"
 - If the current Skills already satisfy the Target's ideal Skill condition, do
   not search Reset Skills for that weapon
-- If the current bonuses already satisfy the Target's ideal bonus condition, do
-  not search bonus amendments for that weapon
+- If the current bonuses have `gogma_artian` scope AND exactly match the
+  Target's ideal bonus multiset, do not search bonus amendments for that weapon
+- Normal-scope exact labels are not Bonus Ideal. Continue supported Reset
+  exploration after conversion and from inherited normal-scope Gogma sources
 - A stream that currently satisfies only the Practical condition still yields a
   zero-operation Practical solution for that stream, and Ideal exploration
   continues on it
@@ -969,17 +987,31 @@ ordering is run-dependent because `compareCandidates()` ties on
 Cancel control still recovers the UI). The retained set and the canonical Ideal
 remain run-independent.
 
-B5 also reproduced a third, separate defect. SEARCH_SPEC 5.1 requires
-`finalBonusScope = "gogma_artian"` for an Ideal, but
-`createCandidateFromPrediction()` never passes `restorationBonusScope` to
-`evaluateTargetCandidate()`, so `satisfiesIdealTarget()` can classify a
-conversion-only `normal_artian` scope Candidate as Ideal. The B5 benchmark
-fixtures were changed so no workload depends on that behavior: a reachable Ideal
-is anchored on a Reset result or on an Owned Gogma source's Gogma-scope slots,
-never on the conversion output, and the fixture tests assert
-`restorationBonusScope === 'gogma_artian'` on the canonical Ideal. Fixing
-Production Search is outside B5 and is not part of B6 by default; it is an
-independent Search correctness task for the design discussion.
+B5-F1 resolved the separate Ideal scope defect found in B5. SEARCH_SPEC 5.1
+remains the authority: Ideal Bonus requires `restorationBonusScope ===
+"gogma_artian"` AND exact five-slot multiset equality. Target Domain's
+`satisfiesIdealBonuses()` is the shared pure authority for Target evaluation,
+stream-local Ideal matching, and current Bonus shortcuts. Scope is explicit,
+never defaulted. Unknown BonusRank references must still raise a Domain Error
+before a normal-scope result is rejected as non-Ideal.
+
+SEARCH_SPEC 5.5.3 retention now uses (restorationBonusScope, completed multiset).
+Normal and Gogma outcomes with identical labels remain separate solutions.
+Full-prefix retention, incremental retention, and delta Cross dedup share that
+identity. Stream ordering keeps advance, closeness, and material quantity
+priorities; scope is the final stable semantic tie-break after multiset and
+operation types. This is initial-Search retention, not permanent dominance, and
+does not change B2 family-layout frontier dedup or lastResetDepth representatives.
+
+Practical conditions remain scope-inclusive. IdealDifference and Similarity
+still use matchedBonusCount and Skill matches only, so normal scope with 5/5
+Ideal labels and matching Skills may be Practical with similarityScore 1.
+B5-F1 tests cover normal-scope conversion D=2 remaining Practical, exploration
+continuing to a Gogma-scope canonical Ideal D=3 after Reset, and an existing
+normal-scope Gogma continuing Bonus exploration. The Gogma-scope current Ideal
+shortcut still makes zero amendment predictions. B5's scope-safe benchmark
+workloads and measured values are unchanged; benchmark input calculation metadata
+now uses the shared schema version 2. B5-F1 is independent of B6.
 Planner constrained re-search (B8) remains unimplemented.
 
 ### Normal Artian Route
@@ -1826,7 +1858,9 @@ Relevant test areas include:
 - Gogma prediction count independent of Skill position count
 - Zero Skill exploration when the current Skills already satisfy the ideal Skill
   condition, and zero bonus amendment exploration when the current bonuses
-  already satisfy the ideal bonus condition
+  have Gogma scope and satisfy the ideal bonus condition
+- Normal-scope exact Ideal labels never cause Bonus early termination; scope
+  stays in full-prefix / incremental stream retention identity
 - Candidate composition follows the documented Cross rule and never enumerates
   the bonus-by-Skill product
 - The initial search stops at one canonical Ideal, and that Ideal is unchanged

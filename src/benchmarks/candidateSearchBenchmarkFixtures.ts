@@ -1,3 +1,4 @@
+import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../domain/models/publicTypes'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import type {
   BonusCondition,
@@ -263,7 +264,7 @@ function benchmarkMaster(): BenchmarkMaster {
     context: {
       gameVersion: data.manifest.gameVersion,
       masterDataVersion: data.manifest.dataVersion,
-      appSchemaVersion: 1,
+      appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
     },
   }
   return cachedMaster

@@ -1,4 +1,3 @@
-import { areRestorationBonusSetsEqual } from '../models/domainRules'
 import type {
   GroupSkillId,
   RestorationBonusScope,
@@ -8,12 +7,13 @@ import type {
   TargetWeapon,
 } from '../models/publicTypes'
 import { stableStringify } from '../models/publicTypes'
-import { bonusOutcomeKey, compareStableKeys } from './semanticKeys'
+import { bonusOutcomeKey, bonusSolutionRetentionKey, compareStableKeys } from './semanticKeys'
 export { compareStableKeys } from './semanticKeys'
 import {
   createBonusIdealDifference,
   evaluatePracticalBonusConditions,
   evaluateSkillCondition,
+  satisfiesIdealBonuses,
 } from '../target'
 import { totalMaterialQuantity } from './candidateFactory'
 import type { CandidateSearchInput } from './searchTypes'
@@ -75,7 +75,10 @@ export interface EvaluatedBonusSolution {
   matchedIdealBonusCount: number
   /** Anchor-ordering tie-break only; never a Practical dominance input. */
   materialQuantity: number
+  /** Pure completed multiset, used for existing semantic ordering. */
   bonusKey: string
+  /** Scope plus multiset, shared by full-prefix, incremental and delta Cross. */
+  retentionKey: string
   operationTypeKey: string
 }
 
@@ -136,9 +139,11 @@ function evaluateBonusSolution(
 ): Omit<EvaluatedBonusSolution, 'index'> {
   return {
     solution,
-    idealMatch: areRestorationBonusSetsEqual(
-      target.idealBonuses,
+    idealMatch: satisfiesIdealBonuses(
+      target,
       solution.finalBonuses,
+      solution.restorationBonusScope,
+      input.master,
     ),
     practicalMatch: evaluatePracticalBonusConditions(
       target.practicalBonusConditions,
@@ -156,6 +161,7 @@ function evaluateBonusSolution(
       input,
     ),
     bonusKey: bonusOutcomeKey(solution.finalBonuses),
+    retentionKey: bonusSolutionRetentionKey(solution.finalBonuses, solution.restorationBonusScope),
     operationTypeKey: solution.operations
       .map((operation) => operation.type)
       .join(','),
@@ -177,7 +183,7 @@ export function compareSkillSolutions(
 /**
  * SEARCH_SPEC 5.5.3 ordering: gogmaAdvance, ideal closeness, summed material
  * quantity, then the stable semantic key (completed multiset, then operation
- * type sequence).
+ * type sequence, then scope).
  */
 export function compareBonusSolutions(
   left: Omit<EvaluatedBonusSolution, 'index'>,
@@ -188,7 +194,8 @@ export function compareBonusSolutions(
     right.matchedIdealBonusCount - left.matchedIdealBonusCount ||
     left.materialQuantity - right.materialQuantity ||
     compareStableKeys(left.bonusKey, right.bonusKey) ||
-    compareStableKeys(left.operationTypeKey, right.operationTypeKey)
+    compareStableKeys(left.operationTypeKey, right.operationTypeKey) ||
+    compareStableKeys(left.solution.restorationBonusScope, right.solution.restorationBonusScope)
   )
 }
 
@@ -222,10 +229,9 @@ export function buildSkillSolutionSet(
  * Evaluates, retains, and deterministically orders the Bonus stream solutions
  * of one Route base.
  *
- * Retention keeps the smallest `gogmaAdvance` per completed outcome
- * (SEARCH_SPEC 5.5.3), compared as an unordered five-slot multiset so slot
- * order alone never creates a second solution and `restorationBonusScope`
- * never splits one outcome in two. Ties at the same depth pick the
+ * Retention keeps the smallest `gogmaAdvance` per (scope, completed multiset)
+ * (SEARCH_SPEC 5.5.3). Slot order alone never creates a second solution, while
+ * inherited Normal and Gogma outcomes stay distinct. Ties at the same depth pick the
  * representative that comes first in the ordering above. As with the Skill
  * stream this is initial-Search retention, not permanent dominance.
  */
@@ -237,9 +243,9 @@ export function buildBonusSolutionSet(
   const retained = new Map<string, Omit<EvaluatedBonusSolution, 'index'>>()
   solutions.forEach((solution) => {
     const evaluated = evaluateBonusSolution(target, input, solution)
-    const current = retained.get(evaluated.bonusKey)
+    const current = retained.get(evaluated.retentionKey)
     if (!current || compareBonusSolutions(evaluated, current) < 0) {
-      retained.set(evaluated.bonusKey, evaluated)
+      retained.set(evaluated.retentionKey, evaluated)
     }
   })
   return [...retained.values()]

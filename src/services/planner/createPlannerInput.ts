@@ -1,3 +1,4 @@
+import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../../domain/models/publicTypes'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import type { CalculationContext } from '../../domain/models/publicTypes'
 import {
@@ -37,7 +38,7 @@ export function createPlannerCalculationContext(
     gameVersion: master.manifest.gameVersion,
     masterDataVersion: master.manifest.dataVersion,
     rngEngineVersion,
-    appSchemaVersion: 1,
+    appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
   }
 }
 

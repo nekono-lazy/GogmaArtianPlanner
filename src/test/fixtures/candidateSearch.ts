@@ -104,6 +104,7 @@ export function createCandidateSearchInput(): CandidateSearchInput {
       gameVersion: 'fixture-only',
       masterDataVersion: 1,
       rngEngineVersion: 'fake-fixture:candidate-search-v1',
+      // Historical calculation context; runtime creators use the current authority.
       appSchemaVersion: 1,
     },
   }

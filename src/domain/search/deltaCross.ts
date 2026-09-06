@@ -24,15 +24,15 @@ export function createDeltaCross(
   const skillSeen = new Set<string>()
   const pairs = new Set<string>()
   function publish(bonus: EvaluatedBonusSolution, skill: EvaluatedSkillSolution) {
-    const key = stableStringify([bonus.bonusKey, skill.semanticKey])
+    const key = stableStringify([bonus.retentionKey, skill.semanticKey])
     if (pairs.has(key)) return
     pairs.add(key)
     emit(bonus, skill)
   }
   return {
     addBonus(bonus: EvaluatedBonusSolution): void {
-      if (bonusSeen.has(bonus.bonusKey)) return
-      bonusSeen.add(bonus.bonusKey)
+      if (bonusSeen.has(bonus.retentionKey)) return
+      bonusSeen.add(bonus.retentionKey)
       for (const category of ['ideal', 'practical'] as const) {
         if (!(category === 'ideal' ? bonus.idealMatch : bonus.practicalMatch)) continue
         const axis = axes[category]

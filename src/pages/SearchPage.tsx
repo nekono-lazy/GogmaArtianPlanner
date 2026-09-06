@@ -1,3 +1,4 @@
+import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../domain/models/publicTypes'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Accordion,
@@ -159,7 +160,7 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
         gameVersion: dependencies.master.manifest.gameVersion,
         masterDataVersion: dependencies.master.manifest.dataVersion,
         rngEngineVersion: client.engineVersion,
-        appSchemaVersion: 1,
+        appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
       }
       const input = await dependencies.createInput({
         searchRunId: requestId,

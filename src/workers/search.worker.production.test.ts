@@ -1,3 +1,4 @@
+import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../domain/models/publicTypes'
 import { describe, expect, it } from 'vitest'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import type {
@@ -64,7 +65,7 @@ function createProductionSearchInput(
     gameVersion: loaded.data.manifest.gameVersion,
     masterDataVersion: loaded.data.manifest.dataVersion,
     rngEngineVersion: PRODUCTION_RNG_ENGINE_VERSION,
-    appSchemaVersion: 1,
+    appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
   }
 
   const target = input.targetWeapons[0]
@@ -133,7 +134,9 @@ describe('Production Candidate Search Worker composition', () => {
       .toContain('normal_artian_to_gogma')
     expect(result.targetResults[0].candidates).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        category: 'ideal',
+        category: 'practical',
+        restorationBonusScope: 'normal_artian',
+        estimatedOperationCount: 2,
         finalBonuses: input.targetWeapons[0].idealBonuses,
         route: expect.objectContaining({ kind: 'normal_artian_to_gogma' }),
       }),

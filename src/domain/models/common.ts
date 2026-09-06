@@ -84,6 +84,10 @@ export interface KnownValue<T> {
   source: RngStateSource | null
 }
 
+// Application calculation semantics, independent of Dexie and AppSettings schemas.
+// Version 2 invalidates pre-B5-F1 scope-blind Candidate Search results.
+export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2
+
 export interface CalculationContext {
   gameVersion: string
   masterDataVersion: number

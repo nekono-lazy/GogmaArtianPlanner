@@ -224,6 +224,20 @@ Production Searchはroute-local / operation-local supportを維持し、RngState
 
 ---
 
+B5-F1はCandidate classification / Search calculation semanticsを変更したため、
+現行の `CalculationContext.appSchemaVersion` を1から **2** へ更新した。
+単一authorityは `src/domain/models/common.ts` の
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2` とし、Search、BuildList、Plannerと
+benchmark入力のruntime creatorで共用する。これはDexieの `DATABASE_SCHEMA_VERSION = 1`
+や `AppSettings.schemaVersion = 1` の変更ではない。gameVersion、Master Data version、
+`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`、`supportsSeedSearch = false` は維持する。
+
+version 1の既存BuildCandidate / BuildListEntry / ProductionPlanはversion 2とCalculationContext
+非互換であり、現行計算結果として再利用しない。BuildListEntryは既存のstale再判定で
+`calculation_context_changed` を付け、Planner入力から除外する。旧Candidateのcategoryや
+Snapshotを自動変換せず、削除migrationも追加しない。必要なCandidateは再検索して取得する。
+歴史データの形式検証・Export/Import契約は変更しない。
+
 ## 5. 条件判定
 
 ## 5.1 理想判定
@@ -231,12 +245,14 @@ Production Searchはroute-local / operation-local supportを維持し、RngState
 候補が理想品になる条件。
 
 ```text
+restorationBonusScope === "gogma_artian"
+AND
 finalBonuses が target.idealBonuses と順不同で完全一致
 AND
 候補スキルが target.idealSkillCondition を満たす
 ```
 
-Idealの5枠完全一致は `finalBonusScope = "gogma_artian"` を要求し、normal / gogmaの同名Bonus TypeまたはRankを暗黙に同一視しない。
+Idealの5枠完全一致は `finalBonusScope = "gogma_artian"` (実装の `restorationBonusScope`) を要求し、normal / gogmaの同名Bonus TypeまたはRankを暗黙に同一視しない。Target Domainの共通pure helper `satisfiesIdealBonuses()` を判定authorityとし、Target評価器とSearch streamの両方で使用する。scopeは必須の明示引数であり、unknown BonusRankの参照検証をscope判定より先に行う。
 
 分類。
 
@@ -293,6 +309,7 @@ isSimilarToIdeal =
 
 - `specifiedIdealSkillCount` は理想条件で指定されたseries / groupの件数
 - `matchedSpecifiedIdealSkillCount` はそのうち一致した件数
+- scope mismatchはIdealDifferenceの新項目やSimilarityの減点にしない。normal scopeでIdealのBonusラベル5/5・Skillが一致しPractical条件も満たす場合、`category = practical`、`similarityScore = 1`、`isSimilarToIdeal = true` になり得る
 - ideal候補は `isSimilarToIdeal = false` とし、近似フィルタへ重複表示しない
 - UIの「近似」は `category = "practical" AND isSimilarToIdeal = true` を抽出する
 - 実用ラインを満たさない「惜しい候補」は初期版では原則表示しない
@@ -317,7 +334,7 @@ Skill操作がGogma Counterを進めることはなく、Gogma Bonus操作がSki
 5.1 / 5.2の判定式は、いずれもBonus述語とSkill述語の論理積であり、交差項を持たない。
 
 ```text
-ideal(B, S)     = idealBonusMatch(B)     AND idealSkillCondition(S)
+ideal(B, scope, S) = idealBonusMatch(B, scope) AND idealSkillCondition(S)
 practical(B, S) = practicalBonusMatch(B) AND practicalSkillCondition(S)
 ```
 
@@ -441,15 +458,21 @@ representative選択は決定的にする。depth dのstateはすべて同一操
 v1は直近Reset優先を採る。根拠は
 [CANDIDATE_SEARCH_REDESIGN.md](./CANDIDATE_SEARCH_REDESIGN.md) に記録する。
 
-Bonus解は次の三つ組で表す。
+Bonus解はscopeを含めて表す。
 
 ```text
-BonusSolution = { gogmaAdvance d, finalBonuses, operations }
+BonusSolution = { gogmaAdvance d, restorationBonusScope, finalBonuses, operations }
 ```
 
-支配関係。同一の完成5枠multisetを与える解のうち、`gogmaAdvance` が最小のものだけを
-初回検索の解集合に残す。Skill解と同様、これは「永久に不要」ではなく
+初回Searchのstream-local retention。同一の `(restorationBonusScope, 完成5枠multiset)` を
+与える解のうち、`gogmaAdvance` が最小のものだけを初回検索の解集合に残す。Skill解と同様、これは「永久に不要」ではなく
 「初回Searchの保持・出力対象から省略する」という意味である(5.6.4参照)。
+
+同じ完成5枠でもnormal scopeとgogma scopeはIdeal semanticsが異なるため別解として保持する。
+full-prefix、incremental retention、差分Crossの重複判定はすべてこのidentityを使用する。
+`bonusOutcomeKey` は純粋な5枠multiset key、`bonusSolutionRetentionKey` はscopeを含むkeyとする。
+これはB5-F1で5.1との矛盾を補正した契約であり、depth >= 1のfamily-layout frontier dedupや
+`lastResetDepth` representativeを変更するものではない。
 
 順序。`B(c)` は次のstream-local deterministic orderingで昇順に並べる。
 実装上の走査順やPromise解決順に依存してはならない。
@@ -461,7 +484,8 @@ BonusSolution = { gogmaAdvance d, finalBonuses, operations }
 3. 素材必要量合計 昇順
      同一depthでもReset / Keepの構成比で素材が変わり得るため
 4. 安定semantic key 昇順
-     完成5枠multisetの正規化文字列、次に操作型列
+     完成5枠multisetの正規化文字列、次に操作型列、最後にrestorationBonusScope
+     異なるscopeを入力順依存にしないlocale非依存のtie-break
 ```
 
 `gogmaAdvance` はBonus streamの操作数そのものなので、操作数を独立キーとして
@@ -753,12 +777,15 @@ Bonus streamの早期終了はB2で実装済みである。
 
 補足。
 
-- 「Ideal条件を満たす」はBonus streamでは `idealBonuses` との5枠一致、
+- 「Ideal条件を満たす」はBonus streamでは `restorationBonusScope === "gogma_artian"`
+  AND `idealBonuses` との5枠multiset完全一致、
   Skill streamでは `idealSkillCondition` を指す
 - 起点巨戟の現在Skillが `idealSkillCondition` を満たす場合、その武器について
   `reset_skills` の探索を行わず `maxSkillAdvance` を消費しない
-- 起点巨戟の現在Bonusが `idealBonuses` と一致する場合、その武器について
+- 起点巨戟の現在Bonusがgogma scopeで `idealBonuses` と完全一致する場合、その武器について
   Bonus amendmentの探索を行わず `maxGogmaAdvance` を消費しない
+- normal scopeではラベル5/5が一致してもBonus Idealではない。conversion直後や継承Bonusを
+  持つ既存巨戟について、Reset PredictionがsupportedならGogma-scope Idealの探索を継続する
 - 片方のstreamがIdeal既達成でも、もう片方のstreamの探索は独立に継続する
 - Practicalのみ満たす状態から探索を打ち切ると、Ideal候補を失うため打ち切らない
 
@@ -1399,7 +1426,9 @@ export type SearchWorkerResponse =
 
 ## 13.1 Condition Test
 
-- 理想5枠が順不同で一致する
+- 理想5枠が順不同で一致し、gogma scopeの場合だけBonus Idealになる
+- normal scopeの5/5一致もPractical条件を通常どおり評価し、Similarity 1になり得る
+- normal scopeでもunknown BonusRankを明示的Domain Errorとして返す
 - 実用BonusConditionが正しく判定される
 - RequiredExCountが正しく判定される
 - OR条件グループが正しく判定される
@@ -1479,7 +1508,12 @@ export type SearchWorkerResponse =
 - canonical Idealが探索上限内に無い場合、探索範囲内で評価できたPracticalへ
   同じ非劣位保持規則が適用される
 - Idealが見つからない場合だけ `max*Advance` の上限まで探索する
-- 現在BonusがIdealと一致する起点についてBonus探索を行わない
+- 現在Bonusがgogma scopeでIdealと完全一致する起点についてBonus探索を行わない
+- normal scopeでIdealラベル5/5・Skill一致のconversion D=2をIdealとせず、同じ5枠を返す
+  Reset Bonuses後のgogma scope D=3まで探索し、そのCandidateをcanonical Idealにする
+- 同じ5枠のnormal d=0 / gogma d=1をfull-prefix / incremental両方で保持する
+- 同一scope・同一multisetは最小advanceを保持し、異なるscopeの同点は安定順序で決める
+- normal scopeを継承した既存Gogmaの5/5一致でもReset探索を0回化しない
 - 現在SkillがidealSkillConditionを満たす起点についてSkill探索を行わない
 - 現在状態がPracticalのみを満たす場合、操作0のPractical解を保持したままIdeal探索を継続する
 - Ideal到達前に見つかった非劣位Practicalを複数保持する

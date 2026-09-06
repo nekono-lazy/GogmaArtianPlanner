@@ -44,8 +44,8 @@ export function createIncrementalBonusRetention(target: TargetWeapon, input: Pic
       }
       previousDepth = depth
       return buildBonusSolutionSet(target, input, solutions).filter((entry) => {
-        if (seen.has(entry.bonusKey)) return false
-        seen.add(entry.bonusKey)
+        if (seen.has(entry.retentionKey)) return false
+        seen.add(entry.retentionKey)
         return true
       })
     },

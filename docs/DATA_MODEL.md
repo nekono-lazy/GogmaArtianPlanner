@@ -160,6 +160,20 @@ export interface CalculationContext {
 
 同一性比較は4項目すべてで行う。変更後の互換性が明示的に保証されない限り、以前のBuildCandidate、BuildListEntry、ProductionPlanはstaleとして扱う。
 
+B5-F1はCandidate classification / Search calculation semanticsを変更したため、
+現行の `CalculationContext.appSchemaVersion` を1から **2** へ更新した。
+単一authorityは `src/domain/models/common.ts` の
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2` とし、Search、BuildList、Plannerと
+benchmark入力のruntime creatorで共用する。これはDexieの `DATABASE_SCHEMA_VERSION = 1`
+や `AppSettings.schemaVersion = 1` の変更ではない。gameVersion、Master Data version、
+`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`、`supportsSeedSearch = false` は維持する。
+
+version 1の既存BuildCandidate / BuildListEntry / ProductionPlanはversion 2とCalculationContext
+非互換であり、現行計算結果として再利用しない。BuildListEntryは既存のstale再判定で
+`calculation_context_changed` を付け、Planner入力から除外する。旧Candidateのcategoryや
+Snapshotを自動変換せず、削除migrationも追加しない。必要なCandidateは再検索して取得する。
+歴史データの形式検証・Export/Import契約は変更しない。
+
 ---
 
 ## 4. Enum

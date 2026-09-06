@@ -24,6 +24,7 @@ export const domainFixtureContext: CalculationContext = {
   gameVersion: 'fixture-only',
   masterDataVersion: 1,
   rngEngineVersion: 'fixture-only',
+  // Historical calculation context; runtime creators use the current authority.
   appSchemaVersion: 1,
 }
 

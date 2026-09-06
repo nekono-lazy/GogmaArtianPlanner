@@ -2,6 +2,7 @@ import { areRestorationBonusSetsEqual } from '../models/domainRules'
 import type {
   CandidateCategory,
   GroupSkillId,
+  RestorationBonusScope,
   RestorationBonusSet,
   SeriesSkillId,
   TargetWeapon,
@@ -18,17 +19,31 @@ import type {
   TargetEvaluationResult,
 } from './targetEvaluationTypes'
 
-export function satisfiesIdealTarget(
+/** SEARCH_SPEC 5.1: validate ranks even when scope rules out an Ideal. */
+export function satisfiesIdealBonuses(
   target: TargetWeapon,
   finalBonuses: RestorationBonusSet,
-  seriesSkillId: SeriesSkillId | null,
-  groupSkillId: GroupSkillId | null,
+  restorationBonusScope: RestorationBonusScope,
   master: TargetEvaluationMasterSubset,
 ): boolean {
   assertRestorationBonusRankReferences(target.idealBonuses, master)
   assertRestorationBonusRankReferences(finalBonuses, master)
   return (
-    areRestorationBonusSetsEqual(target.idealBonuses, finalBonuses) &&
+    restorationBonusScope === 'gogma_artian' &&
+    areRestorationBonusSetsEqual(target.idealBonuses, finalBonuses)
+  )
+}
+
+export function satisfiesIdealTarget(
+  target: TargetWeapon,
+  finalBonuses: RestorationBonusSet,
+  restorationBonusScope: RestorationBonusScope,
+  seriesSkillId: SeriesSkillId | null,
+  groupSkillId: GroupSkillId | null,
+  master: TargetEvaluationMasterSubset,
+): boolean {
+  return (
+    satisfiesIdealBonuses(target, finalBonuses, restorationBonusScope, master) &&
     evaluateSkillCondition(
       target.idealSkillCondition,
       seriesSkillId,
@@ -62,6 +77,7 @@ export function satisfiesPracticalTarget(
 export function classifyCandidate(
   target: TargetWeapon,
   finalBonuses: RestorationBonusSet,
+  restorationBonusScope: RestorationBonusScope,
   seriesSkillId: SeriesSkillId | null,
   groupSkillId: GroupSkillId | null,
   master: TargetEvaluationMasterSubset,
@@ -70,6 +86,7 @@ export function classifyCandidate(
     satisfiesIdealTarget(
       target,
       finalBonuses,
+      restorationBonusScope,
       seriesSkillId,
       groupSkillId,
       master,
@@ -91,6 +108,7 @@ export function classifyCandidate(
 export function evaluateTargetCandidate(
   target: TargetWeapon,
   finalBonuses: RestorationBonusSet,
+  restorationBonusScope: RestorationBonusScope,
   seriesSkillId: SeriesSkillId | null,
   groupSkillId: GroupSkillId | null,
   master: TargetEvaluationMasterSubset,
@@ -99,6 +117,7 @@ export function evaluateTargetCandidate(
   const category = classifyCandidate(
     target,
     finalBonuses,
+    restorationBonusScope,
     seriesSkillId,
     groupSkillId,
     master,

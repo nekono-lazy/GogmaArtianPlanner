@@ -1,3 +1,4 @@
+import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../domain/models/publicTypes'
 import { describe, expect, it } from 'vitest'
 import { searchCandidates } from '../domain/search/candidateSearch'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../domain/rng/production/productionRngEngine'
@@ -28,6 +29,7 @@ describe('B5 Candidate Search benchmark fixtures', () => {
     for (const workload of candidateSearchBenchmarkWorkloads) {
       const { input } = createCandidateSearchBenchmarkInput(workload.id, `test.${workload.id}`)
       expect(input.calculationContext.rngEngineVersion).toBe(PRODUCTION_RNG_ENGINE_VERSION)
+      expect(input.calculationContext.appSchemaVersion).toBe(CURRENT_CALCULATION_APP_SCHEMA_VERSION)
       expect(input.rngState.baseSeed.isConfirmed).toBe(true)
       expect(input.rngState.skillCounter.isConfirmed).toBe(true)
       expect(input.rngState.gogmaCounter.isConfirmed).toBe(true)

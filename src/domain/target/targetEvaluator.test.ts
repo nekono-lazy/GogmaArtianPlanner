@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { MasterDataDomainError } from '../master/masterSelectors'
 import type {
   IdealDifference,
   RestorationBonusSet,
@@ -17,6 +18,7 @@ import {
   classifyCandidate,
   evaluateTargetCandidate,
   satisfiesIdealTarget,
+  satisfiesIdealBonuses,
 } from './targetEvaluator'
 
 const attack = 'bonus_type.fixture.attack'
@@ -44,12 +46,41 @@ function practicalOnlyBonuses(): RestorationBonusSet {
 }
 
 describe('Target candidate classification', () => {
+  it('keeps a normal-scope exact-label result Practical with full similarity', () => {
+    const target = validTarget()
+    expect(satisfiesIdealBonuses(target, target.idealBonuses, 'normal_artian', targetEvaluationMaster)).toBe(false)
+    expect(satisfiesIdealTarget(target, target.idealBonuses, 'normal_artian', 'series_skill.fixture.a', null, targetEvaluationMaster)).toBe(false)
+    const result = evaluateTargetCandidate(
+      target, target.idealBonuses, 'normal_artian',
+      'series_skill.fixture.a', null, targetEvaluationMaster, 0.6,
+    )
+    expect(result).toMatchObject({
+      category: 'practical',
+      idealDifference: { matchedBonusCount: 5, seriesSkillMatches: true, groupSkillMatches: true },
+      similarityScore: 1,
+      isSimilarToIdeal: true,
+    })
+  })
+
+  it.each(['target', 'result'] as const)('validates unknown %s ranks before rejecting normal scope', (side) => {
+    const target = validTarget()
+    const result = structuredClone(target.idealBonuses)
+    const bonuses = side === 'target' ? target.idealBonuses : result
+    bonuses[0].bonusRankId = 'bonus_rank.fixture.missing'
+    expect(() => satisfiesIdealBonuses(target, result, 'normal_artian', targetEvaluationMaster))
+      .toThrow(MasterDataDomainError)
+    expect(() => evaluateTargetCandidate(
+      target, result, 'normal_artian', null, null, targetEvaluationMaster, 0.6,
+    )).toThrow(/BonusRankMaster id 'bonus_rank.fixture.missing'/)
+  })
+
   it('classifies ideal bonuses and ideal skills as ideal', () => {
     const target = validTarget()
     expect(
       classifyCandidate(
         target,
         target.idealBonuses,
+        'gogma_artian',
         'series_skill.fixture.a',
         null,
         targetEvaluationMaster,
@@ -63,6 +94,7 @@ describe('Target candidate classification', () => {
       satisfiesIdealTarget(
         target,
         target.idealBonuses,
+        'gogma_artian',
         'series_skill.fixture.other',
         null,
         targetEvaluationMaster,
@@ -70,7 +102,7 @@ describe('Target candidate classification', () => {
     ).toBe(false)
   })
 
-  it('throws an explicit Domain Error for an unknown result rank', () => {
+  it.each(['normal_artian', 'gogma_artian'] as const)('throws an explicit Domain Error for an unknown result rank in %s', (scope) => {
     const target = validTarget()
     const unknownRankResult: RestorationBonusSet = [
       { ...target.idealBonuses[0], bonusRankId: 'bonus_rank.fixture.missing' },
@@ -83,6 +115,7 @@ describe('Target candidate classification', () => {
       classifyCandidate(
         target,
         unknownRankResult,
+        scope,
         'series_skill.fixture.a',
         null,
         targetEvaluationMaster,
@@ -90,11 +123,12 @@ describe('Target candidate classification', () => {
     ).toThrowError(/BonusRankMaster id 'bonus_rank.fixture.missing'/)
   })
 
-  it('classifies a Practical-only result as practical', () => {
+  it.each(['normal_artian', 'gogma_artian'] as const)('classifies a Practical-only result in %s as practical', (scope) => {
     expect(
       classifyCandidate(
         validTarget(),
         practicalOnlyBonuses(),
+        scope,
         null,
         null,
         targetEvaluationMaster,
@@ -108,6 +142,7 @@ describe('Target candidate classification', () => {
       classifyCandidate(
         target,
         target.idealBonuses,
+        'gogma_artian',
         'series_skill.fixture.a',
         null,
         targetEvaluationMaster,
@@ -127,6 +162,7 @@ describe('Target candidate classification', () => {
       classifyCandidate(
         validTarget(),
         result,
+        'gogma_artian',
         null,
         null,
         targetEvaluationMaster,
@@ -304,6 +340,7 @@ describe('evaluateTargetCandidate integration', () => {
     const result = evaluateTargetCandidate(
       validTarget(),
       practicalOnlyBonuses(),
+      'gogma_artian',
       null,
       null,
       targetEvaluationMaster,
@@ -320,6 +357,7 @@ describe('evaluateTargetCandidate integration', () => {
     const result = evaluateTargetCandidate(
       target,
       target.idealBonuses,
+      'gogma_artian',
       'series_skill.fixture.a',
       null,
       targetEvaluationMaster,

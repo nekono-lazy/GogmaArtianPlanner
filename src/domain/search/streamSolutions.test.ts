@@ -11,6 +11,7 @@ import { evaluateTargetCandidate } from '../target'
 import {
   buildBonusSolutionSet,
   buildSkillSolutionSet,
+  compareBonusSolutions,
   selectBonusAxis,
   selectSkillAxis,
   type RouteBonusSolution,
@@ -213,20 +214,37 @@ describe('Bonus stream-local solution set (SEARCH_SPEC 5.5.3)', () => {
     expect(set[0].solution.gogmaAdvance).toBe(2)
   })
 
-  it('ignores restorationBonusScope in the retention identity', () => {
+  it('retains Normal d=0 and Gogma d=1 exact-label outcomes with distinct Ideal semantics', () => {
     const input = searchInput()
     const inherited: RouteBonusSolution = {
-      ...bonusSolution(0, practicalBonuses()),
+      ...bonusSolution(0, idealBonuses()),
       restorationBonusScope: 'normal_artian',
     }
     const set = buildBonusSolutionSet(input.targetWeapons[0], input, [
+      bonusSolution(2, idealBonusesReordered()),
       inherited,
-      bonusSolution(2, practicalBonuses()),
+      bonusSolution(1, idealBonuses()),
     ])
 
-    expect(set).toHaveLength(1)
-    expect(set[0].solution.gogmaAdvance).toBe(0)
-    expect(set[0].solution.restorationBonusScope).toBe('normal_artian')
+    expect(set.map(({ solution, idealMatch, practicalMatch, matchedIdealBonusCount }) => [
+      solution.gogmaAdvance, solution.restorationBonusScope, idealMatch, practicalMatch, matchedIdealBonusCount,
+    ])).toEqual([
+      [0, 'normal_artian', false, true, 5],
+      [1, 'gogma_artian', true, true, 5],
+    ])
+    expect(set[0].bonusKey).toBe(set[1].bonusKey)
+    expect(set[0].retentionKey).not.toBe(set[1].retentionKey)
+  })
+
+  it('breaks an otherwise identical cross-scope tie independently of input order', () => {
+    const input = searchInput()
+    const gogma = bonusSolution(0, idealBonuses())
+    const normal: RouteBonusSolution = { ...gogma, restorationBonusScope: 'normal_artian' }
+    const set = buildBonusSolutionSet(input.targetWeapons[0], input, [normal, gogma])
+    expect(set).toHaveLength(2)
+    expect(compareBonusSolutions(set[0], set[1])).toBeLessThan(0)
+    expect(compareBonusSolutions(set[1], set[0])).toBeGreaterThan(0)
+    expect(buildBonusSolutionSet(input.targetWeapons[0], input, [gogma, normal])).toEqual(set)
   })
 
   it('does not collide two different (bonusTypeId, bonusRankId) pairs', () => {
@@ -410,9 +428,11 @@ describe('Decomposed evaluation parity with the Target evaluator (SEARCH_SPEC 5.
     const input = searchInput()
     input.targetWeapons[0] = target
 
-    for (const bonuses of bonusSets) {
+    for (const [bonuses, scope] of bonusSets.flatMap((bonuses) =>
+      (['normal_artian', 'gogma_artian'] as const).map((scope) => [bonuses, scope] as const),
+    )) {
       const [bonusEntry] = buildBonusSolutionSet(target, input, [
-        bonusSolution(1, bonuses),
+        { ...bonusSolution(1, bonuses), restorationBonusScope: scope },
       ])
       for (const [seriesSkillId, groupSkillId] of skills) {
         const [skillEntry] = buildSkillSolutionSet(target, [
@@ -421,6 +441,7 @@ describe('Decomposed evaluation parity with the Target evaluator (SEARCH_SPEC 5.
         const composed = evaluateTargetCandidate(
           target,
           bonuses,
+          bonusEntry.solution.restorationBonusScope,
           seriesSkillId,
           groupSkillId,
           input.master,

@@ -549,6 +549,10 @@ canonical historyを与える。Counter進行値は `engine.advanceGogmaCounter(
 `(startGogmaCounter, 順序付き5枠)` 単位で共有する(SEARCH_SPEC 5.5.3)。Keep prediction support
 判定は畳み込み後の代表の実際の5枠に対して行うため、layout共有がsupport判定を跨がない。
 
+> **B5-F1補正:** 以下はB2当時の実装記録である。`areRestorationBonusSetsEqual()` だけの
+> current Bonus Ideal判定は、5.1のgogma scope要件を欠いていた。B5-F1でTarget Domainの
+> scope-aware `satisfiesIdealBonuses()` へ補正した。normal scopeの5/5一致では探索を止めない。
+
 現在BonusがTargetの `idealBonuses` と一致するRoute baseは、Bonus amendment探索を行わない。
 判定は既存Domain semanticsの `areRestorationBonusSetsEqual()` を使う。該当する場合
 `predictGogmaBonus` は0回、Reset / Keep操作も0件になり、Skill streamは独立に継続する。
@@ -570,6 +574,12 @@ Ideal既達成による早期終了は今回もskip reasonを新設していな�
   実装する。生成件数は `|B(c)| + |K(c)| - 1` であり、軸外pairを生成しない
 - `src/domain/search/routeSearchShared.ts` の `composeRouteCandidates()` が
   ideal / practicalのcategory predicateごとにCrossし、重複pairを1回だけCandidate化する
+
+> **B5-F1補正:** 以下のB3当時の「scopeをretention identityに含めない」という記録と
+> 当時のSEARCH_SPEC 5.5.3は、5.1のIdeal scope契約と矛盾していた。B5-F1で正式仕様と
+> full-prefix / incremental retention、差分Crossの重複判定を `(scope, 完成5枠multiset)`
+> へ修正した。normal / gogmaの同一multisetは別解とし、stream-local安定順序の最後に
+> scope tie-breakを加えた。B2のfamily-layout frontier dedupとは別のretentionである。
 
 Skill retentionは同一 `(seriesSkillId, groupSkillId)` の最小 `resetCount`、Bonus retentionは
 同一完成5枠multisetの最小 `gogmaAdvance` を残す。`restorationBonusScope` は
@@ -640,7 +650,39 @@ B5で判明し、B5では修正しなかった事項が3つある。
    評価器へ渡していないため、`normal_artian` scopeのままでもIdealになり得る。
    B5 benchmarkはこの挙動へ依存しないようfixtureを修正した。Production修正は
    B5のscope外であり、設計チャットで独立したSearch correctness taskとして扱う
-   (B6の作業へ自動的に含めない)
+   (B6の作業へ自動的に含めない)。**B5-F1で解決済み** (下記)
+
+**B5-F1 = 完了。** 5.1をauthorityとして、Target Domainの共通Ideal Bonus helperに
+gogma scopeと完全multiset一致を集約した。Target評価・stream-local Ideal・current Bonus
+shortcutへ適用し、unknown rank validationはscope判定より先に維持する。
+normal-scope CandidateはPractical評価対象で、IdealDifference / Similarityにscope減点は追加しない。
+full-prefix / incremental retentionと差分Crossのidentityはscope込みへ補正した。
+B4 schedulerのqueue / lowerBoundは変更せず、normal-scope D=2をPracticalとし、
+Reset後のgogma-scope D=3まで探索する回帰と、既存normal-scope GogmaのReset探索回帰を追加した。
+Plannerは明示承認に基づくTarget評価call siteへのscope引数追加1行だけを行った。
+B2 frontier / lastResetDepth、RNG、Cross規則、Practical dominance、candidateStableKey、
+表示順、Worker性能コード、UI/defaultとB5測定値は変更していない。
+
+**B5-F1 Compatibility review補正:**
+
+B5-F1はCandidate classification / Search calculation semanticsを変更したため、
+現行の `CalculationContext.appSchemaVersion` を1から **2** へ更新した。
+単一authorityは `src/domain/models/common.ts` の
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2` とし、Search、BuildList、Plannerと
+benchmark入力のruntime creatorで共用する。これはDexieの `DATABASE_SCHEMA_VERSION = 1`
+や `AppSettings.schemaVersion = 1` の変更ではない。gameVersion、Master Data version、
+`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`、`supportsSeedSearch = false` は維持する。
+
+version 1の既存BuildCandidate / BuildListEntry / ProductionPlanはversion 2とCalculationContext
+非互換であり、現行計算結果として再利用しない。BuildListEntryは既存のstale再判定で
+`calculation_context_changed` を付け、Planner入力から除外する。旧Candidateのcategoryや
+Snapshotを自動変換せず、削除migrationも追加しない。必要なCandidateは再検索して取得する。
+歴史データの形式検証・Export/Import契約は変更しない。
+
+Plannerのscope回帰ではnormal-scopeのOwned GogmaがIdealラベルとSkillに完全一致しても
+`hasIdeal = false / hasPractical = true`、gogma-scopeでは `hasIdeal = true` を固定する。
+Planner algorithm / Beam Search / scoringは変更していない。benchmarkの変更は計算contextの
+version追従のみであり、B5 workload、予測条件、測定値とWorker性能コードは維持する。
 
 B6以降は未完了である。
 
@@ -730,7 +772,7 @@ Domain契約を変える判断が必要になった場合は、実装前に設�
 7. Worker error handlingの見直し(B5で再現済み。設計判断はB6へ差し戻し)
 8. Candidate出力順のrun依存(B5で判明。保持集合とcanonical Idealはrun非依存)
 9. Ideal分類が `restorationBonusScope` を評価していない(B5で判明。SEARCH_SPEC 5.1
-   との矛盾。独立したSearch correctness taskとして扱う)
+   との矛盾。独立したSearch correctness task **B5-F1で解決済み**。B6には含めない)
 
 ---
 

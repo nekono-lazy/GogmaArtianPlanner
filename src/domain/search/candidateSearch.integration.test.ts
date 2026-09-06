@@ -77,7 +77,7 @@ describe('Candidate Search routes', () => {
 
   })
 
-  it('generates an Ideal Normal route entirely from explicit predictions', async () => {
+  it('generates a normal-scope Practical conversion route entirely from explicit predictions', async () => {
     const input = createCandidateSearchInput()
     input.routeFilter = 'normal_artian'
     const result = await searchCandidates(
@@ -86,7 +86,9 @@ describe('Candidate Search routes', () => {
       deterministicExecution,
     )
     const candidate = result.targetResults[0].candidates[0]
-    expect(candidate.category).toBe('ideal')
+    expect(candidate.category).toBe('practical')
+    expect(candidate.restorationBonusScope).toBe('normal_artian')
+    expect(candidate.finalBonuses).toEqual(input.targetWeapons[0].idealBonuses)
     expect(candidate.route.kind).toBe('normal_artian_to_gogma')
     expect(candidate.route.sourceOwnedWeaponId).toBeNull()
     expect(candidate.route.operations.map(({ type }) => type)).toEqual([
@@ -118,8 +120,8 @@ describe('Candidate Search routes', () => {
   it('searches a Normal conversion followed by transient Reset Bonuses', async () => {
     const input = createCandidateSearchInput()
     input.routeFilter = 'normal_artian'
-    // The inherited five slots must stay below Ideal, otherwise this Route
-    // base's Bonus stream is finished and no amendment is searched.
+    // These inherited slots satisfy Practical; normal scope still requires
+    // a supported amendment to reach Bonus Ideal, even with exact Ideal labels.
     const result = await searchCandidates(
       input,
       createCandidateSearchEngine(input, {

@@ -440,7 +440,13 @@ Application error semanticsに関わるためである。
 
 設計チャットへ差し戻す。
 
-### 9.2 Ideal分類が `restorationBonusScope` を評価していない
+### 9.2 Ideal分類が `restorationBonusScope` を評価していない — B5-F1で解決
+
+以下はB5時点のFinding記録である。**B5-F1で解決済み**。Target Domainのscope-aware Ideal
+判定をSearch stream / shortcutへ適用し、retentionと差分Crossの重複判定を
+`(restorationBonusScope, 完成5枠multiset)` へ補正した。normal scope D=2では停止せず、
+Reset後のgogma scope D=3をcanonical Idealとする回帰テストを追加した。
+B5のscope-safe fixture、測定値、Worker性能コードは変更していない。
 
 benchmark fixtureのレビューで、正式仕様との矛盾が判明した。
 
@@ -467,8 +473,8 @@ B5 benchmarkはこの挙動へ依存しないよう修正した。
 - fixture testは `category === 'ideal'` だけでなく
   `restorationBonusScope === 'gogma_artian'` と route kind も検証する
 
-**Production Searchの修正はB5のscope外である。**
-設計チャットで独立したSearch correctness taskとして扱う。
+**Production Searchの修正はB5のscope外だった。**
+独立したSearch correctness task B5-F1で解決した。B6の作業には含めない。
 
 ---
 
@@ -530,7 +536,7 @@ GCタイミングに依存する観測傾向であり、上限値ではない。
 
 - Candidate出力順のrun依存（7章）はB6以降で扱う対象として残る
 - Ideal分類がscopeを評価していない件（9.2章）は独立したSearch correctness
-  taskであり、B6の作業へ自動的に含めるものではない
+  task B5-F1で解決済みであり、B6の作業には含めない
 - `no_owned_weapon_available` 等のlabel整備はB6のまま
 
 ---

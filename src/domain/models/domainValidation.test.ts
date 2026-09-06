@@ -1,3 +1,4 @@
+import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from './publicTypes'
 import { describe, expect, it } from 'vitest'
 import type { NormalArtianCounter, TargetWeapon } from './publicTypes'
 import {
@@ -351,5 +352,24 @@ describe('complete Domain fixture validation', () => {
         code: 'invalid_literal',
       }),
     )
+  })
+})
+
+describe('B5-F1 persisted calculation compatibility', () => {
+  it('accepts historical record shapes but rejects schema 1 calculation reuse under schema 2', () => {
+    const candidate = createValidBuildCandidate()
+    const entry = createValidBuildListEntry()
+    const plan = createValidProductionPlan()
+    expect(validateBuildCandidate(candidate).isValid).toBe(true)
+    expect(validateBuildListEntry(entry).isValid).toBe(true)
+    expect(validateProductionPlan(plan).isValid).toBe(true)
+    for (const stored of [candidate, entry, plan]) {
+      const context = stored.calculationContext
+      expect(context.appSchemaVersion).toBe(1)
+      const current = { ...context, appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION }
+      expect(isCalculationContextCompatible(context, current)).toBe(false)
+      expect(isCalculationContextCompatible(current, context)).toBe(false)
+      expect(context.appSchemaVersion).toBe(1)
+    }
   })
 })

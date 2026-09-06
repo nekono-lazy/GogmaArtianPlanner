@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createBuildListCalculationContext } from '../../../services/buildList/createBuildListCalculationContext'
 import { createPlannerCalculationContext } from '../../../services/planner/createPlannerInput'
-import { isCalculationContextCompatible } from '../../models/publicTypes'
+import { CURRENT_CALCULATION_APP_SCHEMA_VERSION, isCalculationContextCompatible } from '../../models/publicTypes'
 import { createValidMasterDataFixture } from '../../../test/fixtures/masterData'
 import { createProductionPlannerRngEngine } from '../../../workers/planner.worker.production'
 import { createProductionSearchRngEngine } from '../../../workers/search.worker.production'
@@ -9,6 +9,16 @@ import { ProductionRngEngine, PRODUCTION_RNG_ENGINE_VERSION } from './production
 import { productionRngEngine, productionRngRuntime } from './productionRngRuntime'
 
 describe('Production RNG runtime authority', () => {
+  it('shares calculation schema 2 across BuildList and Planner without changing RNG metadata', () => {
+    const master = createValidMasterDataFixture()
+    const buildList = createBuildListCalculationContext(master)
+    const planner = createPlannerCalculationContext(master, productionRngRuntime.version)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(2)
+    expect(buildList.appSchemaVersion).toBe(CURRENT_CALCULATION_APP_SCHEMA_VERSION)
+    expect(planner).toEqual(buildList)
+    expect(isCalculationContextCompatible({ ...buildList, appSchemaVersion: 1 }, planner)).toBe(false)
+  })
+
   it('keeps UI, Workers, and CalculationContext on the Production Engine version', () => {
     const master = createValidMasterDataFixture()
 

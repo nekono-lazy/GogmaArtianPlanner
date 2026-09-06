@@ -9,9 +9,8 @@ import type {
   SeriesSkillId,
   TargetWeapon,
 } from '../models/publicTypes'
-import { areRestorationBonusSetsEqual } from '../models/domainRules'
 import type { RngEngine } from '../rng/rngEngine'
-import { evaluateSkillCondition } from '../target'
+import { evaluateSkillCondition, satisfiesIdealBonuses } from '../target'
 import {
   bonusAmendmentOperations,
   type BonusStreamSolutionSet,
@@ -111,15 +110,16 @@ export function skillsSatisfyIdeal(
 
 /**
  * The Bonus-stream counterpart of `skillsSatisfyIdeal` (SEARCH_SPEC 5.6.1).
- * A Route base whose current five slots already match `idealBonuses` searches
- * no Bonus amendment at all, so it consumes no `maxGogmaAdvance` position and
+ * A Route base whose current Gogma-scope five slots match `idealBonuses`
+ * searches no Bonus amendment at all, so it consumes no `maxGogmaAdvance` position and
  * calls `predictGogmaBonus` zero times. The Skill stream keeps running.
  */
 export function bonusesSatisfyIdeal(
   context: RouteSearchContext,
   bonuses: RestorationBonusSet,
+  restorationBonusScope: RestorationBonusScope,
 ): boolean {
-  return areRestorationBonusSetsEqual(context.target.idealBonuses, bonuses)
+  return satisfiesIdealBonuses(context.target, bonuses, restorationBonusScope, context.input.master)
 }
 
 /**
@@ -158,8 +158,8 @@ export function routeSkillSolutions(
  * stream's amendment solutions (SEARCH_SPEC 5.5.3 / 5.5.5).
  *
  * `set` is `null` when no amendment was searched for this base, either because
- * Gogma prediction is unavailable, the source is protected, or the current five
- * slots already match `idealBonuses`.
+ * Gogma prediction is unavailable, the source is protected, or the current
+ * Gogma-scope five slots already match `idealBonuses`.
  */
 export function routeBonusSolutions(
   set: BonusStreamSolutionSet | null,

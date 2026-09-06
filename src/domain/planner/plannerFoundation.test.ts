@@ -1,3 +1,4 @@
+import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../models/publicTypes'
 import { describe, expect, it } from 'vitest'
 import { createTargetDefinitionHash } from '../buildList'
 import {
@@ -114,6 +115,19 @@ function resetSkillsEntry(input: PlannerInput): BuildListEntry {
 }
 
 describe('Planner current-state entry validation', () => {
+  it('excludes schema 1 entries under schema 2 even when stored stale flags are false', () => {
+    const { input, dependencies } = fixture()
+    const original = structuredClone(input.buildListEntries[0])
+    expect(original.calculationContext.appSchemaVersion).toBe(1)
+    expect(original.isStale).toBe(false)
+    input.calculationContext = { ...input.calculationContext, appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION }
+    const result = validatePlannerInput(input, dependencies)
+    expect(result.validBuildListEntries).toEqual([])
+    expect(result.excludedBuildListEntries).toHaveLength(1)
+    expect(result.warnings[0].kind).toBe('calculation_context_incompatible')
+    expect(input.buildListEntries[0]).toEqual(original)
+  })
+
   it('rederives target, RNG, referenced-weapon, and CalculationContext staleness', () => {
     const target = fixture()
     target.input.targetWeapons[0].priority = 5
@@ -205,6 +219,28 @@ describe('Planner current-state entry validation', () => {
 })
 
 describe('Planner Target Satisfaction', () => {
+  it.each([
+    ['normal_artian', false],
+    ['gogma_artian', true],
+  ] as const)('evaluates exact Ideal labels in %s scope with hasIdeal=%s', (restorationBonusScope, hasIdeal) => {
+    const { input } = fixture()
+    const target = input.targetWeapons[0]
+    const weapon: OwnedGogmaArtianWeapon = {
+      ...(input.ownedWeapons[0] as OwnedGogmaArtianWeapon),
+      restorationBonusScope,
+      restorationBonuses: structuredClone(target.idealBonuses),
+      seriesSkillId: target.idealSkillCondition.seriesSkillId,
+      groupSkillId: target.idealSkillCondition.groupSkillId,
+    }
+    const [satisfaction] = deriveTargetSatisfaction([target], [weapon], input.master)
+    expect(satisfaction).toMatchObject({
+      hasIdeal,
+      hasPractical: true,
+      idealOwnedWeaponIds: hasIdeal ? [weapon.id] : [],
+      practicalOwnedWeaponIds: [weapon.id],
+    })
+  })
+
   it('uses only compatible Gogma weapons and evaluates actual Target conditions', () => {
     const { input } = fixture()
     const ideal: OwnedGogmaArtianWeapon = {

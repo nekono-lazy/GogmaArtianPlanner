@@ -51,6 +51,57 @@ const keys = (candidates: BuildCandidate[]) => candidates.map(candidateStableKey
 afterEach(() => vi.restoreAllMocks())
 
 describe('B4 actual Target-wide termination', () => {
+  it.each([100, 5000])('B5-F1 continues past Normal-scope D=2 to Gogma-scope Ideal D=3 at bound %i', async (bound) => {
+    const { input, engine } = fixture(true, bound)
+    input.routeFilter = 'normal_artian'
+    input.ownedWeapons = []
+    const idealBonuses = structuredClone(input.targetWeapons[0].idealBonuses)
+    vi.mocked(engine.predictNormalArtian).mockReturnValue(idealBonuses)
+    vi.mocked(engine.predictSkills).mockReturnValue({ seriesSkillId: 'series_skill.fixture.a', groupSkillId: null })
+    const result = await searchCandidates(input, engine, options)
+    const candidates = result.targetResults[0].candidates
+    expect(candidates.find((c) => c.estimatedOperationCount === 2)).toMatchObject({
+      category: 'practical', restorationBonusScope: 'normal_artian',
+      finalBonuses: idealBonuses, similarityScore: 1, isSimilarToIdeal: true,
+      idealDifference: { matchedBonusCount: 5 },
+    })
+    const ideals = candidates.filter((c) => c.category === 'ideal')
+    expect(ideals).toHaveLength(1)
+    expect(ideals[0]).toMatchObject({
+      restorationBonusScope: 'gogma_artian', finalBonuses: idealBonuses,
+      estimatedOperationCount: 3, estimatedGogmaAdvance: 1,
+      estimatedSkillAdvance: 1, estimatedNormalAdvance: 1,
+    })
+    expect(ideals[0].route.operations.map((op) => op.type))
+      .toEqual(['create_normal_artian', 'convert_normal_to_gogma', 'reset_bonuses'])
+    expect(engine.predictGogmaBonus).toHaveBeenCalledTimes(1)
+    expect(engine.predictGogmaBonus).toHaveBeenCalledWith(expect.objectContaining({
+      gogmaCounter: 10, operation: { type: 'reset_bonuses' },
+    }))
+    expect(engine.predictSkills).toHaveBeenCalledTimes(1) // Conversion only: independent Skill shortcut.
+    expect(candidates.every((c) => c.estimatedOperationCount <= 3)).toBe(true)
+  })
+
+  it('B5-F1 resets an existing normal-scope Gogma with exact Ideal labels and Skills', async () => {
+    const { input, engine } = fixture(true, 5000)
+    input.routeFilter = 'existing_gogma'
+    const source = input.ownedWeapons[0] as OwnedGogmaArtianWeapon
+    source.restorationBonusScope = 'normal_artian'
+    source.restorationBonuses = structuredClone(input.targetWeapons[0].idealBonuses)
+    source.seriesSkillId = 'series_skill.fixture.a'
+    const result = await searchCandidates(input, engine, options)
+    expect(result.targetResults[0].candidates).toHaveLength(1)
+    expect(result.targetResults[0].candidates[0]).toMatchObject({
+      category: 'ideal', restorationBonusScope: 'gogma_artian', estimatedOperationCount: 1,
+      route: { kind: 'existing_gogma_reset_bonuses', sourceOwnedWeaponId: source.id },
+    })
+    expect(engine.predictGogmaBonus).toHaveBeenCalledTimes(1)
+    expect(engine.predictGogmaBonus).toHaveBeenCalledWith(expect.objectContaining({
+      operation: { type: 'reset_bonuses' },
+    }))
+    expect(engine.predictSkills).not.toHaveBeenCalled()
+  })
+
   it.each([100, 5000])('settles D=3 without eagerly predicting configured %i bounds', async (bound) => {
     const { input, engine, calls } = fixture(true, bound)
     const result = await searchCandidates(input, engine, options)

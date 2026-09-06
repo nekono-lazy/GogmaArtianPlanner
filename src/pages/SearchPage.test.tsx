@@ -1,3 +1,4 @@
+import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../domain/models/publicTypes'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
@@ -100,7 +101,7 @@ describe('SearchPage', () => {
       gameVersion: deps.master.manifest.gameVersion,
       masterDataVersion: deps.master.manifest.dataVersion,
       rngEngineVersion: client.engineVersion,
-      appSchemaVersion: 1,
+      appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
     })
     client.progress({ completedTargets: 1, totalTargets: 1, currentTargetWeaponId: deps.master.weaponTypes[0].id as never })
     const target = createValidTargetWeapon()

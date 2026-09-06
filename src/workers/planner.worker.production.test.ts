@@ -1,3 +1,4 @@
+import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../domain/models/publicTypes'
 import { describe, expect, it } from 'vitest'
 import { createBuildListEntry } from '../domain/buildList'
 import { loadMasterData } from '../domain/master/loadMasterData'
@@ -77,7 +78,7 @@ function createProductionSearchInput(
     gameVersion: loaded.data.manifest.gameVersion,
     masterDataVersion: loaded.data.manifest.dataVersion,
     rngEngineVersion: PRODUCTION_RNG_ENGINE_VERSION,
-    appSchemaVersion: 1,
+    appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
   }
 
   const target = input.targetWeapons[0]
@@ -118,9 +119,17 @@ async function createProductionPlannerInput(): Promise<PlannerInput> {
   )
   if (!searchResult) throw new Error('Production Search did not provide the Planner smoke Candidate.')
   const candidate = searchResult.result.targetResults[0].candidates.find(
-    ({ category }) => category === 'ideal',
+    ({ category, restorationBonusScope }) => category === 'practical' && restorationBonusScope === 'normal_artian',
   )
-  if (!candidate) throw new Error('Production Search did not find the expected ideal Candidate.')
+  if (!candidate) throw new Error('Production Search did not find the expected normal-scope Practical Candidate.')
+  // B5-F1: conversion preserves the game-verified Normal slots, so this
+  // unchanged two-operation smoke route is Practical even with exact labels.
+  expect(candidate).toMatchObject({
+    finalBonuses: searchInput.targetWeapons[0].idealBonuses,
+    estimatedOperationCount: 2,
+    restorationBonusScope: 'normal_artian',
+    category: 'practical',
+  })
   const target = searchInput.targetWeapons[0]
   const entry = createBuildListEntry(candidate, target, {
     createdAt: '2026-09-01T00:00:00.000Z',

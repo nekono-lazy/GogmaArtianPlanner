@@ -1,3 +1,5 @@
+import { createBuildListCalculationContext } from './createBuildListCalculationContext'
+import { createValidMasterDataFixture } from '../../test/fixtures/masterData'
 import { describe, expect, it, vi } from 'vitest'
 import { createBuildListEntry } from '../../domain/buildList'
 import { createSearchStateHash } from '../../domain/models/hashing'
@@ -38,6 +40,29 @@ function memoryRepositories(initial: BuildListEntry[] = []) {
 }
 
 describe('BuildListService', () => {
+  it('marks a pre-B5-F1 Ideal snapshot stale without deleting or reclassifying it', async () => {
+    const memory = memoryRepositories()
+    const current = createBuildListCalculationContext(createValidMasterDataFixture())
+    const candidate = createValidBuildCandidate()
+    candidate.category = 'ideal'
+    candidate.isSimilarToIdeal = false
+    candidate.calculationContext = { ...current, appSchemaVersion: 1 }
+    candidate.searchStateHash = createSearchStateHash(candidate.route, memory.rngState, memory.normalCounters)
+    const original = createBuildListEntry(candidate, memory.target, { createdAt: '2026-08-29T04:00:00.000Z' })
+    const snapshot = structuredClone(original.candidateSnapshot)
+    memory.entries.push(original)
+
+    const refreshed = await new BuildListService(memory.repositories).refreshStaleness(current)
+    expect(current.appSchemaVersion).toBe(2)
+    expect(refreshed.entries[0].isStale).toBe(true)
+    expect(refreshed.entries[0].staleReasons).toEqual(['calculation_context_changed'])
+    expect(refreshed.entries[0].candidateSnapshot).toEqual(snapshot)
+    expect(refreshed.entries[0].candidateSnapshot.category).toBe('ideal')
+    expect(refreshed.entries[0].candidateSnapshot.restorationBonusScope).toBe('normal_artian')
+    expect(memory.repositories.putEntry).toHaveBeenCalledOnce()
+    expect(memory.repositories.deleteEntry).not.toHaveBeenCalled()
+  })
+
   it('adds a Candidate snapshot once and rejects a semantic duplicate from a new search', async () => {
     const memory = memoryRepositories()
     const service = new BuildListService(memory.repositories)

@@ -142,6 +142,7 @@ export function createCandidateFromPrediction(
   const evaluation = evaluateTargetCandidate(
     target,
     prediction.finalBonuses,
+    prediction.restorationBonusScope,
     prediction.seriesSkillId,
     prediction.groupSkillId,
     input.master,

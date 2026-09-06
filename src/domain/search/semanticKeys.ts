@@ -1,4 +1,4 @@
-import type { RestorationBonusSet } from '../models/publicTypes'
+import type { RestorationBonusScope, RestorationBonusSet } from '../models/publicTypes'
 import { stableStringify } from '../models/publicTypes'
 
 export function compareStableKeys(left: string, right: string): number {
@@ -13,20 +13,18 @@ export function canonicalBonusMultiset(bonuses: RestorationBonusSet): string[] {
 }
 
 /**
- * The completed outcome identity of SEARCH_SPEC 5.5.3: the unordered five-slot
- * multiset, and nothing else.
- *
- * `restorationBonusScope` stays on the solution but is deliberately not part of
- * this key: the retention contract is "the same completed five-slot multiset",
- * so an inherited `normal_artian` solution and a later `gogma_artian` one that
- * reach the same multiset keep only the smaller `gogmaAdvance`. As with every
- * other stream-local retention this is initial-Search omission, not permanent
- * dominance.
- *
- * Each slot is encoded structurally rather than by string concatenation.
- * Master IDs may contain any delimiter, so joining `bonusTypeId` and
- * `bonusRankId` with one would let different pairs collide into one key.
+ * Pure unordered five-slot multiset key, with duplicate counts preserved.
+ * Structural slot encoding avoids collisions between IDs containing delimiters.
+ * Stream retention additionally requires scope; use bonusSolutionRetentionKey.
  */
 export function bonusOutcomeKey(bonuses: RestorationBonusSet): string {
   return stableStringify(canonicalBonusMultiset(bonuses))
+}
+
+/** SEARCH_SPEC 5.5.3 initial-Search identity, not permanent dominance. */
+export function bonusSolutionRetentionKey(
+  bonuses: RestorationBonusSet,
+  restorationBonusScope: RestorationBonusScope,
+): string {
+  return stableStringify([restorationBonusScope, bonusOutcomeKey(bonuses)])
 }

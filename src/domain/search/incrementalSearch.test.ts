@@ -21,6 +21,40 @@ const bonus = (depth: number, ideal = false): RouteBonusSolution => ({
 })
 
 describe('incremental stream retention', () => {
+  it('retains Normal then Gogma exact-label outcomes and agrees with full-prefix retention', () => {
+    const normal: RouteBonusSolution = { ...bonus(0, true), restorationBonusScope: 'normal_artian' }
+    const depths = [normal, bonus(1, true), bonus(2, true)]
+    const retention = createIncrementalBonusRetention(target, input)
+    const retained = depths.flatMap((solution) => retention.appendDepth([solution]))
+    expect(retained.map(({ solution, idealMatch, practicalMatch }) => [
+      solution.gogmaAdvance, solution.restorationBonusScope, idealMatch, practicalMatch,
+    ])).toEqual([[0, 'normal_artian', false, true], [1, 'gogma_artian', true, true]])
+    expect(retained.map((entry, index) => ({ ...entry, index })))
+      .toEqual(buildBonusSolutionSet(target, input, depths))
+  })
+
+  it('orders otherwise identical scopes deterministically within a depth', () => {
+    const gogma = bonus(0, true)
+    const normal: RouteBonusSolution = { ...gogma, restorationBonusScope: 'normal_artian' }
+    const retained = createIncrementalBonusRetention(target, input).appendDepth([normal, gogma])
+    expect(retained).toHaveLength(2)
+    expect(createIncrementalBonusRetention(target, input).appendDepth([gogma, normal])).toEqual(retained)
+    expect(retained).toEqual(buildBonusSolutionSet(target, input, [normal, gogma]))
+  })
+
+  it('publishes both scopes through delta Cross, including the later true Ideal', () => {
+    const normal: RouteBonusSolution = { ...bonus(0, true), restorationBonusScope: 'normal_artian' }
+    const bonuses = buildBonusSolutionSet(target, input, [normal, bonus(1, true)])
+    const [idealSkill] = buildSkillSolutionSet(target, [skill(0, 'series_skill.fixture.a')])
+    const pairs: string[] = []
+    const cross = createDeltaCross((b) => pairs.push(b.solution.restorationBonusScope))
+    cross.addBonus(bonuses[0])
+    cross.addSkill(idealSkill)
+    cross.addBonus(bonuses[1])
+    cross.addBonus(bonuses[1])
+    expect(pairs).toEqual(['normal_artian', 'gogma_artian'])
+  })
+
   it('retains new Skill outcomes at their first depth and rejects prefix replay', () => {
     const retention = createIncrementalSkillRetention(target)
     const first = retention.appendDepth([skill(1)])
@@ -31,12 +65,11 @@ describe('incremental stream retention', () => {
     expect(() => retention.appendDepth([skill(3)])).toThrow('new complete depth')
   })
 
-  it('retains completed Bonus multisets without scope or slot-order identity, at first depth only', () => {
+  it('retains completed Bonus multisets per scope without slot-order identity, at first depth only', () => {
     const retention = createIncrementalBonusRetention(target, input)
     expect(retention.appendDepth([bonus(1)])).toHaveLength(1)
     const later = bonus(2)
     later.finalBonuses.reverse()
-    later.restorationBonusScope = 'normal_artian'
     expect(retention.appendDepth([later])).toEqual([])
     expect(retention.appendDepth([bonus(3, true)]).map((s) => s.solution.gogmaAdvance)).toEqual([3])
     expect(() => retention.appendDepth([bonus(1), bonus(2), bonus(3)])).toThrow('new complete depth')
@@ -57,7 +90,7 @@ describe('delta Cross semantic work', () => {
   const bonusAxis = (): EvaluatedBonusSolution[] =>
     [0, 1, 2].map((depth) => ({
       ...buildBonusSolutionSet(target, input, [bonus(depth)])[0],
-      bonusKey: 'b' + depth, index: depth, idealMatch: depth > 0, practicalMatch: true,
+      bonusKey: 'b' + depth, retentionKey: 'b' + depth, index: depth, idealMatch: depth > 0, practicalMatch: true,
     }))
   const skillAxis = (): EvaluatedSkillSolution[] =>
     [0, 1, 2].map((depth) => ({
