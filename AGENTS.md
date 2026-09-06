@@ -872,8 +872,9 @@ count has been evaluated.
 Only when Counter conflicts actually occur across Targets does the Planner
 re-search the conflicting Targets, look up the next Practical/Ideal for the
 Target that yields, and compare how much further each choice pushes the other.
-`docs/SEARCH_SPEC.md` 5.6 and `docs/PLANNER_SPEC.md` 9.1-9.2 hold that contract;
-v1 does not implement Planner-driven constrained re-search.
+`docs/SEARCH_SPEC.md` 5.6 and `docs/PLANNER_SPEC.md` 9.1-9.2 hold that contract.
+B8-A fixed the formal Planner-driven constrained re-search contract; B8-B1
+onward implement it.
 
 ### Candidate Search Stream Separation
 
@@ -1025,7 +1026,8 @@ normal-scope Gogma continuing Bonus exploration. The Gogma-scope current Ideal
 shortcut still makes zero amendment predictions. B5's scope-safe benchmark
 workloads and measured values are unchanged; benchmark input calculation metadata
 now uses the shared schema version 2. B5-F1 is independent of B6.
-Planner constrained re-search (B8) remains unimplemented.
+Planner constrained re-search is specified by B8-A and unimplemented until
+B8-B1.
 
 B6 is implemented as a UI / defaults / progress / Worker error task. It changed
 no Search semantics: the Cross rule, the B4 scheduler, the canonical Ideal, the
@@ -1350,8 +1352,8 @@ same Gogma Counter position. Only Reset Bonuses and Keep Bonuses consume and
 conflict on Gogma positions.
 
 Resolving Counter conflicts across Targets is the Planner's job, not something
-Candidate Search pre-computes. v1 does not implement Planner-driven constrained
-re-search, but the contract for it is fixed: never restart a re-search at
+Candidate Search pre-computes. Planner-driven constrained re-search is not
+implemented yet, but the contract for it is fixed: never restart a re-search at
 `conflictingCounter + 1`, because a usable Practical may sit before the conflict;
 re-evaluate from the original Search/RNG origin under the fixed Candidate and
 conflict context instead. Never exclude a Candidate merely because it touches an
@@ -1371,6 +1373,240 @@ the re-search, where a currently unusable dominant candidate would permanently
 hide a usable dominated one. Reaching those Candidates again does not require
 reviving the Cartesian product — the streams stay independent and the Cross-only
 initial policy stands.
+
+---
+
+## Planner-driven Constrained Re-search
+
+B8-A fixed the formal contract in `docs/PLANNER_SPEC.md` 9.2 and
+`docs/SEARCH_SPEC.md` 5.6.7. `docs/CANDIDATE_SEARCH_REDESIGN.md` 4.2 is the
+design record, not specification authority. B8-A changed specification documents
+only: no `src/**`, test, build, or DB schema change. The implementation phases
+are B8-B1 (Search-domain constrained enumerator), B8-B2 (enumerator Browser
+Worker benchmark and enumeration-bounds defaults), B8-C (Planner orchestration),
+B8-D (Worker / Application / Persistence), and B8-E (orchestration benchmark and
+orchestration-bounds defaults). B9 what-if, B10 conflict UI, and B11
+normal-scope Keep stay separate phases.
+
+The pipeline is fixed:
+
+```text
+constrained candidate enumerator  (Target-local, from the original Search/RNG origin)
+  -> yields ConstrainedCandidate (transient Search-domain semantic result)
+  -> Planner constrained-search orchestration
+  -> deterministic materializer -> BuildCandidate shape
+  -> temporary BuildListEntry materialization
+  -> augmented PlannerInput
+  -> initial conflict preflight (same validation authority as the ordinary Planner)
+  -> full Beam Search rerun from createInitialPlannerSearchState
+  -> ProductionPlan
+  -> Application/Persistence atomic save
+```
+
+The "original Search/RNG origin" is the current validated Search/RNG snapshot
+taken when the Planner calculation starts — never a past UI Candidate Search
+request. A `CandidateSearchInput` carries `searchRunId`, `routeFilter`,
+`resultFilter`, and `settings`, is never persisted, and cannot be reconstructed
+from a BuildListEntry, which keeps only `searchStateHash` and
+`referencedOwnedWeaponsHash`. So the enumerator takes a dedicated
+`ConstrainedSearchOrigin` holding `rngState`, `normalCounters`, `ownedWeapons`,
+`targetWeapons`, `master`, and `calculationContext`, with no run id and no UI
+filter.
+
+Constrained re-search inherits none of the transient UI filters: the route scope
+is every currently legal Search route, `resultFilter`, the similar filter, and
+`maxCandidatesPerTarget` are not applied, and `ConstrainedEnumerationBounds` is
+the only authority for search extent — never `CandidateSearchSettings`. Widening
+the route policy does not widen what is yielded: only Candidates satisfying the
+Target's Ideal or Practical condition are yielded, exactly as before. The
+ordinary Candidate Search `routeFilter` / `resultFilter` contract is unchanged;
+these are separate boundaries.
+
+The deterministic constrained search identity is fixed by composition, not only
+by name: derive it from the TargetWeapon ID, the Planner-start Search/RNG
+semantic origin, the `CalculationContext`, the `ConstrainedEnumerationBounds`,
+and the route policy. Never fold in a random UUID, the Clock, a request UUID, or
+an enumeration ordinal, and never introduce a `searchRunId`-like run identifier
+there.
+
+The enumerator does not yield `BuildCandidate`. A `BuildCandidate` requires `id`,
+`searchRunId`, `createdAt`, and `isSimilarToIdeal`, and the ordinary candidate
+factory fills them from `CandidateSearchInput.searchRunId` and
+`CandidateSearchSettings.similarityThreshold` — neither of which a
+`ConstrainedSearchOrigin` carries. B8-B1 therefore yields a transient Search-domain
+semantic result (`ConstrainedCandidate`: target, category, final bonuses and scope,
+skills, route, the estimate and material fields, `idealDifference`,
+`similarityScore`, the two hashes, and `calculationContext`). Never mix
+`BuildCandidate.id`, `searchRunId`, `createdAt`, a random or request ID, the Clock,
+or an enumeration ordinal into that result. B8-C's deterministic materializer is
+what converts it to `BuildCandidate` shape: `searchRunId` becomes the deterministic
+constrained search identity, `id` is derived stably from that identity plus the
+Candidate semantic meaning, `createdAt` comes from `PlannerClock`, `similarityScore`
+uses the existing Similarity formula, and `isSimilarToIdeal` is computed with the
+current B6 default similarity threshold 0.6. That 0.6 fills the display metadata
+only — never Candidate yield eligibility, enumeration ordering, route scope, search
+termination, search extent, off-axis evaluation, or Planner coexistence. So
+`CandidateSearchSettings` remains neither the filter authority nor the extent
+authority for constrained enumeration. The ordinary Candidate Search `searchRunId`
+contract and `BuildCandidate` ID generation rule are unchanged; "do not change the
+`BuildCandidate` ID generation rule" means for ordinary Candidate Search, and does
+not conflict with the constrained materializer's own contract.
+
+Never inject a constrained Candidate into a mid-Beam Search state.
+`routeProgressByEntryId`, current counters, transient route output,
+`sourceMutationVersionByOwnedWeaponId`, `candidateReadySourceVersionByEntryId`,
+`routeSourceVersionByEntryId`, and `inFlightExistingSourceByOwnedWeaponId` have
+already advanced there, so a late Entry cannot reconstruct the shared physical
+actions. Rerun from the initial state whenever the Entry set changes, bounded by
+`maxPlannerReruns`.
+
+Coexistence is decided only by rerunning the existing Planner over the augmented
+input — `createPlannerRouteUnitPlans`, counter precondition, `physicalActionKey`,
+`arePlannerRouteUnitsShareable`, inventory precondition, protection, source
+mutation/version, `PlannerConflictResolution`, Beam Search, and Trace Replay.
+Never add a B8-only shortcut such as `usedCounters.has(counter)`, and never
+duplicate that Planner logic inside Candidate Search.
+
+The only authority for which Candidate is held fixed is
+`PlannerConflictResolution.selectedBuildListEntryId`. Never use
+`PlanConflict.recommendedBuildListEntryId`, a participant that a Planner
+bestState happened to pick, Target priority, or Candidate score. A conflict with
+no valid explicit resolution is returned as a `PlanConflict` instead of
+triggering an automatic re-search.
+
+`PlanConflict.id` folds in the sorted participant BuildListEntry IDs, so adding a
+generated Entry changes the id of the very same physical conflict. Never carry
+the original `conflictKey` into the next rerun — it would no longer match and
+would be discarded as `invalid_conflict_resolution`. Instead hold the user's
+choice as a transient fixed constraint (fixed BuildListEntry ID, Target ID,
+Candidate semantic fingerprint, and the conflict-resource identity), and after
+each rerun rebuild the `PlannerConflictResolution` against the newly detected
+`PlanConflict.id` — but only when exactly one detected conflict both matches the
+conflict-resource identity and lists the fixed Entry among its participants. Zero
+matches or several matches means the mapping is unknown: never guess it; drop
+that Candidate trial or return the conflict for reselection. The conflict-resource
+identity is ConflictKind plus the kind-specific position only, never the
+participant Entry set — including the participants would guarantee a mismatch. For
+`same_owned_weapon_consumed`, the conflict context DTO carries the exclusively
+consumed OwnedWeapon ID as its own field; never substitute a participant's
+`sourceOwnedWeaponId`, which need not be the consumed weapon and differs per
+participant. None of this changes the `PlanConflict.id` generation rule, the
+`PlannerConflictResolution` type, or how Beam Search applies a resolution.
+
+Do that re-mapping in an initial conflict preflight *before* the full Beam
+Search, never after it. Running a full Beam Search without the resolution and
+then rebuilding one from its output is circular: the first run does not reflect
+the user's fixed choice, and it forces at least two full searches per trial. The
+fixed order is: build the augmented PlannerInput with the temporary generated
+Entry, preflight with the existing Planner authority only
+(`createInitialPlannerSearchState`, `createPlannerRouteUnitPlans`,
+`detectPlannerConflicts`), re-map the transient fixed constraint onto the
+conflicts that preflight found, build the `PlannerConflictResolution` against the
+current `PlanConflict.id`, then rerun Beam Search from the initial state with
+that resolution, and treat that rerun plus Trace Replay as the final coexistence
+authority. Preflight adds no B8-only conflict logic such as `usedCounters`, and
+it decides nothing about Candidate adoption or coexistence on its own.
+`maxPlannerReruns` counts full Beam Search executions only; preflight never
+counts against it.
+
+Preflight uses exactly the validation authority the ordinary Beam Search uses —
+never raw `BuildListEntry`. `createInitialPlannerSearchState()` takes
+`ValidatedBuildListEntry[]`, and the ordinary search feeds it only the
+`validBuildListEntries` that `validatePlannerInput()` returned, so a preflight
+built on raw Entries would diverge on staleness, capability, prediction support,
+protection, and CalculationContext compatibility. The order is: build the
+augmented input, strip the stale old `conflictKey` resolutions from the preflight
+input (they no longer match and would raise a false
+`invalid_conflict_resolution`), run `validatePlannerInput`, take
+`validation.validBuildListEntries`, call `createInitialPlannerSearchState`, apply
+the same initial relevant-entry selection the ordinary Planner applies, then
+`createPlannerRouteUnitPlans` and `detectPlannerConflicts`. If validation excludes
+the generated Entry or a fixed Entry, fail closed and drop that Candidate trial.
+Do not reimplement this path in B8-C and let it drift from the ordinary Planner:
+extract the current `runPlannerBeamSearch` initial conflict detection path into a
+shared pure helper that both the ordinary Planner and the B8 preflight call. The
+helper's naming is a B8-C decision, but validation, `validBuildListEntries`,
+initial state, entry relevance, route unit plans, and conflict detection must not
+be implemented twice.
+
+Re-map every explicit conflict resolution, not just the one whose conflict
+triggered the re-search. A `PlannerInput` can carry several
+`PlannerConflictResolution`s, and adding a generated Entry can change the
+`PlanConflict.id` of conflicts unrelated to this trial too. Take every valid
+resolution from the original validated input, build a transient fixed constraint
+per resolution (fixed BuildListEntry ID, fixed Target ID, Candidate semantic
+fingerprint, conflict-resource identity), run the augmented preflight, and re-map
+all of them. Rebuild the `PlannerConflictResolution[]` against the current
+`PlanConflict.id`s only when every constraint mapped uniquely. Never silently drop
+another user-specified resolution by rebuilding only the one you were working on,
+and never run Beam Search on a partially rebuilt array. For each constraint: one
+match rebuilds against the current `conflictKey`; zero matches, several matches, a
+fingerprint mismatch, or a fixed Entry excluded by validation all mean do not
+guess — drop that Candidate trial and fail closed, or return the conflict for
+reselection. Never synthesize a substitute fixed Entry from
+`recommendedBuildListEntryId` or a bestState participant.
+
+BuildListEntry now has two producers: the user selecting a search result, and
+Planner constrained re-search materializing one. A Planner-generated Entry uses
+the ordinary `BuildListEntry` shape — no new persisted provenance field, no
+Candidate Snapshot embedded in `ProductionPlan`, and no new persisted entity.
+Candidates found during enumeration are temporary Planner trial input; only the
+Entries adopted into the final augmented PlannerInput are returned as
+`generatedBuildListEntries` and persisted. No plan means no persisted Entry; a
+partial plan with `plan != null` whose snapshot covers generated Entries
+persists them with it, in one Dexie transaction, with current state re-read and
+re-validated first. A plan-only or Entry-only save is forbidden.
+
+Generated Entry identity must be deterministic: derive the ID from the Candidate
+semantic meaning, `targetDefinitionHash`, `searchStateHash`,
+`referencedOwnedWeaponsHash`, and `CalculationContext`. Never use a random UUID,
+the Clock, an enumeration ordinal, or a request UUID for an Entry ID or a
+semantic tie-break; `createdAt` stays display-only. The Candidate semantic
+identity must include restoration bonus scope — the current
+`createBuildCandidateMeaningFingerprint()` omits it, so fix or unify that
+authority in B8 rather than trusting it. Reuse an existing Entry only when every
+current semantic content matches, including `targetDefinitionHash`,
+`searchStateHash`, `referencedOwnedWeaponsHash`, `CalculationContext`, and
+current staleness; an ID match with different content fails closed. Never
+overwrite a stale Entry — keep it as history and create a new Entry, because
+older ProductionPlans reference its ID and Snapshot.
+
+The constrained enumerator is a separate Search-domain API from
+`searchCandidates()`, and it never receives the Planner conflict DTO. It must
+not reuse `TargetSearchScheduler`, whose same-result retention, Cross-only
+policy, canonical-Ideal stop, and initial horizon/retention are initial-Search
+policy. It must be able to enumerate later same-result solutions, must not apply
+Practical dominance, the canonical-Ideal termination, or the initial Practical
+horizon, must yield only Candidates satisfying the Target's Ideal or Practical
+condition, and must be deterministic, finitely bounded, cancellable, and
+Worker-yieldable. Off-axis Cross pairs (`i > 0` and `j > 0`) may be evaluated
+lazily for the Target and conflict that actually need them, capped by
+`maxOffAxisPairEvaluations`; never pre-generate the full Cartesian product,
+never break ties on a run-dependent value, and keep the B2 family-layout
+frontier dedup and the normal-scope Keep prediction exclusion unchanged.
+
+Bounds are split by responsibility and never crossed. Enumeration bounds —
+`maxNormalForgeCount`, `maxGogmaAdvance`, `maxSkillResetCount`, and
+`maxOffAxisPairEvaluations` — belong to the constrained enumerator. Orchestration
+bounds — `maxCandidateTrialsPerConflict`, `maxGeneratedBuildListEntries`, and
+`maxPlannerReruns` — belong to Planner orchestration and must never appear in
+`ConstrainedCandidateSearchInput`. Neither set has a Production default yet, and
+they are decided at different times: B8-B1 takes caller-supplied enumeration
+bounds and B8-B2 sets their defaults from an enumerator Browser Worker
+benchmark, while B8-C and B8-D keep orchestration bounds caller-supplied because
+the cost of one Planner rerun cannot be measured before that orchestration
+exists, and B8-E sets their defaults from a separate Browser/Planner benchmark.
+Do not adopt unjustified numbers, and do not let B8-B2 decide orchestration
+defaults. Reaching either kind of bound is reported as a stop, never as
+exhaustion.
+
+B8 changes none of `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2`,
+`DATABASE_SCHEMA_VERSION = 1`, `AppSettings.schemaVersion = 1`,
+`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`, or
+`supportsSeedSearch = false`, and it changes no Production RNG semantics,
+RouteOperation meaning, ProductionPlan persisted shape, PlanStep meaning, or
+existing BuildListEntry shape. If an implementation phase finds it must break
+one of these, stop and report instead of changing a version.
 
 ---
 
@@ -1944,6 +2180,64 @@ Relevant test areas include:
   material kinds and mixed trade-offs stay incomparable
 - The same result at a later Counter position is not excluded as dominated, and a
   constrained re-search can still reach it
+- A conflict with no explicit `PlannerConflictResolution` does not trigger an
+  automatic constrained re-search, and `recommendedBuildListEntryId` is never
+  used as the fixed authority
+- A constrained re-search re-evaluates from the original Search/RNG origin, not
+  from `conflictingCounter + 1`, and reaches Candidates omitted by initial
+  Practical dominance or stream-local retention
+- Coexistence matches an actual Planner rerun, and a constrained Candidate is
+  never injected into a mid-Beam state
+- Adding a generated Entry changes the `PlanConflict.id` of the same physical
+  conflict, the original `conflictKey` is not reused, and the resolution is
+  rebuilt against the newly detected id only on a unique conflict-resource plus
+  fixed-Entry match; zero or several matches drop the trial or return the
+  conflict instead of guessing
+- The `same_owned_weapon_consumed` conflict resource is its own field and is not
+  substituted by a participant's `sourceOwnedWeaponId`
+- `generatedBuildListEntries` contains only Entries adopted into the final
+  augmented PlannerInput, is empty when `plan === null`, and its Entries are
+  saved with the ProductionPlan in one transaction with no partial save
+- Generated Entry IDs are stable across identical reruns and depend on no random
+  UUID, Clock, enumeration ordinal, or request UUID
+- Identical reruns match on semantic outcome only — generated Entry IDs, the
+  selected Entry semantic set, PlanStep semantic operation sequence and order,
+  RNG Counter advance/transition semantics, inventory transition semantics,
+  conflict semantic outcomes, warnings, `rejectedBuildListEntries`, and
+  `requiredMaterials` — and never require equal `ProductionPlan.id`,
+  `PlanStep.id`, reserved OwnedWeapon IDs, Clock-derived `createdAt` /
+  `updatedAt`, or `ExpectedPlanState` hashes
+- Within one run the expected-state chain still closes: the first
+  `expectedStateBefore` equals `PlanningInputSnapshot.initialExecutionState`, and
+  each step's `expectedStateAfter` equals the next step's `expectedStateBefore`
+- Full `ExpectedPlanState` equality is asserted only under injected
+  sequential-ID and fixed-clock test dependencies
+- A generated ID collision whose semantic content differs fails closed, and a
+  stale existing Entry is neither reused nor overwritten
+- Candidate semantic identity includes restoration bonus scope
+- Constrained enumeration is deterministic, reports a bound stop separately from
+  exhaustion, caps off-axis pair evaluations, never receives a Planner conflict
+  DTO, and never receives the three orchestration bounds
+- The enumerator origin comes from the Planner-start validated snapshot, carries
+  no `searchRunId` / `routeFilter` / `resultFilter` / `settings`, and does not
+  require a historical UI Candidate Search request
+- Constrained re-search applies no `resultFilter`, similar filter, or
+  `maxCandidatesPerTarget`, takes its extent only from
+  `ConstrainedEnumerationBounds`, and still yields only Ideal/Practical Candidates
+- Conflict resolutions are re-mapped in the initial conflict preflight before the
+  full Beam Search, the preflight uses only existing Planner conflict detection,
+  and `maxPlannerReruns` excludes it
+- Preflight runs `validatePlannerInput` and builds its initial state from
+  `validBuildListEntries`, never from raw `BuildListEntry`, and shares that path
+  with the ordinary Planner instead of reimplementing it
+- Validation excluding the generated Entry or a fixed Entry fails closed
+- Every valid explicit resolution is re-mapped, an unrelated one is never silently
+  dropped, and a partially rebuilt resolution array never reaches Beam Search
+- The enumerator yields `ConstrainedCandidate` without `id` / `searchRunId` /
+  `createdAt`, and the materializer sets `searchRunId` to the deterministic
+  constrained search identity and derives `id` from it plus the semantic meaning
+- Threshold 0.6 fills `isSimilarToIdeal` only and affects no yield, ordering,
+  route scope, termination, extent, off-axis, or coexistence decision
 - Target Ideal-implies-Practical validation lands before the Ideal-already-
   satisfied early exit is enabled
 - Reaching `maxCandidatesPerTarget` still includes a found Ideal in the result

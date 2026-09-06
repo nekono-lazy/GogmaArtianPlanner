@@ -517,6 +517,8 @@ Route baseごとに異なる。
 Cross規則は、初回Candidate Searchを高速かつboundedに保つための初期探索policyである。
 Plannerまで含めた完全探索ではない。Bonus側代替とSkill側代替の両方が同時に必要になる
 Planner競合は、5.6.5のPlanner-driven constrained re-searchで必要時に解決する。
+軸外pairの評価は5.6.7のconstrained enumerationだけの拡張であり、本節の初回合成規則を
+変更しない。
 
 category `c` ごとに、その category のBonus述語を満たす解を5.5.3のorderingで並べたものを
 `B(c)`、Skill述語を満たす解を5.5.2のorderingで並べたものを `K(c)` とする。
@@ -947,8 +949,9 @@ Counter競合の解決はPlannerの責務である。詳細な契約は
 - Counter位置が一致することだけを理由に候補を除外しない。同一Counter位置でも
   Plannerがshareableと判定するoperationは共同実行できる
 
-v1ではPlanner-driven constrained re-searchを実装しない。B0は責務分離と
-禁止事項のみを固定する。
+B8-AでPlanner-driven constrained re-searchの正式契約を確定した。Planner側の契約は
+[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2、Search Domain側のenumeration契約は5.6.7に
+定義する。実装はB8-B1以降で行う。
 
 ### 5.6.6 `resultFilter` の位置づけ
 
@@ -958,6 +961,313 @@ v1ではPlanner-driven constrained re-searchを実装しない。B0は責務分�
   Ideal探索の継続規則、5.6.2の終了条件は変わらない
 - `practical` や `similar` を選んでもIdeal探索を打ち切らない
 - `ideal` を選んでもPractical保持集合の構築を省略しない
+
+### 5.6.7 Planner-driven constrained candidate enumeration
+
+B8-Aで確定した契約である。実装はB8-B1で行う。Planner側の契約は
+[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2に定義する。
+
+#### 境界
+
+通常の `searchCandidates()` とは別のAPI境界へ置く。概念APIは次とする。
+
+```ts
+export interface ConstrainedEnumerationBounds {
+  maxNormalForgeCount: number;
+  maxGogmaAdvance: number;
+  maxSkillResetCount: number;
+  maxOffAxisPairEvaluations: number;
+}
+
+export interface ConstrainedSearchOrigin {
+  rngState: RngState;
+  normalCounters: NormalArtianCounter[];
+  ownedWeapons: OwnedWeapon[];
+  targetWeapons: TargetWeapon[];
+  master: SearchMasterSubset;
+  calculationContext: CalculationContext;
+}
+
+export interface ConstrainedCandidateSearchInput {
+  origin: ConstrainedSearchOrigin;
+  targetWeaponId: TargetWeaponId;
+  bounds: ConstrainedEnumerationBounds;
+}
+
+export interface ConstrainedCandidate {
+  targetWeaponId: TargetWeaponId;
+  category: CandidateCategory;
+  finalBonuses: RestorationBonusSet;
+  restorationBonusScope: RestorationBonusScope;
+  seriesSkillId: SeriesSkillId | null;
+  groupSkillId: GroupSkillId | null;
+  route: BuildRoute;
+
+  estimatedOperationCount: number;
+  estimatedGogmaAdvance: number;
+  estimatedSkillAdvance: number;
+  estimatedNormalAdvance: number | null;
+  requiredMaterials: MaterialRequirement[];
+
+  idealDifference: IdealDifference;
+  similarityScore: number | null;
+
+  searchStateHash: string;
+  referencedOwnedWeaponsHash: string | null;
+  calculationContext: CalculationContext;
+}
+
+export interface ConstrainedEnumerationSummary {
+  examinedCandidates: number;
+  evaluatedOffAxisPairs: number;
+  exhausted: boolean;
+  stoppedByBound: boolean;
+}
+```
+
+具体的な名称はB8-B1実装時に微調整してよいが、意味を変更しない。
+
+- Search Domain APIはPlannerのConflict DTOを受け取らない。counter precondition /
+  action identity / shareability / inventory conflict / source mutation /
+  `PlannerConflictResolution` の判定をSearch側へ複製しない
+- `exhausted` と `stoppedByBound` を区別する。bound到達をexhaustionとして報告しない
+
+#### originの意味
+
+`origin` は `CandidateSearchInput` ではない。constrained enumeration専用の
+概念origin DTOとする。
+
+「元のSearch / RNG起点」が指すのは次である。
+
+```text
+正 : Planner計算開始時のcurrent validated Search / RNG snapshot
+誤 : 過去のUI Candidate Search request
+```
+
+過去のUI requestを `origin` にしてはならない。`CandidateSearchInput` は
+`searchRunId`、`routeFilter`、`resultFilter`、`settings` を含むUI一時requestであり、
+永続化されていない。BuildListEntryが保持するのは `searchStateHash` /
+`referencedOwnedWeaponsHash` というhashだけで、元のrequestは現行のPlanner / BuildList
+から復元できない。
+
+したがって `ConstrainedSearchOrigin` は、Planner計算開始時点で既にvalidation済みの
+現在状態から構成する。
+
+```text
+rngState
+normalCounters
+ownedWeapons
+targetWeapons        (対象TargetWeaponを含むvalidated集合)
+master               (SearchMasterSubset)
+calculationContext
+```
+
+これは `CandidateSearchInput` の部分集合ではあるが、UI一時filterと `searchRunId` を
+持たない別の型である。Planner入力と同じ現在状態から作るため、enumeratorが再評価する
+起点はPlanner初期Stateの起点と一致する。
+
+`origin` は5.6.5および[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.1の「元のSearch / RNG
+起点から再評価する」を満たす。競合位置より後ろへ後方固定しないという契約は変わらない。
+
+#### route policy
+
+B8 constrained re-searchは過去のUI一時filterを継承しない。正式policyは次とする。
+
+```text
+route scope     = 現時点で成立する全Search route
+resultFilter    = 適用しない
+similar filter  = 適用しない
+maxCandidates   = 適用しない
+advance bounds  = ConstrainedEnumerationBounds をauthorityとする
+```
+
+- `CandidateRouteFilter` を `origin` へ持たせない。現在のRNG値、Engine capability、
+  input support、所持武器から成立するRouteをすべて対象にする
+- `CandidateResultFilter` を適用しない。`ideal` / `practical` / `similar` の
+  出力filterはUI表示用であり、Plannerの共存可能性判定を狭めてはならない
+- `isSimilarToIdeal` によるsimilar filterを適用しない
+- `maxCandidatesPerTarget` を適用しない。件数上限は初回Searchの保持policyであり、
+  constrained enumerationの上限は `ConstrainedEnumerationBounds` が担う
+- 探索範囲の上限は `ConstrainedEnumerationBounds` だけをauthorityとする。
+  `CandidateSearchSettings` を参照しない
+
+TargetのIdealまたはPractical条件を満たすCandidateだけをyieldする契約は維持する。
+route policyが広がっても、条件を満たさないCandidateはyieldしない。
+
+このpolicyは通常Candidate Searchの `routeFilter` / `resultFilter` 契約
+(3章 / 4章 / 5.6.6)を変更しない。両者は別の境界である。
+
+#### enumerator outputはBuildCandidateではない
+
+B8-B1のenumeratorは `BuildCandidate` を直接yieldしない。Search Domainのtransientな
+semantic resultである `ConstrainedCandidate` をyieldする。
+
+理由。`BuildCandidate` は `id` / `searchRunId` / `createdAt` / `isSimilarToIdeal` /
+`similarityScore` を必須とし、通常Searchのcandidate factoryは
+`CandidateSearchInput.searchRunId` と `CandidateSearchSettings.similarityThreshold`
+から埋める。一方 `ConstrainedSearchOrigin` は意図的に `searchRunId` / `settings` /
+`routeFilter` / `resultFilter` を持たない。したがってenumeratorは `BuildCandidate`
+を完成させられない。
+
+次のrun / persistence metadataをB8-B1 enumeratorのsemantic resultへ混ぜない。
+
+```text
+BuildCandidate.id
+BuildCandidate.searchRunId
+BuildCandidate.createdAt
+random / request ID
+Clock
+enumeration ordinal
+```
+
+`ConstrainedCandidate` は `similarityScore` を持つが `isSimilarToIdeal` を持たない。
+`isSimilarToIdeal` はthresholdを適用した表示メタデータであり、materialize時に決まる。
+
+具体的な名称と必要最小fieldはB8-B1で微調整してよいが、この分離を変更しない。
+通常の `BuildCandidate` 形状への変換はB8-Cのdeterministic materializerが行う
+([PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.13)。
+
+#### materialize時の契約
+
+B8-Cのmaterializerは次で `BuildCandidate` を組み立てる。
+
+```text
+BuildCandidate.searchRunId
+  = deterministic constrained search identity
+
+BuildCandidate.id
+  = deterministic constrained search identity
+    + Candidate semantic meaning
+    から安定生成
+
+BuildCandidate.createdAt
+  = PlannerClock
+
+similarityScore
+  = 既存Similarity計算式 (5.3)
+
+isSimilarToIdeal
+  = 現行B6既定similarity threshold 0.6 を使って算出
+```
+
+`0.6` は表示メタデータ `isSimilarToIdeal` を埋めるためだけに使う。次には使用しない。
+
+```text
+Candidate yield可否
+Candidate enumeration ordering
+route scope
+探索終了
+探索範囲
+off-axis評価
+Planner coexistence
+```
+
+すなわち `CandidateSearchSettings` は、constrained enumerationのfilter authorityでも
+extent authorityでもない。この点は前掲のroute policyと同じである。
+
+通常Candidate Searchの `searchRunId` 契約と `BuildCandidate` ID生成規則は変更しない。
+constrained materializerは通常Searchのcandidate factoryを流用せず、専用の
+deterministicな経路で組み立てる。
+
+#### boundsの責務分離
+
+`ConstrainedEnumerationBounds` はenumeratorが消費する上限だけを持つ。
+Planner orchestration側のboundsを `ConstrainedCandidateSearchInput` へ含めない。
+
+```text
+enumerator側     maxNormalForgeCount
+                 maxGogmaAdvance
+                 maxSkillResetCount
+                 maxOffAxisPairEvaluations
+
+orchestration側  maxCandidateTrialsPerConflict
+                 maxGeneratedBuildListEntries
+                 maxPlannerReruns
+```
+
+orchestration側3つはenumerationの探索量へ影響せず、Search DomainがPlanner側の
+試行回数・再実行回数を知る必要もない。契約本文は
+[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.16にある。
+
+`ConstrainedEnumerationBounds` はB8-B1ではcaller必須指定とし、Production defaultを
+定義しない。Production defaultはB8-B1実装後のB8-B2で、enumerator側の実Browser Worker
+benchmarkから決定する。orchestration側boundsのProduction defaultはB8-B2では決めない。
+Planner再実行1回のコストはB8-C / B8-Dのorchestration実装が無ければ測定できないため、
+B8-C / B8-Dはcaller必須指定のまま実装し、その後のB8-Eで決定する。
+
+#### 既存schedulerを流用しない
+
+既存 `TargetSearchScheduler` をそのまま使用してはならない。次がいずれも初回Search
+専用のpolicyだからである。
+
+```text
+同一結果の最小advance retention
+Cross-only
+canonical Idealによる探索終了
+初回Search horizonとcandidate retention
+```
+
+既存Skill / Bonus streamのretention前depth出力は再利用する。
+
+#### 要求
+
+- 同一結果の後続Counter位置解を列挙できる
+- Practical dominance(5.5.6)を適用しない
+- canonical Ideal(5.6.3)で探索を終了しない
+- 初回Practical horizon(5.5.6.0)を適用しない
+- TargetのIdealまたはPractical条件を満たすCandidateだけをyieldする
+- deterministicである
+- finite boundsを持つ
+- cancellation可能である
+- Worker yield可能である
+- Production RNGのinput-level support契約を維持する
+- normal scope Keep predictionは引き続きunsupportedとして扱う(5.7)
+- B2のfamily-layout frontier dedup(5.5.3)を維持する
+- route-history完全探索へ拡張しない
+
+#### 軸外Cross
+
+初回Searchは軸上のみを生成する(5.5.4)。
+
+```text
+Candidate(c) = { (B(c)[i], k0) } ∪ { (b0, K(c)[j]) }
+```
+
+constrained searchでは、必要になったTarget・その競合に限って軸外pairも評価できる。
+
+```text
+(B(c)[i], K(c)[j])   i > 0 かつ j > 0
+```
+
+規則。
+
+- full Cartesianを事前生成しない。lazy frontier / best-firstなどで、必要なcellだけを
+  順次評価する
+- 評価数は `maxOffAxisPairEvaluations` で有限に抑える
+- tie-breakにrun依存値を使わない。5.5.2 / 5.5.3 / 5.6.3と整合するstable semantic key
+  (`candidateStableKey` 相当)を使う
+- Bonus family-layout frontierは5.5.3のB2契約を維持する
+- 初回Searchの合成規則(5.5.4)は変更しない
+
+#### 変更しないもの
+
+constrained enumerationはSearch orchestrationの追加境界であり、次を変更しない。
+
+```text
+Production RNG prediction semantics
+PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2
+supportsSeedSearch = false
+CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2
+初回Searchの終了条件、canonical Ideal、retention、Cross規則
+通常Candidate SearchのsearchRunId契約とBuildCandidate ID生成規則
+```
+
+最後の項目は**通常Candidate Searchについて変更しない**という意味である。
+`createCandidateFromPrediction()` が `CandidateSearchInput.searchRunId` を
+`semanticHash` へ含め、そこから `BuildCandidate.id` を生成する規則はそのまま残す。
+B8 constrained materializerはこの経路を流用せず、deterministic constrained search
+identityを基点とする専用契約で `searchRunId` と `id` を決める(前掲のmaterialize契約、
+[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.13)。両者は別の境界であり矛盾しない。
 
 ## 5.7 normal scope Keepのgame legalityとprediction support
 
@@ -1606,6 +1916,38 @@ Skill stream側はB1で実装済み、Bonus stream側はB2で実装済みであ�
 - 包含が成立しないTargetWeapon定義を保存できない
 - 包含が成立しない保存済みTargetWeaponはCandidate Searchの対象から
   warning付きで除外される
+
+## 13.2.5 Constrained Enumeration Test
+
+5.6.7の契約に対するテスト観点である。実装はB8-B1で行う。
+
+- constrained enumerationが `ConstrainedSearchOrigin` 起点から再評価し、
+  `conflictingCounter + 1` へ後方固定されない
+- Practical dominance、初回Practical horizon、canonical Ideal終了を適用しない
+- 同一結果の後続Counter位置解をyieldできる
+- IdealもPracticalも満たさないCandidateをyieldしない
+- `origin` がPlanner計算開始時のcurrent validated snapshotから構成され、
+  `searchRunId` / `routeFilter` / `resultFilter` / `settings` を持たない
+- 過去のUI Candidate Search requestを `origin` として要求しない
+- route scopeが現時点で成立する全Routeであり、UI一時filterを継承しない
+- `resultFilter` / similar filter / `maxCandidatesPerTarget` を適用しない
+- 探索範囲の上限が `ConstrainedEnumerationBounds` だけで決まり、
+  `CandidateSearchSettings` を参照しない
+- route policyが広がってもIdeal / Practical条件を満たさないCandidateをyieldしない
+- 同一入力・同一boundsで列挙順が完全に一致する
+- boundsへ到達した場合に `stoppedByBound` を返し、`exhausted` としない
+- 軸外pairをlazyに評価し、full Cartesianを事前生成しない
+- 軸外評価数が `maxOffAxisPairEvaluations` を超えない
+- family-layout frontier dedupとnormal scope Keep未対応の扱いが初回Searchと一致する
+- cancellationで列挙が停止し、以降のCandidateをyieldしない
+- Search Domain APIがPlannerのConflict DTOを受け取らない
+- `ConstrainedCandidateSearchInput` が `maxCandidateTrialsPerConflict` /
+  `maxGeneratedBuildListEntries` / `maxPlannerReruns` を持たない
+- enumeratorが `BuildCandidate` ではなく `ConstrainedCandidate` をyieldし、
+  `id` / `searchRunId` / `createdAt` / random ID / Clock / enumeration ordinalを
+  結果へ含めない
+- `similarityThreshold` がyield可否、ordering、route scope、探索終了、探索範囲、
+  off-axis評価のいずれにも影響しない
 
 ## 13.3 Candidate Test
 

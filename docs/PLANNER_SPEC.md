@@ -518,7 +518,14 @@ Candidate Searchは、Plannerで将来競合する可能性があるという理
 
 ## 9.2 Planner-driven constrained re-search
 
-将来契約である。v1では実装しない。B0では責務と禁止事項だけを固定する。
+B8-Aで正式契約を確定した。実装はB8-B1以降で行う。
+
+- 9.2.1〜9.2.5はB0で固定した責務と禁止事項であり、B8-Aでも変更しない
+- 9.2.6以降がB8-Aで追加した正式契約である
+- 9.2.4のwhat-if比較はB9、競合UIはB10であり、B8では実装しない
+
+B8 architecture自体はProduction RNG semantics、RouteOperationの意味、ProductionPlanの
+永続shape、PlanStepの意味、既存BuildListEntryのshapeを変更しない(9.2.17)。
 
 ### 9.2.1 開始位置を後方固定しない
 
@@ -532,6 +539,19 @@ Candidate Searchは、Plannerで将来競合する可能性があるという理
 前に利用可能な実用品が存在し得る。再検索は元のSearch / RNG起点を基準に再評価し、
 Plannerが固定しているCandidateとconflict contextを制約として渡して、その制約下で
 実行可能かどうかを判定する。
+
+ここでいう「元のSearch / RNG起点」は次を指す。
+
+```text
+正 : Planner計算開始時のcurrent validated Search / RNG snapshot
+誤 : 過去のUI Candidate Search request
+```
+
+過去のUI requestは永続化されておらず、BuildListEntryは `searchStateHash` /
+`referencedOwnedWeaponsHash` というhashしか保持しないため、Planner / BuildListから
+復元できない。したがってenumeratorへ渡す起点はPlanner計算開始時の現在状態から構成する
+([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.7)。「競合位置より後ろへ後方固定しない」という
+本節の禁止事項は変わらない。
 
 ### 9.2.2 Counter位置だけで除外しない
 
@@ -564,22 +584,263 @@ Planner / constrained search orchestration
 
 ### 9.2.3 Planner conflict context
 
-再検索へ渡す競合文脈として、少なくとも次を扱える必要がある。
-B0では概念契約のみを定義し、新しいTypeScript型を追加しない。
-具体的なDTO / APIは後続Phaseで設計する。
+再検索へ渡す競合文脈は、B8 orchestration専用の非永続transient DTOとする。
+既存の `PlanConflict` と `PlannerConflictResolution` を変更・置換しない。
+永続化せず、`ProductionPlan` へ埋め込まない。
 
-| 項目 | 内容 |
+保持する情報は少なくとも次とする。
+
+| 項目 | 粒度 | 内容 |
+| --- | --- | --- |
+| `PlanConflict.id` | 競合 | 検出時点のstable conflict key |
+| ConflictKind | 競合 | 既存の `ConflictKind` |
+| 競合資源identity | 競合 | 下記の競合資源identity |
+| counter stream | 競合 | Skill / Gogma / Normal。`same_owned_weapon_consumed` では null |
+| Normal Counter ID | 競合 | `same_normal_counter` の場合のNormalArtianCounter ID |
+| `counterBefore` | 競合 | 競合しているCounter位置 |
+| 競合対象OwnedWeapon ID | 競合 | `same_owned_weapon_consumed` の場合の排他消費OwnedWeapon ID |
+| `counterAfter` | participant | participantごとの操作後Counter位置 |
+| operation type | participant | `RouteOperation` の種別 |
+| `sourceOwnedWeaponId` | participant | 必要な場合の起点武器 |
+| `physicalActionKey` | participant | 既存 `PlannerRouteUnit.physicalActionKey` |
+| BuildListEntry ID | participant | 競合参加Entry |
+| TargetWeapon ID | participant | 競合参加Target |
+| Candidate semantic fingerprint | participant | 9.2.12のsemantic identity |
+| 固定制約 | 競合 | 固定して残すBuildListEntry / TargetWeapon |
+
+`counterAfter`、operation type、`sourceOwnedWeaponId`、`physicalActionKey` は
+競合単位ではなくparticipant単位で保持する。参加者ごとに異なり得るためである。
+
+#### 競合資源identity
+
+競合資源identityはConflictKindごとに次で構成する。participant BuildListEntry集合を
+含めない。これは9.2.3.1の再対応付けで、participant集合が変わっても同じ物理競合を
+同定するための鍵だからである。
+
+| ConflictKind | 競合資源identity |
 | --- | --- |
-| counter stream | Skill / Gogma / Normal |
-| `counterBefore` | 競合しているCounter位置 |
-| `counterAfter` | 操作後のCounter位置 |
-| operation type | `RouteOperation` の種別 |
-| `sourceOwnedWeaponId` | 必要な場合の起点武器 |
-| 競合参加者 | 競合しているBuildListEntry / TargetWeapon |
-| 固定制約 | 固定して残すCandidate / Plan側の制約 |
+| `same_gogma_counter` | ConflictKind、Gogma Counter位置 |
+| `same_skill_counter` | ConflictKind、Skill Counter位置 |
+| `same_normal_counter` | ConflictKind、NormalArtianCounter ID、Normal Counter位置 |
+| `same_owned_weapon_consumed` | ConflictKind、排他消費されるOwnedWeapon ID |
+
+`same_owned_weapon_consumed` の競合対象OwnedWeapon IDは、conflict context DTOへ
+明示的な独立fieldとして保持する。participantの `sourceOwnedWeaponId` で代用しては
+ならない。素材消費のOwnedWeaponは起点武器と一致するとは限らず、participantごとに
+異なり得るため、participant単位のfieldから競合資源を復元できない。
+
+これは `PlanConflict.id` の生成規則([DATA_MODEL.md](./DATA_MODEL.md) 11.8)を
+変更するものではない。`PlanConflict.id` は従来どおりConflictKind、kind別の競合位置、
+sort済みBuildListEntry IDsから生成する。競合資源identityは、そのうち
+BuildListEntry IDsを除いた部分をorchestrationが個別に保持するtransient値である。
 
 `PlanConflict.id` は既存契約どおりstable conflict keyであり、conflict contextは
 その周辺情報を補う位置づけである。既存の `PlannerConflictResolution` を置き換えない。
+このDTOをSearch Domainへ渡してはならない(9.2.9)。
+
+### 9.2.3.1 conflict preflightとConflict Resolution再対応付け
+
+`PlanConflict.id` はparticipant BuildListEntry集合を含む。したがってgenerated Entryを
+加えたaugmented PlannerInputでは、**同じ物理競合でもIDが変わり得る。**
+
+```text
+元のPlan            : same_gogma_counter, position 351, entries { E1, E2 }     -> id X
+generated Entry追加後 : same_gogma_counter, position 351, entries { E1, E2, G1 } -> id Y
+```
+
+元の `conflictKey` をそのまま再利用してはならない。IDが変わった場合、その
+`PlannerConflictResolution` は再検出された競合と一致せず、既存の適用規則により
+無視されて `invalid_conflict_resolution` になるためである。
+
+再対応付けをfull Beam Search実行**後**に行う設計にしてはならない。次は循環である。
+
+```text
+禁止 : Beam Search完全再実行 -> Conflict取得 -> resolution再構築 -> もう一度完全再実行
+```
+
+resolutionが無いまま実行したBeam Searchの結果は、ユーザーの固定意図を反映していない。
+その出力からresolutionを組み立てて再実行するのでは、full Beam Searchが必ず2回以上必要に
+なり、`maxPlannerReruns` の意味も曖昧になる。
+
+正式順序は次とする。再対応付けはfull Beam Searchの前に、既存Planner authorityによる
+**initial conflict preflight** で行う。
+
+```text
+temporary generated Entryを含むaugmented PlannerInputを作成
+  ↓
+preflight用に、staleな旧conflictKeyを適用しない入力を作成
+  ↓
+validatePlannerInput
+  ↓
+validation.validBuildListEntries
+  ↓
+createInitialPlannerSearchState
+  ↓
+通常Plannerと同じinitial relevant-entry selection
+  ↓
+createPlannerRouteUnitPlans
+  ↓
+detectPlannerConflicts
+  ↓
+元の全fixed constraintを現在のConflict群へ一意に再対応付け
+  ↓
+現在の PlanConflict.id で PlannerConflictResolution[] を再構築
+  ↓
+その完全なresolution配列を持つaugmented PlannerInputで
+Beam Searchを初期Stateから完全再実行
+  ↓
+Planner / Trace Replayを最終coexistence authorityとする
+```
+
+#### preflightのvalidation authority
+
+preflightは通常Beam Searchとまったく同じvalidation authorityを使う。
+raw `BuildListEntry` から直接preflightしてはならない。
+
+理由。`createInitialPlannerSearchState()` は `ValidatedBuildListEntry[]` を要求し、
+通常のBeam Searchは `validatePlannerInput()` が返す `validBuildListEntries` だけを
+使う。preflightだけraw Entryを使うと、staleness、capability、prediction support、
+protection、CalculationContext互換性の判定が通常Plannerと乖離する。
+
+契約。
+
+1. preflight入力は、staleな旧 `conflictKey` を持つ `conflictResolutions` を
+   適用しない状態で作る。旧keyはこの時点で一致しないため、適用すると
+   `invalid_conflict_resolution` を誤って発生させる
+2. `validatePlannerInput()` を通し、`validation.validBuildListEntries` を得る
+3. `createInitialPlannerSearchState(input, validation.validBuildListEntries)` で
+   初期Stateを作る
+4. 通常Plannerと同じinitial relevant-entry selectionを適用する。Route unit planを
+   持つEntryへの絞り込み、安定sort、初期Stateに対するentry relevance判定を
+   通常経路と一致させる
+5. `createPlannerRouteUnitPlans()` でRoute unit planを作る
+6. `detectPlannerConflicts()` で `PlanConflict` を検出する。
+   B8専用の `usedCounters` 等の簡易競合判定を追加してはならない(9.2.11)
+
+fail closed規則。
+
+```text
+generated Entry が validation で除外された  -> そのCandidate trialを採用しない
+fixed Entry が validation で除外された      -> そのCandidate trialを採用しない
+```
+
+除外されたまま先へ進んではならない。除外理由は既存の
+`excludedBuildListEntries` / warning契約をそのまま使う。
+
+#### 二重実装の禁止
+
+B8-Cでこの経路を独自に再実装し、通常Plannerと乖離させてはならない。
+
+推奨契約は次である。
+
+```text
+現行 runPlannerBeamSearch のinitial conflict detection経路を
+shared pure helperへ抽出し、
+通常PlannerとB8 preflightの双方が同じhelperを使用する。
+```
+
+helperの具体的な名称と分割単位はB8-Cで決めてよい。ただし次の意味を二重実装しない。
+
+```text
+validation
+validBuildListEntries
+initial state
+entry relevance
+route unit plans
+conflict detection
+```
+
+preflightは引き続きBeam Searchではなく、`maxPlannerReruns` に数えない(9.2.16)。
+
+#### 全explicit resolutionの再対応付け
+
+B8 orchestrationは、再検索対象となった競合のresolutionだけを保持してはならない。
+`PlannerInput` には複数の `PlannerConflictResolution` が存在し得る。generated Entryの
+追加でparticipant集合が変われば、**今回の再検索対象ではない別Conflictの
+`PlanConflict.id` も変わり得る。**
+
+```text
+元のvalidated PlannerInput
+  ↓
+全てのvalid PlannerConflictResolutionを取得
+  ↓
+resolutionごとにtransient fixed constraintを作成
+    fixed BuildListEntry ID
+    fixed TargetWeapon ID
+    fixed Candidate semantic fingerprint
+    競合資源identity
+  ↓
+augmented preflight
+  ↓
+全fixed constraintを現在のConflict群へ再対応付け
+  ↓
+全て一意に対応できた場合のみ
+現在の PlanConflict.id を使った PlannerConflictResolution[] を再構築
+  ↓
+その完全なresolution配列でBeam Searchを実行
+```
+
+対象となった1件だけを再構築し、他のユーザー明示resolutionを黙って捨ててはならない。
+
+取得元は元のvalidated PlannerInputの `validation.validConflictResolutions` とする。
+validationが既に無効と判定したresolutionを復活させない。
+
+各fixed constraintごとの判定。
+
+```text
+一致1件                          -> current conflictKeyへ再構築
+一致0件                          -> 推測しない
+一致複数                          -> 推測しない
+fingerprint不一致                 -> 推測しない
+fixed Entryがvalidation除外       -> 推測しない
+```
+
+一致条件は次の両方である。
+
+```text
+競合資源identityが一致する
+buildListEntryIds が fixed BuildListEntry ID を含む
+```
+
+再構築するresolutionの形は次とする。
+
+```text
+PlannerConflictResolution = {
+  conflictKey: preflightで再検出した PlanConflict.id,
+  selectedBuildListEntryId: fixed BuildListEntry ID,
+}
+```
+
+既存のexplicit resolutionのうち1つでも安全に再対応付けできない場合は、そのCandidate
+trialを採用せずfail closedにするか、ユーザーへConflictを返す。一部だけ再構築した
+不完全なresolution配列でBeam Searchを実行してはならない。ユーザーへ再選択を求める
+経路は既存の `invalid_conflict_resolution` と同じ扱いとする。
+
+`recommendedBuildListEntryId` やPlanner bestStateから代替のfixed Entryを作らない
+という9.2.7の契約は維持する。再対応付けできないことを、別Entryを固定してよい理由に
+しない。
+
+#### Beam Search実行
+
+再構築できた完全なresolution配列を含むaugmented PlannerInputで、初期Stateから
+Beam Searchを1回完全再実行する。共存可能性の最終authorityはこのBeam Searchと
+Trace Replayであり、preflightではない(9.2.11)。
+
+規則。
+
+- preflightはConflict検出とresolution再対応付けのためだけに行う。Candidateの採否、
+  共存可能性、Plan内容をpreflightの結果だけで決めない
+- preflightは `maxPlannerReruns` に数えない。`maxPlannerReruns` はfull Beam Searchの
+  実行回数だけを数える(9.2.16)
+- fixed BuildListEntry IDは、ユーザーが選択した既存Entryである。generated Entryを
+  fixed側へ昇格させない
+- fixed Candidate semantic fingerprintは、fixed Entryがpreflightの時点で別Candidateへ
+  すり替わっていないことの検証に使う。fingerprintが一致しない場合は再対応付けを
+  成立させない
+- 競合資源identityにparticipant BuildListEntry集合を含めない。含めると
+  generated Entry追加によって必ず不一致になり、再対応付けが常に失敗する
+- 再対応付けはorchestrationのtransient処理であり、`PlanConflict.id` の生成規則、
+  `PlannerConflictResolution` の型、Beam Search内のresolution適用規則を変更しない
 
 ### 9.2.4 what-if比較
 
@@ -605,7 +866,8 @@ Target Bを優先した場合
 - 距離の表現は既存の `estimatedGogmaAdvance` / `estimatedSkillAdvance` /
   `estimatedNormalAdvance` と `estimatedOperationCount` を用いる
 
-v1では実装しない。後続Phaseへ割り当てる。
+what-if比較はB9で実装する。B8では実装しない。B8のorchestrationは、B9が明示的な
+仮想fixed constraintを渡せる形へ将来拡張してよいが、B8でB9の機能を先取りしない。
 
 ### 9.2.5 初回Search pruningを永久除外にしないこと
 
@@ -665,7 +927,574 @@ Planner    : 固定Candidateとの競合で+2が実行不能、+4は実行可能
 引き続き独立に解き、Cross-onlyの初回policyも維持する。追加で必要なのは、
 省略されたCandidateを固定Candidateとの共存可能性に応じて再評価できることだけである。
 
-v1では実装しない。後続Phaseへ割り当てる。
+本要件はB8 constrained enumerationの必須要件であり、9.2.9と
+[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.7で具体化する。
+
+### 9.2.6 B8 architecture
+
+正式architectureは次とする。
+
+```text
+Candidate Search / constrained enumerator
+  元のSearch / RNG起点からTarget単体のCandidateを順次提示
+        ↓
+Planner constrained-search orchestration
+  明示的に固定したCandidateとの共存可能性をPlanner自身で評価
+        ↓
+必要なCandidateを一時BuildListEntryへmaterialize
+        ↓
+augmented PlannerInput
+        ↓
+元のRNG / Planner初期StateからBeam Searchを完全再実行
+        ↓
+最終ProductionPlan
+        ↓
+Application / Persistence
+  generated BuildListEntries + ProductionPlanをatomic保存
+```
+
+責務分離は9.1および[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.0のままである。
+constrained enumeratorはTarget単体のRNG近傍解を列挙するだけであり、共存可能性を
+判定しない。共存可能性の最終authorityは、そのCandidateを含むaugmented PlannerInput
+に対する既存Plannerの再実行である(9.2.11)。
+
+### 9.2.7 固定Candidateのauthority
+
+constrained re-searchで「固定する側」を決めるauthorityは次だけとする。
+
+```text
+PlannerConflictResolution.selectedBuildListEntryId
+```
+
+次を固定authorityとして使用してはならない。
+
+```text
+PlanConflict.recommendedBuildListEntryId
+Planner bestStateで偶然選択されたparticipant
+Target priorityからの自動決定
+Candidate scoreだけによる自動決定
+```
+
+有効な明示 `PlannerConflictResolution` が無い競合については、B8 constrained
+re-searchを自動実行せず、その競合を `PlanConflict` として返す。ユーザー選択を経て
+`PlannerConflictResolution` が与えられた実行でだけ再検索を行う。
+
+`recommendedBuildListEntryId` は従来どおりユーザー提示用の推奨であり、固定制約では
+ない。削除済み・stale・Target無効・Capability不足・保護状態変更で実行不能な選択を
+`invalid_conflict_resolution` として扱う既存規則も変更しない。
+
+固定authorityはユーザーの選択そのもの、すなわちfixed BuildListEntry IDである。
+`conflictKey` はその選択を局所競合へ結び付ける識別子にすぎない。generated Entryの
+追加でPlanConflict IDが変わっても固定authorityは変わらない。したがってfull Beam
+Searchの前に、9.2.3.1のinitial conflict preflightで現在の `PlanConflict.id` へ
+対応付け直す。元の `conflictKey` をそのまま次の再実行へ渡してはならない。再対応付けが一意に成立しない場合は、
+固定対象を推測せず、そのCandidate trialを採用しないか競合を返す。
+
+### 9.2.8 Planner-generated BuildListEntry
+
+BuildListEntryの生成主体を拡張する。
+
+```text
+1. ユーザーがCandidate Search結果から選択して追加する
+2. Planner constrained re-searchがPlan生成に必要としてmaterializeする
+```
+
+規則。
+
+- Planner-generated Entryも通常の `BuildListEntry` 形状をそのまま使う
+- 新しい永続provenance fieldを追加しない
+- `ProductionPlan` へembedded Candidate Snapshotを追加しない
+- Candidate table等の新しい永続entityを追加しない
+- constrained enumerationで発見した全Candidateを保存しない
+
+Candidateはまずmaterializeしてから一時Entryとして生成し、Planner trialへ使う。
+
+```text
+ConstrainedCandidate yield        (Search Domainのtransient semantic result)
+  ↓
+deterministic materializer         (BuildCandidate形状へ変換。9.2.13)
+  ↓
+temporary BuildListEntry
+  ↓
+augmented PlannerInputでPlannerを完全再実行
+```
+
+enumeratorは `BuildCandidate` を直接yieldしない。`BuildCandidate` は `id` /
+`searchRunId` / `createdAt` / `isSimilarToIdeal` を必須とするが、
+`ConstrainedSearchOrigin` は `searchRunId` と `settings` を持たないため、Search Domain
+側では完成させられない([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.7)。
+
+trialで不採用だったCandidateは永続化しない。最終augmented PlannerInputへ正式採用した
+generated Entryだけを `generatedBuildListEntries` として返す(9.2.14)。
+
+ProductionPlanが生成されない場合、generated Entryを永続化しない。
+Planがpartialでも `plan != null` であり、Plan snapshotがgenerated Entryを含む場合は、
+そのEntryをPlanと同一transactionで保存する(9.2.15)。
+
+### 9.2.9 constrained Candidate enumeration境界
+
+constrained enumerationはSearch Domain側の責務であり、通常の `searchCandidates()`
+とは別のAPI境界へ置く。enumerator側の契約本文は
+[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.7に定義する。
+
+Planner側の要件は次である。
+
+- Search Domain APIへ9.2.3のConflict DTOを渡さない。Plannerが渡すのは
+  `ConstrainedSearchOrigin`、対象TargetWeaponId、enumeration boundsだけである
+- `origin` は過去のUI Candidate Search requestではない。Planner計算開始時の
+  current validated Search / RNG snapshotから構成し、`rngState` / `normalCounters` /
+  `ownedWeapons` / `targetWeapons` / `master` / `calculationContext` を保持する。
+  `searchRunId` / `routeFilter` / `resultFilter` / `settings` を持たせない
+- constrained re-searchは過去のUI一時filterを継承しない。route scopeは現時点で
+  成立する全Search routeとし、`resultFilter`、similar filter、
+  `maxCandidatesPerTarget` を適用しない。探索範囲の上限は
+  `ConstrainedEnumerationBounds` だけをauthorityとする
+- route policyが広がっても、TargetのIdealまたはPractical条件を満たすCandidateだけを
+  yieldする契約は維持する
+- enumeratorがyieldするのは `BuildCandidate` ではなく、Search Domainのtransientな
+  semantic result `ConstrainedCandidate` である。`BuildCandidate.id` /
+  `searchRunId` / `createdAt` / random ID / Clock / enumeration ordinalを
+  enumerator resultへ混ぜない。`BuildCandidate` 形状への変換は9.2.13の
+  deterministic materializerが行う
+- `maxCandidateTrialsPerConflict` / `maxGeneratedBuildListEntries` /
+  `maxPlannerReruns` はPlanner orchestration側のboundsであり、
+  `ConstrainedCandidateSearchInput` へ含めない(9.2.16)
+- Candidate Search側へ次のPlannerロジックを複製しない
+
+```text
+counter precondition
+physical action identity
+shareability
+inventory conflict
+source mutation / version
+PlannerConflictResolution
+```
+
+- 実行不能と判定したCandidateについては、enumeratorへ次のCandidateを要求する
+- Cross規則の軸外pair(`i > 0` かつ `j > 0`)は、必要になったTarget・その競合に限って
+  評価を要求してよい。full Cartesianの事前生成は要求しない
+
+### 9.2.10 Planner再実行
+
+constrained CandidateをBeam Search途中のStateへinjectしてはならない。
+
+```text
+Candidate発見
+  ↓
+一時BuildListEntry
+  ↓
+augmented PlannerInput作成
+  ↓
+createInitialPlannerSearchState から初期Stateを再生成
+  ↓
+Beam Searchを最初から再実行
+```
+
+理由。途中Stateでは既に次が進行済みであり、後からEntryを追加しても、過去に共有した
+物理操作を正しく復元できない。
+
+```text
+routeProgressByEntryId
+current counters
+transient route output
+sourceMutationVersionByOwnedWeaponId
+candidateReadySourceVersionByEntryId
+routeSourceVersionByEntryId
+inFlightExistingSourceByOwnedWeaponId
+```
+
+したがってEntry集合が変わるたびに初期Stateから完全再実行する。full Beam Searchの
+実行回数は `maxPlannerReruns` で有限に抑える。9.2.3.1のinitial conflict preflightは
+Beam Searchを走らせないため、この回数へ含めない(9.2.16)。
+
+再実行入力の `conflictResolutions` は、前回入力のものをそのまま流用しない。
+Entry集合が変わると同じ物理競合でも `PlanConflict.id` が変わり得るため、full Beam
+Searchを走らせる**前**に9.2.3.1のinitial conflict preflightで再対応付けを行い、
+現在の `PlanConflict.id` を `conflictKey` とする `PlannerConflictResolution` を
+組み立ててから完全再実行する。再対応付けが一意に成立しないresolutionは入力へ含めず、
+その競合を未解決として扱う。
+
+```text
+元のvalidated PlannerInputの全valid resolution
+  -> resolutionごとのtransient fixed constraint
+       (fixed Entry ID / Target ID / fingerprint / 競合資源identity)
+  -> augmented PlannerInput作成
+  -> initial conflict preflight
+       validatePlannerInput
+       validation.validBuildListEntries
+       createInitialPlannerSearchState
+       通常Plannerと同じinitial relevant-entry selection
+       createPlannerRouteUnitPlans
+       detectPlannerConflicts
+  -> 全fixed constraintについて
+       競合資源identity一致かつfixed Entryを含むConflictを探す
+  -> 全て一意なら現在のPlanConflict.idでresolution配列を再構築
+  -> 1つでも0件・複数件・fingerprint不一致・validation除外なら
+       推測せず、trial不採用またはconflict返却
+  -> 完全なresolution配列でBeam Searchを初期Stateから完全再実行
+```
+
+full Beam Searchの前にpreflightを置くため、resolution無しのBeam Searchを一度走らせて
+から組み直す循環は発生しない。preflightはConflict検出専用であり、共存可能性の最終
+authorityは完全再実行のBeam SearchとTrace Replayである(9.2.11)。
+
+preflightは通常Beam Searchと同じ `validatePlannerInput()` /
+`validation.validBuildListEntries` / initial relevant-entry selectionを使う。
+B8だけがraw `BuildListEntry` から初期Stateを作ることを禁止し、この経路は
+shared pure helperとして通常Plannerと共有する(9.2.3.1)。
+
+### 9.2.11 共存可能性のauthority
+
+Candidateが固定Candidateと共存できるかどうかの最終authorityは、既存Plannerの
+再実行結果とする。次をそのまま再利用する。
+
+```text
+createPlannerRouteUnitPlans
+counter precondition
+physicalActionKey
+arePlannerRouteUnitsShareable
+inventory precondition
+protected weapon判定
+source mutation / version
+PlannerConflictResolution
+Beam Search
+Trace Replay
+```
+
+B8専用の簡易競合ロジックを追加してはならない。次のような判定を書かない。
+
+```ts
+usedCounters.has(counter)
+```
+
+Counter位置の一致だけを理由とする除外は9.2.2で既に禁止している。
+
+### 9.2.12 Candidate semantic identityとEntry再利用
+
+Planner-generated Candidateのsemantic identityは、run ID / Candidate ID / timestampへ
+依存してはならない。少なくとも次を含める。
+
+```text
+targetWeaponId
+route (kind / sourceOwnedWeaponId / operations)
+finalBonuses multiset
+restoration bonus scope
+seriesSkillId
+groupSkillId
+```
+
+**重要。** 現行の `createBuildCandidateMeaningFingerprint()` はrestoration bonus scopeを
+含まない。同一ラベル5枠のnormal scope結果とgogma scope結果を同一意味とみなすため、
+B8 semantic identityとしてそのまま信用してはならない。B8実装時にscopeを含むauthorityへ
+修正または統合する。
+
+既存BuildListEntryの再利用判定は、semantic fingerprintだけでは不十分である。
+次をすべて確認する。
+
+```text
+candidate semantic fingerprint
+targetDefinitionHash
+searchStateHash
+referencedOwnedWeaponsHash
+CalculationContext
+現在のstaleness
+```
+
+同一semantic Candidateに対応する既存Entryが存在しても、Target定義、Search状態、
+OwnedWeapon参照状態、CalculationContextのいずれかが現在値と異なる場合は再利用しない。
+
+stale Entryを上書き更新してはならない。
+
+```text
+旧stale Entry   -> 履歴としてそのまま残す
+現在のCandidate -> 新しいBuildListEntryを作成する
+```
+
+理由。過去のProductionPlanが旧BuildListEntry IDとSnapshotを参照しているためである。
+
+同じgenerated IDまたは同じcurrent semantic Entryが既に存在する場合は、current semantic
+contentがすべて一致するときだけ再利用する。ID一致だが内容が異なる場合はfail closedとし、
+上書きせずerrorにする。これによりretry時のidempotencyを保証する。
+
+### 9.2.13 決定的ID生成
+
+通常Candidate SearchのID契約は変更しない。B6-F1で行ったのはCandidate出力順の
+run非依存化であり、`BuildCandidate.id` の生成規則と `semanticHash` への
+`searchRunId` 包含は現行のままである。
+
+B8 constrained search専用境界では次を用いる。
+
+```text
+deterministic constrained search identity
+deterministic Candidate ID factory
+deterministic generated BuildListEntry ID
+```
+
+deterministic constrained search identityは名前だけでなく構成要素を固定する。
+少なくとも次から安定生成する。
+
+```text
+TargetWeapon ID
+Planner開始時のSearch / RNG semantic origin
+  (ConstrainedSearchOrigin の semantic 正規化値。
+   Base Seed / 該当Counter群 / 参照OwnedWeapon semantic / Target定義)
+CalculationContext
+ConstrainedEnumerationBounds
+route policy
+  (route scope、filter非適用、上限authorityを表す正規化値)
+```
+
+次を含めてはならない。
+
+```text
+random UUID
+Clock
+request UUID
+enumeration ordinal
+```
+
+`searchRunId` に相当するrun識別子をこのidentityへ含めない。通常Candidate Searchの
+`BuildCandidate.id` 生成規則は上記のとおり変更しないため、constrained search側の
+Candidate ID factoryは通常Searchのものを流用せず、この identity を基点にする。
+
+#### deterministic materializer
+
+B8-B1のenumeratorはSearch Domainのtransientな `ConstrainedCandidate` をyieldする
+([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.7)。通常の `BuildCandidate` 形状への変換は
+B8-Cのdeterministic materializerが行う。
+
+```text
+BuildCandidate.searchRunId
+  = deterministic constrained search identity
+
+BuildCandidate.id
+  = deterministic constrained search identity
+    + Candidate semantic meaning (9.2.12)
+    から安定生成
+
+BuildCandidate.createdAt
+  = PlannerClock
+
+similarityScore
+  = 既存Similarity計算式 ([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.3)
+
+isSimilarToIdeal
+  = 現行B6既定similarity threshold 0.6 を使って算出
+```
+
+`0.6` は表示メタデータ `isSimilarToIdeal` を埋めるためだけに使う。次には使用しない。
+
+```text
+Candidate yield可否
+Candidate enumeration ordering
+route scope
+探索終了
+探索範囲
+off-axis評価
+Planner coexistence
+```
+
+`CandidateSearchSettings` はconstrained enumerationのfilter authorityでも
+extent authorityでもない(9.2.9)。
+
+`createdAt` は `PlannerClock` 由来のためrun間で変わる。これは15.9.1で一致を要求しない
+値であり、`BuildCandidate.id` と `searchRunId` はrun間で一致する。generated
+BuildListEntry IDは `createdAt` を含めずsemantic contentから生成する(前掲)。
+
+generated BuildListEntry IDは、少なくとも次から安定生成する。
+
+```text
+Candidate semantic meaning (9.2.12)
+targetDefinitionHash
+searchStateHash
+referencedOwnedWeaponsHash
+CalculationContext
+```
+
+次をEntry IDまたはsemantic tie-breakへ使用してはならない。
+
+```text
+random UUID
+Clock
+enumeration ordinal
+request UUID
+```
+
+`createdAt` は永続表示用として `PlannerClock` から生成してよいが、ID、semantic
+ordering、Planning input hashの意味へ使わない。`createdAt` をID生成へ含める既存の
+`createBuildListEntry()` 既定経路をそのまま流用しない。
+
+### 9.2.14 Orchestration結果
+
+Core `PlannerResult` の意味を変更せず、外側のorchestration resultを追加する。
+
+```ts
+interface PlannerOrchestrationResult extends PlannerResult {
+  generatedBuildListEntries: BuildListEntry[];
+}
+```
+
+具体的な名称はB8-Cで決定してよいが、意味を変更しない。
+
+- `generatedBuildListEntries` には、最終augmented PlannerInputへ正式採用したEntryだけを含む
+- trial中に生成して不採用となったEntryを含めない
+- `plan === null` の場合は空配列とする
+- 既存の `plan` / `conflicts` / `warnings` の意味を変更しない
+- `PlannerOrchestrationResult` は非永続であり、`ProductionPlan` へ埋め込まない
+
+### 9.2.15 Persistence契約
+
+Planner Domain / WorkerはIndexedDBへ直接アクセスしない。保存はB8-DのApplication /
+Persistence serviceが行う。
+
+保存単位は次を1つのDexie read-write transactionとする。
+
+```text
+generated BuildListEntries + ProductionPlan
+```
+
+- Planだけ、またはEntryだけが残るpartial saveを禁止する
+- 保存直前にcurrent stateを再読込・再validationする
+- validationに失敗した場合は何も書き込まず、retry可能なerrorとして返す
+
+保存直前に最低限確認する項目。
+
+```text
+CalculationContext
+RngState
+Normal Counters
+OwnedWeapons
+TargetWeapons
+BuildListEntry set
+generated Entryのstaleness
+PlanningInputSnapshot.initialExecutionState
+PlanningInputSnapshot.targetWeaponsHash
+PlanningInputSnapshot.buildListEntriesHash
+Planが参照するBuildListEntry IDs
+PlanStepのcandidateIdとEntry Snapshot
+```
+
+`PlanningInputSnapshot.buildListEntriesHash` は最終augmented PlannerInput全体を表す。
+したがって最終inputへ含めたgenerated Entryは、例外なく同一transaction内で保存する。
+
+Active Plan単一制約、置換、破棄、再計算は従来どおりApplication / Persistence層の
+責務であり、B8で変更しない。
+
+### 9.2.16 bounds
+
+B8 constrained re-searchは必ずfiniteであること。boundsは責務ごとに2つへ分離する。
+片方をもう片方の境界へ渡してはならない。
+
+#### Search enumeration bounds
+
+constrained enumeratorが消費する上限である。契約本文は
+[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.7にある。
+
+```ts
+interface ConstrainedEnumerationBounds {
+  maxNormalForgeCount: number;
+  maxGogmaAdvance: number;
+  maxSkillResetCount: number;
+  maxOffAxisPairEvaluations: number;
+}
+```
+
+前3つは既存Candidate Search設定と同じ意味([SEARCH_SPEC.md](./SEARCH_SPEC.md) 3.1)であり、
+B5の実Browser Worker実測位置をB8-B2 benchmarkの基準値として使用してよい。
+
+```text
+Normal 1000
+Gogma   200
+Skill  1000
+```
+
+`maxOffAxisPairEvaluations` はB8で新設する上限である。
+
+#### Planner orchestration bounds
+
+Planner orchestrationが消費する上限である。Search Domainへ渡さない。
+
+```ts
+interface PlannerOrchestrationBounds {
+  maxCandidateTrialsPerConflict: number;
+  maxGeneratedBuildListEntries: number;
+  maxPlannerReruns: number;
+}
+```
+
+`maxPlannerReruns` はfull Beam Searchの実行回数を数える。9.2.3.1のinitial conflict
+preflight(`createInitialPlannerSearchState` / `createPlannerRouteUnitPlans` /
+`detectPlannerConflicts`)はBeam Searchを走らせないため、この回数へ含めない。
+
+`ConstrainedCandidateSearchInput` へこの3つを含めてはならない
+([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.7)。enumerationの探索量に影響せず、
+Search DomainがPlanner側の試行回数を知る必要もないためである。
+
+#### Production defaultの決定時期
+
+**B8-AではどちらのProduction defaultも確定しない。** 根拠のない
+`10000` / `32` / `16` / `64` などをProduction仕様として採用しない。
+
+```text
+B8-B1 : enumeration boundsをcaller必須指定とする。Production defaultを定義しない
+B8-B2 : B8-B1実装後にenumerator側の実Browser Worker benchmarkを実施し、
+        enumeration boundsのProduction defaultを決定する
+B8-C  : orchestration boundsをcaller必須指定のまま実装する。
+        orchestration実装前には実測できないため、ここでdefaultを決めない
+B8-E  : B8-C / B8-D実装後にorchestration側のBrowser / Planner benchmarkを実施し、
+        orchestration boundsのProduction defaultを決定する
+```
+
+`maxCandidateTrialsPerConflict` / `maxGeneratedBuildListEntries` /
+`maxPlannerReruns` はPlanner再実行1回のコストと再実行回数に依存する。そのコストは
+B8-C / B8-Dのorchestration実装が存在しなければ測定できない。したがってB8-B2の
+enumerator benchmarkでこれらのdefaultを決めない。
+
+どちらのboundsも、到達した場合は打ち切りをenumeration summaryまたはwarningとして
+明示する。bound到達を無言でexhaustionとして扱わない。
+
+### 9.2.17 B8のtask分割とCompatibility
+
+```text
+B8-A   Spec / DTO / API / persistence contract           (本節)
+B8-B1  Search-domain constrained candidate enumerator
+       enumeration boundsはcaller必須指定
+B8-B2  enumerator側の実Browser Worker benchmark
+       enumeration boundsのProduction default決定
+B8-C   Planner conflict orchestration / deterministic materializer /
+       augmented-input full rerun / Conflict Resolution再対応付け
+       orchestration boundsはcaller必須指定のまま
+B8-D   Worker / Application / Persistence / atomic save /
+       既存UIへの最小配線
+B8-E   orchestration側のBrowser / Planner benchmark
+       orchestration boundsのProduction default決定
+```
+
+boundsのProduction defaultはB8-B2とB8-Eの2回に分けて決定する。orchestration
+boundsはPlanner再実行の実コストに依存し、B8-C / B8-D実装前には測定できないためである。
+
+B9 what-if、B10 Conflict UI、B11 normal-scope Keepは別Phaseとする。
+
+B8 architecture自体は次を変更しない。
+
+```text
+CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2
+DATABASE_SCHEMA_VERSION = 1
+AppSettings.schemaVersion = 1
+PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2
+supportsSeedSearch = false
+```
+
+理由。
+
+- Production RNG semanticsを変更しない
+- RouteOperationの意味を変更しない
+- ProductionPlanの永続shapeを変更しない
+- PlanStepの意味を変更しない
+- 既存BuildListEntryのshapeを変更しない
+- 既存Plan実行の意味を変更しない
+
+実装時にこれらの前提を破る必要が判明した場合、勝手にversionを変更せず設計チャットへ戻す。
 
 ---
 
@@ -1244,3 +2073,143 @@ Planner-driven constrained re-search実装後に追加する観点。
 - create_plan requestはserializable PlannerInputだけを保持し、Engine instanceを持たない
 - Worker module内で生成したPlannerDependenciesがPlanner計算へ渡される
 - 有効、削除済み、staleな競合選択を区別し、無効選択をwarningにする
+
+## 15.9 Constrained Re-search Test
+
+B8-Aで固定した契約に対するテスト観点である。実装はB8-B1以降で行う。
+
+- 明示的な `PlannerConflictResolution` が無い競合でconstrained re-searchを自動実行しない
+- `recommendedBuildListEntryId` やbestStateのparticipantを固定authorityとして使わない
+- 再検索の開始位置が `conflictingCounter + 1` へ後方固定されない
+- enumeratorへ渡す `origin` がPlanner計算開始時のcurrent validated snapshotから
+  構成され、過去のUI Candidate Search requestを要求しない
+- constrained re-searchが過去のUI一時filterを継承せず、route scopeが現時点で
+  成立する全Routeになり、`resultFilter` / similar filter /
+  `maxCandidatesPerTarget` を適用しない
+- 探索範囲の上限が `ConstrainedEnumerationBounds` だけで決まる
+- deterministic constrained search identityがTargetWeapon ID、Search / RNG semantic
+  origin、CalculationContext、`ConstrainedEnumerationBounds`、route policyから
+  安定生成され、random UUID / Clock / request UUID / enumeration ordinalを含まない
+- 競合位置より前のPracticalが再評価対象に含まれる
+- 初回Searchのstream-local retentionで省略された同一結果の後続位置を再評価できる
+- 初回SearchのPractical dominanceで省略された候補を再評価できる
+- Counter位置の一致だけを理由にCandidateを除外しない
+- 共存判定が既存Planner再実行の結果に一致し、B8専用の簡易競合判定を持たない
+- constrained CandidateをBeam Search途中Stateへinjectせず、初期Stateから再実行する
+- 再実行のたびにconflict resolutionを再対応付けし、元の `conflictKey` を流用しない
+- 再対応付けをfull Beam Search実行後ではなくinitial conflict preflightで行い、
+  resolution無しのBeam Searchを先に走らせる循環が発生しない
+- preflightが `validatePlannerInput` / `validation.validBuildListEntries` /
+  `createInitialPlannerSearchState` / initial relevant-entry selection /
+  `createPlannerRouteUnitPlans` / `detectPlannerConflicts` の既存Plannerロジック
+  だけを使い、B8専用の `usedCounters` 等の簡易判定を持たない
+- preflightがraw `BuildListEntry` から初期Stateを作らず、通常Beam Searchと同じ
+  validation authorityを共有する
+- generated Entryまたはfixed Entryがvalidationで除外された場合にfail closedとなり、
+  そのCandidate trialを採用しない
+- preflight入力にstaleな旧 `conflictKey` を適用せず、誤った
+  `invalid_conflict_resolution` を発生させない
+- 元のvalidated PlannerInputの全valid `PlannerConflictResolution` を再対応付け対象と
+  し、再検索対象以外のユーザー明示resolutionを黙って捨てない
+- 全fixed constraintが一意に対応できた場合だけ完全なresolution配列を再構築し、
+  1つでも0件・複数件・fingerprint不一致・validation除外があればfail closedとする
+- 競合資源identityが一致しfixed Entryを含むConflictが一意なときだけ、現在の
+  `PlanConflict.id` でresolutionを構築する
+- 再対応付けが0件または複数件のとき、対応付けを推測せずtrial不採用または競合返却にする
+- 共存可能性の最終判定がpreflightではなく完全再実行のBeam Search / Trace Replayである
+- `maxPlannerReruns` がfull Beam Searchの実行回数だけを数え、preflightを含めない
+- `same_owned_weapon_consumed` の競合資源が独立fieldとして保持され、
+  participantの `sourceOwnedWeaponId` で代用されない
+- `generatedBuildListEntries` が最終augmented PlannerInputへ採用したEntryだけを含む
+- `plan === null` の場合にgenerated Entryを永続化しない
+- generated BuildListEntry IDがrandom UUID / Clock / enumeration ordinalへ依存しない
+- enumeratorが `ConstrainedCandidate` をyieldし、`BuildCandidate.id` /
+  `searchRunId` / `createdAt` を持たない
+- materializerが `searchRunId` にdeterministic constrained search identityを設定し、
+  `id` をそのidentityとCandidate semantic meaningから安定生成する
+- `isSimilarToIdeal` がthreshold 0.6で算出され、その値がyield可否・ordering・
+  route scope・探索終了・探索範囲・off-axis評価・coexistence判定へ影響しない
+- 通常Candidate Searchの `searchRunId` 契約と `BuildCandidate` ID生成規則が
+  変更されていない
+- 同一入力の再実行で15.9.1のsemantic outcomeが一致し、`ExpectedPlanState` の
+  hash完全一致は要求されない
+- 各run内で first `expectedStateBefore` が
+  `PlanningInputSnapshot.initialExecutionState` と一致し、step Nの
+  `expectedStateAfter` が step N+1 の `expectedStateBefore` と一致する
+- 連番ID・固定時刻のテストdependency注入時だけ、`ExpectedPlanState` 完全一致を
+  追加検証する
+- semantic contentが異なるID衝突でfail closedになる
+- stale既存Entryを再利用も上書きもせず、新しいEntryを作成する
+- Candidate semantic identityにrestoration bonus scopeが含まれる
+- generated EntryとProductionPlanが同一transactionで保存され、partial saveが発生しない
+- 保存直前validation失敗時に何も書き込まない
+- enumeration boundsとorchestration boundsが分離され、Planner専用3 boundsが
+  `ConstrainedCandidateSearchInput` へ渡らない
+- どちらのboundsも、到達した場合にexhaustionではなく打ち切りとして報告する
+
+### 15.9.1 determinismの範囲
+
+同一入力の再実行に対して要求するのはsemantic outcomeの一致だけである。
+「Plan全体が一致する」と読める契約にしてはならない。
+
+#### 一致を要求するもの
+
+```text
+generated BuildListEntry ID
+selected BuildListEntry の semantic 集合
+PlanStep の semantic operation 列と順序
+RNG Counter advance / transition semantics
+inventory transition semantics
+conflicts の semantic outcome
+warnings
+rejectedBuildListEntries
+requiredMaterials
+```
+
+#### 一致を要求しないもの
+
+```text
+ProductionPlan.id                          (PlannerIdFactory 由来)
+PlanStep.id                                (PlannerIdFactory 由来)
+予約 OwnedWeapon ID                        (PlannerIdFactory 由来)
+createdAt / updatedAt                      (PlannerClock 由来)
+PlanningInputSnapshot.createdAt            (PlannerClock 由来)
+ExpectedPlanState の hash 値そのもの        (下記)
+PlanningInputSnapshot.initialExecutionState の hash 値そのもの
+```
+
+**`ExpectedPlanState` のhash完全一致を要求しない。** `ownedWeaponsHash` は
+OwnedWeapon IDを含み(11.2 / [DATA_MODEL.md](./DATA_MODEL.md) 11.2)、
+`reserve_weapon` と `create_material_gogma` の予約OwnedWeapon IDは
+`PlannerIdFactory` が生成する。したがって通常のProduction dependencyでは、
+同じsemantic outcomeでもrunごとに `ownedWeaponsHash` が変わる。
+「予約OwnedWeapon IDの一致は不要」と「expectedState hashの一致は必須」は両立しない。
+要求するのは上記のinventory transition semanticsとRNG Counter advance /
+transition semanticsであり、hash文字列そのものではない。
+
+#### run内で必須のchain validity
+
+hash完全一致をrun間で要求しない代わりに、各run内では既存のchain validityを必須とする。
+
+```text
+first expectedStateBefore == PlanningInputSnapshot.initialExecutionState
+step N expectedStateAfter == step N+1 expectedStateBefore
+```
+
+これは12章の再計算不変条件と14章のExecution Transactionが依存する既存契約であり、
+B8で緩めない。run間のhash一致を要求しないことと、run内のchainが閉じていることは
+別の要件である。
+
+#### 固定dependencyでの追加検証
+
+`PlannerIdFactory` と `PlannerClock` は本書4章の既存契約どおりruntime dependencyであり、
+本番adapterは `crypto.randomUUID()` と現在UTC時刻をラップする。B8はこの契約を変更しない。
+
+連番IDと固定時刻のテストdependencyを注入した場合に限り、`ExpectedPlanState` の
+完全一致、`ProductionPlan.id` / `PlanStep.id` / 予約OwnedWeapon IDの一致、
+`createdAt` / `updatedAt` の一致を追加で検証してよい。これはProduction契約ではなく、
+固定dependency下の追加検証である。
+
+generated BuildListEntry IDの決定性(9.2.13)はこれとは別である。generated Entry IDは
+`PlannerIdFactory` を使わず、semantic contentから安定生成するため、Production
+dependencyでもrun間で一致する。

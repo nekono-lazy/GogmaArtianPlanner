@@ -419,9 +419,13 @@ Planner    : 固定Candidateとの競合で+2が実行不能、+4は実行可能
 引き続き独立に解き、Cross-onlyの初回policyも維持する。追加で必要なのは、
 省略されたCandidateを固定Candidateとの共存可能性に応じて再評価できることだけである。
 
-conflict contextは概念契約のみを定義し、新しいTypeScript型を追加しない。
-what-if比較(一方を固定した場合の他方の次のPractical / Idealまでの距離)は
-将来Planner契約として記録し、v1では実装しない。
+B0時点ではconflict contextを概念契約のみとし、新しいTypeScript型を追加しなかった。
+B8-Aでconflict context DTO、constrained enumeration API、generated BuildListEntry、
+決定的ID、Persistence契約、boundsまでを正式契約として確定した(4.2)。
+契約本文は `docs/PLANNER_SPEC.md` 9.2と `docs/SEARCH_SPEC.md` 5.6.7にある。
+
+what-if比較(一方を固定した場合の他方の次のPractical / Idealまでの距離)はB9であり、
+B8では実装しない。
 
 ---
 
@@ -455,7 +459,11 @@ B5は実Browser Worker性能検証であり、engine versionへ影響しない�
 ```text
 B0 -> B7 -> B1 -> B2 -> B3 -> B4 -> B5 -> B6
                                   \
-                                   -> B8 -> B9 / B10
+                                   -> B8-A -> B8-B1 -> B8-B2
+                                                   \
+                                                    -> B8-C -> B8-D -> B8-E
+                                                                          \
+                                                                           -> B9 / B10
 
 B11 は実ゲーム観測を前提とする独立系列
 ```
@@ -471,9 +479,14 @@ B11 は実ゲーム観測を前提とする独立系列
 | B5 | 実Browser Worker性能検証 | C5-E2C8と同形式の実測。checkpoint yield間隔の見直しを含む | B4。完了 |
 | B6 | UI / default / labels修正 | default値、進捗表示粒度、Worker native error handling、`no_owned_weapon_available` 文言、`normal_scope_requires_reset` の誤表現是正 | B5。完了 |
 | B6-F1 | Candidate出力順のrun非依存化 | `compareCandidates()` / `compareDuplicateCandidates()` の最終tie-breakを `BuildCandidate.id` から `candidateStableKey` へ変更。Candidate ID生成規則は不変 | B6。完了 |
-| B8 | Planner-driven constrained re-search | conflict context DTO、制約付き再検索orchestration、Counter位置だけで除外しない判定、初回Search pruning全般を永久除外にしない保証 | B4, 既存Planner |
-| B9 | what-if比較 | 一方固定時の他方の次のPractical / Idealまでの距離算出と提示 | B8 |
-| B10 | 競合UI | 競合候補の除外 / 選択不可表示と理由提示 | B8 |
+| B8-A | Planner-driven constrained re-search 仕様確定 | architecture、conflict context DTO、constrained search API、generated BuildListEntry、決定的ID、Persistence契約、bounds、task分割 | B4, 既存Planner。完了 |
+| B8-B1 | constrained candidate enumerator | Search Domain側の制約付き列挙。enumeration boundsはcaller必須指定 | B8-A |
+| B8-B2 | enumerator実Browser Worker benchmark | enumeration boundsのProduction default決定 | B8-B1 |
+| B8-C | Planner conflict orchestration | 固定Candidate判定、Conflict Resolution再対応付け、deterministic materializer、augmented-input完全再実行。orchestration boundsはcaller必須指定のまま | B8-B1 |
+| B8-D | Worker / Application / Persistence | atomic save、既存UIへの最小配線 | B8-C |
+| B8-E | orchestration Browser / Planner benchmark | orchestration boundsのProduction default決定 | B8-D |
+| B9 | what-if比較 | 一方固定時の他方の次のPractical / Idealまでの距離算出と提示 | B8-E |
+| B10 | 競合UI | 競合候補の除外 / 選択不可表示と理由提示 | B8-E |
 | B11 | normal-tier Keep prediction semantics | 実ゲーム観測 -> game-verified fixture -> Production prediction実装。Search / Planner / Domain検証の除外解除 | 実ゲーム観測 |
 
 ### 4.0 B7を先行させる理由
@@ -706,7 +719,9 @@ B5 benchmarkのworkload設定値と測定値も変更していない。
 列は一致しないことを固定した。B5でordered parityが実際にrunごとに変わった
 `no_ideal_gogma_25` を含む。
 
-B8以降は未完了である。
+**B8-A = 完了。** Planner-driven constrained re-searchの正式契約を仕様文書へ固定した。
+Production TypeScript実装とテストは変更していない。詳細は4.2に記録する。
+B8-B1以降は未完了である。
 
 B8 / B9 / B10 はB1〜B3のstream独立化とは責務が異なるため、既存B1 / B2へ混ぜない。
 特にB8はPlanner側の新規orchestrationである。
@@ -724,9 +739,9 @@ B11の完了を待たない。
 | Target Ideal ⇒ Practical validation | **B7(B1より先行、完了)** |
 | Candidate Searchのstream独立化 | B1 / B2 / B3(B7完了後) |
 | 初回Search終了条件とPractical保持 | B4(B7完了後) |
-| Planner-driven constrained re-search | B8 |
-| conflict context DTO | B8 |
-| 初回Search pruning全般を永久除外にしない保証 | B8 |
+| Planner-driven constrained re-search | B8-A(仕様) / B8-B1〜B8-D(実装) |
+| conflict context DTO | B8-A(仕様) / B8-C(実装) |
+| 初回Search pruning全般を永久除外にしない保証 | B8-A(仕様) / B8-B1(実装) |
 | canonical Idealのrun非依存tie-break (`candidateStableKey`) | B4 |
 | Practical保持のdeterministic horizon | B4 |
 | what-if検索 | B9 |
@@ -735,6 +750,127 @@ B11の完了を待たない。
 | Search progress改善 | B6 |
 | normal-scope Keep prediction | B11 |
 | Worker error handling | B5で再現済み。設計判断はB6 |
+
+---
+
+### 4.2 B8-Aで確定した契約
+
+B8-Aは仕様タスクである。変更したのは仕様文書だけで、`src/**`、テスト、build設定、
+DB schemaは変更していない。
+
+契約本文の所在。
+
+| 内容 | 所在 |
+| --- | --- |
+| B8 architectureと全体契約 | `docs/PLANNER_SPEC.md` 9.2.6〜9.2.17 |
+| conflict context DTO / 競合資源identity | 同 9.2.3 |
+| conflict preflightとResolution再対応付け | 同 9.2.3.1 |
+| 固定Candidateのauthority | 同 9.2.7 |
+| Planner-generated BuildListEntry | 同 9.2.8、`docs/DATA_MODEL.md` 9.4 |
+| Planner再実行 | 同 9.2.10 |
+| 共存可能性のauthority | 同 9.2.11 |
+| semantic identityとEntry再利用 | 同 9.2.12 |
+| 決定的ID生成 | 同 9.2.13 |
+| Orchestration結果 | 同 9.2.14 |
+| Persistence契約 | 同 9.2.15、`docs/DATA_MODEL.md` 14.5 |
+| bounds(enumeration / orchestration分離) | 同 9.2.16 |
+| determinismの範囲 | 同 15.9.1 |
+| deterministic constrained search identity | 同 9.2.13 |
+| deterministic materializer | 同 9.2.13、`docs/SEARCH_SPEC.md` 5.6.7 |
+| constrained enumeration API / origin / route policy / 軸外Cross | `docs/SEARCH_SPEC.md` 5.6.7 |
+
+確定した主な点。
+
+- 共存可能性の最終authorityは、augmented PlannerInputに対する既存Plannerの再実行とする。
+  Search側へcounter precondition / action identity / shareability / inventory /
+  source versionを複製しない
+- constrained CandidateをBeam Search途中Stateへinjectせず、
+  `createInitialPlannerSearchState` から完全再実行する
+- 固定Candidateのauthorityは `PlannerConflictResolution.selectedBuildListEntryId` だけとする。
+  `recommendedBuildListEntryId`、bestStateのparticipant、priority、scoreを使わない
+- 最終augmented PlannerInputへ採用したgenerated BuildListEntryだけを、
+  ProductionPlanと同一Dexie transactionで保存する
+- generated Entry IDはrandom UUID / Clock / enumeration ordinal / request UUIDへ依存させない
+- 既存 `TargetSearchScheduler` をconstrained enumerationへ流用しない
+- 軸外Crossは必要なTarget・競合に限りlazyに評価し、full Cartesianを事前生成しない
+- `PlanConflict.id` はparticipant集合を含むためgenerated Entry追加でIDが変わり得る。
+  元の `conflictKey` を流用せず、競合資源identityとfixed Entryで一意に再検出できた
+  場合だけ現在のIDでresolutionを構築する。0件・複数件では推測しない
+- 再対応付けはfull Beam Searchの前のinitial conflict preflightで行う。resolution
+  無しのBeam Searchを先に走らせて結果からresolutionを組み直す循環を作らない。
+  `maxPlannerReruns` はfull Beam Searchの実行回数だけを数え、preflightを含めない
+- preflightは通常Beam Searchと同じvalidation authorityを使う。
+  `validatePlannerInput` → `validation.validBuildListEntries` →
+  `createInitialPlannerSearchState` → 通常Plannerと同じinitial relevant-entry
+  selection → `createPlannerRouteUnitPlans` → `detectPlannerConflicts` の順とし、
+  raw `BuildListEntry` から初期Stateを作らない。generated Entryまたはfixed Entryが
+  validation除外ならfail closed。この経路はshared pure helperとして通常Plannerと
+  共有し、二重実装しない
+- 再対応付け対象は元のvalidated PlannerInputの全valid `PlannerConflictResolution`
+  とする。今回の再検索対象以外のユーザー明示resolutionを黙って捨てない。全fixed
+  constraintが一意に対応できた場合だけ完全なresolution配列を再構築する
+- enumeratorは `BuildCandidate` ではなくtransientな `ConstrainedCandidate` を
+  yieldする。`BuildCandidate` 形状への変換はB8-Cのdeterministic materializerが行い、
+  `searchRunId` はdeterministic constrained search identity、`id` はそれと
+  Candidate semantic meaningから安定生成、`createdAt` は `PlannerClock` とする。
+  threshold 0.6は `isSimilarToIdeal` の算出だけに使う
+- enumeratorの `origin` は過去のUI Candidate Search requestではなく、Planner計算
+  開始時のcurrent validated Search / RNG snapshotとする。専用の
+  `ConstrainedSearchOrigin` を定義し、UI一時filterと `searchRunId` を持たせない
+- constrained re-searchは過去のUI一時filterを継承しない。route scopeは現時点で
+  成立する全Routeとし、`resultFilter` / similar filter / `maxCandidatesPerTarget`
+  を適用せず、上限は `ConstrainedEnumerationBounds` だけをauthorityとする
+- deterministic constrained search identityはTargetWeapon ID、Planner開始時の
+  Search / RNG semantic origin、CalculationContext、`ConstrainedEnumerationBounds`、
+  route policyから安定生成する
+- boundsをenumeration側4つとorchestration側3つへ分離し、Planner専用3 boundsを
+  `ConstrainedCandidateSearchInput` へ渡さない
+- determinismはsemantic outcomeの一致だけを要求する。`PlannerIdFactory` 由来の
+  ProductionPlan ID / PlanStep ID / 予約OwnedWeapon ID、`PlannerClock` 由来の
+  `createdAt` / `updatedAt`、および `ExpectedPlanState` のhash完全一致は要求しない。
+  run内のexpected-state chain validityは従来どおり必須とする
+
+B8-Aで確定しなかった点。
+
+- enumeration boundsのProduction default(`maxNormalForgeCount` /
+  `maxGogmaAdvance` / `maxSkillResetCount` / `maxOffAxisPairEvaluations`)。
+  B8-B1ではcaller必須指定とし、B8-B2のenumerator実Browser Worker benchmark後に決定する
+- orchestration boundsのProduction default(`maxCandidateTrialsPerConflict` /
+  `maxGeneratedBuildListEntries` / `maxPlannerReruns`)。Planner再実行1回のコストは
+  B8-C / B8-Dのorchestration実装が無ければ測定できないため、B8-B2では決めない。
+  B8-C / B8-Dはcaller必須指定のまま実装し、B8-Eのbenchmark後に決定する
+- constrained enumeratorの具体的な探索スケジューリング(lazy frontier / best-first等)
+- `PlannerOrchestrationResult` およびconstrained search API群の最終的な型名
+
+B8-Aで確認した既存実装の問題。
+
+- `createBuildCandidateMeaningFingerprint()`(`src/domain/buildList/buildListEntry.ts`)が
+  restoration bonus scopeを含まない。同一ラベル5枠のnormal scope結果とgogma scope結果を
+  同一意味とみなすため、B8 semantic identityとしてそのまま使えない。B8実装時に
+  scopeを含むauthorityへ修正または統合する(6章9項)
+- `createBuildListEntry()` の既定ID生成が `createdAt` を含むため、generated Entryの
+  決定的ID生成へそのまま流用できない
+- `CandidateSearchInput` は永続化されず、BuildListEntryは `searchStateHash` /
+  `referencedOwnedWeaponsHash` しか保持しないため、過去のUI Candidate Search request
+  をPlanner / BuildListから復元できない。B8の `origin` をhistorical requestに
+  依存させられないことがB8-A final reviewで判明した
+- `ExpectedPlanState.ownedWeaponsHash` はOwnedWeapon IDを含み、`reserve_weapon` /
+  `create_material_gogma` の予約IDは `PlannerIdFactory` 由来である。したがって
+  「予約OwnedWeapon IDの一致は不要」と「expectedState hashの一致は必須」は
+  両立しない。B8-A final reviewでdeterminism契約から前者を優先して整理した
+- `createInitialPlannerSearchState()` は `ValidatedBuildListEntry[]` を要求し、
+  通常Beam Searchは `validatePlannerInput()` の `validBuildListEntries` だけを使う。
+  B8 preflightがraw `BuildListEntry` を使うと通常Plannerと乖離するため、
+  最終仕様レビューでvalidation authorityを統一した
+- `BuildCandidate` は `id` / `searchRunId` / `createdAt` / `isSimilarToIdeal` を
+  必須とし、`createCandidateFromPrediction()` は `CandidateSearchInput.searchRunId`
+  と `CandidateSearchSettings.similarityThreshold` を使う。`ConstrainedSearchOrigin`
+  はこれらを持たないため、enumeratorが `BuildCandidate` を完成できないことが
+  最終仕様レビューで判明した。enumerator outputとmaterializationを分離した
+
+B8-A自体はProduction RNG semantics、`PRODUCTION_RNG_ENGINE_VERSION`、
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2`、`DATABASE_SCHEMA_VERSION = 1`、
+`AppSettings.schemaVersion = 1`、`supportsSeedSearch = false` を変更しない。
 
 ---
 
@@ -807,6 +943,14 @@ Domain契約を変える判断が必要になった場合は、実装前に設�
    `BuildCandidate.id` の生成規則は変更していない
 9. Ideal分類が `restorationBonusScope` を評価していない(B5で判明。SEARCH_SPEC 5.1
    との矛盾。独立したSearch correctness task **B5-F1で解決済み**。B6には含めない)
+10. `createBuildCandidateMeaningFingerprint()` がrestoration bonus scopeを含まない
+    (B8-Aで判明)。B5-F1で修正したのはSearch側のIdeal判定と stream retention identityで
+    あり、BuildList側のsemantic fingerprintは対象外だった。現状は
+    `isSameBuildListCandidate()` の重複判定で、同一ラベル5枠のnormal scope Candidateと
+    gogma scope Candidateを同一とみなす。B8実装時にscopeを含むauthorityへ修正または
+    統合する(`docs/PLANNER_SPEC.md` 9.2.12)
+11. `createBuildListEntry()` の既定Entry ID生成が `createdAt` を含むため、
+    Planner-generated Entryの決定的ID生成へそのまま流用できない(B8-Aで判明)
 
 ---
 

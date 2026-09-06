@@ -886,6 +886,61 @@ deriveBuildListEntryStaleReasons(
 
 `isStale` はこの戻り値が1件以上かどうかと一致させる。
 
+### Planner-generated BuildListEntry
+
+B8-Aで、BuildListEntryの生成主体を次の2つへ拡張した。契約本文は
+[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.8 / 9.2.12 / 9.2.13 / 9.2.15にある。
+
+```text
+1. ユーザーがCandidate Search結果から選択して追加する
+2. Planner constrained re-searchがPlan生成に必要としてmaterializeする
+```
+
+永続モデルの規則。
+
+- Planner-generated Entryも本節の `BuildListEntry` 形状をそのまま使う
+- 生成主体を表す永続provenance fieldを追加しない
+- `ProductionPlan` へembedded Candidate Snapshotを追加しない
+- Candidate table等の新しい永続entityを追加しない
+- constrained enumerationで発見した全Candidateを保存しない。最終augmented
+  PlannerInputへ正式採用したEntryだけを、生成された `ProductionPlan` と同一
+  Dexie transactionで保存する
+- ProductionPlanが生成されない場合、generated Entryを永続化しない
+
+generated BuildListEntry IDは、少なくとも次から安定生成する。
+
+```text
+Candidate semantic meaning
+targetDefinitionHash
+searchStateHash
+referencedOwnedWeaponsHash
+CalculationContext
+```
+
+`random UUID`、Clock、enumeration ordinal、request UUIDをEntry IDまたはsemantic
+tie-breakへ使用しない。`createdAt` は表示用としてClockから生成してよいが、ID、
+semantic ordering、Planning input hashの意味へ使わない。
+
+既存Entryの再利用は、current semantic contentがすべて一致する場合だけとする。
+ID一致で内容が異なる場合はfail closedとし、上書きしない。Target定義、Search状態、
+OwnedWeapon参照状態、CalculationContextのいずれかが現在値と異なるstale Entryは、
+再利用も上書きもせず履歴としてそのまま残し、現在のCandidateには新しいEntryを作成する。
+過去のProductionPlanが旧Entry IDとSnapshotを参照しているためである。
+
+Candidate semantic identityにはrestoration bonus scopeを含める。現行の
+`createBuildCandidateMeaningFingerprint()` はscopeを含まないため、B8実装時に
+scopeを含むauthorityへ修正または統合する。
+
+Planner-generated Entryの `candidateSnapshot` も本節9.1の `BuildCandidate` 形状で
+ある。ただしconstrained enumeratorが返すのはtransientな `ConstrainedCandidate` で
+あり、`BuildCandidate` 形状への変換はB8-Cのdeterministic materializerが行う。
+materialize時、`searchRunId` はdeterministic constrained search identity、`id` は
+そのidentityとCandidate semantic meaningから安定生成した値、`createdAt` は
+`PlannerClock` 由来の値、`isSimilarToIdeal` はB6既定similarity threshold 0.6で
+算出した表示メタデータとする([PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.13、
+[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.7)。通常Candidate Searchの
+`BuildCandidate` ID生成規則と `searchRunId` 契約は変更しない。
+
 ---
 
 ## 10. 素材要求
@@ -938,6 +993,11 @@ export interface ProductionPlan {
 - `baseSnapshot` はPlanner開始状態の監査、再現、Target・Build List前提の検証に使用する
 - 正常なStep進行後の可変状態を `baseSnapshot` の開始状態と比較してstaleにしない
 - `calculationContext` が現在環境と非互換なら `stale` にする
+- `selectedBuildListEntryIds` はPlanner-generated BuildListEntryを参照してよい。
+  その場合、参照するgenerated Entryは同一Dexie transactionで保存する。
+  Planだけ、またはEntryだけが残るpartial saveを禁止する
+- Candidate SnapshotをProductionPlanへ埋め込まない。Snapshotの保持場所は
+  BuildListEntryのままとする
 
 ## 11.2 PlanningInputSnapshot
 
@@ -1027,6 +1087,21 @@ export interface ExpectedPlanState {
 - `normalCountersHash`: id、counter、isConfirmedを含み、観測日時を除外する
 - `ownedWeaponsHash`: 共通項目としてID、kind、武器種、属性、restorationBonusScope、保存中のボーナス5枠順、isProtected、計画に関係するTarget参照を含む。巨戟だけseriesSkillId、groupSkillId、statusを加える。通常に存在しないSkill / statusへ仮値を設定しない。名称、memo、日時は除外する
 - `buildListEntriesHash`: Entry ID、Candidate Snapshot、Target定義Hash、searchStateHash、CalculationContextを含み、派生値のisStale、staleReasons、日時を除外する
+
+`ExpectedPlanState` の各hashは1つのPlan内で意味を持つ検証値である。`ownedWeaponsHash`
+はOwnedWeapon IDを含み、`reserve_weapon` / `create_material_gogma` の予約IDは
+`PlannerIdFactory` 由来であるため、同じsemantic outcomeでもPlanner実行ごとに値が変わる。
+したがってPlanner実行間でhash文字列の完全一致を要求しない。要求するのは1つのPlan内の
+chain validity、すなわち先頭Stepの `expectedStateBefore` が
+`PlanningInputSnapshot.initialExecutionState` と一致し、Step Nの `expectedStateAfter`
+が Step N+1 の `expectedStateBefore` と一致することである
+([PLANNER_SPEC.md](./PLANNER_SPEC.md) 15.9.1)。12章の再計算不変条件と14.4の
+Execution Transactionはこのchain validityに依存しており、B8で変更しない。
+
+Planner constrained re-searchを経たPlanでは、`buildListEntriesHash` は最終
+augmented PlannerInput全体を表す。したがって最終inputへ含めたPlanner-generated
+BuildListEntryは、例外なくPlanと同一transaction内で保存する
+([PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.15)。
 
 ## 11.3 PlanStep
 
@@ -1166,6 +1241,29 @@ export interface PlanConflict {
 - same_owned_weapon_consumed: kind、OwnedWeapon ID、BuildListEntry IDs
 
 `convert_normal_to_gogma` はsame_skill_counterの位置を使用し、same_gogma_counterへ分類しない。same_gogma_counterはReset Bonuses / Keep Bonusesが同じGogma位置を排他的に必要とする場合に使用する。
+
+`recommendedBuildListEntryId` はユーザー提示用の推奨であり、Planner constrained
+re-searchの固定制約authorityではない。固定authorityは
+`PlannerConflictResolution.selectedBuildListEntryId` だけとする
+([PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.7)。
+B8 orchestrationのconflict context DTOは非永続transientであり、`PlanConflict` を
+置き換えず、`ProductionPlan` へも埋め込まない(同 9.2.3)。
+
+`PlanConflict.id` はsort済みBuildListEntry IDsを含むため、Planner-generated Entryを
+加えたaugmented PlannerInputでは、同じ物理競合でもIDが変わり得る。
+このID生成規則自体はB8で変更しない。代わりにorchestrationが、ConflictKindと
+kind別競合位置だけからなる非永続の競合資源identityを保持し、full Beam Searchの前の
+initial conflict preflightで `PlannerConflictResolution.conflictKey` を現在の
+`PlanConflict.id` へ対応付け直す(同 9.2.3.1)。`same_owned_weapon_consumed` の
+競合資源identityは排他消費されるOwnedWeapon IDであり、participantの
+`sourceOwnedWeaponId` とは別物である。
+
+再対応付けの対象は、元のvalidated PlannerInputが持つ**全ての**valid
+`PlannerConflictResolution` とする。generated Entry追加で参加者集合が変われば、
+今回の再検索対象ではない別Conflictの `PlanConflict.id` も変わり得るためである。
+全fixed constraintが一意に対応できた場合だけ完全な `PlannerConflictResolution[]` を
+再構築し、1件でも対応付けできない場合はfail closedとする。他のユーザー明示
+resolutionを黙って捨ててはならない。
 
 同じ論理競合は再Plannerでも同じID、位置・参加Entry・対象資源が変われば別IDになる。
 第9の競合適用時はconflictKeyが再検出した競合と一致し、selectedBuildListEntryIdがその
@@ -1328,6 +1426,21 @@ Execution Navigatorの1Step確定処理は、次の更新を1つのDexie read-wr
 対象操作は、結果一致、武器確保、予定された旧実用品の素材化確認、想定外結果記録とする。Transaction内のいずれかが失敗した場合は全更新をrollbackし、Step確定前の状態を維持する。
 
 UndoもRngState、全NormalArtianCounter、対象OwnedWeapon、ProductionPlan、ExecutionHistoryを1つのDexie transactionで復元する。復元途中に失敗した場合はUndoを適用せず、元の状態と履歴を維持する。
+
+## 14.5 Planner Save Transaction
+
+Planner constrained re-searchを経たPlan保存も原子的に行う。契約本文は
+[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.15にある。
+
+- Planner-generated BuildListEntry群と `ProductionPlan` を1つのDexie
+  read-write transactionで保存する
+- Planだけ、またはEntryだけが残るpartial saveを禁止する
+- 保存直前にcurrent stateを再読込・再validationし、失敗時は何も書き込まない
+- Planner Domain / WorkerはIndexedDBへ直接アクセスしない。この保存は
+  Application / Persistence層の責務とする
+
+新しいtableもDexie schema versionの変更も伴わない。`buildListEntries` と
+`productionPlans` の既存tableをそのまま使う。
 
 ---
 
