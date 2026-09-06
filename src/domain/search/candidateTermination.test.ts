@@ -167,6 +167,29 @@ describe('B4 actual Target-wide termination', () => {
     expect(await run(true)).toEqual(await run(false))
   })
 
+  it('keeps the ordered output identical when only searchRunId, IDs and the clock change', async () => {
+    // B6-F1: `compareCandidates()` ties on `candidateStableKey`, not on
+    // `BuildCandidate.id`, whose `semanticHash` folds in `searchRunId`.
+    const run = async (second: boolean) => {
+      const { input, engine } = fixture()
+      if (second) input.searchRunId = 'determinism-b'
+      let serial = 0
+      const result = await searchCandidates(input, engine, {
+        ...options,
+        now: () => (second ? '2026-09-05T00:00:00.000Z' : SEARCH_FIXTURE_TIME),
+        createCandidateId: () => candidateId(String(second ? 1000 - serial++ : serial++)),
+      })
+      return result.targetResults[0].candidates
+    }
+    const first = await run(false)
+    const second = await run(true)
+    expect(first.length).toBeGreaterThan(1)
+    // Ordered, not merely the same set.
+    expect(second.map(candidateStableKey)).toEqual(first.map(candidateStableKey))
+    // Only the ordering was fixed; run-dependent identity still differs.
+    expect(second.map(({ id }) => id)).not.toEqual(first.map(({ id }) => id))
+  })
+
   it('settles the same set with Ideal-producing RouteKinds evaluated first or last', async () => {
     async function run(reverse: boolean) {
       const { input, engine, calls } = fixture(true, 5)

@@ -470,6 +470,7 @@ B11 は実ゲーム観測を前提とする独立系列
 | B4 | 初回Search終了条件とPractical保持 | canonical Ideal終了、`candidateStableKey` によるrun非依存tie-break、操作数D以下のPractical horizon、branch-and-bound / best-first、非劣位Practical列挙、保守的dominance、`maxCandidatesPerTarget` のIdeal枠確保 | B3, **B7**。完了 |
 | B5 | 実Browser Worker性能検証 | C5-E2C8と同形式の実測。checkpoint yield間隔の見直しを含む | B4。完了 |
 | B6 | UI / default / labels修正 | default値、進捗表示粒度、Worker native error handling、`no_owned_weapon_available` 文言、`normal_scope_requires_reset` の誤表現是正 | B5。完了 |
+| B6-F1 | Candidate出力順のrun非依存化 | `compareCandidates()` / `compareDuplicateCandidates()` の最終tie-breakを `BuildCandidate.id` から `candidateStableKey` へ変更。Candidate ID生成規則は不変 | B6。完了 |
 | B8 | Planner-driven constrained re-search | conflict context DTO、制約付き再検索orchestration、Counter位置だけで除外しない判定、初回Search pruning全般を永久除外にしない保証 | B4, 既存Planner |
 | B9 | what-if比較 | 一方固定時の他方の次のPractical / Idealまでの距離算出と提示 | B8 |
 | B10 | 競合UI | 競合候補の除外 / 選択不可表示と理由提示 | B8 |
@@ -642,7 +643,7 @@ B5で判明し、B5では修正しなかった事項が3つある。
 
 1. Candidate出力順がrun依存である。`compareCandidates()` の最終tie-breakが
    `BuildCandidate.id`(= `searchRunId` を含む)であり、保持集合とcanonical Idealは
-   run非依存だが表示順だけが変わりうる
+   run非依存だが表示順だけが変わりうる。**B6-F1で解決済み** (下記)
 2. `SearchWorkerClient` がWorkerの `error` / `messageerror` を購読しておらず、
    Worker load失敗を自動検知できない(再現済み)。ユーザー操作が無ければ検索中
    表示が続く。既存のCancelボタンによる手動復帰は可能
@@ -685,7 +686,27 @@ Plannerのscope回帰ではnormal-scopeのOwned GogmaがIdealラベルとSkill�
 Planner algorithm / Beam Search / scoringは変更していない。benchmarkの変更は計算contextの
 version追従のみであり、B5 workload、予測条件、測定値とWorker性能コードは維持する。
 
-B6以降は未完了である。
+**B6-F1 = 完了。** B5 7章のFinding「Candidate出力順がrun依存」を解消した。
+`compareCandidates()` と `compareDuplicateCandidates()` の最終tie-breakを
+`compareStableKeys(left.id, right.id)` から `candidateStableKey` 比較へ変更した。
+既存のsort priority(category、操作数、Gogma / Skill / Normal advance、
+similarityScore、matchedBonusCount と、duplicate側の操作数、素材合計、Counter合計)は
+変更していない。`candidateStableKey` まで完全一致する2 Candidateは
+run非依存のsemantic差を持たないため比較結果0とし、`BuildCandidate.id` や
+`createdAt` で無理に順序づけない(`deduplicateCandidates()` は先着を保持する)。
+
+`BuildCandidate.id` の生成規則、`semanticHash` への `searchRunId` 包含、
+`candidateStableKey` の構成、`candidateDeduplicationKey()` は変更していない。
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2`、Production RNG semantics / version、
+`supportsSeedSearch`、B2 / B3 / B4 / B5-F1 / B6の契約、Similarity式、resultFilter、
+B5 benchmarkのworkload設定値と測定値も変更していない。
+
+回帰として、`searchRunId` だけを変えた2 runで各Targetの
+`candidates.map(candidateStableKey)` が配列順まで一致し、かつ `BuildCandidate.id`
+列は一致しないことを固定した。B5でordered parityが実際にrunごとに変わった
+`no_ideal_gogma_25` を含む。
+
+B8以降は未完了である。
 
 B8 / B9 / B10 はB1〜B3のstream独立化とは責務が異なるため、既存B1 / B2へ混ぜない。
 特にB8はPlanner側の新規orchestrationである。
@@ -780,9 +801,10 @@ Domain契約を変える判断が必要になった場合は、実装前に設�
    B6で native `error` / `messageerror` をfail closedとして自動検知。
    pending全rejectとterminateを行い、壊れたWorkerを再利用しない。
    Worker自動再生成とページ自動reloadはv1では実装しない
-8. Candidate出力順のrun依存(B5で判明。保持集合とcanonical Idealはrun非依存)。
-   B6では未修正。`compareCandidates()` の最終tie-breakが `BuildCandidate.id` である
-   問題は、B6後の別タスクとして残す
+8. ~~Candidate出力順のrun依存(B5で判明。保持集合とcanonical Idealはrun非依存)。~~
+   B6では未修正。**B6-F1で解決済み**。`compareCandidates()` と
+   `compareDuplicateCandidates()` の最終tie-breakを `candidateStableKey` へ変更した。
+   `BuildCandidate.id` の生成規則は変更していない
 9. Ideal分類が `restorationBonusScope` を評価していない(B5で判明。SEARCH_SPEC 5.1
    との矛盾。独立したSearch correctness task **B5-F1で解決済み**。B6には含めない)
 

@@ -887,6 +887,8 @@ candidateStableKey = stableStringify({
 - **同一入力なら検索runを跨いでも同じcanonical Idealを選ぶ**ことを契約とする
 
 B4でcanonical orderingへ `candidateStableKey` を導入済みである。
+B6-F1で7章の重複排除と8章の表示用ソートの最終tie-breakへも適用し、
+Candidateの最終出力順からrun依存値を排除した。
 `BuildCandidate.id` の生成実装は変更していない。
 
 実装要件。
@@ -1249,7 +1251,11 @@ Reset BonusesまたはKeep Bonusesを含むMixed Routeは、起点OwnedWeaponが
 1. estimatedOperationCountが少ない候補を残す
 2. 必要素材数が少ない候補を残す
 3. startからの総Counter進行が少ない候補を残す
-4. IDが辞書順で小さい候補を残す
+4. `candidateStableKey` が辞書順で小さい候補を残す
+
+4のtie-breakに `BuildCandidate.id` を使ってはならない(8章)。
+ここまで完全一致する2 Candidateはrun非依存のsemantic差を持たないため
+比較結果0とし、先に到達した候補をそのまま残す。
 
 ---
 
@@ -1264,7 +1270,7 @@ Reset BonusesまたはKeep Bonusesを含むMixed Routeは、起点OwnedWeaponが
 5. estimatedNormalAdvance昇順。ただし `null` は最後
 6. similarityScore降順
 7. idealDifference.matchedBonusCount降順
-8. id昇順
+8. `candidateStableKey` 昇順
 
 TargetWeapon間の表示順。
 
@@ -1276,9 +1282,18 @@ TargetWeapon間の表示順。
 `estimatedOperationCount` が `estimatedGogmaAdvance + estimatedSkillAdvance`
 (+ forge回数)に対応するため、各streamで進行量が最小のanchor解を含む合成が
 常に上位へ来る。5.6.3のcanonical Idealもこの順序で一意に決まる。
-ただしcanonical Idealの最終tie-breakは `id` ではなく5.6.3の `candidateStableKey`
-を使う。`BuildCandidate.id` は `searchRunId` を含むためrun間で安定しない。
-表示用ソートの最終tie-breakとしての `id` 昇順は現行どおり維持する。
+canonical Idealも表示用ソートも、最終tie-breakには `id` ではなく5.6.3の
+`candidateStableKey` を使う。`BuildCandidate.id` は `searchRunId` を含むため
+run間で安定しない。**Candidateの最終出力順にrun依存値を使ってはならない。**
+`candidateStableKey` まで完全一致する2 Candidateはrun非依存のsemantic差を
+持たないため比較結果0とし、`BuildCandidate.id` / `createdAt` / `searchRunId` で
+順序づけてはならない。7章の重複排除における最終tie-breakも同じ規則に従う。
+
+同一Search入力に対して `searchRunId` だけを変えて2回検索した場合、
+`BuildCandidate.id` は異なってよいが、各Targetの
+`candidates.map(candidateStableKey)` は**配列順まで一致**しなければならない。
+これはB6-F1で実装済みである。`BuildCandidate.id` の生成規則
+(`searchRunId` を含む `semanticHash`)は変更していない。
 
 5.5.2 / 5.5.3で初回検索の解集合から外す同結果・後続位置の解は、このソート順の
 すべてのキーで残す解に劣るか同値である。ただしそれは初回検索の順位付けに
@@ -1548,6 +1563,9 @@ Worker error契約(B6)。
 - 確定したIdealが8章の標準ソート順で最小であり、RouteKindの評価順を入れ替えても同一になる
 - canonical Idealのtie-breakが `searchRunId` / `createdAt` / `BuildCandidate.id` に
   依存せず、`searchRunId` を変えて同一入力を再検索しても同じIdealが選ばれる
+- 表示用ソートと重複排除の最終tie-breakが `BuildCandidate.id` に依存せず、
+  `searchRunId` だけを変えた再検索で `candidateStableKey` 列が配列順まで一致し、
+  かつ `BuildCandidate.id` 列は一致しない
 - `estimatedOperationCount <= D` のPracticalがすべて評価対象になり、
   Idealを先に発見してもそれより近いPracticalを取りこぼさない
 - Practical保持集合がbest-first / branch-and-bound / RouteKind評価順を変えても同一になる

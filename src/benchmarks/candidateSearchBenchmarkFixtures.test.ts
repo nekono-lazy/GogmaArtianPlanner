@@ -1,6 +1,7 @@
 import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../domain/models/publicTypes'
 import { describe, expect, it } from 'vitest'
 import { searchCandidates } from '../domain/search/candidateSearch'
+import { candidateStableKey } from '../domain/search/candidateProcessing'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../domain/rng/production/productionRngEngine'
 import { REFERENCE_GROUP_SKILL_POOL } from '../domain/rng/production/referenceSkillPools'
 import { REFERENCE_GOGMA_RESET_CANDIDATES } from '../domain/rng/production/referenceGogmaBonuses'
@@ -144,6 +145,32 @@ describe('B5 Candidate Search benchmark fixtures', () => {
     })
     expect(satisfies(atDepthEight.seriesSkillId, atDepthEight.groupSkillId)).toBe(true)
   })
+
+  it('orders the same Search input identically across searchRunIds', async () => {
+    // B5 section 7 measured run-dependent ordered parity on these workloads;
+    // B6-F1 made the final tie-break `candidateStableKey` instead of
+    // `BuildCandidate.id`, whose `semanticHash` folds in `searchRunId`.
+    for (const id of ['no_ideal_gogma_25', 'skill_depth_8_default_bounds']) {
+      const engine = createProductionSearchRngEngine()
+      const runA = await searchCandidates(
+        createCandidateSearchBenchmarkInput(id, 'determinism-a').input,
+        engine,
+      )
+      const runB = await searchCandidates(
+        createCandidateSearchBenchmarkInput(id, 'determinism-b').input,
+        engine,
+      )
+      const a = runA.targetResults[0].candidates
+      const b = runB.targetResults[0].candidates
+      expect(a.length).toBeGreaterThan(1)
+      // Ordered sequence parity, not just set parity.
+      expect(b.map(candidateStableKey)).toEqual(a.map(candidateStableKey))
+      // The ordering was fixed; the run-dependent Candidate IDs still differ.
+      expect(b.map((candidate) => candidate.id)).not.toEqual(
+        a.map((candidate) => candidate.id),
+      )
+    }
+  }, 60_000)
 
   it('reaches the documented canonical Ideal with a Gogma-scope result', async () => {
     const expectedRouteKinds: Record<string, RouteKind> = {

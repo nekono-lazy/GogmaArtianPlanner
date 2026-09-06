@@ -925,6 +925,18 @@ candidate's result and route; `BuildCandidate.id` cannot serve there because the
 current implementation folds `searchRunId` into the hash, so the same input would
 pick a different Ideal on a second run.
 
+The same rule governs the final Candidate output. No run-dependent value may
+decide the ordering of a Search result: the final tie-break of the display sort
+and of duplicate selection is `candidateStableKey`, never `BuildCandidate.id`,
+`searchRunId`, or `createdAt`. Two candidates that also tie on
+`candidateStableKey` carry no run-independent semantic difference left to order
+by, so they compare equal and deduplication keeps the first one reached. Re-running
+the same Search input with only a different `searchRunId` must produce the
+identical ordered `candidateStableKey` sequence per Target — array order, not
+merely the same set — even though the `BuildCandidate.id` values differ. The
+`BuildCandidate` ID generation rule, including `searchRunId` inside its
+`semanticHash`, stays unchanged.
+
 Keep the Practical retention range independent of discovery order too. With `D`
 the canonical Ideal's `estimatedOperationCount`, every Practical reachable within
 `estimatedOperationCount <= D` is evaluated for retention, then filtered by the
@@ -984,9 +996,9 @@ ordering is run-dependent because `compareCandidates()` ties on
 `BuildCandidate.id`, and `SearchWorkerClient` subscribed to no Worker `error` or
 `messageerror`, so a failed Worker was never detected automatically and its
 `startSearch()` stayed pending until the user cancelled (the existing Search page
-Cancel control still recovers the UI). B6 fixed the Worker error handling; the
-Candidate output ordering defect is still open and belongs to a separate task.
-The retained set and the canonical Ideal remain run-independent.
+Cancel control still recovers the UI). B6 fixed the Worker error handling, and
+B6-F1 fixed the Candidate output ordering. The retained set and the canonical
+Ideal were run-independent throughout.
 
 B5-F1 resolved the separate Ideal scope defect found in B5. SEARCH_SPEC 5.1
 remains the authority: Ideal Bonus requires `restorationBonusScope ===
@@ -1054,8 +1066,17 @@ unchanged, and normal-scope Keep prediction is still unimplemented.
   weapon kind; the RouteKind label carries that.
 
 The run-dependent Candidate display ordering found in B5 is untouched by B6 and
-remains a separate task. Do not change `candidateStableKey` or the
-`BuildCandidate` ID generation rule as a side effect.
+was fixed separately in B6-F1.
+
+B6-F1 is implemented as a Search determinism task. `compareCandidates()` and
+`compareDuplicateCandidates()` now break their final tie on `candidateStableKey`
+instead of `BuildCandidate.id`. Their existing priorities are unchanged, as are
+`candidateStableKey` itself, `candidateDeduplicationKey()`,
+`compareCanonicalIdeals()`, `compareCandidateSelection()`,
+`retainInitialCandidates()`, the Similarity formula, `resultFilter`, the B6
+defaults, progress and Worker error handling, `CalculationContext.appSchemaVersion
+= 2`, and Production RNG semantics and version. Do not change `candidateStableKey`
+or the `BuildCandidate` ID generation rule as a side effect.
 
 ### Normal Artian Route
 
@@ -1909,6 +1930,9 @@ Relevant test areas include:
 - The initial search stops at one canonical Ideal, and that Ideal is unchanged
   when RouteKind evaluation order changes
 - The canonical Ideal is unchanged when `searchRunId` changes across runs
+- Changing only `searchRunId` leaves each Target's ordered
+  `candidateStableKey` sequence identical while the `BuildCandidate.id` values
+  differ, and complete semantic duplicates compare equal instead of by ID
 - Every Practical within the canonical Ideal's operation count is evaluated, and
   the retained set is unchanged across traversal orders
 - Stream anchors `b0` / `k0` come from the documented deterministic ordering

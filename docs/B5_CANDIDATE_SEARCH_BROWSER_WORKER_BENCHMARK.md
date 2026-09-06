@@ -299,6 +299,15 @@ Node（jsdom）でも同一inputの3 runで保持集合は完全一致し、順�
 これは性能変更ではなくCandidate出力順のsemanticsに関わるため、B5では修正せず
 9章のFindingとして残す。
 
+**B6-F1で解決済み。** `compareCandidates()` と `compareDuplicateCandidates()` の
+最終tie-breakを `BuildCandidate.id` から `candidateStableKey` へ変更した。
+`BuildCandidate.id` の生成規則は変更していない。
+上記の測定結果（B5時点でordered parityがrunごとに変わったこと、
+`no_ideal_gogma_*` で3 run中3種類、`skill_depth_8_default_bounds` で2種類）は
+B5当時の記録として維持する。B6-F1後は、`searchRunId` だけを変えた再検索で
+`candidates.map(candidateStableKey)` が配列順まで一致する。set parityと
+canonical Idealのrun非依存性はB5当時から変わらない。
+
 ---
 
 ## 8. checkpoint / yieldの判断と変更
@@ -535,6 +544,7 @@ GCタイミングに依存する観測傾向であり、上限値ではない。
 ### 11.4 その他
 
 - Candidate出力順のrun依存（7章）はB6以降で扱う対象として残る
+  → B6では未修正、**B6-F1で解決済み**（7章 / 13.4章）
 - Ideal分類がscopeを評価していない件（9.2章）は独立したSearch correctness
   task B5-F1で解決済みであり、B6の作業には含めない
 - `no_owned_weapon_available` 等のlabel整備はB6のまま
@@ -628,6 +638,8 @@ Worker自動再生成とページ自動reloadはv1では実装しない。
 
 - Candidate出力順のrun依存（7章 / 11.4章）。保持集合とcanonical Idealはrun非依存のまま。
   `compareCandidates()` の最終tie-breakが `BuildCandidate.id` である問題はB6後の別タスク
+  → **B6-F1で解決済み**。最終tie-breakを `candidateStableKey` へ変更した。
+  B5 workloadの設定値と測定値、B5当時のordered parity観測結果は変更していない
 - Browser性能の再測定。B6では実施していない。
 
   正確な内訳は次のとおりである。

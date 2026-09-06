@@ -30,6 +30,13 @@ function totalCounterAdvance(candidate: BuildCandidate): number {
   )
 }
 
+/**
+ * SEARCH_SPEC 5.6.3 / 8: the final tie-break is the run-independent
+ * `candidateStableKey`, never `BuildCandidate.id`, whose `semanticHash` folds
+ * in `searchRunId`. Two candidates that also tie on the stable key carry no
+ * run-independent semantic difference left to order by, so they compare equal
+ * and the caller's deterministic encounter order decides.
+ */
 export function compareDuplicateCandidates(
   left: BuildCandidate,
   right: BuildCandidate,
@@ -38,7 +45,7 @@ export function compareDuplicateCandidates(
     left.estimatedOperationCount - right.estimatedOperationCount ||
     materialQuantity(left) - materialQuantity(right) ||
     totalCounterAdvance(left) - totalCounterAdvance(right) ||
-    compareStableKeys(left.id, right.id)
+    compareStableKeys(candidateStableKey(left), candidateStableKey(right))
   )
 }
 
@@ -62,6 +69,11 @@ function nullableAscending(left: number | null, right: number | null): number {
   return left - right
 }
 
+/**
+ * SEARCH_SPEC 8 display ordering. The final tie-break is the run-independent
+ * `candidateStableKey`, so the same Search input yields the same ordered
+ * semantic sequence across runs even though `BuildCandidate.id` differs.
+ */
 export function compareCandidates(
   left: BuildCandidate,
   right: BuildCandidate,
@@ -79,7 +91,7 @@ export function compareCandidates(
     (right.similarityScore ?? -1) - (left.similarityScore ?? -1) ||
     right.idealDifference.matchedBonusCount -
       left.idealDifference.matchedBonusCount ||
-    compareStableKeys(left.id, right.id)
+    compareStableKeys(candidateStableKey(left), candidateStableKey(right))
   )
 }
 

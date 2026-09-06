@@ -73,9 +73,10 @@ function comparableCandidate(candidate: BuildCandidate) {
 }
 
 /**
- * Ordered parity. The retained set and the ordered output are recorded
- * separately because `compareCandidates()` breaks its final tie on
- * `BuildCandidate.id`, which folds in `searchRunId`.
+ * Ordered parity. The retained set and the ordered output stay separate
+ * measurements: B5 recorded run-dependent ordered parity here, and B6-F1 made
+ * `compareCandidates()` break its final tie on the run-independent
+ * `candidateStableKey` instead of `BuildCandidate.id`.
  */
 function parityKey(result: CandidateSearchResult): string {
   return stableStringify({
