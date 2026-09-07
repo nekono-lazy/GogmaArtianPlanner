@@ -1452,7 +1452,7 @@ B8-C1では扱わず、B8-C2で対応した(4.7)。
 
 ### 4.7 B8-C2 implementation record
 
-**B8-C1 complete。B8-C2 complete。B8-C全体はまだ未完である。次subtaskはB8-C3。**
+**B8-C1 complete。B8-C2 complete。B8-C全体はまだ未完である。次subtaskはB8-C3(前半のB8-C3aは4.8で完了)。**
 
 B8-C2はDomain基盤タスクである。Planner conflict orchestration、constrained
 enumeratorの呼出し、Candidate trial loop、Beam Search再実行、
@@ -1627,6 +1627,143 @@ schema bumpは不要である。normal scope Keep predictionは引き続きunsup
 ある。
 
 ---
+
+### 4.8 B8-C3a implementation record
+
+**B8-C1 complete。B8-C2 complete。B8-C3a complete。B8-C3全体はまだ未完であり、
+B8-C全体も未完である。resolution再対応付けはB8-C3b。次subtaskはB8-C3b。**
+
+B8-C3aはPlanner Domain内のtransient DTOとpure抽出だけを実装した。augmented
+PlannerInputの作成、`conflictResolutions: []` でのpreflight、fixed constraintの
+現在Conflictへの再対応付け、current `conflictKey` の再構築、
+`visitConstrainedCandidates()` 呼出し、Candidate trial loop、Beam Search完全再実行、
+Trace Replay orchestration、`PlannerOrchestrationResult`、
+`PlannerOrchestrationBounds` とその既定値、Worker / Application / Persistence / UI は
+いずれも実装していない。
+
+実装は `src/domain/planner/constrained/plannerConflictContext.ts` の1モジュールで、
+Planner constrained indexからexportしている。すべて非永続transientであり、
+`ProductionPlan` へ埋め込まず、Search Domainへ渡さない。
+
+#### conflict context DTO
+
+`PlannerConstrainedConflictContext` は `PLANNER_SPEC.md` 9.2.3の表どおりに、競合単位
+(`conflictId` / `kind` / 競合資源identity / counter stream / Normal Counter ID /
+`counterBefore` / 排他消費OwnedWeapon ID)とparticipant単位
+(`counterAfter` / operation type / `sourceOwnedWeaponId` / `physicalActionKey` /
+BuildListEntry ID / TargetWeapon ID / Candidate semantic fingerprint)を分けて保持する。
+`PlanConflict` を拡張・置換していない。
+
+#### 競合資源identity
+
+`PlannerConflictResourceIdentity` はConflictKindごとのdiscriminated unionで、
+participant BuildListEntry集合を含まない。
+
+```text
+same_gogma_counter        : kind + Gogma位置
+same_skill_counter        : kind + Skill位置
+same_normal_counter       : kind + NormalArtianCounter ID + Normal位置
+same_owned_weapon_consumed: kind + 排他消費OwnedWeapon ID
+```
+
+比較用に `plannerConflictResourceKey()` と `samePlannerConflictResource()` を用意し、
+key生成は既存 `stableStringify()` を使う。
+
+`same_owned_weapon_consumed` の資源authorityは既存
+`PlannerRouteUnit.exclusiveConsumedOwnedWeaponId` だけである。participantの
+`sourceOwnedWeaponId` から復元していない。DTO側も `consumedOwnedWeaponId` を独立
+fieldとして持つ。
+
+#### context生成authority
+
+新しいConflict検出を実装していない。既存 `preparePlannerInitialContext()` が返す
+`initialRelevantUnitPlans` と `initialConflictDetection` だけを使い、
+`conflictIdsByUnitKey` を既存 `plannerRouteUnitKey()` で逆引きして、
+どの `PlannerRouteUnit` がどのConflictへ参加したかを復元する。
+`detectPlannerConflicts()` の内部groupingをコピーしておらず、
+`usedCounters` 相当の簡易判定も追加していない。既存の
+shareability判定でConflictが生成されない同一Counter位置には、C3 contextも生成されない。
+
+participantの粒度は競合へ参加した `PlannerRouteUnit` である。BuildListEntry IDへ
+圧縮していない。重複除去はunit keyの完全一致だけに限る。
+
+順序はinput Map / arrayのinsertion orderへ依存しない。contextは `conflictId` 昇順、
+participantは BuildListEntry ID -> operation index -> unit index -> `physicalActionKey`
+のstable順である。
+
+#### participant sourceOwnedWeaponId
+
+既存 `routeUnitOwnedWeaponId()` をauthorityとして再利用し、
+`use_weapon_as_material` のときだけ `null` にしている。消費武器は
+`exclusiveConsumedOwnedWeaponId` が持つため、source fieldへ詰め替えない。結果として
+次になる。
+
+```text
+reset_bonuses / keep_bonuses / reset_skills -> operation.sourceOwnedWeaponId
+owned Normal conversion                     -> route.sourceOwnedWeaponId
+new Normal conversion / create_normal_artian-> null
+use_weapon_as_material                      -> null
+```
+
+#### Candidate fingerprint authority
+
+participant fingerprintはB8-C2でscope込みへ修正済みの
+`createBuildCandidateMeaningFingerprint()` だけを使う。新しいfingerprint実装は
+書いていない。Candidate ID / `searchRunId` / `createdAt` は含まない。
+
+#### fixed conflict constraint
+
+`PlannerFixedConflictConstraint` は `originalConflictId` / 競合資源identity /
+fixed BuildListEntry ID / fixed TargetWeapon ID / fixed Candidate fingerprint を持つ。
+generated Entryを示すfieldやprovenanceは追加していない。永続fieldも追加していない。
+
+`originalConflictId` はdiagnosticであり、B8-C3bはこれをcurrent `conflictKey` として
+再利用してはならない。再対応付けauthorityは競合資源identityである。この境界は型の
+docコメントにも明記した。
+
+固定authorityは `PlannerConflictResolution.selectedBuildListEntryId` だけである。
+`recommendedBuildListEntryId`、Beam Search bestState、Target priority、Candidate score
+は参照していない。取得元は `PlannerInitialContext.validConflictResolutions` に限定し、
+validationがdrop済みのresolutionを復活させない。fixed constraintはoriginalの
+validated Planner入力からのみ作る。augmented inputのgenerated Entryから新しい
+fixed constraintを作る設計にはしていない。
+
+#### fail closed
+
+`preparePlannerFixedConflictConstraints()` はall-or-nothingである。1件でも
+constraint化できなければ `status: 'unresolved'` と `constraints: []` を返し、成功分だけ
+返さない。失敗理由はstructuredである。
+
+```text
+conflict_not_found
+selected_entry_not_participant
+participant_context_ambiguous
+```
+
+callerはraw error message文字列ではなく `status` と `reason` で分岐する。
+
+#### 変更していないもの
+
+```text
+PlanConflict / PlannerConflictResolution / ConflictKind
+PlanConflict.id 生成規則
+detectPlannerConflicts semantics
+physicalActionKey semantics / shareability semantics
+Beam Search resolution適用規則
+B8-C1 preparePlannerInitialContext / B8-C2 materializer semantics
+CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2
+DATABASE_SCHEMA_VERSION = 1
+AppSettings.schemaVersion = 1
+PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2
+supportsSeedSearch = false
+defaultConstrainedEnumerationBounds = 40 / 30 / 100 / 500
+defaultCandidateSearchSettings = 1000 / 200 / 1000 / 200 / 0.6
+defaultPlannerOptions
+```
+
+schema bumpは不要である。normal scope Keep predictionは引き続きunsupportedのままで
+ある。
+
 
 ---
 
