@@ -70,7 +70,12 @@ export function hashStableValue(value: unknown): string {
   return `fnv1a32:${(hash >>> 0).toString(16).padStart(8, '0')}`
 }
 
-function normalizeKnownValue<T>(known: {
+/**
+ * The semantic content of one `KnownValue`: the value and whether it is
+ * confirmed. Source, notes, and observation timestamps are non-semantic and
+ * never participate in a stable value.
+ */
+export function normalizeKnownValue<T>(known: {
   value: T | null
   isConfirmed: boolean
 }) {
@@ -164,7 +169,17 @@ export function collectReferencedOwnedWeaponIds(
   return [...ids].sort()
 }
 
-function normalizeReferencedOwnedWeapon(weapon: OwnedWeapon) {
+/**
+ * The semantic content of one OwnedWeapon as `referencedOwnedWeaponsHash`
+ * defines it: identity, kind, weapon type, element, restoration bonus scope and
+ * the stored five slots in order, protection, plus Series / Group Skill and
+ * status for a Gogma weapon. Name, memo, and timestamps are excluded.
+ *
+ * Exported so a caller that needs the same per-weapon semantics for a different
+ * stable value - the B8 deterministic constrained search identity - reuses this
+ * authority instead of writing a second normalization.
+ */
+export function normalizeReferencedOwnedWeapon(weapon: OwnedWeapon) {
   const common = {
     id: weapon.id,
     kind: weapon.kind,

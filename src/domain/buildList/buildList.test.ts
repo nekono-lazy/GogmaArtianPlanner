@@ -11,6 +11,7 @@ import {
   createSearchStateHash,
 } from '../models/hashing'
 import {
+  DOMAIN_FIXTURE_TIME,
   buildListEntryId,
   createValidBuildCandidate,
   createValidNormalArtianCounter,
@@ -75,6 +76,39 @@ describe('BuildListEntry creation', () => {
     const repeated = { ...candidate, id: 'candidate.new-run' as typeof candidate.id, searchRunId: 'new-run' }
     expect(createBuildCandidateMeaningFingerprint(repeated)).toBe(createBuildCandidateMeaningFingerprint(candidate))
     expect(isSameBuildListCandidate(entry, repeated)).toBe(true)
+  })
+})
+
+describe('BuildCandidate semantic fingerprint', () => {
+  it('separates identical five-slot labels by restoration bonus scope', () => {
+    const normalScope = createValidBuildCandidate()
+    normalScope.restorationBonusScope = 'normal_artian'
+    const gogmaScope = { ...structuredClone(normalScope), restorationBonusScope: 'gogma_artian' as const }
+    expect(createBuildCandidateMeaningFingerprint(gogmaScope)).not.toBe(createBuildCandidateMeaningFingerprint(normalScope))
+    expect(isSameBuildListCandidate(createBuildListEntry(normalScope, createValidTargetWeapon(), { createdAt: DOMAIN_FIXTURE_TIME }), gogmaScope)).toBe(false)
+  })
+
+  it('keeps the five slots an unordered multiset within one scope', () => {
+    const candidate = createValidBuildCandidate()
+    const permuted = structuredClone(candidate)
+    permuted.finalBonuses = [...permuted.finalBonuses].reverse() as typeof permuted.finalBonuses
+    expect(createBuildCandidateMeaningFingerprint(permuted)).toBe(createBuildCandidateMeaningFingerprint(candidate))
+  })
+
+  it('ignores derived, presentational, and run-scoped fields', () => {
+    const candidate = createValidBuildCandidate()
+    const decorated = {
+      ...structuredClone(candidate),
+      id: 'candidate.other' as typeof candidate.id,
+      searchRunId: 'search-run.other',
+      createdAt: '2027-01-01T00:00:00.000Z',
+      category: candidate.category === 'ideal' ? ('practical' as const) : ('ideal' as const),
+      isSimilarToIdeal: !candidate.isSimilarToIdeal,
+      similarityScore: 0,
+      estimatedOperationCount: candidate.estimatedOperationCount + 10,
+      requiredMaterials: [],
+    }
+    expect(createBuildCandidateMeaningFingerprint(decorated)).toBe(createBuildCandidateMeaningFingerprint(candidate))
   })
 })
 

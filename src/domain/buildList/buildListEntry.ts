@@ -2,8 +2,14 @@ import type {
   BuildCandidate,
   BuildListEntry,
   BuildListEntryId,
+  BuildRoute,
+  GroupSkillId,
   RestorationBonus,
+  RestorationBonusScope,
+  RestorationBonusSet,
+  SeriesSkillId,
   TargetWeapon,
+  TargetWeaponId,
 } from '../models/publicTypes'
 import { hashStableValue, stableStringify } from '../models/hashing'
 
@@ -41,13 +47,37 @@ export function createTargetDefinitionHash(target: TargetWeapon): string {
   })
 }
 
+/**
+ * The run-independent semantic meaning of one Candidate.
+ *
+ * `restorationBonusScope` is part of that meaning (PLANNER_SPEC 9.2.12): five
+ * slots carrying identical Bonus Type / Rank labels mean a different result in
+ * `normal_artian` scope than in `gogma_artian` scope, and B5-F1 already made
+ * scope explicit everywhere else that compares completed results. Bonus slots
+ * stay an unordered multiset with duplicate counts preserved, while
+ * `route.operations` keeps its semantic order.
+ *
+ * Nothing derived, presentational, or run-scoped participates: no Candidate ID,
+ * `searchRunId`, `createdAt`, category, similarity metadata, ideal-difference
+ * summary, estimate field, or material requirement.
+ */
+export interface BuildCandidateMeaning {
+  targetWeaponId: TargetWeaponId
+  route: BuildRoute
+  finalBonuses: RestorationBonusSet
+  restorationBonusScope: RestorationBonusScope
+  seriesSkillId: SeriesSkillId | null
+  groupSkillId: GroupSkillId | null
+}
+
 export function createBuildCandidateMeaningFingerprint(
-  candidate: BuildCandidate,
+  candidate: BuildCandidateMeaning,
 ): string {
   return hashStableValue({
     targetWeaponId: candidate.targetWeaponId,
     route: candidate.route,
     finalBonuses: normalizeBonuses(candidate.finalBonuses),
+    restorationBonusScope: candidate.restorationBonusScope,
     seriesSkillId: candidate.seriesSkillId,
     groupSkillId: candidate.groupSkillId,
   })

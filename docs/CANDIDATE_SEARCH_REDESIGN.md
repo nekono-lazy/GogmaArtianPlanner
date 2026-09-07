@@ -1399,7 +1399,7 @@ B8-Cが引き継ぐべき観測。
 
 ### 4.6 B8-C1 implementation record
 
-**B8-C1 complete。B8-C全体はまだ未完である。次subtaskはB8-C2。**
+**B8-C1 complete。B8-C全体はまだ未完である。次subtaskはB8-C2(4.7で完了)。**
 
 B8-C1はbehavior-preserving refactorである。B8 constrained re-search orchestrationは
 実装していない。
@@ -1448,7 +1448,185 @@ defaultConstrainedEnumerationBounds
 ```
 
 `createBuildCandidateMeaningFingerprint()` のrestoration bonus scope不足(6章の10)は
-B8-C1では扱わず、B8-C2で扱う。
+B8-C1では扱わず、B8-C2で対応した(4.7)。
+
+### 4.7 B8-C2 implementation record
+
+**B8-C1 complete。B8-C2 complete。B8-C全体はまだ未完である。次subtaskはB8-C3。**
+
+B8-C2はDomain基盤タスクである。Planner conflict orchestration、constrained
+enumeratorの呼出し、Candidate trial loop、Beam Search再実行、
+`PlannerOrchestrationResult`、orchestration boundsはいずれも実装していない。
+
+#### scope-aware Candidate semantic fingerprint
+
+`createBuildCandidateMeaningFingerprint()` へ `restorationBonusScope` を追加した
+(`PLANNER_SPEC.md` 9.2.12、6章の10)。同一ラベル5枠のnormal scope結果とgogma scope
+結果は、これで別意味になる。5枠は従来どおりslot順非依存のmultisetであり、
+`route.operations` の順序はsemanticのまま変更していない。引数型だけを
+`BuildCandidateMeaning` へ広げ、`BuildCandidate` と `ConstrainedCandidate` 由来の
+materialize前semanticの双方が同じ1つのauthorityを通るようにした。fingerprintの
+run / presentation非包含(Candidate ID、`searchRunId`、`createdAt`、category、
+similarity、`idealDifference.summary`、estimate、`requiredMaterials`)は変更していない。
+
+通常 `createBuildListEntry()` の既定ID規則(fingerprint + `createdAt`)自体は変更して
+いない。既存の永続Entryは保持しているIDをそのまま使い続ける。
+
+#### deterministic constrained search identity
+
+`src/domain/planner/constrained/constrainedSearchIdentity.ts` に
+`createConstrainedSearchIdentity()` を実装した。構成要素は
+`PLANNER_SPEC.md` 9.2.13どおりである。
+
+```text
+TargetWeapon ID
+正規化したPlanner開始時Search / RNG origin
+CalculationContext
+ConstrainedEnumerationBounds
+route policy token
+```
+
+route policy tokenは `CONSTRAINED_ROUTE_POLICY_VERSION = 'b8-constrained-route-policy:v1'`
+で、`SEARCH_SPEC.md` 5.6.7のroute policy(全legal route / filter非適用 / 上限は
+`ConstrainedEnumerationBounds` のみ / B8-B1 lazy off-axis)を1つの安定tokenとして表す。
+`PRODUCTION_RNG_ENGINE_VERSION` とは無関係であり、変更していない。
+
+origin semantic正規化の方針。
+
+```text
+含む : Base Seed / Gogma Counter / Skill Counter の value と isConfirmed
+       Targetの武器種のrarity 8 Normal Counter (value と isConfirmed)
+       Route sourceになり得る所持武器のsemantic
+       Target定義hash
+除く : legacy counterGate、KnownValue.source、notes、観測timestamp
+       他Target、Route sourceになり得ない所持武器、無関係なNormal Counter
+       SearchMasterSubset本体
+```
+
+Route sourceになり得る所持武器の判定には、B8-B1 enumeratorがRoute baseを組む際の
+authorityと同じ選択子を使い、B8専用のeligibility規則を作っていない。
+
+```text
+Normal : selectConvertibleOwnedNormalArtianWeapons()
+Gogma  : selectCompatibleOwnedGogmaWeapons()
+```
+
+protectedなOwned Normalは自動conversion Routeのsourceにならないため、identityにも
+含めない。Owned Gogmaは `existing_gogma_reset_skills` がprotectedでも使えるので
+protected込みで対象とし、protection状態は正規化semanticの一部として反映される。
+武器1件のsemanticは
+`referencedOwnedWeaponsHash` のauthorityである `normalizeReferencedOwnedWeapon()` を
+export して再利用した。`normalizeKnownValue()` も同様にexportした。どちらも中身は
+変更していない。
+
+Master subset本体をhashしない理由は、Master identityの権威が
+`CalculationContext.masterDataVersion` だからである。subsetの組み立て方でidentityが
+変わることを避けている。set的collectionはIDでstable sortし、slot順がsemanticな
+5枠は並べ替えていない。
+
+#### deterministic materializer
+
+`src/domain/planner/constrained/constrainedMaterializer.ts` の
+`createConstrainedMaterializer()` が `ConstrainedCandidate` を `BuildCandidate` 形状へ
+変換する。Search semanticsは再計算せず、category、5枠とscope、Skills、Route、
+estimate群、`requiredMaterials`、`idealDifference`、`similarityScore`、両hash、
+`CalculationContext` をそのまま引き継ぐ。追加するのはSearch Domain側が意図的に
+作れない値だけである。
+
+```text
+searchRunId = deterministic constrained search identity
+id          = identity + Candidate semantic meaning から安定生成
+              candidate.constrained.<hash>
+createdAt   = PlannerClock
+isSimilarToIdeal = 既存 isSimilarToIdeal() authority に threshold 0.6 を適用
+```
+
+`0.6` は `defaultCandidateSearchSettings.similarityThreshold` から読むが、用途は表示
+metadata `isSimilarToIdeal` だけである。yield可否、category、enumeration order、
+route scope、探索終了、探索範囲、off-axis評価、Planner coexistence、Entry reuse、
+ID生成のいずれにも使っていない。`CandidateSearchSettings` はこの境界のfilter
+authorityでもextent authorityでもない。
+
+`createdAt` はID・semantic ordering・hashのどこにも入らない。Clockだけを変えて
+materializeすると、Candidate ID / `searchRunId` / generated Entry IDは一致し、
+`createdAt` だけが変わる。`materializeBuildListEntry()` は `clock.now()` を1回だけ
+呼び、CandidateとEntryでその1つの値を共有する。Clock呼出し回数はsemantic identityへ
+影響しない。
+
+完成した `BuildCandidate` は既存 `validateBuildCandidate()` を通す。Target不一致・
+validation失敗・deterministic ID衝突は `ConstrainedMaterializationError` の
+`target_mismatch` / `invalid_candidate` / `generated_entry_id_collision` として
+fail closedする。callerはmessage文字列ではなく `code` を見る。
+
+通常Candidate Search側は変更していない。`createCandidateFromPrediction()` の
+`semanticHash` / ID生成規則、`SearchExecutionContext.createCandidateId()`、
+`searchRunId` 契約、candidate ordering、`CandidateSearchSettings`、Search既定値は
+そのままである。constrained materializerはこれらを流用していない。
+
+#### generated BuildListEntry
+
+generated Entryは通常の `BuildListEntry` 形状そのままで、永続provenance fieldを
+追加していない。IDは次から安定生成する。
+
+```text
+Candidate semantic meaning
+targetDefinitionHash
+searchStateHash
+referencedOwnedWeaponsHash
+CalculationContext
+-> build-list.constrained.<hash>
+```
+
+`createdAt`、Clock、random UUID、request UUID、enumeration ordinalは含まない。
+そのため既定IDに `createdAt` を含む通常 `createBuildListEntry()` の既定経路は
+流用せず、IDと `createdAt` を明示指定して呼んでいる。通常経路の既定挙動自体は
+変更していない。
+
+current Entry reuseの条件は `PLANNER_SPEC.md` 9.2.12どおり全項目一致とする。
+
+```text
+Candidate semantic fingerprint
+targetDefinitionHash
+searchStateHash
+referencedOwnedWeaponsHash
+CalculationContext (isCalculationContextCompatible)
+現在のstaleness (evaluateBuildListEntryStaleness で再計算し空であること)
+```
+
+`createdAt` は一致条件に含めない。過去runのtimestampは今回のClock値と異なり得るし、
+semantic contentを表さないためである。reuseした場合はexisting Entryの
+`createdAt` とIDをそのまま保持する。reuse候補が複数ある場合はID昇順で選ぶので、
+入力配列の順序が結果を決めない。reuse時は防御的にcloneを返し、既存Entryを
+mutationしない。
+
+stale duplicateはreuseせず、updateもしない。旧Entryは履歴として残し、現在semantic
+のgenerated Entryを新規に作る。deterministic Entry IDが既存Entryと一致し、かつ
+current semantic contentが異なる場合はfail closedする。上書き、silent reuse、
+random IDへのfallbackはいずれも行わない。
+
+同じIDかつ同じcurrent semantic contentならreuseするので、retry時のidempotencyは
+保たれる。
+
+#### 変更していないもの
+
+```text
+CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2
+DATABASE_SCHEMA_VERSION = 1
+AppSettings.schemaVersion = 1
+PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2
+supportsSeedSearch = false
+defaultConstrainedEnumerationBounds = 40 / 30 / 100 / 500
+defaultCandidateSearchSettings = 1000 / 200 / 1000 / 200 / 0.6
+defaultPlannerOptions
+Production RNG semantics / RouteOperationの意味 / ProductionPlanの永続shape
+PlanStepの意味 / 既存BuildListEntryのshape
+B8-B1 enumerator semantics と B8-C1 preparePlannerInitialContext
+```
+
+schema bumpは不要である。normal scope Keep predictionは引き続きunsupportedのままで
+ある。
+
+---
 
 ---
 
@@ -1521,14 +1699,14 @@ Domain契約を変える判断が必要になった場合は、実装前に設�
    `BuildCandidate.id` の生成規則は変更していない
 9. Ideal分類が `restorationBonusScope` を評価していない(B5で判明。SEARCH_SPEC 5.1
    との矛盾。独立したSearch correctness task **B5-F1で解決済み**。B6には含めない)
-10. `createBuildCandidateMeaningFingerprint()` がrestoration bonus scopeを含まない
-    (B8-Aで判明)。B5-F1で修正したのはSearch側のIdeal判定と stream retention identityで
-    あり、BuildList側のsemantic fingerprintは対象外だった。現状は
-    `isSameBuildListCandidate()` の重複判定で、同一ラベル5枠のnormal scope Candidateと
-    gogma scope Candidateを同一とみなす。B8実装時にscopeを含むauthorityへ修正または
-    統合する(`docs/PLANNER_SPEC.md` 9.2.12)
-11. `createBuildListEntry()` の既定Entry ID生成が `createdAt` を含むため、
-    Planner-generated Entryの決定的ID生成へそのまま流用できない(B8-Aで判明)
+10. ~~`createBuildCandidateMeaningFingerprint()` がrestoration bonus scopeを含まない~~
+    (B8-Aで判明)。B8-C2で解消済み。fingerprintへ `restorationBonusScope` を追加し、
+    同一ラベル5枠のnormal scope Candidateとgogma scope Candidateを別意味として扱う
+    (4.7、`docs/PLANNER_SPEC.md` 9.2.12)
+11. ~~`createBuildListEntry()` の既定Entry ID生成が `createdAt` を含むため、
+    Planner-generated Entryの決定的ID生成へそのまま流用できない~~ (B8-Aで判明)。
+    B8-C2で解消済み。通常経路の既定挙動は変更せず、generated Entry専用の
+    deterministic ID helperを用意し、IDと `createdAt` を明示指定して呼ぶ(4.7)
 
 ---
 
