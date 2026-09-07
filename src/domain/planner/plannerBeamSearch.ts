@@ -25,7 +25,6 @@ import {
 } from './plannerConflictDetection'
 import {
   arePlannerRouteUnitsShareable,
-  createPlannerRouteUnitPlans,
   routeUnitOwnedWeaponId,
   type PlannerRouteUnit,
 } from './plannerRouteProgress'
@@ -34,7 +33,8 @@ import {
   createPlannerSearchStateSemanticKey,
   evaluatePlannerSearchState,
 } from './plannerScoring'
-import { createInitialPlannerSearchState } from './plannerInitialState'
+import { entryIsRelevantForState } from './plannerEntryRelevance'
+import { preparePlannerInitialContext } from './plannerInitialContext'
 import type {
   ExcludedBuildListEntry,
   PlannerBeamSearchResult,
@@ -49,7 +49,6 @@ import type {
   PlannerWarning,
   PlannerConflictResolution,
 } from './plannerTypes'
-import { validatePlannerInput } from './plannerValidation'
 import { deriveTargetSatisfaction } from './targetSatisfaction'
 
 function compareStableStrings(left: string, right: string): number {
@@ -78,18 +77,6 @@ function rngSnapshot(state: PlannerSearchState): PlannerSearchRngSnapshot {
 
 function cloneState(state: PlannerSearchState): PlannerSearchState {
   return structuredClone(state)
-}
-
-function entryIsRelevantForState(
-  state: PlannerSearchState,
-  entry: BuildListEntry,
-): boolean {
-  const satisfaction = state.targetSatisfaction[entry.targetWeaponId]
-  return Boolean(
-    satisfaction &&
-      !satisfaction.hasIdeal &&
-      (!satisfaction.hasPractical || entry.candidateSnapshot.category === 'ideal'),
-  )
 }
 
 function isExistingGogmaRoute(entry: BuildListEntry): boolean {
@@ -990,80 +977,35 @@ export async function runPlannerBeamSearch(
   dependencies: PlannerDependencies,
   executionOptions: PlannerExecutionOptions = {},
 ): Promise<PlannerBeamSearchResult> {
-  const validation = validatePlannerInput(input, dependencies)
-  const warnings = [...validation.warnings]
-  if (!validation.isValid) {
+  const prepared = preparePlannerInitialContext(input, dependencies)
+  if (prepared.status === 'invalid') {
     return initialFailureResult(
-      warnings,
-      validation.issues,
-      validation.excludedBuildListEntries,
+      prepared.warnings,
+      prepared.issues,
+      prepared.excludedBuildListEntries,
     )
   }
-  const initial = createInitialPlannerSearchState(
-    input,
-    validation.validBuildListEntries,
-  )
-  warnings.push(...initial.warnings)
-  if (!initial.isValid || initial.state === null) {
-    return initialFailureResult(
-      warnings,
-      initial.issues,
-      validation.excludedBuildListEntries,
-    )
-  }
-  const initialSearchState = initial.state
-  const routePlans = createPlannerRouteUnitPlans(
-    validation.validBuildListEntries.map(({ entry }) => entry),
-    dependencies.rngEngine,
-  )
-  const rejections = [...routePlans.rejections]
+  const {
+    allSearchEntries,
+    allUnitPlans,
+    entriesById,
+    excludedBuildListEntries,
+    initialConflictDetection,
+    initialState,
+    routeUnitCountByEntryId,
+    targets,
+    targetsById,
+    validConflictResolutions,
+    warnings,
+  } = prepared.context
+  const rejections = [...prepared.context.routePlanRejections]
   const rejectionKeys = new Set(rejections.map(rejectionKey))
-  const allSearchEntries = validation.validBuildListEntries
-    .map(({ entry }) => entry)
-    .filter((entry) => routePlans.unitPlans.has(entry.id))
-    .sort((left, right) => compareStableStrings(left.id, right.id))
-  const targets = input.targetWeapons
-    .filter(({ isEnabled }) => isEnabled)
-    .sort((left, right) => compareStableStrings(left.id, right.id))
-  const targetsById = new Map(targets.map((target) => [target.id, target]))
-  const initialConflictEntries = allSearchEntries.filter((entry) =>
-    entryIsRelevantForState(initialSearchState, entry),
-  )
-  const entriesById = new Map(
-    allSearchEntries.map((entry) => [entry.id, entry]),
-  )
-  const allUnitPlans = new Map(
-    allSearchEntries.flatMap((entry) => {
-      const units = routePlans.unitPlans.get(entry.id)
-      return units === undefined ? [] : [[entry.id, units] as const]
-    }),
-  )
-  const initialConflictUnitPlans = new Map(
-    initialConflictEntries.flatMap((entry) => {
-      const units = allUnitPlans.get(entry.id)
-      return units === undefined ? [] : [[entry.id, units] as const]
-    }),
-  )
-  const routeUnitCountByEntryId = new Map(
-    [...allUnitPlans].map(([entryId, units]) => [
-      entryId,
-      units.length,
-    ]),
-  )
   const scoreContext = {
     entries: allSearchEntries,
     targetsById,
     routeUnitCountByEntryId,
     conflictCountByEntryId: new Map<BuildListEntryId, number>(),
   }
-  const initialState = cloneState(initialSearchState)
-  Object.keys(initialState.routeProgressByEntryId).forEach((entryId) => {
-    if (!entriesById.has(entryId as BuildListEntryId)) {
-      delete initialState.routeProgressByEntryId[entryId]
-      delete initialState.routeRuntimeByEntryId[entryId]
-      delete initialState.routeSourceVersionByEntryId[entryId]
-    }
-  })
   const discoveredConflictsById = new Map<string, PlanConflict>()
   const recordDetectedConflicts = (
     detection: ReturnType<typeof detectPlannerConflicts>,
@@ -1074,14 +1016,6 @@ export async function runPlannerBeamSearch(
       }
     })
   }
-  const initialConflictDetection = detectPlannerConflicts(
-    initialConflictEntries,
-    initialConflictUnitPlans,
-    targets,
-    initialState,
-    validation.validConflictResolutions,
-    false,
-  )
   recordDetectedConflicts(initialConflictDetection)
   initialState.evaluationScore = evaluatePlannerSearchState(
     initialState,
@@ -1095,7 +1029,7 @@ export async function runPlannerBeamSearch(
   const enabledTargetIds = targets.map(({ id }) => id)
   if (isComplete(initialState, enabledTargetIds)) {
     conflictResolutionWarnings(
-      validation.validConflictResolutions,
+      validConflictResolutions,
       discoveredConflictsById,
     ).forEach(({ kind, message }) => addWarning(warnings, kind, message))
     return {
@@ -1105,7 +1039,7 @@ export async function runPlannerBeamSearch(
       ),
       warnings,
       validationIssues: [],
-      excludedBuildListEntries: validation.excludedBuildListEntries,
+      excludedBuildListEntries,
       rejections,
       expandedStates: 0,
       completed: true,
@@ -1143,7 +1077,7 @@ export async function runPlannerBeamSearch(
         allSearchEntries,
         allUnitPlans,
         targets,
-        validation.validConflictResolutions,
+        validConflictResolutions,
       )
       recordDetectedConflicts(stateConflictDetection)
       const conflictsById = new Map(
@@ -1223,7 +1157,7 @@ export async function runPlannerBeamSearch(
           allSearchEntries,
           allUnitPlans,
           targets,
-          validation.validConflictResolutions,
+          validConflictResolutions,
         )
         recordDetectedConflicts(successorConflictDetection)
         applied.state.evaluationScore = evaluatePlannerSearchState(applied.state, {
@@ -1315,7 +1249,7 @@ export async function runPlannerBeamSearch(
   }
   const bestState = bestComplete ?? bestPartial
   conflictResolutionWarnings(
-    validation.validConflictResolutions,
+    validConflictResolutions,
     discoveredConflictsById,
   ).forEach(({ kind, message }) => addWarning(warnings, kind, message))
   return {
@@ -1325,7 +1259,7 @@ export async function runPlannerBeamSearch(
     ),
     warnings,
     validationIssues: [],
-    excludedBuildListEntries: validation.excludedBuildListEntries,
+    excludedBuildListEntries,
     rejections: rejections.sort((left, right) =>
       compareStableStrings(rejectionKey(left), rejectionKey(right)),
     ),

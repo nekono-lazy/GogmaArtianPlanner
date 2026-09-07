@@ -1397,6 +1397,59 @@ B8-Cが引き継ぐべき観測。
   B8-B2では `ConstrainedEnumerationSummary` 型もenumerator semanticsも変更していない。
   B8-Cがこの区別を要するなら、そのPhaseで設計判断すること
 
+### 4.6 B8-C1 implementation record
+
+**B8-C1 complete。B8-C全体はまだ未完である。次subtaskはB8-C2。**
+
+B8-C1はbehavior-preserving refactorである。B8 constrained re-search orchestrationは
+実装していない。
+
+`runPlannerBeamSearch()` に埋め込まれていた初期競合検出経路を、shared pure helper
+`preparePlannerInitialContext()`(`src/domain/planner/plannerInitialContext.ts`)へ抽出した。
+`PLANNER_SPEC.md` 9.2.3.1「二重実装の禁止」が要求する共有authorityがこれにあたる。
+
+helperが1箇所で生成するもの。
+
+```text
+validatePlannerInput
+validation.validBuildListEntries / excludedBuildListEntries / validConflictResolutions
+createInitialPlannerSearchState + searchable Entryへのprune
+createPlannerRouteUnitPlans と route plan rejection
+allSearchEntries / entriesById / allUnitPlans / routeUnitCountByEntryId
+enabled Targetのstable sortとtargetsById
+initial relevant entries / initial relevant unit plans
+detectPlannerConflicts による initial PlanConflict 検出
+```
+
+`entryIsRelevantForState()` は `src/domain/planner/plannerEntryRelevance.ts` へ移し、
+初期選択とBeam Search動的stateの双方が同じ関数を使う。B8だけの別relevance判定は作らない。
+
+通常 `runPlannerBeamSearch()` 自身がこのhelperを使用する。旧経路は残していない。
+validation失敗と初期State失敗は `status: 'invalid'` の discriminated union で返し、
+`PlannerBeamSearchResult` の意味は変更していない。
+
+helperはPlanner Domain内のpure calculationであり、Persistence / Worker / React /
+Clock / random UUID へアクセスしない。既存validationとRoute unit plan生成が必要とする
+`PlannerDependencies.rngEngine` だけを受け取る。
+
+変更していないもの。
+
+```text
+validatePlannerInput semantics / staleness / CalculationContext / prediction support
+entry relevance semantics
+Route unit plan生成 と rejectionの内容・順序・dedup
+detectPlannerConflicts / physical action identity / shareability
+PlannerConflictResolution適用規則 と PlanConflict.id 生成規則
+Beam scoring / ordering / dedup / beamWidth / maxPlanSteps / maxExpandedStates
+Trace semantics
+CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2
+PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2
+defaultConstrainedEnumerationBounds
+```
+
+`createBuildCandidateMeaningFingerprint()` のrestoration bonus scope不足(6章の10)は
+B8-C1では扱わず、B8-C2で扱う。
+
 ---
 
 ## 5. B1 / B2に残る設計判断
