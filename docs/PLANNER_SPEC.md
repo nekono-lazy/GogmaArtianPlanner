@@ -1426,6 +1426,33 @@ interface PlannerOrchestrationBounds {
 preflight(`createInitialPlannerSearchState` / `createPlannerRouteUnitPlans` /
 `detectPlannerConflicts`)はBeam Searchを走らせないため、この回数へ含めない。
 
+B8-C4aで、数える対象を次のとおり明確化する。
+
+`maxPlannerReruns` はB8 orchestrationから開始される `runPlannerBeamSearch()` の
+全実行開始を数える。
+
+```text
+数える
+  最初のordinary Planner full Beam Search
+  Candidate trialのfull Beam Search
+  Trace Replayでruntime unsupportedが判明したとき
+  Production Plan生成内部で行うBeam再実行
+
+数えない
+  preparePlannerInitialContext()
+  9.2.3.1 initial conflict preflight
+  Conflict context生成
+  Candidate materialization
+  Candidate enumeration
+```
+
+したがってProduction Plan生成関数の呼出し回数と `maxPlannerReruns` の消費回数は
+一致しない場合がある。1回のProduction Plan生成が、runtime unsupported retryにより
+複数回のfull Beam Searchを開始し得るためである。
+
+開始しなかったBeam Searchは消費へ数えない。boundへ到達した場合は打ち切りを
+typed signalとして報告し、無言でexhaustionとして扱わない。
+
 `ConstrainedCandidateSearchInput` へこの3つを含めてはならない
 ([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.7)。enumerationの探索量に影響せず、
 Search DomainがPlanner側の試行回数を知る必要もないためである。

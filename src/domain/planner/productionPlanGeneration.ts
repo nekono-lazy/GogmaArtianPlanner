@@ -30,8 +30,10 @@ import type {
   PlannerDependencies,
   PlannerExecutionOptions,
   PlannerInput,
+  PlannerResult,
   PlannerSearchRejection,
   PlannerWarning,
+  ProductionPlanGenerationObserver,
 } from './plannerTypes'
 
 function compareStableStrings(left: string, right: string): number {
@@ -382,11 +384,26 @@ export function collectRequiredMaterials(
     }))
 }
 
-export const createProductionPlan: CreateProductionPlanCalculation = async (
-  input,
-  dependencies,
+/**
+ * Shared Production Plan generation with an optional runtime observer
+ * (PLANNER_SPEC 9.2.16).
+ *
+ * This is the single implementation. Ordinary `createProductionPlan()`
+ * delegates here without an observer, and B8 constrained-search orchestration
+ * delegates here with one, so the two paths can never drift apart.
+ *
+ * `observer.beforeBeamSearch()` is called once immediately before each full
+ * `runPlannerBeamSearch()` execution that actually starts: the first one, and
+ * every runtime-unsupported retry. The observer is semantics-neutral, so
+ * nothing below branches on its presence, and an exception it throws
+ * propagates unchanged instead of becoming a `PlannerResult`.
+ */
+export async function createProductionPlanWithObserver(
+  input: PlannerInput,
+  dependencies: PlannerDependencies,
   options: PlannerExecutionOptions | undefined,
-) => {
+  observer?: ProductionPlanGenerationObserver,
+): Promise<PlannerResult> {
   const runtimeUnsupported = new Map<BuildListEntryId, string>()
   let beamResult: PlannerBeamSearchResult | null = null
   let replay: PlannerTraceReplayResult | null = null
@@ -400,6 +417,7 @@ export const createProductionPlan: CreateProductionPlanCalculation = async (
             ({ id }) => !runtimeUnsupported.has(id),
           ),
         }
+    observer?.beforeBeamSearch()
     beamResult = await runPlannerBeamSearch(beamInput, dependencies, options)
     if (
       beamResult.cancelled ||
@@ -507,3 +525,13 @@ export const createProductionPlan: CreateProductionPlanCalculation = async (
     warnings: structuredClone(warnings),
   }
 }
+
+/**
+ * The ordinary Production Plan calculation. Its signature and result semantics
+ * are unchanged; it simply runs the shared implementation with no observer.
+ */
+export const createProductionPlan: CreateProductionPlanCalculation = async (
+  input,
+  dependencies,
+  options: PlannerExecutionOptions | undefined,
+) => createProductionPlanWithObserver(input, dependencies, options)

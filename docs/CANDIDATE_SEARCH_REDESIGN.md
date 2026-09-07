@@ -1946,6 +1946,148 @@ unsupportedのままである。
 
 ---
 
+### 4.10 B8-C4a implementation record
+
+**B8-C1 complete。B8-C2 complete。B8-C3 complete。B8-C4a complete。B8-C4全体は
+まだ未完である。次subtaskはB8-C4b candidate trial / adoption orchestration。**
+
+B8-C4aが揃えたもの。
+
+```text
+PlannerOrchestrationBounds       caller必須。Production defaultなし
+bounds validation                pure。3値とも finite integer >= 1
+exact full-Beam observation      実際に開始するfull Beam Searchのみを観測
+maxPlannerReruns budget          typed limit signal付きの消費controller
+```
+
+B8-C4aはsemantics-neutral runtime boundary追加である。Candidate enumeration、
+materialization trial loop、`maxCandidateTrialsPerConflict` /
+`maxGeneratedBuildListEntries` の消費loop、`PlannerOrchestrationResult`、
+generated Entry adoption、orchestration bounds Production default、Worker /
+Application / Persistence / UIはいずれもB8-C4a対象外である。
+
+#### observed ProductionPlan生成境界
+
+Production Plan生成の実装は1つに保ち、ordinary pathとB8 orchestration pathで
+共有する。実装を複製しない。
+
+```ts
+interface ProductionPlanGenerationObserver {
+  beforeBeamSearch(): void
+}
+
+createProductionPlanWithObserver(
+  input,
+  dependencies,
+  options,
+  observer?,
+): Promise<PlannerResult>
+```
+
+`createProductionPlan()` は同じ実装へobserver無しでdelegateする。public signatureと
+結果semanticsは変更していない。
+
+`observer.beforeBeamSearch()` は、実際に開始する各full Beam Searchの直前に1回だけ
+呼ぶ。
+
+```text
+observer.beforeBeamSearch()
+  ↓
+runPlannerBeamSearch()
+```
+
+最初のBeam Searchでも呼び、runtime unsupported retryのBeam Searchでも毎回呼ぶ。
+observerがthrowした場合、その例外をそのままcallerへ伝播する。catchして通常の
+`PlannerResult` へ変換しない。partial Planも返さない。
+
+observerはruntime-onlyである。`PlannerInput`、Worker DTO、`ProductionPlan`、
+Persistenceのいずれへもfieldを追加していない。structured-clone dataへ関数を
+入れていない。B8-D Worker wiringはB8-C4a対象外である。
+
+#### PlannerOrchestrationBounds
+
+```ts
+interface PlannerOrchestrationBounds {
+  maxCandidateTrialsPerConflict: number
+  maxGeneratedBuildListEntries: number
+  maxPlannerReruns: number
+}
+```
+
+Search側の `ConstrainedEnumerationBounds` とは完全に別typeであり、
+`CandidateSearchSettings` も再利用しない。この3 fieldを
+`ConstrainedCandidateSearchInput` へ追加していない。
+
+validationは `validatePlannerOptions()` と同じstyleで、3値とも finite integer かつ
+`>= 1` を要求する。`maxOffAxisPairEvaluations` のzero-disable semanticsはSearch
+enumeration固有であり、この3 boundsへ移植していない。validationは入力をmutateせず、
+defaultへ補正もしない。
+
+Production defaultはB8-Eのbenchmark後である。`defaultPlannerOrchestrationBounds`、
+`32` / `16` / `64`、`10000` などの仮値を追加していない。
+`CandidateSearchSettings` や `defaultConstrainedEnumerationBounds` からのfallbackも
+実装していない。
+
+#### maxPlannerReruns budget
+
+budgetは `ProductionPlanGenerationObserver` の形をしており、
+`createProductionPlanWithObserver()` へそのまま渡せる。
+
+```text
+limit = maxPlannerReruns
+used  = 0
+
+before Beam:
+  used < limit  -> used += 1、実行許可
+  used >= limit -> typed failure、usedは増やさない
+```
+
+打ち切りはmessage文字列ではなくtyped signalで報告する。
+
+```ts
+class PlannerOrchestrationLimitError extends Error {
+  code: 'max_planner_reruns'
+  limit: number
+  used: number
+}
+```
+
+`code` は現在B8-C4aが実際に消費する1つだけである。未使用のerror codeを先行実装して
+いない。他2 boundsのcodeは、消費loopを実装するB8-C4bで追加する。
+
+budgetはpreflightを認識しない。9.2.3.1のpreflightは
+`preparePlannerInitialContext()` / `createPlannerRouteUnitPlans()` /
+`detectPlannerConflicts()` だけを呼びBeam Searchを走らせないため、この観測境界へ
+到達せず、budgetを消費し得ない。
+
+#### 変更していないもの
+
+```text
+PlannerResult / ProductionPlan / PlanningInputSnapshot / PlanStep shape
+runtime unsupported retry semantics
+unsupported Entryの扱い
+Trace Replay順序
+warnings / conflicts / selectedBuildListEntryIds
+rejectedBuildListEntries / requiredMaterials
+Clock / PlannerIdFactory呼出し意味
+B8-C1 preparePlannerInitialContext / B8-C2 materializer
+B8-C3a resource identity / B8-C3b re-association semantics
+Production RNG semantics
+CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2
+DATABASE_SCHEMA_VERSION = 1
+AppSettings.schemaVersion = 1
+PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2
+supportsSeedSearch = false
+defaultConstrainedEnumerationBounds = 40 / 30 / 100 / 500
+defaultCandidateSearchSettings = 1000 / 200 / 1000 / 200 / 0.6
+defaultPlannerOptions
+```
+
+schema bumpは不要である。normal scope Keep predictionは引き続きunsupportedの
+ままである。
+
+---
+
 ## 5. B1 / B2に残る設計判断
 
 以下はB0で決めきらず、実装時にコードを見て決める。

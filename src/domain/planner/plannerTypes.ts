@@ -324,6 +324,24 @@ export type CreateProductionPlanCalculation = (
   options?: PlannerExecutionOptions,
 ) => Promise<PlannerResult>
 
+/**
+ * Runtime-only observation of Production Plan generation (PLANNER_SPEC 9.2.16).
+ *
+ * `beforeBeamSearch()` is called exactly once immediately before each full
+ * `runPlannerBeamSearch()` execution that actually starts, including the first
+ * one and every runtime-unsupported retry. B8 orchestration counts those calls
+ * against `maxPlannerReruns`; the initial conflict preflight runs no Beam
+ * Search and therefore never reaches this observer.
+ *
+ * It is semantics-neutral: it must not change Plan generation behaviour. A
+ * throw from it propagates unchanged to the caller and is never converted into
+ * a `PlannerResult`. Like `PlannerDependencies`, it carries functions and is
+ * therefore never part of `PlannerInput`, a Worker DTO, or persistence.
+ */
+export interface ProductionPlanGenerationObserver {
+  beforeBeamSearch(): void
+}
+
 export type PlannerWorkerRequest =
   | {
       type: 'create_plan'
