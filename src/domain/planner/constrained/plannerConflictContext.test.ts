@@ -7,6 +7,7 @@ import type {
 } from '../../models/publicTypes'
 import { createBuildCandidateMeaningFingerprint } from '../../buildList'
 import { ownedWeaponId } from '../../../test/fixtures/domainData'
+import { belowPracticalBonuses } from '../../../test/fixtures/candidateSearch'
 import { normalWeapon } from '../../../test/fixtures/constrainedEnumeration'
 import {
   fixture,
@@ -642,5 +643,151 @@ describe('B8-C3a fixed conflict constraint extraction', () => {
     expect(prepared.result.constraints).toEqual([])
     expect(prepared.result.status === 'unresolved' && prepared.result.failures)
       .toHaveLength(1)
+  })
+})
+
+describe('B8-C3a duplicate BuildListEntry ID identity', () => {
+  const conflictCounter = 10
+
+  function duplicateFixture(
+    suffix: string,
+    variant: 'different_target' | 'same_target',
+  ) {
+    const fixedTarget = target(`target.ctx.dup.${suffix}.fixed`, 5)
+    const otherTarget = target(`target.ctx.dup.${suffix}.other`, 1)
+    const altTarget = target(`target.ctx.dup.${suffix}.alt`, 3)
+    const fixedSource = sourceWeapon(`owned.ctx.dup.${suffix}.fixed`)
+    const otherSource = sourceWeapon(`owned.ctx.dup.${suffix}.other`)
+    const sharedId = `entry.ctx.dup.${suffix}.shared`
+    const first = routeEntry(
+      sharedId,
+      fixedTarget,
+      resetRoute(fixedSource.id, conflictCounter),
+    )
+    const second = routeEntry(
+      sharedId,
+      variant === 'different_target' ? altTarget : fixedTarget,
+      resetRoute(fixedSource.id, conflictCounter),
+    )
+    if (variant === 'same_target') {
+      // Same Target, different Candidate semantics: the duplicate id is what is
+      // rejected, not a difference the two entries happen to disagree on.
+      second.candidateSnapshot.finalBonuses = belowPracticalBonuses()
+    }
+    const other = routeEntry(
+      `entry.ctx.dup.${suffix}.other`,
+      otherTarget,
+      resetRoute(otherSource.id, conflictCounter),
+    )
+    return {
+      targets: [fixedTarget, otherTarget, altTarget],
+      sources: [fixedSource, otherSource],
+      sharedId,
+      first,
+      second,
+      other,
+    }
+  }
+
+  function prepareDuplicate(
+    suffix: string,
+    variant: 'different_target' | 'same_target',
+    order: 'first_then_second' | 'second_then_first',
+  ) {
+    const built = duplicateFixture(suffix, variant)
+    const duplicates =
+      order === 'first_then_second'
+        ? [built.first, built.second]
+        : [built.second, built.first]
+    const conflictKey = conflictIdOfEntries(
+      built.targets,
+      [built.first, built.other],
+      built.sources,
+    )
+    const context = readyContext(
+      built.targets,
+      [...duplicates, built.other].map((entry) => structuredClone(entry)),
+      built.sources,
+      [{ conflictKey, selectedBuildListEntryId: built.first.id }],
+    )
+    const contexts = createPlannerConstrainedConflictContexts(context)
+    return {
+      built,
+      conflictKey,
+      context,
+      contexts,
+      result: preparePlannerFixedConflictConstraints(context, contexts),
+    }
+  }
+
+  function conflictIdOfEntries(
+    targets: TargetWeapon[],
+    entries: BuildListEntry[],
+    ownedWeapons: OwnedWeapon[],
+  ): string {
+    const contexts = createPlannerConstrainedConflictContexts(
+      readyContext(
+        targets,
+        entries.map((entry) => structuredClone(entry)),
+        ownedWeapons,
+      ),
+    )
+    if (contexts.length !== 1) {
+      throw new Error(`Fixture produced ${contexts.length} conflicts.`)
+    }
+    return contexts[0].conflictId
+  }
+
+  it('fails closed when two valid Entries share the selected id', () => {
+    const prepared = prepareDuplicate('target', 'different_target', 'first_then_second')
+    // Both duplicates really are valid Planner input, and the conflict itself
+    // is still detected, so the failure is the identity check, not a side
+    // effect of an unusable fixture.
+    expect(
+      prepared.context.validBuildListEntries.filter(
+        ({ entry }) => entry.id === prepared.built.sharedId,
+      ),
+    ).toHaveLength(2)
+    expect(prepared.contexts).toHaveLength(1)
+    expect(prepared.contexts[0].conflictId).toBe(prepared.conflictKey)
+    expect(prepared.built.second.targetWeaponId)
+      .not.toBe(prepared.built.first.targetWeaponId)
+    expect(prepared.result.status).toBe('unresolved')
+    expect(prepared.result.constraints).toEqual([])
+    expect(prepared.result.status === 'unresolved' && prepared.result.failures)
+      .toMatchObject([{
+        conflictKey: prepared.conflictKey,
+        selectedBuildListEntryId: prepared.built.sharedId,
+        reason: 'selected_entry_ambiguous',
+      }])
+  })
+
+  it('fails closed regardless of the duplicate Entry order', () => {
+    const forward = prepareDuplicate('order', 'different_target', 'first_then_second')
+    const reversed = prepareDuplicate('order', 'different_target', 'second_then_first')
+    expect(forward.result).toEqual(reversed.result)
+    expect(reversed.result.status).toBe('unresolved')
+    expect(reversed.result.constraints).toEqual([])
+    expect(reversed.result.status === 'unresolved' && reversed.result.failures)
+      .toMatchObject([{ reason: 'selected_entry_ambiguous' }])
+  })
+
+  it('fails closed for one Target with two Candidate meanings too', () => {
+    const forward = prepareDuplicate('same', 'same_target', 'first_then_second')
+    const reversed = prepareDuplicate('same', 'same_target', 'second_then_first')
+    expect(
+      forward.context.validBuildListEntries.filter(
+        ({ entry }) => entry.id === forward.built.sharedId,
+      ),
+    ).toHaveLength(2)
+    expect(forward.built.second.targetWeaponId)
+      .toBe(forward.built.first.targetWeaponId)
+    expect(createBuildCandidateMeaningFingerprint(forward.built.second.candidateSnapshot))
+      .not.toBe(createBuildCandidateMeaningFingerprint(forward.built.first.candidateSnapshot))
+    expect(forward.result.status).toBe('unresolved')
+    expect(forward.result.constraints).toEqual([])
+    expect(forward.result.status === 'unresolved' && forward.result.failures)
+      .toMatchObject([{ reason: 'selected_entry_ambiguous' }])
+    expect(reversed.result).toEqual(forward.result)
   })
 })

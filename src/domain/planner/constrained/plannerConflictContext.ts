@@ -338,6 +338,10 @@ export interface PlannerFixedConflictConstraint {
 }
 
 export type PlannerFixedConstraintFailureReason =
+  /** No currently valid BuildListEntry carries the selected id. */
+  | 'selected_entry_not_valid'
+  /** Several currently valid BuildListEntries carry the selected id. */
+  | 'selected_entry_ambiguous'
   /** `conflictKey` matches no currently detected `PlanConflict`. */
   | 'conflict_not_found'
   /** The selected Entry is not a participant of that conflict. */
@@ -390,6 +394,14 @@ function constraintFailure(
  * Entry of an augmented input: B8-C3b re-maps these constraints, it does not
  * create new ones from generated Entries.
  *
+ * The selected BuildListEntry ID must name exactly one entry of
+ * `context.validBuildListEntries`, and that entry alone supplies the fixed
+ * Target and Candidate fingerprint. `validatePlannerInput()` does not reject a
+ * duplicated BuildListEntry ID, so a malformed input could otherwise fix a
+ * Target and fingerprint chosen by Map insertion order. Its own semantics are
+ * unchanged here: this is a C3 fixed-constraint boundary check, not a new
+ * Planner input rule.
+ *
  * `conflictContexts` must be the result of
  * `createPlannerConstrainedConflictContexts(context)` for the same context.
  */
@@ -412,6 +424,38 @@ export function preparePlannerFixedConflictConstraints(
     (left, right) => compareStableStrings(left.conflictKey, right.conflictKey),
   )
   orderedResolutions.forEach((resolution) => {
+    // The original fixed semantics come from `validBuildListEntries`, never
+    // from `entriesById` or a participant context: both are Maps built from the
+    // same Entry array, so a malformed input carrying one BuildListEntry ID
+    // twice would silently resolve to whichever entry was inserted last, making
+    // the fixed Target and fingerprint depend on input order. Identity of the
+    // user-selected Entry has to be unique before anything is fixed on it.
+    const selectedEntries = context.validBuildListEntries.filter(
+      ({ entry }) => entry.id === resolution.selectedBuildListEntryId,
+    )
+    if (selectedEntries.length === 0) {
+      failures.push(constraintFailure(
+        resolution.conflictKey,
+        resolution.selectedBuildListEntryId,
+        'selected_entry_not_valid',
+        `BuildListEntry '${resolution.selectedBuildListEntryId}' is not among the currently valid Planner entries.`,
+      ))
+      return
+    }
+    if (selectedEntries.length > 1) {
+      failures.push(constraintFailure(
+        resolution.conflictKey,
+        resolution.selectedBuildListEntryId,
+        'selected_entry_ambiguous',
+        `${selectedEntries.length} currently valid BuildListEntries carry the id '${resolution.selectedBuildListEntryId}'.`,
+      ))
+      return
+    }
+    const selected = selectedEntries[0].entry
+    const fixedTargetWeaponId = selected.targetWeaponId
+    const fixedCandidateFingerprint = createBuildCandidateMeaningFingerprint(
+      selected.candidateSnapshot,
+    )
     const conflict = conflictById.get(resolution.conflictKey)
     if (conflict === undefined) {
       failures.push(constraintFailure(
@@ -436,13 +480,14 @@ export function preparePlannerFixedConflictConstraints(
       ({ buildListEntryId }) =>
         buildListEntryId === resolution.selectedBuildListEntryId,
     )
-    const semantics = new Set(
-      matching.map(
-        ({ targetWeaponId, candidateFingerprint }) =>
-          `${targetWeaponId}\n${candidateFingerprint}`,
-      ),
+    // Every participating unit must agree with the unique selected Entry's own
+    // semantics; the participant context confirms them, it never supplies them.
+    const inconsistent = matching.some(
+      ({ targetWeaponId, candidateFingerprint }) =>
+        targetWeaponId !== fixedTargetWeaponId ||
+        candidateFingerprint !== fixedCandidateFingerprint,
     )
-    if (conflictContext === undefined || matching.length === 0 || semantics.size !== 1) {
+    if (conflictContext === undefined || matching.length === 0 || inconsistent) {
       failures.push(constraintFailure(
         resolution.conflictKey,
         resolution.selectedBuildListEntryId,
@@ -455,8 +500,8 @@ export function preparePlannerFixedConflictConstraints(
       originalConflictId: conflict.id,
       resourceIdentity: conflictContext.resourceIdentity,
       fixedBuildListEntryId: resolution.selectedBuildListEntryId,
-      fixedTargetWeaponId: matching[0].targetWeaponId,
-      fixedCandidateFingerprint: matching[0].candidateFingerprint,
+      fixedTargetWeaponId,
+      fixedCandidateFingerprint,
     })
   })
   if (failures.length > 0) {

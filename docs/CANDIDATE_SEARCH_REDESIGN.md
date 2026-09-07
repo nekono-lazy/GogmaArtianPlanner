@@ -1630,8 +1630,8 @@ schema bumpは不要である。normal scope Keep predictionは引き続きunsup
 
 ### 4.8 B8-C3a implementation record
 
-**B8-C1 complete。B8-C2 complete。B8-C3a complete。B8-C3全体はまだ未完であり、
-B8-C全体も未完である。resolution再対応付けはB8-C3b。次subtaskはB8-C3b。**
+**B8-C1 complete。B8-C2 complete。B8-C3a complete。resolution再対応付けは
+B8-C3bで完了した(4.9)。B8-C全体はまだ未完であり、次subtaskはB8-C4である。**
 
 B8-C3aはPlanner Domain内のtransient DTOとpure抽出だけを実装した。augmented
 PlannerInputの作成、`conflictResolutions: []` でのpreflight、fixed constraintの
@@ -1764,6 +1764,185 @@ defaultPlannerOptions
 schema bumpは不要である。normal scope Keep predictionは引き続きunsupportedのままで
 ある。
 
+### 4.9 B8-C3b implementation record
+
+**B8-C1 complete。B8-C2 complete。B8-C3a complete。B8-C3b complete。したがって
+B8-C3全体はcomplete。B8-C全体はまだ未完である。次subtaskはB8-C4 orchestration core。**
+
+B8-C3はこれで次の4点を揃えた。
+
+```text
+transient conflict resource identity            (C3a)
+explicit resolution -> fixed constraint          (C3a)
+augmented conflict preflight                     (C3b)
+complete PlannerConflictResolution[] 再対応付け  (C3b)
+```
+
+B8-C3bで実装していないもの。`visitConstrainedCandidates()` 呼出し、
+ConstrainedCandidate materialize trial loop、`maxCandidateTrialsPerConflict` /
+`maxGeneratedBuildListEntries` / `maxPlannerReruns`、full Beam Search再実行、
+Trace Replay orchestration、`PlannerOrchestrationResult`、orchestration bounds
+Production default、Worker / Application / Persistence / atomic save / UI。
+
+実装は `src/domain/planner/constrained/plannerAugmentedPreflight.ts` の1モジュールで、
+Planner constrained indexからexportしている。すべて非永続transientである。
+
+#### preflight API
+
+```ts
+preparePlannerAugmentedConflictPreflight(
+  augmentedInput: PlannerInput,
+  fixedConstraints: readonly PlannerFixedConflictConstraint[],
+  dependencies: PlannerDependencies,
+): PlannerAugmentedConflictPreflightResult
+```
+
+resultはmessage文字列解析を要しないstructured unionである。
+
+```text
+ready      : preflightContext / conflictContexts / conflictResolutions / resolvedInput
+invalid    : warnings / issues / excludedBuildListEntries
+unresolved : conflictResolutions: [] / failures
+```
+
+`resolvedInput` は `{ ...augmentedInput, conflictResolutions }` のcloneであり、caller
+inputをmutationしない。B8-C4はこれをそのままfull Beam Searchへ渡せる。C3b自身は
+`runPlannerBeamSearch()` / `createProductionPlan()` / Trace Replayを呼ばない。
+
+再対応付け部分だけはpure helperとしても切り出してある。
+
+```ts
+reassociatePlannerFixedConstraints(
+  context: PlannerInitialContext,
+  conflictContexts: readonly PlannerConstrainedConflictContext[],
+  fixedConstraints: readonly PlannerFixedConflictConstraint[],
+): PlannerConstraintReassociationResult
+```
+
+synthetic conflict contextでのテスト(0件 / 複数件 / key衝突 / participant semantic
+不一致)を、実detectorが構造上作れないケースについても行うためである。
+
+#### 旧conflictResolutionsをpreflightへ適用しない
+
+preflight入力は必ず次で作る。
+
+```ts
+{ ...augmentedInput, conflictResolutions: [] }
+```
+
+`PlanConflict.id` はparticipant集合を含むため、generated Entry追加後は旧keyが一致
+しない。旧keyを適用すると誤った `invalid_conflict_resolution` を生む。テストでは、
+同じaugmented inputへ旧resolutionを適用した `preparePlannerInitialContext()` が実際に
+`invalid_conflict_resolution` warningを出すこと、preflight経由ではそれが出ず
+`validConflictResolutions` が空であることの両方を確認している。preflight検出時点の
+`PlanConflict.selectedBuildListEntryId` はnullであり、固定選択はre-association後の
+`resolvedInput.conflictResolutions` にだけ現在keyで現れる。
+
+#### C1 helperの再利用
+
+validation / `validBuildListEntries` / initial state / entry relevance / route unit
+plans / conflict detectionをB8側で再実装していない。`preparePlannerInitialContext()`
+をそのまま呼び、current conflict contextは `createPlannerConstrainedConflictContexts()`
+を使う。`usedCounters` 相当の簡易判定、counter grouping、shareability判定の複製は
+無い。preflightはBeam Searchを走らせないため `maxPlannerReruns` へ数えない。
+
+#### fixed constraintの現在検証
+
+constraintごとに次の順で確認する。
+
+```text
+1. fixed Entryが preflight context.validBuildListEntries に存在するか
+     0件 -> fixed_entry_not_valid
+     複数 -> fixed_entry_ambiguous
+2. entry.targetWeaponId === constraint.fixedTargetWeaponId
+     不一致 -> fixed_target_mismatch
+3. createBuildCandidateMeaningFingerprint(entry.candidateSnapshot) 一致
+     不一致 -> fixed_candidate_fingerprint_mismatch
+4. current conflict match
+     resourceIdentity一致 かつ participantにfixed Entryを含む
+     0件 -> current_conflict_not_found
+     複数 -> current_conflict_ambiguous
+5. matched conflict内のfixed Entry participantが
+   全て同じ fixedTargetWeaponId / fixedCandidateFingerprint
+     混在 -> participant_context_mismatch
+```
+
+raw `augmentedInput.buildListEntries` は探索対象にしない。stale / Target無効 /
+CalculationContext不整合 / capability不足 / protected destructive / prediction
+unsupportedで除外されたEntryをfixed側へ復活させないためである。Candidate ID /
+`searchRunId` / `createdAt` はいずれも判定に使わない。
+
+match条件に旧 `PlanConflict.id` を使わない。`constraint.originalConflictId` は
+diagnosticとfailure報告にだけ残す。
+
+同一Entryが同一Conflictへ複数RouteUnitで参加することは正常であり、ambiguous扱いに
+しない。authorityはConflict match件数がexactly oneであることだけである。
+
+#### 再構築resolution
+
+成功時に作るのは次だけである。
+
+```ts
+{ conflictKey: currentConflict.conflictId, selectedBuildListEntryId: constraint.fixedBuildListEntryId }
+```
+
+`recommendedBuildListEntryId` / Beam Search bestState / Target priority / Candidate
+score / category は参照していない。generated Entryをselected側へ昇格させない。
+C3bはfixedConstraintsを受け取って再対応付けするだけで、augmented inputを見て新しい
+fixed constraintを生成しない。
+
+#### all-or-nothing
+
+1件でも失敗すれば `status: 'unresolved'` / `conflictResolutions: []` を返し、成功分の
+partial配列を返さない。result shapeとして、`unresolved` は `conflictResolutions: []`
+しか持てないためcallerが誤用できない。
+
+再構築後に同一 `conflictKey` が複数になる場合はsilent dedupeせず
+`resolution_key_collision` でfail closedにする。`validatePlannerInput()` が
+conflictKey一意を要求するためである。
+
+#### 決定的順序
+
+fixedConstraintsは入力配列順に依存しない。処理順は
+(競合資源key, fixed Entry ID, fixed Target ID, originalConflictId) の安定順である。
+再構築resolutionは (conflictKey, selectedBuildListEntryId) 昇順、failuresは
+(競合資源key, fixed Entry ID, fixed Target ID, originalConflictId, reason) 昇順で
+返す。同semantic inputは入力順を反転しても同一resultになる。
+
+`fixedConstraints = []` は正常であり、current conflictsが存在しても
+`status: 'ready'` / `conflictResolutions: []` を返す。explicit resolutionが無い競合に
+対して固定選択を勝手に生成しない。
+
+#### invalid preflight
+
+`preparePlannerInitialContext()` が `invalid` を返した場合は、その `warnings` /
+`issues` / `excludedBuildListEntries` をそのまま `status: 'invalid'` として返す。
+`current_conflict_not_found` 等のre-association reasonへ変換しない。
+
+#### 変更していないもの
+
+```text
+PlanConflict / PlannerConflictResolution / ConflictKind
+PlanConflict.id 生成規則
+detectPlannerConflicts semantics
+plannerRouteUnitKey / physicalActionKey / shareability semantics
+runPlannerBeamSearch のresolution適用規則
+PlannerWarningKind (invalid_conflict_resolution semanticsを含む)
+createBuildCandidateMeaningFingerprint
+B8-C1 preparePlannerInitialContext / B8-C2 materializer / C3a resource identity semantics
+CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2
+DATABASE_SCHEMA_VERSION = 1
+AppSettings.schemaVersion = 1
+PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2
+supportsSeedSearch = false
+defaultConstrainedEnumerationBounds = 40 / 30 / 100 / 500
+defaultCandidateSearchSettings = 1000 / 200 / 1000 / 200 / 0.6
+defaultPlannerOptions
+```
+
+C3b専用の `PlannerWarningKind` は追加していない。ユーザー再選択への最終mappingは
+B8-C4以降が扱う。schema bumpは不要である。normal scope Keep predictionは引き続き
+unsupportedのままである。
 
 ---
 
