@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import type {
+  CreateConstrainedProductionPlanCalculation,
   CreateProductionPlanCalculation,
   PlannerDependencies,
+  PlannerExecutionOptions,
   PlannerInput,
-  PlannerWorkerRequest,
-  PlannerWorkerResponse,
+  PlannerOrchestrationBounds,
+  PlannerResult,
 } from '../domain/planner'
 import { defaultPlannerOptions } from '../domain/planner'
 import {
@@ -15,7 +17,12 @@ import {
   createValidBuildListEntry,
   createValidProductionPlan,
 } from '../test/fixtures/domainData'
-import { attachPlannerWorker } from './planner.worker'
+import { attachPlannerWorker, type PlannerWorkerCalculations } from './planner.worker'
+import type {
+  PlannerConstrainedWorkerRequest,
+  PlannerWorkerProtocolRequest,
+  PlannerWorkerProtocolResponse,
+} from './plannerWorkerContracts'
 
 function fixture(): { input: PlannerInput; dependencies: PlannerDependencies } {
   const search = createCandidateSearchInput()
@@ -51,20 +58,76 @@ function fixture(): { input: PlannerInput; dependencies: PlannerDependencies } {
   }
 }
 
+/**
+ * Test-only bounds. They are deliberately small and local: B8-D1 adds no
+ * Production `PlannerOrchestrationBounds` default anywhere, so every caller -
+ * including a test - states them.
+ */
+const fixtureOrchestrationBounds: PlannerOrchestrationBounds = {
+  maxCandidateTrialsPerConflict: 2,
+  maxGeneratedBuildListEntries: 1,
+  maxPlannerReruns: 3,
+}
+
+interface Deferred<T> {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (error: unknown) => void
+}
+
+/** Keeps a calculation in flight so a second task can take its request id. */
+function deferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((resolveFn, rejectFn) => {
+    resolve = resolveFn
+    reject = rejectFn
+  })
+  return { promise, resolve, reject }
+}
+
+function failingOrdinaryCalculation(): CreateProductionPlanCalculation {
+  return vi.fn(async () => {
+    throw new Error('Ordinary Planner calculation must not run for this request.')
+  })
+}
+
+function failingConstrainedCalculation(): CreateConstrainedProductionPlanCalculation {
+  return vi.fn(async () => {
+    throw new Error('Constrained Planner calculation must not run for this request.')
+  })
+}
+
+function attach(
+  calculations: PlannerWorkerCalculations,
+  dependencies: PlannerDependencies,
+  responses: PlannerWorkerProtocolResponse[],
+) {
+  return attachPlannerWorker(
+    {
+      postMessage: (response) => responses.push(response),
+      addEventListener: () => undefined,
+    },
+    () => dependencies,
+    calculations,
+  )
+}
+
 describe('Planner Worker contract', () => {
   it('structured-clones only PlannerInput and creates dependencies inside the Worker boundary', async () => {
     const { input, dependencies } = fixture()
-    const request: PlannerWorkerRequest = {
+    const request: PlannerWorkerProtocolRequest = {
       type: 'create_plan',
       requestId: 'planner.fixture.request',
+      generation: 1,
       input,
     }
     expect(structuredClone(request)).toEqual(request)
     expect(request).not.toHaveProperty('rngEngine')
     expect(input).not.toHaveProperty('rngEngine')
 
-    const responses: PlannerWorkerResponse[] = []
-    let listener: (event: { data: PlannerWorkerRequest }) => void = () => {
+    const responses: PlannerWorkerProtocolResponse[] = []
+    let listener: (event: { data: PlannerWorkerProtocolRequest }) => void = () => {
       throw new Error('Planner Worker listener was not attached.')
     }
     const createDependencies = vi.fn(() => dependencies)
@@ -81,18 +144,21 @@ describe('Planner Worker contract', () => {
       expect(runtime.rngEngine).toBe(dependencies.rngEngine)
       return { plan, conflicts: [], warnings: [] }
     })
+    const createConstrainedPlan = failingConstrainedCalculation()
     attachPlannerWorker({
       postMessage: (response) => responses.push(response),
       addEventListener: (_type, callback) => { listener = callback },
-    }, createDependencies, calculate)
+    }, createDependencies, { createPlan: calculate, createConstrainedPlan })
 
     listener({ data: request })
     await vi.waitFor(() => expect(responses).toHaveLength(1))
     expect(createDependencies).toHaveBeenCalledOnce()
     expect(calculate).toHaveBeenCalledOnce()
+    expect(createConstrainedPlan).not.toHaveBeenCalled()
     expect(responses[0]).toEqual(expect.objectContaining({
       type: 'create_plan_result',
       requestId: 'planner.fixture.request',
+      generation: 1,
       result: expect.objectContaining({
         plan: expect.objectContaining({
           id: 'plan.fixed.worker',
@@ -104,25 +170,479 @@ describe('Planner Worker contract', () => {
 
   it('converts an unexpected Planner failure to the existing Worker error response', async () => {
     const { dependencies } = fixture()
-    const responses: PlannerWorkerResponse[] = []
+    const responses: PlannerWorkerProtocolResponse[] = []
     const calculate: CreateProductionPlanCalculation = vi.fn(async () => {
       throw new Error('unexpected prediction failure')
     })
-    const controller = attachPlannerWorker({
-      postMessage: (response) => responses.push(response),
-      addEventListener: () => undefined,
-    }, () => dependencies, calculate)
+    const controller = attach(
+      { createPlan: calculate, createConstrainedPlan: failingConstrainedCalculation() },
+      dependencies,
+      responses,
+    )
 
     await controller.handleMessage({
       type: 'create_plan',
       requestId: 'planner.fixture.error',
+      generation: 1,
       input: fixture().input,
     })
 
     expect(responses).toEqual([{
       type: 'error',
       requestId: 'planner.fixture.error',
+      generation: 1,
       message: 'unexpected prediction failure',
     }])
+  })
+})
+
+describe('Planner Worker constrained request routing (B8-D1)', () => {
+  it('structured-clones only the PlannerInput and the caller orchestration bounds', () => {
+    const { input } = fixture()
+    const request: PlannerConstrainedWorkerRequest = {
+      type: 'create_constrained_plan',
+      requestId: 'planner.constrained.clone',
+      generation: 1,
+      input: {
+        plannerInput: input,
+        orchestrationBounds: fixtureOrchestrationBounds,
+      },
+    }
+    expect(structuredClone(request)).toEqual(request)
+    expect(Object.keys(request.input).sort()).toEqual([
+      'orchestrationBounds',
+      'plannerInput',
+    ])
+    expect(request.input).not.toHaveProperty('enumerationBounds')
+    expect(request.input.plannerInput).not.toHaveProperty('rngEngine')
+  })
+
+  it('routes to the constrained calculation only, with the exact caller bounds and shared runtime options', async () => {
+    const { input, dependencies } = fixture()
+    const responses: PlannerWorkerProtocolResponse[] = []
+    const createPlan = failingOrdinaryCalculation()
+    const generatedEntry = createValidBuildListEntry()
+    const createConstrainedPlan: CreateConstrainedProductionPlanCalculation = vi.fn(
+      async (plannerInput, orchestrationBounds, runtime, executionOptions) => {
+        expect(plannerInput).toBe(input)
+        // Passed through by identity, never re-created, clamped, or completed.
+        expect(orchestrationBounds).toBe(fixtureOrchestrationBounds)
+        expect(runtime).toBe(dependencies)
+        expect(typeof executionOptions?.shouldCancel).toBe('function')
+        expect(typeof executionOptions?.yieldControl).toBe('function')
+        executionOptions?.onProgress?.({ expandedStates: 4, maxExpandedStates: 20 })
+        return {
+          plan: createValidProductionPlan(),
+          conflicts: [],
+          warnings: [],
+          generatedBuildListEntries: [generatedEntry],
+        }
+      },
+    )
+    const controller = attach(
+      { createPlan, createConstrainedPlan },
+      dependencies,
+      responses,
+    )
+
+    await controller.handleMessage({
+      type: 'create_constrained_plan',
+      requestId: 'planner.constrained.request',
+      generation: 1,
+      input: { plannerInput: input, orchestrationBounds: fixtureOrchestrationBounds },
+    })
+
+    expect(createPlan).not.toHaveBeenCalled()
+    expect(createConstrainedPlan).toHaveBeenCalledOnce()
+    // The Beam progress response is shared with the ordinary request kind.
+    expect(responses[0]).toEqual({
+      type: 'progress',
+      requestId: 'planner.constrained.request',
+      generation: 1,
+      progress: { expandedStates: 4, maxExpandedStates: 20 },
+    })
+    expect(responses[1]).toEqual({
+      type: 'create_constrained_plan_result',
+      requestId: 'planner.constrained.request',
+      generation: 1,
+      result: expect.objectContaining({
+        generatedBuildListEntries: [generatedEntry],
+      }),
+    })
+    expect(responses).toHaveLength(2)
+  })
+
+  it('keeps generatedBuildListEntries in the structured-cloneable response', async () => {
+    const { input, dependencies } = fixture()
+    const responses: PlannerWorkerProtocolResponse[] = []
+    const generatedEntry = createValidBuildListEntry()
+    const controller = attach(
+      {
+        createPlan: failingOrdinaryCalculation(),
+        createConstrainedPlan: async () => ({
+          plan: createValidProductionPlan(),
+          conflicts: [],
+          warnings: [],
+          generatedBuildListEntries: [generatedEntry],
+        }),
+      },
+      dependencies,
+      responses,
+    )
+
+    await controller.handleMessage({
+      type: 'create_constrained_plan',
+      requestId: 'planner.constrained.generated',
+      generation: 1,
+      input: { plannerInput: input, orchestrationBounds: fixtureOrchestrationBounds },
+    })
+
+    const response = responses[0]
+    expect(response.type).toBe('create_constrained_plan_result')
+    expect(structuredClone(response)).toEqual(response)
+    expect(
+      response.type === 'create_constrained_plan_result'
+        ? response.result.generatedBuildListEntries
+        : null,
+    ).toEqual([generatedEntry])
+  })
+
+  it('reports a constrained failure as the existing Worker error response without reclassifying it', async () => {
+    const { input, dependencies } = fixture()
+    const responses: PlannerWorkerProtocolResponse[] = []
+    const controller = attach(
+      {
+        createPlan: failingOrdinaryCalculation(),
+        createConstrainedPlan: async () => {
+          throw new Error('constrained materialization invariant failed')
+        },
+      },
+      dependencies,
+      responses,
+    )
+
+    await controller.handleMessage({
+      type: 'create_constrained_plan',
+      requestId: 'planner.constrained.error',
+      generation: 1,
+      input: { plannerInput: input, orchestrationBounds: fixtureOrchestrationBounds },
+    })
+
+    expect(responses).toEqual([{
+      type: 'error',
+      requestId: 'planner.constrained.error',
+      generation: 1,
+      message: 'constrained materialization invariant failed',
+    }])
+    expect(responses.some(({ type }) => type.endsWith('_result'))).toBe(false)
+  })
+
+  it('retires a superseded calculation so its stale progress, result, and error are never posted', async () => {
+    const { input, dependencies } = fixture()
+    const responses: PlannerWorkerProtocolResponse[] = []
+    const first = deferred<PlannerResult>()
+    const second = deferred<PlannerResult>()
+    const pendingResults = [first.promise, second.promise]
+    // Each call keeps its own execution options, so a later task cannot
+    // overwrite the retired one's view of `shouldCancel`.
+    const capturedOptions: (PlannerExecutionOptions | undefined)[] = []
+    const createPlan: CreateProductionPlanCalculation = vi.fn(
+      async (_input, _dependencies, executionOptions) => {
+        capturedOptions.push(executionOptions)
+        return pendingResults[capturedOptions.length - 1]
+      },
+    )
+    const controller = attach(
+      { createPlan, createConstrainedPlan: failingConstrainedCalculation() },
+      dependencies,
+      responses,
+    )
+
+    const running = controller.handleMessage({
+      type: 'create_plan',
+      requestId: 'planner.generation',
+      generation: 1,
+      input,
+    })
+    expect(capturedOptions[0]?.shouldCancel?.()).toBe(false)
+
+    // A second task takes the id. It clears the cancelled flag, so only the
+    // generation can keep the first calculation retired.
+    const replacement = controller.handleMessage({
+      type: 'create_plan',
+      requestId: 'planner.generation',
+      generation: 2,
+      input,
+    })
+    expect(capturedOptions[0]?.shouldCancel?.()).toBe(true)
+
+    // Stale progress from the retired calculation is dropped.
+    capturedOptions[0]?.onProgress?.({ expandedStates: 1, maxExpandedStates: 10 })
+    expect(responses).toEqual([])
+
+    // So is its stale result.
+    first.resolve({ plan: createValidProductionPlan(), conflicts: [], warnings: [] })
+    await running
+    expect(responses).toEqual([])
+
+    const result = { plan: null, conflicts: [], warnings: [] }
+    // The replacement calculation is the one still holding the id.
+    expect(createPlan).toHaveBeenCalledTimes(2)
+    expect(capturedOptions[1]?.shouldCancel?.()).toBe(false)
+    capturedOptions[1]?.onProgress?.({ expandedStates: 3, maxExpandedStates: 10 })
+    second.resolve(result)
+    await replacement
+    expect(responses).toEqual([
+      {
+        type: 'progress',
+        requestId: 'planner.generation',
+        generation: 2,
+        progress: { expandedStates: 3, maxExpandedStates: 10 },
+      },
+      {
+        type: 'create_plan_result',
+        requestId: 'planner.generation',
+        generation: 2,
+        result,
+      },
+    ])
+  })
+
+  it('keeps a cancelled calculation retired even after a new task clears the cancelled flag', async () => {
+    const { input, dependencies } = fixture()
+    const responses: PlannerWorkerProtocolResponse[] = []
+    const cancelled = deferred<PlannerResult>()
+    let cancelledOptions: PlannerExecutionOptions | undefined
+    const createPlan: CreateProductionPlanCalculation = vi.fn(
+      async (_input, _dependencies, executionOptions) => {
+        if (cancelledOptions === undefined) {
+          cancelledOptions = executionOptions
+          return cancelled.promise
+        }
+        return { plan: null, conflicts: [], warnings: [] }
+      },
+    )
+    const controller = attach(
+      { createPlan, createConstrainedPlan: failingConstrainedCalculation() },
+      dependencies,
+      responses,
+    )
+
+    const running = controller.handleMessage({
+      type: 'create_plan',
+      requestId: 'planner.cancel.revive',
+      generation: 1,
+      input,
+    })
+    await controller.handleMessage({
+      type: 'cancel',
+      requestId: 'planner.cancel.revive',
+      generation: 1,
+    })
+    expect(cancelledOptions?.shouldCancel?.()).toBe(true)
+
+    // The replacement takes the id with a fresh, uncancelled generation.
+    await controller.handleMessage({
+      type: 'create_plan',
+      requestId: 'planner.cancel.revive',
+      generation: 2,
+      input,
+    })
+    expect(controller.isCancelled('planner.cancel.revive')).toBe(false)
+    // The cancelled calculation stays retired all the same.
+    expect(cancelledOptions?.shouldCancel?.()).toBe(true)
+
+    cancelled.resolve({ plan: createValidProductionPlan(), conflicts: [], warnings: [] })
+    await running
+    expect(responses).toEqual([
+      {
+        type: 'create_plan_result',
+        requestId: 'planner.cancel.revive',
+        generation: 2,
+        result: { plan: null, conflicts: [], warnings: [] },
+      },
+    ])
+  })
+
+  it('drops a retired calculation failure instead of posting an error for the new task', async () => {
+    const { input, dependencies } = fixture()
+    const responses: PlannerWorkerProtocolResponse[] = []
+    const first = deferred<PlannerResult>()
+    const createPlan: CreateProductionPlanCalculation = vi.fn(async () => first.promise)
+    const constrainedResult = {
+      plan: null,
+      conflicts: [],
+      warnings: [],
+      generatedBuildListEntries: [],
+    }
+    const controller = attach(
+      {
+        createPlan,
+        createConstrainedPlan: async () => constrainedResult,
+      },
+      dependencies,
+      responses,
+    )
+
+    const running = controller.handleMessage({
+      type: 'create_plan',
+      requestId: 'planner.retired.error',
+      generation: 1,
+      input,
+    })
+    await controller.handleMessage({
+      type: 'create_constrained_plan',
+      requestId: 'planner.retired.error',
+      generation: 2,
+      input: { plannerInput: input, orchestrationBounds: fixtureOrchestrationBounds },
+    })
+    first.reject(new Error('retired ordinary failure'))
+    await running
+
+    expect(responses).toEqual([
+      {
+        type: 'create_constrained_plan_result',
+        requestId: 'planner.retired.error',
+        generation: 2,
+        result: constrainedResult,
+      },
+    ])
+  })
+
+  it('ignores a cancel minted for a superseded generation', async () => {
+    const { input, dependencies } = fixture()
+    const responses: PlannerWorkerProtocolResponse[] = []
+    const first = deferred<PlannerResult>()
+    const second = deferred<PlannerResult>()
+    const pendingResults = [first.promise, second.promise]
+    const capturedOptions: (PlannerExecutionOptions | undefined)[] = []
+    const createPlan: CreateProductionPlanCalculation = vi.fn(
+      async (_input, _dependencies, executionOptions) => {
+        capturedOptions.push(executionOptions)
+        return pendingResults[capturedOptions.length - 1]
+      },
+    )
+    const controller = attach(
+      { createPlan, createConstrainedPlan: failingConstrainedCalculation() },
+      dependencies,
+      responses,
+    )
+
+    const running = controller.handleMessage({
+      type: 'create_plan',
+      requestId: 'planner.stale.cancel',
+      generation: 1,
+      input,
+    })
+    const replacement = controller.handleMessage({
+      type: 'create_plan',
+      requestId: 'planner.stale.cancel',
+      generation: 2,
+      input,
+    })
+    // The Client posted this cancel for generation 1 before generation 2 was
+    // delivered; it must not reach generation 2.
+    await controller.handleMessage({
+      type: 'cancel',
+      requestId: 'planner.stale.cancel',
+      generation: 1,
+    })
+    expect(controller.isCancelled('planner.stale.cancel')).toBe(false)
+    expect(capturedOptions[1]?.shouldCancel?.()).toBe(false)
+
+    const result = { plan: null, conflicts: [], warnings: [] }
+    first.resolve({ plan: createValidProductionPlan(), conflicts: [], warnings: [] })
+    second.resolve(result)
+    await running
+    await replacement
+    expect(responses).toEqual([
+      {
+        type: 'create_plan_result',
+        requestId: 'planner.stale.cancel',
+        generation: 2,
+        result,
+      },
+    ])
+  })
+
+  it('drops a task whose generation a newer one already superseded', async () => {
+    const { input, dependencies } = fixture()
+    const responses: PlannerWorkerProtocolResponse[] = []
+    const createPlan: CreateProductionPlanCalculation = vi.fn(async () => ({
+      plan: null,
+      conflicts: [],
+      warnings: [],
+    }))
+    const controller = attach(
+      { createPlan, createConstrainedPlan: failingConstrainedCalculation() },
+      dependencies,
+      responses,
+    )
+
+    await controller.handleMessage({
+      type: 'create_plan',
+      requestId: 'planner.superseded.task',
+      generation: 2,
+      input,
+    })
+    await controller.handleMessage({
+      type: 'create_plan',
+      requestId: 'planner.superseded.task',
+      generation: 1,
+      input,
+    })
+
+    // The older task is never run, so it also posts nothing.
+    expect(createPlan).toHaveBeenCalledOnce()
+    expect(responses).toEqual([
+      {
+        type: 'create_plan_result',
+        requestId: 'planner.superseded.task',
+        generation: 2,
+        result: { plan: null, conflicts: [], warnings: [] },
+      },
+    ])
+  })
+
+  it('propagates cancellation into the constrained calculation and posts nothing afterwards', async () => {
+    const { input, dependencies } = fixture()
+    const responses: PlannerWorkerProtocolResponse[] = []
+    let shouldCancel: (() => boolean) | undefined
+    let cancelledDuringCalculation: boolean | null = null
+    const controller = attach(
+      {
+        createPlan: failingOrdinaryCalculation(),
+        createConstrainedPlan: async (
+          _input,
+          _bounds,
+          _dependencies,
+          executionOptions,
+        ) => {
+          shouldCancel = executionOptions?.shouldCancel
+          expect(shouldCancel?.()).toBe(false)
+          await controller.handleMessage({
+            type: 'cancel',
+            requestId: 'planner.constrained.cancel',
+            generation: 1,
+          })
+          cancelledDuringCalculation = shouldCancel?.() ?? null
+          // A cancelled ordinary Planner still returns a safe result.
+          return { plan: null, conflicts: [], warnings: [], generatedBuildListEntries: [] }
+        },
+      },
+      dependencies,
+      responses,
+    )
+
+    await controller.handleMessage({
+      type: 'create_constrained_plan',
+      requestId: 'planner.constrained.cancel',
+      generation: 1,
+      input: { plannerInput: input, orchestrationBounds: fixtureOrchestrationBounds },
+    })
+
+    expect(cancelledDuringCalculation).toBe(true)
+    expect(controller.isCancelled('planner.constrained.cancel')).toBe(true)
+    expect(responses).toEqual([])
   })
 })

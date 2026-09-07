@@ -7,11 +7,8 @@ import type {
   WeaponTypeId,
 } from '../domain/models/publicTypes'
 import {
-  createProductionPlan,
   defaultPlannerOptions,
   type PlannerInput,
-  type PlannerWorkerRequest,
-  type PlannerWorkerResponse,
 } from '../domain/planner'
 import {
   ProductionRngEngine,
@@ -26,8 +23,13 @@ import type {
 import { createCandidateSearchInput } from '../test/fixtures/candidateSearch'
 import { gameVerifiedBowElementalNormalVectors } from '../test/fixtures/gameVerifiedNormalVectors'
 import { createPlannerWorkerController } from './planner.worker'
+import type {
+  PlannerWorkerProtocolRequest,
+  PlannerWorkerProtocolResponse,
+} from './plannerWorkerContracts'
 import {
   createProductionPlannerRngEngine,
+  createProductionPlannerWorkerCalculations,
   createProductionPlannerWorkerDependencies,
 } from './planner.worker.production'
 import { createSearchWorkerController } from './search.worker'
@@ -165,16 +167,17 @@ describe('Production Planner Worker composition', () => {
 
   it('creates a plan for a game-verified Bow Fire Normal route through Production RNG', async () => {
     const input = await createProductionPlannerInput()
-    const responses: PlannerWorkerResponse[] = []
+    const responses: PlannerWorkerProtocolResponse[] = []
     const dependencies = createProductionPlannerWorkerDependencies()
     const controller = createPlannerWorkerController(
       dependencies,
-      createProductionPlan,
+      createProductionPlannerWorkerCalculations(),
       (response) => responses.push(response),
     )
-    const request: PlannerWorkerRequest = {
+    const request: PlannerWorkerProtocolRequest = {
       type: 'create_plan',
       requestId: 'planner.production.smoke',
+      generation: 1,
       input,
     }
 
@@ -185,7 +188,7 @@ describe('Production Planner Worker composition', () => {
 
     expect(responses.some(({ type }) => type === 'error')).toBe(false)
     const result = responses.find(
-      (response): response is Extract<PlannerWorkerResponse, { type: 'create_plan_result' }> =>
+      (response): response is Extract<PlannerWorkerProtocolResponse, { type: 'create_plan_result' }> =>
         response.type === 'create_plan_result',
     )
     expect(result?.result.plan).toEqual(expect.objectContaining({

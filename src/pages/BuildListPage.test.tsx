@@ -28,6 +28,14 @@ function createPlannerClient(): PlannerWorkerClient {
       conflicts: [],
       warnings: [],
     })),
+    // B8-D1 adds the constrained API to the Client interface only. The page
+    // still uses the ordinary `createPlan()`; B8-D2 owns the switch.
+    createConstrainedPlan: vi.fn(async () => ({
+      plan: createValidProductionPlan(),
+      conflicts: [],
+      warnings: [],
+      generatedBuildListEntries: [],
+    })),
     cancelPlan: vi.fn(),
     dispose: vi.fn(),
   }

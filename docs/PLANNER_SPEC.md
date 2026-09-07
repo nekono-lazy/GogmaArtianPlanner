@@ -1654,6 +1654,9 @@ B8-C   Planner conflict orchestration / deterministic materializer /
        C4a rerun budget / C4b candidate trial / adoption orchestration
 B8-D   Worker / Application / Persistence / atomic save /
        既存UIへの最小配線
+       D1 Worker protocol / routing / Production adapter /
+          Worker Client                                        実装済み
+       D2 save-time再validation / atomic save / 最小UI配線
 B8-E   orchestration側のBrowser / Planner benchmark
        orchestration boundsのProduction default決定
 ```
@@ -2137,6 +2140,31 @@ Planner domainとTrace ReplayはProduction RNGのinput-level support契約へ対
 `PRODUCTION_RNG_ENGINE_VERSION` を共通authorityとして使用する。
 
 C5-E2C3でactive Gate契約をPlanner validation、Trace Replay、expected-state hashへ同期済みである。exact persisted Gateはoperation preflightまたはReplay requirementではなく、expected-state hashにも含めない。Production adapterのruntime policy変更と同時に `PRODUCTION_RNG_ENGINE_VERSION`を `production-rng:c5-e2`へbumpした。これはIdentification Production UIのactivationを意味せず、`supportsSeedSearch = false`を維持する。
+
+B8-D1でconstrained re-search用のrequest kindを追加した。ordinary `create_plan` /
+`create_plan_result` は変更していない。実装名称の対応は次のとおりで、`cancel`、
+`progress`、`error` は両request kindで共有する。
+
+```text
+create_constrained_plan          input: { plannerInput, orchestrationBounds }
+create_constrained_plan_result   result: PlannerOrchestrationResult
+```
+
+あわせて、logical `requestId` とは別にtask instanceを識別するruntime-only
+`generation` をWorker wire messageへ追加した。ordinary / constrainedのtask requestと
+`cancel` はgenerationを運び、`progress`・両result・`error` はそれをechoする。Clientが
+monotonicに採番し、Workerはそれをownership authorityとして使う。Clientは
+requestIdとgenerationが両方一致するresponseだけを現在requestのものとして扱う。
+`postMessage()` が非同期であるため、requestIdだけでは同一ID再利用時に旧task instanceの
+responseを新requestのものとして誤処理しうるためである。`generation` はWorker protocol
+限定のruntime primitiveであり、`PlannerInput` / `PlannerResult` /
+`PlannerOrchestrationResult`、Domain entity、Persistenceへは追加しない。
+
+`PlannerOrchestrationResult` は `domain/planner/constrained` の型であるため、この
+protocolはWorker層の `src/workers/plannerWorkerContracts.ts` へ置く。Domainは
+Worker moduleをimportしない。`PlannerOrchestrationBounds` はcaller必須としてWorker
+messageへ含め、`ConstrainedEnumerationBounds` は含めない。Production Worker adapterが
+`defaultConstrainedEnumerationBounds` をWorker境界内で明示的に渡す。
 
 Workerを利用できない環境ではClientのversionを `production-engine-unavailable` とし、
 計画実行を明示的なunavailable errorにする。これは

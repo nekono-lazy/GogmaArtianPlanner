@@ -1,15 +1,34 @@
 import type {
+  CreateConstrainedProductionPlanCalculation,
   CreateProductionPlanCalculation,
   PlannerDependencies,
-  PlannerWorkerRequest,
-  PlannerWorkerResponse,
+  PlannerExecutionOptions,
 } from '../domain/planner'
+import type {
+  PlannerWorkerProtocolRequest,
+  PlannerWorkerProtocolResponse,
+} from './plannerWorkerContracts'
 
-export type PlannerWorkerPostMessage = (response: PlannerWorkerResponse) => void
+export type PlannerWorkerPostMessage = (
+  response: PlannerWorkerProtocolResponse,
+) => void
 export type PlannerDependenciesFactory = () => PlannerDependencies
 
+/**
+ * The two Planner calculations this Worker routes to.
+ *
+ * Both are injected, so the controller performs no Beam Search, no Candidate
+ * enumeration, no materialization, no preflight, no Trace Replay, and no
+ * adoption of its own: B8-C owns all of that, and the Production adapter
+ * composes it.
+ */
+export interface PlannerWorkerCalculations {
+  createPlan: CreateProductionPlanCalculation
+  createConstrainedPlan: CreateConstrainedProductionPlanCalculation
+}
+
 export interface PlannerWorkerController {
-  handleMessage(request: PlannerWorkerRequest): Promise<void>
+  handleMessage(request: PlannerWorkerProtocolRequest): Promise<void>
   isCancelled(requestId: string): boolean
 }
 
@@ -18,45 +37,110 @@ function workerYield(): Promise<void> {
 }
 
 /**
- * Message orchestration only. Beam Search is supplied separately and receives
- * the worker-local runtime dependencies rather than structured-cloned methods.
+ * Message orchestration only. Both calculations are supplied separately and
+ * receive the worker-local runtime dependencies rather than structured-cloned
+ * methods.
+ *
+ * `cancel`, progress forwarding, and error conversion are shared by the
+ * ordinary and constrained request kinds: a cancel stops the task instance it
+ * names, and B8-C's own cancellation semantics are never reimplemented here.
  */
 export function createPlannerWorkerController(
   dependencies: PlannerDependencies,
-  createPlan: CreateProductionPlanCalculation,
+  calculations: PlannerWorkerCalculations,
   postMessage: PlannerWorkerPostMessage,
 ): PlannerWorkerController {
-  const cancelledRequestIds = new Set<string>()
+  /**
+   * The Client-minted task generation that currently owns each logical request
+   * id, and the generations that have been cancelled.
+   *
+   * The Worker never mints a generation of its own: doing so would lose the
+   * correspondence with the Client token, which is what lets the Client discard
+   * a stale response it receives before its own newer task has even been
+   * delivered here. Ordinary and constrained tasks keep sharing one logical id
+   * namespace; only the generation distinguishes task instances.
+   *
+   * Cancellation is tracked per generation rather than per request id, so a new
+   * task instance is never born cancelled and an older instance can never be
+   * revived by a newer one.
+   */
+  const generationByRequestId = new Map<string, number>()
+  const cancelledGenerations = new Set<number>()
+
+  const isCurrent = (requestId: string, generation: number): boolean =>
+    generationByRequestId.get(requestId) === generation
+  /** A retired calculation is silent: it posts no progress, result, or error. */
+  const isActive = (requestId: string, generation: number): boolean =>
+    isCurrent(requestId, generation) && !cancelledGenerations.has(generation)
+
+  const executionOptions = (
+    requestId: string,
+    generation: number,
+  ): PlannerExecutionOptions => ({
+    shouldCancel: () =>
+      !isCurrent(requestId, generation) || cancelledGenerations.has(generation),
+    yieldControl: workerYield,
+    onProgress: (progress) => {
+      if (isActive(requestId, generation)) {
+        postMessage({ type: 'progress', requestId, generation, progress })
+      }
+    },
+  })
   return {
-    isCancelled: (requestId) => cancelledRequestIds.has(requestId),
+    isCancelled: (requestId) => {
+      const generation = generationByRequestId.get(requestId)
+      return generation !== undefined && cancelledGenerations.has(generation)
+    },
     handleMessage: async (request) => {
+      const { requestId, generation } = request
       if (request.type === 'cancel') {
-        cancelledRequestIds.add(request.requestId)
+        // Only the instance the Client is actually waiting on is cancelled: a
+        // cancel minted for an older generation never reaches a newer task.
+        if (!isCurrent(requestId, generation)) return
+        cancelledGenerations.add(generation)
         return
       }
-      cancelledRequestIds.delete(request.requestId)
+      const owning = generationByRequestId.get(requestId)
+      // A task that a newer generation has already superseded is dropped
+      // outright rather than run and then silenced.
+      if (owning !== undefined && generation <= owning) return
+      generationByRequestId.set(requestId, generation)
       try {
-        const result = await createPlan(request.input, dependencies, {
-          shouldCancel: () => cancelledRequestIds.has(request.requestId),
-          yieldControl: workerYield,
-          onProgress: (progress) => {
-            if (!cancelledRequestIds.has(request.requestId)) {
-              postMessage({ type: 'progress', requestId: request.requestId, progress })
-            }
-          },
-        })
-        if (!cancelledRequestIds.has(request.requestId)) {
-          postMessage({
-            type: 'create_plan_result',
-            requestId: request.requestId,
-            result,
-          })
-        }
+        // The response type is decided by the request type, so an ordinary
+        // result can never be posted for a constrained request.
+        const response: PlannerWorkerProtocolResponse =
+          request.type === 'create_constrained_plan'
+            ? {
+                type: 'create_constrained_plan_result',
+                requestId,
+                generation,
+                result: await calculations.createConstrainedPlan(
+                  request.input.plannerInput,
+                  request.input.orchestrationBounds,
+                  dependencies,
+                  executionOptions(requestId, generation),
+                ),
+              }
+            : {
+                type: 'create_plan_result',
+                requestId,
+                generation,
+                result: await calculations.createPlan(
+                  request.input,
+                  dependencies,
+                  executionOptions(requestId, generation),
+                ),
+              }
+        if (isActive(requestId, generation)) postMessage(response)
       } catch (error: unknown) {
-        if (cancelledRequestIds.has(request.requestId)) return
+        // A constrained Domain error keeps its meaning: it is reported as the
+        // existing Worker error response and never reclassified from its
+        // message text, nor converted into a result.
+        if (!isActive(requestId, generation)) return
         postMessage({
           type: 'error',
-          requestId: request.requestId,
+          requestId,
+          generation,
           message: error instanceof Error ? error.message : 'Unknown Planner error.',
         })
       }
@@ -68,7 +152,7 @@ export interface PlannerWorkerScope {
   postMessage: PlannerWorkerPostMessage
   addEventListener(
     type: 'message',
-    listener: (event: { data: PlannerWorkerRequest }) => void,
+    listener: (event: { data: PlannerWorkerProtocolRequest }) => void,
   ): void
 }
 
@@ -76,11 +160,11 @@ export interface PlannerWorkerScope {
 export function attachPlannerWorker(
   scope: PlannerWorkerScope,
   createDependencies: PlannerDependenciesFactory,
-  createPlan: CreateProductionPlanCalculation,
+  calculations: PlannerWorkerCalculations,
 ): PlannerWorkerController {
   const controller = createPlannerWorkerController(
     createDependencies(),
-    createPlan,
+    calculations,
     (response) => scope.postMessage(response),
   )
   scope.addEventListener('message', (event) => {
@@ -88,4 +172,3 @@ export function attachPlannerWorker(
   })
   return controller
 }
-

@@ -2257,6 +2257,182 @@ schema bumpは不要である。normal scope Keep predictionは引き続きunsup
 
 ---
 
+### 4.12 B8-D1 implementation record
+
+B8-Cは完了、B8-D1は完了、B8-D全体は未完了である。
+
+B8-D1はWorker protocol / Worker execution routing / Production Worker adapter /
+Application Worker Clientまでを対象とする。save-time current-state再読込、再validation、
+generated Entry + ProductionPlanのatomic save、BuildListPageのconstrained経路切替は
+B8-D2の対象であり、本タスクでは実装していない。
+
+#### constrained Worker protocol
+
+ordinary `create_plan` / `create_plan_result` protocolは互換のまま残し、request kindを
+1つ追加した。
+
+```text
+request   create_constrained_plan
+            input.plannerInput        PlannerInput
+            input.orchestrationBounds PlannerOrchestrationBounds
+response  create_constrained_plan_result
+            result                    PlannerOrchestrationResult
+```
+
+`cancel` / `progress` / `error` は両request kindで共有する。
+
+protocolの配置は `src/workers/plannerWorkerContracts.ts` である。
+`PlannerOrchestrationResult` は `domain/planner/constrained` の型であるため、
+`plannerTypes.ts` へ constrained protocolを置くとPlanner foundationが自身の
+constrained sub-moduleへ依存する循環になる。DomainはWorker moduleをimportせず、
+依存はWorker -> Domainの一方向のみである。既存 `src/workers/contracts.ts` の
+`WorkerTaskRequest` / `WorkerResultResponse` を再利用した。
+
+#### bounds責務
+
+```text
+Application caller       -> orchestration boundsのみ指定 (caller必須)
+Production Worker adapter -> defaultConstrainedEnumerationBoundsを明示
+                          -> caller orchestration boundsをそのまま明示
+createProductionPlanWithConstrainedSearch()
+```
+
+`createProductionConstrainedPlan` は `defaultConstrainedEnumerationBounds`
+(40 / 30 / 100 / 500) をSearch Domainのauthorityからimportして渡す。数値をadapter内へ
+複写していない。orchestration boundsは変換・clamp・default補完を行わず、同一参照のまま
+渡す。`defaultPlannerOrchestrationBounds` 相当のProduction defaultは追加していない。
+その3値はB8-E benchmarkがauthorityである。
+
+#### Worker controller
+
+`createPlannerWorkerController` はrequest typeでdispatchするmessage routingのみを担当し、
+Candidate enumeration、materialization、fixed constraint、preflight、Beam Search、
+Trace Replay、adoptionを複製していない。両request kindは同一の
+`PlannerDependencies` / `shouldCancel` / `yieldControl` / `onProgress` を使用し、
+constrained側の `executionOptions` へそのまま渡す。B8-C4bのcancellation semanticsを
+Worker側で別実装していない。
+
+progressは既存 `PlannerProgress { expandedStates, maxExpandedStates }` をBeam progressと
+してそのまま流す。Search enumerationのwork量から疑似percentを作っていない。新しい
+Worker progress DTOは追加していない。
+
+#### task generation契約 (primary / second review修正)
+
+Client側の同一requestId置換だけでは、Worker側の旧計算が失効しない。ordinary Xの実行中に
+constrained Xを開始すると旧ordinary計算がliveのまま残り、その旧resultがcurrentの
+constrained pendingへ届いて `PlannerWorkerProtocolError` になる。これはB8-D1の
+duplicate requestId契約違反である。
+
+primary reviewではWorker-local generationを追加したが、それだけでは解決しない。
+`postMessage()` は非同期であり、Clientがpendingを置換した時点でWorkerがまだ新messageを
+受信していない窓が存在する。その窓では旧generationがWorker側でcurrentのままなので、
+旧resultは正当にpostされ、Main threadのcurrent pendingへ届いてしまう。
+
+そこでlogical `requestId` とは別に、task instanceを識別する
+runtime-only `generation` をWorker protocolへ追加した。
+
+```text
+Client : task作成ごとにmonotonic generationを採番
+         pendingへ requestId / generation / expectedResultType を保持
+         同一requestId再利用 -> old Promiseを PlannerCancelledError -> 新generationへ置換
+request  : create_plan / create_constrained_plan / cancel すべてがgenerationを運ぶ
+response : progress / create_plan_result / create_constrained_plan_result / error が
+           対応するtask generationをechoする
+```
+
+両側でチェックする。
+
+```text
+Worker : Client-provided generationをownership authorityとして使用し、独自採番しない
+         current generationでない task は実行せず破棄
+         shouldCancel : generation不一致 OR そのgenerationがcancelled
+         progress / result / error : current generation かつ non-cancelled のときだけpost
+         cancel : 指定generationがcurrent task instanceのときだけ retire
+                  古いgenerationのcancelは新しいgenerationをcancelしない
+Client : response.requestId === pending.requestId
+         AND response.generation === pending.generation
+         のときだけcurrent requestのresponseとして扱う
+         generation不一致は stale response として silent ignore
+```
+
+cancellationはrequestIdではなくgeneration単位で追跡するため、新task instanceが
+cancelled状態で生まれることも、旧instanceが新instanceによって復活することもない。
+
+`PlannerWorkerProtocolError` は削除していない。generation一致かつresult discriminantが
+違う場合、つまり本物のcurrent protocol violationのときだけ引き続きfail closeする。
+generation不一致のstale resultはsilent ignoreとなり、両者を区別できる。
+
+外部semanticsは変更していない。`createPlan()` / `createConstrainedPlan()` /
+`cancelPlan(requestId)` のsignature、同一requestId再利用時の
+`PlannerCancelledError` 置換、ordinary / constrained共通logical ID namespace、
+progress、errorはそのままである。`generation` はWorker wire DTO限定のruntime primitive
+であり、`PlannerInput` / `PlannerResult` / `PlannerOrchestrationResult`、Domain entity、
+Persistenceへは追加しない。
+
+testは同期delivery fakeでは不十分なため、双方向のmessage deliveryを手動制御できる
+fake Workerを追加し、「Clientがpendingを置換済みだが新taskはWorker未到達」という窓で
+旧result / 旧error / 旧progressが届く順序を再現している。
+
+errorは既存 `type: 'error'` responseのままで、message textからbound / cancel /
+materialization errorへの再分類を行わない。
+
+#### Application Worker Client
+
+```text
+createPlan(requestId, input, callbacks?)                            : PlannerResult
+createConstrainedPlan(requestId, input, orchestrationBounds, cb?)   : PlannerOrchestrationResult
+```
+
+`orchestrationBounds` はcaller必須で、client内defaultは無い。pending requestは
+期待するresponse discriminantを保持し、不一致のresultは
+`PlannerWorkerProtocolError` でfail closedする。ordinary resultが
+constrained Promiseへ silent resolveすると `generatedBuildListEntries` が欠落するため
+である。同一requestId再使用時に以前のpendingを `PlannerCancelledError` で置換する既存
+semanticsは、ordinary / constrainedの混在時も同一ID namespaceとして維持する。
+`createUnavailablePlannerWorkerClient()` の `createConstrainedPlan()` は
+`ProductionPlannerWorkerUnavailableError` を返し、main thread fallback計算や
+orchestration default fallbackへ切り替えない。
+
+#### structured clone境界
+
+constrained requestは `PlannerInput` / `PlannerOrchestrationBounds` / `requestId` のみ、
+responseは `PlannerOrchestrationResult` のみを運ぶ。RngEngine、関数、Clock、ID Factory、
+`ProductionPlanGenerationObserver`、Map、Set、class instanceを含めない。generated
+BuildListEntryは通常のDomain data shapeのままである。
+
+#### D1で行っていないこと
+
+WorkerとApplication ClientはIndexedDB / Dexie / repositoriesへアクセスしない。resultは
+callerへ返すだけで保存しない。BuildListPage / ProductionPlanPage /
+ExecutionNavigatorPageの実動作は変更しておらず、BuildListPageは引き続き ordinary
+`createPlan()` を使用する。UIへhidden orchestration defaultを入れていない。
+
+#### 変更していないもの
+
+```text
+createProductionPlan / PlannerResult / ordinary create_plan protocol
+BuildListPage current plan creation
+Search Worker / Identification Workers
+Production RNG semantics
+CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2
+DATABASE_SCHEMA_VERSION = 1
+AppSettings.schemaVersion = 1
+PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2
+supportsSeedSearch = false
+defaultConstrainedEnumerationBounds = 40 / 30 / 100 / 500
+defaultCandidateSearchSettings = 1000 / 200 / 1000 / 200 / 0.6
+defaultPlannerOptions
+```
+
+schema bumpは不要である。
+
+#### next
+
+B8-D2: save-time current-state再読込 / 再validation / generated Entry +
+ProductionPlanのatomic persistence / 既存UIへの最小配線。
+
+---
+
 ## 5. B1 / B2に残る設計判断
 
 以下はB0で決めきらず、実装時にコードを見て決める。

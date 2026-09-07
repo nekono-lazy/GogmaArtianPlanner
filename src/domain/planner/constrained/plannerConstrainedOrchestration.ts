@@ -81,6 +81,25 @@ export interface PlannerOrchestrationResult extends PlannerResult {
   generatedBuildListEntries: BuildListEntry[]
 }
 
+/**
+ * The constrained counterpart of `CreateProductionPlanCalculation`.
+ *
+ * The Planner Worker controller depends on this signature rather than on
+ * `createProductionPlanWithConstrainedSearch()` itself, so the controller stays
+ * pure message routing and reimplements none of the B8-C orchestration.
+ *
+ * `PlannerOrchestrationBounds` is an explicit parameter because it is
+ * caller-required (PLANNER_SPEC 9.2.16). `ConstrainedEnumerationBounds` is
+ * deliberately absent: the adapter that fulfils this signature chooses it - the
+ * Production one passes `defaultConstrainedEnumerationBounds` explicitly.
+ */
+export type CreateConstrainedProductionPlanCalculation = (
+  input: PlannerInput,
+  orchestrationBounds: PlannerOrchestrationBounds,
+  dependencies: PlannerDependencies,
+  options?: PlannerExecutionOptions,
+) => Promise<PlannerOrchestrationResult>
+
 /** One Target that must be re-searched because of one fixed conflict choice. */
 export interface PlannerConflictWork {
   /** The `PlanConflict.id` of the original input; a diagnostic and budget key. */
