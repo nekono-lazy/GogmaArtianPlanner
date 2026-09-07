@@ -264,6 +264,18 @@ export type PlannerWarningKind =
   | 'invalid_conflict_resolution'
   | 'max_steps_reached'
   | 'max_expanded_states_reached'
+  /**
+   * B8 constrained-search orchestration only (PLANNER_SPEC 9.2.16). The four
+   * kinds below report an orchestration or enumeration stop, never silent
+   * exhaustion, and the ordinary `createProductionPlan()` path never produces
+   * them. They are deliberately separate from `max_steps_reached` /
+   * `max_expanded_states_reached`, which report the two `PlannerOptions`
+   * bounds of a single Beam Search and mean something else entirely.
+   */
+  | 'max_candidate_trials_per_conflict_reached'
+  | 'max_generated_build_list_entries_reached'
+  | 'max_planner_reruns_reached'
+  | 'constrained_enumeration_bound_reached'
 
 export const plannerWarningKinds: readonly PlannerWarningKind[] = [
   'no_build_list_entries',
@@ -277,6 +289,10 @@ export const plannerWarningKinds: readonly PlannerWarningKind[] = [
   'invalid_conflict_resolution',
   'max_steps_reached',
   'max_expanded_states_reached',
+  'max_candidate_trials_per_conflict_reached',
+  'max_generated_build_list_entries_reached',
+  'max_planner_reruns_reached',
+  'constrained_enumeration_bound_reached',
 ]
 
 export interface PlannerWarning {
@@ -340,6 +356,18 @@ export type CreateProductionPlanCalculation = (
  */
 export interface ProductionPlanGenerationObserver {
   beforeBeamSearch(): void
+  /**
+   * Called exactly once immediately after each full `runPlannerBeamSearch()`
+   * execution returns, before Trace Replay inspects its result.
+   *
+   * It is pure observation: nothing in Plan generation branches on it, and it
+   * cannot change which Beam Search runs next. B8 orchestration uses it so
+   * that, when a runtime-unsupported retry is refused by the
+   * `maxPlannerReruns` budget, it can still report the last completed Beam
+   * Search's conflicts and warnings with `plan: null` instead of assembling a
+   * ProductionPlan from a Beam whose Trace Replay never succeeded.
+   */
+  afterBeamSearch?(result: PlannerBeamSearchResult): void
 }
 
 export type PlannerWorkerRequest =

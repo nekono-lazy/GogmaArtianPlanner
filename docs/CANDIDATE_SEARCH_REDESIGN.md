@@ -1948,8 +1948,8 @@ unsupportedのままである。
 
 ### 4.10 B8-C4a implementation record
 
-**B8-C1 complete。B8-C2 complete。B8-C3 complete。B8-C4a complete。B8-C4全体は
-まだ未完である。次subtaskはB8-C4b candidate trial / adoption orchestration。**
+**B8-C1 complete。B8-C2 complete。B8-C3 complete。B8-C4a complete。**
+**B8-C4全体は4.11のB8-C4bで完了した。**
 
 B8-C4aが揃えたもの。
 
@@ -2085,6 +2085,175 @@ defaultPlannerOptions
 
 schema bumpは不要である。normal scope Keep predictionは引き続きunsupportedの
 ままである。
+
+---
+
+### 4.11 B8-C4b implementation record
+
+**B8-C1 complete。B8-C2 complete。B8-C3 complete。B8-C4a complete。B8-C4b complete。**
+**B8-C4 implementation complete。B8-C implementation complete。**
+
+次phaseはB8-D Worker / Application / Persistence / atomic save / 既存UIへの最小配線
+である。B8-C4のorchestration bounds Production defaultは未確定であり、B8-Eの
+Browser / Planner benchmark後に決める。
+
+B8-C4bが接続したpipelineは次である。すべて既存実装をauthorityとして呼ぶだけであり、
+Beam Search / Trace Replay / ProductionPlan生成を複製していない。
+
+```text
+createPlannerFullBeamBudget()                      C4a
+  -> createProductionPlanWithObserver()            initial ordinary Planner
+  -> preparePlannerInitialContext()                C1
+  -> createPlannerConstrainedConflictContexts()    C3a
+  -> preparePlannerFixedConflictConstraints()      C3a
+  -> visitConstrainedCandidates()                  B8-B1 sequential visitor
+  -> createConstrainedMaterializer()               C2
+  -> preparePlannerAugmentedConflictPreflight()    C3b
+  -> createProductionPlanWithObserver()            trial full Beam + Trace Replay
+  -> adoption / next candidate
+```
+
+#### orchestration API
+
+```ts
+createProductionPlanWithConstrainedSearch(
+  input, dependencies, options,
+): Promise<PlannerOrchestrationResult>
+```
+
+`PlannerConstrainedOrchestrationOptions` は `enumerationBounds` /
+`orchestrationBounds` / 任意の `executionOptions` を持ち、両boundsともcaller必須で
+ある。Production defaultはこのモジュールに存在しない。
+
+#### ConstrainedSearchOrigin
+
+`createConstrainedSearchOriginFromPlannerInput()` が、**元のPlannerInputから1回だけ**
+構築する。`rngState` / `normalCounters` / `ownedWeapons` / `targetWeapons` / `master` /
+`calculationContext` をdefensive cloneする。adopt後のPlanner state、Beam bestState、
+競合Counter+1、過去のUI Candidate Search requestのいずれからも作らない。
+`PlannerMasterSubset` と `SearchMasterSubset` は構造的に同一なのでそのまま渡す。
+
+#### fixed constraintとwork
+
+fixed constraintは元のvalidated inputに対して1回だけ作る。`context.validConflictResolutions`
+だけがauthorityであり、`recommendedBuildListEntryId`・bestState participant・priority・
+score・categoryは使わない。有効なexplicit resolutionが0件ならenumeratorを一切起動せず、
+initial ordinary Planner resultと `generatedBuildListEntries: []` を返す。
+`preparePlannerFixedConflictConstraints()` が `unresolved` の場合も同様に停止し、
+structured failureから `invalid_conflict_resolution` warningを組み立てる。
+
+workは `(fixed constraint, 非固定participant Target)` で、同一Targetはdedupe、
+順序はstable keyの昇順である。1件adoptするたびに残りworkの充足を再評価する。
+
+#### trial semantics
+
+`maxCandidateTrialsPerConflict` は元Conflict単位のbudgetで、その元Conflictの複数Target
+workが共有する。`limit + 1` 件目のdeliveryで初めて打ち切りと判断するため、ちょうど
+`limit` 件でenumerationが尽きた場合にfalse positive warningを出さない。
+
+`maxGeneratedBuildListEntries` はadoptした新規generated Entryだけを数える。新規Entryだと
+分かった時点でcapが満杯なら、full Planner再実行を行わずにwarningを出してglobal stopする。
+
+`maxPlannerReruns` はC4aのbudget instanceをinitial run・全trial run・runtime unsupported
+retryで共有する。preflightはBeam Searchを走らせないため消費しない。実測でも、5 Candidate
+処理・4 trial Beamのfixtureが `maxPlannerReruns = 5` でちょうど完了し、`4` では
+`max_planner_reruns_reached` になる。
+
+#### afterBeamSearch観測
+
+initial ordinary Production Plan生成の内部でruntime unsupported retryがrerun budgetに
+拒否されるケースのため、`ProductionPlanGenerationObserver` へ
+`afterBeamSearch?(result: PlannerBeamSearchResult)` を追加した。各
+`runPlannerBeamSearch()` 完了直後にちょうど1回呼ぶ観測専用hookである。これにより
+Replay未成功のBeamからProductionPlanを組み立てずに、最後に完了したBeamの
+conflicts / warningsと `plan: null` を返せる。ordinary
+`createProductionPlan()` のsemanticsとbudget semanticsは変更していない。
+
+#### 追加したwarning kind
+
+```text
+max_candidate_trials_per_conflict_reached
+max_generated_build_list_entries_reached
+max_planner_reruns_reached
+constrained_enumeration_bound_reached
+```
+
+いずれもB8 orchestration専用であり、ordinary Planner経路では生成しない。
+`constrained_enumeration_bound_reached` は、consumer stopではなく
+`summary.stoppedByBound === true` で終わり、かつそのworkでadoptできなかった場合だけ
+出す。
+
+#### 一次レビュー修正 (MEDIUM 1 / MEDIUM 2)
+
+初版では次の2点が契約違反だった。実装で修正済みである。
+
+**MEDIUM 1**: `budget.used === limit` でも、次の `beforeBeamSearch()` がthrowするまで
+到達を検出していなかったため、無駄なenumeration / materialization / preflightが1回
+走っていた。`budget.used >= budget.limit` を直接見る判定を、work開始時(充足判定の後)と
+trial却下直後の2箇所へ追加した。trial採用直後は即warningとせず、残りworkを
+current Planで再評価する。実測では `maxPlannerReruns = 1` のときClock呼出しが1回
+(= initial Plan組み立てのみ)となり、materializationが1回も起きないことを固定した。
+
+**MEDIUM 2**: 通常Plannerがcancellationを `plan: null` の正常結果として処理した後も
+work / enumerationへ進んでいたため、同じ `shouldCancel` が
+`CandidateSearchError('cancelled')` を送出し得た。`runFullPlanner()` を
+`completed` / `cancelled` / `rerun_budget_reached` のtyped outcomeへ変更し、
+`afterBeamSearch` の観測状態を各run開始時にresetして、そのrun自身の最後のBeamの
+`cancelled` だけを見るようにした。initial runがcancelledならenumerationを開始せず
+ordinary safe resultを返し、trialがcancelledならreject扱いにせずorchestration全体を
+終了して最後にacceptedなresultを返す。cancellation専用のwarning kindは追加していない。
+
+#### テスト
+
+`plannerConstrainedOrchestration.test.ts` は29件で、orchestration testは実コード経路
+(C1 / C3a / C3b / B8-B1 enumerator / C2 materializer / Beam Search / Trace Replay)を
+そのまま通す。Fake RNG Engine、ID factory、Clockだけを注入する。fixtureは
+`src/test/fixtures/plannerConstrainedOrchestration.ts` で、B8-B1のconstrained
+enumeration fixtureを再利用し、1つのFake Engineがenumeratorと通常Plannerの両方へ
+答える。
+
+シナリオの骨子は、Target Aと Target Bが同一Gogma Counter位置を奪い合う
+`same_gogma_counter` 競合である。Target Aを固定すると、Target B向けのIdeal Candidateは
+すべて同じGogma位置を使うため完全再実行で不採用となり、Gogma位置を使わない
+Reset-Skills-onlyのPractical Candidateが採用される。
+
+#### 実測できなかったテスト観点
+
+次はこのfixtureでは自然なPlanner局面として再現できなかったため、実装authorityである
+純粋関数 `isConstrainedTrialAdoptable()` / `isPlannerConflictWorkSatisfied()` を
+export して直接検証した。orchestrationはこの関数だけを採否・充足判定に使う。
+
+```text
+generated selectedだがfixed Entryが落ちるtrialの不採用
+以前adoptしたgenerated Entryが落ちるtrialの不採用
+1つのgenerated Entryが別workも充足するケース
+```
+
+また、bound到達なしでenumerationがちょうど `limit` 件でexhaustedになるfixtureは作れて
+いない。false positive警告の不在は、`limit` 件目のCandidateでadoptするケースで検証した。
+
+#### 変更していないもの
+
+```text
+createProductionPlan public signature / 結果semantics
+runPlannerBeamSearch / Trace Replay / runtime unsupported retry semantics
+PlanningInputSnapshot / ProductionPlan / PlanStep shape
+conflict detection / shareability
+B8-C1 / B8-C2 / B8-C3a / B8-C3b
+通常Candidate SearchのAPIとsearchRunId契約
+CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2
+DATABASE_SCHEMA_VERSION = 1
+AppSettings.schemaVersion = 1
+PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2
+supportsSeedSearch = false
+defaultConstrainedEnumerationBounds = 40 / 30 / 100 / 500
+defaultCandidateSearchSettings = 1000 / 200 / 1000 / 200 / 0.6
+defaultPlannerOptions
+```
+
+schema bumpは不要である。normal scope Keep predictionは引き続きunsupportedのままで
+ある。Worker / Application / Persistence / UIはB8-Dの対象であり、B8-C4bでは実装して
+いない。
 
 ---
 

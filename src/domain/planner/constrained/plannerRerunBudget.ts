@@ -7,12 +7,16 @@ import {
 /**
  * Which orchestration bound was reached, as a typed value.
  *
- * Callers branch on `code`; they must never parse the message text. Only the
- * bound that B8-C4a actually consumes exists today. The trial loop and the
- * Entry adoption loop of B8-C4b add their own codes when they are implemented,
- * rather than shipping unused ones now.
+ * Callers branch on `code`; they must never parse the message text. All three
+ * `PlannerOrchestrationBounds` are represented now that B8-C4b implements the
+ * loops that consume them. Search enumeration bounds are deliberately absent:
+ * reaching one is reported by `ConstrainedEnumerationSummary.stoppedByBound`,
+ * which is the Search Domain's own authority.
  */
-export type PlannerOrchestrationLimitCode = 'max_planner_reruns'
+export type PlannerOrchestrationLimitCode =
+  | 'max_candidate_trials_per_conflict'
+  | 'max_generated_build_list_entries'
+  | 'max_planner_reruns'
 
 /**
  * A B8 orchestration bound was reached (PLANNER_SPEC 9.2.16). Reaching a bound

@@ -67,6 +67,13 @@ export const plannerWarningLabels: Record<PlannerWarningKind, string> = {
   invalid_conflict_resolution: '選択した競合解決を現在の状態へ適用できません',
   max_steps_reached: '計画ステップ数の上限に到達しました',
   max_expanded_states_reached: '探索状態数の上限に到達しました',
+  max_candidate_trials_per_conflict_reached:
+    '1つの競合について試行できる候補数の上限に到達しました',
+  max_generated_build_list_entries_reached:
+    '再検索で追加できるビルドリスト項目数の上限に到達しました',
+  max_planner_reruns_reached: 'Plannerの再実行回数の上限に到達しました',
+  constrained_enumeration_bound_reached:
+    '再検索の探索範囲の上限に到達したため、候補の探索を打ち切りました',
 }
 
 export const candidateRouteFilterLabels: Record<CandidateRouteFilter, string> = {

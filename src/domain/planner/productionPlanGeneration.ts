@@ -394,9 +394,11 @@ export function collectRequiredMaterials(
  *
  * `observer.beforeBeamSearch()` is called once immediately before each full
  * `runPlannerBeamSearch()` execution that actually starts: the first one, and
- * every runtime-unsupported retry. The observer is semantics-neutral, so
- * nothing below branches on its presence, and an exception it throws
- * propagates unchanged instead of becoming a `PlannerResult`.
+ * every runtime-unsupported retry, and the optional
+ * `observer.afterBeamSearch()` once immediately after each of them returns.
+ * The observer is semantics-neutral, so nothing below branches on its presence,
+ * and an exception it throws propagates unchanged instead of becoming a
+ * `PlannerResult`.
  */
 export async function createProductionPlanWithObserver(
   input: PlannerInput,
@@ -419,6 +421,7 @@ export async function createProductionPlanWithObserver(
         }
     observer?.beforeBeamSearch()
     beamResult = await runPlannerBeamSearch(beamInput, dependencies, options)
+    observer?.afterBeamSearch?.(beamResult)
     if (
       beamResult.cancelled ||
       beamResult.bestState === null ||

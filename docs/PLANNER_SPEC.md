@@ -1342,6 +1342,66 @@ interface PlannerOrchestrationResult extends PlannerResult {
 - 既存の `plan` / `conflicts` / `warnings` の意味を変更しない
 - `PlannerOrchestrationResult` は非永続であり、`ProductionPlan` へ埋め込まない
 
+#### B8-C4b実装名
+
+B8-C4bで確定した実装上の名称は次である。意味は上記から変更していない。
+
+```ts
+createProductionPlanWithConstrainedSearch(
+  input: PlannerInput,
+  dependencies: PlannerDependencies,
+  options: PlannerConstrainedOrchestrationOptions,
+): Promise<PlannerOrchestrationResult>
+
+interface PlannerConstrainedOrchestrationOptions {
+  enumerationBounds: ConstrainedEnumerationBounds
+  orchestrationBounds: PlannerOrchestrationBounds
+  executionOptions?: PlannerExecutionOptions
+}
+```
+
+両boundsともcaller必須である。orchestration側のProduction defaultはB8-Eで決める。
+
+#### conflict work
+
+再検索対象は `(fixed constraint, 非固定participant Target)` の組とする。
+
+```text
+work対象にする    : participant.buildListEntryId != fixedBuildListEntryId
+work対象にしない  : participant.targetWeaponId === fixedTargetWeaponId
+```
+
+同一Targetが複数RouteUnit / Entryで参加してもTarget単位に1件へdedupeする。
+work順は競合資源identity / fixed BuildListEntry ID / TargetWeapon ID /
+元の `PlanConflict.id` から作るstable keyの昇順とし、context配列順・participant配列順・
+Map挿入順へ依存しない。
+
+1件adoptするたびに残りworkを再評価する。current `ProductionPlan.selectedBuildListEntryIds`
+が、そのworkのfixed EntryとそのTargetのEntryを両方含む場合、そのworkは充足済みとして
+enumerationしない。Candidate score・category・`recommendedBuildListEntryId` は判定に
+使わない。
+
+#### monotonic adoption
+
+trial採否の最終authorityは、preflightを通したaugmented inputに対する完全再実行
+(`createProductionPlanWithObserver()` = full Beam Search + Trace Replay +
+ProductionPlan組み立て)である。採用条件は次をすべて満たすことである。
+
+```text
+plan !== null
+plan.selectedBuildListEntryIds が trial generated Entry ID を含む
+plan.selectedBuildListEntryIds が 全fixed Entry ID を含む
+plan.selectedBuildListEntryIds が 以前adopt済みの全generated Entry ID を含む
+```
+
+したがってadoptionはmonotonicである。新Candidateの採用によって、固定Entryまたは
+以前adoptしたgenerated EntryがPlanから落ちる場合は不採用とする。`completed === true`
+は要求しないため、bound到達によるpartial Planでも上記を満たせば採用してよい。
+
+`reusedExisting: true` のmaterialize結果はcurrent inputに既に存在するため、
+Entryを重複追加せず、full Planner再実行も行わず、`generatedBuildListEntries` へも
+含めない。Candidate trialは1消費済みとして次Candidateへ進む。
+
 ### 9.2.15 Persistence契約
 
 Planner Domain / WorkerはIndexedDBへ直接アクセスしない。保存はB8-DのApplication /
@@ -1480,17 +1540,118 @@ enumerator benchmarkでこれらのdefaultを決めない。
 どちらのboundsも、到達した場合は打ち切りをenumeration summaryまたはwarningとして
 明示する。bound到達を無言でexhaustionとして扱わない。
 
+#### B8-C4b bound semantics
+
+`maxCandidateTrialsPerConflict` は、1つの元Conflictに対してorchestrationが実際に
+処理した `ConstrainedCandidate` 数を数える。同一Conflictに複数の非固定Targetがある
+場合も同じbudgetを共有し、Targetごとにresetしない。preflight却下・Planner却下・
+`reusedExisting` によるno-opも1消費とする。
+
+```text
+used < limit   -> used += 1、そのCandidateを処理
+used >= limit  -> そのCandidateを処理せずconsumer stop、打ち切りとして報告
+```
+
+`limit` 件目を処理した直後に無条件で打ち切りとしてはならない。ちょうど `limit` 件で
+enumerationが尽きた場合はtruncateされていないため、`limit + 1` 件目が実際に
+deliveryされた時点で初めてtrial boundによる打ち切りとする。
+
+`maxGeneratedBuildListEntries` は最終augmented PlannerInputへadoptした新規generated
+Entry数だけを数える。materializeしただけの不採用trial、`reusedExisting` のEntry、
+元のBuildListEntryは数えない。limit到達そのものではwarningを出さず、未充足workが
+残っていて新規Entryをこれ以上adoptできないと判明した時点でwarningを出しglobal stopと
+する。既にcapが満杯であると分かった新規Entryについては、無駄なfull Planner再実行を
+行わない。
+
+`PlannerOrchestrationLimitCode` はtyped値であり、message文字列を制御authorityに
+しない。
+
+```ts
+type PlannerOrchestrationLimitCode =
+  | 'max_candidate_trials_per_conflict'
+  | 'max_generated_build_list_entries'
+  | 'max_planner_reruns'
+```
+
+Search enumeration boundは `ConstrainedEnumerationSummary.stoppedByBound` がauthority
+であり、このunionへ含めない。
+
+#### B8 orchestration warning kind
+
+B8 orchestrationだけが生成するPlannerWarningKindを追加する。通常の
+`createProductionPlan()` 経路はこれらを生成しない。
+
+```text
+max_candidate_trials_per_conflict_reached
+max_generated_build_list_entries_reached
+max_planner_reruns_reached
+constrained_enumeration_bound_reached
+```
+
+既存の `max_steps_reached` / `max_expanded_states_reached` は1回のBeam Searchの
+`PlannerOptions` boundを表すものであり、意味が異なるため流用しない。
+
+`constrained_enumeration_bound_reached` は、consumer stopではなく
+`summary.stoppedByBound === true` でenumerationが終わり、かつそのworkでCandidateを
+adoptできなかった場合だけ出す。対象workは終了するが、他Conflictのworkは継続する。
+
+`max_planner_reruns_reached` に到達した場合、新しいCandidate trialを開始しない。
+到達の検出を次の `beforeBeamSearch()` のthrowまで遅らせてはならない。full Beam Search
+の実行可能回数を使い切っており、かつ未解決workが実際に残っている時点で、新しい
+enumeration / materialization / preflightを一切開始せずwarningを出しglobal stopとする。
+
+```text
+work開始前   : 充足判定 -> 未解決かつbudget使い切り -> warning / global stop
+trial却下後  : そのtrialで最後のBeamを消費 -> 次Candidateを要求せずwarning / global stop
+trial採用後  : 即warningとしない。残りworkをcurrent Planで再評価し、
+               未解決workが残る場合だけ次work開始前にwarning / global stop
+```
+
+最初のordinary Production Plan生成の内部でruntime unsupported retryが拒否された場合は、
+Replay未成功のBeamからProductionPlanを組み立てず、最後に完了したBeam Searchの
+conflicts / warningsと `plan: null` を返す。この観測のために
+`ProductionPlanGenerationObserver` へsemantics-neutralな
+`afterBeamSearch?(result)` を追加した。`beforeBeamSearch()` と同様に観測専用であり、
+通常のProduction Plan生成semanticsを変更しない。
+
+#### cancellation
+
+通常PlannerはBeam cancellationを `beamResult.cancelled = true` から
+`plan: null` の正常 `PlannerResult` として返す。orchestrationはこれをtypedな
+run outcomeとして扱い、その後Search Domainへ進めてはならない。同じ `shouldCancel`
+がconstrained enumeratorのcheckpointで
+`CandidateSearchError('cancelled')` を送出し、処理済みのcancellationを
+rejected Promiseへ変えてしまうためである。
+
+```text
+initial ordinary runがcancelled
+  -> constrained enumerationを開始しない
+  -> generatedBuildListEntries = []
+  -> initial ordinary safe PlannerResultを返す
+
+Candidate trialがcancelled
+  -> 通常のreject扱いにして探索継続しない
+  -> orchestration全体を終了し、最後にaccepted済みのcurrent PlannerResultを返す
+```
+
+cancellation専用のwarning kindは追加しない。`afterBeamSearch` の観測状態は
+Production Plan生成1回ごとにresetし、過去runのBeam結果を誤参照しない。
+`visitConstrainedCandidates()` 自身が検出したSearch cancellationのsemanticsは
+変更しない。
+
 ### 9.2.17 B8のtask分割とCompatibility
 
 ```text
 B8-A   Spec / DTO / API / persistence contract           (本節)
-B8-B1  Search-domain constrained candidate enumerator
+B8-B1  Search-domain constrained candidate enumerator          実装済み
        enumeration boundsはcaller必須指定
-B8-B2  enumerator側の実Browser Worker benchmark
+B8-B2  enumerator側の実Browser Worker benchmark                実装済み
        enumeration boundsのProduction default決定
 B8-C   Planner conflict orchestration / deterministic materializer /
-       augmented-input full rerun / Conflict Resolution再対応付け
+       augmented-input full rerun / Conflict Resolution再対応付け  実装済み
        orchestration boundsはcaller必須指定のまま
+       C1 initial context / C2 materializer / C3 preflight /
+       C4a rerun budget / C4b candidate trial / adoption orchestration
 B8-D   Worker / Application / Persistence / atomic save /
        既存UIへの最小配線
 B8-E   orchestration側のBrowser / Planner benchmark
