@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { enumerateConstrainedCandidates } from './constrainedEnumeration'
 import {
   ConstrainedSearchError,
+  defaultConstrainedEnumerationBounds,
   type ConstrainedEnumerationBounds,
 } from './constrainedTypes'
 import {
@@ -248,5 +249,68 @@ describe('Constrained enumeration fails closed before any Engine prediction', ()
       ),
     ).rejects.toBeInstanceOf(ConstrainedSearchError)
     expect(callCounts).toEqual({ normal: 0, skill: 0, gogmaReset: 0, gogmaKeep: 0 })
+  })
+})
+
+describe('B8-B2 Production enumeration defaults', () => {
+  it('pins the tuple the Browser Worker benchmark selected', () => {
+    expect(defaultConstrainedEnumerationBounds).toEqual({
+      maxNormalForgeCount: 40,
+      maxGogmaAdvance: 30,
+      maxSkillResetCount: 100,
+      maxOffAxisPairEvaluations: 500,
+    })
+  })
+
+  it('is a valid ConstrainedEnumerationBounds value', () => {
+    expect(
+      validateConstrainedEnumerationBounds(defaultConstrainedEnumerationBounds),
+    ).toEqual([])
+  })
+
+  it('carries no Planner orchestration bound', () => {
+    // The three orchestration bounds are decided in B8-E and must never appear
+    // on the enumerator's input.
+    expect(Object.keys(defaultConstrainedEnumerationBounds).sort()).toEqual([
+      'maxGogmaAdvance',
+      'maxNormalForgeCount',
+      'maxOffAxisPairEvaluations',
+      'maxSkillResetCount',
+    ])
+  })
+
+  it('never overrides the caller-supplied bounds', async () => {
+    // The default is a value a Production caller passes, not a floor the
+    // enumerator applies. Enumerating with a bound far below it must stay
+    // bounded by what the caller asked for.
+    const origin = createConstrainedSearchOrigin({
+      ownedWeapons: [gogmaWeapon('owned.constrained.gogma')],
+    })
+    const engine = createConstrainedEngine(origin)
+    const result = await enumerateConstrainedCandidates(
+      constrainedInput(
+        origin,
+        constrainedBounds({
+          maxNormalForgeCount: 1,
+          maxGogmaAdvance: 1,
+          maxSkillResetCount: 1,
+          maxOffAxisPairEvaluations: 0,
+        }),
+      ),
+      engine,
+    )
+    expect(result.candidates.length).toBeGreaterThan(0)
+    expect(result.summary.evaluatedOffAxisPairs).toBe(0)
+    expect(
+      result.candidates.every(
+        (candidate) =>
+          candidate.estimatedGogmaAdvance <= 1 &&
+          // A conversion Route spans one extra Skill position without raising
+          // the Reset bound, so the ceiling is `maxSkillResetCount + 1`.
+          candidate.estimatedSkillAdvance <= 2,
+      ),
+    ).toBe(true)
+    // Nothing here approaches the far larger Production default.
+    expect(defaultConstrainedEnumerationBounds.maxSkillResetCount).toBe(100)
   })
 })

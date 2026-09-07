@@ -481,7 +481,7 @@ B11 は実ゲーム観測を前提とする独立系列
 | B6-F1 | Candidate出力順のrun非依存化 | `compareCandidates()` / `compareDuplicateCandidates()` の最終tie-breakを `BuildCandidate.id` から `candidateStableKey` へ変更。Candidate ID生成規則は不変 | B6。完了 |
 | B8-A | Planner-driven constrained re-search 仕様確定 | architecture、conflict context DTO、constrained search API、generated BuildListEntry、決定的ID、Persistence契約、bounds、task分割 | B4, 既存Planner。完了 |
 | B8-B1 | constrained candidate enumerator | Search Domain側の制約付き列挙。enumeration boundsはcaller必須指定 | B8-A。完了 |
-| B8-B2 | enumerator実Browser Worker benchmark | enumeration boundsのProduction default決定 | B8-B1 |
+| B8-B2 | enumerator実Browser Worker benchmark | enumeration boundsのProduction default決定 | B8-B1。完了 |
 | B8-C | Planner conflict orchestration | 固定Candidate判定、Conflict Resolution再対応付け、deterministic materializer、augmented-input完全再実行。orchestration boundsはcaller必須指定のまま | B8-B1 |
 | B8-D | Worker / Application / Persistence | atomic save、既存UIへの最小配線 | B8-C |
 | B8-E | orchestration Browser / Planner benchmark | orchestration boundsのProduction default決定 | B8-D |
@@ -835,6 +835,8 @@ B8-Aで確定しなかった点。
 - enumeration boundsのProduction default(`maxNormalForgeCount` /
   `maxGogmaAdvance` / `maxSkillResetCount` / `maxOffAxisPairEvaluations`)。
   B8-B1ではcaller必須指定とし、B8-B2のenumerator実Browser Worker benchmark後に決定する
+  -> **B8-B2で決定済み**(4.5章)。B8-A時点でdefaultを持たなかったことは
+  この記録のとおりであり、値は後からB8-B2の実測で決まった
 - orchestration boundsのProduction default(`maxCandidateTrialsPerConflict` /
   `maxGeneratedBuildListEntries` / `maxPlannerReruns`)。Planner再実行1回のコストは
   B8-C / B8-Dのorchestration実装が無ければ測定できないため、B8-B2では決めない。
@@ -988,7 +990,8 @@ maxOffAxisPairEvaluationsによって評価を止めた
 `maxOffAxisPairEvaluations` の最小値は0とした。0は5.5.4のCross-onlyそのもので
 あり、意味のある設定を禁止しないためである。他3 boundsは既存
 `validateCandidateSearchSettings()` と同じ最小値1を維持した。Production default
-はB8-B2まで定義しない。
+はB8-B2まで定義しない(B8-B2で `defaultConstrainedEnumerationBounds` として決定、
+4.5章)。
 
 SEARCH_SPEC 5.6.1のIdeal既達成早期終了は適用したままとした。5.6.7の
 「適用しない」列挙(Practical dominance、canonical Ideal終了、初回Practical
@@ -1037,6 +1040,7 @@ Keep prediction supportの範囲内である。通常Candidate Searchとconstrai
 
 **B8-B1a complete / B8-B1b complete / B8-B1 complete。次PhaseはB8-B2。**
 Phase表の `B8-B1` を完了扱いにしてよい。`B8-B2` 以降は未着手のままである。
+（B8-B2はその後完了した。4.5章を参照）
 
 B8-B1bで実装した範囲。
 
@@ -1283,6 +1287,115 @@ cap = N < reachable では evaluatedOffAxisPairs = N かつ残りが未評価
 cap = reachable ちょうどでは cap を上げても結果が変わらない
 Ideal / Practical双方に現れる同一pairは評価1回・count1回・配信1回
 ```
+
+---
+
+### 4.5 B8-B2 benchmark record
+
+**B8-B2 complete。次PhaseはB8-C。**
+実測記録は
+[B8_CONSTRAINED_ENUMERATION_BROWSER_WORKER_BENCHMARK.md](./B8_CONSTRAINED_ENUMERATION_BROWSER_WORKER_BENCHMARK.md)
+にある。ここには設計判断だけを残す。
+
+B8-B2は計測タスクである。B8-B1のenumerator algorithm、`visitConstrainedCandidates()`、
+lazy off-axis frontier、global `maxOffAxisPairEvaluations`、consumer early stop、
+`ConstrainedEnumerationSummary`、deterministic incremental deliveryを変更していない。
+Production Worker protocol、Persistence、UI、Production RNG semanticsも変更していない。
+Production側の追加は `defaultConstrainedEnumerationBounds` 定数1つだけである。
+
+benchmark harnessの計測基点は `visitConstrainedCandidates()` の直前であり、
+fixture生成 / Master load / 合成所持武器のProduction predictionは計測に含めない。
+
+harnessは2モードを持つ。**性能判断はtiming modeの直接計測のみを使う。**
+
+```text
+timing mode  最小recorder。delivered / ideal・practical count / routeKinds /
+             1・10・50件目timestampだけを記録する。
+             parity instrumentation（constrainedCandidateStableKey()の再生成、
+             digest生成、Candidate列保持）は行わない。
+             Worker wall timeを補正なしでenumerationのコストとして扱う。
+parity mode  determinism確認専用。ordered rolling digestと固定長per-key digestを
+             作るため、そのコストがwall timeに乗る（実測で最大8割）。
+             この時間を性能値として読まない。
+```
+
+parity recorderはstable key全文を保持せず、1回の文字走査でordered rolling digestへ
+foldし、固定長24文字のper-key digestだけを残す。したがってharnessの保持量は
+`O(配信Candidate数)` の固定幅であり、`O(stable key総文字数)` ではない。
+
+決定したenumeration defaults。
+
+```text
+maxNormalForgeCount       40
+maxGogmaAdvance           30
+maxSkillResetCount       100
+maxOffAxisPairEvaluations 500
+```
+
+選定は、全Route baseで両streamがactiveでIdealが近傍に無いcombined workloadの
+timing mode直接計測のみに基づく。single-axis値の合算では決めていない。
+full bounded enumeration中央値1782.0 ms、time to first Candidate中央値331.6 ms、
+consumer stop 50件で354.6 ms。
+
+2秒枠の前後を挟むまで近傍tupleを実測したうえで、共有streamを優先して配分した。
+
+```text
+off-axis   100 -> 500   +26 ms      （1659.2 -> 1685.0 ms、ほぼ無償）
+Skill      100 -> 250   3.2x        （単独sweep）
+Gogma       10 -> 200   285x        （単独sweep、最も急峻）
+```
+
+Gogmaは最も高価な軸である。Normalを譲ってGogmaを25から30へ引き上げた。
+補助的な理由として、Gogma CounterはPlanner競合が起きる共有resourceであり、
+Normal Counterは武器種ごとに独立という既存Plannerの事実がある。
+
+Gogma 35の `30/35/100/500` も2秒枠内だが、採用しなかった理由は実測値である。
+
+```text
+40/30/100/500   1782.0 ms   2秒枠への余裕 約218 ms   20,306件
+30/35/100/500   1899.0 ms   2秒枠への余裕 約101 ms   20,178件
+```
+
+このfixtureでは40/30の方が速く、Candidate数もわずかに多い。session / machine
+variabilityを考え、2秒ぎりぎりではなく余裕を残す方を採った。
+**B8-B2は探索品質そのものを測定していないため、特定のNormal値を実用最低ラインと
+して扱わない。**
+
+`ConstrainedCandidateSearchInput.bounds` はcaller必須のままである。この定数は
+B8-C以降のProduction callerが明示的に渡す値であり、enumeratorが適用するfallbackでは
+ない。orchestration boundsのdefaultはB8-Eで決める。
+
+B8-Cが引き継ぐべき観測。
+
+- 1 Targetのenumerationコストは、採用defaultで全件1782 ms、
+  最初の数件で打ち切るなら約347〜355 ms（いずれもtiming modeの直接計測）。
+  差の大半はupfront stream solveではなくtraversal分であり、
+  trialを打ち切る設計なら実効コストは後者になる
+- 性能を測り直す場合はtiming modeを使うこと。parity modeのwall timeは
+  parity instrumentationのコストを含み、workloadによってはその8割に達する
+- time to first Candidateはupfront raw stream solveが支配する。
+  Candidate 1件目と50件目の差はどのworkloadでも数msしかない
+- `exhausted` / `stoppedByBound` / `stoppedByConsumer` は排他ではない。
+  bound到達はtraversal前のbase構築 / stream solveで確定するため、
+  consumer stopしたrunでも `stoppedByBound = true` になりうる
+- off-axis budgetが足りたかは、単一の値からは判定できない。`stoppedByBound` は
+  Gogma / Skill boundでも `true` になるため使えず、`evaluatedOffAxisPairs` と
+  budgetの比較だけでも足りない
+
+  ```text
+  full traversal && evaluatedOffAxisPairs < maxOffAxisPairEvaluations
+    => off-axis capはbindingではなかった
+  evaluatedOffAxisPairs == maxOffAxisPairEvaluations
+    => reachableがちょうどcapか、capでtruncateしたかを区別できない
+  consumer stop
+    => evaluatedOffAxisPairsだけからoff-axis exhaustion / sufficiencyを
+       判断してはいけない
+  ```
+
+  実測ではbudgetを変えて再測定し、`evaluatedOffAxisPairs` と配信Candidate集合が
+  動かなくなる点（`G/S = 10/10` で470件）を見つけて初めて飽和と判定できた。
+  B8-B2では `ConstrainedEnumerationSummary` 型もenumerator semanticsも変更していない。
+  B8-Cがこの区別を要するなら、そのPhaseで設計判断すること
 
 ---
 

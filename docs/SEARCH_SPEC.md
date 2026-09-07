@@ -1190,10 +1190,40 @@ orchestration側3つはenumerationの探索量へ影響せず、Search Domainが
 [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.16にある。
 
 `ConstrainedEnumerationBounds` はB8-B1ではcaller必須指定とし、Production defaultを
-定義しない。Production defaultはB8-B1実装後のB8-B2で、enumerator側の実Browser Worker
-benchmarkから決定する。orchestration側boundsのProduction defaultはB8-B2では決めない。
-Planner再実行1回のコストはB8-C / B8-Dのorchestration実装が無ければ測定できないため、
-B8-C / B8-Dはcaller必須指定のまま実装し、その後のB8-Eで決定する。
+定義しなかった。Production defaultはB8-B1実装後のB8-B2で、enumerator側の実Browser
+Worker benchmarkから決定する。orchestration側boundsのProduction defaultはB8-B2では
+決めない。Planner再実行1回のコストはB8-C / B8-Dのorchestration実装が無ければ
+測定できないため、B8-C / B8-Dはcaller必須指定のまま実装し、その後のB8-Eで決定する。
+
+**B8-B2で決定済み。** 実測記録は
+[B8_CONSTRAINED_ENUMERATION_BROWSER_WORKER_BENCHMARK.md](./B8_CONSTRAINED_ENUMERATION_BROWSER_WORKER_BENCHMARK.md)
+にある。
+
+```ts
+export const defaultConstrainedEnumerationBounds: ConstrainedEnumerationBounds = {
+  maxNormalForgeCount: 40,
+  maxGogmaAdvance: 30,
+  maxSkillResetCount: 100,
+  maxOffAxisPairEvaluations: 500,
+}
+```
+
+根拠は、全Route baseで両streamがactiveでIdealが近傍に無いcombined workloadの
+実Browser Worker実測である。**計測はparity instrumentation（stable key再生成・
+digest・Candidate列保持）を行わない最小recorderのtiming modeで行い、Worker wall
+timeをそのまま用いる。差し引き補正値をdefault根拠にしない。**
+full bounded enumerationの中央値1782.0 ms、time to first Candidateの中央値331.6 ms、
+Candidate traversal区間のcancel応答0.7〜2.2 ms。single-axis値を足し合わせて
+決めていない。upfront solve区間へのcancelは主スレッドtimer throttleにより
+直接測定できていない。determinism（ordered / set parity）は別のparity modeで確認した。
+
+**これはdefaultであってcapabilityではない。** `ConstrainedCandidateSearchInput.bounds`
+はcaller必須のままであり、`visitConstrainedCandidates()` /
+`enumerateConstrainedCandidates()` が `input.bounds` をoptionalにしたわけではない。
+B8-C以降のProduction callerがこの定数を明示的に渡す。B8-B2ではApplicationへ接続していない。
+
+`CandidateSearchSettings` が依然としてconstrained enumerationのfilter authorityでも
+extent authorityでもないことも変わらない。
 
 #### 既存schedulerを流用しない
 

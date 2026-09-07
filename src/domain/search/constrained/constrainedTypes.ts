@@ -31,8 +31,10 @@ import type { SearchMasterSubset } from '../searchTypes'
  * `CandidateSearchSettings` is neither the filter authority nor the extent
  * authority here. The first three bounds keep their SEARCH_SPEC 3.1 meanings;
  * `maxOffAxisPairEvaluations` is new in B8 and caps how many off-axis Cross
- * pairs (`i > 0` and `j > 0`) may be evaluated. B8-B1 takes every bound from
- * the caller: no Production default exists until the B8-B2 benchmark.
+ * pairs (`i > 0` and `j > 0`) may be evaluated. Every bound stays caller-
+ * supplied, as it was in B8-B1; B8-B2 added
+ * `defaultConstrainedEnumerationBounds` below as the value a Production caller
+ * passes explicitly, never as a fallback this type applies on its own.
  */
 export interface ConstrainedEnumerationBounds {
   /** Maximum `create_normal_artian` forge count, never the maximum offset. */
@@ -43,6 +45,55 @@ export interface ConstrainedEnumerationBounds {
   maxSkillResetCount: number
   /** Off-axis Cross pair evaluation cap; `0` disables off-axis evaluation. */
   maxOffAxisPairEvaluations: number
+}
+
+/**
+ * The Production enumeration bounds, decided by the B8-B2 real Browser Worker
+ * benchmark and by nothing else.
+ *
+ * `docs/B8_CONSTRAINED_ENUMERATION_BROWSER_WORKER_BENCHMARK.md` holds the raw
+ * measurements. The tuple was measured as a whole on the combined workload -
+ * every currently legal Route base with both streams active and no Ideal
+ * nearby - not assembled by adding single-axis numbers together. Every figure
+ * below is a direct Worker wall-clock reading, taken in the benchmark's
+ * `timing` mode - a minimal recorder that does no parity instrumentation - with
+ * nothing subtracted:
+ *
+ * ```text
+ * full bounded enumeration   median 1782.0 ms   (5 measurements)
+ * time to first Candidate    median  331.6 ms
+ * consumer stop after 50     median  354.6 ms
+ * ```
+ *
+ * The axes are priced very differently in that shape, which is why the tuple is
+ * not balanced. The off-axis budget is nearly free, so it is set high, and
+ * Gogma - the most expensive axis - was raised from 25 to 30 by spending Normal
+ * forge count. Raising Gogma further to 35 also fits, but measured worse on
+ * this fixture, which is why it was not taken:
+ *
+ * ```text
+ * 40/30/100/500   1782.0 ms   ~218 ms of headroom   20,306 candidates
+ * 30/35/100/500   1899.0 ms   ~101 ms of headroom   20,178 candidates
+ * ```
+ *
+ * The chosen tuple is faster, holds slightly more candidates, and leaves more
+ * headroom for session and machine variability. As an auxiliary reason, the
+ * Gogma Counter is a shared resource Planner conflicts are fought over while a
+ * Normal Counter is per weapon type - but B8-B2 measured no search-quality
+ * threshold, so no bound value here is a claim about what is practically
+ * sufficient.
+ *
+ * This is a default, not a capability. Every bound stays caller-supplied: B8-C
+ * and B8-D pass this constant explicitly, and `ConstrainedCandidateSearchInput`
+ * keeps `bounds` required so no caller can silently inherit it. The three
+ * Planner orchestration bounds are deliberately absent - they are decided in
+ * B8-E, from a separate benchmark.
+ */
+export const defaultConstrainedEnumerationBounds: ConstrainedEnumerationBounds = {
+  maxNormalForgeCount: 40,
+  maxGogmaAdvance: 30,
+  maxSkillResetCount: 100,
+  maxOffAxisPairEvaluations: 500,
 }
 
 /**
