@@ -39,14 +39,26 @@ export interface PlannerWhatIfBounds {
 }
 
 /**
- * There is deliberately **no** `defaultPlannerWhatIfBounds` in this module.
+ * The caller-facing Production default, decided in B9-B2c from the dedicated
+ * B9-B2b real Browser Worker benchmark (PLANNER_SPEC 9.2.4.9;
+ * docs/B9_PLANNER_WHAT_IF_BROWSER_WORKER_BENCHMARK.md 9-11).
  *
- * PLANNER_SPEC 9.2.4.9 forbids adopting an unmeasured number as a Production
- * default, and 9.2.4.9 explicitly rules out reusing
- * `defaultPlannerOrchestrationBounds` (2 / 1 / 4) or `CandidateSearchSettings`.
- * The Production default is decided later from a real Browser Worker
- * benchmark. Until then every caller supplies the bounds explicitly.
+ * Two trials are the smallest measured value that finds the needed Practical
+ * in two_targets / dual_category; higher values showed no semantic gain.
+ * Eight reruns let all four combined-workload slots reach those two trials,
+ * whereas six left one slot stopped by the rerun bound. The finalist combined
+ * median cost increased by about 1.8%. Combined still found no feasible result;
+ * a bound stop does not prove Candidate absence or coverage for arbitrary inputs.
+ *
+ * This is independent of B8's 2 / 1 / 4 orchestration default and the Search
+ * Domain's enumeration bounds. Callers explicitly choose and pass this value;
+ * request bounds remain required. It is never an implicit Domain, Worker
+ * adapter, or Worker Client fallback, nor a repair or field-completion target.
  */
+export const defaultPlannerWhatIfBounds: PlannerWhatIfBounds = {
+  maxCandidateTrialsPerCategoryPerTarget: 2,
+  maxPlannerReruns: 8,
+}
 
 function issue(
   path: string,
@@ -71,8 +83,8 @@ function positiveIntegerIssue(value: number, path: string) {
 
 /**
  * Pure validation. It never mutates the input, never clamps, never completes a
- * missing field, and never repairs a value towards a default - there is no
- * default to repair towards (PLANNER_SPEC 9.2.4.9).
+ * missing field, and never repairs a value towards a default. The caller-facing
+ * Production constant is not a repair target (PLANNER_SPEC 9.2.4.9).
  */
 export function validatePlannerWhatIfBounds(
   bounds: PlannerWhatIfBounds,

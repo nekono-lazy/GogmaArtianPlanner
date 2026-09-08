@@ -1158,8 +1158,35 @@ caller必須指定
 validationのみ。repair / clamp / field-wise completion を行わない
 ```
 
-**B9-A2ではProduction defaultを定義しない。** 根拠のない数値をProduction仕様として
-採用しない。Production defaultは後続の実Browser Worker benchmarkで決定する。
+**B9-B2bの専用real Browser Worker benchmarkに基づき、B9-B2cでProduction defaultを
+2 / 8に確定した。** 実測と選定理由の詳細は
+[B9_PLANNER_WHAT_IF_BROWSER_WORKER_BENCHMARK.md](./B9_PLANNER_WHAT_IF_BROWSER_WORKER_BENCHMARK.md)
+9〜11章に記録する。
+
+```ts
+export const defaultPlannerWhatIfBounds: PlannerWhatIfBounds = {
+  maxCandidateTrialsPerCategoryPerTarget: 2,
+  maxPlannerReruns: 8,
+}
+```
+
+定義authorityは `src/domain/planner/constrained/plannerWhatIfBounds.ts` とする。
+T=2はtwo_targets / dual_categoryで必要なPracticalを得る最小測定値で、Tを増やしても
+semantic改善は観測されなかった。R=6はthree_targetsで全4枠foundとなる最小測定値だが、
+combinedでは最後の枠がrerun boundで止まる。R=8ならcombinedの全4枠がT=2の試行まで
+到達するため、finalistのcombined中央値で約1.8%の追加costを許容し、各非固定Target / categoryの
+評価機会を優先した。これは測定workload内の根拠であり、任意のTarget数で全枠の試行を保証する
+ものではない。combinedのfoundは0で、Candidate不存在を意味しない。
+
+この定数はcallerが明示的に選択して渡すProduction値である。
+`PlannerWhatIfRequest.bounds` は引き続きcaller-requiredで、省略可能にしない。
+Domain内部fallback、invalid boundsのrepair target、field-wise completionには使わない。
+Worker adapter / Worker Client / wire schemaも暗黙に注入しない。B10 Application callerが
+このdefaultを選んで渡す責務を持つ。
+
+B8の `defaultPlannerOrchestrationBounds = 2 / 1 / 4` の流用ではない。
+`ConstrainedEnumerationBounds` とも独立した決定であり、そのProduction default
+40 / 30 / 100 / 500と9.2.4.10のWorker境界は変更しない。
 
 `maxCandidateTrialsPerCategoryPerTarget` は次の組ごとに独立して数える。
 
@@ -2711,7 +2738,8 @@ ordinary / constrained / what-ifは同じ `requestId` / generation、`cancel`、
 `PlannerWhatIfRequest` をそのまま渡す。Production Worker adapterの
 `createProductionPlannerWhatIfComparison()` が `defaultConstrainedEnumerationBounds` を
 Domain calculationへ明示供給し、caller-requiredの `PlannerWhatIfBounds` は変更しない。
-`defaultPlannerWhatIfBounds` は定義していない。この追記は実装mappingであり、
+`defaultPlannerWhatIfBounds` はB9-B2cで2 / 8に確定したが、callerだけが明示選択し、
+Worker adapter / Clientは暗黙適用しない（9.2.4.9）。この記述は実装mappingであり、
 9.2.4.1〜9.2.4.13のnormative semanticsを変更しない。
 
 Workerを利用できない環境ではClientのversionを `production-engine-unavailable` とし、

@@ -6,19 +6,21 @@
 
 ```text
 Harness implementation: complete (B9-B2a)
-Real Browser measurements: pending (B9-B2b)
-Production PlannerWhatIfBounds default: UNDECIDED (B9-B2c)
+Real Browser measurements: complete (B9-B2b)
+Production PlannerWhatIfBounds default: DECIDED = 2 / 8 (B9-B2c)
 ```
 
-本書はmeasurement harnessとfixtureの記録であり、性能測定結果でもDomain仕様でもない。
+本書はmeasurement harness、fixture、B9-B2b実測とB9-B2c default選定根拠の記録である。
+測定・選定の詳細authorityは本書、正式なDomain契約はPLANNER_SPECとする。
 Authorityは [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.4.1〜9.2.4.13、
 [SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.7、[DATA_MODEL.md](./DATA_MODEL.md) 8.1。
 B8の手法は [B8 benchmark](./B8_PLANNER_ORCHESTRATION_BROWSER_WORKER_BENCHMARK.md)
 を参照した。B8の実測値・orchestration defaultはB9の判断材料として流用していない。
 
-B9-B2aは `defaultPlannerWhatIfBounds` を追加しない。暫定default、推奨default、hidden
-fallback、Production UI callerへの固定値も追加しない。B9-B2bの実測を設計・レビューChatへ
-戻した後、B9-B2cで別途defaultを決定・実装する。今回Browser性能測定は行っていない。
+B9-B2aでharnessを実装し、B9-B2bでreal Browser測定を完了した。B9-B2cではその結果に
+基づく決定を `defaultPlannerWhatIfBounds = 2 / 8` としてDomainへ実装した。
+caller-required契約は維持し、hidden fallbackやProduction UI callerの配線は追加しない。
+実測の再実行はB9-B2cの作業に含めず、既存raw evidenceを読み取り照合して記録する。
 
 ## 1. 目的と計測経路
 
@@ -152,7 +154,8 @@ familyなど既存のunverified領域をgame-verifiedへ昇格させない。
 ## 4. Workloadと意味検証
 
 以下の数値は**非性能のProduction意味テストで確認するoutcomeとdistance**。
-Browser latencyは未測定。tupleはtest/measurement gridの値でありdefault候補の推薦ではない。
+Browser latencyとdefault決定は9〜11章に分けて記録する。ここでのtupleは意味検証条件であり、
+Production defaultを定義するものではない。
 
 | ID | scenario / 構成 | 検証する点 |
 | --- | --- | --- |
@@ -173,8 +176,10 @@ IdealをPractical枠へ代入していないことは、排他category別の列�
   共存を、単純なcounter後方化やfixture専用semanticsで成立させていない。そこでCとDは
   conversionのSkill scenarioに切り替え、独立Gogma streamによる両categoryのfeasibilityを
   現行Production Plannerで確認した。A/Bとcombinedは元の競合コストを残す。
-- combinedはfixed制約下でのfoundを未観測。重い複合reject workloadとして測る。
-  combinedの「全categoryがfeasibleになるthreshold」のdecision evidenceは不足している。
+- combinedはreal Browser測定でもfixed制約下でfound 0だった。T=2 / R=8で全4slotが
+  `stopped_by_candidate_trial_bound` まで到達したが、これはCandidate不存在の証明ではない。
+  重い複合reject workloadとしての評価機会とcostを測ったもので、combinedの
+  「全categoryがfeasibleになるthreshold」のdecision evidenceは依然不足している。
 - `not_found_within_search_extent` / `stopped_by_enumeration_bound` を返す専用Production
   scenarioは今回のdecision workloadでは固定していない。normalizationの全statusテストは
   あるが、これらのBrowserコスト、enumeration extentの十分性を証明するものではない。
@@ -240,9 +245,10 @@ fixture()は計測外の完全なfixtureを返すので、実際のinitial confl
 records()はsnapshotを返す。clear()はメモリ内recordだけを消し、永続データには触れない。
 page mount中だけglobal APIを登録し、unmount時に解除する。
 
-## 7. B9-B2bの予定測定手順
+## 7. B9-B2bの測定手順 / 再現経路
 
-実装レビューでFINAL APPROVEを得てユーザーがcommit/pushした後に実施する。
+B9-B2bはbuild commit `5368b3b` のreal Browser Workerで完了した。以下はharnessの
+測定手順と再現経路である。実際の測定環境・主要集計・finalist結果は9〜11章に記録する。
 
 ```powershell
 npx vite build --config vite.benchmark.config.ts
@@ -276,8 +282,8 @@ workload、既定選択、測定手順は変更していない。
 
 ### Raw result保存
 
-B9-B2bで以下をbrowser consoleから取得し、ユーザーが
-`B9_B2_BROWSER_RAW_RESULTS.json` に保存する。
+B9-B2bのbrowser recordsはユーザーが `B9_B2_BROWSER_RAW_RESULTS.json` に保存済みである。
+再取得時のbrowser console操作は次のとおり。
 
 ```js
 JSON.stringify(b9WhatIfBenchmark.records(), null, 2)
@@ -285,8 +291,9 @@ JSON.stringify(b9WhatIfBenchmark.records(), null, 2)
 
 使用Browser/version、OS、hardware、build commit、実施日、visibilityの異常などを測定報告に
 併記する。recordはpage内メモリだけなのでreloadや別benchmarkタブへの移動前にexportする。
-raw artifactをProduction codeから読まない。B9-B2aではraw artifactを作成していない。
-既存 `B8_E2_BROWSER_RAW_RESULTS.json` は変更・削除・stage・commit・再利用していない。
+raw artifactをProduction codeから読まない。B9-B2cではローカルのB9 raw artifactを読み取り
+照合しただけで、raw内容を本書へ貼り付けない。`B8_E2_BROWSER_RAW_RESULTS.json` と
+`B9_B2_BROWSER_RAW_RESULTS.json` は証拠としてローカルに保持し、変更・削除・stage・commitしない。
 
 ## 8. 検証範囲と引き継ぎ
 
@@ -298,6 +305,123 @@ fixture/client/dispose/normalizationの計測外、fresh Client、progress count
 input、fallback不在を検証する。page testsはglobal API、直列batch、error、unmount、既定C5
 維持を検証する。これらのテスト所要時間はperformance evidenceではない。
 
-Domain/Worker/Production adapter/client、Persistence、B10 UI、schema/Engine version、
-Search/Planner各defaultは変更していない。normative 9.2.4.1〜9.2.4.13も変更していない。
-B9-B2bは実Browser測定、B9-B2cはその結果に基づくdefault decision/implementationである。
+B9-B2aはDomain/Worker/Production adapter/client、Persistence、B10 UI、schema/Engine version、
+Search/Planner各defaultを変更しなかった。B9-B2cは9.2.4.9にProduction defaultの確定契約を
+追加し、既存barrelから公開した。default値・validation通過・non-default caller値の保持・
+invalid値のfail closed・欠損fieldを補完しないことをbounds testで固定した。
+Workerとrerun budgetの古いコメントは同期したが、validationと計算の挙動は変更していない。
+`PlannerWhatIfRequest.bounds` は必須のまま、Worker adapterはrequestをそのまま渡して
+`defaultConstrainedEnumerationBounds` だけを内部供給し、Clientもfallbackを追加しない。
+B10 Application callerのdefault選択・UI配線は後続作業である。
+
+## 9. B9-B2b実測環境とevidence
+
+| 項目 | 値 |
+| --- | --- |
+| Build commit | `5368b3b` |
+| OS | Windows 11 |
+| Browser | Chrome 152 |
+| hardwareConcurrency | 16 |
+| Engine | `production-rng:c5-e2` |
+| `maxNormalForgeCount` | 40 |
+| `maxGogmaAdvance` | 30 |
+| `maxSkillResetCount` | 100 |
+| `maxOffAxisPairEvaluations` | 500 |
+| Raw evidence | `B9_B2_BROWSER_RAW_RESULTS.json`（401,316 bytes / 140 records） |
+
+OSは測定報告による。Browser UAのWindows NT 10.0表記からOSを再解釈しない。
+1〜2章のreal Production Browser Worker / fresh Worker / round-trip境界で測定した。
+Node、Vitest、jsdomの実行時間やB8実測からの外挿ではない。
+
+| Workload | Raw record数（warm-upを含む） |
+| --- | ---: |
+| `what_if_two_targets` | 32 |
+| `what_if_dual_category` | 32 |
+| `what_if_three_targets` | 44 |
+| `what_if_combined` | 32 |
+| 合計 | 140 |
+
+以下の中央値はmeasurementだけを集計し、warm-upを含めない。sweepは各3 measurement、
+finalistは各5 measurementの別batchである。同一tupleのsweepとfinalistをまとめて
+8 measurementの中央値にしない。rawの同一workload / tupleのoutcomeKeyは一致した。
+
+## 10. T / R sweepの実測と選定根拠
+
+### T = maxCandidateTrialsPerCategoryPerTarget
+
+R=32固定。T-boundは `stopped_by_candidate_trial_bound` を示す。
+
+| T | two_targets median (ms) | Practical / Ideal | dual_category median (ms) | Practical / Ideal |
+| ---: | ---: | --- | ---: | --- |
+| 1 | 2835.4 | T-bound / T-bound | 2855.6 | T-bound / found |
+| 2 | 2889.7 | found / T-bound | 2900.7 | found / found |
+| 4 | 2979.0 | T=2と同一semantic | 2895.8 | T=2と同一semantic |
+| 8 | 3281.0 | T=2と同一semantic | 2892.7 | T=2と同一semantic |
+| 16 | 4682.2 | T=2と同一semantic | 2919.3 | T=2と同一semantic |
+
+T=1は両workloadで必要なPracticalを取り逃す。T=2でPracticalがfoundになり、
+dual_categoryではPractical / Ideal両枠を満たす最小測定値となる。T>2でsemantic改善は
+観測されなかったため、T=2を採用する。two_targetsのIdealは引き続きT-boundであり、
+全workloadの両categoryをfoundにする値という意味ではない。
+
+### R = maxPlannerReruns
+
+three_targets、T=2固定。found数は2非固定Target × 2排他categoryの全4slotを数える。
+
+| R | median (ms) | found |
+| ---: | ---: | ---: |
+| 1 | 2687.9 | 0 / 4 |
+| 2 | 2772.0 | 1 / 4 |
+| 4 | 5656.0 | 2 / 4 |
+| 6 | 5672.5 | 4 / 4 |
+| 8 | 5663.5 | 4 / 4 |
+| 16 | 5674.7 | 4 / 4 |
+| 32 | 5753.0 | 4 / 4 |
+
+このreachable workloadだけならR=6が最小完全値である。しかしcombinedでは次の差がある。
+
+| T / R | found | stopped_by_candidate_trial_bound | stopped_by_planner_rerun_bound |
+| --- | ---: | ---: | ---: |
+| 2 / 6 | 0 | 3 | 1 |
+| 2 / 8 | 0 | 4 | 0 |
+
+R=8では全4slotが各categoryのT=2試行まで到達できる。各非固定Targetを同じoriginから
+独立評価するB9の目的に対し、最後のTarget / categoryだけがglobal rerun budgetで評価機会を
+失うR=6より、測定した全slotへT=2を配れるR=8を採用する。これはこのworkloadでの評価機会の
+根拠であり、任意のTarget数・runtime unsupported retry数に対する保証ではない。
+combinedでfoundは0のままである。trial bound到達は探索の打ち切りであり、Candidate不存在や
+enumeration extentの十分性を証明しない。4章のcoverage gapは継続する。
+
+## 11. Finalist比較とB9-B2c Production default
+
+各workload / tupleについてwarm-up 1 + measurement 5。表は5 measurementの中央値。
+
+| Workload | T=2 / R=6 median (ms) | T=2 / R=8 median (ms) |
+| --- | ---: | ---: |
+| `what_if_two_targets` | 2920.6 | 2919.0 |
+| `what_if_dual_category` | 2906.5 | 2903.9 |
+| `what_if_three_targets` | 5758.1 | 5729.1 |
+| `what_if_combined` | 5827.1 | 5934.7 |
+
+PracticalまたはIdealのfoundを確認できた3 workload（two_targets / dual_category /
+three_targets）のsemantic outcomeは2 / 6と2 / 8で同じ。combinedでは2 / 8だけが
+Planner rerun boundを排除した。combinedの追加costは5827.1 → 5934.7 ms、
++107.6 ms（約+1.8%）。この追加costを許容してTarget / category間の評価機会を優先する。
+
+```ts
+export const defaultPlannerWhatIfBounds: PlannerWhatIfBounds = {
+  maxCandidateTrialsPerCategoryPerTarget: 2,
+  maxPlannerReruns: 8,
+}
+```
+
+定義位置は `src/domain/planner/constrained/plannerWhatIfBounds.ts`。
+B9専用の実測から独立して決めた値であり、B8 defaultの2 / 1 / 4を流用したものではない。
+`ConstrainedEnumerationBounds = 40 / 30 / 100 / 500`、Candidate Search / Planner Options、
+各schema / Engine versionは変更しない。
+
+defaultはcallerが明示選択して渡す値である。`PlannerWhatIfRequest.bounds` は必須で、
+Domain内部fallback、invalid値のrepair、field-wise completion、Worker adapter / Clientの
+暗黙注入には使わない。Worker requestのshape・wire schemaは変えず、enumeration boundsは
+引き続きWorker内部から供給する。B10 UI・Persistence・Planner algorithm・Candidate enumeration・
+RNGの変更は本決定に含まない。

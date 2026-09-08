@@ -53,7 +53,9 @@ export const createProductionConstrainedPlan: CreateConstrainedProductionPlanCal
 /**
  * Supplies only the Search-domain enumeration extent inside the Worker.
  * `request.bounds` remains caller-required and is forwarded without repair,
- * clamping, completion, or a Production what-if default.
+ * clamping, completion, or default substitution. The B9-B2c Production value
+ * `defaultPlannerWhatIfBounds` (2 / 8) is for explicit Application caller use;
+ * this adapter never injects it.
  */
 export const createProductionPlannerWhatIfComparison: CreatePlannerWhatIfComparisonCalculation =
   (request, dependencies, executionOptions) =>

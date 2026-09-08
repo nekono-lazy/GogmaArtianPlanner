@@ -65,9 +65,9 @@ export interface PlannerWhatIfFullBeamBudget extends ProductionPlanGenerationObs
 /**
  * Builds the budget from the caller-supplied `PlannerWhatIfBounds`.
  *
- * There is no Production default to fall back to (PLANNER_SPEC 9.2.4.9), so
- * invalid bounds fail closed with `PlannerWhatIfBoundsError` rather than being
- * repaired, clamped, or completed field-wise.
+ * The Production default is caller-facing only (PLANNER_SPEC 9.2.4.9).
+ * Invalid bounds fail closed with `PlannerWhatIfBoundsError` rather than being
+ * repaired, clamped, completed field-wise, or replaced with that default.
  */
 export function createPlannerWhatIfFullBeamBudget(
   bounds: PlannerWhatIfBounds,

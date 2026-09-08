@@ -489,7 +489,7 @@ B11 は実ゲーム観測を前提とする独立系列
 | B8-C | Planner conflict orchestration | 固定Candidate判定、Conflict Resolution再対応付け、deterministic materializer、augmented-input完全再実行。orchestration boundsはcaller必須指定のまま | B8-B1 |
 | B8-D | Worker / Application / Persistence | atomic save、既存UIへの最小配線 | B8-C。**完了**。B8-D1 Worker境界 / B8-D2a atomic save / B8-D2b BuildListPage配線（4.12 / 4.13 / 4.16章） |
 | B8-E | orchestration Browser / Planner benchmark | orchestration boundsのProduction default決定 | B8-D。**完了**。B8-E1 harness / B8-E2a real Browser measurement / B8-E2b default決定 `2 / 1 / 4`（4.15章、`B8_PLANNER_ORCHESTRATION_BROWSER_WORKER_BENCHMARK.md` 10-11章） |
-| B9 | what-if比較の算出 | 一方固定時の他方の次のPractical / Idealまでの距離算出。Domain計算、`PlannerWhatIfBounds`、Worker protocol / routing、Production Worker adapter、`PlannerWorkerClient` API、benchmarkとProduction default決定。表示は含まない | B8-E。B9-A contract audit / B9-A2 contract decision **完了**（4.17章、`PLANNER_SPEC.md` 9.2.4.1〜9.2.4.13）。B9-B1 / B9-C / B9-B2は未実装 |
+| B9 | what-if比較の算出 | 一方固定時の他方の次のPractical / Idealまでの距離算出。Domain計算、`PlannerWhatIfBounds`、Worker protocol / routing、Production Worker adapter、`PlannerWorkerClient` API、benchmarkとProduction default決定。表示は含まない | B8-E。B9-A / B9-B1 / B9-C / B9-B2 **完了**（4.17〜4.22章、`PLANNER_SPEC.md` 9.2.4.1〜9.2.4.13）。Production what-if defaultは独立実測で **2 / 8** に確定 |
 | B10 | 競合UI / what-if提示 | 競合候補の除外 / 選択不可表示と理由提示、Conflict選択UI、what-if距離の表示と比較カード、what-if requestの起動 | B8-E, B9 |
 | B11 | normal-tier Keep prediction semantics | 実ゲーム観測 -> game-verified fixture -> Production prediction実装。Search / Planner / Domain検証の除外解除 | 実ゲーム観測 |
 
@@ -3431,8 +3431,9 @@ repository / UI / B10 wiringは変更していない。次はB9-B2の実Browser 
 
 ### 4.21 B9-B2a implementation record
 
-B9-B2a harness = 完了。B9-B2b real Browser measurement = pending。
+B9-B2a時点: harness = 完了。B9-B2b real Browser measurement = pending。
 B9-B2c Production default decision / implementation = pending（UNDECIDED）。
+後続B9-B2b / B9-B2cは4.22章で完了を記録する。
 
 `plannerWhatIfBenchmarkFixtures.ts` がB8のProduction-valid origin / Master / source生成を
 再利用し、到達可能なIdeal条件と通常Domain factory経由のCandidate / Entryを構築する。
@@ -3458,6 +3459,51 @@ BenchmarkAppにタブを追加し、C5既定選択と既存4 harness、通常UI�
 構築方法、意味検証結果、coverage gap、B9-B2b予定手順は
 [B9_PLANNER_WHAT_IF_BROWSER_WORKER_BENCHMARK.md](./B9_PLANNER_WHAT_IF_BROWSER_WORKER_BENCHMARK.md)
 に記録した。PLANNER_SPEC 9.2.4.1〜9.2.4.13のnormative契約は変更していない。
+
+---
+
+### 4.22 B9-B2b measurement / B9-B2c Production default implementation record
+
+B9-B2b real Browser measurement = 完了。
+B9-B2c Production default decision / implementation = 完了。
+
+#### 実測と決定
+
+build commit `5368b3b`、Windows 11 / Chrome 152 / hardwareConcurrency 16、
+`production-rng:c5-e2`、enumeration bounds 40 / 30 / 100 / 500で測定した。
+B9専用real Production Browser Workerの140 records（401,316 bytes）が証拠である。
+主要sweep、finalist各5 measurement、測定境界とcoverage gapの詳細authorityは
+[B9_PLANNER_WHAT_IF_BROWSER_WORKER_BENCHMARK.md](./B9_PLANNER_WHAT_IF_BROWSER_WORKER_BENCHMARK.md)
+9〜11章とする。
+
+- T=2はtwo_targets / dual_categoryで必要なPracticalを得る最小測定値。T>2でsemantic改善を
+  観測しなかった。
+- R=6はthree_targetsで4 / 4 foundの最小測定値だが、combinedでは1slotがrerun bound。
+  R=8なら全4slotがT=2のcandidate trial boundまで到達する。
+- finalistのcombined中央値は2 / 6が5827.1 ms、2 / 8が5934.7 ms。+107.6 ms（約1.8%）を
+  許容してTarget / category間の評価機会を優先し、**2 / 8** を採用した。
+- combinedのfoundは0のまま。Candidate不存在の証明ではなく、coverage gapは継続する。
+
+#### 実装と契約
+
+`src/domain/planner/constrained/plannerWhatIfBounds.ts` に
+`defaultPlannerWhatIfBounds = { maxCandidateTrialsPerCategoryPerTarget: 2, maxPlannerReruns: 8 }`
+を追加した。既存のconstrained / Planner barrelを通じて公開し、barrel自体の変更は不要だった。
+PLANNER_SPEC 9.2.4.9をdefault確定後の契約へ更新し、Worker mappingの説明も同期した。
+B8 default 2 / 1 / 4の流用ではなく、`ConstrainedEnumerationBounds` と独立した値である。
+
+`PlannerWhatIfRequest.bounds` はcaller-requiredのまま。Domain / Worker adapter / Clientは
+implicit fallback、repair、clamp、field-wise completionを行わない。Workerはrequestをそのまま
+渡し、`defaultConstrainedEnumerationBounds` だけを内部供給する。rerun budget / adapterの
+古いコメントは更新したが挙動は変えていない。
+
+bounds testはdefault 2 / 8、validation / assertion通過、public export、non-default値の保持、
+不正値と欠損fieldのfail closedを固定する。既存のinvalid値検証とB8 default確認は維持した。
+request shape、Worker protocol、Planner algorithm、Candidate enumeration、RNG、Persistence、
+B10 UI、既存default群、schema / Engine versionは変更していない。
+
+raw evidenceのB8 / B9両fileは変更・削除・stage・commitせずローカルに保持する。
+B10 Application callerのdefault選択・what-if起動と表示は後続作業である。
 
 ---
 
