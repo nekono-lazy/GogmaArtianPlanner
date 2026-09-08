@@ -2431,6 +2431,213 @@ schema bumpは不要である。
 B8-D2: save-time current-state再読込 / 再validation / generated Entry +
 ProductionPlanのatomic persistence / 既存UIへの最小配線。
 
+### 4.13 B8-D2a implementation record
+
+B8-Cは完了、B8-D1は完了、B8-D2aは完了、B8-D全体は未完了である。
+
+B8-D2aはApplication / Persistence層のsave-time境界だけを対象とする。
+`PlannerOrchestrationResult` のsave-time current-state再読込、snapshot再validation、
+generated BuildListEntries + ProductionPlanのatomic保存を実装した。
+BuildListPageのconstrained経路切替はB8-D2bであり、本タスクでは実装していない。
+`PlannerOrchestrationBounds` のProduction defaultはB8-Eがauthorityであるため、
+UIから制約付き経路を起動できる状態にしていない。
+
+#### service / API
+
+```text
+src/services/planner/plannerResultPersistenceService.ts
+  PlannerResultPersistenceService
+    savePlannerOrchestrationResult(
+      result: PlannerOrchestrationResult,
+      currentCalculationContext: CalculationContext,
+    ): Promise<ProductionPlan | null>
+```
+
+Domain / WorkerはPersistenceをimportしない。serviceはPlannerを再実行せず、
+Beam Search / Trace Replay / constrained enumeration / Candidate trialを1回も呼ばない。
+Main threadへ `ProductionRngEngine` を生成せず、`validatePlannerInput()` も呼ばない。
+Planの計算authorityはWorker結果のままであり、save-timeはcurrent snapshotとの
+整合確認だけを行う。
+
+#### transaction対象とsave-time readの位置
+
+1つのDexie read-write transactionへ次のtableを含める。
+
+```text
+rngState
+normalArtianCounters
+ownedWeapons
+targetWeapons
+buildListEntries
+productionPlans
+```
+
+`buildCandidates` は含めない。generated CandidateをBuildCandidate tableへ保存しないため
+である。DB schema / table追加はない。
+
+current stateのreadはtransaction外ではなく、writeと同じtransaction内で行う。
+Worker計算時の `PlannerInput` は再利用しない。RngStateが存在しない場合は
+`ensureInitialRngState()` を呼ばずfail closedする。current RngStateが
+`validateRngState()` を通らない場合も同様である。
+
+#### snapshot comparison authority
+
+新しいhashやnormalizationを追加せず、既存authorityだけを使用する。
+
+```text
+CalculationContext        isCalculationContextCompatible()
+initialExecutionState     createExpectedPlanState()
+targetWeaponsHash         createPlanningTargetWeaponsHash()
+buildListEntriesHash      createPlanningBuildListEntriesHash()
+generated Entry staleness evaluateBuildListEntryStaleness()
+Domain validation         validateProductionPlan() / validateBuildListEntry()
+                          / validateRngState()
+```
+
+比較対象の最終augmented BuildListEntry setは
+`current persisted BuildListEntries + result.generatedBuildListEntries` である。
+generated Entryは1回だけ含む。timestamp / source / note / `isStale` /
+`staleReasons` を独自にhashへ足していない。上記authorityがすべて配列順に依存しない
+ため、current arrayの順序だけが変わってもfalse staleにならない。
+
+#### generated Entry staleness
+
+各generated Entryをcurrent Target / RngState / Normal Counters / OwnedWeapons /
+CalculationContextに対して `evaluateBuildListEntryStaleness()` で再評価する。
+computed `isStale === true` なら保存しない。返却Entryが持つ `isStale` /
+`staleReasons` を信用しない。
+
+#### Plan reference validation
+
+最終augmented setからID mapを作り、Planが参照する次のIDがすべて存在することを確認する。
+
+```text
+plan.selectedBuildListEntryIds
+plan.steps[].buildListEntryId != null
+plan.conflicts[].buildListEntryIds
+plan.conflicts[].recommendedBuildListEntryId != null
+plan.conflicts[].selectedBuildListEntryId != null
+plan.rejectedBuildListEntries[].buildListEntryId
+```
+
+加えてPLANNER_SPEC 9.2.14のadoption契約を防御的に再確認する。
+
+```text
+generatedBuildListEntries ⊆ plan.selectedBuildListEntryIds
+```
+
+#### PlanStep candidate identity
+
+`PlanStep.buildListEntryId != null` のStepは、対応Entry Snapshotと
+`step.candidateId === entry.candidateSnapshot.id` を満たすことを確認する。
+`buildListEntryId === null` のPlanner-only Stepへはcandidateを要求しない。
+これは既存Planner生成契約と同じで、Trace Replayが
+`candidateId: entry.candidateSnapshot.id` を設定している。
+
+#### ID collision handling
+
+generated Entry IDが保存時点で既にPersistenceへ存在した場合、内容が同一でも
+reuseせず、上書きもせず、save-time raceとして拒否する。`reusedExisting: true` の
+materialize結果は `generatedBuildListEntries` へ含まれないため、返却後に同じIDが
+現れることはsave-time raceを意味する。
+
+書き込みは既存IDを潰さない方法を使う。repositoryへ `addBuildListEntry()` と
+`addProductionPlan()` を追加し、`put` ではなく `add` でinsertする。両者とも
+既存 `put` と同じDomain validationとactive Plan guardを使用し、validation
+semanticsを弱めていない。
+
+#### plan === null / partial Plan / Active Plan
+
+```text
+plan === null かつ generated []            -> DB write 0件、nullを返す
+plan === null かつ generated non-empty     -> C4 invariant破壊としてfail closed、write 0件
+plan != null かつ bound到達のpartial Plan  -> snapshot整合なら保存する
+```
+
+Plannerから返るPlanは `draft` であることを要求し、B8-D2aでactive化しない。
+既存Active Planが存在してもDraft保存を許可し、Active Planを変更しない。
+Active Plan単一制約、置換、破棄、再計算は従来どおりApplication / Persistence層の
+責務のままである。
+
+#### retry可能なvalidation error
+
+既存 `RepositoryError` 体系へcodeを2つ追加した。schema変更ではない。
+
+```text
+planner_state_changed   save-time current stateがPlan snapshotから乖離した。
+                        write 0件。Plannerを再実行すればよい。
+planner_result_invalid  orchestration result自体がpersist不可能。
+                        同一stateで再実行しても同じく失敗する。
+```
+
+message parsingを要求しない。`runInRepositoryTransaction()` は `RepositoryError` を
+そのまま再throwするため、これらのtyped errorが `transaction_failed` へ潰れない。
+
+#### atomic rollback
+
+全validation成功後にのみwriteし、generated Entries -> ProductionPlanの順に書く。
+途中のEntry write失敗、Plan write失敗、ID collision、Dexie errorはいずれも
+transaction全体をrollbackする。最終状態は「全部保存」か「何も保存しない」だけである。
+
+save-time mismatchを見つけてもProductionPlan snapshotをpatchしない。
+`baseSnapshot` hashの書き換え、generated EntryのPlanからの除去、
+`selectedBuildListEntryIds` の修正、`PlanStep.candidateId` の書き換えを行わず、
+retryable failureとして返す。
+
+#### tests
+
+`src/services/planner/plannerResultPersistenceService.test.ts` を追加した(21件)。
+fixtureは実 `createPlanningInputSnapshot()` / `plannerBeam` fixtureから
+整合stateを組み立てており、hand-written hash文字列だけのtestにしていない。
+
+```text
+plan=null + generated []                     -> write 0件
+plan=null + generated non-empty              -> fail closed / write 0件
+happy path                                   -> Entry + Plan両方保存
+BuildCandidate tableへ保存しない
+partial Plan (bound warning) でも保存可能
+RngState変更 / Normal Counter変更 / OwnedWeapon semantic変更
+TargetWeapon semantic変更 / BuildListEntry set変更 / CalculationContext変更
+generated Entryがcurrent stateでstale               -> 保存拒否
+generated Entry IDが既存                            -> 上書きせず拒否
+generated EntryがPlanでselectedされていない          -> 拒否
+Plan参照Entry ID missing                            -> 拒否
+PlanStep candidateIdとEntry Snapshot不一致           -> 拒否
+Plan write失敗 -> Entryもrollback
+複数generated Entriesの途中write失敗 -> 1件目もrollback
+RngState不在 -> initial state生成せずfail closed
+既存Active Planあり -> Draft保存可 / Active Plan unchanged
+current array順序だけ変更 -> false staleにならない
+```
+
+#### 変更していないもの
+
+```text
+PLANNER_SPEC normative semantics
+Planner Domain orchestration (B8-C)
+Worker protocol / Worker generation (B8-D1)
+Search Domain / constrained enumerator
+BuildListPage createPlan/createConstrainedPlan切替
+PlannerOrchestrationBounds Production default
+benchmark / ProductionPlanPage / ExecutionNavigator
+CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2
+DATABASE_SCHEMA_VERSION = 1
+AppSettings.schemaVersion = 1
+PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2
+supportsSeedSearch = false
+defaultConstrainedEnumerationBounds = 40 / 30 / 100 / 500
+defaultCandidateSearchSettings = 1000 / 200 / 1000 / 200 / 0.6
+defaultPlannerOptions
+```
+
+DB schema bumpは不要である。
+
+#### next
+
+B8-E: orchestration Browser / Planner benchmarkと
+`PlannerOrchestrationBounds` のProduction default決定。
+その後B8-D2b: BuildListPageのconstrained経路切替。
+
 ---
 
 ## 5. B1 / B2に残る設計判断

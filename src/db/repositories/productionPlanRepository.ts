@@ -50,6 +50,37 @@ export class ProductionPlanRepository {
     return activePlans[0]
   }
 
+  /**
+   * Inserts a Plan that must not already exist.
+   *
+   * A newly calculated Plan carries a fresh ID, so a colliding key means the
+   * stored Plan is a different Plan; it is never silently replaced. The active
+   * Plan guard and Domain validation are the same authorities `put` uses.
+   */
+  addProductionPlan(plan: ProductionPlan): Promise<ProductionPlan> {
+    assertRepositoryValidation('ProductionPlan', validateProductionPlan(plan))
+    return runInRepositoryTransaction(
+      this.database,
+      [this.database.productionPlans],
+      async () => {
+        if (plan.status === 'active') {
+          const activePlans = await this.database.productionPlans
+            .where('status')
+            .equals('active')
+            .toArray()
+          if (activePlans.some(({ id }) => id !== plan.id)) {
+            throw new RepositoryError(
+              'active_plan_conflict',
+              'Another ProductionPlan is already active.',
+            )
+          }
+        }
+        await this.database.productionPlans.add(plan)
+        return plan
+      },
+    )
+  }
+
   putProductionPlan(plan: ProductionPlan): Promise<ProductionPlan> {
     assertRepositoryValidation('ProductionPlan', validateProductionPlan(plan))
     return runInRepositoryTransaction(

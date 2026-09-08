@@ -47,6 +47,23 @@ export class BuildListEntryRepository {
     )
   }
 
+  /**
+   * Inserts an Entry that must not already exist.
+   *
+   * Planner-generated Entries are deterministic history (PLANNER_SPEC 9.2.12):
+   * an existing ID is never reused or overwritten, so persistence uses `add`
+   * and lets Dexie reject a colliding key instead of silently replacing the
+   * stored Entry. Domain validation is the same authority `put` uses.
+   */
+  async addBuildListEntry(entry: BuildListEntry): Promise<BuildListEntry> {
+    assertRepositoryValidation(
+      'BuildListEntry',
+      validateBuildListEntry(entry),
+    )
+    await this.database.buildListEntries.add(entry)
+    return entry
+  }
+
   async putBuildListEntry(entry: BuildListEntry): Promise<BuildListEntry> {
     assertRepositoryValidation(
       'BuildListEntry',
