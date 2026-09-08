@@ -3429,6 +3429,38 @@ repository / UI / B10 wiringは変更していない。次はB9-B2の実Browser 
 
 ---
 
+### 4.21 B9-B2a implementation record
+
+B9-B2a harness = 完了。B9-B2b real Browser measurement = pending。
+B9-B2c Production default decision / implementation = pending（UNDECIDED）。
+
+`plannerWhatIfBenchmarkFixtures.ts` がB8のProduction-valid origin / Master / source生成を
+再利用し、到達可能なIdeal条件と通常Domain factory経由のCandidate / Entryを構築する。
+Gogma競合のtrial pressure、Skill競合の排他Practical / Ideal、3 participantのrequest-global
+rerun budget、5 Targetsと複数explicit resolutionの4 workloadを追加した。
+
+`plannerWhatIfBrowserBenchmark.ts` はfresh Production Planner Worker Clientの
+`createWhatIfComparison()` callからPromise settleまでを計測する。fixture、validation、
+Worker constructor、dispose、outcome normalizationは計測外。request時点で残るWorker async
+initialization、structured clone、Production計算と配送は計測内。requestへenumeration
+boundsを追加せず、Production adapterが既存authorityをWorker内で供給する。
+
+`plannerWhatIfBenchmarkOutcome.ts` はtyped statusとdistance 4値だけを中心にsemantic keyと
+bound診断を作る。alternativesのDomain stable orderを保持し、B8 warningをauthorityにしない。
+`PlannerWhatIfBenchmarkPage.tsx` と `globalThis.b9WhatIfBenchmark` はbenchmark-only。
+BenchmarkAppにタブを追加し、C5既定選択と既存4 harness、通常UIは変更していない。
+
+非性能のProduction意味テストでT感度、両categoryのfeasibility、3 participantのR感度を
+確認した。実Browser測定値はまだ存在しない。測定gridはProduction defaultではなく、
+`defaultPlannerWhatIfBounds`、fallback、B10 wiring、Persistence、Domain semanticsは追加・
+変更していない。既存B8 raw artifactを触らず、B9 raw artifactも作成していない。
+
+構築方法、意味検証結果、coverage gap、B9-B2b予定手順は
+[B9_PLANNER_WHAT_IF_BROWSER_WORKER_BENCHMARK.md](./B9_PLANNER_WHAT_IF_BROWSER_WORKER_BENCHMARK.md)
+に記録した。PLANNER_SPEC 9.2.4.1〜9.2.4.13のnormative契約は変更していない。
+
+---
+
 ## 5. B1 / B2に残る設計判断
 
 以下はB0で決めきらず、実装時にコードを見て決める。

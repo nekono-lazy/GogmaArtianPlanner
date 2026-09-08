@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PlannerWhatIfBenchmarkPage } from './PlannerWhatIfBenchmarkPage'
 import { Button, Stack } from '@mui/material'
 import { CandidateSearchBenchmarkPage } from './CandidateSearchBenchmarkPage'
 import { ConstrainedEnumerationBenchmarkPage } from './ConstrainedEnumerationBenchmarkPage'
@@ -10,13 +11,14 @@ type BenchmarkId =
   | 'b5-candidate-search'
   | 'b8-constrained-enumeration'
   | 'b8-planner-orchestration'
+  | 'b9-what-if'
 
 /**
  * Isolated benchmark shell. The C5-E2C8 Skill Identification harness stays the
  * default so its recorded procedure is unchanged; B5 added the Candidate Search
  * harness, B8-B2 the constrained enumeration harness, and B8-E1 the Planner
  * orchestration harness beside them. None of them is reachable from the normal
- * application, and the existing three are unchanged.
+ * application. B9 adds the what-if harness; the existing four stay unchanged.
  */
 export function BenchmarkApp() {
   const [benchmark, setBenchmark] = useState<BenchmarkId>('c8-skill-identification')
@@ -47,7 +49,14 @@ export function BenchmarkApp() {
         >
           B8 Planner Orchestration
         </Button>
+        <Button
+          variant={benchmark === 'b9-what-if' ? 'contained' : 'outlined'}
+          onClick={() => setBenchmark('b9-what-if')}
+        >
+          B9 What-if
+        </Button>
       </Stack>
+      {benchmark === 'b9-what-if' && <PlannerWhatIfBenchmarkPage />}
       {benchmark === 'c8-skill-identification' && <SkillIdentificationBenchmarkPage />}
       {benchmark === 'b5-candidate-search' && <CandidateSearchBenchmarkPage />}
       {benchmark === 'b8-constrained-enumeration' && (
