@@ -61,6 +61,7 @@ function createFakeClient(options: FakeClientOptions = {}) {
         ? Promise.reject(options.error)
         : Promise.resolve(options.result ?? emptyResult())
     },
+    createWhatIfComparison: vi.fn(),
     cancelPlan: vi.fn(),
     dispose,
   }

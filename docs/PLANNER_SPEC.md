@@ -2699,6 +2699,21 @@ Worker moduleをimportしない。`PlannerOrchestrationBounds` はcaller必須�
 messageへ含め、`ConstrainedEnumerationBounds` は含めない。Production Worker adapterが
 `defaultConstrainedEnumerationBounds` をWorker境界内で明示的に渡す。
 
+B9-Cでwhat-if比較を同じPlanner Worker境界へ接続した。実装名称の対応は次である。
+
+```text
+create_what_if_comparison          input: PlannerWhatIfRequest
+create_what_if_comparison_result   result: PlannerWhatIfCalculationResult
+```
+
+ordinary / constrained / what-ifは同じ `requestId` / generation、`cancel`、`progress`、
+`error` 契約を共有する。`PlannerWorkerClient.createWhatIfComparison()` は
+`PlannerWhatIfRequest` をそのまま渡す。Production Worker adapterの
+`createProductionPlannerWhatIfComparison()` が `defaultConstrainedEnumerationBounds` を
+Domain calculationへ明示供給し、caller-requiredの `PlannerWhatIfBounds` は変更しない。
+`defaultPlannerWhatIfBounds` は定義していない。この追記は実装mappingであり、
+9.2.4.1〜9.2.4.13のnormative semanticsを変更しない。
+
 Workerを利用できない環境ではClientのversionを `production-engine-unavailable` とし、
 計画実行を明示的なunavailable errorにする。これは
 `getPredictionSupport() = supported: false` のBuildListEntry単位除外とは別経路である。

@@ -3,6 +3,8 @@ import type {
   CreateProductionPlanCalculation,
   PlannerDependencies,
   PlannerExecutionOptions,
+  PlannerWhatIfCalculationResult,
+  PlannerWhatIfRequest,
 } from '../domain/planner'
 import type {
   PlannerWorkerProtocolRequest,
@@ -15,9 +17,9 @@ export type PlannerWorkerPostMessage = (
 export type PlannerDependenciesFactory = () => PlannerDependencies
 
 /**
- * The two Planner calculations this Worker routes to.
+ * The three Planner calculations this Worker routes to.
  *
- * Both are injected, so the controller performs no Beam Search, no Candidate
+ * All three are injected, so the controller performs no Beam Search, no Candidate
  * enumeration, no materialization, no preflight, no Trace Replay, and no
  * adoption of its own: B8-C owns all of that, and the Production adapter
  * composes it.
@@ -25,7 +27,15 @@ export type PlannerDependenciesFactory = () => PlannerDependencies
 export interface PlannerWorkerCalculations {
   createPlan: CreateProductionPlanCalculation
   createConstrainedPlan: CreateConstrainedProductionPlanCalculation
+  createWhatIfComparison: CreatePlannerWhatIfComparisonCalculation
 }
+
+/** Worker-facing B9 calculation shape; Domain runtime options stay off the wire. */
+export type CreatePlannerWhatIfComparisonCalculation = (
+  request: PlannerWhatIfRequest,
+  dependencies: PlannerDependencies,
+  executionOptions?: PlannerExecutionOptions,
+) => Promise<PlannerWhatIfCalculationResult>
 
 export interface PlannerWorkerController {
   handleMessage(request: PlannerWorkerProtocolRequest): Promise<void>
@@ -42,8 +52,9 @@ function workerYield(): Promise<void> {
  * methods.
  *
  * `cancel`, progress forwarding, and error conversion are shared by the
- * ordinary and constrained request kinds: a cancel stops the task instance it
- * names, and B8-C's own cancellation semantics are never reimplemented here.
+ * ordinary, constrained, and what-if request kinds: a cancel stops the task
+ * instance it names, and Domain cancellation semantics are never reimplemented
+ * here.
  */
 export function createPlannerWorkerController(
   dependencies: PlannerDependencies,
@@ -106,36 +117,53 @@ export function createPlannerWorkerController(
       if (owning !== undefined && generation <= owning) return
       generationByRequestId.set(requestId, generation)
       try {
-        // The response type is decided by the request type, so an ordinary
-        // result can never be posted for a constrained request.
-        const response: PlannerWorkerProtocolResponse =
-          request.type === 'create_constrained_plan'
-            ? {
-                type: 'create_constrained_plan_result',
-                requestId,
-                generation,
-                result: await calculations.createConstrainedPlan(
-                  request.input.plannerInput,
-                  request.input.orchestrationBounds,
-                  dependencies,
-                  executionOptions(requestId, generation),
-                ),
-              }
-            : {
-                type: 'create_plan_result',
-                requestId,
-                generation,
-                result: await calculations.createPlan(
-                  request.input,
-                  dependencies,
-                  executionOptions(requestId, generation),
-                ),
-              }
+        // Every calculation has an explicit branch. In particular, what-if is
+        // never treated as the ordinary fallback.
+        let response: PlannerWorkerProtocolResponse
+        switch (request.type) {
+          case 'create_plan':
+            response = {
+              type: 'create_plan_result',
+              requestId,
+              generation,
+              result: await calculations.createPlan(
+                request.input,
+                dependencies,
+                executionOptions(requestId, generation),
+              ),
+            }
+            break
+          case 'create_constrained_plan':
+            response = {
+              type: 'create_constrained_plan_result',
+              requestId,
+              generation,
+              result: await calculations.createConstrainedPlan(
+                request.input.plannerInput,
+                request.input.orchestrationBounds,
+                dependencies,
+                executionOptions(requestId, generation),
+              ),
+            }
+            break
+          case 'create_what_if_comparison':
+            response = {
+              type: 'create_what_if_comparison_result',
+              requestId,
+              generation,
+              result: await calculations.createWhatIfComparison(
+                request.input,
+                dependencies,
+                executionOptions(requestId, generation),
+              ),
+            }
+            break
+        }
         if (isActive(requestId, generation)) postMessage(response)
       } catch (error: unknown) {
-        // A constrained Domain error keeps its meaning: it is reported as the
-        // existing Worker error response and never reclassified from its
-        // message text, nor converted into a result.
+        // A Domain error keeps its meaning: it is reported as the existing
+        // Worker error response and never reclassified from its message text,
+        // nor converted into a result.
         if (!isActive(requestId, generation)) return
         postMessage({
           type: 'error',

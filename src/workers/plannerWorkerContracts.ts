@@ -2,6 +2,8 @@ import type {
   PlannerInput,
   PlannerOrchestrationBounds,
   PlannerOrchestrationResult,
+  PlannerWhatIfCalculationResult,
+  PlannerWhatIfRequest,
   PlannerWorkerRequest,
   PlannerWorkerResponse,
 } from '../domain/planner'
@@ -76,6 +78,13 @@ export type PlannerConstrainedWorkerRequest = WorkerTaskRequest<
 > &
   PlannerTaskGeneration
 
+/** The B9 public request crosses the wire verbatim; enumeration bounds do not. */
+export type PlannerWhatIfWorkerRequest = WorkerTaskRequest<
+  'create_what_if_comparison',
+  PlannerWhatIfRequest
+> &
+  PlannerTaskGeneration
+
 /** Cancels one task instance, never merely a logical request id. */
 export type PlannerWorkerCancelRequest = Extract<
   PlannerWorkerRequest,
@@ -95,6 +104,12 @@ export type PlannerConstrainedWorkerResultResponse = WorkerResultResponse<
 > &
   PlannerTaskGeneration
 
+export type PlannerWhatIfWorkerResultResponse = WorkerResultResponse<
+  'create_what_if_comparison_result',
+  PlannerWhatIfCalculationResult
+> &
+  PlannerTaskGeneration
+
 export type PlannerWorkerProgressResponse = Extract<
   PlannerWorkerResponse,
   { type: 'progress' }
@@ -107,15 +122,17 @@ export type PlannerWorkerErrorResponse = Extract<
 > &
   PlannerTaskGeneration
 
-/** Ordinary plus constrained requests, dispatched by `type`. */
+/** Ordinary, constrained, and what-if requests, dispatched by `type`. */
 export type PlannerWorkerProtocolRequest =
   | PlannerOrdinaryWorkerRequest
   | PlannerConstrainedWorkerRequest
+  | PlannerWhatIfWorkerRequest
   | PlannerWorkerCancelRequest
 
-/** Ordinary plus constrained responses; `progress` / `error` remain shared. */
+/** All Planner results share the existing `progress` / `error` responses. */
 export type PlannerWorkerProtocolResponse =
   | PlannerOrdinaryWorkerResultResponse
   | PlannerConstrainedWorkerResultResponse
+  | PlannerWhatIfWorkerResultResponse
   | PlannerWorkerProgressResponse
   | PlannerWorkerErrorResponse

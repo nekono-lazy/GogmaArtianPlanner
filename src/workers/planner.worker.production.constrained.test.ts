@@ -8,6 +8,8 @@ import type {
   PlannerInput,
   PlannerOrchestrationBounds,
   PlannerOrchestrationResult,
+  PlannerWhatIfCalculationResult,
+  PlannerWhatIfRequest,
 } from '../domain/planner'
 import { defaultConstrainedEnumerationBounds } from '../domain/search'
 import {
@@ -19,6 +21,7 @@ import {
 } from '../test/fixtures/candidateSearch'
 import {
   createProductionConstrainedPlan,
+  createProductionPlannerWhatIfComparison,
   createProductionPlannerWorkerCalculations,
   createProductionPlannerWorkerDependencies,
 } from './planner.worker.production'
@@ -31,6 +34,7 @@ import {
  */
 const orchestration = vi.hoisted(() => ({
   createProductionPlanWithConstrainedSearch: vi.fn(),
+  createPlannerWhatIfComparison: vi.fn(),
 }))
 
 vi.mock('../domain/planner', async (importOriginal) => {
@@ -39,6 +43,7 @@ vi.mock('../domain/planner', async (importOriginal) => {
     ...actual,
     createProductionPlanWithConstrainedSearch:
       orchestration.createProductionPlanWithConstrainedSearch,
+    createPlannerWhatIfComparison: orchestration.createPlannerWhatIfComparison,
   }
 })
 
@@ -160,21 +165,75 @@ describe('Production constrained Planner Worker adapter (B8-D1)', () => {
     expect(Object.keys(productionModule).sort()).toEqual([
       'createProductionConstrainedPlan',
       'createProductionPlannerRngEngine',
+      'createProductionPlannerWhatIfComparison',
       'createProductionPlannerWorkerCalculations',
       'createProductionPlannerWorkerDependencies',
     ])
     expect(defaultConstrainedEnumerationBounds).toBeDefined()
   })
 
-  it('exposes both calculations and keeps the Production RNG Engine unchanged', () => {
+  it('exposes all calculations and keeps the Production RNG Engine unchanged', () => {
     const calculations = createProductionPlannerWorkerCalculations()
     expect(Object.keys(calculations).sort()).toEqual([
       'createConstrainedPlan',
       'createPlan',
+      'createWhatIfComparison',
     ])
     expect(calculations.createConstrainedPlan).toBe(createProductionConstrainedPlan)
     const dependencies = createProductionPlannerWorkerDependencies()
     expect(dependencies.rngEngine).toBeInstanceOf(ProductionRngEngine)
     expect(dependencies.rngEngine.version).toBe(PRODUCTION_RNG_ENGINE_VERSION)
+  })
+
+  it('adds only the Production enumeration extent to a what-if request', async () => {
+    const result: PlannerWhatIfCalculationResult = {
+      status: 'planner_input_not_ready',
+      issues: [],
+      warnings: [],
+      excludedBuildListEntries: [],
+    }
+    orchestration.createPlannerWhatIfComparison.mockResolvedValue(result)
+    const request: PlannerWhatIfRequest = {
+      plannerInput: plannerInput(),
+      scenarioResolution: {
+        conflictKey: 'conflict.production.what-if',
+        selectedBuildListEntryId: 'build-list.production.what-if' as never,
+      },
+      bounds: {
+        maxCandidateTrialsPerCategoryPerTarget: 7,
+        maxPlannerReruns: 13,
+      },
+    }
+    const before = structuredClone(request)
+    const dependencies = createProductionPlannerWorkerDependencies()
+    const executionOptions = { shouldCancel: () => false }
+
+    await expect(createProductionPlannerWhatIfComparison(
+      request,
+      dependencies,
+      executionOptions,
+    )).resolves.toBe(result)
+
+    expect(orchestration.createPlannerWhatIfComparison).toHaveBeenCalledOnce()
+    const [calledRequest, calledDependencies, calledOptions] =
+      orchestration.createPlannerWhatIfComparison.mock.calls[0]
+    expect(calledRequest).toBe(request)
+    expect(calledDependencies).toBe(dependencies)
+    expect(calledOptions.enumerationBounds).toBe(
+      defaultConstrainedEnumerationBounds,
+    )
+    expect(calledOptions.executionOptions).toBe(executionOptions)
+    expect(Object.keys(calledOptions).sort()).toEqual([
+      'enumerationBounds',
+      'executionOptions',
+    ])
+    expect(request).toEqual(before)
+    expect(calledRequest.bounds).toBe(request.bounds)
+    expect(calledRequest).not.toHaveProperty('enumerationBounds')
+  })
+
+  it('defines no PlannerWhatIfBounds default in the Production adapter', async () => {
+    const productionModule = await import('./planner.worker.production')
+    expect(productionModule).not.toHaveProperty('defaultPlannerWhatIfBounds')
   })
 })

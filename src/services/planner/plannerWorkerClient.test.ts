@@ -5,6 +5,8 @@ import type {
   PlannerOrchestrationBounds,
   PlannerOrchestrationResult,
   PlannerResult,
+  PlannerWhatIfCalculationResult,
+  PlannerWhatIfRequest,
 } from '../../domain/planner'
 import { UnavailableRngEngine } from '../../domain/rng/unavailableRngEngine'
 import {
@@ -68,6 +70,27 @@ const orchestrationBounds: PlannerOrchestrationBounds = {
   maxPlannerReruns: 9,
 }
 
+function whatIfRequest(input = plannerInput()): PlannerWhatIfRequest {
+  return {
+    plannerInput: input,
+    scenarioResolution: {
+      conflictKey: 'conflict.what-if.client',
+      selectedBuildListEntryId: 'build-list.what-if.client' as never,
+    },
+    bounds: {
+      maxCandidateTrialsPerCategoryPerTarget: 4,
+      maxPlannerReruns: 10,
+    },
+  }
+}
+
+const whatIfResult: PlannerWhatIfCalculationResult = {
+  status: 'planner_input_not_ready',
+  issues: [],
+  warnings: [],
+  excludedBuildListEntries: [],
+}
+
 describe('PlannerWorkerClient', () => {
   it('uses the Production RNG version for the production Worker client', () => {
     vi.stubGlobal('Worker', FakeWorker)
@@ -92,6 +115,10 @@ describe('PlannerWorkerClient', () => {
         'planner.unavailable.constrained',
         plannerInput(),
         orchestrationBounds,
+      )).rejects.toBeInstanceOf(ProductionPlannerWorkerUnavailableError)
+      await expect(client.createWhatIfComparison(
+        'planner.unavailable.what-if',
+        whatIfRequest(),
       )).rejects.toBeInstanceOf(ProductionPlannerWorkerUnavailableError)
     } finally {
       vi.unstubAllGlobals()
@@ -164,6 +191,168 @@ describe('PlannerWorkerClient', () => {
       message: 'prediction failed',
     })
     await expect(promise).rejects.toThrow('prediction failed')
+  })
+})
+
+describe('PlannerWorkerClient what-if comparison (B9-C)', () => {
+  it('posts the exact request, forwards shared progress, and resolves the what-if result', async () => {
+    const worker = new FakeWorker()
+    const client = createPlannerWorkerClient(worker, 'fixture')
+    const request = whatIfRequest()
+    const progress = vi.fn()
+    const promise = client.createWhatIfComparison(
+      'planner.what-if.client',
+      request,
+      { onProgress: progress },
+    )
+
+    expect(worker.posted[0]).toEqual({
+      type: 'create_what_if_comparison',
+      requestId: 'planner.what-if.client',
+      generation: 1,
+      input: request,
+    })
+    const posted = worker.posted[0]
+    expect(posted.type === 'create_what_if_comparison' && posted.input).toBe(request)
+    expect(Object.keys(request).sort()).toEqual([
+      'bounds',
+      'plannerInput',
+      'scenarioResolution',
+    ])
+    expect(request).not.toHaveProperty('enumerationBounds')
+
+    worker.emit({
+      type: 'progress',
+      requestId: 'planner.what-if.client',
+      generation: 1,
+      progress: { expandedStates: 8, maxExpandedStates: 50 },
+    })
+    worker.emit({
+      type: 'create_what_if_comparison_result',
+      requestId: 'planner.what-if.client',
+      generation: 1,
+      result: whatIfResult,
+    })
+
+    await expect(promise).resolves.toBe(whatIfResult)
+    expect(progress).toHaveBeenCalledExactlyOnceWith({
+      expandedStates: 8,
+      maxExpandedStates: 50,
+    })
+  })
+
+  it('uses the shared cancel and error paths', async () => {
+    const worker = new FakeWorker()
+    const client = createPlannerWorkerClient(worker, 'fixture')
+    const cancelled = client.createWhatIfComparison(
+      'planner.what-if.cancel',
+      whatIfRequest(),
+    )
+    client.cancelPlan('planner.what-if.cancel')
+    await expect(cancelled).rejects.toBeInstanceOf(PlannerCancelledError)
+    expect(worker.posted.at(-1)).toEqual({
+      type: 'cancel',
+      requestId: 'planner.what-if.cancel',
+      generation: 1,
+    })
+
+    const failed = client.createWhatIfComparison(
+      'planner.what-if.error',
+      whatIfRequest(),
+    )
+    worker.emit({
+      type: 'error',
+      requestId: 'planner.what-if.error',
+      generation: 2,
+      message: 'what-if Worker failed',
+    })
+    await expect(failed).rejects.toThrow('what-if Worker failed')
+  })
+
+  it('rejects current wrong result discriminants but ignores a stale wrong discriminant', async () => {
+    const worker = new FakeWorker()
+    const client = createPlannerWorkerClient(worker, 'fixture')
+    const first = client.createWhatIfComparison(
+      'planner.what-if.mismatch',
+      whatIfRequest(),
+    )
+    worker.emit({
+      type: 'create_plan_result',
+      requestId: 'planner.what-if.mismatch',
+      generation: 1,
+      result: { plan: null, conflicts: [], warnings: [] },
+    })
+    await expect(first).rejects.toBeInstanceOf(PlannerWorkerProtocolError)
+
+    const second = client.createWhatIfComparison(
+      'planner.what-if.mismatch.constrained',
+      whatIfRequest(),
+    )
+    worker.emit({
+      type: 'create_constrained_plan_result',
+      requestId: 'planner.what-if.mismatch.constrained',
+      generation: 2,
+      result: {
+        plan: null,
+        conflicts: [],
+        warnings: [],
+        generatedBuildListEntries: [],
+      },
+    })
+    await expect(second).rejects.toBeInstanceOf(PlannerWorkerProtocolError)
+
+    const stale = client.createWhatIfComparison(
+      'planner.what-if.stale',
+      whatIfRequest(),
+    )
+    const current = client.createConstrainedPlan(
+      'planner.what-if.stale',
+      plannerInput(),
+      orchestrationBounds,
+    )
+    await expect(stale).rejects.toBeInstanceOf(PlannerCancelledError)
+    worker.emit({
+      type: 'create_plan_result',
+      requestId: 'planner.what-if.stale',
+      generation: 3,
+      result: { plan: null, conflicts: [], warnings: [] },
+    })
+    const constrainedResult: PlannerOrchestrationResult = {
+      plan: null,
+      conflicts: [],
+      warnings: [],
+      generatedBuildListEntries: [],
+    }
+    worker.emit({
+      type: 'create_constrained_plan_result',
+      requestId: 'planner.what-if.stale',
+      generation: 4,
+      result: constrainedResult,
+    })
+    await expect(current).resolves.toEqual(constrainedResult)
+  })
+
+  it('participates in duplicate requestId replacement and dispose semantics', async () => {
+    const worker = new FakeWorker()
+    const client = createPlannerWorkerClient(worker, 'fixture')
+    const ordinary = client.createPlan('planner.what-if.shared', plannerInput())
+    const whatIf = client.createWhatIfComparison(
+      'planner.what-if.shared',
+      whatIfRequest(),
+    )
+    await expect(ordinary).rejects.toBeInstanceOf(PlannerCancelledError)
+    expect(worker.posted.map(({ type, generation }) => ({ type, generation })))
+      .toEqual([
+        { type: 'create_plan', generation: 1 },
+        { type: 'create_what_if_comparison', generation: 2 },
+      ])
+
+    client.dispose()
+    await expect(whatIf).rejects.toBeInstanceOf(PlannerCancelledError)
+    await expect(client.createWhatIfComparison(
+      'planner.what-if.disposed',
+      whatIfRequest(),
+    )).rejects.toThrow('Planner Worker Client is disposed.')
   })
 })
 
@@ -457,6 +646,9 @@ function integration() {
       const pending = deferred<PlannerOrchestrationResult>()
       constrainedResults.push(pending)
       return pending.promise
+    },
+    createWhatIfComparison: async () => {
+      throw new Error('What-if calculation was not expected in this integration fixture.')
     },
   }
   const dependencies = {

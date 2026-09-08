@@ -4,6 +4,8 @@ import type {
   PlannerOrchestrationResult,
   PlannerProgress,
   PlannerResult,
+  PlannerWhatIfCalculationResult,
+  PlannerWhatIfRequest,
 } from '../../domain/planner'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../../domain/rng/production/productionRngEngine'
 import type {
@@ -84,6 +86,12 @@ export interface PlannerWorkerClient {
     orchestrationBounds: PlannerOrchestrationBounds,
     callbacks?: PlannerWorkerClientCallbacks,
   ): Promise<PlannerOrchestrationResult>
+  /** B9 transient calculation; the complete caller-required request is wired verbatim. */
+  createWhatIfComparison(
+    requestId: string,
+    request: PlannerWhatIfRequest,
+    callbacks?: PlannerWorkerClientCallbacks,
+  ): Promise<PlannerWhatIfCalculationResult>
   cancelPlan(requestId: string): void
   dispose(): void
 }
@@ -128,6 +136,10 @@ type PendingPlan =
       expectedResultType: 'create_constrained_plan_result'
       resolve: (result: PlannerOrchestrationResult) => void
     })
+  | (PendingPlanIdentity & {
+      expectedResultType: 'create_what_if_comparison_result'
+      resolve: (result: PlannerWhatIfCalculationResult) => void
+    })
 
 export function createPlannerWorkerClient(
   worker: PlannerWorkerLike,
@@ -164,6 +176,13 @@ export function createPlannerWorkerClient(
     if (
       data.type === 'create_constrained_plan_result' &&
       current.expectedResultType === 'create_constrained_plan_result'
+    ) {
+      current.resolve(data.result)
+      return
+    }
+    if (
+      data.type === 'create_what_if_comparison_result' &&
+      current.expectedResultType === 'create_what_if_comparison_result'
     ) {
       current.resolve(data.result)
       return
@@ -229,6 +248,28 @@ export function createPlannerWorkerClient(
         })
       })
     },
+    createWhatIfComparison: (requestId, request, callbacks = {}) => {
+      if (disposed) {
+        return Promise.reject(new Error('Planner Worker Client is disposed.'))
+      }
+      const generation = claimRequestId(requestId)
+      return new Promise<PlannerWhatIfCalculationResult>((resolve, reject) => {
+        pending.set(requestId, {
+          requestId,
+          generation,
+          expectedResultType: 'create_what_if_comparison_result',
+          resolve,
+          reject,
+          onProgress: callbacks.onProgress,
+        })
+        worker.postMessage({
+          type: 'create_what_if_comparison',
+          requestId,
+          generation,
+          input: request,
+        })
+      })
+    },
     cancelPlan: (requestId) => {
       const current = pending.get(requestId)
       if (!current) return
@@ -259,6 +300,8 @@ export function createUnavailablePlannerWorkerClient(): PlannerWorkerClient {
     // The same explicit unavailable error, never a main-thread fallback
     // calculation and never a substituted orchestration bound.
     createConstrainedPlan: () =>
+      Promise.reject(new ProductionPlannerWorkerUnavailableError()),
+    createWhatIfComparison: () =>
       Promise.reject(new ProductionPlannerWorkerUnavailableError()),
     cancelPlan: () => undefined,
     dispose: () => undefined,

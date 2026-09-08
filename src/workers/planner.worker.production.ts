@@ -2,6 +2,7 @@ import {
   createProductionPlan,
   createProductionPlanWithConstrainedSearch,
   createProductionPlannerDependencies,
+  createPlannerWhatIfComparison,
   type CreateConstrainedProductionPlanCalculation,
   type PlannerDependencies,
 } from '../domain/planner'
@@ -10,7 +11,10 @@ import {
 } from '../domain/rng/production/productionRngEngine'
 import type { RngEngine } from '../domain/rng/rngEngine'
 import { defaultConstrainedEnumerationBounds } from '../domain/search'
-import type { PlannerWorkerCalculations } from './planner.worker'
+import type {
+  CreatePlannerWhatIfComparisonCalculation,
+  PlannerWorkerCalculations,
+} from './planner.worker'
 
 /** Creates the active Planner Engine inside the Worker boundary. */
 export function createProductionPlannerRngEngine(): RngEngine {
@@ -46,10 +50,23 @@ export const createProductionConstrainedPlan: CreateConstrainedProductionPlanCal
       executionOptions,
     })
 
-/** Both Production Planner calculations the Worker controller dispatches to. */
+/**
+ * Supplies only the Search-domain enumeration extent inside the Worker.
+ * `request.bounds` remains caller-required and is forwarded without repair,
+ * clamping, completion, or a Production what-if default.
+ */
+export const createProductionPlannerWhatIfComparison: CreatePlannerWhatIfComparisonCalculation =
+  (request, dependencies, executionOptions) =>
+    createPlannerWhatIfComparison(request, dependencies, {
+      enumerationBounds: defaultConstrainedEnumerationBounds,
+      executionOptions,
+    })
+
+/** All Production Planner calculations the Worker controller dispatches to. */
 export function createProductionPlannerWorkerCalculations(): PlannerWorkerCalculations {
   return {
     createPlan: createProductionPlan,
     createConstrainedPlan: createProductionConstrainedPlan,
+    createWhatIfComparison: createProductionPlannerWhatIfComparison,
   }
 }

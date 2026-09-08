@@ -3363,6 +3363,72 @@ B10競合UI、B11 normal-tier Keep prediction semanticsは従来どおり別タ�
 
 ---
 
+### 4.20 B9-C implementation record
+
+B9-C = 完了。B9-B1bの `createPlannerWhatIfComparison()` を既存Planner Worker経路へ
+接続した。Domain what-if semantics、Persistence、UIは変更していない。
+
+#### Worker protocol / routing
+
+`src/workers/plannerWorkerContracts.ts` のWorker-layer protocolへ次を追加した。
+
+```text
+request   create_what_if_comparison
+            input PlannerWhatIfRequest
+response  create_what_if_comparison_result
+            result PlannerWhatIfCalculationResult
+```
+
+wire上の `input` は `plannerInput` / `scenarioResolution` /
+`bounds: PlannerWhatIfBounds` だけで、余計なwrapperを持たない。
+`ConstrainedEnumerationBounds`、RngEngine、Clock、ID Factory、function、observer、
+runtime dependencyはWorker requestを横断しない。
+
+`planner.worker.ts` は `create_plan` / `create_constrained_plan` /
+`create_what_if_comparison` の明示3分岐とし、what-ifをordinary fallbackとして扱わない。
+controllerはmessage routingだけを担当し、enumeration、materialization、preflight、
+Beam Search、Trace Replay、outcome判定、distance算出を実装しない。
+
+#### generation / cancellation / progress / error
+
+ordinary / constrained / what-ifは同じlogical `requestId` namespaceとClient-minted
+monotonic `generation` sequenceを共有する。WorkerとClientはrequestIdとgenerationの
+両方がcurrentなmessageだけを扱い、stale generationのprogress / result / errorは
+silent ignoreする。同generationのresult discriminant mismatchだけを
+`PlannerWorkerProtocolError` とする。
+
+`cancelPlan(requestId)`、generation付き `cancel`、`shouldCancel()` をwhat-ifでも再利用する。
+cancelled generationはresult / progress / errorをpostしない。Domainの
+`PlannerWhatIfCancelledError` のmessageはcontrol authorityにせず、current generationが
+実際にcancelled / retiredかどうかをauthorityとする。currentな非cancelled taskが同Errorを
+throwした場合は既存 `error` responseへ流し、Promiseをpendingのまま残さない。
+progressは既存 `PlannerProgress` / `progress` responseだけを共有する。
+
+#### Production adapter / Client
+
+`createProductionPlannerWhatIfComparison()` はcallerの `PlannerWhatIfRequest` と
+`request.bounds` を変更せずDomain calculationへ渡し、Search Domain authorityの
+`defaultConstrainedEnumerationBounds` だけをoptionsへ明示供給する。adapter内へ
+40 / 30 / 100 / 500を複写していない。
+
+`PlannerWhatIfBounds` は引き続きcaller-requiredである。repair / clamp / completion /
+fallbackは行わず、`defaultPlannerWhatIfBounds` は定義していない。
+`defaultPlannerOrchestrationBounds` もwhat-ifへ流用していない。
+
+`PlannerWorkerClient.createWhatIfComparison(requestId, request, callbacks?)` は
+`PlannerWhatIfRequest` をそのままwireへ渡し、既存pending union、progress、error、
+duplicate requestId、cancel、dispose、protocol mismatchの契約へ参加する。
+Worker unavailable時は `ProductionPlannerWorkerUnavailableError` でrejectし、
+main-thread fallback計算を行わない。
+
+#### scope / next
+
+BuildListEntry、ProductionPlan、what-if resultの保存は行わず、IndexedDB / Dexie /
+repository / UI / B10 wiringは変更していない。次はB9-B2の実Browser Worker benchmarkと
+`PlannerWhatIfBounds` Production default決定である。
+
+---
+
 ## 5. B1 / B2に残る設計判断
 
 以下はB0で決めきらず、実装時にコードを見て決める。
