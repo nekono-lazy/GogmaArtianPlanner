@@ -1222,6 +1222,20 @@ B9は「initial ordinary Planner run」を必須としない。B9の目的はPla
 feasibility comparisonである。この点でB8-C4aの `maxPlannerReruns` とは数える対象が
 異なるため、名前が同じでも既定値を流用しない。
 
+共有 `maxPlannerReruns` の消費順を確定するため、B9-B1bで次の実行順を固定した。
+
+```text
+Target処理順   createPlannerConflictWorks() の既存stable order
+Target内順     practical -> ideal
+category内順   compareConstrainedCandidates()
+```
+
+`works` のstable orderをそのまま使用し、B9独自のTarget sortを追加しない。
+Target内の `practical -> ideal` は、共有 `maxPlannerReruns` をどちらのcategoryが先に
+消費するかを固定するexecution scheduling authorityであり、Candidate semantic ordering
+authorityではない。category内のordering authorityは9.2.4.3のとおり
+`compareConstrainedCandidates()` のままである。
+
 #### 9.2.4.10 enumeration bounds
 
 B9は `ConstrainedEnumerationBounds` の意味とProduction defaultを変更しない。

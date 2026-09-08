@@ -3198,6 +3198,171 @@ semanticsは従来どおり別タスクである。
 
 ---
 
+### 4.19 B9-B1b implementation record
+
+B9-B1b = 完了。B9 Domain what-if calculation本体を実装した。public entry pointは
+`createPlannerWhatIfComparison()` で、B9-B1aの `preparePlannerWhatIfScenario()` を
+そのまま前段として使用する。scenario preparationがreadyでない場合は、その typed
+failure result をそのまま返す。
+
+#### ordering
+
+```text
+Target処理順   PreparedPlannerWhatIfScenario.works の既存stable order
+Target内順     practical -> ideal
+category内順   compareConstrainedCandidates()
+```
+
+`practical -> ideal` は共有 `maxPlannerReruns` の消費順を固定するexecution scheduling
+authorityであり、Candidate semantic ordering authorityではない。この実行順だけを
+[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.4.9へ最小追記した。9.2.4.1〜9.2.4.13の
+normative semanticsは変更していない。
+
+#### enumeration
+
+`enumerateConstrainedCandidates()` を使用する。`visitConstrainedCandidates()` の
+incremental delivery orderは最終 `compareConstrainedCandidates()` 順と一致するとは
+限らないため(4.3)、collector形の最終sorted orderをB9のordering authorityとした。
+`options.enumerationBounds` はcaller supplied値をそのまま渡し、default substitution /
+fallback / clamp / field-wise completionを行わない。`CandidateSearchSettings`、
+`resultFilter`、similar filter、`maxCandidatesPerTarget`、canonical Ideal early-stop、
+initial Search pruning、Practical dominanceはいずれも持ち込んでいない。
+
+#### independence
+
+全Target・全Candidate trialが同じbaseline(`scenario.mergedInput` /
+`scenario.origin` / `scenario.fixedConstraints`)から開始する。B8の
+`currentAugmentedInput` 更新、adopted generated Entry累積、`currentPlannerResult`
+更新に相当する状態は持たない。B9は何もadoptしない。
+
+#### trial semantics
+
+1 trialは「対象categoryのCandidateをfeasibility判定対象として取り上げた時点」で
+1消費する。materialization成功後ではない。`reusedExisting` のCandidateは重複Entryを
+追加せずtrial inputを `mergedInput` のままとするが、preflightとfull Planner rerunは
+実際に行い、その結果でfeasibilityを判定する。preflight rejectはそのCandidateだけを
+rejectし、trialを1消費してBeamは0消費する。preflightへは
+`scenario.fixedConstraints` 全件を渡す。
+
+feasibility authorityは
+`plan !== null` かつ `plan.selectedBuildListEntryIds` が trial Entry と全fixed Entry を
+含むこと(`isPlannerWhatIfCandidateFeasible()`)だけである。`completed === true` は
+要求しない。距離は `ConstrainedCandidate` の既存estimate 4値をそのまま返す。
+
+#### Beam budget
+
+B9専用の `PlannerWhatIfFullBeamBudget` / `PlannerWhatIfRerunLimitError` を新設した。
+B8の `PlannerOrchestrationBounds` / `PlannerOrchestrationLimitError` は流用していない。
+`limit = request.bounds.maxPlannerReruns`。Candidate trialのfull Beam Searchと
+Production Plan生成内部のruntime unsupported retry Beamだけを数え、preflight /
+validation / conflict context生成 / enumeration / materializationは数えない。B9は
+initial ordinary Planner runを行わない。
+
+`used === limit` に到達しただけではbound statusにしない。上限到達後に実際にBeam開始が
+阻止された場合だけ `stopped_by_planner_rerun_bound` とする。ただしTarget評価開始前に
+budgetが完全消費済みの場合は、そのTargetのenumeration / materialization / preflightを
+開始せず両slotをrerun boundとする(9.2.4.9)。Candidate 0件のcategoryはBeam不要なので
+enumeration summaryだけでstatusを確定する。
+
+#### outcome precedence
+
+```text
+found
+stopped_by_candidate_trial_bound
+stopped_by_planner_rerun_bound
+stopped_by_enumeration_bound
+not_found_within_search_extent
+```
+
+trial boundも「limitを使い切ったうえで同categoryに未試行Candidateが残っている」場合
+だけとする。同じ次Candidateをtrial capとrerun capの双方が阻止する場合はtrial capを
+優先する。`exhausted === false` かつ `stoppedByBound === false` はcollector経路では
+発生しないため、そのケースはinvariant failureとしてerrorを伝播し、B9 statusへ変換
+しない。
+
+#### cancellation
+
+`cancelled` は `PlannerWhatIfOutcome` にも正常resultにも含めない。request
+cancellationは `PlannerWhatIfCancelledError` のthrowで終える。Search側の
+`CandidateSearchError('cancelled')` だけをこれへnormalizeし、その他の
+`CandidateSearchError` / `ConstrainedSearchError` / RNG error / invariant errorは
+そのまま伝播する。Beam cancellationは `afterBeamSearch(result).cancelled` で検知し、
+`plan: null` をCandidate rejectとして扱わずrequest全体を終了する。partial comparison
+は返さない。
+
+#### persistence
+
+なし。materializeしたEntryはtrial input専用で、破棄する。Dexie / repository /
+persistence serviceは呼ばない。resultへ `ProductionPlan`、Plan ID、PlanStep ID、
+Candidate ID、generated BuildListEntry ID、`createdAt`、runtime OwnedWeapon IDは
+含めない。
+
+#### Production default
+
+作っていない。`defaultPlannerWhatIfBounds` はB9-B2のbenchmarkまで存在しない。
+
+#### 追加ファイル
+
+```text
+src/domain/planner/constrained/plannerWhatIfCalculation.ts
+src/domain/planner/constrained/plannerWhatIfCalculation.test.ts
+src/domain/planner/constrained/plannerWhatIfRerunBudget.ts
+src/domain/planner/constrained/plannerWhatIfRerunBudget.test.ts
+```
+
+#### public API boundary
+
+`src/domain/planner/constrained/index.ts` がbarrelから公開するB9-B1b APIは次の2つだけ
+である。
+
+```text
+createPlannerWhatIfComparison
+PlannerWhatIfCancelledError
+```
+
+次はB9内部実装として barrel export しない。
+
+```text
+PlannerWhatIfFullBeamBudget
+PlannerWhatIfRerunLimitError
+createPlannerWhatIfFullBeamBudget
+isPlannerWhatIfCandidateFeasible
+plannerWhatIfEnumerationOutcome
+```
+
+責務は次のとおり分ける。
+
+```text
+public   what-if calculation entry point と cancellation signal
+internal shared Beam budget / feasibility helper / enumeration outcome helper
+```
+
+`plannerWhatIfRerunBudget.ts` はbarrel exportしない。テストは対象moduleを直接
+importする。
+
+#### 既知のテスト限界
+
+`stopped_by_planner_rerun_bound` を「Production Plan生成内部のruntime unsupported
+retry Beamが阻止された」経路で起こす統合fixtureは作っていない。retry Beamがbudgetを
+消費すること、および limit 1 で retry Beam が
+`PlannerWhatIfRerunLimitError` により阻止されることは、既存の
+`runtimeUnsupportedFixture()` と実際の `createProductionPlanWithObserver()` に対する
+budget統合テストで検証している。そこから先(typed signalをcatchして
+`stopped_by_planner_rerun_bound` を返し、途中Beam結果を採用しないこと)は、
+what-if calculation側の同一catch経路をconflict fixtureで検証している。
+
+`not_found_within_search_extent` は、`enumerateConstrainedCandidates()` が
+`exhausted === true` を返すconflict fixtureを構成できなかったため、
+`plannerWhatIfEnumerationOutcome()` の単体テストで検証している。統合経路では
+`stopped_by_enumeration_bound` 側を検証した。
+
+#### next
+
+B9-C Worker / adapter / client、B9-B2 benchmarkとProduction default決定、
+B10競合UI、B11 normal-tier Keep prediction semanticsは従来どおり別タスクである。
+
+---
+
 ## 5. B1 / B2に残る設計判断
 
 以下はB0で決めきらず、実装時にコードを見て決める。
