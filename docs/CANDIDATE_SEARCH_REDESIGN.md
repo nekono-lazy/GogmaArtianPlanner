@@ -425,7 +425,9 @@ B8-Aでconflict context DTO、constrained enumeration API、generated BuildListE
 契約本文は `docs/PLANNER_SPEC.md` 9.2と `docs/SEARCH_SPEC.md` 5.6.7にある。
 
 what-if比較(一方を固定した場合の他方の次のPractical / Idealまでの距離)はB9であり、
-B8では実装しない。
+B8では実装しない。B9-A2でwhat-if比較の正式契約を確定した(4.17)。契約本文は
+`docs/PLANNER_SPEC.md` 9.2.4.1〜9.2.4.13にある。距離の算出とWorker / Application APIが
+B9、競合UIとwhat-if距離の表示がB10である。
 
 ---
 
@@ -463,7 +465,9 @@ B0 -> B7 -> B1 -> B2 -> B3 -> B4 -> B5 -> B6
                                                    \
                                                     -> B8-C -> B8-D -> B8-E
                                                                           \
-                                                                           -> B9 / B10
+                                                                           -> B9-A -> B9-A2
+                                                                                -> B9-B1 -> B9-C -> B9-B2
+                                                                                                -> B10
 
 B11 は実ゲーム観測を前提とする独立系列
 ```
@@ -485,8 +489,8 @@ B11 は実ゲーム観測を前提とする独立系列
 | B8-C | Planner conflict orchestration | 固定Candidate判定、Conflict Resolution再対応付け、deterministic materializer、augmented-input完全再実行。orchestration boundsはcaller必須指定のまま | B8-B1 |
 | B8-D | Worker / Application / Persistence | atomic save、既存UIへの最小配線 | B8-C。**完了**。B8-D1 Worker境界 / B8-D2a atomic save / B8-D2b BuildListPage配線（4.12 / 4.13 / 4.16章） |
 | B8-E | orchestration Browser / Planner benchmark | orchestration boundsのProduction default決定 | B8-D。**完了**。B8-E1 harness / B8-E2a real Browser measurement / B8-E2b default決定 `2 / 1 / 4`（4.15章、`B8_PLANNER_ORCHESTRATION_BROWSER_WORKER_BENCHMARK.md` 10-11章） |
-| B9 | what-if比較 | 一方固定時の他方の次のPractical / Idealまでの距離算出と提示 | B8-E |
-| B10 | 競合UI | 競合候補の除外 / 選択不可表示と理由提示 | B8-E |
+| B9 | what-if比較の算出 | 一方固定時の他方の次のPractical / Idealまでの距離算出。Domain計算、`PlannerWhatIfBounds`、Worker protocol / routing、Production Worker adapter、`PlannerWorkerClient` API、benchmarkとProduction default決定。表示は含まない | B8-E。B9-A contract audit / B9-A2 contract decision **完了**（4.17章、`PLANNER_SPEC.md` 9.2.4.1〜9.2.4.13）。B9-B1 / B9-C / B9-B2は未実装 |
+| B10 | 競合UI / what-if提示 | 競合候補の除外 / 選択不可表示と理由提示、Conflict選択UI、what-if距離の表示と比較カード、what-if requestの起動 | B8-E, B9 |
 | B11 | normal-tier Keep prediction semantics | 実ゲーム観測 -> game-verified fixture -> Production prediction実装。Search / Planner / Domain検証の除外解除 | 実ゲーム観測 |
 
 ### 4.0 B7を先行させる理由
@@ -744,8 +748,8 @@ B11の完了を待たない。
 | 初回Search pruning全般を永久除外にしない保証 | B8-A(仕様) / B8-B1(実装) |
 | canonical Idealのrun非依存tie-break (`candidateStableKey`) | B4 |
 | Practical保持のdeterministic horizon | B4 |
-| what-if検索 | B9 |
-| UI競合表示 | B10 |
+| what-if検索 | B9-A2(仕様) / B9-B1・B9-C・B9-B2(実装) |
+| UI競合表示 / what-if距離の表示 | B10 |
 | default値変更 | B6 |
 | Search progress改善 | B6 |
 | normal-scope Keep prediction | B11 |
@@ -2924,7 +2928,102 @@ DB schema bumpは不要である。
 
 #### next
 
-B9 what-if比較、B10競合UI、B11 normal-tier Keep prediction semantics。
+B9 what-if比較(4.17)、B10競合UI、B11 normal-tier Keep prediction semantics。
+
+---
+
+### 4.17 B9-A contract audit / B9-A2 contract decision
+
+#### B9-A contract audit = 完了
+
+B9 what-if比較の実装前に、既存authorityとB8実装の契約監査を行った。コード変更は無い。
+確認した主な事実は次である。
+
+- `PlanConflict.buildListEntryIds` は2件限定ではない。`detectPlannerConflicts()` は
+  同一競合資源keyへ何unitでも束ねるため、3 participant以上は構造的に発生し得る
+- constrained enumeratorの `compareConstrainedWorkItems()` は `categoryRank` を先頭
+  比較keyに持つため、incremental delivery orderは「両stream Ideal一致のcellを全て、
+  その後practical-onlyのcell」という順になる。これは
+  `enumerateConstrainedCandidates()` が最後に適用する `compareConstrainedCandidates()`
+  のfinal sorted orderと一致するとは限らない
+- `createProductionPlanWithConstrainedSearch()` はwhat-ifへそのまま流用できない。
+  1件adoptすると `currentAugmentedInput` / `currentPlannerResult` を更新して以降の
+  workの基準が動き、workあたり最初の1件adoptで停止し、adoptionとPlan返却を行うため
+- 仮想固定は既存 `PlannerInput.conflictResolutions` に乗せられる。`validatePlannerInput()`
+  が空key・重複key・選択Entryの存在と有効性を既存規則で検証するため、B9専用の
+  fixed authorityも新しいvalidation経路も要らない
+- `PlanConflict.recommendedBuildListEntryId` の算出に使う `nextCandidateDistance()` は
+  既存BuildListEntry集合内の `estimatedOperationCount` 差であり、再検索を伴わない。
+  B9のwhat-if距離とは別物であり、B9は `recommendEntry()` を変更しない
+
+監査で一意に決まらなかった論点は、次のB9-A2でproject ownerが決定した。
+
+#### B9-A2 contract decision = 完了
+
+B9-A2は仕様タスクである。変更したのは仕様文書だけで、`src/**`、テスト、build設定、
+DB schemaは変更していない。契約本文は
+[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.4.1〜9.2.4.13にある。確定した内容の要約。
+
+| # | 決定 | 契約 |
+| --- | --- | --- |
+| distance baseline | Planner計算開始時の `ConstrainedSearchOrigin` からの既存estimate 4値だけを使う。競合位置起点・固定Candidate実行後State起点・新distance尺度・B9専用comparatorを禁止 | 9.2.4.1 |
+| Practical / Ideal | 既存の排他 `CandidateCategory` で2枠を定義する。「次のPractical」は `category === 'practical'` を指し、同一Candidateが両枠を埋めない。Ideal ⇒ Practical包含不変条件は変更しない | 9.2.4.2 |
+| 「次」のordering authority | 対象category内で `compareConstrainedCandidates()` 順に最小、かつPlanner full rerun + Trace Replayで共存可能性が証明されたCandidate。visitorのdelivery順をそのまま採用しない | 9.2.4.3 |
+| 3 participant以上 | unique非固定Targetごとに独立評価。Target Bの解を採用した入力でTarget Cを測らない。評価順で距離が変わってはならない | 9.2.4.4 |
+| scenario fixed authority | public requestは `plannerInput` / `scenarioResolution` / `bounds: PlannerWhatIfBounds`。同一 `conflictKey` のresolutionを置換し、他のexplicit resolutionは保持、無ければ追加。callerにB8 transient DTOを組ませない。requestへ `ConstrainedEnumerationBounds` を追加せず、Domain calculationが `PlannerWhatIfCalculationOptions.enumerationBounds` としてcaller必須で受け取る（B8-D1 / B8-E2bと同じ責務分離） | 9.2.4.5 |
+| `reusedExisting` | B8の「trial消費・Beam再実行なし・不採用」を流用しない。既存semantic Entryをtrial Entryとして使い、scenario制約下でpreflight + full rerunして実行可能性を判定する | 9.2.4.6 |
+| feasibility authority | trial Entryと全fixed Entryが `ProductionPlan.selectedBuildListEntryIds` に含まれること。簡易競合判定禁止。partial Planでも可 | 9.2.4.7 |
+| transient only | BuildListEntry / ProductionPlan / what-if resultのいずれも永続化しない。resultへProductionPlanを含めず、Candidate IDやEntry IDを必須fieldにしない | 9.2.4.8 |
+| `PlannerWhatIfBounds` | `maxCandidateTrialsPerCategoryPerTarget` / `maxPlannerReruns`。finite integer `>= 1`、caller必須、repair / clamp / field completion禁止。**B9-A2ではProduction defaultを定義しない**。1 trialは「対象categoryのCandidateをfeasibility判定対象として取り上げた時点」で消費し、`reusedExisting` / preflight reject / rerun reject / found はいずれも1消費、別category・found確定済みcategory・feasibility attempt未到達は消費しない。予期しないerrorはtrial rejectionへ変換せず既存error経路へ伝播する | 9.2.4.9 |
+| enumeration bounds | `defaultConstrainedEnumerationBounds = 40 / 30 / 100 / 500` を変更しない。Production Worker adapterがWorker境界内でDomain calculationへ明示的に渡し、Domainはdefault substitution / fallback / clampを行わない。B9 benchmarkはまずこのextentで測る | 9.2.4.10 |
+| result / no-result | `found` / `not_found_within_search_extent` / `stopped_by_enumeration_bound` / `stopped_by_candidate_trial_bound` / `stopped_by_planner_rerun_bound` をtyped unionで区別する。「見つからない」と「未確認」を同じ `null` へ潰さない。確定済み `found` を後からbound到達だけで無効化しない | 9.2.4.11 |
+| warning | B8専用の4 `PlannerWarningKind` をB9で生成しない。B9のstop理由はB9専用typed statusで表す | 9.2.4.12 |
+| cancellation | `cancelled` を `PlannerWhatIfOutcome` へ含めない。cancelはWorker / Client requestのcancellationとして扱い、partial resultを正常resultとして返さない | 9.2.4.12 |
+| B9 / B10境界 | B9 = Domain計算 / bounds / Worker protocol / Production adapter / Client API / benchmark。B10 = Conflict選択UI / 距離表示 / 比較カード / 選択不可表示 / request起動 | 9.2.4.13 |
+
+#### B9のtask分割
+
+```text
+B9-A   contract audit                                        完了
+B9-A2  contract decision (本節、PLANNER_SPEC 9.2.4.1〜9.2.4.13) 完了
+B9-B1  Domain what-if calculation。PlannerWhatIfBoundsは
+       caller必須指定とし、Production defaultを定義しない
+B9-C   Worker protocol / routing / Production adapter /
+       PlannerWorkerClient API。永続化しない
+B9-B2  実Browser Worker benchmark。PlannerWhatIfBoundsの
+       Production default決定
+```
+
+`B9-B2` を `B9-C` の後に置くのは、B8-E2と同じく実Browser Workerでの計測にWorker境界が
+必要なためである。
+
+#### 変更していないもの
+
+```text
+src/**
+tests
+REQUIREMENTS domain meaning
+SEARCH_SPEC constrained enumeration semantics
+Candidate分類
+Planner conflict detection
+B8 orchestration
+Worker protocol
+DB / persistence
+CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2
+DATABASE_SCHEMA_VERSION = 1
+AppSettings.schemaVersion = 1
+PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2
+supportsSeedSearch = false
+defaultConstrainedEnumerationBounds = 40 / 30 / 100 / 500
+defaultPlannerOrchestrationBounds = 2 / 1 / 4
+defaultCandidateSearchSettings
+defaultPlannerOptions
+```
+
+#### next
+
+B9-B1 Domain what-if calculation。B10競合UI、B11 normal-tier Keep prediction semantics
+は従来どおり別Phaseである。
 
 ---
 

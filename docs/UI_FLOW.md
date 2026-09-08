@@ -535,6 +535,12 @@ Counter位置が一致することだけを理由に「作成できない」と�
 将来のwhat-if比較では、一方のTargetを優先した場合に他方の次に実行可能な
 Practical / Idealまでの距離を並べて提示する。これも後続Phaseで実装する。
 
+implementation mapping（normativeなUI契約ではない）。距離を求めるDomain計算、
+`PlannerWhatIfBounds`、Worker protocol、Production Worker adapter、
+`PlannerWorkerClient` APIはB9であり、その契約は
+[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.4.1〜9.2.4.13にある。本節が述べる競合選択UI、
+距離の表示、比較カード、選択不可表示、what-if requestの起動はB10である。
+
 PlanStep表示。
 
 - 順番

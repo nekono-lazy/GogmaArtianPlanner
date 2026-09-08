@@ -520,9 +520,11 @@ Candidate Searchは、Plannerで将来競合する可能性があるという理
 
 B8-Aで正式契約を確定した。実装はB8-B1以降で行う。
 
-- 9.2.1〜9.2.5はB0で固定した責務と禁止事項であり、B8-Aでも変更しない
+- 9.2.1〜9.2.5はB0で固定した責務と禁止事項であり、B8-AでもB9-A2でも変更しない
 - 9.2.6以降がB8-Aで追加した正式契約である
 - 9.2.4のwhat-if比較はB9、競合UIはB10であり、B8では実装しない
+- 9.2.4.1〜9.2.4.13はB9-A2で確定したwhat-if比較の正式契約である。B8の契約
+  (9.2.1〜9.2.3.1、9.2.5〜9.2.17)とB0固定契約は変更していない
 
 B8 architecture自体はProduction RNG semantics、RouteOperationの意味、ProductionPlanの
 永続shape、PlanStepの意味、既存BuildListEntryのshapeを変更しない(9.2.17)。
@@ -868,6 +870,501 @@ Target Bを優先した場合
 
 what-if比較はB9で実装する。B8では実装しない。B8のorchestrationは、B9が明示的な
 仮想fixed constraintを渡せる形へ将来拡張してよいが、B8でB9の機能を先取りしない。
+
+B9-A2で正式契約を確定した。9.2.4.1〜9.2.4.13がその契約である。上記のB0固定契約
+(距離表現、競合位置より前のPracticalも対象、後方固定の禁止)は変更しない。9.2.4.1以降は
+それを具体化するものであり、9.2.1〜9.2.3.1、9.2.5〜9.2.17のB8契約も変更しない。
+
+B9-A2は仕様文書だけを変更した。`src/**`、テスト、Worker protocol、DB schema、
+schema version、Production RNG semantics、Candidate分類、Planner競合検出、
+B8 orchestration、`defaultConstrainedEnumerationBounds`、
+`defaultPlannerOrchestrationBounds`、`defaultCandidateSearchSettings`、
+`defaultPlannerOptions` はいずれも変更していない。
+
+#### 9.2.4.1 距離のbaseline
+
+what-if距離のbaselineは次だけとする。
+
+```text
+正 : Planner計算開始時の ConstrainedSearchOrigin
+```
+
+これは9.2.1および[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.7の「元のSearch / RNG起点」と
+同一であり、B8 constrained enumerationが既に使用している起点である。したがって
+what-if距離は、enumeratorが返す `ConstrainedCandidate` のestimate値をそのまま用いる。
+
+```text
+estimatedOperationCount
+estimatedGogmaAdvance
+estimatedSkillAdvance
+estimatedNormalAdvance
+```
+
+禁止。
+
+```text
+競合Counter位置からの差分
+固定Candidate実行後Stateからの差分
+新しいdistance尺度の新設
+B9専用のscore / distance comparatorの新設
+```
+
+理由。上記4値はorigin基準のadvanceとして定義されており
+([SEARCH_SPEC.md](./SEARCH_SPEC.md) 3.1)、9.2.4のB0契約が距離表現をこの4値へ固定している。
+別のbaselineを採用すると、同じfield名で別の意味を持つ値が生まれる。
+
+#### 9.2.4.2 Practical / Idealは排他CandidateCategory
+
+B9が求める2枠は、既存の排他 `CandidateCategory`
+([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.1 / 5.2)で定義する。
+
+```text
+practical枠 : candidate.category === 'practical'
+ideal枠     : candidate.category === 'ideal'
+```
+
+B9でいう「次のPractical」は「Practical条件を満たす任意のCandidate」ではなく、
+`category === 'practical'` のCandidateを指す。
+
+- 同一Candidateが2枠を同時に埋める設計にしない
+- Ideal候補をpractical枠の解として採用しない
+- Target Domainの Ideal ⇒ Practical 包含不変条件
+  ([DATA_MODEL.md](./DATA_MODEL.md) 8.1)は変更しない。包含は条件充足の関係であり、
+  `CandidateCategory` の排他性とは別の層である
+
+したがってwhat-if結果では、practical枠とideal枠が独立に充足・未充足・打ち切りになり得る。
+
+#### 9.2.4.3 「次」のordering authority
+
+**重要。** B9の「次に実行可能」は次で定義する。
+
+```text
+対象CandidateCategory内で compareConstrainedCandidates() 順に最小であり、
+かつscenario固定制約下のPlanner full rerun + Trace Replayによって
+共存可能性が証明されたCandidate
+```
+
+禁止。
+
+```text
+visitConstrainedCandidates() で最初にdeliveryされたCandidateを
+そのまま「次」と決める
+```
+
+理由。`visitConstrainedCandidates()` のincremental delivery orderはfrontierの
+best-first traversal orderであり、`enumerateConstrainedCandidates()` が最後に適用する
+`compareConstrainedCandidates()` のfinal sorted orderと一致するとは限らない。B9の
+semantic outcomeは後者を基準に固定する。
+
+- ordering authorityは既存の `compareConstrainedCandidates()` とする
+- B9専用のcomparatorやscoreを新設しない
+- 実装方式(全列挙後にsortする / 同じ順序を保証する別consumerを組む)はB9-B1で決めてよい。
+  本節が固定するのはsemantic outcomeだけである
+- [SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.7のconstrained enumeration semantics
+  (route policy、yield条件、boundsのauthority、決定性、軸外Cross規則)は変更しない
+
+#### 9.2.4.4 3 participant以上と独立評価
+
+`PlanConflict.buildListEntryIds` は2件限定ではない([DATA_MODEL.md](./DATA_MODEL.md) 11.8)。
+B9は2 participantを前提にしない。
+
+1つのscenario固定Entryに対し、**unique非固定TargetWeaponごとに独立**へwhat-ifを求める。
+
+```text
+fixed A
+  -> Target B what-if (practical / ideal)
+  -> Target C what-if (practical / ideal)
+```
+
+各Targetの評価はすべて同じ前提から開始する。
+
+```text
+Planner開始時origin
+scenario固定制約
+その他のexplicit conflict resolution
+```
+
+禁止。
+
+```text
+Target Bのwhat-if Candidateを採用したinputでTarget Cの距離を測る
+```
+
+Target間の評価順によって距離が変わってはならない。非固定participantの列挙とTarget単位の
+dedupeは、9.2.14のconflict work規則と同じく
+`participant.buildListEntryId != fixedBuildListEntryId` かつ
+`participant.targetWeaponId !== fixedTargetWeaponId` を満たすものを対象とする。
+
+#### 9.2.4.5 scenario fixed authorityとpublic request
+
+B9のcallerに、B8のtransient DTO(`PlannerConstrainedConflictContext` /
+`PlannerFixedConflictConstraint`)を組み立てさせない。public概念requestは次とする。
+
+```ts
+interface PlannerWhatIfRequest {
+  plannerInput: PlannerInput;
+  scenarioResolution: PlannerConflictResolution;
+  bounds: PlannerWhatIfBounds;
+}
+```
+
+`PlannerWhatIfRequest` へ `ConstrainedEnumerationBounds` を追加しない。Application /
+Worker requestが運ぶboundsは `PlannerWhatIfBounds` だけである。Search Domainの探索範囲は
+Domain calculation側の別optionsとしてcaller必須で受け取る。
+
+```ts
+interface PlannerWhatIfCalculationOptions {
+  enumerationBounds: ConstrainedEnumerationBounds;
+  executionOptions?: PlannerExecutionOptions;
+}
+```
+
+責務分離は次とする。
+
+```text
+Application / Worker caller
+  PlannerWhatIfBounds を明示的に渡す
+
+Production Worker adapter
+  defaultConstrainedEnumerationBounds = 40 / 30 / 100 / 500 を
+  Domain calculation へ明示的に渡す
+
+Domain calculation
+  enumerationBounds を caller必須で受け取る。
+  default substitution / fallback / clamp / field-wise completion を行わない
+```
+
+これはB8-D1 / B8-E2bと同じ責務分離である。B8でも
+`PlannerConstrainedWorkerTaskInput` は `PlannerOrchestrationBounds` だけを運び、
+`ConstrainedEnumerationBounds` はProduction Worker adapterがWorker境界内で明示的に
+供給する。B9も同じ形にし、Application callerへSearch Domainの探索範囲を再記述させない。
+9.2.4.10のenumeration bounds契約と矛盾させない。
+
+`scenarioResolution` が唯一の仮想fixed authorityである。Domain内部でのmerge規則。
+
+```text
+plannerInput.conflictResolutions のうち
+scenarioResolution.conflictKey と同じ conflictKey のもの
+    -> scenarioResolution で置換する
+
+その他のexplicit resolution
+    -> そのまま保持する
+
+scenario keyが元inputに存在しない
+    -> scenarioResolution を追加する
+```
+
+merge後は既存authorityをそのまま使う。
+
+```text
+validatePlannerInput()
+preparePlannerInitialContext()
+conflict context生成
+fixed constraint構築
+```
+
+9.2.7の固定authority契約は変更しない。次からfixed sideを推論してはならない。
+
+```text
+PlanConflict.recommendedBuildListEntryId
+Planner score
+Beam Search bestState
+Target priority
+Candidate category
+Candidate similarity
+```
+
+`PlannerConflictResolution` の型、`PlanConflict.id` の生成規則、Beam Search内の
+resolution適用規則はいずれも変更しない。
+
+#### 9.2.4.6 `reusedExisting` のsemantics
+
+**重要。** B8 orchestrationの次の扱いをB9へ流用してはならない。
+
+```text
+B8 : reusedExisting === true -> trial 1消費、Beam再実行なし、そのtrialは不採用
+```
+
+B8でそれが成立するのは、同一のaugmented inputに対するcurrent Planner resultを既に
+保持しており、同じ入力を再実行しても結果が変わらないからである(9.2.14)。B9は
+baseline Planner resultを前提にせず、scenario固定制約下の実行可能性を新たに判定する。
+
+B9の規則。materializerが `reusedExisting === true` を返した場合。
+
+```text
+重複するBuildListEntryを追加しない
+その既存semantic Entryをtrial Entryとして使用する
+scenario固定制約下で preflight + full Planner rerun + Trace Replay を行う
+その結果で実行可能性を判定する
+```
+
+既存Entryであることだけを理由に、what-if Candidateから除外しない。
+
+#### 9.2.4.7 feasibility authority
+
+Candidateがwhat-if結果として `found` になる条件は次だけとする。
+
+```text
+full Planner rerun後の ProductionPlan.selectedBuildListEntryIds が
+  trial Entry ID を含む
+  かつ 全fixed Entry ID を含む
+```
+
+- 共存可能性の最終authorityは9.2.11のまま、既存Plannerの完全再実行とTrace Replayである
+- B9専用の簡易競合判定(`usedCounters.has(counter)` 等)を追加しない
+- B9はgenerated Entryをadoptしないため、9.2.14の
+  「以前adopt済みの全generated Entryがselectedであること」に相当する条件は存在しない
+- `completed === true` は要求しない。bound到達によるpartial Planでも、上記のEntryが
+  すべてselectedならfeasibilityを認めてよい
+- 9.2.3.1のinitial conflict preflightと全explicit resolutionの再対応付けは、B9でも
+  full Beam Searchの前に行う。preflightは `maxPlannerReruns` に数えない
+
+#### 9.2.4.8 transient only
+
+B9は永続化を行わない。
+
+```text
+BuildListEntryを永続化しない
+ProductionPlanを永続化しない
+what-if resultをIndexedDBへ保存しない
+Application / Persistenceの保存serviceを呼ばない
+```
+
+- materializeしたEntryはPlanner trial入力専用であり、破棄する
+- resultへ `ProductionPlan` を含めない
+- resultへCandidate IDやgenerated BuildListEntry IDを必須fieldとして要求しない。
+  B9のproduct requirementは距離比較であり、永続Candidate identityではない
+- 9.2.8の「trialで不採用だったCandidateは永続化しない」、9.2.15のPersistence契約、
+  および[DATA_MODEL.md](./DATA_MODEL.md) 11.1の「Candidate SnapshotをProductionPlanへ
+  埋め込まない」は変更しない
+
+#### 9.2.4.9 `PlannerWhatIfBounds`
+
+B9専用のboundsを新設する。B8の `PlannerOrchestrationBounds` を流用しない。
+
+```ts
+interface PlannerWhatIfBounds {
+  maxCandidateTrialsPerCategoryPerTarget: number;
+  maxPlannerReruns: number;
+}
+```
+
+両方とも次を満たす。
+
+```text
+finite integer
+>= 1
+caller必須指定
+validationのみ。repair / clamp / field-wise completion を行わない
+```
+
+**B9-A2ではProduction defaultを定義しない。** 根拠のない数値をProduction仕様として
+採用しない。Production defaultは後続の実Browser Worker benchmarkで決定する。
+
+`maxCandidateTrialsPerCategoryPerTarget` は次の組ごとに独立して数える。
+
+```text
+(conflict scenario, targetWeaponId, CandidateCategory)
+```
+
+```text
+Target B ideal     N trials
+Target B practical N trials
+Target C ideal     N trials
+Target C practical N trials
+```
+
+一方のcategoryがtrial capへ到達しても、他方のcategoryのtrialを禁止しない。
+
+1 trialの定義は次とする。
+
+```text
+対象categoryのCandidateをfeasibility判定の対象として取り上げた時点で1消費する
+```
+
+```text
+1消費する
+  reusedExisting のCandidate
+  preflightでrejectされたCandidate
+  full Planner rerunでrejectされたCandidate
+  found になったCandidate
+
+消費しない
+  別CandidateCategoryのCandidate
+  既にfoundを確定済みのcategoryのCandidate
+  enumeration bound到達やcancel等でfeasibility attemptへ到達しなかったCandidate
+```
+
+`reusedExisting` のCandidateも1消費する。重複するBuildListEntryは追加しないが、B9では
+9.2.4.6のとおりpreflightとfull Planner rerunを実際に行うためである。B8の
+`maxCandidateTrialsPerConflict` が `reusedExisting` をno-opとして1消費する扱いとは、
+根拠が異なる点に注意する。
+
+予期しないmaterialization error、prediction error、invariant violationは、trialの
+rejectionへ変換しない。既存のerror経路へそのまま伝播させる。
+
+`maxPlannerReruns` は、1つのwhat-if request全体で開始可能なfull Beam Searchの総数である。
+
+```text
+数える
+  Candidate trialのfull Beam Search
+  Production Plan生成内部のruntime unsupported retryで実際に開始するBeam Search
+
+数えない
+  preflight
+  validation
+  conflict context生成
+  Candidate enumeration
+  materialization
+```
+
+B9は「initial ordinary Planner run」を必須としない。B9の目的はPlan生成ではなく
+feasibility comparisonである。この点でB8-C4aの `maxPlannerReruns` とは数える対象が
+異なるため、名前が同じでも既定値を流用しない。
+
+#### 9.2.4.10 enumeration bounds
+
+B9は `ConstrainedEnumerationBounds` の意味とProduction defaultを変更しない。
+
+```text
+defaultConstrainedEnumerationBounds = 40 / 30 / 100 / 500
+```
+
+- B9 Domain calculationは、9.2.4.5の `PlannerWhatIfCalculationOptions.enumerationBounds`
+  としてenumeration boundsをcaller必須で受け取る。default substitution、fallback、
+  clamp、field-wise completionを行わない
+- `PlannerWhatIfRequest`、すなわちApplication / Worker requestへ
+  `ConstrainedEnumerationBounds` を追加しない。requestが運ぶboundsは
+  `PlannerWhatIfBounds` だけである
+- Production Worker adapterが、B8-D1 / B8-E2bと同じく
+  `defaultConstrainedEnumerationBounds` をWorker境界内でDomain calculationへ明示的に
+  渡す
+- B9-A2で新しいenumeration defaultを作らない
+- B9 benchmarkは、まずこの既存のProduction enumeration extentで測定する
+- B9に必要だからという理由だけでB8-B2のdefaultを再調整しない。実測で不足が判明した
+  場合は別のdecisionとして扱う
+
+#### 9.2.4.11 result / no-result契約
+
+概念resultは次とする。名称はB9-B1で調整してよいが、意味を変更しない。
+
+```ts
+interface PlannerWhatIfComparison {
+  conflictKey: string;
+  fixedBuildListEntryId: BuildListEntryId;
+  fixedTargetWeaponId: TargetWeaponId;
+  alternatives: PlannerWhatIfTargetComparison[];
+}
+
+interface PlannerWhatIfTargetComparison {
+  targetWeaponId: TargetWeaponId;
+  practical: PlannerWhatIfOutcome;
+  ideal: PlannerWhatIfOutcome;
+}
+
+interface PlannerWhatIfDistance {
+  estimatedOperationCount: number;
+  estimatedGogmaAdvance: number;
+  estimatedSkillAdvance: number;
+  estimatedNormalAdvance: number | null;
+}
+```
+
+`PlannerWhatIfOutcome` は最低限次を区別するtyped unionとする。
+
+```ts
+type PlannerWhatIfOutcome =
+  | { status: 'found'; distance: PlannerWhatIfDistance }
+  | { status: 'not_found_within_search_extent' }
+  | { status: 'stopped_by_enumeration_bound' }
+  | { status: 'stopped_by_candidate_trial_bound' }
+  | { status: 'stopped_by_planner_rerun_bound' }
+```
+
+意味。
+
+```text
+found
+  bound内のCandidateについてPlanner feasibilityが証明された
+
+not_found_within_search_extent
+  enumerationが exhausted === true で終わり、
+  そのcategoryにfeasibleなCandidateが無かった
+
+stopped_by_enumeration_bound
+  Candidate未発見のまま、Search extent boundによって未確認が残った
+
+stopped_by_candidate_trial_bound
+  Candidateはまだ残り得るが、そのcategoryのtrial予算を使い切った
+
+stopped_by_planner_rerun_bound
+  Candidate feasibilityを判定するBeam予算を使い切った
+```
+
+規則。
+
+- 「見つからない」と「上限で未確認」を同じ `null` へ潰さない。9.2.16の
+  「bound到達を無言でexhaustionとして扱わない」をB9でも維持する
+- 既に `found` を確定したcategoryは、その後enumeration boundへ達したことだけを理由に
+  無効化しない
+- `found` の判定authorityは9.2.4.7だけであり、message文字列をcontrol authorityにしない
+
+scenario固定制約を安全に構築できない場合は、comparison全体をtyped failureとする。
+
+```text
+invalid_fixed_resolution
+planner_input_not_ready
+```
+
+正確な型名はB9-B1で調整してよい。次を守る。
+
+```text
+message parsingをcontrol authorityにしない
+recommendedBuildListEntryId等から代替のfixed Entryを選ばない
+```
+
+#### 9.2.4.12 warning / cancellation契約
+
+B9は9.2.16のB8専用 `PlannerWarningKind` を生成しない。
+
+```text
+max_candidate_trials_per_conflict_reached
+max_generated_build_list_entries_reached
+max_planner_reruns_reached
+constrained_enumeration_bound_reached
+```
+
+これらはB8 orchestrationのbound signalであり、数える対象と発生条件がB9とは異なる
+(9.2.4.9)。B9の打ち切り理由は `PlannerWhatIfOutcome` などのB9専用typed statusで表す。
+ordinary Planner内部のwarningをB9のbound signalへ読み替えない。
+
+cancellationはWorker / Client requestのcancellationとして扱う。
+
+- `cancelled` を `PlannerWhatIfOutcome` へ含めない
+- cancelされたrequestのpartial comparison resultを、正常なresultとして返さない
+- 既存のtask generation / stale response / cancel semantics(B8-D1)をB9-Cで再利用する
+
+#### 9.2.4.13 B9とB10の責務分離
+
+```text
+B9
+  Domain what-if calculation
+  PlannerWhatIfBounds
+  Worker protocol / routing
+  Production Worker adapter
+  PlannerWorkerClient API
+  benchmarkとProduction default決定
+
+B10
+  Conflict選択UI
+  what-if距離の表示
+  比較カード
+  選択不可表示と理由提示
+  what-if requestの起動
+```
+
+[UI_FLOW.md](./UI_FLOW.md) 11章の「将来のwhat-if比較」はB10の表示責務であり、その距離を
+計算するDomain / Worker / Application APIがB9である。
 
 ### 9.2.5 初回Search pruningを永久除外にしないこと
 
