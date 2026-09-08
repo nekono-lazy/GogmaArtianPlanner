@@ -67,8 +67,10 @@ export interface PlannerWorkerClient {
    * The B8-D1 Planner-driven constrained re-search entry point.
    *
    * `orchestrationBounds` is caller-required: this client applies no default
-   * and no clamping, because the three orchestration bounds have no Production
-   * value until the B8-E benchmark. `ConstrainedEnumerationBounds` is not a
+   * and no clamping. B8-E2b decided the Production value
+   * (`defaultPlannerOrchestrationBounds`, `2 / 1 / 4`), but choosing to pass it
+   * belongs to the Application caller, not here.
+   * `ConstrainedEnumerationBounds` is not a
    * parameter - the Production Worker adapter passes the B8-B2
    * `defaultConstrainedEnumerationBounds` inside the Worker boundary.
    *

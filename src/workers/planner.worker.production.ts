@@ -32,8 +32,11 @@ export function createProductionPlannerWorkerDependencies(): PlannerDependencies
  *   result, imported from its Search Domain authority rather than restated - is
  *   passed explicitly as the enumeration extent.
  * - The caller's `PlannerOrchestrationBounds` is forwarded unchanged: no
- *   Production default, no clamping, and no field-wise completion. Those three
- *   bounds are decided by the B8-E benchmark.
+ *   default substitution, no clamping, and no field-wise completion. The
+ *   Production default now exists as `defaultPlannerOrchestrationBounds`
+ *   (B8-E2b, `2 / 1 / 4`), but this adapter still forwards the caller-supplied
+ *   wire value unchanged. Application callers decide when to use the Production
+ *   default; the Worker never overrides what the request carried.
  */
 export const createProductionConstrainedPlan: CreateConstrainedProductionPlanCalculation =
   (input, orchestrationBounds, dependencies, executionOptions) =>

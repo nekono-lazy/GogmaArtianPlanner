@@ -13,12 +13,13 @@ import type {
  * never appear in `ConstrainedCandidateSearchInput`, and
  * `CandidateSearchSettings` is not reused for either.
  *
- * There is deliberately **no Production default** for them. The cost of one
- * Planner rerun cannot be measured before the orchestration that performs it
- * exists, so B8-C keeps them caller-required and B8-E fixes their defaults from
- * a Browser / Planner benchmark. Do not add `defaultPlannerOrchestrationBounds`,
- * and do not derive a value from `CandidateSearchSettings` or from
- * `defaultConstrainedEnumerationBounds`.
+ * The cost of one Planner rerun cannot be measured before the orchestration
+ * that performs it exists, so B8-C kept them caller-required and B8-E decided
+ * their Production default from a real Browser / Planner benchmark. That
+ * default is `defaultPlannerOrchestrationBounds` below. It is still not derived
+ * from `CandidateSearchSettings` or from `defaultConstrainedEnumerationBounds`,
+ * and it is never applied implicitly: every API here keeps the bounds
+ * caller-supplied, and an Application caller decides when to pass the default.
  */
 export interface PlannerOrchestrationBounds {
   /** Candidate trials attempted for one conflict before the trial loop stops. */
@@ -36,6 +37,51 @@ export interface PlannerOrchestrationBounds {
    * which run a Beam Search.
    */
   maxPlannerReruns: number
+}
+
+/**
+ * The Production `PlannerOrchestrationBounds`, decided in B8-E2b from the
+ * B8-E2a real Browser measurement of the Production Planner Worker
+ * (`docs/B8_PLANNER_ORCHESTRATION_BROWSER_WORKER_BENCHMARK.md` 10-11).
+ *
+ * ```text
+ * maxCandidateTrialsPerConflict = 2
+ * maxGeneratedBuildListEntries  = 1
+ * maxPlannerReruns              = 4
+ * ```
+ *
+ * `2` is the smallest measured trial count that adopted a generated Entry in
+ * workloads B and C; both adopt nothing at `1`. Above `2`, neither workload
+ * produced a better semantic outcome. Workload C's isolated trial sweep, with
+ * the other two bounds held fixed, showed latency growing as the trial budget
+ * grew, while workload B's timings above `2` were non-monotonic within
+ * measurement noise. The decision rests on the absent semantic gain, not on a
+ * uniform latency increase.
+ *
+ * `4` is not an independent per-field minimum. `maxPlannerReruns` counts the
+ * first ordinary Beam Search as well, so it is not comparable field-for-field
+ * with the trial count. The measured authority is the finalist tuple
+ * `2 / 1 / 4` as a whole, which reached the same semantic outcome as the far
+ * larger bounds on workloads B, C, D and E, and had the lowest aggregate median
+ * latency across those four workloads among the three finalists. It is not the
+ * fastest on every workload taken alone: `4 / 1 / 8` had a lower median on
+ * B and on C.
+ *
+ * `maxGeneratedBuildListEntries = 1` is **not** the Domain maximum number of
+ * generated BuildListEntries. It is the measured Production default: B8-E1 and
+ * B8-E2a never observed a Production-valid two-Entry adoption, and raising the
+ * cap to 2 or 4 on workload D adopted no additional Entry while nearly doubling
+ * the latency. If a Production-valid two-Entry adoption is ever observed, this
+ * value becomes a re-benchmark target - it is not a Domain rule to defend.
+ *
+ * This constant is data for callers. It is never substituted for an invalid
+ * caller value, never clamped towards, and never applied implicitly inside the
+ * Domain, the Planner Worker adapter, or the Planner Worker client.
+ */
+export const defaultPlannerOrchestrationBounds: PlannerOrchestrationBounds = {
+  maxCandidateTrialsPerConflict: 2,
+  maxGeneratedBuildListEntries: 1,
+  maxPlannerReruns: 4,
 }
 
 function issue(
@@ -64,7 +110,8 @@ function positiveIntegerIssue(value: number, path: string) {
 
 /**
  * Pure validation. It never mutates the input and never repairs a value to a
- * default, because no Production default exists to repair towards.
+ * default: `defaultPlannerOrchestrationBounds` is a caller-facing Production
+ * value, not a repair target for a malformed bound.
  */
 export function validatePlannerOrchestrationBounds(
   bounds: PlannerOrchestrationBounds,

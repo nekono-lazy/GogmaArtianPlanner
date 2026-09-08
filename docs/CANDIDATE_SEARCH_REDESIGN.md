@@ -484,7 +484,7 @@ B11 は実ゲーム観測を前提とする独立系列
 | B8-B2 | enumerator実Browser Worker benchmark | enumeration boundsのProduction default決定 | B8-B1。完了 |
 | B8-C | Planner conflict orchestration | 固定Candidate判定、Conflict Resolution再対応付け、deterministic materializer、augmented-input完全再実行。orchestration boundsはcaller必須指定のまま | B8-B1 |
 | B8-D | Worker / Application / Persistence | atomic save、既存UIへの最小配線 | B8-C |
-| B8-E | orchestration Browser / Planner benchmark | orchestration boundsのProduction default決定 | B8-D |
+| B8-E | orchestration Browser / Planner benchmark | orchestration boundsのProduction default決定 | B8-D。**完了**。B8-E1 harness / B8-E2a real Browser measurement / B8-E2b default決定 `2 / 1 / 4`（4.15章、`B8_PLANNER_ORCHESTRATION_BROWSER_WORKER_BENCHMARK.md` 10-11章） |
 | B9 | what-if比較 | 一方固定時の他方の次のPractical / Idealまでの距離算出と提示 | B8-E |
 | B10 | 競合UI | 競合候補の除外 / 選択不可表示と理由提示 | B8-E |
 | B11 | normal-tier Keep prediction semantics | 実ゲーム観測 -> game-verified fixture -> Production prediction実装。Search / Planner / Domain検証の除外解除 | 実ゲーム観測 |
@@ -841,6 +841,8 @@ B8-Aで確定しなかった点。
   `maxGeneratedBuildListEntries` / `maxPlannerReruns`)。Planner再実行1回のコストは
   B8-C / B8-Dのorchestration実装が無ければ測定できないため、B8-B2では決めない。
   B8-C / B8-Dはcaller必須指定のまま実装し、B8-Eのbenchmark後に決定する
+  -> **B8-E2bで決定済み**(4.15章、`2 / 1 / 4`)。B8-A時点でdefaultを持たなかったことは
+  この記録のとおりであり、値は後からB8-E2aの実測で決まった
 - constrained enumeratorの具体的な探索スケジューリング(lazy frontier / best-first等)
 - `PlannerOrchestrationResult` およびconstrained search API群の最終的な型名
 
@@ -2028,6 +2030,11 @@ Production defaultはB8-Eのbenchmark後である。`defaultPlannerOrchestration
 `CandidateSearchSettings` や `defaultConstrainedEnumerationBounds` からのfallbackも
 実装していない。
 
+-> `defaultPlannerOrchestrationBounds` は**B8-E2bで追加済み**(4.15章、`2 / 1 / 4`)。
+値はB8-E2aの実測から決めたものであり、`CandidateSearchSettings` /
+`defaultConstrainedEnumerationBounds` からのfallback・clamp・repairは
+B8-E2b以降も実装していない。validationはcaller supplied値の純粋validationのままである。
+
 #### maxPlannerReruns budget
 
 budgetは `ProductionPlanGenerationObserver` の形をしており、
@@ -2302,6 +2309,10 @@ createProductionPlanWithConstrainedSearch()
 複写していない。orchestration boundsは変換・clamp・default補完を行わず、同一参照のまま
 渡す。`defaultPlannerOrchestrationBounds` 相当のProduction defaultは追加していない。
 その3値はB8-E benchmarkがauthorityである。
+
+-> B8-E2bで `defaultPlannerOrchestrationBounds` = `2 / 1 / 4` が決まった後も、
+このadapterは**caller supplied boundsを同一参照のままforwardする**。Worker内で
+defaultへ置換しない。defaultを使うかどうかはApplication caller側の判断である(4.15章)。
 
 #### Worker controller
 
@@ -2734,6 +2745,98 @@ Production codeの変更は0ファイルである。
 
 B8-E2: 実Browser計測と `PlannerOrchestrationBounds` のProduction default決定。
 その後B8-D2b: BuildListPageのconstrained経路切替。
+
+### 4.15 B8-E2 implementation record
+
+**B8-E2a complete / B8-E2b complete。B8-E complete。次PhaseはB8-D2b。**
+
+B8-E2aは実Browser計測タスクである。実Chromiumページで `benchmark.html` と
+実Production Planner Worker bundleを動かし、174 runを記録した。Vitest実行時間・
+Node直接実行・jsdom・Fake Worker・FakeRngEngine・main-thread直接呼出し・推定値は
+使用していない。測定手順と全raw測定表は
+[B8_PLANNER_ORCHESTRATION_BROWSER_WORKER_BENCHMARK.md](./B8_PLANNER_ORCHESTRATION_BROWSER_WORKER_BENCHMARK.md)
+10章にある。
+
+B8-E2bはowner decisionによるProduction default確定である。
+
+```ts
+export const defaultPlannerOrchestrationBounds: PlannerOrchestrationBounds = {
+  maxCandidateTrialsPerConflict: 2,
+  maxGeneratedBuildListEntries: 1,
+  maxPlannerReruns: 4,
+}
+```
+
+```text
+Production tuple  2 / 1 / 4
+実装位置          src/domain/planner/constrained/plannerOrchestrationBounds.ts
+public export     src/domain/planner（既存 constrained/index.ts 経由。新規cycleなし）
+決定根拠          B8-E2a実測（同文書10章）とfinalist比較（同10.9）
+decision record   同文書11章
+```
+
+決定根拠の要点。
+
+- `maxCandidateTrialsPerConflict = 2` は、generated Candidateがadoptされる
+  測定上の最小trial数である。workload B / C とも trial=1 では adopt 0 であった。
+  `trial > 2` でsemantic outcomeの改善は観測されなかった。latencyの挙動は
+  workloadで異なり、Cのisolated trial sweep（generated / rerun固定）では
+  trial増加に伴って追加costが増加した一方、Bのlatencyは非単調だった。
+  したがってdecisionの根拠はsemantic改善が無かったことだけであり、
+  「trialを増やすと必ずコストが増える」ではない
+- `maxPlannerReruns` は initial ordinary Beam を含めて数えるため、trial数と
+  同じ単位で比較できない。実測でも rerun=1 は ordinary Beam だけで終了した。
+  したがってfield単位の最低値ではなく、**finalist tuple `2/1/4` 全体**を
+  authorityとする。`2/1/4` は workload B / C / D / E のすべてで
+  large-bounds側と同じ semantic outcome へ到達した
+- `maxGeneratedBuildListEntries = 1` は
+  **Domain上の最大generated Entry数を意味しない**。B8-E1 / B8-E2aで
+  Production-validな2件adoptを確認できていないという観測事実に基づく現行default
+  であり、workload D では cap を 2 / 4 へ上げても adopt件数は 1 のままで
+  latencyだけが増えた。将来Production-validな2件adoptが確認された場合は
+  再benchmark対象である
+
+default追加にあたって次は行っていない。
+
+```text
+clamp
+invalid valueのrepair / field-wise completion
+fallback mutation
+CandidateSearchSettings からの導出
+defaultConstrainedEnumerationBounds からの導出
+benchmark-only sweep定数のProduction import
+```
+
+`validatePlannerOrchestrationBounds()` / `assertPlannerOrchestrationBounds()` は
+caller supplied値の純粋validationのままで、invalid値はfail closedする。
+`planner.worker.production.ts` と `PlannerWorkerClient` も
+caller supplied boundsをそのままforwardし、defaultへ置換しない。
+defaultを実際に渡すApplication側の配線はB8-D2bで行う。
+
+B8-E2は次を変更していない。
+
+```text
+Planner orchestration algorithm / Beam Search / Trace Replay
+Search Domain / constrained enumerator
+Persistence / Worker protocol / PlannerWorkerClient API
+BuildListPage / ProductionPlanPage / ExecutionNavigator
+CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2
+DATABASE_SCHEMA_VERSION = 1
+AppSettings.schemaVersion = 1
+PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2
+supportsSeedSearch = false
+defaultConstrainedEnumerationBounds = 40 / 30 / 100 / 500
+defaultCandidateSearchSettings
+defaultPlannerOptions
+```
+
+DB schema bumpは不要である。
+
+#### next
+
+B8-D2b: BuildListPageのconstrained経路切替。
+`createConstrainedPlan()` へ `defaultPlannerOrchestrationBounds` を渡し、
+B8-D2aのatomic saveへ接続する。
 
 ---
 

@@ -1537,6 +1537,26 @@ B8-E  : B8-C / B8-D実装後にorchestration側のBrowser / Planner benchmarkを
 B8-C / B8-Dのorchestration実装が存在しなければ測定できない。したがってB8-B2の
 enumerator benchmarkでこれらのdefaultを決めない。
 
+implementation mapping（normativeなbounds semanticsではない）。
+
+```text
+Production default selected by B8-E2 Browser benchmark:
+2 / 1 / 4
+  maxCandidateTrialsPerConflict = 2
+  maxGeneratedBuildListEntries  = 1
+  maxPlannerReruns              = 4
+実装: defaultPlannerOrchestrationBounds
+      src/domain/planner/constrained/plannerOrchestrationBounds.ts
+記録: docs/B8_PLANNER_ORCHESTRATION_BROWSER_WORKER_BENCHMARK.md 10-11章
+```
+
+この3値は**Domain validity ruleではない**。validityの契約は本節と実装の
+`validatePlannerOrchestrationBounds()` が定めるとおり「finite integer かつ `>= 1`」の
+ままであり、defaultはその範囲内でcallerが選べる1点にすぎない。boundsは引き続き
+caller-supplied typeであり、invalid値をdefaultへrepair・clamp・field-wise completion
+してはならない。`maxGeneratedBuildListEntries = 1` はDomain上の最大generated Entry数を
+意味しない。
+
 どちらのboundsも、到達した場合は打ち切りをenumeration summaryまたはwarningとして
 明示する。bound到達を無言でexhaustionとして扱わない。
 

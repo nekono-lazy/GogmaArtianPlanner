@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   PlannerOrchestrationBoundsError,
   assertPlannerOrchestrationBounds,
+  defaultPlannerOrchestrationBounds,
   validatePlannerOrchestrationBounds,
   type PlannerOrchestrationBounds,
 } from './plannerOrchestrationBounds'
@@ -84,10 +85,60 @@ describe('PlannerOrchestrationBounds validation', () => {
     ).toThrow(PlannerOrchestrationBoundsError)
   })
 
-  it('exposes no Production default', async () => {
-    const module = await import('./plannerOrchestrationBounds')
-    expect(
-      Object.keys(module).some((name) => name.toLowerCase().startsWith('default')),
-    ).toBe(false)
+})
+
+describe('defaultPlannerOrchestrationBounds (B8-E2b Production default)', () => {
+  it('is exactly the 2 / 1 / 4 tuple decided from the B8-E2a Browser measurement', () => {
+    expect(defaultPlannerOrchestrationBounds).toEqual({
+      maxCandidateTrialsPerConflict: 2,
+      maxGeneratedBuildListEntries: 1,
+      maxPlannerReruns: 4,
+    })
   })
+
+  it('passes its own validation and assertion', () => {
+    expect(
+      validatePlannerOrchestrationBounds(defaultPlannerOrchestrationBounds),
+    ).toEqual({ isValid: true, issues: [] })
+    expect(() =>
+      assertPlannerOrchestrationBounds(defaultPlannerOrchestrationBounds),
+    ).not.toThrow()
+  })
+
+  it('is re-exported from the Planner public API', async () => {
+    const planner = await import('../index')
+    expect(planner.defaultPlannerOrchestrationBounds).toEqual(
+      defaultPlannerOrchestrationBounds,
+    )
+  })
+
+  it('accepts a valid caller-supplied non-default value unchanged', () => {
+    const callerBounds = bounds({
+      maxCandidateTrialsPerConflict: 7,
+      maxGeneratedBuildListEntries: 3,
+      maxPlannerReruns: 11,
+    })
+    const before = structuredClone(callerBounds)
+
+    expect(validatePlannerOrchestrationBounds(callerBounds).isValid).toBe(true)
+    expect(() => assertPlannerOrchestrationBounds(callerBounds)).not.toThrow()
+    expect(callerBounds).toEqual(before)
+    expect(callerBounds).not.toEqual(defaultPlannerOrchestrationBounds)
+  })
+
+  it.each(fields)(
+    'fails closed on an invalid %s instead of repairing it towards the default',
+    (field) => {
+      const invalid = bounds({ [field]: 0 })
+      const before = structuredClone(invalid)
+
+      expect(validatePlannerOrchestrationBounds(invalid).isValid).toBe(false)
+      expect(() => assertPlannerOrchestrationBounds(invalid)).toThrow(
+        PlannerOrchestrationBoundsError,
+      )
+      // No field was completed from the Production default.
+      expect(invalid).toEqual(before)
+      expect(invalid[field]).toBe(0)
+    },
+  )
 })

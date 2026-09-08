@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { defaultPlannerOptions } from '../domain/planner'
+import {
+  defaultPlannerOptions,
+  defaultPlannerOrchestrationBounds,
+} from '../domain/planner'
 import type {
   PlannerDependencies,
   PlannerInput,
@@ -114,6 +117,37 @@ describe('Production constrained Planner Worker adapter (B8-D1)', () => {
       'executionOptions',
       'orchestrationBounds',
     ])
+  })
+
+  it('still forwards caller bounds unchanged now that a Production default exists (B8-E2b)', async () => {
+    orchestration.createProductionPlanWithConstrainedSearch.mockClear()
+    orchestration.createProductionPlanWithConstrainedSearch.mockResolvedValue(
+      emptyResult(),
+    )
+    // Every field differs from the B8-E2b Production default, so a silent
+    // substitution or a field-wise completion towards 2 / 1 / 4 would show.
+    const orchestrationBounds: PlannerOrchestrationBounds = {
+      maxCandidateTrialsPerConflict: 5,
+      maxGeneratedBuildListEntries: 2,
+      maxPlannerReruns: 9,
+    }
+    const before = structuredClone(orchestrationBounds)
+
+    await createProductionConstrainedPlan(
+      plannerInput(),
+      orchestrationBounds,
+      createProductionPlannerWorkerDependencies(),
+      { shouldCancel: () => false },
+    )
+
+    const [, , calledOptions] =
+      orchestration.createProductionPlanWithConstrainedSearch.mock.calls[0]
+    expect(calledOptions.orchestrationBounds).toBe(orchestrationBounds)
+    expect(calledOptions.orchestrationBounds).toEqual(before)
+    expect(calledOptions.orchestrationBounds).not.toEqual(
+      defaultPlannerOrchestrationBounds,
+    )
+    expect(orchestrationBounds).toEqual(before)
   })
 
   it('adds no Production PlannerOrchestrationBounds default of its own', async () => {

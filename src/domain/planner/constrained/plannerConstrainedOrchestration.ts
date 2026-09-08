@@ -274,9 +274,10 @@ type CandidateOutcome = 'adopted' | 'rejected' | 'stop'
 /**
  * Runs the whole Planner-driven constrained re-search (PLANNER_SPEC 9.2.6).
  *
- * Both bounds sets stay caller-supplied: there is no Production default for
- * either here, and B8-D passes `defaultConstrainedEnumerationBounds`
- * explicitly while the three orchestration bounds wait for the B8-E benchmark.
+ * Both bounds sets stay caller-supplied: neither Production default is applied
+ * here. B8-D passes `defaultConstrainedEnumerationBounds` explicitly, and the
+ * B8-E2b `defaultPlannerOrchestrationBounds` is likewise chosen by the caller
+ * rather than substituted by this function.
  *
  * The Search Domain never learns anything about the Planner side: the
  * enumerator receives only the origin, a TargetWeapon ID, and

@@ -51,9 +51,10 @@ export interface PlannerTaskGeneration {
 /**
  * Everything the constrained request structured-clones.
  *
- * `PlannerOrchestrationBounds` is caller-required (PLANNER_SPEC 9.2.16): there
- * is no Production default for it until B8-E, so it must cross the Worker
- * boundary explicitly. `ConstrainedEnumerationBounds` deliberately does *not*
+ * `PlannerOrchestrationBounds` is caller-required (PLANNER_SPEC 9.2.16). B8-E2b
+ * decided a Production default (`defaultPlannerOrchestrationBounds`), but the
+ * Worker never applies it, so the bounds must still cross the Worker boundary
+ * explicitly. `ConstrainedEnumerationBounds` deliberately does *not*
  * appear here - the Production Worker adapter supplies the B8-B2
  * `defaultConstrainedEnumerationBounds` inside the Worker boundary, so an
  * Application caller never restates a Search-domain extent.
