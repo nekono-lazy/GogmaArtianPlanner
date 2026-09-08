@@ -3027,6 +3027,177 @@ B9-B1 Domain what-if calculation。B10競合UI、B11 normal-tier Keep prediction
 
 ---
 
+### 4.18 B9-B1a implementation record
+
+B9-B1a = 完了。B9-B1のうちDomain foundationだけを実装した。Candidate enumeration、
+materialization、full Beam trial loop、distance算出はB9-B1bである。契約本文は
+[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.4.1〜9.2.4.13にあり、B9-B1aはそのnormative
+semanticsを変更していない。
+
+#### 実装したもの
+
+```text
+src/domain/planner/constrained/plannerWhatIfBounds.ts
+src/domain/planner/constrained/plannerWhatIfTypes.ts
+src/domain/planner/constrained/plannerWhatIfScenario.ts
+```
+
+`PlannerWhatIfBounds` は `maxCandidateTrialsPerCategoryPerTarget` /
+`maxPlannerReruns` の2値で、どちらもfinite integer `>= 1`。
+`validatePlannerWhatIfBounds()` はpure validationで、repair / clamp /
+field-wise completionを行わない。`assertPlannerWhatIfBounds()` は
+`PlannerWhatIfBoundsError` でfail closedする。`validatePlannerOrchestrationBounds()`
+と同じ形にそろえたが、型は別である。
+
+**Production defaultは定義していない。** `defaultPlannerWhatIfBounds` は存在せず、
+`defaultPlannerOrchestrationBounds = 2 / 1 / 4` も `CandidateSearchSettings` も
+流用していない (9.2.4.9)。テストは public Domain surface に
+`defaultPlannerWhatIfBounds` が無いことを確認する。
+
+public Domain typeは `PlannerWhatIfRequest` / `PlannerWhatIfCalculationOptions` /
+`PlannerWhatIfDistance` / `PlannerWhatIfOutcome` /
+`PlannerWhatIfTargetComparison` / `PlannerWhatIfComparison` /
+`PlannerWhatIfCalculationResult` を定義した。requestへ
+`ConstrainedEnumerationBounds` を入れず、Domain calculation側の
+`PlannerWhatIfCalculationOptions.enumerationBounds` をcaller必須にした
+(9.2.4.5 / 9.2.4.10)。resultに `ProductionPlan` は含めず、Candidate IDと
+generated Entry IDも必須fieldにしていない。`cancelled` は
+`PlannerWhatIfOutcome` に含めない。
+
+failureは `planner_input_not_ready` と `invalid_fixed_resolution` のtyped result
+とした。後者の `reason` は `scenario_resolution_not_valid` /
+`fixed_constraints_unresolved` / `scenario_constraint_missing` である。
+`detail` はdiagnostic文字列であり、control authorityはあくまでtyped
+status / reasonである。
+
+#### scenario resolution merge
+
+`mergePlannerWhatIfScenarioResolution()` は同一 `conflictKey` のresolutionを
+scenarioで置換し、他のexplicit resolutionを保持し、keyが無ければ追加する。
+元 `PlannerInput` とその配列をmutateしない。
+
+malformed inputをrepairしない。元inputに同一 `conflictKey` が2件あればmerge後も
+2件のまま残し、`validatePlannerInput()` の重複key検出でfail closedできる状態を
+維持する。merge自体はvalidation bypass、duplicate repair、invalid resolution削除の
+いずれも行わない。
+
+#### scenario preparation
+
+`preparePlannerWhatIfScenario()` の順序は次である。既存authorityを再利用し、
+validation / initial state / entry relevance / route unit plan / conflict detection
+のいずれも複製していない。
+
+```text
+assertPlannerWhatIfBounds
+  -> mergePlannerWhatIfScenarioResolution
+  -> preparePlannerInitialContext
+  -> scenario exact pairがvalidConflictResolutionsに残っているかを確認
+  -> createPlannerConstrainedConflictContexts
+  -> preparePlannerFixedConflictConstraints (valid explicit resolution全件)
+  -> scenario constraintをexactly one特定
+  -> createConstrainedSearchOriginFromPlannerInput
+  -> createPlannerConflictWorks([scenarioConstraint], conflictContexts)
+```
+
+`preparePlannerInitialContext()` が `ready` でも、scenarioが有効とは限らない。
+`validatePlannerInput()` は選択Entryがmissing / stale / excludedのresolutionを
+warningだけ出して `validConflictResolutions` から落とすため、ready取得後に
+`(conflictKey, selectedBuildListEntryId)` のexact pairが残っているかを確認し、
+無ければ `scenario_resolution_not_valid` でfail closeする。別Entryは選ばない。
+
+fixed constraintはvalid explicit resolution**全件**から構築する。1件でも構築できな
+ければB8と同じall-or-nothingで `fixed_constraints_unresolved` とし、comparisonを
+開始しない。
+
+what-if subjectはscenario conflictだけなので、work生成は
+`createPlannerConflictWorks([scenarioConstraint], conflictContexts)` である。
+全fixed constraintを渡すと他のexplicit resolutionまでwhat-if対象になるため行わない。
+他のfixed constraintsはB9-B1bのpreflight / full rerun feasibility制約として
+`PreparedPlannerWhatIfScenario.fixedConstraints` に保持する。
+
+`PlanConflict.recommendedBuildListEntryId` がscenario選択と別Entryを指していても、
+固定されるのは `scenarioResolution.selectedBuildListEntryId` だけである
+(9.2.7)。score / bestState / priority / category / similarityも固定authorityに
+していない。
+
+`PreparedPlannerWhatIfScenario` はinternal transient typeであり、
+`plannerWhatIfScenario.ts` からのみ提供する。`constrained/index.ts` からは
+`plannerWhatIfBounds` と `plannerWhatIfTypes` だけをexportし、不要なpublic surfaceを
+増やしていない。
+
+#### テスト
+
+```text
+src/domain/planner/constrained/plannerWhatIfBounds.test.ts
+src/domain/planner/constrained/plannerWhatIfScenario.test.ts
+```
+
+bounds: `1 / 1` とpositive integerがvalid。0 / negative / fraction / NaN /
+Infinity / -Infinity がinvalid。invalidで `PlannerWhatIfBoundsError`。input
+mutationなし。default substitutionなし。`defaultPlannerWhatIfBounds` 不在。
+
+merge: replace / add / 元input未変更 / 無関係fieldの保持 / malformed duplicateの
+保持、および保持したduplicateが `planner_input_not_ready` へ落ちること。
+
+preparation: valid scenarioでready contextが `mergedInput` / origin /
+all fixed constraints / scenario constraint / scenario-only worksを持つこと。
+originがPlanner-start snapshotのみで構成されること。3 participantでunique非固定
+Targetごとに1 workになること。scenario以外のvalid resolutionが保持され、works
+だけがscenario conflict由来になること。request inputをmutateしないこと。
+
+failure: scenario validation drop → `scenario_resolution_not_valid` かつ代替Entry
+選択なし。conflict未検出 / 選択Entryが非participant → `fixed_constraints_unresolved`。
+invalid Planner options → `planner_input_not_ready`。invalid bounds → throw。
+
+inference prohibition: `recommendedBuildListEntryId` がscenario選択と異なる場合でも、
+scenario選択だけがfixed constraintになること。
+
+#### B9-B1bに残るもの
+
+```text
+enumerateConstrainedCandidates / visitConstrainedCandidates
+compareConstrainedCandidates順のCandidate走査
+Candidate materialization trial loop
+trial counting (category / Target単位)
+reusedExisting feasibility
+preparePlannerAugmentedConflictPreflight呼出し
+createProductionPlanWithObserver によるfull rerun + Trace Replay
+Beam budget消費
+PlannerWhatIfDistance算出とoutcome判定
+```
+
+Worker protocol / Production adapter / PlannerWorkerClient / UI / Persistence /
+benchmark / Production defaultはB9-C以降で、B9-B1aでは触っていない。
+
+#### 変更していないもの
+
+```text
+PLANNER_SPEC normative semantics
+B8 orchestration semantics
+createProductionPlanWithConstrainedSearch behavior
+plannerOrchestrationBounds / defaultPlannerOrchestrationBounds = 2 / 1 / 4
+ConstrainedEnumerationBounds / defaultConstrainedEnumerationBounds = 40 / 30 / 100 / 500
+Search constrained enumeration / compareConstrainedCandidates / materializer
+augmented preflight / Beam Search / Trace Replay
+Worker protocol / PlannerWorkerClient / BuildListPage
+Persistence / Dexie / ProductionPlan / BuildListEntry shape
+Candidate category semantics
+CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2
+DATABASE_SCHEMA_VERSION = 1
+AppSettings.schemaVersion = 1
+PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2
+supportsSeedSearch = false
+defaultCandidateSearchSettings / defaultPlannerOptions
+```
+
+#### next
+
+B9-B1b Domain what-if calculation本体。B9-C Worker / adapter / client、
+B9-B2 benchmarkとProduction default決定、B10競合UI、B11 normal-tier Keep prediction
+semanticsは従来どおり別タスクである。
+
+---
+
 ## 5. B1 / B2に残る設計判断
 
 以下はB0で決めきらず、実装時にコードを見て決める。
