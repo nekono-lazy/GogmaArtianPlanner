@@ -2638,6 +2638,103 @@ B8-E: orchestration Browser / Planner benchmarkと
 `PlannerOrchestrationBounds` のProduction default決定。
 その後B8-D2b: BuildListPageのconstrained経路切替。
 
+### 4.14 B8-E1 implementation record
+
+B8-Cは完了、B8-D1は完了、B8-D2aは完了、**B8-E1は完了、B8-E全体は未完了**である。
+
+B8-E1はharnessとProduction-valid workloadだけを対象とする。
+**Production defaultは決めていない。** `PlannerOrchestrationBounds` のProduction
+defaultは依然として存在せず、caller必須指定のままである。
+
+計測手順・timing boundary・fresh Worker policy・result normalization・workload定義は
+[B8_PLANNER_ORCHESTRATION_BROWSER_WORKER_BENCHMARK.md](./B8_PLANNER_ORCHESTRATION_BROWSER_WORKER_BENCHMARK.md)
+に記録した。
+
+timing pathは実Production経路である。
+
+```text
+createProductionPlannerWorkerClient()
+  -> planner.worker.entry.ts
+  -> Production Worker adapter (defaultConstrainedEnumerationBounds)
+  -> createProductionPlanWithConstrainedSearch()
+  -> ProductionRngEngine / Beam Search / Trace Replay
+```
+
+benchmark専用のPlanner Worker・Planner algorithm・Fake Engineは作っていない。
+`ConstrainedEnumerationBounds` はbenchmark requestに含めず、Production adapterが
+Worker境界の内側で供給する。
+
+#### 未確認: `generatedBuildListEntries.length >= 2` が未成立
+
+workload要件「generous boundsでgenerated Entry 2件以上」は、B8-E1の
+Production-valid調査では確認できなかった。owner decisionによりB8-E1のこの必須要件は
+免除され、**この未確認事項はB8-E2をブロックしない**。
+**「最大1件」をDomain invariantとして断定しない。** 詳細な調査記録は
+benchmark文書7.5にある。
+
+初版はここに「1 Counter位置 → 1 Route」を前提とした証明を書いていたが、それは現行
+Planner実装と一致しないため撤回した。`plannerRouteProgress.ts` の
+`actionIdentity()` は `reset_bonuses` / `keep_bonuses` /
+`sourceOwnedWeaponId != null` の `reset_skills` をshareableとして扱い、同一
+`physicalActionKey` のunitは `allOneShareablePhysicalAction()` によりcounter
+conflictにならない。すなわち `1 Counter position != 1 BuildListEntry` である。
+
+実Production予測だけで共有 `reset_skills` の構成を作って確認した結果は次である。
+
+```text
+generated A / B が同一 physicalActionKey、shareable = true
+両者間に same_skill_counter conflict は検出されない
+augmented preflight は ready
+Beam trace で1回の reset_skills が両Entryを progressed している
+```
+
+却下されているのはconflictでもshareabilityでもない。`reserve_weapon` は
+`existing_gogma_*` に対して同一source Gogma IDをin-place更新するため、共有physical
+actionから得られる物理武器は1本だけである。その1本をreserveすると
+`refreshTargetSatisfaction()` が同一 weaponType / element の全Targetを更新し、
+2件目のEntryは `entryIsRelevantForState()` の
+`!hasIdeal && (!hasPractical || category === 'ideal')` を満たさなくなって
+`targetCanUseEntry()` で除外される。rejectionsにも現れず、relevanceが消えるだけである。
+
+独立した2本のchainを作る方向も、Gogma / Skillの起点位置が各1つしか使えず、
+`use_weapon_as_material` はSearch / constrained enumeratorのどのroute emitterも
+生成しないため、B8-E1では2件目のadoptへ到達しなかった。
+
+確認できたのは「現行のProduction-valid workloadでは2件adoptを確認できなかった」
+という観測事実であり、一般証明ではない。`maxGeneratedBuildListEntries = 1 / 2 / 4`
+のうち2以上が有用であるケースも今回未確認である。B8-E2では、値を上げてadopt成功件数が
+増えることを今回のworkloadでは期待せず、cap = 1 と larger cap のあいだで追加の
+Candidate trial / Planner rerunコスト・warning kinds・outcomeKeyがどう変わるかを
+測定事実として扱う。Domain / Planner / conflict semanticsは変更していない。
+
+#### 変更していないもの
+
+```text
+PLANNER_SPEC normative semantics
+Planner Domain orchestration (B8-C)
+Worker protocol / Worker generation (B8-D1)
+Application / Persistence atomic save (B8-D2a)
+Search Domain / constrained enumerator
+BuildListPage createPlan/createConstrainedPlan切替
+PlannerOrchestrationBounds Production default
+既存3 benchmark（C5-E2C8 / B5 / B8-B2）とglobalThis.b8Benchmark
+CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2
+DATABASE_SCHEMA_VERSION = 1
+AppSettings.schemaVersion = 1
+PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2
+supportsSeedSearch = false
+defaultConstrainedEnumerationBounds = 40 / 30 / 100 / 500
+defaultCandidateSearchSettings = 1000 / 200 / 1000 / 200 / 0.6
+defaultPlannerOptions
+```
+
+Production codeの変更は0ファイルである。
+
+#### next
+
+B8-E2: 実Browser計測と `PlannerOrchestrationBounds` のProduction default決定。
+その後B8-D2b: BuildListPageのconstrained経路切替。
+
 ---
 
 ## 5. B1 / B2に残る設計判断
