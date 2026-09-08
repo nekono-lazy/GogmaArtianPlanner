@@ -1676,9 +1676,11 @@ B8-D   Worker / Application / Persistence / atomic save /
        既存UIへの最小配線
        D1 Worker protocol / routing / Production adapter /
           Worker Client                                        実装済み
-       D2 save-time再validation / atomic save / 最小UI配線
-B8-E   orchestration側のBrowser / Planner benchmark
+       D2a save-time再validation / atomic save                 実装済み
+       D2b BuildListPageのconstrained経路配線                  実装済み
+B8-E   orchestration側のBrowser / Planner benchmark            実装済み
        orchestration boundsのProduction default決定
+       (defaultPlannerOrchestrationBounds = 2 / 1 / 4)
 ```
 
 boundsのProduction defaultはB8-B2とB8-Eの2回に分けて決定する。orchestration

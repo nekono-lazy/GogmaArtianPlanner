@@ -13,15 +13,21 @@ import type {
   ProductionPlan,
   TargetWeapon,
 } from '../domain/models/publicTypes'
-import type { PlannerInput, PlannerProgress, PlannerWarning } from '../domain/planner'
+import type {
+  PlannerInput,
+  PlannerOrchestrationResult,
+  PlannerProgress,
+  PlannerWarning,
+} from '../domain/planner'
+import { defaultPlannerOrchestrationBounds } from '../domain/planner'
 import { useSettingsStore } from '../stores/settingsStore'
 import { buildListService } from '../services/buildList/buildListService'
 import { createBuildListCalculationContext } from '../services/buildList/createBuildListCalculationContext'
-import { productionPlanRepository } from '../db/repositories'
 import {
   createPlannerCalculationContext,
   createPlannerInput,
 } from '../services/planner/createPlannerInput'
+import { plannerResultPersistenceService } from '../services/planner/plannerResultPersistenceService'
 import {
   createProductionPlannerWorkerClient,
   PlannerCancelledError,
@@ -36,7 +42,20 @@ export interface BuildListPageDependencies {
   createWorkerClient(): PlannerWorkerClient
   refresh(calculationContext: CalculationContext): Promise<{ entries: BuildListEntry[]; targets: TargetWeapon[]; ownedWeapons: OwnedWeapon[] }>
   createInput(calculationContext: CalculationContext): Promise<PlannerInput>
-  savePlan(plan: ProductionPlan): Promise<unknown>
+  /**
+   * Persists the whole `PlannerOrchestrationResult` through the B8-D2a
+   * atomic boundary (PLANNER_SPEC 9.2.15).
+   *
+   * The complete result is passed, never only its Plan: the generated
+   * BuildListEntries and the ProductionPlan must be written in one
+   * transaction, and a `plan === null` result carrying generated Entries is an
+   * invariant violation only that service may judge. It returns the stored
+   * Plan, or `null` when the calculation produced no Plan.
+   */
+  savePlannerResult(
+    result: PlannerOrchestrationResult,
+    currentCalculationContext: CalculationContext,
+  ): Promise<ProductionPlan | null>
   deleteEntry(id: BuildListEntryId): Promise<void>
 }
 
@@ -48,7 +67,11 @@ function createDefaultDependencies(master: MasterDataRoot): BuildListPageDepende
       buildListService.refreshStaleness(calculationContext),
     createInput: (calculationContext) =>
       createPlannerInput(master, calculationContext),
-    savePlan: (plan) => productionPlanRepository.putProductionPlan(plan),
+    savePlannerResult: (result, currentCalculationContext) =>
+      plannerResultPersistenceService.savePlannerOrchestrationResult(
+        result,
+        currentCalculationContext,
+      ),
     deleteEntry: (id) => buildListService.deleteEntry(id),
   }
 }
@@ -117,20 +140,41 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
       )
       const input = await dependencies.createInput(calculationContext)
       if (activeRequestRef.current !== requestId) return
-      const result = await client.createPlan(requestId, input, {
-        onProgress: (nextProgress) => {
-          if (activeRequestRef.current === requestId) setProgress(nextProgress)
+      // B8-D2b: the Application caller is what decides to pass the Production
+      // orchestration bounds. The Worker Client applies no default of its own.
+      const result = await client.createConstrainedPlan(
+        requestId,
+        input,
+        defaultPlannerOrchestrationBounds,
+        {
+          onProgress: (nextProgress) => {
+            if (activeRequestRef.current === requestId) setProgress(nextProgress)
+          },
         },
-      })
+      )
       if (activeRequestRef.current !== requestId) return
       setWarnings(result.warnings)
-      if (result.plan) {
-        await dependencies.savePlan(result.plan)
-        if (activeRequestRef.current !== requestId) return
-        setNotice(`生産計画を作成しました: ${result.plan.id}`)
-      } else {
-        setNotice('現在の入力から作成できる生産計画はありませんでした。')
-      }
+      // Rebuilt at save time rather than reusing the Planner-start context, so
+      // the compatibility check is against current state, not the state the
+      // calculation started from (PLANNER_SPEC 9.2.15).
+      const saveCalculationContext = createPlannerCalculationContext(
+        dependencies.master,
+        client.engineVersion,
+      )
+      // The complete result is always handed over, `plan === null` included:
+      // a no-Plan result carrying generated Entries is an invariant violation
+      // the Persistence service fails closed on, and only it may judge that.
+      const savedPlan = await dependencies.savePlannerResult(
+        result,
+        saveCalculationContext,
+      )
+      if (activeRequestRef.current !== requestId) return
+      // Persistence, not the Worker result, is the success authority.
+      setNotice(
+        savedPlan
+          ? `生産計画を作成しました: ${savedPlan.id}`
+          : '現在の入力から作成できる生産計画はありませんでした。',
+      )
     } catch (caught: unknown) {
       if (activeRequestRef.current !== requestId || caught instanceof PlannerCancelledError) return
       setError(caught instanceof Error ? caught.message : '生産計画の作成に失敗しました。')

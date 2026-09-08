@@ -483,7 +483,7 @@ B11 は実ゲーム観測を前提とする独立系列
 | B8-B1 | constrained candidate enumerator | Search Domain側の制約付き列挙。enumeration boundsはcaller必須指定 | B8-A。完了 |
 | B8-B2 | enumerator実Browser Worker benchmark | enumeration boundsのProduction default決定 | B8-B1。完了 |
 | B8-C | Planner conflict orchestration | 固定Candidate判定、Conflict Resolution再対応付け、deterministic materializer、augmented-input完全再実行。orchestration boundsはcaller必須指定のまま | B8-B1 |
-| B8-D | Worker / Application / Persistence | atomic save、既存UIへの最小配線 | B8-C |
+| B8-D | Worker / Application / Persistence | atomic save、既存UIへの最小配線 | B8-C。**完了**。B8-D1 Worker境界 / B8-D2a atomic save / B8-D2b BuildListPage配線（4.12 / 4.13 / 4.16章） |
 | B8-E | orchestration Browser / Planner benchmark | orchestration boundsのProduction default決定 | B8-D。**完了**。B8-E1 harness / B8-E2a real Browser measurement / B8-E2b default決定 `2 / 1 / 4`（4.15章、`B8_PLANNER_ORCHESTRATION_BROWSER_WORKER_BENCHMARK.md` 10-11章） |
 | B9 | what-if比較 | 一方固定時の他方の次のPractical / Idealまでの距離算出と提示 | B8-E |
 | B10 | 競合UI | 競合候補の除外 / 選択不可表示と理由提示 | B8-E |
@@ -2834,9 +2834,97 @@ DB schema bumpは不要である。
 
 #### next
 
-B8-D2b: BuildListPageのconstrained経路切替。
-`createConstrainedPlan()` へ `defaultPlannerOrchestrationBounds` を渡し、
-B8-D2aのatomic saveへ接続する。
+B8-D2b: BuildListPageのconstrained経路切替。**完了**(4.16章)。
+
+### 4.16 B8-D2b implementation record
+
+**B8-D2b complete。B8-D complete。**
+
+B8-D2bはApplication callerの配線タスクである。変更したexecution codeは
+`src/pages/BuildListPage.tsx` だけであり、Planner Domain orchestration /
+Beam Search / Trace Replay / constrained enumerator / materializer / preflight /
+Planner Worker protocol / `PlannerWorkerClient` / `PlannerResultPersistenceService` /
+`createPlannerInput()` / DB repositories / Production RNG / Candidate Searchは
+変更していない。
+
+旧経路と新経路。
+
+```text
+旧  createPlannerInput()
+      -> client.createPlan()
+      -> productionPlanRepository.putProductionPlan(result.plan)
+
+新  createPlannerInput()
+      -> client.createConstrainedPlan(
+           requestId, input, defaultPlannerOrchestrationBounds, { onProgress })
+      -> savePlannerResult(result, save-time CalculationContext)
+      -> PlannerResultPersistenceService.savePlannerOrchestrationResult()
+```
+
+要点。
+
+- `defaultPlannerOrchestrationBounds`(`2 / 1 / 4`、4.15章)を渡すのはApplication
+  callerであるBuildListPageである。`PlannerWorkerClient` は従来どおりcaller supplied
+  boundsをそのままforwardし、defaultを選ばない
+- Persistenceへ渡すのは `PlannerOrchestrationResult` 全体であり、`plan` だけを
+  取り出さない。generated BuildListEntriesとProductionPlanを同一transactionで
+  保存する必要があるためである(PLANNER_SPEC 9.2.15)
+- `plan === null` でもPersistence serviceを必ず呼ぶ。`plan === null` かつ
+  `generatedBuildListEntries.length > 0` という不正resultをfail closedする
+  authorityはservice側にあり、page側で `if (result.plan)` により分岐して
+  service呼出しを飛ばさない。正常な `plan === null` / generated 0件では
+  serviceが `null` を返し、既存の「計画なし」noticeを表示する
+- CalculationContextはPlanner開始時とsave時で別に構成する。Worker計算完了後、
+  Persistence呼出しの直前に `createPlannerCalculationContext()` を再度呼び、
+  その結果をsave-time contextとして渡す。`input.calculationContext` /
+  Planner開始時context / Worker resultのcontextをsave-time contextへ流用しない。
+  同一manifest / engine versionであれば値は一致するが、境界としてsave時に
+  current contextを再構成することを固定する
+- 成功noticeのauthorityはPersistenceである。Worker resultにPlanがあっても、
+  serviceが返したPlanでのみ成功表示を行い、Plan IDもservice戻り値のものを使う。
+  Persistence errorは既存のerror表示経路へ流し、成功扱いしない
+- `productionPlanRepository` の直接importはBuildListPageから除去した
+- `activeRequestRef` / `PlannerCancelledError` / `cancelPlan()` / `dispose` の
+  既存cancellation semanticsは変更していない。Persistence開始前と成功notice表示前に
+  active requestであることを確認し、古いrequestの結果は保存・表示しない
+- 競合UIはB10のscopeであり、本タスクでは実装していない。`createPlannerInput()` が
+  `conflictResolutions: []` を作る契約も変更していない。したがって現行Production UIは
+  explicit resolutionを持たず、constrained APIへ切り替えてもordinary result相当で
+  終了し得る。これは仕様どおりであり、explicit resolutionの供給はB10が行う
+- generated Entry用の新UI、競合表示、bounds入力UIは追加していない
+
+`BuildListPageDependencies` の変更は次の1点である。
+
+```text
+savePlan(plan: ProductionPlan): Promise<unknown>
+  -> savePlannerResult(
+       result: PlannerOrchestrationResult,
+       currentCalculationContext: CalculationContext,
+     ): Promise<ProductionPlan | null>
+```
+
+default dependencyは `plannerResultPersistenceService.savePlannerOrchestrationResult`
+へ接続する。
+
+B8-D2bは次を変更していない。
+
+```text
+CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2
+DATABASE_SCHEMA_VERSION = 1
+AppSettings.schemaVersion = 1
+PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2
+supportsSeedSearch = false
+defaultConstrainedEnumerationBounds = 40 / 30 / 100 / 500
+defaultPlannerOrchestrationBounds = 2 / 1 / 4
+defaultCandidateSearchSettings
+defaultPlannerOptions
+```
+
+DB schema bumpは不要である。
+
+#### next
+
+B9 what-if比較、B10競合UI、B11 normal-tier Keep prediction semantics。
 
 ---
 
