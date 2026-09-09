@@ -11,14 +11,21 @@ import {
 } from '@mui/material'
 import { Link as RouterLink, useParams } from 'react-router-dom'
 import { PageShell } from '../components/PageShell'
+import { ProductionPlanWhatIfComparison } from '../components/planner/ProductionPlanWhatIfComparison'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import type { MasterDataRoot } from '../domain/master/masterTypes'
 import type {
+  BuildListEntryId,
   CalculationContext,
   ProductionPlan,
   ProductionPlanId,
 } from '../domain/models/publicTypes'
-import type { PlannerInput } from '../domain/planner'
+import {
+  defaultPlannerWhatIfBounds,
+  type PlannerInput,
+  type PlannerProgress,
+  type PlannerWhatIfCalculationResult,
+} from '../domain/planner'
 import { productionPlanRepository } from '../db/repositories/productionPlanRepository'
 import {
   createPlannerCalculationContext,
@@ -73,12 +80,38 @@ type ProductionPlanPageState =
   | {
       status: 'ready'
       plan: ProductionPlan
-      /** Retained for B10-C, paired with this exact preparation result. */
+      /** Presentation pairing only; every action rebuilds its own fresh input. */
       input: PlannerInput
       preparation: PlannerInteractionPreparationResult
       viewModel: ProductionPlanInteractionViewModel
     }
   | { status: 'error'; message: string; plan: ProductionPlan | null }
+
+interface WhatIfTargetIdentity {
+  conflictId: string
+  buildListEntryId: BuildListEntryId
+}
+
+type WhatIfUiState =
+  | { status: 'idle' }
+  | (WhatIfTargetIdentity & {
+      status: 'loading'
+      progress: PlannerProgress | null
+    })
+  | (WhatIfTargetIdentity & {
+      status: 'completed'
+      result: Extract<PlannerWhatIfCalculationResult, { status: 'completed' }>
+      targetWeapons: PlannerInput['targetWeapons']
+    })
+  | (WhatIfTargetIdentity & {
+      status: 'failure'
+      failure:
+        | {
+            kind: 'typed'
+            result: Exclude<PlannerWhatIfCalculationResult, { status: 'completed' }>
+          }
+        | { kind: 'unexpected'; message: string }
+    })
 
 const statusLabels = {
   draft: '下書き',
@@ -107,6 +140,9 @@ export function ProductionPlanPage({
 }: ProductionPlanPageProps) {
   const { planId } = useParams()
   const lifecycleIdentityRef = useRef(0)
+  const whatIfActionIdentityRef = useRef(0)
+  const clientRef = useRef<PlannerWorkerClient | null>(null)
+  const activeWorkerRequestRef = useRef<string | null>(null)
   const [state, setState] = useState<ProductionPlanPageState>(
     dependencies
       ? { status: 'loading_plan' }
@@ -116,12 +152,15 @@ export function ProductionPlanPage({
           plan: null,
         },
   )
+  const [whatIfState, setWhatIfState] = useState<WhatIfUiState>({
+    status: 'idle',
+  })
+  const [whatIfNotice, setWhatIfNotice] = useState<string | null>(null)
 
   useEffect(() => {
     const lifecycleIdentity = lifecycleIdentityRef.current + 1
     lifecycleIdentityRef.current = lifecycleIdentity
     let active = true
-    let activeRequestId: string | null = null
     let client: PlannerWorkerClient | null = null
     const isCurrent = () =>
       active && lifecycleIdentityRef.current === lifecycleIdentity
@@ -149,8 +188,14 @@ export function ProductionPlanPage({
     }
 
     setCurrentState({ status: 'loading_plan' })
+    queueMicrotask(() => {
+      if (!isCurrent()) return
+      setWhatIfState({ status: 'idle' })
+      setWhatIfNotice(null)
+    })
     try {
       client = dependencies.createWorkerClient()
+      clientRef.current = client
     } catch (caught: unknown) {
       setCurrentState({
         status: 'error',
@@ -182,10 +227,10 @@ export function ProductionPlanPage({
         if (!isCurrent()) return
         const input = restorePersistedExplicitResolutions(freshInput, plan)
         const requestId = createRequestId()
-        activeRequestId = requestId
+        activeWorkerRequestRef.current = requestId
         const preparation = await client.prepareInteraction(requestId, input)
-        if (!isCurrent() || activeRequestId !== requestId) return
-        activeRequestId = null
+        if (!isCurrent() || activeWorkerRequestRef.current !== requestId) return
+        activeWorkerRequestRef.current = null
         setState({
           status: 'ready',
           plan,
@@ -199,7 +244,7 @@ export function ProductionPlanPage({
         })
       } catch (caught: unknown) {
         if (!isCurrent() || caught instanceof PlannerCancelledError) return
-        activeRequestId = null
+        activeWorkerRequestRef.current = null
         setState({
           status: 'error',
           message: caughtMessage(caught),
@@ -211,10 +256,171 @@ export function ProductionPlanPage({
 
     return () => {
       active = false
+      whatIfActionIdentityRef.current += 1
+      const activeRequestId = activeWorkerRequestRef.current
+      activeWorkerRequestRef.current = null
       if (activeRequestId !== null) client.cancelPlan(activeRequestId)
       client.dispose()
+      if (clientRef.current === client) clientRef.current = null
     }
   }, [dependencies, planId])
+
+  const startWhatIfComparison = async (
+    conflictId: string,
+    buildListEntryId: BuildListEntryId,
+  ) => {
+    if (!dependencies || state.status !== 'ready') return
+    const displayedPlan = state.plan
+    const displayedParticipant = state.viewModel.conflicts
+      .find(({ id }) => id === conflictId)
+      ?.participants.find(
+        (participant) => participant.buildListEntryId === buildListEntryId,
+      )
+    const client = clientRef.current
+    if (!client || !displayedParticipant?.isAvailable) return
+
+    const previousRequestId = activeWorkerRequestRef.current
+    activeWorkerRequestRef.current = null
+    if (previousRequestId !== null) client.cancelPlan(previousRequestId)
+    const actionIdentity = whatIfActionIdentityRef.current + 1
+    whatIfActionIdentityRef.current = actionIdentity
+    const lifecycleIdentity = lifecycleIdentityRef.current
+    const isCurrentAction = () =>
+      whatIfActionIdentityRef.current === actionIdentity &&
+      lifecycleIdentityRef.current === lifecycleIdentity &&
+      clientRef.current === client
+
+    setWhatIfNotice(null)
+    setWhatIfState({
+      status: 'loading',
+      conflictId,
+      buildListEntryId,
+      progress: null,
+    })
+
+    try {
+      const calculationContext = createPlannerCalculationContext(
+        dependencies.master,
+        client.engineVersion,
+      )
+      const freshInput = await dependencies.createInput(calculationContext)
+      if (!isCurrentAction()) return
+      const plannerInput = restorePersistedExplicitResolutions(
+        freshInput,
+        displayedPlan,
+      )
+
+      const preparationRequestId = createRequestId()
+      activeWorkerRequestRef.current = preparationRequestId
+      const preparation = await client.prepareInteraction(
+        preparationRequestId,
+        plannerInput,
+      )
+      if (
+        !isCurrentAction() ||
+        activeWorkerRequestRef.current !== preparationRequestId
+      ) return
+      activeWorkerRequestRef.current = null
+
+      const viewModel = createProductionPlanInteractionViewModel(
+        displayedPlan,
+        plannerInput,
+        preparation,
+      )
+      setState({
+        status: 'ready',
+        plan: displayedPlan,
+        input: plannerInput,
+        preparation,
+        viewModel,
+      })
+      const currentParticipant = viewModel.conflicts
+        .find(({ id }) => id === conflictId)
+        ?.participants.find(
+          (participant) => participant.buildListEntryId === buildListEntryId,
+        )
+      if (!currentParticipant?.isAvailable) {
+        setWhatIfState({ status: 'idle' })
+        setWhatIfNotice(
+          '現在の状態が変化したため比較を開始できませんでした。',
+        )
+        return
+      }
+
+      const whatIfRequestId = createRequestId()
+      activeWorkerRequestRef.current = whatIfRequestId
+      const result = await client.createWhatIfComparison(
+        whatIfRequestId,
+        {
+          plannerInput,
+          scenarioResolution: {
+            conflictKey: conflictId,
+            selectedBuildListEntryId: currentParticipant.buildListEntryId,
+          },
+          bounds: { ...defaultPlannerWhatIfBounds },
+        },
+        {
+          onProgress: (progress) => {
+            if (
+              isCurrentAction() &&
+              activeWorkerRequestRef.current === whatIfRequestId
+            ) {
+              setWhatIfState({
+                status: 'loading',
+                conflictId,
+                buildListEntryId,
+                progress,
+              })
+            }
+          },
+        },
+      )
+      if (
+        !isCurrentAction() ||
+        activeWorkerRequestRef.current !== whatIfRequestId
+      ) return
+      activeWorkerRequestRef.current = null
+      if (result.status === 'completed') {
+        setWhatIfState({
+          status: 'completed',
+          conflictId,
+          buildListEntryId,
+          result,
+          targetWeapons: plannerInput.targetWeapons,
+        })
+      } else {
+        setWhatIfState({
+          status: 'failure',
+          conflictId,
+          buildListEntryId,
+          failure: { kind: 'typed', result },
+        })
+      }
+    } catch (caught: unknown) {
+      if (!isCurrentAction() || caught instanceof PlannerCancelledError) return
+      activeWorkerRequestRef.current = null
+      setWhatIfState({
+        status: 'failure',
+        conflictId,
+        buildListEntryId,
+        failure: {
+          kind: 'unexpected',
+          message: caught instanceof Error
+            ? `比較処理に失敗しました。${caught.message}`
+            : '比較処理に失敗しました。',
+        },
+      })
+    }
+  }
+
+  const cancelWhatIfComparison = () => {
+    whatIfActionIdentityRef.current += 1
+    const requestId = activeWorkerRequestRef.current
+    activeWorkerRequestRef.current = null
+    if (requestId !== null) clientRef.current?.cancelPlan(requestId)
+    setWhatIfState({ status: 'idle' })
+    setWhatIfNotice(null)
+  }
 
   const loadedPlan =
     state.status === 'preparing' || state.status === 'ready'
@@ -263,6 +469,7 @@ export function ProductionPlanPage({
         )}
         {state.status === 'ready' && (
           <>
+            {whatIfNotice && <Alert severity="info">{whatIfNotice}</Alert>}
             {state.viewModel.planStatusMessage && (
               <Alert
                 severity={state.viewModel.planStatus === 'stale' ? 'warning' : 'info'}
@@ -348,6 +555,72 @@ export function ProductionPlanPage({
                               {participant.unavailableMessage}
                             </Alert>
                           )}
+                          <Button
+                            variant="outlined"
+                            disabled={
+                              !participant.isAvailable ||
+                              (whatIfState.status === 'loading' &&
+                                whatIfState.conflictId === conflict.id &&
+                                whatIfState.buildListEntryId ===
+                                  participant.buildListEntryId)
+                            }
+                            onClick={() => void startWhatIfComparison(
+                              conflict.id,
+                              participant.buildListEntryId,
+                            )}
+                          >
+                            比較する
+                          </Button>
+                          {whatIfState.status !== 'idle' &&
+                            whatIfState.conflictId === conflict.id &&
+                            whatIfState.buildListEntryId ===
+                              participant.buildListEntryId && (
+                              <>
+                                {whatIfState.status === 'loading' && (
+                                  <Stack spacing={1}>
+                                    <Typography variant="body2">
+                                      {whatIfState.progress
+                                        ? `比較中 ${whatIfState.progress.expandedStates} / ${whatIfState.progress.maxExpandedStates}`
+                                        : '比較中'}
+                                    </Typography>
+                                    <LinearProgress
+                                      aria-label="what-if比較の進捗"
+                                      variant={
+                                        whatIfState.progress
+                                          ? 'determinate'
+                                          : 'indeterminate'
+                                      }
+                                      value={whatIfState.progress
+                                        ? whatIfState.progress.maxExpandedStates > 0
+                                          ? whatIfState.progress.expandedStates /
+                                            whatIfState.progress.maxExpandedStates * 100
+                                          : 0
+                                        : undefined}
+                                    />
+                                    <Button onClick={cancelWhatIfComparison}>
+                                      比較をキャンセル
+                                    </Button>
+                                  </Stack>
+                                )}
+                                {whatIfState.status === 'completed' && (
+                                  <ProductionPlanWhatIfComparison
+                                    result={whatIfState.result}
+                                    targetWeapons={whatIfState.targetWeapons}
+                                  />
+                                )}
+                                {whatIfState.status === 'failure' &&
+                                  (whatIfState.failure.kind === 'typed' ? (
+                                    <ProductionPlanWhatIfComparison
+                                      result={whatIfState.failure.result}
+                                      targetWeapons={[]}
+                                    />
+                                  ) : (
+                                    <Alert severity="error">
+                                      {whatIfState.failure.message}
+                                    </Alert>
+                                  ))}
+                              </>
+                            )}
                         </Stack>
                       </Paper>
                     ))}
