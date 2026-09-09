@@ -3,10 +3,12 @@ import type {
   CreateProductionPlanCalculation,
   PlannerDependencies,
   PlannerExecutionOptions,
+  PlannerInput,
   PlannerWhatIfCalculationResult,
   PlannerWhatIfRequest,
 } from '../domain/planner'
 import type {
+  PlannerInteractionPreparationResult,
   PlannerWorkerProtocolRequest,
   PlannerWorkerProtocolResponse,
 } from './plannerWorkerContracts'
@@ -17,9 +19,9 @@ export type PlannerWorkerPostMessage = (
 export type PlannerDependenciesFactory = () => PlannerDependencies
 
 /**
- * The three Planner calculations this Worker routes to.
+ * The four Planner calculations this Worker routes to.
  *
- * All three are injected, so the controller performs no Beam Search, no Candidate
+ * All four are injected, so the controller performs no Beam Search, no Candidate
  * enumeration, no materialization, no preflight, no Trace Replay, and no
  * adoption of its own: B8-C owns all of that, and the Production adapter
  * composes it.
@@ -28,6 +30,7 @@ export interface PlannerWorkerCalculations {
   createPlan: CreateProductionPlanCalculation
   createConstrainedPlan: CreateConstrainedProductionPlanCalculation
   createWhatIfComparison: CreatePlannerWhatIfComparisonCalculation
+  prepareInteraction: PreparePlannerInteractionCalculation
 }
 
 /** Worker-facing B9 calculation shape; Domain runtime options stay off the wire. */
@@ -36,6 +39,12 @@ export type CreatePlannerWhatIfComparisonCalculation = (
   dependencies: PlannerDependencies,
   executionOptions?: PlannerExecutionOptions,
 ) => Promise<PlannerWhatIfCalculationResult>
+
+/** Synchronous initial preparation needs no progress or cancellation hooks. */
+export type PreparePlannerInteractionCalculation = (
+  input: PlannerInput,
+  dependencies: PlannerDependencies,
+) => PlannerInteractionPreparationResult
 
 export interface PlannerWorkerController {
   handleMessage(request: PlannerWorkerProtocolRequest): Promise<void>
@@ -47,12 +56,12 @@ function workerYield(): Promise<void> {
 }
 
 /**
- * Message orchestration only. Both calculations are supplied separately and
+ * Message orchestration only. All calculations are supplied separately and
  * receive the worker-local runtime dependencies rather than structured-cloned
  * methods.
  *
  * `cancel`, progress forwarding, and error conversion are shared by the
- * ordinary, constrained, and what-if request kinds: a cancel stops the task
+ * request kinds: a cancel stops the task
  * instance it names, and Domain cancellation semantics are never reimplemented
  * here.
  */
@@ -68,7 +77,7 @@ export function createPlannerWorkerController(
    * The Worker never mints a generation of its own: doing so would lose the
    * correspondence with the Client token, which is what lets the Client discard
    * a stale response it receives before its own newer task has even been
-   * delivered here. Ordinary and constrained tasks keep sharing one logical id
+   * delivered here. All Planner tasks keep sharing one logical id
    * namespace; only the generation distinguishes task instances.
    *
    * Cancellation is tracked per generation rather than per request id, so a new
@@ -121,6 +130,14 @@ export function createPlannerWorkerController(
         // never treated as the ordinary fallback.
         let response: PlannerWorkerProtocolResponse
         switch (request.type) {
+          case 'prepare_interaction':
+            response = {
+              type: 'prepare_interaction_result',
+              requestId,
+              generation,
+              result: calculations.prepareInteraction(request.input, dependencies),
+            }
+            break
           case 'create_plan':
             response = {
               type: 'create_plan_result',

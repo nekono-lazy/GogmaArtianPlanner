@@ -9,6 +9,7 @@ import type {
 } from '../../domain/planner'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../../domain/rng/production/productionRngEngine'
 import type {
+  PlannerInteractionPreparationResult,
   PlannerWorkerProtocolRequest,
   PlannerWorkerProtocolResponse,
 } from '../../workers/plannerWorkerContracts'
@@ -92,6 +93,11 @@ export interface PlannerWorkerClient {
     request: PlannerWhatIfRequest,
     callbacks?: PlannerWorkerClientCallbacks,
   ): Promise<PlannerWhatIfCalculationResult>
+  /** B10 current initial availability; calculation only, with no search bounds. */
+  prepareInteraction(
+    requestId: string,
+    input: PlannerInput,
+  ): Promise<PlannerInteractionPreparationResult>
   cancelPlan(requestId: string): void
   dispose(): void
 }
@@ -113,7 +119,7 @@ export interface PlannerWorkerLike {
  * One pending request, identified by its task generation and discriminated by
  * the response type it accepts.
  *
- * Both request kinds share this Map, so the duplicate-requestId semantics stay
+ * All request kinds share this Map, so the duplicate-requestId semantics stay
  * exactly as before: re-using an id rejects the previous pending request with
  * `PlannerCancelledError` and replaces it, whichever kind either request is.
  * The generation is what makes that replacement safe across the thread
@@ -128,6 +134,10 @@ interface PendingPlanIdentity {
 }
 
 type PendingPlan =
+  | (PendingPlanIdentity & {
+      expectedResultType: 'prepare_interaction_result'
+      resolve: (result: PlannerInteractionPreparationResult) => void
+    })
   | (PendingPlanIdentity & {
       expectedResultType: 'create_plan_result'
       resolve: (result: PlannerResult) => void
@@ -146,7 +156,7 @@ export function createPlannerWorkerClient(
   engineVersion: string,
 ): PlannerWorkerClient {
   const pending = new Map<string, PendingPlan>()
-  /** Monotonic across both request kinds, so a generation is never reused. */
+  /** Monotonic across all request kinds, so a generation is never reused. */
   let lastGeneration = 0
   let disposed = false
 
@@ -183,6 +193,13 @@ export function createPlannerWorkerClient(
     if (
       data.type === 'create_what_if_comparison_result' &&
       current.expectedResultType === 'create_what_if_comparison_result'
+    ) {
+      current.resolve(data.result)
+      return
+    }
+    if (
+      data.type === 'prepare_interaction_result' &&
+      current.expectedResultType === 'prepare_interaction_result'
     ) {
       current.resolve(data.result)
       return
@@ -270,6 +287,27 @@ export function createPlannerWorkerClient(
         })
       })
     },
+    prepareInteraction: (requestId, input) => {
+      if (disposed) {
+        return Promise.reject(new Error('Planner Worker Client is disposed.'))
+      }
+      const generation = claimRequestId(requestId)
+      return new Promise<PlannerInteractionPreparationResult>((resolve, reject) => {
+        pending.set(requestId, {
+          requestId,
+          generation,
+          expectedResultType: 'prepare_interaction_result',
+          resolve,
+          reject,
+        })
+        worker.postMessage({
+          type: 'prepare_interaction',
+          requestId,
+          generation,
+          input,
+        })
+      })
+    },
     cancelPlan: (requestId) => {
       const current = pending.get(requestId)
       if (!current) return
@@ -302,6 +340,8 @@ export function createUnavailablePlannerWorkerClient(): PlannerWorkerClient {
     createConstrainedPlan: () =>
       Promise.reject(new ProductionPlannerWorkerUnavailableError()),
     createWhatIfComparison: () =>
+      Promise.reject(new ProductionPlannerWorkerUnavailableError()),
+    prepareInteraction: () =>
       Promise.reject(new ProductionPlannerWorkerUnavailableError()),
     cancelPlan: () => undefined,
     dispose: () => undefined,

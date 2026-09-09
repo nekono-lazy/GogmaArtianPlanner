@@ -15,6 +15,7 @@ import {
   type PlannerWorkerController,
 } from '../../workers/planner.worker'
 import type {
+  PlannerInteractionPreparationResult,
   PlannerWorkerProtocolRequest,
   PlannerWorkerProtocolResponse,
 } from '../../workers/plannerWorkerContracts'
@@ -116,6 +117,8 @@ describe('PlannerWorkerClient', () => {
         plannerInput(),
         orchestrationBounds,
       )).rejects.toBeInstanceOf(ProductionPlannerWorkerUnavailableError)
+      await expect(client.prepareInteraction('planner.unavailable.interaction', plannerInput()))
+        .rejects.toBeInstanceOf(ProductionPlannerWorkerUnavailableError)
       await expect(client.createWhatIfComparison(
         'planner.unavailable.what-if',
         whatIfRequest(),
@@ -647,6 +650,7 @@ function integration() {
       constrainedResults.push(pending)
       return pending.promise
     },
+    prepareInteraction: () => interactionResult,
     createWhatIfComparison: async () => {
       throw new Error('What-if calculation was not expected in this integration fixture.')
     },
@@ -867,4 +871,195 @@ describe('Planner Worker / Client task generation across an asynchronous boundar
     session.worker.toClient.forEach(() => session.worker.deliverToClient())
     await expect(ordinary).resolves.toEqual(ordinaryResult)
   })
+})
+
+const interactionResult: PlannerInteractionPreparationResult = {
+  status: 'ready',
+  validBuildListEntryIds: [createValidBuildListEntry().id],
+  excludedBuildListEntries: [],
+  currentConflicts: [{ id: 'conflict.current', buildListEntryIds: [createValidBuildListEntry().id] }],
+}
+
+describe('PlannerWorkerClient interaction preparation (B10-B1)', () => {
+  it.each<PlannerInteractionPreparationResult>([
+    interactionResult,
+    {
+      status: 'invalid',
+      issues: [{ path: 'beamWidth', code: 'invalid_integer', message: 'fixture issue' }],
+      warnings: [{ kind: 'build_list_entry_stale', message: 'fixture warning' }],
+      excludedBuildListEntries: [{
+        buildListEntryId: createValidBuildListEntry().id, reason: 'fixture diagnostic',
+      }],
+    },
+  ])('posts only PlannerInput and resolves the typed $status result', async (result) => {
+    const worker = new FakeWorker()
+    const client = createPlannerWorkerClient(worker, 'fixture')
+    const input = plannerInput()
+    const promise = client.prepareInteraction('interaction', input)
+    expect(worker.posted).toEqual([{
+      type: 'prepare_interaction', requestId: 'interaction', generation: 1, input,
+    }])
+    const posted = worker.posted[0]
+    expect(posted.type === 'prepare_interaction' && posted.input).toBe(input)
+    expect(structuredClone(posted)).toEqual(posted)
+    worker.emit({
+      type: 'prepare_interaction_result', requestId: 'interaction', generation: 1, result,
+    })
+    await expect(promise).resolves.toBe(result)
+    client.dispose()
+  })
+
+  it.each(['create_plan_result', 'create_constrained_plan_result', 'create_what_if_comparison_result'] as const)(
+    'rejects the current wrong discriminant %s',
+    async (type) => {
+      const worker = new FakeWorker()
+      const client = createPlannerWorkerClient(worker, 'fixture')
+      const promise = client.prepareInteraction('interaction.mismatch', plannerInput())
+      const identity = { requestId: 'interaction.mismatch', generation: 1 }
+      if (type === 'create_plan_result') {
+        worker.emit({ type, ...identity, result: ordinaryResult })
+      } else if (type === 'create_constrained_plan_result') {
+        worker.emit({ type, ...identity, result: constrainedResult })
+      } else {
+        worker.emit({ type, ...identity, result: whatIfResult })
+      }
+      await expect(promise).rejects.toMatchObject({
+        name: 'PlannerWorkerProtocolError',
+        receivedResultType: type,
+        expectedResultType: 'prepare_interaction_result',
+      })
+      client.dispose()
+    },
+  )
+
+  it('rejects a preparation result sent for a current ordinary request', async () => {
+    const worker = new FakeWorker()
+    const client = createPlannerWorkerClient(worker, 'fixture')
+    const promise = client.createPlan('interaction.reverse-mismatch', plannerInput())
+    worker.emit({
+      type: 'prepare_interaction_result', requestId: 'interaction.reverse-mismatch',
+      generation: 1, result: interactionResult,
+    })
+    await expect(promise).rejects.toBeInstanceOf(PlannerWorkerProtocolError)
+    client.dispose()
+  })
+
+  it('replaces same-kind duplicate IDs and ignores stale results and errors', async () => {
+    const worker = new FakeWorker()
+    const client = createPlannerWorkerClient(worker, 'fixture')
+    const first = client.prepareInteraction('interaction.duplicate', plannerInput())
+    const second = client.prepareInteraction('interaction.duplicate', plannerInput())
+    await expect(first).rejects.toBeInstanceOf(PlannerCancelledError)
+    let settled = false
+    void second.then(() => { settled = true }, () => { settled = true })
+    worker.emit({
+      type: 'prepare_interaction_result', requestId: 'interaction.duplicate',
+      generation: 1, result: interactionResult,
+    })
+    worker.emit({
+      type: 'error', requestId: 'interaction.duplicate', generation: 1, message: 'stale failure',
+    })
+    await settleMicrotasks()
+    expect(settled).toBe(false)
+    expect(worker.posted.map(({ generation }) => generation)).toEqual([1, 2])
+    worker.emit({
+      type: 'prepare_interaction_result', requestId: 'interaction.duplicate',
+      generation: 2, result: interactionResult,
+    })
+    await expect(second).resolves.toBe(interactionResult)
+    client.dispose()
+  })
+
+  it('shares the namespace with a replacing what-if request', async () => {
+    const worker = new FakeWorker()
+    const client = createPlannerWorkerClient(worker, 'fixture')
+    const preparation = client.prepareInteraction('interaction.what-if', plannerInput())
+    const comparison = client.createWhatIfComparison('interaction.what-if', whatIfRequest())
+    await expect(preparation).rejects.toBeInstanceOf(PlannerCancelledError)
+    let settled = false
+    void comparison.then(() => { settled = true }, () => { settled = true })
+    worker.emit({
+      type: 'prepare_interaction_result', requestId: 'interaction.what-if',
+      generation: 1, result: interactionResult,
+    })
+    await settleMicrotasks()
+    expect(settled).toBe(false)
+    expect(worker.posted.map(({ type, generation }) => ({ type, generation }))).toEqual([
+      { type: 'prepare_interaction', generation: 1 },
+      { type: 'create_what_if_comparison', generation: 2 },
+    ])
+    worker.emit({
+      type: 'create_what_if_comparison_result', requestId: 'interaction.what-if',
+      generation: 2, result: whatIfResult,
+    })
+    await expect(comparison).resolves.toBe(whatIfResult)
+    client.dispose()
+  })
+
+  it('uses shared error and dispose paths and refuses preparation after dispose', async () => {
+    const worker = new FakeWorker()
+    const client = createPlannerWorkerClient(worker, 'fixture')
+    const failed = client.prepareInteraction('interaction.error', plannerInput())
+    worker.emit({
+      type: 'error', requestId: 'interaction.error', generation: 1, message: 'preparation failed',
+    })
+    await expect(failed).rejects.toThrow('preparation failed')
+    const pending = client.prepareInteraction('interaction.dispose', plannerInput())
+    client.dispose()
+    await expect(pending).rejects.toBeInstanceOf(PlannerCancelledError)
+    expect(worker.terminate).toHaveBeenCalledOnce()
+    await expect(client.prepareInteraction('interaction.after-dispose', plannerInput()))
+      .rejects.toThrow('Planner Worker Client is disposed.')
+    expect(worker.posted).toHaveLength(2)
+  })
+
+  it('ignores a constrained result before the replacing preparation reaches the Worker', async () => {
+    const session = integration()
+    const old = session.client.createConstrainedPlan('interaction.race', plannerInput(), orchestrationBounds)
+    const oldRun = session.worker.deliverToWorker()
+    const current = session.client.prepareInteraction('interaction.race', plannerInput())
+    await expect(old).rejects.toBeInstanceOf(PlannerCancelledError)
+    session.constrainedResults[0].resolve(constrainedResult)
+    await oldRun
+    let settled = false
+    void current.then(() => { settled = true }, () => { settled = true })
+    session.worker.deliverToClient()
+    await settleMicrotasks()
+    expect(settled).toBe(false)
+    await session.worker.deliverToWorker()
+    session.worker.deliverToClient()
+    await expect(current).resolves.toEqual(interactionResult)
+    session.client.dispose()
+  })
+
+  it.each(['cancel', 'supersede'] as const)(
+    'ignores a synchronously completed preparation after Client %s',
+    async (action) => {
+      const session = integration()
+      const old = session.client.prepareInteraction('interaction.completed', plannerInput())
+      await session.worker.deliverToWorker()
+      expect(session.worker.toClient).toEqual([{
+        type: 'prepare_interaction_result', requestId: 'interaction.completed',
+        generation: 1, result: interactionResult,
+      }])
+      if (action === 'cancel') {
+        session.client.cancelPlan('interaction.completed')
+        expect(session.worker.toWorker).toEqual([{
+          type: 'cancel', requestId: 'interaction.completed', generation: 1,
+        }])
+      }
+      const current = session.client.prepareInteraction('interaction.completed', plannerInput())
+      await expect(old).rejects.toBeInstanceOf(PlannerCancelledError)
+      let settled = false
+      void current.then(() => { settled = true }, () => { settled = true })
+      session.worker.deliverToClient()
+      await settleMicrotasks()
+      expect(settled).toBe(false)
+      if (action === 'cancel') await session.worker.deliverToWorker()
+      await session.worker.deliverToWorker()
+      session.worker.deliverToClient()
+      await expect(current).resolves.toEqual(interactionResult)
+      session.client.dispose()
+    },
+  )
 })

@@ -1,7 +1,9 @@
+import type { BuildListEntryId, DomainValidationIssue } from '../domain/models/publicTypes'
 import type {
   PlannerInput,
   PlannerOrchestrationBounds,
   PlannerOrchestrationResult,
+  PlannerWarning,
   PlannerWhatIfCalculationResult,
   PlannerWhatIfRequest,
   PlannerWorkerRequest,
@@ -49,6 +51,46 @@ import type { WorkerResultResponse, WorkerTaskRequest } from './contracts'
 export interface PlannerTaskGeneration {
   generation: number
 }
+
+/** Display diagnostics only; never parse reason to decide availability. */
+export interface PlannerInteractionExcludedEntry {
+  buildListEntryId: BuildListEntryId
+  reason: string
+}
+
+/** Current initial Conflict identity and membership, without recommendation. */
+export interface PlannerInteractionConflict {
+  id: string
+  buildListEntryIds: BuildListEntryId[]
+}
+
+/** Minimal B10 wire projection; no PlannerInitialContext or internal state. */
+export type PlannerInteractionPreparationResult =
+  | {
+      status: 'ready'
+      validBuildListEntryIds: BuildListEntryId[]
+      excludedBuildListEntries: PlannerInteractionExcludedEntry[]
+      currentConflicts: PlannerInteractionConflict[]
+    }
+  | {
+      status: 'invalid'
+      issues: DomainValidationIssue[]
+      warnings: PlannerWarning[]
+      excludedBuildListEntries: PlannerInteractionExcludedEntry[]
+    }
+
+/** Preparation performs no search and accepts only the fresh PlannerInput. */
+export type PlannerInteractionWorkerRequest = WorkerTaskRequest<
+  'prepare_interaction',
+  PlannerInput
+> &
+  PlannerTaskGeneration
+
+export type PlannerInteractionWorkerResultResponse = WorkerResultResponse<
+  'prepare_interaction_result',
+  PlannerInteractionPreparationResult
+> &
+  PlannerTaskGeneration
 
 /**
  * Everything the constrained request structured-clones.
@@ -122,11 +164,12 @@ export type PlannerWorkerErrorResponse = Extract<
 > &
   PlannerTaskGeneration
 
-/** Ordinary, constrained, and what-if requests, dispatched by `type`. */
+/** All four Planner request kinds share one task namespace. */
 export type PlannerWorkerProtocolRequest =
   | PlannerOrdinaryWorkerRequest
   | PlannerConstrainedWorkerRequest
   | PlannerWhatIfWorkerRequest
+  | PlannerInteractionWorkerRequest
   | PlannerWorkerCancelRequest
 
 /** All Planner results share the existing `progress` / `error` responses. */
@@ -134,5 +177,6 @@ export type PlannerWorkerProtocolResponse =
   | PlannerOrdinaryWorkerResultResponse
   | PlannerConstrainedWorkerResultResponse
   | PlannerWhatIfWorkerResultResponse
+  | PlannerInteractionWorkerResultResponse
   | PlannerWorkerProgressResponse
   | PlannerWorkerErrorResponse

@@ -178,6 +178,7 @@ describe('Production constrained Planner Worker adapter (B8-D1)', () => {
       'createConstrainedPlan',
       'createPlan',
       'createWhatIfComparison',
+      'prepareInteraction',
     ])
     expect(calculations.createConstrainedPlan).toBe(createProductionConstrainedPlan)
     const dependencies = createProductionPlannerWorkerDependencies()

@@ -3,6 +3,7 @@ import {
   createProductionPlanWithConstrainedSearch,
   createProductionPlannerDependencies,
   createPlannerWhatIfComparison,
+  preparePlannerInitialContext,
   type CreateConstrainedProductionPlanCalculation,
   type PlannerDependencies,
 } from '../domain/planner'
@@ -14,6 +15,7 @@ import { defaultConstrainedEnumerationBounds } from '../domain/search'
 import type {
   CreatePlannerWhatIfComparisonCalculation,
   PlannerWorkerCalculations,
+  PreparePlannerInteractionCalculation,
 } from './planner.worker'
 
 /** Creates the active Planner Engine inside the Worker boundary. */
@@ -64,9 +66,40 @@ export const createProductionPlannerWhatIfComparison: CreatePlannerWhatIfCompari
       executionOptions,
     })
 
+/**
+ * Project only the shared Domain helper's validation and current initial
+ * Conflicts. No retry, search, or availability rule belongs in this adapter.
+ */
+const prepareProductionPlannerInteraction: PreparePlannerInteractionCalculation =
+  (input, dependencies) => {
+    const prepared = preparePlannerInitialContext(input, dependencies)
+    if (prepared.status === 'invalid') {
+      return {
+        status: 'invalid',
+        issues: prepared.issues,
+        warnings: prepared.warnings,
+        excludedBuildListEntries: prepared.excludedBuildListEntries.map(
+          ({ entry, reason }) => ({ buildListEntryId: entry.id, reason }),
+        ),
+      }
+    }
+    const { context } = prepared
+    return {
+      status: 'ready',
+      validBuildListEntryIds: context.validBuildListEntries.map(({ entry }) => entry.id),
+      excludedBuildListEntries: context.excludedBuildListEntries.map(
+        ({ entry, reason }) => ({ buildListEntryId: entry.id, reason }),
+      ),
+      currentConflicts: context.initialConflictDetection.conflicts.map(
+        ({ id, buildListEntryIds }) => ({ id, buildListEntryIds: [...buildListEntryIds] }),
+      ),
+    }
+  }
+
 /** All Production Planner calculations the Worker controller dispatches to. */
 export function createProductionPlannerWorkerCalculations(): PlannerWorkerCalculations {
   return {
+    prepareInteraction: prepareProductionPlannerInteraction,
     createPlan: createProductionPlan,
     createConstrainedPlan: createProductionConstrainedPlan,
     createWhatIfComparison: createProductionPlannerWhatIfComparison,
