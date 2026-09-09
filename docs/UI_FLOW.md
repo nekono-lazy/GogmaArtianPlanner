@@ -507,39 +507,138 @@ Plannerが生成した作成計画を確認する。
 - Debug詳細表示
 - 生成時CalculationContext
 
-競合候補を選択した場合は `PlannerConflictResolution` として現在PlannerInputへ追加し、
-Plannerを再実行する。これは局所的な候補選択であり、Plan全体の手動作成順固定UIには
-しない。選択Entryが削除済み、stale、Target無効、Capability不足、または保護状態変更で
-実行不能な場合はwarningを表示して再選択を求める。
+routeの `planId` に対応するPlanを
+`ProductionPlanRepository.getProductionPlan(planId)` で取得し、その保存済みPlanだけを
+表示する。該当Planが無い場合は、Active Planまたは最新Planを推測して表示しない。
 
-### 競合候補の表示
+表示中Conflictのauthorityは `ProductionPlan.conflicts`、what-ifとPlanner再計算の入力authorityは
+各操作開始時点のcurrent persisted stateから `createPlannerInput()` で新規構築した
+`PlannerInput` とする。`baseSnapshot` からPlannerInputを復元せず、古いWorker inputまたは
+過去のSearch requestを再利用しない。
 
-Plannerの固定Candidateと共存できない候補の扱いは、次のどちらでもよい。
+### 11.1 競合候補の表示と選択可否
 
-- 通常の候補リストから除外する
-- 表示するが選択不可にし、理由を併記する
+各Conflictでは `buildListEntryIds` のparticipantを原則すべて表示する。current stateで
+利用不能なparticipantも一覧から消さず、disabled表示と理由を併記する。
 
-いずれの場合も、ユーザーが理由を確認できる設計余地を残す。表示例。
+- `recommendedBuildListEntryId`: 「Planner推奨」badge等の表示だけに使用する
+- `selectedBuildListEntryId`: 保存済みPlanでの「現在選択中」を明示する
+- 推奨を自動選択、what-if固定、Planner再検索のauthorityにしない
 
-```text
-「〇〇とSkill Counter 351で競合するため作成できません」
-```
+選択可否は、操作時点のfresh PlannerInputと既存のTarget validation、BuildListEntry
+staleness、CalculationContext compatibility、Planner input validationから判定する。
+Planner input validation、current initial Planner state準備、current initial Conflict detectionは、
+Production Planner dependenciesを持つPlanner Worker内で既存 `preparePlannerInitialContext()` 相当の
+処理として行う。UI / main threadで `ProductionRngEngine` を生成しない。
 
-Product契約は「競合理由をユーザーへ説明可能であること」である。B0ではUI詳細を
-固定せず、後続Phaseで具体化する。
+Workerから内部 `PlannerInitialContext` そのものを返さず、ready / invalid、valid Entry IDs、excluded
+EntryのIDと表示用reason、current initial ConflictのIDとparticipant Entry IDsを含む
+structured-clone可能なB10用projectionを返す。B10-Bはこの取得に専用のtyped Planner Worker request /
+Client APIを追加してよいが、B9の `create_what_if_comparison` request / result shapeへfieldを追加せず、
+availability取得のためだけにwhat-ifを実行しない。
+
+persisted Conflictを操作できるのは、同じConflict IDがcurrent initial Conflictに存在し、対象Entryが
+そのcurrent Conflictのparticipantであり、current persistenceに存在してvalid Entry IDsに含まれる
+場合だけである。current initial Conflictに同じIDが無い場合もConflictは表示し、「比較する」と
+「この候補を優先」をdisabledにして、現在のPlanner入力ではこの競合を再現できない旨と再計算導線を
+示す。preparationがinvalidの場合もすべてのConflict操作をdisabledにし、typed resultに基づく理由と
+再計算導線を表示する。
+
+最低限、BuildListEntry不存在、stale、Target不存在、Target無効またはdisabled、
+CalculationContext非互換、Capability / prediction support / protectionその他のPlanner validation
+除外を理由として表示できること。新しいDomain ruleをUIへ作らない。typed status、Entry ID集合、
+Conflict membershipをcontrol authorityとし、表示用reason文字列は表示してよいが解析して分岐しない。
+preparation requestもrequestId / generation / stale response rejectionまたはignore / dispose / cancelの
+考え方を既存Planner Worker lifecycleと揃え、古い結果でavailabilityを上書きしない。
 
 Counter位置が一致することだけを理由に「作成できない」と表示してはならない。
 同一Counter位置でもPlannerがshareableと判定するoperationは共同実行できる
 ([PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.2参照)。
 
-将来のwhat-if比較では、一方のTargetを優先した場合に他方の次に実行可能な
-Practical / Idealまでの距離を並べて提示する。これも後続Phaseで実装する。
+### 11.2 「比較する」とwhat-if preview
 
-implementation mapping（normativeなUI契約ではない）。距離を求めるDomain計算、
-`PlannerWhatIfBounds`、Worker protocol、Production Worker adapter、
-`PlannerWorkerClient` APIはB9であり、その契約は
-[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.4.1〜9.2.4.13にある。本節が述べる競合選択UI、
-距離の表示、比較カード、選択不可表示、what-if requestの起動はB10である。
+各有効participantに「比較する」を置く。クリックしたparticipantだけを
+`scenarioResolution` とし、fresh PlannerInputへ表示中Planの既存explicit resolutionを
+復元して、`defaultPlannerWhatIfBounds = 2 / 8` をApplication callerが明示指定する。
+
+表示中Planから復元するのは `conflicts[].selectedBuildListEntryId !== null` の選択だけである。
+`recommendedBuildListEntryId`、Planner score、Beam bestState、Target priority、Candidate
+category / similarity、`selectedBuildListEntryIds` からresolutionを作らない。
+
+what-ifはtransient previewであり、次を行わない。
+
+```text
+ProductionPlanの変更または保存
+BuildListEntryの変更または保存
+PlannerConflictResolutionの永続化
+what-if resultの永続化
+trial Entryの採用
+```
+
+数秒かかる処理として、少なくとも次の状態を区別する。
+
+```text
+idle       未実行
+loading    比較中。進捗とキャンセルを表示
+completed  typed comparisonを表示
+failure    typed failureまたは予期しないerrorを表示
+```
+
+別participantを比較する、別Conflictへ移動する、pageを離れる、Planner再計算を開始する場合は、
+不要なrequestを `cancelPlan(requestId)` でcancelする。cancelはfailure表示にせず、partial resultを
+表示しない。requestId / generationが古いprogress / result / errorを無視し、古い結果を新しい
+participant cardへ表示しない。
+
+### 11.3 comparison card
+
+`PlannerWhatIfComparison.alternatives` のstable orderをそのまま使い、UI独自のTarget sortを
+追加しない。各non-fixed TargetについてPracticalとIdealの2枠を独立表示し、Ideal結果を
+Practical枠へ流用しない。
+
+`found` は `estimatedOperationCount` を主距離として表示する。
+`estimatedGogmaAdvance` / `estimatedSkillAdvance` / `estimatedNormalAdvance` は
+「進行量」として補足表示してよいが、絶対Counter値ではない。通常表示でBase Seedまたは
+絶対Gogma / Skill / Normal Counterを表示しない。
+
+typed no-resultは少なくとも次の意味を区別する。すべてを「候補なし」へまとめない。
+
+| status | 表示する意味 |
+| --- | --- |
+| `not_found_within_search_extent` | 探索範囲内に実行可能な候補なし |
+| `stopped_by_enumeration_bound` | 探索範囲上限のため未確認 |
+| `stopped_by_candidate_trial_bound` | 候補試行上限のため未確認 |
+| `stopped_by_planner_rerun_bound` | Planner再計算上限のため未確認 |
+
+comparison全体の `planner_input_not_ready` / `invalid_fixed_resolution` は別のtyped failureとして
+表示する。`invalid_fixed_resolution.reason` を分岐authorityとし、detail / message文字列を
+解析しない。自動的に別participantまたはPlanner推奨へfallbackせず、再選択または再計算を促す。
+
+### 11.4 「この候補を優先」とPlanner再計算
+
+「比較する」と「この候補を優先」は別操作とする。what-if成功を選択のgateにせず、比較せずに
+有効participantを優先できる。11.1でdisabledのparticipantはwhat-if成否にかかわらず選択できない。
+
+ユーザーが「この候補を優先」を明示した場合だけ、そのConflict IDとparticipant Entry IDから
+`PlannerConflictResolution` を作る。fresh PlannerInputへ、表示中Planから復元した他Conflictの
+explicit resolutionを保持してmergeし、同一 `conflictKey` は今回選択で置換する。
+
+選択確定後はwhat-if resultをPlan生成へ使わず、B8 Production constrained Plannerを最初から
+再実行する。Application callerが `defaultPlannerOrchestrationBounds = 2 / 1 / 4` を明示指定する。
+
+結果のwarningsにtyped `warning.kind === 'invalid_conflict_resolution'` が1件でもあれば、
+`plan !== null` でもfail closedとする。`savePlannerOrchestrationResult()` を呼ばず、ProductionPlanも
+generated BuildListEntryも保存せず、新Planへ遷移しない。表示中の旧Planを維持し、再選択または
+再計算を促す。warning.messageを解析せず、Planner推奨または別participantへfallbackせず、invalid
+resolutionを無視したordinary Planを保存しない。
+
+上記warningが無い結果だけ、既存
+`plannerResultPersistenceService.savePlannerOrchestrationResult()` でgenerated BuildListEntryと
+ProductionPlanをatomic保存する。新しいPlanが保存された場合はその
+`/plans/:planId` へ遷移する。Planが生成されない場合または保存失敗時は旧Planを黙って置換・削除
+せず、B10の判断だけで旧Planを自動削除しない。
+
+B10の編集対象は原則 `status === 'draft'` とする。`stale` はwhat-if / Conflict固定を継続せず
+既存の再計算へ誘導する。`active` / `completed` / `abandoned` PlanをB10操作で書き換えない。
 
 PlanStep表示。
 
@@ -897,6 +996,31 @@ export interface SearchUiState {
 - RNG変更理由があるBuildListEntryに `rng_state_changed` が表示される
 - Route参照武器変更理由があるBuildListEntryに `owned_weapon_changed` が表示される
 - CalculationContext非互換のEntryまたはPlanに `calculation_context_changed` が表示される
+- `/plans/:planId` がそのIDの保存済みPlanだけを表示し、不存在時に別Planへfallbackしない
+- Conflict participantを原則全件表示し、current stateで利用不能なEntryをdisabled + reasonで示す
+- Production Planner dependenciesを使うWorker-side preparationからready / invalid、valid / excluded
+  Entry、current initial Conflictのstructured-clone projectionを受け、main threadで
+  `ProductionRngEngine` を生成しない
+- persisted Conflictと同じIDのcurrent initial Conflictがあり、そのparticipantかつvalidなEntryだけを
+  操作可能にし、再現できないConflictは表示維持のまま両操作をdisabledにして再計算を促す
+- preparationがinvalidなら全Conflict操作をdisabledにし、typed reasonと再計算導線を表示する
+- preparationの古いrequestId / generation結果をcurrent availabilityへ適用しない
+- `recommendedBuildListEntryId` をbadge表示だけに使い、自動選択またはwhat-if固定に使わない
+- 保存済みPlanの `selectedBuildListEntryId` があるConflictだけをexisting explicit resolutionとして
+  fresh PlannerInputへ復元する
+- 「比較する」と「この候補を優先」が独立し、what-if未実行でも有効participantを選択できる
+- 別participant、別Conflict、page離脱、Planner再計算でwhat-ifをcancelし、cancelをfailure表示せず
+  古いgenerationのpartial / completed resultを新しいcardへ表示しない
+- comparisonがDomainのTarget順を維持し、Practical / Idealを独立表示する
+- what-ifの4種類のtyped no-resultを区別し、`planner_input_not_ready` /
+  `invalid_fixed_resolution` をmessage解析なしで扱う
+- 明示選択後はfresh PlannerInputと `defaultPlannerOrchestrationBounds` でB8 constrained Plannerを
+  再実行し、what-if trial結果をPlan生成へ流用しない
+- constrained結果にtyped `invalid_conflict_resolution` warningが1件でもあれば、`plan !== null` でも
+  persistenceを呼ばず、Entry / Planを保存せず、遷移せず、旧Planを維持する
+- 新Planとgenerated BuildListEntryを既存atomic persistence境界で保存して新Planへ遷移し、
+  Planなしまたは保存失敗時に旧Planを置換・削除しない
+- Conflict編集をDraft Planに限定し、stale / active / completed / abandonedをB10操作で書き換えない
 
 ## 19.3 Import / Export Test
 
