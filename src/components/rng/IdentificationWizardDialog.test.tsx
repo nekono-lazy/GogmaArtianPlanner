@@ -3,11 +3,21 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { createInitialRngState } from '../../domain/models/factories'
 import { loadMasterData } from '../../domain/master/loadMasterData'
-import type { RngState } from '../../domain/models/publicTypes'
+import {
+  getBonusDefinitionsForWeapon, getEnabledElements, getEnabledWeaponTypes,
+  getRanksForBonusType,
+} from '../../domain/master/masterSelectors'
+import type {
+  BonusRankId, BonusTypeId, ElementId, GroupSkillId, RngState, SeriesSkillId,
+  WeaponTypeId,
+} from '../../domain/models/publicTypes'
 import type {
   SkillIdentificationInput,
   SkillIdentificationResult,
 } from '../../domain/rng/identification'
+import {
+  REFERENCE_GROUP_SKILL_POOL, REFERENCE_SERIES_SKILL_POOL,
+} from '../../domain/rng/production/referenceSkillPools'
 import type {
   GogmaIdentificationWizardInput,
   IdentificationResultClassification,
@@ -20,6 +30,62 @@ import { IdentificationWizardDialog } from './IdentificationWizardDialog'
 const loadedMaster = loadMasterData()
 if (!loadedMaster.ok) throw new Error('Test Master is unavailable.')
 const master = loadedMaster.data
+
+// The Dialog resolves its STEP 1 Weapon Type / Element through these Master
+// selectors, so the fixtures resolve the same authoritative pair instead of
+// hard-coding identifiers.
+const enabledWeaponTypeId = getEnabledWeaponTypes(master)[0]?.id
+const enabledElementId = getEnabledElements(master)[0]?.id
+if (enabledWeaponTypeId === undefined || enabledElementId === undefined) {
+  throw new Error('Test fixture requires an enabled Weapon Type and Element.')
+}
+const authoritativeWeaponTypeId: WeaponTypeId = enabledWeaponTypeId
+const authoritativeElementId: ElementId = enabledElementId
+
+const enabledSeriesSkillId = REFERENCE_SERIES_SKILL_POOL.find(
+  (id) => master.seriesSkills.find((skill) => skill.id === id)?.isEnabled,
+)
+const enabledGroupSkillId = REFERENCE_GROUP_SKILL_POOL.find(
+  (id) => master.groupSkills.find((skill) => skill.id === id)?.isEnabled,
+)
+if (enabledSeriesSkillId === undefined || enabledGroupSkillId === undefined) {
+  throw new Error('Test fixture requires an enabled Series Skill and Group Skill.')
+}
+const fixtureSeriesSkillId: SeriesSkillId = enabledSeriesSkillId
+const fixtureGroupSkillId: GroupSkillId = enabledGroupSkillId
+
+interface FixtureBonusChoice {
+  readonly bonusTypeId: BonusTypeId
+  readonly bonusRankId: BonusRankId
+}
+
+/**
+ * Reset observation fixtures must use pairs the Dialog itself offers for the
+ * STEP 1 authoritative Weapon Type / Element under `gogma_artian` scope, in the
+ * same Master order the Selects render.
+ */
+function gogmaBonusChoices(
+  weaponTypeId: WeaponTypeId,
+  elementId: ElementId,
+): readonly FixtureBonusChoice[] {
+  const definitions = getBonusDefinitionsForWeapon(
+    master, weaponTypeId, elementId, 'gogma_artian',
+  )
+  const choices = [...new Set(definitions.map(({ bonusTypeId }) => bonusTypeId))]
+    .map((bonusTypeId) => {
+      const rank = getRanksForBonusType(
+        master, weaponTypeId, elementId, bonusTypeId, 'gogma_artian',
+      )[0]
+      if (rank === undefined) {
+        throw new Error(`Test fixture requires a Gogma rank for ${bonusTypeId}.`)
+      }
+      return { bonusTypeId, bonusRankId: rank.id }
+    })
+  if (choices.length < 2) {
+    throw new Error('Test fixture requires at least two Gogma bonus types.')
+  }
+  return choices
+}
 
 function rngState(): RngState {
   const state = createInitialRngState('2026-09-01T00:00:00.000Z')
@@ -257,6 +323,67 @@ class FakeCoordinator implements IdentificationWizardCoordinator {
     this.publish({ ...this.state, adoption: { status: 'adopted', savedRngState: saved, error: null } })
     return saved
   }
+  /**
+   * Test fixture: publish the state a completed unique STEP 1 search produces.
+   * A STEP 2 or Review test that is not about the STEP 1 journey uses this
+   * instead of replaying the STEP 1 form. The transition itself stays covered by
+   * the STEP 1 journey tests, and `skillInputs` is recorded exactly as
+   * `identifySkill` would record it so STEP 1 authority assertions still hold.
+   */
+  seedUniqueSkillResult(): SkillIdentificationInput {
+    const input: SkillIdentificationInput = {
+      weaponTypeId: authoritativeWeaponTypeId,
+      elementId: authoritativeElementId,
+      observations: Array.from({ length: 4 }, () => ({
+        seriesSkillId: fixtureSeriesSkillId,
+        groupSkillId: fixtureGroupSkillId,
+      })),
+      seedRange: { startInclusive: 100, endInclusive: 200 },
+      skillCounterRange: { startInclusive: 37, endInclusive: 47 },
+    }
+    this.skillInputs.push(structuredClone(input))
+    this.publish({
+      ...initialWizardState(),
+      skill: {
+        status: 'completed', requestId: null, input: structuredClone(input),
+        progress: null,
+        result: {
+          matches: [{ baseSeed: 86315169, startSkillCounter: 42 }],
+          searchedSeedRange: { startInclusive: 0, endInclusive: 99_999_999 },
+          isTruncated: false,
+        },
+        classification: 'unique',
+        identified: { baseSeed: '86315169', startingSkillCounter: 42 },
+        error: null,
+      },
+    })
+    return input
+  }
+
+  /**
+   * Test fixture: publish the state a completed unique STEP 2 search produces on
+   * top of a seeded unique STEP 1 result. Only tests that assert Review
+   * rendering, adoption, or restart use it; a test that also exercises a STEP 1
+   * or STEP 2 rerun keeps the real journey because the rerun depends on the
+   * Dialog's own form drafts.
+   */
+  seedUniqueGogmaResult(): void {
+    this.seedUniqueSkillResult()
+    this.publish({
+      ...this.state,
+      gogma: {
+        ...this.state.gogma, status: 'completed', requestId: null,
+        result: {
+          matches: [{ startGogmaCounter: 84 }],
+          searchedCounterRange: { startInclusive: 79, endInclusive: 89 },
+          isTruncated: false,
+        },
+        classification: 'unique', startingGogmaCounter: 84,
+      },
+      review: { baseSeed: '86315169', startingSkillCounter: 42, startingGogmaCounter: 84 },
+    })
+  }
+
   restart() {
     this.restartCalls += 1
     this.skillActiveRequest = undefined
@@ -287,59 +414,81 @@ function renderWizard(coordinator = new FakeCoordinator()) {
   return { coordinator, onAdopted, onClose, ...view }
 }
 
-function selectOption(
-  control: HTMLElement,
-  optionIndex = 1,
-) {
-  fireEvent.mouseDown(control)
-  const options = within(screen.getByRole('listbox')).getAllByRole('option')
-  fireEvent.click(options[optionIndex]!)
+/**
+ * Set a MUI Select through the hidden native input MUI renders for autofill. It
+ * runs the same controlled `onChange` a Menu option click runs, without mounting
+ * and unmounting a Popover/Portal per slot. Fixture setup only: real Menu
+ * interaction stays asserted by the STEP 1 ordered-observation test and the
+ * STEP 2 STEP 1-authority test, which both drive the Menu with `user.click`.
+ */
+function setMuiSelectValue(control: HTMLElement, value: string) {
+  const nativeInput = control.parentElement?.querySelector('input.MuiSelect-nativeInput')
+  if (!(nativeInput instanceof HTMLInputElement)) {
+    throw new Error('MUI Select native input was not found.')
+  }
+  fireEvent.change(nativeInput, { target: { value } })
 }
 
 function fillSkillObservations(count = 4) {
   for (let index = 1; index <= count; index += 1) {
     const series = screen.getByLabelText(`Observation ${index} Series Skill`)
-    if (series.textContent?.includes('未入力')) selectOption(series)
+    if (series.textContent?.includes('未入力')) setMuiSelectValue(series, fixtureSeriesSkillId)
     const group = screen.getByLabelText(`Observation ${index} Group Skill`)
-    if (group.textContent?.includes('未入力')) selectOption(group)
+    if (group.textContent?.includes('未入力')) setMuiSelectValue(group, fixtureGroupSkillId)
   }
 }
 
-async function fillSeedRange(
-  user: ReturnType<typeof userEvent.setup>,
-  start = '100',
-  end = '200',
-) {
-  const seedStart = screen.getByLabelText('Base Seed range start')
-  const seedEnd = screen.getByLabelText('Base Seed range end')
-  if ((seedStart as HTMLInputElement).value === '') await user.type(seedStart, start)
-  if ((seedEnd as HTMLInputElement).value === '') await user.type(seedEnd, end)
+function fillSeedRange(start = '100', end = '200') {
+  const seedStart = screen.getByLabelText('Base Seed range start') as HTMLInputElement
+  const seedEnd = screen.getByLabelText('Base Seed range end') as HTMLInputElement
+  if (seedStart.value === '') fireEvent.change(seedStart, { target: { value: start } })
+  if (seedEnd.value === '') fireEvent.change(seedEnd, { target: { value: end } })
 }
 
-async function fillStep1(
-  user: ReturnType<typeof userEvent.setup>,
-) {
-  await fillSeedRange(user)
+function fillStep1() {
+  fillSeedRange()
   fillSkillObservations()
 }
 
 async function startSkillSearch(user: ReturnType<typeof userEvent.setup>) {
-  await fillStep1(user)
+  fillStep1()
   await user.click(screen.getByRole('button', { name: 'STEP 1 Search' }))
 }
 
+function resetObservationEditor(observationIndex: number): HTMLElement {
+  return screen.getByText(`Reset Observation ${observationIndex}`)
+    .closest('.MuiStack-root') as HTMLElement
+}
+
+function step1BonusChoices(coordinator: FakeCoordinator): readonly FixtureBonusChoice[] {
+  const input = coordinator.getState().skill.input
+  if (input === null) throw new Error('STEP 1 input is unavailable.')
+  return gogmaBonusChoices(input.weaponTypeId, input.elementId)
+}
+
+function setBonusSlot(editor: HTMLElement, slotIndex: number, choice: FixtureBonusChoice) {
+  setMuiSelectValue(
+    within(editor).getByLabelText(`枠${slotIndex} ボーナス種別`),
+    choice.bonusTypeId,
+  )
+  // The rank Select stays disabled until the type is set, so it is queried again
+  // after the type change re-renders the slot.
+  setMuiSelectValue(
+    within(editor).getByLabelText(`枠${slotIndex} ランク`),
+    choice.bonusRankId,
+  )
+}
+
 function fillGogmaObservations(
+  coordinator: FakeCoordinator,
   observationCount = 4,
   slotCount = 5,
 ) {
+  const choice = step1BonusChoices(coordinator)[0]!
   for (let observationIndex = 1; observationIndex <= observationCount; observationIndex += 1) {
-    const editor = screen.getByText(`Reset Observation ${observationIndex}`)
-      .closest('.MuiStack-root') as HTMLElement
+    const editor = resetObservationEditor(observationIndex)
     for (let slotIndex = 1; slotIndex <= slotCount; slotIndex += 1) {
-      const type = within(editor).getByLabelText(`枠${slotIndex} ボーナス種別`)
-      if (type.textContent?.includes('未入力')) selectOption(type)
-      const rank = within(editor).getByLabelText(`枠${slotIndex} ランク`)
-      if (rank.textContent?.includes('未入力')) selectOption(rank)
+      setBonusSlot(editor, slotIndex, choice)
     }
   }
 }
@@ -352,9 +501,19 @@ async function reachStep2(coordinator: FakeCoordinator, user: ReturnType<typeof 
 
 async function reachReview(coordinator: FakeCoordinator, user: ReturnType<typeof userEvent.setup>) {
   await reachStep2(coordinator, user)
-  fillGogmaObservations()
+  fillGogmaObservations(coordinator)
   await user.click(screen.getByRole('button', { name: 'STEP 2 Search' }))
   act(() => coordinator.completeGogma('unique'))
+  await screen.findByText('Review')
+}
+
+async function seedStep2(coordinator: FakeCoordinator) {
+  act(() => { coordinator.seedUniqueSkillResult() })
+  await screen.findByText('STEP 2 — Starting Gogma Counter')
+}
+
+async function seedReview(coordinator: FakeCoordinator) {
+  act(() => { coordinator.seedUniqueGogmaResult() })
   await screen.findByText('Review')
 }
 
@@ -387,7 +546,7 @@ describe('IdentificationWizardDialog STEP 1', () => {
   it('does not call identifySkill while any Skill observation row is incomplete', async () => {
     const user = userEvent.setup()
     const { coordinator } = renderWizard()
-    await fillSeedRange(user)
+    fillSeedRange()
     fillSkillObservations(3)
 
     await user.click(screen.getByRole('button', { name: 'STEP 1 Search' }))
@@ -471,7 +630,7 @@ describe('IdentificationWizardDialog STEP 1', () => {
   it('restart clears the explicitly entered Seed range and observations', async () => {
     const user = userEvent.setup()
     const { coordinator } = renderWizard()
-    await fillStep1(user)
+    fillStep1()
 
     await user.click(screen.getByRole('button', { name: 'Restart' }))
 
@@ -504,11 +663,10 @@ describe('IdentificationWizardDialog STEP 2', { timeout: 15_000 }, () => {
   it('starts with four unentered five-slot Reset observation drafts', async () => {
     const user = userEvent.setup()
     const { coordinator } = renderWizard()
-    await reachStep2(coordinator, user)
+    await seedStep2(coordinator)
 
     for (let observationIndex = 1; observationIndex <= 4; observationIndex += 1) {
-      const editor = screen.getByText(`Reset Observation ${observationIndex}`)
-        .closest('.MuiStack-root') as HTMLElement
+      const editor = resetObservationEditor(observationIndex)
       for (let slotIndex = 1; slotIndex <= 5; slotIndex += 1) {
         expect(within(editor).getByLabelText(`枠${slotIndex} ボーナス種別`))
           .toHaveTextContent('未入力')
@@ -529,13 +687,13 @@ describe('IdentificationWizardDialog STEP 2', { timeout: 15_000 }, () => {
   it('does not call identifyGogma while any five-slot Reset observation is incomplete', async () => {
     const user = userEvent.setup()
     const { coordinator } = renderWizard()
-    await reachStep2(coordinator, user)
-    fillGogmaObservations(3)
-    const fourthEditor = screen.getByText('Reset Observation 4')
-      .closest('.MuiStack-root') as HTMLElement
+    await seedStep2(coordinator)
+    fillGogmaObservations(coordinator, 3)
+    // Reset Observation 4 keeps slot 5 unentered.
+    const choice = step1BonusChoices(coordinator)[0]!
+    const fourthEditor = resetObservationEditor(4)
     for (let slotIndex = 1; slotIndex <= 4; slotIndex += 1) {
-      selectOption(within(fourthEditor).getByLabelText(`枠${slotIndex} ボーナス種別`))
-      selectOption(within(fourthEditor).getByLabelText(`枠${slotIndex} ランク`))
+      setBonusSlot(fourthEditor, slotIndex, choice)
     }
 
     await user.click(screen.getByRole('button', { name: 'STEP 2 Search' }))
@@ -547,11 +705,11 @@ describe('IdentificationWizardDialog STEP 2', { timeout: 15_000 }, () => {
   it('uses STEP 1 authority, sends ordered five-slot Reset observations, and has no Seed/Keep input', async () => {
     const user = userEvent.setup()
     const { coordinator } = renderWizard()
-    await reachStep2(coordinator, user)
+    await seedStep2(coordinator)
 
     expect(screen.queryByLabelText(/^Base Seed$/)).not.toBeInTheDocument()
     expect(screen.queryByText(/Keep Observation/)).not.toBeInTheDocument()
-    fillGogmaObservations()
+    fillGogmaObservations(coordinator)
     const secondResetPanel = screen.getByText('Reset Observation 2')
       .closest('.MuiPaper-root') as HTMLElement
     await user.click(within(secondResetPanel).getAllByRole('combobox')[0]!)
@@ -581,8 +739,8 @@ describe('IdentificationWizardDialog STEP 2', { timeout: 15_000 }, () => {
   ] as const)('%s does not advance to Review', async (classification, message) => {
     const user = userEvent.setup()
     const { coordinator } = renderWizard()
-    await reachStep2(coordinator, user)
-    fillGogmaObservations()
+    await seedStep2(coordinator)
+    fillGogmaObservations(coordinator)
     await user.click(screen.getByRole('button', { name: 'STEP 2 Search' }))
     act(() => coordinator.completeGogma(classification))
 
@@ -594,8 +752,8 @@ describe('IdentificationWizardDialog STEP 2', { timeout: 15_000 }, () => {
   it('shows global progress, cancellation, and Worker failure distinctly', async () => {
     const user = userEvent.setup()
     const { coordinator } = renderWizard()
-    await reachStep2(coordinator, user)
-    fillGogmaObservations()
+    await seedStep2(coordinator)
+    fillGogmaObservations(coordinator)
     await user.click(screen.getByRole('button', { name: 'STEP 2 Search' }))
     act(() => coordinator.progressGogma())
     expect(screen.getByLabelText('検索進捗')).toHaveTextContent('5 / 11')
@@ -614,7 +772,7 @@ describe('IdentificationWizardDialog Review and lifecycle', { timeout: 15_000 },
   it('shows exact starting values, requires restoration confirmation, and adopts only through Coordinator', async () => {
     const user = userEvent.setup()
     const { coordinator, onAdopted } = renderWizard()
-    await reachReview(coordinator, user)
+    await seedReview(coordinator)
 
     expect(screen.getByText('Base Seed: 86315169')).toBeInTheDocument()
     expect(screen.getByText('Starting Skill Counter: 42')).toBeInTheDocument()
@@ -640,7 +798,7 @@ describe('IdentificationWizardDialog Review and lifecycle', { timeout: 15_000 },
   it('retains Review and confirmation after adoption failure and allows retry', async () => {
     const user = userEvent.setup()
     const { coordinator } = renderWizard()
-    await reachReview(coordinator, user)
+    await seedReview(coordinator)
     await user.click(screen.getByRole('checkbox', { name: '調査前のゲーム状態へ戻した' }))
     coordinator.adoptionFailure = new Error('put failed')
 
@@ -684,7 +842,7 @@ describe('IdentificationWizardDialog Review and lifecycle', { timeout: 15_000 },
   it('restart returns to the initial Coordinator state', async () => {
     const user = userEvent.setup()
     const { coordinator } = renderWizard()
-    await reachReview(coordinator, user)
+    await seedReview(coordinator)
     await user.click(screen.getByRole('button', { name: 'Restart' }))
 
     expect(coordinator.restartCalls).toBe(1)
