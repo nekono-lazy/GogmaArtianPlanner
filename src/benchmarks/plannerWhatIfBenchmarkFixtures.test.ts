@@ -118,24 +118,30 @@ describe('B9 Production-valid benchmark fixtures', () => {
     }
   }, 30000)
 
-  it('shares R across three participants and evaluates alternative Targets independently', async () => {
+  // The three-participant workload keeps its four Production calculations, split
+  // across two tests by semantic unit so one per-test timeout window never has to
+  // hold all four. R=2 / R=4 / R=6 / R=32 and every assertion are preserved.
+  it('shares R across three participants as the rerun budget progresses from R=2 to R=4', async () => {
     const low = await calculate('what_if_three_targets', 2, 2)
-    const high = await calculate('what_if_three_targets', 2, 32)
-    expect(high.comparison.alternatives.map(({ targetWeaponId }) => targetWeaponId)).toEqual([
-      'target.b9b2a.bow_thunder', 'target.b9b2a.bow_water',
-    ])
+    const middle = await calculate('what_if_three_targets', 2, 4)
     expect(low.comparison.alternatives[0].practical.status).toBe('found')
     expect(low.comparison.alternatives[0].ideal.status).toBe('stopped_by_planner_rerun_bound')
     expect(low.comparison.alternatives[1].practical.status).toBe('stopped_by_planner_rerun_bound')
     expect(low.comparison.alternatives[1].ideal.status).toBe('stopped_by_planner_rerun_bound')
+    expect(middle.comparison.alternatives[0].ideal.status).toBe('found')
+    expect(middle.comparison.alternatives[1].practical.status).toBe('stopped_by_planner_rerun_bound')
+  }, 30000)
+
+  it('evaluates alternative Targets independently and reaches the R=32 outcome at R=6', async () => {
+    const sufficient = await calculate('what_if_three_targets', 2, 6)
+    const high = await calculate('what_if_three_targets', 2, 32)
+    expect(high.comparison.alternatives.map(({ targetWeaponId }) => targetWeaponId)).toEqual([
+      'target.b9b2a.bow_thunder', 'target.b9b2a.bow_water',
+    ])
     expect(high.comparison.alternatives.map(({ practical }) => practical.status)).toEqual(['found', 'found'])
     expect(high.comparison.alternatives[0].practical).toEqual(high.comparison.alternatives[1].practical)
     expect(high.comparison.alternatives.map(({ ideal }) => ideal.status)).toEqual(['found', 'found'])
     expect(createPlannerWhatIfBenchmarkOutcome(high).candidateTrialBoundReached).toBe(false)
-    const middle = await calculate('what_if_three_targets', 2, 4)
-    const sufficient = await calculate('what_if_three_targets', 2, 6)
-    expect(middle.comparison.alternatives[0].ideal.status).toBe('found')
-    expect(middle.comparison.alternatives[1].practical.status).toBe('stopped_by_planner_rerun_bound')
     expect(createPlannerWhatIfBenchmarkOutcome(sufficient).outcomeKey).toBe(createPlannerWhatIfBenchmarkOutcome(high).outcomeKey)
     expect(createPlannerWhatIfBenchmarkOutcome(high).plannerRerunBoundReached).toBe(false)
   }, 30000)
