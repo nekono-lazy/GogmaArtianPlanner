@@ -17,10 +17,8 @@ import { RngSetupPage } from './pages/RngSetupPage'
 import { NormalCountersPage } from './pages/NormalCountersPage'
 import { OwnedWeaponsPage } from './pages/OwnedWeaponsPage'
 import { TargetWeaponsPage } from './pages/TargetWeaponsPage'
-import {
-  ExecutionNavigatorPage,
-  ProductionPlanPage,
-} from './pages/StaticPages'
+import { ExecutionNavigatorPage } from './pages/StaticPages'
+import { ProductionPlanPage } from './pages/ProductionPlanPage'
 
 const masterData = loadMasterData()
 
