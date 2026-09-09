@@ -19,6 +19,7 @@ import {
 import type { PlannerInteractionPreparationResult } from '../../workers/plannerWorkerContracts'
 import {
   createProductionPlanInteractionViewModel,
+  mergeExplicitConflictResolution,
   restorePersistedExplicitResolutions,
 } from './prepareProductionPlanInteraction'
 
@@ -305,4 +306,39 @@ describe('createProductionPlanInteractionViewModel', () => {
       })
     },
   )
+})
+
+
+describe('mergeExplicitConflictResolution', () => {
+  it('replaces the same key, keeps other choices and does not mutate the input', () => {
+    const { entries, targets } = fixtureEntries()
+    const input = plannerInput(entries, targets)
+    input.conflictResolutions = [
+      { conflictKey: 'a', selectedBuildListEntryId: entries[0].id },
+      { conflictKey: 'b', selectedBuildListEntryId: entries[0].id },
+    ]
+    const before = structuredClone(input)
+    const choice = { conflictKey: 'a', selectedBuildListEntryId: entries[1].id }
+    const merged = mergeExplicitConflictResolution(input, choice)
+    expect(merged).not.toBe(input)
+    expect(merged.conflictResolutions).toEqual([choice, input.conflictResolutions[1]])
+    expect(input).toEqual(before)
+  })
+
+  it('appends an absent key without generating choices from recommendations', () => {
+    const { entries, targets } = fixtureEntries()
+    const input = plannerInput(entries, targets)
+    const persistedPlan = plan([
+      conflict(entries, { id: 'recommendation-only' }),
+      conflict(entries, { id: 'explicit', selectedBuildListEntryId: entries[0].id }),
+    ])
+    const restored = restorePersistedExplicitResolutions(input, persistedPlan)
+    const before = structuredClone(restored)
+    const choice = { conflictKey: 'new', selectedBuildListEntryId: entries[1].id }
+    const merged = mergeExplicitConflictResolution(restored, choice)
+    expect(merged.conflictResolutions).toEqual([...restored.conflictResolutions, choice])
+    expect(merged.conflictResolutions.some(({ conflictKey }) => conflictKey === 'recommendation-only')).toBe(false)
+    expect(restored).toEqual(before)
+    expect(input.conflictResolutions).toEqual([])
+  })
 })

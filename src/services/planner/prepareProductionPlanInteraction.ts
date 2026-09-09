@@ -71,6 +71,26 @@ export function restorePersistedExplicitResolutions(
   return { ...input, conflictResolutions }
 }
 
+/** Replace only this explicit choice, retaining all other explicit resolutions. */
+export function mergeExplicitConflictResolution(
+  input: PlannerInput,
+  resolution: PlannerConflictResolution,
+): PlannerInput {
+  const exists = input.conflictResolutions.some(
+    ({ conflictKey }) => conflictKey === resolution.conflictKey,
+  )
+  return {
+    ...input,
+    conflictResolutions: exists
+      ? input.conflictResolutions.map((existing) =>
+          existing.conflictKey === resolution.conflictKey
+            ? { ...resolution }
+            : existing,
+        )
+      : [...input.conflictResolutions, { ...resolution }],
+  }
+}
+
 function planStatusMessage(status: ProductionPlanStatus): string | null {
   switch (status) {
     case 'draft':

@@ -9,7 +9,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material'
-import { Link as RouterLink, useParams } from 'react-router-dom'
+import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom'
 import { PageShell } from '../components/PageShell'
 import { ProductionPlanWhatIfComparison } from '../components/planner/ProductionPlanWhatIfComparison'
 import { loadMasterData } from '../domain/master/loadMasterData'
@@ -21,7 +21,9 @@ import type {
   ProductionPlanId,
 } from '../domain/models/publicTypes'
 import {
+  defaultPlannerOrchestrationBounds,
   defaultPlannerWhatIfBounds,
+  type PlannerOrchestrationResult,
   type PlannerInput,
   type PlannerProgress,
   type PlannerWhatIfCalculationResult,
@@ -33,6 +35,7 @@ import {
 } from '../services/planner/createPlannerInput'
 import {
   createProductionPlanInteractionViewModel,
+  mergeExplicitConflictResolution,
   restorePersistedExplicitResolutions,
   type ProductionPlanInteractionViewModel,
 } from '../services/planner/prepareProductionPlanInteraction'
@@ -41,6 +44,7 @@ import {
   PlannerCancelledError,
   type PlannerWorkerClient,
 } from '../services/planner/plannerWorkerClient'
+import { plannerResultPersistenceService } from '../services/planner/plannerResultPersistenceService'
 import type { PlannerInteractionPreparationResult } from '../workers/plannerWorkerContracts'
 
 const loadedMaster = loadMasterData()
@@ -51,6 +55,10 @@ export interface ProductionPlanPageDependencies {
   getPlan(planId: ProductionPlanId): Promise<ProductionPlan | undefined>
   createInput(calculationContext: CalculationContext): Promise<PlannerInput>
   createWorkerClient(): PlannerWorkerClient
+  savePlannerResult(
+    result: PlannerOrchestrationResult,
+    currentCalculationContext: CalculationContext,
+  ): Promise<ProductionPlan | null>
 }
 
 function createDefaultDependencies(
@@ -62,6 +70,11 @@ function createDefaultDependencies(
     createInput: (calculationContext) =>
       createPlannerInput(master, calculationContext),
     createWorkerClient: createProductionPlannerWorkerClient,
+    savePlannerResult: (result, currentCalculationContext) =>
+      plannerResultPersistenceService.savePlannerOrchestrationResult(
+        result,
+        currentCalculationContext,
+      ),
   }
 }
 
@@ -76,6 +89,7 @@ interface ProductionPlanPageProps {
 type ProductionPlanPageState =
   | { status: 'loading_plan' }
   | { status: 'not_found' }
+  | { status: 'stale'; plan: ProductionPlan }
   | { status: 'preparing'; plan: ProductionPlan }
   | {
       status: 'ready'
@@ -113,6 +127,14 @@ type WhatIfUiState =
         | { kind: 'unexpected'; message: string }
     })
 
+type ReplanUiState =
+  | { status: 'idle' }
+  | { status: 'loading'; progress: PlannerProgress | null }
+  | { status: 'saving' }
+  | { status: 'failure'; message: string }
+  | { status: 'notice'; message: string }
+  | { status: 'invalid_resolution' }
+
 const statusLabels = {
   draft: '下書き',
   active: '実行中',
@@ -139,6 +161,10 @@ export function ProductionPlanPage({
   dependencies = defaultDependencies ?? undefined,
 }: ProductionPlanPageProps) {
   const { planId } = useParams()
+  const navigate = useNavigate()
+  const selectionActionIdentityRef = useRef(0)
+  const selectionActiveRef = useRef(false)
+  const selectionSavingRef = useRef(false)
   const lifecycleIdentityRef = useRef(0)
   const whatIfActionIdentityRef = useRef(0)
   const clientRef = useRef<PlannerWorkerClient | null>(null)
@@ -156,6 +182,9 @@ export function ProductionPlanPage({
     status: 'idle',
   })
   const [whatIfNotice, setWhatIfNotice] = useState<string | null>(null)
+
+  const [replanState, setReplanState] = useState<ReplanUiState>({ status: 'idle' })
+  const replanBusy = replanState.status === 'loading' || replanState.status === 'saving'
 
   useEffect(() => {
     const lifecycleIdentity = lifecycleIdentityRef.current + 1
@@ -192,6 +221,7 @@ export function ProductionPlanPage({
       if (!isCurrent()) return
       setWhatIfState({ status: 'idle' })
       setWhatIfNotice(null)
+      setReplanState({ status: 'idle' })
     })
     try {
       client = dependencies.createWorkerClient()
@@ -217,6 +247,10 @@ export function ProductionPlanPage({
           return
         }
         loadedPlan = plan
+        if (plan.status === 'stale') {
+          setState({ status: 'stale', plan })
+          return
+        }
         setState({ status: 'preparing', plan })
 
         const calculationContext = createPlannerCalculationContext(
@@ -257,6 +291,9 @@ export function ProductionPlanPage({
     return () => {
       active = false
       whatIfActionIdentityRef.current += 1
+      selectionActionIdentityRef.current += 1
+      selectionActiveRef.current = false
+      selectionSavingRef.current = false
       const activeRequestId = activeWorkerRequestRef.current
       activeWorkerRequestRef.current = null
       if (activeRequestId !== null) client.cancelPlan(activeRequestId)
@@ -269,7 +306,7 @@ export function ProductionPlanPage({
     conflictId: string,
     buildListEntryId: BuildListEntryId,
   ) => {
-    if (!dependencies || state.status !== 'ready') return
+    if (!dependencies || state.status !== 'ready' || selectionActiveRef.current) return
     const displayedPlan = state.plan
     const displayedParticipant = state.viewModel.conflicts
       .find(({ id }) => id === conflictId)
@@ -422,8 +459,147 @@ export function ProductionPlanPage({
     setWhatIfNotice(null)
   }
 
+  const startReplanning = async (
+    conflictId: string,
+    buildListEntryId: BuildListEntryId,
+  ) => {
+    if (!dependencies || state.status !== 'ready' || selectionActiveRef.current) return
+    const displayedPlan = state.plan
+    const participant = state.viewModel.conflicts
+      .find(({ id }) => id === conflictId)
+      ?.participants.find((entry) => entry.buildListEntryId === buildListEntryId)
+    const client = clientRef.current
+    if (!client || !participant?.isAvailable) return
+
+    // Invalidate even a what-if still awaiting createInput, before cancelling its Worker.
+    whatIfActionIdentityRef.current += 1
+    const previousRequestId = activeWorkerRequestRef.current
+    activeWorkerRequestRef.current = null
+    if (previousRequestId !== null) client.cancelPlan(previousRequestId)
+    setWhatIfState({ status: 'idle' })
+    setWhatIfNotice(null)
+
+    const actionIdentity = ++selectionActionIdentityRef.current
+    const lifecycleIdentity = lifecycleIdentityRef.current
+    selectionActiveRef.current = true
+    const isCurrentAction = () =>
+      selectionActionIdentityRef.current === actionIdentity &&
+      lifecycleIdentityRef.current === lifecycleIdentity &&
+      clientRef.current === client
+    setReplanState({ status: 'loading', progress: null })
+
+    try {
+      const calculationContext = createPlannerCalculationContext(
+        dependencies.master,
+        client.engineVersion,
+      )
+      const freshInput = await dependencies.createInput(calculationContext)
+      if (!isCurrentAction()) return
+      const plannerInput = restorePersistedExplicitResolutions(freshInput, displayedPlan)
+      // Check availability before merging this click: a resolution can change conflicts.
+      const preparationRequestId = createRequestId()
+      activeWorkerRequestRef.current = preparationRequestId
+      const preparation = await client.prepareInteraction(preparationRequestId, plannerInput)
+      if (!isCurrentAction() || activeWorkerRequestRef.current !== preparationRequestId) return
+      activeWorkerRequestRef.current = null
+      const viewModel = createProductionPlanInteractionViewModel(
+        displayedPlan,
+        plannerInput,
+        preparation,
+      )
+      setState({ status: 'ready', plan: displayedPlan, input: plannerInput, preparation, viewModel })
+      const currentParticipant = viewModel.conflicts
+        .find(({ id }) => id === conflictId)
+        ?.participants.find((entry) => entry.buildListEntryId === buildListEntryId)
+      if (preparation.status === 'invalid' || !currentParticipant?.isAvailable) {
+        setReplanState({
+          status: 'notice',
+          message: '現在の状態が変化したため再計算を開始できませんでした。',
+        })
+        return
+      }
+
+      const mergedInput = mergeExplicitConflictResolution(plannerInput, {
+        conflictKey: conflictId,
+        selectedBuildListEntryId: buildListEntryId,
+      })
+      const requestId = createRequestId()
+      activeWorkerRequestRef.current = requestId
+      const result = await client.createConstrainedPlan(
+        requestId,
+        mergedInput,
+        defaultPlannerOrchestrationBounds,
+        {
+          onProgress: (progress) => {
+            if (isCurrentAction() && activeWorkerRequestRef.current === requestId) {
+              setReplanState({ status: 'loading', progress })
+            }
+          },
+        },
+      )
+      if (!isCurrentAction() || activeWorkerRequestRef.current !== requestId) return
+      activeWorkerRequestRef.current = null
+
+      // Application fail-closed boundary: even a non-null ordinary Plan must not
+      // be saved if the Planner could not honour an explicit resolution.
+      const hasInvalidConflictResolution = result.warnings.some(
+        (warning) => warning.kind === 'invalid_conflict_resolution',
+      )
+      if (hasInvalidConflictResolution) {
+        setReplanState({ status: 'invalid_resolution' })
+        return
+      }
+      if (!isCurrentAction()) return
+      selectionSavingRef.current = true
+      setReplanState({ status: 'saving' })
+      const saveCalculationContext = createPlannerCalculationContext(
+        dependencies.master,
+        client.engineVersion,
+      )
+      if (!isCurrentAction()) return
+      // Pass the whole result, including no-Plan results: Persistence owns the
+      // generated-Entry invariants and the single atomic transaction.
+      const savedPlan = await dependencies.savePlannerResult(result, saveCalculationContext)
+      if (!isCurrentAction()) return
+      if (savedPlan === null) {
+        setReplanState({
+          status: 'notice',
+          message: '現在の入力から新しい生産計画を作成できませんでした。',
+        })
+      } else {
+        setReplanState({ status: 'idle' })
+        void navigate(`/plans/${savedPlan.id}`)
+      }
+    } catch (caught: unknown) {
+      if (!isCurrentAction()) return
+      setReplanState(caught instanceof PlannerCancelledError
+        ? { status: 'idle' }
+        : {
+            status: 'failure',
+            message: caught instanceof Error ? caught.message : '生産計画の再計算・保存に失敗しました。',
+          })
+    } finally {
+      if (isCurrentAction()) {
+        activeWorkerRequestRef.current = null
+        selectionActiveRef.current = false
+        selectionSavingRef.current = false
+      }
+    }
+  }
+
+  const cancelReplanning = () => {
+    // Atomic persistence cannot be cancelled, including before the next render.
+    if (selectionSavingRef.current) return
+    selectionActionIdentityRef.current += 1
+    selectionActiveRef.current = false
+    const requestId = activeWorkerRequestRef.current
+    activeWorkerRequestRef.current = null
+    if (requestId !== null) clientRef.current?.cancelPlan(requestId)
+    setReplanState({ status: 'idle' })
+  }
+
   const loadedPlan =
-    state.status === 'preparing' || state.status === 'ready'
+    state.status === 'preparing' || state.status === 'ready' || state.status === 'stale'
       ? state.plan
       : state.status === 'error'
         ? state.plan
@@ -461,6 +637,44 @@ export function ProductionPlanPage({
             />
           </Stack>
         )}
+        {state.status === 'stale' && (
+          <>
+            <Alert severity="warning">
+              この生産計画は現在の状態と一致しません。ビルドリストから再計算してください。
+            </Alert>
+            {state.plan.conflicts.map((conflict, index) => (
+              <Paper key={conflict.id} variant="outlined" sx={{ p: 2 }}>
+                <Stack spacing={1}>
+                  <Typography component="h2" variant="h2">競合 {index + 1}</Typography>
+                  <Typography>{conflict.reason}</Typography>
+                  {conflict.buildListEntryIds.map((id) => (
+                    <Stack key={id} spacing={1}>
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        useFlexGap
+                        sx={{ flexWrap: 'wrap', alignItems: 'center' }}
+                      >
+                        <Typography variant="caption">BuildListEntry ID: {id}</Typography>
+                        {conflict.recommendedBuildListEntryId === id && (
+                          <Chip label="Planner推奨" size="small" color="info" />
+                        )}
+                        {conflict.selectedBuildListEntryId === id && (
+                          <Chip label="現在選択中" size="small" color="secondary" />
+                        )}
+                      </Stack>
+                      <Button disabled>比較する</Button>
+                      <Button disabled>この候補を優先</Button>
+                    </Stack>
+                  ))}
+                </Stack>
+              </Paper>
+            ))}
+            <Button component={RouterLink} to="/build-list" variant="outlined">
+              ビルドリストへ戻る
+            </Button>
+          </>
+        )}
         {state.status === 'preparing' && (
           <>
             <LinearProgress aria-label="現在のPlanner入力を準備中" />
@@ -469,6 +683,39 @@ export function ProductionPlanPage({
         )}
         {state.status === 'ready' && (
           <>
+            {replanState.status === 'loading' && (
+              <Stack spacing={1}>
+                <Typography>
+                  {replanState.progress
+                    ? `再計算中 ${replanState.progress.expandedStates} / ${replanState.progress.maxExpandedStates}`
+                    : '再計算中'}
+                </Typography>
+                <LinearProgress
+                  aria-label="Planner再計算の進捗"
+                  variant={replanState.progress ? 'determinate' : 'indeterminate'}
+                  value={replanState.progress
+                    ? replanState.progress.maxExpandedStates > 0
+                      ? replanState.progress.expandedStates / replanState.progress.maxExpandedStates * 100
+                      : 0
+                    : undefined}
+                />
+                <Button onClick={cancelReplanning}>再計算をキャンセル</Button>
+              </Stack>
+            )}
+            {replanState.status === 'saving' && (
+              <Stack spacing={1}>
+                <Typography>生産計画を保存しています。</Typography>
+                <LinearProgress aria-label="生産計画を保存中" />
+              </Stack>
+            )}
+            {replanState.status === 'failure' && <Alert severity="error">{replanState.message}</Alert>}
+            {replanState.status === 'notice' && <Alert severity="info">{replanState.message}</Alert>}
+            {replanState.status === 'invalid_resolution' && (
+              <Alert severity="warning">
+                ユーザーが選択した競合候補を現在の状態では固定できませんでした。
+                再選択またはビルドリストから再計算してください。
+              </Alert>
+            )}
             {whatIfNotice && <Alert severity="info">{whatIfNotice}</Alert>}
             {state.viewModel.planStatusMessage && (
               <Alert
@@ -559,6 +806,7 @@ export function ProductionPlanPage({
                             variant="outlined"
                             disabled={
                               !participant.isAvailable ||
+                              replanBusy ||
                               (whatIfState.status === 'loading' &&
                                 whatIfState.conflictId === conflict.id &&
                                 whatIfState.buildListEntryId ===
@@ -570,6 +818,13 @@ export function ProductionPlanPage({
                             )}
                           >
                             比較する
+                          </Button>
+                          <Button
+                            variant="contained"
+                            disabled={!participant.isAvailable || replanBusy}
+                            onClick={() => void startReplanning(conflict.id, participant.buildListEntryId)}
+                          >
+                            この候補を優先
                           </Button>
                           {whatIfState.status !== 'idle' &&
                             whatIfState.conflictId === conflict.id &&

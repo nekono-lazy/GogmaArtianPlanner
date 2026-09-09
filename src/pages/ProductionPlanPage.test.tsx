@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
   createMemoryRouter,
@@ -15,6 +15,7 @@ import type {
 import {
   defaultPlannerOptions,
   type PlannerInput,
+  type PlannerOrchestrationResult,
   type PlannerWhatIfCalculationResult,
 } from '../domain/planner'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../domain/rng/production/productionRngEngine'
@@ -209,6 +210,7 @@ function dependencies(
     getPlan: vi.fn(async () => fixture.plan),
     createInput: vi.fn(async () => fixture.input),
     createWorkerClient: vi.fn(() => client),
+    savePlannerResult: vi.fn(async () => null),
   }
 }
 
@@ -746,5 +748,434 @@ describe('ProductionPlanPage', () => {
     expect(screen.queryByText('Planner入力を準備できませんでした'))
       .not.toBeInTheDocument()
     expect(client.createWhatIfComparison).not.toHaveBeenCalled()
+  })
+})
+
+
+function replanResult(plan: ProductionPlan | null = null): PlannerOrchestrationResult {
+  return { plan, conflicts: [], warnings: [], generatedBuildListEntries: [] }
+}
+
+async function clickSelection(user: ReturnType<typeof userEvent.setup>, index = 0) {
+  const buttons = await screen.findAllByRole('button', { name: 'この候補を優先' })
+  expect(buttons[index]).toBeEnabled()
+  await user.click(buttons[index])
+}
+
+describe('ProductionPlanPage explicit selection', () => {
+  it('selects without comparison, prepares fresh input before immutable merge, and explicitly passes 2/1/4', async () => {
+    const user = userEvent.setup()
+    const fixture = multiParticipantFixture()
+    const other = { ...fixture.plan.conflicts[0], id: 'conflict.other' }
+    const recommendationOnly = { ...other, id: 'conflict.recommendation', selectedBuildListEntryId: null }
+    fixture.plan.conflicts.push(other, recommendationOnly)
+    const fresh = structuredClone(fixture.input)
+    fresh.rngState.notes = 'selection-time state'
+    const beforePlan = structuredClone(fixture.plan)
+    const beforeInput = structuredClone(fresh)
+    const client = plannerClient(async () => fixture.preparation)
+    const result = replanResult()
+    vi.mocked(client.createConstrainedPlan).mockResolvedValue(result)
+    const deps = dependencies(fixture, client)
+    vi.mocked(deps.createInput).mockResolvedValueOnce(fixture.input).mockResolvedValueOnce(fresh)
+    renderPage(deps, fixture.plan.id)
+    await clickSelection(user, 1)
+    await waitFor(() => expect(deps.savePlannerResult).toHaveBeenCalledOnce())
+    expect(deps.createInput).toHaveBeenCalledTimes(2)
+    const prepared = vi.mocked(client.prepareInteraction).mock.calls[1][1]
+    expect(prepared.rngState).toBe(fresh.rngState)
+    expect(prepared).not.toBe(vi.mocked(client.prepareInteraction).mock.calls[0][1])
+    expect(prepared.conflictResolutions).toEqual([
+      { conflictKey: fixture.plan.conflicts[0].id, selectedBuildListEntryId: fixture.entry.id },
+      { conflictKey: other.id, selectedBuildListEntryId: fixture.entry.id },
+    ])
+    const [, merged, bounds] = vi.mocked(client.createConstrainedPlan).mock.calls[0]
+    expect(merged).not.toBe(prepared)
+    expect(merged.conflictResolutions).toEqual([
+      { conflictKey: fixture.plan.conflicts[0].id, selectedBuildListEntryId: fixture.secondEntry.id },
+      { conflictKey: other.id, selectedBuildListEntryId: fixture.entry.id },
+    ])
+    expect(bounds).toEqual({ maxCandidateTrialsPerConflict: 2, maxGeneratedBuildListEntries: 1, maxPlannerReruns: 4 })
+    expect(client.createWhatIfComparison).not.toHaveBeenCalled()
+    expect(client.createPlan).not.toHaveBeenCalled()
+    expect(fresh).toEqual(beforeInput)
+    expect(fixture.plan).toEqual(beforePlan)
+    expect(vi.mocked(deps.savePlannerResult).mock.calls[0][0]).toBe(result)
+  })
+
+  it.each([true, false])('CRITICAL: invalid warning prevents every save even with non-null plan=%s', async (hasPlan) => {
+    const user = userEvent.setup()
+    const fixture = pageFixture()
+    const before = structuredClone(fixture.plan)
+    const client = plannerClient(async () => fixture.preparation)
+    const result = replanResult(hasPlan ? createValidProductionPlan() : null)
+    result.generatedBuildListEntries = [createValidBuildListEntry()]
+    result.warnings = [{ kind: 'invalid_conflict_resolution', message: hasPlan ? 'Arbitrary unrelated diagnostic 123' : '完全に異なる文言' }]
+    vi.mocked(client.createConstrainedPlan).mockResolvedValue(result)
+    const deps = dependencies(fixture, client)
+    const view = renderPage(deps, fixture.plan.id)
+    const navigate = vi.spyOn(view.router, 'navigate')
+    await clickSelection(user)
+    expect(await screen.findByText(/ユーザーが選択した競合候補を現在の状態では固定できませんでした/)).toBeInTheDocument()
+    expect(deps.savePlannerResult).not.toHaveBeenCalled()
+    expect(navigate).not.toHaveBeenCalled()
+    expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)
+    expect(screen.getByText('Plan ID: ' + fixture.plan.id)).toBeInTheDocument()
+    expect(fixture.plan).toEqual(before)
+    expect(client.createConstrainedPlan).toHaveBeenCalledOnce()
+    expect(client.createPlan).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'この候補を優先' })).toBeEnabled()
+  })
+
+  it('saves the full result with a rebuilt current context and navigates only to the saved Plan, then reloads', async () => {
+    const user = userEvent.setup()
+    const fixture = pageFixture()
+    const next = pageFixture('saved')
+    const pending = deferred<PlannerOrchestrationResult>()
+    const client = plannerClient(async () => fixture.preparation)
+    vi.mocked(client.createConstrainedPlan).mockReturnValue(pending.promise)
+    const deps = dependencies(fixture, client)
+    vi.mocked(deps.getPlan).mockImplementation(async id => id === next.plan.id ? next.plan : fixture.plan)
+    vi.mocked(deps.savePlannerResult).mockResolvedValue(next.plan)
+    const view = renderPage(deps, fixture.plan.id)
+    await clickSelection(user)
+    await waitFor(() => expect(client.createConstrainedPlan).toHaveBeenCalledOnce())
+    const startContext = vi.mocked(deps.createInput).mock.calls[1][0]
+    deps.master.manifest.dataVersion += 1
+    const result = replanResult({ ...fixture.plan, id: productionPlanId('plan.worker-only') })
+    result.generatedBuildListEntries = [createValidBuildListEntry()]
+    // A message resembling an invalid warning is not an invalid typed kind.
+    result.warnings = [{ kind: 'max_steps_reached', message: 'invalid_conflict_resolution' }]
+    await act(async () => pending.resolve(result))
+    await waitFor(() => expect(view.router.state.location.pathname).toBe('/plans/' + next.plan.id))
+    expect(deps.savePlannerResult).toHaveBeenCalledOnce()
+    const [savedResult, saveContext] = vi.mocked(deps.savePlannerResult).mock.calls[0]
+    expect(savedResult).toBe(result)
+    expect(saveContext).not.toBe(startContext)
+    expect(saveContext.masterDataVersion).toBe(startContext.masterDataVersion + 1)
+    expect(saveContext.rngEngineVersion).toBe(client.engineVersion)
+    expect(deps.getPlan).toHaveBeenCalledWith(next.plan.id)
+    expect(await screen.findByText('Plan ID: ' + next.plan.id)).toBeInTheDocument()
+  })
+
+  it('passes no-Plan results whole to Persistence and keeps the old Plan when save returns null', async () => {
+    const user = userEvent.setup()
+    const fixture = pageFixture()
+    const client = plannerClient(async () => fixture.preparation)
+    const result = replanResult()
+    vi.mocked(client.createConstrainedPlan).mockResolvedValue(result)
+    const deps = dependencies(fixture, client)
+    const view = renderPage(deps, fixture.plan.id)
+    await clickSelection(user)
+    expect(await screen.findByText('現在の入力から新しい生産計画を作成できませんでした。')).toBeInTheDocument()
+    expect(vi.mocked(deps.savePlannerResult).mock.calls[0][0]).toBe(result)
+    expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)
+    expect(screen.getByText('Plan ID: ' + fixture.plan.id)).toBeInTheDocument()
+  })
+
+  it.each(['planner', 'save', 'no-plan-with-entries'] as const)('keeps the old Plan on %s failure and allows explicit retry', async (failure) => {
+    const user = userEvent.setup()
+    const fixture = pageFixture()
+    const before = structuredClone(fixture.plan)
+    const client = plannerClient(async () => fixture.preparation)
+    const result = replanResult(failure === 'no-plan-with-entries' ? null : createValidProductionPlan())
+    result.generatedBuildListEntries = [createValidBuildListEntry()]
+    vi.mocked(client.createConstrainedPlan).mockResolvedValue(result)
+    const deps = dependencies(fixture, client)
+    if (failure === 'planner') vi.mocked(client.createConstrainedPlan).mockRejectedValueOnce(new Error('Planner failed'))
+    else vi.mocked(deps.savePlannerResult).mockRejectedValueOnce(new Error('Atomic save rejected'))
+    const view = renderPage(deps, fixture.plan.id)
+    await clickSelection(user)
+    expect(await screen.findByText(failure === 'planner' ? 'Planner failed' : 'Atomic save rejected')).toBeInTheDocument()
+    expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)
+    expect(screen.getByText('Plan ID: ' + fixture.plan.id)).toBeInTheDocument()
+    expect(fixture.plan).toEqual(before)
+    expect(client.createConstrainedPlan).toHaveBeenCalledOnce()
+    if (failure !== 'planner') expect(vi.mocked(deps.savePlannerResult).mock.calls[0][0]).toBe(result)
+    await clickSelection(user)
+    await waitFor(() => expect(client.createConstrainedPlan).toHaveBeenCalledTimes(2))
+  })
+
+  it.each(['unavailable', 'invalid'] as const)('refreshes action-time %s availability without starting Planner or save', async (status) => {
+    const user = userEvent.setup()
+    const fixture = pageFixture()
+    const current: PlannerInteractionPreparationResult = status === 'invalid'
+      ? { status: 'invalid', issues: [{ path: 'input', code: 'invalid_integer', message: 'Typed action invalid' }], warnings: [], excludedBuildListEntries: [] }
+      : { status: 'ready', validBuildListEntryIds: [fixture.entry.id], excludedBuildListEntries: [], currentConflicts: [] }
+    const client = plannerClient(vi.fn().mockResolvedValueOnce(fixture.preparation).mockResolvedValueOnce(current))
+    const deps = dependencies(fixture, client)
+    renderPage(deps, fixture.plan.id)
+    await clickSelection(user)
+    expect(await screen.findByText('現在の状態が変化したため再計算を開始できませんでした。')).toBeInTheDocument()
+    expect(screen.getByText(status === 'invalid' ? 'Typed action invalid' : '現在のPlanner入力ではこの競合を再現できません。')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'この候補を優先' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '比較する' })).toBeDisabled()
+    expect(client.createConstrainedPlan).not.toHaveBeenCalled()
+    expect(deps.savePlannerResult).not.toHaveBeenCalled()
+  })
+
+  it('shows progress, blocks comparisons and selections during rerun, and ignores results/progress after cancel', async () => {
+    const user = userEvent.setup()
+    const fixture = pageFixture()
+    const pending = deferred<PlannerOrchestrationResult>()
+    const client = plannerClient(async () => fixture.preparation)
+    vi.mocked(client.createConstrainedPlan).mockImplementation(async (_id, _input, _bounds, callbacks) => {
+      callbacks?.onProgress?.({ expandedStates: 3, maxExpandedStates: 10 })
+      return pending.promise
+    })
+    const deps = dependencies(fixture, client)
+    const view = renderPage(deps, fixture.plan.id)
+    await clickSelection(user)
+    expect(await screen.findByText('再計算中 3 / 10')).toBeInTheDocument()
+    expect(screen.getByRole('progressbar', { name: 'Planner再計算の進捗' })).toHaveAttribute('aria-valuenow', '30')
+    expect(screen.getByRole('button', { name: '比較する' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'この候補を優先' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: '比較する' }))
+    expect(client.createWhatIfComparison).not.toHaveBeenCalled()
+    const [requestId, , , callbacks] = vi.mocked(client.createConstrainedPlan).mock.calls[0]
+    await user.click(screen.getByRole('button', { name: '再計算をキャンセル' }))
+    expect(client.cancelPlan).toHaveBeenCalledWith(requestId)
+    await act(async () => {
+      callbacks?.onProgress?.({ expandedStates: 9, maxExpandedStates: 10 })
+      pending.resolve(replanResult(createValidProductionPlan()))
+    })
+    expect(deps.savePlannerResult).not.toHaveBeenCalled()
+    expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)
+    expect(screen.queryByText(/再計算中/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'この候補を優先' })).toBeEnabled()
+  })
+
+  it('does not display PlannerCancelledError as a failure', async () => {
+    const user = userEvent.setup()
+    const fixture = pageFixture()
+    const client = plannerClient(async () => fixture.preparation)
+    vi.mocked(client.createConstrainedPlan).mockRejectedValue(new PlannerCancelledError())
+    const deps = dependencies(fixture, client)
+    renderPage(deps, fixture.plan.id)
+    await clickSelection(user)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'この候補を優先' })).toBeEnabled())
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(deps.savePlannerResult).not.toHaveBeenCalled()
+  })
+
+  it.each(['pending', 'failure', 'no-result', 'completed', 'input-pending'] as const)('selection is independent of what-if %s and starts from fresh input', async (mode) => {
+    const user = userEvent.setup()
+    const fixture = pageFixture()
+    const pending = deferred<PlannerWhatIfCalculationResult>()
+    const inputPending = deferred<PlannerInput>()
+    const client = plannerClient(async () => fixture.preparation, () => pending.promise)
+    vi.mocked(client.createConstrainedPlan).mockResolvedValue(replanResult())
+    const deps = dependencies(fixture, client)
+    if (mode === 'input-pending') vi.mocked(deps.createInput).mockResolvedValueOnce(fixture.input).mockReturnValueOnce(inputPending.promise).mockResolvedValue(fixture.input)
+    renderPage(deps, fixture.plan.id)
+    await user.click(await screen.findByRole('button', { name: '比較する' }))
+    if (mode !== 'input-pending') await waitFor(() => expect(client.createWhatIfComparison).toHaveBeenCalledOnce())
+    if (mode === 'failure') await act(async () => pending.resolve({ status: 'planner_input_not_ready', issues: [], warnings: [], excludedBuildListEntries: [] }))
+    if (mode === 'completed' || mode === 'no-result') {
+      const result = completedWhatIf(fixture.entry.id, fixture.target, 99)
+      if (mode === 'no-result') result.comparison.alternatives[0].practical = { status: 'not_found_within_search_extent' }
+      await act(async () => pending.resolve(result))
+    }
+    await clickSelection(user)
+    await waitFor(() => expect(client.createConstrainedPlan).toHaveBeenCalledOnce())
+    expect(deps.createInput).toHaveBeenCalledTimes(3)
+    if (mode === 'pending') expect(client.cancelPlan).toHaveBeenCalledWith(vi.mocked(client.createWhatIfComparison).mock.calls[0][0])
+    await act(async () => {
+      inputPending.resolve(fixture.input)
+      pending.resolve(completedWhatIf(fixture.entry.id, fixture.target, 99))
+    })
+    expect(client.prepareInteraction).toHaveBeenCalledTimes(mode === 'input-pending' ? 2 : 3)
+    expect(screen.queryByText('必要操作数: 99')).not.toBeInTheDocument()
+    expect(screen.queryByText('比較中')).not.toBeInTheDocument()
+    expect(deps.savePlannerResult).toHaveBeenCalledOnce()
+  })
+
+  it.each(['input', 'preparation', 'planner'] as const)('cancel during %s prevents all later UI effects and unstarted work', async (phase) => {
+    const user = userEvent.setup()
+    const fixture = pageFixture()
+    const inputPending = deferred<PlannerInput>()
+    const preparationPending = deferred<PlannerInteractionPreparationResult>()
+    const plannerPending = deferred<PlannerOrchestrationResult>()
+    const client = plannerClient(async () => fixture.preparation)
+    vi.mocked(client.createConstrainedPlan).mockReturnValue(phase === 'planner' ? plannerPending.promise : Promise.resolve(replanResult(createValidProductionPlan())))
+    const deps = dependencies(fixture, client)
+    if (phase === 'input') vi.mocked(deps.createInput).mockResolvedValueOnce(fixture.input).mockReturnValueOnce(inputPending.promise)
+    if (phase === 'preparation') vi.mocked(client.prepareInteraction).mockResolvedValueOnce(fixture.preparation).mockReturnValueOnce(preparationPending.promise)
+    const view = renderPage(deps, fixture.plan.id)
+    await clickSelection(user)
+    await user.click(screen.getByRole('button', { name: '再計算をキャンセル' }))
+    await act(async () => {
+      inputPending.resolve(fixture.input)
+      preparationPending.resolve(fixture.preparation)
+      plannerPending.resolve(replanResult(createValidProductionPlan()))
+    })
+    if (phase === 'input') expect(client.prepareInteraction).toHaveBeenCalledOnce()
+    if (phase === 'input' || phase === 'preparation') expect(client.createConstrainedPlan).not.toHaveBeenCalled()
+    expect(deps.savePlannerResult).not.toHaveBeenCalled()
+    expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'この候補を優先' })).toBeEnabled()
+  })
+
+  it.each(['stale', 'active', 'completed', 'abandoned'] as const)('does not select a %s Plan', async (status) => {
+    const fixture = pageFixture()
+    fixture.plan.status = status
+    const client = plannerClient(async () => fixture.preparation)
+    const deps = dependencies(fixture, client)
+    renderPage(deps, fixture.plan.id)
+    const button = await screen.findByRole('button', { name: 'この候補を優先' })
+    expect(button).toBeDisabled()
+    fireEvent.click(button)
+    if (status === 'stale') {
+      expect(deps.createInput).not.toHaveBeenCalled()
+      expect(client.prepareInteraction).not.toHaveBeenCalled()
+    }
+    expect(client.createConstrainedPlan).not.toHaveBeenCalled()
+    expect(deps.savePlannerResult).not.toHaveBeenCalled()
+    expect(screen.getByRole('link', { name: 'ビルドリストへ戻る' })).toHaveAttribute('href', '/build-list')
+  })
+})
+
+
+describe('ProductionPlanPage selection lifecycle races', () => {
+  it.each([
+    ['unmount', 'input'], ['unmount', 'preparation'], ['unmount', 'planner'], ['unmount', 'save'],
+    ['route', 'input'], ['route', 'preparation'], ['route', 'planner'], ['route', 'save'],
+    ['client', 'input'], ['client', 'preparation'], ['client', 'planner'], ['client', 'save'],
+  ] as const)('ignores late %s / %s completion', async (change, phase) => {
+    const user = userEvent.setup()
+    const fixture = pageFixture('old')
+    const next = pageFixture('next')
+    const inputPending = deferred<PlannerInput>()
+    const preparationPending = deferred<PlannerInteractionPreparationResult>()
+    const plannerPending = deferred<PlannerOrchestrationResult>()
+    const savePending = deferred<ProductionPlan | null>()
+    const client = plannerClient(async () => fixture.preparation)
+    vi.mocked(client.createConstrainedPlan).mockReturnValue(phase === 'planner' ? plannerPending.promise : Promise.resolve(replanResult(createValidProductionPlan())))
+    const deps = dependencies(fixture, client)
+    if (phase === 'input') vi.mocked(deps.createInput).mockResolvedValueOnce(fixture.input).mockReturnValueOnce(inputPending.promise)
+    if (phase === 'preparation') vi.mocked(client.prepareInteraction).mockResolvedValueOnce(fixture.preparation).mockReturnValueOnce(preparationPending.promise)
+    if (phase === 'save') vi.mocked(deps.savePlannerResult).mockReturnValue(savePending.promise)
+    const nextClient = plannerClient(async () => next.preparation)
+    const nextDeps = dependencies(next, nextClient)
+    const router = createMemoryRouter([
+      { path: '/plans/:planId', element: <ProductionPlanPage dependencies={deps} /> },
+    ], { initialEntries: ['/plans/' + fixture.plan.id] })
+    const view = render(<RouterProvider router={router} />)
+    const navigate = vi.spyOn(router, 'navigate')
+    await clickSelection(user)
+    if (phase === 'save') await waitFor(() => expect(deps.savePlannerResult).toHaveBeenCalledOnce())
+    if (phase === 'planner') await waitFor(() => expect(client.createConstrainedPlan).toHaveBeenCalledOnce())
+    if (phase === 'preparation') await waitFor(() => expect(client.prepareInteraction).toHaveBeenCalledTimes(2))
+    const requestId = phase === 'preparation'
+      ? vi.mocked(client.prepareInteraction).mock.calls[1][0]
+      : phase === 'planner' ? vi.mocked(client.createConstrainedPlan).mock.calls[0][0] : null
+    if (change === 'unmount') view.unmount()
+    else if (change === 'route') {
+      vi.mocked(deps.getPlan).mockResolvedValue(next.plan)
+      vi.mocked(deps.createInput).mockResolvedValue(next.input)
+      vi.mocked(deps.createWorkerClient).mockReturnValue(nextClient)
+      await act(async () => { await router.navigate('/plans/' + next.plan.id) })
+      await screen.findByText(next.target.name)
+    } else {
+      // Replace dependencies on the same route; this must dispose the old client.
+      router.routes[0].element = <ProductionPlanPage dependencies={nextDeps} />
+      await act(async () => { router.revalidate() })
+      await screen.findByText(next.target.name)
+    }
+    const navigationCount = navigate.mock.calls.length
+    const preparationCount = vi.mocked(client.prepareInteraction).mock.calls.length
+    const plannerCount = vi.mocked(client.createConstrainedPlan).mock.calls.length
+    await act(async () => {
+      inputPending.resolve(fixture.input)
+      preparationPending.resolve(fixture.preparation)
+      plannerPending.resolve(replanResult(createValidProductionPlan()))
+      savePending.resolve({ ...fixture.plan, id: productionPlanId('plan.late-save') })
+    })
+    expect(client.dispose).toHaveBeenCalledOnce()
+    if (requestId !== null) expect(client.cancelPlan).toHaveBeenCalledWith(requestId)
+    expect(client.prepareInteraction).toHaveBeenCalledTimes(preparationCount)
+    expect(client.createConstrainedPlan).toHaveBeenCalledTimes(plannerCount)
+    expect(deps.savePlannerResult).toHaveBeenCalledTimes(phase === 'save' ? 1 : 0)
+    expect(navigate).toHaveBeenCalledTimes(navigationCount)
+    if (change !== 'unmount') {
+      expect(screen.getByText('Plan ID: ' + next.plan.id)).toBeInTheDocument()
+      expect(screen.queryByText('Plan ID: ' + fixture.plan.id)).not.toBeInTheDocument()
+      expect(screen.queryByText(/再計算中/)).not.toBeInTheDocument()
+    }
+  })
+})
+
+
+describe('ProductionPlanPage atomic save phase', () => {
+  it('does not allow cancellation or another action once atomic save has started', async () => {
+    const user = userEvent.setup()
+    const fixture = pageFixture()
+    const savePending = deferred<ProductionPlan | null>()
+    const client = plannerClient(async () => fixture.preparation)
+    vi.mocked(client.createConstrainedPlan).mockResolvedValue(replanResult(createValidProductionPlan()))
+    const deps = dependencies(fixture, client)
+    vi.mocked(deps.savePlannerResult).mockReturnValue(savePending.promise)
+    renderPage(deps, fixture.plan.id)
+    await clickSelection(user)
+    await waitFor(() => expect(deps.savePlannerResult).toHaveBeenCalledOnce())
+    expect(screen.getByText('生産計画を保存しています。')).toBeInTheDocument()
+    expect(screen.getByRole('progressbar', { name: '生産計画を保存中' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '再計算をキャンセル' })).not.toBeInTheDocument()
+    const compare = screen.getByRole('button', { name: '比較する' })
+    const select = screen.getByRole('button', { name: 'この候補を優先' })
+    expect(compare).toBeDisabled()
+    expect(select).toBeDisabled()
+    fireEvent.click(compare)
+    fireEvent.click(select)
+    expect(client.createConstrainedPlan).toHaveBeenCalledOnce()
+    expect(client.createWhatIfComparison).not.toHaveBeenCalled()
+    expect(deps.createInput).toHaveBeenCalledTimes(2)
+    expect(client.cancelPlan).not.toHaveBeenCalled()
+    await act(async () => savePending.resolve(null))
+    expect(await screen.findByText('現在の入力から新しい生産計画を作成できませんでした。')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'この候補を優先' })).toBeEnabled()
+    expect(screen.queryByText('生産計画を保存しています。')).not.toBeInTheDocument()
+  })
+})
+
+
+describe('ProductionPlanPage stale persisted badges', () => {
+  it('keeps recommendation and selection on their persisted participants without starting any action', async () => {
+    const fixture = multiParticipantFixture()
+    fixture.plan.status = 'stale'
+    fixture.plan.conflicts[0].recommendedBuildListEntryId = fixture.entry.id
+    fixture.plan.conflicts[0].selectedBuildListEntryId = fixture.secondEntry.id
+    const client = plannerClient(async () => fixture.preparation)
+    const deps = dependencies(fixture, client)
+    const view = renderPage(deps, fixture.plan.id)
+    const navigate = vi.spyOn(view.router, 'navigate')
+
+    const labels = await screen.findAllByText(/^BuildListEntry ID:/)
+    expect(labels.map((label) => label.textContent)).toEqual([
+      'BuildListEntry ID: ' + fixture.entry.id,
+      'BuildListEntry ID: ' + fixture.secondEntry.id,
+    ])
+    for (const [index, label] of labels.entries()) {
+      const participant = label.parentElement?.parentElement
+      if (!participant) throw new Error('Missing stale participant card')
+      const card = within(participant)
+      expect(card.queryByText('Planner推奨') !== null).toBe(index === 0)
+      expect(card.queryByText('現在選択中') !== null).toBe(index === 1)
+      for (const name of ['比較する', 'この候補を優先']) {
+        const button = card.getByRole('button', { name })
+        expect(button).toBeDisabled()
+        fireEvent.click(button)
+      }
+    }
+    expect(deps.getPlan).toHaveBeenCalledExactlyOnceWith(fixture.plan.id)
+    expect(deps.createInput).not.toHaveBeenCalled()
+    expect(client.prepareInteraction).not.toHaveBeenCalled()
+    expect(client.createWhatIfComparison).not.toHaveBeenCalled()
+    expect(client.createConstrainedPlan).not.toHaveBeenCalled()
+    expect(deps.savePlannerResult).not.toHaveBeenCalled()
+    expect(navigate).not.toHaveBeenCalled()
+    expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)
   })
 })
