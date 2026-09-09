@@ -14,16 +14,36 @@ import {
 } from './gogmaPrediction'
 import {
   REFERENCE_GOGMA_RESET_CANDIDATES,
-  referenceGogmaBonusFamily,
   referenceGogmaIdFromRestorationBonus,
   referenceGogmaKeepFamilyCandidates,
+  referenceGogmaKeepFamilyForBonusType,
   restorationBonusFromReferenceGogmaId,
 } from './referenceGogmaBonuses'
-import { gameAdjustedGogmaResetCandidatesForWeaponAndElement } from './gameGogmaBonuses'
+import {
+  GOGMA_SCOPE_KEEP_CURRENT_BONUSES,
+  gameAdjustedGogmaResetCandidatesForWeaponAndElement,
+  gogmaScopeKeepCurrentBonusFamily,
+  requireGogmaScopeKeepCurrentBonusFamily,
+} from './gameGogmaBonuses'
 import { buildReferenceWeightedGogmaPool } from './weightedDraw'
 
+/**
+ * Reads the ordered slot families of any legal Gogma-scope five-slot value.
+ * It uses the Keep current-input authority instead of the reference result
+ * namespace, so a rank I current slot resolves like every other tier.
+ */
 function familyLayout(bonuses: RestorationBonusSet): string[] {
-  return bonuses.map((bonus) => referenceGogmaBonusFamily(referenceGogmaIdFromRestorationBonus(bonus)))
+  return bonuses.map(requireGogmaScopeKeepCurrentBonusFamily)
+}
+
+function bonus(bonusTypeId: string, bonusRankId: string) {
+  return { bonusTypeId, bonusRankId }
+}
+
+function fiveSlots(
+  ...slots: [unknown, unknown, unknown, unknown, unknown]
+): RestorationBonusSet {
+  return slots as unknown as RestorationBonusSet
 }
 
 function master() {
@@ -176,20 +196,107 @@ describe('reference-verified Production Gogma Reset / Keep prediction', () => {
 
   it('rejects malformed or non-Gogma Keep bonus inputs without a fallback', () => {
     const input = referenceGogmaVectors.keeps[0]
+    const withFirstSlot = (first: unknown) => ({
+      ...input,
+      currentBonuses: [first, ...input.currentBonuses.slice(1)] as unknown as RestorationBonusSet,
+    })
     expect(() => predictReferenceGogmaKeep({ ...input, currentBonuses: input.currentBonuses.slice(0, 4) as unknown as RestorationBonusSet })).toThrow(RangeError)
-    expect(() => predictReferenceGogmaKeep({
-      ...input,
-      currentBonuses: [
-        { bonusTypeId: 'bonus_type.attack', bonusRankId: 'bonus_rank.i' },
-        ...input.currentBonuses.slice(1),
-      ] as unknown as RestorationBonusSet,
-    })).toThrow(RangeError)
-    expect(() => predictReferenceGogmaKeep({
-      ...input,
-      currentBonuses: [
-        { bonusTypeId: 'bonus_type.normal_sharpness', bonusRankId: 'bonus_rank.base' },
-        ...input.currentBonuses.slice(1),
-      ] as unknown as RestorationBonusSet,
-    })).toThrow(RangeError)
+    // Normal-tier current values stay unsupported: the reference defines no
+    // family mapping, pool, or weight for them.
+    expect(() => predictReferenceGogmaKeep(withFirstSlot(bonus('bonus_type.attack', 'bonus_rank.base')))).toThrow(RangeError)
+    expect(() => predictReferenceGogmaKeep(withFirstSlot(bonus('bonus_type.normal_sharpness', 'bonus_rank.base')))).toThrow(RangeError)
+    expect(() => predictReferenceGogmaKeep(withFirstSlot(bonus('bonus_type.normal_capacity', 'bonus_rank.base')))).toThrow(RangeError)
+    // Tier values Master never declares under `gogma_artian` scope.
+    expect(() => predictReferenceGogmaKeep(withFirstSlot(bonus('bonus_type.element', 'bonus_rank.iii')))).toThrow(RangeError)
+    expect(() => predictReferenceGogmaKeep(withFirstSlot(bonus('bonus_type.gogma_sharpness_capacity', 'bonus_rank.ii')))).toThrow(RangeError)
+    expect(() => predictReferenceGogmaKeep(withFirstSlot(bonus('bonus_type.unknown', 'bonus_rank.ex')))).toThrow(RangeError)
+    expect(() => predictReferenceGogmaKeep(withFirstSlot(bonus('bonus_type.attack', 'bonus_rank.unknown')))).toThrow(RangeError)
+  })
+})
+
+/**
+ * A Keep current slot only selects its family, so a legal `gogma_artian` tier
+ * the reference lottery never draws must still be readable
+ * (`docs/RNG_SPEC.md` 6.1, `docs/RNG_REFERENCE_AUDIT.md` 10.4 and 11).
+ */
+describe('Gogma-scope rank I as a Keep current input', () => {
+  it('pins the Keep current bonus tiers to the Master `gogma_artian` scope definitions', () => {
+    const key = (bonusTypeId: string, bonusRankId: string) => `${bonusTypeId}/${bonusRankId}`
+    const declared = new Set(
+      master().weaponBonusDefinitions
+        .filter((definition) => definition.scope === 'gogma_artian')
+        .map((definition) => key(definition.bonusTypeId, definition.bonusRankId)),
+    )
+    expect(new Set(GOGMA_SCOPE_KEEP_CURRENT_BONUSES.map(
+      (entry) => key(entry.bonusTypeId, entry.bonusRankId),
+    ))).toEqual(declared)
+  })
+
+  it('separates the Reset/Keep result namespace from the Keep current input', () => {
+    expect(REFERENCE_GOGMA_RESET_CANDIDATES.some((entry) => entry.bonus.bonusRankId === 'bonus_rank.i')).toBe(false)
+    for (const bonusTypeId of ['bonus_type.attack', 'bonus_type.affinity', 'bonus_type.element']) {
+      const rankOne = bonus(bonusTypeId, 'bonus_rank.i')
+      expect(gogmaScopeKeepCurrentBonusFamily(rankOne)).not.toBeNull()
+      expect(gogmaScopeKeepCurrentBonusFamily(rankOne)).toBe(referenceGogmaKeepFamilyForBonusType(bonusTypeId))
+      // Rank I is still not a reference lottery result and gained no reference ID.
+      expect(() => referenceGogmaIdFromRestorationBonus(rankOne)).toThrow(RangeError)
+    }
+    expect(gogmaScopeKeepCurrentBonusFamily(bonus('bonus_type.attack', 'bonus_rank.base'))).toBeNull()
+    expect(gogmaScopeKeepCurrentBonusFamily(bonus('bonus_type.normal_sharpness', 'bonus_rank.base'))).toBeNull()
+  })
+
+  it('produces the reference result of the same family layout from rank I current slots', () => {
+    const vector = referenceGogmaVectors.keeps[1]
+    expect(familyLayout(vector.currentBonuses)).toEqual(['attack', 'affinity', 'element', 'sharpness_capacity', 'attack'])
+    const rankOneCurrent = fiveSlots(
+      bonus('bonus_type.attack', 'bonus_rank.i'),
+      bonus('bonus_type.affinity', 'bonus_rank.i'),
+      bonus('bonus_type.element', 'bonus_rank.i'),
+      bonus('bonus_type.gogma_sharpness_capacity', 'bonus_rank.base'),
+      bonus('bonus_type.attack', 'bonus_rank.i'),
+    )
+    const result = predictReferenceGogmaKeep({ ...vector, currentBonuses: rankOneCurrent })
+    expect(result.bonuses).toEqual(vector.bonuses)
+    expect(familyLayout(result.bonuses)).toEqual(familyLayout(rankOneCurrent))
+  })
+
+  it('depends on the ordered family layout rather than the current tier', () => {
+    const { baseSeed, weaponTypeId, elementId, counterGate, gogmaCounter } = referenceGogmaVectors.keeps[1]
+    const input = { baseSeed, weaponTypeId, elementId, counterGate, gogmaCounter }
+    // The real-game report layout: sharpness / element / element / attack / attack.
+    const rankOne = fiveSlots(
+      bonus('bonus_type.gogma_sharpness_capacity', 'bonus_rank.base'),
+      bonus('bonus_type.element', 'bonus_rank.i'),
+      bonus('bonus_type.element', 'bonus_rank.i'),
+      bonus('bonus_type.attack', 'bonus_rank.i'),
+      bonus('bonus_type.attack', 'bonus_rank.i'),
+    )
+    const higherTiers = fiveSlots(
+      bonus('bonus_type.gogma_sharpness_capacity', 'bonus_rank.ex'),
+      bonus('bonus_type.element', 'bonus_rank.ii'),
+      bonus('bonus_type.element', 'bonus_rank.ex'),
+      bonus('bonus_type.attack', 'bonus_rank.ii'),
+      bonus('bonus_type.attack', 'bonus_rank.ex'),
+    )
+    expect(predictReferenceGogmaKeep({ ...input, currentBonuses: rankOne }))
+      .toEqual(predictReferenceGogmaKeep({ ...input, currentBonuses: higherTiers }))
+
+    const affinity = (bonusRankId: string) => fiveSlots(
+      bonus('bonus_type.affinity', bonusRankId),
+      bonus('bonus_type.affinity', bonusRankId),
+      bonus('bonus_type.affinity', bonusRankId),
+      bonus('bonus_type.affinity', bonusRankId),
+      bonus('bonus_type.affinity', bonusRankId),
+    )
+    expect(predictReferenceGogmaKeep({ ...input, currentBonuses: affinity('bonus_rank.i') }))
+      .toEqual(predictReferenceGogmaKeep({ ...input, currentBonuses: affinity('bonus_rank.iii') }))
+  })
+
+  it('leaves every existing supported Keep golden vector unchanged', () => {
+    for (const vector of referenceGogmaVectors.keeps) {
+      expect(predictReferenceGogmaKeep(vector).bonuses).toEqual(vector.bonuses)
+    }
+    expect(predictReferenceGogmaKeep(gameVerifiedGogmaKeepVector).bonuses)
+      .toEqual(gameVerifiedGogmaKeepVector.bonuses)
   })
 })

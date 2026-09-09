@@ -462,6 +462,14 @@ filter/retry/replacementは追加しない。
 
 Current Gogma MasterにはAttack/Affinity/Elementのrank Iも存在するが、参照Reset/Keep poolにはない。参照上、巨戟化直後は通常tierをそのまま持ち、rank Iへ変換しない。
 
+追記: プロジェクトオーナーの実機確認により、`gogma_artian` scopeの所持巨戟アーティアが
+Attack/Affinity/Elementのrank Iを実際に保持し得ることを確認した。したがってrank Iは
+Keepの **current input** としては合法である。Keepはslot familyだけを保持してtierを再抽選する
+ため、current tierがrank Iでもfamilyは他tierと同じく `bonusTypeId` から一意に決まる。
+一方でrank Iは参照Reset/Keepの **抽選結果** poolには存在せず、reference IDも持たない。
+Reset candidate poolとKeep current inputは別概念として扱い、rank Iへreference IDを
+推測付与しない。rank I entryがどのゲーム操作で生成されるかは引き続き未確認である。
+
 ---
 
 ## 11. Keep Bonuses
@@ -869,7 +877,7 @@ commit固定fixtureを両実装へ流し、Web/Lua/reference extractorとProduct
 - 参照実装自体のアルゴリズムが全weapon/attribute/game versionで実ゲームと一致すること。
 - BowのSharpness/Ammo family、LBG/HBGのElement family、elementless Gogma Element bonusの実ゲーム可否。
 - Current Masterの栄光の誉れ、祝祭の巡りがArtian RNG対象か、別用途か、update差か。
-- Gogma rank I Master entriesの実ゲーム上の意味。参照Reset/Keep poolにはない。
+- Gogma rank I Master entriesを生成するゲーム操作。実機で所持武器のcurrent値としては確認済みだが、参照Reset/Keep抽選結果poolには存在しない（10.4追記を参照）。
 - Gate未満時の実counter保存更新。
 - use as materialのRNG進行。
 - Normal poolのnative recipe capture/fitted poolとconfigured fallbackが全recipeで一致すること。

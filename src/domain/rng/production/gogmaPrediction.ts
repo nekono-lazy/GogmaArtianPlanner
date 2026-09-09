@@ -1,11 +1,14 @@
 import type { ElementId, RestorationBonusSet, WeaponTypeId } from '../../models/publicTypes'
-import { gameAdjustedGogmaResetCandidatesForWeaponAndElement, type GameAdjustedGogmaMasterSubset } from './gameGogmaBonuses'
+import {
+  gameAdjustedGogmaResetCandidatesForWeaponAndElement,
+  requireGogmaScopeKeepCurrentBonusFamily,
+  type GameAdjustedGogmaMasterSubset,
+} from './gameGogmaBonuses'
 import { readReferenceRngBlock } from './referencePrng'
 import {
   REFERENCE_GOGMA_RESET_CANDIDATES,
   type ReferenceGogmaBonus,
-  referenceGogmaIdFromRestorationBonus,
-  referenceGogmaKeepFamilyCandidates,
+  referenceGogmaKeepFamilyCandidatesForFamily,
   restorationBonusSetFromReferenceGogmaIds,
 } from './referenceGogmaBonuses'
 import { deriveGogmaSeed } from './seedDerivation'
@@ -56,7 +59,7 @@ function referenceGogmaBlock(input: ReferenceGogmaPredictionInput): {
 
 function predictReferenceGogmaSlots(
   rawValues: readonly number[],
-  candidatesForSlot: (slot: number) => ReturnType<typeof referenceGogmaKeepFamilyCandidates>,
+  candidatesForSlot: (slot: number) => readonly ReferenceGogmaBonus[],
 ): RestorationBonusSet {
   const selectedReferenceIds: number[] = []
   for (let slot = 0; slot < 5; slot += 1) {
@@ -113,12 +116,15 @@ export function predictReferenceGogmaKeep(input: ReferenceGogmaKeepPredictionInp
   if (!Array.isArray(input.currentBonuses) || input.currentBonuses.length !== 5) {
     throw new RangeError('Keep current bonuses must contain exactly five slots')
   }
-  const currentReferenceIds = input.currentBonuses.map(referenceGogmaIdFromRestorationBonus)
+  // Keep reads only the family of each current slot, so a legal Gogma-scope
+  // tier the reference lottery never draws (rank I) still resolves here. The
+  // draw pool itself stays the unchanged reference family candidate order.
+  const currentFamilies = input.currentBonuses.map(requireGogmaScopeKeepCurrentBonusFamily)
   const { effectiveBlock, rawValues } = referenceGogmaBlock(input)
   return {
     bonuses: predictReferenceGogmaSlots(
       rawValues,
-      (slot) => referenceGogmaKeepFamilyCandidates(currentReferenceIds[slot]!),
+      (slot) => referenceGogmaKeepFamilyCandidatesForFamily(currentFamilies[slot]!),
     ),
     effectiveBlock,
   }

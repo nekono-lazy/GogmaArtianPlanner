@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { RestorationBonusSet } from '../../models/publicTypes'
 import { loadMasterData } from '../../master/loadMasterData'
 import { UnavailableRngEngine } from '../unavailableRngEngine'
 import { UnsupportedRngInputError } from '../rngEngine'
@@ -78,7 +79,7 @@ describe('ProductionRngEngine facade', () => {
     expect(engine.getPredictionSupport({ type: 'gogma_reset', weaponTypeId: reset.weaponTypeId, elementId: reset.elementId, master: unavailable })).toEqual({ supported: false, reason: 'no_available_reset_candidates' })
     expect(() => engine.predictGogmaBonus({ ...reset, baseSeed: String(reset.baseSeed), operation: { type: 'reset_bonuses' }, master: unavailable })).toThrow(UnsupportedRngInputError)
     expect(engine.getPredictionSupport({ type: 'normal_artian', weaponTypeId: 'weapon.great_sword', elementId: 'element.fire', rarity: 8 })).toEqual({ supported: false, reason: 'normal_pool_unverified' })
-    expect(engine.getPredictionSupport({ type: 'gogma_keep', weaponTypeId: gameVerifiedGogmaKeepVector.weaponTypeId, elementId: gameVerifiedGogmaKeepVector.elementId, currentBonuses: [{ bonusTypeId: 'bonus_type.attack', bonusRankId: 'bonus_rank.i' }, ...gameVerifiedGogmaKeepVector.currentBonuses.slice(1)] as never })).toEqual({ supported: false, reason: 'unsupported_current_bonus' })
+    expect(engine.getPredictionSupport({ type: 'gogma_keep', weaponTypeId: gameVerifiedGogmaKeepVector.weaponTypeId, elementId: gameVerifiedGogmaKeepVector.elementId, currentBonuses: [{ bonusTypeId: 'bonus_type.attack', bonusRankId: 'bonus_rank.base' }, ...gameVerifiedGogmaKeepVector.currentBonuses.slice(1)] as never })).toEqual({ supported: false, reason: 'unsupported_current_bonus' })
   })
 
   it('rethrows unexpected support errors and verifies Gogma adapter coverage before prediction', () => {
@@ -86,6 +87,95 @@ describe('ProductionRngEngine facade', () => {
     expect(engine.getPredictionSupport({ type: 'gogma_reset', weaponTypeId: reset.weaponTypeId, elementId: reset.elementId, master: inputMaster })).toEqual({ supported: true })
     expect(engine.getPredictionSupport({ type: 'gogma_keep', weaponTypeId: keep.weaponTypeId, elementId: keep.elementId, currentBonuses: keep.currentBonuses })).toEqual({ supported: true })
     expect(() => engine.getPredictionSupport({ type: 'gogma_reset', weaponTypeId: reset.weaponTypeId, elementId: reset.elementId, master: { ...inputMaster, bonusTypes: {} as never } })).toThrow(TypeError)
+  })
+
+  /**
+   * Keep reads only the slot family, so every legal `gogma_artian` tier is a
+   * supported current input, including the rank I values the reference lottery
+   * never draws (`docs/RNG_SPEC.md` 6.1, `docs/RNG_REFERENCE_AUDIT.md` 10.4).
+   */
+  describe('Gogma-scope Keep current input coverage', () => {
+    const keepSupport = (currentBonuses: unknown) => new ProductionRngEngine().getPredictionSupport({
+      type: 'gogma_keep',
+      weaponTypeId: gameVerifiedGogmaKeepVector.weaponTypeId,
+      elementId: gameVerifiedGogmaKeepVector.elementId,
+      currentBonuses: currentBonuses as never,
+    })
+    const bonus = (bonusTypeId: string, bonusRankId: string) => ({ bonusTypeId, bonusRankId })
+    const repeated = (bonusTypeId: string, bonusRankId: string) =>
+      Array.from({ length: 5 }, () => bonus(bonusTypeId, bonusRankId))
+
+    it('supports the reported real-game rank I current set', () => {
+      expect(keepSupport([
+        bonus('bonus_type.gogma_sharpness_capacity', 'bonus_rank.base'),
+        bonus('bonus_type.element', 'bonus_rank.i'),
+        bonus('bonus_type.element', 'bonus_rank.i'),
+        bonus('bonus_type.attack', 'bonus_rank.i'),
+        bonus('bonus_type.attack', 'bonus_rank.i'),
+      ])).toEqual({ supported: true })
+    })
+
+    it.each([
+      'bonus_type.attack',
+      'bonus_type.affinity',
+      'bonus_type.element',
+    ])('supports rank I current slots of %s', (bonusTypeId) => {
+      expect(keepSupport(repeated(bonusTypeId, 'bonus_rank.i'))).toEqual({ supported: true })
+    })
+
+    it('predicts the rank I current set without changing the family layout', () => {
+      const engine = new ProductionRngEngine()
+      const currentBonuses = [
+        bonus('bonus_type.attack', 'bonus_rank.i'),
+        bonus('bonus_type.attack', 'bonus_rank.i'),
+        bonus('bonus_type.affinity', 'bonus_rank.i'),
+        bonus('bonus_type.element', 'bonus_rank.i'),
+        bonus('bonus_type.gogma_sharpness_capacity', 'bonus_rank.base'),
+      ] as never as RestorationBonusSet
+      const predicted = engine.predictGogmaBonus({
+        baseSeed: String(gameVerifiedGogmaKeepVector.baseSeed),
+        weaponTypeId: gameVerifiedGogmaKeepVector.weaponTypeId,
+        elementId: gameVerifiedGogmaKeepVector.elementId,
+        gogmaCounter: gameVerifiedGogmaKeepVector.gogmaCounter,
+        operation: { type: 'keep_bonuses', currentBonuses },
+        master: master(),
+      })
+      expect(predicted.map(({ bonusTypeId }) => bonusTypeId))
+        .toEqual(currentBonuses.map(({ bonusTypeId }) => bonusTypeId))
+    })
+
+    it('still rejects normal-tier, unknown, and malformed current inputs', () => {
+      // `normal_artian` scope Keep stays unpredictable; that is missing
+      // Production prediction support, not a game rule.
+      expect(keepSupport([
+        bonus('bonus_type.attack', 'bonus_rank.base'),
+        bonus('bonus_type.attack', 'bonus_rank.base'),
+        bonus('bonus_type.affinity', 'bonus_rank.base'),
+        bonus('bonus_type.element', 'bonus_rank.base'),
+        bonus('bonus_type.normal_sharpness', 'bonus_rank.base'),
+      ])).toEqual({ supported: false, reason: 'unsupported_current_bonus' })
+      expect(keepSupport(repeated('bonus_type.attack', 'bonus_rank.base')))
+        .toEqual({ supported: false, reason: 'unsupported_current_bonus' })
+      expect(keepSupport(repeated('bonus_type.normal_capacity', 'bonus_rank.base')))
+        .toEqual({ supported: false, reason: 'unsupported_current_bonus' })
+      expect(keepSupport(repeated('bonus_type.element', 'bonus_rank.iii')))
+        .toEqual({ supported: false, reason: 'unsupported_current_bonus' })
+      expect(keepSupport(repeated('bonus_type.unknown', 'bonus_rank.ex')))
+        .toEqual({ supported: false, reason: 'unsupported_current_bonus' })
+      expect(keepSupport(repeated('bonus_type.attack', 'bonus_rank.i').slice(0, 4)))
+        .toEqual({ supported: false, reason: 'unsupported_current_bonus' })
+      expect(() => new ProductionRngEngine().predictGogmaBonus({
+        baseSeed: String(gameVerifiedGogmaKeepVector.baseSeed),
+        weaponTypeId: gameVerifiedGogmaKeepVector.weaponTypeId,
+        elementId: gameVerifiedGogmaKeepVector.elementId,
+        gogmaCounter: gameVerifiedGogmaKeepVector.gogmaCounter,
+        operation: {
+          type: 'keep_bonuses',
+          currentBonuses: repeated('bonus_type.attack', 'bonus_rank.base') as never as RestorationBonusSet,
+        },
+        master: master(),
+      })).toThrow(UnsupportedRngInputError)
+    })
   })
 
   it('advances only the contracted counters and rejects invalid or overflowing counters', () => {

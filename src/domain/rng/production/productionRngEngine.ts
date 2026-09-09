@@ -19,6 +19,7 @@ import {
   GameAdjustedGogmaResetAvailabilityError,
   GameAdjustedGogmaResetMasterDataError,
   gameAdjustedGogmaResetCandidatesForWeaponAndElement,
+  gogmaScopeKeepCurrentBonusFamily,
 } from './gameGogmaBonuses'
 import {
   predictGameAdjustedGogmaReset,
@@ -27,7 +28,6 @@ import {
 } from './gogmaPrediction'
 import { UnsupportedGameVerifiedNormalPredictionError, gameVerifiedNormalCandidatesForWeaponAndElement } from './gameNormalBonuses'
 import { predictGameVerifiedNormalArtian } from './normalPrediction'
-import { referenceGogmaIdFromRestorationBonus } from './referenceGogmaBonuses'
 import { toReferenceAttributeForce, toReferenceWeaponType } from './referenceAdapters'
 import {
   predictReferenceSkills,
@@ -121,13 +121,13 @@ export class ProductionRngEngine implements RngEngine {
           throw error
         }
         if (!Array.isArray(input.currentBonuses) || input.currentBonuses.length !== 5) return { supported: false, reason: 'unsupported_current_bonus' }
-        try {
-          input.currentBonuses.forEach(referenceGogmaIdFromRestorationBonus)
-          return { supported: true }
-        } catch (error) {
-          if (error instanceof RangeError) return { supported: false, reason: 'unsupported_current_bonus' }
-          throw error
+        // Keep needs the slot family only, so every legal `gogma_artian` tier
+        // is readable, including the rank I values the reference lottery never
+        // draws. Normal-tier current bonuses stay unsupported.
+        if (input.currentBonuses.some((bonus) => gogmaScopeKeepCurrentBonusFamily(bonus) === null)) {
+          return { supported: false, reason: 'unsupported_current_bonus' }
         }
+        return { supported: true }
     }
   }
 
