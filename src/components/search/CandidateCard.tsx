@@ -12,7 +12,12 @@ import {
   Typography,
 } from '@mui/material'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
-import type { BuildCandidate, OwnedWeapon, TargetWeapon } from '../../domain/models/publicTypes'
+import type {
+  BuildCandidate,
+  OwnedWeapon,
+  RestorationBonusSet,
+  TargetWeapon,
+} from '../../domain/models/publicTypes'
 import {
   bonusLabel,
   categoryLabels,
@@ -22,6 +27,39 @@ import {
   routeKindLabels,
   seriesSkillLabel,
 } from './searchPresentation'
+
+/**
+ * The five restoration bonus slots in their stored slot order.
+ *
+ * Slot order is semantic - Keep preserves the bonus family at each slot
+ * position - so the slots are never sorted, grouped, or normalized to a
+ * multiset for display, and the React key is the slot index because two slots
+ * may legitimately hold the identical bonus.
+ */
+function RestorationBonusSlots({
+  bonuses,
+  weaponTypeId,
+  master,
+  variant,
+}: {
+  bonuses: RestorationBonusSet
+  weaponTypeId: string
+  master: MasterDataRoot
+  variant?: 'filled' | 'outlined'
+}) {
+  return (
+    <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap' }}>
+      {bonuses.map((bonus, index) => (
+        <Chip
+          key={`slot-${index}`}
+          label={bonusLabel(bonus, weaponTypeId, master)}
+          size="small"
+          variant={variant}
+        />
+      ))}
+    </Stack>
+  )
+}
 
 interface CandidateCardProps {
   candidate: BuildCandidate
@@ -45,6 +83,17 @@ export function CandidateCard({
   const weaponTypeId = target?.weaponTypeId ?? candidate.route.operations.find(
     (operation) => 'weaponTypeId' in operation,
   )?.weaponTypeId ?? ''
+  // Keyed by the operation's own index, so a run of identical Reset or Keep
+  // operations can never be shifted by one against its predicted result.
+  const amendmentByOperationIndex = new Map(
+    (candidate.bonusAmendmentTrace ?? []).map((step) => [step.operationIndex, step]),
+  )
+  const missingAmendmentTrace =
+    candidate.bonusAmendmentTrace === undefined &&
+    candidate.route.operations.some(
+      (operation) =>
+        operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses',
+    )
   const sourceName = candidate.route.sourceOwnedWeaponId === null
     ? null
     : ownedWeapons.find(({ id }) => id === candidate.route.sourceOwnedWeaponId)?.name ??
@@ -65,15 +114,11 @@ export function CandidateCard({
             )}
             <Chip label={routeKindLabels[candidate.route.kind]} size="small" variant="outlined" />
           </Stack>
-          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-            {candidate.finalBonuses.map((bonus, index) => (
-              <Chip
-                key={`${bonus.bonusTypeId}:${bonus.bonusRankId}:${index}`}
-                label={bonusLabel(bonus, weaponTypeId, master)}
-                size="small"
-              />
-            ))}
-          </Stack>
+          <RestorationBonusSlots
+            bonuses={candidate.finalBonuses}
+            weaponTypeId={weaponTypeId}
+            master={master}
+          />
           <Typography variant="body2">
             シリーズ: {seriesSkillLabel(candidate.seriesSkillId, master)} ／ グループ:{' '}
             {groupSkillLabel(candidate.groupSkillId, master)}
@@ -83,7 +128,9 @@ export function CandidateCard({
             巨戟進行 {candidate.estimatedGogmaAdvance} ・ スキル進行 {candidate.estimatedSkillAdvance}
           </Typography>
           {sourceName && <Alert severity={sourceName.startsWith('参照元') ? 'warning' : 'info'}>起点武器: {sourceName}</Alert>}
-          <Accordion disableGutters elevation={0}>
+          {/* Long Routes reach well over a hundred amendments, so the detail
+              content is mounted only while the panel is open. */}
+          <Accordion disableGutters elevation={0} slotProps={{ transition: { unmountOnExit: true } }}>
             <AccordionSummary aria-controls={`candidate-${candidate.id}-detail`}>
               <Typography>候補詳細・作成ルート</Typography>
             </AccordionSummary>
@@ -103,10 +150,44 @@ export function CandidateCard({
                 </Typography>
                 <Typography variant="body2">類似度: {candidate.similarityScore === null ? '—' : candidate.similarityScore.toFixed(2)}</Typography>
                 <Divider />
+                {missingAmendmentTrace && (
+                  <Typography variant="body2" color="text.secondary">
+                    この候補には各復元ボーナス操作後の予測結果が記録されていません。
+                  </Typography>
+                )}
                 <ol>
-                  {candidate.route.operations.map((operation, index) => (
-                    <li key={`${operation.type}:${index}`}><Typography variant="body2">{operationLabel(operation)}</Typography></li>
-                  ))}
+                  {candidate.route.operations.map((operation, index) => {
+                    const amendment = amendmentByOperationIndex.get(index)
+                    return (
+                      <li key={`${operation.type}:${index}`}>
+                        <Stack
+                          direction={{ xs: 'column', sm: 'row' }}
+                          spacing={{ xs: 0.5, sm: 1 }}
+                          sx={{ alignItems: { sm: 'baseline' }, mb: 0.5 }}
+                        >
+                          <Typography variant="body2">{operationLabel(operation)}</Typography>
+                          {amendment && (
+                            <Stack
+                              direction="row"
+                              spacing={0.5}
+                              useFlexGap
+                              sx={{ flexWrap: 'wrap', alignItems: 'center' }}
+                            >
+                              <Typography variant="caption" color="text.secondary">
+                                予測結果:
+                              </Typography>
+                              <RestorationBonusSlots
+                                bonuses={amendment.restorationBonuses}
+                                weaponTypeId={weaponTypeId}
+                                master={master}
+                                variant="outlined"
+                              />
+                            </Stack>
+                          )}
+                        </Stack>
+                      </li>
+                    )
+                  })}
                 </ol>
                 <Typography variant="body2">
                   必要素材: {candidate.requiredMaterials.map((item) => `${materialLabel(item.materialId, master)} × ${item.quantity}`).join('、') || 'なし'}

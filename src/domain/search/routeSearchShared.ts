@@ -1,4 +1,5 @@
 import type {
+  BonusAmendmentResult,
   BuildCandidate,
   BuildRoute,
   GroupSkillId,
@@ -13,6 +14,7 @@ import type { RngEngine } from '../rng/rngEngine'
 import { evaluateSkillCondition, satisfiesIdealBonuses } from '../target'
 import {
   bonusAmendmentOperations,
+  bonusAmendmentResults,
   type BonusStreamSolutionSet,
   type TargetBonusStream,
 } from './bonusStream'
@@ -175,6 +177,7 @@ export function routeBonusSolutions(
       finalBonuses: solution.bonuses,
       restorationBonusScope: solution.restorationBonusScope,
       operations: bonusAmendmentOperations(set, solution, sourceOwnedWeaponId),
+      amendmentResults: bonusAmendmentResults(solution),
     })),
   ]
 }
@@ -186,10 +189,18 @@ export function createBaseCandidate(
   seriesSkillId: SeriesSkillId | null,
   groupSkillId: GroupSkillId | null,
   route: BuildRoute,
+  bonusAmendmentResults: readonly BonusAmendmentResult[],
 ): BuildCandidate | null {
   return createCandidateFromPrediction(
     context.target,
-    { finalBonuses: bonuses, restorationBonusScope, seriesSkillId, groupSkillId, route },
+    {
+      finalBonuses: bonuses,
+      restorationBonusScope,
+      seriesSkillId,
+      groupSkillId,
+      route,
+      bonusAmendmentResults,
+    },
     context.input,
     context.execution,
   )
@@ -287,6 +298,7 @@ export async function composeRouteCandidates(
         skill.seriesSkillId,
         skill.groupSkillId,
         { kind, sourceOwnedWeaponId: base.sourceOwnedWeaponId, operations },
+        bonus.amendmentResults,
       )
       if (candidate) candidates.push(candidate)
     }

@@ -276,8 +276,12 @@ export interface RestorationBonus {
 
 - `bonusTypeId` は対象武器種で利用可能なBonusTypeである
 - `bonusRankId` は対象武器種とBonusTypeで利用可能なRankである
-- 復元ボーナス5枠は順不同として比較する
-- 保存時の配列順はUI表示用として保持するが、同一性判定はmultisetとして行う
+- Target条件、Candidate completion、semantic identityなど、完成5枠を比較する契約では
+  `bonusTypeId + bonusRankId` のmultisetとして順不同で比較する
+- 一方、保存された `RestorationBonusSet` のslot順は保持する。Gogma Keepは各slot位置の
+  familyを保持してtierを再抽選するため、slot順は将来のKeep prediction入力として意味を持つ
+- したがって保存データをmultiset順へsort / normalizeしてはならない。正規化は比較処理の
+  内部に閉じ、永続化された配列順へ書き戻さない
 
 ## 5.2 RestorationBonusSet
 
@@ -295,7 +299,10 @@ export type RestorationBonusSet = [
 
 - 必ず5要素
 - `null` 要素を含めない
-- 比較時は `bonusTypeId + bonusRankId` の個数で判定する
+- 完成5枠の同一性比較は `bonusTypeId + bonusRankId` の個数で判定する
+- slot順自体が意味を持つ契約（Keep prediction入力、およびその予測結果を説明する
+  `BuildCandidate.bonusAmendmentTrace`）では、slot 1 - 5をそれぞれ
+  `bonusTypeId` / `bonusRankId` まで一致確認する。multiset比較で代用しない
 
 ---
 
@@ -689,6 +696,17 @@ export interface BuildCandidate {
   calculationContext: CalculationContext;
   searchRunId: string;
   createdAt: ISODateTimeString;
+  bonusAmendmentTrace?: CandidateBonusAmendmentStep[];
+}
+
+export interface BonusAmendmentResult {
+  restorationBonuses: RestorationBonusSet;
+  restorationBonusScope: RestorationBonusScope;
+}
+
+export interface CandidateBonusAmendmentStep extends BonusAmendmentResult {
+  operationIndex: number;
+  operationType: "reset_bonuses" | "keep_bonuses";
 }
 ```
 
@@ -706,6 +724,13 @@ export interface BuildCandidate {
 - `referencedOwnedWeaponsHash` はRouteが参照するOwnedWeaponだけから生成し、参照がないRouteでは `null` とする
 - `finalBonusScope` はRoute完了時に実際に保持する5枠のscopeであり、巨戟化だけなら `normal_artian`、Reset / Keep後は `gogma_artian` とする
 - Production RNGが生成するCandidateのSeries Skill / Group SkillはconversionまたはReset Skillsの予測結果を保持し、conversion直後を `null / null` にしない
+- `bonusAmendmentTrace` は決定済みRouteを説明する観測情報であり、Candidate semantic identityに含めない。Candidate ID（`semanticHash`）、`candidateStableKey`、Candidate重複排除key、`searchStateHash`、`referencedOwnedWeaponsHash`、`BuildCandidateMeaning` fingerprintはいずれも参照しない
+- `bonusAmendmentTrace` を持つ場合、`route.operations` 内の `reset_bonuses` / `keep_bonuses` と1対1で実行順に対応し、`operationIndex` は該当Operationの位置、`operationType` はそのOperationの種別と一致する
+- 各entryの `restorationBonuses` はRNG Engineが返した5枠をslot順のまま保持し、multiset正規化・並べ替えを行わない。`restorationBonusScope` は明示し、既定値で補わない
+- 最後のBonus amendmentのentryは `finalBonuses` / `restorationBonusScope` と一致する。Route末尾がReset Skills等でも比較対象は最後のBonus amendmentとする
+- この一致判定はslot順を含む完全一致であり、multiset比較（`areRestorationBonusSetsEqual()`）で代用しない。slot 1 - 5をそれぞれ `bonusTypeId` / `bonusRankId` まで比較し、不一致はDomain validation issueとする
+- 中間結果を `finalBonuses` から逆算せず、同一depthの別branch結果を代用しない。採用されたcanonical operation historyの結果だけを保持する
+- `bonusAmendmentTrace` はoptionalであり、この項目が存在しなかった時点のCandidateも有効とする。additiveな観測情報であって計算意味を変えないため、欠落を理由にstale化しない
 
 ## 9.2 BuildRoute
 

@@ -1,4 +1,5 @@
 import type {
+  BonusAmendmentResult,
   GroupSkillId,
   RestorationBonusScope,
   RestorationBonusSet,
@@ -51,6 +52,12 @@ export interface RouteBonusSolution {
   restorationBonusScope: RestorationBonusScope
   /** Bonus amendment operations in execution order; empty when `d = 0`. */
   operations: readonly RouteOperation[]
+  /**
+   * The predicted five slots right after each entry of `operations`, aligned
+   * index-for-index with it. Observational only: no retention key, ordering
+   * comparator, or Candidate identity reads it.
+   */
+  amendmentResults: readonly BonusAmendmentResult[]
 }
 
 /** Which stream predicate selects an axis; never the final Candidate category. */

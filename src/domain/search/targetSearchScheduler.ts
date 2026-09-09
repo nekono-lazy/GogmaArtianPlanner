@@ -1,7 +1,7 @@
 import type { BuildCandidate, BuildRoute, RouteOperation } from '../models/publicTypes'
 import {
-  bonusAmendmentOperations, bonusStreamBaseKey, type BonusStreamBase,
-  type UnsupportedAmendmentPrediction,
+  bonusAmendmentOperations, bonusAmendmentResults, bonusStreamBaseKey,
+  type BonusStreamBase, type UnsupportedAmendmentPrediction,
 } from './bonusStream'
 import { countRouteOperations } from './candidateFactory'
 import { createDeltaCross } from './deltaCross'
@@ -86,6 +86,7 @@ export class TargetSearchScheduler {
             ...bonus.solution.operations.map(bindSource),
             ...skill.solution.operations.map(bindSource),
           ] },
+          bonus.solution.amendmentResults,
         )
         if (!candidate) return
         base.onCandidate(candidate)
@@ -167,6 +168,7 @@ export class TargetSearchScheduler {
           gogmaAdvance: solution.depth, lastResetDepth: solution.lastResetDepth,
           finalBonuses: solution.bonuses, restorationBonusScope: solution.restorationBonusScope,
           operations: bonusAmendmentOperations(delta, solution, null),
+          amendmentResults: bonusAmendmentResults(solution),
         })))
         for (const value of additions) {
           channel.retained.push(value)

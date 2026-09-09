@@ -31,6 +31,7 @@ import type {
 } from './planning'
 import {
   areRestorationBonusSetsEqual,
+  areRestorationBonusSlotsEqual,
   canKeepBonusesFromScope,
   canResetBonuses,
   canUseAsMaterial,
@@ -747,6 +748,95 @@ function validateMaterialRequirement(
   validatePositiveInteger(requirement.quantity, `${path}.quantity`, issues)
 }
 
+/**
+ * The observational amendment trace, when present, must describe exactly the
+ * Route it belongs to: one entry per `reset_bonuses` / `keep_bonuses`
+ * operation, in execution order, pointing at that operation's own index, and
+ * ending on the five slots the Candidate itself holds.
+ *
+ * The field is optional so Candidates persisted before it existed remain
+ * valid. An absent trace is never an issue; a wrong one always is, because the
+ * whole point is the operation-to-result correspondence.
+ */
+function validateCandidateBonusAmendmentTrace(
+  candidate: BuildCandidate,
+  issues: DomainValidationIssue[],
+): void {
+  const trace = candidate.bonusAmendmentTrace
+  if (trace === undefined) return
+  const amendmentIndexes = candidate.route.operations.flatMap(
+    (operation, index) =>
+      operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses'
+        ? [index]
+        : [],
+  )
+  if (trace.length !== amendmentIndexes.length) {
+    addIssue(
+      issues,
+      'bonusAmendmentTrace',
+      'invalid_state',
+      'bonusAmendmentTrace must have one entry per bonus amendment operation.',
+    )
+    return
+  }
+  trace.forEach((step, index) => {
+    const path = `bonusAmendmentTrace[${index}]`
+    if (step.operationIndex !== amendmentIndexes[index]) {
+      addIssue(
+        issues,
+        `${path}.operationIndex`,
+        'invalid_state',
+        'bonusAmendmentTrace entries must follow the route amendment order.',
+      )
+      return
+    }
+    const operation = candidate.route.operations[step.operationIndex]
+    if (operation.type !== step.operationType) {
+      addIssue(
+        issues,
+        `${path}.operationType`,
+        'invalid_state',
+        'bonusAmendmentTrace operationType must match the referenced operation.',
+      )
+    }
+    appendIssues(
+      issues,
+      `${path}.restorationBonuses`,
+      validateRestorationBonusSet(step.restorationBonuses),
+    )
+    validateRestorationBonusScope(
+      step.restorationBonusScope,
+      `${path}.restorationBonusScope`,
+      issues,
+    )
+  })
+
+  // The last bonus amendment is what the Candidate actually ends up holding.
+  // The Route may continue with Reset Skills, so this is the last amendment,
+  // not the last operation.
+  const last = trace.at(-1)
+  if (!last) return
+  const lastPath = `bonusAmendmentTrace[${trace.length - 1}]`
+  // Slot order is semantic here, so the multiset comparison of
+  // `areRestorationBonusSetsEqual()` would wrongly accept a permutation.
+  if (!areRestorationBonusSlotsEqual(last.restorationBonuses, candidate.finalBonuses)) {
+    addIssue(
+      issues,
+      `${lastPath}.restorationBonuses`,
+      'invalid_state',
+      'The last bonus amendment must match finalBonuses slot by slot.',
+    )
+  }
+  if (last.restorationBonusScope !== candidate.restorationBonusScope) {
+    addIssue(
+      issues,
+      `${lastPath}.restorationBonusScope`,
+      'invalid_state',
+      'The last bonus amendment must match the Candidate restoration bonus scope.',
+    )
+  }
+}
+
 export function validateBuildCandidate(
   candidate: BuildCandidate,
   ownedWeapons?: readonly OwnedWeapon[],
@@ -792,6 +882,7 @@ export function validateBuildCandidate(
   }
   validateCalculationContext(candidate.calculationContext, 'calculationContext', issues)
   validateId(candidate.searchRunId, 'searchRunId', issues)
+  validateCandidateBonusAmendmentTrace(candidate, issues)
 
   if (candidate.route.kind === 'existing_gogma_reset_skills' && ownedWeapons) {
     const source = ownedWeapons.find(({ id }) => id === candidate.route.sourceOwnedWeaponId)

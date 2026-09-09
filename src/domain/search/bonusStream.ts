@@ -1,4 +1,5 @@
 import type {
+  BonusAmendmentResult,
   OwnedWeaponId,
   RestorationBonusScope,
   RestorationBonusSet,
@@ -53,6 +54,30 @@ export interface BonusStreamSolution {
   lastResetDepth: number
   bonuses: RestorationBonusSet
   restorationBonusScope: RestorationBonusScope
+  /**
+   * The canonical amendment history of this solution, latest amendment first.
+   *
+   * Observational only: it records which predicted five slots the canonical
+   * operation sequence passes through, and never takes part in retention,
+   * ordering, frontier reduction, or any Candidate identity.
+   */
+  results: BonusAmendmentResultNode
+}
+
+/**
+ * One node of the shared, immutable amendment history list.
+ *
+ * The list is persistent: a Keep state links to its own parent state's node and
+ * a Reset state links to the previous depth's Reset node, so states share every
+ * common prefix and the memory stays linear in the number of reached states.
+ * Linking a Reset to the previous Reset is exactly the canonical history
+ * `bonusAmendmentOperationType()` describes, because Reset discards the current
+ * bonuses and therefore cannot depend on which branch preceded it.
+ */
+export interface BonusAmendmentResultNode {
+  readonly depth: number
+  readonly result: BonusAmendmentResult
+  readonly previous: BonusAmendmentResultNode | null
 }
 
 export interface UnsupportedAmendmentPrediction {
@@ -127,10 +152,40 @@ export function bonusAmendmentOperations(
   }))
 }
 
+/**
+ * The predicted five slots produced by each amendment of one solution, in
+ * execution order and aligned index-for-index with
+ * `bonusAmendmentOperations()`.
+ *
+ * The walk is the recorded canonical history, never a re-derivation from the
+ * final result and never another solution that happens to sit at the same
+ * depth, so entry `i` is the result of operation `i` of that same solution.
+ */
+export function bonusAmendmentResults(
+  solution: BonusStreamSolution,
+): BonusAmendmentResult[] {
+  const results: BonusAmendmentResult[] = []
+  let node: BonusAmendmentResultNode | null = solution.results
+  for (let depth = solution.depth; depth >= 1; depth -= 1) {
+    if (node === null || node.depth !== depth) {
+      throw new Error(
+        `Bonus amendment history is inconsistent at depth ${depth}.`,
+      )
+    }
+    results.push(node.result)
+    node = node.previous
+  }
+  if (node !== null) {
+    throw new Error('Bonus amendment history is longer than its solution depth.')
+  }
+  return results.reverse()
+}
+
 interface BonusStateBase {
   depth: number
   lastResetDepth: number
   bonuses: RestorationBonusSet
+  results: BonusAmendmentResultNode | null
 }
 
 /** Every amendment result is Gogma-scope, so its Keep family layout is defined. */
@@ -150,6 +205,14 @@ interface NormalScopeBonusState extends BonusStateBase {
 }
 
 type BonusState = GogmaScopeBonusState | NormalScopeBonusState
+
+/**
+ * A state produced by an amendment, so its history node always exists. Only a
+ * depth-0 Route base has `results = null`.
+ */
+interface GeneratedBonusState extends GogmaScopeBonusState {
+  results: BonusAmendmentResultNode
+}
 
 /**
  * Same family layout means the same reachable Keep results at every later
@@ -227,13 +290,19 @@ export function createTargetBonusStream(
     depth: number,
     lastResetDepth: number,
     bonuses: RestorationBonusSet,
-  ): GogmaScopeBonusState {
+    previous: BonusAmendmentResultNode | null,
+  ): GeneratedBonusState {
     return {
       depth,
       lastResetDepth,
       bonuses,
       scope: 'gogma_artian',
       familyLayoutKey: gogmaKeepFamilyLayoutKey(bonuses),
+      results: {
+        depth,
+        result: { restorationBonuses: bonuses, restorationBonusScope: 'gogma_artian' },
+        previous,
+      },
     }
   }
 
@@ -263,6 +332,7 @@ export function createTargetBonusStream(
             bonuses: base.bonuses,
             scope: 'gogma_artian',
             familyLayoutKey: gogmaKeepFamilyLayoutKey(base.bonuses),
+            results: null,
           }
         : {
             depth: 0,
@@ -270,19 +340,25 @@ export function createTargetBonusStream(
             bonuses: base.bonuses,
             scope: 'normal_artian',
             familyLayoutKey: null,
+            results: null,
           },
     ]
     let gogmaCounterBefore = base.startGogmaCounter
+    // The canonical Reset prefix: the depth-`d` Reset extends the depth-(d-1)
+    // Reset, because Reset never reads the bonuses it replaces.
+    let lastResetNode: BonusAmendmentResultNode | null = null
 
     for (let depth = 1; depth <= input.maxGogmaAdvance; depth += 1) {
       if (frontier.length === 0) break
-      const generated: GogmaScopeBonusState[] = []
+      const generated: GeneratedBonusState[] = []
       let gogmaCounterAfter: number | null = null
 
       const resetSupport = predictionSupport.gogmaReset()
       if (resetSupport.supported) {
         await execution.checkpoint()
-        generated.push(toState(depth, depth, predictReset(gogmaCounterBefore)))
+        const reset = toState(depth, depth, predictReset(gogmaCounterBefore), lastResetNode)
+        generated.push(reset)
+        lastResetNode = reset.results
         gogmaCounterAfter = engine.advanceGogmaCounter(gogmaCounterBefore, {
           type: 'reset_bonuses',
         })
@@ -307,6 +383,7 @@ export function createTargetBonusStream(
             depth,
             state.lastResetDepth,
             predictKeep(gogmaCounterBefore, state.familyLayoutKey, state.bonuses),
+            state.results,
           ))
           gogmaCounterAfter ??= engine.advanceGogmaCounter(gogmaCounterBefore, {
             type: 'keep_bonuses',
@@ -318,11 +395,12 @@ export function createTargetBonusStream(
       // The generated outcomes are published before the frontier reduction, so
       // folding a layout never drops a Candidate reached at this depth.
       steps.push({ gogmaCounterBefore, gogmaCounterAfter })
-      solutions.push(...generated.map(({ depth: solutionDepth, lastResetDepth, bonuses, scope }) => ({
+      solutions.push(...generated.map(({ depth: solutionDepth, lastResetDepth, bonuses, scope, results }) => ({
         depth: solutionDepth,
         lastResetDepth,
         bonuses,
         restorationBonusScope: scope,
+        results,
       })))
 
       const byLayout = new Map<string, GogmaScopeBonusState>()

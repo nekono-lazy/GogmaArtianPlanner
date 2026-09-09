@@ -5,8 +5,10 @@ import {
   hashStableValue,
 } from '../models/hashing'
 import type {
+  BonusAmendmentResult,
   BuildCandidate,
   BuildRoute,
+  CandidateBonusAmendmentStep,
   MaterialRequirement,
   RouteOperation,
   TargetWeapon,
@@ -23,6 +25,46 @@ export interface CandidatePrediction {
   seriesSkillId: BuildCandidate['seriesSkillId']
   groupSkillId: BuildCandidate['groupSkillId']
   route: BuildRoute
+  /**
+   * The Bonus stream's predicted result of each amendment of this Route, in
+   * execution order. Omitted when the caller has no observational trace; the
+   * Candidate then simply carries no `bonusAmendmentTrace`.
+   */
+  bonusAmendmentResults?: readonly BonusAmendmentResult[]
+}
+
+/**
+ * Binds the Bonus stream's ordered amendment results to the positions the
+ * amendment operations actually occupy in the finished Route.
+ *
+ * The binding is positional over the amendment operations themselves, not over
+ * a precomputed base-operation offset, so a run of identical operation types
+ * can never shift by one. A count mismatch is an internal inconsistency and
+ * fails loudly rather than displaying a wrong result next to an operation.
+ */
+export function createCandidateBonusAmendmentTrace(
+  operations: readonly RouteOperation[],
+  results: readonly BonusAmendmentResult[],
+): CandidateBonusAmendmentStep[] {
+  const amendments = operations.flatMap((operation, operationIndex) =>
+    operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses'
+      ? [{ operationIndex, operationType: operation.type }]
+      : [],
+  )
+  if (amendments.length !== results.length) {
+    throw new CandidateSearchError(
+      'invalid_candidate',
+      `Route has ${amendments.length} bonus amendment operation(s) but ${results.length} predicted result(s).`,
+    )
+  }
+  return amendments.map(({ operationIndex, operationType }, index) => ({
+    operationIndex,
+    operationType,
+    restorationBonuses: results[index].restorationBonuses.map((bonus) => ({
+      ...bonus,
+    })) as CandidateBonusAmendmentStep['restorationBonuses'],
+    restorationBonusScope: results[index].restorationBonusScope,
+  }))
 }
 
 function materialOperation(
@@ -232,6 +274,14 @@ export function createCandidateFromPrediction(
     calculationContext: { ...input.calculationContext },
     searchRunId: input.searchRunId,
     createdAt: execution.now(),
+    ...(prediction.bonusAmendmentResults === undefined
+      ? {}
+      : {
+          bonusAmendmentTrace: createCandidateBonusAmendmentTrace(
+            prediction.route.operations,
+            prediction.bonusAmendmentResults,
+          ),
+        }),
   }
   const valid = validateBuildCandidate(candidate, input.ownedWeapons)
   if (!valid.isValid) {

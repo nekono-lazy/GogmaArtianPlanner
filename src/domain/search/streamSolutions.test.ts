@@ -91,6 +91,10 @@ function bonusSolution(
     operations: Array.from({ length: gogmaAdvance }, (_, index) =>
       resetOperation(10 + index),
     ),
+    amendmentResults: Array.from({ length: gogmaAdvance }, () => ({
+      restorationBonuses: finalBonuses,
+      restorationBonusScope: 'gogma_artian' as const,
+    })),
   }
 }
 

@@ -98,6 +98,31 @@ export interface SkillCondition {
   matchMode: SkillMatchMode
 }
 
+/**
+ * The predicted five slots produced by one Bonus amendment operation.
+ *
+ * Purely observational: it explains a Route that is already decided, so it
+ * never participates in Candidate semantic identity, hashing, ordering, or
+ * deduplication. The five slots keep their stored slot order because Keep
+ * preserves the bonus family at each slot position.
+ */
+export interface BonusAmendmentResult {
+  restorationBonuses: RestorationBonusSet
+  restorationBonusScope: RestorationBonusScope
+}
+
+/**
+ * One entry of `BuildCandidate.bonusAmendmentTrace`.
+ *
+ * `operationIndex` is the position of the described operation inside
+ * `BuildRoute.operations`, so the association survives repeated identical
+ * operation types.
+ */
+export interface CandidateBonusAmendmentStep extends BonusAmendmentResult {
+  operationIndex: number
+  operationType: 'reset_bonuses' | 'keep_bonuses'
+}
+
 export interface BuildCandidate {
   id: BuildCandidateId
   targetWeaponId: TargetWeaponId
@@ -120,6 +145,14 @@ export interface BuildCandidate {
   calculationContext: CalculationContext
   searchRunId: string
   createdAt: ISODateTimeString
+  /**
+   * Observational per-amendment expected results, in execution order.
+   *
+   * Optional so Candidates persisted before this field existed stay valid and
+   * never become stale: the field explains an already decided Route and changes
+   * no calculation meaning. UI omits the prediction display when it is absent.
+   */
+  bonusAmendmentTrace?: CandidateBonusAmendmentStep[]
 }
 
 export interface BuildRoute {

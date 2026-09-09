@@ -42,6 +42,7 @@ function zeroBonusSolution(source: OwnedGogmaArtianWeapon): RouteBonusSolution {
     finalBonuses: source.restorationBonuses,
     restorationBonusScope: source.restorationBonusScope,
     operations: [],
+    amendmentResults: [],
   }
 }
 

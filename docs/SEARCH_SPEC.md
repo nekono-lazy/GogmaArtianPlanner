@@ -512,6 +512,26 @@ conversionを含むRouteでは、最初のBonus amendmentがResetであり、Res
 1回だけ生成し、すべてのRoute baseで共有する。`depth = 0`(継承した通常5枠そのもの)だけが
 Route baseごとに異なる。
 
+#### 5.5.3.1 canonical amendment historyの観測記録
+
+Bonus streamは各stateについて、そのcanonical operation historyが通過した予測5枠を
+observational recordとして保持する。depth `d`、`lastResetDepth = r` のstateでは、
+depth `1 ... r` がReset結果、`r + 1 ... d` がKeep結果であり、これは
+`bonusAmendmentOperations()` が再構成する操作列と同じ履歴である。
+
+- 記録はstate生成時のchainとして保持し、`finalBonuses` からの逆算や、同一depthの
+  別branch結果の流用を行わない
+- 記録は `RouteBonusSolution` の `operations` とindexが1対1で対応し、Candidateでは
+  `BuildCandidate.bonusAmendmentTrace` として `operationIndex` 付きで保持する
+- 記録は観測情報であり、stream-local retention key、5.5.3の順序、family-layout frontier
+  dedup、canonical Ideal選択、Practical dominance、Candidate semantic identityの
+  いずれの入力にもならない
+- Reset結果は現在Bonusに依存しないため、depth `j <= r` の記録はdepth `j` のReset結果
+  そのものである。frontier reductionはこの対応関係を変えない
+
+`ConstrainedCandidate` はこの観測記録を持たない。5.6.7のconstrained enumerationは
+Planner向けのSearch-domain semantic resultであり、表示用traceを含まない。
+
 ### 5.5.4 Cross規則
 
 Cross規則は、初回Candidate Searchを高速かつboundedに保つための初期探索policyである。

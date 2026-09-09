@@ -52,6 +52,10 @@ function bonusSolution(spec: BonusSpec): EvaluatedBonusSolution {
         gogmaCounterBefore: 0,
         gogmaCounterAfter: 1,
       })),
+      amendmentResults: Array.from({ length: spec.gogmaAdvance }, () => ({
+        restorationBonuses: practicalBonuses(),
+        restorationBonusScope: scope,
+      })),
     },
     idealMatch: false,
     practicalMatch: true,

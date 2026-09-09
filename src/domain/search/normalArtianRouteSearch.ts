@@ -121,7 +121,7 @@ export async function searchNormalArtianRoutes(
             kindResolution: { type: 'fixed', kind: 'normal_artian_to_gogma' },
             sourceOwnedWeaponId: null,
             baseOperations: operations,
-            zeroBonus: { gogmaAdvance: 0, lastResetDepth: 0, finalBonuses: bonuses, restorationBonusScope: 'normal_artian', operations: [] },
+            zeroBonus: { gogmaAdvance: 0, lastResetDepth: 0, finalBonuses: bonuses, restorationBonusScope: 'normal_artian', operations: [], amendmentResults: [] },
             zeroSkill: { resetCount: 0, seriesSkillId: skills.seriesSkillId, groupSkillId: skills.groupSkillId, estimatedSkillAdvance: 1, operations: [] },
             startSkillCounter: skillCounterAfter,
             bonusBase: canSearchAmendments ? { startGogmaCounter: input.rngState.gogmaCounter.value!, bonuses, restorationBonusScope: 'normal_artian' } : null,

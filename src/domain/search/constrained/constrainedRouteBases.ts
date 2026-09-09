@@ -155,6 +155,7 @@ export async function createConstrainedRouteBases(
         finalBonuses: inheritedBonuses,
         restorationBonusScope: 'normal_artian',
         operations: [],
+        amendmentResults: [],
       },
       zeroSkill: {
         resetCount: 0,
@@ -295,6 +296,7 @@ export async function createConstrainedRouteBases(
         finalBonuses: source.restorationBonuses,
         restorationBonusScope: source.restorationBonusScope,
         operations: [],
+        amendmentResults: [],
       },
       zeroSkill: {
         resetCount: 0,

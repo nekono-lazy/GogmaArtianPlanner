@@ -18,6 +18,7 @@ const skill = (depth: number, series = 'series.' + depth): RouteSkillSolution =>
 const bonus = (depth: number, ideal = false): RouteBonusSolution => ({
   gogmaAdvance: depth, lastResetDepth: depth, restorationBonusScope: 'gogma_artian',
   finalBonuses: ideal ? structuredClone(target.idealBonuses) : practicalOnlyBonuses(), operations: [],
+  amendmentResults: [],
 })
 
 describe('incremental stream retention', () => {

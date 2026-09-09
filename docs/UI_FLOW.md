@@ -400,6 +400,7 @@ TargetWeaponごとに候補を検索し、作成リストへ追加する。
 - 必要素材
 - 作成リスト追加状態
 - 近似表示と類似度（該当する実用品のみ）
+- 作成ルート内の `reset_bonuses` / `keep_bonuses` については、その操作直後の予測復元ボーナス5枠
 
 操作。
 
@@ -441,6 +442,17 @@ TargetWeaponごとに候補を検索し、作成リストへ追加する。
 - skip理由の文言は、ゲームルール上の禁止とProduction予測未対応を混同しない。
   normal scope継承状態のKeepは「現在の予測エンジンでは予測未対応」と表示し、
   「最初にReset必須」とは表示しない
+- 候補詳細の作成ルートでは、`reset_bonuses` / `keep_bonuses` の各操作について
+  操作直後の予測復元ボーナス5枠をslot 1 - 5の順で表示する。表示都合で
+  bonusType順・rank順・multiset正規化順へ並べ替えない。Keepはslot位置ごとに
+  familyを保持するため、slot順そのものが意味を持つ
+- 予測結果は `BuildCandidate.bonusAmendmentTrace` が示す `operationIndex` に対応させて表示し、
+  同一操作種別が連続しても対応がずれないようにする
+- `reset_bonuses` / `keep_bonuses` 以外のOperationには予測復元ボーナスを表示しない
+- `bonusAmendmentTrace` を持たない既存Candidateは予測結果を表示せず、記録がない旨だけを示す。
+  stale扱いにしない
+- 予測結果はSearch / Domainが確定した値を表示するだけとし、UIスレッドでProduction RNGを
+  再実行しない
 - `no_owned_weapon_available` の文言は武器種を限定しない。武器種はRouteKind labelが示す
 
 ---
