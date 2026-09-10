@@ -70,6 +70,8 @@ export function createInitialPlannerSearchState(input: PlannerInput, validEntrie
     practicalFirstProgressTargetIds: [],
     trace: [],
     consumedMaterialWeaponCount: 0,
+    weaponSwitchCount: 0,
+    lastWeaponOperationSubjectKey: null,
     totalCost: 0,
     evaluationScore: 0,
   } }

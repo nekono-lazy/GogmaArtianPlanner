@@ -24,9 +24,11 @@ import {
   isUnitBlockedByConflictResolution,
 } from './plannerConflictDetection'
 import {
+  advancePlannerWeaponSwitchMetric,
   arePlannerRouteUnitsShareable,
   currentPlannerCounterValue,
   fastForwardPlannerRouteProgress,
+  plannerWeaponOperationSubjectKey,
   routeUnitOwnedWeaponId,
   type PlannerRouteUnit,
 } from './plannerRouteProgress'
@@ -726,6 +728,14 @@ function applyRouteAction(
         : [],
   }
   state.trace.push(action)
+  // One physical action, so the switch is judged once. Sharing this action with
+  // other Entries and fast-forwarding other Entries' passed Route prefixes both
+  // stay invisible here: neither is an operation the player performs
+  // (docs/PLANNER_SPEC.md 7.3).
+  advancePlannerWeaponSwitchMetric(
+    state,
+    plannerWeaponOperationSubjectKey(primary.entryId, primary.operation),
+  )
   state.totalCost = state.trace.length + state.consumedMaterialWeaponCount * 10
   return { state, rejection: null }
 }

@@ -561,6 +561,120 @@ conflictPenalty = conflictCount * 5000
 - 理想候補でも、実用品未所持Targetの遠すぎる理想は短距離実用品より後回しになることがある
 - `isProtected = true` の武器に対する素材消費・Reset Bonuses・Keep Bonusesはpenaltyではなく実行不能な展開として除外する
 
+### 7.3 Plan quality preference: 武器切替の最小化
+
+correctness / feasibilityより下位のPlan quality preferenceを1つ定義する。
+
+同等にcorrectで、既存評価も同点のPlanner state / Planが複数ある場合、
+実際のゲーム操作で対象武器を持ち替える回数が少ない方を優先する。
+
+これはcorrectness ruleではない。武器切替が多いPlanも正しく実行可能なPlanである。
+
+#### 優先順位
+
+```text
+correctness / feasibility
+  -> Target satisfaction / practical-first
+  -> 既存evaluationScore（Target priority、satisfaction、resource cost、action count、conflict）
+  -> weaponSwitchCount 昇順
+  -> 既存semantic stable tie-break
+  -> 既存trace stable tie-break
+```
+
+`weaponSwitchCount` をTarget satisfactionや既存costより上位へ置かない。
+`evaluationScore` へ大きなweightとして混ぜ込まない。切替1回・操作200回のPlanが
+切替2回・操作100回のPlanより優先されてはならない。
+
+#### metric対象Operation
+
+Gogma武器を選択して継続操作する次の3操作だけを対象とする。
+
+```text
+reset_bonuses
+keep_bonuses
+reset_skills
+```
+
+`create_normal_artian`、`convert_normal_to_gogma`、`use_weapon_as_material` は
+「継続して操作している復元対象武器」というsubjectを持たない。v1ではこれらを
+metric対象にせず、subjectとしても記録しない。曖昧な定義を広げないための
+意図的な限定であり、後から必要になればformal specを更新して拡張する。
+
+`reserve_weapon` はPlanner-only actionであり、ゲーム上の操作ではない。
+switch countを増やさず、直前subjectも変更しない。したがって
+
+```text
+水 Keep -> reserve -> 火 Reset
+```
+
+は `水 -> 火` の1 switchである。
+
+#### weapon subject identity
+
+`physicalActionKey` をweapon subject keyとして流用してはならない。同キーは
+operation typeとCounter before / afterを含むため、同じ武器を連続操作しても
+actionごとに変わり、「同じ武器か」の判定に使えない。
+
+subject identityは操作対象の武器だけで決める。
+
+- concrete OwnedWeapon: `sourceOwnedWeaponId` を持つ操作は、どのBuildListEntryが
+  駆動しても同一subject
+- transient Gogma: `sourceOwnedWeaponId = null` の操作は7.0のEntry-local physical
+  subject契約に従い、BuildListEntryごとに別subject
+
+#### 数え方
+
+- 直前のmetric対象操作と同じsubjectなら +0
+- 直前subjectが `null`（branch最初のmetric対象操作）なら +0
+- 直前subjectと異なるsubjectなら +1
+- metric対象外操作はcountも直前subjectも変更しない
+- physical action sharingで1回の物理操作が複数Entryを進めた場合、
+  実際の物理操作は1回なのでswitch判定も1回だけ行う
+- silent fast-forward（7.0.2）は実物理操作ではないため数えず、直前subjectも変えない
+
+#### Planner runtime state
+
+`PlannerSearchState` はこのmetricをincremental runtime stateとして保持する。
+
+```ts
+weaponSwitchCount: number;
+lastWeaponOperationSubjectKey: string | null;
+```
+
+初期値は `0` と `null` である。state比較のたびにTrace全体を走査して
+O(trace length)で再計算してはならない。
+
+いずれも非永続のPlanner runtime stateであり、`RouteOperation`、`BuildRoute`、
+`BuildCandidate`、`ProductionPlan`、PlanStep、DB schemaへ追加しない。
+
+`createPlannerSearchStateSemanticKey()` へは追加しない。両fieldは既にsemantic keyへ
+含まれるtrace projectionの純粋な関数であり、各actionの `primaryBuildListEntryId` と
+`progressedRoutePositions` が保存済み `RouteOperation`、したがってweapon subjectを
+一意に決める。同じsemantic keyを持つstateは常に同じ両値を持つため、dedup identity、
+以後のswitch計算、決定的tie-breakのいずれも整合する。
+
+#### Beam Searchへの影響
+
+これはranking preferenceであり、7.0.2のrequired / skippable execution eligibilityのような
+semantic pruningではない。
+
+- 武器切替が増えるbranchを実行不能として削除しない
+- rejectionを記録しない
+- conflictを生成しない
+- physical action sharing、silent fast-forward、conflict semantics、Trace Replay
+  semanticsを変更しない
+
+上限付きBeam Searchであるため、武器切替回数の絶対最小は保証しない。
+同じ入力・同じEngine fixture・同じ定数に対する決定性は従来どおり維持する。
+
+#### Calculation compatibility
+
+この変更は実行可能なPlanの意味を変えず、同等にcorrectな複数Planからどれを優先するかだけを
+変える。既存のversion 4 ProductionPlanは武器切替が現行Plannerより多くても物理的・意味的に
+実行可能なままである。したがって `CURRENT_CALCULATION_APP_SCHEMA_VERSION` を更新せず、
+`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、
+`PRODUCTION_RNG_ENGINE_VERSION` も変更しない。
+
 ---
 
 ## 8. 在庫シミュレーション
@@ -3189,6 +3303,10 @@ Workerを利用できない環境ではClientのversionを `production-engine-un
 - 実用品未所持Targetの実用候補が優先される
 - 遠すぎる理想より近い実用品が優先される
 - Candidate ScoreがBeam Searchの状態評価に使われ、単純Score順でPlanが確定しない
+- practical-first進行に差がある場合、`weaponSwitchCount` が少なくても従来の優先順位が勝つ
+- `evaluationScore` に差がある場合も、`weaponSwitchCount` が少ない側ではなく高score側が勝つ
+- 両者が同点の場合だけ `weaponSwitchCount` が少ないstateを優先し、それも同数なら
+  従来のsemantic / trace stable tie-breakへ進む
 
 ## 15.3 Beam Search Test
 
@@ -3215,6 +3333,14 @@ Workerを利用できない環境ではClientのversionを `production-engine-un
   Keep直前のReset、create、conversion、素材消費はskip不可
 - 共有Gogma Counterを別武器の操作で進めた複数Targetが、どちらのTargetも落とさずIdealまで
   完成し、必要なRoute prefixだけがPlanStepになる
+- 同じOwnedWeaponの連続操作はswitchを増やさず、別武器への変更で1、元の武器へ戻ると2になる
+- `reserve_weapon` はswitch countも直前subjectも変えず、同じ武器の操作列を分断しない
+- silent fast-forwardされたRoute prefixはswitchを増やさない
+- 同じconcrete OwnedWeaponのshareable physical actionで複数Entryが進んでも、
+  switchを二重加算しない
+- 同じEntryのtransient Gogma連続操作はswitchを増やさず、別Entryのtransient Gogmaは別subject
+- 共有Counter位置の分割が既存評価で同点になるユーザー再現ケースで、Beam Searchが実際に
+  選んだTrace / ProductionPlanのglobal execution orderが武器切替1回の順序になる
 
 ## 15.4 Inventory Test
 

@@ -1430,6 +1430,49 @@ Replay must not regenerate a skipped operation. Keep the existing design where
 the Beam Search trace alone determines the Replay state, and never introduce a
 semantic difference between Beam Search and Replay.
 
+Among Plans the existing evaluation already rates equally, prefer the one that
+makes the player swap the weapon in hand fewer times. This is Plan quality, not
+correctness, and it sits below correctness, feasibility, Target satisfaction,
+and every existing `evaluationScore` term, and above the semantic and trace
+stable tie-breaks. Never fold it into `evaluationScore` as a large weight, and
+never let it beat a cheaper Plan: one switch with 200 operations must not win
+over two switches with 100.
+
+The metric counts only `reset_bonuses`, `keep_bonuses`, and `reset_skills`,
+because each selects one Gogma weapon and operates on it in place.
+`create_normal_artian`, `convert_normal_to_gogma`, and `use_weapon_as_material`
+have no such continuously operated subject and stay out of the metric in v1; do
+not widen that definition without a specification change. The weapon subject is
+the concrete `OwnedWeapon` when the operation has one, and the Entry-local
+transient Gogma of PR #4 when it does not, so the same OwnedWeapon is one
+subject across BuildListEntries while two Entries' transient weapons are two.
+Never reuse `physicalActionKey` as that subject identity: it also carries the
+operation type and its Counter before / after, so it changes on every action
+even while one weapon stays selected.
+
+`reserve_weapon` is a Planner-only action and a silent fast-forward is not a
+physical operation, so neither counts a switch nor becomes the new previous
+subject - a reserve between two operations on one weapon must not read as
+leaving and returning to it. One shared physical action that progresses several
+Entries is judged once.
+
+`PlannerSearchState` keeps `weaponSwitchCount` and
+`lastWeaponOperationSubjectKey` as incremental Planner runtime state, starting
+at 0 and null. Never recompute the metric by scanning the whole trace on every
+state comparison, and never persist either field in `RouteOperation`,
+`BuildRoute`, `BuildCandidate`, `ProductionPlan`, `PlanStep`, or the DB schema.
+They stay out of `createPlannerSearchStateSemanticKey()`, because both are pure
+functions of the trace projection that key already carries.
+
+This is a Beam Search ranking preference, never a semantic pruning like the
+required / skippable execution eligibility: a branch with more switches is a
+correct Plan, so it is never rejected, never recorded as a rejection, and never
+turned into a conflict. It changes no physical action sharing, silent
+fast-forward, conflict, or Trace Replay semantics, and no calculation version -
+an existing version 4 ProductionPlan with more switches stays executable, so
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION` is unchanged. Bounded Beam Search does
+not guarantee the absolute minimum switch count.
+
 Resolving Counter conflicts across Targets is the Planner's job, not something
 Candidate Search pre-computes. Planner-driven constrained re-search is not
 implemented yet, but the contract for it is fixed: never restart a re-search at
@@ -2364,6 +2407,21 @@ Relevant test areas include:
   position whose competing units are all skippable keeps both orders available
 - Two Targets sharing one Gogma Counter stream both reach Ideal, with only the
   Route prefix that was not passed by another Entry becoming PlanSteps
+- Consecutive operations on one OwnedWeapon count no weapon switch, a different
+  weapon counts one, and returning to the first counts two
+- `reserve_weapon` changes neither the switch count nor the previous subject, a
+  silent fast-forward adds no switch, and one shared physical action is counted
+  once instead of once per progressed Entry
+- One Entry's consecutive transient Gogma operations add no switch, while
+  another Entry's transient Gogma is a different subject
+- `comparePlannerSearchStates()` keeps practical-first progress and
+  `evaluationScore` above the switch count, applies the switch count only when
+  both tie, and falls through to the existing stable tie-breaks when switch
+  counts tie too
+- Where the split of shared Counter positions is rated equally by the existing
+  evaluation, the Trace and ProductionPlan global execution order the Beam
+  Search actually selected is the one-switch order, verified on that real order
+  rather than on a conveniently re-sorted Step array
 - Inventory simulation
 - Expected state Before/After invalidation
 - Old-Practical confirmation flow

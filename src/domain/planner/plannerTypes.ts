@@ -219,6 +219,22 @@ export interface PlannerSearchState {
   practicalFirstProgressTargetIds: TargetWeaponId[]
   trace: PlannerSearchAction[]
   consumedMaterialWeaponCount: number
+  /**
+   * How many times the player has to put one weapon down and pick another one
+   * up while executing this branch's operations so far.
+   *
+   * Plan quality only, never correctness: a branch with more switches is still
+   * a fully executable Plan, so this must not prune, block, or reject an
+   * expansion (`docs/PLANNER_SPEC.md` 7.3).
+   */
+  weaponSwitchCount: number
+  /**
+   * The weapon subject of the most recent switch-counted operation, or `null`
+   * before the branch has run one. Operations with no continuously operated
+   * subject - `reserve_weapon` above all - leave it untouched, so they never
+   * split one weapon's run of operations in two.
+   */
+  lastWeaponOperationSubjectKey: string | null
   totalCost: number
   evaluationScore: number
 }
