@@ -493,6 +493,25 @@ Plannerに検討させる候補集合を確認・調整する。
 - Routeと無関係なOwnedWeapon変更、または参照武器の名前、メモ、日時だけの変更ではEntryをstale表示しない
 - CalculationContext非互換は `calculation_context_changed` と表示する
 
+### 10.1 Planner実行成功後の遷移
+
+`plannerResultPersistenceService.savePlannerOrchestrationResult()` がnon-nullの
+ProductionPlanを返した場合だけ、その保存済みPlanの `/plans/:planId` へ遷移する。
+遷移先のIDはPersistenceが返したPlanの `id` だけをauthorityとする。
+
+以下をauthorityにしない。
+
+```text
+Worker resultのPlan ID
+Active Plan
+最新Plan
+遷移前に生成したID
+```
+
+保存前に遷移しない。`savePlannerOrchestrationResult()` が `null` を返した場合は
+遷移せず、Plan未生成のnoticeをBuild Listに表示する。保存失敗、cancel、
+`invalid_conflict_resolution` によるfail closedでも遷移しない。
+
 ---
 
 ## 11. Production Plan
@@ -504,6 +523,8 @@ Plannerが生成した作成計画を確認する。
 表示。
 
 - Plan status
+- Plan概要
+- 目標武器ごとの作成ルート
 - 採用BuildListEntryとCandidate Snapshot
 - RejectedBuildListEntryと理由
 - BuildListEntry基準の競合と解決結果
@@ -527,6 +548,102 @@ routeの `planId` に対応するPlanを
 各操作開始時点のcurrent persisted stateから `createPlannerInput()` で新規構築した
 `PlannerInput` とする。`baseSnapshot` からPlannerInputを復元せず、古いWorker inputまたは
 過去のSearch requestを再利用しない。
+
+### 11.0 読み取り専用のPlan内容確認
+
+保存済みProductionPlanの内容確認は、what-if / Planner再計算のstate machineから独立させる。
+`getProductionPlan(planId)` でexact persisted Planを取得できた時点で内容を表示し、
+Worker preparationの実行中、preparation失敗後、`status === 'stale'` のいずれでも
+保存済み内容を隠さない。planIdのPlanが存在しない場合だけ、内容を表示せずnot foundとする。
+
+表示authorityは常にそのexact persisted Planである。Active Plan / 最新Planへfallbackせず、
+Worker resultを表示authorityにせず、BuildCandidateからPlanStepを再構成せず、
+Candidate routeからPlanを再計算せず、UI側でRNG予測または `expectedResult` の再生成を行わない。
+
+構成は次の順とする。
+
+```text
+Plan概要
+目標武器ごとの作成ルート
+計画全体の実行順
+既存のConflict / what-if UI
+```
+
+#### Plan概要
+
+- Plan status
+- Plan ID
+- 作成日時
+- 全Step数
+- 目標武器数
+- 確保予定数
+
+目標武器数は、そのPlanのStepから確認できるdistinct TargetWeapon ID数とする。
+確保予定数は `steps[].expectedResult?.shouldSecure === true` のStep数だけをauthorityとし、
+Target件数や `selectedBuildListEntryIds.length` を武器本数と仮定しない。
+
+#### 目標武器ごとの作成ルート
+
+各TargetWeaponについて、そのTargetへ帰属するPlanStepをglobal `step.order` 昇順で表示する。
+帰属は明示的persisted fieldだけで判断する。
+
+```ts
+relatedTargetIds = union(
+  step.progressedTargetWeaponIds ?? [],
+  step.targetWeaponId !== null ? [step.targetWeaponId] : [],
+)
+```
+
+- shared physical Stepは `progressedTargetWeaponIds` により複数Targetへ帰属する
+- `reserve_weapon` のようにRoute進行を伴わないStepは `targetWeaponId` により帰属する
+- 同じTarget IDを1Step内で重複させない
+- `targetWeaponId === null` かつ `progressedTargetWeaponIds` が空のStepは、
+  目標武器ごとのルートに含めず、計画全体の実行順にだけ含める
+
+`progressedTargetWeaponIds.length > 1` のStepは各Target側へ表示してよいが、それはpresentation上の
+帰属表示であり、物理操作を複数回行う意味にしてはならない。「共有操作」badge等で、計画全体では
+1回だけ実行するStepであることを示す。
+
+#### 計画全体の実行順
+
+authorityは `ProductionPlan.steps`、表示順は `step.order` の昇順とする。UI独自の並べ替えや
+Candidate順への変換を行わない。shared physical Stepもここでは1回だけ表示する。
+
+#### legacy Plan
+
+`plan.steps.some(step => step.progressedTargetWeaponIds === undefined)` のPlanをlegacyとする。
+
+legacy Planでも保存済み内容は表示する。ただし目標武器ごとの作成ルートには、共有Target進行情報の
+保存機能追加前に作成されたため一部の共有操作が表示されない可能性がある旨のwarningを表示し、
+計画全体の実行順の確認を促す。
+
+`undefined` からshared Targetを推測せず、Candidate / BuildListEntryから過去のshared attributionを
+再構成しない。legacyでも `step.targetWeaponId` によるprimary関連表示は行ってよい。
+
+#### PlanStepの予測復元ボーナス
+
+`reset_bonuses` / `keep_bonuses` を含む各Stepの予測復元ボーナスは、
+`PlanStep.expectedResult.restorationBonuses` だけをauthorityとする。Candidateの
+`bonusAmendmentTrace` / `finalBonuses` / `route` を表示authorityにしない。
+
+5枠はstored slot orderのまま表示する。sort、group、multiset正規化、bonusType単位のまとめ、
+rank順並び替えを行わない。同一bonusが複数slotにあっても欠落させない。
+
+`expectedResult === null` および `expectedResult.restorationBonuses === null` は正常系として扱い、
+予測結果なしとして安全にfallbackする。nullを理由にpageをerrorにしない。
+`shouldSecure === true` のStepだけを確保予定として表示し、false / null から確保予定を推測しない。
+
+#### TargetWeapon名の解決
+
+TargetWeapon表示名はcurrent persisted TargetWeaponから解決する。生成時のTarget名snapshotを
+Domainへ追加しない。取得失敗またはTarget欠損でPlan内容全体を壊さず、解決できない場合は
+TargetWeapon IDへfallbackする。
+
+#### 長いPlanへの対応
+
+実際のPlanは100〜300 Step規模になり得るため、目標武器ごとの作成ルートと計画全体の実行順は
+折りたたみ表示とし、閉じている間は内容をunmountしてよい。renderごとに無意味な再計算や
+RNG再計算を行わない。
 
 ### 11.1 競合候補の表示と選択可否
 
@@ -1033,6 +1150,18 @@ export interface SearchUiState {
 - 新Planとgenerated BuildListEntryを既存atomic persistence境界で保存して新Planへ遷移し、
   Planなしまたは保存失敗時に旧Planを置換・削除しない
 - Conflict編集をDraft Planに限定し、stale / active / completed / abandonedをB10操作で書き換えない
+- exact persisted Planが取得できていれば、Worker preparation中・preparation失敗後・staleでも
+  Plan概要、目標武器ごとの作成ルート、計画全体の実行順、予測結果を表示する
+- stale PlanでもPlan内容を表示したうえで、既存のConflict操作はdisabledのままにする
+- 目標武器ごとの作成ルートが `progressedTargetWeaponIds` と `targetWeaponId` の和集合で帰属し、
+  shared physical Stepが各Targetへ表示され、計画全体の実行順では1回だけ表示される
+- Route進行がない `progressedTargetWeaponIds = []` のStepがprimary `targetWeaponId` のルートに現れ、
+  Target非依存Stepは目標武器ごとのルートに現れず計画全体の実行順にだけ現れる
+- legacy Planでwarningを表示し、`undefined` からshared Targetを推測しない
+- `expectedResult.restorationBonuses` の5枠がstored slot orderで表示され、同一bonusの重複が欠落しない
+- `expectedResult === null` でも表示が壊れず、`shouldSecure === true` だけを確保予定として示す
+- TargetWeapon名をcurrent persisted Targetから解決し、欠損時はTargetWeapon IDへfallbackする
+- Planner保存成功時に、Persistenceが返したPlanの `/plans/:planId` だけへ遷移する
 
 ## 19.3 Import / Export Test
 

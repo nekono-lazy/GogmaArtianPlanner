@@ -4,6 +4,7 @@ import type {
   NormalArtianRarity,
   OwnedWeaponStatus,
   PlanStepOperationType,
+  ProductionPlanStatus,
   RngStateSource,
   RouteKind,
   RouteOperation,
@@ -40,6 +41,14 @@ export const routeKindLabels: Record<RouteKind, string> = {
   existing_gogma_keep_bonuses: '所持巨戟の復元ボーナス保持再抽選',
   existing_gogma_reset_skills: '所持巨戟のスキル再抽選',
   existing_gogma_mixed: '所持巨戟の複合ルート',
+}
+
+export const productionPlanStatusLabels: Record<ProductionPlanStatus, string> = {
+  draft: '下書き',
+  active: '実行中',
+  completed: '完了',
+  stale: '再計算が必要',
+  abandoned: '破棄済み',
 }
 
 export const planStepOperationLabels: Record<PlanStepOperationType, string> = {

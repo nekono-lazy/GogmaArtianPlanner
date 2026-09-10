@@ -9,7 +9,9 @@ import type {
   BuildListEntry,
   CalculationContext,
   PlanConflict,
+  PlanStep,
   ProductionPlan,
+  RestorationBonusSet,
   TargetWeapon,
 } from '../domain/models/publicTypes'
 import {
@@ -26,6 +28,7 @@ import {
   createValidProductionPlan,
   createValidRngState,
   createValidTargetWeapon,
+  planStepId,
   productionPlanId,
   targetWeaponId,
 } from '../test/fixtures/domainData'
@@ -83,9 +86,17 @@ function pageFixture(suffix = 'a'): {
   target.id = entry.targetWeaponId
   target.name = `Page fixture target ${suffix}`
   const persistedConflict = conflict(entry)
+  const basePlan = createValidProductionPlan()
   const plan = {
-    ...createValidProductionPlan(),
+    ...basePlan,
     id: productionPlanId(`plan.page.${suffix}`),
+    // A current-contract Plan: the shared-attribution field is present, so the
+    // legacy warning belongs only to the tests that build a legacy Plan.
+    steps: basePlan.steps.map((step) => ({
+      ...step,
+      progressedTargetWeaponIds:
+        step.targetWeaponId === null ? [] : [step.targetWeaponId],
+    })),
     conflicts: [persistedConflict],
     selectedBuildListEntryIds: [],
   }
@@ -208,6 +219,7 @@ function dependencies(
   return {
     master: createValidMasterDataFixture(),
     getPlan: vi.fn(async () => fixture.plan),
+    getTargetWeapons: vi.fn(async () => [fixture.target]),
     createInput: vi.fn(async () => fixture.input),
     createWorkerClient: vi.fn(() => client),
     savePlannerResult: vi.fn(async () => null),
@@ -1177,5 +1189,331 @@ describe('ProductionPlanPage stale persisted badges', () => {
     expect(deps.savePlannerResult).not.toHaveBeenCalled()
     expect(navigate).not.toHaveBeenCalled()
     expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)
+  })
+})
+
+const contentBonuses: RestorationBonusSet = [
+  { bonusTypeId: 'bonus_type.fixture.attack', bonusRankId: 'bonus_rank.fixture.high' },
+  { bonusTypeId: 'bonus_type.fixture.attack', bonusRankId: 'bonus_rank.fixture.high' },
+  { bonusTypeId: 'bonus_type.fixture.attack', bonusRankId: 'bonus_rank.fixture.special' },
+  { bonusTypeId: 'bonus_type.fixture.attack', bonusRankId: 'bonus_rank.fixture.high' },
+  { bonusTypeId: 'bonus_type.fixture.attack', bonusRankId: 'bonus_rank.fixture.special' },
+]
+
+const contentTargetA = targetWeaponId('target.content.a')
+const contentTargetB = targetWeaponId('target.content.b')
+
+function contentStep(
+  id: string,
+  order: number,
+  operationType: PlanStep['operationType'],
+  title: string,
+  primary: TargetWeapon['id'] | null,
+  progressed: TargetWeapon['id'][] | undefined,
+  result: PlanStep['expectedResult'],
+): PlanStep {
+  const base = createValidProductionPlan().steps[0]
+  const step: PlanStep = {
+    ...base,
+    id: planStepId(id),
+    order,
+    operationType,
+    title,
+    instruction: `${title}の手順`,
+    targetWeaponId: primary,
+    expectedResult: result,
+  }
+  if (progressed === undefined) delete step.progressedTargetWeaponIds
+  else step.progressedTargetWeaponIds = progressed
+  return step
+}
+
+function contentExpectedResult(
+  overrides: Partial<NonNullable<PlanStep['expectedResult']>> = {},
+): NonNullable<PlanStep['expectedResult']> {
+  return {
+    restorationBonuses: contentBonuses,
+    restorationBonusScope: 'gogma_artian',
+    seriesSkillId: null,
+    groupSkillId: null,
+    candidateCategory: 'practical',
+    isSimilarToIdeal: false,
+    shouldSecure: false,
+    ...overrides,
+  }
+}
+
+/**
+ * A current-contract Plan whose steps are stored out of `order`, so the
+ * displayed sequence can only come from `step.order`.
+ */
+function contentFixture() {
+  const base = pageFixture('content')
+  const targetA = { ...createValidTargetWeapon(), id: contentTargetA, name: '双剣・水' }
+  const targetB = { ...createValidTargetWeapon(), id: contentTargetB, name: '双剣・火' }
+  const shared = contentStep(
+    'step.content.shared', 1, 'reset_bonuses', '復元ボーナスを再抽選',
+    contentTargetA, [contentTargetA, contentTargetB], contentExpectedResult(),
+  )
+  const primaryOnly = contentStep(
+    'step.content.primary', 2, 'keep_bonuses', '復元ボーナスを保持して再抽選',
+    contentTargetB, [], contentExpectedResult(),
+  )
+  const independent = contentStep(
+    'step.content.independent', 3, 'create_material_gogma', '素材用として登録',
+    null, [], null,
+  )
+  const reserve = contentStep(
+    'step.content.reserve', 4, 'reserve_weapon', '候補武器を確保',
+    contentTargetA, [], contentExpectedResult({ shouldSecure: true }),
+  )
+  base.plan.steps = [reserve, independent, primaryOnly, shared]
+  return { ...base, targetA, targetB, shared, primaryOnly, independent, reserve }
+}
+
+function contentDependencies(
+  fixture: ReturnType<typeof contentFixture>,
+  targetWeapons: TargetWeapon[] = [fixture.targetA, fixture.targetB],
+  client = plannerClient(async () => fixture.preparation),
+): ProductionPlanPageDependencies {
+  const deps = dependencies(fixture, client)
+  deps.getTargetWeapons = vi.fn(async () => targetWeapons)
+  return deps
+}
+
+async function openPanel(name: string | RegExp) {
+  await userEvent.click(await screen.findByText(name))
+}
+
+function stepCard(order: number): HTMLElement {
+  const card = screen.getByText(`ステップ ${order}`).closest('.MuiPaper-root')
+  if (!card) throw new Error(`Missing step card ${order}`)
+  return card as HTMLElement
+}
+
+describe('ProductionPlanPage read-only Plan content', () => {
+  it('summarizes the exact persisted Plan', async () => {
+    const fixture = contentFixture()
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+
+    expect(await screen.findByText('計画の概要')).toBeInTheDocument()
+    expect(screen.getByText(`計画ID: ${fixture.plan.id}`)).toBeInTheDocument()
+    expect(screen.getByText(`作成日時: ${fixture.plan.createdAt}`)).toBeInTheDocument()
+    expect(screen.getByText('全ステップ数: 4')).toBeInTheDocument()
+    expect(screen.getByText('目標武器数: 2')).toBeInTheDocument()
+    // Only `expectedResult.shouldSecure === true`, never the Target count or
+    // `selectedBuildListEntryIds.length`.
+    expect(screen.getByText('確保予定数: 1')).toBeInTheDocument()
+  })
+
+  it('lists the persisted steps in step.order for the whole Plan', async () => {
+    const fixture = contentFixture()
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+
+    await openPanel('全4ステップを表示')
+    expect(screen.getAllByText(/^ステップ \d+$/).map((node) => node.textContent))
+      .toEqual(['ステップ 1', 'ステップ 2', 'ステップ 3', 'ステップ 4'])
+    expect(screen.getByText('復元ボーナスを再抽選の手順')).toBeInTheDocument()
+    expect(screen.getByText('素材用巨戟アーティアとして登録')).toBeInTheDocument()
+  })
+
+  it('shows every Reset/Keep expected bonus slot in stored order, duplicates included', async () => {
+    const fixture = contentFixture()
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+
+    await openPanel('双剣・水（2ステップ）')
+    const slots = within(stepCard(1)).getAllByText(/^攻撃(High|Special) fixture$/)
+    expect(slots.map((slot) => slot.textContent)).toEqual([
+      '攻撃High fixture',
+      '攻撃High fixture',
+      '攻撃Special fixture',
+      '攻撃High fixture',
+      '攻撃Special fixture',
+    ])
+  })
+
+  it('renders a Step whose expectedResult is null without breaking the page', async () => {
+    const fixture = contentFixture()
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+
+    await openPanel('全4ステップを表示')
+    const card = within(stepCard(3))
+    expect(card.getByText('想定結果: 予測結果なし')).toBeInTheDocument()
+    expect(card.getByText('対象: 目標武器に紐づかない操作')).toBeInTheDocument()
+    expect(screen.queryByText('指定された生産計画が見つかりません。')).not.toBeInTheDocument()
+  })
+
+  it('marks only a shouldSecure step as 確保予定', async () => {
+    const fixture = contentFixture()
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+
+    await openPanel('全4ステップを表示')
+    const secured = screen.getAllByText('確保予定')
+    expect(secured).toHaveLength(1)
+    expect(within(stepCard(4)).getByText('確保予定')).toBe(secured[0])
+  })
+
+  it('attributes one shared physical Step to both Target routes and lists it once globally', async () => {
+    const fixture = contentFixture()
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+
+    await openPanel('双剣・水（2ステップ）')
+    expect(screen.getByText('ステップ 1')).toBeInTheDocument()
+    expect(screen.getByText('共有操作')).toBeInTheDocument()
+    expect(screen.getByText(
+      'この操作は他の目標武器と共有され、計画全体では1回だけ実行します。',
+    )).toBeInTheDocument()
+
+    await openPanel('双剣・火（2ステップ）')
+    expect(screen.getAllByText('ステップ 1')).toHaveLength(2)
+    // The Target route attribution is presentation only: the Step is still one
+    // physical operation, and the global timeline lists it exactly once.
+    await openPanel('全4ステップを表示')
+    expect(screen.getAllByText('ステップ 1')).toHaveLength(3)
+    expect(screen.getAllByText('ステップ 4')).toHaveLength(2)
+  })
+
+  it('keeps a Step with no Route progression in its primary Target route', async () => {
+    const fixture = contentFixture()
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+
+    await openPanel('双剣・火（2ステップ）')
+    const card = within(stepCard(2))
+    expect(card.getByText('対象: 双剣・火')).toBeInTheDocument()
+    expect(card.queryByText('共有操作')).not.toBeInTheDocument()
+  })
+
+  it('keeps a Target-independent Step out of the Target routes but in the timeline', async () => {
+    const fixture = contentFixture()
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+
+    await openPanel('双剣・水（2ステップ）')
+    await openPanel('双剣・火（2ステップ）')
+    expect(screen.queryByText('ステップ 3')).not.toBeInTheDocument()
+
+    await openPanel('全4ステップを表示')
+    expect(screen.getAllByText('ステップ 3')).toHaveLength(1)
+  })
+
+  it('warns about a legacy Plan and infers no shared attribution for it', async () => {
+    const fixture = contentFixture()
+    const legacyShared = { ...fixture.shared }
+    delete legacyShared.progressedTargetWeaponIds
+    fixture.plan.steps = [legacyShared, fixture.primaryOnly]
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+
+    expect(await screen.findByText(/共有Target進行情報の保存機能追加前に作成された/))
+      .toBeInTheDocument()
+    // The legacy Step keeps only its primary attribution.
+    await openPanel('双剣・水（1ステップ）')
+    expect(screen.getByText('ステップ 1')).toBeInTheDocument()
+    expect(screen.queryByText('共有操作')).not.toBeInTheDocument()
+    await openPanel('双剣・火（1ステップ）')
+    expect(screen.getAllByText('ステップ 1')).toHaveLength(1)
+    expect(screen.getByText('ステップ 2')).toBeInTheDocument()
+  })
+
+  it('does not warn about a current-contract Plan', async () => {
+    const fixture = contentFixture()
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+
+    expect(await screen.findByText('計画の概要')).toBeInTheDocument()
+    expect(screen.queryByText(/共有Target進行情報の保存機能追加前に作成された/))
+      .not.toBeInTheDocument()
+  })
+
+  it('shows the persisted content of a stale Plan while its Conflict controls stay disabled', async () => {
+    const fixture = contentFixture()
+    fixture.plan.status = 'stale'
+    const client = plannerClient(async () => fixture.preparation)
+    const deps = contentDependencies(fixture, [fixture.targetA, fixture.targetB], client)
+    renderPage(deps, fixture.plan.id)
+
+    expect(await screen.findByText(
+      'この生産計画は現在の状態と一致しません。ビルドリストから再計算してください。',
+    )).toBeInTheDocument()
+    expect(screen.getByText('計画の概要')).toBeInTheDocument()
+    await openPanel('全4ステップを表示')
+    expect(screen.getAllByText(/^ステップ \d+$/)).toHaveLength(4)
+    for (const name of ['比較する', 'この候補を優先']) {
+      expect(screen.getByRole('button', { name })).toBeDisabled()
+    }
+    expect(deps.createInput).not.toHaveBeenCalled()
+    expect(client.prepareInteraction).not.toHaveBeenCalled()
+  })
+
+  it('shows the persisted content while the Worker preparation is still running', async () => {
+    const fixture = contentFixture()
+    const pending = deferred<PlannerInteractionPreparationResult>()
+    const client = plannerClient(() => pending.promise)
+    renderPage(
+      contentDependencies(fixture, [fixture.targetA, fixture.targetB], client),
+      fixture.plan.id,
+    )
+
+    expect(await screen.findByText('計画の概要')).toBeInTheDocument()
+    expect(screen.getByText('現在の保存状態から操作可否を確認しています。'))
+      .toBeInTheDocument()
+    await openPanel('全4ステップを表示')
+    expect(screen.getAllByText(/^ステップ \d+$/)).toHaveLength(4)
+
+    await act(async () => {
+      pending.resolve(fixture.preparation)
+      await pending.promise
+    })
+    expect(await screen.findByText('計画の概要')).toBeInTheDocument()
+  })
+
+  it('keeps the loaded Plan content after a preparation failure', async () => {
+    const fixture = contentFixture()
+    const client = plannerClient(async () => {
+      throw new Error('準備に失敗しました。')
+    })
+    renderPage(
+      contentDependencies(fixture, [fixture.targetA, fixture.targetB], client),
+      fixture.plan.id,
+    )
+
+    expect(await screen.findByText('準備に失敗しました。')).toBeInTheDocument()
+    expect(screen.getByText('計画の概要')).toBeInTheDocument()
+    await openPanel('全4ステップを表示')
+    expect(screen.getAllByText(/^ステップ \d+$/)).toHaveLength(4)
+  })
+
+  it('resolves Target names and falls back to the ID for a missing Target', async () => {
+    const fixture = contentFixture()
+    renderPage(contentDependencies(fixture, [fixture.targetA]), fixture.plan.id)
+
+    expect(await screen.findByText('双剣・水（2ステップ）')).toBeInTheDocument()
+    expect(screen.getByText(
+      `削除済みまたは参照できない目標武器（${contentTargetB}）（2ステップ）`,
+    )).toBeInTheDocument()
+  })
+
+  it('keeps the Plan content when the Target read itself fails', async () => {
+    const fixture = contentFixture()
+    const deps = contentDependencies(fixture)
+    deps.getTargetWeapons = vi.fn(async () => {
+      throw new Error('目標武器を読み込めません。')
+    })
+    renderPage(deps, fixture.plan.id)
+
+    expect(await screen.findByText('計画の概要')).toBeInTheDocument()
+    expect(await screen.findByText(
+      `削除済みまたは参照できない目標武器（${contentTargetA}）（2ステップ）`,
+    )).toBeInTheDocument()
+  })
+
+  it('shows no Plan content and no other Plan when the route Plan is missing', async () => {
+    const fixture = contentFixture()
+    const deps = contentDependencies(fixture)
+    vi.mocked(deps.getPlan).mockResolvedValue(undefined)
+    renderPage(deps, 'plan.content.missing')
+
+    expect(await screen.findByText('指定された生産計画が見つかりません。'))
+      .toBeInTheDocument()
+    expect(deps.getPlan).toHaveBeenCalledExactlyOnceWith('plan.content.missing')
+    expect(screen.queryByText('計画の概要')).not.toBeInTheDocument()
+    expect(screen.queryByText('計画全体の実行順')).not.toBeInTheDocument()
   })
 })

@@ -11,6 +11,7 @@ import {
 } from '@mui/material'
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom'
 import { PageShell } from '../components/PageShell'
+import { ProductionPlanContent } from '../components/planner/ProductionPlanContent'
 import { ProductionPlanWhatIfComparison } from '../components/planner/ProductionPlanWhatIfComparison'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import type { MasterDataRoot } from '../domain/master/masterTypes'
@@ -19,6 +20,7 @@ import type {
   CalculationContext,
   ProductionPlan,
   ProductionPlanId,
+  TargetWeapon,
 } from '../domain/models/publicTypes'
 import {
   defaultPlannerOrchestrationBounds,
@@ -29,6 +31,8 @@ import {
   type PlannerWhatIfCalculationResult,
 } from '../domain/planner'
 import { productionPlanRepository } from '../db/repositories/productionPlanRepository'
+import { targetWeaponRepository } from '../db/repositories/targetWeaponRepository'
+import { productionPlanStatusLabels } from '../presentation/labels'
 import {
   createPlannerCalculationContext,
   createPlannerInput,
@@ -53,6 +57,13 @@ const defaultMaster = loadedMaster.ok ? loadedMaster.data : null
 export interface ProductionPlanPageDependencies {
   master: MasterDataRoot
   getPlan(planId: ProductionPlanId): Promise<ProductionPlan | undefined>
+  /**
+   * Current persisted Target definitions, used only to resolve display names
+   * for the read-only Plan contents. It is deliberately independent of the
+   * Worker preparation lifecycle, and a failure here degrades to ID fallback
+   * instead of hiding the persisted Plan.
+   */
+  getTargetWeapons(): Promise<TargetWeapon[]>
   createInput(calculationContext: CalculationContext): Promise<PlannerInput>
   createWorkerClient(): PlannerWorkerClient
   savePlannerResult(
@@ -67,6 +78,7 @@ function createDefaultDependencies(
   return {
     master,
     getPlan: (planId) => productionPlanRepository.getProductionPlan(planId),
+    getTargetWeapons: () => targetWeaponRepository.getAllTargetWeapons(),
     createInput: (calculationContext) =>
       createPlannerInput(master, calculationContext),
     createWorkerClient: createProductionPlannerWorkerClient,
@@ -135,14 +147,6 @@ type ReplanUiState =
   | { status: 'notice'; message: string }
   | { status: 'invalid_resolution' }
 
-const statusLabels = {
-  draft: '下書き',
-  active: '実行中',
-  completed: '完了',
-  stale: '再計算が必要',
-  abandoned: '破棄済み',
-} as const
-
 let fallbackRequestSequence = 0
 
 function createRequestId(): string {
@@ -178,6 +182,7 @@ export function ProductionPlanPage({
           plan: null,
         },
   )
+  const [targetWeapons, setTargetWeapons] = useState<readonly TargetWeapon[]>([])
   const [whatIfState, setWhatIfState] = useState<WhatIfUiState>({
     status: 'idle',
   })
@@ -185,6 +190,25 @@ export function ProductionPlanPage({
 
   const [replanState, setReplanState] = useState<ReplanUiState>({ status: 'idle' })
   const replanBusy = replanState.status === 'loading' || replanState.status === 'saving'
+
+  // Target display names load on their own, so neither a slow nor a failed
+  // Target read can delay or hide the persisted Plan contents; an unresolved
+  // Target simply falls back to its ID.
+  useEffect(() => {
+    if (!dependencies) return
+    let active = true
+    void dependencies
+      .getTargetWeapons()
+      .then((weapons) => {
+        if (active) setTargetWeapons(weapons)
+      })
+      .catch(() => {
+        if (active) setTargetWeapons([])
+      })
+    return () => {
+      active = false
+    }
+  }, [dependencies])
 
   useEffect(() => {
     const lifecycleIdentity = lifecycleIdentityRef.current + 1
@@ -631,17 +655,30 @@ export function ProductionPlanPage({
           >
             <Typography variant="body2">Plan ID: {loadedPlan.id}</Typography>
             <Chip
-              label={statusLabels[loadedPlan.status]}
+              label={productionPlanStatusLabels[loadedPlan.status]}
               color={loadedPlan.status === 'draft' ? 'primary' : 'default'}
               size="small"
             />
           </Stack>
         )}
         {state.status === 'stale' && (
+          <Alert severity="warning">
+            この生産計画は現在の状態と一致しません。ビルドリストから再計算してください。
+          </Alert>
+        )}
+        {/* Read-only Plan contents come straight from the exact persisted Plan,
+            so they render as soon as it is loaded - while the Worker
+            preparation is still running, after it failed, and for a stale Plan
+            whose Conflict controls stay disabled. */}
+        {dependencies && loadedPlan && (
+          <ProductionPlanContent
+            plan={loadedPlan}
+            targetWeapons={targetWeapons}
+            master={dependencies.master}
+          />
+        )}
+        {state.status === 'stale' && (
           <>
-            <Alert severity="warning">
-              この生産計画は現在の状態と一致しません。ビルドリストから再計算してください。
-            </Alert>
             {state.plan.conflicts.map((conflict, index) => (
               <Paper key={conflict.id} variant="outlined" sx={{ p: 2 }}>
                 <Stack spacing={1}>

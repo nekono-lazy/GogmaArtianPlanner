@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, LinearProgress, Stack, Typography } from '@mui/material'
+import { useNavigate } from 'react-router-dom'
 import { PageShell } from '../components/PageShell'
 import { CandidateCard } from '../components/search/CandidateCard'
 import { staleReasonLabels } from '../components/search/searchPresentation'
@@ -84,6 +85,7 @@ interface BuildListPageProps { dependencies?: BuildListPageDependencies }
 
 export function BuildListPage({ dependencies = defaultDependencies ?? undefined }: BuildListPageProps) {
   const debugMode = useSettingsStore((state) => state.debugMode)
+  const navigate = useNavigate()
   const [entries, setEntries] = useState<BuildListEntry[]>([])
   const [targets, setTargets] = useState<TargetWeapon[]>([])
   const [ownedWeapons, setOwnedWeapons] = useState<OwnedWeapon[]>([])
@@ -169,12 +171,14 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
         saveCalculationContext,
       )
       if (activeRequestRef.current !== requestId) return
-      // Persistence, not the Worker result, is the success authority.
-      setNotice(
-        savedPlan
-          ? `生産計画を作成しました: ${savedPlan.id}`
-          : '現在の入力から作成できる生産計画はありませんでした。',
-      )
+      // Persistence, not the Worker result, is the success authority: the
+      // stored Plan's own id is the only navigation target, never the Worker
+      // result's Plan id, the Active Plan, or the latest Plan.
+      if (savedPlan) {
+        void navigate(`/plans/${savedPlan.id}`)
+      } else {
+        setNotice('現在の入力から作成できる生産計画はありませんでした。')
+      }
     } catch (caught: unknown) {
       if (activeRequestRef.current !== requestId || caught instanceof PlannerCancelledError) return
       setError(caught instanceof Error ? caught.message : '生産計画の作成に失敗しました。')

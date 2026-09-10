@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { createMemoryRouter, RouterProvider, useParams } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { createBuildListEntry, createTargetDefinitionHash } from '../domain/buildList'
 import { createSearchStateHash } from '../domain/models/hashing'
@@ -96,6 +97,26 @@ function dependencies(
   }
 }
 
+/**
+ * The page navigates on a successful save, so every render needs a router and
+ * a destination that proves which Plan id was used.
+ */
+function renderPage(deps: BuildListPageDependencies) {
+  const router = createMemoryRouter([
+    { path: '/build-list', element: <BuildListPage dependencies={deps} /> },
+    {
+      path: '/plans/:planId',
+      element: <PlanDestination />,
+    },
+  ], { initialEntries: ['/build-list'] })
+  return { router, ...render(<RouterProvider router={router} />) }
+}
+
+function PlanDestination() {
+  const { planId } = useParams()
+  return <div>Plan destination: {planId}</div>
+}
+
 describe('BuildListPage', () => {
   it('uses the Production RNG version as the current staleness authority', () => {
     expect(createBuildListCalculationContext(createValidMasterDataFixture()).rngEngineVersion)
@@ -106,9 +127,9 @@ describe('BuildListPage', () => {
     const user = userEvent.setup()
     const client = createPlannerClient()
     const deps = dependencies([], client)
-    render(<BuildListPage dependencies={deps} />)
+    renderPage(deps)
     await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
-    await screen.findByText(/生産計画を作成しました/)
+    await screen.findByText(/^Plan destination:/)
 
     expect(deps.refresh).toHaveBeenCalledWith(expect.objectContaining({
       rngEngineVersion: PRODUCTION_RNG_ENGINE_VERSION,
@@ -131,9 +152,9 @@ describe('BuildListPage', () => {
   it('passes the B8-E2b Production orchestration bounds 2 / 1 / 4', async () => {
     const user = userEvent.setup()
     const client = createPlannerClient()
-    render(<BuildListPage dependencies={dependencies([], client)} />)
+    renderPage(dependencies([], client))
     await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
-    await screen.findByText(/生産計画を作成しました/)
+    await screen.findByText(/^Plan destination:/)
 
     expect(vi.mocked(client.createConstrainedPlan).mock.calls[0][2]).toEqual({
       maxCandidateTrialsPerConflict: 2,
@@ -150,9 +171,9 @@ describe('BuildListPage', () => {
     })
     const client = createPlannerClient(result)
     const deps = dependencies([], client)
-    render(<BuildListPage dependencies={deps} />)
+    renderPage(deps)
     await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
-    await screen.findByText(/生産計画を作成しました/)
+    await screen.findByText(/^Plan destination:/)
 
     // The complete result, never only its Plan: the generated Entries and the
     // ProductionPlan must reach the same transaction (PLANNER_SPEC 9.2.15).
@@ -169,9 +190,9 @@ describe('BuildListPage', () => {
     const user = userEvent.setup()
     const client = createPlannerClient()
     const deps = dependencies([], client)
-    render(<BuildListPage dependencies={deps} />)
+    renderPage(deps)
     await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
-    await screen.findByText(/生産計画を作成しました/)
+    await screen.findByText(/^Plan destination:/)
 
     const [plannerStartContext] = vi.mocked(deps.createInput).mock.calls[0]
     const [, saveContext] = vi.mocked(deps.savePlannerResult).mock.calls[0]
@@ -189,7 +210,7 @@ describe('BuildListPage', () => {
     )
     const deps = dependencies([], client)
     deps.savePlannerResult = vi.fn(async () => null)
-    render(<BuildListPage dependencies={deps} />)
+    renderPage(deps)
     await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
 
     expect(await screen.findByText('現在の入力から作成できる生産計画はありませんでした。')).toBeInTheDocument()
@@ -208,12 +229,12 @@ describe('BuildListPage', () => {
     deps.savePlannerResult = vi.fn(async () => {
       throw new Error('生産計画を保存できませんでした。')
     })
-    render(<BuildListPage dependencies={deps} />)
+    renderPage(deps)
     await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
 
     expect(await screen.findByText('生産計画を保存できませんでした。')).toBeInTheDocument()
-    // The Worker returned a Plan, but nothing was stored.
-    expect(screen.queryByText(/生産計画を作成しました/)).not.toBeInTheDocument()
+    // The Worker returned a Plan, but nothing was stored, so nothing to open.
+    expect(screen.queryByText(/^Plan destination:/)).not.toBeInTheDocument()
   })
 
   it('reports the stored Plan id rather than the calculated one', async () => {
@@ -222,14 +243,86 @@ describe('BuildListPage', () => {
     const deps = dependencies([], client)
     const storedPlan = { ...createValidProductionPlan(), id: productionPlanId('plan.b8d2b.stored') }
     deps.savePlannerResult = vi.fn(async () => storedPlan)
-    render(<BuildListPage dependencies={deps} />)
+    renderPage(deps)
     await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
 
-    expect(await screen.findByText(`生産計画を作成しました: ${storedPlan.id}`)).toBeInTheDocument()
+    expect(await screen.findByText(`Plan destination: ${storedPlan.id}`)).toBeInTheDocument()
+  })
+
+  it('navigates to the exact saved Plan, not the calculated one', async () => {
+    const user = userEvent.setup()
+    const calculated = {
+      ...createValidProductionPlan(),
+      id: productionPlanId('plan.worker.calculated'),
+    }
+    const stored = {
+      ...createValidProductionPlan(),
+      id: productionPlanId('plan.persistence.stored'),
+    }
+    const deps = dependencies([], createPlannerClient(
+      createOrchestrationResult({ plan: calculated }),
+    ))
+    deps.savePlannerResult = vi.fn(async () => stored)
+    const view = renderPage(deps)
+    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
+
+    expect(await screen.findByText(`Plan destination: ${stored.id}`)).toBeInTheDocument()
+    // Persistence is the authority: never the Worker result's Plan id, an
+    // Active Plan, a latest Plan, or a pre-generated id.
+    expect(view.router.state.location.pathname).toBe(`/plans/${stored.id}`)
+    expect(view.router.state.location.pathname).not.toContain(calculated.id)
+  })
+
+  it('stays on the Build List with the no-Plan notice when nothing was stored', async () => {
+    const user = userEvent.setup()
+    const deps = dependencies([], createPlannerClient(
+      createOrchestrationResult({ plan: null, generatedBuildListEntries: [] }),
+    ))
+    deps.savePlannerResult = vi.fn(async () => null)
+    const view = renderPage(deps)
+    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
+
+    expect(await screen.findByText('現在の入力から作成できる生産計画はありませんでした。'))
+      .toBeInTheDocument()
+    expect(view.router.state.location.pathname).toBe('/build-list')
+  })
+
+  it('does not navigate when the save fails', async () => {
+    const user = userEvent.setup()
+    const deps = dependencies()
+    deps.savePlannerResult = vi.fn(async () => {
+      throw new Error('生産計画を保存できませんでした。')
+    })
+    const view = renderPage(deps)
+    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
+
+    expect(await screen.findByText('生産計画を保存できませんでした。')).toBeInTheDocument()
+    expect(view.router.state.location.pathname).toBe('/build-list')
+  })
+
+  it('does not navigate after the planning request was cancelled', async () => {
+    const user = userEvent.setup()
+    let releaseSave: () => void = () => undefined
+    const savePending = new Promise<void>((resolve) => {
+      releaseSave = resolve
+    })
+    const deps = dependencies()
+    deps.savePlannerResult = vi.fn(async () => {
+      await savePending
+      return createValidProductionPlan()
+    })
+    const view = renderPage(deps)
+    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
+    await user.click(await screen.findByRole('button', { name: 'キャンセル' }))
+
+    releaseSave()
+    await screen.findByText('生産計画の作成をキャンセルしました。')
+    expect(view.router.state.location.pathname).toBe('/build-list')
+    expect(screen.queryByText(/^Plan destination:/)).not.toBeInTheDocument()
   })
 
   it('renders from Candidate Snapshot and shows stale reasons', async () => {
-    render(<BuildListPage dependencies={dependencies(['rng_state_changed'])} />)
+    renderPage(dependencies(['rng_state_changed']))
     expect(await screen.findByText('Domain fixture target')).toBeInTheDocument()
     expect(screen.getByText('再検索が必要')).toBeInTheDocument()
     expect(screen.getByText('RNG状態が検索時から変更されています')).toBeInTheDocument()
@@ -239,7 +332,7 @@ describe('BuildListPage', () => {
   it('removes only the Build List entry', async () => {
     const user = userEvent.setup()
     const deps = dependencies()
-    render(<BuildListPage dependencies={deps} />)
+    renderPage(deps)
     await user.click(await screen.findByRole('button', { name: 'ビルドリストから削除' }))
     expect(deps.deleteEntry).toHaveBeenCalledOnce()
     expect(screen.queryByText('Domain fixture target')).not.toBeInTheDocument()
@@ -248,7 +341,7 @@ describe('BuildListPage', () => {
   it('shows an empty state', async () => {
     const deps = dependencies()
     deps.refresh = vi.fn(async () => ({ entries: [], targets: [], ownedWeapons: [] }))
-    render(<BuildListPage dependencies={deps} />)
+    renderPage(deps)
     expect(await screen.findByText('ビルドリストは空です。検索結果から候補を追加してください。')).toBeInTheDocument()
   })
 })
