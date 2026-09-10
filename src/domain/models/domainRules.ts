@@ -75,12 +75,20 @@ export function isCalculationContextCompatible(
 /**
  * Compatibility for Search and Build List calculation artifacts.
  *
- * App schema 3 changes only Planner physical-action sharing. A version 2
- * BuildCandidate or BuildListEntry therefore remains safe to use under version
- * 3 when the other calculation authorities are unchanged. This exception is
- * directional and deliberately narrow; ProductionPlan compatibility continues
- * to require exact four-field equality.
+ * App schema 3 changes only Planner physical-action sharing, and app schema 4
+ * only how the Planner treats a Route prefix whose shared Counter position
+ * another Entry's real operation already passed. A version 2 or 3 BuildCandidate
+ * or BuildListEntry therefore remains safe to use under a later version when the
+ * other calculation authorities are unchanged. This exception is directional and
+ * deliberately narrow; ProductionPlan compatibility continues to require exact
+ * four-field equality.
  */
+const COMPATIBLE_BUILD_RESULT_APP_SCHEMA_VERSIONS: ReadonlyMap<number, readonly number[]> =
+  new Map([
+    [3, [2]],
+    [4, [2, 3]],
+  ])
+
 export function isBuildResultCalculationContextCompatible(
   result: CalculationContext,
   current: CalculationContext,
@@ -90,7 +98,9 @@ export function isBuildResultCalculationContextCompatible(
     result.masterDataVersion === current.masterDataVersion &&
     result.rngEngineVersion === current.rngEngineVersion &&
     (result.appSchemaVersion === current.appSchemaVersion ||
-      (result.appSchemaVersion === 2 && current.appSchemaVersion === 3))
+      (
+        COMPATIBLE_BUILD_RESULT_APP_SCHEMA_VERSIONS.get(current.appSchemaVersion) ?? []
+      ).includes(result.appSchemaVersion))
   )
 }
 

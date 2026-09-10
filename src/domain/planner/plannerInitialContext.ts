@@ -13,6 +13,7 @@ import { entryIsRelevantForState } from './plannerEntryRelevance'
 import { createInitialPlannerSearchState } from './plannerInitialState'
 import {
   createPlannerRouteUnitPlans,
+  fastForwardPlannerRouteProgress,
   type PlannerRouteUnit,
 } from './plannerRouteProgress'
 import type {
@@ -126,12 +127,6 @@ export function preparePlannerInitialContext(
       return units === undefined ? [] : [[entry.id, units] as const]
     }),
   )
-  const initialRelevantUnitPlans = new Map(
-    initialRelevantEntries.flatMap((entry) => {
-      const units = allUnitPlans.get(entry.id)
-      return units === undefined ? [] : [[entry.id, units] as const]
-    }),
-  )
   const routeUnitCountByEntryId = new Map(
     [...allUnitPlans].map(([entryId, units]) => [entryId, units.length]),
   )
@@ -143,6 +138,22 @@ export function preparePlannerInitialContext(
       delete initialState.routeSourceVersionByEntryId[entryId]
     }
   })
+  // Normally a no-op, because a Candidate Route starts at the current Counter.
+  // A Route whose skippable prefix already sits behind the current Counter
+  // starts at the position the Beam Search would reach, so the initial conflict
+  // detection never reports an already passed prefix.
+  fastForwardPlannerRouteProgress(initialState, allUnitPlans)
+  const initialRelevantUnitPlans = new Map(
+    initialRelevantEntries.flatMap((entry) => {
+      const units = allUnitPlans.get(entry.id)
+      return units === undefined
+        ? []
+        : [[
+            entry.id,
+            units.slice(initialState.routeProgressByEntryId[entry.id] ?? 0),
+          ] as const]
+    }),
+  )
   const initialConflictDetection = detectPlannerConflicts(
     initialRelevantEntries,
     initialRelevantUnitPlans,

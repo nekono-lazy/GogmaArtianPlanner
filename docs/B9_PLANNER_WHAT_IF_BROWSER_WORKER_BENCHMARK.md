@@ -178,6 +178,10 @@ IdealをPractical枠へ代入していないことは、排他category別の列�
   現行Production Plannerで確認した。A/Bとcombinedは元の競合コストを残す。
 - combinedはreal Browser測定でもfixed制約下でfound 0だった。T=2 / R=8で全4slotが
   `stopped_by_candidate_trial_bound` まで到達したが、これはCandidate不存在の証明ではない。
+  （後日更新：共有Counter prefixのsilent fast-forward修正（PLANNER_SPEC 7.0.2）後、
+  同じcombined workloadのT=2 / R=32では両alternativeのIdealが `found`（距離2）となり、
+  `candidateTrialBound` は4から2へ減った。ここのfound 0はB9時点の観測として残す。
+  ms実測値は再測定していない。）
   重い複合reject workloadとしての評価機会とcostを測ったもので、combinedの
   「全categoryがfeasibleになるthreshold」のdecision evidenceは依然不足している。
 - `not_found_within_search_extent` / `stopped_by_enumeration_bound` を返す専用Production

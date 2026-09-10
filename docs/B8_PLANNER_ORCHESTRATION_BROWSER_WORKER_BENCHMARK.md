@@ -402,6 +402,17 @@ Production default判断の代表workloadである。
 
 ### 7.5 `generatedBuildListEntries.length >= 2` は未成立（B8-E1で確認できず）
 
+> **後日更新（共有Counter prefix fast-forward修正後）**
+> 本節の観測はB8-E1時点のPlanner semanticsに対する記録である。その後の
+> 「別Entryの実操作で通過した不要Route prefixをsilent fast-forwardする」修正
+> （PLANNER_SPEC 7.0.2）により、workload C
+> (`orchestration_trial_and_rerun_pressure`) とworkload D
+> (`orchestration_generated_entry_cap`) はいずれもgenerous boundsで
+> **2件adopt** するようになった。workload Cはbound warningも出さない。
+> 本節冒頭の「2件adoptを確認できなかった」は当時の観測として残す。
+> `docs/B8_PLANNER_ORCHESTRATION_BROWSER_WORKER_BENCHMARK.md` のms実測値は
+> 再測定していないため、Planner costの現行値としては扱わない。
+
 workload要件「generous boundsで `generatedBuildListEntries.length >= 2`」は
 **B8-E1のProduction-valid調査では確認できなかった**。Domain / Planner semanticsは
 変更していない。

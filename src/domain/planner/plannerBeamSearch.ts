@@ -25,6 +25,8 @@ import {
 } from './plannerConflictDetection'
 import {
   arePlannerRouteUnitsShareable,
+  currentPlannerCounterValue,
+  fastForwardPlannerRouteProgress,
   routeUnitOwnedWeaponId,
   type PlannerRouteUnit,
 } from './plannerRouteProgress'
@@ -189,25 +191,6 @@ function appendUniqueRejection(
   rejections.push(value)
 }
 
-function currentCounter(
-  state: PlannerSearchState,
-  unit: PlannerRouteUnit,
-): number | null {
-  if (unit.counterStream === 'gogma') {
-    return state.currentRngState.gogmaCounter.value
-  }
-  if (unit.counterStream === 'skill') {
-    return state.currentRngState.skillCounter.value
-  }
-  if (unit.counterStream === 'normal') {
-    return (
-      state.currentNormalCounters.find(({ id }) => id === unit.counterId)
-        ?.counter ?? null
-    )
-  }
-  return null
-}
-
 function setCurrentCounter(
   state: PlannerSearchState,
   unit: PlannerRouteUnit,
@@ -234,7 +217,7 @@ function counterPreconditionRejection(
   unit: PlannerRouteUnit,
 ): PlannerSearchRejection | null {
   if (unit.counterStream === null) return null
-  const current = currentCounter(state, unit)
+  const current = currentPlannerCounterValue(state, unit)
   if (current === null || unit.counterBefore === null || unit.counterAfter === null) {
     return rejection(
       unit.entryId,
@@ -256,7 +239,7 @@ function counterPreconditionRejection(
       unit.entryId,
       unit.operation.type,
       'counter_before_current',
-      `The current counter ${current} has already passed required position ${unit.counterBefore}.`,
+      `The current counter ${current} has already passed required position ${unit.counterBefore}, and this operation cannot be skipped.`,
     )
   }
   if (current < unit.counterBefore) {
@@ -642,6 +625,11 @@ function applyRouteAction(
       ].sort(compareStableStrings)
     }
   })
+  // Counter stream progression only: a Route prefix another Entry's real
+  // operation already passed advances silently here. It creates no Search
+  // Action, no trace entry, no progressed Entry / Target record, no inventory
+  // effect, and no route runtime output (docs/PLANNER_SPEC.md 7.0.2).
+  fastForwardPlannerRouteProgress(state, unitPlans)
   const progressedBuildListEntryIds = progressedUnits.map(
     ({ entryId }) => entryId,
   )

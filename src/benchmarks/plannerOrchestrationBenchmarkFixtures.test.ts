@@ -371,12 +371,16 @@ describe('B8-E1 workload C: shared trial budget and repeated reruns', () => {
       'max_candidate_trials_per_conflict_reached',
     )
     expect(small.generatedBuildListEntries).toEqual([])
-    // The larger bound reaches a usable Candidate the small one never saw, and
+    // The larger bound reaches usable Candidates the small one never saw, and
     // every trial it spends is a real full Beam Search rerun, not a preflight
-    // rejection - the adopted Entry is only adoptable because a Plan selected it.
-    expect(larger.generatedBuildListEntries).toHaveLength(1)
-    expect(larger.plan?.selectedBuildListEntryIds).toContain(
-      larger.generatedBuildListEntries[0].id,
+    // rejection - an adopted Entry is only adoptable because a Plan selected it.
+    // Since the shared Counter prefix fast-forward both conflict works settle,
+    // so this workload now adopts two Entries and reports no bound stop. That
+    // is an observation of *this* workload, not a Domain maximum.
+    expect(larger.generatedBuildListEntries).toHaveLength(2)
+    expect(larger.warnings).toEqual([])
+    larger.generatedBuildListEntries.forEach(({ id }) =>
+      expect(larger.plan?.selectedBuildListEntryIds).toContain(id),
     )
   }, 180_000)
 
@@ -412,18 +416,21 @@ describe('B8-E1 workload D: generated-entry cap', () => {
     expect(capped.generatedBuildListEntries).toHaveLength(1)
   }, 180_000)
 
-  it('adopts one Entry and still reports a stop with a generous cap', async () => {
+  it('adopts two Entries and still reports a stop with a generous cap', async () => {
     const generous = await runOrchestration(
       'orchestration_generated_entry_cap',
       TEST_ONLY_GENEROUS_BOUNDS,
     )
-    // This fixture adopts one generated Entry and then reports a stop for its
+    // This fixture adopts two generated Entries and then reports a stop for its
     // remaining works. That is an observation of *this* workload, not a Domain
-    // invariant: the B8-E1 investigation did not observe a Production-valid
-    // two-entry adoption; this is not a Domain maximum and does not block
-    // B8-E2 (benchmark document 7.5). Nothing here should be read as "at most
-    // one generated Entry is possible".
-    expect(generous.generatedBuildListEntries).toHaveLength(1)
+    // invariant, and it is not a Domain maximum (benchmark document 7.5).
+    // Nothing here should be read as "at most two generated Entries are
+    // possible". Before the shared Counter prefix fast-forward the same
+    // workload adopted only one Entry.
+    expect(generous.generatedBuildListEntries).toHaveLength(2)
+    generous.generatedBuildListEntries.forEach(({ id }) =>
+      expect(generous.plan?.selectedBuildListEntryIds).toContain(id),
+    )
     expect(generous.warnings.map(({ kind }) => kind)).toContain(
       'max_candidate_trials_per_conflict_reached',
     )

@@ -87,9 +87,14 @@ export interface KnownValue<T> {
 // Application calculation semantics, independent of Dexie and AppSettings schemas.
 // Version 2 invalidates pre-B5-F1 scope-blind Candidate Search results.
 // Version 3 invalidates ProductionPlans created before physical operation
-// subjects became part of transient Gogma action-sharing identity. Version 2
-// BuildCandidate / BuildListEntry results remain explicitly compatible with 3.
-export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 3
+// subjects became part of transient Gogma action-sharing identity.
+// Version 4 invalidates ProductionPlans created before a Route prefix another
+// Entry's real operation already passed could be fast-forwarded: those Plans can
+// hold shared Counter positions as conflicts and Entries rejected as
+// counter_before_current that the current calculation would neither report nor
+// reject. Version 2 and 3 BuildCandidate / BuildListEntry results remain
+// explicitly compatible, because Search and snapshot semantics are unchanged.
+export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 4
 
 export interface CalculationContext {
   gameVersion: string

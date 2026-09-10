@@ -190,27 +190,32 @@ These form `CalculationContext`.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
-semantics, so current `CalculationContext.appSchemaVersion` is **3**, defined only by
-`CURRENT_CALCULATION_APP_SCHEMA_VERSION` in `src/domain/models/common.ts`.
+semantics at version 3, and the shared-Counter Route prefix fast-forward correction
+changed them again, so current `CalculationContext.appSchemaVersion` is **4**, defined
+only by `CURRENT_CALCULATION_APP_SCHEMA_VERSION` in `src/domain/models/common.ts`.
 Search, BuildList, Planner, and benchmark runtime creators share this authority.
 This is independent of Dexie `DATABASE_SCHEMA_VERSION = 1` and
 `AppSettings.schemaVersion = 1`; gameVersion, Master Data version,
 `PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`, and `supportsSeedSearch = false`
 remain unchanged. Version 1 BuildCandidate, BuildListEntry, and ProductionPlan
-calculations are incompatible with version 2 or 3 and must not be reused as current
+calculations are incompatible with any later version and must not be reused as current
 results. Existing staleness checks mark old BuildListEntry records with
 `calculation_context_changed` and exclude them from Planner input. Preserve old
 Candidate categories and snapshots; obtain current Candidates by searching again.
 Do not delete historical results or add a migration or Export/Import semantic
 validation change as a substitute for CalculationContext compatibility.
 
-Version 2 BuildCandidate and BuildListEntry calculations are explicitly compatible
-with version 3 when gameVersion, masterDataVersion, and rngEngineVersion are equal,
-because Search and Build List snapshot semantics did not change. Version 2
-ProductionPlans are not compatible with version 3: treat them as
+Version 2 and version 3 BuildCandidate and BuildListEntry calculations are explicitly
+compatible with version 4 when gameVersion, masterDataVersion, and rngEngineVersion are
+equal, because Search and Build List snapshot semantics did not change. Version 2 and
+version 3 ProductionPlans are not compatible with version 4: treat them as
 `calculation_context_changed`, keep their exact persisted contents visible, and do
-not allow Worker preparation, what-if, conflict selection, or execution. This is a
-narrow artifact-specific exception, not general forward compatibility.
+not allow Worker preparation, what-if, conflict selection, or execution. A version 3
+Plan's persisted Steps stay physically executable, but its `conflicts` and
+`rejectedBuildListEntries` can assert shared-Counter conflicts and
+`counter_before_current` rejections that the current calculation would not produce, so
+it must not be treated as a current executable Plan. This is a narrow
+artifact-specific exception, not general forward compatibility.
 
 Unless compatibility is explicitly guaranteed, a CalculationContext change makes previous:
 
@@ -1360,6 +1365,55 @@ Conversion operations conflict at the same Skill Counter position, not the
 same Gogma Counter position. Only Reset Bonuses and Keep Bonuses consume and
 conflict on Gogma positions.
 
+Counter stream progression and physical action sharing are separate concepts.
+A shared Counter position is not an exclusive resource. When a different Entry's
+real operation moves the current Counter past a Route unit, that unit may be
+treated as already passed — silent fast-forward — but only when executing it is
+unnecessary to preserve the rest of its own Route.
+
+The Planner-internal Route unit attribute is `canSkipWhenCounterPassed`. Derive
+it from the saved Route semantics; never persist it in `RouteOperation`,
+`BuildRoute`, `BuildCandidate`, `ProductionPlan`, or the DB schema. A unit is
+skippable only when the immediately following Route operation rewrites its whole
+semantic output without reading it, so neither the Candidate result nor any
+displayed Step expected result changes:
+
+- `reset_bonuses` followed by `reset_bonuses`: skippable, because Reset redraws
+  all five slots from the Gogma position alone
+- `keep_bonuses` followed by `reset_bonuses`: skippable for the same reason
+- `keep_bonuses` followed by `keep_bonuses`: skippable, because Keep preserves
+  each slot's family, so the next Keep reads the same families either way
+- `reset_bonuses` followed by `keep_bonuses`: required, because that Keep reads
+  the Reset's families
+- `reset_skills` followed by `reset_skills`: skippable, because Reset Skills
+  writes only the Series / Group Skill pair and predicts it positionally
+- everything else is required, including a Route's final operation,
+  `create_normal_artian`, `convert_normal_to_gogma`, `use_weapon_as_material`,
+  `reserve_weapon`, and any concrete inventory mutation
+
+A Route's last unit is never skippable, so a whole Route is never
+fast-forwarded and the Candidate-forming operation always runs.
+
+A fast-forward is not a shared physical action. It creates no
+`PlannerSearchAction`, no trace entry, no `progressedBuildListEntryIds` or
+`PlanStep.progressedTargetWeaponIds` record, no inventory effect, no expected
+result, no route runtime output, and no source mutation version change. It
+advances Route progress only. Never copy an unexecuted Reset / Keep result into
+`routeRuntimeByEntryId`; if a later unit would need semantic state the skipped
+unit produced, that unit is not skippable.
+
+`current > unit.counterBefore` is therefore no longer a blanket rejection:
+
+```text
+past + skippable  -> advance Route progress silently
+past + required   -> counter_before_current / inventory_precondition fail closed
+```
+
+Silent fast-forward exists only in the Beam Search trace's absence, so Trace
+Replay must not regenerate a skipped operation. Keep the existing design where
+the Beam Search trace alone determines the Replay state, and never introduce a
+semantic difference between Beam Search and Replay.
+
 Resolving Counter conflicts across Targets is the Planner's job, not something
 Candidate Search pre-computes. Planner-driven constrained re-search is not
 implemented yet, but the contract for it is fixed: never restart a re-search at
@@ -1618,9 +1672,10 @@ RouteOperation meaning, ProductionPlan persisted shape, PlanStep meaning, or
 existing BuildListEntry shape. If an implementation phase finds it must break
 one of these, stop and report instead of changing a version.
 
-The later physical-action sharing correction supersedes only that historical
-calculation-version statement: the current version and the version 2 artifact
-compatibility rules are defined in the Calculation Context section above.
+The later physical-action sharing and shared-Counter prefix fast-forward
+corrections supersede only that historical calculation-version statement: the
+current version and the version 2 / version 3 artifact compatibility rules are
+defined in the Calculation Context section above.
 
 ---
 
@@ -1751,6 +1806,16 @@ weapon is reserved, not merely when an RNG operation is simulated or confirmed.
 Planner conflicts and rejection records use `BuildListEntryId`, not volatile Candidate IDs.
 
 Conflict kinds follow `DATA_MODEL.md`.
+
+A Counter position conflicts only between units that must physically run at
+that exact position. A `canSkipWhenCounterPassed` unit does not compete for its
+Counter position, so it is never a conflict participant and is never blocked by
+a conflict resolution: whichever Entry runs there first, the other one
+fast-forwards. Required against required stays a conflict when the two are not
+one shareable physical action, and a passed Route prefix never returns to
+conflict detection. `same_owned_weapon_consumed` keeps its existing semantics
+and does not apply this exclusion, because a Route that uses an OwnedWeapon
+always retains at least one required unit referencing it.
 
 Protected destructive use is not merely a scoring penalty or resolvable conflict.
 
@@ -2264,6 +2329,17 @@ Relevant test areas include:
 - Stale hash behavior
 - OwnedWeapon protection
 - Beam Search behavior
+- Silent fast-forward: a skippable past unit advances Route progress only, with
+  no Search Action, trace entry, progressed Entry / Target record, inventory
+  effect, or route runtime output, while a required past unit fails closed
+- Skip derivation: Reset then Reset, Keep then Reset, Keep then Keep, and Reset
+  Skills then Reset Skills are skippable; the Reset a Keep reads, a Route's
+  final unit, create, conversion, and material consumption are not
+- A required unit and a skippable unit at the same Counter position are not a
+  conflict, two required units still are, and a fast-forwarded prefix never
+  returns to conflict detection
+- Two Targets sharing one Gogma Counter stream both reach Ideal, with only the
+  Route prefix that was not passed by another Entry becoming PlanSteps
 - Inventory simulation
 - Expected state Before/After invalidation
 - Old-Practical confirmation flow

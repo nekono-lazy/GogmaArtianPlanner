@@ -53,7 +53,7 @@ describe('BuildListService', () => {
     memory.entries.push(original)
 
     const refreshed = await new BuildListService(memory.repositories).refreshStaleness(current)
-    expect(current.appSchemaVersion).toBe(3)
+    expect(current.appSchemaVersion).toBe(4)
     expect(refreshed.entries[0].isStale).toBe(true)
     expect(refreshed.entries[0].staleReasons).toEqual(['calculation_context_changed'])
     expect(refreshed.entries[0].candidateSnapshot).toEqual(snapshot)
@@ -63,28 +63,31 @@ describe('BuildListService', () => {
     expect(memory.repositories.deleteEntry).not.toHaveBeenCalled()
   })
 
-  it('keeps schema 2 BuildListEntries current under the schema 3 Planner-only change', async () => {
-    const memory = memoryRepositories()
-    const current = createBuildListCalculationContext(createValidMasterDataFixture())
-    const candidate = createValidBuildCandidate()
-    candidate.calculationContext = { ...current, appSchemaVersion: 2 }
-    candidate.searchStateHash = createSearchStateHash(
-      candidate.route,
-      memory.rngState,
-      memory.normalCounters,
-    )
-    const original = createBuildListEntry(candidate, memory.target, {
-      createdAt: '2026-08-29T04:00:00.000Z',
-    })
-    memory.entries.push(original)
+  it.each([2, 3])(
+    'keeps schema %i BuildListEntries current under the Planner-only changes',
+    async (appSchemaVersion) => {
+      const memory = memoryRepositories()
+      const current = createBuildListCalculationContext(createValidMasterDataFixture())
+      const candidate = createValidBuildCandidate()
+      candidate.calculationContext = { ...current, appSchemaVersion }
+      candidate.searchStateHash = createSearchStateHash(
+        candidate.route,
+        memory.rngState,
+        memory.normalCounters,
+      )
+      const original = createBuildListEntry(candidate, memory.target, {
+        createdAt: '2026-08-29T04:00:00.000Z',
+      })
+      memory.entries.push(original)
 
-    const refreshed = await new BuildListService(memory.repositories)
-      .refreshStaleness(current)
+      const refreshed = await new BuildListService(memory.repositories)
+        .refreshStaleness(current)
 
-    expect(refreshed.entries[0].isStale).toBe(false)
-    expect(refreshed.entries[0].staleReasons).toEqual([])
-    expect(memory.repositories.putEntry).not.toHaveBeenCalled()
-  })
+      expect(refreshed.entries[0].isStale).toBe(false)
+      expect(refreshed.entries[0].staleReasons).toEqual([])
+      expect(memory.repositories.putEntry).not.toHaveBeenCalled()
+    },
+  )
 
   it('adds a Candidate snapshot once and rejects a semantic duplicate from a new search', async () => {
     const memory = memoryRepositories()

@@ -258,16 +258,19 @@ export interface PlannerSearchState {
 3. 各Entryの `BuildRoute.operations` から、現在の共有RNG状態と在庫で実行可能な次操作を列挙する
 4. 同じ共有RNG遷移を要求する複数Entryがあれば、1回の遷移で各Entryのroute progressを進める
 5. `count` を持つ操作は実行ナビ用の1操作単位へ分割し、現在Counterまで正常に通過済みのprefixを重複生成しない
-6. 操作前提が現在Stateより過去にあり、副作用または必要資源が満たされていないEntryは実行不能とする
-7. 実行可能な操作を適用し、共有RNGと在庫を進めた次Stateへ展開する
-8. Satisfaction、Route progress、Inventory変化後の現在Stateで、未実行のcurrent / future
+6. 別Entryの実操作でcurrent Counterが通過したRoute prefixのうち、実行しなくても後続Route
+   semanticsを維持できるunitはsilentにroute progressだけ進める（7.0.2）
+7. 操作前提が現在Stateより過去にあり、skipできない、または副作用・必要資源が満たされていない
+   Entryは実行不能とする
+8. 実行可能な操作を適用し、共有RNGと在庫を進めた次Stateへ展開する
+9. Satisfaction、Route progress、Inventory変化後の現在Stateで、未実行のcurrent / future
    Route unitだけを対象にConflictを再評価する。通過済みRoute prefixを再Conflict化しない
    ConflictResolutionは探索中に同じstable Conflict IDが再検出され、selected Entryがその
    Stateで有効なparticipantである場合だけ適用する
-9. 実用品確保、理想品更新、操作数、武器消費、現在Stateで意味のある競合を評価する
-10. 同じ深さで評価値の高い上位 `beamWidth` 件だけを残す
-11. `maxExpandedStates` または `maxPlanSteps` 到達時に打ち切る
-12. 完了Stateのうち最良、完了Stateがなければ最も充足度の高いStateからPlanを生成する
+10. 実用品確保、理想品更新、操作数、武器消費、現在Stateで意味のある競合を評価する
+11. 同じ深さで評価値の高い上位 `beamWidth` 件だけを残す
+12. `maxExpandedStates` または `maxPlanSteps` 到達時に打ち切る
+13. 完了Stateのうち最良、完了Stateがなければ最も充足度の高いStateからPlanを生成する
 
 ### 7.0 physical action sharing
 
@@ -316,8 +319,119 @@ Entry-local transient subject間では、このversion共有を行わない。
   BuildList stale再判定から除外しない
 - このBuild artifact互換例外をversion 2 ProductionPlanへ適用しない
 
+このsilent fast-forward修正もProductionPlanの計算semanticsを変更するため、
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を3から4へ更新する（7.0.2）。version 3
+ProductionPlanは、共有Counter位置を競合として保存し、通過済みprefixを持つEntryを
+`counter_before_current` としてPlanから除外している可能性がある。保存済みStepは物理的に
+実行可能なままだが、その `conflicts` と `rejectedBuildListEntries` はcurrent calculationが
+生成しない判断であるため、version 4で互換とみなしてはならない。上記のfail-closed比較と
+exact persisted表示のルールをそのまま適用する。
+
+version 2と3のBuildCandidate / BuildListEntryは、Searchおよびsnapshot semanticsが
+変わっていないため、他のCalculationContext 3項目が同じ場合に限りversion 4で明示的に
+再利用可能とする。このBuild artifact互換例外をversion 2 / 3 ProductionPlanへ適用しない。
+
 DB schema、AppSettings schema、Production RNG Engine version、ProductionPlan persisted shapeは
 変更しない。
+
+#### 7.0.2 Counter進行とRoute prefixのsilent fast-forward
+
+Counter streamの進行とphysical action sharingは別概念である。
+
+共有Counter streamは排他資源ではない。あるEntryの実操作でcurrent Counterがある位置を
+通過した場合、別EntryのRoute unitのうち「その位置で物理的に実行しなくても後続Route
+semanticsを維持できるもの」は、実行せずに通過済みとして扱ってよい。これをsilent
+fast-forwardと呼ぶ。
+
+fast-forwardはphysical action sharingではない。別Entryの武器へ操作したのではなく、
+そのunitを実行する必要がなくなっただけである。したがってfast-forwardしたunitは次を
+一切生成しない。
+
+- `PlannerSearchAction`
+- Search Trace項目
+- `progressedBuildListEntryIds`
+- `PlanStep.progressedTargetWeaponIds`
+- inventory効果 / route runtime output
+- expected result
+- source mutation version更新
+
+Route progressだけをsilentに前進させる。
+
+##### skip可能条件
+
+Planner内部のRoute unit属性 `canSkipWhenCounterPassed` は、保存済みRoute semanticsから
+導出する。永続fieldではなく、`RouteOperation`、`BuildRoute`、`BuildCandidate`、
+`ProductionPlan`、DB schemaへ追加しない。
+
+条件は「直後のRoute操作が、このunitのsemantic outputを一切読まずに全面的に上書きする」
+ことだけとする。この狭い条件により、最終Candidate結果だけでなく、各Stepのexpected result
+表示もskipの有無で変化しない。
+
+| unit | 直後の操作 | skip |
+| --- | --- | --- |
+| `reset_bonuses` | `reset_bonuses` | 可 |
+| `keep_bonuses` | `reset_bonuses` | 可 |
+| `keep_bonuses` | `keep_bonuses` | 可 |
+| `reset_bonuses` | `keep_bonuses` | 不可 |
+| `reset_skills` | `reset_skills` | 可 |
+| 上記以外 | — | 不可 |
+
+根拠。
+
+- Reset Bonusesは直前の5slotを読まず、Gogma Counter位置とWeapon/Elementだけから
+  5slotを完全再抽選する（[RNG_SPEC.md](./RNG_SPEC.md) 5.3）。したがって直後がReset
+  Bonusesであるbonus操作は、誰にも観測されない
+- Keep Bonusesは各slotのfamilyだけを入力として読み、そのfamilyをslot位置ごとに保持して
+  tierのみ再抽選する。Keep連鎖はfamily layoutを不変に保つため、途中のKeepをskipしても
+  次のKeepの入力familyは変わらず、結果も変わらない
+- Reset直後のKeepはそのResetのfamilyを読むため、そのResetはskip不可
+- Reset SkillsはSeries / Group Skillだけを書き、Skill Counter位置から位置的に予測する。
+  直後がReset Skillsなら、前のReset Skillsの結果はどの操作の入力にもならない
+- Route末尾の操作はCandidate結果そのものを形成するため常に必須
+- `create_normal_artian`、`convert_normal_to_gogma`、`use_weapon_as_material`、
+  `reserve_weapon`、在庫変化を伴う操作は物理副作用を持つため常に必須
+
+Route末尾のunitは常にskip不可なので、Route全体がfast-forwardされることはない。Candidate
+結果を形成する最後の操作は必ず実行され、`reserve_weapon` の前提となるroute outputも必ず
+生成される。skipしたunitのoutputを `routeRuntimeByEntryId` などへ複製してはならない。
+
+##### 適用位置とfail closed
+
+Beam Searchは、実操作でCounterを進めた直後のstateに対してRoute progressを正規化し、
+current Counterより過去になったskip可能unitだけを順に通過させる。skip不可unitに到達した
+時点で停止する。初期stateにも同じ正規化を適用し、初期competition検出が通過済みprefixを
+含まないようにする。
+
+したがって過去unitの扱いは次の2種類だけである。
+
+```text
+past + skip可能 -> route progressだけ前進（silent fast-forward）
+past + skip不可 -> 従来どおり counter_before_current などでfail closed
+```
+
+`current > unit.counterBefore` を一律にrejectしない。逆に、skip不可unitのfail closedは
+弱めない。
+
+##### Conflict判定
+
+同じCounter位置に複数Entryのunitがあるだけでは競合ではない。skip可能unitはその位置を
+排他的に必要としないため、競合participantにもならず、conflict resolutionによる
+blockingの対象にもならない。
+
+```text
+必須unit vs 必須unit（同一physical actionとしてshare不可） -> 競合
+必須unit vs skip可能unit                                   -> 競合ではない
+skip可能unit vs skip可能unit                               -> 競合ではない
+```
+
+どちらが先に実行しても、他方はfast-forwardできるためである。通過済みRoute prefixは
+Conflict対象へ戻さない。
+
+`same_owned_weapon_consumed` は別の排他資源であり、この除外を適用しない。1つのRouteが
+あるOwnedWeaponを起点/素材として使う場合、そのRouteには必ず必須unitが残るため、既存の
+排他消費semanticsはそのまま維持される。PR #4で定めたphysical action identity判定
+（7.0）も弱めない。
+
 
 候補確保時の状態遷移。
 
@@ -507,6 +621,12 @@ Material / unprotected Gogmaを割り当て、不足時だけ補充し、最終P
 - 同じSkill Counter位置で同時取得できない候補
 - 同じ通常アーティアCounter位置で同時取得できない候補
 - 同じOwnedWeaponを素材または起点として排他的に消費する候補
+
+Counter位置の競合対象は、その位置で物理的に実行する必要があるunitだけである。
+`canSkipWhenCounterPassed` なunitはその位置を排他的に必要としないため、competition
+participantにもconflict resolutionのblocking対象にもならない（7.0.2）。同一physical
+actionとしてshareできる場合も従来どおり競合ではない。`same_owned_weapon_consumed` には
+この除外を適用しない。
 
 解決方針。
 
@@ -2473,8 +2593,9 @@ PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2
 supportsSeedSearch = false
 ```
 
-これはB8実装時の歴史的記録である。その後のphysical action sharing修正により現行値は3へ
-更新され、7.0.1のPlan失効 / Build artifact互換契約が適用される。
+これはB8実装時の歴史的記録である。その後のphysical action sharing修正で3へ、共有Counter
+prefixのsilent fast-forward修正で4へ更新されており、7.0.1のPlan失効 / Build artifact
+互換契約が適用される。
 
 理由。
 
@@ -2539,6 +2660,9 @@ PlanStep変換用 `PlannerPlanStepDraft` を生成する。
   含めない。両者ともname、memo、timestampsを含めない。
 - 1 Search Actionは、共有されるEntry数にかかわらず1 physical operation、1 Draftである。
   Draftはprimary Entryと全progressed Entryを別々に保持する。
+- silent fast-forwardしたRoute unitはtraceに存在しないため、Replayは再生成しない。
+  Beam SearchのtraceだけでReplay stateが一意に決まる既存設計を維持し、Replay側で
+  route progressを別途正規化しない。Beam SearchとReplayのsemantic差異を作らない。
 - Replay RuntimeはRngState、Normal Counter、persistent OwnedWeapon Inventoryと、未登録の
   Normal/Gogma出力を保持する。Normal出力はEntryごとに分離し、複数作成後のconvertは
   そのEntryの最後に作成したNormalだけを使用して全Normal transientを破棄する。未登録出力へ
@@ -3037,6 +3161,15 @@ Workerを利用できない環境ではClientのversionを `production-engine-un
 - offset kのNormal候補が `forgeCount = k + 1` だけNormalを進め、最後の1本だけのconversionでSkillを1進め、Gogmaを進めない
 - create operationの `normalCounterAfter = normalCounterBefore + forgeCount` と、採用候補位置 `normalCounterBefore + forgeCount - 1` を混同しない
 - 完全最適解を要求せず、探索上限内の最良Stateを返す
+- 別Entryの実操作でcurrent Counterが通過したskip可能prefixがroute progressだけ前進し、
+  Search Action、trace、progressedBuildListEntryIds、inventory効果、route runtime outputを
+  生成しない
+- skip不可なpast unitは従来どおり `counter_before_current` などでfail closedになる
+- Route末尾のunitはskip不可であり、Route全体がfast-forwardされない
+- Reset→Reset / Keep→Reset / Keep→Keep / Reset Skills→Reset Skillsだけがskip可能で、
+  Keep直前のReset、create、conversion、素材消費はskip不可
+- 共有Gogma Counterを別武器の操作で進めた複数Targetが、どちらのTargetも落とさずIdealまで
+  完成し、必要なRoute prefixだけがPlanStepになる
 
 ## 15.4 Inventory Test
 
@@ -3062,6 +3195,10 @@ Workerを利用できない環境ではClientのversionを `production-engine-un
 - ユーザー選択が必要な競合を検出できる
 - PlanConflictの参照がBuildListEntry ID基準である
 - RejectedBuildListEntryの参照がBuildListEntry ID基準である
+- 必須unitとskip可能unitが同じCounter位置にあっても競合にしない
+- skip可能unit同士を同じCounter位置だけで競合にしない
+- 必須unit同士の同一Counter位置競合と `same_owned_weapon_consumed` は従来どおり検出する
+- fast-forward済みのpast prefixがConflict対象へ戻らない
 
 Planner-driven constrained re-search実装後に追加する観点。
 
