@@ -77,32 +77,40 @@ function ownedWeaponIdForOperation(
   }
 }
 
-function actionIdentity(
+export function createPlannerPhysicalActionIdentity(
   entry: BuildListEntry,
   operation: RouteOperation,
   operationIndex: number,
   unitIndex: number,
 ): { key: string; shareable: boolean } {
   if (operation.type === 'reset_bonuses') {
+    const physicalSubject =
+      operation.sourceOwnedWeaponId === null
+        ? { type: 'entry_transient_gogma', buildListEntryId: entry.id }
+        : { type: 'owned_weapon', ownedWeaponId: operation.sourceOwnedWeaponId }
     return {
       key: stableStringify({
         type: operation.type,
-        sourceOwnedWeaponId: operation.sourceOwnedWeaponId,
+        physicalSubject,
         before: operation.gogmaCounterBefore,
         after: operation.gogmaCounterAfter,
       }),
-      shareable: true,
+      shareable: operation.sourceOwnedWeaponId !== null,
     }
   }
   if (operation.type === 'keep_bonuses') {
+    const physicalSubject =
+      operation.sourceOwnedWeaponId === null
+        ? { type: 'entry_transient_gogma', buildListEntryId: entry.id }
+        : { type: 'owned_weapon', ownedWeaponId: operation.sourceOwnedWeaponId }
     return {
       key: stableStringify({
         type: operation.type,
-        sourceOwnedWeaponId: operation.sourceOwnedWeaponId,
+        physicalSubject,
         before: operation.gogmaCounterBefore,
         after: operation.gogmaCounterAfter,
       }),
-      shareable: true,
+      shareable: operation.sourceOwnedWeaponId !== null,
     }
   }
   if (
@@ -249,7 +257,7 @@ function createEntryUnitPlan(
           ),
         }
       }
-      const identity = actionIdentity(
+      const identity = createPlannerPhysicalActionIdentity(
         entry,
         operation,
         operationIndex,

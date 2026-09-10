@@ -20,6 +20,8 @@ import {
   target,
 } from '../../test/fixtures/plannerBeam'
 import {
+  arePlannerRouteUnitsShareable,
+  createProductionPlan,
   createPlannerRouteUnitPlans,
   detectPlannerConflicts,
   runPlannerBeamSearch,
@@ -443,6 +445,193 @@ describe('Planner Beam Search', () => {
     expect(result.conflicts).toEqual([])
     expect(result.bestState?.currentRngState.gogmaCounter.value).toBe(11)
   })
+
+  it('does not share one Reset between distinct transient Gogma outputs at the same counter', async () => {
+    const firstTarget = target('target.transient-sharing.first', 5)
+    const secondTarget = {
+      ...target('target.transient-sharing.second', 1),
+      weaponTypeId: 'weapon.fixture.b',
+    }
+    const first = routeEntry(
+      'entry.transient-sharing.first',
+      firstTarget,
+      {
+        kind: 'normal_artian_to_gogma',
+        sourceOwnedWeaponId: null,
+        operations: [
+          {
+            type: 'create_normal_artian',
+            weaponTypeId: firstTarget.weaponTypeId,
+            rarity: 8,
+            count: 1,
+            normalCounterBefore: 4,
+            normalCounterAfter: 5,
+          },
+          {
+            type: 'convert_normal_to_gogma',
+            weaponTypeId: firstTarget.weaponTypeId,
+            skillCounterBefore: 7,
+            skillCounterAfter: 8,
+          },
+          {
+            type: 'reset_bonuses',
+            sourceOwnedWeaponId: null,
+            gogmaCounterBefore: 10,
+            gogmaCounterAfter: 11,
+          },
+        ],
+      },
+    )
+    const second = routeEntry(
+      'entry.transient-sharing.second',
+      secondTarget,
+      {
+        kind: 'normal_artian_to_gogma',
+        sourceOwnedWeaponId: null,
+        operations: [
+          {
+            type: 'create_normal_artian',
+            weaponTypeId: secondTarget.weaponTypeId,
+            rarity: 8,
+            count: 1,
+            normalCounterBefore: 12,
+            normalCounterAfter: 13,
+          },
+          {
+            type: 'convert_normal_to_gogma',
+            weaponTypeId: secondTarget.weaponTypeId,
+            skillCounterBefore: 8,
+            skillCounterAfter: 9,
+          },
+          {
+            type: 'reset_bonuses',
+            sourceOwnedWeaponId: null,
+            gogmaCounterBefore: 10,
+            gogmaCounterAfter: 11,
+          },
+        ],
+      },
+    )
+    const { input, dependencies } = fixture(
+      [firstTarget, secondTarget],
+      [first, second],
+    )
+
+    const result = await runPlannerBeamSearch(input, dependencies)
+    const resetActions = result.bestState?.trace.filter(
+      ({ actionType }) => actionType === 'reset_bonuses',
+    ) ?? []
+
+    expect(resetActions).toHaveLength(1)
+    expect(resetActions[0].progressedBuildListEntryIds).toHaveLength(1)
+    expect(resetActions[0].progressedBuildListEntryIds).not.toEqual([
+      first.id,
+      second.id,
+    ])
+    expect(result.bestState?.routeProgressByEntryId[first.id]).not.toBe(
+      result.bestState?.routeProgressByEntryId[second.id],
+    )
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        kind: 'same_gogma_counter',
+        buildListEntryIds: [first.id, second.id],
+      }),
+    ])
+
+    const finalBonuses = createRestorationBonusSet()
+    vi.spyOn(dependencies.rngEngine, 'predictNormalArtian')
+      .mockReturnValue(finalBonuses)
+    vi.spyOn(dependencies.rngEngine, 'predictSkills').mockReturnValue({
+      seriesSkillId: 'series_skill.fixture.a',
+      groupSkillId: null,
+    })
+    vi.spyOn(dependencies.rngEngine, 'predictGogmaBonus')
+      .mockReturnValue(finalBonuses)
+
+    const plan = (await createProductionPlan(input, dependencies)).plan
+    const resetSteps = plan?.steps.filter(
+      ({ operationType }) => operationType === 'reset_bonuses',
+    ) ?? []
+    const reserveSteps = plan?.steps.filter(
+      ({ operationType }) => operationType === 'reserve_weapon',
+    ) ?? []
+
+    expect(resetSteps).toHaveLength(1)
+    expect(resetSteps[0].progressedTargetWeaponIds).toHaveLength(1)
+    expect(reserveSteps).toHaveLength(1)
+    expect(plan?.selectedBuildListEntryIds).toHaveLength(1)
+  })
+
+  it.each(['reset_bonuses', 'keep_bonuses'] as const)(
+    'uses Entry-local physical identity for transient %s at the same counter',
+    (operationType) => {
+      const firstTarget = target('target.transient-identity.' + operationType + '.first')
+      const secondTarget = target('target.transient-identity.' + operationType + '.second')
+      const route = (entryTarget: TargetWeapon): BuildRoute => ({
+        kind: 'normal_artian_to_gogma',
+        sourceOwnedWeaponId: null,
+        operations: [
+          {
+            type: 'create_normal_artian',
+            weaponTypeId: entryTarget.weaponTypeId,
+            rarity: 8,
+            count: 1,
+            normalCounterBefore: 4,
+            normalCounterAfter: 5,
+          },
+          {
+            type: 'convert_normal_to_gogma',
+            weaponTypeId: entryTarget.weaponTypeId,
+            skillCounterBefore: 7,
+            skillCounterAfter: 8,
+          },
+          {
+            type: 'reset_bonuses',
+            sourceOwnedWeaponId: null,
+            gogmaCounterBefore: 10,
+            gogmaCounterAfter: 11,
+          },
+          ...(operationType === 'keep_bonuses'
+            ? [{
+                type: 'keep_bonuses' as const,
+                sourceOwnedWeaponId: null,
+                gogmaCounterBefore: 11,
+                gogmaCounterAfter: 12,
+              }]
+            : []),
+        ],
+      })
+      const first = routeEntry(
+        'entry.transient-identity.' + operationType + '.first',
+        firstTarget,
+        route(firstTarget),
+      )
+      const second = routeEntry(
+        'entry.transient-identity.' + operationType + '.second',
+        secondTarget,
+        route(secondTarget),
+      )
+      const plans = createPlannerRouteUnitPlans(
+        [first, second],
+        plannerEngine(),
+      )
+      const unit = (entryId: typeof first.id) =>
+        plans.unitPlans.get(entryId)?.find(
+          ({ operation }) => operation.type === operationType,
+        )
+      const firstUnit = unit(first.id)
+      const secondUnit = unit(second.id)
+
+      expect(firstUnit).toBeDefined()
+      expect(secondUnit).toBeDefined()
+      expect(firstUnit?.physicalActionKey).not.toBe(
+        secondUnit?.physicalActionKey,
+      )
+      expect(
+        arePlannerRouteUnitsShareable(firstUnit!, secondUnit!),
+      ).toBe(false)
+    },
+  )
 
   it('shares Skill progress for the same protected Reset Skills source', async () => {
     const firstTarget = target('target.shared.skill.first')

@@ -188,20 +188,29 @@ appSchemaVersion
 
 These form `CalculationContext`.
 
-B5-F1 changes Candidate classification and Search calculation semantics, so current
-`CalculationContext.appSchemaVersion` is **2**, defined only by
+B5-F1 changed Candidate classification and Search calculation semantics at version 2.
+The Planner physical-action sharing correction then changed ProductionPlan calculation
+semantics, so current `CalculationContext.appSchemaVersion` is **3**, defined only by
 `CURRENT_CALCULATION_APP_SCHEMA_VERSION` in `src/domain/models/common.ts`.
 Search, BuildList, Planner, and benchmark runtime creators share this authority.
 This is independent of Dexie `DATABASE_SCHEMA_VERSION = 1` and
 `AppSettings.schemaVersion = 1`; gameVersion, Master Data version,
 `PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`, and `supportsSeedSearch = false`
 remain unchanged. Version 1 BuildCandidate, BuildListEntry, and ProductionPlan
-calculations are incompatible with version 2 and must not be reused as current
+calculations are incompatible with version 2 or 3 and must not be reused as current
 results. Existing staleness checks mark old BuildListEntry records with
 `calculation_context_changed` and exclude them from Planner input. Preserve old
 Candidate categories and snapshots; obtain current Candidates by searching again.
 Do not delete historical results or add a migration or Export/Import semantic
 validation change as a substitute for CalculationContext compatibility.
+
+Version 2 BuildCandidate and BuildListEntry calculations are explicitly compatible
+with version 3 when gameVersion, masterDataVersion, and rngEngineVersion are equal,
+because Search and Build List snapshot semantics did not change. Version 2
+ProductionPlans are not compatible with version 3: treat them as
+`calculation_context_changed`, keep their exact persisted contents visible, and do
+not allow Worker preparation, what-if, conflict selection, or execution. This is a
+narrow artifact-specific exception, not general forward compatibility.
 
 Unless compatibility is explicitly guaranteed, a CalculationContext change makes previous:
 
@@ -1600,13 +1609,18 @@ Do not adopt unjustified numbers, and do not let B8-B2 decide orchestration
 defaults. Reaching either kind of bound is reported as a stop, never as
 exhaustion.
 
-B8 changes none of `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2`,
+B8 historically changed none of the then-current
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2`,
 `DATABASE_SCHEMA_VERSION = 1`, `AppSettings.schemaVersion = 1`,
 `PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`, or
 `supportsSeedSearch = false`, and it changes no Production RNG semantics,
 RouteOperation meaning, ProductionPlan persisted shape, PlanStep meaning, or
 existing BuildListEntry shape. If an implementation phase finds it must break
 one of these, stop and report instead of changing a version.
+
+The later physical-action sharing correction supersedes only that historical
+calculation-version statement: the current version and the version 2 artifact
+compatibility rules are defined in the Calculation Context section above.
 
 ---
 

@@ -269,6 +269,56 @@ export interface PlannerSearchState {
 11. `maxExpandedStates` または `maxPlanSteps` 到達時に打ち切る
 12. 完了Stateのうち最良、完了Stateがなければ最も充足度の高いStateからPlanを生成する
 
+### 7.0 physical action sharing
+
+共有Counter streamで同じRNG遷移を要求することは、1回の物理操作を複数Entryで共有する
+ための必要条件ではあるが、十分条件ではない。`physicalActionKey` はRNG transition identity
+に加えて、その操作を実際に受けるphysical weapon subject identityを含める。
+
+- concrete OwnedWeaponを対象とするReset Bonuses、Keep Bonuses、Reset Skillsは、同じ非nullの
+  `sourceOwnedWeaponId`、同じoperation type、同じCounter before / afterを持つ場合だけ
+  cross-Entryでshareableとする
+- `sourceOwnedWeaponId = null` のReset Bonuses、Keep Bonuses、Reset Skillsは、その
+  BuildListEntryの同一Routeで直前に生成したEntry-local transient Gogmaだけを対象とする。
+  別BuildListEntryのnull sourceは別physical weaponであり、Counter before / afterが同じでも
+  1回の物理操作として共有しない
+- transient physical subjectのPlanner内部identityにはBuildListEntry IDを使用してよい。
+  これはroute runtime用の非永続identityであり、fake OwnedWeapon ID、route-local永続ID、
+  ProductionPlan field、DB schemaを追加しない
+- create Normal、conversion、concrete material消費、およびnull sourceの操作はcross-Entryで
+  shareableにしない
+- `PlannerSearchAction.progressedBuildListEntryIds` は、その1回の物理操作で実際にRoute progressが
+  進んだEntryだけを保持する。Counter位置が一致するだけのEntryを追加しない
+- Trace Replayは同じphysical action identityを再検証し、shareableでない複数Entryへ同じ
+  transient outputを複製してはならない
+- `PlanStep.progressedTargetWeaponIds` は正当な `progressedBuildListEntryIds` からだけ導出する。
+  同じCounter位置にいたという理由だけで複数Targetを記録しない
+
+同一concrete OwnedWeaponのshared actionでは、既存のsource mutation / version契約を維持し、
+同じ操作で進んだEntryを操作後の同一versionへ更新してよい。異なるOwnedWeapon IDまたは異なる
+Entry-local transient subject間では、このversion共有を行わない。
+
+#### 7.0.1 Calculation compatibility
+
+このphysical action sharing修正はProductionPlanの計算semanticsを変更するため、
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を2から3へ更新する。version 2 ProductionPlanは、
+別々のEntry-local transient Gogmaに対するReset / Keepを誤共有した可能性を保存済みStepだけから
+安全に否定できないため、version 3で互換とみなしてはならない。
+
+- Planと `baseSnapshot.calculationContext` の両方をcurrent CalculationContextと4項目完全一致で
+  比較する
+- いずれかが非互換なら `calculation_context_changed` としてfail-closedにし、Worker preparation、
+  what-if、競合選択、実行へ進めず再計算を要求する
+- exact persisted表示のため、読取時に保存済みPlanのstatus、recalculationReasons、Step、
+  expected resultを補正または再生成しない
+- version 2のBuildCandidate / BuildListEntryはSearchおよびsnapshot semanticsが変わっていない。
+  他のCalculationContext 3項目が同じ場合に限りversion 3で明示的に再利用可能とし、既存の
+  BuildList stale再判定から除外しない
+- このBuild artifact互換例外をversion 2 ProductionPlanへ適用しない
+
+DB schema、AppSettings schema、Production RNG Engine version、ProductionPlan persisted shapeは
+変更しない。
+
 候補確保時の状態遷移。
 
 - Candidate reserveまたはMaterial Gogma消費など、SimulatedInventoryの意味的変更後は、
@@ -2413,7 +2463,7 @@ boundsはPlanner再実行の実コストに依存し、B8-C / B8-D実装前に�
 
 B9 what-if、B10 Conflict UI、B11 normal-scope Keepは別Phaseとする。
 
-B8 architecture自体は次を変更しない。
+B8 architecture自体は当時の次の値を変更しなかった。
 
 ```text
 CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2
@@ -2422,6 +2472,9 @@ AppSettings.schemaVersion = 1
 PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2
 supportsSeedSearch = false
 ```
+
+これはB8実装時の歴史的記録である。その後のphysical action sharing修正により現行値は3へ
+更新され、7.0.1のPlan失効 / Build artifact互換契約が適用される。
 
 理由。
 

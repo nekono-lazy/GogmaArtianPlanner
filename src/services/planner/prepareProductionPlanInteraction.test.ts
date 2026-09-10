@@ -19,6 +19,7 @@ import {
 import type { PlannerInteractionPreparationResult } from '../../workers/plannerWorkerContracts'
 import {
   createProductionPlanInteractionViewModel,
+  evaluateProductionPlanCalculationCompatibility,
   mergeExplicitConflictResolution,
   restorePersistedExplicitResolutions,
 } from './prepareProductionPlanInteraction'
@@ -107,6 +108,50 @@ function ready(
     }],
   }
 }
+
+describe('evaluateProductionPlanCalculationCompatibility', () => {
+  it('fails closed for a schema 2 Plan under schema 3 while keeping exact matches current', () => {
+    const persistedPlan = createValidProductionPlan()
+    persistedPlan.calculationContext.appSchemaVersion = 2
+    persistedPlan.baseSnapshot.calculationContext.appSchemaVersion = 2
+    const current = {
+      ...persistedPlan.calculationContext,
+      appSchemaVersion: 3,
+    }
+
+    expect(evaluateProductionPlanCalculationCompatibility(
+      persistedPlan,
+      current,
+    )).toEqual({
+      isCompatible: false,
+      recalculationReasons: ['calculation_context_changed'],
+    })
+
+    persistedPlan.calculationContext = { ...current }
+    persistedPlan.baseSnapshot.calculationContext = { ...current }
+    expect(evaluateProductionPlanCalculationCompatibility(
+      persistedPlan,
+      current,
+    )).toEqual({ isCompatible: true, recalculationReasons: [] })
+  })
+
+  it('also fails closed when only the audit snapshot context differs', () => {
+    const persistedPlan = createValidProductionPlan()
+    const current = { ...persistedPlan.calculationContext }
+    persistedPlan.baseSnapshot.calculationContext = {
+      ...current,
+      rngEngineVersion: 'old-engine',
+    }
+
+    expect(evaluateProductionPlanCalculationCompatibility(
+      persistedPlan,
+      current,
+    )).toEqual({
+      isCompatible: false,
+      recalculationReasons: ['calculation_context_changed'],
+    })
+  })
+})
 
 describe('restorePersistedExplicitResolutions', () => {
   it('restores every and only persisted explicit selection', () => {

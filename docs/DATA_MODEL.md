@@ -161,18 +161,31 @@ export interface CalculationContext {
 同一性比較は4項目すべてで行う。変更後の互換性が明示的に保証されない限り、以前のBuildCandidate、BuildListEntry、ProductionPlanはstaleとして扱う。
 
 B5-F1はCandidate classification / Search calculation semanticsを変更したため、
-現行の `CalculationContext.appSchemaVersion` を1から **2** へ更新した。
+`CalculationContext.appSchemaVersion` を1から **2** へ更新した。その後、Plannerの
+physical action sharing semantics修正により現行versionを **3** へ更新した。
 単一authorityは `src/domain/models/common.ts` の
-`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2` とし、Search、BuildList、Plannerと
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 3` とし、Search、BuildList、Plannerと
 benchmark入力のruntime creatorで共用する。これはDexieの `DATABASE_SCHEMA_VERSION = 1`
 や `AppSettings.schemaVersion = 1` の変更ではない。gameVersion、Master Data version、
 `PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`、`supportsSeedSearch = false` は維持する。
 
-version 1の既存BuildCandidate / BuildListEntry / ProductionPlanはversion 2とCalculationContext
+version 1の既存BuildCandidate / BuildListEntry / ProductionPlanはversion 2以降とCalculationContext
 非互換であり、現行計算結果として再利用しない。BuildListEntryは既存のstale再判定で
 `calculation_context_changed` を付け、Planner入力から除外する。旧Candidateのcategoryや
 Snapshotを自動変換せず、削除migrationも追加しない。必要なCandidateは再検索して取得する。
 歴史データの形式検証・Export/Import契約は変更しない。
+
+version 3は、version 2で生成されたProductionPlanが別々のEntry-local transient Gogmaに対する
+Reset / Keepを同一physical actionとして共有し得たことを失効させるPlanner-onlyの境界である。
+version 2 ProductionPlanはversion 3 runtimeで `calculation_context_changed` として扱い、
+Worker preparation、what-if、実行へ進めず再計算を要求する。保存済みPlanのStepやstatusを
+読取時に書き換えず、exact persisted表示は維持する。
+
+Candidate Search semanticsとBuildListEntry snapshot semanticsはversion 2から変更していないため、
+version 2 BuildCandidate / BuildListEntryは、gameVersion、masterDataVersion、rngEngineVersionが
+すべて同じversion 3 runtimeに限り明示的に互換とする。BuildListEntryのstale再判定はこの
+artifact-specific例外を適用し、`calculation_context_changed` を付けない。これはversion 2
+ProductionPlanへ適用せず、将来versionへの一般的な前方互換も意味しない。
 
 ---
 
@@ -809,6 +822,7 @@ export interface UseWeaponAsMaterialOperation {
 - 変換時のSkillがTarget条件を満たす場合はResetSkillsOperationを追加しない。満たさない場合、変換後の次Skill位置からReset Skillsを探索する
 - 同一Route内で変換後の未登録Gogmaを対象にするResetBonusesOperation、KeepBonusesOperation、ResetSkillsOperationは `sourceOwnedWeaponId = null` とし、fake IDまたはRoute-local IDを生成しない
 - `sourceOwnedWeaponId = null` のReset / Keep / Reset Skillsは同じBuildRouteで直前に生成されたtransient Gogmaだけを対象とし、既存OwnedWeaponを表さない
+- このnull sourceのidentity scopeはBuildListEntryごとのRoute runtimeである。別BuildListEntryのnull sourceは別physical weaponを表し、同じCounter位置・同じoperation typeでも1回の物理操作として共有しない。Planner内部ではBuildListEntry IDで区別し、永続OwnedWeapon IDまたは新しいschema fieldを追加しない
 - transientまたはOwned Gogmaの `restorationBonusScope = "normal_artian"` なら、v1の最初のBonus amendmentはResetBonusesOperationでなければならない。最初のReset後だけKeepBonusesOperationを許可する。この検証はProduction prediction supportの制限に由来し、normal-tier KeepのProduction prediction semanticsがgame-verifiedになった時点でSearch / Plannerの除外と同時に解除する。Keep操作自体のgame legalityは確定済みであり、再検証の対象ではない
 - ResetBonusesOperationはGogma Counterを1進め、結果を `gogma_artian` scopeへ置き換える。KeepBonusesOperationもGogma Counterを1進める
 - KeepBonusesOperationはユーザーselectionを持たない。現在5slotのfamilyをslotごとに保持し、同family内tierを再抽選する一意の操作である

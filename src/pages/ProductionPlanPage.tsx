@@ -30,6 +30,7 @@ import {
   type PlannerProgress,
   type PlannerWhatIfCalculationResult,
 } from '../domain/planner'
+import { PRODUCTION_RNG_ENGINE_VERSION } from '../domain/rng/production/productionRngEngine'
 import { productionPlanRepository } from '../db/repositories/productionPlanRepository'
 import { targetWeaponRepository } from '../db/repositories/targetWeaponRepository'
 import { productionPlanStatusLabels } from '../presentation/labels'
@@ -39,6 +40,7 @@ import {
 } from '../services/planner/createPlannerInput'
 import {
   createProductionPlanInteractionViewModel,
+  evaluateProductionPlanCalculationCompatibility,
   mergeExplicitConflictResolution,
   restorePersistedExplicitResolutions,
   type ProductionPlanInteractionViewModel,
@@ -56,6 +58,8 @@ const defaultMaster = loadedMaster.ok ? loadedMaster.data : null
 
 export interface ProductionPlanPageDependencies {
   master: MasterDataRoot
+  /** Current runtime authority used before any Worker is created. */
+  currentCalculationContext: CalculationContext
   getPlan(planId: ProductionPlanId): Promise<ProductionPlan | undefined>
   /**
    * Current persisted Target definitions, used only to resolve display names
@@ -77,6 +81,10 @@ function createDefaultDependencies(
 ): ProductionPlanPageDependencies {
   return {
     master,
+    currentCalculationContext: createPlannerCalculationContext(
+      master,
+      PRODUCTION_RNG_ENGINE_VERSION,
+    ),
     getPlan: (planId) => productionPlanRepository.getProductionPlan(planId),
     getTargetWeapons: () => targetWeaponRepository.getAllTargetWeapons(),
     createInput: (calculationContext) =>
@@ -101,7 +109,11 @@ interface ProductionPlanPageProps {
 type ProductionPlanPageState =
   | { status: 'loading_plan' }
   | { status: 'not_found' }
-  | { status: 'stale'; plan: ProductionPlan }
+  | {
+      status: 'stale'
+      plan: ProductionPlan
+      reason: 'persisted_status' | 'calculation_context_changed'
+    }
   | { status: 'preparing'; plan: ProductionPlan }
   | {
       status: 'ready'
@@ -263,7 +275,19 @@ export function ProductionPlanPage({
         // A stale Plan runs no what-if or Conflict action, so it needs no
         // Worker Client at all.
         if (plan.status === 'stale') {
-          setState({ status: 'stale', plan })
+          setState({ status: 'stale', plan, reason: 'persisted_status' })
+          return
+        }
+        const compatibility = evaluateProductionPlanCalculationCompatibility(
+          plan,
+          dependencies.currentCalculationContext,
+        )
+        if (!compatibility.isCompatible) {
+          setState({
+            status: 'stale',
+            plan,
+            reason: compatibility.recalculationReasons[0],
+          })
           return
         }
         setState({ status: 'preparing', plan })
@@ -665,7 +689,9 @@ export function ProductionPlanPage({
         )}
         {state.status === 'stale' && (
           <Alert severity="warning">
-            この生産計画は現在の状態と一致しません。ビルドリストから再計算してください。
+            {state.reason === 'calculation_context_changed'
+              ? 'この生産計画は現在の計算契約と互換性がありません。ビルドリストから再計算してください。'
+              : 'この生産計画は現在の状態と一致しません。ビルドリストから再計算してください。'}
           </Alert>
         )}
         {/* Read-only Plan contents come straight from the exact persisted Plan,

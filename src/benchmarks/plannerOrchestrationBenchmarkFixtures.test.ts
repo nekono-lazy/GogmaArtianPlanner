@@ -106,7 +106,9 @@ describe('B8-E1 Planner orchestration benchmark fixtures', () => {
         appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
         rngEngineVersion: PRODUCTION_RNG_ENGINE_VERSION,
       })
-      expect(input.calculationContext.appSchemaVersion).toBe(2)
+      expect(input.calculationContext.appSchemaVersion).toBe(
+        CURRENT_CALCULATION_APP_SCHEMA_VERSION,
+      )
       input.buildListEntries.forEach((entry) => {
         expect(entry.calculationContext).toEqual(input.calculationContext)
         expect(entry.candidateSnapshot.calculationContext).toEqual(

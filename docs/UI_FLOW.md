@@ -560,6 +560,11 @@ Worker preparationの実行中、preparation失敗後、`status === 'stale'` の
 Worker resultを表示authorityにせず、BuildCandidateからPlanStepを再構成せず、
 Candidate routeからPlanを再計算せず、UI側でRNG予測または `expectedResult` の再生成を行わない。
 
+保存済みPlanおよび `baseSnapshot` のCalculationContextがcurrentと互換でない場合も、
+statusやStepを読取時に書き換えずexact persisted内容を表示する。ただしそのPlanは
+`calculation_context_changed` による再計算対象として扱い、Worker preparation、what-if、
+競合選択、実行へ進めない。version 2 ProductionPlanはversion 3 runtimeでこの扱いになる。
+
 構成は次の順とする。
 
 ```text

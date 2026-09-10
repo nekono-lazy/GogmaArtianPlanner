@@ -1,11 +1,13 @@
-import type {
-  BuildListEntry,
-  BuildListEntryId,
-  CandidateCategory,
-  PlanConflict,
-  ProductionPlan,
-  ProductionPlanStatus,
-  TargetWeapon,
+import {
+  isCalculationContextCompatible,
+  type BuildListEntry,
+  type BuildListEntryId,
+  type CalculationContext,
+  type CandidateCategory,
+  type PlanConflict,
+  type ProductionPlan,
+  type ProductionPlanStatus,
+  type TargetWeapon,
 } from '../../domain/models/publicTypes'
 import type {
   PlannerConflictResolution,
@@ -47,6 +49,36 @@ export interface ProductionPlanInteractionViewModel {
   isDraft: boolean
   planStatusMessage: string | null
   conflicts: ProductionPlanConflictViewModel[]
+}
+
+export type ProductionPlanCalculationCompatibility =
+  | { isCompatible: true; recalculationReasons: readonly [] }
+  | {
+      isCompatible: false
+      recalculationReasons: readonly ['calculation_context_changed']
+    }
+
+/**
+ * Evaluates whether a persisted Plan may enter the current interaction or
+ * execution preparation path. Both the Plan and its audit snapshot must match
+ * exactly. Build-result compatibility exceptions never apply to a Plan.
+ */
+export function evaluateProductionPlanCalculationCompatibility(
+  plan: ProductionPlan,
+  current: CalculationContext,
+): ProductionPlanCalculationCompatibility {
+  const isCompatible =
+    isCalculationContextCompatible(plan.calculationContext, current) &&
+    isCalculationContextCompatible(
+      plan.baseSnapshot.calculationContext,
+      current,
+    )
+  return isCompatible
+    ? { isCompatible: true, recalculationReasons: [] }
+    : {
+        isCompatible: false,
+        recalculationReasons: ['calculation_context_changed'],
+      }
 }
 
 /**

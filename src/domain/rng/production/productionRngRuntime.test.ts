@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { createBuildListCalculationContext } from '../../../services/buildList/createBuildListCalculationContext'
 import { createPlannerCalculationContext } from '../../../services/planner/createPlannerInput'
-import { CURRENT_CALCULATION_APP_SCHEMA_VERSION, isCalculationContextCompatible } from '../../models/publicTypes'
+import {
+  CURRENT_CALCULATION_APP_SCHEMA_VERSION,
+  isBuildResultCalculationContextCompatible,
+  isCalculationContextCompatible,
+} from '../../models/publicTypes'
 import { createValidMasterDataFixture } from '../../../test/fixtures/masterData'
 import { createProductionPlannerRngEngine } from '../../../workers/planner.worker.production'
 import { createProductionSearchRngEngine } from '../../../workers/search.worker.production'
@@ -9,14 +13,21 @@ import { ProductionRngEngine, PRODUCTION_RNG_ENGINE_VERSION } from './production
 import { productionRngEngine, productionRngRuntime } from './productionRngRuntime'
 
 describe('Production RNG runtime authority', () => {
-  it('shares calculation schema 2 across BuildList and Planner without changing RNG metadata', () => {
+  it('shares calculation schema 3 while retaining only build-result compatibility with schema 2', () => {
     const master = createValidMasterDataFixture()
     const buildList = createBuildListCalculationContext(master)
     const planner = createPlannerCalculationContext(master, productionRngRuntime.version)
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(2)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(3)
     expect(buildList.appSchemaVersion).toBe(CURRENT_CALCULATION_APP_SCHEMA_VERSION)
     expect(planner).toEqual(buildList)
     expect(isCalculationContextCompatible({ ...buildList, appSchemaVersion: 1 }, planner)).toBe(false)
+    const schema2 = { ...buildList, appSchemaVersion: 2 }
+    expect(isCalculationContextCompatible(schema2, planner)).toBe(false)
+    expect(isBuildResultCalculationContextCompatible(schema2, planner)).toBe(true)
+    expect(isBuildResultCalculationContextCompatible(
+      { ...schema2, rngEngineVersion: 'production-rng:other' },
+      planner,
+    )).toBe(false)
   })
 
   it('keeps UI, Workers, and CalculationContext on the Production Engine version', () => {
