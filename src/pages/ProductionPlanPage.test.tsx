@@ -13,6 +13,7 @@ import type {
   RestorationBonusSet,
   TargetWeapon,
 } from '../domain/models/publicTypes'
+import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../domain/models/publicTypes'
 import {
   defaultPlannerOptions,
   type PlannerInput,
@@ -1477,6 +1478,41 @@ describe('ProductionPlanPage read-only Plan content', () => {
     }
     expect(deps.createWorkerClient).not.toHaveBeenCalled()
     expect(deps.createInput).not.toHaveBeenCalled()
+    expect(client.prepareInteraction).not.toHaveBeenCalled()
+  })
+
+
+  it('treats a schema 4 Plan as non-executable under the current schema', async () => {
+    // Schema 4 accepted a partial result of a bound-truncated Planner search as
+    // an ordinary Draft, and a persisted Plan records no
+    // PlannerSearchTermination, so every schema 4 Plan is failed closed rather
+    // than guessed at (DATA_MODEL 3.5).
+    const fixture = contentFixture()
+    fixture.plan.status = 'active'
+    fixture.plan.calculationContext.appSchemaVersion = 4
+    fixture.plan.baseSnapshot.calculationContext.appSchemaVersion = 4
+    const client = plannerClient(async () => fixture.preparation)
+    const deps = contentDependencies(
+      fixture,
+      [fixture.targetA, fixture.targetB],
+      client,
+    )
+    deps.currentCalculationContext = {
+      ...fixture.plan.calculationContext,
+      appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
+    }
+
+    renderPage(deps, fixture.plan.id)
+
+    expect(await screen.findByText(
+      'この生産計画は現在の計算契約と互換性がありません。ビルドリストから再計算してください。',
+    )).toBeInTheDocument()
+    // The exact persisted content stays readable; only the current
+    // interaction and execution path is closed.
+    expect(screen.getAllByText('実行中')).toHaveLength(2)
+    await openPanel('全4ステップを表示')
+    expect(screen.getAllByText(/^ステップ \d+$/)).toHaveLength(4)
+    expect(deps.createWorkerClient).not.toHaveBeenCalled()
     expect(client.prepareInteraction).not.toHaveBeenCalled()
   })
 

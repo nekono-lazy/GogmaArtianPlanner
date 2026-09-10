@@ -92,9 +92,17 @@ export interface KnownValue<T> {
 // Entry's real operation already passed could be fast-forwarded: those Plans can
 // hold shared Counter positions as conflicts and Entries rejected as
 // counter_before_current that the current calculation would neither report nor
-// reject. Version 2 and 3 BuildCandidate / BuildListEntry results remain
-// explicitly compatible, because Search and snapshot semantics are unchanged.
-export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 4
+// reject.
+// Version 5 invalidates ProductionPlans created before a partial result of a
+// search a PlannerOptions bound truncated stopped being accepted as an
+// executable ProductionPlan. Such a Plan was persistable as an ordinary Draft
+// under version 4, a persisted Plan records no PlannerSearchTermination, and
+// ProductionPlan compatibility is exact four-field equality, so a version 4
+// Plan cannot be told apart from a complete one and is failed closed as a
+// whole.
+// Version 2, 3 and 4 BuildCandidate / BuildListEntry results remain explicitly
+// compatible, because Search and snapshot semantics are unchanged.
+export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 5
 
 export interface CalculationContext {
   gameVersion: string

@@ -619,14 +619,40 @@ complete Planが無かった通常の結果として、従来どおりの意味�
 `ProductionPlan` 永続形状のいずれも変更しない。同じ `PlannerInput` に対する計算結果は
 従来と同一であり、変わったのは保存時のartifact受け入れ判定だけである。
 
-Active Plan replacement、abandonment、recalculation、single-active制約と同じく
-Plan保存可否はApplication / Persistenceの責務であり、Planner calculation semanticsでは
-ないため、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` は4のまま変更しない。
-既存のschema 4 ProductionPlanは、そのsteps、conflicts、rejectedBuildListEntriesが
-現在の計算が生成する内容と一致するため、current executable artifactとして互換のままとする。
+それでもこれはCalculation schema境界であり、
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を4から **5** へ更新する。
 
-既知の制約として、この変更以前にschema 4で保存されたpartial ProductionPlanは、
-persisted dataだけからcomplete / incompleteを判別できない。
+version 4以前のruntimeでは、`maxExpandedStates` などで探索が打ち切られても
+`bestComplete ?? bestPartial` からpartial ProductionPlanが通常のDraftとして保存され得た。
+永続化された `ProductionPlan` は `PlannerSearchTermination` を保持せず、ProductionPlan
+互換判定はCalculationContextの完全一致であるため、保存済みversion 4 Planが
+complete search由来かpartial search由来かをcurrent runtimeから判別できない。判別できない
+以上、安全側として旧schema 4 ProductionPlanは一括でstaleとする。
+
+- version 4以前のProductionPlanはversion 5 runtimeで `calculation_context_changed` とし、
+  Worker preparation、conflict interaction、what-if、実行準備、実行へ進めない
+- 保存済みStep、status、conflicts、rejectedBuildListEntriesをread migrationで書き換えず、
+  exact persisted表示は維持する
+- ProductionPlan互換判定は従来どおりexact CalculationContext matchのままとし、
+  build-result例外を適用しない
+- Candidate Search semanticsは変更していないため、version 2 / 3 / 4の
+  BuildCandidate / BuildListEntryは、他のCalculationContext authorityが一致する
+  version 5 runtimeで明示的に互換とする。version 1は引き続き非互換とする
+
+旧artifactへのfail closedと、新しく計算されたresultへのfail closedは別の防御であり、
+両方を維持する。
+
+```text
+version 5                     旧schema 4 ProductionPlanへのfail closed
+termination.status incomplete 新規計算resultへのfail closed
+```
+
+`PlannerResultPersistenceService` の `termination.status === "incomplete"` 拒否は
+schema versionを上げても削除しない。
+
+Calculation semantics / artifact validity境界とDexie schemaは別概念であるため、
+`DATABASE_SCHEMA_VERSION = 1`、`AppSettings.schemaVersion = 1`、
+`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2` は変更しない。
 
 Planner内部ではBeam Searchの状態評価用にCandidate Scoreを計算する。
 
@@ -3534,6 +3560,11 @@ Planner-driven constrained re-search実装後に追加する観点。
   ProductionPlanとして永続化しない
 - そのとき生成BuildListEntriesも単独で永続化しない
 - 探索が自然終了しただけの `exhausted` resultは従来どおり保存できる
+- version 2 / 3 / 4 ProductionPlanがcurrent version 5で非互換となり、
+  `calculation_context_changed` を返す
+- version 5 ProductionPlanがcurrent version 5で互換となる
+- version 2 / 3 / 4のBuildCandidate / BuildListEntryはcurrent version 5で互換、
+  version 1は非互換であり、build-result例外がProductionPlanへ波及しない
 - 実ユーザーケース（Bonus 23 / Bonus 148 + Skill 82の2 Target）が既定上限で
   `incomplete` と24 step partialになり、`maxExpandedStates` を引き上げると
   232 stepの完成Planになる

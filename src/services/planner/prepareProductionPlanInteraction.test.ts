@@ -6,6 +6,10 @@ import type {
   ProductionPlanStatus,
   TargetWeapon,
 } from '../../domain/models/publicTypes'
+import {
+  CURRENT_CALCULATION_APP_SCHEMA_VERSION,
+  isBuildResultCalculationContextCompatible,
+} from '../../domain/models/publicTypes'
 import { defaultPlannerOptions, type PlannerInput } from '../../domain/planner'
 import {
   buildListEntryId,
@@ -129,6 +133,52 @@ describe('evaluateProductionPlanCalculationCompatibility', () => {
 
     persistedPlan.calculationContext = { ...current }
     persistedPlan.baseSnapshot.calculationContext = { ...current }
+    expect(evaluateProductionPlanCalculationCompatibility(
+      persistedPlan,
+      current,
+    )).toEqual({ isCompatible: true, recalculationReasons: [] })
+  })
+
+  it.each([2, 3, 4])(
+    'fails closed for a schema %i ProductionPlan under the current schema',
+    (appSchemaVersion) => {
+      // A persisted Plan records no PlannerSearchTermination, and a version 4
+      // Plan could be a partial result of a bound-truncated search that the
+      // current contract no longer accepts as executable, so every older
+      // schema Plan is failed closed as a whole (DATA_MODEL 3.5).
+      const persistedPlan = createValidProductionPlan()
+      const current = {
+        ...persistedPlan.calculationContext,
+        appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
+      }
+      persistedPlan.calculationContext = { ...current, appSchemaVersion }
+      persistedPlan.baseSnapshot.calculationContext = { ...current, appSchemaVersion }
+
+      expect(evaluateProductionPlanCalculationCompatibility(
+        persistedPlan,
+        current,
+      )).toEqual({
+        isCompatible: false,
+        recalculationReasons: ['calculation_context_changed'],
+      })
+      // The build-result exception never applies to a Plan, even though the
+      // same context is compatible for a BuildCandidate / BuildListEntry.
+      expect(isBuildResultCalculationContextCompatible(
+        persistedPlan.calculationContext,
+        current,
+      )).toBe(true)
+    },
+  )
+
+  it('keeps a current schema ProductionPlan compatible', () => {
+    const persistedPlan = createValidProductionPlan()
+    const current = {
+      ...persistedPlan.calculationContext,
+      appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
+    }
+    persistedPlan.calculationContext = { ...current }
+    persistedPlan.baseSnapshot.calculationContext = { ...current }
+
     expect(evaluateProductionPlanCalculationCompatibility(
       persistedPlan,
       current,

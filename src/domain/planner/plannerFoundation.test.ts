@@ -115,7 +115,7 @@ function resetSkillsEntry(input: PlannerInput): BuildListEntry {
 }
 
 describe('Planner current-state entry validation', () => {
-  it('excludes schema 1 entries under schema 3 even when stored stale flags are false', () => {
+  it('excludes schema 1 entries under the current schema even when stored stale flags are false', () => {
     const { input, dependencies } = fixture()
     const original = structuredClone(input.buildListEntries[0])
     expect(original.calculationContext.appSchemaVersion).toBe(1)
@@ -128,22 +128,29 @@ describe('Planner current-state entry validation', () => {
     expect(input.buildListEntries[0]).toEqual(original)
   })
 
-  it('accepts schema 2 entries under the schema 3 Planner-only change', () => {
-    const { input, dependencies } = fixture()
-    input.buildListEntries[0].calculationContext.appSchemaVersion = 2
-    input.buildListEntries[0].candidateSnapshot.calculationContext.appSchemaVersion = 2
-    input.calculationContext = {
-      ...input.calculationContext,
-      appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
-    }
+  // Every one of these schema changes is Planner-only: none of them touches
+  // Candidate Search or BuildListEntry snapshot semantics, so the Entry stays
+  // usable under the current schema (DATA_MODEL 3.5).
+  it.each([2, 3, 4])(
+    'accepts schema %i entries under the Planner-only schema changes',
+    (appSchemaVersion) => {
+      const { input, dependencies } = fixture()
+      input.buildListEntries[0].calculationContext.appSchemaVersion = appSchemaVersion
+      input.buildListEntries[0].candidateSnapshot.calculationContext.appSchemaVersion =
+        appSchemaVersion
+      input.calculationContext = {
+        ...input.calculationContext,
+        appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
+      }
 
-    const result = validatePlannerInput(input, dependencies)
+      const result = validatePlannerInput(input, dependencies)
 
-    expect(result.validBuildListEntries).toHaveLength(1)
-    expect(result.warnings.some(
-      ({ kind }) => kind === 'calculation_context_incompatible',
-    )).toBe(false)
-  })
+      expect(result.validBuildListEntries).toHaveLength(1)
+      expect(result.warnings.some(
+        ({ kind }) => kind === 'calculation_context_incompatible',
+      )).toBe(false)
+    },
+  )
 
   it('rederives target, RNG, referenced-weapon, and CalculationContext staleness', () => {
     const target = fixture()

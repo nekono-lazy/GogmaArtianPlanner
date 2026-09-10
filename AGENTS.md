@@ -190,8 +190,10 @@ These form `CalculationContext`.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
-semantics at version 3, and the shared-Counter Route prefix fast-forward correction
-changed them again, so current `CalculationContext.appSchemaVersion` is **4**, defined
+semantics at version 3, the shared-Counter Route prefix fast-forward correction changed
+them again at version 4, and refusing a bound-truncated partial search result as an
+executable ProductionPlan changed ProductionPlan artifact validity at version 5, so
+current `CalculationContext.appSchemaVersion` is **5**, defined
 only by `CURRENT_CALCULATION_APP_SCHEMA_VERSION` in `src/domain/models/common.ts`.
 Search, BuildList, Planner, and benchmark runtime creators share this authority.
 This is independent of Dexie `DATABASE_SCHEMA_VERSION = 1` and
@@ -205,17 +207,22 @@ Candidate categories and snapshots; obtain current Candidates by searching again
 Do not delete historical results or add a migration or Export/Import semantic
 validation change as a substitute for CalculationContext compatibility.
 
-Version 2 and version 3 BuildCandidate and BuildListEntry calculations are explicitly
-compatible with version 4 when gameVersion, masterDataVersion, and rngEngineVersion are
-equal, because Search and Build List snapshot semantics did not change. Version 2 and
-version 3 ProductionPlans are not compatible with version 4: treat them as
-`calculation_context_changed`, keep their exact persisted contents visible, and do
-not allow Worker preparation, what-if, conflict selection, or execution. A version 3
-Plan's persisted Steps stay physically executable, but its `conflicts` and
-`rejectedBuildListEntries` can assert shared-Counter conflicts and
-`counter_before_current` rejections that the current calculation would not produce, so
-it must not be treated as a current executable Plan. This is a narrow
-artifact-specific exception, not general forward compatibility.
+Version 2, version 3, and version 4 BuildCandidate and BuildListEntry calculations are
+explicitly compatible with version 5 when gameVersion, masterDataVersion, and
+rngEngineVersion are equal, because Search and Build List snapshot semantics did not
+change. Version 2, version 3, and version 4 ProductionPlans are not compatible with
+version 5: treat them as `calculation_context_changed`, keep their exact persisted
+contents visible, and do not allow Worker preparation, what-if, conflict selection, or
+execution. A version 3 Plan's persisted Steps stay physically executable, but its
+`conflicts` and `rejectedBuildListEntries` can assert shared-Counter conflicts and
+`counter_before_current` rejections that the current calculation would not produce. A
+version 4 Plan's contents can be a partial result of a search a `PlannerOptions` bound
+truncated, which the current contract no longer accepts as executable, and a persisted
+Plan records no `PlannerSearchTermination`, so complete and partial version 4 Plans
+cannot be told apart from persisted data — every version 4 Plan is therefore failed
+closed as a whole rather than judged individually. Neither may be treated as a current
+executable Plan. This is a narrow artifact-specific exception, not general forward
+compatibility, and version 1 stays incompatible for every artifact.
 
 Unless compatibility is explicitly guaranteed, a CalculationContext change makes previous:
 
@@ -1469,9 +1476,11 @@ required / skippable execution eligibility: a branch with more switches is a
 correct Plan, so it is never rejected, never recorded as a rejection, and never
 turned into a conflict. It changes no physical action sharing, silent
 fast-forward, conflict, or Trace Replay semantics, and no calculation version -
-an existing version 4 ProductionPlan with more switches stays executable, so
-`CURRENT_CALCULATION_APP_SCHEMA_VERSION` is unchanged. Bounded Beam Search does
-not guarantee the absolute minimum switch count.
+a switch count alone never invalidates an existing ProductionPlan, so this change
+did not move `CURRENT_CALCULATION_APP_SCHEMA_VERSION` on its own. (The separate
+version 5 boundary above does invalidate every version 4 Plan, for its own
+reason.) Bounded Beam Search does not guarantee the absolute minimum switch
+count.
 
 Resolving Counter conflicts across Targets is the Planner's job, not something
 Candidate Search pre-computes. Planner-driven constrained re-search is not
@@ -1795,14 +1804,21 @@ count, and how to raise the bound. `exhausted` is not an incomplete search: it
 keeps the existing "no Plan from this input" meaning and behaviour.
 
 This changes no Beam Search expansion, scoring, conflict, Trace Replay, PlanStep,
-or `ProductionPlan` persisted semantics. Save-time artifact acceptance is an
-Application/Persistence responsibility, like Active Plan replacement and the
-single-active constraint, so `CURRENT_CALCULATION_APP_SCHEMA_VERSION` stays 4 and
-existing version 4 ProductionPlans stay compatible. `PlannerSearchTermination` is
-runtime result metadata and is never persisted in `ProductionPlan`, `PlanStep`,
-`BuildListEntry`, or the DB schema. A partial ProductionPlan saved under schema 4
-before this change cannot be told apart from a complete one by its persisted data
-alone; that limitation is accepted and not repaired here.
+or `ProductionPlan` persisted semantics: the same `PlannerInput` still produces the
+same Plan contents. It is nevertheless a Calculation schema boundary, because a
+version 4 runtime could persist a bound-truncated partial result as an ordinary
+Draft and a persisted Plan records no termination, so
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION` moves to 5 and every version 4
+ProductionPlan becomes `calculation_context_changed`.
+
+The two fail-closed defences are separate and both stay in force: version 5 closes
+old persisted artifacts, and `termination.status === 'incomplete'` closes newly
+calculated results. Raising the schema version never removes the Persistence
+termination check. `PlannerSearchTermination` is runtime result metadata and is never
+persisted in `ProductionPlan`, `PlanStep`, `BuildListEntry`, or the DB schema.
+Calculation semantics and artifact validity are separate from the Dexie schema, so
+`DATABASE_SCHEMA_VERSION = 1`, `AppSettings.schemaVersion = 1`, and
+`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2` are unchanged.
 
 Do not replace Beam Search with a simple Candidate sort.
 
@@ -2455,6 +2471,11 @@ Relevant test areas include:
   orchestration -> Worker -> Worker Client without being rebuilt from a warning
 - An `incomplete` result's partial Plan never persisted as an executable Draft,
   its generated Entries never persisted alone, and no navigation to the Plan
+- A version 2, 3, or 4 ProductionPlan reported as incompatible under version 5 with
+  `calculation_context_changed`, and a version 5 one reported as compatible
+- Version 2, 3, and 4 BuildCandidate / BuildListEntry compatible under version 5,
+  version 1 incompatible, and the build-result exception never reaching a
+  ProductionPlan or a future version
 - Build List detail settings starting at `defaultPlannerOptions`, sending the
   user-selected values as `PlannerInput.options`, restoring the defaults, and
   refusing `0`, a negative number, a fraction, and an empty field
