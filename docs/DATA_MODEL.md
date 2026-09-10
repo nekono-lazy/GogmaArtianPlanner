@@ -162,9 +162,10 @@ export interface CalculationContext {
 
 B5-F1はCandidate classification / Search calculation semanticsを変更したため、
 `CalculationContext.appSchemaVersion` を1から **2** へ更新した。その後、Plannerの
-physical action sharing semantics修正により現行versionを **3** へ更新した。
-単一authorityは `src/domain/models/common.ts` の
-`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 3` とし、Search、BuildList、Plannerと
+physical action sharing semantics修正によりversionを **3** へ、共有Counter通過時の
+Route prefix silent fast-forward修正によりversionを **4** へ更新した。
+現行versionは **4** である。単一authorityは `src/domain/models/common.ts` の
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 4` とし、Search、BuildList、Plannerと
 benchmark入力のruntime creatorで共用する。これはDexieの `DATABASE_SCHEMA_VERSION = 1`
 や `AppSettings.schemaVersion = 1` の変更ではない。gameVersion、Master Data version、
 `PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`、`supportsSeedSearch = false` は維持する。
@@ -177,15 +178,30 @@ Snapshotを自動変換せず、削除migrationも追加しない。必要なCan
 
 version 3は、version 2で生成されたProductionPlanが別々のEntry-local transient Gogmaに対する
 Reset / Keepを同一physical actionとして共有し得たことを失効させるPlanner-onlyの境界である。
-version 2 ProductionPlanはversion 3 runtimeで `calculation_context_changed` として扱い、
+version 2 ProductionPlanはversion 3以降のruntimeで `calculation_context_changed` として扱い、
 Worker preparation、what-if、実行へ進めず再計算を要求する。保存済みPlanのStepやstatusを
 読取時に書き換えず、exact persisted表示は維持する。
 
+version 4は、共有Counter位置を通過したRoute prefixのsilent fast-forwardを失効境界とする
+Planner-onlyの境界である（`docs/PLANNER_SPEC.md` 7.0.2）。version 3 ProductionPlanは、
+共有Counter位置を競合として保存し、通過済みprefixを持つEntryを `counter_before_current`
+としてPlanから除外している可能性がある。保存済みStepは物理的に実行可能なままだが、その
+`conflicts` と `rejectedBuildListEntries` はcurrent calculationが生成しない判断であるため、
+version 4で互換とみなしてはならない。version 3 ProductionPlanもversion 4 runtimeで
+`calculation_context_changed` として扱い、同じfail-closed比較とexact persisted表示の
+ルールを適用する。
+
 Candidate Search semanticsとBuildListEntry snapshot semanticsはversion 2から変更していないため、
-version 2 BuildCandidate / BuildListEntryは、gameVersion、masterDataVersion、rngEngineVersionが
-すべて同じversion 3 runtimeに限り明示的に互換とする。BuildListEntryのstale再判定はこの
-artifact-specific例外を適用し、`calculation_context_changed` を付けない。これはversion 2
-ProductionPlanへ適用せず、将来versionへの一般的な前方互換も意味しない。
+version 2と3のBuildCandidate / BuildListEntryは、gameVersion、masterDataVersion、
+rngEngineVersionがすべて同じversion 4 runtimeに限り明示的に互換とする。BuildListEntryの
+stale再判定はこのartifact-specific例外を適用し、`calculation_context_changed` を付けない。
+これはversion 2 / 3 ProductionPlanへ適用せず、将来versionへの一般的な前方互換も意味しない。
+
+Planner Plan quality preference（7.3のweapon switch最小化）は、実行可能なPlanの意味を
+変えず、同等にcorrectな複数Planのうちどれを優先するかだけを変える。既存version 4
+ProductionPlanは現行Plannerより武器切替が多くても物理的・意味的に実行可能なままなので、
+これはCalculationContext境界ではなく、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を
+更新しない。
 
 ---
 

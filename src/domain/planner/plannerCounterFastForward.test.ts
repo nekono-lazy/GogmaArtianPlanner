@@ -355,6 +355,22 @@ describe('Shared Gogma Counter Route prefix fast-forward', () => {
           progressedBuildListEntryIds.length === 1,
       ),
     ).toBe(true)
+
+    // Among the equally rated splits of the shared Counter positions, the
+    // Planner picks the one the player can execute as one water block followed
+    // by one fire block (PLANNER_SPEC 7.3). The 23 fire Route units the water
+    // Keeps fast-forward past are not operations, so they add no switch.
+    expect(result.bestState?.weaponSwitchCount).toBe(1)
+    const operatedEntryIds = (result.bestState?.trace ?? [])
+      .filter(({ kind }) => kind === 'route_operation')
+      .map(({ primaryBuildListEntryId }) => primaryBuildListEntryId)
+    expect(operatedEntryIds).toEqual([
+      ...Array.from({ length: WATER_KEEP_COUNT }, () => water.id),
+      ...Array.from(
+        { length: LAST_GOGMA_COUNTER + 1 - WATER_KEEP_COUNT },
+        () => fire.id,
+      ),
+    ])
   }, 180_000)
 
   it('replays the Beam Search trace into one 150 step ProductionPlan', async () => {
@@ -404,15 +420,21 @@ describe('Shared Gogma Counter Route prefix fast-forward', () => {
 
     // Both Routes claim shared Counter positions 0-22, and every position is
     // executed exactly once: the Entry that does not run there fast-forwards.
-    // 140 - (water Keep count) fire Resets remain, and the water Route's own
-    // required final Keep at Counter 22 always runs. PLANNER_SPEC 7.0.2 leaves
-    // which Entry occupies a shared skippable position to the existing score,
-    // so the split itself is not pinned here.
-    expect(fireResets).toHaveLength(FIRE_RESET_COUNT - waterKeeps.length)
-    expect(waterKeeps).toContain(WATER_KEEP_COUNT - 1)
-    expect(
-      [...waterKeeps, ...fireResets.filter((counter) => (counter ?? 0) < WATER_KEEP_COUNT)],
-    ).toHaveLength(WATER_KEEP_COUNT)
+    // Which Entry occupies those shared skippable positions is decided by the
+    // weapon switch preference (PLANNER_SPEC 7.3): running the water Keeps
+    // there leaves one water block followed by one fire block, so the player
+    // swaps the weapon in hand once instead of three times. Both splits execute
+    // the same 148 physical operations, so the existing evaluation rates them
+    // equally and only the switch count separates them.
+    expect(waterKeeps).toEqual(
+      Array.from({ length: WATER_KEEP_COUNT }, (_unused, index) => index),
+    )
+    expect(fireResets).toEqual(
+      Array.from(
+        { length: FIRE_RESET_COUNT - WATER_KEEP_COUNT },
+        (_unused, index) => WATER_KEEP_COUNT + index,
+      ),
+    )
 
     // Exactly one physical operation per shared Gogma Counter position.
     const counterSteps = steps

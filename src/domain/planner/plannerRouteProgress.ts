@@ -89,36 +89,103 @@ function ownedWeaponIdForOperation(
   }
 }
 
+/**
+ * The physical weapon a Planner operation is performed on.
+ *
+ * A concrete OwnedWeapon is one subject no matter which BuildListEntry drives
+ * it. An unregistered route output has no OwnedWeapon ID, so it stays
+ * Entry-local: two Entries' transient Gogma weapons are two different physical
+ * weapons (PR #4, `docs/PLANNER_SPEC.md` 7.0).
+ */
+export type PlannerWeaponOperationSubject =
+  | { type: 'owned_weapon'; ownedWeaponId: OwnedWeaponId }
+  | { type: 'entry_transient_gogma'; buildListEntryId: BuildListEntryId }
+
+function weaponOperationSubject(
+  entryId: BuildListEntryId,
+  sourceOwnedWeaponId: OwnedWeaponId | null,
+): PlannerWeaponOperationSubject {
+  return sourceOwnedWeaponId === null
+    ? { type: 'entry_transient_gogma', buildListEntryId: entryId }
+    : { type: 'owned_weapon', ownedWeaponId: sourceOwnedWeaponId }
+}
+
+/**
+ * The stable identity of the weapon the player keeps selected while performing
+ * this operation, or `null` for an operation whose in-game subject is not a
+ * continuously operated restoration target.
+ *
+ * This is deliberately NOT `physicalActionKey`. That key also carries the
+ * operation type and its Counter before / after, so it changes on every single
+ * action even while the very same weapon stays selected, and it can therefore
+ * never answer "is this the same weapon as the previous operation?"
+ * (`docs/PLANNER_SPEC.md` 7.3).
+ *
+ * Only `reset_bonuses`, `keep_bonuses`, and `reset_skills` are covered: each
+ * selects one existing Gogma weapon and operates on it in place.
+ * `create_normal_artian`, `convert_normal_to_gogma`, and
+ * `use_weapon_as_material` have no such continuously operated subject, and
+ * `reserve_weapon` is a Planner-only action with no in-game operation at all.
+ */
+export function plannerWeaponOperationSubjectKey(
+  entryId: BuildListEntryId,
+  operation: RouteOperation,
+): string | null {
+  if (
+    operation.type !== 'reset_bonuses' &&
+    operation.type !== 'keep_bonuses' &&
+    operation.type !== 'reset_skills'
+  ) {
+    return null
+  }
+  return stableStringify(
+    weaponOperationSubject(entryId, operation.sourceOwnedWeaponId),
+  )
+}
+
+/**
+ * Applies one executed physical operation to the branch's weapon switch metric.
+ *
+ * A `null` subject key means the operation has no continuously operated weapon
+ * subject, so it neither counts a switch nor becomes the new `last` subject: a
+ * `reserve_weapon` action between two operations on the same weapon must not be
+ * read as leaving and returning to it (`docs/PLANNER_SPEC.md` 7.3).
+ *
+ * This is incremental Planner runtime state by design. Recomputing the metric
+ * from the whole trace on every state comparison would make each comparison
+ * O(trace length) in a search that compares thousands of states.
+ */
+export function advancePlannerWeaponSwitchMetric(
+  state: Pick<
+    PlannerSearchState,
+    'weaponSwitchCount' | 'lastWeaponOperationSubjectKey'
+  >,
+  subjectKey: string | null,
+): void {
+  if (subjectKey === null) return
+  if (
+    state.lastWeaponOperationSubjectKey !== null &&
+    state.lastWeaponOperationSubjectKey !== subjectKey
+  ) {
+    state.weaponSwitchCount += 1
+  }
+  state.lastWeaponOperationSubjectKey = subjectKey
+}
+
 export function createPlannerPhysicalActionIdentity(
   entry: BuildListEntry,
   operation: RouteOperation,
   operationIndex: number,
   unitIndex: number,
 ): { key: string; shareable: boolean } {
-  if (operation.type === 'reset_bonuses') {
-    const physicalSubject =
-      operation.sourceOwnedWeaponId === null
-        ? { type: 'entry_transient_gogma', buildListEntryId: entry.id }
-        : { type: 'owned_weapon', ownedWeaponId: operation.sourceOwnedWeaponId }
+  if (operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses') {
     return {
       key: stableStringify({
         type: operation.type,
-        physicalSubject,
-        before: operation.gogmaCounterBefore,
-        after: operation.gogmaCounterAfter,
-      }),
-      shareable: operation.sourceOwnedWeaponId !== null,
-    }
-  }
-  if (operation.type === 'keep_bonuses') {
-    const physicalSubject =
-      operation.sourceOwnedWeaponId === null
-        ? { type: 'entry_transient_gogma', buildListEntryId: entry.id }
-        : { type: 'owned_weapon', ownedWeaponId: operation.sourceOwnedWeaponId }
-    return {
-      key: stableStringify({
-        type: operation.type,
-        physicalSubject,
+        physicalSubject: weaponOperationSubject(
+          entry.id,
+          operation.sourceOwnedWeaponId,
+        ),
         before: operation.gogmaCounterBefore,
         after: operation.gogmaCounterAfter,
       }),
