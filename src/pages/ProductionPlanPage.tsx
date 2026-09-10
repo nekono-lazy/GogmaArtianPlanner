@@ -247,23 +247,12 @@ export function ProductionPlanPage({
       setWhatIfNotice(null)
       setReplanState({ status: 'idle' })
     })
-    try {
-      client = dependencies.createWorkerClient()
-      clientRef.current = client
-    } catch (caught: unknown) {
-      setCurrentState({
-        status: 'error',
-        message: caughtMessage(caught),
-        plan: null,
-      })
-      return () => {
-        active = false
-      }
-    }
 
     const run = async () => {
       let loadedPlan: ProductionPlan | null = null
       try {
+        // The exact persisted Plan is loaded first and unconditionally, so no
+        // Worker concern can keep its read-only contents off the page.
         const plan = await dependencies.getPlan(planId as ProductionPlanId)
         if (!isCurrent()) return
         if (!plan) {
@@ -271,22 +260,30 @@ export function ProductionPlanPage({
           return
         }
         loadedPlan = plan
+        // A stale Plan runs no what-if or Conflict action, so it needs no
+        // Worker Client at all.
         if (plan.status === 'stale') {
           setState({ status: 'stale', plan })
           return
         }
         setState({ status: 'preparing', plan })
 
+        // Created only here: a failure now falls into the catch below, which
+        // keeps `loadedPlan` on the error state instead of discarding it.
+        const preparationClient = dependencies.createWorkerClient()
+        client = preparationClient
+        clientRef.current = preparationClient
+
         const calculationContext = createPlannerCalculationContext(
           dependencies.master,
-          client.engineVersion,
+          preparationClient.engineVersion,
         )
         const freshInput = await dependencies.createInput(calculationContext)
         if (!isCurrent()) return
         const input = restorePersistedExplicitResolutions(freshInput, plan)
         const requestId = createRequestId()
         activeWorkerRequestRef.current = requestId
-        const preparation = await client.prepareInteraction(requestId, input)
+        const preparation = await preparationClient.prepareInteraction(requestId, input)
         if (!isCurrent() || activeWorkerRequestRef.current !== requestId) return
         activeWorkerRequestRef.current = null
         setState({
@@ -320,9 +317,14 @@ export function ProductionPlanPage({
       selectionSavingRef.current = false
       const activeRequestId = activeWorkerRequestRef.current
       activeWorkerRequestRef.current = null
-      if (activeRequestId !== null) client.cancelPlan(activeRequestId)
-      client.dispose()
-      if (clientRef.current === client) clientRef.current = null
+      // `client` stays null when this lifecycle never reached Worker creation:
+      // a stale Plan, a missing Plan, or a Plan load abandoned before it
+      // resolved. There is then nothing to cancel or dispose.
+      if (client !== null) {
+        if (activeRequestId !== null) client.cancelPlan(activeRequestId)
+        client.dispose()
+        if (clientRef.current === client) clientRef.current = null
+      }
     }
   }, [dependencies, planId])
 

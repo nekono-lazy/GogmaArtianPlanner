@@ -385,15 +385,11 @@ describe('ProductionPlanPage', () => {
     const first = pageFixture('load-first')
     const second = pageFixture('load-second')
     const firstLoad = deferred<ProductionPlan | undefined>()
-    const firstClient = plannerClient(async () => first.preparation)
     const secondClient = plannerClient(async () => second.preparation)
-    const deps = dependencies(first, firstClient)
+    const deps = dependencies(second, secondClient)
     vi.mocked(deps.getPlan).mockImplementation((id) =>
       id === first.plan.id ? firstLoad.promise : Promise.resolve(second.plan))
     vi.mocked(deps.createInput).mockResolvedValue(second.input)
-    vi.mocked(deps.createWorkerClient)
-      .mockReturnValueOnce(firstClient)
-      .mockReturnValueOnce(secondClient)
     const view = renderPage(deps, first.plan.id)
 
     await view.router.navigate(`/plans/${second.plan.id}`)
@@ -403,8 +399,10 @@ describe('ProductionPlanPage', () => {
       expect(screen.queryByText(first.target.name)).not.toBeInTheDocument()
     })
     expect(deps.createInput).toHaveBeenCalledOnce()
-    expect(firstClient.prepareInteraction).not.toHaveBeenCalled()
-    expect(firstClient.dispose).toHaveBeenCalledOnce()
+    expect(secondClient.prepareInteraction).toHaveBeenCalledOnce()
+    // The abandoned first load never reached Worker creation, so that
+    // lifecycle has no Client to cancel or dispose.
+    expect(deps.createWorkerClient).toHaveBeenCalledOnce()
   })
 
   it('renders an unexpected Worker error separately from typed invalid', async () => {
@@ -1502,6 +1500,72 @@ describe('ProductionPlanPage read-only Plan content', () => {
     expect(await screen.findByText(
       `削除済みまたは参照できない目標武器（${contentTargetA}）（2ステップ）`,
     )).toBeInTheDocument()
+  })
+
+  it('shows the persisted content when the Worker Client cannot even be created', async () => {
+    const fixture = contentFixture()
+    const deps = contentDependencies(fixture)
+    vi.mocked(deps.createWorkerClient).mockImplementation(() => {
+      throw new Error('Workerを生成できませんでした。')
+    })
+    renderPage(deps, fixture.plan.id)
+
+    expect(await screen.findByText('Workerを生成できませんでした。')).toBeInTheDocument()
+    // The exact persisted Plan is loaded before any Worker concern, so its
+    // read-only contents survive a Worker Client construction failure.
+    expect(deps.getPlan).toHaveBeenCalledExactlyOnceWith(fixture.plan.id)
+    expect(screen.getByText('計画の概要')).toBeInTheDocument()
+    expect(screen.getByText(`計画ID: ${fixture.plan.id}`)).toBeInTheDocument()
+    expect(screen.getByText('全ステップ数: 4')).toBeInTheDocument()
+    expect(screen.getByText('確保予定数: 1')).toBeInTheDocument()
+    await openPanel('全4ステップを表示')
+    expect(screen.getAllByText(/^ステップ \d+$/)).toHaveLength(4)
+    // Nothing downstream of the Worker Client ran.
+    expect(deps.createInput).not.toHaveBeenCalled()
+  })
+
+  it('creates no Worker Client for a stale Plan', async () => {
+    const fixture = contentFixture()
+    fixture.plan.status = 'stale'
+    const client = plannerClient(async () => fixture.preparation)
+    const deps = contentDependencies(fixture, [fixture.targetA, fixture.targetB], client)
+    renderPage(deps, fixture.plan.id)
+
+    expect(await screen.findByText('計画の概要')).toBeInTheDocument()
+    expect(deps.createWorkerClient).not.toHaveBeenCalled()
+    expect(deps.createInput).not.toHaveBeenCalled()
+    expect(client.prepareInteraction).not.toHaveBeenCalled()
+    expect(client.dispose).not.toHaveBeenCalled()
+  })
+
+  it('creates no Worker Client when the route Plan does not exist', async () => {
+    const fixture = contentFixture()
+    const deps = contentDependencies(fixture)
+    vi.mocked(deps.getPlan).mockResolvedValue(undefined)
+    renderPage(deps, 'plan.content.absent')
+
+    expect(await screen.findByText('指定された生産計画が見つかりません。'))
+      .toBeInTheDocument()
+    expect(deps.createWorkerClient).not.toHaveBeenCalled()
+  })
+
+  it('loads the Plan before creating the Worker Client', async () => {
+    const fixture = contentFixture()
+    const order: string[] = []
+    const client = plannerClient(async () => fixture.preparation)
+    const deps = contentDependencies(fixture, [fixture.targetA, fixture.targetB], client)
+    vi.mocked(deps.getPlan).mockImplementation(async () => {
+      order.push('getPlan')
+      return fixture.plan
+    })
+    vi.mocked(deps.createWorkerClient).mockImplementation(() => {
+      order.push('createWorkerClient')
+      return client
+    })
+    renderPage(deps, fixture.plan.id)
+
+    await waitFor(() => expect(client.prepareInteraction).toHaveBeenCalledOnce())
+    expect(order).toEqual(['getPlan', 'createWorkerClient'])
   })
 
   it('shows no Plan content and no other Plan when the route Plan is missing', async () => {
