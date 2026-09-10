@@ -466,6 +466,83 @@ function nextTransientRestorationBonusScope(
   return current?.transientRestorationBonusScope ?? null
 }
 
+/**
+ * Every executable precondition the Beam Search checks before it builds a
+ * successor. Expansion and the required-unit eligibility scan below must use
+ * exactly the same authority, so they never disagree about whether a unit can
+ * run in this state.
+ */
+function routeUnitPreconditionRejection(
+  state: PlannerSearchState,
+  entry: BuildListEntry,
+  unit: PlannerRouteUnit,
+): PlannerSearchRejection | null {
+  if (!entryUsesCurrentSourceVersion(state, entry)) {
+    return sourceVersionRejection(entry, unit)
+  }
+  const counterIssue = counterPreconditionRejection(state, unit)
+  if (counterIssue) return counterIssue
+  return inventoryPreconditionRejection(state, entry, unit)
+}
+
+/** One shared Counter stream position, the resource a unit occupies. */
+function counterPositionKey(unit: PlannerRouteUnit): string | null {
+  if (unit.counterStream === null || unit.counterBefore === null) return null
+  return `${unit.counterStream}\u0000${unit.counterId ?? ''}\u0000${unit.counterBefore}`
+}
+
+/**
+ * Required next units that can run in this state, indexed by Counter position.
+ *
+ * A `canSkipWhenCounterPassed` unit and a required unit at the same position do
+ * not conflict, but they are not interchangeable either: running the required
+ * one first lets the skippable one fast-forward, while running the skippable
+ * one first pushes the Counter past the required unit and kills that Route with
+ * `counter_before_current`. The order is therefore decided by the Planner
+ * itself, never by the user (`docs/PLANNER_SPEC.md` 7.0.2).
+ */
+function executableRequiredUnitsByCounterPosition(
+  state: PlannerSearchState,
+  entries: readonly BuildListEntry[],
+  unitPlans: ReadonlyMap<BuildListEntryId, readonly PlannerRouteUnit[]>,
+  isUnitBlocked: (unit: PlannerRouteUnit) => boolean,
+): Map<string, PlannerRouteUnit[]> {
+  const required = new Map<string, PlannerRouteUnit[]>()
+  entries.forEach((entry) => {
+    if (state.selectedBuildListEntryIds.includes(entry.id)) return
+    if (!entryIsRelevantForState(state, entry)) return
+    const units = unitPlans.get(entry.id) ?? []
+    const unit = units[state.routeProgressByEntryId[entry.id] ?? 0]
+    if (!unit || unit.canSkipWhenCounterPassed) return
+    const key = counterPositionKey(unit)
+    if (key === null) return
+    if (isUnitBlocked(unit)) return
+    if (routeUnitPreconditionRejection(state, entry, unit) !== null) return
+    required.set(key, [...(required.get(key) ?? []), unit])
+  })
+  return required
+}
+
+/**
+ * Whether running this skippable unit now would irreversibly lose a required
+ * unit that occupies the same Counter position.
+ *
+ * A skippable unit that is the same physical action as one of those required
+ * units is not an alternative to it: the PR #4 sharing contract already runs
+ * both Entries with one operation, so that case keeps its existing semantics.
+ */
+function isSkippableUnitDominatedByRequiredUnit(
+  unit: PlannerRouteUnit,
+  requiredByCounterPosition: ReadonlyMap<string, readonly PlannerRouteUnit[]>,
+): boolean {
+  if (!unit.canSkipWhenCounterPassed) return false
+  const key = counterPositionKey(unit)
+  if (key === null) return false
+  const required = requiredByCounterPosition.get(key)
+  if (required === undefined || required.length === 0) return false
+  return !required.some((other) => arePlannerRouteUnitsShareable(other, unit))
+}
+
 function mergedProgressedEntries(
   state: PlannerSearchState,
   primary: PlannerRouteUnit,
@@ -543,17 +620,12 @@ function applyRouteAction(
       ),
     }
   }
-  if (!entryUsesCurrentSourceVersion(sourceState, primaryEntry)) {
-    return { state: null, rejection: sourceVersionRejection(primaryEntry, primary) }
-  }
-  const counterIssue = counterPreconditionRejection(sourceState, primary)
-  if (counterIssue) return { state: null, rejection: counterIssue }
-  const inventoryIssue = inventoryPreconditionRejection(
+  const preconditionIssue = routeUnitPreconditionRejection(
     sourceState,
     primaryEntry,
     primary,
   )
-  if (inventoryIssue) return { state: null, rejection: inventoryIssue }
+  if (preconditionIssue) return { state: null, rejection: preconditionIssue }
   const state = cloneState(sourceState)
   const before = rngSnapshot(state)
   const appliedInventory = applyRouteInventoryEffect(
@@ -1071,6 +1143,24 @@ export async function runPlannerBeamSearch(
       const conflictsById = new Map(
         stateConflictDetection.conflicts.map((conflict) => [conflict.id, conflict]),
       )
+      const isBlockedByConflictResolution = (unit: PlannerRouteUnit) =>
+        isUnitBlockedByConflictResolution(
+          unit,
+          conflictsById,
+          stateConflictDetection.conflictIdsByUnitKey,
+          stateConflictDetection.selectedPhysicalActionKeysByConflictId,
+          (entryId) => {
+            const selected = entriesById.get(entryId)
+            return selected !== undefined && entryIsRelevantForState(state, selected)
+          },
+        )
+      const requiredUnitsByCounterPosition =
+        executableRequiredUnitsByCounterPosition(
+          state,
+          allSearchEntries,
+          allUnitPlans,
+          isBlockedByConflictResolution,
+        )
       for (const entry of allSearchEntries) {
         if (state.selectedBuildListEntryIds.includes(entry.id)) continue
         if (!targetCanUseEntry(state, entry)) continue
@@ -1079,18 +1169,7 @@ export async function runPlannerBeamSearch(
         let applied: AppliedActionResult
         if (progress < units.length) {
           const unit = units[progress]
-          if (
-            isUnitBlockedByConflictResolution(
-              unit,
-              conflictsById,
-              stateConflictDetection.conflictIdsByUnitKey,
-              stateConflictDetection.selectedPhysicalActionKeysByConflictId,
-              (entryId) => {
-                const selected = entriesById.get(entryId)
-                return selected !== undefined && entryIsRelevantForState(state, selected)
-              },
-            )
-          ) {
+          if (isBlockedByConflictResolution(unit)) {
             appendUniqueRejection(
               rejections,
               rejectionKeys,
@@ -1101,6 +1180,19 @@ export async function runPlannerBeamSearch(
                 'A valid local conflict resolution selected another BuildListEntry.',
               ),
             )
+            continue
+          }
+          // Execution eligibility, not a conflict and not a score: another
+          // Entry must physically run at this Counter position, and this unit
+          // can fast-forward once it has (docs/PLANNER_SPEC.md 7.0.2). Running
+          // this one first would only push the Counter past a required unit, so
+          // the branch is never generated and no rejection is recorded.
+          if (
+            isSkippableUnitDominatedByRequiredUnit(
+              unit,
+              requiredUnitsByCounterPosition,
+            )
+          ) {
             continue
           }
           applied = applyRouteAction(

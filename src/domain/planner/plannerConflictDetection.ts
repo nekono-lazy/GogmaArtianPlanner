@@ -126,12 +126,16 @@ interface ConflictGroup {
  * Counter positions are a shared stream, not an exclusive resource.
  *
  * A unit that another Entry's real operation can pass without breaking its own
- * Route (`canSkipWhenCounterPassed`) never competes for its Counter position:
- * whichever Entry runs there first, the other one fast-forwards
+ * Route (`canSkipWhenCounterPassed`) never competes for its Counter position
  * (`docs/PLANNER_SPEC.md` 7.0.2 / 9). Only units that must physically run at
  * that exact position can conflict, so a skippable unit is neither a conflict
  * participant nor blocked by a conflict resolution. Exclusive OwnedWeapon
  * consumption keeps its existing semantics and is detected separately.
+ *
+ * Not being a conflict does not make the order free: a required unit at the
+ * same position must run first, and the Beam Search enforces that as execution
+ * eligibility (`isSkippableUnitDominatedByRequiredUnit`), never as a conflict
+ * the user has to resolve.
  */
 function counterGroups(
   unitPlans: ReadonlyMap<BuildListEntryId, readonly PlannerRouteUnit[]>,

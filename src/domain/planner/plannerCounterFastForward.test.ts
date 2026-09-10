@@ -807,3 +807,72 @@ describe('Silent fast-forward on an unregistered route output', () => {
     ).toBe(true)
   })
 })
+
+describe('Required unit execution eligibility', () => {
+  /**
+   * Counter 10 carries Entry A's required unit and Entry B's skippable unit.
+   * The two do not conflict, but they are not interchangeable: running A first
+   * lets B fast-forward, while running B first would push the Counter past A's
+   * required unit and kill A's Route. The Planner decides that order itself.
+   */
+  it('never expands a skippable unit that would lose a required unit at the same Counter', async () => {
+    const { input, dependencies, required, other } = sharedPositionScenario([10, 11])
+    const result = await runPlannerBeamSearch(input, dependencies)
+
+    expect(result.completed).toBe(true)
+    expect(result.conflicts).toEqual([])
+    // The branch that runs the skippable Counter 10 unit first is never
+    // generated, so no Entry is ever rejected for a Counter it could have kept.
+    expect(result.rejections).not.toContainEqual(
+      expect.objectContaining({ reason: 'counter_before_current' }),
+    )
+    expect(
+      (result.bestState?.trace ?? []).map(
+        ({ primaryBuildListEntryId, actionType, rngBefore }) =>
+          `${primaryBuildListEntryId}:${actionType}:${rngBefore.gogmaCounter}`,
+      ),
+    ).toEqual([
+      `${required.id}:reset_bonuses:10`,
+      `${required.id}:reserve_weapon:11`,
+      `${other.id}:reset_bonuses:11`,
+      `${other.id}:reserve_weapon:12`,
+    ])
+  })
+
+  it('keeps both orders available when only skippable units share the position', async () => {
+    // Counter 10 carries two skippable units, so neither dominates: whichever
+    // Entry runs there, the other one fast-forwards and both Routes finish.
+    const { input, dependencies, required, other } = sharedPositionScenario([10, 11])
+    const requiredUnits = input.buildListEntries.find(
+      ({ id }) => id === required.id,
+    )
+    if (!requiredUnits) throw new Error('Fixture Entry is missing.')
+    requiredUnits.candidateSnapshot.route.operations = [
+      gogmaOperation('reset_bonuses', ownedWeaponId('owned.fast-forward.required'), 10),
+      gogmaOperation('reset_bonuses', ownedWeaponId('owned.fast-forward.required'), 12),
+    ]
+    synchronizeEntry(input, requiredUnits)
+    const plans = createPlannerRouteUnitPlans(
+      input.buildListEntries,
+      dependencies.rngEngine,
+    )
+    expect(
+      (plans.unitPlans.get(required.id) ?? []).map(
+        ({ canSkipWhenCounterPassed }) => canSkipWhenCounterPassed,
+      ),
+    ).toEqual([true, false])
+    const result = await runPlannerBeamSearch(input, dependencies)
+
+    expect(result.conflicts).toEqual([])
+    expect(result.completed).toBe(true)
+    expect(result.bestState?.selectedBuildListEntryIds).toEqual(
+      [required.id, other.id].sort(),
+    )
+    // Counter 10 is consumed exactly once by exactly one of the two Entries.
+    const atTen = (result.bestState?.trace ?? []).filter(
+      ({ kind, rngBefore }) =>
+        kind === 'route_operation' && rngBefore.gogmaCounter === 10,
+    )
+    expect(atTen).toHaveLength(1)
+  })
+})

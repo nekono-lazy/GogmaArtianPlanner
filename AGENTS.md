@@ -1394,6 +1394,22 @@ displayed Step expected result changes:
 A Route's last unit is never skippable, so a whole Route is never
 fast-forwarded and the Candidate-forming operation always runs.
 
+A skippable unit is therefore not interchangeable with a required unit that
+occupies the same Counter position. Running the required one first lets the
+skippable one fast-forward, while running the skippable one first pushes the
+Counter past the required unit and kills that Route with
+`counter_before_current`. So whenever a Counter position carries a required unit
+that can actually run in the current state, never expand a skippable unit that
+would consume that position first. This is execution eligibility - a semantic
+pruning of the successor set - not a score adjustment: a score alone leaves the
+invalid branch alive at the mercy of `beamWidth` and tie-breaks. Decide
+executability with the same authority ordinary expansion uses (source version,
+counter precondition, inventory and protection, conflict-resolution blocking),
+apply it only within one stream and Counter position, leave the case where the
+two are one shareable physical action to the PR #4 sharing contract, and record
+no rejection for the branch that was never generated. Positions where every
+competing unit is skippable keep both orders available.
+
 A fast-forward is not a shared physical action. It creates no
 `PlannerSearchAction`, no trace entry, no `progressedBuildListEntryIds` or
 `PlanStep.progressedTargetWeaponIds` record, no inventory effect, no expected
@@ -1810,12 +1826,17 @@ Conflict kinds follow `DATA_MODEL.md`.
 A Counter position conflicts only between units that must physically run at
 that exact position. A `canSkipWhenCounterPassed` unit does not compete for its
 Counter position, so it is never a conflict participant and is never blocked by
-a conflict resolution: whichever Entry runs there first, the other one
-fast-forwards. Required against required stays a conflict when the two are not
-one shareable physical action, and a passed Route prefix never returns to
-conflict detection. `same_owned_weapon_consumed` keeps its existing semantics
+a conflict resolution. Required against required stays a conflict when the two
+are not one shareable physical action, and a passed Route prefix never returns
+to conflict detection. `same_owned_weapon_consumed` keeps its existing semantics
 and does not apply this exclusion, because a Route that uses an OwnedWeapon
 always retains at least one required unit referencing it.
+
+Not being a conflict does not make the execution order free. A required unit and
+a skippable unit at the same Counter position have an ordering dominance: the
+required one must run first, and only then can the skippable one fast-forward.
+The Planner decides that order by itself, so it never reaches conflict
+resolution or the user.
 
 Protected destructive use is not merely a scoring penalty or resolvable conflict.
 
@@ -2338,6 +2359,9 @@ Relevant test areas include:
 - A required unit and a skippable unit at the same Counter position are not a
   conflict, two required units still are, and a fast-forwarded prefix never
   returns to conflict detection
+- A skippable unit that would consume a Counter position an executable required
+  unit needs is never expanded, and that pruning records no rejection, while a
+  position whose competing units are all skippable keeps both orders available
 - Two Targets sharing one Gogma Counter stream both reach Ideal, with only the
   Route prefix that was not passed by another Entry becoming PlanSteps
 - Inventory simulation

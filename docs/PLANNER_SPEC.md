@@ -260,6 +260,8 @@ export interface PlannerSearchState {
 5. `count` を持つ操作は実行ナビ用の1操作単位へ分割し、現在Counterまで正常に通過済みのprefixを重複生成しない
 6. 別Entryの実操作でcurrent Counterが通過したRoute prefixのうち、実行しなくても後続Route
    semanticsを維持できるunitはsilentにroute progressだけ進める（7.0.2）
+   同じCounter位置に実行可能な必須unitがある場合、その位置を先に消費して必須unitを失わせる
+   skip可能unitはsuccessor展開対象から除外する（7.0.2）
 7. 操作前提が現在Stateより過去にあり、skipできない、または副作用・必要資源が満たされていない
    Entryは実行不能とする
 8. 実行可能な操作を適用し、共有RNGと在庫を進めた次Stateへ展開する
@@ -412,20 +414,55 @@ past + skip不可 -> 従来どおり counter_before_current などでfail closed
 `current > unit.counterBefore` を一律にrejectしない。逆に、skip不可unitのfail closedは
 弱めない。
 
-##### Conflict判定
+##### Conflict判定と実行順序の支配関係
 
 同じCounter位置に複数Entryのunitがあるだけでは競合ではない。skip可能unitはその位置を
 排他的に必要としないため、競合participantにもならず、conflict resolutionによる
 blockingの対象にもならない。
 
 ```text
-必須unit vs 必須unit（同一physical actionとしてshare不可） -> 競合
-必須unit vs skip可能unit                                   -> 競合ではない
-skip可能unit vs skip可能unit                               -> 競合ではない
+必須unit vs 必須unit（同一physical actionとしてshare不可）
+  -> 競合
+
+必須unit vs skip可能unit
+  -> 競合ではない
+  -> 必須unitがそのCounter位置を優先して実行される
+  -> skip可能側はCounter通過後にsilent fast-forward
+
+skip可能unit vs skip可能unit
+  -> 競合ではない
+  -> どちらを先に実行してもよい（実行されなかった側はfast-forward）
 ```
 
-どちらが先に実行しても、他方はfast-forwardできるためである。通過済みRoute prefixは
-Conflict対象へ戻さない。
+「競合ではない」ことと「どちらを先に実行してもよい」ことは同じではない。必須unitと
+skip可能unitの間には実行順序の支配関係がある。
+
+```text
+必須A @C を先に実行 -> Counter C+1 -> skip可能B @C はfast-forward -> 両Route継続可能
+skip可能B @C を先に実行 -> Counter C+1 -> 必須A @C は past + skip不可 -> A Route不能
+```
+
+したがって、あるCounter位置に実行可能な必須unitが存在する場合、その位置を先に消費して
+必須unitを不可逆に失わせるskip可能unitは、Beam Searchのsuccessor展開対象にしない。これは
+execution eligibility（semantic pruning）であり、evaluationScoreによる優遇ではない。
+scoreだけではbeamWidthやtie-break次第で無効branchが残り、無効な状態爆発を防げない。
+
+この順序はPlanner自身が一意に決定できるため、ユーザー選択の競合ではない。
+`required vs skippable` をConflictへ戻さず、Conflict Resolution UIへも出さない。
+
+判定は次の条件で行う。
+
+- 対象は同じstream・同じCounter位置のunitだけである。別streamや別位置のunitは干渉しない
+- 必須unitが現在stateで実際に実行可能な場合だけ支配が成立する。source version、counter
+  precondition、inventory / protection、conflict resolutionによるblockingは、通常の展開と
+  同じ判定authorityで確認する。必須unitが実行不能なら支配は発生せず、skip可能unitの展開を
+  妨げない
+- 必須unitとskip可能unitが同一physical actionとしてshareableな場合は代替関係ではない。
+  既存のphysical action sharing契約（7.0）が1操作で両Entryを進めるため、この除外を適用しない
+- 除外された展開はrejectionとして記録しない。Entryが実行不能になったわけではなく、同じ
+  Counter位置を別Entryが消費した後にfast-forwardするだけである
+
+通過済みRoute prefixはConflict対象へ戻さない。
 
 `same_owned_weapon_consumed` は別の排他資源であり、この除外を適用しない。1つのRouteが
 あるOwnedWeaponを起点/素材として使う場合、そのRouteには必ず必須unitが残るため、既存の
@@ -627,6 +664,10 @@ Counter位置の競合対象は、その位置で物理的に実行する必要�
 participantにもconflict resolutionのblocking対象にもならない（7.0.2）。同一physical
 actionとしてshareできる場合も従来どおり競合ではない。`same_owned_weapon_consumed` には
 この除外を適用しない。
+
+ただし競合でないことと実行順序が自由であることは別である。必須unitとskip可能unitが同じ
+Counter位置にある場合、必須unitを先に実行する順序をPlanner自身が一意に決める（7.0.2）。
+ユーザー選択の競合ではないため、Conflict Resolution UIへ出さない。
 
 解決方針。
 
@@ -3164,6 +3205,10 @@ Workerを利用できない環境ではClientのversionを `production-engine-un
 - 別Entryの実操作でcurrent Counterが通過したskip可能prefixがroute progressだけ前進し、
   Search Action、trace、progressedBuildListEntryIds、inventory効果、route runtime outputを
   生成しない
+- 同じCounter位置に必須unitと実行可能なskip可能unitがある場合、skip可能unitを先に実行する
+  successorを生成せず、不要な `counter_before_current` も記録しない
+- 必須unitが現在stateで実行不能な場合はこの除外を適用しない
+- skip可能unit同士だけの位置では、どちらのEntryが実行してもよい
 - skip不可なpast unitは従来どおり `counter_before_current` などでfail closedになる
 - Route末尾のunitはskip不可であり、Route全体がfast-forwardされない
 - Reset→Reset / Keep→Reset / Keep→Keep / Reset Skills→Reset Skillsだけがskip可能で、
@@ -3195,7 +3240,8 @@ Workerを利用できない環境ではClientのversionを `production-engine-un
 - ユーザー選択が必要な競合を検出できる
 - PlanConflictの参照がBuildListEntry ID基準である
 - RejectedBuildListEntryの参照がBuildListEntry ID基準である
-- 必須unitとskip可能unitが同じCounter位置にあっても競合にしない
+- 必須unitとskip可能unitが同じCounter位置にあっても競合にせず、Conflict Resolution UIへ
+  出さない（順序はPlannerがexecution eligibilityとして決める）
 - skip可能unit同士を同じCounter位置だけで競合にしない
 - 必須unit同士の同一Counter位置競合と `same_owned_weapon_consumed` は従来どおり検出する
 - fast-forward済みのpast prefixがConflict対象へ戻らない
