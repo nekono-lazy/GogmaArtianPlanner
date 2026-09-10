@@ -160,7 +160,13 @@ describe('B9 Production-valid benchmark fixtures', () => {
     expect(result.status).toBe('completed')
     expect(input).toEqual(before)
     const outcome = createPlannerWhatIfBenchmarkOutcome(result)
-    expect(outcome.counts.candidateTrialBound).toBe(4)
+    // Both Ideal alternatives are found since the shared Gogma Counter prefix
+    // fast-forward: an alternative that only had to pass a Counter position
+    // another Entry consumes no longer spends its whole trial budget. Only the
+    // two Practical slots still stop at the trial bound. These are workload
+    // observations, not Domain invariants (B8 benchmark document 7.5).
+    expect(outcome.counts.found).toBe(2)
+    expect(outcome.counts.candidateTrialBound).toBe(2)
     expect(outcome.counts.plannerRerunBound).toBe(0)
   }, 30000)
 })

@@ -13,21 +13,31 @@ import { ProductionRngEngine, PRODUCTION_RNG_ENGINE_VERSION } from './production
 import { productionRngEngine, productionRngRuntime } from './productionRngRuntime'
 
 describe('Production RNG runtime authority', () => {
-  it('shares calculation schema 3 while retaining only build-result compatibility with schema 2', () => {
+  it('shares calculation schema 4 while retaining only build-result compatibility with schema 2 and 3', () => {
     const master = createValidMasterDataFixture()
     const buildList = createBuildListCalculationContext(master)
     const planner = createPlannerCalculationContext(master, productionRngRuntime.version)
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(3)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(4)
     expect(buildList.appSchemaVersion).toBe(CURRENT_CALCULATION_APP_SCHEMA_VERSION)
     expect(planner).toEqual(buildList)
     expect(isCalculationContextCompatible({ ...buildList, appSchemaVersion: 1 }, planner)).toBe(false)
-    const schema2 = { ...buildList, appSchemaVersion: 2 }
-    expect(isCalculationContextCompatible(schema2, planner)).toBe(false)
-    expect(isBuildResultCalculationContextCompatible(schema2, planner)).toBe(true)
     expect(isBuildResultCalculationContextCompatible(
-      { ...schema2, rngEngineVersion: 'production-rng:other' },
+      { ...buildList, appSchemaVersion: 1 },
       planner,
     )).toBe(false)
+    const olderPlannerSchemas = [2, 3].map((appSchemaVersion) => ({
+      ...buildList,
+      appSchemaVersion,
+    }))
+    olderPlannerSchemas.forEach((context) => {
+      // A ProductionPlan still requires exact four-field equality.
+      expect(isCalculationContextCompatible(context, planner)).toBe(false)
+      expect(isBuildResultCalculationContextCompatible(context, planner)).toBe(true)
+      expect(isBuildResultCalculationContextCompatible(
+        { ...context, rngEngineVersion: 'production-rng:other' },
+        planner,
+      )).toBe(false)
+    })
   })
 
   it('keeps UI, Workers, and CalculationContext on the Production Engine version', () => {
