@@ -433,4 +433,40 @@ describe('ReferenceFinder', () => {
         expect.objectContaining({ kind: 'build_list_entry', entityId: entry.id }),
       )
     }))
+
+  it('finds a shared non-primary Target progressed by a ProductionPlan step', () =>
+    withDatabase(async (database) => {
+      const sharedTargetId = targetWeaponId('target.fixture.shared')
+      const plan = planWithIdentity('plan.fixture.shared', 'step.fixture.shared')
+      plan.steps[0].progressedTargetWeaponIds = [
+        plan.steps[0].targetWeaponId as typeof sharedTargetId,
+        sharedTargetId,
+      ]
+      await new ProductionPlanRepository(database).putProductionPlan(plan)
+
+      const finder = new ReferenceFinder(database)
+      expect(await finder.findTargetWeaponReferences(sharedTargetId)).toEqual([
+        {
+          kind: 'production_plan',
+          entityId: plan.id,
+          path: 'steps[0].progressedTargetWeaponIds',
+        },
+      ])
+      expect(
+        await finder.findTargetWeaponReferences(
+          plan.steps[0].targetWeaponId as typeof sharedTargetId,
+        ),
+      ).toEqual([
+        {
+          kind: 'production_plan',
+          entityId: plan.id,
+          path: 'steps[0].progressedTargetWeaponIds',
+        },
+        {
+          kind: 'production_plan',
+          entityId: plan.id,
+          path: 'steps[0].targetWeaponId',
+        },
+      ])
+    }))
 })

@@ -10,6 +10,7 @@ import type {
   ProductionPlan,
   RejectedBuildListEntry,
   TargetWeapon,
+  TargetWeaponId,
 } from '../models/publicTypes'
 import {
   createExpectedPlanState,
@@ -212,6 +213,30 @@ function replayErrorMessage(issues: readonly PlannerTraceReplayIssue[]): string 
     .join('; ')
 }
 
+/**
+ * Observational Target attribution for one physical PlanStep
+ * (PLANNER_SPEC 11.0-B). `draft.progressedBuildListEntryIds` is the authority,
+ * so a shared action reports every Target whose Route it advanced without
+ * touching the primary `targetWeaponId` / `buildListEntryId` semantics. An
+ * unknown BuildListEntry is a Plan generation inconsistency, never a silent
+ * omission.
+ */
+function createProgressedTargetWeaponIds(
+  draft: PlannerPlanStepDraft,
+  entriesById: ReadonlyMap<BuildListEntryId, BuildListEntry>,
+): TargetWeaponId[] {
+  const targetWeaponIds = draft.progressedBuildListEntryIds.map((entryId) => {
+    const entry = entriesById.get(entryId)
+    if (!entry) {
+      throw new PlannerPlanGenerationError(
+        `PlanStep draft references a missing BuildListEntry '${entryId}'.`,
+      )
+    }
+    return entry.targetWeaponId
+  })
+  return [...new Set(targetWeaponIds)].sort(compareStableStrings)
+}
+
 export function createPlanStepsFromDrafts(
   drafts: readonly PlannerPlanStepDraft[],
   input: PlannerInput,
@@ -219,6 +244,7 @@ export function createPlanStepsFromDrafts(
   initialExecutionState: ExpectedPlanState,
 ): PlanStep[] {
   const targetsById = new Map(input.targetWeapons.map((target) => [target.id, target]))
+  const entriesById = new Map(input.buildListEntries.map((entry) => [entry.id, entry]))
   const steps = drafts.map((draft, index) => {
     const target = draft.targetWeaponId === null
       ? null
@@ -231,6 +257,7 @@ export function createPlanStepsFromDrafts(
       ...presentation,
       targetWeaponId: draft.targetWeaponId,
       buildListEntryId: draft.primaryBuildListEntryId,
+      progressedTargetWeaponIds: createProgressedTargetWeaponIds(draft, entriesById),
       candidateId: draft.candidateId,
       ownedWeaponId: draft.ownedWeaponId,
       expectedResult: structuredClone(draft.expectedResult),

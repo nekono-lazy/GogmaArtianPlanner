@@ -64,6 +64,13 @@ export interface PlanStep {
   instruction: string
   targetWeaponId: TargetWeaponId | null
   buildListEntryId: BuildListEntryId | null
+  /**
+   * Observational metadata: every TargetWeapon whose Route this one physical
+   * Step advanced. It never replaces the primary `targetWeaponId` /
+   * `buildListEntryId` presentation authority, and `undefined` means the Plan
+   * predates the field, so its shared attribution must not be inferred.
+   */
+  progressedTargetWeaponIds?: TargetWeaponId[]
   candidateId: BuildCandidateId | null
   ownedWeaponId: OwnedWeaponId | null
   expectedResult: ExpectedResult | null

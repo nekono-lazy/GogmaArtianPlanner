@@ -1,4 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import type {
+  BuildListEntry,
+  BuildRoute,
+  OwnedGogmaArtianWeapon,
+} from '../models/publicTypes'
 import { createTargetDefinitionHash } from '../buildList'
 import {
   createReferencedOwnedWeaponsHash,
@@ -6,21 +11,26 @@ import {
 } from '../models/hashing'
 import {
   buildListEntryId,
+  candidateId,
   createValidBuildListEntry,
   createValidOwnedWeapon,
   ownedWeaponId,
+  targetWeaponId,
 } from '../../test/fixtures/domainData'
 import {
   createCandidateSearchEngine,
   createCandidateSearchInput,
+  type CandidateSearchFixtureOptions,
 } from '../../test/fixtures/candidateSearch'
 import {
   collectRequiredMaterials,
+  createPlanStepsFromDrafts,
   createPlanningBuildListEntriesHash,
   createPlanningInputSnapshot,
   createPlanningTargetWeaponsHash,
   createProductionPlan,
   createRejectedBuildListEntries,
+  PlannerPlanGenerationError,
 } from './productionPlanGeneration'
 import { defaultPlannerOptions, type PlannerBeamSearchResult, type PlannerDependencies, type PlannerInput } from './plannerTypes'
 
@@ -83,6 +93,64 @@ function synchronizeEntry(input: PlannerInput) {
   )
   entry.candidateSnapshot.referencedOwnedWeaponsHash = entry.referencedOwnedWeaponsHash
 }
+/**
+ * Two Targets whose Entries run the same physical operation on one shared
+ * OwnedWeapon source, so Beam Search progresses both Entries with one action.
+ */
+function sharedSourceFixture(
+  routeFor: (source: OwnedGogmaArtianWeapon) => BuildRoute,
+  applyResult: (entry: BuildListEntry, source: OwnedGogmaArtianWeapon) => void,
+  engineOptions: CandidateSearchFixtureOptions = {},
+): { input: PlannerInput; dependencies: PlannerDependencies } {
+  const { input, dependencies } = fixture()
+  const source = createValidOwnedWeapon(ownedWeaponId('owned.shared.source'))
+  source.isProtected = false
+  source.groupSkillId = null
+  source.restorationBonuses = [
+    { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: 'bonus_rank.fixture.low' },
+    { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: 'bonus_rank.fixture.low' },
+    { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: 'bonus_rank.fixture.low' },
+    { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: 'bonus_rank.fixture.low' },
+    { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: 'bonus_rank.fixture.low' },
+  ]
+  input.ownedWeapons = [source]
+  dependencies.rngEngine = createCandidateSearchEngine(
+    createCandidateSearchInput(),
+    engineOptions,
+  )
+  const secondTarget = {
+    ...structuredClone(input.targetWeapons[0]),
+    id: targetWeaponId('target.shared.second'),
+  }
+  input.targetWeapons = [input.targetWeapons[0], secondTarget]
+  const secondEntry = structuredClone(input.buildListEntries[0])
+  secondEntry.id = buildListEntryId('build-list.shared.second')
+  secondEntry.candidateId = candidateId('candidate.shared.second')
+  secondEntry.candidateSnapshot.id = secondEntry.candidateId
+  secondEntry.targetWeaponId = secondTarget.id
+  secondEntry.candidateSnapshot.targetWeaponId = secondTarget.id
+  input.buildListEntries = [input.buildListEntries[0], secondEntry]
+  input.buildListEntries.forEach((entry) => {
+    entry.candidateSnapshot.route = structuredClone(routeFor(source))
+    applyResult(entry, source)
+    const targetWeapon = input.targetWeapons.find(({ id }) => id === entry.targetWeaponId)
+    if (!targetWeapon) throw new Error('Fixture Target is missing.')
+    entry.targetDefinitionHash = createTargetDefinitionHash(targetWeapon)
+    entry.searchStateHash = createSearchStateHash(
+      entry.candidateSnapshot.route,
+      input.rngState,
+      input.normalCounters,
+    )
+    entry.candidateSnapshot.searchStateHash = entry.searchStateHash
+    entry.referencedOwnedWeaponsHash = createReferencedOwnedWeaponsHash(
+      entry.candidateSnapshot.route,
+      input.ownedWeapons,
+    )
+    entry.candidateSnapshot.referencedOwnedWeaponsHash = entry.referencedOwnedWeaponsHash
+  })
+  return { input, dependencies }
+}
+
 describe('Production plan generation', () => {
   it('replays a new Normal route into ordered PlanSteps without regenerating its reserved weapon ID', async () => {
     const { input, dependencies } = fixture()
@@ -485,5 +553,111 @@ describe('Production plan generation', () => {
       expect.objectContaining({ buildListEntryId: protectedEntry.id, reason: 'requires_protected_weapon' }),
       expect.objectContaining({ buildListEntryId: unprovenEntry.id, reason: 'dominated_by_better_candidate' }),
     ])
+  })
+
+  it('records the progressed Target on every newly generated single-Target PlanStep', async () => {
+    const { input, dependencies } = fixture()
+    const targetId = input.targetWeapons[0].id
+    const plan = (await createProductionPlan(input, dependencies)).plan
+    expect(plan?.steps.every(
+      ({ progressedTargetWeaponIds }) => progressedTargetWeaponIds !== undefined,
+    )).toBe(true)
+    expect(plan?.steps.map(({ progressedTargetWeaponIds }) => progressedTargetWeaponIds))
+      .toEqual([[targetId], [targetId], [targetId], [targetId]])
+    expect(plan?.steps.every(({ targetWeaponId }) => targetWeaponId === targetId)).toBe(true)
+  })
+
+  it('records both Targets progressed by one shared physical Reset Bonuses Step', async () => {
+    const { input, dependencies } = sharedSourceFixture(
+      (source) => ({
+        kind: 'existing_gogma_reset_bonuses',
+        sourceOwnedWeaponId: source.id,
+        operations: [{
+          type: 'reset_bonuses',
+          sourceOwnedWeaponId: source.id,
+          gogmaCounterBefore: 10,
+          gogmaCounterAfter: 11,
+        }],
+      }),
+      (entry, source) => {
+        entry.candidateSnapshot.finalBonuses =
+          structuredClone(createValidOwnedWeapon().restorationBonuses)
+        entry.candidateSnapshot.restorationBonusScope = 'gogma_artian'
+        entry.candidateSnapshot.seriesSkillId = source.seriesSkillId
+        entry.candidateSnapshot.groupSkillId = source.groupSkillId
+      },
+      { resetResult: createValidOwnedWeapon().restorationBonuses },
+    )
+    const [firstTarget, secondTarget] = input.targetWeapons
+    const plan = (await createProductionPlan(input, dependencies)).plan
+    const shared = plan?.steps.find(({ operationType }) => operationType === 'reset_bonuses')
+    expect(shared?.progressedTargetWeaponIds).toEqual([firstTarget.id, secondTarget.id])
+    expect(shared?.targetWeaponId).toBe(firstTarget.id)
+    expect(shared?.buildListEntryId).toBe(input.buildListEntries[0].id)
+    expect(plan?.steps.every(
+      ({ progressedTargetWeaponIds }) => progressedTargetWeaponIds !== undefined,
+    )).toBe(true)
+  })
+
+  it('records both Targets progressed by one shared physical Reset Skills Step', async () => {
+    const { input, dependencies } = sharedSourceFixture(
+      (source) => ({
+        kind: 'existing_gogma_reset_skills',
+        sourceOwnedWeaponId: source.id,
+        operations: [{
+          type: 'reset_skills',
+          sourceOwnedWeaponId: source.id,
+          skillCounterBefore: 7,
+          skillCounterAfter: 8,
+        }],
+      }),
+      (entry, source) => {
+        entry.candidateSnapshot.finalBonuses = structuredClone(source.restorationBonuses)
+        entry.candidateSnapshot.restorationBonusScope = source.restorationBonusScope
+        entry.candidateSnapshot.seriesSkillId = 'series_skill.fixture.a'
+        entry.candidateSnapshot.groupSkillId = null
+      },
+    )
+    const [firstTarget, secondTarget] = input.targetWeapons
+    const plan = (await createProductionPlan(input, dependencies)).plan
+    const shared = plan?.steps.find(({ operationType }) => operationType === 'reset_skills')
+    expect(shared?.progressedTargetWeaponIds).toEqual([firstTarget.id, secondTarget.id])
+    expect(shared?.targetWeaponId).toBe(firstTarget.id)
+  })
+
+  it('fails closed when a Draft progresses an unknown BuildListEntry', () => {
+    const { input, dependencies } = fixture()
+    const draft = {
+      operationType: 'reset_skills' as const,
+      primaryBuildListEntryId: input.buildListEntries[0].id,
+      progressedBuildListEntryIds: [
+        input.buildListEntries[0].id,
+        buildListEntryId('build-list.fixture.missing'),
+      ],
+      targetWeaponId: input.targetWeapons[0].id,
+      candidateId: input.buildListEntries[0].candidateId,
+      ownedWeaponId: null,
+      expectedResult: null,
+      expectedStateBefore: {
+        rngStateHash: 'hash.a', normalCountersHash: 'hash.b', ownedWeaponsHash: 'hash.c',
+      },
+      expectedStateAfter: {
+        rngStateHash: 'hash.a', normalCountersHash: 'hash.b', ownedWeaponsHash: 'hash.c',
+      },
+      inventoryChange: null,
+      rngAdvance: {
+        gogmaCounterDelta: 0,
+        skillCounterDelta: 1,
+        normalCounterDelta: null,
+        affectedNormalCounterId: null,
+      },
+      debug: null,
+    }
+    expect(() => createPlanStepsFromDrafts(
+      [draft],
+      input,
+      dependencies,
+      draft.expectedStateBefore,
+    )).toThrow(PlannerPlanGenerationError)
   })
 })

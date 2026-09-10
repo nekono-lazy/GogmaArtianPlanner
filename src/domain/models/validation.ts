@@ -995,6 +995,31 @@ function validatePlanStep(
   if (step.order !== expectedOrder) {
     addIssue(issues, `${path}.order`, 'invalid_state', 'PlanStep order must be a one-based contiguous sequence.')
   }
+  if (step.progressedTargetWeaponIds !== undefined) {
+    if (!Array.isArray(step.progressedTargetWeaponIds)) {
+      addIssue(
+        issues,
+        `${path}.progressedTargetWeaponIds`,
+        'invalid_structure',
+        'progressedTargetWeaponIds must be an array when present.',
+      )
+    } else {
+      step.progressedTargetWeaponIds.forEach((id, index) =>
+        validateId(id, `${path}.progressedTargetWeaponIds[${index}]`, issues),
+      )
+      if (
+        new Set(step.progressedTargetWeaponIds).size !==
+        step.progressedTargetWeaponIds.length
+      ) {
+        addIssue(
+          issues,
+          `${path}.progressedTargetWeaponIds`,
+          'invalid_state',
+          'progressedTargetWeaponIds must not contain duplicates.',
+        )
+      }
+    }
+  }
   if (step.isCompleted && step.completedAt === null) {
     addIssue(issues, `${path}.completedAt`, 'invalid_state', 'A completed PlanStep requires completedAt.')
   }

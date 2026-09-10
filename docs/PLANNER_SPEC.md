@@ -2554,6 +2554,23 @@ idealDifference、similarity表示値、BuildListEntryの`candidateId`、`isStal
 expected state、inventory change、RngAdvance、debugはReplay Draftからstructured cloneする。
 PredictionやCandidate Snapshotからの中間結果再構成は行わない。
 
+`PlanStep.progressedTargetWeaponIds` は、1回の物理Stepが複数TargetのRouteを同時に進めた事実を
+persisted ProductionPlanから判定するためのobservational metadataである。新規生成する全PlanStepへ
+必ず設定し、`draft.progressedBuildListEntryIds` を唯一の権威として
+`PlannerInput.buildListEntries` からTargetWeapon IDへ変換する。重複Targetは除去し、順序は
+locale非依存のstable string比較で決定的にする。`progressedBuildListEntryIds` に対応する
+BuildListEntryが見つからない場合は黙って除外せず、Plan生成の不整合として
+`PlannerPlanGenerationError` で失敗させる。
+
+このfieldは `targetWeaponId` / `buildListEntryId` を置き換えず、両者のprimary presentation /
+primary Entry権威も意味も変えない。`targetWeaponId` が必ず含まれるという契約は追加せず、Route進行を
+伴わないStepは空配列でよい。fieldはoptionalであり、`undefined` はこのfield導入前に保存された
+legacy Planだけを意味する。読み取り時に `[step.targetWeaponId]` などで補完してはならない。実際には
+他Targetも共有していた可能性があり誤情報になる。
+
+`progressedTargetWeaponIds` はPlanner semantics、Search semantics、RNG semantics、PlanStep identity、
+`CalculationContext` semanticsのいずれも変更せず、schema / version bumpも伴わない。
+
 StepはReplay時系列のままorder 1から連番にし、初期状態を未完了とする。最初の
 `expectedStateBefore`はbase snapshotのinitialExecutionStateと一致し、各隣接Stepの
 `expectedStateAfter` / `expectedStateBefore`が連鎖しなければ内部エラーとする。今回の対象
