@@ -269,6 +269,35 @@ export interface PlannerSearchState {
 11. `maxExpandedStates` または `maxPlanSteps` 到達時に打ち切る
 12. 完了Stateのうち最良、完了Stateがなければ最も充足度の高いStateからPlanを生成する
 
+### 7.0 physical action sharing
+
+共有Counter streamで同じRNG遷移を要求することは、1回の物理操作を複数Entryで共有する
+ための必要条件ではあるが、十分条件ではない。`physicalActionKey` はRNG transition identity
+に加えて、その操作を実際に受けるphysical weapon subject identityを含める。
+
+- concrete OwnedWeaponを対象とするReset Bonuses、Keep Bonuses、Reset Skillsは、同じ非nullの
+  `sourceOwnedWeaponId`、同じoperation type、同じCounter before / afterを持つ場合だけ
+  cross-Entryでshareableとする
+- `sourceOwnedWeaponId = null` のReset Bonuses、Keep Bonuses、Reset Skillsは、その
+  BuildListEntryの同一Routeで直前に生成したEntry-local transient Gogmaだけを対象とする。
+  別BuildListEntryのnull sourceは別physical weaponであり、Counter before / afterが同じでも
+  1回の物理操作として共有しない
+- transient physical subjectのPlanner内部identityにはBuildListEntry IDを使用してよい。
+  これはroute runtime用の非永続identityであり、fake OwnedWeapon ID、route-local永続ID、
+  ProductionPlan field、DB schemaを追加しない
+- create Normal、conversion、concrete material消費、およびnull sourceの操作はcross-Entryで
+  shareableにしない
+- `PlannerSearchAction.progressedBuildListEntryIds` は、その1回の物理操作で実際にRoute progressが
+  進んだEntryだけを保持する。Counter位置が一致するだけのEntryを追加しない
+- Trace Replayは同じphysical action identityを再検証し、shareableでない複数Entryへ同じ
+  transient outputを複製してはならない
+- `PlanStep.progressedTargetWeaponIds` は正当な `progressedBuildListEntryIds` からだけ導出する。
+  同じCounter位置にいたという理由だけで複数Targetを記録しない
+
+同一concrete OwnedWeaponのshared actionでは、既存のsource mutation / version契約を維持し、
+同じ操作で進んだEntryを操作後の同一versionへ更新してよい。異なるOwnedWeapon IDまたは異なる
+Entry-local transient subject間では、このversion共有を行わない。
+
 候補確保時の状態遷移。
 
 - Candidate reserveまたはMaterial Gogma消費など、SimulatedInventoryの意味的変更後は、

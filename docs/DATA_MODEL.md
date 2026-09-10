@@ -809,6 +809,7 @@ export interface UseWeaponAsMaterialOperation {
 - 変換時のSkillがTarget条件を満たす場合はResetSkillsOperationを追加しない。満たさない場合、変換後の次Skill位置からReset Skillsを探索する
 - 同一Route内で変換後の未登録Gogmaを対象にするResetBonusesOperation、KeepBonusesOperation、ResetSkillsOperationは `sourceOwnedWeaponId = null` とし、fake IDまたはRoute-local IDを生成しない
 - `sourceOwnedWeaponId = null` のReset / Keep / Reset Skillsは同じBuildRouteで直前に生成されたtransient Gogmaだけを対象とし、既存OwnedWeaponを表さない
+- このnull sourceのidentity scopeはBuildListEntryごとのRoute runtimeである。別BuildListEntryのnull sourceは別physical weaponを表し、同じCounter位置・同じoperation typeでも1回の物理操作として共有しない。Planner内部ではBuildListEntry IDで区別し、永続OwnedWeapon IDまたは新しいschema fieldを追加しない
 - transientまたはOwned Gogmaの `restorationBonusScope = "normal_artian"` なら、v1の最初のBonus amendmentはResetBonusesOperationでなければならない。最初のReset後だけKeepBonusesOperationを許可する。この検証はProduction prediction supportの制限に由来し、normal-tier KeepのProduction prediction semanticsがgame-verifiedになった時点でSearch / Plannerの除外と同時に解除する。Keep操作自体のgame legalityは確定済みであり、再検証の対象ではない
 - ResetBonusesOperationはGogma Counterを1進め、結果を `gogma_artian` scopeへ置き換える。KeepBonusesOperationもGogma Counterを1進める
 - KeepBonusesOperationはユーザーselectionを持たない。現在5slotのfamilyをslotごとに保持し、同family内tierを再抽選する一意の操作である

@@ -93,16 +93,73 @@ describe('Planner trace replay', () => {
     const { input, state, engine, trace } = fixture(); trace[0].rngBefore.gogmaCounter = 99
     expect(replayPlannerSearchTrace(input, state, engine).issues[0]?.code).toBe('rng_before_mismatch')
   })
-  it('keeps one shared physical create action as one Draft and retains every progressed Entry ID', () => {
+  it('rejects a Search Action that shares a non-shareable create across Entries', () => {
     const { input, state, engine, trace, entry } = fixture()
     const sharedId = buildListEntryId('entry.replay.shared')
+    const sharedEntry = structuredClone(entry)
+    sharedEntry.id = sharedId
+    sharedEntry.candidateId = candidateId('candidate.replay.shared')
+    sharedEntry.candidateSnapshot.id = sharedEntry.candidateId
+    input.buildListEntries.push(sharedEntry)
     trace.splice(1, 2)
     trace[0].progressedBuildListEntryIds = [entry.id, sharedId]
+    trace[0].progressedRoutePositions = {
+      [entry.id]: { operationIndex: 0, unitIndex: 0, unitCount: 2 },
+      [sharedId]: { operationIndex: 0, unitIndex: 0, unitCount: 2 },
+    }
     state.currentRngState.gogmaCounter.value = 10; state.currentRngState.skillCounter.value = 7; state.currentNormalCounters[0].counter = 5
     const replay = replayPlannerSearchTrace(input, state, engine)
-    expect(replay).toMatchObject({ isValid: true })
-    expect(replay.drafts).toHaveLength(1)
-    expect(replay.drafts[0].progressedBuildListEntryIds).toEqual([entry.id, sharedId])
+    expect(replay).toMatchObject({
+      isValid: false,
+      drafts: [],
+      issues: [expect.objectContaining({
+        code: 'invalid_physical_action_sharing',
+      })],
+    })
+  })
+  it('rejects shared Reset output assignment across distinct transient Gogma Entries', () => {
+    const { input, state, engine, trace, entry, normal } = fixture()
+    const reset = {
+      type: 'reset_bonuses' as const,
+      sourceOwnedWeaponId: null,
+      gogmaCounterBefore: 10,
+      gogmaCounterAfter: 11,
+    }
+    entry.candidateSnapshot.route.operations.push(reset)
+    const sharedEntry = structuredClone(entry)
+    sharedEntry.id = buildListEntryId('entry.replay.transient-reset.shared')
+    sharedEntry.candidateId = candidateId('candidate.replay.transient-reset.shared')
+    sharedEntry.candidateSnapshot.id = sharedEntry.candidateId
+    input.buildListEntries.push(sharedEntry)
+    trace.push({
+      kind: 'route_operation',
+      actionType: reset.type,
+      primaryBuildListEntryId: entry.id,
+      progressedBuildListEntryIds: [entry.id, sharedEntry.id],
+      progressedRoutePositions: {
+        [entry.id]: { operationIndex: 2, unitIndex: 0, unitCount: 1 },
+        [sharedEntry.id]: { operationIndex: 2, unitIndex: 0, unitCount: 1 },
+      },
+      routeOperation: reset,
+      ownedWeaponId: null,
+      plannerOnly: false,
+      rngBefore: { gogmaCounter: 10, skillCounter: 8, normalCounters: [{ id: normal.id, counter: 6 }] },
+      rngAfter: { gogmaCounter: 11, skillCounter: 8, normalCounters: [{ id: normal.id, counter: 6 }] },
+      inventoryEffect: { addedOwnedWeaponIds: [], removedOwnedWeaponIds: [], updatedOwnedWeaponIds: [], reservedOwnedWeaponIds: [], routeOutputChangedForEntryIds: [entry.id, sharedEntry.id] },
+      satisfactionChanges: [],
+    })
+    state.currentRngState.gogmaCounter.value = 11
+
+    const replay = replayPlannerSearchTrace(input, state, engine)
+
+    expect(replay).toMatchObject({
+      isValid: false,
+      drafts: [],
+      issues: [expect.objectContaining({
+        code: 'invalid_physical_action_sharing',
+        actionIndex: 3,
+      })],
+    })
   })
   it('removes a concrete material weapon once and rejects a second consumption', () => {
     const { input, state, engine, entry } = fixture()

@@ -11,6 +11,7 @@ import type {
   RngPredictionUnsupportedReason,
 } from '../rng/rngEngine'
 import { getPlannerPredictionSupport } from './plannerPredictionSupport'
+import { createPlannerPhysicalActionIdentity } from './plannerRouteProgress'
 import type { PlannerInput, PlannerSearchAction, PlannerSearchRngSnapshot, PlannerSearchState } from './plannerTypes'
 
 /** Non-persistent bridge between one physical Search Action and a future PlanStep. */
@@ -31,6 +32,7 @@ export interface PlannerPlanStepDraft {
 
 export type PlannerTraceReplayIssueCode =
   | 'rng_before_mismatch' | 'rng_after_mismatch' | 'counter_difference_unrepresentable'
+  | 'invalid_physical_action_sharing'
   | 'missing_entry' | 'missing_target' | 'missing_rng_requirement' | 'engine_capability_missing'
   | 'missing_transient_output' | 'missing_source_weapon' | 'invalid_source_weapon'
   | 'inventory_transition_failed' | 'candidate_result_mismatch' | 'final_state_mismatch'
@@ -85,6 +87,52 @@ function predictionIssue(runtime: Runtime, index: number): PlannerTraceReplayIss
 }
 function entryFor(input: PlannerInput, id: BuildListEntryId) { return input.buildListEntries.find((entry) => entry.id === id) ?? null }
 function targetFor(input: PlannerInput, entry: BuildListEntry): TargetWeapon | null { return input.targetWeapons.find(({ id }) => id === entry.targetWeaponId) ?? null }
+function sharedPhysicalActionIssue(
+  input: PlannerInput,
+  action: PlannerSearchAction,
+): string | null {
+  if (
+    action.kind !== 'route_operation' ||
+    action.progressedBuildListEntryIds.length <= 1
+  ) {
+    return null
+  }
+  const progressedEntryIds = new Set(action.progressedBuildListEntryIds)
+  if (
+    progressedEntryIds.size !== action.progressedBuildListEntryIds.length ||
+    !progressedEntryIds.has(action.primaryBuildListEntryId)
+  ) {
+    return 'A shared Search Action must contain its primary Entry exactly once.'
+  }
+  const identities = action.progressedBuildListEntryIds.flatMap((entryId) => {
+    const entry = entryFor(input, entryId)
+    const position = action.progressedRoutePositions[entryId]
+    const operation = position === undefined
+      ? undefined
+      : entry?.candidateSnapshot.route.operations[position.operationIndex]
+    return entry && position && operation
+      ? [createPlannerPhysicalActionIdentity(
+          entry,
+          operation,
+          position.operationIndex,
+          position.unitIndex,
+        )]
+      : []
+  })
+  if (identities.length !== action.progressedBuildListEntryIds.length) {
+    return 'A shared Search Action must identify every progressed Route position.'
+  }
+  const primaryIdentity = identities[
+    action.progressedBuildListEntryIds.indexOf(action.primaryBuildListEntryId)
+  ]
+  return primaryIdentity.shareable &&
+    identities.every(
+      ({ key, shareable }) =>
+        shareable && key === primaryIdentity.key,
+    )
+    ? null
+    : 'A Search Action cannot progress different physical weapon subjects.'
+}
 function currentGogma(runtime: Runtime, entryId: BuildListEntryId, sourceId: OwnedWeaponId): TransientGogma | null {
   const output = runtime.gogmas.get(entryId); if (output) return structuredClone(output)
   const source = runtime.ownedWeapons.find(({ id }) => id === sourceId)
@@ -124,6 +172,8 @@ export function replayPlannerSearchTrace(input: PlannerInput, bestState: Planner
   }
   for (let index = 0; index < bestState.trace.length; index += 1) {
     const action = bestState.trace[index]; if (!sameSnapshot(runtime, action.rngBefore)) return fail('rng_before_mismatch', 'Replay runtime does not match Search Action rngBefore.', index)
+    const physicalActionIssue = sharedPhysicalActionIssue(input, action)
+    if (physicalActionIssue) return fail('invalid_physical_action_sharing', physicalActionIssue, index)
     const advance = rngAdvance(action.rngBefore, action.rngAfter); if (!advance) return fail('counter_difference_unrepresentable', 'Search Action changes multiple or unknown Normal counters.', index)
     const entry = entryFor(input, action.primaryBuildListEntryId); if (!entry) return fail('missing_entry', 'Search Action references a missing BuildListEntry.', index)
     const target = targetFor(input, entry); if (!target) return fail('missing_target', 'BuildListEntry references a missing TargetWeapon.', index)
