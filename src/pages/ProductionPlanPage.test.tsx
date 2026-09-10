@@ -7,7 +7,6 @@ import {
 import { describe, expect, it, vi } from 'vitest'
 import type {
   BuildListEntry,
-  CalculationContext,
   PlanConflict,
   PlanStep,
   ProductionPlan,
@@ -218,6 +217,7 @@ function dependencies(
 ): ProductionPlanPageDependencies {
   return {
     master: createValidMasterDataFixture(),
+    currentCalculationContext: { ...fixture.plan.calculationContext },
     getPlan: vi.fn(async () => fixture.plan),
     getTargetWeapons: vi.fn(async () => [fixture.target]),
     createInput: vi.fn(async () => fixture.input),
@@ -439,7 +439,7 @@ describe('ProductionPlanPage', () => {
       .not.toBeInTheDocument()
   })
 
-  it('uses the route input calculation context rather than a saved Plan snapshot', async () => {
+  it('fails closed instead of using an incompatible saved Plan snapshot as current input', async () => {
     const fixture = pageFixture()
     fixture.plan.baseSnapshot.calculationContext = {
       gameVersion: 'old-game',
@@ -451,15 +451,11 @@ describe('ProductionPlanPage', () => {
     const deps = dependencies(fixture, client)
 
     renderPage(deps, fixture.plan.id)
-    await screen.findByText(fixture.target.name)
-
-    const context = vi.mocked(deps.createInput).mock.calls[0][0] as CalculationContext
-    expect(context).toMatchObject({
-      gameVersion: deps.master.manifest.gameVersion,
-      masterDataVersion: deps.master.manifest.dataVersion,
-      rngEngineVersion: client.engineVersion,
-    })
-    expect(context).not.toEqual(fixture.plan.baseSnapshot.calculationContext)
+    expect(await screen.findByText(
+      'この生産計画は現在の計算契約と互換性がありません。ビルドリストから再計算してください。',
+    )).toBeInTheDocument()
+    expect(deps.createWorkerClient).not.toHaveBeenCalled()
+    expect(deps.createInput).not.toHaveBeenCalled()
   })
 
   it('rebuilds fresh input at click time and sends explicit resolutions, scenario and B9 defaults', async () => {
@@ -1436,6 +1432,41 @@ describe('ProductionPlanPage read-only Plan content', () => {
     for (const name of ['比較する', 'この候補を優先']) {
       expect(screen.getByRole('button', { name })).toBeDisabled()
     }
+    expect(deps.createInput).not.toHaveBeenCalled()
+    expect(client.prepareInteraction).not.toHaveBeenCalled()
+  })
+
+  it('treats a schema 2 Plan as non-executable under schema 3 without rewriting its persisted display', async () => {
+    const fixture = contentFixture()
+    fixture.plan.status = 'active'
+    fixture.plan.calculationContext.appSchemaVersion = 2
+    fixture.plan.baseSnapshot.calculationContext.appSchemaVersion = 2
+    const client = plannerClient(async () => fixture.preparation)
+    const deps = contentDependencies(
+      fixture,
+      [fixture.targetA, fixture.targetB],
+      client,
+    )
+    deps.currentCalculationContext = {
+      ...fixture.plan.calculationContext,
+      appSchemaVersion: 3,
+    }
+
+    renderPage(deps, fixture.plan.id)
+
+    expect(await screen.findByText(
+      'この生産計画は現在の計算契約と互換性がありません。ビルドリストから再計算してください。',
+    )).toBeInTheDocument()
+    // Read-only authority remains the exact persisted Plan, including status
+    // and steps; only the current interaction/execution path is invalidated.
+    expect(screen.getAllByText('実行中')).toHaveLength(2)
+    expect(screen.getByText('計画の概要')).toBeInTheDocument()
+    await openPanel('全4ステップを表示')
+    expect(screen.getAllByText(/^ステップ \d+$/)).toHaveLength(4)
+    for (const name of ['比較する', 'この候補を優先']) {
+      expect(screen.getByRole('button', { name })).toBeDisabled()
+    }
+    expect(deps.createWorkerClient).not.toHaveBeenCalled()
     expect(deps.createInput).not.toHaveBeenCalled()
     expect(client.prepareInteraction).not.toHaveBeenCalled()
   })

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { evaluateBuildListEntryStaleness } from '../domain/buildList'
+import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../domain/models/publicTypes'
 import { createProductionPlannerDependencies, preparePlannerInitialContext, validatePlannerInput } from '../domain/planner'
 import { preparePlannerWhatIfScenario } from '../domain/planner/constrained/plannerWhatIfScenario'
 import { ProductionRngEngine } from '../domain/rng/production/productionRngEngine'
@@ -38,7 +39,9 @@ describe('B9 Production-valid benchmark fixtures', () => {
     const input = fixture.plannerInput
     expect(new ProductionRngEngine().version).toBe('production-rng:c5-e2')
     expect(input.calculationContext.rngEngineVersion).toBe('production-rng:c5-e2')
-    expect(input.calculationContext.appSchemaVersion).toBe(2)
+    expect(input.calculationContext.appSchemaVersion).toBe(
+      CURRENT_CALCULATION_APP_SCHEMA_VERSION,
+    )
     const validation = validatePlannerInput(input, dependencies())
     expect(validation.isValid).toBe(true)
     expect(validation.issues).toEqual([])

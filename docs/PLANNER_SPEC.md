@@ -298,6 +298,27 @@ export interface PlannerSearchState {
 同じ操作で進んだEntryを操作後の同一versionへ更新してよい。異なるOwnedWeapon IDまたは異なる
 Entry-local transient subject間では、このversion共有を行わない。
 
+#### 7.0.1 Calculation compatibility
+
+このphysical action sharing修正はProductionPlanの計算semanticsを変更するため、
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を2から3へ更新する。version 2 ProductionPlanは、
+別々のEntry-local transient Gogmaに対するReset / Keepを誤共有した可能性を保存済みStepだけから
+安全に否定できないため、version 3で互換とみなしてはならない。
+
+- Planと `baseSnapshot.calculationContext` の両方をcurrent CalculationContextと4項目完全一致で
+  比較する
+- いずれかが非互換なら `calculation_context_changed` としてfail-closedにし、Worker preparation、
+  what-if、競合選択、実行へ進めず再計算を要求する
+- exact persisted表示のため、読取時に保存済みPlanのstatus、recalculationReasons、Step、
+  expected resultを補正または再生成しない
+- version 2のBuildCandidate / BuildListEntryはSearchおよびsnapshot semanticsが変わっていない。
+  他のCalculationContext 3項目が同じ場合に限りversion 3で明示的に再利用可能とし、既存の
+  BuildList stale再判定から除外しない
+- このBuild artifact互換例外をversion 2 ProductionPlanへ適用しない
+
+DB schema、AppSettings schema、Production RNG Engine version、ProductionPlan persisted shapeは
+変更しない。
+
 候補確保時の状態遷移。
 
 - Candidate reserveまたはMaterial Gogma消費など、SimulatedInventoryの意味的変更後は、
@@ -2442,7 +2463,7 @@ boundsはPlanner再実行の実コストに依存し、B8-C / B8-D実装前に�
 
 B9 what-if、B10 Conflict UI、B11 normal-scope Keepは別Phaseとする。
 
-B8 architecture自体は次を変更しない。
+B8 architecture自体は当時の次の値を変更しなかった。
 
 ```text
 CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2
@@ -2451,6 +2472,9 @@ AppSettings.schemaVersion = 1
 PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2
 supportsSeedSearch = false
 ```
+
+これはB8実装時の歴史的記録である。その後のphysical action sharing修正により現行値は3へ
+更新され、7.0.1のPlan失効 / Build artifact互換契約が適用される。
 
 理由。
 

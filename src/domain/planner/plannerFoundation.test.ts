@@ -115,7 +115,7 @@ function resetSkillsEntry(input: PlannerInput): BuildListEntry {
 }
 
 describe('Planner current-state entry validation', () => {
-  it('excludes schema 1 entries under schema 2 even when stored stale flags are false', () => {
+  it('excludes schema 1 entries under schema 3 even when stored stale flags are false', () => {
     const { input, dependencies } = fixture()
     const original = structuredClone(input.buildListEntries[0])
     expect(original.calculationContext.appSchemaVersion).toBe(1)
@@ -126,6 +126,23 @@ describe('Planner current-state entry validation', () => {
     expect(result.excludedBuildListEntries).toHaveLength(1)
     expect(result.warnings[0].kind).toBe('calculation_context_incompatible')
     expect(input.buildListEntries[0]).toEqual(original)
+  })
+
+  it('accepts schema 2 entries under the schema 3 Planner-only change', () => {
+    const { input, dependencies } = fixture()
+    input.buildListEntries[0].calculationContext.appSchemaVersion = 2
+    input.buildListEntries[0].candidateSnapshot.calculationContext.appSchemaVersion = 2
+    input.calculationContext = {
+      ...input.calculationContext,
+      appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
+    }
+
+    const result = validatePlannerInput(input, dependencies)
+
+    expect(result.validBuildListEntries).toHaveLength(1)
+    expect(result.warnings.some(
+      ({ kind }) => kind === 'calculation_context_incompatible',
+    )).toBe(false)
   })
 
   it('rederives target, RNG, referenced-weapon, and CalculationContext staleness', () => {

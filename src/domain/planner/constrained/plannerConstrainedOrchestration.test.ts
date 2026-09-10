@@ -638,10 +638,13 @@ describe('B8-C4b Candidate trial and adoption', () => {
 
     expect(preflight.status).toBe('ready')
     if (preflight.status !== 'ready') return
-    const current = preflight.conflictContexts.find(({ participants }) =>
-      participants.some(
-        ({ buildListEntryId }) => buildListEntryId === materialized.entry.id,
-      ),
+    const current = preflight.conflictContexts.find(
+      ({ kind, counterBefore, participants }) =>
+        kind === 'same_gogma_counter' &&
+        counterBefore === CONFLICT_GOGMA_COUNTER &&
+        participants.some(
+          ({ buildListEntryId }) => buildListEntryId === materialized.entry.id,
+        ),
     )
     expect(current).toBeDefined()
     expect(current?.conflictId).not.toBe(originalConflictId)

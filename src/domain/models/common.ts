@@ -86,7 +86,10 @@ export interface KnownValue<T> {
 
 // Application calculation semantics, independent of Dexie and AppSettings schemas.
 // Version 2 invalidates pre-B5-F1 scope-blind Candidate Search results.
-export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2
+// Version 3 invalidates ProductionPlans created before physical operation
+// subjects became part of transient Gogma action-sharing identity. Version 2
+// BuildCandidate / BuildListEntry results remain explicitly compatible with 3.
+export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 3
 
 export interface CalculationContext {
   gameVersion: string

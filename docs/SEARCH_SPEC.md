@@ -240,9 +240,10 @@ Production Searchはroute-local / operation-local supportを維持し、RngState
 ---
 
 B5-F1はCandidate classification / Search calculation semanticsを変更したため、
-現行の `CalculationContext.appSchemaVersion` を1から **2** へ更新した。
+`CalculationContext.appSchemaVersion` を1から **2** へ更新した。その後のPlanner physical
+action sharing修正により現行versionは **3** である。
 単一authorityは `src/domain/models/common.ts` の
-`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2` とし、Search、BuildList、Plannerと
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 3` とし、Search、BuildList、Plannerと
 benchmark入力のruntime creatorで共用する。これはDexieの `DATABASE_SCHEMA_VERSION = 1`
 や `AppSettings.schemaVersion = 1` の変更ではない。gameVersion、Master Data version、
 `PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`、`supportsSeedSearch = false` は維持する。
@@ -252,6 +253,11 @@ version 1の既存BuildCandidate / BuildListEntry / ProductionPlanはversion 2�
 `calculation_context_changed` を付け、Planner入力から除外する。旧Candidateのcategoryや
 Snapshotを自動変換せず、削除migrationも追加しない。必要なCandidateは再検索して取得する。
 歴史データの形式検証・Export/Import契約は変更しない。
+
+version 3ではCandidate Search semantics自体は変更しない。したがってversion 2の
+BuildCandidate / BuildListEntryは、他のCalculationContext 3項目が一致する場合に限り
+version 3と明示的に互換であり、再検索やBuildList再追加を必須にしない。この例外は
+ProductionPlanには適用しない。
 
 ## 5. 条件判定
 
@@ -1307,10 +1313,13 @@ constrained enumerationはSearch orchestrationの追加境界であり、次を�
 Production RNG prediction semantics
 PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2
 supportsSeedSearch = false
-CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2
+当時のCURRENT_CALCULATION_APP_SCHEMA_VERSION = 2
 初回Searchの終了条件、canonical Ideal、retention、Cross規則
 通常Candidate SearchのsearchRunId契約とBuildCandidate ID生成規則
 ```
+
+これはB8 constrained enumeration自身がSearch semanticsを変えなかったという歴史的記録である。
+現行versionは3であり、5.4末尾のversion 2 BuildCandidate / BuildListEntry互換契約に従う。
 
 最後の項目は**通常Candidate Searchについて変更しない**という意味である。
 `createCandidateFromPrediction()` が `CandidateSearchInput.searchRunId` を

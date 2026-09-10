@@ -11,7 +11,7 @@ import {
   createReferencedOwnedWeaponsHash,
   createSearchStateHash,
 } from '../models/hashing'
-import { isCalculationContextCompatible } from '../models/domainRules'
+import { isBuildResultCalculationContextCompatible } from '../models/domainRules'
 import { createTargetDefinitionHash } from './buildListEntry'
 
 export interface BuildListStalenessContext {
@@ -56,7 +56,7 @@ export function evaluateBuildListEntryStaleness(
     reasons.push('owned_weapon_changed')
   }
   if (
-    !isCalculationContextCompatible(
+    !isBuildResultCalculationContextCompatible(
       entry.calculationContext,
       current.calculationContext,
     )

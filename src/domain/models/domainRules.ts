@@ -72,6 +72,28 @@ export function isCalculationContextCompatible(
   )
 }
 
+/**
+ * Compatibility for Search and Build List calculation artifacts.
+ *
+ * App schema 3 changes only Planner physical-action sharing. A version 2
+ * BuildCandidate or BuildListEntry therefore remains safe to use under version
+ * 3 when the other calculation authorities are unchanged. This exception is
+ * directional and deliberately narrow; ProductionPlan compatibility continues
+ * to require exact four-field equality.
+ */
+export function isBuildResultCalculationContextCompatible(
+  result: CalculationContext,
+  current: CalculationContext,
+): boolean {
+  return (
+    result.gameVersion === current.gameVersion &&
+    result.masterDataVersion === current.masterDataVersion &&
+    result.rngEngineVersion === current.rngEngineVersion &&
+    (result.appSchemaVersion === current.appSchemaVersion ||
+      (result.appSchemaVersion === 2 && current.appSchemaVersion === 3))
+  )
+}
+
 export function canUseAsMaterial(weapon: OwnedWeapon): boolean {
   return (
     weapon.kind === 'gogma' &&

@@ -394,7 +394,7 @@ describe('complete Domain fixture validation', () => {
 })
 
 describe('B5-F1 persisted calculation compatibility', () => {
-  it('accepts historical record shapes but rejects schema 1 calculation reuse under schema 2', () => {
+  it('accepts historical record shapes but rejects schema 1 calculation reuse under schema 3', () => {
     const candidate = createValidBuildCandidate()
     const entry = createValidBuildListEntry()
     const plan = createValidProductionPlan()

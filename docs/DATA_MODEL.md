@@ -161,18 +161,31 @@ export interface CalculationContext {
 同一性比較は4項目すべてで行う。変更後の互換性が明示的に保証されない限り、以前のBuildCandidate、BuildListEntry、ProductionPlanはstaleとして扱う。
 
 B5-F1はCandidate classification / Search calculation semanticsを変更したため、
-現行の `CalculationContext.appSchemaVersion` を1から **2** へ更新した。
+`CalculationContext.appSchemaVersion` を1から **2** へ更新した。その後、Plannerの
+physical action sharing semantics修正により現行versionを **3** へ更新した。
 単一authorityは `src/domain/models/common.ts` の
-`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2` とし、Search、BuildList、Plannerと
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 3` とし、Search、BuildList、Plannerと
 benchmark入力のruntime creatorで共用する。これはDexieの `DATABASE_SCHEMA_VERSION = 1`
 や `AppSettings.schemaVersion = 1` の変更ではない。gameVersion、Master Data version、
 `PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`、`supportsSeedSearch = false` は維持する。
 
-version 1の既存BuildCandidate / BuildListEntry / ProductionPlanはversion 2とCalculationContext
+version 1の既存BuildCandidate / BuildListEntry / ProductionPlanはversion 2以降とCalculationContext
 非互換であり、現行計算結果として再利用しない。BuildListEntryは既存のstale再判定で
 `calculation_context_changed` を付け、Planner入力から除外する。旧Candidateのcategoryや
 Snapshotを自動変換せず、削除migrationも追加しない。必要なCandidateは再検索して取得する。
 歴史データの形式検証・Export/Import契約は変更しない。
+
+version 3は、version 2で生成されたProductionPlanが別々のEntry-local transient Gogmaに対する
+Reset / Keepを同一physical actionとして共有し得たことを失効させるPlanner-onlyの境界である。
+version 2 ProductionPlanはversion 3 runtimeで `calculation_context_changed` として扱い、
+Worker preparation、what-if、実行へ進めず再計算を要求する。保存済みPlanのStepやstatusを
+読取時に書き換えず、exact persisted表示は維持する。
+
+Candidate Search semanticsとBuildListEntry snapshot semanticsはversion 2から変更していないため、
+version 2 BuildCandidate / BuildListEntryは、gameVersion、masterDataVersion、rngEngineVersionが
+すべて同じversion 3 runtimeに限り明示的に互換とする。BuildListEntryのstale再判定はこの
+artifact-specific例外を適用し、`calculation_context_changed` を付けない。これはversion 2
+ProductionPlanへ適用せず、将来versionへの一般的な前方互換も意味しない。
 
 ---
 
