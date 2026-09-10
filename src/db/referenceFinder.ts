@@ -195,6 +195,15 @@ export class ReferenceFinder {
             path: `steps[${index}].targetWeaponId`,
           })
         }
+        // Shared physical Steps attribute several Targets. Each field is its own
+        // reference path, so a non-primary Target still blocks deletion.
+        if (step.progressedTargetWeaponIds?.includes(targetWeaponId)) {
+          references.push({
+            kind: 'production_plan',
+            entityId: plan.id,
+            path: `steps[${index}].progressedTargetWeaponIds`,
+          })
+        }
       })
     })
     return sortReferences(references)

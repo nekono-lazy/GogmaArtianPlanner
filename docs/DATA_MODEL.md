@@ -1139,6 +1139,7 @@ export interface PlanStep {
   instruction: string;
   targetWeaponId: TargetWeaponId | null;
   buildListEntryId: BuildListEntryId | null;
+  progressedTargetWeaponIds?: TargetWeaponId[];
   candidateId: BuildCandidateId | null;
   ownedWeaponId: OwnedWeaponId | null;
   expectedResult: ExpectedResult | null;
@@ -1168,6 +1169,14 @@ export interface PlanStep {
 - ユーザーが予定どおり素材化した場合は `expectedStateAfter` と一致するためstaleにしない
 - ユーザーが「保管」を選択した場合は状態を変更せず、`expectedStateAfter` 不一致としてstaleにする
 - Candidate由来のStepは `buildListEntryId` を判断記録の主参照とし、`candidateId` はSnapshot内の追跡情報としてのみ使用する
+- `progressedTargetWeaponIds` は、この1回の物理PlanStepでRoute進行が発生したTargetWeaponを記録するobservational metadataである
+- `progressedTargetWeaponIds` は `targetWeaponId` / `buildListEntryId` を置き換えない。primary presentationとprimary Entry権威は従来どおりこの2 fieldが持つ
+- 1つの物理操作が複数BuildListEntryを同時に進めた場合、`progressedTargetWeaponIds` はそれら全EntryのTargetWeaponを重複なく安定順で保持する。共有StepをEntry数だけ複製しない
+- `targetWeaponId` が必ず `progressedTargetWeaponIds` に含まれるという契約は持たない。Planner-only Stepなど、Route進行を伴わないStepは空配列になり得る
+- `progressedTargetWeaponIds` はoptionalである。`undefined` はこのfield導入前に保存されたlegacy Planを意味し、共有Route帰属は復元不能とする
+- `undefined` から `[targetWeaponId]` を補完するなど、読み取り時のmigration / normalizationで共有Targetを推測してはならない
+- `progressedTargetWeaponIds` はPlanStep identity、CalculationContext semantics、Planner / Search / RNG semanticsを変更しない。embedded dataの後方互換追加であり、Dexie indexed schemaもversionも変更しない
+- TargetWeapon削除の参照保護は `targetWeaponId` と `progressedTargetWeaponIds` の双方を参照として扱い、それぞれ独立したpathとして報告する
 - `operationType = "create_material_gogma"` は直前までの作成・巨戟化結果を素材用OwnedWeaponとして登録するPlanner-only Stepであり、RouteOperationまたは追加のRNG操作ではない
 - `create_material_gogma` の `targetWeaponId`、`buildListEntryId`、`candidateId` は `null`、`ownedWeaponId` はPlanner生成時に予約した追加予定ID、`requiresUserConfirmation = true` とする
 - `create_material_gogma.inventoryChange.addOwnedWeapon` は `ownedWeaponId` と同じIDの `kind = "gogma"`、`status = "material"`、`isProtected = false` の武器を保持し、直前の予測／実結果のrestorationBonusScope、ボーナス、Series Skill、Group Skillを失わない

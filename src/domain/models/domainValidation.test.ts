@@ -255,6 +255,44 @@ describe('complete Domain fixture validation', () => {
     expect(validateExecutionHistory(history).isValid).toBe(false)
   })
 
+  it('accepts a legacy Plan without progressedTargetWeaponIds and validates it when present', () => {
+    const legacy = createValidProductionPlan()
+    expect(legacy.steps[0].progressedTargetWeaponIds).toBeUndefined()
+    expect(validateProductionPlan(legacy).isValid).toBe(true)
+
+    const shared = createValidProductionPlan()
+    shared.steps[0].progressedTargetWeaponIds = [
+      targetWeaponId('target.fixture.a'),
+      targetWeaponId('target.fixture.b'),
+    ]
+    expect(validateProductionPlan(shared).isValid).toBe(true)
+
+    const empty = createValidProductionPlan()
+    empty.steps[0].progressedTargetWeaponIds = []
+    expect(validateProductionPlan(empty).isValid).toBe(true)
+
+    const invalid = createValidProductionPlan()
+    invalid.steps[0].progressedTargetWeaponIds = [targetWeaponId(' ')]
+    expect(validateProductionPlan(invalid).issues).toContainEqual(
+      expect.objectContaining({
+        path: 'steps[0].progressedTargetWeaponIds[0]',
+        code: 'invalid_id',
+      }),
+    )
+
+    const duplicated = createValidProductionPlan()
+    duplicated.steps[0].progressedTargetWeaponIds = [
+      targetWeaponId('target.fixture.a'),
+      targetWeaponId('target.fixture.a'),
+    ]
+    expect(validateProductionPlan(duplicated).issues).toContainEqual(
+      expect.objectContaining({
+        path: 'steps[0].progressedTargetWeaponIds',
+        code: 'invalid_state',
+      }),
+    )
+  })
+
   it('validates create_material_gogma as a zero-RNG Material registration step', () => {
     const plan = createValidProductionPlan()
     const material = {
