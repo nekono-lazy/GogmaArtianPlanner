@@ -30,6 +30,11 @@ import type {
   PlannerWorkerProtocolRequest,
   PlannerWorkerProtocolResponse,
 } from './plannerWorkerContracts'
+import {
+  completedPlannerTermination,
+  exhaustedPlannerTermination,
+  incompletePlannerTermination,
+} from '../test/fixtures/plannerTermination'
 
 function fixture(): { input: PlannerInput; dependencies: PlannerDependencies } {
   const search = createCandidateSearchInput()
@@ -183,7 +188,12 @@ describe('Planner Worker contract', () => {
       plan.updatedAt = runtime.clock.now()
       expect(plannerInput).toBe(input)
       expect(runtime.rngEngine).toBe(dependencies.rngEngine)
-      return { plan, conflicts: [], warnings: [] }
+      return {
+        plan,
+        conflicts: [],
+        warnings: [],
+        termination: completedPlannerTermination(),
+      }
     })
     const createConstrainedPlan = failingConstrainedCalculation()
     attachPlannerWorker({
@@ -286,6 +296,7 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
           plan: createValidProductionPlan(),
           conflicts: [],
           warnings: [],
+          termination: completedPlannerTermination(),
           generatedBuildListEntries: [generatedEntry],
         }
       },
@@ -339,6 +350,7 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
           plan: createValidProductionPlan(),
           conflicts: [],
           warnings: [],
+          termination: completedPlannerTermination(),
           generatedBuildListEntries: [generatedEntry],
         }),
         prepareInteraction: failingPreparationCalculation(),
@@ -363,6 +375,55 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
         ? response.result.generatedBuildListEntries
         : null,
     ).toEqual([generatedEntry])
+  })
+
+  it('carries the typed termination across the Worker boundary as plain data', async () => {
+    const { input, dependencies } = fixture()
+    const responses: PlannerWorkerProtocolResponse[] = []
+    // A truncated search, with the diagnostic warning it also produces. The
+    // Worker must forward both unchanged: it never rebuilds the termination
+    // from the warning, and never drops it (PLANNER_SPEC 7.2.1, 14).
+    const termination = incompletePlannerTermination(['max_expanded_states'], {
+      limits: { maxPlanSteps: 300, beamWidth: 50, maxExpandedStates: 10_000 },
+      expandedStates: 10_000,
+      completedTargetCount: 1,
+      totalTargetCount: 2,
+    })
+    const controller = attach(
+      {
+        createPlan: failingOrdinaryCalculation(),
+        createConstrainedPlan: async () => ({
+          plan: createValidProductionPlan(),
+          conflicts: [],
+          warnings: [{
+            kind: 'max_expanded_states_reached' as const,
+            message: 'Planner reached maxExpandedStates (10000).',
+          }],
+          termination,
+          generatedBuildListEntries: [],
+        }),
+        prepareInteraction: failingPreparationCalculation(),
+        createWhatIfComparison: failingWhatIfCalculation(),
+      },
+      dependencies,
+      responses,
+    )
+
+    await controller.handleMessage({
+      type: 'create_constrained_plan',
+      requestId: 'planner.constrained.termination',
+      generation: 1,
+      input: { plannerInput: input, orchestrationBounds: fixtureOrchestrationBounds },
+    })
+
+    const response = responses[0]
+    expect(response.type).toBe('create_constrained_plan_result')
+    expect(structuredClone(response)).toEqual(response)
+    expect(
+      response.type === 'create_constrained_plan_result'
+        ? response.result.termination
+        : null,
+    ).toEqual(termination)
   })
 
   it('reports a constrained failure as the existing Worker error response without reclassifying it', async () => {
@@ -446,11 +507,21 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
     expect(responses).toEqual([])
 
     // So is its stale result.
-    first.resolve({ plan: createValidProductionPlan(), conflicts: [], warnings: [] })
+    first.resolve({
+      plan: createValidProductionPlan(),
+      conflicts: [],
+      warnings: [],
+      termination: completedPlannerTermination(),
+    })
     await running
     expect(responses).toEqual([])
 
-    const result = { plan: null, conflicts: [], warnings: [] }
+    const result = {
+      plan: null,
+      conflicts: [],
+      warnings: [],
+      termination: exhaustedPlannerTermination(),
+    }
     // The replacement calculation is the one still holding the id.
     expect(createPlan).toHaveBeenCalledTimes(2)
     expect(capturedOptions[1]?.shouldCancel?.()).toBe(false)
@@ -484,7 +555,12 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
           cancelledOptions = executionOptions
           return cancelled.promise
         }
-        return { plan: null, conflicts: [], warnings: [] }
+        return {
+      plan: null,
+      conflicts: [],
+      warnings: [],
+      termination: exhaustedPlannerTermination(),
+    }
       },
     )
     const controller = attach(
@@ -522,14 +598,24 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
     // The cancelled calculation stays retired all the same.
     expect(cancelledOptions?.shouldCancel?.()).toBe(true)
 
-    cancelled.resolve({ plan: createValidProductionPlan(), conflicts: [], warnings: [] })
+    cancelled.resolve({
+      plan: createValidProductionPlan(),
+      conflicts: [],
+      warnings: [],
+      termination: completedPlannerTermination(),
+    })
     await running
     expect(responses).toEqual([
       {
         type: 'create_plan_result',
         requestId: 'planner.cancel.revive',
         generation: 2,
-        result: { plan: null, conflicts: [], warnings: [] },
+        result: {
+      plan: null,
+      conflicts: [],
+      warnings: [],
+      termination: exhaustedPlannerTermination(),
+    },
       },
     ])
   })
@@ -543,6 +629,7 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
       plan: null,
       conflicts: [],
       warnings: [],
+      termination: completedPlannerTermination(),
       generatedBuildListEntries: [],
     }
     const controller = attach(
@@ -627,8 +714,18 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
     expect(controller.isCancelled('planner.stale.cancel')).toBe(false)
     expect(capturedOptions[1]?.shouldCancel?.()).toBe(false)
 
-    const result = { plan: null, conflicts: [], warnings: [] }
-    first.resolve({ plan: createValidProductionPlan(), conflicts: [], warnings: [] })
+    const result = {
+      plan: null,
+      conflicts: [],
+      warnings: [],
+      termination: exhaustedPlannerTermination(),
+    }
+    first.resolve({
+      plan: createValidProductionPlan(),
+      conflicts: [],
+      warnings: [],
+      termination: completedPlannerTermination(),
+    })
     second.resolve(result)
     await running
     await replacement
@@ -649,6 +746,7 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
       plan: null,
       conflicts: [],
       warnings: [],
+      termination: exhaustedPlannerTermination(),
     }))
     const controller = attach(
       {
@@ -681,7 +779,12 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
         type: 'create_plan_result',
         requestId: 'planner.superseded.task',
         generation: 2,
-        result: { plan: null, conflicts: [], warnings: [] },
+        result: {
+      plan: null,
+      conflicts: [],
+      warnings: [],
+      termination: exhaustedPlannerTermination(),
+    },
       },
     ])
   })
@@ -709,7 +812,13 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
           })
           cancelledDuringCalculation = shouldCancel?.() ?? null
           // A cancelled ordinary Planner still returns a safe result.
-          return { plan: null, conflicts: [], warnings: [], generatedBuildListEntries: [] }
+          return {
+    plan: null,
+    conflicts: [],
+    warnings: [],
+    termination: exhaustedPlannerTermination(),
+    generatedBuildListEntries: [],
+  }
         },
         prepareInteraction: failingPreparationCalculation(),
         createWhatIfComparison: failingWhatIfCalculation(),

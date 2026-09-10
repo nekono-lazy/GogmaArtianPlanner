@@ -157,6 +157,7 @@ export interface PlannerResult {
   plan: ProductionPlan | null;
   conflicts: PlanConflict[];
   warnings: PlannerWarning[];
+  termination: PlannerSearchTermination;
 }
 
 export interface PlannerWarning {
@@ -181,6 +182,11 @@ export interface PlannerWarning {
 `max_steps_reached` は `maxPlanSteps`、`max_expanded_states_reached` は
 `maxExpandedStates` に到達した場合だけ使用する。両方へ到達した場合は両方を返してよい。
 探索途中のbest Stateが存在する場合、上限warningと `plan != null` を同時に返せる。
+
+これらのwarningは診断情報であり、UI制御authorityではない。探索が完了したかどうかは
+`PlannerResult.termination` でtypedに判断する（7.2.1）。上限へ到達して完成Planを
+得られなかった `status === "incomplete"` のresultは、`plan != null` であっても
+実行可能なProductionPlanとして永続化しない。
 
 ---
 
@@ -515,7 +521,112 @@ Beam SearchはCandidate Snapshotの `BuildRoute.operations` を変更せず、�
 - `maxExpandedStates = N` の場合はN件まで許可し、N+1件目を構築しない
 - N件へ到達した場合だけ `max_expanded_states_reached` warningを返す
 
-`beamWidth = 50`、`maxExpandedStates = 10000` は初期値であり、UI設定ではなく将来調整可能な定数とする。完全最適解は保証せず、実用的な時間内で十分良いPlanを返す。
+`maxPlanSteps = 300`、`beamWidth = 50`、`maxExpandedStates = 10000` は
+`defaultPlannerOptions` の初期値であり、Application callerがBuildList画面の詳細設定で
+上書きできる。完全最適解は保証せず、実用的な時間内で十分良いPlanを返す。
+
+### 7.2.1 探索上限設定と typed termination
+
+#### PlannerOptions authority
+
+`PlannerInput.options` はBeam Search boundの唯一のauthorityとする。
+
+- 初期値authorityは `defaultPlannerOptions` だけとする
+- BuildList画面の詳細設定でユーザーが `maxPlanSteps` / `beamWidth` /
+  `maxExpandedStates` を変更できる
+- Application callerが選択値を `PlannerInput.options` へ明示的に反映する
+- Worker Client、Worker controller、Domain moduleは既定値を補わない
+- 3項目とも1以上の整数だけを受け付け、NaN・0・負数・小数・空欄はPlannerへ渡さない
+- 推測による固定最大値は設けない。長時間化はWorker実行と既存Cancelで扱う
+- 設定値はBuildList画面のruntime UI stateであり、AppSettingsやIndexedDBへ永続化しない
+
+`PlannerOptions` はB8 orchestration bounds
+（`maxCandidateTrialsPerConflict` / `maxGeneratedBuildListEntries` /
+`maxPlannerReruns`）およびB8 `ConstrainedEnumerationBounds`、B9 `PlannerWhatIfBounds`
+とは別物であり、混同しない。今回の詳細設定はこの3項目だけを公開する。
+
+#### typed termination
+
+Beam Searchの終了状態は `PlannerSearchTermination` としてtypedに返す。
+
+```ts
+export type PlannerSearchLimitKind =
+  | "max_expanded_states"
+  | "max_plan_steps";
+
+export type PlannerSearchTerminationStatus =
+  | "completed"
+  | "incomplete"
+  | "exhausted"
+  | "cancelled";
+
+export interface PlannerSearchTermination {
+  status: PlannerSearchTerminationStatus;
+  reachedLimits: PlannerSearchLimitKind[];
+  limits: PlannerOptions;
+  expandedStates: number;
+  completedTargetCount: number;
+  totalTargetCount: number;
+}
+```
+
+statusの決定順序は次のとおりとする。
+
+1. `cancelled`: ユーザーが探索をキャンセルした
+2. `completed`: 全enabled TargetがIdealへ到達した
+3. `incomplete`: それ以前に `PlannerOptions` boundが探索を打ち切った
+4. `exhausted`: boundに到達せず探索が自然終了し、全Target完成Planが無かった
+
+`PlannerBeamSearchResult.termination` と `PlannerResult.termination` が保持する。
+`PlannerOrchestrationResult` は `PlannerResult` を継承するため同じ値を引き継ぐ。
+複数回full Beam Searchが走った場合は、結果として採用したrunのterminationとする。
+
+`termination` はruntime result metadataであり、`ProductionPlan`、`PlanStep`、
+`BuildListEntry`、DB schemaへ永続化しない。structured-clone可能なplain dataとして
+Worker境界をそのまま通し、Worker側でwarningから再構築しない。
+
+#### warningとの役割分担
+
+`max_steps_reached` / `max_expanded_states_reached` PlannerWarningは診断情報として残す。
+
+- UI / Application / PersistenceはUI制御authorityとして `termination` だけを読む
+- warning messageを文字列解析して可用性を判断してはいけない
+- `reachedLimits` はwarning一覧のコピーではない。`completed` な探索でもboundへ到達した
+  場合は `reachedLimits` が非空になり、warningと矛盾しない
+- Beam Searchへ到達しなかったrun（入力invalid、orchestration bound）は
+  `reachedLimits` を空にする。停止理由はそれぞれのwarningが報告する
+
+#### incomplete resultの扱い
+
+`status === "incomplete"` のresultは、探索途中のpartial Beam Search artifactであり、
+完成したProduction Planではない。
+
+- `PlannerResult.plan` はnullにせず、partial Planをそのまま保持してよい
+- B8 constrained orchestration内部の `isConstrainedTrialAdoptable()` は従来どおり
+  partial Planを利用してよい。この内部契約は変更しない
+- 一方、Persistenceは `planner_result_invalid` としてfail closedし、
+  実行可能なDraft ProductionPlanとして保存しない
+- 生成BuildListEntriesも単独では保存しない
+- UIは `/plans/{id}` へnavigateしない
+- UIは到達したbound、設定値、探索状態数、完成Target数、設定見直し案内を表示する
+
+`status === "exhausted"` は「探索未完了」ではない。入力・Conflict・resourceにより
+complete Planが無かった通常の結果として、従来どおりの意味と挙動を維持する。
+
+#### Calculation compatibility
+
+この変更はBeam Searchの展開、評価、Conflict検出、Trace Replay、PlanStep生成、
+`ProductionPlan` 永続形状のいずれも変更しない。同じ `PlannerInput` に対する計算結果は
+従来と同一であり、変わったのは保存時のartifact受け入れ判定だけである。
+
+Active Plan replacement、abandonment、recalculation、single-active制約と同じく
+Plan保存可否はApplication / Persistenceの責務であり、Planner calculation semanticsでは
+ないため、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` は4のまま変更しない。
+既存のschema 4 ProductionPlanは、そのsteps、conflicts、rejectedBuildListEntriesが
+現在の計算が生成する内容と一致するため、current executable artifactとして互換のままとする。
+
+既知の制約として、この変更以前にschema 4で保存されたpartial ProductionPlanは、
+persisted dataだけからcomplete / incompleteを判別できない。
 
 Planner内部ではBeam Searchの状態評価用にCandidate Scoreを計算する。
 
@@ -2791,6 +2902,7 @@ prefixのsilent fast-forward修正で4へ更新されており、7.0.1のPlan失
 - 高速モード用のまとめStepは作らない
 - Plan生成時点では実際のDBを更新しない。保存は呼び出し側Repositoryが行う
 - Beam Searchの打切り時は到達した上限に応じて `max_steps_reached` / `max_expanded_states_reached` を返す
+- 併せて `PlannerResult.termination` にtypedな終了状態を返す（7.2.1）
 - `ProductionPlan.calculationContext` はPlannerInputと一致させる
 - 同じPlannerInput、RngEngine fixture、ID Factory、Clock、Planner constantsから、採用Entry、操作列、PlanStep、score、warning、予約IDが同一になる
 
@@ -3315,6 +3427,16 @@ Workerを利用できない環境ではClientのversionを `production-engine-un
 - `beamWidth` を超えたStateが評価順に枝刈りされる
 - `maxExpandedStates` 到達時に探索を停止してwarningを返す
 - `maxPlanSteps` と `maxExpandedStates` のwarning kindを区別する
+- `PlannerInput.options` の値がそのまま `termination.limits` に載り、module既定値へ
+  差し替えられない
+- 上限打切り時に `termination.status = "incomplete"` と `reachedLimits` を返し、
+  対応するwarningと矛盾しない
+- 完成した探索が上限へ到達していた場合は `status = "completed"` のまま
+  `reachedLimits` が非空になり、保存とnavigationを妨げない
+- キャンセルは `incomplete` ではなく `cancelled` になる
+- Beam Searchへ到達しなかった入力invalid runは `exhausted` で `reachedLimits` が空になる
+- typed terminationが `PlannerBeamSearchResult` からProduction Plan生成、
+  orchestration結果、Worker応答、Worker Clientまで再構築されずに届く
 - 同じ入力と同じ定数から決定的なPlanが生成される
 - 同じEngine fixture、ID Factory、ClockでもID、時刻、予約素材IDを含め決定的になる
 - offset kのNormal候補が `forgeCount = k + 1` だけNormalを進め、最後の1本だけのconversionでSkillを1進め、Gogmaを進めない
@@ -3408,6 +3530,13 @@ Planner-driven constrained re-search実装後に追加する観点。
 - `recalculate_plan` PlanStepを生成しない
 - Route別reserve_weaponのadd / remove / update契約が守られる
 - Planner-only未来素材IDが登録前に使われず、BuildRouteへ入らない
+- 上限打切りのincomplete resultから生成されたpartial Planを、実行可能なDraft
+  ProductionPlanとして永続化しない
+- そのとき生成BuildListEntriesも単独で永続化しない
+- 探索が自然終了しただけの `exhausted` resultは従来どおり保存できる
+- 実ユーザーケース（Bonus 23 / Bonus 148 + Skill 82の2 Target）が既定上限で
+  `incomplete` と24 step partialになり、`maxExpandedStates` を引き上げると
+  232 stepの完成Planになる
 
 ## 15.7 Invalidation Test
 

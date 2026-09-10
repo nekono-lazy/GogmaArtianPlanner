@@ -30,6 +30,11 @@ import {
   type PlannerWorkerLike,
 } from './plannerWorkerClient'
 import { defaultPlannerOptions, type PlannerInput } from '../../domain/planner'
+import {
+  completedPlannerTermination,
+  exhaustedPlannerTermination,
+  incompletePlannerTermination,
+} from '../../test/fixtures/plannerTermination'
 
 class FakeWorker implements PlannerWorkerLike {
   readonly posted: PlannerWorkerProtocolRequest[] = []
@@ -146,7 +151,12 @@ describe('PlannerWorkerClient', () => {
       generation: 1,
       progress: { expandedStates: 2, maxExpandedStates: 10 },
     })
-    const result = { plan: createValidProductionPlan(), conflicts: [], warnings: [] }
+    const result = {
+      plan: createValidProductionPlan(),
+      conflicts: [],
+      warnings: [],
+      termination: completedPlannerTermination(),
+    }
     worker.emit({
       type: 'create_plan_result',
       requestId: 'planner.request',
@@ -179,7 +189,12 @@ describe('PlannerWorkerClient', () => {
       type: 'create_plan_result',
       requestId: 'planner.request',
       generation: 1,
-      result: { plan: null, conflicts: [], warnings: [] },
+      result: {
+      plan: null,
+      conflicts: [],
+      warnings: [],
+      termination: exhaustedPlannerTermination(),
+    },
     })
   })
 
@@ -283,7 +298,12 @@ describe('PlannerWorkerClient what-if comparison (B9-C)', () => {
       type: 'create_plan_result',
       requestId: 'planner.what-if.mismatch',
       generation: 1,
-      result: { plan: null, conflicts: [], warnings: [] },
+      result: {
+      plan: null,
+      conflicts: [],
+      warnings: [],
+      termination: exhaustedPlannerTermination(),
+    },
     })
     await expect(first).rejects.toBeInstanceOf(PlannerWorkerProtocolError)
 
@@ -299,6 +319,7 @@ describe('PlannerWorkerClient what-if comparison (B9-C)', () => {
         plan: null,
         conflicts: [],
         warnings: [],
+        termination: completedPlannerTermination(),
         generatedBuildListEntries: [],
       },
     })
@@ -318,12 +339,18 @@ describe('PlannerWorkerClient what-if comparison (B9-C)', () => {
       type: 'create_plan_result',
       requestId: 'planner.what-if.stale',
       generation: 3,
-      result: { plan: null, conflicts: [], warnings: [] },
+      result: {
+      plan: null,
+      conflicts: [],
+      warnings: [],
+      termination: exhaustedPlannerTermination(),
+    },
     })
     const constrainedResult: PlannerOrchestrationResult = {
       plan: null,
       conflicts: [],
       warnings: [],
+      termination: completedPlannerTermination(),
       generatedBuildListEntries: [],
     }
     worker.emit({
@@ -393,6 +420,7 @@ describe('PlannerWorkerClient constrained plan (B8-D1)', () => {
       plan: createValidProductionPlan(),
       conflicts: [],
       warnings: [],
+      termination: completedPlannerTermination(),
       generatedBuildListEntries: [createValidBuildListEntry()],
     }
     worker.emit({
@@ -403,6 +431,40 @@ describe('PlannerWorkerClient constrained plan (B8-D1)', () => {
     })
     await expect(promise).resolves.toEqual(result)
     expect(progress).toHaveBeenCalledWith({ expandedStates: 6, maxExpandedStates: 40 })
+  })
+
+  it('resolves the typed termination unchanged instead of rebuilding it', async () => {
+    const worker = new FakeWorker()
+    const client = createPlannerWorkerClient(worker, 'fixture')
+    const promise = client.createConstrainedPlan(
+      'planner.constrained.termination',
+      plannerInput(),
+      orchestrationBounds,
+    )
+    const termination = incompletePlannerTermination(['max_expanded_states'], {
+      limits: { maxPlanSteps: 300, beamWidth: 50, maxExpandedStates: 10_000 },
+      expandedStates: 10_000,
+      completedTargetCount: 1,
+      totalTargetCount: 2,
+    })
+    worker.emit({
+      type: 'create_constrained_plan_result',
+      requestId: 'planner.constrained.termination',
+      generation: 1,
+      result: {
+        plan: createValidProductionPlan(),
+        conflicts: [],
+        // The diagnostic warning travels beside the typed termination; the
+        // Client reads neither and reinterprets neither (PLANNER_SPEC 7.2.1).
+        warnings: [{
+          kind: 'max_expanded_states_reached',
+          message: 'Planner reached maxExpandedStates (10000).',
+        }],
+        termination,
+        generatedBuildListEntries: [],
+      },
+    })
+    await expect(promise).resolves.toMatchObject({ termination })
   })
 
   it('cancels a constrained request through the same cancelPlan path', async () => {
@@ -479,6 +541,7 @@ describe('PlannerWorkerClient constrained plan (B8-D1)', () => {
       plan: null,
       conflicts: [],
       warnings: [],
+      termination: completedPlannerTermination(),
       generatedBuildListEntries: [],
     }
     worker.emit({
@@ -505,7 +568,12 @@ describe('PlannerWorkerClient constrained plan (B8-D1)', () => {
       type: 'create_plan_result',
       requestId: 'planner.mismatch.constrained',
       generation: 1,
-      result: { plan: createValidProductionPlan(), conflicts: [], warnings: [] },
+      result: {
+      plan: createValidProductionPlan(),
+      conflicts: [],
+      warnings: [],
+      termination: completedPlannerTermination(),
+    },
     })
     await expect(constrained).rejects.toBeInstanceOf(PlannerWorkerProtocolError)
 
@@ -518,6 +586,7 @@ describe('PlannerWorkerClient constrained plan (B8-D1)', () => {
         plan: createValidProductionPlan(),
         conflicts: [],
         warnings: [],
+        termination: completedPlannerTermination(),
         generatedBuildListEntries: [createValidBuildListEntry()],
       },
     })
@@ -541,12 +610,18 @@ describe('PlannerWorkerClient constrained plan (B8-D1)', () => {
       type: 'create_plan_result',
       requestId: 'planner.stale.discriminant',
       generation: 1,
-      result: { plan: createValidProductionPlan(), conflicts: [], warnings: [] },
+      result: {
+      plan: createValidProductionPlan(),
+      conflicts: [],
+      warnings: [],
+      termination: completedPlannerTermination(),
+    },
     })
     const result = {
       plan: null,
       conflicts: [],
       warnings: [],
+      termination: completedPlannerTermination(),
       generatedBuildListEntries: [],
     }
     worker.emit({
@@ -689,11 +764,17 @@ async function settleMicrotasks(): Promise<void> {
   await Promise.resolve()
 }
 
-const ordinaryResult: PlannerResult = { plan: null, conflicts: [], warnings: [] }
+const ordinaryResult: PlannerResult = {
+      plan: null,
+      conflicts: [],
+      warnings: [],
+      termination: exhaustedPlannerTermination(),
+    }
 const constrainedResult: PlannerOrchestrationResult = {
   plan: null,
   conflicts: [],
   warnings: [],
+  termination: completedPlannerTermination(),
   generatedBuildListEntries: [],
 }
 
@@ -722,6 +803,7 @@ describe('Planner Worker / Client task generation across an asynchronous boundar
       plan: createValidProductionPlan(),
       conflicts: [],
       warnings: [],
+      termination: completedPlannerTermination(),
     })
     await ordinaryRun
     expect(session.worker.toClient).toEqual([

@@ -34,10 +34,64 @@ export interface PlannerOptions {
   maxExpandedStates: number
 }
 
+/**
+ * The initial values of the three Beam Search bounds (PLANNER_SPEC 7.2).
+ *
+ * They are the *default* the Application caller starts from, not a floor or a
+ * ceiling: the Build List detail settings let the user raise any of them for
+ * one calculation. `PlannerInput.options` remains the single Beam Search bound
+ * authority, and no Worker or Domain module substitutes these values for a
+ * caller-supplied one.
+ */
 export const defaultPlannerOptions: Readonly<PlannerOptions> = {
   maxPlanSteps: 300,
   beamWidth: 50,
   maxExpandedStates: 10_000,
+}
+
+/** Which `PlannerOptions` bound the Beam Search touched. */
+export type PlannerSearchLimitKind = 'max_expanded_states' | 'max_plan_steps'
+
+export const plannerSearchLimitKinds: readonly PlannerSearchLimitKind[] = [
+  'max_expanded_states',
+  'max_plan_steps',
+]
+
+/**
+ * - `completed`  every enabled Target reached Ideal
+ * - `incomplete` a `PlannerOptions` bound truncated the search first
+ * - `exhausted`  the search ended on its own without completing every Target
+ * - `cancelled`  the user stopped the search
+ */
+export type PlannerSearchTerminationStatus =
+  | 'completed'
+  | 'incomplete'
+  | 'exhausted'
+  | 'cancelled'
+
+/**
+ * Typed Beam Search termination (PLANNER_SPEC 7.2.1).
+ *
+ * It is the UI, Application and Persistence control authority for whether a
+ * calculation produced a usable Plan. `PlannerWarning` stays diagnostics: no
+ * consumer may parse a warning message, and `reachedLimits` is not a copy of
+ * the warning list either - a `completed` search can carry a reached bound, and
+ * a run that never reached its Beam Search carries none.
+ *
+ * Every field is plain structured-clone data, so it crosses the Worker boundary
+ * unchanged and is never rebuilt on the other side. It is runtime result
+ * metadata only: it is never persisted in `ProductionPlan`, `PlanStep`,
+ * `BuildListEntry`, or the DB schema.
+ */
+export interface PlannerSearchTermination {
+  status: PlannerSearchTerminationStatus
+  /** Empty unless a bound was touched; non-empty whenever `incomplete`. */
+  reachedLimits: PlannerSearchLimitKind[]
+  /** The `PlannerInput.options` this search actually ran with. */
+  limits: PlannerOptions
+  expandedStates: number
+  completedTargetCount: number
+  totalTargetCount: number
 }
 
 export interface PlannerMasterSubset {
@@ -266,6 +320,16 @@ export interface PlannerBeamSearchResult {
   expandedStates: number
   completed: boolean
   cancelled: boolean
+  /**
+   * The typed termination of this search (PLANNER_SPEC 7.2.1).
+   *
+   * `completed`, `cancelled` and `expandedStates` above keep their existing
+   * meaning for the Domain consumers that already read them; `termination` is
+   * the authority everything outside the Domain reads, because it also carries
+   * which bound was touched, the bounds this run used, and how many Targets
+   * were completed.
+   */
+  termination: PlannerSearchTermination
 }
 
 export type PlannerWarningKind =
@@ -320,6 +384,17 @@ export interface PlannerResult {
   plan: ProductionPlan | null
   conflicts: PlanConflict[]
   warnings: PlannerWarning[]
+  /**
+   * How the Beam Search behind this result ended (PLANNER_SPEC 7.2.1).
+   *
+   * `plan` alone cannot answer that: a `plan` calculated from a truncated
+   * search is a partial Beam Search artifact, not a finished production plan,
+   * and Persistence and UI must be able to tell the two apart without reading
+   * a warning message. When several full Beam Searches ran - a
+   * runtime-unsupported retry, or a B8 Candidate trial - this is the one whose
+   * result was actually used.
+   */
+  termination: PlannerSearchTermination
 }
 
 export interface PlannerIdFactory {

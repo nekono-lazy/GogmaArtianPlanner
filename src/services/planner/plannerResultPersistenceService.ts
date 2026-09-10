@@ -35,6 +35,7 @@ import {
   createPlanningBuildListEntriesHash,
   createPlanningTargetWeaponsHash,
   type PlannerOrchestrationResult,
+  type PlannerSearchTermination,
 } from '../../domain/planner'
 
 /**
@@ -154,7 +155,7 @@ export class PlannerResultPersistenceService {
       return null
     }
 
-    this.assertPersistableResultShape(plan, generatedEntries)
+    this.assertPersistableResultShape(plan, generatedEntries, result.termination)
 
     return runInRepositoryTransaction(
       this.database,
@@ -188,7 +189,20 @@ export class PlannerResultPersistenceService {
   private assertPersistableResultShape(
     plan: ProductionPlan,
     generatedEntries: readonly BuildListEntry[],
+    termination: PlannerSearchTermination,
   ) {
+    // PLANNER_SPEC 7.2.1: a Plan calculated from a Beam Search that a
+    // `PlannerOptions` bound truncated is a partial search artifact, not a
+    // finished production plan, so it never becomes an executable Draft. The
+    // typed termination decides this - never a `PlannerWarning` message, and
+    // never the presence of `max_expanded_states_reached`, which a completed
+    // search can carry too. Raising the bound and recalculating is the
+    // recovery, so nothing is written and no generated Entry is salvaged.
+    if (termination.status === 'incomplete') {
+      throw resultInvalid(
+        `The Planner search did not complete: it reached ${termination.reachedLimits.join(', ')} after ${termination.expandedStates} expanded states with ${termination.completedTargetCount} of ${termination.totalTargetCount} target weapons completed. A truncated search result must not be saved as an executable ProductionPlan.`,
+      )
+    }
     // B8-D2a stores a freshly calculated Draft. Activation, replacement and the
     // single-active-Plan constraint stay the existing Application concerns.
     if (plan.status !== 'draft') {

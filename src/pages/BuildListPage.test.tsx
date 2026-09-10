@@ -23,6 +23,11 @@ import {
   type PlannerInput,
   type PlannerOrchestrationResult,
 } from '../domain/planner'
+import {
+  completedPlannerTermination,
+  exhaustedPlannerTermination,
+  incompletePlannerTermination,
+} from '../test/fixtures/plannerTermination'
 import { createBuildListCalculationContext } from '../services/buildList/createBuildListCalculationContext'
 import type { PlannerWorkerClient } from '../services/planner/plannerWorkerClient'
 import { BuildListPage, type BuildListPageDependencies } from './BuildListPage'
@@ -34,6 +39,7 @@ function createOrchestrationResult(
     plan: createValidProductionPlan(),
     conflicts: [],
     warnings: [],
+    termination: completedPlannerTermination(),
     generatedBuildListEntries: [],
     ...overrides,
   }
@@ -48,6 +54,7 @@ function createPlannerClient(
       plan: createValidProductionPlan(),
       conflicts: [],
       warnings: [],
+      termination: completedPlannerTermination(),
     })),
     // B8-D2b: the page uses the constrained API only.
     createConstrainedPlan: vi.fn(async () => result),
@@ -143,7 +150,10 @@ describe('BuildListPage', () => {
 
     const [requestId, input, bounds] = vi.mocked(client.createConstrainedPlan).mock.calls[0]
     expect(typeof requestId).toBe('string')
-    expect(input).toBe(await vi.mocked(deps.createInput).mock.results[0].value)
+    // Everything but `options` comes straight from `createInput`; `options`
+    // is the Application caller's own decision (PLANNER_SPEC 7.2.1).
+    const createdInput = await vi.mocked(deps.createInput).mock.results[0].value
+    expect(input).toEqual({ ...createdInput, options: { ...defaultPlannerOptions } })
     // The caller passes the Production authority itself, not a local copy of
     // its values: the Worker Client applies no default of its own.
     expect(bounds).toBe(defaultPlannerOrchestrationBounds)
@@ -206,7 +216,11 @@ describe('BuildListPage', () => {
   it('passes a Plan-less result to Persistence and reports that no Plan was created', async () => {
     const user = userEvent.setup()
     const client = createPlannerClient(
-      createOrchestrationResult({ plan: null, generatedBuildListEntries: [] }),
+      createOrchestrationResult({
+        plan: null,
+        termination: exhaustedPlannerTermination(),
+        generatedBuildListEntries: [],
+      }),
     )
     const deps = dependencies([], client)
     deps.savePlannerResult = vi.fn(async () => null)
@@ -276,7 +290,11 @@ describe('BuildListPage', () => {
   it('stays on the Build List with the no-Plan notice when nothing was stored', async () => {
     const user = userEvent.setup()
     const deps = dependencies([], createPlannerClient(
-      createOrchestrationResult({ plan: null, generatedBuildListEntries: [] }),
+      createOrchestrationResult({
+        plan: null,
+        termination: exhaustedPlannerTermination(),
+        generatedBuildListEntries: [],
+      }),
     ))
     deps.savePlannerResult = vi.fn(async () => null)
     const view = renderPage(deps)
@@ -336,6 +354,174 @@ describe('BuildListPage', () => {
     await user.click(await screen.findByRole('button', { name: 'ビルドリストから削除' }))
     expect(deps.deleteEntry).toHaveBeenCalledOnce()
     expect(screen.queryByText('Domain fixture target')).not.toBeInTheDocument()
+  })
+
+  it('starts the detail settings at defaultPlannerOptions and sends them unchanged', async () => {
+    const user = userEvent.setup()
+    const client = createPlannerClient()
+    renderPage(dependencies([], client))
+    await user.click(await screen.findByRole('button', { name: '詳細設定' }))
+
+    expect(await screen.findByLabelText('最大計画ステップ数')).toHaveValue(300)
+    expect(screen.getByLabelText('Beam幅')).toHaveValue(50)
+    expect(screen.getByLabelText('最大探索状態数')).toHaveValue(10000)
+
+    await user.click(screen.getByRole('button', { name: '生産計画を作成' }))
+    await screen.findByText(/^Plan destination:/)
+    expect(vi.mocked(client.createConstrainedPlan).mock.calls[0][1].options).toEqual({
+      maxPlanSteps: 300,
+      beamWidth: 50,
+      maxExpandedStates: 10_000,
+    })
+  })
+
+  it('sends the user-selected bounds as PlannerInput.options', async () => {
+    const user = userEvent.setup()
+    const client = createPlannerClient()
+    renderPage(dependencies([], client))
+    await user.click(await screen.findByRole('button', { name: '詳細設定' }))
+    await user.clear(await screen.findByLabelText('最大計画ステップ数'))
+    await user.type(screen.getByLabelText('最大計画ステップ数'), '400')
+    await user.clear(screen.getByLabelText('Beam幅'))
+    await user.type(screen.getByLabelText('Beam幅'), '60')
+    await user.clear(screen.getByLabelText('最大探索状態数'))
+    await user.type(screen.getByLabelText('最大探索状態数'), '20000')
+
+    await user.click(screen.getByRole('button', { name: '生産計画を作成' }))
+    await screen.findByText(/^Plan destination:/)
+
+    // `PlannerInput.options` is the single Beam Search bound authority, so the
+    // reviewed values reach the Worker exactly (PLANNER_SPEC 7.2.1).
+    expect(vi.mocked(client.createConstrainedPlan).mock.calls[0][1].options).toEqual({
+      maxPlanSteps: 400,
+      beamWidth: 60,
+      maxExpandedStates: 20_000,
+    })
+  })
+
+  it('shows the selected maxExpandedStates as the live progress denominator', async () => {
+    const user = userEvent.setup()
+    let releasePlan: (result: PlannerOrchestrationResult) => void = () => undefined
+    const client = createPlannerClient()
+    client.createConstrainedPlan = vi.fn(
+      () => new Promise<PlannerOrchestrationResult>((resolve) => {
+        releasePlan = resolve
+      }),
+    )
+    renderPage(dependencies([], client))
+    await user.click(await screen.findByRole('button', { name: '詳細設定' }))
+    await user.clear(await screen.findByLabelText('最大探索状態数'))
+    await user.type(screen.getByLabelText('最大探索状態数'), '20000')
+    await user.click(screen.getByRole('button', { name: '生産計画を作成' }))
+
+    expect(await screen.findByText('計画中 0 / 20000')).toBeInTheDocument()
+    releasePlan(createOrchestrationResult())
+  })
+
+  it('restores defaultPlannerOptions with the reset control', async () => {
+    const user = userEvent.setup()
+    renderPage(dependencies())
+    await user.click(await screen.findByRole('button', { name: '詳細設定' }))
+    await user.clear(await screen.findByLabelText('最大探索状態数'))
+    await user.type(screen.getByLabelText('最大探索状態数'), '99')
+    expect(screen.getByLabelText('最大探索状態数')).toHaveValue(99)
+
+    await user.click(screen.getByRole('button', { name: '既定値に戻す' }))
+    expect(screen.getByLabelText('最大計画ステップ数')).toHaveValue(defaultPlannerOptions.maxPlanSteps)
+    expect(screen.getByLabelText('Beam幅')).toHaveValue(defaultPlannerOptions.beamWidth)
+    expect(screen.getByLabelText('最大探索状態数')).toHaveValue(defaultPlannerOptions.maxExpandedStates)
+  })
+
+  it.each([
+    ['zero', '0'],
+    ['a negative number', '-5'],
+    ['a fraction', '1.5'],
+    ['an empty field', ''],
+  ])('never sends %s to the Planner', async (_label, raw) => {
+    const user = userEvent.setup()
+    const client = createPlannerClient()
+    renderPage(dependencies([], client))
+    await user.click(await screen.findByRole('button', { name: '詳細設定' }))
+    await user.clear(await screen.findByLabelText('最大探索状態数'))
+    if (raw !== '') await user.type(screen.getByLabelText('最大探索状態数'), raw)
+
+    expect(await screen.findByText('1以上の整数を入力してください。')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '生産計画を作成' })).toBeDisabled()
+    expect(client.createConstrainedPlan).not.toHaveBeenCalled()
+  })
+
+  it('reports an incomplete search that reached maxExpandedStates and saves nothing', async () => {
+    const user = userEvent.setup()
+    const deps = dependencies([], createPlannerClient(createOrchestrationResult({
+      termination: incompletePlannerTermination(['max_expanded_states'], {
+        expandedStates: 10_000,
+        completedTargetCount: 1,
+        totalTargetCount: 2,
+      }),
+    })))
+    const view = renderPage(deps)
+    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
+
+    expect(await screen.findByText('生産計画の探索が完了していません')).toBeInTheDocument()
+    expect(screen.getByText(/最大探索状態数 10,000 に到達しました。/)).toBeInTheDocument()
+    expect(screen.getByText('探索状態数: 10,000 / 10,000')).toBeInTheDocument()
+    expect(screen.getByText('完成した目標武器: 1 / 2')).toBeInTheDocument()
+
+    // A truncated search never becomes an executable Draft, and never opens.
+    expect(deps.savePlannerResult).not.toHaveBeenCalled()
+    expect(view.router.state.location.pathname).toBe('/build-list')
+    expect(screen.queryByText(/^Plan destination:/)).not.toBeInTheDocument()
+  })
+
+  it('reports an incomplete search that reached maxPlanSteps', async () => {
+    const user = userEvent.setup()
+    const deps = dependencies([], createPlannerClient(createOrchestrationResult({
+      termination: incompletePlannerTermination(['max_plan_steps']),
+    })))
+    renderPage(deps)
+    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
+
+    expect(await screen.findByText('生産計画の探索が完了していません')).toBeInTheDocument()
+    expect(screen.getByText(/最大計画ステップ数 300 に到達しました。/)).toBeInTheDocument()
+    expect(deps.savePlannerResult).not.toHaveBeenCalled()
+  })
+
+  it('reports both bounds when one search reached both', async () => {
+    const user = userEvent.setup()
+    renderPage(dependencies([], createPlannerClient(createOrchestrationResult({
+      termination: incompletePlannerTermination([
+        'max_expanded_states',
+        'max_plan_steps',
+      ]),
+    }))))
+    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
+
+    expect(await screen.findByText(/最大探索状態数 10,000 に到達しました。/)).toBeInTheDocument()
+    expect(screen.getByText(/最大計画ステップ数 300 に到達しました。/)).toBeInTheDocument()
+  })
+
+  it('still saves a completed search that happened to touch a bound', async () => {
+    const user = userEvent.setup()
+    // The last affordable expansion was the one that completed the search, so
+    // the diagnostic warning and `reachedLimits` do not contradict `completed`.
+    const deps = dependencies([], createPlannerClient(createOrchestrationResult({
+      warnings: [{
+        kind: 'max_expanded_states_reached',
+        message: 'Planner reached maxExpandedStates (10000).',
+      }],
+      termination: completedPlannerTermination({
+        reachedLimits: ['max_expanded_states'],
+        expandedStates: 10_000,
+        completedTargetCount: 2,
+        totalTargetCount: 2,
+      }),
+    })))
+    renderPage(deps)
+    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
+
+    await screen.findByText(/^Plan destination:/)
+    expect(deps.savePlannerResult).toHaveBeenCalledOnce()
+    expect(screen.queryByText('生産計画の探索が完了していません')).not.toBeInTheDocument()
   })
 
   it('shows an empty state', async () => {

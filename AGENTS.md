@@ -1754,6 +1754,56 @@ These three positive integers are the complete v1 `PlannerOptions` contract.
 Practical-before-Ideal behavior is fixed by v1 priority rules; do not add or
 retain `preferPracticalBeforeIdeal`.
 
+They are defaults, not fixed constants: the Build List detail settings let the
+user raise any of the three for one calculation. `defaultPlannerOptions` is the
+only initial-value authority, the Application caller writes the reviewed values
+into `PlannerInput.options`, and `PlannerInput.options` stays the single Beam
+Search bound authority — no Worker Client, Worker controller, or Domain module
+substitutes a default of its own. Only positive integers reach the Planner:
+`NaN`, `0`, a negative number, a fraction, and an empty field are refused in the
+UI. No guessed upper cap is added; a long run stays cancellable through the
+existing Worker cancellation. These three settings are Build List runtime UI
+state and are not persisted to `AppSettings` or IndexedDB. They are not the B8
+orchestration bounds, `ConstrainedEnumerationBounds`, or `PlannerWhatIfBounds`,
+and none of those is exposed in this detail settings panel.
+
+### Typed Search Termination
+
+How a Beam Search ended is typed data, never a parsed warning message.
+`PlannerSearchTermination` carries `status`, `reachedLimits`, the `limits` the
+run actually used, `expandedStates`, `completedTargetCount`, and
+`totalTargetCount`, and it reaches UI, Application, and Persistence through
+`PlannerBeamSearchResult.termination` and `PlannerResult.termination`.
+
+Status precedence is `cancelled`, then `completed` (every enabled Target reached
+Ideal), then `incomplete` (a `PlannerOptions` bound truncated the search first),
+then `exhausted` (the search ended on its own without completing every Target).
+
+`max_steps_reached` and `max_expanded_states_reached` stay diagnostics. They do
+not contradict the status and are never its source: a `completed` search can
+carry a reached bound, because the last affordable expansion may be the one that
+completed it, and a run that never reached its Beam Search carries none.
+
+An `incomplete` result's `plan` stays populated in the Domain: `bestPartial` is
+still Beam Search diagnostics, and B8 `isConstrainedTrialAdoptable()` may still
+adopt a trial from a partial Plan. That internal contract is unchanged. What
+changes is outside the Domain: Persistence fails closed with
+`planner_result_invalid`, no generated BuildListEntry is salvaged on its own,
+the UI does not navigate to `/plans/{id}`, and the UI states which bound was
+reached, the value it ran with, the expanded state count, the completed Target
+count, and how to raise the bound. `exhausted` is not an incomplete search: it
+keeps the existing "no Plan from this input" meaning and behaviour.
+
+This changes no Beam Search expansion, scoring, conflict, Trace Replay, PlanStep,
+or `ProductionPlan` persisted semantics. Save-time artifact acceptance is an
+Application/Persistence responsibility, like Active Plan replacement and the
+single-active constraint, so `CURRENT_CALCULATION_APP_SCHEMA_VERSION` stays 4 and
+existing version 4 ProductionPlans stay compatible. `PlannerSearchTermination` is
+runtime result metadata and is never persisted in `ProductionPlan`, `PlanStep`,
+`BuildListEntry`, or the DB schema. A partial ProductionPlan saved under schema 4
+before this change cannot be told apart from a complete one by its persisted data
+alone; that limitation is accepted and not repaired here.
+
 Do not replace Beam Search with a simple Candidate sort.
 
 Planner search state must distinguish target satisfaction:
@@ -2393,6 +2443,25 @@ Relevant test areas include:
 - Stale hash behavior
 - OwnedWeapon protection
 - Beam Search behavior
+- `PlannerInput.options` reaching `termination.limits` unchanged, with no module
+  default substituted
+- A truncated search reporting `incomplete` plus its `reachedLimits`, and never
+  contradicting the diagnostic warning it also produced
+- A completed search that touched a bound staying `completed` with a non-empty
+  `reachedLimits`, and still saving and navigating
+- Cancellation reporting `cancelled`, and an input that never reached the Beam
+  Search reporting `exhausted` with an empty `reachedLimits`
+- Typed termination surviving Domain -> Production Plan generation ->
+  orchestration -> Worker -> Worker Client without being rebuilt from a warning
+- An `incomplete` result's partial Plan never persisted as an executable Draft,
+  its generated Entries never persisted alone, and no navigation to the Plan
+- Build List detail settings starting at `defaultPlannerOptions`, sending the
+  user-selected values as `PlannerInput.options`, restoring the defaults, and
+  refusing `0`, a negative number, a fraction, and an empty field
+- The real user case of one 23-operation Bonus Route plus one 148-operation
+  Bonus + 82-operation Skill Route reporting `incomplete` with a 24-step partial
+  at the default bounds, and producing the 232-step complete Plan once
+  `maxExpandedStates` is raised
 - Silent fast-forward: a skippable past unit advances Route progress only, with
   no Search Action, trace entry, progressed Entry / Target record, inventory
   effect, or route runtime output, while a required past unit fails closed

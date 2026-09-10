@@ -203,6 +203,28 @@ ProductionPlanは現行Plannerより武器切替が多くても物理的・意�
 これはCalculationContext境界ではなく、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を
 更新しない。
 
+Planner探索上限のユーザー設定とtyped termination（`docs/PLANNER_SPEC.md` 7.2.1）も
+CalculationContext境界ではない。
+
+- Beam Searchの展開、評価、Conflict検出、Trace Replay、PlanStep生成、
+  `ProductionPlan` 永続形状のいずれも変更していない
+- 同じ `PlannerInput` に対して生成されるPlanの内容は従来と同一である
+- 変わったのは保存時のartifact受け入れ判定であり、Active Plan replacement、
+  abandonment、recalculation、single-active制約と同じApplication / Persistenceの責務である
+- 既存のschema 4 ProductionPlanは、その `steps`、`conflicts`、
+  `rejectedBuildListEntries` がcurrent calculationの生成物と一致するため、
+  version 3 → 4のような「current calculationが生成しない判断を保存している」状態には
+  当たらない
+
+したがって `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は **4** のまま変更せず、
+`DATABASE_SCHEMA_VERSION = 1`、`AppSettings.schemaVersion = 1`、
+`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2` も変更しない。
+
+既知の制約として、この変更以前にschema 4で保存されたpartial ProductionPlanは、
+persisted dataだけからcomplete / incompleteを判別できない。判別が必要になった場合は
+別タスクで扱う。`PlannerSearchTermination` はruntime result metadataであり、
+`ProductionPlan`、`PlanStep`、`BuildListEntry`、Dexie schemaへ永続化しない。
+
 ---
 
 ## 4. Enum

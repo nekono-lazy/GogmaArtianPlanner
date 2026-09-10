@@ -41,6 +41,9 @@ import {
   ProductionPlanPage,
   type ProductionPlanPageDependencies,
 } from './ProductionPlanPage'
+import {
+  completedPlannerTermination,
+} from '../test/fixtures/plannerTermination'
 
 interface Deferred<T> {
   promise: Promise<T>
@@ -759,7 +762,13 @@ describe('ProductionPlanPage', () => {
 
 
 function replanResult(plan: ProductionPlan | null = null): PlannerOrchestrationResult {
-  return { plan, conflicts: [], warnings: [], generatedBuildListEntries: [] }
+  return {
+    plan,
+    conflicts: [],
+    warnings: [],
+    termination: completedPlannerTermination(),
+    generatedBuildListEntries: [],
+  }
 }
 
 async function clickSelection(user: ReturnType<typeof userEvent.setup>, index = 0) {

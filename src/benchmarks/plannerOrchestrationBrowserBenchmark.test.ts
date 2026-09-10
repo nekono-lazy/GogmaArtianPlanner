@@ -24,9 +24,16 @@ const BOUNDS: PlannerOrchestrationBounds = {
 }
 
 const WORKLOAD_ID = 'orchestration_single_conflict_early_adoption'
+import { exhaustedPlannerTermination } from '../test/fixtures/plannerTermination'
 
 function emptyResult(): PlannerOrchestrationResult {
-  return { plan: null, conflicts: [], warnings: [], generatedBuildListEntries: [] }
+  return {
+    plan: null,
+    conflicts: [],
+    warnings: [],
+    termination: exhaustedPlannerTermination(),
+    generatedBuildListEntries: [],
+  }
 }
 
 interface FakeClientOptions {

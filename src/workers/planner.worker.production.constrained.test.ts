@@ -25,6 +25,9 @@ import {
   createProductionPlannerWorkerCalculations,
   createProductionPlannerWorkerDependencies,
 } from './planner.worker.production'
+import {
+  exhaustedPlannerTermination,
+} from '../test/fixtures/plannerTermination'
 
 /**
  * The B8-C4b orchestration is replaced here on purpose: this file verifies the
@@ -71,7 +74,13 @@ function plannerInput(): PlannerInput {
 }
 
 function emptyResult(): PlannerOrchestrationResult {
-  return { plan: null, conflicts: [], warnings: [], generatedBuildListEntries: [] }
+  return {
+    plan: null,
+    conflicts: [],
+    warnings: [],
+    termination: exhaustedPlannerTermination(),
+    generatedBuildListEntries: [],
+  }
 }
 
 describe('Production constrained Planner Worker adapter (B8-D1)', () => {

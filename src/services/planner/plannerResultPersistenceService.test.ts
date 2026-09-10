@@ -33,6 +33,11 @@ import {
   createPlannerResultPersistenceRepositories,
   type PlannerResultPersistenceRepositories,
 } from './plannerResultPersistenceService'
+import {
+  completedPlannerTermination,
+  exhaustedPlannerTermination,
+  incompletePlannerTermination,
+} from '../../test/fixtures/plannerTermination'
 
 function normalRoute(): BuildRoute {
   return structuredClone(createValidBuildCandidate().route)
@@ -156,6 +161,7 @@ async function withScenario(
         plan,
         conflicts: [],
         warnings: [],
+        termination: completedPlannerTermination(),
         generatedBuildListEntries: generated,
       },
       storedEntryIds: async () =>
@@ -173,7 +179,13 @@ describe('PlannerResultPersistenceService', () => {
   it('writes nothing and returns null when the Planner produced no Plan', () =>
     withScenario(async ({ service, context, storedEntryIds, storedPlanIds }) => {
       const saved = await service.savePlannerOrchestrationResult(
-        { plan: null, conflicts: [], warnings: [], generatedBuildListEntries: [] },
+        {
+          plan: null,
+          conflicts: [],
+          warnings: [],
+          termination: exhaustedPlannerTermination(),
+          generatedBuildListEntries: [],
+        },
         context,
       )
       expect(saved).toBeNull()
@@ -182,6 +194,90 @@ describe('PlannerResultPersistenceService', () => {
         'build-list.persisted.b',
       ])
       expect(await storedPlanIds()).toEqual([])
+    }))
+
+  it('refuses a Plan whose Beam Search a PlannerOptions bound truncated', () =>
+    withScenario(
+      async ({ service, context, result, storedEntryIds, storedPlanIds }) => {
+        // PLANNER_SPEC 7.2.1: an incomplete search's best state is a partial
+        // Beam Search artifact, so it never becomes an executable Draft. The
+        // typed termination is the authority, never a warning message.
+        await expect(
+          service.savePlannerOrchestrationResult(
+            {
+              ...result,
+              termination: incompletePlannerTermination(['max_expanded_states'], {
+                expandedStates: 10_000,
+                completedTargetCount: 1,
+                totalTargetCount: 2,
+              }),
+            },
+            context,
+          ),
+        ).rejects.toMatchObject({ code: 'planner_result_invalid' })
+        // Nothing is salvaged: not the Plan, and not its generated Entries.
+        expect(await storedEntryIds()).toEqual([
+          'build-list.persisted.a',
+          'build-list.persisted.b',
+        ])
+        expect(await storedPlanIds()).toEqual([])
+      },
+    ))
+
+  it('refuses a truncated search that reached the maxPlanSteps bound too', () =>
+    withScenario(async ({ service, context, result, storedPlanIds }) => {
+      await expect(
+        service.savePlannerOrchestrationResult(
+          {
+            ...result,
+            termination: incompletePlannerTermination(['max_plan_steps']),
+          },
+          context,
+        ),
+      ).rejects.toMatchObject({ code: 'planner_result_invalid' })
+      expect(await storedPlanIds()).toEqual([])
+    }))
+
+  it('saves a completed search that happened to touch a bound', () =>
+    withScenario(async ({ service, context, plan, result, storedPlanIds }) => {
+      // The reached bound is a diagnostic here, not a truncation: the last
+      // affordable expansion was the one that completed the search.
+      const saved = await service.savePlannerOrchestrationResult(
+        {
+          ...result,
+          warnings: [{
+            kind: 'max_expanded_states_reached',
+            message: 'Planner reached maxExpandedStates (10000).',
+          }],
+          termination: completedPlannerTermination({
+            reachedLimits: ['max_expanded_states'],
+            expandedStates: 10_000,
+            completedTargetCount: 2,
+            totalTargetCount: 2,
+          }),
+        },
+        context,
+      )
+      expect(saved?.id).toBe(plan.id)
+      expect(await storedPlanIds()).toEqual([plan.id])
+    }))
+
+  it('saves a search that ended on its own without completing every Target', () =>
+    withScenario(async ({ service, context, plan, result, storedPlanIds }) => {
+      // Normal exhaustion keeps its existing meaning: this is the best Plan
+      // the input allows, not a truncated search.
+      const saved = await service.savePlannerOrchestrationResult(
+        {
+          ...result,
+          termination: exhaustedPlannerTermination({
+            completedTargetCount: 1,
+            totalTargetCount: 2,
+          }),
+        },
+        context,
+      )
+      expect(saved?.id).toBe(plan.id)
+      expect(await storedPlanIds()).toEqual([plan.id])
     }))
 
   it('fails closed when a null Plan still carries generated Entries', () =>
@@ -193,6 +289,7 @@ describe('PlannerResultPersistenceService', () => {
               plan: null,
               conflicts: [],
               warnings: [],
+              termination: completedPlannerTermination(),
               generatedBuildListEntries: generated,
             },
             context,
