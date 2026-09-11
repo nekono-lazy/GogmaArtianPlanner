@@ -315,7 +315,7 @@ export function createCandidateFromPrediction(
     input.master,
     input.settings.similarityThreshold,
   )
-  if (!evaluation.category) return null
+  if (!evaluation.category || !evaluation.bonusMatch || !evaluation.skillMatch) return null
 
   const semanticHash = hashStableValue({
     searchRunId: input.searchRunId,
@@ -330,6 +330,7 @@ export function createCandidateFromPrediction(
     id: execution.createCandidateId({ targetWeaponId: target.id, semanticHash }),
     targetWeaponId: target.id,
     category: evaluation.category,
+    conditionMatch: { bonus: evaluation.bonusMatch, skill: evaluation.skillMatch },
     finalBonuses: prediction.finalBonuses.map((bonus) => ({ ...bonus })) as BuildCandidate['finalBonuses'],
     restorationBonusScope: prediction.restorationBonusScope,
     seriesSkillId: prediction.seriesSkillId,

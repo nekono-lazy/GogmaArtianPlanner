@@ -131,8 +131,8 @@ describe('Planner current-state entry validation', () => {
   // Every one of these schema changes is Planner-only: none of them touches
   // Candidate Search or BuildListEntry snapshot semantics, so the Entry stays
   // usable under the current schema (DATA_MODEL 3.5).
-  it.each([2, 3, 4])(
-    'accepts schema %i entries under the Planner-only schema changes',
+  it.each([2, 3, 4, 5])(
+    'rejects schema %i entries under Target semantics version 6',
     (appSchemaVersion) => {
       const { input, dependencies } = fixture()
       input.buildListEntries[0].calculationContext.appSchemaVersion = appSchemaVersion
@@ -145,10 +145,10 @@ describe('Planner current-state entry validation', () => {
 
       const result = validatePlannerInput(input, dependencies)
 
-      expect(result.validBuildListEntries).toHaveLength(1)
+      expect(result.validBuildListEntries).toHaveLength(0)
       expect(result.warnings.some(
         ({ kind }) => kind === 'calculation_context_incompatible',
-      )).toBe(false)
+      )).toBe(true)
     },
   )
 
@@ -259,9 +259,9 @@ describe('Planner Target Satisfaction', () => {
     const [satisfaction] = deriveTargetSatisfaction([target], [weapon], input.master)
     expect(satisfaction).toMatchObject({
       hasIdeal,
-      hasPractical: true,
+      hasPractical: hasIdeal,
       idealOwnedWeaponIds: hasIdeal ? [weapon.id] : [],
-      practicalOwnedWeaponIds: [weapon.id],
+      practicalOwnedWeaponIds: hasIdeal ? [weapon.id] : [],
     })
   })
 

@@ -86,7 +86,7 @@ describe('Candidate Search input-level RNG support', () => {
       weaponTypeId: unsupportedTarget.weaponTypeId,
     })
 
-    const delegate = createCandidateSearchEngine(input)
+    const delegate = createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() })
     const predictNormalArtian = vi.fn(delegate.predictNormalArtian.bind(delegate))
     // The unverified weapon type has neither a Normal nor a Gogma pool, so the
     // forced Reset variant of SEARCH_SPEC 6.1.1 is unavailable for it too and
@@ -135,7 +135,7 @@ describe('Candidate Search input-level RNG support', () => {
     expect(supported?.candidates[0]).toEqual(expect.objectContaining({
       estimatedNormalAdvance: 1,
       estimatedSkillAdvance: 1,
-      estimatedGogmaAdvance: 0,
+      estimatedGogmaAdvance: 1,
     }))
   })
 

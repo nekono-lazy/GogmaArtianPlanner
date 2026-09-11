@@ -1,6 +1,6 @@
 import type {
-  AlternativeBonusConditionGroup,
-  BonusCondition,
+  AlternativeBonusRule,
+  PracticalBonusCondition,
   BuildCandidate,
   CalculationContext,
   NormalArtianCounter,
@@ -117,8 +117,8 @@ export interface TargetCandidateSearchResult {
 }
 
 export interface TargetWeaponRelaxationPatch {
-  practicalBonusConditions?: BonusCondition[]
-  practicalAlternativeGroups?: AlternativeBonusConditionGroup[]
+  practicalBonusConditions?: PracticalBonusCondition[]
+  alternativeBonusRules?: AlternativeBonusRule[]
   practicalSkillCondition?: SkillCondition
 }
 
@@ -128,7 +128,6 @@ export interface RelaxationSuggestion {
   kind:
     | 'lower_minimum_rank'
     | 'remove_required_ex'
-    | 'lower_required_count'
     | 'relax_skill_series'
     | 'relax_skill_group'
     | 'skill_match_all_to_any'

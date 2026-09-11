@@ -185,6 +185,7 @@ describe('B8-E1 Planner orchestration benchmark fixtures', () => {
             practical: satisfiesPracticalTarget(
               target,
               weapon.restorationBonuses,
+              weapon.restorationBonusScope,
               weapon.seriesSkillId,
               weapon.groupSkillId,
               master,
@@ -273,7 +274,7 @@ describe('B8-E1 workload A: ordinary baseline', () => {
       fixture.input.buildListEntries.map(
         ({ candidateSnapshot }) => candidateSnapshot.route.kind,
       ),
-    ).toEqual(['existing_gogma_reset_bonuses', 'normal_artian_to_gogma'])
+    ).toEqual(['existing_gogma_reset_bonuses', 'existing_gogma_reset_skills'])
   })
 
   it('produces a Plan with no generated Entry and no orchestration bound warning', async () => {
@@ -316,7 +317,7 @@ describe('B8-E1 workload B: one conflict, early adoption', () => {
     expect(result.generatedBuildListEntries).toHaveLength(1)
     const generated = result.generatedBuildListEntries[0]
     // The yielding Target escapes onto the free Normal / Skill positions.
-    expect(generated.candidateSnapshot.route.kind).toBe('normal_artian_to_gogma')
+    expect(generated.candidateSnapshot.route.kind).toBe('existing_gogma_reset_bonuses')
     expect(generated.targetWeaponId).not.toBe(
       fixture.input.buildListEntries.find(({ id }) => id === fixedId)?.targetWeaponId,
     )
@@ -460,7 +461,7 @@ describe('B8-E1 workload E: combined multi-Target', () => {
   it('runs constrained re-search for both conflicts and reports every stop', async () => {
     const result = await runOrchestration(
       'orchestration_combined_multi_target',
-      TEST_ONLY_GENEROUS_BOUNDS,
+      testOnlyBounds({ maxCandidateTrialsPerConflict: 1 }),
     )
     // Both fixed Entries keep their contested positions, so both yielding
     // Targets exhaust their trial budget instead of adopting.
@@ -524,7 +525,12 @@ describe('B8-E1 benchmark outcome normalization', () => {
     const result = await runOrchestration(workloadId, TEST_ONLY_GENEROUS_BOUNDS)
     const input = createPlannerOrchestrationBenchmarkInput(workloadId).input
     const ownedIds = input.ownedWeapons.map(({ id }) => id as string)
-    const outcome = createPlannerOrchestrationOutcome(result, ownedIds)
+    const withRuntimeId = structuredClone(result)
+    if (!withRuntimeId.plan) throw new Error('Expected Plan')
+    const reserve = withRuntimeId.plan.steps.find(({ operationType }) => operationType === 'reserve_weapon')
+    if (!reserve) throw new Error('Expected reservation')
+    reserve.ownedWeaponId = 'owned.fixture.runtime-generated' as NonNullable<typeof reserve.ownedWeaponId>
+    const outcome = createPlannerOrchestrationOutcome(withRuntimeId, ownedIds)
     const normalized = outcome.steps
       .map(({ ownedWeaponId }) => ownedWeaponId)
       .filter((id): id is string => id !== null)

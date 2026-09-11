@@ -12,6 +12,7 @@ import type {
   TargetWeaponId,
 } from '../models/publicTypes'
 import { hashStableValue, stableStringify } from '../models/hashing'
+import { isBuildResultCalculationContextCompatible } from '../models/domainRules'
 
 function compareStable(left: unknown, right: unknown): number {
   const leftValue = stableStringify(left)
@@ -35,10 +36,11 @@ export function createTargetDefinitionHash(target: TargetWeapon): string {
     practicalBonusConditions: target.practicalBonusConditions
       .map((condition) => ({ ...condition }))
       .sort(compareStable),
-    practicalAlternativeGroups: target.practicalAlternativeGroups
+    alternativeBonusRules: target.alternativeBonusRules
       .map((group) => ({
         id: group.id,
-        requiredCount: group.requiredCount,
+        sourceBonusTypeId: group.sourceBonusTypeId,
+        maxReplacementCount: group.maxReplacementCount,
         options: group.options.map((option) => ({ ...option })).sort(compareStable),
       }))
       .sort(compareStable),
@@ -89,6 +91,8 @@ export function isSameBuildListCandidate(
 ): boolean {
   return (
     entry.targetWeaponId === candidate.targetWeaponId &&
+    isBuildResultCalculationContextCompatible(entry.calculationContext, candidate.calculationContext) &&
+    isBuildResultCalculationContextCompatible(entry.candidateSnapshot.calculationContext, candidate.calculationContext) &&
     createBuildCandidateMeaningFingerprint(entry.candidateSnapshot) ===
       createBuildCandidateMeaningFingerprint(candidate)
   )

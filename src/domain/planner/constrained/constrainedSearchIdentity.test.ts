@@ -240,7 +240,7 @@ describe('constrained search identity: semantic changes', () => {
     [
       'the Target definition',
       (origin: ConstrainedSearchOrigin) => {
-        origin.targetWeapons[0].practicalBonusConditions[0].requiredCount = 1
+        origin.targetWeapons[0].practicalBonusConditions[0].requiredExCount = 1
       },
     ],
     [

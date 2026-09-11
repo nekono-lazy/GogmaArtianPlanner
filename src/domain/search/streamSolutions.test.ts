@@ -184,7 +184,7 @@ describe('Skill stream-local solution set (SEARCH_SPEC 5.5.2)', () => {
   it('selects K(ideal) and K(practical) from the same ordered set', () => {
     const target = targetWeapon()
     const set = buildSkillSolutionSet(target, [
-      skillSolution(0, 'series_skill.fixture.other'),
+      skillSolution(0, 'series_skill.fixture.other', 'group_skill.fixture.a'),
       skillSolution(1, 'series_skill.fixture.a'),
     ])
 
@@ -237,7 +237,7 @@ describe('Bonus stream-local solution set (SEARCH_SPEC 5.5.3)', () => {
     expect(set.map(({ solution, idealMatch, practicalMatch, matchedIdealBonusCount }) => [
       solution.gogmaAdvance, solution.restorationBonusScope, idealMatch, practicalMatch, matchedIdealBonusCount,
     ])).toEqual([
-      [0, 'normal_artian', false, true, 5],
+      [0, 'normal_artian', false, false, 5],
       [1, 'gogma_artian', true, true, 5],
     ])
     expect(set[0].bonusKey).toBe(set[1].bonusKey)
@@ -401,18 +401,19 @@ describe('Decomposed evaluation parity with the Target evaluator (SEARCH_SPEC 5.
       matchMode: 'any',
     }
     const alternativeGroups = structuredClone(base)
-    alternativeGroups.practicalAlternativeGroups = [
+    alternativeGroups.alternativeBonusRules = [
       {
         id: 'alternative.fixture.parity',
-        requiredCount: 2,
+        sourceBonusTypeId: 'bonus_type.fixture.attack',
+        maxReplacementCount: 2,
         options: [
           {
-            bonusTypeId: 'bonus_type.fixture.element',
-            minimumRankId: 'bonus_rank.fixture.middle',
+            alternativeBonusTypeId: 'bonus_type.fixture.element',
+            minimumRankId: 'bonus_rank.fixture.middle', requiredExCount: 0,
           },
           {
-            bonusTypeId: 'bonus_type.fixture.sharpness',
-            minimumRankId: 'bonus_rank.fixture.low',
+            alternativeBonusTypeId: 'bonus_type.fixture.sharpness',
+            minimumRankId: 'bonus_rank.fixture.low', requiredExCount: 0,
           },
         ],
       },

@@ -1,6 +1,7 @@
 import type {
   CalculationContext,
   CandidateCategory,
+  CandidateConditionMatch,
   GroupSkillId,
   IdealDifference,
   MaterialRequirement,
@@ -130,6 +131,7 @@ export interface ConstrainedCandidateSearchInput {
 export interface ConstrainedCandidate {
   targetWeaponId: TargetWeaponId
   category: CandidateCategory
+  conditionMatch?: CandidateConditionMatch
   finalBonuses: RestorationBonusSet
   restorationBonusScope: RestorationBonusScope
   seriesSkillId: SeriesSkillId | null

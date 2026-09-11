@@ -304,8 +304,8 @@ describe('Candidate Search routes', () => {
     // The owned Normal route keeps using its registered five slots, so a
     // conversion-only Candidate in `normal_artian` scope still exists.
     expect(targetResult.candidates).toContainEqual(expect.objectContaining({
-      restorationBonusScope: 'normal_artian',
-      finalBonuses: registeredBonuses,
+      restorationBonusScope: 'gogma_artian',
+      finalBonuses: createRestorationBonusSet(),
       route: expect.objectContaining({
         kind: 'owned_normal_artian_to_gogma',
         sourceOwnedWeaponId: source.id,
@@ -332,23 +332,24 @@ describe('Candidate Search routes', () => {
 
   })
 
-  it('generates a normal-scope Practical conversion route entirely from explicit predictions', async () => {
+  it('generates a Gogma-scope Ideal conversion and Reset route entirely from explicit predictions', async () => {
     const input = createCandidateSearchInput()
     input.routeFilter = 'normal_artian'
     const result = await searchCandidates(
       input,
-      createCandidateSearchEngine(input),
+      createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
       deterministicExecution,
     )
     const candidate = result.targetResults[0].candidates[0]
-    expect(candidate.category).toBe('practical')
-    expect(candidate.restorationBonusScope).toBe('normal_artian')
+    expect(candidate.category).toBe('ideal')
+    expect(candidate.restorationBonusScope).toBe('gogma_artian')
     expect(candidate.finalBonuses).toEqual(input.targetWeapons[0].idealBonuses)
     expect(candidate.route.kind).toBe('normal_artian_to_gogma')
     expect(candidate.route.sourceOwnedWeaponId).toBeNull()
     expect(candidate.route.operations.map(({ type }) => type)).toEqual([
       'create_normal_artian',
       'convert_normal_to_gogma',
+      'reset_bonuses',
     ])
     expect(candidate.route.operations[0]).toEqual(
       expect.objectContaining({ rarity: 8 }),
@@ -360,9 +361,9 @@ describe('Candidate Search routes', () => {
     expect(candidate.searchStateHash).toMatch(/^fnv1a32:/)
     expect(candidate.calculationContext).toEqual(input.calculationContext)
     expect(candidate.searchRunId).toBe(input.searchRunId)
-    expect(candidate.estimatedOperationCount).toBe(2)
+    expect(candidate.estimatedOperationCount).toBe(3)
     expect(candidate.estimatedNormalAdvance).toBe(1)
-    expect(candidate.estimatedGogmaAdvance).toBe(0)
+    expect(candidate.estimatedGogmaAdvance).toBe(1)
     expect(candidate.estimatedSkillAdvance).toBe(1)
     expect(result.targetResults[0].skippedRoutes).toContainEqual(
       expect.objectContaining({
@@ -406,10 +407,11 @@ describe('Candidate Search routes', () => {
     // The conversion Skill must stay below Ideal, otherwise the Skill stream of
     // this Route is finished and Reset Skills is not searched.
     input.targetWeapons[0].idealSkillCondition = {
-      seriesSkillId: 'series_skill.fixture.other',
+      seriesSkillId: 'series_skill.fixture.b',
       groupSkillId: null,
       matchMode: 'all',
     }
+    input.targetWeapons[0].practicalSkillCondition = { seriesSkillId: null, groupSkillId: null, matchMode: 'all' }
     const source = input.ownedWeapons[0]
     input.ownedWeapons = [
       {
@@ -428,6 +430,7 @@ describe('Candidate Search routes', () => {
       // A distinct Reset Skills result, so the stream-local retention keeps the
       // `resetCount = 1` solution instead of folding it into the conversion.
       createCandidateSearchEngine(input, {
+        resetResult: createRestorationBonusSet(),
         resetSkillSeriesSkillId: 'series_skill.fixture.b',
       }),
       deterministicExecution,
@@ -441,6 +444,7 @@ describe('Candidate Search routes', () => {
     expect(candidate?.route.sourceOwnedWeaponId).toBe(source.id)
     expect(candidate?.route.operations.map(({ type }) => type)).toEqual([
       'convert_normal_to_gogma',
+      'reset_bonuses',
       'reset_skills',
     ])
     expect(candidate?.route.operations).not.toEqual(
@@ -452,7 +456,7 @@ describe('Candidate Search routes', () => {
       expect.objectContaining({ sourceOwnedWeaponId: null }),
     )
     expect(candidate?.referencedOwnedWeaponsHash).toMatch(/^fnv1a32:/)
-    expect(candidate?.estimatedOperationCount).toBe(2)
+    expect(candidate?.estimatedOperationCount).toBe(3)
     expect(result.targetResults[0].searchedRoutes).toContain(
       'owned_normal_artian_to_gogma',
     )
@@ -569,12 +573,12 @@ describe('Candidate Search routes', () => {
     input.routeFilter = 'normal_artian'
     const practical = createRestorationBonusSet()
     practical[4] = {
-      bonusTypeId: 'bonus_type.fixture.critical',
+      bonusTypeId: 'bonus_type.fixture.utility',
       bonusRankId: 'bonus_rank.fixture.low',
     }
     const result = await searchCandidates(
       input,
-      createCandidateSearchEngine(input, { normalResult: practical }),
+      createCandidateSearchEngine(input, { resetResult: practical }),
       deterministicExecution,
     )
     const candidate = result.targetResults[0].candidates[0]
@@ -684,14 +688,7 @@ describe('Candidate Search routes', () => {
     )
     const targetResult = result.targetResults[0]
     expect(targetResult.searchedRoutes).toContain('owned_normal_artian_to_gogma')
-    expect(targetResult.candidates).toContainEqual(expect.objectContaining({
-      route: expect.objectContaining({
-        kind: 'owned_normal_artian_to_gogma',
-        operations: expect.arrayContaining([
-          expect.objectContaining({ type: 'convert_normal_to_gogma' }),
-        ]),
-      }),
-    }))
+    expect(targetResult.candidates).toEqual([])
     expect(targetResult.skippedRoutes).toContainEqual(expect.objectContaining({
       route: 'normal_artian_to_gogma',
       reason: 'normal_counter_unconfirmed',
@@ -1014,12 +1011,14 @@ describe('Candidate Search routes', () => {
     ]
     /** The Keep-only chain; every state stays in layout K. */
     const sourceBonuses = layoutK(low, low)
+    // Additional fixture-only tiers keep five distinct outcomes while the unmodified slot stays Ideal.
+    for (const [id, order] of [['bonus_rank.fixture.extra1', 5], ['bonus_rank.fixture.extra2', 6]] as const) input.master.bonusRanks.push({ ...input.master.bonusRanks[0], id, order })
     const keepChainResults = [
       layoutK(low, middle),
       layoutK(low, high),
       layoutK(low, special),
-      layoutK(middle, high),
-      layoutK(middle, special),
+      layoutK(low, 'bonus_rank.fixture.extra1'),
+      layoutK(low, 'bonus_rank.fixture.extra2'),
     ]
     input.ownedWeapons[0].restorationBonuses = sourceBonuses
     const baseSeed = input.rngState.baseSeed.value as string
@@ -1193,7 +1192,7 @@ describe('Candidate Search routes', () => {
     ]
     const result = await searchCandidates(
       input,
-      createCandidateSearchEngine(input),
+      createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
       deterministicExecution,
     )
     expect(result.targetResults[0].candidates[0].requiredMaterials).toEqual([
@@ -1237,7 +1236,7 @@ describe('Candidate Search routes', () => {
     input.ownedWeapons[0].seriesSkillId = 'series_skill.fixture.other'
     const result = await searchCandidates(
       input,
-      createCandidateSearchEngine(input),
+      createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
       deterministicExecution,
     )
     expect(result.targetResults[0].candidates).toHaveLength(1)
@@ -1246,7 +1245,7 @@ describe('Candidate Search routes', () => {
     input.routeFilter = 'normal_artian'
     const normalOnly = await searchCandidates(
       input,
-      createCandidateSearchEngine(input),
+      createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
       deterministicExecution,
     )
     expect(normalOnly.targetResults[0].searchedRoutes).toEqual([
@@ -1272,7 +1271,7 @@ describe('Candidate Search routes', () => {
     input.routeFilter = 'existing_gogma'
     const existingOnly = await searchCandidates(
       input,
-      createCandidateSearchEngine(input),
+      createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
       deterministicExecution,
     )
     expect(
@@ -1312,7 +1311,6 @@ describe('Candidate Search routes', () => {
         id: 'condition.fixture.unsatisfiable',
         bonusTypeId: 'bonus_type.fixture.element',
         minimumRankId: 'bonus_rank.fixture.high',
-        requiredCount: 3,
         requiredExCount: 0,
       },
     ]

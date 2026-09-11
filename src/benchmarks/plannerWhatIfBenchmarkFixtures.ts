@@ -1,3 +1,4 @@
+import { evaluateTargetCandidate } from '../domain/target'
 import { createBuildListEntry } from '../domain/buildList'
 import { V1_NORMAL_ARTIAN_RARITY } from '../domain/models/publicTypes'
 import type { PlanConflict, TargetWeapon } from '../domain/models/publicTypes'
@@ -108,7 +109,7 @@ export function createPlannerWhatIfBenchmarkFixture(
     }
     // Scan a fixed, documented fixture construction window, not a Search bound.
     // Keep the original Practical condition; never relax it to fit a prediction.
-    for (let offset = conversionScenario ? 0 : 1; offset <= 100; offset += 1) {
+    for (let offset = 1; offset <= 100; offset += 1) {
       const isSkill = entry.candidateSnapshot.route.kind === 'existing_gogma_reset_skills'
       const counter = (isSkill ? SKILL_COUNTER : GOGMA_COUNTER) + offset
       const skills = isSkill
@@ -127,6 +128,9 @@ export function createPlannerWhatIfBenchmarkFixture(
           : { seriesSkillId: null, groupSkillId: null, matchMode: 'all' },
       }
       if (!validateTargetIdealImpliesPractical(proposal, base.master).isValid) continue
+      const initial = entry.candidateSnapshot
+      const match = evaluateTargetCandidate(proposal, initial.finalBonuses, 'gogma_artian', initial.seriesSkillId, initial.groupSkillId, base.master, 0.6)
+      if (match.category === null) continue
       idealPredictionCounters.push({ targetWeaponId: target.id,
         stream: isSkill ? 'skill' : 'gogma', counter })
       return proposal
@@ -155,6 +159,7 @@ export function createPlannerWhatIfBenchmarkFixture(
           normalCounterAfter: NORMAL_COUNTER + 1 },
         { type: 'convert_normal_to_gogma' as const, weaponTypeId: target.weaponTypeId,
           skillCounterBefore: SKILL_COUNTER, skillCounterAfter: SKILL_COUNTER + 1 },
+        { type: 'reset_bonuses' as const, sourceOwnedWeaponId: null, gogmaCounterBefore: GOGMA_COUNTER, gogmaCounterAfter: GOGMA_COUNTER + 1 },
       ],
     } : originalRoute
     const source = base.ownedWeapons.find(({ id }) => id === originalRoute.sourceOwnedWeaponId)
@@ -166,14 +171,11 @@ export function createPlannerWhatIfBenchmarkFixture(
       : source
     const candidate = createCandidateFromPrediction(target, {
       route,
-      finalBonuses: conversion ? engine.predictNormalArtian({
-        baseSeed: BASE_SEED, weaponTypeId: target.weaponTypeId, elementId: target.elementId,
-        rarity: V1_NORMAL_ARTIAN_RARITY, normalCounter: NORMAL_COUNTER, master: base.master,
-      }) : isSkill ? source.restorationBonuses : engine.predictGogmaBonus({
+      finalBonuses: isSkill ? source.restorationBonuses : engine.predictGogmaBonus({
         baseSeed: BASE_SEED, weaponTypeId: target.weaponTypeId, elementId: target.elementId,
         gogmaCounter: GOGMA_COUNTER, operation: { type: 'reset_bonuses' }, master: base.master,
       }),
-      restorationBonusScope: conversion ? 'normal_artian' : 'gogma_artian',
+      restorationBonusScope: 'gogma_artian',
       seriesSkillId: skills.seriesSkillId, groupSkillId: skills.groupSkillId,
     }, searchInput, execution)
     if (!candidate) throw new Error(`Production fixture Candidate rejected: ${target.id}`)

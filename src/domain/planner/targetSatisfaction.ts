@@ -17,7 +17,7 @@ export function deriveTargetSatisfaction(
     ownedWeapons.forEach((weapon) => {
       if (weapon.kind !== 'gogma' || weapon.weaponTypeId !== target.weaponTypeId || weapon.elementId !== target.elementId) return
       const isIdeal = satisfiesIdealTarget(target, weapon.restorationBonuses, weapon.restorationBonusScope, weapon.seriesSkillId, weapon.groupSkillId, master)
-      const isPractical = isIdeal || satisfiesPracticalTarget(target, weapon.restorationBonuses, weapon.seriesSkillId, weapon.groupSkillId, master)
+      const isPractical = isIdeal || satisfiesPracticalTarget(target, weapon.restorationBonuses, weapon.restorationBonusScope, weapon.seriesSkillId, weapon.groupSkillId, master)
       if (isPractical) practicalIds.add(weapon.id)
       if (isIdeal) idealIds.add(weapon.id)
     })

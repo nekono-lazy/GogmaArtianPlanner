@@ -87,6 +87,6 @@ export function validateTargetWeaponMasterReferences(
   if (target.practicalSkillCondition.groupSkillId !== null && !master.groupSkills.some(({ id, isEnabled }) => id === target.practicalSkillCondition.groupSkillId && isEnabled)) issues.push('practicalSkillCondition.groupSkillId: 利用できません。')
   target.idealBonuses.forEach((bonus, index) => validateBonus(master, target.weaponTypeId, target.elementId, 'gogma_artian', bonus, `idealBonuses[${index}]`, issues))
   target.practicalBonusConditions.forEach((condition, index) => validateBonus(master, target.weaponTypeId, target.elementId, 'gogma_artian', { bonusTypeId: condition.bonusTypeId, bonusRankId: condition.minimumRankId }, `practicalBonusConditions[${index}]`, issues))
-  target.practicalAlternativeGroups.forEach((group, groupIndex) => group.options.forEach((option, optionIndex) => validateBonus(master, target.weaponTypeId, target.elementId, 'gogma_artian', { bonusTypeId: option.bonusTypeId, bonusRankId: option.minimumRankId }, `practicalAlternativeGroups[${groupIndex}].options[${optionIndex}]`, issues)))
+  target.alternativeBonusRules.forEach((group, groupIndex) => group.options.forEach((option, optionIndex) => validateBonus(master, target.weaponTypeId, target.elementId, 'gogma_artian', { bonusTypeId: option.alternativeBonusTypeId, bonusRankId: option.minimumRankId }, `alternativeBonusRules[${groupIndex}].options[${optionIndex}]`, issues)))
   return issues
 }

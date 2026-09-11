@@ -13,7 +13,9 @@ import { bonusOutcomeKey, bonusSolutionRetentionKey, compareStableKeys } from '.
 export { compareStableKeys } from './semanticKeys'
 import {
   createBonusIdealDifference,
-  evaluatePracticalBonusConditions,
+  evaluateTargetBonusMatch,
+  evaluateTargetSkillMatch,
+  hasTargetCompromise,
   evaluateSkillCondition,
   satisfiesIdealBonuses,
 } from '../target'
@@ -129,11 +131,9 @@ function evaluateSkillSolution(
       solution.seriesSkillId,
       solution.groupSkillId,
     ),
-    practicalMatch: evaluateSkillCondition(
-      target.practicalSkillCondition,
-      solution.seriesSkillId,
-      solution.groupSkillId,
-    ),
+    practicalMatch: hasTargetCompromise(target) && evaluateTargetSkillMatch(
+      target, solution.seriesSkillId, solution.groupSkillId,
+    ) !== null,
     idealCloseness: skillIdealCloseness(
       target,
       solution.seriesSkillId,
@@ -159,12 +159,9 @@ function evaluateBonusSolution(
       solution.restorationBonusScope,
       input.master,
     ),
-    practicalMatch: evaluatePracticalBonusConditions(
-      target.practicalBonusConditions,
-      target.practicalAlternativeGroups,
-      solution.finalBonuses,
-      input.master,
-    ),
+    practicalMatch: hasTargetCompromise(target) && evaluateTargetBonusMatch(
+      target, solution.finalBonuses, solution.restorationBonusScope, input.master,
+    ) !== null,
     matchedIdealBonusCount: createBonusIdealDifference(
       target.idealBonuses,
       solution.finalBonuses,

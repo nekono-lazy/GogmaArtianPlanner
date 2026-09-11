@@ -57,7 +57,7 @@ function createStreamFixtureEngine(
 ): FakeRngEngine {
   const baseSeed = input.rngState.baseSeed.value as string
   const target = input.targetWeapons[0]
-  const resetResult = options.resetResult ?? belowPracticalBonuses()
+  const resetResult = options.resetResult ?? practicalOnlyBonuses()
   const normalResult = options.normalResult ?? createRestorationBonusSet()
   const normalForges = options.normalForges ?? 0
   const fixtures: FakeRngFixtures = {
@@ -107,7 +107,7 @@ function createStreamFixtureEngine(
           : options.distinctSkills
             ? `${OTHER_SERIES_SKILL}.${index}`
             : OTHER_SERIES_SKILL,
-        groupSkillId: null,
+        groupSkillId: 'group_skill.fixture.a',
       },
     })),
     normalCounterAdvances: Array.from({ length: normalForges }, (_, index) => ({
@@ -146,7 +146,7 @@ function gogmaSource(
     ...structuredClone(base),
     id: ownedWeaponId(id),
     seriesSkillId: OTHER_SERIES_SKILL,
-    groupSkillId: null,
+    groupSkillId: 'group_skill.fixture.a',
     restorationBonusScope: 'gogma_artian',
     isProtected: true,
     ...overrides,
@@ -163,7 +163,7 @@ function normalSource(input: CandidateSearchInput, id: string) {
     restorationBonusScope: 'normal_artian' as const,
     restorationBonuses: createRestorationBonusSet(),
     seriesSkillId: null,
-    groupSkillId: null,
+    groupSkillId: 'group_skill.fixture.a',
     status: null,
     isProtected: false,
   } as unknown as CandidateSearchInput['ownedWeapons'][number]
@@ -331,11 +331,11 @@ describe('Skill stream independence', () => {
     expect(candidates.some(({ route }) =>
       route.operations.some(({ type }) => type === 'reset_skills'),
     )).toBe(false)
-    // The conversion result itself is still a candidate.
+    // Bonus Reset produces a candidate without any Reset Skills.
     expect(candidates.some(({ route }) =>
       route.kind === 'normal_artian_to_gogma' &&
       route.operations.map(({ type }) => type).join(',') ===
-        'create_normal_artian,convert_normal_to_gogma',
+        'create_normal_artian,convert_normal_to_gogma,reset_bonuses',
     )).toBe(true)
     // Only the Skill stream stopped; the Bonus stream kept searching.
     expect(gogma.mock.calls.length).toBeGreaterThan(0)
@@ -370,7 +370,7 @@ describe('Skill stream independence', () => {
     )).toBe(false)
     expect(candidates.some(({ route }) =>
       route.kind === 'owned_normal_artian_to_gogma' &&
-      route.operations.map(({ type }) => type).join(',') === 'convert_normal_to_gogma',
+      route.operations.map(({ type }) => type).join(',') === 'convert_normal_to_gogma,reset_bonuses',
     )).toBe(true)
     expect(gogma.mock.calls.length).toBeGreaterThan(0)
   })

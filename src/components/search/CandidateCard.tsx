@@ -89,6 +89,10 @@ export function CandidateCard({
     <Card variant="outlined">
       <CardContent>
         <Stack spacing={2}>
+          {candidate.conditionMatch && <Typography variant="body2">
+            ボーナス判定: {{ ideal: '理想', practical: '実用', alternative: '代替' }[candidate.conditionMatch.bonus]}
+            {' ／ '}スキル判定: {{ ideal: '理想', practical: '実用' }[candidate.conditionMatch.skill]}
+          </Typography>}
           <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
             <Chip
               color={candidate.category === 'ideal' ? 'success' : 'primary'}

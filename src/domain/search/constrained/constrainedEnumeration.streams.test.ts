@@ -55,7 +55,7 @@ describe('Constrained Normal stream bounds', () => {
           maxSkillResetCount: 1,
         }),
       ),
-      createConstrainedEngine(origin),
+      createConstrainedEngine(origin, { resetResultAt: () => origin.targetWeapons[0].idealBonuses }),
     )
     // Offsets 0..2 mean forging 1..3 weapons; forgeCount 4 is outside the bound.
     expect(forgeCounts(result.candidates)).toEqual([1, 2, 3])
@@ -65,7 +65,7 @@ describe('Constrained Normal stream bounds', () => {
     const origin = createConstrainedSearchOrigin()
     const result = await enumerateConstrainedCandidates(
       constrainedInput(origin, constrainedBounds({ maxNormalForgeCount: 1 })),
-      createConstrainedEngine(origin),
+      createConstrainedEngine(origin, { resetResultAt: () => origin.targetWeapons[0].idealBonuses }),
     )
     expect(result.summary.stoppedByBound).toBe(true)
     expect(result.summary.exhausted).toBe(false)
@@ -82,7 +82,7 @@ describe('Constrained Normal stream bounds', () => {
           maxSkillResetCount: 1,
         }),
       ),
-      createConstrainedEngine(origin),
+      createConstrainedEngine(origin, { resetResultAt: () => origin.targetWeapons[0].idealBonuses }),
     )
     const forges = result.candidates.flatMap((candidate) =>
       candidate.route.operations.flatMap((operation) =>
@@ -110,7 +110,7 @@ describe('Constrained Skill stream', () => {
           skillCounter === 7 || skillCounter === 9
             ? 'series_skill.fixture.repeated'
             : `series_skill.fixture.s${skillCounter}`,
-        groupSkillId: null,
+        groupSkillId: 'group_skill.fixture.a',
       }),
     })
     const result = await enumerateConstrainedCandidates(
@@ -158,7 +158,7 @@ describe('Constrained Skill stream', () => {
 
   it('caps a conversion Route at Reset Skills advance 1 through M + 1', async () => {
     const origin = createConstrainedSearchOrigin()
-    const engine = createConstrainedEngine(origin)
+    const engine = createConstrainedEngine(origin, { resetResultAt: () => origin.targetWeapons[0].idealBonuses })
     const result = await enumerateConstrainedCandidates(
       constrainedInput(
         origin,

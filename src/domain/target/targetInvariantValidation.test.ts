@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type {
-  BonusCondition,
+  PracticalBonusCondition,
   SkillCondition,
   TargetWeapon,
 } from '../models/publicTypes'
@@ -44,7 +44,7 @@ function target(overrides: Partial<TargetWeapon> = {}): TargetWeapon {
     ...createValidTargetWeapon(),
     idealBonuses,
     practicalBonusConditions: [],
-    practicalAlternativeGroups: [],
+    alternativeBonusRules: [],
     idealSkillCondition: {
       seriesSkillId: null,
       groupSkillId: null,
@@ -59,12 +59,11 @@ function target(overrides: Partial<TargetWeapon> = {}): TargetWeapon {
   }
 }
 
-function condition(overrides: Partial<BonusCondition> = {}): BonusCondition {
+function condition(overrides: Partial<PracticalBonusCondition> = {}): PracticalBonusCondition {
   return {
     id: 'condition.fixture',
     bonusTypeId: attack,
     minimumRankId: middle,
-    requiredCount: 2,
     requiredExCount: 0,
     ...overrides,
   }
@@ -81,182 +80,6 @@ function skill(
 function validate(value: TargetWeapon) {
   return validateTargetIdealImpliesPractical(value, targetEvaluationMaster)
 }
-
-describe('Ideal implies Practical containment: Bonus side', () => {
-  it('accepts an Ideal set that satisfies a lower practical bonus condition', () => {
-    const result = validate(
-      target({
-        practicalBonusConditions: [
-          condition({ minimumRankId: high, requiredCount: 2 }),
-        ],
-      }),
-    )
-    expect(result.isValid).toBe(true)
-    expect(result.issues).toEqual([])
-  })
-
-  it('rejects an Ideal set that does not satisfy a practical bonus condition', () => {
-    const result = validate(
-      target({
-        practicalBonusConditions: [
-          condition({
-            bonusTypeId: element,
-            minimumRankId: high,
-            requiredCount: 3,
-          }),
-        ],
-      }),
-    )
-    expect(result.isValid).toBe(false)
-    expect(result.issues).toEqual([
-      {
-        path: 'practicalBonusConditions[0]',
-        code: 'invalid_structure',
-        message: expect.stringContaining('Bonus side'),
-      },
-    ])
-  })
-
-  it('uses the Master rank order rather than the rank ID when comparing', () => {
-    const satisfied = validate(
-      target({
-        practicalBonusConditions: [
-          condition({
-            bonusTypeId: sharpness,
-            minimumRankId: low,
-            requiredCount: 1,
-          }),
-        ],
-      }),
-    )
-    const unsatisfied = validate(
-      target({
-        practicalBonusConditions: [
-          condition({
-            bonusTypeId: sharpness,
-            minimumRankId: high,
-            requiredCount: 1,
-          }),
-        ],
-      }),
-    )
-    expect(satisfied.isValid).toBe(true)
-    expect(unsatisfied.isValid).toBe(false)
-  })
-
-  it('accepts and rejects requiredExCount using the Master isEx flag', () => {
-    const satisfied = validate(
-      target({
-        practicalBonusConditions: [
-          condition({ requiredCount: 2, requiredExCount: 2 }),
-        ],
-      }),
-    )
-    const unsatisfied = validate(
-      target({
-        practicalBonusConditions: [
-          condition({
-            bonusTypeId: element,
-            minimumRankId: middle,
-            requiredCount: 1,
-            requiredExCount: 1,
-          }),
-        ],
-      }),
-    )
-    expect(satisfied.isValid).toBe(true)
-    expect(unsatisfied.isValid).toBe(false)
-  })
-
-  it('accepts an Ideal set that satisfies an alternative group', () => {
-    const result = validate(
-      target({
-        practicalAlternativeGroups: [
-          {
-            id: 'alternative.fixture',
-            requiredCount: 3,
-            options: [
-              { bonusTypeId: attack, minimumRankId: high },
-              { bonusTypeId: element, minimumRankId: middle },
-            ],
-          },
-        ],
-      }),
-    )
-    expect(result.isValid).toBe(true)
-  })
-
-  it('rejects an Ideal set that does not satisfy an alternative group', () => {
-    const result = validate(
-      target({
-        practicalAlternativeGroups: [
-          {
-            id: 'alternative.fixture',
-            requiredCount: 2,
-            options: [{ bonusTypeId: sharpness, minimumRankId: high }],
-          },
-        ],
-      }),
-    )
-    expect(result.isValid).toBe(false)
-    expect(result.issues).toEqual([
-      {
-        path: 'practicalAlternativeGroups[0]',
-        code: 'invalid_structure',
-        message: expect.stringContaining('Bonus side'),
-      },
-    ])
-  })
-
-  it('requires every plain condition AND every alternative group', () => {
-    const result = validate(
-      target({
-        practicalBonusConditions: [
-          condition({ minimumRankId: high, requiredCount: 2 }),
-          condition({
-            bonusTypeId: sharpness,
-            minimumRankId: high,
-            requiredCount: 1,
-          }),
-        ],
-        practicalAlternativeGroups: [
-          {
-            id: 'alternative.satisfied',
-            requiredCount: 1,
-            options: [{ bonusTypeId: element, minimumRankId: high }],
-          },
-          {
-            id: 'alternative.unsatisfied',
-            requiredCount: 5,
-            options: [{ bonusTypeId: element, minimumRankId: high }],
-          },
-        ],
-      }),
-    )
-    expect(result.issues.map((issue) => issue.path)).toEqual([
-      'practicalBonusConditions[1]',
-      'practicalAlternativeGroups[1]',
-    ])
-  })
-
-  it('reports an unresolvable Bonus Rank reference instead of throwing', () => {
-    const result = validate(
-      target({
-        practicalBonusConditions: [
-          condition({ minimumRankId: 'bonus_rank.fixture.missing' }),
-        ],
-      }),
-    )
-    expect(result.isValid).toBe(false)
-    expect(result.issues).toEqual([
-      {
-        path: 'idealBonuses',
-        code: 'invalid_reference',
-        message: expect.stringContaining('bonus_rank.fixture.missing'),
-      },
-    ])
-  })
-})
 
 interface SkillImplicationCase {
   name: string
@@ -449,7 +272,7 @@ describe('Ideal implies Practical containment: whole Target', () => {
     const result = validate(
       target({
         practicalBonusConditions: [
-          condition({ bonusTypeId: element, requiredCount: 3 }),
+          condition({ bonusTypeId: element, minimumRankId: special }),
         ],
         idealSkillCondition: skill(seriesA, groupB, 'any'),
         practicalSkillCondition: skill(seriesA, groupB, 'all'),

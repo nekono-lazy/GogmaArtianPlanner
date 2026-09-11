@@ -102,7 +102,11 @@ export interface KnownValue<T> {
 // whole.
 // Version 2, 3 and 4 BuildCandidate / BuildListEntry results remain explicitly
 // compatible, because Search and snapshot semantics are unchanged.
-export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 5
+// Version 6 changes Target compromise semantics, Candidate acceptance and Search
+// termination. All version 1..5 Candidates, Build List snapshots and Plans are
+// incompatible. The historical 2..5 build-result exception does not extend to 6.
+// Dexie schema 2 migrates Targets separately; RNG semantics remain unchanged.
+export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 6
 
 export interface CalculationContext {
   gameVersion: string

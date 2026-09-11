@@ -75,7 +75,7 @@ export function createSource(
     restorationBonuses: createRestorationBonusSet(),
     restorationBonusScope: 'gogma_artian',
     seriesSkillId: null,
-    groupSkillId: null,
+    groupSkillId: 'group_skill.fixture.a',
     status: 'material',
     isProtected: true,
     relatedTargetWeaponIds: [],

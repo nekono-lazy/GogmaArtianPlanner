@@ -9,10 +9,9 @@ import type {
   DomainValidationIssue,
   DomainValidationResult,
 } from '../models/validation'
-import {
-  evaluateAlternativeBonusConditionGroup,
-  evaluateBonusCondition,
-} from './bonusConditionEvaluator'
+import { evaluateBonusCondition } from './bonusConditionEvaluator'
+import { validateTargetWeapon } from '../models/validation'
+import { hasPracticalSkillCondition } from './targetEvaluator'
 import { evaluateSkillCondition } from './skillConditionEvaluator'
 import type { TargetEvaluationMasterSubset } from './targetEvaluationTypes'
 
@@ -24,7 +23,7 @@ function referencedBonusRankIds(target: TargetWeapon): BonusRankId[] {
     ...target.practicalBonusConditions.map(
       (condition) => condition.minimumRankId,
     ),
-    ...target.practicalAlternativeGroups.flatMap((group) =>
+    ...target.alternativeBonusRules.flatMap((group) =>
       group.options.map((option) => option.minimumRankId),
     ),
   ]
@@ -34,7 +33,7 @@ function unresolvableBonusRankIds(
   target: TargetWeapon,
   master: TargetEvaluationMasterSubset,
 ): BonusRankId[] {
-  const known = new Set(master.bonusRanks.map((rank) => rank.id))
+  const known = new Set(master.bonusRanks.filter((rank) => rank.isEnabled).map((rank) => rank.id))
   return [
     ...new Set(referencedBonusRankIds(target).filter((id) => !known.has(id))),
   ]
@@ -97,6 +96,8 @@ export function validateTargetIdealImpliesPractical(
   target: TargetWeapon,
   master: TargetEvaluationMasterSubset,
 ): DomainValidationResult {
+  const structural = validateTargetWeapon(target)
+  if (!structural.isValid) return structural
   const issues: DomainValidationIssue[] = []
 
   const unresolvable = unresolvableBonusRankIds(target, master)
@@ -116,27 +117,11 @@ export function validateTargetIdealImpliesPractical(
           'Ideal ⇒ Practical containment violated on the Bonus side: idealBonuses does not satisfy this practical bonus condition.',
       })
     })
-    target.practicalAlternativeGroups.forEach((group, index) => {
-      if (
-        evaluateAlternativeBonusConditionGroup(
-          group,
-          target.idealBonuses,
-          master,
-        )
-      ) {
-        return
-      }
-      issues.push({
-        path: `practicalAlternativeGroups[${index}]`,
-        code: 'invalid_structure',
-        message:
-          'Ideal ⇒ Practical containment violated on the Bonus side: idealBonuses does not satisfy this practical alternative group.',
-      })
-    })
+
   }
 
   if (
-    !skillConditionImplies(
+    hasPracticalSkillCondition(target) && !skillConditionImplies(
       target.idealSkillCondition,
       target.practicalSkillCondition,
     )

@@ -79,11 +79,10 @@ function scenarioTarget(
         id: `condition.${id}`,
         bonusTypeId: family,
         minimumRankId: HIGH,
-        requiredCount: 5,
         requiredExCount: 0,
       },
     ],
-    practicalAlternativeGroups: [],
+    alternativeBonusRules: [],
     idealSkillCondition: {
       seriesSkillId: 'series_skill.fixture.a',
       groupSkillId: null,

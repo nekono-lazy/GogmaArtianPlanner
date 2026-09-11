@@ -48,7 +48,10 @@ Use this hierarchy:
 
 1. `docs/REQUIREMENTS.md`
 2. The task-specific detailed specification
-3. Existing implementation and tests
+3. Other formal documentation
+4. Implementation
+5. Tests
+6. Chat / handoff
 
 The current specification set is frozen as the initial-release v1 baseline.
 
@@ -193,10 +196,10 @@ The Planner physical-action sharing correction then changed ProductionPlan calcu
 semantics at version 3, the shared-Counter Route prefix fast-forward correction changed
 them again at version 4, and refusing a bound-truncated partial search result as an
 executable ProductionPlan changed ProductionPlan artifact validity at version 5, so
-current `CalculationContext.appSchemaVersion` is **5**, defined
+Target compromise semantics now make current `CalculationContext.appSchemaVersion` **6**, defined
 only by `CURRENT_CALCULATION_APP_SCHEMA_VERSION` in `src/domain/models/common.ts`.
 Search, BuildList, Planner, and benchmark runtime creators share this authority.
-This is independent of Dexie `DATABASE_SCHEMA_VERSION = 1` and
+Dexie separately moves to `DATABASE_SCHEMA_VERSION = 2` for fail-closed Target migration; this is independent of
 `AppSettings.schemaVersion = 1`; gameVersion, Master Data version,
 `PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`, and `supportsSeedSearch = false`
 remain unchanged. Version 1 BuildCandidate, BuildListEntry, and ProductionPlan
@@ -207,7 +210,9 @@ Candidate categories and snapshots; obtain current Candidates by searching again
 Do not delete historical results or add a migration or Export/Import semantic
 validation change as a substitute for CalculationContext compatibility.
 
-Version 2, version 3, and version 4 BuildCandidate and BuildListEntry calculations are
+All version 1..5 Candidates, BuildListEntries and ProductionPlans are incompatible with version 6. Preserve their contents and fail closed with calculation_context_changed.
+
+Historical version-5 contract (does not apply to version 6): Version 2, version 3, and version 4 BuildCandidate and BuildListEntry calculations are
 explicitly compatible with version 5 when gameVersion, masterDataVersion, and
 rngEngineVersion are equal, because Search and Build List snapshot semantics did not
 change. Version 2, version 3, and version 4 ProductionPlans are not compatible with
@@ -681,50 +686,17 @@ Default:
 3
 ```
 
-A Target separately defines:
+A Target's ideal five-slot multiset is the only Bonus authority.
+- Practical preserves types and counts; only explicitly configured types relax ranks (minimum + EX minimum).
+- Alternative uses exactly one source Rule and one Option, replacing 1..max slots and keeping every other Ideal slot unchanged.
+- Practical Bonus and Alternative Bonus never combine. Skill is an independent axis.
+- Unset Practical Skill (both IDs null) allows only Ideal Skills; no compromise means Ideal-only Search with no Practical horizon.
+- All Bonus matches require gogma_artian scope. Normal creation/conversion routes remain available through Reset.
+- DATA_MODEL 8 and docs/TARGET_COMPROMISE_SEMANTICS.md define the new types and validation.
+- Target saving and Search validate structure, Master references and Ideal containment before evaluation.
+- Current Ideal stream shortcuts, Cross composition and independent RNG streams remain mandatory.
 
-- Ideal five-bonus configuration
-- Practical bonus conditions
-- Practical alternative groups
-- Ideal skill condition
-- Practical skill condition
 
-Ideal is the strict upper bound of Practical, never a parallel alternative:
-
-```text
-Ideal    = the build the user actually wants
-Practical = below Ideal but still usable as a compromise
-```
-
-So the Ideal set is contained in the Practical set:
-
-```text
-{ results satisfying Ideal } ⊆ { results satisfying the Practical conditions }
-```
-
-`idealBonuses` must satisfy every `practicalBonusConditions` entry and every
-`practicalAlternativeGroups` entry. Any result satisfying `idealSkillCondition`
-must also satisfy `practicalSkillCondition` under that condition's
-`seriesSkillId` / `groupSkillId` / `matchMode` semantics, with `null` meaning
-unconstrained. A Target definition that breaks this containment is invalid.
-
-`docs/DATA_MODEL.md` 8.1 holds the formal invariant. `validateTargetIdealImpliesPractical()`
-implements it. It needs Master Data for Bonus Rank `order`, so it is a
-Master-aware validator separate from `validateTargetWeapon()`, and it runs both
-when a Target is saved and when Candidate Search selects its Targets. A stored
-Target that violates the containment is excluded from Candidate Search with a
-warning; it is never auto-repaired, auto-deleted, or silently relaxed. Never make
-Search or Planner silently repair a Target that violates it.
-
-This containment is what lets Candidate Search stop exploring a stream whose
-current state already satisfies the Ideal condition. That optimization is only
-sound once the validation is in force, so the validation always lands first.
-The validation is now in force, and both halves of the early exit have landed
-on top of it: the Skill stream stops when the current Series/Group Skills
-already satisfy `idealSkillCondition`, and the Bonus stream stops when the
-current five slots have `gogma_artian` scope and match `idealBonuses` as an
-unordered multiset. Normal-scope exact labels do not stop Bonus exploration. Each stream stops
-independently; the other one keeps searching.
 
 Do not introduce "any one target in this group completes the group" behavior in v1.
 
@@ -897,9 +869,11 @@ Planner
 
 Candidate Search must not pre-read second and third copies of the same Ideal,
 distant alternative Ideals, or the Bonus-alternative by Skill-alternative product
-merely because the Planner might later hit a conflict. The initial search ends
-once one canonical Ideal is settled and every Practical within its operation
-count has been evaluated.
+merely because the Planner might later hit a conflict. With compromise conditions,
+the initial search ends once one canonical Ideal is settled and every Practical
+within its operation count has been evaluated (inclusive Practical horizon).
+Without any Practical Bonus, Alternative Rule, or Practical Skill condition,
+Search is Ideal-only: settle canonical Ideal ties without a Practical horizon.
 
 Only when Counter conflicts actually occur across Targets does the Planner
 re-search the conflicting Targets, look up the next Practical/Ideal for the
@@ -949,8 +923,7 @@ their deterministic ordering, the composition rule, the termination condition,
 and the meaning of `maxGogmaAdvance`, `maxSkillAdvance`, and
 `maxCandidatesPerTarget`.
 
-Terminate the initial search once one canonical Ideal is settled and every
-Practical within its operation count has been evaluated. The canonical Ideal is
+With compromise configured, terminate after canonical Ideal and its inclusive Practical horizon. Without compromise, compose Ideal only and settle canonical ties without a Practical horizon. The canonical Ideal is
 defined by the documented total order over Ideal candidates. Never let it depend
 on incidental traversal order — which RouteKind ran first, or which Promise
 settled first. Its final tie-break must be a stable semantic key over the
@@ -1049,15 +1022,21 @@ priorities; scope is the final stable semantic tie-break after multiset and
 operation types. This is initial-Search retention, not permanent dominance, and
 does not change B2 family-layout frontier dedup or lastResetDepth representatives.
 
-Practical conditions remain scope-inclusive. IdealDifference and Similarity
-still use matchedBonusCount and Skill matches only, so normal scope with 5/5
-Ideal labels and matching Skills may be Practical with similarityScore 1.
-B5-F1 tests cover normal-scope conversion D=2 remaining Practical, exploration
+Under the historical B5-F1 contract, normal scope with 5/5 Ideal labels and
+matching Skills could be Practical with similarityScore 1. That acceptance rule
+is obsolete. Current Ideal / Practical / Alternative Bonus matches all require
+gogma_artian scope; normal_artian scope is never accepted as a Candidate,
+regardless of matching labels, Skills, or similarity score.
+Current tests reject normal-scope conversion D=2 and cover exploration
 continuing to a Gogma-scope canonical Ideal D=3 after Reset, and an existing
 normal-scope Gogma continuing Bonus exploration. The Gogma-scope current Ideal
-shortcut still makes zero amendment predictions. B5's scope-safe benchmark
-workloads and measured values are unchanged; benchmark input calculation metadata
-now uses the shared schema version 2. B5-F1 is independent of B6.
+shortcut still makes zero amendment predictions. B5's Browser Worker measurements
+and schema version 2 metadata describe the historical workload only. The Target
+compromise revision changed benchmark fixture conditions and workload, so current
+workloads must not be compared directly with those historical measured values.
+Current benchmark calculation metadata uses shared schema version 6; Vitest
+validation is not a replacement for a new Browser Worker performance measurement.
+Historically, B5-F1 was independent of B6.
 Planner constrained re-search is specified by B8-A and unimplemented until
 B8-B1.
 
@@ -1188,10 +1167,11 @@ a pre-field Candidate carrying no record is legal and simply displays nothing,
 with no extra legacy note of its own.
 
 These are presentation and reporting concerns only. They change no Search
-semantics, Planner semantics, RNG algorithm, or Dexie table shape, so
+semantics, Planner semantics, RNG algorithm, or Dexie table shape. At the time,
 `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 5`, `DATABASE_SCHEMA_VERSION = 1`,
 `AppSettings.schemaVersion = 1`, `PRODUCTION_RNG_ENGINE_VERSION =
-production-rng:c5-e2`, and `supportsSeedSearch = false` are all unchanged.
+production-rng:c5-e2`, and `supportsSeedSearch = false` were all unchanged.
+The later Target compromise revision uses calculation version 6 and DB version 2.
 
 ### Normal Artian Route
 
@@ -1959,7 +1939,7 @@ or `ProductionPlan` persisted semantics: the same `PlannerInput` still produces 
 same Plan contents. It is nevertheless a Calculation schema boundary, because a
 version 4 runtime could persist a bound-truncated partial result as an ordinary
 Draft and a persisted Plan records no termination, so
-`CURRENT_CALCULATION_APP_SCHEMA_VERSION` moves to 5 and every version 4
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION` moved to 5 at that boundary and every version 4
 ProductionPlan becomes `calculation_context_changed`.
 
 The two fail-closed defences are separate and both stay in force: version 5 closes
@@ -1967,9 +1947,10 @@ old persisted artifacts, and `termination.status === 'incomplete'` closes newly
 calculated results. Raising the schema version never removes the Persistence
 termination check. `PlannerSearchTermination` is runtime result metadata and is never
 persisted in `ProductionPlan`, `PlanStep`, `BuildListEntry`, or the DB schema.
-Calculation semantics and artifact validity are separate from the Dexie schema, so
+Calculation semantics and artifact validity are separate from the Dexie schema. At that boundary,
 `DATABASE_SCHEMA_VERSION = 1`, `AppSettings.schemaVersion = 1`, and
-`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2` are unchanged.
+`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2` were unchanged.
+The later Target compromise revision uses calculation version 6 and DB version 2.
 
 Do not replace Beam Search with a simple Candidate sort.
 

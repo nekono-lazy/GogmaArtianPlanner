@@ -2,7 +2,6 @@ import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../domain/models/publicT
 import { describe, expect, it } from 'vitest'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import type {
-  RestorationBonusSet,
   WeaponTypeId,
 } from '../domain/models/publicTypes'
 import {
@@ -71,9 +70,9 @@ function createProductionSearchInput(
   const target = input.targetWeapons[0]
   target.weaponTypeId = weaponTypeId
   target.elementId = vector.elementId
-  target.idealBonuses = vector.bonuses.map((bonus) => ({ ...bonus })) as RestorationBonusSet
+  target.idealBonuses = new ProductionRngEngine().predictGogmaBonus({ baseSeed: String(vector.baseSeed), weaponTypeId, elementId: vector.elementId, gogmaCounter: input.rngState.gogmaCounter.value!, operation: { type: 'reset_bonuses' }, master: input.master })
   target.practicalBonusConditions = []
-  target.practicalAlternativeGroups = []
+  target.alternativeBonusRules = []
   const skills = createProductionSearchRngEngine().predictSkills({
     baseSeed: String(vector.baseSeed),
     weaponTypeId,
@@ -134,9 +133,9 @@ describe('Production Candidate Search Worker composition', () => {
       .toContain('normal_artian_to_gogma')
     expect(result.targetResults[0].candidates).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        category: 'practical',
-        restorationBonusScope: 'normal_artian',
-        estimatedOperationCount: 2,
+        category: 'ideal',
+        restorationBonusScope: 'gogma_artian',
+        estimatedOperationCount: 3,
         finalBonuses: input.targetWeapons[0].idealBonuses,
         route: expect.objectContaining({ kind: 'normal_artian_to_gogma' }),
       }),

@@ -36,6 +36,7 @@ const RESET_SERIES_SKILL = 'series_skill.fixture.b'
  * conversion result (SEARCH_SPEC 5.6.1).
  */
 function requireResetSkills(input: CandidateSearchInput): void {
+  input.targetWeapons[0].practicalSkillCondition = { seriesSkillId: null, groupSkillId: null, matchMode: 'all' }
   input.targetWeapons[0].idealSkillCondition = {
     seriesSkillId: RESET_SERIES_SKILL,
     groupSkillId: null,
@@ -51,7 +52,8 @@ function requireResetSkills(input: CandidateSearchInput): void {
 function createExistingGogmaInput(): CandidateSearchInput {
   const input = createCandidateSearchInput()
   input.routeFilter = 'existing_gogma'
-  requireResetSkills(input)
+  input.targetWeapons[0].idealSkillCondition = { seriesSkillId: 'series_skill.fixture.a', groupSkillId: 'group_skill.fixture.ideal', matchMode: 'all' }
+  input.targetWeapons[0].practicalSkillCondition = { seriesSkillId: 'series_skill.fixture.a', groupSkillId: null, matchMode: 'all' }
   input.ownedWeapons = [
     {
       ...(input.ownedWeapons[0] as OwnedGogmaArtianWeapon),
@@ -83,17 +85,18 @@ function findByOperationTypes(
 }
 
 describe('Candidate conversion Skill trace', () => {
-  it('records the initial Skills of a Route that ends at the conversion', async () => {
+  it('records the initial Skills after conversion and Bonus Reset', async () => {
     const input = createCandidateSearchInput()
     input.routeFilter = 'normal_artian'
     const result = await searchCandidates(
       input,
-      createCandidateSearchEngine(input),
+      createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
       deterministicExecution,
     )
     const candidate = findByOperationTypes(result.targetResults[0].candidates, [
       'create_normal_artian',
       'convert_normal_to_gogma',
+      'reset_bonuses',
     ])
 
     expect(candidate.conversionSkillTrace).toEqual({
@@ -115,6 +118,7 @@ describe('Candidate conversion Skill trace', () => {
     const result = await searchCandidates(
       input,
       createCandidateSearchEngine(input, {
+        resetResult: createRestorationBonusSet(),
         resetSkillSeriesSkillId: RESET_SERIES_SKILL,
       }),
       deterministicExecution,
@@ -122,6 +126,7 @@ describe('Candidate conversion Skill trace', () => {
     const candidate = findByOperationTypes(result.targetResults[0].candidates, [
       'create_normal_artian',
       'convert_normal_to_gogma',
+      'reset_bonuses',
       'reset_skills',
     ])
 
@@ -132,7 +137,7 @@ describe('Candidate conversion Skill trace', () => {
     })
     expect(candidate.skillAmendmentTrace).toEqual([
       {
-        operationIndex: 2,
+        operationIndex: 3,
         operationType: 'reset_skills',
         seriesSkillId: RESET_SERIES_SKILL,
         groupSkillId: null,
@@ -225,6 +230,7 @@ describe('Candidate conversion Skill trace', () => {
     const result = await searchCandidates(
       input,
       createCandidateSearchEngine(input, {
+        resetResult: createRestorationBonusSet(),
         resetSkillSeriesSkillId: RESET_SERIES_SKILL,
       }),
       deterministicExecution,
@@ -276,7 +282,8 @@ describe('Candidate conversion Skill trace', () => {
     input.routeFilter = 'normal_artian'
     requireResetSkills(input)
     const engine = createCandidateSearchEngine(input, {
-      resetSkillSeriesSkillId: RESET_SERIES_SKILL,
+      resetResult: createRestorationBonusSet(),
+        resetSkillSeriesSkillId: RESET_SERIES_SKILL,
     })
     const predictSkills = vi.spyOn(engine, 'predictSkills')
     const result = await searchCandidates(input, engine, deterministicExecution)
@@ -298,12 +305,13 @@ describe('Candidate conversion Skill trace', () => {
     input.routeFilter = 'normal_artian'
     const result = await searchCandidates(
       input,
-      createCandidateSearchEngine(input),
+      createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
       deterministicExecution,
     )
     const candidate = findByOperationTypes(result.targetResults[0].candidates, [
       'create_normal_artian',
       'convert_normal_to_gogma',
+      'reset_bonuses',
     ])
     const withoutRecord = structuredClone(candidate)
     delete withoutRecord.conversionSkillTrace
@@ -332,13 +340,14 @@ describe('Candidate conversion Skill trace', () => {
     input.routeFilter = 'normal_artian'
     const result = await searchCandidates(
       input,
-      createCandidateSearchEngine(input),
+      createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
       deterministicExecution,
     )
     const legacy = structuredClone(
       findByOperationTypes(result.targetResults[0].candidates, [
         'create_normal_artian',
         'convert_normal_to_gogma',
+        'reset_bonuses',
       ]),
     )
     delete legacy.conversionSkillTrace
@@ -352,13 +361,14 @@ describe('Candidate conversion Skill trace', () => {
     input.routeFilter = 'normal_artian'
     const result = await searchCandidates(
       input,
-      createCandidateSearchEngine(input),
+      createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
       deterministicExecution,
     )
     const broken = structuredClone(
       findByOperationTypes(result.targetResults[0].candidates, [
         'create_normal_artian',
         'convert_normal_to_gogma',
+        'reset_bonuses',
       ]),
     )
     broken.conversionSkillTrace = {

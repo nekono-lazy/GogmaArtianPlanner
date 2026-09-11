@@ -37,7 +37,7 @@ function fixture(ideal = true, bound = 100) {
   })
   vi.spyOn(engine, 'predictSkills').mockImplementation(({ skillCounter }) => {
     calls.push('skill:' + skillCounter)
-    return { seriesSkillId: ideal && skillCounter === 8 ? 'series_skill.fixture.a' : 'series.other.' + skillCounter, groupSkillId: null }
+    return { seriesSkillId: ideal && skillCounter === 8 ? 'series_skill.fixture.a' : 'series.other.' + skillCounter, groupSkillId: 'group_skill.fixture.a' }
   })
   vi.spyOn(engine, 'predictGogmaBonus').mockImplementation(({ gogmaCounter, operation }) => {
     calls.push(operation.type + ':' + gogmaCounter + (operation.type === 'keep_bonuses' ? ':' + gogmaKeepFamilyLayoutKey(operation.currentBonuses) : ''))
@@ -64,11 +64,7 @@ describe('B4 actual Target-wide termination', () => {
     vi.mocked(engine.predictSkills).mockReturnValue({ seriesSkillId: 'series_skill.fixture.a', groupSkillId: null })
     const result = await searchCandidates(input, engine, options)
     const candidates = result.targetResults[0].candidates
-    expect(candidates.find((c) => c.estimatedOperationCount === 2)).toMatchObject({
-      category: 'practical', restorationBonusScope: 'normal_artian',
-      finalBonuses: idealBonuses, similarityScore: 1, isSimilarToIdeal: true,
-      idealDifference: { matchedBonusCount: 5 },
-    })
+    expect(candidates.find((c) => c.estimatedOperationCount === 2)).toBeUndefined()
     const ideals = candidates.filter((c) => c.category === 'ideal')
     expect(ideals).toHaveLength(1)
     expect(ideals[0]).toMatchObject({

@@ -64,8 +64,10 @@ export interface TargetWeapon {
   priority: 1 | 2 | 3 | 4 | 5
   isEnabled: boolean
   idealBonuses: RestorationBonusSet
-  practicalBonusConditions: BonusCondition[]
-  practicalAlternativeGroups: AlternativeBonusConditionGroup[]
+  practicalBonusConditions: PracticalBonusCondition[]
+  alternativeBonusRules: AlternativeBonusRule[]
+  /** Legacy compromise conditions were cleared; cleared after explicit save. */
+  compromiseNeedsReview?: boolean
   idealSkillCondition: SkillCondition
   practicalSkillCondition: SkillCondition
   memo: string | null
@@ -73,23 +75,24 @@ export interface TargetWeapon {
   updatedAt: ISODateTimeString
 }
 
-export interface BonusCondition {
+export interface PracticalBonusCondition {
   id: string
   bonusTypeId: BonusTypeId
   minimumRankId: BonusRankId
-  requiredCount: number
   requiredExCount: number
 }
 
-export interface AlternativeBonusConditionGroup {
+export interface AlternativeBonusRule {
   id: string
-  requiredCount: number
+  sourceBonusTypeId: BonusTypeId
+  maxReplacementCount: number
   options: AlternativeBonusOption[]
 }
 
 export interface AlternativeBonusOption {
-  bonusTypeId: BonusTypeId
+  alternativeBonusTypeId: BonusTypeId
   minimumRankId: BonusRankId
+  requiredExCount: number
 }
 
 export interface SkillCondition {
@@ -163,10 +166,17 @@ export interface CandidateConversionSkillStep extends SkillAmendmentResult {
   operationType: 'convert_normal_to_gogma'
 }
 
+/** Evaluation recorded at search time, derived from Target and result; not identity. */
+export interface CandidateConditionMatch {
+  bonus: 'ideal' | 'practical' | 'alternative'
+  skill: 'ideal' | 'practical'
+}
+
 export interface BuildCandidate {
   id: BuildCandidateId
   targetWeaponId: TargetWeaponId
   category: CandidateCategory
+  conditionMatch?: CandidateConditionMatch
   finalBonuses: RestorationBonusSet
   restorationBonusScope: RestorationBonusScope
   seriesSkillId: SeriesSkillId | null

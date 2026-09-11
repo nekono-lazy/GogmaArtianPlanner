@@ -53,7 +53,7 @@ describe('BuildListService', () => {
     memory.entries.push(original)
 
     const refreshed = await new BuildListService(memory.repositories).refreshStaleness(current)
-    expect(current.appSchemaVersion).toBe(5)
+    expect(current.appSchemaVersion).toBe(6)
     expect(refreshed.entries[0].isStale).toBe(true)
     expect(refreshed.entries[0].staleReasons).toEqual(['calculation_context_changed'])
     expect(refreshed.entries[0].candidateSnapshot).toEqual(snapshot)
@@ -63,8 +63,8 @@ describe('BuildListService', () => {
     expect(memory.repositories.deleteEntry).not.toHaveBeenCalled()
   })
 
-  it.each([2, 3, 4])(
-    'keeps schema %i BuildListEntries current under the Planner-only changes',
+  it.each([2, 3, 4, 5])(
+    'marks schema %i BuildListEntries stale under Target semantics version 6',
     async (appSchemaVersion) => {
       const memory = memoryRepositories()
       const current = createBuildListCalculationContext(createValidMasterDataFixture())
@@ -83,9 +83,10 @@ describe('BuildListService', () => {
       const refreshed = await new BuildListService(memory.repositories)
         .refreshStaleness(current)
 
-      expect(refreshed.entries[0].isStale).toBe(false)
-      expect(refreshed.entries[0].staleReasons).toEqual([])
-      expect(memory.repositories.putEntry).not.toHaveBeenCalled()
+      expect(refreshed.entries[0].isStale).toBe(true)
+      expect(refreshed.entries[0].staleReasons).toEqual(['calculation_context_changed'])
+      expect(refreshed.entries[0].candidateSnapshot).toEqual(original.candidateSnapshot)
+      expect(memory.repositories.putEntry).toHaveBeenCalledOnce()
     },
   )
 
@@ -100,6 +101,23 @@ describe('BuildListService', () => {
     expect(first.added).toBe(true)
     expect(second.added).toBe(false)
     expect(memory.entries).toHaveLength(1)
+  })
+
+  it.each([1, 2, 3, 4, 5])('adds a current Candidate beside an unchanged schema %i snapshot', async (appSchemaVersion) => {
+    const memory = memoryRepositories()
+    const candidate = createValidBuildCandidate()
+    candidate.calculationContext = createBuildListCalculationContext(createValidMasterDataFixture())
+    const historical = structuredClone(candidate)
+    historical.calculationContext.appSchemaVersion = appSchemaVersion
+    const oldEntry = createBuildListEntry(historical, memory.target, { createdAt: '2026-08-29T04:00:00.000Z' })
+    const before = structuredClone(oldEntry)
+    memory.entries.push(oldEntry)
+    const result = await new BuildListService(memory.repositories).addCandidate(candidate, memory.target)
+    expect(result.added).toBe(true)
+    expect(memory.entries).toHaveLength(2)
+    expect(memory.entries[0]).toEqual(before)
+    expect(result.entry.calculationContext.appSchemaVersion).toBe(6)
+    expect(memory.repositories.deleteEntry).not.toHaveBeenCalled()
   })
 
   it('persists changed stale flags without replacing the snapshot contract', async () => {

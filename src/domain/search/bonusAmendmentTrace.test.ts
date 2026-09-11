@@ -72,8 +72,8 @@ const K1d = () => slots(L1, ['h', 'm', 'h', 'l', 'x'])
 const R2 = () => slots(L2, ['m', 'h', 'h', 'l', 'm'])
 const C3 = () => slots(L2, ['m', 'h', 'h', 'm', 'm'])
 const D4 = () => slots(L2, ['m', 'h', 'h', 'h', 'm'])
-const R3 = () => slots(L3, ['h', 'h', 'm', 'l', 'm'])
-const K3d = () => slots(L3, ['h', 'h', 'm', 'l', 'h'])
+const R3 = () => slots(L3, ['h', 'h', 'm', 'l', 'x'])
+const K3d = () => slots(L3, ['h', 'h', 'm', 'h', 'x'])
 const R4 = () => slots(L4, ['m', 'h', 'h', 'x', 'l'])
 
 /**
@@ -92,12 +92,13 @@ function createTraceFixtureInput(): CandidateSearchInput {
   input.calculationContext.rngEngineVersion = 'fake-fixture:bonus-amendment-trace'
   input.targetWeapons[0].idealBonuses[3] = {
     bonusTypeId: 'bonus_type.fixture.utility',
-    bonusRankId: 'bonus_rank.fixture.special',
+    bonusRankId: 'bonus_rank.fixture.low',
   }
   input.targetWeapons[0].idealBonuses[4] = {
     bonusTypeId: 'bonus_type.fixture.sharpness',
     bonusRankId: 'bonus_rank.fixture.special',
   }
+  input.targetWeapons[0].alternativeBonusRules.push({ id: 'trace.utility', sourceBonusTypeId: 'bonus_type.fixture.utility', maxReplacementCount: 1, options: [{ alternativeBonusTypeId: 'bonus_type.fixture.sharpness', minimumRankId: 'bonus_rank.fixture.low', requiredExCount: 0 }] })
   const source = {
     ...structuredClone(input.ownedWeapons[0] as OwnedGogmaArtianWeapon),
     id: ownedWeaponId('owned.fixture.trace-source'),

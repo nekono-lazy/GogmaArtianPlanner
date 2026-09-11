@@ -38,6 +38,10 @@ import { defaultPlannerOptions, type PlannerBeamSearchResult, type PlannerDepend
 function fixture(): { input: PlannerInput; dependencies: PlannerDependencies } {
   const searchInput = createCandidateSearchInput()
   const entry = createValidBuildListEntry()
+  entry.candidateSnapshot.route.operations.splice(2, 0, { type: 'reset_bonuses', sourceOwnedWeaponId: null, gogmaCounterBefore: 10, gogmaCounterAfter: 11 })
+  entry.candidateSnapshot.restorationBonusScope = 'gogma_artian'
+  entry.candidateSnapshot.estimatedOperationCount += 1
+  entry.candidateSnapshot.estimatedGogmaAdvance = 1
   entry.calculationContext = structuredClone(searchInput.calculationContext)
   entry.candidateSnapshot.calculationContext = structuredClone(searchInput.calculationContext)
   entry.targetDefinitionHash = createTargetDefinitionHash(searchInput.targetWeapons[0])
@@ -68,7 +72,7 @@ function fixture(): { input: PlannerInput; dependencies: PlannerDependencies } {
       conflictResolutions: [],
     },
     dependencies: {
-      rngEngine: createCandidateSearchEngine(searchInput),
+      rngEngine: createCandidateSearchEngine(searchInput, { resetResult: searchInput.targetWeapons[0].idealBonuses }),
       idFactory: {
         productionPlanId: () => `plan.fixed.${++planCount}` as never,
         planStepId: () => `step.fixed.${++stepCount}` as never,
@@ -164,18 +168,19 @@ describe('Production plan generation', () => {
     expect(plan?.steps.map(({ operationType }) => operationType)).toEqual([
       'create_normal_artian',
       'convert_normal_to_gogma',
+      'reset_bonuses',
       'reset_skills',
       'reserve_weapon',
     ])
-    expect(plan?.steps.map(({ order }) => order)).toEqual([1, 2, 3, 4])
+    expect(plan?.steps.map(({ order }) => order)).toEqual([1, 2, 3, 4, 5])
     expect(plan?.steps.map(({ id }) => id)).toEqual([
-      'step.fixed.1', 'step.fixed.2', 'step.fixed.3', 'step.fixed.4',
+      'step.fixed.1', 'step.fixed.2', 'step.fixed.3', 'step.fixed.4', 'step.fixed.5',
     ])
     expect(plan?.currentStepId).toBe('step.fixed.1')
     expect(plan?.steps.every((step) => step.requiresUserConfirmation)).toBe(true)
     expect(plan?.steps.every((step) => !step.isCompleted && step.completedAt === null)).toBe(true)
-    expect(plan?.steps[3].ownedWeaponId).toBe('owned.fixed.1')
-    expect(plan?.steps[3].inventoryChange?.addOwnedWeapon?.id).toBe('owned.fixed.1')
+    expect(plan?.steps[4].ownedWeaponId).toBe('owned.fixed.1')
+    expect(plan?.steps[4].inventoryChange?.addOwnedWeapon?.id).toBe('owned.fixed.1')
     expect(plan?.steps[0].expectedStateBefore).toEqual(plan?.baseSnapshot.initialExecutionState)
     plan?.steps.slice(0, -1).forEach((step, index) => {
       expect(step.expectedStateAfter).toEqual(plan.steps[index + 1].expectedStateBefore)
@@ -207,19 +212,19 @@ describe('Production plan generation', () => {
         weaponTypeId: source.weaponTypeId,
         skillCounterBefore: 7,
         skillCounterAfter: 8,
-      }],
+      }, { type: 'reset_bonuses', sourceOwnedWeaponId: null, gogmaCounterBefore: 10, gogmaCounterAfter: 11 }],
     }
-    entry.candidateSnapshot.restorationBonusScope = 'normal_artian'
+    entry.candidateSnapshot.restorationBonusScope = 'gogma_artian'
     entry.candidateSnapshot.seriesSkillId = 'series_skill.fixture.a'
     entry.candidateSnapshot.groupSkillId = null
     synchronizeEntry(input)
     const plan = (await createProductionPlan(input, dependencies)).plan
     expect(plan?.steps.map(({ operationType }) => operationType)).toEqual([
-      'convert_normal_to_gogma', 'reserve_weapon',
+      'convert_normal_to_gogma', 'reset_bonuses', 'reserve_weapon',
     ])
     expect(plan?.steps[0].inventoryChange?.removeOwnedWeaponIds).toEqual([source.id])
-    expect(plan?.steps[1].inventoryChange?.removeOwnedWeaponIds).toEqual([])
-    expect(plan?.steps[1].inventoryChange?.addOwnedWeapon?.id).not.toBe(source.id)
+    expect(plan?.steps[2].inventoryChange?.removeOwnedWeaponIds).toEqual([])
+    expect(plan?.steps[2].inventoryChange?.addOwnedWeapon?.id).not.toBe(source.id)
     expect(plan?.steps.every(({ buildListEntryId }) => buildListEntryId === entry.id)).toBe(true)
   })
 
@@ -460,7 +465,7 @@ describe('Production plan generation', () => {
     expectChanged((value) => { value.buildListEntries[0].referencedOwnedWeaponsHash = 'hash.changed.owned' })
     expectChanged((value) => { value.buildListEntries[0].calculationContext.appSchemaVersion = 2 })
     expectChanged((value) => {
-      value.buildListEntries[0].candidateSnapshot.restorationBonusScope = 'gogma_artian'
+      value.buildListEntries[0].candidateSnapshot.restorationBonusScope = 'normal_artian'
     })
   })
   it('keeps deterministic Plan IDs, timestamps, selected IDs, and required material totals', async () => {
@@ -566,7 +571,7 @@ describe('Production plan generation', () => {
       ({ progressedTargetWeaponIds }) => progressedTargetWeaponIds !== undefined,
     )).toBe(true)
     expect(plan?.steps.map(({ progressedTargetWeaponIds }) => progressedTargetWeaponIds))
-      .toEqual([[targetId], [targetId], [targetId], [targetId]])
+      .toEqual([[targetId], [targetId], [targetId], [targetId], [targetId]])
     expect(plan?.steps.every(({ targetWeaponId }) => targetWeaponId === targetId)).toBe(true)
   })
 

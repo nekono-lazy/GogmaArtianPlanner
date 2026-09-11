@@ -134,7 +134,7 @@ describe('Planner Beam Search', () => {
           weaponTypeId: 'weapon.fixture.a',
           skillCounterBefore: 7,
           skillCounterAfter: 8,
-        },
+        }, { type: 'reset_bonuses', sourceOwnedWeaponId: null, gogmaCounterBefore: 10, gogmaCounterAfter: 11 },
       ],
     }
     const entry = routeEntry('entry.beam.count', goal, route)
@@ -145,6 +145,7 @@ describe('Planner Beam Search', () => {
       'create_normal_artian',
       'create_normal_artian',
       'convert_normal_to_gogma',
+      'reset_bonuses',
       'reserve_weapon',
     ])
     expect(result.bestState?.trace.slice(0, 2).map((action) =>
@@ -1168,7 +1169,7 @@ describe('Planner Beam Search', () => {
           weaponTypeId: normal.weaponTypeId,
           skillCounterBefore: 7,
           skillCounterAfter: 8,
-        }],
+        }, { type: 'reset_bonuses', sourceOwnedWeaponId: null, gogmaCounterBefore: 10, gogmaCounterAfter: 11 }],
       })
     const first = ownedNormalEntry(
       'entry.owned-normal.first',
@@ -1421,10 +1422,9 @@ describe('Planner Beam Search', () => {
         id: 'condition.in-flight.attack',
         bonusTypeId: 'bonus_type.fixture.attack',
         minimumRankId: 'bonus_rank.fixture.high',
-        requiredCount: 5,
         requiredExCount: 0,
       }],
-      practicalAlternativeGroups: [],
+      alternativeBonusRules: [],
     }
     const nextTarget = target('target.in-flight.next')
     const source = {
@@ -1693,7 +1693,7 @@ describe('Planner Beam Search', () => {
           weaponTypeId: 'weapon.fixture.a',
           skillCounterBefore: 7,
           skillCounterAfter: 8,
-        },
+        }, { type: 'reset_bonuses', sourceOwnedWeaponId: null, gogmaCounterBefore: 10, gogmaCounterAfter: 11 },
       ],
     })
     const consumingEntry = routeEntry('entry.restore.consume', consumingTarget, {
@@ -1887,14 +1887,14 @@ describe('Planner Beam Search', () => {
     }
     const secondTarget = {
       ...target('target.cross-tier.second'),
+      idealBonuses: candidateBonuses.map((bonus) => bonus.bonusTypeId === 'bonus_type.fixture.attack' ? { ...bonus, bonusRankId: 'bonus_rank.fixture.special' } : bonus) as TargetWeapon['idealBonuses'],
       practicalBonusConditions: [{
         id: 'condition.cross-tier.attack',
         bonusTypeId: 'bonus_type.fixture.attack',
         minimumRankId: 'bonus_rank.fixture.high',
-        requiredCount: 3,
         requiredExCount: 0,
       }],
-      practicalAlternativeGroups: [],
+      alternativeBonusRules: [],
     }
     const initiallyPractical = {
       ...createValidOwnedWeapon(ownedWeaponId('owned.cross-tier.practical')),

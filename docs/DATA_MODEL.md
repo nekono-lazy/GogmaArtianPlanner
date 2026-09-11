@@ -166,10 +166,12 @@ physical action sharing semantics修正によりversionを **3** へ、共有Cou
 Route prefix silent fast-forward修正によりversionを **4** へ、探索上限で打ち切られた
 partial resultを実行可能ProductionPlanとして受け入れないartifact validity境界により
 versionを **5** へ更新した。
-現行versionは **5** である。単一authorityは `src/domain/models/common.ts` の
-`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 5` とし、Search、BuildList、Plannerと
-benchmark入力のruntime creatorで共用する。これはDexieの `DATABASE_SCHEMA_VERSION = 1`
-や `AppSettings.schemaVersion = 1` の変更ではない。Calculation semantics / artifact
+Target妥協条件改訂で現行versionは **6** になった。旧1..5の全計算artifactは非互換とする。
+以下の2..5互換例外は歴史的契約でありversion 6には適用しない。
+現行versionの単一authorityは `src/domain/models/common.ts` の
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 6` とし、Search、BuildList、Plannerと
+benchmark入力のruntime creatorで共用する。Target移行は独立してDexie `DATABASE_SCHEMA_VERSION = 2`、
+AppSettingsは `schemaVersion = 1` のままとする。Calculation semantics / artifact
 validity境界とDexie schemaは別の概念であり、片方の更新はもう片方の更新を意味しない。
 gameVersion、Master Data version、
 `PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`、`supportsSeedSearch = false` は維持する。
@@ -211,7 +213,7 @@ current runtimeで安全に互換保証できない。したがってversion 4 P
 what-if、実行準備、実行へ進めず再計算を要求する。保存済みStep、status、conflicts、
 rejectedBuildListEntriesをread migrationで書き換えず、exact persisted表示は維持する。
 
-Candidate Search semanticsとBuildListEntry snapshot semanticsはversion 2から変更していないため、
+version 5時点ではCandidate Search semanticsとBuildListEntry snapshot semanticsはversion 2から変更していなかったため、
 version 2、3、4のBuildCandidate / BuildListEntryは、gameVersion、masterDataVersion、
 rngEngineVersionがすべて同じversion 5 runtimeに限り明示的に互換とする。BuildListEntryの
 stale再判定はこのartifact-specific例外を適用し、`calculation_context_changed` を付けない。
@@ -241,9 +243,9 @@ termination.status incomplete 新規計算resultへのfail closed
 `PlannerResultPersistenceService` の `termination.status === "incomplete"` 拒否は
 schema versionを上げても削除しない。
 
-`DATABASE_SCHEMA_VERSION = 1`、`AppSettings.schemaVersion = 1`、
-`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2` は変更しない。RNG結果は
-変わっていない。
+version 5への更新時にはDATABASE_SCHEMA_VERSION = 1、AppSettings.schemaVersion = 1、
+PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2を変更しなかった。
+今回のTarget移行ではDBだけ独立して2へ上げ、RNG結果は変更しない。
 
 `PlannerSearchTermination` はruntime result metadataであり、
 `ProductionPlan`、`PlanStep`、`BuildListEntry`、Dexie schemaへ永続化しない。
@@ -564,157 +566,59 @@ export type OwnedWeapon =
 
 ## 8.1 TargetWeapon
 
-```ts
-export interface TargetWeapon {
-  id: TargetWeaponId;
-  name: string;
-  weaponTypeId: WeaponTypeId;
-  elementId: ElementId;
-  priority: 1 | 2 | 3 | 4 | 5;
-  isEnabled: boolean;
-  idealBonuses: RestorationBonusSet;
-  practicalBonusConditions: BonusCondition[];
-  practicalAlternativeGroups: AlternativeBonusConditionGroup[];
-  idealSkillCondition: SkillCondition;
-  practicalSkillCondition: SkillCondition;
-  memo: string | null;
-  createdAt: ISODateTimeString;
-  updatedAt: ISODateTimeString;
-}
-```
-
-不変条件。
-
-- 1つの欲しい構成につき1件作成する
-- 同じ武器種・属性でも構成違いは別TargetWeapon
-- `priority` のデフォルトは3
-- `isEnabled = false` の目標は候補検索・Plannerの対象外
-- `idealBonuses` は必ず5枠完全指定
-- v1のTarget bonus定義は `gogma_artian` scopeを基準とし、converted Gogmaのnormal-tier bonusへ暗黙に緩和しない
-
-### Ideal ⇒ Practical 包含不変条件
-
-本アプリにおける意味は次である。
-
-```text
-Ideal    = 本来ほしい完成形
-Practical = Idealには届いていないが妥協して使用できるライン
-```
-
-したがってIdealはPracticalの完全上位であり、集合関係として次を不変条件とする。
-
-```text
-Ideal条件を満たす完成品の集合 ⊆ Practical条件を満たす完成品の集合
-```
-
-Bonus側。`idealBonuses` は必ず `practicalBonusConditions` のすべてと
-`practicalAlternativeGroups` のすべてを満たさなければならない。
-
-```text
-有効な例
-  Ideal     : 攻撃EX / 攻撃EX / ...
-  Practical : 攻撃III以上 × 2
-
-不正な例
-  Ideal     : 攻撃EX × 2
-  Practical : 属性III以上 × 3
-```
-
-Skill側。`idealSkillCondition` を満たす完成Skillは、必ず
-`practicalSkillCondition` も満たさなければならない。
-`seriesSkillId` / `groupSkillId` の `null`(指定しない)と
-`matchMode` の `all` / `any` を考慮した論理包含として扱う。
-
-```text
-すべての (seriesSkillId, groupSkillId) について
-  evaluateSkillCondition(idealSkillCondition, s, g)
-    ⇒ evaluateSkillCondition(practicalSkillCondition, s, g)
-```
-
-この包含が成立しないTargetWeapon定義は不正である。
-
-**B7で実装済み。** `validateTargetIdealImpliesPractical()` がこの包含を検証する。
-Bonus側はTarget評価器 (`evaluateBonusCondition()` /
-`evaluateAlternativeBonusConditionGroup()`) をそのまま再利用し、Rank比較は
-Master Dataの `order` をauthorityとする。Skill側は `evaluateSkillCondition()`
-に対する有限symbolic truth-tableとして論理包含を判定する。
-
-Master Dataを必要とするため、`validateTargetWeapon()` のsignatureは変更せず、
-Master-awareな別validatorとして次の境界で実行する。
-
-- TargetWeapon保存時 (`TargetWeaponCrudService.save()`)
-- Candidate Searchの対象Target選択時 (`selectedTargets()`)
-
-保存済みの不正Targetは自動修正・自動削除・Practical条件の暗黙緩和を行わず、
-Candidate Searchが `isEnabled = false` と同じ扱いでwarning付きに除外する。
-
-この包含に依存する最適化を、validation有効化より先に実装してはならない。
-Candidate SearchがIdeal既達成streamの探索を省略する最適化は、
-validation有効化前に導入すると、包含を満たさない不正Targetに対して
-Practical候補を取りこぼす。B7完了により前提は満たされている。
-
-Search / Plannerがこの包含を暗黙に修正・緩和することは、
-validation有効化の前後を問わず認めない。
-
-この不変条件はCandidate Searchの早期終了規則の前提である
-([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6参照)。
-
-## 8.2 BonusCondition
-
-通常の実用ライン条件。
+TargetWeaponは既存ID・名称・武器種・属性・priority(1..5、default 3)・isEnabled・Ideal5枠・
+Skill条件・memo・日時を保持する。妥協条件の正式型は次のとおり。
 
 ```ts
-export interface BonusCondition {
+interface PracticalBonusCondition {
   id: string;
   bonusTypeId: BonusTypeId;
   minimumRankId: BonusRankId;
-  requiredCount: number;
   requiredExCount: number;
 }
-```
-
-意味。
-
-```text
-対象BonusTypeについて、minimumRank以上をrequiredCount個以上含み、
-そのうちEXランクをrequiredExCount個以上含む。
-```
-
-制約。
-
-- `requiredCount` は1以上5以下
-- `requiredExCount` は0以上 `requiredCount` 以下
-- `minimumRankId` は対象武器種で利用可能なRank
-
-## 8.3 AlternativeBonusConditionGroup
-
-OR条件グループ。
-
-```ts
-export interface AlternativeBonusConditionGroup {
+interface AlternativeBonusRule {
   id: string;
-  requiredCount: number;
+  sourceBonusTypeId: BonusTypeId;
+  maxReplacementCount: number;
   options: AlternativeBonusOption[];
 }
-
-export interface AlternativeBonusOption {
-  bonusTypeId: BonusTypeId;
+interface AlternativeBonusOption {
+  alternativeBonusTypeId: BonusTypeId;
   minimumRankId: BonusRankId;
+  requiredExCount: number;
 }
+// TargetWeaponの該当fields:
+// practicalBonusConditions: PracticalBonusCondition[];
+// alternativeBonusRules: AlternativeBonusRule[];
+// compromiseNeedsReview?: boolean; // 旧条件解除の案内。明示save後false
 ```
 
-意味。
+### Ideal包含と未設定
 
-```text
-optionsのいずれかを満たす復元ボーナスをrequiredCount個以上含む。
-```
+Ideal5枠の種類・個数を変えず、Practicalを設定した種類だけRankを妥協する。
+未設定種類はRank multiset完全一致。全枠minimum以上かつEX最低数を満たす必要があり、
+Ideal自身がこのPractical条件を満たさないTargetは無効である。
+AlternativeはIdealを拒否するAND条件ではなく、1 Rule / 1 Optionによる別の受理経路である。
+0置換のIdealを常に先に判定するため、IdealがAlternative Optionを満たす必要はない。
+明示Practical Skillの既存論理包含validationは保持する。両ID=nullは未設定であり
+Practical Skillのwildcardを意味しない。妥協なしTargetではIdealだけを受理する。
+すべてのBonus判定はgogma_artian scopeを要求する。
 
-制約。
+## 8.2 PracticalBonusCondition
 
-- `requiredCount` は1以上5以下
-- `options` は1件以上
-- 複雑な任意論理式は初期版では扱わない
-- 判定は「すべてのBonusConditionを満たす」AND「すべてのAlternativeBonusConditionGroupを満たす」
+種類はIdeal内、同一種類は1件まで。必要個数はIdeal内個数から導出し永続化しない。
+minimumRankは対象武器種・属性のMasterで有効、requiredExCountは整数0..Ideal内個数。
+未設定種類はRank構成を含めて完全一致。Master order / isExだけをRank / EX判定に使用する。
+
+## 8.3 AlternativeBonusRule
+
+sourceはIdeal内、同じsourceのRuleは1件まで。maxReplacementCountは整数1..Ideal内source個数。
+optionsは1件以上、sourceとalternativeは異なり、代替先の重複は禁止。
+OptionのRankはMaster上有効、requiredExCountは整数0..maxReplacementCount。
+Candidateは1 Rule内の1 Optionだけで1..最大数を置換する。未置換枠はIdealの部分multisetと
+完全一致し、Practical Bonusと併用しない。実際に追加された代替枠だけでRank / EXを評価する。
+Idealに既存の代替先種類がある場合、その元の枠は完全一致で維持しEX数に流用しない。
+詳細・監査・移行契約は[TARGET_COMPROMISE_SEMANTICS.md](./TARGET_COMPROMISE_SEMANTICS.md)。
 
 ## 8.4 SkillCondition
 
@@ -737,7 +641,7 @@ export interface SkillCondition {
 
 - 理想ラインは原則 `matchMode = "all"`
 - 実用ラインのみ `matchMode = "any"` を許可する
-- 両方 `null` の場合は常に条件を満たす
+- predicate単体では両方nullは制約なし。TargetのPractical Skillとして両方nullの場合は未設定であり、Ideal Skillだけを許可する
 
 ---
 
@@ -752,6 +656,7 @@ export interface BuildCandidate {
   id: BuildCandidateId;
   targetWeaponId: TargetWeaponId;
   category: CandidateCategory;
+  conditionMatch?: { bonus: 'ideal' | 'practical' | 'alternative'; skill: 'ideal' | 'practical' };
   finalBonusScope: ArtianBonusScope;
   finalBonuses: RestorationBonusSet;
   seriesSkillId: SeriesSkillId | null;
@@ -1561,7 +1466,9 @@ mh-wilds-gogma-artian-planner
 
 ## 14.2 DB schemaVersion
 
-初期版はDexie schema version 1。
+初期作成schemaは1。現行DATABASE_SCHEMA_VERSIONは2。version(1)のstoresを保持し、
+version(2) upgradeでTarget妥協条件だけを解除する。Idealと他entityを保持し、compromiseNeedsReview=trueとする。
+旧Practical Skillも解除するため、移行直後はIdeal-onlyとなる。
 
 ```ts
 db.version(1).stores({
@@ -1628,7 +1535,7 @@ Planner constrained re-searchを経たPlan保存も原子的に行う。契約�
 
 ```ts
 export interface ExportRoot {
-  schemaVersion: 1;
+  schemaVersion: 2;
   appName: "mh-wilds-gogma-artian-planner";
   exportedAt: ISODateTimeString;
   rngState: RngState | null;
@@ -1664,7 +1571,9 @@ Import方式。
 
 ## 15.3 Migration
 
-初期版では `schemaVersion = 1` のみ対応する。
+新ExportRootはschemaVersion=2。現実装は型のみであり全置換Import/Exportサービスは未実装。
+旧schema=1を新Targetとして直接受理しない。将来のimportも純粋Target移行関数を使用し、
+旧Practical/OR/Practical Skillは解除、Ideal・ID・他entityは保持する。
 
 将来のmigration関数は以下の形を想定する。
 
@@ -1793,3 +1702,19 @@ Production RNG契約切替時の互換性は次のとおりとする。
 - BuildListEntry変更で `buildListEntriesHash` が変わる
 - 同じRoute依存RNG状態から同じ `searchStateHash` が生成される
 - Route依存RNG状態が変わると `searchStateHash` が変わる
+
+
+### 妥協条件version 6の判定理由と監査記録
+
+新規CandidateはconditionMatch（bonus: ideal/practical/alternative、skill: ideal/practical）を保持し、Build List snapshotへそのまま複写する。
+これはTarget定義と完成結果から導出した説明情報であり、Candidate ID / stable key / deduplication key / meaning fingerprint / searchStateHashには追加しない。
+条件の意味はTarget definition hashとCalculationContext version 6で区別する。旧artifactではフィールドを省略でき、推測補完・再分類しない。
+UIは保存された判定理由を「ボーナス判定: 理想 / 実用 / 代替」「スキル判定: 理想 / 実用」と表示する。
+categoryは両軸Idealのときだけideal、それ以外はpracticalであり、代替Bonusを実用Bonusと表示しない。
+
+Productionベンチマークの旧wildcard条件も明示的な理想構成基準へ変更するため、旧versionの測定記録と負荷が異なる。
+過去のBrowser Worker測定値は当時のartifactとして保持する。今回のVitestは意味・不変条件の検証であり、新しいBrowser性能測定の代用ではない。
+
+Build Listへの同一意味の候補の重複追加を防ぐ際はCalculationContext互換性も確認する。
+旧version 1..5の項目を削除・上書きせず、新version 6の再検索結果を別項目として追加できる。
+Candidate meaning fingerprint自体は変更しない。
