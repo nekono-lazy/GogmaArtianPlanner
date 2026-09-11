@@ -506,12 +506,16 @@ export function OwnedWeaponsPage({
                         labelId="owned-status"
                         label="状態"
                         value={draft.status}
-                        onChange={(event) =>
+                        onChange={(event) => {
+                          const status = event.target.value as OwnedWeaponStatus
                           setDraft({
                             ...draft,
-                            status: event.target.value as OwnedWeaponStatus,
+                            status,
+                            ...(editing === null
+                              ? { isProtected: status === 'ideal' }
+                              : {}),
                           })
-                        }
+                        }}
                       >
                         {Object.entries(ownedWeaponStatusLabels).map(
                           ([value, label]) => (

@@ -1,7 +1,10 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { OwnedWeapon } from '../domain/models/publicTypes'
+import type {
+  OwnedGogmaArtianWeapon,
+  OwnedWeapon,
+} from '../domain/models/publicTypes'
 import type { OwnedWeaponDraft } from '../services/crud/entityCrudServices'
 import { OwnedWeaponsPage, type OwnedWeaponsPageDependencies } from './OwnedWeaponsPage'
 
@@ -10,7 +13,7 @@ function dependencies() {
   return { getAll: vi.fn(async (): Promise<OwnedWeapon[]> => []), getTargets: vi.fn(async () => []), save, delete: vi.fn(async () => undefined) } satisfies OwnedWeaponsPageDependencies
 }
 
-function existingWeapon(): OwnedWeapon {
+function existingWeapon(): OwnedGogmaArtianWeapon {
   return {
     id: 'owned-ui' as OwnedWeapon['id'], kind: 'gogma', name: '既存武器', weaponTypeId: 'weapon.dual_blades', elementId: 'element.thunder',
     restorationBonusScope: 'gogma_artian', restorationBonuses: Array.from({ length: 5 }, () => ({ bonusTypeId: 'bonus_type.attack', bonusRankId: 'bonus_rank.ex' })) as OwnedWeapon['restorationBonuses'],
@@ -31,13 +34,38 @@ describe('OwnedWeaponsPage', () => {
     expect((deps.save.mock.calls[0][0] as OwnedWeaponDraft).restorationBonuses).toHaveLength(5)
   })
 
-  it('does not overwrite Protection when Status changes', async () => {
-    const user = userEvent.setup(); const deps = dependencies()
-    render(<OwnedWeaponsPage dependencies={deps} />)
-    await user.click(await screen.findByRole('button', { name: '所持武器を追加' }))
-    await user.click(screen.getByLabelText('状態')); await user.click(screen.getByRole('option', { name: '実用' }))
-    expect(screen.getByRole('checkbox', { name: '保護する' })).not.toBeChecked()
-  })
+  it.each([
+    ['ideal', '理想', true],
+    ['practical', '実用', false],
+    ['material', '素材', false],
+  ] as const)(
+    'applies the %s protection default when a new Gogma status changes',
+    async (status, label, isProtected) => {
+      const user = userEvent.setup()
+      const deps = dependencies()
+      render(<OwnedWeaponsPage dependencies={deps} />)
+      await user.click(
+        await screen.findByRole('button', { name: '所持武器を追加' }),
+      )
+      if (status === 'material') {
+        await user.click(screen.getByLabelText('状態'))
+        await user.click(screen.getByRole('option', { name: '理想' }))
+        expect(screen.getByRole('checkbox', { name: '保護する' })).toBeChecked()
+      }
+      await user.click(screen.getByLabelText('状態'))
+      await user.click(screen.getByRole('option', { name: label }))
+      const protection = screen.getByRole('checkbox', { name: '保護する' })
+      if (isProtected) expect(protection).toBeChecked()
+      else expect(protection).not.toBeChecked()
+
+      await user.type(screen.getByRole('textbox', { name: /名前/ }), `新規${label}`)
+      await user.click(screen.getByRole('button', { name: '保存' }))
+      expect(deps.save).toHaveBeenCalledWith(
+        expect.objectContaining({ status, isProtected }),
+        null,
+      )
+    },
+  )
 
   it('confirms Practical-to-Material editing and preserves explicit Protection', async () => {
     const user = userEvent.setup(); const weapon = existingWeapon(); const deps = dependencies(); deps.getAll = vi.fn(async () => [weapon]); const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
@@ -47,6 +75,44 @@ describe('OwnedWeaponsPage', () => {
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining('素材扱い'))
     expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ status: 'material', isProtected: true }), weapon)
     confirm.mockRestore()
+  })
+
+  it('preserves explicit protected state when editing Practical to Ideal', async () => {
+    const user = userEvent.setup()
+    const weapon = existingWeapon()
+    const deps = dependencies()
+    deps.getAll = vi.fn(async () => [weapon])
+    render(<OwnedWeaponsPage dependencies={deps} />)
+    await user.click(await screen.findByRole('button', { name: '編集' }))
+    await user.click(screen.getByLabelText('状態'))
+    await user.click(screen.getByRole('option', { name: '理想' }))
+    expect(screen.getByRole('checkbox', { name: '保護する' })).toBeChecked()
+    await user.click(screen.getByRole('button', { name: '保存' }))
+    expect(deps.save).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'ideal', isProtected: true }),
+      weapon,
+    )
+  })
+
+  it('preserves explicit unprotected state when editing Ideal to Practical', async () => {
+    const user = userEvent.setup()
+    const weapon: OwnedWeapon = {
+      ...existingWeapon(),
+      status: 'ideal',
+      isProtected: false,
+    }
+    const deps = dependencies()
+    deps.getAll = vi.fn(async () => [weapon])
+    render(<OwnedWeaponsPage dependencies={deps} />)
+    await user.click(await screen.findByRole('button', { name: '編集' }))
+    await user.click(screen.getByLabelText('状態'))
+    await user.click(screen.getByRole('option', { name: '実用' }))
+    expect(screen.getByRole('checkbox', { name: '保護する' })).not.toBeChecked()
+    await user.click(screen.getByRole('button', { name: '保存' }))
+    expect(deps.save).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'practical', isProtected: false }),
+      weapon,
+    )
   })
 
   it('shows verified Japanese Master choices without the old core-data warning', async () => {
