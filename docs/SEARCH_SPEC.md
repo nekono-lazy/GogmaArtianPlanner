@@ -1475,18 +1475,19 @@ reset_bonuses                 <- 必須。最初のBonus amendmentは必ずReset
 制約。
 
 - `CreateNormalArtianOperation` は `count = 1`、`normalCounterBefore = normalCounterAfter = null` とする。架空のNormal Counter値を代入しない
+- このnullは「このRouteのCandidate結果が特定のabsolute Normal Counter位置へ依存しない」という意味である。「Normal Counterが必ず未確定である」でも「実行してもCounterが進まない」でもない。Normal Counterが確定していてもNormal Artian Predictionだけが利用不能な場合、このvariantが選ばれる。Plan実行時に確定Counterを1進めるかどうかはPlannerの実行時契約であり、`docs/PLANNER_SPEC.md` 7.0.3が正本である
 - 通常アーティアを2本以上作成するblind Candidateを生成しない。5枠を読まずResetで全上書きするため、追加forgeは手数・素材・Normal Counter進行だけを増やす完全劣後経路である
 - 変換直後にCandidateを完成させない。変換直後の5枠はunknownであり、Candidateの最終結果へunknownを残さない
 - 変換直後にKeep Bonusesを適用しない。これはProduction predictionの制限ではなくunknown入力の問題であり、normal scope Keepの扱い(5.7)とは独立に禁止する
 - Reset Skillsだけを行ってCandidateを完成させない
 - 最初のResetを実行した時点で `restorationBonusScope = "gogma_artian"` かつ5枠known となり、以降は6.1と同じReset / Keep / Reset Skills semanticsをそのまま使う
 - `zeroBonus`(`gogmaAdvance = 0`)のBonus解は存在しない。Bonus軸は最初のResetから始まる。unknownを表すfake bonus setをstream解集合へ入れない
-- `estimatedNormalAdvance = null` とする。`null` は「Normal Counter進行量を表現しない」であり、`0` ではない
 - `estimatedGogmaAdvance` は最初のResetを含めて1以上になり、`maxGogmaAdvance` を通常どおり消費する
 - `estimatedSkillAdvance` と `maxSkillAdvance` semanticsは6.1と同一である
 - Route最小操作数は `create 1 + convert 1 + reset 1 = 3` である
 - `BuildRoute.sourceOwnedWeaponId = null`、変換後のReset / Keep / Reset Skillsも `sourceOwnedWeaponId = null` とする。`referencedOwnedWeaponsHash = null` である
-- `searchStateHash` はBase Seed、Skill Counter、Gogma Counterに依存し、NormalArtianCounterに依存しない。後からNormal Counterを確定してもこのCandidateはstaleにならない
+- `searchStateHash` はBase Seed、Skill Counter、Gogma Counterに依存し、NormalArtianCounterに依存しない。後からNormal Counterを確定しても、またその値が変わっても、このCandidateの予測結果semanticsは変わらないためstaleにならない。これはPlan実行後に現在Counterを更新しなくてよいという意味ではない(`docs/PLANNER_SPEC.md` 7.0.3)
+- `estimatedNormalAdvance = null` も同じ理由による。Candidate SearchがNormal Counter進行量をabsolute route dependencyとして表現しないことを示すだけで、実行時の物理的なCounter進行とは別概念である
 - 素材コストは通常どおり計上する。通常アーティア作成1本分、変換1回分、Reset等の分をそれぞれ含める
 - Candidateの保持、順序、Ideal / Practical判定、similarity、dominanceは既存規則をそのまま適用し、blind variantを優遇も冷遇もしない
 
@@ -1986,6 +1987,8 @@ Worker error契約(B6)。
 - 最初のReset前のunknown状態からCandidateを生成しない。blind Candidateは常に `restorationBonusScope = "gogma_artian"` で `reset_bonuses` を含む
 - blind Candidateで通常アーティアを2本以上作成しない
 - blind Candidateの `estimatedNormalAdvance` が `null`、`referencedOwnedWeaponsHash` が `null` になる
+- Normal Counterが確定していてNormal Artian Predictionだけが利用不能な場合も、blind variantが検索され `predictNormalArtian` を1度も呼ばない
+- その場合でもblind Candidateの `create_normal_artian` はCounter位置nullのままであり、`estimatedNormalAdvance` も `null` である。Plan実行時のCounter進行は `docs/PLANNER_SPEC.md` 7.0.3のtest観点で確認する
 - blind Candidateの `searchStateHash` がNormalArtianCounterの確定状態に依存しない
 - レア6・7のNormalArtianCounterしかない場合でもblind variantはレア8を作成し、そのCounterを読まない
 - 所持通常アーティア経由は登録済み5枠をそのまま使い続け、blind semanticsへ巻き込まれない

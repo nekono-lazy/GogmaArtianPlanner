@@ -1,13 +1,26 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { BuildRoute, RestorationBonusSet } from '../models/publicTypes'
-import { createRestorationBonusSet } from '../../test/fixtures/domainData'
+import type {
+  BuildRoute,
+  NormalArtianCounter,
+  RestorationBonusSet,
+  RouteOperation,
+} from '../models/publicTypes'
+import { createExpectedPlanState } from '../models/publicTypes'
+import {
+  createRestorationBonusSet,
+  createValidNormalArtianCounter,
+} from '../../test/fixtures/domainData'
 import {
   fixture,
+  plannerEngine,
   routeEntry,
   synchronizeEntry,
   target,
 } from '../../test/fixtures/plannerBeam'
-import { createPlannerRouteUnitPlans } from './plannerRouteProgress'
+import {
+  advanceBlindNormalCreationCounters,
+  createPlannerRouteUnitPlans,
+} from './plannerRouteProgress'
 import { replayPlannerSearchTrace } from './plannerTraceReplay'
 import { runPlannerBeamSearch } from './plannerBeamSearch'
 import { createProductionPlan } from './productionPlanGeneration'
@@ -86,13 +99,22 @@ function predictedRoute(): BuildRoute {
 
 const resetResult = (): RestorationBonusSet => createRestorationBonusSet()
 
-/** No owned weapons, and no Normal Artian Counter record at all. */
-function blindFixture(entries: Parameters<typeof fixture>[1], targets: Parameters<typeof fixture>[0]) {
+/** No owned weapons, and by default no Normal Artian Counter record at all. */
+function blindFixture(
+  entries: Parameters<typeof fixture>[1],
+  targets: Parameters<typeof fixture>[0],
+  normalCounters: NormalArtianCounter[] = [],
+) {
   const built = fixture(targets, entries)
-  built.input.normalCounters = []
+  built.input.normalCounters = normalCounters
   entries.forEach((entry) => synchronizeEntry(built.input, entry))
   mockPredictions(built.dependencies)
   return built
+}
+
+/** `weapon.fixture.a:8`, confirmed at 4; `plannerEngine()` advances 4 -> 5. */
+function confirmedCounter(): NormalArtianCounter {
+  return createValidNormalArtianCounter()
 }
 
 function mockPredictions(dependencies: PlannerDependencies) {
@@ -110,8 +132,9 @@ function blindEntry(
   skillCounter = 7,
   gogmaCounter = 10,
   weaponTypeId = 'weapon.fixture.a',
+  elementId = 'element.fixture.a',
 ) {
-  const targetWeapon = { ...target(targetId), weaponTypeId }
+  const targetWeapon = { ...target(targetId), weaponTypeId, elementId }
   const entry = routeEntry(
     id,
     targetWeapon,
@@ -121,6 +144,73 @@ function blindEntry(
   entry.candidateSnapshot.estimatedNormalAdvance = null
   return { targetWeapon, entry }
 }
+
+describe('advanceBlindNormalCreationCounters', () => {
+  const blindCreate = blindRoute(7, 10).operations[0]
+  const predictedCreate: RouteOperation = {
+    type: 'create_normal_artian',
+    weaponTypeId: 'weapon.fixture.a',
+    rarity: 8,
+    count: 1,
+    normalCounterBefore: 4,
+    normalCounterAfter: 5,
+  }
+
+  function engineReturning(result: number) {
+    const engine = plannerEngine()
+    const advanceNormalCounter = vi.spyOn(engine, 'advanceNormalCounter')
+      .mockReturnValue(result)
+    return { engine, advanceNormalCounter }
+  }
+
+  it('advances a confirmed Counter through the RngEngine, not by adding one', () => {
+    const { engine, advanceNormalCounter } = engineReturning(99)
+    const advanced = advanceBlindNormalCreationCounters(
+      [confirmedCounter()],
+      blindCreate,
+      engine,
+    )
+    // 99 rather than 5 proves the Engine is the authority.
+    expect(advanced).toEqual([expect.objectContaining({ counter: 99 })])
+    expect(advanceNormalCounter).toHaveBeenCalledWith(4, {
+      type: 'create_normal_artian',
+      count: 1,
+    })
+  })
+
+  it.each([
+    ['an unconfirmed numeric value', { counter: 4, isConfirmed: false }],
+    ['a null value', { counter: null, isConfirmed: false }],
+  ])('never advances %s', (_label, patch) => {
+    const { engine, advanceNormalCounter } = engineReturning(99)
+    expect(advanceBlindNormalCreationCounters(
+      [{ ...confirmedCounter(), ...patch } as NormalArtianCounter],
+      blindCreate,
+      engine,
+    )).toBeNull()
+    expect(advanceNormalCounter).not.toHaveBeenCalled()
+  })
+
+  it('invents no record when the Counter is absent', () => {
+    const { engine } = engineReturning(99)
+    expect(advanceBlindNormalCreationCounters([], blindCreate, engine)).toBeNull()
+  })
+
+  it('leaves a different weapon type and a predicted creation alone', () => {
+    const { engine } = engineReturning(99)
+    expect(advanceBlindNormalCreationCounters(
+      [{ ...confirmedCounter(), id: 'weapon.fixture.b:8', weaponTypeId: 'weapon.fixture.b' }],
+      blindCreate,
+      engine,
+    )).toBeNull()
+    // The predicted variant keeps its own Counter stream handling.
+    expect(advanceBlindNormalCreationCounters(
+      [confirmedCounter()],
+      predictedCreate,
+      engine,
+    )).toBeNull()
+  })
+})
 
 describe('Planner execution of the forced Reset Normal Artian route', () => {
   it('treats a blind creation as a required step with no Counter position', () => {
@@ -183,6 +273,100 @@ describe('Planner execution of the forced Reset Normal Artian route', () => {
     expect(plan?.steps[3].expectedResult?.shouldSecure).toBe(true)
   })
 
+  it('advances a confirmed Normal Counter even though the Route has no Counter position', async () => {
+    // Normal Counter is confirmed; only Normal Artian prediction is missing, so
+    // Search falls back to the forced Reset variant. The player still forges a
+    // real weapon, so the confirmed Counter must advance
+    // (`docs/PLANNER_SPEC.md` 7.0.3).
+    const { targetWeapon, entry } = blindEntry('entry.blind.known', 'target.blind.known')
+    const { input, dependencies } = blindFixture(
+      [entry],
+      [targetWeapon],
+      [confirmedCounter()],
+    )
+    const predictNormalArtian = vi.spyOn(dependencies.rngEngine, 'predictNormalArtian')
+      .mockImplementation(() => {
+        throw new Error('Blind creation must not predict a Normal Artian result.')
+      })
+
+    const beam = await runPlannerBeamSearch(input, dependencies)
+    expect(beam.bestState?.currentNormalCounters).toEqual([
+      expect.objectContaining({ id: 'weapon.fixture.a:8', counter: 5, isConfirmed: true }),
+    ])
+
+    const { plan } = await createProductionPlan(input, dependencies)
+    expect(predictNormalArtian).not.toHaveBeenCalled()
+    const create = plan?.steps[0]
+    expect(create?.operationType).toBe('create_normal_artian')
+    expect(create?.rngAdvance).toEqual({
+      gogmaCounterDelta: 0,
+      skillCounterDelta: 0,
+      normalCounterDelta: 1,
+      affectedNormalCounterId: 'weapon.fixture.a:8',
+    })
+    expect(create?.debug?.startNormalCounter).toBe(4)
+    expect(create?.debug?.endNormalCounter).toBe(5)
+    // The expected-state chain really carries the advance, not just the debug
+    // fields: before hashes the Counter at 4 and after hashes it at 5.
+    const hashAt = (counter: number) => createExpectedPlanState(
+      input.rngState,
+      [{ ...confirmedCounter(), counter }],
+      [],
+    ).normalCountersHash
+    expect(create?.expectedStateBefore.normalCountersHash).toBe(hashAt(4))
+    expect(create?.expectedStateAfter.normalCountersHash).toBe(hashAt(5))
+    expect(plan?.steps.at(-1)?.expectedStateAfter.normalCountersHash).toBe(hashAt(5))
+  })
+
+  it('leaves an unconfirmed numeric Normal Counter untouched', async () => {
+    // An unconfirmed value is not authority, so it is never advanced and never
+    // promoted to a confirmed one.
+    const unconfirmed: NormalArtianCounter = {
+      ...confirmedCounter(),
+      counter: 4,
+      isConfirmed: false,
+    }
+    const { targetWeapon, entry } = blindEntry(
+      'entry.blind.unconfirmed',
+      'target.blind.unconfirmed',
+    )
+    const { input, dependencies } = blindFixture([entry], [targetWeapon], [unconfirmed])
+
+    const beam = await runPlannerBeamSearch(input, dependencies)
+    expect(beam.bestState?.currentNormalCounters).toEqual([
+      expect.objectContaining({ counter: 4, isConfirmed: false }),
+    ])
+
+    const { plan } = await createProductionPlan(input, dependencies)
+    const create = plan?.steps[0]
+    expect(create?.rngAdvance).toEqual({
+      gogmaCounterDelta: 0,
+      skillCounterDelta: 0,
+      normalCounterDelta: null,
+      affectedNormalCounterId: null,
+    })
+    expect(create?.debug?.startNormalCounter).toBeNull()
+    expect(create?.debug?.endNormalCounter).toBeNull()
+  })
+
+  it('invents no Normal Counter record when none exists', async () => {
+    const { targetWeapon, entry } = blindEntry('entry.blind.absent', 'target.blind.absent')
+    const { input, dependencies } = blindFixture([entry], [targetWeapon], [])
+
+    const beam = await runPlannerBeamSearch(input, dependencies)
+    expect(beam.bestState?.currentNormalCounters).toEqual([])
+
+    const { plan } = await createProductionPlan(input, dependencies)
+    expect(plan?.steps[0].rngAdvance).toEqual({
+      gogmaCounterDelta: 0,
+      skillCounterDelta: 0,
+      normalCounterDelta: null,
+      affectedNormalCounterId: null,
+    })
+    expect(plan?.steps[0].debug?.startNormalCounter).toBeNull()
+    expect(plan?.steps[0].debug?.endNormalCounter).toBeNull()
+  })
+
   it('still rejects a predicted Normal route without a confirmed Counter', async () => {
     const targetWeapon = target('target.blind.predicted')
     const entry = routeEntry('entry.blind.predicted', targetWeapon, predictedRoute())
@@ -195,6 +379,39 @@ describe('Planner execution of the forced Reset Normal Artian route', () => {
         reason: expect.stringContaining('normal_artian_counter:weapon.fixture.a:8'),
       }),
     ])
+  })
+
+  it('advances one shared Normal Counter once per blind Entry', async () => {
+    // Same weapon type, different element: the two Targets cannot satisfy each
+    // other, so both Routes really run and both forges are real.
+    const first = blindEntry('entry.blind.seq.first', 'target.blind.seq.first', 7, 10)
+    const second = blindEntry(
+      'entry.blind.seq.second',
+      'target.blind.seq.second',
+      8,
+      11,
+      'weapon.fixture.a',
+      'element.fixture.b',
+    )
+    const { input, dependencies } = blindFixture(
+      [first.entry, second.entry],
+      [first.targetWeapon, second.targetWeapon],
+      [confirmedCounter()],
+    )
+
+    const { plan, conflicts } = await createProductionPlan(input, dependencies)
+    // Two required units at no Counter position are not a Counter conflict.
+    expect(conflicts).toEqual([])
+    const creates = plan?.steps.filter(
+      ({ operationType }) => operationType === 'create_normal_artian',
+    ) ?? []
+    expect(creates).toHaveLength(2)
+    expect(creates.map(({ debug }) => [debug?.startNormalCounter, debug?.endNormalCounter]))
+      .toEqual([[4, 5], [5, 6]])
+    creates.forEach((step) => {
+      expect(step.rngAdvance.normalCounterDelta).toBe(1)
+      expect(step.progressedTargetWeaponIds).toHaveLength(1)
+    })
   })
 
   it('never shares the create or convert action between two blind Entries', async () => {

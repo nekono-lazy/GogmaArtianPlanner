@@ -760,9 +760,11 @@ export interface BuildCandidate {
   estimatedOperationCount: number;
   estimatedGogmaAdvance: number;
   estimatedSkillAdvance: number;
-  // null は「このRouteのNormal Counter進行量を表現しない」。通常アーティア作成
-  // を含まないRouteに加えて、blind creationだけを含むRoute(SEARCH_SPEC 6.1.1)
-  // もここが null になる。0 は「進行量0」であり、null とは別の意味である
+  // null は「このRouteのNormal Counter進行量をabsolute route dependencyとして
+  // 表現しない」。通常アーティア作成を含まないRouteに加えて、blind creationだけ
+  // を含むRoute(SEARCH_SPEC 6.1.1)もここが null になる。0 は「進行量0」であり、
+  // null とは別の意味である。Plan実行時に確定Normal Counterが1進むかどうかは
+  // 実行時stateの問題であり、この推定値とは別概念である(PLANNER_SPEC 7.0.3)
   estimatedNormalAdvance: number | null;
   requiredMaterials: MaterialRequirement[];
   idealDifference: IdealDifference;
@@ -889,7 +891,7 @@ export interface UseWeaponAsMaterialOperation {
 - `operations` は実行順に並べ、空配列を許可しない
 - CreateNormalArtianOperationは2 variantを持つ。両方を `normalCounterBefore` / `normalCounterAfter` のnull性だけで判別し、追加のdiscriminant fieldを永続化しない。既存の永続CreateNormalArtianOperationはすべてpredicted variantであり、その意味は変わらない
 - predicted variantの `count` は `forgeCount` で1以上、`normalCounterAfter = normalCounterBefore + count`
-- blind variant(`docs/SEARCH_SPEC.md` 6.1.1)は `count = 1`、`normalCounterBefore = normalCounterAfter = null` とする。`null` は「絶対Normal Counter位置が未確定」を意味し、「Normal Counterが進行しない」ではない。実ゲームのCounterは1進むが、進める確定値をツールが持たないため、架空の値を代入せず保持しない
+- blind variant(`docs/SEARCH_SPEC.md` 6.1.1)は `count = 1`、`normalCounterBefore = normalCounterAfter = null` とする。`null` は「このRouteのCandidate semanticsが特定のabsolute Normal Counter位置へ依存しない」を意味し、「Normal Counterが未確定である」でも「Normal Counterが進行しない」でもない。Route operationがCounter位置を持たないことと、Plan実行時に現在の確定Counterを進めることは別概念である(`docs/PLANNER_SPEC.md` 7.0.3)
 - 片方だけがnullのCreateNormalArtianOperationはどちらのvariantでもなく、Domain validationで拒否する
 - predicted variantの `normal_artian_to_gogma` は該当NormalArtianCounterが確定している場合のみ生成する
 - blind variantの `normal_artian_to_gogma` はNormalArtianCounterもNormal Artian Predictionも要求しない。ただしRouteは変換後に必ず1回以上のResetBonusesOperationを含まなければならない。作成した通常アーティアの5枠が未予測であり、Resetだけがそれを読まずに5枠全体を書き換えられるためである
@@ -1330,7 +1332,16 @@ export interface RngAdvance {
 }
 ```
 
-`normalCounterDelta = null` は「このStepではNormal Counterの進行量を表現しない」を表す。Normal Counterへ影響しないStepに加えて、blind creation(`docs/SEARCH_SPEC.md` 6.1.1)の `create_normal_artian` Stepもこれに該当する。実ゲームのNormal Counterは1進むが、確定した絶対値が存在しないため、ツール側は `0` を記録せず、`PlanStepDebugInfo.startNormalCounter` / `endNormalCounter` も `null` のままとする。Stepのtitle / instructionが通常アーティアを1本作成する物理操作であることを明示するので、「Normal Counterは進行していない」とは表示しない。
+`normalCounterDelta = null` は「このStepではNormal Counterの進行量を表現しない」を表し、「Normal Counterが進行しない」ではない。
+
+blind creation(`docs/SEARCH_SPEC.md` 6.1.1)の `create_normal_artian` Stepは、実行時の現在stateによって次の2通りになる。
+
+| 現在のNormalArtianCounter | `normalCounterDelta` | `affectedNormalCounterId` | `PlanStepDebugInfo.startNormalCounter` / `endNormalCounter` |
+| --- | --- | --- | --- |
+| `isConfirmed = true` かつ `counter !== null` | `1` | 対象Counter ID | 進行前値 / 進行後値 |
+| unconfirmed、`counter = null`、またはrecordなし | `null` | `null` | `null` / `null` |
+
+確定Counterが存在する場合は、Route operationの `normalCounterBefore` / `normalCounterAfter` が `null` であっても、物理的に通常アーティアを1本作成した事実としてCounterを1進める。進行には既存 `advanceNormalCounter()` authorityを使い、`counter + 1` を直接書かない。確定Counterが存在しない場合は `0` を記録せず、架空のCounter recordも作らない。Stepのtitle / instructionが通常アーティアを1本作成する物理操作であることを明示するので、どちらの場合も「Normal Counterは進行していない」とは表示しない。
 
 ## 11.7 PlanStepDebugInfo
 

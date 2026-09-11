@@ -1204,19 +1204,24 @@ reset_bonuses          mandatory first bonus amendment
 
 - Never forge more than one Normal Artian. Extra forges cannot change the
   result and only add operations, materials, and Normal Counter progression
-- Never substitute a fabricated Normal Counter value. `null` means the absolute
-  position is unknown, never that the Counter does not advance — in game it
-  does advance by one, and the tool simply holds no confirmed value to advance
+- Never substitute a fabricated Normal Counter value. `null` means this Route's
+  Candidate result does not depend on any absolute Normal Counter position. It
+  does not mean the Counter is necessarily unknown, and it does not mean the
+  Counter fails to advance when the Plan runs — the forge is real either way.
+  A confirmed Normal Counter is the ordinary case here: a Counter can be
+  confirmed while only Normal Artian prediction is unavailable
 - Never complete a Candidate right after the conversion, and never apply Keep
   Bonuses to the unknown five slots. Unlike normal-scope Keep (5.7), this is an
   unknown-input problem, not a prediction-support one
 - There is no `gogmaAdvance = 0` Bonus solution. The Bonus axis starts at the
   first Reset; no fake bonus set enters the stream
-- `estimatedNormalAdvance = null` and `RngAdvance.normalCounterDelta = null`
-  mean "not represented", never 0
+- `estimatedNormalAdvance = null` means Candidate Search does not represent a
+  Normal Counter advance as an absolute route dependency, never 0. It is a
+  separate concept from the runtime advance below
 - `searchStateHash` depends on Base Seed, Skill Counter, and Gogma Counter, and
-  never on a Normal Artian Counter, so later confirming that Counter does not
-  stale the Candidate
+  never on a Normal Artian Counter, so confirming or changing that Counter does
+  not stale the Candidate. That is not a licence to leave the current Counter
+  unadvanced when the Plan runs
 - The RouteKind goes into `searchedRoutes`; the reason the predicted variant did
   not run is reported as a `CandidateSearchWarning`, not as a `skippedRoutes`
   entry for the same RouteKind
@@ -1979,13 +1984,29 @@ must not enter BuildRoute or IndexedDB before `create_material_gogma` succeeds.
 
 A blind `create_normal_artian` occupies no Counter stream position at all:
 `counterStream`, `counterBefore`, and `counterAfter` are `null`. It therefore
-has no absolute Counter precondition, never participates in a Counter position
-conflict, and never moves a persisted Counter. It is still a required physical
-PlanStep and is never `canSkipWhenCounterPassed`, and it is Entry-local like
-every other conversion action, so two Entries' blind forges are never one
-shared physical action. Do not generalize this to every `create_normal_artian`:
-the predicted variant keeps its existing Normal Counter precondition and is
-still rejected when that Counter is unavailable.
+has no absolute Counter precondition, is never rejected with
+`counter_before_current` or `counter_unavailable`, and never participates in a
+Counter position conflict. It is still a required physical PlanStep and is never
+`canSkipWhenCounterPassed`, and it is Entry-local like every other conversion
+action, so two Entries' blind forges are never one shared physical action. Do
+not generalize the missing precondition to every `create_normal_artian`: the
+predicted variant keeps its existing Normal Counter precondition and is still
+rejected when that Counter is unavailable.
+
+Having no Counter stream position is a property of the Route, not of the
+runtime. The player really forges one Normal Artian weapon, so when the tool
+currently holds a confirmed Counter for that weapon type
+(`isConfirmed === true` and `counter !== null`), that Counter advances through
+the same `advanceNormalCounter()` authority the predicted variant uses — never
+by writing `counter + 1` directly. An unconfirmed value, a `null` value, or an
+absent record stays exactly as it is: an unconfirmed value is not authority, so
+it is never advanced and no record is invented. Beam Search and Trace Replay
+share one helper for this; never fix one without the other. `RngAdvance` and
+`PlanStepDebugInfo` then report `1` plus the concrete positions when the
+Counter was confirmed, and `null` when it was not. Advancing a confirmed
+Counter can push a predicted Route past its own required position, which is
+physically correct; because a blind unit is not a conflict participant, that
+ordering is decided by Beam Search rather than by conflict resolution.
 
 Trace Replay carries the blind forge as an explicit runtime-only "unknown five
 slots" state. Never substitute a fabricated `RestorationBonusSet`. Conversion
@@ -2454,6 +2475,15 @@ Relevant test areas include:
   is later confirmed, while a predicted route's still changes
 - A blind `create_normal_artian` adds no RNG capability requirement, while a
   predicted one still requires its confirmed Counter
+- A blind `create_normal_artian` advances a confirmed Normal Counter by one in
+  both Beam Search and Trace Replay, reporting `normalCounterDelta = 1` with the
+  concrete debug positions, while an unconfirmed value, a `null` value, and an
+  absent record all stay untouched with `null` delta and `null` debug positions
+- The shared advance helper delegates to `advanceNormalCounter()` rather than
+  adding one itself, and leaves a different weapon type and a predicted creation
+  alone
+- Two blind Entries sharing one confirmed Normal Counter advance it once each,
+  in order, without becoming a Counter position conflict
 - Route validation rejects a blind route that completes at the conversion, Keeps
   before its first Reset, resets only Skills, forges more than one weapon, or
   carries a half-filled Normal Counter pair

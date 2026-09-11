@@ -14,7 +14,10 @@ import type {
   RngPredictionUnsupportedReason,
 } from '../rng/rngEngine'
 import { getPlannerPredictionSupport } from './plannerPredictionSupport'
-import { createPlannerPhysicalActionIdentity } from './plannerRouteProgress'
+import {
+  advanceBlindNormalCreationCounters,
+  createPlannerPhysicalActionIdentity,
+} from './plannerRouteProgress'
 import type { PlannerInput, PlannerSearchAction, PlannerSearchRngSnapshot, PlannerSearchState } from './plannerTypes'
 
 /** Non-persistent bridge between one physical Search Action and a future PlanStep. */
@@ -257,12 +260,18 @@ export function replayPlannerSearchTrace(input: PlannerInput, bestState: Planner
         const operation = action.routeOperation
         if (operation.type === 'create_normal_artian') {
           if (isBlindCreateNormalArtianOperation(operation)) {
-            // Blind creation calls no Normal prediction, reads no Normal Artian
-            // Counter, and moves no persisted Counter. The forged weapon is
-            // real, so it is recorded as an output whose five slots are simply
-            // unknown (`docs/PLANNER_SPEC.md` 11.0).
+            // Blind creation calls no Normal prediction and reads no Normal
+            // Artian Counter as a precondition. The forged weapon is real, so
+            // it is recorded as an output whose five slots are simply unknown,
+            // and a confirmed Normal Counter still advances through the same
+            // authority the Beam Search used (`docs/PLANNER_SPEC.md` 11.0).
+            // `applySnapshot()` below reconciles the runtime to the Search
+            // Action either way, so this keeps the Replay independently correct
+            // rather than dependent on that reconciliation.
             const created: TransientBonuses = { kind: 'unknown' }
             action.progressedBuildListEntryIds.forEach((id) => runtime.normals.set(id, [...(runtime.normals.get(id) ?? []), created]))
+            const advancedCounters = advanceBlindNormalCreationCounters(runtime.normalCounters, operation, engine)
+            if (advancedCounters !== null) runtime.normalCounters = advancedCounters
             expectedResult = result(null, null, null, null)
           } else {
             if (!engine.capabilities.supportsNormalArtianPrediction) return fail('engine_capability_missing', 'Normal prediction capability is unavailable.', index)

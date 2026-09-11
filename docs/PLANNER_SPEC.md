@@ -428,13 +428,34 @@ past + skip不可 -> 従来どおり counter_before_current などでfail closed
 blind create Normal([SEARCH_SPEC.md](./SEARCH_SPEC.md) 6.1.1)は
 `counterStream = null`、`counterBefore = counterAfter = null` を持つ。
 
+これは「このRouteのCandidate結果が特定のabsolute Normal Counter位置へ依存しない」という
+**Routeの性質**であり、「実行しても物理的にCounterが進まない」という**runtimeの主張ではない**。
+プレイヤーは実際に通常アーティアを1本作成し、ゲーム内Counterは1進む。
+2つを同一視してはならない。
+
+Routeの性質として次を維持する。
+
 - 絶対Normal Counter preconditionを要求しない。`counter_unavailable` の対象にしない
 - どのCounter位置も占有しないため、Counter位置競合のparticipantにならない
-- current Counterを一切書き換えない。persistedなNormal Counterも進めない
+- `counter_before_current` 等のCounter位置rejectの対象にしない
 - `canSkipWhenCounterPassed = false` である。必ず1 PlanStepとして実行する
 - predicted variantのcreate Normalは従来どおりNormal Counter streamに属し、確定Counterが
   無ければ `counter_unavailable` などでrejectされる。全 `create_normal_artian` から
   Counter確認を外してはならない
+
+runtimeの物理効果として次を行う。
+
+- action適用時に `${weaponTypeId}:${rarity}` のNormalArtianCounterを現在stateから探す
+- `isConfirmed === true && counter !== null` の場合だけ、既存 `advanceNormalCounter()`
+  authorityへ `operation.count` を渡して進める。`counter + 1` を直接書かない
+- unconfirmed、`counter = null`、recordなしの場合は現在stateを変更しない。
+  未確定値は権威ではないため進めず、架空のCounter recordも作らない
+- この更新はBeam SearchとTrace Replayで同一のauthorityを使う。片方だけ直してはならない
+
+結果として、blind createが確定Counterを進めたことにより、同じNormal Counter位置を必要と
+するpredicted Route unitが `counter_before_current` でrejectされることがある。これは
+物理的に正しい。blind unitはCounter位置競合のparticipantではないため、この実行順は
+conflict resolutionではなくBeam Searchの探索が決める。
 
 ##### Conflict判定と実行順序の支配関係
 
@@ -2977,7 +2998,8 @@ PlanStep変換用 `PlannerPlanStepDraft` を生成する。
   そのEntryの最後に作成したNormalだけを使用して全Normal transientを破棄する。未登録出力へ
   永続OwnedWeapon IDを割り当てない。
 - CreateNormalArtianOperationのpredicted variantは `count = forgeCount` をReplayし、`normalCounterAfter = normalCounterBefore + forgeCount` を検証する。convert対象は最後の結果であり、その位置は `candidateCounter = normalCounterBefore + forgeCount - 1` である
-- blind variant([SEARCH_SPEC.md](./SEARCH_SPEC.md) 6.1.1)ではNormal Predictionを呼ばず、NormalArtianCounterを読まず、`RngAdvance.normalCounterDelta = null` とする。物理的な通常アーティア1本は実在するため、Replay Runtimeは「5枠がunknownな作成結果」を保持する。unknownはruntime専用の明示的variantであり、架空の `RestorationBonusSet` を代入しない
+- blind variant([SEARCH_SPEC.md](./SEARCH_SPEC.md) 6.1.1)ではNormal Predictionを呼ばず、NormalArtianCounterをRoute preconditionとして読まない。物理的な通常アーティア1本は実在するため、Replay Runtimeは「5枠がunknownな作成結果」を保持する。unknownはruntime専用の明示的variantであり、架空の `RestorationBonusSet` を代入しない
+- blind variantのReplayも7.0.3と同じauthorityでNormal Counterを更新する。runtimeに `isConfirmed === true && counter !== null` のNormalArtianCounterが存在する場合は `advanceNormalCounter()` で進め、存在しない場合は変更しない。`RngAdvance.normalCounterDelta` は前者で `1`、後者で `null` になる。Planner applyだけを直してReplayを直さない実装は禁止する
 - unknown 5枠のtransientはconversionでそのまま継承され、`ExpectedResult.restorationBonuses` と `restorationBonusScope` は `null` になる。`null` は「予測しない」であり「ボーナスが存在しない」ではない
 - 各Actionの`rngBefore`一致を検証し、`rngAfter`との差分からRngAdvanceを作る。複数Normal
   Counterの変化やunknown→knownの差分は現行RngAdvanceで表せないためReplay failureとする。

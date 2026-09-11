@@ -126,6 +126,11 @@ describe('Candidate Search routes', () => {
   it('searches the forced Reset route without Normal Artian prediction support', async () => {
     const input = createCandidateSearchInput()
     input.routeFilter = 'normal_artian'
+    // The Normal Counter is confirmed here: only prediction is unavailable, so
+    // the RouteKind falls back to the forced Reset variant (SEARCH_SPEC 6.1.1).
+    expect(input.normalCounters[0]).toEqual(
+      expect.objectContaining({ counter: 4, isConfirmed: true }),
+    )
     const delegate = createCandidateSearchEngine(input, {
       resetResult: createRestorationBonusSet(),
     })

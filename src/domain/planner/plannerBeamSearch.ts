@@ -9,6 +9,7 @@ import type {
   TargetWeaponId,
 } from '../models/publicTypes'
 import { stableStringify } from '../models/publicTypes'
+import type { RngEngine } from '../rng/rngEngine'
 import {
   addRegisteredWeapon,
   canUseAsDestructiveGogmaSource,
@@ -24,6 +25,7 @@ import {
   isUnitBlockedByConflictResolution,
 } from './plannerConflictDetection'
 import {
+  advanceBlindNormalCreationCounters,
   advancePlannerWeaponSwitchMetric,
   arePlannerRouteUnitsShareable,
   currentPlannerCounterValue,
@@ -613,6 +615,7 @@ function applyRouteAction(
   selectedPhysicalActionKeysByConflictId: ReadonlyMap<string, readonly string[]>,
   targets: readonly TargetWeapon[],
   master: PlannerInput['master'],
+  engine: RngEngine,
 ): AppliedActionResult {
   const primaryEntry = entriesById.get(primary.entryId)
   if (!primaryEntry) {
@@ -643,6 +646,15 @@ function applyRouteAction(
     return { state: null, rejection: appliedInventory.rejection }
   }
   if (primary.counterStream !== null) setCurrentCounter(state, primary)
+  // Having no Counter stream position is a Route property, not a runtime one: a
+  // blind creation still forges a real weapon, so a confirmed Normal Counter
+  // advances here (`docs/PLANNER_SPEC.md` 7.0.3).
+  const blindAdvanced = advanceBlindNormalCreationCounters(
+    state.currentNormalCounters,
+    primary.operation,
+    engine,
+  )
+  if (blindAdvanced !== null) state.currentNormalCounters = blindAdvanced
   const mutatedSourceId = sourceMutatedByOperation(primary.operation)
   if (mutatedSourceId !== null) {
     state.sourceMutationVersionByOwnedWeaponId[mutatedSourceId] =
@@ -1236,6 +1248,7 @@ export async function runPlannerBeamSearch(
             stateConflictDetection.selectedPhysicalActionKeysByConflictId,
             targets,
             input.master,
+            dependencies.rngEngine,
           )
         } else {
           const target = targetsById.get(entry.targetWeaponId)
