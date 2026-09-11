@@ -869,9 +869,11 @@ Planner
 
 Candidate Search must not pre-read second and third copies of the same Ideal,
 distant alternative Ideals, or the Bonus-alternative by Skill-alternative product
-merely because the Planner might later hit a conflict. The initial search ends
-once one canonical Ideal is settled and every Practical within its operation
-count has been evaluated.
+merely because the Planner might later hit a conflict. With compromise conditions,
+the initial search ends once one canonical Ideal is settled and every Practical
+within its operation count has been evaluated (inclusive Practical horizon).
+Without any Practical Bonus, Alternative Rule, or Practical Skill condition,
+Search is Ideal-only: settle canonical Ideal ties without a Practical horizon.
 
 Only when Counter conflicts actually occur across Targets does the Planner
 re-search the conflicting Targets, look up the next Practical/Ideal for the
@@ -1020,15 +1022,21 @@ priorities; scope is the final stable semantic tie-break after multiset and
 operation types. This is initial-Search retention, not permanent dominance, and
 does not change B2 family-layout frontier dedup or lastResetDepth representatives.
 
-Historical B5-F1 behavior was scope-inclusive. Current Target compromise semantics require gogma_artian scope for every accepted Bonus match. IdealDifference and Similarity
-still use matchedBonusCount and Skill matches only, so normal scope with 5/5
-Ideal labels and matching Skills may be Practical with similarityScore 1.
+Under the historical B5-F1 contract, normal scope with 5/5 Ideal labels and
+matching Skills could be Practical with similarityScore 1. That acceptance rule
+is obsolete. Current Ideal / Practical / Alternative Bonus matches all require
+gogma_artian scope; normal_artian scope is never accepted as a Candidate,
+regardless of matching labels, Skills, or similarity score.
 Current tests reject normal-scope conversion D=2 and cover exploration
 continuing to a Gogma-scope canonical Ideal D=3 after Reset, and an existing
 normal-scope Gogma continuing Bonus exploration. The Gogma-scope current Ideal
-shortcut still makes zero amendment predictions. B5's scope-safe benchmark
-workloads and measured values are unchanged; benchmark input calculation metadata
-now uses the shared schema version 2. B5-F1 is independent of B6.
+shortcut still makes zero amendment predictions. B5's Browser Worker measurements
+and schema version 2 metadata describe the historical workload only. The Target
+compromise revision changed benchmark fixture conditions and workload, so current
+workloads must not be compared directly with those historical measured values.
+Current benchmark calculation metadata uses shared schema version 6; Vitest
+validation is not a replacement for a new Browser Worker performance measurement.
+Historically, B5-F1 was independent of B6.
 Planner constrained re-search is specified by B8-A and unimplemented until
 B8-B1.
 

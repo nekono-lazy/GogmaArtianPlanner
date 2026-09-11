@@ -26,7 +26,8 @@ Candidate Search再設計の背景、実測値、採用しなかった案、受�
 - Normal / Gogma / Skillは独立RNG streamとして独立に探索する
 - Bonus結果とSkill結果のCartesian productを列挙しない
 - 現在状態が既に理想条件を満たすstreamは探索しない
-- 初回検索はcanonical Idealと、その操作数以下のPractical評価を確定した時点で終了する
+- 妥協条件があるTargetの初回検索は、canonical Idealと、その操作数以下のPractical評価（inclusive Practical horizon）を確定した時点で終了する
+- Practical Bonus・Alternative Rule・Practical Skillがすべて未設定ならIdeal-only Searchとし、canonical Idealの同順位を確定するための探索は維持するが、Practical horizonは評価しない（5.6.2）
 - 保持集合を実装上の発見順へ依存させない
 - 理想品は実用ラインも必ず満たす(Ideal ⇒ Practical 包含不変条件)
 - Planner競合対策の先読みは初回検索の責務ではない

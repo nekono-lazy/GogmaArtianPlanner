@@ -229,10 +229,10 @@ function normalSource(
     restorationBonuses,
     restorationBonusScope: 'normal_artian' as const,
     seriesSkillId: null,
-    groupSkillId: 'group_skill.fixture.a',
+    groupSkillId: null,
     status: null,
     isProtected: false,
-  } as unknown as OwnedWeapon
+  }
 }
 
 const operationTypes = (candidate: BuildCandidate) =>
