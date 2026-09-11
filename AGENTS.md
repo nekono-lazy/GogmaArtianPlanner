@@ -1112,6 +1112,57 @@ defaults, progress and Worker error handling, `CalculationContext.appSchemaVersi
 = 2`, and Production RNG semantics and version. Do not change `candidateStableKey`
 or the `BuildCandidate` ID generation rule as a side effect.
 
+### Candidate Search Notices and Observational Traces
+
+A `CandidateSearchWarning` carries an explicit `severity` of `info` or
+`warning`. `info` means the search succeeded under a narrower method than usual
+— the forced Reset Normal Artian route of SEARCH_SPEC 6.1.1 standing in for the
+predicted variant is the v1 case — and is neither an error nor a degraded
+result. `warning` keeps its existing meaning: a capability gap, an excluded
+prediction, or a Target definition the search had to skip. Never downgrade an
+existing warning to `info` just because some fallback succeeded, and never emit
+a notice without an explicit severity. The Search UI renders the two groups as
+separate Alerts headed お知らせ and 警告.
+
+The normal UI never shows an internal reason enum such as
+`normal_counter_unconfirmed`, or raw English Domain terms, inside a notice. A
+reason only selects which sentence the Domain composes. The forced Reset notice
+must distinguish its two causes, because a Normal Artian Counter can be
+confirmed while only Normal Artian prediction is unavailable: saying "the
+Counter is unconfirmed" in that case is simply false.
+
+`BuildCandidate.skillAmendmentTrace` is the Skill counterpart of
+`bonusAmendmentTrace` and follows the same observational contract. It records
+the predicted Series / Group Skills of each `reset_skills`, bound by
+`operationIndex` inside the finished `BuildRoute.operations` so consecutive
+Reset Skills never shift by one. It is optional, so Candidates persisted before
+it existed stay valid and are never staled or migrated for its absence. A
+Search-generated Candidate with no Reset Skills records `[]`; `undefined` means
+a pre-field Candidate, and the UI displays nothing for either.
+
+The trace never participates in Candidate semantic identity, the Candidate ID
+`semanticHash`, `candidateStableKey`, the deduplication key, `searchStateHash`,
+`referencedOwnedWeaponsHash`, the `BuildCandidateMeaning` fingerprint,
+retention, ordering, dominance, Ideal/Practical classification, staleness, or
+Planner route identity. `candidate.seriesSkillId` / `candidate.groupSkillId`
+remain the authority for the Route's final Skills; the trace only explains how
+it got there. A count mismatch between the Route's `reset_skills` operations
+and the predicted results is an internal inconsistency and fails loudly — never
+truncate to the shorter side and never repeat the final Skills on every step.
+
+The values come from the existing Skill stream's memoized predictions, so the
+trace adds no `predictSkills` call. UI, presentation, and CandidateCard code
+must not call `predictSkills()` or re-run any RNG to render it. The trace is
+RouteKind-independent: any Candidate containing `reset_skills` gets one. The
+initial Skill assignment of `convert_normal_to_gogma` is out of its scope in
+v1, and `ConstrainedCandidate` carries no observational trace at all.
+
+These are presentation and reporting concerns only. They change no Search
+semantics, Planner semantics, RNG algorithm, or Dexie table shape, so
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 5`, `DATABASE_SCHEMA_VERSION = 1`,
+`AppSettings.schemaVersion = 1`, `PRODUCTION_RNG_ENGINE_VERSION =
+production-rng:c5-e2`, and `supportsSeedSearch = false` are all unchanged.
+
 ### Normal Artian Route
 
 Route kind:
@@ -2659,6 +2710,28 @@ Relevant test areas include:
   restarts `processedWorkItems` per Target, and ends at
   `completedTargets === totalTargets`
 - Candidate results are identical with and without a progress callback
+- The forced Reset Normal Artian notice is `severity: 'info'` with Japanese text
+  that contains no internal reason enum and no English Domain term, and a
+  confirmed Counter with unavailable Normal prediction never reports the Counter
+  as unconfirmed
+- A genuine capability or Target-definition warning keeps `severity: 'warning'`
+- The Search page renders info notices under お知らせ and warnings under 警告, in
+  separate Alerts when both are present
+- One `reset_skills` records its predicted Series / Group, several consecutive
+  ones each keep their own result without shifting by one, and the last entry
+  equals the Candidate's final Skills
+- A Candidate with no `reset_skills` records `skillAmendmentTrace = []`, and a
+  pre-field Candidate with `undefined` validates, renders, and shows no invented
+  prediction
+- `skillAmendmentTrace` and `bonusAmendmentTrace` bind to disjoint, correct
+  `operationIndex` values in one mixed Route
+- A `reset_skills` count that disagrees with the predicted result count fails
+  loudly instead of padding or truncating
+- Adding, removing, or altering `skillAmendmentTrace` changes no Candidate ID,
+  `candidateStableKey`, deduplication key, meaning fingerprint, `searchStateHash`,
+  or `referencedOwnedWeaponsHash`
+- A conversion Route records its Reset Skills the same way an existing-Gogma
+  Route does, and never reports the conversion itself as a Reset Skills result
 - Native Worker `error` and `messageerror` reject every pending search, remove
   every listener, terminate the Worker, and make later searches reject, while
   the Worker protocol `type: 'error'` response keeps its existing behavior

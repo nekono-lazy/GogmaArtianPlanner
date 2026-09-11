@@ -13,6 +13,7 @@ import type {
 import { isBlindCreateNormalArtianOperation } from '../domain/models/publicTypes'
 import type {
   CandidateRouteFilter,
+  CandidateSearchNoticeSeverity,
   CandidateSearchProgressPhase,
   SkippedRouteReason,
 } from '../domain/search'
@@ -100,6 +101,15 @@ export const candidateSearchProgressPhaseLabels: Record<CandidateSearchProgressP
   preparing: '準備中',
   searching: '探索中',
   finalizing: '結果を整理中',
+}
+
+/**
+ * A search that succeeded under a narrower method is an ordinary result, not a
+ * failure, so it is headed as a notice rather than a warning.
+ */
+export const candidateSearchNoticeSeverityLabels: Record<CandidateSearchNoticeSeverity, string> = {
+  info: 'お知らせ',
+  warning: '警告',
 }
 
 export const skippedRouteReasonLabels: Record<SkippedRouteReason, string> = {

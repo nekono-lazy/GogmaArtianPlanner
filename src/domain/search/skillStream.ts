@@ -4,6 +4,7 @@ import type {
   RngState,
   RouteOperation,
   SeriesSkillId,
+  SkillAmendmentResult,
   TargetWeapon,
 } from '../models/publicTypes'
 import type { RngEngine, SkillPredictionResult } from '../rng/rngEngine'
@@ -33,6 +34,16 @@ export interface SkillStreamInput {
 export interface SkillStreamStep {
   skillCounterBefore: number
   skillCounterAfter: number
+  /**
+   * The Skills this Reset Skills operation produces, i.e. the stream's own
+   * memoized prediction at `skillCounterBefore`.
+   *
+   * Recorded while the step is generated, so it is the prediction this step
+   * actually used rather than a later re-derivation. Observational only: no
+   * retention key, ordering comparator, or Candidate identity reads it.
+   */
+  seriesSkillId: SeriesSkillId | null
+  groupSkillId: GroupSkillId | null
 }
 
 /**
@@ -87,6 +98,25 @@ export function resetSkillsOperations(
   }))
 }
 
+/**
+ * The predicted Skills produced by each Reset Skills of one solution, in
+ * execution order and aligned index-for-index with `resetSkillsOperations()`.
+ *
+ * Both slice the same `set.steps` prefix, so entry `i` is always the result of
+ * operation `i` of that same solution. The values come from the Skill stream's
+ * own memoized prediction, so this adds no `predictSkills` call and no second
+ * RNG implementation.
+ */
+export function skillAmendmentResults(
+  set: SkillStreamSolutionSet,
+  resetCount: number,
+): SkillAmendmentResult[] {
+  return set.steps.slice(0, resetCount).map((step) => ({
+    seriesSkillId: step.seriesSkillId,
+    groupSkillId: step.groupSkillId,
+  }))
+}
+
 export function createTargetSkillStream(
   target: TargetWeapon,
   input: SkillStreamInput,
@@ -125,7 +155,12 @@ export function createTargetSkillStream(
       const skillCounterAfter = engine.advanceSkillCounter(skillCounter, {
         type: 'reset_skills',
       })
-      set.steps.push({ skillCounterBefore: skillCounter, skillCounterAfter })
+      set.steps.push({
+        skillCounterBefore: skillCounter,
+        skillCounterAfter,
+        seriesSkillId: skills.seriesSkillId,
+        groupSkillId: skills.groupSkillId,
+      })
       set.solutions.push({
         resetCount: set.steps.length,
         seriesSkillId: skills.seriesSkillId,

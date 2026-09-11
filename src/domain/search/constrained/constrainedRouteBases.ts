@@ -163,6 +163,7 @@ export async function createConstrainedRouteBases(
         groupSkillId: conversion.skills.groupSkillId,
         estimatedSkillAdvance: 1,
         operations: [],
+        amendmentResults: [],
       },
       skillAdvanceOffset: 1,
       startSkillCounter: skillIdeal ? null : conversion.skillCounterAfter,
@@ -304,6 +305,7 @@ export async function createConstrainedRouteBases(
         groupSkillId: source.groupSkillId,
         estimatedSkillAdvance: 0,
         operations: [],
+        amendmentResults: [],
       },
       skillAdvanceOffset: 0,
       startSkillCounter:

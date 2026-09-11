@@ -14,6 +14,7 @@ const input = createCandidateSearchInput()
 const target = input.targetWeapons[0]
 const skill = (depth: number, series = 'series.' + depth): RouteSkillSolution => ({
   resetCount: depth, seriesSkillId: series, groupSkillId: null, estimatedSkillAdvance: depth, operations: [],
+  amendmentResults: [],
 })
 const bonus = (depth: number, ideal = false): RouteBonusSolution => ({
   gogmaAdvance: depth, lastResetDepth: depth, restorationBonusScope: 'gogma_artian',

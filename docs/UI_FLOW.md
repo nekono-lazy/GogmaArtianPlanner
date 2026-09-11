@@ -454,9 +454,27 @@ TargetWeaponごとに候補を検索し、作成リストへ追加する。
 - `reset_bonuses` / `keep_bonuses` 以外のOperationには予測復元ボーナスを表示しない
 - `bonusAmendmentTrace` を持たない既存Candidateは予測結果を表示せず、記録がない旨だけを示す。
   stale扱いにしない
+- 候補詳細の作成ルートでは、`reset_skills` の各操作について操作直後の予測
+  シリーズスキル / グループスキルを表示する。表示はMaster由来の日本語labelとし、
+  Master IDをそのまま表示しない。`null` のlabelは既存helperの表記に従う
+- 予測結果は `BuildCandidate.skillAmendmentTrace` が示す `operationIndex` に対応させて
+  表示し、`reset_skills` が連続しても対応がずれないようにする
+- `reset_skills` 以外のOperationには予測スキルを表示しない
+- `skillAmendmentTrace` を持たない既存Candidateは予測結果を表示せず、記録がない旨だけを
+  示す。stale扱いにせず、最終Skillを各Reset Skillsの予測結果として代用しない
+- 候補カード上部の最終シリーズ / グループ表示は維持する。これは完成状態であり、
+  作成ルートの予測は途中の各Reset Skills直後の状態なので意味が異なる
 - 予測結果はSearch / Domainが確定した値を表示するだけとし、UIスレッドでProduction RNGを
   再実行しない
 - `no_owned_weapon_available` の文言は武器種を限定しない。武器種はRouteKind labelが示す
+- `CandidateSearchWarning` は `severity` ごとに区別して表示する。`info` は見出し
+  「お知らせ」のinfo Alert、`warning` は見出し「警告」のwarning Alertとし、両方が
+  存在する場合はユーザーが区別できるよう別Alertへ分ける
+- 検索方法が限定されただけで検索自体は成立した場合を `warning` として表示しない。
+  6.1.1のblind Reset variantが正常に検索された場合がこれにあたり、「検索に失敗した」と
+  誤解されない文言にする
+- 通常UIへ内部reason enum（`normal_counter_unconfirmed` など）や英語Domain用語を
+  そのまま表示しない。技術的な詳細が必要な場合はDebug Modeへ置く
 
 ---
 

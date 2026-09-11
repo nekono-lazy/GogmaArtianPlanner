@@ -61,6 +61,15 @@ export function CandidateCard({
       (operation) =>
         operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses',
     )
+  // Same binding rule for the Skill side: consecutive Reset Skills operations
+  // are told apart by their own operation index, never by their position among
+  // the Reset Skills alone.
+  const skillAmendmentByOperationIndex = new Map(
+    (candidate.skillAmendmentTrace ?? []).map((step) => [step.operationIndex, step]),
+  )
+  const missingSkillAmendmentTrace =
+    candidate.skillAmendmentTrace === undefined &&
+    candidate.route.operations.some((operation) => operation.type === 'reset_skills')
   const sourceName = candidate.route.sourceOwnedWeaponId === null
     ? null
     : ownedWeapons.find(({ id }) => id === candidate.route.sourceOwnedWeaponId)?.name ??
@@ -122,9 +131,15 @@ export function CandidateCard({
                     この候補には各復元ボーナス操作後の予測結果が記録されていません。
                   </Typography>
                 )}
+                {missingSkillAmendmentTrace && (
+                  <Typography variant="body2" color="text.secondary">
+                    この候補には各スキルリセット後の予測結果が記録されていません。
+                  </Typography>
+                )}
                 <ol>
                   {candidate.route.operations.map((operation, index) => {
                     const amendment = amendmentByOperationIndex.get(index)
+                    const skillAmendment = skillAmendmentByOperationIndex.get(index)
                     return (
                       <li key={`${operation.type}:${index}`}>
                         <Stack
@@ -149,6 +164,22 @@ export function CandidateCard({
                                 master={master}
                                 variant="outlined"
                               />
+                            </Stack>
+                          )}
+                          {skillAmendment && (
+                            <Stack
+                              direction="row"
+                              spacing={0.5}
+                              useFlexGap
+                              sx={{ flexWrap: 'wrap', alignItems: 'center' }}
+                            >
+                              <Typography variant="caption" color="text.secondary">
+                                予測結果:
+                              </Typography>
+                              <Typography variant="caption">
+                                シリーズ: {seriesSkillLabel(skillAmendment.seriesSkillId, master)} ／ グループ:{' '}
+                                {groupSkillLabel(skillAmendment.groupSkillId, master)}
+                              </Typography>
                             </Stack>
                           )}
                         </Stack>

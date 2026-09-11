@@ -8,6 +8,7 @@ import type {
   RestorationBonusSet,
   RouteOperation,
   SeriesSkillId,
+  SkillAmendmentResult,
   TargetWeapon,
 } from '../models/publicTypes'
 import type { RngEngine } from '../rng/rngEngine'
@@ -34,6 +35,7 @@ import {
 } from './streamSolutions'
 import {
   resetSkillsOperations,
+  skillAmendmentResults,
   type SkillStreamSolutionSet,
   type TargetSkillStream,
 } from './skillStream'
@@ -151,6 +153,7 @@ export function routeSkillSolutions(
         solution.resetCount,
         sourceOwnedWeaponId,
       ),
+      amendmentResults: skillAmendmentResults(set, solution.resetCount),
     })),
   ]
 }
@@ -190,6 +193,7 @@ export function createBaseCandidate(
   groupSkillId: GroupSkillId | null,
   route: BuildRoute,
   bonusAmendmentResults: readonly BonusAmendmentResult[],
+  skillAmendmentResults: readonly SkillAmendmentResult[],
 ): BuildCandidate | null {
   return createCandidateFromPrediction(
     context.target,
@@ -200,6 +204,7 @@ export function createBaseCandidate(
       groupSkillId,
       route,
       bonusAmendmentResults,
+      skillAmendmentResults,
     },
     context.input,
     context.execution,
@@ -299,6 +304,7 @@ export async function composeRouteCandidates(
         skill.groupSkillId,
         { kind, sourceOwnedWeaponId: base.sourceOwnedWeaponId, operations },
         bonus.amendmentResults,
+        skill.amendmentResults,
       )
       if (candidate) candidates.push(candidate)
     }

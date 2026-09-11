@@ -48,6 +48,7 @@ export async function searchOwnedNormalArtianRoutes(
     if (!resetSupport.supported) {
       result.warnings.push({
         targetWeaponId: target.id,
+        severity: 'warning',
         message: `Reset Bonuses was excluded from owned Normal Artian routes by input support (${resetSupport.reason}).`,
       })
       canSearchAmendments = false
@@ -66,7 +67,7 @@ export async function searchOwnedNormalArtianRoutes(
           sourceOwnedWeaponId: source.id,
           baseOperations: operations,
           zeroBonus: { gogmaAdvance: 0, lastResetDepth: 0, finalBonuses: source.restorationBonuses, restorationBonusScope: 'normal_artian', operations: [], amendmentResults: [] },
-          zeroSkill: { resetCount: 0, seriesSkillId: skills.seriesSkillId, groupSkillId: skills.groupSkillId, estimatedSkillAdvance: 1, operations: [] },
+          zeroSkill: { resetCount: 0, seriesSkillId: skills.seriesSkillId, groupSkillId: skills.groupSkillId, estimatedSkillAdvance: 1, operations: [], amendmentResults: [] },
           startSkillCounter: skillCounterAfter,
           bonusBase: canSearchAmendments ? { startGogmaCounter: input.rngState.gogmaCounter.value!, bonuses: source.restorationBonuses, restorationBonusScope: 'normal_artian' } : null,
           onCandidate: (candidate) => result.candidates.push(candidate),
@@ -74,7 +75,7 @@ export async function searchOwnedNormalArtianRoutes(
             if (notice.type !== 'unsupported') return
             const unsupported = notice.prediction
             const message = `${unsupported.type} was excluded after converting OwnedWeapon '${source.id}' by input support (${unsupported.reason}).`
-            if (!result.warnings.some((warning) => warning.message === message)) result.warnings.push({ targetWeaponId: target.id, message })
+            if (!result.warnings.some((warning) => warning.message === message)) result.warnings.push({ targetWeaponId: target.id, severity: 'warning', message })
           },
         })
       },

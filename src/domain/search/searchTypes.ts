@@ -94,8 +94,18 @@ export interface SkippedRoute {
   detail: string
 }
 
+/**
+ * How a Candidate Search notice should be presented.
+ *
+ * `info` is a search that succeeded under a narrower method than usual, which
+ * is neither an error nor a degraded result. `warning` is a genuine capability
+ * gap or an exclusion the user should weigh when reading the result.
+ */
+export type CandidateSearchNoticeSeverity = 'info' | 'warning'
+
 export interface CandidateSearchWarning {
   targetWeaponId: TargetWeaponId | null
+  severity: CandidateSearchNoticeSeverity
   message: string
 }
 

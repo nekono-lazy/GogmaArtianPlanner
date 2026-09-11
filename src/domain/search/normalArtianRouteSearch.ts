@@ -9,7 +9,11 @@ import {
   type RouteSearchResult,
 } from './routeSearchShared'
 import { selectSearchableNormalCounters } from './routeEligibility'
-import type { CandidateSearchWarning, SkippedRouteReason } from './searchTypes'
+import type {
+  CandidateSearchNoticeSeverity,
+  CandidateSearchWarning,
+  SkippedRouteReason,
+} from './searchTypes'
 import type { RouteSkillSolution } from './streamSolutions'
 
 interface RouteSkip {
@@ -106,10 +110,55 @@ function resetBonusesSkip(context: RouteSearchContext): RouteSkip | null {
 function addWarning(
   result: RouteSearchResult,
   targetWeaponId: CandidateSearchWarning['targetWeaponId'],
+  severity: CandidateSearchNoticeSeverity,
   message: string,
 ): void {
   if (result.warnings.some((warning) => warning.message === message)) return
-  result.warnings.push({ targetWeaponId, message })
+  result.warnings.push({ targetWeaponId, severity, message })
+}
+
+/**
+ * How the forced Reset Bonuses route (SEARCH_SPEC 6.1.1) is announced to the
+ * user.
+ *
+ * The route really was searched and its Candidates are ordinary Candidates, so
+ * this is an informational notice rather than a warning: the text says what was
+ * searched before it says what was unavailable. `docs/UI_FLOW.md` 9 forbids
+ * showing an internal reason enum in the normal UI, so the reason only selects
+ * which sentence is used and never appears in the text. The two supported
+ * causes are genuinely different facts and must not be collapsed into one: an
+ * unconfirmed Counter is not the same as missing Normal prediction, and a
+ * Counter can be confirmed while only the prediction is unavailable.
+ */
+function blindResetSearchedMessage(reason: SkippedRouteReason): string {
+  const cause =
+    reason === 'normal_counter_unconfirmed'
+      ? '通常アーティアのカウンターが未確定のため、作成直後の復元ボーナスは予測していません。'
+      : '通常アーティアの初期復元ボーナス予測を利用できないため、作成直後の復元ボーナスは予測していません。'
+  return [
+    '通常アーティアの初期ボーナスを使わないルートで検索しました。',
+    cause,
+    '通常アーティアを1本作成して巨戟化したあと、復元ボーナスを再抽選して5枠を確定するルートを検索しています。',
+  ].join('\n')
+}
+
+/**
+ * The counterpart notice for the case where the forced Reset route is not
+ * available either, so the whole RouteKind was skipped.
+ *
+ * This one stays a warning: nothing was searched for this RouteKind. The
+ * predicted variant's own blocker is already reported as a `SkippedRoute`, so
+ * the text explains only why the fallback could not stand in for it.
+ */
+function blindResetUnavailableMessage(reason: SkippedRouteReason): string {
+  const cause =
+    reason === 'rng_state_unconfirmed'
+      ? '巨戟アーティアのカウンターが未確定のため、復元ボーナスの再抽選を予測できません。'
+      : '現在の予測エンジンでは復元ボーナスの再抽選を予測できません。'
+  return [
+    '通常アーティアの初期ボーナスを使わないルートも実行できなかったため、通常アーティア経由のルートは検索していません。',
+    cause,
+  ].join('\n')
 }
 
 interface ConversionBase {
@@ -165,6 +214,7 @@ export async function searchNormalArtianRoutes(
         groupSkillId: skills.groupSkillId,
         estimatedSkillAdvance: 1,
         operations: [],
+        amendmentResults: [],
       },
     }
   }
@@ -173,6 +223,7 @@ export async function searchNormalArtianRoutes(
     addWarning(
       result,
       target.id,
+      'warning',
       `${notice.prediction.type} was excluded from the Normal Artian route by input support (${notice.prediction.reason}).`,
     )
   }
@@ -206,20 +257,12 @@ function searchBlindResetNormalRoute(
   const resetSkip = resetBonusesSkip(context)
   if (resetSkip !== null) {
     result.skippedRoutes.push({ route: 'normal_artian_to_gogma', ...normalSkip })
-    addWarning(
-      result,
-      target.id,
-      `The forced Reset Bonuses Normal Artian route was also unavailable (${resetSkip.reason}: ${resetSkip.detail}).`,
-    )
+    addWarning(result, target.id, 'warning', blindResetUnavailableMessage(resetSkip.reason))
     return
   }
 
   result.searchedRoutes.push('normal_artian_to_gogma')
-  addWarning(
-    result,
-    target.id,
-    `Normal Artian prediction was unavailable (${normalSkip.reason}), so only the forced Reset Bonuses route was searched: one Normal Artian is created without predicting its restoration bonuses, and Reset Bonuses then rewrites all five slots.`,
-  )
+  addWarning(result, target.id, 'info', blindResetSearchedMessage(normalSkip.reason))
   scheduler.queue.enqueue({
     // create + convert + the mandatory first Reset Bonuses.
     lowerBound: 3,
@@ -282,6 +325,7 @@ function searchPredictedNormalRoutes(
       addWarning(
         result,
         target.id,
+        'warning',
         `Reset Bonuses was excluded from the Normal Artian route by input support (${resetSupport.reason}).`,
       )
       canSearchAmendments = false

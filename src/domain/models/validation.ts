@@ -902,6 +902,80 @@ function validateCandidateBonusAmendmentTrace(
   }
 }
 
+/**
+ * The Skill counterpart of `validateCandidateBonusAmendmentTrace()`.
+ *
+ * Entries correspond one-to-one and in execution order with the Route's
+ * `reset_skills` operations, and the last entry is what the Candidate actually
+ * ends up holding. The Route may continue with bonus amendments after its last
+ * Reset Skills, so the comparison is against the last Skill amendment, not the
+ * last operation.
+ *
+ * The field is optional so Candidates persisted before it existed remain valid.
+ * An absent trace is never an issue; a wrong one always is.
+ */
+function validateCandidateSkillAmendmentTrace(
+  candidate: BuildCandidate,
+  issues: DomainValidationIssue[],
+): void {
+  const trace = candidate.skillAmendmentTrace
+  if (trace === undefined) return
+  const amendmentIndexes = candidate.route.operations.flatMap(
+    (operation, index) => (operation.type === 'reset_skills' ? [index] : []),
+  )
+  if (trace.length !== amendmentIndexes.length) {
+    addIssue(
+      issues,
+      'skillAmendmentTrace',
+      'invalid_state',
+      'skillAmendmentTrace must have one entry per Reset Skills operation.',
+    )
+    return
+  }
+  trace.forEach((step, index) => {
+    const path = `skillAmendmentTrace[${index}]`
+    if (step.operationIndex !== amendmentIndexes[index]) {
+      addIssue(
+        issues,
+        `${path}.operationIndex`,
+        'invalid_state',
+        'skillAmendmentTrace entries must follow the route Reset Skills order.',
+      )
+      return
+    }
+    if (step.operationType !== 'reset_skills') {
+      addIssue(
+        issues,
+        `${path}.operationType`,
+        'invalid_literal',
+        'skillAmendmentTrace operationType must be reset_skills.',
+      )
+    }
+    if (step.seriesSkillId !== null) validateId(step.seriesSkillId, `${path}.seriesSkillId`, issues)
+    if (step.groupSkillId !== null) validateId(step.groupSkillId, `${path}.groupSkillId`, issues)
+  })
+
+  const last = trace.at(-1)
+  if (!last) return
+  const lastPath = `skillAmendmentTrace[${trace.length - 1}]`
+  if (last.seriesSkillId !== candidate.seriesSkillId) {
+    addIssue(
+      issues,
+      `${lastPath}.seriesSkillId`,
+      'invalid_state',
+      'The last Skill amendment must match the Candidate series skill.',
+    )
+  }
+  if (last.groupSkillId !== candidate.groupSkillId) {
+    addIssue(
+      issues,
+      `${lastPath}.groupSkillId`,
+      'invalid_state',
+      'The last Skill amendment must match the Candidate group skill.',
+    )
+  }
+}
+
 export function validateBuildCandidate(
   candidate: BuildCandidate,
   ownedWeapons?: readonly OwnedWeapon[],
@@ -948,6 +1022,7 @@ export function validateBuildCandidate(
   validateCalculationContext(candidate.calculationContext, 'calculationContext', issues)
   validateId(candidate.searchRunId, 'searchRunId', issues)
   validateCandidateBonusAmendmentTrace(candidate, issues)
+  validateCandidateSkillAmendmentTrace(candidate, issues)
 
   if (candidate.route.kind === 'existing_gogma_reset_skills' && ownedWeapons) {
     const source = ownedWeapons.find(({ id }) => id === candidate.route.sourceOwnedWeaponId)
