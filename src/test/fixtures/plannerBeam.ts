@@ -156,7 +156,9 @@ export function routeEntry(
           .reduce(
             (total, operation) =>
               total +
-              (operation.type === 'create_normal_artian'
+              (operation.type === 'create_normal_artian' &&
+              operation.normalCounterAfter !== null &&
+              operation.normalCounterBefore !== null
                 ? operation.normalCounterAfter - operation.normalCounterBefore
                 : 0),
             0,

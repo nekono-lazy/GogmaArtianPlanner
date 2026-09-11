@@ -10,24 +10,91 @@ import {
 import { createRestorationBonusSet } from '../../test/fixtures/domainData'
 import type { NormalArtianCounter, OwnedWeapon } from '../models/publicTypes'
 import { FakeRngEngine, type FakeRngFixtures } from '../rng/fakeRngEngine'
+import type { RngEngine } from '../rng/rngEngine'
 
 const deterministicExecution = {
   now: () => SEARCH_FIXTURE_TIME,
   nowMs: () => 100,
 }
 
+/** Narrow Engine decorator; the delegate keeps every unmentioned behaviour. */
+function overrideEngine(
+  engine: RngEngine,
+  overrides: Partial<Pick<RngEngine, 'capabilities' | 'predictNormalArtian'>>,
+): RngEngine {
+  return {
+    version: engine.version,
+    capabilities: overrides.capabilities ?? engine.capabilities,
+    getPredictionSupport: engine.getPredictionSupport.bind(engine),
+    normalizeSeed: engine.normalizeSeed.bind(engine),
+    predictGogmaBonus: engine.predictGogmaBonus.bind(engine),
+    predictSkills: engine.predictSkills.bind(engine),
+    predictNormalArtian:
+      overrides.predictNormalArtian ?? engine.predictNormalArtian.bind(engine),
+    advanceGogmaCounter: engine.advanceGogmaCounter.bind(engine),
+    advanceSkillCounter: engine.advanceSkillCounter.bind(engine),
+    advanceNormalCounter: engine.advanceNormalCounter.bind(engine),
+  }
+}
+
 describe('Candidate Search routes', () => {
-  it('skips a Normal route when the relevant Counter is unconfirmed', async () => {
+  it('searches only the forced Reset route when the relevant Counter is unconfirmed', async () => {
     const input = createCandidateSearchInput()
     input.routeFilter = 'normal_artian'
     input.normalCounters[0].counter = null
     input.normalCounters[0].isConfirmed = false
+    const predictNormalArtian = vi.fn()
+    const result = await searchCandidates(
+      input,
+      overrideEngine(createCandidateSearchEngine(input, {
+        resetResult: createRestorationBonusSet(),
+      }), { predictNormalArtian }),
+      deterministicExecution,
+    )
+    const targetResult = result.targetResults[0]
+    // The RouteKind is searched, not skipped: the forced Reset variant needs no
+    // Normal Artian Counter (SEARCH_SPEC 6.1.1).
+    expect(targetResult.searchedRoutes).toContain('normal_artian_to_gogma')
+    expect(targetResult.skippedRoutes).not.toContainEqual(
+      expect.objectContaining({ route: 'normal_artian_to_gogma' }),
+    )
+    expect(predictNormalArtian).not.toHaveBeenCalled()
+    expect(result.warnings.some(({ message }) =>
+      message.includes('normal_counter_unconfirmed') &&
+      message.includes('forced Reset Bonuses route'),
+    )).toBe(true)
+    const candidate = targetResult.candidates.find(
+      ({ route }) => route.kind === 'normal_artian_to_gogma',
+    )
+    expect(candidate?.route.operations).toEqual([
+      expect.objectContaining({
+        type: 'create_normal_artian',
+        rarity: 8,
+        count: 1,
+        normalCounterBefore: null,
+        normalCounterAfter: null,
+      }),
+      expect.objectContaining({ type: 'convert_normal_to_gogma' }),
+      expect.objectContaining({ type: 'reset_bonuses', sourceOwnedWeaponId: null }),
+    ])
+    expect(candidate?.restorationBonusScope).toBe('gogma_artian')
+    expect(candidate?.estimatedNormalAdvance).toBeNull()
+    expect(candidate?.estimatedGogmaAdvance).toBe(1)
+    expect(candidate?.referencedOwnedWeaponsHash).toBeNull()
+  })
+
+  it('keeps the forced Reset route unavailable without a confirmed Gogma Counter', async () => {
+    const input = createCandidateSearchInput()
+    input.routeFilter = 'normal_artian'
+    input.normalCounters[0].counter = null
+    input.normalCounters[0].isConfirmed = false
+    input.rngState.gogmaCounter = { value: null, isConfirmed: false, source: null }
     const result = await searchCandidates(
       input,
       createCandidateSearchEngine(input),
       deterministicExecution,
     )
-    expect(result.targetResults[0].skippedRoutes).not.toContainEqual(expect.objectContaining({ route: 'normal_artian_to_gogma', reason: 'normal_prediction_unsupported' }))
+    expect(result.targetResults[0].searchedRoutes).not.toContain('normal_artian_to_gogma')
     expect(result.targetResults[0].skippedRoutes).toContainEqual(
       expect.objectContaining({
         route: 'normal_artian_to_gogma',
@@ -36,7 +103,101 @@ describe('Candidate Search routes', () => {
     )
   })
 
-  it.each([6, 7])('does not search a newly-created rarity %i Normal route', async (rarity) => {
+  it('keeps the forced Reset route unavailable without a confirmed Skill Counter', async () => {
+    const input = createCandidateSearchInput()
+    input.routeFilter = 'normal_artian'
+    input.normalCounters[0].counter = null
+    input.normalCounters[0].isConfirmed = false
+    input.rngState.skillCounter = { value: null, isConfirmed: false, source: null }
+    const result = await searchCandidates(
+      input,
+      createCandidateSearchEngine(input),
+      deterministicExecution,
+    )
+    expect(result.targetResults[0].searchedRoutes).not.toContain('normal_artian_to_gogma')
+    expect(result.targetResults[0].skippedRoutes).toContainEqual(
+      expect.objectContaining({
+        route: 'normal_artian_to_gogma',
+        reason: 'normal_counter_unconfirmed',
+      }),
+    )
+  })
+
+  it('searches the forced Reset route without Normal Artian prediction support', async () => {
+    const input = createCandidateSearchInput()
+    input.routeFilter = 'normal_artian'
+    // The Normal Counter is confirmed here: only prediction is unavailable, so
+    // the RouteKind falls back to the forced Reset variant (SEARCH_SPEC 6.1.1).
+    expect(input.normalCounters[0]).toEqual(
+      expect.objectContaining({ counter: 4, isConfirmed: true }),
+    )
+    const delegate = createCandidateSearchEngine(input, {
+      resetResult: createRestorationBonusSet(),
+    })
+    const result = await searchCandidates(
+      input,
+      overrideEngine(delegate, {
+        capabilities: {
+          ...delegate.capabilities,
+          supportsNormalArtianPrediction: false,
+        },
+        predictNormalArtian: vi.fn(() => {
+          throw new Error('Normal prediction must not be called.')
+        }),
+      }),
+      deterministicExecution,
+    )
+    const targetResult = result.targetResults[0]
+    expect(targetResult.searchedRoutes).toContain('normal_artian_to_gogma')
+    expect(targetResult.candidates.some(({ route }) =>
+      route.kind === 'normal_artian_to_gogma' &&
+      route.operations.some((operation) =>
+        operation.type === 'create_normal_artian' &&
+        operation.normalCounterBefore === null,
+      ),
+    )).toBe(true)
+  })
+
+  it('never creates more than one Normal Artian on the forced Reset route', async () => {
+    const input = createCandidateSearchInput()
+    input.routeFilter = 'normal_artian'
+    input.normalCounters = []
+    input.settings.maxNormalAdvance = 5
+    input.settings.maxGogmaAdvance = 3
+    const result = await searchCandidates(
+      input,
+      createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
+      deterministicExecution,
+    )
+    const creations = result.targetResults[0].candidates
+      .flatMap(({ route }) => route.operations)
+      .filter((operation) => operation.type === 'create_normal_artian')
+    expect(creations.length).toBeGreaterThan(0)
+    expect(creations.every((operation) =>
+      operation.type === 'create_normal_artian' && operation.count === 1,
+    )).toBe(true)
+  })
+
+  it('produces no Candidate before the forced Reset rewrites the unknown slots', async () => {
+    const input = createCandidateSearchInput()
+    input.routeFilter = 'normal_artian'
+    input.normalCounters = []
+    const result = await searchCandidates(
+      input,
+      createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
+      deterministicExecution,
+    )
+    const candidates = result.targetResults[0].candidates.filter(
+      ({ route }) => route.kind === 'normal_artian_to_gogma',
+    )
+    expect(candidates.length).toBeGreaterThan(0)
+    expect(candidates.every(({ route, restorationBonusScope }) =>
+      restorationBonusScope === 'gogma_artian' &&
+      route.operations.some(({ type }) => type === 'reset_bonuses'),
+    )).toBe(true)
+  })
+
+  it.each([6, 7])('never uses a rarity %i Normal Counter', async (rarity) => {
     const input = createCandidateSearchInput()
     input.routeFilter = 'normal_artian'
     input.normalCounters = [
@@ -47,20 +208,94 @@ describe('Candidate Search routes', () => {
       } as unknown as NormalArtianCounter,
     ]
     input.ownedWeapons = []
+    const predictNormalArtian = vi.fn()
     const result = await searchCandidates(
       input,
-      createCandidateSearchEngine(input),
+      overrideEngine(createCandidateSearchEngine(input, {
+        resetResult: createRestorationBonusSet(),
+      }), { predictNormalArtian }),
       deterministicExecution,
     )
-    expect(result.targetResults[0].searchedRoutes).not.toContain(
-      'normal_artian_to_gogma',
+    // A rarity 6 / 7 Counter is not a searchable Counter, so no predicted
+    // Normal offset exists. Only the forced Reset variant remains, and it
+    // creates a rarity 8 weapon while reading no Counter at all.
+    expect(predictNormalArtian).not.toHaveBeenCalled()
+    const creations = result.targetResults[0].candidates
+      .flatMap(({ route }) => route.operations)
+      .filter((operation) => operation.type === 'create_normal_artian')
+    expect(creations.every((operation) =>
+      operation.type === 'create_normal_artian' &&
+      operation.rarity === 8 &&
+      operation.normalCounterBefore === null,
+    )).toBe(true)
+  })
+
+  it('keeps the forced Reset route unavailable without Reset Bonuses support', async () => {
+    const input = createCandidateSearchInput()
+    input.routeFilter = 'normal_artian'
+    input.normalCounters = []
+    const delegate = createCandidateSearchEngine(input)
+    const result = await searchCandidates(
+      input,
+      overrideEngine(delegate, {
+        capabilities: { ...delegate.capabilities, supportsGogmaPrediction: false },
+      }),
+      deterministicExecution,
     )
+    expect(result.targetResults[0].searchedRoutes).not.toContain('normal_artian_to_gogma')
     expect(result.targetResults[0].skippedRoutes).toContainEqual(
       expect.objectContaining({
         route: 'normal_artian_to_gogma',
         reason: 'normal_counter_unconfirmed',
       }),
     )
+    expect(result.warnings.some(({ message }) =>
+      message.includes('gogma_prediction_unsupported'),
+    )).toBe(true)
+  })
+
+  it('keeps the owned Normal route on its registered bonuses beside the forced Reset route', async () => {
+    const input = createCandidateSearchInput()
+    input.routeFilter = 'normal_artian'
+    input.normalCounters = []
+    const source = input.ownedWeapons[0]
+    const registeredBonuses = createRestorationBonusSet()
+    input.ownedWeapons = [{
+      ...source,
+      kind: 'normal',
+      rarity: 8,
+      restorationBonuses: registeredBonuses,
+      restorationBonusScope: 'normal_artian',
+      seriesSkillId: null,
+      groupSkillId: null,
+      status: null,
+      isProtected: false,
+    } as OwnedWeapon]
+    const result = await searchCandidates(
+      input,
+      createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
+      deterministicExecution,
+    )
+    const targetResult = result.targetResults[0]
+    expect(targetResult.searchedRoutes).toEqual(expect.arrayContaining([
+      'normal_artian_to_gogma',
+      'owned_normal_artian_to_gogma',
+    ]))
+    // The owned Normal route keeps using its registered five slots, so a
+    // conversion-only Candidate in `normal_artian` scope still exists.
+    expect(targetResult.candidates).toContainEqual(expect.objectContaining({
+      restorationBonusScope: 'normal_artian',
+      finalBonuses: registeredBonuses,
+      route: expect.objectContaining({
+        kind: 'owned_normal_artian_to_gogma',
+        sourceOwnedWeaponId: source.id,
+      }),
+    }))
+    // The blind variant never borrows those registered bonuses.
+    expect(targetResult.candidates.every(({ route, restorationBonusScope }) =>
+      route.kind !== 'normal_artian_to_gogma' ||
+      restorationBonusScope === 'gogma_artian',
+    )).toBe(true)
   })
 
   it('does not skip a Normal route only because the placeholder LotteryMaster is disabled', async () => {
@@ -368,11 +603,15 @@ describe('Candidate Search routes', () => {
     const targetResult = result.targetResults[0]
     expect(targetResult.searchedRoutes).toContain('existing_gogma_reset_bonuses')
     expect(targetResult.searchedRoutes).toContain('existing_gogma_reset_skills')
-    expect(targetResult.searchedRoutes).not.toContain('normal_artian_to_gogma')
-    expect(targetResult.skippedRoutes).toContainEqual(expect.objectContaining({
-      route: 'normal_artian_to_gogma',
-      reason: 'normal_counter_unconfirmed',
-    }))
+    // An unknown Normal Counter no longer removes the Normal RouteKind, but it
+    // still removes every predicted Normal offset: only the forced Reset
+    // variant remains, and it reads no Normal Counter (SEARCH_SPEC 6.1.1).
+    expect(targetResult.candidates.every(({ route }) =>
+      route.operations.every((operation) =>
+        operation.type !== 'create_normal_artian' ||
+        operation.normalCounterBefore === null,
+      ),
+    )).toBe(true)
   })
 
   it('keeps Search availability, results, and semantic hashes unchanged across legacy Gate states', async () => {

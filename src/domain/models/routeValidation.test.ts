@@ -281,3 +281,121 @@ describe('Existing Gogma route-local bonus scope', () => {
     expect(validateBuildRoute(route, [inheritedSource()]).isValid).toBe(false)
   })
 })
+
+describe('blind Normal Artian route validation', () => {
+  function blindRoute(): BuildRoute {
+    return {
+      kind: 'normal_artian_to_gogma',
+      sourceOwnedWeaponId: null,
+      operations: [
+        {
+          type: 'create_normal_artian',
+          weaponTypeId: 'weapon.fixture.a',
+          rarity: 8,
+          count: 1,
+          normalCounterBefore: null,
+          normalCounterAfter: null,
+        },
+        {
+          type: 'convert_normal_to_gogma',
+          weaponTypeId: 'weapon.fixture.a',
+          skillCounterBefore: 7,
+          skillCounterAfter: 8,
+        },
+        {
+          type: 'reset_bonuses',
+          sourceOwnedWeaponId: null,
+          gogmaCounterBefore: 10,
+          gogmaCounterAfter: 11,
+        },
+      ],
+    }
+  }
+
+  it('accepts create, convert, and a forced Reset Bonuses', () => {
+    expect(validateBuildRoute(blindRoute()).isValid).toBe(true)
+  })
+
+  it('accepts Keep Bonuses and Reset Skills after the forced Reset', () => {
+    const route = blindRoute()
+    route.operations.push(
+      {
+        type: 'keep_bonuses',
+        sourceOwnedWeaponId: null,
+        gogmaCounterBefore: 11,
+        gogmaCounterAfter: 12,
+      },
+      {
+        type: 'reset_skills',
+        sourceOwnedWeaponId: null,
+        skillCounterBefore: 8,
+        skillCounterAfter: 9,
+      },
+    )
+    expect(validateBuildRoute(route).isValid).toBe(true)
+  })
+
+  it('rejects a route that completes right after the conversion', () => {
+    const route = blindRoute()
+    route.operations = route.operations.slice(0, 2)
+    expect(validateBuildRoute(route).issues).toContainEqual(
+      expect.objectContaining({ code: 'invalid_route_operation' }),
+    )
+  })
+
+  it('rejects Keep Bonuses as the first bonus amendment', () => {
+    const route = blindRoute()
+    route.operations[2] = {
+      type: 'keep_bonuses',
+      sourceOwnedWeaponId: null,
+      gogmaCounterBefore: 10,
+      gogmaCounterAfter: 11,
+    }
+    expect(validateBuildRoute(route).isValid).toBe(false)
+  })
+
+  it('rejects a Reset Skills only route', () => {
+    const route = blindRoute()
+    route.operations[2] = {
+      type: 'reset_skills',
+      sourceOwnedWeaponId: null,
+      skillCounterBefore: 8,
+      skillCounterAfter: 9,
+    }
+    expect(validateBuildRoute(route).isValid).toBe(false)
+  })
+
+  it('rejects more than one Normal Artian creation', () => {
+    const route = blindRoute()
+    route.operations.unshift(structuredClone(route.operations[0]))
+    expect(validateBuildRoute(route).isValid).toBe(false)
+  })
+
+  it('rejects a blind creation whose count is not one', () => {
+    const route = blindRoute()
+    const create = route.operations[0]
+    if (create.type !== 'create_normal_artian') throw new Error('fixture')
+    route.operations[0] = { ...create, count: 2 } as typeof create
+    expect(validateBuildRoute(route).issues).toContainEqual(
+      expect.objectContaining({ path: 'operations[0].count' }),
+    )
+  })
+
+  it('rejects a half-filled Normal Counter pair', () => {
+    const route = blindRoute()
+    const create = route.operations[0]
+    if (create.type !== 'create_normal_artian') throw new Error('fixture')
+    route.operations[0] = { ...create, normalCounterAfter: 5 } as typeof create
+    expect(validateBuildRoute(route).issues).toContainEqual(
+      expect.objectContaining({ path: 'operations[0].normalCounterBefore' }),
+    )
+  })
+
+  it('leaves the predicted Normal route contract unchanged', () => {
+    const route = normalRoute()
+    expect(validateBuildRoute(route).isValid).toBe(true)
+    expect(route.operations[0]).toEqual(
+      expect.objectContaining({ normalCounterBefore: 4, normalCounterAfter: 5 }),
+    )
+  })
+})

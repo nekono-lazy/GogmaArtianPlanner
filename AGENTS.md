@@ -224,6 +224,17 @@ closed as a whole rather than judged individually. Neither may be treated as a c
 executable Plan. This is a narrow artifact-specific exception, not general forward
 compatibility, and version 1 stays incompatible for every artifact.
 
+The forced Reset Normal Artian route added a new Route capability without
+changing how any existing artifact is interpreted, so it did not move
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION`. `CreateNormalArtianOperation` only
+widened: every previously persisted one carries numeric Counter positions and
+stays the predicted variant with its exact original meaning, the
+`searchStateHash` normalization is unchanged for it, and replaying it produces
+the same Plan. The new constraints apply only to an operation whose Counter
+positions are `null`, which no existing artifact contains. `DATABASE_SCHEMA_VERSION`,
+`AppSettings.schemaVersion`, and `PRODUCTION_RNG_ENGINE_VERSION` are unchanged
+too: no Dexie shape changed and no RNG algorithm changed.
+
 Unless compatibility is explicitly guaranteed, a CalculationContext change makes previous:
 
 - `BuildCandidate`
@@ -1109,7 +1120,16 @@ Route kind:
 normal_artian_to_gogma
 ```
 
-v1 searches only rarity-8 normal Artian weapons. If the required weapon-type rarity-8 Normal Artian counter is unknown, skip only this route.
+This RouteKind has two variants, discriminated only by whether
+`CreateNormalArtianOperation` carries absolute Normal Counter positions. No new
+RouteKind and no new persisted discriminant field is added, and every
+previously persisted `create_normal_artian` operation stays a predicted one
+with its exact original meaning.
+
+v1 searches only rarity-8 normal Artian weapons. If the required weapon-type
+rarity-8 Normal Artian counter is unknown, the predicted variant below is
+skipped — but the forced Reset variant may still run, so the RouteKind as a
+whole is not necessarily skipped.
 
 NormalArtianCounter is the 0-based block index of the result produced by the
 next forge. Keep candidate position and forge count distinct:
@@ -1159,6 +1179,56 @@ only `reset_bonuses` there and reports the exclusion as
 `keep_prediction_unsupported`, never as a game rule. That Reset produces five
 `gogma_artian` scope slots, after which `reset_bonuses` or `keep_bonuses` may
 occur in the same route.
+
+#### Forced Reset variant (unconfirmed Normal Counter)
+
+`docs/SEARCH_SPEC.md` 6.1.1 is the authority. Reset Bonuses never reads the
+five slots it replaces, so a Route that never reads the forged weapon's slots
+needs neither a confirmed Normal Artian Counter nor Normal Artian prediction.
+
+It is searched only when the predicted variant above cannot run — an
+unconfirmed Counter, a missing Base Seed, a missing Normal prediction
+capability, or an unsupported Normal input. It additionally requires a
+confirmed Base Seed, Skill Counter, and Gogma Counter, Skill prediction
+support, and Reset Bonuses prediction support.
+
+The operation sequence is exactly:
+
+```text
+create_normal_artian   count = 1, normalCounterBefore = normalCounterAfter = null
+convert_normal_to_gogma
+reset_bonuses          mandatory first bonus amendment
+[reset_bonuses | keep_bonuses]*
+[reset_skills]*
+```
+
+- Never forge more than one Normal Artian. Extra forges cannot change the
+  result and only add operations, materials, and Normal Counter progression
+- Never substitute a fabricated Normal Counter value. `null` means this Route's
+  Candidate result does not depend on any absolute Normal Counter position. It
+  does not mean the Counter is necessarily unknown, and it does not mean the
+  Counter fails to advance when the Plan runs — the forge is real either way.
+  A confirmed Normal Counter is the ordinary case here: a Counter can be
+  confirmed while only Normal Artian prediction is unavailable
+- Never complete a Candidate right after the conversion, and never apply Keep
+  Bonuses to the unknown five slots. Unlike normal-scope Keep (5.7), this is an
+  unknown-input problem, not a prediction-support one
+- There is no `gogmaAdvance = 0` Bonus solution. The Bonus axis starts at the
+  first Reset; no fake bonus set enters the stream
+- `estimatedNormalAdvance = null` means Candidate Search does not represent a
+  Normal Counter advance as an absolute route dependency, never 0. It is a
+  separate concept from the runtime advance below
+- `searchStateHash` depends on Base Seed, Skill Counter, and Gogma Counter, and
+  never on a Normal Artian Counter, so confirming or changing that Counter does
+  not stale the Candidate. That is not a licence to leave the current Counter
+  unadvanced when the Plan runs
+- The RouteKind goes into `searchedRoutes`; the reason the predicted variant did
+  not run is reported as a `CandidateSearchWarning`, not as a `skippedRoutes`
+  entry for the same RouteKind
+- Material costs are counted normally: one Normal Artian forge, one conversion,
+  and each amendment
+- The variant stays legal once Normal prediction is extended, because
+  "forge one, Reset immediately" can still be the shorter Candidate
 
 For this route:
 
@@ -1912,6 +1982,42 @@ constraints. Assign an available Material/unprotected Gogma; if none exists,
 replenish and reserve a future OwnedWeapon ID inside ProductionPlan only. The ID
 must not enter BuildRoute or IndexedDB before `create_material_gogma` succeeds.
 
+A blind `create_normal_artian` occupies no Counter stream position at all:
+`counterStream`, `counterBefore`, and `counterAfter` are `null`. It therefore
+has no absolute Counter precondition, is never rejected with
+`counter_before_current` or `counter_unavailable`, and never participates in a
+Counter position conflict. It is still a required physical PlanStep and is never
+`canSkipWhenCounterPassed`, and it is Entry-local like every other conversion
+action, so two Entries' blind forges are never one shared physical action. Do
+not generalize the missing precondition to every `create_normal_artian`: the
+predicted variant keeps its existing Normal Counter precondition and is still
+rejected when that Counter is unavailable.
+
+Having no Counter stream position is a property of the Route, not of the
+runtime. The player really forges one Normal Artian weapon, so when the tool
+currently holds a confirmed Counter for that weapon type
+(`isConfirmed === true` and `counter !== null`), that Counter advances through
+the same `advanceNormalCounter()` authority the predicted variant uses — never
+by writing `counter + 1` directly. An unconfirmed value, a `null` value, or an
+absent record stays exactly as it is: an unconfirmed value is not authority, so
+it is never advanced and no record is invented. Beam Search and Trace Replay
+share one helper for this; never fix one without the other. `RngAdvance` and
+`PlanStepDebugInfo` then report `1` plus the concrete positions when the
+Counter was confirmed, and `null` when it was not. Advancing a confirmed
+Counter can push a predicted Route past its own required position, which is
+physically correct; because a blind unit is not a conflict participant, that
+ordering is decided by Beam Search rather than by conflict resolution.
+
+Trace Replay carries the blind forge as an explicit runtime-only "unknown five
+slots" state. Never substitute a fabricated `RestorationBonusSet`. Conversion
+inherits the unknown state unchanged, Reset Skills passes it through, and only
+`reset_bonuses` — which reads nothing it replaces — turns it into a known
+`gogma_artian` result. Keep Bonuses reading it and `reserve_weapon` securing it
+both fail closed with the Trace Replay issue code
+`unknown_restoration_bonuses`. An `ExpectedResult` with `restorationBonuses` and
+`restorationBonusScope` both `null` means "this Step predicts no restoration
+bonus result", never "the weapon has no bonuses".
+
 `reserve_weapon` has Route-specific inventory semantics:
 
 - `normal_artian_to_gogma`: add a new protected Gogma with a reserved ID
@@ -2360,6 +2466,36 @@ Relevant test areas include:
   Series/Group Skills
 - Normal-scope Keep is excluded as `keep_prediction_unsupported`, not as an
   illegal game operation
+- The forced Reset Normal Artian route is searched with no owned weapon and no
+  confirmed Normal Artian Counter, forges exactly one weapon, calls
+  `predictNormalArtian` zero times, and produces no Candidate before its Reset
+- The forced Reset route stays unavailable without a confirmed Skill Counter,
+  without a confirmed Gogma Counter, or without Reset Bonuses prediction support
+- A blind route's `searchStateHash` is unchanged when the Normal Artian Counter
+  is later confirmed, while a predicted route's still changes
+- A blind `create_normal_artian` adds no RNG capability requirement, while a
+  predicted one still requires its confirmed Counter
+- A blind `create_normal_artian` advances a confirmed Normal Counter by one in
+  both Beam Search and Trace Replay, reporting `normalCounterDelta = 1` with the
+  concrete debug positions, while an unconfirmed value, a `null` value, and an
+  absent record all stay untouched with `null` delta and `null` debug positions
+- The shared advance helper delegates to `advanceNormalCounter()` rather than
+  adding one itself, and leaves a different weapon type and a predicted creation
+  alone
+- Two blind Entries sharing one confirmed Normal Counter advance it once each,
+  in order, without becoming a Counter position conflict
+- Route validation rejects a blind route that completes at the conversion, Keeps
+  before its first Reset, resets only Skills, forges more than one weapon, or
+  carries a half-filled Normal Counter pair
+- The Planner plans create / convert / Reset / reserve from a blind Candidate
+  with no Normal Counter and no `counter_unavailable`, while a predicted Normal
+  route with no confirmed Counter stays excluded
+- Two blind Entries never share their create or convert action
+- Trace Replay carries unknown five slots through conversion, turns them known
+  at the Reset, and fails closed with `unknown_restoration_bonuses` on Keep and
+  on reserve
+- Candidate Search through ProductionPlan end-to-end from an empty inventory
+  with no Normal Artian Counter record
 - Reset or Keep after the first Reset in normal and owned-normal routes
 - Keep family preservation by slot with no selection branches
 - Skill prediction count independent of Gogma state count, source count, and

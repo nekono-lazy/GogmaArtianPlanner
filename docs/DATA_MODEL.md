@@ -760,6 +760,11 @@ export interface BuildCandidate {
   estimatedOperationCount: number;
   estimatedGogmaAdvance: number;
   estimatedSkillAdvance: number;
+  // null は「このRouteのNormal Counter進行量をabsolute route dependencyとして
+  // 表現しない」。通常アーティア作成を含まないRouteに加えて、blind creationだけ
+  // を含むRoute(SEARCH_SPEC 6.1.1)もここが null になる。0 は「進行量0」であり、
+  // null とは別の意味である。Plan実行時に確定Normal Counterが1進むかどうかは
+  // 実行時stateの問題であり、この推定値とは別概念である(PLANNER_SPEC 7.0.3)
   estimatedNormalAdvance: number | null;
   requiredMaterials: MaterialRequirement[];
   idealDifference: IdealDifference;
@@ -825,7 +830,7 @@ export type RouteOperation =
   | ResetSkillsOperation
   | UseWeaponAsMaterialOperation;
 
-export interface CreateNormalArtianOperation {
+export interface PredictedCreateNormalArtianOperation {
   type: "create_normal_artian";
   weaponTypeId: WeaponTypeId;
   rarity: NormalArtianRarity;
@@ -833,6 +838,19 @@ export interface CreateNormalArtianOperation {
   normalCounterBefore: number;
   normalCounterAfter: number;
 }
+
+export interface BlindCreateNormalArtianOperation {
+  type: "create_normal_artian";
+  weaponTypeId: WeaponTypeId;
+  rarity: NormalArtianRarity;
+  count: 1;
+  normalCounterBefore: null;
+  normalCounterAfter: null;
+}
+
+export type CreateNormalArtianOperation =
+  | PredictedCreateNormalArtianOperation
+  | BlindCreateNormalArtianOperation;
 
 export interface ConvertToGogmaOperation {
   type: "convert_normal_to_gogma";
@@ -871,8 +889,13 @@ export interface UseWeaponAsMaterialOperation {
 制約。
 
 - `operations` は実行順に並べ、空配列を許可しない
-- CreateNormalArtianOperationの `count` は `forgeCount` で1以上、`normalCounterAfter = normalCounterBefore + count`
-- `normal_artian_to_gogma` は該当NormalArtianCounterが確定している場合のみ生成する
+- CreateNormalArtianOperationは2 variantを持つ。両方を `normalCounterBefore` / `normalCounterAfter` のnull性だけで判別し、追加のdiscriminant fieldを永続化しない。既存の永続CreateNormalArtianOperationはすべてpredicted variantであり、その意味は変わらない
+- predicted variantの `count` は `forgeCount` で1以上、`normalCounterAfter = normalCounterBefore + count`
+- blind variant(`docs/SEARCH_SPEC.md` 6.1.1)は `count = 1`、`normalCounterBefore = normalCounterAfter = null` とする。`null` は「このRouteのCandidate semanticsが特定のabsolute Normal Counter位置へ依存しない」を意味し、「Normal Counterが未確定である」でも「Normal Counterが進行しない」でもない。Route operationがCounter位置を持たないことと、Plan実行時に現在の確定Counterを進めることは別概念である(`docs/PLANNER_SPEC.md` 7.0.3)
+- 片方だけがnullのCreateNormalArtianOperationはどちらのvariantでもなく、Domain validationで拒否する
+- predicted variantの `normal_artian_to_gogma` は該当NormalArtianCounterが確定している場合のみ生成する
+- blind variantの `normal_artian_to_gogma` はNormalArtianCounterもNormal Artian Predictionも要求しない。ただしRouteは変換後に必ず1回以上のResetBonusesOperationを含まなければならない。作成した通常アーティアの5枠が未予測であり、Resetだけがそれを読まずに5枠全体を書き換えられるためである
+- blind variantを含むRouteはCreateNormalArtianOperationをちょうど1件だけ持つ
 - `normal_artian_to_gogma` は1回以上のforgeを表すCreateNormalArtianOperation、最後の1本だけに対するConvertToGogmaOperation、その後の必要なResetBonusesOperation / KeepBonusesOperation / ResetSkillsOperationを実行順に持てる
 - `normal_artian_to_gogma` の `BuildRoute.sourceOwnedWeaponId` は `null` とする
 - `candidateOffset = k` の通常候補Routeは `forgeCount = k + 1`、`candidateCounter = normalCounterBefore + k = normalCounterBefore + forgeCount - 1` とする。Normal Counterを `forgeCount` 進め、先行するk本は通常アーティアのまま破棄／不採用とし、最後の1本だけを巨戟化する
@@ -957,7 +980,8 @@ export type BuildListEntryStaleReason =
 - Base SeedのvalueとisConfirmed
 - RouteがGogma予測を使う場合はGogma CounterのvalueとisConfirmed
 - RouteがSkill予測を使う場合はSkill CounterのvalueとisConfirmed
-- Routeが新規通常アーティアを使う場合は対象武器種のレア8 NormalArtianCounterのcounterとisConfirmed
+- Routeがpredicted variantのCreateNormalArtianOperationを使う場合は対象武器種のレア8 NormalArtianCounterのcounterとisConfirmed
+- blind variantのCreateNormalArtianOperationはNormal Counterを読まないため、NormalArtianCounterを正規化対象へ含めない。後からNormal Counterを確定してもblind Route Candidateのsemanticsは変わらないので、`rng_state_changed` にしない
 - legacy `counterGate` のvalue、isConfirmed、sourceは除外する。Production active Prediction結果へ影響しないGate変更だけで `rng_state_changed` を発生させない
 - source、notes、観測日時、表示用フィールドは除外する
 
@@ -1284,6 +1308,8 @@ Counter deltaの正式契約はcreate normalがNormal +1 / forge、conversionが
 
 `convert_normal_to_gogma` のExpectedResultは、変換元Normalからslot順のまま継承した `restorationBonusScope = "normal_artian"` の5枠と、変換時のSkill Predictionで付与された初回Series Skill / Group Skillを同時に保持する。Reset Bonuses結果は `restorationBonusScope = "gogma_artian"`、Keep Bonuses結果も `gogma_artian` とする。
 
+`restorationBonuses = null` かつ `restorationBonusScope = null` は「このStepは復元ボーナス結果を予測しない」を表し、「復元ボーナスが存在しない」ではない。blind creation(`docs/SEARCH_SPEC.md` 6.1.1)の `create_normal_artian` Stepと、その直後の `convert_normal_to_gogma` Stepがこれに該当する。架空の5枠を表示しないために `null` を用い、Reset Bonuses以降は通常どおりknown resultを保存する。
+
 ## 11.5 InventoryChange
 
 ```ts
@@ -1305,6 +1331,17 @@ export interface RngAdvance {
   affectedNormalCounterId: string | null;
 }
 ```
+
+`normalCounterDelta = null` は「このStepではNormal Counterの進行量を表現しない」を表し、「Normal Counterが進行しない」ではない。
+
+blind creation(`docs/SEARCH_SPEC.md` 6.1.1)の `create_normal_artian` Stepは、実行時の現在stateによって次の2通りになる。
+
+| 現在のNormalArtianCounter | `normalCounterDelta` | `affectedNormalCounterId` | `PlanStepDebugInfo.startNormalCounter` / `endNormalCounter` |
+| --- | --- | --- | --- |
+| `isConfirmed = true` かつ `counter !== null` | `1` | 対象Counter ID | 進行前値 / 進行後値 |
+| unconfirmed、`counter = null`、またはrecordなし | `null` | `null` | `null` / `null` |
+
+確定Counterが存在する場合は、Route operationの `normalCounterBefore` / `normalCounterAfter` が `null` であっても、物理的に通常アーティアを1本作成した事実としてCounterを1進める。進行には既存 `advanceNormalCounter()` authorityを使い、`counter + 1` を直接書かない。確定Counterが存在しない場合は `0` を記録せず、架空のCounter recordも作らない。Stepのtitle / instructionが通常アーティアを1本作成する物理操作であることを明示するので、どちらの場合も「Normal Counterは進行していない」とは表示しない。
 
 ## 11.7 PlanStepDebugInfo
 

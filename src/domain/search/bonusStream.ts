@@ -94,11 +94,27 @@ export interface BonusStreamSolutionSet {
   unsupportedPredictions: readonly UnsupportedAmendmentPrediction[]
 }
 
-export interface BonusStreamBase {
-  startGogmaCounter: number
-  bonuses: RestorationBonusSet
-  restorationBonusScope: RestorationBonusScope
-}
+/**
+ * The Route base state the Bonus stream starts from.
+ *
+ * A Gogma-scope base always carries its five current slots, because they are
+ * the explicit Keep prediction input. A `normal_artian` scope base never
+ * reaches Keep in v1, so its slots are never read by this stream; they stay
+ * available for `bonusStreamBaseKey` symmetry and may be `null` when the Route
+ * base forged its Normal Artian blind and therefore knows no five slots at all
+ * (`docs/SEARCH_SPEC.md` 6.1.1). No fabricated bonus set is ever substituted.
+ */
+export type BonusStreamBase =
+  | {
+      startGogmaCounter: number
+      bonuses: RestorationBonusSet
+      restorationBonusScope: 'gogma_artian'
+    }
+  | {
+      startGogmaCounter: number
+      bonuses: RestorationBonusSet | null
+      restorationBonusScope: 'normal_artian'
+    }
 
 /**
  * The Bonus stream of one TargetWeapon.
@@ -184,13 +200,13 @@ export function bonusAmendmentResults(
 interface BonusStateBase {
   depth: number
   lastResetDepth: number
-  bonuses: RestorationBonusSet
   results: BonusAmendmentResultNode | null
 }
 
 /** Every amendment result is Gogma-scope, so its Keep family layout is defined. */
 interface GogmaScopeBonusState extends BonusStateBase {
   scope: 'gogma_artian'
+  bonuses: RestorationBonusSet
   familyLayoutKey: string
 }
 
@@ -201,6 +217,8 @@ interface GogmaScopeBonusState extends BonusStateBase {
  */
 interface NormalScopeBonusState extends BonusStateBase {
   scope: 'normal_artian'
+  /** `null` when the Route base forged its Normal Artian blind. */
+  bonuses: RestorationBonusSet | null
   familyLayoutKey: null
 }
 

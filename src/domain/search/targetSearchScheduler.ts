@@ -22,7 +22,17 @@ export interface ScheduledRouteBase {
   kindResolution: RouteCompositionBase['kindResolution']
   sourceOwnedWeaponId: BuildRoute['sourceOwnedWeaponId']
   baseOperations: readonly RouteOperation[]
-  zeroBonus: RouteBonusSolution
+  /**
+   * The Route base's own `gogmaAdvance = 0` Bonus solution.
+   *
+   * `null` means the base has no current five slots at all, which happens only
+   * when a blind Normal creation forged a weapon whose bonuses were never
+   * predicted (`docs/SEARCH_SPEC.md` 6.1.1). No fabricated bonus set is
+   * substituted, the zero-amendment Candidate does not exist, and the Bonus
+   * axis starts at the first Reset Bonuses instead. `bonusBase` is then
+   * required, because the base can produce no Candidate without it.
+   */
+  zeroBonus: RouteBonusSolution | null
   zeroSkill: RouteSkillSolution
   /** Null means capability/support unavailable. Current Ideal is checked here. */
   startSkillCounter: number | null
@@ -94,16 +104,23 @@ export class TargetSearchScheduler {
       } })
     })
 
-    const bonus = buildBonusSolutionSet(target, input, [base.zeroBonus])[0]
+    const bonus = base.zeroBonus === null
+      ? null
+      : buildBonusSolutionSet(target, input, [base.zeroBonus])[0]
     const skill = buildSkillSolutionSet(target, [base.zeroSkill])[0]
-    cross.addBonus(bonus)
+    if (bonus) cross.addBonus(bonus)
     cross.addSkill(skill)
     if (!skill.idealMatch && base.startSkillCounter !== null) {
       const channel = this.skillChannel(base.startSkillCounter, baseCost)
       for (const value of channel.retained) cross.addSkill(value)
       channel.subscribers.push(cross.addSkill)
     }
-    if (!bonus.idealMatch && base.bonusBase !== null) {
+    if (bonus === null && base.bonusBase === null) {
+      throw new Error(
+        'A Route base without a zero-amendment Bonus solution requires a Bonus stream base.',
+      )
+    }
+    if (!bonus?.idealMatch && base.bonusBase !== null) {
       const channel = this.bonusChannel(base.bonusBase, baseCost)
       for (const value of channel.retained) cross.addBonus(value)
       channel.subscribers.push(cross.addBonus)

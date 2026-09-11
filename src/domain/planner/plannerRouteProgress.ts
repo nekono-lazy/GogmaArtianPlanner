@@ -1,10 +1,14 @@
 import type {
   BuildListEntry,
   BuildListEntryId,
+  NormalArtianCounter,
   OwnedWeaponId,
   RouteOperation,
 } from '../models/publicTypes'
-import { stableStringify } from '../models/publicTypes'
+import {
+  isBlindCreateNormalArtianOperation,
+  stableStringify,
+} from '../models/publicTypes'
 import type { RngEngine } from '../rng/rngEngine'
 import type {
   PlannerSearchRejection,
@@ -281,12 +285,19 @@ function counterDetails(
 } {
   switch (operation.type) {
     case 'create_normal_artian':
-      return {
-        stream: 'normal',
-        counterId: `${operation.weaponTypeId}:${operation.rarity}`,
-        before: operation.normalCounterBefore,
-        after: operation.normalCounterAfter,
-      }
+      // A blind creation holds no absolute Counter position, so it occupies no
+      // Normal Counter stream position: it has no counter precondition, takes
+      // part in no Counter conflict, and moves no persisted Counter
+      // (`docs/PLANNER_SPEC.md` 7.0.3). It is still one required physical
+      // PlanStep, because the weapon really is forged.
+      return isBlindCreateNormalArtianOperation(operation)
+        ? { stream: null, counterId: null, before: null, after: null }
+        : {
+            stream: 'normal',
+            counterId: `${operation.weaponTypeId}:${operation.rarity}`,
+            before: operation.normalCounterBefore,
+            after: operation.normalCounterAfter,
+          }
     case 'convert_normal_to_gogma':
       return { stream: 'skill', counterId: null, before: operation.skillCounterBefore, after: operation.skillCounterAfter }
     case 'reset_bonuses':
@@ -449,6 +460,47 @@ export function createPlannerRouteUnitPlans(
     if (planned.rejection) rejections.push(planned.rejection)
   })
   return { unitPlans, rejections }
+}
+
+/**
+ * Applies the physical Normal Artian Counter advance of a blind creation.
+ *
+ * A blind `create_normal_artian` occupies no Counter stream position, so it has
+ * no Counter precondition and never joins a Counter position conflict. That is
+ * a statement about the Route: its Candidate result does not depend on any
+ * absolute Normal Counter position. It is NOT a statement about the runtime -
+ * the player really does forge one Normal Artian weapon, and the game Counter
+ * really does advance (`docs/PLANNER_SPEC.md` 7.0.3).
+ *
+ * So whenever the tool currently holds a confirmed Counter for that weapon
+ * type, that Counter advances here through the same `advanceNormalCounter()`
+ * authority the predicted variant uses. An unconfirmed, null, or absent Counter
+ * record stays exactly as it is: an unconfirmed value is not authority, so it
+ * is never advanced and no record is invented.
+ *
+ * Returns `null` when nothing changed, so a caller can skip the state write.
+ */
+export function advanceBlindNormalCreationCounters(
+  counters: readonly NormalArtianCounter[],
+  operation: RouteOperation,
+  engine: RngEngine,
+): NormalArtianCounter[] | null {
+  if (
+    operation.type !== 'create_normal_artian' ||
+    !isBlindCreateNormalArtianOperation(operation)
+  ) {
+    return null
+  }
+  const counterId = `${operation.weaponTypeId}:${operation.rarity}`
+  const target = counters.find(({ id }) => id === counterId)
+  if (!target || !target.isConfirmed || target.counter === null) return null
+  const advanced = engine.advanceNormalCounter(target.counter, {
+    type: 'create_normal_artian',
+    count: operation.count,
+  })
+  return counters.map((counter) =>
+    counter.id === counterId ? { ...counter, counter: advanced } : counter,
+  )
 }
 
 export function routeUnitOwnedWeaponId(

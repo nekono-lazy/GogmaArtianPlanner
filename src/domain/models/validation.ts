@@ -22,6 +22,7 @@ import type {
   SkillCondition,
   TargetWeapon,
 } from './entities'
+import { isBlindCreateNormalArtianOperation } from './entities'
 import type {
   ActualResult,
   ExecutionHistory,
@@ -444,6 +445,33 @@ function validateRouteOperation(
       )
     }
     validatePositiveInteger(operation.count, `${path}.count`, issues)
+    // Blind creation stores no absolute Counter position at all. A half-filled
+    // pair is neither variant, so it is rejected instead of being coerced.
+    if (
+      operation.normalCounterBefore === null ||
+      operation.normalCounterAfter === null
+    ) {
+      if (
+        operation.normalCounterBefore !== null ||
+        operation.normalCounterAfter !== null
+      ) {
+        addIssue(
+          issues,
+          `${path}.normalCounterBefore`,
+          'invalid_state',
+          'A blind Normal creation must leave both Normal Counter positions null.',
+        )
+      }
+      if (operation.count !== 1) {
+        addIssue(
+          issues,
+          `${path}.count`,
+          'invalid_state',
+          'A blind Normal creation forges exactly one Normal Artian weapon.',
+        )
+      }
+      return
+    }
     validateNonNegativeInteger(operation.normalCounterBefore, `${path}.normalCounterBefore`, issues)
     validateNonNegativeInteger(operation.normalCounterAfter, `${path}.normalCounterAfter`, issues)
     return
@@ -588,6 +616,9 @@ export function validateBuildRoute(
     }
     let converted = false
     let transientScope: 'normal_artian' | 'gogma_artian' | null = null
+    let blindCreateCount = 0
+    let createCount = 0
+    let resetBonusesCount = 0
     route.operations.forEach((operation, index) => {
       if (!['create_normal_artian', 'convert_normal_to_gogma', 'reset_bonuses', 'keep_bonuses', 'reset_skills'].includes(operation.type)) {
         addIssue(
@@ -597,6 +628,11 @@ export function validateBuildRoute(
           `Operation '${operation.type}' is not allowed in normal_artian_to_gogma.`,
         )
       }
+      if (operation.type === 'create_normal_artian') {
+        createCount += 1
+        if (isBlindCreateNormalArtianOperation(operation)) blindCreateCount += 1
+      }
+      if (operation.type === 'reset_bonuses') resetBonusesCount += 1
       if (operation.type === 'convert_normal_to_gogma') {
         converted = true
         transientScope = 'normal_artian'
@@ -619,6 +655,35 @@ export function validateBuildRoute(
         )
       }
     })
+    if (blindCreateCount > 0) {
+      // The forged weapon's five slots are unknown, so the Route is executable
+      // only when a Reset Bonuses rewrites all five of them
+      // (`docs/SEARCH_SPEC.md` 6.1.1).
+      if (createCount !== 1 || blindCreateCount !== createCount) {
+        addIssue(
+          issues,
+          'operations',
+          'invalid_route_operation',
+          'A blind Normal Artian route creates exactly one Normal Artian weapon.',
+        )
+      }
+      if (!converted) {
+        addIssue(
+          issues,
+          'operations',
+          'invalid_route_operation',
+          'A blind Normal Artian route requires a conversion operation.',
+        )
+      }
+      if (resetBonusesCount === 0) {
+        addIssue(
+          issues,
+          'operations',
+          'invalid_route_operation',
+          'A blind Normal Artian route requires Reset Bonuses, because the created weapon has unknown restoration bonuses.',
+        )
+      }
+    }
   } else if (route.kind === 'owned_normal_artian_to_gogma') {
     if (route.sourceOwnedWeaponId === null) {
       addIssue(

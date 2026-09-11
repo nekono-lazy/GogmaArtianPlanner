@@ -4,14 +4,20 @@ import type {
   OwnedWeaponId, PlanStepDebugInfo, PlanStepOperationType, RestorationBonusSet,
   RngAdvance, RngState, TargetWeapon, TargetWeaponId, BuildCandidateId,
 } from '../models/publicTypes'
-import { createExpectedPlanState } from '../models/publicTypes'
+import {
+  createExpectedPlanState,
+  isBlindCreateNormalArtianOperation,
+} from '../models/publicTypes'
 import type {
   RngEngine,
   RngPredictionSupportInput,
   RngPredictionUnsupportedReason,
 } from '../rng/rngEngine'
 import { getPlannerPredictionSupport } from './plannerPredictionSupport'
-import { createPlannerPhysicalActionIdentity } from './plannerRouteProgress'
+import {
+  advanceBlindNormalCreationCounters,
+  createPlannerPhysicalActionIdentity,
+} from './plannerRouteProgress'
 import type { PlannerInput, PlannerSearchAction, PlannerSearchRngSnapshot, PlannerSearchState } from './plannerTypes'
 
 /** Non-persistent bridge between one physical Search Action and a future PlanStep. */
@@ -28,6 +34,15 @@ export interface PlannerPlanStepDraft {
   inventoryChange: InventoryChange | null
   rngAdvance: RngAdvance
   debug: PlanStepDebugInfo | null
+  /**
+   * Whether this Step forges a Normal Artian whose restoration bonuses were
+   * never predicted (`docs/SEARCH_SPEC.md` 6.1.1).
+   *
+   * Presentation only, and non-persistent like the rest of this draft: the
+   * PlanStep it produces carries the difference in its own instruction text, so
+   * no persisted PlanStep field is added.
+   */
+  isBlindNormalCreation: boolean
 }
 
 export type PlannerTraceReplayIssueCode =
@@ -36,6 +51,13 @@ export type PlannerTraceReplayIssueCode =
   | 'missing_entry' | 'missing_target' | 'missing_rng_requirement' | 'engine_capability_missing'
   | 'missing_transient_output' | 'missing_source_weapon' | 'invalid_source_weapon'
   | 'inventory_transition_failed' | 'candidate_result_mismatch' | 'final_state_mismatch'
+  /**
+   * A replay step needed the current five restoration bonus slots, but the
+   * weapon was forged by a blind Normal creation and no slots were ever
+   * predicted for it (`docs/PLANNER_SPEC.md` 11.0). Only `reset_bonuses`, which
+   * reads nothing it replaces, can turn that state into a known one.
+   */
+  | 'unknown_restoration_bonuses'
 export interface PlannerTraceReplayIssue { code: PlannerTraceReplayIssueCode; message: string; actionIndex: number | null }
 export interface PlannerUnsupportedPredictionInput {
   buildListEntryId: BuildListEntryId
@@ -50,12 +72,45 @@ export interface PlannerTraceReplayResult {
   unsupportedInput: PlannerUnsupportedPredictionInput | null
 }
 
-interface TransientGogma { restorationBonuses: RestorationBonusSet; restorationBonusScope: 'normal_artian' | 'gogma_artian'; seriesSkillId: string | null; groupSkillId: string | null }
+/**
+ * The five restoration bonus slots one replay runtime weapon currently carries.
+ *
+ * `unknown` is the blind Normal creation of `docs/SEARCH_SPEC.md` 6.1.1: the
+ * weapon physically exists, but no five slots were ever predicted for it. It is
+ * deliberately its own runtime-only variant rather than a fabricated
+ * `RestorationBonusSet`, so every step that would read the slots fails closed
+ * instead of displaying invented values.
+ */
+type TransientBonuses =
+  | {
+      kind: 'known'
+      restorationBonuses: RestorationBonusSet
+      restorationBonusScope: 'normal_artian' | 'gogma_artian'
+    }
+  | { kind: 'unknown' }
+interface TransientGogma { bonuses: TransientBonuses; seriesSkillId: string | null; groupSkillId: string | null }
 interface Runtime {
   rngState: RngState; normalCounters: NormalArtianCounter[]; ownedWeapons: OwnedWeapon[]
   /** Per-Entry creation history; conversion consumes only the latest output. */
-  normals: Map<BuildListEntryId, RestorationBonusSet[]>; gogmas: Map<BuildListEntryId, TransientGogma>
+  normals: Map<BuildListEntryId, TransientBonuses[]>; gogmas: Map<BuildListEntryId, TransientGogma>
 }
+const knownBonuses = (
+  restorationBonuses: RestorationBonusSet,
+  restorationBonusScope: 'normal_artian' | 'gogma_artian',
+): TransientBonuses => ({ kind: 'known', restorationBonuses: structuredClone(restorationBonuses), restorationBonusScope })
+/**
+ * The first two `result()` arguments for one runtime bonus state.
+ *
+ * `null` restoration bonuses mean "this Step predicts no restoration bonus
+ * result", which `ExpectedResult` already allows; they never mean the weapon
+ * has no bonuses.
+ */
+const expectedResultBonusArgs = (
+  bonuses: TransientBonuses,
+): [RestorationBonusSet | null, ExpectedResult['restorationBonusScope']] =>
+  bonuses.kind === 'known'
+    ? [structuredClone(bonuses.restorationBonuses), bonuses.restorationBonusScope]
+    : [null, null]
 const cloneBonuses = (value: RestorationBonusSet): RestorationBonusSet => structuredClone(value)
 const emptyChange = (): InventoryChange => ({ addOwnedWeapon: null, removeOwnedWeaponIds: [], updateOwnedWeapons: [], materialRequirements: [] })
 const result = (restorationBonuses: RestorationBonusSet | null, restorationBonusScope: ExpectedResult['restorationBonusScope'], seriesSkillId: string | null, groupSkillId: string | null, shouldSecure = false, candidateCategory: ExpectedResult['candidateCategory'] = null, isSimilarToIdeal = false): ExpectedResult => ({ restorationBonuses, restorationBonusScope, seriesSkillId, groupSkillId, candidateCategory, isSimilarToIdeal, shouldSecure })
@@ -136,7 +191,7 @@ function sharedPhysicalActionIssue(
 function currentGogma(runtime: Runtime, entryId: BuildListEntryId, sourceId: OwnedWeaponId): TransientGogma | null {
   const output = runtime.gogmas.get(entryId); if (output) return structuredClone(output)
   const source = runtime.ownedWeapons.find(({ id }) => id === sourceId)
-  return source?.kind === 'gogma' ? { restorationBonuses: cloneBonuses(source.restorationBonuses), restorationBonusScope: source.restorationBonusScope, seriesSkillId: source.seriesSkillId, groupSkillId: source.groupSkillId } : null
+  return source?.kind === 'gogma' ? { bonuses: knownBonuses(source.restorationBonuses, source.restorationBonusScope), seriesSkillId: source.seriesSkillId, groupSkillId: source.groupSkillId } : null
 }
 function assignGogma(runtime: Runtime, action: PlannerSearchAction, output: TransientGogma) { action.progressedBuildListEntryIds.forEach((id) => runtime.gogmas.set(id, structuredClone(output))) }
 function reservedWeapon(entry: BuildListEntry, target: TargetWeapon, id: OwnedWeaponId): OwnedGogmaArtianWeapon {
@@ -183,7 +238,10 @@ export function replayPlannerSearchTrace(input: PlannerInput, bestState: Planner
         const transient = runtime.gogmas.get(entry.id)
         if (!transient) return fail('missing_transient_output', 'Reserve requires the Entry transient Gogma output.', index)
         const candidate = entry.candidateSnapshot
-        if (JSON.stringify(transient.restorationBonuses) !== JSON.stringify(candidate.finalBonuses) || transient.seriesSkillId !== candidate.seriesSkillId || transient.groupSkillId !== candidate.groupSkillId) {
+        if (transient.bonuses.kind !== 'known') {
+          return fail('unknown_restoration_bonuses', 'A route output whose restoration bonuses were never predicted cannot secure a Candidate.', index)
+        }
+        if (JSON.stringify(transient.bonuses.restorationBonuses) !== JSON.stringify(candidate.finalBonuses) || transient.seriesSkillId !== candidate.seriesSkillId || transient.groupSkillId !== candidate.groupSkillId) {
           return fail('candidate_result_mismatch', 'Transient Gogma result does not match the Candidate Snapshot.', index)
         }
         inventoryChange = emptyChange()
@@ -201,29 +259,45 @@ export function replayPlannerSearchTrace(input: PlannerInput, bestState: Planner
     } else {
         const operation = action.routeOperation
         if (operation.type === 'create_normal_artian') {
-          if (!engine.capabilities.supportsNormalArtianPrediction) return fail('engine_capability_missing', 'Normal prediction capability is unavailable.', index)
-          const missing = predictionIssue(runtime, index); if (missing) return { isValid: false, drafts: [], issues: [missing], unsupportedInput: null }
-          const normalCounter = runtime.normalCounters.find(({ id }) => id === operation.weaponTypeId + ':' + operation.rarity)
-          const counter = normalCounter?.counter
-          if (!normalCounter || counter === null || counter === undefined || !normalCounter.isConfirmed) return fail('missing_rng_requirement', 'A confirmed Normal Artian Counter is required.', index)
-          const unsupported = requireSupport({
-            type: 'normal_artian',
-            weaponTypeId: operation.weaponTypeId,
-            elementId: target.elementId,
-            rarity: operation.rarity,
-          }, entry.id, index)
-          if (unsupported) return unsupported
-          const bonuses = engine.predictNormalArtian({ baseSeed: runtime.rngState.baseSeed.value!, weaponTypeId: operation.weaponTypeId, elementId: target.elementId, rarity: operation.rarity, normalCounter: counter, master: input.master })
-          action.progressedBuildListEntryIds.forEach((id) => runtime.normals.set(id, [...(runtime.normals.get(id) ?? []), cloneBonuses(bonuses)])); expectedResult = result(cloneBonuses(bonuses), 'normal_artian', null, null)
+          if (isBlindCreateNormalArtianOperation(operation)) {
+            // Blind creation calls no Normal prediction and reads no Normal
+            // Artian Counter as a precondition. The forged weapon is real, so
+            // it is recorded as an output whose five slots are simply unknown,
+            // and a confirmed Normal Counter still advances through the same
+            // authority the Beam Search used (`docs/PLANNER_SPEC.md` 11.0).
+            // `applySnapshot()` below reconciles the runtime to the Search
+            // Action either way, so this keeps the Replay independently correct
+            // rather than dependent on that reconciliation.
+            const created: TransientBonuses = { kind: 'unknown' }
+            action.progressedBuildListEntryIds.forEach((id) => runtime.normals.set(id, [...(runtime.normals.get(id) ?? []), created]))
+            const advancedCounters = advanceBlindNormalCreationCounters(runtime.normalCounters, operation, engine)
+            if (advancedCounters !== null) runtime.normalCounters = advancedCounters
+            expectedResult = result(null, null, null, null)
+          } else {
+            if (!engine.capabilities.supportsNormalArtianPrediction) return fail('engine_capability_missing', 'Normal prediction capability is unavailable.', index)
+            const missing = predictionIssue(runtime, index); if (missing) return { isValid: false, drafts: [], issues: [missing], unsupportedInput: null }
+            const normalCounter = runtime.normalCounters.find(({ id }) => id === operation.weaponTypeId + ':' + operation.rarity)
+            const counter = normalCounter?.counter
+            if (!normalCounter || counter === null || counter === undefined || !normalCounter.isConfirmed) return fail('missing_rng_requirement', 'A confirmed Normal Artian Counter is required.', index)
+            const unsupported = requireSupport({
+              type: 'normal_artian',
+              weaponTypeId: operation.weaponTypeId,
+              elementId: target.elementId,
+              rarity: operation.rarity,
+            }, entry.id, index)
+            if (unsupported) return unsupported
+            const bonuses = engine.predictNormalArtian({ baseSeed: runtime.rngState.baseSeed.value!, weaponTypeId: operation.weaponTypeId, elementId: target.elementId, rarity: operation.rarity, normalCounter: counter, master: input.master })
+            action.progressedBuildListEntryIds.forEach((id) => runtime.normals.set(id, [...(runtime.normals.get(id) ?? []), knownBonuses(bonuses, 'normal_artian')])); expectedResult = result(cloneBonuses(bonuses), 'normal_artian', null, null)
+          }
         } else if (operation.type === 'convert_normal_to_gogma') {
           if (!engine.capabilities.supportsSkillPrediction) return fail('engine_capability_missing', 'Skill prediction capability is unavailable.', index)
           const missing = predictionIssue(runtime, index); if (missing) return { isValid: false, drafts: [], issues: [missing], unsupportedInput: null }
           if (runtime.rngState.skillCounter.value === null || !runtime.rngState.skillCounter.isConfirmed) return fail('missing_rng_requirement', 'A confirmed Skill Counter is required.', index)
-          let inheritedNormalBonuses: RestorationBonusSet | undefined
+          let inheritedNormalBonuses: TransientBonuses | undefined
           if (entry.candidateSnapshot.route.kind === 'owned_normal_artian_to_gogma') {
             const source = entry.candidateSnapshot.route.sourceOwnedWeaponId === null ? null : runtime.ownedWeapons.find(({ id }) => id === entry.candidateSnapshot.route.sourceOwnedWeaponId)
             if (!source) return fail('missing_source_weapon', 'Owned Normal conversion source is unavailable.', index); if (source.kind !== 'normal') return fail('invalid_source_weapon', 'Owned Normal conversion source is not Normal Artian.', index)
-            inheritedNormalBonuses = cloneBonuses(source.restorationBonuses); runtime.ownedWeapons = runtime.ownedWeapons.filter(({ id }) => id !== source.id); inventoryChange = { ...emptyChange(), removeOwnedWeaponIds: [source.id] }
+            inheritedNormalBonuses = knownBonuses(source.restorationBonuses, 'normal_artian'); runtime.ownedWeapons = runtime.ownedWeapons.filter(({ id }) => id !== source.id); inventoryChange = { ...emptyChange(), removeOwnedWeaponIds: [source.id] }
           } else { const normals = runtime.normals.get(entry.id) ?? []; inheritedNormalBonuses = normals.at(-1); if (!inheritedNormalBonuses) return fail('missing_transient_output', 'New Normal conversion requires a transient Normal result.', index); runtime.normals.delete(entry.id) }
           const unsupported = requireSupport({
             type: 'skill',
@@ -232,14 +306,25 @@ export function replayPlannerSearchTrace(input: PlannerInput, bestState: Planner
           }, entry.id, index)
           if (unsupported) return unsupported
           const skills = engine.predictSkills({ baseSeed: runtime.rngState.baseSeed.value!, skillCounter: runtime.rngState.skillCounter.value!, weaponTypeId: operation.weaponTypeId, elementId: target.elementId, master: input.master })
-          assignGogma(runtime, action, { restorationBonuses: cloneBonuses(inheritedNormalBonuses), restorationBonusScope: 'normal_artian', seriesSkillId: skills.seriesSkillId, groupSkillId: skills.groupSkillId }); expectedResult = result(cloneBonuses(inheritedNormalBonuses), 'normal_artian', skills.seriesSkillId, skills.groupSkillId)
+          // Conversion preserves the five inherited slots exactly, including the
+          // case where they were never predicted at all.
+          assignGogma(runtime, action, { bonuses: inheritedNormalBonuses, seriesSkillId: skills.seriesSkillId, groupSkillId: skills.groupSkillId }); expectedResult = result(...expectedResultBonusArgs(inheritedNormalBonuses), skills.seriesSkillId, skills.groupSkillId)
         } else if (operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses') {
           if (!engine.capabilities.supportsGogmaPrediction || operation.type === 'keep_bonuses' && !engine.capabilities.supportsKeepBonusesPrediction) return fail('engine_capability_missing', 'Gogma prediction capability is unavailable.', index)
           const missing = predictionIssue(runtime, index); if (missing) return { isValid: false, drafts: [], issues: [missing], unsupportedInput: null }; if (runtime.rngState.gogmaCounter.value === null || !runtime.rngState.gogmaCounter.isConfirmed) return fail('missing_rng_requirement', 'A confirmed Gogma Counter is required.', index)
           const current = operation.sourceOwnedWeaponId === null ? runtime.gogmas.get(entry.id) ?? null : currentGogma(runtime, entry.id, operation.sourceOwnedWeaponId); if (!current) return fail('missing_source_weapon', 'Gogma source is unavailable.', index)
-          if (operation.type === 'keep_bonuses' && current.restorationBonusScope !== 'gogma_artian') return fail('invalid_source_weapon', 'Keep Bonuses requires Gogma-scope bonuses.', index)
+          // Keep reads the current five slots, so it fails closed on an
+          // unknown state; Reset reads nothing it replaces and is exactly the
+          // operation that turns unknown into known.
+          if (operation.type === 'keep_bonuses' && current.bonuses.kind !== 'known') return fail('unknown_restoration_bonuses', 'Keep Bonuses cannot read restoration bonuses that were never predicted.', index)
+          if (operation.type === 'keep_bonuses' && current.bonuses.kind === 'known' && current.bonuses.restorationBonusScope !== 'gogma_artian') return fail('invalid_source_weapon', 'Keep Bonuses requires Gogma-scope bonuses.', index)
+          // Keep with unknown slots already failed closed above, so a null
+          // `keepInput` here always means this operation is a Reset.
+          const keepInput = operation.type === 'keep_bonuses' && current.bonuses.kind === 'known'
+            ? current.bonuses.restorationBonuses
+            : null
           const unsupported = requireSupport(
-            operation.type === 'reset_bonuses'
+            keepInput === null
               ? {
                   type: 'gogma_reset',
                   weaponTypeId: target.weaponTypeId,
@@ -250,14 +335,14 @@ export function replayPlannerSearchTrace(input: PlannerInput, bestState: Planner
                   type: 'gogma_keep',
                   weaponTypeId: target.weaponTypeId,
                   elementId: target.elementId,
-                  currentBonuses: current.restorationBonuses,
+                  currentBonuses: keepInput,
                 },
             entry.id,
             index,
           )
           if (unsupported) return unsupported
-          const bonuses = engine.predictGogmaBonus({ baseSeed: runtime.rngState.baseSeed.value!, gogmaCounter: runtime.rngState.gogmaCounter.value, weaponTypeId: target.weaponTypeId, elementId: target.elementId, operation: operation.type === 'reset_bonuses' ? { type: 'reset_bonuses' } : { type: 'keep_bonuses', currentBonuses: current.restorationBonuses }, master: input.master })
-          assignGogma(runtime, action, { ...current, restorationBonuses: cloneBonuses(bonuses), restorationBonusScope: 'gogma_artian' }); expectedResult = result(cloneBonuses(bonuses), 'gogma_artian', current.seriesSkillId, current.groupSkillId)
+          const bonuses = engine.predictGogmaBonus({ baseSeed: runtime.rngState.baseSeed.value!, gogmaCounter: runtime.rngState.gogmaCounter.value, weaponTypeId: target.weaponTypeId, elementId: target.elementId, operation: keepInput === null ? { type: 'reset_bonuses' } : { type: 'keep_bonuses', currentBonuses: keepInput }, master: input.master })
+          assignGogma(runtime, action, { ...current, bonuses: knownBonuses(bonuses, 'gogma_artian') }); expectedResult = result(cloneBonuses(bonuses), 'gogma_artian', current.seriesSkillId, current.groupSkillId)
         } else if (operation.type === 'reset_skills') {
           if (!engine.capabilities.supportsSkillPrediction) return fail('engine_capability_missing', 'Skill prediction capability is unavailable.', index)
           const missing = predictionIssue(runtime, index); if (missing) return { isValid: false, drafts: [], issues: [missing], unsupportedInput: null }; if (runtime.rngState.skillCounter.value === null || !runtime.rngState.skillCounter.isConfirmed) return fail('missing_rng_requirement', 'A confirmed Skill Counter is required.', index)
@@ -269,13 +354,15 @@ export function replayPlannerSearchTrace(input: PlannerInput, bestState: Planner
           }, entry.id, index)
           if (unsupported) return unsupported
           const skills = engine.predictSkills({ baseSeed: runtime.rngState.baseSeed.value!, skillCounter: runtime.rngState.skillCounter.value, weaponTypeId: target.weaponTypeId, elementId: target.elementId, master: input.master })
-          assignGogma(runtime, action, { restorationBonuses: cloneBonuses(current.restorationBonuses), restorationBonusScope: current.restorationBonusScope, seriesSkillId: skills.seriesSkillId, groupSkillId: skills.groupSkillId }); expectedResult = result(cloneBonuses(current.restorationBonuses), current.restorationBonusScope, skills.seriesSkillId, skills.groupSkillId)
+          // Reset Skills writes only the Series / Group Skill pair, so it never
+          // reads the five slots and carries an unknown state through unchanged.
+          assignGogma(runtime, action, { bonuses: current.bonuses, seriesSkillId: skills.seriesSkillId, groupSkillId: skills.groupSkillId }); expectedResult = result(...expectedResultBonusArgs(current.bonuses), skills.seriesSkillId, skills.groupSkillId)
         } else { const source = runtime.ownedWeapons.find(({ id }) => id === operation.ownedWeaponId); if (!source) return fail('missing_source_weapon', 'Material weapon is unavailable.', index); runtime.ownedWeapons = runtime.ownedWeapons.filter(({ id }) => id !== source.id); inventoryChange = { ...emptyChange(), removeOwnedWeaponIds: [source.id] } }
     }
     applySnapshot(runtime, action.rngAfter); if (!sameSnapshot(runtime, action.rngAfter)) return fail('rng_after_mismatch', 'Replay runtime does not match Search Action rngAfter.', index)
     const normalBefore = advance.affectedNormalCounterId === null ? null : action.rngBefore.normalCounters.find(({ id }) => id === advance.affectedNormalCounterId)?.counter ?? null
     const normalAfter = advance.affectedNormalCounterId === null ? null : action.rngAfter.normalCounters.find(({ id }) => id === advance.affectedNormalCounterId)?.counter ?? null
-    drafts.push({ operationType: action.actionType, primaryBuildListEntryId: action.primaryBuildListEntryId, progressedBuildListEntryIds: [...action.progressedBuildListEntryIds], targetWeaponId: entry.targetWeaponId, candidateId: entry.candidateSnapshot.id, ownedWeaponId: action.ownedWeaponId, expectedResult, expectedStateBefore, expectedStateAfter: createExpectedPlanState(runtime.rngState, runtime.normalCounters, runtime.ownedWeapons), inventoryChange, rngAdvance: advance, debug: { startBaseSeed: runtime.rngState.baseSeed.value, startGogmaCounter: action.rngBefore.gogmaCounter, endGogmaCounter: action.rngAfter.gogmaCounter, startSkillCounter: action.rngBefore.skillCounter, endSkillCounter: action.rngAfter.skillCounter, startNormalCounter: normalBefore, endNormalCounter: normalAfter, plannerReason: action.actionType } })
+    drafts.push({ isBlindNormalCreation: action.kind === 'route_operation' && action.routeOperation.type === 'create_normal_artian' && isBlindCreateNormalArtianOperation(action.routeOperation), operationType: action.actionType, primaryBuildListEntryId: action.primaryBuildListEntryId, progressedBuildListEntryIds: [...action.progressedBuildListEntryIds], targetWeaponId: entry.targetWeaponId, candidateId: entry.candidateSnapshot.id, ownedWeaponId: action.ownedWeaponId, expectedResult, expectedStateBefore, expectedStateAfter: createExpectedPlanState(runtime.rngState, runtime.normalCounters, runtime.ownedWeapons), inventoryChange, rngAdvance: advance, debug: { startBaseSeed: runtime.rngState.baseSeed.value, startGogmaCounter: action.rngBefore.gogmaCounter, endGogmaCounter: action.rngAfter.gogmaCounter, startSkillCounter: action.rngBefore.skillCounter, endSkillCounter: action.rngAfter.skillCounter, startNormalCounter: normalBefore, endNormalCounter: normalAfter, plannerReason: action.actionType } })
   }
   const expected = createExpectedPlanState(bestState.currentRngState, bestState.currentNormalCounters, bestState.simulatedInventory.ownedWeapons)
   const actual = createExpectedPlanState(runtime.rngState, runtime.normalCounters, runtime.ownedWeapons)
