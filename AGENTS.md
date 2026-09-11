@@ -1153,9 +1153,39 @@ truncate to the shorter side and never repeat the final Skills on every step.
 The values come from the existing Skill stream's memoized predictions, so the
 trace adds no `predictSkills` call. UI, presentation, and CandidateCard code
 must not call `predictSkills()` or re-run any RNG to render it. The trace is
-RouteKind-independent: any Candidate containing `reset_skills` gets one. The
-initial Skill assignment of `convert_normal_to_gogma` is out of its scope in
-v1, and `ConstrainedCandidate` carries no observational trace at all.
+RouteKind-independent: any Candidate containing `reset_skills` gets one, and
+`ConstrainedCandidate` carries no observational trace at all.
+
+The initial Skill assignment of `convert_normal_to_gogma` stays out of
+`skillAmendmentTrace` and is recorded separately as
+`BuildCandidate.conversionSkillTrace` (`docs/SEARCH_SPEC.md` 5.5.2.2). Do not
+widen `skillAmendmentTrace.operationType` to cover conversion: the two are
+separate observational contracts, and `skillAmendmentTrace` stays Reset Skills
+only.
+
+`conversionSkillTrace` is singular, because a Route carries at most one
+`convert_normal_to_gogma` (SEARCH_SPEC 6.1 / 6.1.1 / 6.2). It is bound by
+`operationIndex` found by scanning the finished `BuildRoute.operations`, never
+by counting base operations by hand. It carries exactly the Skills the Skill
+stream already predicted at the conversion's own Counter position, so it adds
+no `predictSkills` call, and UI, presentation, and CandidateCard code must not
+re-run any RNG to render it. It obeys the same observational rules as the two
+amendment traces — no Candidate semantic identity, `semanticHash`,
+`candidateStableKey`, deduplication key, `searchStateHash`,
+`referencedOwnedWeaponsHash`, meaning fingerprint, retention, ordering,
+dominance, Ideal/Practical classification, staleness, or Planner route identity
+— and it is optional, so a Candidate persisted before it existed stays valid
+and is never staled or migrated for its absence.
+
+Unlike the amendment traces, it is never compared against the Candidate's own
+Skills: a later `reset_skills` legitimately overwrites the conversion result,
+and `candidate.seriesSkillId` / `candidate.groupSkillId` stay the authority for
+the final Skills. Every conversion RouteKind gets one, including the 6.1.1
+blind variant whose five forged slots are unknown while its conversion Skill is
+predicted normally. A Route whose conversion count is not exactly one while a
+conversion Skill was predicted is an internal inconsistency and fails loudly;
+a pre-field Candidate carrying no record is legal and simply displays nothing,
+with no extra legacy note of its own.
 
 These are presentation and reporting concerns only. They change no Search
 semantics, Planner semantics, RNG algorithm, or Dexie table shape, so
@@ -2732,6 +2762,24 @@ Relevant test areas include:
   or `referencedOwnedWeaponsHash`
 - A conversion Route records its Reset Skills the same way an existing-Gogma
   Route does, and never reports the conversion itself as a Reset Skills result
+- A conversion-only Route records `conversionSkillTrace` at its conversion
+  operation index, and that record equals the Candidate final Skills only
+  because no Reset Skills follows
+- A conversion followed by `reset_skills` keeps the conversion record distinct
+  from the Candidate final Skills, and the two traces bind to disjoint
+  operation indexes alongside `bonusAmendmentTrace`
+- The blind Normal Artian route, the predicted Normal Artian route, and the
+  owned Normal Artian route all record the conversion Skill, while an
+  existing-Gogma Candidate records none
+- A Search-generated conversion Candidate predicts each Skill Counter position
+  once; the record adds no `predictSkills` call
+- Adding, removing, or altering `conversionSkillTrace` changes no Candidate ID,
+  `candidateStableKey`, deduplication key, meaning fingerprint,
+  `searchStateHash`, or `referencedOwnedWeaponsHash`
+- A pre-field conversion Candidate validates and renders with the operation name
+  only, and the card adds no legacy note for the missing conversion record
+- A record pointing at a non-conversion operation, and a record on a Route with
+  no conversion, are both Domain validation issues
 - Native Worker `error` and `messageerror` reject every pending search, remove
   every listener, terminate the Worker, and make later searches reject, while
   the Worker protocol `type: 'error'` response keeps its existing behavior

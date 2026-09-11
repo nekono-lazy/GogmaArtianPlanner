@@ -97,6 +97,8 @@ export async function searchExistingGogmaRoutes(context: RouteSearchContext, sch
       kindResolution: { type: 'existing_gogma' },
       sourceOwnedWeaponId: source.id,
       baseOperations: [],
+      // No conversion: the base's current Skills are the source weapon's own.
+      conversionSkill: null,
       zeroBonus: zeroBonusSolution(source),
       zeroSkill: zeroSkillSolution(source),
       startSkillCounter: canSkill ? input.rngState.skillCounter.value : null,

@@ -459,9 +459,20 @@ TargetWeaponごとに候補を検索し、作成リストへ追加する。
   Master IDをそのまま表示しない。`null` のlabelは既存helperの表記に従う
 - 予測結果は `BuildCandidate.skillAmendmentTrace` が示す `operationIndex` に対応させて
   表示し、`reset_skills` が連続しても対応がずれないようにする
-- `reset_skills` 以外のOperationには予測スキルを表示しない
+- `skillAmendmentTrace` の予測スキルを `reset_skills` 以外のOperationへ表示しない
 - `skillAmendmentTrace` を持たない既存Candidateは予測結果を表示せず、記録がない旨だけを
   示す。stale扱いにせず、最終Skillを各Reset Skillsの予測結果として代用しない
+- 候補詳細の作成ルートでは、`convert_normal_to_gogma` についても巨戟化時に付与される
+  初回シリーズスキル / グループスキルを表示する。表示形式はReset Skillsの予測結果と
+  同じとし、Master由来の日本語labelを用いる
+- 予測結果は `BuildCandidate.conversionSkillTrace` が示す `operationIndex` に対応させて
+  表示する。`skillAmendmentTrace` とは別の観測契約であり、変換をReset Skillsのentryとして
+  表示しない
+- `conversionSkillTrace` を持たない既存Candidateは予測結果を表示せず、操作名だけを表示する。
+  stale扱いにせず、記録がない旨の補足文も表示しない。旧Candidateであることを
+  過剰に通知しないためであり、`bonusAmendmentTrace` / `skillAmendmentTrace` の
+  補足文は従来どおり維持する
+- conversionを含まないRouteには変換の予測スキルを表示しない
 - 候補カード上部の最終シリーズ / グループ表示は維持する。これは完成状態であり、
   作成ルートの予測は途中の各Reset Skills直後の状態なので意味が異なる
 - 予測結果はSearch / Domainが確定した値を表示するだけとし、UIスレッドでProduction RNGを

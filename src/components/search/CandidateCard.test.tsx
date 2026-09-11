@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import type {
   BuildCandidate,
   CandidateBonusAmendmentStep,
+  CandidateConversionSkillStep,
   CandidateSkillAmendmentStep,
   RestorationBonusSet,
   RouteOperation,
@@ -85,6 +86,7 @@ function candidateWith(
   operations: RouteOperation[],
   bonusAmendmentTrace: CandidateBonusAmendmentStep[] | undefined,
   skillAmendmentTrace?: CandidateSkillAmendmentStep[],
+  conversionSkillTrace?: CandidateConversionSkillStep,
 ): BuildCandidate {
   const candidate = createValidBuildCandidate()
   candidate.route = { ...candidate.route, operations }
@@ -97,6 +99,11 @@ function candidateWith(
     delete candidate.skillAmendmentTrace
   } else {
     candidate.skillAmendmentTrace = skillAmendmentTrace
+  }
+  if (conversionSkillTrace === undefined) {
+    delete candidate.conversionSkillTrace
+  } else {
+    candidate.conversionSkillTrace = conversionSkillTrace
   }
   return candidate
 }
@@ -426,5 +433,143 @@ describe('CandidateCard route skill results', () => {
     // fixture does not define, so the header keeps its own fallback label.
     expect(screen.getByText(/不明なシリーズスキル/)).toBeTruthy()
     expect(screen.getByText(new RegExp(skillLabels.disabledSeries))).toBeTruthy()
+  })
+})
+
+describe('CandidateCard conversion skill result', () => {
+  /** Resolved by `seriesSkillLabel` / `groupSkillLabel` from the Master fixture. */
+  const skillLabels = {
+    series: 'シリーズfixture',
+    disabledSeries: '無効シリーズfixture',
+    group: 'グループfixture',
+    none: 'なし',
+  }
+
+  const conversion: RouteOperation = {
+    type: 'convert_normal_to_gogma',
+    weaponTypeId: 'weapon.fixture.a',
+    skillCounterBefore: 7,
+    skillCounterAfter: 8,
+  }
+
+  const create: RouteOperation = {
+    type: 'create_normal_artian',
+    weaponTypeId: 'weapon.fixture.a',
+    rarity: 8,
+    count: 1,
+    normalCounterBefore: 4,
+    normalCounterAfter: 5,
+  }
+
+  const resetSkills = (skillCounterBefore: number): RouteOperation => ({
+    type: 'reset_skills',
+    sourceOwnedWeaponId: null,
+    skillCounterBefore,
+    skillCounterAfter: skillCounterBefore + 1,
+  })
+
+  function conversionStep(
+    operationIndex: number,
+    seriesSkillId: string | null,
+    groupSkillId: string | null,
+  ): CandidateConversionSkillStep {
+    return {
+      operationIndex,
+      operationType: 'convert_normal_to_gogma',
+      seriesSkillId,
+      groupSkillId,
+    }
+  }
+
+  it('shows the predicted Series and Group next to the conversion', async () => {
+    const candidate = candidateWith(
+      [create, conversion],
+      undefined,
+      [],
+      conversionStep(1, 'series_skill.fixture.enabled', 'group_skill.fixture.enabled'),
+    )
+    const { container } = await renderExpanded(candidate)
+
+    expect(routeStepTexts(container)).toEqual([
+      '通常アーティアを作成 × 1',
+      `巨戟アーティアへ変換予測結果:シリーズ: ${skillLabels.series} ／ グループ: ${skillLabels.group}`,
+    ])
+    // Master-backed labels only; a raw Master ID must never reach the card.
+    expect(container.textContent).not.toContain('series_skill.fixture.enabled')
+  })
+
+  it('keeps the conversion result separate from each later Reset Skills', async () => {
+    const candidate = candidateWith(
+      [create, conversion, resetSkills(8), resetSkills(9)],
+      undefined,
+      [
+        { operationIndex: 2, operationType: 'reset_skills', seriesSkillId: 'series_skill.fixture.disabled', groupSkillId: null },
+        { operationIndex: 3, operationType: 'reset_skills', seriesSkillId: null, groupSkillId: 'group_skill.fixture.enabled' },
+      ],
+      conversionStep(1, 'series_skill.fixture.enabled', 'group_skill.fixture.enabled'),
+    )
+    const { container } = await renderExpanded(candidate)
+    const texts = routeStepTexts(container)
+
+    expect(texts[0]).toBe('通常アーティアを作成 × 1')
+    expect(texts[1]).toBe(
+      `巨戟アーティアへ変換予測結果:シリーズ: ${skillLabels.series} ／ グループ: ${skillLabels.group}`,
+    )
+    expect(texts[2]).toBe(
+      `スキルをリセット予測結果:シリーズ: ${skillLabels.disabledSeries} ／ グループ: ${skillLabels.none}`,
+    )
+    expect(texts[3]).toBe(
+      `スキルをリセット予測結果:シリーズ: ${skillLabels.none} ／ グループ: ${skillLabels.group}`,
+    )
+    expect(screen.getAllByText('予測結果:')).toHaveLength(3)
+  })
+
+  it('shows the conversion, bonus, and skill predictions on their own operations', async () => {
+    const candidate = candidateWith(
+      [create, conversion, amendment(10, 'reset_bonuses'), resetSkills(8)],
+      [traceStep(2, 'reset_bonuses', firstResult())],
+      [{ operationIndex: 3, operationType: 'reset_skills', seriesSkillId: 'series_skill.fixture.enabled', groupSkillId: null }],
+      conversionStep(1, 'series_skill.fixture.disabled', null),
+    )
+    const { container } = await renderExpanded(candidate)
+    const texts = routeStepTexts(container)
+
+    expect(texts[1]).toBe(
+      `巨戟アーティアへ変換予測結果:シリーズ: ${skillLabels.disabledSeries} ／ グループ: ${skillLabels.none}`,
+    )
+    expect(texts[2]).toContain(labels.attackHigh)
+    expect(texts[2]).not.toContain('シリーズ:')
+    expect(texts[3]).toBe(
+      `スキルをリセット予測結果:シリーズ: ${skillLabels.series} ／ グループ: ${skillLabels.none}`,
+    )
+  })
+
+  it('renders a conversion Candidate saved before the field existed without predictions', async () => {
+    const candidate = candidateWith([create, conversion], undefined, [], undefined)
+    const { container } = await renderExpanded(candidate)
+
+    expect(routeStepTexts(container)).toEqual([
+      '通常アーティアを作成 × 1',
+      '巨戟アーティアへ変換',
+    ])
+    expect(screen.queryByText('予測結果:')).toBeNull()
+    // Legacy Candidates get no extra note for the conversion Skill: the record
+    // is simply omitted rather than announced.
+    expect(container.textContent).not.toContain('巨戟化時')
+  })
+
+  it('shows no conversion prediction on a route without a conversion', async () => {
+    const candidate = candidateWith(
+      [resetSkills(8)],
+      undefined,
+      [{ operationIndex: 0, operationType: 'reset_skills', seriesSkillId: 'series_skill.fixture.enabled', groupSkillId: null }],
+      undefined,
+    )
+    const { container } = await renderExpanded(candidate)
+
+    expect(routeStepTexts(container)).toEqual([
+      `スキルをリセット予測結果:シリーズ: ${skillLabels.series} ／ グループ: ${skillLabels.none}`,
+    ])
+    expect(screen.getAllByText('予測結果:')).toHaveLength(1)
   })
 })

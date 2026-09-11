@@ -66,6 +66,9 @@ export async function searchOwnedNormalArtianRoutes(
           kindResolution: { type: 'fixed', kind: 'owned_normal_artian_to_gogma' },
           sourceOwnedWeaponId: source.id,
           baseOperations: operations,
+          // The same prediction the conversion assigns, kept as an
+          // observational record (SEARCH_SPEC 5.5.2.2). No extra predictSkills.
+          conversionSkill: { seriesSkillId: skills.seriesSkillId, groupSkillId: skills.groupSkillId },
           zeroBonus: { gogmaAdvance: 0, lastResetDepth: 0, finalBonuses: source.restorationBonuses, restorationBonusScope: 'normal_artian', operations: [], amendmentResults: [] },
           zeroSkill: { resetCount: 0, seriesSkillId: skills.seriesSkillId, groupSkillId: skills.groupSkillId, estimatedSkillAdvance: 1, operations: [], amendmentResults: [] },
           startSkillCounter: skillCounterAfter,

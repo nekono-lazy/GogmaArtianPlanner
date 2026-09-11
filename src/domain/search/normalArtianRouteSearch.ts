@@ -1,5 +1,5 @@
 import type { TargetSearchScheduler } from './targetSearchScheduler'
-import type { RouteOperation } from '../models/publicTypes'
+import type { RouteOperation, SkillAmendmentResult } from '../models/publicTypes'
 import { V1_NORMAL_ARTIAN_RARITY } from '../models/publicTypes'
 import type { BonusStreamNotice } from './targetSearchScheduler'
 import {
@@ -165,6 +165,12 @@ interface ConversionBase {
   skillCounter: number
   skillCounterAfter: number
   zeroSkill: RouteSkillSolution
+  /**
+   * The same predicted Skills the conversion assigns, kept as an observational
+   * record (SEARCH_SPEC 5.5.2.2). It reads the Skill stream's existing memoized
+   * prediction, so it adds no `predictSkills` call.
+   */
+  conversionSkill: SkillAmendmentResult
 }
 
 export async function searchNormalArtianRoutes(
@@ -215,6 +221,10 @@ export async function searchNormalArtianRoutes(
         estimatedSkillAdvance: 1,
         operations: [],
         amendmentResults: [],
+      },
+      conversionSkill: {
+        seriesSkillId: skills.seriesSkillId,
+        groupSkillId: skills.groupSkillId,
       },
     }
   }
@@ -288,6 +298,7 @@ function searchBlindResetNormalRoute(
         kindResolution: { type: 'fixed', kind: 'normal_artian_to_gogma' },
         sourceOwnedWeaponId: null,
         baseOperations: operations,
+        conversionSkill: converted.conversionSkill,
         // No zero-amendment solution exists: the inherited five slots are
         // unknown, and no fabricated bonus set stands in for them. The Bonus
         // axis therefore starts at the first Reset Bonuses.
@@ -357,6 +368,7 @@ function searchPredictedNormalRoutes(
             kindResolution: { type: 'fixed', kind: 'normal_artian_to_gogma' },
             sourceOwnedWeaponId: null,
             baseOperations: operations,
+            conversionSkill: converted.conversionSkill,
             zeroBonus: { gogmaAdvance: 0, lastResetDepth: 0, finalBonuses: bonuses, restorationBonusScope: 'normal_artian', operations: [], amendmentResults: [] },
             zeroSkill: converted.zeroSkill,
             startSkillCounter: converted.skillCounterAfter,

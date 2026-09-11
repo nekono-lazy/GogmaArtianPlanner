@@ -16,6 +16,7 @@ import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import type {
   BuildCandidate,
   OwnedWeapon,
+  SkillAmendmentResult,
   TargetWeapon,
 } from '../../domain/models/publicTypes'
 import {
@@ -61,12 +62,21 @@ export function CandidateCard({
       (operation) =>
         operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses',
     )
-  // Same binding rule for the Skill side: consecutive Reset Skills operations
-  // are told apart by their own operation index, never by their position among
-  // the Reset Skills alone.
-  const skillAmendmentByOperationIndex = new Map(
-    (candidate.skillAmendmentTrace ?? []).map((step) => [step.operationIndex, step]),
-  )
+  // Same binding rule for every Skill prediction: consecutive Reset Skills
+  // operations are told apart by their own operation index, never by their
+  // position among the Reset Skills alone. The conversion's initial Skill
+  // assignment is a separate observational contract, but it describes the same
+  // kind of result and renders identically, so both share one lookup keyed by
+  // the operation they belong to. The two can never collide: one describes
+  // `reset_skills`, the other `convert_normal_to_gogma`.
+  const skillPredictionByOperationIndex = new Map<number, SkillAmendmentResult>([
+    ...(candidate.skillAmendmentTrace ?? []).map(
+      (step) => [step.operationIndex, step] as const,
+    ),
+    ...(candidate.conversionSkillTrace === undefined
+      ? []
+      : [[candidate.conversionSkillTrace.operationIndex, candidate.conversionSkillTrace] as const]),
+  ])
   const missingSkillAmendmentTrace =
     candidate.skillAmendmentTrace === undefined &&
     candidate.route.operations.some((operation) => operation.type === 'reset_skills')
@@ -139,7 +149,7 @@ export function CandidateCard({
                 <ol>
                   {candidate.route.operations.map((operation, index) => {
                     const amendment = amendmentByOperationIndex.get(index)
-                    const skillAmendment = skillAmendmentByOperationIndex.get(index)
+                    const skillPrediction = skillPredictionByOperationIndex.get(index)
                     return (
                       <li key={`${operation.type}:${index}`}>
                         <Stack
@@ -166,7 +176,7 @@ export function CandidateCard({
                               />
                             </Stack>
                           )}
-                          {skillAmendment && (
+                          {skillPrediction && (
                             <Stack
                               direction="row"
                               spacing={0.5}
@@ -177,8 +187,8 @@ export function CandidateCard({
                                 予測結果:
                               </Typography>
                               <Typography variant="caption">
-                                シリーズ: {seriesSkillLabel(skillAmendment.seriesSkillId, master)} ／ グループ:{' '}
-                                {groupSkillLabel(skillAmendment.groupSkillId, master)}
+                                シリーズ: {seriesSkillLabel(skillPrediction.seriesSkillId, master)} ／ グループ:{' '}
+                                {groupSkillLabel(skillPrediction.groupSkillId, master)}
                               </Typography>
                             </Stack>
                           )}

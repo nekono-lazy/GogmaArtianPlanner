@@ -976,6 +976,65 @@ function validateCandidateSkillAmendmentTrace(
   }
 }
 
+/**
+ * The observational conversion Skill record, when present, must describe the
+ * one `convert_normal_to_gogma` operation of the Route it belongs to.
+ *
+ * It is singular because SEARCH_SPEC 6.1 / 6.1.1 / 6.2 give a conversion Route
+ * exactly one conversion operation, so a Route carrying the field with any
+ * other conversion count is an internal inconsistency rather than something to
+ * bind by best effort.
+ *
+ * The record is NOT compared against the Candidate's own Skills: a later
+ * `reset_skills` legitimately overwrites the conversion result, and the
+ * Candidate's `seriesSkillId` / `groupSkillId` stay the authority for the final
+ * Skills. The field is optional so Candidates persisted before it existed
+ * remain valid; an absent record is never an issue, a wrong one always is.
+ */
+function validateCandidateConversionSkillTrace(
+  candidate: BuildCandidate,
+  issues: DomainValidationIssue[],
+): void {
+  const step = candidate.conversionSkillTrace
+  if (step === undefined) return
+  const conversionIndexes = candidate.route.operations.flatMap(
+    (operation, index) =>
+      operation.type === 'convert_normal_to_gogma' ? [index] : [],
+  )
+  if (conversionIndexes.length !== 1) {
+    addIssue(
+      issues,
+      'conversionSkillTrace',
+      'invalid_state',
+      'conversionSkillTrace requires exactly one conversion operation in the route.',
+    )
+    return
+  }
+  if (step.operationIndex !== conversionIndexes[0]) {
+    addIssue(
+      issues,
+      'conversionSkillTrace.operationIndex',
+      'invalid_state',
+      'conversionSkillTrace must point at the route conversion operation.',
+    )
+    return
+  }
+  if (step.operationType !== 'convert_normal_to_gogma') {
+    addIssue(
+      issues,
+      'conversionSkillTrace.operationType',
+      'invalid_literal',
+      'conversionSkillTrace operationType must be convert_normal_to_gogma.',
+    )
+  }
+  if (step.seriesSkillId !== null) {
+    validateId(step.seriesSkillId, 'conversionSkillTrace.seriesSkillId', issues)
+  }
+  if (step.groupSkillId !== null) {
+    validateId(step.groupSkillId, 'conversionSkillTrace.groupSkillId', issues)
+  }
+}
+
 export function validateBuildCandidate(
   candidate: BuildCandidate,
   ownedWeapons?: readonly OwnedWeapon[],
@@ -1023,6 +1082,7 @@ export function validateBuildCandidate(
   validateId(candidate.searchRunId, 'searchRunId', issues)
   validateCandidateBonusAmendmentTrace(candidate, issues)
   validateCandidateSkillAmendmentTrace(candidate, issues)
+  validateCandidateConversionSkillTrace(candidate, issues)
 
   if (candidate.route.kind === 'existing_gogma_reset_skills' && ownedWeapons) {
     const source = ownedWeapons.find(({ id }) => id === candidate.route.sourceOwnedWeaponId)

@@ -9,6 +9,7 @@ import type {
   BuildCandidate,
   BuildRoute,
   CandidateBonusAmendmentStep,
+  CandidateConversionSkillStep,
   CandidateSkillAmendmentStep,
   MaterialRequirement,
   RouteOperation,
@@ -40,6 +41,13 @@ export interface CandidatePrediction {
    * Candidate then simply carries no `skillAmendmentTrace`.
    */
   skillAmendmentResults?: readonly SkillAmendmentResult[]
+  /**
+   * The initial Series / Group Skills this Route's `convert_normal_to_gogma`
+   * assigns, as already predicted by the Skill stream at the conversion's own
+   * Counter position. Omitted when the caller has no observational record; the
+   * Candidate then simply carries no `conversionSkillTrace`.
+   */
+  conversionSkillResult?: SkillAmendmentResult
 }
 
 /**
@@ -102,6 +110,36 @@ export function createCandidateSkillAmendmentTrace(
     seriesSkillId: results[index].seriesSkillId,
     groupSkillId: results[index].groupSkillId,
   }))
+}
+
+/**
+ * Binds one conversion Skill observation to the Route's own conversion
+ * operation index.
+ *
+ * Singular by contract: SEARCH_SPEC 6.1 / 6.1.1 / 6.2 give a conversion Route
+ * exactly one `convert_normal_to_gogma`, so any other count while a result was
+ * predicted is an internal inconsistency and fails loudly instead of binding to
+ * an arbitrary one of them.
+ */
+export function createCandidateConversionSkillStep(
+  operations: readonly RouteOperation[],
+  result: SkillAmendmentResult,
+): CandidateConversionSkillStep {
+  const conversions = operations.flatMap((operation, operationIndex) =>
+    operation.type === 'convert_normal_to_gogma' ? [operationIndex] : [],
+  )
+  if (conversions.length !== 1) {
+    throw new CandidateSearchError(
+      'invalid_candidate',
+      `Route has ${conversions.length} conversion operation(s) but one predicted initial Skill result.`,
+    )
+  }
+  return {
+    operationIndex: conversions[0],
+    operationType: 'convert_normal_to_gogma',
+    seriesSkillId: result.seriesSkillId,
+    groupSkillId: result.groupSkillId,
+  }
 }
 
 function materialOperation(
@@ -331,6 +369,14 @@ export function createCandidateFromPrediction(
           skillAmendmentTrace: createCandidateSkillAmendmentTrace(
             prediction.route.operations,
             prediction.skillAmendmentResults,
+          ),
+        }),
+    ...(prediction.conversionSkillResult === undefined
+      ? {}
+      : {
+          conversionSkillTrace: createCandidateConversionSkillStep(
+            prediction.route.operations,
+            prediction.conversionSkillResult,
           ),
         }),
   }
