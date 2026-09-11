@@ -202,7 +202,7 @@ export function CandidateCard({
                   })}
                 </ol>
                 <Typography variant="body2">
-                  必要素材: {candidate.requiredMaterials.map((item) => `${materialLabel(item.materialId, master)} × ${item.quantity}`).join('、') || 'なし'}
+                  必要素材（アイテム）: {candidate.requiredMaterials.map((item) => `${materialLabel(item.materialId, master)} × ${item.quantity}`).join('、') || 'なし'}
                 </Typography>
                 {debugMode && (
                   <Alert severity="info">

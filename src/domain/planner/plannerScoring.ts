@@ -14,12 +14,6 @@ function compareStableStrings(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
 }
 
-function consumedMaterialWeaponCount(entry: BuildListEntry): number {
-  return entry.candidateSnapshot.route.operations.filter(
-    ({ type }) => type === 'use_weapon_as_material',
-  ).length
-}
-
 export function scoreCandidate(
   state: PlannerSearchState,
   target: TargetWeapon,
@@ -39,21 +33,18 @@ export function scoreCandidate(
       : 0
   const categoryScore = candidate.category === 'ideal' ? 20_000 : 10_000
   const distancePenalty = candidate.estimatedOperationCount * 100
-  const resourcePenalty = consumedMaterialWeaponCount(entry) * 1_000
   const conflictPenalty = conflictCount * 5_000
   return {
     targetPriorityScore,
     satisfactionScore,
     categoryScore,
     distancePenalty,
-    resourcePenalty,
     conflictPenalty,
     total:
       targetPriorityScore +
       satisfactionScore +
       categoryScore -
       distancePenalty -
-      resourcePenalty -
       conflictPenalty,
   }
 }
@@ -133,9 +124,8 @@ export function evaluatePlannerSearchState(
     context.routeUnitCountByEntryId,
     context.conflictCountByEntryId,
   )
-  const materialPenalty = state.consumedMaterialWeaponCount * 1_000
   const actionPenalty = state.trace.length * 100
-  return achieved + progress - materialPenalty - actionPenalty
+  return achieved + progress - actionPenalty
 }
 
 function normalizedOwnedWeapons(state: PlannerSearchState) {
@@ -152,11 +142,13 @@ function normalizedOwnedWeapons(state: PlannerSearchState) {
       elementId: weapon.elementId,
       restorationBonuses: weapon.restorationBonuses,
       isProtected: weapon.isProtected,
+      // `status` is deliberately absent: it is a user-facing organisation label
+      // that decides nothing in the Planner, so two branches differing only in
+      // it are the same search state (`docs/DATA_MODEL.md` 3.2).
       ...(weapon.kind === 'gogma'
         ? {
             seriesSkillId: weapon.seriesSkillId,
             groupSkillId: weapon.groupSkillId,
-            status: weapon.status,
           }
         : { rarity: weapon.rarity }),
     }))

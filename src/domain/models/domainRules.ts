@@ -109,14 +109,6 @@ export function isBuildResultCalculationContextCompatible(
   )
 }
 
-export function canUseAsMaterial(weapon: OwnedWeapon): boolean {
-  return (
-    weapon.kind === 'gogma' &&
-    weapon.status === 'material' &&
-    !weapon.isProtected
-  )
-}
-
 export function canResetBonuses(weapon: OwnedWeapon): boolean {
   return weapon.kind === 'gogma' && !weapon.isProtected
 }

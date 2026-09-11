@@ -276,7 +276,7 @@ export type GogmaOperation =
   | { type: "keep_bonuses" };
 ```
 
-Reset BonusesとKeep BonusesはそれぞれDomain Gogma Counterを1進める。通常→巨戟化はGogma streamを消費しない。`use_weapon_as_material` のRNG進行は未確認であり、この型へ含めたり0進行と推測したりしない。
+Reset BonusesとKeep BonusesはそれぞれDomain Gogma Counterを1進める。通常→巨戟化はGogma streamを消費しない。
 
 実装上は以下の関数で一元管理する。
 
@@ -675,7 +675,7 @@ Engine factoryを取得する。生成したEngine、ID Factory、ClockはPlanne
 pure Planner calculationへ注入する。PlannerInputへengineCapabilitiesを重複保存せず、
 `dependencies.rngEngine.capabilities` をCapability判定に使用する。
 
-Plannerが素材補充やRoute実行の予測を必要とする場合も注入EngineのPrediction / advance
+PlannerがRoute実行の予測を必要とする場合も注入EngineのPrediction / advance
 契約だけを使用し、Bonus Type Mapping、固定Counter delta、Skill、Keep結果を推測しない。
 
 Settings、Debug、RNG Setupのmain thread向け軽量操作は、

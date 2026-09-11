@@ -21,7 +21,7 @@ import type { RngCapabilityMissingRequirement } from '../domain/rng/capabilities
 import type { PlannerWarningKind } from '../domain/planner'
 
 export const ownedWeaponStatusLabels: Record<OwnedWeaponStatus, string> = {
-  material: '素材',
+  unclassified: '未分類',
   practical: '実用',
   ideal: '理想',
 }
@@ -57,13 +57,10 @@ export const productionPlanStatusLabels: Record<ProductionPlanStatus, string> = 
 export const planStepOperationLabels: Record<PlanStepOperationType, string> = {
   create_normal_artian: '通常アーティアを作成',
   convert_normal_to_gogma: '巨戟アーティアへ変換',
-  create_material_gogma: '素材用巨戟アーティアとして登録',
   reset_bonuses: '復元ボーナスをリセット',
   keep_bonuses: '復元ボーナスを保持して再抽選',
   reset_skills: 'スキルをリセット',
   reserve_weapon: '目標武器として確保',
-  use_weapon_as_material: '素材武器として使用',
-  change_owned_weapon_status: '所持武器の状態を変更',
   confirm_result: '結果を確認',
 }
 
@@ -71,7 +68,6 @@ export const plannerWarningLabels: Record<PlannerWarningKind, string> = {
   no_build_list_entries: '利用できるビルドリスト項目がありません',
   rng_state_missing: '必要なRNG状態または予測機能が不足しています',
   rng_prediction_unsupported: '指定されたRNG予測入力には対応していません',
-  material_weapon_shortage: '素材用巨戟アーティアが不足しています',
   protected_weapon_required: '保護中の武器が必要なため実行できません',
   build_list_entry_stale: '再検索が必要なビルドリスト項目があります',
   calculation_context_incompatible: '計算に使用したバージョンに互換性がありません',
@@ -178,8 +174,6 @@ export function getRouteOperationLabel(operation: RouteOperation): string {
       return '復元ボーナスを保持して再抽選'
     case 'reset_skills':
       return 'スキルをリセット'
-    case 'use_weapon_as_material':
-      return '素材武器として使用'
   }
 }
 

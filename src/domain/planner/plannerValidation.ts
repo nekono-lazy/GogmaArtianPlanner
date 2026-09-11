@@ -5,8 +5,6 @@ import type {
   InventoryChange,
   OwnedGogmaArtianWeapon,
   OwnedWeapon,
-  OwnedWeaponId,
-  PlanStep,
   RestorationBonusSet,
   TargetWeapon,
 } from '../models/publicTypes'
@@ -31,8 +29,6 @@ import type {
   PlannerConflictResolution,
   PlannerDependencies,
   PlannerInput,
-  PlannerMaterialAssignment,
-  PlannerMaterialRequirement,
   PlannerOptions,
   PlannerWarning,
   ValidatedBuildListEntry,
@@ -88,39 +84,6 @@ export function validatePlannerWarning(
   if (warning.message.trim().length === 0) {
     issues.push(issue('message', 'invalid_structure', 'Planner warning message cannot be empty.'))
   }
-  return { isValid: issues.length === 0, issues }
-}
-
-export function validatePlannerMaterialAssignments(
-  requirements: readonly PlannerMaterialRequirement[],
-  assignments: readonly PlannerMaterialAssignment[],
-): DomainValidationResult {
-  const issues: DomainValidationIssue[] = []
-  const requirementIds = new Set<string>()
-  requirements.forEach((requirement, index) => {
-    if (requirement.id.trim().length === 0 || requirementIds.has(requirement.id)) {
-      issues.push(issue(`requirements[${index}].id`, 'invalid_id', 'Planner material requirement IDs must be non-empty and unique.'))
-    }
-    requirementIds.add(requirement.id)
-    if (requirement.purpose !== 'gogma_rng_progression') {
-      issues.push(issue(`requirements[${index}].purpose`, 'invalid_literal', 'Planner material purpose is invalid.'))
-    }
-  })
-  const assignedRequirementIds = new Set<string>()
-  const assignedWeaponIds = new Set<OwnedWeaponId>()
-  assignments.forEach((assignment, index) => {
-    if (!requirementIds.has(assignment.requirementId)) {
-      issues.push(issue(`assignments[${index}].requirementId`, 'invalid_reference', 'Material assignment must reference an existing Planner requirement.'))
-    }
-    if (assignedRequirementIds.has(assignment.requirementId)) {
-      issues.push(issue(`assignments[${index}].requirementId`, 'invalid_state', 'A Planner material requirement can be assigned only once.'))
-    }
-    if (assignedWeaponIds.has(assignment.ownedWeaponId)) {
-      issues.push(issue(`assignments[${index}].ownedWeaponId`, 'invalid_state', 'One material weapon cannot satisfy multiple consumption requirements.'))
-    }
-    assignedRequirementIds.add(assignment.requirementId)
-    assignedWeaponIds.add(assignment.ownedWeaponId)
-  })
   return { isValid: issues.length === 0, issues }
 }
 
@@ -578,48 +541,5 @@ export function validateOwnedNormalConversionInventoryChange(
   if (change.addOwnedWeapon !== null || change.updateOwnedWeapons.length > 0) {
     issues.push(issue('', 'invalid_state', 'Conversion removes the Normal source but does not register or update a Gogma OwnedWeapon.'))
   }
-  return { isValid: issues.length === 0, issues }
-}
-
-/**
- * Validates only Planner-created material consumption (`buildListEntryId = null`).
- * Candidate Route material operations remain bound to their original concrete ID.
- */
-export function validatePlannerMaterialLifecycle(
-  steps: readonly PlanStep[],
-  initialOwnedWeaponIds: readonly OwnedWeaponId[],
-): DomainValidationResult {
-  const issues: DomainValidationIssue[] = []
-  const available = new Set<OwnedWeaponId>(initialOwnedWeaponIds)
-  const consumed = new Set<OwnedWeaponId>()
-
-  steps.forEach((step, index) => {
-    const path = `steps[${index}]`
-    if (step.operationType === 'create_material_gogma') {
-      const id = step.inventoryChange?.addOwnedWeapon?.id
-      if (id && available.has(id)) {
-        issues.push(issue(`${path}.ownedWeaponId`, 'invalid_reference', 'A reserved material ID must not already exist before registration.'))
-      }
-      if (id) available.add(id)
-      return
-    }
-    if (step.operationType !== 'use_weapon_as_material' || step.buildListEntryId !== null) return
-    const id = step.ownedWeaponId
-    if (id === null || !available.has(id)) {
-      issues.push(issue(`${path}.ownedWeaponId`, 'invalid_reference', 'Planner-only material consumption requires an already registered or initial OwnedWeapon.'))
-      return
-    }
-    if (consumed.has(id)) {
-      issues.push(issue(`${path}.ownedWeaponId`, 'invalid_state', 'The same material weapon cannot be consumed twice.'))
-      return
-    }
-    if (!step.inventoryChange?.removeOwnedWeaponIds.includes(id)) {
-      issues.push(issue(`${path}.inventoryChange.removeOwnedWeaponIds`, 'invalid_state', 'Material consumption must remove the assigned OwnedWeapon ID.'))
-      return
-    }
-    consumed.add(id)
-    available.delete(id)
-  })
-
   return { isValid: issues.length === 0, issues }
 }

@@ -142,18 +142,17 @@ export function createCandidateConversionSkillStep(
   }
 }
 
-function materialOperation(
-  operation: RouteOperation,
-): {
-  type:
-    | 'create_normal_artian'
-    | 'convert_normal_to_gogma'
-    | 'reset_bonuses'
-    | 'keep_bonuses'
-    | 'reset_skills'
+/**
+ * The in-game item material cost key of one Route operation.
+ *
+ * This is the game's consumable item cost (`MaterialCostMaster`), not an owned
+ * weapon: v1 never consumes an owned Artian weapon as material. Every current
+ * `RouteOperation` carries an item cost, so this is total.
+ */
+function itemMaterialOperation(operation: RouteOperation): {
+  type: RouteOperation['type']
   units: number
-} | null {
-  if (operation.type === 'use_weapon_as_material') return null
+} {
   return {
     type: operation.type,
     units: operation.type === 'create_normal_artian' ? operation.count : 1,
@@ -167,8 +166,7 @@ export function collectRequiredMaterialsForOperations(
 ): MaterialRequirement[] {
   const quantities = new Map<string, number>()
   operations.forEach((operation) => {
-    const info = materialOperation(operation)
-    if (!info) return
+    const info = itemMaterialOperation(operation)
     getMaterialCostsFromSubset(input.master, info.type, weaponTypeId).forEach(
       (cost) => {
         quantities.set(

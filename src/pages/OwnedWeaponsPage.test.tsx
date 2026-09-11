@@ -22,7 +22,7 @@ function existingWeapon(): OwnedGogmaArtianWeapon {
 }
 
 describe('OwnedWeaponsPage', () => {
-  it('creates a five-slot Material weapon unprotected', async () => {
+  it('creates a five-slot unclassified weapon unprotected', async () => {
     const user = userEvent.setup(); const deps = dependencies()
     render(<OwnedWeaponsPage dependencies={deps} />)
     await user.click(await screen.findByRole('button', { name: '所持武器を追加' }))
@@ -30,14 +30,14 @@ describe('OwnedWeaponsPage', () => {
     expect(screen.getByRole('checkbox', { name: '保護する' })).not.toBeChecked()
     await user.type(screen.getByRole('textbox', { name: /名前/ }), '登録武器')
     await user.click(screen.getByRole('button', { name: '保存' }))
-    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ name: '登録武器', status: 'material', isProtected: false, restorationBonuses: expect.any(Array) }), null)
+    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ name: '登録武器', status: 'unclassified', isProtected: false, restorationBonuses: expect.any(Array) }), null)
     expect((deps.save.mock.calls[0][0] as OwnedWeaponDraft).restorationBonuses).toHaveLength(5)
   })
 
   it.each([
     ['ideal', '理想', true],
     ['practical', '実用', false],
-    ['material', '素材', false],
+    ['unclassified', '未分類', false],
   ] as const)(
     'applies the %s protection default when a new Gogma status changes',
     async (status, label, isProtected) => {
@@ -47,7 +47,7 @@ describe('OwnedWeaponsPage', () => {
       await user.click(
         await screen.findByRole('button', { name: '所持武器を追加' }),
       )
-      if (status === 'material') {
+      if (status === 'unclassified') {
         await user.click(screen.getByLabelText('状態'))
         await user.click(screen.getByRole('option', { name: '理想' }))
         expect(screen.getByRole('checkbox', { name: '保護する' })).toBeChecked()
@@ -67,14 +67,28 @@ describe('OwnedWeaponsPage', () => {
     },
   )
 
-  it('confirms Practical-to-Material editing and preserves explicit Protection', async () => {
+  it('relabels Practical to 未分類 with no confirmation and no Protection change', async () => {
+    // Status is a user-facing organisation label, so relabelling is ordinary
+    // CRUD: it never implies the weapon becomes consumable and never touches
+    // protection (`docs/DATA_MODEL.md` 3.2).
     const user = userEvent.setup(); const weapon = existingWeapon(); const deps = dependencies(); deps.getAll = vi.fn(async () => [weapon]); const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
     render(<OwnedWeaponsPage dependencies={deps} />)
     await user.click(await screen.findByRole('button', { name: '編集' }))
-    await user.click(screen.getByLabelText('状態')); await user.click(screen.getByRole('option', { name: '素材' })); await user.click(screen.getByRole('button', { name: '保存' }))
-    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('素材扱い'))
-    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ status: 'material', isProtected: true }), weapon)
+    await user.click(screen.getByLabelText('状態')); await user.click(screen.getByRole('option', { name: '未分類' })); await user.click(screen.getByRole('button', { name: '保存' }))
+    expect(confirm).not.toHaveBeenCalled()
+    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ status: 'unclassified', isProtected: true }), weapon)
     confirm.mockRestore()
+  })
+
+  it('never offers 素材 as an owned weapon status', async () => {
+    const user = userEvent.setup()
+    render(<OwnedWeaponsPage dependencies={dependencies()} />)
+    await user.click(await screen.findByRole('button', { name: '所持武器を追加' }))
+    await user.click(screen.getByLabelText('状態'))
+    expect(
+      screen.getAllByRole('option').map(({ textContent }) => textContent),
+    ).toEqual(['未分類', '実用', '理想'])
+    expect(screen.queryByRole('option', { name: '素材' })).toBeNull()
   })
 
   it('preserves explicit protected state when editing Practical to Ideal', async () => {

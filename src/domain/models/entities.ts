@@ -248,7 +248,6 @@ export type RouteOperation =
   | ResetBonusesOperation
   | KeepBonusesOperation
   | ResetSkillsOperation
-  | UseWeaponAsMaterialOperation
 
 interface CreateNormalArtianOperationBase {
   type: 'create_normal_artian'
@@ -336,11 +335,6 @@ export interface ResetSkillsOperation {
   sourceOwnedWeaponId: OwnedWeaponId | null
   skillCounterBefore: number
   skillCounterAfter: number
-}
-
-export interface UseWeaponAsMaterialOperation {
-  type: 'use_weapon_as_material'
-  ownedWeaponId: OwnedWeaponId
 }
 
 export interface IdealDifference {

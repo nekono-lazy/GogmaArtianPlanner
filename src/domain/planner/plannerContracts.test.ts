@@ -4,13 +4,11 @@ import type {
   InventoryChange,
   OwnedGogmaArtianWeapon,
   OwnedNormalArtianWeapon,
-  PlanStep,
 } from '../models/publicTypes'
 import {
   buildListEntryId,
   createValidBuildListEntry,
   createValidOwnedWeapon,
-  createValidProductionPlan,
   ownedWeaponId,
 } from '../../test/fixtures/domainData'
 import {
@@ -32,8 +30,6 @@ import {
 } from './plannerTypes'
 import {
   validatePlannerInput,
-  validatePlannerMaterialAssignments,
-  validatePlannerMaterialLifecycle,
   validatePlannerOptions,
   validatePlannerWarning,
   validateOwnedNormalConversionInventoryChange,
@@ -282,52 +278,6 @@ describe('Planner contracts', () => {
     })
     expect(entry.candidateSnapshot.route).toEqual(routeBefore)
     expect(JSON.stringify(entry.candidateSnapshot.route)).not.toContain(futureId)
-  })
-
-  it('allows a reserved material ID only after registration and prevents double consumption', () => {
-    const futureId = ownedWeaponId('owned.fixture.future-material')
-    const baseStep = createValidProductionPlan().steps[0]
-    const material = {
-      ...createValidOwnedWeapon(futureId),
-      status: 'material' as const,
-      isProtected: false,
-    }
-    const register: PlanStep = {
-      ...baseStep,
-      id: 'step.fixture.register' as never,
-      operationType: 'create_material_gogma',
-      buildListEntryId: null,
-      ownedWeaponId: futureId,
-      inventoryChange: { ...emptyInventoryChange(), addOwnedWeapon: material },
-    }
-    const consume: PlanStep = {
-      ...baseStep,
-      id: 'step.fixture.consume' as never,
-      operationType: 'use_weapon_as_material',
-      buildListEntryId: null,
-      ownedWeaponId: futureId,
-      inventoryChange: { ...emptyInventoryChange(), removeOwnedWeaponIds: [futureId] },
-    }
-    expect(validatePlannerMaterialLifecycle([register, consume], []).isValid).toBe(true)
-    expect(validatePlannerMaterialLifecycle([consume, register], []).isValid).toBe(false)
-    expect(validatePlannerMaterialLifecycle([register, consume, consume], []).isValid).toBe(false)
-  })
-
-  it('assigns one concrete material weapon to each Planner-only requirement without guessed constraints', () => {
-    const firstId = ownedWeaponId('owned.fixture.material.first')
-    const secondId = ownedWeaponId('owned.fixture.material.second')
-    const requirements = [
-      { id: 'requirement.fixture.a', sourceBuildListEntryId: null, purpose: 'gogma_rng_progression' as const },
-      { id: 'requirement.fixture.b', sourceBuildListEntryId: null, purpose: 'gogma_rng_progression' as const },
-    ]
-    expect(validatePlannerMaterialAssignments(requirements, [
-      { requirementId: requirements[0].id, ownedWeaponId: firstId },
-      { requirementId: requirements[1].id, ownedWeaponId: secondId },
-    ]).isValid).toBe(true)
-    expect(validatePlannerMaterialAssignments(requirements, [
-      { requirementId: requirements[0].id, ownedWeaponId: firstId },
-      { requirementId: requirements[1].id, ownedWeaponId: firstId },
-    ]).isValid).toBe(false)
   })
 
   it('creates stable conflict keys from semantic positions and sorted BuildListEntry IDs', () => {

@@ -22,7 +22,7 @@ Plannerの基本優先順位。
 
 - ユーザーによる作成順の完全固定
 - 高度な任意スコアリング
-- 素材アイテム所持数による作成不能判定
+- アイテム素材の所持数による作成不能判定
 - 複数キャラクター横断計画
 
 ---
@@ -166,8 +166,6 @@ export interface PlannerWarning {
     | "rng_state_missing"
     | "rng_prediction_unsupported"
     | "rng_engine_capability_missing"
-    | "material_rng_advance_unverified"
-    | "material_weapon_shortage"
     | "protected_weapon_required"
     | "build_list_entry_stale"
     | "calculation_context_incompatible"
@@ -251,7 +249,6 @@ export interface PlannerSearchState {
   securedOwnedWeaponIdByEntryId: Record<BuildListEntryId, OwnedWeaponId>;
   trace: PlannerSearchAction[];
   practicalFirstProgressTargetIds: TargetWeaponId[];
-  consumedMaterialWeaponCount: number;
   totalCost: number;
   evaluationScore: number;
 }
@@ -296,8 +293,7 @@ export interface PlannerSearchState {
 - transient physical subjectのPlanner内部identityにはBuildListEntry IDを使用してよい。
   これはroute runtime用の非永続identityであり、fake OwnedWeapon ID、route-local永続ID、
   ProductionPlan field、DB schemaを追加しない
-- create Normal、conversion、concrete material消費、およびnull sourceの操作はcross-Entryで
-  shareableにしない
+- create Normal、conversion、およびnull sourceの操作はcross-Entryでshareableにしない
 - blind create Normal([SEARCH_SPEC.md](./SEARCH_SPEC.md) 6.1.1)も同様にEntry-localである。
   Counter位置を持たず、同じ「Normal Artianを1本作成する」操作に見えても、Entryごとに
   別の物理武器を作るため1回の物理操作として共有しない
@@ -399,8 +395,8 @@ Planner内部のRoute unit属性 `canSkipWhenCounterPassed` は、保存済みRo
 - Reset SkillsはSeries / Group Skillだけを書き、Skill Counter位置から位置的に予測する。
   直後がReset Skillsなら、前のReset Skillsの結果はどの操作の入力にもならない
 - Route末尾の操作はCandidate結果そのものを形成するため常に必須
-- `create_normal_artian`、`convert_normal_to_gogma`、`use_weapon_as_material`、
-  `reserve_weapon`、在庫変化を伴う操作は物理副作用を持つため常に必須
+- `create_normal_artian`、`convert_normal_to_gogma`、`reserve_weapon`、在庫変化を伴う
+  操作は物理副作用を持つため常に必須
 
 Route末尾のunitは常にskip不可なので、Route全体がfast-forwardされることはない。Candidate
 結果を形成する最後の操作は必ず実行され、`reserve_weapon` の前提となるroute outputも必ず
@@ -508,14 +504,14 @@ scoreだけではbeamWidthやtie-break次第で無効branchが残り、無効な
 通過済みRoute prefixはConflict対象へ戻さない。
 
 `same_owned_weapon_consumed` は別の排他資源であり、この除外を適用しない。1つのRouteが
-あるOwnedWeaponを起点/素材として使う場合、そのRouteには必ず必須unitが残るため、既存の
-排他消費semanticsはそのまま維持される。PR #4で定めたphysical action identity判定
+あるOwnedWeaponを起点として使う場合、そのRouteには必ず必須unitが残るため、既存の
+排他使用semanticsはそのまま維持される。PR #4で定めたphysical action identity判定
 （7.0）も弱めない。
 
 
 候補確保時の状態遷移。
 
-- Candidate reserveまたはMaterial Gogma消費など、SimulatedInventoryの意味的変更後は、
+- Candidate reserveや所持通常アーティアの変換消費など、SimulatedInventoryの意味的変更後は、
   enabled Target全体のTargetSatisfactionを現在InventoryのOwnedGogmaだけから再導出する。
   statusだけで判定せず、Idealは常にPracticalも満たす。1武器が複数Targetを満たす場合は
   すべてへ反映し、削除・更新で満たさなくなったTargetはtrueを保持しない。
@@ -720,7 +716,6 @@ categoryScore =
   candidate.category === "ideal" ? 20000 :
   10000
 distancePenalty = estimatedOperationCount * 100
-resourcePenalty = consumedMaterialWeaponCount * 1000
 conflictPenalty = conflictCount * 5000
 ```
 
@@ -733,7 +728,8 @@ conflictPenalty = conflictCount * 5000
 - 実用品未所持TargetをPractical以上へ進める評価を、実用品取得済みTargetのIdeal更新より高くする
 - Practical確保後はhasPracticalを維持しつつIdeal候補を評価する
 - 理想候補でも、実用品未所持Targetの遠すぎる理想は短距離実用品より後回しになることがある
-- `isProtected = true` の武器に対する素材消費・Reset Bonuses・Keep Bonuses・Reset Skillsはpenaltyではなく実行不能な展開として除外する
+- `isProtected = true` の武器に対するReset Bonuses・Keep Bonuses・Reset Skillsはpenaltyではなく実行不能な展開として除外する
+- `status` はユーザー管理ラベルであり、score項目にしない。未分類武器の本数はPlanner scoreへ影響しない
 
 ### 7.3 Plan quality preference: 武器切替の最小化
 
@@ -770,7 +766,7 @@ keep_bonuses
 reset_skills
 ```
 
-`create_normal_artian`、`convert_normal_to_gogma`、`use_weapon_as_material` は
+`create_normal_artian` と `convert_normal_to_gogma` は
 「継続して操作している復元対象武器」というsubjectを持たない。v1ではこれらを
 metric対象にせず、subjectとしても記録しない。曖昧な定義を広げないための
 意図的な限定であり、後から必要になればformal specを更新して拡張する。
@@ -944,69 +940,58 @@ export interface SimulatedInventory {
 
 - レア8通常アーティアかつ保護OFF: `owned_normal_artian_to_gogma` の変換元として使用可能
 - 通常アーティアかつ保護ON: 変換元として使用しない
-- 巨戟アーティアのMaterialかつ保護OFF: 素材消費可能
-- Practical: 消費しない
-- Ideal: 消費しない
-- `isProtected = true`: 素材消費・Reset Bonuses・Keep Bonuses・Reset Skillsへ使用しない
+- 巨戟アーティアかつ保護OFF: Reset Bonuses / Keep Bonuses / Reset Skillsの起点として使用可能
+- `isProtected = true`: Reset Bonuses・Keep Bonuses・Reset Skillsへ使用しない
+- `status` は使用可否の判定に一切使用しない。未分類 / 実用 / 理想はユーザー管理ラベルである
 - 所持レア8通常アーティアを巨戟化したStateでは元通常アーティアをInventoryから除き、同じ通常アーティアを二重使用しない
 - `owned_normal_artian_to_gogma` ではconvert_normal_to_gogma適用時に元NormalをInventoryから削除し、変換後GogmaはまだOwnedWeaponとして追加しない。以後そのNormal IDは別Routeへ利用できない
-- 通常アーティアはstatusを持たず、旧PracticalのMaterial化規則を適用しない
+- 通常アーティアはstatusを持たない
 
-素材用巨戟が不足する場合。
+### 8.1 所持武器を素材として消費するモデルは存在しない
+
+所持している巨戟アーティア武器そのものを消耗品として消費するv1 Planner仕様は撤去した。
+Plannerは次の概念を一切持たない。
 
 ```text
-通常アーティア作成
-→ 巨戟化
-→ create_material_gogma（素材用巨戟として登録）
-→ 後続Stepで素材として使用
+use_weapon_as_material        RouteOperation
+canUseAsMaterial              Domain rule
+canConsumeMaterialWeapon      SimulatedInventory
+consumeMaterialWeapon         SimulatedInventory
+consumedMaterialWeaponCount   PlannerSearchState
+PlannerMaterialRequirement    Planner-only DTO
+PlannerMaterialAssignment     Planner-only DTO
+material_weapon_shortage      PlannerWarningKind
+create_material_gogma         PlanStepOperationType
+change_owned_weapon_status    PlanStepOperationType
 ```
 
-PlannerがCandidate Routeとは別に必要とする一般素材需要は、次のPlanner-only型で管理する。
+したがってPlannerは次を行わない。
 
-```ts
-export interface PlannerMaterialRequirement {
-  id: string;
-  sourceBuildListEntryId: BuildListEntryId | null;
-  purpose: "route_material_requirement";
-}
+- 素材用巨戟の不足を判定する
+- 素材用巨戟を補充するRoute / Stepを生成する
+- 素材補充だけを目的にNormal / Gogma / Skill Counterを進める
+- 旧PracticalをMaterialへ変える確認付きStepを予定する
+- 所持武器のstatusを変更する
+- 素材武器の消費本数をscoreへ加算する
 
-export interface PlannerMaterialAssignment {
-  requirementId: string;
-  ownedWeaponId: OwnedWeaponId;
-}
-```
+`SimulatedInventory.consumedWeaponIds` は維持する。所持通常アーティアの巨戟化で元武器を
+在庫から消費し、同じsourceを二重利用しないためのsemanticsであり、素材消費とは別概念である。
 
-未確認の武器種、属性、Bonus、素材コスト制約をこの型へ追加しない。利用可能な
-Material / unprotected Gogmaを割り当て、不足時だけ補充し、最終Planでは具体的な
-`use_weapon_as_material` Stepへ変換する。
+status変更はOwned Weapons画面の通常CRUDであり、ProductionPlanの操作ではない。
 
-`use_weapon_as_material` 単独のRNG進行はunverifiedである。`purpose` は在庫上の素材要求だけを表し、Gogma stream進行を意味しない。現行RngAdvanceはunknown deltaを表現できないため、素材使用後の予測位置がそのRNG効果に依存するProduction Planは、進行契約がgame-verifiedになるまで生成不可とし、0または+1を推測して後続Counterを計算しない。
+### 8.2 ゲーム内アイテム素材
+
+復元強化やスキル再抽選が消費するゲーム内アイテム素材は別概念であり、
+`MaterialRequirement`、`MaterialCostMaster`、`PlannerMasterSubset.materialCosts`、
+`ProductionPlan.requiredMaterials`、`InventoryChange.materialRequirements` として維持する。
 
 制約。
 
-- 初期版では素材アイテムの所持数不足はPlan不可理由にしない
-- 巨戟アーティア武器の不足はPlanに補充Stepを追加して解決する
-- 補充StepでもRNG進行を伴うため、後続候補のCounterと整合させる
-- RNG進行は通常アーティア作成と巨戟化の実ゲーム操作Stepで行い、`create_material_gogma` 自体はCounterを進めない
-- Plannerは補充武器のOwnedWeaponIdをPlan生成時に予約し、`create_material_gogma.inventoryChange.addOwnedWeapon.id` と後続 `use_weapon_as_material` で同じIDを使ってよい
-- 予約武器は `create_material_gogma` 確定前のInventoryへ追加せず、登録前に素材消費・Reset Bonuses・Keep Bonusesの起点として使わない
-- Candidate Searchが生成した `UseWeaponAsMaterialOperation.ownedWeaponId` は検索時点の具体的既存武器を要求するため、Plannerは別IDへ差し替えない
-- Planner-only素材需要、補充、登録、消費、旧Practical素材化、reserveはBuildRouteを書き換えず、Planner-only Stepとして追加する
-- protected武器への素材消費・Reset Bonuses・Keep Bonuses・Reset Skillsが必要な探索展開は生成せず、該当BuildListEntryを不採用として理由を残す
-- Search後に起点武器がprotectedへ変わった場合、素材消費またはBonus / Skill amendmentを必要とするEntryはPlanner入力validationで実行不能とする
-- v1では、Plannerは同一TargetのIdeal武器を先に確保できる場合だけ、旧Practical武器の確認付き素材化Stepを探索へ追加してよい
-- 素材化Stepを予定することは許可するが、ユーザー確認前に `isProtected` または `status` を変更しない
-- 素材化Stepが確認された後のStateでのみ、その武器を後続の素材消費へ割り当てる
-- 別のPractical武器を確保したことだけを理由に旧Practical武器の素材化展開を生成しない。Practical同士の優劣判定は将来仕様とする
-
-旧実用品の素材化に必要な探索条件。
-
-- 対象武器は現在 `status = "practical" AND isProtected = true`
-- 同じTargetのIdeal武器を確保済み、または同一Plan内の先行Stepで確保する
-- 素材化後も、そのTargetの `hasIdeal = true` を満たす別のOwnedWeaponが残る
-- 後続Stepで素材として使う合理的な必要性がある
-- `change_owned_weapon_status` Stepを素材消費Stepより前に配置する
-- この素材化はCandidate Searchがprotected武器を起点に破壊的Routeを生成することを許可するものではなく、Plannerが後続の一般素材不足を解消する在庫操作として追加する
+- 初期版ではアイテム素材の所持数不足をPlan不可理由にしない
+- 必要数を表示するだけで、所持数管理や不足判定を行わない
+- protected武器へのReset Bonuses・Keep Bonuses・Reset Skillsが必要な探索展開は生成せず、該当BuildListEntryを不採用として理由を残す
+- Search後に起点武器がprotectedへ変わった場合、Bonus / Skill amendmentを必要とするEntryはPlanner入力validationで実行不能とする
+- PlannerはCandidate Route内の具体的な起点OwnedWeapon IDを別武器へ差し替えず、reserveはBuildRouteを書き換えずPlanner-only Stepとして追加する
 
 ---
 
@@ -1021,7 +1006,7 @@ Material / unprotected Gogmaを割り当て、不足時だけ補充し、最終P
 - 同じGogma Counter位置で同時取得できない候補
 - 同じSkill Counter位置で同時取得できない候補
 - 同じ通常アーティアCounter位置で同時取得できない候補
-- 同じOwnedWeaponを素材または起点として排他的に消費する候補
+- 同じOwnedWeaponを起点として排他的に使用・消費する候補
 
 Counter位置の競合対象は、その位置で物理的に実行する必要があるunitだけである。
 `canSkipWhenCounterPassed` なunitはその位置を排他的に必要としないため、competition
@@ -1064,7 +1049,7 @@ PlannerIdFactoryは使用しない。
 選択Entryが削除済み、stale、Target無効、Capability不足、または保護状態変更により
 実行不能ならresolutionを適用せず `invalid_conflict_resolution` warningを返し、再選択を促す。
 
-protected武器への素材消費・Reset Bonuses・Keep Bonuses・Reset Skillsは競合として解決せず、常に実行不能として `requires_protected_weapon` の不採用理由を付ける。確認付き素材化Stepが先行し、期待状態どおりMaterial / unprotectedへ変わった後の素材消費はこの禁止に該当しない。
+protected武器へのReset Bonuses・Keep Bonuses・Reset Skillsは競合として解決せず、常に実行不能として `requires_protected_weapon` の不採用理由を付ける。
 
 RouteOperation別のRNG位置は実際に消費するstreamで判定する。`convert_normal_to_gogma` は `same_skill_counter` の競合対象であり、`same_gogma_counter` として扱わない。Reset SkillsもSkill、Reset / KeepだけがGogma、forgeだけが該当Normal Counter位置を競合資源とする。
 
@@ -1203,8 +1188,8 @@ Planner / constrained search orchestration
 
 `same_owned_weapon_consumed` の競合対象OwnedWeapon IDは、conflict context DTOへ
 明示的な独立fieldとして保持する。participantの `sourceOwnedWeaponId` で代用しては
-ならない。素材消費のOwnedWeaponは起点武器と一致するとは限らず、participantごとに
-異なり得るため、participant単位のfieldから競合資源を復元できない。
+ならない。両者は別concernのfieldであり、participant単位のfieldから競合資源を
+復元する実装にしない。
 
 これは `PlanConflict.id` の生成規則([DATA_MODEL.md](./DATA_MODEL.md) 11.8)を
 変更するものではない。`PlanConflict.id` は従来どおりConflictKind、kind別の競合位置、
@@ -3028,11 +3013,10 @@ prefixのsilent fast-forward修正で4へ更新されており、7.0.1のPlan失
 7. 各展開で共有RNG時系列と在庫をシミュレート
 8. 競合を検出し、実行不能な展開を除外
 9. 最良Stateから採用BuildListEntryとRejectedBuildListEntryを決定
-10. 必要に応じて素材用巨戟補充Stepを追加
-11. CandidateのBuildRoute.operationsを変更せずRouteOperation列からPlanStep列を生成し、Planner-only Stepを別に挿入する
-12. 各PlanStepの期待状態Before / Afterを計算
-13. requiredMaterialsを集計
-14. ProductionPlanを返す
+10. CandidateのBuildRoute.operationsを変更せずRouteOperation列からPlanStep列を生成し、Planner-only Stepを別に挿入する
+11. 各PlanStepの期待状態Before / Afterを計算
+12. requiredMaterials（アイテム素材）を集計
+13. ProductionPlanを返す
 
 制約。
 
@@ -3086,7 +3070,7 @@ PlanStep変換用 `PlannerPlanStepDraft` を生成する。
   Beam Searchを再実行する。support query例外とsupport=true後のPrediction例外は
   `prediction_failed` 等へ変換せず呼出元へ伝播する。
 - convertはGogma Predictionを呼ばない。変換元Normalの `normal_artian` scope 5-slot bonusesをslot順のままtransient Gogmaへ継承し、現在Skill位置で `predictSkills` を実行して初回Series / Groupを設定する。
-- convertのRNG遷移はSkill Counter `+1`、Normal / Gogma Counter `+0` とする。変換時のSkill結果を無視するRouteや素材補充でも、実ゲームでconversionする限り同じSkill位置を消費する。
+- convertのRNG遷移はSkill Counter `+1`、Normal / Gogma Counter `+0` とする。変換時のSkill結果を無視するRouteでも、実ゲームでconversionする限り同じSkill位置を消費する。
 - Reset / Keepはtransient Gogmaのscopeとslot順を追跡する。normal scopeならv1は最初のBonus amendmentとしてResetだけを許可し、Reset結果でgogma scopeへ置き換えた後に限りKeepを許可する。これはProduction prediction supportの制限であり、ゲームルール上の制限ではない([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.7参照)。
 - unknown 5枠に対してはReset Bonusesだけが実行可能である。Resetは置き換える5枠を読まないため、unknownからknownな `gogma_artian` scope 5枠へ遷移できる唯一の操作である。Reset Skillsは5枠を読まずSeries / Group Skillだけを書き換えるため、unknownをunknownのまま通過させる
 - unknown 5枠を読む操作はReplay issue code `unknown_restoration_bonuses` でfail closedする。対象はKeep Bonusesの入力と、reserve時のCandidate Snapshot照合である。架空の5枠を合成してReplayを継続しない
@@ -3097,7 +3081,7 @@ PlanStep変換用 `PlannerPlanStepDraft` を生成する。
 - reset/keep/reset-skillsによるpersistent inventory更新はreserveまで行わない。所持Normalはconvertで
   削除し、new/owned-Normal reserveは予約済みIDのGogmaを追加、existing Gogma reserveは同一IDを更新する。
 - Replay完了時はRNG、Normal Counter、persistent simulated inventoryがbest Search Stateと一致しなければ
-  Draftを返さない。confirm_result、一般素材Gogma補充、create_material_gogma、ProductionPlan、ID/Clock生成は第9C-Aの対象外である。
+  Draftを返さない。confirm_result、ProductionPlan、ID/Clock生成は第9C-Aの対象外である。
 
 
 ### 11.0-B 第9C-B: ProductionPlan組み立て
@@ -3110,7 +3094,7 @@ PlanStep変換用 `PlannerPlanStepDraft` を生成する。
 3. `bestState.trace` が空なら（初期状態ですべての有効TargetがIdealを満たす場合を含む）空Planを作らず `plan = null` とする。
 4. `replayPlannerSearchTrace(input, bestState, dependencies.rngEngine)` を実行する。Replay failureはwarningへ変換せず、issue code / message / actionIndexを含むPlanner内部エラーとして失敗させる。
 5. Replayが成功したDraftを順序を変えずにPlanStepへ1対1で変換する。
-6. PlanningInputSnapshot、採用/不採用Entry、素材表示、ProductionPlanを作る。
+6. PlanningInputSnapshot、採用/不採用Entry、アイテム素材表示、ProductionPlanを作る。
 
 Replay後、ProductionPlan IDを1回生成し、その後Draft順にPlanStep IDを1回ずつ生成する。
 Searchで確定したreserve用OwnedWeapon IDはDraftの値をそのまま使用し、再生成しない。Clockは
@@ -3202,8 +3186,7 @@ total requiredMaterialsをphysical action単位へ安全に分解する契約が
 再計算、Entry数での除算、補正式の追加を行わない。
 
 上限到達時でもtraceが1件以上あるbest partial Stateは、その到達点までのDraft Planとして返して
-既存warningを維持する。一般素材Gogma補充、`create_material_gogma`、
-`change_owned_weapon_status`、Execution、Invalidation、Undo、Worker契約追加、Dexie保存は
+既存warningを維持する。Execution、Invalidation、Undo、Worker契約追加、Dexie保存は
 第9C-Bでは生成・実装しない。
 BuildCandidateの `BuildRoute.operations` を順にPlanStepへ変換する。Route kindやCounter endpointだけから操作列を再構成しない。
 
@@ -3215,8 +3198,10 @@ ConvertToGogmaOperation    -> convert_normal_to_gogma
 ResetBonusesOperation      -> reset_bonuses
 KeepBonusesOperation       -> keep_bonuses
 ResetSkillsOperation       -> reset_skills
-UseWeaponAsMaterialOperation -> use_weapon_as_material
 ```
+
+current `RouteOperation` unionはこの5種類だけである。switch文のdefaultで旧operationを
+暗黙処理せず、exhaustiveに扱う。
 
 OperationごとのExpectedResult / RngAdvance / debug before-afterは次を正式契約とする。
 
@@ -3310,51 +3295,22 @@ updatedAtを更新し、復元ボーナスとcreatedAtを維持する。Target�
 
 起点は `restorationBonusScope = "gogma_artian"` でなければならない。Keepはcurrent 5slotのfamilyをslotごとに保持する単一操作であり、selection別のPlanStepを生成しない。
 
-## 11.6 素材補充
+## 11.6 撤去したPlanner-only Step
+
+所持武器を素材として消費するモデルの廃止にともない、次のPlanner-only Stepは
+current仕様から撤去した(8.1)。
 
 ```text
-1. create_normal_artian
-2. convert_normal_to_gogma
-3. create_material_gogma
-4. 必要になった位置で use_weapon_as_material
+create_material_gogma         素材用巨戟として登録
+use_weapon_as_material        素材として消費
+change_owned_weapon_status    旧PracticalをMaterialへ変更
 ```
 
-素材補充でもconversionは実ゲーム操作であるため、通常5枠を継承して初回Skillを予測し、Normalは必要forge数、Skillは1、Gogmaは0進める。素材用途でSkill結果を評価対象にしない場合でもSkill Counter消費を省略しない。
+Plannerは素材用巨戟の補充Routeを生成せず、旧Practical武器の確認付き素材化Stepも
+予定しない。status変更はOwned Weapons画面の通常CRUDである。
 
-`create_material_gogma` は作成済み巨戟をツールのOwnedWeapon Inventoryへ登録するPlanner-only PlanStepであり、RouteOperationまたは追加の巨戟化ではない。
-
-- `targetWeaponId = null`
-- `buildListEntryId = null`
-- `candidateId = null`
-- `ownedWeaponId` はPlan生成時に予約した追加予定Material OwnedWeapon ID
-- `requiresUserConfirmation = true`
-- `inventoryChange.addOwnedWeapon` は同じIDの `kind = "gogma"`、`status = "material"`、`isProtected = false` の武器
-- 復元ボーナス、Series Skill、Group Skillは直前の予測／実結果を保持する
-- `rngAdvance` はGogma / Skill / Normalすべて0
-- `expectedStateBefore` では予約武器は未登録、`expectedStateAfter.ownedWeaponsHash` では登録済み
-
-`ExpectedResult` を保持する場合は、直前結果の復元ボーナスとSkillを設定し、`candidateCategory = null`、`isSimilarToIdeal = false`、`shouldSecure = true` とする。Target候補として扱わない。
-
-`create_material_gogma` は、既存PracticalをMaterial / unprotectedへ変更する `change_owned_weapon_status` と、TargetのPractical / Ideal候補を確保する `reserve_weapon` のどちらにも流用しない。予約IDはBuildRoute内の未来武器参照ではなく、ProductionPlan内で登録Stepと後続消費Stepを結ぶためだけに使う。
-
-## 11.7 旧実用品の素材化
-
-同一TargetのIdeal武器の確保後に旧Practical武器を後続素材へ使うPlanでは、次のStepを生成できる。
-
-```text
-1. reserve_weapon（同一TargetのIdeal武器）
-2. change_owned_weapon_status（旧実用品）
-3. use_weapon_as_material（変更後の旧実用品）
-```
-
-`change_owned_weapon_status` Stepの契約。
-
-- `requiresUserConfirmation = true`
-- expectedStateBefore: 旧実用品がPractical / protected
-- 予定どおり「素材用に変更」: Material / unprotectedへ更新し、expectedStateAfter一致としてPlanを継続
-- 「保管」: 状態を変更せず、expectedStateAfter不一致としてPlanをstaleにする
-- ユーザー操作前に状態変更を適用しない
-- 確認結果をExecutionHistoryへ保存する
+保存済みlegacy artifactがこれらのoperationを含んでいても、current Domain operationへ
+自動変換せず、CalculationContext境界でfail closeする。
 
 すべての `reserve_weapon` Stepは上記Route別InventoryChangeを
 `expectedStateBefore` / `expectedStateAfter` へ反映する。RNG操作Stepだけでは
@@ -3408,7 +3364,6 @@ export function detectPlanInvalidation(
 - 想定結果と実結果が違った
 - 予定候補を確保しなかった
 - 予定とは異なる候補を確保した
-- 予定された素材化に対して「保管」を選び、`planned_status_change_declined` が記録された
 
 制約。
 
@@ -3591,7 +3546,7 @@ Workerを利用できない環境ではClientのversionを `production-engine-un
 - typed terminationが `PlannerBeamSearchResult` からProduction Plan生成、
   orchestration結果、Worker応答、Worker Clientまで再構築されずに届く
 - 同じ入力と同じ定数から決定的なPlanが生成される
-- 同じEngine fixture、ID Factory、ClockでもID、時刻、予約素材IDを含め決定的になる
+- 同じEngine fixture、ID Factory、ClockでもID、時刻、予約OwnedWeapon IDを含め決定的になる
 - offset kのNormal候補が `forgeCount = k + 1` だけNormalを進め、最後の1本だけのconversionでSkillを1進め、Gogmaを進めない
 - create operationの `normalCounterAfter = normalCounterBefore + forgeCount` と、採用候補位置 `normalCounterBefore + forgeCount - 1` を混同しない
 - 完全最適解を要求せず、探索上限内の最良Stateを返す
@@ -3605,7 +3560,7 @@ Workerを利用できない環境ではClientのversionを `production-engine-un
 - skip不可なpast unitは従来どおり `counter_before_current` などでfail closedになる
 - Route末尾のunitはskip不可であり、Route全体がfast-forwardされない
 - Reset→Reset / Keep→Reset / Keep→Keep / Reset Skills→Reset Skillsだけがskip可能で、
-  Keep直前のReset、create、conversion、素材消費はskip不可
+  Keep直前のReset、create、conversionはskip不可
 - 共有Gogma Counterを別武器の操作で進めた複数Targetが、どちらのTargetも落とさずIdealまで
   完成し、必要なRoute prefixだけがPlanStepになる
 - 同じOwnedWeaponの連続操作はswitchを増やさず、別武器への変更で1、元の武器へ戻ると2になる
@@ -3619,17 +3574,19 @@ Workerを利用できない環境ではClientのversionを `production-engine-un
 
 ## 15.4 Inventory Test
 
-- Material武器を消費できる
-- Practical / Ideal武器を消費しない
-- `isProtected = true` の武器を素材消費・Reset Bonuses・Keep Bonuses・Reset Skillsへ使う探索展開を生成しない
-- 素材消費またはBonus / Skill amendmentで保護武器を必要とするEntryは `requires_protected_weapon` で不採用になる
-- 素材用巨戟不足時に補充Stepが追加される
-- `create_material_gogma` が予約IDと同じunprotected Material Gogmaを追加し、RNGを進めない
-- 予約素材武器を登録Step前に使用せず、登録後も二重消費しない
+- current `RouteOperation` に `use_weapon_as_material` が存在しない
+- `canUseAsMaterial`、`canConsumeMaterialWeapon`、`consumeMaterialWeapon`、
+  `consumedMaterialWeaponCount`、`PlannerMaterialRequirement`、
+  `PlannerMaterialAssignment`、`material_weapon_shortage` が存在しない
+- Plannerが `create_material_gogma` / `change_owned_weapon_status` を生成しない
+- 素材用巨戟の補充Routeを生成しない
+- 素材武器消費のpenaltyがscoreに存在せず、未分類武器の本数がscoreへ影響しない
+- `isProtected = true` の武器をReset Bonuses・Keep Bonuses・Reset Skillsへ使う探索展開を生成しない
+- Bonus / Skill amendmentで保護武器を必要とするEntryは `requires_protected_weapon` で不採用になる
+- 所持通常アーティアの巨戟化で元のNormalがInventoryから削除される
+- 同じ所持Normalを二重使用できない
 - 消費済み武器を再利用しない
-- 同一TargetのIdeal確保後に確認必須のchange_owned_weapon_status Stepを生成できる
-- 別のPractical確保だけを理由にchange_owned_weapon_status Stepを生成しない
-- 素材化確認後だけ旧実用品を後続素材へ使用できる
+- `status` は使用可否の判定に使われず、未分類の巨戟でも実性能でTargetを満たせる
 
 ## 15.5 Conflict Test
 
@@ -3681,7 +3638,6 @@ Planner-driven constrained re-search実装後に追加する観点。
 - Candidate由来PlanStepの主参照がBuildListEntry IDである
 - `recalculate_plan` PlanStepを生成しない
 - Route別reserve_weaponのadd / remove / update契約が守られる
-- Planner-only未来素材IDが登録前に使われず、BuildRouteへ入らない
 - 上限打切りのincomplete resultから生成されたpartial Planを、実行可能なDraft
   ProductionPlanとして永続化しない
 - そのとき生成BuildListEntriesも単独で永続化しない
@@ -3707,8 +3663,7 @@ Planner-driven constrained re-search実装後に追加する観点。
 - ExecutionHistoryの想定外結果でstaleになる
 - CalculationContext非互換で `calculation_context_changed` が記録され、staleになる
 - Active Planの計画どおりの参照OwnedWeapon変更では、BuildListEntry由来の `owned_weapon_changed` だけを理由にstaleにならない
-- 予定どおり素材化してexpectedStateAfterと一致する場合はstaleにならない
-- 素材化予定に対して「保管」を選ぶとstaleになる
+- 所持武器のstatusだけを変更してもstaleにならない
 
 ## 15.8 Worker Contract Test
 
@@ -3824,8 +3779,7 @@ PlanningInputSnapshot.initialExecutionState の hash 値そのもの
 
 **`ExpectedPlanState` のhash完全一致を要求しない。** `ownedWeaponsHash` は
 OwnedWeapon IDを含み(11.2 / [DATA_MODEL.md](./DATA_MODEL.md) 11.2)、
-`reserve_weapon` と `create_material_gogma` の予約OwnedWeapon IDは
-`PlannerIdFactory` が生成する。したがって通常のProduction dependencyでは、
+`reserve_weapon` の予約OwnedWeapon IDは `PlannerIdFactory` が生成する。したがって通常のProduction dependencyでは、
 同じsemantic outcomeでもrunごとに `ownedWeaponsHash` が変わる。
 「予約OwnedWeapon IDの一致は不要」と「expectedState hashの一致は必須」は両立しない。
 要求するのは上記のinventory transition semanticsとRNG Counter advance /

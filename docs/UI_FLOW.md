@@ -292,9 +292,8 @@ activation条件。
 - 編集
 - 複製
 - 削除
-- Material / Practical / Ideal切替
+- 未分類 / 実用 / 理想切替
 - 保護ON/OFF
-- 旧実用品を素材用に変更
 - 新規登録時の「通常アーティアとして登録」切替。初期値は巨戟
 
 入力制約。
@@ -306,12 +305,14 @@ activation条件。
 - 通常アーティアはレア8として自動登録し、レア度選択UIを表示しない
 - 巨戟アーティアのstatusと保護は独立項目として扱う
 - 既存武器の種類変更は互換項目の初期化を伴うためv1 UIでは禁止する
-- 新規巨戟アーティア作成時だけ、Material / Practicalは保護OFF、Idealは保護ONを初期値にする
+- 新規巨戟アーティアの初期値は「未分類 / 保護OFF」とする
+- 新規作成時だけ、未分類 / 実用は保護OFF、理想は保護ONを初期値にする
 - 登録済み巨戟アーティアの通常のstatus変更ではProtectionを自動上書きしない。Protectionは独立項目とする
-- `isProtected = true` の武器はPlannerが素材消費・Reset Bonuses・Keep Bonuses・Reset Skillsへ使用しない
+- statusはユーザー管理ラベルであり、Plannerの操作可否・Target Satisfaction・Search Route
+  eligibilityに影響しない。武器性能を変更してよいかは `isProtected` だけが決める
+- `isProtected = true` の武器はPlannerがReset Bonuses・Keep Bonuses・Reset Skillsへ使用しない
 - `restorationBonusScope = "normal_artian"` の巨戟アーティアにはKeep Bonusesを提示せず、最初のamendmentとしてReset Bonusesだけを提示する
-- Plannerが消費できるのはMaterialかつ保護OFFの武器だけ
-- 旧実用品を素材用に変更する場合は確認後に `status = Material` と保護OFFを同時適用する
+- 「素材用武器」「素材として使用」など、所持武器を消耗品と誤解させる文言を表示しない
 - 削除時にActive Planで参照されている場合は警告する
 - 旧「関連する目標武器」の表示・編集UIは廃止する。目標武器との紐づけ操作はTarget Weapons画面
   だけから行い、この画面はread-only表示と確認付き解除のためにTarget関係を読み取るだけとする
@@ -337,14 +338,11 @@ Target Aとの紐づけを解除します。よろしいですか？
 削除時は、優先起点として参照されている武器を黙って削除しない。既存の参照中Entity削除保護
 （`PersistenceReferenceKind = "target_weapon"`）を適用する。
 
-Plan外で旧実用品を素材用へ変更する場合は、この画面で確認ダイアログを表示する。Active Plan中に計画された素材化は、Execution Navigatorの独立した `change_owned_weapon_status` Stepで確認する。
+statusの変更はこの画面の通常CRUDである。statusは非semanticであるため、statusだけを
+変更してもActive Planやビルドリストはstaleにならず、確認ダイアログも表示しない。
+Protectionを変更したい場合は独立した項目として明示的に操作する。
 
-選択肢。
-
-- 素材用に変更: `status = Material`、`isProtected = false` とし、計画外変更ならActive Planをstale判定する
-- 保管: 状態と保護を維持する
-
-自動的な素材化、Plannerによる保護解除、確認前の状態変更は禁止する。
+Plannerによる保護解除と、ユーザー確認前の状態変更は禁止する。
 
 ---
 
@@ -414,7 +412,7 @@ Selectを置き、補助説明を添える。
 ```
 
 - 候補は同一武器種・属性の所持武器とする。Normal / Gogmaのどちらも表示する
-- statusは表示条件にしない。非保護で互換ならMaterial / Practical / Idealのいずれも選択できる
+- statusは表示条件にしない。非保護で互換なら未分類 / 実用 / 理想のいずれも選択できる
 - 互換性のある保護武器も表示するが選択不可とする。完全に非表示にせず、「なぜ候補にないのか」
   が分かるUIにする
 - `指定なし` を選択可能にする
@@ -478,7 +476,7 @@ TargetWeaponごとに候補を検索し、作成リストへ追加する。
 - 推奨作成経路
 - 既存巨戟のスキルのみ再付与経路では、復元ボーナスを維持すること
 - 所持通常アーティア経由では「所持通常アーティアから巨戟化」と変換元の名称
-- 必要素材
+- 必要素材（アイテム）
 - 作成リスト追加状態
 - 近似表示と類似度（該当する実用品のみ）
 - 作成ルート内の `reset_bonuses` / `keep_bonuses` については、その操作直後の予測復元ボーナス5枠
@@ -601,7 +599,7 @@ Plannerに検討させる候補集合を確認・調整する。
 - BuildCandidateの検索結果とBuildListEntryを同一Entityとして扱わない
 - staleなBuildListEntryはPlanner入力に含めず、再検索または再追加を促す
 - 有効なBuildListEntryが0件ならPlanner実行不可
-- Target条件、検索に使用したRNG状態、Routeが参照する起点武器・素材武器、CalculationContext変更時にEntryのstale理由を表示する
+- Target条件、検索に使用したRNG状態、Routeが参照する起点武器、CalculationContext変更時にEntryのstale理由を表示する
 - RNG変更によるstaleは `rng_state_changed` と表示し、再検索・再追加へ誘導する
 - Route参照武器のボーナス、スキル、status、isProtected変更によるstaleは `owned_weapon_changed` と表示し、再検索・再追加へ誘導する
 - Routeと無関係なOwnedWeapon変更、または参照武器の名前、メモ、日時だけの変更ではEntryをstale表示しない
@@ -713,7 +711,7 @@ Plannerが生成した作成計画を確認する。
 - RejectedBuildListEntryと理由
 - BuildListEntry基準の競合と解決結果
 - 競合ごとの推奨候補とユーザー選択
-- 必要素材合計
+- 必要素材（アイテム）合計
 - タイムライン形式のPlanStep
 
 操作。
@@ -967,7 +965,6 @@ PlanStep表示。
 - 想定結果
 - 確保対象かどうか
 
-`create_material_gogma` は「素材用巨戟アーティアとして登録」と表示する。追加のRNG抽選ではなく、直前までに作成した巨戟をMaterial / 保護OFFでツールへ登録する確認Stepとして示す。`change_owned_weapon_status`（既存Practicalの素材化）や `reserve_weapon`（Target候補の確保）とは別表示にする。
 
 制約。
 
@@ -1015,7 +1012,7 @@ PlanStep表示。
 - PlanStepとProductionPlan更新
 - 次Stepへ進む
 
-これらは12.6の共通Dexie transactionで確定する。両方の期待状態と一致する正常進行ではPlanをstaleにしない。不一致の場合はStep完了を確定せず、差分と再計算導線を表示する。
+これらは12.5の共通Dexie transactionで確定する。両方の期待状態と一致する正常進行ではPlanをstaleにしない。不一致の場合はStep完了を確定せず、差分と再計算導線を表示する。
 
 ## 12.2 確保
 
@@ -1027,35 +1024,11 @@ PlanStep表示。
 - 実行前状態をExecutionUndoSnapshotへ保存
 - ExecutionHistory追加
 - PlanStepとProductionPlan更新
-- 旧実用品の素材化がPlanに含まれる場合でも、このStepでは状態を変更せず、後続の確認Stepへ進む
 - 次Stepへ進む
 
-武器追加・更新からPlan更新までを12.6の共通Dexie transactionで確定する。
+武器追加・更新からPlan更新までを12.5の共通Dexie transactionで確定する。
 
-## 12.3 予定された旧実用品の素材化
-
-`operationType = "change_owned_weapon_status"` のStepで表示する。
-
-表示。
-
-- 対象となる旧実用品
-- 先に確保した同一TargetのIdeal武器
-- 後続で素材として使う予定
-
-選択肢と処理。
-
-- 素材用に変更: `status = Material`、`isProtected = false` を同一トランザクションで適用し、`confirmed_weapon_status_change` としてExecutionHistoryへ記録する。`expectedStateAfter` と一致すればPlanをstaleにせず次Stepへ進む
-- 保管: 状態と保護を変更せず、`declined_weapon_status_change` と `planned_status_change_declined` をExecutionHistoryへ記録する。`expectedStateAfter` と不一致になるためPlanをstaleにして再計算を促す
-
-制約。
-
-- ユーザー選択前に状態を変更しない
-- 確認ダイアログを閉じただけではStepを完了しない
-- 素材化Step完了前に後続の `use_weapon_as_material` Stepへ進めない
-- v1では同一TargetのIdeal武器が先行確保されている場合だけこのStepを表示する。別のPractical取得を理由とするPlanner提案は行わない
-- どちらの選択もExecutionHistory、OwnedWeapon変更の有無、PlanStep、ProductionPlanを12.6の共通Dexie transactionで確定する
-
-## 12.4 結果が違う
+## 12.3 結果が違う
 
 処理。
 
@@ -1066,9 +1039,9 @@ PlanStep表示。
 - `expectedStateAfter` との不一致理由を記録してPlanをstaleにする
 - 再計算導線を表示
 
-ActualResult、RNG / Counter / Inventoryの実変更、ExecutionHistory、PlanStep、ProductionPlanを12.6の共通Dexie transactionで確定する。
+ActualResult、RNG / Counter / Inventoryの実変更、ExecutionHistory、PlanStep、ProductionPlanを12.5の共通Dexie transactionで確定する。
 
-## 12.5 Undo
+## 12.4 Undo
 
 処理。
 
@@ -1086,9 +1059,9 @@ Undoは上記すべてを1つのDexie transactionで行う。途中で失敗し�
 Undoはツール上の操作を戻すだけです。ゲーム内の操作は戻りません。
 ```
 
-## 12.6 Step確定Transaction
+## 12.5 Step確定Transaction
 
-結果一致、武器確保、予定された旧実用品の素材化確認、想定外結果記録では、次の関連更新を1つのDexie read-write transactionで原子的に行う。
+結果一致、武器確保、想定外結果記録では、次の関連更新を1つのDexie read-write transactionで原子的に行う。
 
 - RngState更新
 - NormalArtianCounter更新
@@ -1097,7 +1070,7 @@ Undoはツール上の操作を戻すだけです。ゲーム内の操作は戻�
 - PlanStep完了または取消
 - ProductionPlan更新
 
-操作開始前に同じtransaction内で実状態を読み、`expectedStateBefore` のvalidationとExecutionUndoSnapshot生成を行う。結果一致、武器確保、「素材用に変更」では `expectedStateAfter` 不一致をvalidation失敗としてtransaction全体をrollbackする。想定外結果と「保管」は不一致を意図して記録する経路であるため、実状態とstale理由を同じtransactionで保存する。各経路で必要な読み書きまたはvalidationが失敗した場合は部分更新を残さず、Step確定前の状態を維持する。UIは次Stepへ遷移せず、再試行可能な保存エラーを表示する。
+操作開始前に同じtransaction内で実状態を読み、`expectedStateBefore` のvalidationとExecutionUndoSnapshot生成を行う。結果一致と武器確保では `expectedStateAfter` 不一致をvalidation失敗としてtransaction全体をrollbackする。想定外結果は不一致を意図して記録する経路であるため、実状態とstale理由を同じtransactionで保存する。各経路で必要な読み書きまたはvalidationが失敗した場合は部分更新を残さず、Step確定前の状態を維持する。UIは次Stepへ遷移せず、再試行可能な保存エラーを表示する。
 
 ---
 
@@ -1113,7 +1086,6 @@ Undoはツール上の操作を戻すだけです。ゲーム内の操作は戻�
 - 現在Step
 - 今後のStep
 - 確保予定武器
-- 素材補充予定
 
 操作。
 
@@ -1190,10 +1162,9 @@ Planがstaleになる条件。
 - 想定外結果
 - 予定候補未確保
 - 別候補確保
-- 予定された素材化に対して「保管」を選択（`planned_status_change_declined`）
 - CalculationContext非互換（`calculation_context_changed`）
 
-PlanどおりのStep完了でCounterまたは所持武器が変化しても、現在StepのexpectedStateAfterおよび次StepのexpectedStateBeforeと一致する限りstaleにしない。予定された素材化でMaterial / unprotectedへ変わる場合も同じである。Plan開始時Snapshotとの単純比較は行わない。
+PlanどおりのStep完了でCounterまたは所持武器が変化しても、現在StepのexpectedStateAfterおよび次StepのexpectedStateBeforeと一致する限りstaleにしない。所持武器のstatusは非semanticであるため、status変更だけでは不一致にならない。Plan開始時Snapshotとの単純比較は行わない。
 
 Active Planの正常進行によってBuildListEntryのsearchStateHashまたはreferencedOwnedWeaponsHashと現在値が一致しなくなっても、その派生staleだけを理由に進行中Planを停止しない。Execution NavigatorではPlanStep期待状態を優先する。
 
@@ -1305,12 +1276,10 @@ export interface SearchUiState {
 - Undoで最後の操作を戻せる
 - Undoで最後のStepが変更したRNG、通常Counter、OwnedWeapon、ProductionPlanを完全に戻せる
 - Step確定またはUndoの途中で保存失敗しても部分更新が残らない
-- Planに旧実用品の素材化がある場合、確保Stepとは別の確認Stepが表示される
-- 同一TargetのIdeal確保後だけ、Planner予定の旧Practical素材化確認が表示される
-- 別のPractical確保だけでは、Planner予定の旧Practical素材化確認が表示されない
-- 予定どおり「素材用に変更」でMaterial / 保護OFFになり、Planがstaleにならず次Stepへ進む
-- 素材化予定に対する「保管」で状態と保護が維持され、Planがstaleになる
-- 素材化確認前に後続の素材消費Stepへ進めない
+- 所持武器のstatus選択肢が「未分類 / 実用 / 理想」であり、「素材」が表示されない
+- 新規巨戟アーティアの初期値が「未分類 / 保護OFF」である
+- 登録済み武器のstatus変更でProtectionが変わらない
+- status変更だけではActive Planもビルドリストもstaleにならない
 - staleなBuildListEntryからPlannerを実行できない
 - RNG変更理由があるBuildListEntryに `rng_state_changed` が表示される
 - Route参照武器変更理由があるBuildListEntryに `owned_weapon_changed` が表示される

@@ -36,7 +36,6 @@ import {
   canKeepBonusesFromScope,
   canResetBonuses,
   canResetSkills,
-  canUseAsMaterial,
   isCalculationContextCompatible,
 } from './domainRules'
 
@@ -325,7 +324,7 @@ export function validateOwnedWeapon(
     if (weapon.status !== null) {
       addIssue(issues, 'status', 'invalid_state', 'Normal Artian weapons cannot have an OwnedWeapon status.')
     }
-  } else if (!['material', 'practical', 'ideal'].includes(weapon.status)) {
+  } else if (!['unclassified', 'practical', 'ideal'].includes(weapon.status)) {
     addIssue(issues, 'status', 'invalid_literal', 'Gogma Artian weapons require a valid status.')
   }
   return result(issues)
@@ -498,10 +497,6 @@ function validateRouteOperation(
     validateNonNegativeInteger(operation.skillCounterAfter, `${path}.skillCounterAfter`, issues)
     return
   }
-  if (operation.type === 'use_weapon_as_material') {
-    validateId(operation.ownedWeaponId, `${path}.ownedWeaponId`, issues)
-    return
-  }
   addIssue(
     issues,
     `${path}.type`,
@@ -547,9 +542,7 @@ function validateProtectedRouteUse(
       operation.type === 'keep_bonuses' ||
       operation.type === 'reset_skills'
         ? operation.sourceOwnedWeaponId
-        : operation.type === 'use_weapon_as_material'
-          ? operation.ownedWeaponId
-          : null
+        : null
     if (id === null) return
     const weapon = byId.get(id)
     if (!weapon) {
@@ -563,9 +556,7 @@ function validateProtectedRouteUse(
         ? canResetBonuses(weapon)
         : operation.type === 'keep_bonuses'
           ? canKeepBonusesFromScope(weapon, currentScope)
-          : operation.type === 'reset_skills'
-            ? canResetSkills(weapon)
-            : canUseAsMaterial(weapon)
+          : canResetSkills(weapon)
     if (!allowed) {
       addIssue(
         issues,
@@ -1203,13 +1194,10 @@ function validatePlanStep(
   const allowedOperationTypes: readonly PlanStepOperationType[] = [
     'create_normal_artian',
     'convert_normal_to_gogma',
-    'create_material_gogma',
     'reset_bonuses',
     'keep_bonuses',
     'reset_skills',
     'reserve_weapon',
-    'use_weapon_as_material',
-    'change_owned_weapon_status',
     'confirm_result',
   ]
   if (!allowedOperationTypes.includes(step.operationType)) {
@@ -1250,119 +1238,6 @@ function validatePlanStep(
   }
   if (step.isCompleted && step.completedAt === null) {
     addIssue(issues, `${path}.completedAt`, 'invalid_state', 'A completed PlanStep requires completedAt.')
-  }
-  if (step.operationType === 'change_owned_weapon_status' && !step.requiresUserConfirmation) {
-    addIssue(issues, `${path}.requiresUserConfirmation`, 'invalid_state', 'Weapon status changes require explicit confirmation.')
-  }
-  if (step.operationType === 'create_material_gogma') {
-    if (
-      step.targetWeaponId !== null ||
-      step.buildListEntryId !== null ||
-      step.candidateId !== null
-    ) {
-      addIssue(
-        issues,
-        path,
-        'invalid_state',
-        'A material Gogma registration step must not reference a Target, BuildListEntry, or Candidate.',
-      )
-    }
-    if (step.ownedWeaponId === null) {
-      addIssue(
-        issues,
-        `${path}.ownedWeaponId`,
-        'invalid_reference',
-        'A material Gogma registration step requires its reserved OwnedWeapon ID.',
-      )
-    }
-    if (!step.requiresUserConfirmation) {
-      addIssue(
-        issues,
-        `${path}.requiresUserConfirmation`,
-        'invalid_state',
-        'A material Gogma registration step requires explicit confirmation.',
-      )
-    }
-    const addedWeapon = step.inventoryChange?.addOwnedWeapon
-    if (!addedWeapon) {
-      addIssue(
-        issues,
-        `${path}.inventoryChange.addOwnedWeapon`,
-        'invalid_structure',
-        'A material Gogma registration step must add the predicted weapon.',
-      )
-    } else {
-      appendIssues(
-        issues,
-        `${path}.inventoryChange.addOwnedWeapon`,
-        validateOwnedWeapon(addedWeapon),
-      )
-      if (
-        addedWeapon.kind !== 'gogma' ||
-        addedWeapon.status !== 'material' ||
-        addedWeapon.isProtected
-      ) {
-        addIssue(
-          issues,
-          `${path}.inventoryChange.addOwnedWeapon`,
-          'invalid_state',
-          'The added weapon must be an unprotected Material Gogma Artian weapon.',
-        )
-      }
-      if (step.ownedWeaponId !== addedWeapon.id) {
-        addIssue(
-          issues,
-          `${path}.ownedWeaponId`,
-          'invalid_reference',
-          'ownedWeaponId must match inventoryChange.addOwnedWeapon.id.',
-        )
-      }
-      const expected = step.expectedResult
-      if (
-        expected === null ||
-        expected.restorationBonuses === null ||
-        !areRestorationBonusSetsEqual(
-          expected.restorationBonuses,
-          addedWeapon.restorationBonuses,
-        ) ||
-        expected.seriesSkillId !== addedWeapon.seriesSkillId ||
-        expected.groupSkillId !== addedWeapon.groupSkillId ||
-        expected.candidateCategory !== null ||
-        expected.isSimilarToIdeal ||
-        !expected.shouldSecure
-      ) {
-        addIssue(
-          issues,
-          `${path}.expectedResult`,
-          'inconsistent_snapshot',
-          'ExpectedResult must describe the material Gogma weapon being registered without a Target category.',
-        )
-      }
-    }
-    if (
-      step.rngAdvance.gogmaCounterDelta !== 0 ||
-      step.rngAdvance.skillCounterDelta !== 0 ||
-      step.rngAdvance.normalCounterDelta !== null ||
-      step.rngAdvance.affectedNormalCounterId !== null
-    ) {
-      addIssue(
-        issues,
-        `${path}.rngAdvance`,
-        'invalid_state',
-        'Registering a material Gogma weapon must not advance RNG counters.',
-      )
-    }
-    if (
-      step.expectedStateBefore.ownedWeaponsHash ===
-      step.expectedStateAfter.ownedWeaponsHash
-    ) {
-      addIssue(
-        issues,
-        `${path}.expectedStateAfter.ownedWeaponsHash`,
-        'inconsistent_snapshot',
-        'The expected OwnedWeapon state must include the registered material weapon.',
-      )
-    }
   }
   validateExpectedPlanState(step.expectedStateBefore, `${path}.expectedStateBefore`, issues)
   validateExpectedPlanState(step.expectedStateAfter, `${path}.expectedStateAfter`, issues)
@@ -1443,8 +1318,6 @@ export function validateExecutionHistory(
     ![
       'confirmed_expected',
       'secured_weapon',
-      'confirmed_weapon_status_change',
-      'declined_weapon_status_change',
       'actual_result_different',
       'skipped_candidate',
     ].includes(history.action)

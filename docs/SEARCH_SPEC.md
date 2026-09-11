@@ -213,7 +213,6 @@ export interface SkippedRoute {
     | "skill_prediction_unsupported"
     | "keep_prediction_unsupported"
     | "normal_scope_keep_prediction_unsupported"
-    | "material_rng_advance_unverified"
     | "master_data_unavailable"
     | "calculation_context_incompatible"
     | "disabled_by_filter";
@@ -240,9 +239,7 @@ export interface CandidateSearchWarning {
 未確定RNG値は `*_unconfirmed`、Engine機能不足は `*_prediction_unsupported`、所持source不足は `no_owned_weapon_available` / `no_unprotected_source_weapon` として区別する。`no_owned_weapon_available` は `owned_normal_artian_to_gogma` と `existing_gogma_*` の両方で使うため、UI文言は武器種を限定しない汎用表現にする。武器種はRouteKind labelが示す。値が確定していてもEngineが未対応なら予測可能とみなさず、逆にEngineが対応していても必要値が未確定なら該当RNG値のreasonを返す。
 
 Production Searchはroute-local / operation-local supportを維持し、RngState全体のall-or-nothing availabilityを設けない。Skill-dependent routeはBase SeedまたはSkill Counter不足、Skill Prediction / concrete semantic input unsupportedでskipする。Gogma amendment routeはBase SeedまたはGogma Counter不足、Gogma Prediction / concrete semantic input / Master unsupportedでskipする。persisted Counter Gateの未設定・未確定はskip reasonにしない。Normal Counter不足は `create_normal_artian` を含むrouteだけに適用する。
-`use_weapon_as_material` 後のRNG位置へ依存するRouteは、素材使用時の進行がgame-verifiedになるまで `material_rng_advance_unverified` としてskipし、0進行またはGogma +1を推測しない。
-
-`master_data_unavailable` は、Route実行に必要なWeaponBonusDefinition、BonusRank、Material等のMaster Dataが存在しない、無効、または利用不能な場合に使用する。Production RNG poolはEngineのreference-verified tableであり、disabled LotteryMasterだけを理由にこのreasonを返さない。reference-verifiedは参照repositoryとの一致を表し、全実ゲーム条件でのgame-verifiedを意味しない。
+`master_data_unavailable` は、Route実行に必要なWeaponBonusDefinition、BonusRank、アイテム素材等のMaster Dataが存在しない、無効、または利用不能な場合に使用する。Production RNG poolはEngineのreference-verified tableであり、disabled LotteryMasterだけを理由にこのreasonを返さない。reference-verifiedは参照repositoryとの一致を表し、全実ゲーム条件でのgame-verifiedを意味しない。
 
 `CandidateRouteFilter` はRouteグループを選ぶ入力であり、SkippedRouteの粒度には使用しない。`normal_artian` は `normal_artian_to_gogma` と `owned_normal_artian_to_gogma`、`existing_gogma` は操作0の `existing_gogma_current` と4つの amendment RouteKindを対象とする。`disabled_by_filter` も除外された具体的なRouteKindごとに返す。`searchedRoutes` と `skippedRoutes[].route` は同じRouteKind粒度で、同じRouteを両方へ含めない。
 
@@ -546,8 +543,8 @@ full-prefix、incremental retention、差分Crossの重複判定はすべてこ�
 1. gogmaAdvance 昇順
 2. stream-local ideal closeness 降順
      idealDifference.matchedBonusCount 相当のBonus側一致枠数
-3. 素材必要量合計 昇順
-     同一depthでもReset / Keepの構成比で素材が変わり得るため
+3. アイテム素材必要量合計 昇順
+     同一depthでもReset / Keepの構成比でアイテム素材が変わり得るため
 4. 安定semantic key 昇順
      完成5枠multisetの正規化文字列、次に操作型列、最後にrestorationBonusScope
      異なるscopeを入力順依存にしないlocale非依存のtie-break
@@ -686,7 +683,7 @@ BがAを支配するのは、次のすべてを満たす場合に限る。
 6. estimatedGogmaAdvance     B <= A
 7. estimatedSkillAdvance     B <= A
 8. estimatedNormalAdvance    B <= A   (両方 null か、両方数値)
-9. 素材が component-wise で B <= A   (5.5.6.2)
+9. アイテム素材が component-wise で B <= A   (5.5.6.2)
 10. 上記のいずれかで B < A   (完全同値なら7章の重複排除に委ねる)
 ```
 
@@ -694,7 +691,7 @@ BがAを支配するのは、次のすべてを満たす場合に限る。
 削除してよい例
   A: 攻撃II を含む Practical
   B: 攻撃III を含む Practical
-  同一Bonus Type構成 / 同一Skill / 同一起点 / 操作・Counter・素材でBが不利でない
+  同一Bonus Type構成 / 同一Skill / 同一起点 / 操作・Counter・アイテム素材でBが不利でない
   -> A を落として B だけ残す
 ```
 
@@ -727,9 +724,9 @@ BがAを支配するのは、次のすべてを満たす場合に限る。
 Masterのrank orderingで安全に比較できない `ArtianBonusScope` / `bonusTypeId` が
 ある場合は、推測せず比較不能とする。異なるBonus Type構成は従来どおり比較不能である。
 
-#### 5.5.6.2 素材はmaterialId単位のcomponent-wise比較で判定する
+#### 5.5.6.2 アイテム素材はmaterialId単位のcomponent-wise比較で判定する
 
-素材必要量の**合計個数**だけで優劣を判定してはならない。
+アイテム素材必要量の**合計個数**だけで優劣を判定してはならない。
 異なる `materialId` 同士の価値をSearchが推測してはならない。
 
 ```text
@@ -742,7 +739,7 @@ Masterのrank orderingで安全に比較できない `ArtianBonusScope` / `bonus
 ```text
 A: material.X ×2
 B: material.X ×1
--> B が素材面で上位
+-> B がアイテム素材面で上位
 
 A: material.X ×2
 B: material.Y ×1
@@ -753,7 +750,7 @@ B: X×1, Y×2
 -> trade-off なので比較不能
 ```
 
-5.5.3のstream-local anchor orderingにある「素材必要量合計」は、
+5.5.3のstream-local anchor orderingにある「アイテム素材必要量合計」は、
 同一 `gogmaAdvance` かつ同一 ideal closeness の解を決定的に並べるための
 tie-breakにすぎない。**Practical dominanceの判定には使用しない**。
 両者は別物である。
@@ -1525,7 +1522,7 @@ reset_bonuses                 <- 必須。最初のBonus amendmentは必ずReset
 
 - `CreateNormalArtianOperation` は `count = 1`、`normalCounterBefore = normalCounterAfter = null` とする。架空のNormal Counter値を代入しない
 - このnullは「このRouteのCandidate結果が特定のabsolute Normal Counter位置へ依存しない」という意味である。「Normal Counterが必ず未確定である」でも「実行してもCounterが進まない」でもない。Normal Counterが確定していてもNormal Artian Predictionだけが利用不能な場合、このvariantが選ばれる。Plan実行時に確定Counterを1進めるかどうかはPlannerの実行時契約であり、`docs/PLANNER_SPEC.md` 7.0.3が正本である
-- 通常アーティアを2本以上作成するblind Candidateを生成しない。5枠を読まずResetで全上書きするため、追加forgeは手数・素材・Normal Counter進行だけを増やす完全劣後経路である
+- 通常アーティアを2本以上作成するblind Candidateを生成しない。5枠を読まずResetで全上書きするため、追加forgeは手数・アイテム素材・Normal Counter進行だけを増やす完全劣後経路である
 - 変換直後にCandidateを完成させない。変換直後の5枠はunknownであり、Candidateの最終結果へunknownを残さない
 - 変換直後にKeep Bonusesを適用しない。これはProduction predictionの制限ではなくunknown入力の問題であり、normal scope Keepの扱い(5.7)とは独立に禁止する
 - Reset Skillsだけを行ってCandidateを完成させない
@@ -1537,7 +1534,7 @@ reset_bonuses                 <- 必須。最初のBonus amendmentは必ずReset
 - `BuildRoute.sourceOwnedWeaponId = null`、変換後のReset / Keep / Reset Skillsも `sourceOwnedWeaponId = null` とする。`referencedOwnedWeaponsHash = null` である
 - `searchStateHash` はBase Seed、Skill Counter、Gogma Counterに依存し、NormalArtianCounterに依存しない。後からNormal Counterを確定しても、またその値が変わっても、このCandidateの予測結果semanticsは変わらないためstaleにならない。これはPlan実行後に現在Counterを更新しなくてよいという意味ではない(`docs/PLANNER_SPEC.md` 7.0.3)
 - `estimatedNormalAdvance = null` も同じ理由による。Candidate SearchがNormal Counter進行量をabsolute route dependencyとして表現しないことを示すだけで、実行時の物理的なCounter進行とは別概念である
-- 素材コストは通常どおり計上する。通常アーティア作成1本分、変換1回分、Reset等の分をそれぞれ含める
+- アイテム素材コストは通常どおり計上する。通常アーティア作成1本分、変換1回分、Reset等の分をそれぞれ含める
 - Candidateの保持、順序、Ideal / Practical判定、similarity、dominanceは既存規則をそのまま適用し、blind variantを優遇も冷遇もしない
 
 報告。
@@ -1595,7 +1592,6 @@ RouteKind。
 必要条件。
 
 - 対象TargetWeaponと同じ武器種・属性のOwnedWeaponがある
-- またはゲーム仕様上、素材として使用可能なOwnedWeaponがある
 - 起点OwnedWeaponの `isProtected = false`
 - `canPredictGogma = true`
 - Skill操作を含む場合は `canPredictSkills = true`
@@ -1648,7 +1644,6 @@ RouteKind。
 - Keepは現在5slotのfamilyをslotごとに保持し、各slotのtierを同family内で再抽選する
 - Keep depth 1、2、...という時間方向の探索は許可する
 - `isProtected = true` のOwnedWeaponを起点とするKeep Bonuses Routeは生成しない
-- `isProtected = true` のOwnedWeaponを素材消費するRouteも生成しない
 - Keepの起点候補がprotected武器だけの場合も `no_unprotected_source_weapon` としてskipする
 
 ## 6.5 既存巨戟 Reset Skills経由
@@ -1726,9 +1721,8 @@ Mixed RouteでもBonus streamとSkill streamを独立に解き、5.5.4のCross�
 
 組み合わせた操作を実行順の `RouteOperation[]` として必ず保持する。Plannerはこの操作列からPlanStepを生成し、start / target Counterだけから中間操作を推測しない。
 
-PlannerはCandidate SnapshotのBuildRoute.operationsを書き換えない。Route内の
-UseWeaponAsMaterialOperationが具体的OwnedWeapon IDを持つ場合は検索時点で要求する武器であり、
-Planner-only素材割当を理由に別IDへ差し替えない。素材補充・登録・一般素材消費は別PlanStepで表現する。
+PlannerはCandidate SnapshotのBuildRoute.operationsを書き換えない。Routeが具体的な起点
+OwnedWeapon IDを持つ場合は検索時点で要求する武器であり、Plannerが別IDへ差し替えない。
 
 Mixed Routeは含まれるamendment種別にかかわらず、起点OwnedWeaponが `isProtected = false` の場合のみ生成する。Reset Skillsだけの場合はMixedではなく `existing_gogma_reset_skills` として生成する。
 
@@ -1748,7 +1742,7 @@ Mixed Routeは含まれるamendment種別にかかわらず、起点OwnedWeapon�
 重複時の採用ルール。
 
 1. estimatedOperationCountが少ない候補を残す
-2. 必要素材数が少ない候補を残す
+2. 必要アイテム素材数が少ない候補を残す
 3. startからの総Counter進行が少ない候補を残す
 4. `candidateStableKey` が辞書順で小さい候補を残す
 
@@ -1975,7 +1969,7 @@ createBuildListEntry(
 
 生成時に、Candidate Snapshot、Target定義Hash、`candidate.searchStateHash`、`candidate.referencedOwnedWeaponsHash`、CalculationContextを固定する。追加時の現在RNG状態と現在OwnedWeaponから同じHashを再計算し、どちらかがCandidateと不一致なら追加を拒否して再検索を促す。再検索でCandidateが消えてもBuildListEntryは直ちに削除しない。
 
-`referencedOwnedWeaponsHash` は[DATA_MODEL.md](./DATA_MODEL.md)の正規化規則に従う。参照IDはRouteとReset Bonuses、Keep Bonuses、Reset Skills、素材消費Operationから収集する。共通項目は `id`、`kind`、武器種、属性、保存中の復元ボーナス5枠順、isProtectedとし、巨戟だけシリーズスキル、グループスキル、statusを加える。name、memo、日時およびRouteに無関係なOwnedWeaponは含めない。
+`referencedOwnedWeaponsHash` は[DATA_MODEL.md](./DATA_MODEL.md)の正規化規則に従う。参照IDはRouteとReset Bonuses、Keep Bonuses、Reset Skills Operationから収集する。共通項目は `id`、`kind`、武器種、属性、保存中の復元ボーナス5枠順、isProtectedとし、巨戟だけシリーズスキル、グループスキルを加える。`status` はユーザー管理ラベルであり計算に影響しないため、name、memo、日時と同じく除外する。Routeに無関係なOwnedWeaponも含めない。
 
 追加方式。
 
@@ -2081,7 +2075,7 @@ Worker error契約(B6)。
 - BuildListEntryはBuildCandidateの削除処理と分離する
 - TargetWeaponを変更した場合、紐づくBuildCandidateは再検索対象、BuildListEntryはstale扱いにする
 - Candidate Route成立に使用したRNG状態が変わった場合、BuildListEntryを `rng_state_changed` としてstale扱いにする
-- Candidate Routeが参照する起点武器または素材武器の状態が変わった場合、BuildListEntryを `owned_weapon_changed` としてstale扱いにする
+- Candidate Routeが参照する起点武器の状態が変わった場合、BuildListEntryを `owned_weapon_changed` としてstale扱いにする。`status` は非semanticであり、status変更だけではstaleにしない
 - Routeに無関係なOwnedWeaponの変更、または参照武器のname、memo、日時だけの変更ではBuildListEntryをstaleにしない
 - BuildCandidateも現在RNG状態Hashと一致しなければ現行検索結果として扱わず、再検索を促す
 - BuildCandidateも現在の参照武器Hashと一致しなければ現行検索結果として扱わず、再検索を促す
@@ -2116,7 +2110,7 @@ Worker error契約(B6)。
 - BuildRouteの操作列から実行順を復元できる
 - protected武器を起点とするReset Bonuses / Keep Bonuses / Reset Skills / Mixed Routeを生成しない
 - protected武器でも現在性能がTarget条件を満たす場合は `existing_gogma_current` の操作0候補を生成する
-- protected武器を素材消費するRouteを生成しない
+- `status` をRoute eligibilityの条件にしない。未分類 / 実用 / 理想のいずれでも同じ扱いとする
 - amendmentの互換起点候補がprotected武器だけなら各amendment Routeへ `no_unprotected_source_weapon` を返す
 - 復元ボーナス条件を満たす既存武器から `existing_gogma_reset_skills` 候補を生成できる
 - Reset Skills候補のfinalBonusesが起点OwnedWeaponのrestorationBonusesと一致する
@@ -2210,7 +2204,7 @@ Worker error契約(B6)。
 - Bonus rank dominanceを `bonusTypeId` ごとのrank multisetで判定し、slot順に依存しない
 - 同一bonusTypeで `[III, II]` と `[EX, I]` を比較不能として両方保持する
 - Masterでrank orderingを安全に比較できないscope / typeを比較不能として扱う
-- 素材を `materialId` 単位のcomponent-wiseで比較し、合計個数で優劣判定しない
+- アイテム素材を `materialId` 単位のcomponent-wiseで比較し、合計個数で優劣判定しない
 - `X×2` と `Y×1`、`{X×2, Y×1}` と `{X×1, Y×2}` を比較不能として両方保持する
 - Bonus Type構成が異なるPractical候補、Skill構成が異なるPractical候補、
   起点が異なるPractical候補を比較不能として両方保持する

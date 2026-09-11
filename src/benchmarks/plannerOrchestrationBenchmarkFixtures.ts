@@ -601,7 +601,7 @@ function createBenchmarkSource(
     restorationBonusScope: 'gogma_artian',
     seriesSkillId: skills.seriesSkillId as OwnedGogmaArtianWeapon['seriesSkillId'],
     groupSkillId: skills.groupSkillId as OwnedGogmaArtianWeapon['groupSkillId'],
-    status: 'material',
+    status: 'unclassified',
     isProtected: false,
     memo: null,
     createdAt: FIXTURE_TIME,

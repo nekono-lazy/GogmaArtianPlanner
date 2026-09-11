@@ -138,26 +138,30 @@ function forgeRoute(weaponTypeId: string, normalCounterBefore: number): BuildRou
   }
 }
 
-function materialRoute(
-  sourceId: string,
-  materialIds: readonly string[],
-  gogmaCounter: number,
+/**
+ * A Route that exclusively uses one shared owned Gogma weapon, once per given
+ * Gogma Counter position.
+ *
+ * An owned Artian weapon is never consumed as material any more
+ * (`docs/PLANNER_SPEC.md` 8), so the remaining exclusive OwnedWeapon use is a
+ * Route amending one existing source. Two Routes naming the same source at
+ * different Counter positions are the `same_owned_weapon_consumed` conflict,
+ * and several positions in one Route make that Entry participate more than
+ * once.
+ */
+function sharedSourceRoute(
+  sharedSourceId: string,
+  gogmaCounters: readonly number[],
 ): BuildRoute {
   return {
     kind: 'existing_gogma_reset_bonuses',
-    sourceOwnedWeaponId: ownedWeaponId(sourceId),
-    operations: [
-      {
-        type: 'reset_bonuses',
-        sourceOwnedWeaponId: ownedWeaponId(sourceId),
-        gogmaCounterBefore: gogmaCounter,
-        gogmaCounterAfter: gogmaCounter + 1,
-      },
-      ...materialIds.map((id) => ({
-        type: 'use_weapon_as_material' as const,
-        ownedWeaponId: ownedWeaponId(id),
-      })),
-    ],
+    sourceOwnedWeaponId: ownedWeaponId(sharedSourceId),
+    operations: gogmaCounters.map((gogmaCounter) => ({
+      type: 'reset_bonuses' as const,
+      sourceOwnedWeaponId: ownedWeaponId(sharedSourceId),
+      gogmaCounterBefore: gogmaCounter,
+      gogmaCounterAfter: gogmaCounter + 1,
+    })),
   }
 }
 
@@ -533,20 +537,18 @@ describe('B8-C3b resource re-association per ConflictKind', () => {
   })
 
   it('re-maps a same_owned_weapon_consumed conflict by the consumed weapon', () => {
-    const material = sourceWeapon('owned.pf.kind-material.shared')
+    const shared = sourceWeapon('owned.pf.kind-consumed.shared')
     const build = (ids: readonly string[], counterBase: number) => {
       const targets = ids.map((id, index) =>
-        target(`target.pf.kind-material.${id}`, index === 0 ? 5 : 1),
+        target(`target.pf.kind-consumed.${id}`, index === 0 ? 5 : 1),
       )
-      const sources = ids.map((id) => sourceWeapon(`owned.pf.kind-material.src.${id}`))
       return {
         targets,
-        sources,
         entries: ids.map((id, index) =>
           routeEntry(
-            `entry.pf.kind-material.${id}`,
+            `entry.pf.kind-consumed.${id}`,
             targets[index],
-            materialRoute(sources[index].id, [material.id], counterBase + index * 4),
+            sharedSourceRoute(shared.id, [counterBase + index * 4]),
           ),
         ),
       }
@@ -556,18 +558,18 @@ describe('B8-C3b resource re-association per ConflictKind', () => {
     const { original, result } = remapped(
       two.targets,
       two.entries,
-      [material, ...two.sources],
+      [shared],
       {
         targets: extra.targets,
         entries: extra.entries,
-        ownedWeapons: extra.sources,
+        ownedWeapons: [],
       },
       two.entries[1],
     )
     expect(original.constraints[0].resourceIdentity).toEqual({
       kind: 'same_owned_weapon_consumed',
       counterStream: null,
-      consumedOwnedWeaponId: material.id,
+      consumedOwnedWeaponId: shared.id,
     })
     expect(result.status).toBe('ready')
     if (result.status !== 'ready') return
@@ -575,10 +577,11 @@ describe('B8-C3b resource re-association per ConflictKind', () => {
       ({ kind }) => kind === 'same_owned_weapon_consumed',
     )
     expect(consumed).toHaveLength(1)
-    expect(consumed[0].consumedOwnedWeaponId).toBe(material.id)
-    // The Route sources differ per participant and never define the resource.
-    expect(consumed[0].participants.map(({ sourceOwnedWeaponId }) => sourceOwnedWeaponId))
-      .toEqual([null, null, null])
+    // The resource comes from the conflict's own consumed-weapon field, never
+    // from a participant scan, and the participant Entry set never enters the
+    // resource identity (PLANNER_SPEC 9.2.3).
+    expect(consumed[0].consumedOwnedWeaponId).toBe(shared.id)
+    expect(consumed[0].participants).toHaveLength(3)
     expect(result.conflictResolutions).toEqual([{
       conflictKey: consumed[0].conflictId,
       selectedBuildListEntryId: two.entries[1].id,
@@ -861,29 +864,26 @@ describe('B8-C3b multiple explicit resolutions', () => {
 
 describe('B8-C3b conflict match granularity', () => {
   it('accepts a fixed Entry that participates through several Route units', () => {
-    const material = sourceWeapon('owned.pf.units.material')
+    const shared = sourceWeapon('owned.pf.units.shared')
     const first = target('target.pf.units.first', 5)
     const second = target('target.pf.units.second', 1)
     const generatedTarget = target('target.pf.units.generated', 1)
-    const firstSource = sourceWeapon('owned.pf.units.src.first')
-    const secondSource = sourceWeapon('owned.pf.units.src.second')
-    const generatedSource = sourceWeapon('owned.pf.units.src.generated')
     const firstEntry = routeEntry(
       'entry.pf.units.first',
       first,
-      materialRoute(firstSource.id, [material.id, material.id], 10),
+      sharedSourceRoute(shared.id, [10, 11]),
     )
     const secondEntry = routeEntry(
       'entry.pf.units.second',
       second,
-      materialRoute(secondSource.id, [material.id], 14),
+      sharedSourceRoute(shared.id, [14]),
     )
     const generatedEntry = routeEntry(
       'entry.pf.units.generated',
       generatedTarget,
-      materialRoute(generatedSource.id, [material.id], 18),
+      sharedSourceRoute(shared.id, [18]),
     )
-    const owned = [material, firstSource, secondSource]
+    const owned = [shared]
     const original = originalConstraints(
       [first, second],
       [firstEntry, secondEntry],
@@ -907,7 +907,7 @@ describe('B8-C3b conflict match granularity', () => {
     const augmented = scenario(
       [first, second, generatedTarget],
       [firstEntry, secondEntry, generatedEntry],
-      [...owned, generatedSource],
+      owned,
     )
     const result = preparePlannerAugmentedConflictPreflight(
       augmented.input,

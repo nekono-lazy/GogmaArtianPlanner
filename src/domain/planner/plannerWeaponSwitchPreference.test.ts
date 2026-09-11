@@ -118,12 +118,6 @@ describe('Planner weapon operation subject identity', () => {
         skillCounterAfter: 8,
       }),
     ).toBeNull()
-    expect(
-      subjectKey(FIRST_ENTRY, {
-        type: 'use_weapon_as_material',
-        ownedWeaponId: WEAPON_B,
-      }),
-    ).toBeNull()
   })
 })
 

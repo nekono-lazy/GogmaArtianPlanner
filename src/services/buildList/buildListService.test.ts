@@ -53,7 +53,7 @@ describe('BuildListService', () => {
     memory.entries.push(original)
 
     const refreshed = await new BuildListService(memory.repositories).refreshStaleness(current)
-    expect(current.appSchemaVersion).toBe(8)
+    expect(current.appSchemaVersion).toBe(9)
     expect(refreshed.entries[0].isStale).toBe(true)
     expect(refreshed.entries[0].staleReasons).toEqual(['calculation_context_changed'])
     expect(refreshed.entries[0].candidateSnapshot).toEqual(snapshot)
@@ -103,7 +103,7 @@ describe('BuildListService', () => {
     expect(memory.entries).toHaveLength(1)
   })
 
-  it.each([1, 2, 3, 4, 5, 6, 7])('adds a current Candidate beside an unchanged schema %i snapshot', async (appSchemaVersion) => {
+  it.each([1, 2, 3, 4, 5, 6, 7, 8])('adds a current Candidate beside an unchanged schema %i snapshot', async (appSchemaVersion) => {
     const memory = memoryRepositories()
     const candidate = createValidBuildCandidate()
     candidate.calculationContext = createBuildListCalculationContext(createValidMasterDataFixture())
@@ -116,7 +116,7 @@ describe('BuildListService', () => {
     expect(result.added).toBe(true)
     expect(memory.entries).toHaveLength(2)
     expect(memory.entries[0]).toEqual(before)
-    expect(result.entry.calculationContext.appSchemaVersion).toBe(8)
+    expect(result.entry.calculationContext.appSchemaVersion).toBe(9)
     expect(memory.repositories.deleteEntry).not.toHaveBeenCalled()
   })
 

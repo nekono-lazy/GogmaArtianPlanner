@@ -83,7 +83,7 @@ function scenarioSource(
     restorationBonusScope: 'gogma_artian',
     seriesSkillId: WATER_SERIES,
     groupSkillId: null,
-    status: 'material',
+    status: 'unclassified',
     isProtected: false,
   }
 }

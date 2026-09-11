@@ -119,7 +119,8 @@ Do not implement the following unless the specifications are explicitly changed:
 - Arbitrary user-defined Planner scoring
 - Server-side RNG processing
 - Server-side persistence
-- Practical-versus-Practical quality ranking for automatic materialization
+- Practical-versus-Practical quality ranking
+- Consuming an owned Artian weapon as material
 - Route-local references to newly generated weapons
 
 Do not add speculative future functionality while implementing a v1 task.
@@ -199,15 +200,19 @@ executable ProductionPlan changed ProductionPlan artifact validity at version 5.
 Target compromise semantics then moved it to version 6, and the protected-weapon
 mutation contract plus zero-operation current-state Candidate semantics moved it to
 version 7. Replacing `OwnedWeapon.relatedTargetWeaponIds` with the Target-side
-`preferredOwnedWeaponId` changes Target definition semantics, the same-cost Route
-selection of Candidate Search, and Planner plan preference, so current
-`CalculationContext.appSchemaVersion` is **8**, defined
+`preferredOwnedWeaponId` moved it to version 8. Removing the
+owned-weapon-as-material model and reducing `OwnedWeapon.status` to a user-facing
+organisation label changes the active RouteOperation set, Planner inventory
+semantics, Planner scoring, the PlanStep operation set, and the OwnedWeapon
+semantic hash contract, so current
+`CalculationContext.appSchemaVersion` is **9**, defined
 only by `CURRENT_CALCULATION_APP_SCHEMA_VERSION` in `src/domain/models/common.ts`.
 Search, BuildList, Planner, and benchmark runtime creators share this authority.
-Dexie separately moves to `DATABASE_SCHEMA_VERSION = 3` for the persisted-model migration; this is independent of
+Dexie separately moves to `DATABASE_SCHEMA_VERSION = 4` for the persisted status rename; this is independent of
 `AppSettings.schemaVersion = 1`; gameVersion, Master Data version,
+`RngState.schemaVersion = 1`, `CONSTRAINED_ROUTE_POLICY_VERSION`,
 `PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`, and `supportsSeedSearch = false`
-remain unchanged. `ExportRoot.schemaVersion` moves to 3 with the persisted entity shape. Version 1 BuildCandidate, BuildListEntry, and ProductionPlan
+remain unchanged. `ExportRoot.schemaVersion` moves to 4 with the persisted entity shape. Version 1 BuildCandidate, BuildListEntry, and ProductionPlan
 calculations are incompatible with any later version and must not be reused as current
 results. Existing staleness checks mark old BuildListEntry records with
 `calculation_context_changed` and exclude them from Planner input. Preserve old
@@ -215,7 +220,22 @@ Candidate categories and snapshots; obtain current Candidates by searching again
 Do not delete historical results or add a migration or Export/Import semantic
 validation change as a substitute for CalculationContext compatibility.
 
-All version 1..7 Candidates, BuildListEntries and ProductionPlans are incompatible with version 8. Preserve their contents and fail closed with calculation_context_changed. Do not extend the historical build-result compatibility exception to version 8.
+All version 1..8 Candidates, BuildListEntries and ProductionPlans are incompatible with version 9. Preserve their contents and fail closed with calculation_context_changed. Do not extend the historical build-result compatibility exception to version 9.
+
+The v3 -> v4 Dexie migration converts only `OwnedGogma.status === 'material'` to
+`'unclassified'`. `practical` and `ideal` keep their values, a Normal Artian
+keeps `status: null`, `isProtected` is never touched — a formerly Material weapon
+the user had protected stays protected — and `TargetWeapon.preferredOwnedWeaponId`
+is left alone. v1 -> v2 -> v3 -> v4 must apply in order.
+
+Never migrate a historical BuildCandidate, BuildListEntry, ProductionPlan, or
+ExecutionHistory into the new semantics. A stored `use_weapon_as_material`,
+`create_material_gogma`, `change_owned_weapon_status`, or `status = material`
+keeps its exact persisted contents and fails closed at the CalculationContext
+boundary; never rewrite it into a current operation. A UI that can display
+historical artifacts must not crash on one — a legacy presentation fallback at
+the Persistence / Presentation boundary is allowed, but it must never make a
+legacy operation executable as a current Domain operation.
 
 Historical version-5 contract (does not apply to version 6 or 7): Version 2, version 3, and version 4 BuildCandidate and BuildListEntry calculations are
 explicitly compatible with version 5 when gameVersion, masterDataVersion, and
@@ -320,8 +340,7 @@ The formal domain-counter contract and its verification provenance are:
 | Reset Bonuses | 0 | 0 | +1 | reference-verified |
 | Keep Bonuses | 0 | 0 | +1 | reference-verified |
 
-Internal PRNG steps are not Domain Counter increments. RNG advancement caused
-by `use_weapon_as_material` is unverified and must not be guessed.
+Internal PRNG steps are not Domain Counter increments.
 
 Conversion preserves the normal weapon's five restoration-bonus slots, in
 order and with `normal_artian` scope, assigns the initial Series and Group
@@ -347,7 +366,6 @@ matches the reference implementation. The following remain unverified:
 - 祝祭の巡り
 - Gogma rank I
 - Persisted Counter advancement while Counter Gate is below threshold
-- RNG advancement caused by `use_weapon_as_material`
 - Keep Bonuses prediction whose current bonuses are `normal_artian` scope
   (family mapping, candidate pool, weights, and repeat penalties are all
   undefined in the pinned reference and have no game-verified fixture)
@@ -564,7 +582,7 @@ A normal Artian weapon:
 - Uses five `normal_artian` scope restoration bonuses
 - Has no Series Skill
 - Has no Group Skill
-- Has no Material / Practical / Ideal status
+- Has no status
 - Retains an independent protection state
 - Defaults to unprotected when newly registered
 - Must not be used by an automatic Gogma-conversion route while protected
@@ -578,7 +596,7 @@ A Gogma Artian weapon:
 - Never mixes `normal_artian` and `gogma_artian` scopes within one weapon;
   all five slots have the same scope
 - Retains Series Skill and Group Skill
-- Retains Material / Practical / Ideal status
+- Retains an unclassified / practical / ideal status label
 - Retains protection independently from status
 
 Converting a normal Artian weapon does not translate its bonus types or ranks
@@ -608,22 +626,36 @@ weights; that behavior stays unverified until a game-verified fixture exists.
 Statuses are:
 
 ```text
-material
+unclassified
 practical
 ideal
 ```
 
-Status and protection are separate concepts.
+`status` is a user-facing organisation label and nothing more. It never decides
+Planner eligibility, Search route eligibility, material use, or Target
+Satisfaction. The four concepts stay strictly separate:
 
-Defaults for newly generated or registered Gogma weapons:
+```text
+status                                  the user's unclassified / practical / ideal label
+isProtected                             whether Planner / Search may change the weapon
+TargetWeapon.preferredOwnedWeaponId     the preferred starting weapon of a Target
+Target Satisfaction                     judged from the actual Bonuses / Skills
+```
 
-- Practical: unprotected
-- Ideal: protected
-- Material: unprotected
+Never write a check of the form "status === 'unclassified', therefore it may (or
+may not) be changed". Mutability is decided by the `isProtected` contract fixed
+in PR #12.
+
+Defaults:
+
+- A manually registered new Gogma weapon: `unclassified`, unprotected
+- A Planner-secured Practical Candidate: `practical`, unprotected
+- A Planner-secured Ideal Candidate: `ideal`, protected
+- Updating an existing Gogma to a Candidate result preserves its explicit
+  protection value, exactly as PR #12 fixed
 
 Protected weapons must not be used by the Planner for:
 
-- Material consumption
 - Reset Bonuses
 - Keep Bonuses
 - Reset Skills
@@ -633,50 +665,77 @@ Candidate when its current bonuses and skills satisfy the Target. It must not be
 source of future Bonus or Skill amendment exploration. Search must not invoke Skill or
 Gogma prediction solely because a compatible protected source exists.
 
-Status and protection remain independent user settings. The Planner must never silently
-remove protection, and status-only changes must not overwrite an existing saved protection
-choice. Existing Practical records are not migrated to unprotected.
+Status and protection remain independent user settings. Outside the creation
+defaults above, changing one never changes the other: an `unclassified` protected
+weapon relabelled `practical` stays protected, and an `ideal` unprotected weapon
+relabelled `unclassified` stays unprotected. The user changes protection
+explicitly when they want it. The Planner must never silently remove protection,
+and status-only changes must not overwrite an existing saved protection choice.
+
+Because `status` carries no calculation meaning, it is excluded from every
+semantic hash and calculation identity, exactly like `name` and `memo`:
+
+```text
+status-only change
+  -> referencedOwnedWeaponsHash          unchanged
+  -> ExpectedPlanState.ownedWeaponsHash  unchanged
+  -> constrained search identity         unchanged
+  -> BuildListEntry                      not owned_weapon_changed
+  -> ProductionPlan                      no semantic state mismatch
+```
+
+`id`, `kind`, `weaponTypeId`, `elementId`, `restorationBonusScope`, the five
+stored bonus slots, Series Skill, Group Skill, `isProtected`, and Normal rarity
+where applicable all stay semantic and still move those hashes.
 
 ---
 
-## Old Practical Weapon Materialization
+## No Owned Weapon Is Ever Consumed As Material
 
-Do not automatically convert a Practical weapon to Material.
-
-In v1, the Planner may schedule a confirmation-required:
-
-```text
-change_owned_weapon_status
-```
-
-step for an old Practical weapon only when:
-
-- The same Target already has an Ideal weapon, or
-- The same Plan secures that Target's Ideal weapon in an earlier step
-- Another weapon continues to satisfy that Target as Ideal after materialization
-- A later material-consumption step actually needs the old weapon
-
-The status-change step must occur before material consumption.
-
-If the user confirms:
+The model where an owned Gogma Artian weapon itself is consumed as material does
+not exist in v1. The following are all removed from the current Domain and must
+not be reintroduced:
 
 ```text
-status = material
-isProtected = false
+UseWeaponAsMaterialOperation / 'use_weapon_as_material'   RouteOperation
+canUseAsMaterial                                          Domain rule
+canConsumeMaterialWeapon / consumeMaterialWeapon          SimulatedInventory
+PlannerSearchState.consumedMaterialWeaponCount            Planner state
+CandidateScore.resourcePenalty                            Planner scoring
+PlannerMaterialRequirement / PlannerMaterialAssignment    Planner-only DTOs
+'material_weapon_shortage'                                PlannerWarningKind
+'create_material_gogma'                                   PlanStepOperationType
+'change_owned_weapon_status'                              PlanStepOperationType
+'confirmed_weapon_status_change'                          ExecutionAction
+'declined_weapon_status_change'                           ExecutionAction
+'planned_status_change_declined'                          RecalculationReason
 ```
 
-must be applied together.
+Therefore the Planner never detects a material weapon shortage, never schedules
+a replenishment Route for one, never advances a Normal / Gogma / Skill Counter
+purely to stock material, never changes an owned weapon's status, and never
+counts consumed weapons in its score. The number of `unclassified` weapons is
+not a Planner resource and must not affect `evaluationScore` or `totalCost`.
 
-If the user chooses to keep the weapon:
+Current `RouteOperation` and `PlanStepOperationType` switches handle only the
+current operations exhaustively. Never absorb a removed operation in a `default`
+branch.
 
-- Do not change status
-- Do not change protection
-- Record `planned_status_change_declined`
-- Mark the Plan stale and require recalculation
+`SimulatedInventory.consumedWeaponIds` stays. Converting an owned normal Artian
+weapon is the one remaining weapon consumption: `consumeOwnedNormalForConversion`
+removes the source Normal from inventory so two Routes can never use it twice.
+`same_owned_weapon_consumed`, `exclusiveConsumedOwnedWeaponId`, and
+`consumedWeaponIds` serve that exclusive-source semantics and are kept unchanged;
+do not rename or delete them.
 
-Do not infer "better Practical".
-
-Obtaining another Practical weapon alone must never trigger automatic materialization of the previous Practical weapon in v1.
+Game item materials are a different concept and are untouched:
+`MaterialRequirement`, `BuildCandidate.requiredMaterials`,
+`ProductionPlan.requiredMaterials`, `InventoryChange.materialRequirements`,
+`MaterialCostMaster`, `PlannerMasterSubset.materialCosts`, and the
+`src/data/materials.json` / `src/data/material-costs.json` masters all stay. v1
+adds no exact quantity revision, no owned-item tracking, and no shortage-based
+Plan rejection. Where UI or documentation could confuse the two, say
+アイテム素材 or 必要素材（アイテム）rather than a bare 素材.
 
 ---
 
@@ -707,7 +766,7 @@ at most one Target - and it points one way, from Target to weapon.
 
 A weapon is selectable when its weapon type and element match the Target and it is
 unprotected. Both `normal` and `gogma` kinds qualify. `status` is never a selection
-condition: a Material, Practical, or Ideal weapon is equally selectable, and status
+condition: an unclassified, Practical, or Ideal weapon is equally selectable, and status
 and preference stay independent user settings. Never auto-derive a preference from
 status, and never require one.
 
@@ -861,7 +920,6 @@ Collect references from:
 - Reset Bonuses source
 - Keep Bonuses source
 - Non-null Reset Skills source
-- Material-consumption operations
 
 Deduplicate and stably sort IDs.
 
@@ -879,12 +937,12 @@ For Gogma Artian weapons, also include:
 
 - Series skill
 - Group skill
-- Status
 
 Exclude:
 
 - Name
 - Memo
+- Status
 - `createdAt`
 - `updatedAt`
 
@@ -1542,10 +1600,8 @@ Planner calculation must not call `crypto.randomUUID()`, `new Date()`, or
 deterministic ID and clock dependencies.
 
 Planner must not rewrite a Candidate Snapshot's `BuildRoute.operations` or
-replace the concrete OwnedWeapon ID in a Candidate-derived
-`UseWeaponAsMaterialOperation`. Planner-only replenishment, registration,
-material consumption, reservation, and confirmed status changes are separate
-PlanSteps.
+replace the concrete source OwnedWeapon ID a Candidate Route saved. Planner-only
+reservation is a separate PlanStep.
 
 Target satisfaction is derived only from owned Gogma Artian weapons. Owned
 normal Artian weapons are inventory/conversion resources and never satisfy a
@@ -1587,8 +1643,8 @@ displayed Step expected result changes:
 - `reset_skills` followed by `reset_skills`: skippable, because Reset Skills
   writes only the Series / Group Skill pair and predicts it positionally
 - everything else is required, including a Route's final operation,
-  `create_normal_artian`, `convert_normal_to_gogma`, `use_weapon_as_material`,
-  `reserve_weapon`, and any concrete inventory mutation
+  `create_normal_artian`, `convert_normal_to_gogma`, `reserve_weapon`, and any
+  concrete inventory mutation
 
 A Route's last unit is never skippable, so a whole Route is never
 fast-forwarded and the Candidate-forming operation always runs.
@@ -1641,8 +1697,8 @@ over two switches with 100.
 
 The metric counts only `reset_bonuses`, `keep_bonuses`, and `reset_skills`,
 because each selects one Gogma weapon and operates on it in place.
-`create_normal_artian`, `convert_normal_to_gogma`, and `use_weapon_as_material`
-have no such continuously operated subject and stay out of the metric in v1; do
+`create_normal_artian` and `convert_normal_to_gogma` have no such continuously
+operated subject and stay out of the metric in v1; do
 not widen that definition without a specification change. The weapon subject is
 the concrete `OwnedWeapon` when the operation has one, and the Entry-local
 transient Gogma of PR #4 when it does not, so the same OwnedWeapon is one
@@ -2069,53 +2125,18 @@ whose `sourceOwnedWeaponId = null`.
 reuse its ID, assign a future ID at conversion time, or add a route-local weapon
 reference.
 
-Material items are not a hard inventory constraint in v1; display required quantities instead.
+Game item materials are not a hard inventory constraint in v1; display required
+quantities instead.
 
-Material weapon consumption is allowed only when:
+An owned Artian weapon is never consumed as material. Protected weapons are
+never used for:
 
-```text
-status = material
-AND
-isProtected = false
-```
-
-Protected weapons are never used for:
-
-- Material consumption
 - Reset Bonuses
 - Keep Bonuses
 - Reset Skills
 
-If a material Gogma weapon is required but unavailable, the Planner may schedule replenishment:
-
-```text
-create normal Artian
--> convert to Gogma
--> create_material_gogma
--> consume later
-```
-
-Material replenishment conversion still consumes one Skill result and no Gogma
-result. Being created as material never suppresses that Skill advancement.
-
-`create_material_gogma` is a Planner-only registration PlanStep, not a
-`RouteOperation` and not an additional RNG draw. It registers the already
-created predicted/observed Gogma weapon as `kind = gogma`,
-`status = material`, and `isProtected = false`, with zero RNG advancement.
-The Planner may reserve the future OwnedWeapon ID when constructing the Plan so
-the later material-consumption Step can reference the same weapon. Do not write
-that weapon to IndexedDB before the registration Step is confirmed, and do not
-put the future ID into a BuildRoute.
-
-All RNG effects of replenishment must be included in simulation.
-
-Do not reuse a consumed weapon.
-
-Planner-only general Gogma material demand is separate from Candidate
-RouteOperations and must not add guessed weapon type, element, bonus, or cost
-constraints. Assign an available Material/unprotected Gogma; if none exists,
-replenish and reserve a future OwnedWeapon ID inside ProductionPlan only. The ID
-must not enter BuildRoute or IndexedDB before `create_material_gogma` succeeds.
+Do not reuse a consumed weapon: the owned Normal source of a conversion is
+removed from inventory at that Step and no other Route may take it.
 
 A blind `create_normal_artian` occupies no Counter stream position at all:
 `counterStream`, `counterBefore`, and `counterAfter` are `null`. It therefore
@@ -2244,9 +2265,8 @@ Examples that must not stale a Plan when expected hashes match:
 - Counters advance as predicted
 - A Practical weapon is secured as planned
 - An Ideal weapon is secured as planned
-- A material weapon is created as planned
 - Planned inventory changes occur
-- A planned old-Practical status change is confirmed
+- An owned weapon's status label is changed by the user
 - Referenced OwnedWeapon state changes exactly as the Plan predicted
 
 Active Plan execution takes precedence over BuildListEntry derivative staleness caused solely by normal planned progression.
@@ -2264,7 +2284,6 @@ Examples that do require stale/recalculation behavior:
 - Predicted result differs from observed result
 - Planned candidate is not secured
 - A different candidate is secured
-- User declines a planned old-Practical materialization
 
 Use the specified recalculation reason where applicable.
 
@@ -2288,40 +2307,25 @@ Plan steps may represent operations such as:
 - Keep Bonuses
 - Reset Skills
 - Reserve/secure weapon
-- Register an already-created Gogma weapon as material
-- Consume material weapon
-- Confirm old-Practical status change
 
 Every Step stores expected state before and after the operation.
 
 For `ExpectedPlanState.ownedWeaponsHash`, include OwnedWeapon `kind` and
 restoration-bonus scope in addition to the other semantic inventory fields. A
 kind or scope change must change this hash and `referencedOwnedWeaponsHash`;
-name, memo, and timestamps remain excluded. An OwnedWeapon carries no Target
+name, memo, status, and timestamps remain excluded. An OwnedWeapon carries no Target
 reference, so neither hash contains one, and a Target's
 `preferredOwnedWeaponId` must never be added to the
 `referencedOwnedWeaponsHash` of a Candidate whose Route does not reference that
 weapon.
 
-`create_material_gogma` has null Target, BuildListEntry, and Candidate
-references, uses the reserved OwnedWeapon ID as `ownedWeaponId`, requires user
-confirmation, and adds the same unprotected Material Gogma weapon through
-`inventoryChange.addOwnedWeapon`. It is distinct from
-`change_owned_weapon_status` (an existing Practical weapon conversion) and
-`reserve_weapon` (securing a Target candidate).
-
 Plan recalculation is a user-initiated UI/Planner action for a stale Plan. It is
 not a `PlanStepOperationType`, and no `recalculate_plan` Step is inserted into
 the old Plan.
 
-For a planned old-Practical materialization:
-
-- It is a separate `change_owned_weapon_status` Step
-- `requiresUserConfirmation = true`
-- `expectedStateBefore` includes Practical/protected
-- Confirming produces Material/unprotected
-- Declining leaves the weapon unchanged and makes the Plan stale
-- Material consumption must not occur before the confirmation Step succeeds
+Changing an owned weapon's status is ordinary Owned Weapons CRUD, never a
+ProductionPlan operation. Because status is non-semantic, relabelling a weapon
+never makes a running Plan stale.
 
 ---
 
@@ -2379,11 +2383,10 @@ Expected-success paths such as:
 
 - Confirm expected result
 - Secure weapon
-- Confirm planned materialization
 
 must rollback the entire transaction if the resulting state does not match `expectedStateAfter`.
 
-Unexpected-result and declined-materialization paths intentionally persist stale state and the corresponding reason within the same transaction.
+The unexpected-result path intentionally persists stale state and the corresponding reason within the same transaction.
 
 On any storage/validation failure:
 
@@ -2573,6 +2576,12 @@ Target Weapons UI must:
 
 Owned Weapons UI must:
 
+- Offer 未分類 / 実用 / 理想 as the owned Gogma status, and never 素材
+- Default a new Gogma weapon to 未分類 with protection off
+- Keep status and protection independent when editing an existing weapon: a
+  status change alone must not confirm anything or alter protection
+- Drop every wording that presents an owned weapon as a consumable - 素材用武器,
+  素材として使用 and the like - while keeping the game item material display
 - Not offer the removed 関連する目標武器 display or editing controls
 - Show the preferring Target read-only, so the relation stays visible
 - Confirm before protecting or re-typing a weapon a Target prefers, change neither
@@ -2789,7 +2798,7 @@ Relevant test areas include:
   effect, or route runtime output, while a required past unit fails closed
 - Skip derivation: Reset then Reset, Keep then Reset, Keep then Keep, and Reset
   Skills then Reset Skills are skippable; the Reset a Keep reads, a Route's
-  final unit, create, conversion, and material consumption are not
+  final unit, create, and conversion are not
 - A required unit and a skippable unit at the same Counter position are not a
   conflict, two required units still are, and a fast-forwarded prefix never
   returns to conflict detection
@@ -2815,7 +2824,28 @@ Relevant test areas include:
   rather than on a conveniently re-sorted Step array
 - Inventory simulation
 - Expected state Before/After invalidation
-- Old-Practical confirmation flow
+- A status-only change leaving `referencedOwnedWeaponsHash`,
+  `ExpectedPlanState.ownedWeaponsHash`, and the constrained search identity
+  unchanged, and never reporting `owned_weapon_changed`, while a protection,
+  Bonus, Skill, scope, kind, weapon type, or element change still moves them
+- `OwnedWeaponStatus` being exactly `unclassified | practical | ideal`, a new
+  Gogma draft defaulting to unclassified and unprotected, and a status-only edit
+  of an existing weapon leaving protection untouched
+- The Owned Weapons UI offering 未分類 / 実用 / 理想 and never 素材
+- The v3 -> v4 migration converting only `material`, keeping protection and
+  `preferredOwnedWeaponId`, and rewriting no historical calculation artifact
+- `use_weapon_as_material`, `canUseAsMaterial`, `canConsumeMaterialWeapon`,
+  `consumeMaterialWeapon`, `consumedMaterialWeaponCount`, `resourcePenalty`,
+  `PlannerMaterialRequirement`, `PlannerMaterialAssignment`,
+  `material_weapon_shortage`, `create_material_gogma`, and
+  `change_owned_weapon_status` all being absent, with Domain validation rejecting
+  a PlanStep or ExecutionHistory that still names one
+- Owned Normal conversion still consuming its source exactly once, and the same
+  owned Normal never being usable twice
+- Target Satisfaction ignoring status, so an unclassified Gogma still satisfies a
+  Target on actual performance, and an unprotected compatible one is still
+  selectable as `preferredOwnedWeaponId`
+- Item `MaterialRequirement` and its Master infrastructure staying intact
 - Atomic Execution transactions
 - Undo snapshot restoration
 - Worker request/response/cancellation behavior
@@ -2873,9 +2903,9 @@ Relevant test areas include:
   sets it to null for every Target, removes `relatedTargetWeaponIds` from every
   current OwnedWeapon, never infers a preference from the removed list, and
   rewrites no BuildCandidate, BuildListEntry, ProductionPlan, or ExecutionHistory
-- `DATABASE_SCHEMA_VERSION = 3`, `ExportRoot.schemaVersion = 3`,
-  `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 8`, schema 1..7 artifacts failing closed
-  under version 8, and no other version authority changed
+- `DATABASE_SCHEMA_VERSION = 4`, `ExportRoot.schemaVersion = 4`,
+  `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 9`, schema 1..8 artifacts failing closed
+  under version 9, and no other version authority changed
 - Collection validation rejects a missing preferred weapon, a weapon type or element
   mismatch, a protected weapon, and the same weapon preferred by two Targets, and
   accepts a compatible unprotected Normal, a compatible unprotected Gogma at every

@@ -48,7 +48,7 @@ function gogmaWeapon(): OwnedGogmaArtianWeapon {
       bonusTypeId: 'bonus_type.attack',
       bonusRankId: 'bonus_rank.i',
     })) as OwnedGogmaArtianWeapon['restorationBonuses'],
-    status: 'material',
+    status: 'unclassified',
   }
 }
 

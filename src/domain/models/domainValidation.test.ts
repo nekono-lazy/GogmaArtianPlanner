@@ -11,7 +11,6 @@ import {
   canKeepBonuses,
   canResetBonuses,
   canResetSkills,
-  canUseAsMaterial,
   isCalculationContextCompatible,
   isSkillConditionUnconstrained,
 } from './domainRules'
@@ -28,7 +27,6 @@ import {
   validateRngState,
   validateTargetWeapon,
 } from './validation'
-import { createExpectedPlanState } from './hashing'
 import {
   DOMAIN_FIXTURE_TIME,
   createRestorationBonusSet,
@@ -41,7 +39,6 @@ import {
   createValidRngState,
   createValidTargetWeapon,
   domainFixtureContext,
-  ownedWeaponId,
   targetWeaponId,
 } from '../../test/fixtures/domainData'
 import { createDefaultAppSettings } from './factories'
@@ -119,7 +116,7 @@ describe('RestorationBonusSet rules', () => {
 })
 
 describe('OwnedWeapon rules', () => {
-  it.each(['material', 'practical', 'ideal'] as const)(
+  it.each(['unclassified', 'practical', 'ideal'] as const)(
     'accepts the %s status without coupling status and protection',
     (status) => {
       const weapon = { ...createValidOwnedWeapon(), status }
@@ -133,12 +130,12 @@ describe('OwnedWeapon rules', () => {
     void isProtected
     void createdAt
     void updatedAt
-    expect(createOwnedWeapon({ ...input, status: 'material' }, DOMAIN_FIXTURE_TIME).isProtected).toBe(false)
+    expect(createOwnedWeapon({ ...input, status: 'unclassified' }, DOMAIN_FIXTURE_TIME).isProtected).toBe(false)
     expect(createOwnedWeapon({ ...input, status: 'practical' }, DOMAIN_FIXTURE_TIME).isProtected).toBe(false)
     expect(createOwnedWeapon({ ...input, status: 'ideal' }, DOMAIN_FIXTURE_TIME).isProtected).toBe(true)
     expect(
       createOwnedWeapon(
-        { ...input, status: 'material', isProtected: true },
+        { ...input, status: 'unclassified', isProtected: true },
         DOMAIN_FIXTURE_TIME,
       ).isProtected,
     ).toBe(true)
@@ -146,7 +143,6 @@ describe('OwnedWeapon rules', () => {
 
   it('blocks every protected performance mutation including Reset Skills', () => {
     const weapon = createValidOwnedWeapon()
-    expect(canUseAsMaterial(weapon)).toBe(false)
     expect(canResetBonuses(weapon)).toBe(false)
     expect(canKeepBonuses(weapon)).toBe(false)
     expect(canResetSkills(weapon)).toBe(false)
@@ -159,13 +155,13 @@ describe('OwnedWeapon rules', () => {
     expect(canResetSkills(weapon)).toBe(true)
   })
 
-  it('allows only unprotected Material weapons as material', () => {
-    const weapon = {
-      ...createValidOwnedWeapon(),
-      status: 'material' as const,
-      isProtected: false,
+  it('never gates an amendment on status: every label behaves identically', () => {
+    for (const status of ['unclassified', 'practical', 'ideal'] as const) {
+      const weapon = { ...createValidOwnedWeapon(), status, isProtected: false }
+      expect(canResetBonuses(weapon)).toBe(true)
+      expect(canKeepBonuses(weapon)).toBe(true)
+      expect(canResetSkills(weapon)).toBe(true)
     }
-    expect(canUseAsMaterial(weapon)).toBe(true)
   })
 })
 
@@ -300,89 +296,22 @@ describe('complete Domain fixture validation', () => {
     )
   })
 
-  it('validates create_material_gogma as a zero-RNG Material registration step', () => {
+  it.each([
+    'create_material_gogma',
+    'use_weapon_as_material',
+    'change_owned_weapon_status',
+  ])('rejects the removed weapon-as-material PlanStep operation %s', (operationType) => {
+    // The owned-weapon-as-material model is gone, so a persisted legacy Plan
+    // carrying one of these can never be revalidated into a current Plan
+    // (`docs/PLANNER_SPEC.md` 8). Its contents stay readable; the
+    // CalculationContext boundary is what fails it closed.
     const plan = createValidProductionPlan()
-    const material = {
-      ...createValidOwnedWeapon(),
-      status: 'material' as const,
-      isProtected: false,
-    }
-    const rngState = createValidRngState()
-    const counters = [createValidNormalArtianCounter()]
-    plan.steps[0] = {
-      ...plan.steps[0],
-      operationType: 'create_material_gogma',
-      targetWeaponId: null,
-      buildListEntryId: null,
-      candidateId: null,
-      ownedWeaponId: material.id,
-      expectedResult: {
-        restorationBonuses: material.restorationBonuses,
-        restorationBonusScope: material.restorationBonusScope, seriesSkillId: material.seriesSkillId,
-        groupSkillId: material.groupSkillId,
-        candidateCategory: null,
-        isSimilarToIdeal: false,
-        shouldSecure: true,
-      },
-      expectedStateBefore: createExpectedPlanState(rngState, counters, []),
-      expectedStateAfter: createExpectedPlanState(
-        rngState,
-        counters,
-        [material],
-      ),
-      inventoryChange: {
-        addOwnedWeapon: material,
-        removeOwnedWeaponIds: [],
-        updateOwnedWeapons: [],
-        materialRequirements: [],
-      },
-      rngAdvance: {
-        gogmaCounterDelta: 0,
-        skillCounterDelta: 0,
-        normalCounterDelta: null,
-        affectedNormalCounterId: null,
-      },
-      requiresUserConfirmation: true,
-    }
-    expect(validateProductionPlan(plan).isValid).toBe(true)
-
-    plan.steps[0].rngAdvance.gogmaCounterDelta = 1
+    plan.steps[0].operationType =
+      operationType as typeof plan.steps[0]['operationType']
     expect(validateProductionPlan(plan).issues).toContainEqual(
       expect.objectContaining({
-        path: 'steps[0].rngAdvance',
-        code: 'invalid_state',
-      }),
-    )
-    plan.steps[0].rngAdvance.gogmaCounterDelta = 0
-    plan.steps[0].targetWeaponId = targetWeaponId('target.fixture.unexpected')
-    expect(validateProductionPlan(plan).issues).toContainEqual(
-      expect.objectContaining({
-        path: 'steps[0]',
-        code: 'invalid_state',
-      }),
-    )
-    plan.steps[0].targetWeaponId = null
-    plan.steps[0].ownedWeaponId = ownedWeaponId('owned.fixture.other')
-    expect(validateProductionPlan(plan).issues).toContainEqual(
-      expect.objectContaining({
-        path: 'steps[0].ownedWeaponId',
-        code: 'invalid_reference',
-      }),
-    )
-    plan.steps[0].ownedWeaponId = material.id
-    const inventoryChange = plan.steps[0].inventoryChange
-    if (inventoryChange === null) throw new Error('fixture inventoryChange is required')
-    plan.steps[0].inventoryChange = {
-      ...inventoryChange,
-      addOwnedWeapon: {
-        ...material,
-        status: 'practical',
-      },
-    }
-    expect(validateProductionPlan(plan).issues).toContainEqual(
-      expect.objectContaining({
-        path: 'steps[0].inventoryChange.addOwnedWeapon',
-        code: 'invalid_state',
+        path: 'steps[0].operationType',
+        code: 'invalid_literal',
       }),
     )
   })

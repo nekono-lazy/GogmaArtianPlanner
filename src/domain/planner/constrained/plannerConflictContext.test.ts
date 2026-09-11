@@ -99,24 +99,19 @@ function forgeRoute(
   }
 }
 
-function materialRoute(
-  sourceId: string,
-  materialId: string,
-  gogmaCounter: number,
+/**
+ * A Route that exclusively consumes one owned Normal Artian weapon.
+ *
+ * Converting an owned Normal is the only weapon consumption v1 has: an owned
+ * Gogma Artian weapon is never consumed as material (`docs/PLANNER_SPEC.md` 8).
+ * Two Routes naming the same Normal at different Skill Counter positions are
+ * therefore the `same_owned_weapon_consumed` conflict.
+ */
+function consumesNormalRoute(
+  normalSourceId: string,
+  skillCounter: number,
 ): BuildRoute {
-  return {
-    kind: 'existing_gogma_reset_bonuses',
-    sourceOwnedWeaponId: ownedWeaponId(sourceId),
-    operations: [
-      {
-        type: 'reset_bonuses',
-        sourceOwnedWeaponId: ownedWeaponId(sourceId),
-        gogmaCounterBefore: gogmaCounter,
-        gogmaCounterAfter: gogmaCounter + 1,
-      },
-      { type: 'use_weapon_as_material', ownedWeaponId: ownedWeaponId(materialId) },
-    ],
-  }
+  return convertRoute(normalSourceId, skillCounter)
 }
 
 describe('B8-C3a Planner conflict resource identity', () => {
@@ -229,67 +224,62 @@ describe('B8-C3a Planner conflict resource identity', () => {
   })
 
   it('identifies a consumed weapon conflict by the exclusively consumed weapon', () => {
-    const first = target('target.ctx.material.first', 5)
-    const second = target('target.ctx.material.second', 1)
-    const material = sourceWeapon('owned.ctx.material.shared')
-    const firstSource = sourceWeapon('owned.ctx.material.source.first')
-    const secondSource = sourceWeapon('owned.ctx.material.source.second')
+    const first = target('target.ctx.consumed.first', 5)
+    const second = target('target.ctx.consumed.second', 1)
+    const shared = normalWeapon('owned.ctx.consumed.shared')
     const contexts = contextsOf(
       [first, second],
       [
         routeEntry(
-          'entry.ctx.material.first',
+          'entry.ctx.consumed.first',
           first,
-          materialRoute(firstSource.id, material.id, 10),
+          consumesNormalRoute(shared.id, 7),
         ),
         routeEntry(
-          'entry.ctx.material.second',
+          'entry.ctx.consumed.second',
           second,
-          materialRoute(secondSource.id, material.id, 14),
+          consumesNormalRoute(shared.id, 11),
         ),
       ],
-      [material, firstSource, secondSource],
+      [shared],
     )
     expect(contexts).toHaveLength(1)
     expect(contexts[0].resourceIdentity).toEqual({
       kind: 'same_owned_weapon_consumed',
       counterStream: null,
-      consumedOwnedWeaponId: material.id,
+      consumedOwnedWeaponId: shared.id,
     })
-    expect(contexts[0].consumedOwnedWeaponId).toBe(material.id)
+    expect(contexts[0].consumedOwnedWeaponId).toBe(shared.id)
     expect(contexts[0].counterStream).toBeNull()
     expect(contexts[0].counterBefore).toBeNull()
-    // The differing Route sources never define the conflict resource.
-    expect(contexts[0].participants.map(({ sourceOwnedWeaponId }) => sourceOwnedWeaponId))
-      .toEqual([null, null])
   })
 
-  it('keeps the consumed weapon resource when the Route sources differ', () => {
-    const material = sourceWeapon('owned.ctx.material.stable')
-    const build = (sourceSuffix: string) => {
-      const first = target(`target.ctx.stable.${sourceSuffix}.first`, 5)
-      const second = target(`target.ctx.stable.${sourceSuffix}.second`, 1)
-      const firstSource = sourceWeapon(`owned.ctx.stable.${sourceSuffix}.first`)
-      const secondSource = sourceWeapon(`owned.ctx.stable.${sourceSuffix}.second`)
+  it('keeps the consumed weapon resource when the Entries and Targets differ', () => {
+    const shared = normalWeapon('owned.ctx.stable.shared')
+    const build = (suffix: string) => {
+      const first = target(`target.ctx.stable.${suffix}.first`, 5)
+      const second = target(`target.ctx.stable.${suffix}.second`, 1)
       return contextsOf(
         [first, second],
         [
           routeEntry(
-            `entry.ctx.stable.${sourceSuffix}.first`,
+            `entry.ctx.stable.${suffix}.first`,
             first,
-            materialRoute(firstSource.id, material.id, 10),
+            consumesNormalRoute(shared.id, 7),
           ),
           routeEntry(
-            `entry.ctx.stable.${sourceSuffix}.second`,
+            `entry.ctx.stable.${suffix}.second`,
             second,
-            materialRoute(secondSource.id, material.id, 14),
+            consumesNormalRoute(shared.id, 11),
           ),
         ],
-        [material, firstSource, secondSource],
+        [shared],
       )
     }
     const [left] = build('alpha')
     const [right] = build('beta')
+    // The resource identity is ConflictKind plus the consumed weapon only; the
+    // participant Entry set never enters it (PLANNER_SPEC 9.2.3).
     expect(samePlannerConflictResource(left.resourceIdentity, right.resourceIdentity))
       .toBe(true)
   })
@@ -363,34 +353,38 @@ describe('B8-C3a conflict context authority', () => {
     ])
   })
 
-  it('keeps a consumed material weapon out of the participant source field', () => {
+  it('carries the consumed weapon in its own field rather than scanning participants', () => {
     const first = target('target.ctx.consume.first', 5)
     const second = target('target.ctx.consume.second', 1)
-    const material = sourceWeapon('owned.ctx.consume.material')
-    const firstSource = sourceWeapon('owned.ctx.consume.source.first')
-    const secondSource = sourceWeapon('owned.ctx.consume.source.second')
+    const shared = normalWeapon('owned.ctx.consume.shared')
     const [conflict] = contextsOf(
       [first, second],
       [
         routeEntry(
           'entry.ctx.consume.first',
           first,
-          materialRoute(firstSource.id, material.id, 10),
+          consumesNormalRoute(shared.id, 7),
         ),
         routeEntry(
           'entry.ctx.consume.second',
           second,
-          materialRoute(secondSource.id, material.id, 14),
+          consumesNormalRoute(shared.id, 11),
         ),
       ],
-      [material, firstSource, secondSource],
+      [shared],
     )
+    // The conflict names the consumed weapon once, in its own field, while each
+    // participant keeps its own per-Entry Counter (PLANNER_SPEC 9.2.3). The two
+    // stay separate fields even now that owned-Normal conversion - the only
+    // remaining weapon consumption - makes their values coincide.
+    expect(conflict.consumedOwnedWeaponId).toBe(shared.id)
     conflict.participants.forEach((participant) => {
-      expect(participant.operationType).toBe('use_weapon_as_material')
-      expect(participant.sourceOwnedWeaponId).toBeNull()
-      expect(participant.exclusiveConsumedOwnedWeaponId).toBe(material.id)
-      expect(participant.counterAfter).toBeNull()
+      expect(participant.operationType).toBe('convert_normal_to_gogma')
+      expect(participant.exclusiveConsumedOwnedWeaponId).toBe(shared.id)
     })
+    expect(
+      conflict.participants.map(({ counterAfter }) => counterAfter),
+    ).toEqual([8, 12])
   })
 
   it('orders contexts and participants independently of input order', () => {

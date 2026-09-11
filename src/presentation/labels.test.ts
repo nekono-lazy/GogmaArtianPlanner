@@ -15,11 +15,11 @@ import {
 
 describe('presentation labels', () => {
   it('maps normal UI Domain values to shared Japanese labels', () => {
-    expect(ownedWeaponStatusLabels).toEqual({ material: '素材', practical: '実用', ideal: '理想' })
+    expect(ownedWeaponStatusLabels).toEqual({ unclassified: '未分類', practical: '実用', ideal: '理想' })
     expect(candidateCategoryLabels.practical).toBe('実用')
     expect(routeKindLabels.normal_artian_to_gogma).toContain('新規通常アーティア')
     expect(routeKindLabels.existing_gogma_reset_skills).toContain('スキル再抽選')
-    expect(planStepOperationLabels.create_material_gogma).toBe('素材用巨戟アーティアとして登録')
+    expect(planStepOperationLabels.reserve_weapon).toBe('目標武器として確保')
     expect(plannerWarningLabels.max_steps_reached).toContain('ステップ数')
     expect(plannerWarningLabels.max_expanded_states_reached).toContain('探索状態数')
     expect(plannerWarningLabels.rng_prediction_unsupported).toContain('予測入力')

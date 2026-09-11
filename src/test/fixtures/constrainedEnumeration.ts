@@ -127,7 +127,7 @@ export function gogmaWeapon(
     restorationBonusScope: 'gogma_artian',
     seriesSkillId: 'series_skill.fixture.z',
     groupSkillId: 'group_skill.fixture.a',
-    status: 'material',
+    status: 'unclassified',
     isProtected: false,
     memo: null,
     createdAt: DOMAIN_FIXTURE_TIME,

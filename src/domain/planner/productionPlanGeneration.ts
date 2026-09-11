@@ -164,21 +164,9 @@ const operationPresentation: Record<
     title: 'スキルを再付与',
     instruction: 'スキルを再付与し、結果を確認してください。',
   },
-  use_weapon_as_material: {
-    title: '素材用武器を使用',
-    instruction: '指定された素材用武器を使用し、結果を確認してください。',
-  },
   reserve_weapon: {
     title: '候補武器を確保',
     instruction: '候補武器を確保し、結果を確認してください。',
-  },
-  create_material_gogma: {
-    title: '素材用巨戟アーティアを登録',
-    instruction: '作成済みの巨戟アーティアを素材用武器として登録し、結果を確認してください。',
-  },
-  change_owned_weapon_status: {
-    title: '所持武器の状態を変更',
-    instruction: '所持武器の状態変更を確認してください。',
   },
   confirm_result: {
     title: '結果を確認',

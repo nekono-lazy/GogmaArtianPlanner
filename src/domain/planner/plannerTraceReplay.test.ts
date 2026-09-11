@@ -17,7 +17,7 @@ function fixture() {
   const route = (operation: typeof create | typeof convert, before: ReturnType<typeof snap>, after: ReturnType<typeof snap>): PlannerSearchAction => ({ kind: 'route_operation', actionType: operation.type, primaryBuildListEntryId: entry.id, progressedBuildListEntryIds: [entry.id], progressedRoutePositions: {}, routeOperation: operation, ownedWeaponId: null, plannerOnly: false, rngBefore: before, rngAfter: after, inventoryEffect: { addedOwnedWeaponIds: [], removedOwnedWeaponIds: [], updatedOwnedWeaponIds: [], reservedOwnedWeaponIds: [], routeOutputChangedForEntryIds: [] }, satisfactionChanges: [] })
   const trace = [route(create, snap(10, 7, 4), snap(10, 7, 5)), route(create, snap(10, 7, 5), snap(10, 7, 6)), route(convert, snap(10, 7, 6), snap(10, 8, 6))]
   const finalRng = structuredClone(rngState); finalRng.skillCounter.value = 8; const finalNormal = [{ ...normal, counter: 6 }]
-  const state: PlannerSearchState = { currentRngState: finalRng, currentNormalCounters: finalNormal, simulatedInventory: createSimulatedInventory([]).inventory!, targetSatisfaction: {}, selectedBuildListEntryIds: [], routeProgressByEntryId: {}, routeRuntimeByEntryId: {}, sourceMutationVersionByOwnedWeaponId: {}, candidateReadySourceVersionByEntryId: {}, routeSourceVersionByEntryId: {}, inFlightExistingSourceByOwnedWeaponId: {}, securedOwnedWeaponIdByEntryId: {}, practicalFirstProgressTargetIds: [], trace, consumedMaterialWeaponCount: 0, weaponSwitchCount: 0, preferredSourceProgressCount: 0, lastWeaponOperationSubjectKey: null, totalCost: 0, evaluationScore: 0 }
+  const state: PlannerSearchState = { currentRngState: finalRng, currentNormalCounters: finalNormal, simulatedInventory: createSimulatedInventory([]).inventory!, targetSatisfaction: {}, selectedBuildListEntryIds: [], routeProgressByEntryId: {}, routeRuntimeByEntryId: {}, sourceMutationVersionByOwnedWeaponId: {}, candidateReadySourceVersionByEntryId: {}, routeSourceVersionByEntryId: {}, inFlightExistingSourceByOwnedWeaponId: {}, securedOwnedWeaponIdByEntryId: {}, practicalFirstProgressTargetIds: [], trace, weaponSwitchCount: 0, preferredSourceProgressCount: 0, lastWeaponOperationSubjectKey: null, totalCost: 0, evaluationScore: 0 }
   const a = createRestorationBonusSet(); const b = structuredClone(a); b[0].bonusRankId = 'bonus_rank.fixture.low'; const g = structuredClone(a); g[1].bonusRankId = 'bonus_rank.fixture.low'
   const engine = new FakeRngEngine({ version: 'replay', capabilities: { supportsSeedSearch: false, supportsNormalArtianPrediction: true, supportsGogmaPrediction: true, supportsSkillPrediction: true, supportsKeepBonusesPrediction: false }, normalizedSeeds: [], skillPredictions: [{ input: { baseSeed: rngState.baseSeed.value!, skillCounter: 7, weaponTypeId: target.weaponTypeId, elementId: target.elementId, master: input.master }, result: { seriesSkillId: 'series_skill.fixture.a', groupSkillId: null } }], keepBonusPredictions: [], gogmaCounterAdvances: [], skillCounterAdvances: [{ current: 7, operation: { type: 'convert_normal_to_gogma' }, result: 8 }], normalCounterAdvances: [], normalArtianPredictions: [{ input: { baseSeed: rngState.baseSeed.value!, weaponTypeId: normal.weaponTypeId, elementId: 'element.fixture.a', rarity: 8, normalCounter: 4, master: input.master }, result: a }, { input: { baseSeed: rngState.baseSeed.value!, weaponTypeId: normal.weaponTypeId, elementId: 'element.fixture.a', rarity: 8, normalCounter: 5, master: input.master }, result: b }], resetBonusPredictions: [{ input: { baseSeed: rngState.baseSeed.value!, gogmaCounter: 10, weaponTypeId: target.weaponTypeId, elementId: target.elementId, operation: { type: 'reset_bonuses' }, master: input.master }, result: g }] })
   return { input, state, engine, trace, a, b, g, entry, target, normal }
@@ -161,23 +161,14 @@ describe('Planner trace replay', () => {
       })],
     })
   })
-  it('removes a concrete material weapon once and rejects a second consumption', () => {
-    const { input, state, engine, entry } = fixture()
-    const material = { id: ownedWeaponId('owned.replay.material'), kind: 'gogma' as const, restorationBonusScope: 'gogma_artian' as const, name: '', weaponTypeId: input.targetWeapons[0].weaponTypeId, elementId: input.targetWeapons[0].elementId, restorationBonuses: createRestorationBonusSet(), seriesSkillId: null, groupSkillId: null, status: 'material' as const, isProtected: false, memo: null, createdAt: 'x', updatedAt: 'x' }
-    input.ownedWeapons = [material]
-    state.currentRngState = structuredClone(input.rngState); state.currentNormalCounters = structuredClone(input.normalCounters)
-    const snap = { gogmaCounter: 10, skillCounter: 7, normalCounters: [{ id: input.normalCounters[0].id, counter: 4 }] }
-    const action = (operation: { type: 'use_weapon_as_material'; ownedWeaponId: typeof material.id }): PlannerSearchAction => ({ kind: 'route_operation', actionType: operation.type, primaryBuildListEntryId: entry.id, progressedBuildListEntryIds: [entry.id], progressedRoutePositions: {}, routeOperation: operation, ownedWeaponId: material.id, plannerOnly: false, rngBefore: snap, rngAfter: snap, inventoryEffect: { addedOwnedWeaponIds: [], removedOwnedWeaponIds: [material.id], updatedOwnedWeaponIds: [], reservedOwnedWeaponIds: [], routeOutputChangedForEntryIds: [] }, satisfactionChanges: [] })
-    state.trace = [action({ type: 'use_weapon_as_material', ownedWeaponId: material.id })]
-    state.simulatedInventory = createSimulatedInventory([]).inventory!
-    expect(replayPlannerSearchTrace(input, state, engine)).toMatchObject({ isValid: true, drafts: [expect.objectContaining({ inventoryChange: expect.objectContaining({ removeOwnedWeaponIds: [material.id] }) })] })
-    state.trace = [action({ type: 'use_weapon_as_material', ownedWeaponId: material.id }), action({ type: 'use_weapon_as_material', ownedWeaponId: material.id })]
-    expect(replayPlannerSearchTrace(input, state, engine).issues[0]?.code).toBe('missing_source_weapon')
-  })
   it('hashes equivalent semantic state identically and includes kind', () => {
     const state = createValidRngState(); const counter = createValidNormalArtianCounter(); const weapon = { ...createValidBuildListEntry().candidateSnapshot }
-    const owned = { id: ownedWeaponId('owned.hash'), kind: 'gogma' as const, restorationBonusScope: 'gogma_artian' as const, name: 'A', weaponTypeId: 'weapon.fixture.a', elementId: 'element.fixture.a', restorationBonuses: createRestorationBonusSet(), seriesSkillId: null, groupSkillId: null, status: 'material' as const, isProtected: false, memo: null, createdAt: 'a', updatedAt: 'a' }
+    const owned = { id: ownedWeaponId('owned.hash'), kind: 'gogma' as const, restorationBonusScope: 'gogma_artian' as const, name: 'A', weaponTypeId: 'weapon.fixture.a', elementId: 'element.fixture.a', restorationBonuses: createRestorationBonusSet(), seriesSkillId: null, groupSkillId: null, status: 'unclassified' as const, isProtected: false, memo: null, createdAt: 'a', updatedAt: 'a' }
     const before = createExpectedPlanState(state, [counter], [owned]); expect(createExpectedPlanState({ ...state, notes: 'x', updatedAt: 'b' }, [{ ...counter, updatedAt: 'b' }], [{ ...owned, name: 'B', memo: 'x', updatedAt: 'b' }])).toEqual(before)
+    // The status label carries no calculation meaning, so it never moves the
+    // expected inventory hash (`docs/DATA_MODEL.md` 3.2).
+    expect(createExpectedPlanState(state, [counter], [{ ...owned, status: 'ideal' as const }])).toEqual(before)
+    expect(createExpectedPlanState(state, [counter], [{ ...owned, isProtected: true }]).ownedWeaponsHash).not.toBe(before.ownedWeaponsHash)
     expect(createExpectedPlanState(state, [counter], [{ ...owned, kind: 'normal' as const, restorationBonusScope: 'normal_artian' as const, rarity: 8, seriesSkillId: null, groupSkillId: null, status: null }]).ownedWeaponsHash).not.toBe(before.ownedWeaponsHash)
     void weapon
   })
@@ -193,7 +184,7 @@ describe('Planner trace replay', () => {
       restorationBonuses: createRestorationBonusSet(),
       seriesSkillId: null,
       groupSkillId: null,
-      status: 'material' as const,
+      status: 'unclassified' as const,
       isProtected: false,
       memo: null,
       createdAt: 'x',
