@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { createBuildListEntry } from '../domain/buildList'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import type {
-  RestorationBonusSet,
   WeaponTypeId,
 } from '../domain/models/publicTypes'
 import {
@@ -94,9 +93,9 @@ function createProductionSearchInput(
   const target = input.targetWeapons[0]
   target.weaponTypeId = weaponTypeId
   target.elementId = vector.elementId
-  target.idealBonuses = vector.bonuses.map((bonus) => ({ ...bonus })) as RestorationBonusSet
+  target.idealBonuses = new ProductionRngEngine().predictGogmaBonus({ baseSeed: String(vector.baseSeed), weaponTypeId, elementId: vector.elementId, gogmaCounter: input.rngState.gogmaCounter.value!, operation: { type: 'reset_bonuses' }, master: input.master })
   target.practicalBonusConditions = []
-  target.practicalAlternativeGroups = []
+  target.alternativeBonusRules = []
   const skills = createProductionPlannerRngEngine().predictSkills({
     baseSeed: String(vector.baseSeed),
     weaponTypeId,
@@ -129,16 +128,16 @@ async function createProductionPlannerInput(): Promise<PlannerInput> {
   )
   if (!searchResult) throw new Error('Production Search did not provide the Planner smoke Candidate.')
   const candidate = searchResult.result.targetResults[0].candidates.find(
-    ({ category, restorationBonusScope }) => category === 'practical' && restorationBonusScope === 'normal_artian',
+    ({ category, restorationBonusScope }) => category === 'ideal' && restorationBonusScope === 'gogma_artian',
   )
   if (!candidate) throw new Error('Production Search did not find the expected normal-scope Practical Candidate.')
   // B5-F1: conversion preserves the game-verified Normal slots, so this
   // unchanged two-operation smoke route is Practical even with exact labels.
   expect(candidate).toMatchObject({
     finalBonuses: searchInput.targetWeapons[0].idealBonuses,
-    estimatedOperationCount: 2,
-    restorationBonusScope: 'normal_artian',
-    category: 'practical',
+    estimatedOperationCount: 3,
+    restorationBonusScope: 'gogma_artian',
+    category: 'ideal',
   })
   const target = searchInput.targetWeapons[0]
   const entry = createBuildListEntry(candidate, target, {

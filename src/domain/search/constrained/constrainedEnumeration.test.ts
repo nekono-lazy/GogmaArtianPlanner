@@ -51,7 +51,7 @@ function idealReachableSetup() {
     skillResultAt: (skillCounter) => ({
       seriesSkillId:
         skillCounter === 7 ? IDEAL_SKILL : `series_skill.fixture.s${skillCounter}`,
-      groupSkillId: null,
+      groupSkillId: 'group_skill.fixture.a',
     }),
   })
   return { origin, engine }
@@ -320,6 +320,7 @@ describe('Constrained enumeration determinism', () => {
       expect(Object.keys(candidate).sort()).toEqual([
         'calculationContext',
         'category',
+        'conditionMatch',
         'estimatedGogmaAdvance',
         'estimatedNormalAdvance',
         'estimatedOperationCount',
@@ -595,7 +596,7 @@ function overlappingCategorySetup() {
     skillResultAt: (skillCounter) => ({
       seriesSkillId:
         skillCounter === 7 ? IDEAL_SKILL : `series_skill.fixture.s${skillCounter}`,
-      groupSkillId: null,
+      groupSkillId: 'group_skill.fixture.a',
     }),
   })
   return { origin, engine }
@@ -1047,7 +1048,9 @@ describe('Constrained sequential delivery', () => {
  * what makes it the adversarial partner for a lexicographic-only ordering.
  */
 function sharpnessPracticalBonuses() {
-  return practicalVariant(45)
+  const bonuses = idealBonuses()
+  bonuses[3] = { bonusTypeId: 'bonus_type.fixture.sharpness', bonusRankId: 'bonus_rank.fixture.high' }
+  return bonuses
 }
 
 /**

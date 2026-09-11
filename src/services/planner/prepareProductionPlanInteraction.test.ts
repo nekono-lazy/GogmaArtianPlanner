@@ -139,7 +139,7 @@ describe('evaluateProductionPlanCalculationCompatibility', () => {
     )).toEqual({ isCompatible: true, recalculationReasons: [] })
   })
 
-  it.each([2, 3, 4])(
+  it.each([2, 3, 4, 5])(
     'fails closed for a schema %i ProductionPlan under the current schema',
     (appSchemaVersion) => {
       // A persisted Plan records no PlannerSearchTermination, and a version 4
@@ -166,7 +166,7 @@ describe('evaluateProductionPlanCalculationCompatibility', () => {
       expect(isBuildResultCalculationContextCompatible(
         persistedPlan.calculationContext,
         current,
-      )).toBe(true)
+      )).toBe(false)
     },
   )
 

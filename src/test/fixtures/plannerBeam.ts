@@ -101,7 +101,7 @@ export function sourceWeapon(
     id: ownedWeaponId(id),
     restorationBonuses: belowPracticalBonuses(),
     seriesSkillId: null,
-    groupSkillId: null,
+    groupSkillId: 'group_skill.fixture.a',
     status: 'material',
     isProtected,
     relatedTargetWeaponIds: [],
@@ -129,12 +129,13 @@ export function routeEntry(
   entry.candidateSnapshot.id = entry.candidateId
   entry.candidateSnapshot.targetWeaponId = targetWeapon.id
   entry.candidateSnapshot.route = structuredClone(route)
+  entry.candidateSnapshot.restorationBonusScope = route.operations.some(({ type }) => type === 'reset_bonuses' || type === 'keep_bonuses') || !route.operations.some(({ type }) => type === 'convert_normal_to_gogma') ? 'gogma_artian' : 'normal_artian'
   entry.candidateSnapshot.category = category
   entry.candidateSnapshot.isSimilarToIdeal = false
   entry.candidateSnapshot.finalBonuses = createRestorationBonusSet()
   entry.candidateSnapshot.seriesSkillId =
     category === 'ideal' ? 'series_skill.fixture.a' : null
-  entry.candidateSnapshot.groupSkillId = null
+  entry.candidateSnapshot.groupSkillId = category === 'ideal' ? null : 'group_skill.fixture.a'
   entry.candidateSnapshot.estimatedOperationCount =
     route.operations.reduce(
       (total, operation) =>

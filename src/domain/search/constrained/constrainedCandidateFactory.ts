@@ -13,7 +13,8 @@ import type {
 import { validateBuildRoute } from '../../models/publicTypes'
 import {
   calculateSimilarityScore,
-  classifyCandidate,
+  evaluateTargetBonusMatch,
+  evaluateTargetSkillMatch,
   createIdealDifference,
 } from '../../target'
 import { candidateStableKey } from '../candidateProcessing'
@@ -51,15 +52,15 @@ export function createConstrainedCandidate(
   origin: ConstrainedSearchOrigin,
   prediction: ConstrainedCandidatePrediction,
 ): ConstrainedCandidate | null {
-  const category = classifyCandidate(
+  const bonus = evaluateTargetBonusMatch(
     target,
     prediction.finalBonuses,
     prediction.restorationBonusScope,
-    prediction.seriesSkillId,
-    prediction.groupSkillId,
     origin.master,
   )
-  if (!category) return null
+  const skill = evaluateTargetSkillMatch(target, prediction.seriesSkillId, prediction.groupSkillId)
+  if (!bonus || !skill) return null
+  const category = bonus === 'ideal' && skill === 'ideal' ? 'ideal' : 'practical'
 
   const valid = validateBuildRoute(prediction.route, origin.ownedWeapons)
   if (!valid.isValid) {
@@ -78,6 +79,7 @@ export function createConstrainedCandidate(
   return {
     targetWeaponId: target.id,
     category,
+    conditionMatch: { bonus, skill },
     finalBonuses: prediction.finalBonuses.map((bonus) => ({
       ...bonus,
     })) as RestorationBonusSet,

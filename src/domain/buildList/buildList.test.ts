@@ -48,7 +48,7 @@ describe('targetDefinitionHash', () => {
 
   it.each([
     ['ideal bonuses', (target: ReturnType<typeof createValidTargetWeapon>) => { target.idealBonuses[0] = { bonusTypeId: 'bonus.changed', bonusRankId: 'rank.changed' } }],
-    ['practical condition', (target: ReturnType<typeof createValidTargetWeapon>) => { target.practicalBonusConditions[0].requiredCount = 1 }],
+    ['practical condition', (target: ReturnType<typeof createValidTargetWeapon>) => { target.practicalBonusConditions[0].requiredExCount = 1 }],
     ['skill condition', (target: ReturnType<typeof createValidTargetWeapon>) => { target.idealSkillCondition.seriesSkillId = null }],
   ])('changes for %s', (_label, mutate) => {
     const target = createValidTargetWeapon()
@@ -136,7 +136,7 @@ describe('BuildListEntry staleness', () => {
     const base = createFixtureEntry()
     expect(evaluateBuildListEntryStaleness(base.entry, { target: { ...base.target, name: '別名' }, rngState: base.rngState, normalCounters: base.normalCounters, ownedWeapons: [], calculationContext: domainFixtureContext }).isStale).toBe(false)
     const changed = structuredClone(base.target)
-    changed.practicalBonusConditions[0].requiredCount = 1
+    changed.practicalBonusConditions[0].requiredExCount = 1
     expect(evaluateBuildListEntryStaleness(base.entry, { target: changed, rngState: base.rngState, normalCounters: base.normalCounters, ownedWeapons: [], calculationContext: domainFixtureContext }).staleReasons).toContain('target_definition_changed')
   })
 

@@ -1,143 +1,96 @@
 import { areRestorationBonusSetsEqual } from '../models/domainRules'
 import type {
-  CandidateCategory,
-  GroupSkillId,
-  RestorationBonusScope,
-  RestorationBonusSet,
-  SeriesSkillId,
-  TargetWeapon,
+  CandidateCategory, GroupSkillId, RestorationBonusScope, RestorationBonusSet,
+  SeriesSkillId, TargetWeapon,
 } from '../models/publicTypes'
 import {
-  assertRestorationBonusRankReferences,
+  assertRestorationBonusRankReferences, evaluateAlternativeBonusRule,
   evaluatePracticalBonusConditions,
 } from './bonusConditionEvaluator'
 import { createIdealDifference } from './idealDifference'
 import { evaluateSkillCondition } from './skillConditionEvaluator'
 import { calculateSimilarityScore, isSimilarToIdeal } from './similarity'
-import type {
-  TargetEvaluationMasterSubset,
-  TargetEvaluationResult,
-} from './targetEvaluationTypes'
+import type { TargetEvaluationMasterSubset, TargetEvaluationResult } from './targetEvaluationTypes'
 
-/** SEARCH_SPEC 5.1: validate ranks even when scope rules out an Ideal. */
+export function hasPracticalSkillCondition(target: TargetWeapon): boolean {
+  const condition = target.practicalSkillCondition
+  return condition.seriesSkillId !== null || condition.groupSkillId !== null
+}
+
+export function hasTargetCompromise(target: TargetWeapon): boolean {
+  return target.practicalBonusConditions.length > 0 || target.alternativeBonusRules.length > 0 ||
+    hasPracticalSkillCondition(target)
+}
+
+/** Scope is explicit; invalid Master references fail even for normal scope. */
 export function satisfiesIdealBonuses(
-  target: TargetWeapon,
-  finalBonuses: RestorationBonusSet,
-  restorationBonusScope: RestorationBonusScope,
-  master: TargetEvaluationMasterSubset,
+  target: TargetWeapon, finalBonuses: RestorationBonusSet,
+  restorationBonusScope: RestorationBonusScope, master: TargetEvaluationMasterSubset,
 ): boolean {
   assertRestorationBonusRankReferences(target.idealBonuses, master)
   assertRestorationBonusRankReferences(finalBonuses, master)
-  return (
-    restorationBonusScope === 'gogma_artian' &&
+  return restorationBonusScope === 'gogma_artian' &&
     areRestorationBonusSetsEqual(target.idealBonuses, finalBonuses)
-  )
+}
+
+export function evaluateTargetBonusMatch(
+  target: TargetWeapon, bonuses: RestorationBonusSet, scope: RestorationBonusScope,
+  master: TargetEvaluationMasterSubset,
+): TargetEvaluationResult['bonusMatch'] {
+  if (satisfiesIdealBonuses(target, bonuses, scope, master)) return 'ideal'
+  if (scope !== 'gogma_artian') return null
+  if (target.practicalBonusConditions.length > 0 && evaluatePracticalBonusConditions(target, bonuses, master)) return 'practical'
+  if (target.alternativeBonusRules.some((rule) => evaluateAlternativeBonusRule(rule, target.idealBonuses, bonuses, master))) return 'alternative'
+  return null
+}
+
+export function evaluateTargetSkillMatch(
+  target: TargetWeapon, series: SeriesSkillId | null, group: GroupSkillId | null,
+): TargetEvaluationResult['skillMatch'] {
+  if (evaluateSkillCondition(target.idealSkillCondition, series, group)) return 'ideal'
+  return hasPracticalSkillCondition(target) && evaluateSkillCondition(target.practicalSkillCondition, series, group)
+    ? 'practical' : null
 }
 
 export function satisfiesIdealTarget(
-  target: TargetWeapon,
-  finalBonuses: RestorationBonusSet,
-  restorationBonusScope: RestorationBonusScope,
-  seriesSkillId: SeriesSkillId | null,
-  groupSkillId: GroupSkillId | null,
-  master: TargetEvaluationMasterSubset,
+  target: TargetWeapon, bonuses: RestorationBonusSet, scope: RestorationBonusScope,
+  series: SeriesSkillId | null, group: GroupSkillId | null, master: TargetEvaluationMasterSubset,
 ): boolean {
-  return (
-    satisfiesIdealBonuses(target, finalBonuses, restorationBonusScope, master) &&
-    evaluateSkillCondition(
-      target.idealSkillCondition,
-      seriesSkillId,
-      groupSkillId,
-    )
-  )
+  return satisfiesIdealBonuses(target, bonuses, scope, master) &&
+    evaluateSkillCondition(target.idealSkillCondition, series, group)
 }
 
+/** Inclusive accepted set, also used for Planner's hasPractical satisfaction. */
 export function satisfiesPracticalTarget(
-  target: TargetWeapon,
-  finalBonuses: RestorationBonusSet,
-  seriesSkillId: SeriesSkillId | null,
-  groupSkillId: GroupSkillId | null,
-  master: TargetEvaluationMasterSubset,
+  target: TargetWeapon, bonuses: RestorationBonusSet, scope: RestorationBonusScope,
+  series: SeriesSkillId | null, group: GroupSkillId | null, master: TargetEvaluationMasterSubset,
 ): boolean {
-  return (
-    evaluatePracticalBonusConditions(
-      target.practicalBonusConditions,
-      target.practicalAlternativeGroups,
-      finalBonuses,
-      master,
-    ) &&
-    evaluateSkillCondition(
-      target.practicalSkillCondition,
-      seriesSkillId,
-      groupSkillId,
-    )
-  )
+  return evaluateTargetBonusMatch(target, bonuses, scope, master) !== null &&
+    evaluateTargetSkillMatch(target, series, group) !== null
 }
 
 export function classifyCandidate(
-  target: TargetWeapon,
-  finalBonuses: RestorationBonusSet,
-  restorationBonusScope: RestorationBonusScope,
-  seriesSkillId: SeriesSkillId | null,
-  groupSkillId: GroupSkillId | null,
-  master: TargetEvaluationMasterSubset,
+  target: TargetWeapon, bonuses: RestorationBonusSet, scope: RestorationBonusScope,
+  series: SeriesSkillId | null, group: GroupSkillId | null, master: TargetEvaluationMasterSubset,
 ): CandidateCategory | null {
-  if (
-    satisfiesIdealTarget(
-      target,
-      finalBonuses,
-      restorationBonusScope,
-      seriesSkillId,
-      groupSkillId,
-      master,
-    )
-  ) {
-    return 'ideal'
-  }
-  return satisfiesPracticalTarget(
-    target,
-    finalBonuses,
-    seriesSkillId,
-    groupSkillId,
-    master,
-  )
-    ? 'practical'
-    : null
+  const bonus = evaluateTargetBonusMatch(target, bonuses, scope, master)
+  const skill = evaluateTargetSkillMatch(target, series, group)
+  return bonus === null || skill === null ? null : bonus === 'ideal' && skill === 'ideal' ? 'ideal' : 'practical'
 }
 
 export function evaluateTargetCandidate(
-  target: TargetWeapon,
-  finalBonuses: RestorationBonusSet,
-  restorationBonusScope: RestorationBonusScope,
-  seriesSkillId: SeriesSkillId | null,
-  groupSkillId: GroupSkillId | null,
-  master: TargetEvaluationMasterSubset,
+  target: TargetWeapon, bonuses: RestorationBonusSet, scope: RestorationBonusScope,
+  series: SeriesSkillId | null, group: GroupSkillId | null, master: TargetEvaluationMasterSubset,
   similarityThreshold: number,
 ): TargetEvaluationResult {
-  const category = classifyCandidate(
-    target,
-    finalBonuses,
-    restorationBonusScope,
-    seriesSkillId,
-    groupSkillId,
-    master,
-  )
-  const idealDifference = createIdealDifference(
-    target,
-    finalBonuses,
-    seriesSkillId,
-    groupSkillId,
-  )
+  const bonusMatch = evaluateTargetBonusMatch(target, bonuses, scope, master)
+  const skillMatch = evaluateTargetSkillMatch(target, series, group)
+  const category = bonusMatch === null || skillMatch === null ? null :
+    bonusMatch === 'ideal' && skillMatch === 'ideal' ? 'ideal' : 'practical'
+  const idealDifference = createIdealDifference(target, bonuses, series, group)
   const similarityScore = calculateSimilarityScore(target, idealDifference)
-
   return {
-    category,
-    idealDifference,
-    similarityScore,
-    isSimilarToIdeal: isSimilarToIdeal(
-      category,
-      similarityScore,
-      similarityThreshold,
-    ),
+    category, bonusMatch, skillMatch, idealDifference, similarityScore,
+    isSimilarToIdeal: isSimilarToIdeal(category, similarityScore, similarityThreshold),
   }
 }

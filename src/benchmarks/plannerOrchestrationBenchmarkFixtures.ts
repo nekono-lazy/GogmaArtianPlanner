@@ -1,3 +1,4 @@
+import { benchmarkPracticalBonuses } from './targetCompromiseFixture'
 import { createBuildListEntry } from '../domain/buildList'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import {
@@ -15,10 +16,8 @@ import type {
   OwnedWeapon,
   OwnedWeaponId,
   PlanConflict,
-  RestorationBonus,
   RestorationBonusSet,
   RngState,
-  SkillCondition,
   TargetWeapon,
   TargetWeaponId,
   WeaponTypeId,
@@ -43,7 +42,6 @@ import type { CandidateSearchInput, SearchMasterSubset } from '../domain/search'
 import { validateTargetIdealImpliesPractical } from '../domain/target'
 import {
   CONSTRAINED_BENCHMARK_BASE_SEED,
-  CONSTRAINED_BENCHMARK_GOGMA_COUNTER,
   CONSTRAINED_BENCHMARK_NORMAL_COUNTER,
   CONSTRAINED_BENCHMARK_SKILL_COUNTER,
 } from './constrainedEnumerationBenchmarkFixtures'
@@ -80,8 +78,8 @@ import {
  */
 
 export const PLANNER_ORCHESTRATION_BENCHMARK_BASE_SEED = CONSTRAINED_BENCHMARK_BASE_SEED
-export const PLANNER_ORCHESTRATION_BENCHMARK_GOGMA_COUNTER =
-  CONSTRAINED_BENCHMARK_GOGMA_COUNTER
+// Schema 6 fixture: Counters 117-119 share a Bow layout with different tiers.
+export const PLANNER_ORCHESTRATION_BENCHMARK_GOGMA_COUNTER = 117
 export const PLANNER_ORCHESTRATION_BENCHMARK_SKILL_COUNTER =
   CONSTRAINED_BENCHMARK_SKILL_COUNTER
 export const PLANNER_ORCHESTRATION_BENCHMARK_NORMAL_COUNTER =
@@ -112,10 +110,6 @@ const SOURCE_SKILL_SCAN_END = 900
  * a Planner benchmark wants: no Target drops out of planning because it is
  * already complete, and SEARCH_SPEC 5.6.1 never disables a stream.
  */
-const UNREACHABLE_BONUS: RestorationBonus = {
-  bonusTypeId: 'bonus_type.attack',
-  bonusRankId: 'bonus_rank.i',
-}
 const UNREACHABLE_GROUP_SKILL_ID = 'group_skill.verified_14'
 const PRACTICAL_BONUS_TYPE_ID = 'bonus_type.attack'
 
@@ -211,7 +205,7 @@ const baselineWorkload: PlannerOrchestrationBenchmarkWorkload = {
   conflictResolution: 'none',
   targets: [
     targetSpec('bow_fire', BOW, FIRE, 'bonus', { kind: 'reset_bonuses' }),
-    targetSpec('bow_water', BOW, WATER, 'bonus', { kind: 'convert', forgeCount: 1 }),
+    targetSpec('bow_water', BOW, WATER, 'skill', { kind: 'reset_skills' }),
   ],
   note: 'Two Targets on disjoint streams; no conflict and no explicit resolution, so only the initial ordinary Planner run happens.',
 }
@@ -223,8 +217,8 @@ const baselineWorkload: PlannerOrchestrationBenchmarkWorkload = {
  * source, so exactly two BuildListEntries participate in one
  * `same_gogma_counter` conflict. The fixed side keeps that position; the
  * yielding Target's constrained re-search reaches a conversion Candidate, whose
- * Normal-scope five slots satisfy its Practical bonus condition and whose
- * Normal and Skill positions are untouched by the fixed side.
+ * later Reset Bonuses preserve its Ideal layout while relaxing ranks.
+ * Earlier Counter prefixes can be passed by the fixed side.
  */
 const earlyAdoptionWorkload: PlannerOrchestrationBenchmarkWorkload = {
   id: 'orchestration_single_conflict_early_adoption',
@@ -233,7 +227,7 @@ const earlyAdoptionWorkload: PlannerOrchestrationBenchmarkWorkload = {
   conflictResolution: 'fix_lowest_entry_id',
   targets: [
     targetSpec('bow_fire', BOW, FIRE, 'bonus', { kind: 'reset_bonuses' }),
-    targetSpec('bow_water', BOW, WATER, 'bonus', { kind: 'reset_bonuses' }),
+    targetSpec('bow_thunder', BOW, THUNDER, 'bonus', { kind: 'reset_bonuses' }),
   ],
   note: 'Two participants in one same_gogma_counter conflict; the yielding Target adopts a conversion Candidate on the free Normal / Skill positions.',
 }
@@ -255,7 +249,7 @@ const trialPressureWorkload: PlannerOrchestrationBenchmarkWorkload = {
   conflictResolution: 'fix_lowest_entry_id',
   targets: [
     targetSpec('bow_fire', BOW, FIRE, 'bonus', { kind: 'reset_bonuses' }),
-    targetSpec('bow_water', BOW, WATER, 'bonus', { kind: 'reset_bonuses' }),
+    targetSpec('bow_ice', BOW, ICE, 'bonus', { kind: 'reset_bonuses' }),
     targetSpec('bow_thunder', BOW, THUNDER, 'bonus', { kind: 'reset_bonuses' }),
   ],
   note: 'Three participants in one conflict; two works share one trial budget and every trial runs a full Beam Search.',
@@ -555,73 +549,28 @@ function benchmarkNormalCounter(weaponTypeId: WeaponTypeId): NormalArtianCounter
   }
 }
 
-function unreachableIdealBonuses(): RestorationBonusSet {
-  return [
-    { ...UNREACHABLE_BONUS },
-    { ...UNREACHABLE_BONUS },
-    { ...UNREACHABLE_BONUS },
-    { ...UNREACHABLE_BONUS },
-    { ...UNREACHABLE_BONUS },
-  ]
-}
-
 function createBenchmarkTarget(
-  spec: PlannerOrchestrationTargetSpec,
+  spec: PlannerOrchestrationTargetSpec, source: OwnedGogmaArtianWeapon,
   predictions: ProductionPredictions,
 ): TargetWeapon {
-  // The Series Skill the Skill stream produces at the starting position; a
-  // Production value, not a chosen one.
-  const startingSeriesSkillId = predictions.skills(
-    spec.weaponTypeId,
-    spec.elementId,
-    PLANNER_ORCHESTRATION_BENCHMARK_SKILL_COUNTER,
-  ).seriesSkillId
-  const practicalSkillCondition: SkillCondition =
-    spec.flavor === 'skill'
-      ? {
-          seriesSkillId: startingSeriesSkillId,
-          groupSkillId: null,
-          matchMode: 'all',
-        }
-      : { seriesSkillId: null, groupSkillId: null, matchMode: 'any' }
-  // Ideal implies Practical by construction: the Ideal skill condition repeats
-  // the Practical Series Skill and only adds the unreachable Group Skill, and
-  // the Ideal five slots are all `bonus_type.attack`, which satisfies the
-  // Practical bonus condition's `requiredCount: 1` at `bonus_rank.base`.
-  const idealSkillCondition: SkillCondition = {
-    seriesSkillId: spec.flavor === 'skill' ? startingSeriesSkillId : null,
-    groupSkillId: UNREACHABLE_GROUP_SKILL_ID,
-    matchMode: 'all',
-  }
+  const prediction = createRoutePrediction(spec, source, predictions)
+  const bonusFocused = spec.flavor === 'bonus'
+  const idealBonuses = bonusFocused
+    ? prediction.finalBonuses.map((bonus) => ({ ...bonus, bonusRankId: 'bonus_rank.i' })) as RestorationBonusSet
+    : structuredClone(prediction.finalBonuses)
   return {
     id: `target.b8e1.${spec.key}` as TargetWeaponId,
-    name: `B8-E1 ${spec.key}`,
-    weaponTypeId: spec.weaponTypeId,
-    elementId: spec.elementId,
-    priority: 3,
-    isEnabled: true,
-    idealBonuses: unreachableIdealBonuses(),
-    practicalBonusConditions: [
-      {
-        id: `condition.b8e1.${spec.key}.attack`,
-        bonusTypeId: PRACTICAL_BONUS_TYPE_ID,
-        minimumRankId: 'bonus_rank.base',
-        requiredCount: 1,
-        requiredExCount: 0,
-      },
-    ],
-    practicalAlternativeGroups: [],
-    idealSkillCondition,
-    practicalSkillCondition,
-    memo: null,
-    createdAt: FIXTURE_TIME,
-    updatedAt: FIXTURE_TIME,
+    name: `B8-E1 ${spec.key}`, weaponTypeId: spec.weaponTypeId, elementId: spec.elementId,
+    priority: 3, isEnabled: true, idealBonuses,
+    practicalBonusConditions: benchmarkPracticalBonuses(idealBonuses), alternativeBonusRules: [],
+    idealSkillCondition: { seriesSkillId: prediction.seriesSkillId, groupSkillId: bonusFocused ? prediction.groupSkillId : UNREACHABLE_GROUP_SKILL_ID, matchMode: 'all' },
+    practicalSkillCondition: { seriesSkillId: bonusFocused ? null : prediction.seriesSkillId, groupSkillId: null, matchMode: 'all' },
+    memo: null, createdAt: FIXTURE_TIME, updatedAt: FIXTURE_TIME,
   }
 }
 
 function createBenchmarkSource(
   spec: PlannerOrchestrationTargetSpec,
-  target: TargetWeapon,
   predictions: ProductionPredictions,
 ): OwnedGogmaArtianWeapon {
   const wantsPracticalBonuses = spec.flavor === 'skill'
@@ -634,7 +583,7 @@ function createBenchmarkSource(
   const skillCounter = sourceSkillCounter(
     spec.weaponTypeId,
     spec.elementId,
-    spec.flavor === 'skill' ? target.practicalSkillCondition.seriesSkillId : null,
+    spec.flavor === 'skill' ? predictions.skills(spec.weaponTypeId, spec.elementId, PLANNER_ORCHESTRATION_BENCHMARK_SKILL_COUNTER).seriesSkillId : null,
     predictions,
   )
   const skills = predictions.skills(spec.weaponTypeId, spec.elementId, skillCounter)
@@ -753,16 +702,14 @@ function createRoutePrediction(
           skillCounterBefore: skillCounter,
           skillCounterAfter: skillCounter + 1,
         },
+        { type: 'reset_bonuses', sourceOwnedWeaponId: null, gogmaCounterBefore: gogmaCounter, gogmaCounterAfter: gogmaCounter + 1 },
       ],
     },
-    // The selected weapon is the last forged block, and conversion preserves
-    // its five Normal-scope slots in order.
-    finalBonuses: predictions.normalBonuses(
-      spec.weaponTypeId,
-      spec.elementId,
-      normalCounter + forgeCount - 1,
+    // Conversion preserves the Normal slots; only the following Reset supplies the accepted Gogma result.
+    finalBonuses: predictions.resetBonuses(
+      spec.weaponTypeId, spec.elementId, gogmaCounter,
     ),
-    restorationBonusScope: 'normal_artian',
+    restorationBonusScope: 'gogma_artian',
     seriesSkillId: skills.seriesSkillId as OwnedGogmaArtianWeapon['seriesSkillId'],
     groupSkillId: skills.groupSkillId as OwnedGogmaArtianWeapon['groupSkillId'],
   }
@@ -803,23 +750,12 @@ export function createPlannerOrchestrationBenchmarkInput(
     rngEngineVersion: engine.version,
   }
 
-  const targets = workload.targets.map((spec) =>
-    createBenchmarkTarget(spec, predictions),
-  )
-  targets.forEach((target, index) => {
-    const containment = validateTargetIdealImpliesPractical(target, master)
-    if (!containment.isValid) {
-      throw new Error(
-        `Workload '${workloadId}' Target '${workload.targets[index].key}' violates Ideal implies Practical: ${containment.issues
-          .map((issue) => `${issue.path}: ${issue.message}`)
-          .join(' / ')}`,
-      )
-    }
+  const sources = workload.targets.map((spec) => createBenchmarkSource(spec, predictions))
+  const targets = workload.targets.map((spec, index) => createBenchmarkTarget(spec, sources[index], predictions))
+  targets.forEach((target) => {
+    const validation = validateTargetIdealImpliesPractical(target, master)
+    if (!validation.isValid) throw new Error(JSON.stringify(validation.issues))
   })
-
-  const sources = workload.targets.map((spec, index) =>
-    createBenchmarkSource(spec, targets[index], predictions),
-  )
   const ownedWeapons: OwnedWeapon[] = [...sources]
   const normalCounters = [
     ...new Set(workload.targets.map(({ weaponTypeId }) => weaponTypeId)),

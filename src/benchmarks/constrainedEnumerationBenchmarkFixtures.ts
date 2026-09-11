@@ -1,14 +1,13 @@
+import { benchmarkPracticalBonuses, benchmarkPracticalSkills } from './targetCompromiseFixture'
 import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../domain/models/publicTypes'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import type {
-  BonusCondition,
   CalculationContext,
   NormalArtianCounter,
   OwnedGogmaArtianWeapon,
   OwnedNormalArtianWeapon,
   OwnedWeapon,
   OwnedWeaponId,
-  RestorationBonus,
   RestorationBonusSet,
   RngState,
   SkillCondition,
@@ -87,10 +86,6 @@ const OWNED_GOGMA_SOURCE_SKILL_COUNTER = CONSTRAINED_BENCHMARK_SKILL_COUNTER + 9
 /** The Normal Artian block the synthetic Owned Normal source was forged from. */
 const OWNED_NORMAL_SOURCE_COUNTER = CONSTRAINED_BENCHMARK_NORMAL_COUNTER + 3000
 
-const UNREACHABLE_BONUS: RestorationBonus = {
-  bonusTypeId: 'bonus_type.attack',
-  bonusRankId: 'bonus_rank.i',
-}
 
 const UNREACHABLE_GROUP_SKILL_ID = 'group_skill.verified_14'
 
@@ -366,22 +361,6 @@ function benchmarkNormalCounter(): NormalArtianCounter {
   }
 }
 
-const practicalBonusConditions: readonly BonusCondition[] = [
-  {
-    id: 'condition.benchmark.b8.attack',
-    bonusTypeId: 'bonus_type.attack',
-    minimumRankId: 'bonus_rank.base',
-    requiredCount: 1,
-    requiredExCount: 0,
-  },
-]
-
-const practicalSkillCondition: SkillCondition = {
-  seriesSkillId: null,
-  groupSkillId: null,
-  matchMode: 'any',
-}
-
 function skillsAtCounter(
   skillCounter: number,
   master: SearchMasterSubset,
@@ -495,15 +474,7 @@ export function constrainedBenchmarkOwnedNormal(
   }
 }
 
-function unreachableBonuses(): RestorationBonusSet {
-  return [
-    { ...UNREACHABLE_BONUS },
-    { ...UNREACHABLE_BONUS },
-    { ...UNREACHABLE_BONUS },
-    { ...UNREACHABLE_BONUS },
-    { ...UNREACHABLE_BONUS },
-  ]
-}
+
 
 export interface ConstrainedEnumerationBenchmarkFixture {
   readonly input: ConstrainedCandidateSearchInput
@@ -529,7 +500,7 @@ export function createConstrainedEnumerationBenchmarkInput(
   const idealBonuses: RestorationBonusSet =
     workload.ideal.bonuses.kind === 'owned_gogma_current'
       ? ownedGogma.restorationBonuses
-      : unreachableBonuses()
+      : ownedGogma.restorationBonuses.map((bonus) => ({ ...bonus, bonusRankId: 'bonus_rank.ex' })) as RestorationBonusSet
 
   const idealSkillCondition: SkillCondition =
     workload.ideal.skills.kind === 'owned_gogma_current'
@@ -539,7 +510,7 @@ export function createConstrainedEnumerationBenchmarkInput(
           matchMode: 'all',
         }
       : {
-          seriesSkillId: null,
+          seriesSkillId: skillsAtCounter(CONSTRAINED_BENCHMARK_SKILL_COUNTER, master, engine).seriesSkillId,
           groupSkillId: UNREACHABLE_GROUP_SKILL_ID,
           matchMode: 'all',
         }
@@ -552,12 +523,10 @@ export function createConstrainedEnumerationBenchmarkInput(
     priority: 3,
     isEnabled: true,
     idealBonuses,
-    practicalBonusConditions: practicalBonusConditions.map((condition) => ({
-      ...condition,
-    })),
-    practicalAlternativeGroups: [],
+    practicalBonusConditions: benchmarkPracticalBonuses(idealBonuses),
+    alternativeBonusRules: [],
     idealSkillCondition,
-    practicalSkillCondition: { ...practicalSkillCondition },
+    practicalSkillCondition: workload.inventory.ownedGogma ? { seriesSkillId: idealSkillCondition.seriesSkillId, groupSkillId: ownedGogma.groupSkillId, matchMode: 'any' } : benchmarkPracticalSkills(idealSkillCondition),
     memo: null,
     createdAt: FIXTURE_TIME,
     updatedAt: FIXTURE_TIME,

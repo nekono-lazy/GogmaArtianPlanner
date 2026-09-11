@@ -59,7 +59,7 @@ describe('Constrained enumeration input contract', () => {
     const origin = createConstrainedSearchOrigin()
     const result = await enumerateConstrainedCandidates(
       constrainedInput(origin),
-      createConstrainedEngine(origin),
+      createConstrainedEngine(origin, { resetResultAt: () => origin.targetWeapons[0].idealBonuses }),
     )
     expect(result.targetWeaponId).toBe(origin.targetWeapons[0].id)
     expect(result.candidates.length).toBeGreaterThan(0)
@@ -119,7 +119,6 @@ describe('assertConstrainedCandidateSearchInput', () => {
         id: 'condition.fixture.impossible',
         bonusTypeId: 'bonus_type.fixture.utility',
         minimumRankId: 'bonus_rank.fixture.high',
-        requiredCount: 5,
         requiredExCount: 0,
       },
     ]
@@ -201,7 +200,7 @@ describe('assertConstrainedCandidateSearchInput', () => {
 describe('Constrained enumeration CalculationContext compatibility', () => {
   it('fails closed when the Engine version does not match the origin context', async () => {
     const origin = createConstrainedSearchOrigin()
-    const engine = createConstrainedEngine(origin)
+    const engine = createConstrainedEngine(origin, { resetResultAt: () => origin.targetWeapons[0].idealBonuses })
     origin.calculationContext.rngEngineVersion = 'fake-fixture:other'
     await expect(
       enumerateConstrainedCandidates(constrainedInput(origin), engine),
@@ -286,7 +285,7 @@ describe('B8-B2 Production enumeration defaults', () => {
     const origin = createConstrainedSearchOrigin({
       ownedWeapons: [gogmaWeapon('owned.constrained.gogma')],
     })
-    const engine = createConstrainedEngine(origin)
+    const engine = createConstrainedEngine(origin, { resetResultAt: () => origin.targetWeapons[0].idealBonuses })
     const result = await enumerateConstrainedCandidates(
       constrainedInput(
         origin,

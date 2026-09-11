@@ -362,7 +362,11 @@ Plan外で旧実用品を素材用へ変更する場合は、この画面で確�
 
 - 優先度デフォルトは3
 - 理想復元ボーナスは5枠完全指定
-- 実用ラインはBonusConditionとAlternativeBonusConditionGroupで表現する
+- 実用は種類・理想内個数(read-only)・最低Rank・EX最低数。種類はIdeal内のみ、重複禁止
+- 代替は元種類・最大置換数・options(代替先種類/最低Rank/EX最低数)。同じ元は1 Rule
+- 「未設定種類は理想条件のまま」「代替は1元/1候補のみ、未置換枠は理想、実用Bonusと非併用」を説明する
+- 実用Skillの両項目未設定はスキル妥協なし。一覧は全妥協未設定なら「妥協なし（理想のみ検索）」
+- DB移行後は旧妥協条件の解除と再設定を案内する。武器種・属性変更はBonus条件を解除し、Ideal編集の不整合は保存validationで拒否する
 - 複雑な任意論理式UIは作らない
 
 ---
@@ -1285,3 +1289,15 @@ export interface SearchUiState {
 - Search ResultsのTarget切替が操作できる
 - Execution Navigatorの主要ボタンが片手操作しやすい位置にある
 - 復元ボーナス5枠が小画面でも判読できる
+
+
+### 妥協条件version 6の判定理由と監査記録
+
+新規CandidateはconditionMatch（bonus: ideal/practical/alternative、skill: ideal/practical）を保持し、Build List snapshotへそのまま複写する。
+これはTarget定義と完成結果から導出した説明情報であり、Candidate ID / stable key / deduplication key / meaning fingerprint / searchStateHashには追加しない。
+条件の意味はTarget definition hashとCalculationContext version 6で区別する。旧artifactではフィールドを省略でき、推測補完・再分類しない。
+UIは保存された判定理由を「ボーナス判定: 理想 / 実用 / 代替」「スキル判定: 理想 / 実用」と表示する。
+categoryは両軸Idealのときだけideal、それ以外はpracticalであり、代替Bonusを実用Bonusと表示しない。
+
+Productionベンチマークの旧wildcard条件も明示的な理想構成基準へ変更するため、旧versionの測定記録と負荷が異なる。
+過去のBrowser Worker測定値は当時のartifactとして保持する。今回のVitestは意味・不変条件の検証であり、新しいBrowser性能測定の代用ではない。

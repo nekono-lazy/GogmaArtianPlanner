@@ -150,7 +150,7 @@ function createCompositionEngine(
         elementId: target.elementId,
         master: input.master,
       },
-      result: { seriesSkillId, groupSkillId: null },
+      result: { seriesSkillId, groupSkillId: 'group_skill.fixture.a' },
     })),
     normalCounterAdvances: normals.map((_, index) => ({
       current: START_NORMAL_COUNTER,
@@ -210,7 +210,7 @@ function gogmaSource(
     restorationBonuses,
     restorationBonusScope: 'gogma_artian',
     seriesSkillId: 'series_skill.fixture.source',
-    groupSkillId: null,
+    groupSkillId: 'group_skill.fixture.a',
     isProtected: false,
     ...overrides,
   } as OwnedGogmaArtianWeapon
@@ -229,7 +229,7 @@ function normalSource(
     restorationBonuses,
     restorationBonusScope: 'normal_artian' as const,
     seriesSkillId: null,
-    groupSkillId: null,
+    groupSkillId: 'group_skill.fixture.a',
     status: null,
     isProtected: false,
   } as unknown as OwnedWeapon
@@ -463,7 +463,7 @@ describe('Zero-operation stream solutions (SEARCH_SPEC 5.5.5)', () => {
     )).toBe(true)
   })
 
-  it('still composes a conversion Route at d = 0 and k = 0', async () => {
+  it('rejects a normal-scope conversion at d = 0 and k = 0', async () => {
     const input = compositionInput(1, 1)
     input.routeFilter = 'normal_artian'
     input.ownedWeapons = [
@@ -481,7 +481,7 @@ describe('Zero-operation stream solutions (SEARCH_SPEC 5.5.5)', () => {
 
     expect(candidates.some((candidate) =>
       operationTypes(candidate) === 'convert_normal_to_gogma',
-    )).toBe(true)
+    )).toBe(false)
   })
 })
 

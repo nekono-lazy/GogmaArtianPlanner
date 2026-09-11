@@ -131,20 +131,18 @@ export function createValidTargetWeapon(): TargetWeapon {
         id: 'condition.fixture.attack',
         bonusTypeId: 'bonus_type.fixture.attack',
         minimumRankId: 'bonus_rank.fixture.high',
-        requiredCount: 2,
         requiredExCount: 0,
       },
+      { id: 'condition.fixture.sharpness', bonusTypeId: 'bonus_type.fixture.sharpness', minimumRankId: 'bonus_rank.fixture.low', requiredExCount: 0 },
+      { id: 'condition.fixture.utility', bonusTypeId: 'bonus_type.fixture.utility', minimumRankId: 'bonus_rank.fixture.low', requiredExCount: 0 },
+      { id: 'condition.fixture.element', bonusTypeId: 'bonus_type.fixture.element', minimumRankId: 'bonus_rank.fixture.middle', requiredExCount: 0 },
     ],
-    practicalAlternativeGroups: [
+    alternativeBonusRules: [
       {
         id: 'alternative.fixture.one',
-        requiredCount: 1,
-        options: [
-          {
-            bonusTypeId: 'bonus_type.fixture.element',
-            minimumRankId: 'bonus_rank.fixture.middle',
-          },
-        ],
+        sourceBonusTypeId: 'bonus_type.fixture.sharpness',
+        maxReplacementCount: 1,
+        options: [{ alternativeBonusTypeId: 'bonus_type.fixture.utility', minimumRankId: 'bonus_rank.fixture.low', requiredExCount: 0 }],
       },
     ],
     idealSkillCondition: {
@@ -153,8 +151,8 @@ export function createValidTargetWeapon(): TargetWeapon {
       matchMode: 'all',
     },
     practicalSkillCondition: {
-      seriesSkillId: null,
-      groupSkillId: null,
+      seriesSkillId: 'series_skill.fixture.a',
+      groupSkillId: 'group_skill.fixture.a',
       matchMode: 'any',
     },
     memo: null,

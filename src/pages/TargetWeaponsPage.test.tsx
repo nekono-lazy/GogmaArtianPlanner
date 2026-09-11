@@ -11,7 +11,7 @@ function existingTarget(): TargetWeapon {
   return {
     id: 'target-ui' as TargetWeapon['id'], name: '既存Target', weaponTypeId: 'weapon.dual_blades', elementId: 'element.thunder', priority: 3, isEnabled: true,
     idealBonuses: Array.from({ length: 5 }, () => ({ bonusTypeId: 'bonus_type.attack', bonusRankId: 'bonus_rank.ex' })) as TargetWeapon['idealBonuses'],
-    practicalBonusConditions: [], practicalAlternativeGroups: [], idealSkillCondition: { seriesSkillId: null, groupSkillId: null, matchMode: 'all' }, practicalSkillCondition: { seriesSkillId: null, groupSkillId: null, matchMode: 'all' }, memo: null, createdAt: 'created', updatedAt: 'updated',
+    practicalBonusConditions: [], alternativeBonusRules: [], idealSkillCondition: { seriesSkillId: null, groupSkillId: null, matchMode: 'all' }, practicalSkillCondition: { seriesSkillId: null, groupSkillId: null, matchMode: 'all' }, memo: null, createdAt: 'created', updatedAt: 'updated',
   }
 }
 
@@ -22,13 +22,16 @@ describe('TargetWeaponsPage', () => {
     await user.click(await screen.findByRole('button', { name: '目標武器を追加' }))
     expect(screen.getByLabelText('優先度')).toHaveTextContent('3')
     expect(screen.getAllByRole('combobox', { name: /枠[1-5] ボーナス種別/ })).toHaveLength(5)
-    await user.click(screen.getByRole('button', { name: '条件を追加' }))
-    await user.click(screen.getByRole('button', { name: '代替グループを追加' }))
-    expect(screen.getByLabelText('必要個数')).toBeInTheDocument()
-    expect(screen.getByLabelText('グループの必要個数')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '実用条件を追加' }))
+    await user.click(screen.getByRole('button', { name: '代替条件を追加' }))
+    expect(screen.queryByLabelText('必要個数')).not.toBeInTheDocument()
+    expect(screen.getByText('理想での個数: 5')).toBeInTheDocument()
+    expect(screen.getByLabelText('最大置換数')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '実用条件を追加' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '代替条件を追加' })).toBeDisabled()
     await user.type(screen.getByRole('textbox', { name: /名前/ }), '新規Target')
     await user.click(screen.getByRole('button', { name: '保存' }))
-    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ name: '新規Target', priority: 3, isEnabled: true, practicalBonusConditions: expect.any(Array), practicalAlternativeGroups: expect.any(Array) }), null)
+    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ name: '新規Target', priority: 3, isEnabled: true, practicalBonusConditions: expect.any(Array), alternativeBonusRules: expect.any(Array) }), null)
   })
 
   it('shows Japanese Master-backed options without exposing English Domain labels', async () => {

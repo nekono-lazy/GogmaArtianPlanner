@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie'
+import { migrateLegacyTargetCompromise } from './migrateLegacyTargetCompromise'
 import type {
   AppSettings,
   BuildCandidate,
@@ -12,7 +13,7 @@ import type {
 } from '../domain/models/publicTypes'
 
 export const DATABASE_NAME = 'mh-wilds-gogma-artian-planner'
-export const DATABASE_SCHEMA_VERSION = 1
+export const DATABASE_SCHEMA_VERSION = 2
 
 export class AppDatabase extends Dexie {
   rngState!: Table<RngState, 'current'>
@@ -27,7 +28,7 @@ export class AppDatabase extends Dexie {
 
   constructor(name = DATABASE_NAME) {
     super(name)
-    this.version(DATABASE_SCHEMA_VERSION).stores({
+    this.version(1).stores({
       rngState: 'id',
       normalArtianCounters: 'id, [weaponTypeId+rarity], isConfirmed',
       ownedWeapons: 'id, weaponTypeId, elementId, status, isProtected, updatedAt',
@@ -37,6 +38,13 @@ export class AppDatabase extends Dexie {
       productionPlans: 'id, status, createdAt, updatedAt',
       executionHistory: 'id, planId, planStepId, createdAt',
       settings: 'id',
+    })
+    this.version(DATABASE_SCHEMA_VERSION).stores({}).upgrade(async (transaction) => {
+      await transaction.table('targetWeapons').toCollection().modify((target: Record<string, unknown>) => {
+        const migrated = migrateLegacyTargetCompromise(target)
+        delete target.practicalAlternativeGroups
+        Object.assign(target, migrated)
+      })
     })
   }
 }

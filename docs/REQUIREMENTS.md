@@ -264,36 +264,25 @@ Skill Identificationはreference-generated fixtureに加えて、C5-E2C9で独�
 
 ---
 
-## 11. 実用ライン
+## 11. 実用・代替の妥協条件
 
-理想品が遠い場合でも、ゲームで使用できる妥協品を確保できるように実用ラインを設定する。
+理想5枠を唯一の基準とする。詳細は[TARGET_COMPROMISE_SEMANTICS.md](./TARGET_COMPROMISE_SEMANTICS.md)に従う。
+理想・実用・代替のBonus判定はすべてgogma_artian scopeを要求する。通常由来のボーナスを
+同じラベルの巨戟ボーナスとして受理せず、通常作成・巨戟化RouteはReset後の予測で評価する。
 
-実用ラインは「理想には届いていないが妥協して使用できるライン」であり、理想構成は必ず実用ラインを満たす。理想品の集合は実用ラインを満たす候補の集合に含まれる。理想構成が実用ラインを満たさない目標武器定義は不正とする。詳細な不変条件は[DATA_MODEL.md](./DATA_MODEL.md) 8.1に定義する。
+### 11.1 実用ボーナス
 
-### 11.1 通常条件
+種類と種類別個数は理想と完全一致する。指定した種類だけ最低RankとEX最低数を設定し、
+その種類の全枠が最低Rank以上、EX枠数が指定以上であることを要求する。
+必要個数は理想5枠から導出し入力させない。未設定種類はRank multisetも理想と完全一致する。
+Ideal自身がPractical条件を満たさないTargetは保存できない。
 
-条件には次の項目を設定できる。
+### 11.2 代替ボーナス
 
-- ボーナス種類
-- 最低ランク
-- 必要個数
-- そのうちEXを何個以上必要とするか
-
-例: 「攻撃II以上を2個、そのうちEXを1個以上」
-
-### 11.2 OR条件
-
-複数候補のいずれかを満たせばよい条件グループを設定できる。
-
-例: 「属性EXまたは会心EXを合計1枠以上」
-
-初期版では複雑な任意論理式を実装しない。実用ラインは次の構造に限定する。
-
-```text
-すべての通常条件を満たす
-AND
-すべてのOR条件グループを満たす
-```
+元種類ごとに最大置換数と代替先optionsを設定する。1 Candidateでは1 Rule / 1 Optionだけを使用し、
+1枠以上を置換する。最大置換数は必須数ではない。0枠置換はIdeal側で判定する。
+未置換枠は理想のRankを保持し、実用BonusのRank緩和とは併用しない。
+EX最低数は実際に置換された代替枠だけで評価する。複合置換・任意論理式は禁止する。
 
 ---
 
@@ -313,6 +302,9 @@ AND
 - どちらか一方を満たす
 
 指定しない項目を、存在しないスキルとの完全一致として扱わない。
+ただし実用Skillの両項目が未設定ならスキル妥協なしとし、Ideal Skillだけを許可する。
+Ideal Skillを優先し、その不一致時だけ明示された実用Skillを評価する。Bonusとは別軸であり、
+Bonus実用・代替と実用Skillの組み合わせを許可する。
 
 ---
 
@@ -320,10 +312,10 @@ AND
 
 ### 13.1 実用品
 
-次の両方を満たす候補を実用品と判定する。
-
-- 復元ボーナスが実用ラインを満たす
-- スキルが実用ラインを満たす
+BonusがIdeal / Practical / Alternativeのいずれか、SkillがIdeal / Practicalのいずれかを満たし、
+両方Idealではない完成Candidateを category=practical とする。alternativeカテゴリは追加しない。
+Practical Bonus、Alternative Rule、Practical Skillがすべて未設定なら妥協なしであり、
+Idealだけを検索・保持する。Practical horizonは妥協条件があるTargetだけで評価する。
 
 ### 13.2 理想品
 
@@ -361,7 +353,7 @@ AND
 
 - 攻撃III以上からII以上へ下げる
 - EX必須を解除する
-- 必要数を2から1へ減らす
+- EX最低数を2から1へ減らす（種類別個数は理想5枠がauthority）
 
 各案について、適用した場合の最短候補までのおおよその距離を表示する。ユーザーが選択した場合のみ条件を変更し、再検索する。
 
@@ -940,3 +932,9 @@ Practical同士の優劣判定と、それに基づくPlannerからの旧Practic
 同一Route内で新規生成した武器を後続Operationから参照するRoute内武器参照型は将来仕様とし、v1では追加しない。
 
 C5-E2C2で、本書および詳細仕様のProduction Counter Gate契約を「exact persisted Gate不要、operation別active representative使用」へ正式改訂した。C5-E2C3 Active Gate runtime integrationでProduction adapter、Domain Prediction input、Capability、Search、Planner、Trace Replay、semantic Hashを本仕様へ同期し、`PRODUCTION_RNG_ENGINE_VERSION`を `production-rng:c5-e2`へ更新した。`RngState.counterGate`は互換・診断用に保持する。C5-E2C7でIdentification Wizard UIをRNG Setupへ接続し、実Browser Worker benchmarkはC5-E2C8で、Skill live-game verificationはC5-E2C9で完了した（[C5_E2C8_BROWSER_WORKER_BENCHMARK.md](./C5_E2C8_BROWSER_WORKER_BENCHMARK.md) / [C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md](./C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md)）。`supportsSeedSearch = false`を維持したまま、C5-E2C10 Production Identification activationが完了した（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）。
+
+
+Target妥協条件改訂ではDexie schema 2 / ExportRoot schema 2 / CalculationContext appSchemaVersion 6を採用する。旧Targetの妥協条件は推測変換せず解除し再設定を案内する。旧計算artifactは内容を保持してcalculation_context_changedでfail closedとする。詳細はTARGET_COMPROMISE_SEMANTICS.md。
+
+Target妥協条件のversion 6への変更では、旧1..5のBuild List項目を新候補の重複として再利用しない。
+同じ完成結果・経路でも、新計算版を別項目として追加できる。旧snapshotは保持する。

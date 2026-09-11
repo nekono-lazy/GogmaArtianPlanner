@@ -13,11 +13,11 @@ import { ProductionRngEngine, PRODUCTION_RNG_ENGINE_VERSION } from './production
 import { productionRngEngine, productionRngRuntime } from './productionRngRuntime'
 
 describe('Production RNG runtime authority', () => {
-  it('shares calculation schema 5 while retaining only build-result compatibility with schema 2, 3 and 4', () => {
+  it('shares schema 6 and rejects every earlier calculation', () => {
     const master = createValidMasterDataFixture()
     const buildList = createBuildListCalculationContext(master)
     const planner = createPlannerCalculationContext(master, productionRngRuntime.version)
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(5)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(6)
     expect(buildList.appSchemaVersion).toBe(CURRENT_CALCULATION_APP_SCHEMA_VERSION)
     expect(planner).toEqual(buildList)
     expect(isCalculationContextCompatible({ ...buildList, appSchemaVersion: 1 }, planner)).toBe(false)
@@ -25,14 +25,14 @@ describe('Production RNG runtime authority', () => {
       { ...buildList, appSchemaVersion: 1 },
       planner,
     )).toBe(false)
-    const olderPlannerSchemas = [2, 3, 4].map((appSchemaVersion) => ({
+    const olderPlannerSchemas = [2, 3, 4, 5].map((appSchemaVersion) => ({
       ...buildList,
       appSchemaVersion,
     }))
     olderPlannerSchemas.forEach((context) => {
       // A ProductionPlan still requires exact four-field equality.
       expect(isCalculationContextCompatible(context, planner)).toBe(false)
-      expect(isBuildResultCalculationContextCompatible(context, planner)).toBe(true)
+      expect(isBuildResultCalculationContextCompatible(context, planner)).toBe(false)
       expect(isBuildResultCalculationContextCompatible(
         { ...context, rngEngineVersion: 'production-rng:other' },
         planner,

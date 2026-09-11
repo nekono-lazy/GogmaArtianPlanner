@@ -251,25 +251,19 @@ Production Searchはroute-local / operation-local supportを維持し、RngState
 
 ---
 
-B5-F1はCandidate classification / Search calculation semanticsを変更したため、
-`CalculationContext.appSchemaVersion` を1から **2** へ更新した。その後のPlanner physical
-action sharing修正により現行versionは **3** である。
-単一authorityは `src/domain/models/common.ts` の
-`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 3` とし、Search、BuildList、Plannerと
-benchmark入力のruntime creatorで共用する。これはDexieの `DATABASE_SCHEMA_VERSION = 1`
-や `AppSettings.schemaVersion = 1` の変更ではない。gameVersion、Master Data version、
-`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`、`supportsSeedSearch = false` は維持する。
+Target妥協条件の改訂により、現行CalculationContext.appSchemaVersionは **6**。
+単一authorityは src/domain/models/common.ts の CURRENT_CALCULATION_APP_SCHEMA_VERSION。
+Search、BuildList、Planner、benchmark runtime creatorで共用する。
+旧version 1..5のCandidate / BuildListEntry / ProductionPlanはすべて非互換であり、
+calculation_context_changedにより現行計算・実行から除外する。
+旧Candidateのcategoryやsnapshotは再分類・削除せず、現在のTarget条件で再検索する。
 
-version 1の既存BuildCandidate / BuildListEntry / ProductionPlanはversion 2とCalculationContext
-非互換であり、現行計算結果として再利用しない。BuildListEntryは既存のstale再判定で
-`calculation_context_changed` を付け、Planner入力から除外する。旧Candidateのcategoryや
-Snapshotを自動変換せず、削除migrationも追加しない。必要なCandidateは再検索して取得する。
-歴史データの形式検証・Export/Import契約は変更しない。
-
-version 3ではCandidate Search semantics自体は変更しない。したがってversion 2の
-BuildCandidate / BuildListEntryは、他のCalculationContext 3項目が一致する場合に限り
-version 3と明示的に互換であり、再検索やBuildList再追加を必須にしない。この例外は
-ProductionPlanには適用しない。
+歴史的にはB5-F1で1→2、Plannerのみの変更で2→3→4→5と更新した。
+2..5間のCandidate / BuildList互換例外は当時の境界に限り、version 6へは適用しない。
+Targetの永続形状は独立してDexie DATABASE_SCHEMA_VERSIONを1→2へ更新する。
+AppSettings.schemaVersion、gameVersion、Master Data version、RNG Engine version、
+supportsSeedSearchは変更しない。移行・ExportRoot契約はDATA_MODELと
+TARGET_COMPROMISE_SEMANTICSを参照する。
 
 ## 5. 条件判定
 
@@ -295,25 +289,12 @@ category = "ideal"
 
 ## 5.2 実用判定
 
-候補が実用品になる条件。
-
-```text
-finalBonuses がすべての practicalBonusConditions を満たす
-AND
-finalBonuses がすべての practicalAlternativeGroups を満たす
-AND
-候補スキルが target.practicalSkillCondition を満たす
-```
-
-Practical評価も `finalBonusScope` に対応するWeaponBonusDefinitionを使って、実際に保持するBonus Type / Rank / Skillだけを評価する。normal-tierをgogma-tierへ読み替えたり、Target条件を自動緩和したりしない。Bonus条件が空の場合までscopeだけで不合格にせず、定義された条件を通常どおり評価する。
-
-分類。
-
-```ts
-category = "practical"
-```
-
-ただし理想判定を満たす場合は `ideal` を優先する。
+Bonus Match=ideal / practical / alternative、Skill Match=ideal / practicalを独立評価する。
+Bonus / Skill両方Idealならcategory=ideal、それ以外の受理組み合わせはcategory=practical。
+BonusのPracticalとAlternativeは非併用、Skillとの組み合わせは許可する。
+すべてのBonus Matchはgogma_artian scopeを要求する。通常由来scopeは未達であり、Reset探索を継続する。
+詳細はDATA_MODEL 8とTARGET_COMPROMISE_SEMANTICS.md。
+妥協条件なしならIdealだけを受理し、両ID=nullのPractical Skillをwildcardとして扱わない。
 
 ## 5.3 近似判定
 
@@ -342,7 +323,7 @@ isSimilarToIdeal =
 
 - `specifiedIdealSkillCount` は理想条件で指定されたseries / groupの件数
 - `matchedSpecifiedIdealSkillCount` はそのうち一致した件数
-- scope mismatchはIdealDifferenceの新項目やSimilarityの減点にしない。normal scopeでIdealのBonusラベル5/5・Skillが一致しPractical条件も満たす場合、`category = practical`、`similarityScore = 1`、`isSimilarToIdeal = true` になり得る
+- scope mismatchはIdealDifferenceの新項目やSimilarityの減点にしない。ただしnormal scopeはCandidateとして受理しない
 - ideal候補は `isSimilarToIdeal = false` とし、近似フィルタへ重複表示しない
 - UIの「近似」は `category = "practical" AND isSimilarToIdeal = true` を抽出する
 - 実用ラインを満たさない「惜しい候補」は初期版では原則表示しない
@@ -368,7 +349,7 @@ Skill操作がGogma Counterを進めることはなく、Gogma Bonus操作がSki
 
 ```text
 ideal(B, scope, S) = idealBonusMatch(B, scope) AND idealSkillCondition(S)
-practical(B, S) = practicalBonusMatch(B) AND practicalSkillCondition(S)
+accepted(B, scope, S) = bonusMatch(B, scope) != null AND skillMatch(S) != null
 ```
 
 `IdealDifference` も同様に分解できる。
@@ -608,7 +589,7 @@ Planner競合は、5.6.5のPlanner-driven constrained re-searchで必要時に�
 軸外pairの評価は5.6.7のconstrained enumerationだけの拡張であり、本節の初回合成規則を
 変更しない。
 
-category `c` ごとに、その category のBonus述語を満たす解を5.5.3のorderingで並べたものを
+妥協なしではidealのみ、妥協ありではcategory `c` ごとに、その category のBonus述語を満たす解を5.5.3のorderingで並べたものを
 `B(c)`、Skill述語を満たす解を5.5.2のorderingで並べたものを `K(c)` とする。
 `b0` / `k0` は各streamのdeterministic orderingで一意に決まり、
 RouteKindの評価順やPromiseの解決順に依存してはならない。
@@ -895,6 +876,10 @@ Bonus streamの早期終了はB2で実装済みである。
 - Practicalのみ満たす状態から探索を打ち切ると、Ideal候補を失うため打ち切らない
 
 ### 5.6.2 初回Candidate Searchの終了条件
+
+妥協なしTargetはIdeal-only modeとする。Practical Bonus・Alternative Rule・Practical Skillの
+すべてが未設定ならPractical axisを生成せず、Practical horizon評価を要求しない。
+canonical Ideal同順位の確定に必要な探索は維持する。以下のPractical horizon契約は妥協ありTargetだけに適用する。
 
 初回Candidate Searchは、canonical Idealを1件確定し、その操作数 `D` までの
 Practical評価を完了した時点で通常探索を終了する。
@@ -1829,7 +1814,6 @@ export interface RelaxationSuggestion {
   kind:
     | "lower_minimum_rank"
     | "remove_required_ex"
-    | "lower_required_count"
     | "relax_skill_series"
     | "relax_skill_group"
     | "skill_match_all_to_any";
@@ -1839,8 +1823,8 @@ export interface RelaxationSuggestion {
 }
 
 export interface TargetWeaponRelaxationPatch {
-  practicalBonusConditions?: BonusCondition[];
-  practicalAlternativeGroups?: AlternativeBonusConditionGroup[];
+  practicalBonusConditions?: PracticalBonusCondition[];
+  alternativeBonusRules?: AlternativeBonusRule[];
   practicalSkillCondition?: SkillCondition;
 }
 ```
@@ -1849,7 +1833,7 @@ export interface TargetWeaponRelaxationPatch {
 
 - `minimumRank` を1段階下げる
 - `requiredExCount` を1減らす
-- `requiredCount` を1減らす
+- Alternativeの最大置換数をIdeal内の元種類個数の範囲で増やす（型の拡張が必要な将来案）
 - 実用スキルのseries指定を外す
 - 実用スキルのgroup指定を外す
 - `matchMode = "all"` を `"any"` にする
@@ -1998,11 +1982,11 @@ Worker error契約(B6)。
 ## 13.1 Condition Test
 
 - 理想5枠が順不同で一致し、gogma scopeの場合だけBonus Idealになる
-- normal scopeの5/5一致もPractical条件を通常どおり評価し、Similarity 1になり得る
+- normal scopeの5/5一致はBonus Ideal / Practical / Alternativeすべて不一致とし、Candidateにしない
 - normal scopeでもunknown BonusRankを明示的Domain Errorとして返す
 - 実用BonusConditionが正しく判定される
 - RequiredExCountが正しく判定される
-- OR条件グループが正しく判定される
+- Alternativeは1 Rule / 1 Optionだけを使い、未置換枠のIdeal Rankを維持する
 - SkillCondition `all` / `any` が正しく判定される
 - 理想条件が実用条件より優先分類される
 - 理想条件を満たす完成品が実用条件も満たす(Ideal ⇒ Practical 包含不変条件)
@@ -2127,9 +2111,9 @@ Target validation(B7)はIdeal既達成早期終了より先に実装する。
 以下はB7で追加済みの観点であり、13.2.3のIdeal既達成早期終了のうち
 Skill stream側はB1で実装済み、Bonus stream側はB2で実装済みである。
 
-- `idealBonuses` が `practicalBonusConditions` と `practicalAlternativeGroups` をすべて満たす
+- `idealBonuses` が `practicalBonusConditions` をすべて満たす。AlternativeにはIdeal包含を要求せず、元種類・個数・Optionを検証する
 - `idealSkillCondition` を満たす `(seriesSkillId, groupSkillId)` が
-  `practicalSkillCondition` も満たす
+  明示設定された `practicalSkillCondition` も満たす
 - 包含が成立しないTargetWeapon定義を保存できない
 - 包含が成立しない保存済みTargetWeaponはCandidate Searchの対象から
   warning付きで除外される
@@ -2204,3 +2188,15 @@ Skill stream側はB1で実装済み、Bonus stream側はB2で実装済みであ�
 - native `error` / `messageerror` で全pending Searchがrejectされ、listener解除・
   terminate・以降のstartSearch即rejectまで行われる
 - 大量検索でもUIスレッドがブロックされない
+
+
+### 妥協条件version 6の判定理由と監査記録
+
+新規CandidateはconditionMatch（bonus: ideal/practical/alternative、skill: ideal/practical）を保持し、Build List snapshotへそのまま複写する。
+これはTarget定義と完成結果から導出した説明情報であり、Candidate ID / stable key / deduplication key / meaning fingerprint / searchStateHashには追加しない。
+条件の意味はTarget definition hashとCalculationContext version 6で区別する。旧artifactではフィールドを省略でき、推測補完・再分類しない。
+UIは保存された判定理由を「ボーナス判定: 理想 / 実用 / 代替」「スキル判定: 理想 / 実用」と表示する。
+categoryは両軸Idealのときだけideal、それ以外はpracticalであり、代替Bonusを実用Bonusと表示しない。
+
+Productionベンチマークの旧wildcard条件も明示的な理想構成基準へ変更するため、旧versionの測定記録と負荷が異なる。
+過去のBrowser Worker測定値は当時のartifactとして保持する。今回のVitestは意味・不変条件の検証であり、新しいBrowser性能測定の代用ではない。

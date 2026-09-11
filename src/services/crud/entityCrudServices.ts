@@ -128,7 +128,7 @@ export class TargetWeaponCrudService {
       ...domainMessages(validateTargetIdealImpliesPractical(value, this.master)),
     ]
     if (issues.length) throw new EntityFormValidationError(issues)
-    return this.dependencies.put(value)
+    return this.dependencies.put({ ...value, compromiseNeedsReview: false })
   }
 
   async delete(id: TargetWeaponId): Promise<void> {

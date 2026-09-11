@@ -38,11 +38,11 @@ const START_GOGMA_COUNTER = 10
  * position, so the stream-local retention of SEARCH_SPEC 5.5.2 keeps all three
  * Reset depths and a shifted binding is immediately visible.
  */
-const SOURCE_SKILLS = { seriesSkillId: 'series_skill.fixture.s0', groupSkillId: 'group_skill.fixture.g0' }
+const SOURCE_SKILLS = { seriesSkillId: 'series_skill.fixture.s0', groupSkillId: 'group_skill.fixture.a' }
 const RESET_SKILLS = [
-  { seriesSkillId: 'series_skill.fixture.s1', groupSkillId: 'group_skill.fixture.g1' },
-  { seriesSkillId: 'series_skill.fixture.s2', groupSkillId: 'group_skill.fixture.g2' },
-  { seriesSkillId: 'series_skill.fixture.s3', groupSkillId: 'group_skill.fixture.g3' },
+  { seriesSkillId: 'series_skill.fixture.s1', groupSkillId: 'group_skill.fixture.a' },
+  { seriesSkillId: 'series_skill.fixture.s2', groupSkillId: 'group_skill.fixture.a' },
+  { seriesSkillId: 'series_skill.fixture.s3', groupSkillId: 'group_skill.fixture.a' },
 ]
 
 /** Practical but not Ideal, so neither stream terminates early. */
@@ -50,9 +50,9 @@ function resetBonusResult(): RestorationBonusSet {
   return restorationBonusSet(
     restorationBonus('bonus_type.fixture.attack', 'bonus_rank.fixture.high'),
     restorationBonus('bonus_type.fixture.attack', 'bonus_rank.fixture.high'),
-    restorationBonus('bonus_type.fixture.element', 'bonus_rank.fixture.high'),
+    restorationBonus('bonus_type.fixture.element', 'bonus_rank.fixture.middle'),
     restorationBonus('bonus_type.fixture.utility', 'bonus_rank.fixture.low'),
-    restorationBonus('bonus_type.fixture.utility', 'bonus_rank.fixture.low'),
+    restorationBonus('bonus_type.fixture.utility', 'bonus_rank.fixture.middle'),
   )
 }
 
@@ -66,6 +66,8 @@ function createSkillTraceInput(): CandidateSearchInput {
   input.settings.maxSkillAdvance = 3
   input.settings.maxGogmaAdvance = 1
   input.calculationContext.rngEngineVersion = 'fake-fixture:skill-amendment-trace'
+  input.targetWeapons[0].idealSkillCondition = { seriesSkillId: 'series_skill.fixture.ideal', groupSkillId: 'group_skill.fixture.a', matchMode: 'all' }
+  input.targetWeapons[0].practicalSkillCondition = { seriesSkillId: null, groupSkillId: 'group_skill.fixture.a', matchMode: 'all' }
   const source = {
     ...structuredClone(input.ownedWeapons[0] as OwnedGogmaArtianWeapon),
     id: ownedWeaponId('owned.fixture.skill-trace-source'),
@@ -298,6 +300,7 @@ describe('Candidate skill amendment trace across RouteKinds', () => {
     input.routeFilter = 'normal_artian'
     // The conversion assigns `series_skill.fixture.a`, so the Ideal Skill must
     // be something else or the Skill stream stops before any Reset Skills.
+    input.targetWeapons[0].practicalSkillCondition = { seriesSkillId: null, groupSkillId: null, matchMode: 'all' }
     input.targetWeapons[0].idealSkillCondition = {
       seriesSkillId: 'series_skill.fixture.b',
       groupSkillId: null,
@@ -306,6 +309,7 @@ describe('Candidate skill amendment trace across RouteKinds', () => {
     const result = await searchCandidates(
       input,
       createCandidateSearchEngine(input, {
+        resetResult: practicalOnlyBonuses(),
         resetSkillSeriesSkillId: 'series_skill.fixture.b',
       }),
       deterministicExecution,

@@ -23,6 +23,7 @@ import {
   constrainedInput,
   createConstrainedEngine,
   createConstrainedSearchOrigin,
+  practicalBonuses,
 } from '../../../test/fixtures/constrainedEnumeration'
 import { targetWeaponId } from '../../../test/fixtures/domainData'
 
@@ -52,7 +53,7 @@ let candidates: ConstrainedCandidate[] = []
 beforeAll(async () => {
   const result = await enumerateConstrainedCandidates(
     constrainedInput(origin),
-    createConstrainedEngine(origin),
+    createConstrainedEngine(origin, { resetResultAt: () => practicalBonuses() }),
   )
   candidates = result.candidates
   expect(candidates.length).toBeGreaterThan(1)
@@ -158,6 +159,8 @@ describe('constrained Candidate materialization', () => {
           ? 'normal_artian'
           : 'gogma_artian',
     }
+    // Historical snapshots may omit match metadata; scope remains semantic for their identity.
+    delete flipped.conditionMatch
     const first = materializer.materializeCandidate(source)
     const second = materializer.materializeCandidate(flipped)
 

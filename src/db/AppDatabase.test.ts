@@ -31,7 +31,7 @@ describe('AppDatabase schema', () => {
     database.close()
   })
 
-  it('keeps schema version 1 and exposes tables with formal Domain types', () => {
+  it('uses schema version 2 and exposes tables with formal Domain types', () => {
     const database = new AppDatabase('schema-domain-types-test')
     const rngState: Table<RngState, 'current'> = database.rngState
     const normalCounters: Table<NormalArtianCounter, string> =
@@ -54,8 +54,8 @@ describe('AppDatabase schema', () => {
       history,
       settings,
     ]
-    expect(DATABASE_SCHEMA_VERSION).toBe(1)
-    expect(database.verno).toBe(1)
+    expect(DATABASE_SCHEMA_VERSION).toBe(2)
+    expect(database.verno).toBe(2)
     expect(typedTables).toHaveLength(9)
     database.close()
   })

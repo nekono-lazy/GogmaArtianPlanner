@@ -32,7 +32,9 @@ const high = 'bonus_rank.fixture.high'
 const special = 'bonus_rank.fixture.special'
 
 function validTarget(): TargetWeapon {
-  return createValidTargetWeapon()
+  const target = createValidTargetWeapon()
+  target.alternativeBonusRules[0].options.push({ alternativeBonusTypeId: critical, minimumRankId: low, requiredExCount: 0 })
+  return target
 }
 
 function practicalOnlyBonuses(): RestorationBonusSet {
@@ -46,7 +48,7 @@ function practicalOnlyBonuses(): RestorationBonusSet {
 }
 
 describe('Target candidate classification', () => {
-  it('keeps a normal-scope exact-label result Practical with full similarity', () => {
+  it('rejects a normal-scope exact-label result despite full similarity', () => {
     const target = validTarget()
     expect(satisfiesIdealBonuses(target, target.idealBonuses, 'normal_artian', targetEvaluationMaster)).toBe(false)
     expect(satisfiesIdealTarget(target, target.idealBonuses, 'normal_artian', 'series_skill.fixture.a', null, targetEvaluationMaster)).toBe(false)
@@ -55,10 +57,10 @@ describe('Target candidate classification', () => {
       'series_skill.fixture.a', null, targetEvaluationMaster, 0.6,
     )
     expect(result).toMatchObject({
-      category: 'practical',
+      category: null,
       idealDifference: { matchedBonusCount: 5, seriesSkillMatches: true, groupSkillMatches: true },
       similarityScore: 1,
-      isSimilarToIdeal: true,
+      isSimilarToIdeal: false,
     })
   })
 
@@ -130,10 +132,10 @@ describe('Target candidate classification', () => {
         practicalOnlyBonuses(),
         scope,
         null,
-        null,
+        'group_skill.fixture.a',
         targetEvaluationMaster,
       ),
-    ).toBe('practical')
+    ).toBe(scope === 'gogma_artian' ? 'practical' : null)
   })
 
   it('gives Ideal precedence when both Ideal and Practical match', () => {
@@ -342,7 +344,7 @@ describe('evaluateTargetCandidate integration', () => {
       practicalOnlyBonuses(),
       'gogma_artian',
       null,
-      null,
+      'group_skill.fixture.a',
       targetEvaluationMaster,
       0.6,
     )

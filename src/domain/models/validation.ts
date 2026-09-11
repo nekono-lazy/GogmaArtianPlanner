@@ -11,8 +11,8 @@ import type {
 } from './common'
 import { V1_NORMAL_ARTIAN_RARITY } from './common'
 import type {
-  AlternativeBonusConditionGroup,
-  BonusCondition,
+  AlternativeBonusRule,
+  PracticalBonusCondition,
   BuildCandidate,
   BuildListEntry,
   BuildRoute,
@@ -334,60 +334,41 @@ export function validateOwnedWeapon(
 }
 
 function validateBonusCondition(
-  condition: BonusCondition,
-  path: string,
-  issues: DomainValidationIssue[],
+  condition: PracticalBonusCondition, count: number, path: string, issues: DomainValidationIssue[],
 ) {
-  validateId(condition.id, `${path}.id`, issues)
-  validateId(condition.bonusTypeId, `${path}.bonusTypeId`, issues)
-  validateId(condition.minimumRankId, `${path}.minimumRankId`, issues)
-  if (!Number.isInteger(condition.requiredCount) || condition.requiredCount < 1 || condition.requiredCount > 5) {
-    addIssue(
-      issues,
-      `${path}.requiredCount`,
-      'invalid_range',
-      'requiredCount must be an integer from 1 through 5.',
-    )
+  validateId(condition.id, path + '.id', issues)
+  validateId(condition.bonusTypeId, path + '.bonusTypeId', issues)
+  validateId(condition.minimumRankId, path + '.minimumRankId', issues)
+  if (!Number.isInteger(condition.requiredExCount) || condition.requiredExCount < 0 || condition.requiredExCount > count) {
+    addIssue(issues, path + '.requiredExCount', 'invalid_range', 'EX最低数は0以上、理想内の同種類の個数以下の整数にしてください。')
   }
-  if (
-    !Number.isInteger(condition.requiredExCount) ||
-    condition.requiredExCount < 0 ||
-    condition.requiredExCount > condition.requiredCount
-  ) {
-    addIssue(
-      issues,
-      `${path}.requiredExCount`,
-      'invalid_range',
-      'requiredExCount must be between 0 and requiredCount.',
-    )
-  }
+  if ('requiredCount' in condition) addIssue(issues, path, 'invalid_structure', '旧実用条件は再設定が必要です。')
 }
 
-function validateAlternativeGroup(
-  group: AlternativeBonusConditionGroup,
-  path: string,
-  issues: DomainValidationIssue[],
+function validateAlternativeRule(
+  rule: AlternativeBonusRule, count: number, path: string, issues: DomainValidationIssue[],
 ) {
-  validateId(group.id, `${path}.id`, issues)
-  if (!Number.isInteger(group.requiredCount) || group.requiredCount < 1 || group.requiredCount > 5) {
-    addIssue(
-      issues,
-      `${path}.requiredCount`,
-      'invalid_range',
-      'Alternative group requiredCount must be an integer from 1 through 5.',
-    )
+  validateId(rule.id, path + '.id', issues)
+  validateId(rule.sourceBonusTypeId, path + '.sourceBonusTypeId', issues)
+  if (!Number.isInteger(rule.maxReplacementCount) || rule.maxReplacementCount < 1 || rule.maxReplacementCount > count) {
+    addIssue(issues, path + '.maxReplacementCount', 'invalid_range', '最大置換数は1以上、理想内の元種類の個数以下の整数にしてください。')
   }
-  if (!Array.isArray(group.options) || group.options.length < 1) {
-    addIssue(
-      issues,
-      `${path}.options`,
-      'invalid_structure',
-      'Alternative group requires at least one option.',
-    )
+  if (!Array.isArray(rule.options) || rule.options.length === 0) {
+    addIssue(issues, path + '.options', 'invalid_structure', '代替候補を1件以上設定してください。')
+    return
   }
-  group.options.forEach((option, index) => {
-    validateId(option.bonusTypeId, `${path}.options[${index}].bonusTypeId`, issues)
-    validateId(option.minimumRankId, `${path}.options[${index}].minimumRankId`, issues)
+  const seen = new Set<string>()
+  rule.options.forEach((option, index) => {
+    const optionPath = path + '.options[' + index + ']'
+    validateId(option.alternativeBonusTypeId, optionPath + '.alternativeBonusTypeId', issues)
+    validateId(option.minimumRankId, optionPath + '.minimumRankId', issues)
+    if (option.alternativeBonusTypeId === rule.sourceBonusTypeId || seen.has(option.alternativeBonusTypeId)) {
+      addIssue(issues, optionPath, 'invalid_structure', '代替先は元と異なる種類を重複なく設定してください。')
+    }
+    seen.add(option.alternativeBonusTypeId)
+    if (!Number.isInteger(option.requiredExCount) || option.requiredExCount < 0 || option.requiredExCount > rule.maxReplacementCount) {
+      addIssue(issues, optionPath + '.requiredExCount', 'invalid_range', 'EX最低数は0以上、最大置換数以下の整数にしてください。')
+    }
   })
 }
 
@@ -418,12 +399,27 @@ export function validateTargetWeapon(
     addIssue(issues, 'priority', 'invalid_range', 'Target priority must be 1 through 5.')
   }
   appendIssues(issues, 'idealBonuses', validateRestorationBonusSet(target.idealBonuses))
-  target.practicalBonusConditions.forEach((condition, index) =>
-    validateBonusCondition(condition, `practicalBonusConditions[${index}]`, issues),
-  )
-  target.practicalAlternativeGroups.forEach((group, index) =>
-    validateAlternativeGroup(group, `practicalAlternativeGroups[${index}]`, issues),
-  )
+  if (!Array.isArray(target.practicalBonusConditions) || !Array.isArray(target.alternativeBonusRules) || 'practicalAlternativeGroups' in target) {
+    addIssue(issues, 'alternativeBonusRules', 'invalid_structure', '旧条件または不正な妥協条件です。移行・再設定が必要です。')
+    return result(issues)
+  }
+  const idealCount = (type: string) => target.idealBonuses.filter((bonus) => bonus.bonusTypeId === type).length
+  const practicalTypes = new Set<string>()
+  target.practicalBonusConditions.forEach((condition, index) => {
+    const path = 'practicalBonusConditions[' + index + ']'
+    const count = idealCount(condition.bonusTypeId)
+    if (count === 0 || practicalTypes.has(condition.bonusTypeId)) addIssue(issues, path, 'invalid_structure', '理想に含まれる種類を重複なく設定してください。')
+    practicalTypes.add(condition.bonusTypeId)
+    validateBonusCondition(condition, count, path, issues)
+  })
+  const sources = new Set<string>()
+  target.alternativeBonusRules.forEach((rule, index) => {
+    const path = 'alternativeBonusRules[' + index + ']'
+    const count = idealCount(rule.sourceBonusTypeId)
+    if (count === 0 || sources.has(rule.sourceBonusTypeId)) addIssue(issues, path, 'invalid_structure', '元ボーナスは理想に含まれる種類を重複なく設定してください。')
+    sources.add(rule.sourceBonusTypeId)
+    validateAlternativeRule(rule, count, path, issues)
+  })
   validateSkillCondition(target.idealSkillCondition, 'idealSkillCondition', issues)
   validateSkillCondition(target.practicalSkillCondition, 'practicalSkillCondition', issues)
   return result(issues)
@@ -1044,6 +1040,13 @@ export function validateBuildCandidate(
   validateId(candidate.targetWeaponId, 'targetWeaponId', issues)
   if (!['ideal', 'practical'].includes(candidate.category)) {
     addIssue(issues, 'category', 'invalid_literal', 'Candidate category is invalid.')
+  }
+  if (candidate.conditionMatch !== undefined) {
+    const match = candidate.conditionMatch
+    if (!['ideal', 'practical', 'alternative'].includes(match.bonus) || !['ideal', 'practical'].includes(match.skill) ||
+      (candidate.category === 'ideal') !== (match.bonus === 'ideal' && match.skill === 'ideal') || candidate.restorationBonusScope !== 'gogma_artian') {
+      addIssue(issues, 'conditionMatch', 'invalid_structure', 'Candidate condition match must agree with category and Gogma scope.')
+    }
   }
   appendIssues(issues, 'finalBonuses', validateRestorationBonusSet(candidate.finalBonuses))
   validateRestorationBonusScope(candidate.restorationBonusScope, 'restorationBonusScope', issues)

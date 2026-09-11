@@ -10,6 +10,8 @@ export interface TargetEvaluationMasterSubset {
 
 export interface TargetEvaluationResult {
   category: CandidateCategory | null
+  bonusMatch: 'ideal' | 'practical' | 'alternative' | null
+  skillMatch: 'ideal' | 'practical' | null
   idealDifference: IdealDifference
   similarityScore: number
   isSimilarToIdeal: boolean

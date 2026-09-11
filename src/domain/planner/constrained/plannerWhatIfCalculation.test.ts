@@ -163,11 +163,10 @@ function uniformTarget(
         id: `condition.whatif.${bonusTypeId}`,
         bonusTypeId,
         minimumRankId: 'bonus_rank.fixture.high',
-        requiredCount: 5,
         requiredExCount: 0,
       },
     ],
-    practicalAlternativeGroups: [],
+    alternativeBonusRules: [],
   })
 }
 
@@ -188,14 +187,12 @@ function gogmaConflictTarget(id: string): TargetWeapon {
         id: 'condition.whatif.gogma.attack',
         bonusTypeId: 'bonus_type.fixture.attack',
         minimumRankId: 'bonus_rank.fixture.high',
-        requiredCount: 2,
         requiredExCount: 0,
       },
       {
         id: 'condition.whatif.gogma.sharpness',
         bonusTypeId: 'bonus_type.fixture.sharpness',
         minimumRankId: 'bonus_rank.fixture.high',
-        requiredCount: 1,
         requiredExCount: 0,
       },
     ],

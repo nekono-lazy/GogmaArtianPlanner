@@ -1,12 +1,11 @@
+import { benchmarkPracticalBonuses, benchmarkPracticalSkills } from './targetCompromiseFixture'
 import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../domain/models/publicTypes'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import type {
-  BonusCondition,
   CalculationContext,
   NormalArtianCounter,
   OwnedGogmaArtianWeapon,
   OwnedWeaponId,
-  RestorationBonus,
   RestorationBonusSet,
   RngState,
   SkillCondition,
@@ -59,10 +58,6 @@ const OWNED_GOGMA_SOURCE_SKILL_COUNTER =
  * `REFERENCE_GOGMA_RESET_CANDIDATES`, and every Normal Artian slot is
  * `bonus_rank.base`, so no Reset or Keep result can contain it.
  */
-const UNREACHABLE_BONUS: RestorationBonus = {
-  bonusTypeId: 'bonus_type.attack',
-  bonusRankId: 'bonus_rank.i',
-}
 
 /**
  * Enabled in the Group Skill Master but deliberately absent from
@@ -331,22 +326,6 @@ function benchmarkNormalCounter(): NormalArtianCounter {
   }
 }
 
-const practicalBonusConditions: readonly BonusCondition[] = [
-  {
-    id: 'condition.benchmark.attack',
-    bonusTypeId: 'bonus_type.attack',
-    minimumRankId: 'bonus_rank.base',
-    requiredCount: 1,
-    requiredExCount: 0,
-  },
-]
-
-const practicalSkillCondition: SkillCondition = {
-  seriesSkillId: null,
-  groupSkillId: null,
-  matchMode: 'any',
-}
-
 /**
  * `convert_normal_to_gogma` assigns the Skill read at the pre-conversion Skill
  * Counter, and Reset Skills depth `k` on an existing Gogma source reads
@@ -429,13 +408,7 @@ function resolveIdeal(
 ): IdealResolution {
   const bonuses: RestorationBonusSet =
     ideal.bonuses.kind === 'unreachable'
-      ? [
-          { ...UNREACHABLE_BONUS },
-          { ...UNREACHABLE_BONUS },
-          { ...UNREACHABLE_BONUS },
-          { ...UNREACHABLE_BONUS },
-          { ...UNREACHABLE_BONUS },
-        ]
+      ? resetBonusesAtDepth(1, master, engine).map((bonus) => ({ ...bonus, bonusRankId: 'bonus_rank.i' })) as RestorationBonusSet
       : ideal.bonuses.kind === 'owned_gogma_current'
         ? ownedGogmaSource(master, engine).restorationBonuses
         : resetBonusesAtDepth(ideal.bonuses.depth, master, engine)
@@ -443,7 +416,7 @@ function resolveIdeal(
   const skills: SkillCondition =
     ideal.skills.kind === 'unreachable'
       ? {
-          seriesSkillId: null,
+          seriesSkillId: skillsAtCounter(CANDIDATE_SEARCH_BENCHMARK_SKILL_COUNTER, master, engine).seriesSkillId,
           groupSkillId: UNREACHABLE_GROUP_SKILL_ID,
           matchMode: 'all',
         }
@@ -484,12 +457,10 @@ export function createCandidateSearchBenchmarkInput(
     priority: 3,
     isEnabled: true,
     idealBonuses: ideal.bonuses,
-    practicalBonusConditions: practicalBonusConditions.map((condition) => ({
-      ...condition,
-    })),
-    practicalAlternativeGroups: [],
+    practicalBonusConditions: benchmarkPracticalBonuses(ideal.bonuses),
+    alternativeBonusRules: [],
     idealSkillCondition: { ...ideal.skills },
-    practicalSkillCondition: { ...practicalSkillCondition },
+    practicalSkillCondition: { ...benchmarkPracticalSkills(ideal.skills), groupSkillId: skillsAtCounter(CANDIDATE_SEARCH_BENCHMARK_SKILL_COUNTER, master, engine).groupSkillId, matchMode: 'any' },
     memo: null,
     createdAt: FIXTURE_TIME,
     updatedAt: FIXTURE_TIME,

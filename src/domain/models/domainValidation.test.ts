@@ -190,15 +190,15 @@ describe('TargetWeapon rules', () => {
 
   it('rejects invalid BonusCondition ranges', () => {
     const target = createValidTargetWeapon()
-    target.practicalBonusConditions[0].requiredCount = 0
-    target.practicalBonusConditions[0].requiredExCount = 2
+    target.practicalBonusConditions[0].requiredExCount = -1
+    target.practicalBonusConditions[0].requiredExCount = 3
     expect(validateTargetWeapon(target).isValid).toBe(false)
   })
 
   it('rejects invalid AlternativeGroup ranges and empty options', () => {
     const target = createValidTargetWeapon()
-    target.practicalAlternativeGroups[0].requiredCount = 6
-    target.practicalAlternativeGroups[0].options = []
+    target.alternativeBonusRules[0].maxReplacementCount = 6
+    target.alternativeBonusRules[0].options = []
     expect(validateTargetWeapon(target).isValid).toBe(false)
   })
 

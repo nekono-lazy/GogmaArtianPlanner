@@ -109,7 +109,9 @@ export function constrainedMaster() {
 }
 
 export function constrainedTarget(): TargetWeapon {
-  return createValidTargetWeapon()
+  const target = createValidTargetWeapon()
+  target.alternativeBonusRules.push({ id: 'constrained.utility', sourceBonusTypeId: 'bonus_type.fixture.utility', maxReplacementCount: 1, options: [{ alternativeBonusTypeId: 'bonus_type.fixture.sharpness', minimumRankId: 'bonus_rank.fixture.low', requiredExCount: 0 }] })
+  return target
 }
 
 export function gogmaWeapon(
@@ -125,7 +127,7 @@ export function gogmaWeapon(
     restorationBonuses: practicalBonuses(),
     restorationBonusScope: 'gogma_artian',
     seriesSkillId: 'series_skill.fixture.z',
-    groupSkillId: null,
+    groupSkillId: 'group_skill.fixture.a',
     status: 'material',
     isProtected: false,
     relatedTargetWeaponIds: [targetWeaponId('target.fixture.a')],
@@ -169,24 +171,13 @@ export function normalWeapon(
  * different completed multiset. Used to build a long Bonus axis.
  */
 export function practicalVariant(index: number): RestorationBonusSet {
-  const fillers = [
-    restorationBonus('bonus_type.fixture.utility', 'bonus_rank.fixture.low'),
-    restorationBonus('bonus_type.fixture.utility', 'bonus_rank.fixture.middle'),
-    restorationBonus('bonus_type.fixture.utility', 'bonus_rank.fixture.high'),
-    restorationBonus('bonus_type.fixture.sharpness', 'bonus_rank.fixture.low'),
-    restorationBonus('bonus_type.fixture.sharpness', 'bonus_rank.fixture.middle'),
-    restorationBonus('bonus_type.fixture.sharpness', 'bonus_rank.fixture.high'),
-    restorationBonus('bonus_type.fixture.element', 'bonus_rank.fixture.low'),
-    restorationBonus('bonus_type.fixture.element', 'bonus_rank.fixture.high'),
-  ]
-  const fourth = fillers[index % fillers.length]
-  const fifth = fillers[Math.floor(index / fillers.length) % fillers.length]
+  const ranks = ['bonus_rank.fixture.low', 'bonus_rank.fixture.middle', 'bonus_rank.fixture.high', 'bonus_rank.fixture.special']
   return restorationBonusSet(
     restorationBonus('bonus_type.fixture.attack', 'bonus_rank.fixture.high'),
-    restorationBonus('bonus_type.fixture.attack', 'bonus_rank.fixture.high'),
-    restorationBonus('bonus_type.fixture.element', 'bonus_rank.fixture.middle'),
-    fourth,
-    fifth,
+    restorationBonus('bonus_type.fixture.attack', index < 48 ? 'bonus_rank.fixture.high' : 'bonus_rank.fixture.special'),
+    restorationBonus('bonus_type.fixture.element', ranks[1 + Math.floor(index / 16) % 3]),
+    restorationBonus('bonus_type.fixture.utility', ranks[index % 4]),
+    restorationBonus('bonus_type.fixture.sharpness', ranks[Math.floor(index / 4) % 4]),
   )
 }
 
@@ -332,7 +323,7 @@ export function createConstrainedEngine(
     options.skillResultAt ??
     ((skillCounter: number) => ({
       seriesSkillId: `series_skill.fixture.s${skillCounter}`,
-      groupSkillId: null,
+      groupSkillId: 'group_skill.fixture.a',
     }))
   const resetResultAt = options.resetResultAt ?? (() => belowPracticalBonuses())
   const keepResultAt = options.keepResultAt ?? (() => belowPracticalBonuses())

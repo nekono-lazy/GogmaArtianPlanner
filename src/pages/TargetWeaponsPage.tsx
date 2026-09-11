@@ -20,14 +20,14 @@ import {
 } from '@mui/material'
 import { PageShell } from '../components/PageShell'
 import { BonusSetEditor } from '../components/forms/BonusSetEditor'
+import { TargetCompromiseEditor } from '../components/forms/TargetCompromiseEditor'
+import { hasTargetCompromise } from '../domain/target'
 import { SkillConditionEditor } from '../components/forms/SkillConditionEditor'
 import { MasterDataStatusAlert } from '../components/MasterDataStatusAlert'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import {
-  getBonusDefinitionsForWeapon,
   getEnabledElements,
   getEnabledWeaponTypes,
-  getRanksForBonusType,
 } from '../domain/master/masterSelectors'
 import {
   createDefaultBonusSet,
@@ -35,8 +35,6 @@ import {
   MasterOptionsUnavailableError,
 } from '../domain/forms/entityDrafts'
 import type {
-  AlternativeBonusConditionGroup,
-  BonusCondition,
   TargetWeapon,
 } from '../domain/models/publicTypes'
 import {
@@ -53,10 +51,6 @@ export interface TargetWeaponsPageDependencies {
   getAll(): Promise<TargetWeapon[]>
   save(draft: TargetWeaponDraft, existing: TargetWeapon | null): Promise<TargetWeapon>
   delete(id: TargetWeapon['id']): Promise<void>
-}
-
-function randomItemId() {
-  return globalThis.crypto.randomUUID()
 }
 
 function deleteReferenceMessage(error: ReferencedEntityDeleteError) {
@@ -134,18 +128,6 @@ export function TargetWeaponsPage({
   const master = masterResult.data
   const weaponTypes = getEnabledWeaponTypes(master)
   const elements = getEnabledElements(master)
-  const definitions = draft
-    ? getBonusDefinitionsForWeapon(
-        master,
-        draft.weaponTypeId,
-        draft.elementId,
-        'gogma_artian',
-      )
-    : []
-  const bonusTypeIds = [
-    ...new Set(definitions.map(({ bonusTypeId }) => bonusTypeId)),
-  ]
-
   const openNew = () => {
     try {
       setEditing(null)
@@ -228,49 +210,9 @@ export function TargetWeaponsPage({
       'gogma_artian',
     ),
     practicalBonusConditions: [],
-    practicalAlternativeGroups: [],
+    alternativeBonusRules: [],
   })
 
-  const firstChoice = () => {
-    const definition = definitions[0]
-    if (!definition) {
-      throw new MasterOptionsUnavailableError(
-        '復元ボーナスのマスターデータが利用できません。',
-      )
-    }
-    return {
-      bonusTypeId: definition.bonusTypeId,
-      minimumRankId: definition.bonusRankId,
-    }
-  }
-
-  const updateCondition = (index: number, condition: BonusCondition) => {
-    if (!draft) return
-    const next = [...draft.practicalBonusConditions]
-    next[index] = condition
-    setDraft({ ...draft, practicalBonusConditions: next })
-  }
-
-  const updateGroup = (
-    index: number,
-    group: AlternativeBonusConditionGroup,
-  ) => {
-    if (!draft) return
-    const next = [...draft.practicalAlternativeGroups]
-    next[index] = group
-    setDraft({ ...draft, practicalAlternativeGroups: next })
-  }
-
-  const ranksFor = (bonusTypeId: string) =>
-    draft
-      ? getRanksForBonusType(
-          master,
-          draft.weaponTypeId,
-          draft.elementId,
-          bonusTypeId,
-          'gogma_artian',
-        )
-      : []
 
   return (
     <PageShell
@@ -306,9 +248,11 @@ export function TargetWeaponsPage({
                 {target.isEnabled ? '有効' : '無効'}
               </Typography>
               <Typography variant="body2">理想: 5枠設定済み</Typography>
+              {!hasTargetCompromise(target) && <Typography>妥協なし（理想のみ検索）</Typography>}
+              {target.compromiseNeedsReview && <Alert severity="info">条件の仕様変更により旧妥協条件を解除しました。理想条件を保持しています。実用・代替・実用スキルを確認して再設定してください。</Alert>}
               <Typography variant="body2">
-                実用: 条件 {target.practicalBonusConditions.length}件、代替グループ{' '}
-                {target.practicalAlternativeGroups.length}件
+                実用: 条件 {target.practicalBonusConditions.length}件、代替条件{' '}
+                {target.alternativeBonusRules.length}件
               </Typography>
               <Stack direction="row">
                 <Button onClick={() => openEdit(target)}>編集</Button>
@@ -450,295 +394,8 @@ export function TargetWeaponsPage({
                     setDraft({ ...draft, idealBonuses })
                   }
                 />
-                <Stack spacing={1}>
-                  <Typography variant="h3">実用ボーナス条件</Typography>
-                  {draft.practicalBonusConditions.map((condition, index) => (
-                    <Paper key={condition.id} variant="outlined" sx={{ p: 2 }}>
-                      <Stack spacing={1}>
-                        <FormControl>
-                          <InputLabel id={`condition-${index}-type`}>
-                            ボーナス種別
-                          </InputLabel>
-                          <Select
-                            labelId={`condition-${index}-type`}
-                            label="ボーナス種別"
-                            value={condition.bonusTypeId}
-                            onChange={(event) => {
-                              const ranks = ranksFor(event.target.value)
-                              updateCondition(index, {
-                                ...condition,
-                                bonusTypeId: event.target.value,
-                                minimumRankId: ranks[0]?.id ?? '',
-                              })
-                            }}
-                          >
-                            {bonusTypeIds.map((id) => (
-                              <MenuItem key={id} value={id}>
-                                {
-                                  master.bonusTypes.find(
-                                    (type) => type.id === id,
-                                  )?.displayNameJa
-                                }
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                        <FormControl>
-                          <InputLabel id={`condition-${index}-rank`}>
-                            最低ランク
-                          </InputLabel>
-                          <Select
-                            labelId={`condition-${index}-rank`}
-                            label="最低ランク"
-                            value={condition.minimumRankId}
-                            onChange={(event) =>
-                              updateCondition(index, {
-                                ...condition,
-                                minimumRankId: event.target.value,
-                              })
-                            }
-                          >
-                            {ranksFor(condition.bonusTypeId).map((rank) => (
-                              <MenuItem key={rank.id} value={rank.id}>
-                                {rank.displayNameJa}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                        <TextField
-                          label="必要個数"
-                          type="number"
-                          value={condition.requiredCount}
-                          slotProps={{ htmlInput: { min: 1, max: 5 } }}
-                          onChange={(event) =>
-                            updateCondition(index, {
-                              ...condition,
-                              requiredCount: Number(event.target.value),
-                            })
-                          }
-                        />
-                        <TextField
-                          label="必要EX個数"
-                          type="number"
-                          value={condition.requiredExCount}
-                          slotProps={{
-                            htmlInput: {
-                              min: 0,
-                              max: condition.requiredCount,
-                            },
-                          }}
-                          onChange={(event) =>
-                            updateCondition(index, {
-                              ...condition,
-                              requiredExCount: Number(event.target.value),
-                            })
-                          }
-                        />
-                        <Button
-                          color="error"
-                          onClick={() =>
-                            setDraft({
-                              ...draft,
-                              practicalBonusConditions:
-                                draft.practicalBonusConditions.filter(
-                                  (_, itemIndex) => itemIndex !== index,
-                                ),
-                            })
-                          }
-                        >
-                          条件を削除
-                        </Button>
-                      </Stack>
-                    </Paper>
-                  ))}
-                  <Button
-                    onClick={() => {
-                      try {
-                        setDraft({
-                          ...draft,
-                          practicalBonusConditions: [
-                            ...draft.practicalBonusConditions,
-                            {
-                              id: randomItemId(),
-                              ...firstChoice(),
-                              requiredCount: 1,
-                              requiredExCount: 0,
-                            },
-                          ],
-                        })
-                      } catch (caught) {
-                        if (caught instanceof Error) setError(caught.message)
-                      }
-                    }}
-                  >
-                    条件を追加
-                  </Button>
-                </Stack>
-                <Stack spacing={1}>
-                  <Typography variant="h3">代替ボーナスグループ</Typography>
-                  {draft.practicalAlternativeGroups.map(
-                    (group, groupIndex) => (
-                      <Paper
-                        key={group.id}
-                        variant="outlined"
-                        sx={{ p: 2 }}
-                      >
-                        <Stack spacing={1}>
-                          <Typography>次のいずれかを合計</Typography>
-                          <TextField
-                            label="グループの必要個数"
-                            type="number"
-                            value={group.requiredCount}
-                            slotProps={{ htmlInput: { min: 1, max: 5 } }}
-                            onChange={(event) =>
-                              updateGroup(groupIndex, {
-                                ...group,
-                                requiredCount: Number(event.target.value),
-                              })
-                            }
-                          />
-                          {group.options.map((option, optionIndex) => (
-                            <Stack
-                              key={optionIndex}
-                              direction={{ xs: 'column', sm: 'row' }}
-                              spacing={1}
-                            >
-                              <FormControl fullWidth>
-                                <InputLabel
-                                  id={`group-${groupIndex}-option-${optionIndex}-type`}
-                                >
-                                  選択肢のボーナス種別
-                                </InputLabel>
-                                <Select
-                                  labelId={`group-${groupIndex}-option-${optionIndex}-type`}
-                                  label="選択肢のボーナス種別"
-                                  value={option.bonusTypeId}
-                                  onChange={(event) => {
-                                    const nextOptions = [...group.options]
-                                    nextOptions[optionIndex] = {
-                                      bonusTypeId: event.target.value,
-                                      minimumRankId:
-                                        ranksFor(event.target.value)[0]?.id ??
-                                        '',
-                                    }
-                                    updateGroup(groupIndex, {
-                                      ...group,
-                                      options: nextOptions,
-                                    })
-                                  }}
-                                >
-                                  {bonusTypeIds.map((id) => (
-                                    <MenuItem key={id} value={id}>
-                                      {
-                                        master.bonusTypes.find(
-                                          (type) => type.id === id,
-                                        )?.displayNameJa
-                                      }
-                                    </MenuItem>
-                                  ))}
-                                </Select>
-                              </FormControl>
-                              <FormControl fullWidth>
-                                <InputLabel
-                                  id={`group-${groupIndex}-option-${optionIndex}-rank`}
-                                >
-                                  選択肢の最低ランク
-                                </InputLabel>
-                                <Select
-                                  labelId={`group-${groupIndex}-option-${optionIndex}-rank`}
-                                  label="選択肢の最低ランク"
-                                  value={option.minimumRankId}
-                                  onChange={(event) => {
-                                    const nextOptions = [...group.options]
-                                    nextOptions[optionIndex] = {
-                                      ...option,
-                                      minimumRankId: event.target.value,
-                                    }
-                                    updateGroup(groupIndex, {
-                                      ...group,
-                                      options: nextOptions,
-                                    })
-                                  }}
-                                >
-                                  {ranksFor(option.bonusTypeId).map((rank) => (
-                                    <MenuItem key={rank.id} value={rank.id}>
-                                      {rank.displayNameJa}
-                                    </MenuItem>
-                                  ))}
-                                </Select>
-                              </FormControl>
-                              <Button
-                                color="error"
-                                disabled={group.options.length === 1}
-                                onClick={() =>
-                                  updateGroup(groupIndex, {
-                                    ...group,
-                                    options: group.options.filter(
-                                      (_, index) => index !== optionIndex,
-                                    ),
-                                  })
-                                }
-                              >
-                                選択肢を削除
-                              </Button>
-                            </Stack>
-                          ))}
-                          <Button
-                            onClick={() => {
-                              try {
-                                updateGroup(groupIndex, {
-                                  ...group,
-                                  options: [...group.options, firstChoice()],
-                                })
-                              } catch (caught) {
-                                if (caught instanceof Error) {
-                                  setError(caught.message)
-                                }
-                              }
-                            }}
-                          >
-                            選択肢を追加
-                          </Button>
-                          <Button
-                            color="error"
-                            onClick={() =>
-                              setDraft({
-                                ...draft,
-                                practicalAlternativeGroups:
-                                  draft.practicalAlternativeGroups.filter(
-                                    (_, index) => index !== groupIndex,
-                                  ),
-                              })
-                            }
-                          >
-                            グループを削除
-                          </Button>
-                        </Stack>
-                      </Paper>
-                    ),
-                  )}
-                  <Button
-                    onClick={() => {
-                      try {
-                        setDraft({
-                          ...draft,
-                          practicalAlternativeGroups: [
-                            ...draft.practicalAlternativeGroups,
-                            {
-                              id: randomItemId(),
-                              requiredCount: 1,
-                              options: [firstChoice()],
-                            },
-                          ],
-                        })
-                      } catch (caught) {
-                        if (caught instanceof Error) setError(caught.message)
-                      }
-                    }}
-                  >
-                    代替グループを追加
-                  </Button>
-                </Stack>
+                <TargetCompromiseEditor target={draft} master={master} onChange={(conditions) => setDraft({ ...draft, ...conditions })} />
+                <Typography>実用スキルの指定がない場合、スキルは理想条件だけを許可します。ボーナスが実用・代替の場合も、実用スキルと組み合わせられます。</Typography>
                 <SkillConditionEditor
                   label="理想スキル条件"
                   master={master}

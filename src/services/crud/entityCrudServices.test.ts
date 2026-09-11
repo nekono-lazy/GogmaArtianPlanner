@@ -51,16 +51,18 @@ describe('TargetWeaponCrudService', () => {
   const master = createValidMasterDataFixture()
   function dependencies(referenced = false) { return { getAll: vi.fn(async () => [] as TargetWeapon[]), put: vi.fn(async (value: TargetWeapon) => value), delete: vi.fn(async () => undefined), findReferences: vi.fn(async () => referenced ? [{ kind: 'owned_weapon' as const, entityId: 'owned-1', path: 'relatedTargetWeaponIds' }] : []) } }
   it('saves Practical/Alternative/Skill conditions and validates count ranges', async () => {
-    const service = new TargetWeaponCrudService(master, dependencies())
-    const draft = createTargetWeaponDraft(master); draft.name = 'target'; draft.practicalBonusConditions = [{ id: 'condition', bonusTypeId: 'bonus_type.fixture.attack', minimumRankId: 'bonus_rank.fixture.high', requiredCount: 1, requiredExCount: 0 }]; draft.practicalAlternativeGroups = [{ id: 'group', requiredCount: 1, options: [{ bonusTypeId: 'bonus_type.fixture.attack', minimumRankId: 'bonus_rank.fixture.high' }] }]; draft.idealSkillCondition = { seriesSkillId: 'series_skill.fixture.enabled', groupSkillId: null, matchMode: 'all' }
+    const alternativeMaster = structuredClone(master)
+    alternativeMaster.weaponBonusDefinitions.push({ ...master.weaponBonusDefinitions[1], id: 'fixture.alternative', bonusTypeId: 'bonus_type.fixture.unused' })
+    const service = new TargetWeaponCrudService(alternativeMaster, dependencies())
+    const draft = createTargetWeaponDraft(master); draft.name = 'target'; draft.practicalBonusConditions = [{ id: 'condition', bonusTypeId: 'bonus_type.fixture.attack', minimumRankId: 'bonus_rank.fixture.high', requiredExCount: 0 }]; draft.alternativeBonusRules = [{ id: 'group', sourceBonusTypeId: 'bonus_type.fixture.attack', maxReplacementCount: 1, options: [{ alternativeBonusTypeId: 'bonus_type.fixture.unused', minimumRankId: 'bonus_rank.fixture.high', requiredExCount: 0 }] }]; draft.idealSkillCondition = { seriesSkillId: 'series_skill.fixture.enabled', groupSkillId: null, matchMode: 'all' }
     await expect(service.save(draft, null, DOMAIN_FIXTURE_TIME)).resolves.toMatchObject({ priority: 3, practicalBonusConditions: draft.practicalBonusConditions })
-    draft.practicalBonusConditions[0].requiredCount = 0
+    draft.practicalBonusConditions[0].requiredExCount = -1
     await expect(service.save(draft, null, DOMAIN_FIXTURE_TIME)).rejects.toBeInstanceOf(EntityFormValidationError)
   })
   it('rejects a Target whose idealBonuses break the Ideal implies Practical containment', async () => {
     const service = new TargetWeaponCrudService(master, dependencies())
     const draft = createTargetWeaponDraft(master); draft.name = 'target'
-    draft.practicalBonusConditions = [{ id: 'condition', bonusTypeId: 'bonus_type.fixture.element', minimumRankId: 'bonus_rank.fixture.high', requiredCount: 3, requiredExCount: 0 }]
+    draft.practicalBonusConditions = [{ id: 'condition', bonusTypeId: 'bonus_type.fixture.element', minimumRankId: 'bonus_rank.fixture.high', requiredExCount: 0 }]
     const error = await service.save(draft, null, DOMAIN_FIXTURE_TIME).catch((caught: unknown) => caught)
     expect(error).toBeInstanceOf(EntityFormValidationError)
     expect((error as EntityFormValidationError).issues).toContainEqual(expect.stringContaining('practicalBonusConditions[0]'))
@@ -77,7 +79,7 @@ describe('TargetWeaponCrudService', () => {
   it('saves a Target whose Ideal is a strict upper bound of Practical', async () => {
     const deps = dependencies(); const service = new TargetWeaponCrudService(master, deps)
     const draft = createTargetWeaponDraft(master); draft.name = 'target'
-    draft.practicalBonusConditions = [{ id: 'condition', bonusTypeId: 'bonus_type.fixture.attack', minimumRankId: 'bonus_rank.fixture.high', requiredCount: 5, requiredExCount: 0 }]
+    draft.practicalBonusConditions = [{ id: 'condition', bonusTypeId: 'bonus_type.fixture.attack', minimumRankId: 'bonus_rank.fixture.high', requiredExCount: 0 }]
     draft.idealSkillCondition = { seriesSkillId: 'series_skill.fixture.enabled', groupSkillId: 'group_skill.fixture.enabled', matchMode: 'all' }
     draft.practicalSkillCondition = { seriesSkillId: 'series_skill.fixture.enabled', groupSkillId: null, matchMode: 'all' }
     await expect(service.save(draft, null, DOMAIN_FIXTURE_TIME)).resolves.toMatchObject({ practicalBonusConditions: draft.practicalBonusConditions })

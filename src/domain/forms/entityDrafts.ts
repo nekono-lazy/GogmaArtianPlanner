@@ -125,7 +125,7 @@ export function createTargetWeaponDraft(master: MasterDataRoot): TargetWeaponDra
     isEnabled: true,
     idealBonuses: createDefaultBonusSet(master, base.weaponTypeId, base.elementId),
     practicalBonusConditions: [],
-    practicalAlternativeGroups: [],
+    alternativeBonusRules: [],
     idealSkillCondition: { seriesSkillId: null, groupSkillId: null, matchMode: 'all' },
     practicalSkillCondition: { seriesSkillId: null, groupSkillId: null, matchMode: 'all' },
     memo: null,

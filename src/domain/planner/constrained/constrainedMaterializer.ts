@@ -176,6 +176,7 @@ export function createConstrainedMaterializer(
     const withoutId = {
       targetWeaponId: semantic.targetWeaponId,
       category: semantic.category,
+      ...(semantic.conditionMatch ? { conditionMatch: { ...semantic.conditionMatch } } : {}),
       finalBonuses: semantic.finalBonuses,
       restorationBonusScope: semantic.restorationBonusScope,
       seriesSkillId: semantic.seriesSkillId,

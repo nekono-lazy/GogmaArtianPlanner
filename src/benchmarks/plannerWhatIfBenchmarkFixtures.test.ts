@@ -81,32 +81,32 @@ describe('B9 Production-valid benchmark fixtures', () => {
     }
   })
 
-  it('isolates trial sensitivity: T=1 stops, T=2 finds Practical with R=32 unchanged', async () => {
+  it('isolates trial sensitivity: T=1 stops, T=4 finds Practical with R=32 unchanged', async () => {
     const low = await calculate('what_if_two_targets', 1, 32)
-    const high = await calculate('what_if_two_targets', 2, 32)
+    const high = await calculate('what_if_two_targets', 4, 32)
     expect(low.comparison.alternatives[0].practical.status).toBe('stopped_by_candidate_trial_bound')
     expect(high.comparison.alternatives[0].practical).toEqual({ status: 'found', distance: {
-      estimatedOperationCount: 2, estimatedGogmaAdvance: 0, estimatedSkillAdvance: 1, estimatedNormalAdvance: 1,
+      estimatedOperationCount: 3, estimatedGogmaAdvance: 3, estimatedSkillAdvance: 0, estimatedNormalAdvance: null,
     } })
     for (const result of [low, high]) expect(createPlannerWhatIfBenchmarkOutcome(result).plannerRerunBoundReached).toBe(false)
   }, 30000)
 
   it('finds exclusive Practical and Ideal at different distances, and proves practical-first scheduling', async () => {
     const low = await calculate('what_if_dual_category', 1, 32)
-    const full = await calculate('what_if_dual_category', 2, 32)
-    const limited = await calculate('what_if_dual_category', 2, 2)
+    const full = await calculate('what_if_dual_category', 4, 32)
+    const limited = await calculate('what_if_dual_category', 4, 4)
     expect(low.comparison.alternatives[0].practical.status).toBe('stopped_by_candidate_trial_bound')
     expect(low.comparison.alternatives[0].ideal.status).toBe('found')
     const alternative = full.comparison.alternatives[0]
     expect(alternative.practical).toEqual({ status: 'found', distance: {
-      estimatedOperationCount: 2, estimatedGogmaAdvance: 2, estimatedSkillAdvance: 0, estimatedNormalAdvance: null,
+      estimatedOperationCount: 3, estimatedGogmaAdvance: 3, estimatedSkillAdvance: 0, estimatedNormalAdvance: null,
     } })
     expect(alternative.ideal).toEqual({ status: 'found', distance: {
-      estimatedOperationCount: 1, estimatedGogmaAdvance: 1, estimatedSkillAdvance: 0, estimatedNormalAdvance: null,
+      estimatedOperationCount: 2, estimatedGogmaAdvance: 2, estimatedSkillAdvance: 0, estimatedNormalAdvance: null,
     } })
     expect(limited.comparison.alternatives[0].practical).toEqual(alternative.practical)
     expect(limited.comparison.alternatives[0].ideal.status).toBe('stopped_by_planner_rerun_bound')
-    const prepared = preparePlannerWhatIfScenario(request('what_if_dual_category', 2, 32), dependencies())
+    const prepared = preparePlannerWhatIfScenario(request('what_if_dual_category', 4, 32), dependencies())
     if (prepared.status !== 'ready') throw new Error('Invalid scenario')
     const enumeration = await enumerateConstrainedCandidates({ origin: prepared.scenario.origin,
       targetWeaponId: alternative.targetWeaponId, bounds: defaultConstrainedEnumerationBounds }, new ProductionRngEngine())
@@ -124,9 +124,9 @@ describe('B9 Production-valid benchmark fixtures', () => {
   // The three-participant workload keeps its four Production calculations, split
   // across two tests by semantic unit so one per-test timeout window never has to
   // hold all four. R=2 / R=4 / R=6 / R=32 and every assertion are preserved.
-  it('shares R across three participants as the rerun budget progresses from R=2 to R=4', async () => {
-    const low = await calculate('what_if_three_targets', 2, 2)
-    const middle = await calculate('what_if_three_targets', 2, 4)
+  it('shares R across three participants as the rerun budget progresses from R=4 to R=6', async () => {
+    const low = await calculate('what_if_three_targets', 4, 4)
+    const middle = await calculate('what_if_three_targets', 4, 6)
     expect(low.comparison.alternatives[0].practical.status).toBe('found')
     expect(low.comparison.alternatives[0].ideal.status).toBe('stopped_by_planner_rerun_bound')
     expect(low.comparison.alternatives[1].practical.status).toBe('stopped_by_planner_rerun_bound')
@@ -135,11 +135,11 @@ describe('B9 Production-valid benchmark fixtures', () => {
     expect(middle.comparison.alternatives[1].practical.status).toBe('stopped_by_planner_rerun_bound')
   }, 30000)
 
-  it('evaluates alternative Targets independently and reaches the R=32 outcome at R=6', async () => {
-    const sufficient = await calculate('what_if_three_targets', 2, 6)
-    const high = await calculate('what_if_three_targets', 2, 32)
+  it('evaluates alternative Targets independently and reaches the R=32 outcome at R=12', async () => {
+    const sufficient = await calculate('what_if_three_targets', 4, 12)
+    const high = await calculate('what_if_three_targets', 4, 32)
     expect(high.comparison.alternatives.map(({ targetWeaponId }) => targetWeaponId)).toEqual([
-      'target.b9b2a.bow_thunder', 'target.b9b2a.bow_water',
+      'target.b9b2a.bow_ice', 'target.b9b2a.bow_thunder',
     ])
     expect(high.comparison.alternatives.map(({ practical }) => practical.status)).toEqual(['found', 'found'])
     expect(high.comparison.alternatives[0].practical).toEqual(high.comparison.alternatives[1].practical)
