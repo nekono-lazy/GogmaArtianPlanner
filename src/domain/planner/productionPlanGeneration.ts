@@ -186,16 +186,32 @@ const operationPresentation: Record<
   },
 }
 
+/**
+ * The blind Normal creation instruction (`docs/SEARCH_SPEC.md` 6.1.1).
+ *
+ * The forged weapon's restoration bonuses were never predicted, and the very
+ * next bonus amendment redraws all five slots, so the player is told plainly
+ * that the created contents do not matter here.
+ */
+const blindCreateNormalArtianInstruction =
+  '対象の通常アーティアを 1 本作成してください。' +
+  'この時点の復元ボーナス内容は問いません。' +
+  '後の「復元ボーナスを再抽選」で 5 枠すべてが引き直されます。'
+
 /** Pure deterministic presentation text; no game UI labels or navigation are assumed. */
 export function createPlanStepPresentation(
   operationType: PlanStepOperationType,
   target: TargetWeapon | null,
+  isBlindNormalCreation = false,
 ): Pick<PlanStep, 'title' | 'instruction'> {
   const base = operationPresentation[operationType]
   const targetSuffix = target === null ? '' : ` 「${target.name}」用`
   return {
     title: `${base.title}${targetSuffix}`,
-    instruction: base.instruction,
+    instruction:
+      isBlindNormalCreation && operationType === 'create_normal_artian'
+        ? blindCreateNormalArtianInstruction
+        : base.instruction,
   }
 }
 
@@ -249,7 +265,11 @@ export function createPlanStepsFromDrafts(
     const target = draft.targetWeaponId === null
       ? null
       : targetsById.get(draft.targetWeaponId) ?? null
-    const presentation = createPlanStepPresentation(draft.operationType, target)
+    const presentation = createPlanStepPresentation(
+      draft.operationType,
+      target,
+      draft.isBlindNormalCreation,
+    )
     return {
       id: dependencies.idFactory.planStepId(),
       order: index + 1,

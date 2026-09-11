@@ -4,7 +4,10 @@ import type {
   RngState,
   RouteOperation,
 } from '../models/publicTypes'
-import { V1_NORMAL_ARTIAN_RARITY } from '../models/publicTypes'
+import {
+  V1_NORMAL_ARTIAN_RARITY,
+  isBlindCreateNormalArtianOperation,
+} from '../models/publicTypes'
 import type { RngEngineCapabilities } from './rngEngine'
 
 export type RngCapabilityMissingRequirement =
@@ -105,6 +108,10 @@ export function deriveRngCapabilities(
   const requireNormalArtianPrediction = (
     operation: Extract<RouteOperation, { type: 'create_normal_artian' }>,
   ) => {
+    // A blind Normal creation predicts nothing and reads no Counter, so it adds
+    // no RNG requirement of its own (`docs/SEARCH_SPEC.md` 6.1.1). The Route's
+    // conversion and Reset Bonuses still require their own inputs.
+    if (isBlindCreateNormalArtianOperation(operation)) return
     requireBaseSeed()
     const counterId = normalCounterId(operation)
     if (!confirmedNormalCounterIds.has(counterId)) {

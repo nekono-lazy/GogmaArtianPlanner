@@ -148,11 +148,49 @@ describe('Production Candidate Search Worker composition', () => {
     const responses = await runProductionSearch(input)
 
     expect(responses.some(({ type }) => type === 'error')).toBe(false)
-    const targetResult = resultResponse(responses).result.targetResults[0]
-    expect(targetResult.searchedRoutes).not.toContain('normal_artian_to_gogma')
-    expect(targetResult.skippedRoutes).toContainEqual(expect.objectContaining({
-      route: 'normal_artian_to_gogma',
-      reason: 'normal_prediction_unsupported',
+    const result = resultResponse(responses).result
+    const targetResult = result.targetResults[0]
+    // The Production Engine does not support this Normal input, so no predicted
+    // Normal offset exists. The forced Reset variant (SEARCH_SPEC 6.1.1) needs
+    // no Normal prediction at all and still runs.
+    expect(result.warnings).toContainEqual(expect.objectContaining({
+      message: expect.stringContaining('normal_prediction_unsupported'),
     }))
+    expect(targetResult.candidates.every(({ route }) =>
+      route.operations.every((operation) =>
+        operation.type !== 'create_normal_artian' ||
+        operation.normalCounterBefore === null,
+      ),
+    )).toBe(true)
+  })
+
+  it('creates a forced Reset Production Candidate without Normal prediction', async () => {
+    const input = createProductionSearchInput('weapon.great_sword')
+    const responses = await runProductionSearch(input)
+
+    expect(responses.some(({ type }) => type === 'error')).toBe(false)
+    const targetResult = resultResponse(responses).result.targetResults[0]
+    expect(targetResult.searchedRoutes).toContain('normal_artian_to_gogma')
+    const candidate = targetResult.candidates.find(
+      ({ route }) => route.kind === 'normal_artian_to_gogma',
+    )
+    expect(candidate).toBeDefined()
+    expect(candidate?.route.operations).toEqual([
+      expect.objectContaining({
+        type: 'create_normal_artian',
+        rarity: 8,
+        count: 1,
+        normalCounterBefore: null,
+        normalCounterAfter: null,
+      }),
+      expect.objectContaining({ type: 'convert_normal_to_gogma' }),
+      expect.objectContaining({ type: 'reset_bonuses', sourceOwnedWeaponId: null }),
+    ])
+    expect(candidate?.restorationBonusScope).toBe('gogma_artian')
+    expect(candidate?.estimatedNormalAdvance).toBeNull()
+    expect(candidate?.estimatedSkillAdvance).toBe(1)
+    expect(candidate?.estimatedGogmaAdvance).toBe(1)
+    expect(candidate?.estimatedOperationCount).toBe(3)
+    expect(candidate?.referencedOwnedWeaponsHash).toBeNull()
   })
 })

@@ -169,13 +169,62 @@ export type RouteOperation =
   | ResetSkillsOperation
   | UseWeaponAsMaterialOperation
 
-export interface CreateNormalArtianOperation {
+interface CreateNormalArtianOperationBase {
   type: 'create_normal_artian'
   weaponTypeId: WeaponTypeId
   rarity: NormalArtianRarity
+}
+
+/**
+ * Normal Artian creation from a confirmed Normal Artian Counter.
+ *
+ * The absolute Counter positions are known, so the five restoration bonus
+ * slots of every forged weapon are predictable and the Planner can check the
+ * Counter precondition of each forge.
+ */
+export interface PredictedCreateNormalArtianOperation
+  extends CreateNormalArtianOperationBase {
   count: number
   normalCounterBefore: number
   normalCounterAfter: number
+}
+
+/**
+ * Normal Artian creation with no confirmed Normal Artian Counter
+ * (`docs/SEARCH_SPEC.md` 6.1.1).
+ *
+ * The forged weapon's five slots are never read: the Route's first bonus
+ * amendment is always `reset_bonuses`, which redraws all five slots from the
+ * Gogma Counter position alone. Exactly one weapon is forged, because forging
+ * more would only add operations and materials without changing the result.
+ *
+ * `null` means the absolute Normal Counter position is unknown, never that the
+ * Counter does not advance. The game Counter does advance by one; the tool
+ * simply holds no confirmed value to advance, so it stores none rather than
+ * inventing one.
+ */
+export interface BlindCreateNormalArtianOperation
+  extends CreateNormalArtianOperationBase {
+  count: 1
+  normalCounterBefore: null
+  normalCounterAfter: null
+}
+
+export type CreateNormalArtianOperation =
+  | PredictedCreateNormalArtianOperation
+  | BlindCreateNormalArtianOperation
+
+/**
+ * Whether one `create_normal_artian` operation is the blind variant.
+ *
+ * The two variants are discriminated by the nullability of their Counter
+ * positions, so an operation persisted before the blind variant existed keeps
+ * its exact predicted meaning and stays valid.
+ */
+export function isBlindCreateNormalArtianOperation(
+  operation: CreateNormalArtianOperation,
+): operation is BlindCreateNormalArtianOperation {
+  return operation.normalCounterBefore === null
 }
 
 export interface ConvertToGogmaOperation {

@@ -278,3 +278,57 @@ describe('deriveRngCapabilities', () => {
     expect(unsupported.canSearchSeed).toBe(false)
   })
 })
+
+describe('deriveRngCapabilities for a blind Normal creation', () => {
+  function blindNormalOperation(): RouteOperation {
+    return {
+      type: 'create_normal_artian',
+      weaponTypeId: 'weapon.fixture.a',
+      rarity: 8,
+      count: 1,
+      normalCounterBefore: null,
+      normalCounterAfter: null,
+    }
+  }
+
+  function unconfirmedCounter(): NormalArtianCounter {
+    return { ...createValidNormalArtianCounter(), counter: null, isConfirmed: false }
+  }
+
+  it('requires neither a confirmed Normal Counter nor Normal prediction', () => {
+    const capabilities = deriveRngCapabilities(
+      confirmedRngState(),
+      [unconfirmedCounter()],
+      [blindNormalOperation(), resetBonusesOperation()],
+      { ...supportedEngine, supportsNormalArtianPrediction: false },
+    )
+    expect(capabilities.missingRequirements).toEqual([])
+    expect(capabilities.canRunPlanner).toBe(true)
+  })
+
+  it('still requires the Gogma inputs its forced Reset Bonuses needs', () => {
+    const rngState = confirmedRngState()
+    rngState.gogmaCounter = { value: null, isConfirmed: false, source: null }
+    const capabilities = deriveRngCapabilities(
+      rngState,
+      [unconfirmedCounter()],
+      [blindNormalOperation(), resetBonusesOperation()],
+      supportedEngine,
+    )
+    expect(capabilities.missingRequirements).toContain('gogma_counter')
+    expect(capabilities.canRunPlanner).toBe(false)
+  })
+
+  it('keeps the predicted Normal creation requirements unchanged', () => {
+    const capabilities = deriveRngCapabilities(
+      confirmedRngState(),
+      [unconfirmedCounter()],
+      [createNormalOperation()],
+      supportedEngine,
+    )
+    expect(capabilities.missingRequirements).toContain(
+      `normal_artian_counter:${unconfirmedCounter().id}`,
+    )
+    expect(capabilities.canRunPlanner).toBe(false)
+  })
+})

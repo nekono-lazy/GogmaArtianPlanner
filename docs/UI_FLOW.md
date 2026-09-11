@@ -401,6 +401,9 @@ TargetWeaponごとに候補を検索し、作成リストへ追加する。
 - 作成リスト追加状態
 - 近似表示と類似度（該当する実用品のみ）
 - 作成ルート内の `reset_bonuses` / `keep_bonuses` については、その操作直後の予測復元ボーナス5枠
+- 通常アーティアCounter未確定の強制Resetルート([SEARCH_SPEC.md](./SEARCH_SPEC.md) 6.1.1)では、
+  作成する通常アーティアの復元ボーナス内容を問わないことを操作ラベルへ明示する。
+  予測していない5枠を表示しない
 
 操作。
 
@@ -804,6 +807,7 @@ Practical枠へ流用しない。
 `estimatedGogmaAdvance` / `estimatedSkillAdvance` / `estimatedNormalAdvance` は
 「進行量」として補足表示してよいが、絶対Counter値ではない。通常表示でBase Seedまたは
 絶対Gogma / Skill / Normal Counterを表示しない。
+`estimatedNormalAdvance = null` は「進行量を表現しない」であり、`0` として表示しない。
 
 typed no-resultは少なくとも次の意味を区別する。すべてを「候補なし」へまとめない。
 

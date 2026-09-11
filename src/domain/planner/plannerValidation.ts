@@ -11,6 +11,7 @@ import type {
   TargetWeapon,
 } from '../models/publicTypes'
 import {
+  isBlindCreateNormalArtianOperation,
   stableStringify,
   validateBuildCandidate,
   validateBuildRoute,
@@ -208,6 +209,9 @@ function entryPredictionSupportFailure(
   for (let operationIndex = 0; operationIndex < operations.length; operationIndex += 1) {
     const operation = operations[operationIndex]
     if (operation.type === 'create_normal_artian') {
+      // A blind creation predicts nothing, so it queries no Normal Artian
+      // prediction support (`docs/SEARCH_SPEC.md` 6.1.1).
+      if (isBlindCreateNormalArtianOperation(operation)) continue
       const failure = query({
         type: 'normal_artian',
         weaponTypeId: operation.weaponTypeId,

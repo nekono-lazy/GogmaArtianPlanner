@@ -13,6 +13,7 @@ import type {
   RouteOperation,
   TargetWeapon,
 } from '../models/publicTypes'
+import { isBlindCreateNormalArtianOperation } from '../models/publicTypes'
 import { validateBuildCandidate } from '../models/validation'
 import { evaluateTargetCandidate } from '../target'
 import type { SearchExecutionContext } from './searchExecution'
@@ -167,7 +168,13 @@ function operationAdvance(
 ): number | null {
   const values = operations.flatMap((operation) => {
     if (stream === 'normal' && operation.type === 'create_normal_artian') {
-      return [operation.normalCounterAfter - operation.normalCounterBefore]
+      // A blind creation has no absolute Counter pair, so it contributes no
+      // representable advance. A Route whose only Normal creation is blind
+      // therefore reports `estimatedNormalAdvance = null`, which means "not
+      // represented", never "the Normal Counter did not advance".
+      return isBlindCreateNormalArtianOperation(operation)
+        ? []
+        : [operation.normalCounterAfter - operation.normalCounterBefore]
     }
     if (
       stream === 'skill' &&

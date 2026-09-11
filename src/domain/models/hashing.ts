@@ -1,6 +1,7 @@
 import type { NormalArtianCounter, OwnedWeaponId, RngState } from './common'
 import { V1_NORMAL_ARTIAN_RARITY } from './common'
 import type { BuildRoute, OwnedWeapon } from './entities'
+import { isBlindCreateNormalArtianOperation } from './entities'
 import type { ExpectedPlanState } from './planning'
 
 export class StableSerializationError extends Error {
@@ -104,6 +105,9 @@ export function createSearchStateHash(
   const usesSkillPrediction = route.operations.some(
     ({ type }) => type === 'convert_normal_to_gogma' || type === 'reset_skills',
   )
+  // A blind Normal creation reads no Normal Artian Counter, so it never adds a
+  // Normal Counter dependency: later confirming that Counter must not stale the
+  // Candidate, whose semantics did not change (`docs/SEARCH_SPEC.md` 6.1.1).
   const relevantNormalCounterIds = [
     ...new Set(
       route.operations
@@ -113,6 +117,7 @@ export function createSearchStateHash(
             { type: 'create_normal_artian' }
           > => operation.type === 'create_normal_artian',
         )
+        .filter((operation) => !isBlindCreateNormalArtianOperation(operation))
         .map(normalCounterId),
     ),
   ].sort()

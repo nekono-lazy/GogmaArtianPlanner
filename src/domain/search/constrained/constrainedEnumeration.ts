@@ -2,6 +2,7 @@ import type {
   RestorationBonusSet,
   RouteOperation,
 } from '../../models/publicTypes'
+import { isBlindCreateNormalArtianOperation } from '../../models/publicTypes'
 import type { RngEngine } from '../../rng/rngEngine'
 import { evaluateSkillCondition, satisfiesIdealBonuses } from '../../target'
 import { createTargetBonusStream } from '../bonusStream'
@@ -93,10 +94,17 @@ interface StreamBoundStops {
   skill: boolean
 }
 
-/** Normal Counter advance contributed by a Route base's own operations. */
+/**
+ * Normal Counter advance contributed by a Route base's own operations.
+ *
+ * A blind Normal creation holds no absolute Counter pair, so it contributes no
+ * representable advance and leaves the estimate `null`
+ * (`docs/SEARCH_SPEC.md` 6.1.1).
+ */
 function baseNormalAdvance(operations: readonly RouteOperation[]): number | null {
   const advances = operations.flatMap((operation) =>
-    operation.type === 'create_normal_artian'
+    operation.type === 'create_normal_artian' &&
+    !isBlindCreateNormalArtianOperation(operation)
       ? [operation.normalCounterAfter - operation.normalCounterBefore]
       : [],
   )

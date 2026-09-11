@@ -10,6 +10,7 @@ import type {
   RouteOperation,
   ArtianWeaponKind,
 } from '../domain/models/publicTypes'
+import { isBlindCreateNormalArtianOperation } from '../domain/models/publicTypes'
 import type {
   CandidateRouteFilter,
   CandidateSearchProgressPhase,
@@ -152,7 +153,11 @@ export function getPersistenceReferenceKindLabel(kind: string): string {
 export function getRouteOperationLabel(operation: RouteOperation): string {
   switch (operation.type) {
     case 'create_normal_artian':
-      return `通常アーティアを作成 × ${operation.count}`
+      // A blind creation predicts no restoration bonuses, so the label says so
+      // instead of implying a known result (`docs/SEARCH_SPEC.md` 6.1.1).
+      return isBlindCreateNormalArtianOperation(operation)
+        ? '通常アーティアを作成 × 1（復元ボーナス内容は不問）'
+        : `通常アーティアを作成 × ${operation.count}`
     case 'convert_normal_to_gogma':
       return '巨戟アーティアへ変換'
     case 'reset_bonuses':

@@ -88,11 +88,20 @@ describe('Candidate Search input-level RNG support', () => {
 
     const delegate = createCandidateSearchEngine(input)
     const predictNormalArtian = vi.fn(delegate.predictNormalArtian.bind(delegate))
+    // The unverified weapon type has neither a Normal nor a Gogma pool, so the
+    // forced Reset variant of SEARCH_SPEC 6.1.1 is unavailable for it too and
+    // the whole RouteKind stays skipped.
     const engine = overrideEngine(delegate, {
       getPredictionSupport: (supportInput): RngPredictionSupport =>
-        supportInput.type === 'normal_artian' &&
+        (supportInput.type === 'normal_artian' ||
+          supportInput.type === 'gogma_reset') &&
         supportInput.weaponTypeId === unsupportedTarget.weaponTypeId
-          ? { supported: false, reason: 'normal_pool_unverified' }
+          ? {
+              supported: false,
+              reason: supportInput.type === 'normal_artian'
+                ? 'normal_pool_unverified'
+                : 'no_available_reset_candidates',
+            }
           : delegate.getPredictionSupport(supportInput),
       predictNormalArtian,
     })

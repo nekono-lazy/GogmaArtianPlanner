@@ -655,6 +655,7 @@ describe('Production plan generation', () => {
         affectedNormalCounterId: null,
       },
       debug: null,
+      isBlindNormalCreation: false,
     }
     expect(() => createPlanStepsFromDrafts(
       [draft],

@@ -51,6 +51,61 @@ describe('searchStateHash', () => {
     expect(createSearchStateHash(route, state, counters)).toBe(before)
   })
 
+  it('does not depend on a Normal Counter for a blind Normal route', () => {
+    // The blind variant reads no Normal Artian Counter, so later confirming
+    // that Counter must not stale the Candidate (SEARCH_SPEC 6.1.1).
+    const route: BuildRoute = {
+      kind: 'normal_artian_to_gogma',
+      sourceOwnedWeaponId: null,
+      operations: [
+        {
+          type: 'create_normal_artian',
+          weaponTypeId: 'weapon.fixture.a',
+          rarity: 8,
+          count: 1,
+          normalCounterBefore: null,
+          normalCounterAfter: null,
+        },
+        {
+          type: 'convert_normal_to_gogma',
+          weaponTypeId: 'weapon.fixture.a',
+          skillCounterBefore: 7,
+          skillCounterAfter: 8,
+        },
+        {
+          type: 'reset_bonuses',
+          sourceOwnedWeaponId: null,
+          gogmaCounterBefore: 10,
+          gogmaCounterAfter: 11,
+        },
+      ],
+    }
+    const state = createValidRngState()
+    const unconfirmed = {
+      ...createValidNormalArtianCounter(),
+      counter: null,
+      isConfirmed: false,
+    }
+    const before = createSearchStateHash(route, state, [unconfirmed])
+    expect(createSearchStateHash(route, state, [createValidNormalArtianCounter()]))
+      .toBe(before)
+    expect(createSearchStateHash(route, state, [])).toBe(before)
+    // It still depends on the RNG inputs the Route actually uses.
+    const movedGogma = createValidRngState()
+    movedGogma.gogmaCounter.value = (movedGogma.gogmaCounter.value ?? 0) + 1
+    expect(createSearchStateHash(route, movedGogma, [])).not.toBe(before)
+  })
+
+  it('still depends on the Normal Counter for a predicted Normal route', () => {
+    const route = createValidBuildCandidate().route
+    const state = createValidRngState()
+    const confirmed = createValidNormalArtianCounter()
+    const before = createSearchStateHash(route, state, [confirmed])
+    expect(createSearchStateHash(route, state, [
+      { ...confirmed, counter: (confirmed.counter ?? 0) + 1 },
+    ])).not.toBe(before)
+  })
+
   it('is unchanged by RNG notes-only changes', () => {
     const route = createValidBuildCandidate().route
     const state = createValidRngState()

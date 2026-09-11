@@ -4,7 +4,10 @@ import type {
   OwnedWeaponId,
   RouteOperation,
 } from '../models/publicTypes'
-import { stableStringify } from '../models/publicTypes'
+import {
+  isBlindCreateNormalArtianOperation,
+  stableStringify,
+} from '../models/publicTypes'
 import type { RngEngine } from '../rng/rngEngine'
 import type {
   PlannerSearchRejection,
@@ -281,12 +284,19 @@ function counterDetails(
 } {
   switch (operation.type) {
     case 'create_normal_artian':
-      return {
-        stream: 'normal',
-        counterId: `${operation.weaponTypeId}:${operation.rarity}`,
-        before: operation.normalCounterBefore,
-        after: operation.normalCounterAfter,
-      }
+      // A blind creation holds no absolute Counter position, so it occupies no
+      // Normal Counter stream position: it has no counter precondition, takes
+      // part in no Counter conflict, and moves no persisted Counter
+      // (`docs/PLANNER_SPEC.md` 7.0.3). It is still one required physical
+      // PlanStep, because the weapon really is forged.
+      return isBlindCreateNormalArtianOperation(operation)
+        ? { stream: null, counterId: null, before: null, after: null }
+        : {
+            stream: 'normal',
+            counterId: `${operation.weaponTypeId}:${operation.rarity}`,
+            before: operation.normalCounterBefore,
+            after: operation.normalCounterAfter,
+          }
     case 'convert_normal_to_gogma':
       return { stream: 'skill', counterId: null, before: operation.skillCounterBefore, after: operation.skillCounterAfter }
     case 'reset_bonuses':

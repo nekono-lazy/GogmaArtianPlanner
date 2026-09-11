@@ -173,6 +173,7 @@ Reset上限は常にMであり、余分な1位置はconversionの初回Skill付�
 - 1 Skill Counter位置あたりの `predictSkills` 呼び出しは1回
 - どちらの上限も、もう一方のstreamの解の個数によって消費量が変化してはならない
 - `maxNormalAdvance` はNormal streamのforge回数上限であり、Gogma / Skillの探索量を倍加させない
+- `maxNormalAdvance` はpredicted variantのoffset列挙だけに適用する。6.1.1のblind Reset variantはforge数が常に1で固定であり、`maxNormalAdvance` のoffsetを消費しない
 - これらの上限は探索範囲の上限であり、初回検索の終了条件ではない。終了条件は5.6に定義する
 
 ---
@@ -1395,6 +1396,7 @@ RouteKind。
 
 - `canSearchNormalArtian = true`
 - EngineがNormal Artian PredictionとSkill Predictionをsupportする
+- これらを満たさない場合でも、6.1.1の強制Reset variantが成立することがある
 - Base SeedとSkill Counterが確定している。persisted Counter Gateは要求しない
 - 対象武器種・対象レア度のNormalArtianCounterが確定している
 - 対象レア度はv1固定の8
@@ -1414,7 +1416,7 @@ RouteKind。
 
 制約。
 
-- 通常Counter未確定ならこのRouteはskipする
+- 通常Counter未確定ならこのpredicted variantはskipする。RouteKind全体がskipされるとは限らず、6.1.1のblind Reset variantが成立する場合はそちらを検索する
 - レア6・7のCounterまたはLotteryを探索しない
 - すべての武器種Counter確定を要求しない
 - 検索対象はTargetWeaponの武器種だけでよい
@@ -1427,6 +1429,78 @@ RouteKind。
 - 同一Routeのtransient Gogmaへ適用するReset / Keep / Reset Skillsは `sourceOwnedWeaponId = null` とし、未登録武器用のOwnedWeaponIdを生成しない
 - normal scopeのtransient Gogmaへ直接Keepを適用しない。理由はゲームルールではなく、Production RNGがnormal-tier BonusからのKeepをまだ予測できないことである(5.7参照)
 - `candidateOffset` ごとにBonus解集合とSkill解集合を再計算しない。5.5.2と5.5.3の共有規則に従う
+
+## 6.1.1 通常アーティア経由 / Counter未確定時の強制Reset variant
+
+RouteKindは6.1と同じ `normal_artian_to_gogma` を使う。新しいRouteKindを追加しない。
+predicted variantとblind variantは `CreateNormalArtianOperation` のCounter null性で
+区別でき、既存のRouteOperation semanticsとvalidationで安全に判別できるためである。
+
+成立根拠。
+
+Gogmaの `Reset Bonuses` は直前の復元ボーナス5枠を参照せず、Base Seed、Gogma Counter
+位置、武器種、属性、Masterだけから5枠を完全に再抽選する(`docs/RNG_SPEC.md`)。
+したがって作成した通常アーティアの5枠を一度も読まないRouteであれば、
+NormalArtianCounterもNormal Artian Predictionも不要になる。
+
+必要条件。
+
+- 確定Base Seed
+- 確定Skill CounterとSkill Prediction support(変換時の初回Skill付与に必要)
+- 確定Gogma CounterとReset Bonuses Prediction support(最初のBonus amendmentに必要)
+- Master support
+- Normal Artian Prediction capability / input supportは不要
+- NormalArtianCounterの確定も不要
+
+適用条件。
+
+- 6.1のpredicted variantが成立しない場合にだけ生成する。具体的には、対象武器種のレア8
+  NormalArtianCounterが未確定であるか、Base Seed未確定、Normal Artian Prediction
+  capability欠如、またはNormal Artian input unsupportedのいずれかである
+- predicted variantが成立する場合、同じ結果はoffset 0 + Resetで既に得られるため、
+  blind variantを重複生成しない
+- conversion自体が成立しない場合はvariantを問わずRouteKind全体をskipし、predicted
+  variantのskip理由を報告する
+
+操作列。
+
+```text
+create_normal_artian (count = 1, Counter位置なし)
+convert_normal_to_gogma
+reset_bonuses                 <- 必須。最初のBonus amendmentは必ずReset
+[reset_bonuses | keep_bonuses]*
+[reset_skills]*
+```
+
+制約。
+
+- `CreateNormalArtianOperation` は `count = 1`、`normalCounterBefore = normalCounterAfter = null` とする。架空のNormal Counter値を代入しない
+- 通常アーティアを2本以上作成するblind Candidateを生成しない。5枠を読まずResetで全上書きするため、追加forgeは手数・素材・Normal Counter進行だけを増やす完全劣後経路である
+- 変換直後にCandidateを完成させない。変換直後の5枠はunknownであり、Candidateの最終結果へunknownを残さない
+- 変換直後にKeep Bonusesを適用しない。これはProduction predictionの制限ではなくunknown入力の問題であり、normal scope Keepの扱い(5.7)とは独立に禁止する
+- Reset Skillsだけを行ってCandidateを完成させない
+- 最初のResetを実行した時点で `restorationBonusScope = "gogma_artian"` かつ5枠known となり、以降は6.1と同じReset / Keep / Reset Skills semanticsをそのまま使う
+- `zeroBonus`(`gogmaAdvance = 0`)のBonus解は存在しない。Bonus軸は最初のResetから始まる。unknownを表すfake bonus setをstream解集合へ入れない
+- `estimatedNormalAdvance = null` とする。`null` は「Normal Counter進行量を表現しない」であり、`0` ではない
+- `estimatedGogmaAdvance` は最初のResetを含めて1以上になり、`maxGogmaAdvance` を通常どおり消費する
+- `estimatedSkillAdvance` と `maxSkillAdvance` semanticsは6.1と同一である
+- Route最小操作数は `create 1 + convert 1 + reset 1 = 3` である
+- `BuildRoute.sourceOwnedWeaponId = null`、変換後のReset / Keep / Reset Skillsも `sourceOwnedWeaponId = null` とする。`referencedOwnedWeaponsHash = null` である
+- `searchStateHash` はBase Seed、Skill Counter、Gogma Counterに依存し、NormalArtianCounterに依存しない。後からNormal Counterを確定してもこのCandidateはstaleにならない
+- 素材コストは通常どおり計上する。通常アーティア作成1本分、変換1回分、Reset等の分をそれぞれ含める
+- Candidateの保持、順序、Ideal / Practical判定、similarity、dominanceは既存規則をそのまま適用し、blind variantを優遇も冷遇もしない
+
+報告。
+
+- blind variantを検索した場合、RouteKind `normal_artian_to_gogma` は `searchedRoutes` に入る。同じRouteKindを同時に `skippedRoutes` へ載せない
+- predicted variantが実行されなかったことは `CandidateSearchWarning` で報告する。warningはpredicted variantが不可だった理由(`normal_counter_unconfirmed` など)と、blind variantだけを検索した事実を含める
+- blind variantも不可の場合は、従来どおりpredicted variantのskip理由を `skippedRoutes` へ記録し、blind variantが不可だった理由をwarningへ追加する
+
+将来。
+
+Normal復元ボーナス予測が拡張されても、このvariantは削除しない。
+「1本作成 → 即Reset」はpredicted variantより短い有効なCandidateになり得るため、
+独立した合法Routeとして残す。
 
 ## 6.2 所持通常アーティア経由
 
@@ -1870,7 +1944,7 @@ Worker error契約(B6)。
 
 ## 13.2 Route Test
 
-- 通常Counter未確定なら通常アーティア経由をskipする
+- 通常Counter未確定なら通常アーティア経由のpredicted variantをskipする
 - 対象武器種・属性のnormal scope WeaponBonusDefinitionが利用不能なら `master_data_unavailable` で通常アーティア経由をskipする
 - 既存巨戟がない場合、既存巨戟Routeをskipする
 - Keepがcurrent 5slotのfamilyを維持した一意の次結果を返し、同一Counterでselection branchを作らない
@@ -1900,6 +1974,21 @@ Worker error契約(B6)。
 - Route Filter `existing_gogma` が既存巨戟4 RouteKindを対象とする
 - RNG値不足、Engine capability不足、source不足、filter除外がそれぞれ具体的なRouteKindと異なるreasonで報告される
 - 同じRouteKindをsearchedRoutesとskippedRoutesの両方へ含めない
+
+## 13.2.0 強制Reset variant Test (6.1.1)
+
+- 所持武器なし、Normal Counter未確定、Base Seed / Skill Counter / Gogma Counter確定のとき、`normal_artian_to_gogma` が `searchedRoutes` に入り `skippedRoutes` へ載らない
+- そのCandidateの操作列が `create_normal_artian`(count = 1、Counter null) → `convert_normal_to_gogma` → `reset_bonuses` を含む
+- `supportsNormalArtianPrediction = false` でもblind variantを検索でき、`predictNormalArtian` を1度も呼ばない
+- Gogma Counter未確定ならblind variantを生成せず、predicted variantのskip理由を報告する
+- Skill Counter未確定ならblind variantを生成しない
+- Reset Bonuses prediction unsupportedならblind variantを生成しない
+- 最初のReset前のunknown状態からCandidateを生成しない。blind Candidateは常に `restorationBonusScope = "gogma_artian"` で `reset_bonuses` を含む
+- blind Candidateで通常アーティアを2本以上作成しない
+- blind Candidateの `estimatedNormalAdvance` が `null`、`referencedOwnedWeaponsHash` が `null` になる
+- blind Candidateの `searchStateHash` がNormalArtianCounterの確定状態に依存しない
+- レア6・7のNormalArtianCounterしかない場合でもblind variantはレア8を作成し、そのCounterを読まない
+- 所持通常アーティア経由は登録済み5枠をそのまま使い続け、blind semanticsへ巻き込まれない
 
 ## 13.2.1 Stream Independence Test
 

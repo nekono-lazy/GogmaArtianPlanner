@@ -298,6 +298,9 @@ export interface PlannerSearchState {
   ProductionPlan field、DB schemaを追加しない
 - create Normal、conversion、concrete material消費、およびnull sourceの操作はcross-Entryで
   shareableにしない
+- blind create Normal([SEARCH_SPEC.md](./SEARCH_SPEC.md) 6.1.1)も同様にEntry-localである。
+  Counter位置を持たず、同じ「Normal Artianを1本作成する」操作に見えても、Entryごとに
+  別の物理武器を作るため1回の物理操作として共有しない
 - `PlannerSearchAction.progressedBuildListEntryIds` は、その1回の物理操作で実際にRoute progressが
   進んだEntryだけを保持する。Counter位置が一致するだけのEntryを追加しない
 - Trace Replayは同じphysical action identityを再検証し、shareableでない複数Entryへ同じ
@@ -419,6 +422,19 @@ past + skip不可 -> 従来どおり counter_before_current などでfail closed
 
 `current > unit.counterBefore` を一律にrejectしない。逆に、skip不可unitのfail closedは
 弱めない。
+
+##### Counter位置を持たないRoute unit
+
+blind create Normal([SEARCH_SPEC.md](./SEARCH_SPEC.md) 6.1.1)は
+`counterStream = null`、`counterBefore = counterAfter = null` を持つ。
+
+- 絶対Normal Counter preconditionを要求しない。`counter_unavailable` の対象にしない
+- どのCounter位置も占有しないため、Counter位置競合のparticipantにならない
+- current Counterを一切書き換えない。persistedなNormal Counterも進めない
+- `canSkipWhenCounterPassed = false` である。必ず1 PlanStepとして実行する
+- predicted variantのcreate Normalは従来どおりNormal Counter streamに属し、確定Counterが
+  無ければ `counter_unavailable` などでrejectされる。全 `create_normal_artian` から
+  Counter確認を外してはならない
 
 ##### Conflict判定と実行順序の支配関係
 
@@ -2960,7 +2976,9 @@ PlanStep変換用 `PlannerPlanStepDraft` を生成する。
   Normal/Gogma出力を保持する。Normal出力はEntryごとに分離し、複数作成後のconvertは
   そのEntryの最後に作成したNormalだけを使用して全Normal transientを破棄する。未登録出力へ
   永続OwnedWeapon IDを割り当てない。
-- CreateNormalArtianOperationは `count = forgeCount` をReplayし、`normalCounterAfter = normalCounterBefore + forgeCount` を検証する。convert対象は最後の結果であり、その位置は `candidateCounter = normalCounterBefore + forgeCount - 1` である
+- CreateNormalArtianOperationのpredicted variantは `count = forgeCount` をReplayし、`normalCounterAfter = normalCounterBefore + forgeCount` を検証する。convert対象は最後の結果であり、その位置は `candidateCounter = normalCounterBefore + forgeCount - 1` である
+- blind variant([SEARCH_SPEC.md](./SEARCH_SPEC.md) 6.1.1)ではNormal Predictionを呼ばず、NormalArtianCounterを読まず、`RngAdvance.normalCounterDelta = null` とする。物理的な通常アーティア1本は実在するため、Replay Runtimeは「5枠がunknownな作成結果」を保持する。unknownはruntime専用の明示的variantであり、架空の `RestorationBonusSet` を代入しない
+- unknown 5枠のtransientはconversionでそのまま継承され、`ExpectedResult.restorationBonuses` と `restorationBonusScope` は `null` になる。`null` は「予測しない」であり「ボーナスが存在しない」ではない
 - 各Actionの`rngBefore`一致を検証し、`rngAfter`との差分からRngAdvanceを作る。複数Normal
   Counterの変化やunknown→knownの差分は現行RngAdvanceで表せないためReplay failureとする。
 - create/reset/keep/reset-skillsは現在のRngEngine predictionを再実行する。KeepはReplay時点のtransientまたは起点武器の現在5slotをslot順のまま入力し、selection branchを持たない。
@@ -2971,6 +2989,8 @@ PlanStep変換用 `PlannerPlanStepDraft` を生成する。
 - convertはGogma Predictionを呼ばない。変換元Normalの `normal_artian` scope 5-slot bonusesをslot順のままtransient Gogmaへ継承し、現在Skill位置で `predictSkills` を実行して初回Series / Groupを設定する。
 - convertのRNG遷移はSkill Counter `+1`、Normal / Gogma Counter `+0` とする。変換時のSkill結果を無視するRouteや素材補充でも、実ゲームでconversionする限り同じSkill位置を消費する。
 - Reset / Keepはtransient Gogmaのscopeとslot順を追跡する。normal scopeならv1は最初のBonus amendmentとしてResetだけを許可し、Reset結果でgogma scopeへ置き換えた後に限りKeepを許可する。これはProduction prediction supportの制限であり、ゲームルール上の制限ではない([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.7参照)。
+- unknown 5枠に対してはReset Bonusesだけが実行可能である。Resetは置き換える5枠を読まないため、unknownからknownな `gogma_artian` scope 5枠へ遷移できる唯一の操作である。Reset Skillsは5枠を読まずSeries / Group Skillだけを書き換えるため、unknownをunknownのまま通過させる
+- unknown 5枠を読む操作はReplay issue code `unknown_restoration_bonuses` でfail closedする。対象はKeep Bonusesの入力と、reserve時のCandidate Snapshot照合である。架空の5枠を合成してReplayを継続しない
 - reserve前にEntry固有transient Gogmaのbonuses、Series Skill、Group SkillがCandidate Snapshotと
   完全一致することを検証する。不一致またはtransient不足はReplay failureであり、Candidate Snapshotで
   transientを上書きしてはならない。成功したEntryのtransientだけを破棄する。
@@ -3048,6 +3068,13 @@ operationはすべて`requiresUserConfirmation = true`とする。`confirm_resul
 
 title / instructionはoperation typeと、存在する場合だけTarget名から決定的に生成する。未確認の
 ゲームUI名、ボタン、座標、画面遷移を文言へ推測してはならない。
+
+`create_normal_artian` のinstructionだけは、そのStepがblind creation
+([SEARCH_SPEC.md](./SEARCH_SPEC.md) 6.1.1)かどうかで分岐する。blind creationでは
+「復元ボーナス内容は問わない」ことと、後続のReset Bonusesで5枠全体が引き直されることを
+明示する。これは非永続の `PlannerPlanStepDraft` が保持するpresentation情報から決定し、
+永続 `PlanStep` へ新しいfieldを追加しない。生成済み文言はこれまでどおりPlanStepの
+`instruction` 文字列としてそのまま保存される。
 
 #### ProductionPlanの集約値
 
