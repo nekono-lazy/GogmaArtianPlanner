@@ -1910,6 +1910,17 @@ lazily for the Target and conflict that actually need them, capped by
 never break ties on a run-dependent value, and keep the B2 family-layout
 frontier dedup and the normal-scope Keep prediction exclusion unchanged.
 
+The Planner consumes the enumerator's streaming API, taking one Candidate at a
+time and stopping at the first adoptable trial, so a final array sort never runs
+on the Production path. Every ordering rule that must reach Candidate adoption
+therefore belongs in the lattice traversal priority itself, not only in the
+collected result's sort. The Target's preferred source is one such rule
+(`docs/SEARCH_SPEC.md` 8.1): it sits after every Candidate quality and cost
+comparison and immediately before the stable semantic key. It is safe there
+because it is a property of the Route base, constant across one matrix's cells,
+so parent and child always tie on it and the lazy lattice's coordinate-wise
+monotonicity is untouched.
+
 Bounds are split by responsibility and never crossed. Enumeration bounds —
 `maxNormalForgeCount`, `maxGogmaAdvance`, `maxSkillResetCount`, and
 `maxOffAxisPairEvaluations` — belong to the constrained enumerator. Orchestration
@@ -2888,6 +2899,15 @@ Relevant test areas include:
 - A fully tied bounded Practical selection orders the preferred source first, and no
   Candidate ID, stable key, deduplication key, or meaning fingerprint carries the
   preference
+- The constrained enumerator's streaming `visitConstrainedCandidates()` delivery
+  order puts a fully tied preferred source first, flips when the preference
+  flips, still delivers a cheaper non-preferred Route first, keeps the existing
+  stable order when no preference is set, and changes neither the enumerated set
+  nor the examined-pair and off-axis counts
+- Planner constrained re-search trials and adopts the preferred source when both
+  sources are equally adoptable, and adopts the other one when the preference
+  points at it instead, proving the rule reaches the Production streaming path
+  rather than only the collected result's sort
 - The Planner prefers a preferred-source Route when the existing evaluation ties,
   prefers the non-preferred one when the existing evaluation rates it higher, ranks
   the preference above `weaponSwitchCount` and below Target priority, satisfaction,

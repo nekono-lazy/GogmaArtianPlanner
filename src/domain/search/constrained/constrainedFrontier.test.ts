@@ -18,7 +18,7 @@ import type { RestorationBonusScope } from '../../models/publicTypes'
 import { stableStringify } from '../../models/publicTypes'
 import { practicalBonuses } from '../../../test/fixtures/constrainedEnumeration'
 
-const BASE = { baseKey: 'base', operationUnits: 0, normalAdvance: null }
+const BASE = { baseKey: 'base', operationUnits: 0, normalAdvance: null, preferredSourceRank: 0 }
 
 interface BonusSpec {
   gogmaAdvance: number

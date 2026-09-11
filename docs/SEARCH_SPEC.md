@@ -1856,6 +1856,42 @@ sourceが `null` のためpreferredにならない。Targetのpreferredが `null
 - Practical retention後のordering（5.5.6）
 - 表示用ソート（本章）
 - constrained searchの同様のbounded ordering（5.6.7）
+- constrained searchのstreaming traversal priority（5.6.7）
+
+#### constrained searchのstreaming delivery順
+
+constrained enumerationには2つの出力経路がある。
+
+- `enumerateConstrainedCandidates()`: 全件を集めてから最終sortする配列API
+- `visitConstrainedCandidates()`: Candidateを1件ずつconsumerへ渡すstreaming API
+
+Production PlannerのConstrained re-searchは後者を使い、trial Plannerが採用可能と判断した
+時点で`'stop'`を返して打ち切る。したがって最終sortはProductionの候補採用順に効かない。
+preferred sourceのtie-breakは、最終配列sortだけでなく**traversal priority自体**へ反映し、
+streaming deliveryの順序にも効かせること。
+
+lattice cellのtraversal priorityでは、既存のCandidate品質・コスト相当比較をすべて終えた後、
+安定semantic keyより前にpreferred sourceを置く。
+
+```text
+categoryRank
+operationCount
+gogmaAdvance
+skillAdvance
+normalAdvance
+idealCloseness
+bonus / material / skill semantic comparisons
+preferredSourceRank
+stable semantic key
+internal node tie-break
+```
+
+preferred sourceはRoute baseごとに固定値であり、同一matrix内で`i` / `j`が増えても変化しない。
+親cellと子cellは常にこの項目で同値となり比較は次の項目へ落ちるため、lazy latticeが依存する
+coordinate-wise monotonicityを損なわない。異なるbase間のcellだけを分離する。
+
+この配置はlazy traversalの正しさ、off-axis budget、frontierのmonotonicity、cancellation、
+`examinedCandidates`のいずれも変更しない。
 
 #### 変更してはいけないもの
 

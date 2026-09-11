@@ -19,7 +19,7 @@ import {
   createIdealDifference,
 } from '../../target'
 import { candidateStableKey } from '../candidateProcessing'
-import { compareStableKeys } from '../semanticKeys'
+import { compareStableKeys, preferredSourceRank } from '../semanticKeys'
 import { createCandidateRouteEstimates } from '../candidateFactory'
 import {
   ConstrainedSearchError,
@@ -155,20 +155,17 @@ export function compareConstrainedCandidates(
     (right.similarityScore ?? -1) - (left.similarityScore ?? -1) ||
     right.idealDifference.matchedBonusCount -
       left.idealDifference.matchedBonusCount ||
-    preferredSourceRank(left, preferredOwnedWeaponId) -
-      preferredSourceRank(right, preferredOwnedWeaponId) ||
+    preferredSourceRank(
+      left.route.sourceOwnedWeaponId,
+      preferredOwnedWeaponId,
+    ) -
+      preferredSourceRank(
+        right.route.sourceOwnedWeaponId,
+        preferredOwnedWeaponId,
+      ) ||
     compareStableKeys(
       constrainedCandidateStableKey(left),
       constrainedCandidateStableKey(right),
     )
   )
-}
-
-/** 0 when the Route starts from the Target's preferred owned weapon. */
-function preferredSourceRank(
-  candidate: ConstrainedCandidate,
-  preferredOwnedWeaponId: OwnedWeaponId | null,
-): number {
-  if (preferredOwnedWeaponId === null) return 0
-  return candidate.route.sourceOwnedWeaponId === preferredOwnedWeaponId ? 0 : 1
 }

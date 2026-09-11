@@ -62,6 +62,7 @@ const TARGET_A = 'target.orchestration.a'
 const TARGET_B = 'target.orchestration.b'
 const TARGET_C = 'target.orchestration.c'
 const SOURCE_C = 'owned.orchestration.c'
+const SOURCE_D = 'owned.orchestration.d'
 const ENTRY_A = 'build-list.orchestration.a'
 const ENTRY_B = 'build-list.orchestration.b'
 const ENTRY_C = 'build-list.orchestration.c'
@@ -686,6 +687,84 @@ describe('B8-C4b Candidate trial and adoption', () => {
     expect(
       result.plan?.selectedBuildListEntryIds.filter((id) => id === generated.id),
     ).toHaveLength(1)
+  })
+})
+
+/**
+ * Target B reachable from two interchangeable sources.
+ *
+ * Both carry the same Practical five slots and the same non-Ideal Series
+ * Skill, so each yields the very same one-operation Reset-Skills Candidate that
+ * avoids the contested Gogma Counter. Every existing priority ties, and
+ * `owned.orchestration.b` sorts before `owned.orchestration.d` on the Route
+ * base key, so the stable key alone always delivers `b` first.
+ */
+function twoSourceTargetBParts(preferredForB: string | null): TwoTargetParts {
+  const a = targetA()
+  const b = skillTarget(TARGET_B)
+  return {
+    targets: [
+      a,
+      {
+        ...b,
+        preferredOwnedWeaponId: (preferredForB ?? null) as TargetWeapon['preferredOwnedWeaponId'],
+      },
+    ],
+    ownedWeapons: [
+      orchestrationSource(ORCHESTRATION_SOURCE_A),
+      orchestrationSource(ORCHESTRATION_SOURCE_B, {
+        restorationBonuses: practicalBonuses(),
+      }),
+      orchestrationSource(SOURCE_D, {
+        restorationBonuses: practicalBonuses(),
+      }),
+    ],
+    entries: [idealEntryA(a), idealMixedEntry(ENTRY_B, b, ORCHESTRATION_SOURCE_B)],
+  }
+}
+
+async function adoptedSourceForTargetB(
+  preferredForB: string | null,
+): Promise<string | null> {
+  const parts = twoSourceTargetBParts(preferredForB)
+  const built = fixedScenario(parts)
+  const result = await createProductionPlanWithConstrainedSearch(
+    built.input,
+    built.dependencies,
+    options(),
+  )
+  expect(result.plan).not.toBeNull()
+  expect(result.generatedBuildListEntries).toHaveLength(1)
+  const generated = result.generatedBuildListEntries[0]
+  expect(generated.targetWeaponId).toBe(TARGET_B)
+  expect(generated.candidateSnapshot.route.kind).toBe(
+    'existing_gogma_reset_skills',
+  )
+  return generated.candidateSnapshot.route.sourceOwnedWeaponId
+}
+
+/**
+ * The Production path: the orchestration consumes `visitConstrainedCandidates()`
+ * one Candidate at a time and stops at the first adoptable trial, so the final
+ * array sort of `enumerateConstrainedCandidates()` never runs here. Only a
+ * preference inside the traversal priority can decide which source is adopted
+ * (`docs/SEARCH_SPEC.md` 8.1).
+ */
+describe('B8-C4b constrained trial order and the Target preferred source', () => {
+  it('trials and adopts the preferred source when both are equally adoptable', async () => {
+    expect(await adoptedSourceForTargetB(SOURCE_D)).toBe(SOURCE_D)
+  })
+
+  it('adopts the other source when the preference points at it instead', async () => {
+    // Flipping the preference flips the adopted source. A stable key cannot do
+    // that: it would return `owned.orchestration.b` both times.
+    expect(await adoptedSourceForTargetB(ORCHESTRATION_SOURCE_B)).toBe(
+      ORCHESTRATION_SOURCE_B,
+    )
+  })
+
+  it('falls back to the existing stable order with no preference', async () => {
+    expect(await adoptedSourceForTargetB(null)).toBe(ORCHESTRATION_SOURCE_B)
   })
 })
 
