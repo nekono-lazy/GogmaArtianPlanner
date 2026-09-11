@@ -1,4 +1,9 @@
-import type { BuildCandidate, BuildRoute, RouteOperation } from '../models/publicTypes'
+import type {
+  BuildCandidate,
+  BuildRoute,
+  RouteOperation,
+  SkillAmendmentResult,
+} from '../models/publicTypes'
 import {
   bonusAmendmentOperations, bonusAmendmentResults, bonusStreamBaseKey,
   type BonusStreamBase, type UnsupportedAmendmentPrediction,
@@ -22,6 +27,15 @@ export interface ScheduledRouteBase {
   kindResolution: RouteCompositionBase['kindResolution']
   sourceOwnedWeaponId: BuildRoute['sourceOwnedWeaponId']
   baseOperations: readonly RouteOperation[]
+  /**
+   * The Skills `convert_normal_to_gogma` assigns for this base, or `null` when
+   * `baseOperations` contains no conversion (SEARCH_SPEC 5.5.2.2).
+   *
+   * Required rather than optional: an existing-Gogma base's current Skills come
+   * from the source weapon, not from a conversion, and must never be reported
+   * as a conversion result.
+   */
+  conversionSkill: SkillAmendmentResult | null
   /**
    * The Route base's own `gogmaAdvance = 0` Bonus solution.
    *
@@ -98,6 +112,7 @@ export class TargetSearchScheduler {
           ] },
           bonus.solution.amendmentResults,
           skill.solution.amendmentResults,
+          base.conversionSkill,
         )
         if (!candidate) return
         base.onCandidate(candidate)

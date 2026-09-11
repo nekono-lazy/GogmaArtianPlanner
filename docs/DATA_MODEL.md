@@ -777,6 +777,7 @@ export interface BuildCandidate {
   createdAt: ISODateTimeString;
   bonusAmendmentTrace?: CandidateBonusAmendmentStep[];
   skillAmendmentTrace?: CandidateSkillAmendmentStep[];
+  conversionSkillTrace?: CandidateConversionSkillStep;
 }
 
 export interface BonusAmendmentResult {
@@ -797,6 +798,11 @@ export interface SkillAmendmentResult {
 export interface CandidateSkillAmendmentStep extends SkillAmendmentResult {
   operationIndex: number;
   operationType: "reset_skills";
+}
+
+export interface CandidateConversionSkillStep extends SkillAmendmentResult {
+  operationIndex: number;
+  operationType: "convert_normal_to_gogma";
 }
 ```
 
@@ -829,6 +835,13 @@ export interface CandidateSkillAmendmentStep extends SkillAmendmentResult {
 - Route内の `reset_skills` 件数と予測結果件数が一致しない場合はinternal inconsistencyとしてCandidate生成をfail loudlyし、短い方へ黙って合わせない
 - `reset_skills` を1回も含まないSearch生成Candidateは `skillAmendmentTrace = []` とする。`undefined` はこの項目が存在しなかった時点のCandidateを意味し、`[]` とは区別してよい。どちらもUIでは予測結果を表示しない
 - `skillAmendmentTrace` はoptionalであり、この項目が存在しなかった時点のCandidateも有効とする。欠落を理由にstale化せず、read migrationも行わない
+- `conversionSkillTrace` は `convert_normal_to_gogma` が付与する初回Series Skill / Group Skillの観測情報であり、`skillAmendmentTrace` とは別の契約とする。`skillAmendmentTrace` は引き続き `reset_skills` 専用であり、`operationType` へconversionを追加して兼用しない
+- `conversionSkillTrace` はCandidate semantic identityに含めず、Candidate ID（`semanticHash`）、`candidateStableKey`、Candidate重複排除key、`searchStateHash`、`referencedOwnedWeaponsHash`、`BuildCandidateMeaning` fingerprint、retention、ordering、dominance、Ideal / Practical判定、staleness、Planner route identityのいずれの入力にもならない
+- `conversionSkillTrace` は単数とする。Routeが持つ `convert_normal_to_gogma` は最大1件であり（SEARCH_SPEC 6.1 / 6.1.1 / 6.2）、conversionを含まないRouteはこの項目を持たない
+- `conversionSkillTrace` を持つ場合、`operationIndex` はRoute内の `convert_normal_to_gogma` の位置と一致し、`operationType` は `"convert_normal_to_gogma"` と一致する。conversion件数が1件でないRouteがこの項目を持つ場合はinternal inconsistencyとする
+- `conversionSkillTrace` の `seriesSkillId` / `groupSkillId` は、Search時にconversion位置のSkill Counterで実際に使用した予測結果を保持する。UI・presentation層でRNGを再実行せず、同じCounter位置を再予測しない
+- `conversionSkillTrace` はCandidateの `seriesSkillId` / `groupSkillId` との一致を要求しない。conversion後に `reset_skills` が続く場合、最終Skillはconversion直後Skillと異なるためである。Skill結果のauthorityは引き続きCandidateの `seriesSkillId` / `groupSkillId` である
+- `conversionSkillTrace` はoptionalであり、この項目が存在しなかった時点のCandidateも有効とする。欠落を理由にstale化せず、read migrationも行わない
 
 ## 9.2 BuildRoute
 

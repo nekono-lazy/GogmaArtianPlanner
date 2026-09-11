@@ -23,7 +23,12 @@ import { createCandidateFromPrediction } from './candidateFactory'
 import { crossStreamSolutions } from './crossComposition'
 import type { SearchExecutionContext } from './searchExecution'
 import type { SearchPredictionSupport } from './searchPredictionSupport'
-import type { CandidateSearchInput, CandidateSearchWarning, SkippedRoute } from './searchTypes'
+import {
+  CandidateSearchError,
+  type CandidateSearchInput,
+  type CandidateSearchWarning,
+  type SkippedRoute,
+} from './searchTypes'
 import {
   buildBonusSolutionSet,
   buildSkillSolutionSet,
@@ -91,6 +96,15 @@ export interface RouteCompositionBase {
   sourceOwnedWeaponId: OwnedWeaponId | null
   /** `create_normal_artian` / `convert_normal_to_gogma`, in execution order. */
   baseOperations: readonly RouteOperation[]
+  /**
+   * The Skills `convert_normal_to_gogma` assigns for this base, or `null` for a
+   * base without a conversion (SEARCH_SPEC 5.5.2.2).
+   *
+   * Required rather than optional so every Route base states which case it is:
+   * an existing-Gogma base's own current Skills are not a conversion result and
+   * must never be reported as one.
+   */
+  conversionSkill: SkillAmendmentResult | null
   bonusSolutions: readonly RouteBonusSolution[]
   skillSolutions: readonly RouteSkillSolution[]
 }
@@ -185,6 +199,34 @@ export function routeBonusSolutions(
   ]
 }
 
+/**
+ * The Search composition boundary's fail-loud check that a conversion Route
+ * really carries its conversion Skill observation and a non-conversion Route
+ * does not (SEARCH_SPEC 5.5.2.2).
+ *
+ * The correspondence is structural here rather than best effort: every Search
+ * Route base states its `conversionSkill`, so a base whose operations disagree
+ * with it is an internal inconsistency, never a Candidate that silently drops
+ * the display.
+ */
+export function conversionSkillPrediction(
+  route: BuildRoute,
+  conversionSkill: SkillAmendmentResult | null,
+): SkillAmendmentResult | undefined {
+  const hasConversion = route.operations.some(
+    (operation) => operation.type === 'convert_normal_to_gogma',
+  )
+  if (hasConversion === (conversionSkill !== null)) {
+    return conversionSkill ?? undefined
+  }
+  throw new CandidateSearchError(
+    'invalid_candidate',
+    hasConversion
+      ? 'A conversion Route base must supply the predicted initial Skills of its conversion.'
+      : 'A Route base without a conversion operation must not supply a conversion Skill result.',
+  )
+}
+
 export function createBaseCandidate(
   context: RouteSearchContext,
   bonuses: RestorationBonusSet,
@@ -194,7 +236,9 @@ export function createBaseCandidate(
   route: BuildRoute,
   bonusAmendmentResults: readonly BonusAmendmentResult[],
   skillAmendmentResults: readonly SkillAmendmentResult[],
+  conversionSkill: SkillAmendmentResult | null,
 ): BuildCandidate | null {
+  const conversionSkillResult = conversionSkillPrediction(route, conversionSkill)
   return createCandidateFromPrediction(
     context.target,
     {
@@ -205,6 +249,7 @@ export function createBaseCandidate(
       route,
       bonusAmendmentResults,
       skillAmendmentResults,
+      ...(conversionSkillResult === undefined ? {} : { conversionSkillResult }),
     },
     context.input,
     context.execution,
@@ -305,6 +350,7 @@ export async function composeRouteCandidates(
         { kind, sourceOwnedWeaponId: base.sourceOwnedWeaponId, operations },
         bonus.amendmentResults,
         skill.amendmentResults,
+        base.conversionSkill,
       )
       if (candidate) candidates.push(candidate)
     }

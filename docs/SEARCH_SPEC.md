@@ -476,7 +476,33 @@ Reset Skillsの結果を実行順に並べたものであり、`resetSkillsOpera
   アーティア経由、6.1.1のblind variant、所持通常アーティア経由、既存巨戟のいずれでも
   同じ規則で生成する
 - `convert_normal_to_gogma` の初回Skill付与はこの記録の対象外であり、
-  `reset_skills` のentryとして報告しない
+  `reset_skills` のentryとして報告しない。conversionの初回Skillは5.5.2.2の別記録とする
+
+`ConstrainedCandidate` はこの観測記録を持たない。5.5.3.1と同じ理由である。
+
+#### 5.5.2.2 conversion初回Skillの観測記録
+
+`convert_normal_to_gogma` が付与する初回Series / Group Skillも観測記録として保持する。
+5.5.2.1と同じ観測情報契約に従うが、対象Operationが異なるため別の記録とする。
+
+- 値はSearchがconversion位置のSkill Counterに対して既に確定させた予測をそのまま保持する。
+  Skill streamのmemoized予測を読むだけであり、`predictSkills` の呼び出し回数を増やさない。
+  UI層・presentation層でProduction RNGを再実行しない
+- Candidateでは `BuildCandidate.conversionSkillTrace` として `operationIndex` 付きで保持する
+  (`docs/DATA_MODEL.md` 9.1)。`operationIndex` は完成したRouteの操作列を走査して求め、
+  基点操作数からの手計算で決めない
+- 記録は単数である。Routeが持つconversionは最大1件であり(6.1 / 6.1.1 / 6.2)、
+  conversion件数が1件でないRouteへこの記録を付与しない
+- 記録を `skillAmendmentTrace` へ統合しない。`skillAmendmentTrace` は `reset_skills` 専用契約を
+  維持し、`operationType` へconversionを追加して兼用しない
+- 記録はCandidateの最終Skillとの一致を要求しない。conversion後に `reset_skills` が続く場合、
+  最終Skillはconversion直後Skillと異なる。最終Skillからの逆算も行わない
+- 記録は観測情報であり、stream-local retention key、5.5.2の順序、canonical Ideal選択、
+  Practical dominance、Candidate semantic identityのいずれの入力にもならない
+- 記録はRouteKindに依存しない。6.1のpredicted variant、6.1.1のblind variant、6.2の
+  所持通常アーティア経由のいずれでも同じ規則で生成する。6.1.1では作成した通常アーティアの
+  5枠がunknownであるが、conversion時のSkill予測はknownなので記録を省略しない
+- conversionを含まない既存巨戟Routeはこの記録を持たない
 
 `ConstrainedCandidate` はこの観測記録を持たない。5.5.3.1と同じ理由である。
 

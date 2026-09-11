@@ -148,6 +148,21 @@ export interface CandidateSkillAmendmentStep extends SkillAmendmentResult {
   operationType: 'reset_skills'
 }
 
+/**
+ * `BuildCandidate.conversionSkillTrace`: the initial Series / Group Skills that
+ * `convert_normal_to_gogma` assigns.
+ *
+ * A separate observational contract from `skillAmendmentTrace`, which stays
+ * Reset Skills only (`docs/SEARCH_SPEC.md` 5.5.2.1). It is singular because a
+ * Route carries at most one conversion operation (SEARCH_SPEC 6.1 / 6.1.1 /
+ * 6.2), and it is bound by `operationIndex` inside the finished
+ * `BuildRoute.operations` for the same reason the other traces are.
+ */
+export interface CandidateConversionSkillStep extends SkillAmendmentResult {
+  operationIndex: number
+  operationType: 'convert_normal_to_gogma'
+}
+
 export interface BuildCandidate {
   id: BuildCandidateId
   targetWeaponId: TargetWeaponId
@@ -188,6 +203,17 @@ export interface BuildCandidate {
    * Skills. UI omits the prediction display when the field is absent.
    */
   skillAmendmentTrace?: CandidateSkillAmendmentStep[]
+  /**
+   * Observational initial Skill assignment of this Route's conversion.
+   *
+   * Present only for a Route containing `convert_normal_to_gogma`, and optional
+   * for the same reason as the two amendment traces: it explains an already
+   * decided Route, so a Candidate persisted before this field existed stays
+   * valid and never becomes stale. `seriesSkillId` / `groupSkillId` remain the
+   * authority for the Route's final Skills, which a later `reset_skills`
+   * overwrites. UI omits the prediction display when the field is absent.
+   */
+  conversionSkillTrace?: CandidateConversionSkillStep
 }
 
 export interface BuildRoute {
