@@ -76,6 +76,10 @@ function skillSolution(
     operations: Array.from({ length: resetCount }, (_, index) =>
       resetSkillsOperation(7 + index),
     ),
+    amendmentResults: Array.from({ length: resetCount }, () => ({
+      seriesSkillId,
+      groupSkillId,
+    })),
   }
 }
 

@@ -776,6 +776,7 @@ export interface BuildCandidate {
   searchRunId: string;
   createdAt: ISODateTimeString;
   bonusAmendmentTrace?: CandidateBonusAmendmentStep[];
+  skillAmendmentTrace?: CandidateSkillAmendmentStep[];
 }
 
 export interface BonusAmendmentResult {
@@ -786,6 +787,16 @@ export interface BonusAmendmentResult {
 export interface CandidateBonusAmendmentStep extends BonusAmendmentResult {
   operationIndex: number;
   operationType: "reset_bonuses" | "keep_bonuses";
+}
+
+export interface SkillAmendmentResult {
+  seriesSkillId: SeriesSkillId | null;
+  groupSkillId: GroupSkillId | null;
+}
+
+export interface CandidateSkillAmendmentStep extends SkillAmendmentResult {
+  operationIndex: number;
+  operationType: "reset_skills";
 }
 ```
 
@@ -810,6 +821,14 @@ export interface CandidateBonusAmendmentStep extends BonusAmendmentResult {
 - この一致判定はslot順を含む完全一致であり、multiset比較（`areRestorationBonusSetsEqual()`）で代用しない。slot 1 - 5をそれぞれ `bonusTypeId` / `bonusRankId` まで比較し、不一致はDomain validation issueとする
 - 中間結果を `finalBonuses` から逆算せず、同一depthの別branch結果を代用しない。採用されたcanonical operation historyの結果だけを保持する
 - `bonusAmendmentTrace` はoptionalであり、この項目が存在しなかった時点のCandidateも有効とする。additiveな観測情報であって計算意味を変えないため、欠落を理由にstale化しない
+- `skillAmendmentTrace` は `bonusAmendmentTrace` のSkill側対応物であり、同じ観測情報契約に従う。Candidate semantic identityに含めず、Candidate ID（`semanticHash`）、`candidateStableKey`、Candidate重複排除key、`searchStateHash`、`referencedOwnedWeaponsHash`、`BuildCandidateMeaning` fingerprint、retention、ordering、dominance、Ideal / Practical判定、stalenessのいずれの入力にもならない
+- `skillAmendmentTrace` を持つ場合、`route.operations` 内の `reset_skills` と1対1で実行順に対応し、`operationIndex` は該当Operationの位置、`operationType` は `"reset_skills"` と一致する。連続する同一Operationでも「何番目の `reset_skills` か」ではなく `operationIndex` で束縛する
+- 各entryの `seriesSkillId` / `groupSkillId` はSkill streamがそのCounter位置で実際に使用した予測結果を保持する。`finalBonuses` 相当の逆算、最終Skillの全stepへの複製、別Counter位置の結果の流用を行わない
+- 最後のSkill amendmentのentryはCandidateの `seriesSkillId` / `groupSkillId` と一致する。Routeの末尾がBonus amendment等でも比較対象は最後の `reset_skills` とする
+- Skill結果のauthorityは引き続きCandidateの `seriesSkillId` / `groupSkillId` であり、`skillAmendmentTrace` は説明用である
+- Route内の `reset_skills` 件数と予測結果件数が一致しない場合はinternal inconsistencyとしてCandidate生成をfail loudlyし、短い方へ黙って合わせない
+- `reset_skills` を1回も含まないSearch生成Candidateは `skillAmendmentTrace = []` とする。`undefined` はこの項目が存在しなかった時点のCandidateを意味し、`[]` とは区別してよい。どちらもUIでは予測結果を表示しない
+- `skillAmendmentTrace` はoptionalであり、この項目が存在しなかった時点のCandidateも有効とする。欠落を理由にstale化せず、read migrationも行わない
 
 ## 9.2 BuildRoute
 

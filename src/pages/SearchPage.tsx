@@ -29,6 +29,7 @@ import type {
   CandidateResultFilter,
   CandidateRouteFilter,
   CandidateSearchInput,
+  CandidateSearchNoticeSeverity,
   CandidateSearchProgress,
   CandidateSearchResult,
   CandidateSearchSettings,
@@ -44,6 +45,7 @@ import {
   type SearchWorkerClient,
 } from '../services/search/searchWorkerClient'
 import {
+  candidateSearchNoticeSeverityLabels,
   candidateSearchProgressPhaseLabels,
   routeKindLabels,
   skippedRouteReasonLabels,
@@ -51,6 +53,9 @@ import {
 
 const loadedMaster = loadMasterData()
 const defaultMaster = loadedMaster.ok ? loadedMaster.data : null
+
+/** Notices are rendered info-first, so the successful-search case reads first. */
+const noticeSeverities: readonly CandidateSearchNoticeSeverity[] = ['info', 'warning']
 
 function createSearchRunId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `search-${Date.now()}`
@@ -289,7 +294,26 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
             </Stack>
           </Paper>
         )}
-        {result && result.warnings.length > 0 && <Alert severity="warning"><Typography variant="subtitle2">警告</Typography>{result.warnings.map((warning, index) => <Typography variant="body2" key={`${warning.targetWeaponId}:${index}`}>{warning.message}</Typography>)}</Alert>}
+        {result && noticeSeverities.map((severity) => {
+          // Grouped by severity so a search that merely used a narrower method
+          // is never read as a failed search.
+          const notices = result.warnings.filter((warning) => warning.severity === severity)
+          if (notices.length === 0) return null
+          return (
+            <Alert severity={severity} key={severity}>
+              <Typography variant="subtitle2">{candidateSearchNoticeSeverityLabels[severity]}</Typography>
+              {notices.map((notice, index) => (
+                <Typography
+                  variant="body2"
+                  sx={{ whiteSpace: 'pre-line' }}
+                  key={`${notice.targetWeaponId}:${index}`}
+                >
+                  {notice.message}
+                </Typography>
+              ))}
+            </Alert>
+          )
+        })}
         {result && masterForDisplay && result.targetResults.map((targetResult) => {
           const target = targetById.get(targetResult.targetWeaponId) ?? null
           const idealCount = targetResult.candidates.filter(({ category }) => category === 'ideal').length

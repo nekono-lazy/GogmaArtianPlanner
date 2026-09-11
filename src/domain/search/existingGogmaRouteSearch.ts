@@ -31,6 +31,7 @@ function zeroSkillSolution(source: OwnedGogmaArtianWeapon): RouteSkillSolution {
     groupSkillId: source.groupSkillId,
     estimatedSkillAdvance: 0,
     operations: [],
+    amendmentResults: [],
   }
 }
 
@@ -112,7 +113,7 @@ export async function searchExistingGogmaRoutes(context: RouteSearchContext, sch
         } else if (notice.prediction.type === 'keep_bonuses') {
           keepUnsupportedSources.add(source.id)
           const message = `Keep Bonuses branches from OwnedWeapon '${source.id}' were excluded by input support (${notice.prediction.reason}).`
-          if (!result.warnings.some((warning) => warning.message === message)) result.warnings.push({ targetWeaponId: context.target.id, message })
+          if (!result.warnings.some((warning) => warning.message === message)) result.warnings.push({ targetWeaponId: context.target.id, severity: 'warning', message })
         }
       },
     })

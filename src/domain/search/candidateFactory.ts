@@ -9,8 +9,10 @@ import type {
   BuildCandidate,
   BuildRoute,
   CandidateBonusAmendmentStep,
+  CandidateSkillAmendmentStep,
   MaterialRequirement,
   RouteOperation,
+  SkillAmendmentResult,
   TargetWeapon,
 } from '../models/publicTypes'
 import { isBlindCreateNormalArtianOperation } from '../models/publicTypes'
@@ -32,6 +34,12 @@ export interface CandidatePrediction {
    * Candidate then simply carries no `bonusAmendmentTrace`.
    */
   bonusAmendmentResults?: readonly BonusAmendmentResult[]
+  /**
+   * The Skill stream's predicted result of each Reset Skills of this Route, in
+   * execution order. Omitted when the caller has no observational trace; the
+   * Candidate then simply carries no `skillAmendmentTrace`.
+   */
+  skillAmendmentResults?: readonly SkillAmendmentResult[]
 }
 
 /**
@@ -65,6 +73,34 @@ export function createCandidateBonusAmendmentTrace(
       ...bonus,
     })) as CandidateBonusAmendmentStep['restorationBonuses'],
     restorationBonusScope: results[index].restorationBonusScope,
+  }))
+}
+
+/**
+ * The Skill counterpart of `createCandidateBonusAmendmentTrace()`.
+ *
+ * The binding is positional over the `reset_skills` operations themselves, so a
+ * run of consecutive Reset Skills can never shift by one, and a count mismatch
+ * fails loudly instead of repeating the final Skills next to every operation.
+ */
+export function createCandidateSkillAmendmentTrace(
+  operations: readonly RouteOperation[],
+  results: readonly SkillAmendmentResult[],
+): CandidateSkillAmendmentStep[] {
+  const amendments = operations.flatMap((operation, operationIndex) =>
+    operation.type === 'reset_skills' ? [operationIndex] : [],
+  )
+  if (amendments.length !== results.length) {
+    throw new CandidateSearchError(
+      'invalid_candidate',
+      `Route has ${amendments.length} Reset Skills operation(s) but ${results.length} predicted result(s).`,
+    )
+  }
+  return amendments.map((operationIndex, index) => ({
+    operationIndex,
+    operationType: 'reset_skills',
+    seriesSkillId: results[index].seriesSkillId,
+    groupSkillId: results[index].groupSkillId,
   }))
 }
 
@@ -287,6 +323,14 @@ export function createCandidateFromPrediction(
           bonusAmendmentTrace: createCandidateBonusAmendmentTrace(
             prediction.route.operations,
             prediction.bonusAmendmentResults,
+          ),
+        }),
+    ...(prediction.skillAmendmentResults === undefined
+      ? {}
+      : {
+          skillAmendmentTrace: createCandidateSkillAmendmentTrace(
+            prediction.route.operations,
+            prediction.skillAmendmentResults,
           ),
         }),
   }

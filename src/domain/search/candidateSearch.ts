@@ -86,6 +86,7 @@ function selectedTargets(
     if (!target) {
       warnings.push({
         targetWeaponId: id,
+        severity: 'warning',
         message: `TargetWeapon '${id}' does not exist and was not searched.`,
       })
       return []
@@ -93,6 +94,7 @@ function selectedTargets(
     if (!target.isEnabled) {
       warnings.push({
         targetWeaponId: id,
+        severity: 'warning',
         message: `TargetWeapon '${id}' is disabled and was not searched.`,
       })
       return []
@@ -104,6 +106,7 @@ function selectedTargets(
     if (!containment.isValid) {
       warnings.push({
         targetWeaponId: id,
+        severity: 'warning',
         message: `TargetWeapon '${id}' violates the Ideal implies Practical containment invariant and was not searched: ${containment.issues
           .map((issue) => `${issue.path}: ${issue.message}`)
           .join(' / ')}`,

@@ -123,6 +123,31 @@ export interface CandidateBonusAmendmentStep extends BonusAmendmentResult {
   operationType: 'reset_bonuses' | 'keep_bonuses'
 }
 
+/**
+ * The predicted Series / Group Skills produced by one Reset Skills operation.
+ *
+ * The Skill counterpart of `BonusAmendmentResult`, and purely observational for
+ * the same reason: it explains a Route that is already decided, so it never
+ * participates in Candidate semantic identity, hashing, ordering, retention, or
+ * deduplication. `null` keeps its ordinary meaning of "no skill".
+ */
+export interface SkillAmendmentResult {
+  seriesSkillId: SeriesSkillId | null
+  groupSkillId: GroupSkillId | null
+}
+
+/**
+ * One entry of `BuildCandidate.skillAmendmentTrace`.
+ *
+ * `operationIndex` is the position of the described operation inside
+ * `BuildRoute.operations`, so a run of consecutive `reset_skills` operations can
+ * never be shifted by one against its predicted result.
+ */
+export interface CandidateSkillAmendmentStep extends SkillAmendmentResult {
+  operationIndex: number
+  operationType: 'reset_skills'
+}
+
 export interface BuildCandidate {
   id: BuildCandidateId
   targetWeaponId: TargetWeaponId
@@ -153,6 +178,16 @@ export interface BuildCandidate {
    * no calculation meaning. UI omits the prediction display when it is absent.
    */
   bonusAmendmentTrace?: CandidateBonusAmendmentStep[]
+  /**
+   * Observational per-Reset-Skills expected results, in execution order.
+   *
+   * Optional for the same reason as `bonusAmendmentTrace`: Candidates persisted
+   * before this field existed stay valid and never become stale, because the
+   * field explains an already decided Route and changes no calculation meaning.
+   * `seriesSkillId` / `groupSkillId` remain the authority for the Route's final
+   * Skills. UI omits the prediction display when the field is absent.
+   */
+  skillAmendmentTrace?: CandidateSkillAmendmentStep[]
 }
 
 export interface BuildRoute {

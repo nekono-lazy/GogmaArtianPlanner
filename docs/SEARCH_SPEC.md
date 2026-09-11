@@ -219,11 +219,22 @@ export interface SkippedRoute {
   detail: string;
 }
 
+export type CandidateSearchNoticeSeverity = "info" | "warning";
+
 export interface CandidateSearchWarning {
   targetWeaponId: TargetWeaponId | null;
+  severity: CandidateSearchNoticeSeverity;
   message: string;
 }
 ```
+
+`CandidateSearchWarning` はseverity付きの通知である。`severity` を明示しないCandidate Search通知を生成しない。
+
+- `info` は、通常より限定された方法で検索が成立したことの案内に使う。6.1.1のblind Reset variantが正常に検索された場合がこれにあたる。エラーでも結果品質の低下でもない
+- `warning` は、検索能力が欠けてRouteを検索できなかった場合、一部の予測を除外した場合、Target定義が不正で検索対象から除外した場合など、結果を読むうえで注意が必要な場合に使う
+- fallbackが成立したという理由だけで既存warningを `info` へ引き下げない
+
+通常UIへ内部reason enum（`normal_counter_unconfirmed` など）や英語Domain用語をそのまま表示しない。reasonはどの文言を選ぶかの判定にだけ使う。UIでのseverity別表示は `docs/UI_FLOW.md` 9が正本である。
 
 未確定RNG値は `*_unconfirmed`、Engine機能不足は `*_prediction_unsupported`、所持source不足は `no_owned_weapon_available` / `no_unprotected_source_weapon` として区別する。`no_owned_weapon_available` は `owned_normal_artian_to_gogma` と `existing_gogma_*` の両方で使うため、UI文言は武器種を限定しない汎用表現にする。武器種はRouteKind labelが示す。値が確定していてもEngineが未対応なら予測可能とみなさず、逆にEngineが対応していても必要値が未確定なら該当RNG値のreasonを返す。
 
@@ -444,6 +455,30 @@ SkillSolution = { resetCount r, seriesSkillId, groupSkillId }
 
 `resetCount` はSkill streamの操作数そのものなので、操作数を独立キーとして
 重ねない。
+
+#### 5.5.2.1 Reset Skills結果の観測記録
+
+Skill streamは各Reset Skills位置について、その操作が生成する予測Skillを
+observational recordとして保持する。`resetCount = r` の解では、`1 ... r` 回目の
+Reset Skillsの結果を実行順に並べたものであり、`resetSkillsOperations()` が
+再構成する操作列とindexが1対1で対応する。
+
+- 記録はstream生成時に確定した予測をそのまま保持し、最終Skillからの逆算、
+  最終Skillの全stepへの複製、別Counter位置の結果の流用を行わない
+- 記録はstreamの既存memoized予測を読むだけであり、`predictSkills` の呼び出し回数を
+  増やさない。UI層・presentation層でProduction RNGを再実行しない
+- 記録は `RouteSkillSolution` の `operations` とindexが1対1で対応し、Candidateでは
+  `BuildCandidate.skillAmendmentTrace` として `operationIndex` 付きで保持する
+  (`docs/DATA_MODEL.md` 9.1)
+- 記録は観測情報であり、stream-local retention key、5.5.2の順序、canonical Ideal選択、
+  Practical dominance、Candidate semantic identityのいずれの入力にもならない
+- 記録はRouteKindに依存しない。`reset_skills` を含むCandidateであれば、新規通常
+  アーティア経由、6.1.1のblind variant、所持通常アーティア経由、既存巨戟のいずれでも
+  同じ規則で生成する
+- `convert_normal_to_gogma` の初回Skill付与はこの記録の対象外であり、
+  `reset_skills` のentryとして報告しない
+
+`ConstrainedCandidate` はこの観測記録を持たない。5.5.3.1と同じ理由である。
 
 ### 5.5.3 Bonus stream解集合
 
@@ -1494,8 +1529,13 @@ reset_bonuses                 <- 必須。最初のBonus amendmentは必ずReset
 報告。
 
 - blind variantを検索した場合、RouteKind `normal_artian_to_gogma` は `searchedRoutes` に入る。同じRouteKindを同時に `skippedRoutes` へ載せない
-- predicted variantが実行されなかったことは `CandidateSearchWarning` で報告する。warningはpredicted variantが不可だった理由(`normal_counter_unconfirmed` など)と、blind variantだけを検索した事実を含める
-- blind variantも不可の場合は、従来どおりpredicted variantのskip理由を `skippedRoutes` へ記録し、blind variantが不可だった理由をwarningへ追加する
+- predicted variantが実行されなかったことは `CandidateSearchWarning` で報告する。blind variantが正常に検索された場合、この通知は `severity = "info"` とする。検索は成立しており、生成されたCandidateは通常のCandidateだからである
+- 通知は「初期ボーナスを使わないルートで検索した」という成立事実と、predicted variantが使えなかった原因を区別して示す。原因は少なくとも次の2つを別の文言として扱う
+  - 対象武器種のレア8 NormalArtianCounterが未確定
+  - Normal Artian Predictionまたはそのinput supportが利用不能
+  Normal Counterが確定していてもPredictionだけが利用不能な場合があるため、後者を「カウンターが未確定」と説明しない
+- 通知本文へ `normal_counter_unconfirmed` などの内部reason enumや英語Domain用語を埋め込まない
+- blind variantも不可の場合は、従来どおりpredicted variantのskip理由を `skippedRoutes` へ記録し、blind variantが不可だった理由を `severity = "warning"` の通知へ追加する。このRouteKindは何も検索されていないためである
 
 将来。
 

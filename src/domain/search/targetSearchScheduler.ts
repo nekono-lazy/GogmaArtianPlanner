@@ -8,7 +8,7 @@ import { createDeltaCross } from './deltaCross'
 import { createIncrementalBonusRetention, createIncrementalSkillRetention } from './incrementalStreamSolutions'
 import { createBaseCandidate, existingGogmaRouteKind, type RouteCompositionBase, type RouteSearchContext } from './routeSearchShared'
 import { SearchWorkQueue } from './searchWorkQueue'
-import { resetSkillsOperations } from './skillStream'
+import { resetSkillsOperations, skillAmendmentResults } from './skillStream'
 import {
   buildBonusSolutionSet, buildSkillSolutionSet, type EvaluatedBonusSolution,
   type EvaluatedSkillSolution, type RouteBonusSolution, type RouteSkillSolution,
@@ -97,6 +97,7 @@ export class TargetSearchScheduler {
             ...skill.solution.operations.map(bindSource),
           ] },
           bonus.solution.amendmentResults,
+          skill.solution.amendmentResults,
         )
         if (!candidate) return
         base.onCandidate(candidate)
@@ -144,6 +145,7 @@ export class TargetSearchScheduler {
         const additions = retention.appendDepth(delta.solutions.map((solution) => ({
           ...solution, estimatedSkillAdvance: solution.resetCount,
           operations: resetSkillsOperations(delta, solution.resetCount, null),
+          amendmentResults: skillAmendmentResults(delta, solution.resetCount),
         })))
         for (const value of additions) {
           channel.retained.push(value)

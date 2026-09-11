@@ -59,10 +59,22 @@ describe('Candidate Search routes', () => {
       expect.objectContaining({ route: 'normal_artian_to_gogma' }),
     )
     expect(predictNormalArtian).not.toHaveBeenCalled()
-    expect(result.warnings.some(({ message }) =>
-      message.includes('normal_counter_unconfirmed') &&
-      message.includes('forced Reset Bonuses route'),
-    )).toBe(true)
+    // The fallback succeeded, so it is an informational notice in Japanese and
+    // never leaks an internal reason enum into the normal UI.
+    const notice = result.warnings.find(({ severity }) => severity === 'info')
+    expect(notice?.severity).toBe('info')
+    expect(notice?.message).toContain(
+      '通常アーティアの初期ボーナスを使わないルートで検索しました。',
+    )
+    expect(notice?.message).toContain(
+      '通常アーティアのカウンターが未確定のため、作成直後の復元ボーナスは予測していません。',
+    )
+    expect(notice?.message).toContain(
+      '通常アーティアを1本作成して巨戟化したあと、復元ボーナスを再抽選して5枠を確定するルートを検索しています。',
+    )
+    expect(notice?.message).not.toContain('normal_counter_unconfirmed')
+    expect(notice?.message).not.toContain('forced Reset Bonuses')
+    expect(notice?.message).not.toContain('Normal Artian prediction was unavailable')
     const candidate = targetResult.candidates.find(
       ({ route }) => route.kind === 'normal_artian_to_gogma',
     )
@@ -249,9 +261,17 @@ describe('Candidate Search routes', () => {
         reason: 'normal_counter_unconfirmed',
       }),
     )
+    // Nothing was searched for this RouteKind, so this one stays a warning, and
+    // it explains the cause without naming the internal reason enum.
+    expect(result.warnings).toContainEqual(expect.objectContaining({
+      severity: 'warning',
+      message: expect.stringContaining(
+        '通常アーティアの初期ボーナスを使わないルートも実行できなかったため、通常アーティア経由のルートは検索していません。',
+      ),
+    }))
     expect(result.warnings.some(({ message }) =>
       message.includes('gogma_prediction_unsupported'),
-    )).toBe(true)
+    )).toBe(false)
   })
 
   it('keeps the owned Normal route on its registered bonuses beside the forced Reset route', async () => {
@@ -1302,9 +1322,11 @@ describe('Candidate Search routes', () => {
       deterministicExecution,
     )
     expect(result.targetResults).toEqual([])
+    // A genuine capability / definition problem keeps `warning`.
     expect(result.warnings).toEqual([
       {
         targetWeaponId: input.targetWeapons[0].id,
+        severity: 'warning',
         message: expect.stringContaining('practicalBonusConditions[0]'),
       },
     ])
@@ -1331,6 +1353,7 @@ describe('Candidate Search routes', () => {
     expect(result.warnings).toEqual([
       {
         targetWeaponId: input.targetWeapons[0].id,
+        severity: 'warning',
         message: expect.stringContaining('practicalSkillCondition'),
       },
     ])

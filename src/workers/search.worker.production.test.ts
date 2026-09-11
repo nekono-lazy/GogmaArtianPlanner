@@ -153,9 +153,17 @@ describe('Production Candidate Search Worker composition', () => {
     // The Production Engine does not support this Normal input, so no predicted
     // Normal offset exists. The forced Reset variant (SEARCH_SPEC 6.1.1) needs
     // no Normal prediction at all and still runs.
+    // The Counter is confirmed here: only the prediction is unavailable, so the
+    // notice must not claim the Counter is unconfirmed.
     expect(result.warnings).toContainEqual(expect.objectContaining({
-      message: expect.stringContaining('normal_prediction_unsupported'),
+      severity: 'info',
+      message: expect.stringContaining(
+        '通常アーティアの初期復元ボーナス予測を利用できないため、作成直後の復元ボーナスは予測していません。',
+      ),
     }))
+    const notice = result.warnings.find(({ severity }) => severity === 'info')
+    expect(notice?.message).not.toContain('カウンターが未確定')
+    expect(notice?.message).not.toContain('normal_prediction_unsupported')
     expect(targetResult.candidates.every(({ route }) =>
       route.operations.every((operation) =>
         operation.type !== 'create_normal_artian' ||

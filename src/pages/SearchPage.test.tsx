@@ -58,6 +58,13 @@ function resultFor(
   }
 }
 
+function resultWithNotices(
+  target: TargetWeapon,
+  warnings: CandidateSearchResult['warnings'],
+): CandidateSearchResult {
+  return { ...resultFor(target, []), warnings }
+}
+
 function dependencies(client: ControlledClient, targets = [createValidTargetWeapon()]): SearchPageDependencies {
   const master = createValidMasterDataFixture()
   return {
@@ -196,6 +203,61 @@ describe('SearchPage', () => {
     client.resolve(resultFor(target, [createValidBuildCandidate()]))
     await waitFor(() => expect(screen.queryByText(/理想候補/)).not.toBeInTheDocument())
     expect(client.cancelSearch).toHaveBeenCalledOnce()
+  })
+
+  it('presents a successful narrower search as a notice rather than a warning', async () => {
+    const user = userEvent.setup()
+    const target = createValidTargetWeapon()
+    const client = new ControlledClient()
+    render(<SearchPage dependencies={dependencies(client, [target])} />)
+    await user.click(await screen.findByRole('button', { name: '検索開始' }))
+    client.resolve(resultWithNotices(target, [{
+      targetWeaponId: target.id,
+      severity: 'info',
+      message: '通常アーティアの初期ボーナスを使わないルートで検索しました。',
+    }]))
+
+    const heading = await screen.findByText('お知らせ')
+    expect(heading).toBeInTheDocument()
+    expect(screen.queryByText('警告')).not.toBeInTheDocument()
+    expect(heading.closest('.MuiAlert-root')).toHaveClass('MuiAlert-colorInfo')
+  })
+
+  it('keeps a genuine warning in a warning Alert', async () => {
+    const user = userEvent.setup()
+    const target = createValidTargetWeapon()
+    const client = new ControlledClient()
+    render(<SearchPage dependencies={dependencies(client, [target])} />)
+    await user.click(await screen.findByRole('button', { name: '検索開始' }))
+    client.resolve(resultWithNotices(target, [{
+      targetWeaponId: target.id,
+      severity: 'warning',
+      message: '通常アーティア経由のルートは検索していません。',
+    }]))
+
+    const heading = await screen.findByText('警告')
+    expect(screen.queryByText('お知らせ')).not.toBeInTheDocument()
+    expect(heading.closest('.MuiAlert-root')).toHaveClass('MuiAlert-colorWarning')
+  })
+
+  it('separates notices from warnings when both are present', async () => {
+    const user = userEvent.setup()
+    const target = createValidTargetWeapon()
+    const client = new ControlledClient()
+    render(<SearchPage dependencies={dependencies(client, [target])} />)
+    await user.click(await screen.findByRole('button', { name: '検索開始' }))
+    client.resolve(resultWithNotices(target, [
+      { targetWeaponId: target.id, severity: 'warning', message: '警告メッセージfixture' },
+      { targetWeaponId: target.id, severity: 'info', message: 'お知らせメッセージfixture' },
+    ]))
+
+    const infoAlert = (await screen.findByText('お知らせ')).closest('.MuiAlert-root')
+    const warningAlert = screen.getByText('警告').closest('.MuiAlert-root')
+    expect(infoAlert).not.toBe(warningAlert)
+    expect(infoAlert).toHaveTextContent('お知らせメッセージfixture')
+    expect(infoAlert).not.toHaveTextContent('警告メッセージfixture')
+    expect(warningAlert).toHaveTextContent('警告メッセージfixture')
+    expect(warningAlert).not.toHaveTextContent('お知らせメッセージfixture')
   })
 
   it('adds a displayed Candidate to Build List through the service boundary', async () => {

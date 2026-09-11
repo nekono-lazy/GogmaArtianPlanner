@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import type {
   BuildCandidate,
   CandidateBonusAmendmentStep,
+  CandidateSkillAmendmentStep,
   RestorationBonusSet,
   RouteOperation,
 } from '../../domain/models/publicTypes'
@@ -83,6 +84,7 @@ function traceStep(
 function candidateWith(
   operations: RouteOperation[],
   bonusAmendmentTrace: CandidateBonusAmendmentStep[] | undefined,
+  skillAmendmentTrace?: CandidateSkillAmendmentStep[],
 ): BuildCandidate {
   const candidate = createValidBuildCandidate()
   candidate.route = { ...candidate.route, operations }
@@ -90,6 +92,11 @@ function candidateWith(
     delete candidate.bonusAmendmentTrace
   } else {
     candidate.bonusAmendmentTrace = bonusAmendmentTrace
+  }
+  if (skillAmendmentTrace === undefined) {
+    delete candidate.skillAmendmentTrace
+  } else {
+    candidate.skillAmendmentTrace = skillAmendmentTrace
   }
   return candidate
 }
@@ -278,5 +285,146 @@ describe('CandidateCard route bonus results', () => {
     )
 
     expect(container.querySelectorAll('ol li')).toHaveLength(0)
+  })
+})
+
+describe('CandidateCard route skill results', () => {
+  /** Resolved by `seriesSkillLabel` / `groupSkillLabel` from the Master fixture. */
+  const skillLabels = {
+    series: 'シリーズfixture',
+    disabledSeries: '無効シリーズfixture',
+    group: 'グループfixture',
+    none: 'なし',
+  }
+
+  const resetSkills = (skillCounterBefore: number): RouteOperation => ({
+    type: 'reset_skills',
+    sourceOwnedWeaponId: null,
+    skillCounterBefore,
+    skillCounterAfter: skillCounterBefore + 1,
+  })
+
+  function skillStep(
+    operationIndex: number,
+    seriesSkillId: string | null,
+    groupSkillId: string | null,
+  ): CandidateSkillAmendmentStep {
+    return { operationIndex, operationType: 'reset_skills', seriesSkillId, groupSkillId }
+  }
+
+  it('shows the predicted Series and Group next to a single Reset Skills', async () => {
+    const candidate = candidateWith(
+      [resetSkills(8)],
+      undefined,
+      [skillStep(0, 'series_skill.fixture.enabled', 'group_skill.fixture.enabled')],
+    )
+    const { container } = await renderExpanded(candidate)
+
+    expect(routeStepTexts(container)).toEqual([
+      `スキルをリセット予測結果:シリーズ: ${skillLabels.series} ／ グループ: ${skillLabels.group}`,
+    ])
+    // Master-backed labels only; a raw Master ID must never reach the card.
+    expect(container.textContent).not.toContain('series_skill.fixture.enabled')
+  })
+
+  it('keeps each repeated Reset Skills bound to its own predicted result', async () => {
+    const candidate = candidateWith(
+      [resetSkills(8), resetSkills(9), resetSkills(10)],
+      undefined,
+      [
+        skillStep(0, 'series_skill.fixture.enabled', null),
+        skillStep(1, 'series_skill.fixture.disabled', 'group_skill.fixture.enabled'),
+        skillStep(2, null, 'group_skill.fixture.enabled'),
+      ],
+    )
+    const { container } = await renderExpanded(candidate)
+    const texts = routeStepTexts(container)
+
+    expect(texts).toHaveLength(3)
+    expect(new Set(texts).size).toBe(3)
+    expect(texts[0]).toBe(
+      `スキルをリセット予測結果:シリーズ: ${skillLabels.series} ／ グループ: ${skillLabels.none}`,
+    )
+    expect(texts[1]).toBe(
+      `スキルをリセット予測結果:シリーズ: ${skillLabels.disabledSeries} ／ グループ: ${skillLabels.group}`,
+    )
+    expect(texts[2]).toBe(
+      `スキルをリセット予測結果:シリーズ: ${skillLabels.none} ／ グループ: ${skillLabels.group}`,
+    )
+  })
+
+  it('shows bonus and skill predictions on their own operations', async () => {
+    const candidate = candidateWith(
+      [amendment(10, 'reset_bonuses'), amendment(11, 'keep_bonuses'), resetSkills(8), resetSkills(9)],
+      [
+        traceStep(0, 'reset_bonuses', firstResult()),
+        traceStep(1, 'keep_bonuses', secondResult()),
+      ],
+      [
+        skillStep(2, 'series_skill.fixture.enabled', null),
+        skillStep(3, null, 'group_skill.fixture.enabled'),
+      ],
+    )
+    const { container } = await renderExpanded(candidate)
+    const texts = routeStepTexts(container)
+
+    expect(texts[0]).toContain(labels.attackHigh)
+    expect(texts[0]).not.toContain('シリーズ:')
+    expect(texts[1]).toContain(labels.attackSpecial)
+    expect(texts[1]).not.toContain('シリーズ:')
+    expect(texts[2]).toBe(
+      `スキルをリセット予測結果:シリーズ: ${skillLabels.series} ／ グループ: ${skillLabels.none}`,
+    )
+    expect(texts[3]).toBe(
+      `スキルをリセット予測結果:シリーズ: ${skillLabels.none} ／ グループ: ${skillLabels.group}`,
+    )
+  })
+
+  it('renders a Candidate saved before the skill trace existed without predictions', async () => {
+    const candidate = candidateWith([resetSkills(8), resetSkills(9)], undefined, undefined)
+    const { container } = await renderExpanded(candidate)
+
+    expect(routeStepTexts(container)).toEqual(['スキルをリセット', 'スキルをリセット'])
+    expect(screen.queryByText('予測結果:')).toBeNull()
+    expect(
+      screen.getByText('この候補には各スキルリセット後の予測結果が記録されていません。'),
+    ).toBeTruthy()
+  })
+
+  it('never attaches a skill prediction to a non-Reset-Skills operation', async () => {
+    const candidate = candidateWith(
+      [
+        {
+          type: 'convert_normal_to_gogma',
+          weaponTypeId: 'weapon.fixture.a',
+          skillCounterBefore: 7,
+          skillCounterAfter: 8,
+        },
+        resetSkills(8),
+      ],
+      undefined,
+      [skillStep(1, 'series_skill.fixture.enabled', null)],
+    )
+    const { container } = await renderExpanded(candidate)
+    const texts = routeStepTexts(container)
+
+    expect(texts[0]).toBe('巨戟アーティアへ変換')
+    expect(texts[1]).toContain('予測結果:')
+    expect(screen.getAllByText('予測結果:')).toHaveLength(1)
+  })
+
+  it('keeps the final Skill summary above the route detail', async () => {
+    const candidate = candidateWith(
+      [resetSkills(8)],
+      undefined,
+      [skillStep(0, 'series_skill.fixture.disabled', null)],
+    )
+    await renderExpanded(candidate)
+
+    // The card header shows the finished weapon; the route step shows what that
+    // one operation produces. `createValidBuildCandidate` uses a Master ID the
+    // fixture does not define, so the header keeps its own fallback label.
+    expect(screen.getByText(/不明なシリーズスキル/)).toBeTruthy()
+    expect(screen.getByText(new RegExp(skillLabels.disabledSeries))).toBeTruthy()
   })
 })

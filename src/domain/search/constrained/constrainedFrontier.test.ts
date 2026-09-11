@@ -87,6 +87,10 @@ function skillSolution(spec: SkillSpec): EvaluatedSkillSolution {
         skillCounterBefore: 0,
         skillCounterAfter: 1,
       })),
+      amendmentResults: Array.from({ length: spec.resetCount }, () => ({
+        seriesSkillId: `series_skill.fixture.s${spec.resetCount}`,
+        groupSkillId: null,
+      })),
     },
     idealMatch: false,
     practicalMatch: true,

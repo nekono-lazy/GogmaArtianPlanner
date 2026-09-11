@@ -5,6 +5,7 @@ import type {
   RestorationBonusSet,
   RouteOperation,
   SeriesSkillId,
+  SkillAmendmentResult,
   TargetWeapon,
 } from '../models/publicTypes'
 import { stableStringify } from '../models/publicTypes'
@@ -34,6 +35,12 @@ export interface RouteSkillSolution {
   estimatedSkillAdvance: number
   /** Reset Skills operations in execution order; empty when `resetCount = 0`. */
   operations: readonly RouteOperation[]
+  /**
+   * The predicted Skills right after each entry of `operations`, aligned
+   * index-for-index with it. Observational only: no retention key, ordering
+   * comparator, or Candidate identity reads it.
+   */
+  amendmentResults: readonly SkillAmendmentResult[]
 }
 
 /**
