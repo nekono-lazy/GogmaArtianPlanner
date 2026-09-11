@@ -244,11 +244,9 @@ export function createExpectedPlanState(
     .map(({ id, counter, isConfirmed }) => ({ id, counter, isConfirmed }))
   const normalizedWeapons = [...ownedWeapons]
     .sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0)
-    .map((weapon) => ({
-      ...normalizeExpectedOwnedWeapon(weapon),
-      relatedTargetWeaponIds: [...new Set(weapon.relatedTargetWeaponIds)]
-        .sort((left, right) => left < right ? -1 : left > right ? 1 : 0),
-    }))
+    // A Target's preferred owned weapon is planning input on the Target, not
+    // inventory state, so it never enters this hash.
+    .map((weapon) => normalizeExpectedOwnedWeapon(weapon))
 
   return {
     rngStateHash: hashStableValue(normalizedRngState),

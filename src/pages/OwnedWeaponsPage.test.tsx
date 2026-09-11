@@ -17,7 +17,7 @@ function existingWeapon(): OwnedGogmaArtianWeapon {
   return {
     id: 'owned-ui' as OwnedWeapon['id'], kind: 'gogma', name: '既存武器', weaponTypeId: 'weapon.dual_blades', elementId: 'element.thunder',
     restorationBonusScope: 'gogma_artian', restorationBonuses: Array.from({ length: 5 }, () => ({ bonusTypeId: 'bonus_type.attack', bonusRankId: 'bonus_rank.ex' })) as OwnedWeapon['restorationBonuses'],
-    seriesSkillId: null, groupSkillId: null, status: 'practical', isProtected: true, relatedTargetWeaponIds: [], memo: null, createdAt: 'created', updatedAt: 'updated',
+    seriesSkillId: null, groupSkillId: null, status: 'practical', isProtected: true, memo: null, createdAt: 'created', updatedAt: 'updated',
   }
 }
 

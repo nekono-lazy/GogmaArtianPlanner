@@ -283,6 +283,16 @@ export interface PlannerSearchState {
    */
   weaponSwitchCount: number
   /**
+   * How much of this branch's progress has been made on Routes that start from
+   * their Target's preferred owned weapon.
+   *
+   * Plan preference only, never correctness or feasibility: it sits below every
+   * existing evaluation term and above `weaponSwitchCount` in
+   * `comparePlannerSearchStates()`, so it decides nothing except which of two
+   * otherwise equally rated branches survives (`docs/PLANNER_SPEC.md` 7.4).
+   */
+  preferredSourceProgressCount: number
+  /**
    * The weapon subject of the most recent switch-counted operation, or `null`
    * before the branch has run one. Operations with no continuously operated
    * subject - `reserve_weapon` above all - leave it untouched, so they never

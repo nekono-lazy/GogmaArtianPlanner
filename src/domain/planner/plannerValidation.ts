@@ -18,6 +18,7 @@ import {
   validateOwnedWeapon,
 } from '../models/publicTypes'
 import { evaluateBuildListEntryStaleness } from '../buildList'
+import { validateTargetPreferredOwnedWeapons } from '../target'
 import { collectReferencedOwnedWeaponIds } from '../models/hashing'
 import { deriveRngCapabilities } from '../rng/capabilities'
 import type { RngPredictionUnsupportedReason } from '../rng/rngEngine'
@@ -391,6 +392,16 @@ export function validatePlannerInput(
       appendUniqueEntryWarning(warnings, warningKeys, entry, eligibility.warningKind, eligibility.reason)
     })
 
+  // The same collection-level authority the save Service and Candidate Search
+  // use, so a preference pointing at a missing, incompatible, protected, or
+  // double-claimed weapon fails the Planner input closed rather than silently
+  // preferring nothing (`docs/DATA_MODEL.md` 8.5).
+  issues.push(
+    ...validateTargetPreferredOwnedWeapons(
+      input.targetWeapons,
+      input.ownedWeapons,
+    ).issues,
+  )
   if (input.buildListEntries.length === 0) {
     warnings.push({ kind: 'no_build_list_entries', message: 'No BuildListEntry is available for Planner input.' })
   }
@@ -456,12 +467,6 @@ function validateReservedGogma(
     weapon.groupSkillId !== candidate.groupSkillId
   ) {
     issues.push(issue(path, 'inconsistent_snapshot', 'The reserved weapon must preserve the Candidate result, category, and required protection state.'))
-  }
-  const targetReferences = weapon.relatedTargetWeaponIds.filter(
-    (id) => id === entry.targetWeaponId,
-  )
-  if (targetReferences.length !== 1) {
-    issues.push(issue(`${path}.relatedTargetWeaponIds`, 'invalid_reference', 'The reserved weapon must reference its Target exactly once.'))
   }
 }
 
@@ -536,13 +541,8 @@ export function validateReserveWeaponInventoryChange(
         issues,
         source?.isProtected ?? false,
       )
-      if (source?.kind === 'gogma') {
-        const preservedTargets = source.relatedTargetWeaponIds.every((id) =>
-          updated.relatedTargetWeaponIds.includes(id),
-        )
-        if (!preservedTargets || updated.createdAt !== source.createdAt) {
-          issues.push(issue('updateOwnedWeapons[0]', 'invalid_state', 'Existing Target references and createdAt must be preserved.'))
-        }
+      if (source?.kind === 'gogma' && updated.createdAt !== source.createdAt) {
+        issues.push(issue('updateOwnedWeapons[0]', 'invalid_state', 'createdAt must be preserved.'))
       }
     }
   }

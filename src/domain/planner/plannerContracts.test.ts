@@ -106,7 +106,6 @@ function reservedGogma(entry: BuildListEntry): OwnedGogmaArtianWeapon {
     groupSkillId: entry.candidateSnapshot.groupSkillId,
     status: entry.candidateSnapshot.category,
     isProtected: entry.candidateSnapshot.category === 'ideal',
-    relatedTargetWeaponIds: [entry.targetWeaponId],
   }
 }
 
@@ -266,10 +265,6 @@ describe('Planner contracts', () => {
       groupSkillId: existingEntry.candidateSnapshot.groupSkillId,
       status: existingEntry.candidateSnapshot.category,
       isProtected: true,
-      relatedTargetWeaponIds: [...new Set([
-        ...existing.relatedTargetWeaponIds,
-        existingEntry.targetWeaponId,
-      ])],
     }
     expect(validateReserveWeaponInventoryChange(existingEntry, [existing], {
       ...emptyInventoryChange(),

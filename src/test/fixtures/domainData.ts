@@ -110,7 +110,6 @@ export function createValidOwnedWeapon(
     groupSkillId: 'group_skill.fixture.a',
     status: 'practical',
     isProtected: true,
-    relatedTargetWeaponIds: [targetWeaponId('target.fixture.a')],
     memo: 'Fixture memo excluded from semantic hashes.',
     createdAt: DOMAIN_FIXTURE_TIME,
     updatedAt: DOMAIN_FIXTURE_TIME,
@@ -125,6 +124,7 @@ export function createValidTargetWeapon(): TargetWeapon {
     elementId: 'element.fixture.a',
     priority: 3,
     isEnabled: true,
+    preferredOwnedWeaponId: null,
     idealBonuses: createRestorationBonusSet(),
     practicalBonusConditions: [
       {

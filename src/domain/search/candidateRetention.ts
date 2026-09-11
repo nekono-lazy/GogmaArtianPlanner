@@ -1,4 +1,4 @@
-import type { BuildCandidate, BuildRoute, MaterialRequirement, WeaponTypeId } from '../models/publicTypes'
+import type { BuildCandidate, BuildRoute, MaterialRequirement, OwnedWeaponId, WeaponTypeId } from '../models/publicTypes'
 import type { SearchMasterSubset } from './searchTypes'
 import { compareCandidateSelection, compareCanonicalIdeals, deduplicateCandidates } from './candidateProcessing'
 
@@ -93,15 +93,23 @@ export function practicalDominates(better: BuildCandidate, worse: BuildCandidate
   return strict
 }
 
-/** No filter or output cap may influence the horizon or dominance. */
-export function retainInitialCandidates(candidates: readonly BuildCandidate[], master: SearchMasterSubset, weaponTypeId: WeaponTypeId, cap: number) {
+/**
+ * No filter or output cap may influence the horizon or dominance.
+ *
+ * `preferredOwnedWeaponId` reaches only the two orderings, never the horizon,
+ * the dominance, or the cap: the Target's preference decides which of two
+ * equally rated solutions is chosen, and never how far the search looks or how
+ * many results it keeps (`docs/SEARCH_SPEC.md` 8.1).
+ */
+export function retainInitialCandidates(candidates: readonly BuildCandidate[], master: SearchMasterSubset, weaponTypeId: WeaponTypeId, cap: number, preferredOwnedWeaponId: OwnedWeaponId | null = null) {
   const unique = deduplicateCandidates(candidates)
-  const canonicalIdeal = unique.filter(({ category }) => category === 'ideal').sort(compareCanonicalIdeals)[0] ?? null
+  const canonicalIdeal = unique.filter(({ category }) => category === 'ideal')
+    .sort((left, right) => compareCanonicalIdeals(left, right, preferredOwnedWeaponId))[0] ?? null
   const horizon = unique.filter((candidate) => candidate.category === 'practical' &&
     (canonicalIdeal === null || candidate.estimatedOperationCount <= canonicalIdeal.estimatedOperationCount))
   const practical = horizon.filter((candidate) =>
     !horizon.some((other) => other !== candidate && practicalDominates(other, candidate, master, weaponTypeId)),
-  ).sort(compareCandidateSelection)
+  ).sort((left, right) => compareCandidateSelection(left, right, preferredOwnedWeaponId))
   const retained = canonicalIdeal ? [canonicalIdeal, ...practical] : practical
   return { canonicalIdeal, horizon, retained, bounded: retained.slice(0, cap) }
 }

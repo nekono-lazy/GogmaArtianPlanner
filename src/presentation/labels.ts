@@ -153,6 +153,7 @@ export const normalArtianRarityLabels: Record<NormalArtianRarity, string> = {
 export function getPersistenceReferenceKindLabel(kind: string): string {
   const labels: Record<string, string> = {
     owned_weapon: '所持武器',
+    target_weapon: '目標武器',
     build_candidate: '検索候補',
     build_list_entry: 'ビルドリスト',
     production_plan: '生産計画',

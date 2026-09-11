@@ -293,13 +293,17 @@ describe('ExpectedPlanState hashing', () => {
       .not.toBe(createExpectedPlanState(state, [counter], [normal]).ownedWeaponsHash)
   })
 
-  it('includes related Targets only in ExpectedPlanState', () => {
+  it('carries no Target relation in either OwnedWeapon hash', () => {
     const state = createValidRngState(); const counter = createValidNormalArtianCounter(); const route = referencedRoute()
     const weapon = createValidOwnedWeapon()
-    const changed = { ...weapon, relatedTargetWeaponIds: ['target.changed' as never] }
-    expect(createExpectedPlanState(state, [counter], [changed]).ownedWeaponsHash)
-      .not.toBe(createExpectedPlanState(state, [counter], [weapon]).ownedWeaponsHash)
-    expect(createReferencedOwnedWeaponsHash(route, [changed])).toBe(
+    // The relation now lives on TargetWeapon.preferredOwnedWeaponId, which is
+    // Target planning input and never inventory state, so neither hash can see
+    // it at all (`docs/DATA_MODEL.md` 8.5 / 11.2).
+    expect(Object.keys(weapon)).not.toContain('relatedTargetWeaponIds')
+    const renamed = { ...weapon, name: 'B', memo: 'x', updatedAt: 'later' }
+    expect(createExpectedPlanState(state, [counter], [renamed]).ownedWeaponsHash)
+      .toBe(createExpectedPlanState(state, [counter], [weapon]).ownedWeaponsHash)
+    expect(createReferencedOwnedWeaponsHash(route, [renamed])).toBe(
       createReferencedOwnedWeaponsHash(route, [weapon]),
     )
   })

@@ -166,12 +166,16 @@ physical action sharing semantics修正によりversionを **3** へ、共有Cou
 Route prefix silent fast-forward修正によりversionを **4** へ、探索上限で打ち切られた
 partial resultを実行可能ProductionPlanとして受け入れないartifact validity境界により
 versionを **5** へ更新した。
-Target妥協条件改訂でversionは **6** になり、保護武器の全性能変更禁止と操作0候補の導入で現行versionは **7** になった。旧1..6の全計算artifactは非互換とする。
+Target妥協条件改訂でversionは **6** になり、保護武器の全性能変更禁止と操作0候補の導入で
+versionは **7** になった。`OwnedWeapon.relatedTargetWeaponIds` を廃止しTarget側の
+`preferredOwnedWeaponId` へ置き換えた改訂は、Target definition semantics、Candidate Searchの
+同条件Route selection、Planner plan preferenceを変更するため、現行versionは **8** である。
+旧1..7の全計算artifactは非互換とする。
 以下の2..5互換例外は歴史的契約でありversion 6以降には適用しない。
 現行versionの単一authorityは `src/domain/models/common.ts` の
-`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 7` とし、Search、BuildList、Plannerと
-benchmark入力のruntime creatorで共用する。Target移行は独立してDexie `DATABASE_SCHEMA_VERSION = 2`、
-AppSettingsは `schemaVersion = 1` のままとする。Calculation semantics / artifact
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 8` とし、Search、BuildList、Plannerと
+benchmark入力のruntime creatorで共用する。永続モデル移行は独立してDexie
+`DATABASE_SCHEMA_VERSION = 3`、AppSettingsは `schemaVersion = 1` のままとする。Calculation semantics / artifact
 validity境界とDexie schemaは別の概念であり、片方の更新はもう片方の更新を意味しない。
 gameVersion、Master Data version、
 `PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`、`supportsSeedSearch = false` は維持する。
@@ -511,7 +515,6 @@ export interface OwnedWeaponBase {
   restorationBonusScope: ArtianBonusScope;
   restorationBonuses: RestorationBonusSet;
   isProtected: boolean;
-  relatedTargetWeaponIds: TargetWeaponId[];
   memo: string | null;
   createdAt: ISODateTimeString;
   updatedAt: ISODateTimeString;
@@ -560,7 +563,9 @@ export type OwnedWeapon =
 - 旧実用品の素材化は確認必須の `change_owned_weapon_status` PlanStepとして予定できる
 - ユーザーが素材化を確認した場合だけ、`status = "material"` と `isProtected = false` を同一トランザクションで適用する
 - ユーザーが「保管」を選択した場合は状態と保護を変更しない
-- `relatedTargetWeaponIds` は存在するTargetWeaponのみ参照する
+- OwnedWeaponはTargetWeaponを参照しない。目標武器との紐づけはTarget側の
+  `preferredOwnedWeaponId` が唯一のauthorityであり、向きはTarget → OwnedWeaponの一方向とする
+  (8.5参照)
 
 ---
 
@@ -568,8 +573,9 @@ export type OwnedWeapon =
 
 ## 8.1 TargetWeapon
 
-TargetWeaponは既存ID・名称・武器種・属性・priority(1..5、default 3)・isEnabled・Ideal5枠・
-Skill条件・memo・日時を保持する。妥協条件の正式型は次のとおり。
+TargetWeaponは既存ID・名称・武器種・属性・priority(1..5、default 3)・isEnabled・
+`preferredOwnedWeaponId`(8.5)・Ideal5枠・Skill条件・memo・日時を保持する。
+妥協条件の正式型は次のとおり。
 
 ```ts
 interface PracticalBonusCondition {
@@ -644,6 +650,71 @@ export interface SkillCondition {
 - 理想ラインは原則 `matchMode = "all"`
 - 実用ラインのみ `matchMode = "any"` を許可する
 - predicate単体では両方nullは制約なし。TargetのPractical Skillとして両方nullの場合は未設定であり、Ideal Skillだけを許可する
+
+## 8.5 preferredOwnedWeaponId
+
+```ts
+// TargetWeaponの該当field:
+// preferredOwnedWeaponId: OwnedWeaponId | null;
+```
+
+このTargetを作成する際に、Candidate Search / Plannerが起点として優先したい所持武器を示す
+計画入力である。
+
+関係。
+
+```text
+TargetWeapon 0..1 -> OwnedWeapon
+OwnedWeapon  0..1 <- TargetWeapon
+```
+
+- Targetは所持武器を指定しなくてよい
+- 1 Targetにつき最大1 OwnedWeapon
+- 1 OwnedWeaponを複数Targetへ同時に割り当ててはいけない
+- 参照の向きはTarget → OwnedWeaponの一方向であり、OwnedWeapon側は相手を保持しない
+
+選択可能条件。
+
+- Targetと `weaponTypeId` が一致する
+- Targetと `elementId` が一致する
+- `isProtected = false`
+- `kind` はNormal / Gogmaのどちらでもよい
+- `status` は選択可否の条件にしない。非保護で互換なら `material` / `practical` / `ideal` の
+  いずれも選択可能であり、statusと優先起点は独立したユーザー設定とする
+
+soft preferenceである。
+
+- 必須Route指定ではない。Searchは従来どおり新規Normal / 所持Normal / 所持Gogmaの実行可能Route
+  をすべて探索し、preferred以外のRouteを除外しない
+- より短い、より低コスト、または既存評価で明確に優れたRouteがある場合はそちらを優先する
+- Search / Plannerでの位置づけは[SEARCH_SPEC.md](./SEARCH_SPEC.md) 8.1と
+  [PLANNER_SPEC.md](./PLANNER_SPEC.md) 7.4に従う
+- Target Satisfactionを制限しない。あるTargetがWeapon Xを優先起点にしていても、性能を満たす
+  別のWeapon YがそのTargetを満たしてよい。1対1制約は優先起点の関係にだけ適用する
+- `reserve_weapon` その他のPlanner処理がこの値を自動設定・自動付け替えしてはいけない。
+  設定はTarget Weapons画面からのユーザー操作だけで行う
+
+collection validation。TargetWeapon単体validationは構造だけを検証できるため、以下は
+OwnedWeapon collectionと他Targetを参照する専用のvalidation authorityでfail closedにする。
+保存Service、Candidate Search入力、Planner入力の各境界で同じ契約を再利用し、UIだけを
+authorityにしない。
+
+- `preferredOwnedWeaponId` の参照先OwnedWeaponが存在しない
+- 参照先の武器種がTargetと一致しない
+- 参照先の属性がTargetと一致しない
+- 参照先が `isProtected = true`
+- 同一OwnedWeaponを2つ以上のTargetが優先起点にしている
+
+atomic persistence。以下は途中状態を永続化してはいけない。
+
+- 別Targetからの付け替え。承認後、旧Target `preferredOwnedWeaponId = null` と
+  新Target `preferredOwnedWeaponId = Weapon X` を同一トランザクションで保存する
+- 紐づけ中OwnedWeaponの保護ONまたは武器種 / 属性変更。承認後、武器の変更とTarget側の
+  紐づけ解除を同一トランザクションで保存する
+
+削除保護。`preferredOwnedWeaponId` から参照されているOwnedWeaponは、通常の参照中Entity削除
+保護の対象とし、`PersistenceReferenceKind = "target_weapon"` として報告する。旧
+`OwnedWeapon.relatedTargetWeaponIds` によるTarget削除時の参照は廃止する。
 
 ---
 
@@ -903,7 +974,11 @@ export type BuildListEntryStaleReason =
 不変条件。
 
 - 作成リスト追加時にBuildCandidate全体を `candidateSnapshot` へ複製する
-- `targetDefinitionHash` はTargetWeaponの意味を持つ項目を安定serializeして生成する
+- `targetDefinitionHash` はTargetWeaponの意味を持つ項目を安定serializeして生成する。
+  `preferredOwnedWeaponId` はTargetの計画意味に影響するため対象に含め、変更すると既存Entryは
+  `target_definition_changed` としてstaleになる。一方でCandidate stable key、Candidate ID、
+  Candidate dedup key、BuildCandidate meaning fingerprintへは混ぜない。preferredはCandidate
+  自身の意味ではなくTarget側の選好だからである
 - `searchStateHash` は `candidateSnapshot.searchStateHash` を複製する
 - `referencedOwnedWeaponsHash` は `candidateSnapshot.referencedOwnedWeaponsHash` を複製する
 - `calculationContext` は `candidateSnapshot.calculationContext` と一致する
@@ -1149,7 +1224,7 @@ export interface ExpectedPlanState {
 
 - `rngStateHash`: Base Seed、Gogma Counter、Skill Counterの各KnownValueについて正規化valueとisConfirmedを含み、legacy `counterGate`、source、notes、日時を除外する
 - `normalCountersHash`: id、counter、isConfirmedを含み、観測日時を除外する
-- `ownedWeaponsHash`: 共通項目としてID、kind、武器種、属性、restorationBonusScope、保存中のボーナス5枠順、isProtected、計画に関係するTarget参照を含む。巨戟だけseriesSkillId、groupSkillId、statusを加える。通常に存在しないSkill / statusへ仮値を設定しない。名称、memo、日時は除外する
+- `ownedWeaponsHash`: 共通項目としてID、kind、武器種、属性、restorationBonusScope、保存中のボーナス5枠順、isProtectedを含む。OwnedWeaponはTargetWeaponを参照しないため、Target関連情報は含めない。巨戟だけseriesSkillId、groupSkillId、statusを加える。通常に存在しないSkill / statusへ仮値を設定しない。名称、memo、日時は除外する
 - `buildListEntriesHash`: Entry ID、Candidate Snapshot、Target定義Hash、searchStateHash、CalculationContextを含み、派生値のisStale、staleReasons、日時を除外する
 
 `ExpectedPlanState` の各hashは1つのPlan内で意味を持つ検証値である。`ownedWeaponsHash`
@@ -1227,7 +1302,7 @@ export interface PlanStep {
 - `owned_normal_artian_to_gogma` のconvert Stepは元Normal IDをInventoryから削除し、変換後Gogmaをまだ登録しない。後続Reset / Keep / Reset SkillsはsourceOwnedWeaponId = nullを維持する
 - `owned_normal_artian_to_gogma` のreserveは元Normalを再削除せず、別の予約IDでGogmaだけを追加する。元IDのkind変更では表現しない
 - amendmentを持つ `existing_gogma_*` のreserveは新規追加せず、Route sourceと同じGogma IDをCandidate結果、status、Target参照で更新する。保存済みの保護状態、既存Target参照、createdAtを失わない
-- reserveによるInventoryChangeはexpectedStateBefore / expectedStateAfterへ反映し、relatedTargetWeaponIdsへTarget IDを重複なく追加する
+- reserveによるInventoryChangeはexpectedStateBefore / expectedStateAfterへ反映する。OwnedWeaponへTarget IDを追加する処理は存在せず、`TargetWeapon.preferredOwnedWeaponId` も変更しない
 - 再計算はstale Planに対するUI / Planner操作であり、`recalculate_plan` PlanStepを旧Planへ追加しない
 
 ## 11.4 ExpectedResult
@@ -1469,9 +1544,21 @@ mh-wilds-gogma-artian-planner
 
 ## 14.2 DB schemaVersion
 
-初期作成schemaは1。現行DATABASE_SCHEMA_VERSIONは2。version(1)のstoresを保持し、
+初期作成schemaは1。現行DATABASE_SCHEMA_VERSIONは3。version(1)のstoresを保持し、
 version(2) upgradeでTarget妥協条件だけを解除する。Idealと他entityを保持し、compromiseNeedsReview=trueとする。
 旧Practical Skillも解除するため、移行直後はIdeal-onlyとなる。
+
+version(3) upgradeで `OwnedWeapon.relatedTargetWeaponIds` をTarget側の
+`preferredOwnedWeaponId` へ置き換える。v1 -> v2 -> v3は順番に適用できること。
+
+- 全TargetWeaponを `preferredOwnedWeaponId = null` とする
+- 全OwnedWeaponから `relatedTargetWeaponIds` を削除する
+- 旧 `relatedTargetWeaponIds` から新しいpreferred関係を推測しない。旧fieldは「どのTargetに
+  関連して記録されたか」というprovenance metadataであり、1対多・多対多になり得る。新しい
+  「このTargetを作る際の優先起点」とは意味が異なるため変換しない
+- BuildCandidate / BuildListEntry / ProductionPlan / ExecutionHistory等の過去artifactは
+  migrationで内容を書き換えず、exact persisted historyを保持する。互換性はCalculationContext
+  境界(3.5)でfail closedにする
 
 ```ts
 db.version(1).stores({
@@ -1538,7 +1625,7 @@ Planner constrained re-searchを経たPlan保存も原子的に行う。契約�
 
 ```ts
 export interface ExportRoot {
-  schemaVersion: 2;
+  schemaVersion: 3;
   appName: "mh-wilds-gogma-artian-planner";
   exportedAt: ISODateTimeString;
   rngState: RngState | null;

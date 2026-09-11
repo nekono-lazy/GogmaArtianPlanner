@@ -43,7 +43,6 @@ function dynamicConflictScenario() {
     ...createValidOwnedWeapon(ownedWeaponId('owned.dynamic-conflict.only')),
     status: 'material' as const,
     isProtected: false,
-    relatedTargetWeaponIds: [],
   }
   const consumingSource = {
     ...sourceWeapon('owned.dynamic-conflict.source'),
@@ -642,7 +641,6 @@ describe('Planner Beam Search', () => {
       isProtected: false,
       status: 'practical' as const,
       seriesSkillId: null,
-      relatedTargetWeaponIds: [],
     }
     const route = (entryTarget: TargetWeapon, id: string) =>
       routeEntry(id, entryTarget, {
@@ -923,7 +921,6 @@ describe('Planner Beam Search', () => {
     const goal = target('target.already.ideal')
     const ideal = {
       ...createValidOwnedWeapon(ownedWeaponId('owned.already.ideal')),
-      relatedTargetWeaponIds: [goal.id],
     }
     const { input, dependencies } = fixture([goal], [], [ideal])
     const result = await runPlannerBeamSearch(input, dependencies)
@@ -1009,7 +1006,6 @@ describe('Planner Beam Search', () => {
       isProtected: true,
       status: 'practical' as const,
       seriesSkillId: null,
-      relatedTargetWeaponIds: [],
     }
     const skill = routeEntry('entry.protected.skill', skillTarget, {
       kind: 'existing_gogma_reset_skills',
@@ -1161,7 +1157,6 @@ describe('Planner Beam Search', () => {
       groupSkillId: null,
       status: null,
       isProtected: false,
-      relatedTargetWeaponIds: [],
     }
     const ownedNormalEntry = (id: string, targetWeapon: TargetWeapon) =>
       routeEntry(id, targetWeapon, {
@@ -1264,7 +1259,6 @@ describe('Planner Beam Search', () => {
       isProtected: false,
       seriesSkillId: null,
       status: 'practical' as const,
-      relatedTargetWeaponIds: [],
     }
     const gogma = routeEntry(
       'entry.prune.gogma',
@@ -1315,7 +1309,6 @@ describe('Planner Beam Search', () => {
       weaponTypeId: 'weapon.fixture.b',
       seriesSkillId: null,
       status: 'practical' as const,
-      relatedTargetWeaponIds: [],
     }
     const practical = routeEntry(
       'entry.priority.practical',
@@ -1386,7 +1379,6 @@ describe('Planner Beam Search', () => {
       ...createValidOwnedWeapon(ownedWeaponId('owned.consume.material')),
       status: 'material' as const,
       isProtected: false,
-      relatedTargetWeaponIds: [],
     }
     const routeSource = {
       ...sourceWeapon('owned.consume.route-source'),
@@ -1603,7 +1595,6 @@ describe('Planner Beam Search', () => {
         },
       ] as TargetWeapon['idealBonuses'],
       isProtected: false,
-      relatedTargetWeaponIds: [],
     }
     const activeSource = sourceWeapon('owned.conflict.irrelevant.active')
     const ideal = routeEntry(
@@ -1674,7 +1665,6 @@ describe('Planner Beam Search', () => {
       ...createValidOwnedWeapon(ownedWeaponId('owned.restore.only')),
       status: 'material' as const,
       isProtected: false,
-      relatedTargetWeaponIds: [],
     }
     const consumingSource = {
       ...sourceWeapon('owned.restore.consumer-source'),
@@ -1909,7 +1899,6 @@ describe('Planner Beam Search', () => {
           bonusRankId: 'bonus_rank.fixture.special',
         },
       ] as TargetWeapon['idealBonuses'],
-      relatedTargetWeaponIds: [],
     }
     const candidateSource = sourceWeapon('owned.cross-tier.candidate')
     const entry = routeEntry(

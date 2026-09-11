@@ -23,7 +23,6 @@ import {
   createValidRngState,
   createValidTargetWeapon,
   ownedWeaponId,
-  targetWeaponId,
 } from './domainData'
 import { restorationBonus, restorationBonusSet } from './targetEvaluation'
 
@@ -130,7 +129,6 @@ export function gogmaWeapon(
     groupSkillId: 'group_skill.fixture.a',
     status: 'material',
     isProtected: false,
-    relatedTargetWeaponIds: [targetWeaponId('target.fixture.a')],
     memo: null,
     createdAt: DOMAIN_FIXTURE_TIME,
     updatedAt: DOMAIN_FIXTURE_TIME,
@@ -155,7 +153,6 @@ export function normalWeapon(
     groupSkillId: null,
     status: null,
     isProtected: false,
-    relatedTargetWeaponIds: [],
     memo: null,
     createdAt: DOMAIN_FIXTURE_TIME,
     updatedAt: DOMAIN_FIXTURE_TIME,

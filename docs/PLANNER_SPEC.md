@@ -750,6 +750,7 @@ correctness / feasibilityより下位のPlan quality preferenceを1つ定義す�
 correctness / feasibility
   -> Target satisfaction / practical-first
   -> 既存evaluationScore（Target priority、satisfaction、resource cost、action count、conflict）
+  -> preferred source match（7.4）
   -> weaponSwitchCount 昇順
   -> 既存semantic stable tie-break
   -> 既存trace stable tie-break
@@ -848,6 +849,81 @@ semantic pruningではない。
 実行可能なままである。したがって `CURRENT_CALCULATION_APP_SCHEMA_VERSION` を更新せず、
 `DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、
 `PRODUCTION_RNG_ENGINE_VERSION` も変更しない。
+
+### 7.4 Plan preference: Targetの優先起点
+
+`TargetWeapon.preferredOwnedWeaponId`（[DATA_MODEL.md](./DATA_MODEL.md) 8.5）は、Plannerでも
+hard constraintにしない。correctness、Target satisfaction、practical-first、Target priority、
+Candidate category、operation / resource / conflict cost、実行可能性はすべてpreferredより上位
+である。preferred起点は、それらが同等の場合のPlan preferenceとする。
+
+#### 優先順位
+
+```text
+practical-first
+  -> 既存evaluationScore / correctness / cost
+  -> preferred source match
+  -> weaponSwitchCount
+  -> semantic stable tie-break
+  -> trace stable tie-break
+```
+
+preferredをweighted scoreへ混ぜ込まない。1操作以上遠いRouteをpreferredという理由だけで
+逆転させてはならない。同時に、同評価のbranchがstable keyだけを理由にpreferred Routeより
+先に残ることがないよう、Beam Searchの途中stateでもこのpreferenceを適用する。
+
+#### preferred判定
+
+```ts
+entry.candidateSnapshot.route.sourceOwnedWeaponId === target.preferredOwnedWeaponId
+```
+
+- 所持Normal Routeはsource IDで判定できる
+- 既存Gogma Routeはsource IDで判定できる
+- 新規Normal Routeはsourceが `null` のためpreferredにならない。Targetのpreferredが `null` の
+  場合もpreference自体が無効であり、`null` source同士を一致とみなさない
+
+#### Planner runtime state
+
+`PlannerSearchState` はこのpreferenceをincremental runtime stateとして保持する。
+
+```ts
+preferredSourceProgressCount: number;
+```
+
+初期値は `0` である。1つのSearch Actionが進めたBuildListEntryのうち、preferred判定を満たす
+ものの数だけ加算する。physical action sharingで1回の物理操作が複数Entryを進めた場合は、
+その物理操作が進めたpreferred Entryだけを数える。silent fast-forward（7.0.2）はEntryを進めた
+記録を持たないため加算しない。
+
+非永続のPlanner runtime stateであり、`RouteOperation`、`BuildRoute`、`BuildCandidate`、
+`ProductionPlan`、PlanStep、DB schemaへ追加しない。`createPlannerSearchStateSemanticKey()`
+へも追加しない。`weaponSwitchCount` と同様に、semantic keyが既に保持するtrace projection
+（各actionの `primaryBuildListEntryId` と `progressedBuildListEntryIds`）の純粋な関数だからである。
+
+#### Beam Searchへの影響
+
+7.3と同じくranking preferenceであり、semantic pruningではない。
+
+- preferred以外のRouteを実行不能として削除しない
+- rejectionを記録しない
+- conflictを生成しない
+- physical action sharing、silent fast-forward、Counter fast-forward、conflict semantics、
+  weapon switch semantics、Trace Replay semanticsを変更しない
+
+#### 自動変更の禁止
+
+`reserve_weapon` は `TargetWeapon.preferredOwnedWeaponId` を自動変更してはいけない。
+Practicalを確保した、Idealを確保した、新規Gogmaを登録した、既存Gogmaを更新したという理由
+だけで優先起点を自動設定・付け替えしない。優先起点はユーザーがTarget Weapons画面から設定する
+計画入力である。
+
+#### Target Satisfaction
+
+Target Satisfactionは従来どおり武器種、属性、実際のボーナス、実際のスキル、Target条件から
+判定する。`preferredOwnedWeaponId` を見てTarget Satisfactionを制限してはいけない。
+Target AがWeapon Xを優先起点にしていても、条件を満たすWeapon YによってTarget Aが
+Ideal satisfiedになってよい。
 
 ---
 
@@ -2984,10 +3060,11 @@ PlanStep変換用 `PlannerPlanStepDraft` を生成する。
   Bonus Rank、Keep、Counter Gateを推測しない。
 - `ExpectedPlanState` はProduction semantic RNG KnownValueのvalue/isConfirmed、stable sorted Normal Counter、
   OwnedWeaponのsemantic fields（kindを含む）をstable hash化する。名前、memo、日時、
-  RNG source/notes、観測表示項目、legacy `counterGate` は除く。関連Target IDはsort/dedupeする。
+  RNG source/notes、観測表示項目、legacy `counterGate` は除く。OwnedWeaponはTargetWeaponを
+  参照しないため、Target関連情報も含めない。
 - `ExpectedPlanState.ownedWeaponsHash` とBuild Listの`referencedOwnedWeaponsHash`は別契約である。
-  前者はNormal rarityとrelatedTargetWeaponIdsを含むが、後者は既存Search契約どおり両方を
-  含めない。両者ともname、memo、timestampsを含めない。
+  前者はNormal rarityを含むが、後者は既存Search契約どおり含めない。両者ともname、memo、
+  timestampsを含めない。
 - 1 Search Actionは、共有されるEntry数にかかわらず1 physical operation、1 Draftである。
   Draftはprimary Entryと全progressed Entryを別々に保持する。
 - silent fast-forwardしたRoute unitはtraceに存在しないため、Replayは再生成しない。
@@ -3178,7 +3255,8 @@ Route別の典型例。
   finalBonuses / Series Skill / Group Skillを持つ `kind = "gogma"` の武器を追加する。
 その武器の `restorationBonusScope` はCandidate Snapshotの `finalBonusScope` と一致させる。
 Ideal候補はstatus Idealかつprotected、Practical候補はstatus Practicalかつunprotectedとして新規登録する。
-`relatedTargetWeaponIds` へTarget IDを重複なく追加する。
+OwnedWeaponへTarget IDを追加する処理は存在せず、`TargetWeapon.preferredOwnedWeaponId` も
+変更しない（7.4）。
 
 UI実行は1操作ずつ。
 
@@ -3220,7 +3298,7 @@ protection、Candidate結果、Target参照は11.1と同じ契約とする。
 起点OwnedWeaponのrestorationBonusScopeと復元ボーナス5枠を変更せず、Skill CounterとSkill Prediction結果だけを反映する。Reset SkillsはSkill性能を変更するため、起点OwnedWeaponはGogmaかつunprotectedでなければならない。
 
 `reserve_weapon` では同じIDのseriesSkillId、groupSkillId、status、isProtected、
-relatedTargetWeaponIds、updatedAtを更新し、復元ボーナスとcreatedAtを維持する。
+updatedAtを更新し、復元ボーナスとcreatedAtを維持する。Target参照は更新対象に含まない（7.4）。
 
 ## 11.5 既存巨戟 Keep Bonuses
 

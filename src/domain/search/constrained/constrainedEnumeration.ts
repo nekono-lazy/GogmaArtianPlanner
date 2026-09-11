@@ -471,9 +471,16 @@ export async function enumerateConstrainedCandidates(
     },
     options,
   )
+  // The Target's preferred owned weapon only orders solutions the existing
+  // priorities already rate equally; it never changes what was enumerated.
+  const preferredOwnedWeaponId =
+    input.origin.targetWeapons.find(({ id }) => id === input.targetWeaponId)
+      ?.preferredOwnedWeaponId ?? null
   return {
     targetWeaponId: execution.targetWeaponId,
-    candidates: candidates.sort(compareConstrainedCandidates),
+    candidates: candidates.sort((left, right) =>
+      compareConstrainedCandidates(left, right, preferredOwnedWeaponId),
+    ),
     summary: execution.summary,
   }
 }

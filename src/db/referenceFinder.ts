@@ -8,6 +8,7 @@ import { appDatabase, type AppDatabase } from './AppDatabase'
 
 export type PersistenceReferenceKind =
   | 'owned_weapon'
+  | 'target_weapon'
   | 'build_candidate'
   | 'build_list_entry'
   | 'production_plan'
@@ -67,13 +68,26 @@ export class ReferenceFinder {
   async findOwnedWeaponReferences(
     ownedWeaponId: OwnedWeaponId,
   ): Promise<PersistenceReference[]> {
-    const [candidates, entries, plans, history] = await Promise.all([
+    const [targets, candidates, entries, plans, history] = await Promise.all([
+      this.database.targetWeapons.toArray(),
       this.database.buildCandidates.toArray(),
       this.database.buildListEntries.toArray(),
       this.database.productionPlans.toArray(),
       this.database.executionHistory.toArray(),
     ])
     const references: PersistenceReference[] = []
+    // A Target that prefers this weapon as its Route origin is an ordinary
+    // reference, so the existing referenced-entity delete protection applies
+    // (`docs/DATA_MODEL.md` 8.5).
+    targets.forEach((target) => {
+      if (target.preferredOwnedWeaponId === ownedWeaponId) {
+        references.push({
+          kind: 'target_weapon',
+          entityId: target.id,
+          path: 'preferredOwnedWeaponId',
+        })
+      }
+    })
     candidates.forEach((candidate) => {
       if (collectReferencedOwnedWeaponIds(candidate.route).includes(ownedWeaponId)) {
         references.push({
@@ -152,22 +166,14 @@ export class ReferenceFinder {
   async findTargetWeaponReferences(
     targetWeaponId: TargetWeaponId,
   ): Promise<PersistenceReference[]> {
-    const [weapons, candidates, entries, plans] = await Promise.all([
-      this.database.ownedWeapons.toArray(),
+    // OwnedWeapon no longer references TargetWeapon: the relation is now held
+    // on the Target side, so deleting a Target never conflicts with inventory.
+    const [candidates, entries, plans] = await Promise.all([
       this.database.buildCandidates.toArray(),
       this.database.buildListEntries.toArray(),
       this.database.productionPlans.toArray(),
     ])
     const references: PersistenceReference[] = []
-    weapons.forEach((weapon) => {
-      if (weapon.relatedTargetWeaponIds.includes(targetWeaponId)) {
-        references.push({
-          kind: 'owned_weapon',
-          entityId: weapon.id,
-          path: 'relatedTargetWeaponIds',
-        })
-      }
-    })
     candidates.forEach((candidate) => {
       if (candidate.targetWeaponId === targetWeaponId) {
         references.push({

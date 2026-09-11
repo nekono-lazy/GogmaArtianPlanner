@@ -1,15 +1,15 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { TargetWeapon } from '../domain/models/publicTypes'
+import type { OwnedWeapon, TargetWeapon } from '../domain/models/publicTypes'
 import type { TargetWeaponDraft } from '../services/crud/entityCrudServices'
 import { TargetWeaponsPage, type TargetWeaponsPageDependencies } from './TargetWeaponsPage'
 
-function dependencies() { const save = vi.fn(async (draft: TargetWeaponDraft) => ({ ...draft, id: crypto.randomUUID() as TargetWeapon['id'], createdAt: 'now', updatedAt: 'now' })); return { getAll: vi.fn(async (): Promise<TargetWeapon[]> => []), save, delete: vi.fn(async () => undefined) } satisfies TargetWeaponsPageDependencies }
+function dependencies() { const save = vi.fn(async (draft: TargetWeaponDraft) => ({ ...draft, id: crypto.randomUUID() as TargetWeapon['id'], createdAt: 'now', updatedAt: 'now' })); return { getAll: vi.fn(async (): Promise<TargetWeapon[]> => []), getOwnedWeapons: vi.fn(async (): Promise<OwnedWeapon[]> => []), save, delete: vi.fn(async () => undefined) } satisfies TargetWeaponsPageDependencies }
 
 function existingTarget(): TargetWeapon {
   return {
-    id: 'target-ui' as TargetWeapon['id'], name: '既存Target', weaponTypeId: 'weapon.dual_blades', elementId: 'element.thunder', priority: 3, isEnabled: true,
+    id: 'target-ui' as TargetWeapon['id'], name: '既存Target', weaponTypeId: 'weapon.dual_blades', elementId: 'element.thunder', priority: 3, isEnabled: true, preferredOwnedWeaponId: null,
     idealBonuses: Array.from({ length: 5 }, () => ({ bonusTypeId: 'bonus_type.attack', bonusRankId: 'bonus_rank.ex' })) as TargetWeapon['idealBonuses'],
     practicalBonusConditions: [], alternativeBonusRules: [], idealSkillCondition: { seriesSkillId: null, groupSkillId: null, matchMode: 'all' }, practicalSkillCondition: { seriesSkillId: null, groupSkillId: null, matchMode: 'all' }, memo: null, createdAt: 'created', updatedAt: 'updated',
   }

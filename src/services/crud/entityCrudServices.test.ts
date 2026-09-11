@@ -25,8 +25,24 @@ describe('entity draft defaults', () => {
 
 describe('OwnedWeaponCrudService', () => {
   const master = createValidMasterDataFixture()
-  function dependencies(references: Array<{ kind: 'build_list_entry'; entityId: string; path: string }> = []) {
-    return { getAll: vi.fn(async () => [] as OwnedWeapon[]), put: vi.fn(async (value: OwnedWeapon) => value), delete: vi.fn(async () => undefined), findReferences: vi.fn(async () => references) }
+  function dependencies(
+    references: Array<{ kind: 'build_list_entry'; entityId: string; path: string }> = [],
+    targets: TargetWeapon[] = [],
+  ) {
+    return {
+      getAll: vi.fn(async () => [] as OwnedWeapon[]),
+      getTargets: vi.fn(async () => targets),
+      put: vi.fn(async (value: OwnedWeapon) => value),
+      putReleasingTargets: vi.fn(async (value: OwnedWeapon, released: readonly TargetWeapon[]) => {
+        released.forEach((target) => {
+          const index = targets.findIndex(({ id }) => id === target.id)
+          if (index >= 0) targets[index] = target
+        })
+        return value
+      }),
+      delete: vi.fn(async () => undefined),
+      findReferences: vi.fn(async () => references),
+    }
   }
   it('preserves ID/createdAt and changes only updatedAt while editing', async () => {
     const deps = dependencies(); const service = new OwnedWeaponCrudService(master, deps)
@@ -49,7 +65,26 @@ describe('OwnedWeaponCrudService', () => {
 
 describe('TargetWeaponCrudService', () => {
   const master = createValidMasterDataFixture()
-  function dependencies(referenced = false) { return { getAll: vi.fn(async () => [] as TargetWeapon[]), put: vi.fn(async (value: TargetWeapon) => value), delete: vi.fn(async () => undefined), findReferences: vi.fn(async () => referenced ? [{ kind: 'owned_weapon' as const, entityId: 'owned-1', path: 'relatedTargetWeaponIds' }] : []) } }
+  function dependencies(
+    referenced = false,
+    targets: TargetWeapon[] = [],
+    ownedWeapons: OwnedWeapon[] = [],
+  ) {
+    return {
+      getAll: vi.fn(async () => targets),
+      getOwnedWeapons: vi.fn(async () => ownedWeapons),
+      put: vi.fn(async (value: TargetWeapon) => value),
+      putReleasingTargets: vi.fn(async (value: TargetWeapon, released: readonly TargetWeapon[]) => {
+        released.forEach((target) => {
+          const index = targets.findIndex(({ id }) => id === target.id)
+          if (index >= 0) targets[index] = target
+        })
+        return value
+      }),
+      delete: vi.fn(async () => undefined),
+      findReferences: vi.fn(async () => referenced ? [{ kind: 'build_list_entry' as const, entityId: 'entry-1', path: 'targetWeaponId' }] : []),
+    }
+  }
   it('saves Practical/Alternative/Skill conditions and validates count ranges', async () => {
     const alternativeMaster = structuredClone(master)
     alternativeMaster.weaponBonusDefinitions.push({ ...master.weaponBonusDefinitions[1], id: 'fixture.alternative', bonusTypeId: 'bonus_type.fixture.unused' })

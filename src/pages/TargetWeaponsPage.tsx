@@ -21,7 +21,11 @@ import {
 import { PageShell } from '../components/PageShell'
 import { BonusSetEditor } from '../components/forms/BonusSetEditor'
 import { TargetCompromiseEditor } from '../components/forms/TargetCompromiseEditor'
-import { hasTargetCompromise } from '../domain/target'
+import {
+  hasTargetCompromise,
+  isCompatiblePreferredOwnedWeapon,
+  isEligiblePreferredOwnedWeapon,
+} from '../domain/target'
 import { SkillConditionEditor } from '../components/forms/SkillConditionEditor'
 import { MasterDataStatusAlert } from '../components/MasterDataStatusAlert'
 import { loadMasterData } from '../domain/master/loadMasterData'
@@ -35,8 +39,14 @@ import {
   MasterOptionsUnavailableError,
 } from '../domain/forms/entityDrafts'
 import type {
+  OwnedWeapon,
   TargetWeapon,
 } from '../domain/models/publicTypes'
+import { ownedWeaponRepository } from '../db/repositories'
+import {
+  artianWeaponKindLabels,
+  ownedWeaponStatusLabels,
+} from '../presentation/labels'
 import {
   EntityFormValidationError,
   ReferencedEntityDeleteError,
@@ -45,12 +55,35 @@ import {
 } from '../services/crud/entityCrudServices'
 import { getPersistenceReferenceKindLabel } from '../presentation/labels'
 
+const NO_PREFERRED_OWNED_WEAPON = ''
+
+/**
+ * The Target edit dropdown order of `docs/UI_FLOW.md` 8.1.
+ *
+ * Group 0 is the weapon this Target currently prefers, 1 an unassigned
+ * unprotected weapon, 2 one another Target already prefers, and 3 a protected
+ * one, which is shown but never selectable so the user can see why it is
+ * unavailable. Within a group the existing stable order - display name, then ID
+ * - decides, so the list never depends on load order.
+ */
+function preferredOptionGroup(
+  weapon: OwnedWeapon,
+  currentPreferredId: string | null,
+  claimedByOtherTarget: boolean,
+): number {
+  if (weapon.id === currentPreferredId) return 0
+  if (weapon.isProtected) return 3
+  return claimedByOtherTarget ? 2 : 1
+}
+
 const masterResult = loadMasterData()
 
 export interface TargetWeaponsPageDependencies {
   getAll(): Promise<TargetWeapon[]>
   save(draft: TargetWeaponDraft, existing: TargetWeapon | null): Promise<TargetWeapon>
   delete(id: TargetWeapon['id']): Promise<void>
+  /** The preferred-origin candidates shown in the edit dialog. */
+  getOwnedWeapons(): Promise<OwnedWeapon[]>
 }
 
 function deleteReferenceMessage(error: ReferencedEntityDeleteError) {
@@ -79,11 +112,13 @@ export function TargetWeaponsPage({
             getAll: () => defaultService.getAll(),
             save: (draft, existing) => defaultService.save(draft, existing),
             delete: (id) => defaultService.delete(id),
+            getOwnedWeapons: () => ownedWeaponRepository.getAllOwnedWeapons(),
           }
         : null),
     [defaultService, dependencies],
   )
   const [targets, setTargets] = useState<TargetWeapon[]>([])
+  const [ownedWeapons, setOwnedWeapons] = useState<OwnedWeapon[]>([])
   const [loading, setLoading] = useState(api !== null)
   const [editing, setEditing] = useState<TargetWeapon | null>(null)
   const [draft, setDraft] = useState<TargetWeaponDraft | null>(null)
@@ -95,10 +130,12 @@ export function TargetWeaponsPage({
   useEffect(() => {
     if (!api) return
     let active = true
-    void api
-      .getAll()
-      .then((loaded) => {
-        if (active) setTargets(loaded)
+    void Promise.all([api.getAll(), api.getOwnedWeapons()])
+      .then(([loaded, loadedWeapons]) => {
+        if (active) {
+          setTargets(loaded)
+          setOwnedWeapons(loadedWeapons)
+        }
       })
       .catch((caught: unknown) => {
         if (active) {
@@ -158,10 +195,17 @@ export function TargetWeaponsPage({
     if (!api || !draft) return
     try {
       const saved = await api.save(draft, editing)
-      setTargets((current) => [
-        ...current.filter(({ id }) => id !== saved.id),
-        saved,
-      ])
+      setTargets((current) =>
+        [...current.filter(({ id }) => id !== saved.id), saved].map((target) =>
+          // The Service released the previous holder in the same transaction,
+          // so the list must show that release too (`docs/UI_FLOW.md` 8.1).
+          target.id !== saved.id &&
+          saved.preferredOwnedWeaponId !== null &&
+          target.preferredOwnedWeaponId === saved.preferredOwnedWeaponId
+            ? { ...target, preferredOwnedWeaponId: null }
+            : target,
+        ),
+      )
       setDraft(null)
       setEditing(null)
       setNotice('目標武器を保存しました。')
@@ -199,20 +243,66 @@ export function TargetWeaponsPage({
     value: TargetWeaponDraft,
     weaponTypeId: string,
     elementId: string,
-  ): TargetWeaponDraft => ({
-    ...value,
-    weaponTypeId,
-    elementId,
-    idealBonuses: createDefaultBonusSet(
-      master,
+  ): TargetWeaponDraft => {
+    // Changing the Target's own definition can make its preferred weapon
+    // incompatible. Clearing it here touches the draft only; nothing is written
+    // until save, and this is never treated as taking a weapon from another
+    // Target (`docs/UI_FLOW.md` 8.1).
+    const preferred = ownedWeapons.find(
+      ({ id }) => id === value.preferredOwnedWeaponId,
+    )
+    const keepsPreferred =
+      preferred !== undefined &&
+      isEligiblePreferredOwnedWeapon({ weaponTypeId, elementId }, preferred)
+    return {
+      ...value,
       weaponTypeId,
       elementId,
-      'gogma_artian',
-    ),
-    practicalBonusConditions: [],
-    alternativeBonusRules: [],
-  })
+      preferredOwnedWeaponId: keepsPreferred
+        ? value.preferredOwnedWeaponId
+        : null,
+      idealBonuses: createDefaultBonusSet(
+        master,
+        weaponTypeId,
+        elementId,
+        'gogma_artian',
+      ),
+      practicalBonusConditions: [],
+      alternativeBonusRules: [],
+    }
+  }
 
+  // Compatible weapons only, protected ones included so the user can see why
+  // they cannot be chosen. Status is deliberately not a filter: a Material,
+  // Practical, or Ideal weapon is equally selectable (`docs/UI_FLOW.md` 8.1).
+  const preferredOwnedWeaponOptions = draft
+    ? ownedWeapons
+        .filter((weapon) => isCompatiblePreferredOwnedWeapon(draft, weapon))
+        .map((weapon) => {
+          const holder =
+            targets.find(
+              (target) =>
+                target.id !== editing?.id &&
+                target.preferredOwnedWeaponId === weapon.id,
+            ) ?? null
+          return {
+            weapon,
+            holder,
+            selectable: !weapon.isProtected,
+            group: preferredOptionGroup(
+              weapon,
+              draft.preferredOwnedWeaponId,
+              holder !== null,
+            ),
+          }
+        })
+        .sort(
+          (left, right) =>
+            left.group - right.group ||
+            left.weapon.name.localeCompare(right.weapon.name) ||
+            left.weapon.id.localeCompare(right.weapon.id),
+        )
+    : []
 
   return (
     <PageShell
@@ -246,6 +336,12 @@ export function TargetWeaponsPage({
                 }{' '}
                 ／ 優先度 {target.priority} ／{' '}
                 {target.isEnabled ? '有効' : '無効'}
+              </Typography>
+              <Typography variant="body2">
+                優先起点:{' '}
+                {ownedWeapons.find(
+                  ({ id }) => id === target.preferredOwnedWeaponId,
+                )?.name ?? 'なし'}
               </Typography>
               <Typography variant="body2">理想: 5枠設定済み</Typography>
               {!hasTargetCompromise(target) && <Typography>妥協なし（理想のみ検索）</Typography>}
@@ -383,6 +479,70 @@ export function TargetWeaponsPage({
                   }
                   label="有効"
                 />
+                <FormControl fullWidth>
+                  <InputLabel id="target-preferred-owned-weapon">
+                    優先する所持武器
+                  </InputLabel>
+                  <Select
+                    labelId="target-preferred-owned-weapon"
+                    label="優先する所持武器"
+                    value={
+                      draft.preferredOwnedWeaponId ?? NO_PREFERRED_OWNED_WEAPON
+                    }
+                    onChange={(event) => {
+                      const value = event.target.value
+                      if (value === NO_PREFERRED_OWNED_WEAPON) {
+                        setDraft({ ...draft, preferredOwnedWeaponId: null })
+                        return
+                      }
+                      const holder = targets.find(
+                        (target) =>
+                          target.id !== editing?.id &&
+                          target.preferredOwnedWeaponId === value,
+                      )
+                      if (
+                        holder &&
+                        !window.confirm(
+                          `この武器は現在「${holder.name}」の優先起点に設定されています。\n` +
+                            `この目標武器に変更すると、「${holder.name}」との紐づけは解除されます。\n` +
+                            '変更しますか？',
+                        )
+                      ) {
+                        return
+                      }
+                      setDraft({
+                        ...draft,
+                        preferredOwnedWeaponId:
+                          value as TargetWeapon['preferredOwnedWeaponId'],
+                      })
+                    }}
+                  >
+                    <MenuItem value={NO_PREFERRED_OWNED_WEAPON}>指定なし</MenuItem>
+                    {preferredOwnedWeaponOptions.map(
+                      ({ weapon, holder, selectable }) => (
+                        <MenuItem
+                          key={weapon.id}
+                          value={weapon.id}
+                          disabled={!selectable}
+                        >
+                          {`${artianWeaponKindLabels[weapon.kind]} / ${weapon.name}`}
+                          {weapon.kind === 'gogma'
+                            ? ` / ${ownedWeaponStatusLabels[weapon.status]}`
+                            : ''}
+                          {weapon.isProtected
+                            ? ' [保護中・選択不可]'
+                            : holder
+                              ? ` [${holder.name}に割当中]`
+                              : ''}
+                        </MenuItem>
+                      ),
+                    )}
+                  </Select>
+                </FormControl>
+                <Typography variant="body2">
+                  この目標を作る際の起点として優先します。
+                  より短い作成ルートがある場合は、そちらが選ばれることがあります。
+                </Typography>
                 <BonusSetEditor
                   label="理想の復元ボーナス5枠"
                   master={master}

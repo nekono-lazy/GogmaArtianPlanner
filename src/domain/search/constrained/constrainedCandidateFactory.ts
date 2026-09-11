@@ -5,6 +5,7 @@ import {
 import type {
   BuildRoute,
   GroupSkillId,
+  OwnedWeaponId,
   RestorationBonusScope,
   RestorationBonusSet,
   SeriesSkillId,
@@ -126,7 +127,14 @@ function nullableAscending(left: number | null, right: number | null): number {
 /**
  * The deterministic enumeration order, mirroring the existing bounded-selection
  * ordering `compareCandidateSelection()`: Ideal before Practical, then cheaper
- * routes, then closeness, then the stable semantic key.
+ * routes, then closeness, then the Target's preferred source, then the stable
+ * semantic key.
+ *
+ * `preferredOwnedWeaponId` sits immediately before the stable tie-break, in the
+ * same position the ordinary Candidate comparisons give it, so it separates
+ * only solutions every existing priority already rates equally
+ * (`docs/SEARCH_SPEC.md` 8.1). It changes no enumeration bound, no route scope,
+ * no termination condition, and no yield eligibility.
  *
  * No run-dependent value participates: there is no Candidate ID, no
  * `searchRunId`, no Clock value, and no Map insertion or Promise resolution
@@ -135,6 +143,7 @@ function nullableAscending(left: number | null, right: number | null): number {
 export function compareConstrainedCandidates(
   left: ConstrainedCandidate,
   right: ConstrainedCandidate,
+  preferredOwnedWeaponId: OwnedWeaponId | null = null,
 ): number {
   return (
     Number(left.category === 'practical') -
@@ -146,9 +155,20 @@ export function compareConstrainedCandidates(
     (right.similarityScore ?? -1) - (left.similarityScore ?? -1) ||
     right.idealDifference.matchedBonusCount -
       left.idealDifference.matchedBonusCount ||
+    preferredSourceRank(left, preferredOwnedWeaponId) -
+      preferredSourceRank(right, preferredOwnedWeaponId) ||
     compareStableKeys(
       constrainedCandidateStableKey(left),
       constrainedCandidateStableKey(right),
     )
   )
+}
+
+/** 0 when the Route starts from the Target's preferred owned weapon. */
+function preferredSourceRank(
+  candidate: ConstrainedCandidate,
+  preferredOwnedWeaponId: OwnedWeaponId | null,
+): number {
+  if (preferredOwnedWeaponId === null) return 0
+  return candidate.route.sourceOwnedWeaponId === preferredOwnedWeaponId ? 0 : 1
 }

@@ -23,9 +23,10 @@ export type CreateOwnedWeaponInput =
 
 export type CreateTargetWeaponInput = Omit<
   TargetWeapon,
-  'priority' | 'createdAt' | 'updatedAt'
+  'priority' | 'preferredOwnedWeaponId' | 'createdAt' | 'updatedAt'
 > & {
   priority?: TargetWeapon['priority']
+  preferredOwnedWeaponId?: TargetWeapon['preferredOwnedWeaponId']
 }
 
 function currentIsoTime(): ISODateTimeString {
@@ -87,6 +88,7 @@ export function createTargetWeapon(
   return {
     ...input,
     priority: input.priority ?? 3,
+    preferredOwnedWeaponId: input.preferredOwnedWeaponId ?? null,
     createdAt: now,
     updatedAt: now,
   }

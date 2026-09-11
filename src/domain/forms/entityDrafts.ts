@@ -93,7 +93,6 @@ export function createOwnedWeaponDraft(
       base.elementId,
       scope,
     ),
-    relatedTargetWeaponIds: [],
     memo: null,
   }
   return kind === 'normal'
@@ -123,6 +122,7 @@ export function createTargetWeaponDraft(master: MasterDataRoot): TargetWeaponDra
     ...base,
     priority: 3,
     isEnabled: true,
+    preferredOwnedWeaponId: null,
     idealBonuses: createDefaultBonusSet(master, base.weaponTypeId, base.elementId),
     practicalBonusConditions: [],
     alternativeBonusRules: [],
