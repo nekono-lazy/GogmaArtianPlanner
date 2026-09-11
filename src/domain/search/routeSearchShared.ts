@@ -261,16 +261,18 @@ export function createBaseCandidate(
  *
  * The canonical amendment history is Reset for depths `1 ... lastResetDepth`
  * and Keep afterwards, so the Bonus-only kind follows from those two numbers.
- * `d = 0` with `k = 0` produces an empty operation list, which is not a
- * Candidate: that weapon already satisfies the Target and the Planner derives
- * the satisfaction from the owned Gogma directly (SEARCH_SPEC 5.5.5).
+ * `d = 0` with `k = 0` is the current, zero-operation Candidate. It keeps a
+ * protected source visible when its current performance satisfies the Target
+ * without opening any amendment stream.
  */
 export function existingGogmaRouteKind(
   bonus: RouteBonusSolution,
   skill: RouteSkillSolution,
-): BuildRoute['kind'] | null {
+): BuildRoute['kind'] {
   if (bonus.gogmaAdvance === 0) {
-    return skill.resetCount === 0 ? null : 'existing_gogma_reset_skills'
+    return skill.resetCount === 0
+      ? 'existing_gogma_current'
+      : 'existing_gogma_reset_skills'
   }
   if (skill.resetCount > 0) return 'existing_gogma_mixed'
   if (bonus.lastResetDepth === bonus.gogmaAdvance) {
@@ -285,7 +287,7 @@ function routeKindFor(
   base: RouteCompositionBase,
   bonus: RouteBonusSolution,
   skill: RouteSkillSolution,
-): BuildRoute['kind'] | null {
+): BuildRoute['kind'] {
   return base.kindResolution.type === 'fixed'
     ? base.kindResolution.kind
     : existingGogmaRouteKind(bonus, skill)
@@ -333,13 +335,11 @@ export async function composeRouteCandidates(
       const bonus = pair.bonus.solution
       const skill = pair.skill.solution
       const kind = routeKindFor(base, bonus, skill)
-      if (kind === null) continue
       const operations = [
         ...base.baseOperations,
         ...bonus.operations,
         ...skill.operations,
       ]
-      if (operations.length === 0) continue
       await context.execution.checkpoint()
       const candidate = createBaseCandidate(
         context,

@@ -112,7 +112,7 @@ export function createOwnedWeaponDraft(
         seriesSkillId: null,
         groupSkillId: null,
         status,
-        isProtected: status !== 'material',
+        isProtected: status === 'ideal',
       }
 }
 

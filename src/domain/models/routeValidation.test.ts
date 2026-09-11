@@ -134,10 +134,31 @@ describe('BuildRoute validation', () => {
     )
   })
 
-  it('allows a protected existing weapon for Reset Skills only', () => {
+  it('rejects a protected existing weapon for Reset Skills', () => {
     const weapon = createValidOwnedWeapon()
     expect(weapon.isProtected).toBe(true)
+    expect(validateBuildRoute(resetSkillsRoute(), [weapon]).issues).toContainEqual(
+      expect.objectContaining({ code: 'protected_destructive_use' }),
+    )
+  })
+
+  it('allows an unprotected existing weapon for Reset Skills', () => {
+    const weapon = { ...createValidOwnedWeapon(), isProtected: false }
     expect(validateBuildRoute(resetSkillsRoute(), [weapon]).isValid).toBe(true)
+  })
+
+  it('accepts only an empty zero-operation current route', () => {
+    const weapon = createValidOwnedWeapon()
+    const route: BuildRoute = {
+      kind: 'existing_gogma_current',
+      sourceOwnedWeaponId: weapon.id,
+      operations: [],
+    }
+    expect(validateBuildRoute(route, [weapon]).isValid).toBe(true)
+    route.operations.push(resetSkillsRoute().operations[0])
+    expect(validateBuildRoute(route, [weapon]).issues).toContainEqual(
+      expect.objectContaining({ code: 'invalid_route_operation' }),
+    )
   })
 
   it('rejects protected weapons in destructive operations', () => {

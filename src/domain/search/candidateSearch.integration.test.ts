@@ -588,7 +588,7 @@ describe('Candidate Search routes', () => {
     expect(candidate.isSimilarToIdeal).toBe(true)
   })
 
-  it('searches Reset Skills from a protected source without Gogma or Keep capability', async () => {
+  it('does not search Reset Skills from a protected source or call prediction', async () => {
     const input = createCandidateSearchInput()
     input.routeFilter = 'existing_gogma'
     input.ownedWeapons[0].isProtected = true
@@ -598,19 +598,45 @@ describe('Candidate Search routes', () => {
     const engine = createCandidateSearchEngine(input)
     engine.capabilities.supportsGogmaPrediction = false
     engine.capabilities.supportsKeepBonusesPrediction = false
+    const predictSkills = vi.spyOn(engine, 'predictSkills')
+    const predictGogmaBonus = vi.spyOn(engine, 'predictGogmaBonus')
+    const result = await searchCandidates(input, engine, deterministicExecution)
+    expect(result.targetResults[0].candidates.some(
+      ({ route }) => route.kind === 'existing_gogma_reset_skills',
+    )).toBe(false)
+    expect(result.targetResults[0].skippedRoutes).toContainEqual(
+      expect.objectContaining({
+        route: 'existing_gogma_reset_skills',
+        reason: 'no_unprotected_source_weapon',
+      }),
+    )
+    expect(predictSkills).not.toHaveBeenCalled()
+    expect(predictGogmaBonus).not.toHaveBeenCalled()
+  })
+
+  it('returns a protected Gogma that already satisfies the Target as a zero-operation candidate', async () => {
+    const input = createCandidateSearchInput()
+    input.routeFilter = 'existing_gogma'
+    input.ownedWeapons[0].isProtected = true
+    const engine = createCandidateSearchEngine(input)
+    const predictSkills = vi.spyOn(engine, 'predictSkills')
+    const predictGogmaBonus = vi.spyOn(engine, 'predictGogmaBonus')
     const result = await searchCandidates(input, engine, deterministicExecution)
     const candidate = result.targetResults[0].candidates.find(
-      ({ route }) => route.kind === 'existing_gogma_reset_skills',
+      ({ route }) => route.kind === 'existing_gogma_current',
     )
-    expect(candidate).toBeDefined()
-    expect(candidate?.finalBonuses).toEqual(
-      input.ownedWeapons[0].restorationBonuses,
-    )
-    expect(candidate?.seriesSkillId).toBe('series_skill.fixture.a')
-    expect(candidate?.route.sourceOwnedWeaponId).toBe(input.ownedWeapons[0].id)
-    expect(candidate?.referencedOwnedWeaponsHash).toMatch(/^fnv1a32:/)
-    expect(candidate?.estimatedGogmaAdvance).toBe(0)
-    expect(candidate?.estimatedNormalAdvance).toBeNull()
+    expect(candidate).toMatchObject({
+      route: {
+        sourceOwnedWeaponId: input.ownedWeapons[0].id,
+        operations: [],
+      },
+      estimatedOperationCount: 0,
+      estimatedGogmaAdvance: 0,
+      estimatedSkillAdvance: 0,
+      estimatedNormalAdvance: null,
+    })
+    expect(predictSkills).not.toHaveBeenCalled()
+    expect(predictGogmaBonus).not.toHaveBeenCalled()
   })
 
   it('keeps Gogma-only routes available with Gate and Normal Counter unknown', async () => {
@@ -698,7 +724,7 @@ describe('Candidate Search routes', () => {
   it('skips Reset Skills when Skill capability is missing', async () => {
     const input = createCandidateSearchInput()
     input.routeFilter = 'existing_gogma'
-    input.ownedWeapons[0].isProtected = true
+    input.ownedWeapons[0].isProtected = false
     const result = await searchCandidates(
       input,
       createCandidateSearchEngine(input, { skillSupported: false }),
@@ -1084,7 +1110,9 @@ describe('Candidate Search routes', () => {
     })
     const predictGogmaBonus = vi.spyOn(engine, 'predictGogmaBonus')
     const result = await searchCandidates(input, engine, deterministicExecution)
-    const candidates = result.targetResults[0].candidates
+    const candidates = result.targetResults[0].candidates.filter(
+      ({ route }) => route.kind !== 'existing_gogma_current',
+    )
     const sequences = candidates.map(({ route }) =>
       route.operations.map(({ type }) => type).join(','),
     )
@@ -1213,6 +1241,7 @@ describe('Candidate Search routes', () => {
       ...[
         'normal_artian_to_gogma',
         'owned_normal_artian_to_gogma',
+        'existing_gogma_current',
         'existing_gogma_reset_bonuses',
         'existing_gogma_keep_bonuses',
         'existing_gogma_reset_skills',
@@ -1234,13 +1263,20 @@ describe('Candidate Search routes', () => {
     // Keep more than one candidate reachable: a source whose Skills already
     // satisfy Ideal contributes no Reset Skills candidate.
     input.ownedWeapons[0].seriesSkillId = 'series_skill.fixture.other'
+    input.ownedWeapons[0].restorationBonuses = belowPracticalBonuses()
+    input.ownedWeapons.push({
+      ...structuredClone(input.ownedWeapons[0]),
+      id: 'owned.fixture.limit.second' as never,
+    })
     const result = await searchCandidates(
       input,
       createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
       deterministicExecution,
     )
     expect(result.targetResults[0].candidates).toHaveLength(1)
-    expect(result.isTruncated).toBe(true)
+    // The zero-operation Practical dominates later Practical amendments, so
+    // the configured display cap omits no retained Candidate.
+    expect(result.isTruncated).toBe(false)
 
     input.routeFilter = 'normal_artian'
     const normalOnly = await searchCandidates(
@@ -1262,6 +1298,7 @@ describe('Candidate Search routes', () => {
         .filter(({ reason }) => reason === 'disabled_by_filter')
         .map(({ route }) => route),
     ).toEqual([
+      'existing_gogma_current',
       'existing_gogma_reset_bonuses',
       'existing_gogma_keep_bonuses',
       'existing_gogma_reset_skills',

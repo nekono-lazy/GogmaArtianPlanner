@@ -131,8 +131,8 @@ describe('Planner current-state entry validation', () => {
   // Every one of these schema changes is Planner-only: none of them touches
   // Candidate Search or BuildListEntry snapshot semantics, so the Entry stays
   // usable under the current schema (DATA_MODEL 3.5).
-  it.each([2, 3, 4, 5])(
-    'rejects schema %i entries under Target semantics version 6',
+  it.each([2, 3, 4, 5, 6])(
+    'rejects schema %i entries under protection semantics version 7',
     (appSchemaVersion) => {
       const { input, dependencies } = fixture()
       input.buildListEntries[0].calculationContext.appSchemaVersion = appSchemaVersion
@@ -187,6 +187,7 @@ describe('Planner current-state entry validation', () => {
 
   it('keeps an existing Gogma Skill entry usable with Gate and Normal Counter unknown', () => {
     const { input, dependencies } = fixture()
+    input.ownedWeapons[0].isProtected = false
     input.rngState.counterGate = { value: null, isConfirmed: false, source: null }
     input.normalCounters = []
     input.buildListEntries = [resetSkillsEntry(input)]
@@ -223,7 +224,7 @@ describe('Planner current-state entry validation', () => {
     expect(result.warnings.some(({ kind }) => kind === 'rng_state_missing')).toBe(true)
   })
 
-  it('rejects protected destructive routes but allows protected Reset Skills-only routes', () => {
+  it('rejects protected Bonus and Skill amendment routes', () => {
     const destructive = fixture()
     const source = destructive.input.ownedWeapons[0]
     const entry = resetSkillsEntry(destructive.input)
@@ -238,7 +239,9 @@ describe('Planner current-state entry validation', () => {
 
     const skills = fixture()
     skills.input.buildListEntries = [resetSkillsEntry(skills.input)]
-    expect(validatePlannerInput(skills.input, skills.dependencies).validBuildListEntries).toHaveLength(1)
+    expect(validatePlannerInput(skills.input, skills.dependencies).validBuildListEntries).toHaveLength(0)
+    expect(validatePlannerInput(skills.input, skills.dependencies).warnings[0].kind)
+      .toBe('protected_weapon_required')
   })
 })
 
@@ -339,7 +342,8 @@ describe('Planner simulated inventory', () => {
     expect(consumeMaterialWeapon(registered, futureId).isValid).toBe(true)
     const protectedGogma = { ...material, isProtected: true }
     expect(canUseAsDestructiveGogmaSource(protectedGogma)).toBe(false)
-    expect(canUseAsResetSkillsSource(protectedGogma)).toBe(true)
+    expect(canUseAsResetSkillsSource(protectedGogma)).toBe(false)
+    expect(canUseAsResetSkillsSource(material)).toBe(true)
   })
 
   it('allows same-kind updates but rejects a Normal ID becoming Gogma', () => {

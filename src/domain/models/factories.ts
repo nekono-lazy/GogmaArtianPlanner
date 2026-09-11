@@ -74,7 +74,7 @@ export function createOwnedWeapon(
   }
   return {
     ...input,
-    isProtected: input.isProtected ?? input.status !== 'material',
+    isProtected: input.isProtected ?? input.status === 'ideal',
     createdAt: now,
     updatedAt: now,
   }

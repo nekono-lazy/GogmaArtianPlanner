@@ -181,6 +181,7 @@ describe('Production plan generation', () => {
     expect(plan?.steps.every((step) => !step.isCompleted && step.completedAt === null)).toBe(true)
     expect(plan?.steps[4].ownedWeaponId).toBe('owned.fixed.1')
     expect(plan?.steps[4].inventoryChange?.addOwnedWeapon?.id).toBe('owned.fixed.1')
+    expect(plan?.steps[4].inventoryChange?.addOwnedWeapon?.isProtected).toBe(false)
     expect(plan?.steps[0].expectedStateBefore).toEqual(plan?.baseSnapshot.initialExecutionState)
     plan?.steps.slice(0, -1).forEach((step, index) => {
       expect(step.expectedStateAfter).toEqual(plan.steps[index + 1].expectedStateBefore)
@@ -188,6 +189,20 @@ describe('Production plan generation', () => {
     expect(plan?.steps.every(({ title, instruction }) => title.length > 0 && instruction.length > 0)).toBe(true)
     expect(plan?.steps.some(({ title, instruction }) => /ボタン|画面|座標/.test(title + instruction))).toBe(false)
     expect(input).toEqual(before)
+  })
+
+  it('registers a newly reserved Ideal candidate protected', async () => {
+    const { input, dependencies } = fixture()
+    const entry = input.buildListEntries[0]
+    entry.candidateSnapshot.category = 'ideal'
+    entry.candidateSnapshot.isSimilarToIdeal = false
+    entry.candidateSnapshot.similarityScore = null
+    const plan = (await createProductionPlan(input, dependencies)).plan
+    expect(plan?.steps.at(-1)?.operationType).toBe('reserve_weapon')
+    expect(plan?.steps.at(-1)?.inventoryChange?.addOwnedWeapon).toMatchObject({
+      status: 'ideal',
+      isProtected: true,
+    })
   })
 
   it('replays owned Normal conversion by removing the source once and reserving a different Gogma ID', async () => {
@@ -314,7 +329,7 @@ describe('Production plan generation', () => {
     expect(plan?.steps[1].inventoryChange?.updateOwnedWeapons[0]?.id).toBe(source.id)
   })
 
-  it('allows protected existing Gogma Reset Skills and preserves bonuses until same-ID reserve', async () => {
+  it('rejects a protected existing Gogma Reset Skills source in Planner validation', async () => {
     const { input, dependencies } = fixture()
     const source = createValidOwnedWeapon(ownedWeaponId('owned.skills.source'))
     source.isProtected = true
@@ -332,21 +347,47 @@ describe('Production plan generation', () => {
         skillCounterAfter: 8,
       }],
     }
-    entry.candidateSnapshot.category = 'ideal'
-    entry.candidateSnapshot.isSimilarToIdeal = false
-    entry.candidateSnapshot.similarityScore = null
     entry.candidateSnapshot.finalBonuses = structuredClone(source.restorationBonuses)
     entry.candidateSnapshot.restorationBonusScope = source.restorationBonusScope
     entry.candidateSnapshot.seriesSkillId = 'series_skill.fixture.a'
     entry.candidateSnapshot.groupSkillId = null
     synchronizeEntry(input)
-    const plan = (await createProductionPlan(input, dependencies)).plan
-    expect(plan?.steps.map(({ operationType }) => operationType)).toEqual([
-      'reset_skills', 'reserve_weapon',
-    ])
-    expect(plan?.steps[0].expectedResult?.restorationBonuses).toEqual(source.restorationBonuses)
-    expect(plan?.steps[0].inventoryChange).toBeNull()
-    expect(plan?.steps[1].inventoryChange?.updateOwnedWeapons[0]?.id).toBe(source.id)
+    const result = await createProductionPlan(input, dependencies)
+    expect(result.plan).toBeNull()
+    expect(result.warnings).toContainEqual(expect.objectContaining({
+      kind: 'protected_weapon_required',
+    }))
+  })
+
+  it('rejects an old Reset Skills entry when its source is protected after Search', async () => {
+    const { input, dependencies } = fixture()
+    const source = createValidOwnedWeapon(ownedWeaponId('owned.skills.changed'))
+    source.isProtected = false
+    source.seriesSkillId = null
+    source.groupSkillId = null
+    input.ownedWeapons = [source]
+    const entry = input.buildListEntries[0]
+    entry.candidateSnapshot.route = {
+      kind: 'existing_gogma_reset_skills',
+      sourceOwnedWeaponId: source.id,
+      operations: [{
+        type: 'reset_skills',
+        sourceOwnedWeaponId: source.id,
+        skillCounterBefore: 7,
+        skillCounterAfter: 8,
+      }],
+    }
+    entry.candidateSnapshot.finalBonuses = structuredClone(source.restorationBonuses)
+    entry.candidateSnapshot.restorationBonusScope = source.restorationBonusScope
+    entry.candidateSnapshot.seriesSkillId = 'series_skill.fixture.a'
+    entry.candidateSnapshot.groupSkillId = null
+    synchronizeEntry(input)
+    source.isProtected = true
+    const result = await createProductionPlan(input, dependencies)
+    expect(result.plan).toBeNull()
+    expect(result.warnings).toContainEqual(expect.objectContaining({
+      kind: 'protected_weapon_required',
+    }))
   })
   it('does not reject in-progress or undecided Entries in a partial Plan', async () => {
     const { input, dependencies } = fixture()

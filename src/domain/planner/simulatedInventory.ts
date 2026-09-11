@@ -33,7 +33,7 @@ export function findOwnedWeapon(inventory: SimulatedInventory, ownedWeaponId: Ow
 
 export function canConsumeMaterialWeapon(weapon: OwnedWeapon | null): boolean { return weapon !== null && weapon.kind === 'gogma' && weapon.status === 'material' && !weapon.isProtected }
 export function canUseAsDestructiveGogmaSource(weapon: OwnedWeapon | null): boolean { return weapon !== null && weapon.kind === 'gogma' && !weapon.isProtected }
-export function canUseAsResetSkillsSource(weapon: OwnedWeapon | null): boolean { return weapon !== null && weapon.kind === 'gogma' }
+export function canUseAsResetSkillsSource(weapon: OwnedWeapon | null): boolean { return weapon !== null && weapon.kind === 'gogma' && !weapon.isProtected }
 
 export function consumeMaterialWeapon(inventory: SimulatedInventory, ownedWeaponId: OwnedWeaponId): SimulatedInventoryResult {
   const weapon = findOwnedWeapon(inventory, ownedWeaponId)

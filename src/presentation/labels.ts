@@ -39,6 +39,7 @@ export const candidateCategoryLabels: Record<CandidateCategory, string> = {
 export const routeKindLabels: Record<RouteKind, string> = {
   normal_artian_to_gogma: '新規通常アーティアから巨戟化',
   owned_normal_artian_to_gogma: '所持通常アーティアから巨戟化',
+  existing_gogma_current: '所持巨戟の現在性能（操作なし）',
   existing_gogma_reset_bonuses: '所持巨戟の復元ボーナス再抽選',
   existing_gogma_keep_bonuses: '所持巨戟の復元ボーナス保持再抽選',
   existing_gogma_reset_skills: '所持巨戟のスキル再抽選',

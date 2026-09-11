@@ -196,7 +196,7 @@ function currentGogma(runtime: Runtime, entryId: BuildListEntryId, sourceId: Own
 function assignGogma(runtime: Runtime, action: PlannerSearchAction, output: TransientGogma) { action.progressedBuildListEntryIds.forEach((id) => runtime.gogmas.set(id, structuredClone(output))) }
 function reservedWeapon(entry: BuildListEntry, target: TargetWeapon, id: OwnedWeaponId): OwnedGogmaArtianWeapon {
   const candidate = entry.candidateSnapshot
-  return { id, kind: 'gogma', name: '', weaponTypeId: target.weaponTypeId, elementId: target.elementId, restorationBonuses: cloneBonuses(candidate.finalBonuses), restorationBonusScope: candidate.restorationBonusScope, seriesSkillId: candidate.seriesSkillId, groupSkillId: candidate.groupSkillId, status: candidate.category, isProtected: true, relatedTargetWeaponIds: [entry.targetWeaponId], memo: null, createdAt: candidate.createdAt, updatedAt: candidate.createdAt }
+  return { id, kind: 'gogma', name: '', weaponTypeId: target.weaponTypeId, elementId: target.elementId, restorationBonuses: cloneBonuses(candidate.finalBonuses), restorationBonusScope: candidate.restorationBonusScope, seriesSkillId: candidate.seriesSkillId, groupSkillId: candidate.groupSkillId, status: candidate.category, isProtected: candidate.category === 'ideal', relatedTargetWeaponIds: [entry.targetWeaponId], memo: null, createdAt: candidate.createdAt, updatedAt: candidate.createdAt }
 }
 
 /** Pure, deterministic replay. It generates neither PlanStep IDs nor clocks. */
@@ -251,11 +251,12 @@ export function replayPlannerSearchTrace(input: PlannerInput, bestState: Planner
         } else {
           const position = runtime.ownedWeapons.findIndex(({ id }) => id === action.ownedWeaponId); const source = runtime.ownedWeapons[position]
           if (!source || source.kind !== 'gogma') return fail('missing_source_weapon', 'Existing Gogma reserve source is unavailable.', index)
-          const updated: OwnedGogmaArtianWeapon = { ...source, restorationBonuses: cloneBonuses(entry.candidateSnapshot.finalBonuses), restorationBonusScope: entry.candidateSnapshot.restorationBonusScope, seriesSkillId: entry.candidateSnapshot.seriesSkillId, groupSkillId: entry.candidateSnapshot.groupSkillId, status: entry.candidateSnapshot.category, isProtected: true, relatedTargetWeaponIds: [...new Set([...source.relatedTargetWeaponIds, entry.targetWeaponId])].sort() }
+          const updated: OwnedGogmaArtianWeapon = { ...source, restorationBonuses: cloneBonuses(entry.candidateSnapshot.finalBonuses), restorationBonusScope: entry.candidateSnapshot.restorationBonusScope, seriesSkillId: entry.candidateSnapshot.seriesSkillId, groupSkillId: entry.candidateSnapshot.groupSkillId, status: entry.candidateSnapshot.category, relatedTargetWeaponIds: [...new Set([...source.relatedTargetWeaponIds, entry.targetWeaponId])].sort() }
           runtime.ownedWeapons[position] = updated; inventoryChange.updateOwnedWeapons = [structuredClone(updated)]
         }
         runtime.gogmas.delete(entry.id)
-        expectedResult = result(cloneBonuses(entry.candidateSnapshot.finalBonuses), entry.candidateSnapshot.restorationBonusScope, entry.candidateSnapshot.seriesSkillId, entry.candidateSnapshot.groupSkillId, true, entry.candidateSnapshot.category, entry.candidateSnapshot.isSimilarToIdeal)
+        const reserved = inventoryChange.addOwnedWeapon ?? inventoryChange.updateOwnedWeapons[0]
+        expectedResult = result(cloneBonuses(entry.candidateSnapshot.finalBonuses), entry.candidateSnapshot.restorationBonusScope, entry.candidateSnapshot.seriesSkillId, entry.candidateSnapshot.groupSkillId, reserved?.isProtected ?? false, entry.candidateSnapshot.category, entry.candidateSnapshot.isSimilarToIdeal)
     } else {
         const operation = action.routeOperation
         if (operation.type === 'create_normal_artian') {

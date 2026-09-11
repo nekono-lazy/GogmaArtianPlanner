@@ -13,7 +13,7 @@ import {
 } from './routeSearchShared'
 import type { RouteBonusSolution, RouteSkillSolution } from './streamSolutions'
 
-const destructiveKinds = ['existing_gogma_reset_bonuses', 'existing_gogma_keep_bonuses', 'existing_gogma_mixed'] as const
+const bonusAmendmentKinds = ['existing_gogma_reset_bonuses', 'existing_gogma_keep_bonuses', 'existing_gogma_mixed'] as const
 
 function compatibleSources(context: RouteSearchContext): OwnedGogmaArtianWeapon[] {
   return selectCompatibleOwnedGogmaWeapons(context.target, context.input.ownedWeapons)
@@ -52,14 +52,21 @@ export async function searchExistingGogmaRoutes(context: RouteSearchContext, sch
   const result: RouteSearchResult = { candidates: [], searchedRoutes: [], skippedRoutes: [], warnings: [] }
   const all = compatibleSources(context)
   if (all.length === 0) {
-    pushAll(result, ['existing_gogma_reset_bonuses', 'existing_gogma_keep_bonuses', 'existing_gogma_reset_skills', 'existing_gogma_mixed'], 'no_owned_weapon_available', 'No compatible owned Gogma weapon is available.')
+    pushAll(result, ['existing_gogma_current', 'existing_gogma_reset_bonuses', 'existing_gogma_keep_bonuses', 'existing_gogma_reset_skills', 'existing_gogma_mixed'], 'no_owned_weapon_available', 'No compatible owned Gogma weapon is available.')
     return result
   }
+  result.searchedRoutes.push('existing_gogma_current')
+
+  const mutableSources = all.filter((weapon) => !weapon.isProtected)
 
   const hasSkillInputs = hasConfirmedSkillInputs(input)
   let skillInputUnsupportedReason: string | null = null
   let canSkill = false
-  if (hasSkillInputs && engine.capabilities.supportsSkillPrediction) {
+  if (
+    mutableSources.length > 0 &&
+    hasSkillInputs &&
+    engine.capabilities.supportsSkillPrediction
+  ) {
     const skillSupport = context.predictionSupport.skill()
     canSkill = skillSupport.supported
     if (!skillSupport.supported) skillInputUnsupportedReason = skillSupport.reason
@@ -70,8 +77,14 @@ export async function searchExistingGogmaRoutes(context: RouteSearchContext, sch
   } else {
     result.skippedRoutes.push({
       route: 'existing_gogma_reset_skills',
-      reason: hasSkillInputs ? 'skill_prediction_unsupported' : 'rng_state_unconfirmed',
-      detail: !hasSkillInputs
+      reason: mutableSources.length === 0
+        ? 'no_unprotected_source_weapon'
+        : hasSkillInputs
+          ? 'skill_prediction_unsupported'
+          : 'rng_state_unconfirmed',
+      detail: mutableSources.length === 0
+        ? 'Only protected sources are available for Reset Skills routes.'
+        : !hasSkillInputs
         ? 'Confirmed Base Seed and Skill Counter are required.'
         : skillInputUnsupportedReason
           ? `The active RNG Engine does not support this Skill input (${skillInputUnsupportedReason}).`
@@ -79,13 +92,12 @@ export async function searchExistingGogmaRoutes(context: RouteSearchContext, sch
     })
   }
 
-  const destructive = all.filter((weapon) => !weapon.isProtected)
   const gogmaInputsConfirmed = hasConfirmedGogmaInputs(input)
-  const canAmend = destructive.length > 0
+  const canAmend = mutableSources.length > 0
     && gogmaInputsConfirmed
     && engine.capabilities.supportsGogmaPrediction
   const canKeep = engine.capabilities.supportsKeepBonusesPrediction
-  const pureKeepSources = destructive.filter(
+  const pureKeepSources = mutableSources.filter(
     ({ restorationBonusScope }) => restorationBonusScope === 'gogma_artian',
   )
   const searchedAmendmentRoutes = new Set<BuildRoute['kind']>()
@@ -101,7 +113,10 @@ export async function searchExistingGogmaRoutes(context: RouteSearchContext, sch
       conversionSkill: null,
       zeroBonus: zeroBonusSolution(source),
       zeroSkill: zeroSkillSolution(source),
-      startSkillCounter: canSkill ? input.rngState.skillCounter.value : null,
+      startSkillCounter:
+        canSkill && !source.isProtected
+          ? input.rngState.skillCounter.value
+          : null,
       bonusBase: canAmend && !source.isProtected ? {
         startGogmaCounter: input.rngState.gogmaCounter.value!,
         bonuses: source.restorationBonuses,
@@ -121,17 +136,17 @@ export async function searchExistingGogmaRoutes(context: RouteSearchContext, sch
     })
   }
 
-  if (destructive.length === 0) {
-    pushAll(result, destructiveKinds, 'no_unprotected_source_weapon', 'Only protected sources are available for destructive routes.')
+  if (mutableSources.length === 0) {
+    pushAll(result, bonusAmendmentKinds, 'no_unprotected_source_weapon', 'Only protected sources are available for performance-amendment routes.')
     return result
   }
   if (!gogmaInputsConfirmed || !engine.capabilities.supportsGogmaPrediction) {
-    pushAll(result, destructiveKinds, gogmaInputsConfirmed ? 'gogma_prediction_unsupported' : 'rng_state_unconfirmed', gogmaInputsConfirmed ? 'The active RNG Engine does not support Gogma prediction.' : 'Confirmed Base Seed and Gogma Counter are required.')
+    pushAll(result, bonusAmendmentKinds, gogmaInputsConfirmed ? 'gogma_prediction_unsupported' : 'rng_state_unconfirmed', gogmaInputsConfirmed ? 'The active RNG Engine does not support Gogma prediction.' : 'Confirmed Base Seed and Gogma Counter are required.')
     return result
   }
 
   result.finalize = () => {
-    // Queried only once the destructive preconditions hold, so an unavailable
+    // Queried only once the performance-amendment preconditions hold, so an unavailable
     // source or unconfirmed Gogma input never triggers a support query.
     const resetSupport = context.predictionSupport.gogmaReset()
     const canReset = resetSupport.supported

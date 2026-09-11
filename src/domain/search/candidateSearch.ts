@@ -33,6 +33,7 @@ import { assertCandidateSearchInput } from './searchValidation'
 const routeOrder: RouteKind[] = [
   'normal_artian_to_gogma',
   'owned_normal_artian_to_gogma',
+  'existing_gogma_current',
   'existing_gogma_reset_bonuses',
   'existing_gogma_keep_bonuses',
   'existing_gogma_reset_skills',
@@ -43,6 +44,7 @@ const normalRouteKinds: RouteKind[] = [
   'owned_normal_artian_to_gogma',
 ]
 const existingGogmaRouteKinds: RouteKind[] = [
+  'existing_gogma_current',
   'existing_gogma_reset_bonuses',
   'existing_gogma_keep_bonuses',
   'existing_gogma_reset_skills',

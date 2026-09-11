@@ -105,7 +105,7 @@ function reservedGogma(entry: BuildListEntry): OwnedGogmaArtianWeapon {
     seriesSkillId: entry.candidateSnapshot.seriesSkillId,
     groupSkillId: entry.candidateSnapshot.groupSkillId,
     status: entry.candidateSnapshot.category,
-    isProtected: true,
+    isProtected: entry.candidateSnapshot.category === 'ideal',
     relatedTargetWeaponIds: [entry.targetWeaponId],
   }
 }

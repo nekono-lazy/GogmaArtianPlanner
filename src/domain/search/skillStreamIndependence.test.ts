@@ -148,7 +148,7 @@ function gogmaSource(
     seriesSkillId: OTHER_SERIES_SKILL,
     groupSkillId: 'group_skill.fixture.a',
     restorationBonusScope: 'gogma_artian',
-    isProtected: true,
+    isProtected: false,
     ...overrides,
   } as OwnedGogmaArtianWeapon
 }
@@ -459,9 +459,9 @@ describe('Skill stream independence', () => {
     expect(result.targetResults[0].candidates.some(({ route }) =>
       route.operations.some(({ type }) => type === 'reset_skills'),
     )).toBe(false)
-    // Only the Skill stream stops; the Route itself is still reported searched.
+    // Only the current-state Route is searched because no amendment is needed.
     expect(result.targetResults[0].searchedRoutes).toContain(
-      'existing_gogma_reset_skills',
+      'existing_gogma_current',
     )
   })
 
@@ -521,13 +521,13 @@ describe('Skill stream independence', () => {
     expect(reachedIdeal?.route.kind).toBe('existing_gogma_mixed')
   })
 
-  it('keeps a Reset Skills only route non-destructive and Bonus-preserving', async () => {
+  it('keeps a Reset Skills only route Bonus-preserving', async () => {
     const input = existingGogmaInput(2, 1)
     const source = gogmaSource(input, 'owned.fixture.stream-skill-only', {
       restorationBonuses: createRestorationBonusSet(),
       restorationBonusScope: 'gogma_artian',
       seriesSkillId: OTHER_SERIES_SKILL,
-      isProtected: true,
+      isProtected: false,
     })
     input.ownedWeapons = [source]
     const engine = createStreamFixtureEngine(input, {

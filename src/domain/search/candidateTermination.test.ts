@@ -280,7 +280,7 @@ describe('B4 delta scheduler: semantic work, not Prediction memo counts', () => 
     expect(engine.predictGogmaBonus).not.toHaveBeenCalled()
   })
 
-  it('exhausts d=0/k=0 current Ideal immediately without generating a Candidate', async () => {
+  it('exhausts d=0/k=0 current Ideal after generating one current-state Candidate', async () => {
     const { input, engine } = fixture(true, 5000)
     input.routeFilter = 'existing_gogma'
     const source = input.ownedWeapons[0] as OwnedGogmaArtianWeapon
@@ -290,10 +290,10 @@ describe('B4 delta scheduler: semantic work, not Prediction memo counts', () => 
     const compositions = vi.spyOn(routeShared, 'createBaseCandidate')
     const shouldCancel = vi.fn(() => false)
     const result = await searchCandidates(input, engine, { ...options, shouldCancel })
-    expect(steps).not.toHaveBeenCalled()
-    expect(compositions).not.toHaveBeenCalled()
-    expect(shouldCancel).toHaveBeenCalledTimes(1)
-    expect(result.targetResults[0].candidates).toEqual([])
+    expect(steps).toHaveBeenCalledTimes(1)
+    expect(compositions).toHaveBeenCalledTimes(1)
+    expect(result.targetResults[0].candidates).toHaveLength(1)
+    expect(result.targetResults[0].candidates[0].route.kind).toBe('existing_gogma_current')
     expect(engine.predictSkills).not.toHaveBeenCalled()
     expect(engine.predictGogmaBonus).not.toHaveBeenCalled()
   })

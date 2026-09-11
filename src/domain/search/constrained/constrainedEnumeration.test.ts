@@ -153,7 +153,7 @@ describe('Constrained route policy', () => {
     expect(result.candidates).toEqual([])
   })
 
-  it('never schedules a destructive amendment on a protected Gogma source', async () => {
+  it('never schedules any performance amendment on a protected Gogma source', async () => {
     const origin = createConstrainedSearchOrigin({
       normalCounters: [],
       ownedWeapons: [
@@ -173,8 +173,7 @@ describe('Constrained route policy', () => {
       ),
       engine,
     )
-    // Reset Skills stays legal on a protected weapon in v1.
-    expect(routeKinds(result.candidates)).toEqual(['existing_gogma_reset_skills'])
+    expect(routeKinds(result.candidates)).toEqual([])
   })
 })
 

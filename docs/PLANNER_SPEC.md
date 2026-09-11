@@ -733,7 +733,7 @@ conflictPenalty = conflictCount * 5000
 - 実用品未所持TargetをPractical以上へ進める評価を、実用品取得済みTargetのIdeal更新より高くする
 - Practical確保後はhasPracticalを維持しつつIdeal候補を評価する
 - 理想候補でも、実用品未所持Targetの遠すぎる理想は短距離実用品より後回しになることがある
-- `isProtected = true` の武器に対する素材消費・Reset Bonuses・Keep Bonusesはpenaltyではなく実行不能な展開として除外する
+- `isProtected = true` の武器に対する素材消費・Reset Bonuses・Keep Bonuses・Reset Skillsはpenaltyではなく実行不能な展開として除外する
 
 ### 7.3 Plan quality preference: 武器切替の最小化
 
@@ -871,7 +871,7 @@ export interface SimulatedInventory {
 - 巨戟アーティアのMaterialかつ保護OFF: 素材消費可能
 - Practical: 消費しない
 - Ideal: 消費しない
-- `isProtected = true`: 素材消費・Reset Bonuses・Keep Bonusesへ使用しない
+- `isProtected = true`: 素材消費・Reset Bonuses・Keep Bonuses・Reset Skillsへ使用しない
 - 所持レア8通常アーティアを巨戟化したStateでは元通常アーティアをInventoryから除き、同じ通常アーティアを二重使用しない
 - `owned_normal_artian_to_gogma` ではconvert_normal_to_gogma適用時に元NormalをInventoryから削除し、変換後GogmaはまだOwnedWeaponとして追加しない。以後そのNormal IDは別Routeへ利用できない
 - 通常アーティアはstatusを持たず、旧PracticalのMaterial化規則を適用しない
@@ -916,8 +916,8 @@ Material / unprotected Gogmaを割り当て、不足時だけ補充し、最終P
 - 予約武器は `create_material_gogma` 確定前のInventoryへ追加せず、登録前に素材消費・Reset Bonuses・Keep Bonusesの起点として使わない
 - Candidate Searchが生成した `UseWeaponAsMaterialOperation.ownedWeaponId` は検索時点の具体的既存武器を要求するため、Plannerは別IDへ差し替えない
 - Planner-only素材需要、補充、登録、消費、旧Practical素材化、reserveはBuildRouteを書き換えず、Planner-only Stepとして追加する
-- protected武器への素材消費・Reset Bonuses・Keep Bonusesが必要な探索展開は生成せず、該当BuildListEntryを不採用として理由を残す
-- Search後に起点武器がprotectedへ変わった場合、素材消費・Reset Bonuses・Keep Bonusesを必要とするEntryはPlanner入力validationで実行不能とする。Reset SkillsのみのEntryは実行可能とする
+- protected武器への素材消費・Reset Bonuses・Keep Bonuses・Reset Skillsが必要な探索展開は生成せず、該当BuildListEntryを不採用として理由を残す
+- Search後に起点武器がprotectedへ変わった場合、素材消費またはBonus / Skill amendmentを必要とするEntryはPlanner入力validationで実行不能とする
 - v1では、Plannerは同一TargetのIdeal武器を先に確保できる場合だけ、旧Practical武器の確認付き素材化Stepを探索へ追加してよい
 - 素材化Stepを予定することは許可するが、ユーザー確認前に `isProtected` または `status` を変更しない
 - 素材化Stepが確認された後のStateでのみ、その武器を後続の素材消費へ割り当てる
@@ -988,7 +988,7 @@ PlannerIdFactoryは使用しない。
 選択Entryが削除済み、stale、Target無効、Capability不足、または保護状態変更により
 実行不能ならresolutionを適用せず `invalid_conflict_resolution` warningを返し、再選択を促す。
 
-protected武器への素材消費・Reset Bonuses・Keep Bonusesは競合として解決せず、常に実行不能として `requires_protected_weapon` の不採用理由を付ける。確認付き素材化Stepが先行し、期待状態どおりMaterial / unprotectedへ変わった後の素材消費はこの禁止に該当しない。
+protected武器への素材消費・Reset Bonuses・Keep Bonuses・Reset Skillsは競合として解決せず、常に実行不能として `requires_protected_weapon` の不採用理由を付ける。確認付き素材化Stepが先行し、期待状態どおりMaterial / unprotectedへ変わった後の素材消費はこの禁止に該当しない。
 
 RouteOperation別のRNG位置は実際に消費するstreamで判定する。`convert_normal_to_gogma` は `same_skill_counter` の競合対象であり、`same_gogma_counter` として扱わない。Reset SkillsもSkill、Reset / KeepだけがGogma、forgeだけが該当Normal Counter位置を競合資源とする。
 
@@ -3177,7 +3177,7 @@ Route別の典型例。
 `reserve_weapon` はPlanner生成時に新しいOwnedWeapon IDを予約し、Candidate Snapshotの
   finalBonuses / Series Skill / Group Skillを持つ `kind = "gogma"` の武器を追加する。
 その武器の `restorationBonusScope` はCandidate Snapshotの `finalBonusScope` と一致させる。
-Ideal候補はstatus Ideal、Practical候補はstatus Practicalとし、いずれもprotectedとする。
+Ideal候補はstatus Idealかつprotected、Practical候補はstatus Practicalかつunprotectedとして新規登録する。
 `relatedTargetWeaponIds` へTarget IDを重複なく追加する。
 
 UI実行は1操作ずつ。
@@ -3208,7 +3208,7 @@ protection、Candidate結果、Target参照は11.1と同じ契約とする。
 
 既存巨戟Routeの `reserve_weapon` は新しい武器を追加せず、Routeの
 `sourceOwnedWeaponId` と同じOwnedGogmaArtianWeaponを更新する。Candidate結果、categoryに
-対応するstatus、`isProtected = true`、Target参照を反映し、既存Target参照は失わない。
+対応するstatusとTarget参照を反映するが、既存武器の明示的な `isProtected` は変更せず、既存Target参照も失わない。
 
 ## 11.4 既存巨戟 Reset Skills
 
@@ -3217,7 +3217,7 @@ protection、Candidate結果、Target参照は11.1と同じ契約とする。
 2. confirm_result または reserve_weapon
 ```
 
-起点OwnedWeaponのrestorationBonusScopeと復元ボーナス5枠を変更せず、Skill CounterとSkill Prediction結果だけを反映する。Reset Skillsは非破壊操作として扱うため、protectedなPractical / Ideal武器も起点にできる。
+起点OwnedWeaponのrestorationBonusScopeと復元ボーナス5枠を変更せず、Skill CounterとSkill Prediction結果だけを反映する。Reset SkillsはSkill性能を変更するため、起点OwnedWeaponはGogmaかつunprotectedでなければならない。
 
 `reserve_weapon` では同じIDのseriesSkillId、groupSkillId、status、isProtected、
 relatedTargetWeaponIds、updatedAtを更新し、復元ボーナスとcreatedAtを維持する。
@@ -3543,9 +3543,8 @@ Workerを利用できない環境ではClientのversionを `production-engine-un
 
 - Material武器を消費できる
 - Practical / Ideal武器を消費しない
-- `isProtected = true` の武器を素材消費・Reset Bonuses・Keep Bonusesへ使う探索展開を生成しない
-- `isProtected = true` のPractical / Ideal武器でもReset Skillsのみの探索展開を生成できる
-- 素材消費・Reset Bonuses・Keep Bonusesで保護武器を必要とするEntryは `requires_protected_weapon` で不採用になる
+- `isProtected = true` の武器を素材消費・Reset Bonuses・Keep Bonuses・Reset Skillsへ使う探索展開を生成しない
+- 素材消費またはBonus / Skill amendmentで保護武器を必要とするEntryは `requires_protected_weapon` で不採用になる
 - 素材用巨戟不足時に補充Stepが追加される
 - `create_material_gogma` が予約IDと同じunprotected Material Gogmaを追加し、RNGを進めない
 - 予約素材武器を登録Step前に使用せず、登録後も二重消費しない
@@ -3598,7 +3597,7 @@ Planner-driven constrained re-search実装後に追加する観点。
 - conversion StepのExpectedResultが継承normal bonusと初回Skillを持ち、RngAdvanceがSkill +1 / Gogma +0になる
 - transient GogmaのReset / Keep / Reset Skills PlanStepがfake OwnedWeaponIdを持たない
 - `existing_gogma_reset_skills` からreset_skillsと結果確認または確保Stepを生成する
-- protected武器のReset Skills Routeを `requires_protected_weapon` として誤って不採用にしない
+- Search後にsourceがprotectedへ変わったReset Skills Routeを `requires_protected_weapon` で不採用にする
 - 各PlanStepにexpectedStateBefore / Afterが設定される
 - BuildListEntry IDとCalculationContextがPlanへ保存される
 - Candidate由来PlanStepの主参照がBuildListEntry IDである

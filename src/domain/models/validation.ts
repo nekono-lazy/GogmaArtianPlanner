@@ -35,6 +35,7 @@ import {
   areRestorationBonusSlotsEqual,
   canKeepBonusesFromScope,
   canResetBonuses,
+  canResetSkills,
   canUseAsMaterial,
   isCalculationContextCompatible,
 } from './domainRules'
@@ -539,7 +540,9 @@ function validateProtectedRouteUse(
   route.operations.forEach((operation, index) => {
     const path = `operations[${index}]`
     const id =
-      operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses'
+      operation.type === 'reset_bonuses' ||
+      operation.type === 'keep_bonuses' ||
+      operation.type === 'reset_skills'
         ? operation.sourceOwnedWeaponId
         : operation.type === 'use_weapon_as_material'
           ? operation.ownedWeaponId
@@ -557,7 +560,9 @@ function validateProtectedRouteUse(
         ? canResetBonuses(weapon)
         : operation.type === 'keep_bonuses'
           ? canKeepBonusesFromScope(weapon, currentScope)
-          : canUseAsMaterial(weapon)
+          : operation.type === 'reset_skills'
+            ? canResetSkills(weapon)
+            : canUseAsMaterial(weapon)
     if (!allowed) {
       addIssue(
         issues,
@@ -586,6 +591,7 @@ export function validateBuildRoute(
     ![
       'normal_artian_to_gogma',
       'owned_normal_artian_to_gogma',
+      'existing_gogma_current',
       'existing_gogma_reset_bonuses',
       'existing_gogma_keep_bonuses',
       'existing_gogma_reset_skills',
@@ -594,8 +600,13 @@ export function validateBuildRoute(
   ) {
     addIssue(issues, 'kind', 'invalid_literal', 'BuildRoute kind is invalid.')
   }
-  if (!Array.isArray(route.operations) || route.operations.length === 0) {
-    addIssue(issues, 'operations', 'invalid_structure', 'BuildRoute operations cannot be empty.')
+  if (!Array.isArray(route.operations)) {
+    addIssue(issues, 'operations', 'invalid_structure', 'BuildRoute operations must be an array.')
+  } else if (
+    route.operations.length === 0 &&
+    route.kind !== 'existing_gogma_current'
+  ) {
+    addIssue(issues, 'operations', 'invalid_structure', 'Only an existing_gogma_current route may have no operations.')
   }
   route.operations.forEach((operation, index) =>
     validateRouteOperation(operation, `operations[${index}]`, issues),
@@ -766,6 +777,17 @@ export function validateBuildRoute(
         )
       }
     })
+  }
+  if (
+    route.kind === 'existing_gogma_current' &&
+    route.operations.length !== 0
+  ) {
+    addIssue(
+      issues,
+      'operations',
+      'invalid_route_operation',
+      'existing_gogma_current must not contain any operations.',
+    )
   }
   if (route.kind.startsWith('existing_gogma_') && route.kind !== 'existing_gogma_reset_skills') {
     const bonusOperations = route.operations.filter(

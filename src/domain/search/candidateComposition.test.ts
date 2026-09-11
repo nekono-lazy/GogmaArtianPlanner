@@ -281,9 +281,9 @@ describe('Candidate composition follows the Cross rule (SEARCH_SPEC 5.5.4)', () 
     const candidates = result.targetResults[0].candidates
 
     // |B(practical)| = 4 (d = 0 ... 3), |K(practical)| = 4 (k = 0 ... 3).
-    // The Cross yields 7 pairs, and `(d = 0, k = 0)` is not a Candidate.
-    expect(createCandidateId).toHaveBeenCalledTimes(6)
-    expect(candidates).toHaveLength(6)
+    // The Cross yields 7 pairs, including the current-state `(d = 0, k = 0)` Candidate.
+    expect(createCandidateId).toHaveBeenCalledTimes(7)
+    expect(candidates).toHaveLength(7)
     expect(candidates.length).toBeLessThan(4 * 4)
   })
 
@@ -293,6 +293,7 @@ describe('Candidate composition follows the Cross rule (SEARCH_SPEC 5.5.4)', () 
     const shapes = result.targetResults[0].candidates.map(axisShape)
 
     expect(shapes.sort()).toEqual([
+      [0, 0],
       [0, 1],
       [0, 2],
       [0, 3],
@@ -389,7 +390,7 @@ describe('Candidate composition follows the Cross rule (SEARCH_SPEC 5.5.4)', () 
 })
 
 describe('Zero-operation stream solutions (SEARCH_SPEC 5.5.5)', () => {
-  it('produces no Candidate for an existing Gogma d = 0 and k = 0 pair', async () => {
+  it('produces an existing-current Candidate for a d = 0 and k = 0 pair', async () => {
     const input = compositionInput(1, 1)
     input.ownedWeapons = [
       gogmaSource(input, 'owned.fixture.zero', practicalBonuses(RANKS[0])),
@@ -401,7 +402,12 @@ describe('Zero-operation stream solutions (SEARCH_SPEC 5.5.5)', () => {
     })
     const result = await searchCandidates(input, engine, deterministicExecution)
 
-    expect(result.targetResults[0].candidates).toEqual([])
+    expect(result.targetResults[0].candidates).toHaveLength(1)
+    expect(result.targetResults[0].candidates[0].route).toEqual({
+      kind: 'existing_gogma_current',
+      sourceOwnedWeaponId: input.ownedWeapons[0].id,
+      operations: [],
+    })
   })
 
   it('anchors the Skill axis on d = 0 when only the current bonuses are Practical', async () => {
@@ -416,10 +422,12 @@ describe('Zero-operation stream solutions (SEARCH_SPEC 5.5.5)', () => {
     const result = await searchCandidates(input, engine, deterministicExecution)
     const candidates = result.targetResults[0].candidates
 
-    expect(candidates.map(axisShape).sort()).toEqual([[0, 1], [0, 2]])
-    expect(candidates.every(({ route }) =>
-      route.kind === 'existing_gogma_reset_skills',
-    )).toBe(true)
+    expect(candidates.map(axisShape).sort()).toEqual([[0, 0], [0, 1], [0, 2]])
+    expect(candidates.map(({ route }) => route.kind).sort()).toEqual([
+      'existing_gogma_current',
+      'existing_gogma_reset_skills',
+      'existing_gogma_reset_skills',
+    ])
   })
 
   it('anchors the Bonus axis on k = 0 when only the current Skills are usable', async () => {
@@ -477,7 +485,9 @@ describe('Zero-operation stream solutions (SEARCH_SPEC 5.5.5)', () => {
       skills: ['series_skill.fixture.k1', 'series_skill.fixture.k2'],
     })
     const result = await searchCandidates(input, engine, deterministicExecution)
-    const candidates = result.targetResults[0].candidates
+    const candidates = result.targetResults[0].candidates.filter(({ route }) =>
+      route.kind === 'existing_gogma_reset_skills',
+    )
 
     expect(candidates.some((candidate) =>
       operationTypes(candidate) === 'convert_normal_to_gogma',
@@ -547,7 +557,9 @@ describe('Composed RouteKind and operation order', () => {
       skills: ['series_skill.fixture.k1'],
     })
     const result = await searchCandidates(input, engine, deterministicExecution)
-    const candidates = result.targetResults[0].candidates
+    const candidates = result.targetResults[0].candidates.filter(({ route }) =>
+      route.kind === 'existing_gogma_reset_skills',
+    )
 
     expect(candidates).toHaveLength(1)
     expect(candidates[0].route.kind).toBe('existing_gogma_reset_skills')
@@ -609,7 +621,7 @@ describe('Composed RouteKind and operation order', () => {
     )).toBe(true)
   })
 
-  it('keeps a protected source on the Skill axis only', async () => {
+  it('keeps a protected source only as its current-state candidate', async () => {
     const input = compositionInput(2, 2)
     input.ownedWeapons = [
       gogmaSource(input, 'owned.fixture.protected', practicalBonuses(RANKS[0]), {
@@ -621,14 +633,14 @@ describe('Composed RouteKind and operation order', () => {
       skills: ['series_skill.fixture.k1', 'series_skill.fixture.k2'],
     })
     const gogma = vi.spyOn(engine, 'predictGogmaBonus')
+    const skills = vi.spyOn(engine, 'predictSkills')
     const result = await searchCandidates(input, engine, deterministicExecution)
     const candidates = result.targetResults[0].candidates
 
     expect(gogma).not.toHaveBeenCalled()
-    expect(candidates.map(axisShape).sort()).toEqual([[0, 1], [0, 2]])
-    expect(candidates.every(({ route }) =>
-      route.kind === 'existing_gogma_reset_skills',
-    )).toBe(true)
+    expect(skills).not.toHaveBeenCalled()
+    expect(candidates.map(axisShape)).toEqual([[0, 0]])
+    expect(candidates[0].route.kind).toBe('existing_gogma_current')
   })
 })
 

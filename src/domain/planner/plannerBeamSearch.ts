@@ -314,8 +314,12 @@ function inventoryPreconditionRejection(
       state.simulatedInventory,
       operation.sourceOwnedWeaponId,
     )
-    return canUseAsResetSkillsSource(source)
-      ? null
+    if (canUseAsResetSkillsSource(source)) return null
+    return source?.kind === 'gogma' && source.isProtected
+      ? protectedRejection(
+          unit,
+          `OwnedWeapon '${operation.sourceOwnedWeaponId}' is protected and cannot be used for Reset Skills.`,
+        )
       : rejection(
           entry.id,
           operation.type,
@@ -780,7 +784,7 @@ function createReservedWeapon(
     seriesSkillId: candidate.seriesSkillId,
     groupSkillId: candidate.groupSkillId,
     status: candidate.category,
-    isProtected: true,
+    isProtected: candidate.category === 'ideal',
     relatedTargetWeaponIds: [entry.targetWeaponId],
     memo: null,
     createdAt: candidate.createdAt,
@@ -896,7 +900,6 @@ function applyReserveAction(
       seriesSkillId: entry.candidateSnapshot.seriesSkillId,
       groupSkillId: entry.candidateSnapshot.groupSkillId,
       status: entry.candidateSnapshot.category,
-      isProtected: true,
       relatedTargetWeaponIds: [
         ...new Set([...source.relatedTargetWeaponIds, entry.targetWeaponId]),
       ],
