@@ -32,6 +32,10 @@ export function createTargetDefinitionHash(target: TargetWeapon): string {
     elementId: target.elementId,
     priority: target.priority,
     isEnabled: target.isEnabled,
+    // The preferred owned weapon changes which Route the Planner prefers for
+    // this Target, so changing it must stale existing entries with
+    // `target_definition_changed` (`docs/DATA_MODEL.md` 9.4).
+    preferredOwnedWeaponId: target.preferredOwnedWeaponId,
     idealBonuses: normalizeBonuses(target.idealBonuses),
     practicalBonusConditions: target.practicalBonusConditions
       .map((condition) => ({ ...condition }))

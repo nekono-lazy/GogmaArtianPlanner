@@ -328,9 +328,6 @@ export function validateOwnedWeapon(
   } else if (!['material', 'practical', 'ideal'].includes(weapon.status)) {
     addIssue(issues, 'status', 'invalid_literal', 'Gogma Artian weapons require a valid status.')
   }
-  weapon.relatedTargetWeaponIds.forEach((id, index) =>
-    validateId(id, `relatedTargetWeaponIds[${index}]`, issues),
-  )
   return result(issues)
 }
 
@@ -398,6 +395,12 @@ export function validateTargetWeapon(
   validateId(target.elementId, 'elementId', issues)
   if (!Number.isInteger(target.priority) || target.priority < 1 || target.priority > 5) {
     addIssue(issues, 'priority', 'invalid_range', 'Target priority must be 1 through 5.')
+  }
+  // Structural only. Whether the referenced weapon exists, is compatible, is
+  // unprotected, and is claimed by no other Target needs the whole collection,
+  // so it belongs to validateTargetPreferredOwnedWeapons() instead.
+  if (target.preferredOwnedWeaponId !== null) {
+    validateId(target.preferredOwnedWeaponId, 'preferredOwnedWeaponId', issues)
   }
   appendIssues(issues, 'idealBonuses', validateRestorationBonusSet(target.idealBonuses))
   if (!Array.isArray(target.practicalBonusConditions) || !Array.isArray(target.alternativeBonusRules) || 'practicalAlternativeGroups' in target) {

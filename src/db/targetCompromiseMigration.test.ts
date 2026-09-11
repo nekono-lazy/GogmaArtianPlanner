@@ -48,8 +48,13 @@ describe('fail-closed Target compromise migration', () => {
     try {
       await db.open()
       const migrated = await db.targetWeapons.get(legacy.id)
-      expect(db.verno).toBe(2)
-      expect(migrated).toEqual(migrateLegacyTargetCompromise(legacy))
+      expect(db.verno).toBe(3)
+      // v1 -> v2 -> v3 runs in order: the compromise migration first, then the
+      // preferred owned weapon field, which starts unset for every Target.
+      expect(migrated).toEqual({
+        ...migrateLegacyTargetCompromise(legacy),
+        preferredOwnedWeaponId: null,
+      })
       expect(hasTargetCompromise(migrated!)).toBe(false)
       expect(await db.buildCandidates.get(candidate.id)).toEqual(candidate)
       expect(await db.buildListEntries.get(entry.id)).toEqual(entry)
@@ -62,10 +67,10 @@ describe('fail-closed Target compromise migration', () => {
 })
 
 describe('Target semantics calculation boundary', () => {
-  it.each([1, 2, 3, 4, 5, 6])('fails closed for every schema-%i calculation artifact', (version) => {
+  it.each([1, 2, 3, 4, 5, 6, 7])('fails closed for every schema-%i calculation artifact', (version) => {
     const stored = { ...createValidBuildCandidate().calculationContext, appSchemaVersion: version }
     const current = { ...stored, appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION }
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(7)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(8)
     expect(isBuildResultCalculationContextCompatible(stored, current)).toBe(false)
     expect(isCalculationContextCompatible(stored, current)).toBe(false)
     expect(isBuildResultCalculationContextCompatible(current, current)).toBe(true)

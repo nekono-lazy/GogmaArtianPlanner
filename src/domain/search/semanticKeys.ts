@@ -1,8 +1,31 @@
-import type { RestorationBonusScope, RestorationBonusSet } from '../models/publicTypes'
+import type {
+  OwnedWeaponId,
+  RestorationBonusScope,
+  RestorationBonusSet,
+} from '../models/publicTypes'
 import { stableStringify } from '../models/publicTypes'
 
 export function compareStableKeys(left: string, right: string): number {
   return left === right ? 0 : left < right ? -1 : 1
+}
+
+/**
+ * 0 when a Route starting from `sourceOwnedWeaponId` is the one its Target
+ * prefers, 1 otherwise, so a plain ascending comparison puts preferred first
+ * (`docs/SEARCH_SPEC.md` 8.1).
+ *
+ * The source ID is the whole test. A new-Normal Route has no owned source, so
+ * it is never preferred, and a Target with no preference disables the rule
+ * entirely rather than matching every `null` source: without this guard a
+ * new-Normal Route would rank ahead of every owned-source Route the moment a
+ * Target left its preference unset.
+ */
+export function preferredSourceRank(
+  sourceOwnedWeaponId: OwnedWeaponId | null,
+  preferredOwnedWeaponId: OwnedWeaponId | null,
+): number {
+  if (preferredOwnedWeaponId === null) return 0
+  return sourceOwnedWeaponId === preferredOwnedWeaponId ? 0 : 1
 }
 
 /** Completed five-slot identity: order independent, duplicates preserved. */

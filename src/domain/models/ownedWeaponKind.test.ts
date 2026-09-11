@@ -30,7 +30,6 @@ function normalWeapon(): OwnedNormalArtianWeapon {
     groupSkillId: null,
     status: null,
     isProtected: false,
-    relatedTargetWeaponIds: [],
     memo: null,
     createdAt: DOMAIN_FIXTURE_TIME,
     updatedAt: DOMAIN_FIXTURE_TIME,

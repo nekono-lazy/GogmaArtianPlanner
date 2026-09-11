@@ -33,7 +33,6 @@ export interface OwnedWeaponBase {
   /** All five stored slots belong to this family; mixed scope is invalid. */
   restorationBonusScope: RestorationBonusScope
   isProtected: boolean
-  relatedTargetWeaponIds: TargetWeaponId[]
   memo: string | null
   createdAt: ISODateTimeString
   updatedAt: ISODateTimeString
@@ -63,6 +62,17 @@ export interface TargetWeapon {
   elementId: ElementId
   priority: 1 | 2 | 3 | 4 | 5
   isEnabled: boolean
+  /**
+   * The owned weapon this Target prefers as the starting point of its Route.
+   *
+   * A soft planning preference, never a hard Route constraint: Search still
+   * explores every executable Route, and a shorter or otherwise better one wins
+   * (`docs/SEARCH_SPEC.md` 8.1, `docs/PLANNER_SPEC.md` 7.4). The relation is an
+   * optional 1:1 - a Target names at most one weapon, and one weapon is the
+   * preferred origin of at most one Target - and it never restricts Target
+   * Satisfaction, which stays a judgment about actual weapon performance.
+   */
+  preferredOwnedWeaponId: OwnedWeaponId | null
   idealBonuses: RestorationBonusSet
   practicalBonusConditions: PracticalBonusCondition[]
   alternativeBonusRules: AlternativeBonusRule[]

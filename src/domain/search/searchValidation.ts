@@ -3,6 +3,7 @@ import type {
   CandidateSearchSettings,
 } from './searchTypes'
 import { CandidateSearchError } from './searchTypes'
+import { validateTargetPreferredOwnedWeapons } from '../target'
 
 export interface CandidateSearchValidationIssue {
   path: string
@@ -46,6 +47,17 @@ export function assertCandidateSearchInput(input: CandidateSearchInput): void {
   if (input.searchRunId.trim().length === 0) {
     issues.push({ path: 'searchRunId', message: 'searchRunId cannot be empty.' })
   }
+  // The same collection-level authority the save Service and the Planner use.
+  // A preference pointing at a missing, incompatible, protected, or
+  // double-claimed weapon fails closed here rather than quietly ordering
+  // Candidates by a reference that means nothing (`docs/DATA_MODEL.md` 8.5).
+  const preferred = validateTargetPreferredOwnedWeapons(
+    input.targetWeapons,
+    input.ownedWeapons,
+  )
+  issues.push(
+    ...preferred.issues.map(({ path, message }) => ({ path, message })),
+  )
   if (issues.length > 0) {
     throw new CandidateSearchError(
       'invalid_input',

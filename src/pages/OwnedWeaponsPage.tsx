@@ -56,6 +56,11 @@ const masterResult = loadMasterData()
 
 export interface OwnedWeaponsPageDependencies {
   getAll(): Promise<OwnedWeapon[]>
+  /**
+   * Read-only here. Editing the relation belongs to the Target Weapons screen;
+   * this screen reads it to show which Target prefers a weapon, and to confirm
+   * before a change would break that link (`docs/UI_FLOW.md` 7.1).
+   */
   getTargets(): Promise<TargetWeapon[]>
   save(draft: OwnedWeaponDraft, existing: OwnedWeapon | null): Promise<OwnedWeapon>
   delete(id: OwnedWeapon['id']): Promise<void>
@@ -185,12 +190,50 @@ export function OwnedWeaponsPage({
     ) {
       return
     }
+    // Protecting, or re-typing, a weapon a Target prefers as its Route origin
+    // would leave that Target holding a preference the Domain rejects. Confirm
+    // first, then let the Service release the link in the same transaction as
+    // the save (`docs/UI_FLOW.md` 7.1).
+    const releasedTargets = editing
+      ? targets.filter(
+          (target) =>
+            target.preferredOwnedWeaponId === editing.id &&
+            (draft.isProtected ||
+              draft.weaponTypeId !== target.weaponTypeId ||
+              draft.elementId !== target.elementId),
+        )
+      : []
+    if (releasedTargets.length > 0) {
+      const names = releasedTargets.map(({ name }) => name).join('、')
+      const reason = draft.isProtected
+        ? '保護すると生産計画でこの武器を変更できなくなるため、'
+        : '武器種または属性が一致しなくなるため、'
+      if (
+        !window.confirm(
+          `この武器は「${names}」の優先起点に設定されています。\n` +
+            `${reason}「${names}」との紐づけを解除します。\n` +
+            'よろしいですか？',
+        )
+      ) {
+        return
+      }
+    }
     try {
       const saved = await api.save(draft, editing)
       setWeapons((current) => [
         ...current.filter(({ id }) => id !== saved.id),
         saved,
       ])
+      const releasedIds = new Set(releasedTargets.map(({ id }) => id))
+      if (releasedIds.size > 0) {
+        setTargets((current) =>
+          current.map((target) =>
+            releasedIds.has(target.id)
+              ? { ...target, preferredOwnedWeaponId: null }
+              : target,
+          ),
+        )
+      }
       setDraft(null)
       setEditing(null)
       setNotice('所持武器を保存しました。')
@@ -318,14 +361,10 @@ export function OwnedWeaponsPage({
                     : '—'}
                 </Typography>
                 <Typography variant="body2">
-                  関連する目標武器:{' '}
-                  {weapon.relatedTargetWeaponIds
-                    .map(
-                      (id) =>
-                        targets.find((target) => target.id === id)?.name ??
-                        '不明',
-                    )
-                    .join('、') || 'なし'}
+                  優先起点:{' '}
+                  {targets.find(
+                    (target) => target.preferredOwnedWeaponId === weapon.id,
+                  )?.name ?? 'なし'}
                 </Typography>
                 <Stack direction="row" spacing={1}>
                   <Button onClick={() => openEdit(weapon)}>編集</Button>
@@ -542,32 +581,6 @@ export function OwnedWeaponsPage({
                   }
                   label="保護する"
                 />
-                <Typography variant="subtitle2">
-                  関連する目標武器
-                </Typography>
-                {targets.map((target) => (
-                  <FormControlLabel
-                    key={target.id}
-                    control={
-                      <Checkbox
-                        checked={draft.relatedTargetWeaponIds.includes(
-                          target.id,
-                        )}
-                        onChange={(event) =>
-                          setDraft({
-                            ...draft,
-                            relatedTargetWeaponIds: event.target.checked
-                              ? [...draft.relatedTargetWeaponIds, target.id]
-                              : draft.relatedTargetWeaponIds.filter(
-                                  (id) => id !== target.id,
-                                ),
-                          })
-                        }
-                      />
-                    }
-                    label={target.name}
-                  />
-                ))}
                 <TextField
                   label="メモ"
                   multiline

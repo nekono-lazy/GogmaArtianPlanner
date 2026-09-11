@@ -228,7 +228,6 @@ describe('Planner initial context preparation', () => {
     const idealSource = {
       ...createValidOwnedWeapon(ownedWeaponId('owned.preflight.relevance.ideal')),
       isProtected: false,
-      relatedTargetWeaponIds: [],
     }
     const practicalSource = {
       ...createValidOwnedWeapon(ownedWeaponId('owned.preflight.relevance.practical')),
@@ -241,7 +240,6 @@ describe('Planner initial context preparation', () => {
         },
       ] as TargetWeapon['idealBonuses'],
       isProtected: false,
-      relatedTargetWeaponIds: [],
     }
     const activeSource = {
       ...sourceWeapon('owned.preflight.relevance.active'),

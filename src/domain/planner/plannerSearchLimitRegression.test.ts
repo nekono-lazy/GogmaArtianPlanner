@@ -85,7 +85,6 @@ function scenarioSource(
     groupSkillId: null,
     status: 'material',
     isProtected: false,
-    relatedTargetWeaponIds: [],
   }
 }
 

@@ -111,7 +111,14 @@ export interface KnownValue<T> {
 // and changes new Practical protection defaults. All version 1..6 calculation
 // artifacts are incompatible with these Search and Planner semantics.
 // Dexie schema 2 migrates Targets separately; RNG semantics remain unchanged.
-export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 7
+// Version 8 replaces `OwnedWeapon.relatedTargetWeaponIds` with the Target-side
+// `preferredOwnedWeaponId`. That changes Target definition semantics, the
+// same-cost Route selection of Candidate Search, and Planner Plan preference,
+// so all version 1..7 Candidates, Build List snapshots and Plans are
+// incompatible and fail closed. The historical 2..5 build-result exception is
+// not extended to version 8. Dexie schema 3 migrates the persisted shape
+// separately; RNG semantics remain unchanged.
+export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 8
 
 export interface CalculationContext {
   gameVersion: string

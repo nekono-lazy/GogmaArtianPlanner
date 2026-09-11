@@ -197,14 +197,17 @@ semantics at version 3, the shared-Counter Route prefix fast-forward correction 
 them again at version 4, and refusing a bound-truncated partial search result as an
 executable ProductionPlan changed ProductionPlan artifact validity at version 5.
 Target compromise semantics then moved it to version 6, and the protected-weapon
-mutation contract plus zero-operation current-state Candidate semantics now make current
-`CalculationContext.appSchemaVersion` **7**, defined
+mutation contract plus zero-operation current-state Candidate semantics moved it to
+version 7. Replacing `OwnedWeapon.relatedTargetWeaponIds` with the Target-side
+`preferredOwnedWeaponId` changes Target definition semantics, the same-cost Route
+selection of Candidate Search, and Planner plan preference, so current
+`CalculationContext.appSchemaVersion` is **8**, defined
 only by `CURRENT_CALCULATION_APP_SCHEMA_VERSION` in `src/domain/models/common.ts`.
 Search, BuildList, Planner, and benchmark runtime creators share this authority.
-Dexie separately moves to `DATABASE_SCHEMA_VERSION = 2` for fail-closed Target migration; this is independent of
+Dexie separately moves to `DATABASE_SCHEMA_VERSION = 3` for the persisted-model migration; this is independent of
 `AppSettings.schemaVersion = 1`; gameVersion, Master Data version,
 `PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`, and `supportsSeedSearch = false`
-remain unchanged. Version 1 BuildCandidate, BuildListEntry, and ProductionPlan
+remain unchanged. `ExportRoot.schemaVersion` moves to 3 with the persisted entity shape. Version 1 BuildCandidate, BuildListEntry, and ProductionPlan
 calculations are incompatible with any later version and must not be reused as current
 results. Existing staleness checks mark old BuildListEntry records with
 `calculation_context_changed` and exclude them from Planner input. Preserve old
@@ -212,7 +215,7 @@ Candidate categories and snapshots; obtain current Candidates by searching again
 Do not delete historical results or add a migration or Export/Import semantic
 validation change as a substitute for CalculationContext compatibility.
 
-All version 1..6 Candidates, BuildListEntries and ProductionPlans are incompatible with version 7. Preserve their contents and fail closed with calculation_context_changed.
+All version 1..7 Candidates, BuildListEntries and ProductionPlans are incompatible with version 8. Preserve their contents and fail closed with calculation_context_changed. Do not extend the historical build-result compatibility exception to version 8.
 
 Historical version-5 contract (does not apply to version 6 or 7): Version 2, version 3, and version 4 BuildCandidate and BuildListEntry calculations are
 explicitly compatible with version 5 when gameVersion, masterDataVersion, and
@@ -549,8 +552,11 @@ Each `OwnedWeapon` retains:
 - Element
 - Five restoration bonuses
 - Protection state
-- Related target references
 - Memo and timestamps as specified
+
+An `OwnedWeapon` never references a `TargetWeapon`. The relation between the two
+is held only by `TargetWeapon.preferredOwnedWeaponId`, one-directionally from
+Target to weapon (see Target Weapon Rules).
 
 A normal Artian weapon:
 
@@ -691,6 +697,48 @@ Default:
 ```text
 3
 ```
+
+### `preferredOwnedWeaponId`
+
+`TargetWeapon.preferredOwnedWeaponId: OwnedWeaponId | null` names the owned weapon
+this Target prefers as the starting point of its Route. The relation is an optional
+1:1 - a Target names at most one weapon, and one weapon is the preferred origin of
+at most one Target - and it points one way, from Target to weapon.
+
+A weapon is selectable when its weapon type and element match the Target and it is
+unprotected. Both `normal` and `gogma` kinds qualify. `status` is never a selection
+condition: a Material, Practical, or Ideal weapon is equally selectable, and status
+and preference stay independent user settings. Never auto-derive a preference from
+status, and never require one.
+
+It is a soft preference, never a hard Route constraint. Search still explores every
+executable Route and excludes none for not being preferred; a shorter, cheaper, or
+otherwise better Route wins. `docs/SEARCH_SPEC.md` 8.1 and `docs/PLANNER_SPEC.md` 7.4
+fix where the preference sits in each comparison: immediately before the final stable
+tie-break, never as a weight inside a score.
+
+It never restricts Target Satisfaction, which stays a judgment about actual weapon
+performance: another weapon that meets the Target's conditions still satisfies it.
+`reserve_weapon` and every other Planner action must never set or reassign it -
+securing a Practical, securing an Ideal, registering a new Gogma, or updating an
+existing one are not reasons to rewrite the user's planning input.
+
+Because the field is part of the Target's planning meaning, it participates in
+`createTargetDefinitionHash()` and changing it stales existing BuildListEntries with
+`target_definition_changed`. It never enters Candidate stable key, Candidate ID,
+Candidate deduplication key, or the `BuildCandidateMeaning` fingerprint: the
+preference belongs to the Target, not to the Candidate's own meaning.
+
+A collection-level validation authority, separate from single-Target validation,
+fails closed on a missing referenced weapon, a weapon type or element mismatch, a
+protected weapon, and the same weapon being preferred by two Targets. The save
+Service, Candidate Search input, and Planner input all reuse it; UI is never the
+authority. Reassigning a weapon between Targets, and protecting or re-typing a
+preferred weapon, each persist their two writes in one transaction, so no
+intermediate state where two Targets hold one weapon - or where a Target holds a
+protected one - is ever stored. An OwnedWeapon a Target prefers is protected from
+deletion through the existing ReferenceFinder, reported as `target_weapon`.
+`docs/DATA_MODEL.md` 8.5 is the authority.
 
 A Target's ideal five-slot multiset is the only Bonus authority.
 - Practical preserves types and counts; only explicitly configured types relax ranks (minimum + EX minimum).
@@ -861,6 +909,13 @@ referencedOwnedWeaponsHash = null
 Candidate search runs per TargetWeapon, even if one Worker request handles multiple targets.
 
 Search only routes whose capabilities and prerequisites are available.
+
+A Target's `preferredOwnedWeaponId` never narrows that route scope, never changes
+the search horizon, the canonical-Ideal cost boundary, the Practical horizon,
+Practical dominance, the output cap, the number of RNG prediction calls, the stream
+search depth, or any Counter semantics. It affects only the choice and ordering
+among Candidates every existing priority already rates equally
+(`docs/SEARCH_SPEC.md` 8.1).
 
 ### Candidate Search and Planner Responsibilities
 
@@ -1574,7 +1629,9 @@ Replay must not regenerate a skipped operation. Keep the existing design where
 the Beam Search trace alone determines the Replay state, and never introduce a
 semantic difference between Beam Search and Replay.
 
-Among Plans the existing evaluation already rates equally, prefer the one that
+Among Plans the existing evaluation already rates equally, prefer first the one
+whose Routes start from their Targets' preferred owned weapons
+(`docs/PLANNER_SPEC.md` 7.4), and then the one that
 makes the player swap the weapon in hand fewer times. This is Plan quality, not
 correctness, and it sits below correctness, feasibility, Target satisfaction,
 and every existing `evaluationScore` term, and above the semantic and trace
@@ -1853,6 +1910,17 @@ lazily for the Target and conflict that actually need them, capped by
 never break ties on a run-dependent value, and keep the B2 family-layout
 frontier dedup and the normal-scope Keep prediction exclusion unchanged.
 
+The Planner consumes the enumerator's streaming API, taking one Candidate at a
+time and stopping at the first adoptable trial, so a final array sort never runs
+on the Production path. Every ordering rule that must reach Candidate adoption
+therefore belongs in the lattice traversal priority itself, not only in the
+collected result's sort. The Target's preferred source is one such rule
+(`docs/SEARCH_SPEC.md` 8.1): it sits after every Candidate quality and cost
+comparison and immediately before the stable semantic key. It is safe there
+because it is a property of the Route base, constant across one matrix's cells,
+so parent and child always tie on it and the lazy lattice's coordinate-wise
+monotonicity is untouched.
+
 Bounds are split by responsibility and never crossed. Enumeration bounds —
 `maxNormalForgeCount`, `maxGogmaAdvance`, `maxSkillResetCount`, and
 `maxOffAxisPairEvaluations` — belong to the constrained enumerator. Orchestration
@@ -2094,10 +2162,11 @@ bonus result", never "the weapon has no bonuses".
 - amendment `existing_gogma_*`: update the same source Gogma ID, do not add a new
   weapon, and preserve its explicit protection value
 
-The secured weapon uses Candidate result bonuses and skills, has status Ideal or
-Practical from the Candidate category, and includes the Target ID once without
-dropping existing Target references. Target satisfaction changes only when the
-weapon is reserved, not merely when an RNG operation is simulated or confirmed.
+The secured weapon uses Candidate result bonuses and skills and has status Ideal
+or Practical from the Candidate category. It stores no Target reference, and
+`reserve_weapon` never changes `TargetWeapon.preferredOwnedWeaponId`. Target
+satisfaction changes only when the weapon is reserved, not merely when an RNG
+operation is simulated or confirmed.
 
 ---
 
@@ -2228,7 +2297,11 @@ Every Step stores expected state before and after the operation.
 For `ExpectedPlanState.ownedWeaponsHash`, include OwnedWeapon `kind` and
 restoration-bonus scope in addition to the other semantic inventory fields. A
 kind or scope change must change this hash and `referencedOwnedWeaponsHash`;
-name, memo, and timestamps remain excluded.
+name, memo, and timestamps remain excluded. An OwnedWeapon carries no Target
+reference, so neither hash contains one, and a Target's
+`preferredOwnedWeaponId` must never be added to the
+`referencedOwnedWeaponsHash` of a Candidate whose Route does not reference that
+weapon.
 
 `create_material_gogma` has null Target, BuildListEntry, and Candidate
 references, uses the reserved OwnedWeapon ID as `ownedWeaponId`, requires user
@@ -2483,6 +2556,28 @@ Search UI must:
   Production Keep prediction support rather than as a game restriction
 - Allow later Reset Bonuses or Keep Bonuses in the same route after that first
   Reset; never present a Keep slot-selection control
+
+Target Weapons UI must:
+
+- Offer a 優先する所持武器 Select listing compatible Normal and Gogma weapons
+- Show a compatible protected weapon as a visible but unselectable option, so the
+  user can see why it is unavailable, rather than hiding it
+- Mark a weapon another Target already prefers with that Target's name
+- Order the options as current selection, unassigned, assigned elsewhere, protected,
+  and break ties within a group on a stable existing key
+- Offer 指定なし
+- Confirm before taking a weapon from another Target, and change nothing on cancel
+- Drop a preference the Target's own weapon type or element change made
+  incompatible, in the draft only, with no confirmation and no write before save
+- Show the preferred weapon name, or なし, on the Target list card
+
+Owned Weapons UI must:
+
+- Not offer the removed 関連する目標武器 display or editing controls
+- Show the preferring Target read-only, so the relation stays visible
+- Confirm before protecting or re-typing a weapon a Target prefers, change neither
+  the weapon nor the Target on cancel, and on approval save the change together
+  with the Target unlink
 
 Execution UI must:
 
@@ -2774,6 +2869,53 @@ Relevant test areas include:
   the Worker protocol `type: 'error'` response keeps its existing behavior
 - Skip reason labels state normal-scope Keep as missing prediction support, and
   `no_owned_weapon_available` reads naturally for Normal and Gogma source routes
+- `TargetWeapon.preferredOwnedWeaponId` accepts null, and the v2 -> v3 migration
+  sets it to null for every Target, removes `relatedTargetWeaponIds` from every
+  current OwnedWeapon, never infers a preference from the removed list, and
+  rewrites no BuildCandidate, BuildListEntry, ProductionPlan, or ExecutionHistory
+- `DATABASE_SCHEMA_VERSION = 3`, `ExportRoot.schemaVersion = 3`,
+  `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 8`, schema 1..7 artifacts failing closed
+  under version 8, and no other version authority changed
+- Collection validation rejects a missing preferred weapon, a weapon type or element
+  mismatch, a protected weapon, and the same weapon preferred by two Targets, and
+  accepts a compatible unprotected Normal, a compatible unprotected Gogma at every
+  status, and no preference at all
+- The Target dropdown lists compatible Normal and Gogma weapons, shows a protected
+  one as unselectable, marks one another Target already prefers, orders current /
+  unassigned / assigned-elsewhere / protected, offers 指定なし, confirms a takeover,
+  changes nothing on cancel, saves old Target null plus new Target weapon on
+  approval, and drops a preference the Target's own weapon type or element change
+  made incompatible from the draft alone
+- The Owned Weapons screen has no related-Target editing UI, confirms before
+  protecting a preferred weapon, changes neither weapon nor Target on cancel, saves
+  protection plus the Target unlink on approval, and its ReferenceFinder blocks
+  deleting an OwnedWeapon a Target prefers
+- Both atomic paths persist no intermediate state: a failed reassignment leaves the
+  original Target holding the weapon and the new one holding none
+- An equal-cost equal-quality Ideal picks the preferred source as the canonical
+  Ideal, a shorter non-preferred Route still wins, non-preferred routes are searched
+  as usual, and a preference widens or narrows no search horizon and adds no RNG
+  prediction call
+- A fully tied bounded Practical selection orders the preferred source first, and no
+  Candidate ID, stable key, deduplication key, or meaning fingerprint carries the
+  preference
+- The constrained enumerator's streaming `visitConstrainedCandidates()` delivery
+  order puts a fully tied preferred source first, flips when the preference
+  flips, still delivers a cheaper non-preferred Route first, keeps the existing
+  stable order when no preference is set, and changes neither the enumerated set
+  nor the examined-pair and off-axis counts
+- Planner constrained re-search trials and adopts the preferred source when both
+  sources are equally adoptable, and adopts the other one when the preference
+  points at it instead, proving the rule reaches the Production streaming path
+  rather than only the collected result's sort
+- The Planner prefers a preferred-source Route when the existing evaluation ties,
+  prefers the non-preferred one when the existing evaluation rates it higher, ranks
+  the preference above `weaponSwitchCount` and below Target priority, satisfaction,
+  category, cost, and conflict, works for owned Normal and existing Gogma routes,
+  never treats a new-Normal route as preferred, and never lets `reserve_weapon`
+  change a Target preference
+- Changing only `preferredOwnedWeaponId` changes `targetDefinitionHash` and stales
+  the BuildListEntry with `target_definition_changed`
 - Export/import validation
 - Mobile UI flows where applicable
 

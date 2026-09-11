@@ -50,6 +50,10 @@ describe('targetDefinitionHash', () => {
     ['ideal bonuses', (target: ReturnType<typeof createValidTargetWeapon>) => { target.idealBonuses[0] = { bonusTypeId: 'bonus.changed', bonusRankId: 'rank.changed' } }],
     ['practical condition', (target: ReturnType<typeof createValidTargetWeapon>) => { target.practicalBonusConditions[0].requiredExCount = 1 }],
     ['skill condition', (target: ReturnType<typeof createValidTargetWeapon>) => { target.idealSkillCondition.seriesSkillId = null }],
+    // The preferred owned weapon changes which Route the Planner prefers for
+    // this Target, so it is part of the Target's planning meaning
+    // (`docs/DATA_MODEL.md` 9.4).
+    ['preferred owned weapon', (target: ReturnType<typeof createValidTargetWeapon>) => { target.preferredOwnedWeaponId = ownedWeaponId('owned.preferred') }],
   ])('changes for %s', (_label, mutate) => {
     const target = createValidTargetWeapon()
     const changed = structuredClone(target)
@@ -146,6 +150,14 @@ describe('BuildListEntry staleness', () => {
     rngState.baseSeed.source = 'observation'
     const unrelated = { ...createValidNormalArtianCounter(), id: 'weapon.other:8', weaponTypeId: 'weapon.other', rarity: 8 as const, counter: 999 }
     expect(evaluateBuildListEntryStaleness(base.entry, { target: base.target, rngState, normalCounters: [...base.normalCounters, unrelated], ownedWeapons: [], calculationContext: domainFixtureContext }).isStale).toBe(false)
+  })
+
+  it('stales an entry when only the Target preferred owned weapon changes', () => {
+    const base = createFixtureEntry()
+    const changed = { ...base.target, preferredOwnedWeaponId: ownedWeaponId('owned.preferred') }
+    expect(
+      evaluateBuildListEntryStaleness(base.entry, { target: changed, rngState: base.rngState, normalCounters: base.normalCounters, ownedWeapons: [], calculationContext: domainFixtureContext }).staleReasons,
+    ).toEqual(['target_definition_changed'])
   })
 
   it('detects a route-dependent RNG change', () => {

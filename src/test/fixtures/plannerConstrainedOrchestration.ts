@@ -110,7 +110,6 @@ export function orchestrationSource(
     groupSkillId: null,
     status: 'material',
     isProtected: false,
-    relatedTargetWeaponIds: [],
     ...overrides,
   })
 }

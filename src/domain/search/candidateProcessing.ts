@@ -4,6 +4,7 @@ import type {
   BuildCandidate,
   BuildRoute,
   GroupSkillId,
+  OwnedWeaponId,
   RestorationBonusScope,
   RestorationBonusSet,
   SeriesSkillId,
@@ -92,6 +93,43 @@ function nullableAscending(left: number | null, right: number | null): number {
 }
 
 /**
+ * 0 when this Candidate's Route starts from the Target's preferred owned
+ * weapon, 1 otherwise, so a plain ascending comparison puts preferred first.
+ *
+ * `route.sourceOwnedWeaponId` is the whole test, so a new-Normal route - whose
+ * source is `null` - is never preferred (`docs/SEARCH_SPEC.md` 8.1).
+ */
+function preferredSourceRank(
+  candidate: CandidateStableKeyInput,
+  preferredOwnedWeaponId: OwnedWeaponId | null,
+): number {
+  if (preferredOwnedWeaponId === null) return 0
+  return candidate.route.sourceOwnedWeaponId === preferredOwnedWeaponId ? 0 : 1
+}
+
+/**
+ * The Target's preferred owned weapon as an ordering preference.
+ *
+ * Placed immediately before the final stable tie-break in every Candidate
+ * comparison, and nowhere else: every existing correctness, category, cost and
+ * closeness priority is decided first, so a preferred Route can never overtake
+ * a cheaper or better one. It never enters `candidateStableKey()`, the
+ * Candidate ID, the deduplication key, or the meaning fingerprint, because the
+ * preference belongs to the Target, not to the Candidate's own meaning
+ * (`docs/SEARCH_SPEC.md` 8.1).
+ */
+function comparePreferredSource(
+  left: CandidateStableKeyInput,
+  right: CandidateStableKeyInput,
+  preferredOwnedWeaponId: OwnedWeaponId | null,
+): number {
+  return (
+    preferredSourceRank(left, preferredOwnedWeaponId) -
+    preferredSourceRank(right, preferredOwnedWeaponId)
+  )
+}
+
+/**
  * SEARCH_SPEC 8 display ordering. The final tie-break is the run-independent
  * `candidateStableKey`, so the same Search input yields the same ordered
  * semantic sequence across runs even though `BuildCandidate.id` differs.
@@ -99,6 +137,7 @@ function nullableAscending(left: number | null, right: number | null): number {
 export function compareCandidates(
   left: BuildCandidate,
   right: BuildCandidate,
+  preferredOwnedWeaponId: OwnedWeaponId | null = null,
 ): number {
   const categoryOrder = { ideal: 0, practical: 1 }
   return (
@@ -113,14 +152,18 @@ export function compareCandidates(
     (right.similarityScore ?? -1) - (left.similarityScore ?? -1) ||
     right.idealDifference.matchedBonusCount -
       left.idealDifference.matchedBonusCount ||
+    comparePreferredSource(left, right, preferredOwnedWeaponId) ||
     compareStableKeys(candidateStableKey(left), candidateStableKey(right))
   )
 }
 
 export function sortCandidates(
   candidates: readonly BuildCandidate[],
+  preferredOwnedWeaponId: OwnedWeaponId | null = null,
 ): BuildCandidate[] {
-  return [...candidates].sort(compareCandidates)
+  return [...candidates].sort((left, right) =>
+    compareCandidates(left, right, preferredOwnedWeaponId),
+  )
 }
 
 export function filterCandidates(
@@ -153,16 +196,25 @@ export function candidateStableKey(candidate: CandidateStableKeyInput): string {
   })
 }
 
-export function compareCanonicalIdeals(left: BuildCandidate, right: BuildCandidate): number {
+export function compareCanonicalIdeals(
+  left: BuildCandidate,
+  right: BuildCandidate,
+  preferredOwnedWeaponId: OwnedWeaponId | null = null,
+): number {
   return left.estimatedOperationCount - right.estimatedOperationCount ||
     left.estimatedGogmaAdvance - right.estimatedGogmaAdvance ||
     left.estimatedSkillAdvance - right.estimatedSkillAdvance ||
     nullableAscending(left.estimatedNormalAdvance, right.estimatedNormalAdvance) ||
+    comparePreferredSource(left, right, preferredOwnedWeaponId) ||
     compareStableKeys(candidateStableKey(left), candidateStableKey(right))
 }
 
 /** Standard ordering with a semantic final tie for bounded selection only. */
-export function compareCandidateSelection(left: BuildCandidate, right: BuildCandidate): number {
+export function compareCandidateSelection(
+  left: BuildCandidate,
+  right: BuildCandidate,
+  preferredOwnedWeaponId: OwnedWeaponId | null = null,
+): number {
   return Number(left.category === 'practical') - Number(right.category === 'practical') ||
     left.estimatedOperationCount - right.estimatedOperationCount ||
     left.estimatedGogmaAdvance - right.estimatedGogmaAdvance ||
@@ -170,5 +222,6 @@ export function compareCandidateSelection(left: BuildCandidate, right: BuildCand
     nullableAscending(left.estimatedNormalAdvance, right.estimatedNormalAdvance) ||
     (right.similarityScore ?? -1) - (left.similarityScore ?? -1) ||
     right.idealDifference.matchedBonusCount - left.idealDifference.matchedBonusCount ||
+    comparePreferredSource(left, right, preferredOwnedWeaponId) ||
     compareStableKeys(candidateStableKey(left), candidateStableKey(right))
 }

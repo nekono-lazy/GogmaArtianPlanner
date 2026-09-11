@@ -71,6 +71,7 @@ export function createInitialPlannerSearchState(input: PlannerInput, validEntrie
     trace: [],
     consumedMaterialWeaponCount: 0,
     weaponSwitchCount: 0,
+    preferredSourceProgressCount: 0,
     lastWeaponOperationSubjectKey: null,
     totalCost: 0,
     evaluationScore: 0,

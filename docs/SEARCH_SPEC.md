@@ -1769,7 +1769,8 @@ Mixed Routeは含まれるamendment種別にかかわらず、起点OwnedWeapon�
 5. estimatedNormalAdvance昇順。ただし `null` は最後
 6. similarityScore降順
 7. idealDifference.matchedBonusCount降順
-8. `candidateStableKey` 昇順
+8. preferred source match（8.1）
+9. `candidateStableKey` 昇順
 
 TargetWeapon間の表示順。
 
@@ -1802,6 +1803,113 @@ run間で安定しない。**Candidateの最終出力順にrun依存値を使っ
 `maxCandidatesPerTarget` はこのソート後に適用する既存の出力打ち切りであり、
 合成規則の代わりにはならない。合成段階でCartesian productを作ってから
 打ち切る設計にしない。Idealを発見した場合の枠確保は5.5.7に従う。
+
+### 8.1 Targetの優先起点
+
+`TargetWeapon.preferredOwnedWeaponId`（[DATA_MODEL.md](./DATA_MODEL.md) 8.5）はhard filter
+ではない。Searchは従来どおり新規Normal / 所持Normal / 所持Gogmaの実行可能Routeをすべて
+探索し、preferred以外のRouteを除外しない。
+
+概念的な優先順序。
+
+```text
+1. Routeが実行可能であること
+2. 既存のCandidate category / operation cost / Counter advance / similarity等の比較
+3. それらが同等ならpreferredOwnedWeaponIdを起点とするRoute
+4. 最終stable key
+```
+
+例。
+
+```text
+preferred Weaponから Ideal -> 4操作
+新規Normalから Ideal       -> 2操作
+```
+
+なら新規Normalを優先する。一方で
+
+```text
+preferred Weaponから Ideal -> 2操作
+別OwnedWeaponから Ideal    -> 2操作
+```
+
+でその他条件も同等ならpreferred Weaponを優先する。
+
+判定は
+
+```ts
+candidate.route.sourceOwnedWeaponId === target.preferredOwnedWeaponId
+```
+
+を基本とする。所持Normal Routeと既存Gogma Routeはsource IDで判定でき、新規Normal Routeは
+sourceが `null` のためpreferredにならない。Targetのpreferredが `null` の場合はpreference自体
+が無効であり、`null` source同士を一致とみなさない。
+
+#### Comparatorへの入れ方
+
+既存Comparatorへ単純な大きいbonus scoreを加えてはならない。既存のコスト比較をpreferredが
+逆転しないよう、**最終stable tie-breakの直前**に明示的なlexicographic preferenceとして
+入れる。対象は次のとおり。
+
+- canonical Ideal selection（5.6.3）
+- bounded Candidate selection（5.5.7）
+- Practical retention後のordering（5.5.6）
+- 表示用ソート（本章）
+- constrained searchの同様のbounded ordering（5.6.7）
+- constrained searchのstreaming traversal priority（5.6.7）
+
+#### constrained searchのstreaming delivery順
+
+constrained enumerationには2つの出力経路がある。
+
+- `enumerateConstrainedCandidates()`: 全件を集めてから最終sortする配列API
+- `visitConstrainedCandidates()`: Candidateを1件ずつconsumerへ渡すstreaming API
+
+Production PlannerのConstrained re-searchは後者を使い、trial Plannerが採用可能と判断した
+時点で`'stop'`を返して打ち切る。したがって最終sortはProductionの候補採用順に効かない。
+preferred sourceのtie-breakは、最終配列sortだけでなく**traversal priority自体**へ反映し、
+streaming deliveryの順序にも効かせること。
+
+lattice cellのtraversal priorityでは、既存のCandidate品質・コスト相当比較をすべて終えた後、
+安定semantic keyより前にpreferred sourceを置く。
+
+```text
+categoryRank
+operationCount
+gogmaAdvance
+skillAdvance
+normalAdvance
+idealCloseness
+bonus / material / skill semantic comparisons
+preferredSourceRank
+stable semantic key
+internal node tie-break
+```
+
+preferred sourceはRoute baseごとに固定値であり、同一matrix内で`i` / `j`が増えても変化しない。
+親cellと子cellは常にこの項目で同値となり比較は次の項目へ落ちるため、lazy latticeが依存する
+coordinate-wise monotonicityを損なわない。異なるbase間のcellだけを分離する。
+
+この配置はlazy traversalの正しさ、off-axis budget、frontierのmonotonicity、cancellation、
+`examinedCandidates`のいずれも変更しない。
+
+#### 変更してはいけないもの
+
+preferredのために次を変更してはならない。同一コストCandidate間の選択・順序だけに影響させる。
+
+- Search horizon
+- canonical Idealのcost境界
+- Practical horizon
+- Practical dominance
+- `maxCandidatesPerTarget` などの出力打ち切り
+- RNG Prediction call count
+- Stream探索深さ
+- Gogma / Skill / Normal Counter semantics
+
+#### Candidate identityへ入れない
+
+Candidate ID、`candidateStableKey`、dedup key、`BuildCandidateMeaning` fingerprintへ
+preferred情報を入れない。preferredはCandidateそのものの意味ではなく、Target側の選好だからである。
 
 ---
 

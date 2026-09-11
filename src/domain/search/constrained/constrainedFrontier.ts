@@ -62,6 +62,16 @@ export interface ConstrainedWorkPriority {
   /** `compareSkillSolutions()` key 3: the completed Series / Group Skills. */
   skillSemanticKey: string
   /**
+   * 0 when this cell's Route base starts from the Target's preferred owned
+   * weapon, 1 otherwise; 0 for every base when the Target sets no preference
+   * (`docs/SEARCH_SPEC.md` 8.1).
+   *
+   * A property of the Route base alone, so it is constant across every `(i, j)`
+   * of one matrix. That is what keeps it safe here: see the monotonicity note
+   * on `compareConstrainedWorkItems()`.
+   */
+  preferredSourceRank: number
+  /**
    * Run-independent stable key over the Route base, the Bonus solution and the
    * Skill solution semantics. Never a push order, ordinal, ID or Clock value.
    * It carries the `baseKey`, so it also separates cells of different bases
@@ -75,6 +85,8 @@ export interface ConstrainedWorkBase {
   /** `create_normal_artian` counted as its forge `count`. */
   operationUnits: number
   normalAdvance: number | null
+  /** `preferredSourceRank()` over this base's source and the Target preference. */
+  preferredSourceRank: number
 }
 
 export interface ConstrainedWorkItem {
@@ -139,11 +151,26 @@ function nullableAscending(left: number | null, right: number | null): number {
  *   actual pair the Ideal matrix already reached, and by then an evaluated
  *   duplicate.
  *
+ * - `preferredSourceRank` is a property of the Route base, so every cell of one
+ *   matrix carries the same value. Parent and child therefore always tie on it
+ *   and the comparison falls through to the next field exactly as it did before
+ *   the field existed: it can never make a child outrank its parent, and it
+ *   leaves the whole argument above untouched. It only ever separates cells of
+ *   different bases, which is precisely its purpose.
+ *
  * The last four comparisons only separate frontier nodes that denote the same
  * actual pair in different matrices, so they never reorder delivered
  * Candidates. Ranking an axis cell before an identical off-axis cell also
  * guarantees that a pair reachable on any axis is evaluated as axis work and
  * never consumes the off-axis budget.
+ *
+ * `preferredSourceRank` sits after every Candidate quality and cost comparison
+ * and immediately before the stable `semanticKey`, mirroring where the ordinary
+ * Search comparators place the same preference (`docs/SEARCH_SPEC.md` 8.1). It
+ * is a lexicographic step, never a weight, so it can never reverse a cheaper or
+ * better Route. This position is what makes the preference reach the streaming
+ * `visitConstrainedCandidates()` delivery order the Production Planner consumes,
+ * rather than only the final array sort of `enumerateConstrainedCandidates()`.
  *
  * No run-dependent value participates: no random ID, Clock, Candidate ID, Map
  * insertion order, Promise settlement order, or enumeration ordinal. `i`, `j`
@@ -168,6 +195,7 @@ export function compareConstrainedWorkItems(
     compareStableKeys(a.bonusOperationTypeKey, b.bonusOperationTypeKey) ||
     compareStableKeys(a.bonusScope, b.bonusScope) ||
     compareStableKeys(a.skillSemanticKey, b.skillSemanticKey) ||
+    a.preferredSourceRank - b.preferredSourceRank ||
     compareStableKeys(a.semanticKey, b.semanticKey) ||
     Number(left.offAxis) - Number(right.offAxis) ||
     compareStableKeys(left.categoryPredicate, right.categoryPredicate) ||
@@ -234,6 +262,7 @@ export function createConstrainedWorkPriority(
     bonusOperationTypeKey: bonus.operationTypeKey,
     bonusScope: bonus.solution.restorationBonusScope,
     skillSemanticKey: skill.semanticKey,
+    preferredSourceRank: base.preferredSourceRank,
     semanticKey: constrainedWorkSemanticKey(base.baseKey, bonus, skill),
   }
 }

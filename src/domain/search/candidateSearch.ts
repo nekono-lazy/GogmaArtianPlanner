@@ -212,8 +212,8 @@ async function searchTarget(
     }
   }
 
-  const retention = retainInitialCandidates(candidates, input.master, target.weaponTypeId, input.settings.maxCandidatesPerTarget)
-  const processed = filterCandidates(sortCandidates(retention.bounded), input.resultFilter)
+  const retention = retainInitialCandidates(candidates, input.master, target.weaponTypeId, input.settings.maxCandidatesPerTarget, target.preferredOwnedWeaponId)
+  const processed = filterCandidates(sortCandidates(retention.bounded, target.preferredOwnedWeaponId), input.resultFilter)
   // Preserve the existing display-relative meaning: true if the cap omitted
   // a candidate matching this filter. Horizon/dominance omissions are not truncation.
   const truncated = filterCandidates(retention.retained, input.resultFilter).length > processed.length

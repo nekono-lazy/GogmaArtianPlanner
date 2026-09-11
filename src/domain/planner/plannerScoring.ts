@@ -166,14 +166,16 @@ function normalizedOwnedWeapons(state: PlannerSearchState) {
 /**
  * IDs reserved during search and timestamps are deliberately excluded.
  *
- * `weaponSwitchCount` and `lastWeaponOperationSubjectKey` are deliberately
- * excluded too, and their exclusion loses nothing. Both are pure functions of
- * the trace projection already keyed below: each action's
- * `primaryBuildListEntryId` plus its `progressedRoutePositions` pins the exact
- * saved `RouteOperation`, and therefore its weapon subject. Two states sharing
- * this key therefore always share both values, so deduplication identity,
- * future switch accounting, and the deterministic tie-break stay consistent
- * without restating them (`docs/PLANNER_SPEC.md` 7.3).
+ * `weaponSwitchCount`, `lastWeaponOperationSubjectKey`, and
+ * `preferredSourceProgressCount` are deliberately excluded too, and their
+ * exclusion loses nothing. All three are pure functions of the trace projection
+ * already keyed below: each action's `primaryBuildListEntryId` and
+ * `progressedBuildListEntryIds` plus its `progressedRoutePositions` pin the
+ * exact saved `RouteOperation`, and therefore its weapon subject and which
+ * Entries it progressed. Two states sharing this key therefore always share all
+ * three values, so deduplication identity, future switch accounting, the
+ * preferred-source preference, and the deterministic tie-break stay consistent
+ * without restating them (`docs/PLANNER_SPEC.md` 7.3 / 7.4).
  */
 export function createPlannerSearchStateSemanticKey(
   state: PlannerSearchState,
@@ -241,10 +243,18 @@ export function comparePlannerSearchStates(
   if (left.evaluationScore !== right.evaluationScore) {
     return right.evaluationScore - left.evaluationScore
   }
-  // Plan quality, below every correctness, satisfaction, and cost decision and
-  // above the two stable string tie-breaks: among Plans the existing evaluation
-  // already rates equally, prefer the one that makes the player swap the weapon
-  // in hand fewer times (docs/PLANNER_SPEC.md 7.3).
+  // Plan preference, below every correctness, satisfaction, and cost decision:
+  // among branches the existing evaluation already rates equally, prefer the
+  // one that works from the owned weapon its Target named as the preferred
+  // starting point. Never a weight inside evaluationScore, so it can never
+  // reverse a cheaper Route (docs/PLANNER_SPEC.md 7.4).
+  if (left.preferredSourceProgressCount !== right.preferredSourceProgressCount) {
+    return right.preferredSourceProgressCount - left.preferredSourceProgressCount
+  }
+  // Plan quality, below the preferred-source preference and above the two
+  // stable string tie-breaks: among Plans the existing evaluation already rates
+  // equally, prefer the one that makes the player swap the weapon in hand fewer
+  // times (docs/PLANNER_SPEC.md 7.3).
   if (left.weaponSwitchCount !== right.weaponSwitchCount) {
     return left.weaponSwitchCount - right.weaponSwitchCount
   }

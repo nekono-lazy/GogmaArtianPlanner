@@ -561,7 +561,7 @@ function createBenchmarkTarget(
   return {
     id: `target.b8e1.${spec.key}` as TargetWeaponId,
     name: `B8-E1 ${spec.key}`, weaponTypeId: spec.weaponTypeId, elementId: spec.elementId,
-    priority: 3, isEnabled: true, idealBonuses,
+    priority: 3, isEnabled: true, preferredOwnedWeaponId: null, idealBonuses,
     practicalBonusConditions: benchmarkPracticalBonuses(idealBonuses), alternativeBonusRules: [],
     idealSkillCondition: { seriesSkillId: prediction.seriesSkillId, groupSkillId: bonusFocused ? prediction.groupSkillId : UNREACHABLE_GROUP_SKILL_ID, matchMode: 'all' },
     practicalSkillCondition: { seriesSkillId: bonusFocused ? null : prediction.seriesSkillId, groupSkillId: null, matchMode: 'all' },
@@ -603,7 +603,6 @@ function createBenchmarkSource(
     groupSkillId: skills.groupSkillId as OwnedGogmaArtianWeapon['groupSkillId'],
     status: 'material',
     isProtected: false,
-    relatedTargetWeaponIds: [],
     memo: null,
     createdAt: FIXTURE_TIME,
     updatedAt: FIXTURE_TIME,

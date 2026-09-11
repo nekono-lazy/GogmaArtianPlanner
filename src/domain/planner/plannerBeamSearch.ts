@@ -40,6 +40,10 @@ import {
   evaluatePlannerSearchState,
 } from './plannerScoring'
 import { entryIsRelevantForState } from './plannerEntryRelevance'
+import {
+  advancePlannerPreferredSourceMetric,
+  collectPreferredSourceEntryIds,
+} from './plannerPreferredSource'
 import { preparePlannerInitialContext } from './plannerInitialContext'
 import {
   createPlannerSearchTermination,
@@ -620,6 +624,7 @@ function applyRouteAction(
   targets: readonly TargetWeapon[],
   master: PlannerInput['master'],
   engine: RngEngine,
+  preferredSourceEntryIds: ReadonlySet<BuildListEntryId>,
 ): AppliedActionResult {
   const primaryEntry = entriesById.get(primary.entryId)
   if (!primaryEntry) {
@@ -756,6 +761,14 @@ function applyRouteAction(
     state,
     plannerWeaponOperationSubjectKey(primary.entryId, primary.operation),
   )
+  // A silently fast-forwarded prefix is not counted: it progresses no Entry
+  // here, so it never appears in `progressedBuildListEntryIds`
+  // (docs/PLANNER_SPEC.md 7.0.2 / 7.4).
+  advancePlannerPreferredSourceMetric(
+    state,
+    progressedBuildListEntryIds,
+    preferredSourceEntryIds,
+  )
   state.totalCost = state.trace.length + state.consumedMaterialWeaponCount * 10
   return { state, rejection: null }
 }
@@ -785,7 +798,6 @@ function createReservedWeapon(
     groupSkillId: candidate.groupSkillId,
     status: candidate.category,
     isProtected: candidate.category === 'ideal',
-    relatedTargetWeaponIds: [entry.targetWeaponId],
     memo: null,
     createdAt: candidate.createdAt,
     updatedAt: candidate.createdAt,
@@ -799,6 +811,7 @@ function applyReserveAction(
   dependencies: PlannerDependencies,
   targets: readonly TargetWeapon[],
   master: PlannerInput['master'],
+  preferredSourceEntryIds: ReadonlySet<BuildListEntryId>,
 ): AppliedActionResult {
   if (!targetCanUseEntry(sourceState, entry)) {
     return {
@@ -900,9 +913,6 @@ function applyReserveAction(
       seriesSkillId: entry.candidateSnapshot.seriesSkillId,
       groupSkillId: entry.candidateSnapshot.groupSkillId,
       status: entry.candidateSnapshot.category,
-      relatedTargetWeaponIds: [
-        ...new Set([...source.relatedTargetWeaponIds, entry.targetWeaponId]),
-      ],
     }
     const result = updateOwnedWeapon(state.simulatedInventory, updated)
     if (!result.isValid || result.inventory === null) {
@@ -953,6 +963,11 @@ function applyReserveAction(
     satisfactionChanges,
   }
   state.trace.push(action)
+  advancePlannerPreferredSourceMetric(
+    state,
+    [entry.id],
+    preferredSourceEntryIds,
+  )
   state.totalCost = state.trace.length + state.consumedMaterialWeaponCount * 10
   return { state, rejection: null }
 }
@@ -1097,6 +1112,11 @@ export async function runPlannerBeamSearch(
   } = prepared.context
   const rejections = [...prepared.context.routePlanRejections]
   const rejectionKeys = new Set(rejections.map(rejectionKey))
+  // Static Planner input, so it is derived once instead of per expansion.
+  const preferredSourceEntryIds = collectPreferredSourceEntryIds(
+    allSearchEntries,
+    targetsById,
+  )
   const scoreContext = {
     entries: allSearchEntries,
     targetsById,
@@ -1252,6 +1272,7 @@ export async function runPlannerBeamSearch(
             targets,
             input.master,
             dependencies.rngEngine,
+            preferredSourceEntryIds,
           )
         } else {
           const target = targetsById.get(entry.targetWeaponId)
@@ -1263,6 +1284,7 @@ export async function runPlannerBeamSearch(
             dependencies,
             targets,
             input.master,
+            preferredSourceEntryIds,
           )
         }
         if (applied.rejection) {

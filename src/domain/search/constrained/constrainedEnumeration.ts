@@ -35,6 +35,7 @@ import {
   createConstrainedWorkPriority,
   type ConstrainedWorkItem,
 } from './constrainedFrontier'
+import { preferredSourceRank } from '../semanticKeys'
 import {
   createConstrainedRouteBases,
   type ConstrainedRouteBase,
@@ -85,6 +86,11 @@ interface ConstrainedMatrix {
   categoryPredicate: StreamCategoryPredicate
   baseOperationUnits: number
   baseNormalAdvance: number | null
+  /**
+   * Derived once per base, like the two fields above: the Target preference is
+   * static input, and the base's source never changes across the lattice.
+   */
+  basePreferredSourceRank: number
   bonusAxis: EvaluatedBonusSolution[]
   skillAxis: EvaluatedSkillSolution[]
 }
@@ -218,6 +224,10 @@ export async function visitConstrainedCandidates(
     const solved = await solveBase(base)
     const baseOperationUnits = countRouteOperationUnits(base.baseOperations)
     const normalAdvance = baseNormalAdvance(base.baseOperations)
+    const basePreferredSourceRank = preferredSourceRank(
+      base.sourceOwnedWeaponId,
+      target.preferredOwnedWeaponId,
+    )
     for (const categoryPredicate of streamCategories) {
       matrices.push({
         index: matrices.length,
@@ -225,6 +235,7 @@ export async function visitConstrainedCandidates(
         categoryPredicate,
         baseOperationUnits,
         baseNormalAdvance: normalAdvance,
+        basePreferredSourceRank,
         bonusAxis: selectBonusAxis(solved.bonusSolutions, categoryPredicate),
         skillAxis: selectSkillAxis(solved.skillSolutions, categoryPredicate),
       })
@@ -333,6 +344,7 @@ export async function visitConstrainedCandidates(
           baseKey: matrix.base.baseKey,
           operationUnits: matrix.baseOperationUnits,
           normalAdvance: matrix.baseNormalAdvance,
+          preferredSourceRank: matrix.basePreferredSourceRank,
         },
         bonus,
         skill,
@@ -471,9 +483,19 @@ export async function enumerateConstrainedCandidates(
     },
     options,
   )
+  // The Target's preferred owned weapon only orders solutions the existing
+  // priorities already rate equally; it never changes what was enumerated.
+  // The streaming `visitConstrainedCandidates()` delivery order applies the
+  // same preference in its own traversal priority, so this final sort is not
+  // the only place it takes effect (`docs/SEARCH_SPEC.md` 8.1).
+  const preferredOwnedWeaponId =
+    input.origin.targetWeapons.find(({ id }) => id === input.targetWeaponId)
+      ?.preferredOwnedWeaponId ?? null
   return {
     targetWeaponId: execution.targetWeaponId,
-    candidates: candidates.sort(compareConstrainedCandidates),
+    candidates: candidates.sort((left, right) =>
+      compareConstrainedCandidates(left, right, preferredOwnedWeaponId),
+    ),
     summary: execution.summary,
   }
 }
