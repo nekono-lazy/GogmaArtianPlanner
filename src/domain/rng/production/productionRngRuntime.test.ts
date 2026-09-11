@@ -13,11 +13,11 @@ import { ProductionRngEngine, PRODUCTION_RNG_ENGINE_VERSION } from './production
 import { productionRngEngine, productionRngRuntime } from './productionRngRuntime'
 
 describe('Production RNG runtime authority', () => {
-  it('shares calculation schema 4 while retaining only build-result compatibility with schema 2 and 3', () => {
+  it('shares calculation schema 5 while retaining only build-result compatibility with schema 2, 3 and 4', () => {
     const master = createValidMasterDataFixture()
     const buildList = createBuildListCalculationContext(master)
     const planner = createPlannerCalculationContext(master, productionRngRuntime.version)
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(4)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(5)
     expect(buildList.appSchemaVersion).toBe(CURRENT_CALCULATION_APP_SCHEMA_VERSION)
     expect(planner).toEqual(buildList)
     expect(isCalculationContextCompatible({ ...buildList, appSchemaVersion: 1 }, planner)).toBe(false)
@@ -25,7 +25,7 @@ describe('Production RNG runtime authority', () => {
       { ...buildList, appSchemaVersion: 1 },
       planner,
     )).toBe(false)
-    const olderPlannerSchemas = [2, 3].map((appSchemaVersion) => ({
+    const olderPlannerSchemas = [2, 3, 4].map((appSchemaVersion) => ({
       ...buildList,
       appSchemaVersion,
     }))
@@ -38,6 +38,19 @@ describe('Production RNG runtime authority', () => {
         planner,
       )).toBe(false)
     })
+  })
+
+  it('never treats the current schema as compatible with a future one', () => {
+    const master = createValidMasterDataFixture()
+    const current = createBuildListCalculationContext(master)
+    const future = {
+      ...current,
+      appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION + 1,
+    }
+    // The build-result exception is directional and enumerated, never a
+    // general forward compatibility.
+    expect(isBuildResultCalculationContextCompatible(future, current)).toBe(false)
+    expect(isCalculationContextCompatible(future, current)).toBe(false)
   })
 
   it('keeps UI, Workers, and CalculationContext on the Production Engine version', () => {

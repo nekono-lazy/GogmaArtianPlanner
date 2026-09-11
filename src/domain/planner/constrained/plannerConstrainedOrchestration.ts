@@ -12,6 +12,7 @@ import {
   preparePlannerInitialContext,
 } from '../plannerInitialContext'
 import { createProductionPlanWithObserver } from '../productionPlanGeneration'
+import { createUnsearchedPlannerTermination } from '../plannerTermination'
 import type {
   PlannerBeamSearchResult,
   PlannerDependencies,
@@ -372,6 +373,9 @@ export async function createProductionPlanWithConstrainedSearch(
       plan: result.plan,
       conflicts: result.conflicts,
       warnings: dedupeWarnings([...result.warnings, ...orchestrationWarnings]),
+      // The adopted run's own typed termination, carried through unchanged.
+      // It is never rebuilt from a warning and never merged across trials.
+      termination: result.termination,
       generatedBuildListEntries,
     } satisfies PlannerOrchestrationResult
   }
@@ -392,6 +396,16 @@ export async function createProductionPlanWithConstrainedSearch(
         plan: null,
         conflicts: beam === null ? [] : structuredClone(beam.conflicts),
         warnings: beam === null ? [] : structuredClone(beam.warnings),
+        // `maxPlannerReruns` is an orchestration bound, not a `PlannerOptions`
+        // bound, so it is reported by its own warning above. When no Beam
+        // Search ran at all, no `PlannerOptions` bound was touched either.
+        termination:
+          beam === null
+            ? createUnsearchedPlannerTermination(
+                input.options,
+                input.targetWeapons,
+              )
+            : structuredClone(beam.termination),
       },
       [],
     )

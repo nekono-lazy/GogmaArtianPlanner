@@ -39,6 +39,10 @@ import {
 } from './plannerScoring'
 import { entryIsRelevantForState } from './plannerEntryRelevance'
 import { preparePlannerInitialContext } from './plannerInitialContext'
+import {
+  createPlannerSearchTermination,
+  createUnsearchedPlannerTermination,
+} from './plannerTermination'
 import type {
   ExcludedBuildListEntry,
   PlannerBeamSearchResult,
@@ -1025,6 +1029,7 @@ function conflictResolutionWarnings(
 }
 
 function initialFailureResult(
+  input: PlannerInput,
   warnings: PlannerWarning[],
   issues: DomainValidationIssue[],
   excludedBuildListEntries: ExcludedBuildListEntry[],
@@ -1039,6 +1044,12 @@ function initialFailureResult(
     expandedStates: 0,
     completed: false,
     cancelled: false,
+    // No expansion ran, so no `PlannerOptions` bound was touched. The reason
+    // the input was rejected is reported by its own validation warnings.
+    termination: createUnsearchedPlannerTermination(
+      input.options,
+      input.targetWeapons,
+    ),
   }
 }
 
@@ -1050,6 +1061,7 @@ export async function runPlannerBeamSearch(
   const prepared = preparePlannerInitialContext(input, dependencies)
   if (prepared.status === 'invalid') {
     return initialFailureResult(
+      input,
       prepared.warnings,
       prepared.issues,
       prepared.excludedBuildListEntries,
@@ -1114,6 +1126,15 @@ export async function runPlannerBeamSearch(
       expandedStates: 0,
       completed: true,
       cancelled: false,
+      termination: createPlannerSearchTermination({
+        options: input.options,
+        enabledTargetIds,
+        bestState: initialState,
+        expandedStates: 0,
+        cancelled: false,
+        reachedStepLimit: false,
+        reachedExpandedLimit: false,
+      }),
     }
   }
 
@@ -1357,5 +1378,14 @@ export async function runPlannerBeamSearch(
     completed:
       bestState !== null && isComplete(bestState, enabledTargetIds),
     cancelled,
+    termination: createPlannerSearchTermination({
+      options: input.options,
+      enabledTargetIds,
+      bestState,
+      expandedStates,
+      cancelled,
+      reachedStepLimit,
+      reachedExpandedLimit,
+    }),
   }
 }

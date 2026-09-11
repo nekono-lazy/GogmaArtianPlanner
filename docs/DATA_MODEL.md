@@ -163,11 +163,15 @@ export interface CalculationContext {
 B5-F1はCandidate classification / Search calculation semanticsを変更したため、
 `CalculationContext.appSchemaVersion` を1から **2** へ更新した。その後、Plannerの
 physical action sharing semantics修正によりversionを **3** へ、共有Counter通過時の
-Route prefix silent fast-forward修正によりversionを **4** へ更新した。
-現行versionは **4** である。単一authorityは `src/domain/models/common.ts` の
-`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 4` とし、Search、BuildList、Plannerと
+Route prefix silent fast-forward修正によりversionを **4** へ、探索上限で打ち切られた
+partial resultを実行可能ProductionPlanとして受け入れないartifact validity境界により
+versionを **5** へ更新した。
+現行versionは **5** である。単一authorityは `src/domain/models/common.ts` の
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 5` とし、Search、BuildList、Plannerと
 benchmark入力のruntime creatorで共用する。これはDexieの `DATABASE_SCHEMA_VERSION = 1`
-や `AppSettings.schemaVersion = 1` の変更ではない。gameVersion、Master Data version、
+や `AppSettings.schemaVersion = 1` の変更ではない。Calculation semantics / artifact
+validity境界とDexie schemaは別の概念であり、片方の更新はもう片方の更新を意味しない。
+gameVersion、Master Data version、
 `PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`、`supportsSeedSearch = false` は維持する。
 
 version 1の既存BuildCandidate / BuildListEntry / ProductionPlanはversion 2以降とCalculationContext
@@ -191,17 +195,58 @@ version 4で互換とみなしてはならない。version 3 ProductionPlanもve
 `calculation_context_changed` として扱い、同じfail-closed比較とexact persisted表示の
 ルールを適用する。
 
+version 5は、`PlannerOptions` boundで打ち切られたpartial search resultを実行可能な
+ProductionPlanとしてPersistenceしないartifact validity境界である
+（`docs/PLANNER_SPEC.md` 7.2.1）。version 4以前のruntimeでは、Beam Searchが
+`maxExpandedStates` などで打ち切られても `bestComplete ?? bestPartial` から
+partial ProductionPlanが通常のDraftとして保存され得た。実ユーザーケースでも、
+2 Targetのうち1 Targetだけを確保する24 step Planがversion 4で保存可能だった。
+
+永続化された `ProductionPlan` は `PlannerSearchTermination` を保持しないため、
+保存済みversion 4 Planがcomplete search由来かpartial search由来かを後から判別できない。
+ProductionPlanの互換判定はCalculationContextの完全一致であり、判別できない以上
+current runtimeで安全に互換保証できない。したがってversion 4 ProductionPlanは
+個別判定せず一括でstaleとする。version 4 ProductionPlanもversion 5 runtimeで
+`calculation_context_changed` として扱い、Worker preparation、conflict interaction、
+what-if、実行準備、実行へ進めず再計算を要求する。保存済みStep、status、conflicts、
+rejectedBuildListEntriesをread migrationで書き換えず、exact persisted表示は維持する。
+
 Candidate Search semanticsとBuildListEntry snapshot semanticsはversion 2から変更していないため、
-version 2と3のBuildCandidate / BuildListEntryは、gameVersion、masterDataVersion、
-rngEngineVersionがすべて同じversion 4 runtimeに限り明示的に互換とする。BuildListEntryの
+version 2、3、4のBuildCandidate / BuildListEntryは、gameVersion、masterDataVersion、
+rngEngineVersionがすべて同じversion 5 runtimeに限り明示的に互換とする。BuildListEntryの
 stale再判定はこのartifact-specific例外を適用し、`calculation_context_changed` を付けない。
-これはversion 2 / 3 ProductionPlanへ適用せず、将来versionへの一般的な前方互換も意味しない。
+これはversion 2 / 3 / 4 ProductionPlanへ適用せず、version 1へも適用せず、
+将来versionへの一般的な前方互換も意味しない。
 
 Planner Plan quality preference（7.3のweapon switch最小化）は、実行可能なPlanの意味を
 変えず、同等にcorrectな複数Planのうちどれを優先するかだけを変える。既存version 4
 ProductionPlanは現行Plannerより武器切替が多くても物理的・意味的に実行可能なままなので、
 これはCalculationContext境界ではなく、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を
 更新しない。
+
+version 5はartifact validity境界であって、Beam Searchの展開、評価、Conflict検出、
+Trace Replay、PlanStep生成、`ProductionPlan` 永続形状のいずれも変更していない。
+同じ `PlannerInput` から生成されるPlanの内容は従来と同一であり、変わったのは
+その結果を実行可能artifactとして受け入れるかどうかだけである。それでもversionを
+上げるのは、判別できない旧artifactをfail closedにする手段が他にないためである。
+
+旧artifactへのfail closedと、新しく計算されたresultへのfail closedは別々に必要であり、
+両方を維持する。
+
+```text
+version 5                     旧schema 4 ProductionPlanへのfail closed
+termination.status incomplete 新規計算resultへのfail closed
+```
+
+`PlannerResultPersistenceService` の `termination.status === "incomplete"` 拒否は
+schema versionを上げても削除しない。
+
+`DATABASE_SCHEMA_VERSION = 1`、`AppSettings.schemaVersion = 1`、
+`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2` は変更しない。RNG結果は
+変わっていない。
+
+`PlannerSearchTermination` はruntime result metadataであり、
+`ProductionPlan`、`PlanStep`、`BuildListEntry`、Dexie schemaへ永続化しない。
 
 ---
 

@@ -53,7 +53,7 @@ describe('BuildListService', () => {
     memory.entries.push(original)
 
     const refreshed = await new BuildListService(memory.repositories).refreshStaleness(current)
-    expect(current.appSchemaVersion).toBe(4)
+    expect(current.appSchemaVersion).toBe(5)
     expect(refreshed.entries[0].isStale).toBe(true)
     expect(refreshed.entries[0].staleReasons).toEqual(['calculation_context_changed'])
     expect(refreshed.entries[0].candidateSnapshot).toEqual(snapshot)
@@ -63,7 +63,7 @@ describe('BuildListService', () => {
     expect(memory.repositories.deleteEntry).not.toHaveBeenCalled()
   })
 
-  it.each([2, 3])(
+  it.each([2, 3, 4])(
     'keeps schema %i BuildListEntries current under the Planner-only changes',
     async (appSchemaVersion) => {
       const memory = memoryRepositories()

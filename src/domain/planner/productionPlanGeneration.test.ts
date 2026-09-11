@@ -5,6 +5,7 @@ import type {
   OwnedGogmaArtianWeapon,
 } from '../models/publicTypes'
 import { createTargetDefinitionHash } from '../buildList'
+import { completedPlannerTermination } from '../../test/fixtures/plannerTermination'
 import {
   createReferencedOwnedWeaponsHash,
   createSearchStateHash,
@@ -497,6 +498,7 @@ describe('Production plan generation', () => {
       expandedStates: 1,
       completed: true,
       cancelled: false,
+      termination: completedPlannerTermination({ expandedStates: 1 }),
     } satisfies PlannerBeamSearchResult
     expect(createRejectedBuildListEntries(
       { ...input, buildListEntries: [selectedEntry, progressedEntry] },
@@ -542,6 +544,7 @@ describe('Production plan generation', () => {
       expandedStates: 0,
       completed: true,
       cancelled: false,
+      termination: completedPlannerTermination(),
     } satisfies PlannerBeamSearchResult
     const rejected = createRejectedBuildListEntries(
       { ...input, buildListEntries: [selectedEntry, protectedEntry, fallbackEntry, unprovenEntry] },

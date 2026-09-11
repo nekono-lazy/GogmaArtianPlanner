@@ -599,6 +599,18 @@ export function ProductionPlanPage({
         setReplanState({ status: 'invalid_resolution' })
         return
       }
+      // The same fail-closed boundary as the Build List (PLANNER_SPEC 7.2.1):
+      // a Plan calculated from a Beam Search that a `PlannerOptions` bound
+      // truncated is never saved and never opened. The typed termination
+      // decides that, never a warning message.
+      if (result.termination.status === 'incomplete') {
+        setReplanState({
+          status: 'notice',
+          message:
+            '探索上限に到達したため、完成した生産計画を作成できませんでした。ビルドリスト画面の「詳細設定」で探索上限を引き上げてから、もう一度生産計画を作成してください。',
+        })
+        return
+      }
       if (!isCurrentAction()) return
       selectionSavingRef.current = true
       setReplanState({ status: 'saving' })

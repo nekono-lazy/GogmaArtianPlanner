@@ -511,6 +511,7 @@ export async function createProductionPlanWithObserver(
       plan: null,
       conflicts: structuredClone(beamResult.conflicts),
       warnings: structuredClone(warnings),
+      termination: structuredClone(beamResult.termination),
     }
   }
   if (replay === null || !replay.isValid) {
@@ -553,6 +554,10 @@ export async function createProductionPlanWithObserver(
     plan,
     conflicts: structuredClone(beamResult.conflicts),
     warnings: structuredClone(warnings),
+    // The last Beam Search that actually produced this Plan, so a Plan built
+    // from a truncated search is identifiable without reading a warning
+    // message (PLANNER_SPEC 7.2.1).
+    termination: structuredClone(beamResult.termination),
   }
 }
 

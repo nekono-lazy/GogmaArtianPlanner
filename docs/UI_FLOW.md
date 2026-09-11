@@ -478,6 +478,7 @@ Plannerに検討させる候補集合を確認・調整する。
 
 - 候補を外す
 - TargetWeapon優先度を変更
+- Planner探索上限の詳細設定
 - Planner実行
 
 制約。
@@ -493,7 +494,77 @@ Plannerに検討させる候補集合を確認・調整する。
 - Routeと無関係なOwnedWeapon変更、または参照武器の名前、メモ、日時だけの変更ではEntryをstale表示しない
 - CalculationContext非互換は `calculation_context_changed` と表示する
 
-### 10.1 Planner実行成功後の遷移
+### 10.0 Planner詳細設定
+
+Search Resultsと同じ「詳細設定」Accordionを置き、Beam Searchの探索上限を変更できる。
+
+| 表示名 | `PlannerOptions` |
+| --- | --- |
+| 最大計画ステップ数 | `maxPlanSteps` |
+| 最大探索状態数 | `maxExpandedStates` |
+| Beam幅 | `beamWidth` |
+
+説明文。
+
+```text
+最大計画ステップ数
+作成ルートとして許可する最大ステップ数です。
+長いルートで上限に達した場合は増やしてください。
+
+最大探索状態数
+Plannerが評価する状態数の上限です。
+探索未完了になった場合は、この値を増やして再実行してください。
+
+Beam幅
+各探索段階で残す候補状態数です。
+通常は変更不要な高度な設定で、大きくすると探索品質が上がる可能性がありますが、
+処理量も増えます。
+```
+
+制約。
+
+- 初期値は `defaultPlannerOptions` だけをauthorityとする
+- 「既定値に戻す」で `defaultPlannerOptions` へ戻す
+- 3項目とも1以上の整数のみ有効とし、無効な値はfield errorを表示して
+  「生産計画を作成」をdisabledにする
+- 無効な値をPlannerへ渡さない
+- 推測による固定最大値は設けない。長時間化は既存のWorker実行とキャンセルで扱う
+- 選択した `maxExpandedStates` が実行中progressの分母になる
+- 設定はBuildList画面のruntime UI stateであり、再読み込みで既定値へ戻る
+- B8 orchestration boundsとB9 what-if boundsはこの詳細設定に出さない
+
+### 10.1 探索未完了の表示
+
+`PlannerResult.termination.status === "incomplete"` の場合は、探索上限で打ち切られ、
+完成した生産計画を作成できなかったことを明示する（PLANNER_SPEC 7.2.1）。
+
+表示内容。
+
+```text
+生産計画の探索が完了していません
+
+最大探索状態数 10,000 に到達しました。
+すべての目標武器を含む完成計画を作成できませんでした。
+「詳細設定」の「最大探索状態数」を増やして、もう一度生産計画を作成してください。
+
+探索状態数: 10,000 / 10,000
+完成した目標武器: 1 / 2
+```
+
+`max_plan_steps` へ到達した場合は「最大計画ステップ数」の見直しを案内する。
+両方へ到達した場合は両方を表示する。
+
+制約。
+
+- UIはtypedな `termination` だけを読み、`PlannerWarning.message` を解析しない
+- incompleteの場合はPersistenceを呼ばず、`/plans/:planId` へ遷移しない
+- partial Planの全Stepを表示する必要はない
+- 到達したbound、設定値、探索状態数、完成Target数、設定見直し案内を表示する
+- `status === "exhausted"` は探索未完了ではない。従来どおり
+  「現在の入力から作成できる生産計画はありませんでした。」を表示する
+- `status === "cancelled"` は従来どおりキャンセルのnoticeを表示する
+
+### 10.2 Planner実行成功後の遷移
 
 `plannerResultPersistenceService.savePlannerOrchestrationResult()` がnon-nullの
 ProductionPlanを返した場合だけ、その保存済みPlanの `/plans/:planId` へ遷移する。
