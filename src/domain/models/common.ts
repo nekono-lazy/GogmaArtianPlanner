@@ -31,6 +31,7 @@ export type CandidateCategory = 'ideal' | 'practical'
 export type RouteKind =
   | 'normal_artian_to_gogma'
   | 'owned_normal_artian_to_gogma'
+  | 'existing_gogma_current'
   | 'existing_gogma_reset_bonuses'
   | 'existing_gogma_keep_bonuses'
   | 'existing_gogma_reset_skills'
@@ -105,8 +106,12 @@ export interface KnownValue<T> {
 // Version 6 changes Target compromise semantics, Candidate acceptance and Search
 // termination. All version 1..5 Candidates, Build List snapshots and Plans are
 // incompatible. The historical 2..5 build-result exception does not extend to 6.
+// Version 7 makes protection cover every OwnedWeapon performance mutation,
+// including Reset Skills, adds the zero-operation existing-Gogma Candidate,
+// and changes new Practical protection defaults. All version 1..6 calculation
+// artifacts are incompatible with these Search and Planner semantics.
 // Dexie schema 2 migrates Targets separately; RNG semantics remain unchanged.
-export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 6
+export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 7
 
 export interface CalculationContext {
   gameVersion: string

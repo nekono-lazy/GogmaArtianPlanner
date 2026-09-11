@@ -2,7 +2,7 @@ import Dexie from 'dexie'
 import { describe, expect, it } from 'vitest'
 import { AppDatabase } from './AppDatabase'
 import { migrateLegacyTargetCompromise } from './migrateLegacyTargetCompromise'
-import { createValidTargetWeapon, createValidBuildCandidate, createValidBuildListEntry, createValidProductionPlan } from '../test/fixtures/domainData'
+import { createValidTargetWeapon, createValidBuildCandidate, createValidBuildListEntry, createValidOwnedWeapon, createValidProductionPlan } from '../test/fixtures/domainData'
 import { CURRENT_CALCULATION_APP_SCHEMA_VERSION, isBuildResultCalculationContextCompatible, isCalculationContextCompatible } from '../domain/models/publicTypes'
 import { hasTargetCompromise } from '../domain/target'
 
@@ -36,11 +36,13 @@ describe('fail-closed Target compromise migration', () => {
       productionPlans: 'id, status, createdAt, updatedAt', executionHistory: 'id, planId, planStepId, createdAt', settings: 'id',
     })
     const candidate = createValidBuildCandidate(), entry = createValidBuildListEntry(), plan = createValidProductionPlan()
+    const practical = createValidOwnedWeapon()
     const legacy = legacyTarget()
     await old.table('targetWeapons').put(legacy)
     await old.table('buildCandidates').put(candidate)
     await old.table('buildListEntries').put(entry)
     await old.table('productionPlans').put(plan)
+    await old.table('ownedWeapons').put(practical)
     old.close()
     const db = new AppDatabase(name)
     try {
@@ -52,6 +54,7 @@ describe('fail-closed Target compromise migration', () => {
       expect(await db.buildCandidates.get(candidate.id)).toEqual(candidate)
       expect(await db.buildListEntries.get(entry.id)).toEqual(entry)
       expect(await db.productionPlans.get(plan.id)).toEqual(plan)
+      expect(await db.ownedWeapons.get(practical.id)).toEqual(practical)
       db.close(); await db.open()
       expect(await db.targetWeapons.get(legacy.id)).toEqual(migrated)
     } finally { await db.delete() }
@@ -59,10 +62,10 @@ describe('fail-closed Target compromise migration', () => {
 })
 
 describe('Target semantics calculation boundary', () => {
-  it.each([1, 2, 3, 4, 5])('fails closed for every schema-%i calculation artifact', (version) => {
+  it.each([1, 2, 3, 4, 5, 6])('fails closed for every schema-%i calculation artifact', (version) => {
     const stored = { ...createValidBuildCandidate().calculationContext, appSchemaVersion: version }
     const current = { ...stored, appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION }
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(6)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(7)
     expect(isBuildResultCalculationContextCompatible(stored, current)).toBe(false)
     expect(isCalculationContextCompatible(stored, current)).toBe(false)
     expect(isBuildResultCalculationContextCompatible(current, current)).toBe(true)

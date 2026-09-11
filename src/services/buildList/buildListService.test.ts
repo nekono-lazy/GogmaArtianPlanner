@@ -53,7 +53,7 @@ describe('BuildListService', () => {
     memory.entries.push(original)
 
     const refreshed = await new BuildListService(memory.repositories).refreshStaleness(current)
-    expect(current.appSchemaVersion).toBe(6)
+    expect(current.appSchemaVersion).toBe(7)
     expect(refreshed.entries[0].isStale).toBe(true)
     expect(refreshed.entries[0].staleReasons).toEqual(['calculation_context_changed'])
     expect(refreshed.entries[0].candidateSnapshot).toEqual(snapshot)
@@ -63,8 +63,8 @@ describe('BuildListService', () => {
     expect(memory.repositories.deleteEntry).not.toHaveBeenCalled()
   })
 
-  it.each([2, 3, 4, 5])(
-    'marks schema %i BuildListEntries stale under Target semantics version 6',
+  it.each([2, 3, 4, 5, 6])(
+    'marks schema %i BuildListEntries stale under protection semantics version 7',
     async (appSchemaVersion) => {
       const memory = memoryRepositories()
       const current = createBuildListCalculationContext(createValidMasterDataFixture())
@@ -103,7 +103,7 @@ describe('BuildListService', () => {
     expect(memory.entries).toHaveLength(1)
   })
 
-  it.each([1, 2, 3, 4, 5])('adds a current Candidate beside an unchanged schema %i snapshot', async (appSchemaVersion) => {
+  it.each([1, 2, 3, 4, 5, 6])('adds a current Candidate beside an unchanged schema %i snapshot', async (appSchemaVersion) => {
     const memory = memoryRepositories()
     const candidate = createValidBuildCandidate()
     candidate.calculationContext = createBuildListCalculationContext(createValidMasterDataFixture())
@@ -116,7 +116,7 @@ describe('BuildListService', () => {
     expect(result.added).toBe(true)
     expect(memory.entries).toHaveLength(2)
     expect(memory.entries[0]).toEqual(before)
-    expect(result.entry.calculationContext.appSchemaVersion).toBe(6)
+    expect(result.entry.calculationContext.appSchemaVersion).toBe(7)
     expect(memory.repositories.deleteEntry).not.toHaveBeenCalled()
   })
 

@@ -441,6 +441,7 @@ function validateReservedGogma(
   weapon: OwnedWeapon,
   path: string,
   issues: DomainValidationIssue[],
+  expectedProtection: boolean,
 ) {
   const candidate = entry.candidateSnapshot
   if (weapon.kind !== 'gogma') {
@@ -449,12 +450,12 @@ function validateReservedGogma(
   }
   if (
     weapon.status !== candidate.category ||
-    !weapon.isProtected ||
+    weapon.isProtected !== expectedProtection ||
     !sameBonusSlots(weapon.restorationBonuses, candidate.finalBonuses) ||
     weapon.seriesSkillId !== candidate.seriesSkillId ||
     weapon.groupSkillId !== candidate.groupSkillId
   ) {
-    issues.push(issue(path, 'inconsistent_snapshot', 'The reserved weapon must preserve the Candidate result, category, and protected state.'))
+    issues.push(issue(path, 'inconsistent_snapshot', 'The reserved weapon must preserve the Candidate result, category, and required protection state.'))
   }
   const targetReferences = weapon.relatedTargetWeaponIds.filter(
     (id) => id === entry.targetWeaponId,
@@ -478,7 +479,13 @@ export function validateReserveWeaponInventoryChange(
     if (!added) {
       issues.push(issue('addOwnedWeapon', 'invalid_structure', 'A new-Normal route must add a new Gogma weapon.'))
     } else {
-      validateReservedGogma(entry, added, 'addOwnedWeapon', issues)
+      validateReservedGogma(
+        entry,
+        added,
+        'addOwnedWeapon',
+        issues,
+        entry.candidateSnapshot.category === 'ideal',
+      )
     }
     if (change.removeOwnedWeaponIds.length > 0 || change.updateOwnedWeapons.length > 0) {
       issues.push(issue('', 'invalid_state', 'A new-Normal route must not remove or update an existing weapon.'))
@@ -488,7 +495,13 @@ export function validateReserveWeaponInventoryChange(
     if (!added) {
       issues.push(issue('addOwnedWeapon', 'invalid_structure', 'An owned-Normal route must add a new Gogma weapon.'))
     } else {
-      validateReservedGogma(entry, added, 'addOwnedWeapon', issues)
+      validateReservedGogma(
+        entry,
+        added,
+        'addOwnedWeapon',
+        issues,
+        entry.candidateSnapshot.category === 'ideal',
+      )
       if (added.id === sourceId) {
         issues.push(issue('addOwnedWeapon.id', 'invalid_reference', 'The converted Gogma weapon must use a new OwnedWeapon ID.'))
       }
@@ -516,7 +529,13 @@ export function validateReserveWeaponInventoryChange(
       issues.push(issue('updateOwnedWeapons', 'invalid_reference', 'An existing-Gogma route must update the same source OwnedWeapon ID.'))
     } else {
       const updated = change.updateOwnedWeapons[0]
-      validateReservedGogma(entry, updated, 'updateOwnedWeapons[0]', issues)
+      validateReservedGogma(
+        entry,
+        updated,
+        'updateOwnedWeapons[0]',
+        issues,
+        source?.isProtected ?? false,
+      )
       if (source?.kind === 'gogma') {
         const preservedTargets = source.relatedTargetWeaponIds.every((id) =>
           updated.relatedTargetWeaponIds.includes(id),

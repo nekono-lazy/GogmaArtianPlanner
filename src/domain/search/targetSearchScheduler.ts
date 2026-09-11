@@ -94,7 +94,6 @@ export class TargetSearchScheduler {
     const cross = createDeltaCross((bonus, skill) => {
       const kind = base.kindResolution.type === 'fixed'
         ? base.kindResolution.kind : existingGogmaRouteKind(bonus.solution, skill.solution)
-      if (kind === null) return // Existing d=0/k=0: inventory satisfaction only.
       const cost = baseCost + bonus.solution.gogmaAdvance + skill.solution.resetCount
       this.queue.enqueue({ lowerBound: cost, settle: async () => {
         await this.context.execution.checkpoint()

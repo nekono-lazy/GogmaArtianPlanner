@@ -77,7 +77,7 @@ export function createSource(
     seriesSkillId: null,
     groupSkillId: 'group_skill.fixture.a',
     status: 'material',
-    isProtected: true,
+    isProtected: false,
     relatedTargetWeaponIds: [],
   }
 }

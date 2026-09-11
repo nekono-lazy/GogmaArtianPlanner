@@ -134,7 +134,7 @@ describe('OwnedWeapon rules', () => {
     void createdAt
     void updatedAt
     expect(createOwnedWeapon({ ...input, status: 'material' }, DOMAIN_FIXTURE_TIME).isProtected).toBe(false)
-    expect(createOwnedWeapon({ ...input, status: 'practical' }, DOMAIN_FIXTURE_TIME).isProtected).toBe(true)
+    expect(createOwnedWeapon({ ...input, status: 'practical' }, DOMAIN_FIXTURE_TIME).isProtected).toBe(false)
     expect(createOwnedWeapon({ ...input, status: 'ideal' }, DOMAIN_FIXTURE_TIME).isProtected).toBe(true)
     expect(
       createOwnedWeapon(
@@ -144,11 +144,18 @@ describe('OwnedWeapon rules', () => {
     ).toBe(true)
   })
 
-  it('blocks protected destructive use but allows Reset Skills', () => {
+  it('blocks every protected performance mutation including Reset Skills', () => {
     const weapon = createValidOwnedWeapon()
     expect(canUseAsMaterial(weapon)).toBe(false)
     expect(canResetBonuses(weapon)).toBe(false)
     expect(canKeepBonuses(weapon)).toBe(false)
+    expect(canResetSkills(weapon)).toBe(false)
+  })
+
+  it('allows every Gogma amendment when the source is unprotected', () => {
+    const weapon = { ...createValidOwnedWeapon(), isProtected: false }
+    expect(canResetBonuses(weapon)).toBe(true)
+    expect(canKeepBonuses(weapon)).toBe(true)
     expect(canResetSkills(weapon)).toBe(true)
   })
 

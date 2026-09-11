@@ -420,13 +420,14 @@ export async function visitConstrainedCandidates(
       base.kindResolution.type === 'fixed'
         ? base.kindResolution.kind
         : existingGogmaRouteKind(bonus.solution, skill.solution)
-    if (kind === null) return null
     const operations: RouteOperation[] = [
       ...base.baseOperations,
       ...bonus.solution.operations,
       ...skill.solution.operations,
     ]
-    if (operations.length === 0) return null
+    // Planner already derives zero-operation satisfaction directly from the
+    // inventory, so constrained re-search emits only actionable alternatives.
+    if (kind === 'existing_gogma_current') return null
     return (
       createConstrainedCandidate(target, origin, {
         finalBonuses: bonus.solution.finalBonuses,

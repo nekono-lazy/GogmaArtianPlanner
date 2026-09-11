@@ -195,8 +195,10 @@ B5-F1 changed Candidate classification and Search calculation semantics at versi
 The Planner physical-action sharing correction then changed ProductionPlan calculation
 semantics at version 3, the shared-Counter Route prefix fast-forward correction changed
 them again at version 4, and refusing a bound-truncated partial search result as an
-executable ProductionPlan changed ProductionPlan artifact validity at version 5, so
-Target compromise semantics now make current `CalculationContext.appSchemaVersion` **6**, defined
+executable ProductionPlan changed ProductionPlan artifact validity at version 5.
+Target compromise semantics then moved it to version 6, and the protected-weapon
+mutation contract plus zero-operation current-state Candidate semantics now make current
+`CalculationContext.appSchemaVersion` **7**, defined
 only by `CURRENT_CALCULATION_APP_SCHEMA_VERSION` in `src/domain/models/common.ts`.
 Search, BuildList, Planner, and benchmark runtime creators share this authority.
 Dexie separately moves to `DATABASE_SCHEMA_VERSION = 2` for fail-closed Target migration; this is independent of
@@ -210,9 +212,9 @@ Candidate categories and snapshots; obtain current Candidates by searching again
 Do not delete historical results or add a migration or Export/Import semantic
 validation change as a substitute for CalculationContext compatibility.
 
-All version 1..5 Candidates, BuildListEntries and ProductionPlans are incompatible with version 6. Preserve their contents and fail closed with calculation_context_changed.
+All version 1..6 Candidates, BuildListEntries and ProductionPlans are incompatible with version 7. Preserve their contents and fail closed with calculation_context_changed.
 
-Historical version-5 contract (does not apply to version 6): Version 2, version 3, and version 4 BuildCandidate and BuildListEntry calculations are
+Historical version-5 contract (does not apply to version 6 or 7): Version 2, version 3, and version 4 BuildCandidate and BuildListEntry calculations are
 explicitly compatible with version 5 when gameVersion, masterDataVersion, and
 rngEngineVersion are equal, because Search and Build List snapshot semantics did not
 change. Version 2, version 3, and version 4 ProductionPlans are not compatible with
@@ -607,9 +609,9 @@ ideal
 
 Status and protection are separate concepts.
 
-Defaults:
+Defaults for newly generated or registered Gogma weapons:
 
-- Practical: protected
+- Practical: unprotected
 - Ideal: protected
 - Material: unprotected
 
@@ -618,12 +620,16 @@ Protected weapons must not be used by the Planner for:
 - Material consumption
 - Reset Bonuses
 - Keep Bonuses
+- Reset Skills
 
-Reset Skills is treated as non-destructive in v1.
+A protected Gogma remains eligible as an `existing_gogma_current` zero-operation
+Candidate when its current bonuses and skills satisfy the Target. It must not be the
+source of future Bonus or Skill amendment exploration. Search must not invoke Skill or
+Gogma prediction solely because a compatible protected source exists.
 
-A protected Practical or Ideal weapon may be the source of an `existing_gogma_reset_skills` route.
-
-The Planner must never silently remove protection.
+Status and protection remain independent user settings. The Planner must never silently
+remove protection, and status-only changes must not overwrite an existing saved protection
+choice. Existing Practical records are not migrated to unprotected.
 
 ---
 
@@ -1398,7 +1404,7 @@ This route:
 - Changes only predicted series/group skills
 - Advances only Skill RNG as defined by the Engine
 - Uses a non-null source OwnedWeapon ID
-- May use protected Practical or Ideal weapons in v1
+- Requires an unprotected Gogma source
 
 It does not require Gogma prediction or Keep prediction.
 
@@ -1412,7 +1418,7 @@ Route kind:
 existing_gogma_mixed
 ```
 
-If the route includes Reset Bonuses or Keep Bonuses, the source must be unprotected.
+The source must be unprotected for every mixed Bonus / Skill amendment route.
 
 A mixed route whose source still has `normal_artian` scope performs Reset
 Bonuses before any Keep Bonuses operation in v1, because normal-scope Keep is
@@ -2010,8 +2016,7 @@ Protected weapons are never used for:
 - Material consumption
 - Reset Bonuses
 - Keep Bonuses
-
-Reset Skills remains allowed on protected weapons.
+- Reset Skills
 
 If a material Gogma weapon is required but unavailable, the Planner may schedule replenishment:
 
@@ -2082,10 +2087,12 @@ bonus result", never "the weapon has no bonuses".
 
 `reserve_weapon` has Route-specific inventory semantics:
 
-- `normal_artian_to_gogma`: add a new protected Gogma with a reserved ID
-- `owned_normal_artian_to_gogma`: add a new protected Gogma with a different
-  reserved ID; its source Normal was already consumed by the conversion Step
-- `existing_gogma_*`: update the same source Gogma ID, do not add a new weapon
+- `normal_artian_to_gogma`: add a new Gogma with a reserved ID; Practical defaults
+  to unprotected and Ideal defaults to protected
+- `owned_normal_artian_to_gogma`: add a new Gogma with a different reserved ID and
+  the same category-based default; its source Normal was already consumed by the conversion Step
+- amendment `existing_gogma_*`: update the same source Gogma ID, do not add a new
+  weapon, and preserve its explicit protection value
 
 The secured weapon uses Candidate result bonuses and skills, has status Ideal or
 Practical from the Candidate category, and includes the Target ID once without
@@ -2467,7 +2474,8 @@ Search UI must:
 
 - Show Ideal / Practical / Similar filtering correctly
 - Show skipped-route reasons
-- Allow existing-Gogma Reset Skills candidates from protected weapons
+- Show protected existing Gogma only as zero-operation current-state Candidates when
+  they already satisfy the Target, and do not show amendment routes for them
 - Show inherited normal-scope bonuses and the initial predicted Skills at
   conversion
 - Present Reset Bonuses as the only currently predictable first bonus amendment

@@ -309,9 +309,14 @@ export async function createConstrainedRouteBases(
       },
       skillAdvanceOffset: 0,
       startSkillCounter:
-        canSkill && !skillIdeal && skillCounter !== null ? skillCounter : null,
-      // Bonus amendments are destructive, so a protected source never enters
-      // an automatic Reset Bonuses or Keep Bonuses route.
+        canSkill &&
+        !source.isProtected &&
+        !skillIdeal &&
+        skillCounter !== null
+          ? skillCounter
+          : null,
+      // Protection covers every performance mutation, so a protected source
+      // enters neither Bonus nor Skill amendment exploration.
       bonusBase:
         canAmend &&
         startGogmaCounter !== null &&

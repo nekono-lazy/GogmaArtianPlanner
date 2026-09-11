@@ -223,7 +223,7 @@ Skill Identificationはreference-generated fixtureに加えて、C5-E2C9で独�
 
 無属性武器では通常／巨戟とも属性強化を利用できない。ライト／ヘビィボウガンの属性強化不可ルールも維持し、ElementとWeaponBonusDefinitionのMasterから選択肢を決定する。
 
-実用品と理想品は原則として保護する。同一TargetのIdeal武器を取得しても旧Practical武器を自動的に素材化せず、ユーザーの明示操作を必要とする。Practical同士の優劣はv1で判定しない。
+新しく生成・登録する巨戟アーティアの保護初期値は、PracticalがOFF、IdealがON、MaterialがOFFである。statusと保護は独立したユーザー設定であり、既存保存データの保護値をmigrationやstatus変更だけで書き換えない。同一TargetのIdeal武器を取得しても旧Practical武器を自動的に素材化せず、ユーザーの明示操作を必要とする。Practical同士の優劣はv1で判定しない。
 
 ---
 
@@ -379,7 +379,7 @@ Gogma-tierのTarget条件へ到達する必要がある場合、同一Route内�
 - Keep Bonuses
 - スキルのみ再付与
 
-既存巨戟のスキルのみ再付与経路では、起点武器の復元ボーナス5枠を変更せず、Skill Prediction結果からシリーズスキルとグループスキルだけを更新する。現在のv1前提ではReset Skillsを非破壊操作として扱い、protected武器も起点にできる。実ゲーム上の追加制約が確認された場合は推測で変更せず、別途仕様変更として扱う。
+既存巨戟のスキルのみ再付与経路では、起点武器の復元ボーナス5枠を変更せず、Skill Prediction結果からシリーズスキルとグループスキルだけを更新する。Reset Skillsも武器性能を変更する操作であるため、起点武器は非保護でなければならない。保護中の巨戟は、Bonus / Skillを変更せず現在性能のままTargetを満たす操作0候補としてのみ利用できる。
 
 経路フィルタが「すべて」の場合、利用可能な経路を比較し、推奨経路を表示する。
 
@@ -512,9 +512,10 @@ BuildCandidateのRouteには、通常アーティア作成、巨戟化、Reset B
 
 - Material武器はゲーム操作の素材として消費できるが、その操作単独のRNG進行は未確認である。Gogma Counterを進める目的と推測して使用しない
 - Keep Bonusesにより目標候補へ転用できるMaterial武器は温存を検討する
-- Practical武器は原則保護する
-- Ideal武器は原則保護する
-- 保護された武器を素材消費、Reset Bonuses、Keep Bonusesへ使用しない
+- 新規Practical武器の保護初期値はOFF、新規Ideal武器はON、Material武器は従来どおりOFFとする
+- statusと保護は独立して扱い、status変更だけでユーザー設定済みの保護状態を暗黙変更しない
+- 保護された武器を素材消費、Reset Bonuses、Keep Bonuses、Reset Skillsへ使用しない
+- 保護中の巨戟は現在性能の操作0候補として利用できるが、将来のBonus / Skill amendment探索の起点にしない
 - Ideal武器取得後も旧実用品を自動的に素材化しない
 - 1本の武器を同時に複数の排他的用途へ割り当てない
 
@@ -523,7 +524,7 @@ v1のPlannerは、同一TargetのIdeal武器を確保済み、または同一Pla
 - 予定どおり素材用に変更: `status = Material`、`isProtected = false` とし、期待状態Afterと一致するためPlanをstaleにしない
 - 保管: 状態と保護を維持し、Planの期待状態と異なるためstaleにして再計算を促す
 
-Plannerが確認なしで保護を解除または素材化すること、protected武器を素材消費・Reset Bonuses・Keep Bonusesへ使用すること、保護消費のoverride設定を設けることは禁止する。Reset Skillsはこの禁止対象に含めない。
+Plannerが確認なしで保護を解除または素材化すること、protected武器を素材消費・Reset Bonuses・Keep Bonuses・Reset Skillsへ使用すること、保護消費のoverride設定を設けることは禁止する。
 
 ---
 
@@ -897,7 +898,7 @@ RNGの実データやアルゴリズムが未確定の段階では、推測値�
 2. Plannerが共有RNG、武器在庫、優先度を考慮する
 3. 競合がなければ実行可能な時系列計画を生成する
 4. 競合があれば理由と選択肢を表示し、選択後に再計算する
-5. 保護武器が素材消費・Reset Bonuses・Keep Bonusesへ使われないことを確認する
+5. 保護武器が素材消費・Reset Bonuses・Keep Bonuses・Reset Skillsへ使われないことを確認する
 6. Plannerの競合と不採用記録がBuildListEntry基準で追跡できる
 
 ### 38.3 実行と再同期
@@ -938,3 +939,5 @@ Target妥協条件改訂ではDexie schema 2 / ExportRoot schema 2 / Calculation
 
 Target妥協条件のversion 6への変更では、旧1..5のBuild List項目を新候補の重複として再利用しない。
 同じ完成結果・経路でも、新計算版を別項目として追加できる。旧snapshotは保持する。
+
+保護契約の改訂ではCalculationContext appSchemaVersionを7へ更新する。version 1..6のCandidate / BuildListEntry / ProductionPlanは内容を保持したまま `calculation_context_changed` でfail closedとする。Dexie `DATABASE_SCHEMA_VERSION = 2` とRNG Engine versionは変更せず、既存Practicalの保存済み保護値もmigrationしない。

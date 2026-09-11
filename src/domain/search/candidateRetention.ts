@@ -6,8 +6,10 @@ import { compareCandidateSelection, compareCanonicalIdeals, deduplicateCandidate
  * DATA_MODEL 7 / 9.2 and validateProtectedRouteUse / validateBuildRoute:
  * Bonus amendments and material consumption are destructive operations.
  * Conversion consumes an owned Normal source; a newly forged source is not
- * existing inventory. Reset Skills is explicitly non-destructive in v1.
- * This classification is local to initial Search retention, not Planner scoring.
+ * existing inventory. Reset Skills mutates performance but not this function's
+ * narrower bonus/material destruction axis. Protection eligibility is validated
+ * separately for every performance mutation. This classification is local to
+ * initial Search retention, not Planner scoring.
  */
 export function isDestructiveCandidateRoute(route: BuildRoute): boolean {
   return route.operations.some((operation) =>

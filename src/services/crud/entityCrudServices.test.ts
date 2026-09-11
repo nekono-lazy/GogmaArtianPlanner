@@ -9,7 +9,7 @@ describe('entity draft defaults', () => {
   const master = createValidMasterDataFixture()
   it.each([
     ['material', false],
-    ['practical', true],
+    ['practical', false],
     ['ideal', true],
   ] as const)('sets %s protection only at creation', (status, expected) => {
     const draft = createOwnedWeaponDraft(master, status)

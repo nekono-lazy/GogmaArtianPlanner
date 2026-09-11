@@ -634,12 +634,12 @@ describe('Planner Beam Search', () => {
     },
   )
 
-  it('shares Skill progress for the same protected Reset Skills source', async () => {
+  it('shares Skill progress for the same unprotected Reset Skills source', async () => {
     const firstTarget = target('target.shared.skill.first')
     const secondTarget = target('target.shared.skill.second')
     const source = {
       ...createValidOwnedWeapon(ownedWeaponId('owned.shared.skill')),
-      isProtected: true,
+      isProtected: false,
       status: 'practical' as const,
       seriesSkillId: null,
       relatedTargetWeaponIds: [],
@@ -981,7 +981,7 @@ describe('Planner Beam Search', () => {
     expect(secondResult).toEqual(firstResult)
   })
 
-  it('rejects protected destructive use but keeps protected Reset Skills executable', async () => {
+  it('rejects protected Bonus and Skill mutations', async () => {
     const destructiveTarget = target('target.protected.destructive')
     const protectedSource = sourceWeapon('owned.protected.source', true)
     const destructive = routeEntry(
@@ -1021,17 +1021,20 @@ describe('Planner Beam Search', () => {
         skillCounterAfter: 8,
       }],
     })
-    const allowed = fixture(
+    const blockedSkill = fixture(
       [skillTarget],
       [skill],
       [practicalProtected],
     )
-    const allowedResult = await runPlannerBeamSearch(
-      allowed.input,
-      allowed.dependencies,
+    const blockedSkillResult = await runPlannerBeamSearch(
+      blockedSkill.input,
+      blockedSkill.dependencies,
     )
-    expect(allowedResult.completed).toBe(true)
-    expect(allowedResult.bestState?.trace[0].actionType).toBe('reset_skills')
+    expect(blockedSkillResult.completed).toBe(false)
+    expect(blockedSkillResult.bestState?.trace).toEqual([])
+    expect(blockedSkillResult.warnings.some(({ kind }) =>
+      kind === 'protected_weapon_required',
+    )).toBe(true)
   })
 
   it('creates an independent initial branch state', () => {
@@ -1258,6 +1261,7 @@ describe('Planner Beam Search', () => {
     const gogmaSource = sourceWeapon('owned.prune.gogma')
     const skillSource = {
       ...createValidOwnedWeapon(ownedWeaponId('owned.prune.skill')),
+      isProtected: false,
       seriesSkillId: null,
       status: 'practical' as const,
       relatedTargetWeaponIds: [],

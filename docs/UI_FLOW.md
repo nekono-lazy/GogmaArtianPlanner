@@ -304,11 +304,11 @@ activation条件。
 - 無属性では通常／巨戟とも属性強化を表示しない。ライト／ヘビィボウガンも属性にかかわらず表示しない
 - 通常アーティアではシリーズ／グループスキルとstatus入力を表示せず、保護初期値をOFFにする
 - 通常アーティアはレア8として自動登録し、レア度選択UIを表示しない
-- 巨戟アーティアの従来のstatusと保護初期値を維持する
+- 巨戟アーティアのstatusと保護は独立項目として扱う
 - 既存武器の種類変更は互換項目の初期化を伴うためv1 UIでは禁止する
-- 新規巨戟アーティア作成時だけ、Materialは保護OFF、Practical / Idealは保護ONを初期値にする
+- 新規巨戟アーティア作成時だけ、Material / Practicalは保護OFF、Idealは保護ONを初期値にする
 - 登録済み巨戟アーティアの通常のstatus変更ではProtectionを自動上書きしない。Protectionは独立項目とする
-- `isProtected = true` の武器はPlannerが素材消費・Reset Bonuses・Keep Bonusesへ使用しない
+- `isProtected = true` の武器はPlannerが素材消費・Reset Bonuses・Keep Bonuses・Reset Skillsへ使用しない
 - `restorationBonusScope = "normal_artian"` の巨戟アーティアにはKeep Bonusesを提示せず、最初のamendmentとしてReset Bonusesだけを提示する
 - Plannerが消費できるのはMaterialかつ保護OFFの武器だけ
 - 旧実用品を素材用に変更する場合は確認後に `status = Material` と保護OFFを同時適用する
@@ -427,9 +427,9 @@ TargetWeaponごとに候補を検索し、作成リストへ追加する。
 - TargetWeaponなしなら検索開始不可
 - 通常Counter未確定Routeはskip理由を表示
 - Route実行に必要なWeaponBonusDefinition等のMaster Dataが利用不能な場合は `master_data_unavailable` としてskip理由を表示する。disabled LotteryMasterだけを理由にProduction Routeをskipしない
-- protected武器を起点とするReset Bonuses / Keep Bonuses Routeは検索結果へ表示しない
-- Reset Bonuses / Keep Bonusesの起点候補がprotected武器だけの場合は「保護されていない起点武器がない」とskip理由を表示する
-- Reset Skillsのみの経路は非破壊操作として扱い、protectedなPractical / Ideal武器からも検索結果へ表示できる
+- protected武器を起点とするReset Bonuses / Keep Bonuses / Reset Skills / mixed amendment Routeは検索結果へ表示しない
+- amendmentの起点候補がprotected武器だけの場合は「保護されていない起点武器がない」と各該当Routeのskip理由を表示する
+- protected武器でも現在性能がTarget条件を満たす場合は、操作なしの現在性能候補として表示する。この評価だけを理由にSkill / Gogma Predictionを実行しない
 - 通常アーティア経由では、候補位置までのforge数、最後の1本だけの巨戟化、conversion時の初回Skill、必要なfirst Reset、その後のReset / Keep / Reset Skillsを実行順に表示する
 - 既存の「通常アーティア最大進行量」入力は `maxNormalAdvance`、すなわち最大forge回数を表す。最大0-based offsetではなく、候補offsetの表示が必要なら `0 ... maxNormalAdvance - 1` とする
 - normal-tier bonusを持つ巨戟ではKeepを最初に表示せず、first Reset後だけKeepを表示する。
@@ -946,7 +946,7 @@ PlanStep表示。
 
 - ExpectedResultをOwnedWeaponとして登録または更新
 - statusをPracticalまたはIdealに設定
-- 保護ON
+- 新規登録ではPracticalを保護OFF、Idealを保護ONにする。既存巨戟の更新では保存済みの保護状態を維持する
 - 実行前状態をExecutionUndoSnapshotへ保存
 - ExecutionHistory追加
 - PlanStepとProductionPlan更新
@@ -1211,7 +1211,7 @@ export interface SearchUiState {
 - 通常Counter未確定時に通常Route skipが表示される
 - 通常アーティアのnormal scope WeaponBonusDefinition不足時に `master_data_unavailable` の通常Route skipが表示される
 - 既存武器の復元ボーナスを維持したスキルのみ再付与Routeを表示できる
-- protectedなPractical / Ideal武器でもスキルのみ再付与Routeを表示できる
+- protectedなPractical / Ideal武器ではスキルのみ再付与Routeを表示せず、現在性能がTargetを満たす場合だけ操作なし候補を表示する
 - Skill Capability不足時にスキルのみ再付与Routeのskip理由が表示される
 - `candidateOffset = k` の通常アーティア経由で `forgeCount = k + 1` 本forgeし、最後の1本だけを巨戟化する操作列が表示される
 - conversion結果に継承normal bonus 5枠と初回Series / Groupが表示される

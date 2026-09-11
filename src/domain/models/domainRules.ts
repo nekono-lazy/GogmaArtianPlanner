@@ -148,7 +148,7 @@ export function canKeepBonuses(weapon: OwnedWeapon): boolean {
 }
 
 export function canResetSkills(weapon: OwnedWeapon): boolean {
-  return weapon.kind === 'gogma'
+  return weapon.kind === 'gogma' && !weapon.isProtected
 }
 
 export function isSkillConditionUnconstrained(

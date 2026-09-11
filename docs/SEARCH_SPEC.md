@@ -244,7 +244,7 @@ Production Searchはroute-local / operation-local supportを維持し、RngState
 
 `master_data_unavailable` は、Route実行に必要なWeaponBonusDefinition、BonusRank、Material等のMaster Dataが存在しない、無効、または利用不能な場合に使用する。Production RNG poolはEngineのreference-verified tableであり、disabled LotteryMasterだけを理由にこのreasonを返さない。reference-verifiedは参照repositoryとの一致を表し、全実ゲーム条件でのgame-verifiedを意味しない。
 
-`CandidateRouteFilter` はRouteグループを選ぶ入力であり、SkippedRouteの粒度には使用しない。`normal_artian` は `normal_artian_to_gogma` と `owned_normal_artian_to_gogma`、`existing_gogma` は4つの `existing_gogma_*` RouteKindを対象とする。`disabled_by_filter` も除外された具体的なRouteKindごとに返す。`searchedRoutes` と `skippedRoutes[].route` は同じRouteKind粒度で、同じRouteを両方へ含めない。
+`CandidateRouteFilter` はRouteグループを選ぶ入力であり、SkippedRouteの粒度には使用しない。`normal_artian` は `normal_artian_to_gogma` と `owned_normal_artian_to_gogma`、`existing_gogma` は操作0の `existing_gogma_current` と4つの amendment RouteKindを対象とする。`disabled_by_filter` も除外された具体的なRouteKindごとに返す。`searchedRoutes` と `skippedRoutes[].route` は同じRouteKind粒度で、同じRouteを両方へ含めない。
 
 すべてのBuildCandidateとCandidateSearchResultに、入力の `calculationContext` をそのまま保存する。各BuildCandidateには検索開始時のRoute依存RNG状態から生成した `searchStateHash` と、Routeが参照するOwnedWeaponだけから生成した `referencedOwnedWeaponsHash` を保存する。参照武器がないRouteでは後者を `null` とする。Worker実行中に現在環境のCalculationContext、検索開始状態、またはCandidateが参照するOwnedWeapon状態が変わった場合、そのrequestIdの結果を現行候補として保存しない。
 
@@ -252,15 +252,15 @@ Production Searchはroute-local / operation-local supportを維持し、RngState
 
 ---
 
-Target妥協条件の改訂により、現行CalculationContext.appSchemaVersionは **6**。
+保護契約の改訂により、現行CalculationContext.appSchemaVersionは **7**。
 単一authorityは src/domain/models/common.ts の CURRENT_CALCULATION_APP_SCHEMA_VERSION。
 Search、BuildList、Planner、benchmark runtime creatorで共用する。
-旧version 1..5のCandidate / BuildListEntry / ProductionPlanはすべて非互換であり、
+旧version 1..6のCandidate / BuildListEntry / ProductionPlanはすべて非互換であり、
 calculation_context_changedにより現行計算・実行から除外する。
 旧Candidateのcategoryやsnapshotは再分類・削除せず、現在のTarget条件で再検索する。
 
 歴史的にはB5-F1で1→2、Plannerのみの変更で2→3→4→5と更新した。
-2..5間のCandidate / BuildList互換例外は当時の境界に限り、version 6へは適用しない。
+2..5間のCandidate / BuildList互換例外は当時の境界に限り、version 6以降へは適用しない。
 Targetの永続形状は独立してDexie DATABASE_SCHEMA_VERSIONを1→2へ更新する。
 AppSettings.schemaVersion、gameVersion、Master Data version、RNG Engine version、
 supportsSeedSearchは変更しない。移行・ExportRoot契約はDATA_MODELと
@@ -630,9 +630,11 @@ Cross規則と5.5.2 / 5.5.3のstream-local retention / orderingはB3で実装済
 
 - Bonus stream `d = 0` は「現在の5枠をそのまま使う」ことを表す
 - Skill stream `k = 0` は「現在のSeries / Group Skillをそのまま使う」ことを表す
-- 既存巨戟Routeで `d = 0` かつ `k = 0` になる合成は、`BuildRoute.operations` が空になり
-  Domain検証を通らないため候補化しない。その武器は既にTargetを満たしており、
-  Plannerは所持巨戟アーティアからTarget充足を直接導出する
+- 既存巨戟Routeで `d = 0` かつ `k = 0` になる合成は、`existing_gogma_current` として
+  `BuildRoute.operations = []` の操作0 Candidateを生成できる。保護中の巨戟も現在性能が
+  Target条件を満たす場合はこの評価対象に残す
+- `existing_gogma_current` は操作を持たず、Plannerは所持巨戟アーティアからTarget充足を
+  直接導出する。Planner-driven constrained re-searchでは実行可能な代替Routeではないため列挙しない
 - 通常アーティア経由と所持通常アーティア経由は `create_normal_artian` /
   `convert_normal_to_gogma` を必ず含むため、`d = 0` かつ `k = 0` でも操作列は空にならない
 
@@ -1662,6 +1664,7 @@ RouteKind。
 必要条件。
 
 - 起点OwnedWeaponが存在する
+- 起点OwnedWeaponが `isProtected = false` である
 - 起点OwnedWeaponのweaponTypeIdとelementIdが対象TargetWeaponと一致する
 - 起点OwnedWeaponの現在のrestorationBonusesがTargetWeaponのIdealまたはPracticalボーナス条件を満たす
 - `canPredictSkills = true`
@@ -1703,7 +1706,7 @@ BuildRoute例。
 - Search側でSkill RNGまたはCounter進行を推測しない
 - `estimatedGogmaAdvance = 0`、`estimatedNormalAdvance = null` とし、`estimatedSkillAdvance` だけに必要なSkill Counter進行量を設定する
 - 起点OwnedWeaponを `referencedOwnedWeaponsHash` の対象にする
-- Reset Skillsはv1で非破壊操作として扱い、`isProtected = true` のPractical / Ideal武器も起点にできる
+- Reset Skillsは武器性能を変更するため、`isProtected = true` の武器を起点にできない
 - `canPredictGogma` とKeep Prediction Capabilityは要求しない
 - Skill Counter等のRNG値不足とSkill Prediction未対応を、それぞれ対応する `*_unconfirmed` / `skill_prediction_unsupported` で区別してskipする
 
@@ -1727,7 +1730,7 @@ PlannerはCandidate SnapshotのBuildRoute.operationsを書き換えない。Rout
 UseWeaponAsMaterialOperationが具体的OwnedWeapon IDを持つ場合は検索時点で要求する武器であり、
 Planner-only素材割当を理由に別IDへ差し替えない。素材補充・登録・一般素材消費は別PlanStepで表現する。
 
-Reset BonusesまたはKeep Bonusesを含むMixed Routeは、起点OwnedWeaponが `isProtected = false` の場合のみ生成する。Reset Skillsだけの場合はMixedではなく `existing_gogma_reset_skills` として生成する。
+Mixed Routeは含まれるamendment種別にかかわらず、起点OwnedWeaponが `isProtected = false` の場合のみ生成する。Reset Skillsだけの場合はMixedではなく `existing_gogma_reset_skills` として生成する。
 
 ---
 
@@ -2003,13 +2006,15 @@ Worker error契約(B6)。
 - Keep後の完成5枠がRNG Engine Predictionだけから生成される
 - RNG EngineがKeep未対応ならRouteをskipする
 - BuildRouteの操作列から実行順を復元できる
-- protected武器を起点とするReset Bonuses / Keep Bonuses / それらを含むMixed Routeを生成しない
+- protected武器を起点とするReset Bonuses / Keep Bonuses / Reset Skills / Mixed Routeを生成しない
+- protected武器でも現在性能がTarget条件を満たす場合は `existing_gogma_current` の操作0候補を生成する
 - protected武器を素材消費するRouteを生成しない
-- Reset Bonuses / Keep Bonusesの起点候補がprotected武器だけなら `no_unprotected_source_weapon` を返す
+- amendmentの互換起点候補がprotected武器だけなら各amendment Routeへ `no_unprotected_source_weapon` を返す
 - 復元ボーナス条件を満たす既存武器から `existing_gogma_reset_skills` 候補を生成できる
 - Reset Skills候補のfinalBonusesが起点OwnedWeaponのrestorationBonusesと一致する
 - Reset Skills候補ではSkill Prediction結果だけがseriesSkillId / groupSkillIdへ反映される
-- protectedなPractical / Ideal武器からReset Skills Routeを生成できる
+- protectedなPractical / Ideal武器からReset Skills Routeを生成しない
+- protectedな互換武器しかない場合、不要なSkill / Gogma Predictionを呼ばない
 - Reset Skills Routeの起点武器変更でreferencedOwnedWeaponsHashが変わる
 - Skill RNG値不足時とSkill Prediction未対応時を別reasonでskipする
 - normal scopeのtransient Gogmaへ適用するKeepを `keep_prediction_unsupported` 系の理由で除外し、ゲームルール由来の理由コード・文言を使わない
