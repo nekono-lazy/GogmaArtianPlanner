@@ -118,6 +118,8 @@ export const plannerWarningLabels: Record<PlannerWarningKind, string> = {
     '既に理想品を所持している目標武器にチェックポイントが選択されています。作成リストでそのチェックポイント選択を解除してください',
   selected_checkpoint_fixes_target_entry:
     'チェックポイントを選択した候補がある目標武器では、その候補だけを作成ルートとして扱い、同じ目標武器の他の候補は使用しません',
+  invalid_checkpoint_selection:
+    'チェックポイントの選択内容が候補の内容と一致しません。作成リストでその候補のチェックポイント選択を解除し、必要なら候補を追加し直してください',
 }
 
 export const candidateRouteFilterLabels: Record<CandidateRouteFilter, string> = {

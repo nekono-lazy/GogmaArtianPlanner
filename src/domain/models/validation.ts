@@ -1292,8 +1292,20 @@ export function validateBuildCandidate(
  * The selected checkpoints are a hard Planner constraint, so an unknown id or a
  * second selection inside one group fails closed rather than being ignored
  * (`docs/DATA_MODEL.md` 9.4).
+ *
+ * Shared with the Planner's current-input validation: a malformed selection
+ * must never reach `selectedCheckpointsForEntry()`, which would read it as an
+ * empty selection (`docs/PLANNER_SPEC.md` 7.5.9).
  */
-function validateBuildListEntryCheckpointSelection(
+export function validateBuildListEntryCheckpointSelection(
+  entry: BuildListEntry,
+): DomainValidationResult {
+  const issues: DomainValidationIssue[] = []
+  appendCheckpointSelectionIssues(entry, issues)
+  return result(issues)
+}
+
+function appendCheckpointSelectionIssues(
   entry: BuildListEntry,
   issues: DomainValidationIssue[],
 ): void {
@@ -1360,7 +1372,7 @@ export function validateBuildListEntry(
   if (!isCalculationContextCompatible(entry.calculationContext, entry.candidateSnapshot.calculationContext)) {
     addIssue(issues, 'calculationContext', 'inconsistent_snapshot', 'CalculationContext must match the candidate snapshot.')
   }
-  validateBuildListEntryCheckpointSelection(entry, issues)
+  appendCheckpointSelectionIssues(entry, issues)
   if (entry.isStale !== (entry.staleReasons.length > 0)) {
     addIssue(issues, 'isStale', 'invalid_state', 'isStale must match the presence of staleReasons.')
   }

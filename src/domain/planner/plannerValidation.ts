@@ -12,6 +12,7 @@ import {
   isBlindCreateNormalArtianOperation,
   stableStringify,
   validateBuildCandidate,
+  validateBuildListEntryCheckpointSelection,
   validateBuildRoute,
   validateOwnedWeapon,
 } from '../models/publicTypes'
@@ -341,6 +342,20 @@ export function validatePlannerInput(
   const entriesByStableId = [...input.buildListEntries]
     .sort((left, right) => compareStableStrings(left.id, right.id))
   entriesByStableId.forEach((entry) => {
+      // A malformed checkpoint selection is corrupted planning input, not a
+      // stale Entry: it fails the whole input closed so that the selection is
+      // never read as empty and no other Entry of the Target stands in for it
+      // (`docs/PLANNER_SPEC.md` 7.5.9).
+      const selection = validateBuildListEntryCheckpointSelection(entry)
+      if (!selection.isValid) {
+        const detail = selection.issues
+          .map(({ path, message }) => `${path}: ${message}`)
+          .join(' ')
+        const message =
+          `BuildListEntry '${entry.id}' has an invalid compromise checkpoint selection (${detail}). Clear that checkpoint selection in the Build List before planning.`
+        issues.push(issue(`buildListEntries.${entry.id}.selectedCheckpointOpportunityIds`, 'invalid_state', message))
+        warnings.push({ kind: 'invalid_checkpoint_selection', message })
+      }
       const eligibility = currentEntryEligibility(
         input,
         dependencies,

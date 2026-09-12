@@ -995,7 +995,7 @@ function detectCurrentPlannerConflicts(
       return [[entry.id, units.slice(progress)] as const]
     }),
   )
-  return detectPlannerConflicts(entries, unitPlans, targets, state, resolutions, false)
+  return detectPlannerConflicts(entries, unitPlans, targets, resolutions, false)
 }
 
 function conflictCountByEntryId(

@@ -2182,7 +2182,11 @@ Rules:
   the Planner's goal is its Ideal
 - A target that already has Ideal is normally removed from further planning
 - Practical-first progress is not a planning goal. `practicalFirstProgressTargetIds`
-  and `CandidateScore.categoryScore` do not exist
+  and `CandidateScore.categoryScore` do not exist, and `hasPractical` is read by
+  no Planner score, state evaluation, Beam pruning, or conflict recommendation:
+  a Target holding nothing and a Target holding only a compromise weapon get the
+  same priority. `CandidateScore.satisfactionScore` is `hasIdeal ? 0 : 50_000`,
+  and the achieved term of a state counts Ideal Targets only
 
 Planning priority:
 
@@ -2226,6 +2230,14 @@ by score, cost, or order), and no checkpoint selection on a Target that already
 holds an Ideal weapon when planning starts
 (`selected_checkpoint_target_already_ideal`). Several groups selected inside one
 Entry stay allowed.
+
+A structurally invalid `selectedCheckpointOpportunityIds` - an unknown
+opportunity id, two opportunities of one group, a duplicate - is checked in the
+Planner's current-input validation through the same shared
+`validateBuildListEntryCheckpointSelection()` that `validateBuildListEntry()`
+uses, and fails the whole input closed (`invalid_checkpoint_selection`). A broken
+selection is never read as an empty one, so no other Entry of that Target can
+stand in for it; the persisted `isStale` flag stays untrusted as before.
 
 Complete optimality is not required.
 
@@ -2945,6 +2957,16 @@ Relevant test areas include:
   physical action reaching both without duplicating the operation, and an Entry
   with no selection keeping its ordinary Ideal Route meaning
 - `practicalFirstProgressTargetIds` and `CandidateScore.categoryScore` being absent
+- `hasPractical` alone producing no `CandidateScore` difference at equal priority
+  and cost, a higher-priority Ideal-unmet Target never overtaken by a
+  lower-priority uncovered one on `hasPractical` alone, Beam pruning ordering
+  unchanged whichever Target holds the compromise weapon, and a selected
+  checkpoint kept through `PlannerCheckpointRequirements` rather than any score
+- An unknown checkpoint opportunity id, two opportunities of one group, and a
+  duplicate id each failing the Planner input closed before any Beam Search,
+  never read as an empty selection and never bypassed through a selection-free
+  Entry of the same Target, while a well-formed selection and a selection-free
+  Entry keep working
 - A checkpoint-selected Entry never bypassed by a cheaper selection-free Entry of
   the same Target, staying relevant after another weapon made its Target Ideal,
   completing only once it reached its checkpoint and secured its Ideal, the typed

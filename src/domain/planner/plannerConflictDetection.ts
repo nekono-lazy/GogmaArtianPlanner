@@ -11,7 +11,6 @@ import { selectedCheckpointAtOperationIndex } from './plannerCheckpoints'
 import type { PlannerRouteUnit } from './plannerRouteProgress'
 import type {
   PlannerConflictResolution,
-  PlannerSearchState,
   PlannerWarning,
 } from './plannerTypes'
 
@@ -109,22 +108,21 @@ function recommendEntry(
   entryIds: readonly BuildListEntryId[],
   entriesById: ReadonlyMap<BuildListEntryId, BuildListEntry>,
   targetsById: ReadonlyMap<TargetWeaponId, TargetWeapon>,
-  state: PlannerSearchState,
   allEntries: readonly BuildListEntry[],
 ): BuildListEntryId | null {
   const entries = entryIds.flatMap((id) => {
     const entry = entriesById.get(id)
     return entry ? [entry] : []
   })
+  // Target priority, then how far the next Candidate of that Target is, then
+  // the cheaper Route. Whether a Target already holds a compromise weapon is
+  // deliberately not a factor: the Planner has no Practical-first priority
+  // (`docs/PLANNER_SPEC.md` 7).
   entries.sort((left, right) => {
     const leftTarget = targetsById.get(left.targetWeaponId)
     const rightTarget = targetsById.get(right.targetWeaponId)
-    const leftSatisfaction = state.targetSatisfaction[left.targetWeaponId]
-    const rightSatisfaction = state.targetSatisfaction[right.targetWeaponId]
     return (
       (rightTarget?.priority ?? 0) - (leftTarget?.priority ?? 0) ||
-      Number(!rightSatisfaction?.hasPractical) -
-        Number(!leftSatisfaction?.hasPractical) ||
       nextCandidateDistance(right, allEntries) -
         nextCandidateDistance(left, allEntries) ||
       left.candidateSnapshot.estimatedOperationCount -
@@ -311,7 +309,6 @@ export function detectPlannerConflicts(
   entries: readonly BuildListEntry[],
   unitPlans: ReadonlyMap<BuildListEntryId, readonly PlannerRouteUnit[]>,
   targets: readonly TargetWeapon[],
-  state: PlannerSearchState,
   resolutions: readonly PlannerConflictResolution[],
   reportInvalidResolutions = true,
 ): PlannerConflictDetectionResult {
@@ -354,7 +351,6 @@ export function detectPlannerConflicts(
           buildListEntryIds,
           entriesById,
           targetsById,
-          state,
           entries,
         ),
         selectedBuildListEntryId,

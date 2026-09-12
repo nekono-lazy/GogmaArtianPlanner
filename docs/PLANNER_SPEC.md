@@ -127,6 +127,9 @@ export interface PlannerClock {
   現在状態から再validationし、実行可能なBuildListEntryだけを使用する
 - PlannerはBuildListEntryの `candidateSnapshot` を入力候補として使う
 - Planner入力validationでTarget定義Hash、searchStateHash、referencedOwnedWeaponsHash、CalculationContextを現在値から再確認し、保存済み `isStale` だけを信用しない
+- Planner入力validationは各BuildListEntryの `selectedCheckpointOpportunityIds` を
+  共有Domain関数 `validateBuildListEntryCheckpointSelection()` で検証し、未知ID・
+  同一group複数選択・重複IDはPlanner入力全体をfail closedする（7.5.9）
 - RngState全体の確定は要求しない
 - `deriveRngCapabilities(rngState, normalCounters, requiredOperations, engineCapabilities)` で、各BuildListEntryの全RouteOperationに必要なKnownValueと現在Engineのsupportが揃うか確認する
 - conversionだけのEntryはSkill Prediction、確定Base Seed / Skill Counter、concrete semantic input supportを要求し、persisted Counter Gate、Gogma Prediction、Gogma Counterを要求しない
@@ -225,7 +228,8 @@ export interface PlannerTargetSatisfaction {
 - `hasPractical`、`hasIdeal`、`practicalOwnedWeaponIds`、`idealOwnedWeaponIds` はすべてOwnedGogmaArtianWeaponだけから導出する
 - OwnedNormalArtianWeaponはInventory資源・巨戟化元であり、Target充足武器として評価しない
 - 既に理想品があるTargetは原則Planner対象から外す
-- 既に実用品があるTargetでは、理想候補を優先度に応じて後回しにする
+- 既に実用品があるTargetも理想品未所持であり、実用品を持たないTargetと同じ優先度で
+  Planner対象に残る。`hasPractical` はPlannerの優先順位・scoreに影響しない（7章）
 - PlannerSearchStateの初期 `targetSatisfaction` はTargetSatisfactionから生成する
 - `hasIdeal = true` の場合は常に `hasPractical = true` とする
 
@@ -724,6 +728,21 @@ distancePenalty = estimatedOperationCount * 100
 conflictPenalty = conflictCount * 5000
 ```
 
+state全体の評価は次の3項からなる。
+
+```text
+achieved  = sum over Targets (hasIdeal なら 1200000 + priority * 120000)
+progress  = Target ごとに、relevant で進行中の Entry の最大 (CandidateScore.total + 進行bonus)
+penalty   = trace.length * 100
+evaluationScore = achieved + progress - penalty
+```
+
+`hasPractical` はCandidateScoreにもstate評価にも一切現れない。Practical未所持の
+Targetと、Practical所持かつIdeal未所持のTargetは同じ扱いであり、同priority・
+同costなら `hasPractical` の有無だけでscore差は付かない。Beam pruningの順序も
+同様である。競合の `recommendedBuildListEntryId` もTarget priority・次Candidate
+までの距離・操作数・安定IDだけで決め、`hasPractical` を読まない。
+
 `categoryScore` は存在しない。BuildListEntryのCandidateは常に理想品なので、
 categoryで重み付けする対象がない。妥協checkpointはscoreへ加算も減算もしない
 hard constraintであり、7.5で扱う。
@@ -1077,6 +1096,23 @@ Build Listで解除してください」と案内する。
 
 checkpoint選択の無いTargetが既にIdealを所持している場合は従来どおり
 （`all_targets_already_satisfied` など）である。
+
+#### 7.5.9 壊れたcheckpoint選択はPlanner入力をfail closedする
+
+`selectedCheckpointOpportunityIds` の構造違反（Candidate Snapshotに存在しない
+opportunity ID、同一groupからの複数選択、重複ID）は、
+[DATA_MODEL.md](./DATA_MODEL.md) 9.4のDomain validationが拒否する。Planner入力
+validationも同じ共有関数 `validateBuildListEntryCheckpointSelection()` を各
+BuildListEntryへ適用し、違反があればそのEntryを含むPlanner入力全体を
+`buildListEntries.<id>.selectedCheckpointOpportunityIds` のvalidation issueと
+`invalid_checkpoint_selection` warningでfail closedする。
+
+- 壊れた選択を「選択なし」と解釈してBeam Searchへ入れない
+- 同じTargetのselection-freeな別Entryを代わりに採用して迂回しない（Planner入力全体が
+  無効なので、そのrunではどのEntryも計画しない）
+- 保存済み `isStale` を現在状態のauthorityとして信用しない契約は変わらない。
+  この検証はstalenessではなく、現在入力の構造検証である
+- 正しい選択を持つEntryと選択のないEntryは従来どおり動作する
 
 ---
 

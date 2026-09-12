@@ -1070,6 +1070,9 @@ export type BuildListEntryStaleReason =
   `selectedCheckpointOpportunityIds.length > 0` のvalid Entryは最大1件とする。
   2件以上はPlanner入力をfail closedし、Build Listで片方の選択解除を求める。
   永続データとして複数Entryが共存すること自体は禁止しない(同 7.5.7)
+- 上記のcheckpoint選択構造validationは `validateBuildListEntryCheckpointSelection()`
+  として共有され、`validateBuildListEntry()` とPlanner入力validationの両方が呼ぶ。
+  Plannerは壊れた選択を「選択なし」と解釈せず、入力をfail closedする(同 7.5.9)
 
 `searchStateHash` の正規化対象。
 

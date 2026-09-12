@@ -631,6 +631,8 @@ Plannerに検討させる候補集合を確認・調整する。
   UIが片方を自動解除しない
 - 既に理想品を所持している目標武器にチェックポイント選択がある場合、Plannerは計画を作らず
   `selected_checkpoint_target_already_ideal` warningで選択解除を案内する(同 7.5.8)
+- チェックポイント選択の内容が候補と一致しない場合、Plannerは計画を作らず
+  `invalid_checkpoint_selection` warningでその候補の選択解除を案内する(同 7.5.9)
 - Plannerが採用しない可能性があることを表示する
 - BuildCandidateの検索結果とBuildListEntryを同一Entityとして扱わない
 - staleなBuildListEntryはPlanner入力に含めず、再検索または再追加を促す

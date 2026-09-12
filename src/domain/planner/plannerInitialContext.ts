@@ -184,7 +184,6 @@ export function preparePlannerInitialContext(
     initialRelevantEntries,
     initialRelevantUnitPlans,
     targets,
-    initialState,
     validation.validConflictResolutions,
     false,
   )

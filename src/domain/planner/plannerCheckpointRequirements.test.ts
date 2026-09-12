@@ -22,6 +22,7 @@ import {
 import { createInitialPlannerSearchState } from './plannerInitialState'
 import { preparePlannerInitialContext } from './plannerInitialContext'
 import { runPlannerBeamSearch } from './plannerBeamSearch'
+import { scoreCandidate } from './plannerScoring'
 import { validatePlannerInput } from './plannerValidation'
 import { createProductionPlan } from './productionPlanGeneration'
 
@@ -329,5 +330,118 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
     expect(result.warnings.map(({ kind }) => kind)).not.toContain(
       'selected_checkpoint_target_already_ideal',
     )
+  })
+
+  it('D: keeps the required Entry through PlannerCheckpointRequirements, never through the score', () => {
+    const selected = scenario({ selectA: true, withB: true })
+    const unselected = scenario({ selectA: false, withB: true })
+    const context = readyContext(selected)
+    const target = selected.input.targetWeapons[0]
+    const state = structuredClone(context.initialState)
+
+    // The score reads no selection at all: a checkpoint is a hard constraint,
+    // not a weight, so the selected and the unselected Entry score identically.
+    expect(scoreCandidate(state, target, selected.entries.a)).toEqual(
+      scoreCandidate(state, target, unselected.entries.a),
+    )
+    // What keeps Entry A and drops Entry B is the requirement authority.
+    expect(entryIsRelevantForState(state, selected.entries.a, context.checkpointRequirements))
+      .toBe(true)
+    expect(entryIsRelevantForState(state, selected.entries.b!, context.checkpointRequirements))
+      .toBe(false)
+    const none = readyContext(unselected)
+    expect(entryIsRelevantForState(state, unselected.entries.b!, none.checkpointRequirements))
+      .toBe(true)
+  })
+})
+
+
+describe('A malformed checkpoint selection fails the Planner input closed', () => {
+  function malformed(
+    mutate: (entry: BuildListEntry) => void,
+  ): ReturnType<typeof scenario> {
+    const built = scenario({ selectA: true, withB: true })
+    mutate(built.entries.a)
+    return built
+  }
+
+  function expectFailClosed(built: ReturnType<typeof scenario>, detail: string) {
+    const validation = validatePlannerInput(built.input, built.dependencies)
+    expect(validation.isValid).toBe(false)
+    expect(validation.issues).toContainEqual(
+      expect.objectContaining({
+        path: `buildListEntries.${ENTRY_A}.selectedCheckpointOpportunityIds`,
+        code: 'invalid_state',
+        message: expect.stringContaining(detail) as string,
+      }),
+    )
+    expect(validation.warnings).toContainEqual(
+      expect.objectContaining({ kind: 'invalid_checkpoint_selection' }),
+    )
+    expect(preparePlannerInitialContext(built.input, built.dependencies).status).toBe('invalid')
+  }
+
+  it('A: rejects an unknown opportunity id and never starts the Beam Search', async () => {
+    const built = malformed((entry) => {
+      entry.selectedCheckpointOpportunityIds = ['checkpoint-opportunity:unknown' as never]
+    })
+    expectFailClosed(built, 'must exist in the candidate snapshot')
+
+    const result = await runPlannerBeamSearch(built.input, built.dependencies)
+    expect(result.bestState).toBeNull()
+    expect(result.expandedStates).toBe(0)
+    expect(result.validationIssues).not.toEqual([])
+    expect(result.warnings).toContainEqual(
+      expect.objectContaining({ kind: 'invalid_checkpoint_selection' }),
+    )
+  })
+
+  it('B: rejects two opportunities of one group', () => {
+    const built = malformed((entry) => {
+      const [group] = entry.candidateSnapshot.checkpointGroups ?? []
+      expect(group.opportunities.length).toBeGreaterThanOrEqual(2)
+      entry.selectedCheckpointOpportunityIds = [
+        group.opportunities[0].id,
+        group.opportunities[1].id,
+      ]
+    })
+    expectFailClosed(built, 'At most one opportunity may be selected per checkpoint group')
+  })
+
+  it('C: rejects a duplicated opportunity id', () => {
+    const built = malformed((entry) => {
+      const [id] = entry.selectedCheckpointOpportunityIds ?? []
+      entry.selectedCheckpointOpportunityIds = [id, id]
+    })
+    expectFailClosed(built, 'must not be selected twice')
+  })
+
+  it('D: never reads the malformed selection as empty and never bypasses it through the other Entry', async () => {
+    const built = malformed((entry) => {
+      entry.selectedCheckpointOpportunityIds = ['checkpoint-opportunity:unknown' as never]
+    })
+
+    const result = await createProductionPlan(built.input, built.dependencies)
+
+    // Neither Entry A read as selection-free nor Entry B standing in: no Plan.
+    expect(result.plan).toBeNull()
+    expect(result.termination.status).toBe('exhausted')
+    expect(result.termination.expandedStates).toBe(0)
+    expect(result.warnings).toContainEqual(
+      expect.objectContaining({ kind: 'invalid_checkpoint_selection' }),
+    )
+    expect(result.warnings.map(({ kind }) => kind)).not.toContain(
+      'selected_checkpoint_fixes_target_entry',
+    )
+  })
+
+  it('keeps a well-formed selection and a selection-free Entry working as before', () => {
+    const selected = scenario({ selectA: true, withB: true })
+    const unselected = scenario({ selectA: false, withB: true })
+    expect(validatePlannerInput(selected.input, selected.dependencies).isValid).toBe(true)
+    expect(validatePlannerInput(unselected.input, unselected.dependencies).isValid).toBe(true)
+    expect(
+      validatePlannerInput(selected.input, selected.dependencies).warnings.map(({ kind }) => kind),
+    ).not.toContain('invalid_checkpoint_selection')
   })
 })

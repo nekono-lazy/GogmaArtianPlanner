@@ -409,29 +409,42 @@ describe('Planner Beam Search', () => {
     })
   })
 
-  it('scores an uncovered Practical above an Ideal upgrade at equal priority', () => {
+  it('gives hasPractical alone no score difference at equal priority and cost', () => {
     const uncovered = target('target.score.uncovered')
     const upgrade = target('target.score.upgrade')
-    const first = routeEntry(
-      'entry.score.practical',
-      uncovered,
-      resetRoute('owned.score.first'),
-      'practical',
-    )
-    const second = routeEntry(
-      'entry.score.ideal',
-      upgrade,
-      resetRoute('owned.score.second'),
-      'ideal',
-    )
+    const first = routeEntry('entry.score.uncovered', uncovered, resetRoute('owned.score.first'))
+    const second = routeEntry('entry.score.upgrade', upgrade, resetRoute('owned.score.second'))
     const state = {
       targetSatisfaction: {
         [uncovered.id]: { hasPractical: false, hasIdeal: false },
         [upgrade.id]: { hasPractical: true, hasIdeal: false },
       },
     } as PlannerSearchState
-    expect(scoreCandidate(state, uncovered, first).total).toBeGreaterThan(
-      scoreCandidate(state, upgrade, second).total,
+    // The Planner's goal is the Ideal alone: holding a compromise weapon
+    // already changes no priority (`docs/PLANNER_SPEC.md` 7).
+    expect(scoreCandidate(state, uncovered, first)).toEqual(
+      scoreCandidate(state, upgrade, second),
+    )
+    expect(scoreCandidate(state, uncovered, first).satisfactionScore).toBe(50_000)
+    const idealHeld = {
+      targetSatisfaction: { [upgrade.id]: { hasPractical: true, hasIdeal: true } },
+    } as PlannerSearchState
+    expect(scoreCandidate(idealHeld, upgrade, second).satisfactionScore).toBe(0)
+  })
+
+  it('never lets a lower-priority uncovered Target overtake a higher-priority Ideal-unmet one on hasPractical alone', () => {
+    const uncovered = target('target.score.low-uncovered', 1)
+    const upgrade = target('target.score.high-upgrade', 5)
+    const first = routeEntry('entry.score.low', uncovered, resetRoute('owned.score.low'))
+    const second = routeEntry('entry.score.high', upgrade, resetRoute('owned.score.high'))
+    const state = {
+      targetSatisfaction: {
+        [uncovered.id]: { hasPractical: false, hasIdeal: false },
+        [upgrade.id]: { hasPractical: true, hasIdeal: false },
+      },
+    } as PlannerSearchState
+    expect(scoreCandidate(state, upgrade, second).total).toBeGreaterThan(
+      scoreCandidate(state, uncovered, first).total,
     )
   })
 
@@ -846,17 +859,10 @@ describe('Planner Beam Search', () => {
     const second = routeEntry('entry.consumed.second', secondTarget, route(11))
     const engine = plannerEngine()
     const plans = createPlannerRouteUnitPlans([first, second], engine)
-    const state = {
-      targetSatisfaction: {
-        [firstTarget.id]: { hasPractical: false, hasIdeal: false },
-        [secondTarget.id]: { hasPractical: false, hasIdeal: false },
-      },
-    } as PlannerSearchState
     const conflicts = detectPlannerConflicts(
       [first, second],
       plans.unitPlans,
       [firstTarget, secondTarget],
-      state,
       [],
     )
     expect(conflicts.conflicts[0]).toMatchObject({
@@ -1114,17 +1120,10 @@ describe('Planner Beam Search', () => {
       [firstSkill, secondSkill],
       engine,
     )
-    const state = {
-      targetSatisfaction: {
-        [firstTarget.id]: { hasPractical: false, hasIdeal: false },
-        [secondTarget.id]: { hasPractical: false, hasIdeal: false },
-      },
-    } as PlannerSearchState
     expect(detectPlannerConflicts(
       [firstSkill, secondSkill],
       skillPlans.unitPlans,
       [firstTarget, secondTarget],
-      state,
       [],
     ).conflicts[0]).toMatchObject({
       kind: 'same_skill_counter',
@@ -1160,7 +1159,6 @@ describe('Planner Beam Search', () => {
       [firstNormal, secondNormal],
       normalPlans.unitPlans,
       [firstTarget, secondTarget],
-      state,
       [],
     ).conflicts[0]).toMatchObject({
       kind: 'same_normal_counter',
@@ -1314,9 +1312,18 @@ describe('Planner Beam Search', () => {
     expect(result.bestState?.trace[0].primaryBuildListEntryId).toBe(gogma.id)
   })
 
-  it('uses fixed Practical-first priority in Beam pruning', async () => {
+  /**
+   * Two Targets, one of which already holds a compromise weapon. Target
+   * `uncovered` holds nothing; Target `upgrade` holds a Gogma that satisfies
+   * its Practical condition but not its Ideal. Each has a one-operation Route.
+   */
+  function practicalVersusUncoveredScenario(
+    uncoveredPriority: TargetWeapon['priority'],
+    upgradePriority: TargetWeapon['priority'],
+    practicalHolder: 'upgrade' | 'uncovered' = 'upgrade',
+  ) {
     const uncovered = {
-      ...target('target.priority.uncovered', 1),
+      ...target('target.priority.uncovered', uncoveredPriority),
       idealBonuses: [
         ...createRestorationBonusSet().slice(0, 4),
         {
@@ -1326,23 +1333,36 @@ describe('Planner Beam Search', () => {
       ] as TargetWeapon['idealBonuses'],
     }
     const upgrade = {
-      ...target('target.priority.upgrade', 5),
+      ...target('target.priority.upgrade', upgradePriority),
       weaponTypeId: 'weapon.fixture.b',
     }
-    const uncoveredSource = sourceWeapon('owned.priority.uncovered')
-    const upgradeSource = {
+    // Exactly one of the two Targets holds a compromise weapon at the start:
+    // `upgrade` through its own Ideal-slot source with a Practical Skill, or
+    // `uncovered` through a source that meets its Practical conditions.
+    const uncoveredSource: OwnedGogmaArtianWeapon = practicalHolder === 'uncovered'
+      ? {
+          ...sourceWeapon('owned.priority.uncovered'),
+          restorationBonuses: createRestorationBonusSet(),
+          seriesSkillId: null,
+          groupSkillId: 'group_skill.fixture.a',
+        }
+      : sourceWeapon('owned.priority.uncovered')
+    const upgradeSource: OwnedGogmaArtianWeapon = {
       ...createValidOwnedWeapon(ownedWeaponId('owned.priority.upgrade')),
       weaponTypeId: 'weapon.fixture.b',
-      seriesSkillId: null,
+      seriesSkillId: practicalHolder === 'upgrade' ? null : 'series_skill.fixture.z',
+      groupSkillId: practicalHolder === 'upgrade' ? 'group_skill.fixture.a' : null,
       status: 'practical' as const,
+      // The Domain fixture weapon is protected; a Reset Skills Route needs an
+      // unprotected source to be executable at all.
+      isProtected: false,
     }
-    const practical = routeEntry(
-      'entry.priority.practical',
+    const uncoveredEntry = routeEntry(
+      'entry.priority.uncovered',
       uncovered,
       resetRoute(uncoveredSource.id),
-      'practical',
     )
-    const ideal = routeEntry('entry.priority.ideal', upgrade, {
+    const upgradeEntry = routeEntry('entry.priority.upgrade', upgrade, {
       kind: 'existing_gogma_reset_skills',
       sourceOwnedWeaponId: upgradeSource.id,
       operations: [{
@@ -1352,16 +1372,65 @@ describe('Planner Beam Search', () => {
         skillCounterAfter: 8,
       }],
     })
-    const { input, dependencies } = fixture(
+    const built = fixture(
       [uncovered, upgrade],
-      [practical, ideal],
+      [uncoveredEntry, upgradeEntry],
       [uncoveredSource, upgradeSource],
     )
-    input.options.beamWidth = 1
-    input.options.maxPlanSteps = 1
-    const result = await runPlannerBeamSearch(input, dependencies)
+    built.input.options.beamWidth = 1
+    built.input.options.maxPlanSteps = 1
+    return { ...built, uncovered, upgrade, uncoveredEntry, upgradeEntry }
+  }
+
+  it('prunes the Beam by Target priority, never by Practical-first', async () => {
+    const scenario = practicalVersusUncoveredScenario(1, 5)
+    const initial = createInitialPlannerSearchState(
+      scenario.input,
+      validatePlannerInput(scenario.input, scenario.dependencies).validBuildListEntries,
+    ).state
+    expect(initial?.targetSatisfaction[scenario.uncovered.id]).toEqual({
+      hasPractical: false,
+      hasIdeal: false,
+    })
+    expect(initial?.targetSatisfaction[scenario.upgrade.id]).toEqual({
+      hasPractical: true,
+      hasIdeal: false,
+    })
+
+    const result = await runPlannerBeamSearch(scenario.input, scenario.dependencies)
+    // Both Entries are executable: neither was excluded before the search.
+    expect(result.excludedBuildListEntries).toEqual([])
+    expect(result.expandedStates).toBe(2)
+
+    // The higher-priority Target wins the single Beam slot even though the
+    // lower-priority one holds no weapon at all.
     expect(result.bestState?.trace[0].primaryBuildListEntryId).toBe(
-      practical.id,
+      scenario.upgradeEntry.id,
+    )
+  })
+
+  it('prunes the Beam identically whichever Target holds the compromise weapon', async () => {
+    // Equal priority and equal cost: the order is the stable Entry-id
+    // tie-break, and it does not move when the Practical Target changes.
+    const forward = practicalVersusUncoveredScenario(3, 3)
+    const forwardResult = await runPlannerBeamSearch(forward.input, forward.dependencies)
+
+    // The compromise weapon now belongs to the other Target: the formerly
+    // uncovered Target holds a Practical, the other holds nothing.
+    const swapped = practicalVersusUncoveredScenario(3, 3, 'uncovered')
+    const initial = createInitialPlannerSearchState(
+      swapped.input,
+      validatePlannerInput(swapped.input, swapped.dependencies).validBuildListEntries,
+    ).state
+    expect(initial?.targetSatisfaction[swapped.uncovered.id]?.hasPractical).toBe(true)
+    expect(initial?.targetSatisfaction[swapped.upgrade.id]?.hasPractical).toBe(false)
+    const swappedResult = await runPlannerBeamSearch(swapped.input, swapped.dependencies)
+
+    expect(swappedResult.bestState?.trace[0].primaryBuildListEntryId).toBe(
+      forwardResult.bestState?.trace[0].primaryBuildListEntryId,
+    )
+    expect(swappedResult.bestState?.evaluationScore).toBe(
+      forwardResult.bestState?.evaluationScore,
     )
   })
 
@@ -1491,10 +1560,6 @@ describe('Planner Beam Search', () => {
       [first, second],
       plans.unitPlans,
       [firstTarget, secondTarget],
-      { targetSatisfaction: {
-        [firstTarget.id]: { hasPractical: false, hasIdeal: false },
-        [secondTarget.id]: { hasPractical: false, hasIdeal: false },
-      } } as PlannerSearchState,
       [],
     )
     expect(conflicts.conflicts).toContainEqual(expect.objectContaining({
@@ -1518,10 +1583,6 @@ describe('Planner Beam Search', () => {
       [first, second],
       plans.unitPlans,
       [firstTarget, secondTarget],
-      { targetSatisfaction: {
-        [firstTarget.id]: { hasPractical: false, hasIdeal: false },
-        [secondTarget.id]: { hasPractical: false, hasIdeal: false },
-      } } as PlannerSearchState,
       [],
     )
     expect(conflicts.conflicts).toEqual([])
@@ -1717,7 +1778,7 @@ describe('Planner Beam Search', () => {
     )
   })
 
-  it('uses Practical-first as a tier instead of counting started Targets', () => {
+  it('compares states by evaluationScore before any stable tie-break', () => {
     const twoStarted = {
       evaluationScore: 10,
     } as PlannerSearchState
@@ -1867,7 +1928,7 @@ describe('Planner Beam Search', () => {
     }))
   })
 
-  it('adds cross-target Practical satisfaction to the Practical-first tier', async () => {
+  it('derives cross-target Practical satisfaction without a Practical-first tier', async () => {
     const candidateBonuses = [
       { bonusTypeId: 'bonus_type.fixture.attack', bonusRankId: 'bonus_rank.fixture.high' },
       { bonusTypeId: 'bonus_type.fixture.attack', bonusRankId: 'bonus_rank.fixture.high' },
@@ -1925,7 +1986,7 @@ describe('Planner Beam Search', () => {
     ).toBeUndefined()
   })
 
-  it('prefers a completed cross-target Practical state over an unfinished one', () => {
+  it('prefers the higher evaluationScore between two states', () => {
     const unfinished = {
       evaluationScore: 10,
     } as PlannerSearchState

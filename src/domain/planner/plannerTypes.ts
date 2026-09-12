@@ -379,6 +379,13 @@ export type PlannerWarningKind =
   | 'multiple_selected_checkpoint_entries'
   | 'selected_checkpoint_target_already_ideal'
   | 'selected_checkpoint_fixes_target_entry'
+  /**
+   * A BuildListEntry's `selectedCheckpointOpportunityIds` is structurally
+   * invalid (unknown id, two of one group, a duplicate). The Planner input
+   * fails closed with a validation issue; the selection is never read as
+   * empty (PLANNER_SPEC 7.5.9).
+   */
+  | 'invalid_checkpoint_selection'
   | 'max_planner_reruns_reached'
   | 'constrained_enumeration_bound_reached'
 
@@ -401,6 +408,7 @@ export const plannerWarningKinds: readonly PlannerWarningKind[] = [
   'multiple_selected_checkpoint_entries',
   'selected_checkpoint_target_already_ideal',
   'selected_checkpoint_fixes_target_entry',
+  'invalid_checkpoint_selection',
 ]
 
 export interface PlannerWarning {

@@ -28,14 +28,12 @@ export function scoreCandidate(
   }
   const candidate = entry.candidateSnapshot
   const targetPriorityScore = target.priority * 10_000
-  // Reads the Target's own current satisfaction only. A Target with no usable
-  // weapon at all is more urgent than one that only lacks its Ideal; neither
-  // branch reads a Candidate category, because every Candidate is Ideal.
-  const satisfactionScore = !satisfaction.hasPractical
-    ? 50_000
-    : !satisfaction.hasIdeal
-      ? 20_000
-      : 0
+  // The only satisfaction the Planner pursues is the Ideal: a Target that lacks
+  // its Ideal is urgent, one that holds it is not. `hasPractical` is never read
+  // here - whether the Target already holds a compromise weapon changes no
+  // Planner priority (`docs/PLANNER_SPEC.md` 7), and a selected checkpoint is a
+  // hard constraint outside the score (7.5).
+  const satisfactionScore = satisfaction.hasIdeal ? 0 : 50_000
   const distancePenalty = candidate.estimatedOperationCount * 100
   const conflictPenalty = conflictCount * 5_000
   return {
@@ -51,18 +49,20 @@ export function scoreCandidate(
   }
 }
 
+/**
+ * The achieved-goal term of a state: one weight per Target that holds its
+ * Ideal, scaled by Target priority. There is no Practical tier - a Target that
+ * only holds a compromise weapon scores exactly like one that holds nothing,
+ * because the Planner's goal is the Ideal alone (`docs/PLANNER_SPEC.md` 7).
+ */
 function achievedSatisfactionScore(
   state: PlannerSearchState,
   targets: readonly TargetWeapon[],
 ): number {
   return targets.reduce((total, target) => {
     const satisfaction = state.targetSatisfaction[target.id]
-    if (!satisfaction) return total
-    const practical =
-      satisfaction.hasPractical ? 1_000_000 + target.priority * 100_000 : 0
-    const ideal =
-      satisfaction.hasIdeal ? 200_000 + target.priority * 20_000 : 0
-    return total + practical + ideal
+    if (!satisfaction?.hasIdeal) return total
+    return total + 1_200_000 + target.priority * 120_000
   }, 0)
 }
 
