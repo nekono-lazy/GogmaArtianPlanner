@@ -168,22 +168,55 @@ export interface PlannerResult {
   termination: PlannerSearchTermination;
 }
 
+export type PlannerWarningKind =
+  // 通常のPlanner入力validation / Beam Search
+  | "no_build_list_entries"
+  | "rng_state_missing"
+  | "rng_prediction_unsupported"
+  | "protected_weapon_required"
+  | "build_list_entry_stale"
+  | "calculation_context_incompatible"
+  | "all_targets_already_satisfied"
+  | "invalid_conflict_resolution"
+  | "max_steps_reached"
+  | "max_expanded_states_reached"
+  // B8 constrained-search orchestrationだけが返す（9.2.16）
+  | "max_candidate_trials_per_conflict_reached"
+  | "max_generated_build_list_entries_reached"
+  | "max_planner_reruns_reached"
+  | "constrained_enumeration_bound_reached"
+  // 選択済みcompromise checkpoint（7.5.6〜7.5.9、9.5.2）
+  | "selected_checkpoint_blocks_constrained_search"
+  | "multiple_selected_checkpoint_entries"
+  | "selected_checkpoint_target_already_ideal"
+  | "selected_checkpoint_fixes_target_entry"
+  | "invalid_checkpoint_selection";
+
 export interface PlannerWarning {
-  kind:
-    | "no_build_list_entries"
-    | "rng_state_missing"
-    | "rng_prediction_unsupported"
-    | "rng_engine_capability_missing"
-    | "protected_weapon_required"
-    | "build_list_entry_stale"
-    | "calculation_context_incompatible"
-    | "all_targets_already_satisfied"
-    | "invalid_conflict_resolution"
-    | "max_steps_reached"
-    | "max_expanded_states_reached";
+  kind: PlannerWarningKind;
   message: string;
 }
 ```
+
+この列挙は `src/domain/planner/plannerTypes.ts` の `PlannerWarningKind` /
+`plannerWarningKinds` と一致させ、`presentation/labels.ts` の
+`plannerWarningLabels` は全kindの表示ラベルを持つ。ここに無いkindを返さない。
+
+- `rng_state_missing` はRNG値不足、`rng_prediction_unsupported` はEngine
+  capability不足またはconcrete inputのunsupportedを表す。capability不足専用の
+  kindは存在しない
+- `max_candidate_trials_per_conflict_reached` /
+  `max_generated_build_list_entries_reached` / `max_planner_reruns_reached` /
+  `constrained_enumeration_bound_reached` はorchestrationまたはenumerationの
+  停止を表し、通常の `createProductionPlan()` は返さない（9.2.16）
+- `selected_checkpoint_blocks_constrained_search` はrequired checkpoint Entryを
+  持つTargetを再検索しなかったことを表す（9.5.2）
+- `multiple_selected_checkpoint_entries`（7.5.7）、
+  `selected_checkpoint_target_already_ideal`（7.5.8）、
+  `invalid_checkpoint_selection`（7.5.9）はvalidation issueに添えて返し、
+  Planner入力はfail closedされる
+- `selected_checkpoint_fixes_target_entry` は、required checkpoint Entryを持つ
+  Targetの他のEntryをそのrunの候補選択から外したことを伝える情報warning（7.5.6）
 
 `max_steps_reached` は `maxPlanSteps`、`max_expanded_states_reached` は
 `maxExpandedStates` に到達した場合だけ使用する。両方へ到達した場合は両方を返してよい。
