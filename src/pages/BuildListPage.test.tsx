@@ -100,7 +100,8 @@ function dependencies(
       conflictResolutions: [],
     })),
     savePlannerResult: vi.fn(async () => createValidProductionPlan()),
-    deleteEntry: vi.fn(async () => undefined),
+    updateCheckpointSelection: vi.fn(async () => { throw new Error('not used in this fixture') }),
+  deleteEntry: vi.fn(async () => undefined),
   }
 }
 
@@ -344,7 +345,6 @@ describe('BuildListPage', () => {
     expect(await screen.findByText('Domain fixture target')).toBeInTheDocument()
     expect(screen.getByText('再検索が必要')).toBeInTheDocument()
     expect(screen.getByText('RNG状態が検索時から変更されています')).toBeInTheDocument()
-    expect(screen.getByText('実用')).toBeInTheDocument()
   })
 
   it('removes only the Build List entry', async () => {

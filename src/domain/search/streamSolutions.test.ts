@@ -12,8 +12,8 @@ import {
   buildBonusSolutionSet,
   buildSkillSolutionSet,
   compareBonusSolutions,
-  selectBonusAxis,
-  selectSkillAxis,
+  selectIdealBonusAxis,
+  selectIdealSkillAxis,
   type RouteBonusSolution,
   type RouteSkillSolution,
 } from './streamSolutions'
@@ -188,13 +188,11 @@ describe('Skill stream-local solution set (SEARCH_SPEC 5.5.2)', () => {
       skillSolution(1, 'series_skill.fixture.a'),
     ])
 
-    // The fixture Target's Practical Skill condition is unconstrained.
-    expect(selectSkillAxis(set, 'practical')).toHaveLength(2)
-    expect(selectSkillAxis(set, 'ideal').map(({ solution }) => solution.resetCount))
+    // There is one axis, the Ideal one: composing a Practical result would
+    // create an independent compromise Candidate, which no longer exists
+    // (`docs/SEARCH_SPEC.md` 5.5.4).
+    expect(selectIdealSkillAxis(set).map(({ solution }) => solution.resetCount))
       .toEqual([1])
-    // Ideal implies Practical, so the Ideal solution is on both axes.
-    expect(selectSkillAxis(set, 'practical').map(({ solution }) => solution.resetCount))
-      .toContain(1)
   })
 })
 
@@ -234,11 +232,11 @@ describe('Bonus stream-local solution set (SEARCH_SPEC 5.5.3)', () => {
       bonusSolution(1, idealBonuses()),
     ])
 
-    expect(set.map(({ solution, idealMatch, practicalMatch, matchedIdealBonusCount }) => [
-      solution.gogmaAdvance, solution.restorationBonusScope, idealMatch, practicalMatch, matchedIdealBonusCount,
+    expect(set.map(({ solution, idealMatch, matchedIdealBonusCount }) => [
+      solution.gogmaAdvance, solution.restorationBonusScope, idealMatch, matchedIdealBonusCount,
     ])).toEqual([
-      [0, 'normal_artian', false, false, 5],
-      [1, 'gogma_artian', true, true, 5],
+      [0, 'normal_artian', false, 5],
+      [1, 'gogma_artian', true, 5],
     ])
     expect(set[0].bonusKey).toBe(set[1].bonusKey)
     expect(set[0].retentionKey).not.toBe(set[1].retentionKey)
@@ -359,10 +357,10 @@ describe('Bonus stream-local solution set (SEARCH_SPEC 5.5.3)', () => {
       bonusSolution(3, idealBonuses()),
     ])
 
-    expect(selectBonusAxis(set, 'ideal').map(({ solution }) => solution.gogmaAdvance))
+    // Only the Ideal axis exists: a Practical Bonus solution never composes a
+    // Candidate of its own (`docs/SEARCH_SPEC.md` 5.5.4).
+    expect(selectIdealBonusAxis(set).map(({ solution }) => solution.gogmaAdvance))
       .toEqual([3])
-    expect(selectBonusAxis(set, 'practical').map(({ solution }) => solution.gogmaAdvance))
-      .toEqual([2, 3])
   })
 })
 
@@ -454,26 +452,18 @@ describe('Decomposed evaluation parity with the Target evaluator (SEARCH_SPEC 5.
           seriesSkillId,
           groupSkillId,
           input.master,
-          input.settings.similarityThreshold,
         )
+        // The decomposed stream predicates must agree with the composed Target
+        // evaluation on the one axis Candidate composition uses.
         const decomposedIdeal = bonusEntry.idealMatch && skillEntry.idealMatch
-        const decomposedPractical =
-          bonusEntry.practicalMatch && skillEntry.practicalMatch
-        const decomposedCategory = decomposedIdeal
-          ? 'ideal'
-          : decomposedPractical
-            ? 'practical'
-            : null
-
-        expect(composed.category).toBe(decomposedCategory)
+        expect(
+          composed.bonusMatch === 'ideal' && composed.skillMatch === 'ideal',
+        ).toBe(decomposedIdeal)
         expect(composed.idealDifference.matchedBonusCount)
           .toBe(bonusEntry.matchedIdealBonusCount)
 
-        // The Skill halves of `IdealDifference` and the additive similarity
-        // score also follow from the decomposed values alone.
-        const specifiedIdealSkillCount =
-          Number(target.idealSkillCondition.seriesSkillId !== null) +
-          Number(target.idealSkillCondition.groupSkillId !== null)
+        // The Skill half of `IdealDifference` also follows from the decomposed
+        // values alone.
         const matchedIdealSkillCount =
           Number(
             target.idealSkillCondition.seriesSkillId !== null &&
@@ -484,15 +474,6 @@ describe('Decomposed evaluation parity with the Target evaluator (SEARCH_SPEC 5.
               composed.idealDifference.groupSkillMatches,
           )
         expect(matchedIdealSkillCount).toBe(skillEntry.idealCloseness)
-        expect(composed.similarityScore).toBeCloseTo(
-          (bonusEntry.matchedIdealBonusCount + skillEntry.idealCloseness) /
-            (5 + specifiedIdealSkillCount),
-          10,
-        )
-        expect(composed.isSimilarToIdeal).toBe(
-          composed.category === 'practical' &&
-            composed.similarityScore >= input.settings.similarityThreshold,
-        )
       }
     }
   })

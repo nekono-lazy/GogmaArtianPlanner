@@ -6,6 +6,7 @@ import {
   createCandidateSearchInput,
   practicalOnlyBonuses,
   SEARCH_FIXTURE_TIME,
+  candidatesOf,
 } from '../../test/fixtures/candidateSearch'
 import { createRestorationBonusSet } from '../../test/fixtures/domainData'
 import type { NormalArtianCounter, OwnedWeapon } from '../models/publicTypes'
@@ -51,7 +52,7 @@ describe('Candidate Search routes', () => {
       }), { predictNormalArtian }),
       deterministicExecution,
     )
-    const targetResult = result.targetResults[0]
+    const targetResult = result.targetResult
     // The RouteKind is searched, not skipped: the forced Reset variant needs no
     // Normal Artian Counter (SEARCH_SPEC 6.1.1).
     expect(targetResult.searchedRoutes).toContain('normal_artian_to_gogma')
@@ -75,7 +76,7 @@ describe('Candidate Search routes', () => {
     expect(notice?.message).not.toContain('normal_counter_unconfirmed')
     expect(notice?.message).not.toContain('forced Reset Bonuses')
     expect(notice?.message).not.toContain('Normal Artian prediction was unavailable')
-    const candidate = targetResult.candidates.find(
+    const candidate = candidatesOf(targetResult).find(
       ({ route }) => route.kind === 'normal_artian_to_gogma',
     )
     expect(candidate?.route.operations).toEqual([
@@ -106,8 +107,8 @@ describe('Candidate Search routes', () => {
       createCandidateSearchEngine(input),
       deterministicExecution,
     )
-    expect(result.targetResults[0].searchedRoutes).not.toContain('normal_artian_to_gogma')
-    expect(result.targetResults[0].skippedRoutes).toContainEqual(
+    expect(result.targetResult.searchedRoutes).not.toContain('normal_artian_to_gogma')
+    expect(result.targetResult.skippedRoutes).toContainEqual(
       expect.objectContaining({
         route: 'normal_artian_to_gogma',
         reason: 'normal_counter_unconfirmed',
@@ -126,8 +127,8 @@ describe('Candidate Search routes', () => {
       createCandidateSearchEngine(input),
       deterministicExecution,
     )
-    expect(result.targetResults[0].searchedRoutes).not.toContain('normal_artian_to_gogma')
-    expect(result.targetResults[0].skippedRoutes).toContainEqual(
+    expect(result.targetResult.searchedRoutes).not.toContain('normal_artian_to_gogma')
+    expect(result.targetResult.skippedRoutes).toContainEqual(
       expect.objectContaining({
         route: 'normal_artian_to_gogma',
         reason: 'normal_counter_unconfirmed',
@@ -159,9 +160,9 @@ describe('Candidate Search routes', () => {
       }),
       deterministicExecution,
     )
-    const targetResult = result.targetResults[0]
+    const targetResult = result.targetResult
     expect(targetResult.searchedRoutes).toContain('normal_artian_to_gogma')
-    expect(targetResult.candidates.some(({ route }) =>
+    expect(candidatesOf(targetResult).some(({ route }) =>
       route.kind === 'normal_artian_to_gogma' &&
       route.operations.some((operation) =>
         operation.type === 'create_normal_artian' &&
@@ -181,7 +182,7 @@ describe('Candidate Search routes', () => {
       createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
       deterministicExecution,
     )
-    const creations = result.targetResults[0].candidates
+    const creations = candidatesOf(result.targetResult)
       .flatMap(({ route }) => route.operations)
       .filter((operation) => operation.type === 'create_normal_artian')
     expect(creations.length).toBeGreaterThan(0)
@@ -199,7 +200,7 @@ describe('Candidate Search routes', () => {
       createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
       deterministicExecution,
     )
-    const candidates = result.targetResults[0].candidates.filter(
+    const candidates = candidatesOf(result.targetResult).filter(
       ({ route }) => route.kind === 'normal_artian_to_gogma',
     )
     expect(candidates.length).toBeGreaterThan(0)
@@ -232,7 +233,7 @@ describe('Candidate Search routes', () => {
     // Normal offset exists. Only the forced Reset variant remains, and it
     // creates a rarity 8 weapon while reading no Counter at all.
     expect(predictNormalArtian).not.toHaveBeenCalled()
-    const creations = result.targetResults[0].candidates
+    const creations = candidatesOf(result.targetResult)
       .flatMap(({ route }) => route.operations)
       .filter((operation) => operation.type === 'create_normal_artian')
     expect(creations.every((operation) =>
@@ -254,8 +255,8 @@ describe('Candidate Search routes', () => {
       }),
       deterministicExecution,
     )
-    expect(result.targetResults[0].searchedRoutes).not.toContain('normal_artian_to_gogma')
-    expect(result.targetResults[0].skippedRoutes).toContainEqual(
+    expect(result.targetResult.searchedRoutes).not.toContain('normal_artian_to_gogma')
+    expect(result.targetResult.skippedRoutes).toContainEqual(
       expect.objectContaining({
         route: 'normal_artian_to_gogma',
         reason: 'normal_counter_unconfirmed',
@@ -296,14 +297,14 @@ describe('Candidate Search routes', () => {
       createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
       deterministicExecution,
     )
-    const targetResult = result.targetResults[0]
+    const targetResult = result.targetResult
     expect(targetResult.searchedRoutes).toEqual(expect.arrayContaining([
       'normal_artian_to_gogma',
       'owned_normal_artian_to_gogma',
     ]))
     // The owned Normal route keeps using its registered five slots, so a
     // conversion-only Candidate in `normal_artian` scope still exists.
-    expect(targetResult.candidates).toContainEqual(expect.objectContaining({
+    expect(candidatesOf(targetResult)).toContainEqual(expect.objectContaining({
       restorationBonusScope: 'gogma_artian',
       finalBonuses: createRestorationBonusSet(),
       route: expect.objectContaining({
@@ -312,7 +313,7 @@ describe('Candidate Search routes', () => {
       }),
     }))
     // The blind variant never borrows those registered bonuses.
-    expect(targetResult.candidates.every(({ route, restorationBonusScope }) =>
+    expect(candidatesOf(targetResult).every(({ route, restorationBonusScope }) =>
       route.kind !== 'normal_artian_to_gogma' ||
       restorationBonusScope === 'gogma_artian',
     )).toBe(true)
@@ -327,8 +328,8 @@ describe('Candidate Search routes', () => {
       createCandidateSearchEngine(input),
       deterministicExecution,
     )
-    expect(result.targetResults[0].searchedRoutes).toContain('normal_artian_to_gogma')
-    expect(result.targetResults[0].skippedRoutes).not.toContainEqual(expect.objectContaining({ route: 'normal_artian_to_gogma', reason: 'normal_prediction_unsupported' }))
+    expect(result.targetResult.searchedRoutes).toContain('normal_artian_to_gogma')
+    expect(result.targetResult.skippedRoutes).not.toContainEqual(expect.objectContaining({ route: 'normal_artian_to_gogma', reason: 'normal_prediction_unsupported' }))
 
   })
 
@@ -340,8 +341,7 @@ describe('Candidate Search routes', () => {
       createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
       deterministicExecution,
     )
-    const candidate = result.targetResults[0].candidates[0]
-    expect(candidate.category).toBe('ideal')
+    const candidate = candidatesOf(result.targetResult)[0]
     expect(candidate.restorationBonusScope).toBe('gogma_artian')
     expect(candidate.finalBonuses).toEqual(input.targetWeapons[0].idealBonuses)
     expect(candidate.route.kind).toBe('normal_artian_to_gogma')
@@ -365,7 +365,7 @@ describe('Candidate Search routes', () => {
     expect(candidate.estimatedNormalAdvance).toBe(1)
     expect(candidate.estimatedGogmaAdvance).toBe(1)
     expect(candidate.estimatedSkillAdvance).toBe(1)
-    expect(result.targetResults[0].skippedRoutes).toContainEqual(
+    expect(result.targetResult.skippedRoutes).toContainEqual(
       expect.objectContaining({
         route: 'owned_normal_artian_to_gogma',
         reason: 'no_owned_weapon_available',
@@ -386,7 +386,7 @@ describe('Candidate Search routes', () => {
       }),
       deterministicExecution,
     )
-    const candidate = result.targetResults[0].candidates.find(({ route }) =>
+    const candidate = candidatesOf(result.targetResult).find(({ route }) =>
       route.kind === 'normal_artian_to_gogma' &&
       route.operations.some(({ type }) => type === 'reset_bonuses'),
     )
@@ -435,7 +435,7 @@ describe('Candidate Search routes', () => {
       }),
       deterministicExecution,
     )
-    const candidate = result.targetResults[0].candidates.find(
+    const candidate = candidatesOf(result.targetResult).find(
       ({ route }) =>
         route.kind === 'owned_normal_artian_to_gogma' &&
         route.operations.some(({ type }) => type === 'reset_skills'),
@@ -457,7 +457,7 @@ describe('Candidate Search routes', () => {
     )
     expect(candidate?.referencedOwnedWeaponsHash).toMatch(/^fnv1a32:/)
     expect(candidate?.estimatedOperationCount).toBe(3)
-    expect(result.targetResults[0].searchedRoutes).toContain(
+    expect(result.targetResult.searchedRoutes).toContain(
       'owned_normal_artian_to_gogma',
     )
   })
@@ -484,7 +484,7 @@ describe('Candidate Search routes', () => {
       createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
       deterministicExecution,
     )
-    const candidate = result.targetResults[0].candidates.find(({ route }) =>
+    const candidate = candidatesOf(result.targetResult).find(({ route }) =>
       route.kind === 'owned_normal_artian_to_gogma' &&
       route.operations.some(({ type }) => type === 'reset_bonuses'),
     )
@@ -518,10 +518,10 @@ describe('Candidate Search routes', () => {
       createCandidateSearchEngine(input),
       deterministicExecution,
     )
-    expect(result.targetResults[0].searchedRoutes).not.toContain(
+    expect(result.targetResult.searchedRoutes).not.toContain(
       'owned_normal_artian_to_gogma',
     )
-    expect(result.targetResults[0].skippedRoutes).toContainEqual(
+    expect(result.targetResult.skippedRoutes).toContainEqual(
       expect.objectContaining({
         route: 'owned_normal_artian_to_gogma',
         reason: 'no_unprotected_source_weapon',
@@ -550,7 +550,7 @@ describe('Candidate Search routes', () => {
       createCandidateSearchEngine(input),
       deterministicExecution,
     )
-    expect(result.targetResults[0].searchedRoutes).not.toContain(
+    expect(result.targetResult.searchedRoutes).not.toContain(
       'owned_normal_artian_to_gogma',
     )
   })
@@ -565,10 +565,14 @@ describe('Candidate Search routes', () => {
       }),
       deterministicExecution,
     )
-    expect(result.targetResults[0].skippedRoutes).not.toContainEqual(expect.objectContaining({ route: 'normal_artian_to_gogma', reason: 'normal_prediction_unsupported' }))
+    expect(result.targetResult.skippedRoutes).not.toContainEqual(expect.objectContaining({ route: 'normal_artian_to_gogma', reason: 'normal_prediction_unsupported' }))
   })
 
-  it('creates a Practical candidate with Similarity attributes', async () => {
+  it('returns no Candidate when only a compromise result is reachable', async () => {
+    // A state that satisfies the Target's compromise conditions but not its
+    // Ideal is never an independent Candidate: only a strict prefix of a real
+    // Ideal Route can be offered, and there is no Ideal Route here
+    // (`docs/SEARCH_SPEC.md` 5.7).
     const input = createCandidateSearchInput()
     input.routeFilter = 'normal_artian'
     const practical = createRestorationBonusSet()
@@ -581,11 +585,8 @@ describe('Candidate Search routes', () => {
       createCandidateSearchEngine(input, { resetResult: practical }),
       deterministicExecution,
     )
-    const candidate = result.targetResults[0].candidates[0]
-    expect(candidate.category).toBe('practical')
-    expect(candidate.idealDifference.matchedBonusCount).toBe(4)
-    expect(candidate.similarityScore).toBe(5 / 6)
-    expect(candidate.isSimilarToIdeal).toBe(true)
+    expect(result.targetResult.candidate).toBeNull()
+    expect(candidatesOf(result.targetResult)).toEqual([])
   })
 
   it('does not search Reset Skills from a protected source or call prediction', async () => {
@@ -601,10 +602,10 @@ describe('Candidate Search routes', () => {
     const predictSkills = vi.spyOn(engine, 'predictSkills')
     const predictGogmaBonus = vi.spyOn(engine, 'predictGogmaBonus')
     const result = await searchCandidates(input, engine, deterministicExecution)
-    expect(result.targetResults[0].candidates.some(
+    expect(candidatesOf(result.targetResult).some(
       ({ route }) => route.kind === 'existing_gogma_reset_skills',
     )).toBe(false)
-    expect(result.targetResults[0].skippedRoutes).toContainEqual(
+    expect(result.targetResult.skippedRoutes).toContainEqual(
       expect.objectContaining({
         route: 'existing_gogma_reset_skills',
         reason: 'no_unprotected_source_weapon',
@@ -622,7 +623,7 @@ describe('Candidate Search routes', () => {
     const predictSkills = vi.spyOn(engine, 'predictSkills')
     const predictGogmaBonus = vi.spyOn(engine, 'predictGogmaBonus')
     const result = await searchCandidates(input, engine, deterministicExecution)
-    const candidate = result.targetResults[0].candidates.find(
+    const candidate = candidatesOf(result.targetResult).find(
       ({ route }) => route.kind === 'existing_gogma_current',
     )
     expect(candidate).toMatchObject({
@@ -650,13 +651,13 @@ describe('Candidate Search routes', () => {
       createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
       deterministicExecution,
     )
-    const targetResult = result.targetResults[0]
+    const targetResult = result.targetResult
     expect(targetResult.searchedRoutes).toContain('existing_gogma_reset_bonuses')
     expect(targetResult.searchedRoutes).toContain('existing_gogma_reset_skills')
     // An unknown Normal Counter no longer removes the Normal RouteKind, but it
     // still removes every predicted Normal offset: only the forced Reset
     // variant remains, and it reads no Normal Counter (SEARCH_SPEC 6.1.1).
-    expect(targetResult.candidates.every(({ route }) =>
+    expect(candidatesOf(targetResult).every(({ route }) =>
       route.operations.every((operation) =>
         operation.type !== 'create_normal_artian' ||
         operation.normalCounterBefore === null,
@@ -682,12 +683,12 @@ describe('Candidate Search routes', () => {
       deterministicExecution,
     )
     const [unknownResult, importedResult] = await Promise.all([run(unknown), run(imported)])
-    expect(importedResult.targetResults[0].searchedRoutes)
-      .toEqual(unknownResult.targetResults[0].searchedRoutes)
-    expect(importedResult.targetResults[0].skippedRoutes)
-      .toEqual(unknownResult.targetResults[0].skippedRoutes)
-    expect(importedResult.targetResults[0].candidates.map(({ route, searchStateHash }) => ({ route, searchStateHash })))
-      .toEqual(unknownResult.targetResults[0].candidates.map(({ route, searchStateHash }) => ({ route, searchStateHash })))
+    expect(importedResult.targetResult.searchedRoutes)
+      .toEqual(unknownResult.targetResult.searchedRoutes)
+    expect(importedResult.targetResult.skippedRoutes)
+      .toEqual(unknownResult.targetResult.skippedRoutes)
+    expect(candidatesOf(importedResult.targetResult).map(({ route, searchStateHash }) => ({ route, searchStateHash })))
+      .toEqual(candidatesOf(unknownResult.targetResult).map(({ route, searchStateHash }) => ({ route, searchStateHash })))
   })
 
   it('keeps owned-Normal conversion available when Gogma Counter is unknown', async () => {
@@ -712,9 +713,9 @@ describe('Candidate Search routes', () => {
       createCandidateSearchEngine(input),
       deterministicExecution,
     )
-    const targetResult = result.targetResults[0]
+    const targetResult = result.targetResult
     expect(targetResult.searchedRoutes).toContain('owned_normal_artian_to_gogma')
-    expect(targetResult.candidates).toEqual([])
+    expect(candidatesOf(targetResult)).toEqual([])
     expect(targetResult.skippedRoutes).toContainEqual(expect.objectContaining({
       route: 'normal_artian_to_gogma',
       reason: 'normal_counter_unconfirmed',
@@ -730,10 +731,10 @@ describe('Candidate Search routes', () => {
       createCandidateSearchEngine(input, { skillSupported: false }),
       deterministicExecution,
     )
-    expect(result.targetResults[0].searchedRoutes).not.toContain(
+    expect(result.targetResult.searchedRoutes).not.toContain(
       'existing_gogma_reset_skills',
     )
-    expect(result.targetResults[0].skippedRoutes).toContainEqual(
+    expect(result.targetResult.skippedRoutes).toContainEqual(
       expect.objectContaining({
         route: 'existing_gogma_reset_skills',
         reason: 'skill_prediction_unsupported',
@@ -752,14 +753,14 @@ describe('Candidate Search routes', () => {
       createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
       deterministicExecution,
     )
-    const targetResult = result.targetResults[0]
+    const targetResult = result.targetResult
     expect(targetResult.searchedRoutes).toContain('existing_gogma_reset_bonuses')
     expect(targetResult.searchedRoutes).not.toContain('existing_gogma_reset_skills')
     expect(targetResult.skippedRoutes).toContainEqual(expect.objectContaining({
       route: 'existing_gogma_reset_skills',
       reason: 'rng_state_unconfirmed',
     }))
-    expect(targetResult.candidates.some(({ route }) =>
+    expect(candidatesOf(targetResult).some(({ route }) =>
       route.operations.some(({ type }) => type === 'reset_skills'),
     )).toBe(false)
   })
@@ -777,16 +778,16 @@ describe('Candidate Search routes', () => {
       neitherEngine,
       deterministicExecution,
     )
-    expect(neither.targetResults[0].searchedRoutes).toContain(
+    expect(neither.targetResult.searchedRoutes).toContain(
       'existing_gogma_reset_bonuses',
     )
-    expect(neither.targetResults[0].searchedRoutes).not.toContain(
+    expect(neither.targetResult.searchedRoutes).not.toContain(
       'existing_gogma_mixed',
     )
-    expect(neither.targetResults[0].skippedRoutes).toContainEqual(
+    expect(neither.targetResult.skippedRoutes).toContainEqual(
       expect.objectContaining({ route: 'existing_gogma_mixed' }),
     )
-    expect(neither.targetResults[0].candidates.some(({ route }) =>
+    expect(candidatesOf(neither.targetResult).some(({ route }) =>
       route.kind === 'existing_gogma_mixed',
     )).toBe(false)
 
@@ -799,7 +800,7 @@ describe('Candidate Search routes', () => {
       createCandidateSearchEngine(skillInput),
       deterministicExecution,
     )
-    expect(skill.targetResults[0].searchedRoutes).toContain(
+    expect(skill.targetResult.searchedRoutes).toContain(
       'existing_gogma_mixed',
     )
 
@@ -810,10 +811,10 @@ describe('Candidate Search routes', () => {
     const keepEngine = createCandidateSearchEngine(keepInput, { keepSupported: true })
     keepEngine.capabilities.supportsSkillPrediction = false
     const keep = await searchCandidates(keepInput, keepEngine, deterministicExecution)
-    expect(keep.targetResults[0].searchedRoutes).toContain('existing_gogma_reset_bonuses')
-    expect(keep.targetResults[0].searchedRoutes).toContain('existing_gogma_keep_bonuses')
-    expect(keep.targetResults[0].searchedRoutes).not.toContain('existing_gogma_mixed')
-    expect(keep.targetResults[0].skippedRoutes).toContainEqual(expect.objectContaining({
+    expect(keep.targetResult.searchedRoutes).toContain('existing_gogma_reset_bonuses')
+    expect(keep.targetResult.searchedRoutes).toContain('existing_gogma_keep_bonuses')
+    expect(keep.targetResult.searchedRoutes).not.toContain('existing_gogma_mixed')
+    expect(keep.targetResult.skippedRoutes).toContainEqual(expect.objectContaining({
       route: 'existing_gogma_mixed',
       reason: 'skill_prediction_unsupported',
     }))
@@ -830,7 +831,7 @@ describe('Candidate Search routes', () => {
       createCandidateSearchEngine(input, { resetResult: predicted }),
       deterministicExecution,
     )
-    const candidate = result.targetResults[0].candidates.find(
+    const candidate = candidatesOf(result.targetResult).find(
       ({ route }) => route.kind === 'existing_gogma_reset_bonuses',
     )
     expect(candidate?.finalBonuses).toEqual(predicted)
@@ -849,13 +850,13 @@ describe('Candidate Search routes', () => {
       createCandidateSearchEngine(input),
       deterministicExecution,
     )
-    expect(result.targetResults[0].searchedRoutes).not.toContain(
+    expect(result.targetResult.searchedRoutes).not.toContain(
       'existing_gogma_reset_bonuses',
     )
-    expect(result.targetResults[0].searchedRoutes).not.toContain(
+    expect(result.targetResult.searchedRoutes).not.toContain(
       'existing_gogma_keep_bonuses',
     )
-    expect(result.targetResults[0].skippedRoutes).toContainEqual(
+    expect(result.targetResult.skippedRoutes).toContainEqual(
       expect.objectContaining({ reason: 'no_unprotected_source_weapon' }),
     )
   })
@@ -875,7 +876,7 @@ describe('Candidate Search routes', () => {
       }),
       deterministicExecution,
     )
-    const candidate = result.targetResults[0].candidates.find(
+    const candidate = candidatesOf(result.targetResult).find(
       ({ route }) => route.kind === 'existing_gogma_keep_bonuses',
     )
     expect(candidate?.finalBonuses).toEqual(predicted)
@@ -895,10 +896,10 @@ describe('Candidate Search routes', () => {
       createCandidateSearchEngine(input),
       deterministicExecution,
     )
-    expect(result.targetResults[0].searchedRoutes).not.toContain(
+    expect(result.targetResult.searchedRoutes).not.toContain(
       'existing_gogma_keep_bonuses',
     )
-    expect(result.targetResults[0].skippedRoutes).toContainEqual(
+    expect(result.targetResult.skippedRoutes).toContainEqual(
       expect.objectContaining({ reason: 'keep_prediction_unsupported' }),
     )
   })
@@ -917,19 +918,19 @@ describe('Candidate Search routes', () => {
       }),
       deterministicExecution,
     )
-    expect(result.targetResults[0].candidates.some(({ route }) =>
+    expect(candidatesOf(result.targetResult).some(({ route }) =>
       route.operations[0]?.type === 'keep_bonuses',
     )).toBe(false)
-    expect(result.targetResults[0].candidates.some(({ route }) =>
+    expect(candidatesOf(result.targetResult).some(({ route }) =>
       route.operations.map(({ type }) => type).join(',') === 'reset_bonuses',
     )).toBe(true)
-    expect(result.targetResults[0].searchedRoutes).not.toContain(
+    expect(result.targetResult.searchedRoutes).not.toContain(
       'existing_gogma_keep_bonuses',
     )
-    expect(result.targetResults[0].searchedRoutes).toContain(
+    expect(result.targetResult.searchedRoutes).toContain(
       'existing_gogma_mixed',
     )
-    expect(result.targetResults[0].skippedRoutes).toContainEqual(
+    expect(result.targetResult.skippedRoutes).toContainEqual(
       expect.objectContaining({
         route: 'existing_gogma_keep_bonuses',
         reason: 'normal_scope_keep_prediction_unsupported',
@@ -950,7 +951,7 @@ describe('Candidate Search routes', () => {
       }),
       deterministicExecution,
     )
-    const mixed = result.targetResults[0].candidates.find(
+    const mixed = candidatesOf(result.targetResult).find(
       ({ route }) => route.kind === 'existing_gogma_mixed',
     )
     expect(mixed?.route.operations.map(({ type }) => type)).toEqual([
@@ -975,7 +976,7 @@ describe('Candidate Search routes', () => {
       }),
       deterministicExecution,
     )
-    const mixed = result.targetResults[0].candidates.find(
+    const mixed = candidatesOf(result.targetResult).find(
       ({ route }) =>
         route.kind === 'existing_gogma_mixed' &&
         route.operations[0].type === 'keep_bonuses',
@@ -986,7 +987,7 @@ describe('Candidate Search routes', () => {
     ])
   })
 
-  it('folds the amendment frontier by family layout and rebuilds canonical histories', async () => {
+  it('folds the amendment frontier by family layout', async () => {
     const input = createCandidateSearchInput()
     input.routeFilter = 'existing_gogma'
     input.settings.maxGogmaAdvance = 5
@@ -1109,13 +1110,7 @@ describe('Candidate Search routes', () => {
       normalCounterAdvances: [],
     })
     const predictGogmaBonus = vi.spyOn(engine, 'predictGogmaBonus')
-    const result = await searchCandidates(input, engine, deterministicExecution)
-    const candidates = result.targetResults[0].candidates.filter(
-      ({ route }) => route.kind !== 'existing_gogma_current',
-    )
-    const sequences = candidates.map(({ route }) =>
-      route.operations.map(({ type }) => type).join(','),
-    )
+    await searchCandidates(input, engine, deterministicExecution)
 
     // Reset ignores the current bonuses, so it is predicted once per position.
     const resetCounters = predictGogmaBonus.mock.calls
@@ -1136,57 +1131,9 @@ describe('Candidate Search routes', () => {
     // Layout K survives at every position; layout R appears from depth 2.
     expect(keepKeys).toHaveLength(counters.length + counters.length - 1)
 
-    // Each depth keeps one representative per family layout, so depth d yields
-    // the Reset state, the Keep of the Reset layout, and the Keep-only chain.
-    expect(sequences.sort()).toEqual([
-      'keep_bonuses',
-      'keep_bonuses,keep_bonuses',
-      'keep_bonuses,keep_bonuses,keep_bonuses',
-      'keep_bonuses,keep_bonuses,keep_bonuses,keep_bonuses',
-      'keep_bonuses,keep_bonuses,keep_bonuses,keep_bonuses,keep_bonuses',
-      'reset_bonuses',
-      'reset_bonuses,keep_bonuses',
-      'reset_bonuses,reset_bonuses',
-      'reset_bonuses,reset_bonuses,keep_bonuses',
-      'reset_bonuses,reset_bonuses,reset_bonuses',
-      'reset_bonuses,reset_bonuses,reset_bonuses,keep_bonuses',
-      'reset_bonuses,reset_bonuses,reset_bonuses,reset_bonuses',
-      'reset_bonuses,reset_bonuses,reset_bonuses,reset_bonuses,keep_bonuses',
-      'reset_bonuses,reset_bonuses,reset_bonuses,reset_bonuses,reset_bonuses',
-    ].sort())
-
-    // The canonical history places every Reset before every Keep, so the
-    // route-history duplicate `keep -> reset` is folded into `reset -> reset`.
-    expect(sequences.every((sequence) =>
-      !/keep_bonuses,.*reset_bonuses/.test(sequence),
-    )).toBe(true)
-
-    for (const [kind, sequence] of [
-      ['existing_gogma_reset_bonuses', 'reset_bonuses,reset_bonuses'],
-      ['existing_gogma_keep_bonuses', 'keep_bonuses,keep_bonuses'],
-      ['existing_gogma_mixed', 'reset_bonuses,reset_bonuses,keep_bonuses'],
-    ]) {
-      expect(candidates.some(({ route }) =>
-        route.kind === kind &&
-        route.operations.map(({ type }) => type).join(',') === sequence,
-      )).toBe(true)
-    }
-
-    const longest = candidates.find(({ route }) =>
-      route.operations.length === 5 && route.operations[4].type === 'keep_bonuses',
-    )
-    expect(longest?.route.operations.map((operation) =>
-      operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses'
-        ? [operation.gogmaCounterBefore, operation.gogmaCounterAfter, operation.sourceOwnedWeaponId]
-        : null,
-    )).toEqual([
-      [10, 11, input.ownedWeapons[0].id],
-      [11, 12, input.ownedWeapons[0].id],
-      [12, 13, input.ownedWeapons[0].id],
-      [13, 14, input.ownedWeapons[0].id],
-      [14, 15, input.ownedWeapons[0].id],
-    ])
-    expect(longest?.estimatedGogmaAdvance).toBe(5)
+    // The frontier itself is the subject here. The Candidate output is
+    // canonical-Ideal-only, and this fixture deliberately reaches no Ideal, so
+    // the per-state route histories are no longer observable as Candidates.
   })
 
   it('aggregates enabled Material Costs from concrete operations', async () => {
@@ -1223,7 +1170,7 @@ describe('Candidate Search routes', () => {
       createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
       deterministicExecution,
     )
-    expect(result.targetResults[0].candidates[0].requiredMaterials).toEqual([
+    expect(candidatesOf(result.targetResult)[0].requiredMaterials).toEqual([
       { materialId: 'material.fixture.a', quantity: 3 },
     ])
   })
@@ -1236,8 +1183,8 @@ describe('Candidate Search routes', () => {
       createCandidateSearchEngine(input),
       deterministicExecution,
     )
-    expect(result.targetResults[0].searchedRoutes).toEqual([])
-    expect(result.targetResults[0].skippedRoutes).toEqual([
+    expect(result.targetResult.searchedRoutes).toEqual([])
+    expect(result.targetResult.skippedRoutes).toEqual([
       ...[
         'normal_artian_to_gogma',
         'owned_normal_artian_to_gogma',
@@ -1255,10 +1202,9 @@ describe('Candidate Search routes', () => {
     ])
   })
 
-  it('applies route filters and candidate limits deterministically', async () => {
+  it('applies route filters deterministically', async () => {
     const input = createCandidateSearchInput()
-    input.settings.maxCandidatesPerTarget = 1
-    // Practical overflow, rather than multiple Ideals omitted by B4 policy.
+    // No Ideal is reachable here, so the run exercises the route filter alone.
     input.targetWeapons[0].idealSkillCondition.groupSkillId = 'group.unreached'
     // Keep more than one candidate reachable: a source whose Skills already
     // satisfy Ideal contributes no Reset Skills candidate.
@@ -1273,10 +1219,8 @@ describe('Candidate Search routes', () => {
       createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
       deterministicExecution,
     )
-    expect(result.targetResults[0].candidates).toHaveLength(1)
-    // The zero-operation Practical dominates later Practical amendments, so
-    // the configured display cap omits no retained Candidate.
-    expect(result.isTruncated).toBe(false)
+    // No Ideal in range means no Candidate and no checkpoint.
+    expect(result.targetResult.candidate).toBeNull()
 
     input.routeFilter = 'normal_artian'
     const normalOnly = await searchCandidates(
@@ -1284,17 +1228,17 @@ describe('Candidate Search routes', () => {
       createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
       deterministicExecution,
     )
-    expect(normalOnly.targetResults[0].searchedRoutes).toEqual([
+    expect(normalOnly.targetResult.searchedRoutes).toEqual([
       'normal_artian_to_gogma',
     ])
-    expect(normalOnly.targetResults[0].skippedRoutes).toContainEqual(
+    expect(normalOnly.targetResult.skippedRoutes).toContainEqual(
       expect.objectContaining({
         route: 'existing_gogma_reset_skills',
         reason: 'disabled_by_filter',
       }),
     )
     expect(
-      normalOnly.targetResults[0].skippedRoutes
+      normalOnly.targetResult.skippedRoutes
         .filter(({ reason }) => reason === 'disabled_by_filter')
         .map(({ route }) => route),
     ).toEqual([
@@ -1312,16 +1256,16 @@ describe('Candidate Search routes', () => {
       deterministicExecution,
     )
     expect(
-      existingOnly.targetResults[0].skippedRoutes
+      existingOnly.targetResult.skippedRoutes
         .filter(({ reason }) => reason === 'disabled_by_filter')
         .map(({ route }) => route),
     ).toEqual([
       'normal_artian_to_gogma',
       'owned_normal_artian_to_gogma',
     ])
-    const overlap = existingOnly.targetResults[0].searchedRoutes.filter(
+    const overlap = existingOnly.targetResult.searchedRoutes.filter(
       (route) =>
-        existingOnly.targetResults[0].skippedRoutes.some(
+        existingOnly.targetResult.skippedRoutes.some(
           (skipped) => skipped.route === route,
         ),
     )
@@ -1336,9 +1280,7 @@ describe('Candidate Search routes', () => {
       deterministicExecution,
     )
     expect(result.warnings).toEqual([])
-    expect(result.targetResults.map(({ targetWeaponId }) => targetWeaponId)).toEqual([
-      input.targetWeapons[0].id,
-    ])
+    expect(result.targetResult.targetWeaponId).toBe(input.targetWeapons[0].id)
   })
 
   it('excludes a Target whose idealBonuses break the containment invariant', async () => {
@@ -1356,7 +1298,12 @@ describe('Candidate Search routes', () => {
       createCandidateSearchEngine(input),
       deterministicExecution,
     )
-    expect(result.targetResults).toEqual([])
+    expect(result.targetResult).toEqual({
+      targetWeaponId: 'target.fixture.a',
+      candidate: null,
+      searchedRoutes: [],
+      skippedRoutes: [],
+    })
     // A genuine capability / definition problem keeps `warning`.
     expect(result.warnings).toEqual([
       {
@@ -1384,7 +1331,12 @@ describe('Candidate Search routes', () => {
       createCandidateSearchEngine(input),
       deterministicExecution,
     )
-    expect(result.targetResults).toEqual([])
+    expect(result.targetResult).toEqual({
+      targetWeaponId: 'target.fixture.a',
+      candidate: null,
+      searchedRoutes: [],
+      skippedRoutes: [],
+    })
     expect(result.warnings).toEqual([
       {
         targetWeaponId: input.targetWeapons[0].id,

@@ -28,7 +28,7 @@ describe('CRUD integration', () => {
     const master = createValidMasterDataFixture()
     const rngState = createValidRngState(); const counter = createValidNormalArtianCounter(); const owned = createValidOwnedWeapon(); const target = createValidTargetWeapon()
     const settings: AppSettings = { id: 'settings', schemaVersion: 1, debugMode: false, resultPageSize: 50, defaultSearchLimit: 5000, createdAt: 'now', updatedAt: 'now' }
-    const input = await createCandidateSearchInput({ searchRunId: 'integration', targetWeaponIds: [target.id], routeFilter: 'all', resultFilter: 'all', settings: { maxNormalAdvance: 1, maxGogmaAdvance: 1, maxSkillAdvance: 1, maxCandidatesPerTarget: 1, similarityThreshold: 0.6 }, master, calculationContext: domainFixtureContext }, { ensureInitialRngState: async () => rngState, getAllNormalArtianCounters: async () => [counter], getAllOwnedWeapons: async () => [owned], getAllTargetWeapons: async () => [target], ensureSettings: async () => settings })
+    const input = await createCandidateSearchInput({ searchRunId: 'integration', targetWeaponId: target.id, routeFilter: 'all', settings: { maxNormalAdvance: 1, maxGogmaAdvance: 1, maxSkillAdvance: 1 }, master, calculationContext: domainFixtureContext }, { ensureInitialRngState: async () => rngState, getAllNormalArtianCounters: async () => [counter], getAllOwnedWeapons: async () => [owned], getAllTargetWeapons: async () => [target], ensureSettings: async () => settings })
     expect(input).toMatchObject({ rngState, normalCounters: [counter], ownedWeapons: [owned], targetWeapons: [target] })
   })
 

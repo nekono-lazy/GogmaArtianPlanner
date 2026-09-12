@@ -863,14 +863,11 @@ export function ProductionPlanPage({
                               color={participant.isAvailable ? 'success' : 'default'}
                             />
                           </Stack>
-                          <Typography variant="body2">
-                            候補区分:{' '}
-                            {participant.candidateCategory === 'ideal'
-                              ? '理想候補'
-                              : participant.candidateCategory === 'practical'
-                                ? '実用候補'
-                                : '現在確認できません'}
-                          </Typography>
+                          {participant.checkpointOpportunityId !== null && (
+                            <Alert severity="info">
+                              この競合には選択済みチェックポイントが関係しています。作成リストでチェックポイントを変更または解除してください。
+                            </Alert>
+                          )}
                           <Typography variant="caption">
                             BuildListEntry ID: {participant.buildListEntryId}
                           </Typography>

@@ -80,23 +80,22 @@ function comparableCandidate(candidate: BuildCandidate) {
  */
 function parityKey(result: CandidateSearchResult): string {
   return stableStringify({
-    isTruncated: result.isTruncated,
     warnings: result.warnings,
-    targetResults: result.targetResults.map((target: CandidateSearchResult['targetResults'][number]) => ({
-      targetWeaponId: target.targetWeaponId,
-      searchedRoutes: target.searchedRoutes,
-      skippedRoutes: target.skippedRoutes,
-      candidates: target.candidates.map(comparableCandidate),
-    })),
+    targetWeaponId: result.targetResult.targetWeaponId,
+    searchedRoutes: result.targetResult.searchedRoutes,
+    skippedRoutes: result.targetResult.skippedRoutes,
+    candidate: result.targetResult.candidate === null
+      ? null
+      : comparableCandidate(result.targetResult.candidate),
   })
 }
 
 /** Order-insensitive parity: the retained candidate set alone. */
 function setParityKey(result: CandidateSearchResult): string {
   return stableStringify(
-    result.targetResults.flatMap((target: CandidateSearchResult['targetResults'][number]) =>
-      target.candidates.map((candidate) => stableStringify(comparableCandidate(candidate))),
-    ).sort(),
+    result.targetResult.candidate === null
+      ? []
+      : [stableStringify(comparableCandidate(result.targetResult.candidate))],
   )
 }
 
@@ -202,8 +201,7 @@ export function CandidateSearchBenchmarkPage() {
     }
 
     setProgress({
-      completedTargets: 0, totalTargets: input.targetWeaponIds.length,
-      currentTargetWeaponId: null, phase: 'preparing', processedWorkItems: 0,
+      targetWeaponId: input.targetWeaponId, phase: 'preparing', processedWorkItems: 0,
     })
     const startedAt = performance.now()
     let record: CandidateSearchBenchmarkRecord
@@ -216,15 +214,17 @@ export function CandidateSearchBenchmarkPage() {
         },
       })
       const elapsedMs = performance.now() - startedAt
-      const target = result.targetResults[0]
-      const ideal = target?.candidates.filter(({ category }) => category === 'ideal') ?? []
+      // A Search result is at most one canonical Ideal Candidate now, so the
+      // candidate and Ideal counts are 0 or 1 and truncation no longer exists.
+      const candidate = result.targetResult.candidate
       record = {
         id: requestId, workloadId: options.workloadId, mode: options.mode,
         phase: options.phase, status: 'completed', elapsedMs,
         searchElapsedMs: result.elapsedMs, workerSettledMs: null,
-        candidateCount: target?.candidates.length ?? 0, idealCount: ideal.length,
-        idealOperationCount: ideal[0]?.estimatedOperationCount ?? null,
-        isTruncated: result.isTruncated, parityKey: shortHash(parityKey(result)),
+        candidateCount: candidate === null ? 0 : 1,
+        idealCount: candidate === null ? 0 : 1,
+        idealOperationCount: candidate?.estimatedOperationCount ?? null,
+        isTruncated: false, parityKey: shortHash(parityKey(result)),
         setParityKey: shortHash(setParityKey(result)),
         progressEvents, animationFrames, longestAnimationFrameMs,
         workerPings: pings.length,
@@ -335,10 +335,6 @@ export function CandidateSearchBenchmarkPage() {
     ;(globalThis as unknown as { b5Benchmark?: unknown }).b5Benchmark = api
   })
 
-  const percent = progress === null || progress.totalTargets === 0
-    ? 0
-    : (progress.completedTargets / progress.totalTargets) * 100
-
   return (
     <PageShell
       title="B5 Candidate Search Browser Worker Benchmark"
@@ -404,9 +400,9 @@ export function CandidateSearchBenchmarkPage() {
             </Stack>
             {progress && (
               <Box aria-label="benchmark progress">
-                <LinearProgress variant="determinate" value={percent} />
+                <LinearProgress />
                 <Typography variant="body2" sx={{ mt: 0.5 }}>
-                  {progress.completedTargets} / {progress.totalTargets} targets
+                  {progress.phase} / {progress.processedWorkItems} work items
                 </Typography>
               </Box>
             )}

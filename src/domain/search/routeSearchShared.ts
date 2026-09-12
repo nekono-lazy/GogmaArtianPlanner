@@ -32,11 +32,10 @@ import {
 import {
   buildBonusSolutionSet,
   buildSkillSolutionSet,
-  selectBonusAxis,
-  selectSkillAxis,
+  selectIdealBonusAxis,
+  selectIdealSkillAxis,
   type RouteBonusSolution,
   type RouteSkillSolution,
-  type StreamCategoryPredicate,
 } from './streamSolutions'
 import {
   resetSkillsOperations,
@@ -50,8 +49,6 @@ export {
   createSearchPredictionSupport,
   type SearchPredictionSupport,
 } from './searchPredictionSupport'
-
-const streamCategories: readonly StreamCategoryPredicate[] = ['ideal', 'practical']
 
 export interface RouteSearchResult {
   candidates: BuildCandidate[]
@@ -300,13 +297,11 @@ function routeKindFor(
  * No prediction happens here, so composing more Bonus states, more source
  * weapons, or more Normal offsets never adds a `predictSkills` or
  * `predictGogmaBonus` call. The number of Candidates built per Route base is
- * bounded by `|B(c)| + |K(c)| - 1` summed over the two category predicates,
- * never by `|B(c)| * |K(c)|`.
+ * bounded by `|B| + |K| - 1`, never by `|B| * |K|`.
  *
- * The category predicate only selects which stream solutions enter an axis. The
- * final `category`, `idealDifference`, `similarityScore`, and `isSimilarToIdeal`
- * always come from the existing Target evaluator inside
- * `createCandidateFromPrediction()`.
+ * Only the Ideal axes take part: a composed Search result is always an Ideal
+ * Candidate, and a compromise state is offered only as a checkpoint on the
+ * canonical Ideal Route.
  */
 export async function composeRouteCandidates(
   context: RouteSearchContext,
@@ -319,41 +314,32 @@ export async function composeRouteCandidates(
   )
   const skillSet = buildSkillSolutionSet(context.target, base.skillSolutions)
   const candidates: BuildCandidate[] = []
-  // The Ideal and Practical Cross series can select the same pair; the pair is
-  // built once here so the Candidate count stays linear in the axis lengths.
-  const composed = new Set<string>()
-
-  for (const category of streamCategories) {
-    const pairs = crossStreamSolutions(
-      selectBonusAxis(bonusSet, category),
-      selectSkillAxis(skillSet, category),
+  const pairs = crossStreamSolutions(
+    selectIdealBonusAxis(bonusSet),
+    selectIdealSkillAxis(skillSet),
+  )
+  for (const pair of pairs) {
+    const bonus = pair.bonus.solution
+    const skill = pair.skill.solution
+    const kind = routeKindFor(base, bonus, skill)
+    const operations = [
+      ...base.baseOperations,
+      ...bonus.operations,
+      ...skill.operations,
+    ]
+    await context.execution.checkpoint()
+    const candidate = createBaseCandidate(
+      context,
+      bonus.finalBonuses,
+      bonus.restorationBonusScope,
+      skill.seriesSkillId,
+      skill.groupSkillId,
+      { kind, sourceOwnedWeaponId: base.sourceOwnedWeaponId, operations },
+      bonus.amendmentResults,
+      skill.amendmentResults,
+      base.conversionSkill,
     )
-    for (const pair of pairs) {
-      const pairKey = `${pair.bonus.index},${pair.skill.index}`
-      if (composed.has(pairKey)) continue
-      composed.add(pairKey)
-      const bonus = pair.bonus.solution
-      const skill = pair.skill.solution
-      const kind = routeKindFor(base, bonus, skill)
-      const operations = [
-        ...base.baseOperations,
-        ...bonus.operations,
-        ...skill.operations,
-      ]
-      await context.execution.checkpoint()
-      const candidate = createBaseCandidate(
-        context,
-        bonus.finalBonuses,
-        bonus.restorationBonusScope,
-        skill.seriesSkillId,
-        skill.groupSkillId,
-        { kind, sourceOwnedWeaponId: base.sourceOwnedWeaponId, operations },
-        bonus.amendmentResults,
-        skill.amendmentResults,
-        base.conversionSkill,
-      )
-      if (candidate) candidates.push(candidate)
-    }
+    if (candidate) candidates.push(candidate)
   }
   return candidates
 }

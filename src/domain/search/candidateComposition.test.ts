@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createCandidateSearchInput,
   SEARCH_FIXTURE_TIME,
+  candidatesOf,
 } from '../../test/fixtures/candidateSearch'
 import {
   createRestorationBonusSet,
@@ -86,6 +87,13 @@ interface CompositionFixtureOptions {
   keepSupported?: boolean
   /** Series Skill published at `START_SKILL_COUNTER + index`. */
   skills: (string | null)[]
+  /**
+   * Group Skill published at `START_SKILL_COUNTER + index`.
+   *
+   * The fixture Target leaves the Group Skill unconstrained, so varying it is
+   * how several distinct Skill solutions can all satisfy the Ideal condition.
+   */
+  groupSkills?: (string | null)[]
   /** Normal Artian prediction per forge offset, for conversion Routes. */
   normals?: RestorationBonusSet[]
 }
@@ -150,7 +158,10 @@ function createCompositionEngine(
         elementId: target.elementId,
         master: input.master,
       },
-      result: { seriesSkillId, groupSkillId: 'group_skill.fixture.a' },
+      result: {
+        seriesSkillId,
+        groupSkillId: options.groupSkills?.[index] ?? 'group_skill.fixture.a',
+      },
     })),
     normalCounterAdvances: normals.map((_, index) => ({
       current: START_NORMAL_COUNTER,
@@ -245,30 +256,41 @@ const axisShape = (candidate: BuildCandidate) => [
 
 describe('Candidate composition follows the Cross rule (SEARCH_SPEC 5.5.4)', () => {
   /**
-   * Four Bonus solutions (`d = 0 ... 3`) and four Skill solutions
-   * (`k = 0 ... 3`), all Practical and all with distinct outcomes.
+   * One Ideal Bonus solution and three Ideal Skill solutions.
+   *
+   * The Ideal five slots are an exact multiset, so the Bonus axis can hold at
+   * most one entry: stream retention keeps its smallest Gogma depth. The Ideal
+   * Skill condition leaves the Group Skill unconstrained, so three distinct
+   * Skill outcomes all satisfy it and the Skill axis holds three entries.
    */
   function crossFixture() {
     const input = compositionInput(3, 3)
     input.ownedWeapons = [
-      gogmaSource(input, 'owned.fixture.cross', practicalBonuses(RANKS[0])),
+      gogmaSource(input, 'owned.fixture.cross', belowPracticalBonuses(), {
+        seriesSkillId: 'series_skill.fixture.source',
+      })
     ]
     const engine = createCompositionEngine(input, {
       resets: [
-        practicalBonuses(RANKS[1]),
+        createRestorationBonusSet(),
         practicalBonuses(RANKS[2]),
         practicalBonuses(RANKS[3]),
       ],
       skills: [
-        'series_skill.fixture.k1',
-        'series_skill.fixture.k2',
-        'series_skill.fixture.k3',
+        'series_skill.fixture.a',
+        'series_skill.fixture.a',
+        'series_skill.fixture.a',
+      ],
+      groupSkills: [
+        'group_skill.fixture.k1',
+        'group_skill.fixture.k2',
+        'group_skill.fixture.k3',
       ],
     })
     return { input, engine }
   }
 
-  it('produces |B| + |K| - 1 pairs per Route base, not |B| x |K|', async () => {
+  it('composes |B| + |K| - 1 pairs per Route base, not |B| x |K|', async () => {
     const { input, engine } = crossFixture()
     const createCandidateId = vi.fn(
       ({ semanticHash }: { semanticHash: string }) =>
@@ -278,31 +300,21 @@ describe('Candidate composition follows the Cross rule (SEARCH_SPEC 5.5.4)', () 
       ...deterministicExecution,
       createCandidateId,
     })
-    const candidates = result.targetResults[0].candidates
 
-    // |B(practical)| = 4 (d = 0 ... 3), |K(practical)| = 4 (k = 0 ... 3).
-    // The Cross yields 7 pairs, including the current-state `(d = 0, k = 0)` Candidate.
-    expect(createCandidateId).toHaveBeenCalledTimes(7)
-    expect(candidates).toHaveLength(7)
-    expect(candidates.length).toBeLessThan(4 * 4)
+    // |B| = 1, because the Ideal five slots are one exact multiset and stream
+    // retention keeps its smallest Gogma depth. The Cross therefore never
+    // composes a Cartesian product, and the target-wide queue stops at the
+    // canonical Ideal, so the cheapest pair is the only one composed at all.
+    expect(createCandidateId).toHaveBeenCalledTimes(1)
+    expect(candidatesOf(result.targetResult)).toHaveLength(1)
   })
 
-  it('fixes the Skill anchor on the Bonus axis and the Bonus anchor on the Skill axis', async () => {
+  it('fixes the Bonus anchor on the Skill axis', async () => {
     const { input, engine } = crossFixture()
     const result = await searchCandidates(input, engine, deterministicExecution)
-    const shapes = result.targetResults[0].candidates.map(axisShape)
-
-    expect(shapes.sort()).toEqual([
-      [0, 0],
-      [0, 1],
-      [0, 2],
-      [0, 3],
-      [1, 0],
-      [2, 0],
-      [3, 0],
-    ])
-    // No off-axis pair: never both streams advanced at once.
-    expect(shapes.every(([gogma, skill]) => gogma === 0 || skill === 0)).toBe(true)
+    // Every composed pair keeps the single Ideal Bonus solution fixed, so the
+    // Skill axis is the only one that can vary.
+    expect(candidatesOf(result.targetResult).map(axisShape)).toEqual([[1, 1]])
   })
 
   it('is unchanged when the Route base evaluation order changes', async () => {
@@ -318,7 +330,7 @@ describe('Candidate composition follows the Cross rule (SEARCH_SPEC 5.5.4)', () 
         skills: ['series_skill.fixture.k1', 'series_skill.fixture.k2'],
       })
       const result = await searchCandidates(input, engine, deterministicExecution)
-      return result.targetResults[0].candidates.map((candidate) => [
+      return candidatesOf(result.targetResult).map((candidate) => [
         candidate.route.kind,
         candidate.route.sourceOwnedWeaponId,
         operationTypes(candidate),
@@ -329,32 +341,7 @@ describe('Candidate composition follows the Cross rule (SEARCH_SPEC 5.5.4)', () 
     expect(await run(true)).toEqual(await run(false))
   })
 
-  it('does not change the composed set when resultFilter changes', async () => {
-    const run = async (resultFilter: CandidateSearchInput['resultFilter']) => {
-      const { input, engine } = crossFixture()
-      input.resultFilter = resultFilter
-      const gogma = vi.spyOn(engine, 'predictGogmaBonus')
-      const skill = vi.spyOn(engine, 'predictSkills')
-      const result = await searchCandidates(input, engine, deterministicExecution)
-      return {
-        gogmaCalls: gogma.mock.calls.length,
-        skillCalls: skill.mock.calls.length,
-        shapes: result.targetResults[0].candidates.map(axisShape).sort(),
-      }
-    }
-
-    const all = await run('all')
-    const practical = await run('practical')
-    const ideal = await run('ideal')
-
-    expect(practical.gogmaCalls).toBe(all.gogmaCalls)
-    expect(practical.skillCalls).toBe(all.skillCalls)
-    expect(ideal.gogmaCalls).toBe(all.gogmaCalls)
-    expect(ideal.skillCalls).toBe(all.skillCalls)
-    expect(practical.shapes).toEqual(all.shapes)
-  })
-
-  it('lets the Target evaluator decide the final category of a Practical Cross pair', async () => {
+  it('composes only Ideal results, and the Target evaluator agrees', async () => {
     const input = compositionInput(1, 1)
     input.ownedWeapons = [
       gogmaSource(input, 'owned.fixture.category', belowPracticalBonuses(), {
@@ -362,15 +349,13 @@ describe('Candidate composition follows the Cross rule (SEARCH_SPEC 5.5.4)', () 
       }),
     ]
     const engine = createCompositionEngine(input, {
-      // The Bonus anchor of the Practical Cross is also the Ideal result, and
-      // the Skill anchor is also the Ideal Skill.
       resets: [createRestorationBonusSet()],
       skills: ['series_skill.fixture.a'],
     })
     const result = await searchCandidates(input, engine, deterministicExecution)
-    const candidates = result.targetResults[0].candidates
+    const candidates = candidatesOf(result.targetResult)
 
-    expect(candidates.some(({ category }) => category === 'ideal')).toBe(true)
+    expect(candidates).toHaveLength(1)
     for (const candidate of candidates) {
       const expected = evaluateTargetCandidate(
         input.targetWeapons[0],
@@ -379,12 +364,11 @@ describe('Candidate composition follows the Cross rule (SEARCH_SPEC 5.5.4)', () 
         candidate.seriesSkillId,
         candidate.groupSkillId,
         input.master,
-        input.settings.similarityThreshold,
       )
-      expect(candidate.category).toBe(expected.category)
+      // Every composed result satisfies both axes at Ideal.
+      expect(expected.bonusMatch).toBe('ideal')
+      expect(expected.skillMatch).toBe('ideal')
       expect(candidate.idealDifference).toEqual(expected.idealDifference)
-      expect(candidate.similarityScore).toBe(expected.similarityScore)
-      expect(candidate.isSimilarToIdeal).toBe(expected.isSimilarToIdeal)
     }
   })
 })
@@ -393,56 +377,68 @@ describe('Zero-operation stream solutions (SEARCH_SPEC 5.5.5)', () => {
   it('produces an existing-current Candidate for a d = 0 and k = 0 pair', async () => {
     const input = compositionInput(1, 1)
     input.ownedWeapons = [
-      gogmaSource(input, 'owned.fixture.zero', practicalBonuses(RANKS[0])),
+      gogmaSource(input, 'owned.fixture.zero', createRestorationBonusSet(), {
+        seriesSkillId: 'series_skill.fixture.a',
+      }),
     ]
-    const engine = createCompositionEngine(input, {
-      // Both streams reach exactly the Route base's own current state again.
-      resets: [practicalBonuses(RANKS[0])],
-      skills: ['series_skill.fixture.source'],
-    })
+    // The source already satisfies both Ideal axes, so neither stream is
+    // searched and the zero-operation Candidate is the whole result.
+    const engine = createCompositionEngine(input, { resets: [], skills: [] })
     const result = await searchCandidates(input, engine, deterministicExecution)
 
-    expect(result.targetResults[0].candidates).toHaveLength(1)
-    expect(result.targetResults[0].candidates[0].route).toEqual({
+    expect(candidatesOf(result.targetResult)).toHaveLength(1)
+    expect(candidatesOf(result.targetResult)[0].route).toEqual({
       kind: 'existing_gogma_current',
       sourceOwnedWeaponId: input.ownedWeapons[0].id,
       operations: [],
     })
   })
 
-  it('anchors the Skill axis on d = 0 when only the current bonuses are Practical', async () => {
+  it('anchors the Skill axis on d = 0 when the current bonuses are already Ideal', async () => {
     const input = compositionInput(1, 2)
     input.ownedWeapons = [
-      gogmaSource(input, 'owned.fixture.zero-bonus', practicalBonuses(RANKS[0])),
+      gogmaSource(input, 'owned.fixture.zero-bonus', createRestorationBonusSet(), {
+        seriesSkillId: 'series_skill.fixture.source',
+      }),
     ]
     const engine = createCompositionEngine(input, {
-      resets: [belowPracticalBonuses()],
-      skills: ['series_skill.fixture.k1', 'series_skill.fixture.k2'],
+      resets: [],
+      skills: ['series_skill.fixture.a', 'series_skill.fixture.a'],
+      groupSkills: ['group_skill.fixture.k1', 'group_skill.fixture.k2'],
     })
-    const result = await searchCandidates(input, engine, deterministicExecution)
-    const candidates = result.targetResults[0].candidates
+    const createCandidateId = vi.fn(
+      ({ semanticHash }: { semanticHash: string }) =>
+        `candidate.${semanticHash}` as BuildCandidate['id'],
+    )
+    const result = await searchCandidates(input, engine, {
+      ...deterministicExecution,
+      createCandidateId,
+    })
 
-    expect(candidates.map(axisShape).sort()).toEqual([[0, 0], [0, 1], [0, 2]])
-    expect(candidates.map(({ route }) => route.kind).sort()).toEqual([
-      'existing_gogma_current',
-      'existing_gogma_reset_skills',
-      'existing_gogma_reset_skills',
-    ])
+    // The Bonus axis holds only its zero-operation solution, so every composed
+    // pair is a Reset Skills Route, and the queue stops at the cheapest one.
+    expect(createCandidateId).toHaveBeenCalledTimes(1)
+    expect(candidatesOf(result.targetResult).map(axisShape)).toEqual([[0, 1]])
+    expect(candidatesOf(result.targetResult)[0].route.kind)
+      .toBe('existing_gogma_reset_skills')
   })
 
-  it('anchors the Bonus axis on k = 0 when only the current Skills are usable', async () => {
+  it('anchors the Bonus axis on k = 0 when the current Skills are already Ideal', async () => {
     const input = compositionInput(2, 1)
     input.ownedWeapons = [
-      gogmaSource(input, 'owned.fixture.zero-skill', belowPracticalBonuses()),
+      gogmaSource(input, 'owned.fixture.zero-skill', belowPracticalBonuses(), {
+        seriesSkillId: 'series_skill.fixture.a',
+      }),
     ]
     const engine = createCompositionEngine(input, {
-      resets: [practicalBonuses(RANKS[0]), practicalBonuses(RANKS[1])],
-      skills: ['series_skill.fixture.k1'],
+      resets: [createRestorationBonusSet(), practicalBonuses(RANKS[1])],
+      skills: [],
     })
     const result = await searchCandidates(input, engine, deterministicExecution)
 
-    expect(result.targetResults[0].candidates.map(axisShape).sort())
-      .toEqual([[1, 0], [1, 1], [2, 0]])
+    expect(candidatesOf(result.targetResult).map(axisShape)).toEqual([[1, 0]])
+    expect(candidatesOf(result.targetResult)[0].route.kind)
+      .toBe('existing_gogma_reset_bonuses')
   })
 
   it('keeps searching Ideal from a Practical-only current state', async () => {
@@ -455,9 +451,10 @@ describe('Zero-operation stream solutions (SEARCH_SPEC 5.5.5)', () => {
     const engine = createCompositionEngine(input, {
       resets: [practicalBonuses(RANKS[1]), createRestorationBonusSet()],
       skills: ['series_skill.fixture.k1', 'series_skill.fixture.a'],
+      groupSkills: ['group_skill.fixture.a', 'group_skill.fixture.a'],
     })
     const result = await searchCandidates(input, engine, deterministicExecution)
-    const candidates = result.targetResults[0].candidates
+    const candidates = candidatesOf(result.targetResult)
 
     // The zero-operation Practical state did not stop either stream.
     expect(candidates.some(({ finalBonuses }) =>
@@ -485,7 +482,7 @@ describe('Zero-operation stream solutions (SEARCH_SPEC 5.5.5)', () => {
       skills: ['series_skill.fixture.k1', 'series_skill.fixture.k2'],
     })
     const result = await searchCandidates(input, engine, deterministicExecution)
-    const candidates = result.targetResults[0].candidates.filter(({ route }) =>
+    const candidates = candidatesOf(result.targetResult).filter(({ route }) =>
       route.kind === 'existing_gogma_reset_skills',
     )
 
@@ -496,135 +493,116 @@ describe('Zero-operation stream solutions (SEARCH_SPEC 5.5.5)', () => {
 })
 
 describe('Composed RouteKind and operation order', () => {
-  it('derives existing Gogma RouteKinds from the composed (d, k) pair', async () => {
-    const input = compositionInput(2, 1)
+  /**
+   * A Search returns exactly one canonical Ideal Candidate, so each RouteKind
+   * is exercised by making that Route's own final result the Target's Ideal.
+   */
+  it('uses existing_gogma_reset_bonuses for d > 0 with k = 0', async () => {
+    const input = compositionInput(1, 1)
     input.ownedWeapons = [
-      // Below Practical, so the Bonus anchor is an amendment result and the
-      // Skill axis composes with `d > 0`.
-      gogmaSource(input, 'owned.fixture.kinds', belowPracticalBonuses()),
+      gogmaSource(input, 'owned.fixture.reset-only', belowPracticalBonuses(), {
+        seriesSkillId: 'series_skill.fixture.a',
+      }),
     ]
     const engine = createCompositionEngine(input, {
-      resets: [practicalBonuses(RANKS[0]), practicalBonuses(RANKS[1])],
+      resets: [createRestorationBonusSet()],
+      skills: [],
+    })
+    const [candidate] = candidatesOf(
+      (await searchCandidates(input, engine, deterministicExecution)).targetResult,
+    )
+    expect(candidate.route.kind).toBe('existing_gogma_reset_bonuses')
+    expect(operationTypes(candidate)).toBe('reset_bonuses')
+  })
+
+  it('uses existing_gogma_keep_bonuses for a Keep-only chain with k = 0', async () => {
+    const input = compositionInput(1, 1)
+    input.ownedWeapons = [
+      gogmaSource(input, 'owned.fixture.keep-only', belowPracticalBonuses(), {
+        seriesSkillId: 'series_skill.fixture.a',
+      }),
+    ]
+    const engine = createCompositionEngine(input, {
+      resets: [practicalBonuses(RANKS[0])],
       keepSupported: true,
       keeps: [
         {
           counterOffset: 0,
           currentBonuses: belowPracticalBonuses(),
-          result: keepChainBonuses(RANKS[1]),
-        },
-        {
-          counterOffset: 1,
-          currentBonuses: practicalBonuses(RANKS[0]),
-          result: practicalBonuses(RANKS[2]),
-        },
-        {
-          counterOffset: 1,
-          currentBonuses: keepChainBonuses(RANKS[1]),
-          result: keepChainBonuses(RANKS[2]),
+          result: createRestorationBonusSet(),
         },
       ],
-      skills: ['series_skill.fixture.k1'],
+      skills: [],
     })
-    const result = await searchCandidates(input, engine, deterministicExecution)
-    const byKind = new Map(
-      result.targetResults[0].candidates.map((candidate) => [
-        `${candidate.route.kind}|${operationTypes(candidate)}`,
-        candidate,
-      ]),
+    const [candidate] = candidatesOf(
+      (await searchCandidates(input, engine, deterministicExecution)).targetResult,
     )
-
-    // Reset only with k = 0.
-    expect([...byKind.keys()]).toContain('existing_gogma_reset_bonuses|reset_bonuses')
-    // Keep only with k = 0.
-    expect([...byKind.keys()]).toContain('existing_gogma_keep_bonuses|keep_bonuses')
-    // Reset then Keep with k = 0.
-    expect([...byKind.keys()]).toContain(
-      'existing_gogma_mixed|reset_bonuses,keep_bonuses',
-    )
-    // d > 0 with k > 0.
-    expect([...byKind.keys()]).toContain(
-      'existing_gogma_mixed|reset_bonuses,reset_skills',
-    )
+    expect(candidate.route.kind).toBe('existing_gogma_keep_bonuses')
+    expect(operationTypes(candidate)).toBe('keep_bonuses')
   })
 
   it('uses existing_gogma_reset_skills for d = 0 with k > 0', async () => {
     const input = compositionInput(1, 1)
     input.ownedWeapons = [
-      gogmaSource(input, 'owned.fixture.skill-only', practicalBonuses(RANKS[0])),
+      gogmaSource(input, 'owned.fixture.skill-only', createRestorationBonusSet(), {
+        seriesSkillId: 'series_skill.fixture.other',
+      }),
     ]
     const engine = createCompositionEngine(input, {
-      resets: [belowPracticalBonuses()],
-      skills: ['series_skill.fixture.k1'],
+      resets: [],
+      skills: ['series_skill.fixture.a'],
     })
-    const result = await searchCandidates(input, engine, deterministicExecution)
-    const candidates = result.targetResults[0].candidates.filter(({ route }) =>
-      route.kind === 'existing_gogma_reset_skills',
+    const [candidate] = candidatesOf(
+      (await searchCandidates(input, engine, deterministicExecution)).targetResult,
     )
-
-    expect(candidates).toHaveLength(1)
-    expect(candidates[0].route.kind).toBe('existing_gogma_reset_skills')
-    expect(operationTypes(candidates[0])).toBe('reset_skills')
+    expect(candidate.route.kind).toBe('existing_gogma_reset_skills')
+    expect(operationTypes(candidate)).toBe('reset_skills')
   })
 
-  it('places Bonus operations before Skill operations in every RouteKind', async () => {
-    const input = compositionInput(2, 2)
-    input.routeFilter = 'all'
-    input.normalCounters[0].counter = START_NORMAL_COUNTER
-    input.settings.maxNormalAdvance = 1
+  it('places Bonus operations before Skill operations in a mixed Route', async () => {
+    const input = compositionInput(1, 1)
     input.ownedWeapons = [
-      gogmaSource(input, 'owned.fixture.order-gogma', belowPracticalBonuses()),
-      normalSource(input, 'owned.fixture.order-normal', belowPracticalBonuses()),
+      gogmaSource(input, 'owned.fixture.order-gogma', belowPracticalBonuses(), {
+        seriesSkillId: 'series_skill.fixture.other',
+      }),
     ]
     const engine = createCompositionEngine(input, {
-      resets: [practicalBonuses(RANKS[0]), practicalBonuses(RANKS[1])],
-      skills: [
-        'series_skill.fixture.k1',
-        'series_skill.fixture.k2',
-        'series_skill.fixture.k3',
-      ],
+      resets: [createRestorationBonusSet()],
+      skills: ['series_skill.fixture.a'],
+    })
+    const [candidate] = candidatesOf(
+      (await searchCandidates(input, engine, deterministicExecution)).targetResult,
+    )
+    expect(candidate.route.kind).toBe('existing_gogma_mixed')
+    expect(operationTypes(candidate)).toBe('reset_bonuses,reset_skills')
+  })
+
+  it('opens a conversion Route with its base operations', async () => {
+    const input = compositionInput(1, 1)
+    input.routeFilter = 'normal_artian'
+    input.ownedWeapons = []
+    input.normalCounters[0].counter = START_NORMAL_COUNTER
+    input.settings.maxNormalAdvance = 1
+    const engine = createCompositionEngine(input, {
+      resets: [createRestorationBonusSet()],
+      // The conversion itself reads the Skill stream, and it already assigns
+      // the Target's Ideal Series Skill, so no Reset Skills is needed.
+      skills: ['series_skill.fixture.a'],
       normals: [belowPracticalBonuses()],
     })
-    const result = await searchCandidates(input, engine, deterministicExecution)
-    const sequences = result.targetResults[0].candidates.map(operationTypes)
-    const bonusTypes = ['reset_bonuses', 'keep_bonuses']
-
-    expect(sequences.length).toBeGreaterThan(0)
-    for (const sequence of sequences) {
-      const types = sequence.split(',')
-      const lastBonus = types.reduce(
-        (last, type, index) => (bonusTypes.includes(type) ? index : last),
-        -1,
-      )
-      const firstSkill = types.indexOf('reset_skills')
-      if (lastBonus >= 0 && firstSkill >= 0) {
-        expect(lastBonus).toBeLessThan(firstSkill)
-      }
-      // Conversion Routes always open with their base operations.
-      const streamIndexes = [lastBonus, firstSkill].filter((index) => index >= 0)
-      if (types.includes('convert_normal_to_gogma') && streamIndexes.length > 0) {
-        expect(types.indexOf('convert_normal_to_gogma'))
-          .toBeLessThan(Math.min(...streamIndexes))
-      }
-      if (types.includes('create_normal_artian')) {
-        expect(types[0]).toBe('create_normal_artian')
-        expect(types[1]).toBe('convert_normal_to_gogma')
-      }
-    }
-    expect(sequences.some((sequence) =>
-      sequence === 'create_normal_artian,convert_normal_to_gogma,reset_bonuses',
-    )).toBe(true)
-    expect(sequences.some((sequence) =>
-      sequence === 'convert_normal_to_gogma,reset_bonuses,reset_skills',
-    )).toBe(true)
-    expect(sequences.some((sequence) =>
-      sequence === 'reset_bonuses,reset_skills',
-    )).toBe(true)
+    const [candidate] = candidatesOf(
+      (await searchCandidates(input, engine, deterministicExecution)).targetResult,
+    )
+    expect(operationTypes(candidate)).toBe(
+      'create_normal_artian,convert_normal_to_gogma,reset_bonuses',
+    )
   })
 
   it('keeps a protected source only as its current-state candidate', async () => {
     const input = compositionInput(2, 2)
     input.ownedWeapons = [
-      gogmaSource(input, 'owned.fixture.protected', practicalBonuses(RANKS[0]), {
+      gogmaSource(input, 'owned.fixture.protected', createRestorationBonusSet(), {
+        seriesSkillId: 'series_skill.fixture.a',
         isProtected: true,
       }),
     ]
@@ -635,7 +613,7 @@ describe('Composed RouteKind and operation order', () => {
     const gogma = vi.spyOn(engine, 'predictGogmaBonus')
     const skills = vi.spyOn(engine, 'predictSkills')
     const result = await searchCandidates(input, engine, deterministicExecution)
-    const candidates = result.targetResults[0].candidates
+    const candidates = candidatesOf(result.targetResult)
 
     expect(gogma).not.toHaveBeenCalled()
     expect(skills).not.toHaveBeenCalled()
@@ -707,18 +685,31 @@ describe('Stream solutions are shared across Route bases', () => {
     const input = compositionInput(1, 1)
     const shared = keepChainBonuses(RANKS[0])
     input.ownedWeapons = [
-      gogmaSource(input, 'owned.fixture.same-a', shared),
-      gogmaSource(input, 'owned.fixture.same-b', structuredClone(shared)),
+      gogmaSource(input, 'owned.fixture.same-a', shared, {
+        seriesSkillId: 'series_skill.fixture.a',
+      }),
+      gogmaSource(input, 'owned.fixture.same-b', structuredClone(shared), {
+        seriesSkillId: 'series_skill.fixture.a',
+      }),
     ]
     const engine = createCompositionEngine(input, {
-      resets: [belowPracticalBonuses()],
-      skills: ['series_skill.fixture.k1'],
+      resets: [createRestorationBonusSet()],
+      skills: [],
     })
-    const result = await searchCandidates(input, engine, deterministicExecution)
-    const sources = result.targetResults[0].candidates.map(
-      ({ route }) => route.sourceOwnedWeaponId,
-    )
+    // Both bases reach the same Ideal result, so both are composed as separate
+    // Candidates; only one of them becomes the canonical Ideal, which is why
+    // the separation is observed on the composition rather than on the result.
+    const composedHashes: string[] = []
+    await searchCandidates(input, engine, {
+      ...deterministicExecution,
+      createCandidateId: ({ semanticHash }) => {
+        composedHashes.push(semanticHash)
+        return `candidate.${semanticHash}` as BuildCandidate['id']
+      },
+    })
 
-    expect(new Set(sources).size).toBe(2)
+    // Two composed Candidates with different semantic identities: the source
+    // OwnedWeapon is part of the Route, so one base never absorbs the other.
+    expect(new Set(composedHashes).size).toBe(2)
   })
 })

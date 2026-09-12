@@ -26,9 +26,9 @@ Candidate Search再設計の背景、実測値、採用しなかった案、受�
 - Normal / Gogma / Skillは独立RNG streamとして独立に探索する
 - Bonus結果とSkill結果のCartesian productを列挙しない
 - 現在状態が既に理想条件を満たすstreamは探索しない
-- 妥協条件があるTargetの初回検索は、canonical Idealと、その操作数以下のPractical評価（inclusive Practical horizon）を確定した時点で終了する
-- Practical Bonus・Alternative Rule・Practical Skillがすべて未設定ならIdeal-only Searchとし、canonical Idealの同順位を確定するための探索は維持するが、Practical horizonは評価しない（5.6.2）
-- 保持集合を実装上の発見順へ依存させない
+- 初回検索はcanonical Idealを1件確定した時点で終了する。Searchは常にIdeal-onlyである
+- 妥協状態は独立したCandidateではなく、canonical Ideal Routeのstrict prefixに現れるcheckpointである（5.7 / 5.8）
+- canonical Idealの選択を実装上の発見順へ依存させない
 - 理想品は実用ラインも必ず満たす(Ideal ⇒ Practical 包含不変条件)
 - Planner競合対策の先読みは初回検索の責務ではない
 
@@ -39,9 +39,8 @@ Candidate Search再設計の背景、実測値、採用しなかった案、受�
 ```ts
 export interface CandidateSearchInput {
   searchRunId: string;
-  targetWeaponIds: TargetWeaponId[];
+  targetWeaponId: TargetWeaponId;
   routeFilter: CandidateRouteFilter;
-  resultFilter: CandidateResultFilter;
   rngState: RngState;
   normalCounters: NormalArtianCounter[];
   ownedWeapons: OwnedWeapon[];
@@ -58,18 +57,10 @@ export type CandidateRouteFilter =
   | "normal_artian"
   | "existing_gogma";
 
-export type CandidateResultFilter =
-  | "all"
-  | "ideal"
-  | "practical"
-  | "similar";
-
 export interface CandidateSearchSettings {
   maxNormalAdvance: number;
   maxGogmaAdvance: number;
   maxSkillAdvance: number;
-  maxCandidatesPerTarget: number;
-  similarityThreshold: number;
 }
 
 export interface SearchMasterSubset {
@@ -96,8 +87,6 @@ const defaultCandidateSearchSettings = {
   maxNormalAdvance: 1000,
   maxGogmaAdvance: 200,
   maxSkillAdvance: 1000,
-  maxCandidatesPerTarget: 200,
-  similarityThreshold: 0.6,
 };
 ```
 
@@ -112,8 +101,7 @@ Gogma   200 ≈ 1961 ms
 
 `5000 / 5000 / 5000` は近傍にIdealがあれば数ms〜数十msで終わるが、Idealが無い場合は
 60秒でも完了しなかった。これは上限機能の削除ではなく初期値の変更であり、
-ユーザーは詳細設定で各上限を引き上げられる。探索algorithm、canonical Ideal、
-Practical horizonは変更していない。
+ユーザーは詳細設定で各上限を引き上げられる。
 
 制約。
 
@@ -124,11 +112,11 @@ Practical horizonは変更していない。
 - input supportがfalseの場合は、該当Route、operation、またはsourceの最小単位だけを正常系としてskipし、他のsupported探索を継続する
 - support queryの予期しない例外、またはsupport=true確認後のPrediction例外は通常skipへ変換せず、既存Search / Worker error経路へ伝播する
 - すべての選択Routeが実行不能な場合のみ検索を開始不可とする
-- `targetWeaponIds` は `isEnabled = true` のTargetWeaponのみ
+- `targetWeaponId` は単一のTargetWeaponを指す。1 requestで検索するTargetはちょうど1件であり、`isEnabled = true` でなければならない
+- 存在しないTarget、`isEnabled = false` のTarget、Ideal implies Practical不変条件を満たさないTargetは、Candidateを返さず `CandidateSearchWarning` として報告する
 - `max*Advance` は1以上
 - `maxNormalAdvance` は既存設定・既存UIの意味を維持した「最大forge回数」であり、最大0-based offsetではない。探索する `candidateOffset` は `0 ... maxNormalAdvance - 1`
-- `maxCandidatesPerTarget` は1以上
-- `similarityThreshold` は0以上1以下
+- 出力上限 (`maxCandidatesPerTarget`) と近似閾値 (`similarityThreshold`) は存在しない。Searchが返すCandidateはcanonical Ideal 1件以下であり、上限で打ち切る対象がない
 
 ### 3.1 探索量設定の正式な意味
 
@@ -185,16 +173,14 @@ Reset上限は常にMであり、余分な1位置はconversionの初回Skill付�
 export interface CandidateSearchResult {
   searchRunId: string;
   calculationContext: CalculationContext;
-  targetResults: TargetCandidateSearchResult[];
-  relaxationSuggestions: RelaxationSuggestion[];
+  targetResult: TargetCandidateSearchResult;
   warnings: CandidateSearchWarning[];
   elapsedMs: number;
-  isTruncated: boolean;
 }
 
 export interface TargetCandidateSearchResult {
   targetWeaponId: TargetWeaponId;
-  candidates: BuildCandidate[];
+  candidate: BuildCandidate | null;
   searchedRoutes: RouteKind[];
   skippedRoutes: SkippedRoute[];
 }
@@ -249,6 +235,24 @@ Production Searchはroute-local / operation-local supportを維持し、RngState
 
 ---
 
+### 4.1 検索対象Targetの選択
+
+`targetWeaponId` が指すTargetWeaponだけを検索する。存在しない、`isEnabled = false`、
+またはIdeal implies Practical不変条件を満たさないTargetは、
+`targetResult.candidate = null`、`searchedRoutes = []`、`skippedRoutes = []` の
+空結果と `severity: "warning"` の通知として返す。request自体は成立しているため
+errorにはせず、UIは理由を表示する。
+
+### 4.2 出力上限の不在
+
+`targetResult.candidate` はcanonical Ideal 1件または `null` である。
+出力上限で候補を切り落とす概念は存在しないため、`isTruncated` も
+`relaxationSuggestions` も返さない。Idealが見つからなかった場合は
+「現在の探索範囲ではIdealが見つからなかった」であり、
+「このTargetにIdealが存在しない」ではない。
+
+---
+
 保護契約の改訂により、現行CalculationContext.appSchemaVersionは **7**。
 単一authorityは src/domain/models/common.ts の CURRENT_CALCULATION_APP_SCHEMA_VERSION。
 Search、BuildList、Planner、benchmark runtime creatorで共用する。
@@ -285,48 +289,38 @@ Idealの5枠完全一致は `finalBonusScope = "gogma_artian"` (実装の `resto
 category = "ideal"
 ```
 
-## 5.2 実用判定
+## 5.2 妥協判定
 
 Bonus Match=ideal / practical / alternative、Skill Match=ideal / practicalを独立評価する。
-Bonus / Skill両方Idealならcategory=ideal、それ以外の受理組み合わせはcategory=practical。
+Bonus / Skill両方Idealなら理想品、それ以外の受理組み合わせは「妥協状態」である。
 BonusのPracticalとAlternativeは非併用、Skillとの組み合わせは許可する。
 すべてのBonus Matchはgogma_artian scopeを要求する。通常由来scopeは未達であり、Reset探索を継続する。
 詳細はDATA_MODEL 8とTARGET_COMPROMISE_SEMANTICS.md。
 妥協条件なしならIdealだけを受理し、両ID=nullのPractical Skillをwildcardとして扱わない。
 
-## 5.3 近似判定
-
-近似はCandidateCategoryではなく、実用品の理想への近さを表す別属性とする。
-
-```text
-category = practical
-AND similarityScore >= settings.similarityThreshold
-```
-
-算出。
+妥協状態は独立したCandidateではない。5.7と5.8の通り、canonical Ideal Routeの
+strict prefixとして到達する妥協状態だけがcheckpointになる。
 
 ```ts
-const comparableItemCount = 5 + specifiedIdealSkillCount;
-const matchedItemCount =
-  idealDifference.matchedBonusCount +
-  matchedSpecifiedIdealSkillCount;
-
-similarityScore = matchedItemCount / comparableItemCount;
-isSimilarToIdeal =
-  category === "practical" &&
-  similarityScore >= settings.similarityThreshold;
+export interface CompromiseConditionMatch {
+  bonus: "ideal" | "practical" | "alternative";
+  skill: "ideal" | "practical";
+}
 ```
 
-注意。
+両軸がidealの組み合わせは理想品そのものであり、`CompromiseConditionMatch` としては
+存在しない。`evaluateCompromiseCheckpointCondition()` がこの判定authorityであり、
+両軸idealまたは受理不能な状態に対して `null` を返す。
 
-- `specifiedIdealSkillCount` は理想条件で指定されたseries / groupの件数
-- `matchedSpecifiedIdealSkillCount` はそのうち一致した件数
-- scope mismatchはIdealDifferenceの新項目やSimilarityの減点にしない。ただしnormal scopeはCandidateとして受理しない
-- ideal候補は `isSimilarToIdeal = false` とし、近似フィルタへ重複表示しない
-- UIの「近似」は `category = "practical" AND isSimilarToIdeal = true` を抽出する
-- 実用ラインを満たさない「惜しい候補」は初期版では原則表示しない
-- 将来版で「惜しいが未実用」のカテゴリを追加する場合は別仕様とする
-- `normal_artian` Filterは新規通常アーティア作成経由と所持通常アーティア経由の両方を対象とする
+## 5.3 近似判定の廃止
+
+近似 (similarity) の概念は存在しない。`similarityScore`、`isSimilarToIdeal`、
+`similarityThreshold`、およびSearch UIの「近似」フィルタはすべて削除した。
+
+Targetの妥協条件（Practical Bonus、Alternative Rule、Practical Skill）が
+「どこまでなら受け入れるか」の唯一のauthorityであり、Idealへの近さを測る
+スコアがそれを代替することはない。`IdealDifference` は表示用の差分説明として
+残るが、受理判定にも順序付けにも参加しない。
 
 ## 5.4 Stream分離と条件の独立評価
 
@@ -357,18 +351,10 @@ Bonus側 : missingBonuses, extraBonuses, matchedBonusCount
 Skill側 : seriesSkillMatches, groupSkillMatches
 ```
 
-`similarityScore` は両者の加算である。
-
-```text
-similarityScore =
-  (matchedBonusCount + matchedSpecifiedIdealSkillCount)
-  / (5 + specifiedIdealSkillCount)
-```
-
 したがってCandidate Searchは、Bonus結果とSkill結果を先に独立評価し、
-最後に定数時間で合成できる。合成後の最終 `category`、`idealDifference`、
-`similarityScore`、`isSimilarToIdeal` は、従来どおり既存のTarget評価器が返す値と
-一致しなければならない。分解評価は最適化であり、判定semanticsの変更ではない。
+最後に定数時間で合成できる。合成後の理想判定と `idealDifference` は、
+既存のTarget評価器が返す値と一致しなければならない。分解評価は最適化であり、
+判定semanticsの変更ではない。
 
 Candidate Searchの制御構造は、この独立性を保存する。
 
@@ -587,24 +573,24 @@ Planner競合は、5.6.5のPlanner-driven constrained re-searchで必要時に�
 軸外pairの評価は5.6.7のconstrained enumerationだけの拡張であり、本節の初回合成規則を
 変更しない。
 
-妥協なしではidealのみ、妥協ありではcategory `c` ごとに、その category のBonus述語を満たす解を5.5.3のorderingで並べたものを
-`B(c)`、Skill述語を満たす解を5.5.2のorderingで並べたものを `K(c)` とする。
+Ideal Bonus条件を満たす解を5.5.3のorderingで並べたものを `B`、
+Ideal Skill条件を満たす解を5.5.2のorderingで並べたものを `K` とする。
 `b0` / `k0` は各streamのdeterministic orderingで一意に決まり、
 RouteKindの評価順やPromiseの解決順に依存してはならない。
 
 ```text
-b0 = B(c)[0]      Bonus anchor
-k0 = K(c)[0]      Skill anchor
+b0 = B[0]      Bonus anchor
+k0 = K[0]      Skill anchor
 
-Candidate(c) = { (B(c)[i], k0) | i = 0 ... |B(c)| - 1 }
-             ∪ { (b0, K(c)[j]) | j = 0 ... |K(c)| - 1 }
+Candidate = { (B[i], k0) | i = 0 ... |B| - 1 }
+          ∪ { (b0, K[j]) | j = 0 ... |K| - 1 }
 ```
 
-生成件数は `|B(c)| + |K(c)| - 1` であり、`|B(c)| × |K(c)| ` ではない。
+生成件数は `|B| + |K| - 1` であり、`|B| × |K|` ではない。
 
 規則。
 
-- `B(c)` または `K(c)` が空なら、そのRoute baseからcategory `c` の候補を生成しない
+- `B` または `K` が空なら、そのRoute baseから候補を生成しない
 - Bonus軸の候補はSkill anchorを固定し、Skill軸の候補はBonus anchorを固定する
 - 両軸から外れた `(B(c)[i], K(c)[j])`(`i > 0` かつ `j > 0`)は生成しない
 - Bonus候補 × Skill候補の直積を列挙しない。総操作数順のpriority queueなどで
@@ -613,15 +599,15 @@ Candidate(c) = { (B(c)[i], k0) | i = 0 ... |B(c)| - 1 }
 - 合成した操作列は「Bonus操作列 → Skill操作列」の順で1本の `BuildRoute.operations` へ記録する。
   Counterはstreamごとに独立に保持し、`estimatedGogmaAdvance = d`、
   `estimatedSkillAdvance` は既存巨戟Routeで `r`、conversionを含むRouteで `r + 1` とする
-- 合成後の `category` は必ず既存のTarget評価器が決定する。上記の `c` は生成対象を選ぶための
-  分類であり、最終categoryを上書きしない。理想条件を満たす合成結果は `ideal` を優先する
-- 軸候補の重複と、`ideal` 系列と `practical` 系列が同じ操作列を生む場合の重複は、
-  7章の既存重複排除で1件へ畳む
-- `resultFilter` は出力段のフィルタであり、stream探索・解集合・合成規則へ影響しない。
-  `similar` を選んでもideal解の探索を省略しない
+- 合成結果が理想品であることは必ず既存のTarget評価器が確認する。満たさない合成結果は
+  Candidateにしない
+- 軸候補の重複は7章の既存重複排除で1件へ畳む
+- `routeFilter` はRouteグループを選ぶ入力であり、stream探索・解集合・合成規則の意味を
+  変えない
 
 Cross規則と5.5.2 / 5.5.3のstream-local retention / orderingはB3で実装済みである。
-5.5.6のPractical dominance、5.5.7のIdeal枠確保、5.6.2の実探索終了条件、5.6.3のrun非依存canonical IdealはB4で実装済みである。
+5.6.2の実探索終了条件と5.6.3のrun非依存canonical IdealはB4で実装済みである。
+妥協状態の扱いは5.7 / 5.8のcheckpointモデルへ移した。
 
 ### 5.5.5 操作0の扱い
 
@@ -635,187 +621,32 @@ Cross規則と5.5.2 / 5.5.3のstream-local retention / orderingはB3で実装済
 - 通常アーティア経由と所持通常アーティア経由は `create_normal_artian` /
   `convert_normal_to_gogma` を必ず含むため、`d = 0` かつ `k = 0` でも操作列は空にならない
 
-### 5.5.6 Practical候補の保持とdominance規則
+### 5.5.6 Cross合成はIdeal軸だけを取る
 
-Practicalは「最良の1件だけ」に絞らない。
-5.5.6.0のhorizon内で到達可能なPractical候補のうち、
-明確に他候補の下位互換でないものは列挙する。
-
-#### 5.5.6.0 Practical保持のdeterministic search horizon
-
-保持範囲を実装上の発見順へ依存させてはならない。best-first、branch-and-bound、
-RouteKindの評価順、Promiseの解決順のいずれを変えてもPractical集合が変わらないこと
-を契約とする。
+Cross規則が取るBonus軸とSkill軸は、いずれも当該Route baseの **Ideal解** だけである。
 
 ```text
-canonical Ideal の estimatedOperationCount = D
-
-初回Searchでは
-  estimatedOperationCount <= D
-で到達可能なPracticalをPractical保持の評価対象とする。
-
-その集合へ5.5.6の保守的dominanceを適用し、非劣位Practicalを保持する。
+B(c) = そのRoute baseでIdeal Bonus条件を満たすBonus stream解
+K(c) = そのRoute baseでIdeal Skill条件を満たすSkill stream解
+合成数 = |B| + |K| - 1
 ```
 
-- 操作数がちょうど `D` のPracticalも評価対象に含める
-- canonical Idealが探索上限内に存在しない場合は、設定された探索範囲
-  (`maxGogmaAdvance` / `maxSkillAdvance` / `maxNormalAdvance`)内で評価できた
-  Practicalへ同じ非劣位保持規則を適用する
-- 「たまたまIdealを先に発見したので、それより近いPracticalを評価しなかった」
-  という結果を許可しない
-- canonical Ideal確定後に `D` を超える遠方Practicalまで探索を広げる必要はない
-- 5.5.7の `maxCandidatesPerTarget` によるbounded保持契約は維持する
+妥協状態はCross合成に参加しない。合成されたCandidateは常に理想品であり、
+妥協状態はそのRouteのstrict prefixとしてcheckpointに現れるだけである。
 
-このhorizonは探索の停止条件ではなく保持の評価範囲である。
-探索自体の終了条件は5.6.2に従う。
+この帰結として、Ideal Bonus multisetは定義上1種類しかないため、stream-local retentionを
+経た `|B|` は通常1になる。`|K|` は、Ideal Skill条件がGroup Skillを拘束しない場合などに
+1を超えうる。off-axis cell (`i > 0 AND j > 0`) は両軸が2件以上ある場合にだけ存在する。
 
-候補Aを候補Bで削除してよいのは、BがAに対して**確実なPareto dominance**を持つ場合だけである。
-判定は保守的に、狭く定義する。
+旧来のPractical候補保持、Practical horizon、Practical dominance、
+`practicalDominates()` はすべて削除した。妥協状態の取捨選択は5.8の
+checkpoint grouping、および5.8.4の表示専用dominanceが引き継ぐ。
 
-BがAを支配するのは、次のすべてを満たす場合に限る。
+### 5.5.7 出力上限の不在
 
-```text
-1. Bonus結果として B >= A   (5.5.6.1 のrank multiset比較)
-2. Series Skill と Group Skill が一致
-3. sourceOwnedWeaponId が一致
-4. destructive / non-destructive の別が一致
-5. estimatedOperationCount   B <= A
-6. estimatedGogmaAdvance     B <= A
-7. estimatedSkillAdvance     B <= A
-8. estimatedNormalAdvance    B <= A   (両方 null か、両方数値)
-9. アイテム素材が component-wise で B <= A   (5.5.6.2)
-10. 上記のいずれかで B < A   (完全同値なら7章の重複排除に委ねる)
-```
-
-```text
-削除してよい例
-  A: 攻撃II を含む Practical
-  B: 攻撃III を含む Practical
-  同一Bonus Type構成 / 同一Skill / 同一起点 / 操作・Counter・アイテム素材でBが不利でない
-  -> A を落として B だけ残す
-```
-
-#### 5.5.6.1 Bonus rank dominanceはmultisetで判定する
-
-完成Bonusはmultisetとして評価し、slot順そのものに完成性能上の意味を持たせない。
-したがってrank比較をslot indexへ依存させてはならない。
-
-判定手順。
-
-```text
-1. A と B の 5枠を bonusTypeId ごとにグループ化する
-2. bonusTypeId の集合と、各 bonusTypeId の出現数が A と B で一致しない場合
-   -> 比較不能 (異なるBonus Type構成)
-3. 各 bonusTypeId について、Master の rank ordering で正規化した
-   rank vector を降順ソートして sortedRanks(A) / sortedRanks(B) を作る
-4. すべての bonusTypeId、すべての i について
-       sortedRanks(B)[i] >= sortedRanks(A)[i]
-   が成立し、かつ少なくとも1要素で厳密に上位なら B >= A かつ B != A
-5. すべて同位なら Bonus結果として同値
-6. どこかで sortedRanks(B)[i] < sortedRanks(A)[i] なら比較不能
-```
-
-```text
-例 (bonusTypeId = 攻撃 の枠が2つ)
-  A: [III, II]   B: [EX, II]   -> B が上位
-  A: [III, II]   B: [EX, I ]   -> 比較不能 (2要素目でBが下位)
-```
-
-Masterのrank orderingで安全に比較できない `ArtianBonusScope` / `bonusTypeId` が
-ある場合は、推測せず比較不能とする。異なるBonus Type構成は従来どおり比較不能である。
-
-#### 5.5.6.2 アイテム素材はmaterialId単位のcomponent-wise比較で判定する
-
-アイテム素材必要量の**合計個数**だけで優劣を判定してはならない。
-異なる `materialId` 同士の価値をSearchが推測してはならない。
-
-```text
-全 materialId について
-  quantity(B, materialId) <= quantity(A, materialId)
-```
-
-出現しない `materialId` の quantity は 0 として扱う。
-
-```text
-A: material.X ×2
-B: material.X ×1
--> B がアイテム素材面で上位
-
-A: material.X ×2
-B: material.Y ×1
--> 比較不能
-
-A: X×2, Y×1
-B: X×1, Y×2
--> trade-off なので比較不能
-```
-
-5.5.3のstream-local anchor orderingにある「アイテム素材必要量合計」は、
-同一 `gogmaAdvance` かつ同一 ideal closeness の解を決定的に並べるための
-tie-breakにすぎない。**Practical dominanceの判定には使用しない**。
-両者は別物である。
-
-比較不能として両方保持する例。
-
-```text
-A: 会心率EX を含む Practical
-B: 属性EX   を含む Practical
--> Bonus Type構成が異なる。ゲーム性能上の優劣を仕様から決定できない
-```
-
-禁止事項。Search側が次のような主観的・未定義な性能比較を行ってはならない。
-
-- 会心率の方が属性より強い
-- 攻撃の方が会心より価値が高い
-- あるSeries SkillがほかのSeries Skillより優れている
-
-次の場合は原則としてすべて比較不能とする。
-
-- 異なるBonus Type構成
-- 異なるSkill構成
-- 異なるsourceOwnedWeapon
-- destructive / non-destructive が異なる
-- 一方がCounter上近いが、もう一方が結果として強い
-
-同一の完成結果が異なるCounter位置に存在する場合(たとえば `+10` と `+80`)、
-`+10` を `+80` の完全上位互換として扱ってはならない。Plannerは
-`counterBefore` と runtime counter の一致を要求するため、両者はPlanner上
-異なる意味を持つ。初回検索が `+80` を出力しないのは支配されたからではなく、
-初回Searchの保持・出力対象から省略しているからである(5.6.4参照)。
-
-### 5.5.7 `maxCandidatesPerTarget` の意味
-
-`maxCandidatesPerTarget` は、Idealを探す前に検索自体を止める件数として扱わない。
-
-理想的な保持内容は次である。
-
-```text
-保持 = 5.5.6.0のhorizon内の非劣位Practical + canonical Ideal
-```
-
-`maxCandidatesPerTarget` は非劣位Practicalが非常に多い場合の安全上限として機能する。
-horizonの決定(5.5.6.0)には関与せず、horizon内で確定した非劣位集合を
-出力段でboundedにするだけである。`maxCandidatesPerTarget` に達したことを理由に
-horizon内のPractical評価を打ち切ってはならない。
-
-規則。
-
-- Practical保持集合を `maxCandidatesPerTarget` でboundedにする
-- Practical保持集合が上限に達しても、Ideal探索は5.6の終了条件または探索上限まで継続する
-- Idealを発見した場合は必ず結果へ含める。上限超過時は8章の並び順で最下位のPractical候補を
-  置換する。これによりIdeal用の枠を常に確保する
-- Practicalを溢れさせる場合は8章の並び順で下位から落とす
-- `maxCandidatesPerTarget` の型・既定値・検証範囲は変更しない
-
-`isTruncated` は、`maxCandidatesPerTarget` によるbounded retentionで、
-現在の `resultFilter` に該当する保持候補が1件以上除外された場合にtrueとする。
-horizon / dominance適用後のcap前保持集合をfilterした件数と、cap後の集合を
-同じfilterで絞った件数を比較する。Ideal枠確保によるPracticalの除外も含む。
-filterは探索・保持集合・終了位置に影響しない。
-
-canonical Idealによる探索終了、Practical horizon外、dominance、
-stream-local retention、family frontier dedup、Cross policyによる省略は
-truncationに含めない。
+`maxCandidatesPerTarget` は存在しない。1 Target 1 requestが返すCandidateは
+canonical Ideal 1件以下であり、切り落とす対象がない。表示上の件数制御は
+5.8.4のcheckpoint表示dominanceが担当し、Domainのopportunityは削除しない。
 
 ## 5.6 探索継続と初回Search終了条件
 
@@ -852,7 +683,7 @@ BonusとSkillで同一の原則を適用する。
 
 Ideal既達成streamの早期終了は、[DATA_MODEL.md](./DATA_MODEL.md) 8.1の
 Ideal ⇒ Practical 包含不変条件に依存する。Idealを満たす現在状態はPracticalも必ず
-満たすため、そのstreamについて将来探索で得られる上位categoryは存在しない。
+満たすため、そのstreamについて将来探索で得られるより良い状態は存在しない。
 
 **実装順の制約。** この早期終了はTargetWeapon validationが包含を保証してから
 実装する。validation有効化前に導入すると、包含を満たさない不正Targetに対して
@@ -873,34 +704,24 @@ Bonus streamの早期終了はB2で実装済みである。
 - normal scopeではラベル5/5が一致してもBonus Idealではない。conversion直後や継承Bonusを
   持つ既存巨戟について、Reset PredictionがsupportedならGogma-scope Idealの探索を継続する
 - 片方のstreamがIdeal既達成でも、もう片方のstreamの探索は独立に継続する
-- Practicalのみ満たす状態から探索を打ち切ると、Ideal候補を失うため打ち切らない
+- 妥協条件だけを満たす状態で探索を打ち切ると、Ideal候補を失うため打ち切らない
 
 ### 5.6.2 初回Candidate Searchの終了条件
 
-妥協なしTargetはIdeal-only modeとする。Practical Bonus・Alternative Rule・Practical Skillの
-すべてが未設定ならPractical axisを生成せず、Practical horizon評価を要求しない。
-canonical Ideal同順位の確定に必要な探索は維持する。以下のPractical horizon契約は妥協ありTargetだけに適用する。
-
-初回Candidate Searchは、canonical Idealを1件確定し、その操作数 `D` までの
-Practical評価を完了した時点で通常探索を終了する。
+初回Candidate Searchは、canonical Idealを1件確定した時点で通常探索を終了する。
 
 ```text
 探索開始
-  -> canonical Idealを確定 (操作数 D)
-  -> estimatedOperationCount <= D のPracticalを評価対象として確定
-  -> 5.5.6のdominanceを適用して非劣位Practicalを保持
-  -> Idealを保持
+  -> canonical Idealを確定
+  -> そのRouteのstrict prefixからcheckpointを抽出 (5.8)
   -> 通常探索終了
 ```
 
-終了はcanonical Idealの発見だけでは成立しない。`D` 以下のPractical評価対象が
-すべて確定していなければならない。best-firstで操作数昇順に走査する実装なら、
-`D` を確定した時点でこの条件は自動的に満たされる。branch-and-bound実装なら、
-上界 `D` の枝刈りを維持したまま `D` 以下の枝を走査し切る必要がある。
+Idealが探索範囲内に見つからない場合だけ、`max*Advance` の上限まで探索する。
+その場合の結果はCandidate 0件であり、checkpointも0件である（5.7）。
 
-`maxGogmaAdvance` / `maxSkillAdvance` / `maxNormalAdvance` は探索範囲の上限であり、
-Idealが見つからない場合の停止条件として機能する。Idealが見つかった場合は
-上限に達する前に終了してよい。
+妥協条件の有無は終了条件を変えない。妥協条件はcheckpointの有無だけを変え、
+探索範囲、RNG Prediction呼び出し回数、canonical Idealの選択には影響しない。
 
 ### 5.6.3 canonical Idealの定義
 
@@ -922,8 +743,7 @@ canonical Ideal = 全Route base・全RouteKindを通じたIdeal候補のうち�
 5. candidateStableKey 昇順
 ```
 
-`category` はIdealで同一、`similarityScore` と `matchedBonusCount` はIdeal候補間で
-最大値に張り付くため、順位はこの5キーで決まる。
+Candidateは常に理想品なので、品質を測る追加キーは存在せず、順位はこの5キーで決まる。
 
 #### canonical Idealのstable tie-break
 
@@ -1026,14 +846,13 @@ B8-AでPlanner-driven constrained re-searchの正式契約を確定した。Plan
 [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2、Search Domain側のenumeration契約は5.6.7に
 定義する。実装はB8-B1以降で行う。
 
-### 5.6.6 `resultFilter` の位置づけ
+### 5.6.6 `resultFilter` の廃止
 
-`resultFilter` は最終表示・出力のフィルタである。
+`resultFilter` は存在しない。Searchが返すのはcanonical Ideal 1件以下であり、
+表示側で選り分けるcategoryがないためである。妥協状態の表示の出し分けは
+5.8のcheckpoint group表示（primary / secondary、その他の到達点）が担当する。
 
-- `ideal` / `practical` / `similar` のいずれを選んでも、stream探索の意味、
-  Ideal探索の継続規則、5.6.2の終了条件は変わらない
-- `practical` や `similar` を選んでもIdeal探索を打ち切らない
-- `ideal` を選んでもPractical保持集合の構築を省略しない
+`routeFilter` は従来どおり機能する。
 
 ### 5.6.7 Planner-driven constrained candidate enumeration
 
@@ -1069,7 +888,6 @@ export interface ConstrainedCandidateSearchInput {
 
 export interface ConstrainedCandidate {
   targetWeaponId: TargetWeaponId;
-  category: CandidateCategory;
   finalBonuses: RestorationBonusSet;
   restorationBonusScope: RestorationBonusScope;
   seriesSkillId: SeriesSkillId | null;
@@ -1083,7 +901,6 @@ export interface ConstrainedCandidate {
   requiredMaterials: MaterialRequirement[];
 
   idealDifference: IdealDifference;
-  similarityScore: number | null;
 
   searchStateHash: string;
   referencedOwnedWeaponsHash: string | null;
@@ -1148,39 +965,31 @@ B8 constrained re-searchは過去のUI一時filterを継承しない。正式pol
 
 ```text
 route scope     = 現時点で成立する全Search route
-resultFilter    = 適用しない
-similar filter  = 適用しない
-maxCandidates   = 適用しない
 advance bounds  = ConstrainedEnumerationBounds をauthorityとする
 ```
 
 - `CandidateRouteFilter` を `origin` へ持たせない。現在のRNG値、Engine capability、
   input support、所持武器から成立するRouteをすべて対象にする
-- `CandidateResultFilter` を適用しない。`ideal` / `practical` / `similar` の
-  出力filterはUI表示用であり、Plannerの共存可能性判定を狭めてはならない
-- `isSimilarToIdeal` によるsimilar filterを適用しない
-- `maxCandidatesPerTarget` を適用しない。件数上限は初回Searchの保持policyであり、
-  constrained enumerationの上限は `ConstrainedEnumerationBounds` が担う
 - 探索範囲の上限は `ConstrainedEnumerationBounds` だけをauthorityとする。
   `CandidateSearchSettings` を参照しない
 
-TargetのIdealまたはPractical条件を満たすCandidateだけをyieldする契約は維持する。
-route policyが広がっても、条件を満たさないCandidateはyieldしない。
+**yieldするのはIdeal Candidateだけである。** constrained re-searchは、Plannerが
+固定したCandidateのもとで「そのTargetのIdealへ到達する別の方法」を探す仕組みであり、
+妥協状態を独立したCandidateとして提案する仕組みではない。妥協状態をここでyieldすると、
+Plannerが妥協専用のBuildListEntryを生成することになり、35章の禁止事項に反する。
 
-このpolicyは通常Candidate Searchの `routeFilter` / `resultFilter` 契約
-(3章 / 4章 / 5.6.6)を変更しない。両者は別の境界である。
+このpolicyは通常Candidate Searchの `routeFilter` 契約(3章 / 4章)を変更しない。
+両者は別の境界である。
 
 #### enumerator outputはBuildCandidateではない
 
 B8-B1のenumeratorは `BuildCandidate` を直接yieldしない。Search Domainのtransientな
 semantic resultである `ConstrainedCandidate` をyieldする。
 
-理由。`BuildCandidate` は `id` / `searchRunId` / `createdAt` / `isSimilarToIdeal` /
-`similarityScore` を必須とし、通常Searchのcandidate factoryは
-`CandidateSearchInput.searchRunId` と `CandidateSearchSettings.similarityThreshold`
-から埋める。一方 `ConstrainedSearchOrigin` は意図的に `searchRunId` / `settings` /
-`routeFilter` / `resultFilter` を持たない。したがってenumeratorは `BuildCandidate`
-を完成させられない。
+理由。`BuildCandidate` は `id` / `searchRunId` / `createdAt` を必須とし、
+通常Searchのcandidate factoryは `CandidateSearchInput.searchRunId` から埋める。
+一方 `ConstrainedSearchOrigin` は意図的に `searchRunId` / `settings` /
+`routeFilter` を持たない。したがってenumeratorは `BuildCandidate` を完成させられない。
 
 次のrun / persistence metadataをB8-B1 enumeratorのsemantic resultへ混ぜない。
 
@@ -1192,9 +1001,6 @@ random / request ID
 Clock
 enumeration ordinal
 ```
-
-`ConstrainedCandidate` は `similarityScore` を持つが `isSimilarToIdeal` を持たない。
-`isSimilarToIdeal` はthresholdを適用した表示メタデータであり、materialize時に決まる。
 
 具体的な名称と必要最小fieldはB8-B1で微調整してよいが、この分離を変更しない。
 通常の `BuildCandidate` 形状への変換はB8-Cのdeterministic materializerが行う
@@ -1216,26 +1022,11 @@ BuildCandidate.id
 BuildCandidate.createdAt
   = PlannerClock
 
-similarityScore
-  = 既存Similarity計算式 (5.3)
-
-isSimilarToIdeal
-  = 現行B6既定similarity threshold 0.6 を使って算出
+BuildCandidate.checkpointGroups
+  = 5.8のcheckpoint抽出をそのCandidateへ適用した結果
 ```
 
-`0.6` は表示メタデータ `isSimilarToIdeal` を埋めるためだけに使う。次には使用しない。
-
-```text
-Candidate yield可否
-Candidate enumeration ordering
-route scope
-探索終了
-探索範囲
-off-axis評価
-Planner coexistence
-```
-
-すなわち `CandidateSearchSettings` は、constrained enumerationのfilter authorityでも
+`CandidateSearchSettings` は、constrained enumerationのfilter authorityでも
 extent authorityでもない。この点は前掲のroute policyと同じである。
 
 通常Candidate Searchの `searchRunId` 契約と `BuildCandidate` ID生成規則は変更しない。
@@ -1315,16 +1106,14 @@ canonical Idealによる探索終了
 #### 要求
 
 - 同一結果の後続Counter位置解を列挙できる
-- Practical dominance(5.5.6)を適用しない
 - canonical Ideal(5.6.3)で探索を終了しない
-- 初回Practical horizon(5.5.6.0)を適用しない
-- TargetのIdealまたはPractical条件を満たすCandidateだけをyieldする
+- TargetのIdeal条件を満たすCandidateだけをyieldする
 - deterministicである
 - finite boundsを持つ
 - cancellation可能である
 - Worker yield可能である
 - Production RNGのinput-level support契約を維持する
-- normal scope Keep predictionは引き続きunsupportedとして扱う(5.7)
+- normal scope Keep predictionは引き続きunsupportedとして扱う(5.9)
 - B2のfamily-layout frontier dedup(5.5.3)を維持する
 - route-history完全探索へ拡張しない
 
@@ -1375,7 +1164,121 @@ B8 constrained materializerはこの経路を流用せず、deterministic constr
 identityを基点とする専用契約で `searchRunId` と `id` を決める(前掲のmaterialize契約、
 [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.13)。両者は別の境界であり矛盾しない。
 
-## 5.7 normal scope Keepのgame legalityとprediction support
+## 5.7 Candidate出力はcanonical Idealだけである
+
+1 Target 1 requestの出力は、canonical Ideal Candidate 1件または `null` である。
+
+```text
+Idealが探索範囲内に存在する    -> canonical Ideal 1件 + そのRouteのcheckpoint
+Idealが探索範囲内に存在しない  -> Candidate 0件。checkpointも0件
+```
+
+妥協状態を独立したCandidateとして返すことはない。Idealが見つからなかった場合、
+妥協状態に到達できることが分かっていてもCandidateは0件である。理由は、
+妥協状態は「理想品へ向かう1本の物理Routeの途中状態」としてしか意味を持たず、
+その先へ続くRouteが存在しない妥協状態は、continuation可能なcheckpointではなく
+単なる行き止まりだからである。
+
+UIは「現在の探索範囲では理想品が見つかりませんでした」と表示する。
+「このTargetに理想品は存在しません」と表示してはならない。探索範囲上限を上げれば
+見つかる可能性を否定していないためである。
+
+## 5.8 canonical Ideal Routeのcompromise checkpoint
+
+canonical Ideal CandidateのRouteのうち、Targetの妥協条件を満たす **strict prefix**
+の到達状態だけをcheckpointとして提示する。
+
+### 5.8.1 strict prefixとpure replay
+
+対象はcanonical Ideal Route自身の操作列 `operations[0 .. n-1]` のうち
+`operations[0 .. i]`(`i < n - 1`)を実行し終えた状態である。最終操作 `n - 1` は
+理想品を完成させる操作なのでcheckpointにならない。
+
+状態の再構成は **既存の観測traceのpure replay** で行う。
+
+```text
+Route baseの5枠とSkill  <- BuildRoute.sourceOwnedWeaponId のOwnedWeapon
+reset / keep の結果      <- BuildCandidate.bonusAmendmentTrace
+reset_skills の結果      <- BuildCandidate.skillAmendmentTrace
+巨戟化時の初期Skill      <- BuildCandidate.conversionSkillTrace
+```
+
+したがってcheckpoint抽出は `predictGogmaBonus` / `predictSkills` /
+`predictNormalArtian` を **1回も追加で呼ばない**。UI / presentation /
+CandidateCardも、checkpointを描画するためにRNG Engineを再実行してはならない。
+
+記録が存在しない状態（blind forgeの5枠、trace以前に永続化されたCandidateなど）は
+`known: false` として扱い、checkpointにしない。値を捏造しない。
+
+replayした最終状態がCandidate自身の `finalBonuses` / `restorationBonusScope` /
+`seriesSkillId` / `groupSkillId` と食い違う場合は内部不整合であり、
+loudly失敗する。短い方へ切り詰めない。
+
+### 5.8.2 2層モデル : groupとopportunity
+
+checkpointは2層で表現する。
+
+```text
+CompromiseCheckpointGroup       ユーザーが見る「妥協品としての性能」
+  scope
+  5枠の順不同multiset(重複数を保存)
+  seriesSkillId / groupSkillId
+  conditionMatch
+
+CompromiseCheckpointOpportunity 到達機会
+  afterOperationIndex
+  operationCount / remainingOperationCount
+  exact ordered 5枠
+  seriesSkillId / groupSkillId
+  conditionMatch
+```
+
+group identityにslot順は含めない。同じ5枠をslot順違いで持つ2状態は、
+ユーザーから見て同じ妥協品なので同じgroupへまとめる。
+opportunity側にはexactなslot順を残す。PlannerとTrace Replayは
+「実際にその瞬間手に持つ武器」を検証するため、slot順が必要である。
+
+group ID / opportunity IDは `candidateStableKey` とgroup identityから決まる
+deterministicな値であり、`searchRunId`、Clock、列挙順序を含まない。
+
+### 5.8.3 複数回の到達をすべて保持する
+
+同じgroupへ2手目と4手目の両方で到達する場合、両方のopportunityを保持する。
+早い方を表示上のprimaryとして扱い、後続は「その他の到達点」として開示する。
+後続opportunityをDomainから削除しない。Counter競合により早い到達が使えず、
+遅い到達だけが実行可能なケースがあるためである。
+
+選択できるのは1 groupにつき最大1 opportunityである。Plannerは選択された
+opportunityを別のopportunityへ勝手に読み替えない。
+
+### 5.8.4 表示専用の保守的dominance
+
+表示整理のためだけに、次をすべて満たす場合に限りgroup `w` を
+display-secondaryにできる。
+
+```text
+scope が等しい
+seriesSkillId / groupSkillId が等しい
+bonusTypeId ごとのrank降順vectorが b >= w で、少なくとも1箇所で b > w
+b の最早opportunityが w の最早opportunity以下の操作数で到達する
+Master参照(BonusType / BonusRank / WeaponBonusDefinition)がすべて比較可能
+```
+
+Bonus Type構成が異なる場合、Skillが異なる場合、Master参照が比較不能な場合は
+dominanceを成立させない。これは表示の優先度だけを決めるものであり、
+Domainのgroupもopportunityも削除しない。「劣る」checkpointが、
+Counter競合を避けられる唯一の選択肢になりうるためである。
+
+### 5.8.5 開始状態はcheckpointではない
+
+Route baseの開始状態（変換元のOwnedWeaponが既に持っている状態）はRouteのprefixでは
+ないので、それが妥協条件を満たしていてもcheckpointにしない。ユーザーが既に
+手元に持っているものを「到達点」として提示する意味がないためである。
+
+Target SatisfactionのhasPracticalは従来どおり実際の性能から判定する。
+checkpointの有無とは独立である。
+
+## 5.9 normal scope Keepのgame legalityとprediction support
 
 以下の三層を厳密に分離する。混同した記述を仕様・UI文言・skip reasonへ書かない。
 
@@ -1535,7 +1438,7 @@ reset_bonuses                 <- 必須。最初のBonus amendmentは必ずReset
 - `searchStateHash` はBase Seed、Skill Counter、Gogma Counterに依存し、NormalArtianCounterに依存しない。後からNormal Counterを確定しても、またその値が変わっても、このCandidateの予測結果semanticsは変わらないためstaleにならない。これはPlan実行後に現在Counterを更新しなくてよいという意味ではない(`docs/PLANNER_SPEC.md` 7.0.3)
 - `estimatedNormalAdvance = null` も同じ理由による。Candidate SearchがNormal Counter進行量をabsolute route dependencyとして表現しないことを示すだけで、実行時の物理的なCounter進行とは別概念である
 - アイテム素材コストは通常どおり計上する。通常アーティア作成1本分、変換1回分、Reset等の分をそれぞれ含める
-- Candidateの保持、順序、Ideal / Practical判定、similarity、dominanceは既存規則をそのまま適用し、blind variantを優遇も冷遇もしない
+- Candidateの保持、順序、Ideal判定、checkpoint抽出は既存規則をそのまま適用し、blind variantを優遇も冷遇もしない
 
 報告。
 
@@ -1754,17 +1657,17 @@ Mixed Routeは含まれるamendment種別にかかわらず、起点OwnedWeapon�
 
 ## 8. 並び順
 
-検索結果の標準ソート。
+1 Target 1 requestの出力はcanonical Ideal 1件以下なので、表示ソートは
+canonical Idealの選択順序そのものである。
 
-1. category: ideal, practical
-2. estimatedOperationCount昇順
-3. estimatedGogmaAdvance昇順
-4. estimatedSkillAdvance昇順
-5. estimatedNormalAdvance昇順。ただし `null` は最後
-6. similarityScore降順
-7. idealDifference.matchedBonusCount降順
-8. preferred source match（8.1）
-9. `candidateStableKey` 昇順
+1. estimatedOperationCount昇順
+2. estimatedGogmaAdvance昇順
+3. estimatedSkillAdvance昇順
+4. estimatedNormalAdvance昇順。ただし `null` は最後
+5. preferred source match（8.1）
+6. `candidateStableKey` 昇順
+
+checkpoint groupの表示順は5.8.4に従う（最早到達、妥協軸の少なさ、stable key）。
 
 TargetWeapon間の表示順。
 
@@ -1784,8 +1687,8 @@ run間で安定しない。**Candidateの最終出力順にrun依存値を使っ
 順序づけてはならない。7章の重複排除における最終tie-breakも同じ規則に従う。
 
 同一Search入力に対して `searchRunId` だけを変えて2回検索した場合、
-`BuildCandidate.id` は異なってよいが、各Targetの
-`candidates.map(candidateStableKey)` は**配列順まで一致**しなければならない。
+`BuildCandidate.id` は異なってよいが、`candidateStableKey` と
+`checkpointGroups` は完全に一致しなければならない。
 これはB6-F1で実装済みである。`BuildCandidate.id` の生成規則
 (`searchRunId` を含む `semanticHash`)は変更していない。
 
@@ -1794,9 +1697,8 @@ run間で安定しない。**Candidateの最終出力順にrun依存値を使っ
 限った話であり、Planner上の代替Counter位置としての価値まで否定するものではない
 (5.6.4参照)。
 
-`maxCandidatesPerTarget` はこのソート後に適用する既存の出力打ち切りであり、
-合成規則の代わりにはならない。合成段階でCartesian productを作ってから
-打ち切る設計にしない。Idealを発見した場合の枠確保は5.5.7に従う。
+出力打ち切りは存在しない（5.5.7）。合成段階でCartesian productを作ってから
+打ち切る設計にもしない。
 
 ### 8.1 Targetの優先起点
 
@@ -1808,7 +1710,7 @@ run間で安定しない。**Candidateの最終出力順にrun依存値を使っ
 
 ```text
 1. Routeが実行可能であること
-2. 既存のCandidate category / operation cost / Counter advance / similarity等の比較
+2. 既存のoperation cost / Counter advance の比較
 3. それらが同等ならpreferredOwnedWeaponIdを起点とするRoute
 4. 最終stable key
 ```
@@ -1893,9 +1795,7 @@ preferredのために次を変更してはならない。同一コストCandidat
 
 - Search horizon
 - canonical Idealのcost境界
-- Practical horizon
-- Practical dominance
-- `maxCandidatesPerTarget` などの出力打ち切り
+- checkpoint抽出の結果
 - RNG Prediction call count
 - Stream探索深さ
 - Gogma / Skill / Normal Counter semantics
@@ -1907,48 +1807,17 @@ preferred情報を入れない。preferredはCandidateそのものの意味で�
 
 ---
 
-## 9. 条件緩和案
+## 9. 条件緩和案の廃止
 
-検索結果が少ない、または非常に遠い場合、条件を自動変更しない。
+`RelaxationSuggestion` と `CandidateSearchResult.relaxationSuggestions` は存在しない。
 
-RelaxationSuggestion。
+Searchが返すのはcanonical Ideal 1件以下であり、「候補が少ない」という状態は
+「探索範囲内にIdealが無かった」だけである。この場合にDomainが提示するのは
+探索範囲上限の引き上げであって、Target条件の自動緩和案ではない。
 
-```ts
-export interface RelaxationSuggestion {
-  id: string;
-  targetWeaponId: TargetWeaponId;
-  kind:
-    | "lower_minimum_rank"
-    | "remove_required_ex"
-    | "relax_skill_series"
-    | "relax_skill_group"
-    | "skill_match_all_to_any";
-  description: string;
-  patch: TargetWeaponRelaxationPatch;
-  nearestCandidateDistance: number | null;
-}
-
-export interface TargetWeaponRelaxationPatch {
-  practicalBonusConditions?: PracticalBonusCondition[];
-  alternativeBonusRules?: AlternativeBonusRule[];
-  practicalSkillCondition?: SkillCondition;
-}
-```
-
-緩和案生成ルール。
-
-- `minimumRank` を1段階下げる
-- `requiredExCount` を1減らす
-- Alternativeの最大置換数をIdeal内の元種類個数の範囲で増やす（型の拡張が必要な将来案）
-- 実用スキルのseries指定を外す
-- 実用スキルのgroup指定を外す
-- `matchMode = "all"` を `"any"` にする
-
-制約。
-
-- 理想条件は自動緩和しない
-- 緩和案はユーザーが選択するまでTargetWeaponへ適用しない
-- 緩和案ごとに再検索した場合の最短距離を表示する
+妥協をどこまで許すかはTargetの妥協条件がすでに表現しており、
+その妥協をRouteのどこで受け取るかは5.8のcheckpoint選択が表現する。
+Target条件は従来どおりユーザーの明示操作以外で変更しない。
 
 ---
 
@@ -1971,18 +1840,31 @@ createBuildListEntry(
 
 `referencedOwnedWeaponsHash` は[DATA_MODEL.md](./DATA_MODEL.md)の正規化規則に従う。参照IDはRouteとReset Bonuses、Keep Bonuses、Reset Skills Operationから収集する。共通項目は `id`、`kind`、武器種、属性、保存中の復元ボーナス5枠順、isProtectedとし、巨戟だけシリーズスキル、グループスキルを加える。`status` はユーザー管理ラベルであり計算に影響しないため、name、memo、日時と同じく除外する。Routeに無関係なOwnedWeaponも含めない。
 
-追加方式。
+追加方式は個別追加だけである。1 Target 1 requestが返すCandidateは
+canonical Ideal 1件以下なので、一括追加の対象がない。
 
-- 個別追加
-- 理想候補一括追加
-- 実用候補一括追加
-- 理想＋実用一括追加
+追加時には、そのCandidateについてユーザーが選択したcheckpoint opportunityの
+IDを `BuildListEntry.selectedCheckpointOpportunityIds` として保存する。
 
-一括追加の制約。
+```ts
+createBuildListEntry(candidate, target, {
+  selectedCheckpointOpportunityIds,
+});
+```
 
-- 現在表示中のTargetWeaponに対して実行する
-- filterで非表示の候補を含めるかはUIで明示する
-- 近似フィルタの候補は初期版では一括追加対象に含めない。個別追加のみ許可する
+初期選択は空である。既に同一semanticのCandidateがBuildListに存在する場合は、
+既存Entryをそのまま返し、既存のcheckpoint選択を上書きしない。Search側は
+「この候補は作成リストに追加済みです。チェックポイントは作成リストで変更して
+ください。」と案内する。checkpoint選択の変更は作成リスト側の操作である。
+
+制約。
+
+- 1 groupにつき選択できるopportunityは最大1件
+- Candidate Snapshotに存在しないopportunity IDはfail closedで拒否する
+- checkpoint選択はCandidateのidentityにもhashにも入らない。選択を変えても
+  BuildListEntry自体はstaleにならない
+- 一方でPlanの `buildListEntriesHash` には入る。選択を変えると既存Planは
+  再計算対象になる
 - 同じCandidateのBuildListEntryを重複作成しない
 - Target定義変更、`searchStateHash` 不一致、`referencedOwnedWeaponsHash` 不一致、CalculationContext非互換時はBuildListEntryをstaleにする
 - `searchStateHash` 不一致のstale reasonは `rng_state_changed`
@@ -2096,8 +1978,8 @@ Worker error契約(B6)。
 - SkillCondition `all` / `any` が正しく判定される
 - 理想条件が実用条件より優先分類される
 - 理想条件を満たす完成品が実用条件も満たす(Ideal ⇒ Practical 包含不変条件)
-- PracticalとSimilarityが別軸で判定される
-- 近似フィルタが `category = practical AND isSimilarToIdeal = true` だけを返す
+- 妥協判定が両軸Idealのとき `null` を返し、checkpointにならない
+- 近似 (similarity) の概念が存在しない
 
 ## 13.2 Route Test
 
@@ -2163,34 +2045,29 @@ Worker error契約(B6)。
 - 同一 `(baseSeed, skillCounter)` に対する `predictSkills` を2回以上呼ばない
 - 同一Gogma Counter位置に対するReset予測を1回だけ行う
 - 同一family layoutのstateがfrontierで1代表へ畳まれ、それによって候補を失わない
-- `resultFilter` を変えてもstream探索量と解集合が変化しない
+- checkpoint抽出のために `predictGogmaBonus` / `predictSkills` / `predictNormalArtian`
+  の呼び出し回数が1回も増えない
 
 ## 13.2.2 Candidate Composition Test
 
-- 合成件数が `|B(c)| + |K(c)| - 1` になり、`|B(c)| × |K(c)|` にならない
+- 合成件数が `|B| + |K| - 1` になり、`|B| × |K|` にならない
 - Bonus軸候補はSkill anchorを固定し、Skill軸候補はBonus anchorを固定する
-- 両軸から外れた `(B(c)[i], K(c)[j])`(`i > 0` かつ `j > 0`)を生成しない
+- 両軸から外れた `(B[i], K[j])`(`i > 0` かつ `j > 0`)を生成しない
 - 合成した `RouteOperation[]` がBonus操作列 → Skill操作列の順で保存される
 - `estimatedGogmaAdvance` と `estimatedSkillAdvance` がstreamごとに独立して正しい
-- 合成後の `category` / `idealDifference` / `similarityScore` / `isSimilarToIdeal` が既存Target評価器の結果と一致する
+- 合成結果が理想品でない場合はCandidateにならない
 - 既存巨戟Routeで `d = 0` かつ `resetCount = 0` になる合成を候補化しない
 - `b0` / `k0` が5.5.2 / 5.5.3のdeterministic orderingで一意に決まり、Route baseの評価順を変えても変わらない
 
-## 13.2.3 Termination and Retention Test
+## 13.2.3 Termination and Checkpoint Test
 
-- 初回検索がcanonical Idealと操作数D以下のPractical評価を確定した時点で通常探索を終了する
+- 初回検索がcanonical Idealを確定した時点で通常探索を終了する
 - 確定したIdealが8章の標準ソート順で最小であり、RouteKindの評価順を入れ替えても同一になる
 - canonical Idealのtie-breakが `searchRunId` / `createdAt` / `BuildCandidate.id` に
   依存せず、`searchRunId` を変えて同一入力を再検索しても同じIdealが選ばれる
-- 表示用ソートと重複排除の最終tie-breakが `BuildCandidate.id` に依存せず、
-  `searchRunId` だけを変えた再検索で `candidateStableKey` 列が配列順まで一致し、
-  かつ `BuildCandidate.id` 列は一致しない
-- `estimatedOperationCount <= D` のPracticalがすべて評価対象になり、
-  Idealを先に発見してもそれより近いPracticalを取りこぼさない
-- Practical保持集合がbest-first / branch-and-bound / RouteKind評価順を変えても同一になる
-- canonical Idealが探索上限内に無い場合、探索範囲内で評価できたPracticalへ
-  同じ非劣位保持規則が適用される
+- checkpointの有無でcanonical Idealの選択が変わらない
 - Idealが見つからない場合だけ `max*Advance` の上限まで探索する
+- Idealが見つからない場合はCandidate 0件であり、妥協状態へ到達できてもCandidateを返さない
 - 現在Bonusがgogma scopeでIdealと完全一致する起点についてBonus探索を行わない
 - normal scopeでIdealラベル5/5・Skill一致のconversion D=2をIdealとせず、同じ5枠を返す
   Reset Bonuses後のgogma scope D=3まで探索し、そのCandidateをcanonical Idealにする
@@ -2198,20 +2075,24 @@ Worker error契約(B6)。
 - 同一scope・同一multisetは最小advanceを保持し、異なるscopeの同点は安定順序で決める
 - normal scopeを継承した既存Gogmaの5/5一致でもReset探索を0回化しない
 - 現在SkillがidealSkillConditionを満たす起点についてSkill探索を行わない
-- 現在状態がPracticalのみを満たす場合、操作0のPractical解を保持したままIdeal探索を継続する
-- Ideal到達前に見つかった非劣位Practicalを複数保持する
-- 5.5.6の10条件をすべて満たす場合だけPractical候補を削除する
-- Bonus rank dominanceを `bonusTypeId` ごとのrank multisetで判定し、slot順に依存しない
-- 同一bonusTypeで `[III, II]` と `[EX, I]` を比較不能として両方保持する
-- Masterでrank orderingを安全に比較できないscope / typeを比較不能として扱う
-- アイテム素材を `materialId` 単位のcomponent-wiseで比較し、合計個数で優劣判定しない
-- `X×2` と `Y×1`、`{X×2, Y×1}` と `{X×1, Y×2}` を比較不能として両方保持する
-- Bonus Type構成が異なるPractical候補、Skill構成が異なるPractical候補、
-  起点が異なるPractical候補を比較不能として両方保持する
 - 同一結果の後続Counter位置を「支配された」として恒久除外しない
-- canonical Idealより手前の同一結果が、評価済みでも初回保持集合から省略され得る
-- `maxCandidatesPerTarget` に達してもIdealを結果へ含め、最下位Practicalを置換する
-- `resultFilter` を変えても終了条件・保持集合の構築が変化しない
+
+### checkpoint抽出
+
+- canonical Ideal Routeのstrict prefixだけをcheckpoint評価する
+- 最終操作（理想品を完成させる操作）をcheckpointにしない
+- canonical Ideal Routeから分岐する妥協状態をcheckpointにしない
+- 記録のない状態（blind forgeの5枠など）をcheckpointにしない
+- 開始OwnedWeaponが妥協条件を満たしていてもcheckpoint opportunityにしない
+- 同一Bonus multiset / scope / Skillでslot順だけが違う状態を同じgroupへまとめる
+- opportunity側にexact slot順が残る
+- 同じ妥協品が2手目と4手目に存在した場合、両opportunityを保持する
+- 最早opportunityがgroup代表として選ばれ、後続opportunityを削除しない
+- conservative dominanceで下位互換groupをdisplay-secondaryにできる
+- display dominanceでDomainのgroupもopportunityも削除しない
+- 異なるSkill、異なるBonus Type構成、比較不能なMaster参照をdominance扱いしない
+- 後から到達するgroupが、より早く到達する下位groupをdominateしない
+- group ID / opportunity IDが `searchRunId` / Clock / 列挙順に依存しない
 
 ## 13.2.4 Target Invariant Test
 
@@ -2232,17 +2113,16 @@ Skill stream側はB1で実装済み、Bonus stream側はB2で実装済みであ�
 
 - constrained enumerationが `ConstrainedSearchOrigin` 起点から再評価し、
   `conflictingCounter + 1` へ後方固定されない
-- Practical dominance、初回Practical horizon、canonical Ideal終了を適用しない
+- canonical Ideal終了を適用しない
 - 同一結果の後続Counter位置解をyieldできる
-- IdealもPracticalも満たさないCandidateをyieldしない
+- Idealを満たさないCandidateをyieldしない
 - `origin` がPlanner計算開始時のcurrent validated snapshotから構成され、
-  `searchRunId` / `routeFilter` / `resultFilter` / `settings` を持たない
+  `searchRunId` / `routeFilter` / `settings` を持たない
 - 過去のUI Candidate Search requestを `origin` として要求しない
 - route scopeが現時点で成立する全Routeであり、UI一時filterを継承しない
-- `resultFilter` / similar filter / `maxCandidatesPerTarget` を適用しない
 - 探索範囲の上限が `ConstrainedEnumerationBounds` だけで決まり、
   `CandidateSearchSettings` を参照しない
-- route policyが広がってもIdeal / Practical条件を満たさないCandidateをyieldしない
+- route policyが広がってもIdeal条件を満たさないCandidateをyieldしない
 - 同一入力・同一boundsで列挙順が完全に一致する
 - boundsへ到達した場合に `stoppedByBound` を返し、`exhausted` としない
 - 軸外pairをlazyに評価し、full Cartesianを事前生成しない
@@ -2255,13 +2135,10 @@ Skill stream側はB1で実装済み、Bonus stream側はB2で実装済みであ�
 - enumeratorが `BuildCandidate` ではなく `ConstrainedCandidate` をyieldし、
   `id` / `searchRunId` / `createdAt` / random ID / Clock / enumeration ordinalを
   結果へ含めない
-- `similarityThreshold` がyield可否、ordering、route scope、探索終了、探索範囲、
-  off-axis評価のいずれにも影響しない
 
 ## 13.3 Candidate Test
 
 - 重複候補が排除される
-- category順でsortされる
 - estimatedOperationCountが少ない候補が優先される
 - Candidate選択時にBuildCandidateを変更せずBuildListEntryが生成される
 - BuildCandidateに検索開始時のsearchStateHashが保存される
@@ -2275,17 +2152,19 @@ Skill stream側はB1で実装済み、Bonus stream側はB2で実装済みであ�
 - Routeに無関係なOwnedWeapon変更と、参照武器のname、memo、日時変更ではBuildListEntryがstaleにならない
 - OwnedWeaponを参照しないRouteではreferencedOwnedWeaponsHashが `null` のままになる
 
-## 13.4 Relaxation Test
+## 13.4 Checkpoint選択Test
 
-- 条件を自動変更しない
-- Rankを1段階下げる案を生成する
-- EX必須を緩和する案を生成する
-- Skill条件を緩和する案を生成する
-- 緩和案適用後の最短距離を計算できる
+- checkpoint初期選択が空である
+- 異なるgroupから複数checkpointを選択できる
+- 同一groupから複数opportunityの選択をrejectする
+- Candidate Snapshotに存在しないopportunity IDをrejectする
+- checkpoint selection変更でBuildListEntry自体はstaleにならない
+- checkpoint selection変更でPlanの `buildListEntriesHash` が変わる
+- 同一semanticのCandidateを再追加しても既存checkpoint selectionを上書きしない
 
 ## 13.5 Worker Test
 
-- 複数TargetWeapon検索でprogressが返る
+- 単一TargetWeapon検索でprogressが返る
 - Target開始時点でcurrent Targetを含むprogressが返る
 - 長時間Targetで完了前にactivity progressが返り、`processedWorkItems` が単調増加する
 - Targetごとに `processedWorkItems` が0へresetされ、最終 `completedTargets` が
@@ -2300,11 +2179,12 @@ Skill stream側はB1で実装済み、Bonus stream側はB2で実装済みであ�
 
 ### 妥協条件version 6の判定理由と監査記録
 
-新規CandidateはconditionMatch（bonus: ideal/practical/alternative、skill: ideal/practical）を保持し、Build List snapshotへそのまま複写する。
-これはTarget定義と完成結果から導出した説明情報であり、Candidate ID / stable key / deduplication key / meaning fingerprint / searchStateHashには追加しない。
-条件の意味はTarget definition hashとCalculationContext version 6で区別する。旧artifactではフィールドを省略でき、推測補完・再分類しない。
-UIは保存された判定理由を「ボーナス判定: 理想 / 実用 / 代替」「スキル判定: 理想 / 実用」と表示する。
-categoryは両軸Idealのときだけideal、それ以外はpracticalであり、代替Bonusを実用Bonusと表示しない。
+妥協判定 `conditionMatch`（bonus: ideal/practical/alternative、skill: ideal/practical）は、
+Candidate本体ではなく5.8のcheckpoint group / opportunityが保持する。
+これはTarget定義と到達状態から導出した説明情報であり、Candidate ID / stable key /
+deduplication key / meaning fingerprint / searchStateHashには追加しない。
+UIは保存された判定理由を「ボーナス判定: 実用 / 代替」「スキル判定: 理想 / 実用」と表示する。
+両軸Idealは理想品そのものなのでcheckpointとして存在しない。
 
 Productionベンチマークの旧wildcard条件も明示的な理想構成基準へ変更するため、旧versionの測定記録と負荷が異なる。
 過去のBrowser Worker測定値は当時のartifactとして保持する。今回のVitestは意味・不変条件の検証であり、新しいBrowser性能測定の代用ではない。

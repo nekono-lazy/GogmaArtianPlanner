@@ -14,8 +14,8 @@ import {
   createConstrainedSearchOrigin,
   gogmaWeapon,
   IDEAL_SERIES_SKILL_ID,
+  idealBonuses,
   normalWeapon,
-  practicalBonuses,
 } from '../../../test/fixtures/constrainedEnumeration'
 
 /**
@@ -64,9 +64,9 @@ function twoSourceSetup(options: SetupOptions) {
     ),
   })
   const engine = createConstrainedEngine(origin, {
-    // Reset yields the same Practical result at every Gogma position, so the
-    // two sources' Bonus axes are literally identical.
-    resetResultAt: () => practicalBonuses(),
+    // Reset yields the same Ideal result at every Gogma position, so the two
+    // sources' Bonus axes are literally identical.
+    resetResultAt: () => idealBonuses(),
   })
   return { origin, engine, target }
 }
@@ -79,7 +79,7 @@ const EXISTING_GOGMA_SOURCE = 'owned.constrained.zzz-gogma'
  *
  * The preferred source is an owned Normal weapon, so its Route is
  * `convert_normal_to_gogma` plus the Reset Bonuses that turns the inherited
- * normal-scope slots into a Gogma-scope Practical result: two operations. The
+ * normal-scope slots into a Gogma-scope Ideal result: two operations. The
  * non-preferred existing-Gogma source reaches the identical five-slot result
  * with that one Reset alone. The Normal source also sorts first on `baseKey`,
  * so nothing but the operation count can put the Gogma source ahead.
@@ -101,7 +101,7 @@ function cheaperNonPreferredSetup() {
     ],
   })
   const engine = createConstrainedEngine(origin, {
-    resetResultAt: () => practicalBonuses(),
+    resetResultAt: () => idealBonuses(),
   })
   return { origin, engine, target }
 }

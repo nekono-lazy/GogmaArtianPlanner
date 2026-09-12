@@ -21,7 +21,6 @@ import {
   idealBonuses,
   normalWeapon,
   practicalBonuses,
-  practicalVariant,
 } from '../../../test/fixtures/constrainedEnumeration'
 
 const IDEAL_SKILL = 'series_skill.fixture.a'
@@ -45,13 +44,16 @@ function idealReachableSetup() {
       }),
     ],
   })
+  // The Ideal five slots and the Ideal Skill are both reachable at two
+  // consecutive Counter positions, so the same result exists at more than one
+  // position - exactly the work the initial Search stops before reaching.
   const engine = createConstrainedEngine(origin, {
     resetResultAt: (gogmaCounter) =>
-      gogmaCounter === 10 ? idealBonuses() : belowPracticalBonuses(),
+      gogmaCounter <= 11 ? idealBonuses() : belowPracticalBonuses(),
     skillResultAt: (skillCounter) => ({
       seriesSkillId:
-        skillCounter === 7 ? IDEAL_SKILL : `series_skill.fixture.s${skillCounter}`,
-      groupSkillId: 'group_skill.fixture.a',
+        skillCounter <= 8 ? IDEAL_SKILL : `series_skill.fixture.s${skillCounter}`,
+      groupSkillId: `group_skill.fixture.g${skillCounter}`,
     }),
   })
   return { origin, engine }
@@ -62,12 +64,17 @@ describe('Constrained route policy', () => {
     const origin = createConstrainedSearchOrigin({
       ownedWeapons: [
         normalWeapon('owned.constrained.normal'),
-        gogmaWeapon('owned.constrained.gogma'),
+        gogmaWeapon('owned.constrained.gogma.bonus', {
+          // Ideal Skill already; only the Bonus axis is amended.
+          seriesSkillId: 'series_skill.fixture.a',
+        }),
+        gogmaWeapon('owned.constrained.gogma.skill', {
+          // Ideal five slots already; only the Skill axis is amended.
+          restorationBonuses: idealBonuses(),
+        }),
       ],
     })
-    const engine = createConstrainedEngine(origin, {
-      resetResultAt: () => alternativePracticalBonuses(),
-    })
+    const engine = createConstrainedEngine(origin)
     const result = await enumerateConstrainedCandidates(
       constrainedInput(
         origin,
@@ -91,13 +98,15 @@ describe('Constrained route policy', () => {
     const origin = createConstrainedSearchOrigin({
       ownedWeapons: [
         normalWeapon('owned.constrained.normal'),
-        gogmaWeapon('owned.constrained.gogma'),
+        gogmaWeapon('owned.constrained.gogma.bonus', {
+          seriesSkillId: 'series_skill.fixture.a',
+        }),
+        gogmaWeapon('owned.constrained.gogma.skill', {
+          restorationBonuses: idealBonuses(),
+        }),
       ],
     })
-    const engine = createConstrainedEngine(origin, {
-      normalSupported: false,
-      resetResultAt: () => alternativePracticalBonuses(),
-    })
+    const engine = createConstrainedEngine(origin, { normalSupported: false })
     const result = await enumerateConstrainedCandidates(
       constrainedInput(
         origin,
@@ -120,13 +129,15 @@ describe('Constrained route policy', () => {
     const origin = createConstrainedSearchOrigin({
       ownedWeapons: [
         normalWeapon('owned.constrained.normal'),
-        gogmaWeapon('owned.constrained.gogma'),
+        gogmaWeapon('owned.constrained.gogma.bonus', {
+          seriesSkillId: 'series_skill.fixture.a',
+        }),
+        gogmaWeapon('owned.constrained.gogma.skill', {
+          restorationBonuses: idealBonuses(),
+        }),
       ],
     })
-    const engine = createConstrainedEngine(origin, {
-      skillSupported: false,
-      resetResultAt: () => alternativePracticalBonuses(),
-    })
+    const engine = createConstrainedEngine(origin, { skillSupported: false })
     const result = await enumerateConstrainedCandidates(
       constrainedInput(
         origin,
@@ -187,10 +198,7 @@ describe('Constrained Candidate yield contract', () => {
       ),
       engine,
     )
-    expect(result.candidates.some(({ category }) => category === 'ideal')).toBe(true)
-    expect(result.candidates.some(({ category }) => category === 'practical')).toBe(true)
     for (const candidate of result.candidates) {
-      expect(['ideal', 'practical']).toContain(candidate.category)
       expect(
         areRestorationBonusSetsEqual(candidate.finalBonuses, belowPracticalBonuses()),
       ).toBe(false)
@@ -206,16 +214,15 @@ describe('Constrained Candidate yield contract', () => {
       ),
       engine,
     )
-    const ideal = result.candidates.find(({ category }) => category === 'ideal')
-    expect(ideal).toBeDefined()
-    const beyondIdeal = result.candidates.filter(
-      (candidate) =>
-        candidate.estimatedOperationCount >
-        (ideal as ConstrainedCandidate).estimatedOperationCount,
+    const cheapest = Math.min(
+      ...result.candidates.map(({ estimatedOperationCount }) => estimatedOperationCount),
     )
-    // The initial Search would drop every Practical past the canonical Ideal's
-    // operation count; constrained enumeration keeps them.
-    expect(beyondIdeal.length).toBeGreaterThan(0)
+    const beyondCheapest = result.candidates.filter(
+      (candidate) => candidate.estimatedOperationCount > cheapest,
+    )
+    // The initial Search stops at the canonical Ideal; constrained enumeration
+    // keeps the later Ideal solutions the Planner may need instead.
+    expect(beyondCheapest.length).toBeGreaterThan(0)
     expect(result.candidates).toHaveLength(3)
   })
 
@@ -225,13 +232,17 @@ describe('Constrained Candidate yield contract', () => {
       ownedWeapons: [
         gogmaWeapon('owned.constrained.gogma', {
           restorationBonuses: belowPracticalBonuses(),
+          // The Ideal Skill is already held, so the Skill axis contributes its
+          // zero-operation solution and the two solutions differ only in their
+          // Gogma Counter position.
+          seriesSkillId: IDEAL_SKILL,
         }),
       ],
     })
     const engine = createConstrainedEngine(origin, {
       resetResultAt: (gogmaCounter) =>
         gogmaCounter === 10 || gogmaCounter === 12
-          ? practicalBonuses()
+          ? idealBonuses()
           : belowPracticalBonuses(),
     })
     const result = await enumerateConstrainedCandidates(
@@ -245,14 +256,15 @@ describe('Constrained Candidate yield contract', () => {
       .filter(
         (candidate) =>
           candidate.estimatedSkillAdvance === 0 &&
-          areRestorationBonusSetsEqual(candidate.finalBonuses, practicalBonuses()),
+          areRestorationBonusSetsEqual(candidate.finalBonuses, idealBonuses()),
       )
       .sort((left, right) => left.estimatedGogmaAdvance - right.estimatedGogmaAdvance)
     expect(sameResult).toHaveLength(2)
     const [cheaper, dearer] = sameResult
     // Identical completed result, skills, source weapon and destructive kind,
     // with the later position strictly worse on every cost axis: exactly the
-    // pair the initial Search drops. The Planner may still need the later one.
+    // pair the initial Search drops when it stops at the canonical Ideal. The
+    // Planner may still need the later one.
     expect(cheaper.estimatedOperationCount).toBeLessThan(dearer.estimatedOperationCount)
     expect(cheaper.estimatedGogmaAdvance).toBeLessThan(dearer.estimatedGogmaAdvance)
     expect(cheaper.seriesSkillId).toBe(dearer.seriesSkillId)
@@ -295,8 +307,6 @@ describe('Constrained Candidate yield contract', () => {
     )
     for (const candidate of result.candidates) {
       expect(candidate.calculationContext).toEqual(origin.calculationContext)
-      expect(candidate.similarityScore).toBeGreaterThanOrEqual(0)
-      expect(candidate.similarityScore).toBeLessThanOrEqual(1)
     }
   })
 })
@@ -318,8 +328,6 @@ describe('Constrained enumeration determinism', () => {
       }
       expect(Object.keys(candidate).sort()).toEqual([
         'calculationContext',
-        'category',
-        'conditionMatch',
         'estimatedGogmaAdvance',
         'estimatedNormalAdvance',
         'estimatedOperationCount',
@@ -333,7 +341,6 @@ describe('Constrained enumeration determinism', () => {
         'route',
         'searchStateHash',
         'seriesSkillId',
-        'similarityScore',
         'targetWeaponId',
       ])
     }
@@ -352,9 +359,7 @@ describe('Constrained enumeration determinism', () => {
           gogmaWeapon('owned.constrained.gogma'),
         ],
       })
-      const engine = createConstrainedEngine(origin, {
-        resetResultAt: () => alternativePracticalBonuses(),
-      })
+      const engine = createConstrainedEngine(origin)
       return enumerateConstrainedCandidates(constrainedInput(origin, bounds), engine)
     }
     const first = await runOnce()
@@ -383,9 +388,7 @@ describe('Constrained enumeration determinism', () => {
       })
       return {
         origin,
-        engine: createConstrainedEngine(origin, {
-          resetResultAt: () => alternativePracticalBonuses(),
-        }),
+        engine: createConstrainedEngine(origin),
       }
     }
     const forward = build(false)
@@ -560,51 +563,33 @@ function offAxisSetup() {
     normalCounters: [],
     ownedWeapons: [
       gogmaWeapon('owned.constrained.gogma', {
-        restorationBonuses: practicalVariant(0),
+        restorationBonuses: belowPracticalBonuses(),
       }),
     ],
   })
-  const engine = createConstrainedEngine(origin, {
-    resetResultAt: (gogmaCounter) => practicalVariant(gogmaCounter - 9),
-  })
+  // Every Gogma position reaches the Ideal five slots and every Skill position
+  // the Ideal Series Skill, so both axes hold several entries and genuine
+  // off-axis cells exist.
+  const engine = createConstrainedEngine(origin)
   return { origin, engine }
 }
 
 /**
- * The same base with the Ideal five slots reachable at Gogma depth 1 and the
- * Ideal Series Skill at Skill reset 1.
- *
- * That single pair is the Ideal matrix's own anchor `(0, 0)` and, at the same
- * time, the Practical matrix's off-axis cell `(1, 1)`. It therefore also covers
- * both `categoryRank` improvements inside the Practical matrix: along the Bonus
- * axis `(0, 1) -> (1, 1)` with the Ideal Skill fixed, and along the Skill axis
- * `(1, 0) -> (1, 1)` with the Ideal Bonus fixed.
+ * One base whose Bonus and Skill axes both hold several Ideal entries, so the
+ * same actual `(Bonus, Skill)` pair can be reached from more than one frontier
+ * node. It is evaluated once and never recounted, while every node still
+ * expands its own neighbours.
  */
 function overlappingCategorySetup() {
-  const origin = createConstrainedSearchOrigin({
-    normalCounters: [],
-    ownedWeapons: [
-      gogmaWeapon('owned.constrained.gogma', {
-        restorationBonuses: practicalVariant(0),
-      }),
-    ],
-  })
-  const engine = createConstrainedEngine(origin, {
-    resetResultAt: (gogmaCounter) =>
-      gogmaCounter === 10 ? idealBonuses() : practicalVariant(gogmaCounter - 9),
-    skillResultAt: (skillCounter) => ({
-      seriesSkillId:
-        skillCounter === 7 ? IDEAL_SKILL : `series_skill.fixture.s${skillCounter}`,
-      groupSkillId: 'group_skill.fixture.a',
-    }),
-  })
-  return { origin, engine }
+  return offAxisSetup()
 }
 
 function offAxisBounds(maxOffAxisPairEvaluations: number) {
+  // Three Ideal entries on each axis, so the Cross rule composes 3 + 3 - 1 = 5
+  // axis cells and leaves exactly four off-axis cells for the cap to govern.
   return constrainedBounds({
-    maxGogmaAdvance: 2,
-    maxSkillResetCount: 2,
+    maxGogmaAdvance: 3,
+    maxSkillResetCount: 3,
     maxOffAxisPairEvaluations,
   })
 }
@@ -639,30 +624,30 @@ describe('Off-axis Cross cells', () => {
     )
     const withOffAxis = await enumerateConstrainedCandidates(
       constrainedInput(origin, offAxisBounds(4)),
-      createConstrainedEngine(origin, {
-        resetResultAt: (gogmaCounter) => practicalVariant(gogmaCounter - 9),
-      }),
+      engine,
     )
-    // |B| = |K| = 3, so the Cross rule composes 3 + 3 - 1 = 5 cells and the
-    // existing-Gogma d = 0 / k = 0 cell is not a Candidate.
+    // |B| = |K| = 3, so the Cross rule composes 3 + 3 - 1 = 5 axis cells. Both
+    // axes start at depth 1, because the source is Ideal on neither of them.
     expect(positions(axisOnly.candidates).sort()).toEqual([
-      '0,1',
-      '0,2',
-      '1,0',
-      '2,0',
-    ])
-    expect(positions(withOffAxis.candidates).sort()).toEqual([
-      '0,1',
-      '0,2',
-      '1,0',
       '1,1',
       '1,2',
-      '2,0',
+      '1,3',
+      '2,1',
+      '3,1',
+    ])
+    expect(positions(withOffAxis.candidates).sort()).toEqual([
+      '1,1',
+      '1,2',
+      '1,3',
       '2,1',
       '2,2',
+      '2,3',
+      '3,1',
+      '3,2',
+      '3,3',
     ])
     expect(withOffAxis.summary.evaluatedOffAxisPairs).toBe(4)
-    expect(withOffAxis.summary.examinedCandidates).toBe(8)
+    expect(withOffAxis.summary.examinedCandidates).toBe(9)
   })
 
   it('classifies an off-axis pair with the same authority as an axis pair', async () => {
@@ -671,13 +656,15 @@ describe('Off-axis Cross cells', () => {
       constrainedInput(origin, offAxisBounds(4)),
       engine,
     )
+    // Both Cross anchors sit at depth 1, because the source is Ideal on
+    // neither axis, so an off-axis cell is one that advanced past the anchor
+    // on both streams.
     const offAxis = result.candidates.filter(
       (candidate) =>
-        candidate.estimatedGogmaAdvance > 0 && candidate.estimatedSkillAdvance > 0,
+        candidate.estimatedGogmaAdvance > 1 && candidate.estimatedSkillAdvance > 1,
     )
     expect(offAxis).toHaveLength(4)
     for (const candidate of offAxis) {
-      expect(candidate.category).toBe('practical')
       expect(candidate.restorationBonusScope).toBe('gogma_artian')
       expect(candidate.route.kind).toBe('existing_gogma_mixed')
       expect(candidate.searchStateHash).toMatch(/^fnv1a32:/)
@@ -697,7 +684,7 @@ describe('Off-axis Cross cells', () => {
     // Zero is a valid setting: it is exactly the Cross-only policy. The axis
     // Candidates are still enumerated to the end.
     expect(result.summary.evaluatedOffAxisPairs).toBe(0)
-    expect(result.candidates).toHaveLength(4)
+    expect(result.candidates).toHaveLength(5)
     expect(result.summary.stoppedByBound).toBe(true)
     expect(result.summary.exhausted).toBe(false)
   })
@@ -709,16 +696,17 @@ describe('Off-axis Cross cells', () => {
       engine,
     )
     expect(result.summary.evaluatedOffAxisPairs).toBe(2)
-    expect(result.summary.examinedCandidates).toBe(6)
+    expect(result.summary.examinedCandidates).toBe(7)
     // The two cheapest off-axis cells are taken first, and every axis
     // Candidate survives the off-axis cap.
     expect(positions(result.candidates).sort()).toEqual([
-      '0,1',
-      '0,2',
-      '1,0',
       '1,1',
       '1,2',
-      '2,0',
+      '1,3',
+      '2,1',
+      '2,2',
+      '2,3',
+      '3,1',
     ])
     expect(result.summary.stoppedByBound).toBe(true)
     expect(result.summary.exhausted).toBe(false)
@@ -729,9 +717,7 @@ describe('Off-axis Cross cells', () => {
     const run = (cap: number) =>
       enumerateConstrainedCandidates(
         constrainedInput(origin, offAxisBounds(cap)),
-        createConstrainedEngine(origin, {
-          resetResultAt: (gogmaCounter) => practicalVariant(gogmaCounter - 9),
-        }),
+        createConstrainedEngine(origin),
       )
     const exact = await run(4)
     const generous = await run(5)
@@ -746,30 +732,26 @@ describe('Off-axis Cross cells', () => {
     )
   })
 
-  it('never re-evaluates or recounts a pair shared by the Ideal and Practical matrices', async () => {
+  it('never re-evaluates or recounts an actual pair reached from two frontier nodes', async () => {
     const { origin, engine } = overlappingCategorySetup()
     const result = await enumerateConstrainedCandidates(
       constrainedInput(origin, offAxisBounds(4)),
       engine,
     )
-    const ideal = result.candidates.filter(({ category }) => category === 'ideal')
-    expect(ideal).toHaveLength(1)
-    expect(ideal[0].estimatedGogmaAdvance).toBe(1)
-    expect(ideal[0].estimatedSkillAdvance).toBe(1)
-    // The Ideal anchor and the Practical `(1, 1)` cell are the same actual
-    // pair. It is evaluated once, as axis work, so it consumes no off-axis
-    // budget, and the three remaining off-axis cells are still reached.
-    expect(result.summary.evaluatedOffAxisPairs).toBe(3)
-    expect(result.summary.examinedCandidates).toBe(8)
+    // Every actual pair is evaluated exactly once, however many frontier
+    // nodes reach it, so the counts stay the axis and off-axis cell counts.
+    expect(result.summary.evaluatedOffAxisPairs).toBe(4)
+    expect(result.summary.examinedCandidates).toBe(9)
     expect(positions(result.candidates).sort()).toEqual([
-      '0,1',
-      '0,2',
-      '1,0',
       '1,1',
       '1,2',
-      '2,0',
+      '1,3',
       '2,1',
       '2,2',
+      '2,3',
+      '3,1',
+      '3,2',
+      '3,3',
     ])
   })
 
@@ -780,7 +762,7 @@ describe('Off-axis Cross cells', () => {
       normalCounters: [],
       ownedWeapons: [
         gogmaWeapon('owned.constrained.gogma', {
-          restorationBonuses: practicalVariant(0),
+          restorationBonuses: belowPracticalBonuses(),
         }),
       ],
     })
@@ -788,7 +770,6 @@ describe('Off-axis Cross cells', () => {
       callCounts,
       gogmaPositions: axisDepth + 2,
       skillPositions: axisDepth + 2,
-      resetResultAt: (gogmaCounter) => practicalVariant(gogmaCounter - 9),
     })
     const result = await enumerateConstrainedCandidates(
       constrainedInput(
@@ -802,14 +783,15 @@ describe('Off-axis Cross cells', () => {
       engine,
     )
 
-    // |B| = |K| = 31. The two axes contribute 31 + 31 - 2 = 60 evaluated
-    // combinations, and exactly 3 off-axis cells are added. A Cartesian
-    // traversal would be 31 * 31 = 961.
-    const axisSize = axisDepth + 1
+    // |B| = |K| = 30, because the source is Ideal on neither axis and both
+    // Cross anchors therefore sit at depth 1. The two axes contribute
+    // 30 + 30 - 1 = 59 evaluated combinations, and exactly 3 off-axis cells
+    // are added. A Cartesian traversal would be 30 * 30 = 900.
+    const axisSize = axisDepth
     expect(result.summary.evaluatedOffAxisPairs).toBe(3)
-    expect(result.summary.examinedCandidates).toBe(axisSize + axisSize - 2 + 3)
+    expect(result.summary.examinedCandidates).toBe(axisSize + axisSize - 1 + 3)
     expect(result.summary.examinedCandidates).toBeLessThan(axisSize * axisSize)
-    expect(result.candidates).toHaveLength(axisSize + axisSize - 2 + 3)
+    expect(result.candidates).toHaveLength(axisSize + axisSize - 1 + 3)
     // Off-axis cells reuse the already solved stream positions, so they add no
     // Engine prediction at all.
     expect(callCounts.gogmaReset).toBe(axisDepth)
@@ -859,9 +841,11 @@ describe('Constrained sequential delivery', () => {
     settled = true
     // Every callback ran while the enumeration was still in progress, so the
     // consumer never had to wait for the complete collected result.
-    expect(seen).toEqual([false, false, false, false, false, false, false, false])
+    expect(seen).toEqual([
+      false, false, false, false, false, false, false, false, false,
+    ])
     expect(execution.stoppedByConsumer).toBe(false)
-    expect(execution.summary.examinedCandidates).toBe(8)
+    expect(execution.summary.examinedCandidates).toBe(9)
   })
 
   it('stops all further pair evaluation when the consumer stops', async () => {
@@ -911,7 +895,9 @@ describe('Constrained sequential delivery', () => {
         return order.length >= 4 ? 'stop' : 'continue'
       },
     )
-    expect(order).toEqual(['in:0', 'out:0', 'in:1', 'out:1'])
+    // The anchor and the next delivered cell both advance one Gogma position:
+    // the second delivery is the Skill-axis cell `(B1, K2)`.
+    expect(order).toEqual(['in:1', 'out:1', 'in:1', 'out:1'])
     expect(execution.stoppedByConsumer).toBe(true)
   })
 
@@ -920,13 +906,11 @@ describe('Constrained sequential delivery', () => {
       normalCounters: [],
       ownedWeapons: [
         gogmaWeapon('owned.constrained.gogma', {
-          restorationBonuses: practicalVariant(0),
+          restorationBonuses: belowPracticalBonuses(),
         }),
       ],
     })
-    const engine = createConstrainedEngine(origin, {
-      resetResultAt: (gogmaCounter) => practicalVariant(gogmaCounter - 9),
-    })
+    const engine = createConstrainedEngine(origin)
     const { candidates } = await collectSequentially(
       constrainedInput(
         origin,
@@ -939,13 +923,13 @@ describe('Constrained sequential delivery', () => {
       engine,
     )
     const delivered = positions(candidates)
-    // `(B1, K1)` costs two operations while `(B3, k0)` costs three, so a
-    // best-first traversal delivers the off-axis cell first. An "every axis
-    // cell first" traversal would invert this.
-    expect(delivered.indexOf('1,1')).toBeGreaterThanOrEqual(0)
-    expect(delivered.indexOf('1,1')).toBeLessThan(delivered.indexOf('3,0'))
-    expect(delivered.indexOf('1,1')).toBeLessThan(delivered.indexOf('0,3'))
-    expect(candidates).toHaveLength(24)
+    // `(B2, K2)` costs four operations while `(B4, K1)` costs five, so a
+    // best-first traversal delivers the near off-axis cell first. An "every
+    // axis cell first" traversal would invert this.
+    expect(delivered.indexOf('2,2')).toBeGreaterThanOrEqual(0)
+    expect(delivered.indexOf('2,2')).toBeLessThan(delivered.indexOf('4,1'))
+    expect(delivered.indexOf('2,2')).toBeLessThan(delivered.indexOf('1,4'))
+    expect(candidates).toHaveLength(16)
   })
 
   it('repeats the identical delivery sequence regardless of stored input order', async () => {
@@ -957,22 +941,17 @@ describe('Constrained sequential delivery', () => {
     const build = (reversed: boolean) => {
       const weapons = [
         gogmaWeapon('owned.constrained.gogma.b', {
-          restorationBonuses: practicalVariant(0),
+          restorationBonuses: belowPracticalBonuses(),
         }),
         gogmaWeapon('owned.constrained.gogma.a', {
-          restorationBonuses: practicalVariant(0),
+          restorationBonuses: belowPracticalBonuses(),
         }),
       ]
       const origin = createConstrainedSearchOrigin({
         normalCounters: [],
         ownedWeapons: reversed ? [...weapons].reverse() : weapons,
       })
-      return {
-        origin,
-        engine: createConstrainedEngine(origin, {
-          resetResultAt: (gogmaCounter) => practicalVariant(gogmaCounter - 9),
-        }),
-      }
+      return { origin, engine: createConstrainedEngine(origin) }
     }
     const forward = build(false)
     const reversed = build(true)
@@ -984,7 +963,7 @@ describe('Constrained sequential delivery', () => {
       constrainedInput(reversed.origin, bounds),
       reversed.engine,
     )
-    expect(first.candidates.length).toBeGreaterThan(8)
+    expect(first.candidates.length).toBeGreaterThan(4)
     expect(second.candidates.map(constrainedCandidateStableKey)).toEqual(
       first.candidates.map(constrainedCandidateStableKey),
     )
@@ -1037,33 +1016,19 @@ describe('Constrained sequential delivery', () => {
   })
 })
 
-/**
- * `practicalVariant(45)`: two attack at high, one element at middle and two
- * sharpness at high.
- *
- * It matches four of the five Ideal slots, exactly like `practicalBonuses()`,
- * so the two results tie on Ideal closeness. Its completed multiset sorts
- * BEFORE `practicalBonuses()` because "sharpness" precedes "utility", which is
- * what makes it the adversarial partner for a lexicographic-only ordering.
- */
-function sharpnessPracticalBonuses() {
-  const bonuses = idealBonuses()
-  bonuses[3] = { bonusTypeId: 'bonus_type.fixture.sharpness', bonusRankId: 'bonus_rank.fixture.high' }
-  return bonuses
-}
 
 /**
  * Two owned Gogma sources that still carry inherited `normal_artian` scope
  * slots, so their first amendment is a Reset and both share one Bonus stream.
  *
  * Nothing is Practical before Gogma depth 2. At depth 2 the stream publishes
- * two Practical results that tie on every leading work priority - same depth,
- * so the same operation count and Gogma advance, and the same matched Ideal
- * slot count - and differ only in required material quantity:
+ * two Ideal results that tie on every leading work priority - same depth, so
+ * the same operation count and Gogma advance, and the same matched Ideal slot
+ * count - and differ only in required material quantity:
  *
  * ```text
- * reset -> reset   practicalBonuses()          material 1 + 1 = 2
- * reset -> keep    sharpnessPracticalBonuses() material 1 + 5 = 6
+ * reset -> reset   idealBonuses()   material 1 + 1 = 2
+ * reset -> keep    idealBonuses()   material 1 + 5 = 6
  * ```
  *
  * `compareBonusSolutions()` therefore puts the Reset result first, while its
@@ -1074,6 +1039,9 @@ function materialOrderingSetup() {
     gogmaWeapon(id, {
       restorationBonuses: belowPracticalBonuses(),
       restorationBonusScope: 'normal_artian',
+      // The Ideal Skill is already held, so the Skill axis contributes its
+      // zero-operation solution and only the Bonus ordering is exercised.
+      seriesSkillId: IDEAL_SKILL,
     })
   const origin = createConstrainedSearchOrigin({
     normalCounters: [],
@@ -1103,9 +1071,12 @@ function materialOrderingSetup() {
   const engine = createConstrainedEngine(origin, {
     keepSupported: true,
     keepInputs: [belowPracticalBonuses()],
+    // Two Routes reach the very same Ideal five slots at the same depth, one
+    // through a second Reset and one through a Keep, so they tie on every
+    // leading work priority and differ only in required material quantity.
     resetResultAt: (gogmaCounter) =>
-      gogmaCounter === 11 ? practicalBonuses() : belowPracticalBonuses(),
-    keepResultAt: () => sharpnessPracticalBonuses(),
+      gogmaCounter === 11 ? idealBonuses() : belowPracticalBonuses(),
+    keepResultAt: () => idealBonuses(),
   })
   return { origin, engine }
 }
@@ -1149,7 +1120,10 @@ describe('Constrained delivery follows the canonical Bonus stream ordering', () 
       'a:6',
       'b:6',
     ])
-    expect(candidates).toHaveLength(6)
+    // Two Route bases with two Ideal Bonus results each. The Skill axis
+    // contributes only its zero-operation solution, because both sources
+    // already hold the Ideal Skill.
+    expect(candidates).toHaveLength(4)
   })
 
   it('gives a consumer stopping early the canonically best Candidates', async () => {

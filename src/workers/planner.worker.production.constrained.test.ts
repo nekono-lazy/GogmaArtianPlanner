@@ -210,7 +210,7 @@ describe('Production constrained Planner Worker adapter (B8-D1)', () => {
         selectedBuildListEntryId: 'build-list.production.what-if' as never,
       },
       bounds: {
-        maxCandidateTrialsPerCategoryPerTarget: 7,
+        maxCandidateTrialsPerTarget: 7,
         maxPlannerReruns: 13,
       },
     }

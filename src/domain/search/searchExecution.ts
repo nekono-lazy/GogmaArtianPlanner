@@ -14,8 +14,6 @@ import type {
 export const SEARCH_ACTIVITY_PROGRESS_INTERVAL = 100
 
 export interface TargetProgressScope {
-  completedTargets: number
-  totalTargets: number
   targetWeaponId: TargetWeaponId
 }
 
@@ -63,9 +61,7 @@ export function createSearchExecutionContext(
     phase: CandidateSearchProgressPhase,
   ) => {
     onProgress({
-      completedTargets: current.completedTargets,
-      totalTargets: current.totalTargets,
-      currentTargetWeaponId: current.targetWeaponId,
+      targetWeaponId: current.targetWeaponId,
       phase,
       processedWorkItems,
     })
@@ -92,10 +88,7 @@ export function createSearchExecutionContext(
       const current = scope
       if (current === null) return
       scope = null
-      report(
-        { ...current, completedTargets: current.completedTargets + 1 },
-        'finalizing',
-      )
+      report(current, 'finalizing')
     },
     createCandidateId:
       options.createCandidateId ??

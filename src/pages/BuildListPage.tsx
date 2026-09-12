@@ -29,6 +29,9 @@ import type {
   BuildListEntry,
   BuildListEntryId,
   CalculationContext,
+  CompromiseCheckpointGroup,
+  CompromiseCheckpointOpportunity,
+  CompromiseCheckpointOpportunityId,
   OwnedWeapon,
   ProductionPlan,
   TargetWeapon,
@@ -82,6 +85,17 @@ export interface BuildListPageDependencies {
     currentCalculationContext: CalculationContext,
   ): Promise<ProductionPlan | null>
   deleteEntry(id: BuildListEntryId): Promise<void>
+  /**
+   * Replaces one Entry's checkpoint selection.
+   *
+   * Editing it here is what makes a Counter conflict recoverable without
+   * re-searching: the user moves the checkpoint to another arrival, or turns it
+   * off, and runs the Planner again (`docs/UI_FLOW.md` 7.2).
+   */
+  updateCheckpointSelection(
+    id: BuildListEntryId,
+    selectedCheckpointOpportunityIds: readonly CompromiseCheckpointOpportunityId[],
+  ): Promise<BuildListEntry>
 }
 
 function createDefaultDependencies(master: MasterDataRoot): BuildListPageDependencies {
@@ -98,6 +112,8 @@ function createDefaultDependencies(master: MasterDataRoot): BuildListPageDepende
         currentCalculationContext,
       ),
     deleteEntry: (id) => buildListService.deleteEntry(id),
+    updateCheckpointSelection: (id, selectedCheckpointOpportunityIds) =>
+      buildListService.updateCheckpointSelection(id, selectedCheckpointOpportunityIds),
   }
 }
 
@@ -289,6 +305,33 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
     setNotice('生産計画の作成をキャンセルしました。')
   }
 
+  /**
+   * At most one opportunity may be selected per checkpoint group, so choosing
+   * another arrival at the same compromise product replaces the previous one.
+   */
+  const toggleCheckpoint = async (
+    entry: BuildListEntry,
+    group: CompromiseCheckpointGroup,
+    opportunity: CompromiseCheckpointOpportunity,
+    selected: boolean,
+  ) => {
+    if (!dependencies) return
+    const groupIds = new Set(group.opportunities.map(({ id }) => id))
+    const kept = (entry.selectedCheckpointOpportunityIds ?? []).filter(
+      (id) => !groupIds.has(id),
+    )
+    const next = selected ? [...kept, opportunity.id] : kept
+    try {
+      const updated = await dependencies.updateCheckpointSelection(entry.id, next)
+      setEntries((current) =>
+        current.map((existing) => (existing.id === updated.id ? updated : existing)),
+      )
+      setNotice('利用チェックポイントを更新しました。生産計画を再作成してください。')
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : 'チェックポイントを更新できませんでした。')
+    }
+  }
+
   const remove = async (id: BuildListEntryId) => {
     if (!dependencies) return
     try {
@@ -358,7 +401,17 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
           return <Stack spacing={1} key={entry.id}>
             <Typography variant="h2">{target?.name ?? '削除済みの目標武器'}</Typography>
             {entry.isStale && <Alert severity="warning"><Typography variant="subtitle2">再検索が必要</Typography>{entry.staleReasons.map((reason) => <Typography variant="body2" key={reason}>{staleReasonLabels[reason]}</Typography>)}</Alert>}
-            {masterForDisplay && <CandidateCard candidate={entry.candidateSnapshot} target={target} master={masterForDisplay} ownedWeapons={ownedWeapons} debugMode={debugMode} />}
+            {masterForDisplay && <CandidateCard
+              candidate={entry.candidateSnapshot}
+              target={target}
+              master={masterForDisplay}
+              ownedWeapons={ownedWeapons}
+              debugMode={debugMode}
+              selectedCheckpointOpportunityIds={entry.selectedCheckpointOpportunityIds ?? []}
+              onToggleCheckpoint={(group, opportunity, selected) =>
+                void toggleCheckpoint(entry, group, opportunity, selected)
+              }
+            />}
             {debugMode && <Alert severity="info">targetDefinitionHash: {entry.targetDefinitionHash}</Alert>}
             <Typography variant="caption">追加日時: {entry.createdAt}</Typography>
             <Button color="error" variant="outlined" onClick={() => void remove(entry.id)}>ビルドリストから削除</Button>

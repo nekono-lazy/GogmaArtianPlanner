@@ -9,7 +9,6 @@ import type { ConstrainedCandidate } from '../../search'
 import {
   belowPracticalBonuses,
   idealBonuses,
-  practicalBonuses,
 } from '../../../test/fixtures/constrainedEnumeration'
 import { runtimeUnsupportedFixture } from '../../../test/fixtures/plannerRuntimeUnsupported'
 import {
@@ -63,6 +62,10 @@ const TARGET_B = 'target.orchestration.b'
 const TARGET_C = 'target.orchestration.c'
 const SOURCE_C = 'owned.orchestration.c'
 const SOURCE_D = 'owned.orchestration.d'
+/** Source A's own Series Skill, which is also Target A's Ideal Skill. */
+const SOURCE_A_SERIES_SKILL_ID = 'series_skill.fixture.z'
+/** A Series Skill no Target accepts as Ideal, so a Skill amendment is needed. */
+const SOURCE_B_SERIES_SKILL_ID = 'series_skill.fixture.b-source'
 const ENTRY_A = 'build-list.orchestration.a'
 const ENTRY_B = 'build-list.orchestration.b'
 const ENTRY_C = 'build-list.orchestration.c'
@@ -75,23 +78,33 @@ function targetA(): TargetWeapon {
   return orchestrationTarget(TARGET_A, {
     priority: 5,
     idealSkillCondition: {
-      seriesSkillId: null,
+      seriesSkillId: SOURCE_A_SERIES_SKILL_ID,
+      groupSkillId: null,
+      matchMode: 'all',
+    },
+    practicalSkillCondition: {
+      seriesSkillId: SOURCE_A_SERIES_SKILL_ID,
       groupSkillId: null,
       matchMode: 'all',
     },
   })
 }
 
-/** A Target whose Practical condition also needs the Ideal Series Skill. */
+/**
+ * A Target whose Practical condition also needs the Ideal Series Skill.
+ *
+ * Its own source already carries the Ideal five slots, so a Reset-Skills-only
+ * Route is a genuine Ideal solution: that is how a constrained Candidate can
+ * avoid the contested Gogma Counter entirely.
+ */
 function skillTarget(id: string): TargetWeapon {
   return skillConstrainedTarget(id, { priority: 1 })
 }
 
 function idealEntryA(target: TargetWeapon): BuildListEntry {
   return orchestrationEntry(ENTRY_A, target, resetRoute(ORCHESTRATION_SOURCE_A), {
-    category: 'ideal',
     finalBonuses: idealBonuses(),
-    seriesSkillId: 'series_skill.fixture.z',
+    seriesSkillId: SOURCE_A_SERIES_SKILL_ID,
   })
 }
 
@@ -112,7 +125,6 @@ function idealMixedEntry(
         ...resetSkillsRoute(sourceId).operations,
       ],
     },
-    { category: 'ideal' },
   )
 }
 
@@ -127,21 +139,25 @@ interface TwoTargetParts {
  *
  * Target A's Entry Resets its own source there; Target B's Entry Resets its own
  * source at the very same position, which is the `same_gogma_counter` conflict
- * the whole B8 flow is about. Target B's source already carries Practical five
- * slots, so a Reset-Skills-only constrained Candidate is a real Practical
- * solution that avoids the contested position entirely.
+ * the whole B8 flow is about. The same Ideal five slots are reachable again two
+ * Gogma positions later, so a constrained Candidate can reach Target B's Ideal
+ * without the contested position. Source B's Series Skill is its own, so it
+ * never satisfies Target A.
  */
 function twoTargetParts(
-  sourceBBonuses = practicalBonuses(),
+  sourceBBonuses = belowPracticalBonuses(),
 ): TwoTargetParts {
   const a = targetA()
   const b = skillTarget(TARGET_B)
   return {
     targets: [a, b],
     ownedWeapons: [
-      orchestrationSource(ORCHESTRATION_SOURCE_A),
+      orchestrationSource(ORCHESTRATION_SOURCE_A, {
+        seriesSkillId: SOURCE_A_SERIES_SKILL_ID,
+      }),
       orchestrationSource(ORCHESTRATION_SOURCE_B, {
         restorationBonuses: sourceBBonuses,
+        seriesSkillId: SOURCE_B_SERIES_SKILL_ID,
       }),
     ],
     entries: [idealEntryA(a), idealMixedEntry(ENTRY_B, b, ORCHESTRATION_SOURCE_B)],
@@ -156,7 +172,10 @@ function threeTargetParts(): TwoTargetParts {
     targets: [...two.targets, c],
     ownedWeapons: [
       ...two.ownedWeapons,
-      orchestrationSource(SOURCE_C, { restorationBonuses: practicalBonuses() }),
+      orchestrationSource(SOURCE_C, {
+        restorationBonuses: idealBonuses(),
+        seriesSkillId: SOURCE_B_SERIES_SKILL_ID,
+      }),
     ],
     entries: [...two.entries, idealMixedEntry(ENTRY_C, c, SOURCE_C)],
   }
@@ -496,14 +515,25 @@ describe('B8-C4b Candidate trial and adoption', () => {
     expect(result.generatedBuildListEntries).toHaveLength(1)
     const generated = result.generatedBuildListEntries[0]
     expect(generated.targetWeaponId).toBe(TARGET_B)
-    // The adopted Route avoids the contested Gogma Counter entirely; every
+    // The adopted Route reaches the very same Ideal result two Gogma
+    // positions later, so it avoids the contested Counter entirely; every
     // Candidate that used it was rejected by the full Planner rerun.
-    expect(generated.candidateSnapshot.route.kind).toBe(
-      'existing_gogma_reset_skills',
-    )
+    expect(generated.candidateSnapshot.route.kind).toBe('existing_gogma_mixed')
     expect(
       generated.candidateSnapshot.route.operations.map(({ type }) => type),
-    ).toEqual(['reset_skills'])
+    ).toEqual(['reset_bonuses', 'reset_bonuses', 'reset_bonuses', 'reset_skills'])
+    expect(
+      generated.candidateSnapshot.route.operations.every(
+        (operation) =>
+          operation.type !== 'reset_bonuses' ||
+          operation.gogmaCounterBefore !== CONFLICT_GOGMA_COUNTER ||
+          operation.gogmaCounterAfter !== CONFLICT_GOGMA_COUNTER + 1 ||
+          // The contested position may be passed by an unobserved prefix Reset
+          // that the next Reset fully overwrites; what must not happen is the
+          // adopted Candidate *ending* its Bonus amendment there.
+          operation !== generated.candidateSnapshot.route.operations.at(-2),
+      ),
+    ).toBe(true)
     // The fixed Entry and the adopted generated Entry both survive.
     expect(result.plan?.selectedBuildListEntryIds).toEqual(
       [generated.id, entryId(ENTRY_A)].sort(),
@@ -597,9 +627,10 @@ describe('B8-C4b Candidate trial and adoption', () => {
     const constraints = fixedConstraintsOf(built)
     const originalConflictId = constraints[0].originalConflictId
 
-    // The first Candidate the enumerator delivers for Target B is an Ideal one
-    // sitting on the contested Gogma Counter, so adding it joins that very
-    // conflict and changes its id.
+    // An Ideal Candidate for Target B that sits on the contested Gogma
+    // Counter: adding it joins that very conflict and changes its id. The
+    // enumerator also offers cheaper Skill-only Candidates, which is exactly
+    // why the colliding one has to be picked deliberately here.
     let firstCandidate: ConstrainedCandidate | null = null
     await visitConstrainedCandidates(
       {
@@ -609,6 +640,7 @@ describe('B8-C4b Candidate trial and adoption', () => {
       },
       built.dependencies.rngEngine,
       (candidate) => {
+        if (candidate.estimatedGogmaAdvance === 0) return 'continue'
         firstCandidate = candidate
         return 'stop'
       },
@@ -711,12 +743,18 @@ function twoSourceTargetBParts(preferredForB: string | null): TwoTargetParts {
       },
     ],
     ownedWeapons: [
-      orchestrationSource(ORCHESTRATION_SOURCE_A),
+      orchestrationSource(ORCHESTRATION_SOURCE_A, {
+        seriesSkillId: SOURCE_A_SERIES_SKILL_ID,
+      }),
+      // Two equally adoptable sources: both already hold the Ideal five slots
+      // and need the same single Reset Skills.
       orchestrationSource(ORCHESTRATION_SOURCE_B, {
-        restorationBonuses: practicalBonuses(),
+        restorationBonuses: idealBonuses(),
+        seriesSkillId: SOURCE_B_SERIES_SKILL_ID,
       }),
       orchestrationSource(SOURCE_D, {
-        restorationBonuses: practicalBonuses(),
+        restorationBonuses: idealBonuses(),
+        seriesSkillId: SOURCE_B_SERIES_SKILL_ID,
       }),
     ],
     entries: [idealEntryA(a), idealMixedEntry(ENTRY_B, b, ORCHESTRATION_SOURCE_B)],
@@ -786,7 +824,7 @@ describe('B8-C4b orchestration bounds', () => {
     const stopped = await createProductionPlanWithConstrainedSearch(
       short.input,
       short.dependencies,
-      options({ maxCandidateTrialsPerConflict: 4 }),
+      options({ maxCandidateTrialsPerConflict: 3 }),
     )
 
     expect(stopped.generatedBuildListEntries).toEqual([])
@@ -796,14 +834,14 @@ describe('B8-C4b orchestration bounds', () => {
   })
 
   it('raises no trial warning when the adopted Candidate is exactly the limit-th', async () => {
-    // The fixture adopts on the fifth delivered Candidate. An implementation
+    // The fixture adopts on the fourth delivered Candidate. An implementation
     // that stopped right after consuming the limit-th trial, instead of on the
     // `limit + 1`-th delivery, would report a truncation that never happened.
     const exact = fixedScenario()
     const result = await createProductionPlanWithConstrainedSearch(
       exact.input,
       exact.dependencies,
-      options({ maxCandidateTrialsPerConflict: 5 }),
+      options({ maxCandidateTrialsPerConflict: 4 }),
     )
 
     expect(result.generatedBuildListEntries).toHaveLength(1)
@@ -814,12 +852,12 @@ describe('B8-C4b orchestration bounds', () => {
     const parts = threeTargetParts()
     const built = fixedScenario(parts)
 
-    // Seven trials adopt Target B's Candidate; Target C's work then finds the
+    // Four trials adopt Target B's Candidate; Target C's work then finds the
     // shared budget already spent instead of a fresh one of its own.
     const result = await createProductionPlanWithConstrainedSearch(
       built.input,
       built.dependencies,
-      options({ maxCandidateTrialsPerConflict: 7 }),
+      options({ maxCandidateTrialsPerConflict: 5 }),
     )
 
     expect(
@@ -871,16 +909,15 @@ describe('B8-C4b orchestration bounds', () => {
   })
 
   it('counts the initial ordinary Beam Search and every Candidate trial against maxPlannerReruns', async () => {
-    // The fixture processes five Candidates before adopting one, but only four
-    // of them reach a Beam Search: the remaining one is rejected by the initial
-    // conflict preflight, which runs per trial and consumes no budget. So the
-    // whole run needs one initial ordinary Beam Search plus four trial ones -
-    // four executions are one short, five are exactly enough.
+    // The fixture processes four Candidates before adopting one, and each of
+    // them reaches a Beam Search. So the whole run needs one initial ordinary
+    // Beam Search plus three trial ones - three executions are one short, four
+    // are exactly enough.
     const short = fixedScenario()
     const shortResult = await createProductionPlanWithConstrainedSearch(
       short.input,
       short.dependencies,
-      options({ maxPlannerReruns: 4 }),
+      options({ maxPlannerReruns: 3 }),
     )
     expect(shortResult.plan).not.toBeNull()
     expect(shortResult.generatedBuildListEntries).toEqual([])
@@ -892,7 +929,7 @@ describe('B8-C4b orchestration bounds', () => {
     const exactResult = await createProductionPlanWithConstrainedSearch(
       exact.input,
       exact.dependencies,
-      options({ maxPlannerReruns: 5 }),
+      options({ maxPlannerReruns: 4 }),
     )
     expect(exactResult.generatedBuildListEntries).toHaveLength(1)
     expect(exactResult.warnings).toEqual([])
@@ -1026,34 +1063,33 @@ describe('B8-C4b maxPlannerReruns stops orchestration work, not only the next Be
   })
 
   it('requests no further Candidate once a rejected trial spends the last Beam Search', async () => {
-    // The fixture needs five Beam Searches - one initial plus four trials over
-    // five delivered Candidates, one of which the preflight rejects without a
-    // Beam - and adopts on the fifth Candidate.
+    // The fixture needs four Beam Searches - one initial plus three trials -
+    // and adopts on the fourth delivered Candidate.
     const complete = fixedScenario()
     const completeClock = countingClock(complete)
     const completed = await createProductionPlanWithConstrainedSearch(
       complete.input,
       complete.dependencies,
-      options({ maxPlannerReruns: 5 }),
+      options({ maxPlannerReruns: 4 }),
     )
     expect(completed.generatedBuildListEntries).toHaveLength(1)
-    // Five assembled Plans plus five materialized Candidates.
-    expect(completeClock.calls).toBe(10)
+    // Four assembled Plans plus four materialized Candidates.
+    expect(completeClock.calls).toBe(8)
 
     const stopped = fixedScenario()
     const stoppedClock = countingClock(stopped)
     const result = await createProductionPlanWithConstrainedSearch(
       stopped.input,
       stopped.dependencies,
-      options({ maxPlannerReruns: 4 }),
+      options({ maxPlannerReruns: 3 }),
     )
 
     expect(warningKinds(result.warnings)).toContain('max_planner_reruns_reached')
     expect(result.generatedBuildListEntries).toEqual([])
-    // Four assembled Plans plus four materialized Candidates. The fifth
-    // Candidate is never delivered or materialized, because the fourth trial
+    // Three assembled Plans plus three materialized Candidates. The fourth
+    // Candidate is never delivered or materialized, because the third trial
     // was rejected with the budget already spent.
-    expect(stoppedClock.calls).toBe(8)
+    expect(stoppedClock.calls).toBe(6)
     expect(stoppedClock.calls).toBeLessThan(completeClock.calls)
   })
 })

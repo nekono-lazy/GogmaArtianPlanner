@@ -257,9 +257,8 @@ export function candidateSearchInputFromOrigin(
 ): CandidateSearchInput {
   return {
     searchRunId: 'search-run.constrained-fixture',
-    targetWeaponIds: [origin.targetWeapons[0].id],
+    targetWeaponId: origin.targetWeapons[0].id,
     routeFilter: 'all',
-    resultFilter: 'all',
     rngState: origin.rngState,
     normalCounters: origin.normalCounters,
     ownedWeapons: origin.ownedWeapons,
@@ -268,8 +267,6 @@ export function candidateSearchInputFromOrigin(
       maxNormalAdvance: 1,
       maxGogmaAdvance: 2,
       maxSkillAdvance: 1,
-      maxCandidatesPerTarget: 200,
-      similarityThreshold: 0.6,
       ...settings,
     },
     master: origin.master,
@@ -316,13 +313,18 @@ export function createConstrainedEngine(
   const skillPositions = options.skillPositions ?? 8
   const gogmaPositions = options.gogmaPositions ?? 6
   const normalResultAt = options.normalResultAt ?? (() => practicalBonuses())
+  // Every Skill position reaches the Target's Ideal Series Skill, and the
+  // Group Skill - which the Ideal condition leaves unconstrained - keeps the
+  // positions distinct. Every Gogma position reaches the Ideal five slots.
+  // Constrained enumeration exists to offer the same result at a later Counter
+  // position, so an Ideal-reaching stream is exactly its workload.
   const skillResultAt =
     options.skillResultAt ??
     ((skillCounter: number) => ({
-      seriesSkillId: `series_skill.fixture.s${skillCounter}`,
-      groupSkillId: 'group_skill.fixture.a',
+      seriesSkillId: IDEAL_SERIES_SKILL_ID,
+      groupSkillId: `group_skill.fixture.g${skillCounter}`,
     }))
-  const resetResultAt = options.resetResultAt ?? (() => belowPracticalBonuses())
+  const resetResultAt = options.resetResultAt ?? (() => idealBonuses())
   const keepResultAt = options.keepResultAt ?? (() => belowPracticalBonuses())
   const startNormal = origin.normalCounters[0]?.counter ?? CONSTRAINED_START_NORMAL_COUNTER
   const startSkill = CONSTRAINED_START_SKILL_COUNTER

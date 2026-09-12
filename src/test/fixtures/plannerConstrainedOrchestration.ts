@@ -34,7 +34,6 @@ import {
   CONSTRAINED_START_GOGMA_COUNTER,
   CONSTRAINED_START_SKILL_COUNTER,
   IDEAL_SERIES_SKILL_ID,
-  alternativePracticalBonuses,
   belowPracticalBonuses,
   createConstrainedEngine,
   createConstrainedSearchOrigin,
@@ -170,8 +169,6 @@ export function orchestrationEntry(
   snapshot.id = entry.candidateId
   snapshot.targetWeaponId = target.id
   snapshot.route = structuredClone(route)
-  snapshot.category = options.category ?? 'ideal'
-  snapshot.isSimilarToIdeal = false
   snapshot.finalBonuses = options.finalBonuses ?? idealBonuses()
   snapshot.restorationBonusScope = 'gogma_artian'
   snapshot.seriesSkillId =
@@ -243,9 +240,12 @@ export interface OrchestrationScenario {
  * Practical results, and everything else stays below the Practical line.
  */
 export function orchestrationResetResultAt(gogmaCounter: number): RestorationBonusSet {
+  // The Ideal five slots are reachable at the contested position and again two
+  // positions later, so a constrained re-search can reject the colliding
+  // Candidate and adopt a later one that reaches the very same Ideal result.
   if (gogmaCounter === CONFLICT_GOGMA_COUNTER) return idealBonuses()
   if (gogmaCounter === CONFLICT_GOGMA_COUNTER + 1) return practicalBonuses()
-  if (gogmaCounter === CONFLICT_GOGMA_COUNTER + 2) return alternativePracticalBonuses()
+  if (gogmaCounter === CONFLICT_GOGMA_COUNTER + 2) return idealBonuses()
   return belowPracticalBonuses()
 }
 

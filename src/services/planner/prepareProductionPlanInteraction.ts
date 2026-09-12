@@ -3,7 +3,7 @@ import {
   type BuildListEntry,
   type BuildListEntryId,
   type CalculationContext,
-  type CandidateCategory,
+  type CompromiseCheckpointOpportunityId,
   type PlanConflict,
   type ProductionPlan,
   type ProductionPlanStatus,
@@ -30,7 +30,15 @@ export interface ProductionPlanParticipantViewModel {
   entry: BuildListEntry | null
   target: TargetWeapon | null
   targetName: string
-  candidateCategory: CandidateCategory | null
+  /**
+   * The compromise checkpoint this participant is competing for, or `null`.
+   *
+   * A conflict between two selected checkpoints cannot be resolved by picking a
+   * winning Entry: the loser's checkpoint would simply be dropped, which the
+   * Planner is never allowed to do. The UI uses this to say that the Build List
+   * checkpoint selection has to change instead (`docs/UI_FLOW.md` 7.2).
+   */
+  checkpointOpportunityId: CompromiseCheckpointOpportunityId | null
   isRecommended: boolean
   isSelected: boolean
   isAvailable: boolean
@@ -242,7 +250,10 @@ export function createProductionPlanInteractionViewModel(
           targetName: entry
             ? target?.name ?? '削除済みまたは現在存在しない目標武器'
             : '削除済みまたは現在存在しない候補',
-          candidateCategory: entry?.candidateSnapshot.category ?? null,
+          checkpointOpportunityId:
+            conflict.checkpointParticipants?.find(
+              (participant) => participant.buildListEntryId === buildListEntryId,
+            )?.checkpointOpportunityId ?? null,
           isRecommended:
             conflict.recommendedBuildListEntryId === buildListEntryId,
           isSelected: conflict.selectedBuildListEntryId === buildListEntryId,

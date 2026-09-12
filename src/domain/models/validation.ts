@@ -9,7 +9,10 @@ import type {
   RestorationBonusScope,
   RngState,
 } from './common'
-import { V1_NORMAL_ARTIAN_RARITY } from './common'
+import {
+  CURRENT_CALCULATION_APP_SCHEMA_VERSION,
+  V1_NORMAL_ARTIAN_RARITY,
+} from './common'
 import type {
   AlternativeBonusRule,
   PracticalBonusCondition,
@@ -1047,6 +1050,123 @@ function validateCandidateConversionSkillTrace(
   }
 }
 
+/**
+ * Strict checkpoint shape validation (`docs/SEARCH_SPEC.md` 5.8).
+ *
+ * Every Candidate generated under the current `CalculationContext` carries
+ * `checkpointGroups`. A Candidate persisted before the field existed is left
+ * alone rather than rewritten, so an absent field is an issue only at the
+ * current calculation schema version.
+ */
+function validateCandidateCheckpointGroups(
+  candidate: BuildCandidate,
+  issues: DomainValidationIssue[],
+): void {
+  const groups = candidate.checkpointGroups
+  if (groups === undefined) {
+    if (
+      candidate.calculationContext.appSchemaVersion ===
+      CURRENT_CALCULATION_APP_SCHEMA_VERSION
+    ) {
+      addIssue(
+        issues,
+        'checkpointGroups',
+        'invalid_state',
+        'A current-schema Candidate must carry its checkpoint groups.',
+      )
+    }
+    return
+  }
+  const operationCount = candidate.route.operations.length
+  const groupIds = new Set<string>()
+  const opportunityIds = new Set<string>()
+  groups.forEach((group, groupIndex) => {
+    const path = `checkpointGroups[${groupIndex}]`
+    validateId(group.id, `${path}.id`, issues)
+    if (groupIds.has(group.id)) {
+      addIssue(issues, `${path}.id`, 'invalid_structure', 'Checkpoint group ids must be unique.')
+    }
+    groupIds.add(group.id)
+    validateRestorationBonusScope(group.restorationBonusScope, `${path}.restorationBonusScope`, issues)
+    appendIssues(issues, `${path}.restorationBonuses`, validateRestorationBonusSet(group.restorationBonuses))
+    if (
+      !['ideal', 'practical', 'alternative'].includes(group.conditionMatch.bonus) ||
+      !['ideal', 'practical'].includes(group.conditionMatch.skill) ||
+      (group.conditionMatch.bonus === 'ideal' && group.conditionMatch.skill === 'ideal')
+    ) {
+      addIssue(
+        issues,
+        `${path}.conditionMatch`,
+        'invalid_structure',
+        'A checkpoint must satisfy a compromise condition, never the full Ideal condition.',
+      )
+    }
+    if (group.restorationBonusScope !== 'gogma_artian') {
+      addIssue(
+        issues,
+        `${path}.restorationBonusScope`,
+        'invalid_state',
+        'A checkpoint state must have Gogma Artian scope.',
+      )
+    }
+    if (group.opportunities.length === 0) {
+      addIssue(issues, `${path}.opportunities`, 'invalid_state', 'A checkpoint group must keep at least one opportunity.')
+    }
+    if (group.isDisplaySecondary !== (group.dominatingGroupId !== null)) {
+      addIssue(
+        issues,
+        `${path}.isDisplaySecondary`,
+        'invalid_state',
+        'isDisplaySecondary must match the presence of dominatingGroupId.',
+      )
+    }
+    group.opportunities.forEach((opportunity, index) => {
+      const opportunityPath = `${path}.opportunities[${index}]`
+      validateId(opportunity.id, `${opportunityPath}.id`, issues)
+      if (opportunityIds.has(opportunity.id)) {
+        addIssue(issues, `${opportunityPath}.id`, 'invalid_structure', 'Checkpoint opportunity ids must be unique.')
+      }
+      opportunityIds.add(opportunity.id)
+      validateNonNegativeInteger(opportunity.afterOperationIndex, `${opportunityPath}.afterOperationIndex`, issues)
+      // Strict prefix only: the Ideal-completing final operation is never a
+      // checkpoint (`docs/SEARCH_SPEC.md` 5.8.1).
+      if (opportunity.afterOperationIndex >= operationCount - 1) {
+        addIssue(
+          issues,
+          `${opportunityPath}.afterOperationIndex`,
+          'invalid_range',
+          'A checkpoint must end on a strict prefix of the Route.',
+        )
+      }
+      if (index > 0 && opportunity.afterOperationIndex <= group.opportunities[index - 1].afterOperationIndex) {
+        addIssue(
+          issues,
+          `${opportunityPath}.afterOperationIndex`,
+          'invalid_structure',
+          'Checkpoint opportunities must ascend by Route position.',
+        )
+      }
+      validatePositiveInteger(opportunity.operationCount, `${opportunityPath}.operationCount`, issues)
+      validatePositiveInteger(opportunity.remainingOperationCount, `${opportunityPath}.remainingOperationCount`, issues)
+      appendIssues(issues, `${opportunityPath}.restorationBonuses`, validateRestorationBonusSet(opportunity.restorationBonuses))
+      validateRestorationBonusScope(opportunity.restorationBonusScope, `${opportunityPath}.restorationBonusScope`, issues)
+      if (
+        opportunity.restorationBonusScope !== group.restorationBonusScope ||
+        opportunity.seriesSkillId !== group.seriesSkillId ||
+        opportunity.groupSkillId !== group.groupSkillId ||
+        !areRestorationBonusSetsEqual(opportunity.restorationBonuses, group.restorationBonuses)
+      ) {
+        addIssue(
+          issues,
+          opportunityPath,
+          'invalid_state',
+          'Every opportunity must reach its own group performance state.',
+        )
+      }
+    })
+  })
+}
+
 export function validateBuildCandidate(
   candidate: BuildCandidate,
   ownedWeapons?: readonly OwnedWeapon[],
@@ -1054,16 +1174,6 @@ export function validateBuildCandidate(
   const issues: DomainValidationIssue[] = []
   validateId(candidate.id, 'id', issues)
   validateId(candidate.targetWeaponId, 'targetWeaponId', issues)
-  if (!['ideal', 'practical'].includes(candidate.category)) {
-    addIssue(issues, 'category', 'invalid_literal', 'Candidate category is invalid.')
-  }
-  if (candidate.conditionMatch !== undefined) {
-    const match = candidate.conditionMatch
-    if (!['ideal', 'practical', 'alternative'].includes(match.bonus) || !['ideal', 'practical'].includes(match.skill) ||
-      (candidate.category === 'ideal') !== (match.bonus === 'ideal' && match.skill === 'ideal') || candidate.restorationBonusScope !== 'gogma_artian') {
-      addIssue(issues, 'conditionMatch', 'invalid_structure', 'Candidate condition match must agree with category and Gogma scope.')
-    }
-  }
   appendIssues(issues, 'finalBonuses', validateRestorationBonusSet(candidate.finalBonuses))
   validateRestorationBonusScope(candidate.restorationBonusScope, 'restorationBonusScope', issues)
   appendIssues(issues, 'route', validateBuildRoute(candidate.route, ownedWeapons))
@@ -1079,20 +1189,7 @@ export function validateBuildCandidate(
   if (candidate.idealDifference.matchedBonusCount < 0 || candidate.idealDifference.matchedBonusCount > 5) {
     addIssue(issues, 'idealDifference.matchedBonusCount', 'invalid_range', 'matchedBonusCount must be 0 through 5.')
   }
-  if (candidate.category === 'ideal' && candidate.isSimilarToIdeal) {
-    addIssue(
-      issues,
-      'isSimilarToIdeal',
-      'invalid_state',
-      'Only practical candidates may be similar to ideal.',
-    )
-  }
-  if (
-    candidate.similarityScore !== null &&
-    (!Number.isFinite(candidate.similarityScore) || candidate.similarityScore < 0 || candidate.similarityScore > 1)
-  ) {
-    addIssue(issues, 'similarityScore', 'invalid_range', 'similarityScore must be null or 0 through 1.')
-  }
+  validateCandidateCheckpointGroups(candidate, issues)
   validateId(candidate.searchStateHash, 'searchStateHash', issues)
   if (candidate.referencedOwnedWeaponsHash !== null) {
     validateId(candidate.referencedOwnedWeaponsHash, 'referencedOwnedWeaponsHash', issues)
@@ -1128,6 +1225,55 @@ export function validateBuildCandidate(
   return result(issues)
 }
 
+/**
+ * The selected checkpoints are a hard Planner constraint, so an unknown id or a
+ * second selection inside one group fails closed rather than being ignored
+ * (`docs/DATA_MODEL.md` 10.2).
+ */
+function validateBuildListEntryCheckpointSelection(
+  entry: BuildListEntry,
+  issues: DomainValidationIssue[],
+): void {
+  const selected = entry.selectedCheckpointOpportunityIds
+  if (selected === undefined || selected.length === 0) return
+  const groupIdByOpportunityId = new Map<string, string>()
+  for (const group of entry.candidateSnapshot.checkpointGroups ?? []) {
+    for (const opportunity of group.opportunities) {
+      groupIdByOpportunityId.set(opportunity.id, group.id)
+    }
+  }
+  const selectedGroupIds = new Set<string>()
+  const seen = new Set<string>()
+  selected.forEach((opportunityId, index) => {
+    const path = `selectedCheckpointOpportunityIds[${index}]`
+    const groupId = groupIdByOpportunityId.get(opportunityId)
+    if (groupId === undefined) {
+      addIssue(
+        issues,
+        path,
+        'invalid_reference',
+        'A selected checkpoint opportunity must exist in the candidate snapshot.',
+      )
+      return
+    }
+    if (seen.has(opportunityId)) {
+      addIssue(issues, path, 'invalid_structure', 'A checkpoint opportunity must not be selected twice.')
+      return
+    }
+    seen.add(opportunityId)
+    if (selectedGroupIds.has(groupId)) {
+      addIssue(
+        issues,
+        path,
+        'invalid_state',
+        'At most one opportunity may be selected per checkpoint group.',
+      )
+      return
+    }
+    selectedGroupIds.add(groupId)
+  })
+}
+
 export function validateBuildListEntry(
   entry: BuildListEntry,
 ): DomainValidationResult {
@@ -1151,6 +1297,7 @@ export function validateBuildListEntry(
   if (!isCalculationContextCompatible(entry.calculationContext, entry.candidateSnapshot.calculationContext)) {
     addIssue(issues, 'calculationContext', 'inconsistent_snapshot', 'CalculationContext must match the candidate snapshot.')
   }
+  validateBuildListEntryCheckpointSelection(entry, issues)
   if (entry.isStale !== (entry.staleReasons.length > 0)) {
     addIssue(issues, 'isStale', 'invalid_state', 'isStale must match the presence of staleReasons.')
   }

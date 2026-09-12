@@ -13,9 +13,6 @@ import { bonusOutcomeKey, bonusSolutionRetentionKey, compareStableKeys } from '.
 export { compareStableKeys } from './semanticKeys'
 import {
   createBonusIdealDifference,
-  evaluateTargetBonusMatch,
-  evaluateTargetSkillMatch,
-  hasTargetCompromise,
   evaluateSkillCondition,
   satisfiesIdealBonuses,
 } from '../target'
@@ -69,15 +66,11 @@ export interface RouteBonusSolution {
   amendmentResults: readonly BonusAmendmentResult[]
 }
 
-/** Which stream predicate selects an axis; never the final Candidate category. */
-export type StreamCategoryPredicate = 'ideal' | 'practical'
-
 export interface EvaluatedSkillSolution {
   /** Position in the retained, deterministically ordered stream set. */
   index: number
   solution: RouteSkillSolution
   idealMatch: boolean
-  practicalMatch: boolean
   /** Matched count among the series / group actually specified by Ideal. */
   idealCloseness: number
   semanticKey: string
@@ -87,7 +80,6 @@ export interface EvaluatedBonusSolution {
   index: number
   solution: RouteBonusSolution
   idealMatch: boolean
-  practicalMatch: boolean
   matchedIdealBonusCount: number
   /** Anchor-ordering tie-break only; never a Practical dominance input. */
   materialQuantity: number
@@ -131,9 +123,6 @@ function evaluateSkillSolution(
       solution.seriesSkillId,
       solution.groupSkillId,
     ),
-    practicalMatch: hasTargetCompromise(target) && evaluateTargetSkillMatch(
-      target, solution.seriesSkillId, solution.groupSkillId,
-    ) !== null,
     idealCloseness: skillIdealCloseness(
       target,
       solution.seriesSkillId,
@@ -159,9 +148,6 @@ function evaluateBonusSolution(
       solution.restorationBonusScope,
       input.master,
     ),
-    practicalMatch: hasTargetCompromise(target) && evaluateTargetBonusMatch(
-      target, solution.finalBonuses, solution.restorationBonusScope, input.master,
-    ) !== null,
     matchedIdealBonusCount: createBonusIdealDifference(
       target.idealBonuses,
       solution.finalBonuses,
@@ -302,22 +288,23 @@ export function buildBonusSolutionSet(
     .map((evaluated, index) => ({ ...evaluated, index }))
 }
 
-/** `K(c)`: the ordered Skill solutions satisfying the category's predicate. */
-export function selectSkillAxis(
+/**
+ * `K`: the ordered Skill solutions satisfying the Target's Ideal Skill
+ * condition.
+ *
+ * There is no Practical axis any more. Composing a Practical result would
+ * create an independent compromise Candidate, and a compromise is only offered
+ * as a checkpoint on a real Ideal Route (`docs/SEARCH_SPEC.md` 5.5.4).
+ */
+export function selectIdealSkillAxis(
   set: readonly EvaluatedSkillSolution[],
-  category: StreamCategoryPredicate,
 ): EvaluatedSkillSolution[] {
-  return set.filter((entry) =>
-    category === 'ideal' ? entry.idealMatch : entry.practicalMatch,
-  )
+  return set.filter((entry) => entry.idealMatch)
 }
 
-/** `B(c)`: the ordered Bonus solutions satisfying the category's predicate. */
-export function selectBonusAxis(
+/** `B`: the ordered Bonus solutions satisfying the Target's Ideal Bonuses. */
+export function selectIdealBonusAxis(
   set: readonly EvaluatedBonusSolution[],
-  category: StreamCategoryPredicate,
 ): EvaluatedBonusSolution[] {
-  return set.filter((entry) =>
-    category === 'ideal' ? entry.idealMatch : entry.practicalMatch,
-  )
+  return set.filter((entry) => entry.idealMatch)
 }

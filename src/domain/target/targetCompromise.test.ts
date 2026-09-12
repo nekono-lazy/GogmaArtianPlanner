@@ -24,8 +24,25 @@ function target(): TargetWeapon {
     practicalSkillCondition: { seriesSkillId: 'series', groupSkillId: null, matchMode: 'all' },
   }
 }
+/**
+ * The two axis matches plus the category they imply.
+ *
+ * `category` is derived here rather than read off the evaluator: a state
+ * matching both axes at Ideal is an Ideal result, and a state matching both
+ * with at least one compromise is a checkpoint state on a canonical Ideal
+ * Route, never an independent Candidate (`docs/SEARCH_SPEC.md` 5.8).
+ */
 function evaluate(value: RestorationBonusSet, t = target(), skill: 'ideal' | 'practical' = 'ideal') {
-  return evaluateTargetCandidate(t, value, 'gogma_artian', 'series', skill === 'ideal' ? 'group' : 'other', master, 0.6)
+  const result = evaluateTargetCandidate(t, value, 'gogma_artian', 'series', skill === 'ideal' ? 'group' : 'other', master)
+  return {
+    ...result,
+    category:
+      result.bonusMatch === null || result.skillMatch === null
+        ? null
+        : result.bonusMatch === 'ideal' && result.skillMatch === 'ideal'
+          ? 'ideal'
+          : 'practical',
+  }
 }
 
 describe('Ideal-based compromise semantics', () => {
@@ -108,7 +125,9 @@ describe('Ideal-based compromise semantics', () => {
     expect(evaluate(ideal(), t, 'practical').category).toBe('practical')
   })
   it.each([ideal, practical, alternative])('rejects normal scope regardless of matching labels', (slots) => {
-    expect(evaluateTargetCandidate(target(), slots(), 'normal_artian', 'series', 'group', master, 0.6).category).toBeNull()
+    // Every Bonus match requires Gogma scope, so a Normal-scope result is
+    // neither an Ideal Candidate nor a checkpoint state.
+    expect(evaluateTargetCandidate(target(), slots(), 'normal_artian', 'series', 'group', master).bonusMatch).toBeNull()
   })
 })
 

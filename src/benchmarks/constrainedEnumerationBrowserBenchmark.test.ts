@@ -189,14 +189,10 @@ describe('B8 benchmark Worker path', () => {
     }
     const measurement = first.outcome.measurement
     expect(measurement.summary.examinedCandidates).toBeGreaterThan(0)
-    expect(measurement.summary.evaluatedOffAxisPairs).toBeGreaterThan(0)
     expect(measurement.summary.exhausted).toBe(false)
     expect(measurement.summary.stoppedByBound).toBe(true)
     expect(measurement.stoppedByConsumer).toBe(false)
     expect(measurement.deliveredCandidates).toBeGreaterThan(0)
-    expect(measurement.idealCandidates + measurement.practicalCandidates).toBe(
-      measurement.deliveredCandidates,
-    )
     expect(measurement.timeToFirstCandidateMs).not.toBeNull()
     expect(measurement.mode).toBe('parity')
     expect(measurement.recorderOverheadMs).not.toBeNull()
@@ -261,12 +257,12 @@ describe('B8 benchmark Worker path', () => {
     const { harness } = harnessOverFake()
     const stopped = await harness.run({
       requestId: 'b8.test.stop',
-      workloadId: 'constrained_gogma_10',
+      workloadId: 'constrained_skill_10',
       stopAfterCandidates: 3,
     })
     const full = await harness.run({
       requestId: 'b8.test.stop.full',
-      workloadId: 'constrained_gogma_10',
+      workloadId: 'constrained_skill_10',
     })
     if (stopped.outcome.status !== 'completed' || full.outcome.status !== 'completed') {
       throw new Error('expected completion')
@@ -365,12 +361,6 @@ describe('B8 benchmark Worker path', () => {
     expect(timing.outcome.measurement.deliveredCandidates).toBe(
       parity.outcome.measurement.deliveredCandidates,
     )
-    expect(timing.outcome.measurement.idealCandidates).toBe(
-      parity.outcome.measurement.idealCandidates,
-    )
-    expect(timing.outcome.measurement.practicalCandidates).toBe(
-      parity.outcome.measurement.practicalCandidates,
-    )
     expect(timing.outcome.measurement.routeKinds).toEqual(
       parity.outcome.measurement.routeKinds,
     )
@@ -384,7 +374,7 @@ describe('B8 benchmark Worker path', () => {
     const { harness } = harnessOverFake()
     const result = await harness.run({
       requestId: 'b8.test.timing.stop',
-      workloadId: 'constrained_gogma_10',
+      workloadId: 'constrained_skill_10',
       stopAfterCandidates: 3,
     })
     if (result.outcome.status !== 'completed') throw new Error('expected completion')

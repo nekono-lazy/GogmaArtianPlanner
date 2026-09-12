@@ -4,6 +4,7 @@ import {
   createCandidateSearchInput,
   practicalOnlyBonuses,
   SEARCH_FIXTURE_TIME,
+  candidatesOf,
 } from '../../test/fixtures/candidateSearch'
 import {
   createRestorationBonusSet,
@@ -16,7 +17,14 @@ import type {
 } from '../models/publicTypes'
 import { FakeRngEngine, type FakeRngFixtures } from '../rng/fakeRngEngine'
 import { gogmaKeepFamilyLayoutKey } from '../rng/gogmaBonusFamily'
+import {
+  bonusAmendmentOperations,
+  createTargetBonusStream,
+} from './bonusStream'
 import { searchCandidates } from './candidateSearch'
+import { createSearchPredictionSupport } from './routeSearchShared'
+import { createSearchExecutionContext } from './searchExecution'
+import { bonusStreamInputForSearch } from './searchStreamInputs'
 import type { CandidateSearchInput } from './searchTypes'
 
 const deterministicExecution = {
@@ -354,14 +362,6 @@ describe('Bonus stream state search', () => {
     const many = await run(4)
     expect(single.resetCounters).toEqual([10, 11, 12])
     expect(many.resetCounters).toEqual([10, 11, 12])
-    // Every offset still composes with the shared depth >= 1 Bonus solutions.
-    expect(many.result.targetResults[0].candidates.filter(({ route }) =>
-      route.operations.some(({ type }) => type === 'reset_bonuses'),
-    ).length).toBeGreaterThan(
-      single.result.targetResults[0].candidates.filter(({ route }) =>
-        route.operations.some(({ type }) => type === 'reset_bonuses'),
-      ).length,
-    )
   })
 
   it('predicts Keep once per family layout even when the tiers differ', async () => {
@@ -430,16 +430,12 @@ describe('Bonus stream state search', () => {
       ],
     })
     const calls = gogmaCalls(engine)
-    const result = await searchCandidates(input, engine, deterministicExecution)
+    await searchCandidates(input, engine, deterministicExecution)
 
     // One representative survives, and it is the depth-1 Reset state.
     const secondKeep = calls.keepInputs().filter(({ counter }) => counter === 11)
     expect(secondKeep).toHaveLength(1)
     expect(secondKeep[0].currentBonuses).toEqual(layoutA())
-    // The folded Keep-only state was still published as a depth-1 Candidate.
-    expect(result.targetResults[0].candidates.map(({ route }) =>
-      operationTypes(route.operations),
-    )).toContain('keep_bonuses')
   })
 
   it('rebuilds the canonical Reset-then-Keep operation sequence of every depth', async () => {
@@ -466,11 +462,28 @@ describe('Bonus stream state search', () => {
         { counterOffset: 2, currentBonuses: layoutSUtilityHigh(), result: layoutSUtilityMixed() },
       ],
     })
-    const result = await searchCandidates(input, engine, deterministicExecution)
+    // The Candidate output is canonical-Ideal-only, so the four canonical
+    // depth-3 histories are observed on the Bonus stream itself, which is the
+    // authority that rebuilds them (`docs/SEARCH_SPEC.md` 5.5.3).
     const source = input.ownedWeapons[0]
-    const depthThree = result.targetResults[0].candidates
-      .filter(({ route }) => route.operations.length === 3)
-      .map(({ route }) => operationTypes(route.operations))
+    const target = input.targetWeapons[0]
+    const stream = createTargetBonusStream(
+      target,
+      bonusStreamInputForSearch(input),
+      engine,
+      createSearchExecutionContext(deterministicExecution),
+      createSearchPredictionSupport(engine, target, input.master),
+    )
+    const set = await stream.solve({
+      startGogmaCounter: START_GOGMA_COUNTER,
+      bonuses: layoutS(),
+      restorationBonusScope: 'gogma_artian',
+    })
+    const depthThreeSolutions = set.solutions.filter(({ depth }) => depth === 3)
+    const depthThree = depthThreeSolutions
+      .map((solution) =>
+        operationTypes(bonusAmendmentOperations(set, solution, source.id)),
+      )
       .sort()
 
     expect(depthThree).toEqual([
@@ -480,20 +493,18 @@ describe('Bonus stream state search', () => {
       'reset_bonuses,reset_bonuses,reset_bonuses',
     ])
 
-    for (const sequence of depthThree) {
-      const candidate = result.targetResults[0].candidates.find(
-        ({ route }) => operationTypes(route.operations) === sequence,
-      )
-      expect(candidate?.route.operations.map((operation) =>
-        operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses'
-          ? [operation.gogmaCounterBefore, operation.gogmaCounterAfter, operation.sourceOwnedWeaponId]
-          : null,
-      )).toEqual([
+    for (const solution of depthThreeSolutions) {
+      expect(
+        bonusAmendmentOperations(set, solution, source.id).map((operation) =>
+          operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses'
+            ? [operation.gogmaCounterBefore, operation.gogmaCounterAfter, operation.sourceOwnedWeaponId]
+            : null,
+        ),
+      ).toEqual([
         [10, 11, source.id],
         [11, 12, source.id],
         [12, 13, source.id],
       ])
-      expect(candidate?.estimatedGogmaAdvance).toBe(3)
     }
   })
 
@@ -516,19 +527,19 @@ describe('Bonus stream state search', () => {
       isProtected: false,
     } as unknown as CandidateSearchInput['ownedWeapons'][number]
     input.ownedWeapons = [source]
-    // Unreached Ideal keeps this full-depth frontier regression independent of B4.
-    input.targetWeapons[0].idealBonuses[3] = { bonusTypeId: 'bonus_type.fixture.utility', bonusRankId: 'bonus_rank.fixture.low' }
-    input.targetWeapons[0].idealBonuses[4] = { bonusTypeId: 'bonus_type.fixture.sharpness', bonusRankId: 'bonus_rank.fixture.special' }
+    // The Ideal is reached only by the depth-2 Keep, so the canonical Ideal
+    // Route is exactly the mixed `convert -> reset -> keep` sequence whose
+    // transient amendments this test is about.
     const engine = createBonusFixtureEngine(input, {
-      resets: [layoutA(), layoutC()],
+      resets: [layoutALower(), layoutAMiddle()],
       keepSupported: true,
       skillSupported: true,
       skillPositions: 2,
       idealSkillIndex: 0,
-      keeps: [{ counterOffset: 1, currentBonuses: layoutA(), result: layoutALower() }],
+      keeps: [{ counterOffset: 1, currentBonuses: layoutALower(), result: layoutA() }],
     })
     const result = await searchCandidates(input, engine, deterministicExecution)
-    const candidates = result.targetResults[0].candidates
+    const candidates = candidatesOf(result.targetResult)
 
     // Normal-scope Keep stays unsupported, so depth 1 is Reset only.
     expect(candidates.map(({ route }) => operationTypes(route.operations)))
@@ -564,7 +575,7 @@ describe('Bonus stream state search', () => {
     })
     const calls = gogmaCalls(engine)
     const result = await searchCandidates(input, engine, deterministicExecution)
-    const candidates = result.targetResults[0].candidates
+    const candidates = candidatesOf(result.targetResult)
 
     expect(calls.total()).toBe(0)
     expect(candidates.some(({ route }) =>
@@ -576,7 +587,6 @@ describe('Bonus stream state search', () => {
     const resetSkills = candidates.find(({ route }) =>
       route.kind === 'existing_gogma_reset_skills',
     )
-    expect(resetSkills?.category).toBe('ideal')
     expect(operationTypes(resetSkills?.route.operations ?? [])).toBe('reset_skills')
   })
 
@@ -597,13 +607,14 @@ describe('Bonus stream state search', () => {
     })
     const calls = gogmaCalls(engine)
     const result = await searchCandidates(input, engine, deterministicExecution)
-    const candidates = result.targetResults[0].candidates
+    const candidates = candidatesOf(result.targetResult)
 
     // The first Reset reaches Ideal: B4 settles depth 1 and stops.
     expect(calls.resetCounters()).toEqual([10])
-    const ideal = candidates.find(({ category }) => category === 'ideal')
-    expect(operationTypes(ideal?.route.operations ?? [])).toBe('reset_bonuses')
-    expect(candidates.some(({ category }) => category === 'practical')).toBe(true)
+    // Only the Ideal result becomes a Candidate; the Practical outcome the
+    // stream also reached is offered as a checkpoint instead.
+    expect(candidates).toHaveLength(1)
+    expect(operationTypes(candidates[0].route.operations)).toBe('reset_bonuses')
   })
 
   it('does not grow the Skill prediction count with the Bonus family layout count', async () => {

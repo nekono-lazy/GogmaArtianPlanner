@@ -12,16 +12,19 @@ import {
   Typography,
 } from '@mui/material'
 import { RestorationBonusSlots } from '../RestorationBonusSlots'
+import { CompromiseCheckpointList } from './CompromiseCheckpointList'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import type {
   BuildCandidate,
+  CompromiseCheckpointGroup,
+  CompromiseCheckpointOpportunity,
+  CompromiseCheckpointOpportunityId,
   OwnedWeapon,
   SkillAmendmentResult,
   TargetWeapon,
 } from '../../domain/models/publicTypes'
 import {
   bonusLabel,
-  categoryLabels,
   groupSkillLabel,
   materialLabel,
   operationLabel,
@@ -37,6 +40,19 @@ interface CandidateCardProps {
   debugMode?: boolean
   onAdd?: (candidate: BuildCandidate) => void
   addDisabled?: boolean
+  /**
+   * The compromise checkpoints the user has chosen to use.
+   *
+   * Checkpoints are a BuildListEntry input, never part of the Candidate, so the
+   * owner of the selection passes it in rather than the card holding it
+   * (`docs/DATA_MODEL.md` 10.2).
+   */
+  selectedCheckpointOpportunityIds?: readonly CompromiseCheckpointOpportunityId[]
+  onToggleCheckpoint?: (
+    group: CompromiseCheckpointGroup,
+    opportunity: CompromiseCheckpointOpportunity,
+    selected: boolean,
+  ) => void
 }
 
 export function CandidateCard({
@@ -47,6 +63,8 @@ export function CandidateCard({
   debugMode = false,
   onAdd,
   addDisabled = false,
+  selectedCheckpointOpportunityIds = [],
+  onToggleCheckpoint,
 }: CandidateCardProps) {
   const weaponTypeId = target?.weaponTypeId ?? candidate.route.operations.find(
     (operation) => 'weaponTypeId' in operation,
@@ -89,19 +107,8 @@ export function CandidateCard({
     <Card variant="outlined">
       <CardContent>
         <Stack spacing={2}>
-          {candidate.conditionMatch && <Typography variant="body2">
-            ボーナス判定: {{ ideal: '理想', practical: '実用', alternative: '代替' }[candidate.conditionMatch.bonus]}
-            {' ／ '}スキル判定: {{ ideal: '理想', practical: '実用' }[candidate.conditionMatch.skill]}
-          </Typography>}
           <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-            <Chip
-              color={candidate.category === 'ideal' ? 'success' : 'primary'}
-              label={categoryLabels[candidate.category]}
-              size="small"
-            />
-            {candidate.category === 'practical' && candidate.isSimilarToIdeal && (
-              <Chip label="理想に近い" variant="outlined" size="small" />
-            )}
+            <Chip color="success" label="理想候補" size="small" />
             <Chip label={routeKindLabels[candidate.route.kind]} size="small" variant="outlined" />
           </Stack>
           <RestorationBonusSlots
@@ -138,7 +145,6 @@ export function CandidateCard({
                 <Typography variant="body2">
                   余剰: {candidate.idealDifference.extraBonuses.map((bonus) => bonusLabel(bonus, weaponTypeId, master)).join('、') || 'なし'}
                 </Typography>
-                <Typography variant="body2">類似度: {candidate.similarityScore === null ? '—' : candidate.similarityScore.toFixed(2)}</Typography>
                 <Divider />
                 {missingAmendmentTrace && (
                   <Typography variant="body2" color="text.secondary">
@@ -214,6 +220,19 @@ export function CandidateCard({
               </Stack>
             </AccordionDetails>
           </Accordion>
+          {/* A checkpoint is an intermediate state of this very Route, so it
+              is shown on the Candidate that owns it rather than as a separate
+              result (`docs/UI_FLOW.md` 6.4). */}
+          <CompromiseCheckpointList
+            groups={candidate.checkpointGroups ?? []}
+            weaponTypeId={weaponTypeId}
+            master={master}
+            selectedOpportunityIds={selectedCheckpointOpportunityIds}
+            onToggle={onToggleCheckpoint}
+          />
+          <Typography variant="body2" color="text.secondary">
+            最終 {candidate.estimatedOperationCount}手目 ［理想］
+          </Typography>
           {onAdd && <Button variant="contained" onClick={() => onAdd(candidate)} disabled={addDisabled}>ビルドリストへ追加</Button>}
         </Stack>
       </CardContent>

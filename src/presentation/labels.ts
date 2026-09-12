@@ -1,6 +1,6 @@
 import type {
   BuildListEntryStaleReason,
-  CandidateCategory,
+  CompromiseConditionMatch,
   NormalArtianRarity,
   OwnedWeaponStatus,
   PlanStepOperationType,
@@ -31,9 +31,37 @@ export const artianWeaponKindLabels: Record<ArtianWeaponKind, string> = {
   gogma: '巨戟アーティア',
 }
 
-export const candidateCategoryLabels: Record<CandidateCategory, string> = {
+/**
+ * How one compromise checkpoint state rates on each Target axis.
+ *
+ * Explanatory display only: a checkpoint is never an independent Candidate, so
+ * these labels classify a state on the canonical Ideal Route, not a category.
+ */
+export const compromiseBonusMatchLabels: Record<
+  CompromiseConditionMatch['bonus'],
+  string
+> = {
   ideal: '理想',
   practical: '実用',
+  alternative: '代替',
+}
+
+export const compromiseSkillMatchLabels: Record<
+  CompromiseConditionMatch['skill'],
+  string
+> = {
+  ideal: '理想',
+  practical: '実用',
+}
+
+/** The short badge one checkpoint group shows: the weaker of its two axes. */
+export function compromiseCheckpointBadgeLabel(
+  conditionMatch: CompromiseConditionMatch,
+): string {
+  if (conditionMatch.bonus === 'alternative') return '代替'
+  return conditionMatch.bonus === 'practical' || conditionMatch.skill === 'practical'
+    ? '実用'
+    : '理想'
 }
 
 export const routeKindLabels: Record<RouteKind, string> = {

@@ -24,9 +24,13 @@ Skillは別軸。Ideal Skillを優先し、Ideal不一致の場合だけ明示�
 Practical Skillの両IDがnullなら妥協未設定であり、wildcardではない。
 明示されたSkill条件のIdeal包含validationと参照validationは維持する。
 
-categoryはideal / practicalの2種類を維持する。Bonus IdealかつSkill Idealだけideal。
-その他の許可された組み合わせはpractical。Domain評価はbonusMatch
-(ideal / practical / alternative / null)とskillMatch (ideal / practical / null)を返す。
+`CandidateCategory` は存在しない。Domain評価はbonusMatch
+(ideal / practical / alternative / null)とskillMatch (ideal / practical / null)を返し、
+両軸Idealなら理想品、それ以外の受理組み合わせは「妥協状態」である。
+
+妥協状態は独立したCandidateではない。canonical Ideal Routeのstrict prefixとして
+到達する妥協状態だけが、選択可能なcompromise checkpointになる
+（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.7 / 5.8）。
 
 ## Validation
 
@@ -37,10 +41,12 @@ Rank順はMaster order、EXはMaster isExで評価し、表示名やID文字列�
 
 ## Search
 
-Practical Bonus・Alternative・Practical Skillがすべて未設定なら妥協なし。
-この場合はIdeal解だけを合成・保持し、Practical horizonを評価しない。
-canonical Idealの同順位比較に必要な探索は維持する。妥協がある場合だけ既存の
-canonical Ideal + inclusive Practical horizonを使用する。
+SearchはTargetの妥協設定にかかわらずIdeal-onlyである。妥協条件はcheckpointの
+有無だけを変え、探索範囲、canonical Idealの選択、RNG Prediction呼び出し回数の
+いずれも変えない。
+
+妥協条件がまったく未設定のTargetは、canonical Ideal Routeにcheckpointが
+1件も現れないというだけである。
 Normal / Gogma / Skillの独立性、Cross、determinism、保護、blind Normal、予測traceを維持する。
 評価のための追加RNG Predictionを行わない。
 
@@ -50,16 +56,16 @@ Dexie schemaを1から2に上げる。旧Practical / OR条件は新条件へ推�
 旧TargetのPractical Bonus・OR・Practical Skillを未設定へリセットする。Ideal、ID、名称、優先度、メモを保持する。
 再設定を促す情報を残す。Candidate、BuildListEntry、Plan、履歴の内容は変更・削除しない。
 
-CalculationContext.appSchemaVersionを5から6へ上げる。Searchの受理条件と終了条件が
-変わるため、旧version 1..5のCandidate / BuildListEntry / Planはすべて非互換。
+CalculationContext.appSchemaVersionは、妥協条件導入時に5から6へ上げた。
+現行は10であり、旧version 1..9のCandidate / BuildListEntry / Planはすべて非互換。
 既存のcalculation_context_changedによるfail closedを使う。RNG version、Master version、
 AppSettings.schemaVersion、RngState.schemaVersionは変更しない。
 searchStateHashと参照武器hashはRNG・武器依存の既存定義を維持する。
 Target definition hashは新Rule構造を含める。
 
 Import/Exportは現時点でExportRoot型のみであり、全置換UI・JSON parser・保存serviceは未実装。
-新ExportRootはschemaVersion 2。将来のimportでも旧条件の推測変換を禁止し、
-version 1を新Targetとして直接受理しない。同じfail-closed Target移行を使用する。
+現行ExportRootはschemaVersion 5。将来のimportでも旧条件の推測変換を禁止し、
+旧versionを新Targetとして直接受理しない。同じfail-closed Target移行を使用する。
 履歴artifactを新評価で再分類しない。
 
 ## UI
@@ -68,20 +74,24 @@ PracticalはIdealに含まれる種類、Ideal内個数(read-only)、最低Rank�
 未設定種類は理想条件のままと説明する。Alternativeは元種類・最大置換数・optionsを編集する。
 1元種類/1候補のみ、未置換枠は理想のまま、実用Bonusとは非併用であることを明示する。
 武器種・属性変更でBonus依存条件をリセットし、Ideal編集後の不整合はvalidationで拒否する。
-完成Candidate単位と既存filterを維持する。Bonus/Skill結果の完全分離UIは将来検討とする。
+Search結果はcanonical Ideal 1件と、そのRoute上のcompromise checkpointの一覧である。
+checkpointは既定でOFFであり、ユーザーが明示的に選択したものだけが計画へ入る。
+Bonus/Skill結果の完全分離UIは将来検討とする。
 
 
 ### 妥協条件version 6の判定理由と監査記録
 
-新規CandidateはconditionMatch（bonus: ideal/practical/alternative、skill: ideal/practical）を保持し、Build List snapshotへそのまま複写する。
-これはTarget定義と完成結果から導出した説明情報であり、Candidate ID / stable key / deduplication key / meaning fingerprint / searchStateHashには追加しない。
-条件の意味はTarget definition hashとCalculationContext version 6で区別する。旧artifactではフィールドを省略でき、推測補完・再分類しない。
-UIは保存された判定理由を「ボーナス判定: 理想 / 実用 / 代替」「スキル判定: 理想 / 実用」と表示する。
-categoryは両軸Idealのときだけideal、それ以外はpracticalであり、代替Bonusを実用Bonusと表示しない。
+妥協判定 `conditionMatch`（bonus: ideal/practical/alternative、skill: ideal/practical）は
+Candidate本体ではなくcheckpoint group / opportunityが保持し、Build List snapshotへそのまま複写する。
+これはTarget定義と到達状態から導出した説明情報であり、Candidate ID / stable key / deduplication key / meaning fingerprint / searchStateHashには追加しない。
+旧artifactではフィールドを省略でき、推測補完・再分類しない。
+UIは保存された判定理由を「ボーナス判定: 実用 / 代替」「スキル判定: 理想 / 実用」と表示する。
+両軸Idealは理想品そのものなのでcheckpointとしては存在しない。
 
 Productionベンチマークの旧wildcard条件も明示的な理想構成基準へ変更するため、旧versionの測定記録と負荷が異なる。
 過去のBrowser Worker測定値は当時のartifactとして保持する。今回のVitestは意味・不変条件の検証であり、新しいBrowser性能測定の代用ではない。
 
 Build Listへの同一意味の候補の重複追加を防ぐ際はCalculationContext互換性も確認する。
-旧version 1..5の項目を削除・上書きせず、新version 6の再検索結果を別項目として追加できる。
-Candidate meaning fingerprint自体は変更しない。
+旧versionの項目を削除・上書きせず、新versionの再検索結果を別項目として追加できる。
+Candidate meaning fingerprint自体は変更しない。checkpoint選択はfingerprintに入らないため、
+同一意味のCandidateを再追加しても既存の選択を上書きしない。

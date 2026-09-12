@@ -2,11 +2,7 @@ import { TargetSearchScheduler } from './targetSearchScheduler'
 import type { BuildCandidate, RestorationBonusSet, RouteKind, TargetWeapon } from '../models/publicTypes'
 import type { RngEngine } from '../rng/rngEngine'
 import { validateTargetIdealImpliesPractical } from '../target'
-import {
-  filterCandidates,
-  sortCandidates,
-} from './candidateProcessing'
-import { retainInitialCandidates } from './candidateRetention'
+import { selectCanonicalIdealCandidate } from './candidateRetention'
 import { searchExistingGogmaRoutes } from './existingGogmaRouteSearch'
 import { searchNormalArtianRoutes } from './normalArtianRouteSearch'
 import { searchOwnedNormalArtianRoutes } from './ownedNormalArtianRouteSearch'
@@ -59,14 +55,6 @@ function routeKindsForFilter(
   return routeOrder
 }
 
-function compareTargets(left: TargetWeapon, right: TargetWeapon): number {
-  return (
-    right.priority - left.priority ||
-    right.updatedAt.localeCompare(left.updatedAt) ||
-    left.id.localeCompare(right.id)
-  )
-}
-
 function uniqueSkippedRoutes(routes: readonly SkippedRoute[]): SkippedRoute[] {
   const keys = new Set<string>()
   return routes.filter((route) => {
@@ -77,47 +65,52 @@ function uniqueSkippedRoutes(routes: readonly SkippedRoute[]): SkippedRoute[] {
   })
 }
 
-function selectedTargets(
+/**
+ * The one TargetWeapon this request searches, or a warning explaining why it
+ * cannot be searched (`docs/SEARCH_SPEC.md` 4.1).
+ *
+ * A disabled Target is refused rather than silently skipped: the Search UI only
+ * offers enabled Targets, so reaching one here means the request no longer
+ * matches current data.
+ */
+function selectedTarget(
   input: CandidateSearchInput,
-): { targets: TargetWeapon[]; warnings: CandidateSearchWarning[] } {
-  const byId = new Map(input.targetWeapons.map((target) => [target.id, target]))
-  const warnings: CandidateSearchWarning[] = []
-  const ids = [...new Set(input.targetWeaponIds)]
-  const targets = ids.flatMap((id) => {
-    const target = byId.get(id)
-    if (!target) {
-      warnings.push({
-        targetWeaponId: id,
+): { target: TargetWeapon | null; warnings: CandidateSearchWarning[] } {
+  const target = input.targetWeapons.find(({ id }) => id === input.targetWeaponId) ?? null
+  if (!target) {
+    return {
+      target: null,
+      warnings: [{
+        targetWeaponId: input.targetWeaponId,
         severity: 'warning',
-        message: `TargetWeapon '${id}' does not exist and was not searched.`,
-      })
-      return []
+        message: `TargetWeapon '${input.targetWeaponId}' does not exist and was not searched.`,
+      }],
     }
-    if (!target.isEnabled) {
-      warnings.push({
-        targetWeaponId: id,
+  }
+  if (!target.isEnabled) {
+    return {
+      target: null,
+      warnings: [{
+        targetWeaponId: target.id,
         severity: 'warning',
-        message: `TargetWeapon '${id}' is disabled and was not searched.`,
-      })
-      return []
+        message: `TargetWeapon '${target.id}' is disabled and was not searched.`,
+      }],
     }
-    const containment = validateTargetIdealImpliesPractical(
-      target,
-      input.master,
-    )
-    if (!containment.isValid) {
-      warnings.push({
-        targetWeaponId: id,
+  }
+  const containment = validateTargetIdealImpliesPractical(target, input.master)
+  if (!containment.isValid) {
+    return {
+      target: null,
+      warnings: [{
+        targetWeaponId: target.id,
         severity: 'warning',
-        message: `TargetWeapon '${id}' violates the Ideal implies Practical containment invariant and was not searched: ${containment.issues
+        message: `TargetWeapon '${target.id}' violates the Ideal implies Practical containment invariant and was not searched: ${containment.issues
           .map((issue) => `${issue.path}: ${issue.message}`)
           .join(' / ')}`,
-      })
-      return []
+      }],
     }
-    return [target]
-  })
-  return { targets: targets.sort(compareTargets), warnings }
+  }
+  return { target, warnings: [] }
 }
 
 function contextSkippedRoutes(input: CandidateSearchInput): SkippedRoute[] {
@@ -134,7 +127,7 @@ async function searchTarget(
   input: CandidateSearchInput,
   engine: RngEngine,
   execution: ReturnType<typeof createSearchExecutionContext>,
-): Promise<{ result: TargetCandidateSearchResult; warnings: CandidateSearchWarning[]; truncated: boolean }> {
+): Promise<{ result: TargetCandidateSearchResult; warnings: CandidateSearchWarning[] }> {
   const skippedRoutes: SkippedRoute[] = []
   const searchedRoutes: RouteKind[] = []
   const candidates: BuildCandidate[] = []
@@ -144,12 +137,11 @@ async function searchTarget(
     return {
       result: {
         targetWeaponId: target.id,
-        candidates: [],
+        candidate: null,
         searchedRoutes: [],
         skippedRoutes: contextSkippedRoutes(input),
       },
       warnings,
-      truncated: false,
     }
   }
 
@@ -212,11 +204,14 @@ async function searchTarget(
     }
   }
 
-  const retention = retainInitialCandidates(candidates, input.master, target.weaponTypeId, input.settings.maxCandidatesPerTarget, target.preferredOwnedWeaponId)
-  const processed = filterCandidates(sortCandidates(retention.bounded, target.preferredOwnedWeaponId), input.resultFilter)
-  // Preserve the existing display-relative meaning: true if the cap omitted
-  // a candidate matching this filter. Horizon/dominance omissions are not truncation.
-  const truncated = filterCandidates(retention.retained, input.resultFilter).length > processed.length
+  // At most one canonical Ideal. A compromise state discovered on the way is
+  // never returned as a Candidate: only a strict prefix of an actual Ideal
+  // Route may be offered, and without an Ideal there is no such prefix
+  // (`docs/SEARCH_SPEC.md` 5.7).
+  const candidate = selectCanonicalIdealCandidate(
+    candidates,
+    target.preferredOwnedWeaponId,
+  )
   const orderedSearchedRoutes = routeOrder.filter((route) =>
     searchedRoutes.includes(route),
   )
@@ -224,14 +219,13 @@ async function searchTarget(
   return {
     result: {
       targetWeaponId: target.id,
-      candidates: processed,
+      candidate,
       searchedRoutes: orderedSearchedRoutes,
       skippedRoutes: uniqueSkippedRoutes(skippedRoutes).filter(
         ({ route }) => !searchedRouteSet.has(route),
       ),
     },
     warnings,
-    truncated,
   }
 }
 
@@ -243,34 +237,35 @@ export async function searchCandidates(
   assertCandidateSearchInput(input)
   const execution = createSearchExecutionContext(options)
   const startedAt = execution.nowMs()
-  const selection = selectedTargets(input)
-  const targetResults: TargetCandidateSearchResult[] = []
-  const warnings = [...selection.warnings]
-  let isTruncated = false
-
-  for (let index = 0; index < selection.targets.length; index += 1) {
-    await execution.checkpoint()
-    const target = selection.targets[index]
-    execution.beginTarget({
-      completedTargets: index,
-      totalTargets: selection.targets.length,
-      targetWeaponId: target.id,
-    })
-    const searched = await searchTarget(target, input, engine, execution)
-    targetResults.push(searched.result)
-    warnings.push(...searched.warnings)
-    isTruncated ||= searched.truncated
-    execution.completeTarget()
-    await (options.yieldControl ?? (() => Promise.resolve()))()
+  const selection = selectedTarget(input)
+  if (selection.target === null) {
+    // A Target that cannot be searched is reported as a notice with an empty
+    // result, exactly like a skipped Route: the request itself is well formed,
+    // and the UI renders the reason rather than failing the whole search.
+    return {
+      searchRunId: input.searchRunId,
+      calculationContext: { ...input.calculationContext },
+      targetResult: {
+        targetWeaponId: input.targetWeaponId,
+        candidate: null,
+        searchedRoutes: [],
+        skippedRoutes: [],
+      },
+      warnings: selection.warnings,
+      elapsedMs: Math.max(0, execution.nowMs() - startedAt),
+    }
   }
+  const target = selection.target
+  await execution.checkpoint()
+  execution.beginTarget({ targetWeaponId: target.id })
+  const searched = await searchTarget(target, input, engine, execution)
+  execution.completeTarget()
 
   return {
     searchRunId: input.searchRunId,
     calculationContext: { ...input.calculationContext },
-    targetResults,
-    relaxationSuggestions: [],
-    warnings,
+    targetResult: searched.result,
+    warnings: searched.warnings,
     elapsedMs: Math.max(0, execution.nowMs() - startedAt),
-    isTruncated,
   }
 }

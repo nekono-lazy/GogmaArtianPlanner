@@ -25,7 +25,7 @@ export interface PlannerWhatIfBounds {
    * The three axes are independent: a category that has spent its budget never
    * stops the other category of the same Target, nor another Target.
    */
-  maxCandidateTrialsPerCategoryPerTarget: number
+  maxCandidateTrialsPerTarget: number
   /**
    * Full Beam Searches one whole what-if request may start.
    *
@@ -56,7 +56,7 @@ export interface PlannerWhatIfBounds {
  * adapter, or Worker Client fallback, nor a repair or field-completion target.
  */
 export const defaultPlannerWhatIfBounds: PlannerWhatIfBounds = {
-  maxCandidateTrialsPerCategoryPerTarget: 2,
+  maxCandidateTrialsPerTarget: 2,
   maxPlannerReruns: 8,
 }
 
@@ -91,8 +91,8 @@ export function validatePlannerWhatIfBounds(
 ): DomainValidationResult {
   const issues = [
     positiveIntegerIssue(
-      bounds.maxCandidateTrialsPerCategoryPerTarget,
-      'maxCandidateTrialsPerCategoryPerTarget',
+      bounds.maxCandidateTrialsPerTarget,
+      'maxCandidateTrialsPerTarget',
     ),
     positiveIntegerIssue(bounds.maxPlannerReruns, 'maxPlannerReruns'),
   ].filter((entry): entry is DomainValidationIssue => entry !== null)

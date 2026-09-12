@@ -67,7 +67,7 @@ export function createInitialPlannerSearchState(input: PlannerInput, validEntrie
     routeSourceVersionByEntryId,
     inFlightExistingSourceByOwnedWeaponId: {},
     securedOwnedWeaponIdByEntryId: {},
-    practicalFirstProgressTargetIds: [],
+    reachedCheckpointOpportunityIdsByEntryId: {},
     trace: [],
     weaponSwitchCount: 0,
     preferredSourceProgressCount: 0,

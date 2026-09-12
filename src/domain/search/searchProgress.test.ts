@@ -5,8 +5,7 @@ import {
   practicalOnlyBonuses,
   SEARCH_FIXTURE_TIME,
 } from '../../test/fixtures/candidateSearch'
-import { targetWeaponId } from '../../test/fixtures/domainData'
-import type { CandidateSearchInput, CandidateSearchProgress } from './searchTypes'
+import type { CandidateSearchProgress } from './searchTypes'
 import { defaultCandidateSearchSettings } from './searchTypes'
 import { SEARCH_ACTIVITY_PROGRESS_INTERVAL } from './searchExecution'
 import { searchCandidates } from './candidateSearch'
@@ -41,19 +40,6 @@ function longRunningFixture(bound = 400) {
   return { input, engine }
 }
 
-function withSecondTarget(input: CandidateSearchInput): CandidateSearchInput {
-  const second = {
-    ...structuredClone(input.targetWeapons[0]),
-    id: targetWeaponId('target.fixture.b'),
-    name: 'Second fixture target',
-  }
-  return {
-    ...input,
-    targetWeapons: [...input.targetWeapons, second],
-    targetWeaponIds: [...input.targetWeaponIds, second.id],
-  }
-}
-
 const options = { now: () => SEARCH_FIXTURE_TIME, nowMs: () => 0 }
 
 afterEach(() => vi.restoreAllMocks())
@@ -64,31 +50,39 @@ describe('B6 Candidate Search defaults', () => {
       maxNormalAdvance: 1000,
       maxGogmaAdvance: 200,
       maxSkillAdvance: 1000,
-      maxCandidatesPerTarget: 200,
-      similarityThreshold: 0.6,
     })
   })
 })
 
 describe('B6 Candidate Search progress', () => {
-  it('reports the current Target when its search starts, before it completes', async () => {
+  it('reports the searched Target when the search starts, before it completes', async () => {
     const { input, engine } = longRunningFixture(3)
     const events: CandidateSearchProgress[] = []
     await searchCandidates(input, engine, { ...options, onProgress: (event) => events.push(event) })
 
     expect(events[0]).toEqual({
-      completedTargets: 0,
-      totalTargets: 1,
-      currentTargetWeaponId: input.targetWeaponIds[0],
+      targetWeaponId: input.targetWeaponId,
       phase: 'preparing',
       processedWorkItems: 0,
     })
     expect(events.at(-1)).toMatchObject({
-      completedTargets: 1,
-      totalTargets: 1,
-      currentTargetWeaponId: input.targetWeaponIds[0],
+      targetWeaponId: input.targetWeaponId,
       phase: 'finalizing',
     })
+  })
+
+  it('carries no multi-Target progress fields at all', async () => {
+    const { input, engine } = longRunningFixture(3)
+    const events: CandidateSearchProgress[] = []
+    await searchCandidates(input, engine, { ...options, onProgress: (event) => events.push(event) })
+
+    // One search covers one Target, so a Target-count progress bar would be a
+    // constant 1 / 1 (`docs/SEARCH_SPEC.md` 4.1).
+    expect(Object.keys(events[0]).sort()).toEqual([
+      'phase',
+      'processedWorkItems',
+      'targetWeaponId',
+    ])
   })
 
   it('reports activity inside one long-running Target with a monotonic work count', async () => {
@@ -98,14 +92,13 @@ describe('B6 Candidate Search progress', () => {
 
     const activity = events.filter(({ phase }) => phase === 'searching')
     expect(activity.length).toBeGreaterThan(0)
-    // Activity is published while the single Target is still incomplete.
-    expect(activity.every(({ completedTargets }) => completedTargets === 0)).toBe(true)
+    // Activity is published while the Target is still incomplete.
+    expect(activity.every(({ phase }) => phase === 'searching')).toBe(true)
     expect(activity[0].processedWorkItems).toBe(SEARCH_ACTIVITY_PROGRESS_INTERVAL)
     expect(activity.map(({ processedWorkItems }) => processedWorkItems)).toEqual(
       [...activity].map(({ processedWorkItems }) => processedWorkItems).sort((a, b) => a - b),
     )
     for (let index = 1; index < events.length; index += 1) {
-      if (events[index].completedTargets !== events[index - 1].completedTargets) continue
       expect(events[index].processedWorkItems).toBeGreaterThanOrEqual(
         events[index - 1].processedWorkItems,
       )
@@ -115,22 +108,16 @@ describe('B6 Candidate Search progress', () => {
     )
   })
 
-  it('restarts the work count per Target and ends at completedTargets = totalTargets', async () => {
-    const base = longRunningFixture()
-    const input = withSecondTarget(base.input)
+  it('starts at zero work and ends with one finalizing event', async () => {
+    const { input, engine } = longRunningFixture()
     const events: CandidateSearchProgress[] = []
-    await searchCandidates(input, base.engine, { ...options, onProgress: (event) => events.push(event) })
+    await searchCandidates(input, engine, { ...options, onProgress: (event) => events.push(event) })
 
     const starts = events.filter(({ phase }) => phase === 'preparing')
-    expect(starts).toHaveLength(2)
-    expect(starts.map(({ completedTargets }) => completedTargets)).toEqual([0, 1])
-    expect(starts.every(({ processedWorkItems }) => processedWorkItems === 0)).toBe(true)
-    expect(new Set(starts.map(({ currentTargetWeaponId }) => currentTargetWeaponId)).size).toBe(2)
-
-    const last = events.at(-1)!
-    expect(last.completedTargets).toBe(2)
-    expect(last.totalTargets).toBe(2)
-    expect(last.phase).toBe('finalizing')
+    expect(starts).toHaveLength(1)
+    expect(starts[0].processedWorkItems).toBe(0)
+    expect(events.filter(({ phase }) => phase === 'finalizing')).toHaveLength(1)
+    expect(events.at(-1)?.phase).toBe('finalizing')
   })
 
   it('returns the same Candidates with and without a progress callback', async () => {
@@ -141,7 +128,6 @@ describe('B6 Candidate Search progress', () => {
       onProgress: () => undefined,
     })
     const silent = await searchCandidates(withoutCallback.input, withoutCallback.engine, options)
-    expect(observed.targetResults).toEqual(silent.targetResults)
-    expect(observed.isTruncated).toBe(silent.isTruncated)
+    expect(observed.targetResult).toEqual(silent.targetResult)
   })
 })

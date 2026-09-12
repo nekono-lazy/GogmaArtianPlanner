@@ -122,7 +122,7 @@ export interface CandidateSearchBenchmarkWorkload {
 /**
  * The complete Candidate Search settings in force when the B5 measurements were
  * taken, pinned field by field. These were the shipped defaults at that time;
- * B6 lowered the shipped defaults to `1000 / 200 / 1000 / 200 / 0.6`. This
+ * B6 lowered the shipped defaults to `1000 / 200 / 1000`. This
  * preset deliberately does not read `defaultCandidateSearchSettings`, so a
  * later default change can never silently redefine a historical workload and
  * the values recorded in
@@ -132,8 +132,6 @@ export const B5_MEASUREMENT_SETTINGS: CandidateSearchSettings = {
   maxNormalAdvance: 5000,
   maxGogmaAdvance: 5000,
   maxSkillAdvance: 5000,
-  maxCandidatesPerTarget: 200,
-  similarityThreshold: 0.6,
 }
 
 function b5Settings(
@@ -479,9 +477,8 @@ export function createCandidateSearchBenchmarkInput(
     workload,
     input: {
       searchRunId,
-      targetWeaponIds: [target.id],
+      targetWeaponId: target.id,
       routeFilter: 'all',
-      resultFilter: 'all',
       rngState: benchmarkRngState(),
       normalCounters: [benchmarkNormalCounter()],
       ownedWeapons: usesOwnedGogmaSource(workload.ideal)

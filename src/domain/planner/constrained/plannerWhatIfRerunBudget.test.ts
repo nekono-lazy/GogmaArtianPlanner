@@ -20,7 +20,7 @@ describe('B9 what-if full Beam budget', () => {
   it('fails closed on invalid bounds instead of substituting a default', () => {
     expect(() =>
       createPlannerWhatIfFullBeamBudget({
-        maxCandidateTrialsPerCategoryPerTarget: 1,
+        maxCandidateTrialsPerTarget: 1,
         maxPlannerReruns: 0,
       }),
     ).toThrow(PlannerWhatIfBoundsError)
@@ -28,7 +28,7 @@ describe('B9 what-if full Beam budget', () => {
 
   it('counts every started execution and reports exhaustion without truncating', () => {
     const budget = createPlannerWhatIfFullBeamBudget({
-      maxCandidateTrialsPerCategoryPerTarget: 1,
+      maxCandidateTrialsPerTarget: 1,
       maxPlannerReruns: 2,
     })
 
@@ -51,7 +51,7 @@ describe('B9 what-if full Beam budget', () => {
 
   it('refuses the execution the limit actually blocks', () => {
     const budget = createPlannerWhatIfFullBeamBudget({
-      maxCandidateTrialsPerCategoryPerTarget: 1,
+      maxCandidateTrialsPerTarget: 1,
       maxPlannerReruns: 1,
     })
     budget.beforeBeamSearch()
@@ -71,7 +71,7 @@ describe('B9 what-if full Beam budget', () => {
   it('counts a runtime-unsupported retry Beam Search', async () => {
     const { input, dependencies } = runtimeUnsupportedFixture()
     const budget = createPlannerWhatIfFullBeamBudget({
-      maxCandidateTrialsPerCategoryPerTarget: 1,
+      maxCandidateTrialsPerTarget: 1,
       maxPlannerReruns: 2,
     })
 
@@ -90,7 +90,7 @@ describe('B9 what-if full Beam budget', () => {
   it('blocks the retry Beam Search when only one execution is affordable', async () => {
     const { input, dependencies } = runtimeUnsupportedFixture()
     const budget = createPlannerWhatIfFullBeamBudget({
-      maxCandidateTrialsPerCategoryPerTarget: 1,
+      maxCandidateTrialsPerTarget: 1,
       maxPlannerReruns: 1,
     })
 

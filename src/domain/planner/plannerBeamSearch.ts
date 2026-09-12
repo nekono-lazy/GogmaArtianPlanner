@@ -40,6 +40,10 @@ import {
 } from './plannerScoring'
 import { entryIsRelevantForState } from './plannerEntryRelevance'
 import {
+  hasReachedEverySelectedCheckpoint,
+  selectedCheckpointAtOperationIndex,
+} from './plannerCheckpoints'
+import {
   advancePlannerPreferredSourceMetric,
   collectPreferredSourceEntryIds,
 } from './plannerPreferredSource'
@@ -526,14 +530,7 @@ function mergedProgressedEntries(
     const entry = entriesById.get(entryId)
     if (!entry) return
     if (!entryUsesCurrentSourceVersion(state, entry)) return
-    const satisfaction = state.targetSatisfaction[entry.targetWeaponId]
-    if (
-      satisfaction?.hasIdeal ||
-      (satisfaction?.hasPractical &&
-        entry.candidateSnapshot.category !== 'ideal')
-    ) {
-      return
-    }
+    if (!entryIsRelevantForState(state, entry)) return
     const progress = state.routeProgressByEntryId[entryId] ?? 0
     const next = units[progress]
     if (
@@ -663,15 +660,25 @@ function applyRouteAction(
       state.candidateReadySourceVersionByEntryId[entry.id] =
         state.routeSourceVersionByEntryId[entry.id]
     }
-    if (
-      entry &&
-      !sourceState.targetSatisfaction[entry.targetWeaponId]?.hasPractical &&
-      !state.practicalFirstProgressTargetIds.includes(entry.targetWeaponId)
-    ) {
-      state.practicalFirstProgressTargetIds = [
-        ...state.practicalFirstProgressTargetIds,
-        entry.targetWeaponId,
-      ].sort(compareStableStrings)
+    // A unit that ends one of this Entry's selected checkpoints really put the
+    // compromise weapon in the player's hands, so the hard constraint is
+    // recorded as satisfied here. It is never recorded for a unit that was only
+    // fast-forwarded: a checkpoint endpoint is never skippable, so it can only
+    // arrive through a real executed action (`docs/PLANNER_SPEC.md` 7.5.3).
+    if (entry && unit.position.unitIndex === unit.position.unitCount - 1) {
+      const checkpoint = selectedCheckpointAtOperationIndex(
+        entry,
+        unit.position.operationIndex,
+      )
+      if (checkpoint) {
+        const reached = state.reachedCheckpointOpportunityIdsByEntryId[entry.id] ?? []
+        if (!reached.includes(checkpoint.opportunity.id)) {
+          state.reachedCheckpointOpportunityIdsByEntryId[entry.id] = [
+            ...reached,
+            checkpoint.opportunity.id,
+          ]
+        }
+      }
     }
   })
   // Counter stream progression only: a Route prefix another Entry's real
@@ -746,8 +753,11 @@ function createReservedWeapon(
     restorationBonusScope: candidate.restorationBonusScope,
     seriesSkillId: candidate.seriesSkillId,
     groupSkillId: candidate.groupSkillId,
-    status: candidate.category,
-    isProtected: candidate.category === 'ideal',
+    // Every Candidate is a canonical Ideal Candidate, so a newly generated
+    // weapon is labelled Ideal and protected by default, exactly as the
+    // existing Ideal contract requires (`docs/DATA_MODEL.md` 3.2).
+    status: 'ideal',
+    isProtected: true,
     memo: null,
     createdAt: candidate.createdAt,
     updatedAt: candidate.createdAt,
@@ -770,7 +780,27 @@ function applyReserveAction(
         entry.id,
         'reserve_weapon',
         'candidate_already_satisfied',
-        'The Target no longer needs this Candidate category.',
+        'The Target already holds an Ideal weapon.',
+      ),
+    }
+  }
+  // The user's selected compromise checkpoints are a hard constraint: a branch
+  // that did not actually reach one of them may not finish this Entry, and the
+  // Planner never resolves that by dropping or moving the selection
+  // (`docs/PLANNER_SPEC.md` 7.5.3).
+  if (
+    !hasReachedEverySelectedCheckpoint(
+      entry,
+      sourceState.reachedCheckpointOpportunityIdsByEntryId[entry.id] ?? [],
+    )
+  ) {
+    return {
+      state: null,
+      rejection: rejection(
+        entry.id,
+        'reserve_weapon',
+        'selected_checkpoint_not_reached',
+        'A compromise checkpoint selected for this BuildListEntry was not reached.',
       ),
     }
   }
@@ -862,7 +892,9 @@ function applyReserveAction(
       restorationBonuses: structuredClone(entry.candidateSnapshot.finalBonuses),
       seriesSkillId: entry.candidateSnapshot.seriesSkillId,
       groupSkillId: entry.candidateSnapshot.groupSkillId,
-      status: entry.candidateSnapshot.category,
+      // The Candidate category becomes the label, and the stored protection
+      // value is preserved exactly as PR #12 fixed.
+      status: 'ideal',
     }
     const result = updateOwnedWeapon(state.simulatedInventory, updated)
     if (!result.isValid || result.inventory === null) {
@@ -882,17 +914,6 @@ function applyReserveAction(
     state.securedOwnedWeaponIdByEntryId[entry.id] = ownedWeaponId
   }
   const satisfactionChanges = refreshTargetSatisfaction(state, targets, master)
-  const newlyPracticalTargetIds = satisfactionChanges
-    .filter(({ before, after }) => !before.hasPractical && after.hasPractical)
-    .map(({ targetWeaponId }) => targetWeaponId)
-  if (newlyPracticalTargetIds.length > 0) {
-    state.practicalFirstProgressTargetIds = [
-      ...new Set([
-        ...state.practicalFirstProgressTargetIds,
-        ...newlyPracticalTargetIds,
-      ]),
-    ].sort(compareStableStrings)
-  }
   state.selectedBuildListEntryIds = [
     ...state.selectedBuildListEntryIds,
     entry.id,
@@ -906,7 +927,6 @@ function applyReserveAction(
     routeOperation: null,
     ownedWeaponId,
     plannerOnly: true,
-    candidateCategory: entry.candidateSnapshot.category,
     rngBefore: before,
     rngAfter: rngSnapshot(state),
     inventoryEffect: effect,

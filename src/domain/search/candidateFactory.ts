@@ -18,7 +18,8 @@ import type {
 } from '../models/publicTypes'
 import { isBlindCreateNormalArtianOperation } from '../models/publicTypes'
 import { validateBuildCandidate } from '../models/validation'
-import { evaluateTargetCandidate } from '../target'
+import { createIdealDifference, satisfiesIdealTarget } from '../target'
+import { extractCandidateCheckpointGroups } from './checkpointExtraction'
 import type { SearchExecutionContext } from './searchExecution'
 import { CandidateSearchError } from './searchTypes'
 import type { CandidateSearchInput } from './searchTypes'
@@ -298,22 +299,38 @@ export function createCandidateRouteEstimates(
   }
 }
 
+/**
+ * Builds one composed Search result, or `null` when it is not an Ideal result.
+ *
+ * Only the Ideal condition is accepted now. A state that merely satisfies a
+ * compromise condition is never an independent Candidate: it is offered to the
+ * user as a checkpoint on an actual Ideal Route, and only when it really is a
+ * strict prefix of one (`docs/SEARCH_SPEC.md` 5.5.4 / 5.8).
+ */
 export function createCandidateFromPrediction(
   target: TargetWeapon,
   prediction: CandidatePrediction,
   input: CandidateSearchInput,
   execution: SearchExecutionContext,
 ): BuildCandidate | null {
-  const evaluation = evaluateTargetCandidate(
+  if (
+    !satisfiesIdealTarget(
+      target,
+      prediction.finalBonuses,
+      prediction.restorationBonusScope,
+      prediction.seriesSkillId,
+      prediction.groupSkillId,
+      input.master,
+    )
+  ) {
+    return null
+  }
+  const idealDifference = createIdealDifference(
     target,
     prediction.finalBonuses,
-    prediction.restorationBonusScope,
     prediction.seriesSkillId,
     prediction.groupSkillId,
-    input.master,
-    input.settings.similarityThreshold,
   )
-  if (!evaluation.category || !evaluation.bonusMatch || !evaluation.skillMatch) return null
 
   const semanticHash = hashStableValue({
     searchRunId: input.searchRunId,
@@ -327,8 +344,6 @@ export function createCandidateFromPrediction(
   const candidate: BuildCandidate = {
     id: execution.createCandidateId({ targetWeaponId: target.id, semanticHash }),
     targetWeaponId: target.id,
-    category: evaluation.category,
-    conditionMatch: { bonus: evaluation.bonusMatch, skill: evaluation.skillMatch },
     finalBonuses: prediction.finalBonuses.map((bonus) => ({ ...bonus })) as BuildCandidate['finalBonuses'],
     restorationBonusScope: prediction.restorationBonusScope,
     seriesSkillId: prediction.seriesSkillId,
@@ -339,9 +354,7 @@ export function createCandidateFromPrediction(
       target.weaponTypeId,
       input,
     ),
-    idealDifference: evaluation.idealDifference,
-    isSimilarToIdeal: evaluation.isSimilarToIdeal,
-    similarityScore: evaluation.similarityScore,
+    idealDifference,
     searchStateHash: createSearchStateHash(
       prediction.route,
       input.rngState,
@@ -379,6 +392,14 @@ export function createCandidateFromPrediction(
           ),
         }),
   }
+  // Derived from the finished Route and the Target definition alone, so it
+  // reuses the observational traces this Candidate already carries and adds no
+  // RNG prediction call (`docs/SEARCH_SPEC.md` 5.8.1).
+  candidate.checkpointGroups = extractCandidateCheckpointGroups(candidate, {
+    target,
+    master: input.master,
+    ownedWeapons: input.ownedWeapons,
+  })
   const valid = validateBuildCandidate(candidate, input.ownedWeapons)
   if (!valid.isValid) {
     throw new CandidateSearchError(

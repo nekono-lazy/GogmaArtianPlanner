@@ -19,33 +19,20 @@ function positiveIntegerIssue(value: number, path: string) {
 export function validateCandidateSearchSettings(
   settings: CandidateSearchSettings,
 ): CandidateSearchValidationIssue[] {
-  const issues = [
+  return [
     positiveIntegerIssue(settings.maxNormalAdvance, 'maxNormalAdvance'),
     positiveIntegerIssue(settings.maxGogmaAdvance, 'maxGogmaAdvance'),
     positiveIntegerIssue(settings.maxSkillAdvance, 'maxSkillAdvance'),
-    positiveIntegerIssue(
-      settings.maxCandidatesPerTarget,
-      'maxCandidatesPerTarget',
-    ),
   ].filter((issue): issue is CandidateSearchValidationIssue => issue !== null)
-
-  if (
-    !Number.isFinite(settings.similarityThreshold) ||
-    settings.similarityThreshold < 0 ||
-    settings.similarityThreshold > 1
-  ) {
-    issues.push({
-      path: 'similarityThreshold',
-      message: 'similarityThreshold must be a finite number from 0 through 1.',
-    })
-  }
-  return issues
 }
 
 export function assertCandidateSearchInput(input: CandidateSearchInput): void {
   const issues = validateCandidateSearchSettings(input.settings)
   if (input.searchRunId.trim().length === 0) {
     issues.push({ path: 'searchRunId', message: 'searchRunId cannot be empty.' })
+  }
+  if (input.targetWeaponId.trim().length === 0) {
+    issues.push({ path: 'targetWeaponId', message: 'targetWeaponId cannot be empty.' })
   }
   // The same collection-level authority the save Service and the Planner use.
   // A preference pointing at a missing, incompatible, protected, or

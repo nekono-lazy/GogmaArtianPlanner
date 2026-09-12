@@ -165,7 +165,6 @@ export function createValidBuildCandidate(): BuildCandidate {
   return {
     id: candidateId('candidate.fixture.a'),
     targetWeaponId: targetWeaponId('target.fixture.a'),
-    category: 'practical',
     finalBonuses: createRestorationBonusSet(),
     restorationBonusScope: 'normal_artian',
     seriesSkillId: 'series_skill.fixture.a',
@@ -209,8 +208,9 @@ export function createValidBuildCandidate(): BuildCandidate {
       groupSkillMatches: true,
       summary: 'Domain fixture only.',
     },
-    isSimilarToIdeal: true,
-    similarityScore: 0.9,
+    // Every Candidate generated under the current CalculationContext carries
+    // its checkpoint groups, and validation requires them there.
+    checkpointGroups: [],
     searchStateHash: 'hash.fixture.search',
     referencedOwnedWeaponsHash: null,
     calculationContext: { ...domainFixtureContext },
@@ -271,8 +271,6 @@ export function createValidProductionPlan(): ProductionPlan {
           restorationBonusScope: 'gogma_artian',
           seriesSkillId: 'series_skill.fixture.a',
           groupSkillId: null,
-          candidateCategory: 'practical',
-          isSimilarToIdeal: true,
           shouldSecure: true,
         },
         expectedStateBefore: { ...expectedState },

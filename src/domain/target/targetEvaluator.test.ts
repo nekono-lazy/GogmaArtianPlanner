@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { MasterDataDomainError } from '../master/masterSelectors'
 import type {
-  IdealDifference,
   RestorationBonusSet,
   TargetWeapon,
 } from '../models/publicTypes'
@@ -12,10 +11,8 @@ import {
   targetEvaluationMaster,
 } from '../../test/fixtures/targetEvaluation'
 import { createIdealDifference } from './idealDifference'
-import { calculateSimilarityScore, isSimilarToIdeal } from './similarity'
-import { TargetEvaluationError } from './targetEvaluationTypes'
 import {
-  classifyCandidate,
+  evaluateCompromiseCheckpointCondition,
   evaluateTargetCandidate,
   satisfiesIdealTarget,
   satisfiesIdealBonuses,
@@ -47,6 +44,26 @@ function practicalOnlyBonuses(): RestorationBonusSet {
   )
 }
 
+/**
+ * The old `classifyCandidate()` meaning, rebuilt from the two axes the Target
+ * evaluator still exposes.
+ *
+ * A state matching both axes at Ideal is an Ideal result; a state matching both
+ * axes with at least one compromise is a checkpoint state; a state matching
+ * neither is not accepted at all. Candidate Search now composes only the first
+ * of the three, and the second reaches the user as a checkpoint on the
+ * canonical Ideal Route (`docs/SEARCH_SPEC.md` 5.8).
+ */
+function classifyResult(
+  ...args: Parameters<typeof evaluateCompromiseCheckpointCondition>
+): 'ideal' | 'practical' | null {
+  const [target, bonuses, scope, series, group, master] = args
+  if (satisfiesIdealTarget(target, bonuses, scope, series, group, master)) return 'ideal'
+  return evaluateCompromiseCheckpointCondition(target, bonuses, scope, series, group, master) === null
+    ? null
+    : 'practical'
+}
+
 describe('Target candidate classification', () => {
   it('rejects a normal-scope exact-label result despite full similarity', () => {
     const target = validTarget()
@@ -54,14 +71,18 @@ describe('Target candidate classification', () => {
     expect(satisfiesIdealTarget(target, target.idealBonuses, 'normal_artian', 'series_skill.fixture.a', null, targetEvaluationMaster)).toBe(false)
     const result = evaluateTargetCandidate(
       target, target.idealBonuses, 'normal_artian',
-      'series_skill.fixture.a', null, targetEvaluationMaster, 0.6,
+      'series_skill.fixture.a', null, targetEvaluationMaster,
     )
+    // Every Bonus match requires Gogma scope, so a Normal-scope result matching
+    // all five labels is neither an Ideal Candidate nor a checkpoint state.
     expect(result).toMatchObject({
-      category: null,
+      bonusMatch: null,
       idealDifference: { matchedBonusCount: 5, seriesSkillMatches: true, groupSkillMatches: true },
-      similarityScore: 1,
-      isSimilarToIdeal: false,
     })
+    expect(classifyResult(
+      target, target.idealBonuses, 'normal_artian',
+      'series_skill.fixture.a', null, targetEvaluationMaster,
+    )).toBeNull()
   })
 
   it.each(['target', 'result'] as const)('validates unknown %s ranks before rejecting normal scope', (side) => {
@@ -72,14 +93,14 @@ describe('Target candidate classification', () => {
     expect(() => satisfiesIdealBonuses(target, result, 'normal_artian', targetEvaluationMaster))
       .toThrow(MasterDataDomainError)
     expect(() => evaluateTargetCandidate(
-      target, result, 'normal_artian', null, null, targetEvaluationMaster, 0.6,
+      target, result, 'normal_artian', null, null, targetEvaluationMaster,
     )).toThrow(/BonusRankMaster id 'bonus_rank.fixture.missing'/)
   })
 
   it('classifies ideal bonuses and ideal skills as ideal', () => {
     const target = validTarget()
     expect(
-      classifyCandidate(
+      classifyResult(
         target,
         target.idealBonuses,
         'gogma_artian',
@@ -114,7 +135,7 @@ describe('Target candidate classification', () => {
       target.idealBonuses[4],
     ]
     expect(() =>
-      classifyCandidate(
+      classifyResult(
         target,
         unknownRankResult,
         scope,
@@ -127,7 +148,7 @@ describe('Target candidate classification', () => {
 
   it.each(['normal_artian', 'gogma_artian'] as const)('classifies a Practical-only result in %s as practical', (scope) => {
     expect(
-      classifyCandidate(
+      classifyResult(
         validTarget(),
         practicalOnlyBonuses(),
         scope,
@@ -141,7 +162,7 @@ describe('Target candidate classification', () => {
   it('gives Ideal precedence when both Ideal and Practical match', () => {
     const target = validTarget()
     expect(
-      classifyCandidate(
+      classifyResult(
         target,
         target.idealBonuses,
         'gogma_artian',
@@ -161,7 +182,7 @@ describe('Target candidate classification', () => {
       restorationBonus(utility, low),
     )
     expect(
-      classifyCandidate(
+      classifyResult(
         validTarget(),
         result,
         'gogma_artian',
@@ -260,85 +281,8 @@ describe('IdealDifference', () => {
   })
 })
 
-describe('Similarity', () => {
-  function difference(
-    matchedBonusCount: number,
-    seriesSkillMatches: boolean,
-    groupSkillMatches: boolean,
-  ): IdealDifference {
-    return {
-      missingBonuses: [],
-      extraBonuses: [],
-      matchedBonusCount,
-      seriesSkillMatches,
-      groupSkillMatches,
-      summary: 'fixture',
-    }
-  }
-
-  it('uses five comparable items when no Ideal skill is specified', () => {
-    const target = validTarget()
-    target.idealSkillCondition = {
-      seriesSkillId: null,
-      groupSkillId: null,
-      matchMode: 'all',
-    }
-    expect(calculateSimilarityScore(target, difference(4, true, true))).toBe(
-      4 / 5,
-    )
-  })
-
-  it('counts only a specified and matching Ideal skill', () => {
-    const target = validTarget()
-    target.idealSkillCondition = {
-      seriesSkillId: 'series.fixture.a',
-      groupSkillId: null,
-      matchMode: 'all',
-    }
-    expect(calculateSimilarityScore(target, difference(4, true, true))).toBe(
-      5 / 6,
-    )
-    expect(calculateSimilarityScore(target, difference(4, false, true))).toBe(
-      4 / 6,
-    )
-  })
-
-  it('counts two specified Ideal skills independently', () => {
-    const target = validTarget()
-    target.idealSkillCondition = {
-      seriesSkillId: 'series.fixture.a',
-      groupSkillId: 'group.fixture.a',
-      matchMode: 'all',
-    }
-    expect(calculateSimilarityScore(target, difference(4, true, false))).toBe(
-      5 / 7,
-    )
-  })
-
-  it('only marks Practical candidates at or above threshold as Similar', () => {
-    expect(isSimilarToIdeal('ideal', 1, 0.6)).toBe(false)
-    expect(isSimilarToIdeal('practical', 0.6, 0.6)).toBe(true)
-    expect(isSimilarToIdeal('practical', 0.59, 0.6)).toBe(false)
-    expect(isSimilarToIdeal(null, 1, 0.6)).toBe(false)
-  })
-
-  it('keeps the score within 0 through 1', () => {
-    const target = validTarget()
-    expect(calculateSimilarityScore(target, difference(-1, false, false))).toBe(
-      0,
-    )
-    expect(calculateSimilarityScore(target, difference(99, true, true))).toBe(1)
-  })
-
-  it('rejects an invalid similarity threshold explicitly', () => {
-    expect(() => isSimilarToIdeal('practical', 0.5, 1.1)).toThrow(
-      TargetEvaluationError,
-    )
-  })
-})
-
 describe('evaluateTargetCandidate integration', () => {
-  it('returns category, difference, score, and Similar flag from a predicted fixture result', () => {
+  it('returns the two axis matches and the ideal difference, and carries no similarity metadata', () => {
     const result = evaluateTargetCandidate(
       validTarget(),
       practicalOnlyBonuses(),
@@ -346,15 +290,22 @@ describe('evaluateTargetCandidate integration', () => {
       null,
       'group_skill.fixture.a',
       targetEvaluationMaster,
-      0.6,
     )
-    expect(result.category).toBe('practical')
+    // This five-slot result matches through the Target's Alternative Rule,
+    // which is a compromise match on the Bonus axis just like `practical`.
+    expect(result.bonusMatch).toBe('alternative')
+    expect(result.skillMatch).toBe('practical')
     expect(result.idealDifference.matchedBonusCount).toBe(4)
-    expect(result.similarityScore).toBe(4 / 6)
-    expect(result.isSimilarToIdeal).toBe(true)
+    // The similarity concept is gone: the compromise conditions themselves
+    // decide a checkpoint, never a closeness score (`docs/SEARCH_SPEC.md` 5.3).
+    expect(Object.keys(result).sort()).toEqual([
+      'bonusMatch',
+      'idealDifference',
+      'skillMatch',
+    ])
   })
 
-  it('never marks an Ideal result as Similar', () => {
+  it('reports a full Ideal result on both axes and offers it as no checkpoint', () => {
     const target = validTarget()
     const result = evaluateTargetCandidate(
       target,
@@ -363,10 +314,17 @@ describe('evaluateTargetCandidate integration', () => {
       'series_skill.fixture.a',
       null,
       targetEvaluationMaster,
-      0,
     )
-    expect(result.category).toBe('ideal')
-    expect(result.similarityScore).toBe(1)
-    expect(result.isSimilarToIdeal).toBe(false)
+    expect(result.bonusMatch).toBe('ideal')
+    expect(result.skillMatch).toBe('ideal')
+    // The Ideal result completes the Route, so it is never a checkpoint.
+    expect(evaluateCompromiseCheckpointCondition(
+      target,
+      target.idealBonuses,
+      'gogma_artian',
+      'series_skill.fixture.a',
+      null,
+      targetEvaluationMaster,
+    )).toBeNull()
   })
 })

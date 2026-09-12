@@ -78,20 +78,12 @@ export function ProductionPlanWhatIfComparison({
                   <Typography component="h5" variant="subtitle2">
                     {target?.name ?? alternative.targetWeaponId}
                   </Typography>
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                    <Paper variant="outlined" sx={{ p: 1.5, flex: 1 }}>
-                      <Stack spacing={1}>
-                        <Typography variant="subtitle2">Practical</Typography>
-                        <WhatIfOutcome outcome={alternative.practical} />
-                      </Stack>
-                    </Paper>
-                    <Paper variant="outlined" sx={{ p: 1.5, flex: 1 }}>
-                      <Stack spacing={1}>
-                        <Typography variant="subtitle2">Ideal</Typography>
-                        <WhatIfOutcome outcome={alternative.ideal} />
-                      </Stack>
-                    </Paper>
-                  </Stack>
+                  <Paper variant="outlined" sx={{ p: 1.5 }}>
+                    <Stack spacing={1}>
+                      <Typography variant="subtitle2">理想候補</Typography>
+                      <WhatIfOutcome outcome={alternative.outcome} />
+                    </Stack>
+                  </Paper>
                   <Divider />
                 </Stack>
               )

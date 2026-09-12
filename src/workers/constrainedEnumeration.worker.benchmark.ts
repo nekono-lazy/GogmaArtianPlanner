@@ -79,8 +79,8 @@ interface RunRecorder {
 /**
  * The `timing` mode visitor, and the authority for every Production default.
  *
- * It is a minimal recorder, not an absent one: it keeps the delivered / ideal /
- * practical counts, the route kinds, and the 1st / 10th / 50th delivery
+ * It is a minimal recorder, not an absent one: it keeps the delivered count,
+ * the route kinds, and the 1st / 10th / 50th delivery
  * timestamps. What it omits is parity instrumentation - it never calls
  * `constrainedCandidateStableKey()`, never touches a digest, and never retains
  * the Candidate sequence - so it adds no second key generation, no growing
@@ -95,16 +95,12 @@ class TimingRecorder implements RunRecorder {
   private readonly startedAt = performance.now()
   private readonly routeKinds = new Set<string>()
   private deliveredCount = 0
-  private ideal = 0
-  private practical = 0
   private first: number | null = null
   private tenth: number | null = null
   private fiftieth: number | null = null
 
   record(candidate: ConstrainedCandidate): void {
     this.deliveredCount += 1
-    if (candidate.category === 'ideal') this.ideal += 1
-    else this.practical += 1
     this.routeKinds.add(candidate.route.kind)
     if (
       this.deliveredCount === 1 ||
@@ -136,8 +132,6 @@ class TimingRecorder implements RunRecorder {
       recorderOverheadMs: null,
       enumerationElapsedMs: null,
       deliveredCandidates: this.deliveredCount,
-      idealCandidates: this.ideal,
-      practicalCandidates: this.practical,
       timeToFirstCandidateMs: this.first,
       timeToTenthCandidateMs: this.tenth,
       timeToFiftiethCandidateMs: this.fiftieth,
@@ -178,8 +172,6 @@ class ParityRecorder implements RunRecorder {
   private readonly keyDigests: string[] = []
   private readonly routeKinds = new Set<string>()
   private deliveredCount = 0
-  private ideal = 0
-  private practical = 0
   private first: number | null = null
   private tenth: number | null = null
   private fiftieth: number | null = null
@@ -198,8 +190,6 @@ class ParityRecorder implements RunRecorder {
     )
     this.routeKinds.add(candidate.route.kind)
     this.deliveredCount += 1
-    if (candidate.category === 'ideal') this.ideal += 1
-    else this.practical += 1
     if (this.deliveredCount === 1) this.first = elapsed
     if (this.deliveredCount === 10) this.tenth = elapsed
     if (this.deliveredCount === 50) this.fiftieth = elapsed
@@ -226,8 +216,6 @@ class ParityRecorder implements RunRecorder {
       recorderOverheadMs: this.overheadMs,
       enumerationElapsedMs: workerElapsedMs - this.overheadMs,
       deliveredCandidates: this.deliveredCount,
-      idealCandidates: this.ideal,
-      practicalCandidates: this.practical,
       timeToFirstCandidateMs: this.first,
       timeToTenthCandidateMs: this.tenth,
       timeToFiftiethCandidateMs: this.fiftieth,

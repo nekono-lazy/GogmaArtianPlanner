@@ -200,7 +200,7 @@ function completedWhatIf(
       fixedTargetWeaponId: targetWeaponId('target.fixed'),
       alternatives: [{
         targetWeaponId: alternativeTarget.id,
-        practical: {
+        outcome: {
           status: 'found',
           distance: {
             estimatedOperationCount: operationCount,
@@ -209,7 +209,6 @@ function completedWhatIf(
             estimatedNormalAdvance: null,
           },
         },
-        ideal: { status: 'not_found_within_search_extent' },
       }],
     },
   }
@@ -510,7 +509,7 @@ describe('ProductionPlanPage', () => {
       selectedBuildListEntryId: fixture.entry.id,
     })
     expect(request.bounds).toEqual({
-      maxCandidateTrialsPerCategoryPerTarget: 2,
+      maxCandidateTrialsPerTarget: 2,
       maxPlannerReruns: 8,
     })
     expect(screen.getByText('比較中 3 / 8')).toBeInTheDocument()
@@ -990,7 +989,7 @@ describe('ProductionPlanPage explicit selection', () => {
     if (mode === 'failure') await act(async () => pending.resolve({ status: 'planner_input_not_ready', issues: [], warnings: [], excludedBuildListEntries: [] }))
     if (mode === 'completed' || mode === 'no-result') {
       const result = completedWhatIf(fixture.entry.id, fixture.target, 99)
-      if (mode === 'no-result') result.comparison.alternatives[0].practical = { status: 'not_found_within_search_extent' }
+      if (mode === 'no-result') result.comparison.alternatives[0].outcome = { status: 'not_found_within_search_extent' }
       await act(async () => pending.resolve(result))
     }
     await clickSelection(user)
@@ -1240,8 +1239,6 @@ function contentExpectedResult(
     restorationBonusScope: 'gogma_artian',
     seriesSkillId: null,
     groupSkillId: null,
-    candidateCategory: 'practical',
-    isSimilarToIdeal: false,
     shouldSecure: false,
     ...overrides,
   }

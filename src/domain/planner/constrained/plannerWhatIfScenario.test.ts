@@ -29,7 +29,7 @@ import {
 import type { PlannerWhatIfRequest } from './plannerWhatIfTypes'
 
 const BOUNDS: PlannerWhatIfBounds = {
-  maxCandidateTrialsPerCategoryPerTarget: 1,
+  maxCandidateTrialsPerTarget: 1,
   maxPlannerReruns: 1,
 }
 
@@ -486,7 +486,7 @@ describe('B9-B1a scenario preparation failures', () => {
         {
           plannerInput: input,
           scenarioResolution: resolution('conflict-X', scenario.entries[0].id),
-          bounds: { maxCandidateTrialsPerCategoryPerTarget: 0, maxPlannerReruns: 1 },
+          bounds: { maxCandidateTrialsPerTarget: 0, maxPlannerReruns: 1 },
         },
         dependencies,
       ),

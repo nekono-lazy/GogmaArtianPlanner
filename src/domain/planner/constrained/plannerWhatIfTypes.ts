@@ -88,22 +88,22 @@ export type PlannerWhatIfOutcome =
   | { status: 'not_found_within_search_extent' }
   /** A `ConstrainedEnumerationBounds` value left reachable work unchecked. */
   | { status: 'stopped_by_enumeration_bound' }
-  /** That category spent `maxCandidateTrialsPerCategoryPerTarget`. */
+  /** This Target spent `maxCandidateTrialsPerTarget`. */
   | { status: 'stopped_by_candidate_trial_bound' }
-  /** The request spent `maxPlannerReruns` before deciding this category. */
+  /** The request spent `maxPlannerReruns` before deciding this Target. */
   | { status: 'stopped_by_planner_rerun_bound' }
 
 /**
  * One non-fixed Target's what-if answer.
  *
- * `practical` and `ideal` are the exclusive `CandidateCategory` slots of
- * SEARCH_SPEC 5.1 / 5.2 (PLANNER_SPEC 9.2.4.2), so they are filled and stopped
- * independently and one Candidate never fills both.
+ * There is one outcome per Target, not one per Candidate category: Candidate
+ * Search produces canonical Ideal Candidates only, so the question this answers
+ * is how far away this Target's next feasible Ideal Candidate is
+ * (`docs/PLANNER_SPEC.md` 9.2.4.2).
  */
 export interface PlannerWhatIfTargetComparison {
   targetWeaponId: TargetWeaponId
-  practical: PlannerWhatIfOutcome
-  ideal: PlannerWhatIfOutcome
+  outcome: PlannerWhatIfOutcome
 }
 
 /**

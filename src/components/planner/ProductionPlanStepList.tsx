@@ -5,7 +5,6 @@ import type {
   TargetWeaponId,
 } from '../../domain/models/publicTypes'
 import {
-  candidateCategoryLabels,
   planStepOperationLabels,
 } from '../../presentation/labels'
 import { RestorationBonusSlots } from '../RestorationBonusSlots'
@@ -71,11 +70,6 @@ function ExpectedResultView({
         シリーズ: {seriesSkillLabel(expected.seriesSkillId, master)} ／ グループ:{' '}
         {groupSkillLabel(expected.groupSkillId, master)}
       </Typography>
-      {expected.candidateCategory !== null && (
-        <Typography variant="body2">
-          候補区分: {candidateCategoryLabels[expected.candidateCategory]}
-        </Typography>
-      )}
     </Stack>
   )
 }

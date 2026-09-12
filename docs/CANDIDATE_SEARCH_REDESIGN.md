@@ -3758,3 +3758,83 @@ A / Bの比較はそのソートへ載せられる。
 
 Strategy Aの価値はGogma Counter消費をNormal forgeへ振り替えられる点にあり、
 複数TargetがGogma streamを奪い合うPlanner局面で効く。
+
+
+---
+
+## 8. canonical Ideal Route + compromise checkpointへの再設計
+
+### 8.0 この節の位置づけ
+
+1〜7章はPhase A監査時点、すなわち「独立したPractical Candidate」を前提とした
+設計記録である。**歴史記録としてそのまま残す。** 当時の判断根拠を後から
+書き換えないためである。
+
+本章は、その前提が変わったことと、1〜7章のどの記述が現在は無効かを記録する。
+正式な契約は `docs/SEARCH_SPEC.md` 5.7 / 5.8 と `docs/PLANNER_SPEC.md` 7.5 / 9.5
+にある。
+
+### 8.1 変更の動機
+
+旧モデルでは、Practical CandidateとIdeal Candidateが別々のBuildCandidateとして
+返り、ユーザーは両方をBuild Listへ入れられた。しかしPlannerのtransient physical
+weapon identityはEntry-localである。同じ物理武器を「まず妥協品として受け取り、
+その後そのまま理想品まで作り続ける」という継続Routeは、2つのEntryでは表現できない。
+
+そこで、妥協はRouteの分岐ではなく **1本のcanonical Ideal Routeの途中状態** として
+表現することにした。
+
+```text
+1 Ideal BuildCandidate
+1 BuildListEntry
+same physical route
+selected checkpoint metadata
+```
+
+### 8.2 1〜7章のうち現在は無効な記述
+
+| 旧記述 | 現在 |
+| --- | --- |
+| `CandidateCategory` (ideal / practical) | 廃止。Candidateは常に理想品 |
+| `similarityScore` / `isSimilarToIdeal` / `similarityThreshold` | 廃止 |
+| `resultFilter` (all / ideal / practical / similar) | 廃止 |
+| `maxCandidatesPerTarget` とIdeal枠確保 | 廃止。出力は1件以下 |
+| inclusive Practical horizon | 廃止。canonical Ideal確定で終了 |
+| Practical dominance (`practicalDominates()`) | 廃止。SEARCH_SPEC 5.8.4の表示専用dominanceへ置換 |
+| category predicateごとのCross | Ideal軸だけのCross |
+| `practicalFirstProgressTargetIds` とpractical-first scoring | 廃止 |
+| B4の「操作数D以下のPractical horizon」 | canonical Ideal確定で終了 |
+
+### 8.3 維持した設計判断
+
+次は変更していない。
+
+- Normal / Gogma / Skillのstream独立性
+- Cross規則 `|B| + |K| - 1`（軸がIdeal解だけになった点を除く）
+- B2 family-layout frontier dedup
+- canonical Idealのrun非依存tie-break (`candidateStableKey`)
+- 同一結果の後続Counter位置をPlanner上の恒久支配解としないこと
+- constrained enumerationの境界、bounds責務分離、preflight契約
+- Production RNG semanticsと `PRODUCTION_RNG_ENGINE_VERSION`
+
+### 8.4 checkpoint抽出のコスト
+
+checkpoint抽出は、Candidateが既に持つ観測trace
+（`bonusAmendmentTrace` / `skillAmendmentTrace` / `conversionSkillTrace`）と
+Route baseのOwnedWeaponからのpure replayである。RNG Engine呼び出しは1回も増えない。
+
+したがってB5 / B8のBrowser Worker実測のうち、prediction call countに関する結論は
+そのまま有効である。一方で、retained candidate setとcomposition countは
+「Ideal軸だけ」へ変わったため、旧測定値と直接比較できない。
+
+### 8.5 受け入れた構造的帰結
+
+- Ideal Bonus multisetは定義上1種類なので、stream-local retention後の `|B|` は
+  通常1になる。したがってCross合成のoff-axis cell (`i > 0 AND j > 0`) は、
+  Ideal Skillが複数位置で成立する場合にしか現れない
+- Production Engineの実測range（Reset結果25深度）ではBonus multisetがすべて
+  相異なったため、constrained enumerationのoff-axis budgetは当該workloadでは
+  binding constraintにならなかった。これはそのworkloadの観測であって契約ではない
+- 妥協状態だけが到達可能でIdealが到達不能なTargetは、Candidate 0件になる。
+  これは意図した挙動であり、「妥協品を作れない」という意味ではない。
+  探索範囲上限を上げてIdeal Routeを見つければ、その途中でその妥協品を受け取れる

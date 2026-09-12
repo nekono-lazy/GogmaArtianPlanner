@@ -291,25 +291,11 @@ describe('comparePlannerSearchStates weapon switch preference', () => {
     values: Partial<PlannerSearchState>,
   ): PlannerSearchState {
     return {
-      practicalFirstProgressTargetIds: [],
       evaluationScore: 0,
       weaponSwitchCount: 0,
       ...values,
     } as PlannerSearchState
   }
-
-  it('keeps Practical-first progress above a lower weapon switch count', () => {
-    const practicalFirst = partial({
-      practicalFirstProgressTargetIds: [
-        target('target.weapon-switch.compare.practical').id,
-      ],
-      weaponSwitchCount: 9,
-    })
-    const fewerSwitches = partial({ weaponSwitchCount: 0 })
-    expect(
-      comparePlannerSearchStates(practicalFirst, fewerSwitches),
-    ).toBeLessThan(0)
-  })
 
   it('keeps the existing evaluationScore above a lower weapon switch count', () => {
     const higherScore = partial({ evaluationScore: 20, weaponSwitchCount: 9 })

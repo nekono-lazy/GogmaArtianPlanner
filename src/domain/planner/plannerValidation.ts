@@ -423,7 +423,9 @@ function validateReservedGogma(
     return
   }
   if (
-    weapon.status !== candidate.category ||
+    // Every Candidate is a canonical Ideal Candidate, so a secured weapon
+    // always carries the Ideal label.
+    weapon.status !== 'ideal' ||
     weapon.isProtected !== expectedProtection ||
     !sameBonusSlots(weapon.restorationBonuses, candidate.finalBonuses) ||
     weapon.seriesSkillId !== candidate.seriesSkillId ||
@@ -452,7 +454,7 @@ export function validateReserveWeaponInventoryChange(
         added,
         'addOwnedWeapon',
         issues,
-        entry.candidateSnapshot.category === 'ideal',
+        true,
       )
     }
     if (change.removeOwnedWeaponIds.length > 0 || change.updateOwnedWeapons.length > 0) {
@@ -468,7 +470,7 @@ export function validateReserveWeaponInventoryChange(
         added,
         'addOwnedWeapon',
         issues,
-        entry.candidateSnapshot.category === 'ideal',
+        true,
       )
       if (added.id === sourceId) {
         issues.push(issue('addOwnedWeapon.id', 'invalid_reference', 'The converted Gogma weapon must use a new OwnedWeapon ID.'))

@@ -85,6 +85,7 @@ export function createEntry(
   suffix: string,
   target: TargetWeapon,
   source: OwnedGogmaArtianWeapon,
+  resetSkillsCount = 1,
 ): BuildListEntry {
   const entry = createValidBuildListEntry()
   entry.id = buildListEntryId(`entry.runtime.${suffix}`)
@@ -92,8 +93,6 @@ export function createEntry(
   entry.targetWeaponId = target.id
   entry.candidateSnapshot.id = entry.candidateId
   entry.candidateSnapshot.targetWeaponId = target.id
-  entry.candidateSnapshot.category = 'ideal'
-  entry.candidateSnapshot.isSimilarToIdeal = false
   entry.candidateSnapshot.finalBonuses =
     structuredClone(source.restorationBonuses)
   entry.candidateSnapshot.restorationBonusScope = 'gogma_artian'
@@ -102,16 +101,16 @@ export function createEntry(
   entry.candidateSnapshot.route = {
     kind: 'existing_gogma_reset_skills',
     sourceOwnedWeaponId: source.id,
-    operations: [{
-      type: 'reset_skills',
+    operations: Array.from({ length: resetSkillsCount }, (_, index) => ({
+      type: 'reset_skills' as const,
       sourceOwnedWeaponId: source.id,
-      skillCounterBefore: 7,
-      skillCounterAfter: 8,
-    }],
+      skillCounterBefore: 7 + index,
+      skillCounterAfter: 8 + index,
+    })),
   }
-  entry.candidateSnapshot.estimatedOperationCount = 1
+  entry.candidateSnapshot.estimatedOperationCount = resetSkillsCount
   entry.candidateSnapshot.estimatedGogmaAdvance = 0
-  entry.candidateSnapshot.estimatedSkillAdvance = 1
+  entry.candidateSnapshot.estimatedSkillAdvance = resetSkillsCount
   entry.candidateSnapshot.estimatedNormalAdvance = null
   return entry
 }
@@ -135,8 +134,11 @@ export function runtimeUnsupportedFixture(): {
   }))
   const sources = targets.map((target, index) =>
     createSource(String.fromCharCode(97 + index), target))
+  // Target b's Entry is strictly the cheapest, so the first Beam Search
+  // always selects it and its replay reaches the runtime-unsupported Skill
+  // prediction that forces the retry.
   const entries = targets.map((target, index) =>
-    createEntry(String.fromCharCode(97 + index), target, sources[index]))
+    createEntry(String.fromCharCode(97 + index), target, sources[index], index === 1 ? 1 : 2))
   const baseEngine = createCandidateSearchEngine(searchInput)
   const skillSupportCalls = new Map<string, number>()
   const engine: RngEngine = {

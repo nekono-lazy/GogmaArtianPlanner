@@ -5,7 +5,7 @@ import { createIncrementalBonusRetention, createIncrementalSkillRetention } from
 import { SearchWorkQueue } from './searchWorkQueue'
 import { crossStreamSolutions } from './crossComposition'
 import {
-  buildBonusSolutionSet, buildSkillSolutionSet, selectBonusAxis, selectSkillAxis,
+  buildBonusSolutionSet, buildSkillSolutionSet, selectIdealBonusAxis, selectIdealSkillAxis,
   type EvaluatedBonusSolution, type EvaluatedSkillSolution,
   type RouteBonusSolution, type RouteSkillSolution,
 } from './streamSolutions'
@@ -28,9 +28,9 @@ describe('incremental stream retention', () => {
     const depths = [normal, bonus(1, true), bonus(2, true)]
     const retention = createIncrementalBonusRetention(target, input)
     const retained = depths.flatMap((solution) => retention.appendDepth([solution]))
-    expect(retained.map(({ solution, idealMatch, practicalMatch }) => [
-      solution.gogmaAdvance, solution.restorationBonusScope, idealMatch, practicalMatch,
-    ])).toEqual([[0, 'normal_artian', false, false], [1, 'gogma_artian', true, true]])
+    expect(retained.map(({ solution, idealMatch }) => [
+      solution.gogmaAdvance, solution.restorationBonusScope, idealMatch,
+    ])).toEqual([[0, 'normal_artian', false], [1, 'gogma_artian', true]])
     expect(retained.map((entry, index) => ({ ...entry, index })))
       .toEqual(buildBonusSolutionSet(target, input, depths))
   })
@@ -92,17 +92,17 @@ describe('delta Cross semantic work', () => {
   const bonusAxis = (): EvaluatedBonusSolution[] =>
     [0, 1, 2].map((depth) => ({
       ...buildBonusSolutionSet(target, input, [bonus(depth)])[0],
-      bonusKey: 'b' + depth, retentionKey: 'b' + depth, index: depth, idealMatch: depth > 0, practicalMatch: true,
+      bonusKey: 'b' + depth, retentionKey: 'b' + depth, index: depth, idealMatch: true,
     }))
   const skillAxis = (): EvaluatedSkillSolution[] =>
     [0, 1, 2].map((depth) => ({
       ...buildSkillSolutionSet(target, [skill(depth)])[0],
-      semanticKey: 'k' + depth, index: depth, idealMatch: depth > 0, practicalMatch: true,
+      semanticKey: 'k' + depth, index: depth, idealMatch: true,
     }))
   const key = (b: EvaluatedBonusSolution, k: EvaluatedSkillSolution) => b.bonusKey + ',' + k.semanticKey
 
   it.each(['bonus-first', 'skill-first', 'interleaved'] as const)(
-    'emits each pair once for separate Ideal/Practical axes (%s)', (order) => {
+    'emits each pair of the single Ideal axis exactly once (%s)', (order) => {
       const bonuses = bonusAxis(), skills = skillAxis(), emitted: string[] = []
       const cross = createDeltaCross((b, k) => emitted.push(key(b, k)))
       if (order === 'bonus-first') {
@@ -119,14 +119,15 @@ describe('delta Cross semantic work', () => {
           cross.addSkill(skills[i])
         }
       }
-      const expected = new Set(['ideal', 'practical'].flatMap((category) =>
+      const expected = new Set(
         crossStreamSolutions(
-          selectBonusAxis(bonuses, category as 'ideal' | 'practical'),
-          selectSkillAxis(skills, category as 'ideal' | 'practical'),
-        ).map(({ bonus: b, skill: k }) => key(b, k))))
+          selectIdealBonusAxis(bonuses),
+          selectIdealSkillAxis(skills),
+        ).map(({ bonus: b, skill: k }) => key(b, k)),
+      )
       expect([...emitted].sort()).toEqual([...expected].sort())
       expect(new Set(emitted).size).toBe(emitted.length)
-      expect(emitted).not.toContain('b2,k2') // Off-axis for BOTH category axes.
+      expect(emitted).not.toContain('b2,k2') // Off-axis on the Ideal axis.
       const settled = [...emitted]
       bonuses.forEach(cross.addBonus)
       skills.forEach(cross.addSkill)
@@ -135,8 +136,8 @@ describe('delta Cross semantic work', () => {
   )
 
   it('pairs each newly retained solution with its anchor without traversing old pairs', () => {
-    const bonuses = bonusAxis().map((b) => ({ ...b, idealMatch: false }))
-    const skills = skillAxis().map((k) => ({ ...k, idealMatch: false }))
+    const bonuses = bonusAxis()
+    const skills = skillAxis()
     const emitted: string[] = []
     const cross = createDeltaCross((b, k) => emitted.push(key(b, k)))
     cross.addBonus(bonuses[0])

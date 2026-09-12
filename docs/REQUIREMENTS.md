@@ -338,12 +338,14 @@ Bonus実用・代替と実用Skillの組み合わせを許可する。
 
 ## 13. 完成判定
 
-### 13.1 実用品
+### 13.1 妥協状態
 
 BonusがIdeal / Practical / Alternativeのいずれか、SkillがIdeal / Practicalのいずれかを満たし、
-両方Idealではない完成Candidateを category=practical とする。alternativeカテゴリは追加しない。
-Practical Bonus、Alternative Rule、Practical Skillがすべて未設定なら妥協なしであり、
-Idealだけを検索・保持する。Practical horizonは妥協条件があるTargetだけで評価する。
+両方Idealではない状態を「妥協状態」とする。
+
+妥協状態は独立した作成Candidateではない。理想品へ向かう1本の物理Routeの途中状態として
+だけ意味を持ち、Search結果としては「理想品Routeの途中で選べるチェックポイント」の形で
+提示する。妥協状態を単独のBuildCandidateやBuildListEntryとして扱わない。
 
 ### 13.2 理想品
 
@@ -352,7 +354,8 @@ Idealだけを検索・保持する。Practical horizonは妥協条件があるT
 - 復元ボーナスが理想構成と一致する
 - スキルが理想条件と一致する
 
-理想品は実用品より上位のカテゴリとして扱い、同じ候補を重複表示しない。理想品は実用ラインも必ず満たすため、実用ラインを満たさない理想品は存在しない。
+理想品は実用ラインも必ず満たすため、実用ラインを満たさない理想品は存在しない。
+候補検索が返すのは理想品だけである。
 
 候補検索は、この目標武器単体を現在のRNG状態から作る場合に近い位置へある実用品と理想品を高速に求めることを主責務とする。複数目標武器を同時に作る場合のCounter操作の両立はPlannerの責務であり、将来競合し得るという理由だけで2本目以降の理想品や遠い代替を初回検索で先読みしない。
 
@@ -362,12 +365,17 @@ Idealだけを検索・保持する。Practical horizonは妥協条件があるT
 
 検索対象がONの目標武器について、現在のRNG状態から将来の完成候補を検索する。
 
-候補カテゴリは次の2種類とする。
+候補検索は1回につき1つの目標武器を対象とし、現在の探索範囲で見つかるcanonical Ideal
+候補を1件だけ返す。候補カテゴリ、近似（Similar）判定、結果フィルタ、出力件数上限は
+存在しない。
 
-- `Ideal`
-- `Practical`
+理想品が見つかった場合、その作成Routeの途中で妥協条件を満たす状態を
+「チェックポイント」として一覧表示する。ユーザーは必要なものだけを選択でき、
+既定では何も選択されていない。
 
-理想への近さはカテゴリとは別の軸として、理想との差分、近似表示の可否、必要に応じた類似度で表す。UI上のSimilar（近似）は、実用品のうち理想に近いと判定された候補を抽出するフィルタであり、独立カテゴリではない。実用ラインを満たさない「惜しい候補」は初期版では原則表示しない。
+理想品が見つからなかった場合は候補0件であり、チェックポイントも0件である。
+UIは「現在の探索範囲では理想品が見つかりませんでした」と案内する。
+「この目標武器に理想品は存在しません」とは表示しない。
 
 同じ完成結果と実質的に同じ経路を持つ候補は重複排除する。検索処理は進捗表示とキャンセルに対応し、UIを長時間停止させないこと。
 
@@ -421,14 +429,10 @@ Keep Bonusesにユーザー選択slotはない。現在5slotのBonus familyをsl
 
 ## 17. 検索結果
 
-検索結果は目標武器単位で表示する。スマートフォンでは目標武器を容易に切り替えられること。
+検索結果は1回につき1つの目標武器のものを表示する。目標武器はSelectで選ぶ。
 
-検索結果フィルタ:
-
-- すべて
-- 理想
-- 実用
-- 近似
+検索結果フィルタ（すべて / 理想 / 実用 / 近似）は存在しない。返る候補は
+canonical Ideal 1件以下だからである。
 
 作成経路のフィルタ:
 
@@ -445,6 +449,11 @@ Keep Bonusesにユーザー選択slotはない。現在5slotのBonus familyをsl
 - 到達までのおおよその操作量
 - 推奨作成経路
 
+理想品が見つかった場合は、その作成Routeの途中で妥協条件を満たす状態を
+チェックポイントとして一覧表示する。各チェックポイントには妥協品としての性能、
+判定理由、何操作目で手に入るか、残り何操作で理想品になるかを表示する。
+既定ではどのチェックポイントも選択されていない。
+
 ---
 
 ## 18. 作成リスト
@@ -453,14 +462,15 @@ Keep Bonusesにユーザー選択slotはない。現在5slotのBonus familyをsl
 
 BuildCandidateは検索結果、BuildListEntryはユーザーがPlannerへ渡すために選択した状態として分離する。作成リスト追加時にはCandidateのSnapshot、Target定義Hash、検索開始RNG状態Hash、Routeが参照するOwnedWeaponの状態Hash、計算時のバージョン情報をBuildListEntryへ保存する。OwnedWeaponを参照しないRouteでは参照武器Hashを `null` とする。
 
-追加方式:
+追加方式は個別追加だけである。返る候補が1件以下なので一括追加の対象がない。
 
-- 個別追加
-- 理想候補の一括追加
-- 実用候補の一括追加
-- 理想候補と実用候補の一括追加
+追加時には、選択中のチェックポイントを同じBuildListEntryへ一緒に登録する。
+1つの性能グループから選べるチェックポイントは1つまでである。選択の変更は
+作成リスト側で行い、同じ候補を再追加しても既存の選択を上書きしない。
 
-近似フィルタで表示される候補は初期版では個別追加のみ許可する。
+選択したチェックポイントはPlannerのhard constraintであり、Plannerが勝手に
+解除したり別の到達点へ読み替えたりしない。到達しても武器の確保や
+status / 保護の変更は行わず、その先の作成は続く。
 
 再検索でBuildCandidateが置き換わってもBuildListEntryのSnapshotは失われない。ただしTarget条件、Candidate Route成立に使用したRNG状態、Routeが参照する起点武器の状態、または計算バージョンとの互換性が失われたEntryはstaleとし、Planner入力に使用しない。stale理由はそれぞれ `target_definition_changed`、`rng_state_changed`、`owned_weapon_changed`、`calculation_context_changed` とする。初期版では計算に使用したRNG状態Hashが変わった場合、安全側に倒してstaleとしてよい。Routeと無関係なOwnedWeaponの変更は参照武器Hashへ含めず、Entryをstaleにしない。
 
@@ -510,7 +520,10 @@ Plannerが自動判断できない局所競合では、ユーザーがBuildListE
 
 初期版の探索方式は上限付きBeam Searchとする。共有RNG状態、シミュレーション中の武器在庫、目標ごとの実用品・理想品充足状態、採用候補、操作列、累積コストを探索状態として持ち、実行可能な次操作へ展開する。完全最適解の保証より、実用的な時間内で十分良い計画を返すことを優先する。
 
-探索中はTargetごとに「実用品未所持」「実用品所持」「理想品所持」を区別する。Practical候補の確保で実用品所持、Ideal候補の確保で実用品所持かつ理想品所持へ更新し、未所持Targetの実用品確保を先に評価する。
+探索中はTargetごとに「理想品所持」を区別する。Ideal候補の確保で実用品所持かつ
+理想品所持へ更新する。実用品を先に確保する優先評価（practical-first）は行わない。
+ユーザーが選択したチェックポイントはscoreではなくhard constraintとして扱い、
+未到達のままそのEntryを完了できない。
 
 BuildCandidateのRouteには、通常アーティア作成、巨戟化、Reset Bonuses、Keep Bonuses、Reset Skillsなどの具体的な操作列を保持する。Plannerはこの操作列からPlanStepを再現する。
 
@@ -563,9 +576,11 @@ statusを書き換える経路は次の2つだけである。
 → Owned Weapons画面の通常CRUD
 
 Candidateを reserve_weapon で確保
-→ Candidate categoryを管理ラベルとして設定する
-   practical Candidate → status = practical
-   ideal Candidate     → status = ideal
+→ 理想品ラベルを設定する
+   新規生成武器  → status = ideal、保護あり
+   既存Gogma更新 → status = ideal、保存済み保護値を維持する
+
+チェックポイントへ到達しただけではstatusも保護も変更しない。
 ```
 
 `reserve_weapon` の設定は新規生成Candidateでも既存Gogma Candidateの確保でも同じであり、
@@ -621,10 +636,9 @@ Plannerが提示する推奨候補は表示用であり、制約付き再検索�
 候補を除外せず、同時に実行できるかどうかで判断する。
 
 制約付き再検索は、過去の画面上の絞り込み設定を引き継がない。現時点で成立する作成経路を
-すべて対象とし、理想 / 実用 / 近似の表示フィルタと表示件数上限を適用しない。探索範囲の
-上限は制約付き再検索専用の設定だけで決める。ただし目標の理想条件または実用条件を満たす
-候補だけを対象とする方針は変えない。通常の候補検索における経路フィルタと結果フィルタの
-仕様は変更しない。
+すべて対象とし、表示件数上限を適用しない。探索範囲の上限は制約付き再検索専用の設定だけで
+決める。対象は目標の理想条件を満たす候補だけである。妥協状態を独立した候補として提案する
+ことはない。通常の候補検索における経路フィルタの仕様は変更しない。
 
 制約付き再検索でPlannerが作成リスト項目を追加すると、同じ競合でも競合参加者の組み合わせ
 が変わる。ユーザーの競合選択は、参加者の組み合わせではなく、選んだ作成リスト項目と競合
@@ -645,7 +659,7 @@ Production Plan画面では、保存済みPlanの競合参加BuildListEntryを�
 Planに残るユーザー明示選択と、今回ユーザーが明示的に選んだ参加者だけから決める。
 
 「見送った場合の次候補までの距離」は、一方の競合参加者を仮に固定した場合について、他の参加
-Targetごとに次に実行可能なPracticalとIdealを独立して比較するwhat-ifとして提示する。距離の
+Targetごとに次に実行可能な理想品候補を比較するwhat-ifとして提示する。距離の
 主表示はPlanner開始時の現在状態を起点とする推定操作数とし、探索範囲内に候補が無い場合と、
 各種上限により未確認の場合を区別する。what-ifは保存を伴わないpreviewであり、比較の成功を
 競合選択の必須条件にしない。「比較する」と「この候補を優先」は別操作とし、明示選択後に
@@ -931,7 +945,7 @@ RNGの実データやアルゴリズムが未確定の段階では、推測値�
 3. 必要に応じて所持通常アーティアと所持巨戟アーティアを登録する
 4. 理想構成と実用ラインを持つ目標武器を複数登録する
 5. 利用可能な経路から候補を検索する
-6. 理想 / 実用カテゴリ、実用品の近似属性、到達距離を確認する
+6. 理想品候補と、その作成Route上の妥協チェックポイント、到達距離を確認する
 7. 復元ボーナス条件を満たす既存武器から、スキルのみ再付与する候補を検索できる
 
 ### 38.2 複数目標の計画生成
@@ -983,3 +997,10 @@ Target妥協条件のversion 6への変更では、旧1..5のBuild List項目を
 同じ完成結果・経路でも、新計算版を別項目として追加できる。旧snapshotは保持する。
 
 保護契約の改訂ではCalculationContext appSchemaVersionを7へ更新する。version 1..6のCandidate / BuildListEntry / ProductionPlanは内容を保持したまま `calculation_context_changed` でfail closedとする。Dexie `DATABASE_SCHEMA_VERSION = 2` とRNG Engine versionは変更せず、既存Practicalの保存済み保護値もmigrationしない。
+
+独立した実用品Candidateを廃止し、canonical Ideal Route上の選択可能な妥協チェックポイントへ
+再設計した改訂では、CalculationContext appSchemaVersionを10へ、`ExportRoot.schemaVersion` を
+5へ更新する。version 1..9のCandidate / BuildListEntry / ProductionPlanは内容を保持したまま
+`calculation_context_changed` でfail closedとする。Dexie `DATABASE_SCHEMA_VERSION = 4` と
+RNG Engine versionは変更しない。`OwnedWeaponStatus.practical` は所持武器の管理ラベルとして
+そのまま残す。

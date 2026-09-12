@@ -3,6 +3,7 @@ import {
   createCandidateSearchInput,
   practicalOnlyBonuses,
   SEARCH_FIXTURE_TIME,
+  candidatesOf,
 } from '../../test/fixtures/candidateSearch'
 import { ownedWeaponId } from '../../test/fixtures/domainData'
 import { restorationBonus, restorationBonusSet } from '../../test/fixtures/targetEvaluation'
@@ -81,23 +82,22 @@ const R4 = () => slots(L4, ['m', 'h', 'h', 'x', 'l'])
  *
  * Reset is predicted once per Counter position and Keep once per
  * `(Counter, ordered family layout)`, so the fixtures below describe exactly
- * the frontier the stream actually reaches. The Ideal five slots are never
- * produced, which keeps the search running to the configured depth.
+ * the frontier the stream actually reaches.
+ *
+ * `idealOutcome` decides which depth-4 result is the Target's Ideal, so the
+ * canonical Ideal Candidate is the Route ending in that very outcome. A Search
+ * returns at most one canonical Ideal Candidate, so a Route shape is exercised
+ * by making its own final result the Ideal (`docs/SEARCH_SPEC.md` 5.6.3).
  */
-function createTraceFixtureInput(): CandidateSearchInput {
+function createTraceFixtureInput(
+  idealOutcome: RestorationBonusSet = D4(),
+): CandidateSearchInput {
   const input = createCandidateSearchInput()
   input.routeFilter = 'existing_gogma'
   input.settings.maxGogmaAdvance = 4
   input.settings.maxSkillAdvance = 1
   input.calculationContext.rngEngineVersion = 'fake-fixture:bonus-amendment-trace'
-  input.targetWeapons[0].idealBonuses[3] = {
-    bonusTypeId: 'bonus_type.fixture.utility',
-    bonusRankId: 'bonus_rank.fixture.low',
-  }
-  input.targetWeapons[0].idealBonuses[4] = {
-    bonusTypeId: 'bonus_type.fixture.sharpness',
-    bonusRankId: 'bonus_rank.fixture.special',
-  }
+  input.targetWeapons[0].idealBonuses = structuredClone(idealOutcome)
   input.targetWeapons[0].alternativeBonusRules.push({ id: 'trace.utility', sourceBonusTypeId: 'bonus_type.fixture.utility', maxReplacementCount: 1, options: [{ alternativeBonusTypeId: 'bonus_type.fixture.sharpness', minimumRankId: 'bonus_rank.fixture.low', requiredExCount: 0 }] })
   const source = {
     ...structuredClone(input.ownedWeapons[0] as OwnedGogmaArtianWeapon),
@@ -190,11 +190,13 @@ function operationTypes(operations: readonly RouteOperation[]): string[] {
   return operations.map(({ type }) => type)
 }
 
-async function searchTraceCandidates(): Promise<BuildCandidate[]> {
-  const input = createTraceFixtureInput()
+async function searchTraceCandidates(
+  idealOutcome: RestorationBonusSet = D4(),
+): Promise<BuildCandidate[]> {
+  const input = createTraceFixtureInput(idealOutcome)
   const engine = createTraceFixtureEngine(input)
   const result = await searchCandidates(input, engine, deterministicExecution)
-  return result.targetResults[0].candidates
+  return candidatesOf(result.targetResult)
 }
 
 function findByOperationTypes(
@@ -250,7 +252,7 @@ describe('Candidate bonus amendment trace', () => {
   })
 
   it('keeps every repeated Reset distinct instead of repeating the final result', async () => {
-    const candidates = await searchTraceCandidates()
+    const candidates = await searchTraceCandidates(R4())
     const candidate = findByOperationTypes(candidates, [
       'reset_bonuses',
       'reset_bonuses',
@@ -271,7 +273,10 @@ describe('Candidate bonus amendment trace', () => {
   })
 
   it('ends the trace on the Candidate final bonuses for every searched Route', async () => {
-    const candidates = await searchTraceCandidates()
+    const candidates = [
+      ...(await searchTraceCandidates()),
+      ...(await searchTraceCandidates(R4())),
+    ]
     expect(candidates.length).toBeGreaterThan(1)
 
     candidates.forEach((candidate) => {
@@ -455,7 +460,7 @@ describe('Candidate validation of the amendment trace', () => {
 
   it('accepts a searched Candidate whose trace ends on its own final bonuses', async () => {
     const candidates = await searchTraceCandidates()
-    expect(candidates.length).toBeGreaterThan(1)
+    expect(candidates.length).toBeGreaterThan(0)
 
     candidates.forEach((candidate) => {
       expect(validateBuildCandidate(candidate).isValid).toBe(true)

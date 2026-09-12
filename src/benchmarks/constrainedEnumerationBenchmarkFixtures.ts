@@ -43,20 +43,17 @@ import {
  * observation). Every prediction the workloads reach is a Production-supported
  * input for the unmodified `ProductionRngEngine`.
  *
- * The unreachable halves are the same reference-level facts B5 used, not new
- * empirical guesses:
+ * A workload keeps a stream active by anchoring that stream's Ideal condition
+ * away from the Route base's current state: SEARCH_SPEC 5.6.1 disables a
+ * stream whose current state already satisfies the Ideal condition, and these
+ * fixtures use exactly that rule to isolate one axis at a time.
  *
- * - `bonus_type.attack` / `bonus_rank.i` is absent from
- *   `REFERENCE_GOGMA_RESET_CANDIDATES`, and every Normal Artian slot is
- *   `bonus_rank.base`, so no Reset or Keep result can contain it
- * - `group_skill.verified_14` is enabled in Master but absent from
- *   `REFERENCE_GROUP_SKILL_POOL`, so `predictSkills` never returns it
- *
- * Unlike B5, an unreachable Ideal is not used to defeat a search termination
- * rule: the constrained enumerator has no canonical-Ideal termination. It is
- * used to keep a stream *active*, because SEARCH_SPEC 5.6.1 disables a stream
- * whose current state already satisfies the Ideal condition. That same rule is
- * what these fixtures use, deliberately, to isolate one axis at a time.
+ * The active halves anchor on the Production prediction at the deepest
+ * position the workload's own bound reaches, rather than on an unreachable
+ * value. Search and constrained enumeration now yield Ideal Candidates only,
+ * so a workload that reaches no Ideal would measure enumeration work with no
+ * Candidate at all. The constrained enumerator has no canonical-Ideal
+ * termination, so a reachable Ideal never shortens the measured sweep.
  */
 export const CONSTRAINED_BENCHMARK_BASE_SEED = CANDIDATE_SEARCH_BENCHMARK_BASE_SEED
 export const CONSTRAINED_BENCHMARK_WEAPON_TYPE_ID =
@@ -87,18 +84,19 @@ const OWNED_GOGMA_SOURCE_SKILL_COUNTER = CONSTRAINED_BENCHMARK_SKILL_COUNTER + 9
 const OWNED_NORMAL_SOURCE_COUNTER = CONSTRAINED_BENCHMARK_NORMAL_COUNTER + 3000
 
 
-const UNREACHABLE_GROUP_SKILL_ID = 'group_skill.verified_14'
-
 /**
  * How a workload anchors the Target's Ideal bonus condition.
  *
  * `owned_gogma_current` makes the Owned Gogma source's Bonus stream inactive
  * (SEARCH_SPEC 5.6.1), which is how the Skill axis is isolated.
- * `unreachable` keeps the Bonus stream active on every base.
+ * `reset_at_bound` anchors the Ideal five slots on the Reset result at the
+ * deepest Gogma position the workload's own bound reaches, which keeps the
+ * Bonus stream active over the whole sweep while still letting the workload
+ * yield Candidates.
  */
 export type ConstrainedIdealBonuses =
   | { readonly kind: 'owned_gogma_current' }
-  | { readonly kind: 'unreachable' }
+  | { readonly kind: 'reset_at_bound' }
 
 /**
  * How a workload anchors the Target's Ideal skill condition.
@@ -106,10 +104,15 @@ export type ConstrainedIdealBonuses =
  * `owned_gogma_current` makes the Owned Gogma source's Skill stream inactive,
  * which is how the Gogma axis is isolated. It does not disable the Skill stream
  * of a conversion base, whose current Skills are the conversion result.
+ * `series_at_bound` anchors the Ideal Series Skill on the prediction at the
+ * deepest Reset Skills position the workload's own bound reaches that is not
+ * the Owned Gogma source's own Series Skill, leaving the Group Skill
+ * unconstrained. Anchoring on the source's own Skill would satisfy the Ideal
+ * condition already and disable the very stream the workload measures.
  */
 export type ConstrainedIdealSkills =
   | { readonly kind: 'owned_gogma_current' }
-  | { readonly kind: 'unreachable' }
+  | { readonly kind: 'series_at_bound' }
 
 export interface ConstrainedIdealSpec {
   readonly bonuses: ConstrainedIdealBonuses
@@ -161,7 +164,7 @@ const normalScaling = [10, 50, 100, 250, 500, 1000].map(
     id: `constrained_normal_${forgeCount}`,
     label: `A. Normal forge count ${forgeCount}`,
     group: 'normal',
-    ideal: { bonuses: { kind: 'unreachable' }, skills: { kind: 'unreachable' } },
+    ideal: { bonuses: { kind: 'reset_at_bound' }, skills: { kind: 'series_at_bound' } },
     inventory: { normalCounter: true, ownedNormal: false, ownedGogma: false },
     bounds: bounds(forgeCount, 1, 1, 0),
     note: 'Normal offsets only; Gogma and Skill at the validator minimum, off-axis disabled.',
@@ -183,7 +186,7 @@ const skillScaling = [10, 50, 100, 250, 500, 1000].map(
     group: 'skill',
     ideal: {
       bonuses: { kind: 'owned_gogma_current' },
-      skills: { kind: 'unreachable' },
+      skills: { kind: 'series_at_bound' },
     },
     inventory: { normalCounter: false, ownedNormal: false, ownedGogma: true },
     bounds: bounds(1, 1, resetCount, 0),
@@ -205,7 +208,7 @@ const gogmaScaling = [10, 25, 50, 100, 200].map(
     label: `C. Gogma advance ${advance}`,
     group: 'gogma',
     ideal: {
-      bonuses: { kind: 'unreachable' },
+      bonuses: { kind: 'reset_at_bound' },
       skills: { kind: 'owned_gogma_current' },
     },
     inventory: { normalCounter: false, ownedNormal: false, ownedGogma: true },
@@ -229,8 +232,8 @@ const offAxisScaling = [10, 25].flatMap((depth) =>
       label: `D. Off-axis G/S ${depth}/${depth}, budget ${budget}`,
       group: 'off_axis',
       ideal: {
-        bonuses: { kind: 'unreachable' },
-        skills: { kind: 'unreachable' },
+        bonuses: { kind: 'reset_at_bound' },
+        skills: { kind: 'series_at_bound' },
       },
       inventory: { normalCounter: false, ownedNormal: false, ownedGogma: true },
       bounds: bounds(1, depth, depth, budget),
@@ -259,7 +262,7 @@ const combinedScaling = combinedTuples.map(
     id: `constrained_combined_${normal}_${gogma}_${skill}_${offAxis}`,
     label: `E. Combined N/G/S/O ${normal}/${gogma}/${skill}/${offAxis}`,
     group: 'combined',
-    ideal: { bonuses: { kind: 'unreachable' }, skills: { kind: 'unreachable' } },
+    ideal: { bonuses: { kind: 'reset_at_bound' }, skills: { kind: 'series_at_bound' } },
     inventory: { normalCounter: true, ownedNormal: true, ownedGogma: true },
     bounds: bounds(normal, gogma, skill, offAxis),
     note: 'Every currently legal Route base with both streams active and no Ideal nearby.',
@@ -373,6 +376,34 @@ function skillsAtCounter(
     skillCounter,
     master,
   })
+}
+
+/**
+ * The Ideal Series Skill of a workload whose Skill stream must stay active.
+ *
+ * The deepest Reset Skills position inside the workload's own bound whose
+ * predicted Series Skill is not `excludedSeriesSkillId`, which is the Owned
+ * Gogma source's current Series Skill when that source is in the inventory.
+ */
+function activeIdealSeriesSkillId(
+  maxSkillResetCount: number,
+  excludedSeriesSkillId: string | null,
+  master: SearchMasterSubset,
+  engine: ProductionRngEngine,
+): string {
+  for (let offset = maxSkillResetCount - 1; offset >= 0; offset -= 1) {
+    const { seriesSkillId } = skillsAtCounter(
+      CONSTRAINED_BENCHMARK_SKILL_COUNTER + offset,
+      master,
+      engine,
+    )
+    if (seriesSkillId !== null && seriesSkillId !== excludedSeriesSkillId) {
+      return seriesSkillId
+    }
+  }
+  throw new Error(
+    'Every Skill position inside the bound predicts the excluded Series Skill.',
+  )
 }
 
 function resetBonusesAtDepth(
@@ -498,7 +529,7 @@ export function createConstrainedEnumerationBenchmarkInput(
   const idealBonuses: RestorationBonusSet =
     workload.ideal.bonuses.kind === 'owned_gogma_current'
       ? ownedGogma.restorationBonuses
-      : ownedGogma.restorationBonuses.map((bonus) => ({ ...bonus, bonusRankId: 'bonus_rank.ex' })) as RestorationBonusSet
+      : resetBonusesAtDepth(workload.bounds.maxGogmaAdvance, master, engine)
 
   const idealSkillCondition: SkillCondition =
     workload.ideal.skills.kind === 'owned_gogma_current'
@@ -508,8 +539,13 @@ export function createConstrainedEnumerationBenchmarkInput(
           matchMode: 'all',
         }
       : {
-          seriesSkillId: skillsAtCounter(CONSTRAINED_BENCHMARK_SKILL_COUNTER, master, engine).seriesSkillId,
-          groupSkillId: UNREACHABLE_GROUP_SKILL_ID,
+          seriesSkillId: activeIdealSeriesSkillId(
+            workload.bounds.maxSkillResetCount,
+            workload.inventory.ownedGogma ? ownedGogma.seriesSkillId : null,
+            master,
+            engine,
+          ),
+          groupSkillId: null,
           matchMode: 'all',
         }
 

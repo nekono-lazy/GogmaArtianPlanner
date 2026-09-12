@@ -7,6 +7,7 @@ import {
   createCandidateSearchEngine,
   createCandidateSearchInput,
   SEARCH_FIXTURE_TIME,
+  candidatesOf,
 } from '../test/fixtures/candidateSearch'
 import {
   createRestorationBonusSet,
@@ -63,7 +64,7 @@ describe('forced Reset Normal Artian route, Search to ProductionPlan', () => {
     input: ReturnType<typeof scenario>['input'],
     engine: RngEngine,
     candidate: NonNullable<
-      Awaited<ReturnType<typeof searchCandidates>>['targetResults'][number]['candidates'][number]
+      Awaited<ReturnType<typeof searchCandidates>>['targetResult']['candidate']
     >,
   ) {
     const target = input.targetWeapons[0]
@@ -97,10 +98,10 @@ describe('forced Reset Normal Artian route, Search to ProductionPlan', () => {
   it('searches a Candidate with no owned weapon and no Normal Counter', async () => {
     const { input, engine } = scenario()
     const result = await searchCandidates(input, engine, deterministicExecution)
-    const targetResult = result.targetResults[0]
+    const targetResult = result.targetResult
 
     expect(targetResult.searchedRoutes).toContain('normal_artian_to_gogma')
-    const candidate = targetResult.candidates.find(
+    const candidate = candidatesOf(targetResult).find(
       ({ route }) => route.kind === 'normal_artian_to_gogma',
     )
     expect(candidate).toBeDefined()
@@ -121,7 +122,7 @@ describe('forced Reset Normal Artian route, Search to ProductionPlan', () => {
   it('plans and executes that Candidate as a ProductionPlan', async () => {
     const { input, engine } = scenario()
     const result = await searchCandidates(input, engine, deterministicExecution)
-    const candidate = result.targetResults[0].candidates.find(
+    const candidate = candidatesOf(result.targetResult).find(
       ({ route }) => route.kind === 'normal_artian_to_gogma',
     )
     if (!candidate) throw new Error('Search produced no forced Reset Candidate.')
@@ -158,7 +159,7 @@ describe('forced Reset Normal Artian route, Search to ProductionPlan', () => {
     const engine = withoutNormalPrediction(delegate)
 
     const result = await searchCandidates(input, engine, deterministicExecution)
-    const candidate = result.targetResults[0].candidates.find(
+    const candidate = candidatesOf(result.targetResult).find(
       ({ route }) => route.kind === 'normal_artian_to_gogma',
     )
     if (!candidate) throw new Error('Search produced no forced Reset Candidate.')

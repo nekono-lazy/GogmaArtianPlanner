@@ -1,4 +1,3 @@
-import { evaluateTargetCandidate } from '../domain/target'
 import { createBuildListEntry } from '../domain/buildList'
 import { V1_NORMAL_ARTIAN_RARITY } from '../domain/models/publicTypes'
 import type { PlanConflict, TargetWeapon } from '../domain/models/publicTypes'
@@ -26,7 +25,7 @@ import {
 
 /** Measurement grid only. These values are NOT Production defaults. */
 export const BENCHMARK_ONLY_WHAT_IF_BOUNDS_SWEEP = {
-  maxCandidateTrialsPerCategoryPerTarget: [1, 2, 4, 8, 16],
+  maxCandidateTrialsPerTarget: [1, 2, 4, 8, 16],
   maxPlannerReruns: [1, 2, 4, 8, 16, 32],
 } as const
 
@@ -107,40 +106,47 @@ export function createPlannerWhatIfBenchmarkFixture(
       id: original.id.replace('b8e1', 'b9b2a') as TargetWeapon['id'],
       name: original.name.replace('B8-E1', 'B9-B2a'),
     }
-    // Scan a fixed, documented fixture construction window, not a Search bound.
+    // Every BuildListEntry now carries a canonical Ideal Candidate, so the
+    // Target's Ideal is anchored on the Entry's own Production result at the
+    // base Counter rather than scanned for at a later one. The Group Skill is
+    // left unconstrained, which is what lets a later Skill position reach the
+    // very same Ideal condition and gives the what-if an alternative to find.
     // Keep the original Practical condition; never relax it to fit a prediction.
-    for (let offset = 1; offset <= 100; offset += 1) {
-      const isSkill = entry.candidateSnapshot.route.kind === 'existing_gogma_reset_skills'
-      const counter = (isSkill ? SKILL_COUNTER : GOGMA_COUNTER) + offset
-      const skills = isSkill
-        ? engine.predictSkills({ baseSeed: BASE_SEED, weaponTypeId: target.weaponTypeId,
-            elementId: target.elementId, skillCounter: counter, master: base.master })
-        : source
-      const bonuses = isSkill ? source.restorationBonuses
-        : engine.predictGogmaBonus({ baseSeed: BASE_SEED, weaponTypeId: target.weaponTypeId,
-            elementId: target.elementId, gogmaCounter: counter,
-            operation: { type: 'reset_bonuses' }, master: base.master })
-      const proposal: TargetWeapon = {
-        ...target,
-        idealBonuses: bonuses,
-        idealSkillCondition: isSkill
-          ? { seriesSkillId: skills.seriesSkillId, groupSkillId: skills.groupSkillId, matchMode: 'all' }
-          : { seriesSkillId: null, groupSkillId: null, matchMode: 'all' },
-      }
-      if (!validateTargetIdealImpliesPractical(proposal, base.master).isValid) continue
-      const initial = entry.candidateSnapshot
-      const match = evaluateTargetCandidate(proposal, initial.finalBonuses, 'gogma_artian', initial.seriesSkillId, initial.groupSkillId, base.master, 0.6)
-      if (match.category === null) continue
-      idealPredictionCounters.push({ targetWeaponId: target.id,
-        stream: isSkill ? 'skill' : 'gogma', counter })
-      return proposal
+    const isSkill = entry.candidateSnapshot.route.kind === 'existing_gogma_reset_skills'
+    const counter = isSkill || conversionScenario ? SKILL_COUNTER : GOGMA_COUNTER
+    const skills = isSkill || conversionScenario
+      ? engine.predictSkills({ baseSeed: BASE_SEED, weaponTypeId: target.weaponTypeId,
+          elementId: target.elementId, skillCounter: SKILL_COUNTER, master: base.master })
+      : source
+    const bonuses = isSkill ? source.restorationBonuses
+      : engine.predictGogmaBonus({ baseSeed: BASE_SEED, weaponTypeId: target.weaponTypeId,
+          elementId: target.elementId, gogmaCounter: GOGMA_COUNTER,
+          operation: { type: 'reset_bonuses' }, master: base.master })
+    const proposal: TargetWeapon = {
+      ...target,
+      idealBonuses: bonuses,
+      idealSkillCondition: {
+        seriesSkillId: skills.seriesSkillId,
+        groupSkillId: null,
+        matchMode: 'all',
+      },
     }
-    throw new Error(`No Production-valid reachable Ideal for ${target.id} in fixture scan.`)
+    const containment = validateTargetIdealImpliesPractical(proposal, base.master)
+    if (!containment.isValid) {
+      throw new Error(
+        `Production fixture Target breaks Ideal implies Practical: ${target.id}`,
+      )
+    }
+    idealPredictionCounters.push({ targetWeaponId: target.id,
+      stream: isSkill || conversionScenario ? 'skill' : 'gogma', counter })
+    return proposal
   })
   const searchInput: CandidateSearchInput = {
     searchRunId: `b9-b2a-fixture:${workloadId}`,
-    targetWeaponIds: targets.map(({ id }) => id),
-    routeFilter: 'all', resultFilter: 'all',
+    // Single-Target search input, used here only as the
+    // `createCandidateFromPrediction()` context.
+    targetWeaponId: targets[0].id,
+    routeFilter: 'all',
     rngState: base.rngState, normalCounters: base.normalCounters,
     ownedWeapons: base.ownedWeapons, targetWeapons: targets,
     settings: { ...defaultCandidateSearchSettings },

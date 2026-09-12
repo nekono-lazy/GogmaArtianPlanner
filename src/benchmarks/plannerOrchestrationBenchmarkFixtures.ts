@@ -110,7 +110,6 @@ const SOURCE_SKILL_SCAN_END = 900
  * a Planner benchmark wants: no Target drops out of planning because it is
  * already complete, and SEARCH_SPEC 5.6.1 never disables a stream.
  */
-const UNREACHABLE_GROUP_SKILL_ID = 'group_skill.verified_14'
 const PRACTICAL_BONUS_TYPE_ID = 'bonus_type.attack'
 
 /**
@@ -555,15 +554,18 @@ function createBenchmarkTarget(
 ): TargetWeapon {
   const prediction = createRoutePrediction(spec, source, predictions)
   const bonusFocused = spec.flavor === 'bonus'
-  const idealBonuses = bonusFocused
-    ? prediction.finalBonuses.map((bonus) => ({ ...bonus, bonusRankId: 'bonus_rank.i' })) as RestorationBonusSet
-    : structuredClone(prediction.finalBonuses)
+  // The Route prediction is the Target's Ideal result on both axes: Candidate
+  // Search composes Ideal results only, so a workload whose Route stops at a
+  // compromise state would produce no Candidate at all. The two flavors still
+  // differ in which axis the Route has to amend, which is what the workload
+  // measures.
+  const idealBonuses = structuredClone(prediction.finalBonuses)
   return {
     id: `target.b8e1.${spec.key}` as TargetWeaponId,
     name: `B8-E1 ${spec.key}`, weaponTypeId: spec.weaponTypeId, elementId: spec.elementId,
     priority: 3, isEnabled: true, preferredOwnedWeaponId: null, idealBonuses,
     practicalBonusConditions: benchmarkPracticalBonuses(idealBonuses), alternativeBonusRules: [],
-    idealSkillCondition: { seriesSkillId: prediction.seriesSkillId, groupSkillId: bonusFocused ? prediction.groupSkillId : UNREACHABLE_GROUP_SKILL_ID, matchMode: 'all' },
+    idealSkillCondition: { seriesSkillId: prediction.seriesSkillId, groupSkillId: prediction.groupSkillId, matchMode: 'all' },
     practicalSkillCondition: { seriesSkillId: bonusFocused ? null : prediction.seriesSkillId, groupSkillId: null, matchMode: 'all' },
     memo: null, createdAt: FIXTURE_TIME, updatedAt: FIXTURE_TIME,
   }
@@ -768,9 +770,11 @@ export function createPlannerOrchestrationBenchmarkInput(
   // Entries; it is never an enumeration or orchestration bound.
   const searchInput: CandidateSearchInput = {
     searchRunId: FIXTURE_SEARCH_RUN_ID,
-    targetWeaponIds: targets.map(({ id }) => id),
+    // Candidate Search is single-Target now. This fixture only uses the input
+    // as the `createCandidateFromPrediction()` context, which reads the Master
+    // subset, the RNG snapshot and the CalculationContext, never this id.
+    targetWeaponId: targets[0].id,
     routeFilter: 'all',
-    resultFilter: 'all',
     rngState,
     normalCounters,
     ownedWeapons,

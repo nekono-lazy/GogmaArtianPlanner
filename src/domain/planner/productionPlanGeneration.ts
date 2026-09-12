@@ -71,7 +71,6 @@ function normalizeCandidateMaterials(candidate: BuildCandidate) {
 function normalizeCandidateSnapshot(candidate: BuildCandidate) {
   return {
     targetWeaponId: candidate.targetWeaponId,
-    category: candidate.category,
     finalBonuses: normalizeCandidateBonuses(candidate),
     restorationBonusScope: candidate.restorationBonusScope,
     seriesSkillId: candidate.seriesSkillId,
@@ -114,6 +113,13 @@ export function createPlanningBuildListEntriesHash(
       .map((entry) => ({
         id: entry.id,
         candidateSnapshot: normalizeCandidateSnapshot(entry.candidateSnapshot),
+        // The user's selected compromise checkpoints are a hard Planner
+        // constraint, so changing the selection changes what this Plan had to
+        // achieve and must make an existing Plan a recalculation target
+        // (`docs/PLANNER_SPEC.md` 7.5.5).
+        selectedCheckpointOpportunityIds: [
+          ...(entry.selectedCheckpointOpportunityIds ?? []),
+        ].sort(compareStableStrings),
         targetDefinitionHash: entry.targetDefinitionHash,
         searchStateHash: entry.searchStateHash,
         referencedOwnedWeaponsHash: entry.referencedOwnedWeaponsHash,
@@ -269,6 +275,7 @@ export function createPlanStepsFromDrafts(
       candidateId: draft.candidateId,
       ownedWeaponId: draft.ownedWeaponId,
       expectedResult: structuredClone(draft.expectedResult),
+      checkpointMilestones: structuredClone(draft.checkpointMilestones),
       expectedStateBefore: structuredClone(draft.expectedStateBefore),
       expectedStateAfter: structuredClone(draft.expectedStateAfter),
       inventoryChange: structuredClone(draft.inventoryChange),
@@ -327,7 +334,6 @@ function rejectedReason(
   const selectedComparable = input.buildListEntries.some((selected) =>
     selectedEntryIds.has(selected.id) &&
     selected.targetWeaponId === entry.targetWeaponId &&
-    selected.candidateSnapshot.category === entry.candidateSnapshot.category &&
     selected.candidateSnapshot.estimatedOperationCount <
       entry.candidateSnapshot.estimatedOperationCount,
   )

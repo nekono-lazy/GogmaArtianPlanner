@@ -84,7 +84,7 @@ function whatIfRequest(input = plannerInput()): PlannerWhatIfRequest {
       selectedBuildListEntryId: 'build-list.what-if.client' as never,
     },
     bounds: {
-      maxCandidateTrialsPerCategoryPerTarget: 4,
+      maxCandidateTrialsPerTarget: 4,
       maxPlannerReruns: 10,
     },
   }

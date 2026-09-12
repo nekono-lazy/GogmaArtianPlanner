@@ -1,5 +1,7 @@
 export * from './candidateFactory'
 export * from './candidateProcessing'
+export * from './candidateRetention'
+export * from './checkpointExtraction'
 export * from './candidateSearch'
 export * from './constrained'
 export * from './crossComposition'

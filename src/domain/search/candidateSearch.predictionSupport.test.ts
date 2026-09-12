@@ -13,6 +13,7 @@ import {
   createCandidateSearchInput,
   practicalOnlyBonuses,
   SEARCH_FIXTURE_TIME,
+  candidatesOf,
 } from '../../test/fixtures/candidateSearch'
 import {
   createRestorationBonusSet,
@@ -79,7 +80,6 @@ describe('Candidate Search input-level RNG support', () => {
       priority: 5 as const,
     }
     input.targetWeapons = [supportedTarget, unsupportedTarget]
-    input.targetWeaponIds = [unsupportedTarget.id, supportedTarget.id]
     input.normalCounters.push({
       ...structuredClone(input.normalCounters[0]),
       id: `${unsupportedTarget.weaponTypeId}:8`,
@@ -106,33 +106,40 @@ describe('Candidate Search input-level RNG support', () => {
       predictNormalArtian,
     })
 
-    const result = await searchCandidates(input, engine, deterministicExecution)
-    const unsupported = result.targetResults.find(
-      ({ targetWeaponId }) => targetWeaponId === unsupportedTarget.id,
-    )
-    const supported = result.targetResults.find(
-      ({ targetWeaponId }) => targetWeaponId === supportedTarget.id,
-    )
+    // One search per Target: reconciling several Targets is the Planner's job
+    // (`docs/SEARCH_SPEC.md` 4.1).
+    const unsupported = (await searchCandidates(
+      { ...input, targetWeaponId: unsupportedTarget.id },
+      engine,
+      deterministicExecution,
+    )).targetResult
+    const supported = (await searchCandidates(
+      { ...input, targetWeaponId: supportedTarget.id },
+      engine,
+      deterministicExecution,
+    )).targetResult
 
-    expect(unsupported?.candidates).toEqual([])
-    expect(unsupported?.skippedRoutes).toContainEqual(expect.objectContaining({
+    expect(candidatesOf(unsupported)).toEqual([])
+    expect(unsupported.skippedRoutes).toContainEqual(expect.objectContaining({
       route: 'normal_artian_to_gogma',
       reason: 'normal_prediction_unsupported',
     }))
-    expect(supported?.candidates).not.toHaveLength(0)
-    expect(predictNormalArtian).toHaveBeenCalledTimes(1)
+    expect(candidatesOf(supported)).not.toHaveLength(0)
     expect(predictNormalArtian).toHaveBeenCalledWith(expect.objectContaining({
       weaponTypeId: supportedTarget.weaponTypeId,
     }))
+    expect(predictNormalArtian).not.toHaveBeenCalledWith(expect.objectContaining({
+      weaponTypeId: unsupportedTarget.weaponTypeId,
+    }))
 
-    const conversion = supported?.candidates[0]?.route.operations.find(
+    const conversion = candidatesOf(supported)[0]?.route.operations.find(
       ({ type }) => type === 'convert_normal_to_gogma',
     )
     expect(conversion).toEqual(expect.objectContaining({
       skillCounterBefore: 7,
       skillCounterAfter: 8,
     }))
-    expect(supported?.candidates[0]).toEqual(expect.objectContaining({
+    expect(candidatesOf(supported)[0]).toEqual(expect.objectContaining({
       estimatedNormalAdvance: 1,
       estimatedSkillAdvance: 1,
       estimatedGogmaAdvance: 1,
@@ -155,13 +162,13 @@ describe('Candidate Search input-level RNG support', () => {
     })
 
     const result = await searchCandidates(input, engine, deterministicExecution)
-    const targetResult = result.targetResults[0]
+    const targetResult = result.targetResult
 
     expect(targetResult.skippedRoutes).toContainEqual(expect.objectContaining({
       route: 'existing_gogma_reset_skills',
       reason: 'skill_prediction_unsupported',
     }))
-    expect(targetResult.candidates).toEqual(expect.arrayContaining([
+    expect(candidatesOf(targetResult)).toEqual(expect.arrayContaining([
       expect.objectContaining({
         route: expect.objectContaining({ kind: 'existing_gogma_reset_bonuses' }),
       }),
@@ -188,7 +195,7 @@ describe('Candidate Search input-level RNG support', () => {
     })
 
     const result = await searchCandidates(input, engine, deterministicExecution)
-    const targetResult = result.targetResults[0]
+    const targetResult = result.targetResult
 
     expect(targetResult.searchedRoutes).toContain('existing_gogma_reset_bonuses')
     expect(targetResult.searchedRoutes).toContain('existing_gogma_keep_bonuses')
@@ -221,13 +228,13 @@ describe('Candidate Search input-level RNG support', () => {
     })
 
     const result = await searchCandidates(input, engine, deterministicExecution)
-    const targetResult = result.targetResults[0]
+    const targetResult = result.targetResult
 
     expect(targetResult.skippedRoutes).toContainEqual(expect.objectContaining({
       route: 'existing_gogma_reset_bonuses',
       reason: 'master_data_unavailable',
     }))
-    expect(targetResult.candidates).toEqual(expect.arrayContaining([
+    expect(candidatesOf(targetResult)).toEqual(expect.arrayContaining([
       expect.objectContaining({
         route: expect.objectContaining({ kind: 'existing_gogma_keep_bonuses' }),
       }),
@@ -282,17 +289,9 @@ describe('Candidate Search input-level RNG support', () => {
     })
 
     const result = await searchCandidates(input, engine, deterministicExecution)
-    const targetResult = result.targetResults[0]
-    const keepSourceIds = targetResult.candidates
-      .filter(({ route }) => route.operations[0]?.type === 'keep_bonuses')
-      .map(({ route }) => route.sourceOwnedWeaponId)
-    const resetSourceIds = targetResult.candidates
-      .filter(({ route }) => route.operations[0]?.type === 'reset_bonuses')
-      .map(({ route }) => route.sourceOwnedWeaponId)
 
-    expect(keepSourceIds).toEqual(expect.arrayContaining([sourceA.id, sourceC.id]))
-    expect(keepSourceIds).not.toContain(sourceB.id)
-    expect(resetSourceIds).toContain(sourceB.id)
+    // Which sources reach a Keep prediction is the subject: the Candidate
+    // output itself is canonical-Ideal-only and this Target reaches no Ideal.
     expect(keepPredictionKeys).toEqual(expect.arrayContaining([
       orderedBonusKey(sourceA.restorationBonuses),
       orderedBonusKey(sourceC.restorationBonuses),

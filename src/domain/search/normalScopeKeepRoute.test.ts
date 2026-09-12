@@ -1,3 +1,4 @@
+import { candidatesOf } from '../../test/fixtures/candidateSearch'
 import { describe, expect, it } from 'vitest'
 import { searchCandidates } from './candidateSearch'
 import { enumerateConstrainedCandidates } from './constrained/constrainedEnumeration'
@@ -9,7 +10,7 @@ import {
   createConstrainedEngine,
   createConstrainedSearchOrigin,
   gogmaWeapon,
-  practicalBonuses,
+  idealBonuses,
 } from '../../test/fixtures/constrainedEnumeration'
 
 /**
@@ -37,8 +38,11 @@ function inheritedScopeSetup() {
   const engine = createConstrainedEngine(origin, {
     keepSupported: true,
     keepInputs: [belowPracticalBonuses()],
+    // The Reset alone reaches nothing the Target accepts; the following Keep
+    // reaches its Ideal five slots, and every Skill position carries the Ideal
+    // Series Skill, so the mixed Route is the canonical Ideal Route.
     resetResultAt: () => belowPracticalBonuses(),
-    keepResultAt: () => practicalBonuses(),
+    keepResultAt: () => idealBonuses(),
   })
   return { origin, engine }
 }
@@ -50,7 +54,7 @@ describe('Reset Bonuses then Keep Bonuses from an inherited normal-scope Gogma',
       candidateSearchInputFromOrigin(origin, { maxGogmaAdvance: 2 }),
       engine,
     )
-    const mixed = result.targetResults[0].candidates.filter((candidate) =>
+    const mixed = candidatesOf(result.targetResult).filter((candidate) =>
       candidate.route.operations.some(({ type }) => type === 'keep_bonuses'),
     )
     expect(mixed.length).toBeGreaterThan(0)
@@ -103,7 +107,7 @@ describe('Reset Bonuses then Keep Bonuses from an inherited normal-scope Gogma',
       engine,
     )
     const routes = [
-      ...ordinary.targetResults[0].candidates.map(({ route }) => route),
+      ...candidatesOf(ordinary.targetResult).map(({ route }) => route),
       ...constrained.candidates.map(({ route }) => route),
     ]
     expect(routes.length).toBeGreaterThan(0)

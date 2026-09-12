@@ -10,10 +10,9 @@ export function entryIsRelevantForState(
   state: PlannerSearchState,
   entry: BuildListEntry,
 ): boolean {
-  const satisfaction = state.targetSatisfaction[entry.targetWeaponId]
-  return Boolean(
-    satisfaction &&
-      !satisfaction.hasIdeal &&
-      (!satisfaction.hasPractical || entry.candidateSnapshot.category === 'ideal'),
-  )
+  // Every Candidate is a canonical Ideal Candidate, so an Entry stays relevant
+  // until its Target actually holds an Ideal weapon. A Target that only holds a
+  // Practical weapon still needs its Ideal Route - and that Route may be the
+  // very one carrying the user's selected checkpoints.
+  return Boolean(state.targetSatisfaction[entry.targetWeaponId]?.hasIdeal === false)
 }

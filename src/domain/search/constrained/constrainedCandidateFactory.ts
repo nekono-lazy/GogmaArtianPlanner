@@ -12,12 +12,7 @@ import type {
   TargetWeapon,
 } from '../../models/publicTypes'
 import { validateBuildRoute } from '../../models/publicTypes'
-import {
-  calculateSimilarityScore,
-  evaluateTargetBonusMatch,
-  evaluateTargetSkillMatch,
-  createIdealDifference,
-} from '../../target'
+import { createIdealDifference, satisfiesIdealTarget } from '../../target'
 import { candidateStableKey } from '../candidateProcessing'
 import { compareStableKeys, preferredSourceRank } from '../semanticKeys'
 import { createCandidateRouteEstimates } from '../candidateFactory'
@@ -38,30 +33,32 @@ export interface ConstrainedCandidatePrediction {
 /**
  * Builds one transient `ConstrainedCandidate`.
  *
- * Every field comes from an existing Domain authority: `classifyCandidate()`,
- * `createIdealDifference()`, `calculateSimilarityScore()`,
- * `createCandidateRouteEstimates()`, `createSearchStateHash()` and
- * `createReferencedOwnedWeaponsHash()`. No similarity threshold is applied, so
+ * Every field comes from an existing Domain authority: `satisfiesIdealTarget()`,
+ * `createIdealDifference()`, `createCandidateRouteEstimates()`,
+ * `createSearchStateHash()` and `createReferencedOwnedWeaponsHash()`.
  * `CandidateSearchSettings` never reaches this boundary, and no `id`,
  * `searchRunId`, `createdAt`, Clock value, or enumeration ordinal is produced.
  *
- * Returns `null` when the composed result satisfies neither the Ideal nor the
- * Practical condition, which is the yield contract of SEARCH_SPEC 5.6.7.
+ * Returns `null` when the composed result is not an Ideal result, which is the
+ * yield contract of SEARCH_SPEC 5.6.7.
  */
 export function createConstrainedCandidate(
   target: TargetWeapon,
   origin: ConstrainedSearchOrigin,
   prediction: ConstrainedCandidatePrediction,
 ): ConstrainedCandidate | null {
-  const bonus = evaluateTargetBonusMatch(
-    target,
-    prediction.finalBonuses,
-    prediction.restorationBonusScope,
-    origin.master,
-  )
-  const skill = evaluateTargetSkillMatch(target, prediction.seriesSkillId, prediction.groupSkillId)
-  if (!bonus || !skill) return null
-  const category = bonus === 'ideal' && skill === 'ideal' ? 'ideal' : 'practical'
+  if (
+    !satisfiesIdealTarget(
+      target,
+      prediction.finalBonuses,
+      prediction.restorationBonusScope,
+      prediction.seriesSkillId,
+      prediction.groupSkillId,
+      origin.master,
+    )
+  ) {
+    return null
+  }
 
   const valid = validateBuildRoute(prediction.route, origin.ownedWeapons)
   if (!valid.isValid) {
@@ -79,8 +76,6 @@ export function createConstrainedCandidate(
   )
   return {
     targetWeaponId: target.id,
-    category,
-    conditionMatch: { bonus, skill },
     finalBonuses: prediction.finalBonuses.map((bonus) => ({
       ...bonus,
     })) as RestorationBonusSet,
@@ -92,7 +87,6 @@ export function createConstrainedCandidate(
       master: origin.master,
     }),
     idealDifference,
-    similarityScore: calculateSimilarityScore(target, idealDifference),
     searchStateHash: createSearchStateHash(
       prediction.route,
       origin.rngState,
@@ -125,10 +119,9 @@ function nullableAscending(left: number | null, right: number | null): number {
 }
 
 /**
- * The deterministic enumeration order, mirroring the existing bounded-selection
- * ordering `compareCandidateSelection()`: Ideal before Practical, then cheaper
- * routes, then closeness, then the Target's preferred source, then the stable
- * semantic key.
+ * The deterministic enumeration order, mirroring the canonical Ideal ordering:
+ * cheaper routes, then the smallest advance on each stream, then the Target's
+ * preferred source, then the stable semantic key.
  *
  * `preferredOwnedWeaponId` sits immediately before the stable tie-break, in the
  * same position the ordinary Candidate comparisons give it, so it separates
@@ -146,15 +139,10 @@ export function compareConstrainedCandidates(
   preferredOwnedWeaponId: OwnedWeaponId | null = null,
 ): number {
   return (
-    Number(left.category === 'practical') -
-      Number(right.category === 'practical') ||
     left.estimatedOperationCount - right.estimatedOperationCount ||
     left.estimatedGogmaAdvance - right.estimatedGogmaAdvance ||
     left.estimatedSkillAdvance - right.estimatedSkillAdvance ||
     nullableAscending(left.estimatedNormalAdvance, right.estimatedNormalAdvance) ||
-    (right.similarityScore ?? -1) - (left.similarityScore ?? -1) ||
-    right.idealDifference.matchedBonusCount -
-      left.idealDifference.matchedBonusCount ||
     preferredSourceRank(
       left.route.sourceOwnedWeaponId,
       preferredOwnedWeaponId,

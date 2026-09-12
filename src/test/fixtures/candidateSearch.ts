@@ -1,8 +1,11 @@
 import { FakeRngEngine, type FakeRngFixtures } from '../../domain/rng/fakeRngEngine'
 import type {
   CandidateSearchInput,
+  CandidateSearchResult,
   SearchMasterSubset,
+  TargetCandidateSearchResult,
 } from '../../domain/search'
+import type { BuildCandidate } from '../../domain/models/publicTypes'
 import {
   createRestorationBonusSet,
   createValidNormalArtianCounter,
@@ -14,6 +17,20 @@ import {
 import { restorationBonus, restorationBonusSet, targetEvaluationMaster } from './targetEvaluation'
 
 export const SEARCH_FIXTURE_TIME = '2026-08-29T01:00:00.000Z'
+
+/**
+ * The searched Target's Candidates as a list.
+ *
+ * A Search result is at most one canonical Ideal Candidate, so this is an empty
+ * or single-element array. It exists so an assertion can keep reading like a
+ * collection without pretending the Domain still returns several Candidates.
+ */
+export function candidatesOf(
+  result: CandidateSearchResult | TargetCandidateSearchResult,
+): BuildCandidate[] {
+  const targetResult = 'targetResult' in result ? result.targetResult : result
+  return targetResult.candidate === null ? [] : [targetResult.candidate]
+}
 
 export const searchMasterFixture: SearchMasterSubset = {
   weaponBonusDefinitions: [],
@@ -75,9 +92,8 @@ export function createCandidateSearchInput(): CandidateSearchInput {
   owned.groupSkillId = null
   return {
     searchRunId: 'search-run.fixture.v1',
-    targetWeaponIds: [target.id],
+    targetWeaponId: target.id,
     routeFilter: 'all',
-    resultFilter: 'all',
     rngState,
     normalCounters: [createValidNormalArtianCounter()],
     ownedWeapons: [owned],
@@ -86,8 +102,6 @@ export function createCandidateSearchInput(): CandidateSearchInput {
       maxNormalAdvance: 1,
       maxGogmaAdvance: 1,
       maxSkillAdvance: 1,
-      maxCandidatesPerTarget: 200,
-      similarityThreshold: 0.6,
     },
     master: {
       weaponBonusDefinitions: searchMasterFixture.weaponBonusDefinitions.map(

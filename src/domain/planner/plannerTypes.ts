@@ -2,7 +2,6 @@ import type {
   BuildListEntry,
   BuildListEntryId,
   CalculationContext,
-  CandidateCategory,
   DomainValidationIssue,
   ISODateTimeString,
   NormalArtianCounter,
@@ -160,10 +159,17 @@ export interface SimulatedInventory {
   createdWeaponIds: OwnedWeaponId[]
 }
 
+/**
+ * How valuable selecting one BuildListEntry is in one state.
+ *
+ * There is no category term any more: every Candidate is a canonical Ideal
+ * Candidate, so a per-Candidate category score would be a constant. Selected
+ * compromise checkpoints are a hard constraint, never a score
+ * (`docs/PLANNER_SPEC.md` 7.5.3).
+ */
 export interface CandidateScore {
   targetPriorityScore: number
   satisfactionScore: number
-  categoryScore: number
   distancePenalty: number
   conflictPenalty: number
   total: number
@@ -219,7 +225,6 @@ export interface PlannerSearchReserveAction {
   routeOperation: null
   ownedWeaponId: OwnedWeaponId
   plannerOnly: true
-  candidateCategory: CandidateCategory
   rngBefore: PlannerSearchRngSnapshot
   rngAfter: PlannerSearchRngSnapshot
   inventoryEffect: PlannerSearchInventoryEffect
@@ -253,8 +258,15 @@ export interface PlannerSearchState {
   /** Existing sources are excluded from satisfaction until a Candidate result is reserved. */
   inFlightExistingSourceByOwnedWeaponId: Record<string, true>
   securedOwnedWeaponIdByEntryId: Record<string, OwnedWeaponId>
-  /** Targets initially lacking a Practical weapon that this branch has started to secure. */
-  practicalFirstProgressTargetIds: TargetWeaponId[]
+  /**
+   * Which selected compromise checkpoints this branch has actually reached, as
+   * `entryId -> reached checkpoint opportunity ids`.
+   *
+   * A hard constraint's progress record, not a score: a branch may only secure
+   * an Entry's Candidate once every checkpoint the user selected for it has
+   * really been reached (`docs/PLANNER_SPEC.md` 7.5.3).
+   */
+  reachedCheckpointOpportunityIdsByEntryId: Record<string, string[]>
   trace: PlannerSearchAction[]
   /**
    * How many times the player has to put one weapon down and pick another one
@@ -295,6 +307,11 @@ export type PlannerSearchRejectionReason =
   | 'conflict_resolution_not_selected'
   | 'candidate_already_satisfied'
   | 'rng_contract_unavailable'
+  /**
+   * A compromise checkpoint the user selected for this BuildListEntry was not
+   * reached, so its Candidate may not be secured (PLANNER_SPEC 7.5.3).
+   */
+  | 'selected_checkpoint_not_reached'
 
 export interface PlannerSearchRejection {
   buildListEntryId: BuildListEntryId

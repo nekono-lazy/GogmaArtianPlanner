@@ -9,7 +9,6 @@ import {
   createRestorationBonusSet,
   createValidOwnedWeapon,
   ownedWeaponId,
-  targetWeaponId,
 } from '../../test/fixtures/domainData'
 import {
   fixture,
@@ -1401,9 +1400,15 @@ describe('Planner Beam Search', () => {
       bonusTypeId: 'bonus_type.fixture.attack',
       bonusRankId: 'bonus_rank.fixture.high',
     })) as unknown as TargetWeapon['idealBonuses']
+    // The source satisfies the previous Target's compromise condition only,
+    // never its Ideal, so consuming it as the next Target's source is a strict
+    // improvement the Beam Search will actually take.
     const previousTarget = {
       ...target('target.in-flight.previous'),
-      idealBonuses: attackOnly,
+      idealBonuses: Array.from({ length: 5 }, () => ({
+        bonusTypeId: 'bonus_type.fixture.attack',
+        bonusRankId: 'bonus_rank.fixture.special',
+      })) as unknown as TargetWeapon['idealBonuses'],
       practicalBonusConditions: [{
         id: 'condition.in-flight.attack',
         bonusTypeId: 'bonus_type.fixture.attack',
@@ -1714,14 +1719,9 @@ describe('Planner Beam Search', () => {
 
   it('uses Practical-first as a tier instead of counting started Targets', () => {
     const twoStarted = {
-      practicalFirstProgressTargetIds: [
-        targetWeaponId('target.tier.first'),
-        targetWeaponId('target.tier.second'),
-      ],
       evaluationScore: 10,
     } as PlannerSearchState
     const oneSecured = {
-      practicalFirstProgressTargetIds: [targetWeaponId('target.tier.secured')],
       evaluationScore: 20,
     } as PlannerSearchState
     expect(comparePlannerSearchStates(oneSecured, twoStarted)).toBeLessThan(0)
@@ -1915,18 +1915,21 @@ describe('Planner Beam Search', () => {
     const result = await runPlannerBeamSearch(input, dependencies)
     expect(result.bestState?.targetSatisfaction[secondTarget.id].hasPractical)
       .toBe(true)
-    expect(result.bestState?.practicalFirstProgressTargetIds).toContain(
-      secondTarget.id,
-    )
+    // A Target's satisfaction is derived from the actual weapon it holds. The
+    // Planner no longer tracks a "secured a Practical first" branch flag at
+    // all, because independent Practical Candidates do not exist
+    // (`docs/PLANNER_SPEC.md` 7.2).
+    expect(
+      (result.bestState as unknown as Record<string, unknown>)
+        .practicalFirstProgressTargetIds,
+    ).toBeUndefined()
   })
 
   it('prefers a completed cross-target Practical state over an unfinished one', () => {
     const unfinished = {
-      practicalFirstProgressTargetIds: [targetWeaponId('target.cross-tier')],
       evaluationScore: 10,
     } as PlannerSearchState
     const completed = {
-      practicalFirstProgressTargetIds: [targetWeaponId('target.cross-tier')],
       evaluationScore: 20,
     } as PlannerSearchState
     expect(comparePlannerSearchStates(completed, unfinished)).toBeLessThan(0)

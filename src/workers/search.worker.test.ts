@@ -8,7 +8,6 @@ import {
   createCandidateSearchEngine,
   createCandidateSearchInput,
 } from '../test/fixtures/candidateSearch'
-import { targetWeaponId } from '../test/fixtures/domainData'
 
 describe('Candidate Search Worker', () => {
   it('keeps RngEngine outside the structured-clone Worker request', () => {
@@ -25,13 +24,6 @@ describe('Candidate Search Worker', () => {
   it('returns progress and result with the requestId for multiple Targets', async () => {
     const input = createCandidateSearchInput()
     input.routeFilter = 'normal_artian'
-    const secondTarget = {
-      ...input.targetWeapons[0],
-      id: targetWeaponId('target.fixture.second'),
-      name: 'Second fixture target',
-    }
-    input.targetWeapons.push(secondTarget)
-    input.targetWeaponIds.push(secondTarget.id)
     const responses: SearchWorkerResponse[] = []
     const controller = createSearchWorkerController(
       createCandidateSearchEngine(input),
@@ -50,20 +42,16 @@ describe('Candidate Search Worker', () => {
         { type: 'progress' }
       > => response.type === 'progress',
     )
-    // Each Target reports its start and its completion, so the current Target
-    // is visible before it finishes.
-    expect(progress).toHaveLength(4)
+    // One search covers one Target, so it reports its start and its completion
+    // (`docs/SEARCH_SPEC.md` 4.1).
+    expect(progress).toHaveLength(2)
     expect(
       progress.every(({ requestId }) => requestId === 'request.fixture.progress'),
     ).toBe(true)
-    expect(progress.map((item) => item.phase)).toEqual([
-      'preparing',
-      'finalizing',
-      'preparing',
-      'finalizing',
-    ])
-    expect(progress.map((item) => item.completedTargets)).toEqual([0, 1, 1, 2])
-    expect(progress.map((item) => item.totalTargets)).toEqual([2, 2, 2, 2])
+    expect(progress.map((item) => item.phase)).toEqual(['preparing', 'finalizing'])
+    expect(
+      progress.every(({ targetWeaponId: id }) => id === input.targetWeaponId),
+    ).toBe(true)
     expect(
       progress
         .filter(({ phase }) => phase === 'preparing')
@@ -80,12 +68,6 @@ describe('Candidate Search Worker', () => {
   it('does not post a final result after cancellation', async () => {
     const input = createCandidateSearchInput()
     input.routeFilter = 'normal_artian'
-    const secondTarget = {
-      ...input.targetWeapons[0],
-      id: targetWeaponId('target.fixture.cancel.second'),
-    }
-    input.targetWeapons.push(secondTarget)
-    input.targetWeaponIds.push(secondTarget.id)
     const responses: SearchWorkerResponse[] = []
     const controllerHolder: {
       value?: ReturnType<typeof createSearchWorkerController>
@@ -94,7 +76,7 @@ describe('Candidate Search Worker', () => {
       createCandidateSearchEngine(input),
       (response) => {
         responses.push(response)
-        if (response.type === 'progress' && response.completedTargets === 1) {
+        if (response.type === 'progress' && response.phase === 'preparing') {
           void controllerHolder.value?.handleMessage({
             type: 'cancel',
             requestId: 'request.fixture.cancel',

@@ -2,7 +2,8 @@ import type {
   BuildCandidateId,
   BuildListEntryId,
   CalculationContext,
-  CandidateCategory,
+  CompromiseCheckpointGroupId,
+  CompromiseCheckpointOpportunityId,
   ConflictKind,
   ExecutionAction,
   ExecutionHistoryId,
@@ -71,6 +72,20 @@ export interface PlanStep {
    * predates the field, so its shared attribution must not be inferred.
    */
   progressedTargetWeaponIds?: TargetWeaponId[]
+  /**
+   * The selected compromise checkpoints this one physical Step reaches
+   * (`docs/PLANNER_SPEC.md` 7.5.4).
+   *
+   * A checkpoint is never its own operation: it is milestone metadata on the
+   * real Step that produces the state, so no `PlanStepOperationType` is added,
+   * nothing is reserved, no OwnedWeapon is created, no status or protection
+   * changes, and the Plan neither stops nor completes there. One shared
+   * physical Step can reach several Entries' milestones at once.
+   *
+   * `undefined` means the Plan predates the field, which must not be read as
+   * "this Step reaches no milestone".
+   */
+  checkpointMilestones?: PlanStepCheckpointMilestone[]
   candidateId: BuildCandidateId | null
   ownedWeaponId: OwnedWeaponId | null
   expectedResult: ExpectedResult | null
@@ -84,13 +99,35 @@ export interface PlanStep {
   debug: PlanStepDebugInfo | null
 }
 
+/**
+ * One selected checkpoint reached by the Step carrying it.
+ *
+ * Typed metadata rather than a reused `ExpectedResult` category: the Step's
+ * `ExpectedResult` keeps its own responsibility of describing the actual state
+ * expected after the physical operation.
+ */
+export interface PlanStepCheckpointMilestone {
+  buildListEntryId: BuildListEntryId
+  targetWeaponId: TargetWeaponId
+  checkpointGroupId: CompromiseCheckpointGroupId
+  checkpointOpportunityId: CompromiseCheckpointOpportunityId
+  /** Operation units still remaining until this Entry's Ideal result. */
+  remainingOperationCount: number
+}
+
+/**
+ * The actual weapon state expected after one physical operation.
+ *
+ * It carries no Candidate category and no similarity metadata: independent
+ * Practical Candidates and the similarity concept no longer exist, and
+ * checkpoint explanation belongs to `PlanStep.checkpointMilestones` instead
+ * (`docs/PLANNER_SPEC.md` 7.5.4).
+ */
 export interface ExpectedResult {
   restorationBonuses: RestorationBonusSet | null
   restorationBonusScope: RestorationBonusScope | null
   seriesSkillId: SeriesSkillId | null
   groupSkillId: GroupSkillId | null
-  candidateCategory: CandidateCategory | null
-  isSimilarToIdeal: boolean
   shouldSecure: boolean
 }
 
@@ -119,6 +156,21 @@ export interface PlanStepDebugInfo {
   plannerReason: string
 }
 
+/**
+ * One conflict participant whose competing unit is a selected checkpoint
+ * endpoint (`docs/PLANNER_SPEC.md` 9.5).
+ *
+ * Typed metadata so the UI can say that resolving this conflict requires
+ * changing a checkpoint selection in the Build List, instead of inferring it
+ * from a message. It never enters `PlanConflict.id`, which keeps its existing
+ * generation rule.
+ */
+export interface PlanConflictCheckpointParticipant {
+  buildListEntryId: BuildListEntryId
+  checkpointGroupId: CompromiseCheckpointGroupId
+  checkpointOpportunityId: CompromiseCheckpointOpportunityId
+}
+
 export interface PlanConflict {
   id: string
   kind: ConflictKind
@@ -127,6 +179,14 @@ export interface PlanConflict {
   recommendedBuildListEntryId: BuildListEntryId | null
   selectedBuildListEntryId: BuildListEntryId | null
   resolutionNote: string | null
+  /**
+   * Participants whose competing unit is a selected checkpoint endpoint.
+   *
+   * Empty means no selected checkpoint is involved. `undefined` means the Plan
+   * predates the field and carries no such judgement; it must not be read as
+   * "no checkpoint is involved".
+   */
+  checkpointParticipants?: PlanConflictCheckpointParticipant[]
 }
 
 export interface RejectedBuildListEntry {

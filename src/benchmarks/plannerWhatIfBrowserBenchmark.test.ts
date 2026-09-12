@@ -4,7 +4,7 @@ import type { PlannerWorkerClient } from '../services/planner/plannerWorkerClien
 import { createPlannerWhatIfBenchmarkFixture } from './plannerWhatIfBenchmarkFixtures'
 import { runPlannerWhatIfBenchmark } from './plannerWhatIfBrowserBenchmark'
 
-const bounds = { maxCandidateTrialsPerCategoryPerTarget: 4, maxPlannerReruns: 16 }
+const bounds = { maxCandidateTrialsPerTarget: 4, maxPlannerReruns: 16 }
 const options = { requestId: 'contract-only', workloadId: 'what_if_two_targets', bounds }
 const fixture = createPlannerWhatIfBenchmarkFixture(options.workloadId)
 const completed: PlannerWhatIfCalculationResult = {
@@ -115,7 +115,7 @@ describe('B9 Browser harness contract', () => {
   it.each([0, -1, 1.5, Infinity, NaN, undefined])('rejects invalid bound %s before Client or fixture construction', async (value) => {
     const createClient = vi.fn(fakeClient)
     const createFixture = vi.fn(() => fixture)
-    for (const field of ['maxCandidateTrialsPerCategoryPerTarget', 'maxPlannerReruns']) {
+    for (const field of ['maxCandidateTrialsPerTarget', 'maxPlannerReruns']) {
       await expect(runPlannerWhatIfBenchmark({ ...options, bounds: { ...bounds, [field]: value } }, { createClient, createFixture })).rejects.toThrow()
     }
     expect(createClient).not.toHaveBeenCalled()

@@ -9,7 +9,6 @@ import type {
   RestorationBonusSet,
   SeriesSkillId,
 } from '../models/publicTypes'
-import type { CandidateResultFilter } from './searchTypes'
 
 /**
  * The run-independent semantic content of one composed Search result.
@@ -111,11 +110,11 @@ function preferredSourceRank(
  * The Target's preferred owned weapon as an ordering preference.
  *
  * Placed immediately before the final stable tie-break in every Candidate
- * comparison, and nowhere else: every existing correctness, category, cost and
- * closeness priority is decided first, so a preferred Route can never overtake
- * a cheaper or better one. It never enters `candidateStableKey()`, the
- * Candidate ID, the deduplication key, or the meaning fingerprint, because the
- * preference belongs to the Target, not to the Candidate's own meaning
+ * comparison, and nowhere else: every existing correctness, cost and closeness
+ * priority is decided first, so a preferred Route can never overtake a cheaper
+ * or better one. It never enters `candidateStableKey()`, the Candidate ID, the
+ * deduplication key, or the meaning fingerprint, because the preference belongs
+ * to the Target, not to the Candidate's own meaning
  * (`docs/SEARCH_SPEC.md` 8.1).
  */
 function comparePreferredSource(
@@ -126,60 +125,6 @@ function comparePreferredSource(
   return (
     preferredSourceRank(left, preferredOwnedWeaponId) -
     preferredSourceRank(right, preferredOwnedWeaponId)
-  )
-}
-
-/**
- * SEARCH_SPEC 8 display ordering. The final tie-break is the run-independent
- * `candidateStableKey`, so the same Search input yields the same ordered
- * semantic sequence across runs even though `BuildCandidate.id` differs.
- */
-export function compareCandidates(
-  left: BuildCandidate,
-  right: BuildCandidate,
-  preferredOwnedWeaponId: OwnedWeaponId | null = null,
-): number {
-  const categoryOrder = { ideal: 0, practical: 1 }
-  return (
-    categoryOrder[left.category] - categoryOrder[right.category] ||
-    left.estimatedOperationCount - right.estimatedOperationCount ||
-    left.estimatedGogmaAdvance - right.estimatedGogmaAdvance ||
-    left.estimatedSkillAdvance - right.estimatedSkillAdvance ||
-    nullableAscending(
-      left.estimatedNormalAdvance,
-      right.estimatedNormalAdvance,
-    ) ||
-    (right.similarityScore ?? -1) - (left.similarityScore ?? -1) ||
-    right.idealDifference.matchedBonusCount -
-      left.idealDifference.matchedBonusCount ||
-    comparePreferredSource(left, right, preferredOwnedWeaponId) ||
-    compareStableKeys(candidateStableKey(left), candidateStableKey(right))
-  )
-}
-
-export function sortCandidates(
-  candidates: readonly BuildCandidate[],
-  preferredOwnedWeaponId: OwnedWeaponId | null = null,
-): BuildCandidate[] {
-  return [...candidates].sort((left, right) =>
-    compareCandidates(left, right, preferredOwnedWeaponId),
-  )
-}
-
-export function filterCandidates(
-  candidates: readonly BuildCandidate[],
-  filter: CandidateResultFilter,
-): BuildCandidate[] {
-  if (filter === 'all') return [...candidates]
-  if (filter === 'ideal') {
-    return candidates.filter(({ category }) => category === 'ideal')
-  }
-  if (filter === 'practical') {
-    return candidates.filter(({ category }) => category === 'practical')
-  }
-  return candidates.filter(
-    (candidate) =>
-      candidate.category === 'practical' && candidate.isSimilarToIdeal,
   )
 }
 
@@ -196,6 +141,19 @@ export function candidateStableKey(candidate: CandidateStableKeyInput): string {
   })
 }
 
+/**
+ * SEARCH_SPEC 5.6.3 canonical Ideal ordering.
+ *
+ * Every composed Candidate is an Ideal Candidate now, so this is the only
+ * Candidate ordering the Search needs: cheapest first, then the smallest
+ * advance on each stream, then the Target's preferred source, then the
+ * run-independent stable key.
+ *
+ * Checkpoint availability, checkpoint earliness and checkpoint quality are
+ * deliberately absent. They are derived from the chosen Route, so letting them
+ * choose the Route would make the canonical Ideal depend on its own output
+ * (`docs/SEARCH_SPEC.md` 5.8.6).
+ */
 export function compareCanonicalIdeals(
   left: BuildCandidate,
   right: BuildCandidate,
@@ -205,23 +163,6 @@ export function compareCanonicalIdeals(
     left.estimatedGogmaAdvance - right.estimatedGogmaAdvance ||
     left.estimatedSkillAdvance - right.estimatedSkillAdvance ||
     nullableAscending(left.estimatedNormalAdvance, right.estimatedNormalAdvance) ||
-    comparePreferredSource(left, right, preferredOwnedWeaponId) ||
-    compareStableKeys(candidateStableKey(left), candidateStableKey(right))
-}
-
-/** Standard ordering with a semantic final tie for bounded selection only. */
-export function compareCandidateSelection(
-  left: BuildCandidate,
-  right: BuildCandidate,
-  preferredOwnedWeaponId: OwnedWeaponId | null = null,
-): number {
-  return Number(left.category === 'practical') - Number(right.category === 'practical') ||
-    left.estimatedOperationCount - right.estimatedOperationCount ||
-    left.estimatedGogmaAdvance - right.estimatedGogmaAdvance ||
-    left.estimatedSkillAdvance - right.estimatedSkillAdvance ||
-    nullableAscending(left.estimatedNormalAdvance, right.estimatedNormalAdvance) ||
-    (right.similarityScore ?? -1) - (left.similarityScore ?? -1) ||
-    right.idealDifference.matchedBonusCount - left.idealDifference.matchedBonusCount ||
     comparePreferredSource(left, right, preferredOwnedWeaponId) ||
     compareStableKeys(candidateStableKey(left), candidateStableKey(right))
 }

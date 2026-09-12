@@ -97,6 +97,10 @@ export type BuildListEntryId = Brand<string, "BuildListEntryId">;
 export type ProductionPlanId = Brand<string, "ProductionPlanId">;
 export type PlanStepId = Brand<string, "PlanStepId">;
 export type ExecutionHistoryId = Brand<string, "ExecutionHistoryId">;
+export type CompromiseCheckpointGroupId =
+  Brand<string, "CompromiseCheckpointGroupId">;
+export type CompromiseCheckpointOpportunityId =
+  Brand<string, "CompromiseCheckpointOpportunityId">;
 ```
 
 DB保存時は通常のstringとして保存してよい。
@@ -171,11 +175,14 @@ versionは **7** になった。`OwnedWeapon.relatedTargetWeaponIds` を廃止�
 `preferredOwnedWeaponId` へ置き換えた改訂でversionは **8** になった。所持武器を素材として
 消費するモデルの廃止と、`OwnedWeapon.status` の管理ラベル化は、active RouteOperation set、
 Planner inventory semantics、Planner scoring、PlanStep operation set、OwnedWeapon semantic
-hash契約を変更するため、現行versionは **9** である。
-旧1..8の全計算artifactは非互換とする。
+hash契約を変更するため、versionは **9** になった。
+独立したPractical Candidateを廃止し、canonical Ideal Route上のselectable compromise
+checkpointへ再設計した改訂は、Candidate出力形状、Candidate分類、Build Listの計画入力、
+Planner fast-forward / conflict semanticsをすべて変更するため、現行versionは **10** である。
+旧1..9の全計算artifactは非互換とする。
 以下の2..5互換例外は歴史的契約でありversion 6以降には適用しない。
 現行versionの単一authorityは `src/domain/models/common.ts` の
-`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 9` とし、Search、BuildList、Plannerと
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 10` とし、Search、BuildList、Plannerと
 benchmark入力のruntime creatorで共用する。永続モデル移行は独立してDexie
 `DATABASE_SCHEMA_VERSION = 4`、AppSettingsは `schemaVersion = 1` のままとする。Calculation semantics / artifact
 validity境界とDexie schemaは別の概念であり、片方の更新はもう片方の更新を意味しない。
@@ -277,10 +284,6 @@ export type OwnedWeaponStatus =
   | "unclassified"
   | "practical"
   | "ideal";
-
-export type CandidateCategory =
-  | "ideal"
-  | "practical";
 
 export type RouteKind =
   | "normal_artian_to_gogma"
@@ -558,9 +561,10 @@ export type OwnedWeapon =
 - 通常アーティアの新規保護初期値はfalseとし、ユーザーが手動で保護できる
 - 保護中の通常アーティアは巨戟化Routeの変換元にしない
 - Plannerに保護武器の消費を許可するoverride設定は持たない
-- statusを書き換える経路は、Owned Weapons画面の通常CRUDと、`reserve_weapon` がCandidate
-  categoryを管理ラベルとして設定する場合だけとする。後者は新規生成Candidateでも既存Gogma
-  Candidateの確保でも同じで、既存Gogmaの保護状態は維持する。Material化のためのstatus変更と
+- statusを書き換える経路は、Owned Weapons画面の通常CRUDと、`reserve_weapon` が
+  理想品ラベルを設定する場合だけとする。後者は新規生成Candidateでも既存Gogma
+  Candidateの確保でも同じで、既存Gogmaの保護状態は維持する。checkpointへの到達では
+  statusも保護も変更しない。Material化のためのstatus変更と
   `change_owned_weapon_status` PlanStepは廃止した
 - `status` は `name` / `memo` / timestampと同じく非semanticであり、`referencedOwnedWeaponsHash`、
   `ExpectedPlanState.ownedWeaponsHash`、constrained search identity、Planner search
@@ -733,8 +737,6 @@ atomic persistence。以下は途中状態を永続化してはいけない。
 export interface BuildCandidate {
   id: BuildCandidateId;
   targetWeaponId: TargetWeaponId;
-  category: CandidateCategory;
-  conditionMatch?: { bonus: 'ideal' | 'practical' | 'alternative'; skill: 'ideal' | 'practical' };
   finalBonusScope: ArtianBonusScope;
   finalBonuses: RestorationBonusSet;
   seriesSkillId: SeriesSkillId | null;
@@ -751,8 +753,6 @@ export interface BuildCandidate {
   estimatedNormalAdvance: number | null;
   requiredMaterials: MaterialRequirement[];
   idealDifference: IdealDifference;
-  isSimilarToIdeal: boolean;
-  similarityScore: number | null;
   searchStateHash: string;
   referencedOwnedWeaponsHash: string | null;
   calculationContext: CalculationContext;
@@ -761,6 +761,48 @@ export interface BuildCandidate {
   bonusAmendmentTrace?: CandidateBonusAmendmentStep[];
   skillAmendmentTrace?: CandidateSkillAmendmentStep[];
   conversionSkillTrace?: CandidateConversionSkillStep;
+  /**
+   * このCandidate自身のRouteのstrict prefixに現れる妥協checkpoint。
+   * 現行calculation schemaのCandidateでは必須であり、field自体が存在しない
+   * 旧artifactはそのまま保持する（SEARCH_SPEC 5.8）。
+   */
+  checkpointGroups?: CompromiseCheckpointGroup[];
+}
+
+export interface CompromiseConditionMatch {
+  bonus: "ideal" | "practical" | "alternative";
+  skill: "ideal" | "practical";
+}
+
+/** ユーザーから見て同一の妥協品。slot順はidentityに含めない。 */
+export interface CompromiseCheckpointGroup {
+  id: CompromiseCheckpointGroupId;
+  restorationBonusScope: ArtianBonusScope;
+  /** 代表として表示する5枠。最早opportunityのslot順をそのまま使う。 */
+  restorationBonuses: RestorationBonusSet;
+  seriesSkillId: SeriesSkillId | null;
+  groupSkillId: GroupSkillId | null;
+  conditionMatch: CompromiseConditionMatch;
+  /** Route位置の昇順。1件以上。 */
+  opportunities: CompromiseCheckpointOpportunity[];
+  /** 表示専用のdominance。Domainからは何も削除しない。 */
+  isDisplaySecondary: boolean;
+  dominatingGroupId: CompromiseCheckpointGroupId | null;
+}
+
+/** その妥協品へ到達する具体的なRoute位置。 */
+export interface CompromiseCheckpointOpportunity {
+  id: CompromiseCheckpointOpportunityId;
+  /** `route.operations` のindex。常に `operations.length - 1` 未満。 */
+  afterOperationIndex: number;
+  operationCount: number;
+  remainingOperationCount: number;
+  /** exactなslot順。groupの代表5枠とはslot順が異なりうる。 */
+  restorationBonuses: RestorationBonusSet;
+  restorationBonusScope: ArtianBonusScope;
+  seriesSkillId: SeriesSkillId | null;
+  groupSkillId: GroupSkillId | null;
+  conditionMatch: CompromiseConditionMatch;
 }
 
 export interface BonusAmendmentResult {
@@ -792,12 +834,20 @@ export interface CandidateConversionSkillStep extends SkillAmendmentResult {
 不変条件。
 
 - `targetWeaponId` は存在するTargetWeaponを参照する
-- `category = "ideal"` の候補は対象TargetWeaponの理想条件を満たす
-- `category = "practical"` の候補は実用条件を満たす
-- `isSimilarToIdeal = true` は `category = "practical"` の候補にのみ設定できる
-- 近似判定は `idealDifference` と、定義済みの類似度基準から導出する
-- `similarityScore` を使用する場合は同一SearchRun内で同じ算出方法を用い、値域を0以上1以下とする
-- 初期版では実用ラインを満たさない候補を原則保存しない
+- BuildCandidateは常に対象TargetWeaponの理想条件を満たす。妥協状態はCandidateにならない
+- `category` / `isSimilarToIdeal` / `similarityScore` は存在しない
+- `checkpointGroups` は現行calculation schemaのCandidateでは必須である。field自体が
+  無い旧artifactは互換対象として保持し、補完も再分類もしない
+- 各checkpoint groupは `restorationBonusScope = "gogma_artian"` であり、
+  `conditionMatch` が両軸idealになることはない
+- 各opportunityの `afterOperationIndex` は `route.operations.length - 1` 未満の
+  strict prefixであり、group内で昇順に並ぶ
+- 各opportunityはgroupと同じscope / 5枠multiset / Series Skill / Group Skillへ到達する
+- group IDとopportunity IDは `candidateStableKey` とgroup identityから決まる
+  deterministicな値であり、`searchRunId`・Clock・列挙順に依存しない
+- `checkpointGroups` はCandidate semantic identityに含めない。Candidate ID
+  （`semanticHash`）、`candidateStableKey`、重複排除key、`BuildCandidateMeaning`
+  fingerprint、`searchStateHash`、`referencedOwnedWeaponsHash` はいずれも参照しない
 - `calculationContext` は候補生成時の値を保存し、互換性が失われた候補はstaleとして扱う
 - `searchStateHash` は候補検索開始時のRoute依存RNG状態から生成する
 - `referencedOwnedWeaponsHash` はRouteが参照するOwnedWeaponだけから生成し、参照がないRouteでは `null` とする
@@ -960,6 +1010,15 @@ export interface BuildListEntry {
   isStale: boolean;
   staleReasons: BuildListEntryStaleReason[];
   createdAt: ISODateTimeString;
+  /**
+   * ユーザーが選択した妥協checkpointのopportunity ID。
+   * 初期値は空配列であり、1 groupにつき最大1件だけ選択できる。
+   * 選択はCandidateの意味ではなくユーザーの計画入力なので、Candidate Snapshot、
+   * 両hash、CalculationContextのいずれも変更せず、Entryをstaleにしない。
+   * 一方でPlanの `buildListEntriesHash` には入るため、選択を変えると既存Planは
+   * 再計算対象になる（PLANNER_SPEC 7.5.5）。
+   */
+  selectedCheckpointOpportunityIds?: CompromiseCheckpointOpportunityId[];
 }
 
 export type BuildListEntryStaleReason =
@@ -986,7 +1045,13 @@ export type BuildListEntryStaleReason =
 - 初期版では `searchStateHash` が現在値から再計算したHashと異なる場合、安全側に倒して `rng_state_changed` とする
 - Route成立性に影響しない変更を明示的かつテスト可能に証明できる場合だけ、将来 `rng_state_changed` を回避してよい
 - Active Plan開始後、PlanどおりのRNG進行またはOwnedWeapon変更でEntry自体が再利用不可になっても、進行中Planのstale判定はPlanStepの期待状態を優先する
-- 同じCandidateを重複追加しない
+- 同じCandidateを重複追加しない。既に同一semanticのCandidateが存在する場合は既存Entryを
+  返し、`selectedCheckpointOpportunityIds` を上書きしない
+- `selectedCheckpointOpportunityIds` の各IDは `candidateSnapshot.checkpointGroups` の
+  いずれかのopportunityに存在しなければならない。存在しないIDはfail closedで拒否する
+- 同一groupから2件以上のopportunityを選択できない
+- 同じopportunity IDを2回含めない
+- checkpoint選択の変更は `isStale` / `staleReasons` に影響しない
 
 `searchStateHash` の正規化対象。
 
@@ -1074,8 +1139,8 @@ Planner-generated Entryの `candidateSnapshot` も本節9.1の `BuildCandidate` 
 あり、`BuildCandidate` 形状への変換はB8-Cのdeterministic materializerが行う。
 materialize時、`searchRunId` はdeterministic constrained search identity、`id` は
 そのidentityとCandidate semantic meaningから安定生成した値、`createdAt` は
-`PlannerClock` 由来の値、`isSimilarToIdeal` はB6既定similarity threshold 0.6で
-算出した表示メタデータとする([PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.13、
+`PlannerClock` 由来の値、`checkpointGroups` はそのCandidateへcheckpoint抽出を
+適用した結果とする([PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.13、
 [SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.7)。通常Candidate Searchの
 `BuildCandidate` ID生成規則と `searchRunId` 契約は変更しない。
 
@@ -1271,8 +1336,8 @@ export interface PlanStep {
 - Step実行前の実状態は `expectedStateBefore` と一致しなければならない
 - 期待どおりの操作と更新を適用した後の実状態は `expectedStateAfter` と一致しなければならない
 - 両方が一致して次Stepへ進む場合、Planをstaleにしない
-- statusだけを変更する専用PlanStepは持たない。`reserve_weapon` がCandidate categoryを
-  管理ラベルとして設定する以外に、Plannerがstatusを書き換える経路はない。statusは
+- statusだけを変更する専用PlanStepは持たない。`reserve_weapon` が理想品のラベル
+  （`ideal` / 保護あり）を設定する以外に、Plannerがstatusを書き換える経路はない。statusは
   非semanticであるため、ユーザーがOwned Weapons画面でラベルを変更しても実行中Planの
   ExpectedPlanState不一致にならない
 - Candidate由来のStepは `buildListEntryId` を判断記録の主参照とし、`candidateId` はSnapshot内の追跡情報としてのみ使用する
@@ -1289,7 +1354,11 @@ export interface PlanStep {
   current `PlanStepOperationType` に存在しない。保存済みlegacy artifactがこれらを含んでいても
   current Domain operationとして再実行せず、CalculationContext境界でfail closeする(14.2)
 - `reserve_weapon` は結果確認だけの `confirm_result` と異なり、Target候補をInventoryへ正式確保してTargetSatisfactionを更新する
-- `normal_artian_to_gogma` のreserveは予約した新IDでGogmaを追加し、Candidate categoryに対応するstatusと保護初期値（Practicalはfalse、Idealはtrue）、CandidateのfinalBonusScopeを含む完成結果、Target参照を保持する
+- `normal_artian_to_gogma` のreserveは予約した新IDでGogmaを追加し、`status = "ideal"`、
+  保護初期値 `true`、CandidateのfinalBonusScopeを含む完成結果を保持する。Candidateは
+  常に理想品なので、reserve時のラベルは常にIdealである
+- checkpointへ到達しただけではreserveしない。statusも保護も変更しない。reserve semanticsは
+  最終的に理想品が完成したときだけ適用する（PLANNER_SPEC 7.5.4）
 - `owned_normal_artian_to_gogma` のconvert Stepは元Normal IDをInventoryから削除し、変換後Gogmaをまだ登録しない。後続Reset / Keep / Reset SkillsはsourceOwnedWeaponId = nullを維持する
 - `owned_normal_artian_to_gogma` のreserveは元Normalを再削除せず、別の予約IDでGogmaだけを追加する。元IDのkind変更では表現しない
 - amendmentを持つ `existing_gogma_*` のreserveは新規追加せず、Route sourceと同じGogma IDをCandidate結果、status、Target参照で更新する。保存済みの保護状態、既存Target参照、createdAtを失わない
@@ -1304,11 +1373,13 @@ export interface ExpectedResult {
   restorationBonuses: RestorationBonusSet | null;
   seriesSkillId: SeriesSkillId | null;
   groupSkillId: GroupSkillId | null;
-  candidateCategory: CandidateCategory | null;
-  isSimilarToIdeal: boolean;
   shouldSecure: boolean;
 }
 ```
+
+`candidateCategory` と `isSimilarToIdeal` は存在しない。PlanStepが表示するのは
+予測結果そのものであり、category分類ではない。妥協checkpointへ到達したStepは
+`PlanStep.checkpointMilestones` でそれを示す（11.3）。
 
 Counter deltaの正式契約はcreate normalがNormal +1 / forge、conversionがSkill +1、Reset SkillsがSkill +1、Reset Bonuses / Keep BonusesがGogma +1である。conversionのGogma deltaは0とする。PRNG内部10 stepをDomain Counter deltaへ入れない。
 
@@ -1570,7 +1641,7 @@ db.version(1).stores({
   normalArtianCounters: "id, [weaponTypeId+rarity], isConfirmed",
   ownedWeapons: "id, weaponTypeId, elementId, status, isProtected, updatedAt",
   targetWeapons: "id, weaponTypeId, elementId, priority, isEnabled, updatedAt",
-  buildCandidates: "id, targetWeaponId, category, searchStateHash, searchRunId, createdAt",
+  buildCandidates: "id, targetWeaponId, searchStateHash, searchRunId, createdAt",
   buildListEntries: "id, candidateId, targetWeaponId, searchStateHash, isStale, createdAt",
   productionPlans: "id, status, createdAt, updatedAt",
   executionHistory: "id, planId, planStepId, createdAt",
@@ -1629,7 +1700,7 @@ Planner constrained re-searchを経たPlan保存も原子的に行う。契約�
 
 ```ts
 export interface ExportRoot {
-  schemaVersion: 4;
+  schemaVersion: 5;
   appName: "mh-wilds-gogma-artian-planner";
   exportedAt: ISODateTimeString;
   rngState: RngState | null;
@@ -1665,7 +1736,10 @@ Import方式。
 
 ## 15.3 Migration
 
-新ExportRootはschemaVersion=2。現実装は型のみであり全置換Import/Exportサービスは未実装。
+現行ExportRootはschemaVersion=5である。BuildCandidateが `checkpointGroups` を、
+BuildListEntryが `selectedCheckpointOpportunityIds` を持つ最初の形状であり、
+Dexie `DATABASE_SCHEMA_VERSION = 4` とは独立して更新する。
+現実装は型のみであり全置換Import/Exportサービスは未実装。
 旧schema=1を新Targetとして直接受理しない。将来のimportも純粋Target移行関数を使用し、
 旧Practical/OR/Practical Skillは解除、Ideal・ID・他entityは保持する。
 
@@ -1709,7 +1783,7 @@ Production RNG契約切替時の互換性は次のとおりとする。
 - protected武器でも現在性能を変更しない操作0 Candidateとしては利用できる
 - 通常→巨戟化はNormal bonus 5枠をslot順のまま継承し、Skill Counterだけを1進め、Normal / Gogma Counterを進めない
 - normal scopeの巨戟に対する最初のBonus amendmentは、v1ではprediction support上の理由でReset Bonusesだけを許可し、その後は同一Route内でもReset / Keepを許可する
-- Plannerは所持武器を素材として消費せず、statusは `reserve_weapon` のCandidate category設定以外で変更しない
+- Plannerは所持武器を素材として消費せず、statusは `reserve_weapon` の理想品ラベル設定以外で変更しない
 - Plan進行中は現在Stepの期待状態と実態を比較する
 - 期待状態Before / Afterと一致する正常進行ではPlanをstaleにしない
 - CalculationContext非互換のCandidate、BuildListEntry、Planはstaleとし、Planには `calculation_context_changed` を記録する
@@ -1796,11 +1870,12 @@ Production RNG契約切替時の互換性は次のとおりとする。
 
 ### 妥協条件version 6の判定理由と監査記録
 
-新規CandidateはconditionMatch（bonus: ideal/practical/alternative、skill: ideal/practical）を保持し、Build List snapshotへそのまま複写する。
+妥協判定 `conditionMatch`（bonus: ideal/practical/alternative、skill: ideal/practical）は
+Candidate本体ではなくcheckpoint group / opportunityが保持し、Build List snapshotへそのまま複写する。
 これはTarget定義と完成結果から導出した説明情報であり、Candidate ID / stable key / deduplication key / meaning fingerprint / searchStateHashには追加しない。
 条件の意味はTarget definition hashとCalculationContext version 6で区別する。旧artifactではフィールドを省略でき、推測補完・再分類しない。
-UIは保存された判定理由を「ボーナス判定: 理想 / 実用 / 代替」「スキル判定: 理想 / 実用」と表示する。
-categoryは両軸Idealのときだけideal、それ以外はpracticalであり、代替Bonusを実用Bonusと表示しない。
+UIは保存された判定理由を「ボーナス判定: 実用 / 代替」「スキル判定: 理想 / 実用」と表示する。
+両軸Idealは理想品そのものなのでcheckpointとしては存在しない。
 
 Productionベンチマークの旧wildcard条件も明示的な理想構成基準へ変更するため、旧versionの測定記録と負荷が異なる。
 過去のBrowser Worker測定値は当時のartifactとして保持する。今回のVitestは意味・不変条件の検証であり、新しいBrowser性能測定の代用ではない。

@@ -10,6 +10,7 @@ import {
   stableStringify,
 } from '../models/publicTypes'
 import type { RngEngine } from '../rng/rngEngine'
+import { selectedCheckpointEndpointOperationIndexes } from './plannerCheckpoints'
 import type {
   PlannerSearchRejection,
   PlannerSearchRoutePosition,
@@ -240,14 +241,24 @@ export function createPlannerPhysicalActionIdentity(
  * Every other operation is never skippable. `create_normal_artian` and
  * `convert_normal_to_gogma` carry physical or inventory side effects, and a
  * route's final operation forms the Candidate result itself.
+ *
+ * A unit that ends one of this Entry's selected compromise checkpoints is never
+ * skippable either, whatever the operation types say: the whole point of
+ * selecting it is that the player holds that exact intermediate weapon, so the
+ * state is observed rather than immediately overwritten
+ * (`docs/PLANNER_SPEC.md` 7.5.1). Earlier units whose entire output the next
+ * operation rewrites stay skippable, because skipping them leaves the
+ * checkpoint state itself unchanged.
  */
 function canSkipWhenCounterPassed(
   operations: readonly RouteOperation[],
   operationIndex: number,
   unitIndex: number,
   unitCount: number,
+  checkpointEndpointOperationIndexes: ReadonlySet<number>,
 ): boolean {
   if (unitIndex !== unitCount - 1) return false
+  if (checkpointEndpointOperationIndexes.has(operationIndex)) return false
   const operation = operations[operationIndex]
   const next = operations[operationIndex + 1]
   if (next === undefined) return false
@@ -347,6 +358,7 @@ function createEntryUnitPlan(
 ): { units: PlannerRouteUnit[] | null; rejection: PlannerSearchRejection | null } {
   const units: PlannerRouteUnit[] = []
   const operations = entry.candidateSnapshot.route.operations
+  const checkpointEndpoints = selectedCheckpointEndpointOperationIndexes(entry)
   for (
     let operationIndex = 0;
     operationIndex < operations.length;
@@ -416,6 +428,7 @@ function createEntryUnitPlan(
           operationIndex,
           unitIndex,
           unitCount,
+          checkpointEndpoints,
         ),
       })
       current = next

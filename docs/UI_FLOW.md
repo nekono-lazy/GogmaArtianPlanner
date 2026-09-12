@@ -454,16 +454,19 @@ TargetWeaponごとに候補を検索し、作成リストへ追加する。
 
 表示構造。
 
-- TargetWeapon切替
-- 結果フィルタ: すべて / 理想 / 実用 / 近似
+- 目標武器Select（検索対象がONの目標武器だけを並べる。単一選択）
 - 経路フィルタ: すべて / 通常アーティア経由（新規作成・所持通常の両方） / 既存巨戟から
-- 候補一覧
+- 探索量の詳細設定（通常 / 巨戟 / スキルの3上限のみ）
+- 理想品候補1件
+- 妥協チェックポイント一覧
+
+1回の検索は1つの目標武器だけを対象とする。結果フィルタ（すべて / 理想 / 実用 / 近似）は
+存在しない。
 
 スマートフォン。
 
-- TargetWeaponは横スワイプまたはタブで切替
-- 候補カードは縦スクロール
-- フィルタは上部に固定してよい
+- 目標武器Selectは上部に固定してよい
+- 候補カードとチェックポイント一覧は縦スクロール
 
 候補表示。
 
@@ -478,21 +481,28 @@ TargetWeaponごとに候補を検索し、作成リストへ追加する。
 - 所持通常アーティア経由では「所持通常アーティアから巨戟化」と変換元の名称
 - 必要素材（アイテム）
 - 作成リスト追加状態
-- 近似表示と類似度（該当する実用品のみ）
 - 作成ルート内の `reset_bonuses` / `keep_bonuses` については、その操作直後の予測復元ボーナス5枠
 - 通常アーティアCounter未確定の強制Resetルート([SEARCH_SPEC.md](./SEARCH_SPEC.md) 6.1.1)では、
   作成する通常アーティアの復元ボーナス内容を問わないことを操作ラベルへ明示する。
   予測していない5枠を表示しない
 
+チェックポイント表示。
+
+- 妥協品としての性能（5枠、シリーズスキル、グループスキル）
+- 判定理由（「ボーナス判定: 実用 / 代替」「スキル判定: 理想 / 実用」）
+- 最短の到達点（何操作目で手に入るか、残り何操作で理想品になるか）
+- 同じ性能へ複数回到達できる場合は「その他の到達点」として折りたたみ開示する
+- 上位互換のチェックポイントに隠された下位のものは「その他の候補」として
+  折りたたみ開示する。一覧から消さない
+- 各到達点のチェックボックス。既定はすべてOFF
+- 1つの性能グループから選べる到達点は1つまで
+
 操作。
 
 - 検索開始
 - 検索キャンセル
-- 個別追加
-- 理想候補一括追加
-- 実用候補一括追加
-- 理想＋実用一括追加
-- 条件緩和案を確認
+- チェックポイントの選択 / 解除
+- 作成リストへ追加（選択中のチェックポイントを一緒に登録する）
 
 制約。
 
@@ -511,14 +521,17 @@ TargetWeaponごとに候補を検索し、作成リストへ追加する。
   これはProduction Keep predictionの未対応によるものであり、ゲームルール上の禁止ではない
 - conversionだけのRouteでGogma Counter不足をskip理由にせず、Base Seed / Skill Counter不足、Skill Predictionまたはconcrete semantic input support不足を区別して表示する。persisted Counter Gate不足をskip理由にしない
 - レア8、非保護、かつTargetと武器種・属性が一致する所持通常アーティアだけを変換元候補として表示する
-- 条件緩和案は選択されるまでTargetWeaponへ適用しない
-- 「実用」は `category = practical`、「近似」は `category = practical AND isSimilarToIdeal = true` を表示する
-- 検索中は Target単位の `completedTargets / totalTargets`、現在の目標武器名、
-  現在のphase（準備中 / 探索中 / 結果を整理中）、現Targetでsettleした探索ステップ数を表示する。
-  progress barはTarget単位の完了率だけをpercentとして扱い、Target内の探索ステップ数を
-  percentへ変換しない。Target内の総work量は探索中に増えるため未知である
-- 現在の目標武器はTarget探索の開始時点で表示する。Target完了までcurrent Targetが
-  分からない状態にしない
+- 理想品が見つからない場合は「現在の探索範囲では理想品が見つかりませんでした。
+  探索量の上限を上げると見つかる場合があります。」と表示する。
+  「この目標武器に理想品は存在しません」とは表示しない
+- 理想品が見つからない場合はチェックポイントも表示しない。妥協状態だけを
+  単独の候補として提示しない
+- 同じ意味の候補が既に作成リストにある場合は「この候補は作成リストに追加済みです。
+  チェックポイントは作成リストで変更してください。」と案内し、既存の選択を上書きしない
+- 検索中は 現在の目標武器名、現在のphase（準備中 / 探索中 / 結果を整理中）、
+  settleした探索ステップ数を表示する。探索ステップ数をpercentへ変換しない。
+  総work量は探索中に増えるため未知である
+- 現在の目標武器はTarget探索の開始時点で表示する
 - Search Worker自体が異常終了した場合は検索中表示を解除し、ページ再読み込みを促す
   errorを表示する。v1ではWorkerの自動再生成やページ自動reloadを行わない
 - skip理由の文言は、ゲームルール上の禁止とProduction予測未対応を混同しない。
@@ -577,17 +590,25 @@ Plannerに検討させる候補集合を確認・調整する。
 表示。
 
 - TargetWeaponごとのBuildListEntry
-- category
 - Candidate Snapshot
 - route
 - estimatedOperationCount
+- 妥協チェックポイントの選択状態
 - 競合しそうな資源
 - 優先度
 - stale状態と理由
 
+チェックポイント表示。
+
+- そのEntryのCandidate Snapshotが持つチェックポイント一覧
+- 性能グループごとに1つまで選択できるチェックボックス
+- 最短の到達点をprimaryとして表示し、その他の到達点は折りたたみ開示する
+- 選択中のチェックポイントは「作成途中で必ずこの状態を経由する」として説明する
+
 操作。
 
 - 候補を外す
+- チェックポイントの選択 / 解除 / 別の到達点へ変更
 - TargetWeapon優先度を変更
 - Planner探索上限の詳細設定
 - Planner実行
@@ -595,6 +616,10 @@ Plannerに検討させる候補集合を確認・調整する。
 制約。
 
 - 作成順の手動固定は提供しない
+- チェックポイントの選択はここが唯一の編集場所である。Search側での再追加では変更しない
+- チェックポイント選択を変更してもEntry自体はstaleにならない
+- チェックポイント選択を変更すると既存の作成プランは再計算対象になる
+- 同一性能グループから2つ以上の到達点を選択できない
 - Plannerが採用しない可能性があることを表示する
 - BuildCandidateの検索結果とBuildListEntryを同一Entityとして扱わない
 - staleなBuildListEntryはPlanner入力に含めず、再検索または再追加を促す
@@ -878,8 +903,8 @@ Counter位置が一致することだけを理由に「作成できない」と�
 復元して、`defaultPlannerWhatIfBounds = 2 / 8` をApplication callerが明示指定する。
 
 表示中Planから復元するのは `conflicts[].selectedBuildListEntryId !== null` の選択だけである。
-`recommendedBuildListEntryId`、Planner score、Beam bestState、Target priority、Candidate
-category / similarity、`selectedBuildListEntryIds` からresolutionを作らない。
+`recommendedBuildListEntryId`、Planner score、Beam bestState、Target priority、
+`selectedBuildListEntryIds` からresolutionを作らない。
 
 what-ifはtransient previewであり、次を行わない。
 
@@ -908,8 +933,8 @@ participant cardへ表示しない。
 ### 11.3 comparison card
 
 `PlannerWhatIfComparison.alternatives` のstable orderをそのまま使い、UI独自のTarget sortを
-追加しない。各non-fixed TargetについてPracticalとIdealの2枠を独立表示し、Ideal結果を
-Practical枠へ流用しない。
+追加しない。各non-fixed Targetについて理想品候補1件の結果を表示する。
+Practical枠 / Ideal枠という2枠構造は存在しない。
 
 `found` は `estimatedOperationCount` を主距離として表示する。
 `estimatedGogmaAdvance` / `estimatedSkillAdvance` / `estimatedNormalAdvance` は
@@ -1222,7 +1247,6 @@ UI state例。
 ```ts
 export interface SearchUiState {
   activeTargetWeaponId: TargetWeaponId | null;
-  resultFilter: CandidateResultFilter;
   routeFilter: CandidateRouteFilter;
   isSearching: boolean;
   currentRequestId: string | null;
@@ -1259,7 +1283,7 @@ export interface SearchUiState {
 - 通常Counter未確定時に通常Route skipが表示される
 - 通常アーティアのnormal scope WeaponBonusDefinition不足時に `master_data_unavailable` の通常Route skipが表示される
 - 既存武器の復元ボーナスを維持したスキルのみ再付与Routeを表示できる
-- protectedなPractical / Ideal武器ではスキルのみ再付与Routeを表示せず、現在性能がTargetを満たす場合だけ操作なし候補を表示する
+- protected武器ではスキルのみ再付与Routeを表示せず、現在性能がTargetを満たす場合だけ操作なし候補を表示する
 - Skill Capability不足時にスキルのみ再付与Routeのskip理由が表示される
 - `candidateOffset = k` の通常アーティア経由で `forgeCount = k + 1` 本forgeし、最後の1本だけを巨戟化する操作列が表示される
 - conversion結果に継承normal bonus 5枠と初回Series / Groupが表示される
@@ -1267,6 +1291,18 @@ export interface SearchUiState {
 - normal scopeでKeepが選べない理由を「現在のProduction RNGが予測できない」と表示し、「ゲーム上Reset必須」とは表示しない
 - transient GogmaのReset / Keep / Reset Skillsにfake OwnedWeapon IDを表示しない
 - Search Resultsから候補を作成リストへ追加できる
+- 理想品が見つからない場合に「現在の探索範囲では理想品が見つかりませんでした」と表示し、
+  「理想品は存在しません」とは表示しない
+- 理想品Routeの途中で妥協条件を満たす状態をチェックポイントとして一覧表示する
+- チェックポイントの既定選択が空である
+- 同じ性能グループの複数到達点を「その他の到達点」として開示し、選択は1つまでに制限する
+- 上位互換に隠されたグループを「その他の候補」として開示し、一覧から消さない
+- 追加済みの候補を再追加しても既存のチェックポイント選択を上書きせず、
+  作成リストで変更するよう案内する
+- 作成リストでチェックポイントを選択・解除・別の到達点へ変更できる
+- チェックポイント選択の変更でEntryがstale表示にならず、既存Planが再計算対象になる
+- 作成プランで、チェックポイントへ到達する物理Stepにmilestoneが表示され、
+  その後も後続Stepが残る
 - Build ListからPlannerを実行できる
 - Production PlanからExecution Navigatorへ進める
 - 結果一致で次Stepへ進む
@@ -1299,7 +1335,7 @@ export interface SearchUiState {
 - 「比較する」と「この候補を優先」が独立し、what-if未実行でも有効participantを選択できる
 - 別participant、別Conflict、page離脱、Planner再計算でwhat-ifをcancelし、cancelをfailure表示せず
   古いgenerationのpartial / completed resultを新しいcardへ表示しない
-- comparisonがDomainのTarget順を維持し、Practical / Idealを独立表示する
+- comparisonがDomainのTarget順を維持し、Targetごとに理想品候補の結果を1つ表示する
 - what-ifの4種類のtyped no-resultを区別し、`planner_input_not_ready` /
   `invalid_fixed_resolution` をmessage解析なしで扱う
 - 明示選択後はfresh PlannerInputと `defaultPlannerOrchestrationBounds` でB8 constrained Plannerを
@@ -1339,11 +1375,12 @@ export interface SearchUiState {
 
 ### 妥協条件version 6の判定理由と監査記録
 
-新規CandidateはconditionMatch（bonus: ideal/practical/alternative、skill: ideal/practical）を保持し、Build List snapshotへそのまま複写する。
-これはTarget定義と完成結果から導出した説明情報であり、Candidate ID / stable key / deduplication key / meaning fingerprint / searchStateHashには追加しない。
-条件の意味はTarget definition hashとCalculationContext version 6で区別する。旧artifactではフィールドを省略でき、推測補完・再分類しない。
-UIは保存された判定理由を「ボーナス判定: 理想 / 実用 / 代替」「スキル判定: 理想 / 実用」と表示する。
-categoryは両軸Idealのときだけideal、それ以外はpracticalであり、代替Bonusを実用Bonusと表示しない。
+妥協判定 `conditionMatch`（bonus: ideal/practical/alternative、skill: ideal/practical）は
+Candidate本体ではなくcheckpoint group / opportunityが保持し、Build List snapshotへそのまま複写する。
+これはTarget定義と到達状態から導出した説明情報であり、Candidate ID / stable key / deduplication key / meaning fingerprint / searchStateHashには追加しない。
+旧artifactではフィールドを省略でき、推測補完・再分類しない。
+UIは保存された判定理由を「ボーナス判定: 実用 / 代替」「スキル判定: 理想 / 実用」と表示する。
+両軸Idealは理想品そのものなのでcheckpointとしては存在しない。
 
 Productionベンチマークの旧wildcard条件も明示的な理想構成基準へ変更するため、旧versionの測定記録と負荷が異なる。
 過去のBrowser Worker測定値は当時のartifactとして保持する。今回のVitestは意味・不変条件の検証であり、新しいBrowser性能測定の代用ではない。

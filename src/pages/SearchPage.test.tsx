@@ -44,17 +44,15 @@ class ControlledClient implements SearchWorkerClient {
 
 function resultFor(
   target: TargetWeapon,
-  candidates: BuildCandidate[],
-  skippedRoutes: CandidateSearchResult['targetResults'][number]['skippedRoutes'] = [],
+  candidate: BuildCandidate | null,
+  skippedRoutes: CandidateSearchResult['targetResult']['skippedRoutes'] = [],
 ): CandidateSearchResult {
   return {
     searchRunId: 'ui-run',
     calculationContext: createFixtureInput().calculationContext,
-    targetResults: [{ targetWeaponId: target.id, candidates, searchedRoutes: ['normal_artian_to_gogma'], skippedRoutes }],
-    relaxationSuggestions: [],
+    targetResult: { targetWeaponId: target.id, candidate, searchedRoutes: ['normal_artian_to_gogma'], skippedRoutes },
     warnings: [],
     elapsedMs: 1,
-    isTruncated: false,
   }
 }
 
@@ -62,7 +60,7 @@ function resultWithNotices(
   target: TargetWeapon,
   warnings: CandidateSearchResult['warnings'],
 ): CandidateSearchResult {
-  return { ...resultFor(target, []), warnings }
+  return { ...resultFor(target, null), warnings }
 }
 
 function dependencies(client: ControlledClient, targets = [createValidTargetWeapon()]): SearchPageDependencies {
@@ -78,7 +76,7 @@ function dependencies(client: ControlledClient, targets = [createValidTargetWeap
         ...fixture,
         ...options,
         targetWeapons: targets,
-        targetWeaponIds: options.targetWeaponIds,
+        targetWeaponId: options.targetWeaponId,
         master: {
           weaponBonusDefinitions: master.weaponBonusDefinitions,
           weaponTypes: master.weaponTypes,
@@ -101,48 +99,51 @@ describe('SearchPage', () => {
     expect(await screen.findByText('目標武器を登録してください。')).toBeInTheDocument()
   })
 
-  it('starts search, shows progress, and renders Ideal/Practical/Similar results', async () => {
+  it('searches exactly one Target and renders its canonical Ideal Candidate', async () => {
     const user = userEvent.setup()
     const client = new ControlledClient()
-    const deps = dependencies(client)
+    const target = createValidTargetWeapon()
+    const deps = dependencies(client, [target])
     render(<SearchPage dependencies={deps} />)
     await user.click(await screen.findByRole('button', { name: '検索開始' }))
-    expect(screen.getByText(/検索中 0 \/ 1/)).toBeInTheDocument()
+    // One Target per search: reconciling several Targets is the Planner's job
+    // (`docs/UI_FLOW.md` 6.1).
+    expect(client.input?.targetWeaponId).toBe(target.id)
     expect(client.input?.calculationContext).toEqual({
       gameVersion: deps.master.manifest.gameVersion,
       masterDataVersion: deps.master.manifest.dataVersion,
       rngEngineVersion: client.engineVersion,
       appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
     })
-    client.progress({ completedTargets: 1, totalTargets: 1, currentTargetWeaponId: deps.master.weaponTypes[0].id as never, phase: 'finalizing', processedWorkItems: 42 })
-    const target = createValidTargetWeapon()
-    const ideal = { ...createValidBuildCandidate(), id: 'candidate.ideal' as BuildCandidate['id'], category: 'ideal' as const, isSimilarToIdeal: false }
-    const practical = { ...createValidBuildCandidate(), id: 'candidate.practical' as BuildCandidate['id'], category: 'practical' as const, isSimilarToIdeal: true }
-    client.resolve(resultFor(target, [ideal, practical]))
-    expect(await screen.findByText('理想候補 1件 ／ 実用候補 1件')).toBeInTheDocument()
-    expect(screen.getByText('理想に近い')).toBeInTheDocument()
-    expect(deps.saveCandidates).toHaveBeenCalledWith(target.id, [ideal, practical])
+    const candidate = createValidBuildCandidate()
+    client.resolve(resultFor(target, candidate))
+    expect(await screen.findByText('理想候補')).toBeInTheDocument()
+    expect(deps.saveCandidates).toHaveBeenCalledWith(target.id, [candidate])
   })
 
-  it('shows the current Target, phase, and settled work while one Target searches', async () => {
+  it('offers no result filter and no output-cap settings at all', async () => {
+    render(<SearchPage dependencies={dependencies(new ControlledClient())} />)
+    await screen.findByRole('button', { name: '検索開始' })
+    // A Search result is one canonical Ideal or nothing, so there is nothing to
+    // filter by category or by closeness (`docs/UI_FLOW.md` 6.1).
+    expect(screen.queryByText('理想に近い実用')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('目標武器ごとの最大候補数')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('理想に近いと判定する類似度')).not.toBeInTheDocument()
+  })
+
+  it('shows the searched Target, phase, and settled work while it searches', async () => {
     const user = userEvent.setup()
     const client = new ControlledClient()
     const target = createValidTargetWeapon()
     render(<SearchPage dependencies={dependencies(client, [target])} />)
     await user.click(await screen.findByRole('button', { name: '検索開始' }))
-    expect(screen.getByText('現在の目標武器: 準備中')).toBeInTheDocument()
+    expect(screen.getByText(`対象: ${target.name}`)).toBeInTheDocument()
     expect(screen.getByText('準備中')).toBeInTheDocument()
     expect(screen.getByText('探索ステップ: 0')).toBeInTheDocument()
 
-    // Target start: the Target is named before it completes.
-    client.progress({ completedTargets: 0, totalTargets: 1, currentTargetWeaponId: target.id, phase: 'preparing', processedWorkItems: 0 })
-    expect(await screen.findByText(`現在の目標武器: ${target.name}`)).toBeInTheDocument()
-
-    // Activity inside the same Target, still 0 / 1 completed.
-    client.progress({ completedTargets: 0, totalTargets: 1, currentTargetWeaponId: target.id, phase: 'searching', processedWorkItems: 1200 })
+    client.progress({ targetWeaponId: target.id, phase: 'searching', processedWorkItems: 1200 })
     expect(await screen.findByText('探索ステップ: 1200')).toBeInTheDocument()
     expect(screen.getByText('探索中')).toBeInTheDocument()
-    expect(screen.getByText(/検索中 0 \/ 1/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'キャンセル' })).toBeInTheDocument()
   })
 
@@ -166,8 +167,10 @@ describe('SearchPage', () => {
     const zeroClient = new ControlledClient()
     const view = render(<SearchPage dependencies={dependencies(zeroClient, [target])} />)
     await user.click(await screen.findByRole('button', { name: '検索開始' }))
-    zeroClient.resolve(resultFor(target, []))
-    expect(await screen.findByText('条件を満たす候補は見つかりませんでした。')).toBeInTheDocument()
+    zeroClient.resolve(resultFor(target, null))
+    // Never "no Ideal exists": only "not inside the configured extent"
+    // (`docs/SEARCH_SPEC.md` 5.7).
+    expect(await screen.findByText(/現在の探索範囲では理想品が見つかりませんでした。/)).toBeInTheDocument()
     view.unmount()
 
     const errorClient = new ControlledClient()
@@ -183,7 +186,7 @@ describe('SearchPage', () => {
     const client = new ControlledClient()
     render(<SearchPage dependencies={dependencies(client, [target])} />)
     await user.click(await screen.findByRole('button', { name: '検索開始' }))
-    client.resolve(resultFor(target, [], [{
+    client.resolve(resultFor(target, null, [{
       route: 'owned_normal_artian_to_gogma',
       reason: 'no_owned_weapon_available',
       detail: 'fixture',
@@ -200,7 +203,7 @@ describe('SearchPage', () => {
     await user.click(await screen.findByRole('button', { name: '検索開始' }))
     await user.click(screen.getByRole('button', { name: 'キャンセル' }))
     expect(screen.getByText('検索をキャンセルしました。')).toBeInTheDocument()
-    client.resolve(resultFor(target, [createValidBuildCandidate()]))
+    client.resolve(resultFor(target, createValidBuildCandidate()))
     await waitFor(() => expect(screen.queryByText(/理想候補/)).not.toBeInTheDocument())
     expect(client.cancelSearch).toHaveBeenCalledOnce()
   })
@@ -268,9 +271,10 @@ describe('SearchPage', () => {
     render(<SearchPage dependencies={deps} />)
     await user.click(await screen.findByRole('button', { name: '検索開始' }))
     const candidate = createValidBuildCandidate()
-    client.resolve(resultFor(target, [candidate]))
+    client.resolve(resultFor(target, candidate))
     await user.click(await screen.findByRole('button', { name: 'ビルドリストへ追加' }))
-    expect(deps.addCandidate).toHaveBeenCalledWith(candidate, target)
+    // Checkpoints start unselected, so a fresh result selects none.
+    expect(deps.addCandidate).toHaveBeenCalledWith(candidate, target, [])
     expect(screen.getByText('ビルドリストへ追加しました。')).toBeInTheDocument()
   })
 })

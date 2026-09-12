@@ -2,10 +2,12 @@ import type {
   BuildListEntry,
   BuildListEntryId,
   PlanConflict,
+  PlanConflictCheckpointParticipant,
   TargetWeapon,
   TargetWeaponId,
 } from '../models/publicTypes'
 import { createPlanConflictId } from './conflictKey'
+import { selectedCheckpointAtOperationIndex } from './plannerCheckpoints'
 import type { PlannerRouteUnit } from './plannerRouteProgress'
 import type {
   PlannerConflictResolution,
@@ -83,8 +85,6 @@ function recommendEntry(
       (rightTarget?.priority ?? 0) - (leftTarget?.priority ?? 0) ||
       Number(!rightSatisfaction?.hasPractical) -
         Number(!leftSatisfaction?.hasPractical) ||
-      Number(right.candidateSnapshot.category === 'ideal') -
-        Number(left.candidateSnapshot.category === 'ideal') ||
       nextCandidateDistance(right, allEntries) -
         nextCandidateDistance(left, allEntries) ||
       left.candidateSnapshot.estimatedOperationCount -
@@ -216,6 +216,43 @@ function conflictId(group: ConflictGroup, entryIds: BuildListEntryId[]): string 
   }
 }
 
+/**
+ * Which participants of this conflict are competing for a unit that ends one of
+ * their own selected compromise checkpoints (`docs/PLANNER_SPEC.md` 9.5).
+ *
+ * Typed metadata so the UI can tell the user that this conflict can only be
+ * resolved by changing a checkpoint selection in the Build List, rather than by
+ * picking a winning Entry. It deliberately does not enter `PlanConflict.id`,
+ * whose generation rule is unchanged.
+ */
+function checkpointParticipants(
+  group: ConflictGroup,
+  entriesById: ReadonlyMap<BuildListEntryId, BuildListEntry>,
+): PlanConflictCheckpointParticipant[] {
+  const participants = new Map<string, PlanConflictCheckpointParticipant>()
+  group.units.forEach((unit) => {
+    if (unit.position.unitIndex !== unit.position.unitCount - 1) return
+    const entry = entriesById.get(unit.entryId)
+    if (!entry) return
+    const checkpoint = selectedCheckpointAtOperationIndex(
+      entry,
+      unit.position.operationIndex,
+    )
+    if (!checkpoint) return
+    participants.set(checkpoint.opportunity.id, {
+      buildListEntryId: entry.id,
+      checkpointGroupId: checkpoint.groupId,
+      checkpointOpportunityId: checkpoint.opportunity.id,
+    })
+  })
+  return [...participants.values()].sort((left, right) =>
+    compareStableStrings(
+      left.checkpointOpportunityId,
+      right.checkpointOpportunityId,
+    ),
+  )
+}
+
 function conflictReason(group: ConflictGroup): string {
   const first = group.units[0]
   switch (group.kind) {
@@ -272,6 +309,7 @@ export function detectPlannerConflicts(
           selectedBuildListEntryId === null
             ? null
             : `Applied local resolution for BuildListEntry '${selectedBuildListEntryId}'.`,
+        checkpointParticipants: checkpointParticipants(group, entriesById),
       }
       appendUnitConflict(conflictIdsByUnitKey, conflict, group.units)
       if (selectedBuildListEntryId !== null) {

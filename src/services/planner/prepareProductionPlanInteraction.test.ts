@@ -39,7 +39,6 @@ function fixtureEntries(): {
   second.id = buildListEntryId('build-list.fixture.b')
   second.targetWeaponId = targetWeaponId('target.fixture.b')
   second.candidateSnapshot.targetWeaponId = second.targetWeaponId
-  second.candidateSnapshot.category = 'ideal'
   secondTarget.id = second.targetWeaponId
   secondTarget.name = 'Second fixture target'
   return { entries: [first, second], targets: [firstTarget, secondTarget] }
@@ -266,14 +265,12 @@ describe('createProductionPlanInteractionViewModel', () => {
     expect(result.conflicts[0].participants).toEqual([
       expect.objectContaining({
         targetName: 'Second fixture target',
-        candidateCategory: 'ideal',
         isRecommended: true,
         isSelected: false,
         isAvailable: true,
       }),
       expect.objectContaining({
         targetName: 'Domain fixture target',
-        candidateCategory: 'practical',
         isRecommended: false,
         isSelected: true,
         isAvailable: true,
@@ -352,7 +349,6 @@ describe('createProductionPlanInteractionViewModel', () => {
       entry: null,
       target: null,
       targetName: '削除済みまたは現在存在しない候補',
-      candidateCategory: null,
       isRecommended: true,
       isAvailable: false,
       unavailableReason: 'entry_not_found',

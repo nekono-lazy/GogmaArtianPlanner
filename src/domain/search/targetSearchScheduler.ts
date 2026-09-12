@@ -115,7 +115,9 @@ export class TargetSearchScheduler {
         )
         if (!candidate) return
         base.onCandidate(candidate)
-        if (candidate.category === 'ideal') this.idealCost = Math.min(this.idealCost ?? cost, cost)
+        // Every composed Candidate is an Ideal Candidate, so any Candidate at
+        // all settles the cost the canonical-Ideal drain is measured against.
+        this.idealCost = Math.min(this.idealCost ?? cost, cost)
       } })
     })
 

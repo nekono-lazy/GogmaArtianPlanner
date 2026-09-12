@@ -4,7 +4,6 @@ import { compareStableKeys } from '../semanticKeys'
 import type {
   EvaluatedBonusSolution,
   EvaluatedSkillSolution,
-  StreamCategoryPredicate,
 } from '../streamSolutions'
 
 /**
@@ -42,8 +41,6 @@ import type {
  * what keeps the comparator monotone along each lattice axis.
  */
 export interface ConstrainedWorkPriority {
-  /** 0 when both streams match Ideal, 1 otherwise. */
-  categoryRank: number
   /** Base units plus the two stream operation counts. */
   operationCount: number
   gogmaAdvance: number
@@ -90,18 +87,17 @@ export interface ConstrainedWorkBase {
 }
 
 export interface ConstrainedWorkItem {
-  /** Deterministic index of the owning `(base, category)` matrix. */
+  /** Deterministic index of the owning Route base matrix. */
   matrixIndex: number
-  categoryPredicate: StreamCategoryPredicate
   i: number
   j: number
   /** Frontier node identity: matrix plus local lattice coordinates. */
   nodeKey: string
   /**
    * Identity of the concrete `(Bonus solution, Skill solution)` pair, which is
-   * deliberately NOT the node identity. The Ideal and Practical axes of one
-   * base overlap, so the same actual pair is reachable from two matrices; it is
-   * evaluated once, while both frontier nodes still expand their neighbours.
+   * deliberately NOT the node identity: a pair is evaluated once even when
+   * several frontier nodes reach it, while every node still expands its own
+   * neighbours.
    */
   pairKey: string
   /** `i > 0 && j > 0`: the only cells that consume the off-axis budget. */
@@ -136,20 +132,9 @@ function nullableAscending(left: number | null, right: number | null): number {
  *   `operationCount` and `skillAdvance`; its key 2, `idealCloseness`
  *   descending, is compared as `idealCloseness` with the Bonus side fixed; and
  *   its key 3 is compared as `skillSemanticKey`. Every `bonus*` field ties.
- * - `categoryRank` is the one leading field a later index can improve, and it
- *   can do so on EITHER axis of a Practical matrix. Along the Bonus axis, a
- *   deeper Bonus solution may satisfy Ideal while an earlier one is Practical
- *   only, with the fixed Skill solution already Ideal. Along the Skill axis, a
- *   later Skill solution may satisfy Ideal while an earlier one is Practical
- *   only, with the fixed Bonus solution already Ideal. The safety argument is
- *   the same for both: `categoryRank` reaches 0 only when the Bonus AND the
- *   Skill solution both satisfy Ideal, so that very actual pair is also a cell
- *   of the same base's Ideal matrix. Every cell of an Ideal matrix has rank 0,
- *   because both of its axes hold Ideal solutions only, so the whole Ideal
- *   matrix pops before any rank 1 cell. A rank-improving node in the Practical
- *   matrix is therefore not a hidden high-priority Candidate: it is the same
- *   actual pair the Ideal matrix already reached, and by then an evaluated
- *   duplicate.
+ * - There is no category rank any more: one Route base owns exactly one matrix
+ *   whose two axes hold Ideal solutions only, so every cell is an Ideal cell
+ *   and no later index can improve a leading field.
  *
  * - `preferredSourceRank` is a property of the Route base, so every cell of one
  *   matrix carries the same value. Parent and child therefore always tie on it
@@ -184,7 +169,6 @@ export function compareConstrainedWorkItems(
   const a = left.priority
   const b = right.priority
   return (
-    a.categoryRank - b.categoryRank ||
     a.operationCount - b.operationCount ||
     a.gogmaAdvance - b.gogmaAdvance ||
     a.skillAdvance - b.skillAdvance ||
@@ -198,7 +182,6 @@ export function compareConstrainedWorkItems(
     a.preferredSourceRank - b.preferredSourceRank ||
     compareStableKeys(a.semanticKey, b.semanticKey) ||
     Number(left.offAxis) - Number(right.offAxis) ||
-    compareStableKeys(left.categoryPredicate, right.categoryPredicate) ||
     left.i - right.i ||
     left.j - right.j ||
     left.matrixIndex - right.matrixIndex
@@ -212,9 +195,8 @@ export function constrainedPairKey(
   skill: EvaluatedSkillSolution,
 ): string {
   // The two indices are positions in the deterministic 5.5.2 / 5.5.3 orderings
-  // of this base's full solution arrays, and `selectBonusAxis()` /
-  // `selectSkillAxis()` preserve them, so the same solution keeps one index
-  // across both category axes.
+  // of this base's full solution arrays, which `selectIdealBonusAxis()` /
+  // `selectIdealSkillAxis()` preserve.
   return stableStringify([baseKey, bonus.index, skill.index])
 }
 
@@ -248,7 +230,6 @@ export function createConstrainedWorkPriority(
   skill: EvaluatedSkillSolution,
 ): ConstrainedWorkPriority {
   return {
-    categoryRank: bonus.idealMatch && skill.idealMatch ? 0 : 1,
     operationCount:
       base.operationUnits +
       bonus.solution.operations.length +

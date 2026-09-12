@@ -26,24 +26,24 @@ export function scoreCandidate(
   }
   const candidate = entry.candidateSnapshot
   const targetPriorityScore = target.priority * 10_000
+  // Reads the Target's own current satisfaction only. A Target with no usable
+  // weapon at all is more urgent than one that only lacks its Ideal; neither
+  // branch reads a Candidate category, because every Candidate is Ideal.
   const satisfactionScore = !satisfaction.hasPractical
     ? 50_000
-    : candidate.category === 'ideal' && !satisfaction.hasIdeal
+    : !satisfaction.hasIdeal
       ? 20_000
       : 0
-  const categoryScore = candidate.category === 'ideal' ? 20_000 : 10_000
   const distancePenalty = candidate.estimatedOperationCount * 100
   const conflictPenalty = conflictCount * 5_000
   return {
     targetPriorityScore,
     satisfactionScore,
-    categoryScore,
     distancePenalty,
     conflictPenalty,
     total:
       targetPriorityScore +
-      satisfactionScore +
-      categoryScore -
+      satisfactionScore -
       distancePenalty -
       conflictPenalty,
   }
@@ -76,13 +76,7 @@ function progressPotentialScore(
     if (state.selectedBuildListEntryIds.includes(entry.id)) return
     const target = targetsById.get(entry.targetWeaponId)
     if (!target) return
-    const satisfaction = state.targetSatisfaction[target.id]
-    if (
-      satisfaction?.hasIdeal ||
-      (satisfaction?.hasPractical && entry.candidateSnapshot.category !== 'ideal')
-    ) {
-      return
-    }
+    if (state.targetSatisfaction[target.id]?.hasIdeal) return
     const unitCount = routeUnitCountByEntryId.get(entry.id) ?? 0
     const progress = state.routeProgressByEntryId[entry.id] ?? 0
     if (unitCount <= 0 || progress <= 0) return
@@ -198,8 +192,8 @@ export function createPlannerSearchStateSemanticKey(
     routeSourceVersionByEntryId: state.routeSourceVersionByEntryId,
     inFlightExistingSourceByOwnedWeaponId:
       state.inFlightExistingSourceByOwnedWeaponId,
-    practicalFirstProgressTargetIds: [...state.practicalFirstProgressTargetIds]
-      .sort(compareStableStrings),
+    reachedCheckpointOpportunityIdsByEntryId:
+      state.reachedCheckpointOpportunityIdsByEntryId,
     selectedBuildListEntryIds: [...state.selectedBuildListEntryIds].sort(
       compareStableStrings,
     ),
@@ -229,14 +223,6 @@ export function comparePlannerSearchStates(
   left: PlannerSearchState,
   right: PlannerSearchState,
 ): number {
-  const leftHasPracticalFirstProgress =
-    left.practicalFirstProgressTargetIds.length > 0
-  const rightHasPracticalFirstProgress =
-    right.practicalFirstProgressTargetIds.length > 0
-  if (leftHasPracticalFirstProgress !== rightHasPracticalFirstProgress) {
-    return Number(rightHasPracticalFirstProgress) -
-      Number(leftHasPracticalFirstProgress)
-  }
   if (left.evaluationScore !== right.evaluationScore) {
     return right.evaluationScore - left.evaluationScore
   }
