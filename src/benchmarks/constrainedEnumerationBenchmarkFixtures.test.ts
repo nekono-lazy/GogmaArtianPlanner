@@ -145,40 +145,72 @@ describe('B8 constrained enumeration benchmark workloads under the Production En
     const result = await run('constrained_gogma_10')
     expect(result.candidates.every((c) => c.estimatedSkillAdvance === 0)).toBe(true)
     expect(result.candidates.some((c) => c.estimatedGogmaAdvance > 0)).toBe(true)
-    // A gogma-scope unprotected source supports both amendments.
-    expect([...new Set(result.candidates.map((c) => c.route.kind))].sort()).toContain(
-      'existing_gogma_keep_bonuses',
-    )
+    // A gogma-scope unprotected source supports both amendments, and the Keep
+    // branch is enumerated here too. Only the Reset branch reaches this
+    // workload's Ideal five slots, though: the Ideal bonus multiset is unique
+    // by definition and no Production Keep result inside the bound reproduces
+    // it, so no Keep-only Route is a complete Ideal Route.
+    expect([...new Set(result.candidates.map((c) => c.route.kind))].sort()).toEqual([
+      'existing_gogma_reset_bonuses',
+    ])
   })
 
-  it('keeps every off-axis evaluation inside its budget and grows with it', async () => {
+  it('keeps every off-axis evaluation inside its budget', async () => {
     const none = await run('constrained_off_axis_10_0')
     const some = await run('constrained_off_axis_10_100')
     expect(none.summary.evaluatedOffAxisPairs).toBe(0)
     expect(some.summary.evaluatedOffAxisPairs).toBeLessThanOrEqual(100)
-    expect(some.summary.evaluatedOffAxisPairs).toBeGreaterThan(0)
-    expect(some.candidates.length).toBeGreaterThan(none.candidates.length)
+
+    // An observation of *this* Production workload, not a contract: an
+    // off-axis cell needs at least two Ideal solutions on the Bonus axis, and
+    // the Ideal bonus multiset is unique, so the Bonus axis reaches it at one
+    // Gogma position only - every Production Reset result inside the measured
+    // range is a distinct multiset. The budget therefore binds nothing here.
+    // The cap itself is covered against the Fake Engine in
+    // `constrainedEnumeration.test.ts`, where both axes carry several
+    // solutions.
+    expect(some.summary.evaluatedOffAxisPairs).toBe(0)
+    expect(some.candidates.length).toBe(none.candidates.length)
   })
 
   it('reaches every currently legal Route base family in the combined workload', async () => {
     const result = await run('constrained_combined_10_10_25_25')
+    const fixture = createConstrainedEnumerationBenchmarkInput(
+      'constrained_combined_10_10_25_25',
+    )
+    const ownedNormal = fixture.input.origin.ownedWeapons.find(
+      ({ kind }) => kind === 'normal',
+    )
+    const ownedGogma = fixture.input.origin.ownedWeapons.find(
+      ({ kind }) => kind === 'gogma',
+    )
+
+    // All three Route base families are enumerated: the new Normal forge, the
+    // Owned Normal source, and the Owned Gogma source.
+    expect([
+      ...new Set(result.candidates.map((c) => c.route.sourceOwnedWeaponId)),
+    ].sort()).toEqual([ownedNormal?.id, ownedGogma?.id, null].sort())
+
+    // A Route kind appears only when that exact operation shape is itself a
+    // complete Ideal Route. This workload's Ideal needs both streams, so the
+    // Owned Gogma base reaches it as `existing_gogma_mixed`; the Bonus-only
+    // and Skill-only kinds are not Ideal Routes here.
     expect([...new Set(result.candidates.map((c) => c.route.kind))].sort()).toEqual([
-      'existing_gogma_keep_bonuses',
       'existing_gogma_mixed',
-      'existing_gogma_reset_bonuses',
-      'existing_gogma_reset_skills',
       'normal_artian_to_gogma',
       'owned_normal_artian_to_gogma',
     ])
   })
 
-  it('yields only Ideal or Practical Candidates', async () => {
+  it('yields only Ideal Candidates', async () => {
     const result = await run('constrained_combined_10_10_25_25')
+    // Constrained re-search looks for another way to reach the Target's Ideal
+    // under the Planner's fixed Candidates, never for a compromise Candidate.
     expect(
       result.candidates.every(
-        (candidate) =>
-          candidate.category === 'ideal' || candidate.category === 'practical',
+        (candidate) => (candidate as unknown as Record<string, unknown>).category === undefined,
       ),
     ).toBe(true)
+    expect(result.candidates.length).toBeGreaterThan(0)
   })
 })

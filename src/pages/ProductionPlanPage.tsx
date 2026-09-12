@@ -39,6 +39,7 @@ import {
   createPlannerInput,
 } from '../services/planner/createPlannerInput'
 import {
+  CHECKPOINT_CONFLICT_MESSAGE,
   createProductionPlanInteractionViewModel,
   evaluateProductionPlanCalculationCompatibility,
   mergeExplicitConflictResolution,
@@ -834,6 +835,27 @@ export function ProductionPlanPage({
                       競合 {conflictIndex + 1}
                     </Typography>
                     <Typography variant="body2">{conflict.reason}</Typography>
+                    {conflict.involvesSelectedCheckpoint && (
+                      // A conflict a selected checkpoint takes part in has no
+                      // winner: the Domain refuses such a resolution, so the
+                      // only way forward is the Build List selection
+                      // (`docs/UI_FLOW.md` 11.1).
+                      <Alert
+                        severity="warning"
+                        action={
+                          <Button
+                            component={RouterLink}
+                            to="/build-list"
+                            color="inherit"
+                            size="small"
+                          >
+                            ビルドリストでチェックポイントを変更
+                          </Button>
+                        }
+                      >
+                        {CHECKPOINT_CONFLICT_MESSAGE}
+                      </Alert>
+                    )}
                     <Divider />
                     {conflict.participants.map((participant) => (
                       <Paper
@@ -863,14 +885,11 @@ export function ProductionPlanPage({
                               color={participant.isAvailable ? 'success' : 'default'}
                             />
                           </Stack>
-                          <Typography variant="body2">
-                            候補区分:{' '}
-                            {participant.candidateCategory === 'ideal'
-                              ? '理想候補'
-                              : participant.candidateCategory === 'practical'
-                                ? '実用候補'
-                                : '現在確認できません'}
-                          </Typography>
+                          {participant.checkpointOpportunityId !== null && (
+                            <Alert severity="info">
+                              この候補は選択済みチェックポイントのためにこの位置を必要としています。
+                            </Alert>
+                          )}
                           <Typography variant="caption">
                             BuildListEntry ID: {participant.buildListEntryId}
                           </Typography>

@@ -4,6 +4,7 @@ import {
   createCandidateSearchInput,
   practicalOnlyBonuses,
   SEARCH_FIXTURE_TIME,
+  candidatesOf,
 } from '../../test/fixtures/candidateSearch'
 import { ownedWeaponId } from '../../test/fixtures/domainData'
 import { restorationBonus, restorationBonusSet } from '../../test/fixtures/targetEvaluation'
@@ -45,7 +46,7 @@ const RESET_SKILLS = [
   { seriesSkillId: 'series_skill.fixture.s3', groupSkillId: 'group_skill.fixture.a' },
 ]
 
-/** Practical but not Ideal, so neither stream terminates early. */
+/** The Target's Ideal five slots, reached by exactly one Reset Bonuses. */
 function resetBonusResult(): RestorationBonusSet {
   return restorationBonusSet(
     restorationBonus('bonus_type.fixture.attack', 'bonus_rank.fixture.high'),
@@ -57,16 +58,26 @@ function resetBonusResult(): RestorationBonusSet {
 }
 
 /**
- * One unprotected Gogma source whose current Skills do not satisfy the Target's
- * Ideal Skill condition, so the Skill stream really runs to `maxSkillAdvance`.
+ * One unprotected Gogma source and one Bonus Reset that reaches the Target's
+ * Ideal five slots.
+ *
+ * `idealSkills` decides how deep the Skill stream has to run: the canonical
+ * Ideal Candidate is the Route whose final Skills are exactly those, so a Route
+ * shape is exercised by making its own result the Ideal
+ * (`docs/SEARCH_SPEC.md` 5.6.3).
  */
-function createSkillTraceInput(): CandidateSearchInput {
+function createSkillTraceInput(
+  idealSkills: { seriesSkillId: string; groupSkillId: string } = RESET_SKILLS[2],
+): CandidateSearchInput {
   const input = createCandidateSearchInput()
   input.routeFilter = 'existing_gogma'
   input.settings.maxSkillAdvance = 3
   input.settings.maxGogmaAdvance = 1
   input.calculationContext.rngEngineVersion = 'fake-fixture:skill-amendment-trace'
-  input.targetWeapons[0].idealSkillCondition = { seriesSkillId: 'series_skill.fixture.ideal', groupSkillId: 'group_skill.fixture.a', matchMode: 'all' }
+  input.targetWeapons[0].idealBonuses = resetBonusResult()
+  input.targetWeapons[0].practicalBonusConditions = []
+  input.targetWeapons[0].alternativeBonusRules = []
+  input.targetWeapons[0].idealSkillCondition = { ...idealSkills, matchMode: 'all' }
   input.targetWeapons[0].practicalSkillCondition = { seriesSkillId: null, groupSkillId: 'group_skill.fixture.a', matchMode: 'all' }
   const source = {
     ...structuredClone(input.ownedWeapons[0] as OwnedGogmaArtianWeapon),
@@ -136,14 +147,16 @@ function createSkillTraceEngine(input: CandidateSearchInput): FakeRngEngine {
   return new FakeRngEngine(fixtures)
 }
 
-async function searchSkillTraceCandidates(): Promise<BuildCandidate[]> {
-  const input = createSkillTraceInput()
+async function searchSkillTraceCandidates(
+  idealSkills: { seriesSkillId: string; groupSkillId: string } = RESET_SKILLS[2],
+): Promise<BuildCandidate[]> {
+  const input = createSkillTraceInput(idealSkills)
   const result = await searchCandidates(
     input,
     createSkillTraceEngine(input),
     deterministicExecution,
   )
-  return result.targetResults[0].candidates
+  return candidatesOf(result.targetResult)
 }
 
 function resetSkillsCount(candidate: BuildCandidate): number {
@@ -154,10 +167,11 @@ function findByResetSkillsCount(
   candidates: readonly BuildCandidate[],
   count: number,
 ): BuildCandidate {
+  // The canonical Ideal Route also carries the Bonus Reset that reaches the
+  // Ideal five slots, so its RouteKind is the mixed one; the Reset Skills count
+  // is what tells the shapes apart.
   const matches = candidates.filter(
-    (candidate) =>
-      candidate.route.kind === 'existing_gogma_reset_skills' &&
-      resetSkillsCount(candidate) === count,
+    (candidate) => resetSkillsCount(candidate) === count,
   )
   expect(matches).toHaveLength(1)
   return matches[0]
@@ -165,11 +179,12 @@ function findByResetSkillsCount(
 
 describe('Candidate skill amendment trace', () => {
   it('records the predicted Skills of a single Reset Skills operation', async () => {
-    const candidates = await searchSkillTraceCandidates()
+    const candidates = await searchSkillTraceCandidates(RESET_SKILLS[0])
     const candidate = findByResetSkillsCount(candidates, 1)
 
+    // Index 0 is the Bonus Reset that reaches the Ideal five slots.
     expect(candidate.skillAmendmentTrace).toEqual([
-      { operationIndex: 0, operationType: 'reset_skills', ...RESET_SKILLS[0] },
+      { operationIndex: 1, operationType: 'reset_skills', ...RESET_SKILLS[0] },
     ])
     expect(candidate.seriesSkillId).toBe(RESET_SKILLS[0].seriesSkillId)
     expect(candidate.groupSkillId).toBe(RESET_SKILLS[0].groupSkillId)
@@ -180,9 +195,9 @@ describe('Candidate skill amendment trace', () => {
     const candidate = findByResetSkillsCount(candidates, 3)
 
     expect(candidate.skillAmendmentTrace).toEqual([
-      { operationIndex: 0, operationType: 'reset_skills', ...RESET_SKILLS[0] },
-      { operationIndex: 1, operationType: 'reset_skills', ...RESET_SKILLS[1] },
-      { operationIndex: 2, operationType: 'reset_skills', ...RESET_SKILLS[2] },
+      { operationIndex: 1, operationType: 'reset_skills', ...RESET_SKILLS[0] },
+      { operationIndex: 2, operationType: 'reset_skills', ...RESET_SKILLS[1] },
+      { operationIndex: 3, operationType: 'reset_skills', ...RESET_SKILLS[2] },
     ])
     // The last Reset is the Candidate's own result; an off-by-one binding would
     // put `s2 / g2` here instead.
@@ -191,7 +206,11 @@ describe('Candidate skill amendment trace', () => {
   })
 
   it('ends every trace on the Candidate final Skills without repeating them', async () => {
-    const candidates = await searchSkillTraceCandidates()
+    const candidates = [
+      ...(await searchSkillTraceCandidates(RESET_SKILLS[0])),
+      ...(await searchSkillTraceCandidates(RESET_SKILLS[1])),
+      ...(await searchSkillTraceCandidates(RESET_SKILLS[2])),
+    ]
     expect(candidates.length).toBeGreaterThan(1)
 
     candidates.forEach((candidate) => {
@@ -206,7 +225,9 @@ describe('Candidate skill amendment trace', () => {
   })
 
   it('records an empty trace for a Candidate that never resets Skills', async () => {
-    const candidates = await searchSkillTraceCandidates()
+    // The source Skills already satisfy the Ideal Skill condition, so the Skill
+    // stream is never entered (`docs/SEARCH_SPEC.md` 5.6.1).
+    const candidates = await searchSkillTraceCandidates(SOURCE_SKILLS)
     const bonusOnly = candidates.filter(
       (candidate) => candidate.route.kind === 'existing_gogma_reset_bonuses',
     )
@@ -309,12 +330,14 @@ describe('Candidate skill amendment trace across RouteKinds', () => {
     const result = await searchCandidates(
       input,
       createCandidateSearchEngine(input, {
-        resetResult: practicalOnlyBonuses(),
+        // The Reset reaches the Ideal five slots, so the composed result is a
+        // canonical Ideal Candidate.
+        resetResult: structuredClone(input.targetWeapons[0].idealBonuses),
         resetSkillSeriesSkillId: 'series_skill.fixture.b',
       }),
       deterministicExecution,
     )
-    const candidate = result.targetResults[0].candidates.find(
+    const candidate = candidatesOf(result.targetResult).find(
       ({ route }) =>
         route.kind === 'normal_artian_to_gogma' &&
         route.operations.some(({ type }) => type === 'reset_skills'),

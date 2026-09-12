@@ -1,7 +1,4 @@
-import type {
-  BuildListEntryId,
-  CandidateCategory,
-} from '../../models/publicTypes'
+import type { BuildListEntryId } from '../../models/publicTypes'
 import { CandidateSearchError, enumerateConstrainedCandidates } from '../../search'
 import type {
   ConstrainedCandidate,
@@ -43,15 +40,13 @@ import type {
  * The B9-B1b what-if Domain calculation (PLANNER_SPEC 9.2.4.1 - 9.2.4.13).
  *
  * It answers one question only: with the scenario Candidate held fixed, how far
- * away is each other participating Target's next feasible Practical and Ideal
- * Candidate? It produces no `ProductionPlan`, adopts nothing, and persists
- * nothing (9.2.4.8).
+ * away is each other participating Target's next feasible Ideal Candidate? It
+ * produces no `ProductionPlan`, adopts nothing, and persists nothing (9.2.4.8).
  *
  * The pipeline per Target is fixed:
  *
  * ```text
  * enumerateConstrainedCandidates()   Search Domain, final sorted order
- *   -> practical / ideal split       exclusive CandidateCategory slots
  *   -> deterministic materializer    B8-C2
  *   -> temporary trial Entry
  *   -> augmented conflict preflight  B8-C3, every fixed constraint
@@ -72,16 +67,6 @@ export class PlannerWhatIfCancelledError extends Error {
     this.name = 'PlannerWhatIfCancelledError'
   }
 }
-
-/**
- * The category execution order of PLANNER_SPEC 9.2.4.9.
- *
- * This is execution scheduling authority, not Candidate semantic ordering
- * authority: it fixes which category spends the shared `maxPlannerReruns`
- * first. Inside a category the ordering authority stays
- * `compareConstrainedCandidates()`.
- */
-const whatIfCategoryOrder: readonly CandidateCategory[] = ['practical', 'ideal']
 
 /** How one Candidate trial ended. */
 type CandidateTrialOutcome = 'found' | 'rejected' | 'rerun_bound'
@@ -151,9 +136,8 @@ export function plannerWhatIfEnumerationOutcome(
  *
  * `options.enumerationBounds` is used exactly as supplied: no default
  * substitution, fallback, clamp, or field-wise completion (9.2.4.10). The
- * ordinary Candidate Search filters - `CandidateSearchSettings`,
- * `resultFilter`, the similar filter and `maxCandidatesPerTarget` - are not
- * applied and are not consulted.
+ * ordinary Candidate Search request fields - `CandidateSearchSettings` and
+ * `routeFilter` - are not applied and are not consulted.
  *
  * Every Target and every Candidate trial starts from the same baseline: the
  * Planner-start origin, the merged input, and every valid explicit resolution
@@ -169,7 +153,7 @@ export async function createPlannerWhatIfComparison(
   if (prepared.status !== 'ready') return prepared
   const scenario: PreparedPlannerWhatIfScenario = prepared.scenario
   const budget = createPlannerWhatIfFullBeamBudget(request.bounds)
-  const maxTrials = request.bounds.maxCandidateTrialsPerCategoryPerTarget
+  const maxTrials = request.bounds.maxCandidateTrialsPerTarget
   const executionOptions = options.executionOptions
 
   // Reset before every run, so one run can never read another run's Beam.
@@ -185,14 +169,23 @@ export async function createPlannerWhatIfComparison(
 
   const alternatives: PlannerWhatIfTargetComparison[] = []
   for (const work of scenario.works) {
+    if (work.blockedBySelectedCheckpoint) {
+      // A selected checkpoint is a hard constraint on this Target's current
+      // Route, so no alternate Route is a valid answer and none is enumerated,
+      // materialized, preflighted, or trialled (PLANNER_SPEC 9.5.2).
+      alternatives.push({
+        targetWeaponId: work.targetWeaponId,
+        outcome: { status: 'blocked_by_selected_checkpoint' },
+      })
+      continue
+    }
     if (budget.exhausted) {
       // No Beam Search is left to judge anything for this Target, so no
       // enumeration, materialization or preflight is started for it at all
       // (PLANNER_SPEC 9.2.4.9).
       alternatives.push({
         targetWeaponId: work.targetWeaponId,
-        practical: rerunBoundOutcome(),
-        ideal: rerunBoundOutcome(),
+        outcome: rerunBoundOutcome(),
       })
       continue
     }
@@ -219,26 +212,17 @@ export async function createPlannerWhatIfComparison(
       bounds: options.enumerationBounds,
       clock: dependencies.clock,
     })
-    const outcomes = new Map<CandidateCategory, PlannerWhatIfOutcome>()
-    for (const category of whatIfCategoryOrder) {
-      outcomes.set(
-        category,
-        await evaluateCategory(
-          // The final `compareConstrainedCandidates()` order, filtered in
-          // place: the two slots are exclusive `CandidateCategory` values, so
-          // an Ideal Candidate never fills the Practical slot and vice versa
-          // (PLANNER_SPEC 9.2.4.2 / 9.2.4.3).
-          enumeration.candidates.filter(({ category: value }) => value === category),
-          enumeration.summary,
-          materializer,
-          budget,
-        ),
-      )
-    }
     return {
       targetWeaponId: work.targetWeaponId,
-      practical: outcomes.get('practical') as PlannerWhatIfOutcome,
-      ideal: outcomes.get('ideal') as PlannerWhatIfOutcome,
+      // The final `compareConstrainedCandidates()` order, taken whole: every
+      // enumerated Candidate is an Ideal Candidate, so there is nothing to
+      // split by category (PLANNER_SPEC 9.2.4.2 / 9.2.4.3).
+      outcome: await evaluateTargetOutcome(
+        enumeration.candidates,
+        enumeration.summary,
+        materializer,
+        budget,
+      ),
     }
   }
 
@@ -272,7 +256,7 @@ export async function createPlannerWhatIfComparison(
     }
   }
 
-  async function evaluateCategory(
+  async function evaluateTargetOutcome(
     candidates: readonly ConstrainedCandidate[],
     summary: ConstrainedEnumerationSummary,
     materializer: ConstrainedMaterializer,

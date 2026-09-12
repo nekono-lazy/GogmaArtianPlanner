@@ -20,6 +20,10 @@ import {
 import { createTargetDefinitionHash } from '../buildList'
 import { runPlannerBeamSearch } from './plannerBeamSearch'
 import {
+  derivePlannerCheckpointRequirements,
+  selectedCheckpointsForEntry,
+} from './plannerCheckpoints'
+import {
   replayPlannerSearchTrace,
   type PlannerPlanStepDraft,
   type PlannerTraceReplayResult,
@@ -71,7 +75,6 @@ function normalizeCandidateMaterials(candidate: BuildCandidate) {
 function normalizeCandidateSnapshot(candidate: BuildCandidate) {
   return {
     targetWeaponId: candidate.targetWeaponId,
-    category: candidate.category,
     finalBonuses: normalizeCandidateBonuses(candidate),
     restorationBonusScope: candidate.restorationBonusScope,
     seriesSkillId: candidate.seriesSkillId,
@@ -114,6 +117,13 @@ export function createPlanningBuildListEntriesHash(
       .map((entry) => ({
         id: entry.id,
         candidateSnapshot: normalizeCandidateSnapshot(entry.candidateSnapshot),
+        // The user's selected compromise checkpoints are a hard Planner
+        // constraint, so changing the selection changes what this Plan had to
+        // achieve and must make an existing Plan a recalculation target
+        // (`docs/PLANNER_SPEC.md` 7.5.5).
+        selectedCheckpointOpportunityIds: [
+          ...(entry.selectedCheckpointOpportunityIds ?? []),
+        ].sort(compareStableStrings),
         targetDefinitionHash: entry.targetDefinitionHash,
         searchStateHash: entry.searchStateHash,
         referencedOwnedWeaponsHash: entry.referencedOwnedWeaponsHash,
@@ -269,6 +279,7 @@ export function createPlanStepsFromDrafts(
       candidateId: draft.candidateId,
       ownedWeaponId: draft.ownedWeaponId,
       expectedResult: structuredClone(draft.expectedResult),
+      checkpointMilestones: structuredClone(draft.checkpointMilestones),
       expectedStateBefore: structuredClone(draft.expectedStateBefore),
       expectedStateAfter: structuredClone(draft.expectedStateAfter),
       inventoryChange: structuredClone(draft.inventoryChange),
@@ -327,7 +338,6 @@ function rejectedReason(
   const selectedComparable = input.buildListEntries.some((selected) =>
     selectedEntryIds.has(selected.id) &&
     selected.targetWeaponId === entry.targetWeaponId &&
-    selected.candidateSnapshot.category === entry.candidateSnapshot.category &&
     selected.candidateSnapshot.estimatedOperationCount <
       entry.candidateSnapshot.estimatedOperationCount,
   )
@@ -539,6 +549,12 @@ export async function createProductionPlanWithObserver(
   )
   const selectedBuildListEntryIds = [...new Set(beamResult.bestState.selectedBuildListEntryIds)]
     .sort(compareStableStrings)
+  assertCheckpointRequirementsSatisfied(
+    beamInputEntries(input, beamResult),
+    selectedBuildListEntryIds,
+    steps,
+    beamResult.termination.status === 'completed',
+  )
   const plan: ProductionPlan = {
     id: productionPlanId,
     status: 'draft',
@@ -573,6 +589,61 @@ export async function createProductionPlanWithObserver(
  * The ordinary Production Plan calculation. Its signature and result semantics
  * are unchanged; it simply runs the shared implementation with no observer.
  */
+function beamInputEntries(
+  input: PlannerInput,
+  beamResult: PlannerBeamSearchResult,
+): BuildListEntry[] {
+  const excluded = new Set(
+    beamResult.excludedBuildListEntries.map(({ entry }) => entry.id),
+  )
+  return input.buildListEntries.filter(({ id }) => !excluded.has(id))
+}
+
+/**
+ * Fail-closed defence behind the Beam Search (PLANNER_SPEC 7.5.6): a Plan that
+ * claims completion must secure every required checkpoint Entry, and every
+ * secured Entry's selected checkpoints must appear as milestones on the real
+ * Steps that reached them. The Beam Search and Trace Replay already guarantee
+ * both; a Plan that violates either is an internal inconsistency, never a
+ * Draft.
+ */
+function assertCheckpointRequirementsSatisfied(
+  entries: readonly BuildListEntry[],
+  selectedBuildListEntryIds: readonly BuildListEntryId[],
+  steps: readonly PlanStep[],
+  completed: boolean,
+): void {
+  const selected = new Set(selectedBuildListEntryIds)
+  const reached = new Set(
+    steps.flatMap((step) =>
+      (step.checkpointMilestones ?? []).map(
+        ({ buildListEntryId, checkpointOpportunityId }) =>
+          `${buildListEntryId}\u0000${checkpointOpportunityId}`,
+      ),
+    ),
+  )
+  const { requirements } = derivePlannerCheckpointRequirements(entries)
+  requirements.requiredEntryIdByTargetId.forEach((entryId, targetId) => {
+    if (!selected.has(entryId)) {
+      if (completed) {
+        throw new PlannerPlanGenerationError(
+          `Planner reported completion without securing required checkpoint BuildListEntry '${entryId}' of TargetWeapon '${targetId}'.`,
+        )
+      }
+      return
+    }
+    const entry = entries.find(({ id }) => id === entryId)
+    if (!entry) return
+    selectedCheckpointsForEntry(entry).forEach(({ opportunity }) => {
+      if (!reached.has(`${entryId}\u0000${opportunity.id}`)) {
+        throw new PlannerPlanGenerationError(
+          `Planner secured BuildListEntry '${entryId}' without a Step reaching its selected checkpoint '${opportunity.id}'.`,
+        )
+      }
+    })
+  })
+}
+
 export const createProductionPlan: CreateProductionPlanCalculation = async (
   input,
   dependencies,

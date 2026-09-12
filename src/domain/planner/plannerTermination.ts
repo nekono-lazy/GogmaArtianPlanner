@@ -1,4 +1,6 @@
 import type { TargetWeapon, TargetWeaponId } from '../models/publicTypes'
+import type { PlannerCheckpointRequirements } from './plannerCheckpoints'
+import { isPlannerTargetComplete } from './plannerEntryRelevance'
 import type {
   PlannerOptions,
   PlannerSearchState,
@@ -27,16 +29,20 @@ export function isPlannerSearchResultUsable(
 function countCompletedTargets(
   bestState: PlannerSearchState | null,
   enabledTargetIds: readonly TargetWeaponId[],
+  checkpointRequirements: PlannerCheckpointRequirements,
 ): number {
   if (bestState === null) return 0
-  return enabledTargetIds.filter(
-    (targetId) => bestState.targetSatisfaction[targetId]?.hasIdeal === true,
+  // The same authority the Beam Search uses: a Target with a required
+  // checkpoint Entry counts only once that Entry itself was secured.
+  return enabledTargetIds.filter((targetId) =>
+    isPlannerTargetComplete(bestState, targetId, checkpointRequirements),
   ).length
 }
 
 export interface PlannerSearchTerminationInput {
   options: PlannerOptions
   enabledTargetIds: readonly TargetWeaponId[]
+  checkpointRequirements: PlannerCheckpointRequirements
   bestState: PlannerSearchState | null
   expandedStates: number
   cancelled: boolean
@@ -52,7 +58,8 @@ export interface PlannerSearchTerminationInput {
  * - `cancelled`  the user stopped the search; nothing about the result is a
  *   statement on feasibility, and the ordinary Planner already returns a safe
  *   `plan: null` for it.
- * - `completed`  every enabled Target reached Ideal. A bound that was touched
+ * - `completed`  every enabled Target is complete: Ideal, and its required
+ *   checkpoint Entry secured (PLANNER_SPEC 7.5.6). A bound that was touched
  *   on the way stays in `reachedLimits` as a diagnostic and changes nothing.
  * - `incomplete` a `PlannerOptions` bound truncated the search before that, so
  *   the best state is a search artifact, not an answer about the input.
@@ -71,6 +78,7 @@ export function createPlannerSearchTermination(
   const completedTargetCount = countCompletedTargets(
     input.bestState,
     input.enabledTargetIds,
+    input.checkpointRequirements,
   )
   const isComplete =
     input.bestState !== null &&

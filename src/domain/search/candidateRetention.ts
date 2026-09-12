@@ -1,6 +1,5 @@
-import type { BuildCandidate, BuildRoute, MaterialRequirement, OwnedWeaponId, WeaponTypeId } from '../models/publicTypes'
-import type { SearchMasterSubset } from './searchTypes'
-import { compareCandidateSelection, compareCanonicalIdeals, deduplicateCandidates } from './candidateProcessing'
+import type { BuildCandidate, BuildRoute, OwnedWeaponId } from '../models/publicTypes'
+import { compareCanonicalIdeals, deduplicateCandidates } from './candidateProcessing'
 
 /**
  * DATA_MODEL 7 / 9.2 and validateProtectedRouteUse / validateBuildRoute:
@@ -8,8 +7,7 @@ import { compareCandidateSelection, compareCanonicalIdeals, deduplicateCandidate
  * Conversion consumes an owned Normal source; a newly forged source is not
  * existing inventory. Reset Skills mutates performance but not this function's
  * narrower bonus/material destruction axis. Protection eligibility is validated
- * separately for every performance mutation. This classification is local to
- * initial Search retention, not Planner scoring.
+ * separately for every performance mutation.
  */
 export function isDestructiveCandidateRoute(route: BuildRoute): boolean {
   return route.operations.some((operation) =>
@@ -19,96 +17,24 @@ export function isDestructiveCandidateRoute(route: BuildRoute): boolean {
   )
 }
 
-function rankVectors(candidate: BuildCandidate, master: SearchMasterSubset, weaponTypeId: WeaponTypeId): Map<string, number[]> | null {
-  const grouped = new Map<string, number[]>()
-  for (const bonus of candidate.finalBonuses) {
-    const ranks = master.bonusRanks.filter(({ id }) => id === bonus.bonusRankId)
-    const rank = ranks[0]
-    if (ranks.length !== 1 || !rank.isEnabled || !Number.isFinite(rank.order) ||
-      !master.bonusTypes.some(({ id, isEnabled }) => id === bonus.bonusTypeId && isEnabled) ||
-      !master.weaponBonusDefinitions.some((definition) =>
-        definition.isEnabled && definition.weaponTypeId === weaponTypeId &&
-        definition.scope === candidate.restorationBonusScope &&
-        definition.bonusTypeId === bonus.bonusTypeId && definition.bonusRankId === bonus.bonusRankId,
-      )) return null
-    const vector = grouped.get(bonus.bonusTypeId) ?? []
-    vector.push(rank.order)
-    grouped.set(bonus.bonusTypeId, vector)
-  }
-  for (const vector of grouped.values()) vector.sort((a, b) => b - a)
-  return grouped
-}
-
-function materials(requirements: readonly MaterialRequirement[]): Map<string, number> {
-  const quantities = new Map<string, number>()
-  for (const { materialId, quantity } of requirements) {
-    quantities.set(materialId, (quantities.get(materialId) ?? 0) + quantity)
-  }
-  return quantities
-}
-
-/** SEARCH_SPEC 5.5.6: true only when all ten conservative conditions hold. */
-export function practicalDominates(better: BuildCandidate, worse: BuildCandidate, master: SearchMasterSubset, weaponTypeId: WeaponTypeId): boolean {
-  if (better.category !== 'practical' || worse.category !== 'practical' ||
-    better.targetWeaponId !== worse.targetWeaponId ||
-    better.restorationBonusScope !== worse.restorationBonusScope ||
-    better.seriesSkillId !== worse.seriesSkillId || better.groupSkillId !== worse.groupSkillId ||
-    better.route.sourceOwnedWeaponId !== worse.route.sourceOwnedWeaponId ||
-    isDestructiveCandidateRoute(better.route) !== isDestructiveCandidateRoute(worse.route) ||
-    (better.estimatedNormalAdvance === null) !== (worse.estimatedNormalAdvance === null)) return false
-
-  let strict = false
-  const costs = [
-    [better.estimatedOperationCount, worse.estimatedOperationCount],
-    [better.estimatedGogmaAdvance, worse.estimatedGogmaAdvance],
-    [better.estimatedSkillAdvance, worse.estimatedSkillAdvance],
-    [better.estimatedNormalAdvance ?? 0, worse.estimatedNormalAdvance ?? 0],
-  ]
-  for (const [b, a] of costs) {
-    if (b > a) return false
-    strict ||= b < a
-  }
-
-  const bRanks = rankVectors(better, master, weaponTypeId)
-  const aRanks = rankVectors(worse, master, weaponTypeId)
-  if (!bRanks || !aRanks || bRanks.size !== aRanks.size) return false
-  for (const [type, a] of aRanks) {
-    const b = bRanks.get(type)
-    if (!b || b.length !== a.length) return false
-    for (let i = 0; i < a.length; i += 1) {
-      if (b[i] < a[i]) return false
-      strict ||= b[i] > a[i]
-    }
-  }
-
-  const bMaterials = materials(better.requiredMaterials)
-  const aMaterials = materials(worse.requiredMaterials)
-  for (const id of new Set([...bMaterials.keys(), ...aMaterials.keys()])) {
-    const b = bMaterials.get(id) ?? 0
-    const a = aMaterials.get(id) ?? 0
-    if (b > a) return false
-    strict ||= b < a
-  }
-  return strict
-}
-
 /**
- * No filter or output cap may influence the horizon or dominance.
+ * Selects the single canonical Ideal Candidate of one Target
+ * (`docs/SEARCH_SPEC.md` 5.6.3).
  *
- * `preferredOwnedWeaponId` reaches only the two orderings, never the horizon,
- * the dominance, or the cap: the Target's preference decides which of two
- * equally rated solutions is chosen, and never how far the search looks or how
- * many results it keeps (`docs/SEARCH_SPEC.md` 8.1).
+ * Independent compromise Candidates do not exist, so there is nothing to keep
+ * plural, rank, or cap: the only thing a Search retains is the one canonical
+ * Ideal, or nothing at all when the configured extent contained no Ideal.
+ *
+ * `preferredOwnedWeaponId` reaches only the ordering, never the search extent:
+ * the Target's preference decides which of two equally rated Ideal Routes is
+ * chosen, and never how far the search looks (`docs/SEARCH_SPEC.md` 8.1).
  */
-export function retainInitialCandidates(candidates: readonly BuildCandidate[], master: SearchMasterSubset, weaponTypeId: WeaponTypeId, cap: number, preferredOwnedWeaponId: OwnedWeaponId | null = null) {
-  const unique = deduplicateCandidates(candidates)
-  const canonicalIdeal = unique.filter(({ category }) => category === 'ideal')
-    .sort((left, right) => compareCanonicalIdeals(left, right, preferredOwnedWeaponId))[0] ?? null
-  const horizon = unique.filter((candidate) => candidate.category === 'practical' &&
-    (canonicalIdeal === null || candidate.estimatedOperationCount <= canonicalIdeal.estimatedOperationCount))
-  const practical = horizon.filter((candidate) =>
-    !horizon.some((other) => other !== candidate && practicalDominates(other, candidate, master, weaponTypeId)),
-  ).sort((left, right) => compareCandidateSelection(left, right, preferredOwnedWeaponId))
-  const retained = canonicalIdeal ? [canonicalIdeal, ...practical] : practical
-  return { canonicalIdeal, horizon, retained, bounded: retained.slice(0, cap) }
+export function selectCanonicalIdealCandidate(
+  candidates: readonly BuildCandidate[],
+  preferredOwnedWeaponId: OwnedWeaponId | null = null,
+): BuildCandidate | null {
+  return (
+    deduplicateCandidates(candidates)
+      .sort((left, right) => compareCanonicalIdeals(left, right, preferredOwnedWeaponId))[0] ?? null
+  )
 }

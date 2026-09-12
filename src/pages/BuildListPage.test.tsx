@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider, useParams } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
@@ -30,6 +30,14 @@ import {
 } from '../test/fixtures/plannerTermination'
 import { createBuildListCalculationContext } from '../services/buildList/createBuildListCalculationContext'
 import type { PlannerWorkerClient } from '../services/planner/plannerWorkerClient'
+import {
+  checkpointAlternativeBonuses,
+  checkpointCandidate,
+  checkpointIdealBonuses,
+  checkpointPracticalBonuses,
+  checkpointSource,
+  checkpointTarget,
+} from '../test/fixtures/checkpointRoute'
 import { BuildListPage, type BuildListPageDependencies } from './BuildListPage'
 
 function createOrchestrationResult(
@@ -100,7 +108,8 @@ function dependencies(
       conflictResolutions: [],
     })),
     savePlannerResult: vi.fn(async () => createValidProductionPlan()),
-    deleteEntry: vi.fn(async () => undefined),
+    updateCheckpointSelection: vi.fn(async () => { throw new Error('not used in this fixture') }),
+  deleteEntry: vi.fn(async () => undefined),
   }
 }
 
@@ -344,7 +353,6 @@ describe('BuildListPage', () => {
     expect(await screen.findByText('Domain fixture target')).toBeInTheDocument()
     expect(screen.getByText('再検索が必要')).toBeInTheDocument()
     expect(screen.getByText('RNG状態が検索時から変更されています')).toBeInTheDocument()
-    expect(screen.getByText('実用')).toBeInTheDocument()
   })
 
   it('removes only the Build List entry', async () => {
@@ -529,5 +537,54 @@ describe('BuildListPage', () => {
     deps.refresh = vi.fn(async () => ({ entries: [], targets: [], ownedWeapons: [] }))
     renderPage(deps)
     expect(await screen.findByText('ビルドリストは空です。検索結果から候補を追加してください。')).toBeInTheDocument()
+  })
+
+  it('keeps both groups selected when two toggles overlap in flight', async () => {
+    const user = userEvent.setup()
+    // Two independent checkpoint groups on one Route: one opportunity each.
+    const candidate = checkpointCandidate([
+      checkpointPracticalBonuses(),
+      checkpointAlternativeBonuses(),
+      checkpointIdealBonuses(),
+    ])
+    const target = checkpointTarget()
+    let entry = createBuildListEntry(candidate, target, {
+      id: buildListEntryId('build-list.checkpoint.race'),
+      createdAt: '2026-09-12T00:00:00.000Z',
+    })
+    const releases: Array<() => void> = []
+    const deps: BuildListPageDependencies = {
+      ...dependencies(),
+      refresh: vi.fn(async () => ({ entries: [entry], targets: [target], ownedWeapons: [checkpointSource()] })),
+      // Every save waits until the test releases it, in call order.
+      updateCheckpointSelection: vi.fn(async (_id, selected) => {
+        await new Promise<void>((resolve) => releases.push(resolve))
+        entry = { ...entry, selectedCheckpointOpportunityIds: [...selected] }
+        return entry
+      }),
+    }
+    renderPage(deps)
+    const first = await screen.findByRole('checkbox', { name: '1手目（理想まで残り2操作）' })
+    const second = screen.getByRole('checkbox', { name: '2手目（理想まで残り1操作）' })
+
+    // The second toggle starts while the first save is still pending.
+    await user.click(first)
+    await user.click(second)
+    expect(releases).toHaveLength(1)
+    releases[0]()
+    await waitFor(() => expect(releases).toHaveLength(2))
+    releases[1]()
+
+    await waitFor(() => expect(deps.updateCheckpointSelection).toHaveBeenCalledTimes(2))
+    const [firstGroup, secondGroup] = (candidate.checkpointGroups ?? []).map(
+      ({ opportunities }) => opportunities[0].id,
+    )
+    const calls = vi.mocked(deps.updateCheckpointSelection).mock.calls
+    expect(calls[0][1]).toEqual([firstGroup])
+    // The second save starts from the first save's result, so the first
+    // selection survives: different groups may be selected together.
+    expect(calls[1][1]).toEqual([firstGroup, secondGroup])
+    await waitFor(() => expect(first).toBeChecked())
+    expect(second).toBeChecked()
   })
 })

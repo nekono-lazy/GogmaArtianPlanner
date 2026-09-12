@@ -726,7 +726,6 @@ describe('Shared Counter position conflicts', () => {
       [required, other],
       plans.unitPlans,
       [requiredTarget, otherTarget],
-      initialStateFor(input),
       [],
     ).conflicts
   }

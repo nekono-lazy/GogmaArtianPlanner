@@ -5,7 +5,8 @@ import type {
   BuildCandidateId,
   BuildListEntryId,
   CalculationContext,
-  CandidateCategory,
+  CompromiseCheckpointGroupId,
+  CompromiseCheckpointOpportunityId,
   ElementId,
   GroupSkillId,
   ISODateTimeString,
@@ -176,17 +177,83 @@ export interface CandidateConversionSkillStep extends SkillAmendmentResult {
   operationType: 'convert_normal_to_gogma'
 }
 
-/** Evaluation recorded at search time, derived from Target and result; not identity. */
-export interface CandidateConditionMatch {
+/**
+ * Which Target condition one compromise checkpoint state satisfies.
+ *
+ * Purely explanatory: it is derived from the Target definition and the reached
+ * performance state, so it is never a checkpoint group's identity authority,
+ * never a Candidate identity input, and never a Planner decision input
+ * (`docs/SEARCH_SPEC.md` 5.8.2).
+ */
+export interface CompromiseConditionMatch {
   bonus: 'ideal' | 'practical' | 'alternative'
   skill: 'ideal' | 'practical'
+}
+
+/**
+ * One position on the canonical Ideal Route at which a checkpoint group's
+ * exact weapon state is reached (`docs/SEARCH_SPEC.md` 5.8.3).
+ *
+ * The ordered five slots are kept here, not on the group: two Route positions
+ * reaching the same unordered multiset are the same user-visible compromise
+ * product but different Route states, and Planner / Trace Replay must use the
+ * exact ordered state.
+ */
+export interface CompromiseCheckpointOpportunity {
+  id: CompromiseCheckpointOpportunityId
+  /**
+   * Index inside `BuildRoute.operations` of the last operation of the strict
+   * prefix that reaches this state. The prefix is `operations[0 ..
+   * afterOperationIndex]`, and it is always strict: the Ideal-completing final
+   * operation is never a checkpoint.
+   */
+  afterOperationIndex: number
+  /** Operation units executed up to and including `afterOperationIndex`. */
+  operationCount: number
+  /** Operation units still remaining until the Ideal result is reached. */
+  remainingOperationCount: number
+  /** The exact ordered five slots at this Route position. */
+  restorationBonuses: RestorationBonusSet
+  restorationBonusScope: RestorationBonusScope
+  seriesSkillId: SeriesSkillId | null
+  groupSkillId: GroupSkillId | null
+  conditionMatch: CompromiseConditionMatch
+}
+
+/**
+ * One user-visible compromise product reachable on the canonical Ideal Route.
+ *
+ * Group identity is the performance state a player would recognise: scope, the
+ * unordered five-slot multiset with duplicate counts preserved, and the two
+ * Skills. Slot order is deliberately excluded here and preserved per
+ * opportunity instead (`docs/SEARCH_SPEC.md` 5.8.2).
+ */
+export interface CompromiseCheckpointGroup {
+  id: CompromiseCheckpointGroupId
+  restorationBonusScope: RestorationBonusScope
+  /** Representative ordered slots, taken from the earliest opportunity. */
+  restorationBonuses: RestorationBonusSet
+  seriesSkillId: SeriesSkillId | null
+  groupSkillId: GroupSkillId | null
+  /** Explanatory only; derived from the Target and this state. */
+  conditionMatch: CompromiseConditionMatch
+  /** Ascending by `afterOperationIndex`; never empty, never deduplicated. */
+  opportunities: CompromiseCheckpointOpportunity[]
+  /**
+   * Display organisation only (`docs/SEARCH_SPEC.md` 5.8.4).
+   *
+   * `true` means another retained group is conservatively, obviously better.
+   * It is never a Domain dominance: the group and every one of its
+   * opportunities stay available to the user and to the Planner, because a
+   * "worse" checkpoint can be the only one that avoids a Counter conflict.
+   */
+  isDisplaySecondary: boolean
+  dominatingGroupId: CompromiseCheckpointGroupId | null
 }
 
 export interface BuildCandidate {
   id: BuildCandidateId
   targetWeaponId: TargetWeaponId
-  category: CandidateCategory
-  conditionMatch?: CandidateConditionMatch
   finalBonuses: RestorationBonusSet
   restorationBonusScope: RestorationBonusScope
   seriesSkillId: SeriesSkillId | null
@@ -198,8 +265,21 @@ export interface BuildCandidate {
   estimatedNormalAdvance: number | null
   requiredMaterials: MaterialRequirement[]
   idealDifference: IdealDifference
-  isSimilarToIdeal: boolean
-  similarityScore: number | null
+  /**
+   * The compromise checkpoints reachable on this Candidate's own Route.
+   *
+   * Derived from the finished Route and the Target definition, so it changes
+   * no Candidate semantic identity: it never enters the Candidate ID
+   * `semanticHash`, `candidateStableKey`, the deduplication key, the
+   * `BuildCandidateMeaning` fingerprint, `searchStateHash`, or
+   * `referencedOwnedWeaponsHash`, and checkpoint availability never influences
+   * canonical Ideal selection (`docs/SEARCH_SPEC.md` 5.8.6).
+   *
+   * Optional so a Candidate persisted before this field existed still loads
+   * and renders. Every Candidate generated under the current
+   * `CalculationContext` carries it, and validation requires it there.
+   */
+  checkpointGroups?: CompromiseCheckpointGroup[]
   searchStateHash: string
   referencedOwnedWeaponsHash: string | null
   calculationContext: CalculationContext
@@ -357,6 +437,21 @@ export interface BuildListEntry {
   candidateId: BuildCandidateId
   targetWeaponId: TargetWeaponId
   candidateSnapshot: BuildCandidate
+  /**
+   * The checkpoint opportunities the user chose to use, as a hard Planner
+   * constraint (`docs/PLANNER_SPEC.md` 7.5).
+   *
+   * Every id must exist in `candidateSnapshot.checkpointGroups`, and at most
+   * one id per group may be selected. It is the user's Planner input, not part
+   * of the Candidate's own meaning, so it never participates in
+   * `createBuildCandidateMeaningFingerprint()` and changing it alone never
+   * makes this entry stale - but it does change what the Planner must achieve,
+   * so it participates in the Plan's build-list semantic hash.
+   *
+   * Optional so a BuildListEntry persisted before this field existed still
+   * loads and renders; absent means no checkpoint is selected.
+   */
+  selectedCheckpointOpportunityIds?: CompromiseCheckpointOpportunityId[]
   targetDefinitionHash: string
   searchStateHash: string
   referencedOwnedWeaponsHash: string | null

@@ -7,6 +7,22 @@ export type BuildListEntryId = Brand<string, 'BuildListEntryId'>
 export type ProductionPlanId = Brand<string, 'ProductionPlanId'>
 export type PlanStepId = Brand<string, 'PlanStepId'>
 export type ExecutionHistoryId = Brand<string, 'ExecutionHistoryId'>
+/**
+ * One user-visible compromise product reachable on a canonical Ideal Route.
+ *
+ * Derived deterministically from the Candidate's own meaning and the group's
+ * performance identity, never from a search run id, a clock, or an enumeration
+ * ordinal (`docs/SEARCH_SPEC.md` 5.8).
+ */
+export type CompromiseCheckpointGroupId = Brand<
+  string,
+  'CompromiseCheckpointGroupId'
+>
+/** One Route position at which a checkpoint group's exact state is reached. */
+export type CompromiseCheckpointOpportunityId = Brand<
+  string,
+  'CompromiseCheckpointOpportunityId'
+>
 
 export type ISODateTimeString = string
 export type WeaponTypeId = string
@@ -38,7 +54,6 @@ export type RestorationBonusScope = 'normal_artian' | 'gogma_artian'
  * identity, exactly like `name` and `memo` (`docs/DATA_MODEL.md` 3.2).
  */
 export type OwnedWeaponStatus = 'unclassified' | 'practical' | 'ideal'
-export type CandidateCategory = 'ideal' | 'practical'
 export type RouteKind =
   | 'normal_artian_to_gogma'
   | 'owned_normal_artian_to_gogma'
@@ -134,7 +149,19 @@ export interface KnownValue<T> {
 // schema 4 migrates the persisted `material` status separately; RNG semantics
 // remain unchanged. Game item materials (`MaterialRequirement`) are a different
 // concept and are untouched.
-export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 9
+// Version 10 replaces the independent Practical / Alternative BuildCandidate
+// with the canonical Ideal Route plus selectable compromise checkpoints. A
+// Candidate no longer carries a category, a condition match, or any similarity
+// metadata; a Search result is at most one canonical Ideal per Target; a
+// BuildListEntry additionally carries the user's selected checkpoint
+// opportunities as a hard Planner constraint; and Planner scoring, PlanStep
+// milestone metadata and `ExpectedResult` change with it. So all version 1..9
+// Candidates, Build List snapshots and Plans are incompatible and fail closed
+// with `calculation_context_changed`. The historical 2..5 build-result
+// exception is not extended to version 10. No Dexie table shape changed, so
+// `DATABASE_SCHEMA_VERSION` stays 4; the Export current shape does change, so
+// `ExportRoot.schemaVersion` moves to 5. RNG semantics remain unchanged.
+export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 10
 
 export interface CalculationContext {
   gameVersion: string

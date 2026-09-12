@@ -4,6 +4,7 @@ import {
   createCandidateSearchInput,
   practicalOnlyBonuses,
   SEARCH_FIXTURE_TIME,
+  candidatesOf,
 } from '../../test/fixtures/candidateSearch'
 import { createRestorationBonusSet } from '../../test/fixtures/domainData'
 import { createBuildCandidateMeaningFingerprint } from '../buildList'
@@ -52,8 +53,10 @@ function requireResetSkills(input: CandidateSearchInput): void {
 function createExistingGogmaInput(): CandidateSearchInput {
   const input = createCandidateSearchInput()
   input.routeFilter = 'existing_gogma'
-  input.targetWeapons[0].idealSkillCondition = { seriesSkillId: 'series_skill.fixture.a', groupSkillId: 'group_skill.fixture.ideal', matchMode: 'all' }
-  input.targetWeapons[0].practicalSkillCondition = { seriesSkillId: 'series_skill.fixture.a', groupSkillId: null, matchMode: 'all' }
+  // One Reset Skills reaches the Ideal Skill, so the canonical Ideal Candidate
+  // really carries a Reset Skills record.
+  input.targetWeapons[0].idealSkillCondition = { seriesSkillId: 'series_skill.fixture.a', groupSkillId: null, matchMode: 'all' }
+  input.targetWeapons[0].practicalSkillCondition = { seriesSkillId: null, groupSkillId: null, matchMode: 'all' }
   input.ownedWeapons = [
     {
       ...(input.ownedWeapons[0] as OwnedGogmaArtianWeapon),
@@ -93,7 +96,7 @@ describe('Candidate conversion Skill trace', () => {
       createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
       deterministicExecution,
     )
-    const candidate = findByOperationTypes(result.targetResults[0].candidates, [
+    const candidate = findByOperationTypes(candidatesOf(result.targetResult), [
       'create_normal_artian',
       'convert_normal_to_gogma',
       'reset_bonuses',
@@ -118,12 +121,14 @@ describe('Candidate conversion Skill trace', () => {
     const result = await searchCandidates(
       input,
       createCandidateSearchEngine(input, {
-        resetResult: createRestorationBonusSet(),
+        // The Reset reaches the Ideal five slots, so the composed result is a
+        // canonical Ideal Candidate.
+        resetResult: structuredClone(input.targetWeapons[0].idealBonuses),
         resetSkillSeriesSkillId: RESET_SERIES_SKILL,
       }),
       deterministicExecution,
     )
-    const candidate = findByOperationTypes(result.targetResults[0].candidates, [
+    const candidate = findByOperationTypes(candidatesOf(result.targetResult), [
       'create_normal_artian',
       'convert_normal_to_gogma',
       'reset_bonuses',
@@ -159,12 +164,14 @@ describe('Candidate conversion Skill trace', () => {
     const result = await searchCandidates(
       input,
       createCandidateSearchEngine(input, {
-        resetResult: createRestorationBonusSet(),
+        // The Reset reaches the Ideal five slots, so the composed result is a
+        // canonical Ideal Candidate.
+        resetResult: structuredClone(input.targetWeapons[0].idealBonuses),
         resetSkillSeriesSkillId: RESET_SERIES_SKILL,
       }),
       deterministicExecution,
     )
-    const candidate = findByOperationTypes(result.targetResults[0].candidates, [
+    const candidate = findByOperationTypes(candidatesOf(result.targetResult), [
       'create_normal_artian',
       'convert_normal_to_gogma',
       'reset_bonuses',
@@ -190,7 +197,7 @@ describe('Candidate conversion Skill trace', () => {
       createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
       deterministicExecution,
     )
-    const blind = result.targetResults[0].candidates.filter(({ route }) =>
+    const blind = candidatesOf(result.targetResult).filter(({ route }) =>
       route.operations.some(
         (operation) =>
           operation.type === 'create_normal_artian' && operation.normalCounterBefore === null,
@@ -230,12 +237,14 @@ describe('Candidate conversion Skill trace', () => {
     const result = await searchCandidates(
       input,
       createCandidateSearchEngine(input, {
-        resetResult: createRestorationBonusSet(),
+        // The Reset reaches the Ideal five slots, so the composed result is a
+        // canonical Ideal Candidate.
+        resetResult: structuredClone(input.targetWeapons[0].idealBonuses),
         resetSkillSeriesSkillId: RESET_SERIES_SKILL,
       }),
       deterministicExecution,
     )
-    const owned = result.targetResults[0].candidates.filter(
+    const owned = candidatesOf(result.targetResult).filter(
       ({ route }) => route.kind === 'owned_normal_artian_to_gogma',
     )
 
@@ -258,13 +267,14 @@ describe('Candidate conversion Skill trace', () => {
     const result = await searchCandidates(
       input,
       createCandidateSearchEngine(input, {
-        resetResult: createRestorationBonusSet(),
+        // The Reset reaches the Ideal five slots, so the composed result is a
+        // canonical Ideal Candidate.
+        resetResult: structuredClone(input.targetWeapons[0].idealBonuses),
         resetSkillSeriesSkillId: RESET_SERIES_SKILL,
       }),
       deterministicExecution,
     )
-    const candidates = result.targetResults[0].candidates
-
+    const candidates = candidatesOf(result.targetResult)
     expect(candidates.length).toBeGreaterThan(0)
     candidates.forEach((candidate) => {
       expect(operationTypes(candidate)).not.toContain('convert_normal_to_gogma')
@@ -289,7 +299,7 @@ describe('Candidate conversion Skill trace', () => {
     const result = await searchCandidates(input, engine, deterministicExecution)
 
     expect(
-      result.targetResults[0].candidates.some(
+      candidatesOf(result.targetResult).some(
         ({ conversionSkillTrace }) => conversionSkillTrace !== undefined,
       ),
     ).toBe(true)
@@ -308,7 +318,7 @@ describe('Candidate conversion Skill trace', () => {
       createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
       deterministicExecution,
     )
-    const candidate = findByOperationTypes(result.targetResults[0].candidates, [
+    const candidate = findByOperationTypes(candidatesOf(result.targetResult), [
       'create_normal_artian',
       'convert_normal_to_gogma',
       'reset_bonuses',
@@ -344,7 +354,7 @@ describe('Candidate conversion Skill trace', () => {
       deterministicExecution,
     )
     const legacy = structuredClone(
-      findByOperationTypes(result.targetResults[0].candidates, [
+      findByOperationTypes(candidatesOf(result.targetResult), [
         'create_normal_artian',
         'convert_normal_to_gogma',
         'reset_bonuses',
@@ -365,7 +375,7 @@ describe('Candidate conversion Skill trace', () => {
       deterministicExecution,
     )
     const broken = structuredClone(
-      findByOperationTypes(result.targetResults[0].candidates, [
+      findByOperationTypes(candidatesOf(result.targetResult), [
         'create_normal_artian',
         'convert_normal_to_gogma',
         'reset_bonuses',
@@ -388,12 +398,14 @@ describe('Candidate conversion Skill trace', () => {
     const result = await searchCandidates(
       input,
       createCandidateSearchEngine(input, {
-        resetResult: createRestorationBonusSet(),
+        // The Reset reaches the Ideal five slots, so the composed result is a
+        // canonical Ideal Candidate.
+        resetResult: structuredClone(input.targetWeapons[0].idealBonuses),
         resetSkillSeriesSkillId: RESET_SERIES_SKILL,
       }),
       deterministicExecution,
     )
-    const broken = structuredClone(result.targetResults[0].candidates[0])
+    const broken = structuredClone(candidatesOf(result.targetResult)[0])
     expect(operationTypes(broken)).not.toContain('convert_normal_to_gogma')
     broken.conversionSkillTrace = {
       operationIndex: 0,

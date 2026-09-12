@@ -6,7 +6,7 @@ import { PlannerWhatIfBenchmarkPage } from './PlannerWhatIfBenchmarkPage'
 
 vi.mock('../benchmarks/plannerWhatIfBrowserBenchmark', () => ({ runPlannerWhatIfBenchmark: vi.fn() }))
 const run = vi.mocked(runPlannerWhatIfBenchmark)
-const bounds = { maxCandidateTrialsPerCategoryPerTarget: 2, maxPlannerReruns: 32 }
+const bounds = { maxCandidateTrialsPerTarget: 2, maxPlannerReruns: 32 }
 function api() {
   if (!globalThis.b9WhatIfBenchmark) throw new Error('Missing API')
   return globalThis.b9WhatIfBenchmark
@@ -27,7 +27,7 @@ describe('B9 isolated benchmark page', () => {
     expect(api().workloads()).toHaveLength(4)
     expect(api().fixture('what_if_three_targets').workload.participantCount).toBe(3)
     expect(api().records()).toEqual([])
-    expect(api().sweep.maxCandidateTrialsPerCategoryPerTarget).toEqual([1, 2, 4, 8, 16])
+    expect(api().sweep.maxCandidateTrialsPerTarget).toEqual([1, 2, 4, 8, 16])
     expect(api().sweep.maxPlannerReruns).toEqual([1, 2, 4, 8, 16, 32])
     expect(api().environment.engineVersion).toBe('production-rng:c5-e2')
     expect(screen.getByText(/UNDECIDED/)).toBeInTheDocument()

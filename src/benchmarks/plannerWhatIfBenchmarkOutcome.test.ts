@@ -9,7 +9,7 @@ function completed(slots: PlannerWhatIfOutcome[]): Extract<PlannerWhatIfCalculat
     conflictKey: 'fixture-conflict', fixedTargetWeaponId: 'fixed' as TargetWeaponId,
     fixedBuildListEntryId: 'fixed-entry' as BuildListEntryId,
     alternatives: slots.map((slot, index) => ({ targetWeaponId: `target-${index}` as TargetWeaponId,
-      practical: slot, ideal: { status: 'not_found_within_search_extent' } })),
+      outcome: slot })),
   } }
 }
 
@@ -22,7 +22,7 @@ describe('B9 benchmark semantic normalization', () => {
       { status: 'stopped_by_enumeration_bound' },
       { status: 'not_found_within_search_extent' },
     ]))
-    expect(result.counts).toEqual({ found: 1, candidateTrialBound: 1, plannerRerunBound: 1, enumerationBound: 1, notFound: 6 })
+    expect(result.counts).toEqual({ found: 1, candidateTrialBound: 1, plannerRerunBound: 1, enumerationBound: 1, notFound: 1, blockedBySelectedCheckpoint: 0 })
     expect(result.candidateTrialBoundReached).toBe(true)
     expect(result.plannerRerunBoundReached).toBe(true)
     expect(result.enumerationBoundReached).toBe(true)
@@ -54,8 +54,7 @@ describe('B9 benchmark semantic normalization', () => {
     reversed.comparison.alternatives.reverse()
     expect(createPlannerWhatIfBenchmarkOutcome(reversed).outcomeKey).not.toBe(createPlannerWhatIfBenchmarkOutcome(result).outcomeKey)
     const swapped = structuredClone(result)
-    const target = swapped.comparison.alternatives[0]
-    ;[target.practical, target.ideal] = [target.ideal, target.practical]
+    swapped.comparison.alternatives[0].outcome = { status: 'not_found_within_search_extent' }
     expect(createPlannerWhatIfBenchmarkOutcome(swapped).outcomeKey).not.toBe(createPlannerWhatIfBenchmarkOutcome(result).outcomeKey)
     expect(result).toEqual(before)
   })

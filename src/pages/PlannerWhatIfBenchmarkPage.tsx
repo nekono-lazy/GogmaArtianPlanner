@@ -122,7 +122,7 @@ export function PlannerWhatIfBenchmarkPage() {
   }, [])
 
   const bounds = (): PlannerWhatIfBounds => ({
-    maxCandidateTrialsPerCategoryPerTarget: Number(trials), maxPlannerReruns: Number(reruns),
+    maxCandidateTrialsPerTarget: Number(trials), maxPlannerReruns: Number(reruns),
   })
   // API errors are surfaced by exclusive(); UI handlers consume the rejection.
   const runFromUi = (batch: boolean) => {
@@ -136,7 +136,7 @@ export function PlannerWhatIfBenchmarkPage() {
     <PageShell title="B9 What-if Browser Worker Benchmark" description="B9-B2a: 未リンクの計測専用harness。実Browser測定はB9-B2bで実施します。">
       <Stack spacing={2}>
         <Alert severity="warning">Production buildと実Production Planner Workerを使用します。下の値はmeasurement grid onlyであり、Production defaultではありません。Production defaultはUNDECIDEDです。</Alert>
-        <Alert severity="info">1 run = 1 fresh Worker。warm-up 1回 + measurement N回を順次実行します。Practical / Idealの結果は排他categoryごとに記録します。</Alert>
+        <Alert severity="info">1 run = 1 fresh Worker。warm-up 1回 + measurement N回を順次実行します。各Targetの結果は理想品1件のoutcomeとして記録します。</Alert>
         <Paper variant="outlined" sx={{ p: 2 }}>
           <Stack spacing={2}>
             <Typography>{PRODUCTION_RNG_ENGINE_VERSION} · concurrency: {navigator.hardwareConcurrency}</Typography>
@@ -146,7 +146,7 @@ export function PlannerWhatIfBenchmarkPage() {
                 {plannerWhatIfBenchmarkWorkloads.map((workload) => <MenuItem key={workload.id} value={workload.id}>{workload.label}</MenuItem>)}
               </Select>
             </FormControl>
-            <TextField label="maxCandidateTrialsPerCategoryPerTarget" type="number" value={trials} disabled={running} onChange={(event) => setTrials(event.target.value)} />
+            <TextField label="maxCandidateTrialsPerTarget" type="number" value={trials} disabled={running} onChange={(event) => setTrials(event.target.value)} />
             <TextField label="maxPlannerReruns" type="number" value={reruns} disabled={running} onChange={(event) => setReruns(event.target.value)} />
             <TextField label="Measurements" type="number" value={count} disabled={running} onChange={(event) => setCount(event.target.value)} />
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
@@ -161,7 +161,7 @@ export function PlannerWhatIfBenchmarkPage() {
         {records.length === 0 && <Typography>No measurements yet.</Typography>}
         {records.map((record) => (
           <Paper key={record.requestId} variant="outlined" sx={{ p: 2, overflowX: 'auto' }}>
-            <Typography>{record.phase} · {record.workloadId} · T/R {record.bounds.maxCandidateTrialsPerCategoryPerTarget}/{record.bounds.maxPlannerReruns} · {record.status} · {record.roundTripMs.toFixed(1)} ms</Typography>
+            <Typography>{record.phase} · {record.workloadId} · T/R {record.bounds.maxCandidateTrialsPerTarget}/{record.bounds.maxPlannerReruns} · {record.status} · {record.roundTripMs.toFixed(1)} ms</Typography>
             <Typography variant="body2">Progress events: {record.progressEvents}</Typography>
             {record.error && <Alert severity="error">{record.error}</Alert>}
             <pre>{JSON.stringify(record.outcome, null, 2)}</pre>

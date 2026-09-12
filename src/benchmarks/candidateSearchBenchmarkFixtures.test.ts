@@ -1,3 +1,4 @@
+import { candidatesOf } from '../test/fixtures/candidateSearch'
 import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../domain/models/publicTypes'
 import { describe, expect, it } from 'vitest'
 import { searchCandidates } from '../domain/search/candidateSearch'
@@ -150,7 +151,7 @@ describe('B5 Candidate Search benchmark fixtures', () => {
     // B5 section 7 measured run-dependent ordered parity on these workloads;
     // B6-F1 made the final tie-break `candidateStableKey` instead of
     // `BuildCandidate.id`, whose `semanticHash` folds in `searchRunId`.
-    for (const id of ['no_ideal_gogma_25', 'skill_depth_8_default_bounds']) {
+    for (const id of ['near_ideal_default_bounds', 'skill_depth_8_default_bounds']) {
       const engine = createProductionSearchRngEngine()
       const runA = await searchCandidates(
         createCandidateSearchBenchmarkInput(id, 'determinism-a').input,
@@ -160,9 +161,12 @@ describe('B5 Candidate Search benchmark fixtures', () => {
         createCandidateSearchBenchmarkInput(id, 'determinism-b').input,
         engine,
       )
-      const a = runA.targetResults[0].candidates
-      const b = runB.targetResults[0].candidates
-      expect(a.length).toBeGreaterThan(1)
+      const a = candidatesOf(runA.targetResult)
+      const b = candidatesOf(runB.targetResult)
+      // At most one canonical Ideal Candidate per Target, so the ordered
+      // sequence is one element long; the parity check below is still an
+      // ordered-sequence comparison rather than a set comparison.
+      expect(a.length).toBe(1)
       // Ordered sequence parity, not just set parity.
       expect(b.map(candidateStableKey)).toEqual(a.map(candidateStableKey))
       // The ordering was fixed; the run-dependent Candidate IDs still differ.
@@ -170,6 +174,19 @@ describe('B5 Candidate Search benchmark fixtures', () => {
         a.map((candidate) => candidate.id),
       )
     }
+
+    // A workload that reaches no Ideal returns no Candidate on either run.
+    const engine = createProductionSearchRngEngine()
+    const emptyA = await searchCandidates(
+      createCandidateSearchBenchmarkInput('no_ideal_gogma_25', 'determinism-a').input,
+      engine,
+    )
+    const emptyB = await searchCandidates(
+      createCandidateSearchBenchmarkInput('no_ideal_gogma_25', 'determinism-b').input,
+      engine,
+    )
+    expect(emptyA.targetResult.candidate).toBeNull()
+    expect(emptyB.targetResult.candidate).toBeNull()
   }, 60_000)
 
   it('reaches the documented canonical Ideal with a Gogma-scope result', async () => {
@@ -186,8 +203,8 @@ describe('B5 Candidate Search benchmark fixtures', () => {
     ]) {
       const { input, workload } = createCandidateSearchBenchmarkInput(id, `test.ideal.${id}`)
       const result = await searchCandidates(input, createProductionSearchRngEngine())
-      const ideal = result.targetResults[0].candidates.filter(
-        ({ category }) => category === 'ideal',
+      const ideal = candidatesOf(result.targetResult).filter(
+        () => true,
       )
       if (workload.expectedIdealOperationCount === null) {
         expect(ideal).toHaveLength(0)

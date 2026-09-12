@@ -1,7 +1,6 @@
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import type { CalculationContext, TargetWeaponId } from '../../domain/models/publicTypes'
 import type {
-  CandidateResultFilter,
   CandidateRouteFilter,
   CandidateSearchInput,
   CandidateSearchSettings,
@@ -33,9 +32,8 @@ export const defaultSearchInputRepositories: SearchInputRepositories = {
 
 export interface CreateCandidateSearchInputOptions {
   searchRunId: string
-  targetWeaponIds: TargetWeaponId[]
+  targetWeaponId: TargetWeaponId
   routeFilter: CandidateRouteFilter
-  resultFilter: CandidateResultFilter
   settings: CandidateSearchSettings
   master: MasterDataRoot
   calculationContext: CalculationContext
@@ -55,9 +53,8 @@ export async function createCandidateSearchInput(
     ])
   return {
     searchRunId: options.searchRunId,
-    targetWeaponIds: [...options.targetWeaponIds],
+    targetWeaponId: options.targetWeaponId,
     routeFilter: options.routeFilter,
-    resultFilter: options.resultFilter,
     rngState,
     normalCounters,
     ownedWeapons,

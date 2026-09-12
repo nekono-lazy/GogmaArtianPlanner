@@ -3,14 +3,13 @@ import type { BuildCandidate } from '../models/publicTypes'
 import { createValidBuildCandidate, candidateId, ownedWeaponId } from '../../test/fixtures/domainData'
 import {
   candidateStableKey,
-  compareCandidates,
+  compareCanonicalIdeals,
   compareDuplicateCandidates,
   deduplicateCandidates,
-  filterCandidates,
-  sortCandidates,
 } from './candidateProcessing'
 import { compareStableKeys } from './semanticKeys'
 import { validateCandidateSearchSettings } from './searchValidation'
+import { defaultCandidateSearchSettings } from './searchTypes'
 
 function candidate(
   id: string,
@@ -30,27 +29,39 @@ describe('Candidate Search settings', () => {
         maxNormalAdvance: 5000,
         maxGogmaAdvance: 5000,
         maxSkillAdvance: 5000,
-        maxCandidatesPerTarget: 200,
-        similarityThreshold: 0.6,
       }),
     ).toEqual([])
   })
 
-  it('rejects invalid advances, limit, and threshold', () => {
+  it('rejects invalid advances', () => {
     expect(
       validateCandidateSearchSettings({
         maxNormalAdvance: 0,
         maxGogmaAdvance: -1,
         maxSkillAdvance: 1.5,
-        maxCandidatesPerTarget: 0,
-        similarityThreshold: 1.1,
       }).map(({ path }) => path),
     ).toEqual([
       'maxNormalAdvance',
       'maxGogmaAdvance',
       'maxSkillAdvance',
-      'maxCandidatesPerTarget',
-      'similarityThreshold',
+    ])
+  })
+
+  it('carries no output cap and no similarity threshold', () => {
+    // A Search result is at most one canonical Ideal Candidate, so nothing
+    // bounds a retained set and nothing ranks results by closeness
+    // (`docs/SEARCH_SPEC.md` 4.2).
+    const settings: Record<string, unknown> = {
+      maxNormalAdvance: 1,
+      maxGogmaAdvance: 1,
+      maxSkillAdvance: 1,
+    }
+    expect(settings.maxCandidatesPerTarget).toBeUndefined()
+    expect(settings.similarityThreshold).toBeUndefined()
+    expect(Object.keys(defaultCandidateSearchSettings).sort()).toEqual([
+      'maxGogmaAdvance',
+      'maxNormalAdvance',
+      'maxSkillAdvance',
     ])
   })
 })
@@ -148,28 +159,27 @@ describe('Candidate deduplication', () => {
   })
 })
 
-describe('Candidate sorting and filters', () => {
-  it('applies every documented sort tie-breaker', () => {
+describe('Canonical Ideal ordering', () => {
+  it('applies every documented canonical ordering tie-breaker', () => {
     const base = candidate('base')
-    expect(compareCandidates(candidate('ideal', { category: 'ideal' }), base)).toBeLessThan(0)
-    expect(compareCandidates(candidate('ops', { estimatedOperationCount: 1 }), base)).toBeLessThan(0)
-    expect(compareCandidates(candidate('gogma', { estimatedGogmaAdvance: 0 }), candidate('base-gogma', { estimatedGogmaAdvance: 1 }))).toBeLessThan(0)
-    expect(compareCandidates(candidate('skill', { estimatedSkillAdvance: 0 }), base)).toBeLessThan(0)
-    expect(compareCandidates(candidate('normal', { estimatedNormalAdvance: 0 }), candidate('null', { estimatedNormalAdvance: null }))).toBeLessThan(0)
-    expect(compareCandidates(candidate('similar', { similarityScore: 1 }), base)).toBeLessThan(0)
-    expect(
-      compareCandidates(
-        candidate('matched', {
-          idealDifference: { ...base.idealDifference, matchedBonusCount: 5 },
-        }),
-        candidate('fewer-matches', {
-          idealDifference: { ...base.idealDifference, matchedBonusCount: 4 },
-        }),
-      ),
-    ).toBeLessThan(0)
+    expect(compareCanonicalIdeals(candidate('ops', { estimatedOperationCount: 1 }), base)).toBeLessThan(0)
+    expect(compareCanonicalIdeals(candidate('gogma', { estimatedGogmaAdvance: 0 }), candidate('base-gogma', { estimatedGogmaAdvance: 1 }))).toBeLessThan(0)
+    expect(compareCanonicalIdeals(candidate('skill', { estimatedSkillAdvance: 0 }), base)).toBeLessThan(0)
+    expect(compareCanonicalIdeals(candidate('normal', { estimatedNormalAdvance: 0 }), candidate('null', { estimatedNormalAdvance: null }))).toBeLessThan(0)
   })
 
-  it('breaks the final sort tie on candidateStableKey instead of the Candidate ID', () => {
+  it('ignores checkpoint availability entirely', () => {
+    // Checkpoints are derived from the chosen Route, so letting them choose the
+    // Route would make the canonical Ideal depend on its own output
+    // (`docs/SEARCH_SPEC.md` 5.8.6).
+    const withCheckpoints = candidate('with', { checkpointGroups: [] })
+    const base = candidate('without')
+    delete base.checkpointGroups
+    expect(compareCanonicalIdeals(withCheckpoints, base)).toBe(0)
+    expect(compareCanonicalIdeals(base, withCheckpoints)).toBe(0)
+  })
+
+  it('breaks the final tie on candidateStableKey instead of the Candidate ID', () => {
     // IDs are deliberately the reverse of the semantic stable-key order.
     const first = candidate('z', { seriesSkillId: null })
     const second = candidate('a')
@@ -178,7 +188,7 @@ describe('Candidate sorting and filters', () => {
         ? [first, second]
         : [second, first]
     expect(candidateStableKey(lower)).not.toBe(candidateStableKey(higher))
-    expect(sortCandidates([higher, lower]).map(candidateStableKey)).toEqual(
+    expect([higher, lower].sort(compareCanonicalIdeals).map(candidateStableKey)).toEqual(
       [lower, higher].map(candidateStableKey),
     )
 
@@ -188,24 +198,23 @@ describe('Candidate sorting and filters', () => {
       id: candidateId(`rerun.${index}`),
       searchRunId: 'another-run',
     }))
-    expect(sortCandidates(renamed).map(candidateStableKey)).toEqual(
+    expect(renamed.sort(compareCanonicalIdeals).map(candidateStableKey)).toEqual(
       [lower, higher].map(candidateStableKey),
     )
   })
 
   it('leaves complete semantic duplicates unordered by ID', () => {
-    expect(compareCandidates(candidate('z'), candidate('a'))).toBe(0)
-    expect(compareCandidates(candidate('a'), candidate('z'))).toBe(0)
+    expect(compareCanonicalIdeals(candidate('z'), candidate('a'))).toBe(0)
+    expect(compareCanonicalIdeals(candidate('a'), candidate('z'))).toBe(0)
   })
 
-  it('filters all, ideal, practical, and Similar without a Similar category', () => {
-    const ideal = candidate('ideal', { category: 'ideal', isSimilarToIdeal: false })
-    const practical = candidate('practical', { category: 'practical', isSimilarToIdeal: false })
-    const similar = candidate('similar', { category: 'practical', isSimilarToIdeal: true })
-    const values = [ideal, practical, similar]
-    expect(filterCandidates(values, 'all')).toHaveLength(3)
-    expect(filterCandidates(values, 'ideal').map(({ id }) => id)).toEqual(['ideal'])
-    expect(filterCandidates(values, 'practical').map(({ id }) => id)).toEqual(['practical', 'similar'])
-    expect(filterCandidates(values, 'similar').map(({ id }) => id)).toEqual(['similar'])
+  it('exposes no result filter at all', async () => {
+    // A Search result is one canonical Ideal or nothing, so there is nothing to
+    // filter by category or by closeness (`docs/SEARCH_SPEC.md` 4.2).
+    const processing = (await import('./candidateProcessing')) as Record<string, unknown>
+    expect(processing.filterCandidates).toBeUndefined()
+    expect(processing.compareCandidates).toBeUndefined()
+    expect(processing.sortCandidates).toBeUndefined()
+    expect(processing.compareCandidateSelection).toBeUndefined()
   })
 })

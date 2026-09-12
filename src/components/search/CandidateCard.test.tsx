@@ -573,14 +573,3 @@ describe('CandidateCard conversion skill result', () => {
     expect(screen.getAllByText('予測結果:')).toHaveLength(1)
   })
 })
-
-
-describe('Candidate condition explanations', () => {
-  it('identifies Alternative Bonus separately from Practical Skill', async () => {
-    const candidate = createValidBuildCandidate()
-    candidate.conditionMatch = { bonus: 'alternative', skill: 'practical' }
-    await renderExpanded(candidate)
-    expect(screen.getByText('ボーナス判定: 代替 ／ スキル判定: 実用')).toBeInTheDocument()
-    expect(screen.queryByText(/ボーナス判定: 実用/)).not.toBeInTheDocument()
-  })
-})

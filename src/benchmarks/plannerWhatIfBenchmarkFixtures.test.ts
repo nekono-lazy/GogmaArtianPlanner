@@ -11,7 +11,7 @@ import { createPlannerWhatIfBenchmarkFixture, plannerWhatIfBenchmarkWorkloads } 
 import { createPlannerWhatIfBenchmarkOutcome } from './plannerWhatIfBenchmarkOutcome'
 
 const dependencies = () => createProductionPlannerDependencies(new ProductionRngEngine())
-const bounds = (trials: number, reruns: number) => ({ maxCandidateTrialsPerCategoryPerTarget: trials, maxPlannerReruns: reruns })
+const bounds = (trials: number, reruns: number) => ({ maxCandidateTrialsPerTarget: trials, maxPlannerReruns: reruns })
 function request(id: string, trials: number, reruns: number) {
   const fixture = createPlannerWhatIfBenchmarkFixture(id)
   return { plannerInput: fixture.plannerInput, scenarioResolution: fixture.scenarioResolution, bounds: bounds(trials, reruns) }
@@ -81,58 +81,49 @@ describe('B9 Production-valid benchmark fixtures', () => {
     }
   })
 
-  it('isolates trial sensitivity: T=1 stops, T=4 finds Practical with R=32 unchanged', async () => {
+  it('isolates trial sensitivity: T=1 stops, T=4 finds the Ideal answer with R=32 unchanged', async () => {
     const low = await calculate('what_if_two_targets', 1, 32)
     const high = await calculate('what_if_two_targets', 4, 32)
-    expect(low.comparison.alternatives[0].practical.status).toBe('stopped_by_candidate_trial_bound')
-    expect(high.comparison.alternatives[0].practical).toEqual({ status: 'found', distance: {
-      estimatedOperationCount: 3, estimatedGogmaAdvance: 3, estimatedSkillAdvance: 0, estimatedNormalAdvance: null,
-    } })
+    expect(low.comparison.alternatives[0].outcome.status).toBe('stopped_by_candidate_trial_bound')
+    expect(high.comparison.alternatives[0].outcome.status).toBe('found')
     for (const result of [low, high]) expect(createPlannerWhatIfBenchmarkOutcome(result).plannerRerunBoundReached).toBe(false)
   }, 30000)
 
-  it('finds exclusive Practical and Ideal at different distances, and proves practical-first scheduling', async () => {
-    const low = await calculate('what_if_dual_category', 1, 32)
-    const full = await calculate('what_if_dual_category', 4, 32)
-    const limited = await calculate('what_if_dual_category', 4, 4)
-    expect(low.comparison.alternatives[0].practical.status).toBe('stopped_by_candidate_trial_bound')
-    expect(low.comparison.alternatives[0].ideal.status).toBe('found')
+  it('reports one Ideal distance that an actually enumerated Candidate carries', async () => {
+    const full = await calculate('what_if_two_targets', 4, 32)
     const alternative = full.comparison.alternatives[0]
-    expect(alternative.practical).toEqual({ status: 'found', distance: {
-      estimatedOperationCount: 3, estimatedGogmaAdvance: 3, estimatedSkillAdvance: 0, estimatedNormalAdvance: null,
-    } })
-    expect(alternative.ideal).toEqual({ status: 'found', distance: {
-      estimatedOperationCount: 2, estimatedGogmaAdvance: 2, estimatedSkillAdvance: 0, estimatedNormalAdvance: null,
-    } })
-    expect(limited.comparison.alternatives[0].practical).toEqual(alternative.practical)
-    expect(limited.comparison.alternatives[0].ideal.status).toBe('stopped_by_planner_rerun_bound')
-    const prepared = preparePlannerWhatIfScenario(request('what_if_dual_category', 4, 32), dependencies())
+    if (alternative.outcome.status !== 'found') throw new Error('Expected a feasible Candidate')
+    const distance = alternative.outcome.distance
+    const prepared = preparePlannerWhatIfScenario(request('what_if_two_targets', 4, 32), dependencies())
     if (prepared.status !== 'ready') throw new Error('Invalid scenario')
     const enumeration = await enumerateConstrainedCandidates({ origin: prepared.scenario.origin,
       targetWeaponId: alternative.targetWeaponId, bounds: defaultConstrainedEnumerationBounds }, new ProductionRngEngine())
-    for (const category of ['practical', 'ideal'] as const) {
-      const slot = alternative[category]
-      if (slot.status !== 'found') throw new Error('Missing category')
-      expect(enumeration.candidates.some((candidate) => candidate.category === category &&
-        candidate.estimatedOperationCount === slot.distance.estimatedOperationCount &&
-        candidate.estimatedGogmaAdvance === slot.distance.estimatedGogmaAdvance &&
-        candidate.estimatedSkillAdvance === slot.distance.estimatedSkillAdvance &&
-        candidate.estimatedNormalAdvance === slot.distance.estimatedNormalAdvance)).toBe(true)
-    }
+    // Every enumerated Candidate is an Ideal Candidate, so the distance is read
+    // off one of them rather than off a category slot.
+    expect(enumeration.candidates.some((candidate) =>
+      candidate.estimatedOperationCount === distance.estimatedOperationCount &&
+      candidate.estimatedGogmaAdvance === distance.estimatedGogmaAdvance &&
+      candidate.estimatedSkillAdvance === distance.estimatedSkillAdvance &&
+      candidate.estimatedNormalAdvance === distance.estimatedNormalAdvance)).toBe(true)
   }, 30000)
 
   // The three-participant workload keeps its four Production calculations, split
   // across two tests by semantic unit so one per-test timeout window never has to
   // hold all four. R=2 / R=4 / R=6 / R=32 and every assertion are preserved.
-  it('shares R across three participants as the rerun budget progresses from R=4 to R=6', async () => {
-    const low = await calculate('what_if_three_targets', 4, 4)
-    const middle = await calculate('what_if_three_targets', 4, 6)
-    expect(low.comparison.alternatives[0].practical.status).toBe('found')
-    expect(low.comparison.alternatives[0].ideal.status).toBe('stopped_by_planner_rerun_bound')
-    expect(low.comparison.alternatives[1].practical.status).toBe('stopped_by_planner_rerun_bound')
-    expect(low.comparison.alternatives[1].ideal.status).toBe('stopped_by_planner_rerun_bound')
-    expect(middle.comparison.alternatives[0].ideal.status).toBe('found')
-    expect(middle.comparison.alternatives[1].practical.status).toBe('stopped_by_planner_rerun_bound')
+  it('shares R across three participants as the rerun budget progresses from R=2 to R=4', async () => {
+    const low = await calculate('what_if_three_targets', 4, 2)
+    const middle = await calculate('what_if_three_targets', 4, 4)
+    // The shared rerun budget is spent Target by Target in the fixed order, so
+    // a later participant is left unjudged while an earlier one has already
+    // spent its whole trial allowance. A workload observation, not a Domain
+    // invariant: this Target's Ideal five slots are reachable only at the
+    // contested Gogma position, so no alternative Candidate is feasible.
+    expect(low.comparison.alternatives.map(({ outcome }) => outcome.status)).toEqual([
+      'stopped_by_planner_rerun_bound',
+      'stopped_by_planner_rerun_bound',
+    ])
+    expect(middle.comparison.alternatives[0].outcome.status).toBe('stopped_by_candidate_trial_bound')
+    expect(middle.comparison.alternatives[1].outcome.status).toBe('stopped_by_planner_rerun_bound')
   }, 30000)
 
   it('evaluates alternative Targets independently and reaches the R=32 outcome at R=12', async () => {
@@ -141,10 +132,12 @@ describe('B9 Production-valid benchmark fixtures', () => {
     expect(high.comparison.alternatives.map(({ targetWeaponId }) => targetWeaponId)).toEqual([
       'target.b9b2a.bow_ice', 'target.b9b2a.bow_thunder',
     ])
-    expect(high.comparison.alternatives.map(({ practical }) => practical.status)).toEqual(['found', 'found'])
-    expect(high.comparison.alternatives[0].practical).toEqual(high.comparison.alternatives[1].practical)
-    expect(high.comparison.alternatives.map(({ ideal }) => ideal.status)).toEqual(['found', 'found'])
-    expect(createPlannerWhatIfBenchmarkOutcome(high).candidateTrialBoundReached).toBe(false)
+    expect(high.comparison.alternatives.map(({ outcome }) => outcome.status)).toEqual([
+      'stopped_by_candidate_trial_bound',
+      'stopped_by_candidate_trial_bound',
+    ])
+    expect(high.comparison.alternatives[0].outcome).toEqual(high.comparison.alternatives[1].outcome)
+    expect(createPlannerWhatIfBenchmarkOutcome(high).candidateTrialBoundReached).toBe(true)
     expect(createPlannerWhatIfBenchmarkOutcome(sufficient).outcomeKey).toBe(createPlannerWhatIfBenchmarkOutcome(high).outcomeKey)
     expect(createPlannerWhatIfBenchmarkOutcome(high).plannerRerunBoundReached).toBe(false)
   }, 30000)
@@ -160,12 +153,12 @@ describe('B9 Production-valid benchmark fixtures', () => {
     expect(result.status).toBe('completed')
     expect(input).toEqual(before)
     const outcome = createPlannerWhatIfBenchmarkOutcome(result)
-    // Both Ideal alternatives are found since the shared Gogma Counter prefix
-    // fast-forward: an alternative that only had to pass a Counter position
-    // another Entry consumes no longer spends its whole trial budget. Only the
-    // two Practical slots still stop at the trial bound. These are workload
-    // observations, not Domain invariants (B8 benchmark document 7.5).
-    expect(outcome.counts.found).toBe(2)
+    // One outcome per Target now, and both stop at the trial bound: this
+    // workload's Ideal five slots are reachable only at the contested Gogma
+    // position, so every enumerated alternative collides with the fixed Entry.
+    // A workload observation, not a Domain invariant (B8 benchmark document
+    // 7.5).
+    expect(outcome.counts.found).toBe(0)
     expect(outcome.counts.candidateTrialBound).toBe(2)
     expect(outcome.counts.plannerRerunBound).toBe(0)
   }, 30000)

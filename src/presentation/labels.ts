@@ -1,6 +1,6 @@
 import type {
   BuildListEntryStaleReason,
-  CandidateCategory,
+  CompromiseConditionMatch,
   NormalArtianRarity,
   OwnedWeaponStatus,
   PlanStepOperationType,
@@ -31,9 +31,37 @@ export const artianWeaponKindLabels: Record<ArtianWeaponKind, string> = {
   gogma: '巨戟アーティア',
 }
 
-export const candidateCategoryLabels: Record<CandidateCategory, string> = {
+/**
+ * How one compromise checkpoint state rates on each Target axis.
+ *
+ * Explanatory display only: a checkpoint is never an independent Candidate, so
+ * these labels classify a state on the canonical Ideal Route, not a category.
+ */
+export const compromiseBonusMatchLabels: Record<
+  CompromiseConditionMatch['bonus'],
+  string
+> = {
   ideal: '理想',
   practical: '実用',
+  alternative: '代替',
+}
+
+export const compromiseSkillMatchLabels: Record<
+  CompromiseConditionMatch['skill'],
+  string
+> = {
+  ideal: '理想',
+  practical: '実用',
+}
+
+/** The short badge one checkpoint group shows: the weaker of its two axes. */
+export function compromiseCheckpointBadgeLabel(
+  conditionMatch: CompromiseConditionMatch,
+): string {
+  if (conditionMatch.bonus === 'alternative') return '代替'
+  return conditionMatch.bonus === 'practical' || conditionMatch.skill === 'practical'
+    ? '実用'
+    : '理想'
 }
 
 export const routeKindLabels: Record<RouteKind, string> = {
@@ -82,6 +110,16 @@ export const plannerWarningLabels: Record<PlannerWarningKind, string> = {
   max_planner_reruns_reached: 'Plannerの再実行回数の上限に到達しました',
   constrained_enumeration_bound_reached:
     '再検索の探索範囲の上限に到達したため、候補の探索を打ち切りました',
+  selected_checkpoint_blocks_constrained_search:
+    '選択済みチェックポイントがある目標武器は再検索で別ルートへ置き換えません。作成リストでチェックポイントを変更または解除してください',
+  multiple_selected_checkpoint_entries:
+    '同じ目標武器にチェックポイントを選択した候補が2件以上あります。作成リストで片方のチェックポイント選択を解除してください',
+  selected_checkpoint_target_already_ideal:
+    '既に理想品を所持している目標武器にチェックポイントが選択されています。作成リストでそのチェックポイント選択を解除してください',
+  selected_checkpoint_fixes_target_entry:
+    'チェックポイントを選択した候補がある目標武器では、その候補だけを作成ルートとして扱い、同じ目標武器の他の候補は使用しません',
+  invalid_checkpoint_selection:
+    'チェックポイントの選択内容が候補の内容と一致しません。作成リストでその候補のチェックポイント選択を解除し、必要なら候補を追加し直してください',
 }
 
 export const candidateRouteFilterLabels: Record<CandidateRouteFilter, string> = {

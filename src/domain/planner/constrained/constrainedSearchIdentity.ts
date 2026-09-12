@@ -25,10 +25,7 @@ import { ConstrainedMaterializationError } from './constrainedMaterializationErr
  *
  * ```text
  * route scope     = every currently legal Search route
- * routeFilter     = not applied
- * resultFilter    = not applied
- * similar filter  = not applied
- * maxCandidates   = not applied
+ * UI filters      = none (no routeFilter, no CandidateSearchSettings)
  * extent          = ConstrainedEnumerationBounds only
  * off-axis        = B8-B1 lazy constrained evaluation
  * ```

@@ -204,23 +204,29 @@ version 7. Replacing `OwnedWeapon.relatedTargetWeaponIds` with the Target-side
 owned-weapon-as-material model and reducing `OwnedWeapon.status` to a user-facing
 organisation label changes the active RouteOperation set, Planner inventory
 semantics, Planner scoring, the PlanStep operation set, and the OwnedWeapon
-semantic hash contract, so current
-`CalculationContext.appSchemaVersion` is **9**, defined
+semantic hash contract, which moved it to version 9. Replacing the independent
+Practical Candidate with a canonical Ideal Route plus selectable compromise
+checkpoints changes the Candidate output shape, Candidate classification, the
+Build List planning input, and Planner fast-forward / conflict semantics, so
+current `CalculationContext.appSchemaVersion` is **10**, defined
 only by `CURRENT_CALCULATION_APP_SCHEMA_VERSION` in `src/domain/models/common.ts`.
 Search, BuildList, Planner, and benchmark runtime creators share this authority.
 Dexie separately moves to `DATABASE_SCHEMA_VERSION = 4` for the persisted status rename; this is independent of
 `AppSettings.schemaVersion = 1`; gameVersion, Master Data version,
 `RngState.schemaVersion = 1`, `CONSTRAINED_ROUTE_POLICY_VERSION`,
 `PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`, and `supportsSeedSearch = false`
-remain unchanged. `ExportRoot.schemaVersion` moves to 4 with the persisted entity shape. Version 1 BuildCandidate, BuildListEntry, and ProductionPlan
+remain unchanged. `DATABASE_SCHEMA_VERSION` stays 4 at the checkpoint boundary, while
+`ExportRoot.schemaVersion` moves to 5 with the persisted entity shape. Version 1 BuildCandidate, BuildListEntry, and ProductionPlan
 calculations are incompatible with any later version and must not be reused as current
 results. Existing staleness checks mark old BuildListEntry records with
 `calculation_context_changed` and exclude them from Planner input. Preserve old
-Candidate categories and snapshots; obtain current Candidates by searching again.
+Candidate snapshots exactly as persisted, including any `category` /
+`isSimilarToIdeal` / `similarityScore` a historical record still carries; obtain
+current Candidates by searching again.
 Do not delete historical results or add a migration or Export/Import semantic
 validation change as a substitute for CalculationContext compatibility.
 
-All version 1..8 Candidates, BuildListEntries and ProductionPlans are incompatible with version 9. Preserve their contents and fail closed with calculation_context_changed. Do not extend the historical build-result compatibility exception to version 9.
+All version 1..9 Candidates, BuildListEntries and ProductionPlans are incompatible with version 10. Preserve their contents and fail closed with calculation_context_changed. Do not extend the historical build-result compatibility exception to version 9 or 10.
 
 The v3 -> v4 Dexie migration converts only `OwnedGogma.status === 'material'` to
 `'unclassified'`. `practical` and `ideal` keep their values, a Normal Artian
@@ -649,8 +655,10 @@ in PR #12.
 Defaults:
 
 - A manually registered new Gogma weapon: `unclassified`, unprotected
-- A Planner-secured Practical Candidate: `practical`, unprotected
-- A Planner-secured Ideal Candidate: `ideal`, protected
+- A Planner-secured Candidate: `ideal`, protected. The Planner secures only the
+  canonical Ideal result; a compromise checkpoint is an intermediate state of
+  that same Route and is never reserved as a weapon of its own
+- `practical` is written only by the user's own relabelling
 - Updating an existing Gogma to a Candidate result preserves its explicit
   protection value, exactly as PR #12 fixed
 
@@ -722,15 +730,14 @@ Exactly two paths write `status`:
 
 ```text
 any user relabelling            ordinary Owned Weapons CRUD
-reserve_weapon securing a       the Candidate category becomes the label:
-Candidate                         practical Candidate -> status = practical
-                                  ideal Candidate     -> status = ideal
+reserve_weapon securing a       an Ideal Candidate is always secured as
+Candidate                         status = ideal (new weapons also protected)
 ```
 
 `reserve_weapon` applies that label the same way for a newly generated weapon
 and for an existing Gogma Candidate, and an existing Gogma keeps its stored
 protection exactly as PR #12 fixed. Never "fix" this by deleting
-`status: candidate.category` so the Planner touches no status at all. Even there
+the status write so the Planner touches no status at all. Even there
 status stays non-semantic: it decides no Search eligibility, no Planner
 operation eligibility, no Target Satisfaction, and no semantic hash.
 
@@ -820,7 +827,7 @@ A Target's ideal five-slot multiset is the only Bonus authority.
 - Practical preserves types and counts; only explicitly configured types relax ranks (minimum + EX minimum).
 - Alternative uses exactly one source Rule and one Option, replacing 1..max slots and keeping every other Ideal slot unchanged.
 - Practical Bonus and Alternative Bonus never combine. Skill is an independent axis.
-- Unset Practical Skill (both IDs null) allows only Ideal Skills; no compromise means Ideal-only Search with no Practical horizon.
+- Unset Practical Skill (both IDs null) allows only Ideal Skills. Search is Ideal-only either way; compromise conditions decide only which checkpoints exist.
 - All Bonus matches require gogma_artian scope. Normal creation/conversion routes remain available through Reset.
 - DATA_MODEL 8 and docs/TARGET_COMPROMISE_SEMANTICS.md define the new types and validation.
 - Target saving and Search validate structure, Master references and Ideal containment before evaluation.
@@ -832,27 +839,88 @@ Do not introduce "any one target in this group completes the group" behavior in 
 
 ---
 
-## Candidate Categories and Similarity
+## Canonical Ideal Route and Compromise Checkpoints
 
-Candidate categories are only:
+A compromise result is never an independent Candidate. `CandidateCategory`,
+`BuildCandidate.category`, `isSimilarToIdeal`, `similarityScore`,
+`similarityThreshold`, `CandidateResultFilter`, `maxCandidatesPerTarget`, the
+Practical horizon, `practicalDominates()`, the Similar filter, and
+`RelaxationSuggestion` are all removed and must not be reintroduced.
+
+A Candidate Search request covers exactly one `targetWeaponId` and returns at
+most one canonical Ideal `BuildCandidate`:
 
 ```text
-ideal
-practical
+Ideal reachable in range     -> 1 canonical Ideal + its checkpoints
+Ideal not reachable in range -> no Candidate, no checkpoint
 ```
 
-Similarity is not a third category.
+Reaching a compromise state without reaching an Ideal produces nothing. The UI
+must say the Ideal was not found *in the current search range*, never that the
+Target has no Ideal.
 
-`isSimilarToIdeal` and `similarityScore` are attributes of Practical candidates.
+Compromise states are offered only as **checkpoints on the canonical Ideal
+Route's strict prefixes**. They are reconstructed by a pure replay of the
+Candidate's own observational traces (`bonusAmendmentTrace`,
+`skillAmendmentTrace`, `conversionSkillTrace`) plus the Route base OwnedWeapon,
+so extraction adds **zero** RNG prediction calls, and UI/presentation code must
+never re-run the RNG Engine to render one.
 
-Rules:
+Checkpoints are two-layered. A `CompromiseCheckpointGroup` is the user-visible
+compromise product: scope, the unordered five-slot multiset with duplicate
+counts preserved, Series Skill, Group Skill, and `conditionMatch`. Slot order is
+deliberately excluded from group identity. A `CompromiseCheckpointOpportunity`
+is one arrival at that product and keeps the exact ordered five slots, the Route
+position, the operation counts, and `conditionMatch`. Both ids are deterministic
+functions of `candidateStableKey` and the group identity — never of
+`searchRunId`, the Clock, or an enumeration ordinal.
 
-- Ideal candidates take category precedence over Practical
-- Ideal candidates are not duplicated in the Similar filter
-- Candidates below the Practical line are normally not persisted/displayed in v1
-- Target relaxation may be suggested, but must never be applied without explicit user action
+Every arrival is retained. Two arrivals at the same product stay two
+opportunities; the earliest is the display representative and the rest are
+disclosed as 「その他の到達点」. A conservative, per-`bonusTypeId` rank-vector
+dominance may mark a group display-secondary, but it never removes a group or an
+opportunity from the Domain: a "worse" checkpoint can be the only one that
+avoids a Counter conflict. Differing Bonus Type compositions, differing Skills,
+and uncomparable Master references are never ranked against each other.
 
-Do not create an ambiguous "similar" category.
+The Route base's own starting state is not a Route prefix, so an owned weapon
+that already satisfies a compromise condition never becomes a checkpoint.
+`TargetWeapon.practicalBonusConditions`, `alternativeBonusRules`,
+`practicalSkillCondition`, `OwnedWeaponStatus.practical`,
+`satisfiesPracticalTarget()`, and `hasPractical` all stay: they decide what
+counts as a compromise and what a weapon actually delivers.
+
+Constrained enumeration yields Ideal Candidates only, for the same reason: a
+Planner-generated Entry for a compromise result would be exactly the separate
+Practical BuildListEntry this model forbids.
+
+### Checkpoint conflicts and constrained re-search
+
+A selected checkpoint is a hard constraint the Planner never drops, moves, or
+empties on its own. Two rules follow, both Domain authority and never UI-only
+(`docs/PLANNER_SPEC.md` 9.5, `docs/DATA_MODEL.md` 11.8, `docs/UI_FLOW.md` 11.1):
+
+- A conflict whose `PlanConflict.checkpointParticipants` is non-empty cannot be
+  resolved by a generic `PlannerConflictResolution`. Picking either side would
+  let the Planner drop the other side's selected checkpoint, so
+  `conflictResolutionRefusalReason()` refuses it: initial conflict detection
+  leaves `selectedBuildListEntryId = null`, Beam Search reports
+  `invalid_conflict_resolution`, `preparePlannerFixedConflictConstraints()` and
+  the preflight re-association fail with `checkpoint_conflict`, and the Plan UI
+  disables 「比較する」 / 「この候補を優先」 for every participant and routes to
+  the Build List. The only resolution is changing or clearing the selection
+  there; a shared physical action that reaches several checkpoints at once is
+  still one action and no conflict
+- Constrained re-search and what-if never replace the Route of a Target that
+  has a required checkpoint Entry anywhere in the current valid Entry set - not
+  only among the conflict's participants: no auto-transplant onto another
+  opportunity, no "same performance, other Route", no empty selection.
+  `createPlannerConflictWorks()` takes the run's `PlannerCheckpointRequirements`,
+  `PlannerConflictWork.blockedBySelectedCheckpoint` skips the enumeration, the
+  conflict is returned as it is with the warning
+  `selected_checkpoint_blocks_constrained_search`, and what-if answers
+  `blocked_by_selected_checkpoint`. A Target with no selection is re-searched
+  exactly as before
 
 ---
 
@@ -986,9 +1054,9 @@ Candidate search runs per TargetWeapon, even if one Worker request handles multi
 Search only routes whose capabilities and prerequisites are available.
 
 A Target's `preferredOwnedWeaponId` never narrows that route scope, never changes
-the search horizon, the canonical-Ideal cost boundary, the Practical horizon,
-Practical dominance, the output cap, the number of RNG prediction calls, the stream
-search depth, or any Counter semantics. It affects only the choice and ordering
+the search horizon, the canonical-Ideal cost boundary, the extracted checkpoints,
+the number of RNG prediction calls, the stream search depth, or any Counter
+semantics. It affects only the choice and ordering
 among Candidates every existing priority already rates equally
 (`docs/SEARCH_SPEC.md` 8.1).
 
@@ -1005,14 +1073,12 @@ Planner
 
 Candidate Search must not pre-read second and third copies of the same Ideal,
 distant alternative Ideals, or the Bonus-alternative by Skill-alternative product
-merely because the Planner might later hit a conflict. With compromise conditions,
-the initial search ends once one canonical Ideal is settled and every Practical
-within its operation count has been evaluated (inclusive Practical horizon).
-Without any Practical Bonus, Alternative Rule, or Practical Skill condition,
-Search is Ideal-only: settle canonical Ideal ties without a Practical horizon.
+merely because the Planner might later hit a conflict. The initial search ends
+once one canonical Ideal is settled; the checkpoints of that Route are then
+extracted from the traces it already recorded.
 
 Only when Counter conflicts actually occur across Targets does the Planner
-re-search the conflicting Targets, look up the next Practical/Ideal for the
+re-search the conflicting Targets, look up the next feasible Ideal Route for the
 Target that yields, and compare how much further each choice pushes the other.
 `docs/SEARCH_SPEC.md` 5.6 and `docs/PLANNER_SPEC.md` 9.1-9.2 hold that contract.
 B8-A fixed the formal Planner-driven constrained re-search contract; B8-B1
@@ -1045,9 +1111,9 @@ flow, not only in the recorded counters.
   Target's ideal bonus multiset, do not search bonus amendments for that weapon
 - Normal-scope exact labels are not Bonus Ideal. Continue supported Reset
   exploration after conversion and from inherited normal-scope Gogma sources
-- A stream that currently satisfies only the Practical condition still yields a
-  zero-operation Practical solution for that stream, and Ideal exploration
-  continues on it
+- A stream that currently satisfies only a compromise condition is not
+  finished: Ideal exploration continues on it, and a compromise state becomes a
+  checkpoint only when it lies on a strict prefix of the settled Ideal Route
 
 Do not enumerate the Cartesian product of bonus results and Skill results, and
 do not reintroduce it as a lazily expanded priority queue or a small fixed
@@ -1057,9 +1123,9 @@ Cross rule is the initial bounded search policy, not a complete search through
 the Planner. `docs/SEARCH_SPEC.md` is the authority for the stream solution sets,
 their deterministic ordering, the composition rule, the termination condition,
 and the meaning of `maxGogmaAdvance`, `maxSkillAdvance`, and
-`maxCandidatesPerTarget`.
+the three advance bounds.
 
-With compromise configured, terminate after canonical Ideal and its inclusive Practical horizon. Without compromise, compose Ideal only and settle canonical ties without a Practical horizon. The canonical Ideal is
+Terminate after the canonical Ideal is settled. The canonical Ideal is
 defined by the documented total order over Ideal candidates. Never let it depend
 on incidental traversal order — which RouteKind ran first, or which Promise
 settled first. Its final tie-break must be a stable semantic key over the
@@ -1079,28 +1145,28 @@ merely the same set — even though the `BuildCandidate.id` values differ. The
 `BuildCandidate` ID generation rule, including `searchRunId` inside its
 `semanticHash`, stays unchanged.
 
-Keep the Practical retention range independent of discovery order too. With `D`
-the canonical Ideal's `estimatedOperationCount`, every Practical reachable within
-`estimatedOperationCount <= D` is evaluated for retention, then filtered by the
-conservative dominance below. Finding the Ideal first must never cause a nearer
-Practical to go unevaluated.
+Keep the checkpoint set independent of discovery order too. Every checkpoint
+of the settled canonical Ideal Route is extracted from the traces that Route
+already recorded, so the extracted groups and opportunities are the same
+whichever RouteKind or Promise settled first.
 
-Keep Practical candidates plural. Drop one only under a conservative Pareto
-dominance covering bonus composition, bonus rank, skills, source weapon,
-destructive/non-destructive kind, every advance and operation count, and
-material requirements. Compare bonus ranks as a per-`bonusTypeId` rank multiset,
-never by slot index, and treat a scope or type whose Master rank ordering cannot
-be compared safely as incomparable. Compare materials component-wise per
-`materialId`, never by a summed quantity — differing material kinds are
-incomparable. Never rank bonus types or skills against each other by assumed
-game strength; differing compositions are incomparable, so keep both.
+Keep checkpoint groups plural. Nothing is removed from the Domain: the only
+dominance is the display-only conservative one of `docs/SEARCH_SPEC.md` 5.8.4
+(`isDisplaySecondary` / `dominatingGroupId`), which requires equal scope and
+Skills, a per-`bonusTypeId` rank vector that is at least as good everywhere and
+better somewhere, an earliest arrival that is no later, and comparable Master
+references. Compare bonus ranks as a per-`bonusTypeId` rank multiset, never by
+slot index, and treat a scope or type whose Master rank ordering cannot be
+compared safely as incomparable. Never rank bonus types or skills against each
+other by assumed game strength; differing compositions are incomparable, so both
+groups stay primary.
 
 `maxGogmaAdvance` bounds the Gogma Counter positions the search covers, not the
 number of Engine calls; a bounded state search inside the Gogma stream is
 allowed. `maxSkillAdvance` is the maximum Reset Skills count, so a conversion
 route's shared Skill prediction array spans one extra position without raising
-that Reset bound. `maxCandidatesPerTarget` bounds the retained Practical set and
-must never stop the search before an Ideal is found.
+that Reset bound. There is no output cap: a request returns at most one
+canonical Ideal Candidate.
 
 A later Counter position reaching the same result may be omitted from the initial
 search's retained output, but it is never permanently dominated. Some of those
@@ -1161,8 +1227,8 @@ does not change B2 family-layout frontier dedup or lastResetDepth representative
 Under the historical B5-F1 contract, normal scope with 5/5 Ideal labels and
 matching Skills could be Practical with similarityScore 1. That acceptance rule
 is obsolete. Current Ideal / Practical / Alternative Bonus matches all require
-gogma_artian scope; normal_artian scope is never accepted as a Candidate,
-regardless of matching labels, Skills, or similarity score.
+gogma_artian scope; normal_artian scope is never accepted as a Candidate or as a
+checkpoint, regardless of matching labels or Skills.
 Current tests reject normal-scope conversion D=2 and cover exploration
 continuing to a Gogma-scope canonical Ideal D=3 after Reset, and an existing
 normal-scope Gogma continuing Bonus exploration. The Gogma-scope current Ideal
@@ -1178,12 +1244,13 @@ B8-B1.
 
 B6 is implemented as a UI / defaults / progress / Worker error task. It changed
 no Search semantics: the Cross rule, the B4 scheduler, the canonical Ideal, the
-Practical horizon and dominance, the Similarity formula, resultFilter semantics,
+then-current Practical horizon and dominance, Similarity formula and `resultFilter`
+semantics (all since removed),
 `CalculationContext.appSchemaVersion = 2`, Production RNG semantics and version,
 the checkpoint interval of 50, and the MessagePort `workerYield` are all
 unchanged, and normal-scope Keep prediction is still unimplemented.
 
-- `defaultCandidateSearchSettings` is `1000 / 200 / 1000` with
+- `defaultCandidateSearchSettings` was `1000 / 200 / 1000` with
   `maxCandidatesPerTarget = 200` and `similarityThreshold = 0.6`, from the B5
   Browser Worker measurements (Normal 1000 ~ 256 ms, Skill 1000 ~ 325 ms, Gogma
   200 ~ 1961 ms). This lowers a default, not a capability: the Search UI still
@@ -1222,7 +1289,7 @@ B6-F1 is implemented as a Search determinism task. `compareCandidates()` and
 instead of `BuildCandidate.id`. Their existing priorities are unchanged, as are
 `candidateStableKey` itself, `candidateDeduplicationKey()`,
 `compareCanonicalIdeals()`, `compareCandidateSelection()`,
-`retainInitialCandidates()`, the Similarity formula, `resultFilter`, the B6
+`retainInitialCandidates()`, the Similarity formula, `resultFilter` (all since removed), the B6
 defaults, progress and Worker error handling, `CalculationContext.appSchemaVersion
 = 2`, and Production RNG semantics and version. Do not change `candidateStableKey`
 or the `BuildCandidate` ID generation rule as a side effect.
@@ -1804,7 +1871,7 @@ constrained candidate enumerator  (Target-local, from the original Search/RNG or
 The "original Search/RNG origin" is the current validated Search/RNG snapshot
 taken when the Planner calculation starts — never a past UI Candidate Search
 request. A `CandidateSearchInput` carries `searchRunId`, `routeFilter`,
-`resultFilter`, and `settings`, is never persisted, and cannot be reconstructed
+and `settings`, is never persisted, and cannot be reconstructed
 from a BuildListEntry, which keeps only `searchStateHash` and
 `referencedOwnedWeaponsHash`. So the enumerator takes a dedicated
 `ConstrainedSearchOrigin` holding `rngState`, `normalCounters`, `ownedWeapons`,
@@ -1812,13 +1879,13 @@ from a BuildListEntry, which keeps only `searchStateHash` and
 filter.
 
 Constrained re-search inherits none of the transient UI filters: the route scope
-is every currently legal Search route, `resultFilter`, the similar filter, and
-`maxCandidatesPerTarget` are not applied, and `ConstrainedEnumerationBounds` is
-the only authority for search extent — never `CandidateSearchSettings`. Widening
-the route policy does not widen what is yielded: only Candidates satisfying the
-Target's Ideal or Practical condition are yielded, exactly as before. The
-ordinary Candidate Search `routeFilter` / `resultFilter` contract is unchanged;
-these are separate boundaries.
+is every currently legal Search route, and `ConstrainedEnumerationBounds` is the
+only authority for search extent — never `CandidateSearchSettings`. Widening the
+route policy does not widen what is yielded: only Candidates satisfying the
+Target's **Ideal** condition are yielded. A compromise result would become a
+Planner-generated Practical BuildListEntry, which the checkpoint model forbids.
+The ordinary Candidate Search `routeFilter` contract is unchanged; these are
+separate boundaries.
 
 The deterministic constrained search identity is fixed by composition, not only
 by name: derive it from the TargetWeapon ID, the Planner-start Search/RNG
@@ -1828,27 +1895,23 @@ an enumeration ordinal, and never introduce a `searchRunId`-like run identifier
 there.
 
 The enumerator does not yield `BuildCandidate`. A `BuildCandidate` requires `id`,
-`searchRunId`, `createdAt`, and `isSimilarToIdeal`, and the ordinary candidate
-factory fills them from `CandidateSearchInput.searchRunId` and
-`CandidateSearchSettings.similarityThreshold` — neither of which a
-`ConstrainedSearchOrigin` carries. B8-B1 therefore yields a transient Search-domain
-semantic result (`ConstrainedCandidate`: target, category, final bonuses and scope,
-skills, route, the estimate and material fields, `idealDifference`,
-`similarityScore`, the two hashes, and `calculationContext`). Never mix
-`BuildCandidate.id`, `searchRunId`, `createdAt`, a random or request ID, the Clock,
-or an enumeration ordinal into that result. B8-C's deterministic materializer is
-what converts it to `BuildCandidate` shape: `searchRunId` becomes the deterministic
-constrained search identity, `id` is derived stably from that identity plus the
-Candidate semantic meaning, `createdAt` comes from `PlannerClock`, `similarityScore`
-uses the existing Similarity formula, and `isSimilarToIdeal` is computed with the
-current B6 default similarity threshold 0.6. That 0.6 fills the display metadata
-only — never Candidate yield eligibility, enumeration ordering, route scope, search
-termination, search extent, off-axis evaluation, or Planner coexistence. So
-`CandidateSearchSettings` remains neither the filter authority nor the extent
-authority for constrained enumeration. The ordinary Candidate Search `searchRunId`
-contract and `BuildCandidate` ID generation rule are unchanged; "do not change the
-`BuildCandidate` ID generation rule" means for ordinary Candidate Search, and does
-not conflict with the constrained materializer's own contract.
+`searchRunId`, and `createdAt`, and the ordinary candidate factory fills them from
+`CandidateSearchInput.searchRunId` — which a `ConstrainedSearchOrigin` does not
+carry. B8-B1 therefore yields a transient Search-domain semantic result
+(`ConstrainedCandidate`: target, final bonuses and scope, skills, route, the
+estimate and material fields, `idealDifference`, the two hashes, and
+`calculationContext`). Never mix `BuildCandidate.id`, `searchRunId`, `createdAt`,
+a random or request ID, the Clock, or an enumeration ordinal into that result.
+B8-C's deterministic materializer is what converts it to `BuildCandidate` shape:
+`searchRunId` becomes the deterministic constrained search identity, `id` is
+derived stably from that identity plus the Candidate semantic meaning, `createdAt`
+comes from `PlannerClock`, and `checkpointGroups` comes from applying checkpoint
+extraction to that Candidate. `CandidateSearchSettings` is neither the filter
+authority nor the extent authority for constrained enumeration. The ordinary
+Candidate Search `searchRunId` contract and `BuildCandidate` ID generation rule are
+unchanged; "do not change the `BuildCandidate` ID generation rule" means for
+ordinary Candidate Search, and does not conflict with the constrained
+materializer's own contract.
 
 Never inject a constrained Candidate into a mid-Beam Search state.
 `routeProgressByEntryId`, current counters, transient route output,
@@ -2038,8 +2101,9 @@ maxPlanSteps = 300
 ```
 
 These three positive integers are the complete v1 `PlannerOptions` contract.
-Practical-before-Ideal behavior is fixed by v1 priority rules; do not add or
-retain `preferPracticalBeforeIdeal`.
+`preferPracticalBeforeIdeal` belongs to a legacy Planner contract and is
+unsupported: the Planner has no Practical-first priority, and an input carrying
+that option is refused as a validation issue rather than accepted or ignored.
 
 They are defaults, not fixed constants: the Build List detail settings let the
 user raise any of the three for one calculation. `defaultPlannerOptions` is the
@@ -2110,17 +2174,70 @@ hasIdeal
 
 Rules:
 
-- Practical candidate -> `hasPractical = true`
-- Ideal candidate -> `hasPractical = true`, `hasIdeal = true`
-- A Practical-secured but non-Ideal target remains eligible for Ideal improvement
+- Every BuildListEntry Candidate is an Ideal Candidate, so securing one sets
+  `hasPractical = true` and `hasIdeal = true`
+- `hasPractical` still describes what the inventory actually delivers and is
+  judged from real performance, never from `status`
+- A target whose inventory only meets a compromise condition stays in planning:
+  the Planner's goal is its Ideal
 - A target that already has Ideal is normally removed from further planning
+- Practical-first progress is not a planning goal. `practicalFirstProgressTargetIds`
+  and `CandidateScore.categoryScore` do not exist, and `hasPractical` is read by
+  no Planner score, state evaluation, Beam pruning, or conflict recommendation:
+  a Target holding nothing and a Target holding only a compromise weapon get the
+  same priority. `CandidateScore.satisfactionScore` is `hasIdeal ? 0 : 50_000`,
+  and the achieved term of a state counts Ideal Targets only
 
 Planning priority:
 
-1. Obtain Practical weapons for uncovered targets early
+1. Obtain Ideal weapons for uncovered targets, highest Target priority first
 2. Exploit shared RNG progression to obtain useful results for other targets
-3. Upgrade Practical targets to Ideal
+3. Satisfy every selected compromise checkpoint as a hard constraint
 4. Reduce weapon consumption and operation count among otherwise similar states
+
+A `BuildListEntry.selectedCheckpointOpportunityIds` entry is a hard constraint.
+The Planner may never ignore it, disable it, or move the selection to another
+opportunity of the same group; a unit that ends a selected checkpoint is never
+`canSkipWhenCounterPassed`, and `reserve_weapon` is refused with
+`selected_checkpoint_not_reached` until every selected checkpoint was really
+reached. Reaching one reserves nothing, changes no status and no protection, and
+never stops the Plan: it is recorded as `PlanStep.checkpointMilestones` on the
+real physical Step that produced it, and no new `PlanStepOperationType` is added.
+Two selected checkpoints that need the same Counter position and are not one
+shareable physical action are an ordinary Counter conflict, reported with typed
+`PlanConflict.checkpointParticipants` so the UI can send the user to the Build
+List to change a selection.
+
+A checkpoint-selected BuildListEntry is its Target's **required Entry** for the
+run (`docs/PLANNER_SPEC.md` 7.5.6). The Target is complete only once that very
+Entry reached every selected checkpoint and secured its Ideal Candidate; another
+Entry of the same Target, another Target's Entry, or an existing weapon making
+the Target `hasIdeal` never completes it, and the required Entry keeps its
+relevance until it is secured. The Target's other Entries are left out of that
+run's candidate selection - never adopted as an alternative finishing Route,
+never a conflict participant - and reported with
+`selected_checkpoint_fixes_target_entry`. The single authority is
+`PlannerCheckpointRequirements`, derived once in `preparePlannerInitialContext()`
+from every valid BuildListEntry of the run and read by `entryIsRelevantForState()`,
+`isPlannerSearchStateComplete()`, scoring, typed termination, constrained
+re-search and what-if alike. It is a hard feasibility constraint, never a score,
+and Plan generation re-checks it as a fail-closed defence.
+
+Two collection-level rules fail the Planner input closed instead of guessing: at
+most one checkpoint-selected Entry per Target (`multiple_selected_checkpoint_entries`
+- the user clears one selection in the Build List; the Planner never picks one
+by score, cost, or order), and no checkpoint selection on a Target that already
+holds an Ideal weapon when planning starts
+(`selected_checkpoint_target_already_ideal`). Several groups selected inside one
+Entry stay allowed.
+
+A structurally invalid `selectedCheckpointOpportunityIds` - an unknown
+opportunity id, two opportunities of one group, a duplicate - is checked in the
+Planner's current-input validation through the same shared
+`validateBuildListEntryCheckpointSelection()` that `validateBuildListEntry()`
+uses, and fails the whole input closed (`invalid_checkpoint_selection`). A broken
+selection is never read as an empty one, so no other Entry of that Target can
+stand in for it; the persisted `isStale` flag stays untrusted as before.
 
 Complete optimality is not required.
 
@@ -2193,15 +2310,15 @@ bonus result", never "the weapon has no bonuses".
 
 `reserve_weapon` has Route-specific inventory semantics:
 
-- `normal_artian_to_gogma`: add a new Gogma with a reserved ID; Practical defaults
-  to unprotected and Ideal defaults to protected
+- `normal_artian_to_gogma`: add a new Gogma with a reserved ID, `status = ideal`
+  and protection on
 - `owned_normal_artian_to_gogma`: add a new Gogma with a different reserved ID and
-  the same category-based default; its source Normal was already consumed by the conversion Step
+  the same default; its source Normal was already consumed by the conversion Step
 - amendment `existing_gogma_*`: update the same source Gogma ID, do not add a new
   weapon, and preserve its explicit protection value
 
-The secured weapon uses Candidate result bonuses and skills and has status Ideal
-or Practical from the Candidate category. It stores no Target reference, and
+The secured weapon uses Candidate result bonuses and skills and has status Ideal,
+because a Candidate is always an Ideal Candidate. It stores no Target reference, and
 `reserve_weapon` never changes `TargetWeapon.preferredOwnedWeaponId`. Target
 satisfaction changes only when the weapon is reserved, not merely when an RNG
 operation is simulated or confirmed.
@@ -2342,9 +2459,9 @@ the old Plan.
 
 A status change on its own is ordinary Owned Weapons CRUD, never a
 ProductionPlan operation, and there is no PlanStep whose only effect is one.
-`reserve_weapon` still records the Candidate category as the secured weapon's
-label. Because status is non-semantic, relabelling a weapon never makes a
-running Plan stale.
+`reserve_weapon` still records the Ideal label on the secured weapon. Because
+status is non-semantic, relabelling a weapon never makes a running Plan stale.
+Reaching a compromise checkpoint changes neither status nor protection.
 
 ---
 
@@ -2567,7 +2684,17 @@ Important destructive operations require explicit confirmation.
 
 Search UI must:
 
-- Show Ideal / Practical / Similar filtering correctly
+- Offer one enabled TargetWeapon at a time through a single Select, with no
+  result filter, no output cap and no similarity control
+- Show at most one canonical Ideal Candidate, and say
+  「現在の探索範囲では理想品が見つかりませんでした」 when none was found - never
+  that the Target has no Ideal
+- List the compromise checkpoints of that Candidate's Route, all unselected by
+  default, at most one selectable opportunity per group, with 「その他の到達点」
+  for later arrivals of one group and 「その他の候補」 for display-secondary groups
+- Say 「この候補は作成リストに追加済みです。チェックポイントは作成リストで変更して
+  ください。」 when the same Candidate is added again, and never overwrite the
+  existing selection
 - Show skipped-route reasons
 - Show protected existing Gogma only as zero-operation current-state Candidates when
   they already satisfy the Target, and do not show amendment routes for them
@@ -2707,11 +2834,11 @@ Relevant test areas include:
 - Changing only `searchRunId` leaves each Target's ordered
   `candidateStableKey` sequence identical while the `BuildCandidate.id` values
   differ, and complete semantic duplicates compare equal instead of by ID
-- Every Practical within the canonical Ideal's operation count is evaluated, and
-  the retained set is unchanged across traversal orders
+- Every checkpoint of the canonical Ideal Route is extracted from its recorded
+  traces, and the extracted set is unchanged across traversal orders
 - Stream anchors `b0` / `k0` come from the documented deterministic ordering
-- Practical candidates with differing bonus compositions, skill compositions, or
-  source weapons are kept as incomparable rather than dropped
+- Checkpoint groups with differing bonus compositions or skill compositions stay
+  primary as incomparable rather than being tidied behind the secondary disclosure
 - Bonus rank dominance is decided per `bonusTypeId` rank multiset, not by slot
   index, and an uncomparable Master rank ordering makes the pair incomparable
 - Material dominance is decided component-wise per `materialId`, so differing
@@ -2774,11 +2901,9 @@ Relevant test areas include:
 - The enumerator yields `ConstrainedCandidate` without `id` / `searchRunId` /
   `createdAt`, and the materializer sets `searchRunId` to the deterministic
   constrained search identity and derives `id` from it plus the semantic meaning
-- Threshold 0.6 fills `isSimilarToIdeal` only and affects no yield, ordering,
-  route scope, termination, extent, off-axis, or coexistence decision
+- Constrained enumeration yields Ideal Candidates only
 - Target Ideal-implies-Practical validation lands before the Ideal-already-
   satisfied early exit is enabled
-- Reaching `maxCandidatesPerTarget` still includes a found Ideal in the result
 - `maxSkillAdvance` caps Reset Skills at M for both existing-Gogma routes
   (advance 0..M) and conversion routes (advance 1..M+1)
 - Target Ideal-implies-Practical containment, added with Target validation
@@ -2805,6 +2930,62 @@ Relevant test areas include:
 - Version 2, 3, and 4 BuildCandidate / BuildListEntry compatible under version 5,
   version 1 incompatible, and the build-result exception never reaching a
   ProductionPlan or a future version
+- A Candidate Search request covering exactly one Target, refusing a disabled or
+  non-containing Target with a notice instead of a Candidate, and still applying
+  `routeFilter`
+- `resultFilter`, `similarityThreshold` and `maxCandidatesPerTarget` being absent
+- One canonical Ideal Candidate when an Ideal is in range, none when it is not,
+  and none when only a compromise state is reachable
+- Only strict prefixes of the canonical Ideal Route becoming checkpoints, never a
+  compromise state that branches off it and never the Route base's own state
+- Checkpoint extraction adding no RNG prediction call and never moving the
+  canonical Ideal selection
+- Two slot orders of one Bonus multiset grouping together while each opportunity
+  keeps its exact slot order, both arrivals at one product being retained, the
+  earliest being the representative, conservative display dominance marking a
+  group secondary without removing any Domain group or opportunity, and differing
+  Skills or Bonus Type compositions never being ranked against each other
+- Checkpoint selection starting empty, accepting one opportunity per group,
+  rejecting two of one group and an unknown id, leaving the BuildListEntry
+  un-staled, moving the Plan's build-list hash, and surviving a re-add of the
+  same Candidate
+- A selected checkpoint endpoint never being silently fast-forwarded while an
+  unselected intermediate unit and a fully overwritten prefix unit still are
+- The exact selected checkpoint state actually holding, the Planner never
+  deselecting or substituting an opportunity, two incompatible selections on one
+  Counter becoming a conflict that a Build List change resolves, one shared
+  physical action reaching both without duplicating the operation, and an Entry
+  with no selection keeping its ordinary Ideal Route meaning
+- `practicalFirstProgressTargetIds` and `CandidateScore.categoryScore` being absent
+- `hasPractical` alone producing no `CandidateScore` difference at equal priority
+  and cost, a higher-priority Ideal-unmet Target never overtaken by a
+  lower-priority uncovered one on `hasPractical` alone, Beam pruning ordering
+  unchanged whichever Target holds the compromise weapon, and a selected
+  checkpoint kept through `PlannerCheckpointRequirements` rather than any score
+- An unknown checkpoint opportunity id, two opportunities of one group, and a
+  duplicate id each failing the Planner input closed before any Beam Search,
+  never read as an empty selection and never bypassed through a selection-free
+  Entry of the same Target, while a well-formed selection and a selection-free
+  Entry keep working
+- A checkpoint-selected Entry never bypassed by a cheaper selection-free Entry of
+  the same Target, staying relevant after another weapon made its Target Ideal,
+  completing only once it reached its checkpoint and secured its Ideal, the typed
+  termination counting that Target complete only then, two checkpoint-selected
+  Entries of one Target failing closed without picking either, selection-free
+  same-Target Entries keeping the ordinary candidate selection, an already-Ideal
+  Target with a selection failing closed, and a conflict reached through a
+  selection-free Entry still blocking that Target's constrained re-search and
+  what-if
+- Checkpoints adding no `PlanStepOperationType`, riding as milestones on the real
+  physical Step, leaving later Steps in place, reserving nothing, and changing no
+  status or protection, while the final Ideal still applies the ordinary reserve
+  semantics
+- A starting OwnedWeapon that already satisfies a compromise condition never
+  becoming a checkpoint, `hasPractical` still judged from actual performance, and
+  `OwnedWeaponStatus.practical` still present
+- Schema 9 artifacts failing closed under schema 10, current-schema checkpoint
+  shape validated strictly, a historical artifact with no checkpoint field still
+  validating and rendering, and `ExportRoot.schemaVersion = 5`
 - Build List detail settings starting at `defaultPlannerOptions`, sending the
   user-selected values as `PlannerInput.options`, restoring the defaults, and
   refusing `0`, a negative number, a fraction, and an empty field
@@ -2833,7 +3014,7 @@ Relevant test areas include:
   once instead of once per progressed Entry
 - One Entry's consecutive transient Gogma operations add no switch, while
   another Entry's transient Gogma is a different subject
-- `comparePlannerSearchStates()` keeps practical-first progress and
+- `comparePlannerSearchStates()` keeps Ideal progress and
   `evaluationScore` above the switch count, applies the switch count only when
   both tie, and falls through to the existing stable tie-breaks when switch
   counts tie too
@@ -2922,9 +3103,9 @@ Relevant test areas include:
   sets it to null for every Target, removes `relatedTargetWeaponIds` from every
   current OwnedWeapon, never infers a preference from the removed list, and
   rewrites no BuildCandidate, BuildListEntry, ProductionPlan, or ExecutionHistory
-- `DATABASE_SCHEMA_VERSION = 4`, `ExportRoot.schemaVersion = 4`,
-  `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 9`, schema 1..8 artifacts failing closed
-  under version 9, and no other version authority changed
+- `DATABASE_SCHEMA_VERSION = 4`, `ExportRoot.schemaVersion = 5`,
+  `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 10`, schema 1..9 artifacts failing closed
+  under version 10, and no other version authority changed
 - Collection validation rejects a missing preferred weapon, a weapon type or element
   mismatch, a protected weapon, and the same weapon preferred by two Targets, and
   accepts a compatible unprotected Normal, a compatible unprotected Gogma at every

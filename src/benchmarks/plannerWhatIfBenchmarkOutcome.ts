@@ -27,8 +27,7 @@ function semanticResult(result: PlannerWhatIfCalculationResult) {
         // Domain stable order is meaningful. Never sort alternatives here.
         alternatives: result.comparison.alternatives.map((alternative) => ({
           targetWeaponId: alternative.targetWeaponId,
-          practical: normalizeSlot(alternative.practical),
-          ideal: normalizeSlot(alternative.ideal),
+          outcome: normalizeSlot(alternative.outcome),
         })),
       }
     case 'invalid_fixed_resolution':
@@ -43,7 +42,7 @@ function semanticResult(result: PlannerWhatIfCalculationResult) {
 export function createPlannerWhatIfBenchmarkOutcome(result: PlannerWhatIfCalculationResult) {
   const semantic = semanticResult(result)
   const slots = result.status === 'completed'
-    ? result.comparison.alternatives.flatMap(({ practical, ideal }) => [practical, ideal]) : []
+    ? result.comparison.alternatives.map(({ outcome }) => outcome) : []
   const count = (status: PlannerWhatIfOutcome['status']) => slots.filter((slot) => slot.status === status).length
   const counts = {
     found: count('found'),
@@ -51,6 +50,7 @@ export function createPlannerWhatIfBenchmarkOutcome(result: PlannerWhatIfCalcula
     plannerRerunBound: count('stopped_by_planner_rerun_bound'),
     enumerationBound: count('stopped_by_enumeration_bound'),
     notFound: count('not_found_within_search_extent'),
+    blockedBySelectedCheckpoint: count('blocked_by_selected_checkpoint'),
   }
   return {
     semantic,

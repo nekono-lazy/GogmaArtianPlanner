@@ -9,10 +9,10 @@ import {
 } from './plannerWhatIfBounds'
 
 function bounds(
-  maxCandidateTrialsPerCategoryPerTarget: number,
+  maxCandidateTrialsPerTarget: number,
   maxPlannerReruns: number,
 ): PlannerWhatIfBounds {
-  return { maxCandidateTrialsPerCategoryPerTarget, maxPlannerReruns }
+  return { maxCandidateTrialsPerTarget, maxPlannerReruns }
 }
 
 describe('B9-B1a PlannerWhatIfBounds validation', () => {
@@ -39,10 +39,10 @@ describe('B9-B1a PlannerWhatIfBounds validation', () => {
     const validation = validatePlannerWhatIfBounds(bounds(value, 1))
     expect(validation.isValid).toBe(false)
     expect(validation.issues).toEqual([{
-      path: 'maxCandidateTrialsPerCategoryPerTarget',
+      path: 'maxCandidateTrialsPerTarget',
       code: 'invalid_integer',
       message:
-        'maxCandidateTrialsPerCategoryPerTarget must be an integer greater than or equal to 1.',
+        'maxCandidateTrialsPerTarget must be an integer greater than or equal to 1.',
     }])
   })
 
@@ -66,7 +66,7 @@ describe('B9-B1a PlannerWhatIfBounds validation', () => {
   it('reports every invalid field at once', () => {
     const validation = validatePlannerWhatIfBounds(bounds(0, -1))
     expect(validation.issues.map(({ path }) => path)).toEqual([
-      'maxCandidateTrialsPerCategoryPerTarget',
+      'maxCandidateTrialsPerTarget',
       'maxPlannerReruns',
     ])
   })
@@ -75,7 +75,7 @@ describe('B9-B1a PlannerWhatIfBounds validation', () => {
     const invalid = bounds(0, 0)
     validatePlannerWhatIfBounds(invalid)
     expect(invalid).toEqual({
-      maxCandidateTrialsPerCategoryPerTarget: 0,
+      maxCandidateTrialsPerTarget: 0,
       maxPlannerReruns: 0,
     })
   })
@@ -96,17 +96,17 @@ describe('B9-B1a assertPlannerWhatIfBounds', () => {
     expect(thrown).toBeInstanceOf(PlannerWhatIfBoundsError)
     expect((thrown as PlannerWhatIfBoundsError).name).toBe('PlannerWhatIfBoundsError')
     expect((thrown as PlannerWhatIfBoundsError).issues).toEqual([{
-      path: 'maxCandidateTrialsPerCategoryPerTarget',
+      path: 'maxCandidateTrialsPerTarget',
       code: 'invalid_integer',
       message:
-        'maxCandidateTrialsPerCategoryPerTarget must be an integer greater than or equal to 1.',
+        'maxCandidateTrialsPerTarget must be an integer greater than or equal to 1.',
     }])
   })
 
   it('leaves the invalid input unchanged instead of completing a field', () => {
     const invalid = bounds(Number.NaN, 0)
     expect(() => assertPlannerWhatIfBounds(invalid)).toThrow(PlannerWhatIfBoundsError)
-    expect(Number.isNaN(invalid.maxCandidateTrialsPerCategoryPerTarget)).toBe(true)
+    expect(Number.isNaN(invalid.maxCandidateTrialsPerTarget)).toBe(true)
     expect(invalid.maxPlannerReruns).toBe(0)
   })
 })
@@ -114,7 +114,7 @@ describe('B9-B1a assertPlannerWhatIfBounds', () => {
 describe('B9-B2c Production default', () => {
   it('is exactly the 2 / 8 tuple decided from the B9-B2b Browser measurements', () => {
     expect(defaultPlannerWhatIfBounds).toEqual({
-      maxCandidateTrialsPerCategoryPerTarget: 2,
+      maxCandidateTrialsPerTarget: 2,
       maxPlannerReruns: 8,
     })
   })
@@ -143,7 +143,7 @@ describe('B9-B2c Production default', () => {
   })
 
   const fields = [
-    'maxCandidateTrialsPerCategoryPerTarget',
+    'maxCandidateTrialsPerTarget',
     'maxPlannerReruns',
   ] as const
 

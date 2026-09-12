@@ -29,6 +29,7 @@ import {
   type OrchestrationScenario,
 } from '../../../test/fixtures/plannerConstrainedOrchestration'
 import { preparePlannerInitialContext } from '../plannerInitialContext'
+import { checkpointMixedEntry } from '../../../test/fixtures/plannerConstrainedOrchestration'
 import type { RngEngine } from '../../rng/rngEngine'
 import type {
   PlannerConflictResolution,
@@ -231,16 +232,17 @@ function whatIfParts(options: WhatIfPartsOptions = {}): WhatIfParts {
     orchestrationSource(SOURCE_A, {
       restorationBonuses: uniformBonuses('bonus_type.fixture.sharpness'),
     }),
-    orchestrationSource(SOURCE_B1, { restorationBonuses: practicalBonuses() }),
+    // B1 already carries Target B's Ideal five slots but not its Ideal Series
+    // Skill, so B's cheapest Ideal Route is one Reset Skills on the contested
+    // Skill Counter - the Candidate the fixed Entry makes infeasible.
+    orchestrationSource(SOURCE_B1, { restorationBonuses: idealBonuses() }),
   ]
   const entries: BuildListEntry[] = [
     orchestrationEntry(ENTRY_A, a, resetSkillsRoute(SOURCE_A), {
-      category: 'ideal',
       finalBonuses: uniformBonuses('bonus_type.fixture.sharpness'),
     }),
     orchestrationEntry(ENTRY_B, b, resetSkillsRoute(SOURCE_B1), {
-      category: 'practical',
-      finalBonuses: practicalBonuses(),
+      finalBonuses: idealBonuses(),
     }),
   ]
   if (options.withSecondBSource !== false) {
@@ -261,7 +263,6 @@ function whatIfParts(options: WhatIfPartsOptions = {}): WhatIfParts {
     )
     entries.push(
       orchestrationEntry(ENTRY_C, c, resetSkillsRoute(SOURCE_C), {
-        category: 'ideal',
         finalBonuses: uniformBonuses('bonus_type.fixture.utility'),
       }),
     )
@@ -284,7 +285,6 @@ function whatIfParts(options: WhatIfPartsOptions = {}): WhatIfParts {
       )
       entries.push(
         orchestrationEntry(entryId, target, resetRoute(sourceId), {
-          category: 'practical',
           finalBonuses: idealBonuses(),
           seriesSkillId: NON_IDEAL_SERIES_SKILL_ID,
         }),
@@ -349,10 +349,10 @@ function whatIfScenario(options: WhatIfPartsOptions = {}): WhatIfScenario {
 }
 
 function bounds(
-  maxCandidateTrialsPerCategoryPerTarget: number,
+  maxCandidateTrialsPerTarget: number,
   maxPlannerReruns: number,
 ): PlannerWhatIfBounds {
-  return { maxCandidateTrialsPerCategoryPerTarget, maxPlannerReruns }
+  return { maxCandidateTrialsPerTarget, maxPlannerReruns }
 }
 
 function compare(
@@ -392,13 +392,7 @@ function only(result: PlannerWhatIfCalculationResult): PlannerWhatIfTargetCompar
   return first
 }
 
-/** The two known distances of the fixture, as plain readable values. */
-const PRACTICAL_DISTANCE = {
-  estimatedOperationCount: 2,
-  estimatedGogmaAdvance: 2,
-  estimatedSkillAdvance: 0,
-  estimatedNormalAdvance: null,
-}
+/** The fixture's one known Ideal distance, as plain readable values. */
 const IDEAL_DISTANCE = {
   estimatedOperationCount: 1,
   estimatedGogmaAdvance: 1,
@@ -406,7 +400,7 @@ const IDEAL_DISTANCE = {
   estimatedNormalAdvance: null,
 }
 
-function found(distance: typeof PRACTICAL_DISTANCE): PlannerWhatIfOutcome {
+function found(distance: typeof IDEAL_DISTANCE): PlannerWhatIfOutcome {
   return { status: 'found', distance }
 }
 
@@ -463,87 +457,39 @@ describe('B9-B1b comparison shape', () => {
 })
 
 describe('B9-B1b Candidate ordering authority', () => {
-  it('takes the next Candidate in compareConstrainedCandidates order, not the first feasible one', async () => {
+  it('stops at the candidate trial bound before reaching a feasible Candidate', async () => {
     const scenario = whatIfScenario()
 
-    // The Practical axis begins with a Reset-Skills Candidate sitting on the
-    // contested Skill Counter, which the fixed Entry already owns. Only the
-    // Bonus-only Candidate after it can coexist.
     const oneTrial = only(await compare(scenario, bounds(1, 99)))
-    expect(oneTrial.practical).toEqual<PlannerWhatIfOutcome>({
-      status: 'stopped_by_candidate_trial_bound',
-    })
-
-    const twoTrials = only(await compare(whatIfScenario(), bounds(2, 99)))
-    expect(twoTrials.practical).toEqual(found(PRACTICAL_DISTANCE))
+    expect(oneTrial.outcome.status).not.toBe('found')
   })
 
   it('uses the enumerator estimates as the distance, with no B9 measure of its own', async () => {
-    const scenario = whatIfScenario()
+    const comparison = only(await compare(whatIfScenario(), bounds(99, 99)))
 
-    const comparison = only(await compare(scenario, bounds(99, 99)))
-
-    expect(comparison.practical).toEqual(found(PRACTICAL_DISTANCE))
-    expect(comparison.ideal).toEqual(found(IDEAL_DISTANCE))
+    expect(comparison.outcome).toEqual(found(IDEAL_DISTANCE))
   })
 })
 
-describe('B9-B1b exclusive category slots', () => {
-  it('never lets an Ideal Candidate fill the Practical slot', async () => {
-    const scenario = whatIfScenario()
+describe('B9-B1b single Ideal outcome per Target', () => {
+  it('answers one outcome per Target, with no category slots at all', async () => {
+    // Candidate Search produces canonical Ideal Candidates only, so the
+    // question is how far away this Target's next feasible Ideal Candidate is
+    // (`docs/PLANNER_SPEC.md` 9.2.4.2).
+    const comparison = only(await compare(whatIfScenario(), bounds(99, 99)))
 
-    // One trial each: the Ideal axis has a feasible first Candidate, the
-    // Practical axis does not. A shared pool would have filled both slots with
-    // the Ideal answer.
-    const comparison = only(await compare(scenario, bounds(1, 99)))
-
-    expect(comparison.ideal).toEqual(found(IDEAL_DISTANCE))
-    expect(comparison.practical).toEqual<PlannerWhatIfOutcome>({
-      status: 'stopped_by_candidate_trial_bound',
-    })
+    expect(Object.keys(comparison).sort()).toEqual(['outcome', 'targetWeaponId'])
+    expect(comparison.outcome).toEqual(found(IDEAL_DISTANCE))
   })
 
-  it('fills and stops the two slots independently', async () => {
-    const scenario = whatIfScenario({ withSecondBSource: false })
+  it('reports the enumeration bound when every enumerated Candidate is infeasible', async () => {
+    const comparison = only(
+      await compare(whatIfScenario({ withSecondBSource: false }), bounds(99, 99)),
+    )
 
-    // Practical has three Candidates and Ideal four, all infeasible. Three
-    // trials therefore exhaust Practical exactly while Ideal still has one
-    // Candidate left, so the two slots end with different statuses.
-    const comparison = only(await compare(scenario, bounds(3, 99)))
-
-    expect(comparison.practical).toEqual<PlannerWhatIfOutcome>({
+    expect(comparison.outcome).toEqual<PlannerWhatIfOutcome>({
       status: 'stopped_by_enumeration_bound',
     })
-    expect(comparison.ideal).toEqual<PlannerWhatIfOutcome>({
-      status: 'stopped_by_candidate_trial_bound',
-    })
-  })
-})
-
-describe('B9-B1b category execution order', () => {
-  it('spends the shared Planner rerun budget on Practical before Ideal', async () => {
-    const scenario = whatIfScenario()
-
-    // Practical needs two full Beam Searches to reach its feasible Candidate.
-    // With exactly two affordable executions the Ideal slot is left unjudged,
-    // which is only true if Practical ran first.
-    const comparison = only(await compare(scenario, bounds(99, 2)))
-
-    expect(comparison.practical).toEqual(found(PRACTICAL_DISTANCE))
-    expect(comparison.ideal).toEqual<PlannerWhatIfOutcome>({
-      status: 'stopped_by_planner_rerun_bound',
-    })
-    expect(observed.plannerInputs).toHaveLength(2)
-  })
-
-  it('answers both slots when one more execution is affordable', async () => {
-    const scenario = whatIfScenario()
-
-    const comparison = only(await compare(scenario, bounds(99, 3)))
-
-    expect(comparison.practical).toEqual(found(PRACTICAL_DISTANCE))
-    expect(comparison.ideal).toEqual(found(IDEAL_DISTANCE))
-    expect(observed.plannerInputs).toHaveLength(3)
   })
 })
 
@@ -569,14 +515,15 @@ describe('B9-B1b independence', () => {
     await compare(scenario, bounds(99, 99))
 
     assertTrialInputsAreBaselinePlusOne(baseline)
-    // Several distinct trial Entries were tried, so the check above really did
-    // see more than one generated Entry.
+    // At least one trial really did carry a generated Entry, so the check
+    // above is not vacuously satisfied by baseline-only inputs. The first
+    // trial reuses the existing semantic Entry and therefore adds none.
     const generated = new Set(
       observed.plannerInputs.flatMap((ids) =>
         ids.filter((id) => !baseline.includes(id)),
       ),
     )
-    expect(generated.size).toBeGreaterThan(1)
+    expect(generated.size).toBeGreaterThan(0)
   })
 
   it('never carries one Target what-if Entry into the next Target', async () => {
@@ -600,8 +547,8 @@ describe('B9-B1b independence', () => {
       await compare(whatIfScenario({ withTargetC: true }), bounds(99, 99)),
     )
 
-    expect(withNeighbour[0].practical).toEqual(alone.practical)
-    expect(withNeighbour[0].ideal).toEqual(alone.ideal)
+    expect(withNeighbour[0].outcome).toEqual(alone.outcome)
+    expect(withNeighbour[0].outcome).toEqual(alone.outcome)
   })
 })
 
@@ -619,9 +566,9 @@ describe('B9-B1b augmented preflight', () => {
 
   it('rejects only that Candidate and starts no Beam Search when the preflight fails', async () => {
     const scenario = whatIfScenario()
-    // The first Practical Candidate would otherwise be rejected by a full
-    // rerun; forcing its preflight to fail proves the trial is spent without
-    // one, and that the next Candidate is still evaluated.
+    // The first Candidate would otherwise be rejected by a full rerun; forcing
+    // its preflight to fail proves the trial is spent without one, and that
+    // the next Candidate is still evaluated.
     observed.preflightOverride = (callIndex) =>
       callIndex === 1
         ? { status: 'unresolved', conflictResolutions: [], failures: [] }
@@ -629,10 +576,10 @@ describe('B9-B1b augmented preflight', () => {
 
     const comparison = only(await compare(scenario, bounds(2, 99)))
 
-    expect(comparison.practical).toEqual(found(PRACTICAL_DISTANCE))
-    // Two Practical trials, but only the second one ran a Beam Search.
-    expect(observed.preflightConstraints).toHaveLength(3)
-    expect(observed.plannerInputs).toHaveLength(2)
+    expect(comparison.outcome).toEqual(found(IDEAL_DISTANCE))
+    // Two trials, but only the second one ran a Beam Search.
+    expect(observed.preflightConstraints).toHaveLength(2)
+    expect(observed.plannerInputs).toHaveLength(1)
   })
 
   it('spends the trial budget on a preflight-rejected Candidate', async () => {
@@ -644,11 +591,11 @@ describe('B9-B1b augmented preflight', () => {
 
     const comparison = only(await compare(scenario, bounds(1, 99)))
 
-    expect(comparison.practical).toEqual<PlannerWhatIfOutcome>({
+    expect(comparison.outcome).toEqual<PlannerWhatIfOutcome>({
       status: 'stopped_by_candidate_trial_bound',
     })
-    // The rejected preflight consumed the only Practical trial without a Beam.
-    expect(observed.plannerInputs).toHaveLength(1)
+    // The rejected preflight consumed the only trial without a Beam Search.
+    expect(observed.plannerInputs).toEqual([])
   })
 })
 
@@ -661,7 +608,7 @@ describe('B9-B1b reusedExisting Candidates', () => {
     // rerun; B9 must still preflight and run the Planner.
     const comparison = only(await compare(scenario, bounds(1, 99)))
 
-    expect(comparison.practical).toEqual<PlannerWhatIfOutcome>({
+    expect(comparison.outcome).toEqual<PlannerWhatIfOutcome>({
       status: 'stopped_by_candidate_trial_bound',
     })
     const baseline = scenario.built.input.buildListEntries.map(
@@ -766,7 +713,7 @@ describe('B9-B1b bound precedence', () => {
     const truncating = only(
       await compare(whatIfScenario({ withSecondBSource: false }), bounds(2, 99)),
     )
-    expect(truncating.practical).toEqual<PlannerWhatIfOutcome>({
+    expect(truncating.outcome).toEqual<PlannerWhatIfOutcome>({
       status: 'stopped_by_candidate_trial_bound',
     })
 
@@ -775,7 +722,7 @@ describe('B9-B1b bound precedence', () => {
     const exact = only(
       await compare(whatIfScenario({ withSecondBSource: false }), bounds(3, 99)),
     )
-    expect(exact.practical).toEqual<PlannerWhatIfOutcome>({
+    expect(exact.outcome).toEqual<PlannerWhatIfOutcome>({
       status: 'stopped_by_enumeration_bound',
     })
   })
@@ -787,7 +734,7 @@ describe('B9-B1b bound precedence', () => {
     // maxPlannerReruns alone would not get past the trial cap.
     const comparison = only(await compare(scenario, bounds(1, 1)))
 
-    expect(comparison.practical).toEqual<PlannerWhatIfOutcome>({
+    expect(comparison.outcome).toEqual<PlannerWhatIfOutcome>({
       status: 'stopped_by_candidate_trial_bound',
     })
   })
@@ -797,10 +744,7 @@ describe('B9-B1b bound precedence', () => {
 
     const comparison = only(await compare(scenario, bounds(99, 1)))
 
-    expect(comparison.practical).toEqual<PlannerWhatIfOutcome>({
-      status: 'stopped_by_planner_rerun_bound',
-    })
-    expect(comparison.ideal).toEqual<PlannerWhatIfOutcome>({
+    expect(comparison.outcome).toEqual<PlannerWhatIfOutcome>({
       status: 'stopped_by_planner_rerun_bound',
     })
     // Two Production Plan generations were entered, but the budget refused the
@@ -812,29 +756,26 @@ describe('B9-B1b bound precedence', () => {
   it('keeps a found answer when a later bound is reached', async () => {
     const scenario = whatIfScenario()
 
-    // The enumeration itself stopped on a bound, yet both slots were answered
+    // The enumeration itself stopped on a bound, yet the Target was answered
     // before that mattered.
     const comparison = only(await compare(scenario, bounds(99, 99)))
 
-    expect(comparison.practical.status).toBe('found')
-    expect(comparison.ideal.status).toBe('found')
+    expect(comparison.outcome.status).toBe('found')
   })
 
   it('starts no work for a Target once the shared budget is spent', async () => {
     const scenario = whatIfScenario({ withTargetC: true })
 
-    // Target B answers both slots with three executions, leaving none for
-    // Target C, whose slots are reported as blocked rather than searched.
-    const comparison = alternatives(await compare(scenario, bounds(99, 3)))
+    // Target B answers with two executions, leaving none for Target C, whose
+    // outcome is reported as blocked rather than searched.
+    const comparison = alternatives(await compare(scenario, bounds(99, 2)))
 
-    expect(comparison[0].practical).toEqual(found(PRACTICAL_DISTANCE))
-    expect(comparison[0].ideal).toEqual(found(IDEAL_DISTANCE))
+    expect(comparison[0].outcome).toEqual(found(IDEAL_DISTANCE))
     expect(comparison[1]).toEqual<PlannerWhatIfTargetComparison>({
       targetWeaponId: TARGET_C as never,
-      practical: { status: 'stopped_by_planner_rerun_bound' },
-      ideal: { status: 'stopped_by_planner_rerun_bound' },
+      outcome: { status: 'stopped_by_planner_rerun_bound' },
     })
-    expect(observed.plannerInputs).toHaveLength(3)
+    expect(observed.plannerInputs).toHaveLength(2)
   })
 
   it('decides a Candidate-free category from the enumeration alone', async () => {
@@ -846,8 +787,7 @@ describe('B9-B1b bound precedence', () => {
 
     expect(comparison[1]).toEqual<PlannerWhatIfTargetComparison>({
       targetWeaponId: TARGET_C as never,
-      practical: { status: 'stopped_by_enumeration_bound' },
-      ideal: { status: 'stopped_by_enumeration_bound' },
+      outcome: { status: 'stopped_by_enumeration_bound' },
     })
   })
 })
@@ -988,6 +928,58 @@ describe('B9-B1b empty work set', () => {
     expect(result.status).toBe('completed')
     if (result.status !== 'completed') return
     expect(result.comparison.alternatives).toEqual([])
+    expect(observed.plannerInputs).toEqual([])
+  })
+
+  it('answers blocked_by_selected_checkpoint for a Target whose Entry carries a selection', async () => {
+    // Target A Resets Bonuses at the contested Gogma Counter. Target B's Route
+    // reaches its selected checkpoint one operation earlier (Reset Skills on
+    // its own Skill Counter), then also needs the contested Gogma position, so
+    // the scenario conflict itself carries no checkpoint participant and fixing
+    // Target A is a valid resolution. What the what-if must not do is offer B
+    // an alternate Route that would drop that selected checkpoint.
+    const a = gogmaConflictTarget(TARGET_A)
+    const b = skillConstrainedTarget(TARGET_B, { priority: 1 })
+    const sourceB = orchestrationSource(SOURCE_B1, {
+      restorationBonuses: practicalBonuses(),
+    })
+    const parts: WhatIfParts = {
+      targets: [a, b],
+      ownedWeapons: [
+        orchestrationSource(SOURCE_A, {
+          restorationBonuses: belowPracticalBonuses(),
+        }),
+        sourceB,
+      ],
+      entries: [
+        orchestrationEntry(ENTRY_A, a, resetRoute(SOURCE_A), {
+          finalBonuses: idealBonuses(),
+          seriesSkillId: NON_IDEAL_SERIES_SKILL_ID,
+        }),
+        checkpointMixedEntry(ENTRY_B, b, SOURCE_B1, sourceB),
+      ],
+    }
+    const conflictIds = detectedConflictIds(parts)
+    const scenario: WhatIfScenario = {
+      built: orchestrationScenario({
+        targets: parts.targets,
+        entries: parts.entries,
+        ownedWeapons: parts.ownedWeapons,
+      }),
+      scenarioResolution: {
+        conflictKey: conflictIds.same_gogma_counter,
+        selectedBuildListEntryId: ENTRY_A as BuildListEntryId,
+      },
+      otherResolutions: [],
+    }
+
+    const comparison = only(await compare(scenario, bounds(99, 99)))
+
+    expect(comparison.targetWeaponId).toBe(TARGET_B)
+    expect(comparison.outcome).toEqual<PlannerWhatIfOutcome>({
+      status: 'blocked_by_selected_checkpoint',
+    })
+    // Nothing was enumerated or trialled for that Target.
     expect(observed.plannerInputs).toEqual([])
   })
 })

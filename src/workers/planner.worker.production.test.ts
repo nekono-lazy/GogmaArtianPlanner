@@ -20,7 +20,7 @@ import type {
   SearchWorkerRequest,
   SearchWorkerResponse,
 } from '../domain/search'
-import { createCandidateSearchInput } from '../test/fixtures/candidateSearch'
+import { createCandidateSearchInput, candidatesOf } from '../test/fixtures/candidateSearch'
 import { gameVerifiedBowElementalNormalVectors } from '../test/fixtures/gameVerifiedNormalVectors'
 import {
   fixture as beamFixture,
@@ -105,7 +105,7 @@ function createProductionSearchInput(
   })
   target.idealSkillCondition = { ...skills, matchMode: 'all' }
   target.practicalSkillCondition = { ...skills, matchMode: 'all' }
-  input.targetWeaponIds = [target.id]
+  input.targetWeaponId = target.id
   return input
 }
 
@@ -127,17 +127,16 @@ async function createProductionPlannerInput(): Promise<PlannerInput> {
       response.type === 'candidate_search_result',
   )
   if (!searchResult) throw new Error('Production Search did not provide the Planner smoke Candidate.')
-  const candidate = searchResult.result.targetResults[0].candidates.find(
-    ({ category, restorationBonusScope }) => category === 'ideal' && restorationBonusScope === 'gogma_artian',
+  const candidate = candidatesOf(searchResult.result.targetResult).find(
+    ({ restorationBonusScope }) => restorationBonusScope === 'gogma_artian',
   )
-  if (!candidate) throw new Error('Production Search did not find the expected normal-scope Practical Candidate.')
+  if (!candidate) throw new Error('Production Search did not find the expected Gogma-scope Ideal Candidate.')
   // B5-F1: conversion preserves the game-verified Normal slots, so this
   // unchanged two-operation smoke route is Practical even with exact labels.
   expect(candidate).toMatchObject({
     finalBonuses: searchInput.targetWeapons[0].idealBonuses,
     estimatedOperationCount: 3,
     restorationBonusScope: 'gogma_artian',
-    category: 'ideal',
   })
   const target = searchInput.targetWeapons[0]
   const entry = createBuildListEntry(candidate, target, {
@@ -248,6 +247,7 @@ describe('Production Worker interaction projection (B10-B1)', () => {
       currentConflicts: [{
         id: conflict.id,
         buildListEntryIds: [entries[0].id, entries[1].id],
+        checkpointParticipants: [],
       }],
     })
     expect(result.status === 'ready' && result.validBuildListEntryIds)

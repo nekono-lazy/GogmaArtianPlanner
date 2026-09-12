@@ -120,7 +120,7 @@ describe('comparePlannerSearchStates preferred-source position', () => {
     expect(comparePlannerSearchStates(more, less)).toBeLessThan(0)
   })
 
-  it('never overrules practical-first progress or evaluationScore', () => {
+  it('never overrules the existing evaluationScore', () => {
     const betterScore = state({
       evaluationScore: 200,
       preferredSourceProgressCount: 0,
@@ -130,14 +130,6 @@ describe('comparePlannerSearchStates preferred-source position', () => {
       preferredSourceProgressCount: 5,
     })
     expect(comparePlannerSearchStates(betterScore, preferredButWorse))
-      .toBeLessThan(0)
-
-    const practicalFirst = state({
-      evaluationScore: 100,
-      preferredSourceProgressCount: 0,
-      practicalFirstProgressTargetIds: [target('target.practical-first').id],
-    })
-    expect(comparePlannerSearchStates(practicalFirst, preferredButWorse))
       .toBeLessThan(0)
   })
 

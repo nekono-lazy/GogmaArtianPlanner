@@ -19,6 +19,8 @@ export function presentPlannerWhatIfNoResult(
       return '候補試行上限のため未確認'
     case 'stopped_by_planner_rerun_bound':
       return 'Planner再計算上限のため未確認'
+    case 'blocked_by_selected_checkpoint':
+      return '選択済みチェックポイントがあるため代替ルートを探索しません。作成リストでチェックポイントを変更または解除してください'
     default:
       return assertNever(outcome)
   }

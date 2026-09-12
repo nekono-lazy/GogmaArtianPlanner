@@ -52,7 +52,7 @@ class FakeWorker implements WorkerLike {
 }
 
 function fixtureResult(searchRunId: string, calculationContext: ReturnType<typeof createCandidateSearchInput>['calculationContext']) {
-  return { searchRunId, calculationContext, targetResults: [], relaxationSuggestions: [], warnings: [], elapsedMs: 1, isTruncated: false }
+  return { searchRunId, calculationContext, targetResult: { targetWeaponId: 'target.fixture.a' as never, candidate: null, searchedRoutes: [], skippedRoutes: [] }, warnings: [], elapsedMs: 1 }
 }
 
 describe('SearchWorkerClient', () => {
@@ -75,15 +75,14 @@ describe('SearchWorkerClient', () => {
     const promise = client.startSearch(input, { onProgress: progress })
     expect(worker.posted[0]).toEqual({ type: 'candidate_search', requestId: input.searchRunId, input })
     worker.emit({
-      type: 'progress', requestId: input.searchRunId, completedTargets: 1, totalTargets: 2,
-      currentTargetWeaponId: input.targetWeaponIds[0], phase: 'searching', processedWorkItems: 300,
+      type: 'progress', requestId: input.searchRunId, targetWeaponId: 'target.fixture.a' as never, phase: 'searching', processedWorkItems: 300,
     })
     const result = fixtureResult(input.searchRunId, input.calculationContext)
     worker.emit({ type: 'candidate_search_result', requestId: input.searchRunId, result })
     await expect(promise).resolves.toEqual(result)
     expect(progress).toHaveBeenCalledOnce()
     expect(progress).toHaveBeenCalledWith({
-      completedTargets: 1, totalTargets: 2, currentTargetWeaponId: input.targetWeaponIds[0],
+      targetWeaponId: 'target.fixture.a' as never,
       phase: 'searching', processedWorkItems: 300,
     })
   })

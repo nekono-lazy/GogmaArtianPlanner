@@ -50,8 +50,8 @@ describe('preferred owned weapon persistence migration', () => {
   })
 
   it('declares Export schema version 4', () => {
-    const schemaVersion: ExportRoot['schemaVersion'] = 4
-    expect(schemaVersion).toBe(4)
+    const schemaVersion: ExportRoot['schemaVersion'] = 5
+    expect(schemaVersion).toBe(5)
   })
 
   it('runs v1 -> v2 -> v3 -> v4 in order and clears every Target preference', async () => {

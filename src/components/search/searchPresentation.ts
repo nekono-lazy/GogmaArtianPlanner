@@ -1,7 +1,7 @@
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import type { RestorationBonus } from '../../domain/models/publicTypes'
 export {
-  candidateCategoryLabels as categoryLabels,
+  compromiseCheckpointBadgeLabel,
   getRouteOperationLabel as operationLabel,
   routeKindLabels,
   skippedRouteReasonLabels,

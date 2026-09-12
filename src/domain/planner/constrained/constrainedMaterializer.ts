@@ -19,34 +19,18 @@ import type {
   TargetWeapon,
   TargetWeaponId,
 } from '../../models/publicTypes'
-import { defaultCandidateSearchSettings } from '../../search'
+import { extractCandidateCheckpointGroups } from '../../search'
 import type {
   ConstrainedCandidate,
   ConstrainedEnumerationBounds,
   ConstrainedSearchOrigin,
 } from '../../search'
-import { isSimilarToIdeal } from '../../target'
 import type { PlannerClock } from '../plannerTypes'
 import { ConstrainedMaterializationError } from './constrainedMaterializationErrors'
 import {
   createConstrainedSearchIdentity,
   resolveConstrainedTarget,
 } from './constrainedSearchIdentity'
-
-/**
- * The B6 default similarity threshold, used for exactly one thing: filling the
- * display metadata `BuildCandidate.isSimilarToIdeal` (PLANNER_SPEC 9.2.13).
- *
- * It never decides Candidate yield eligibility, Candidate category, enumeration
- * ordering, route scope, search termination, search extent, off-axis
- * evaluation, Planner coexistence, Entry reuse, or any generated ID. Constrained
- * enumeration takes its filter authority and its extent authority from
- * SEARCH_SPEC 5.6.7 and `ConstrainedEnumerationBounds` alone, so reading one
- * number out of `defaultCandidateSearchSettings` here does not make
- * `CandidateSearchSettings` an authority over this boundary.
- */
-export const CONSTRAINED_SIMILARITY_METADATA_THRESHOLD =
-  defaultCandidateSearchSettings.similarityThreshold
 
 export interface ConstrainedMaterializationContext {
   origin: ConstrainedSearchOrigin
@@ -130,13 +114,13 @@ function compareIds(left: string, right: string): number {
  * `BuildListEntry` of the ordinary persisted shape - no new provenance field
  * and no new entity.
  *
- * It recomputes no Search semantics. Category, the completed five slots and
- * their scope, Skills, the concrete Route, every estimate, the material
- * requirements, `idealDifference`, `similarityScore`, both hashes, and the
- * `CalculationContext` are carried over from the enumerator unchanged. It adds
- * only what the Search Domain deliberately could not produce: the deterministic
- * identity, the deterministic IDs, the Clock-derived `createdAt`, and the
- * `isSimilarToIdeal` display metadata.
+ * It recomputes no Search semantics. The completed five slots and their
+ * scope, Skills, the concrete Route, every estimate, the material
+ * requirements, `idealDifference`, both hashes, and the `CalculationContext`
+ * are carried over from the enumerator unchanged. It adds only what the Search
+ * Domain deliberately could not produce: the deterministic identity, the
+ * deterministic IDs, the Clock-derived `createdAt`, and the checkpoint groups
+ * of the materialized Candidate's own Route.
  *
  * It is pure apart from the injected `PlannerClock`: no `crypto.randomUUID()`,
  * no `new Date()`, no persistence, and no ordinary-Search candidate factory.
@@ -175,8 +159,6 @@ export function createConstrainedMaterializer(
     const semantic = structuredClone(source)
     const withoutId = {
       targetWeaponId: semantic.targetWeaponId,
-      category: semantic.category,
-      ...(semantic.conditionMatch ? { conditionMatch: { ...semantic.conditionMatch } } : {}),
       finalBonuses: semantic.finalBonuses,
       restorationBonusScope: semantic.restorationBonusScope,
       seriesSkillId: semantic.seriesSkillId,
@@ -188,14 +170,6 @@ export function createConstrainedMaterializer(
       estimatedNormalAdvance: semantic.estimatedNormalAdvance,
       requiredMaterials: semantic.requiredMaterials,
       idealDifference: semantic.idealDifference,
-      isSimilarToIdeal:
-        semantic.similarityScore !== null &&
-        isSimilarToIdeal(
-          semantic.category,
-          semantic.similarityScore,
-          CONSTRAINED_SIMILARITY_METADATA_THRESHOLD,
-        ),
-      similarityScore: semantic.similarityScore,
       searchStateHash: semantic.searchStateHash,
       referencedOwnedWeaponsHash: semantic.referencedOwnedWeaponsHash,
       calculationContext: semantic.calculationContext,
@@ -209,6 +183,18 @@ export function createConstrainedMaterializer(
         createBuildCandidateMeaningFingerprint(withoutId),
       ),
     }
+    // A `ConstrainedCandidate` deliberately carries no observational trace at
+    // all, so nothing here can reconstruct the intermediate weapon states of
+    // its Route. The result is an empty checkpoint set rather than an invented
+    // one: the enumerator's job is finding another way to the Target's Ideal
+    // under the Planner's fixed Candidates, and the user selects checkpoints on
+    // the Candidate an ordinary Search produced (`docs/PLANNER_SPEC.md`
+    // 9.2.13).
+    candidate.checkpointGroups = extractCandidateCheckpointGroups(candidate, {
+      target,
+      master: context.origin.master,
+      ownedWeapons: context.origin.ownedWeapons,
+    })
     const valid = validateBuildCandidate(candidate, context.origin.ownedWeapons)
     if (!valid.isValid) {
       throw new ConstrainedMaterializationError(

@@ -9,24 +9,19 @@ import { compareStableKeys } from './semanticKeys'
 import {
   candidateDeduplicationKey,
   candidateStableKey,
-  compareCandidateSelection,
-  compareCandidates,
   compareCanonicalIdeals,
-  sortCandidates,
 } from './candidateProcessing'
-import { retainInitialCandidates } from './candidateRetention'
+import { selectCanonicalIdealCandidate } from './candidateRetention'
 import { createBuildCandidateMeaningFingerprint } from '../buildList'
 import {
   createCandidateSearchEngine,
   createCandidateSearchInput,
   SEARCH_FIXTURE_TIME,
-  searchMasterFixture,
+  candidatesOf,
 } from '../../test/fixtures/candidateSearch'
 import { createRestorationBonusSet } from '../../test/fixtures/domainData'
 import { searchCandidates } from './candidateSearch'
 import type { RngEngine } from '../rng/rngEngine'
-
-const FIXTURE_WEAPON_TYPE = 'weapon.fixture.a'
 
 const PREFERRED = ownedWeaponId('owned.preferred')
 const OTHER = ownedWeaponId('owned.other')
@@ -61,10 +56,8 @@ describe('preferred owned weapon as a Candidate ordering preference', () => {
   it('prefers the preferred source when every existing priority ties', () => {
     const preferred = candidate('candidate.preferred', PREFERRED)
     const other = candidate('candidate.other', OTHER)
-    expect(compareCandidates(other, preferred, PREFERRED)).toBeGreaterThan(0)
-    expect(compareCandidateSelection(other, preferred, PREFERRED)).toBeGreaterThan(0)
     expect(compareCanonicalIdeals(other, preferred, PREFERRED)).toBeGreaterThan(0)
-    expect(sortCandidates([other, preferred], PREFERRED)[0].id).toBe(preferred.id)
+    expect(selectCanonicalIdealCandidate([other, preferred], PREFERRED)?.id).toBe(preferred.id)
   })
 
   it('never reverses a cheaper Route', () => {
@@ -76,19 +69,18 @@ describe('preferred owned weapon as a Candidate ordering preference', () => {
     const cheaper = candidate('candidate.other.near', OTHER, {
       estimatedOperationCount: 2,
     })
-    expect(compareCandidates(preferred, cheaper, PREFERRED)).toBeGreaterThan(0)
     expect(compareCanonicalIdeals(preferred, cheaper, PREFERRED)).toBeGreaterThan(0)
-    expect(sortCandidates([preferred, cheaper], PREFERRED)[0].id).toBe(cheaper.id)
+    expect(selectCanonicalIdealCandidate([preferred, cheaper], PREFERRED)?.id).toBe(cheaper.id)
   })
 
   it('never treats a new-Normal route as preferred: its source is null', () => {
     const newNormal = candidate('candidate.new.normal', null)
     const preferred = candidate('candidate.preferred.source', PREFERRED)
-    expect(compareCandidates(newNormal, preferred, PREFERRED)).toBeGreaterThan(0)
+    expect(compareCanonicalIdeals(newNormal, preferred, PREFERRED)).toBeGreaterThan(0)
     // A new-Normal route is not preferred even when the Target's preference is
     // itself null: `preferredOwnedWeaponId === null` disables the preference
     // rather than matching every null source, so the stable key decides.
-    expect(compareCandidates(newNormal, preferred, null)).toBe(
+    expect(compareCanonicalIdeals(newNormal, preferred, null)).toBe(
       compareStableKeys(
         candidateStableKey(newNormal),
         candidateStableKey(preferred),
@@ -97,61 +89,27 @@ describe('preferred owned weapon as a Candidate ordering preference', () => {
   })
 
   it('chooses the preferred source as the canonical Ideal at equal cost', () => {
-    const preferred = candidate('candidate.ideal.preferred', PREFERRED, {
-      category: 'ideal',
-    })
-    const other = candidate('candidate.ideal.other', OTHER, {
-      category: 'ideal',
-    })
-    const retained = retainInitialCandidates(
-      [other, preferred],
-      searchMasterFixture,
-      FIXTURE_WEAPON_TYPE,
-      200,
-      PREFERRED,
-    )
-    expect(retained.canonicalIdeal?.id).toBe(preferred.id)
+    const preferred = candidate('candidate.ideal.preferred', PREFERRED)
+    const other = candidate('candidate.ideal.other', OTHER)
+    expect(selectCanonicalIdealCandidate([other, preferred], PREFERRED)?.id)
+      .toBe(preferred.id)
   })
 
   it('keeps a cheaper non-preferred Ideal as the canonical Ideal', () => {
     const preferred = candidate('candidate.ideal.preferred.far', PREFERRED, {
-      category: 'ideal',
       estimatedOperationCount: 4,
     })
     const cheaper = candidate('candidate.ideal.other.near', OTHER, {
-      category: 'ideal',
       estimatedOperationCount: 2,
     })
-    const retained = retainInitialCandidates(
-      [preferred, cheaper],
-      searchMasterFixture,
-      FIXTURE_WEAPON_TYPE,
-      200,
-      PREFERRED,
-    )
-    expect(retained.canonicalIdeal?.id).toBe(cheaper.id)
+    expect(selectCanonicalIdealCandidate([preferred, cheaper], PREFERRED)?.id)
+      .toBe(cheaper.id)
   })
 
-  it('orders a fully tied bounded Practical selection preferred-first', () => {
-    const preferred = candidate('candidate.practical.preferred', PREFERRED, {
-      category: 'practical',
-    })
-    const other = candidate('candidate.practical.other', OTHER, {
-      category: 'practical',
-    })
-    const retained = retainInitialCandidates(
-      [other, preferred],
-      searchMasterFixture,
-      FIXTURE_WEAPON_TYPE,
-      200,
-      PREFERRED,
-    )
-    // Both are kept - differing source weapons are incomparable, so dominance
-    // never drops either - and the preferred one is offered first.
-    expect(retained.retained.map(({ id }) => id)).toEqual([
-      preferred.id,
-      other.id,
-    ])
+  it('flips the canonical Ideal when the preference flips', () => {
+    const preferred = candidate('candidate.ideal.preferred', PREFERRED)
+    const other = candidate('candidate.ideal.other', OTHER)
+    expect(selectCanonicalIdealCandidate([other, preferred], OTHER)?.id).toBe(other.id)
   })
 
   it('leaves Candidate identity untouched', () => {
@@ -236,12 +194,12 @@ describe('preferred owned weapon never changes Search extent', () => {
     const without = await runSearch(false)
     const withPreference = await runSearch(true)
 
-    expect(withPreference.result.targetResults[0].searchedRoutes).toEqual(
-      without.result.targetResults[0].searchedRoutes,
+    expect(withPreference.result.targetResult.searchedRoutes).toEqual(
+      without.result.targetResult.searchedRoutes,
     )
     // Non-preferred routes are still searched in full: the preference is not a
     // filter on the route scope.
-    expect(withPreference.result.targetResults[0].searchedRoutes.length)
+    expect(withPreference.result.targetResult.searchedRoutes.length)
       .toBeGreaterThan(1)
     expect(withPreference.counts).toEqual(without.counts)
   })
@@ -251,7 +209,7 @@ describe('preferred owned weapon never changes Search extent', () => {
     const withPreference = await runSearch(true)
 
     const keys = (run: typeof without) =>
-      [...run.result.targetResults[0].candidates]
+      [...candidatesOf(run.result.targetResult)]
         .map(candidateStableKey)
         .sort()
     // The horizon, the dominance, and the cap are untouched, so exactly the
@@ -265,7 +223,7 @@ describe('preferred owned weapon never changes Search extent', () => {
     const first = await runSearch(true)
     const second = await runSearch(true)
     expect(
-      second.result.targetResults[0].candidates.map(candidateStableKey),
-    ).toEqual(first.result.targetResults[0].candidates.map(candidateStableKey))
+      candidatesOf(second.result.targetResult).map(candidateStableKey),
+    ).toEqual(candidatesOf(first.result.targetResult).map(candidateStableKey))
   })
 })

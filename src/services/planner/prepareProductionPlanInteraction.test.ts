@@ -39,7 +39,6 @@ function fixtureEntries(): {
   second.id = buildListEntryId('build-list.fixture.b')
   second.targetWeaponId = targetWeaponId('target.fixture.b')
   second.candidateSnapshot.targetWeaponId = second.targetWeaponId
-  second.candidateSnapshot.category = 'ideal'
   secondTarget.id = second.targetWeaponId
   secondTarget.name = 'Second fixture target'
   return { entries: [first, second], targets: [firstTarget, secondTarget] }
@@ -109,6 +108,7 @@ function ready(
     currentConflicts: [{
       id: persistedConflict.id,
       buildListEntryIds: [...persistedConflict.buildListEntryIds],
+      checkpointParticipants: [],
     }],
   }
 }
@@ -266,14 +266,12 @@ describe('createProductionPlanInteractionViewModel', () => {
     expect(result.conflicts[0].participants).toEqual([
       expect.objectContaining({
         targetName: 'Second fixture target',
-        candidateCategory: 'ideal',
         isRecommended: true,
         isSelected: false,
         isAvailable: true,
       }),
       expect.objectContaining({
         targetName: 'Domain fixture target',
-        candidateCategory: 'practical',
         isRecommended: false,
         isSelected: true,
         isAvailable: true,
@@ -305,6 +303,7 @@ describe('createProductionPlanInteractionViewModel', () => {
         currentConflicts: [{
           id: persistedConflict.id,
           buildListEntryIds: [entries[1].id],
+          checkpointParticipants: [],
         }],
       },
     )
@@ -352,7 +351,6 @@ describe('createProductionPlanInteractionViewModel', () => {
       entry: null,
       target: null,
       targetName: '削除済みまたは現在存在しない候補',
-      candidateCategory: null,
       isRecommended: true,
       isAvailable: false,
       unavailableReason: 'entry_not_found',
@@ -435,5 +433,60 @@ describe('mergeExplicitConflictResolution', () => {
     expect(merged.conflictResolutions.some(({ conflictKey }) => conflictKey === 'recommendation-only')).toBe(false)
     expect(restored).toEqual(before)
     expect(input.conflictResolutions).toEqual([])
+  })
+
+  it('refuses winner selection on a conflict a selected checkpoint takes part in', () => {
+    const { entries, targets } = fixtureEntries()
+    const persistedConflict = conflict(entries)
+    const preparation = ready(persistedConflict)
+    preparation.currentConflicts[0].checkpointParticipants = [{
+      buildListEntryId: entries[1].id,
+      checkpointGroupId: 'checkpoint-group:fixture' as never,
+      checkpointOpportunityId: 'checkpoint-opportunity:fixture' as never,
+    }]
+
+    const result = createProductionPlanInteractionViewModel(
+      plan([persistedConflict]),
+      plannerInput(entries, targets),
+      preparation,
+    )
+
+    expect(result.conflicts[0].involvesSelectedCheckpoint).toBe(true)
+    // Conservative by contract: both sides are unavailable, not only the one
+    // whose checkpoint is on the line.
+    for (const participant of result.conflicts[0].participants) {
+      expect(participant).toMatchObject({
+        isAvailable: false,
+        unavailableReason: 'checkpoint_conflict',
+        unavailableMessage: expect.stringContaining('作成リストでチェックポイントを変更または解除'),
+      })
+    }
+    expect(result.conflicts[0].participants.map(({ checkpointOpportunityId }) => checkpointOpportunityId))
+      .toEqual([null, 'checkpoint-opportunity:fixture'])
+  })
+
+  it('reads checkpoint involvement from the current preparation, not the persisted Plan', () => {
+    const { entries, targets } = fixtureEntries()
+    // The persisted Plan remembers a checkpoint conflict, but the Build List
+    // has changed since and the current conflict no longer involves one.
+    const persistedConflict = conflict(entries, {
+      checkpointParticipants: [{
+        buildListEntryId: entries[0].id,
+        checkpointGroupId: 'checkpoint-group:stale' as never,
+        checkpointOpportunityId: 'checkpoint-opportunity:stale' as never,
+      }],
+    })
+
+    const result = createProductionPlanInteractionViewModel(
+      plan([persistedConflict]),
+      plannerInput(entries, targets),
+      ready(persistedConflict),
+    )
+
+    expect(result.conflicts[0].involvesSelectedCheckpoint).toBe(false)
+    expect(result.conflicts[0].participants.every(({ isAvailable }) => isAvailable)).toBe(true)
+    expect(result.conflicts[0].participants.every(
+      ({ checkpointOpportunityId }) => checkpointOpportunityId === null,
+    )).toBe(true)
   })
 })

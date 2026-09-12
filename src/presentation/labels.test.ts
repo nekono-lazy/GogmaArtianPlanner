@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  candidateCategoryLabels,
+  compromiseCheckpointBadgeLabel,
   candidateSearchProgressPhaseLabels,
   getRngMissingRequirementLabel,
   getRouteOperationLabel,
@@ -16,7 +16,9 @@ import {
 describe('presentation labels', () => {
   it('maps normal UI Domain values to shared Japanese labels', () => {
     expect(ownedWeaponStatusLabels).toEqual({ unclassified: '未分類', practical: '実用', ideal: '理想' })
-    expect(candidateCategoryLabels.practical).toBe('実用')
+    expect(compromiseCheckpointBadgeLabel({ bonus: 'practical', skill: 'ideal' })).toBe('実用')
+    expect(compromiseCheckpointBadgeLabel({ bonus: 'ideal', skill: 'practical' })).toBe('実用')
+    expect(compromiseCheckpointBadgeLabel({ bonus: 'alternative', skill: 'ideal' })).toBe('代替')
     expect(routeKindLabels.normal_artian_to_gogma).toContain('新規通常アーティア')
     expect(routeKindLabels.existing_gogma_reset_skills).toContain('スキル再抽選')
     expect(planStepOperationLabels.reserve_weapon).toBe('目標武器として確保')

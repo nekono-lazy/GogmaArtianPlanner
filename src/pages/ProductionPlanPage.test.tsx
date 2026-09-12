@@ -134,6 +134,7 @@ function pageFixture(suffix = 'a'): {
       currentConflicts: [{
         id: persistedConflict.id,
         buildListEntryIds: [entry.id],
+        checkpointParticipants: [],
       }],
     },
   }
@@ -182,6 +183,7 @@ function multiParticipantFixture() {
     currentConflicts: [{
       id: fixture.plan.conflicts[0].id,
       buildListEntryIds: [fixture.entry.id, secondEntry.id],
+      checkpointParticipants: [],
     }],
   }
   return { ...fixture, secondEntry, secondTarget }
@@ -200,7 +202,7 @@ function completedWhatIf(
       fixedTargetWeaponId: targetWeaponId('target.fixed'),
       alternatives: [{
         targetWeaponId: alternativeTarget.id,
-        practical: {
+        outcome: {
           status: 'found',
           distance: {
             estimatedOperationCount: operationCount,
@@ -209,7 +211,6 @@ function completedWhatIf(
             estimatedNormalAdvance: null,
           },
         },
-        ideal: { status: 'not_found_within_search_extent' },
       }],
     },
   }
@@ -510,7 +511,7 @@ describe('ProductionPlanPage', () => {
       selectedBuildListEntryId: fixture.entry.id,
     })
     expect(request.bounds).toEqual({
-      maxCandidateTrialsPerCategoryPerTarget: 2,
+      maxCandidateTrialsPerTarget: 2,
       maxPlannerReruns: 8,
     })
     expect(screen.getByText('比較中 3 / 8')).toBeInTheDocument()
@@ -990,7 +991,7 @@ describe('ProductionPlanPage explicit selection', () => {
     if (mode === 'failure') await act(async () => pending.resolve({ status: 'planner_input_not_ready', issues: [], warnings: [], excludedBuildListEntries: [] }))
     if (mode === 'completed' || mode === 'no-result') {
       const result = completedWhatIf(fixture.entry.id, fixture.target, 99)
-      if (mode === 'no-result') result.comparison.alternatives[0].practical = { status: 'not_found_within_search_extent' }
+      if (mode === 'no-result') result.comparison.alternatives[0].outcome = { status: 'not_found_within_search_extent' }
       await act(async () => pending.resolve(result))
     }
     await clickSelection(user)
@@ -1240,8 +1241,6 @@ function contentExpectedResult(
     restorationBonusScope: 'gogma_artian',
     seriesSkillId: null,
     groupSkillId: null,
-    candidateCategory: 'practical',
-    isSimilarToIdeal: false,
     shouldSecure: false,
     ...overrides,
   }
@@ -1655,5 +1654,34 @@ describe('ProductionPlanPage read-only Plan content', () => {
     expect(deps.getPlan).toHaveBeenCalledExactlyOnceWith('plan.content.missing')
     expect(screen.queryByText('計画の概要')).not.toBeInTheDocument()
     expect(screen.queryByText('計画全体の実行順')).not.toBeInTheDocument()
+  })
+
+  it('disables winner selection on a checkpoint conflict and routes to the Build List', async () => {
+    const fixture = multiParticipantFixture()
+    if (fixture.preparation.status !== 'ready') throw new Error('fixture')
+    fixture.preparation.currentConflicts[0].checkpointParticipants = [{
+      buildListEntryId: fixture.secondEntry.id,
+      checkpointGroupId: 'checkpoint-group:page' as never,
+      checkpointOpportunityId: 'checkpoint-opportunity:page' as never,
+    }]
+    const client = plannerClient(async () => fixture.preparation)
+    const deps = dependencies(fixture, client)
+
+    renderPage(deps, fixture.plan.id)
+
+    // Once for the conflict, then once per unavailable participant.
+    expect(await screen.findAllByText(
+      'この競合には選択済みチェックポイントが関係しています。作成リストでチェックポイントを変更または解除してください。',
+    )).toHaveLength(3)
+    for (const name of ['比較する', 'この候補を優先']) {
+      for (const button of screen.getAllByRole('button', { name })) {
+        expect(button).toBeDisabled()
+      }
+    }
+    const link = screen.getByRole('link', { name: 'ビルドリストでチェックポイントを変更' })
+    expect(link).toHaveAttribute('href', '/build-list')
+    expect(screen.getByRole('link', { name: 'ビルドリストへ戻る' })).toBeInTheDocument()
+    expect(client.createWhatIfComparison).not.toHaveBeenCalled()
+    expect(client.createConstrainedPlan).not.toHaveBeenCalled()
   })
 })

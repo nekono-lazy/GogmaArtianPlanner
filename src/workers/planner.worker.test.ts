@@ -89,7 +89,7 @@ function fixtureWhatIfRequest(input = fixture().input): PlannerWhatIfRequest {
       selectedBuildListEntryId: input.buildListEntries[0].id,
     },
     bounds: {
-      maxCandidateTrialsPerCategoryPerTarget: 3,
+      maxCandidateTrialsPerTarget: 3,
       maxPlannerReruns: 7,
     },
   }

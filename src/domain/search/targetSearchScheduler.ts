@@ -115,7 +115,9 @@ export class TargetSearchScheduler {
         )
         if (!candidate) return
         base.onCandidate(candidate)
-        if (candidate.category === 'ideal') this.idealCost = Math.min(this.idealCost ?? cost, cost)
+        // Every composed Candidate is an Ideal Candidate, so any Candidate at
+        // all settles the cost the canonical-Ideal drain is measured against.
+        this.idealCost = Math.min(this.idealCost ?? cost, cost)
       } })
     })
 
@@ -217,8 +219,8 @@ export class TargetSearchScheduler {
   /**
    * Empty queue is formal exhaustion, including no-Candidate/no-future-work.
    * On an Ideal at D, drain ALL pending work with lowerBound <= D (including
-   * work discovered during that drain). Only then are Ideal ties and inclusive
-   * Practical horizon settled. No empty layers or configured-maximum loop.
+   * work discovered during that drain). Only then are the canonical Ideal
+   * ties settled. No empty layers or configured-maximum loop.
    * The exhaustive option is an internal oracle for bounded Search tests.
    */
   async run(stopAtIdeal = true): Promise<void> {

@@ -13,11 +13,10 @@ import { createTargetSkillStream } from '../skillStream'
 import {
   evaluateBonusSolutions,
   evaluateSkillSolutions,
-  selectBonusAxis,
-  selectSkillAxis,
+  selectIdealBonusAxis,
+  selectIdealSkillAxis,
   type EvaluatedBonusSolution,
   type EvaluatedSkillSolution,
-  type StreamCategoryPredicate,
 } from '../streamSolutions'
 import {
   existingGogmaRouteKind,
@@ -50,8 +49,6 @@ import {
 } from './constrainedTypes'
 import { assertConstrainedCandidateSearchInput } from './constrainedValidation'
 
-const streamCategories: readonly StreamCategoryPredicate[] = ['ideal', 'practical']
-
 /**
  * Cancellation and Worker yield only. The constrained enumerator produces no
  * Candidate ID and no timestamp, so it never takes an ID factory or a Clock.
@@ -75,15 +72,15 @@ interface ConstrainedBaseSolutions {
 }
 
 /**
- * One `(Route base, stream category predicate)` lattice.
+ * One Route base's lattice.
  *
- * `bonusAxis` / `skillAxis` are `B(c)` and `K(c)`. The matrix stores only the
- * two axes and the base's fixed cost, never a cell array.
+ * `bonusAxis` / `skillAxis` are the base's Ideal Bonus and Ideal Skill
+ * solutions. The matrix stores only the two axes and the base's fixed cost,
+ * never a cell array.
  */
 interface ConstrainedMatrix {
   index: number
   base: ConstrainedRouteBase
-  categoryPredicate: StreamCategoryPredicate
   baseOperationUnits: number
   baseNormalAdvance: number | null
   /**
@@ -131,10 +128,9 @@ function baseNormalAdvance(operations: readonly RouteOperation[]): number | null
  * family-layout frontier dedup, and the Production RNG input-level support
  * contract are unchanged.
  *
- * The enumerator applies none of the following: Practical dominance, the
- * initial Practical horizon, termination at the canonical Ideal,
- * `maxCandidatesPerTarget`, `resultFilter`, or the similar filter. Its only
- * extent authority is `ConstrainedEnumerationBounds`.
+ * The enumerator applies none of the initial Search's stopping policies -
+ * termination at the canonical Ideal, `CandidateSearchSettings`, or any UI
+ * filter. Its only extent authority is `ConstrainedEnumerationBounds`.
  *
  * `onCandidate` receives each Candidate as it is discovered, in the traversal's
  * deterministic best-first order, and may return `'stop'` to end the
@@ -228,18 +224,15 @@ export async function visitConstrainedCandidates(
       base.sourceOwnedWeaponId,
       target.preferredOwnedWeaponId,
     )
-    for (const categoryPredicate of streamCategories) {
-      matrices.push({
-        index: matrices.length,
-        base,
-        categoryPredicate,
-        baseOperationUnits,
-        baseNormalAdvance: normalAdvance,
-        basePreferredSourceRank,
-        bonusAxis: selectBonusAxis(solved.bonusSolutions, categoryPredicate),
-        skillAxis: selectSkillAxis(solved.skillSolutions, categoryPredicate),
-      })
-    }
+    matrices.push({
+      index: matrices.length,
+      base,
+      baseOperationUnits,
+      baseNormalAdvance: normalAdvance,
+      basePreferredSourceRank,
+      bonusAxis: selectIdealBonusAxis(solved.bonusSolutions),
+      skillAxis: selectIdealSkillAxis(solved.skillSolutions),
+    })
   }
 
   const frontier = new ConstrainedWorkFrontier()
@@ -251,8 +244,8 @@ export async function visitConstrainedCandidates(
   let offAxisBoundStop = false
   let stoppedByConsumer = false
 
-  // One seed per matrix. An empty axis means the category has no solution on
-  // that stream, so the matrix contributes no cell at all.
+  // One seed per matrix. An empty axis means this Route base has no Ideal
+  // solution on that stream, so the matrix contributes no cell at all.
   for (const matrix of matrices) enqueue(matrix, 0, 0)
 
   while (frontier.size > 0) {
@@ -261,10 +254,9 @@ export async function visitConstrainedCandidates(
     const matrix = matrices[item.matrixIndex]
 
     if (evaluatedPairs.has(item.pairKey)) {
-      // The Ideal and Practical axes overlap, so this actual pair was already
-      // evaluated from the other matrix. It is not re-evaluated and never
-      // recounted, but the frontier node still expands: dropping it would make
-      // this matrix's neighbouring cells unreachable.
+      // This actual pair was already evaluated. It is not re-evaluated and
+      // never recounted, but the frontier node still expands: dropping it would
+      // make this matrix's neighbouring cells unreachable.
       expand(matrix, item)
       continue
     }
@@ -329,7 +321,6 @@ export async function visitConstrainedCandidates(
     const skill = matrix.skillAxis[j]
     frontier.push({
       matrixIndex: matrix.index,
-      categoryPredicate: matrix.categoryPredicate,
       i,
       j,
       nodeKey,

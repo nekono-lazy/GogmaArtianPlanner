@@ -140,9 +140,11 @@ export interface ConstrainedEnumerationBenchmarkMeasurement {
    * that decision rests on a direct measurement instead of a subtraction.
    */
   readonly enumerationElapsedMs: number | null
+  /**
+   * Every delivered Candidate is an Ideal Candidate: constrained enumeration
+   * yields only Ideal results, so there is no category split to report.
+   */
   readonly deliveredCandidates: number
-  readonly idealCandidates: number
-  readonly practicalCandidates: number
   readonly timeToFirstCandidateMs: number | null
   readonly timeToTenthCandidateMs: number | null
   readonly timeToFiftiethCandidateMs: number | null

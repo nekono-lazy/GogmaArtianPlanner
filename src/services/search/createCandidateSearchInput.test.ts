@@ -35,15 +35,12 @@ describe('createCandidateSearchInput', () => {
 
     const input = await createCandidateSearchInput({
       searchRunId: 'search.master-subset',
-      targetWeaponIds: [targetWeapons[0].id],
+      targetWeaponId: targetWeapons[0].id,
       routeFilter: 'all',
-      resultFilter: 'all',
       settings: {
         maxNormalAdvance: 1,
         maxGogmaAdvance: 1,
         maxSkillAdvance: 1,
-        maxCandidatesPerTarget: 1,
-        similarityThreshold: 0.6,
       },
       master,
       calculationContext,

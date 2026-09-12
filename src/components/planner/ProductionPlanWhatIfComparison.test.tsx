@@ -29,7 +29,7 @@ function found(
 }
 
 describe('ProductionPlanWhatIfComparison', () => {
-  it('keeps alternative order and presents Practical and Ideal independently', () => {
+  it('keeps alternative order and presents one Ideal outcome per Target', () => {
     const firstTarget = createValidTargetWeapon()
     firstTarget.id = targetWeaponId('target.what-if.first')
     firstTarget.name = 'First alternative'
@@ -45,13 +45,11 @@ describe('ProductionPlanWhatIfComparison', () => {
         alternatives: [
           {
             targetWeaponId: secondTarget.id,
-            practical: found(12, null),
-            ideal: { status: 'stopped_by_candidate_trial_bound' },
+            outcome: found(12, null),
           },
           {
             targetWeaponId: firstTarget.id,
-            practical: { status: 'not_found_within_search_extent' },
-            ideal: found(21, 5),
+            outcome: found(21, 5),
           },
         ],
       },
@@ -69,8 +67,9 @@ describe('ProductionPlanWhatIfComparison', () => {
     const targetCards = screen.getAllByRole('heading', { level: 5 })
       .map((heading) => heading.parentElement)
     expect(targetCards[0]).not.toBeNull()
-    expect(within(targetCards[0]!).getByText('Practical')).toBeInTheDocument()
-    expect(within(targetCards[0]!).getByText('Ideal')).toBeInTheDocument()
+    // One outcome per Target: the comparison answers how far this Target's
+    // next feasible Ideal Candidate is, with no category slots.
+    expect(within(targetCards[0]!).getByText('理想候補')).toBeInTheDocument()
     expect(within(targetCards[0]!).getByText('必要操作数: 12')).toBeInTheDocument()
     expect(within(targetCards[0]!).getByText('巨戟進行量: +4')).toBeInTheDocument()
     expect(within(targetCards[0]!).getByText('スキル進行量: +3')).toBeInTheDocument()
@@ -79,11 +78,15 @@ describe('ProductionPlanWhatIfComparison', () => {
     expect(within(targetCards[1]!).getByText('通常進行量: +5')).toBeInTheDocument()
   })
 
-  it('shows all four no-result statuses with distinct wording', () => {
+  it('shows every no-result status with distinct wording', () => {
     const firstTarget = createValidTargetWeapon()
     firstTarget.id = targetWeaponId('target.no-result.first')
     const secondTarget = structuredClone(firstTarget)
     secondTarget.id = targetWeaponId('target.no-result.second')
+    const thirdTarget = structuredClone(firstTarget)
+    thirdTarget.id = targetWeaponId('target.no-result.third')
+    const fourthTarget = structuredClone(firstTarget)
+    fourthTarget.id = targetWeaponId('target.no-result.fourth')
     const result: PlannerWhatIfCalculationResult = {
       status: 'completed',
       comparison: {
@@ -93,13 +96,19 @@ describe('ProductionPlanWhatIfComparison', () => {
         alternatives: [
           {
             targetWeaponId: firstTarget.id,
-            practical: { status: 'not_found_within_search_extent' },
-            ideal: { status: 'stopped_by_enumeration_bound' },
+            outcome: { status: 'not_found_within_search_extent' },
           },
           {
             targetWeaponId: secondTarget.id,
-            practical: { status: 'stopped_by_candidate_trial_bound' },
-            ideal: { status: 'stopped_by_planner_rerun_bound' },
+            outcome: { status: 'stopped_by_candidate_trial_bound' },
+          },
+          {
+            targetWeaponId: thirdTarget.id,
+            outcome: { status: 'stopped_by_enumeration_bound' },
+          },
+          {
+            targetWeaponId: fourthTarget.id,
+            outcome: { status: 'stopped_by_planner_rerun_bound' },
           },
         ],
       },
@@ -108,7 +117,7 @@ describe('ProductionPlanWhatIfComparison', () => {
     render(
       <ProductionPlanWhatIfComparison
         result={result}
-        targetWeapons={[firstTarget, secondTarget]}
+        targetWeapons={[firstTarget, secondTarget, thirdTarget, fourthTarget]}
       />,
     )
 

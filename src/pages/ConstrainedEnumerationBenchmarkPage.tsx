@@ -32,8 +32,6 @@ export interface ConstrainedEnumerationBenchmarkRecord {
   readonly recorderOverheadMs: number | null
   readonly enumerationElapsedMs: number | null
   readonly deliveredCandidates: number | null
-  readonly idealCandidates: number | null
-  readonly practicalCandidates: number | null
   readonly timeToFirstCandidateMs: number | null
   readonly timeToTenthCandidateMs: number | null
   readonly timeToFiftiethCandidateMs: number | null
@@ -161,8 +159,6 @@ export function ConstrainedEnumerationBenchmarkPage() {
         recorderOverheadMs: measurement.recorderOverheadMs,
         enumerationElapsedMs: measurement.enumerationElapsedMs,
         deliveredCandidates: measurement.deliveredCandidates,
-        idealCandidates: measurement.idealCandidates,
-        practicalCandidates: measurement.practicalCandidates,
         timeToFirstCandidateMs: measurement.timeToFirstCandidateMs,
         timeToTenthCandidateMs: measurement.timeToTenthCandidateMs,
         timeToFiftiethCandidateMs: measurement.timeToFiftiethCandidateMs,
@@ -187,8 +183,6 @@ export function ConstrainedEnumerationBenchmarkPage() {
         result.outcome.status === 'cancelled'
           ? result.outcome.deliveredCandidates
           : null,
-      idealCandidates: null,
-      practicalCandidates: null,
       timeToFirstCandidateMs: null,
       timeToTenthCandidateMs: null,
       timeToFiftiethCandidateMs: null,
@@ -377,8 +371,7 @@ export function ConstrainedEnumerationBenchmarkPage() {
                   </TableCell>
                   <TableCell>{milliseconds(record.roundTripMs)}</TableCell>
                   <TableCell>
-                    {record.deliveredCandidates ?? '—'} ({record.idealCandidates ?? '—'}/
-                    {record.practicalCandidates ?? '—'})
+                    {record.deliveredCandidates ?? '—'}
                   </TableCell>
                   <TableCell>
                     {milliseconds(record.timeToFirstCandidateMs)} /{' '}

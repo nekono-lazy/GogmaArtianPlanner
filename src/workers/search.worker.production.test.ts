@@ -14,7 +14,7 @@ import type {
   SearchWorkerRequest,
   SearchWorkerResponse,
 } from '../domain/search'
-import { createCandidateSearchInput } from '../test/fixtures/candidateSearch'
+import { createCandidateSearchInput, candidatesOf } from '../test/fixtures/candidateSearch'
 import { gameVerifiedBowElementalNormalVectors } from '../test/fixtures/gameVerifiedNormalVectors'
 import { createSearchWorkerController } from './search.worker'
 import { createProductionSearchRngEngine } from './search.worker.production'
@@ -82,7 +82,7 @@ function createProductionSearchInput(
   })
   target.idealSkillCondition = { ...skills, matchMode: 'all' }
   target.practicalSkillCondition = { ...skills, matchMode: 'all' }
-  input.targetWeaponIds = [target.id]
+  input.targetWeaponId = target.id
   return input
 }
 
@@ -129,11 +129,10 @@ describe('Production Candidate Search Worker composition', () => {
     const result = resultResponse(responses).result
     expect(result.calculationContext.rngEngineVersion)
       .toBe(PRODUCTION_RNG_ENGINE_VERSION)
-    expect(result.targetResults[0].searchedRoutes)
+    expect(result.targetResult.searchedRoutes)
       .toContain('normal_artian_to_gogma')
-    expect(result.targetResults[0].candidates).toEqual(expect.arrayContaining([
+    expect(candidatesOf(result.targetResult)).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        category: 'ideal',
         restorationBonusScope: 'gogma_artian',
         estimatedOperationCount: 3,
         finalBonuses: input.targetWeapons[0].idealBonuses,
@@ -148,7 +147,7 @@ describe('Production Candidate Search Worker composition', () => {
 
     expect(responses.some(({ type }) => type === 'error')).toBe(false)
     const result = resultResponse(responses).result
-    const targetResult = result.targetResults[0]
+    const targetResult = result.targetResult
     // The Production Engine does not support this Normal input, so no predicted
     // Normal offset exists. The forced Reset variant (SEARCH_SPEC 6.1.1) needs
     // no Normal prediction at all and still runs.
@@ -163,7 +162,7 @@ describe('Production Candidate Search Worker composition', () => {
     const notice = result.warnings.find(({ severity }) => severity === 'info')
     expect(notice?.message).not.toContain('カウンターが未確定')
     expect(notice?.message).not.toContain('normal_prediction_unsupported')
-    expect(targetResult.candidates.every(({ route }) =>
+    expect(candidatesOf(targetResult).every(({ route }) =>
       route.operations.every((operation) =>
         operation.type !== 'create_normal_artian' ||
         operation.normalCounterBefore === null,
@@ -176,9 +175,9 @@ describe('Production Candidate Search Worker composition', () => {
     const responses = await runProductionSearch(input)
 
     expect(responses.some(({ type }) => type === 'error')).toBe(false)
-    const targetResult = resultResponse(responses).result.targetResults[0]
+    const targetResult = resultResponse(responses).result.targetResult
     expect(targetResult.searchedRoutes).toContain('normal_artian_to_gogma')
-    const candidate = targetResult.candidates.find(
+    const candidate = candidatesOf(targetResult).find(
       ({ route }) => route.kind === 'normal_artian_to_gogma',
     )
     expect(candidate).toBeDefined()

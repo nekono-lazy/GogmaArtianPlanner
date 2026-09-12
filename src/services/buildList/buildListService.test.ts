@@ -11,6 +11,14 @@ import {
   createValidTargetWeapon,
   domainFixtureContext,
 } from '../../test/fixtures/domainData'
+import {
+  checkpointCandidate,
+  checkpointIdealBonuses,
+  checkpointPracticalBonuses,
+  checkpointPracticalBonusesReordered,
+  checkpointTarget,
+} from '../../test/fixtures/checkpointRoute'
+import type { CompromiseCheckpointOpportunityId } from '../../domain/models/publicTypes'
 import { BuildListService, type BuildListServiceRepositories } from './buildListService'
 
 function memoryRepositories(initial: BuildListEntry[] = []) {
@@ -44,8 +52,6 @@ describe('BuildListService', () => {
     const memory = memoryRepositories()
     const current = createBuildListCalculationContext(createValidMasterDataFixture())
     const candidate = createValidBuildCandidate()
-    candidate.category = 'ideal'
-    candidate.isSimilarToIdeal = false
     candidate.calculationContext = { ...current, appSchemaVersion: 1 }
     candidate.searchStateHash = createSearchStateHash(candidate.route, memory.rngState, memory.normalCounters)
     const original = createBuildListEntry(candidate, memory.target, { createdAt: '2026-08-29T04:00:00.000Z' })
@@ -53,11 +59,10 @@ describe('BuildListService', () => {
     memory.entries.push(original)
 
     const refreshed = await new BuildListService(memory.repositories).refreshStaleness(current)
-    expect(current.appSchemaVersion).toBe(9)
+    expect(current.appSchemaVersion).toBe(10)
     expect(refreshed.entries[0].isStale).toBe(true)
     expect(refreshed.entries[0].staleReasons).toEqual(['calculation_context_changed'])
     expect(refreshed.entries[0].candidateSnapshot).toEqual(snapshot)
-    expect(refreshed.entries[0].candidateSnapshot.category).toBe('ideal')
     expect(refreshed.entries[0].candidateSnapshot.restorationBonusScope).toBe('normal_artian')
     expect(memory.repositories.putEntry).toHaveBeenCalledOnce()
     expect(memory.repositories.deleteEntry).not.toHaveBeenCalled()
@@ -103,7 +108,7 @@ describe('BuildListService', () => {
     expect(memory.entries).toHaveLength(1)
   })
 
-  it.each([1, 2, 3, 4, 5, 6, 7, 8])('adds a current Candidate beside an unchanged schema %i snapshot', async (appSchemaVersion) => {
+  it.each([1, 2, 3, 4, 5, 6, 7, 8, 9])('adds a current Candidate beside an unchanged schema %i snapshot', async (appSchemaVersion) => {
     const memory = memoryRepositories()
     const candidate = createValidBuildCandidate()
     candidate.calculationContext = createBuildListCalculationContext(createValidMasterDataFixture())
@@ -116,7 +121,7 @@ describe('BuildListService', () => {
     expect(result.added).toBe(true)
     expect(memory.entries).toHaveLength(2)
     expect(memory.entries[0]).toEqual(before)
-    expect(result.entry.calculationContext.appSchemaVersion).toBe(9)
+    expect(result.entry.calculationContext.appSchemaVersion).toBe(10)
     expect(memory.repositories.deleteEntry).not.toHaveBeenCalled()
   })
 
@@ -133,5 +138,65 @@ describe('BuildListService', () => {
     expect(refreshed.entries[0].candidateSnapshot).toEqual(original.candidateSnapshot)
     expect(refreshed.entries[0].searchStateHash).toBe(original.searchStateHash)
     expect(memory.repositories.putEntry).toHaveBeenCalledOnce()
+  })
+  it('never overwrites an existing checkpoint selection when the Candidate is re-added', async () => {
+    const memory = memoryRepositories()
+    const service = new BuildListService(memory.repositories)
+    const candidate = checkpointCandidate([
+      checkpointPracticalBonuses(),
+      checkpointIdealBonuses(),
+    ])
+    const target = checkpointTarget()
+    memory.repositories.getTargets = async () => [target]
+    const selected = candidate.checkpointGroups![0].opportunities[0].id
+
+    const first = await service.addCandidate(candidate, target, [selected])
+    // A second Search finds the same Candidate again under a new run id.
+    const repeated = structuredClone(candidate)
+    repeated.id = 'candidate.checkpoint.another' as typeof repeated.id
+    repeated.searchRunId = 'search-run.checkpoint.another'
+    const second = await service.addCandidate(repeated, target, [])
+
+    expect(first.added).toBe(true)
+    expect(second.added).toBe(false)
+    expect(memory.entries).toHaveLength(1)
+    // The user's selection survives: it is edited in the Build List, never by
+    // adding the same Candidate again.
+    expect(second.entry.selectedCheckpointOpportunityIds).toEqual([selected])
+  })
+
+  it('replaces a checkpoint selection through the Domain validation authority', async () => {
+    const memory = memoryRepositories()
+    const service = new BuildListService(memory.repositories)
+    const candidate = checkpointCandidate([
+      checkpointPracticalBonuses(),
+      checkpointPracticalBonusesReordered(),
+      checkpointIdealBonuses(),
+    ])
+    const target = checkpointTarget()
+    memory.repositories.getTargets = async () => [target]
+    const [group] = candidate.checkpointGroups!
+    const added = await service.addCandidate(candidate, target)
+
+    const updated = await service.updateCheckpointSelection(added.entry.id, [
+      group.opportunities[1].id,
+    ])
+    expect(updated.selectedCheckpointOpportunityIds).toEqual([group.opportunities[1].id])
+
+    // Two opportunities of one group are refused, and nothing is persisted.
+    await expect(
+      service.updateCheckpointSelection(added.entry.id, [
+        group.opportunities[0].id,
+        group.opportunities[1].id,
+      ]),
+    ).rejects.toThrow(/checkpoint group/)
+    await expect(
+      service.updateCheckpointSelection(added.entry.id, [
+        'checkpoint-opportunity:unknown' as CompromiseCheckpointOpportunityId,
+      ]),
+    ).rejects.toThrow(/candidate snapshot/)
+    expect(memory.entries[0].selectedCheckpointOpportunityIds).toEqual([
+      group.opportunities[1].id,
+    ])
   })
 })

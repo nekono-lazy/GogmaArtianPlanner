@@ -84,7 +84,7 @@ function whatIfRequest(input = plannerInput()): PlannerWhatIfRequest {
       selectedBuildListEntryId: 'build-list.what-if.client' as never,
     },
     bounds: {
-      maxCandidateTrialsPerCategoryPerTarget: 4,
+      maxCandidateTrialsPerTarget: 4,
       maxPlannerReruns: 10,
     },
   }
@@ -959,7 +959,7 @@ const interactionResult: PlannerInteractionPreparationResult = {
   status: 'ready',
   validBuildListEntryIds: [createValidBuildListEntry().id],
   excludedBuildListEntries: [],
-  currentConflicts: [{ id: 'conflict.current', buildListEntryIds: [createValidBuildListEntry().id] }],
+  currentConflicts: [{ id: 'conflict.current', buildListEntryIds: [createValidBuildListEntry().id], checkpointParticipants: [] }],
 }
 
 describe('PlannerWorkerClient interaction preparation (B10-B1)', () => {

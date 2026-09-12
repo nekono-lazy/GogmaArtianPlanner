@@ -69,9 +69,9 @@ function baseOptions(master: MasterDataRoot, scope: ArtianBonusScope) {
  *
  * A manually registered Gogma weapon starts `unclassified` and unprotected: the
  * status is a user-facing organisation label, so the tool never guesses one.
- * The Practical / Ideal protection defaults below apply to a draft the caller
- * explicitly asks for with that status, which is how a Planner-secured
- * Candidate is registered (`docs/DATA_MODEL.md` 3.2).
+ * The status-based protection defaults below (practical unprotected, ideal
+ * protected) apply to a draft the caller explicitly asks for with that status,
+ * which is how a Planner-secured Ideal is registered (`docs/DATA_MODEL.md` 3.2).
  */
 export function createOwnedWeaponDraft(
   master: MasterDataRoot,

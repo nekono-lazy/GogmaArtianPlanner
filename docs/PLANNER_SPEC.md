@@ -13,10 +13,13 @@ PlannerはUIやIndexedDBに依存せず、入力からProductionPlanを返す純
 
 Plannerの基本優先順位。
 
-1. 未所持の実用品を早く揃える
+1. 理想品未所持のTargetの理想品を、Target優先度順に早く揃える
 2. 共有RNG進行中に他の目標武器も効率よく取得する
-3. 実用品確保後に理想品へ更新する
+3. 作成リストで選択済みのcompromise checkpointをhard constraintとして必ず経由する（7.5）
 4. 同程度の場合は武器消費や操作量を抑える
+
+Plannerが追う到達目標はTargetの理想品だけである。実用品を先に確保する優先評価は
+存在しない（7章）。
 
 初期版で実装しないこと。
 
@@ -124,6 +127,9 @@ export interface PlannerClock {
   現在状態から再validationし、実行可能なBuildListEntryだけを使用する
 - PlannerはBuildListEntryの `candidateSnapshot` を入力候補として使う
 - Planner入力validationでTarget定義Hash、searchStateHash、referencedOwnedWeaponsHash、CalculationContextを現在値から再確認し、保存済み `isStale` だけを信用しない
+- Planner入力validationは各BuildListEntryの `selectedCheckpointOpportunityIds` を
+  共有Domain関数 `validateBuildListEntryCheckpointSelection()` で検証し、未知ID・
+  同一group複数選択・重複IDはPlanner入力全体をfail closedする（7.5.9）
 - RngState全体の確定は要求しない
 - `deriveRngCapabilities(rngState, normalCounters, requiredOperations, engineCapabilities)` で、各BuildListEntryの全RouteOperationに必要なKnownValueと現在Engineのsupportが揃うか確認する
 - conversionだけのEntryはSkill Prediction、確定Base Seed / Skill Counter、concrete semantic input supportを要求し、persisted Counter Gate、Gogma Prediction、Gogma Counterを要求しない
@@ -143,7 +149,9 @@ export interface PlannerClock {
 - RNG値不足とEngine capability不足を別warning reasonとして扱う。該当BuildListEntryだけを除外し、無関係なEntryを一括無効化しない
 - `targetWeapons` は `isEnabled = true` のみ対象
 - `maxPlanSteps`、`beamWidth`、`maxExpandedStates` は1以上
-- 実用品を先に確保する優先順位はv1固定であり、`preferPracticalBeforeIdeal` のような切替Optionを持たない
+- `preferPracticalBeforeIdeal` は旧Planner契約のOptionであり、現在はサポートしない。
+  Plannerに実用品優先の評価は存在せず、この項目を含む `PlannerOptions` は
+  validation issueとして拒否する
 - Active Planの有無はPlanner pure calculationの入力に含めない。PlannerはDraft Planを計算し、Active Plan単一制約、置換、破棄、再計算の制御はApplication / Persistence層で行う
 
 ---
@@ -160,22 +168,55 @@ export interface PlannerResult {
   termination: PlannerSearchTermination;
 }
 
+export type PlannerWarningKind =
+  // 通常のPlanner入力validation / Beam Search
+  | "no_build_list_entries"
+  | "rng_state_missing"
+  | "rng_prediction_unsupported"
+  | "protected_weapon_required"
+  | "build_list_entry_stale"
+  | "calculation_context_incompatible"
+  | "all_targets_already_satisfied"
+  | "invalid_conflict_resolution"
+  | "max_steps_reached"
+  | "max_expanded_states_reached"
+  // B8 constrained-search orchestrationだけが返す（9.2.16）
+  | "max_candidate_trials_per_conflict_reached"
+  | "max_generated_build_list_entries_reached"
+  | "max_planner_reruns_reached"
+  | "constrained_enumeration_bound_reached"
+  // 選択済みcompromise checkpoint（7.5.6〜7.5.9、9.5.2）
+  | "selected_checkpoint_blocks_constrained_search"
+  | "multiple_selected_checkpoint_entries"
+  | "selected_checkpoint_target_already_ideal"
+  | "selected_checkpoint_fixes_target_entry"
+  | "invalid_checkpoint_selection";
+
 export interface PlannerWarning {
-  kind:
-    | "no_build_list_entries"
-    | "rng_state_missing"
-    | "rng_prediction_unsupported"
-    | "rng_engine_capability_missing"
-    | "protected_weapon_required"
-    | "build_list_entry_stale"
-    | "calculation_context_incompatible"
-    | "all_targets_already_satisfied"
-    | "invalid_conflict_resolution"
-    | "max_steps_reached"
-    | "max_expanded_states_reached";
+  kind: PlannerWarningKind;
   message: string;
 }
 ```
+
+この列挙は `src/domain/planner/plannerTypes.ts` の `PlannerWarningKind` /
+`plannerWarningKinds` と一致させ、`presentation/labels.ts` の
+`plannerWarningLabels` は全kindの表示ラベルを持つ。ここに無いkindを返さない。
+
+- `rng_state_missing` はRNG値不足、`rng_prediction_unsupported` はEngine
+  capability不足またはconcrete inputのunsupportedを表す。capability不足専用の
+  kindは存在しない
+- `max_candidate_trials_per_conflict_reached` /
+  `max_generated_build_list_entries_reached` / `max_planner_reruns_reached` /
+  `constrained_enumeration_bound_reached` はorchestrationまたはenumerationの
+  停止を表し、通常の `createProductionPlan()` は返さない（9.2.16）
+- `selected_checkpoint_blocks_constrained_search` はrequired checkpoint Entryを
+  持つTargetを再検索しなかったことを表す（9.5.2）
+- `multiple_selected_checkpoint_entries`（7.5.7）、
+  `selected_checkpoint_target_already_ideal`（7.5.8）、
+  `invalid_checkpoint_selection`（7.5.9）はvalidation issueに添えて返し、
+  Planner入力はfail closedされる
+- `selected_checkpoint_fixes_target_entry` は、required checkpoint Entryを持つ
+  Targetの他のEntryをそのrunの候補選択から外したことを伝える情報warning（7.5.6）
 
 `max_steps_reached` は `maxPlanSteps`、`max_expanded_states_reached` は
 `maxExpandedStates` に到達した場合だけ使用する。両方へ到達した場合は両方を返してよい。
@@ -220,7 +261,8 @@ export interface PlannerTargetSatisfaction {
 - `hasPractical`、`hasIdeal`、`practicalOwnedWeaponIds`、`idealOwnedWeaponIds` はすべてOwnedGogmaArtianWeaponだけから導出する
 - OwnedNormalArtianWeaponはInventory資源・巨戟化元であり、Target充足武器として評価しない
 - 既に理想品があるTargetは原則Planner対象から外す
-- 既に実用品があるTargetでは、理想候補を優先度に応じて後回しにする
+- 既に実用品があるTargetも理想品未所持であり、実用品を持たないTargetと同じ優先度で
+  Planner対象に残る。`hasPractical` はPlannerの優先順位・scoreに影響しない（7章）
 - PlannerSearchStateの初期 `targetSatisfaction` はTargetSatisfactionから生成する
 - `hasIdeal = true` の場合は常に `hasPractical = true` とする
 
@@ -248,10 +290,18 @@ export interface PlannerSearchState {
   inFlightExistingSourceByOwnedWeaponId: Record<OwnedWeaponId, true>;
   securedOwnedWeaponIdByEntryId: Record<BuildListEntryId, OwnedWeaponId>;
   trace: PlannerSearchAction[];
-  practicalFirstProgressTargetIds: TargetWeaponId[];
+  /**
+   * 各BuildListEntryが実際に到達済みのcompromise checkpoint opportunity ID。
+   * 選択したcheckpointをすべて到達していないEntryはreserveできない（7.5.3）。
+   */
+  reachedCheckpointOpportunityIdsByEntryId: Record<BuildListEntryId, string[]>;
   totalCost: number;
   evaluationScore: number;
 }
+```
+
+`practicalFirstProgressTargetIds` は存在しない。Practicalは独立した到達目標では
+なくなったため、Practical優先の進行記録も、それを使う評価項目も廃止した。
 ```
 
 探索手順。
@@ -525,10 +575,10 @@ scoreだけではbeamWidthやtie-break次第で無効branchが残り、無効な
   現在source versionの一致を要求する。共有physical actionで進行したEntryは操作後の
   versionへ同時に更新する。共有prefix後に別Entryがsourceを変更した場合、古いversionの
   Routeは後続操作・reserveとも実行しない。
-- Practical-first tierはEntry自身のTargetだけでなく、reserve後の再導出で未所持Targetが
-  Practical以上になった場合も満たす。複数Targetを満たす1武器は、そのすべてのTargetを
-  tier対象へ反映する。
-- Practical確保済みでもIdeal未所持なら、そのTargetは理想更新候補として探索に残す
+- reserve後の再導出は、Entry自身のTargetだけでなく、確保した武器が満たす他の
+  未所持Targetにも反映する。複数Targetを満たす1武器は、そのすべてのTargetの
+  TargetSatisfactionへ反映する。
+- 現在在庫がPractical条件だけを満たすTargetもIdeal未所持であり、探索対象に残す
 
 ### 7.1 Planner Search Action / Trace
 
@@ -606,7 +656,9 @@ export interface PlannerSearchTermination {
 statusの決定順序は次のとおりとする。
 
 1. `cancelled`: ユーザーが探索をキャンセルした
-2. `completed`: 全enabled TargetがIdealへ到達した
+2. `completed`: 全enabled Targetが完了した。完了とは `hasIdeal = true` であり、かつ
+   そのTargetにrequired checkpoint Entry（7.5.6）があればそのEntry自身をsecure済み
+   であること。`completedTargetCount` も同じ判定で数える
 3. `incomplete`: それ以前に `PlannerOptions` boundが探索を打ち切った
 4. `exhausted`: boundに到達せず探索が自然終了し、全Target完成Planが無かった
 
@@ -693,9 +745,7 @@ Planner内部ではBeam Searchの状態評価用にCandidate Scoreを計算す�
 export interface CandidateScore {
   targetPriorityScore: number;
   satisfactionScore: number;
-  categoryScore: number;
   distancePenalty: number;
-  resourcePenalty: number;
   conflictPenalty: number;
   total: number;
 }
@@ -706,28 +756,39 @@ export interface CandidateScore {
 ```ts
 targetPriorityScore = target.priority * 10000
 satisfactionScore =
-  !state.targetSatisfaction[target.id].hasPractical
-    ? 50000
-    : candidate.category === "ideal" &&
-      !state.targetSatisfaction[target.id].hasIdeal
-      ? 20000
-      : 0
-categoryScore =
-  candidate.category === "ideal" ? 20000 :
-  10000
+  state.targetSatisfaction[target.id].hasIdeal ? 0 : 50000
 distancePenalty = estimatedOperationCount * 100
 conflictPenalty = conflictCount * 5000
 ```
+
+state全体の評価は次の3項からなる。
+
+```text
+achieved  = sum over Targets (hasIdeal なら 1200000 + priority * 120000)
+progress  = Target ごとに、relevant で進行中の Entry の最大 (CandidateScore.total + 進行bonus)
+penalty   = trace.length * 100
+evaluationScore = achieved + progress - penalty
+```
+
+`hasPractical` はCandidateScoreにもstate評価にも一切現れない。Practical未所持の
+Targetと、Practical所持かつIdeal未所持のTargetは同じ扱いであり、同priority・
+同costなら `hasPractical` の有無だけでscore差は付かない。Beam pruningの順序も
+同様である。競合の `recommendedBuildListEntryId` もTarget priority・次Candidate
+までの距離・操作数・安定IDだけで決め、`hasPractical` を読まない。
+
+`categoryScore` は存在しない。BuildListEntryのCandidateは常に理想品なので、
+categoryで重み付けする対象がない。妥協checkpointはscoreへ加算も減算もしない
+hard constraintであり、7.5で扱う。
 
 制約。
 
 - scoreはBeam Search内の状態比較用であり、単独で採用候補を確定しない
 - scoreはPlanner内部の比較用であり、初期版UIで高度なユーザー調整は提供しない
 - Debug Modeではscore内訳を表示してよい
-- 実用品未所持Targetでは実用候補の価値を高くする
-- 実用品未所持TargetをPractical以上へ進める評価を、実用品取得済みTargetのIdeal更新より高くする
-- Practical確保後はhasPracticalを維持しつつIdeal候補を評価する
-- 理想候補でも、実用品未所持Targetの遠すぎる理想は短距離実用品より後回しになることがある
+- Practical優先(practical-first)の評価項目は存在しない。Plannerが追う到達目標は
+  Targetの理想品だけである
+- `hasPractical` は6章の充足判定として残るが、Beam Searchの目標にはしない
+- 選択済みcheckpointはscoreではなくhard constraintとして扱う(7.5)
 - `isProtected = true` の武器に対するReset Bonuses・Keep Bonuses・Reset Skillsはpenaltyではなく実行不能な展開として除外する
 - `status` はユーザー管理ラベルであり、score項目にしない。未分類武器の本数はPlanner scoreへ影響しない
 
@@ -744,7 +805,8 @@ correctness / feasibilityより下位のPlan quality preferenceを1つ定義す�
 
 ```text
 correctness / feasibility
-  -> Target satisfaction / practical-first
+  -> 選択済みcheckpointの充足（hard constraint、7.5）
+  -> Target satisfaction
   -> 既存evaluationScore（Target priority、satisfaction、resource cost、action count、conflict）
   -> preferred source match（7.4）
   -> weaponSwitchCount 昇順
@@ -849,14 +911,14 @@ semantic pruningではない。
 ### 7.4 Plan preference: Targetの優先起点
 
 `TargetWeapon.preferredOwnedWeaponId`（[DATA_MODEL.md](./DATA_MODEL.md) 8.5）は、Plannerでも
-hard constraintにしない。correctness、Target satisfaction、practical-first、Target priority、
-Candidate category、operation / resource / conflict cost、実行可能性はすべてpreferredより上位
+hard constraintにしない。correctness、選択済みcheckpointの充足、Target satisfaction、
+Target priority、operation / resource / conflict cost、実行可能性はすべてpreferredより上位
 である。preferred起点は、それらが同等の場合のPlan preferenceとする。
 
 #### 優先順位
 
 ```text
-practical-first
+選択済みcheckpointの充足
   -> 既存evaluationScore / correctness / cost
   -> preferred source match
   -> weaponSwitchCount
@@ -921,6 +983,170 @@ Target Satisfactionは従来どおり武器種、属性、実際のボーナス�
 Target AがWeapon Xを優先起点にしていても、条件を満たすWeapon YによってTarget Aが
 Ideal satisfiedになってよい。
 
+### 7.5 選択済みcompromise checkpointの扱い
+
+`BuildListEntry.selectedCheckpointOpportunityIds`（[DATA_MODEL.md](./DATA_MODEL.md) 9.4）は
+**hard constraint** である。Plannerはこれを無視・解除・別opportunityへの読み替えの
+いずれも行わない。できるのは「それを満たすPlanを作れない」と報告することだけである。
+
+#### 7.5.1 選択済みcheckpoint終端はfast-forwardしない
+
+選択したcheckpointが終わるRoute unitは、7.0.2のsilent fast-forward対象から外す。
+`canSkipWhenCounterPassed = false` とする。ユーザーはその瞬間に実際にその妥協武器を
+手に持つのだから、その状態は「直後に上書きされる未観測な中間状態」ではない。
+
+選択されていないcheckpoint相当の中間unitは従来どおりskip可能である。
+選択したcheckpointより手前にあり、次の操作が出力全体を書き換えるprefix unitも
+従来どおりskip可能である。skipしてもcheckpoint状態そのものは変わらないためである。
+
+#### 7.5.2 checkpointはCounter競合の当事者になりうる
+
+7.0.2の通り、skip可能unitはCounter位置の競合参加者にならない。選択によって
+`canSkipWhenCounterPassed = false` になったunitは、通常の必須unitと同じく
+`same_gogma_counter` / `same_skill_counter` の当事者になる。
+
+したがって2武器が同じCounter位置で別々のcheckpointを選択し、その2 unitが
+1つの共有物理actionにならない場合、競合として報告する。ユーザーは作成リストで
+どちらかのcheckpointを別opportunityへ変更するか解除することで解消できる。
+
+1つの共有物理actionが複数Entryのcheckpointを同時に達成できる場合は、
+7.0の共有契約どおり1回だけ実行し、重複操作しない。
+
+#### 7.5.3 未到達のcheckpointはreserveを止める
+
+`reserve_weapon` の展開条件に、そのEntryの選択済みcheckpointをすべて実際に
+到達済みであることを加える。満たさない場合は
+`selected_checkpoint_not_reached` として拒否する。
+
+到達記録は `PlannerSearchState.reachedCheckpointOpportunityIdsByEntryId` が持つ。
+記録されるのは実際に実行されたunitだけである。checkpoint終端はfast-forwardされない
+ので、silent fast-forwardで到達済みになることはない。
+
+同一groupの別opportunityへ到達しても、選択したopportunityの到達にはならない。
+Plannerが選択を勝手に読み替えないという契約はここで具体化される。
+
+#### 7.5.4 PlanStepはmilestoneを持つが、checkpoint専用Stepは作らない
+
+checkpointは新しい `PlanStepOperationType` ではない。到達を生む物理Step
+（Reset Bonusesなど）に `PlanStep.checkpointMilestones` を付ける。
+
+```ts
+export interface PlanStepCheckpointMilestone {
+  buildListEntryId: BuildListEntryId;
+  targetWeaponId: TargetWeaponId;
+  checkpointGroupId: CompromiseCheckpointGroupId;
+  checkpointOpportunityId: CompromiseCheckpointOpportunityId;
+  remainingOperationCount: number;
+}
+```
+
+- checkpoint到達でOwnedWeaponをreserveしない
+- checkpoint到達でstatusも保護も変更しない
+- checkpoint到達でPlanは止まらない。`remainingOperationCount` 分の後続Stepが必ず残る
+- 従来のreserve semantics（`status = "ideal"`、新規武器は保護あり）は、最終的に
+  理想品が完成したときだけ適用する
+- 1つの共有Stepが複数Entryのcheckpointを達成した場合、milestoneはEntryごとに
+  1件ずつ並ぶ。Stepを複製しない
+
+Trace Replayは、milestoneを出す前に、そのRoute位置でreplayした状態が選択された
+opportunityの `restorationBonuses`（slot順まで）、`restorationBonusScope`、
+`seriesSkillId`、`groupSkillId` と一致することを検証する。一致しない場合は
+`checkpoint_state_mismatch` としてfail closeする。
+
+#### 7.5.5 選択変更とPlanのstale
+
+checkpoint選択はPlanの `PlanningInputSnapshot.buildListEntriesHash` に含める。
+選択を変えるとhashが変わるので、既存Planは通常のBuild List変更と同じく
+再計算対象になる。一方でBuildListEntry自体はstaleにならない
+（[DATA_MODEL.md](./DATA_MODEL.md) 9.4）。
+
+#### 7.5.6 checkpoint-selected EntryはTargetのrequired Entry
+
+`selectedCheckpointOpportunityIds.length > 0` のBuildListEntryは、そのPlanner runに
+おける当該Targetの **required Entry** である。checkpoint選択は
+「このTargetではこのcanonical Ideal Route上の中間状態を必ず利用する」という
+ユーザー入力であり、同じTargetの別Entryで迂回できてはならない。
+
+required Entryを持つTargetについて、Plannerは次を保証する。
+
+- Targetの完了は、required Entry自身が選択済みcheckpointをすべて実到達し、その
+  Ideal Candidateを `reserve_weapon` でsecureしたときだけである。別Entry、別Target
+  のEntry、または既存武器によって `hasIdeal = true` になっても、それだけでは
+  Targetを完了扱いにしない
+- required EntryはsecureされるまでrelevanceをPlannerに保つ。`hasIdeal` だけで
+  irrelevantにしない
+- 同じTargetの他のBuildListEntryは、そのrunのcandidate selectionから外す。代替
+  完成Routeとして採用せず、競合検出・共有physical action・scoreにも参加させない。
+  永続データを削除・stale化する必要はなく、authorityをrequired Entryへ固定する
+  だけである。外したEntryは `selected_checkpoint_fixes_target_entry` warningで
+  ユーザーへ伝える
+
+authorityは `PlannerCheckpointRequirements`（Target -> required Entry ID）の1つであり、
+`preparePlannerInitialContext()` がそのrunのvalid BuildListEntry全体から導出する。
+`entryIsRelevantForState()`、`isPlannerSearchStateComplete()`、Beam Searchの展開・
+reserve・conflict detection・`progressPotential`、typed termination、constrained
+re-search / what-if（9.5.2）はすべてこの1つの導出を読む。どこかで参加者だけから
+再導出してはならない。
+
+これはscoreではなくhard correctness / feasibility constraintである。required Entryを
+「他Entryより高いscore」で優先する実装にしない。
+
+Plan生成後にも同じ不変条件をfail-closed defenseとして置く。`completed` を主張する
+Beam Searchの結果がrequired Entryをsecureしていない場合、またはsecure済みEntryの
+選択済みcheckpointに対応する `PlanStep.checkpointMilestones` が存在しない場合は
+`PlannerPlanGenerationError` として失敗し、Draft Planを作らない。
+
+#### 7.5.7 1 Targetにつきcheckpoint-selected Entryは最大1件
+
+同一TargetにBuildListEntryが複数存在すること自体は許可する。ただしcheckpointを
+選択したEntryが同一Targetに2件以上ある場合、ユーザーが2本のRouteを両方必須に
+したのか代替として選んだのかをPlannerは推測できない。
+
+v1では保守的に、Planner入力のcollection-level invariantとして
+
+```text
+1 Targetにつき selectedCheckpointOpportunityIds.length > 0 のBuildListEntryは最大1件
+```
+
+を要求する（[DATA_MODEL.md](./DATA_MODEL.md) 9.4）。判定対象はvalidation後の
+valid Entry集合である。2件以上ある場合は `validatePlannerInput()` が
+`buildListEntries` のvalidation issueと `multiple_selected_checkpoint_entries`
+warningでfail closedし、Build Listで片方のcheckpoint選択を解除するよう案内する。
+自動で片方を選ぶ、score・Candidate cost・入力順で決める、最初のEntryを採用する、
+のいずれも行わない。
+
+1つのEntry内で異なるcheckpoint groupを複数選択できる契約（1 groupにつき1件）は
+そのまま維持する。
+
+#### 7.5.8 既にIdeal所持のTargetにcheckpoint選択がある場合
+
+Planner開始時点で `hasIdeal = true` のTargetにrequired checkpoint Entryがある場合、
+Plannerはそのcheckpointを暗黙に捨てて正常終了してはならない。v1では安全側として、
+`createInitialPlannerSearchState()` が `buildListEntries` のvalidation issue
+（`invalid_state`）と `selected_checkpoint_target_already_ideal` warningで
+Planner入力をfail closedし、「既に理想品を所持している目標武器のcheckpoint選択を
+Build Listで解除してください」と案内する。
+
+checkpoint選択の無いTargetが既にIdealを所持している場合は従来どおり
+（`all_targets_already_satisfied` など）である。
+
+#### 7.5.9 壊れたcheckpoint選択はPlanner入力をfail closedする
+
+`selectedCheckpointOpportunityIds` の構造違反（Candidate Snapshotに存在しない
+opportunity ID、同一groupからの複数選択、重複ID）は、
+[DATA_MODEL.md](./DATA_MODEL.md) 9.4のDomain validationが拒否する。Planner入力
+validationも同じ共有関数 `validateBuildListEntryCheckpointSelection()` を各
+BuildListEntryへ適用し、違反があればそのEntryを含むPlanner入力全体を
+`buildListEntries.<id>.selectedCheckpointOpportunityIds` のvalidation issueと
+`invalid_checkpoint_selection` warningでfail closedする。
+
+- 壊れた選択を「選択なし」と解釈してBeam Searchへ入れない
+- 同じTargetのselection-freeな別Entryを代わりに採用して迂回しない（Planner入力全体が
+  無効なので、そのrunではどのEntryも計画しない）
+- 保存済み `isStale` を現在状態のauthorityとして信用しない契約は変わらない。
+  この検証はstalenessではなく、現在入力の構造検証である
+- 正しい選択を持つEntryと選択のないEntryは従来どおり動作する
+
 ---
 
 ## 8. 在庫シミュレーション
@@ -984,9 +1210,11 @@ statusを書き換える経路は次の2つだけである。
 → Owned Weapons画面の通常CRUD
 
 Candidateを reserve_weapon で確保
-→ Candidate categoryを管理ラベルとして設定する
-   practical Candidate → status = practical
-   ideal Candidate     → status = ideal
+→ 理想品ラベルを設定する
+   新規生成武器 → status = ideal、保護あり
+   既存Gogma更新 → status = ideal、保存済み保護値を維持する
+
+妥協checkpointへ到達しただけではstatusも保護も変更しない（7.5.4）。
 ```
 
 `reserve_weapon` の設定は新規生成Candidateでも既存Gogma Candidateの確保でも同じであり
@@ -1029,6 +1257,9 @@ participantにもconflict resolutionのblocking対象にもならない（7.0.2�
 actionとしてshareできる場合も従来どおり競合ではない。`same_owned_weapon_consumed` には
 この除外を適用しない。
 
+選択済みcheckpointの終端unitは `canSkipWhenCounterPassed = false` になるため、
+通常の必須unitと同じく競合当事者になりうる（7.5.2）。
+
 ただし競合でないことと実行順序が自由であることは別である。必須unitとskip可能unitが同じ
 Counter位置にある場合、必須unitを先に実行する順序をPlanner自身が一意に決める（7.0.2）。
 ユーザー選択の競合ではないため、Conflict Resolution UIへ出さない。
@@ -1036,16 +1267,91 @@ Counter位置にある場合、必須unitを先に実行する順序をPlanner�
 解決方針。
 
 1. Target priorityが高い候補
-2. 実用品未所持Targetの候補
-3. ideal候補
-4. 見送った場合の次候補までの距離が遠い候補
-5. 武器消費が少ない候補
-6. 操作量が少ない候補
+2. 見送った場合の次候補までの距離が遠い候補
+3. 武器消費が少ない候補
+4. 操作量が少ない候補
 
 ユーザー選択が必要な場合。
 
 - score差が小さい
-- どちらも高優先度Targetの初回実用品
+- どちらも高優先度Targetの候補
+
+### 9.5 checkpointが関係する競合
+
+競合の当事者が選択済みcheckpointの終端unitである場合、`PlanConflict` へ
+typed metadataとしてそれを記録する。
+
+```ts
+export interface PlanConflictCheckpointParticipant {
+  buildListEntryId: BuildListEntryId;
+  checkpointGroupId: CompromiseCheckpointGroupId;
+  checkpointOpportunityId: CompromiseCheckpointOpportunityId;
+}
+```
+
+`PlanConflict.checkpointParticipants` は、その競合のどのEntryが「自分で選んだ
+checkpointのために」その位置を必要としているかを示す。UIはこれを使って
+「この競合には選択済みcheckpointが関係しています。作成リストでcheckpointを変更
+または解除してください。」と案内できる。
+
+- `PlanConflict.id` の生成規則には含めない。既存のConflictKind + kind固有position +
+  sorted participant Entry IDのままである
+- 新しい `ConflictKind` を追加しない
+- Plannerがこのmetadataを見て選択を自動変更することはない
+
+#### 9.5.1 checkpoint競合は勝者選択で解決できない
+
+`checkpointParticipants` が1件以上ある競合は、汎用の `PlannerConflictResolution`
+では解決できない。どちらのEntryを優先しても、もう一方の選択済みcheckpointを
+Plannerが落とすことになるためである。保守的に、参加者の一方だけがcheckpointで
+あっても、その競合全体を「この候補を優先」の対象外とする。
+
+この拒否はDomain authorityであり、UIだけの無効化ではない。
+
+- 判定は `conflictResolutionRefusalReason()` の1箇所に置く。競合が見つからない、
+  選択Entryが参加者でない、選択済みcheckpointが関係する、のいずれかで拒否する
+- 初期conflict detectionは拒否したresolutionを適用せず
+  `selectedBuildListEntryId = null` のままにする。半適用はしない
+- Beam Searchは `invalid_conflict_resolution` warningを返し、Application / UIは
+  既存のfail closed(11.4)でPlanを保存しない
+- constrained re-searchの `preparePlannerFixedConflictConstraints()` は
+  `checkpoint_conflict` で失敗し(all-or-nothing)、再検索を開始しない。
+  preflightの再対応付け(9.2.3.1)も、対応先の競合がcheckpoint競合なら
+  `checkpoint_conflict` で失敗する
+- Plan UIは、その競合の全participantを `checkpoint_conflict` として利用不可にし、
+  「比較する」「この候補を優先」を無効化して作成リストへの導線を示す
+  ([UI_FLOW.md](./UI_FLOW.md) 11.1)
+
+解決手段は作成リストでcheckpointを変更または解除することだけである。
+同じ武器の同じ操作が複数Entryのcheckpointへ同時に到達する場合は、従来どおり
+1つの共有physical actionであり競合ではない(7.5.2)。
+
+#### 9.5.2 選択済みcheckpointを持つTargetは再検索対象外
+
+constrained re-search(9.2)とwhat-if(9.2.4)は、required checkpoint Entry（7.5.6）を
+持つTargetのRouteを置き換えない。
+
+- 選択済みcheckpointを別のopportunityへ自動的に移さない
+- 「同じ性能へ到達する別Route」へ差し替えない
+- 選択を空にして再検索しない
+
+判定はTarget-wideである。authorityはcurrent PlannerInputのvalid BuildListEntry全体から
+導出した `PlannerCheckpointRequirements`（7.5.6）であり、Conflict contextの
+participantだけではない。競合のparticipantがcheckpointを持たない別Entry Bであっても、
+同じTargetにcheckpoint-selected Entry Aが存在する限り、そのTargetは代替Routeへ
+再検索しない。`createPlannerConflictWorks()` はorchestrationとwhat-ifの両方で
+同じrequirementsを受け取り、participantの `hasSelectedCheckpoints` はその狭い
+証拠として残す。
+
+orchestrationは該当Targetの `PlannerConflictWork` を
+`blockedBySelectedCheckpoint = true` とし、enumeration・materialize・trialを一切
+行わずに競合をそのまま返す。warning kindは
+`selected_checkpoint_blocks_constrained_search`、what-ifの `outcome.status` は
+`blocked_by_selected_checkpoint` とする。選択を持たないTargetの再検索は従来どおりである。
+
+なお7.5.6により、required Entryを持つTargetの他のEntryはそのrunで競合の
+participantにならない。したがってparticipant経由の迂回は、持ち越した
+`PlannerConflictResolution` が現在の競合と対応しないことでもfail closedする。
 
 競合をユーザーが選択した場合は、現在入力へ `PlannerConflictResolution` を追加して
 Plannerを再実行する。`conflictKey` は検出された `PlanConflict.id` と対応し、その競合では
@@ -1081,15 +1387,17 @@ Planner
 
 Candidate Searchは、Plannerで将来競合する可能性があるという理由だけで、2個目以降の
 同一Ideal、遠いCounter位置の代替Ideal、Bonus代替 × Skill代替のCartesian productを
-初回検索で先読みしない。初回検索はcanonical Idealを1件確定し、その
-`estimatedOperationCount = D` 以下で到達可能なPracticalの評価も確定した時点で終了する
-([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6参照)。
+初回検索で先読みしない。初回検索はcanonical Idealを1件確定した時点で終了し、
+そのRoute上のcheckpointを記録済みtraceから抽出する
+([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6 / 5.8参照)。
 
 複数Target間でCounter競合が実際に発生した場合にだけ、Plannerが必要に応じて次を調べる。
 
 - 競合したTargetの再検索
-- 一方を優先した場合の他方の次のPractical / Ideal
+- 一方を優先した場合の他方の次に実行可能なIdeal Route
 - どちらを優先するとどの程度遠くなるか
+
+ただし選択済みcheckpointを持つTargetは再検索の対象外である(9.5.2)。
 
 ## 9.2 Planner-driven constrained re-search
 
@@ -1156,7 +1464,7 @@ Planner / constrained search orchestration
   -> 固定Candidateと共存可能か評価
 
 実行不能 -> 次のCandidate探索を継続
-実行可能 -> next Practical / Ideal として採用
+実行可能 -> 次のIdeal Routeとして採用
 ```
 
 ### 9.2.3 Planner conflict context
@@ -1426,20 +1734,20 @@ Trace Replayであり、preflightではない(9.2.11)。
 ```text
 Target Aを優先した場合
   Target B:
-    次に実行可能なPractical  +3
     次に実行可能なIdeal      +47
 
 Target Bを優先した場合
   Target A:
-    次に実行可能なPractical  +8
     次に実行可能なIdeal      +12
 ```
 
 契約。
 
-- 一方を固定したPlanner制約下で、他方の次に実行可能なPractical / Idealまでの距離を求める
-- 「競合Counter以降のIdealだけ」を探す仕様にしない。競合位置より前のPracticalも、
-  固定Candidateと共同実行可能なら候補である
+- 一方を固定したPlanner制約下で、他方の次に実行可能なIdeal Routeまでの距離を求める
+- 「競合Counter以降のIdealだけ」を探す仕様にしない。競合位置より前の位置で完成する
+  Ideal Routeも、固定Candidateと共同実行可能なら候補である
+- 選択済みcheckpointを持つTargetには代替Routeを求めず
+  `blocked_by_selected_checkpoint` を返す(9.5.2)
 - 距離の表現は既存の `estimatedGogmaAdvance` / `estimatedSkillAdvance` /
   `estimatedNormalAdvance` と `estimatedOperationCount` を用いる
 
@@ -1447,7 +1755,7 @@ what-if比較はB9で実装する。B8では実装しない。B8のorchestration
 仮想fixed constraintを渡せる形へ将来拡張してよいが、B8でB9の機能を先取りしない。
 
 B9-A2で正式契約を確定した。9.2.4.1〜9.2.4.13がその契約である。上記のB0固定契約
-(距離表現、競合位置より前のPracticalも対象、後方固定の禁止)は変更しない。9.2.4.1以降は
+(距離表現、競合位置より前の位置も対象、後方固定の禁止)は変更しない。9.2.4.1以降は
 それを具体化するものであり、9.2.1〜9.2.3.1、9.2.5〜9.2.17のB8契約も変更しない。
 
 B9-A2は仕様文書だけを変更した。`src/**`、テスト、Worker protocol、DB schema、
@@ -1488,33 +1796,28 @@ B9専用のscore / distance comparatorの新設
 ([SEARCH_SPEC.md](./SEARCH_SPEC.md) 3.1)、9.2.4のB0契約が距離表現をこの4値へ固定している。
 別のbaselineを採用すると、同じfield名で別の意味を持つ値が生まれる。
 
-#### 9.2.4.2 Practical / Idealは排他CandidateCategory
+#### 9.2.4.2 Targetごとに1つの結果
 
-B9が求める2枠は、既存の排他 `CandidateCategory`
-([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.1 / 5.2)で定義する。
+what-ifが答えるのはTargetごとに1つである。
 
 ```text
-practical枠 : candidate.category === 'practical'
-ideal枠     : candidate.category === 'ideal'
+このTargetが譲った場合、次に実行可能な理想品Candidateはどれだけ遠いか
 ```
 
-B9でいう「次のPractical」は「Practical条件を満たす任意のCandidate」ではなく、
-`category === 'practical'` のCandidateを指す。
+constrained enumerationは理想品Candidateだけをyieldするため
+([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.7)、category別の枠は存在しない。
+`PlannerWhatIfTargetComparison` は `targetWeaponId` と1つの `outcome` を持つ。
 
-- 同一Candidateが2枠を同時に埋める設計にしない
-- Ideal候補をpractical枠の解として採用しない
-- Target Domainの Ideal ⇒ Practical 包含不変条件
-  ([DATA_MODEL.md](./DATA_MODEL.md) 8.1)は変更しない。包含は条件充足の関係であり、
-  `CandidateCategory` の排他性とは別の層である
-
-したがってwhat-if結果では、practical枠とideal枠が独立に充足・未充足・打ち切りになり得る。
+- practical枠 / ideal枠という2枠構造を設けない
+- 妥協状態をwhat-ifの代替解として提示しない。妥協は独立したRouteではなく、
+  採用された理想品Routeのcheckpointとして作成リストで選ぶものである
 
 #### 9.2.4.3 「次」のordering authority
 
 **重要。** B9の「次に実行可能」は次で定義する。
 
 ```text
-対象CandidateCategory内で compareConstrainedCandidates() 順に最小であり、
+compareConstrainedCandidates() 順に最小であり、
 かつscenario固定制約下のPlanner full rerun + Trace Replayによって
 共存可能性が証明されたCandidate
 ```
@@ -1547,8 +1850,8 @@ B9は2 participantを前提にしない。
 
 ```text
 fixed A
-  -> Target B what-if (practical / ideal)
-  -> Target C what-if (practical / ideal)
+  -> Target B what-if (ideal)
+  -> Target C what-if (ideal)
 ```
 
 各Targetの評価はすべて同じ前提から開始する。
@@ -1645,8 +1948,6 @@ PlanConflict.recommendedBuildListEntryId
 Planner score
 Beam Search bestState
 Target priority
-Candidate category
-Candidate similarity
 ```
 
 `PlannerConflictResolution` の型、`PlanConflict.id` の生成規則、Beam Search内の
@@ -1719,7 +2020,7 @@ B9専用のboundsを新設する。B8の `PlannerOrchestrationBounds` を流用�
 
 ```ts
 interface PlannerWhatIfBounds {
-  maxCandidateTrialsPerCategoryPerTarget: number;
+  maxCandidateTrialsPerTarget: number;
   maxPlannerReruns: number;
 }
 ```
@@ -1740,16 +2041,16 @@ validationのみ。repair / clamp / field-wise completion を行わない
 
 ```ts
 export const defaultPlannerWhatIfBounds: PlannerWhatIfBounds = {
-  maxCandidateTrialsPerCategoryPerTarget: 2,
+  maxCandidateTrialsPerTarget: 2,
   maxPlannerReruns: 8,
 }
 ```
 
 定義authorityは `src/domain/planner/constrained/plannerWhatIfBounds.ts` とする。
-T=2はtwo_targets / dual_categoryで必要なPracticalを得る最小測定値で、Tを増やしても
+T=2はtwo_targets / dual_categoryで必要な代替Idealを得る最小測定値で、Tを増やしても
 semantic改善は観測されなかった。R=6はthree_targetsで全4枠foundとなる最小測定値だが、
 combinedでは最後の枠がrerun boundで止まる。R=8ならcombinedの全4枠がT=2の試行まで
-到達するため、finalistのcombined中央値で約1.8%の追加costを許容し、各非固定Target / categoryの
+到達するため、finalistのcombined中央値で約1.8%の追加costを許容し、各非固定Targetの
 評価機会を優先した。これは測定workload内の根拠であり、任意のTarget数で全枠の試行を保証する
 ものではない。combinedのfoundは0で、Candidate不存在を意味しない。
 
@@ -1763,25 +2064,23 @@ B8の `defaultPlannerOrchestrationBounds = 2 / 1 / 4` の流用ではない。
 `ConstrainedEnumerationBounds` とも独立した決定であり、そのProduction default
 40 / 30 / 100 / 500と9.2.4.10のWorker境界は変更しない。
 
-`maxCandidateTrialsPerCategoryPerTarget` は次の組ごとに独立して数える。
+`maxCandidateTrialsPerTarget` は次の組ごとに独立して数える。
 
 ```text
-(conflict scenario, targetWeaponId, CandidateCategory)
+(conflict scenario, targetWeaponId)
 ```
 
 ```text
-Target B ideal     N trials
-Target B practical N trials
-Target C ideal     N trials
-Target C practical N trials
+Target B  N trials
+Target C  N trials
 ```
 
-一方のcategoryがtrial capへ到達しても、他方のcategoryのtrialを禁止しない。
+一方のTargetがtrial capへ到達しても、他方のTargetのtrialを禁止しない。
 
 1 trialの定義は次とする。
 
 ```text
-対象categoryのCandidateをfeasibility判定の対象として取り上げた時点で1消費する
+対象TargetのCandidateをfeasibility判定の対象として取り上げた時点で1消費する
 ```
 
 ```text
@@ -1792,8 +2091,8 @@ Target C practical N trials
   found になったCandidate
 
 消費しない
-  別CandidateCategoryのCandidate
-  既にfoundを確定済みのcategoryのCandidate
+  別TargetのCandidate
+  既にfoundを確定済みのTargetのCandidate
   enumeration bound到達やcancel等でfeasibility attemptへ到達しなかったCandidate
 ```
 
@@ -1828,14 +2127,11 @@ feasibility comparisonである。この点でB8-C4aの `maxPlannerReruns` と�
 
 ```text
 Target処理順   createPlannerConflictWorks() の既存stable order
-Target内順     practical -> ideal
-category内順   compareConstrainedCandidates()
+Target内順     compareConstrainedCandidates()
 ```
 
 `works` のstable orderをそのまま使用し、B9独自のTarget sortを追加しない。
-Target内の `practical -> ideal` は、共有 `maxPlannerReruns` をどちらのcategoryが先に
-消費するかを固定するexecution scheduling authorityであり、Candidate semantic ordering
-authorityではない。category内のordering authorityは9.2.4.3のとおり
+Target内のordering authorityは9.2.4.3のとおり
 `compareConstrainedCandidates()` のままである。
 
 #### 9.2.4.10 enumeration bounds
@@ -1905,13 +2201,13 @@ found
 
 not_found_within_search_extent
   enumerationが exhausted === true で終わり、
-  そのcategoryにfeasibleなCandidateが無かった
+  そのTargetにfeasibleなCandidateが無かった
 
 stopped_by_enumeration_bound
   Candidate未発見のまま、Search extent boundによって未確認が残った
 
 stopped_by_candidate_trial_bound
-  Candidateはまだ残り得るが、そのcategoryのtrial予算を使い切った
+  Candidateはまだ残り得るが、そのTargetのtrial予算を使い切った
 
 stopped_by_planner_rerun_bound
   Candidate feasibilityを判定するBeam予算を使い切った
@@ -1921,7 +2217,7 @@ stopped_by_planner_rerun_bound
 
 - 「見つからない」と「上限で未確認」を同じ `null` へ潰さない。9.2.16の
   「bound到達を無言でexhaustionとして扱わない」をB9でも維持する
-- 既に `found` を確定したcategoryは、その後enumeration boundへ達したことだけを理由に
+- 既に `found` を確定したTargetは、その後enumeration boundへ達したことだけを理由に
   無効化しない
 - `found` の判定authorityは9.2.4.7だけであり、message文字列をcontrol authorityにしない
 
@@ -2025,8 +2321,8 @@ plan.conflicts
 ```
 
 これは保存済みPlanに残るユーザー明示resolutionの復元である。
-`recommendedBuildListEntryId`、Planner score、Beam bestState、Target priority、Candidate
-category / similarity、`selectedBuildListEntryIds` からresolutionを生成しない。
+`recommendedBuildListEntryId`、Planner score、Beam bestState、Target priority、
+`selectedBuildListEntryIds` からresolutionを生成しない。
 
 ##### participant表示とcurrent availability
 
@@ -2320,7 +2616,7 @@ augmented PlannerInputでPlannerを完全再実行
 ```
 
 enumeratorは `BuildCandidate` を直接yieldしない。`BuildCandidate` は `id` /
-`searchRunId` / `createdAt` / `isSimilarToIdeal` を必須とするが、
+`searchRunId` / `createdAt` / `checkpointGroups` を必須とするが、
 `ConstrainedSearchOrigin` は `searchRunId` と `settings` を持たないため、Search Domain
 側では完成させられない([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.7)。
 
@@ -2344,10 +2640,10 @@ Planner側の要件は次である。
 - `origin` は過去のUI Candidate Search requestではない。Planner計算開始時の
   current validated Search / RNG snapshotから構成し、`rngState` / `normalCounters` /
   `ownedWeapons` / `targetWeapons` / `master` / `calculationContext` を保持する。
-  `searchRunId` / `routeFilter` / `resultFilter` / `settings` を持たせない
+  `searchRunId` / `routeFilter` / `settings` を持たせない
 - constrained re-searchは過去のUI一時filterを継承しない。route scopeは現時点で
-  成立する全Search routeとし、`resultFilter`、similar filter、
-  `maxCandidatesPerTarget` を適用しない。探索範囲の上限は
+  成立する全Search routeとし、UI一時filterや `CandidateSearchSettings` を
+  適用しない。探索範囲の上限は
   `ConstrainedEnumerationBounds` だけをauthorityとする
 - route policyが広がっても、TargetのIdealまたはPractical条件を満たすCandidateだけを
   yieldする契約は維持する
@@ -2575,14 +2871,12 @@ BuildCandidate.id
 BuildCandidate.createdAt
   = PlannerClock
 
-similarityScore
-  = 既存Similarity計算式 ([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.3)
-
-isSimilarToIdeal
-  = 現行B6既定similarity threshold 0.6 を使って算出
+BuildCandidate.checkpointGroups
+  = materializeしたCandidateのRouteへcheckpoint抽出を適用した結果
+    ([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.8)
 ```
 
-`0.6` は表示メタデータ `isSimilarToIdeal` を埋めるためだけに使う。次には使用しない。
+`checkpointGroups` は作成リストの選択入力を支える表示・選択データであり、次には使用しない。
 
 ```text
 Candidate yield可否
@@ -2678,7 +2972,7 @@ Map挿入順へ依存しない。
 
 1件adoptするたびに残りworkを再評価する。current `ProductionPlan.selectedBuildListEntryIds`
 が、そのworkのfixed EntryとそのTargetのEntryを両方含む場合、そのworkは充足済みとして
-enumerationしない。Candidate score・category・`recommendedBuildListEntryId` は判定に
+enumerationしない。Candidate score・`recommendedBuildListEntryId` は判定に
 使わない。
 
 #### monotonic adoption
@@ -3189,7 +3483,7 @@ dominated_by_better_candidateを付けない。
 complete PlanではTraceに登場したこと自体をRejected除外理由にしない。RejectedBuildListEntryは、最終selectedでない検討可能Entryと明確なprotected destructive
 rejectionだけをEntry IDごとに1件作る。理由は証明できる順に
 `requires_protected_weapon`、選択済みConflictによる`resource_conflict`、
-`candidate_already_satisfied`による`already_satisfied`、同一Target・同一categoryで短い採用Routeが
+`candidate_already_satisfied`による`already_satisfied`、同一Targetで短い採用Routeが
 ある`longer_route`を使う。これらを証明できない場合だけ
 `dominated_by_better_candidate`を使う。stale / CalculationContext / capability等のvalidation除外は
 このunionへ押し込まず、既存warning/validation結果の責務とする。
@@ -3254,7 +3548,8 @@ Route別の典型例。
 `reserve_weapon` はPlanner生成時に新しいOwnedWeapon IDを予約し、Candidate Snapshotの
   finalBonuses / Series Skill / Group Skillを持つ `kind = "gogma"` の武器を追加する。
 その武器の `restorationBonusScope` はCandidate Snapshotの `finalBonusScope` と一致させる。
-Ideal候補はstatus Idealかつprotected、Practical候補はstatus Practicalかつunprotectedとして新規登録する。
+Candidateは常に理想品なので、新規登録する武器はstatus idealかつprotectedとする。
+checkpointは同じRouteの途中状態であり、reserveの対象にならない(7.5.3)。
 OwnedWeaponへTarget IDを追加する処理は存在せず、`TargetWeapon.preferredOwnedWeaponId` も
 変更しない（7.4）。
 
@@ -3285,7 +3580,7 @@ protection、Candidate結果、Target参照は11.1と同じ契約とする。
 ```
 
 既存巨戟Routeの `reserve_weapon` は新しい武器を追加せず、Routeの
-`sourceOwnedWeaponId` と同じOwnedGogmaArtianWeaponを更新する。Candidate結果、categoryに
+`sourceOwnedWeaponId` と同じOwnedGogmaArtianWeaponを更新する。Candidate結果、理想品ラベルに
 対応するstatusとTarget参照を反映するが、既存武器の明示的な `isProtected` は変更せず、既存Target参照も失わない。
 
 ## 11.4 既存巨戟 Reset Skills
@@ -3323,7 +3618,7 @@ change_owned_weapon_status    旧PracticalをMaterialへ変更
 
 Plannerは素材用巨戟の補充Routeを生成せず、旧Practical武器の確認付き素材化Stepも
 予定しない。statusを書き換えるのはOwned Weapons画面の通常CRUDと、`reserve_weapon` が
-Candidate categoryを管理ラベルとして設定する場合だけである(8.1)。
+理想品ラベルを設定する場合だけである(8.1)。
 
 保存済みlegacy artifactがこれらのoperationを含んでいても、current Domain operationへ
 自動変換せず、CalculationContext境界でfail closeする。
@@ -3527,19 +3822,27 @@ Workerを利用できない環境ではClientのversionを `production-engine-un
 - 通常アーティアをTargetのPractical / Ideal所持判定に含めない
 - 巨戟アーティアだけを実際のTarget条件で評価する
 - statusではなく条件で実用品所持を判定する
-- 理想品所持TargetをPlanner対象から外す
-- 実用品所持Targetでは理想候補が後回しになる
-- Practical候補確保でhasPracticalだけがtrueになる
+- 理想品所持TargetをPlanner対象から外す。ただしrequired checkpoint Entryを持つ
+  Targetは、そのEntry自身をsecureするまで対象に残る（7.5.6）
+- 妥協品しか持たないTargetはPlanner対象に残る
+- 同一Targetの別Entryの理想品完成だけではrequired checkpoint EntryのTargetを
+  完了扱いにせず、required Entryのcheckpoint到達とsecureで完了する
+- 同一Targetにcheckpoint-selected Entryが2件以上あればfail closedし、片方を自動選択しない
+- Planner開始時点で理想品所持のTargetにcheckpoint選択があればfail closedする
+- checkpoint選択の無い同一Target複数Entryは従来のcandidate選択のまま
+- 競合participantがcheckpointなしのEntryでも、同Targetの別Entryにcheckpoint選択が
+  あればconstrained re-searchとwhat-ifは再検索しない
+- `hasPractical` はstatusではなく実際の性能から判定する
 - Ideal候補確保でhasPracticalとhasIdealがtrueになる
-- Practical確保後もIdeal未所持Targetが理想更新候補として残る
+- 開始OwnedWeaponが妥協条件を満たしていてもcheckpoint opportunityにしない
 
 ## 15.2 Score Test
 
 - priorityが高いTargetの候補が優先される
-- 実用品未所持Targetの実用候補が優先される
-- 遠すぎる理想より近い実用品が優先される
+- 理想品未所持Targetの候補が優先される
 - Candidate ScoreがBeam Searchの状態評価に使われ、単純Score順でPlanが確定しない
-- practical-first進行に差がある場合、`weaponSwitchCount` が少なくても従来の優先順位が勝つ
+- `categoryScore` と `practicalFirstProgressTargetIds` が存在しない
+- 選択済みcheckpointの充足に差がある場合、`weaponSwitchCount` が少なくても従来の優先順位が勝つ
 - `evaluationScore` に差がある場合も、`weaponSwitchCount` が少ない側ではなく高score側が勝つ
 - 両者が同点の場合だけ `weaponSwitchCount` が少ないstateを優先し、それも同数なら
   従来のsemantic / trace stable tie-breakへ進む
@@ -3604,6 +3907,26 @@ Workerを利用できない環境ではClientのversionを `production-engine-un
 - 消費済み武器を再利用しない
 - `status` は使用可否の判定に使われず、未分類の巨戟でも実性能でTargetを満たせる
 
+## 15.4.1 Checkpoint Constraint Test
+
+- 選択済みcheckpoint終端をsilent fast-forwardしない
+- 未選択のcheckpoint相当の中間unitは従来どおりsafe fast-forwardできる
+- checkpointに不要な完全上書き済みprefix unitは従来どおりskipできる
+- 選択済みcheckpointのexact stateがTrace Replayで検証され、不一致は
+  `checkpoint_state_mismatch` になる
+- 選択済みcheckpointを到達していないEntryはreserveできず、
+  `selected_checkpoint_not_reached` になる
+- Plannerが選択済みcheckpointを自動解除しない
+- Plannerが同一groupの別opportunityへ自動変更しない
+- checkpointなしのEntryでは従来のIdeal Route実行意味が変わらない
+- 1つの共有物理actionが複数Entryのcheckpointを同時達成する場合、操作を重複させない
+- checkpointは新しい `PlanStepOperationType` ではない
+- checkpoint milestoneが該当する物理PlanStepへ載る
+- milestone到達後も `remainingOperationCount` 分の後続PlanStepが存在する
+- checkpoint到達でOwnedWeaponをreserveしない
+- checkpoint到達でstatusも保護も変更しない
+- 最終的な理想品完成時だけ従来のreserve semanticsを適用する
+
 ## 15.5 Conflict Test
 
 - 同じRNG位置の候補を競合にする
@@ -3618,12 +3941,17 @@ Workerを利用できない環境ではClientのversionを `production-engine-un
 - skip可能unit同士を同じCounter位置だけで競合にしない
 - 必須unit同士の同一Counter位置競合と `same_owned_weapon_consumed` は従来どおり検出する
 - fast-forward済みのpast prefixがConflict対象へ戻らない
+- 2武器の選択済みcheckpointが同じCounterで両立不能なら競合になる
+- 作成リストで別opportunityへ変更すると、その競合が解消する
+- 選択のない共有prefix位置は従来どおり競合にならない
+- 競合へ参加した選択済みcheckpointが `PlanConflict.checkpointParticipants` に記録され、
+  `PlanConflict.id` の生成規則は変わらない
 
 Planner-driven constrained re-search実装後に追加する観点。
 
-- 再検索の開始位置を `conflictingCounter + 1` へ固定せず、競合位置より前のPracticalも候補になる
+- 再検索の開始位置を `conflictingCounter + 1` へ固定せず、競合位置より前の解も候補になる
 - 同一Counter位置でもshareableなoperationを持つCandidateを除外しない
-- 固定Candidateと共存不能なCandidateを順次読み飛ばし、共存可能なものをnext Practical / Idealとして採用する
+- 固定Candidateと共存不能なCandidateを順次読み飛ばし、共存可能なものをnext Idealとして採用する
 - Candidate Search側にcounter precondition / action identity判定を複製していない
 - earlier same-result solutionが固定Candidateと競合して実行不能な場合に、
   later same-result solutionを再評価して採用できる
@@ -3699,8 +4027,8 @@ B8-Aで固定した契約に対するテスト観点である。実装はB8-B1�
 - enumeratorへ渡す `origin` がPlanner計算開始時のcurrent validated snapshotから
   構成され、過去のUI Candidate Search requestを要求しない
 - constrained re-searchが過去のUI一時filterを継承せず、route scopeが現時点で
-  成立する全Routeになり、`resultFilter` / similar filter /
-  `maxCandidatesPerTarget` を適用しない
+  成立する全Routeになり、UI一時filterや `CandidateSearchSettings` を
+  適用しない
 - 探索範囲の上限が `ConstrainedEnumerationBounds` だけで決まる
 - deterministic constrained search identityがTargetWeapon ID、Search / RNG semantic
   origin、CalculationContext、`ConstrainedEnumerationBounds`、route policyから
@@ -3742,7 +4070,7 @@ B8-Aで固定した契約に対するテスト観点である。実装はB8-B1�
   `searchRunId` / `createdAt` を持たない
 - materializerが `searchRunId` にdeterministic constrained search identityを設定し、
   `id` をそのidentityとCandidate semantic meaningから安定生成する
-- `isSimilarToIdeal` がthreshold 0.6で算出され、その値がyield可否・ordering・
+- materializerが `checkpointGroups` を抽出し、その値がyield可否・ordering・
   route scope・探索終了・探索範囲・off-axis評価・coexistence判定へ影響しない
 - 通常Candidate Searchの `searchRunId` 契約と `BuildCandidate` ID生成規則が
   変更されていない

@@ -106,9 +106,8 @@ describe('BuildCandidate semantic fingerprint', () => {
       id: 'candidate.other' as typeof candidate.id,
       searchRunId: 'search-run.other',
       createdAt: '2027-01-01T00:00:00.000Z',
-      category: candidate.category === 'ideal' ? ('practical' as const) : ('ideal' as const),
-      isSimilarToIdeal: !candidate.isSimilarToIdeal,
-      similarityScore: 0,
+      // Derived and presentational content, never Candidate meaning.
+      checkpointGroups: [],
       estimatedOperationCount: candidate.estimatedOperationCount + 10,
       requiredMaterials: [],
     }

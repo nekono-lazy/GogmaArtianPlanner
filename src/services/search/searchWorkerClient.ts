@@ -99,9 +99,7 @@ export function createSearchWorkerClient(
     if (!current) return
     if (data.type === 'progress') {
       current.onProgress?.({
-        completedTargets: data.completedTargets,
-        totalTargets: data.totalTargets,
-        currentTargetWeaponId: data.currentTargetWeaponId,
+        targetWeaponId: data.targetWeaponId,
         phase: data.phase,
         processedWorkItems: data.processedWorkItems,
       })

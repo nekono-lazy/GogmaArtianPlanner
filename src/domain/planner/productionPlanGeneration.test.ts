@@ -181,7 +181,8 @@ describe('Production plan generation', () => {
     expect(plan?.steps.every((step) => !step.isCompleted && step.completedAt === null)).toBe(true)
     expect(plan?.steps[4].ownedWeaponId).toBe('owned.fixed.1')
     expect(plan?.steps[4].inventoryChange?.addOwnedWeapon?.id).toBe('owned.fixed.1')
-    expect(plan?.steps[4].inventoryChange?.addOwnedWeapon?.isProtected).toBe(false)
+    // A Planner-secured Ideal Candidate defaults to protected.
+    expect(plan?.steps[4].inventoryChange?.addOwnedWeapon?.isProtected).toBe(true)
     expect(plan?.steps[0].expectedStateBefore).toEqual(plan?.baseSnapshot.initialExecutionState)
     plan?.steps.slice(0, -1).forEach((step, index) => {
       expect(step.expectedStateAfter).toEqual(plan.steps[index + 1].expectedStateBefore)
@@ -193,10 +194,6 @@ describe('Production plan generation', () => {
 
   it('registers a newly reserved Ideal candidate protected', async () => {
     const { input, dependencies } = fixture()
-    const entry = input.buildListEntries[0]
-    entry.candidateSnapshot.category = 'ideal'
-    entry.candidateSnapshot.isSimilarToIdeal = false
-    entry.candidateSnapshot.similarityScore = null
     const plan = (await createProductionPlan(input, dependencies)).plan
     expect(plan?.steps.at(-1)?.operationType).toBe('reserve_weapon')
     expect(plan?.steps.at(-1)?.inventoryChange?.addOwnedWeapon).toMatchObject({
@@ -500,7 +497,6 @@ describe('Production plan generation', () => {
       if (operation.type !== 'create_normal_artian') throw new Error('Fixture route changed.')
       operation.count = 2
     })
-    expectChanged((value) => { value.buildListEntries[0].candidateSnapshot.category = 'ideal' })
     expectChanged((value) => { value.buildListEntries[0].candidateSnapshot.requiredMaterials[0].quantity = 3 })
     expectChanged((value) => { value.buildListEntries[0].searchStateHash = 'hash.changed.search' })
     expectChanged((value) => { value.buildListEntries[0].referencedOwnedWeaponsHash = 'hash.changed.owned' })
@@ -702,6 +698,7 @@ describe('Production plan generation', () => {
       },
       debug: null,
       isBlindNormalCreation: false,
+    checkpointMilestones: [],
     }
     expect(() => createPlanStepsFromDrafts(
       [draft],

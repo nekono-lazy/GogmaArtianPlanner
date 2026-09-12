@@ -3,6 +3,7 @@ import type {
   BuildListEntry,
   BuildListEntryId,
   BuildRoute,
+  CompromiseCheckpointOpportunityId,
   GroupSkillId,
   RestorationBonus,
   RestorationBonusScope,
@@ -105,6 +106,34 @@ export function isSameBuildListCandidate(
 export interface CreateBuildListEntryOptions {
   id?: BuildListEntryId
   createdAt?: string
+  /**
+   * The compromise checkpoints the user chose on the Search screen.
+   *
+   * They are the Entry's own Planner input, so they never take part in
+   * `createEntryId()` or `createBuildCandidateMeaningFingerprint()`: two Entries
+   * differing only in their checkpoint selection would otherwise be two
+   * different Candidates, which they are not (`docs/DATA_MODEL.md` 9.4).
+   */
+  selectedCheckpointOpportunityIds?: readonly CompromiseCheckpointOpportunityId[]
+}
+
+/**
+ * Replaces one Entry's checkpoint selection.
+ *
+ * It is an ordinary Build List edit, not a recalculation: the Candidate
+ * Snapshot, both hashes and the `CalculationContext` are untouched, so the
+ * Entry does not become stale. What it does change is the Plan's build-list
+ * semantic hash, which is what makes an existing Plan a recalculation target
+ * (`docs/PLANNER_SPEC.md` 7.5.5).
+ */
+export function withSelectedCheckpointOpportunities(
+  entry: BuildListEntry,
+  selectedCheckpointOpportunityIds: readonly CompromiseCheckpointOpportunityId[],
+): BuildListEntry {
+  return {
+    ...entry,
+    selectedCheckpointOpportunityIds: [...selectedCheckpointOpportunityIds],
+  }
 }
 
 function createEntryId(candidate: BuildCandidate, createdAt: string): BuildListEntryId {
@@ -129,6 +158,9 @@ export function createBuildListEntry(
     candidateId: candidate.id,
     targetWeaponId: target.id,
     candidateSnapshot: structuredClone(candidate),
+    selectedCheckpointOpportunityIds: [
+      ...(options.selectedCheckpointOpportunityIds ?? []),
+    ],
     targetDefinitionHash: createTargetDefinitionHash(target),
     searchStateHash: candidate.searchStateHash,
     referencedOwnedWeaponsHash: candidate.referencedOwnedWeaponsHash,

@@ -12,11 +12,13 @@ import {
   isBlindCreateNormalArtianOperation,
   stableStringify,
   validateBuildCandidate,
+  validateBuildListEntryCheckpointSelection,
   validateBuildRoute,
   validateOwnedWeapon,
 } from '../models/publicTypes'
 import { evaluateBuildListEntryStaleness } from '../buildList'
 import { validateTargetPreferredOwnedWeapons } from '../target'
+import { derivePlannerCheckpointRequirements } from './plannerCheckpoints'
 import { collectReferencedOwnedWeaponIds } from '../models/hashing'
 import { deriveRngCapabilities } from '../rng/capabilities'
 import type { RngPredictionUnsupportedReason } from '../rng/rngEngine'
@@ -68,7 +70,7 @@ export function validatePlannerOptions(
     issues.push(issue(
       'preferPracticalBeforeIdeal',
       'invalid_structure',
-      'Practical-before-Ideal priority is fixed in v1 and is not a Planner option.',
+      "'preferPracticalBeforeIdeal' belongs to a legacy Planner contract and is not supported: the Planner has no Practical-first priority and takes no such option.",
     ))
   }
   return { isValid: issues.length === 0, issues }
@@ -340,6 +342,20 @@ export function validatePlannerInput(
   const entriesByStableId = [...input.buildListEntries]
     .sort((left, right) => compareStableStrings(left.id, right.id))
   entriesByStableId.forEach((entry) => {
+      // A malformed checkpoint selection is corrupted planning input, not a
+      // stale Entry: it fails the whole input closed so that the selection is
+      // never read as empty and no other Entry of the Target stands in for it
+      // (`docs/PLANNER_SPEC.md` 7.5.9).
+      const selection = validateBuildListEntryCheckpointSelection(entry)
+      if (!selection.isValid) {
+        const detail = selection.issues
+          .map(({ path, message }) => `${path}: ${message}`)
+          .join(' ')
+        const message =
+          `BuildListEntry '${entry.id}' has an invalid compromise checkpoint selection (${detail}). Clear that checkpoint selection in the Build List before planning.`
+        issues.push(issue(`buildListEntries.${entry.id}.selectedCheckpointOpportunityIds`, 'invalid_state', message))
+        warnings.push({ kind: 'invalid_checkpoint_selection', message })
+      }
       const eligibility = currentEntryEligibility(
         input,
         dependencies,
@@ -354,6 +370,19 @@ export function validatePlannerInput(
       excludedBuildListEntries.push({ entry, reason: eligibility.reason })
       appendUniqueEntryWarning(warnings, warningKeys, entry, eligibility.warningKind, eligibility.reason)
     })
+
+  // Collection-level checkpoint invariant (`docs/DATA_MODEL.md` 9.4,
+  // `docs/PLANNER_SPEC.md` 7.5.7): two checkpoint-selected Entries of one
+  // Target leave the user's intent unknown, so the input fails closed. The
+  // Planner never picks one by score, cost, or position.
+  derivePlannerCheckpointRequirements(
+    validBuildListEntries.map(({ entry }) => entry),
+  ).violations.forEach(({ targetWeaponId, buildListEntryIds }) => {
+    const message =
+      `TargetWeapon '${targetWeaponId}' has ${buildListEntryIds.length} BuildListEntries with a selected compromise checkpoint (${buildListEntryIds.join(', ')}); at most one is allowed. Clear the checkpoint selection of all but one in the Build List.`
+    issues.push(issue('buildListEntries', 'invalid_structure', message))
+    warnings.push({ kind: 'multiple_selected_checkpoint_entries', message })
+  })
 
   // The same collection-level authority the save Service and Candidate Search
   // use, so a preference pointing at a missing, incompatible, protected, or
@@ -423,7 +452,9 @@ function validateReservedGogma(
     return
   }
   if (
-    weapon.status !== candidate.category ||
+    // Every Candidate is a canonical Ideal Candidate, so a secured weapon
+    // always carries the Ideal label.
+    weapon.status !== 'ideal' ||
     weapon.isProtected !== expectedProtection ||
     !sameBonusSlots(weapon.restorationBonuses, candidate.finalBonuses) ||
     weapon.seriesSkillId !== candidate.seriesSkillId ||
@@ -452,7 +483,7 @@ export function validateReserveWeaponInventoryChange(
         added,
         'addOwnedWeapon',
         issues,
-        entry.candidateSnapshot.category === 'ideal',
+        true,
       )
     }
     if (change.removeOwnedWeaponIds.length > 0 || change.updateOwnedWeapons.length > 0) {
@@ -468,7 +499,7 @@ export function validateReserveWeaponInventoryChange(
         added,
         'addOwnedWeapon',
         issues,
-        entry.candidateSnapshot.category === 'ideal',
+        true,
       )
       if (added.id === sourceId) {
         issues.push(issue('addOwnedWeapon.id', 'invalid_reference', 'The converted Gogma weapon must use a new OwnedWeapon ID.'))

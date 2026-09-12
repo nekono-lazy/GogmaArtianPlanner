@@ -3,11 +3,11 @@ import * as routeShared from './routeSearchShared'
 import { SearchWorkQueue } from './searchWorkQueue'
 import { TargetSearchScheduler } from './targetSearchScheduler'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createCandidateSearchEngine, createCandidateSearchInput, practicalOnlyBonuses, SEARCH_FIXTURE_TIME } from '../../test/fixtures/candidateSearch'
+import { createCandidateSearchEngine, createCandidateSearchInput, practicalOnlyBonuses, SEARCH_FIXTURE_TIME, candidatesOf } from '../../test/fixtures/candidateSearch'
 import { candidateId, ownedWeaponId } from '../../test/fixtures/domainData'
 import type { BuildCandidate, OwnedGogmaArtianWeapon, RestorationBonusSet } from '../models/publicTypes'
 import { searchCandidates } from './candidateSearch'
-import { candidateStableKey, filterCandidates, deduplicateCandidates } from './candidateProcessing'
+import { candidateStableKey, deduplicateCandidates } from './candidateProcessing'
 import { createTargetSkillStream } from './skillStream'
 import { createTargetBonusStream } from './bonusStream'
 import {
@@ -19,7 +19,7 @@ import { createSearchPredictionSupport, type RouteSearchContext } from './routeS
 import { searchNormalArtianRoutes } from './normalArtianRouteSearch'
 import { searchOwnedNormalArtianRoutes } from './ownedNormalArtianRouteSearch'
 import { searchExistingGogmaRoutes } from './existingGogmaRouteSearch'
-import { retainInitialCandidates } from './candidateRetention'
+import { selectCanonicalIdealCandidate } from './candidateRetention'
 import { gogmaKeepFamilyLayoutKey } from '../rng/gogmaBonusFamily'
 
 function fixture(ideal = true, bound = 100) {
@@ -63,9 +63,11 @@ describe('B4 actual Target-wide termination', () => {
     vi.mocked(engine.predictNormalArtian).mockReturnValue(idealBonuses)
     vi.mocked(engine.predictSkills).mockReturnValue({ seriesSkillId: 'series_skill.fixture.a', groupSkillId: null })
     const result = await searchCandidates(input, engine, options)
-    const candidates = result.targetResults[0].candidates
+    const candidates = candidatesOf(result.targetResult)
     expect(candidates.find((c) => c.estimatedOperationCount === 2)).toBeUndefined()
-    const ideals = candidates.filter((c) => c.category === 'ideal')
+    // Every returned Candidate is the canonical Ideal, so a Normal-scope D=2
+    // result is not returned at all (`docs/SEARCH_SPEC.md` 5.5.4).
+    const ideals = candidates
     expect(ideals).toHaveLength(1)
     expect(ideals[0]).toMatchObject({
       restorationBonusScope: 'gogma_artian', finalBonuses: idealBonuses,
@@ -90,9 +92,9 @@ describe('B4 actual Target-wide termination', () => {
     source.restorationBonuses = structuredClone(input.targetWeapons[0].idealBonuses)
     source.seriesSkillId = 'series_skill.fixture.a'
     const result = await searchCandidates(input, engine, options)
-    expect(result.targetResults[0].candidates).toHaveLength(1)
-    expect(result.targetResults[0].candidates[0]).toMatchObject({
-      category: 'ideal', restorationBonusScope: 'gogma_artian', estimatedOperationCount: 1,
+    expect(candidatesOf(result.targetResult)).toHaveLength(1)
+    expect(candidatesOf(result.targetResult)[0]).toMatchObject({
+      restorationBonusScope: 'gogma_artian', estimatedOperationCount: 1,
       route: { kind: 'existing_gogma_reset_bonuses', sourceOwnedWeaponId: source.id },
     })
     expect(engine.predictGogmaBonus).toHaveBeenCalledTimes(1)
@@ -105,9 +107,9 @@ describe('B4 actual Target-wide termination', () => {
   it.each([100, 5000])('settles D=3 without eagerly predicting configured %i bounds', async (bound) => {
     const { input, engine, calls } = fixture(true, bound)
     const result = await searchCandidates(input, engine, options)
-    const candidates = result.targetResults[0].candidates
-    expect(candidates.filter((c) => c.category === 'ideal')).toHaveLength(1)
-    expect(candidates.find((c) => c.category === 'ideal')?.estimatedOperationCount).toBe(3)
+    const candidates = candidatesOf(result.targetResult)
+    expect(candidates).toHaveLength(1)
+    expect(candidates[0].estimatedOperationCount).toBe(3)
     expect(engine.predictNormalArtian).toHaveBeenCalledTimes(2)
     expect(engine.predictSkills).toHaveBeenCalledTimes(3)
     expect(calls.filter((call) => call.startsWith('reset_bonuses:'))).toEqual(['reset_bonuses:10', 'reset_bonuses:11', 'reset_bonuses:12'])
@@ -119,30 +121,28 @@ describe('B4 actual Target-wide termination', () => {
   it('exhausts configured positions when no Ideal exists, preserving one prediction per key', async () => {
     const { input, engine, calls } = fixture(false, 4)
     const result = await searchCandidates(input, engine, options)
-    expect(result.targetResults[0].candidates.some((c) => c.category === 'ideal')).toBe(false)
+    // No Ideal inside the configured extent means no Candidate at all: a
+    // compromise state found on the way is never returned, because only a
+    // strict prefix of a real Ideal Route can be one (SEARCH_SPEC 5.7).
+    expect(candidatesOf(result.targetResult)).toEqual([])
     expect(engine.predictNormalArtian).toHaveBeenCalledTimes(4)
     expect(engine.predictSkills).toHaveBeenCalledTimes(5) // conversion S plus M Reset positions
     expect(calls.filter((call) => call.startsWith('reset_bonuses:'))).toEqual(['reset_bonuses:10', 'reset_bonuses:11', 'reset_bonuses:12', 'reset_bonuses:13'])
     expect(new Set(calls).size).toBe(calls.length)
   })
 
-  it('has identical Prediction sequence and retention boundary for every resultFilter and cap', async () => {
+  it('has an identical Prediction sequence and canonical Ideal across repeated runs', async () => {
+    // There is no result filter and no output cap left to vary, so the only
+    // thing a repeated run may differ in is its run-dependent identity.
     const reference = fixture()
     const all = await searchCandidates(reference.input, reference.engine, options)
-    for (const cap of [1, 3, 200]) {
-      const base = fixture()
-      base.input.settings.maxCandidatesPerTarget = cap
-      const unfiltered = await searchCandidates(base.input, base.engine, options)
-      for (const filter of ['all', 'ideal', 'practical', 'similar'] as const) {
-        const run = fixture()
-        run.input.settings.maxCandidatesPerTarget = cap
-        run.input.resultFilter = filter
-        const result = await searchCandidates(run.input, run.engine, options)
-        expect(run.calls).toEqual(reference.calls)
-        expect(keys(result.targetResults[0].candidates)).toEqual(keys(filterCandidates(unfiltered.targetResults[0].candidates, filter)))
-      }
-      expect(candidateStableKey(unfiltered.targetResults[0].candidates.find((c) => c.category === 'ideal')!))
-        .toBe(candidateStableKey(all.targetResults[0].candidates.find((c) => c.category === 'ideal')!))
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const run = fixture()
+      run.input.searchRunId = `rerun-${attempt}`
+      const result = await searchCandidates(run.input, run.engine, options)
+      expect(run.calls).toEqual(reference.calls)
+      expect(keys(candidatesOf(result.targetResult)))
+        .toEqual(keys(candidatesOf(all.targetResult)))
     }
   })
 
@@ -162,7 +162,7 @@ describe('B4 actual Target-wide termination', () => {
         now: () => reverse ? '2026-09-05T00:00:00.000Z' : SEARCH_FIXTURE_TIME,
         createCandidateId: () => candidateId(String(reverse ? 1000 - serial++ : serial++)),
       })
-      return keys(result.targetResults[0].candidates)
+      return keys(candidatesOf(result.targetResult))
     }
     expect(await run(true)).toEqual(await run(false))
   })
@@ -179,12 +179,12 @@ describe('B4 actual Target-wide termination', () => {
         now: () => (second ? '2026-09-05T00:00:00.000Z' : SEARCH_FIXTURE_TIME),
         createCandidateId: () => candidateId(String(second ? 1000 - serial++ : serial++)),
       })
-      return result.targetResults[0].candidates
+      return candidatesOf(result.targetResult)
     }
     const first = await run(false)
     const second = await run(true)
-    expect(first.length).toBeGreaterThan(1)
-    // Ordered, not merely the same set.
+    expect(first).toHaveLength(1)
+    // The one canonical Ideal is identical, not merely equivalent.
     expect(second.map(candidateStableKey)).toEqual(first.map(candidateStableKey))
     // Only the ordering was fixed; run-dependent identity still differs.
     expect(second.map(({ id }) => id)).not.toEqual(first.map(({ id }) => id))
@@ -207,7 +207,8 @@ describe('B4 actual Target-wide termination', () => {
       for (const search of searchers) results.push(await search(context, scheduler))
       await scheduler.run()
       const candidates = results.flatMap((result) => result.candidates)
-      return { candidates: retainInitialCandidates(candidates, input.master, target.weaponTypeId, 200).bounded, calls }
+      const canonical = selectCanonicalIdealCandidate(candidates)
+      return { candidates: canonical === null ? [] : [canonical], calls }
     }
     const first = await run(false)
     const last = await run(true)
@@ -233,8 +234,9 @@ describe('B4 actual Target-wide termination', () => {
     await scheduler.run(false)
     expect(scheduler.queue.pendingCount).toBe(0)
     const candidates = results.flatMap((result) => result.candidates)
-    const retained = retainInitialCandidates(deduplicateCandidates(candidates), input.master, target.weaponTypeId, 200)
-    expect(keys(bounded.targetResults[0].candidates)).toEqual(keys(retained.bounded))
+    const canonical = selectCanonicalIdealCandidate(deduplicateCandidates(candidates))
+    expect(keys(candidatesOf(bounded.targetResult)))
+      .toEqual(keys(canonical === null ? [] : [canonical]))
   })
 })
 
@@ -261,8 +263,12 @@ describe('B4 delta scheduler: semantic work, not Prediction memo counts', () => 
     // Memo cannot hide duplicate Candidate evaluator calls or base registration.
     const evaluated = compositions.mock.calls.map(([, bonuses, scope, series, group, route]) =>
       JSON.stringify({ bonuses, scope, series, group, route }))
-    expect(evaluated.length).toBeGreaterThan(4)
     expect(new Set(evaluated).size).toBe(evaluated.length)
+    // This fixture reaches no Ideal Skill, so the Ideal Skill axis is empty and
+    // the Cross rule composes nothing at all. The delta scheduling above still
+    // registered every base once and read every new stream depth exactly once:
+    // composition work is what an unreachable Ideal removes, not stream work.
+    expect(evaluated).toEqual([])
     expect((steps.mock.contexts[0] as SearchWorkQueue).pendingCount).toBe(0)
   })
 
@@ -275,7 +281,7 @@ describe('B4 delta scheduler: semantic work, not Prediction memo counts', () => 
     const result = await searchCandidates(input, engine, { ...options, shouldCancel })
     expect(steps).not.toHaveBeenCalled()
     expect(shouldCancel).toHaveBeenCalledTimes(1) // Target entry only.
-    expect(result.targetResults[0].candidates).toEqual([])
+    expect(candidatesOf(result.targetResult)).toEqual([])
     expect(engine.predictSkills).not.toHaveBeenCalled()
     expect(engine.predictGogmaBonus).not.toHaveBeenCalled()
   })
@@ -292,8 +298,8 @@ describe('B4 delta scheduler: semantic work, not Prediction memo counts', () => 
     const result = await searchCandidates(input, engine, { ...options, shouldCancel })
     expect(steps).toHaveBeenCalledTimes(1)
     expect(compositions).toHaveBeenCalledTimes(1)
-    expect(result.targetResults[0].candidates).toHaveLength(1)
-    expect(result.targetResults[0].candidates[0].route.kind).toBe('existing_gogma_current')
+    expect(candidatesOf(result.targetResult)).toHaveLength(1)
+    expect(candidatesOf(result.targetResult)[0].route.kind).toBe('existing_gogma_current')
     expect(engine.predictSkills).not.toHaveBeenCalled()
     expect(engine.predictGogmaBonus).not.toHaveBeenCalled()
   })
@@ -307,30 +313,17 @@ describe('B4 delta scheduler: semantic work, not Prediction memo counts', () => 
     const result = await searchCandidates(input, engine, options)
     expect(steps).toHaveBeenCalledTimes(1) // Bonus support check exhausts the frontier.
     expect((steps.mock.contexts[0] as SearchWorkQueue).pendingCount).toBe(0)
-    expect(result.targetResults[0].candidates).toEqual([])
+    expect(candidatesOf(result.targetResult)).toEqual([])
     expect(engine.predictSkills).not.toHaveBeenCalled()
     expect(engine.predictGogmaBonus).not.toHaveBeenCalled()
   })
 
-  it('reports only display-relative cap omissions as truncation', async () => {
+  it('returns exactly the canonical Ideal and reports no truncation concept', async () => {
     const reference = fixture()
     const all = await searchCandidates(reference.input, reference.engine, options)
-    expect(all.isTruncated).toBe(false) // D stop, stream retention and dominance are policies.
-    expect(all.targetResults[0].candidates.some((c) => c.category === 'practical')).toBe(true)
-    for (const cap of [1, 3]) {
-      for (const filter of ['all', 'ideal', 'practical', 'similar'] as const) {
-        const run = fixture()
-        run.input.settings.maxCandidatesPerTarget = cap
-        run.input.resultFilter = filter
-        const result = await searchCandidates(run.input, run.engine, options)
-        const before = filterCandidates(all.targetResults[0].candidates, filter).length
-        expect(result.isTruncated).toBe(before > result.targetResults[0].candidates.length)
-        if (filter === 'ideal') expect(result.isTruncated).toBe(false)
-        if (cap === 1 && filter === 'practical') {
-          expect(result.targetResults[0].candidates).toEqual([])
-          expect(result.isTruncated).toBe(true)
-        }
-      }
-    }
+    expect(candidatesOf(all.targetResult)).toHaveLength(1)
+    // `isTruncated` only ever meant "the output cap omitted a Candidate", and
+    // the cap is gone (`docs/SEARCH_SPEC.md` 4.2).
+    expect((all as unknown as Record<string, unknown>).isTruncated).toBeUndefined()
   })
 })

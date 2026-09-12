@@ -215,7 +215,7 @@ describe('Planner initial context preparation', () => {
     expect(context.initialState.routeProgressByEntryId).toEqual({})
   })
 
-  it('excludes already-Ideal and already-Practical Targets from initial relevance', () => {
+  it('excludes only already-Ideal Targets from initial relevance', () => {
     const idealTarget = target('target.preflight.relevance.ideal')
     const practicalTarget = {
       ...target('target.preflight.relevance.practical'),
@@ -264,12 +264,28 @@ describe('Planner initial context preparation', () => {
     expect(context.allSearchEntries.map(({ id }) => id)).toEqual(
       [active.id, ideal.id, practical.id].sort(),
     )
-    expect(context.initialRelevantEntries.map(({ id }) => id)).toEqual([active.id])
-    expect([...context.initialRelevantUnitPlans.keys()]).toEqual([active.id])
-    expect(context.initialConflictDetection.conflicts).toEqual([])
-    expect(entryIsRelevantForState(context.initialState, ideal)).toBe(false)
-    expect(entryIsRelevantForState(context.initialState, practical)).toBe(false)
-    expect(entryIsRelevantForState(context.initialState, active)).toBe(true)
+    // A Target that already holds an Ideal weapon is removed from planning; a
+    // Target that only holds a compromise weapon still needs its Ideal, so it
+    // stays relevant. Practical satisfaction is no longer a planning goal of
+    // its own (`docs/PLANNER_SPEC.md` 7).
+    expect(context.initialRelevantEntries.map(({ id }) => id)).toEqual(
+      [active.id, practical.id],
+    )
+    expect([...context.initialRelevantUnitPlans.keys()]).toEqual(
+      [active.id, practical.id],
+    )
+    // Both relevant Entries Reset at the same Gogma Counter, so keeping the
+    // compromise-satisfied Target in planning surfaces their real conflict.
+    expect(context.initialConflictDetection.conflicts).toEqual([
+      expect.objectContaining({
+        kind: 'same_gogma_counter',
+        buildListEntryIds: [active.id, practical.id],
+      }),
+    ])
+    const requirements = context.checkpointRequirements
+    expect(entryIsRelevantForState(context.initialState, ideal, requirements)).toBe(false)
+    expect(entryIsRelevantForState(context.initialState, practical, requirements)).toBe(true)
+    expect(entryIsRelevantForState(context.initialState, active, requirements)).toBe(true)
   })
 
   it('orders entries, targets, and conflicts independently of input order', () => {

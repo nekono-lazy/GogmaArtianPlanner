@@ -5,11 +5,8 @@ import {
   AccordionDetails,
   AccordionSummary,
   Alert,
-  Box,
   Button,
-  Checkbox,
   FormControl,
-  FormControlLabel,
   InputLabel,
   LinearProgress,
   MenuItem,
@@ -24,9 +21,16 @@ import { CandidateCard } from '../components/search/CandidateCard'
 import { MasterDataStatusAlert } from '../components/MasterDataStatusAlert'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import type { MasterDataRoot } from '../domain/master/masterTypes'
-import type { BuildCandidate, CalculationContext, OwnedWeapon, TargetWeapon } from '../domain/models/publicTypes'
 import type {
-  CandidateResultFilter,
+  BuildCandidate,
+  CalculationContext,
+  CompromiseCheckpointGroup,
+  CompromiseCheckpointOpportunity,
+  CompromiseCheckpointOpportunityId,
+  OwnedWeapon,
+  TargetWeapon,
+} from '../domain/models/publicTypes'
+import type {
   CandidateRouteFilter,
   CandidateSearchInput,
   CandidateSearchNoticeSeverity,
@@ -68,15 +72,18 @@ export interface SearchPageDependencies {
   createWorkerClient(): SearchWorkerClient
   createInput(options: {
     searchRunId: string
-    targetWeaponIds: TargetWeapon['id'][]
+    targetWeaponId: TargetWeapon['id']
     routeFilter: CandidateRouteFilter
-    resultFilter: CandidateResultFilter
     settings: CandidateSearchSettings
     master: MasterDataRoot
     calculationContext: CalculationContext
   }): Promise<CandidateSearchInput>
   saveCandidates(targetId: TargetWeapon['id'], candidates: BuildCandidate[]): Promise<unknown>
-  addCandidate(candidate: BuildCandidate, target: TargetWeapon): Promise<{ added: boolean }>
+  addCandidate(
+    candidate: BuildCandidate,
+    target: TargetWeapon,
+    selectedCheckpointOpportunityIds: readonly CompromiseCheckpointOpportunityId[],
+  ): Promise<{ added: boolean }>
 }
 
 const defaultDependencies: SearchPageDependencies | null = defaultMaster
@@ -88,8 +95,12 @@ const defaultDependencies: SearchPageDependencies | null = defaultMaster
       createInput: (options) => createCandidateSearchInput(options),
       saveCandidates: (targetId, candidates) =>
         buildCandidateRepository.replaceBuildCandidatesForTarget(targetId, candidates),
-      addCandidate: async (candidate, target) => {
-        const result = await buildListService.addCandidate(candidate, target)
+      addCandidate: async (candidate, target, selectedCheckpointOpportunityIds) => {
+        const result = await buildListService.addCandidate(
+          candidate,
+          target,
+          selectedCheckpointOpportunityIds,
+        )
         return { added: result.added }
       },
     }
@@ -103,9 +114,13 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
   const debugMode = useSettingsStore((state) => state.debugMode)
   const [targets, setTargets] = useState<TargetWeapon[]>([])
   const [ownedWeapons, setOwnedWeapons] = useState<OwnedWeapon[]>([])
-  const [selectedIds, setSelectedIds] = useState<Set<TargetWeapon['id']>>(new Set())
+  const [targetWeaponId, setTargetWeaponId] = useState<TargetWeapon['id'] | ''>('')
   const [routeFilter, setRouteFilter] = useState<CandidateRouteFilter>('all')
-  const [resultFilter, setResultFilter] = useState<CandidateResultFilter>('all')
+  // Checkpoints always start unselected: choosing none means "go straight to
+  // the Ideal result" (`docs/UI_FLOW.md` 9).
+  const [selectedCheckpointIds, setSelectedCheckpointIds] = useState<
+    CompromiseCheckpointOpportunityId[]
+  >([])
   const [settings, setSettings] = useState<CandidateSearchSettings>({ ...defaultCandidateSearchSettings })
   const [result, setResult] = useState<CandidateSearchResult | null>(null)
   const [progress, setProgress] = useState<CandidateSearchProgress | null>(null)
@@ -129,7 +144,7 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
         if (!active) return
         setTargets(loadedTargets)
         setOwnedWeapons(loadedWeapons)
-        setSelectedIds(new Set(loadedTargets.filter(({ isEnabled }) => isEnabled).map(({ id }) => id)))
+        setTargetWeaponId(loadedTargets.find(({ isEnabled }) => isEnabled)?.id ?? '')
       })
       .catch((caught: unknown) => {
         if (active) setError(caught instanceof Error ? caught.message : '検索データの読み込みに失敗しました。')
@@ -155,7 +170,7 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
   }
 
   const startSearch = async () => {
-    if (!dependencies || !clientRef.current || selectedIds.size === 0) return
+    if (!dependencies || !clientRef.current || targetWeaponId === '') return
     const requestId = createSearchRunId()
     const client = clientRef.current
     activeRequestRef.current = requestId
@@ -163,10 +178,9 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
     setError(null)
     setNotice(null)
     setResult(null)
+    setSelectedCheckpointIds([])
     setProgress({
-      completedTargets: 0,
-      totalTargets: selectedIds.size,
-      currentTargetWeaponId: null,
+      targetWeaponId,
       phase: 'preparing',
       processedWorkItems: 0,
     })
@@ -179,9 +193,8 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
       }
       const input = await dependencies.createInput({
         searchRunId: requestId,
-        targetWeaponIds: [...selectedIds],
+        targetWeaponId,
         routeFilter,
-        resultFilter,
         settings,
         master: dependencies.master,
         calculationContext,
@@ -193,10 +206,9 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
         },
       })
       if (activeRequestRef.current !== requestId) return
-      await Promise.all(
-        completed.targetResults.map((targetResult) =>
-          dependencies.saveCandidates(targetResult.targetWeaponId, targetResult.candidates),
-        ),
+      await dependencies.saveCandidates(
+        completed.targetResult.targetWeaponId,
+        completed.targetResult.candidate === null ? [] : [completed.targetResult.candidate],
       )
       if (activeRequestRef.current !== requestId) return
       setResult(completed)
@@ -220,6 +232,23 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
     setNotice('検索をキャンセルしました。')
   }
 
+  /**
+   * At most one opportunity may be selected per checkpoint group, so choosing a
+   * different arrival at the same compromise product replaces the previous one
+   * rather than adding a second (`docs/DATA_MODEL.md` 9.4).
+   */
+  const toggleCheckpoint = (
+    group: CompromiseCheckpointGroup,
+    opportunity: CompromiseCheckpointOpportunity,
+    selected: boolean,
+  ) => {
+    const groupIds = new Set(group.opportunities.map(({ id }) => id))
+    setSelectedCheckpointIds((current) => {
+      const kept = current.filter((id) => !groupIds.has(id))
+      return selected ? [...kept, opportunity.id] : kept
+    })
+  }
+
   const addToBuildList = async (candidate: BuildCandidate) => {
     const target = targetById.get(candidate.targetWeaponId)
     if (!dependencies || !target) {
@@ -227,8 +256,15 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
       return
     }
     try {
-      const added = await dependencies.addCandidate(candidate, target)
-      setNotice(added.added ? 'ビルドリストへ追加しました。' : '同等の候補はすでにビルドリストにあります。')
+      const added = await dependencies.addCandidate(candidate, target, selectedCheckpointIds)
+      // An equivalent Candidate already in the Build List keeps its own
+      // checkpoint selection: the Search screen never silently overwrites it
+      // (`docs/UI_FLOW.md` 6.5).
+      setNotice(
+        added.added
+          ? 'ビルドリストへ追加しました。'
+          : 'この候補は作成リストに追加済みです。チェックポイントは作成リストで変更してください。',
+      )
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : 'ビルドリストへの追加に失敗しました。')
     }
@@ -246,48 +282,38 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
           <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
             <Stack spacing={3}>
               <Typography variant="h2">検索条件</Typography>
-              <Box>
-                <Typography variant="subtitle2">検索対象の目標武器（複数選択可）</Typography>
-                {enabledTargets.map((target) => (
-                  <FormControlLabel
-                    key={target.id}
-                    control={<Checkbox checked={selectedIds.has(target.id)} onChange={(event) => setSelectedIds((current) => {
-                      const next = new Set(current)
-                      if (event.target.checked) next.add(target.id)
-                      else next.delete(target.id)
-                      return next
-                    })} />}
-                    label={target.name}
-                  />
-                ))}
-              </Box>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <FormControl fullWidth><InputLabel id="route-filter-label">作成ルート</InputLabel><Select labelId="route-filter-label" label="作成ルート" value={routeFilter} onChange={(event) => setRouteFilter(event.target.value as CandidateRouteFilter)}><MenuItem value="all">すべて</MenuItem><MenuItem value="normal_artian">通常アーティア経由</MenuItem><MenuItem value="existing_gogma">所持巨戟アーティア経由</MenuItem></Select></FormControl>
-                <FormControl fullWidth><InputLabel id="result-filter-label">結果</InputLabel><Select labelId="result-filter-label" label="結果" value={resultFilter} onChange={(event) => setResultFilter(event.target.value as CandidateResultFilter)}><MenuItem value="all">すべて</MenuItem><MenuItem value="ideal">理想</MenuItem><MenuItem value="practical">実用</MenuItem><MenuItem value="similar">理想に近い実用</MenuItem></Select></FormControl>
-              </Stack>
+              {/* One Target per search: reconciling several Targets is the
+                  Production Planner's job (`docs/UI_FLOW.md` 6.1). */}
+              <FormControl fullWidth>
+                <InputLabel id="target-weapon-label">検索対象の目標武器</InputLabel>
+                <Select
+                  labelId="target-weapon-label"
+                  label="検索対象の目標武器"
+                  value={targetWeaponId}
+                  onChange={(event) => setTargetWeaponId(event.target.value as TargetWeapon['id'])}
+                >
+                  {enabledTargets.map((target) => (
+                    <MenuItem value={target.id} key={target.id}>{target.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl fullWidth><InputLabel id="route-filter-label">作成ルート</InputLabel><Select labelId="route-filter-label" label="作成ルート" value={routeFilter} onChange={(event) => setRouteFilter(event.target.value as CandidateRouteFilter)}><MenuItem value="all">すべて</MenuItem><MenuItem value="normal_artian">通常アーティア経由</MenuItem><MenuItem value="existing_gogma">所持巨戟アーティア経由</MenuItem></Select></FormControl>
               <Accordion><AccordionSummary><Typography>詳細設定</Typography></AccordionSummary><AccordionDetails><Stack spacing={2}>
                 <TextField label="通常アーティア最大進行量" type="number" value={settings.maxNormalAdvance} onChange={(event) => updateSetting('maxNormalAdvance', event.target.value)} slotProps={{ htmlInput: { min: 1 } }} />
                 <TextField label="巨戟最大進行量" type="number" value={settings.maxGogmaAdvance} onChange={(event) => updateSetting('maxGogmaAdvance', event.target.value)} slotProps={{ htmlInput: { min: 1 } }} />
                 <TextField label="スキル最大進行量" type="number" value={settings.maxSkillAdvance} onChange={(event) => updateSetting('maxSkillAdvance', event.target.value)} slotProps={{ htmlInput: { min: 1 } }} />
-                <TextField label="目標武器ごとの最大候補数" type="number" value={settings.maxCandidatesPerTarget} onChange={(event) => updateSetting('maxCandidatesPerTarget', event.target.value)} slotProps={{ htmlInput: { min: 1 } }} />
-                <TextField label="理想に近いと判定する類似度" type="number" value={settings.similarityThreshold} onChange={(event) => updateSetting('similarityThreshold', event.target.value)} slotProps={{ htmlInput: { min: 0, max: 1, step: 0.1 } }} />
               </Stack></AccordionDetails></Accordion>
-              <Button variant="contained" onClick={() => void startSearch()} disabled={searching || selectedIds.size === 0}>検索開始</Button>
+              <Button variant="contained" onClick={() => void startSearch()} disabled={searching || targetWeaponId === ''}>検索開始</Button>
             </Stack>
           </Paper>
         )}
         {searching && progress && (
           <Paper variant="outlined" sx={{ p: 2 }}>
             <Stack spacing={1}>
-              <Typography>検索中 {progress.completedTargets} / {progress.totalTargets}</Typography>
-              {/* Target completion only. The work inside one Target is discovered
-                  while searching, so it is never converted into a percent. */}
-              <LinearProgress
-                aria-label="目標武器の検索進捗"
-                variant={progress.totalTargets > 0 ? 'determinate' : 'indeterminate'}
-                value={progress.totalTargets > 0 ? progress.completedTargets / progress.totalTargets * 100 : 0}
-              />
-              <Typography variant="body2">現在の目標武器: {progress.currentTargetWeaponId ? targetById.get(progress.currentTargetWeaponId)?.name ?? '不明' : '準備中'}</Typography>
+              {/* Work inside one Target is discovered while searching, so it is
+                  never converted into a percent. */}
+              <LinearProgress aria-label="候補検索の進捗" />
+              <Typography variant="body2">対象: {targetById.get(progress.targetWeaponId)?.name ?? '不明'}</Typography>
               <Typography variant="body2">{candidateSearchProgressPhaseLabels[progress.phase]}</Typography>
               <Typography variant="body2">探索ステップ: {progress.processedWorkItems}</Typography>
               <Button onClick={cancelSearch}>キャンセル</Button>
@@ -314,12 +340,29 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
             </Alert>
           )
         })}
-        {result && masterForDisplay && result.targetResults.map((targetResult) => {
+        {result && masterForDisplay && (() => {
+          const targetResult = result.targetResult
           const target = targetById.get(targetResult.targetWeaponId) ?? null
-          const idealCount = targetResult.candidates.filter(({ category }) => category === 'ideal').length
-          const practicalCount = targetResult.candidates.length - idealCount
-          return <Stack spacing={2} key={targetResult.targetWeaponId}><Typography variant="h2">{target?.name ?? '不明な目標武器'}</Typography><Typography>理想候補 {idealCount}件 ／ 実用候補 {practicalCount}件</Typography>{targetResult.candidates.length === 0 && <Alert severity="info">条件を満たす候補は見つかりませんでした。</Alert>}{targetResult.candidates.map((candidate) => <CandidateCard key={candidate.id} candidate={candidate} target={target} master={masterForDisplay} ownedWeapons={ownedWeapons} debugMode={debugMode} onAdd={(selected) => void addToBuildList(selected)} />)}{targetResult.skippedRoutes.length > 0 && <Accordion><AccordionSummary><Typography>実行できなかった作成ルート</Typography></AccordionSummary><AccordionDetails><Stack spacing={1}>{targetResult.skippedRoutes.map((skipped, index) => <Alert severity={skipped.reason === 'master_data_unavailable' ? 'warning' : 'info'} key={`${skipped.route}:${skipped.reason}:${index}`}>{routeKindLabels[skipped.route]}: {skippedRouteReasonLabels[skipped.reason]}</Alert>)}</Stack></AccordionDetails></Accordion>}</Stack>
-        })}
+          return <Stack spacing={2}><Typography variant="h2">{target?.name ?? '不明な目標武器'}</Typography>
+            {/* No Ideal inside the configured extent is never a statement that
+                no Ideal exists, and a compromise state found on the way is
+                deliberately not offered: only a strict prefix of a real Ideal
+                Route can be a checkpoint (`docs/SEARCH_SPEC.md` 5.7). */}
+            {targetResult.candidate === null && <Alert severity="info">
+              現在の探索範囲では理想品が見つかりませんでした。詳細設定の「通常アーティア最大進行量」「巨戟最大進行量」「スキル最大進行量」を見直してください。
+            </Alert>}
+            {targetResult.candidate && <CandidateCard
+              candidate={targetResult.candidate}
+              target={target}
+              master={masterForDisplay}
+              ownedWeapons={ownedWeapons}
+              debugMode={debugMode}
+              selectedCheckpointOpportunityIds={selectedCheckpointIds}
+              onToggleCheckpoint={toggleCheckpoint}
+              onAdd={(selected) => void addToBuildList(selected)}
+            />}
+            {targetResult.skippedRoutes.length > 0 && <Accordion><AccordionSummary><Typography>実行できなかった作成ルート</Typography></AccordionSummary><AccordionDetails><Stack spacing={1}>{targetResult.skippedRoutes.map((skipped, index) => <Alert severity={skipped.reason === 'master_data_unavailable' ? 'warning' : 'info'} key={`${skipped.route}:${skipped.reason}:${index}`}>{routeKindLabels[skipped.route]}: {skippedRouteReasonLabels[skipped.reason]}</Alert>)}</Stack></AccordionDetails></Accordion>}</Stack>
+        })()}
       </Stack>
     </PageShell>
   )

@@ -1,7 +1,5 @@
 import type {
   CalculationContext,
-  CandidateCategory,
-  CandidateConditionMatch,
   GroupSkillId,
   IdealDifference,
   MaterialRequirement,
@@ -101,7 +99,7 @@ export const defaultConstrainedEnumerationBounds: ConstrainedEnumerationBounds =
  * The Planner-start current validated Search / RNG snapshot.
  *
  * It is deliberately NOT a `CandidateSearchInput`: no `searchRunId`, no
- * `routeFilter`, no `resultFilter`, and no `settings`. A historical UI
+ * `routeFilter`, and no `settings`. A historical UI
  * Candidate Search request is not persisted and must never be required here.
  */
 export interface ConstrainedSearchOrigin {
@@ -123,15 +121,17 @@ export interface ConstrainedCandidateSearchInput {
 /**
  * One transient Search Domain semantic result.
  *
- * It is not a `BuildCandidate`: `id`, `searchRunId`, `createdAt` and
- * `isSimilarToIdeal` are run / persistence metadata that only the B8-C
- * deterministic materializer may add. No random ID, Clock value, or enumeration
- * ordinal is folded into anything here.
+ * It is not a `BuildCandidate`: `id`, `searchRunId` and `createdAt` are run /
+ * persistence metadata that only the B8-C deterministic materializer may add.
+ * No random ID, Clock value, or enumeration ordinal is folded into anything
+ * here.
+ *
+ * Like every Search result it is an Ideal result: constrained re-search looks
+ * for another way to reach the Target's Ideal under the Planner's fixed
+ * Candidates, never for an independent compromise Candidate.
  */
 export interface ConstrainedCandidate {
   targetWeaponId: TargetWeaponId
-  category: CandidateCategory
-  conditionMatch?: CandidateConditionMatch
   finalBonuses: RestorationBonusSet
   restorationBonusScope: RestorationBonusScope
   seriesSkillId: SeriesSkillId | null
@@ -145,8 +145,6 @@ export interface ConstrainedCandidate {
   requiredMaterials: MaterialRequirement[]
 
   idealDifference: IdealDifference
-  /** The existing SEARCH_SPEC 5.3 formula, with no threshold applied. */
-  similarityScore: number | null
 
   searchStateHash: string
   referencedOwnedWeaponsHash: string | null
@@ -156,22 +154,18 @@ export interface ConstrainedCandidate {
 export interface ConstrainedEnumerationSummary {
   /**
    * Completed Candidate semantic combinations carried through Target condition
-   * evaluation, including combinations that satisfied neither condition.
-   *
-   * One actual `(Bonus solution, Skill solution)` pair counts once. The Ideal
-   * and Practical axes of one Route base overlap, so the same pair can be
-   * reached from both; re-reaching it is not re-evaluated and not recounted.
+   * evaluation, including combinations that did not satisfy the Ideal
+   * condition. One actual `(Bonus solution, Skill solution)` pair counts once.
    */
   examinedCandidates: number
   /**
    * Unique actual off-axis Cross pairs (`i > 0` and `j > 0`) carried into
    * Target evaluation, over the whole Target enumeration.
    *
-   * The budget is global: it is never reset per Route base or per stream
-   * category. It counts evaluations, not adopted Candidates, so an off-axis
-   * pair that satisfied neither condition or duplicated an existing Candidate
-   * still consumed one. Axis pairs never consume it, and neither does
-   * re-reaching an already evaluated pair from the other category axis.
+   * The budget is global: it is never reset per Route base. It counts
+   * evaluations, not adopted Candidates, so an off-axis pair that did not
+   * satisfy the Ideal condition or duplicated an existing Candidate still
+   * consumed one. Axis pairs never consume it.
    */
   evaluatedOffAxisPairs: number
   /**

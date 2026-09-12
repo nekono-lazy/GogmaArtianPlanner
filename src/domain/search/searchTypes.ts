@@ -1,13 +1,10 @@
 import type {
-  AlternativeBonusRule,
-  PracticalBonusCondition,
   BuildCandidate,
   CalculationContext,
   NormalArtianCounter,
   OwnedWeapon,
   RngState,
   RouteKind,
-  SkillCondition,
   TargetWeapon,
   TargetWeaponId,
 } from '../models/publicTypes'
@@ -22,30 +19,31 @@ import type {
 } from '../master/masterTypes'
 
 export type CandidateRouteFilter = 'all' | 'normal_artian' | 'existing_gogma'
-export type CandidateResultFilter = 'all' | 'ideal' | 'practical' | 'similar'
 
+/**
+ * The three stream extents of one Candidate Search.
+ *
+ * There is no result filter, no output cap, and no similarity threshold: a
+ * Search produces at most one canonical Ideal Candidate, so nothing needs to
+ * bound a retained Practical set or rank results by closeness
+ * (`docs/SEARCH_SPEC.md` 4.2).
+ */
 export interface CandidateSearchSettings {
   maxNormalAdvance: number
   maxGogmaAdvance: number
   maxSkillAdvance: number
-  maxCandidatesPerTarget: number
-  similarityThreshold: number
 }
 
 /**
  * B6 defaults, chosen from the real Browser Worker measurements recorded in
  * `docs/B5_CANDIDATE_SEARCH_BROWSER_WORKER_BENCHMARK.md`: Normal 1000 ~ 256 ms,
- * Skill 1000 ~ 325 ms, Gogma 200 ~ 1961 ms. The former `5000 / 5000 / 5000`
- * finished quickly when an Ideal was near but did not complete within 60 s
- * when none existed. These are defaults, not caps: the Search UI still lets the
- * user raise every bound.
+ * Skill 1000 ~ 325 ms, Gogma 200 ~ 1961 ms. These are defaults, not caps: the
+ * Search UI still lets the user raise every bound.
  */
 export const defaultCandidateSearchSettings: CandidateSearchSettings = {
   maxNormalAdvance: 1000,
   maxGogmaAdvance: 200,
   maxSkillAdvance: 1000,
-  maxCandidatesPerTarget: 200,
-  similarityThreshold: 0.6,
 }
 
 export interface SearchMasterSubset {
@@ -58,11 +56,18 @@ export interface SearchMasterSubset {
   materialCosts: MaterialCostMaster[]
 }
 
+/**
+ * One Candidate Search request, for exactly one TargetWeapon.
+ *
+ * Multi-Target search was removed with the canonical Ideal Route model: the
+ * Search decides one Target's Ideal Route and the checkpoints on it, while
+ * reconciling several Targets is the Production Planner's job
+ * (`docs/SEARCH_SPEC.md` 4.1).
+ */
 export interface CandidateSearchInput {
   searchRunId: string
-  targetWeaponIds: TargetWeaponId[]
+  targetWeaponId: TargetWeaponId
   routeFilter: CandidateRouteFilter
-  resultFilter: CandidateResultFilter
   rngState: RngState
   normalCounters: NormalArtianCounter[]
   ownedWeapons: OwnedWeapon[]
@@ -109,58 +114,42 @@ export interface CandidateSearchWarning {
   message: string
 }
 
+/**
+ * The searched Target's result: at most one canonical Ideal Candidate.
+ *
+ * `candidate === null` means no Ideal was found inside the configured search
+ * extent. It never means an Ideal does not exist, and compromise states found
+ * on the way are deliberately not returned: only a strict prefix of an actual
+ * Ideal Route can be offered as a checkpoint (`docs/SEARCH_SPEC.md` 5.7).
+ */
 export interface TargetCandidateSearchResult {
   targetWeaponId: TargetWeaponId
-  candidates: BuildCandidate[]
+  candidate: BuildCandidate | null
   searchedRoutes: RouteKind[]
   skippedRoutes: SkippedRoute[]
-}
-
-export interface TargetWeaponRelaxationPatch {
-  practicalBonusConditions?: PracticalBonusCondition[]
-  alternativeBonusRules?: AlternativeBonusRule[]
-  practicalSkillCondition?: SkillCondition
-}
-
-export interface RelaxationSuggestion {
-  id: string
-  targetWeaponId: TargetWeaponId
-  kind:
-    | 'lower_minimum_rank'
-    | 'remove_required_ex'
-    | 'relax_skill_series'
-    | 'relax_skill_group'
-    | 'skill_match_all_to_any'
-  description: string
-  patch: TargetWeaponRelaxationPatch
-  nearestCandidateDistance: number | null
 }
 
 export interface CandidateSearchResult {
   searchRunId: string
   calculationContext: CalculationContext
-  targetResults: TargetCandidateSearchResult[]
-  relaxationSuggestions: RelaxationSuggestion[]
+  targetResult: TargetCandidateSearchResult
   warnings: CandidateSearchWarning[]
   elapsedMs: number
-  isTruncated: boolean
 }
 
 /**
- * `preparing` is emitted when a Target's search starts, `searching` while the
- * Target's scheduler settles work, and `finalizing` once that Target is done.
+ * `preparing` is emitted when the search starts, `searching` while the
+ * scheduler settles work, and `finalizing` once the Target is done.
  */
 export type CandidateSearchProgressPhase = 'preparing' | 'searching' | 'finalizing'
 
 export interface CandidateSearchProgress {
-  completedTargets: number
-  totalTargets: number
-  currentTargetWeaponId: TargetWeaponId | null
+  targetWeaponId: TargetWeaponId
   phase: CandidateSearchProgressPhase
   /**
-   * Scheduler work items settled for the current Target, restarting at 0 for
-   * each Target. Total work is discovered while searching, so this is an
-   * activity signal only and must never be presented as a completion percent.
+   * Scheduler work items settled so far. Total work is discovered while
+   * searching, so this is an activity signal only and must never be presented
+   * as a completion percent.
    */
   processedWorkItems: number
 }

@@ -58,7 +58,6 @@ function bonusSolution(spec: BonusSpec): EvaluatedBonusSolution {
       })),
     },
     idealMatch: false,
-    practicalMatch: true,
     matchedIdealBonusCount: spec.matchedIdealBonusCount ?? 0,
     materialQuantity: spec.materialQuantity ?? 0,
     bonusKey,
@@ -93,7 +92,6 @@ function skillSolution(spec: SkillSpec): EvaluatedSkillSolution {
       })),
     },
     idealMatch: false,
-    practicalMatch: true,
     idealCloseness: spec.idealCloseness ?? 0,
     semanticKey: spec.semanticKey ?? `skill:${spec.resetCount}`,
   }
@@ -109,7 +107,6 @@ function cell(
   const j = position.j ?? 0
   return {
     matrixIndex,
-    categoryPredicate: 'practical',
     i,
     j,
     nodeKey: `${matrixIndex}:${i},${j}`,

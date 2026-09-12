@@ -5,6 +5,7 @@ import {
   createCandidateSearchInput,
   practicalOnlyBonuses,
   SEARCH_FIXTURE_TIME,
+  candidatesOf,
 } from '../../test/fixtures/candidateSearch'
 import {
   createRestorationBonusSet,
@@ -222,21 +223,15 @@ describe('Skill stream independence', () => {
     expect(many.calls).toEqual([7, 8, 9])
     expect(many.calls).toHaveLength(3)
     expect(many.calls.length).toBeLessThan(3 * 3)
-    expect(
-      many.result.targetResults[0].candidates.filter(({ route }) =>
-        route.kind === 'existing_gogma_reset_skills',
-      ).length,
-    ).toBeGreaterThan(single.result.targetResults[0].candidates.filter(({ route }) =>
-      route.kind === 'existing_gogma_reset_skills',
-    ).length)
   })
 
   it('predicts Skill Counter positions S ... S + M - 1 only, for Reset Skills 1 ... M', async () => {
     const input = existingGogmaInput(3, 1)
     input.ownedWeapons = [gogmaSource(input, 'owned.fixture.stream-range')]
-    // No Ideal in bounds: this test covers the full configured Reset range.
+    // The Ideal Skill arrives at the last Reset the bound allows, so the
+    // canonical Ideal Route covers the whole configured Reset range.
       const engine = createStreamFixtureEngine(input, {
-        idealSkillIndex: 99,
+        idealSkillIndex: 2,
       skillPositions: 5,
       gogmaPositions: 1,
       distinctSkills: true,
@@ -247,7 +242,7 @@ describe('Skill stream independence', () => {
     expect(calls.counters()).toEqual([7, 8, 9])
     expect(calls.counters()).not.toContain(10)
 
-    const resetSkillRoutes = result.targetResults[0].candidates
+    const resetSkillRoutes = candidatesOf(result.targetResult)
       .filter(({ route }) => route.kind === 'existing_gogma_reset_skills')
       .map(({ route }) => route.operations)
     const resetCounts = resetSkillRoutes.map((operations) => operations.length)
@@ -325,7 +320,7 @@ describe('Skill stream independence', () => {
     const calls = skillCounterCalls(engine)
     const gogma = vi.spyOn(engine, 'predictGogmaBonus')
     const result = await searchCandidates(input, engine, deterministicExecution)
-    const candidates = result.targetResults[0].candidates
+    const candidates = candidatesOf(result.targetResult)
 
     expect(calls.counters()).toEqual([7])
     expect(candidates.some(({ route }) =>
@@ -362,7 +357,7 @@ describe('Skill stream independence', () => {
     const calls = skillCounterCalls(engine)
     const gogma = vi.spyOn(engine, 'predictGogmaBonus')
     const result = await searchCandidates(input, engine, deterministicExecution)
-    const candidates = result.targetResults[0].candidates
+    const candidates = candidatesOf(result.targetResult)
 
     expect(calls.counters()).toEqual([7])
     expect(candidates.some(({ route }) =>
@@ -380,13 +375,15 @@ describe('Skill stream independence', () => {
       const input = conversionInput(3, 1)
       input.settings.maxNormalAdvance = maxNormalAdvance
       input.ownedWeapons = []
-      // No Ideal in bounds: this test covers the full configured Reset range.
+      // The conversion Skill is not Ideal; the Ideal arrives at the last
+      // Reset the bound allows, so the Route covers the whole Reset range.
       const engine = createStreamFixtureEngine(input, {
-        idealSkillIndex: 99,
+        idealSkillIndex: 3,
         skillPositions: 5,
         gogmaPositions: 1,
         distinctSkills: true,
         normalForges: maxNormalAdvance,
+        resetResult: createRestorationBonusSet(),
       })
       const calls = skillCounterCalls(engine)
       const result = await searchCandidates(input, engine, deterministicExecution)
@@ -401,7 +398,7 @@ describe('Skill stream independence', () => {
     expect(many.calls).toEqual([7, 8, 9, 10])
     expect(many.calls).not.toContain(11)
 
-    const resetCounts = many.result.targetResults[0].candidates.map(({ route }) =>
+    const resetCounts = candidatesOf(many.result.targetResult).map(({ route }) =>
       route.operations.filter(({ type }) => type === 'reset_skills').length,
     )
     expect(Math.max(...resetCounts)).toBe(3)
@@ -432,13 +429,6 @@ describe('Skill stream independence', () => {
     expect(single.calls).toEqual([7, 8, 9, 10])
     expect(many.calls).toEqual([7, 8, 9, 10])
     expect(many.calls.length).toBeLessThan(3 * 4)
-    expect(
-      many.result.targetResults[0].candidates.filter(({ route }) =>
-        route.kind === 'owned_normal_artian_to_gogma',
-      ).length,
-    ).toBeGreaterThan(single.result.targetResults[0].candidates.filter(({ route }) =>
-      route.kind === 'owned_normal_artian_to_gogma',
-    ).length)
   })
 
   it('performs no Skill prediction when the current Skills already satisfy the Ideal condition', async () => {
@@ -456,11 +446,11 @@ describe('Skill stream independence', () => {
     const result = await searchCandidates(input, engine, deterministicExecution)
 
     expect(calls.counters()).toEqual([])
-    expect(result.targetResults[0].candidates.some(({ route }) =>
+    expect(candidatesOf(result.targetResult).some(({ route }) =>
       route.operations.some(({ type }) => type === 'reset_skills'),
     )).toBe(false)
     // Only the current-state Route is searched because no amendment is needed.
-    expect(result.targetResults[0].searchedRoutes).toContain(
+    expect(result.targetResult.searchedRoutes).toContain(
       'existing_gogma_current',
     )
   })
@@ -483,14 +473,13 @@ describe('Skill stream independence', () => {
     const result = await searchCandidates(input, engine, deterministicExecution)
 
     expect(calls.counters()).toEqual([])
-    const reset = result.targetResults[0].candidates.find(({ route }) =>
+    const reset = candidatesOf(result.targetResult).find(({ route }) =>
       route.kind === 'existing_gogma_reset_bonuses',
     )
     expect(reset?.route.operations.map(({ type }) => type)).toEqual(['reset_bonuses'])
-    expect(reset?.category).toBe('ideal')
   })
 
-  it('keeps the zero-Reset Practical solution while continuing the Ideal Skill search', async () => {
+  it('never publishes the zero-Reset compromise state while reaching the Ideal Skill', async () => {
     const input = existingGogmaInput(3, 1)
     input.ownedWeapons = [
       gogmaSource(input, 'owned.fixture.stream-practical', {
@@ -505,18 +494,18 @@ describe('Skill stream independence', () => {
       resetResult: createRestorationBonusSet(),
     })
     const result = await searchCandidates(input, engine, deterministicExecution)
-    const candidates = result.targetResults[0].candidates
+    const candidates = candidatesOf(result.targetResult)
 
+    // The Bonus-only state satisfies the compromise conditions but not the
+    // Ideal Skill, so it is never an independent Candidate of its own.
     const zeroReset = candidates.find(({ route }) =>
       route.operations.map(({ type }) => type).join(',') === 'reset_bonuses',
     )
-    expect(zeroReset?.category).toBe('practical')
-    expect(zeroReset?.seriesSkillId).toBe(OTHER_SERIES_SKILL)
+    expect(zeroReset).toBeUndefined()
 
     const reachedIdeal = candidates.find(({ route }) =>
       route.operations.map(({ type }) => type).join(',') === 'reset_bonuses,reset_skills',
     )
-    expect(reachedIdeal?.category).toBe('ideal')
     expect(reachedIdeal?.seriesSkillId).toBe(IDEAL_SERIES_SKILL)
     expect(reachedIdeal?.route.kind).toBe('existing_gogma_mixed')
   })
@@ -535,7 +524,7 @@ describe('Skill stream independence', () => {
       gogmaPositions: 1,
     })
     const result = await searchCandidates(input, engine, deterministicExecution)
-    const candidate = result.targetResults[0].candidates.find(({ route }) =>
+    const candidate = candidatesOf(result.targetResult).find(({ route }) =>
       route.kind === 'existing_gogma_reset_skills',
     )
 
