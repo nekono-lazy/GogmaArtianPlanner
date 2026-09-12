@@ -114,21 +114,6 @@ export interface PlannerConflictResolution {
   selectedBuildListEntryId: BuildListEntryId
 }
 
-/**
- * A Planner-created need for a consumable Gogma weapon. It deliberately carries
- * no guessed weapon type, element, bonus, or material-cost constraint.
- */
-export interface PlannerMaterialRequirement {
-  id: string
-  sourceBuildListEntryId: BuildListEntryId | null
-  purpose: 'gogma_rng_progression'
-}
-
-export interface PlannerMaterialAssignment {
-  requirementId: string
-  ownedWeaponId: OwnedWeaponId
-}
-
 /** Structured-clone input. Engine instances and runtime dependencies are excluded. */
 export interface PlannerInput {
   rngState: RngState
@@ -180,7 +165,6 @@ export interface CandidateScore {
   satisfactionScore: number
   categoryScore: number
   distancePenalty: number
-  resourcePenalty: number
   conflictPenalty: number
   total: number
 }
@@ -272,7 +256,6 @@ export interface PlannerSearchState {
   /** Targets initially lacking a Practical weapon that this branch has started to secure. */
   practicalFirstProgressTargetIds: TargetWeaponId[]
   trace: PlannerSearchAction[]
-  consumedMaterialWeaponCount: number
   /**
    * How many times the player has to put one weapon down and pick another one
    * up while executing this branch's operations so far.
@@ -346,7 +329,6 @@ export type PlannerWarningKind =
   | 'no_build_list_entries'
   | 'rng_state_missing'
   | 'rng_prediction_unsupported'
-  | 'material_weapon_shortage'
   | 'protected_weapon_required'
   | 'build_list_entry_stale'
   | 'calculation_context_incompatible'
@@ -371,7 +353,6 @@ export const plannerWarningKinds: readonly PlannerWarningKind[] = [
   'no_build_list_entries',
   'rng_state_missing',
   'rng_prediction_unsupported',
-  'material_weapon_shortage',
   'protected_weapon_required',
   'build_list_entry_stale',
   'calculation_context_incompatible',

@@ -66,8 +66,6 @@ function engineAdvance(
       return engine.advanceGogmaCounter(current, { type: 'keep_bonuses' })
     case 'reset_skills':
       return engine.advanceSkillCounter(current, { type: 'reset_skills' })
-    case 'use_weapon_as_material':
-      return current
   }
 }
 
@@ -81,8 +79,6 @@ function ownedWeaponIdForOperation(
       return operation.sourceOwnedWeaponId
     case 'reset_skills':
       return operation.sourceOwnedWeaponId
-    case 'use_weapon_as_material':
-      return operation.ownedWeaponId
     case 'convert_normal_to_gogma':
       return entry.candidateSnapshot.route.kind ===
         'owned_normal_artian_to_gogma'
@@ -127,9 +123,9 @@ function weaponOperationSubject(
  *
  * Only `reset_bonuses`, `keep_bonuses`, and `reset_skills` are covered: each
  * selects one existing Gogma weapon and operates on it in place.
- * `create_normal_artian`, `convert_normal_to_gogma`, and
- * `use_weapon_as_material` have no such continuously operated subject, and
- * `reserve_weapon` is a Planner-only action with no in-game operation at all.
+ * `create_normal_artian` and `convert_normal_to_gogma` have no such
+ * continuously operated subject, and `reserve_weapon` is a Planner-only action
+ * with no in-game operation at all.
  */
 export function plannerWeaponOperationSubjectKey(
   entryId: BuildListEntryId,
@@ -241,10 +237,9 @@ export function createPlannerPhysicalActionIdentity(
  *   from the Skill stream position alone, so a Reset Skills directly followed
  *   by another Reset Skills is unobserved
  *
- * Every other operation is never skippable. `create_normal_artian`,
- * `convert_normal_to_gogma`, and `use_weapon_as_material` carry physical or
- * inventory side effects, and a route's final operation forms the Candidate
- * result itself.
+ * Every other operation is never skippable. `create_normal_artian` and
+ * `convert_normal_to_gogma` carry physical or inventory side effects, and a
+ * route's final operation forms the Candidate result itself.
  */
 function canSkipWhenCounterPassed(
   operations: readonly RouteOperation[],
@@ -310,8 +305,6 @@ function counterDetails(
         before: operation.skillCounterBefore,
         after: operation.skillCounterAfter,
       }
-    case 'use_weapon_as_material':
-      return { stream: null, counterId: null, before: null, after: null }
   }
 }
 
@@ -319,9 +312,6 @@ function exclusiveConsumedWeaponId(
   entry: BuildListEntry,
   operation: RouteOperation,
 ): OwnedWeaponId | null {
-  if (operation.type === 'use_weapon_as_material') {
-    return operation.ownedWeaponId
-  }
   if (
     operation.type === 'convert_normal_to_gogma' &&
     entry.candidateSnapshot.route.kind === 'owned_normal_artian_to_gogma'

@@ -100,7 +100,7 @@ describe('validateTargetPreferredOwnedWeapons', () => {
     ).toBe(true)
   })
 
-  it.each(['material', 'practical', 'ideal'] as const)(
+  it.each(['unclassified', 'practical', 'ideal'] as const)(
     'accepts an unprotected %s Gogma: status is not a selection condition',
     (status) => {
       const weapon = { ...compatibleGogma(), status }

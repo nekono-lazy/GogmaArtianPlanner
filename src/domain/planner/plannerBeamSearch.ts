@@ -14,7 +14,6 @@ import {
   addRegisteredWeapon,
   canUseAsDestructiveGogmaSource,
   canUseAsResetSkillsSource,
-  consumeMaterialWeapon,
   consumeOwnedNormalForConversion,
   findOwnedWeapon,
   reserveWeaponId,
@@ -355,34 +354,6 @@ function inventoryPreconditionRejection(
         )
       : null
   }
-  if (operation.type === 'use_weapon_as_material') {
-    const source = findOwnedWeapon(
-      state.simulatedInventory,
-      operation.ownedWeaponId,
-    )
-    if (!source) {
-      return rejection(
-        entry.id,
-        operation.type,
-        'inventory_precondition_failed',
-        `Concrete material OwnedWeapon '${operation.ownedWeaponId}' is unavailable.`,
-      )
-    }
-    if (source.isProtected) {
-      return protectedRejection(
-        unit,
-        `Concrete material OwnedWeapon '${operation.ownedWeaponId}' is protected.`,
-      )
-    }
-    if (source.kind !== 'gogma' || source.status !== 'material') {
-      return rejection(
-        entry.id,
-        operation.type,
-        'inventory_precondition_failed',
-        `Concrete OwnedWeapon '${operation.ownedWeaponId}' is not an unprotected Material Gogma weapon.`,
-      )
-    }
-  }
   return null
 }
 
@@ -426,27 +397,6 @@ function applyRouteInventoryEffect(
     }
     state.simulatedInventory = consumed.inventory
     effect.removedOwnedWeaponIds.push(sourceId)
-    return { rejection: null, effect }
-  }
-  if (operation.type === 'use_weapon_as_material') {
-    const consumed = consumeMaterialWeapon(
-      state.simulatedInventory,
-      operation.ownedWeaponId,
-    )
-    if (!consumed.isValid || consumed.inventory === null) {
-      return {
-        rejection: rejection(
-          entry.id,
-          operation.type,
-          'inventory_precondition_failed',
-          consumed.issues[0]?.message ?? 'Material consumption failed.',
-        ),
-        effect,
-      }
-    }
-    state.simulatedInventory = consumed.inventory
-    state.consumedMaterialWeaponCount += 1
-    effect.removedOwnedWeaponIds.push(operation.ownedWeaponId)
     return { rejection: null, effect }
   }
   return { rejection: null, effect }
@@ -748,7 +698,7 @@ function applyRouteAction(
     rngAfter: rngSnapshot(state),
     inventoryEffect: appliedInventory.effect,
     satisfactionChanges:
-      mutatedSourceId !== null || primary.operation.type === 'use_weapon_as_material'
+      mutatedSourceId !== null
         ? refreshTargetSatisfaction(state, targets, master)
         : [],
   }
@@ -769,7 +719,7 @@ function applyRouteAction(
     progressedBuildListEntryIds,
     preferredSourceEntryIds,
   )
-  state.totalCost = state.trace.length + state.consumedMaterialWeaponCount * 10
+  state.totalCost = state.trace.length
   return { state, rejection: null }
 }
 
@@ -968,7 +918,7 @@ function applyReserveAction(
     [entry.id],
     preferredSourceEntryIds,
   )
-  state.totalCost = state.trace.length + state.consumedMaterialWeaponCount * 10
+  state.totalCost = state.trace.length
   return { state, rejection: null }
 }
 
@@ -1372,19 +1322,6 @@ export async function runPlannerBeamSearch(
       warnings,
       'max_expanded_states_reached',
       `Planner reached maxExpandedStates (${input.options.maxExpandedStates}).`,
-    )
-  }
-  if (
-    rejections.some(
-      ({ actionType, reason }) =>
-        actionType === 'use_weapon_as_material' &&
-        reason === 'inventory_precondition_failed',
-    )
-  ) {
-    addWarning(
-      warnings,
-      'material_weapon_shortage',
-      'A concrete Candidate material weapon was unavailable. No replenishment branch was generated because v1 has no verified general material weapon type/element selection rule.',
     )
   }
   if (

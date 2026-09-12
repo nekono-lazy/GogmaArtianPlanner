@@ -8,7 +8,7 @@
 本書を初期版の上位要件とし、具体的な型、保存形式、アルゴリズム、画面遷移は以下の文書で定義する。
 
 - [DATA_MODEL.md](./DATA_MODEL.md): 型、ID、enum、関係、永続化、不変条件
-- [MASTER_DATA.md](./MASTER_DATA.md): 武器種、属性、ボーナス、スキル、抽選、素材のマスター
+- [MASTER_DATA.md](./MASTER_DATA.md): 武器種、属性、ボーナス、スキル、抽選、アイテム素材のマスター
 - [RNG_SPEC.md](./RNG_SPEC.md): RNG状態、予測、進行、Import、観測検索
 - [SEARCH_SPEC.md](./SEARCH_SPEC.md): 条件評価、候補検索、経路比較、条件緩和
 - [PLANNER_SPEC.md](./PLANNER_SPEC.md): 候補選択、競合、在庫、作成計画、再計算
@@ -127,7 +127,7 @@ stream進行は次を正式契約とする。Statusはprovenanceの確認範囲�
 | reset bonuses | 0 | 0 | +1 | reference-verified |
 | keep bonuses | 0 | 0 | +1 | reference-verified |
 
-`use_weapon_as_material` のRNG進行は未確認であり推測しない。Domain Counter +1とPRNG内部1 blockの10 stepは別概念とする。Core / reference semanticsではCounter Gateは予測時のeffective PRNG blockにだけ作用し、Skill Gate < 54ならSkill offsetを0、Gogma Gate < 35ならGogma offsetを0とする。Gate未満で保存Counter自体が操作後にどう変化するかは未確認のまま維持する。
+所持武器そのものを素材として消費するモデルはv1 Domainに存在しない。Domain Counter +1とPRNG内部1 blockの10 stepは別概念とする。Core / reference semanticsではCounter Gateは予測時のeffective PRNG blockにだけ作用し、Skill Gate < 54ならSkill offsetを0、Gogma Gate < 35ならGogma offsetを0とする。Gate未満で保存Counter自体が操作後にどう変化するかは未確認のまま維持する。
 
 このCore / reference contractとProduction v1 runtime policyを区別する。Production v1 adapterはoperationに応じ、Skillでは54、Gogmaでは35をactive branch選択用の内部representativeとして使用する。54 / 35はactual game Counter Gate値ではなく、`RngState.counterGate`へ保存しない。低Gate branch自体はCore / reference semanticsとその検証のために残す。
 
@@ -195,7 +195,7 @@ Skill Identificationはreference-generated fixtureに加えて、C5-E2C9で独�
 
 ## 8. 所持アーティア管理
 
-所持している通常アーティアと巨戟アーティアを1本ずつ個別管理する。素材用巨戟も省略せず登録できること。
+所持している通常アーティアと巨戟アーティアを1本ずつ個別管理する。用途を問わず、所持している武器はすべて登録できること。
 
 各武器は最低限、次の情報を保持する。
 
@@ -212,17 +212,32 @@ Skill Identificationはreference-generated fixtureに加えて、C5-E2C9で独�
 
 巨戟アーティアの状態は次の3種類とする。通常アーティアは状態を持たない。
 
-- `Material`: 素材用
-- `Practical`: 実用品
-- `Ideal`: 理想品
+- `unclassified`: 未分類
+- `practical`: 実用
+- `ideal`: 理想
 
-素材用武器にも復元ボーナス5枠とスキルを保持する。現在の復元構成がKeep Bonusesによって将来の目標武器作成に利用できる可能性があるためである。
+statusはユーザーが所持武器を整理するための管理ラベルだけを意味する。statusから
+Plannerの操作可否、Search Route eligibility、Target Satisfactionを決定しない。
+責務は次のとおり厳密に分離する。
+
+| 概念 | 意味 |
+| --- | --- |
+| `status` | 未分類 / 実用 / 理想というユーザー管理ラベル |
+| `isProtected` | Planner / Searchが武器性能を変更してよいか |
+| `TargetWeapon.preferredOwnedWeaponId` | このTargetを作る際に優先する起点武器 |
+| Target Satisfaction | 実際のBonus / Skillから判定 |
+
+どのstatusの武器も復元ボーナス5枠とスキルを保持する。
 
 通常アーティアはレア8だけを登録でき、`normal_artian` scopeの復元ボーナス5枠を保持し、シリーズ／グループスキルとstatusを持たない。巨戟アーティアは、変換直後から最初のBonus amendmentまでは継承した `normal_artian` scopeの5枠、その後は `gogma_artian` scopeの5枠を保持できる。1本の5枠内でscopeを混在させない。レア度選択UIは持たない。通常／巨戟の両方で保護を設定でき、保護中の通常アーティアを自動計画の巨戟化元にしない。
 
 無属性武器では通常／巨戟とも属性強化を利用できない。ライト／ヘビィボウガンの属性強化不可ルールも維持し、ElementとWeaponBonusDefinitionのMasterから選択肢を決定する。
 
-新しく生成・登録する巨戟アーティアの保護初期値は、PracticalがOFF、IdealがON、MaterialがOFFである。statusと保護は独立したユーザー設定であり、既存保存データの保護値をmigrationやstatus変更だけで書き換えない。同一TargetのIdeal武器を取得しても旧Practical武器を自動的に素材化せず、ユーザーの明示操作を必要とする。Practical同士の優劣はv1で判定しない。
+手動で新規登録する巨戟アーティアの初期値は `unclassified` かつ保護OFFである。Plannerが
+Candidateを確保する場合は、Practicalが保護OFF、Idealが保護ONで登録される。statusと保護は
+独立したユーザー設定であり、既存保存データの保護値をmigrationやstatus変更だけで書き換えない。
+status変更はOwned Weapons画面の通常CRUDであり、ProductionPlanの操作ではない。Practical同士の
+優劣はv1で判定しない。
 
 ---
 
@@ -253,7 +268,7 @@ Skill Identificationはreference-generated fixtureに加えて、C5-E2C9で独�
 - 1つの目標武器につき最大1本
 - 1本の所持武器を複数の目標武器へ同時に割り当てない
 - 候補は目標武器と武器種・属性が一致する非保護の所持武器とする。通常／巨戟のどちらでもよく、
-  状態（Material / Practical / Ideal）は選択可否の条件にしない
+  状態（未分類 / 実用 / 理想）は選択可否の条件にしない
 - 必須ルート指定ではない。より短い、より低コスト、または既存評価で明確に優れたルートがある
   場合はそちらを優先する
 - 目標達成判定を制限しない。ある目標が特定の所持武器を優先起点にしていても、条件を満たす別の
@@ -447,7 +462,7 @@ BuildCandidateは検索結果、BuildListEntryはユーザーがPlannerへ渡す
 
 近似フィルタで表示される候補は初期版では個別追加のみ許可する。
 
-再検索でBuildCandidateが置き換わってもBuildListEntryのSnapshotは失われない。ただしTarget条件、Candidate Route成立に使用したRNG状態、Routeが参照する起点武器・素材武器の状態、または計算バージョンとの互換性が失われたEntryはstaleとし、Planner入力に使用しない。stale理由はそれぞれ `target_definition_changed`、`rng_state_changed`、`owned_weapon_changed`、`calculation_context_changed` とする。初期版では計算に使用したRNG状態Hashが変わった場合、安全側に倒してstaleとしてよい。Routeと無関係なOwnedWeaponの変更は参照武器Hashへ含めず、Entryをstaleにしない。
+再検索でBuildCandidateが置き換わってもBuildListEntryのSnapshotは失われない。ただしTarget条件、Candidate Route成立に使用したRNG状態、Routeが参照する起点武器の状態、または計算バージョンとの互換性が失われたEntryはstaleとし、Planner入力に使用しない。stale理由はそれぞれ `target_definition_changed`、`rng_state_changed`、`owned_weapon_changed`、`calculation_context_changed` とする。初期版では計算に使用したRNG状態Hashが変わった場合、安全側に倒してstaleとしてよい。Routeと無関係なOwnedWeaponの変更は参照武器Hashへ含めず、Entryをstaleにしない。
 
 作成リストに追加された候補がすべて採用されるとは限らない。PlannerはBuildListEntryを入力とし、目標の充足と全体効率を考慮して採用候補を決定する。
 
@@ -477,7 +492,7 @@ Plannerは複数目標を横断して作成計画を生成する。
 - Reset Bonuses
 - Keep Bonuses
 - スキル再付与
-- 素材用武器、実用品、理想品の状態
+- 未分類 / 実用 / 理想の管理ラベル（計算には使用しない）
 - 目標優先度
 - 武器消費
 - 操作回数
@@ -485,8 +500,8 @@ Plannerは複数目標を横断して作成計画を生成する。
 Plannerは候補検索と分離し、作成リストに追加された候補を入力として計画を生成する。
 
 PlannerはCandidate SnapshotのBuildRouteと具体的なRouteOperationを変更しない。
-Planner独自の素材補充、素材登録、一般素材消費、Target武器確保、確認付き状態変更は
-Planner-only PlanStepとして挿入する。Candidate Route内の具体的素材武器IDを別武器へ
+Planner独自のTarget武器確保はPlanner-only PlanStepとして挿入する。Candidate Route内の
+具体的な起点OwnedWeapon IDを別武器へ
 差し替えない。
 
 Plannerが自動判断できない局所競合では、ユーザーがBuildListEntryを選択し、その選択を
@@ -521,46 +536,62 @@ BuildCandidateのRouteには、通常アーティア作成、巨戟化、Reset B
 - 非保護の所持レア8通常アーティアは巨戟化元として使用でき、変換後は元在庫から消費する
 - レア6・7通常アーティアはv1 Inventoryへ含めない
 - 保護中の通常アーティアは変換元にしない
-- 通常アーティアにはPractical / Ideal / Material状態を適用しない
+- 通常アーティアにはstatusを適用しない
 
-- Material武器はゲーム操作の素材として消費できるが、その操作単独のRNG進行は未確認である。Gogma Counterを進める目的と推測して使用しない
-- Keep Bonusesにより目標候補へ転用できるMaterial武器は温存を検討する
-- 新規Practical武器の保護初期値はOFF、新規Ideal武器はON、Material武器は従来どおりOFFとする
 - statusと保護は独立して扱い、status変更だけでユーザー設定済みの保護状態を暗黙変更しない
-- 保護された武器を素材消費、Reset Bonuses、Keep Bonuses、Reset Skillsへ使用しない
+- 武器性能を変更してよいかは `isProtected` だけが決める。statusは判定に使用しない
+- 保護された武器をReset Bonuses、Keep Bonuses、Reset Skillsへ使用しない
 - 保護中の巨戟は現在性能の操作0候補として利用できるが、将来のBonus / Skill amendment探索の起点にしない
-- Ideal武器取得後も旧実用品を自動的に素材化しない
 - 1本の武器を同時に複数の排他的用途へ割り当てない
 
-v1のPlannerは、同一TargetのIdeal武器を確保済み、または同一Plan内の先行Stepで確保する場合に限り、旧Practical武器を後続素材として使う確認必須の `change_owned_weapon_status` PlanStepを予定できる。このStepは自動的な素材化ではなく、実行ナビでユーザーに「素材用に変更」または「保管」を選択させる。別のPractical武器を取得したことだけを理由に、旧Practical武器の素材化を計画しない。ユーザーがOwned Weapons画面で手動変更することは許可する。
+所持している巨戟アーティア武器そのものを「素材武器」として消費するモデルはv1に存在しない。
+Plannerは所持武器を消耗品として扱わず、次の概念を一切持たない。
 
-- 予定どおり素材用に変更: `status = Material`、`isProtected = false` とし、期待状態Afterと一致するためPlanをstaleにしない
-- 保管: 状態と保護を維持し、Planの期待状態と異なるためstaleにして再計算を促す
+- 武器を素材として消費する `use_weapon_as_material` RouteOperation
+- 素材利用可否を判定する `canUseAsMaterial`
+- 素材用巨戟の不足（`material_weapon_shortage`）
+- 素材用巨戟を補充するRoute
+- 素材用として登録する `create_material_gogma` PlanStep
+- 旧PracticalをMaterialへ変える確認付き `change_owned_weapon_status` PlanStep
 
-Plannerが確認なしで保護を解除または素材化すること、protected武器を素材消費・Reset Bonuses・Keep Bonuses・Reset Skillsへ使用すること、保護消費のoverride設定を設けることは禁止する。
+Plannerが所持武器を消費資源として扱うことはなく、未分類武器の本数はPlanner scoreへ影響しない。
+
+statusを書き換える経路は次の2つだけである。
+
+```text
+任意のユーザー管理ラベル変更
+→ Owned Weapons画面の通常CRUD
+
+Candidateを reserve_weapon で確保
+→ Candidate categoryを管理ラベルとして設定する
+   practical Candidate → status = practical
+   ideal Candidate     → status = ideal
+```
+
+`reserve_weapon` の設定は新規生成Candidateでも既存Gogma Candidateの確保でも同じであり、
+既存Gogmaの保護状態は従来契約どおり維持する。この場合もstatusはnon-semanticのままで、
+Search eligibility、Plannerのoperation可否、Target Satisfaction、semantic hashを決めない。
+
+Material化のためのstatus変更と、確認必須の `change_owned_weapon_status` PlanStepは廃止した。
+
+Plannerが確認なしで保護を解除すること、protected武器をReset Bonuses・Keep Bonuses・Reset Skillsへ使用すること、保護消費のoverride設定を設けることは禁止する。
+
+在庫から武器が消費される唯一の操作は、所持通常アーティアの巨戟化である。変換時に元の通常
+アーティアを在庫から取り除き、同じ武器を複数Routeで二重使用しない。
 
 ---
 
-## 22. 素材用武器不足
+## 22. ゲーム内アイテム素材
 
-作成計画上、素材用巨戟アーティアが不足する場合は補充操作を計画に含める。
+復元強化やスキル再抽選はゲーム内のアイテム素材を消費する。これは所持武器の消費とは
+まったく別の概念であり、`MaterialRequirement`、`MaterialCostMaster`、
+`BuildCandidate.requiredMaterials`、`ProductionPlan.requiredMaterials` として維持する。
 
-補充の例:
+アイテム素材は初期版では厳密な所持数制約にしない。必要数または必要量のみ表示する。
+正確な必要個数の整備、所持素材数の管理、素材不足によるPlan不可判定はv1の対象外とする。
 
-```text
-通常アーティア作成
-→ 巨戟化
-→ `create_material_gogma` で素材用巨戟として登録
-→ 必要になった位置で素材消費
-```
-
-`create_material_gogma` は追加のゲーム内RNG操作ではなく、直前までに作成済みの巨戟アーティアを `kind = Gogma`、`status = Material`、保護OFFとしてツールのInventoryへ登録するPlanner-only PlanStepである。Plannerは後続の素材消費と結ぶOwnedWeapon IDをPlan生成時に予約してよいが、登録Step確定前にDBまたはシミュレーション在庫へ追加せず、BuildRouteへ未来武器IDを入れない。
-
-素材補充のconversionも通常Routeと同じく初回Skillを1つ消費し、Gogma Counterは進めない。素材用途でSkill結果をTarget評価しない場合でも、実ゲーム操作のSkill進行を省略しない。
-
-既存PracticalをMaterialへ変える `change_owned_weapon_status`、Target候補を確保する `reserve_weapon` とは役割を分離する。再計算はstale Planに対するユーザー操作であり、旧Plan内の `recalculate_plan` Stepとして表現しない。
-
-素材アイテムそのものは初期版では厳密な所持数制約にしない。必要数または必要量のみ表示する。
+UIやドキュメントで所持武器と混同しうる箇所では「素材」ではなく「アイテム素材」
+「必要素材（アイテム）」など意味が明確な表現を用いる。
 
 ---
 
@@ -630,8 +661,7 @@ Plannerの結果を時系列のPlanStepとして表示する。
 
 - 作成予定武器
 - 作成順
-- 素材用武器の補充
-- 必要素材数
+- 必要アイテム素材数
 - 採用候補
 - 不採用候補と理由
 - 競合と解決結果
@@ -673,7 +703,6 @@ Plan全体の開始Snapshotは監査と再現用に保持する。加えて各Pl
 - 現在のステップ
 - 今後のステップ
 - 確保予定武器
-- 素材補充予定
 
 この画面の目的は現在地確認であり、初期版ではプラン編集を行わない。「現在の作業に戻る」操作で実行ナビへ戻れること。
 
@@ -736,7 +765,7 @@ Plan開始前のBuildListEntryは検索開始RNG状態との不一致でstaleに
 
 旧RNG契約のconversion Gogma Counter、巨戟化時のbonus再抽選、Keep selectionを保存したBuildCandidate / BuildListEntry Candidate Snapshotは新契約と非互換である。推測変換せずinvalid / staleとして再検索を要求する。Target、OwnedWeapon、RngStateなど意味を維持できるデータは不用意に削除しない。ProductionPlanは本契約確定時点で永続化前のためmigration対象外とし、Dexie migration手順は次のコード実装フェーズで決定する。
 
-Execution Navigatorの結果一致、武器確保、旧実用品の素材化確認、想定外結果記録は、RNG状態、通常アーティアCounter、OwnedWeapon、ExecutionHistory、PlanStep、ProductionPlanの関連更新を1つのDexie transactionで確定する。Undoも同じ範囲を1つのtransactionで復元する。transaction失敗時は部分更新を残さず、操作前の状態を維持する。
+Execution Navigatorの結果一致、武器確保、想定外結果記録は、RNG状態、通常アーティアCounter、OwnedWeapon、ExecutionHistory、PlanStep、ProductionPlanの関連更新を1つのDexie transactionで確定する。Undoも同じ範囲を1つのtransactionで復元する。transaction失敗時は部分更新を残さず、操作前の状態を維持する。
 
 ---
 
@@ -911,7 +940,7 @@ RNGの実データやアルゴリズムが未確定の段階では、推測値�
 2. Plannerが共有RNG、武器在庫、優先度を考慮する
 3. 競合がなければ実行可能な時系列計画を生成する
 4. 競合があれば理由と選択肢を表示し、選択後に再計算する
-5. 保護武器が素材消費・Reset Bonuses・Keep Bonuses・Reset Skillsへ使われないことを確認する
+5. 保護武器がReset Bonuses・Keep Bonuses・Reset Skillsへ使われないことを確認する
 6. Plannerの競合と不採用記録がBuildListEntry基準で追跡できる
 
 ### 38.3 実行と再同期
@@ -921,8 +950,8 @@ RNGの実データやアルゴリズムが未確定の段階では、推測値�
 3. 想定と異なる場合は実結果を記録する
 4. 差分と再計算理由を表示し、新しい計画を生成する
 5. 誤って進めたアプリ内操作をUndoできる
-6. 予定された旧実用品の素材化を承認するとPlanを継続できる
-7. 素材化予定に対して保管を選ぶとPlanがstaleになり再計算できる
+6. 所持武器のstatusを変更してもPlanがstaleにならない
+7. 所持通常アーティアの巨戟化で元の武器が在庫から消費される
 8. 最後のExecutionHistoryのSnapshotから直前Stepのアプリ内変更を完全にUndoできる
 9. Step確定またはUndoの保存失敗時に部分更新が残らない
 
@@ -939,9 +968,9 @@ RNGの実データやアルゴリズムが未確定の段階では、推測値�
 
 本書および参照する詳細仕様書を、初期版実装のv1基準とする。実装中に意味変更が必要になった場合は、コードだけで吸収せず該当仕様書を更新して変更理由を記録する。
 
-conversionのNormal +0 / Skill +1 / Gogma +0、bonus継承、初回Skillはgame-verified（実機確認済み）である。create/reset/keepのstream進行、first Reset、Keep family保持はreference-verifiedであり、本書の正式製品契約として採用するが、全weapon、attribute、game versionでgame-verifiedという意味ではない。BowのSharpness/Ammo family、LBG/HBGのElement family、elementless GogmaのElement bonus、栄光の誉れ、祝祭の巡り、Gogma rank I、Gate未満の保存Counter進行、`use_weapon_as_material` のRNG進行はunverified（未確認）のため推測固定しない。Interface、Capability、Fake Engine、Fixtureの境界を維持する。
+conversionのNormal +0 / Skill +1 / Gogma +0、bonus継承、初回Skillはgame-verified（実機確認済み）である。create/reset/keepのstream進行、first Reset、Keep family保持はreference-verifiedであり、本書の正式製品契約として採用するが、全weapon、attribute、game versionでgame-verifiedという意味ではない。BowのSharpness/Ammo family、LBG/HBGのElement family、elementless GogmaのElement bonus、栄光の誉れ、祝祭の巡り、Gogma rank I、Gate未満の保存Counter進行はunverified（未確認）のため推測固定しない。Interface、Capability、Fake Engine、Fixtureの境界を維持する。
 
-Practical同士の優劣判定と、それに基づくPlannerからの旧Practical素材化提案は将来仕様とし、v1では実装しない。
+Practical同士の優劣判定は将来仕様とし、v1では実装しない。
 
 同一Route内で新規生成した武器を後続Operationから参照するRoute内武器参照型は将来仕様とし、v1では追加しない。
 

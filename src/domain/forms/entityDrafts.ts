@@ -64,17 +64,26 @@ function baseOptions(master: MasterDataRoot, scope: ArtianBonusScope) {
   return { weaponTypeId: weaponType.id, elementId: element.id }
 }
 
+/**
+ * A new OwnedWeapon draft.
+ *
+ * A manually registered Gogma weapon starts `unclassified` and unprotected: the
+ * status is a user-facing organisation label, so the tool never guesses one.
+ * The Practical / Ideal protection defaults below apply to a draft the caller
+ * explicitly asks for with that status, which is how a Planner-secured
+ * Candidate is registered (`docs/DATA_MODEL.md` 3.2).
+ */
 export function createOwnedWeaponDraft(
   master: MasterDataRoot,
   kindOrStatus: ArtianWeaponKind | OwnedWeaponStatus = 'gogma',
-  requestedStatus: OwnedWeaponStatus = 'material',
+  requestedStatus: OwnedWeaponStatus = 'unclassified',
 ): OwnedWeaponDraft {
   const kind: ArtianWeaponKind =
     kindOrStatus === 'normal' || kindOrStatus === 'gogma'
       ? kindOrStatus
       : 'gogma'
   const status: OwnedWeaponStatus =
-    kindOrStatus === 'material' ||
+    kindOrStatus === 'unclassified' ||
     kindOrStatus === 'practical' ||
     kindOrStatus === 'ideal'
       ? kindOrStatus

@@ -440,7 +440,7 @@ export interface LotteryMaster {
 
 ---
 
-## 12. MaterialMaster
+## 12. MaterialMaster（アイテム素材）
 
 ```ts
 export interface MaterialMaster {
@@ -452,18 +452,22 @@ export interface MaterialMaster {
 }
 ```
 
-初期版では素材の所持数管理はしない。
+ゲーム内で消費するアイテム素材のマスターである。所持しているアーティア武器そのものの
+消費とは別概念であり、v1に武器を素材として消費するモデルは存在しない
+（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 8.1）。
+
+初期版ではアイテム素材の所持数管理はしない。
 
 用途。
 
-- 候補ごとの必要素材表示
-- Plan全体の必要素材集計
+- 候補ごとの必要アイテム素材表示
+- Plan全体の必要アイテム素材集計
 
 ---
 
 ## 13. MaterialCostMaster
 
-操作ごとの必要素材を定義する。
+操作ごとの必要アイテム素材を定義する。
 
 ```ts
 export interface MaterialCostMaster {
@@ -486,7 +490,7 @@ export interface MaterialCostMaster {
 - `quantity` は1以上
 - 武器種共通コストは `weaponTypeId = null`
 - 武器種別コストがある場合は `weaponTypeId` を指定する
-- 初期版では素材不足によるPlan不可判定は行わない
+- 初期版ではアイテム素材不足によるPlan不可判定は行わない
 
 ---
 
@@ -597,4 +601,4 @@ Master Data読み込み時に以下を検証する。
 - TargetWeaponの入力候補がMaster Dataから生成できる
 - OwnedWeapon登録時に武器種別の有効ボーナスだけを許可する
 - Production RNG用Worker入力へ参照numeric Lottery表をDomain Masterとして渡さず、Engineがprovenance付きreference-verified tableからsemantic ID結果を返す。これは参照repositoryとの一致を表し、全実ゲーム条件でのgame-verifiedを意味しない
-- MaterialCostMasterからPlan全体の必要素材を集計できる
+- MaterialCostMasterからPlan全体の必要アイテム素材を集計できる

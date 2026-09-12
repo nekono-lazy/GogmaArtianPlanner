@@ -118,17 +118,15 @@ function invariant(condition: boolean, message: string): void {
  * The participant `sourceOwnedWeaponId`, derived from Route / operation
  * semantics through the existing `routeUnitOwnedWeaponId()` authority.
  *
- * `use_weapon_as_material` is the one deliberate difference: the consumed
- * weapon is carried by `exclusiveConsumedOwnedWeaponId`, never squeezed into
- * the source field (PLANNER_SPEC 9.2.3).
+ * It stays separate from `exclusiveConsumedOwnedWeaponId`, which a
+ * `same_owned_weapon_consumed` conflict carries in its own field: the exclusively
+ * consumed weapon is never squeezed into the source field (PLANNER_SPEC 9.2.3).
  */
 function participantSourceOwnedWeaponId(
   entry: BuildListEntry,
   unit: PlannerRouteUnit,
 ): OwnedWeaponId | null {
-  return unit.operation.type === 'use_weapon_as_material'
-    ? null
-    : routeUnitOwnedWeaponId(entry, unit)
+  return routeUnitOwnedWeaponId(entry, unit)
 }
 
 function unitResourceIdentity(

@@ -26,7 +26,18 @@ export const V1_NORMAL_ARTIAN_RARITY = 8 as const
 export type NormalArtianRarity = typeof V1_NORMAL_ARTIAN_RARITY
 export type ArtianWeaponKind = 'normal' | 'gogma'
 export type RestorationBonusScope = 'normal_artian' | 'gogma_artian'
-export type OwnedWeaponStatus = 'material' | 'practical' | 'ideal'
+/**
+ * A user-facing organisation label on an owned Gogma Artian weapon, and nothing
+ * more.
+ *
+ * It never decides whether the Planner or Search may operate on the weapon
+ * (`isProtected` does), which weapon a Target starts from
+ * (`TargetWeapon.preferredOwnedWeaponId` does), or whether a weapon satisfies a
+ * Target (the actual restoration bonuses and Skills do). Because it carries no
+ * calculation meaning, it is excluded from every semantic hash and calculation
+ * identity, exactly like `name` and `memo` (`docs/DATA_MODEL.md` 3.2).
+ */
+export type OwnedWeaponStatus = 'unclassified' | 'practical' | 'ideal'
 export type CandidateCategory = 'ideal' | 'practical'
 export type RouteKind =
   | 'normal_artian_to_gogma'
@@ -46,19 +57,14 @@ export type ProductionPlanStatus =
 export type PlanStepOperationType =
   | 'create_normal_artian'
   | 'convert_normal_to_gogma'
-  | 'create_material_gogma'
   | 'reset_bonuses'
   | 'keep_bonuses'
   | 'reset_skills'
   | 'reserve_weapon'
-  | 'use_weapon_as_material'
-  | 'change_owned_weapon_status'
   | 'confirm_result'
 export type ExecutionAction =
   | 'confirmed_expected'
   | 'secured_weapon'
-  | 'confirmed_weapon_status_change'
-  | 'declined_weapon_status_change'
   | 'actual_result_different'
   | 'skipped_candidate'
 export type RecalculationReason =
@@ -71,7 +77,6 @@ export type RecalculationReason =
   | 'unexpected_result'
   | 'planned_candidate_not_secured'
   | 'different_candidate_secured'
-  | 'planned_status_change_declined'
   | 'manual_recalculate'
 export type ConflictKind =
   | 'same_gogma_counter'
@@ -118,7 +123,18 @@ export interface KnownValue<T> {
 // incompatible and fail closed. The historical 2..5 build-result exception is
 // not extended to version 8. Dexie schema 3 migrates the persisted shape
 // separately; RNG semantics remain unchanged.
-export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 8
+// Version 9 removes the "consume an owned Gogma Artian weapon as material"
+// Domain model entirely and reduces `OwnedWeapon.status` to a user-facing
+// organisation label. That changes the active RouteOperation set
+// (`use_weapon_as_material` no longer exists), Planner inventory semantics,
+// Planner scoring, the PlanStep operation set, and the OwnedWeapon semantic
+// hash contract, so all version 1..8 Candidates, Build List snapshots and Plans
+// are incompatible and fail closed with `calculation_context_changed`. The
+// historical 2..5 build-result exception is not extended to version 9. Dexie
+// schema 4 migrates the persisted `material` status separately; RNG semantics
+// remain unchanged. Game item materials (`MaterialRequirement`) are a different
+// concept and are untouched.
+export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 9
 
 export interface CalculationContext {
   gameVersion: string

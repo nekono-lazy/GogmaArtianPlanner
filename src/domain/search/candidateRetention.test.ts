@@ -162,8 +162,6 @@ describe('B4 conservative Practical dominance', () => {
     const conversion = { type: 'convert_normal_to_gogma' as const, weaponTypeId: 'weapon.fixture.a', skillCounterBefore: 0, skillCounterAfter: 1 }
     expect(isDestructiveCandidateRoute({ kind: 'owned_normal_artian_to_gogma', sourceOwnedWeaponId: source, operations: [conversion] })).toBe(true)
     expect(isDestructiveCandidateRoute({ kind: 'normal_artian_to_gogma', sourceOwnedWeaponId: null, operations: [conversion] })).toBe(false)
-    expect(isDestructiveCandidateRoute({ kind: 'existing_gogma_mixed', sourceOwnedWeaponId: source,
-      operations: [{ type: 'use_weapon_as_material', ownedWeaponId: source }] })).toBe(true)
   })
 })
 

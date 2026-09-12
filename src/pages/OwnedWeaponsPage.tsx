@@ -179,17 +179,6 @@ export function OwnedWeaponsPage({
 
   const save = async () => {
     if (!api || !draft) return
-    if (
-      editing?.kind === 'gogma' &&
-      draft.kind === 'gogma' &&
-      editing.status !== 'material' &&
-      draft.status === 'material' &&
-      !window.confirm(
-        'この武器を素材扱いに変更します。生産計画で素材候補になる可能性があります。',
-      )
-    ) {
-      return
-    }
     // Protecting, or re-typing, a weapon a Target prefers as its Route origin
     // would leave that Target holding a preference the Domain rejects. Confirm
     // first, then let the Service release the link in the same transaction as

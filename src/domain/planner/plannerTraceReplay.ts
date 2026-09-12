@@ -358,7 +358,7 @@ export function replayPlannerSearchTrace(input: PlannerInput, bestState: Planner
           // Reset Skills writes only the Series / Group Skill pair, so it never
           // reads the five slots and carries an unknown state through unchanged.
           assignGogma(runtime, action, { bonuses: current.bonuses, seriesSkillId: skills.seriesSkillId, groupSkillId: skills.groupSkillId }); expectedResult = result(...expectedResultBonusArgs(current.bonuses), skills.seriesSkillId, skills.groupSkillId)
-        } else { const source = runtime.ownedWeapons.find(({ id }) => id === operation.ownedWeaponId); if (!source) return fail('missing_source_weapon', 'Material weapon is unavailable.', index); runtime.ownedWeapons = runtime.ownedWeapons.filter(({ id }) => id !== source.id); inventoryChange = { ...emptyChange(), removeOwnedWeaponIds: [source.id] } }
+        }
     }
     applySnapshot(runtime, action.rngAfter); if (!sameSnapshot(runtime, action.rngAfter)) return fail('rng_after_mismatch', 'Replay runtime does not match Search Action rngAfter.', index)
     const normalBefore = advance.affectedNormalCounterId === null ? null : action.rngBefore.normalCounters.find(({ id }) => id === advance.affectedNormalCounterId)?.counter ?? null

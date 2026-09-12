@@ -34,7 +34,7 @@ export function getMasterDataStatus(
   if (feature === 'search' && !master.lotteries.some(({ isEnabled }) => isEnabled)) {
     return {
       isProductionReady: false,
-      reason: '抽選マスターデータは未検証のため無効です。通常アーティア経由の検索は利用できません。素材コストも未検証です。',
+      reason: '抽選マスターデータは未検証のため無効です。通常アーティア経由の検索は利用できません。アイテム素材コストも未検証です。',
     }
   }
 

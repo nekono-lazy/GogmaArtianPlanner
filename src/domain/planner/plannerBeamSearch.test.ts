@@ -19,6 +19,8 @@ import {
   sourceWeapon,
   target,
 } from '../../test/fixtures/plannerBeam'
+import { belowPracticalBonuses } from '../../test/fixtures/candidateSearch'
+import { normalWeapon } from '../../test/fixtures/constrainedEnumeration'
 import {
   arePlannerRouteUnitsShareable,
   createProductionPlan,
@@ -33,20 +35,28 @@ import { comparePlannerSearchStates } from './plannerScoring'
 import { validatePlannerInput } from './plannerValidation'
 import { validateBuildRoute } from '../models/validation'
 
+/**
+ * A Target that starts Ideally satisfied and becomes relevant again mid-search.
+ *
+ * An owned Artian weapon is never consumed as material any more
+ * (`docs/PLANNER_SPEC.md` 8), so the remaining way a satisfied Target loses its
+ * weapon is another Entry amending that very weapon: the source goes in flight
+ * and stops satisfying anything until its new result is reserved.
+ */
 function dynamicConflictScenario() {
   const restoredTarget = target('target.dynamic-conflict.restored')
-  const consumingTarget = {
-    ...target('target.dynamic-conflict.consumer'),
-    weaponTypeId: 'weapon.fixture.b',
-  }
   const onlySatisfiedWeapon = {
     ...createValidOwnedWeapon(ownedWeaponId('owned.dynamic-conflict.only')),
-    status: 'material' as const,
+    status: 'unclassified' as const,
     isProtected: false,
   }
-  const consumingSource = {
-    ...sourceWeapon('owned.dynamic-conflict.source'),
-    weaponTypeId: 'weapon.fixture.b',
+  // Same weapon type, so this Target's Route may amend that weapon, but Ideal
+  // bonuses it does not currently hold, so it is not already satisfied by it.
+  const consumingTarget = {
+    ...target('target.dynamic-conflict.consumer'),
+    idealBonuses: belowPracticalBonuses(),
+    practicalBonusConditions: [],
+    alternativeBonusRules: [],
   }
   const restoredEntry = routeEntry('entry.dynamic-conflict.restored', restoredTarget, {
     kind: 'normal_artian_to_gogma',
@@ -70,21 +80,31 @@ function dynamicConflictScenario() {
   })
   const consumingEntry = routeEntry('entry.dynamic-conflict.consume', consumingTarget, {
     kind: 'existing_gogma_mixed',
-    sourceOwnedWeaponId: consumingSource.id,
+    sourceOwnedWeaponId: onlySatisfiedWeapon.id,
     operations: [
-      { type: 'use_weapon_as_material', ownedWeaponId: onlySatisfiedWeapon.id },
+      // The trigger takes a Gogma position, so Skill Counter 7 is still free
+      // when `restoredEntry` becomes relevant and the two collide there.
+      {
+        type: 'reset_bonuses',
+        sourceOwnedWeaponId: onlySatisfiedWeapon.id,
+        gogmaCounterBefore: 10,
+        gogmaCounterAfter: 11,
+      },
       {
         type: 'reset_skills',
-        sourceOwnedWeaponId: consumingSource.id,
+        sourceOwnedWeaponId: onlySatisfiedWeapon.id,
         skillCounterBefore: 7,
         skillCounterAfter: 8,
       },
     ],
   })
+  // Its result keeps the amended weapon away from `restoredTarget` for good, so
+  // the restored Entry stays relevant once it becomes so.
+  consumingEntry.candidateSnapshot.finalBonuses = belowPracticalBonuses()
   return {
     targets: [restoredTarget, consumingTarget],
     entries: [restoredEntry, consumingEntry],
-    ownedWeapons: [onlySatisfiedWeapon, consumingSource],
+    ownedWeapons: [onlySatisfiedWeapon],
     restoredEntry,
     consumingEntry,
   }
@@ -805,25 +825,26 @@ describe('Planner Beam Search', () => {
     )).toBe(true)
   })
 
-  it('detects the same concrete material weapon without replacing its ID', () => {
-    const firstTarget = target('target.material.first')
-    const secondTarget = target('target.material.second')
-    const materialId = ownedWeaponId('owned.material.concrete')
-    const route = (sourceId: string): BuildRoute => ({
-      kind: 'existing_gogma_mixed',
-      sourceOwnedWeaponId: ownedWeaponId(sourceId),
-      operations: [{ type: 'use_weapon_as_material', ownedWeaponId: materialId }],
+  it('detects the same exclusively consumed weapon without replacing its ID', () => {
+    // Converting an owned Normal Artian is the only remaining weapon
+    // consumption, and it is exclusive: two Entries naming the same source are
+    // a `same_owned_weapon_consumed` conflict, and the Planner never rewrites
+    // the concrete OwnedWeapon ID the Candidate Route saved.
+    const firstTarget = target('target.consumed.first')
+    const secondTarget = target('target.consumed.second')
+    const sharedNormal = normalWeapon('owned.consumed.concrete')
+    const route = (skillCounter: number): BuildRoute => ({
+      kind: 'owned_normal_artian_to_gogma',
+      sourceOwnedWeaponId: sharedNormal.id,
+      operations: [{
+        type: 'convert_normal_to_gogma',
+        weaponTypeId: 'weapon.fixture.a',
+        skillCounterBefore: skillCounter,
+        skillCounterAfter: skillCounter + 1,
+      }],
     })
-    const first = routeEntry(
-      'entry.material.first',
-      firstTarget,
-      route('owned.material.source.first'),
-    )
-    const second = routeEntry(
-      'entry.material.second',
-      secondTarget,
-      route('owned.material.source.second'),
-    )
+    const first = routeEntry('entry.consumed.first', firstTarget, route(7))
+    const second = routeEntry('entry.consumed.second', secondTarget, route(11))
     const engine = plannerEngine()
     const plans = createPlannerRouteUnitPlans([first, second], engine)
     const state = {
@@ -843,9 +864,12 @@ describe('Planner Beam Search', () => {
       kind: 'same_owned_weapon_consumed',
       buildListEntryIds: [first.id, second.id],
     })
+    expect(first.candidateSnapshot.route.sourceOwnedWeaponId).toBe(sharedNormal.id)
     expect(first.candidateSnapshot.route.operations[0]).toEqual({
-      type: 'use_weapon_as_material',
-      ownedWeaponId: materialId,
+      type: 'convert_normal_to_gogma',
+      weaponTypeId: 'weapon.fixture.a',
+      skillCounterBefore: 7,
+      skillCounterAfter: 8,
     })
   })
 
@@ -1195,37 +1219,40 @@ describe('Planner Beam Search', () => {
     )).toBe(false)
   })
 
-  it('does not double-consume a concrete Material weapon', async () => {
-    const goal = target('target.material.double')
-    const source = sourceWeapon('owned.material.route-source')
-    const material = {
-      ...sourceWeapon('owned.material.double'),
-      status: 'material' as const,
-      isProtected: false,
-    }
-    const entry = routeEntry('entry.material.double', goal, {
-      kind: 'existing_gogma_mixed',
-      sourceOwnedWeaponId: source.id,
-      operations: [
-        { type: 'use_weapon_as_material', ownedWeaponId: material.id },
-        { type: 'use_weapon_as_material', ownedWeaponId: material.id },
-      ],
+  it('consumes one owned Normal conversion source and never reuses it', async () => {
+    const firstTarget = target('target.normal.double.first')
+    const secondTarget = target('target.normal.double.second')
+    const sharedNormal = normalWeapon('owned.normal.double.shared')
+    const route = (skillCounter: number): BuildRoute => ({
+      kind: 'owned_normal_artian_to_gogma',
+      sourceOwnedWeaponId: sharedNormal.id,
+      operations: [{
+        type: 'convert_normal_to_gogma',
+        weaponTypeId: 'weapon.fixture.a',
+        skillCounterBefore: skillCounter,
+        skillCounterAfter: skillCounter + 1,
+      }],
     })
+    const first = routeEntry('entry.normal.double.first', firstTarget, route(7))
+    const second = routeEntry('entry.normal.double.second', secondTarget, route(8))
     const { input, dependencies } = fixture(
-      [goal],
-      [entry],
-      [source, material],
+      [firstTarget, secondTarget],
+      [first, second],
+      [sharedNormal],
     )
     const result = await runPlannerBeamSearch(input, dependencies)
-    expect(result.bestState?.trace.map(({ actionType }) => actionType)).toEqual([
-      'use_weapon_as_material',
-    ])
+    // The conversion removes the source Normal from inventory exactly once, and
+    // the second Route can no longer find it.
     expect(result.bestState?.simulatedInventory.consumedWeaponIds).toEqual([
-      material.id,
+      sharedNormal.id,
     ])
-    expect(result.warnings.some(({ kind }) =>
-      kind === 'material_weapon_shortage',
-    )).toBe(true)
+    expect(
+      result.bestState?.simulatedInventory.ownedWeapons.map(({ id }) => id),
+    ).not.toContain(sharedNormal.id)
+    expect(result.rejections).toContainEqual(expect.objectContaining({
+      actionType: 'convert_normal_to_gogma',
+      reason: 'inventory_precondition_failed',
+    }))
   })
 
   it('does not count rejected precondition branches as expanded states', async () => {
@@ -1369,43 +1396,6 @@ describe('Planner Beam Search', () => {
     })
   })
 
-  it('removes satisfaction when its only Material Gogma is consumed', async () => {
-    const satisfiedTarget = target('target.consume.satisfied')
-    const remainingTarget = {
-      ...target('target.consume.remaining'),
-      weaponTypeId: 'weapon.fixture.b',
-    }
-    const material = {
-      ...createValidOwnedWeapon(ownedWeaponId('owned.consume.material')),
-      status: 'material' as const,
-      isProtected: false,
-    }
-    const routeSource = {
-      ...sourceWeapon('owned.consume.route-source'),
-      weaponTypeId: 'weapon.fixture.b',
-    }
-    const entry = routeEntry('entry.consume.material', remainingTarget, {
-      kind: 'existing_gogma_mixed',
-      sourceOwnedWeaponId: routeSource.id,
-      operations: [{ type: 'use_weapon_as_material', ownedWeaponId: material.id }],
-    })
-    const { input, dependencies } = fixture(
-      [satisfiedTarget, remainingTarget],
-      [entry],
-      [material, routeSource],
-    )
-    const result = await runPlannerBeamSearch(input, dependencies)
-    expect(result.bestState?.targetSatisfaction[satisfiedTarget.id]).toEqual({
-      hasPractical: false,
-      hasIdeal: false,
-    })
-    expect(result.bestState?.trace[0].satisfactionChanges).toContainEqual({
-      targetWeaponId: satisfiedTarget.id,
-      before: { hasPractical: true, hasIdeal: true },
-      after: { hasPractical: false, hasIdeal: false },
-    })
-  })
-
   it('excludes an in-flight existing source and restores only its new satisfaction', async () => {
     const attackOnly = Array.from({ length: 5 }, () => ({
       bonusTypeId: 'bonus_type.fixture.attack',
@@ -1427,7 +1417,7 @@ describe('Planner Beam Search', () => {
       ...sourceWeapon('owned.in-flight.source'),
       restorationBonuses: attackOnly,
       seriesSkillId: 'series_skill.fixture.a',
-      status: 'material' as const,
+      status: 'unclassified' as const,
     }
     const entry = routeEntry(
       'entry.in-flight.next',
@@ -1656,19 +1646,17 @@ describe('Planner Beam Search', () => {
   })
 
   it('restores an initially unnecessary Entry after its Target loses its only weapon', async () => {
-    const restoredTarget = target('target.restore.after-consumption')
-    const consumingTarget = {
-      ...target('target.restore.consumer'),
-      weaponTypeId: 'weapon.fixture.b',
-    }
+    const restoredTarget = target('target.restore.after-amendment')
     const onlySatisfiedWeapon = {
       ...createValidOwnedWeapon(ownedWeaponId('owned.restore.only')),
-      status: 'material' as const,
+      status: 'unclassified' as const,
       isProtected: false,
     }
-    const consumingSource = {
-      ...sourceWeapon('owned.restore.consumer-source'),
-      weaponTypeId: 'weapon.fixture.b',
+    const consumingTarget = {
+      ...target('target.restore.consumer'),
+      idealBonuses: belowPracticalBonuses(),
+      practicalBonusConditions: [],
+      alternativeBonusRules: [],
     }
     const restorationEntry = routeEntry('entry.restore.target', restoredTarget, {
       kind: 'normal_artian_to_gogma',
@@ -1687,21 +1675,33 @@ describe('Planner Beam Search', () => {
           weaponTypeId: 'weapon.fixture.a',
           skillCounterBefore: 7,
           skillCounterAfter: 8,
-        }, { type: 'reset_bonuses', sourceOwnedWeaponId: null, gogmaCounterBefore: 10, gogmaCounterAfter: 11 },
+        },
+        {
+          type: 'reset_bonuses',
+          sourceOwnedWeaponId: null,
+          gogmaCounterBefore: 11,
+          gogmaCounterAfter: 12,
+        },
       ],
     })
     const consumingEntry = routeEntry('entry.restore.consume', consumingTarget, {
-      kind: 'existing_gogma_mixed',
-      sourceOwnedWeaponId: consumingSource.id,
+      kind: 'existing_gogma_reset_bonuses',
+      sourceOwnedWeaponId: onlySatisfiedWeapon.id,
       operations: [{
-        type: 'use_weapon_as_material',
-        ownedWeaponId: onlySatisfiedWeapon.id,
+        type: 'reset_bonuses',
+        sourceOwnedWeaponId: onlySatisfiedWeapon.id,
+        gogmaCounterBefore: 10,
+        gogmaCounterAfter: 11,
       }],
     })
+    // Amending the only weapon that satisfied `restoredTarget` leaves it
+    // holding bonuses that Target does not want, so the Entry it no longer
+    // needed at the start becomes necessary.
+    consumingEntry.candidateSnapshot.finalBonuses = belowPracticalBonuses()
     const { input, dependencies } = fixture(
       [restoredTarget, consumingTarget],
       [restorationEntry, consumingEntry],
-      [onlySatisfiedWeapon, consumingSource],
+      [onlySatisfiedWeapon],
     )
     const result = await runPlannerBeamSearch(input, dependencies)
     expect(result.bestState?.trace.map(({ primaryBuildListEntryId }) =>

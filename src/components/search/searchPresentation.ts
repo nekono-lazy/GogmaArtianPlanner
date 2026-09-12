@@ -40,5 +40,5 @@ export function groupSkillLabel(id: string | null, master: MasterDataRoot): stri
 }
 
 export function materialLabel(id: string, master: MasterDataRoot): string {
-  return master.materials.find((material) => material.id === id)?.displayNameJa ?? '不明な素材'
+  return master.materials.find((material) => material.id === id)?.displayNameJa ?? '不明なアイテム素材'
 }

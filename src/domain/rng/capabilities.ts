@@ -140,8 +140,6 @@ export function deriveRngCapabilities(
           missingRequirements.add('engine:keep_prediction')
         }
         break
-      case 'use_weapon_as_material':
-        break
     }
   })
 

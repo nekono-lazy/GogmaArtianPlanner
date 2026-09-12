@@ -43,12 +43,6 @@ function allOneShareablePhysicalAction(
   )
 }
 
-function routeMaterialConsumption(entry: BuildListEntry): number {
-  return entry.candidateSnapshot.route.operations.filter(
-    ({ type }) => type === 'use_weapon_as_material',
-  ).length
-}
-
 function nextCandidateDistance(
   entry: BuildListEntry,
   entries: readonly BuildListEntry[],
@@ -93,7 +87,6 @@ function recommendEntry(
         Number(left.candidateSnapshot.category === 'ideal') ||
       nextCandidateDistance(right, allEntries) -
         nextCandidateDistance(left, allEntries) ||
-      routeMaterialConsumption(left) - routeMaterialConsumption(right) ||
       left.candidateSnapshot.estimatedOperationCount -
         right.candidateSnapshot.estimatedOperationCount ||
       compareStableStrings(left.id, right.id)

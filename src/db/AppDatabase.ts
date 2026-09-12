@@ -13,7 +13,7 @@ import type {
 } from '../domain/models/publicTypes'
 
 export const DATABASE_NAME = 'mh-wilds-gogma-artian-planner'
-export const DATABASE_SCHEMA_VERSION = 3
+export const DATABASE_SCHEMA_VERSION = 4
 
 export class AppDatabase extends Dexie {
   rngState!: Table<RngState, 'current'>
@@ -56,12 +56,35 @@ export class AppDatabase extends Dexie {
     // ProductionPlan, ExecutionHistory) keep their exact persisted contents and
     // fail closed through CalculationContext instead
     // (`docs/DATA_MODEL.md` 14.2).
-    this.version(DATABASE_SCHEMA_VERSION).stores({}).upgrade(async (transaction) => {
+    this.version(3).stores({}).upgrade(async (transaction) => {
       await transaction.table('targetWeapons').toCollection().modify((target: Record<string, unknown>) => {
         target.preferredOwnedWeaponId = null
       })
       await transaction.table('ownedWeapons').toCollection().modify((weapon: Record<string, unknown>) => {
         delete weapon.relatedTargetWeaponIds
+      })
+    })
+    // v4 renames the owned Gogma `material` status to `unclassified`. The
+    // "consume an owned Artian weapon as material" model is gone, so the value
+    // no longer means anything about how the weapon may be used; it is now a
+    // user-facing organisation label like the other two. Only the literal is
+    // converted: `practical` and `ideal` keep their values, a Normal Artian
+    // keeps `status: null`, `isProtected` is never touched (a formerly Material
+    // weapon that the user had protected stays protected), and
+    // `TargetWeapon.preferredOwnedWeaponId` is left alone.
+    //
+    // Past calculation artifacts (BuildCandidate, BuildListEntry,
+    // ProductionPlan, ExecutionHistory) are deliberately NOT rewritten. Their
+    // stored `use_weapon_as_material` / `create_material_gogma` /
+    // `change_owned_weapon_status` operations and `status: 'material'` snapshots
+    // keep their exact persisted contents and fail closed through
+    // CalculationContext version 9 instead of being guessed into current
+    // operations (`docs/DATA_MODEL.md` 14.2).
+    this.version(DATABASE_SCHEMA_VERSION).stores({}).upgrade(async (transaction) => {
+      await transaction.table('ownedWeapons').toCollection().modify((weapon: Record<string, unknown>) => {
+        if (weapon.kind === 'gogma' && weapon.status === 'material') {
+          weapon.status = 'unclassified'
+        }
       })
     })
   }

@@ -167,9 +167,6 @@ export function collectReferencedOwnedWeaponIds(
     ) {
       if (operation.sourceOwnedWeaponId !== null) ids.add(operation.sourceOwnedWeaponId)
     }
-    if (operation.type === 'use_weapon_as_material') {
-      ids.add(operation.ownedWeaponId)
-    }
   })
   return [...ids].sort()
 }
@@ -177,8 +174,16 @@ export function collectReferencedOwnedWeaponIds(
 /**
  * The semantic content of one OwnedWeapon as `referencedOwnedWeaponsHash`
  * defines it: identity, kind, weapon type, element, restoration bonus scope and
- * the stored five slots in order, protection, plus Series / Group Skill and
- * status for a Gogma weapon. Name, memo, and timestamps are excluded.
+ * the stored five slots in order, protection, plus Series / Group Skill for a
+ * Gogma weapon.
+ *
+ * `name`, `memo`, and the timestamps are excluded because they carry no
+ * calculation meaning, and `status` is excluded for exactly the same reason: it
+ * is a user-facing organisation label that decides nothing about Search routes,
+ * Planner eligibility, or Target Satisfaction (`docs/DATA_MODEL.md` 3.2). So
+ * relabelling a weapon must never stale a Candidate, a BuildListEntry, or a
+ * ProductionPlan, while changing its protection, bonuses, Skills, scope, kind,
+ * weapon type, or element still does.
  *
  * Exported so a caller that needs the same per-weapon semantics for a different
  * stable value - the B8 deterministic constrained search identity - reuses this
@@ -203,7 +208,6 @@ export function normalizeReferencedOwnedWeapon(weapon: OwnedWeapon) {
         ...common,
         seriesSkillId: weapon.seriesSkillId,
         groupSkillId: weapon.groupSkillId,
-        status: weapon.status,
       }
 }
 

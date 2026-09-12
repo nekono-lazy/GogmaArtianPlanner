@@ -431,7 +431,7 @@ export function constrainedBenchmarkOwnedGogma(
     restorationBonusScope: 'gogma_artian',
     seriesSkillId: skills.seriesSkillId,
     groupSkillId: skills.groupSkillId,
-    status: 'material',
+    status: 'unclassified',
     isProtected: false,
     memo: null,
     createdAt: FIXTURE_TIME,

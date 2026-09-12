@@ -15,7 +15,6 @@ export function isDestructiveCandidateRoute(route: BuildRoute): boolean {
   return route.operations.some((operation) =>
     operation.type === 'reset_bonuses' ||
     operation.type === 'keep_bonuses' ||
-    operation.type === 'use_weapon_as_material' ||
     (operation.type === 'convert_normal_to_gogma' && route.kind === 'owned_normal_artian_to_gogma'),
   )
 }

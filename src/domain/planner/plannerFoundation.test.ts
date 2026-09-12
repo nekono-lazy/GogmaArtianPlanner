@@ -25,7 +25,6 @@ import {
   areAllEnabledTargetsAlreadySatisfied,
   canUseAsDestructiveGogmaSource,
   canUseAsResetSkillsSource,
-  consumeMaterialWeapon,
   consumeOwnedNormalForConversion,
   createInitialPlannerSearchState,
   createSimulatedInventory,
@@ -273,7 +272,7 @@ describe('Planner Target Satisfaction', () => {
     const ideal: OwnedGogmaArtianWeapon = {
       ...(input.ownedWeapons[0] as OwnedGogmaArtianWeapon),
       groupSkillId: null,
-      status: 'material',
+      status: 'unclassified',
       isProtected: false,
     }
     const normal: OwnedWeapon = {
@@ -285,6 +284,9 @@ describe('Planner Target Satisfaction', () => {
       groupSkillId: null,
       status: null,
     }
+    // Labelled `ideal` but performing below the Target: satisfaction is judged
+    // from the actual bonuses and Skills, never from the status label
+    // (`docs/DATA_MODEL.md` 3.2).
     const wrongStatus: OwnedGogmaArtianWeapon = {
       ...ideal,
       id: ownedWeaponId('owned.foundation.wrong'),
@@ -293,6 +295,27 @@ describe('Planner Target Satisfaction', () => {
     }
     const satisfaction = deriveTargetSatisfaction(input.targetWeapons, [ideal, normal, wrongStatus], input.master)
     expect(satisfaction[0]).toMatchObject({ hasPractical: true, hasIdeal: true, practicalOwnedWeaponIds: [ideal.id], idealOwnedWeaponIds: [ideal.id] })
+  })
+
+  it('satisfies a Target from an unclassified weapon and ignores the status label entirely', () => {
+    const { input } = fixture()
+    const base = {
+      ...(input.ownedWeapons[0] as OwnedGogmaArtianWeapon),
+      groupSkillId: null,
+      isProtected: false,
+    }
+    for (const status of ['unclassified', 'practical', 'ideal'] as const) {
+      const satisfaction = deriveTargetSatisfaction(
+        input.targetWeapons,
+        [{ ...base, status }],
+        input.master,
+      )
+      expect(satisfaction[0]).toMatchObject({
+        hasPractical: true,
+        hasIdeal: true,
+        idealOwnedWeaponIds: [base.id],
+      })
+    }
   })
 
   it('creates deterministic IDs, skips disabled Targets, and detects all-Ideal completion', () => {
@@ -308,15 +331,12 @@ describe('Planner Target Satisfaction', () => {
 })
 
 describe('Planner simulated inventory', () => {
-  it('deep-copies inventory and only consumes unprotected Material Gogma once', () => {
-    const material = { ...createValidOwnedWeapon(), status: 'material' as const, isProtected: false }
-    const initial = createSimulatedInventory([material])
-    expect(initial.inventory?.ownedWeapons[0]).not.toBe(material)
-    const consumed = consumeMaterialWeapon(initial.inventory!, material.id)
-    expect(consumed.inventory).toMatchObject({ ownedWeapons: [], consumedWeaponIds: [material.id] })
-    expect(consumeMaterialWeapon(consumed.inventory!, material.id).isValid).toBe(false)
-    expect(consumeMaterialWeapon(createSimulatedInventory([{ ...material, isProtected: true }]).inventory!, material.id).isValid).toBe(false)
-    expect(consumeMaterialWeapon(createSimulatedInventory([{ ...material, status: 'practical' }]).inventory!, material.id).isValid).toBe(false)
+  it('deep-copies inventory and rejects duplicate current weapon IDs', () => {
+    const weapon = { ...createValidOwnedWeapon(), status: 'unclassified' as const, isProtected: false }
+    const initial = createSimulatedInventory([weapon])
+    expect(initial.inventory?.ownedWeapons[0]).not.toBe(weapon)
+    expect(initial.inventory?.ownedWeapons[0]).toEqual(weapon)
+    expect(createSimulatedInventory([weapon, weapon]).isValid).toBe(false)
   })
 
   it('consumes owned Normal conversion sources without registering or reusing Gogma IDs', () => {
@@ -332,18 +352,18 @@ describe('Planner simulated inventory', () => {
   it('requires reservation before registration and recognizes protected-source rules', () => {
     const futureId = ownedWeaponId('owned.foundation.future')
     const base = createSimulatedInventory([]).inventory!
-    const material = { ...createValidOwnedWeapon(futureId), id: futureId, status: 'material' as const, isProtected: false }
-    expect(addRegisteredWeapon(base, material).isValid).toBe(false)
+    const secured = { ...createValidOwnedWeapon(futureId), id: futureId, status: 'unclassified' as const, isProtected: false }
+    expect(addRegisteredWeapon(base, secured).isValid).toBe(false)
     const reserved = reserveWeaponId(base, futureId).inventory!
     expect(reserved.ownedWeapons).toEqual([])
-    const registered = addRegisteredWeapon(reserved, material).inventory!
+    const registered = addRegisteredWeapon(reserved, secured).inventory!
     expect(registered.reservedWeaponIds).toEqual([])
     expect(registered.createdWeaponIds).toEqual([futureId])
-    expect(consumeMaterialWeapon(registered, futureId).isValid).toBe(true)
-    const protectedGogma = { ...material, isProtected: true }
+    expect(addRegisteredWeapon(registered, secured).isValid).toBe(false)
+    const protectedGogma = { ...secured, isProtected: true }
     expect(canUseAsDestructiveGogmaSource(protectedGogma)).toBe(false)
     expect(canUseAsResetSkillsSource(protectedGogma)).toBe(false)
-    expect(canUseAsResetSkillsSource(material)).toBe(true)
+    expect(canUseAsResetSkillsSource(secured)).toBe(true)
   })
 
   it('allows same-kind updates but rejects a Normal ID becoming Gogma', () => {

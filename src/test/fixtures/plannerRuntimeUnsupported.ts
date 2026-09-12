@@ -76,7 +76,7 @@ export function createSource(
     restorationBonusScope: 'gogma_artian',
     seriesSkillId: null,
     groupSkillId: 'group_skill.fixture.a',
-    status: 'material',
+    status: 'unclassified',
     isProtected: false,
   }
 }

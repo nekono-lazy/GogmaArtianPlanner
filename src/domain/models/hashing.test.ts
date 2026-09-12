@@ -169,7 +169,6 @@ describe('referencedOwnedWeaponsHash', () => {
     const source = createValidOwnedWeapon()
     const unrelated = createValidOwnedWeapon(ownedWeaponId('owned.fixture.b'))
     const before = createReferencedOwnedWeaponsHash(route, [source, unrelated])
-    unrelated.status = 'ideal'
     unrelated.restorationBonuses[0].bonusRankId = 'bonus_rank.fixture.changed'
     expect(createReferencedOwnedWeaponsHash(route, [source, unrelated])).toBe(before)
   })
@@ -182,22 +181,28 @@ describe('referencedOwnedWeaponsHash', () => {
     expect(createReferencedOwnedWeaponsHash(route, [source])).not.toBe(before)
   })
 
-  it('changes when a referenced status changes', () => {
-    const route = referencedRoute()
-    const source = createValidOwnedWeapon()
-    const before = createReferencedOwnedWeaponsHash(route, [source])
-    source.status = 'ideal'
-    expect(createReferencedOwnedWeaponsHash(route, [source])).not.toBe(before)
-  })
-
-  it('ignores referenced name, memo, and timestamps', () => {
+  it('ignores referenced name, memo, timestamps, and status', () => {
+    // Status is a user-facing organisation label with no calculation meaning,
+    // so relabelling a referenced weapon must never stale a Candidate or a
+    // BuildListEntry (`docs/DATA_MODEL.md` 3.2).
     const route = referencedRoute()
     const source = createValidOwnedWeapon()
     const before = createReferencedOwnedWeaponsHash(route, [source])
     source.name = 'Renamed'
     source.memo = 'Changed memo'
     source.updatedAt = '2026-08-30T00:00:00.000Z'
-    expect(createReferencedOwnedWeaponsHash(route, [source])).toBe(before)
+    for (const status of ['unclassified', 'practical', 'ideal'] as const) {
+      source.status = status
+      expect(createReferencedOwnedWeaponsHash(route, [source])).toBe(before)
+    }
+  })
+
+  it('changes when a referenced protection changes', () => {
+    const route = referencedRoute()
+    const source = createValidOwnedWeapon()
+    const before = createReferencedOwnedWeaponsHash(route, [source])
+    source.isProtected = !source.isProtected
+    expect(createReferencedOwnedWeaponsHash(route, [source])).not.toBe(before)
   })
 
   it('does not depend on OwnedWeapon input order', () => {
@@ -205,8 +210,10 @@ describe('referencedOwnedWeaponsHash', () => {
     const sourceB = createValidOwnedWeapon(ownedWeaponId('owned.fixture.b'))
     const route = referencedRoute()
     route.operations.push({
-      type: 'use_weapon_as_material',
-      ownedWeaponId: sourceB.id,
+      type: 'reset_bonuses',
+      sourceOwnedWeaponId: sourceB.id,
+      gogmaCounterBefore: 3,
+      gogmaCounterAfter: 4,
     })
     expect(createReferencedOwnedWeaponsHash(route, [sourceA, sourceB])).toBe(
       createReferencedOwnedWeaponsHash(route, [sourceB, sourceA]),

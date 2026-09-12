@@ -91,7 +91,7 @@ function scenarioSource(
     restorationBonusScope: 'gogma_artian',
     seriesSkillId: 'series_skill.fixture.a',
     groupSkillId: null,
-    status: 'material',
+    status: 'unclassified',
     isProtected: false,
   }
 }

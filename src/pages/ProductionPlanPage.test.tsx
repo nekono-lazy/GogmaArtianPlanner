@@ -1264,7 +1264,7 @@ function contentFixture() {
     contentTargetB, [], contentExpectedResult(),
   )
   const independent = contentStep(
-    'step.content.independent', 3, 'create_material_gogma', '素材用として登録',
+    'step.content.independent', 3, 'reset_skills', 'スキルを再付与',
     null, [], null,
   )
   const reserve = contentStep(
@@ -1318,7 +1318,7 @@ describe('ProductionPlanPage read-only Plan content', () => {
     expect(screen.getAllByText(/^ステップ \d+$/).map((node) => node.textContent))
       .toEqual(['ステップ 1', 'ステップ 2', 'ステップ 3', 'ステップ 4'])
     expect(screen.getByText('復元ボーナスを再抽選の手順')).toBeInTheDocument()
-    expect(screen.getByText('素材用巨戟アーティアとして登録')).toBeInTheDocument()
+    expect(screen.getByText('スキルをリセット')).toBeInTheDocument()
   })
 
   it('shows every Reset/Keep expected bonus slot in stored order, duplicates included', async () => {

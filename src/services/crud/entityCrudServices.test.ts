@@ -8,7 +8,7 @@ import { EntityFormValidationError, OwnedWeaponCrudService, ReferencedEntityDele
 describe('entity draft defaults', () => {
   const master = createValidMasterDataFixture()
   it.each([
-    ['material', false],
+    ['unclassified', false],
     ['practical', false],
     ['ideal', true],
   ] as const)('sets %s protection only at creation', (status, expected) => {
@@ -48,7 +48,7 @@ describe('OwnedWeaponCrudService', () => {
     const deps = dependencies(); const service = new OwnedWeaponCrudService(master, deps)
     const existing = createValidOwnedWeapon(); existing.weaponTypeId = 'weapon.fixture.a'; existing.elementId = 'element.fixture.a'; existing.restorationBonuses = Array.from({ length: 5 }, () => ({ bonusTypeId: 'bonus_type.fixture.attack', bonusRankId: 'bonus_rank.fixture.high' })) as OwnedWeapon['restorationBonuses']; existing.seriesSkillId = null; existing.groupSkillId = null
     const { id: _id, createdAt: _created, updatedAt: _updated, ...draft } = existing; void _id; void _created; void _updated
-    const saved = await service.save({ ...draft, name: 'edited', status: 'material', isProtected: true }, existing, '2026-08-29T09:00:00.000Z')
+    const saved = await service.save({ ...draft, name: 'edited', status: 'unclassified', isProtected: true }, existing, '2026-08-29T09:00:00.000Z')
     expect(saved.id).toBe(existing.id); expect(saved.createdAt).toBe(existing.createdAt); expect(saved.updatedAt).toBe('2026-08-29T09:00:00.000Z'); expect(saved.isProtected).toBe(true)
   })
   it('rejects an unavailable weapon-specific Rank', async () => {

@@ -31,21 +31,18 @@ export function findOwnedWeapon(inventory: SimulatedInventory, ownedWeaponId: Ow
   return weapon ? structuredClone(weapon) : null
 }
 
-export function canConsumeMaterialWeapon(weapon: OwnedWeapon | null): boolean { return weapon !== null && weapon.kind === 'gogma' && weapon.status === 'material' && !weapon.isProtected }
 export function canUseAsDestructiveGogmaSource(weapon: OwnedWeapon | null): boolean { return weapon !== null && weapon.kind === 'gogma' && !weapon.isProtected }
 export function canUseAsResetSkillsSource(weapon: OwnedWeapon | null): boolean { return weapon !== null && weapon.kind === 'gogma' && !weapon.isProtected }
 
-export function consumeMaterialWeapon(inventory: SimulatedInventory, ownedWeaponId: OwnedWeaponId): SimulatedInventoryResult {
-  const weapon = findOwnedWeapon(inventory, ownedWeaponId)
-  if (!weapon) return failure(issue('ownedWeaponId', 'invalid_reference', `Material weapon '${ownedWeaponId}' is unavailable.`))
-  if (!canConsumeMaterialWeapon(weapon)) return failure(issue('ownedWeaponId', 'protected_destructive_use', `OwnedWeapon '${ownedWeaponId}' cannot be consumed as material.`))
-  const next = copyInventory(inventory)
-  next.ownedWeapons = next.ownedWeapons.filter(({ id }) => id !== ownedWeaponId)
-  next.consumedWeaponIds = [...next.consumedWeaponIds, ownedWeaponId]
-  return success(next)
-}
-
-/** Consumes an owned unprotected rarity-8 Normal Artian without registering a Gogma output. */
+/**
+ * Consumes an owned unprotected rarity-8 Normal Artian without registering a
+ * Gogma output.
+ *
+ * This is the only remaining weapon consumption in v1: `consumedWeaponIds`
+ * exists for it, so an owned Normal source can never be converted twice. Owned
+ * Gogma Artian weapons are never consumed as material (`docs/PLANNER_SPEC.md`
+ * 8).
+ */
 export function consumeOwnedNormalForConversion(inventory: SimulatedInventory, ownedWeaponId: OwnedWeaponId): SimulatedInventoryResult {
   const weapon = findOwnedWeapon(inventory, ownedWeaponId)
   if (!weapon) return failure(issue('ownedWeaponId', 'invalid_reference', `Normal conversion source '${ownedWeaponId}' is unavailable.`))

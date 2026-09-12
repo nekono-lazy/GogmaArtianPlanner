@@ -108,7 +108,7 @@ export function orchestrationSource(
     restorationBonusScope: 'gogma_artian',
     seriesSkillId: 'series_skill.fixture.z',
     groupSkillId: null,
-    status: 'material',
+    status: 'unclassified',
     isProtected: false,
     ...overrides,
   })
