@@ -369,6 +369,16 @@ export type PlannerWarningKind =
    * carries a selected compromise checkpoint that an alternate Route would drop.
    */
   | 'selected_checkpoint_blocks_constrained_search'
+  /**
+   * Planner input fail-closed reasons for selected checkpoints
+   * (PLANNER_SPEC 7.5.6 / 7.5.7 / 7.5.8). The first two accompany a validation
+   * issue, so the Build List can say why no Plan was calculated; the third is
+   * informational: another Entry of a Target with a required checkpoint Entry
+   * was left out of this run's candidate selection.
+   */
+  | 'multiple_selected_checkpoint_entries'
+  | 'selected_checkpoint_target_already_ideal'
+  | 'selected_checkpoint_fixes_target_entry'
   | 'max_planner_reruns_reached'
   | 'constrained_enumeration_bound_reached'
 
@@ -388,6 +398,9 @@ export const plannerWarningKinds: readonly PlannerWarningKind[] = [
   'max_planner_reruns_reached',
   'constrained_enumeration_bound_reached',
   'selected_checkpoint_blocks_constrained_search',
+  'multiple_selected_checkpoint_entries',
+  'selected_checkpoint_target_already_ideal',
+  'selected_checkpoint_fixes_target_entry',
 ]
 
 export interface PlannerWarning {

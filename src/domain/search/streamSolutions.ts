@@ -81,7 +81,7 @@ export interface EvaluatedBonusSolution {
   solution: RouteBonusSolution
   idealMatch: boolean
   matchedIdealBonusCount: number
-  /** Anchor-ordering tie-break only; never a Practical dominance input. */
+  /** Anchor-ordering tie-break only; never a dominance input. */
   materialQuantity: number
   /** Pure completed multiset, used for existing semantic ordering. */
   bonusKey: string

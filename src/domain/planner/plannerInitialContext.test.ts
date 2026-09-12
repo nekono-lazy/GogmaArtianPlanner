@@ -282,9 +282,10 @@ describe('Planner initial context preparation', () => {
         buildListEntryIds: [active.id, practical.id],
       }),
     ])
-    expect(entryIsRelevantForState(context.initialState, ideal)).toBe(false)
-    expect(entryIsRelevantForState(context.initialState, practical)).toBe(true)
-    expect(entryIsRelevantForState(context.initialState, active)).toBe(true)
+    const requirements = context.checkpointRequirements
+    expect(entryIsRelevantForState(context.initialState, ideal, requirements)).toBe(false)
+    expect(entryIsRelevantForState(context.initialState, practical, requirements)).toBe(true)
+    expect(entryIsRelevantForState(context.initialState, active, requirements)).toBe(true)
   })
 
   it('orders entries, targets, and conflicts independently of input order', () => {

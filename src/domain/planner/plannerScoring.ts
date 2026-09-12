@@ -5,6 +5,8 @@ import type {
   TargetWeaponId,
 } from '../models/publicTypes'
 import { stableStringify } from '../models/publicTypes'
+import type { PlannerCheckpointRequirements } from './plannerCheckpoints'
+import { entryIsRelevantForState } from './plannerEntryRelevance'
 import type {
   CandidateScore,
   PlannerSearchState,
@@ -70,13 +72,17 @@ function progressPotentialScore(
   targetsById: ReadonlyMap<TargetWeaponId, TargetWeapon>,
   routeUnitCountByEntryId: ReadonlyMap<BuildListEntryId, number>,
   conflictCountByEntryId: ReadonlyMap<BuildListEntryId, number>,
+  checkpointRequirements: PlannerCheckpointRequirements,
 ): number {
   const bestByTarget = new Map<TargetWeaponId, number>()
   entries.forEach((entry) => {
     if (state.selectedBuildListEntryIds.includes(entry.id)) return
     const target = targetsById.get(entry.targetWeaponId)
     if (!target) return
-    if (state.targetSatisfaction[target.id]?.hasIdeal) return
+    // Relevance, not `hasIdeal`: a required checkpoint Entry keeps its
+    // progress potential after another weapon made its Target Ideal, and an
+    // Entry the requirement excludes never had any.
+    if (!entryIsRelevantForState(state, entry, checkpointRequirements)) return
     const unitCount = routeUnitCountByEntryId.get(entry.id) ?? 0
     const progress = state.routeProgressByEntryId[entry.id] ?? 0
     if (unitCount <= 0 || progress <= 0) return
@@ -101,6 +107,7 @@ export interface StateScoreContext {
   targetsById: ReadonlyMap<TargetWeaponId, TargetWeapon>
   routeUnitCountByEntryId: ReadonlyMap<BuildListEntryId, number>
   conflictCountByEntryId: ReadonlyMap<BuildListEntryId, number>
+  checkpointRequirements: PlannerCheckpointRequirements
 }
 
 export function evaluatePlannerSearchState(
@@ -117,6 +124,7 @@ export function evaluatePlannerSearchState(
     context.targetsById,
     context.routeUnitCountByEntryId,
     context.conflictCountByEntryId,
+    context.checkpointRequirements,
   )
   const actionPenalty = state.trace.length * 100
   return achieved + progress - actionPenalty

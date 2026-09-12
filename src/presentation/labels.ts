@@ -112,6 +112,12 @@ export const plannerWarningLabels: Record<PlannerWarningKind, string> = {
     '再検索の探索範囲の上限に到達したため、候補の探索を打ち切りました',
   selected_checkpoint_blocks_constrained_search:
     '選択済みチェックポイントがある目標武器は再検索で別ルートへ置き換えません。作成リストでチェックポイントを変更または解除してください',
+  multiple_selected_checkpoint_entries:
+    '同じ目標武器にチェックポイントを選択した候補が2件以上あります。作成リストで片方のチェックポイント選択を解除してください',
+  selected_checkpoint_target_already_ideal:
+    '既に理想品を所持している目標武器にチェックポイントが選択されています。作成リストでそのチェックポイント選択を解除してください',
+  selected_checkpoint_fixes_target_entry:
+    'チェックポイントを選択した候補がある目標武器では、その候補だけを作成ルートとして扱い、同じ目標武器の他の候補は使用しません',
 }
 
 export const candidateRouteFilterLabels: Record<CandidateRouteFilter, string> = {

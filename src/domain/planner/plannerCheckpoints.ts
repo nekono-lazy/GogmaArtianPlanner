@@ -1,9 +1,15 @@
 import type {
   BuildListEntry,
+  BuildListEntryId,
   CompromiseCheckpointGroupId,
   CompromiseCheckpointOpportunity,
   CompromiseCheckpointOpportunityId,
+  TargetWeaponId,
 } from '../models/publicTypes'
+
+function compareStableStrings(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0
+}
 
 /**
  * One checkpoint the user selected for this Entry, together with the group it
@@ -88,6 +94,73 @@ export function hasReachedEverySelectedCheckpoint(
   return selectedCheckpointsForEntry(entry).every(({ opportunity }) =>
     reached.has(opportunity.id),
   )
+}
+
+/**
+ * The Target-wide checkpoint requirement of one Planner run
+ * (`docs/PLANNER_SPEC.md` 7.5.6).
+ *
+ * A BuildListEntry that carries a selected checkpoint is that Target's
+ * *required* Entry: the Target is not finished until this very Entry reached
+ * every selected checkpoint and secured its Ideal Candidate, and no other
+ * Entry of the Target is adopted as an alternative finishing Route. The map is
+ * derived from the whole set of valid BuildListEntries of the run - never from
+ * a conflict's participants alone - so constrained re-search and what-if read
+ * the same authority the Beam Search does.
+ */
+export interface PlannerCheckpointRequirements {
+  requiredEntryIdByTargetId: ReadonlyMap<TargetWeaponId, BuildListEntryId>
+}
+
+/** A Target with two or more checkpoint-selected Entries: fail closed. */
+export interface PlannerCheckpointRequirementViolation {
+  targetWeaponId: TargetWeaponId
+  buildListEntryIds: BuildListEntryId[]
+}
+
+export interface PlannerCheckpointRequirementDerivation {
+  requirements: PlannerCheckpointRequirements
+  /** Stable order by Target ID; never resolved by picking one Entry. */
+  violations: PlannerCheckpointRequirementViolation[]
+}
+
+export const EMPTY_PLANNER_CHECKPOINT_REQUIREMENTS: PlannerCheckpointRequirements = {
+  requiredEntryIdByTargetId: new Map(),
+}
+
+/**
+ * Derives the required Entry of every Target from the given Entries.
+ *
+ * At most one checkpoint-selected Entry per Target is a collection-level
+ * invariant of the Planner input (`docs/DATA_MODEL.md` 9.4). Two such Entries
+ * mean the user's intent - two mandatory Routes, or alternatives - is unknown,
+ * so the Target is reported as a violation and gets no requirement: the caller
+ * fails the input closed instead of guessing, scoring, or taking the first one.
+ */
+export function derivePlannerCheckpointRequirements(
+  entries: readonly BuildListEntry[],
+): PlannerCheckpointRequirementDerivation {
+  const selectedByTarget = new Map<TargetWeaponId, BuildListEntryId[]>()
+  entries.forEach((entry) => {
+    if (selectedCheckpointsForEntry(entry).length === 0) return
+    selectedByTarget.set(entry.targetWeaponId, [
+      ...(selectedByTarget.get(entry.targetWeaponId) ?? []),
+      entry.id,
+    ])
+  })
+  const requiredEntryIdByTargetId = new Map<TargetWeaponId, BuildListEntryId>()
+  const violations: PlannerCheckpointRequirementViolation[] = []
+  ;[...selectedByTarget]
+    .sort(([left], [right]) => compareStableStrings(left, right))
+    .forEach(([targetWeaponId, entryIds]) => {
+      const buildListEntryIds = [...new Set(entryIds)].sort(compareStableStrings)
+      if (buildListEntryIds.length === 1) {
+        requiredEntryIdByTargetId.set(targetWeaponId, buildListEntryIds[0])
+      } else {
+        violations.push({ targetWeaponId, buildListEntryIds })
+      }
+    })
+  return { requirements: { requiredEntryIdByTargetId }, violations }
 }
 
 export type { CompromiseCheckpointOpportunityId }

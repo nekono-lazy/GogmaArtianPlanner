@@ -13,6 +13,7 @@ import {
 } from '../plannerInitialContext'
 import { createProductionPlanWithObserver } from '../productionPlanGeneration'
 import { createUnsearchedPlannerTermination } from '../plannerTermination'
+import type { PlannerCheckpointRequirements } from '../plannerCheckpoints'
 import type {
   PlannerBeamSearchResult,
   PlannerDependencies,
@@ -108,11 +109,12 @@ export interface PlannerConflictWork {
   constraint: PlannerFixedConflictConstraint
   targetWeaponId: TargetWeaponId
   /**
-   * The participant BuildListEntry of this Target carries a selected
-   * compromise checkpoint. No constrained Route replacement is attempted for
-   * it: an alternate Route would drop that checkpoint, and the Planner never
-   * drops, moves, or empties a selection (`docs/PLANNER_SPEC.md` 9.5.2). The
-   * conflict stays a conflict until the Build List selection changes.
+   * This Target has a required checkpoint Entry somewhere in the current
+   * Planner input - not necessarily among this conflict's participants. No
+   * constrained Route replacement is attempted for the Target: an alternate
+   * Route would bypass that checkpoint, and the Planner never drops, moves, or
+   * empties a selection (`docs/PLANNER_SPEC.md` 9.5.2). The conflict stays a
+   * conflict until the Build List selection changes.
    */
   blockedBySelectedCheckpoint: boolean
   orderKey: string
@@ -167,6 +169,7 @@ export function createConstrainedSearchOriginFromPlannerInput(
 export function createPlannerConflictWorks(
   constraints: readonly PlannerFixedConflictConstraint[],
   conflictContexts: readonly PlannerConstrainedConflictContext[],
+  checkpointRequirements: PlannerCheckpointRequirements,
 ): PlannerConflictWork[] {
   const contextById = new Map(
     conflictContexts.map((context) => [context.conflictId, context]),
@@ -186,13 +189,19 @@ export function createPlannerConflictWorks(
         originalConflictId: constraint.originalConflictId,
         constraint,
         targetWeaponId: participant.targetWeaponId,
-        // Any participant Entry of this Target with a selection blocks the
-        // whole Target: its Route may not be replaced behind the user's back.
-        blockedBySelectedCheckpoint: context.participants.some(
-          (other) =>
-            other.targetWeaponId === participant.targetWeaponId &&
-            other.hasSelectedCheckpoints,
-        ),
+        // Target-wide, from the whole valid Entry set of the run: a required
+        // checkpoint Entry of this Target blocks its re-search even when the
+        // participant here is another, selection-free Entry. The participant
+        // flag is kept as a second, narrower witness of the same fact.
+        blockedBySelectedCheckpoint:
+          checkpointRequirements.requiredEntryIdByTargetId.has(
+            participant.targetWeaponId,
+          ) ||
+          context.participants.some(
+            (other) =>
+              other.targetWeaponId === participant.targetWeaponId &&
+              other.hasSelectedCheckpoints,
+          ),
         orderKey: [
           plannerConflictResourceKey(constraint.resourceIdentity),
           constraint.fixedBuildListEntryId,
@@ -464,7 +473,11 @@ export async function createProductionPlanWithConstrainedSearch(
   }
 
   const origin = createConstrainedSearchOriginFromPlannerInput(input)
-  const works = createPlannerConflictWorks(fixedConstraints, originalContexts)
+  const works = createPlannerConflictWorks(
+    fixedConstraints,
+    originalContexts,
+    prepared.context.checkpointRequirements,
+  )
 
   const trialsUsedByConflictId = new Map<string, number>()
   const trialStoppedConflictIds = new Set<string>()
@@ -482,7 +495,7 @@ export async function createProductionPlanWithConstrainedSearch(
       // the conflict is returned as it is (PLANNER_SPEC 9.5.2).
       warn(
         'selected_checkpoint_blocks_constrained_search',
-        `Planner constrained re-search skipped TargetWeapon '${work.targetWeaponId}' of conflict '${work.originalConflictId}': its BuildListEntry carries a selected compromise checkpoint, which an alternate Route would drop. Change or clear the checkpoint in the Build List and run the Planner again.`,
+        `Planner constrained re-search skipped TargetWeapon '${work.targetWeaponId}' of conflict '${work.originalConflictId}': a BuildListEntry of that Target carries a selected compromise checkpoint, which an alternate Route would bypass. Change or clear the checkpoint in the Build List and run the Planner again.`,
       )
       continue
     }

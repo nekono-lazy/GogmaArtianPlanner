@@ -623,6 +623,14 @@ Plannerに検討させる候補集合を確認・調整する。
 - チェックポイント選択を変更してもEntry自体はstaleにならない
 - チェックポイント選択を変更すると既存の作成プランは再計算対象になる
 - 同一性能グループから2つ以上の到達点を選択できない
+- チェックポイントを選択した候補は、その目標武器の必須ルートになる。同じ目標武器の
+  別候補はそのPlanner実行では使われず、`selected_checkpoint_fixes_target_entry`
+  warningで伝える(PLANNER_SPEC 7.5.6)
+- 同じ目標武器にチェックポイントを選択した候補が2件以上ある場合、Plannerは計画を作らず
+  `multiple_selected_checkpoint_entries` warningで片方の選択解除を案内する(同 7.5.7)。
+  UIが片方を自動解除しない
+- 既に理想品を所持している目標武器にチェックポイント選択がある場合、Plannerは計画を作らず
+  `selected_checkpoint_target_already_ideal` warningで選択解除を案内する(同 7.5.8)
 - Plannerが採用しない可能性があることを表示する
 - BuildCandidateの検索結果とBuildListEntryを同一Entityとして扱わない
 - staleなBuildListEntryはPlanner入力に含めず、再検索または再追加を促す

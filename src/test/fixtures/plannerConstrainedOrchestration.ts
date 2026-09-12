@@ -239,6 +239,67 @@ export function checkpointMixedEntry(
   return entry
 }
 
+/**
+ * The Gogma Counter positions of `checkpointBonusEntry()`'s Route, and the
+ * Reset result the Fake Engine must return at each of them: a compromise
+ * product at the first and third positions, the Ideal at the last.
+ */
+export const CHECKPOINT_BONUS_ROUTE_COUNTERS = [10, 11, 12, 13, 14] as const
+
+export function checkpointBonusResultAt(gogmaCounter: number): RestorationBonusSet {
+  if (gogmaCounter === 10 || gogmaCounter === 12) return practicalBonuses()
+  if (gogmaCounter === 14) return idealBonuses()
+  return belowPracticalBonuses()
+}
+
+/**
+ * A five-operation Reset Bonuses Route whose first Reset already reaches a
+ * compromise checkpoint (the source carries the Ideal Series Skill), and whose
+ * last Reset completes the Ideal. Pair it with
+ * `engine: { resetResultAt: checkpointBonusResultAt }`.
+ *
+ * `select` picks the earliest opportunity of the first checkpoint group, so
+ * the Entry becomes its Target's required Entry (`docs/PLANNER_SPEC.md` 7.5.6).
+ */
+export function checkpointBonusEntry(
+  id: string,
+  target: TargetWeapon,
+  sourceId: string,
+  source: OwnedGogmaArtianWeapon,
+  options: { select?: boolean } = {},
+): BuildListEntry {
+  const counters = [...CHECKPOINT_BONUS_ROUTE_COUNTERS]
+  const entry = orchestrationEntry(id, target, {
+    kind: 'existing_gogma_reset_bonuses',
+    sourceOwnedWeaponId: ownedWeaponId(sourceId),
+    operations: counters.map((gogmaCounter) => ({
+      type: 'reset_bonuses' as const,
+      sourceOwnedWeaponId: ownedWeaponId(sourceId),
+      gogmaCounterBefore: gogmaCounter,
+      gogmaCounterAfter: gogmaCounter + 1,
+    })),
+  }, { finalBonuses: idealBonuses() })
+  const snapshot = entry.candidateSnapshot
+  snapshot.bonusAmendmentTrace = counters.map((gogmaCounter, operationIndex) => ({
+    operationIndex,
+    operationType: 'reset_bonuses' as const,
+    restorationBonuses: checkpointBonusResultAt(gogmaCounter),
+    restorationBonusScope: 'gogma_artian' as const,
+  }))
+  snapshot.skillAmendmentTrace = []
+  snapshot.checkpointGroups = extractCandidateCheckpointGroups(snapshot, {
+    target,
+    master: constrainedMaster(),
+    ownedWeapons: [source],
+  })
+  const first = snapshot.checkpointGroups
+    .flatMap(({ opportunities }) => opportunities)
+    .find(({ afterOperationIndex }) => afterOperationIndex === 0)
+  if (!first) throw new Error('The checkpoint fixture Route reached no checkpoint.')
+  entry.selectedCheckpointOpportunityIds = options.select === false ? [] : [first.id]
+  return entry
+}
+
 /** Keeps every derived hash of an Entry consistent with the Planner input. */
 export function synchronizeOrchestrationEntry(
   input: PlannerInput,

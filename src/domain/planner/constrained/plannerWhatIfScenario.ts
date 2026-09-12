@@ -228,7 +228,11 @@ export function preparePlannerWhatIfScenario(
       scenarioConstraint,
       // Scenario-only: `createPlannerConflictWorks(fixedConstraints, ...)`
       // would turn every other explicit resolution into a what-if subject.
-      works: createPlannerConflictWorks([scenarioConstraint], conflictContexts),
+      works: createPlannerConflictWorks(
+        [scenarioConstraint],
+        conflictContexts,
+        context.checkpointRequirements,
+      ),
     },
   }
 }

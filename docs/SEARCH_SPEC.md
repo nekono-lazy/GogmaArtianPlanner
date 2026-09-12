@@ -3,7 +3,7 @@
 
 ## 1. この文書の目的
 
-この文書は、目標武器ごとの候補検索、canonical Ideal Routeとcompromise checkpoint、作成経路、条件判定、条件緩和案、Web Worker入出力、保存方針、テスト観点を定義する。
+この文書は、目標武器ごとの候補検索、canonical Ideal Routeとcompromise checkpoint、作成経路、条件判定、Web Worker入出力、保存方針、テスト観点を定義する。
 
 候補検索はProduction Plannerの前段であり、Plannerは検索結果から作成リストへ追加された候補だけを入力として扱う。
 
@@ -21,7 +21,7 @@ Candidate Search再設計の背景、実測値、採用しなかった案、受�
 - Candidateは常に理想品であり、実用品のcategoryや理想への近さを表す属性は持たない
 - 通常アーティア経由と既存巨戟アーティア経由を比較する
 - 対象武器種のレア8通常アーティアCounterが未確定なら新規通常アーティア経由を検索しない
-- 条件は自動変更せず、緩和案だけを提示する
+- Target条件を自動変更しない。条件緩和案も提示しない（9章）
 - 重い検索はWeb Workerで行う
 - Normal / Gogma / Skillは独立RNG streamとして独立に探索する
 - Bonus結果とSkill結果のCartesian productを列挙しない

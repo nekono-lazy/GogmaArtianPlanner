@@ -911,11 +911,13 @@ empties on its own. Two rules follow, both Domain authority and never UI-only
   the Build List. The only resolution is changing or clearing the selection
   there; a shared physical action that reaches several checkpoints at once is
   still one action and no conflict
-- Constrained re-search and what-if never replace the Route of a Target whose
-  participant `BuildListEntry` has `selectedCheckpointOpportunityIds.length > 0`:
-  no auto-transplant onto another opportunity, no "same performance, other
-  Route", no empty selection. `PlannerConflictWork.blockedBySelectedCheckpoint`
-  skips the enumeration, the conflict is returned as it is with the warning
+- Constrained re-search and what-if never replace the Route of a Target that
+  has a required checkpoint Entry anywhere in the current valid Entry set - not
+  only among the conflict's participants: no auto-transplant onto another
+  opportunity, no "same performance, other Route", no empty selection.
+  `createPlannerConflictWorks()` takes the run's `PlannerCheckpointRequirements`,
+  `PlannerConflictWork.blockedBySelectedCheckpoint` skips the enumeration, the
+  conflict is returned as it is with the warning
   `selected_checkpoint_blocks_constrained_search`, and what-if answers
   `blocked_by_selected_checkpoint`. A Target with no selection is re-searched
   exactly as before
@@ -2099,8 +2101,9 @@ maxPlanSteps = 300
 ```
 
 These three positive integers are the complete v1 `PlannerOptions` contract.
-Practical-before-Ideal behavior is fixed by v1 priority rules; do not add or
-retain `preferPracticalBeforeIdeal`.
+`preferPracticalBeforeIdeal` belongs to a legacy Planner contract and is
+unsupported: the Planner has no Practical-first priority, and an input carrying
+that option is refused as a validation issue rather than accepted or ignored.
 
 They are defaults, not fixed constants: the Build List detail settings let the
 user raise any of the three for one calculation. `defaultPlannerOptions` is the
@@ -2200,6 +2203,29 @@ Two selected checkpoints that need the same Counter position and are not one
 shareable physical action are an ordinary Counter conflict, reported with typed
 `PlanConflict.checkpointParticipants` so the UI can send the user to the Build
 List to change a selection.
+
+A checkpoint-selected BuildListEntry is its Target's **required Entry** for the
+run (`docs/PLANNER_SPEC.md` 7.5.6). The Target is complete only once that very
+Entry reached every selected checkpoint and secured its Ideal Candidate; another
+Entry of the same Target, another Target's Entry, or an existing weapon making
+the Target `hasIdeal` never completes it, and the required Entry keeps its
+relevance until it is secured. The Target's other Entries are left out of that
+run's candidate selection - never adopted as an alternative finishing Route,
+never a conflict participant - and reported with
+`selected_checkpoint_fixes_target_entry`. The single authority is
+`PlannerCheckpointRequirements`, derived once in `preparePlannerInitialContext()`
+from every valid BuildListEntry of the run and read by `entryIsRelevantForState()`,
+`isPlannerSearchStateComplete()`, scoring, typed termination, constrained
+re-search and what-if alike. It is a hard feasibility constraint, never a score,
+and Plan generation re-checks it as a fail-closed defence.
+
+Two collection-level rules fail the Planner input closed instead of guessing: at
+most one checkpoint-selected Entry per Target (`multiple_selected_checkpoint_entries`
+- the user clears one selection in the Build List; the Planner never picks one
+by score, cost, or order), and no checkpoint selection on a Target that already
+holds an Ideal weapon when planning starts
+(`selected_checkpoint_target_already_ideal`). Several groups selected inside one
+Entry stay allowed.
 
 Complete optimality is not required.
 
@@ -2919,6 +2945,15 @@ Relevant test areas include:
   physical action reaching both without duplicating the operation, and an Entry
   with no selection keeping its ordinary Ideal Route meaning
 - `practicalFirstProgressTargetIds` and `CandidateScore.categoryScore` being absent
+- A checkpoint-selected Entry never bypassed by a cheaper selection-free Entry of
+  the same Target, staying relevant after another weapon made its Target Ideal,
+  completing only once it reached its checkpoint and secured its Ideal, the typed
+  termination counting that Target complete only then, two checkpoint-selected
+  Entries of one Target failing closed without picking either, selection-free
+  same-Target Entries keeping the ordinary candidate selection, an already-Ideal
+  Target with a selection failing closed, and a conflict reached through a
+  selection-free Entry still blocking that Target's constrained re-search and
+  what-if
 - Checkpoints adding no `PlanStepOperationType`, riding as milestones on the real
   physical Step, leaving later Steps in place, reserving nothing, and changing no
   status or protection, while the final Ideal still applies the ordinary reserve

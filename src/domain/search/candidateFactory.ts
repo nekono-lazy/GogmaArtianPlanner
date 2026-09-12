@@ -198,8 +198,8 @@ export function collectRequiredMaterials(
  * The summed required quantity of one operation sequence.
  *
  * SEARCH_SPEC 5.5.3 uses this only as a deterministic tie-break inside one
- * stream's anchor ordering. It is NOT the Practical dominance comparison,
- * which stays component-wise per `materialId` (5.5.6.2).
+ * stream's anchor ordering. It is NOT a dominance comparison: the display-only
+ * checkpoint dominance never reads materials at all (5.8.4).
  */
 export function totalMaterialQuantity(
   operations: readonly RouteOperation[],

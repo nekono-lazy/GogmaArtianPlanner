@@ -39,10 +39,14 @@ import {
   createPlannerSearchStateSemanticKey,
   evaluatePlannerSearchState,
 } from './plannerScoring'
-import { entryIsRelevantForState } from './plannerEntryRelevance'
+import {
+  entryIsRelevantForState,
+  isPlannerSearchStateComplete,
+} from './plannerEntryRelevance'
 import {
   hasReachedEverySelectedCheckpoint,
   selectedCheckpointAtOperationIndex,
+  type PlannerCheckpointRequirements,
 } from './plannerCheckpoints'
 import {
   advancePlannerPreferredSourceMetric,
@@ -477,11 +481,12 @@ function executableRequiredUnitsByCounterPosition(
   entries: readonly BuildListEntry[],
   unitPlans: ReadonlyMap<BuildListEntryId, readonly PlannerRouteUnit[]>,
   isUnitBlocked: (unit: PlannerRouteUnit) => boolean,
+  requirements: PlannerCheckpointRequirements,
 ): Map<string, PlannerRouteUnit[]> {
   const required = new Map<string, PlannerRouteUnit[]>()
   entries.forEach((entry) => {
     if (state.selectedBuildListEntryIds.includes(entry.id)) return
-    if (!entryIsRelevantForState(state, entry)) return
+    if (!entryIsRelevantForState(state, entry, requirements)) return
     const units = unitPlans.get(entry.id) ?? []
     const unit = units[state.routeProgressByEntryId[entry.id] ?? 0]
     if (!unit || unit.canSkipWhenCounterPassed) return
@@ -522,6 +527,7 @@ function mergedProgressedEntries(
   conflictsById: ReadonlyMap<string, PlanConflict>,
   conflictIdsByUnitKey: ReadonlyMap<string, readonly string[]>,
   selectedPhysicalActionKeysByConflictId: ReadonlyMap<string, readonly string[]>,
+  requirements: PlannerCheckpointRequirements,
 ): PlannerRouteUnit[] {
   const shared = [primary]
   if (!primary.shareable) return shared
@@ -531,7 +537,7 @@ function mergedProgressedEntries(
     const entry = entriesById.get(entryId)
     if (!entry) return
     if (!entryUsesCurrentSourceVersion(state, entry)) return
-    if (!entryIsRelevantForState(state, entry)) return
+    if (!entryIsRelevantForState(state, entry, requirements)) return
     const progress = state.routeProgressByEntryId[entryId] ?? 0
     const next = units[progress]
     if (
@@ -544,7 +550,10 @@ function mergedProgressedEntries(
         selectedPhysicalActionKeysByConflictId,
         (entryId) => {
           const selected = entriesById.get(entryId)
-          return selected !== undefined && entryIsRelevantForState(state, selected)
+          return (
+            selected !== undefined &&
+            entryIsRelevantForState(state, selected, requirements)
+          )
         },
       )
     ) {
@@ -573,6 +582,7 @@ function applyRouteAction(
   master: PlannerInput['master'],
   engine: RngEngine,
   preferredSourceEntryIds: ReadonlySet<BuildListEntryId>,
+  requirements: PlannerCheckpointRequirements,
 ): AppliedActionResult {
   const primaryEntry = entriesById.get(primary.entryId)
   if (!primaryEntry) {
@@ -626,6 +636,7 @@ function applyRouteAction(
     conflictsById,
     conflictIdsByUnitKey,
     selectedPhysicalActionKeysByConflictId,
+    requirements,
   )
   const progressedRoutePositions: PlannerSearchAction['progressedRoutePositions'] =
     {}
@@ -734,8 +745,9 @@ function applyRouteAction(
 function targetCanUseEntry(
   state: PlannerSearchState,
   entry: BuildListEntry,
+  requirements: PlannerCheckpointRequirements,
 ): boolean {
-  return entryIsRelevantForState(state, entry)
+  return entryIsRelevantForState(state, entry, requirements)
 }
 
 function createReservedWeapon(
@@ -773,8 +785,9 @@ function applyReserveAction(
   targets: readonly TargetWeapon[],
   master: PlannerInput['master'],
   preferredSourceEntryIds: ReadonlySet<BuildListEntryId>,
+  requirements: PlannerCheckpointRequirements,
 ): AppliedActionResult {
-  if (!targetCanUseEntry(sourceState, entry)) {
+  if (!targetCanUseEntry(sourceState, entry, requirements)) {
     return {
       state: null,
       rejection: rejection(
@@ -943,18 +956,6 @@ function applyReserveAction(
   return { state, rejection: null }
 }
 
-function isComplete(
-  state: PlannerSearchState,
-  enabledTargetIds: readonly TargetWeaponId[],
-): boolean {
-  return (
-    enabledTargetIds.length > 0 &&
-    enabledTargetIds.every(
-      (targetId) => state.targetSatisfaction[targetId]?.hasIdeal,
-    )
-  )
-}
-
 function betterState(
   current: PlannerSearchState | null,
   candidate: PlannerSearchState,
@@ -982,9 +983,10 @@ function detectCurrentPlannerConflicts(
   allUnitPlans: ReadonlyMap<BuildListEntryId, readonly PlannerRouteUnit[]>,
   targets: readonly TargetWeapon[],
   resolutions: readonly PlannerConflictResolution[],
+  requirements: PlannerCheckpointRequirements,
 ) {
   const entries = allSearchEntries.filter((entry) =>
-    entryIsRelevantForState(state, entry),
+    entryIsRelevantForState(state, entry, requirements),
   )
   const unitPlans = new Map(
     entries.flatMap((entry) => {
@@ -1076,7 +1078,13 @@ export async function runPlannerBeamSearch(
     targetsById,
     validConflictResolutions,
     warnings,
+    checkpointRequirements,
   } = prepared.context
+  const enabledTargetIds = targets.map(({ id }) => id)
+  // Completion is one authority: every enabled Target Ideal *and* every
+  // required checkpoint Entry secured (PLANNER_SPEC 7.5.6).
+  const isComplete = (state: PlannerSearchState) =>
+    isPlannerSearchStateComplete(state, enabledTargetIds, checkpointRequirements)
   const rejections = [...prepared.context.routePlanRejections]
   const rejectionKeys = new Set(rejections.map(rejectionKey))
   // Static Planner input, so it is derived once instead of per expansion.
@@ -1089,6 +1097,7 @@ export async function runPlannerBeamSearch(
     targetsById,
     routeUnitCountByEntryId,
     conflictCountByEntryId: new Map<BuildListEntryId, number>(),
+    checkpointRequirements,
   }
   const discoveredConflictsById = new Map<string, PlanConflict>()
   const recordDetectedConflicts = (
@@ -1110,8 +1119,7 @@ export async function runPlannerBeamSearch(
       ),
     },
   )
-  const enabledTargetIds = targets.map(({ id }) => id)
-  if (isComplete(initialState, enabledTargetIds)) {
+  if (isComplete(initialState)) {
     conflictResolutionWarnings(
       validConflictResolutions,
       discoveredConflictsById,
@@ -1131,6 +1139,7 @@ export async function runPlannerBeamSearch(
       termination: createPlannerSearchTermination({
         options: input.options,
         enabledTargetIds,
+        checkpointRequirements,
         bestState: initialState,
         expandedStates: 0,
         cancelled: false,
@@ -1157,7 +1166,7 @@ export async function runPlannerBeamSearch(
         stop = true
         break
       }
-      if (isComplete(state, enabledTargetIds)) {
+      if (isComplete(state)) {
         bestComplete = betterState(bestComplete, state)
         continue
       }
@@ -1171,6 +1180,7 @@ export async function runPlannerBeamSearch(
         allUnitPlans,
         targets,
         validConflictResolutions,
+        checkpointRequirements,
       )
       recordDetectedConflicts(stateConflictDetection)
       const conflictsById = new Map(
@@ -1184,7 +1194,10 @@ export async function runPlannerBeamSearch(
           stateConflictDetection.selectedPhysicalActionKeysByConflictId,
           (entryId) => {
             const selected = entriesById.get(entryId)
-            return selected !== undefined && entryIsRelevantForState(state, selected)
+            return (
+              selected !== undefined &&
+              entryIsRelevantForState(state, selected, checkpointRequirements)
+            )
           },
         )
       const requiredUnitsByCounterPosition =
@@ -1193,10 +1206,11 @@ export async function runPlannerBeamSearch(
           allSearchEntries,
           allUnitPlans,
           isBlockedByConflictResolution,
+          checkpointRequirements,
         )
       for (const entry of allSearchEntries) {
         if (state.selectedBuildListEntryIds.includes(entry.id)) continue
-        if (!targetCanUseEntry(state, entry)) continue
+        if (!targetCanUseEntry(state, entry, checkpointRequirements)) continue
         const units = allUnitPlans.get(entry.id) ?? []
         const progress = state.routeProgressByEntryId[entry.id] ?? 0
         let applied: AppliedActionResult
@@ -1240,6 +1254,7 @@ export async function runPlannerBeamSearch(
             input.master,
             dependencies.rngEngine,
             preferredSourceEntryIds,
+            checkpointRequirements,
           )
         } else {
           const target = targetsById.get(entry.targetWeaponId)
@@ -1252,6 +1267,7 @@ export async function runPlannerBeamSearch(
             targets,
             input.master,
             preferredSourceEntryIds,
+            checkpointRequirements,
           )
         }
         if (applied.rejection) {
@@ -1274,6 +1290,7 @@ export async function runPlannerBeamSearch(
           allUnitPlans,
           targets,
           validConflictResolutions,
+          checkpointRequirements,
         )
         recordDetectedConflicts(successorConflictDetection)
         applied.state.evaluationScore = evaluatePlannerSearchState(applied.state, {
@@ -1292,7 +1309,7 @@ export async function runPlannerBeamSearch(
           maxExpandedStates: input.options.maxExpandedStates,
         })
         bestPartial = betterState(bestPartial, applied.state)
-        if (isComplete(applied.state, enabledTargetIds)) {
+        if (isComplete(applied.state)) {
           bestComplete = betterState(bestComplete, applied.state)
         }
         if (expandedStates >= input.options.maxExpandedStates) {
@@ -1367,12 +1384,12 @@ export async function runPlannerBeamSearch(
       compareStableStrings(rejectionKey(left), rejectionKey(right)),
     ),
     expandedStates,
-    completed:
-      bestState !== null && isComplete(bestState, enabledTargetIds),
+    completed: bestState !== null && isComplete(bestState),
     cancelled,
     termination: createPlannerSearchTermination({
       options: input.options,
       enabledTargetIds,
+      checkpointRequirements,
       bestState,
       expandedStates,
       cancelled,

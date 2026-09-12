@@ -9,10 +9,13 @@ import type { ConstrainedCandidate } from '../../search'
 import {
   belowPracticalBonuses,
   idealBonuses,
+  IDEAL_SERIES_SKILL_ID,
   practicalBonuses,
 } from '../../../test/fixtures/constrainedEnumeration'
 import { runtimeUnsupportedFixture } from '../../../test/fixtures/plannerRuntimeUnsupported'
 import {
+  checkpointBonusEntry,
+  checkpointBonusResultAt,
   checkpointMixedEntry,
   CONFLICT_GOGMA_COUNTER,
   ORCHESTRATION_SOURCE_A,
@@ -31,6 +34,10 @@ import {
 import { preparePlannerInitialContext } from '../plannerInitialContext'
 import { createPlanningBuildListEntriesHash, createProductionPlan } from '../productionPlanGeneration'
 import type { PlannerConflictResolution } from '../plannerTypes'
+import {
+  derivePlannerCheckpointRequirements,
+  type PlannerCheckpointRequirements,
+} from '../plannerCheckpoints'
 import { createConstrainedMaterializer } from './constrainedMaterializer'
 import { preparePlannerAugmentedConflictPreflight } from './plannerAugmentedPreflight'
 import {
@@ -191,6 +198,15 @@ function contextsOf(built: OrchestrationScenario): PlannerConstrainedConflictCon
   return createPlannerConstrainedConflictContexts(prepared.context)
 }
 
+/** The Target-wide required checkpoint Entries of the run (PLANNER_SPEC 7.5.6). */
+function requirementsOf(built: OrchestrationScenario): PlannerCheckpointRequirements {
+  const prepared = preparePlannerInitialContext(built.input, built.dependencies)
+  if (prepared.status !== 'ready') {
+    throw new Error(`Expected a ready Planner initial context: ${prepared.status}`)
+  }
+  return prepared.context.checkpointRequirements
+}
+
 /** The `same_gogma_counter` conflict id of a freshly built scenario. */
 function gogmaConflictId(parts: TwoTargetParts): string {
   const probe = orchestrationScenario({
@@ -276,7 +292,7 @@ describe('B8-C4b conflict work scheduling', () => {
     const built = fixedScenario(parts)
     const contexts = contextsOf(built)
     const constraints = fixedConstraintsOf(built)
-    const works = createPlannerConflictWorks(constraints, contexts)
+    const works = createPlannerConflictWorks(constraints, contexts, requirementsOf(built))
 
     expect(constraints).toHaveLength(1)
     expect(works.map(({ targetWeaponId }) => targetWeaponId)).toEqual([
@@ -300,13 +316,15 @@ describe('B8-C4b conflict work scheduling', () => {
     const contexts = contextsOf(built)
     const constraints = fixedConstraintsOf(built)
 
-    const forward = createPlannerConflictWorks(constraints, contexts)
+    const requirements = requirementsOf(built)
+    const forward = createPlannerConflictWorks(constraints, contexts, requirements)
     const reversed = createPlannerConflictWorks(
       [...constraints].reverse(),
       [...contexts].reverse().map((context) => ({
         ...context,
         participants: [...context.participants].reverse(),
       })),
+      requirements,
     )
 
     expect(reversed).toEqual(forward)
@@ -326,7 +344,7 @@ describe('B8-C4b conflict work scheduling', () => {
       participants: [...conflict.participants, ...conflict.participants],
     }
 
-    const works = createPlannerConflictWorks(constraints, [duplicated])
+    const works = createPlannerConflictWorks(constraints, [duplicated], requirementsOf(built))
 
     expect(works.map(({ targetWeaponId }) => targetWeaponId)).toEqual([
       TARGET_B,
@@ -342,6 +360,7 @@ describe('B8-C4b work satisfaction', () => {
     const works = createPlannerConflictWorks(
       fixedConstraintsOf(built),
       contextsOf(built),
+      requirementsOf(built),
     )
     return works[0]
   }
@@ -1246,12 +1265,125 @@ describe('B8-C4b cancellation stays an ordinary Planner outcome', () => {
       const works = createPlannerConflictWorks(
         fixedConstraintsOf(built),
         contextsOf(built),
+        requirementsOf(built),
       )
       expect(works).toHaveLength(1)
       expect(works[0]).toMatchObject({
         targetWeaponId: TARGET_B,
         blockedBySelectedCheckpoint: true,
       })
+    })
+  })
+
+  describe('the block is Target-wide, not participant-wide', () => {
+    const SOURCE_T_SKILL = 'owned.orchestration.t-skill'
+    const SOURCE_T_BONUS = 'owned.orchestration.t-bonus'
+    const SOURCE_U_SKILL = 'owned.orchestration.u-skill'
+    const ENTRY_T_SKILL = 'build-list.orchestration.t-skill'
+    const ENTRY_T_BONUS = 'build-list.orchestration.t-bonus'
+    const ENTRY_U_SKILL = 'build-list.orchestration.u-skill'
+
+    /**
+     * Target T's Entry B (Reset Skills, no checkpoint) collides with Target U's
+     * Entry C on the Skill Counter, and the resolution fixes C. Target T's
+     * other Entry A carries a selected checkpoint but takes no part in that
+     * conflict - it Resets Bonuses on a different weapon.
+     */
+    function parts() {
+      const t = skillTarget(TARGET_B)
+      const u = skillTarget(TARGET_C)
+      const sourceA = orchestrationSource(SOURCE_T_BONUS, {
+        seriesSkillId: IDEAL_SERIES_SKILL_ID,
+      })
+      const sourceB = orchestrationSource(SOURCE_T_SKILL, {
+        restorationBonuses: idealBonuses(),
+      })
+      const sourceC = orchestrationSource(SOURCE_U_SKILL, {
+        restorationBonuses: idealBonuses(),
+      })
+      const entryA = checkpointBonusEntry(ENTRY_T_BONUS, t, SOURCE_T_BONUS, sourceA)
+      const entryB = orchestrationEntry(ENTRY_T_SKILL, t, resetSkillsRoute(SOURCE_T_SKILL), {
+        finalBonuses: idealBonuses(),
+      })
+      const entryC = orchestrationEntry(ENTRY_U_SKILL, u, resetSkillsRoute(SOURCE_U_SKILL), {
+        finalBonuses: idealBonuses(),
+      })
+      return { t, u, sourceA, sourceB, sourceC, entryA, entryB, entryC }
+    }
+
+    function conflictViaB() {
+      const { t, u, sourceB, sourceC, entryB, entryC } = parts()
+      const probe = orchestrationScenario({
+        targets: [t, u],
+        entries: [structuredClone(entryB), structuredClone(entryC)],
+        ownedWeapons: [sourceB, sourceC],
+        engine: { resetResultAt: checkpointBonusResultAt },
+      })
+      const conflict = contextsOf(probe).find(({ kind }) => kind === 'same_skill_counter')
+      if (!conflict) throw new Error('The fixture produced no Skill Counter conflict.')
+      return orchestrationScenario({
+        targets: [t, u],
+        entries: [entryB, entryC],
+        ownedWeapons: [sourceB, sourceC],
+        engine: { resetResultAt: checkpointBonusResultAt },
+        conflictResolutions: [{
+          conflictKey: conflict.conflictId,
+          selectedBuildListEntryId: entryC.id,
+        }],
+      })
+    }
+
+    it('blocks the Target when its required checkpoint Entry is not a participant', () => {
+      const built = conflictViaB()
+      const contexts = contextsOf(built)
+      const constraints = fixedConstraintsOf(built)
+      // No participant of the conflict carries a selection, so a
+      // participant-only authority would let Target T be re-searched.
+      expect(
+        contexts.every(({ participants }) =>
+          participants.every(({ hasSelectedCheckpoints }) => !hasSelectedCheckpoints),
+        ),
+      ).toBe(true)
+      expect(
+        createPlannerConflictWorks(constraints, contexts, requirementsOf(built)),
+      ).toMatchObject([{ targetWeaponId: TARGET_B, blockedBySelectedCheckpoint: false }])
+
+      // The same conflict, judged with the run's whole Entry set: Target T's
+      // other Entry A carries a selected checkpoint, so T is blocked.
+      const { entryA, entryB, entryC } = parts()
+      const targetWide = derivePlannerCheckpointRequirements([entryA, entryB, entryC])
+      expect(targetWide.violations).toEqual([])
+      expect(
+        createPlannerConflictWorks(constraints, contexts, targetWide.requirements),
+      ).toMatchObject([{ targetWeaponId: TARGET_B, blockedBySelectedCheckpoint: true }])
+    })
+
+    it('never lets the selection-free Entry stand in for the required one end to end', async () => {
+      // With Entry A in the run, Entry B is not this Target's Route at all: it
+      // takes part in no conflict, so the persisted resolution built on the
+      // B-vs-C conflict finds nothing to apply to and no re-search starts.
+      const { t, u, sourceA, sourceB, sourceC, entryA, entryB, entryC } = parts()
+      const viaB = conflictViaB()
+      const built = orchestrationScenario({
+        targets: [t, u],
+        entries: [entryA, entryB, entryC],
+        ownedWeapons: [sourceA, sourceB, sourceC],
+        engine: { resetResultAt: checkpointBonusResultAt },
+        conflictResolutions: viaB.input.conflictResolutions,
+      })
+
+      const result = await createProductionPlanWithConstrainedSearch(
+        built.input,
+        built.dependencies,
+        options(),
+      )
+
+      expect(result.generatedBuildListEntries).toEqual([])
+      expect(warningKinds(result.warnings)).toContain('invalid_conflict_resolution')
+      expect(warningKinds(result.warnings)).toContain('selected_checkpoint_fixes_target_entry')
+      expect(result.plan?.selectedBuildListEntryIds ?? []).not.toContain(ENTRY_T_SKILL)
+      expect(result.plan?.selectedBuildListEntryIds ?? []).toContain(ENTRY_T_BONUS)
+      expect(entryA.selectedCheckpointOpportunityIds).toHaveLength(1)
     })
   })
 })

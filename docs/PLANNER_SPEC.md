@@ -13,10 +13,13 @@ PlannerはUIやIndexedDBに依存せず、入力からProductionPlanを返す純
 
 Plannerの基本優先順位。
 
-1. 未所持の実用品を早く揃える
+1. 理想品未所持のTargetの理想品を、Target優先度順に早く揃える
 2. 共有RNG進行中に他の目標武器も効率よく取得する
-3. 実用品確保後に理想品へ更新する
+3. 作成リストで選択済みのcompromise checkpointをhard constraintとして必ず経由する（7.5）
 4. 同程度の場合は武器消費や操作量を抑える
+
+Plannerが追う到達目標はTargetの理想品だけである。実用品を先に確保する優先評価は
+存在しない（7章）。
 
 初期版で実装しないこと。
 
@@ -143,7 +146,9 @@ export interface PlannerClock {
 - RNG値不足とEngine capability不足を別warning reasonとして扱う。該当BuildListEntryだけを除外し、無関係なEntryを一括無効化しない
 - `targetWeapons` は `isEnabled = true` のみ対象
 - `maxPlanSteps`、`beamWidth`、`maxExpandedStates` は1以上
-- 実用品を先に確保する優先順位はv1固定であり、`preferPracticalBeforeIdeal` のような切替Optionを持たない
+- `preferPracticalBeforeIdeal` は旧Planner契約のOptionであり、現在はサポートしない。
+  Plannerに実用品優先の評価は存在せず、この項目を含む `PlannerOptions` は
+  validation issueとして拒否する
 - Active Planの有無はPlanner pure calculationの入力に含めない。PlannerはDraft Planを計算し、Active Plan単一制約、置換、破棄、再計算の制御はApplication / Persistence層で行う
 
 ---
@@ -614,7 +619,9 @@ export interface PlannerSearchTermination {
 statusの決定順序は次のとおりとする。
 
 1. `cancelled`: ユーザーが探索をキャンセルした
-2. `completed`: 全enabled TargetがIdealへ到達した
+2. `completed`: 全enabled Targetが完了した。完了とは `hasIdeal = true` であり、かつ
+   そのTargetにrequired checkpoint Entry（7.5.6）があればそのEntry自身をsecure済み
+   であること。`completedTargetCount` も同じ判定で数える
 3. `incomplete`: それ以前に `PlannerOptions` boundが探索を打ち切った
 4. `exhausted`: boundに到達せず探索が自然終了し、全Target完成Planが無かった
 
@@ -1001,6 +1008,76 @@ checkpoint選択はPlanの `PlanningInputSnapshot.buildListEntriesHash` に含�
 再計算対象になる。一方でBuildListEntry自体はstaleにならない
 （[DATA_MODEL.md](./DATA_MODEL.md) 9.4）。
 
+#### 7.5.6 checkpoint-selected EntryはTargetのrequired Entry
+
+`selectedCheckpointOpportunityIds.length > 0` のBuildListEntryは、そのPlanner runに
+おける当該Targetの **required Entry** である。checkpoint選択は
+「このTargetではこのcanonical Ideal Route上の中間状態を必ず利用する」という
+ユーザー入力であり、同じTargetの別Entryで迂回できてはならない。
+
+required Entryを持つTargetについて、Plannerは次を保証する。
+
+- Targetの完了は、required Entry自身が選択済みcheckpointをすべて実到達し、その
+  Ideal Candidateを `reserve_weapon` でsecureしたときだけである。別Entry、別Target
+  のEntry、または既存武器によって `hasIdeal = true` になっても、それだけでは
+  Targetを完了扱いにしない
+- required EntryはsecureされるまでrelevanceをPlannerに保つ。`hasIdeal` だけで
+  irrelevantにしない
+- 同じTargetの他のBuildListEntryは、そのrunのcandidate selectionから外す。代替
+  完成Routeとして採用せず、競合検出・共有physical action・scoreにも参加させない。
+  永続データを削除・stale化する必要はなく、authorityをrequired Entryへ固定する
+  だけである。外したEntryは `selected_checkpoint_fixes_target_entry` warningで
+  ユーザーへ伝える
+
+authorityは `PlannerCheckpointRequirements`（Target -> required Entry ID）の1つであり、
+`preparePlannerInitialContext()` がそのrunのvalid BuildListEntry全体から導出する。
+`entryIsRelevantForState()`、`isPlannerSearchStateComplete()`、Beam Searchの展開・
+reserve・conflict detection・`progressPotential`、typed termination、constrained
+re-search / what-if（9.5.2）はすべてこの1つの導出を読む。どこかで参加者だけから
+再導出してはならない。
+
+これはscoreではなくhard correctness / feasibility constraintである。required Entryを
+「他Entryより高いscore」で優先する実装にしない。
+
+Plan生成後にも同じ不変条件をfail-closed defenseとして置く。`completed` を主張する
+Beam Searchの結果がrequired Entryをsecureしていない場合、またはsecure済みEntryの
+選択済みcheckpointに対応する `PlanStep.checkpointMilestones` が存在しない場合は
+`PlannerPlanGenerationError` として失敗し、Draft Planを作らない。
+
+#### 7.5.7 1 Targetにつきcheckpoint-selected Entryは最大1件
+
+同一TargetにBuildListEntryが複数存在すること自体は許可する。ただしcheckpointを
+選択したEntryが同一Targetに2件以上ある場合、ユーザーが2本のRouteを両方必須に
+したのか代替として選んだのかをPlannerは推測できない。
+
+v1では保守的に、Planner入力のcollection-level invariantとして
+
+```text
+1 Targetにつき selectedCheckpointOpportunityIds.length > 0 のBuildListEntryは最大1件
+```
+
+を要求する（[DATA_MODEL.md](./DATA_MODEL.md) 9.4）。判定対象はvalidation後の
+valid Entry集合である。2件以上ある場合は `validatePlannerInput()` が
+`buildListEntries` のvalidation issueと `multiple_selected_checkpoint_entries`
+warningでfail closedし、Build Listで片方のcheckpoint選択を解除するよう案内する。
+自動で片方を選ぶ、score・Candidate cost・入力順で決める、最初のEntryを採用する、
+のいずれも行わない。
+
+1つのEntry内で異なるcheckpoint groupを複数選択できる契約（1 groupにつき1件）は
+そのまま維持する。
+
+#### 7.5.8 既にIdeal所持のTargetにcheckpoint選択がある場合
+
+Planner開始時点で `hasIdeal = true` のTargetにrequired checkpoint Entryがある場合、
+Plannerはそのcheckpointを暗黙に捨てて正常終了してはならない。v1では安全側として、
+`createInitialPlannerSearchState()` が `buildListEntries` のvalidation issue
+（`invalid_state`）と `selected_checkpoint_target_already_ideal` warningで
+Planner入力をfail closedし、「既に理想品を所持している目標武器のcheckpoint選択を
+Build Listで解除してください」と案内する。
+
+checkpoint選択の無いTargetが既にIdealを所持している場合は従来どおり
+（`all_targets_already_satisfied` など）である。
+
 ---
 
 ## 8. 在庫シミュレーション
@@ -1182,18 +1259,30 @@ Plannerが落とすことになるためである。保守的に、参加者の�
 
 #### 9.5.2 選択済みcheckpointを持つTargetは再検索対象外
 
-constrained re-search(9.2)とwhat-if(9.2.4)は、participant Entryが
-`selectedCheckpointOpportunityIds.length > 0` を持つTargetのRouteを置き換えない。
+constrained re-search(9.2)とwhat-if(9.2.4)は、required checkpoint Entry（7.5.6）を
+持つTargetのRouteを置き換えない。
 
 - 選択済みcheckpointを別のopportunityへ自動的に移さない
 - 「同じ性能へ到達する別Route」へ差し替えない
 - 選択を空にして再検索しない
+
+判定はTarget-wideである。authorityはcurrent PlannerInputのvalid BuildListEntry全体から
+導出した `PlannerCheckpointRequirements`（7.5.6）であり、Conflict contextの
+participantだけではない。競合のparticipantがcheckpointを持たない別Entry Bであっても、
+同じTargetにcheckpoint-selected Entry Aが存在する限り、そのTargetは代替Routeへ
+再検索しない。`createPlannerConflictWorks()` はorchestrationとwhat-ifの両方で
+同じrequirementsを受け取り、participantの `hasSelectedCheckpoints` はその狭い
+証拠として残す。
 
 orchestrationは該当Targetの `PlannerConflictWork` を
 `blockedBySelectedCheckpoint = true` とし、enumeration・materialize・trialを一切
 行わずに競合をそのまま返す。warning kindは
 `selected_checkpoint_blocks_constrained_search`、what-ifの `outcome.status` は
 `blocked_by_selected_checkpoint` とする。選択を持たないTargetの再検索は従来どおりである。
+
+なお7.5.6により、required Entryを持つTargetの他のEntryはそのrunで競合の
+participantにならない。したがってparticipant経由の迂回は、持ち越した
+`PlannerConflictResolution` が現在の競合と対応しないことでもfail closedする。
 
 競合をユーザーが選択した場合は、現在入力へ `PlannerConflictResolution` を追加して
 Plannerを再実行する。`conflictKey` は検出された `PlanConflict.id` と対応し、その競合では
@@ -3664,8 +3753,16 @@ Workerを利用できない環境ではClientのversionを `production-engine-un
 - 通常アーティアをTargetのPractical / Ideal所持判定に含めない
 - 巨戟アーティアだけを実際のTarget条件で評価する
 - statusではなく条件で実用品所持を判定する
-- 理想品所持TargetをPlanner対象から外す
+- 理想品所持TargetをPlanner対象から外す。ただしrequired checkpoint Entryを持つ
+  Targetは、そのEntry自身をsecureするまで対象に残る（7.5.6）
 - 妥協品しか持たないTargetはPlanner対象に残る
+- 同一Targetの別Entryの理想品完成だけではrequired checkpoint EntryのTargetを
+  完了扱いにせず、required Entryのcheckpoint到達とsecureで完了する
+- 同一Targetにcheckpoint-selected Entryが2件以上あればfail closedし、片方を自動選択しない
+- Planner開始時点で理想品所持のTargetにcheckpoint選択があればfail closedする
+- checkpoint選択の無い同一Target複数Entryは従来のcandidate選択のまま
+- 競合participantがcheckpointなしのEntryでも、同Targetの別Entryにcheckpoint選択が
+  あればconstrained re-searchとwhat-ifは再検索しない
 - `hasPractical` はstatusではなく実際の性能から判定する
 - Ideal候補確保でhasPracticalとhasIdealがtrueになる
 - 開始OwnedWeaponが妥協条件を満たしていてもcheckpoint opportunityにしない

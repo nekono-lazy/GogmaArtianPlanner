@@ -1063,6 +1063,13 @@ export type BuildListEntryStaleReason =
 - 同一groupから2件以上のopportunityを選択できない
 - 同じopportunity IDを2回含めない
 - checkpoint選択の変更は `isStale` / `staleReasons` に影響しない
+- checkpointを選択したEntryは、そのPlanner runにおける当該Targetのrequired Entryである。
+  同じTargetの別Entryの理想品完成で迂回できない
+  ([PLANNER_SPEC.md](./PLANNER_SPEC.md) 7.5.6)
+- Planner入力のcollection-level invariantとして、1 Targetにつき
+  `selectedCheckpointOpportunityIds.length > 0` のvalid Entryは最大1件とする。
+  2件以上はPlanner入力をfail closedし、Build Listで片方の選択解除を求める。
+  永続データとして複数Entryが共存すること自体は禁止しない(同 7.5.7)
 
 `searchStateHash` の正規化対象。
 
