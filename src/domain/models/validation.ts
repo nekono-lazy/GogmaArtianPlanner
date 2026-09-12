@@ -1078,15 +1078,39 @@ function validateCandidateCheckpointGroups(
     return
   }
   const operationCount = candidate.route.operations.length
-  const groupIds = new Set<string>()
+  // Operation units in Route order: `create_normal_artian` counts its forges,
+  // every other operation is one unit. `operationCount` / `remainingOperationCount`
+  // of an opportunity are derived from these, never stored independently.
+  const cumulativeUnits: number[] = []
+  let totalUnits = 0
+  candidate.route.operations.forEach((operation) => {
+    totalUnits += operation.type === 'create_normal_artian' ? operation.count : 1
+    cumulativeUnits.push(totalUnits)
+  })
+  const groupIds = new Set(groups.map(({ id }) => id))
+  const seenGroupIds = new Set<string>()
   const opportunityIds = new Set<string>()
   groups.forEach((group, groupIndex) => {
     const path = `checkpointGroups[${groupIndex}]`
     validateId(group.id, `${path}.id`, issues)
-    if (groupIds.has(group.id)) {
+    if (!group.id.startsWith('checkpoint-group:')) {
+      addIssue(issues, `${path}.id`, 'invalid_id', 'Checkpoint group ids use the checkpoint-group prefix.')
+    }
+    if (seenGroupIds.has(group.id)) {
       addIssue(issues, `${path}.id`, 'invalid_structure', 'Checkpoint group ids must be unique.')
     }
-    groupIds.add(group.id)
+    seenGroupIds.add(group.id)
+    if (
+      group.dominatingGroupId !== null &&
+      (group.dominatingGroupId === group.id || !groupIds.has(group.dominatingGroupId))
+    ) {
+      addIssue(
+        issues,
+        `${path}.dominatingGroupId`,
+        'invalid_reference',
+        'dominatingGroupId must reference another checkpoint group of the same Candidate.',
+      )
+    }
     validateRestorationBonusScope(group.restorationBonusScope, `${path}.restorationBonusScope`, issues)
     appendIssues(issues, `${path}.restorationBonuses`, validateRestorationBonusSet(group.restorationBonuses))
     if (
@@ -1123,11 +1147,50 @@ function validateCandidateCheckpointGroups(
     group.opportunities.forEach((opportunity, index) => {
       const opportunityPath = `${path}.opportunities[${index}]`
       validateId(opportunity.id, `${opportunityPath}.id`, issues)
+      if (!opportunity.id.startsWith('checkpoint-opportunity:')) {
+        addIssue(issues, `${opportunityPath}.id`, 'invalid_id', 'Checkpoint opportunity ids use the checkpoint-opportunity prefix.')
+      }
       if (opportunityIds.has(opportunity.id)) {
         addIssue(issues, `${opportunityPath}.id`, 'invalid_structure', 'Checkpoint opportunity ids must be unique.')
       }
       opportunityIds.add(opportunity.id)
       validateNonNegativeInteger(opportunity.afterOperationIndex, `${opportunityPath}.afterOperationIndex`, issues)
+      // The two counts are Route facts, so a current artifact whose stored
+      // counts disagree with its own Route is rejected rather than trusted.
+      const expectedOperationCount = cumulativeUnits[opportunity.afterOperationIndex]
+      if (
+        expectedOperationCount !== undefined &&
+        opportunity.operationCount !== expectedOperationCount
+      ) {
+        addIssue(
+          issues,
+          `${opportunityPath}.operationCount`,
+          'invalid_state',
+          'operationCount must equal the Route operation units through afterOperationIndex.',
+        )
+      }
+      if (
+        expectedOperationCount !== undefined &&
+        opportunity.remainingOperationCount !== totalUnits - expectedOperationCount
+      ) {
+        addIssue(
+          issues,
+          `${opportunityPath}.remainingOperationCount`,
+          'invalid_state',
+          'remainingOperationCount must equal the Route operation units after afterOperationIndex.',
+        )
+      }
+      if (
+        opportunity.conditionMatch.bonus !== group.conditionMatch.bonus ||
+        opportunity.conditionMatch.skill !== group.conditionMatch.skill
+      ) {
+        addIssue(
+          issues,
+          `${opportunityPath}.conditionMatch`,
+          'invalid_state',
+          'An opportunity carries the same compromise judgement as its group.',
+        )
+      }
       // Strict prefix only: the Ideal-completing final operation is never a
       // checkpoint (`docs/SEARCH_SPEC.md` 5.8.1).
       if (opportunity.afterOperationIndex >= operationCount - 1) {
@@ -1228,7 +1291,7 @@ export function validateBuildCandidate(
 /**
  * The selected checkpoints are a hard Planner constraint, so an unknown id or a
  * second selection inside one group fails closed rather than being ignored
- * (`docs/DATA_MODEL.md` 10.2).
+ * (`docs/DATA_MODEL.md` 9.4).
  */
 function validateBuildListEntryCheckpointSelection(
   entry: BuildListEntry,

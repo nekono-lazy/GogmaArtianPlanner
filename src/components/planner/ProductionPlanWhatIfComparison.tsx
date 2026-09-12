@@ -44,6 +44,7 @@ function WhatIfOutcome({ outcome }: { outcome: PlannerWhatIfOutcome }) {
     case 'stopped_by_enumeration_bound':
     case 'stopped_by_candidate_trial_bound':
     case 'stopped_by_planner_rerun_bound':
+    case 'blocked_by_selected_checkpoint':
       return (
         <Typography variant="body2">
           {presentPlannerWhatIfNoResult(outcome)}

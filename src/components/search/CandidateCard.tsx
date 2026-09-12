@@ -45,7 +45,7 @@ interface CandidateCardProps {
    *
    * Checkpoints are a BuildListEntry input, never part of the Candidate, so the
    * owner of the selection passes it in rather than the card holding it
-   * (`docs/DATA_MODEL.md` 10.2).
+   * (`docs/DATA_MODEL.md` 9.4).
    */
   selectedCheckpointOpportunityIds?: readonly CompromiseCheckpointOpportunityId[]
   onToggleCheckpoint?: (
@@ -222,7 +222,7 @@ export function CandidateCard({
           </Accordion>
           {/* A checkpoint is an intermediate state of this very Route, so it
               is shown on the Candidate that owns it rather than as a separate
-              result (`docs/UI_FLOW.md` 6.4). */}
+              result (`docs/UI_FLOW.md` 9). */}
           <CompromiseCheckpointList
             groups={candidate.checkpointGroups ?? []}
             weaponTypeId={weaponTypeId}

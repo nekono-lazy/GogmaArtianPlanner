@@ -50,6 +50,7 @@ export function createPlannerWhatIfBenchmarkOutcome(result: PlannerWhatIfCalcula
     plannerRerunBound: count('stopped_by_planner_rerun_bound'),
     enumerationBound: count('stopped_by_enumeration_bound'),
     notFound: count('not_found_within_search_extent'),
+    blockedBySelectedCheckpoint: count('blocked_by_selected_checkpoint'),
   }
   return {
     semantic,

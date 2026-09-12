@@ -843,8 +843,19 @@ export interface CandidateConversionSkillStep extends SkillAmendmentResult {
 - 各opportunityの `afterOperationIndex` は `route.operations.length - 1` 未満の
   strict prefixであり、group内で昇順に並ぶ
 - 各opportunityはgroupと同じscope / 5枠multiset / Series Skill / Group Skillへ到達する
+- 各opportunityの `conditionMatch` はgroupの `conditionMatch` と一致する
+- 各opportunityの `operationCount` はRoute先頭から `afterOperationIndex` までの
+  操作unit数(`create_normal_artian` は `count` 本分)と一致し、
+  `remainingOperationCount` はRoute全体のunit数からそれを引いた値と一致する
+- `dominatingGroupId` は同じCandidateの別groupのIDだけを参照する。自分自身や
+  存在しないgroupを参照せず、`isDisplaySecondary` は `dominatingGroupId !== null`
+  と一致する
 - group IDとopportunity IDは `candidateStableKey` とgroup identityから決まる
-  deterministicな値であり、`searchRunId`・Clock・列挙順に依存しない
+  deterministicな値であり、`searchRunId`・Clock・列挙順に依存しない。group IDは
+  `checkpoint-group:`、opportunity IDは `checkpoint-opportunity:` で始まる
+- 現行calculation schemaのCandidate validationは上記をすべて検証する。
+  `checkpointGroups` を持たないschema 9以前のartifactは互換対象として読めるまま
+  保持し、補完しない
 - `checkpointGroups` はCandidate semantic identityに含めない。Candidate ID
   （`semanticHash`）、`candidateStableKey`、重複排除key、`BuildCandidateMeaning`
   fingerprint、`searchStateHash`、`referencedOwnedWeaponsHash` はいずれも参照しない
@@ -1440,6 +1451,12 @@ export interface PlanStepDebugInfo {
 ## 11.8 PlanConflict
 
 ```ts
+export interface PlanConflictCheckpointParticipant {
+  buildListEntryId: BuildListEntryId;
+  checkpointGroupId: CompromiseCheckpointGroupId;
+  checkpointOpportunityId: CompromiseCheckpointOpportunityId;
+}
+
 export interface PlanConflict {
   id: string;
   kind: ConflictKind;
@@ -1448,12 +1465,27 @@ export interface PlanConflict {
   recommendedBuildListEntryId: BuildListEntryId | null;
   selectedBuildListEntryId: BuildListEntryId | null;
   resolutionNote: string | null;
+  /**
+   * 選択済みcompromise checkpointの終端unitとしてこの競合に参加するEntry。
+   * schema 10で追加したoptional fieldであり、省略は空と同義である
+   * (PLANNER_SPEC 9.5)。
+   */
+  checkpointParticipants?: PlanConflictCheckpointParticipant[];
 }
 ```
 
 競合選択は `PlannerConflictResolution` として次回PlannerInputへ渡す。
 `conflictKey` は安定したPlanConflict IDに対応し、選択はその局所競合だけを解決する。
 削除済み、stale、Target無効、Capability不足、保護状態変更で実行不能なEntry選択は適用せずwarningとする。
+
+`checkpointParticipants` が1件以上ある競合は、汎用の `PlannerConflictResolution` で
+解決できない。どちらを優先してももう一方の選択済みcheckpointを落とすためであり、
+Domainは `selectedBuildListEntryId` を `null` のままにして
+`invalid_conflict_resolution` を返す。constrained re-searchの固定制約準備と
+preflight再対応付けも `checkpoint_conflict` で失敗する。解決は作成リストでの
+checkpoint変更または解除だけである([PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.5.1)。
+また、選択済みcheckpointを持つTargetのRouteはconstrained re-searchで置き換えない
+(同 9.5.2)。
 
 `PlanConflict.id` はPlannerIdFactoryで生成せず、次のsemantic dataをstable serialize / hashして
 決定的に生成する。BuildListEntry IDは重複排除してsortし、Candidate IDは使用しない。
@@ -1803,7 +1835,7 @@ Production RNG契約切替時の互換性は次のとおりとする。
 - SkillConditionの `all` / `any` 判定が正しい
 - 新規OwnedWeaponのstatus別保護初期値が正しく、既存保存値を勝手に変更しない
 - 保護武器をReset Bonuses・Keep Bonuses・Reset Skillsの対象にできない
-- protectedなPractical / Ideal武器でも現在性能がTargetを満たせば操作0 Candidateにできる
+- protectedな武器でも、statusにかかわらず現在性能がTargetを満たせば操作0 Candidateにできる
 - `existing_gogma_reset_skills` のfinalBonusesが起点OwnedWeaponと一致し、Skill Prediction結果だけがスキルへ反映される
 - Reset Skills Routeの起点OwnedWeapon状態変更で `referencedOwnedWeaponsHash` が変わる
 - Skill Capability不足時は `existing_gogma_reset_skills` を生成しない

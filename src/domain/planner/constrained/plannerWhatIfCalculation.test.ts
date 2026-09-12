@@ -11,6 +11,7 @@ import {
   belowPracticalBonuses,
   idealBonuses,
   IDEAL_SERIES_SKILL_ID,
+  practicalBonuses,
 } from '../../../test/fixtures/constrainedEnumeration'
 import {
   restorationBonus,
@@ -28,6 +29,7 @@ import {
   type OrchestrationScenario,
 } from '../../../test/fixtures/plannerConstrainedOrchestration'
 import { preparePlannerInitialContext } from '../plannerInitialContext'
+import { checkpointMixedEntry } from '../../../test/fixtures/plannerConstrainedOrchestration'
 import type { RngEngine } from '../../rng/rngEngine'
 import type {
   PlannerConflictResolution,
@@ -926,6 +928,58 @@ describe('B9-B1b empty work set', () => {
     expect(result.status).toBe('completed')
     if (result.status !== 'completed') return
     expect(result.comparison.alternatives).toEqual([])
+    expect(observed.plannerInputs).toEqual([])
+  })
+
+  it('answers blocked_by_selected_checkpoint for a Target whose Entry carries a selection', async () => {
+    // Target A Resets Bonuses at the contested Gogma Counter. Target B's Route
+    // reaches its selected checkpoint one operation earlier (Reset Skills on
+    // its own Skill Counter), then also needs the contested Gogma position, so
+    // the scenario conflict itself carries no checkpoint participant and fixing
+    // Target A is a valid resolution. What the what-if must not do is offer B
+    // an alternate Route that would drop that selected checkpoint.
+    const a = gogmaConflictTarget(TARGET_A)
+    const b = skillConstrainedTarget(TARGET_B, { priority: 1 })
+    const sourceB = orchestrationSource(SOURCE_B1, {
+      restorationBonuses: practicalBonuses(),
+    })
+    const parts: WhatIfParts = {
+      targets: [a, b],
+      ownedWeapons: [
+        orchestrationSource(SOURCE_A, {
+          restorationBonuses: belowPracticalBonuses(),
+        }),
+        sourceB,
+      ],
+      entries: [
+        orchestrationEntry(ENTRY_A, a, resetRoute(SOURCE_A), {
+          finalBonuses: idealBonuses(),
+          seriesSkillId: NON_IDEAL_SERIES_SKILL_ID,
+        }),
+        checkpointMixedEntry(ENTRY_B, b, SOURCE_B1, sourceB),
+      ],
+    }
+    const conflictIds = detectedConflictIds(parts)
+    const scenario: WhatIfScenario = {
+      built: orchestrationScenario({
+        targets: parts.targets,
+        entries: parts.entries,
+        ownedWeapons: parts.ownedWeapons,
+      }),
+      scenarioResolution: {
+        conflictKey: conflictIds.same_gogma_counter,
+        selectedBuildListEntryId: ENTRY_A as BuildListEntryId,
+      },
+      otherResolutions: [],
+    }
+
+    const comparison = only(await compare(scenario, bounds(99, 99)))
+
+    expect(comparison.targetWeaponId).toBe(TARGET_B)
+    expect(comparison.outcome).toEqual<PlannerWhatIfOutcome>({
+      status: 'blocked_by_selected_checkpoint',
+    })
+    // Nothing was enumerated or trialled for that Target.
     expect(observed.plannerInputs).toEqual([])
   })
 })

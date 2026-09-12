@@ -99,7 +99,7 @@ export const defaultConstrainedEnumerationBounds: ConstrainedEnumerationBounds =
  * The Planner-start current validated Search / RNG snapshot.
  *
  * It is deliberately NOT a `CandidateSearchInput`: no `searchRunId`, no
- * `routeFilter`, no `resultFilter`, and no `settings`. A historical UI
+ * `routeFilter`, and no `settings`. A historical UI
  * Candidate Search request is not persisted and must never be required here.
  */
 export interface ConstrainedSearchOrigin {

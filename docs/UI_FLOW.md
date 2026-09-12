@@ -617,6 +617,9 @@ Plannerに検討させる候補集合を確認・調整する。
 
 - 作成順の手動固定は提供しない
 - チェックポイントの選択はここが唯一の編集場所である。Search側での再追加では変更しない
+- 同じEntryへの選択保存は直列化し、各保存は直前の保存結果(または保存中の最新値)を
+  起点に次の選択を組み立てる。描画時点の古い選択を起点にして、直前の保存を
+  上書きしてはならない(lost update)。Domain validationが選択内容の唯一のauthorityである
 - チェックポイント選択を変更してもEntry自体はstaleにならない
 - チェックポイント選択を変更すると既存の作成プランは再計算対象になる
 - 同一性能グループから2つ以上の到達点を選択できない
@@ -896,6 +899,16 @@ Counter位置が一致することだけを理由に「作成できない」と�
 同一Counter位置でもPlannerがshareableと判定するoperationは共同実行できる
 ([PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.2参照)。
 
+current Conflictの `checkpointParticipants` が1件以上ある場合(checkpoint競合)、その
+競合の全participantを `checkpoint_conflict` として利用不可にし、「比較する」と
+「この候補を優先」をdisabledにする。競合単位で「この競合には選択済みチェックポイントが
+関係しています。作成リストでチェックポイントを変更または解除してください。」と、
+作成リスト(`/build-list`)への導線「ビルドリストでチェックポイントを変更」を表示する。
+checkpointを持つ側だけでなく相手側も選択できない。これはUIだけの無効化ではなく、
+Domainが同じresolutionを拒否する([PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.5.1)。
+checkpoint関与の判定はcurrent preparationの `checkpointParticipants` から行い、
+保存済みPlanの `PlanConflict.checkpointParticipants` を判定authorityにしない。
+
 ### 11.2 「比較する」とwhat-if preview
 
 各有効participantに「比較する」を置く。クリックしたparticipantだけを
@@ -950,6 +963,7 @@ typed no-resultは少なくとも次の意味を区別する。すべてを「�
 | `stopped_by_enumeration_bound` | 探索範囲上限のため未確認 |
 | `stopped_by_candidate_trial_bound` | 候補試行上限のため未確認 |
 | `stopped_by_planner_rerun_bound` | Planner再計算上限のため未確認 |
+| `blocked_by_selected_checkpoint` | 選択済みチェックポイントがあるため代替ルートを探索しない。作成リストでの変更または解除を案内する |
 
 comparison全体の `planner_input_not_ready` / `invalid_fixed_resolution` は別のtyped failureとして
 表示する。`invalid_fixed_resolution.reason` を分岐authorityとし、detail / message文字列を
@@ -968,7 +982,10 @@ explicit resolutionを保持してmergeし、同一 `conflictKey` は今回選�
 再実行する。Application callerが `defaultPlannerOrchestrationBounds = 2 / 1 / 4` を明示指定する。
 
 結果のwarningsにtyped `warning.kind === 'invalid_conflict_resolution'` が1件でもあれば、
-`plan !== null` でもfail closedとする。`savePlannerOrchestrationResult()` を呼ばず、ProductionPlanも
+`plan !== null` でもfail closedとする。checkpoint競合へのresolutionはDomainがこのwarningで
+拒否するため、同じfail closedがそのまま適用される。選択済みcheckpointを持つTargetの
+Routeを置き換えられない場合の `selected_checkpoint_blocks_constrained_search` は
+再選択を促すwarningであり、Planの保存を妨げない。`savePlannerOrchestrationResult()` を呼ばず、ProductionPlanも
 generated BuildListEntryも保存せず、新Planへ遷移しない。表示中の旧Planを維持し、再選択または
 再計算を促す。warning.messageを解析せず、Planner推奨または別participantへfallbackせず、invalid
 resolutionを無視したordinary Planを保存しない。

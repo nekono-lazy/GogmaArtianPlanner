@@ -114,13 +114,13 @@ function compareIds(left: string, right: string): number {
  * `BuildListEntry` of the ordinary persisted shape - no new provenance field
  * and no new entity.
  *
- * It recomputes no Search semantics. Category, the completed five slots and
- * their scope, Skills, the concrete Route, every estimate, the material
- * requirements, `idealDifference`, `similarityScore`, both hashes, and the
- * `CalculationContext` are carried over from the enumerator unchanged. It adds
- * only what the Search Domain deliberately could not produce: the deterministic
- * identity, the deterministic IDs, the Clock-derived `createdAt`, and the
- * `isSimilarToIdeal` display metadata.
+ * It recomputes no Search semantics. The completed five slots and their
+ * scope, Skills, the concrete Route, every estimate, the material
+ * requirements, `idealDifference`, both hashes, and the `CalculationContext`
+ * are carried over from the enumerator unchanged. It adds only what the Search
+ * Domain deliberately could not produce: the deterministic identity, the
+ * deterministic IDs, the Clock-derived `createdAt`, and the checkpoint groups
+ * of the materialized Candidate's own Route.
  *
  * It is pure apart from the injected `PlannerClock`: no `crypto.randomUUID()`,
  * no `new Date()`, no persistence, and no ordinary-Search candidate factory.

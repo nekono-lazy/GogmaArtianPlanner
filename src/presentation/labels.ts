@@ -110,6 +110,8 @@ export const plannerWarningLabels: Record<PlannerWarningKind, string> = {
   max_planner_reruns_reached: 'Plannerの再実行回数の上限に到達しました',
   constrained_enumeration_bound_reached:
     '再検索の探索範囲の上限に到達したため、候補の探索を打ち切りました',
+  selected_checkpoint_blocks_constrained_search:
+    '選択済みチェックポイントがある目標武器は再検索で別ルートへ置き換えません。作成リストでチェックポイントを変更または解除してください',
 }
 
 export const candidateRouteFilterLabels: Record<CandidateRouteFilter, string> = {

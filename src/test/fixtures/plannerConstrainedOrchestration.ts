@@ -13,6 +13,7 @@ import {
 import { createTargetDefinitionHash } from '../../domain/buildList'
 import type { FakeRngEngine } from '../../domain/rng/fakeRngEngine'
 import type { ConstrainedSearchOrigin } from '../../domain/search'
+import { extractCandidateCheckpointGroups } from '../../domain/search'
 import {
   defaultPlannerOptions,
   type PlannerConflictResolution,
@@ -35,6 +36,7 @@ import {
   CONSTRAINED_START_SKILL_COUNTER,
   IDEAL_SERIES_SKILL_ID,
   belowPracticalBonuses,
+  constrainedMaster,
   createConstrainedEngine,
   createConstrainedSearchOrigin,
   gogmaWeapon,
@@ -185,6 +187,55 @@ export function orchestrationEntry(
     type === 'convert_normal_to_gogma' || type === 'reset_skills',
   ).length
   snapshot.estimatedNormalAdvance = null
+  return entry
+}
+
+/**
+ * An Entry whose Route reaches a selectable compromise checkpoint *before*
+ * the contested Gogma position: Reset Skills at the Skill Counter (the source's
+ * Practical five slots plus the Ideal Series Skill form the checkpoint), then
+ * the Reset Bonuses at the contested Gogma Counter completes the Ideal.
+ *
+ * The checkpoint is extracted from the Entry's own recorded traces, exactly as
+ * an ordinary Search would record them, and it is selected on the Entry. The
+ * source must carry `practicalBonuses()` for the checkpoint to exist.
+ */
+export function checkpointMixedEntry(
+  id: string,
+  target: TargetWeapon,
+  sourceId: string,
+  source: OwnedGogmaArtianWeapon,
+  options: { select?: boolean } = {},
+): BuildListEntry {
+  const skills = resetSkillsRoute(sourceId)
+  const bonuses = resetRoute(sourceId)
+  const entry = orchestrationEntry(id, target, {
+    kind: 'existing_gogma_mixed',
+    sourceOwnedWeaponId: bonuses.sourceOwnedWeaponId,
+    operations: [...skills.operations, ...bonuses.operations],
+  })
+  const snapshot = entry.candidateSnapshot
+  snapshot.skillAmendmentTrace = [{
+    operationIndex: 0,
+    operationType: 'reset_skills',
+    seriesSkillId: IDEAL_SERIES_SKILL_ID,
+    groupSkillId: null,
+  }]
+  snapshot.bonusAmendmentTrace = [{
+    operationIndex: 1,
+    operationType: 'reset_bonuses',
+    restorationBonuses: idealBonuses(),
+    restorationBonusScope: 'gogma_artian',
+  }]
+  snapshot.checkpointGroups = extractCandidateCheckpointGroups(snapshot, {
+    target,
+    master: constrainedMaster(),
+    ownedWeapons: [source],
+  })
+  const [group] = snapshot.checkpointGroups
+  if (!group) throw new Error('The checkpoint fixture Route reached no checkpoint.')
+  entry.selectedCheckpointOpportunityIds =
+    options.select === false ? [] : [group.opportunities[0].id]
   return entry
 }
 

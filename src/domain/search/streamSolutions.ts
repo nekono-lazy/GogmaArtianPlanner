@@ -93,7 +93,6 @@ export interface EvaluatedBonusSolution {
 /**
  * SEARCH_SPEC 5.5.2 stream-local ideal closeness. A `null` side of
  * `idealSkillCondition` is unconstrained, so it is never counted as a match.
- * This is the same quantity `calculateSimilarityScore()` adds on the Skill side.
  */
 function skillIdealCloseness(
   target: TargetWeapon,

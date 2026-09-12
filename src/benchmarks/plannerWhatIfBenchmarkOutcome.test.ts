@@ -22,7 +22,7 @@ describe('B9 benchmark semantic normalization', () => {
       { status: 'stopped_by_enumeration_bound' },
       { status: 'not_found_within_search_extent' },
     ]))
-    expect(result.counts).toEqual({ found: 1, candidateTrialBound: 1, plannerRerunBound: 1, enumerationBound: 1, notFound: 1 })
+    expect(result.counts).toEqual({ found: 1, candidateTrialBound: 1, plannerRerunBound: 1, enumerationBound: 1, notFound: 1, blockedBySelectedCheckpoint: 0 })
     expect(result.candidateTrialBoundReached).toBe(true)
     expect(result.plannerRerunBoundReached).toBe(true)
     expect(result.enumerationBoundReached).toBe(true)

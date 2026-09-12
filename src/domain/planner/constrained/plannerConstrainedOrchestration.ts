@@ -107,6 +107,14 @@ export interface PlannerConflictWork {
   originalConflictId: string
   constraint: PlannerFixedConflictConstraint
   targetWeaponId: TargetWeaponId
+  /**
+   * The participant BuildListEntry of this Target carries a selected
+   * compromise checkpoint. No constrained Route replacement is attempted for
+   * it: an alternate Route would drop that checkpoint, and the Planner never
+   * drops, moves, or empties a selection (`docs/PLANNER_SPEC.md` 9.5.2). The
+   * conflict stays a conflict until the Build List selection changes.
+   */
+  blockedBySelectedCheckpoint: boolean
   orderKey: string
 }
 
@@ -131,7 +139,7 @@ function dedupeWarnings(warnings: readonly PlannerWarning[]): PlannerWarning[] {
  * enumeration. It is never rebuilt from an adopted Planner state, from a Beam
  * Search bestState, or from `conflictingCounter + 1`, and it needs no
  * historical UI Candidate Search request: it carries no `searchRunId`,
- * `routeFilter`, `resultFilter`, or `settings`.
+ * `routeFilter`, or `settings`.
  */
 export function createConstrainedSearchOriginFromPlannerInput(
   input: PlannerInput,
@@ -178,6 +186,13 @@ export function createPlannerConflictWorks(
         originalConflictId: constraint.originalConflictId,
         constraint,
         targetWeaponId: participant.targetWeaponId,
+        // Any participant Entry of this Target with a selection blocks the
+        // whole Target: its Route may not be replaced behind the user's back.
+        blockedBySelectedCheckpoint: context.participants.some(
+          (other) =>
+            other.targetWeaponId === participant.targetWeaponId &&
+            other.hasSelectedCheckpoints,
+        ),
         orderKey: [
           plannerConflictResourceKey(constraint.resourceIdentity),
           constraint.fixedBuildListEntryId,
@@ -460,6 +475,17 @@ export async function createProductionPlanWithConstrainedSearch(
   for (const work of works) {
     if (rerunBudgetReached || generatedCapReached || cancelled) break
     if (trialStoppedConflictIds.has(work.originalConflictId)) continue
+    if (work.blockedBySelectedCheckpoint) {
+      // The user's selected checkpoint is a hard constraint on this Target's
+      // current Route. Enumerating a replacement Route would only ever offer
+      // one that drops it, so nothing is enumerated, materialized, or tried:
+      // the conflict is returned as it is (PLANNER_SPEC 9.5.2).
+      warn(
+        'selected_checkpoint_blocks_constrained_search',
+        `Planner constrained re-search skipped TargetWeapon '${work.targetWeaponId}' of conflict '${work.originalConflictId}': its BuildListEntry carries a selected compromise checkpoint, which an alternate Route would drop. Change or clear the checkpoint in the Build List and run the Planner again.`,
+      )
+      continue
+    }
     // Re-checked before every work item: one generated Candidate can settle
     // several conflicts at once (PLANNER_SPEC 9.2.10). An adoption that spent
     // the last affordable Beam Search is therefore a normal completion when it

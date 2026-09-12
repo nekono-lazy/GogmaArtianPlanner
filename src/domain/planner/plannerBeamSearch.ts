@@ -20,6 +20,7 @@ import {
   updateOwnedWeapon,
 } from './simulatedInventory'
 import {
+  conflictResolutionRefusalReason,
   detectPlannerConflicts,
   isUnitBlockedByConflictResolution,
 } from './plannerConflictDetection'
@@ -1012,19 +1013,15 @@ function conflictResolutionWarnings(
   conflictsById: ReadonlyMap<string, PlanConflict>,
 ): PlannerWarning[] {
   return resolutions.flatMap((resolution) => {
-    const conflict = conflictsById.get(resolution.conflictKey)
-    if (!conflict) {
-      return [{
-        kind: 'invalid_conflict_resolution' as const,
-        message: `Conflict resolution '${resolution.conflictKey}' does not match a currently detected conflict.`,
-      }]
-    }
-    return conflict.buildListEntryIds.includes(resolution.selectedBuildListEntryId)
+    // The same refusal authority the detection applied, so a resolution that
+    // targets a selected-checkpoint conflict is reported here too.
+    const reason = conflictResolutionRefusalReason(
+      resolution,
+      conflictsById.get(resolution.conflictKey),
+    )
+    return reason === null
       ? []
-      : [{
-          kind: 'invalid_conflict_resolution' as const,
-          message: `BuildListEntry '${resolution.selectedBuildListEntryId}' is not a participant in conflict '${resolution.conflictKey}'.`,
-        }]
+      : [{ kind: 'invalid_conflict_resolution' as const, message: reason }]
   })
 }
 

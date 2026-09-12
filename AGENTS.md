@@ -655,8 +655,10 @@ in PR #12.
 Defaults:
 
 - A manually registered new Gogma weapon: `unclassified`, unprotected
-- A Planner-secured Practical Candidate: `practical`, unprotected
-- A Planner-secured Ideal Candidate: `ideal`, protected
+- A Planner-secured Candidate: `ideal`, protected. The Planner secures only the
+  canonical Ideal result; a compromise checkpoint is an intermediate state of
+  that same Route and is never reserved as a weapon of its own
+- `practical` is written only by the user's own relabelling
 - Updating an existing Gogma to a Candidate result preserves its explicit
   protection value, exactly as PR #12 fixed
 
@@ -892,6 +894,32 @@ Constrained enumeration yields Ideal Candidates only, for the same reason: a
 Planner-generated Entry for a compromise result would be exactly the separate
 Practical BuildListEntry this model forbids.
 
+### Checkpoint conflicts and constrained re-search
+
+A selected checkpoint is a hard constraint the Planner never drops, moves, or
+empties on its own. Two rules follow, both Domain authority and never UI-only
+(`docs/PLANNER_SPEC.md` 9.5, `docs/DATA_MODEL.md` 11.8, `docs/UI_FLOW.md` 11.1):
+
+- A conflict whose `PlanConflict.checkpointParticipants` is non-empty cannot be
+  resolved by a generic `PlannerConflictResolution`. Picking either side would
+  let the Planner drop the other side's selected checkpoint, so
+  `conflictResolutionRefusalReason()` refuses it: initial conflict detection
+  leaves `selectedBuildListEntryId = null`, Beam Search reports
+  `invalid_conflict_resolution`, `preparePlannerFixedConflictConstraints()` and
+  the preflight re-association fail with `checkpoint_conflict`, and the Plan UI
+  disables 「比較する」 / 「この候補を優先」 for every participant and routes to
+  the Build List. The only resolution is changing or clearing the selection
+  there; a shared physical action that reaches several checkpoints at once is
+  still one action and no conflict
+- Constrained re-search and what-if never replace the Route of a Target whose
+  participant `BuildListEntry` has `selectedCheckpointOpportunityIds.length > 0`:
+  no auto-transplant onto another opportunity, no "same performance, other
+  Route", no empty selection. `PlannerConflictWork.blockedBySelectedCheckpoint`
+  skips the enumeration, the conflict is returned as it is with the warning
+  `selected_checkpoint_blocks_constrained_search`, and what-if answers
+  `blocked_by_selected_checkpoint`. A Target with no selection is re-searched
+  exactly as before
+
 ---
 
 ## Build Candidate and Build List Separation
@@ -1048,7 +1076,7 @@ once one canonical Ideal is settled; the checkpoints of that Route are then
 extracted from the traces it already recorded.
 
 Only when Counter conflicts actually occur across Targets does the Planner
-re-search the conflicting Targets, look up the next Practical/Ideal for the
+re-search the conflicting Targets, look up the next feasible Ideal Route for the
 Target that yields, and compare how much further each choice pushes the other.
 `docs/SEARCH_SPEC.md` 5.6 and `docs/PLANNER_SPEC.md` 9.1-9.2 hold that contract.
 B8-A fixed the formal Planner-driven constrained re-search contract; B8-B1
@@ -1081,9 +1109,9 @@ flow, not only in the recorded counters.
   Target's ideal bonus multiset, do not search bonus amendments for that weapon
 - Normal-scope exact labels are not Bonus Ideal. Continue supported Reset
   exploration after conversion and from inherited normal-scope Gogma sources
-- A stream that currently satisfies only the Practical condition still yields a
-  zero-operation Practical solution for that stream, and Ideal exploration
-  continues on it
+- A stream that currently satisfies only a compromise condition is not
+  finished: Ideal exploration continues on it, and a compromise state becomes a
+  checkpoint only when it lies on a strict prefix of the settled Ideal Route
 
 Do not enumerate the Cartesian product of bonus results and Skill results, and
 do not reintroduce it as a lazily expanded priority queue or a small fixed
@@ -1115,21 +1143,21 @@ merely the same set — even though the `BuildCandidate.id` values differ. The
 `BuildCandidate` ID generation rule, including `searchRunId` inside its
 `semanticHash`, stays unchanged.
 
-Keep the Practical retention range independent of discovery order too. With `D`
-the canonical Ideal's `estimatedOperationCount`, every Practical reachable within
-`estimatedOperationCount <= D` is evaluated for retention, then filtered by the
-conservative dominance below. Finding the Ideal first must never cause a nearer
-Practical to go unevaluated.
+Keep the checkpoint set independent of discovery order too. Every checkpoint
+of the settled canonical Ideal Route is extracted from the traces that Route
+already recorded, so the extracted groups and opportunities are the same
+whichever RouteKind or Promise settled first.
 
-Keep Practical candidates plural. Drop one only under a conservative Pareto
-dominance covering bonus composition, bonus rank, skills, source weapon,
-destructive/non-destructive kind, every advance and operation count, and
-material requirements. Compare bonus ranks as a per-`bonusTypeId` rank multiset,
-never by slot index, and treat a scope or type whose Master rank ordering cannot
-be compared safely as incomparable. Compare materials component-wise per
-`materialId`, never by a summed quantity — differing material kinds are
-incomparable. Never rank bonus types or skills against each other by assumed
-game strength; differing compositions are incomparable, so keep both.
+Keep checkpoint groups plural. Nothing is removed from the Domain: the only
+dominance is the display-only conservative one of `docs/SEARCH_SPEC.md` 5.8.4
+(`isDisplaySecondary` / `dominatingGroupId`), which requires equal scope and
+Skills, a per-`bonusTypeId` rank vector that is at least as good everywhere and
+better somewhere, an earliest arrival that is no later, and comparable Master
+references. Compare bonus ranks as a per-`bonusTypeId` rank multiset, never by
+slot index, and treat a scope or type whose Master rank ordering cannot be
+compared safely as incomparable. Never rank bonus types or skills against each
+other by assumed game strength; differing compositions are incomparable, so both
+groups stay primary.
 
 `maxGogmaAdvance` bounds the Gogma Counter positions the search covers, not the
 number of Engine calls; a bounded state search inside the Gogma stream is
@@ -1214,7 +1242,8 @@ B8-B1.
 
 B6 is implemented as a UI / defaults / progress / Worker error task. It changed
 no Search semantics: the Cross rule, the B4 scheduler, the canonical Ideal, the
-Practical horizon and dominance, the Similarity formula, `resultFilter` semantics,
+then-current Practical horizon and dominance, Similarity formula and `resultFilter`
+semantics (all since removed),
 `CalculationContext.appSchemaVersion = 2`, Production RNG semantics and version,
 the checkpoint interval of 50, and the MessagePort `workerYield` are all
 unchanged, and normal-scope Keep prediction is still unimplemented.
@@ -2767,11 +2796,11 @@ Relevant test areas include:
 - Changing only `searchRunId` leaves each Target's ordered
   `candidateStableKey` sequence identical while the `BuildCandidate.id` values
   differ, and complete semantic duplicates compare equal instead of by ID
-- Every Practical within the canonical Ideal's operation count is evaluated, and
-  the retained set is unchanged across traversal orders
+- Every checkpoint of the canonical Ideal Route is extracted from its recorded
+  traces, and the extracted set is unchanged across traversal orders
 - Stream anchors `b0` / `k0` come from the documented deterministic ordering
-- Practical candidates with differing bonus compositions, skill compositions, or
-  source weapons are kept as incomparable rather than dropped
+- Checkpoint groups with differing bonus compositions or skill compositions stay
+  primary as incomparable rather than being tidied behind the secondary disclosure
 - Bonus rank dominance is decided per `bonusTypeId` rank multiset, not by slot
   index, and an uncomparable Master rank ordering makes the pair incomparable
 - Material dominance is decided component-wise per `materialId`, so differing
@@ -2928,7 +2957,7 @@ Relevant test areas include:
   once instead of once per progressed Entry
 - One Entry's consecutive transient Gogma operations add no switch, while
   another Entry's transient Gogma is a different subject
-- `comparePlannerSearchStates()` keeps practical-first progress and
+- `comparePlannerSearchStates()` keeps Ideal progress and
   `evaluationScore` above the switch count, applies the switch count only when
   both tie, and falls through to the existing stable tie-breaks when switch
   counts tie too

@@ -128,10 +128,9 @@ function baseNormalAdvance(operations: readonly RouteOperation[]): number | null
  * family-layout frontier dedup, and the Production RNG input-level support
  * contract are unchanged.
  *
- * The enumerator applies none of the following: Practical dominance, the
- * initial Practical horizon, termination at the canonical Ideal,
- * `maxCandidatesPerTarget`, `resultFilter`, or the similar filter. Its only
- * extent authority is `ConstrainedEnumerationBounds`.
+ * The enumerator applies none of the initial Search's stopping policies -
+ * termination at the canonical Ideal, `CandidateSearchSettings`, or any UI
+ * filter. Its only extent authority is `ConstrainedEnumerationBounds`.
  *
  * `onCandidate` receives each Candidate as it is discovered, in the traversal's
  * deterministic best-first order, and may return `'stop'` to end the

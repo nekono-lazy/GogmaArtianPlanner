@@ -91,7 +91,11 @@ const prepareProductionPlannerInteraction: PreparePlannerInteractionCalculation 
         ({ entry, reason }) => ({ buildListEntryId: entry.id, reason }),
       ),
       currentConflicts: context.initialConflictDetection.conflicts.map(
-        ({ id, buildListEntryIds }) => ({ id, buildListEntryIds: [...buildListEntryIds] }),
+        ({ id, buildListEntryIds, checkpointParticipants }) => ({
+          id,
+          buildListEntryIds: [...buildListEntryIds],
+          checkpointParticipants: structuredClone(checkpointParticipants ?? []),
+        }),
       ),
     }
   }

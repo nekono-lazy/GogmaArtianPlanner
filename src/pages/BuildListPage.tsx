@@ -90,7 +90,7 @@ export interface BuildListPageDependencies {
    *
    * Editing it here is what makes a Counter conflict recoverable without
    * re-searching: the user moves the checkpoint to another arrival, or turns it
-   * off, and runs the Planner again (`docs/UI_FLOW.md` 7.2).
+   * off, and runs the Planner again (`docs/UI_FLOW.md` 10).
    */
   updateCheckpointSelection(
     id: BuildListEntryId,
@@ -180,6 +180,19 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
   )
   const clientRef = useRef<PlannerWorkerClient | null>(null)
   const activeRequestRef = useRef<string | null>(null)
+  /**
+   * Per-Entry serialization of checkpoint selection saves.
+   *
+   * Two quick toggles on different groups must both survive (one opportunity
+   * per group, any number of groups). Each save therefore starts from the
+   * latest known selection - the previous save's result, or the pending
+   * optimistic value - rather than from the render-time Entry, and saves for
+   * one Entry run one after another. The service's Domain validation stays
+   * the authority for what a selection may contain.
+   */
+  const checkpointSaveChainRef = useRef(
+    new Map<BuildListEntryId, Promise<readonly CompromiseCheckpointOpportunityId[]>>(),
+  )
   const masterForDisplay = dependencies?.master ?? defaultMaster
   const plannerOptions = useMemo(
     () => parsePlannerOptions(optionInputs),
@@ -316,19 +329,34 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
     selected: boolean,
   ) => {
     if (!dependencies) return
+    const deps = dependencies
     const groupIds = new Set(group.opportunities.map(({ id }) => id))
-    const kept = (entry.selectedCheckpointOpportunityIds ?? []).filter(
-      (id) => !groupIds.has(id),
-    )
-    const next = selected ? [...kept, opportunity.id] : kept
-    try {
-      const updated = await dependencies.updateCheckpointSelection(entry.id, next)
-      setEntries((current) =>
-        current.map((existing) => (existing.id === updated.id ? updated : existing)),
+    const chain = checkpointSaveChainRef.current
+    const previous =
+      chain.get(entry.id) ??
+      Promise.resolve<readonly CompromiseCheckpointOpportunityId[]>(
+        entry.selectedCheckpointOpportunityIds ?? [],
       )
+    const save = previous
+      // A failed earlier save keeps the last persisted value as the base.
+      .catch(() => entry.selectedCheckpointOpportunityIds ?? [])
+      .then(async (latest) => {
+        const kept = latest.filter((id) => !groupIds.has(id))
+        const next = selected ? [...kept, opportunity.id] : kept
+        const updated = await deps.updateCheckpointSelection(entry.id, next)
+        setEntries((current) =>
+          current.map((existing) => (existing.id === updated.id ? updated : existing)),
+        )
+        return updated.selectedCheckpointOpportunityIds ?? []
+      })
+    chain.set(entry.id, save)
+    try {
+      await save
       setNotice('利用チェックポイントを更新しました。生産計画を再作成してください。')
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : 'チェックポイントを更新できませんでした。')
+    } finally {
+      if (chain.get(entry.id) === save) chain.delete(entry.id)
     }
   }
 

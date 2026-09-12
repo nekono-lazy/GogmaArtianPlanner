@@ -136,9 +136,8 @@ export function plannerWhatIfEnumerationOutcome(
  *
  * `options.enumerationBounds` is used exactly as supplied: no default
  * substitution, fallback, clamp, or field-wise completion (9.2.4.10). The
- * ordinary Candidate Search filters - `CandidateSearchSettings`,
- * `resultFilter`, the similar filter and `maxCandidatesPerTarget` - are not
- * applied and are not consulted.
+ * ordinary Candidate Search request fields - `CandidateSearchSettings` and
+ * `routeFilter` - are not applied and are not consulted.
  *
  * Every Target and every Candidate trial starts from the same baseline: the
  * Planner-start origin, the merged input, and every valid explicit resolution
@@ -170,6 +169,16 @@ export async function createPlannerWhatIfComparison(
 
   const alternatives: PlannerWhatIfTargetComparison[] = []
   for (const work of scenario.works) {
+    if (work.blockedBySelectedCheckpoint) {
+      // A selected checkpoint is a hard constraint on this Target's current
+      // Route, so no alternate Route is a valid answer and none is enumerated,
+      // materialized, preflighted, or trialled (PLANNER_SPEC 9.5.2).
+      alternatives.push({
+        targetWeaponId: work.targetWeaponId,
+        outcome: { status: 'blocked_by_selected_checkpoint' },
+      })
+      continue
+    }
     if (budget.exhausted) {
       // No Beam Search is left to judge anything for this Target, so no
       // enumeration, materialization or preflight is started for it at all

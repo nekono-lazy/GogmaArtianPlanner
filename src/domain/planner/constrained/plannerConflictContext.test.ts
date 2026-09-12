@@ -336,6 +336,7 @@ describe('B8-C3a conflict context authority', () => {
         exclusiveConsumedOwnedWeaponId: firstSource.id,
         physicalActionKey: context.allUnitPlans.get(firstEntry.id)?.[0]
           .physicalActionKey,
+        hasSelectedCheckpoints: false,
       },
       {
         buildListEntryId: secondEntry.id,
@@ -349,6 +350,7 @@ describe('B8-C3a conflict context authority', () => {
         exclusiveConsumedOwnedWeaponId: secondSource.id,
         physicalActionKey: context.allUnitPlans.get(secondEntry.id)?.[0]
           .physicalActionKey,
+        hasSelectedCheckpoints: false,
       },
     ])
   })

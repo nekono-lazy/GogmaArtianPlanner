@@ -20,9 +20,27 @@ import type {
 import { preparePlannerInitialContext } from './plannerInitialContext'
 import { arePlannerRouteUnitsShareable, createPlannerRouteUnitPlans } from './plannerRouteProgress'
 import { plannerEngine } from '../../test/fixtures/plannerBeam'
+import { checkpointMaster } from '../../test/fixtures/checkpointRoute'
+import { extractCandidateCheckpointGroups } from '../search'
+import { createBuildCandidateMeaningFingerprint } from '../buildList'
+import { runPlannerBeamSearch } from './plannerBeamSearch'
+import { hasReachedEverySelectedCheckpoint } from './plannerCheckpoints'
+import { conflictResolutionRefusalReason } from './plannerConflictDetection'
+import {
+  createPlannerConstrainedConflictContexts,
+  preparePlannerFixedConflictConstraints,
+  reassociatePlannerFixedConstraints,
+} from './constrained'
+import type { PlannerConflictResolution } from './plannerTypes'
 
 const SOURCE_A = ownedWeaponId('owned.checkpoint.conflict.a')
 const SOURCE_B = ownedWeaponId('owned.checkpoint.conflict.b')
+/**
+ * Each Target requires a Group Skill only its own source carries, so a weapon
+ * secured for one Target never satisfies the other as a side effect and both
+ * Entries stay relevant to the Planner until their own Route finishes.
+ */
+const ownGroupSkillId = (suffix: string) => `group_skill.fixture.${suffix}-only`
 
 /**
  * Two Targets whose Routes Reset overlapping Gogma Counter positions from
@@ -60,11 +78,29 @@ function twoEntryScenario(
       id: candidate.targetWeaponId,
       name: `Checkpoint conflict ${suffix}`,
     }
+    const owned = checkpointSource(source)
+    target.idealSkillCondition = {
+      seriesSkillId: target.idealSkillCondition.seriesSkillId,
+      groupSkillId: ownGroupSkillId(suffix),
+      matchMode: 'all',
+    }
+    target.practicalSkillCondition = {
+      seriesSkillId: target.idealSkillCondition.seriesSkillId,
+      groupSkillId: ownGroupSkillId(suffix),
+      matchMode: 'all',
+    }
+    owned.groupSkillId = ownGroupSkillId(suffix)
+    candidate.groupSkillId = ownGroupSkillId(suffix)
+    candidate.checkpointGroups = extractCandidateCheckpointGroups(candidate, {
+      target,
+      master: checkpointMaster(),
+      ownedWeapons: [owned],
+    })
     const entry = createBuildListEntry(candidate, target, {
       selectedCheckpointOpportunityIds: selected,
       createdAt: `2026-09-1${suffix === 'a' ? 1 : 2}T00:00:00.000Z`,
     })
-    return { candidate, target, entry, source: checkpointSource(source) }
+    return { candidate, target, entry, source: owned }
   })
   const targets = parts.map(({ target }) => target)
   const entries: BuildListEntry[] = parts.map(({ entry }) => entry)
@@ -192,5 +228,140 @@ describe('Compromise checkpoint conflicts', () => {
     expect(conflicts.every(({ checkpointParticipants }) =>
       (checkpointParticipants ?? []).length === 0,
     )).toBe(true)
+  })
+
+  describe('a generic PlannerConflictResolution never drops a selected checkpoint', () => {
+    function collided() {
+      const probe = twoEntryScenario([], [])
+      const first = opportunityAt(probe.parts[0], 0)
+      const second = opportunityAt(probe.parts[1], 0)
+      const scenario = twoEntryScenario([first.id], [second.id])
+      const conflict = conflictsOf(scenario).find(({ kind }) => kind === 'same_gogma_counter')
+      if (!conflict) throw new Error('The fixture produced no checkpoint conflict.')
+      return { scenario, conflict, first, second }
+    }
+
+    it.each([0, 1])('refuses to apply a resolution preferring participant %i', (winner) => {
+      const { scenario, conflict } = collided()
+      const resolution: PlannerConflictResolution = {
+        conflictKey: conflict.id,
+        selectedBuildListEntryId: scenario.input.buildListEntries[winner].id,
+      }
+      // The single Domain refusal authority.
+      expect(conflictResolutionRefusalReason(resolution, conflict)).toMatch(/checkpoint/)
+
+      // Initial detection: the conflict stays unresolved and says why.
+      const resolved = twoEntryScenario(
+        scenario.input.buildListEntries[0].selectedCheckpointOpportunityIds ?? [],
+        scenario.input.buildListEntries[1].selectedCheckpointOpportunityIds ?? [],
+      )
+      resolved.input.conflictResolutions = [resolution]
+      const prepared = preparePlannerInitialContext(resolved.input, resolved.dependencies)
+      if (prepared.status !== 'ready') throw new Error(prepared.status)
+      const detected = prepared.context.initialConflictDetection
+      expect(detected.conflicts.find(({ id }) => id === conflict.id)?.selectedBuildListEntryId)
+        .toBeNull()
+      // Nothing is blocked by a refused resolution, so no unit of the loser is
+      // rejected for it: the conflict is simply returned to the user.
+      expect(detected.selectedPhysicalActionKeysByConflictId.has(conflict.id)).toBe(false)
+
+      // The constrained re-search fixed side refuses it too, all-or-nothing.
+      const contexts = createPlannerConstrainedConflictContexts(prepared.context)
+      const fixed = preparePlannerFixedConflictConstraints(prepared.context, contexts)
+      expect(fixed.status).toBe('unresolved')
+      if (fixed.status !== 'unresolved') return
+      expect(fixed.failures).toMatchObject([{ reason: 'checkpoint_conflict' }])
+      expect(contexts.find(({ conflictId }) => conflictId === conflict.id)?.involvesSelectedCheckpoint)
+        .toBe(true)
+    })
+
+    it.each([0, 1])('keeps every selected checkpoint through a Beam Search that prefers participant %i', async (winner) => {
+      const { scenario, conflict } = collided()
+      const resolved = twoEntryScenario(
+        scenario.input.buildListEntries[0].selectedCheckpointOpportunityIds ?? [],
+        scenario.input.buildListEntries[1].selectedCheckpointOpportunityIds ?? [],
+      )
+      resolved.input.conflictResolutions = [{
+        conflictKey: conflict.id,
+        selectedBuildListEntryId: resolved.input.buildListEntries[winner].id,
+      }]
+
+      const result = await runPlannerBeamSearch(resolved.input, resolved.dependencies)
+
+      expect(result.warnings).toContainEqual(
+        expect.objectContaining({ kind: 'invalid_conflict_resolution' }),
+      )
+      expect(result.rejections.some(({ reason }) => reason === 'conflict_resolution_not_selected'))
+        .toBe(false)
+      // Whatever the Beam Search finished, every finished Entry really reached
+      // its own selected checkpoint: no selection was dropped to get there.
+      const state = result.bestState
+      expect(state).not.toBeNull()
+      for (const entry of resolved.input.buildListEntries) {
+        expect(entry.selectedCheckpointOpportunityIds).toHaveLength(1)
+        if (state?.selectedBuildListEntryIds.includes(entry.id)) {
+          expect(
+            hasReachedEverySelectedCheckpoint(
+              entry,
+              state.reachedCheckpointOpportunityIdsByEntryId[entry.id] ?? [],
+            ),
+          ).toBe(true)
+        }
+      }
+      // The two selected checkpoints cannot both run at one Counter, so at
+      // most one Entry finishes and the conflict is reported, not resolved.
+      expect(state?.selectedBuildListEntryIds.length ?? 0).toBeLessThanOrEqual(1)
+      expect(result.conflicts.find(({ id }) => id === conflict.id)?.selectedBuildListEntryId)
+        .toBeNull()
+    })
+
+    it('refuses to re-associate a fixed constraint onto a checkpoint conflict', () => {
+      const { scenario, conflict } = collided()
+      const prepared = preparePlannerInitialContext(scenario.input, scenario.dependencies)
+      if (prepared.status !== 'ready') throw new Error(prepared.status)
+      const contexts = createPlannerConstrainedConflictContexts(prepared.context)
+      const fixedEntry = scenario.input.buildListEntries[0]
+      const current = contexts.find(({ conflictId }) => conflictId === conflict.id)
+      if (!current) throw new Error('Fixture conflict context is missing.')
+
+      const result = reassociatePlannerFixedConstraints(prepared.context, contexts, [{
+        originalConflictId: 'plan-conflict:previous-run',
+        resourceIdentity: current.resourceIdentity,
+        fixedBuildListEntryId: fixedEntry.id,
+        fixedTargetWeaponId: fixedEntry.targetWeaponId,
+        fixedCandidateFingerprint: createBuildCandidateMeaningFingerprint(
+          fixedEntry.candidateSnapshot,
+        ),
+      }])
+
+      expect(result.status).toBe('unresolved')
+      if (result.status !== 'unresolved') return
+      expect(result.failures).toMatchObject([{ reason: 'checkpoint_conflict' }])
+      expect(result.conflictResolutions).toEqual([])
+    })
+
+    it('finishes both Entries with their checkpoints once one moves to another opportunity', async () => {
+      const probe = twoEntryScenario([], [])
+      const first = opportunityAt(probe.parts[0], 0)
+      const later = opportunityAt(probe.parts[1], 1)
+      const moved = twoEntryScenario([first.id], [later.id])
+
+      const result = await runPlannerBeamSearch(moved.input, moved.dependencies)
+
+      expect(result.completed).toBe(true)
+      const state = result.bestState
+      expect(state?.selectedBuildListEntryIds.slice().sort()).toEqual(
+        moved.input.buildListEntries.map(({ id }) => id).sort(),
+      )
+      for (const entry of moved.input.buildListEntries) {
+        expect(
+          hasReachedEverySelectedCheckpoint(
+            entry,
+            state?.reachedCheckpointOpportunityIdsByEntryId[entry.id] ?? [],
+          ),
+        ).toBe(true)
+      }
+      expect(result.conflicts.filter(({ kind }) => kind === 'same_gogma_counter')).toEqual([])
+    })
   })
 })

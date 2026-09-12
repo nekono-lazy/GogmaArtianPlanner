@@ -117,7 +117,7 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
   const [targetWeaponId, setTargetWeaponId] = useState<TargetWeapon['id'] | ''>('')
   const [routeFilter, setRouteFilter] = useState<CandidateRouteFilter>('all')
   // Checkpoints always start unselected: choosing none means "go straight to
-  // the Ideal result" (`docs/UI_FLOW.md` 6.4).
+  // the Ideal result" (`docs/UI_FLOW.md` 9).
   const [selectedCheckpointIds, setSelectedCheckpointIds] = useState<
     CompromiseCheckpointOpportunityId[]
   >([])
@@ -235,7 +235,7 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
   /**
    * At most one opportunity may be selected per checkpoint group, so choosing a
    * different arrival at the same compromise product replaces the previous one
-   * rather than adding a second (`docs/DATA_MODEL.md` 10.2).
+   * rather than adding a second (`docs/DATA_MODEL.md` 9.4).
    */
   const toggleCheckpoint = (
     group: CompromiseCheckpointGroup,

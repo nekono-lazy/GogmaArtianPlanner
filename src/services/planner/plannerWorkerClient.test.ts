@@ -959,7 +959,7 @@ const interactionResult: PlannerInteractionPreparationResult = {
   status: 'ready',
   validBuildListEntryIds: [createValidBuildListEntry().id],
   excludedBuildListEntries: [],
-  currentConflicts: [{ id: 'conflict.current', buildListEntryIds: [createValidBuildListEntry().id] }],
+  currentConflicts: [{ id: 'conflict.current', buildListEntryIds: [createValidBuildListEntry().id], checkpointParticipants: [] }],
 }
 
 describe('PlannerWorkerClient interaction preparation (B10-B1)', () => {

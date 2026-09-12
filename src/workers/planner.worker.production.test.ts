@@ -247,6 +247,7 @@ describe('Production Worker interaction projection (B10-B1)', () => {
       currentConflicts: [{
         id: conflict.id,
         buildListEntryIds: [entries[0].id, entries[1].id],
+        checkpointParticipants: [],
       }],
     })
     expect(result.status === 'ready' && result.validBuildListEntryIds)

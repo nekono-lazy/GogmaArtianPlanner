@@ -92,6 +92,12 @@ export type PlannerWhatIfOutcome =
   | { status: 'stopped_by_candidate_trial_bound' }
   /** The request spent `maxPlannerReruns` before deciding this Target. */
   | { status: 'stopped_by_planner_rerun_bound' }
+  /**
+   * This Target's participant BuildListEntry carries a selected compromise
+   * checkpoint, so no alternate Route may replace it and nothing is enumerated
+   * (PLANNER_SPEC 9.5.2). The Build List selection is where this is settled.
+   */
+  | { status: 'blocked_by_selected_checkpoint' }
 
 /**
  * One non-fixed Target's what-if answer.

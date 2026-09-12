@@ -112,7 +112,7 @@ export interface CreateBuildListEntryOptions {
    * They are the Entry's own Planner input, so they never take part in
    * `createEntryId()` or `createBuildCandidateMeaningFingerprint()`: two Entries
    * differing only in their checkpoint selection would otherwise be two
-   * different Candidates, which they are not (`docs/DATA_MODEL.md` 10.2).
+   * different Candidates, which they are not (`docs/DATA_MODEL.md` 9.4).
    */
   selectedCheckpointOpportunityIds?: readonly CompromiseCheckpointOpportunityId[]
 }

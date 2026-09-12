@@ -22,6 +22,46 @@ export interface PlannerConflictDetectionResult {
   warnings: PlannerWarning[]
 }
 
+/**
+ * Whether this conflict involves a selected compromise checkpoint.
+ *
+ * Such a conflict is out of scope for a winner-picking
+ * `PlannerConflictResolution` (`docs/PLANNER_SPEC.md` 9.5): applying one would
+ * make the losing Entry give up the very Counter position its selected
+ * checkpoint needs, which silently drops a hard constraint. The only
+ * resolution is a Build List checkpoint change followed by a new Planner run.
+ */
+export function conflictInvolvesSelectedCheckpoint(
+  conflict: Pick<PlanConflict, 'checkpointParticipants'>,
+): boolean {
+  return (conflict.checkpointParticipants?.length ?? 0) > 0
+}
+
+/**
+ * Why one explicit `PlannerConflictResolution` cannot be applied to the
+ * conflict it names, or `null` when it can.
+ *
+ * This is the single Domain authority every consumer shares - initial
+ * detection, the Beam Search's final warnings, and the constrained re-search
+ * fixed-constraint preparation - so a refused resolution is refused the same
+ * way everywhere and can never reach a Beam Search through another door.
+ */
+export function conflictResolutionRefusalReason(
+  resolution: PlannerConflictResolution,
+  conflict: PlanConflict | undefined,
+): string | null {
+  if (!conflict) {
+    return `Conflict resolution '${resolution.conflictKey}' does not match a currently detected conflict.`
+  }
+  if (!conflict.buildListEntryIds.includes(resolution.selectedBuildListEntryId)) {
+    return `BuildListEntry '${resolution.selectedBuildListEntryId}' is not a participant in conflict '${resolution.conflictKey}'.`
+  }
+  if (conflictInvolvesSelectedCheckpoint(conflict)) {
+    return `Conflict '${resolution.conflictKey}' involves a selected compromise checkpoint, so it cannot be resolved by preferring BuildListEntry '${resolution.selectedBuildListEntryId}'; change or clear the checkpoint in the Build List instead.`
+  }
+  return null
+}
+
 function compareStableStrings(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
 }
@@ -287,9 +327,22 @@ export function detectPlannerConflicts(
       const buildListEntryIds = sortedEntryIds(group.units)
       const id = conflictId(group, buildListEntryIds)
       const resolution = resolutionByKey.get(id)
+      const participants = checkpointParticipants(group, entriesById)
+      // A resolution is applied only when the shared refusal authority accepts
+      // it: a non-participant selection and a checkpoint conflict both leave
+      // the conflict unresolved, never half-applied.
       const selectedBuildListEntryId =
         resolution &&
-        buildListEntryIds.includes(resolution.selectedBuildListEntryId)
+        conflictResolutionRefusalReason(resolution, {
+          id,
+          kind: group.kind,
+          buildListEntryIds,
+          reason: '',
+          recommendedBuildListEntryId: null,
+          selectedBuildListEntryId: null,
+          resolutionNote: null,
+          checkpointParticipants: participants,
+        }) === null
           ? resolution.selectedBuildListEntryId
           : null
       const conflict: PlanConflict = {
@@ -309,7 +362,7 @@ export function detectPlannerConflicts(
           selectedBuildListEntryId === null
             ? null
             : `Applied local resolution for BuildListEntry '${selectedBuildListEntryId}'.`,
-        checkpointParticipants: checkpointParticipants(group, entriesById),
+        checkpointParticipants: participants,
       }
       appendUnitConflict(conflictIdsByUnitKey, conflict, group.units)
       if (selectedBuildListEntryId !== null) {
@@ -328,20 +381,13 @@ export function detectPlannerConflicts(
 
   const conflictById = new Map(conflicts.map((conflict) => [conflict.id, conflict]))
   const warnings = reportInvalidResolutions ? resolutions.flatMap((resolution): PlannerWarning[] => {
-    const conflict = conflictById.get(resolution.conflictKey)
-    if (!conflict) {
-      return [{
-        kind: 'invalid_conflict_resolution',
-        message: `Conflict resolution '${resolution.conflictKey}' does not match a currently detected conflict.`,
-      }]
-    }
-    if (!conflict.buildListEntryIds.includes(resolution.selectedBuildListEntryId)) {
-      return [{
-        kind: 'invalid_conflict_resolution',
-        message: `BuildListEntry '${resolution.selectedBuildListEntryId}' is not a participant in conflict '${resolution.conflictKey}'.`,
-      }]
-    }
-    return []
+    const reason = conflictResolutionRefusalReason(
+      resolution,
+      conflictById.get(resolution.conflictKey),
+    )
+    return reason === null
+      ? []
+      : [{ kind: 'invalid_conflict_resolution', message: reason }]
   }) : []
   return {
     conflicts,

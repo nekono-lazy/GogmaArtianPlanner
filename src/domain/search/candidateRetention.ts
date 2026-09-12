@@ -21,10 +21,9 @@ export function isDestructiveCandidateRoute(route: BuildRoute): boolean {
  * Selects the single canonical Ideal Candidate of one Target
  * (`docs/SEARCH_SPEC.md` 5.6.3).
  *
- * There is no Practical horizon, no Practical dominance and no output cap any
- * more: independent Practical Candidates do not exist, so the only thing a
- * Search retains is the one canonical Ideal, or nothing at all when the
- * configured extent contained no Ideal.
+ * Independent compromise Candidates do not exist, so there is nothing to keep
+ * plural, rank, or cap: the only thing a Search retains is the one canonical
+ * Ideal, or nothing at all when the configured extent contained no Ideal.
  *
  * `preferredOwnedWeaponId` reaches only the ordering, never the search extent:
  * the Target's preference decides which of two equally rated Ideal Routes is

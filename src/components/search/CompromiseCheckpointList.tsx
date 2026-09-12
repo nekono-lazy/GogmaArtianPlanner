@@ -148,7 +148,7 @@ function CheckpointGroupCard({
  *
  * The two disclosures are display organisation only. A later arrival at the
  * same compromise product and a conservatively worse group both stay fully
- * selectable behind them (`docs/UI_FLOW.md` 6.4).
+ * selectable behind them (`docs/UI_FLOW.md` 9).
  */
 export function CompromiseCheckpointList(props: CompromiseCheckpointListProps) {
   const { groups } = props

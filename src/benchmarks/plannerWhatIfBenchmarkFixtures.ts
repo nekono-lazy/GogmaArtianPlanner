@@ -49,7 +49,7 @@ export const plannerWhatIfBenchmarkWorkloads = [
     label: 'D. Three participants: shared rerun budget',
     baseWorkloadId: 'orchestration_trial_and_rerun_pressure',
     participantCount: 3,
-    note: 'Three conversion participants; two independent alternatives with reachable Practical / Ideal. Also preserves the Normal conflict resolution.',
+    note: 'Three conversion participants; two independent alternatives with a reachable Ideal. Also preserves the Normal conflict resolution.',
   },
   {
     id: 'what_if_combined',

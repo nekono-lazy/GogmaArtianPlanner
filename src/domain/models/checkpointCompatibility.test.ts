@@ -183,4 +183,59 @@ describe('Checkpoint calculation and Export schema contracts', () => {
     const older = { ...root, schemaVersion: 4 } as unknown as ExportRoot
     expect(older.schemaVersion).not.toBe(root.schemaVersion)
   })
+
+  it('rejects a current artifact whose checkpoint counts disagree with its Route', () => {
+    const wrongOperationCount = currentCandidate()
+    wrongOperationCount.checkpointGroups![0].opportunities[0].operationCount += 1
+    expect(validateBuildCandidate(wrongOperationCount, [checkpointSource()]).issues)
+      .toContainEqual(expect.objectContaining({
+        path: 'checkpointGroups[0].opportunities[0].operationCount',
+      }))
+
+    const wrongRemaining = currentCandidate()
+    wrongRemaining.checkpointGroups![0].opportunities[0].remainingOperationCount = 0
+    expect(validateBuildCandidate(wrongRemaining, [checkpointSource()]).issues)
+      .toContainEqual(expect.objectContaining({
+        path: 'checkpointGroups[0].opportunities[0].remainingOperationCount',
+      }))
+  })
+
+  it('rejects an opportunity whose judgement disagrees with its group', () => {
+    const candidate = currentCandidate()
+    candidate.checkpointGroups![0].opportunities[0].conditionMatch = {
+      bonus: 'alternative',
+      skill: 'ideal',
+    }
+    expect(validateBuildCandidate(candidate, [checkpointSource()]).issues)
+      .toContainEqual(expect.objectContaining({
+        path: 'checkpointGroups[0].opportunities[0].conditionMatch',
+      }))
+  })
+
+  it('rejects a dominating reference that names itself or no group', () => {
+    const self = currentCandidate()
+    self.checkpointGroups![0].isDisplaySecondary = true
+    self.checkpointGroups![0].dominatingGroupId = self.checkpointGroups![0].id
+    expect(validateBuildCandidate(self, [checkpointSource()]).issues)
+      .toContainEqual(expect.objectContaining({
+        path: 'checkpointGroups[0].dominatingGroupId',
+      }))
+
+    const unknown = currentCandidate()
+    unknown.checkpointGroups![0].isDisplaySecondary = true
+    unknown.checkpointGroups![0].dominatingGroupId = 'checkpoint-group:unknown' as never
+    expect(validateBuildCandidate(unknown, [checkpointSource()]).issues)
+      .toContainEqual(expect.objectContaining({
+        path: 'checkpointGroups[0].dominatingGroupId',
+      }))
+  })
+
+  it('rejects checkpoint ids outside the deterministic id families', () => {
+    const candidate = currentCandidate()
+    candidate.checkpointGroups![0].id = 'group:not-deterministic' as never
+    candidate.checkpointGroups![0].opportunities[0].id = 'opportunity:not-deterministic' as never
+    const paths = validateBuildCandidate(candidate, [checkpointSource()]).issues.map(({ path }) => path)
+    expect(paths).toContain('checkpointGroups[0].id')
+    expect(paths).toContain('checkpointGroups[0].opportunities[0].id')
+  })
 })

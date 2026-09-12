@@ -363,6 +363,12 @@ export type PlannerWarningKind =
    */
   | 'max_candidate_trials_per_conflict_reached'
   | 'max_generated_build_list_entries_reached'
+  /**
+   * B8 constrained-search orchestration only (PLANNER_SPEC 9.5.2): a
+   * conflict participant Target was not re-searched because its BuildListEntry
+   * carries a selected compromise checkpoint that an alternate Route would drop.
+   */
+  | 'selected_checkpoint_blocks_constrained_search'
   | 'max_planner_reruns_reached'
   | 'constrained_enumeration_bound_reached'
 
@@ -381,6 +387,7 @@ export const plannerWarningKinds: readonly PlannerWarningKind[] = [
   'max_generated_build_list_entries_reached',
   'max_planner_reruns_reached',
   'constrained_enumeration_bound_reached',
+  'selected_checkpoint_blocks_constrained_search',
 ]
 
 export interface PlannerWarning {

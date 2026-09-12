@@ -134,6 +134,7 @@ function pageFixture(suffix = 'a'): {
       currentConflicts: [{
         id: persistedConflict.id,
         buildListEntryIds: [entry.id],
+        checkpointParticipants: [],
       }],
     },
   }
@@ -182,6 +183,7 @@ function multiParticipantFixture() {
     currentConflicts: [{
       id: fixture.plan.conflicts[0].id,
       buildListEntryIds: [fixture.entry.id, secondEntry.id],
+      checkpointParticipants: [],
     }],
   }
   return { ...fixture, secondEntry, secondTarget }
@@ -1652,5 +1654,34 @@ describe('ProductionPlanPage read-only Plan content', () => {
     expect(deps.getPlan).toHaveBeenCalledExactlyOnceWith('plan.content.missing')
     expect(screen.queryByText('計画の概要')).not.toBeInTheDocument()
     expect(screen.queryByText('計画全体の実行順')).not.toBeInTheDocument()
+  })
+
+  it('disables winner selection on a checkpoint conflict and routes to the Build List', async () => {
+    const fixture = multiParticipantFixture()
+    if (fixture.preparation.status !== 'ready') throw new Error('fixture')
+    fixture.preparation.currentConflicts[0].checkpointParticipants = [{
+      buildListEntryId: fixture.secondEntry.id,
+      checkpointGroupId: 'checkpoint-group:page' as never,
+      checkpointOpportunityId: 'checkpoint-opportunity:page' as never,
+    }]
+    const client = plannerClient(async () => fixture.preparation)
+    const deps = dependencies(fixture, client)
+
+    renderPage(deps, fixture.plan.id)
+
+    // Once for the conflict, then once per unavailable participant.
+    expect(await screen.findAllByText(
+      'この競合には選択済みチェックポイントが関係しています。作成リストでチェックポイントを変更または解除してください。',
+    )).toHaveLength(3)
+    for (const name of ['比較する', 'この候補を優先']) {
+      for (const button of screen.getAllByRole('button', { name })) {
+        expect(button).toBeDisabled()
+      }
+    }
+    const link = screen.getByRole('link', { name: 'ビルドリストでチェックポイントを変更' })
+    expect(link).toHaveAttribute('href', '/build-list')
+    expect(screen.getByRole('link', { name: 'ビルドリストへ戻る' })).toBeInTheDocument()
+    expect(client.createWhatIfComparison).not.toHaveBeenCalled()
+    expect(client.createConstrainedPlan).not.toHaveBeenCalled()
   })
 })

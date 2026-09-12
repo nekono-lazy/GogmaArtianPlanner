@@ -514,8 +514,8 @@ export interface ConstrainedEnumerationBenchmarkFixture {
  * Builds one deterministic benchmark input.
  *
  * The origin is a `ConstrainedSearchOrigin`, not a `CandidateSearchInput`: it
- * carries no `searchRunId`, `routeFilter`, `resultFilter`, or
- * `CandidateSearchSettings`, exactly as SEARCH_SPEC 5.6.7 requires. The
+ * carries no `searchRunId`, `routeFilter`, or `CandidateSearchSettings`,
+ * exactly as SEARCH_SPEC 5.6.7 requires. The
  * Ideal-implies-Practical containment is asserted here rather than assumed.
  */
 export function createConstrainedEnumerationBenchmarkInput(

@@ -3,7 +3,7 @@
 
 ## 1. この文書の目的
 
-この文書は、目標武器ごとの候補検索、候補カテゴリ、作成経路、条件判定、条件緩和案、Web Worker入出力、保存方針、テスト観点を定義する。
+この文書は、目標武器ごとの候補検索、canonical Ideal Routeとcompromise checkpoint、作成経路、条件判定、条件緩和案、Web Worker入出力、保存方針、テスト観点を定義する。
 
 候補検索はProduction Plannerの前段であり、Plannerは検索結果から作成リストへ追加された候補だけを入力として扱う。
 
@@ -18,7 +18,7 @@ Candidate Search再設計の背景、実測値、採用しなかった案、受�
 - 検索はTargetWeapon単位で実行する
 - 検索結果はBuildCandidateとして保存する
 - 初期版では実用ラインを満たさない候補を原則表示しない
-- 候補カテゴリは理想 / 実用とし、理想への近さは別属性で表す
+- Candidateは常に理想品であり、実用品のcategoryや理想への近さを表す属性は持たない
 - 通常アーティア経由と既存巨戟アーティア経由を比較する
 - 対象武器種のレア8通常アーティアCounterが未確定なら新規通常アーティア経由を検索しない
 - 条件は自動変更せず、緩和案だけを提示する
@@ -678,8 +678,8 @@ BonusとSkillで同一の原則を適用する。
 | 現在状態 | そのstreamの将来探索 | 生成できる解 |
 | --- | --- | --- |
 | Ideal条件を満たす | 不要。探索を終了してよい | 操作0のIdeal解 |
-| Practicalのみ満たす | Ideal到達可能性を探すため継続する | 操作0のPractical解と、探索で見つかるIdeal解 |
-| 未達 | Practical / Ideal到達位置を探索する | 探索で見つかるPractical / Ideal解 |
+| 妥協条件のみ満たす | Ideal到達可能性を探すため継続する | 探索で見つかるIdeal解（妥協状態はそのRouteのcheckpoint候補） |
+| 未達 | Ideal到達位置を探索する | 探索で見つかるIdeal解 |
 
 Ideal既達成streamの早期終了は、[DATA_MODEL.md](./DATA_MODEL.md) 8.1の
 Ideal ⇒ Practical 包含不変条件に依存する。Idealを満たす現在状態はPracticalも必ず
@@ -687,7 +687,7 @@ Ideal ⇒ Practical 包含不変条件に依存する。Idealを満たす現在�
 
 **実装順の制約。** この早期終了はTargetWeapon validationが包含を保証してから
 実装する。validation有効化前に導入すると、包含を満たさない不正Targetに対して
-Practical候補を取りこぼす。Phase依存は
+理想Route上の妥協checkpointを取りこぼす。Phase依存は
 [CANDIDATE_SEARCH_REDESIGN.md](./CANDIDATE_SEARCH_REDESIGN.md) 4章に従う。
 このvalidationはB7で実装済みであり、Skill streamの早期終了はB1で実装済みである。
 Bonus streamの早期終了はB2で実装済みである。
@@ -1997,7 +1997,7 @@ Worker error契約(B6)。
 - 復元ボーナス条件を満たす既存武器から `existing_gogma_reset_skills` 候補を生成できる
 - Reset Skills候補のfinalBonusesが起点OwnedWeaponのrestorationBonusesと一致する
 - Reset Skills候補ではSkill Prediction結果だけがseriesSkillId / groupSkillIdへ反映される
-- protectedなPractical / Ideal武器からReset Skills Routeを生成しない
+- protectedな武器からは、statusがpractical / idealでもReset Skills Routeを生成しない
 - protectedな互換武器しかない場合、不要なSkill / Gogma Predictionを呼ばない
 - Reset Skills Routeの起点武器変更でreferencedOwnedWeaponsHashが変わる
 - Skill RNG値不足時とSkill Prediction未対応時を別reasonでskipする

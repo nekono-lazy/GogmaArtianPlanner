@@ -9,9 +9,11 @@ import type { ConstrainedCandidate } from '../../search'
 import {
   belowPracticalBonuses,
   idealBonuses,
+  practicalBonuses,
 } from '../../../test/fixtures/constrainedEnumeration'
 import { runtimeUnsupportedFixture } from '../../../test/fixtures/plannerRuntimeUnsupported'
 import {
+  checkpointMixedEntry,
   CONFLICT_GOGMA_COUNTER,
   ORCHESTRATION_SOURCE_A,
   ORCHESTRATION_SOURCE_B,
@@ -1158,5 +1160,98 @@ describe('B8-C4b cancellation stays an ordinary Planner outcome', () => {
     expect(outcome.value.plan).not.toBeNull()
     expect(outcome.value.generatedBuildListEntries).toEqual([])
     expect(outcome.value.warnings).toEqual([])
+  })
+
+  describe('a selected compromise checkpoint blocks Route replacement', () => {
+    /**
+     * Target A fixes the contested Gogma position. Target B's Route reaches
+     * its selected checkpoint one operation earlier (Reset Skills), then also
+     * needs the contested position. The conflict itself carries no checkpoint
+     * participant, so the resolution is valid; what is forbidden is replacing
+     * B's Route with one that no longer passes the selected checkpoint.
+     */
+    function checkpointParts(select: boolean): TwoTargetParts {
+      const a = targetA()
+      const b = skillTarget(TARGET_B)
+      const sourceB = orchestrationSource(ORCHESTRATION_SOURCE_B, {
+        restorationBonuses: practicalBonuses(),
+        seriesSkillId: SOURCE_B_SERIES_SKILL_ID,
+      })
+      return {
+        targets: [a, b],
+        ownedWeapons: [
+          orchestrationSource(ORCHESTRATION_SOURCE_A, {
+            seriesSkillId: SOURCE_A_SERIES_SKILL_ID,
+          }),
+          sourceB,
+        ],
+        entries: [
+          idealEntryA(a),
+          checkpointMixedEntry(ENTRY_B, b, ORCHESTRATION_SOURCE_B, sourceB, { select }),
+        ],
+      }
+    }
+
+    it('returns the conflict instead of an alternate Route without the checkpoint', async () => {
+      const parts = checkpointParts(true)
+      const built = fixedScenario(parts)
+      const selectedBefore = structuredClone(
+        built.input.buildListEntries[1].selectedCheckpointOpportunityIds,
+      )
+      expect(selectedBefore).toHaveLength(1)
+
+      const result = await createProductionPlanWithConstrainedSearch(
+        built.input,
+        built.dependencies,
+        options(),
+      )
+
+      // Nothing was generated, nothing was adopted, and no enumeration ran.
+      expect(result.generatedBuildListEntries).toEqual([])
+      expect(warningKinds(result.warnings)).toContain(
+        'selected_checkpoint_blocks_constrained_search',
+      )
+      expect(warningKinds(result.warnings)).not.toContain('invalid_conflict_resolution')
+      // The conflict is handed back as it is: the Build List is the authority.
+      expect(result.conflicts.some(({ kind }) => kind === 'same_gogma_counter')).toBe(true)
+      expect(result.plan?.selectedBuildListEntryIds ?? []).not.toContain(ENTRY_B)
+      // The selection itself was never touched, moved, or emptied.
+      expect(built.input.buildListEntries[1].selectedCheckpointOpportunityIds)
+        .toEqual(selectedBefore)
+    })
+
+    it('still replaces the Route of a Target with no selected checkpoint', async () => {
+      const parts = checkpointParts(false)
+      const built = fixedScenario(parts)
+
+      const result = await createProductionPlanWithConstrainedSearch(
+        built.input,
+        built.dependencies,
+        options(),
+      )
+
+      expect(warningKinds(result.warnings)).not.toContain(
+        'selected_checkpoint_blocks_constrained_search',
+      )
+      expect(result.generatedBuildListEntries).toHaveLength(1)
+      const [generated] = result.generatedBuildListEntries
+      expect(generated.targetWeaponId).toBe(TARGET_B as never)
+      expect(generated.selectedCheckpointOpportunityIds ?? []).toEqual([])
+      expect(result.plan?.selectedBuildListEntryIds).toContain(generated.id)
+    })
+
+    it('marks the work blocked without enumerating, from the participant context alone', () => {
+      const parts = checkpointParts(true)
+      const built = fixedScenario(parts)
+      const works = createPlannerConflictWorks(
+        fixedConstraintsOf(built),
+        contextsOf(built),
+      )
+      expect(works).toHaveLength(1)
+      expect(works[0]).toMatchObject({
+        targetWeaponId: TARGET_B,
+        blockedBySelectedCheckpoint: true,
+      })
+    })
   })
 })

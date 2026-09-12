@@ -136,7 +136,7 @@ export function PlannerWhatIfBenchmarkPage() {
     <PageShell title="B9 What-if Browser Worker Benchmark" description="B9-B2a: 未リンクの計測専用harness。実Browser測定はB9-B2bで実施します。">
       <Stack spacing={2}>
         <Alert severity="warning">Production buildと実Production Planner Workerを使用します。下の値はmeasurement grid onlyであり、Production defaultではありません。Production defaultはUNDECIDEDです。</Alert>
-        <Alert severity="info">1 run = 1 fresh Worker。warm-up 1回 + measurement N回を順次実行します。Practical / Idealの結果は排他categoryごとに記録します。</Alert>
+        <Alert severity="info">1 run = 1 fresh Worker。warm-up 1回 + measurement N回を順次実行します。各Targetの結果は理想品1件のoutcomeとして記録します。</Alert>
         <Paper variant="outlined" sx={{ p: 2 }}>
           <Stack spacing={2}>
             <Typography>{PRODUCTION_RNG_ENGINE_VERSION} · concurrency: {navigator.hardwareConcurrency}</Typography>
