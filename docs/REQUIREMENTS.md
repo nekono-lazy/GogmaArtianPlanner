@@ -554,8 +554,25 @@ Plannerは所持武器を消耗品として扱わず、次の概念を一切持�
 - 素材用として登録する `create_material_gogma` PlanStep
 - 旧PracticalをMaterialへ変える確認付き `change_owned_weapon_status` PlanStep
 
-status変更はOwned Weapons画面の通常CRUDであり、Plannerが所持武器のstatusを変更したり、
-消費資源として扱ったりすることはない。未分類武器の本数はPlanner scoreへ影響しない。
+Plannerが所持武器を消費資源として扱うことはなく、未分類武器の本数はPlanner scoreへ影響しない。
+
+statusを書き換える経路は次の2つだけである。
+
+```text
+任意のユーザー管理ラベル変更
+→ Owned Weapons画面の通常CRUD
+
+Candidateを reserve_weapon で確保
+→ Candidate categoryを管理ラベルとして設定する
+   practical Candidate → status = practical
+   ideal Candidate     → status = ideal
+```
+
+`reserve_weapon` の設定は新規生成Candidateでも既存Gogma Candidateの確保でも同じであり、
+既存Gogmaの保護状態は従来契約どおり維持する。この場合もstatusはnon-semanticのままで、
+Search eligibility、Plannerのoperation可否、Target Satisfaction、semantic hashを決めない。
+
+Material化のためのstatus変更と、確認必須の `change_owned_weapon_status` PlanStepは廃止した。
 
 Plannerが確認なしで保護を解除すること、protected武器をReset Bonuses・Keep Bonuses・Reset Skillsへ使用すること、保護消費のoverride設定を設けることは禁止する。
 

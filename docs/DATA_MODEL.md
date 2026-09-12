@@ -558,7 +558,10 @@ export type OwnedWeapon =
 - 通常アーティアの新規保護初期値はfalseとし、ユーザーが手動で保護できる
 - 保護中の通常アーティアは巨戟化Routeの変換元にしない
 - Plannerに保護武器の消費を許可するoverride設定は持たない
-- Plannerが所持武器のstatusを変更することはない。status変更はOwned Weapons画面の通常CRUDとする
+- statusを書き換える経路は、Owned Weapons画面の通常CRUDと、`reserve_weapon` がCandidate
+  categoryを管理ラベルとして設定する場合だけとする。後者は新規生成Candidateでも既存Gogma
+  Candidateの確保でも同じで、既存Gogmaの保護状態は維持する。Material化のためのstatus変更と
+  `change_owned_weapon_status` PlanStepは廃止した
 - `status` は `name` / `memo` / timestampと同じく非semanticであり、`referencedOwnedWeaponsHash`、
   `ExpectedPlanState.ownedWeaponsHash`、constrained search identity、Planner search
   semantic inventoryのいずれにも含めない。status変更だけではBuildCandidate、
@@ -1000,9 +1003,10 @@ export type BuildListEntryStaleReason =
 - 参照IDは `BuildRoute.sourceOwnedWeaponId`、非nullの `ResetBonusesOperation.sourceOwnedWeaponId`、非nullの `KeepBonusesOperation.sourceOwnedWeaponId`、非nullの `ResetSkillsOperation.sourceOwnedWeaponId` から収集する。`null` transient sourceはOwnedWeapon参照に含めない
 - 同じIDを重複排除し、ID順に安定ソートする
 - 各参照武器について `id`、`kind`、`weaponTypeId`、`elementId`、`restorationBonusScope`、`restorationBonuses`、`isProtected` を含める
-- 巨戟アーティアについてはさらに `seriesSkillId`、`groupSkillId`、`status` を含める
+- 巨戟アーティアについてはさらに `seriesSkillId`、`groupSkillId` を含める
 - `restorationBonuses` は保存中の5枠配列順を保持する。Keepがslotごとのfamilyを保持するため、Hash生成時に並べ替えない
-- `name`、`memo`、`createdAt`、`updatedAt` は除外する
+- `name`、`memo`、`createdAt`、`updatedAt`、`status` は除外する。`status` はユーザー管理ラベルであり
+  計算に影響しないため、名称やmemoと同じくnon-semanticとして扱う(3.2)
 - Routeが参照しないOwnedWeaponの追加、更新、削除はHashへ影響させない
 - 参照武器が存在しない、または参照武器IDが現在在庫から消失した場合は、元Hashと一致しない値を生成して `owned_weapon_changed` とする
 - RouteがOwnedWeaponを参照しない場合は `null` とし、在庫変更によってstaleにしない
@@ -1267,9 +1271,10 @@ export interface PlanStep {
 - Step実行前の実状態は `expectedStateBefore` と一致しなければならない
 - 期待どおりの操作と更新を適用した後の実状態は `expectedStateAfter` と一致しなければならない
 - 両方が一致して次Stepへ進む場合、Planをstaleにしない
-- Plannerは所持武器の `status` を変更するStepを持たない。status変更はOwned Weapons画面の
-  通常CRUDであり、ProductionPlanの操作ではない。statusは非semanticであるため、
-  status変更だけでは実行中PlanのExpectedPlanState不一致にならない
+- statusだけを変更する専用PlanStepは持たない。`reserve_weapon` がCandidate categoryを
+  管理ラベルとして設定する以外に、Plannerがstatusを書き換える経路はない。statusは
+  非semanticであるため、ユーザーがOwned Weapons画面でラベルを変更しても実行中Planの
+  ExpectedPlanState不一致にならない
 - Candidate由来のStepは `buildListEntryId` を判断記録の主参照とし、`candidateId` はSnapshot内の追跡情報としてのみ使用する
 - `progressedTargetWeaponIds` は、この1回の物理PlanStepでRoute進行が発生したTargetWeaponを記録するobservational metadataである
 - `progressedTargetWeaponIds` は `targetWeaponId` / `buildListEntryId` を置き換えない。primary presentationとprimary Entry権威は従来どおりこの2 fieldが持つ
@@ -1704,7 +1709,7 @@ Production RNG契約切替時の互換性は次のとおりとする。
 - protected武器でも現在性能を変更しない操作0 Candidateとしては利用できる
 - 通常→巨戟化はNormal bonus 5枠をslot順のまま継承し、Skill Counterだけを1進め、Normal / Gogma Counterを進めない
 - normal scopeの巨戟に対する最初のBonus amendmentは、v1ではprediction support上の理由でReset Bonusesだけを許可し、その後は同一Route内でもReset / Keepを許可する
-- Plannerは所持武器を素材として消費せず、statusを変更しない
+- Plannerは所持武器を素材として消費せず、statusは `reserve_weapon` のCandidate category設定以外で変更しない
 - Plan進行中は現在Stepの期待状態と実態を比較する
 - 期待状態Before / Afterと一致する正常進行ではPlanをstaleにしない
 - CalculationContext非互換のCandidate、BuildListEntry、Planはstaleとし、Planには `calculation_context_changed` を記録する

@@ -713,9 +713,26 @@ PlannerMaterialRequirement / PlannerMaterialAssignment    Planner-only DTOs
 
 Therefore the Planner never detects a material weapon shortage, never schedules
 a replenishment Route for one, never advances a Normal / Gogma / Skill Counter
-purely to stock material, never changes an owned weapon's status, and never
-counts consumed weapons in its score. The number of `unclassified` weapons is
-not a Planner resource and must not affect `evaluationScore` or `totalCost`.
+purely to stock material, never schedules a step whose only effect is a status
+change, and never counts consumed weapons in its score. The number of
+`unclassified` weapons is not a Planner resource and must not affect
+`evaluationScore` or `totalCost`.
+
+Exactly two paths write `status`:
+
+```text
+any user relabelling            ordinary Owned Weapons CRUD
+reserve_weapon securing a       the Candidate category becomes the label:
+Candidate                         practical Candidate -> status = practical
+                                  ideal Candidate     -> status = ideal
+```
+
+`reserve_weapon` applies that label the same way for a newly generated weapon
+and for an existing Gogma Candidate, and an existing Gogma keeps its stored
+protection exactly as PR #12 fixed. Never "fix" this by deleting
+`status: candidate.category` so the Planner touches no status at all. Even there
+status stays non-semantic: it decides no Search eligibility, no Planner
+operation eligibility, no Target Satisfaction, and no semantic hash.
 
 Current `RouteOperation` and `PlanStepOperationType` switches handle only the
 current operations exhaustively. Never absorb a removed operation in a `default`
@@ -2323,9 +2340,11 @@ Plan recalculation is a user-initiated UI/Planner action for a stale Plan. It is
 not a `PlanStepOperationType`, and no `recalculate_plan` Step is inserted into
 the old Plan.
 
-Changing an owned weapon's status is ordinary Owned Weapons CRUD, never a
-ProductionPlan operation. Because status is non-semantic, relabelling a weapon
-never makes a running Plan stale.
+A status change on its own is ordinary Owned Weapons CRUD, never a
+ProductionPlan operation, and there is no PlanStep whose only effect is one.
+`reserve_weapon` still records the Candidate category as the secured weapon's
+label. Because status is non-semantic, relabelling a weapon never makes a
+running Plan stale.
 
 ---
 

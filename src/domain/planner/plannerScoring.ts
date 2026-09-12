@@ -140,11 +140,16 @@ function normalizedOwnedWeapons(state: PlannerSearchState) {
       kind: weapon.kind,
       weaponTypeId: weapon.weaponTypeId,
       elementId: weapon.elementId,
+      restorationBonusScope: weapon.restorationBonusScope,
       restorationBonuses: weapon.restorationBonuses,
       isProtected: weapon.isProtected,
-      // `status` is deliberately absent: it is a user-facing organisation label
-      // that decides nothing in the Planner, so two branches differing only in
-      // it are the same search state (`docs/DATA_MODEL.md` 3.2).
+      // `status` is the one deliberate omission: it is a user-facing
+      // organisation label that decides nothing in the Planner, so two branches
+      // differing only in it are the same search state
+      // (`docs/DATA_MODEL.md` 3.2). Every other field above stays semantic -
+      // `restorationBonusScope` above all, because the same five labels under
+      // `normal_artian` and `gogma_artian` scope are different results and
+      // reach different later Bonus outcomes.
       ...(weapon.kind === 'gogma'
         ? {
             seriesSkillId: weapon.seriesSkillId,

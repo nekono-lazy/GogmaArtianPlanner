@@ -971,13 +971,28 @@ change_owned_weapon_status    PlanStepOperationType
 - 素材用巨戟を補充するRoute / Stepを生成する
 - 素材補充だけを目的にNormal / Gogma / Skill Counterを進める
 - 旧PracticalをMaterialへ変える確認付きStepを予定する
-- 所持武器のstatusを変更する
+- statusだけを変更する専用Stepを予定する
 - 素材武器の消費本数をscoreへ加算する
 
 `SimulatedInventory.consumedWeaponIds` は維持する。所持通常アーティアの巨戟化で元武器を
 在庫から消費し、同じsourceを二重利用しないためのsemanticsであり、素材消費とは別概念である。
 
-status変更はOwned Weapons画面の通常CRUDであり、ProductionPlanの操作ではない。
+statusを書き換える経路は次の2つだけである。
+
+```text
+任意のユーザー管理ラベル変更
+→ Owned Weapons画面の通常CRUD
+
+Candidateを reserve_weapon で確保
+→ Candidate categoryを管理ラベルとして設定する
+   practical Candidate → status = practical
+   ideal Candidate     → status = ideal
+```
+
+`reserve_weapon` の設定は新規生成Candidateでも既存Gogma Candidateの確保でも同じであり
+([DATA_MODEL.md](./DATA_MODEL.md) 11.3)、既存Gogmaの保護状態は従来契約どおり維持する。この場合もstatusはnon-semanticの
+ままで、Search eligibility、Plannerのoperation可否、Target Satisfaction、semantic hashを
+決めない。Material化のためのstatus変更と `change_owned_weapon_status` PlanStepは廃止した。
 
 ### 8.2 ゲーム内アイテム素材
 
@@ -3307,7 +3322,8 @@ change_owned_weapon_status    旧PracticalをMaterialへ変更
 ```
 
 Plannerは素材用巨戟の補充Routeを生成せず、旧Practical武器の確認付き素材化Stepも
-予定しない。status変更はOwned Weapons画面の通常CRUDである。
+予定しない。statusを書き換えるのはOwned Weapons画面の通常CRUDと、`reserve_weapon` が
+Candidate categoryを管理ラベルとして設定する場合だけである(8.1)。
 
 保存済みlegacy artifactがこれらのoperationを含んでいても、current Domain operationへ
 自動変換せず、CalculationContext境界でfail closeする。
