@@ -10,6 +10,7 @@ import { createDefaultBonusSet } from '../domain/forms/entityDrafts'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import { getBonusDefinitionsForWeapon } from '../domain/master/masterSelectors'
 import { restorationBonusScopeLabels } from '../presentation/labels'
+import { hasMaxHeightRule } from '../test/cssRuleAssertions'
 import { OwnedWeaponsPage, type OwnedWeaponsPageDependencies } from './OwnedWeaponsPage'
 
 function loadedMaster() {
@@ -448,6 +449,30 @@ describe('OwnedWeaponsPage', () => {
     for (const bonus of saved.restorationBonuses) {
       expect(master.weaponBonusDefinitions.some((definition) => definition.scope === 'normal_artian' && definition.weaponTypeId === 'weapon.great_sword' && definition.bonusTypeId === bonus.bonusTypeId && definition.bonusRankId === bonus.bonusRankId)).toBe(true)
     }
+  })
+
+  it('keeps a very long save error fully readable in a bounded region while 保存 / キャンセル stay reachable', async () => {
+    const user = userEvent.setup(); const weapon = existingWeapon(); const deps = dependencies(); deps.getAll = vi.fn(async () => [weapon])
+    const issues = Array.from({ length: 12 }, (_, index) => `restorationBonuses[${index}]: 選択した武器種では利用できないボーナス／Rankです。`)
+    deps.save = vi.fn(async () => { throw new EntityFormValidationError(issues) })
+    render(<OwnedWeaponsPage dependencies={deps} />)
+    await user.click(await screen.findByRole('button', { name: '編集' }))
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
+    const dialog = screen.getByRole('dialog', { name: '所持武器を編集' })
+    const alert = await within(dialog).findByRole('alert')
+    // The whole message is in the DOM: nothing is truncated.
+    expect(alert).toHaveTextContent(issues.join(' / '))
+    // The error sits outside the scrolling form content, and before the actions.
+    expect(alert.closest('.MuiDialogContent-root')).toBeNull()
+    const save = within(dialog).getByRole('button', { name: '保存' })
+    const cancel = within(dialog).getByRole('button', { name: 'キャンセル' })
+    expect(alert.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(save).toBeEnabled()
+    expect(cancel).toBeEnabled()
+    // The region is bounded and scrolls rather than pushing the actions away.
+    expect(getComputedStyle(alert).overflowY).toBe('auto')
+    expect(hasMaxHeightRule(alert)).toBe(true)
   })
 
   it('shows the Gogma amendment scope for gogma_artian slots', async () => {

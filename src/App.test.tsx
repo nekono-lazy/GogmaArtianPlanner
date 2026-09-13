@@ -1,7 +1,8 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { settingsRepository } from './db/settingsRepository'
 import { PRODUCTION_RNG_ENGINE_VERSION } from './domain/rng/production/productionRngEngine'
 import { useSettingsStore } from './stores/settingsStore'
 
@@ -9,6 +10,10 @@ describe('App', () => {
   beforeEach(() => {
     window.location.hash = '#/'
     useSettingsStore.getState().reset()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   it('renders the Dashboard', () => {
@@ -77,6 +82,29 @@ describe('App', () => {
     ).toBeInTheDocument()
     expect(within(row('Seed Search')).getByText('未対応', { selector: 'dd' })).toBeInTheDocument()
     expect(within(versions).queryByText('未設定')).not.toBeInTheDocument()
+  })
+
+  it('reports a Debug Mode persistence failure without claiming what is persisted', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(settingsRepository, 'setDebugMode').mockRejectedValue(new Error('IndexedDB write failed'))
+    window.location.hash = '#/settings'
+    render(<App />)
+    const debugSwitch = screen.getByRole('switch', { name: 'デバッグモード' })
+
+    await user.click(debugSwitch)
+    const warning = await screen.findByText(/設定を保存できませんでした/)
+    // The switch keeps showing the value the user chose: no rollback is
+    // pretended, and the persisted value is described only as possibly
+    // different, never as "restored".
+    expect(debugSwitch).toBeChecked()
+    expect(warning).toHaveTextContent('再読み込み後は保存済みの設定が使用され、現在の表示と異なる場合があります')
+    expect(warning).toHaveTextContent('再度お試しください')
+    expect(warning).not.toHaveTextContent('元の設定に戻ります')
+
+    // The next operation clears the notice, as before.
+    await user.click(debugSwitch)
+    expect(debugSwitch).not.toBeChecked()
+    expect(await screen.findByText(/設定を保存できませんでした/)).toBeInTheDocument()
   })
 
   it('heads the Debug Mode switch with its own settings section', () => {

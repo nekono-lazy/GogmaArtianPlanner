@@ -87,7 +87,7 @@ export function SettingsPage() {
           </Typography>
           {saveError && (
             <Alert severity="warning" sx={{ mt: 1.5 }}>
-              設定を保存できませんでした。表示は切り替わっていますが、次回起動時には元の設定に戻ります。再度お試しください。
+              設定を保存できませんでした。再読み込み後は保存済みの設定が使用され、現在の表示と異なる場合があります。再度お試しください。
             </Alert>
           )}
         </SettingsSection>

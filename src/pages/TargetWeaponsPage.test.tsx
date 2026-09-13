@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { OwnedWeapon, TargetWeapon } from '../domain/models/publicTypes'
 import { EntityFormValidationError, ReferencedEntityDeleteError, type TargetWeaponDraft } from '../services/crud/entityCrudServices'
+import { hasMaxHeightRule } from '../test/cssRuleAssertions'
 import { TargetWeaponsPage, type TargetWeaponsPageDependencies } from './TargetWeaponsPage'
 
 async function itemFor(name: string): Promise<HTMLElement> {
@@ -135,6 +136,27 @@ describe('TargetWeaponsPage', () => {
     await user.click(dialog.getByRole('button', { name: '保存' }))
     expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ priority: 1 }), target)
     expect(await screen.findByText('目標武器を保存しました。')).toBeInTheDocument()
+  })
+
+  it('keeps a very long save error fully readable in a bounded region while 保存 / キャンセル stay reachable', async () => {
+    const user = userEvent.setup(); const target = existingTarget(); const deps = dependencies(); deps.getAll = vi.fn(async () => [target])
+    const issues = Array.from({ length: 12 }, (_, index) => `practicalBonusConditions[${index}]: 理想に含まれない種類です`)
+    deps.save = vi.fn(async () => { throw new EntityFormValidationError(issues) })
+    render(<TargetWeaponsPage dependencies={deps} />)
+    await user.click(await screen.findByRole('button', { name: '編集' }))
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
+    const dialog = screen.getByRole('dialog', { name: '目標武器を編集' })
+    const alert = await within(dialog).findByRole('alert')
+    expect(alert).toHaveTextContent(issues.join(' / '))
+    expect(alert.closest('.MuiDialogContent-root')).toBeNull()
+    const save = within(dialog).getByRole('button', { name: '保存' })
+    const cancel = within(dialog).getByRole('button', { name: 'キャンセル' })
+    expect(alert.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(save).toBeEnabled()
+    expect(cancel).toBeEnabled()
+    expect(getComputedStyle(alert).overflowY).toBe('auto')
+    expect(hasMaxHeightRule(alert)).toBe(true)
   })
 
   it('shows a save validation error inside the open Dialog, not only behind the modal', async () => {
