@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import {
-  Alert, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle,
-  FormControl, FormControlLabel, InputLabel, LinearProgress, MenuItem, Paper,
+  Alert, AlertTitle, Box, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle,
+  FormControl, FormControlLabel, InputLabel, LinearProgress, MenuItem,
   Select, Stack, TextField, Typography,
 } from '@mui/material'
+import { StatusChip, type StatusTone } from '../StatusChip'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import {
   getBonusDefinitionsForWeapon, getEnabledElements, getEnabledWeaponTypes,
@@ -47,6 +48,20 @@ export interface IdentificationWizardDialogProps {
   onAdopted(state: RngState): void
   onClose(): void
 }
+
+/**
+ * Smartphone: a narrower outer margin keeps the long form usable at 375px. The
+ * title, step indicator and actions stay outside the scrolling content (MUI
+ * `scroll="paper"`), so Restart / Close stay reachable however long it grows.
+ */
+const dialogPaperSx = {
+  m: { xs: 1, sm: 4 },
+  width: { xs: 'calc(100% - 16px)', sm: 'calc(100% - 64px)' },
+  maxHeight: { xs: 'calc(100% - 16px)', sm: 'calc(100% - 64px)' },
+}
+
+const fieldPairSx = { display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 1.5 } as const
+const buttonSx = { minHeight: 44 } as const
 
 function emptySkillObservation(): SkillObservationDraft {
   return { seriesSkillId: null, groupSkillId: null }
@@ -135,7 +150,8 @@ function parseApproximateRange(draft: ApproximateCounterDraft, label: string, ma
 function previewApproximateRange(draft: ApproximateCounterDraft, maximum: number): string {
   try {
     const range = parseApproximateRange(draft, 'Counter', maximum)
-    return `${range.startInclusive} ～ ${range.endInclusive}（inclusive）`
+    const count = range.endInclusive - range.startInclusive + 1
+    return `${range.startInclusive} ～ ${range.endInclusive}（inclusive・${count.toLocaleString()}候補）`
   } catch { return '中心値を入力すると検索範囲を表示します。' }
 }
 
@@ -162,13 +178,136 @@ function errorAlert(error: IdentificationWizardErrorState | null) {
   return <Alert severity="error">{prefix}: {errorMessage(error.error)}</Alert>
 }
 
+/**
+ * A short status word for one STEP. It only names the Coordinator's own status,
+ * classification and error kind; it never re-derives a result.
+ */
+function searchStatus(step: IdentificationWizardState['skill'] | IdentificationWizardState['gogma']): { label: string; tone: StatusTone } {
+  if (step.status === 'idle') return { label: '未検索', tone: 'neutral' }
+  if (step.status === 'searching') return { label: '検索中', tone: 'info' }
+  if (step.status === 'cancelled') return { label: 'キャンセル済み', tone: 'neutral' }
+  if (step.status === 'error') return { label: 'エラー', tone: 'caution' }
+  if (step.classification === 'unique') return { label: '一意に特定', tone: 'positive' }
+  if (step.classification === 'multiple') return { label: '候補が複数', tone: 'caution' }
+  if (step.classification === 'incomplete') return { label: '探索未完了', tone: 'caution' }
+  if (step.classification === 'zero') return { label: '一致なし', tone: 'caution' }
+  return { label: '完了', tone: 'neutral' }
+}
+
+type StepProgress = 'current' | 'done' | 'upcoming' | 'adopted'
+
+/** The step position, derived from the same Coordinator state the sections use. */
+function wizardStepProgress(state: IdentificationWizardState): readonly [StepProgress, StepProgress, StepProgress] {
+  if (state.review !== null) return ['done', 'done', state.adoption.status === 'adopted' ? 'adopted' : 'current']
+  if (state.skill.classification === 'unique') return ['done', 'current', 'upcoming']
+  return ['current', 'upcoming', 'upcoming']
+}
+
+const stepProgressLabels: Record<StepProgress, string> = {
+  current: '現在',
+  done: '完了',
+  upcoming: '未到達',
+  adopted: '採用済み',
+}
+
+function StepIndicator({ state }: { state: IdentificationWizardState }) {
+  const progress = wizardStepProgress(state)
+  const steps = ['STEP 1', 'STEP 2', 'Review / 採用']
+  return (
+    <Box component="nav" aria-label="Identificationの進行状況" sx={{ px: { xs: 2, sm: 3 }, pb: 1.5 }}>
+      <Box component="ol" sx={{ m: 0, p: 0, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 0.75 }}>
+        {steps.map((label, index) => {
+          const status = progress[index]!
+          const current = status === 'current'
+          return (
+            <Box
+              component="li"
+              key={label}
+              aria-current={current ? 'step' : undefined}
+              sx={{
+                listStyle: 'none', minWidth: 0, px: 1, py: 0.5, borderRadius: 1,
+                border: current ? 2 : 1,
+                borderStyle: status === 'upcoming' ? 'dashed' : 'solid',
+                borderColor: current ? 'primary.main' : 'divider',
+                bgcolor: current ? 'action.selected' : 'transparent',
+              }}
+            >
+              <Typography component="span" variant="subtitle2" sx={{ display: 'block', overflowWrap: 'anywhere', lineHeight: 1.3 }}>{label}</Typography>
+              <Typography component="span" variant="caption" color={current ? 'primary' : 'text.secondary'} sx={{ display: 'block', fontWeight: current ? 600 : 400 }}>
+                {stepProgressLabels[status]}
+              </Typography>
+            </Box>
+          )
+        })}
+      </Box>
+    </Box>
+  )
+}
+
+/** A bordered STEP section with its own h3 heading under the Dialog title. */
+function StepSection({ title, status, children }: { title: string; status?: { label: string; tone: StatusTone }; children: ReactNode }) {
+  const headingId = useId()
+  return (
+    <Box component="section" aria-labelledby={headingId} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: { xs: 1.5, sm: 2 }, minWidth: 0 }}>
+      <Stack spacing={2}>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Typography id={headingId} component="h3" variant="h2" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>{title}</Typography>
+          {status && <Box role="status"><StatusChip label={status.label} tone={status.tone} /></Box>}
+        </Stack>
+        {children}
+      </Stack>
+    </Box>
+  )
+}
+
+function SubHeading({ children }: { children: ReactNode }) {
+  return <Typography component="h4" variant="subtitle1">{children}</Typography>
+}
+
 function SearchProgress({ completed, total, matches }: { completed: number; total: number; matches: number }) {
   const percent = total > 0 ? Math.min(100, (completed / total) * 100) : 0
-  return <Stack spacing={0.5} aria-label="検索進捗"><LinearProgress variant="determinate" value={percent} /><Typography variant="body2">{completed.toLocaleString()} / {total.toLocaleString()}（一致 {matches.toLocaleString()}件）</Typography></Stack>
+  const textId = useId()
+  return <Stack spacing={0.5} role="group" aria-label="検索進捗"><LinearProgress variant="determinate" value={percent} aria-labelledby={textId} /><Typography id={textId} variant="body2" className="tabular-nums">{completed.toLocaleString()} / {total.toLocaleString()}（一致 {matches.toLocaleString()}件）</Typography></Stack>
 }
 
 function ApproximateCounterFields({ label, draft, maximum, disabled, onChange }: { label: string; draft: ApproximateCounterDraft; maximum: number; disabled: boolean; onChange(value: ApproximateCounterDraft): void }) {
-  return <Stack spacing={1}><Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}><TextField fullWidth label={`概算${label}`} type="number" value={draft.center} disabled={disabled} slotProps={{ htmlInput: { min: 0, max: maximum, step: 1 } }} onChange={(event) => onChange({ ...draft, center: event.target.value })} /><TextField fullWidth label={`${label}の±幅`} type="number" value={draft.radius} disabled={disabled} slotProps={{ htmlInput: { min: 0, step: 1 } }} onChange={(event) => onChange({ ...draft, radius: event.target.value })} /></Stack><Typography variant="body2" color="text.secondary">検索範囲: {previewApproximateRange(draft, maximum)}</Typography></Stack>
+  return <Stack spacing={1}>
+    <Box sx={fieldPairSx}>
+      <TextField fullWidth label={`概算${label}`} type="number" value={draft.center} disabled={disabled} slotProps={{ htmlInput: { min: 0, max: maximum, step: 1 } }} onChange={(event) => onChange({ ...draft, center: event.target.value })} />
+      <TextField fullWidth label={`${label}の±幅`} type="number" value={draft.radius} disabled={disabled} slotProps={{ htmlInput: { min: 0, step: 1 } }} onChange={(event) => onChange({ ...draft, radius: event.target.value })} />
+    </Box>
+    <Box sx={{ px: 1.5, py: 1, borderLeft: 3, borderColor: 'primary.main', bgcolor: 'background.default', borderRadius: 1 }}>
+      <Typography variant="body2" className="tabular-nums" sx={{ fontWeight: 500, overflowWrap: 'anywhere' }}>検索範囲: {previewApproximateRange(draft, maximum)}</Typography>
+    </Box>
+  </Stack>
+}
+
+/** One numbered observation card: title, completion, delete, then its inputs. */
+function ObservationCard({ dataAttribute, title, subtitle, completion, deleteLabel, deleteDisabled, onDelete, children }: {
+  dataAttribute: Record<string, number>
+  title: string
+  subtitle?: string
+  completion: { label: string; tone: StatusTone }
+  deleteLabel: string
+  deleteDisabled: boolean
+  onDelete(): void
+  children: ReactNode
+}) {
+  return (
+    <Box component="li" {...dataAttribute} sx={{ listStyle: 'none', border: 1, borderColor: 'divider', borderRadius: 1, p: { xs: 1.5, sm: 2 }, minWidth: 0 }}>
+      <Stack spacing={1.5}>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+          <Box sx={{ flex: '1 1 auto', minWidth: 0 }}>
+            <Typography component="h5" variant="subtitle2" sx={{ overflowWrap: 'anywhere' }}>{title}</Typography>
+            {subtitle && <Typography variant="caption" color="text.secondary" component="p">{subtitle}</Typography>}
+          </Box>
+          <StatusChip label={completion.label} tone={completion.tone} />
+          <Button color="error" aria-label={deleteLabel} disabled={deleteDisabled} onClick={onDelete} sx={{ minHeight: 44, minWidth: 64 }}>削除</Button>
+        </Stack>
+        {children}
+      </Stack>
+    </Box>
+  )
 }
 
 function BonusObservationEditor({
@@ -197,15 +336,16 @@ function BonusObservationEditor({
     onChange(next)
   }
 
-  return <Stack spacing={1}>
-    <Typography variant="subtitle2">{label}</Typography>
+  // Type and rank sit side by side at every width, so each rank reads as
+  // belonging to its slot on a narrow screen too.
+  return <Box component="ol" aria-label={`${label}の5枠`} sx={{ m: 0, p: 0, display: 'grid', gap: 1.25 }}>
     {value.map((slot, index) => {
       const ranks = slot.bonusTypeId === null
         ? []
         : getRanksForBonusType(
           master, weaponTypeId, elementId, slot.bonusTypeId, 'gogma_artian',
         )
-      return <Stack key={index} direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+      return <Box component="li" key={index} sx={{ listStyle: 'none', display: 'grid', gridTemplateColumns: 'minmax(0, 1.6fr) minmax(0, 1fr)', gap: 1 }}>
         <FormControl fullWidth disabled={disabled}>
           <InputLabel shrink id={`${fieldIdPrefix}-${index}-type`}>枠{index + 1} ボーナス種別</InputLabel>
           <Select
@@ -220,7 +360,7 @@ function BonusObservationEditor({
           >
             <MenuItem value=""><em>未入力</em></MenuItem>
             {typeIds.map((id) => (
-              <MenuItem key={id} value={id}>
+              <MenuItem key={id} value={id} sx={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }}>
                 {master.bonusTypes.find((type) => type.id === id)?.displayNameJa ?? '不明'}
               </MenuItem>
             ))}
@@ -244,14 +384,9 @@ function BonusObservationEditor({
             ))}
           </Select>
         </FormControl>
-      </Stack>
+      </Box>
     })}
-  </Stack>
-}
-
-function currentStepLabel(state: IdentificationWizardState): string {
-  if (state.review !== null) return 'Review'
-  return state.skill.classification === 'unique' ? 'STEP 2' : 'STEP 1'
+  </Box>
 }
 
 export function IdentificationWizardDialog({
@@ -404,33 +539,45 @@ export function IdentificationWizardDialog({
     coordinator.restart()
   }
 
+  const nameOf = (list: readonly { id: string; displayNameJa: string }[], id: string) =>
+    list.find((entry) => entry.id === id)?.displayNameJa ?? id
+
   return (
     <Dialog
       open
       fullWidth
       maxWidth="md"
+      slotProps={{ paper: { sx: dialogPaperSx } }}
       onClose={(_, reason) => {
         if (!adopting && reason !== 'backdropClick') onClose()
       }}
     >
-      <DialogTitle>RNG Identification Wizard</DialogTitle>
-      <DialogContent dividers>
-        <Stack spacing={3}>
+      <DialogTitle sx={{ px: { xs: 2, sm: 3 }, pb: 1 }}>RNG Identification Wizard</DialogTitle>
+      <StepIndicator state={wizardState} />
+      <DialogContent dividers sx={{ px: { xs: 2, sm: 3 } }}>
+        <Stack spacing={{ xs: 2, sm: 3 }}>
           <Alert severity="warning">
-            Production Identificationとして有効です。ただし実機検証済みのSkill streamは操虫棍 / 氷の特定Counter位置のみ、Gogma Reset streamはヘヴィボウガン / 氷の記録のみです。全武器種・全属性・全ゲームバージョンの正しさを保証するものではないため、採用後の予測はゲーム側でも確認してください。
+            <AlertTitle>開始前に必ず確認してください</AlertTitle>
+            <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+              <li>観測結果の記録が終わるまでゲーム状態を保存しないでください。</li>
+              <li>開始前にバックアップ方法と自動保存の設定・挙動を確認してください。</li>
+              <li>案内された操作だけを順番に連続して行ってください。</li>
+              <li>観測後は調査前の状態へ戻してから採用します。</li>
+              <li>ゲーム側の保存仕様や安全をこのアプリが保証するものではありません。</li>
+            </Box>
           </Alert>
           <Alert severity="info">
-            観測結果の記録が終わるまでゲーム状態を保存しないでください。開始前にバックアップ方法と自動保存の設定・挙動を確認し、案内された操作だけを順番に連続して行ってください。観測後は調査前の状態へ戻してから採用します。ゲーム側の保存仕様や安全をこのアプリが保証するものではありません。
+            <AlertTitle>検証範囲</AlertTitle>
+            Production Identificationとして有効です。ただし実機検証済みのSkill streamは操虫棍 / 氷の特定Counter位置のみ、Gogma Reset streamはヘヴィボウガン / 氷の記録のみです。全武器種・全属性・全ゲームバージョンの正しさを保証するものではないため、採用後の予測はゲーム側でも確認してください。
           </Alert>
-          <Typography variant="h2">現在: {currentStepLabel(wizardState)}</Typography>
 
-          <Paper variant="outlined" sx={{ p: 2 }}>
-            <Stack spacing={2}>
-              <Typography variant="h2">STEP 1 — Base Seed / Starting Skill Counter</Typography>
-              <Typography>
-                Normal → Gogma conversionで自動付与されたSkillをObservation 1へ記録し、その後の連続したSkill Reset結果をObservation 2以降へ順番どおり記録します。
-              </Typography>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+          <StepSection title="STEP 1 — Base Seed / Starting Skill Counter" status={searchStatus(wizardState.skill)}>
+            <Typography>
+              Normal → Gogma conversionで自動付与されたSkillをObservation 1へ記録し、その後の連続したSkill Reset結果をObservation 2以降へ順番どおり記録します。
+            </Typography>
+            <Stack spacing={1}>
+              <SubHeading>観測する武器</SubHeading>
+              <Box sx={fieldPairSx}>
                 <FormControl fullWidth disabled={skillSearching}>
                   <InputLabel id="identification-weapon-type-label">Weapon Type</InputLabel>
                   <Select labelId="identification-weapon-type-label" label="Weapon Type" value={weaponTypeId} onChange={(event) => setWeaponTypeId(event.target.value)}>
@@ -443,16 +590,25 @@ export function IdentificationWizardDialog({
                     {elements.map((element) => <MenuItem key={element.id} value={element.id}>{element.displayNameJa}</MenuItem>)}
                   </Select>
                 </FormControl>
-              </Stack>
-              <Stack spacing={1}>
-                <Typography variant="h3">ordered Skill observations</Typography>
-                {skillObservations.map((observation, index) => (
-                  <Paper key={index} variant="outlined" sx={{ p: 1.5 }}>
-                    <Stack spacing={1}>
-                      <Typography variant="subtitle2">
-                        Observation {index + 1} — {index === 0 ? 'conversion自動Skill' : `連続Skill Reset ${index}`}
-                      </Typography>
-                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              </Box>
+            </Stack>
+            <Stack spacing={1}>
+              <SubHeading>ordered Skill observations（記録順）</SubHeading>
+              <Box component="ol" sx={{ m: 0, p: 0, display: 'grid', gap: 1.25 }}>
+                {skillObservations.map((observation, index) => {
+                  const complete = observation.seriesSkillId !== null && observation.groupSkillId !== null
+                  return (
+                    <ObservationCard
+                      key={index}
+                      dataAttribute={{ 'data-skill-observation': index + 1 }}
+                      title={`Observation ${index + 1}`}
+                      subtitle={index === 0 ? 'conversion自動Skill' : `連続Skill Reset ${index}`}
+                      completion={complete ? { label: '入力済み', tone: 'positive' } : { label: '未入力あり', tone: 'neutral' }}
+                      deleteLabel={`Observation ${index + 1}を削除`}
+                      deleteDisabled={skillSearching || skillObservations.length === 1}
+                      onDelete={() => setSkillObservations((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                    >
+                      <Box sx={fieldPairSx}>
                         <FormControl fullWidth disabled={skillSearching}>
                           <InputLabel shrink id={`skill-observation-${index}-series-label`}>Observation {index + 1} Series Skill</InputLabel>
                           <Select
@@ -470,7 +626,7 @@ export function IdentificationWizardDialog({
                             }}
                           >
                             <MenuItem value=""><em>未入力</em></MenuItem>
-                            {seriesSkills.map((skill) => <MenuItem key={skill.id} value={skill.id}>{skill.displayNameJa}</MenuItem>)}
+                            {seriesSkills.map((skill) => <MenuItem key={skill.id} value={skill.id} sx={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{skill.displayNameJa}</MenuItem>)}
                           </Select>
                         </FormControl>
                         <FormControl fullWidth disabled={skillSearching}>
@@ -490,28 +646,28 @@ export function IdentificationWizardDialog({
                             }}
                           >
                             <MenuItem value=""><em>未入力</em></MenuItem>
-                            {groupSkills.map((skill) => <MenuItem key={skill.id} value={skill.id}>{skill.displayNameJa}</MenuItem>)}
+                            {groupSkills.map((skill) => <MenuItem key={skill.id} value={skill.id} sx={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{skill.displayNameJa}</MenuItem>)}
                           </Select>
                         </FormControl>
-                      </Stack>
-                      <Button
-                        color="error"
-                        disabled={skillSearching || skillObservations.length === 1}
-                        onClick={() => setSkillObservations((current) => current.filter((_, itemIndex) => itemIndex !== index))}
-                      >
-                        Observation {index + 1}を削除
-                      </Button>
-                    </Stack>
-                  </Paper>
-                ))}
+                      </Box>
+                    </ObservationCard>
+                  )
+                })}
+              </Box>
+              <Box>
                 <Button
+                  variant="outlined"
+                  sx={buttonSx}
                   disabled={skillSearching}
                   onClick={() => setSkillObservations((current) => [...current, emptySkillObservation()])}
                 >
                   Skill Observationを追加
                 </Button>
-              </Stack>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              </Box>
+            </Stack>
+            <Stack spacing={1.5}>
+              <SubHeading>検索範囲</SubHeading>
+              <Box sx={fieldPairSx}>
                 <TextField
                   fullWidth label="Base Seed range start" type="number" value={seedStart}
                   disabled={skillSearching}
@@ -524,7 +680,7 @@ export function IdentificationWizardDialog({
                   slotProps={{ htmlInput: { min: CANONICAL_BASE_SEED_MIN, max: CANONICAL_BASE_SEED_MAX, step: 1 } }}
                   onChange={(event) => setSeedEnd(event.target.value)}
                 />
-              </Stack>
+              </Box>
               <Typography variant="body2" color="text.secondary">
                 Production defaultは設定しません。検索するbounded rangeを毎回明示入力してください。自動拡張やbackground wideningは行いません。
               </Typography>
@@ -535,41 +691,61 @@ export function IdentificationWizardDialog({
                 disabled={skillSearching}
                 onChange={setSkillRange}
               />
-              {step1FormError && <Alert severity="error">{step1FormError}</Alert>}
-              {wizardState.skill.progress && (
-                <SearchProgress
-                  completed={wizardState.skill.progress.searchedSeeds}
-                  total={wizardState.skill.progress.totalSeeds}
-                  matches={wizardState.skill.progress.matchesFound}
-                />
-              )}
-              {classificationAlert(wizardState.skill.classification, 'skill')}
-              {errorAlert(wizardState.skill.error)}
-              <Stack direction="row" spacing={1}>
-                <Button variant="contained" disabled={skillSearching || adopting} onClick={() => void identifySkill()}>
-                  STEP 1 Search
-                </Button>
-                <Button disabled={!skillSearching} onClick={() => coordinator.cancelSkill()}>
-                  STEP 1 Cancel
-                </Button>
-              </Stack>
             </Stack>
-          </Paper>
+            {step1FormError && <Alert severity="error">{step1FormError}</Alert>}
+            {wizardState.skill.progress && (
+              <SearchProgress
+                completed={wizardState.skill.progress.searchedSeeds}
+                total={wizardState.skill.progress.totalSeeds}
+                matches={wizardState.skill.progress.matchesFound}
+              />
+            )}
+            {classificationAlert(wizardState.skill.classification, 'skill')}
+            {errorAlert(wizardState.skill.error)}
+            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+              <Button variant="contained" sx={buttonSx} disabled={skillSearching || adopting} onClick={() => void identifySkill()}>
+                STEP 1 Search
+              </Button>
+              <Button variant="outlined" sx={buttonSx} disabled={!skillSearching} onClick={() => coordinator.cancelSkill()}>
+                STEP 1 Cancel
+              </Button>
+            </Stack>
+          </StepSection>
+
           {wizardState.skill.classification === 'unique' && (
-            <Paper variant="outlined" sx={{ p: 2 }}>
-              <Stack spacing={2}>
-                <Typography variant="h2">STEP 2 — Starting Gogma Counter</Typography>
-                <Typography>
-                  STEP 1で一意に特定したBase Seedを内部利用します。Base Seedの再入力は不要です。同じ武器でReset Bonusesだけを連続して行い、各5枠を枠順どおり記録してください。Keep Bonusesは使用しません。
-                </Typography>
-                <Typography variant="body2">
-                  Weapon Type: {weaponTypes.find(({ id }) => id === step2WeaponTypeId)?.displayNameJa ?? step2WeaponTypeId} ／ Element: {elements.find(({ id }) => id === step2ElementId)?.displayNameJa ?? step2ElementId}
-                </Typography>
-                <Stack spacing={1}>
-                  <Typography variant="h3">ordered Gogma Reset observations</Typography>
-                  {gogmaObservations.map((observation, index) => (
-                    <Paper key={index} variant="outlined" sx={{ p: 1.5 }}>
-                      <Stack spacing={1}>
+            <StepSection title="STEP 2 — Starting Gogma Counter" status={searchStatus(wizardState.gogma)}>
+              <Box component="dl" sx={{ m: 0, display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(3, minmax(0, 1fr))' }, gap: 1, p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1, bgcolor: 'background.default' }}>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography component="dt" variant="caption" color="text.secondary">Weapon Type</Typography>
+                  <Typography component="dd" variant="body2" sx={{ m: 0, fontWeight: 500, overflowWrap: 'anywhere' }}>{nameOf(weaponTypes, step2WeaponTypeId)}</Typography>
+                </Box>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography component="dt" variant="caption" color="text.secondary">Element</Typography>
+                  <Typography component="dd" variant="body2" sx={{ m: 0, fontWeight: 500, overflowWrap: 'anywhere' }}>{nameOf(elements, step2ElementId)}</Typography>
+                </Box>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography component="dt" variant="caption" color="text.secondary">STEP 1</Typography>
+                  <Box component="dd" sx={{ m: 0 }}><StatusChip label="完了（一意に特定）" tone="positive" /></Box>
+                </Box>
+              </Box>
+              <Typography>
+                STEP 1で一意に特定したBase Seedを内部利用します。Base Seedの再入力は不要です。同じ武器でReset Bonusesだけを連続して行い、各5枠を枠順どおり記録してください。Keep Bonusesは使用しません。
+              </Typography>
+              <Stack spacing={1}>
+                <SubHeading>ordered Gogma Reset observations（記録順）</SubHeading>
+                <Box component="ol" sx={{ m: 0, p: 0, display: 'grid', gap: 1.25 }}>
+                  {gogmaObservations.map((observation, index) => {
+                    const filled = observation.filter((slot) => slot.bonusTypeId !== null && slot.bonusRankId !== null).length
+                    return (
+                      <ObservationCard
+                        key={index}
+                        dataAttribute={{ 'data-reset-observation': index + 1 }}
+                        title={`Reset Observation ${index + 1}`}
+                        completion={{ label: `入力 ${filled}/5枠`, tone: filled === 5 ? 'positive' : 'neutral' }}
+                        deleteLabel={`Reset Observation ${index + 1}を削除`}
+                        deleteDisabled={gogmaSearching || gogmaObservations.length === 1}
+                        onDelete={() => setGogmaObservations((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                      >
                         <BonusObservationEditor
                           label={`Reset Observation ${index + 1}`}
                           master={master}
@@ -583,23 +759,23 @@ export function IdentificationWizardDialog({
                             setGogmaObservations(next)
                           }}
                         />
-                        <Button
-                          color="error"
-                          disabled={gogmaSearching || gogmaObservations.length === 1}
-                          onClick={() => setGogmaObservations((current) => current.filter((_, itemIndex) => itemIndex !== index))}
-                        >
-                          Reset Observation {index + 1}を削除
-                        </Button>
-                      </Stack>
-                    </Paper>
-                  ))}
+                      </ObservationCard>
+                    )
+                  })}
+                </Box>
+                <Box>
                   <Button
+                    variant="outlined"
+                    sx={buttonSx}
                     disabled={gogmaSearching}
                     onClick={() => setGogmaObservations((current) => [...current, emptyBonusObservation()])}
                   >
                     Reset Observationを追加
                   </Button>
-                </Stack>
+                </Box>
+              </Stack>
+              <Stack spacing={1.5}>
+                <SubHeading>検索範囲</SubHeading>
                 <ApproximateCounterFields
                   label="Gogma Counter"
                   draft={gogmaRange}
@@ -607,71 +783,79 @@ export function IdentificationWizardDialog({
                   disabled={gogmaSearching}
                   onChange={setGogmaRange}
                 />
-                {step2FormError && <Alert severity="error">{step2FormError}</Alert>}
-                {wizardState.gogma.progress && (
-                  <SearchProgress
-                    completed={wizardState.gogma.progress.searchedCounters}
-                    total={wizardState.gogma.progress.totalCounters}
-                    matches={wizardState.gogma.progress.matchesFound}
-                  />
-                )}
-                {classificationAlert(wizardState.gogma.classification, 'gogma')}
-                {errorAlert(wizardState.gogma.error)}
-                <Stack direction="row" spacing={1}>
-                  <Button variant="contained" disabled={gogmaSearching || adopting} onClick={() => void identifyGogma()}>
-                    STEP 2 Search
-                  </Button>
-                  <Button disabled={!gogmaSearching} onClick={() => coordinator.cancelGogma()}>
-                    STEP 2 Cancel
-                  </Button>
-                </Stack>
               </Stack>
-            </Paper>
+              {step2FormError && <Alert severity="error">{step2FormError}</Alert>}
+              {wizardState.gogma.progress && (
+                <SearchProgress
+                  completed={wizardState.gogma.progress.searchedCounters}
+                  total={wizardState.gogma.progress.totalCounters}
+                  matches={wizardState.gogma.progress.matchesFound}
+                />
+              )}
+              {classificationAlert(wizardState.gogma.classification, 'gogma')}
+              {errorAlert(wizardState.gogma.error)}
+              <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+                <Button variant="contained" sx={buttonSx} disabled={gogmaSearching || adopting} onClick={() => void identifyGogma()}>
+                  STEP 2 Search
+                </Button>
+                <Button variant="outlined" sx={buttonSx} disabled={!gogmaSearching} onClick={() => coordinator.cancelGogma()}>
+                  STEP 2 Cancel
+                </Button>
+              </Stack>
+            </StepSection>
           )}
 
           {wizardState.review && (
-            <Paper variant="outlined" sx={{ p: 2 }}>
-              <Stack spacing={2}>
-                <Typography variant="h2">Review</Typography>
-                <Typography>Base Seed: {wizardState.review.baseSeed}</Typography>
-                <Typography>Starting Skill Counter: {wizardState.review.startingSkillCounter}</Typography>
-                <Typography>Starting Gogma Counter: {wizardState.review.startingGogmaCounter}</Typography>
-                <Alert severity="warning">
-                  表示値は調査開始前のstarting valuesです。Observation数は加算されません。ゲーム状態を調査前へ戻した後に採用してください。
+            <StepSection title="Review">
+              <Box sx={{ p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1, bgcolor: 'background.default' }}>
+                <Stack spacing={0.5} className="tabular-nums">
+                  <Typography sx={{ overflowWrap: 'anywhere' }}>Base Seed: {wizardState.review.baseSeed}</Typography>
+                  <Typography>Starting Skill Counter: {wizardState.review.startingSkillCounter}</Typography>
+                  <Typography>Starting Gogma Counter: {wizardState.review.startingGogmaCounter}</Typography>
+                </Stack>
+              </Box>
+              <Alert severity="warning">
+                表示値は調査開始前のstarting valuesです。Observation数は加算されません。ゲーム状態を調査前へ戻した後に採用してください。
+              </Alert>
+              <FormControlLabel
+                sx={{ m: 0, minHeight: 44 }}
+                control={(
+                  <Checkbox
+                    checked={wizardState.gameRestoredConfirmed}
+                    disabled={adopting || wizardState.adoption.status === 'adopted'}
+                    onChange={(event) => coordinator.setGameRestoredConfirmed(event.target.checked)}
+                  />
+                )}
+                label="調査前のゲーム状態へ戻した"
+              />
+              {!wizardState.gameRestoredConfirmed && wizardState.adoption.status !== 'adopted' && (
+                <Typography variant="body2" color="text.secondary">「調査前のゲーム状態へ戻した」を確認すると採用できます。</Typography>
+              )}
+              {wizardState.adoption.error && (
+                <Alert severity="error">
+                  Adoption failure: {errorMessage(wizardState.adoption.error.error)}。Reviewと復元確認を保持しています。再試行できます。
                 </Alert>
-                <FormControlLabel
-                  control={(
-                    <Checkbox
-                      checked={wizardState.gameRestoredConfirmed}
-                      disabled={adopting || wizardState.adoption.status === 'adopted'}
-                      onChange={(event) => coordinator.setGameRestoredConfirmed(event.target.checked)}
-                    />
-                  )}
-                  label="調査前のゲーム状態へ戻した"
-                />
-                {wizardState.adoption.error && (
-                  <Alert severity="error">
-                    Adoption failure: {errorMessage(wizardState.adoption.error.error)}。Reviewと復元確認を保持しています。再試行できます。
-                  </Alert>
-                )}
-                {wizardState.adoption.status === 'adopted' && (
-                  <Alert severity="success">Identification結果をRNG状態へ採用しました。</Alert>
-                )}
+              )}
+              {wizardState.adoption.status === 'adopted' && (
+                <Alert severity="success">Identification結果をRNG状態へ採用しました。</Alert>
+              )}
+              <Box>
                 <Button
                   variant="contained"
+                  sx={buttonSx}
                   disabled={!wizardState.gameRestoredConfirmed || adopting || wizardState.adoption.status === 'adopted'}
                   onClick={() => void adopt()}
                 >
                   {adopting ? 'Adopting…' : 'Adopt starting values'}
                 </Button>
-              </Stack>
-            </Paper>
+              </Box>
+            </StepSection>
           )}
         </Stack>
       </DialogContent>
-      <DialogActions>
-        <Button disabled={adopting} onClick={restart}>Restart</Button>
-        <Button disabled={adopting} onClick={onClose}>Close</Button>
+      <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: 1.5, gap: 1, justifyContent: 'space-between' }}>
+        <Button variant="outlined" sx={buttonSx} disabled={adopting} onClick={restart}>Restart</Button>
+        <Button sx={buttonSx} disabled={adopting} onClick={onClose}>Close</Button>
       </DialogActions>
     </Dialog>
   )

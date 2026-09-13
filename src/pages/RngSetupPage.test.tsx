@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { createInitialRngState } from '../domain/models/factories'
@@ -17,6 +17,20 @@ function dependencies(initial = createInitialRngState('2026-08-29T00:00:00.000Z'
   return { deps, getStored: () => stored }
 }
 
+/** A `dt` / `dd` row of a definition list, found by its term. */
+function definitionRow(container: HTMLElement, term: string): HTMLElement {
+  return within(container).getByText(term, { selector: 'dt' }).parentElement as HTMLElement
+}
+
+/** Expands the shared technical-details Accordion and returns its definition list. */
+async function openEngineDetails(user: ReturnType<typeof userEvent.setup>): Promise<HTMLElement> {
+  const toggle = screen.getByRole('button', { name: 'Production RNG Engine（技術情報）' })
+  expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await user.click(toggle)
+  expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  return screen.getByText('Engine version', { selector: 'dt' }).closest('dl') as HTMLElement
+}
+
 describe('RngSetupPage', () => {
   it('normalizes a decimal Base Seed, marks it manual, and preserves untouched KnownValues', async () => {
     const state = createInitialRngState('2026-08-29T00:00:00.000Z')
@@ -33,7 +47,7 @@ describe('RngSetupPage', () => {
     render(<RngSetupPage dependencies={fixture.deps} />)
 
     const seed = await screen.findByLabelText('Base Seed（基準シード）')
-    const seedPanel = seed.closest('.MuiPaper-root') as HTMLElement
+    const seedPanel = seed.closest('[data-known-field]') as HTMLElement
     await user.type(seed, '100000001')
     await user.click(within(seedPanel).getByRole('checkbox', { name: 'この値を検索・予測に使用する' }))
     await user.click(screen.getByRole('button', { name: '保存' }))
@@ -127,20 +141,106 @@ describe('RngSetupPage', () => {
     const fixture = dependencies()
     render(<RngSetupPage dependencies={fixture.deps} />)
     const seed = await screen.findByLabelText('Base Seed（基準シード）')
-    const seedPanel = seed.closest('.MuiPaper-root') as HTMLElement
+    const seedPanel = seed.closest('[data-known-field]') as HTMLElement
     const useValue = within(seedPanel).getByRole('checkbox', { name: 'この値を検索・予測に使用する' })
     expect(useValue).toBeDisabled()
     await user.type(seed, '42')
 
     expect(useValue).toBeEnabled()
     expect(within(seedPanel).getByText('取得方法: 手動入力')).toBeInTheDocument()
-    expect(screen.getByText(`Engine version: ${PRODUCTION_RNG_ENGINE_VERSION}`)).toBeInTheDocument()
-    expect(screen.getByText('通常アーティア予測 capability: 対応')).toBeInTheDocument()
-    expect(screen.getByText('スキル予測 capability: 対応')).toBeInTheDocument()
-    expect(screen.getByText('巨戟アーティア予測 capability: 対応')).toBeInTheDocument()
-    expect(screen.getByText('Keep Bonuses予測 capability: 対応')).toBeInTheDocument()
-    expect(screen.getByText('Seed Search capability: 未対応')).toBeInTheDocument()
+    const engine = await openEngineDetails(user)
+    expect(definitionRow(engine, 'Engine version')).toHaveTextContent(PRODUCTION_RNG_ENGINE_VERSION)
+    expect(definitionRow(engine, '通常アーティア予測').textContent).toBe('通常アーティア予測対応')
+    expect(definitionRow(engine, 'スキル予測').textContent).toBe('スキル予測対応')
+    expect(definitionRow(engine, '巨戟アーティア予測').textContent).toBe('巨戟アーティア予測対応')
+    expect(definitionRow(engine, 'Keep Bonuses予測').textContent).toBe('Keep Bonuses予測対応')
+    expect(definitionRow(engine, 'Seed Search').textContent).toBe('Seed Search未対応')
     expect(screen.queryByText(/本番RNG予測エンジンが未実装/)).not.toBeInTheDocument()
+  })
+
+  it('keeps current availability separate from what the Engine itself supports', async () => {
+    const user = userEvent.setup()
+    render(<RngSetupPage dependencies={dependencies().deps} />)
+    const current = await screen.findByRole('region', { name: '現在の入力内容で利用可能な機能' })
+
+    // Nothing is confirmed yet, so the current state cannot predict even though
+    // the Engine supports it.
+    expect(definitionRow(current, 'スキル予測').textContent).toBe('スキル予測利用不可')
+    expect(definitionRow(current, '巨戟アーティア予測').textContent).toBe('巨戟アーティア予測利用不可')
+    expect(within(current).getByText('現在不足している項目')).toBeInTheDocument()
+    const engine = await openEngineDetails(user)
+    expect(definitionRow(engine, 'スキル予測').textContent).toBe('スキル予測対応')
+    expect(within(engine).queryByText('利用不可')).not.toBeInTheDocument()
+    expect(within(engine).queryByText('現在不足している項目')).not.toBeInTheDocument()
+  })
+
+  it('summarizes each saved KnownValue as 使用中 / 未確認 / 未入力 without showing the value', async () => {
+    const state = createInitialRngState('2026-08-29T00:00:00.000Z')
+    state.baseSeed = { value: '987654', isConfirmed: true, source: 'manual' }
+    state.gogmaCounter = { value: 4321, isConfirmed: false, source: 'manual' }
+    render(<RngSetupPage dependencies={dependencies(state).deps} />)
+    const summary = await screen.findByRole('region', { name: '保存済みのRNG状態' })
+
+    expect(definitionRow(summary, 'Base Seed（基準シード）').textContent).toBe('Base Seed（基準シード）使用中')
+    expect(definitionRow(summary, '巨戟カウンター').textContent).toBe('巨戟カウンター未確認')
+    expect(definitionRow(summary, 'スキルカウンター').textContent).toBe('スキルカウンター未入力')
+    expect(summary).not.toHaveTextContent('987654')
+    expect(summary).not.toHaveTextContent('4321')
+    // The editable fields show the draft status in words as well.
+    const seedPanel = screen.getByLabelText('Base Seed（基準シード）').closest('[data-known-field]') as HTMLElement
+    expect(within(seedPanel).getByText('状態: 使用中')).toBeInTheDocument()
+  })
+
+  it('edits and saves Counter Gate from the shared 詳細・互換情報 section', async () => {
+    const state = createInitialRngState('2026-08-29T00:00:00.000Z')
+    state.baseSeed = { value: '42', isConfirmed: true, source: 'observation' }
+    const user = userEvent.setup()
+    const fixture = dependencies(state)
+    render(<RngSetupPage dependencies={fixture.deps} />)
+
+    const toggle = await screen.findByRole('button', { name: '詳細・互換情報（Counter Gate）' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await user.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    await user.type(screen.getByLabelText('Counter Gate（カウンターゲート）'), '60')
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
+    await waitFor(() => expect(fixture.getStored().counterGate).toEqual({ value: 60, isConfirmed: false, source: 'manual' }))
+    expect(fixture.getStored().baseSeed).toEqual(state.baseSeed)
+  })
+
+  it('shows a load failure without any synthetic RNG state or form', async () => {
+    const fixture = dependencies()
+    fixture.deps.ensure = vi.fn(async (): Promise<RngState> => { throw new Error('IndexedDB read failed') })
+    render(<RngSetupPage dependencies={fixture.deps} />)
+
+    expect(await screen.findByText('IndexedDB read failed')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Base Seed（基準シード）')).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: '保存済みのRNG状態' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: '現在の入力内容で利用可能な機能' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '保存' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Identification Wizardを開始' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('RNG状態を読み込み中')).not.toBeInTheDocument()
+  })
+
+  it('shows a save failure inside the manual input section next to 保存', async () => {
+    const user = userEvent.setup()
+    const fixture = dependencies()
+    render(<RngSetupPage dependencies={fixture.deps} />)
+    await user.type(await screen.findByLabelText('スキルカウンター'), '-5')
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
+    const manual = screen.getByRole('region', { name: '手動入力' })
+    expect(await within(manual).findByText('スキルカウンターは0以上の整数で入力してください。')).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: '値が分からない場合' })).queryByRole('alert', { name: /スキルカウンター/ })).not.toBeInTheDocument()
+  })
+
+  it('states what the Wizard identifies next to its start button', async () => {
+    render(<RngSetupPage dependencies={dependencies().deps} />)
+    const cta = await screen.findByRole('region', { name: '値が分からない場合' })
+    expect(within(cta).getByText('調査開始前のスキルカウンター')).toBeInTheDocument()
+    expect(within(cta).getByText('調査開始前の巨戟カウンター')).toBeInTheDocument()
+    expect(within(cta).getByRole('button', { name: 'Identification Wizardを開始' })).toBeEnabled()
   })
 
   it('opens the dedicated Identification Wizard without replacing the manual workflow', async () => {

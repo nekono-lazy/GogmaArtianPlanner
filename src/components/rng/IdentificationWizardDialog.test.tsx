@@ -197,6 +197,17 @@ class FakeCoordinator implements IdentificationWizardCoordinator {
     })
     this.skillReject?.(error)
   }
+  failSkillWith(kind: 'invalid_input' | 'unsupported_input', error: Error) {
+    this.publish({
+      ...this.state,
+      skill: {
+        ...this.state.skill, status: 'error', requestId: null, result: null,
+        classification: null, identified: null,
+        error: { kind, error },
+      },
+    })
+    this.skillReject?.(error)
+  }
   cancelSkill() {
     this.cancelSkillCalls += 1
     this.skillActiveRequest = undefined
@@ -457,7 +468,17 @@ async function startSkillSearch(user: ReturnType<typeof userEvent.setup>) {
 
 function resetObservationEditor(observationIndex: number): HTMLElement {
   return screen.getByText(`Reset Observation ${observationIndex}`)
-    .closest('.MuiStack-root') as HTMLElement
+    .closest('[data-reset-observation]') as HTMLElement
+}
+
+function skillObservationCard(observationIndex: number): HTMLElement {
+  return screen.getByText(`Observation ${observationIndex}`)
+    .closest('[data-skill-observation]') as HTMLElement
+}
+
+function stepPositions(): string[] {
+  const nav = screen.getByRole('navigation', { name: 'Identificationの進行状況' })
+  return within(nav).getAllByRole('listitem').map((item) => item.textContent ?? '')
 }
 
 function step1BonusChoices(coordinator: FakeCoordinator): readonly FixtureBonusChoice[] {
@@ -655,7 +676,74 @@ describe('IdentificationWizardDialog STEP 1', () => {
     const user = userEvent.setup()
     const { coordinator } = renderWizard()
     await reachStep2(coordinator, user)
-    expect(screen.getByText('現在: STEP 2')).toBeInTheDocument()
+    expect(screen.getByRole('listitem', { current: 'step' })).toHaveTextContent('STEP 2')
+  })
+
+  it('keeps every safety item and the verification scope visible', () => {
+    renderWizard()
+    const dialog = within(screen.getByRole('dialog', { name: 'RNG Identification Wizard' }))
+    for (const item of [
+      '観測結果の記録が終わるまでゲーム状態を保存しないでください。',
+      '開始前にバックアップ方法と自動保存の設定・挙動を確認してください。',
+      '案内された操作だけを順番に連続して行ってください。',
+      '観測後は調査前の状態へ戻してから採用します。',
+      'ゲーム側の保存仕様や安全をこのアプリが保証するものではありません。',
+    ]) {
+      expect(dialog.getByText(item)).toBeInTheDocument()
+    }
+    expect(dialog.getByText('検証範囲')).toBeInTheDocument()
+    expect(dialog.getByText(/操虫棍 \/ 氷の特定Counter位置のみ/)).toBeInTheDocument()
+  })
+
+  it('numbers each Skill observation, shows its completion, and deletes by number down to one', async () => {
+    const user = userEvent.setup()
+    renderWizard()
+
+    expect(within(skillObservationCard(1)).getByText('conversion自動Skill')).toBeInTheDocument()
+    expect(within(skillObservationCard(2)).getByText('連続Skill Reset 1')).toBeInTheDocument()
+    expect(within(skillObservationCard(1)).getByText('未入力あり')).toBeInTheDocument()
+    fillSkillObservations(1)
+    expect(within(skillObservationCard(1)).getByText('入力済み')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Observation 2を削除' }))
+    expect(screen.queryByLabelText('Observation 4 Series Skill')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Observation 3 Series Skill')).toBeInTheDocument()
+    // Observation 1 keeps its entered values after a later row is removed.
+    expect(within(skillObservationCard(1)).getByText('入力済み')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Observation 3を削除' }))
+    await user.click(screen.getByRole('button', { name: 'Observation 2を削除' }))
+    expect(screen.getByRole('button', { name: 'Observation 1を削除' })).toBeDisabled()
+  })
+
+  it('previews the approximate Skill Counter as an inclusive range from center ± 5', () => {
+    renderWizard()
+    expect(screen.getByText('検索範囲: 37 ～ 47（inclusive・11候補）')).toBeInTheDocument()
+  })
+
+  it('names the search state in words while searching and after cancel', async () => {
+    const user = userEvent.setup()
+    const { coordinator } = renderWizard()
+    const step1 = screen.getByRole('region', { name: 'STEP 1 — Base Seed / Starting Skill Counter' })
+    expect(within(step1).getByRole('status')).toHaveTextContent('未検索')
+    await startSkillSearch(user)
+    expect(within(step1).getByRole('status')).toHaveTextContent('検索中')
+    await user.click(screen.getByRole('button', { name: 'STEP 1 Cancel' }))
+    expect(within(step1).getByRole('status')).toHaveTextContent('キャンセル済み')
+    expect(coordinator.cancelSkillCalls).toBe(1)
+  })
+
+  it.each([
+    ['invalid_input', '入力エラー: bad observation'],
+    ['unsupported_input', '未対応の入力: bad observation'],
+  ] as const)('shows %s as its own error, not as no-match', async (kind, message) => {
+    const user = userEvent.setup()
+    const { coordinator } = renderWizard()
+    await startSkillSearch(user)
+    act(() => coordinator.failSkillWith(kind, new Error('bad observation')))
+
+    expect(await screen.findByText(message)).toBeInTheDocument()
+    expect(screen.queryByText(/一致する結果がありません/)).not.toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'STEP 1 — Base Seed / Starting Skill Counter' })).getByRole('status')).toHaveTextContent('エラー')
   })
 })
 
@@ -676,8 +764,7 @@ describe('IdentificationWizardDialog STEP 2', { timeout: 15_000 }, () => {
     }
 
     await user.click(screen.getByRole('button', { name: 'Reset Observationを追加' }))
-    const addedEditor = screen.getByText('Reset Observation 5')
-      .closest('.MuiStack-root') as HTMLElement
+    const addedEditor = resetObservationEditor(5)
     expect(within(addedEditor).getByLabelText('枠1 ボーナス種別'))
       .toHaveTextContent('未入力')
     expect(within(addedEditor).getByLabelText('枠1 ランク'))
@@ -710,8 +797,7 @@ describe('IdentificationWizardDialog STEP 2', { timeout: 15_000 }, () => {
     expect(screen.queryByLabelText(/^Base Seed$/)).not.toBeInTheDocument()
     expect(screen.queryByText(/Keep Observation/)).not.toBeInTheDocument()
     fillGogmaObservations(coordinator)
-    const secondResetPanel = screen.getByText('Reset Observation 2')
-      .closest('.MuiPaper-root') as HTMLElement
+    const secondResetPanel = resetObservationEditor(2)
     await user.click(within(secondResetPanel).getAllByRole('combobox')[0]!)
     await user.click(within(await screen.findByRole('listbox')).getAllByRole('option')[2]!)
     await user.click(within(secondResetPanel).getAllByRole('combobox')[1]!)
@@ -730,6 +816,24 @@ describe('IdentificationWizardDialog STEP 2', { timeout: 15_000 }, () => {
     expect(input?.observations[1]?.[0].bonusTypeId).not.toBe(
       input?.observations[0]?.[0].bonusTypeId,
     )
+  })
+
+  it('summarizes the STEP 1 authority and counts filled slots per Reset observation', async () => {
+    const { coordinator } = renderWizard()
+    await seedStep2(coordinator)
+    const step2 = within(screen.getByRole('region', { name: 'STEP 2 — Starting Gogma Counter' }))
+    const input = coordinator.getState().skill.input!
+    expect(step2.getByText(master.weaponTypes.find(({ id }) => id === input.weaponTypeId)!.displayNameJa)).toBeInTheDocument()
+    expect(step2.getByText(master.elements.find(({ id }) => id === input.elementId)!.displayNameJa)).toBeInTheDocument()
+    expect(step2.getByText('完了（一意に特定）')).toBeInTheDocument()
+    expect(step2.queryByRole('textbox', { name: /Base Seed/ })).not.toBeInTheDocument()
+    expect(step2.getByText('検索範囲: 79 ～ 89（inclusive・11候補）')).toBeInTheDocument()
+
+    expect(within(resetObservationEditor(1)).getByText('入力 0/5枠')).toBeInTheDocument()
+    fillGogmaObservations(coordinator, 1)
+    expect(within(resetObservationEditor(1)).getByText('入力 5/5枠')).toBeInTheDocument()
+    expect(within(resetObservationEditor(1)).getByRole('list', { name: 'Reset Observation 1の5枠' })).toBeInTheDocument()
+    expect(within(resetObservationEditor(2)).getByRole('button', { name: 'Reset Observation 2を削除' })).toBeEnabled()
   })
 
   it.each([
@@ -846,7 +950,7 @@ describe('IdentificationWizardDialog Review and lifecycle', { timeout: 15_000 },
     await user.click(screen.getByRole('button', { name: 'Restart' }))
 
     expect(coordinator.restartCalls).toBe(1)
-    expect(screen.getByText('現在: STEP 1')).toBeInTheDocument()
+    expect(screen.getByRole('listitem', { current: 'step' })).toHaveTextContent('STEP 1')
     expect(screen.queryByText('STEP 2 — Starting Gogma Counter')).not.toBeInTheDocument()
     expect(screen.queryByText('Review')).not.toBeInTheDocument()
   })
@@ -861,6 +965,35 @@ describe('IdentificationWizardDialog Review and lifecycle', { timeout: 15_000 },
 
     expect(screen.queryByText('STEP 2 — Starting Gogma Counter')).not.toBeInTheDocument()
     expect(coordinator.getState().skill.status).toBe('cancelled')
+  })
+
+  it('moves the step indicator only with Coordinator state and marks adoption in words', async () => {
+    const user = userEvent.setup()
+    const { coordinator } = renderWizard()
+    expect(stepPositions()).toEqual(['STEP 1現在', 'STEP 2未到達', 'Review / 採用未到達'])
+    await seedStep2(coordinator)
+    expect(stepPositions()).toEqual(['STEP 1完了', 'STEP 2現在', 'Review / 採用未到達'])
+    await seedReview(coordinator)
+    expect(stepPositions()).toEqual(['STEP 1完了', 'STEP 2完了', 'Review / 採用現在'])
+    expect(screen.getByRole('listitem', { current: 'step' })).toHaveTextContent('Review / 採用')
+
+    expect(screen.getByText('「調査前のゲーム状態へ戻した」を確認すると採用できます。')).toBeInTheDocument()
+    await user.click(screen.getByRole('checkbox', { name: '調査前のゲーム状態へ戻した' }))
+    await user.click(screen.getByRole('button', { name: 'Adopt starting values' }))
+
+    expect(await screen.findByText('Identification結果をRNG状態へ採用しました。')).toBeInTheDocument()
+    expect(stepPositions()).toEqual(['STEP 1完了', 'STEP 2完了', 'Review / 採用採用済み'])
+    expect(screen.getByRole('button', { name: 'Adopt starting values' })).toBeDisabled()
+    expect(screen.getByRole('checkbox', { name: '調査前のゲーム状態へ戻した' })).toBeDisabled()
+  })
+
+  it('Close only asks the owner to close and never disposes the Coordinator', async () => {
+    const user = userEvent.setup()
+    const { coordinator, onClose } = renderWizard()
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(coordinator.disposeCalls).toBe(0)
+    expect(coordinator.restartCalls).toBe(0)
   })
 
   it('unsubscribes on unmount and leaves Coordinator disposal to its owner', () => {
