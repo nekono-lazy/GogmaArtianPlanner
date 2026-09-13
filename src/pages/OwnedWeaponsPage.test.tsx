@@ -1,11 +1,11 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type {
   OwnedGogmaArtianWeapon,
   OwnedWeapon,
 } from '../domain/models/publicTypes'
-import { ReferencedEntityDeleteError, type OwnedWeaponDraft } from '../services/crud/entityCrudServices'
+import { EntityFormValidationError, ReferencedEntityDeleteError, type OwnedWeaponDraft } from '../services/crud/entityCrudServices'
 import { createDefaultBonusSet } from '../domain/forms/entityDrafts'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import { OwnedWeaponsPage, type OwnedWeaponsPageDependencies } from './OwnedWeaponsPage'
@@ -300,6 +300,35 @@ describe('OwnedWeaponsPage', () => {
     const deps = dependencies(); deps.getAll = vi.fn(async () => [existingWeapon()])
     render(<OwnedWeaponsPage dependencies={deps} />)
     expect(within(await itemFor('既存武器')).getByText('ボーナス区分: 巨戟amendment後（巨戟のボーナス）')).toBeInTheDocument()
+  })
+
+  it.each([
+    ['a validation error', () => new EntityFormValidationError(['name: 名前を入力してください'])],
+    ['a persistence error', () => new Error('IndexedDB write failed')],
+  ])('shows %s inside the open Dialog, not only behind the modal', async (_kind, createError) => {
+    const user = userEvent.setup(); const weapon = existingWeapon(); const deps = dependencies(); deps.getAll = vi.fn(async () => [weapon])
+    const failure = createError()
+    const message = failure instanceof EntityFormValidationError ? failure.issues.join(' / ') : failure.message
+    deps.save = vi.fn(async () => { throw failure })
+    render(<OwnedWeaponsPage dependencies={deps} />)
+    await user.click(await screen.findByRole('button', { name: '編集' }))
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
+    const dialog = screen.getByRole('dialog', { name: '所持武器を編集' })
+    expect(await within(dialog).findByText(message)).toBeInTheDocument()
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(message)
+    // Every rendering of the message lives inside the Dialog.
+    for (const element of screen.getAllByText(message)) {
+      expect(dialog.contains(element)).toBe(true)
+    }
+    expect(screen.queryByText('所持武器を保存しました。')).toBeNull()
+
+    // Cancelling and reopening does not carry the old form error over.
+    await user.click(within(dialog).getByRole('button', { name: 'キャンセル' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await user.click(screen.getByRole('button', { name: '編集' }))
+    expect(within(screen.getByRole('dialog', { name: '所持武器を編集' })).queryByRole('alert')).toBeNull()
+    expect(screen.queryByText(message)).toBeNull()
   })
 
   it('keeps the registered kind fixed when editing, and explains why', async () => {

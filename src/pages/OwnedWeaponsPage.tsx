@@ -121,6 +121,9 @@ export function OwnedWeaponsPage({
   const [error, setError] = useState<string | null>(
     api ? null : 'マスターデータが利用できません。',
   )
+  // Page-level `error` covers load / delete. An add / edit failure belongs to
+  // the open Dialog, where the modal keeps it reachable next to 保存.
+  const [formError, setFormError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const listHeadingId = useId()
   const kindHelpId = useId()
@@ -175,6 +178,7 @@ export function OwnedWeaponsPage({
     try {
       setEditing(null)
       setDraft(createOwnedWeaponDraft(master))
+      setFormError(null)
       setError(null)
     } catch (caught) {
       setError(
@@ -195,6 +199,12 @@ export function OwnedWeaponsPage({
     void _updatedAt
     setEditing(weapon)
     setDraft(structuredClone(value))
+    setFormError(null)
+  }
+
+  const closeDialog = () => {
+    setDraft(null)
+    setFormError(null)
   }
 
   const save = async () => {
@@ -245,10 +255,11 @@ export function OwnedWeaponsPage({
       }
       setDraft(null)
       setEditing(null)
+      setFormError(null)
       setNotice('所持武器を保存しました。')
       setError(null)
     } catch (caught: unknown) {
-      setError(
+      setFormError(
         caught instanceof EntityFormValidationError
           ? caught.issues.join(' / ')
           : caught instanceof Error
@@ -413,7 +424,7 @@ export function OwnedWeaponsPage({
         </Paper>
         <Dialog
           open={draft !== null}
-          onClose={() => setDraft(null)}
+          onClose={closeDialog}
           fullWidth
           maxWidth="md"
           slotProps={{ paper: { sx: dialogPaperSx } }}
@@ -424,6 +435,7 @@ export function OwnedWeaponsPage({
           {draft && (
             <DialogContent dividers sx={{ px: { xs: 2, sm: 3 } }}>
               <Stack spacing={3}>
+                {formError && <Alert severity="error">{formError}</Alert>}
                 <Stack component="section" spacing={1.5}>
                   <Typography component="h3" variant="h3">基本情報</Typography>
                   <Box>
@@ -443,7 +455,7 @@ export function OwnedWeaponsPage({
                                 ),
                               )
                             } catch (caught) {
-                              if (caught instanceof Error) setError(caught.message)
+                              if (caught instanceof Error) setFormError(caught.message)
                             }
                           }}
                         />
@@ -482,7 +494,7 @@ export function OwnedWeaponsPage({
                             )
                           } catch (caught) {
                             if (caught instanceof MasterOptionsUnavailableError) {
-                              setError(caught.message)
+                              setFormError(caught.message)
                             }
                           }
                         }}
@@ -511,7 +523,7 @@ export function OwnedWeaponsPage({
                             )
                           } catch (caught) {
                             if (caught instanceof MasterOptionsUnavailableError) {
-                              setError(caught.message)
+                              setFormError(caught.message)
                             }
                           }
                         }}
@@ -652,7 +664,7 @@ export function OwnedWeaponsPage({
             </DialogContent>
           )}
           <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: 1.5, gap: 1 }}>
-            <Button onClick={() => setDraft(null)} sx={{ minHeight: 44 }}>キャンセル</Button>
+            <Button onClick={closeDialog} sx={{ minHeight: 44 }}>キャンセル</Button>
             <Button variant="contained" onClick={() => void save()} sx={{ minHeight: 44, minWidth: 96 }}>
               保存
             </Button>

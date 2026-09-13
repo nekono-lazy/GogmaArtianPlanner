@@ -1,8 +1,8 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { OwnedWeapon, TargetWeapon } from '../domain/models/publicTypes'
-import { ReferencedEntityDeleteError, type TargetWeaponDraft } from '../services/crud/entityCrudServices'
+import { EntityFormValidationError, ReferencedEntityDeleteError, type TargetWeaponDraft } from '../services/crud/entityCrudServices'
 import { TargetWeaponsPage, type TargetWeaponsPageDependencies } from './TargetWeaponsPage'
 
 async function itemFor(name: string): Promise<HTMLElement> {
@@ -135,6 +135,29 @@ describe('TargetWeaponsPage', () => {
     await user.click(dialog.getByRole('button', { name: '保存' }))
     expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ priority: 1 }), target)
     expect(await screen.findByText('目標武器を保存しました。')).toBeInTheDocument()
+  })
+
+  it('shows a save validation error inside the open Dialog, not only behind the modal', async () => {
+    const user = userEvent.setup(); const target = existingTarget(); const deps = dependencies(); deps.getAll = vi.fn(async () => [target])
+    const message = 'practicalBonusConditions: 理想に含まれない種類です'
+    deps.save = vi.fn(async () => { throw new EntityFormValidationError([message]) })
+    render(<TargetWeaponsPage dependencies={deps} />)
+    await user.click(await screen.findByRole('button', { name: '編集' }))
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
+    const dialog = screen.getByRole('dialog', { name: '目標武器を編集' })
+    expect(await within(dialog).findByText(message)).toBeInTheDocument()
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(message)
+    for (const element of screen.getAllByText(message)) {
+      expect(dialog.contains(element)).toBe(true)
+    }
+    expect(screen.queryByText('目標武器を保存しました。')).toBeNull()
+
+    await user.click(within(dialog).getByRole('button', { name: 'キャンセル' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await user.click(screen.getByRole('button', { name: '目標武器を追加' }))
+    expect(within(screen.getByRole('dialog', { name: '目標武器を追加' })).queryByRole('alert')).toBeNull()
+    expect(screen.queryByText(message)).toBeNull()
   })
 
   it('refuses to delete a referenced Target and keeps it listed', async () => {

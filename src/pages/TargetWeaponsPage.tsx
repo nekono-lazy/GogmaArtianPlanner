@@ -156,6 +156,9 @@ export function TargetWeaponsPage({
   const [error, setError] = useState<string | null>(
     api ? null : 'マスターデータが利用できません。',
   )
+  // Page-level `error` covers load / delete. An add / edit failure belongs to
+  // the open Dialog, where the modal keeps it reachable next to 保存.
+  const [formError, setFormError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const listHeadingId = useId()
   const preferredHelpId = useId()
@@ -203,6 +206,7 @@ export function TargetWeaponsPage({
     try {
       setEditing(null)
       setDraft(createTargetWeaponDraft(master))
+      setFormError(null)
       setError(null)
     } catch (caught) {
       setError(
@@ -223,6 +227,12 @@ export function TargetWeaponsPage({
     void _updatedAt
     setEditing(target)
     setDraft(structuredClone(value))
+    setFormError(null)
+  }
+
+  const closeDialog = () => {
+    setDraft(null)
+    setFormError(null)
   }
 
   const save = async () => {
@@ -242,10 +252,11 @@ export function TargetWeaponsPage({
       )
       setDraft(null)
       setEditing(null)
+      setFormError(null)
       setNotice('目標武器を保存しました。')
       setError(null)
     } catch (caught: unknown) {
-      setError(
+      setFormError(
         caught instanceof EntityFormValidationError
           ? caught.issues.join(' / ')
           : caught instanceof Error
@@ -460,7 +471,7 @@ export function TargetWeaponsPage({
         </Paper>
         <Dialog
           open={draft !== null}
-          onClose={() => setDraft(null)}
+          onClose={closeDialog}
           fullWidth
           maxWidth="md"
           slotProps={{ paper: { sx: dialogPaperSx } }}
@@ -471,6 +482,7 @@ export function TargetWeaponsPage({
           {draft && (
             <DialogContent dividers sx={{ px: { xs: 2, sm: 3 } }}>
               <Stack spacing={3}>
+                {formError && <Alert severity="error">{formError}</Alert>}
                 <Stack component="section" spacing={1.5}>
                   <Typography component="h3" variant="h3">基本情報</Typography>
                   <TextField
@@ -501,7 +513,7 @@ export function TargetWeaponsPage({
                             if (
                               caught instanceof MasterOptionsUnavailableError
                             ) {
-                              setError(caught.message)
+                              setFormError(caught.message)
                             }
                           }
                         }}
@@ -532,7 +544,7 @@ export function TargetWeaponsPage({
                             if (
                               caught instanceof MasterOptionsUnavailableError
                             ) {
-                              setError(caught.message)
+                              setFormError(caught.message)
                             }
                           }
                         }}
@@ -701,7 +713,7 @@ export function TargetWeaponsPage({
             </DialogContent>
           )}
           <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: 1.5, gap: 1 }}>
-            <Button onClick={() => setDraft(null)} sx={{ minHeight: 44 }}>キャンセル</Button>
+            <Button onClick={closeDialog} sx={{ minHeight: 44 }}>キャンセル</Button>
             <Button variant="contained" onClick={() => void save()} sx={{ minHeight: 44, minWidth: 96 }}>
               保存
             </Button>
