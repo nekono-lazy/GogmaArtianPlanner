@@ -1,6 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Alert, Button, Checkbox, Chip, FormControlLabel, LinearProgress, Paper, Stack, TextField, Typography } from '@mui/material'
+import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
+import {
+  Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Checkbox,
+  FormControlLabel, LinearProgress, Paper, Stack, SvgIcon, TextField, Typography,
+} from '@mui/material'
 import { PageShell } from '../components/PageShell'
+import { StatusChip, type StatusTone } from '../components/StatusChip'
 import { IdentificationWizardDialog } from '../components/rng/IdentificationWizardDialog'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import type { KnownValue, RngState, RngStateSource } from '../domain/models/publicTypes'
@@ -23,6 +27,16 @@ type RngForm = Record<KnownKey, FormKnown> & { notes: string }
 const knownKeys: readonly KnownKey[] = [
   'baseSeed', 'gogmaCounter', 'skillCounter', 'counterGate',
 ]
+
+const UNSAVED_WIZARD_MESSAGE =
+  'Identification Wizardを開始する前に、RNG状態設定の変更を保存するか元に戻してください。'
+
+const knownLabels: Record<KnownKey, string> = {
+  baseSeed: 'Base Seed（基準シード）',
+  gogmaCounter: '巨戟カウンター',
+  skillCounter: 'スキルカウンター',
+  counterGate: 'Counter Gate（カウンターゲート）',
+}
 
 function toForm(state: RngState): RngForm {
   const map = <T,>(known: KnownValue<T>): FormKnown => ({ value: known.value === null ? '' : String(known.value), isConfirmed: known.isConfirmed, source: known.source })
@@ -76,18 +90,53 @@ function toState(
   }
 }
 
+/**
+ * The status word of one KnownValue. It restates only whether a value is held
+ * and whether it is confirmed; the value itself is never shown here.
+ */
+function knownStatus(isEmpty: boolean, isConfirmed: boolean): { label: string; tone: StatusTone } {
+  if (isEmpty) return { label: '未入力', tone: 'neutral' }
+  return isConfirmed ? { label: '使用中', tone: 'positive' } : { label: '未確認', tone: 'caution' }
+}
+
+function ExpandIcon() {
+  return <SvgIcon aria-hidden="true"><path d="M7 10l5 5 5-5z" /></SvgIcon>
+}
+
+/** A titled, border-based page section (the Dashboard pattern). */
+function SectionCard({ title, children, sx }: { title: string; children: ReactNode; sx?: object }) {
+  const headingId = useId()
+  return (
+    <Paper component="section" variant="outlined" aria-labelledby={headingId} sx={{ p: { xs: 2, md: 2.5 }, minWidth: 0, ...sx }}>
+      <Typography id={headingId} component="h2" variant="h2" sx={{ mb: 1.5 }}>{title}</Typography>
+      {children}
+    </Paper>
+  )
+}
+
+/** One label / value row inside a definition list. */
+function DefinitionRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', columnGap: 1.5, alignItems: 'center', py: 1, borderTop: 1, borderColor: 'divider', '&:first-of-type': { borderTop: 0, pt: 0 } }}>
+      <Typography component="dt" variant="body2" sx={{ fontWeight: 500, minWidth: 0, overflowWrap: 'anywhere' }}>{label}</Typography>
+      <Box component="dd" sx={{ m: 0, textAlign: 'right', overflowWrap: 'anywhere' }}>{children}</Box>
+    </Box>
+  )
+}
+
 interface KnownFieldProps { fieldId: string; label: string; description: string; numeric?: boolean; value: FormKnown; onChange(value: FormKnown): void }
 function KnownField({ fieldId, label, description, numeric = false, value, onChange }: KnownFieldProps) {
-  const stateLabel = value.value === '' ? '未入力' : value.isConfirmed ? '使用中' : '未確認'
-  const stateColor = value.value === '' ? 'default' : value.isConfirmed ? 'success' : 'warning'
-  return <Paper variant="outlined" sx={{ p: 2 }}><Stack spacing={2}>
-    <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}><Typography variant="h3">{label}</Typography><Chip label={stateLabel} color={stateColor} size="small" /></Stack>
-    <TextField label={label} helperText={description} value={value.value} type={numeric ? 'number' : 'text'} onChange={(event) => onChange({ ...value, value: event.target.value, isConfirmed: event.target.value === '' ? false : value.isConfirmed, source: event.target.value === '' ? value.source : 'manual' })} slotProps={numeric ? { htmlInput: { min: 0, step: 1 } } : undefined} />
-    <FormControlLabel control={<Checkbox checked={value.isConfirmed} disabled={value.value === ''} onChange={(event) => onChange({ ...value, isConfirmed: event.target.checked })} />} label="この値を検索・予測に使用する" />
-    <Typography variant="body2" color="text.secondary" id={`${fieldId}-source`}>
-      取得方法: {value.source === null ? '指定なし' : rngStateSourceLabels[value.source]}
-    </Typography>
-  </Stack></Paper>
+  const status = knownStatus(value.value === '', value.isConfirmed)
+  return <Box data-known-field={fieldId} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: { xs: 1.5, md: 2 }, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+    <TextField id={fieldId} fullWidth label={label} helperText={description} value={value.value} type={numeric ? 'number' : 'text'} onChange={(event) => onChange({ ...value, value: event.target.value, isConfirmed: event.target.value === '' ? false : value.isConfirmed, source: event.target.value === '' ? value.source : 'manual' })} slotProps={numeric ? { htmlInput: { min: 0, step: 1 } } : undefined} />
+    <FormControlLabel sx={{ m: 0, minHeight: 44, alignItems: 'center' }} control={<Checkbox checked={value.isConfirmed} disabled={value.value === ''} onChange={(event) => onChange({ ...value, isConfirmed: event.target.checked })} slotProps={{ input: { 'aria-describedby': `${fieldId}-label` } }} />} label="この値を検索・予測に使用する" />
+    <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+      <StatusChip label={`状態: ${status.label}`} tone={status.tone} />
+      <Typography variant="body2" color="text.secondary" id={`${fieldId}-source`}>
+        取得方法: {value.source === null ? '指定なし' : rngStateSourceLabels[value.source]}
+      </Typography>
+    </Stack>
+  </Box>
 }
 
 export interface RngSetupPageDependencies {
@@ -108,11 +157,15 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
   const [form, setForm] = useState<RngForm | null>(null)
   const [normalCounters, setNormalCounters] = useState<Awaited<ReturnType<RngSetupPageDependencies['getNormalCounters']>>>([])
   const [modifiedKeys, setModifiedKeys] = useState<Set<KnownKey>>(new Set())
-  const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
+  // Each failure is shown next to the action it belongs to.
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [wizardError, setWizardError] = useState<string | null>(null)
+  const [saveNotice, setSaveNotice] = useState<string | null>(null)
+  const [adoptionNotice, setAdoptionNotice] = useState<string | null>(null)
   const [identificationCoordinator, setIdentificationCoordinator] =
     useState<IdentificationWizardCoordinator | null>(null)
-  useEffect(() => { let active = true; void Promise.all([dependencies.ensure(), dependencies.getNormalCounters()]).then(([loaded, counters]) => { if (active) { setState(loaded); setForm(toForm(loaded)); setNormalCounters(counters) } }).catch((caught: unknown) => { if (active) setError(caught instanceof Error ? caught.message : 'RNG状態を読み込めません。') }); return () => { active = false } }, [dependencies])
+  useEffect(() => { let active = true; void Promise.all([dependencies.ensure(), dependencies.getNormalCounters()]).then(([loaded, counters]) => { if (active) { setState(loaded); setForm(toForm(loaded)); setNormalCounters(counters) } }).catch((caught: unknown) => { if (active) setLoadError(caught instanceof Error ? caught.message : 'RNG状態を読み込めません。') }); return () => { active = false } }, [dependencies])
 
   // The page owns Coordinator lifetime: the Wizard session ends only when the
   // Coordinator is cleared by a real Close or when this page unmounts.
@@ -126,7 +179,12 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
     setModifiedKeys((current) => new Set(current).add(key))
   }
 
-  const preview = useMemo(() => { if (!state || !form) return null; try { return toState(form, state, modifiedKeys, state.updatedAt, productionRngEngine) } catch { return state } }, [form, modifiedKeys, state])
+  // The capability preview is either built from the current draft or reported as
+  // undeterminable. An invalid draft never falls back to the saved state, which
+  // would present saved availability as the current input's result.
+  const draftPreview = useMemo<{ state: RngState; invalid: false } | { state: null; invalid: true } | null>(() => { if (!state || !form) return null; try { return { state: toState(form, state, modifiedKeys, state.updatedAt, productionRngEngine), invalid: false } } catch { return { state: null, invalid: true } } }, [form, modifiedKeys, state])
+  const preview = draftPreview?.state ?? null
+  const previewInvalid = draftPreview?.invalid === true
   const hasUnsavedChanges = useMemo(
     () => state !== null && form !== null && hasUnsavedRngFormChanges(form, state),
     [form, state],
@@ -144,21 +202,21 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
 
   const save = async () => {
     if (!state || !form) return
-    setError(null); setNotice(null)
+    setSaveError(null); setSaveNotice(null); setAdoptionNotice(null)
     try {
       const next = toState(form, state, modifiedKeys, new Date().toISOString(), productionRngEngine)
       const validation = validateRngState(next)
       if (!validation.isValid) throw new Error(validation.issues.map(({ message }) => message).join(' / '))
       const saved = await dependencies.save(next)
-      setState(saved); setForm(toForm(saved)); setModifiedKeys(new Set()); setNotice('RNG状態を保存しました。')
-    } catch (caught: unknown) { setError(caught instanceof Error ? caught.message : 'RNG状態を保存できません。') }
+      setState(saved); setForm(toForm(saved)); setModifiedKeys(new Set()); setSaveNotice('RNG状態を保存しました。')
+    } catch (caught: unknown) { setSaveError(caught instanceof Error ? caught.message : 'RNG状態を保存できません。') }
   }
 
   const startIdentification = () => {
-    setError(null)
-    setNotice(null)
+    setWizardError(null)
+    setAdoptionNotice(null)
     if (hasUnsavedChanges) {
-      setError('Identification Wizardを開始する前に、RNG状態設定の変更を保存するか元に戻してください。')
+      setWizardError(UNSAVED_WIZARD_MESSAGE)
       return
     }
     try {
@@ -167,7 +225,7 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
           createProductionIdentificationWizardCoordinator)(),
       )
     } catch (caught: unknown) {
-      setError(caught instanceof Error ? caught.message : 'Identification Wizardを開始できません。')
+      setWizardError(caught instanceof Error ? caught.message : 'Identification Wizardを開始できません。')
     }
   }
 
@@ -175,14 +233,117 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
     setState(saved)
     setForm(toForm(saved))
     setModifiedKeys(new Set())
-    setNotice('Identification結果をRNG状態へ採用しました。')
+    setSaveNotice(null)
+    setAdoptionNotice('Identification結果をRNG状態へ採用しました。')
   }
 
-  return <PageShell title="RNG状態設定" description="検索や予測に使うRNG状態を項目ごとに設定します。"><Stack spacing={3}>
-    {!form && !error && <LinearProgress />}{error && <Alert severity="error">{error}</Alert>}{notice && <Alert severity="success">{notice}</Alert>}
-    {form && <><Alert severity="info">正しいことを確認できた値だけ「この値を検索・予測に使用する」を選択してください。直接入力した値の取得方法は「手動入力」になります。空欄は既存値を変更しません。</Alert><Paper variant="outlined" sx={{ p: 2 }}><Stack spacing={1}><Typography variant="h2">値が分からない場合</Typography><Typography>Normal → Gogma conversionと連続Resetの観測から、Base Seedと調査開始前のSkill / Gogma Counterを専用Wizardで特定します。手動入力は引き続き利用できます。</Typography><Button variant="outlined" disabled={!masterResult.ok || identificationCoordinator !== null || hasUnsavedChanges} onClick={startIdentification}>Identification Wizardを開始</Button>{hasUnsavedChanges && <Alert severity="warning">Identification Wizardを開始する前に、RNG状態設定の変更を保存するか元に戻してください。</Alert>}{!masterResult.ok && <Alert severity="error">マスターデータが利用できないためWizardを開始できません。</Alert>}</Stack></Paper><KnownField fieldId="base-seed" label="Base Seed（基準シード）" description="10進数または0xで始まる16進数を入力します。保存時に予測用の10進文字列へ正規化します。" value={form.baseSeed} onChange={(value) => updateField('baseSeed', value)} /><KnownField fieldId="gogma-counter" label="巨戟カウンター" description="巨戟アーティアの復元ボーナス予測に使う位置です。" numeric value={form.gogmaCounter} onChange={(value) => updateField('gogmaCounter', value)} /><KnownField fieldId="skill-counter" label="スキルカウンター" description="シリーズ・グループスキル予測に使う位置です。" numeric value={form.skillCounter} onChange={(value) => updateField('skillCounter', value)} /><KnownField fieldId="counter-gate" label="Counter Gate（カウンターゲート）" description="legacy / diagnostic / compatibility情報です。Production予測やIdentificationのauthorityではありません。" numeric value={form.counterGate} onChange={(value) => updateField('counterGate', value)} /><TextField label="メモ" multiline minRows={2} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /><Button variant="contained" onClick={() => void save()}>保存</Button></>}
-    <Paper variant="outlined" sx={{ p: 2 }}><Typography variant="h2" gutterBottom>Production RNG Engine</Typography><Stack spacing={1}><Typography>Engine mode: {productionRngRuntime.mode}</Typography><Typography>Engine version: {productionRngRuntime.version}</Typography><Typography>通常アーティア予測 capability: {productionRngRuntime.capabilities.supportsNormalArtianPrediction ? '対応' : '未対応'}</Typography><Typography>スキル予測 capability: {productionRngRuntime.capabilities.supportsSkillPrediction ? '対応' : '未対応'}</Typography><Typography>巨戟アーティア予測 capability: {productionRngRuntime.capabilities.supportsGogmaPrediction ? '対応' : '未対応'}</Typography><Typography>Keep Bonuses予測 capability: {productionRngRuntime.capabilities.supportsKeepBonusesPrediction ? '対応' : '未対応'}</Typography><Typography>Seed Search capability: {productionRngRuntime.capabilities.supportsSeedSearch ? '対応' : '未対応'}</Typography></Stack></Paper>
-    {capabilities && <Paper variant="outlined" sx={{ p: 2 }}><Typography variant="h2" gutterBottom>現在のRNG状態で利用可能な機能</Typography><Stack spacing={1}><Typography>巨戟アーティア予測: {capabilities.canPredictGogma ? '利用可能' : '利用不可'}</Typography><Typography>スキル予測: {capabilities.canPredictSkills ? '利用可能' : '利用不可'}</Typography><Typography>通常アーティア検索: {capabilities.canSearchNormalArtian ? '利用可能' : '利用不可'}</Typography><Typography>生産計画作成: Production Engine有効（必要項目は作成ルートにより異なります）</Typography>{displayedRequirements.length > 0 && <Alert severity="warning"><Typography variant="subtitle2">現在不足している項目</Typography>{displayedRequirements.map((requirement) => <Typography variant="body2" key={requirement}>{getRngMissingRequirementLabel(requirement)}</Typography>)}</Alert>}</Stack></Paper>}
+  const engineCapabilities = productionRngRuntime.capabilities
+
+  return <PageShell title="RNG状態設定" description="検索や予測に使うRNG状態を項目ごとに設定します。"><Stack spacing={{ xs: 2, md: 3 }}>
+    {!form && !loadError && <LinearProgress aria-label="RNG状態を読み込み中" />}
+    {loadError && <Alert severity="error">{loadError}</Alert>}
+    {form && state && <>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))' }, gap: { xs: 2, md: 3 }, alignItems: 'start' }}>
+        <SectionCard title="保存済みのRNG状態">
+          <Box component="dl" sx={{ m: 0 }}>
+            {(['baseSeed', 'gogmaCounter', 'skillCounter'] as const).map((key) => {
+              const status = knownStatus(state[key].value === null, state[key].isConfirmed)
+              return <DefinitionRow key={key} label={knownLabels[key]}><StatusChip label={status.label} tone={status.tone} /></DefinitionRow>
+            })}
+          </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            {hasUnsavedChanges ? '未保存の変更があります。保存するとこの表示に反映されます。' : '使用中: 検索・予測に使用する値です。未確認: 値はありますが使用しません。'}
+          </Typography>
+        </SectionCard>
+
+        <SectionCard title="値が分からない場合" sx={{ borderLeftWidth: 4, borderLeftColor: 'primary.main' }}>
+          <Stack spacing={1.5}>
+            <Typography>Normal → Gogma conversionと連続Resetの観測から、専用Wizardで次の値を特定します。</Typography>
+            <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+              <Typography component="li" variant="body2">Base Seed（基準シード）</Typography>
+              <Typography component="li" variant="body2">調査開始前のスキルカウンター</Typography>
+              <Typography component="li" variant="body2">調査開始前の巨戟カウンター</Typography>
+            </Box>
+            <Typography variant="body2" color="text.secondary">開始条件: RNG状態設定に未保存の変更がなく、マスターデータを利用できること。手動入力は引き続き利用できます。</Typography>
+            {hasUnsavedChanges && <Alert severity="warning">{UNSAVED_WIZARD_MESSAGE}</Alert>}
+            {!masterResult.ok && <Alert severity="error">マスターデータが利用できないためWizardを開始できません。</Alert>}
+            {wizardError && wizardError !== UNSAVED_WIZARD_MESSAGE && <Alert severity="error">{wizardError}</Alert>}
+            {adoptionNotice && <Alert severity="success" onClose={() => setAdoptionNotice(null)}>{adoptionNotice}</Alert>}
+            <Box>
+              <Button variant="contained" sx={{ minHeight: 44 }} disabled={!masterResult.ok || identificationCoordinator !== null || hasUnsavedChanges} onClick={startIdentification}>Identification Wizardを開始</Button>
+            </Box>
+          </Stack>
+        </SectionCard>
+      </Box>
+
+      <SectionCard title="手動入力">
+        <Stack spacing={2}>
+          <Typography variant="body2" color="text.secondary">正しいことを確認できた値だけ「この値を検索・予測に使用する」を選択してください。直接入力した値の取得方法は「手動入力」になります。空欄は既存値を変更しません。</Typography>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(3, minmax(0, 1fr))' }, gap: { xs: 1.5, md: 2 }, alignItems: 'start' }}>
+            <KnownField fieldId="base-seed" label={knownLabels.baseSeed} description="10進数または0xで始まる16進数を入力します。保存時に予測用の10進文字列へ正規化します。" value={form.baseSeed} onChange={(value) => updateField('baseSeed', value)} />
+            <KnownField fieldId="gogma-counter" label={knownLabels.gogmaCounter} description="巨戟アーティアの復元ボーナス予測に使う位置です。" numeric value={form.gogmaCounter} onChange={(value) => updateField('gogmaCounter', value)} />
+            <KnownField fieldId="skill-counter" label={knownLabels.skillCounter} description="シリーズ・グループスキル予測に使う位置です。" numeric value={form.skillCounter} onChange={(value) => updateField('skillCounter', value)} />
+          </Box>
+          <Accordion slotProps={{ heading: { component: 'h3' } }}>
+            <AccordionSummary expandIcon={<ExpandIcon />} sx={{ minHeight: 48 }}>
+              <Typography component="span" variant="subtitle1">詳細・互換情報（Counter Gate）</Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Stack spacing={1.5}>
+                <Typography variant="body2" color="text.secondary">Counter Gateは旧形式・診断・互換性のために保持する値です。Production予測とIdentificationには使用しません。値を編集した場合も下の「保存」で保存します。</Typography>
+                <Box sx={{ maxWidth: { md: 'calc((100% - 32px) / 3)' } }}>
+                  <KnownField fieldId="counter-gate" label={knownLabels.counterGate} description="legacy / diagnostic / compatibility情報です。Production予測やIdentificationのauthorityではありません。" numeric value={form.counterGate} onChange={(value) => updateField('counterGate', value)} />
+                </Box>
+              </Stack>
+            </AccordionDetails>
+          </Accordion>
+          <TextField label="メモ" multiline minRows={2} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
+          {saveError && <Alert severity="error">{saveError}</Alert>}
+          {saveNotice && <Alert severity="success" onClose={() => setSaveNotice(null)}>{saveNotice}</Alert>}
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'flex-end' }}>
+            {hasUnsavedChanges && <Typography variant="body2" color="text.secondary">未保存の変更があります。</Typography>}
+            <Button variant="contained" sx={{ minHeight: 44, minWidth: 120 }} onClick={() => void save()}>保存</Button>
+          </Stack>
+        </Stack>
+      </SectionCard>
+    </>}
+
+    {previewInvalid && <SectionCard title="現在の入力内容で利用可能な機能">
+      <Alert severity="info">現在の入力内容にエラーがあるため、利用可能な機能を判定できません。入力内容を修正すると判定結果を表示します。</Alert>
+    </SectionCard>}
+
+    {capabilities && <SectionCard title="現在の入力内容で利用可能な機能">
+      <Box component="dl" sx={{ m: 0 }}>
+        <DefinitionRow label="巨戟アーティア予測"><StatusChip label={capabilities.canPredictGogma ? '利用可能' : '利用不可'} tone={capabilities.canPredictGogma ? 'positive' : 'caution'} /></DefinitionRow>
+        <DefinitionRow label="スキル予測"><StatusChip label={capabilities.canPredictSkills ? '利用可能' : '利用不可'} tone={capabilities.canPredictSkills ? 'positive' : 'caution'} /></DefinitionRow>
+        <DefinitionRow label="通常アーティア検索"><StatusChip label={capabilities.canSearchNormalArtian ? '利用可能' : '利用不可'} tone={capabilities.canSearchNormalArtian ? 'positive' : 'caution'} /></DefinitionRow>
+        <DefinitionRow label="生産計画作成"><StatusChip label="作成ルート依存" tone="info" /></DefinitionRow>
+      </Box>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+        生産計画作成: Production Engine有効（必要項目は作成ルートにより異なります）
+        {hasUnsavedChanges ? ' 判定には未保存の入力内容を含みます。' : ''}
+      </Typography>
+      {displayedRequirements.length > 0 && <Alert severity="warning" sx={{ mt: 1.5 }}><Typography variant="subtitle2" component="p">現在不足している項目</Typography><Box component="ul" sx={{ m: 0, pl: 2.5 }}>{displayedRequirements.map((requirement) => <Typography component="li" variant="body2" key={requirement}>{getRngMissingRequirementLabel(requirement)}</Typography>)}</Box></Alert>}
+    </SectionCard>}
+
+    <Accordion slotProps={{ heading: { component: 'h2' } }}>
+      <AccordionSummary expandIcon={<ExpandIcon />} sx={{ minHeight: 48 }}>
+        <Typography component="span" variant="subtitle1">Production RNG Engine（技術情報）</Typography>
+      </AccordionSummary>
+      <AccordionDetails>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Engine自体が対応している機能です。現在の入力内容で使えるかどうかは「現在の入力内容で利用可能な機能」を確認してください。</Typography>
+        <Box component="dl" sx={{ m: 0 }}>
+          <DefinitionRow label="Engine mode"><Typography variant="body2" component="span" className="tabular-nums">{productionRngRuntime.mode}</Typography></DefinitionRow>
+          <DefinitionRow label="Engine version"><Typography variant="body2" component="span" className="tabular-nums">{productionRngRuntime.version}</Typography></DefinitionRow>
+          <DefinitionRow label="通常アーティア予測"><StatusChip label={engineCapabilities.supportsNormalArtianPrediction ? '対応' : '未対応'} tone={engineCapabilities.supportsNormalArtianPrediction ? 'positive' : 'neutral'} /></DefinitionRow>
+          <DefinitionRow label="スキル予測"><StatusChip label={engineCapabilities.supportsSkillPrediction ? '対応' : '未対応'} tone={engineCapabilities.supportsSkillPrediction ? 'positive' : 'neutral'} /></DefinitionRow>
+          <DefinitionRow label="巨戟アーティア予測"><StatusChip label={engineCapabilities.supportsGogmaPrediction ? '対応' : '未対応'} tone={engineCapabilities.supportsGogmaPrediction ? 'positive' : 'neutral'} /></DefinitionRow>
+          <DefinitionRow label="Keep Bonuses予測"><StatusChip label={engineCapabilities.supportsKeepBonusesPrediction ? '対応' : '未対応'} tone={engineCapabilities.supportsKeepBonusesPrediction ? 'positive' : 'neutral'} /></DefinitionRow>
+          <DefinitionRow label="Seed Search"><StatusChip label={engineCapabilities.supportsSeedSearch ? '対応' : '未対応'} tone={engineCapabilities.supportsSeedSearch ? 'positive' : 'neutral'} /></DefinitionRow>
+        </Box>
+      </AccordionDetails>
+    </Accordion>
+
     {identificationCoordinator && state && masterResult.ok && <IdentificationWizardDialog coordinator={identificationCoordinator} initialRngState={state} master={masterResult.data} onAdopted={handleIdentificationAdopted} onClose={() => setIdentificationCoordinator(null)} />}
   </Stack></PageShell>
 }
