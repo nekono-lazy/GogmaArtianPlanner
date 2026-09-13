@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import {
   Alert,
+  Box,
   Button,
   Checkbox,
   Dialog,
@@ -19,8 +20,11 @@ import {
   Typography,
 } from '@mui/material'
 import { PageShell } from '../components/PageShell'
+import { StatusChip } from '../components/StatusChip'
+import { BonusSlotList, ManagementListItem } from '../components/ManagementListItem'
 import { BonusSetEditor } from '../components/forms/BonusSetEditor'
 import { TargetCompromiseEditor } from '../components/forms/TargetCompromiseEditor'
+import { bonusLabel } from '../components/search/searchPresentation'
 import {
   hasTargetCompromise,
   isCompatiblePreferredOwnedWeapon,
@@ -29,6 +33,7 @@ import {
 import { SkillConditionEditor } from '../components/forms/SkillConditionEditor'
 import { MasterDataStatusAlert } from '../components/MasterDataStatusAlert'
 import { loadMasterData } from '../domain/master/loadMasterData'
+import type { MasterDataRoot } from '../domain/master/masterTypes'
 import {
   getEnabledElements,
   getEnabledWeaponTypes,
@@ -40,12 +45,14 @@ import {
 } from '../domain/forms/entityDrafts'
 import type {
   OwnedWeapon,
+  SkillCondition,
   TargetWeapon,
 } from '../domain/models/publicTypes'
 import { ownedWeaponRepository } from '../db/repositories'
 import {
   artianWeaponKindLabels,
   ownedWeaponStatusLabels,
+  skillMatchModeLabels,
 } from '../presentation/labels'
 import {
   EntityFormValidationError,
@@ -56,6 +63,13 @@ import {
 import { getPersistenceReferenceKindLabel } from '../presentation/labels'
 
 const NO_PREFERRED_OWNED_WEAPON = ''
+
+/** See `OwnedWeaponsPage`: a narrower margin on smartphone, actions outside the scroll. */
+const dialogPaperSx = {
+  m: { xs: 1, sm: 4 },
+  width: { xs: 'calc(100% - 16px)', sm: 'calc(100% - 64px)' },
+  maxHeight: { xs: 'calc(100% - 16px)', sm: 'calc(100% - 64px)' },
+}
 
 /**
  * The Target edit dropdown order of `docs/UI_FLOW.md` 8.1.
@@ -74,6 +88,22 @@ function preferredOptionGroup(
   if (weapon.id === currentPreferredId) return 0
   if (weapon.isProtected) return 3
   return claimedByOtherTarget ? 2 : 1
+}
+
+/** A read-only summary of one stored SkillCondition, for the list. */
+function skillConditionSummary(condition: SkillCondition, master: MasterDataRoot): string {
+  const parts = [
+    condition.seriesSkillId === null
+      ? null
+      : `シリーズ ${master.seriesSkills.find(({ id }) => id === condition.seriesSkillId)?.displayNameJa ?? condition.seriesSkillId}`,
+    condition.groupSkillId === null
+      ? null
+      : `グループ ${master.groupSkills.find(({ id }) => id === condition.groupSkillId)?.displayNameJa ?? condition.groupSkillId}`,
+  ].filter((part): part is string => part !== null)
+  if (parts.length === 0) return '指定なし'
+  return parts.length > 1
+    ? `${parts.join(' ／ ')}（${skillMatchModeLabels[condition.matchMode]}）`
+    : parts[0]
 }
 
 const masterResult = loadMasterData()
@@ -120,12 +150,15 @@ export function TargetWeaponsPage({
   const [targets, setTargets] = useState<TargetWeapon[]>([])
   const [ownedWeapons, setOwnedWeapons] = useState<OwnedWeapon[]>([])
   const [loading, setLoading] = useState(api !== null)
+  const [loadFailed, setLoadFailed] = useState(false)
   const [editing, setEditing] = useState<TargetWeapon | null>(null)
   const [draft, setDraft] = useState<TargetWeaponDraft | null>(null)
   const [error, setError] = useState<string | null>(
     api ? null : 'マスターデータが利用できません。',
   )
   const [notice, setNotice] = useState<string | null>(null)
+  const listHeadingId = useId()
+  const preferredHelpId = useId()
 
   useEffect(() => {
     if (!api) return
@@ -139,6 +172,7 @@ export function TargetWeaponsPage({
       })
       .catch((caught: unknown) => {
         if (active) {
+          setLoadFailed(true)
           setError(
             caught instanceof Error
               ? caught.message
@@ -308,241 +342,318 @@ export function TargetWeaponsPage({
     <PageShell
       title="目標武器"
       description="欲しい完成武器の理想条件と実用条件を管理します。"
+      actions={
+        <Button variant="contained" onClick={openNew} sx={{ minHeight: 44 }}>
+          目標武器を追加
+        </Button>
+      }
     >
       <Stack spacing={2}>
         <MasterDataStatusAlert master={master} />
-        {loading && <LinearProgress />}
         {error && <Alert severity="error">{error}</Alert>}
-        {notice && <Alert severity="success">{notice}</Alert>}
-        <Button variant="contained" onClick={openNew}>
-          目標武器を追加
-        </Button>
-        {!loading && targets.length === 0 && (
-          <Alert severity="info">目標武器は未登録です。</Alert>
+        {notice && (
+          <Alert severity="success" onClose={() => setNotice(null)}>
+            {notice}
+          </Alert>
         )}
-        {targets.map((target) => (
-          <Paper key={target.id} variant="outlined" sx={{ p: 2 }}>
-            <Stack spacing={1}>
-              <Typography variant="h3">{target.name}</Typography>
-              <Typography>
-                {
-                  weaponTypes.find(({ id }) => id === target.weaponTypeId)
-                    ?.displayNameJa
-                }{' '}
-                /{' '}
-                {
-                  elements.find(({ id }) => id === target.elementId)
-                    ?.displayNameJa
-                }{' '}
-                ／ 優先度 {target.priority} ／{' '}
-                {target.isEnabled ? '有効' : '無効'}
+        <Paper
+          component="section"
+          variant="outlined"
+          aria-labelledby={listHeadingId}
+          sx={{ overflow: 'hidden' }}
+        >
+          <Stack
+            direction="row"
+            spacing={1}
+            useFlexGap
+            sx={{ px: { xs: 2, md: 2.5 }, py: 2, alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap' }}
+          >
+            <Typography id={listHeadingId} component="h2" variant="h2">
+              登録済みの目標武器
+            </Typography>
+            {!loading && !loadFailed && (
+              <Typography variant="body2" color="text.secondary" className="tabular-nums">
+                {targets.length}件（有効 {targets.filter(({ isEnabled }) => isEnabled).length}件）
               </Typography>
-              <Typography variant="body2">
-                優先起点:{' '}
-                {ownedWeapons.find(
-                  ({ id }) => id === target.preferredOwnedWeaponId,
-                )?.name ?? 'なし'}
+            )}
+          </Stack>
+          {loading && <LinearProgress aria-label="目標武器を読み込み中" />}
+          {!loading && !loadFailed && targets.length === 0 && (
+            <Box sx={{ px: { xs: 2, md: 2.5 }, py: 3, borderTop: 1, borderColor: 'divider' }}>
+              <Typography>目標武器は未登録です。</Typography>
+              <Typography variant="body2" color="text.secondary">
+                「目標武器を追加」から、欲しい完成武器の理想条件を登録します。
               </Typography>
-              <Typography variant="body2">理想: 5枠設定済み</Typography>
-              {!hasTargetCompromise(target) && <Typography>妥協なし（理想のみ検索）</Typography>}
-              {target.compromiseNeedsReview && <Alert severity="info">条件の仕様変更により旧妥協条件を解除しました。理想条件を保持しています。実用・代替・実用スキルを確認して再設定してください。</Alert>}
-              <Typography variant="body2">
-                実用: 条件 {target.practicalBonusConditions.length}件、代替条件{' '}
-                {target.alternativeBonusRules.length}件
-              </Typography>
-              <Stack direction="row">
-                <Button onClick={() => openEdit(target)}>編集</Button>
-                <Button color="error" onClick={() => void remove(target)}>
-                  削除
-                </Button>
-              </Stack>
-            </Stack>
-          </Paper>
-        ))}
+            </Box>
+          )}
+          {!loading && targets.length > 0 && (
+            <Box component="ul" sx={{ m: 0, p: 0 }}>
+              {targets.map((target) => (
+                <ManagementListItem
+                  key={target.id}
+                  title={target.name}
+                  muted={!target.isEnabled}
+                  badges={
+                    <>
+                      <StatusChip
+                        label={target.isEnabled ? '有効' : '無効'}
+                        tone={target.isEnabled ? 'positive' : 'neutral'}
+                      />
+                      <StatusChip label={`優先度 ${target.priority}`} tone="info" />
+                    </>
+                  }
+                  summary={
+                    <Typography variant="body2" color="text.secondary">
+                      {weaponTypes.find(({ id }) => id === target.weaponTypeId)?.displayNameJa}
+                      {' / '}
+                      {elements.find(({ id }) => id === target.elementId)?.displayNameJa}
+                    </Typography>
+                  }
+                  detail={
+                    <Stack spacing={1}>
+                      <BonusSlotList
+                        heading="理想ボーナス"
+                        labels={target.idealBonuses.map((bonus) =>
+                          bonusLabel(bonus, target.weaponTypeId, master),
+                        )}
+                      />
+                      <Typography variant="body2">
+                        理想スキル: {skillConditionSummary(target.idealSkillCondition, master)}
+                      </Typography>
+                    </Stack>
+                  }
+                  status={
+                    <Stack spacing={0.75} sx={{ alignItems: 'flex-start' }}>
+                      <Typography variant="caption" color="text.secondary">
+                        妥協条件
+                      </Typography>
+                      {hasTargetCompromise(target) ? (
+                        <Typography variant="body2">
+                          実用ボーナス条件 {target.practicalBonusConditions.length}件
+                          {' ／ '}代替ボーナス条件 {target.alternativeBonusRules.length}件
+                          <br />
+                          実用スキル: {skillConditionSummary(target.practicalSkillCondition, master)}
+                        </Typography>
+                      ) : (
+                        <Typography variant="body2">妥協なし（理想のみ検索）</Typography>
+                      )}
+                      {target.compromiseNeedsReview && (
+                        <>
+                          <StatusChip label="妥協条件の再設定が必要" tone="caution" />
+                          <Typography variant="body2" color="text.secondary">
+                            条件の仕様変更により旧妥協条件を解除しました。理想条件を保持しています。実用・代替・実用スキルを確認して再設定してください。
+                          </Typography>
+                        </>
+                      )}
+                      <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                        優先起点:{' '}
+                        {ownedWeapons.find(({ id }) => id === target.preferredOwnedWeaponId)?.name ?? 'なし'}
+                      </Typography>
+                    </Stack>
+                  }
+                  onEdit={() => openEdit(target)}
+                  onDelete={() => void remove(target)}
+                />
+              ))}
+            </Box>
+          )}
+        </Paper>
         <Dialog
           open={draft !== null}
           onClose={() => setDraft(null)}
           fullWidth
-          maxWidth="lg"
+          maxWidth="md"
+          slotProps={{ paper: { sx: dialogPaperSx } }}
         >
-          <DialogTitle>
+          <DialogTitle sx={{ px: { xs: 2, sm: 3 } }}>
             {editing ? '目標武器を編集' : '目標武器を追加'}
           </DialogTitle>
           {draft && (
-            <DialogContent>
-              <Stack spacing={3} sx={{ pt: 1 }}>
-                <TextField
-                  label="名前"
-                  required
-                  value={draft.name}
-                  onChange={(event) =>
-                    setDraft({ ...draft, name: event.target.value })
-                  }
-                />
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                  <FormControl fullWidth>
-                    <InputLabel id="target-weapon-type">武器種</InputLabel>
-                    <Select
-                      labelId="target-weapon-type"
-                      label="武器種"
-                      value={draft.weaponTypeId}
-                      onChange={(event) => {
-                        try {
-                          setDraft(
-                            resetBonusConditions(
-                              draft,
-                              event.target.value,
-                              draft.elementId,
-                            ),
-                          )
-                        } catch (caught) {
-                          if (
-                            caught instanceof MasterOptionsUnavailableError
-                          ) {
-                            setError(caught.message)
-                          }
-                        }
-                      }}
-                    >
-                      {weaponTypes.map((type) => (
-                        <MenuItem key={type.id} value={type.id}>
-                          {type.displayNameJa}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  <FormControl fullWidth>
-                    <InputLabel id="target-element">属性</InputLabel>
-                    <Select
-                      labelId="target-element"
-                      label="属性"
-                      value={draft.elementId}
-                      onChange={(event) => {
-                        try {
-                          setDraft(
-                            resetBonusConditions(
-                              draft,
-                              draft.weaponTypeId,
-                              event.target.value,
-                            ),
-                          )
-                        } catch (caught) {
-                          if (
-                            caught instanceof MasterOptionsUnavailableError
-                          ) {
-                            setError(caught.message)
-                          }
-                        }
-                      }}
-                    >
-                      {elements.map((element) => (
-                        <MenuItem key={element.id} value={element.id}>
-                          {element.displayNameJa}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  <FormControl fullWidth>
-                    <InputLabel id="target-priority">優先度</InputLabel>
-                    <Select
-                      labelId="target-priority"
-                      label="優先度"
-                      value={draft.priority}
-                      onChange={(event) =>
-                        setDraft({
-                          ...draft,
-                          priority: Number(
-                            event.target.value,
-                          ) as TargetWeapon['priority'],
-                        })
-                      }
-                    >
-                      {[1, 2, 3, 4, 5].map((value) => (
-                        <MenuItem key={value} value={value}>
-                          {value}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Stack>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={draft.isEnabled}
-                      onChange={(event) =>
-                        setDraft({
-                          ...draft,
-                          isEnabled: event.target.checked,
-                        })
-                      }
-                    />
-                  }
-                  label="有効"
-                />
-                <FormControl fullWidth>
-                  <InputLabel id="target-preferred-owned-weapon">
-                    優先する所持武器
-                  </InputLabel>
-                  <Select
-                    labelId="target-preferred-owned-weapon"
-                    label="優先する所持武器"
-                    value={
-                      draft.preferredOwnedWeaponId ?? NO_PREFERRED_OWNED_WEAPON
+            <DialogContent dividers sx={{ px: { xs: 2, sm: 3 } }}>
+              <Stack spacing={3}>
+                <Stack component="section" spacing={1.5}>
+                  <Typography component="h3" variant="h3">基本情報</Typography>
+                  <TextField
+                    label="名前"
+                    required
+                    value={draft.name}
+                    onChange={(event) =>
+                      setDraft({ ...draft, name: event.target.value })
                     }
-                    onChange={(event) => {
-                      const value = event.target.value
-                      if (value === NO_PREFERRED_OWNED_WEAPON) {
-                        setDraft({ ...draft, preferredOwnedWeaponId: null })
-                        return
+                  />
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.7fr)' }, gap: 1.5 }}>
+                    <FormControl fullWidth>
+                      <InputLabel id="target-weapon-type">武器種</InputLabel>
+                      <Select
+                        labelId="target-weapon-type"
+                        label="武器種"
+                        value={draft.weaponTypeId}
+                        onChange={(event) => {
+                          try {
+                            setDraft(
+                              resetBonusConditions(
+                                draft,
+                                event.target.value,
+                                draft.elementId,
+                              ),
+                            )
+                          } catch (caught) {
+                            if (
+                              caught instanceof MasterOptionsUnavailableError
+                            ) {
+                              setError(caught.message)
+                            }
+                          }
+                        }}
+                      >
+                        {weaponTypes.map((type) => (
+                          <MenuItem key={type.id} value={type.id}>
+                            {type.displayNameJa}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <FormControl fullWidth>
+                      <InputLabel id="target-element">属性</InputLabel>
+                      <Select
+                        labelId="target-element"
+                        label="属性"
+                        value={draft.elementId}
+                        onChange={(event) => {
+                          try {
+                            setDraft(
+                              resetBonusConditions(
+                                draft,
+                                draft.weaponTypeId,
+                                event.target.value,
+                              ),
+                            )
+                          } catch (caught) {
+                            if (
+                              caught instanceof MasterOptionsUnavailableError
+                            ) {
+                              setError(caught.message)
+                            }
+                          }
+                        }}
+                      >
+                        {elements.map((element) => (
+                          <MenuItem key={element.id} value={element.id}>
+                            {element.displayNameJa}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <FormControl fullWidth>
+                      <InputLabel id="target-priority">優先度</InputLabel>
+                      <Select
+                        labelId="target-priority"
+                        label="優先度"
+                        value={draft.priority}
+                        onChange={(event) =>
+                          setDraft({
+                            ...draft,
+                            priority: Number(
+                              event.target.value,
+                            ) as TargetWeapon['priority'],
+                          })
+                        }
+                      >
+                        {[1, 2, 3, 4, 5].map((value) => (
+                          <MenuItem key={value} value={value}>
+                            {value}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Box>
+                  <FormControlLabel
+                    sx={{ minHeight: 44, alignSelf: 'flex-start' }}
+                    control={
+                      <Checkbox
+                        checked={draft.isEnabled}
+                        onChange={(event) =>
+                          setDraft({
+                            ...draft,
+                            isEnabled: event.target.checked,
+                          })
+                        }
+                      />
+                    }
+                    label="有効"
+                  />
+                </Stack>
+                <Stack component="section" spacing={1}>
+                  <Typography component="h3" variant="h3">優先する所持武器</Typography>
+                  <FormControl fullWidth>
+                    <InputLabel id="target-preferred-owned-weapon">
+                      優先する所持武器
+                    </InputLabel>
+                    <Select
+                      labelId="target-preferred-owned-weapon"
+                      label="優先する所持武器"
+                      aria-describedby={preferredHelpId}
+                      value={
+                        draft.preferredOwnedWeaponId ?? NO_PREFERRED_OWNED_WEAPON
                       }
-                      const holder = targets.find(
-                        (target) =>
-                          target.id !== editing?.id &&
-                          target.preferredOwnedWeaponId === value,
-                      )
-                      if (
-                        holder &&
-                        !window.confirm(
-                          `この武器は現在「${holder.name}」の優先起点に設定されています。\n` +
-                            `この目標武器に変更すると、「${holder.name}」との紐づけは解除されます。\n` +
-                            '変更しますか？',
+                      onChange={(event) => {
+                        const value = event.target.value
+                        if (value === NO_PREFERRED_OWNED_WEAPON) {
+                          setDraft({ ...draft, preferredOwnedWeaponId: null })
+                          return
+                        }
+                        const holder = targets.find(
+                          (target) =>
+                            target.id !== editing?.id &&
+                            target.preferredOwnedWeaponId === value,
                         )
-                      ) {
-                        return
-                      }
-                      setDraft({
-                        ...draft,
-                        preferredOwnedWeaponId:
-                          value as TargetWeapon['preferredOwnedWeaponId'],
-                      })
-                    }}
-                  >
-                    <MenuItem value={NO_PREFERRED_OWNED_WEAPON}>指定なし</MenuItem>
-                    {preferredOwnedWeaponOptions.map(
-                      ({ weapon, holder, selectable }) => (
-                        <MenuItem
-                          key={weapon.id}
-                          value={weapon.id}
-                          disabled={!selectable}
-                        >
-                          {`${artianWeaponKindLabels[weapon.kind]} / ${weapon.name}`}
-                          {weapon.kind === 'gogma'
-                            ? ` / ${ownedWeaponStatusLabels[weapon.status]}`
-                            : ''}
-                          {weapon.isProtected
-                            ? ' [保護中・選択不可]'
-                            : holder
-                              ? ` [${holder.name}に割当中]`
+                        if (
+                          holder &&
+                          !window.confirm(
+                            `この武器は現在「${holder.name}」の優先起点に設定されています。\n` +
+                              `この目標武器に変更すると、「${holder.name}」との紐づけは解除されます。\n` +
+                              '変更しますか？',
+                          )
+                        ) {
+                          return
+                        }
+                        setDraft({
+                          ...draft,
+                          preferredOwnedWeaponId:
+                            value as TargetWeapon['preferredOwnedWeaponId'],
+                        })
+                      }}
+                    >
+                      <MenuItem value={NO_PREFERRED_OWNED_WEAPON}>指定なし</MenuItem>
+                      {preferredOwnedWeaponOptions.map(
+                        ({ weapon, holder, selectable }) => (
+                          <MenuItem
+                            key={weapon.id}
+                            value={weapon.id}
+                            disabled={!selectable}
+                            // Long weapon / Target names wrap instead of being
+                            // cut off inside a narrow menu.
+                            sx={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }}
+                          >
+                            {`${artianWeaponKindLabels[weapon.kind]} / ${weapon.name}`}
+                            {weapon.kind === 'gogma'
+                              ? ` / ${ownedWeaponStatusLabels[weapon.status]}`
                               : ''}
-                        </MenuItem>
-                      ),
-                    )}
-                  </Select>
-                </FormControl>
-                <Typography variant="body2">
-                  この目標を作る際の起点として優先します。
-                  より短い作成ルートがある場合は、そちらが選ばれることがあります。
-                </Typography>
+                            {weapon.isProtected
+                              ? ' [保護中・選択不可]'
+                              : holder
+                                ? ` [${holder.name}に割当中]`
+                                : ''}
+                          </MenuItem>
+                        ),
+                      )}
+                    </Select>
+                  </FormControl>
+                  <Typography id={preferredHelpId} variant="body2" color="text.secondary">
+                    この目標を作る際の起点として優先します。
+                    より短い作成ルートがある場合は、そちらが選ばれることがあります。
+                  </Typography>
+                </Stack>
                 <BonusSetEditor
                   label="理想の復元ボーナス5枠"
                   master={master}
@@ -555,26 +666,29 @@ export function TargetWeaponsPage({
                   }
                 />
                 <TargetCompromiseEditor target={draft} master={master} onChange={(conditions) => setDraft({ ...draft, ...conditions })} />
-                <Typography>実用スキルの指定がない場合、スキルは理想条件だけを許可します。ボーナスが実用・代替の場合も、実用スキルと組み合わせられます。</Typography>
-                <SkillConditionEditor
-                  label="理想スキル条件"
-                  master={master}
-                  value={draft.idealSkillCondition}
-                  onChange={(idealSkillCondition) =>
-                    setDraft({ ...draft, idealSkillCondition })
-                  }
-                />
-                <SkillConditionEditor
-                  label="実用スキル条件"
-                  master={master}
-                  value={draft.practicalSkillCondition}
-                  onChange={(practicalSkillCondition) =>
-                    setDraft({ ...draft, practicalSkillCondition })
-                  }
-                />
+                <Stack spacing={2}>
+                  <Typography variant="body2" color="text.secondary">実用スキルの指定がない場合、スキルは理想条件だけを許可します。ボーナスが実用・代替の場合も、実用スキルと組み合わせられます。</Typography>
+                  <SkillConditionEditor
+                    label="理想スキル条件"
+                    master={master}
+                    value={draft.idealSkillCondition}
+                    onChange={(idealSkillCondition) =>
+                      setDraft({ ...draft, idealSkillCondition })
+                    }
+                  />
+                  <SkillConditionEditor
+                    label="実用スキル条件"
+                    master={master}
+                    value={draft.practicalSkillCondition}
+                    onChange={(practicalSkillCondition) =>
+                      setDraft({ ...draft, practicalSkillCondition })
+                    }
+                  />
+                </Stack>
                 <TextField
                   label="メモ"
                   multiline
+                  minRows={2}
                   value={draft.memo ?? ''}
                   onChange={(event) =>
                     setDraft({
@@ -586,9 +700,9 @@ export function TargetWeaponsPage({
               </Stack>
             </DialogContent>
           )}
-          <DialogActions>
-            <Button onClick={() => setDraft(null)}>キャンセル</Button>
-            <Button variant="contained" onClick={() => void save()}>
+          <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: 1.5, gap: 1 }}>
+            <Button onClick={() => setDraft(null)} sx={{ minHeight: 44 }}>キャンセル</Button>
+            <Button variant="contained" onClick={() => void save()} sx={{ minHeight: 44, minWidth: 96 }}>
               保存
             </Button>
           </DialogActions>

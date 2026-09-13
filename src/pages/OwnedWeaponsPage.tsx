@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import {
   Alert,
+  Box,
   Button,
   Checkbox,
   Chip,
@@ -20,6 +21,8 @@ import {
   Typography,
 } from '@mui/material'
 import { PageShell } from '../components/PageShell'
+import { StatusChip } from '../components/StatusChip'
+import { BonusSlotList, ManagementListItem } from '../components/ManagementListItem'
 import { BonusSetEditor } from '../components/forms/BonusSetEditor'
 import { MasterDataStatusAlert } from '../components/MasterDataStatusAlert'
 import { loadMasterData } from '../domain/master/loadMasterData'
@@ -53,6 +56,17 @@ import {
 } from '../presentation/labels'
 
 const masterResult = loadMasterData()
+
+/**
+ * Smartphone: a narrower outer margin so the form keeps a usable width.
+ * The title and actions stay outside the scrolling content (MUI `scroll="paper"`),
+ * so 保存 / キャンセル remain reachable however long the form is.
+ */
+const dialogPaperSx = {
+  m: { xs: 1, sm: 4 },
+  width: { xs: 'calc(100% - 16px)', sm: 'calc(100% - 64px)' },
+  maxHeight: { xs: 'calc(100% - 16px)', sm: 'calc(100% - 64px)' },
+}
 
 export interface OwnedWeaponsPageDependencies {
   getAll(): Promise<OwnedWeapon[]>
@@ -100,12 +114,15 @@ export function OwnedWeaponsPage({
   const [weapons, setWeapons] = useState<OwnedWeapon[]>([])
   const [targets, setTargets] = useState<TargetWeapon[]>([])
   const [loading, setLoading] = useState(api !== null)
+  const [loadFailed, setLoadFailed] = useState(false)
   const [editing, setEditing] = useState<OwnedWeapon | null>(null)
   const [draft, setDraft] = useState<OwnedWeaponDraft | null>(null)
   const [error, setError] = useState<string | null>(
     api ? null : 'マスターデータが利用できません。',
   )
   const [notice, setNotice] = useState<string | null>(null)
+  const listHeadingId = useId()
+  const kindHelpId = useId()
 
   useEffect(() => {
     if (!api) return
@@ -119,6 +136,7 @@ export function OwnedWeaponsPage({
       })
       .catch((caught: unknown) => {
         if (active) {
+          setLoadFailed(true)
           setError(
             caught instanceof Error
               ? caught.message
@@ -272,203 +290,236 @@ export function OwnedWeaponsPage({
     ),
   })
 
+  const bonusLabels = (weapon: OwnedWeapon) => {
+    const scope = weapon.kind === 'normal' ? 'normal_artian' : 'gogma_artian'
+    return weapon.restorationBonuses.map(
+      (bonus) =>
+        master.weaponBonusDefinitions.find(
+          (definition) =>
+            definition.scope === scope &&
+            definition.weaponTypeId === weapon.weaponTypeId &&
+            definition.bonusTypeId === bonus.bonusTypeId &&
+            definition.bonusRankId === bonus.bonusRankId,
+        )?.displayNameJa ?? '不明',
+    )
+  }
+
   return (
     <PageShell
       title="所持武器"
       description="所持している通常／巨戟アーティアを1本ずつ管理します。"
+      actions={
+        <Button variant="contained" onClick={openNew} sx={{ minHeight: 44 }}>
+          所持武器を追加
+        </Button>
+      }
     >
       <Stack spacing={2}>
         <MasterDataStatusAlert master={master} />
-        {loading && <LinearProgress />}
         {error && <Alert severity="error">{error}</Alert>}
-        {notice && <Alert severity="success">{notice}</Alert>}
-        <Button variant="contained" onClick={openNew}>
-          所持武器を追加
-        </Button>
-        {!loading && weapons.length === 0 && (
-          <Alert severity="info">所持武器は未登録です。</Alert>
+        {notice && (
+          <Alert severity="success" onClose={() => setNotice(null)}>
+            {notice}
+          </Alert>
         )}
-        {weapons.map((weapon) => {
-          const scope =
-            weapon.kind === 'normal' ? 'normal_artian' : 'gogma_artian'
-          return (
-            <Paper key={weapon.id} variant="outlined" sx={{ p: 2 }}>
-              <Stack spacing={1}>
-                <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-                  <Typography variant="h3">{weapon.name}</Typography>
-                  <Chip label={artianWeaponKindLabels[weapon.kind]} />
-                  {weapon.kind === 'gogma' && (
-                    <Chip label={ownedWeaponStatusLabels[weapon.status]} />
-                  )}
-                  <Chip
-                    label={weapon.isProtected ? '保護中' : '未保護'}
-                    color={weapon.isProtected ? 'success' : 'default'}
-                  />
-                </Stack>
-                <Typography>
-                  {
-                    weaponTypes.find(({ id }) => id === weapon.weaponTypeId)
-                      ?.displayNameJa
-                  }{' '}
-                  /{' '}
-                  {
-                    elements.find(({ id }) => id === weapon.elementId)
-                      ?.displayNameJa
+        <Paper
+          component="section"
+          variant="outlined"
+          aria-labelledby={listHeadingId}
+          sx={{ overflow: 'hidden' }}
+        >
+          <Stack
+            direction="row"
+            spacing={1}
+            useFlexGap
+            sx={{ px: { xs: 2, md: 2.5 }, py: 2, alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap' }}
+          >
+            <Typography id={listHeadingId} component="h2" variant="h2">
+              登録済みの所持武器
+            </Typography>
+            {!loading && !loadFailed && (
+              <Typography variant="body2" color="text.secondary" className="tabular-nums">
+                {weapons.length}本
+              </Typography>
+            )}
+          </Stack>
+          {loading && <LinearProgress aria-label="所持武器を読み込み中" />}
+          {!loading && !loadFailed && weapons.length === 0 && (
+            <Box sx={{ px: { xs: 2, md: 2.5 }, py: 3, borderTop: 1, borderColor: 'divider' }}>
+              <Typography>所持武器は未登録です。</Typography>
+              <Typography variant="body2" color="text.secondary">
+                「所持武器を追加」から、通常アーティアまたは巨戟アーティアを1本ずつ登録します。
+              </Typography>
+            </Box>
+          )}
+          {!loading && weapons.length > 0 && (
+            <Box component="ul" sx={{ m: 0, p: 0 }}>
+              {weapons.map((weapon) => (
+                <ManagementListItem
+                  key={weapon.id}
+                  title={weapon.name}
+                  badges={
+                    <Chip size="small" variant="outlined" label={artianWeaponKindLabels[weapon.kind]} />
                   }
-                </Typography>
-                <Typography variant="body2">
-                  復元ボーナス:{' '}
-                  {weapon.restorationBonuses
-                    .map(
-                      (bonus) =>
-                        master.weaponBonusDefinitions.find(
-                          (definition) =>
-                            definition.scope === scope &&
-                            definition.weaponTypeId === weapon.weaponTypeId &&
-                            definition.bonusTypeId === bonus.bonusTypeId &&
-                            definition.bonusRankId === bonus.bonusRankId,
-                        )?.displayNameJa ?? '不明',
-                    )
-                    .join('、')}
-                </Typography>
-                {weapon.kind === 'gogma' && (
-                  <Typography variant="body2">
-                    シリーズスキル:{' '}
-                    {master.seriesSkills.find(
-                      ({ id }) => id === weapon.seriesSkillId,
-                    )?.displayNameJa ?? 'なし'}{' '}
-                    ／ グループスキル:{' '}
-                    {master.groupSkills.find(
-                      ({ id }) => id === weapon.groupSkillId,
-                    )?.displayNameJa ?? 'なし'}
-                  </Typography>
-                )}
-                <Typography variant="body2">
-                  状態:{' '}
-                  {weapon.kind === 'gogma'
-                    ? ownedWeaponStatusLabels[weapon.status]
-                    : '—'}
-                </Typography>
-                <Typography variant="body2">
-                  優先起点:{' '}
-                  {targets.find(
-                    (target) => target.preferredOwnedWeaponId === weapon.id,
-                  )?.name ?? 'なし'}
-                </Typography>
-                <Stack direction="row" spacing={1}>
-                  <Button onClick={() => openEdit(weapon)}>編集</Button>
-                  <Button color="error" onClick={() => void remove(weapon)}>
-                    削除
-                  </Button>
-                </Stack>
-              </Stack>
-            </Paper>
-          )
-        })}
+                  summary={
+                    <Typography variant="body2" color="text.secondary">
+                      {weaponTypes.find(({ id }) => id === weapon.weaponTypeId)?.displayNameJa}
+                      {' / '}
+                      {elements.find(({ id }) => id === weapon.elementId)?.displayNameJa}
+                    </Typography>
+                  }
+                  detail={
+                    <Stack spacing={1}>
+                      <BonusSlotList heading="復元ボーナス" labels={bonusLabels(weapon)} />
+                      {weapon.kind === 'gogma' && (
+                        <Typography variant="body2">
+                          シリーズスキル:{' '}
+                          {master.seriesSkills.find(({ id }) => id === weapon.seriesSkillId)?.displayNameJa ?? 'なし'}
+                          {' ／ '}グループスキル:{' '}
+                          {master.groupSkills.find(({ id }) => id === weapon.groupSkillId)?.displayNameJa ?? 'なし'}
+                        </Typography>
+                      )}
+                    </Stack>
+                  }
+                  status={
+                    <Stack spacing={0.75} sx={{ alignItems: 'flex-start' }}>
+                      <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
+                        <StatusChip
+                          label={`状態: ${weapon.kind === 'gogma' ? ownedWeaponStatusLabels[weapon.status] : '—'}`}
+                          tone={weapon.kind === 'gogma' ? 'info' : 'neutral'}
+                        />
+                        <StatusChip
+                          label={weapon.isProtected ? '保護中' : '未保護'}
+                          tone={weapon.isProtected ? 'positive' : 'neutral'}
+                        />
+                      </Stack>
+                      <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                        優先起点:{' '}
+                        {targets.find((target) => target.preferredOwnedWeaponId === weapon.id)?.name ?? 'なし'}
+                      </Typography>
+                    </Stack>
+                  }
+                  onEdit={() => openEdit(weapon)}
+                  onDelete={() => void remove(weapon)}
+                />
+              ))}
+            </Box>
+          )}
+        </Paper>
         <Dialog
           open={draft !== null}
           onClose={() => setDraft(null)}
           fullWidth
           maxWidth="md"
+          slotProps={{ paper: { sx: dialogPaperSx } }}
         >
-          <DialogTitle>
+          <DialogTitle sx={{ px: { xs: 2, sm: 3 } }}>
             {editing ? '所持武器を編集' : '所持武器を追加'}
           </DialogTitle>
           {draft && (
-            <DialogContent>
-              <Stack spacing={2} sx={{ pt: 1 }}>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={draft.kind === 'normal'}
-                      disabled={editing !== null}
-                      onChange={(event) => {
-                        try {
-                          setDraft(
-                            createOwnedWeaponDraft(
-                              master,
-                              event.target.checked ? 'normal' : 'gogma',
-                            ),
-                          )
-                        } catch (caught) {
-                          if (caught instanceof Error) setError(caught.message)
-                        }
-                      }}
+            <DialogContent dividers sx={{ px: { xs: 2, sm: 3 } }}>
+              <Stack spacing={3}>
+                <Stack component="section" spacing={1.5}>
+                  <Typography component="h3" variant="h3">基本情報</Typography>
+                  <Box>
+                    <FormControlLabel
+                      sx={{ minHeight: 44 }}
+                      control={
+                        <Checkbox
+                          checked={draft.kind === 'normal'}
+                          disabled={editing !== null}
+                          slotProps={editing ? { input: { 'aria-describedby': kindHelpId } } : undefined}
+                          onChange={(event) => {
+                            try {
+                              setDraft(
+                                createOwnedWeaponDraft(
+                                  master,
+                                  event.target.checked ? 'normal' : 'gogma',
+                                ),
+                              )
+                            } catch (caught) {
+                              if (caught instanceof Error) setError(caught.message)
+                            }
+                          }}
+                        />
+                      }
+                      label="通常アーティアとして登録"
                     />
-                  }
-                  label="通常アーティアとして登録"
-                />
-                {editing && (
-                  <Typography variant="caption">
-                    登録済み武器の種類は変更できません。
-                  </Typography>
-                )}
-                <TextField
-                  label="名前"
-                  value={draft.name}
-                  required
-                  onChange={(event) =>
-                    setDraft({ ...draft, name: event.target.value })
-                  }
-                />
-                <FormControl>
-                  <InputLabel id="owned-weapon-type">武器種</InputLabel>
-                  <Select
-                    labelId="owned-weapon-type"
-                    label="武器種"
-                    value={draft.weaponTypeId}
-                    onChange={(event) => {
-                      try {
-                        setDraft(
-                          resetBonuses(
-                            draft,
-                            event.target.value,
-                            draft.elementId,
-                          ),
-                        )
-                      } catch (caught) {
-                        if (caught instanceof MasterOptionsUnavailableError) {
-                          setError(caught.message)
-                        }
-                      }
-                    }}
-                  >
-                    {weaponTypes.map((type) => (
-                      <MenuItem key={type.id} value={type.id}>
-                        {type.displayNameJa}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <FormControl>
-                  <InputLabel id="owned-element">属性</InputLabel>
-                  <Select
-                    labelId="owned-element"
-                    label="属性"
-                    value={draft.elementId}
-                    onChange={(event) => {
-                      try {
-                        setDraft(
-                          resetBonuses(
-                            draft,
-                            draft.weaponTypeId,
-                            event.target.value,
-                          ),
-                        )
-                      } catch (caught) {
-                        if (caught instanceof MasterOptionsUnavailableError) {
-                          setError(caught.message)
-                        }
-                      }
-                    }}
-                  >
-                    {elements.map((element) => (
-                      <MenuItem key={element.id} value={element.id}>
-                        {element.displayNameJa}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                    {editing && (
+                      <Typography id={kindHelpId} variant="caption" color="text.secondary" component="p">
+                        登録済み武器の種類は変更できません。
+                      </Typography>
+                    )}
+                  </Box>
+                  <TextField
+                    label="名前"
+                    value={draft.name}
+                    required
+                    onChange={(event) =>
+                      setDraft({ ...draft, name: event.target.value })
+                    }
+                  />
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 1.5 }}>
+                    <FormControl fullWidth>
+                      <InputLabel id="owned-weapon-type">武器種</InputLabel>
+                      <Select
+                        labelId="owned-weapon-type"
+                        label="武器種"
+                        value={draft.weaponTypeId}
+                        onChange={(event) => {
+                          try {
+                            setDraft(
+                              resetBonuses(
+                                draft,
+                                event.target.value,
+                                draft.elementId,
+                              ),
+                            )
+                          } catch (caught) {
+                            if (caught instanceof MasterOptionsUnavailableError) {
+                              setError(caught.message)
+                            }
+                          }
+                        }}
+                      >
+                        {weaponTypes.map((type) => (
+                          <MenuItem key={type.id} value={type.id}>
+                            {type.displayNameJa}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <FormControl fullWidth>
+                      <InputLabel id="owned-element">属性</InputLabel>
+                      <Select
+                        labelId="owned-element"
+                        label="属性"
+                        value={draft.elementId}
+                        onChange={(event) => {
+                          try {
+                            setDraft(
+                              resetBonuses(
+                                draft,
+                                draft.weaponTypeId,
+                                event.target.value,
+                              ),
+                            )
+                          } catch (caught) {
+                            if (caught instanceof MasterOptionsUnavailableError) {
+                              setError(caught.message)
+                            }
+                          }
+                        }}
+                      >
+                        {elements.map((element) => (
+                          <MenuItem key={element.id} value={element.id}>
+                            {element.displayNameJa}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Box>
+                </Stack>
                 <BonusSetEditor
                   label="復元ボーナス5枠"
                   master={master}
@@ -481,112 +532,120 @@ export function OwnedWeaponsPage({
                   }
                 />
                 {draft.kind === 'gogma' && (
-                  <>
-                    <FormControl>
-                      <InputLabel id="owned-series">
-                        シリーズスキル
-                      </InputLabel>
-                      <Select
-                        labelId="owned-series"
-                        label="シリーズスキル"
-                        value={draft.seriesSkillId ?? ''}
-                        onChange={(event) =>
-                          setDraft({
-                            ...draft,
-                            seriesSkillId: event.target.value || null,
-                          })
-                        }
-                      >
-                        <MenuItem value="">なし</MenuItem>
-                        {getSeriesSkillOptions(master).map((skill) => (
-                          <MenuItem key={skill.id} value={skill.id}>
-                            {skill.displayNameJa}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                    <FormControl>
-                      <InputLabel id="owned-group">
-                        グループスキル
-                      </InputLabel>
-                      <Select
-                        labelId="owned-group"
-                        label="グループスキル"
-                        value={draft.groupSkillId ?? ''}
-                        onChange={(event) =>
-                          setDraft({
-                            ...draft,
-                            groupSkillId: event.target.value || null,
-                          })
-                        }
-                      >
-                        <MenuItem value="">なし</MenuItem>
-                        {getGroupSkillOptions(master).map((skill) => (
-                          <MenuItem key={skill.id} value={skill.id}>
-                            {skill.displayNameJa}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                    <FormControl>
-                      <InputLabel id="owned-status">状態</InputLabel>
-                      <Select
-                        labelId="owned-status"
-                        label="状態"
-                        value={draft.status}
-                        onChange={(event) => {
-                          const status = event.target.value as OwnedWeaponStatus
-                          setDraft({
-                            ...draft,
-                            status,
-                            ...(editing === null
-                              ? { isProtected: status === 'ideal' }
-                              : {}),
-                          })
-                        }}
-                      >
-                        {Object.entries(ownedWeaponStatusLabels).map(
-                          ([value, label]) => (
-                            <MenuItem key={value} value={value}>
-                              {label}
+                  <Stack component="section" spacing={1.5}>
+                    <Typography component="h3" variant="h3">スキル・状態</Typography>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 1.5 }}>
+                      <FormControl fullWidth>
+                        <InputLabel id="owned-series">
+                          シリーズスキル
+                        </InputLabel>
+                        <Select
+                          labelId="owned-series"
+                          label="シリーズスキル"
+                          value={draft.seriesSkillId ?? ''}
+                          onChange={(event) =>
+                            setDraft({
+                              ...draft,
+                              seriesSkillId: event.target.value || null,
+                            })
+                          }
+                        >
+                          <MenuItem value="">なし</MenuItem>
+                          {getSeriesSkillOptions(master).map((skill) => (
+                            <MenuItem key={skill.id} value={skill.id}>
+                              {skill.displayNameJa}
                             </MenuItem>
-                          ),
-                        )}
-                      </Select>
-                    </FormControl>
-                  </>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      <FormControl fullWidth>
+                        <InputLabel id="owned-group">
+                          グループスキル
+                        </InputLabel>
+                        <Select
+                          labelId="owned-group"
+                          label="グループスキル"
+                          value={draft.groupSkillId ?? ''}
+                          onChange={(event) =>
+                            setDraft({
+                              ...draft,
+                              groupSkillId: event.target.value || null,
+                            })
+                          }
+                        >
+                          <MenuItem value="">なし</MenuItem>
+                          {getGroupSkillOptions(master).map((skill) => (
+                            <MenuItem key={skill.id} value={skill.id}>
+                              {skill.displayNameJa}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      <FormControl fullWidth>
+                        <InputLabel id="owned-status">状態</InputLabel>
+                        <Select
+                          labelId="owned-status"
+                          label="状態"
+                          value={draft.status}
+                          onChange={(event) => {
+                            const status = event.target.value as OwnedWeaponStatus
+                            setDraft({
+                              ...draft,
+                              status,
+                              ...(editing === null
+                                ? { isProtected: status === 'ideal' }
+                                : {}),
+                            })
+                          }}
+                        >
+                          {Object.entries(ownedWeaponStatusLabels).map(
+                            ([value, label]) => (
+                              <MenuItem key={value} value={value}>
+                                {label}
+                              </MenuItem>
+                            ),
+                          )}
+                        </Select>
+                      </FormControl>
+                    </Box>
+                  </Stack>
                 )}
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={draft.isProtected}
-                      onChange={(event) =>
-                        setDraft({
-                          ...draft,
-                          isProtected: event.target.checked,
-                        })
-                      }
-                    />
-                  }
-                  label="保護する"
-                />
-                <TextField
-                  label="メモ"
-                  multiline
-                  value={draft.memo ?? ''}
-                  onChange={(event) =>
-                    setDraft({
-                      ...draft,
-                      memo: event.target.value || null,
-                    })
-                  }
-                />
+                <Stack component="section" spacing={1.5}>
+                  <Typography component="h3" variant="h3">保護・メモ</Typography>
+                  <FormControlLabel
+                    sx={{ minHeight: 44, alignSelf: 'flex-start' }}
+                    control={
+                      <Checkbox
+                        checked={draft.isProtected}
+                        onChange={(event) =>
+                          setDraft({
+                            ...draft,
+                            isProtected: event.target.checked,
+                          })
+                        }
+                      />
+                    }
+                    label="保護する"
+                  />
+                  <TextField
+                    label="メモ"
+                    multiline
+                    minRows={2}
+                    value={draft.memo ?? ''}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        memo: event.target.value || null,
+                      })
+                    }
+                  />
+                </Stack>
               </Stack>
             </DialogContent>
           )}
-          <DialogActions>
-            <Button onClick={() => setDraft(null)}>キャンセル</Button>
-            <Button variant="contained" onClick={() => void save()}>
+          <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: 1.5, gap: 1 }}>
+            <Button onClick={() => setDraft(null)} sx={{ minHeight: 44 }}>キャンセル</Button>
+            <Button variant="contained" onClick={() => void save()} sx={{ minHeight: 44, minWidth: 96 }}>
               保存
             </Button>
           </DialogActions>

@@ -1,4 +1,4 @@
-import { Alert, FormControl, InputLabel, MenuItem, Select, Stack, Typography } from '@mui/material'
+import { Alert, Box, FormControl, InputLabel, MenuItem, Select, Stack, Typography } from '@mui/material'
 import type { ArtianBonusScope, MasterDataRoot } from '../../domain/master/masterTypes'
 import { getBonusDefinitionsForWeapon, getRanksForBonusType } from '../../domain/master/masterSelectors'
 import type { RestorationBonusSet } from '../../domain/models/publicTypes'
@@ -30,14 +30,16 @@ export function BonusSetEditor({ label, master, weaponTypeId, elementId, scope, 
     onChange(next)
   }
 
-  return <Stack spacing={1}>
-    <Typography variant="subtitle2">{label}</Typography>
+  return <Stack spacing={1.5}>
+    <Typography component="h3" variant="h3">{label}</Typography>
     {value.map((bonus, index) => {
       const ranks = getRanksForBonusType(master, weaponTypeId, elementId, bonus.bonusTypeId, scope)
-      return <Stack key={index} direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+      // One slot per row, type and rank side by side at every width, so a
+      // rank always reads as belonging to its slot on a narrow screen too.
+      return <Box key={index} sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.6fr) minmax(0, 1fr)', gap: 1 }}>
         <FormControl fullWidth><InputLabel id={`${label}-${index}-type`}>枠{index + 1} ボーナス種別</InputLabel><Select labelId={`${label}-${index}-type`} label={`枠${index + 1} ボーナス種別`} value={bonus.bonusTypeId} onChange={(event) => update(index, event.target.value)}>{typeIds.map((id) => <MenuItem key={id} value={id}>{master.bonusTypes.find((type) => type.id === id)?.displayNameJa ?? '不明'}</MenuItem>)}</Select></FormControl>
         <FormControl fullWidth><InputLabel id={`${label}-${index}-rank`}>枠{index + 1} ランク</InputLabel><Select labelId={`${label}-${index}-rank`} label={`枠${index + 1} ランク`} value={bonus.bonusRankId} onChange={(event) => update(index, bonus.bonusTypeId, event.target.value)}>{ranks.map((rank) => <MenuItem key={rank.id} value={rank.id}>{rank.displayNameJa}</MenuItem>)}</Select></FormControl>
-      </Stack>
+      </Box>
     })}
   </Stack>
 }

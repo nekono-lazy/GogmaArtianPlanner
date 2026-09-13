@@ -11,6 +11,7 @@ import type {
   ArtianWeaponKind,
 } from '../domain/models/publicTypes'
 import { isBlindCreateNormalArtianOperation } from '../domain/models/publicTypes'
+import type { SkillMatchMode } from '../domain/models/common'
 import type {
   CandidateRouteFilter,
   CandidateSearchNoticeSeverity,
@@ -29,6 +30,11 @@ export const ownedWeaponStatusLabels: Record<OwnedWeaponStatus, string> = {
 export const artianWeaponKindLabels: Record<ArtianWeaponKind, string> = {
   normal: '通常アーティア',
   gogma: '巨戟アーティア',
+}
+
+export const skillMatchModeLabels: Record<SkillMatchMode, string> = {
+  all: 'すべて一致',
+  any: 'いずれか一致',
 }
 
 /**
