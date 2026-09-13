@@ -4,8 +4,9 @@ import type {
 } from '../../models/publicTypes'
 
 /**
- * Reference-verified RNG order from WiseHorror/Gogma-Artian-Roll-Planner
- * @ eceb2bd9ca6f4897ec516387acab2ad6beb8b38b, app.js `artianSetOrder`.
+ * Reference-verified against GARP.lua v0.9.4 `artian_set_table_order` from
+ * WiseHorror/Gogma-Artian-Roll-Planner
+ * @ eceb2bd9ca6f4897ec516387acab2ad6beb8b38b.
  *
  * These semantic IDs deliberately do not follow Master display order.
  */
@@ -34,8 +35,9 @@ export const REFERENCE_SERIES_SKILL_POOL: readonly SeriesSkillId[] = [
 ]
 
 /**
- * Reference-verified RNG order from the pinned app.js `artianGroupOrder`.
- * The current Master's two additional enabled IDs are intentionally excluded.
+ * Reference-verified against the same GARP.lua
+ * `artian_group_table_order`. The current Master's two additional enabled IDs
+ * are intentionally excluded.
  */
 export const REFERENCE_GROUP_SKILL_POOL: readonly GroupSkillId[] = [
   'group_skill.verified_04',

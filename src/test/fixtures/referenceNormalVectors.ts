@@ -1,9 +1,16 @@
 import type { RestorationBonus, RestorationBonusSet } from '../../domain/models/publicTypes'
 
 /**
- * Literal raw Normal lottery values extracted by running app.js from
- * WiseHorror/Gogma-Artian-Roll-Planner @
- * eceb2bd9ca6f4897ec516387acab2ad6beb8b38b in a read-only Node VM.
+ * Reference-verified Normal lottery values for
+ * WiseHorror/Gogma-Artian-Roll-Planner GARP.lua v0.9.4
+ * (`configured_base_reinforcement_pool`, `draw_base_reinforcement`, and
+ * `predict_base_reinforcement`)
+ * @ eceb2bd9ca6f4897ec516387acab2ad6beb8b38b.
+ * GARP.lua SHA-256:
+ * dd9ff4ede166542c1efa4bc13595b2d064c581676c289893946af2f9b5551282.
+ * The fixed-hash Lua revalidation passed 23 / 23 cases and 155 slot-level
+ * comparisons with no mismatch, including visible rarity 8 mapped to internal
+ * rarity 7. Do not regenerate these values from Production code.
  * These are reference-verified parity fixtures, not game-verification claims.
  */
 function bonus(bonusTypeId: string): RestorationBonus {

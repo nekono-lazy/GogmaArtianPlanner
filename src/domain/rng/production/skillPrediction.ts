@@ -52,8 +52,8 @@ export function predictReferenceSkills(
       : input.skillCounter
   const seed = deriveSkillSeed(input.baseSeed, input.weaponTypeId, input.elementId)
 
-  // app.js predictSkillRoute advances to a block, then uses exactly its first
-  // post-step raw `w` word for `w % 294`; it does not draw separate values.
+  // GARP.lua `predict_skill_route` advances to a block, then uses exactly its
+  // first post-step raw `w` word for `w % 294`; it draws no separate values.
   const rawValue = readReferenceRngBlock(seed, effectiveBlock).values[0]
   if (rawValue === undefined) {
     throw new Error('Reference RNG block is missing its first raw value')

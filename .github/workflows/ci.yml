@@ -39,3 +39,6 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Verify dependency license inventory
+        run: test -f dist/licenses.md

@@ -1,4 +1,8 @@
-/** Reference algorithm constants from app.js at the pinned audit commit. */
+/**
+ * Reference-verified against GARP.lua v0.9.4 (`u32`, `initialize_rng`, and
+ * `rng_step`) from WiseHorror/Gogma-Artian-Roll-Planner
+ * @ eceb2bd9ca6f4897ec516387acab2ad6beb8b38b.
+ */
 const INITIAL_X = 0x159a55e5
 const INITIAL_Y = 0x1f123bb5
 const INITIAL_Z = 0x05491333

@@ -1,10 +1,12 @@
 /**
- * Literal output fixtures extracted from the read-only reference repository:
- * WiseHorror/Gogma-Artian-Roll-Planner
- * commit eceb2bd9ca6f4897ec516387acab2ad6beb8b38b
- * source: app.js functions u32, rngStep, initializeRng, and the seed
- * expressions used by predictSkillRoute and initializeGogma. Skill vectors
- * were obtained by executing the pinned app.js directly, not this project.
+ * Reference-verified fixture values for WiseHorror/Gogma-Artian-Roll-Planner
+ * GARP.lua v0.9.4 (`u32`, `rng_step`, `initialize_rng`,
+ * `initialize_gogma_rng`, `predict_skill_route`, and its seed expressions)
+ * @ eceb2bd9ca6f4897ec516387acab2ad6beb8b38b.
+ * GARP.lua SHA-256:
+ * dd9ff4ede166542c1efa4bc13595b2d064c581676c289893946af2f9b5551282.
+ * The existing values were independently revalidated with the fixed-hash Lua
+ * source: 20 / 20 cases and 81 scalar comparisons passed with no mismatch.
  *
  * Do not regenerate these values from GogmaArtianPlanner production code.
  */

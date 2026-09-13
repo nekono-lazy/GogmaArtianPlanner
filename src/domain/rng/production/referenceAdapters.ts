@@ -7,10 +7,13 @@ import type {
 /**
  * Numeric values used only by the pinned reference implementation.
  *
- * Source: WiseHorror/Gogma-Artian-Roll-Planner @
- * eceb2bd9ca6f4897ec516387acab2ad6beb8b38b, app.js and
- * docs/RNG_REFERENCE_AUDIT.md section 9. These values are reference-verified;
- * they are not Domain IDs and must not be persisted.
+ * Reference-verified against GARP.lua v0.9.4 from
+ * WiseHorror/Gogma-Artian-Roll-Planner
+ * @ eceb2bd9ca6f4897ec516387acab2ad6beb8b38b: `weapon_type_names` with
+ * `target_weapon_type - 1`, `skill_attribute_force_for_recipe`, and
+ * `capture_target_planning_inputs`. This project adapts that numeric namespace
+ * to semantic Domain IDs; the numeric values are not Domain IDs and must not
+ * be persisted. See docs/RNG_REFERENCE_AUDIT.md section 9.
  */
 const REFERENCE_WEAPON_TYPE_BY_ID: Readonly<Record<string, number>> = {
   'weapon.great_sword': 0,

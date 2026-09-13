@@ -10,7 +10,7 @@ import { gameVerifiedGogmaCounterIdentificationVector as live } from '../test/fi
 import { createGogmaCounterIdentificationWorkerController } from './gogmaCounterIdentification.worker'
 import { createProductionGogmaCounterIdentificationRngEngine } from './gogmaCounterIdentification.worker.production'
 
-function input(startInclusive = 475, endInclusive = 485): GogmaCounterIdentificationInput {
+function input(startInclusive = 50, endInclusive = 65): GogmaCounterIdentificationInput {
   const loaded = loadMasterData()
   if (!loaded.ok) throw new Error(JSON.stringify(loaded.issues))
   return {
@@ -57,8 +57,8 @@ describe('Gogma Counter Identification Worker', () => {
       type: 'gogma_counter_identification_result',
       requestId: 'gogma-identification.production',
       result: {
-        matches: [{ startGogmaCounter: 480 }],
-        searchedCounterRange: { startInclusive: 475, endInclusive: 485 },
+        matches: [{ startGogmaCounter: 55 }],
+        searchedCounterRange: { startInclusive: 50, endInclusive: 65 },
         isTruncated: false,
       },
     })

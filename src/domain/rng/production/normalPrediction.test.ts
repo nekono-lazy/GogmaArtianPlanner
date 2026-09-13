@@ -47,7 +47,7 @@ describe('reference-verified Production Normal Artian prediction', () => {
     expect(referenceNormalCandidatesForElement('element.thunder')).toBe(REFERENCE_NORMAL_ELEMENTAL_CANDIDATES)
   })
 
-  it('matches every independent raw five-slot golden from the pinned reference app.js', () => {
+  it('matches every independent raw five-slot golden from the pinned GARP.lua reference', () => {
     for (const vector of referenceNormalVectors.raw) {
       expect(predictReferenceNormalRaw(vector)).toEqual({
         referenceIds: vector.referenceIds,
