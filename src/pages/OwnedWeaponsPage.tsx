@@ -26,6 +26,7 @@ import { BonusSlotList, ManagementListItem } from '../components/ManagementListI
 import { BonusSetEditor } from '../components/forms/BonusSetEditor'
 import { MasterDataStatusAlert } from '../components/MasterDataStatusAlert'
 import { loadMasterData } from '../domain/master/loadMasterData'
+import type { ArtianBonusScope } from '../domain/master/masterTypes'
 import {
   getEnabledElements,
   getEnabledWeaponTypes,
@@ -303,6 +304,28 @@ export function OwnedWeaponsPage({
     ),
   })
 
+  // The five slots always follow scope + weapon type + element. The new set is
+  // built before the draft is replaced, so a Master failure leaves the draft
+  // exactly as it was and reports inside the Dialog.
+  const changeScope = (value: OwnedWeaponDraft, scope: ArtianBonusScope) => {
+    if (value.kind !== 'gogma' || value.restorationBonusScope === scope) return
+    try {
+      const restorationBonuses = createDefaultBonusSet(
+        master,
+        value.weaponTypeId,
+        value.elementId,
+        scope,
+      )
+      setDraft({ ...value, restorationBonusScope: scope, restorationBonuses })
+    } catch (caught) {
+      if (caught instanceof MasterOptionsUnavailableError) {
+        setFormError(caught.message)
+      } else {
+        throw caught
+      }
+    }
+  }
+
   const bonusLabels = (weapon: OwnedWeapon) => {
     const scope = weapon.restorationBonusScope
     return weapon.restorationBonuses.map(
@@ -537,9 +560,36 @@ export function OwnedWeaponsPage({
                     </FormControl>
                   </Box>
                 </Stack>
-                <Typography variant="body2" color="text.secondary">
-                  ボーナス区分: {restorationBonusScopeLabels[draft.restorationBonusScope]}
-                </Typography>
+                {draft.kind === 'gogma' ? (
+                  // A Gogma weapon may hold either scope (`docs/UI_FLOW.md` 7):
+                  // inherited normal-tier slots before its first bonus amendment,
+                  // or Gogma-tier slots after one.
+                  <FormControl fullWidth>
+                    <InputLabel id="owned-bonus-scope">ボーナス区分</InputLabel>
+                    <Select
+                      labelId="owned-bonus-scope"
+                      label="ボーナス区分"
+                      value={draft.restorationBonusScope}
+                      onChange={(event) =>
+                        changeScope(draft, event.target.value as ArtianBonusScope)
+                      }
+                    >
+                      {(Object.keys(restorationBonusScopeLabels) as ArtianBonusScope[]).map((scope) => (
+                        <MenuItem
+                          key={scope}
+                          value={scope}
+                          sx={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }}
+                        >
+                          {restorationBonusScopeLabels[scope]}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    ボーナス区分: {restorationBonusScopeLabels[draft.restorationBonusScope]}
+                  </Typography>
+                )}
                 <BonusSetEditor
                   label="復元ボーナス5枠"
                   master={master}

@@ -8,12 +8,32 @@ import type {
 import { EntityFormValidationError, ReferencedEntityDeleteError, type OwnedWeaponDraft } from '../services/crud/entityCrudServices'
 import { createDefaultBonusSet } from '../domain/forms/entityDrafts'
 import { loadMasterData } from '../domain/master/loadMasterData'
+import { getBonusDefinitionsForWeapon } from '../domain/master/masterSelectors'
+import { restorationBonusScopeLabels } from '../presentation/labels'
 import { OwnedWeaponsPage, type OwnedWeaponsPageDependencies } from './OwnedWeaponsPage'
 
 function loadedMaster() {
   const result = loadMasterData()
   if (!result.ok) throw new Error('Master load failed')
   return result.data
+}
+
+const NORMAL_SCOPE_LABEL = restorationBonusScopeLabels.normal_artian
+const GOGMA_SCOPE_LABEL = restorationBonusScopeLabels.gogma_artian
+
+async function chooseOption(user: ReturnType<typeof userEvent.setup>, combobox: HTMLElement, name: string) {
+  await user.click(combobox)
+  await user.click(await screen.findByRole('option', { name }))
+  await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull())
+}
+
+/** Every slot is a Master definition for the draft's own weapon type, element, and the given scope. */
+function expectSlotsMatchScope(master: ReturnType<typeof loadedMaster>, draft: OwnedWeaponDraft, scope: 'normal_artian' | 'gogma_artian') {
+  const definitions = getBonusDefinitionsForWeapon(master, draft.weaponTypeId, draft.elementId, scope)
+  expect(draft.restorationBonuses).toHaveLength(5)
+  for (const bonus of draft.restorationBonuses) {
+    expect(definitions.some((definition) => definition.bonusTypeId === bonus.bonusTypeId && definition.bonusRankId === bonus.bonusRankId)).toBe(true)
+  }
 }
 
 async function itemFor(name: string): Promise<HTMLElement> {
@@ -260,6 +280,139 @@ describe('OwnedWeaponsPage', () => {
     }
   })
 
+  it('offers the bonus scope for a new Gogma, defaulting to gogma_artian', async () => {
+    const user = userEvent.setup()
+    render(<OwnedWeaponsPage dependencies={dependencies()} />)
+    await user.click(await screen.findByRole('button', { name: '所持武器を追加' }))
+    const dialog = within(screen.getByRole('dialog', { name: '所持武器を追加' }))
+    expect(dialog.getByRole('checkbox', { name: '通常アーティアとして登録' })).not.toBeChecked()
+    const scope = dialog.getByRole('combobox', { name: 'ボーナス区分' })
+    expect(scope).toHaveTextContent(GOGMA_SCOPE_LABEL)
+    await user.click(scope)
+    expect(screen.getAllByRole('option').map(({ textContent }) => textContent)).toEqual([NORMAL_SCOPE_LABEL, GOGMA_SCOPE_LABEL])
+  })
+
+  it('switches a new Gogma from gogma_artian to normal_artian with a fresh normal-tier set', async () => {
+    const master = loadedMaster()
+    const user = userEvent.setup(); const deps = dependencies()
+    render(<OwnedWeaponsPage dependencies={deps} />)
+    await user.click(await screen.findByRole('button', { name: '所持武器を追加' }))
+    // A Gogma-only type in slot 1 must not survive the scope change.
+    await chooseOption(user, screen.getAllByRole('combobox', { name: /ボーナス種別/ })[0], '斬れ味・装填強化')
+    await chooseOption(user, screen.getByRole('combobox', { name: 'ボーナス区分' }), NORMAL_SCOPE_LABEL)
+
+    expect(screen.getByRole('combobox', { name: 'ボーナス区分' })).toHaveTextContent(NORMAL_SCOPE_LABEL)
+    expect(screen.getAllByRole('combobox', { name: /ボーナス種別/ })).toHaveLength(5)
+    expect(screen.getAllByRole('combobox', { name: /ボーナス種別/ })[0]).not.toHaveTextContent('斬れ味・装填強化')
+    await user.click(screen.getAllByRole('combobox', { name: /ボーナス種別/ })[0])
+    expect(screen.getByRole('option', { name: '斬れ味強化' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: '斬れ味・装填強化' })).toBeNull()
+    await user.keyboard('{Escape}')
+
+    await user.type(screen.getByRole('textbox', { name: /名前/ }), '巨戟化直後の新規')
+    await user.click(screen.getByRole('button', { name: '保存' }))
+    const saved = deps.save.mock.calls[0][0] as OwnedWeaponDraft
+    expect(saved).toMatchObject({ kind: 'gogma', restorationBonusScope: 'normal_artian', status: 'unclassified', isProtected: false })
+    expectSlotsMatchScope(master, saved, 'normal_artian')
+  })
+
+  it('switches a new Gogma from normal_artian back to gogma_artian with a fresh Gogma-tier set', async () => {
+    const master = loadedMaster()
+    const user = userEvent.setup(); const deps = dependencies()
+    render(<OwnedWeaponsPage dependencies={deps} />)
+    await user.click(await screen.findByRole('button', { name: '所持武器を追加' }))
+    await chooseOption(user, screen.getByRole('combobox', { name: 'ボーナス区分' }), NORMAL_SCOPE_LABEL)
+    await chooseOption(user, screen.getAllByRole('combobox', { name: /ボーナス種別/ })[0], '斬れ味強化')
+    await chooseOption(user, screen.getByRole('combobox', { name: 'ボーナス区分' }), GOGMA_SCOPE_LABEL)
+
+    expect(screen.getAllByRole('combobox', { name: /ボーナス種別/ })[0]).not.toHaveTextContent('斬れ味強化')
+    await user.click(screen.getAllByRole('combobox', { name: /ボーナス種別/ })[0])
+    expect(screen.getByRole('option', { name: '斬れ味・装填強化' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: '斬れ味強化' })).toBeNull()
+    await user.keyboard('{Escape}')
+
+    await user.type(screen.getByRole('textbox', { name: /名前/ }), '巨戟tierの新規')
+    await user.click(screen.getByRole('button', { name: '保存' }))
+    const saved = deps.save.mock.calls[0][0] as OwnedWeaponDraft
+    expect(saved).toMatchObject({ kind: 'gogma', restorationBonusScope: 'gogma_artian' })
+    expectSlotsMatchScope(master, saved, 'gogma_artian')
+  })
+
+  it('keeps the chosen normal_artian scope through a weapon type change', async () => {
+    const master = loadedMaster()
+    const user = userEvent.setup(); const deps = dependencies()
+    render(<OwnedWeaponsPage dependencies={deps} />)
+    await user.click(await screen.findByRole('button', { name: '所持武器を追加' }))
+    await chooseOption(user, screen.getByRole('combobox', { name: 'ボーナス区分' }), NORMAL_SCOPE_LABEL)
+    await chooseOption(user, screen.getByLabelText('武器種'), '双剣')
+
+    expect(screen.getByRole('combobox', { name: 'ボーナス区分' })).toHaveTextContent(NORMAL_SCOPE_LABEL)
+    await user.type(screen.getByRole('textbox', { name: /名前/ }), '双剣')
+    await user.click(screen.getByRole('button', { name: '保存' }))
+    const saved = deps.save.mock.calls[0][0] as OwnedWeaponDraft
+    expect(saved).toMatchObject({ kind: 'gogma', weaponTypeId: 'weapon.dual_blades', restorationBonusScope: 'normal_artian' })
+    expectSlotsMatchScope(master, saved, 'normal_artian')
+  })
+
+  it('keeps the chosen normal_artian scope through an element change, with that element option set', async () => {
+    const master = loadedMaster()
+    const user = userEvent.setup(); const deps = dependencies()
+    render(<OwnedWeaponsPage dependencies={deps} />)
+    await user.click(await screen.findByRole('button', { name: '所持武器を追加' }))
+    await chooseOption(user, screen.getByRole('combobox', { name: 'ボーナス区分' }), NORMAL_SCOPE_LABEL)
+    await chooseOption(user, screen.getByLabelText('属性'), '火')
+
+    expect(screen.getByRole('combobox', { name: 'ボーナス区分' })).toHaveTextContent(NORMAL_SCOPE_LABEL)
+    await user.type(screen.getByRole('textbox', { name: /名前/ }), '火属性')
+    await user.click(screen.getByRole('button', { name: '保存' }))
+    const saved = deps.save.mock.calls[0][0] as OwnedWeaponDraft
+    expect(saved.restorationBonusScope).toBe('normal_artian')
+    expect(master.elements.find(({ id }) => id === saved.elementId)?.displayNameJa).toBe('火')
+    expectSlotsMatchScope(master, saved, 'normal_artian')
+
+    // The editor offers exactly the normal_artian types for the new element.
+    const expectedTypes = [...new Set(getBonusDefinitionsForWeapon(master, saved.weaponTypeId, saved.elementId, 'normal_artian').map(({ bonusTypeId }) => bonusTypeId))]
+      .map((id) => master.bonusTypes.find((type) => type.id === id)?.displayNameJa)
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await user.click(screen.getByRole('button', { name: '所持武器を追加' }))
+    await chooseOption(user, screen.getByRole('combobox', { name: 'ボーナス区分' }), NORMAL_SCOPE_LABEL)
+    await chooseOption(user, screen.getByLabelText('属性'), '火')
+    await user.click(screen.getAllByRole('combobox', { name: /ボーナス種別/ })[0])
+    expect(screen.getAllByRole('option').map(({ textContent }) => textContent)).toEqual(expectedTypes)
+  })
+
+  it('opens an existing normal_artian Gogma on its stored scope, saves it unchanged, and writes nothing on cancel', async () => {
+    const master = loadedMaster()
+    const inheritedBonuses = createDefaultBonusSet(master, 'weapon.dual_blades', 'element.thunder', 'normal_artian')
+    const weapon: OwnedWeapon = { ...existingWeapon(), name: '通常継承の既存', restorationBonusScope: 'normal_artian', restorationBonuses: inheritedBonuses, isProtected: false }
+    const user = userEvent.setup(); const deps = dependencies(); deps.getAll = vi.fn(async () => [weapon])
+    render(<OwnedWeaponsPage dependencies={deps} />)
+
+    await user.click(await screen.findByRole('button', { name: '編集' }))
+    await chooseOption(user, screen.getByRole('combobox', { name: 'ボーナス区分' }), GOGMA_SCOPE_LABEL)
+    await user.click(screen.getByRole('button', { name: 'キャンセル' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(deps.save).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: '編集' }))
+    expect(screen.getByRole('combobox', { name: 'ボーナス区分' })).toHaveTextContent(NORMAL_SCOPE_LABEL)
+    await user.click(screen.getByRole('button', { name: '保存' }))
+    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ kind: 'gogma', restorationBonusScope: 'normal_artian', restorationBonuses: inheritedBonuses }), weapon)
+  })
+
+  it('keeps Normal Artian fixed to normal_artian with no scope selector', async () => {
+    const user = userEvent.setup(); const deps = dependencies()
+    render(<OwnedWeaponsPage dependencies={deps} />)
+    await user.click(await screen.findByRole('button', { name: '所持武器を追加' }))
+    await user.click(screen.getByRole('checkbox', { name: '通常アーティアとして登録' }))
+    const dialog = within(screen.getByRole('dialog', { name: '所持武器を追加' }))
+    expect(dialog.queryByRole('combobox', { name: 'ボーナス区分' })).toBeNull()
+    expect(dialog.getByText(`ボーナス区分: ${NORMAL_SCOPE_LABEL}`)).toBeInTheDocument()
+    await user.type(dialog.getByRole('textbox', { name: /名前/ }), '通常')
+    await user.click(dialog.getByRole('button', { name: '保存' }))
+    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ kind: 'normal', restorationBonusScope: 'normal_artian', status: null }), null)
+  })
+
   it('keeps a Gogma weapon inherited normal_artian scope in the list, the editor, and after a weapon type change', async () => {
     // A converted Gogma legitimately keeps its five normal-tier slots until the
     // first bonus amendment (`docs/DATA_MODEL.md` 7.1), so kind must not decide scope.
@@ -279,7 +432,8 @@ describe('OwnedWeaponsPage', () => {
     expect(item.queryByText('不明')).toBeNull()
 
     await user.click(item.getByRole('button', { name: '編集' }))
-    expect(within(screen.getByRole('dialog', { name: '所持武器を編集' })).getByText('ボーナス区分: 通常継承（通常アーティアのボーナス）')).toBeInTheDocument()
+    // The selector opens on the stored scope; kind never decides it.
+    expect(within(screen.getByRole('dialog', { name: '所持武器を編集' })).getByRole('combobox', { name: 'ボーナス区分' })).toHaveTextContent(NORMAL_SCOPE_LABEL)
     await user.click(screen.getAllByRole('combobox', { name: /ボーナス種別/ })[0])
     expect(screen.getByRole('option', { name: '斬れ味強化' })).toBeInTheDocument()
     expect(screen.queryByRole('option', { name: '斬れ味・装填強化' })).toBeNull()
