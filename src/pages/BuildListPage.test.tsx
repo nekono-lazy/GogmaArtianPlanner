@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider, useParams } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
@@ -7,6 +7,7 @@ import { createSearchStateHash } from '../domain/models/hashing'
 import type { BuildListEntryStaleReason } from '../domain/models/publicTypes'
 import {
   buildListEntryId,
+  candidateId,
   createValidBuildCandidate,
   createValidBuildListEntry,
   createValidNormalArtianCounter,
@@ -586,5 +587,189 @@ describe('BuildListPage', () => {
     expect(calls[1][1]).toEqual([firstGroup, secondGroup])
     await waitFor(() => expect(first).toBeChecked())
     expect(second).toBeChecked()
+  })
+})
+
+describe('BuildListPage presentation', () => {
+  it('lays the page out as summary, Planner panel and Target groups with a sequential outline', async () => {
+    renderPage(dependencies())
+    expect(await screen.findByRole('heading', { level: 1, name: 'ビルドリスト' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: 'ページ概要' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: '生産計画の作成' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: '候補一覧' })).toBeInTheDocument()
+    // The Target group heads its Entries; the Candidate card sits one level below it.
+    expect(screen.getByRole('heading', { level: 3, name: 'Domain fixture target' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 4, name: '理想候補' })).toBeInTheDocument()
+    expect(screen.getByText('優先度 3')).toBeInTheDocument()
+    expect(screen.getByText('候補 1件')).toBeInTheDocument()
+    // The primary CTA is an ordinary button in the flow, never fixed or sticky.
+    expect(screen.getByRole('button', { name: '生産計画を作成' })).toBeEnabled()
+  })
+
+  it('summarizes the loaded Entries for display only', async () => {
+    renderPage(dependencies(['rng_state_changed']))
+    const summary = await screen.findByRole('region', { name: 'ページ概要' })
+    const tiles = within(summary).getAllByRole('listitem')
+    expect(tiles.map((tile) => within(tile).getByRole('heading', { level: 3 }).textContent)).toEqual([
+      '登録候補',
+      '目標武器',
+      '再検索が必要な候補',
+      'チェックポイント選択中',
+    ])
+    expect(tiles.map((tile) => tile.querySelector('p')?.textContent)).toEqual(['1', '1', '1', '0'])
+  })
+
+  it('gives the detail settings a real heading and a wired disclosure', async () => {
+    renderPage(dependencies())
+    const toggle = await screen.findByRole('button', { name: '詳細設定' })
+    const heading = screen.getByRole('heading', { level: 3, name: '詳細設定' })
+    expect(heading).toContainElement(toggle)
+    expect(within(toggle).queryByRole('heading')).not.toBeInTheDocument()
+    const contentId = toggle.getAttribute('aria-controls')
+    expect(contentId).toBeTruthy()
+    const region = document.getElementById(contentId ?? '')
+    expect(region).not.toBeNull()
+    expect(region).toHaveAttribute('aria-labelledby', toggle.id)
+  })
+
+  it('groups several Entries of one Target under a single Target heading', async () => {
+    const target = createValidTargetWeapon()
+    const first = createValidBuildCandidate()
+    const second = { ...createValidBuildCandidate(), id: candidateId('candidate.fixture.second') }
+    const entries = [
+      createBuildListEntry(first, target, { id: buildListEntryId('build-list.group.a'), createdAt: '2026-09-01T00:00:00.000Z' }),
+      createBuildListEntry(second, target, { id: buildListEntryId('build-list.group.b'), createdAt: '2026-09-02T00:00:00.000Z' }),
+    ]
+    const deps = dependencies()
+    deps.refresh = vi.fn(async () => ({ entries, targets: [target], ownedWeapons: [] }))
+    renderPage(deps)
+
+    const group = await screen.findByRole('region', { name: 'Domain fixture target' })
+    expect(screen.getAllByRole('heading', { level: 3, name: 'Domain fixture target' })).toHaveLength(1)
+    expect(within(group).getByText('候補 2件')).toBeInTheDocument()
+    expect(within(group).getAllByRole('heading', { level: 4, name: '理想候補' })).toHaveLength(2)
+    expect(within(group).getAllByRole('button', { name: 'ビルドリストから削除' })).toHaveLength(2)
+    // Persisted order inside the group is kept.
+    expect(within(group).getAllByText(/^追加日時: /).map((node) => node.textContent)).toEqual([
+      '追加日時: 2026-09-01T00:00:00.000Z',
+      '追加日時: 2026-09-02T00:00:00.000Z',
+    ])
+  })
+
+  it('shows a load failure as an error, not as an empty Build List', async () => {
+    const deps = dependencies()
+    deps.refresh = vi.fn(async () => {
+      throw new Error('ビルドリストを読み込めませんでした。')
+    })
+    renderPage(deps)
+    expect(await screen.findByText('ビルドリストを読み込めませんでした。')).toBeInTheDocument()
+    expect(screen.queryByText('ビルドリストは空です。検索結果から候補を追加してください。')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '生産計画を作成' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the Candidate Snapshot of a stale Entry readable and marks the Target group', async () => {
+    renderPage(dependencies(['owned_weapon_changed']))
+    expect(await screen.findByText('参照している所持武器が変更されています')).toBeInTheDocument()
+    expect(screen.getByText('再検索が必要 1件')).toBeInTheDocument()
+    // The stored Candidate stays visible below the warning.
+    expect(screen.getByRole('heading', { level: 4, name: '理想候補' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '候補詳細・作成ルート' })).toBeInTheDocument()
+  })
+
+  it('explains checkpoints in Build List terms and reflects the persisted selection', async () => {
+    const user = userEvent.setup()
+    const candidate = checkpointCandidate([
+      checkpointPracticalBonuses(),
+      checkpointIdealBonuses(),
+    ])
+    const target = checkpointTarget()
+    const selected = (candidate.checkpointGroups ?? [])[0].opportunities[0].id
+    let entry = createBuildListEntry(candidate, target, {
+      id: buildListEntryId('build-list.checkpoint.persisted'),
+      createdAt: '2026-09-12T00:00:00.000Z',
+      selectedCheckpointOpportunityIds: [selected],
+    })
+    const deps: BuildListPageDependencies = {
+      ...dependencies(),
+      refresh: vi.fn(async () => ({ entries: [entry], targets: [target], ownedWeapons: [checkpointSource()] })),
+      updateCheckpointSelection: vi.fn(async (_id, next) => {
+        entry = { ...entry, selectedCheckpointOpportunityIds: [...next] }
+        return entry
+      }),
+    }
+    renderPage(deps)
+
+    const checkbox = await screen.findByRole('checkbox', { name: '1手目（理想まで残り1操作）' })
+    expect(checkbox).toBeChecked()
+    expect(screen.getByText('チェックポイント選択中 1')).toBeInTheDocument()
+    expect(screen.getByText(
+      '選択中のチェックポイントは、この候補を作成する途中で必ず経由する条件としてPlannerに渡されます。変更すると既存の生産計画は再計算が必要です。性能ごとに選べる到達点は1つまでです。',
+    )).toBeInTheDocument()
+    expect(screen.queryByText(/作成リストへ登録します/)).not.toBeInTheDocument()
+
+    await user.click(checkbox)
+    expect(deps.updateCheckpointSelection).toHaveBeenCalledWith(entry.id, [])
+    expect(await screen.findByText('利用チェックポイントを更新しました。生産計画を再作成してください。')).toBeInTheDocument()
+    expect(screen.getByText('チェックポイント未選択')).toBeInTheDocument()
+  })
+
+  it('keeps a failed checkpoint save next to the Entries as an error', async () => {
+    const user = userEvent.setup()
+    const candidate = checkpointCandidate([checkpointPracticalBonuses(), checkpointIdealBonuses()])
+    const target = checkpointTarget()
+    const entry = createBuildListEntry(candidate, target, {
+      id: buildListEntryId('build-list.checkpoint.failed'),
+      createdAt: '2026-09-12T00:00:00.000Z',
+    })
+    const deps: BuildListPageDependencies = {
+      ...dependencies(),
+      refresh: vi.fn(async () => ({ entries: [entry], targets: [target], ownedWeapons: [checkpointSource()] })),
+      updateCheckpointSelection: vi.fn(async () => {
+        throw new Error('checkpoint: 選択内容が不正です。')
+      }),
+    }
+    renderPage(deps)
+    await user.click(await screen.findByRole('checkbox', { name: '1手目（理想まで残り1操作）' }))
+    expect(await screen.findByText('checkpoint: 選択内容が不正です。')).toBeInTheDocument()
+    // Nothing else is presented as a load failure.
+    expect(screen.getByRole('button', { name: '生産計画を作成' })).toBeInTheDocument()
+  })
+
+  it('names the Planner progress and offers cancel while planning', async () => {
+    const user = userEvent.setup()
+    let releasePlan: (result: PlannerOrchestrationResult) => void = () => undefined
+    const client = createPlannerClient()
+    client.createConstrainedPlan = vi.fn(
+      (_id, _input, _bounds, callbacks) => new Promise<PlannerOrchestrationResult>((resolve) => {
+        callbacks?.onProgress?.({ expandedStates: 2_500, maxExpandedStates: 10_000 })
+        releasePlan = resolve
+      }),
+    )
+    renderPage(dependencies([], client))
+    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
+
+    expect(await screen.findByText('計画中 2500 / 10000')).toBeInTheDocument()
+    const bar = screen.getByRole('progressbar', { name: '生産計画の作成の進捗' })
+    expect(bar).toHaveAttribute('aria-valuenow', '25')
+    expect(screen.getByRole('button', { name: 'キャンセル' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '生産計画を作成' })).toBeDisabled()
+    releasePlan(createOrchestrationResult())
+  })
+
+  it('shows Planner warnings with their typed label and the returned message', async () => {
+    const user = userEvent.setup()
+    const deps = dependencies([], createPlannerClient(createOrchestrationResult({
+      plan: null,
+      termination: exhaustedPlannerTermination(),
+      warnings: [{ kind: 'build_list_entry_stale', message: 'Typed warning message' }],
+    })))
+    deps.savePlannerResult = vi.fn(async () => null)
+    renderPage(deps)
+    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
+
+    expect(await screen.findByText('再検索が必要なビルドリスト項目があります')).toBeInTheDocument()
+    expect(screen.getByText('Typed warning message')).toBeInTheDocument()
+    expect(screen.getByText('現在の入力から作成できる生産計画はありませんでした。')).toBeInTheDocument()
+    expect(screen.queryByText('生産計画の探索が完了していません')).not.toBeInTheDocument()
   })
 })

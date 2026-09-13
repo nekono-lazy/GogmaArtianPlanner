@@ -11,9 +11,13 @@ import {
   Typography,
 } from '@mui/material'
 import { DisclosureAccordion } from '../DisclosureAccordion'
+import { nextHeadingLevel } from '../headingLevel'
 import { RestorationBonusSlots } from '../RestorationBonusSlots'
 import { StatusChip } from '../StatusChip'
-import { CompromiseCheckpointList } from './CompromiseCheckpointList'
+import {
+  CompromiseCheckpointList,
+  type CompromiseCheckpointSelectionContext,
+} from './CompromiseCheckpointList'
 import { SearchDefinitionItem, SearchDefinitionList } from './SearchDefinitionList'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import type {
@@ -71,6 +75,19 @@ interface CandidateCardProps {
     opportunity: CompromiseCheckpointOpportunity,
     selected: boolean,
   ) => void
+  /**
+   * Which screen the editable checkpoint explanation is written for. The
+   * Search screen is the default; the Build List, where the Candidate is
+   * already registered, passes `build_list`.
+   */
+  checkpointSelectionContext?: CompromiseCheckpointSelectionContext
+  /**
+   * Heading level of the card heading. Detail and checkpoint sections take
+   * the following levels, so the outline stays sequential where the card is
+   * embedded under a Target group heading (Build List) or directly under a
+   * section heading (Search).
+   */
+  headingLevel?: 'h3' | 'h4'
 }
 
 /** One figure of the operation summary. */
@@ -99,8 +116,12 @@ export function CandidateCard({
   buildListStatus,
   selectedCheckpointOpportunityIds = [],
   onToggleCheckpoint,
+  checkpointSelectionContext = 'search',
+  headingLevel = 'h3',
 }: CandidateCardProps) {
   const headingId = useId()
+  const sectionLevel = nextHeadingLevel(headingLevel)
+  const detailLevel = nextHeadingLevel(sectionLevel)
   const weaponTypeId = target?.weaponTypeId ?? candidate.route.operations.find(
     (operation) => 'weaponTypeId' in operation,
   )?.weaponTypeId ?? ''
@@ -144,7 +165,7 @@ export function CandidateCard({
       <CardContent sx={{ p: { xs: 2, md: 2.5 }, '&:last-child': { pb: { xs: 2, md: 2.5 } } }}>
         <Stack spacing={2}>
           <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
-            <Typography id={headingId} component="h3" variant="h3">
+            <Typography id={headingId} component={headingLevel} variant="h3">
               理想候補
             </Typography>
             <StatusChip label={routeKindLabels[candidate.route.kind]} tone="info" />
@@ -202,10 +223,10 @@ export function CandidateCard({
 
           {/* Long Routes reach well over a hundred amendments, so the detail
               content is mounted only while the panel is open. */}
-          <DisclosureAccordion title="候補詳細・作成ルート" headingLevel="h4" unmountOnExit>
+          <DisclosureAccordion title="候補詳細・作成ルート" headingLevel={sectionLevel} unmountOnExit>
             <Stack spacing={2}>
               <Box>
-                <Typography component="h5" variant="subtitle2" sx={{ mb: 1 }}>
+                <Typography component={detailLevel} variant="subtitle2" sx={{ mb: 1 }}>
                   理想との差分
                 </Typography>
                 <SearchDefinitionList>
@@ -230,7 +251,7 @@ export function CandidateCard({
               </Box>
               <Divider />
               <Box>
-                <Typography component="h5" variant="subtitle2" sx={{ mb: 1 }}>
+                <Typography component={detailLevel} variant="subtitle2" sx={{ mb: 1 }}>
                   作成ルート（実行順）
                 </Typography>
                 {missingAmendmentTrace && (
@@ -294,7 +315,7 @@ export function CandidateCard({
                 </Box>
               </Box>
               <Box>
-                <Typography component="h5" variant="subtitle2" sx={{ mb: 1 }}>
+                <Typography component={detailLevel} variant="subtitle2" sx={{ mb: 1 }}>
                   必要素材（アイテム）
                 </Typography>
                 {candidate.requiredMaterials.length === 0 ? (
@@ -337,7 +358,8 @@ export function CandidateCard({
             master={master}
             selectedOpportunityIds={selectedCheckpointOpportunityIds}
             onToggle={onToggleCheckpoint}
-            headingLevel="h4"
+            headingLevel={sectionLevel}
+            selectionContext={checkpointSelectionContext}
           />
 
           <Divider />

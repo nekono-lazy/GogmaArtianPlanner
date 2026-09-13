@@ -1,4 +1,4 @@
-import { Chip, Divider, Paper, Stack, Typography } from '@mui/material'
+import { Divider, Paper, Stack, Typography } from '@mui/material'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import type {
   PlanStep,
@@ -6,8 +6,11 @@ import type {
 } from '../../domain/models/publicTypes'
 import {
   planStepOperationLabels,
+  restorationBonusScopeLabels,
 } from '../../presentation/labels'
+import type { SectionHeadingLevel } from '../headingLevel'
 import { RestorationBonusSlots } from '../RestorationBonusSlots'
+import { StatusChip } from '../StatusChip'
 import { groupSkillLabel, seriesSkillLabel } from '../search/searchPresentation'
 import {
   isSharedPlanStep,
@@ -34,6 +37,15 @@ function TargetWeaponReference({
   return <>削除済みまたは参照できない目標武器（{targetWeaponId}）</>
 }
 
+/**
+ * The persisted `ExpectedResult` of one Step.
+ *
+ * `expectedResult.restorationBonuses` is the only bonus authority, shown in
+ * stored slot order. The persisted `restorationBonusScope` selects the
+ * scope-specific label; a `null` scope is a legal record with no scope, so the
+ * generic Master label is used instead of assuming a scope. `null` results
+ * are ordinary states, not errors.
+ */
 function ExpectedResultView({
   step,
   weaponTypeId,
@@ -52,21 +64,31 @@ function ExpectedResultView({
     )
   }
   return (
-    <Stack spacing={0.5}>
-      <Typography variant="body2">想定結果</Typography>
+    <Stack spacing={0.75}>
+      <Typography variant="subtitle2">想定結果</Typography>
       {expected.restorationBonuses === null ? (
         <Typography variant="body2" color="text.secondary">
           復元ボーナス: 対象外
         </Typography>
       ) : (
-        <RestorationBonusSlots
-          bonuses={expected.restorationBonuses}
-          weaponTypeId={weaponTypeId}
-          master={master}
-          variant="outlined"
-        />
+        <>
+          <RestorationBonusSlots
+            bonuses={expected.restorationBonuses}
+            weaponTypeId={weaponTypeId}
+            master={master}
+            scope={expected.restorationBonusScope}
+            variant="outlined"
+            label={`ステップ ${step.order} の予測復元ボーナス5枠`}
+          />
+          <Typography variant="caption" color="text.secondary">
+            ボーナス区分:{' '}
+            {expected.restorationBonusScope === null
+              ? '記録なし'
+              : restorationBonusScopeLabels[expected.restorationBonusScope]}
+          </Typography>
+        </>
       )}
-      <Typography variant="body2">
+      <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
         シリーズ: {seriesSkillLabel(expected.seriesSkillId, master)} ／ グループ:{' '}
         {groupSkillLabel(expected.groupSkillId, master)}
       </Typography>
@@ -75,22 +97,25 @@ function ExpectedResultView({
 }
 
 /**
- * One persisted PlanStep.
+ * One persisted PlanStep, as a list item.
  *
- * Everything shown comes from the Step itself: its persisted `title` /
- * `instruction`, its `operationType`, and its `expectedResult`. The operation
- * is never regenerated from a Candidate route, and no RNG prediction runs here.
+ * Everything shown comes from the Step itself: its persisted `order`,
+ * `title` / `instruction`, `operationType`, and `expectedResult`. The operation
+ * is never regenerated from a Candidate route, no RNG prediction runs here,
+ * and the order is the persisted `step.order`, never the DOM index.
  */
 export function ProductionPlanStepCard({
   step,
   lookup,
   master,
   showSharedBadge = false,
+  headingLevel = 'h4',
 }: {
   step: PlanStep
   lookup: TargetWeaponLookup
   master: MasterDataRoot
   showSharedBadge?: boolean
+  headingLevel?: SectionHeadingLevel
 }) {
   // The primary Target decides which weapon-type bonus names apply; a shared
   // Step keeps that single persisted resolution rather than inventing one.
@@ -98,33 +123,36 @@ export function ProductionPlanStepCard({
     step.targetWeaponId === null
       ? ''
       : lookup.byId(step.targetWeaponId)?.weaponTypeId ?? ''
+  const shared = showSharedBadge && isSharedPlanStep(step)
   return (
-    <Paper variant="outlined" sx={{ p: 1.5 }}>
-      <Stack spacing={0.75}>
+    <Paper
+      component="li"
+      variant="outlined"
+      sx={{ p: { xs: 1.5, md: 2 }, minWidth: 0, listStyle: 'none' }}
+    >
+      <Stack spacing={1}>
         <Stack
           direction="row"
           spacing={1}
           useFlexGap
           sx={{ flexWrap: 'wrap', alignItems: 'center' }}
         >
-          <Typography variant="subtitle2">ステップ {step.order}</Typography>
-          <Chip
-            label={planStepOperationLabels[step.operationType]}
-            size="small"
-            variant="outlined"
-          />
+          <Typography component={headingLevel} variant="subtitle1" className="tabular-nums">
+            ステップ {step.order}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {planStepOperationLabels[step.operationType]}
+          </Typography>
           {step.expectedResult?.shouldSecure === true && (
-            <Chip label="確保予定" size="small" color="success" />
+            <StatusChip label="確保予定" tone="positive" />
           )}
-          {showSharedBadge && isSharedPlanStep(step) && (
-            <Chip label="共有操作" size="small" color="info" variant="outlined" />
-          )}
+          {shared && <StatusChip label="共有操作" tone="info" />}
         </Stack>
-        <Typography variant="body2">{step.title}</Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography sx={{ fontWeight: 500, overflowWrap: 'anywhere' }}>{step.title}</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
           {step.instruction}
         </Typography>
-        <Typography variant="body2">
+        <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
           対象:{' '}
           {step.targetWeaponId === null ? (
             '目標武器に紐づかない操作'
@@ -135,7 +163,7 @@ export function ProductionPlanStepCard({
             />
           )}
         </Typography>
-        {showSharedBadge && isSharedPlanStep(step) && (
+        {shared && (
           <Typography variant="caption" color="text.secondary">
             この操作は他の目標武器と共有され、計画全体では1回だけ実行します。
           </Typography>
@@ -147,19 +175,28 @@ export function ProductionPlanStepCard({
   )
 }
 
+/**
+ * An ordered list of persisted Steps, in the order the caller supplies (the
+ * caller has already applied `orderPlanSteps()`; nothing is re-sorted here).
+ */
 export function ProductionPlanStepList({
   steps,
   lookup,
   master,
   showSharedBadge = false,
+  headingLevel = 'h4',
+  label,
 }: {
   steps: readonly PlanStep[]
   lookup: TargetWeaponLookup
   master: MasterDataRoot
   showSharedBadge?: boolean
+  headingLevel?: SectionHeadingLevel
+  /** Accessible name of the list. */
+  label: string
 }) {
   return (
-    <Stack spacing={1}>
+    <Stack component="ol" spacing={1} aria-label={label} sx={{ m: 0, p: 0, minWidth: 0 }}>
       {steps.map((step) => (
         <ProductionPlanStepCard
           key={step.id}
@@ -167,6 +204,7 @@ export function ProductionPlanStepList({
           lookup={lookup}
           master={master}
           showSharedBadge={showSharedBadge}
+          headingLevel={headingLevel}
         />
       ))}
     </Stack>

@@ -183,6 +183,31 @@ describe('CompromiseCheckpointList', () => {
     expect(onToggle).toHaveBeenCalledWith(alternativeGroup, alternativeGroup.opportunities[0], true)
   })
 
+  it('explains a selection in Search terms by default and in Build List terms on request', () => {
+    const searchText =
+      '選択すると、この到達点を作成途中で必ず経由する条件として作成リストへ登録します。何も選ばなければ理想品まで進みます。性能ごとに選べる到達点は1つまでです。'
+    const buildListText =
+      '選択中のチェックポイントは、この候補を作成する途中で必ず経由する条件としてPlannerに渡されます。変更すると既存の生産計画は再計算が必要です。性能ごとに選べる到達点は1つまでです。'
+    const { unmount } = renderList([practicalGroup])
+    expect(screen.getByText(searchText)).toBeInTheDocument()
+    unmount()
+
+    render(
+      <CompromiseCheckpointList
+        groups={[practicalGroup]}
+        weaponTypeId="weapon.fixture.a"
+        master={createValidMasterDataFixture()}
+        selectedOpportunityIds={[]}
+        onToggle={vi.fn()}
+        selectionContext="build_list"
+      />,
+    )
+    expect(screen.getByText(buildListText)).toBeInTheDocument()
+    expect(screen.queryByText(searchText)).not.toBeInTheDocument()
+    // The selection controls are the same in both contexts.
+    expect(screen.getByRole('checkbox', { name: '2手目（理想まで残り3操作）' })).toBeInTheDocument()
+  })
+
   it('renders read-only without checkboxes when no toggle handler is supplied', () => {
     render(
       <CompromiseCheckpointList

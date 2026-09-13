@@ -1,20 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
-  Accordion,
-  AccordionDetails,
-  AccordionSummary,
   Alert,
   AlertTitle,
+  Box,
   Button,
   LinearProgress,
+  Paper,
   Stack,
   TextField,
   Typography,
 } from '@mui/material'
-import { useNavigate } from 'react-router-dom'
+import { Link as RouterLink, useNavigate } from 'react-router-dom'
+import { DisclosureAccordion } from '../components/DisclosureAccordion'
 import { PageShell } from '../components/PageShell'
+import { StatusChip } from '../components/StatusChip'
 import { CandidateCard } from '../components/search/CandidateCard'
-import { staleReasonLabels } from '../components/search/searchPresentation'
 import {
   createPlannerCompletedTargetsText,
   createPlannerExpandedStatesText,
@@ -35,6 +35,7 @@ import type {
   OwnedWeapon,
   ProductionPlan,
   TargetWeapon,
+  TargetWeaponId,
 } from '../domain/models/publicTypes'
 import type {
   PlannerInput,
@@ -48,6 +49,7 @@ import {
   defaultPlannerOptions,
   defaultPlannerOrchestrationBounds,
 } from '../domain/planner'
+import { plannerWarningLabels, staleReasonLabels } from '../presentation/labels'
 import { useSettingsStore } from '../stores/settingsStore'
 import { buildListService } from '../services/buildList/buildListService'
 import { createBuildListCalculationContext } from '../services/buildList/createBuildListCalculationContext'
@@ -155,11 +157,190 @@ function parsePlannerOptions(inputs: PlannerOptionInputs): PlannerOptions | null
     : { maxPlanSteps, beamWidth, maxExpandedStates }
 }
 
+/**
+ * Feedback about the last checkpoint selection save, kept apart from the
+ * Planner run and from load / remove failures so each message stays next to
+ * the action that caused it.
+ */
+interface CheckpointFeedback {
+  severity: 'info' | 'error'
+  message: string
+}
+
+/** A Planner run that ended without a saved Plan, typed rather than as text. */
+type PlannerNotice = 'cancelled' | 'no_plan'
+
+const plannerNoticeMessages: Record<PlannerNotice, string> = {
+  cancelled: '生産計画の作成をキャンセルしました。',
+  no_plan: '現在の入力から作成できる生産計画はありませんでした。',
+}
+
+/**
+ * Entries grouped by the Target they belong to, in first-appearance order.
+ *
+ * Presentation only: the persisted Entry order is kept inside each group, and
+ * the group order is derived from that same order rather than from priority
+ * or any other new meaning. The Target is the current persisted one; a Target
+ * that no longer exists still keeps its Entries together under its ID.
+ */
+interface BuildListTargetGroup {
+  targetWeaponId: TargetWeaponId
+  target: TargetWeapon | null
+  entries: BuildListEntry[]
+}
+
+function groupEntriesByTarget(
+  entries: readonly BuildListEntry[],
+  targets: readonly TargetWeapon[],
+): BuildListTargetGroup[] {
+  const targetById = new Map(targets.map((target) => [target.id, target]))
+  const groups = new Map<TargetWeaponId, BuildListTargetGroup>()
+  for (const entry of entries) {
+    const group = groups.get(entry.targetWeaponId)
+    if (group) group.entries.push(entry)
+    else {
+      groups.set(entry.targetWeaponId, {
+        targetWeaponId: entry.targetWeaponId,
+        target: targetById.get(entry.targetWeaponId) ?? null,
+        entries: [entry],
+      })
+    }
+  }
+  return [...groups.values()]
+}
+
+function selectedCheckpointCount(entry: BuildListEntry): number {
+  return entry.selectedCheckpointOpportunityIds?.length ?? 0
+}
+
+/** One figure of the page summary. Display only, never a Planner authority. */
+function SummaryTile({ label, value, note }: { label: string; value: number; note?: string }) {
+  return (
+    <Box
+      component="li"
+      sx={{
+        listStyle: 'none',
+        border: 1,
+        borderColor: 'divider',
+        borderRadius: 1,
+        p: 1.5,
+        minWidth: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 0.25,
+      }}
+    >
+      <Typography component="h3" variant="subtitle2" color="text.secondary">
+        {label}
+      </Typography>
+      <Typography component="p" className="tabular-nums" sx={{ fontSize: '1.375rem', fontWeight: 600, lineHeight: 1.3 }}>
+        {value}
+      </Typography>
+      {note && (
+        <Typography variant="caption" color="text.secondary">
+          {note}
+        </Typography>
+      )}
+    </Box>
+  )
+}
+
+/** A titled, border-based page section. */
+function PageSection({
+  title,
+  children,
+  accent = false,
+}: {
+  title: string
+  children: ReactNode
+  accent?: boolean
+}) {
+  const headingId = useId()
+  return (
+    <Paper
+      component="section"
+      variant="outlined"
+      aria-labelledby={headingId}
+      sx={{
+        p: { xs: 2, md: 2.5 },
+        minWidth: 0,
+        ...(accent ? { borderLeftWidth: 4, borderLeftColor: 'primary.main' } : {}),
+      }}
+    >
+      <Stack spacing={2}>
+        <Typography id={headingId} component="h2" variant="h2">
+          {title}
+        </Typography>
+        {children}
+      </Stack>
+    </Paper>
+  )
+}
+
+/**
+ * One Target's Entries.
+ *
+ * The Target name, its priority and the Entry count come from the current
+ * persisted Target and from the Entries themselves. The priority is shown for
+ * orientation only: changing it belongs to the Target Weapons screen's full
+ * edit path, and no Target write happens here.
+ */
+function TargetGroupSection({
+  group,
+  children,
+}: {
+  group: BuildListTargetGroup
+  children: ReactNode
+}) {
+  const headingId = useId()
+  const staleCount = group.entries.filter(({ isStale }) => isStale).length
+  return (
+    <Paper
+      component="section"
+      variant="outlined"
+      aria-labelledby={headingId}
+      sx={{ p: { xs: 2, md: 2.5 }, minWidth: 0 }}
+    >
+      <Stack spacing={2}>
+        <Stack
+          direction="row"
+          spacing={1}
+          useFlexGap
+          sx={{ flexWrap: 'wrap', alignItems: 'center', minWidth: 0 }}
+        >
+          <Typography
+            id={headingId}
+            component="h3"
+            variant="h3"
+            sx={{ overflowWrap: 'anywhere', minWidth: 0 }}
+          >
+            {group.target?.name ?? '削除済みの目標武器'}
+          </Typography>
+          {group.target && (
+            <StatusChip label={`優先度 ${group.target.priority}`} tone="info" />
+          )}
+          <Typography variant="body2" color="text.secondary" className="tabular-nums">
+            候補 {group.entries.length}件
+          </Typography>
+          {staleCount > 0 && (
+            <StatusChip label={`再検索が必要 ${staleCount}件`} tone="caution" />
+          )}
+        </Stack>
+        <Stack component="ul" spacing={2} sx={{ m: 0, p: 0, listStyle: 'none' }}>
+          {children}
+        </Stack>
+      </Stack>
+    </Paper>
+  )
+}
+
 interface BuildListPageProps { dependencies?: BuildListPageDependencies }
 
 export function BuildListPage({ dependencies = defaultDependencies ?? undefined }: BuildListPageProps) {
   const debugMode = useSettingsStore((state) => state.debugMode)
   const navigate = useNavigate()
+  const progressHeadingId = useId()
+  const entriesHeadingId = useId()
   const [entries, setEntries] = useState<BuildListEntry[]>([])
   const [targets, setTargets] = useState<TargetWeapon[]>([])
   const [ownedWeapons, setOwnedWeapons] = useState<OwnedWeapon[]>([])
@@ -167,7 +348,6 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
   const [planning, setPlanning] = useState(false)
   const [progress, setProgress] = useState<PlannerProgress | null>(null)
   const [warnings, setWarnings] = useState<PlannerWarning[]>([])
-  const [notice, setNotice] = useState<string | null>(null)
   const [optionInputs, setOptionInputs] = useState<PlannerOptionInputs>(() =>
     createPlannerOptionInputs(defaultPlannerOptions),
   )
@@ -175,9 +355,16 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
   // `warnings` because it is the typed result, not a diagnostic message.
   const [incompleteSearch, setIncompleteSearch] =
     useState<PlannerSearchTermination | null>(null)
-  const [error, setError] = useState<string | null>(
+  // The failure and notice sources stay separate: a load failure is never
+  // shown as an empty Build List, and a Planner, checkpoint, or remove problem
+  // stays next to the control that caused it (`docs/UI_FLOW.md` 10).
+  const [loadError, setLoadError] = useState<string | null>(
     dependencies ? null : 'マスターデータを読み込めません。',
   )
+  const [plannerError, setPlannerError] = useState<string | null>(null)
+  const [plannerNotice, setPlannerNotice] = useState<PlannerNotice | null>(null)
+  const [checkpointFeedback, setCheckpointFeedback] = useState<CheckpointFeedback | null>(null)
+  const [removeError, setRemoveError] = useState<string | null>(null)
   const clientRef = useRef<PlannerWorkerClient | null>(null)
   const activeRequestRef = useRef<string | null>(null)
   /**
@@ -198,6 +385,13 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
     () => parsePlannerOptions(optionInputs),
     [optionInputs],
   )
+  const groups = useMemo(() => groupEntriesByTarget(entries, targets), [entries, targets])
+  // Display-only counts over the loaded data. None of them decides whether the
+  // Planner may run: that stays with the Planner's own input validation.
+  const staleCount = entries.filter(({ isStale }) => isStale).length
+  const checkpointEntryCount = entries.filter(
+    (entry) => selectedCheckpointCount(entry) > 0,
+  ).length
 
   useEffect(() => {
     let active = true
@@ -213,7 +407,7 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
       setTargets(loaded.targets)
       setOwnedWeapons(loaded.ownedWeapons)
     }).catch((caught: unknown) => {
-      if (active) setError(caught instanceof Error ? caught.message : 'ビルドリストの読み込みに失敗しました。')
+      if (active) setLoadError(caught instanceof Error ? caught.message : 'ビルドリストの読み込みに失敗しました。')
     }).finally(() => { if (active) setLoading(false) })
     return () => {
       active = false
@@ -234,8 +428,8 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
       maxExpandedStates: plannerOptions.maxExpandedStates,
     })
     setWarnings([])
-    setNotice(null)
-    setError(null)
+    setPlannerNotice(null)
+    setPlannerError(null)
     setIncompleteSearch(null)
     try {
       const calculationContext = createPlannerCalculationContext(
@@ -296,11 +490,11 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
       if (savedPlan) {
         void navigate(`/plans/${savedPlan.id}`)
       } else {
-        setNotice('現在の入力から作成できる生産計画はありませんでした。')
+        setPlannerNotice('no_plan')
       }
     } catch (caught: unknown) {
       if (activeRequestRef.current !== requestId || caught instanceof PlannerCancelledError) return
-      setError(caught instanceof Error ? caught.message : '生産計画の作成に失敗しました。')
+      setPlannerError(caught instanceof Error ? caught.message : '生産計画の作成に失敗しました。')
     } finally {
       if (activeRequestRef.current === requestId) {
         activeRequestRef.current = null
@@ -315,7 +509,7 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
     activeRequestRef.current = null
     clientRef.current?.cancelPlan(requestId)
     setPlanning(false)
-    setNotice('生産計画の作成をキャンセルしました。')
+    setPlannerNotice('cancelled')
   }
 
   /**
@@ -352,9 +546,15 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
     chain.set(entry.id, save)
     try {
       await save
-      setNotice('利用チェックポイントを更新しました。生産計画を再作成してください。')
+      setCheckpointFeedback({
+        severity: 'info',
+        message: '利用チェックポイントを更新しました。生産計画を再作成してください。',
+      })
     } catch (caught: unknown) {
-      setError(caught instanceof Error ? caught.message : 'チェックポイントを更新できませんでした。')
+      setCheckpointFeedback({
+        severity: 'error',
+        message: caught instanceof Error ? caught.message : 'チェックポイントを更新できませんでした。',
+      })
     } finally {
       if (chain.get(entry.id) === save) chain.delete(entry.id)
     }
@@ -362,89 +562,315 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
 
   const remove = async (id: BuildListEntryId) => {
     if (!dependencies) return
+    setRemoveError(null)
     try {
       await dependencies.deleteEntry(id)
       setEntries((current) => current.filter((entry) => entry.id !== id))
     } catch (caught: unknown) {
-      setError(caught instanceof Error ? caught.message : 'ビルドリストから削除できませんでした。')
+      setRemoveError(caught instanceof Error ? caught.message : 'ビルドリストから削除できませんでした。')
     }
   }
 
+  const loaded = !loading && loadError === null
+  const progressRatio =
+    progress && progress.maxExpandedStates > 0
+      ? Math.min(100, (progress.expandedStates / progress.maxExpandedStates) * 100)
+      : 0
+
   return (
-    <PageShell title="ビルドリスト" description="生産計画で検討する候補を確認します。">
-      <Stack spacing={3}>
+    <PageShell
+      title="ビルドリスト"
+      description="生産計画（Planner）で検討する候補を確認し、チェックポイントの選択と探索上限を調整します。"
+    >
+      <Stack spacing={{ xs: 2, md: 3 }}>
         {loading && <LinearProgress aria-label="ビルドリストを読み込み中" />}
-        {error && <Alert severity="error">{error}</Alert>}
-        {notice && <Alert severity="info">{notice}</Alert>}
-        {incompleteSearch && (
-          <Alert severity="warning">
-            <AlertTitle>{plannerIncompleteSearchTitle}</AlertTitle>
-            {createPlannerReachedLimitMessages(incompleteSearch).map((message) => (
-              <Typography variant="body2" key={message}>{message}</Typography>
-            ))}
-            <Typography variant="body2">{createPlannerExpandedStatesText(incompleteSearch)}</Typography>
-            <Typography variant="body2">{createPlannerCompletedTargetsText(incompleteSearch)}</Typography>
+        {loadError && <Alert severity="error">{loadError}</Alert>}
+        {removeError && <Alert severity="error">{removeError}</Alert>}
+
+        {loaded && (
+          <PageSection title="ページ概要">
+            <Box
+              component="ul"
+              sx={{
+                m: 0,
+                p: 0,
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: 'repeat(2, minmax(0, 1fr))',
+                  md: 'repeat(4, minmax(0, 1fr))',
+                },
+                gap: 1.5,
+              }}
+            >
+              <SummaryTile label="登録候補" value={entries.length} note="件" />
+              <SummaryTile label="目標武器" value={groups.length} note="件" />
+              <SummaryTile
+                label="再検索が必要な候補"
+                value={staleCount}
+                note={staleCount > 0 ? '生産計画に含まれません' : '件'}
+              />
+              <SummaryTile label="チェックポイント選択中" value={checkpointEntryCount} note="候補" />
+            </Box>
+          </PageSection>
+        )}
+
+        {loaded && entries.length === 0 && (
+          <Alert
+            severity="info"
+            action={
+              <Button component={RouterLink} to="/search" color="inherit" size="small">
+                候補検索へ
+              </Button>
+            }
+          >
+            ビルドリストは空です。検索結果から候補を追加してください。
           </Alert>
         )}
-        {warnings.length > 0 && <Alert severity="warning"><Typography variant="subtitle2">Planner警告</Typography>{warnings.map((warning, index) => <Typography variant="body2" key={`${warning.kind}:${index}`}>{warning.message}</Typography>)}</Alert>}
-        {!loading && !error && entries.length === 0 && <Alert severity="info">ビルドリストは空です。検索結果から候補を追加してください。</Alert>}
-        {!loading && entries.length > 0 && (
-          <Accordion>
-            <AccordionSummary><Typography>詳細設定</Typography></AccordionSummary>
-            <AccordionDetails>
-              <Stack spacing={2}>
-                {plannerOptionFields.map(({ key, label, helperText }) => {
-                  const invalid = parsePlannerOptionValue(optionInputs[key]) === null
-                  return (
-                    <TextField
-                      key={key}
-                      label={label}
-                      type="number"
-                      value={optionInputs[key]}
-                      error={invalid}
-                      helperText={invalid ? plannerOptionInvalidMessage : helperText}
-                      onChange={(event) =>
-                        setOptionInputs((current) => ({
-                          ...current,
-                          [key]: event.target.value,
-                        }))
-                      }
-                      slotProps={{ htmlInput: { min: 1, step: 1 } }}
-                    />
-                  )
-                })}
+
+        {loaded && entries.length > 0 && (
+          <PageSection title="生産計画の作成" accent>
+            <Stack
+              direction={{ xs: 'column', md: 'row' }}
+              spacing={{ xs: 1.5, md: 3 }}
+              sx={{ justifyContent: 'space-between', alignItems: { xs: 'stretch', md: 'center' } }}
+            >
+              <Typography variant="body2" color="text.secondary" sx={{ minWidth: 0 }}>
+                再検索が必要な候補は生産計画に含まれません。作成に成功すると、保存された生産計画の画面へ移動します。
+              </Typography>
+              <Button
+                variant="contained"
+                disabled={planning || plannerOptions === null}
+                onClick={() => void startPlanning()}
+                sx={{ minHeight: 44, px: 3, flexShrink: 0 }}
+              >
+                生産計画を作成
+              </Button>
+            </Stack>
+            {plannerOptions === null && (
+              <Alert severity="warning">
+                詳細設定に無効な値があるため、生産計画を作成できません。
+              </Alert>
+            )}
+            <DisclosureAccordion title="詳細設定" headingLevel="h3">
+              <Stack spacing={1.5}>
+                <Typography variant="body2" color="text.secondary">
+                  Beam Searchの探索上限です。3項目とも1以上の整数だけが有効で、この画面を再読み込みすると既定値へ戻ります。
+                </Typography>
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(3, minmax(0, 1fr))' },
+                    gap: 1.5,
+                  }}
+                >
+                  {plannerOptionFields.map(({ key, label, helperText }) => {
+                    const invalid = parsePlannerOptionValue(optionInputs[key]) === null
+                    return (
+                      <TextField
+                        key={key}
+                        fullWidth
+                        label={label}
+                        type="number"
+                        value={optionInputs[key]}
+                        error={invalid}
+                        helperText={invalid ? plannerOptionInvalidMessage : helperText}
+                        onChange={(event) =>
+                          setOptionInputs((current) => ({
+                            ...current,
+                            [key]: event.target.value,
+                          }))
+                        }
+                        slotProps={{ htmlInput: { min: 1, step: 1 } }}
+                      />
+                    )
+                  })}
+                </Box>
                 <Button
+                  variant="outlined"
                   onClick={() =>
                     setOptionInputs(createPlannerOptionInputs(defaultPlannerOptions))
                   }
-                >既定値に戻す</Button>
+                  sx={{ minHeight: 44, alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
+                >
+                  既定値に戻す
+                </Button>
               </Stack>
-            </AccordionDetails>
-          </Accordion>
+            </DisclosureAccordion>
+
+            {planning && progress && (
+              <Paper
+                component="section"
+                variant="outlined"
+                role="status"
+                aria-live="polite"
+                aria-labelledby={progressHeadingId}
+                sx={{ p: { xs: 1.5, md: 2 }, minWidth: 0 }}
+              >
+                <Stack spacing={1.5}>
+                  <Typography
+                    id={progressHeadingId}
+                    component="h3"
+                    variant="h3"
+                    className="tabular-nums"
+                  >
+                    計画中 {progress.expandedStates} / {progress.maxExpandedStates}
+                  </Typography>
+                  {/* `maxExpandedStates` is a known bound, so the Planner
+                      progress is determinate (UI_FLOW 10.0). */}
+                  <LinearProgress
+                    aria-label="生産計画の作成の進捗"
+                    variant="determinate"
+                    value={progressRatio}
+                  />
+                  <Typography variant="caption" color="text.secondary">
+                    探索状態数 / 最大探索状態数
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    onClick={cancelPlanning}
+                    sx={{ minHeight: 44, alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
+                  >
+                    キャンセル
+                  </Button>
+                </Stack>
+              </Paper>
+            )}
+
+            {incompleteSearch && (
+              <Alert severity="warning">
+                <AlertTitle>{plannerIncompleteSearchTitle}</AlertTitle>
+                <Stack spacing={0.5}>
+                  {createPlannerReachedLimitMessages(incompleteSearch).map((message) => (
+                    <Typography variant="body2" key={message}>{message}</Typography>
+                  ))}
+                  <Typography variant="body2" className="tabular-nums">
+                    {createPlannerExpandedStatesText(incompleteSearch)}
+                  </Typography>
+                  <Typography variant="body2" className="tabular-nums">
+                    {createPlannerCompletedTargetsText(incompleteSearch)}
+                  </Typography>
+                </Stack>
+              </Alert>
+            )}
+            {warnings.length > 0 && (
+              <Alert severity="warning">
+                <AlertTitle>Planner警告</AlertTitle>
+                <Box component="ul" sx={{ m: 0, pl: 2.5, display: 'grid', gap: 0.75 }}>
+                  {warnings.map((warning, index) => (
+                    <li key={`${warning.kind}:${index}`}>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {plannerWarningLabels[warning.kind]}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+                        {warning.message}
+                      </Typography>
+                    </li>
+                  ))}
+                </Box>
+              </Alert>
+            )}
+            {plannerNotice && <Alert severity="info">{plannerNoticeMessages[plannerNotice]}</Alert>}
+            {plannerError && <Alert severity="error">{plannerError}</Alert>}
+          </PageSection>
         )}
-        {!loading && entries.length > 0 && <Button variant="contained" disabled={planning || plannerOptions === null} onClick={() => void startPlanning()}>生産計画を作成</Button>}
-        {planning && progress && <Stack spacing={1}><Typography>計画中 {progress.expandedStates} / {progress.maxExpandedStates}</Typography><LinearProgress variant="determinate" value={progress.maxExpandedStates > 0 ? progress.expandedStates / progress.maxExpandedStates * 100 : 0} /><Button onClick={cancelPlanning}>キャンセル</Button></Stack>}
-        {entries.map((entry) => {
-          const target = targets.find(({ id }) => id === entry.targetWeaponId) ?? null
-          return <Stack spacing={1} key={entry.id}>
-            <Typography variant="h2">{target?.name ?? '削除済みの目標武器'}</Typography>
-            {entry.isStale && <Alert severity="warning"><Typography variant="subtitle2">再検索が必要</Typography>{entry.staleReasons.map((reason) => <Typography variant="body2" key={reason}>{staleReasonLabels[reason]}</Typography>)}</Alert>}
-            {masterForDisplay && <CandidateCard
-              candidate={entry.candidateSnapshot}
-              target={target}
-              master={masterForDisplay}
-              ownedWeapons={ownedWeapons}
-              debugMode={debugMode}
-              selectedCheckpointOpportunityIds={entry.selectedCheckpointOpportunityIds ?? []}
-              onToggleCheckpoint={(group, opportunity, selected) =>
-                void toggleCheckpoint(entry, group, opportunity, selected)
-              }
-            />}
-            {debugMode && <Alert severity="info">targetDefinitionHash: {entry.targetDefinitionHash}</Alert>}
-            <Typography variant="caption">追加日時: {entry.createdAt}</Typography>
-            <Button color="error" variant="outlined" onClick={() => void remove(entry.id)}>ビルドリストから削除</Button>
+
+        {loaded && entries.length > 0 && masterForDisplay && (
+          <Stack component="section" aria-labelledby={entriesHeadingId} spacing={2} sx={{ minWidth: 0 }}>
+            <Typography id={entriesHeadingId} component="h2" variant="h2">
+              候補一覧
+            </Typography>
+            {checkpointFeedback && (
+              <Alert severity={checkpointFeedback.severity}>{checkpointFeedback.message}</Alert>
+            )}
+            {groups.map((group) => (
+              <TargetGroupSection key={group.targetWeaponId} group={group}>
+                {group.entries.map((entry) => (
+                  <Box
+                    component="li"
+                    key={entry.id}
+                    sx={{
+                      border: 1,
+                      borderColor: entry.isStale ? 'warning.main' : 'divider',
+                      borderRadius: 1,
+                      p: { xs: 1.5, md: 2 },
+                      minWidth: 0,
+                    }}
+                  >
+                    <Stack spacing={1.5}>
+                      <Stack
+                        direction={{ xs: 'column', sm: 'row' }}
+                        spacing={1}
+                        useFlexGap
+                        sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' }, flexWrap: 'wrap' }}
+                      >
+                        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+                          {selectedCheckpointCount(entry) > 0 ? (
+                            <StatusChip
+                              label={`チェックポイント選択中 ${selectedCheckpointCount(entry)}`}
+                              tone="info"
+                            />
+                          ) : (
+                            <StatusChip label="チェックポイント未選択" tone="neutral" />
+                          )}
+                        </Stack>
+                        <Typography variant="caption" color="text.secondary" className="tabular-nums">
+                          追加日時: {entry.createdAt}
+                        </Typography>
+                      </Stack>
+                      {entry.isStale && (
+                        <Alert severity="warning">
+                          <AlertTitle>再検索が必要</AlertTitle>
+                          <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+                            {entry.staleReasons.map((reason) => (
+                              <Typography component="li" variant="body2" key={reason}>
+                                {staleReasonLabels[reason]}
+                              </Typography>
+                            ))}
+                          </Box>
+                          <Typography variant="body2" sx={{ mt: 0.5 }}>
+                            この候補は生産計画に含まれません。候補検索をやり直して、候補を追加し直してください。内容は下で確認できます。
+                          </Typography>
+                        </Alert>
+                      )}
+                      {/* The Candidate Snapshot stored on the Entry is the
+                          display authority; the current Search result is never
+                          re-fetched (`docs/UI_FLOW.md` 10). */}
+                      <CandidateCard
+                        candidate={entry.candidateSnapshot}
+                        target={group.target}
+                        master={masterForDisplay}
+                        ownedWeapons={ownedWeapons}
+                        debugMode={debugMode}
+                        headingLevel="h4"
+                        checkpointSelectionContext="build_list"
+                        selectedCheckpointOpportunityIds={entry.selectedCheckpointOpportunityIds ?? []}
+                        onToggleCheckpoint={(checkpointGroup, opportunity, selected) =>
+                          void toggleCheckpoint(entry, checkpointGroup, opportunity, selected)
+                        }
+                      />
+                      {debugMode && (
+                        <Alert severity="info">
+                          Entry ID: {entry.id}<br />
+                          targetDefinitionHash: {entry.targetDefinitionHash}<br />
+                          searchStateHash: {entry.searchStateHash}<br />
+                          referencedOwnedWeaponsHash: {entry.referencedOwnedWeaponsHash ?? 'null'}
+                        </Alert>
+                      )}
+                      <Button
+                        color="error"
+                        variant="text"
+                        onClick={() => void remove(entry.id)}
+                        sx={{ minHeight: 44, alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
+                      >
+                        ビルドリストから削除
+                      </Button>
+                    </Stack>
+                  </Box>
+                ))}
+              </TargetGroupSection>
+            ))}
           </Stack>
-        })}
+        )}
       </Stack>
     </PageShell>
   )
