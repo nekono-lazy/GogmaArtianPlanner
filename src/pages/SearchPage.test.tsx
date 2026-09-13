@@ -1,8 +1,13 @@
 import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../domain/models/publicTypes'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { BuildCandidate, TargetWeapon } from '../domain/models/publicTypes'
+import type {
+  BuildCandidate,
+  CompromiseCheckpointGroup,
+  CompromiseCheckpointOpportunity,
+  TargetWeapon,
+} from '../domain/models/publicTypes'
 import type {
   CandidateSearchInput,
   CandidateSearchProgress,
@@ -276,5 +281,129 @@ describe('SearchPage', () => {
     // Checkpoints start unselected, so a fresh result selects none.
     expect(deps.addCandidate).toHaveBeenCalledWith(candidate, target, [])
     expect(screen.getByText('ビルドリストへ追加しました。')).toBeInTheDocument()
+  })
+
+  it('shows a load failure without the Target empty state or a search form', async () => {
+    const deps = dependencies(new ControlledClient(), [createValidTargetWeapon()])
+    deps.getTargets = async () => {
+      throw new Error('読み込みfixture失敗')
+    }
+    render(<SearchPage dependencies={deps} />)
+
+    expect(await screen.findByText('読み込みfixture失敗')).toBeInTheDocument()
+    // A failed load is never presented as "no Targets", and no synthetic
+    // Target is offered to search.
+    expect(screen.queryByText('目標武器を登録してください。')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '検索開始' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('検索対象の目標武器')).not.toBeInTheDocument()
+  })
+
+  it('heads the search conditions and detail settings with sequential headings', async () => {
+    const user = userEvent.setup()
+    render(<SearchPage dependencies={dependencies(new ControlledClient())} />)
+    await screen.findByRole('button', { name: '検索開始' })
+
+    expect(screen.getByRole('heading', { level: 1, name: '候補検索' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: '検索条件' })).toBeInTheDocument()
+    expect(screen.getByLabelText('検索対象の目標武器')).toBeInTheDocument()
+    expect(screen.getByLabelText('作成ルート')).toBeInTheDocument()
+    // The Accordion heading slot is the only heading around its toggle.
+    const toggle = screen.getByRole('button', { name: '詳細設定（探索量の上限）' })
+    expect(screen.getByRole('heading', { level: 3, name: '詳細設定（探索量の上限）' })).toContainElement(toggle)
+    expect(within(toggle).queryByRole('heading')).not.toBeInTheDocument()
+    await user.click(toggle)
+    expect(await screen.findByLabelText('通常アーティア最大進行量')).toBeInTheDocument()
+    expect(screen.getByLabelText('巨戟最大進行量')).toBeInTheDocument()
+    expect(screen.getByLabelText('スキル最大進行量')).toBeInTheDocument()
+  })
+
+  it('shows an add failure and the duplicate notice next to the Candidate', async () => {
+    const user = userEvent.setup()
+    const client = new ControlledClient()
+    const target = createValidTargetWeapon()
+    const deps = dependencies(client, [target])
+    let attempt = 0
+    deps.addCandidate = vi.fn(async () => {
+      attempt += 1
+      if (attempt === 1) throw new Error('追加fixture失敗')
+      return { added: false }
+    })
+    render(<SearchPage dependencies={deps} />)
+    await user.click(await screen.findByRole('button', { name: '検索開始' }))
+    client.resolve(resultFor(target, createValidBuildCandidate()))
+
+    const addButton = await screen.findByRole('button', { name: 'ビルドリストへ追加' })
+    const card = screen.getByRole('heading', { level: 3, name: '理想候補' }).closest('section')
+    expect(card).toContainElement(addButton)
+
+    await user.click(addButton)
+    expect(await screen.findByText('追加fixture失敗')).toBeInTheDocument()
+    expect(card).toHaveTextContent('追加fixture失敗')
+
+    // The existing Build List selection is never overwritten from here.
+    await user.click(addButton)
+    const duplicate = await screen.findByText(
+      'この候補は作成リストに追加済みです。チェックポイントは作成リストで変更してください。',
+    )
+    expect(card).toContainElement(duplicate)
+    expect(screen.queryByText('追加fixture失敗')).not.toBeInTheDocument()
+  })
+
+  it('keeps at most one selected opportunity per checkpoint group', async () => {
+    const user = userEvent.setup()
+    const client = new ControlledClient()
+    const target = createValidTargetWeapon()
+    const deps = dependencies(client, [target])
+    const candidate = createValidBuildCandidate()
+    const identity = {
+      seriesSkillId: 'series_skill.fixture.enabled',
+      groupSkillId: null,
+      conditionMatch: { bonus: 'practical', skill: 'ideal' },
+    } as const
+    const arrival = (id: string, afterOperationIndex: number): CompromiseCheckpointOpportunity => ({
+      id: id as CompromiseCheckpointOpportunity['id'],
+      afterOperationIndex,
+      operationCount: afterOperationIndex + 1,
+      remainingOperationCount: 2 - afterOperationIndex,
+      restorationBonuses: candidate.finalBonuses,
+      restorationBonusScope: 'gogma_artian',
+      ...identity,
+    })
+    const group: CompromiseCheckpointGroup = {
+      id: 'checkpoint-group:fixture.ui' as CompromiseCheckpointGroup['id'],
+      restorationBonusScope: 'gogma_artian',
+      restorationBonuses: candidate.finalBonuses,
+      ...identity,
+      opportunities: [
+        arrival('checkpoint-opportunity:fixture.ui.1', 0),
+        arrival('checkpoint-opportunity:fixture.ui.2', 1),
+      ],
+      isDisplaySecondary: false,
+      dominatingGroupId: null,
+    }
+    candidate.checkpointGroups = [group]
+    render(<SearchPage dependencies={deps} />)
+    await user.click(await screen.findByRole('button', { name: '検索開始' }))
+    client.resolve(resultFor(target, candidate))
+
+    const primary = await screen.findByRole('checkbox', { name: '1手目（理想まで残り2操作）' })
+    expect(primary).not.toBeChecked()
+    await user.click(primary)
+    expect(primary).toBeChecked()
+
+    await user.click(screen.getByRole('button', { name: 'その他の到達点（1）' }))
+    const later = await screen.findByRole('checkbox', { name: '2手目（理想まで残り1操作）' })
+    await user.click(later)
+    // Choosing another arrival at the same product replaces the first one.
+    expect(later).toBeChecked()
+    expect(primary).not.toBeChecked()
+
+    await user.click(screen.getByRole('button', { name: 'ビルドリストへ追加' }))
+    expect(deps.addCandidate).toHaveBeenCalledWith(candidate, target, [group.opportunities[1].id])
+
+    await user.click(later)
+    expect(later).not.toBeChecked()
+    await user.click(screen.getByRole('button', { name: 'ビルドリストへ追加' }))
+    expect(deps.addCandidate).toHaveBeenLastCalledWith(candidate, target, [])
   })
 })

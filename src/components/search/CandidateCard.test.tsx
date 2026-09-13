@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import type {
@@ -571,5 +571,89 @@ describe('CandidateCard conversion skill result', () => {
       `スキルをリセット予測結果:シリーズ: ${skillLabels.series} ／ グループ: ${skillLabels.none}`,
     ])
     expect(screen.getAllByText('予測結果:')).toHaveLength(1)
+  })
+})
+
+describe('CandidateCard summary', () => {
+  it('names the card and shows the route kind, final skills, and operation summary', () => {
+    const candidate = createValidBuildCandidate()
+    render(<CandidateCard candidate={candidate} target={target()} master={createValidMasterDataFixture()} />)
+
+    expect(screen.getByRole('heading', { level: 3, name: '理想候補' })).toBeInTheDocument()
+    expect(screen.getByText('新規通常アーティアから巨戟化')).toBeInTheDocument()
+    expect(screen.getByText(/シリーズ: 不明なシリーズスキル ／ グループ: なし/)).toBeInTheDocument()
+
+    // Every figure comes from the Candidate's own estimates; no Counter value
+    // is shown.
+    const summary = within(screen.getByLabelText('操作量の概要'))
+    expect(summary.getByText('操作回数').nextSibling).toHaveTextContent('3回')
+    expect(summary.getByText('通常進行').nextSibling).toHaveTextContent('1')
+    expect(summary.getByText('巨戟進行').nextSibling).toHaveTextContent('0')
+    expect(summary.getByText('スキル進行').nextSibling).toHaveTextContent('2')
+  })
+
+  it('shows a dash when the Route has no absolute Normal Counter dependency', () => {
+    const candidate = createValidBuildCandidate()
+    candidate.estimatedNormalAdvance = null
+    render(<CandidateCard candidate={candidate} target={target()} master={createValidMasterDataFixture()} />)
+
+    const summary = within(screen.getByLabelText('操作量の概要'))
+    expect(summary.getByText('通常進行').nextSibling).toHaveTextContent('—')
+  })
+})
+
+describe('CandidateCard restoration bonus scope', () => {
+  function finalSlotTexts(): string[] {
+    const list = screen.getByRole('list', { name: '完成時の復元ボーナス5枠' })
+    return within(list).getAllByRole('listitem').map((item) => item.textContent ?? '')
+  }
+
+  it('labels a normal-scope Candidate with the normal definition and the normal scope label', () => {
+    const candidate = createValidBuildCandidate()
+    expect(candidate.restorationBonusScope).toBe('normal_artian')
+    render(<CandidateCard candidate={candidate} target={target()} master={createValidMasterDataFixture()} />)
+
+    expect(screen.getByText('通常継承（通常アーティアのボーナス）')).toBeInTheDocument()
+    expect(screen.queryByText('巨戟amendment後（巨戟のボーナス）')).not.toBeInTheDocument()
+    const texts = finalSlotTexts()
+    expect(texts).toHaveLength(5)
+    // The fixture defines a distinct normal-scope label for attack / high, so
+    // the slot resolves to it rather than to the Gogma definition.
+    expect(texts[0]).toBe('通常攻撃fixture')
+    expect(texts[1]).toBe('通常攻撃fixture')
+    expect(texts).not.toContain(labels.attackHigh)
+  })
+
+  it('labels a Gogma-scope Candidate with the Gogma definition and the Gogma scope label', () => {
+    const candidate = createValidBuildCandidate()
+    candidate.restorationBonusScope = 'gogma_artian'
+    render(<CandidateCard candidate={candidate} target={target()} master={createValidMasterDataFixture()} />)
+
+    expect(screen.getByText('巨戟amendment後（巨戟のボーナス）')).toBeInTheDocument()
+    expect(screen.queryByText('通常継承（通常アーティアのボーナス）')).not.toBeInTheDocument()
+    const texts = finalSlotTexts()
+    expect(texts).toHaveLength(5)
+    expect(texts[0]).toBe(labels.attackHigh)
+    expect(texts).not.toContain('通常攻撃fixture')
+  })
+
+  it('resolves each amendment prediction label from that step’s own scope', async () => {
+    // Presentation-only check of the binding: each trace step's stored scope,
+    // not the Candidate's final scope, selects the definition label.
+    const candidate = candidateWith(
+      [amendment(10, 'reset_bonuses'), amendment(11, 'reset_bonuses')],
+      [
+        { ...traceStep(0, 'reset_bonuses', firstResult()), restorationBonusScope: 'normal_artian' },
+        traceStep(1, 'reset_bonuses', firstResult()),
+      ],
+    )
+    candidate.restorationBonusScope = 'gogma_artian'
+    const { container } = await renderExpanded(candidate)
+    const [first, second] = routeStepTexts(container)
+
+    expect(first).toContain('通常攻撃fixture')
+    expect(first).not.toContain(labels.attackHigh)
+    expect(second).toContain(labels.attackHigh)
+    expect(second).not.toContain('通常攻撃fixture')
   })
 })
