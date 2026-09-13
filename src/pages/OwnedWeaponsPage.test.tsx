@@ -1,12 +1,27 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type {
   OwnedGogmaArtianWeapon,
   OwnedWeapon,
 } from '../domain/models/publicTypes'
-import type { OwnedWeaponDraft } from '../services/crud/entityCrudServices'
+import { EntityFormValidationError, ReferencedEntityDeleteError, type OwnedWeaponDraft } from '../services/crud/entityCrudServices'
+import { createDefaultBonusSet } from '../domain/forms/entityDrafts'
+import { loadMasterData } from '../domain/master/loadMasterData'
 import { OwnedWeaponsPage, type OwnedWeaponsPageDependencies } from './OwnedWeaponsPage'
+
+function loadedMaster() {
+  const result = loadMasterData()
+  if (!result.ok) throw new Error('Master load failed')
+  return result.data
+}
+
+async function itemFor(name: string): Promise<HTMLElement> {
+  const heading = await screen.findByRole('heading', { name })
+  const item = heading.closest<HTMLElement>('li')
+  if (!item) throw new Error(`${name} was not rendered as a list item`)
+  return item
+}
 
 function dependencies() {
   const save = vi.fn(async (draft: OwnedWeaponDraft) => ({ ...draft, id: crypto.randomUUID() as OwnedWeapon['id'], createdAt: 'now', updatedAt: 'now' }))
@@ -194,6 +209,162 @@ describe('OwnedWeaponsPage', () => {
       expect.objectContaining({ kind: 'normal', rarity: 8 }),
       null,
     )
+  })
+
+  it('shows an empty state with the add action when nothing is registered', async () => {
+    render(<OwnedWeaponsPage dependencies={dependencies()} />)
+    expect(await screen.findByText('所持武器は未登録です。')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: '所持武器を追加' })).toHaveLength(1)
+    expect(screen.queryByRole('listitem')).toBeNull()
+  })
+
+  it('lists each weapon once with kind, type, element, five slots, skills, status, protection and preferred origin', async () => {
+    const gogmaWeapon = existingWeapon()
+    const normalWeapon: OwnedWeapon = {
+      ...existingWeapon(),
+      id: 'owned-normal' as OwnedWeapon['id'],
+      kind: 'normal',
+      rarity: 8,
+      name: '通常武器',
+      restorationBonusScope: 'normal_artian',
+      seriesSkillId: null,
+      groupSkillId: null,
+      status: null,
+      isProtected: false,
+    }
+    const deps = dependencies(); deps.getAll = vi.fn(async () => [gogmaWeapon, normalWeapon])
+    render(<OwnedWeaponsPage dependencies={deps} />)
+
+    const gogmaItem = within(await itemFor('既存武器'))
+    expect(gogmaItem.getByText('巨戟アーティア')).toBeInTheDocument()
+    expect(gogmaItem.getByText('双剣 / 雷')).toBeInTheDocument()
+    const slots = gogmaItem.getByRole('list', { name: '復元ボーナス' })
+    expect(within(slots).getAllByRole('listitem')).toHaveLength(5)
+    expect(gogmaItem.getByText(/シリーズスキル: なし/)).toBeInTheDocument()
+    expect(gogmaItem.getByText('状態: 実用')).toBeInTheDocument()
+    expect(gogmaItem.getByText('保護中')).toBeInTheDocument()
+    expect(gogmaItem.getByText('優先起点: なし')).toBeInTheDocument()
+
+    const normalItem = within(await itemFor('通常武器'))
+    expect(normalItem.getByText('通常アーティア')).toBeInTheDocument()
+    expect(normalItem.getByText('状態: —')).toBeInTheDocument()
+    expect(normalItem.getByText('未保護')).toBeInTheDocument()
+    expect(normalItem.queryByText(/シリーズスキル/)).toBeNull()
+
+    // Both devices share one DOM structure: each action exists once per weapon
+    // and is described by that weapon's name.
+    for (const [item, name] of [[gogmaItem, '既存武器'], [normalItem, '通常武器']] as const) {
+      expect(item.getAllByRole('button', { name: '編集' })).toHaveLength(1)
+      expect(item.getByRole('button', { name: '編集' })).toHaveAccessibleDescription(name)
+      expect(item.getByRole('button', { name: '削除' })).toHaveAccessibleDescription(name)
+    }
+  })
+
+  it('keeps a Gogma weapon inherited normal_artian scope in the list, the editor, and after a weapon type change', async () => {
+    // A converted Gogma legitimately keeps its five normal-tier slots until the
+    // first bonus amendment (`docs/DATA_MODEL.md` 7.1), so kind must not decide scope.
+    const master = loadedMaster()
+    const inheritedBonuses = createDefaultBonusSet(master, 'weapon.dual_blades', 'element.thunder', 'normal_artian')
+    const weapon: OwnedWeapon = { ...existingWeapon(), name: '巨戟化直後', restorationBonusScope: 'normal_artian', restorationBonuses: inheritedBonuses, isProtected: false }
+    const expectedLabels = inheritedBonuses.map((bonus) => master.weaponBonusDefinitions.find((definition) => definition.scope === 'normal_artian' && definition.weaponTypeId === 'weapon.dual_blades' && definition.bonusTypeId === bonus.bonusTypeId && definition.bonusRankId === bonus.bonusRankId)?.displayNameJa)
+    expect(expectedLabels.every((label) => typeof label === 'string')).toBe(true)
+    const user = userEvent.setup(); const deps = dependencies(); deps.getAll = vi.fn(async () => [weapon])
+    render(<OwnedWeaponsPage dependencies={deps} />)
+
+    const item = within(await itemFor('巨戟化直後'))
+    expect(item.getByText('巨戟アーティア')).toBeInTheDocument()
+    expect(item.getByText('ボーナス区分: 通常継承（通常アーティアのボーナス）')).toBeInTheDocument()
+    const slots = within(item.getByRole('list', { name: '復元ボーナス' })).getAllByRole('listitem')
+    expect(slots.map((slot) => slot.textContent)).toEqual(expectedLabels.map((label, index) => `${index + 1}${label}`))
+    expect(item.queryByText('不明')).toBeNull()
+
+    await user.click(item.getByRole('button', { name: '編集' }))
+    expect(within(screen.getByRole('dialog', { name: '所持武器を編集' })).getByText('ボーナス区分: 通常継承（通常アーティアのボーナス）')).toBeInTheDocument()
+    await user.click(screen.getAllByRole('combobox', { name: /ボーナス種別/ })[0])
+    expect(screen.getByRole('option', { name: '斬れ味強化' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: '斬れ味・装填強化' })).toBeNull()
+    await user.keyboard('{Escape}')
+
+    await user.click(screen.getByLabelText('武器種'))
+    await user.click(screen.getByRole('option', { name: '大剣' }))
+    await user.click(screen.getByRole('button', { name: '保存' }))
+    const saved = deps.save.mock.calls[0][0] as OwnedWeaponDraft
+    expect(saved).toMatchObject({ kind: 'gogma', weaponTypeId: 'weapon.great_sword', restorationBonusScope: 'normal_artian' })
+    expect(saved.restorationBonuses).toHaveLength(5)
+    for (const bonus of saved.restorationBonuses) {
+      expect(master.weaponBonusDefinitions.some((definition) => definition.scope === 'normal_artian' && definition.weaponTypeId === 'weapon.great_sword' && definition.bonusTypeId === bonus.bonusTypeId && definition.bonusRankId === bonus.bonusRankId)).toBe(true)
+    }
+  })
+
+  it('shows the Gogma amendment scope for gogma_artian slots', async () => {
+    const deps = dependencies(); deps.getAll = vi.fn(async () => [existingWeapon()])
+    render(<OwnedWeaponsPage dependencies={deps} />)
+    expect(within(await itemFor('既存武器')).getByText('ボーナス区分: 巨戟amendment後（巨戟のボーナス）')).toBeInTheDocument()
+  })
+
+  it.each([
+    ['a validation error', () => new EntityFormValidationError(['name: 名前を入力してください'])],
+    ['a persistence error', () => new Error('IndexedDB write failed')],
+  ])('shows %s inside the open Dialog, not only behind the modal', async (_kind, createError) => {
+    const user = userEvent.setup(); const weapon = existingWeapon(); const deps = dependencies(); deps.getAll = vi.fn(async () => [weapon])
+    const failure = createError()
+    const message = failure instanceof EntityFormValidationError ? failure.issues.join(' / ') : failure.message
+    deps.save = vi.fn(async () => { throw failure })
+    render(<OwnedWeaponsPage dependencies={deps} />)
+    await user.click(await screen.findByRole('button', { name: '編集' }))
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
+    const dialog = screen.getByRole('dialog', { name: '所持武器を編集' })
+    expect(await within(dialog).findByText(message)).toBeInTheDocument()
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(message)
+    // Every rendering of the message lives inside the Dialog.
+    for (const element of screen.getAllByText(message)) {
+      expect(dialog.contains(element)).toBe(true)
+    }
+    expect(screen.queryByText('所持武器を保存しました。')).toBeNull()
+
+    // Cancelling and reopening does not carry the old form error over.
+    await user.click(within(dialog).getByRole('button', { name: 'キャンセル' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await user.click(screen.getByRole('button', { name: '編集' }))
+    expect(within(screen.getByRole('dialog', { name: '所持武器を編集' })).queryByRole('alert')).toBeNull()
+    expect(screen.queryByText(message)).toBeNull()
+  })
+
+  it('keeps the registered kind fixed when editing, and explains why', async () => {
+    const user = userEvent.setup(); const weapon = existingWeapon(); const deps = dependencies(); deps.getAll = vi.fn(async () => [weapon])
+    render(<OwnedWeaponsPage dependencies={deps} />)
+    await user.click(await screen.findByRole('button', { name: '編集' }))
+    const kind = screen.getByRole('checkbox', { name: '通常アーティアとして登録' })
+    expect(kind).toBeDisabled()
+    expect(kind).toHaveAccessibleDescription('登録済み武器の種類は変更できません。')
+    await user.click(screen.getByRole('button', { name: '保存' }))
+    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ kind: 'gogma' }), weapon)
+    expect(await screen.findByText('所持武器を保存しました。')).toBeInTheDocument()
+  })
+
+  it('resets the five slots when the weapon type changes', async () => {
+    const user = userEvent.setup(); const weapon = existingWeapon(); const deps = dependencies(); deps.getAll = vi.fn(async () => [weapon])
+    render(<OwnedWeaponsPage dependencies={deps} />)
+    await user.click(await screen.findByRole('button', { name: '編集' }))
+    await user.click(screen.getByLabelText('武器種'))
+    await user.click(screen.getByRole('option', { name: '大剣' }))
+    await user.click(screen.getByRole('button', { name: '保存' }))
+    const saved = deps.save.mock.calls[0][0] as OwnedWeaponDraft
+    expect(saved.weaponTypeId).toBe('weapon.great_sword')
+    expect(saved.restorationBonuses).toHaveLength(5)
+    expect(saved.restorationBonuses).not.toEqual(weapon.restorationBonuses)
+  })
+
+  it('refuses to delete a referenced weapon and keeps it listed', async () => {
+    const user = userEvent.setup(); const weapon = existingWeapon(); const deps = dependencies(); deps.getAll = vi.fn(async () => [weapon])
+    deps.delete = vi.fn(async () => { throw new ReferencedEntityDeleteError([{ kind: 'target_weapon', entityId: 'target.a', path: 'preferredOwnedWeaponId' }]) })
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<OwnedWeaponsPage dependencies={deps} />)
+    await user.click(await screen.findByRole('button', { name: '削除' }))
+    expect(await screen.findByText(/参照中のため削除できません/)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '既存武器' })).toBeInTheDocument()
+    confirm.mockRestore()
   })
 
   it('deletes an unreferenced weapon after confirmation', async () => {
