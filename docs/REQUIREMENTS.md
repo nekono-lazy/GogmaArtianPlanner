@@ -62,7 +62,7 @@ RNG仕様の確認状態は次の3語で区別する。
 - PS5版 Monster Hunter Wildsのユーザー
 - PC版 Monster Hunter Wildsのユーザー
 
-スマートフォンでゲームを見ながら操作する利用形態を重視する。PCブラウザでも同じ機能を利用できること。
+PCブラウザとスマートフォンブラウザの双方を主要利用環境とし、全主要機能を双方で実用レベルで利用可能にする。利用端末によって機能、情報、入力項目、Domain semanticsを減らしたり変更したりしない。端末差はPresentation層の情報密度、配置、表示形式、操作位置に限定する。Execution Navigatorは、PC / PS5でゲームを操作しながらスマートフォンで利用する形態を特に重視する。画面ごとの適応方針は[UI_FLOW.md](./UI_FLOW.md) 3.1で定義する。
 
 Production v1のSkill / Gogma PredictionとIdentification Wizardは、通常アーティアおよび巨戟アーティアを利用可能なゲーム進行状態のユーザーを対象とする。この製品前提により、Production runtimeはCounterのactive branchを使用する。これはユーザーのactual Counter Gate値を特定済みとみなすことを意味しない。
 

@@ -2671,7 +2671,12 @@ Do not return guessed production results from a Fake RNG implementation without 
 
 ## UI Rules
 
-The application is mobile-friendly first and must also work on desktop browsers.
+PC browsers and smartphone browsers are both primary environments. Every major
+feature must be practically usable on both, and a device never removes or
+changes features, information, input fields, or Domain semantics: device
+differences stay in the Presentation layer (density, layout, display form,
+control placement). `docs/UI_FLOW.md` 3.1 defines the per-screen policy,
+including the smartphone emphasis of the Execution Navigator.
 
 Normal UI hides internal RNG values:
 
