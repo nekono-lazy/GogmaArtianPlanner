@@ -116,9 +116,19 @@ function presentNextAction(
         description: 'ビルドリストは空です。候補検索の結果からビルドリストへ候補を追加します。',
         primary: { label: '候補検索を開始する', to: '/search' },
       }
-    case 'create_plan':
+    case 'search_again_for_stale_build_list':
       return {
-        title: 'ビルドリストから生産計画を作成できます',
+        title: 'ビルドリストの候補は再検索が必要です',
+        description: `ビルドリストの候補${summary.buildList.total}件はすべて再検索が必要です。候補検索をやり直してください。理由はビルドリストで確認できます。`,
+        primary: { label: '候補検索を開始する', to: '/search' },
+        secondary: { label: 'ビルドリストを開く', to: '/build-list' },
+      }
+    case 'review_build_list':
+      // Only facts the Dashboard knows are stated here. Whether the Planner
+      // can use an Entry is decided on the Build List by the Planner's own
+      // validation, so no "a Plan can be created" claim is made.
+      return {
+        title: 'ビルドリストを確認してください',
         description:
           summary.buildList.stale > 0
             ? `ビルドリストの候補${summary.buildList.total}件のうち、${summary.buildList.stale}件は再検索が必要です。`

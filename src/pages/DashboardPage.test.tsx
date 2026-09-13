@@ -2,8 +2,11 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createBuildListEntry } from '../domain/buildList'
 import { loadMasterData } from '../domain/master/loadMasterData'
+import { createReferencedOwnedWeaponsHash, createSearchStateHash } from '../domain/models/hashing'
 import type {
+  BuildListEntry,
   NormalArtianCounter,
   OwnedNormalArtianWeapon,
   ProductionPlan,
@@ -11,9 +14,12 @@ import type {
   TargetWeapon,
 } from '../domain/models/publicTypes'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../domain/rng/production/productionRngEngine'
+import { createBuildListCalculationContext } from '../services/buildList/createBuildListCalculationContext'
 import { createPlannerCalculationContext } from '../services/planner/createPlannerInput'
 import { useSettingsStore } from '../stores/settingsStore'
 import {
+  buildListEntryId,
+  createValidBuildCandidate,
   createValidBuildListEntry,
   createValidOwnedWeapon,
   createValidProductionPlan,
@@ -193,8 +199,12 @@ describe('DashboardPage', () => {
       getBuildListEntries: vi.fn(async () => [createValidBuildListEntry()]),
     }))
 
+    // Every Entry is stale, so the Dashboard sends the user to search again
+    // rather than claiming the Build List can produce a Plan.
     const next = await findRegion('次の操作')
-    expect(within(next).getByText('ビルドリストの候補1件のうち、1件は再検索が必要です。')).toBeInTheDocument()
+    expect(within(next).getByText('ビルドリストの候補は再検索が必要です')).toBeInTheDocument()
+    expect(within(next).queryByText(/生産計画を作成できます/)).not.toBeInTheDocument()
+    expect(within(next).getByRole('link', { name: '候補検索を開始する' })).toHaveAttribute('href', '/search')
     expect(within(next).getByRole('link', { name: 'ビルドリストを開く' })).toHaveAttribute('href', '/build-list')
 
     const rng = screen.getByRole('region', { name: 'RNG状態' })
@@ -212,6 +222,49 @@ describe('DashboardPage', () => {
     expect(within(data).getByText('巨戟 1本')).toBeInTheDocument()
     expect(within(data).getByText('登録済み 2件')).toBeInTheDocument()
     expect(within(data).getByText('うち再検索が必要 1件')).toBeInTheDocument()
+  })
+
+  it('asks to review a partly stale Build List without claiming a Plan can be created', async () => {
+    const user = userEvent.setup()
+    const state = rngState()
+    const counters = [confirmedNormalCounter()]
+    const owned = [createValidOwnedWeapon()]
+    const currentTarget = target(true)
+    // An Entry built against the current state, so the Domain staleness
+    // authority reports it as current.
+    const candidate = createValidBuildCandidate()
+    candidate.targetWeaponId = currentTarget.id
+    candidate.calculationContext = createBuildListCalculationContext(master)
+    candidate.searchStateHash = createSearchStateHash(candidate.route, state, counters)
+    candidate.referencedOwnedWeaponsHash = createReferencedOwnedWeaponsHash(candidate.route, owned)
+    const current: BuildListEntry = createBuildListEntry(candidate, currentTarget, {
+      id: buildListEntryId('build-list.dashboard.current'),
+      createdAt: DOMAIN_FIXTURE_TIME,
+    })
+    // Persisted as not stale, but its historical CalculationContext makes the
+    // Domain authority report it stale: the persisted flag is not trusted.
+    const stale: BuildListEntry = {
+      ...createValidBuildListEntry(),
+      id: buildListEntryId('build-list.dashboard.stale'),
+      isStale: false,
+      staleReasons: [],
+    }
+    const router = renderDashboard(dependencies({
+      getRngState: vi.fn(async () => state),
+      getNormalCounters: vi.fn(async () => counters),
+      getOwnedWeapons: vi.fn(async () => owned),
+      getTargetWeapons: vi.fn(async () => [currentTarget]),
+      getBuildListEntries: vi.fn(async () => [current, stale]),
+    }))
+
+    const next = await findRegion('次の操作')
+    expect(within(next).getByText('ビルドリストを確認してください')).toBeInTheDocument()
+    expect(within(next).getByText('ビルドリストの候補2件のうち、1件は再検索が必要です。')).toBeInTheDocument()
+    expect(screen.queryByText(/生産計画を作成できます/)).not.toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: '現在のデータ' })).getByText('うち再検索が必要 1件')).toBeInTheDocument()
+
+    await user.click(within(next).getByRole('link', { name: 'ビルドリストを開く' }))
+    expect(router.state.location.pathname).toBe('/build-list')
   })
 
   it('leads to the Execution Navigator when a compatible Active Plan exists', async () => {

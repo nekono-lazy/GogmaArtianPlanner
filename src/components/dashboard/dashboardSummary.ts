@@ -88,7 +88,17 @@ export type DashboardNextAction =
   | { kind: 'setup_rng' }
   | { kind: 'register_target' }
   | { kind: 'start_search' }
-  | { kind: 'create_plan' }
+  /**
+   * Every Entry is stale by `evaluateBuildListEntryStaleness`, so none of them
+   * is usable until the Target is searched again.
+   */
+  | { kind: 'search_again_for_stale_build_list' }
+  /**
+   * The Build List has Entries, not all of them stale. This is deliberately
+   * not "a Plan can be created": Planner eligibility is decided per Entry by
+   * `validatePlannerInput` and is never re-derived on the Dashboard.
+   */
+  | { kind: 'review_build_list' }
 
 export interface DashboardSummary {
   rngItems: DashboardRngItem[]
@@ -118,7 +128,10 @@ function selectNextAction(
   }
   if (summary.targetWeapons.enabled === 0) return { kind: 'register_target' }
   if (summary.buildList.total === 0) return { kind: 'start_search' }
-  return { kind: 'create_plan' }
+  if (summary.buildList.stale === summary.buildList.total) {
+    return { kind: 'search_again_for_stale_build_list' }
+  }
+  return { kind: 'review_build_list' }
 }
 
 export function createDashboardSummary(
