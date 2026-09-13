@@ -1,6 +1,11 @@
 import type { BonusTypeId, RestorationBonus, RestorationBonusSet } from '../../models/publicTypes'
 
-/** Reference-only mapping from the pinned app.js Gogma lottery namespace. */
+/**
+ * Reference-only mapping from GARP.lua v0.9.4 `gogma_bonus_ids`,
+ * `gogma_repeat_penalty`, `gogma_keep_family`, and `build_gogma_pool` at
+ * WiseHorror/Gogma-Artian-Roll-Planner
+ * @ eceb2bd9ca6f4897ec516387acab2ad6beb8b38b.
+ */
 export type ReferenceGogmaBonusFamily = 'attack' | 'affinity' | 'element' | 'sharpness_capacity'
 
 export interface ReferenceGogmaBonus {
@@ -10,7 +15,7 @@ export interface ReferenceGogmaBonus {
   readonly bonus: Readonly<RestorationBonus>
 }
 
-/** Exact `gogmaBonusIds` candidate order from the pinned reference app.js. */
+/** Exact Reset candidate order from the pinned `gogma_bonus_ids` table. */
 export const REFERENCE_GOGMA_RESET_CANDIDATES: readonly ReferenceGogmaBonus[] = [
   { referenceId: 8, family: 'attack', repeatPenalty: 50, bonus: { bonusTypeId: 'bonus_type.attack', bonusRankId: 'bonus_rank.ii' } },
   { referenceId: 12, family: 'attack', repeatPenalty: 50, bonus: { bonusTypeId: 'bonus_type.attack', bonusRankId: 'bonus_rank.iii' } },

@@ -29,7 +29,7 @@
 - 計画に沿ったゲーム操作を1ステップずつ案内する
 - 実際の結果が想定と異なった場合に状態を修正して計画を再生成する
 
-単一武器のRNG予測・作成RouteはGogma-Artian-Roll-Plannerの参照実装で確認済みのアルゴリズムを参照し、GogmaArtianPlannerはこれを複数Target、所持Inventory、共有RNG Planner、1 Step Executionへ拡張する。Seed / Counterの観測・特定はGogma Seed Finder系を参照する。外部Repositoryはalgorithm provenanceであり、コードをコピーして組み込むことを意味しない。
+単一武器のRNG予測・作成Routeは、Gogma-Artian-Roll-Plannerの固定 `GARP.lua v0.9.4` で確認済みのProduction RNG primitives / semantic mappingsを参照する。GogmaArtianPlannerは同じProduction RNGを用いるSeed / Counter Identificationを製品内で実装し、さらに複数Target、所持Inventory、共有RNG Planner、1 Step Executionへ拡張する。外部live-game fixtureの出典はfixture単位の観測evidenceであり、出典toolをalgorithmまたはIdentification implementationのauthorityにしない。
 
 RNG仕様の確認状態は次の3語で区別する。
 
@@ -139,13 +139,13 @@ stream進行は次を正式契約とする。Statusはprovenanceの確認範囲�
 
 初期版では次の3方式を提供する。
 
-### 6.1 GogmaSeedFinderからImport
+### 6.1 Gogma Seed Finder形式Import互換
 
-GogmaSeedFinderが出力する状態情報をユーザーが貼り付け、解析結果を確認してから取り込めること。
+Gogma Seed Finderが出力する既知形式の状態情報をユーザーが貼り付け、解析結果を確認してから取り込めること。この機能は出力text formatとの互換性であり、外部toolのalgorithmまたは実装をIdentification authorityとして使用することを意味しない。
 
 一部の値だけ読み取れた場合は、読み取れた項目だけを適用できること。読み取れない項目や既存の他項目を暗黙に上書きしない。
 
-GogmaSeedFinderのソースコードそのものをコピーして使用しない。対応する入力形式は[RNG_SPEC.md](./RNG_SPEC.md)で定義する。
+対応は入力textのparseと内部型への変換に限定し、Production Identificationを外部Seed Finder実装へ依存させない。対応する入力形式は[RNG_SPEC.md](./RNG_SPEC.md)で定義する。
 
 ### 6.2 正確な値の直接入力
 

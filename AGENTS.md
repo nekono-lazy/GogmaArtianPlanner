@@ -329,12 +329,19 @@ Never make production behavior depend on guessed:
 - Seed behavior
 - Other unverified game mechanics
 
-`Gogma-Artian-Roll-Planner` is the provenance for reference-verified single-weapon RNG
-prediction and route behavior. GogmaArtianPlanner extends that behavior to
-multiple Targets, inventory, global planning, and guided execution; it must not
-invent different single-weapon RNG rules or copy external source code verbatim.
-Gogma Seed Finder-family tools are provenance for Seed and Counter observation
-and identification behavior.
+`Gogma-Artian-Roll-Planner` `GARP.lua` v0.9.4 at the pinned reference commit is
+the external provenance for reference-verified single-weapon RNG prediction and
+route behavior. GogmaArtianPlanner owns the implementation that applies those
+Production RNG primitives and semantic mappings to Seed / Counter
+Identification, multiple Targets, inventory, global planning, and guided
+execution; it must not invent different single-weapon RNG rules or depend on an
+external Seed Finder implementation as Identification authority.
+
+External live-game observation fixtures carry provenance at the fixture level.
+A fixture sourced from a third-party tool is evidence for that recorded game
+observation only; it does not make the tool an RNG algorithm or Identification
+implementation authority. Likewise, parsing a supported external output format
+is Import compatibility, not algorithm provenance.
 
 The formal domain-counter contract and its verification provenance are:
 

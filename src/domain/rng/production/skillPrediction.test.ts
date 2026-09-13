@@ -65,7 +65,7 @@ describe('reference-verified Production Skill prediction', () => {
     expect(() => referenceSkillCombinationFromIndex(1.5)).toThrow(RangeError)
   })
 
-  it('matches independent golden vectors from the pinned reference app.js', () => {
+  it('matches independent golden vectors from the pinned GARP.lua reference', () => {
     for (const vector of referenceRngVectors.skillPredictions) {
       const result = predictReferenceSkills(vector)
       expect(result).toEqual({

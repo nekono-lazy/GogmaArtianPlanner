@@ -1,9 +1,14 @@
 import type { RestorationBonus, RestorationBonusSet } from '../../domain/models/publicTypes'
 
 /**
- * Literal values extracted by executing WiseHorror/Gogma-Artian-Roll-Planner
- * @ eceb2bd9ca6f4897ec516387acab2ad6beb8b38b app.js in a read-only Node VM.
- * Source functions: initializeGogma, buildGogmaPool, and simulateGogma.
+ * Reference-verified fixture values for WiseHorror/Gogma-Artian-Roll-Planner
+ * GARP.lua v0.9.4 (`initialize_gogma_rng`, `gogma_repeat_penalty`,
+ * `gogma_keep_family`, `build_gogma_pool`, and `simulate_gogma_roll`)
+ * @ eceb2bd9ca6f4897ec516387acab2ad6beb8b38b.
+ * GARP.lua SHA-256:
+ * dd9ff4ede166542c1efa4bc13595b2d064c581676c289893946af2f9b5551282.
+ * The existing values were independently revalidated with the fixed-hash Lua
+ * source: 14 / 14 cases and 70 bonus-slot comparisons passed with no mismatch.
  * Do not regenerate these expected values from this repository's production code.
  */
 function bonus(bonusTypeId: string, bonusRankId: string): RestorationBonus {

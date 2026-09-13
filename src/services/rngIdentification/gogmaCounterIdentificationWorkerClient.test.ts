@@ -53,7 +53,7 @@ function input(): GogmaCounterIdentificationInput {
     weaponTypeId: live.weaponTypeId,
     elementId: live.elementId,
     observations: live.observations,
-    gogmaCounterRange: { startInclusive: 475, endInclusive: 485 },
+    gogmaCounterRange: { startInclusive: 50, endInclusive: 65 },
     master: {
       weaponTypes: loaded.data.weaponTypes,
       elements: loaded.data.elements,
@@ -64,8 +64,8 @@ function input(): GogmaCounterIdentificationInput {
 }
 
 const result = {
-  matches: [{ startGogmaCounter: 480 }],
-  searchedCounterRange: { startInclusive: 475, endInclusive: 485 },
+  matches: [{ startGogmaCounter: 55 }],
+  searchedCounterRange: { startInclusive: 50, endInclusive: 65 },
   isTruncated: false,
 }
 

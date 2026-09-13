@@ -102,9 +102,11 @@ Service、実Dexie database）である。
 
 STEP 2のobservationはSTEP 1のBase Seed上でProduction Engineから生成した合成入力
 であり、live-game Gogma証拠ではない。Gogmaのgame-verified証拠は
-`src/test/fixtures/gameVerifiedGogmaVectors.ts` と、その kernel / Worker client /
-Worker testが引き続きauthorityである（Base Seed `86315169`、starting Gogma Counter
-`480`、Heavy Bowgun / Ice、six Reset observations、non-truncated）。
+`src/test/fixtures/gameVerifiedGogmaVectors.ts` と、その kernel / Worker testが
+引き続きauthorityである。current fixtureは2026-09-13（Asia/Tokyo）にuserが
+独立採取したBase Seed `51231782`、starting Gogma Counter `55`、Hammer /
+Paralysis、six Reset observations、non-truncatedである。Worker Client testは
+Fake Workerを使うprotocol testであり、live computation parityのauthorityではない。
 
 ## Browser smoke
 
@@ -169,7 +171,9 @@ pathの実Worker測定はC5-E2C8の記録をauthorityとし、再測定してい
 
 - 実機検証済みのSkill streamは操虫棍 / 氷 / Skill Counter 341-344のみである。
   全weapon、全element、全game versionを証明しない
-- Gogma Reset streamのgame-verified証拠はHeavy Bowgun / Iceの記録のみである
+- Gogma Reset streamのcurrent game-verified証拠は、Hammer / Paralysis、Base Seed
+  `51231782`、actual Counter Gate `200`、Gogma Counter 55..60の6連続Reset
+  （30 ordered slots）に限定され、全weapon / element / Counterを証明しない
 - Normal streamのlive verificationは未実施である
 - 実Browser Workerでのcancel / disposeはC8の記録に依存し、C10では再測定していない
 - Bow Sharpness/Ammo、LBG/HBG Element、elementless Gogmaのelement bonus、

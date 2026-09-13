@@ -4,6 +4,7 @@ import { loadMasterData } from '../../master/loadMasterData'
 import type { WeaponBonusDefinitionsMasterSubset } from '../../master/masterSelectors'
 import { gameVerifiedGogmaCounterIdentificationVector as live } from '../../../test/fixtures/gameVerifiedGogmaVectors'
 import { ProductionRngEngine } from '../production/productionRngEngine'
+import { toReferenceAttributeForce, toReferenceWeaponType } from '../production/referenceAdapters'
 import { predictGameAdjustedGogmaReset } from '../production/gogmaPrediction'
 import { referenceGogmaIdFromRestorationBonus } from '../production/referenceGogmaBonuses'
 import { identifyGogmaCounter } from './gogmaCounterIdentification'
@@ -32,8 +33,8 @@ function masterSubset(): WeaponBonusDefinitionsMasterSubset {
 
 function input(
   observations: GogmaCounterIdentificationInput['observations'] = live.observations,
-  startInclusive = 475,
-  endInclusive = 485,
+  startInclusive = 50,
+  endInclusive = 65,
 ): GogmaCounterIdentificationInput {
   return {
     baseSeed: String(live.baseSeed),
@@ -49,7 +50,16 @@ describe('Gogma Counter Identification live Production parity', () => {
   it('matches all six live Reset observations and all thirty ordered slots', () => {
     const engine = new ProductionRngEngine()
     const master = loadedMaster()
-    expect(live.provenance.status).toBe('game-verified')
+    expect(live.provenance).toMatchObject({
+      status: 'game-verified',
+      liveObservationDate: '2026-09-13',
+      timeZone: 'Asia/Tokyo',
+      observationSource: 'GogmaArtianPlanner user live-game observation',
+    })
+    expect(live.observations).toHaveLength(6)
+    expect(live.observations.flat()).toHaveLength(30)
+    expect(toReferenceWeaponType(live.weaponTypeId)).toBe(4)
+    expect(toReferenceAttributeForce(live.elementId)).toBe(7)
     for (let offset = 0; offset < live.observations.length; offset += 1) {
       const shared = {
         baseSeed: String(live.baseSeed),
@@ -100,8 +110,8 @@ describe('Gogma Counter Identification live Production parity', () => {
 describe('Gogma Counter Identification kernel', () => {
   it('reproduces the live known-Seed bounded Counter golden', async () => {
     await expect(identifyGogmaCounter(input(), new ProductionRngEngine())).resolves.toEqual({
-      matches: [{ startGogmaCounter: 480 }],
-      searchedCounterRange: { startInclusive: 475, endInclusive: 485 },
+      matches: [{ startGogmaCounter: 55 }],
+      searchedCounterRange: { startInclusive: 50, endInclusive: 65 },
       isTruncated: false,
     })
   })
@@ -112,7 +122,7 @@ describe('Gogma Counter Identification kernel', () => {
     const scenarios = [
       { weaponTypeId: 'weapon.bow', elementId: 'element.fire', baseSeed: 51_231_782 },
       { weaponTypeId: 'weapon.long_sword', elementId: 'element.none', baseSeed: 12_345_678 },
-      { weaponTypeId: 'weapon.heavy_bowgun', elementId: 'element.ice', baseSeed: 86_315_169 },
+      { weaponTypeId: 'weapon.hammer', elementId: 'element.paralysis', baseSeed: 51_231_782 },
     ] as const
     for (let sample = 0; sample < 30; sample += 1) {
       const scenario = scenarios[sample % scenarios.length]!
@@ -142,7 +152,7 @@ describe('Gogma Counter Identification kernel', () => {
   })
 
   it('returns multiple matches in Counter order and truncates at the first N matches', async () => {
-    const expectedCounters = [480, 42_238, 59_898, 68_919, 83_207]
+    const expectedCounters = [55, 31_237, 51_953, 84_602, 91_845]
     const oneObservation = input(live.observations.slice(0, 1), 0, 100_000)
     const engine = new ProductionRngEngine()
     const complete = await identifyGogmaCounter(oneObservation, engine)
@@ -152,22 +162,33 @@ describe('Gogma Counter Identification kernel', () => {
     const limited = await identifyGogmaCounter({ ...oneObservation, maxMatches: 2 }, engine)
     expect(limited).toEqual({
       matches: [
-        { startGogmaCounter: 480 },
-        { startGogmaCounter: 42_238 },
+        { startGogmaCounter: 55 },
+        { startGogmaCounter: 31_237 },
       ],
-      searchedCounterRange: { startInclusive: 0, endInclusive: 42_238 },
+      searchedCounterRange: { startInclusive: 0, endInclusive: 31_237 },
       isTruncated: true,
     })
   })
 
+  it('keeps the live bounded range unique for every observation prefix', async () => {
+    const engine = new ProductionRngEngine()
+    for (let observationCount = 1; observationCount <= live.observations.length; observationCount += 1) {
+      const result = await identifyGogmaCounter(
+        input(live.observations.slice(0, observationCount)),
+        engine,
+      )
+      expect(result.matches).toEqual([{ startGogmaCounter: 55 }])
+    }
+  })
+
   it('reduces this live 0..100,000 fixture to one candidate from two observations onward', async () => {
     const engine = new ProductionRngEngine()
-    for (const observationCount of [2, 4, 6]) {
+    for (let observationCount = 2; observationCount <= live.observations.length; observationCount += 1) {
       const result = await identifyGogmaCounter(
         input(live.observations.slice(0, observationCount), 0, 100_000),
         engine,
       )
-      expect(result.matches).toEqual([{ startGogmaCounter: 480 }])
+      expect(result.matches).toEqual([{ startGogmaCounter: 55 }])
     }
   })
 
@@ -186,7 +207,7 @@ describe('Gogma Counter Identification kernel', () => {
     const engine = new ProductionRngEngine()
     await expect(identifyGogmaCounter({
       ...input(),
-      baseSeed: '086315169',
+      baseSeed: '051231782',
     }, engine)).rejects.toMatchObject({ code: 'invalid_input' })
     await expect(identifyGogmaCounter({
       ...input(),

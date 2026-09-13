@@ -17,16 +17,32 @@
 - 重い検索はWeb Workerで実行する
 - UIはSeed / Counterを通常表示しない
 - Debug Mode ONの場合のみ内部値を表示する
-- GogmaSeedFinderのソースコードはコピーしない
+- Production Identificationは外部Seed Finderのalgorithmまたは実装へ依存させない
 - 外部ツール出力のImportは、出力テキストをparseして内部型へ変換するだけにする
 
 Production RNG契約のprovenanceは次のとおりとする。
 
-- Gogma-Artian-Roll-Planner: 単一武器のRNG予測と作成Routeの参照実装
-- GogmaArtianPlanner: 参照した単一武器契約を、複数Target、Inventory、Planner、Executionへ拡張する製品
-- Gogma Seed Finder系: Seed / Counterの観測・特定機能の参照元
+- Gogma-Artian-Roll-Planner `GARP.lua v0.9.4`: reference-verified Production RNGと単一武器Route behaviorの正式な外部Reference Implementation
+- GogmaArtianPlanner: 同じProduction RNG primitives / semantic mappingsを用いるSeed / Counter Identificationを含め、複数Target、Inventory、Planner、Executionへ拡張する製品側実装
+- 外部live-game fixture: 出典をfixture単位の観測evidenceとして記録する。出典toolはProduction RNG algorithmまたはIdentification implementationのauthorityではない
 
-外部Repositoryはreference-verified algorithmの参照元として扱い、ソースコードをコピーして組み込まない。監査時点の参照file、function、commit、参照実装で確認済みの事項と未確認事項は [RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) に記録する。
+現在のprovenance構造は次のとおりとする。
+
+```text
+WiseHorror / Gogma Artian Roll Planner
+GARP.lua v0.9.4
+        ↓
+Reference-verified Production RNG
+        ↓
+GogmaArtianPlanner-owned implementation
+        ├─ Seed / Counter Identification
+        ├─ Candidate Search
+        ├─ Build List
+        ├─ Planner
+        └─ Guided Execution
+```
+
+正式な外部RNG Referenceは固定したGARP.luaとし、外部ソースコードをコピーして組み込まない。監査時点の参照file、function、commit、参照実装で確認済みの事項と未確認事項は [RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) に記録する。第三者が公開したlive-game observationをfixtureに保持する場合は、algorithm authorityと分離してfixture自身へ出典を記録する。
 
 確認状態の用語を次のように固定する。
 
@@ -278,6 +294,8 @@ export type GogmaOperation =
 
 Reset BonusesとKeep BonusesはそれぞれDomain Gogma Counterを1進める。通常→巨戟化はGogma streamを消費しない。
 
+Reset Bonusesは抽選を実行した時点でGogma Counterを1消費し、その後に抽選結果を武器へ反映するか破棄するかは、そのCounter進行を変更または巻き戻さない。この範囲は2026-09-13のgame-verified observationで確認済みである。save / autosave / reloadの挙動はこの確認範囲に含めず、推測しない。
+
 実装上は以下の関数で一元管理する。
 
 ```ts
@@ -352,9 +370,11 @@ Production v1は通常アーティアおよび巨戟アーティアを利用可�
 
 ## 8. Import仕様
 
-## 8.1 GogmaSeedFinder Import
+## 8.1 Gogma Seed Finder format compatibility
 
 入力はユーザーが貼り付けるテキスト。
+
+このImportは外部toolの既知output formatとの互換機能である。入力textをparseして内部型へ変換するだけであり、Gogma Seed Finderのalgorithmまたは実装をProduction RNG / Identification authorityとして利用しない。既存の型名、永続source値、presentation labelは互換性のため維持する。
 
 Parser出力。
 
@@ -382,7 +402,7 @@ export interface GogmaSeedFinderImportResult {
 
 禁止事項。
 
-- GogmaSeedFinderのソースコードをコピーしない
+- 外部Seed FinderのalgorithmをProduction Identificationへ移植・委譲しない
 - 外部ツールの内部実装にアプリを密結合しない
 
 ## 8.2 Manual Input
@@ -605,7 +625,7 @@ Skill Identificationでcanonical Base Seedが確定した後のSTEP 2には、�
 - Productionのavailability filter済みcandidate order、weighted draw、exact-ID repeat penaltyを共有し、raw reference Resetだけで照合しない
 - 候補は`startGogmaCounter`数値昇順で返す。`maxMatches`は最初のN候補で停止し、完了した連続Counter prefixを`searchedCounterRange`として返し、未探索範囲があればtruncatedとする
 - progressは完全にaccept/rejectした`searchedCounters / totalCounters`と`matchesFound`である。Counter chunk sizeはruntime tuning値で、永続Production契約ではない
-- game-verified Heavy Bowgun/Ice six-Reset fixture（Base Seed 86315169、start Counter 480）はCounter 475..485で480だけに一致する。Gate 35とfixture actual Gate 200は同じ30 ordered slotsを返す
+- 2026-09-13（Asia/Tokyo）のgame-verified Hammer/Paralysis six-Reset fixture（Base Seed 51231782、start Counter 55、actual Gate 200）はCounter 55..60の30 ordered slotsすべてがProduction Gate 35/200で一致する。Counter 50..65では1観測から55だけ、0..100,000では1観測で5候補、2観測以降は55だけに一致する
 - Gogma Counter Identification kernelとProduction Worker foundationはimplementedであり、C5-E2C4 Identification Adoption Serviceもimplementedである。C5-E2C7でWizard UIはRNG Setupへ接続済みである。C5-E2C10 Production Identification activationは完了した（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）。`supportsSeedSearch = false`と`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`を維持する
 - STEP 2へ進めるのはSTEP 1がexactly oneかつnon-truncatedのBase Seed候補を返した場合だけとする。STEP 2も完全な探索でstarting Gogma Counter候補がexactly oneかつnon-truncatedの場合だけreviewへ進める。複数なら追加Reset観測、0件なら観測入力、range、操作順の確認を要求する
 - WizardはCounter Gateを入力、探索、Observation、resultへ含めず、Skill 54 / Gogma 35をactual Gateとしてpersistしない

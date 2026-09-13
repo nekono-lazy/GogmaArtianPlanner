@@ -29,7 +29,21 @@
 
 監査日: 2026-08-30 (Asia/Tokyo)
 
-参照repository: <https://github.com/WiseHorror/Gogma-Artian-Roll-Planner>
+Project: WiseHorror / Gogma Artian Roll Planner
+
+正式な外部RNG Reference Implementationは次の固定Luaのみとする。READMEは操作・概念の補助説明として参照できるが、algorithm authorityではない。
+
+| 項目 | 固定値 |
+|---|---|
+| Reference version | `0.9.4` |
+| Repository | <https://github.com/WiseHorror/Gogma-Artian-Roll-Planner> |
+| Reference commit | `eceb2bd9ca6f4897ec516387acab2ad6beb8b38b` |
+| Reference file | `reframework/autorun/GARP.lua` |
+| GARP.lua SHA-256 | `dd9ff4ede166542c1efa4bc13595b2d064c581676c289893946af2f9b5551282` |
+| Nexus Mods | <https://www.nexusmods.com/monsterhunterwilds/mods/4705> |
+| Nexus archive SHA-256 | `24c799cd96af0356b010c97eba4aa190486e2896454cbb5a922ba94dc988e5fa` |
+
+Nexus配布版 `0.9.4` の `reframework/autorun/GARP.lua` と上記GitHub commitの同fileは同一であることを確認済み。
 
 監査commit:
 
@@ -44,31 +58,26 @@ commit日時・件名:
 Fix equip box limit
 ```
 
-Lua版の自己申告versionは `0.9.4`。直前履歴には Wilds Ver.1.042.00.02 対応commitがあるが、本監査ではゲームversionとの完全な対応関係を別途検証していない。
+`GARP.lua` の自己申告versionは `0.9.4`。直前履歴には Wilds Ver.1.042.00.02 対応commitがあるが、本監査ではゲームversionとの完全な対応関係を別途検証していない。
 
 ### 1.1 参照ファイルと関数
 
 | 参照 | 関数・節 | 監査で使用した意味 |
 |---|---|---|
-| [README.md](https://github.com/WiseHorror/Gogma-Artian-Roll-Planner/blob/eceb2bd9ca6f4897ec516387acab2ad6beb8b38b/README.md) | How Artian Weapons Work / Usage | 3 streamの独立性、巨戟化でSkill消費、Reset/Keepの意味、通常tier継承 |
-| [app.js](https://github.com/WiseHorror/Gogma-Artian-Roll-Planner/blob/eceb2bd9ca6f4897ec516387acab2ad6beb8b38b/app.js#L109) | `u32`, `rngStep`, `initializeRng`, `advance` | 32-bit PRNG本体 |
-| [app.js](https://github.com/WiseHorror/Gogma-Artian-Roll-Planner/blob/eceb2bd9ca6f4897ec516387acab2ad6beb8b38b/app.js#L149) | `skillFromIndex`, `predictSkillRoute` | Skill seed、294組、counter/Gate、`counterIsNext` |
-| [app.js](https://github.com/WiseHorror/Gogma-Artian-Roll-Planner/blob/eceb2bd9ca6f4897ec516387acab2ad6beb8b38b/app.js#L176) | `skillAttributeForce`, `configuredBasePool`, `drawBase` | attribute変換、通常pool、slot抽選 |
-| [app.js](https://github.com/WiseHorror/Gogma-Artian-Roll-Planner/blob/eceb2bd9ca6f4897ec516387acab2ad6beb8b38b/app.js#L210) | `repeatPenalty`, `keepFamily`, `familyId`, `buildGogmaPool`, `simulateGogma` | Gogma候補順、weight、重複penalty、Keep family |
-| [app.js](https://github.com/WiseHorror/Gogma-Artian-Roll-Planner/blob/eceb2bd9ca6f4897ec516387acab2ad6beb8b38b/app.js#L258) | `initializeGogma`, `findGogmaRoute`, `findKeepGogmaRoute` | Gogma seed、Gate、Reset/Keep探索、10-step block |
-| [app.js](https://github.com/WiseHorror/Gogma-Artian-Roll-Planner/blob/eceb2bd9ca6f4897ec516387acab2ad6beb8b38b/app.js#L342) | `calculate`, `calculateExisting` | 新規/既存route全体、conversion非Gogma消費、first reset |
-| [app.js](https://github.com/WiseHorror/Gogma-Artian-Roll-Planner/blob/eceb2bd9ca6f4897ec516387acab2ad6beb8b38b/app.js#L724) | `getValues` | 表示Rarity 8に対する内部 `rarity = 7` |
+| [README.md](https://github.com/WiseHorror/Gogma-Artian-Roll-Planner/blob/eceb2bd9ca6f4897ec516387acab2ad6beb8b38b/README.md) | How Artian Weapons Work / Usage | 補助説明: 3 streamの独立性、巨戟化でSkill消費、Reset/Keepの意味、通常tier継承 |
+| [GARP.lua](https://github.com/WiseHorror/Gogma-Artian-Roll-Planner/blob/eceb2bd9ca6f4897ec516387acab2ad6beb8b38b/reframework/autorun/GARP.lua#L190) | `weapon_type_names`, `artian_set_table_order`, `artian_group_table_order`, `gogma_bonus_ids` | weapon numeric順、21×14 Skill順、Gogma候補順 |
+| [GARP.lua](https://github.com/WiseHorror/Gogma-Artian-Roll-Planner/blob/eceb2bd9ca6f4897ec516387acab2ad6beb8b38b/reframework/autorun/GARP.lua#L332) | `u32` | uint32 bit-pattern正規化 |
 | [GARP.lua](https://github.com/WiseHorror/Gogma-Artian-Roll-Planner/blob/eceb2bd9ca6f4897ec516387acab2ad6beb8b38b/reframework/autorun/GARP.lua#L527) | `rng_state_from_static_reference`, `read_skill_rng_state` | raw seed、`% 100000000`、live counter/Gate読取 |
-| [GARP.lua](https://github.com/WiseHorror/Gogma-Artian-Roll-Planner/blob/eceb2bd9ca6f4897ec516387acab2ad6beb8b38b/reframework/autorun/GARP.lua#L619) | `rng_step`, `initialize_rng`, `initialize_gogma_rng` | Lua版PRNGとWeb版の一致 |
-| [GARP.lua](https://github.com/WiseHorror/Gogma-Artian-Roll-Planner/blob/eceb2bd9ca6f4897ec516387acab2ad6beb8b38b/reframework/autorun/GARP.lua#L977) | `gogma_repeat_penalty` から `simulate_gogma_roll` | Lua版Gogma/KeepとWeb版の一致 |
-| [GARP.lua](https://github.com/WiseHorror/Gogma-Artian-Roll-Planner/blob/eceb2bd9ca6f4897ec516387acab2ad6beb8b38b/reframework/autorun/GARP.lua#L1051) | `skill_type_from_table_index`, `predict_skill_route` | Lua版SkillとWeb版の一致 |
-| [GARP.lua](https://github.com/WiseHorror/Gogma-Artian-Roll-Planner/blob/eceb2bd9ca6f4897ec516387acab2ad6beb8b38b/reframework/autorun/GARP.lua#L1193) | `skill_attribute_force_for_recipe`, `configured_base_reinforcement_pool`, `draw_base_reinforcement`, `predict_base_reinforcement` | 通常seed/pool/advance |
+| [GARP.lua](https://github.com/WiseHorror/Gogma-Artian-Roll-Planner/blob/eceb2bd9ca6f4897ec516387acab2ad6beb8b38b/reframework/autorun/GARP.lua#L619) | `rng_step`, `initialize_rng`, `initialize_gogma_rng` | PRNG本体、seed初期化、Gogma Gateと10-step block |
+| [GARP.lua](https://github.com/WiseHorror/Gogma-Artian-Roll-Planner/blob/eceb2bd9ca6f4897ec516387acab2ad6beb8b38b/reframework/autorun/GARP.lua#L977) | `gogma_repeat_penalty`, `gogma_keep_family`, `build_gogma_pool`, `simulate_gogma_roll` | Gogma候補、weight、重複penalty、Keep family、5-slot抽選 |
+| [GARP.lua](https://github.com/WiseHorror/Gogma-Artian-Roll-Planner/blob/eceb2bd9ca6f4897ec516387acab2ad6beb8b38b/reframework/autorun/GARP.lua#L1051) | `skill_type_from_table_index`, `predict_skill_route` | Skill seed、294組、counter/Gate、block先頭値 |
+| [GARP.lua](https://github.com/WiseHorror/Gogma-Artian-Roll-Planner/blob/eceb2bd9ca6f4897ec516387acab2ad6beb8b38b/reframework/autorun/GARP.lua#L1193) | `skill_attribute_force_for_recipe`, `configured_base_reinforcement_pool`, `draw_base_reinforcement`, `predict_base_reinforcement` | attribute変換、通常seed/pool/advance/slot抽選 |
 | [GARP.lua](https://github.com/WiseHorror/Gogma-Artian-Roll-Planner/blob/eceb2bd9ca6f4897ec516387acab2ad6beb8b38b/reframework/autorun/GARP.lua#L1529) | `packed_reinforcement_tier`, `find_mixed_gogma_route_from` | 通常tierを保持する巨戟と最初のReset強制 |
 | [GARP.lua](https://github.com/WiseHorror/Gogma-Artian-Roll-Planner/blob/eceb2bd9ca6f4897ec516387acab2ad6beb8b38b/reframework/autorun/GARP.lua#L1837) | `install_create_count_hooks` | Normal counterのbefore/after |
 | [GARP.lua](https://github.com/WiseHorror/Gogma-Artian-Roll-Planner/blob/eceb2bd9ca6f4897ec516387acab2ad6beb8b38b/reframework/autorun/GARP.lua#L1919) | `calculate_from_scratch_plan`, `calculate_existing_weapon_route` | conversion、initial skill、amendment streamの関係 |
 | [GARP.lua](https://github.com/WiseHorror/Gogma-Artian-Roll-Planner/blob/eceb2bd9ca6f4897ec516387acab2ad6beb8b38b/reframework/autorun/GARP.lua#L2681) | `capture_target_planning_inputs` | 内部rarity 7、getter counterは次forge block |
 
-Web版とLua版は、PRNG、seed salt、normal seed、skill seed、Gogma seed、Gate threshold、10-step block、5-slot draw、Gogma候補順、weight、repeat penalty、Keep family、21×14順序で一致する。Lua版だけがlive game state抽出、game runtime Skill Type変換、装備box decodingを持つ。
+固定した `GARP.lua v0.9.4` が、PRNG、seed salt、normal seed、skill seed、Gogma seed、Gate threshold、10-step block、5-slot draw、Gogma候補順、weight、repeat penalty、Keep family、21×14順序、およびlive game state抽出を含む正式なalgorithm authorityである。
 
 ---
 
@@ -134,7 +143,17 @@ nextW = u32(w XOR (w >>> 21) XOR t XOR (t >>> 4))
 
 ### 3.3 PRNG core Golden候補
 
-参照 `app.js` 自身をNode VMで実行して採取した値。
+以下を含む既存reference fixture expected valuesは、固定hashの `GARP.lua v0.9.4` のpure sectionを独立Lua harnessで実行して再検証済みである。fixture値の変更は不要だった。
+
+| 検証項目 | 結果 |
+|---|---|
+| 検証日 | 2026-09-13 (Asia/Tokyo) |
+| Runtime | Lua 5.4 via Wasmoon 1.16.0（一時verification tooling。Project dependencyではない） |
+| GARP.lua SHA-256 | `dd9ff4ede166542c1efa4bc13595b2d064c581676c289893946af2f9b5551282` |
+| `referenceRngVectors.ts` | 20 / 20 PASS、81 scalar comparisons |
+| `referenceGogmaVectors.ts` | 14 / 14 PASS、70 bonus-slot comparisons |
+| `referenceNormalVectors.ts` | 23 / 23 PASS、155 slot-level comparisons |
+| mismatch | none |
 
 | input seed | initialize `(x,y,z,w)` | 1 step後 `(x,y,z,w)` |
 |---:|---|---|
@@ -153,7 +172,7 @@ Lua版はgame stateの64-bit `base_seed_raw` を読み、予測用Base Seedを�
 baseSeed = baseSeedRaw % 100000000
 ```
 
-したがって、参照mod/Web exportの `baseSeed` はraw値ではなく8桁範囲へ正規化済みの値である。現行 `RngState.baseSeed` が「REFrameworkが表示したraw qword」なのか「GARP exportの正規化済み値」なのかはUI文言だけでは区別されていない。`RngSetupPage` は現在文字列をそのまま保存し、`UnavailableRngEngine` のため `normalizeSeed()` を呼んでいない。
+したがって、参照modのGARP exportに含まれる `baseSeed` はraw値ではなく8桁範囲へ正規化済みの値である。現行 `RngState.baseSeed` が「REFrameworkが表示したraw qword」なのか「GARP exportの正規化済み値」なのかはUI文言だけでは区別されていない。`RngSetupPage` は現在文字列をそのまま保存し、`UnavailableRngEngine` のため `normalizeSeed()` を呼んでいない。
 
 提案:
 
@@ -179,7 +198,7 @@ state = advance(state, normalCounter * 10)
 
 ### 5.2 表示Rarity 8と内部rarity
 
-参照Web版はUI上Rarity 8を扱う一方、`getValues()`で常に `rarity = 7` を設定する。Lua版も `getArtianCreateCount(..., rarity = 7)` とseed式へ7を渡す。
+`GARP.lua` の `capture_target_planning_inputs` は対象を表示上のRarity 8として扱い、内部 `rarity = 7` を設定する。`install_create_count_hooks` も `rarity = 7` のNormal counterを取得し、seed式へ同じ内部値を渡す。
 
 ```text
 Domain NormalArtianRarity 8 -> game/reference internal rarity 7
@@ -603,7 +622,7 @@ Gate未満時も保存counterのDomain before/afterが+1するかどうかは、
 - Counter Gate exact値を入力・探索・保存せず、active branchの内部代表値35を使う。固定live inputではGate 35/36/54/200が同一Predictionになる。
 - caller-supplied Master subsetは`weaponTypes`、`elements`、`bonusTypes`、`weaponBonusDefinitions`である。Worker内Master loadとLotteryMaster dependencyはない。
 - correctness authorityは`ProductionRngEngine.predictGogmaBonus(reset)`である。compiled kernelはProduction PRNG/seed derivation、availability filtering、candidate order、weighted draw、repeat penaltyを共有する。
-- `apeshinzo78/GogmaSeedFinder@b931079277224c82b37666c31feab2c28c36f1ad`の`gogma_heavy_bowgun_reset_stream_live_2026-08-23.json`から必要最小限のgame-verified vectorを記録した。Base Seed 86315169、Heavy Bowgun/Ice、Counter 480..485の6 Reset・30 slotsはProduction Gate 35/200の双方で完全一致し、475..485探索は480だけを返す。
+- 2026-09-13（Asia/Tokyo）にGogmaArtianPlanner userが独立採取したgame-verified vectorを記録した。GARP live RNG state readで確認したBase Seed 51231782、starting Gogma Counter 55、actual Counter Gate 200と、Hammer/Paralysisでの6連続Reset Bonuses draw（Counter 55..60、30 ordered slots）を使用する。Production Gate 35/200の双方で全slotが一致し、50..65探索は1観測から55だけ、0..100,000探索は1観測で55/31237/51953/84602/91845、2観測以降は55だけを返す。Reset drawを実行した時点でCounterが進み、その後に抽選結果を武器へ反映するか破棄するかはCounter進行へ影響しないことも実機確認した。save / autosave / reload semanticsはこの実測から推測しない。Identification kernelはGogmaArtianPlanner-owned implementationであり、GARP.luaで確認されたProduction RNG primitives / semantic mappingsを使用する。
 - WorkerはB1のactive requestId拒否、request-scoped cancel token、terminal cleanup、late response ignore、`production-engine-unavailable` contractを維持する。UIには未接続である。
 - C5-E2B2でも`supportsSeedSearch = false`、`production-rng:c5-b`、RngState schema、UI、Search/Plannerを変更しない。
 
@@ -757,7 +776,7 @@ tableにはsource commit、game version、rngEngineVersion、検証状態を持�
 
 ## 17. Golden Test Vector方針
 
-期待値はGogmaArtianPlanner実装から生成しない。commit固定した参照 `app.js` の関数をNode VMで直接実行する抽出script、または同commitのLua関数を独立harnessで実行してJSON fixture化する。fixtureには必ずsource commit、関数名、入力のnumeric namespace、semantic変換後期待値を併記する。
+期待値はGogmaArtianPlanner実装から生成しない。固定version、commit、file hashを確認した `GARP.lua` のpure関数・tableを独立Lua harnessで実行してfixture化または再検証する。fixtureには必ずsource version/commit/file/hash、関数名、入力のnumeric namespace、semantic変換後期待値を併記する。
 
 ### 17.1 Skill候補
 

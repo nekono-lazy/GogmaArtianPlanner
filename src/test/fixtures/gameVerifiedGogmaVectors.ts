@@ -71,37 +71,45 @@ export const gameVerifiedGogmaKeepVector = {
 } as const
 
 /**
- * Six consecutive live Reset previews recorded without saving. Provenance:
- * apeshinzo78/GogmaSeedFinder@b931079277224c82b37666c31feab2c28c36f1ad,
- * tests/fixtures/gogma_heavy_bowgun_reset_stream_live_2026-08-23.json.
+ * Six consecutive Reset Bonuses draws recorded directly in game by a
+ * GogmaArtianPlanner user on 2026-09-13 (Asia/Tokyo). The Base Seed and
+ * starting Gogma Counter came from a GARP live RNG state read. Performing each
+ * draw advanced the Gogma Counter; subsequently applying or discarding the
+ * rolled bonuses did not change that advance.
+ *
+ * Semantic Domain bonuses are the fixture authority. Private reference IDs are
+ * retained only to verify the observed Japanese bonus transcription against
+ * the reference-to-Domain adapter.
  */
 export const gameVerifiedGogmaCounterIdentificationVector = {
   provenance: {
     status: 'game-verified',
-    liveObservationDate: '2026-08-23',
-    repository: 'https://github.com/apeshinzo78/GogmaSeedFinder',
-    auditedCommit: 'b931079277224c82b37666c31feab2c28c36f1ad',
-    fixturePath: 'tests/fixtures/gogma_heavy_bowgun_reset_stream_live_2026-08-23.json',
+    liveObservationDate: '2026-09-13',
+    timeZone: 'Asia/Tokyo',
+    observationSource: 'GogmaArtianPlanner user live-game observation',
+    stateSource: 'GARP live RNG state read',
+    counterAdvancesWhenDrawPerformed: true,
+    subsequentApplyDecisionChangesCounterAdvance: false,
   },
-  baseSeed: 86_315_169,
-  weaponTypeId: 'weapon.heavy_bowgun',
-  elementId: 'element.ice',
-  startGogmaCounter: 480,
+  baseSeed: 51_231_782,
+  weaponTypeId: 'weapon.hammer',
+  elementId: 'element.paralysis',
+  startGogmaCounter: 55,
   actualCounterGate: 200,
   referenceIds: [
-    [13, 6, 8, 12, 6],
-    [13, 10, 12, 15, 6],
-    [9, 15, 9, 16, 6],
-    [12, 16, 6, 8, 9],
-    [12, 13, 15, 6, 9],
-    [15, 9, 6, 16, 12],
+    [16, 12, 11, 10, 8],
+    [16, 10, 15, 12, 12],
+    [16, 9, 15, 10, 6],
+    [10, 11, 13, 9, 6],
+    [10, 14, 12, 11, 11],
+    [15, 8, 12, 10, 13],
   ],
   observations: [
-    set(affinityIII, sharpnessBase, attackII, attackIII, sharpnessBase),
-    set(affinityIII, sharpnessEX, attackIII, attackEX, sharpnessBase),
-    set(affinityII, attackEX, affinityII, affinityEX, sharpnessBase),
-    set(attackIII, affinityEX, sharpnessBase, attackII, affinityII),
-    set(attackIII, affinityIII, attackEX, sharpnessBase, affinityII),
-    set(attackEX, affinityII, sharpnessBase, affinityEX, attackIII),
+    set(affinityEX, attackIII, elementII, sharpnessEX, attackII),
+    set(affinityEX, sharpnessEX, attackEX, attackIII, attackIII),
+    set(affinityEX, affinityII, attackEX, sharpnessEX, sharpnessBase),
+    set(sharpnessEX, elementII, affinityIII, affinityII, sharpnessBase),
+    set(sharpnessEX, elementEX, attackIII, elementII, elementII),
+    set(attackEX, attackII, attackIII, sharpnessEX, affinityIII),
   ],
 } as const
