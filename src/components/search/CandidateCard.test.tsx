@@ -657,3 +657,37 @@ describe('CandidateCard restoration bonus scope', () => {
     expect(second).not.toContain('通常攻撃fixture')
   })
 })
+
+describe('CandidateCard Build List add state', () => {
+  const guidance = 'この候補は作成リストに追加済みです。チェックポイントは作成リストで変更してください。'
+
+  it('shows the formal checkpoint guidance once for an added Candidate and disables the button', () => {
+    render(
+      <CandidateCard
+        candidate={createValidBuildCandidate()}
+        target={target()}
+        master={createValidMasterDataFixture()}
+        buildListStatus="added"
+        onAdd={() => undefined}
+      />,
+    )
+    expect(screen.getByText('作成リスト: 追加済み')).toBeInTheDocument()
+    expect(screen.getAllByText(guidance)).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'ビルドリストへ追加' })).toBeDisabled()
+  })
+
+  it('shows no guidance for a Candidate that is not added', () => {
+    render(
+      <CandidateCard
+        candidate={createValidBuildCandidate()}
+        target={target()}
+        master={createValidMasterDataFixture()}
+        buildListStatus="not_added"
+        onAdd={() => undefined}
+      />,
+    )
+    expect(screen.getByText('作成リスト: 未追加')).toBeInTheDocument()
+    expect(screen.queryByText(guidance)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'ビルドリストへ追加' })).toBeEnabled()
+  })
+})

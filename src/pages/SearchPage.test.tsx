@@ -350,12 +350,18 @@ describe('SearchPage', () => {
     expect(await screen.findByText('追加fixture失敗')).toBeInTheDocument()
     expect(card).toHaveTextContent('追加fixture失敗')
 
-    // The existing Build List selection is never overwritten from here.
+    // The existing Build List selection is never overwritten from here. The
+    // Service's duplicate answer turns the Candidate's state to "added", and
+    // the guidance sentence appears exactly once rather than as feedback plus
+    // permanent notice.
     await user.click(addButton)
     const duplicate = await screen.findByText(
       'この候補は作成リストに追加済みです。チェックポイントは作成リストで変更してください。',
     )
     expect(card).toContainElement(duplicate)
+    expect(screen.getAllByText(/この候補は作成リストに追加済みです/)).toHaveLength(1)
+    expect(screen.getByText('作成リスト: 追加済み')).toBeInTheDocument()
+    expect(addButton).toBeDisabled()
     expect(screen.queryByText('追加fixture失敗')).not.toBeInTheDocument()
   })
 
@@ -521,6 +527,7 @@ describe('SearchPage Build List add state', () => {
 
     expect(screen.getByText('作成リスト: 未追加')).toBeInTheDocument()
     expect(screen.queryByText('作成リスト: 追加済み')).not.toBeInTheDocument()
+    expect(screen.queryByText(/この候補は作成リストに追加済みです/)).not.toBeInTheDocument()
     expect(addButton).toBeEnabled()
   })
 
@@ -529,8 +536,10 @@ describe('SearchPage Build List add state', () => {
     const client = new ControlledClient()
     const target = createValidTargetWeapon()
     const candidate = createValidBuildCandidate()
+    candidate.checkpointGroups = [checkpointGroupFor(candidate)]
     const entry = equivalentEntryFor(candidate, target)
     expect(entry.candidateId).not.toBe(candidate.id)
+    expect(entry.selectedCheckpointOpportunityIds).toHaveLength(1)
     const deps = dependencies(client, [target], [entry])
     render(<SearchPage dependencies={deps} />)
     const addButton = await searchFor(user, client, target, candidate)
@@ -539,6 +548,16 @@ describe('SearchPage Build List add state', () => {
     expect(screen.getByText('作成リスト: 追加済み')).toBeInTheDocument()
     expect(screen.queryByText('作成リスト: 未追加')).not.toBeInTheDocument()
     expect(addButton).toBeDisabled()
+    // The formal guidance is shown from the state alone, before any click,
+    // exactly once, inside the Candidate's own card (`docs/UI_FLOW.md` 9).
+    const guidance = screen.getAllByText(
+      'この候補は作成リストに追加済みです。チェックポイントは作成リストで変更してください。',
+    )
+    expect(guidance).toHaveLength(1)
+    expect(screen.getByRole('heading', { level: 3, name: '理想候補' }).closest('section')).toContainElement(guidance[0])
+    // The Search draft stays all-unselected: the Entry's own selection is
+    // never restored into these checkboxes.
+    expect(screen.getByRole('checkbox', { name: '1手目（理想まで残り2操作）' })).not.toBeChecked()
     expect(deps.addCandidate).not.toHaveBeenCalled()
   })
 

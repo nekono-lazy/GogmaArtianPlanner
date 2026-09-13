@@ -345,6 +345,14 @@ export function CandidateCard({
             <Typography variant="body2" color="text.secondary" className="tabular-nums">
               理想品の完成: {candidate.estimatedOperationCount}手目（この候補の最終状態）
             </Typography>
+            {/* State-derived, permanent guidance for an already-added Candidate
+                (`docs/UI_FLOW.md` 9): the Build List owns its checkpoint
+                selection, and this screen's draft never overwrites it. */}
+            {buildListStatus === 'added' && (
+              <Alert severity="info">
+                この候補は作成リストに追加済みです。チェックポイントは作成リストで変更してください。
+              </Alert>
+            )}
             {onAdd && (
               <Button
                 variant="contained"

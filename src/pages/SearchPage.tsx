@@ -325,13 +325,12 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
       )
       // An equivalent Candidate already in the Build List keeps its own
       // checkpoint selection: the Search screen never silently overwrites it
-      // (`docs/UI_FLOW.md` 9).
-      setAddFeedback({
-        severity: 'info',
-        message: added.added
-          ? 'ビルドリストへ追加しました。'
-          : 'この候補は作成リストに追加済みです。チェックポイントは作成リストで変更してください。',
-      })
+      // (`docs/UI_FLOW.md` 9). The mirrored Entry turns the Candidate's state
+      // to "added", whose permanent guidance already carries the duplicate
+      // sentence, so no second copy of it is shown as feedback.
+      setAddFeedback(
+        added.added ? { severity: 'info', message: 'ビルドリストへ追加しました。' } : null,
+      )
     } catch (caught: unknown) {
       setAddFeedback({
         severity: 'error',
