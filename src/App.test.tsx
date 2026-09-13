@@ -1,7 +1,8 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { settingsRepository } from './db/settingsRepository'
 import { PRODUCTION_RNG_ENGINE_VERSION } from './domain/rng/production/productionRngEngine'
 import { useSettingsStore } from './stores/settingsStore'
 
@@ -9,6 +10,10 @@ describe('App', () => {
   beforeEach(() => {
     window.location.hash = '#/'
     useSettingsStore.getState().reset()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   it('renders the Dashboard', () => {
@@ -45,7 +50,9 @@ describe('App', () => {
     window.location.hash = '#/debug'
     render(<App />)
 
-    expect(screen.getByText('Debug Modeが無効です。Settingsから有効にしてください。')).toBeInTheDocument()
+    expect(
+      screen.getByText('Debug Modeが無効です。「設定」画面のデバッグモードから有効にしてください。'),
+    ).toBeInTheDocument()
     expect(screen.queryByText('Base Seed')).not.toBeInTheDocument()
   })
 
@@ -62,14 +69,54 @@ describe('App', () => {
     expect(debugSwitch).not.toBeChecked()
   })
 
-  it('shows the active Production RNG provenance in Settings', () => {
+  it('shows the active Production RNG provenance in Settings as a key / value list', () => {
     window.location.hash = '#/settings'
     render(<App />)
 
-    expect(screen.getByText('RNG予測エンジン: Production')).toBeInTheDocument()
-    expect(screen.getByText(`Engine version: ${PRODUCTION_RNG_ENGINE_VERSION}`)).toBeInTheDocument()
-    expect(screen.getByText('Seed Search: 未対応')).toBeInTheDocument()
-    expect(screen.queryByText('RNG予測エンジン: 未設定')).not.toBeInTheDocument()
+    const versions = screen.getByRole('region', { name: 'バージョン情報' })
+    const row = (label: string) =>
+      within(versions).getByText(label, { selector: 'dt' }).parentElement as HTMLElement
+    expect(within(row('RNG予測エンジン')).getByText('Production', { selector: 'dd' })).toBeInTheDocument()
+    expect(
+      within(row('Engine version')).getByText(PRODUCTION_RNG_ENGINE_VERSION, { selector: 'dd' }),
+    ).toBeInTheDocument()
+    expect(within(row('Seed Search')).getByText('未対応', { selector: 'dd' })).toBeInTheDocument()
+    expect(within(versions).queryByText('未設定')).not.toBeInTheDocument()
+  })
+
+  it('reports a Debug Mode persistence failure without claiming what is persisted', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(settingsRepository, 'setDebugMode').mockRejectedValue(new Error('IndexedDB write failed'))
+    window.location.hash = '#/settings'
+    render(<App />)
+    const debugSwitch = screen.getByRole('switch', { name: 'デバッグモード' })
+
+    await user.click(debugSwitch)
+    const warning = await screen.findByText(/設定を保存できませんでした/)
+    // The switch keeps showing the value the user chose: no rollback is
+    // pretended, and the persisted value is described only as possibly
+    // different, never as "restored".
+    expect(debugSwitch).toBeChecked()
+    expect(warning).toHaveTextContent('再読み込み後は保存済みの設定が使用され、現在の表示と異なる場合があります')
+    expect(warning).toHaveTextContent('再度お試しください')
+    expect(warning).not.toHaveTextContent('元の設定に戻ります')
+
+    // The next operation clears the notice, as before.
+    await user.click(debugSwitch)
+    expect(debugSwitch).not.toBeChecked()
+    expect(await screen.findByText(/設定を保存できませんでした/)).toBeInTheDocument()
+  })
+
+  it('heads the Debug Mode switch with its own settings section', () => {
+    window.location.hash = '#/settings'
+    render(<App />)
+
+    const display = screen.getByRole('region', { name: '表示設定' })
+    expect(within(display).getByRole('switch', { name: 'デバッグモード' })).toHaveAccessibleDescription(
+      /ゲーム計算の意味には影響しません/,
+    )
+    expect(screen.getByRole('heading', { level: 2, name: '表示設定' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: 'バージョン情報' })).toBeInTheDocument()
   })
 
   it('shows Production Engine capabilities and version in Debug Details', () => {
@@ -87,9 +134,21 @@ describe('App', () => {
       'supportsKeepBonusesPrediction',
     ]) {
       const row = within(provenance).getByText(capability).closest('li') as HTMLElement
-      expect(within(row).getByText('true')).toBeInTheDocument()
+      expect(within(row).getByText('true（対応）')).toBeInTheDocument()
     }
     const seedSearchRow = within(provenance).getByText('supportsSeedSearch').closest('li') as HTMLElement
-    expect(within(seedSearchRow).getByText('false')).toBeInTheDocument()
+    expect(within(seedSearchRow).getByText('false（未対応）')).toBeInTheDocument()
+    // Every Debug section is a headed region, the placeholder list included.
+    expect(screen.getByRole('heading', { level: 2, name: 'RNG Engine information' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: 'Future debug sections' })).toBeInTheDocument()
+  })
+
+  it('offers the Not Found page a heading, an explanation, and a way back', () => {
+    window.location.hash = '#/not-a-route'
+    render(<App />)
+
+    expect(screen.getByRole('heading', { level: 1, name: 'ページが見つかりません' })).toBeInTheDocument()
+    expect(screen.getByText(/ダッシュボードから目的の画面へ移動/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'ダッシュボードへ戻る' })).toHaveAttribute('href', '#/')
   })
 })

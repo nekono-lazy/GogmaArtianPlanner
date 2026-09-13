@@ -270,8 +270,15 @@ export function ProductionPlanCalculationContextDetails({
   return (
     <DisclosureAccordion title="生成時CalculationContext（Debug）" headingLevel="h2" unmountOnExit>
       <Stack spacing={1.5}>
+        {/* Fixed column widths on a narrow screen: long version strings wrap
+            inside their cell instead of pushing the table into a horizontal
+            scroll; from `md` the natural column widths are used. */}
         <Box sx={{ overflowX: 'auto' }}>
-          <Table size="small" aria-label="生成時CalculationContext">
+          <Table
+            size="small"
+            aria-label="生成時CalculationContext"
+            sx={{ tableLayout: { xs: 'fixed', md: 'auto' }, '& th, & td': { overflowWrap: 'anywhere' } }}
+          >
             <TableHead>
               <TableRow>
                 <TableCell>項目</TableCell>

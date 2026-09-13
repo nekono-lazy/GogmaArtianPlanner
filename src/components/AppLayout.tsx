@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState, type MouseEvent } from 'react'
 import {
   AppBar,
   Box,
@@ -114,24 +114,34 @@ export function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const debugMode = useSettingsStore((state) => state.debugMode)
   const currentPageLabel = useCurrentPageLabel()
+  const mainRef = useRef<HTMLElement>(null)
 
   /**
-   * Shared active/hover/focus styling for every navigation link.
+   * Moves keyboard focus straight to the page content, past the AppBar and
+   * the Drawer navigation. The link keeps a conventional `#main-content`
+   * href for assistive technology, but the default jump is suppressed
+   * because a hash change would be read by the HashRouter as a route
+   * change; focus is moved programmatically instead, so Router semantics
+   * are untouched.
+   */
+  const skipToMainContent = (event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault()
+    mainRef.current?.focus()
+  }
+
+  /**
+   * Shared active/hover styling for every navigation link.
    *
    * The active indicator combines a left border, a background tint, and a
    * bolder + coloured label - never colour alone. The border is always
    * reserved at its active width (transparent when inactive) so becoming
-   * active never shifts the label position. Focus-visible gets an explicit
-   * outline so keyboard navigation stays visible regardless of browser
-   * defaults for a `component={NavLink}` root.
+   * active never shifts the label position. The keyboard focus ring comes
+   * from the theme-wide `focusVisible` setting, the same ring every other
+   * MUI control shows, so no per-link outline is defined here.
    */
   const navigationItemSx = {
     borderLeft: '3px solid transparent',
     '&:hover': { bgcolor: 'action.hover' },
-    '&.Mui-focusVisible': {
-      outline: `2px solid ${theme.palette.primary.main}`,
-      outlineOffset: '-2px',
-    },
     '&.active': {
       bgcolor: 'action.selected',
       borderLeftColor: 'primary.main',
@@ -199,6 +209,40 @@ export function AppLayout() {
 
   return (
     <Box sx={{ minHeight: '100dvh', display: 'flex' }}>
+      {/*
+        Skip link: visually hidden until it receives keyboard focus, then
+        shown above the AppBar so it is the first Tab stop on every page.
+        It is never visible to a pointer user and takes no layout space, so
+        the smartphone layout is unaffected.
+      */}
+      <Box
+        component="a"
+        href="#main-content"
+        onClick={skipToMainContent}
+        sx={{
+          position: 'fixed',
+          top: 8,
+          left: 8,
+          zIndex: theme.zIndex.appBar + 1,
+          px: 2,
+          py: 1,
+          borderRadius: 1,
+          bgcolor: 'background.paper',
+          color: 'primary.main',
+          border: `1px solid ${theme.palette.primary.main}`,
+          fontWeight: 600,
+          textDecoration: 'none',
+          // Off-screen (not display:none) so it stays in the Tab order.
+          transform: 'translateY(-200%)',
+          '&:focus-visible': {
+            transform: 'none',
+            outline: `2px solid ${theme.palette.primary.main}`,
+            outlineOffset: 2,
+          },
+        }}
+      >
+        メインコンテンツへ移動
+      </Box>
       <AppBar
         position="fixed"
         color="inherit"
@@ -252,7 +296,12 @@ export function AppLayout() {
         </Toolbar>
       </AppBar>
 
-      <Box component="nav" sx={{ width: { md: drawerWidth }, flexShrink: { md: 0 } }}>
+      {/*
+        A plain layout box, not a second landmark: the Drawer content itself
+        is the one `navigation` landmark. On smartphone the temporary Drawer
+        renders in a portal, so a `<nav>` here would be an empty landmark.
+      */}
+      <Box sx={{ width: { md: drawerWidth }, flexShrink: { md: 0 } }}>
         {isDesktop ? (
           <Drawer
             variant="permanent"
@@ -274,7 +323,13 @@ export function AppLayout() {
         )}
       </Box>
 
-      <Box component="main" sx={{ flexGrow: 1, minWidth: 0, pt: 8, px: { xs: 2, sm: 3, lg: 5 }, pb: 5 }}>
+      <Box
+        component="main"
+        id="main-content"
+        ref={mainRef}
+        tabIndex={-1}
+        sx={{ flexGrow: 1, minWidth: 0, pt: 8, px: { xs: 2, sm: 3, lg: 5 }, pb: 5, outline: 'none' }}
+      >
         <Box sx={{ width: '100%', maxWidth: 1120, mx: 'auto', pt: { xs: 3, md: 4 } }}>
           <Outlet />
         </Box>

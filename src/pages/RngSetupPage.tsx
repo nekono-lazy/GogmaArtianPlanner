@@ -1,8 +1,9 @@
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
 import {
-  Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Checkbox,
-  FormControlLabel, LinearProgress, Paper, Stack, SvgIcon, TextField, Typography,
+  Alert, Box, Button, Checkbox,
+  FormControlLabel, LinearProgress, Paper, Stack, TextField, Typography,
 } from '@mui/material'
+import { DisclosureAccordion } from '../components/DisclosureAccordion'
 import { PageShell } from '../components/PageShell'
 import { StatusChip, type StatusTone } from '../components/StatusChip'
 import { IdentificationWizardDialog } from '../components/rng/IdentificationWizardDialog'
@@ -97,10 +98,6 @@ function toState(
 function knownStatus(isEmpty: boolean, isConfirmed: boolean): { label: string; tone: StatusTone } {
   if (isEmpty) return { label: '未入力', tone: 'neutral' }
   return isConfirmed ? { label: '使用中', tone: 'positive' } : { label: '未確認', tone: 'caution' }
-}
-
-function ExpandIcon() {
-  return <SvgIcon aria-hidden="true"><path d="M7 10l5 5 5-5z" /></SvgIcon>
 }
 
 /** A titled, border-based page section (the Dashboard pattern). */
@@ -284,19 +281,16 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
             <KnownField fieldId="gogma-counter" label={knownLabels.gogmaCounter} description="巨戟アーティアの復元ボーナス予測に使う位置です。" numeric value={form.gogmaCounter} onChange={(value) => updateField('gogmaCounter', value)} />
             <KnownField fieldId="skill-counter" label={knownLabels.skillCounter} description="シリーズ・グループスキル予測に使う位置です。" numeric value={form.skillCounter} onChange={(value) => updateField('skillCounter', value)} />
           </Box>
-          <Accordion slotProps={{ heading: { component: 'h3' } }}>
-            <AccordionSummary expandIcon={<ExpandIcon />} sx={{ minHeight: 48 }}>
-              <Typography component="span" variant="subtitle1">詳細・互換情報（Counter Gate）</Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Stack spacing={1.5}>
-                <Typography variant="body2" color="text.secondary">Counter Gateは旧形式・診断・互換性のために保持する値です。Production予測とIdentificationには使用しません。値を編集した場合も下の「保存」で保存します。</Typography>
-                <Box sx={{ maxWidth: { md: 'calc((100% - 32px) / 3)' } }}>
-                  <KnownField fieldId="counter-gate" label={knownLabels.counterGate} description="legacy / diagnostic / compatibility情報です。Production予測やIdentificationのauthorityではありません。" numeric value={form.counterGate} onChange={(value) => updateField('counterGate', value)} />
-                </Box>
-              </Stack>
-            </AccordionDetails>
-          </Accordion>
+          {/* Kept mounted while collapsed: the Counter Gate draft is part of
+              the same unsaved form and must survive closing the disclosure. */}
+          <DisclosureAccordion title="詳細・互換情報（Counter Gate）" headingLevel="h3">
+            <Stack spacing={1.5}>
+              <Typography variant="body2" color="text.secondary">Counter Gateは旧形式・診断・互換性のために保持する値です。Production予測とIdentificationには使用しません。値を編集した場合も下の「保存」で保存します。</Typography>
+              <Box sx={{ maxWidth: { md: 'calc((100% - 32px) / 3)' } }}>
+                <KnownField fieldId="counter-gate" label={knownLabels.counterGate} description="legacy / diagnostic / compatibility情報です。Production予測やIdentificationのauthorityではありません。" numeric value={form.counterGate} onChange={(value) => updateField('counterGate', value)} />
+              </Box>
+            </Stack>
+          </DisclosureAccordion>
           <TextField label="メモ" multiline minRows={2} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
           {saveError && <Alert severity="error">{saveError}</Alert>}
           {saveNotice && <Alert severity="success" onClose={() => setSaveNotice(null)}>{saveNotice}</Alert>}
@@ -326,23 +320,18 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
       {displayedRequirements.length > 0 && <Alert severity="warning" sx={{ mt: 1.5 }}><Typography variant="subtitle2" component="p">現在不足している項目</Typography><Box component="ul" sx={{ m: 0, pl: 2.5 }}>{displayedRequirements.map((requirement) => <Typography component="li" variant="body2" key={requirement}>{getRngMissingRequirementLabel(requirement)}</Typography>)}</Box></Alert>}
     </SectionCard>}
 
-    <Accordion slotProps={{ heading: { component: 'h2' } }}>
-      <AccordionSummary expandIcon={<ExpandIcon />} sx={{ minHeight: 48 }}>
-        <Typography component="span" variant="subtitle1">Production RNG Engine（技術情報）</Typography>
-      </AccordionSummary>
-      <AccordionDetails>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Engine自体が対応している機能です。現在の入力内容で使えるかどうかは「現在の入力内容で利用可能な機能」を確認してください。</Typography>
-        <Box component="dl" sx={{ m: 0 }}>
-          <DefinitionRow label="Engine mode"><Typography variant="body2" component="span" className="tabular-nums">{productionRngRuntime.mode}</Typography></DefinitionRow>
-          <DefinitionRow label="Engine version"><Typography variant="body2" component="span" className="tabular-nums">{productionRngRuntime.version}</Typography></DefinitionRow>
-          <DefinitionRow label="通常アーティア予測"><StatusChip label={engineCapabilities.supportsNormalArtianPrediction ? '対応' : '未対応'} tone={engineCapabilities.supportsNormalArtianPrediction ? 'positive' : 'neutral'} /></DefinitionRow>
-          <DefinitionRow label="スキル予測"><StatusChip label={engineCapabilities.supportsSkillPrediction ? '対応' : '未対応'} tone={engineCapabilities.supportsSkillPrediction ? 'positive' : 'neutral'} /></DefinitionRow>
-          <DefinitionRow label="巨戟アーティア予測"><StatusChip label={engineCapabilities.supportsGogmaPrediction ? '対応' : '未対応'} tone={engineCapabilities.supportsGogmaPrediction ? 'positive' : 'neutral'} /></DefinitionRow>
-          <DefinitionRow label="Keep Bonuses予測"><StatusChip label={engineCapabilities.supportsKeepBonusesPrediction ? '対応' : '未対応'} tone={engineCapabilities.supportsKeepBonusesPrediction ? 'positive' : 'neutral'} /></DefinitionRow>
-          <DefinitionRow label="Seed Search"><StatusChip label={engineCapabilities.supportsSeedSearch ? '対応' : '未対応'} tone={engineCapabilities.supportsSeedSearch ? 'positive' : 'neutral'} /></DefinitionRow>
-        </Box>
-      </AccordionDetails>
-    </Accordion>
+    <DisclosureAccordion title="Production RNG Engine（技術情報）" headingLevel="h2">
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Engine自体が対応している機能です。現在の入力内容で使えるかどうかは「現在の入力内容で利用可能な機能」を確認してください。</Typography>
+      <Box component="dl" sx={{ m: 0 }}>
+        <DefinitionRow label="Engine mode"><Typography variant="body2" component="span" className="tabular-nums">{productionRngRuntime.mode}</Typography></DefinitionRow>
+        <DefinitionRow label="Engine version"><Typography variant="body2" component="span" className="tabular-nums">{productionRngRuntime.version}</Typography></DefinitionRow>
+        <DefinitionRow label="通常アーティア予測"><StatusChip label={engineCapabilities.supportsNormalArtianPrediction ? '対応' : '未対応'} tone={engineCapabilities.supportsNormalArtianPrediction ? 'positive' : 'neutral'} /></DefinitionRow>
+        <DefinitionRow label="スキル予測"><StatusChip label={engineCapabilities.supportsSkillPrediction ? '対応' : '未対応'} tone={engineCapabilities.supportsSkillPrediction ? 'positive' : 'neutral'} /></DefinitionRow>
+        <DefinitionRow label="巨戟アーティア予測"><StatusChip label={engineCapabilities.supportsGogmaPrediction ? '対応' : '未対応'} tone={engineCapabilities.supportsGogmaPrediction ? 'positive' : 'neutral'} /></DefinitionRow>
+        <DefinitionRow label="Keep Bonuses予測"><StatusChip label={engineCapabilities.supportsKeepBonusesPrediction ? '対応' : '未対応'} tone={engineCapabilities.supportsKeepBonusesPrediction ? 'positive' : 'neutral'} /></DefinitionRow>
+        <DefinitionRow label="Seed Search"><StatusChip label={engineCapabilities.supportsSeedSearch ? '対応' : '未対応'} tone={engineCapabilities.supportsSeedSearch ? 'positive' : 'neutral'} /></DefinitionRow>
+      </Box>
+    </DisclosureAccordion>
 
     {identificationCoordinator && state && masterResult.ok && <IdentificationWizardDialog coordinator={identificationCoordinator} initialRngState={state} master={masterResult.data} onAdopted={handleIdentificationAdopted} onClose={() => setIdentificationCoordinator(null)} />}
   </Stack></PageShell>

@@ -20,6 +20,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
+import { DialogFormError } from '../components/DialogFormError'
 import { PageShell } from '../components/PageShell'
 import { StatusChip } from '../components/StatusChip'
 import { BonusSlotList, ManagementListItem } from '../components/ManagementListItem'
@@ -458,7 +459,6 @@ export function OwnedWeaponsPage({
           {draft && (
             <DialogContent dividers sx={{ px: { xs: 2, sm: 3 } }}>
               <Stack spacing={3}>
-                {formError && <Alert severity="error">{formError}</Alert>}
                 <Stack component="section" spacing={1.5}>
                   <Typography component="h3" variant="h3">基本情報</Typography>
                   <Box>
@@ -713,7 +713,14 @@ export function OwnedWeaponsPage({
               </Stack>
             </DialogContent>
           )}
-          <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: 1.5, gap: 1 }}>
+          {/* Outside the scrolling content, directly above 保存: a failure
+              reported after saving from the bottom of a long form stays in
+              view instead of scrolling out at the top, and a very long one
+              scrolls inside its own bounded region (`docs/UI_FLOW.md` 3.1). */}
+          {formError && <DialogFormError message={formError} />}
+          {/* Never shrinks: 保存 / キャンセル stay reachable however long the
+              form or the error is. */}
+          <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: 1.5, gap: 1, flexShrink: 0 }}>
             <Button onClick={closeDialog} sx={{ minHeight: 44 }}>キャンセル</Button>
             <Button variant="contained" onClick={() => void save()} sx={{ minHeight: 44, minWidth: 96 }}>
               保存
