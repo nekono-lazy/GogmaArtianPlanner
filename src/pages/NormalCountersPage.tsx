@@ -117,10 +117,12 @@ export function NormalCountersPage({ dependencies = defaultDependencies }: { dep
   const debugMode = useSettingsStore((state) => state.debugMode)
   const [values, setValues] = useState<NormalArtianCounter[]>([])
   const [loading, setLoading] = useState(true)
+  // A failed read is not "every Counter unset": no synthetic rows are shown.
+  const [loadFailed, setLoadFailed] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const listHeadingId = useId()
-  useEffect(() => { let active = true; void dependencies.getAll().then((loaded) => { if (active) setValues(loaded) }).catch((caught: unknown) => { if (active) setError(caught instanceof Error ? caught.message : 'カウンターを読み込めません。') }).finally(() => { if (active) setLoading(false) }); return () => { active = false } }, [dependencies])
+  useEffect(() => { let active = true; void dependencies.getAll().then((loaded) => { if (active) setValues(loaded) }).catch((caught: unknown) => { if (active) { setLoadFailed(true); setError(caught instanceof Error ? caught.message : 'カウンターを読み込めません。') } }).finally(() => { if (active) setLoading(false) }); return () => { active = false } }, [dependencies])
   if (!masterResult.ok) return <PageShell title="通常アーティアカウンター" description="通常アーティアカウンターを確認します。"><Alert severity="error">マスターデータが利用できません。</Alert></PageShell>
   const rows = getEnabledWeaponTypes(masterResult.data).map((weaponType) => values.find((value) => value.weaponTypeId === weaponType.id && value.rarity === V1_NORMAL_ARTIAN_RARITY) ?? emptyCounter(weaponType.id))
   const confirmedCount = rows.filter((row) => row.isConfirmed && row.counter !== null).length
@@ -133,7 +135,7 @@ export function NormalCountersPage({ dependencies = defaultDependencies }: { dep
         {notice && <Alert severity="success" onClose={() => setNotice(null)}>{notice}</Alert>}
         <Alert severity="info">v1ではレア8のみを扱います。観測検索は未実装で、直接編集はデバッグモード限定です。</Alert>
         {debugMode && <Alert severity="warning">デバッグモード: カウンターを直接編集できます。保存した値は通常アーティア経由の候補検索に使用されます。</Alert>}
-        <Paper component="section" variant="outlined" aria-labelledby={listHeadingId} sx={{ overflow: 'hidden' }}>
+        {!loadFailed && <Paper component="section" variant="outlined" aria-labelledby={listHeadingId} sx={{ overflow: 'hidden' }}>
           <Stack direction="row" spacing={1} useFlexGap sx={{ px: { xs: 2, md: 2.5 }, pt: 2, pb: { xs: 1.5, md: 2 }, alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap' }}>
             <Typography id={listHeadingId} component="h2" variant="h2">武器種別カウンター（レア8）</Typography>
             {!loading && <Typography variant="body2" color="text.secondary" className="tabular-nums">確定 {confirmedCount} / {rows.length}</Typography>}
@@ -150,7 +152,7 @@ export function NormalCountersPage({ dependencies = defaultDependencies }: { dep
               </Box>
             </>
           )}
-        </Paper>
+        </Paper>}
       </Stack>
     </PageShell>
   )

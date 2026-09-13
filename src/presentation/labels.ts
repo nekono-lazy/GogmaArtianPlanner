@@ -12,6 +12,7 @@ import type {
 } from '../domain/models/publicTypes'
 import { isBlindCreateNormalArtianOperation } from '../domain/models/publicTypes'
 import type { SkillMatchMode } from '../domain/models/common'
+import type { ArtianBonusScope } from '../domain/master/masterTypes'
 import type {
   CandidateRouteFilter,
   CandidateSearchNoticeSeverity,
@@ -30,6 +31,16 @@ export const ownedWeaponStatusLabels: Record<OwnedWeaponStatus, string> = {
 export const artianWeaponKindLabels: Record<ArtianWeaponKind, string> = {
   normal: '通常アーティア',
   gogma: '巨戟アーティア',
+}
+
+/**
+ * The restoration bonus scope an owned weapon currently holds. A Gogma weapon
+ * keeps `normal_artian` slots inherited at conversion until its first bonus
+ * amendment (`docs/UI_FLOW.md` 7 / `docs/DATA_MODEL.md` 7.1).
+ */
+export const restorationBonusScopeLabels: Record<ArtianBonusScope, string> = {
+  normal_artian: '通常継承（通常アーティアのボーナス）',
+  gogma_artian: '巨戟amendment後（巨戟のボーナス）',
 }
 
 export const skillMatchModeLabels: Record<SkillMatchMode, string> = {

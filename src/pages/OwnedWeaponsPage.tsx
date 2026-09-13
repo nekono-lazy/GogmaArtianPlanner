@@ -53,6 +53,7 @@ import {
   artianWeaponKindLabels,
   getPersistenceReferenceKindLabel,
   ownedWeaponStatusLabels,
+  restorationBonusScopeLabels,
 } from '../presentation/labels'
 
 const masterResult = loadMasterData()
@@ -166,8 +167,9 @@ export function OwnedWeaponsPage({
   const master = masterResult.data
   const weaponTypes = getEnabledWeaponTypes(master)
   const elements = getEnabledElements(master)
-  const scopeFor = (value: OwnedWeaponDraft) =>
-    value.kind === 'normal' ? 'normal_artian' : 'gogma_artian'
+  // The stored scope is the authority: a Gogma weapon may still hold the
+  // `normal_artian` slots it inherited at conversion (`docs/DATA_MODEL.md` 7.1).
+  const scopeFor = (value: OwnedWeaponDraft) => value.restorationBonusScope
 
   const openNew = () => {
     try {
@@ -291,7 +293,7 @@ export function OwnedWeaponsPage({
   })
 
   const bonusLabels = (weapon: OwnedWeapon) => {
-    const scope = weapon.kind === 'normal' ? 'normal_artian' : 'gogma_artian'
+    const scope = weapon.restorationBonusScope
     return weapon.restorationBonuses.map(
       (bonus) =>
         master.weaponBonusDefinitions.find(
@@ -370,6 +372,9 @@ export function OwnedWeaponsPage({
                   }
                   detail={
                     <Stack spacing={1}>
+                      <Typography variant="body2">
+                        ボーナス区分: {restorationBonusScopeLabels[weapon.restorationBonusScope]}
+                      </Typography>
                       <BonusSlotList heading="復元ボーナス" labels={bonusLabels(weapon)} />
                       {weapon.kind === 'gogma' && (
                         <Typography variant="body2">
@@ -520,6 +525,9 @@ export function OwnedWeaponsPage({
                     </FormControl>
                   </Box>
                 </Stack>
+                <Typography variant="body2" color="text.secondary">
+                  ボーナス区分: {restorationBonusScopeLabels[draft.restorationBonusScope]}
+                </Typography>
                 <BonusSetEditor
                   label="復元ボーナス5枠"
                   master={master}

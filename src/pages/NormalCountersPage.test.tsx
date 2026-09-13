@@ -48,6 +48,17 @@ describe('NormalCountersPage', () => {
     expect(screen.getByText('確定 1 / 14')).toBeInTheDocument()
   })
 
+  it('shows a load failure as an error, never as synthetic unset Counters', async () => {
+    const deps = dependencies(); deps.getAll = vi.fn(async (): Promise<NormalArtianCounter[]> => { throw new Error('IndexedDB read failed') })
+    render(<NormalCountersPage dependencies={deps} />)
+    expect(await screen.findByText('IndexedDB read failed')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '武器種別カウンター（レア8）' })).toBeNull()
+    expect(screen.queryAllByRole('heading', { level: 3 })).toHaveLength(0)
+    expect(screen.queryByRole('listitem')).toBeNull()
+    expect(screen.queryByText(/確定 \d+ \/ 14/)).toBeNull()
+    expect(screen.queryByText(/未設定・検索に未使用/)).toBeNull()
+  })
+
   it('never shows raw Counter values in the normal UI', async () => {
     // `docs/UI_FLOW.md` 3: Seed / Counter values are Debug Mode only.
     render(<NormalCountersPage dependencies={dependencies([confirmedFixture, unconfirmedFixture])} />)

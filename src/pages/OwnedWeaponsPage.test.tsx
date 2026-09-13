@@ -6,7 +6,15 @@ import type {
   OwnedWeapon,
 } from '../domain/models/publicTypes'
 import { ReferencedEntityDeleteError, type OwnedWeaponDraft } from '../services/crud/entityCrudServices'
+import { createDefaultBonusSet } from '../domain/forms/entityDrafts'
+import { loadMasterData } from '../domain/master/loadMasterData'
 import { OwnedWeaponsPage, type OwnedWeaponsPageDependencies } from './OwnedWeaponsPage'
+
+function loadedMaster() {
+  const result = loadMasterData()
+  if (!result.ok) throw new Error('Master load failed')
+  return result.data
+}
 
 async function itemFor(name: string): Promise<HTMLElement> {
   const heading = await screen.findByRole('heading', { name })
@@ -250,6 +258,48 @@ describe('OwnedWeaponsPage', () => {
       expect(item.getByRole('button', { name: '編集' })).toHaveAccessibleDescription(name)
       expect(item.getByRole('button', { name: '削除' })).toHaveAccessibleDescription(name)
     }
+  })
+
+  it('keeps a Gogma weapon inherited normal_artian scope in the list, the editor, and after a weapon type change', async () => {
+    // A converted Gogma legitimately keeps its five normal-tier slots until the
+    // first bonus amendment (`docs/DATA_MODEL.md` 7.1), so kind must not decide scope.
+    const master = loadedMaster()
+    const inheritedBonuses = createDefaultBonusSet(master, 'weapon.dual_blades', 'element.thunder', 'normal_artian')
+    const weapon: OwnedWeapon = { ...existingWeapon(), name: '巨戟化直後', restorationBonusScope: 'normal_artian', restorationBonuses: inheritedBonuses, isProtected: false }
+    const expectedLabels = inheritedBonuses.map((bonus) => master.weaponBonusDefinitions.find((definition) => definition.scope === 'normal_artian' && definition.weaponTypeId === 'weapon.dual_blades' && definition.bonusTypeId === bonus.bonusTypeId && definition.bonusRankId === bonus.bonusRankId)?.displayNameJa)
+    expect(expectedLabels.every((label) => typeof label === 'string')).toBe(true)
+    const user = userEvent.setup(); const deps = dependencies(); deps.getAll = vi.fn(async () => [weapon])
+    render(<OwnedWeaponsPage dependencies={deps} />)
+
+    const item = within(await itemFor('巨戟化直後'))
+    expect(item.getByText('巨戟アーティア')).toBeInTheDocument()
+    expect(item.getByText('ボーナス区分: 通常継承（通常アーティアのボーナス）')).toBeInTheDocument()
+    const slots = within(item.getByRole('list', { name: '復元ボーナス' })).getAllByRole('listitem')
+    expect(slots.map((slot) => slot.textContent)).toEqual(expectedLabels.map((label, index) => `${index + 1}${label}`))
+    expect(item.queryByText('不明')).toBeNull()
+
+    await user.click(item.getByRole('button', { name: '編集' }))
+    expect(within(screen.getByRole('dialog', { name: '所持武器を編集' })).getByText('ボーナス区分: 通常継承（通常アーティアのボーナス）')).toBeInTheDocument()
+    await user.click(screen.getAllByRole('combobox', { name: /ボーナス種別/ })[0])
+    expect(screen.getByRole('option', { name: '斬れ味強化' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: '斬れ味・装填強化' })).toBeNull()
+    await user.keyboard('{Escape}')
+
+    await user.click(screen.getByLabelText('武器種'))
+    await user.click(screen.getByRole('option', { name: '大剣' }))
+    await user.click(screen.getByRole('button', { name: '保存' }))
+    const saved = deps.save.mock.calls[0][0] as OwnedWeaponDraft
+    expect(saved).toMatchObject({ kind: 'gogma', weaponTypeId: 'weapon.great_sword', restorationBonusScope: 'normal_artian' })
+    expect(saved.restorationBonuses).toHaveLength(5)
+    for (const bonus of saved.restorationBonuses) {
+      expect(master.weaponBonusDefinitions.some((definition) => definition.scope === 'normal_artian' && definition.weaponTypeId === 'weapon.great_sword' && definition.bonusTypeId === bonus.bonusTypeId && definition.bonusRankId === bonus.bonusRankId)).toBe(true)
+    }
+  })
+
+  it('shows the Gogma amendment scope for gogma_artian slots', async () => {
+    const deps = dependencies(); deps.getAll = vi.fn(async () => [existingWeapon()])
+    render(<OwnedWeaponsPage dependencies={deps} />)
+    expect(within(await itemFor('既存武器')).getByText('ボーナス区分: 巨戟amendment後（巨戟のボーナス）')).toBeInTheDocument()
   })
 
   it('keeps the registered kind fixed when editing, and explains why', async () => {
