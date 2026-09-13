@@ -25,6 +25,9 @@ function definitionRow(container: HTMLElement, term: string): HTMLElement {
 /** Expands the shared technical-details Accordion and returns its definition list. */
 async function openEngineDetails(user: ReturnType<typeof userEvent.setup>): Promise<HTMLElement> {
   const toggle = screen.getByRole('button', { name: 'Production RNG Engine（技術情報）' })
+  // The Accordion heading slot is the only heading around its toggle.
+  expect(screen.getByRole('heading', { level: 2, name: 'Production RNG Engine（技術情報）' })).toContainElement(toggle)
+  expect(within(toggle).queryByRole('heading')).not.toBeInTheDocument()
   expect(toggle).toHaveAttribute('aria-expanded', 'false')
   await user.click(toggle)
   expect(toggle).toHaveAttribute('aria-expanded', 'true')
@@ -174,6 +177,57 @@ describe('RngSetupPage', () => {
     expect(within(engine).queryByText('現在不足している項目')).not.toBeInTheDocument()
   })
 
+  it('reports an invalid unsaved draft as undeterminable instead of showing saved availability', async () => {
+    const state = createInitialRngState('2026-08-29T00:00:00.000Z')
+    state.baseSeed = { value: productionRngEngine.normalizeSeed('42'), isConfirmed: true, source: 'manual' }
+    state.gogmaCounter = { value: 1, isConfirmed: true, source: 'manual' }
+    state.skillCounter = { value: 2, isConfirmed: true, source: 'manual' }
+    const user = userEvent.setup()
+    const fixture = dependencies(state)
+    render(<RngSetupPage dependencies={fixture.deps} />)
+
+    // The saved state can predict both streams.
+    const saved = await screen.findByRole('region', { name: '現在の入力内容で利用可能な機能' })
+    expect(definitionRow(saved, 'スキル予測').textContent).toBe('スキル予測利用可能')
+    expect(definitionRow(saved, '巨戟アーティア予測').textContent).toBe('巨戟アーティア予測利用可能')
+
+    const counter = screen.getByLabelText('スキルカウンター')
+    await user.clear(counter)
+    await user.type(counter, '-1')
+
+    // Unsaved, and the draft cannot be turned into an RngState.
+    expect(screen.getByRole('button', { name: 'Identification Wizardを開始' })).toBeDisabled()
+    const current = screen.getByRole('region', { name: '現在の入力内容で利用可能な機能' })
+    expect(within(current).getByText(/現在の入力内容にエラーがあるため、利用可能な機能を判定できません。/)).toBeInTheDocument()
+    expect(within(current).queryByText('利用可能')).not.toBeInTheDocument()
+    expect(within(current).queryByText('利用不可')).not.toBeInTheDocument()
+    expect(within(current).queryByText('現在不足している項目')).not.toBeInTheDocument()
+    expect(screen.queryByText(/判定には未保存の入力内容を含みます/)).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '保存' }))
+    expect(await screen.findByText('スキルカウンターは0以上の整数で入力してください。')).toBeInTheDocument()
+    expect(fixture.deps.save).not.toHaveBeenCalled()
+    expect(fixture.getStored().skillCounter).toEqual(state.skillCounter)
+  })
+
+  it('still judges a valid unsaved draft and says it includes unsaved input', async () => {
+    const user = userEvent.setup()
+    render(<RngSetupPage dependencies={dependencies().deps} />)
+    const current = await screen.findByRole('region', { name: '現在の入力内容で利用可能な機能' })
+    expect(definitionRow(current, 'スキル予測').textContent).toBe('スキル予測利用不可')
+
+    const seed = screen.getByLabelText('Base Seed（基準シード）')
+    await user.type(seed, '42')
+    await user.click(within(seed.closest('[data-known-field]') as HTMLElement).getByRole('checkbox', { name: 'この値を検索・予測に使用する' }))
+    const skill = screen.getByLabelText('スキルカウンター')
+    await user.type(skill, '7')
+    await user.click(within(skill.closest('[data-known-field]') as HTMLElement).getByRole('checkbox', { name: 'この値を検索・予測に使用する' }))
+
+    expect(definitionRow(current, 'スキル予測').textContent).toBe('スキル予測利用可能')
+    expect(within(current).getByText(/判定には未保存の入力内容を含みます。/)).toBeInTheDocument()
+    expect(screen.queryByText(/現在の入力内容にエラーがあるため/)).not.toBeInTheDocument()
+  })
+
   it('summarizes each saved KnownValue as 使用中 / 未確認 / 未入力 without showing the value', async () => {
     const state = createInitialRngState('2026-08-29T00:00:00.000Z')
     state.baseSeed = { value: '987654', isConfirmed: true, source: 'manual' }
@@ -199,6 +253,8 @@ describe('RngSetupPage', () => {
     render(<RngSetupPage dependencies={fixture.deps} />)
 
     const toggle = await screen.findByRole('button', { name: '詳細・互換情報（Counter Gate）' })
+    expect(screen.getByRole('heading', { level: 3, name: '詳細・互換情報（Counter Gate）' })).toContainElement(toggle)
+    expect(within(toggle).queryByRole('heading')).not.toBeInTheDocument()
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
     await user.click(toggle)
     expect(toggle).toHaveAttribute('aria-expanded', 'true')

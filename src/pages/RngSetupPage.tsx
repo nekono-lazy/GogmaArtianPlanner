@@ -179,7 +179,12 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
     setModifiedKeys((current) => new Set(current).add(key))
   }
 
-  const preview = useMemo(() => { if (!state || !form) return null; try { return toState(form, state, modifiedKeys, state.updatedAt, productionRngEngine) } catch { return state } }, [form, modifiedKeys, state])
+  // The capability preview is either built from the current draft or reported as
+  // undeterminable. An invalid draft never falls back to the saved state, which
+  // would present saved availability as the current input's result.
+  const draftPreview = useMemo<{ state: RngState; invalid: false } | { state: null; invalid: true } | null>(() => { if (!state || !form) return null; try { return { state: toState(form, state, modifiedKeys, state.updatedAt, productionRngEngine), invalid: false } } catch { return { state: null, invalid: true } } }, [form, modifiedKeys, state])
+  const preview = draftPreview?.state ?? null
+  const previewInvalid = draftPreview?.invalid === true
   const hasUnsavedChanges = useMemo(
     () => state !== null && form !== null && hasUnsavedRngFormChanges(form, state),
     [form, state],
@@ -281,7 +286,7 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
           </Box>
           <Accordion slotProps={{ heading: { component: 'h3' } }}>
             <AccordionSummary expandIcon={<ExpandIcon />} sx={{ minHeight: 48 }}>
-              <Typography variant="subtitle1">詳細・互換情報（Counter Gate）</Typography>
+              <Typography component="span" variant="subtitle1">詳細・互換情報（Counter Gate）</Typography>
             </AccordionSummary>
             <AccordionDetails>
               <Stack spacing={1.5}>
@@ -303,6 +308,10 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
       </SectionCard>
     </>}
 
+    {previewInvalid && <SectionCard title="現在の入力内容で利用可能な機能">
+      <Alert severity="info">現在の入力内容にエラーがあるため、利用可能な機能を判定できません。入力内容を修正すると判定結果を表示します。</Alert>
+    </SectionCard>}
+
     {capabilities && <SectionCard title="現在の入力内容で利用可能な機能">
       <Box component="dl" sx={{ m: 0 }}>
         <DefinitionRow label="巨戟アーティア予測"><StatusChip label={capabilities.canPredictGogma ? '利用可能' : '利用不可'} tone={capabilities.canPredictGogma ? 'positive' : 'caution'} /></DefinitionRow>
@@ -319,7 +328,7 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
 
     <Accordion slotProps={{ heading: { component: 'h2' } }}>
       <AccordionSummary expandIcon={<ExpandIcon />} sx={{ minHeight: 48 }}>
-        <Typography variant="subtitle1">Production RNG Engine（技術情報）</Typography>
+        <Typography component="span" variant="subtitle1">Production RNG Engine（技術情報）</Typography>
       </AccordionSummary>
       <AccordionDetails>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Engine自体が対応している機能です。現在の入力内容で使えるかどうかは「現在の入力内容で利用可能な機能」を確認してください。</Typography>

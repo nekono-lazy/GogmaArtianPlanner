@@ -576,6 +576,10 @@ describe('IdentificationWizardDialog STEP 1', () => {
     expect(coordinator.skillInputs).toHaveLength(0)
   })
 
+  // This journey drives two real MUI Menus and types every range field, like the
+  // STEP 2 and Review journeys that already run under 15 seconds. Alone it takes
+  // about 3.5 seconds, but under the parallel full suite it reaches the default
+  // 5 second limit, so it gets the same limit. The assertions are unchanged.
   it('passes ordered observations, semantic weapon/element, and explicit ranges to the Coordinator', async () => {
     const user = userEvent.setup()
     const { coordinator } = renderWizard()
@@ -605,7 +609,7 @@ describe('IdentificationWizardDialog STEP 1', () => {
     expect(input?.observations[0]).not.toEqual(input?.observations[1])
     expect(input?.observations[2]).toEqual(input?.observations[0])
     expect(input?.observations[3]).toEqual(input?.observations[0])
-  })
+  }, 15_000)
 
   it('shows global progress and cancels through the Coordinator', async () => {
     const user = userEvent.setup()
