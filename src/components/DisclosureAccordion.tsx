@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import { Accordion, AccordionDetails, AccordionSummary, SvgIcon, Typography } from '@mui/material'
 
 export type DisclosureHeadingLevel = 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
@@ -19,6 +19,12 @@ function ExpandIcon() {
  * the summary text is rendered as a `span` so no nested heading is created.
  * The summary keeps a 48px minimum height as a comfortable touch target.
  *
+ * ARIA wiring follows MUI's contract: the summary's `id` and `aria-controls`
+ * are the authority, and the Accordion derives its content region's `id` and
+ * `aria-labelledby` from them. Both ids are generated here with `useId`, so
+ * every instance is unique and no id is ever placed on two elements; callers
+ * never supply ids.
+ *
  * `unmountOnExit` keeps heavy content (long route traces) out of the DOM while
  * the panel is closed.
  */
@@ -27,14 +33,15 @@ export function DisclosureAccordion({
   headingLevel,
   children,
   unmountOnExit = false,
-  detailsId,
 }: {
   title: string
   headingLevel: DisclosureHeadingLevel
   children: ReactNode
   unmountOnExit?: boolean
-  detailsId?: string
 }) {
+  const baseId = useId()
+  const summaryId = `${baseId}-summary`
+  const contentId = `${baseId}-content`
   return (
     <Accordion
       slotProps={{
@@ -43,15 +50,16 @@ export function DisclosureAccordion({
       }}
     >
       <AccordionSummary
+        id={summaryId}
+        aria-controls={contentId}
         expandIcon={<ExpandIcon />}
-        aria-controls={detailsId}
         sx={{ minHeight: 48, '& .MuiAccordionSummary-content': { minWidth: 0 } }}
       >
         <Typography component="span" variant="subtitle2" sx={{ overflowWrap: 'anywhere' }}>
           {title}
         </Typography>
       </AccordionSummary>
-      <AccordionDetails id={detailsId}>{children}</AccordionDetails>
+      <AccordionDetails>{children}</AccordionDetails>
     </Accordion>
   )
 }

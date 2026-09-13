@@ -4,10 +4,12 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type {
   BuildCandidate,
+  BuildListEntry,
   CompromiseCheckpointGroup,
   CompromiseCheckpointOpportunity,
   TargetWeapon,
 } from '../domain/models/publicTypes'
+import { createBuildListEntry } from '../domain/buildList'
 import type {
   CandidateSearchInput,
   CandidateSearchProgress,
@@ -68,12 +70,17 @@ function resultWithNotices(
   return { ...resultFor(target, null), warnings }
 }
 
-function dependencies(client: ControlledClient, targets = [createValidTargetWeapon()]): SearchPageDependencies {
+function dependencies(
+  client: ControlledClient,
+  targets = [createValidTargetWeapon()],
+  buildListEntries: BuildListEntry[] = [],
+): SearchPageDependencies {
   const master = createValidMasterDataFixture()
   return {
     master,
     getTargets: async () => targets,
     getOwnedWeapons: async () => [],
+    getBuildListEntries: async () => buildListEntries,
     createWorkerClient: () => client,
     createInput: async (options) => {
       const fixture = createFixtureInput()
@@ -94,7 +101,10 @@ function dependencies(client: ControlledClient, targets = [createValidTargetWeap
       }
     },
     saveCandidates: vi.fn(async () => undefined),
-    addCandidate: vi.fn(async () => ({ added: true })),
+    addCandidate: vi.fn(async (candidate, target, selectedCheckpointOpportunityIds) => ({
+      entry: createBuildListEntry(candidate, target, { selectedCheckpointOpportunityIds }),
+      added: true,
+    })),
   }
 }
 
@@ -323,10 +333,10 @@ describe('SearchPage', () => {
     const target = createValidTargetWeapon()
     const deps = dependencies(client, [target])
     let attempt = 0
-    deps.addCandidate = vi.fn(async () => {
+    deps.addCandidate = vi.fn(async (candidate, target) => {
       attempt += 1
       if (attempt === 1) throw new Error('追加fixture失敗')
-      return { added: false }
+      return { entry: createBuildListEntry(candidate, target), added: false }
     })
     render(<SearchPage dependencies={deps} />)
     await user.click(await screen.findByRole('button', { name: '検索開始' }))
@@ -401,9 +411,213 @@ describe('SearchPage', () => {
     await user.click(screen.getByRole('button', { name: 'ビルドリストへ追加' }))
     expect(deps.addCandidate).toHaveBeenCalledWith(candidate, target, [group.opportunities[1].id])
 
+    // The draft selection stays editable afterwards, while the Candidate is
+    // now added and the button no longer offers a second addition.
     await user.click(later)
     expect(later).not.toBeChecked()
-    await user.click(screen.getByRole('button', { name: 'ビルドリストへ追加' }))
-    expect(deps.addCandidate).toHaveBeenLastCalledWith(candidate, target, [])
+    expect(screen.getByRole('button', { name: 'ビルドリストへ追加' })).toBeDisabled()
+    expect(deps.addCandidate).toHaveBeenCalledOnce()
+  })
+})
+
+/** One checkpoint group with two arrivals on the fixture Candidate's Route. */
+function checkpointGroupFor(candidate: BuildCandidate): CompromiseCheckpointGroup {
+  const identity = {
+    seriesSkillId: 'series_skill.fixture.enabled',
+    groupSkillId: null,
+    conditionMatch: { bonus: 'practical', skill: 'ideal' },
+  } as const
+  const arrival = (id: string, afterOperationIndex: number): CompromiseCheckpointOpportunity => ({
+    id: id as CompromiseCheckpointOpportunity['id'],
+    afterOperationIndex,
+    operationCount: afterOperationIndex + 1,
+    remainingOperationCount: 2 - afterOperationIndex,
+    restorationBonuses: candidate.finalBonuses,
+    restorationBonusScope: 'gogma_artian',
+    ...identity,
+  })
+  return {
+    id: 'checkpoint-group:fixture.status' as CompromiseCheckpointGroup['id'],
+    restorationBonusScope: 'gogma_artian',
+    restorationBonuses: candidate.finalBonuses,
+    ...identity,
+    opportunities: [
+      arrival('checkpoint-opportunity:fixture.status.1', 0),
+      arrival('checkpoint-opportunity:fixture.status.2', 1),
+    ],
+    isDisplaySecondary: false,
+    dominatingGroupId: null,
+  }
+}
+
+/**
+ * A Build List Entry whose snapshot means the same as the fixture Candidate
+ * but was found on another search run, so its Candidate ID differs.
+ */
+function equivalentEntryFor(candidate: BuildCandidate, target: TargetWeapon): BuildListEntry {
+  const earlier = {
+    ...structuredClone(candidate),
+    id: 'candidate.fixture.earlier-run' as BuildCandidate['id'],
+    searchRunId: 'search-run.fixture.earlier',
+  }
+  return createBuildListEntry(earlier, target, {
+    id: 'build-list.fixture.earlier' as BuildListEntry['id'],
+    selectedCheckpointOpportunityIds: [
+      'checkpoint-opportunity:fixture.status.2' as CompromiseCheckpointOpportunity['id'],
+    ],
+  })
+}
+
+async function searchFor(
+  user: ReturnType<typeof userEvent.setup>,
+  client: ControlledClient,
+  target: TargetWeapon,
+  candidate: BuildCandidate,
+) {
+  await user.click(await screen.findByRole('button', { name: '検索開始' }))
+  client.resolve(resultFor(target, candidate))
+  return screen.findByRole('button', { name: 'ビルドリストへ追加' })
+}
+
+describe('SearchPage disclosure ARIA wiring', () => {
+  it('links every disclosure toggle to its own content region with unique ids', async () => {
+    const user = userEvent.setup()
+    const client = new ControlledClient()
+    const target = createValidTargetWeapon()
+    const candidate = createValidBuildCandidate()
+    candidate.checkpointGroups = [checkpointGroupFor(candidate)]
+    render(<SearchPage dependencies={dependencies(client, [target])} />)
+    await searchFor(user, client, target, candidate)
+
+    // Detail settings, Candidate detail, later arrivals, skipped routes are
+    // all closed disclosures at this point. A panel that unmounts while closed
+    // has no region yet, so each one is opened before its region is checked.
+    const toggles = screen.getAllByRole('button', { expanded: false })
+    expect(toggles.length).toBeGreaterThanOrEqual(3)
+    for (const toggle of toggles) {
+      expect(toggle.id).not.toBe('')
+      const contentId = toggle.getAttribute('aria-controls')
+      expect(contentId).toBeTruthy()
+      expect(within(toggle).queryByRole('heading')).not.toBeInTheDocument()
+      await user.click(toggle)
+      await waitFor(() => expect(toggle).toHaveAttribute('aria-expanded', 'true'))
+      const region = document.getElementById(contentId as string)
+      expect(region).not.toBeNull()
+      expect(region).not.toBe(toggle)
+      expect(region).toHaveAttribute('aria-labelledby', toggle.id)
+    }
+    const ids = [...document.querySelectorAll('[id]')].map((element) => element.id)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+})
+
+describe('SearchPage Build List add state', () => {
+  it('shows a not-yet-added Candidate as 未追加 with the add button enabled', async () => {
+    const user = userEvent.setup()
+    const client = new ControlledClient()
+    const target = createValidTargetWeapon()
+    render(<SearchPage dependencies={dependencies(client, [target], [])} />)
+    const addButton = await searchFor(user, client, target, createValidBuildCandidate())
+
+    expect(screen.getByText('作成リスト: 未追加')).toBeInTheDocument()
+    expect(screen.queryByText('作成リスト: 追加済み')).not.toBeInTheDocument()
+    expect(addButton).toBeEnabled()
+  })
+
+  it('shows an equivalent Candidate found on another run as 追加済み before any click', async () => {
+    const user = userEvent.setup()
+    const client = new ControlledClient()
+    const target = createValidTargetWeapon()
+    const candidate = createValidBuildCandidate()
+    const entry = equivalentEntryFor(candidate, target)
+    expect(entry.candidateId).not.toBe(candidate.id)
+    const deps = dependencies(client, [target], [entry])
+    render(<SearchPage dependencies={deps} />)
+    const addButton = await searchFor(user, client, target, candidate)
+
+    // Decided by the Build List Domain authority, not by Candidate ID.
+    expect(screen.getByText('作成リスト: 追加済み')).toBeInTheDocument()
+    expect(screen.queryByText('作成リスト: 未追加')).not.toBeInTheDocument()
+    expect(addButton).toBeDisabled()
+    expect(deps.addCandidate).not.toHaveBeenCalled()
+  })
+
+  it('treats a Candidate that differs in Domain meaning as 未追加', async () => {
+    const user = userEvent.setup()
+    const client = new ControlledClient()
+    const target = createValidTargetWeapon()
+    const stored = createValidBuildCandidate()
+    const entry = equivalentEntryFor(stored, target)
+    render(<SearchPage dependencies={dependencies(client, [target], [entry])} />)
+    // Same five labels, other restoration bonus scope: a different Candidate
+    // under the existing fingerprint (`docs/DATA_MODEL.md` 9.1).
+    const searched = { ...structuredClone(stored), restorationBonusScope: 'gogma_artian' as const }
+    const addButton = await searchFor(user, client, target, searched)
+
+    expect(screen.getByText('作成リスト: 未追加')).toBeInTheDocument()
+    expect(addButton).toBeEnabled()
+  })
+
+  it('turns 追加済み as soon as an addition succeeds, keeping the draft selection', async () => {
+    const user = userEvent.setup()
+    const client = new ControlledClient()
+    const target = createValidTargetWeapon()
+    const candidate = createValidBuildCandidate()
+    candidate.checkpointGroups = [checkpointGroupFor(candidate)]
+    const deps = dependencies(client, [target], [])
+    render(<SearchPage dependencies={deps} />)
+    const addButton = await searchFor(user, client, target, candidate)
+    const primary = screen.getByRole('checkbox', { name: '1手目（理想まで残り2操作）' })
+    await user.click(primary)
+    expect(screen.getByText('作成リスト: 未追加')).toBeInTheDocument()
+
+    await user.click(addButton)
+    expect(deps.addCandidate).toHaveBeenCalledWith(candidate, target, [
+      candidate.checkpointGroups[0].opportunities[0].id,
+    ])
+    expect(await screen.findByText('作成リスト: 追加済み')).toBeInTheDocument()
+    expect(screen.queryByText('作成リスト: 未追加')).not.toBeInTheDocument()
+    expect(addButton).toBeDisabled()
+    expect(screen.getByText('ビルドリストへ追加しました。')).toBeInTheDocument()
+    // The screen's own draft selection is untouched by the add.
+    expect(primary).toBeChecked()
+  })
+
+  it('never restores an existing Entry selection into the Search draft', async () => {
+    const user = userEvent.setup()
+    const client = new ControlledClient()
+    const target = createValidTargetWeapon()
+    const candidate = createValidBuildCandidate()
+    candidate.checkpointGroups = [checkpointGroupFor(candidate)]
+    const entry = equivalentEntryFor(candidate, target)
+    expect(entry.selectedCheckpointOpportunityIds).toEqual([
+      'checkpoint-opportunity:fixture.status.2',
+    ])
+    const deps = dependencies(client, [target], [entry])
+    render(<SearchPage dependencies={deps} />)
+    const addButton = await searchFor(user, client, target, candidate)
+
+    expect(screen.getByText('作成リスト: 追加済み')).toBeInTheDocument()
+    // The Entry selected the later arrival; the draft stays all-unselected.
+    expect(screen.getByRole('checkbox', { name: '1手目（理想まで残り2操作）' })).not.toBeChecked()
+    await user.click(screen.getByRole('button', { name: 'その他の到達点（1）' }))
+    expect(await screen.findByRole('checkbox', { name: '2手目（理想まで残り1操作）' })).not.toBeChecked()
+    // Nothing reaches the Service, so the Entry's selection cannot change.
+    expect(addButton).toBeDisabled()
+    expect(deps.addCandidate).not.toHaveBeenCalled()
+  })
+
+  it('reports a Build List load failure like any other load failure', async () => {
+    const client = new ControlledClient()
+    const deps = dependencies(client, [createValidTargetWeapon()])
+    deps.getBuildListEntries = async () => {
+      throw new Error('作成リスト読み込みfixture失敗')
+    }
+    render(<SearchPage dependencies={deps} />)
+
+    expect(await screen.findByText('作成リスト読み込みfixture失敗')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '検索開始' })).not.toBeInTheDocument()
+    expect(screen.queryByText('目標武器を登録してください。')).not.toBeInTheDocument()
+    expect(screen.queryByText('作成リスト: 未追加')).not.toBeInTheDocument()
   })
 })

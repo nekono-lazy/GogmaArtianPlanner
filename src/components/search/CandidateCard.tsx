@@ -49,6 +49,16 @@ interface CandidateCardProps {
    */
   addFeedback?: ReactNode
   /**
+   * Whether an equivalent Candidate is already in the Build List
+   * (`docs/UI_FLOW.md` 9 「作成リスト追加状態」).
+   *
+   * Decided by the owner with the Build List Domain authority
+   * (`isSameBuildListCandidate()`), never here and never by Candidate ID. An
+   * `added` Candidate disables the add button as a convenience only: the
+   * Build List Service keeps its own duplicate protection.
+   */
+  buildListStatus?: 'added' | 'not_added'
+  /**
    * The compromise checkpoints the user has chosen to use.
    *
    * Checkpoints are a BuildListEntry input, never part of the Candidate, so the
@@ -86,6 +96,7 @@ export function CandidateCard({
   onAdd,
   addDisabled = false,
   addFeedback,
+  buildListStatus,
   selectedCheckpointOpportunityIds = [],
   onToggleCheckpoint,
 }: CandidateCardProps) {
@@ -137,6 +148,8 @@ export function CandidateCard({
               理想候補
             </Typography>
             <StatusChip label={routeKindLabels[candidate.route.kind]} tone="info" />
+            {buildListStatus === 'added' && <StatusChip label="作成リスト: 追加済み" tone="positive" />}
+            {buildListStatus === 'not_added' && <StatusChip label="作成リスト: 未追加" tone="neutral" />}
           </Stack>
 
           {/* The finished weapon. The five slots keep their stored order and the
@@ -189,12 +202,7 @@ export function CandidateCard({
 
           {/* Long Routes reach well over a hundred amendments, so the detail
               content is mounted only while the panel is open. */}
-          <DisclosureAccordion
-            title="候補詳細・作成ルート"
-            headingLevel="h4"
-            unmountOnExit
-            detailsId={`candidate-${candidate.id}-detail`}
-          >
+          <DisclosureAccordion title="候補詳細・作成ルート" headingLevel="h4" unmountOnExit>
             <Stack spacing={2}>
               <Box>
                 <Typography component="h5" variant="subtitle2" sx={{ mb: 1 }}>
@@ -341,7 +349,7 @@ export function CandidateCard({
               <Button
                 variant="contained"
                 onClick={() => onAdd(candidate)}
-                disabled={addDisabled}
+                disabled={addDisabled || buildListStatus === 'added'}
                 sx={{ minHeight: 44, alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
               >
                 ビルドリストへ追加

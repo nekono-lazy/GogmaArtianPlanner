@@ -24,6 +24,7 @@ import { loadMasterData } from '../domain/master/loadMasterData'
 import type { MasterDataRoot } from '../domain/master/masterTypes'
 import type {
   BuildCandidate,
+  BuildListEntry,
   CalculationContext,
   CompromiseCheckpointGroup,
   CompromiseCheckpointOpportunity,
@@ -40,7 +41,13 @@ import type {
   CandidateSearchSettings,
 } from '../domain/search'
 import { defaultCandidateSearchSettings } from '../domain/search'
-import { buildCandidateRepository, ownedWeaponRepository, targetWeaponRepository } from '../db/repositories'
+import { isSameBuildListCandidate } from '../domain/buildList'
+import {
+  buildCandidateRepository,
+  buildListEntryRepository,
+  ownedWeaponRepository,
+  targetWeaponRepository,
+} from '../db/repositories'
 import { useSettingsStore } from '../stores/settingsStore'
 import { buildListService } from '../services/buildList/buildListService'
 import { createCandidateSearchInput } from '../services/search/createCandidateSearchInput'
@@ -70,6 +77,11 @@ export interface SearchPageDependencies {
   master: MasterDataRoot
   getTargets(): Promise<TargetWeapon[]>
   getOwnedWeapons(): Promise<OwnedWeapon[]>
+  /**
+   * Read-only Build List entries, used only to show whether an equivalent
+   * Candidate is already added (`docs/UI_FLOW.md` 9 「作成リスト追加状態」).
+   */
+  getBuildListEntries(): Promise<BuildListEntry[]>
   createWorkerClient(): SearchWorkerClient
   createInput(options: {
     searchRunId: string
@@ -84,7 +96,7 @@ export interface SearchPageDependencies {
     candidate: BuildCandidate,
     target: TargetWeapon,
     selectedCheckpointOpportunityIds: readonly CompromiseCheckpointOpportunityId[],
-  ): Promise<{ added: boolean }>
+  ): Promise<{ entry: BuildListEntry; added: boolean }>
 }
 
 const defaultDependencies: SearchPageDependencies | null = defaultMaster
@@ -92,18 +104,16 @@ const defaultDependencies: SearchPageDependencies | null = defaultMaster
       master: defaultMaster,
       getTargets: () => targetWeaponRepository.getAllTargetWeapons(),
       getOwnedWeapons: () => ownedWeaponRepository.getAllOwnedWeapons(),
+      getBuildListEntries: () => buildListEntryRepository.getAllBuildListEntries(),
       createWorkerClient: createProductionSearchWorkerClient,
       createInput: (options) => createCandidateSearchInput(options),
       saveCandidates: (targetId, candidates) =>
         buildCandidateRepository.replaceBuildCandidatesForTarget(targetId, candidates),
-      addCandidate: async (candidate, target, selectedCheckpointOpportunityIds) => {
-        const result = await buildListService.addCandidate(
-          candidate,
-          target,
-          selectedCheckpointOpportunityIds,
-        )
-        return { added: result.added }
-      },
+      // The Service result (existing or new Entry, plus whether it was added)
+      // is passed through unchanged; its duplicate protection stays the
+      // Domain authority.
+      addCandidate: (candidate, target, selectedCheckpointOpportunityIds) =>
+        buildListService.addCandidate(candidate, target, selectedCheckpointOpportunityIds),
     }
   : null
 
@@ -147,6 +157,10 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
   const resultHeadingId = useId()
   const [targets, setTargets] = useState<TargetWeapon[]>([])
   const [ownedWeapons, setOwnedWeapons] = useState<OwnedWeapon[]>([])
+  // Read-only mirror of the Build List, kept only to show the add state of
+  // the displayed Candidate. It never feeds a checkpoint selection back into
+  // this screen's own draft selection.
+  const [buildListEntries, setBuildListEntries] = useState<BuildListEntry[]>([])
   const [targetWeaponId, setTargetWeaponId] = useState<TargetWeapon['id'] | ''>('')
   const [routeFilter, setRouteFilter] = useState<CandidateRouteFilter>('all')
   // Checkpoints always start unselected: choosing none means "go straight to
@@ -176,11 +190,19 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
     }
     clientRef.current = dependencies.createWorkerClient()
     let active = true
-    void Promise.all([dependencies.getTargets(), dependencies.getOwnedWeapons()])
-      .then(([loadedTargets, loadedWeapons]) => {
+    // The Build List is part of the screen's base data: the add state is a
+    // formal display item, so a failure to read it is a load failure like any
+    // other rather than a silent "not added".
+    void Promise.all([
+      dependencies.getTargets(),
+      dependencies.getOwnedWeapons(),
+      dependencies.getBuildListEntries(),
+    ])
+      .then(([loadedTargets, loadedWeapons, loadedEntries]) => {
         if (!active) return
         setTargets(loadedTargets)
         setOwnedWeapons(loadedWeapons)
+        setBuildListEntries(loadedEntries)
         setTargetWeaponId(loadedTargets.find(({ isEnabled }) => isEnabled)?.id ?? '')
       })
       .catch((caught: unknown) => {
@@ -295,6 +317,12 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
     }
     try {
       const added = await dependencies.addCandidate(candidate, target, selectedCheckpointIds)
+      // The Entry the Service returned (new or already existing) is mirrored
+      // so the add state updates at once; the Entry's own checkpoint
+      // selection is never copied back into this screen's draft.
+      setBuildListEntries((current) =>
+        current.some((entry) => entry.id === added.entry.id) ? current : [...current, added.entry],
+      )
       // An equivalent Candidate already in the Build List keeps its own
       // checkpoint selection: the Search screen never silently overwrites it
       // (`docs/UI_FLOW.md` 9).
@@ -479,6 +507,15 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
         {result && masterForDisplay && (() => {
           const targetResult = result.targetResult
           const target = targetById.get(targetResult.targetWeaponId) ?? null
+          const displayedCandidate = targetResult.candidate
+          // The Build List Domain authority decides equivalence; a Candidate
+          // ID differs on every search run and is never compared here.
+          const buildListStatus =
+            displayedCandidate === null
+              ? undefined
+              : buildListEntries.some((entry) => isSameBuildListCandidate(entry, displayedCandidate))
+                ? 'added'
+                : 'not_added'
           return (
             <Stack component="section" aria-labelledby={resultHeadingId} spacing={2} sx={{ minWidth: 0 }}>
               <Box>
@@ -525,6 +562,7 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
                   master={masterForDisplay}
                   ownedWeapons={ownedWeapons}
                   debugMode={debugMode}
+                  buildListStatus={buildListStatus}
                   selectedCheckpointOpportunityIds={selectedCheckpointIds}
                   onToggleCheckpoint={toggleCheckpoint}
                   onAdd={(selected) => void addToBuildList(selected)}
