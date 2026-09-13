@@ -128,6 +128,28 @@ describe('OwnedWeapon Artian kind', () => {
     ).not.toEqual([])
   })
 
+  it('validates a Gogma weapon against its stored normal_artian scope, not its kind', () => {
+    // A converted Gogma keeps the five normal-tier slots until its first bonus
+    // amendment (`docs/DATA_MODEL.md` 7.1).
+    const normal = normalWeapon()
+    expect(validateOwnedWeaponMasterReferences(normal, verifiedMaster())).toEqual([])
+    const inherited = {
+      ...gogmaWeapon(),
+      weaponTypeId: normal.weaponTypeId,
+      elementId: normal.elementId,
+      restorationBonusScope: 'normal_artian' as const,
+      restorationBonuses: structuredClone(normal.restorationBonuses),
+    }
+    expect(validateOwnedWeaponMasterReferences(inherited, verifiedMaster())).toEqual([])
+
+    // A Gogma-tier bonus is still rejected inside a normal_artian set.
+    inherited.restorationBonuses[0] = {
+      bonusTypeId: 'bonus_type.gogma_sharpness_capacity',
+      bonusRankId: 'bonus_rank.base',
+    }
+    expect(validateOwnedWeaponMasterReferences(inherited, verifiedMaster())).not.toEqual([])
+  })
+
   it('rejects Element bonuses for element.none through Master validation', () => {
     const weapon = gogmaWeapon()
     weapon.elementId = 'element.none'

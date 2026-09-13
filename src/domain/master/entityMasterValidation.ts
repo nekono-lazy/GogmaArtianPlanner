@@ -60,8 +60,10 @@ export function validateOwnedWeaponMasterReferences(
 ): string[] {
   const issues: string[] = []
   validateCommon(weapon, master, issues)
-  const scope =
-    weapon.kind === 'normal' ? 'normal_artian' : 'gogma_artian'
+  // The stored scope is the authority. A Gogma weapon may still hold the
+  // `normal_artian` slots it inherited at conversion (`docs/DATA_MODEL.md` 7.1);
+  // the structural validation already pins a Normal weapon to `normal_artian`.
+  const scope = weapon.restorationBonusScope
   weapon.restorationBonuses.forEach((bonus, index) =>
     validateBonus(master, weapon.weaponTypeId, weapon.elementId, scope, bonus, `restorationBonuses[${index}]`, issues),
   )
