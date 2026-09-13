@@ -1890,3 +1890,162 @@ describe('ProductionPlanPage supplementary persisted content', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })
+
+describe('ProductionPlanPage read-only persisted Conflicts', () => {
+  function participantCards() {
+    return within(screen.getByRole('list', { name: '競合 1 の参加候補' })).getAllByRole('listitem')
+  }
+
+  function expectReadOnlyParticipants(reason: string) {
+    const cards = participantCards()
+    expect(cards).toHaveLength(2)
+    // Persisted recommendation / selection badges keep their display contract.
+    expect(within(cards[0]).getByText('Planner推奨')).toBeInTheDocument()
+    expect(within(cards[0]).queryByText('現在選択中')).not.toBeInTheDocument()
+    expect(within(cards[1]).getByText('現在選択中')).toBeInTheDocument()
+    expect(within(cards[1]).queryByText('Planner推奨')).not.toBeInTheDocument()
+    for (const card of cards) {
+      expect(within(card).getByText('利用不可')).toBeInTheDocument()
+      expect(within(card).getByText(reason)).toBeInTheDocument()
+      expect(within(card).queryByText('利用可能')).not.toBeInTheDocument()
+      for (const name of ['比較する', 'この候補を優先']) {
+        const button = within(card).getByRole('button', { name })
+        expect(button).toBeDisabled()
+        fireEvent.click(button)
+      }
+    }
+    // Nothing that only the current preparation knows is inferred from the
+    // persisted Plan: no Target name, no checkpoint involvement.
+    expect(screen.queryByText(fixtureTargetName)).not.toBeInTheDocument()
+    expect(screen.queryByText('チェックポイント関与')).not.toBeInTheDocument()
+    expect(screen.queryByText(
+      'この競合には選択済みチェックポイントが関係しています。作成リストでチェックポイントを変更または解除してください。',
+    )).not.toBeInTheDocument()
+  }
+
+  let fixtureTargetName = ''
+
+  function readOnlyFixture() {
+    const fixture = multiParticipantFixture()
+    fixture.plan.conflicts[0].recommendedBuildListEntryId = fixture.entry.id
+    fixture.plan.conflicts[0].selectedBuildListEntryId = fixture.secondEntry.id
+    // Persisted metadata that must never become a current authority.
+    fixture.plan.conflicts[0].checkpointParticipants = [{
+      buildListEntryId: fixture.secondEntry.id,
+      checkpointGroupId: 'checkpoint-group:persisted' as never,
+      checkpointOpportunityId: 'checkpoint-opportunity:persisted' as never,
+    }]
+    fixtureTargetName = fixture.target.name
+    return fixture
+  }
+
+  it('shows the persisted Conflicts read-only while the Worker preparation is still running, then switches to current availability', async () => {
+    const fixture = readOnlyFixture()
+    const pending = deferred<PlannerInteractionPreparationResult>()
+    const client = plannerClient(() => pending.promise)
+    const deps = dependencies(fixture, client)
+    renderPage(deps, fixture.plan.id)
+
+    expect(await screen.findByText('計画の概要')).toBeInTheDocument()
+    expect(screen.getByText('現在の保存状態から操作可否を確認しています。')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: '競合と解決' })).toBeInTheDocument()
+    expect(screen.getByText('Persisted fixture conflict')).toBeInTheDocument()
+    expect(screen.getByText('同じ巨戟カウンター位置')).toBeInTheDocument()
+    expectReadOnlyParticipants('現在の操作可否を確認しています。')
+    expect(client.createWhatIfComparison).not.toHaveBeenCalled()
+    expect(client.createConstrainedPlan).not.toHaveBeenCalled()
+
+    await act(async () => {
+      pending.resolve(fixture.preparation)
+      await pending.promise
+    })
+    // The fresh preparation is the availability authority once it arrives.
+    expect(await screen.findAllByText('利用可能')).toHaveLength(2)
+    expect(screen.queryByText('現在の操作可否を確認しています。')).not.toBeInTheDocument()
+    expect(screen.queryByText('現在の保存状態から操作可否を確認しています。')).not.toBeInTheDocument()
+    for (const card of participantCards()) {
+      expect(within(card).getByRole('button', { name: '比較する' })).toBeEnabled()
+      expect(within(card).getByRole('button', { name: 'この候補を優先' })).toBeEnabled()
+    }
+    expect(screen.getByText(fixture.target.name)).toBeInTheDocument()
+  })
+
+  it('keeps the persisted Conflicts visible read-only after the Worker preparation failed', async () => {
+    const fixture = readOnlyFixture()
+    const client = plannerClient(async () => {
+      throw new Error('Unexpected preparation failure')
+    })
+    const deps = dependencies(fixture, client)
+    renderPage(deps, fixture.plan.id)
+
+    expect(await screen.findByText('Unexpected preparation failure')).toBeInTheDocument()
+    // The Worker failure is an error, never a stale Plan.
+    expect(screen.queryByText(/再計算が必要な生産計画です/)).not.toBeInTheDocument()
+    expect(screen.getByText('計画の概要')).toBeInTheDocument()
+    expect(summaryValue('計画ID')).toBe(fixture.plan.id)
+    expect(screen.getByRole('heading', { level: 2, name: '競合と解決' })).toBeInTheDocument()
+    expect(screen.getByText('Persisted fixture conflict')).toBeInTheDocument()
+    expectReadOnlyParticipants('現在の操作可否を確認できないため、この候補は操作できません。')
+    expect(client.createWhatIfComparison).not.toHaveBeenCalled()
+    expect(client.createConstrainedPlan).not.toHaveBeenCalled()
+    expect(deps.savePlannerResult).not.toHaveBeenCalled()
+  })
+
+  it('gives every stale participant its unavailable reason beside the persisted badges', async () => {
+    const fixture = readOnlyFixture()
+    fixture.plan.status = 'stale'
+    const client = plannerClient(async () => fixture.preparation)
+    const deps = dependencies(fixture, client)
+    renderPage(deps, fixture.plan.id)
+
+    expect(await screen.findByText(
+      'この生産計画は現在の状態と一致しません。ビルドリストから再計算してください。',
+    )).toBeInTheDocument()
+    expect(screen.getByText('Persisted fixture conflict')).toBeInTheDocument()
+    expectReadOnlyParticipants('この生産計画は再計算が必要なため、この候補は操作できません。')
+    expect(deps.createInput).not.toHaveBeenCalled()
+    expect(client.prepareInteraction).not.toHaveBeenCalled()
+  })
+
+  it('uses the same read-only reason for a calculation-context-incompatible Plan', async () => {
+    const fixture = readOnlyFixture()
+    fixture.plan.calculationContext.appSchemaVersion = 9
+    fixture.plan.baseSnapshot.calculationContext.appSchemaVersion = 9
+    const deps = dependencies(fixture, plannerClient(async () => fixture.preparation))
+    deps.currentCalculationContext = {
+      ...fixture.plan.calculationContext,
+      appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
+    }
+    renderPage(deps, fixture.plan.id)
+
+    expect(await screen.findByText(
+      'この生産計画は現在の計算契約と互換性がありません。ビルドリストから再計算してください。',
+    )).toBeInTheDocument()
+    expectReadOnlyParticipants('この生産計画は再計算が必要なため、この候補は操作できません。')
+  })
+
+  it('keeps the empty Conflict presentation in a read-only state', async () => {
+    const fixture = readOnlyFixture()
+    fixture.plan.conflicts = []
+    const pending = deferred<PlannerInteractionPreparationResult>()
+    const client = plannerClient(() => pending.promise)
+    renderPage(dependencies(fixture, client), fixture.plan.id)
+
+    expect(await screen.findByText('計画の概要')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: '競合と解決' })).toBeInTheDocument()
+    expect(screen.getByText('この生産計画に表示する競合はありません。')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '比較する' })).not.toBeInTheDocument()
+    pending.resolve({ status: 'ready', validBuildListEntryIds: [], excludedBuildListEntries: [], currentConflicts: [] })
+  })
+
+  it('shows no Conflict section when the Plan itself could not be loaded', async () => {
+    const fixture = readOnlyFixture()
+    const deps = dependencies(fixture, plannerClient(async () => fixture.preparation))
+    vi.mocked(deps.getPlan).mockRejectedValue(new Error('計画を読み込めませんでした。'))
+    renderPage(deps, fixture.plan.id)
+
+    expect(await screen.findByText('計画を読み込めませんでした。')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { level: 2, name: '競合と解決' })).not.toBeInTheDocument()
+    expect(screen.queryByText('計画の概要')).not.toBeInTheDocument()
+  })
+})

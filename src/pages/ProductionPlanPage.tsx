@@ -209,6 +209,46 @@ interface ConflictDisplay {
   participants: ParticipantDisplay[]
 }
 
+/**
+ * The persisted Conflicts of a Plan as a read-only projection.
+ *
+ * `ProductionPlan.conflicts` is the display authority whenever the page has
+ * the exact persisted Plan but no *current* Worker preparation to judge
+ * participants with: while the preparation is still running, after it failed,
+ * and for a stale Plan (UI_FLOW 11.0 / 11.1). Every participant is therefore
+ * unavailable with the caller's reason, and nothing that only the current
+ * preparation can know - Target names, checkpoint involvement, current
+ * conflict membership - is inferred from persisted data. The persisted
+ * recommendation and selection badges keep their display contract.
+ */
+function createReadOnlyConflictDisplays(
+  plan: ProductionPlan,
+  unavailableMessage: string,
+): ConflictDisplay[] {
+  return plan.conflicts.map((conflict) => ({
+    id: conflict.id,
+    kind: conflict.kind,
+    reason: conflict.reason,
+    involvesSelectedCheckpoint: false,
+    participants: conflict.buildListEntryIds.map((buildListEntryId) => ({
+      buildListEntryId,
+      targetName: null,
+      isRecommended: conflict.recommendedBuildListEntryId === buildListEntryId,
+      isSelected: conflict.selectedBuildListEntryId === buildListEntryId,
+      isAvailable: false,
+      unavailableMessage,
+      competesForCheckpoint: false,
+    })),
+  }))
+}
+
+/** Why a participant cannot be acted on in each read-only page state. */
+const readOnlyConflictMessages = {
+  preparing: '現在の操作可否を確認しています。',
+  preparationFailed: '現在の操作可否を確認できないため、この候補は操作できません。',
+  stale: 'この生産計画は再計算が必要なため、この候補は操作できません。',
+} as const
+
 /** A titled, border-based page section. */
 function PlanPageSection({ title, children }: { title: string; children: ReactNode }) {
   const headingId = useId()
@@ -891,10 +931,12 @@ export function ProductionPlanPage({
         ? state.plan
         : null
 
-  // The Conflict list is one presentation for both the interactive (`ready`)
-  // and the read-only (`stale`) case. Persisted `ProductionPlan.conflicts` is
-  // the display authority in both; only `ready` carries the current Worker
-  // preparation that decides whether a participant can be acted on.
+  // Persisted `ProductionPlan.conflicts` is the Conflict display authority in
+  // every state that holds the exact persisted Plan (UI_FLOW 11.0): the list
+  // never disappears because the Worker preparation is still running or has
+  // failed. Only `ready` carries the current preparation, which is the sole
+  // authority for whether a participant can be acted on; every other state is
+  // a read-only projection whose participants are all unavailable.
   const conflictDisplays: ConflictDisplay[] | null =
     state.status === 'ready'
       ? state.viewModel.conflicts.map((conflict) => ({
@@ -912,25 +954,13 @@ export function ProductionPlanPage({
             competesForCheckpoint: participant.checkpointOpportunityId !== null,
           })),
         }))
-      : state.status === 'stale'
-        ? state.plan.conflicts.map((conflict) => ({
-            id: conflict.id,
-            kind: conflict.kind,
-            reason: conflict.reason,
-            // The persisted metadata is display context only; no current
-            // preparation exists for a stale Plan, so nothing is actionable.
-            involvesSelectedCheckpoint: false,
-            participants: conflict.buildListEntryIds.map((buildListEntryId) => ({
-              buildListEntryId,
-              targetName: null,
-              isRecommended: conflict.recommendedBuildListEntryId === buildListEntryId,
-              isSelected: conflict.selectedBuildListEntryId === buildListEntryId,
-              isAvailable: false,
-              unavailableMessage: null,
-              competesForCheckpoint: false,
-            })),
-          }))
-        : null
+      : state.status === 'preparing'
+        ? createReadOnlyConflictDisplays(state.plan, readOnlyConflictMessages.preparing)
+        : state.status === 'error' && state.plan !== null
+          ? createReadOnlyConflictDisplays(state.plan, readOnlyConflictMessages.preparationFailed)
+          : state.status === 'stale'
+            ? createReadOnlyConflictDisplays(state.plan, readOnlyConflictMessages.stale)
+            : null
 
   const showBuildListLink =
     state.status === 'stale' ||
@@ -1101,7 +1131,10 @@ export function ProductionPlanPage({
                 {conflictDisplays.map((conflict, conflictIndex) => (
                   <ConflictItem key={conflict.id} conflict={conflict} index={conflictIndex}>
                     {conflict.participants.map((participant, participantIndex) => {
+                      // A what-if belongs to the interactive state only; a
+                      // read-only projection never shows one.
                       const showsWhatIf =
+                        state.status === 'ready' &&
                         whatIfState.status !== 'idle' &&
                         whatIfState.conflictId === conflict.id &&
                         whatIfState.buildListEntryId === participant.buildListEntryId
