@@ -33,6 +33,8 @@ interface ProductionPlanContentProps {
   plan: ProductionPlan
   targetWeapons: readonly TargetWeapon[]
   master: MasterDataRoot
+  /** Debug Mode only adds raw identifiers to Step details; it changes nothing else. */
+  debugMode?: boolean
 }
 
 /** A titled, border-based section of the read-only Plan view. */
@@ -77,6 +79,7 @@ export function ProductionPlanContent({
   plan,
   targetWeapons,
   master,
+  debugMode = false,
 }: ProductionPlanContentProps) {
   const orderedSteps = useMemo(() => orderPlanSteps(plan), [plan])
   const targetGroups = useMemo(() => groupPlanStepsByTargetWeapon(plan), [plan])
@@ -122,6 +125,7 @@ export function ProductionPlanContent({
                     master={master}
                     showSharedBadge
                     label={`${name}の作成ルート`}
+                    debugMode={debugMode}
                   />
                 </DisclosureAccordion>
               )
@@ -146,6 +150,7 @@ export function ProductionPlanContent({
             lookup={lookup}
             master={master}
             label="計画全体の実行順"
+            debugMode={debugMode}
           />
         </DisclosureAccordion>
       </PlanSection>
@@ -217,7 +222,7 @@ export function ProductionPlanContent({
                 sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5, minWidth: 0 }}
               >
                 <Stack spacing={0.5}>
-                  <Typography variant="subtitle2">
+                  <Typography component="p" variant="subtitle2">
                     {rejectedBuildListEntryReasonLabels[rejected.reason]}
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>

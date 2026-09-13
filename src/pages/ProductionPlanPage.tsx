@@ -1013,6 +1013,7 @@ export function ProductionPlanPage({
             plan={loadedPlan}
             targetWeapons={targetWeapons}
             master={dependencies.master}
+            debugMode={debugMode}
           />
         )}
 
@@ -1200,6 +1201,7 @@ export function ProductionPlanPage({
                             <ProductionPlanWhatIfComparison
                               result={whatIfState.result}
                               targetWeapons={whatIfState.targetWeapons}
+                              headingLevel="h5"
                             />
                           )}
                           {showsWhatIf && whatIfState.status === 'failure' &&
@@ -1207,6 +1209,7 @@ export function ProductionPlanPage({
                               <ProductionPlanWhatIfComparison
                                 result={whatIfState.failure.result}
                                 targetWeapons={[]}
+                                headingLevel="h5"
                               />
                             ) : (
                               <Alert severity="error">

@@ -9,6 +9,16 @@
  */
 export type SectionHeadingLevel = 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
 
+/**
+ * Whether a section at `level` can still give its own sub-sections a deeper
+ * heading. HTML stops at `h6`, so a caller at `h6` must not create a child
+ * heading of the same level: below that depth, sub-structure is expressed as
+ * labelled non-heading text or a heading-less disclosure instead.
+ */
+export function hasDeeperHeadingLevel(level: SectionHeadingLevel): boolean {
+  return level !== 'h6'
+}
+
 export function nextHeadingLevel(level: SectionHeadingLevel): SectionHeadingLevel {
   switch (level) {
     case 'h2':

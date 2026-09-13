@@ -59,9 +59,11 @@ describe('ProductionPlanWhatIfComparison', () => {
       <ProductionPlanWhatIfComparison
         result={result}
         targetWeapons={[firstTarget, secondTarget]}
+        headingLevel="h4"
       />,
     )
 
+    expect(screen.getByRole('heading', { level: 4, name: '比較結果' })).toBeInTheDocument()
     expect(screen.getAllByRole('heading', { level: 5 }).map(({ textContent }) =>
       textContent)).toEqual(['Second alternative', 'First alternative'])
     const targetCards = screen.getAllByRole('heading', { level: 5 })
@@ -118,6 +120,7 @@ describe('ProductionPlanWhatIfComparison', () => {
       <ProductionPlanWhatIfComparison
         result={result}
         targetWeapons={[firstTarget, secondTarget, thirdTarget, fourthTarget]}
+        headingLevel="h4"
       />,
     )
 
@@ -147,7 +150,7 @@ describe('ProductionPlanWhatIfComparison', () => {
     }
 
     render(
-      <ProductionPlanWhatIfComparison result={result} targetWeapons={[]} />,
+      <ProductionPlanWhatIfComparison result={result} targetWeapons={[]} headingLevel="h4" />,
     )
 
     expect(screen.getByText('Planner入力を準備できませんでした')).toBeInTheDocument()
@@ -179,11 +182,41 @@ describe('ProductionPlanWhatIfComparison', () => {
     }
 
     render(
-      <ProductionPlanWhatIfComparison result={result} targetWeapons={[]} />,
+      <ProductionPlanWhatIfComparison result={result} targetWeapons={[]} headingLevel="h4" />,
     )
 
     expect(screen.getByText(message)).toBeInTheDocument()
     expect(screen.getByText('Diagnostics only: deliberately unrelated wording'))
       .toBeInTheDocument()
+  })
+})
+
+describe('ProductionPlanWhatIfComparison heading depth', () => {
+  function completed(targetId: string): PlannerWhatIfCalculationResult {
+    return {
+      status: 'completed',
+      comparison: {
+        conflictKey: 'conflict.depth',
+        fixedBuildListEntryId: buildListEntryId('build-list.fixed'),
+        fixedTargetWeaponId: targetWeaponId('target.fixed'),
+        alternatives: [{ targetWeaponId: targetWeaponId(targetId), outcome: found(3, null) }],
+      },
+    }
+  }
+
+  it('derives the Target result heading from the caller level (h5 -> h6)', () => {
+    const target = { ...createValidTargetWeapon(), id: targetWeaponId('target.depth.a'), name: 'Depth target' }
+    render(<ProductionPlanWhatIfComparison result={completed(target.id)} targetWeapons={[target]} headingLevel="h5" />)
+    expect(screen.getByRole('heading', { level: 5, name: '比較結果' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 6, name: 'Depth target' })).toBeInTheDocument()
+  })
+
+  it('renders Target names as labelled text when 比較結果 is already h6', () => {
+    const target = { ...createValidTargetWeapon(), id: targetWeaponId('target.depth.b'), name: 'Deepest target' }
+    render(<ProductionPlanWhatIfComparison result={completed(target.id)} targetWeapons={[target]} headingLevel="h6" />)
+    expect(screen.getByRole('heading', { level: 6, name: '比較結果' })).toBeInTheDocument()
+    expect(screen.getByText('Deepest target')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Deepest target' })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('heading')).toHaveLength(1)
   })
 })

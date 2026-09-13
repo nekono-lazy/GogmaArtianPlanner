@@ -1,4 +1,4 @@
-import { Divider, Paper, Stack, Typography } from '@mui/material'
+import { Box, Divider, Paper, Stack, Typography } from '@mui/material'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import type {
   PlanStep,
@@ -65,7 +65,7 @@ function ExpectedResultView({
   }
   return (
     <Stack spacing={0.75}>
-      <Typography variant="subtitle2">想定結果</Typography>
+      <Typography component="p" variant="subtitle2">想定結果</Typography>
       {expected.restorationBonuses === null ? (
         <Typography variant="body2" color="text.secondary">
           復元ボーナス: 対象外
@@ -110,13 +110,20 @@ export function ProductionPlanStepCard({
   master,
   showSharedBadge = false,
   headingLevel = 'h4',
+  debugMode = false,
 }: {
   step: PlanStep
   lookup: TargetWeaponLookup
   master: MasterDataRoot
   showSharedBadge?: boolean
   headingLevel?: SectionHeadingLevel
+  /** Debug Mode adds the raw milestone identifiers; the normal UI shows none. */
+  debugMode?: boolean
 }) {
+  // `undefined` means the Plan predates the field: nothing is inferred for it
+  // from a Candidate or Entry, and no section is shown. `[]` means this Step
+  // reaches no selected checkpoint (`docs/PLANNER_SPEC.md` 7.5.4).
+  const milestones = step.checkpointMilestones ?? []
   // The primary Target decides which weapon-type bonus names apply; a shared
   // Step keeps that single persisted resolution rather than inventing one.
   const weaponTypeId =
@@ -168,6 +175,43 @@ export function ProductionPlanStepCard({
             この操作は他の目標武器と共有され、計画全体では1回だけ実行します。
           </Typography>
         )}
+        {milestones.length > 0 && (
+          // Persisted milestone metadata on the physical Step that reaches the
+          // selected checkpoint: every stored entry is listed in stored order,
+          // a shared Step included, and nothing else changes - no extra Step,
+          // no stop, no reservation.
+          <Box>
+            <Typography component="p" variant="subtitle2">チェックポイント到達</Typography>
+            <Box
+              component="ul"
+              aria-label={`ステップ ${step.order} のチェックポイント到達`}
+              sx={{ m: 0, mt: 0.25, pl: 2.5, display: 'grid', gap: 0.25 }}
+            >
+              {milestones.map((milestone, index) => (
+                <Typography
+                  component="li"
+                  variant="body2"
+                  key={`${milestone.buildListEntryId}:${milestone.checkpointOpportunityId}:${index}`}
+                  className="tabular-nums"
+                  sx={{ overflowWrap: 'anywhere' }}
+                >
+                  <TargetWeaponReference targetWeaponId={milestone.targetWeaponId} lookup={lookup} />
+                  （理想まで残り{milestone.remainingOperationCount}操作）
+                  {debugMode && (
+                    <Typography
+                      component="span"
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: 'block', overflowWrap: 'anywhere' }}
+                    >
+                      BuildListEntry ID: {milestone.buildListEntryId} ／ group: {milestone.checkpointGroupId} ／ opportunity: {milestone.checkpointOpportunityId}
+                    </Typography>
+                  )}
+                </Typography>
+              ))}
+            </Box>
+          </Box>
+        )}
         <Divider />
         <ExpectedResultView step={step} weaponTypeId={weaponTypeId} master={master} />
       </Stack>
@@ -186,6 +230,7 @@ export function ProductionPlanStepList({
   showSharedBadge = false,
   headingLevel = 'h4',
   label,
+  debugMode = false,
 }: {
   steps: readonly PlanStep[]
   lookup: TargetWeaponLookup
@@ -194,6 +239,7 @@ export function ProductionPlanStepList({
   headingLevel?: SectionHeadingLevel
   /** Accessible name of the list. */
   label: string
+  debugMode?: boolean
 }) {
   return (
     <Stack component="ol" spacing={1} aria-label={label} sx={{ m: 0, p: 0, minWidth: 0 }}>
@@ -205,6 +251,7 @@ export function ProductionPlanStepList({
           master={master}
           showSharedBadge={showSharedBadge}
           headingLevel={headingLevel}
+          debugMode={debugMode}
         />
       ))}
     </Stack>

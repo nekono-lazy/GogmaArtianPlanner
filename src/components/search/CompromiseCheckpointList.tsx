@@ -1,7 +1,7 @@
 import { useId } from 'react'
 import { Alert, Box, Checkbox, FormControlLabel, Paper, Stack, Typography } from '@mui/material'
 import { DisclosureAccordion, type DisclosureHeadingLevel } from '../DisclosureAccordion'
-import { nextHeadingLevel } from '../headingLevel'
+import { hasDeeperHeadingLevel, nextHeadingLevel } from '../headingLevel'
 import { RestorationBonusSlots } from '../RestorationBonusSlots'
 import { StatusChip } from '../StatusChip'
 import { SearchDefinitionItem, SearchDefinitionList } from './SearchDefinitionList'
@@ -118,9 +118,19 @@ function CheckpointGroupCard({
   group: CompromiseCheckpointGroup
   /** 1-based display number; presentation only, never an identity. */
   index: number
-  headingLevel: DisclosureHeadingLevel
+  /**
+   * Heading level of the group title, or `null` when the group sits below an
+   * `h6` and its title is therefore labelled text rather than a heading.
+   */
+  headingLevel: DisclosureHeadingLevel | null
 }) {
   const headingId = useId()
+  // A later-arrival disclosure below the deepest heading level keeps its ARIA
+  // wiring but creates no heading of its own.
+  const laterArrivalsLevel =
+    headingLevel !== null && hasDeeperHeadingLevel(headingLevel)
+      ? nextHeadingLevel(headingLevel)
+      : 'none'
   const selected = new Set<string>(selectedOpportunityIds)
   // Ascending by Route position, so the first entry is the earliest arrival.
   const [primary, ...later] = group.opportunities
@@ -134,7 +144,7 @@ function CheckpointGroupCard({
     >
       <Stack spacing={1.25}>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
-          <Typography id={headingId} component={headingLevel} variant="subtitle2">
+          <Typography id={headingId} component={headingLevel ?? 'div'} variant="subtitle2">
             チェックポイント {index}
           </Typography>
           <StatusChip
@@ -184,7 +194,7 @@ function CheckpointGroupCard({
           // usable arrival (`docs/SEARCH_SPEC.md` 5.8.3).
           <DisclosureAccordion
             title={`その他の到達点（${later.length}）`}
-            headingLevel={nextHeadingLevel(headingLevel)}
+            headingLevel={laterArrivalsLevel}
           >
             <Stack>
               {later.map((opportunity) => (
@@ -220,8 +230,12 @@ export function CompromiseCheckpointList(props: CompromiseCheckpointListProps) {
   const sectionHeadingId = useId()
   const primary = groups.filter(({ isDisplaySecondary }) => !isDisplaySecondary)
   const secondary = groups.filter(({ isDisplaySecondary }) => isDisplaySecondary)
-  const groupLevel = nextHeadingLevel(headingLevel)
-  const secondaryGroupLevel = nextHeadingLevel(groupLevel)
+  // Each nesting level takes the next heading level while one exists; once
+  // `h6` is reached, deeper structure is expressed without new headings so a
+  // child never repeats its parent's level (`docs/UI_FLOW.md` 3.1).
+  const groupLevel = hasDeeperHeadingLevel(headingLevel) ? nextHeadingLevel(headingLevel) : null
+  const secondaryGroupLevel =
+    groupLevel !== null && hasDeeperHeadingLevel(groupLevel) ? nextHeadingLevel(groupLevel) : null
   return (
     <Box component="section" aria-labelledby={sectionHeadingId}>
       <Stack spacing={1}>
@@ -249,7 +263,7 @@ export function CompromiseCheckpointList(props: CompromiseCheckpointListProps) {
             {secondary.length > 0 && (
               <DisclosureAccordion
                 title={`その他の候補（${secondary.length}）`}
-                headingLevel={groupLevel}
+                headingLevel={groupLevel ?? 'none'}
               >
                 <Stack spacing={1}>
                   <Typography variant="body2" color="text.secondary">

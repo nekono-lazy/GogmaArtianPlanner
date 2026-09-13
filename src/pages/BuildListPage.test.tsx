@@ -37,6 +37,7 @@ import {
   checkpointIdealBonuses,
   checkpointPracticalBonuses,
   checkpointSource,
+  checkpointStrongerPracticalBonuses,
   checkpointTarget,
 } from '../test/fixtures/checkpointRoute'
 import { BuildListPage, type BuildListPageDependencies } from './BuildListPage'
@@ -771,5 +772,171 @@ describe('BuildListPage presentation', () => {
     expect(screen.getByText('Typed warning message')).toBeInTheDocument()
     expect(screen.getByText('現在の入力から作成できる生産計画はありませんでした。')).toBeInTheDocument()
     expect(screen.queryByText('生産計画の探索が完了していません')).not.toBeInTheDocument()
+  })
+})
+
+describe('BuildListPage checkpoint save chain recovery', () => {
+  interface SaveAttempt {
+    selected: readonly string[]
+    resolve(): void
+    reject(): void
+  }
+
+  /**
+   * Three primary checkpoint groups on one Route: the Practical product
+   * (1手目), the Alternative product (2手目) and the stronger Practical product
+   * (3手目; arriving later, it dominates nothing). Every save waits for the test.
+   */
+  function chainFixture(persisted: readonly string[] = []) {
+    const candidate = checkpointCandidate([
+      checkpointPracticalBonuses(),
+      checkpointAlternativeBonuses(),
+      checkpointStrongerPracticalBonuses(),
+      checkpointIdealBonuses(),
+    ])
+    const target = checkpointTarget()
+    const groups = candidate.checkpointGroups ?? []
+    const byOperationCount = (count: number) =>
+      groups.flatMap(({ opportunities }) => opportunities).find(
+        ({ operationCount }) => operationCount === count,
+      )!.id
+    const ids = { practical: byOperationCount(1), alternative: byOperationCount(2), stronger: byOperationCount(3) }
+    let entry = createBuildListEntry(candidate, target, {
+      id: buildListEntryId('build-list.checkpoint.chain'),
+      createdAt: '2026-09-12T00:00:00.000Z',
+      selectedCheckpointOpportunityIds: [...persisted] as never[],
+    })
+    const attempts: SaveAttempt[] = []
+    const deps: BuildListPageDependencies = {
+      ...dependencies(),
+      refresh: vi.fn(async () => ({ entries: [entry], targets: [target], ownedWeapons: [checkpointSource()] })),
+      updateCheckpointSelection: vi.fn((_id, selected) =>
+        new Promise<typeof entry>((resolve, reject) => {
+          attempts.push({
+            selected,
+            resolve: () => {
+              entry = { ...entry, selectedCheckpointOpportunityIds: [...selected] }
+              resolve(entry)
+            },
+            reject: () => reject(new Error('チェックポイントの保存に失敗しました（テスト）')),
+          })
+        })),
+    }
+    return { deps, ids, attempts, latestEntry: () => entry }
+  }
+
+  const names = {
+    practical: '1手目（理想まで残り3操作）',
+    alternative: '2手目（理想まで残り2操作）',
+    stronger: '3手目（理想まで残り1操作）',
+  }
+
+  it('continues from the last persisted selection after a failed save (success -> failure -> success)', async () => {
+    const user = userEvent.setup()
+    const { deps, ids, attempts, latestEntry } = chainFixture()
+    renderPage(deps)
+    const alternative = await screen.findByRole('checkbox', { name: names.alternative })
+    const stronger = screen.getByRole('checkbox', { name: names.stronger })
+    const practical = screen.getByRole('checkbox', { name: names.practical })
+
+    // A, B, C are toggled before any save settles.
+    await user.click(alternative)
+    await user.click(stronger)
+    await user.click(practical)
+    expect(attempts).toHaveLength(1)
+    expect(attempts[0].selected).toEqual([ids.alternative])
+
+    attempts[0].resolve()
+    await waitFor(() => expect(attempts).toHaveLength(2))
+    // B starts from A's persisted result.
+    expect(attempts[1].selected).toEqual([ids.alternative, ids.stronger])
+
+    attempts[1].reject()
+    expect(await screen.findByText('チェックポイントの保存に失敗しました（テスト）')).toBeInTheDocument()
+    await waitFor(() => expect(attempts).toHaveLength(3))
+    // C starts from the last *persisted* selection [A], never from the
+    // render-time [] and never from the failed [A, B].
+    expect(attempts[2].selected).toEqual([ids.alternative, ids.practical])
+
+    attempts[2].resolve()
+    await waitFor(() => expect(practical).toBeChecked())
+    expect(alternative).toBeChecked()
+    expect(stronger).not.toBeChecked()
+    expect(latestEntry().selectedCheckpointOpportunityIds).toEqual([ids.alternative, ids.practical])
+    expect(deps.updateCheckpointSelection).toHaveBeenCalledTimes(3)
+    // The chain is still usable after the failure: a fourth toggle builds on [A, C].
+    await user.click(stronger)
+    await waitFor(() => expect(attempts).toHaveLength(4))
+    expect(attempts[3].selected).toEqual([ids.alternative, ids.practical, ids.stronger])
+    attempts[3].resolve()
+    await waitFor(() => expect(stronger).toBeChecked())
+  })
+
+  it('starts the save after a first failure from the persisted selection, not from the failed one', async () => {
+    const user = userEvent.setup()
+    // Persisted before the page opened: the Practical checkpoint (X). The ids
+    // are deterministic, so a throwaway fixture can name it.
+    const ids = chainFixture().ids
+    const persistedId = ids.practical
+    const fixture = chainFixture([persistedId])
+    renderPage(fixture.deps)
+    const alternative = await screen.findByRole('checkbox', { name: names.alternative })
+    const stronger = screen.getByRole('checkbox', { name: names.stronger })
+
+    await user.click(alternative)
+    await user.click(stronger)
+    expect(fixture.attempts[0].selected).toEqual([persistedId, ids.alternative])
+    fixture.attempts[0].reject()
+    expect(await screen.findByText('チェックポイントの保存に失敗しました（テスト）')).toBeInTheDocument()
+    await waitFor(() => expect(fixture.attempts).toHaveLength(2))
+    // B builds on the last persisted [X], not on the failed [X, A].
+    expect(fixture.attempts[1].selected).toEqual([persistedId, ids.stronger])
+    fixture.attempts[1].resolve()
+    await waitFor(() => expect(stronger).toBeChecked())
+    expect(alternative).not.toBeChecked()
+    expect(fixture.latestEntry().selectedCheckpointOpportunityIds).toEqual([persistedId, ids.stronger])
+  })
+
+  it('keeps the heading outline sequential down to the deepest checkpoint structure', async () => {
+    // The stronger Practical product arrives first, so the plain Practical
+    // group (reached twice) is display-secondary and carries a later arrival.
+    const candidate = checkpointCandidate([
+      checkpointStrongerPracticalBonuses(),
+      checkpointPracticalBonuses(),
+      checkpointAlternativeBonuses(),
+      checkpointPracticalBonuses(),
+      checkpointIdealBonuses(),
+    ])
+    const target = checkpointTarget()
+    const entry = createBuildListEntry(candidate, target, {
+      id: buildListEntryId('build-list.checkpoint.outline'),
+      createdAt: '2026-09-12T00:00:00.000Z',
+    })
+    const deps: BuildListPageDependencies = {
+      ...dependencies(),
+      refresh: vi.fn(async () => ({ entries: [entry], targets: [target], ownedWeapons: [checkpointSource()] })),
+    }
+    renderPage(deps)
+
+    expect(await screen.findByRole('heading', { level: 4, name: '理想候補' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 5, name: '途中で利用可能な妥協チェックポイント' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 6, name: 'チェックポイント 1' })).toBeInTheDocument()
+    // Below h6 nothing becomes a new heading: the disclosures keep their
+    // toggles, and the secondary group title is labelled text.
+    const secondaryToggle = screen.getByRole('button', { name: 'その他の候補（1）' })
+    expect(screen.getByRole('heading', { level: 6, name: 'その他の候補（1）' })).toContainElement(secondaryToggle)
+    await userEvent.click(secondaryToggle)
+    expect(await screen.findByText('チェックポイント 3')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'チェックポイント 3' })).not.toBeInTheDocument()
+    const laterToggle = screen.getByRole('button', { name: 'その他の到達点（1）' })
+    expect(laterToggle.closest('h6')).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'その他の到達点（1）' })).not.toBeInTheDocument()
+    await userEvent.click(laterToggle)
+    expect(await screen.findByRole('checkbox', { name: '4手目（理想まで残り1操作）' })).toBeInTheDocument()
+    // No heading level is skipped anywhere on the page.
+    const levels = screen.getAllByRole('heading').map((heading) => Number(heading.tagName.slice(1)))
+    for (let index = 1; index < levels.length; index += 1) {
+      expect(levels[index] - levels[index - 1]).toBeLessThanOrEqual(1)
+    }
   })
 })

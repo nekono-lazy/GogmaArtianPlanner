@@ -370,12 +370,15 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
   /**
    * Per-Entry serialization of checkpoint selection saves.
    *
-   * Two quick toggles on different groups must both survive (one opportunity
-   * per group, any number of groups). Each save therefore starts from the
-   * latest known selection - the previous save's result, or the pending
-   * optimistic value - rather than from the render-time Entry, and saves for
-   * one Entry run one after another. The service's Domain validation stays
-   * the authority for what a selection may contain.
+   * The chain holds, per Entry, a continuation that resolves to the *last
+   * selection known to be persisted*: the result of the latest successful
+   * save, or - when that save failed - the stable value before it. Every new
+   * toggle is built on that value, so two quick toggles on different groups
+   * both survive, and a failed save in between never sends the next one back
+   * to the render-time Entry (`docs/UI_FLOW.md` 10, lost update). The
+   * continuation itself never rejects; only the individual attempt does, and
+   * that rejection is what the error feedback reports. The service's Domain
+   * validation stays the authority for what a selection may contain.
    */
   const checkpointSaveChainRef = useRef(
     new Map<BuildListEntryId, Promise<readonly CompromiseCheckpointOpportunityId[]>>(),
@@ -526,26 +529,33 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
     const deps = dependencies
     const groupIds = new Set(group.opportunities.map(({ id }) => id))
     const chain = checkpointSaveChainRef.current
-    const previous =
+    // The last selection known to be persisted. Only the very first toggle of
+    // an Entry in this session starts from the loaded Entry; afterwards the
+    // chain's own continuation is the authority, never a render-time Entry.
+    const previousStable =
       chain.get(entry.id) ??
       Promise.resolve<readonly CompromiseCheckpointOpportunityId[]>(
         entry.selectedCheckpointOpportunityIds ?? [],
       )
-    const save = previous
-      // A failed earlier save keeps the last persisted value as the base.
-      .catch(() => entry.selectedCheckpointOpportunityIds ?? [])
-      .then(async (latest) => {
-        const kept = latest.filter((id) => !groupIds.has(id))
-        const next = selected ? [...kept, opportunity.id] : kept
-        const updated = await deps.updateCheckpointSelection(entry.id, next)
-        setEntries((current) =>
-          current.map((existing) => (existing.id === updated.id ? updated : existing)),
-        )
-        return updated.selectedCheckpointOpportunityIds ?? []
-      })
-    chain.set(entry.id, save)
+    const attempt = previousStable.then(async (latest) => {
+      const kept = latest.filter((id) => !groupIds.has(id))
+      const next = selected ? [...kept, opportunity.id] : kept
+      const updated = await deps.updateCheckpointSelection(entry.id, next)
+      // Only a persisted result updates the displayed Entry; a failed
+      // selection is never shown as saved.
+      setEntries((current) =>
+        current.map((existing) => (existing.id === updated.id ? updated : existing)),
+      )
+      return updated.selectedCheckpointOpportunityIds ?? []
+    })
+    // The continuation handed to the next toggle: the new stable selection on
+    // success, the previous stable one on failure. It never rejects, so a
+    // failed save neither poisons the chain nor loses an earlier success.
+    const continuation: Promise<readonly CompromiseCheckpointOpportunityId[]> =
+      attempt.catch(() => previousStable)
+    chain.set(entry.id, continuation)
     try {
-      await save
+      await attempt
       setCheckpointFeedback({
         severity: 'info',
         message: '利用チェックポイントを更新しました。生産計画を再作成してください。',
@@ -555,8 +565,6 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
         severity: 'error',
         message: caught instanceof Error ? caught.message : 'チェックポイントを更新できませんでした。',
       })
-    } finally {
-      if (chain.get(entry.id) === save) chain.delete(entry.id)
     }
   }
 
@@ -565,6 +573,7 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
     setRemoveError(null)
     try {
       await dependencies.deleteEntry(id)
+      checkpointSaveChainRef.current.delete(id)
       setEntries((current) => current.filter((entry) => entry.id !== id))
     } catch (caught: unknown) {
       setRemoveError(caught instanceof Error ? caught.message : 'ビルドリストから削除できませんでした。')

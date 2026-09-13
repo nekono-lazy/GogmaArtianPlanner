@@ -196,3 +196,69 @@ describe('ProductionPlanStepList', () => {
     expect(within(card(1)).getByText('対象: 削除済みまたは参照できない目標武器（target.steps.gone）')).toBeInTheDocument()
   })
 })
+
+describe('ProductionPlanStepList checkpoint milestones', () => {
+  const milestone = (
+    targetId: typeof target.id,
+    remainingOperationCount: number,
+    suffix: string,
+  ) => ({
+    buildListEntryId: `build-list.milestone.${suffix}` as never,
+    targetWeaponId: targetId,
+    checkpointGroupId: `checkpoint-group:${suffix}` as never,
+    checkpointOpportunityId: `checkpoint-opportunity:${suffix}` as never,
+    remainingOperationCount,
+  })
+
+  it('lists one persisted milestone with its Target and remaining operations', () => {
+    renderList([step('step.milestone.one', 1, { checkpointMilestones: [milestone(target.id, 2, 'a')] })])
+    const list = within(card(1)).getByRole('list', { name: 'ステップ 1 のチェックポイント到達' })
+    expect(within(card(1)).getByText('チェックポイント到達')).toBeInTheDocument()
+    expect(within(list).getAllByRole('listitem').map(({ textContent }) => textContent))
+      .toEqual(['双剣・水（理想まで残り2操作）'])
+    // Raw identifiers stay out of the normal UI.
+    expect(within(card(1)).queryByText(/BuildListEntry ID/)).not.toBeInTheDocument()
+  })
+
+  it('lists every milestone of a shared Step in stored order', () => {
+    renderList([step('step.milestone.shared', 1, {
+      progressedTargetWeaponIds: [target.id, other.id],
+      checkpointMilestones: [milestone(other.id, 1, 'b'), milestone(target.id, 2, 'a')],
+    })], true)
+    const list = within(card(1)).getByRole('list', { name: 'ステップ 1 のチェックポイント到達' })
+    expect(within(list).getAllByRole('listitem').map(({ textContent }) => textContent)).toEqual([
+      '双剣・火（理想まで残り1操作）',
+      '双剣・水（理想まで残り2操作）',
+    ])
+    expect(within(card(1)).getByText('共有操作')).toBeInTheDocument()
+  })
+
+  it('falls back to the Target ID for a milestone whose Target no longer resolves', () => {
+    renderList([step('step.milestone.gone', 1, {
+      checkpointMilestones: [milestone(targetWeaponId('target.steps.gone'), 4, 'c')],
+    })])
+    expect(within(card(1)).getByText('削除済みまたは参照できない目標武器（target.steps.gone）（理想まで残り4操作）')).toBeInTheDocument()
+  })
+
+  it('shows no milestone section for a legacy undefined field or an empty list', () => {
+    const legacy = step('step.milestone.legacy', 1)
+    delete legacy.checkpointMilestones
+    renderList([legacy, step('step.milestone.empty', 2, { checkpointMilestones: [] })])
+    expect(screen.queryByText('チェックポイント到達')).not.toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: /チェックポイント到達/ })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('heading', { level: 4 })).toHaveLength(2)
+  })
+
+  it('adds the raw identifiers only in Debug Mode', () => {
+    render(
+      <ProductionPlanStepList
+        steps={[step('step.milestone.debug', 1, { checkpointMilestones: [milestone(target.id, 2, 'dbg')] })]}
+        lookup={createTargetWeaponLookup([target, other])}
+        master={createValidMasterDataFixture()}
+        label="テスト手順"
+        debugMode
+      />,
+    )
+    expect(screen.getByText(/BuildListEntry ID: build-list\.milestone\.dbg/)).toBeInTheDocument()
+  })
+})

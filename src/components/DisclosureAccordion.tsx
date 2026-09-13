@@ -27,6 +27,10 @@ function ExpandIcon() {
  *
  * `unmountOnExit` keeps heavy content (long route traces) out of the DOM while
  * the panel is closed.
+ *
+ * `headingLevel: 'none'` is for a disclosure nested below an `h6`: HTML has no
+ * deeper heading, so the toggle keeps its full ARIA wiring but sits in a plain
+ * `div` instead of repeating the parent's level as a false sibling heading.
  */
 export function DisclosureAccordion({
   title,
@@ -35,7 +39,7 @@ export function DisclosureAccordion({
   unmountOnExit = false,
 }: {
   title: string
-  headingLevel: DisclosureHeadingLevel
+  headingLevel: DisclosureHeadingLevel | 'none'
   children: ReactNode
   unmountOnExit?: boolean
 }) {
@@ -45,7 +49,7 @@ export function DisclosureAccordion({
   return (
     <Accordion
       slotProps={{
-        heading: { component: headingLevel },
+        heading: { component: headingLevel === 'none' ? 'div' : headingLevel },
         transition: { unmountOnExit },
       }}
     >

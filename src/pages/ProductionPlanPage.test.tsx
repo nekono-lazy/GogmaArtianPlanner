@@ -2049,3 +2049,85 @@ describe('ProductionPlanPage read-only persisted Conflicts', () => {
     expect(screen.queryByText('計画の概要')).not.toBeInTheDocument()
   })
 })
+
+describe('ProductionPlanPage checkpoint milestones and heading depth', () => {
+  it('shows every persisted milestone on the physical Step that reaches it, in both views', async () => {
+    const fixture = contentFixture()
+    fixture.shared.checkpointMilestones = [
+      {
+        buildListEntryId: buildListEntryId('build-list.milestone.a'),
+        targetWeaponId: contentTargetA,
+        checkpointGroupId: 'checkpoint-group:a' as never,
+        checkpointOpportunityId: 'checkpoint-opportunity:a' as never,
+        remainingOperationCount: 2,
+      },
+      {
+        buildListEntryId: buildListEntryId('build-list.milestone.b'),
+        targetWeaponId: contentTargetB,
+        checkpointGroupId: 'checkpoint-group:b' as never,
+        checkpointOpportunityId: 'checkpoint-opportunity:b' as never,
+        remainingOperationCount: 1,
+      },
+    ]
+    fixture.plan.steps = [fixture.reserve, fixture.independent, fixture.primaryOnly, fixture.shared]
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+
+    await openPanel('全4ステップを表示')
+    const list = within(stepCard(1)).getByRole('list', { name: 'ステップ 1 のチェックポイント到達' })
+    expect(within(list).getAllByRole('listitem').map(({ textContent }) => textContent)).toEqual([
+      '双剣・水（理想まで残り2操作）',
+      '双剣・火（理想まで残り1操作）',
+    ])
+    // Only the Step carrying the metadata shows it; the Plan has no extra Step.
+    expect(screen.getAllByText('チェックポイント到達')).toHaveLength(1)
+    expect(screen.getAllByText(/^ステップ \d+$/)).toHaveLength(4)
+    expect(summaryValue('全ステップ数')).toBe('4')
+    expect(summaryValue('確保予定数')).toBe('1')
+    // The Target route shows the same persisted milestones on the shared Step.
+    await openPanel('双剣・火（2ステップ）')
+    expect(screen.getAllByText('チェックポイント到達')).toHaveLength(2)
+    // Labels inside a Step card are text, not headings: with every panel open
+    // the page outline never skips a level.
+    const levels = screen.getAllByRole('heading').map((heading) => Number(heading.tagName.slice(1)))
+    for (let index = 1; index < levels.length; index += 1) {
+      expect(levels[index] - levels[index - 1]).toBeLessThanOrEqual(1)
+    }
+    expect(screen.queryByRole('heading', { name: 'チェックポイント到達' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '想定結果' })).not.toBeInTheDocument()
+  })
+
+  it('shows no milestone section for a legacy Plan without the field or an empty list', async () => {
+    const fixture = contentFixture()
+    const legacy = { ...fixture.shared }
+    delete legacy.checkpointMilestones
+    fixture.plan.steps = [legacy, { ...fixture.primaryOnly, checkpointMilestones: [] }]
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+
+    await openPanel('全2ステップを表示')
+    expect(screen.getAllByText(/^ステップ \d+$/)).toHaveLength(2)
+    expect(screen.queryByText('チェックポイント到達')).not.toBeInTheDocument()
+  })
+
+  it('nests the what-if comparison below its participant heading', async () => {
+    const user = userEvent.setup()
+    const fixture = multiParticipantFixture()
+    const client = plannerClient(
+      async () => fixture.preparation,
+      async () => completedWhatIf(fixture.entry.id, fixture.secondTarget, 7),
+    )
+    renderPage(dependencies(fixture, client), fixture.plan.id)
+    const buttons = await screen.findAllByRole('button', { name: '比較する' })
+    await user.click(buttons[0])
+
+    expect(await screen.findByText('必要操作数: 7')).toBeInTheDocument()
+    const participant = screen.getByRole('heading', { level: 4, name: fixture.target.name })
+    const comparison = screen.getByRole('heading', { level: 5, name: '比較結果' })
+    const targetResult = screen.getByRole('heading', { level: 6, name: fixture.secondTarget.name })
+    expect(participant.closest('li')).toContainElement(comparison)
+    expect(participant.closest('li')).toContainElement(targetResult)
+    // The participant heading, the comparison and the Target result descend
+    // one level each; no two nested levels coincide.
+    expect(screen.getByRole('heading', { level: 3, name: '競合 1' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { level: 4, name: '比較結果' })).not.toBeInTheDocument()
+  })
+})
