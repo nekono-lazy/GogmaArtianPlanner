@@ -45,6 +45,7 @@ import {
 import {
   completedPlannerTermination,
 } from '../test/fixtures/plannerTermination'
+import { useSettingsStore } from '../stores/settingsStore'
 
 interface Deferred<T> {
   promise: Promise<T>
@@ -243,6 +244,14 @@ function renderPage(
     { path: '/build-list', element: <div>Build list destination</div> },
   ], { initialEntries: [`/plans/${planId}`] })
   return { router, ...render(<RouterProvider router={router} />) }
+}
+
+/**
+ * The value shown for one label of the Plan overview (`計画の概要`): the
+ * overview is a `dl`, so the value is the `dd` following the label's `dt`.
+ */
+function summaryValue(label: string): string | null | undefined {
+  return screen.getByText(label).nextElementSibling?.textContent
 }
 
 describe('ProductionPlanPage', () => {
@@ -837,7 +846,7 @@ describe('ProductionPlanPage explicit selection', () => {
     expect(deps.savePlannerResult).not.toHaveBeenCalled()
     expect(navigate).not.toHaveBeenCalled()
     expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)
-    expect(screen.getByText('Plan ID: ' + fixture.plan.id)).toBeInTheDocument()
+    expect(summaryValue('計画ID')).toBe(fixture.plan.id)
     expect(fixture.plan).toEqual(before)
     expect(client.createConstrainedPlan).toHaveBeenCalledOnce()
     expect(client.createPlan).not.toHaveBeenCalled()
@@ -872,7 +881,7 @@ describe('ProductionPlanPage explicit selection', () => {
     expect(saveContext.masterDataVersion).toBe(startContext.masterDataVersion + 1)
     expect(saveContext.rngEngineVersion).toBe(client.engineVersion)
     expect(deps.getPlan).toHaveBeenCalledWith(next.plan.id)
-    expect(await screen.findByText('Plan ID: ' + next.plan.id)).toBeInTheDocument()
+    await waitFor(() => expect(summaryValue('計画ID')).toBe(next.plan.id))
   })
 
   it('passes no-Plan results whole to Persistence and keeps the old Plan when save returns null', async () => {
@@ -887,7 +896,7 @@ describe('ProductionPlanPage explicit selection', () => {
     expect(await screen.findByText('現在の入力から新しい生産計画を作成できませんでした。')).toBeInTheDocument()
     expect(vi.mocked(deps.savePlannerResult).mock.calls[0][0]).toBe(result)
     expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)
-    expect(screen.getByText('Plan ID: ' + fixture.plan.id)).toBeInTheDocument()
+    expect(summaryValue('計画ID')).toBe(fixture.plan.id)
   })
 
   it.each(['planner', 'save', 'no-plan-with-entries'] as const)('keeps the old Plan on %s failure and allows explicit retry', async (failure) => {
@@ -905,7 +914,7 @@ describe('ProductionPlanPage explicit selection', () => {
     await clickSelection(user)
     expect(await screen.findByText(failure === 'planner' ? 'Planner failed' : 'Atomic save rejected')).toBeInTheDocument()
     expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)
-    expect(screen.getByText('Plan ID: ' + fixture.plan.id)).toBeInTheDocument()
+    expect(summaryValue('計画ID')).toBe(fixture.plan.id)
     expect(fixture.plan).toEqual(before)
     expect(client.createConstrainedPlan).toHaveBeenCalledOnce()
     if (failure !== 'planner') expect(vi.mocked(deps.savePlannerResult).mock.calls[0][0]).toBe(result)
@@ -1117,8 +1126,8 @@ describe('ProductionPlanPage selection lifecycle races', () => {
     expect(deps.savePlannerResult).toHaveBeenCalledTimes(phase === 'save' ? 1 : 0)
     expect(navigate).toHaveBeenCalledTimes(navigationCount)
     if (change !== 'unmount') {
-      expect(screen.getByText('Plan ID: ' + next.plan.id)).toBeInTheDocument()
-      expect(screen.queryByText('Plan ID: ' + fixture.plan.id)).not.toBeInTheDocument()
+      expect(summaryValue('計画ID')).toBe(next.plan.id)
+      expect(summaryValue('計画ID')).not.toBe(fixture.plan.id)
       expect(screen.queryByText(/再計算中/)).not.toBeInTheDocument()
     }
   })
@@ -1175,7 +1184,7 @@ describe('ProductionPlanPage stale persisted badges', () => {
       'BuildListEntry ID: ' + fixture.secondEntry.id,
     ])
     for (const [index, label] of labels.entries()) {
-      const participant = label.parentElement?.parentElement
+      const participant = label.closest('li')
       if (!participant) throw new Error('Missing stale participant card')
       const card = within(participant)
       expect(card.queryByText('Planner推奨') !== null).toBe(index === 0)
@@ -1300,13 +1309,15 @@ describe('ProductionPlanPage read-only Plan content', () => {
     renderPage(contentDependencies(fixture), fixture.plan.id)
 
     expect(await screen.findByText('計画の概要')).toBeInTheDocument()
-    expect(screen.getByText(`計画ID: ${fixture.plan.id}`)).toBeInTheDocument()
-    expect(screen.getByText(`作成日時: ${fixture.plan.createdAt}`)).toBeInTheDocument()
-    expect(screen.getByText('全ステップ数: 4')).toBeInTheDocument()
-    expect(screen.getByText('目標武器数: 2')).toBeInTheDocument()
+    expect(summaryValue('計画ID')).toBe(fixture.plan.id)
+    expect(summaryValue('作成日時')).toBe(fixture.plan.createdAt)
+    expect(summaryValue('全ステップ数')).toBe('4')
+    expect(summaryValue('目標武器数')).toBe('2')
     // Only `expectedResult.shouldSecure === true`, never the Target count or
     // `selectedBuildListEntryIds.length`.
-    expect(screen.getByText('確保予定数: 1')).toBeInTheDocument()
+    expect(summaryValue('確保予定数')).toBe('1')
+    // The adopted Entry count is its own figure, never presented as weapons.
+    expect(summaryValue('採用候補（BuildListEntry）')).toBe('0')
   })
 
   it('lists the persisted steps in step.order for the whole Plan', async () => {
@@ -1468,7 +1479,8 @@ describe('ProductionPlanPage read-only Plan content', () => {
     )).toBeInTheDocument()
     // Read-only authority remains the exact persisted Plan, including status
     // and steps; only the current interaction/execution path is invalidated.
-    expect(screen.getAllByText('実行中')).toHaveLength(2)
+    // Status is shown once, in the overview, exactly as persisted.
+    expect(screen.getAllByText('実行中')).toHaveLength(1)
     expect(screen.getByText('計画の概要')).toBeInTheDocument()
     await openPanel('全4ステップを表示')
     expect(screen.getAllByText(/^ステップ \d+$/)).toHaveLength(4)
@@ -1508,7 +1520,7 @@ describe('ProductionPlanPage read-only Plan content', () => {
     )).toBeInTheDocument()
     // The exact persisted content stays readable; only the current
     // interaction and execution path is closed.
-    expect(screen.getAllByText('実行中')).toHaveLength(2)
+    expect(screen.getAllByText('実行中')).toHaveLength(1)
     await openPanel('全4ステップを表示')
     expect(screen.getAllByText(/^ステップ \d+$/)).toHaveLength(4)
     expect(deps.createWorkerClient).not.toHaveBeenCalled()
@@ -1590,9 +1602,9 @@ describe('ProductionPlanPage read-only Plan content', () => {
     // read-only contents survive a Worker Client construction failure.
     expect(deps.getPlan).toHaveBeenCalledExactlyOnceWith(fixture.plan.id)
     expect(screen.getByText('計画の概要')).toBeInTheDocument()
-    expect(screen.getByText(`計画ID: ${fixture.plan.id}`)).toBeInTheDocument()
-    expect(screen.getByText('全ステップ数: 4')).toBeInTheDocument()
-    expect(screen.getByText('確保予定数: 1')).toBeInTheDocument()
+    expect(summaryValue('計画ID')).toBe(fixture.plan.id)
+    expect(summaryValue('全ステップ数')).toBe('4')
+    expect(summaryValue('確保予定数')).toBe('1')
     await openPanel('全4ステップを表示')
     expect(screen.getAllByText(/^ステップ \d+$/)).toHaveLength(4)
     // Nothing downstream of the Worker Client ran.
@@ -1683,5 +1695,439 @@ describe('ProductionPlanPage read-only Plan content', () => {
     expect(screen.getByRole('link', { name: 'ビルドリストへ戻る' })).toBeInTheDocument()
     expect(client.createWhatIfComparison).not.toHaveBeenCalled()
     expect(client.createConstrainedPlan).not.toHaveBeenCalled()
+  })
+})
+
+describe('ProductionPlanPage supplementary persisted content', () => {
+  it('shows the Plan status once, in the overview, with the adopted Entry count as its own figure', async () => {
+    const fixture = contentFixture()
+    fixture.plan.selectedBuildListEntryIds = [
+      buildListEntryId('build-list.content.a'),
+      buildListEntryId('build-list.content.b'),
+    ]
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+
+    const overview = await screen.findByRole('region', { name: '計画の概要' })
+    expect(within(overview).getByText('下書き')).toBeInTheDocument()
+    expect(screen.getAllByText('下書き')).toHaveLength(1)
+    expect(summaryValue('採用候補（BuildListEntry）')).toBe('2')
+    // The secured count still comes from `shouldSecure` alone.
+    expect(summaryValue('確保予定数')).toBe('1')
+  })
+
+  it('lists the persisted item material totals with Master labels', async () => {
+    const fixture = contentFixture()
+    fixture.plan.requiredMaterials = [
+      { materialId: 'material.fixture.active', quantity: 12 },
+      { materialId: 'material.fixture.unknown', quantity: 3 },
+    ]
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+
+    expect(await screen.findByRole('heading', { level: 2, name: '必要素材（アイテム）合計' })).toBeInTheDocument()
+    const list = screen.getByRole('list', { name: '必要素材（アイテム）合計' })
+    // Stored totals are shown as they are, never re-summed or reordered.
+    expect(within(list).getAllByRole('listitem').map(({ textContent }) => textContent)).toEqual([
+      '素材fixture× 12',
+      '不明なアイテム素材× 3',
+    ])
+  })
+
+  it('states when no item material total was recorded', async () => {
+    const fixture = contentFixture()
+    fixture.plan.requiredMaterials = []
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+    expect(await screen.findByText('記録されている必要素材（アイテム）はありません。')).toBeInTheDocument()
+  })
+
+  it('discloses the persisted rejected Entries with a reason label, detail and ID', async () => {
+    const fixture = contentFixture()
+    fixture.plan.rejectedBuildListEntries = [
+      {
+        buildListEntryId: buildListEntryId('build-list.rejected.a'),
+        reason: 'resource_conflict',
+        detail: 'Persisted rejection detail',
+      },
+      {
+        buildListEntryId: buildListEntryId('build-list.rejected.b'),
+        reason: 'longer_route',
+        detail: 'Second detail',
+      },
+    ]
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+
+    const toggle = await screen.findByRole('button', { name: '採用されなかった候補（2件）' })
+    expect(screen.getByRole('heading', { level: 2, name: '採用されなかった候補（2件）' })).toContainElement(toggle)
+    // Collapsed content is unmounted.
+    expect(screen.queryByText('Persisted rejection detail')).not.toBeInTheDocument()
+    await userEvent.click(toggle)
+    const list = await screen.findByRole('list', { name: '採用されなかった候補' })
+    const items = within(list).getAllByRole('listitem')
+    expect(items).toHaveLength(2)
+    expect(within(items[0]).getByText('他の候補と資源（RNG位置または所持武器）が競合しました')).toBeInTheDocument()
+    expect(within(items[0]).getByText('Persisted rejection detail')).toBeInTheDocument()
+    expect(within(items[0]).getByText('BuildListEntry ID: build-list.rejected.a')).toBeInTheDocument()
+    expect(within(items[1]).getByText('より短い作成ルートの候補を優先しました')).toBeInTheDocument()
+  })
+
+  it('states when no Entry was rejected', async () => {
+    const fixture = contentFixture()
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+    expect(await screen.findByText('採用されなかった候補はありません。')).toBeInTheDocument()
+  })
+
+  it('labels expected bonus slots by the persisted scope and falls back safely on null', async () => {
+    const fixture = contentFixture()
+    const normalStep = contentStep(
+      'step.content.normal', 5, 'convert_normal_to_gogma', '巨戟化',
+      contentTargetA, [contentTargetA],
+      contentExpectedResult({ restorationBonusScope: 'normal_artian' }),
+    )
+    const nullScopeStep = contentStep(
+      'step.content.null-scope', 6, 'reset_bonuses', '区分なし',
+      contentTargetA, [contentTargetA],
+      contentExpectedResult({ restorationBonusScope: null }),
+    )
+    fixture.plan.steps = [...fixture.plan.steps, normalStep, nullScopeStep]
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+
+    await openPanel('全6ステップを表示')
+    const gogma = within(stepCard(1)).getByRole('list', { name: 'ステップ 1 の予測復元ボーナス5枠' })
+    expect(within(gogma).getAllByRole('listitem').map(({ textContent }) => textContent)).toEqual([
+      '攻撃High fixture', '攻撃High fixture', '攻撃Special fixture', '攻撃High fixture', '攻撃Special fixture',
+    ])
+    expect(within(stepCard(1)).getByText('ボーナス区分: 巨戟amendment後（巨戟のボーナス）')).toBeInTheDocument()
+    const normal = within(stepCard(5)).getByRole('list', { name: 'ステップ 5 の予測復元ボーナス5枠' })
+    // The Normal-scope definition names slot 1 (attack High); Special has no
+    // Normal definition and falls back to the generic label.
+    expect(within(normal).getAllByRole('listitem').map(({ textContent }) => textContent)).toEqual([
+      '通常攻撃fixture', '通常攻撃fixture', '攻撃fixture Special fixture', '通常攻撃fixture', '攻撃fixture Special fixture',
+    ])
+    expect(within(stepCard(5)).getByText('ボーナス区分: 通常継承（通常アーティアのボーナス）')).toBeInTheDocument()
+    const nullScope = within(stepCard(6)).getByRole('list', { name: 'ステップ 6 の予測復元ボーナス5枠' })
+    expect(within(nullScope).getAllByRole('listitem').map(({ textContent }) => textContent)).toEqual([
+      '攻撃fixture High fixture', '攻撃fixture High fixture', '攻撃fixture Special fixture', '攻撃fixture High fixture', '攻撃fixture Special fixture',
+    ])
+    expect(within(stepCard(6)).getByText('ボーナス区分: 記録なし')).toBeInTheDocument()
+  })
+
+  it('wires every disclosure with unique ids, a heading slot and unmounted collapsed content', async () => {
+    const fixture = contentFixture()
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+
+    const timeline = await screen.findByRole('button', { name: '全4ステップを表示' })
+    const routeA = screen.getByRole('button', { name: '双剣・水（2ステップ）' })
+    const routeB = screen.getByRole('button', { name: '双剣・火（2ステップ）' })
+    const toggles = [timeline, routeA, routeB]
+    const ids = toggles.flatMap((toggle) => [toggle.id, toggle.getAttribute('aria-controls') ?? ''])
+    expect(ids.every((id) => id !== '')).toBe(true)
+    expect(new Set(ids).size).toBe(ids.length)
+    for (const toggle of toggles) {
+      expect(screen.getByRole('heading', { level: 3, name: toggle.textContent ?? '' })).toContainElement(toggle)
+      expect(within(toggle).queryByRole('heading')).not.toBeInTheDocument()
+      // Collapsed content is unmounted, so the controlled region does not
+      // exist yet; it appears, labelled by the summary, once opened.
+      expect(document.getElementById(toggle.getAttribute('aria-controls') ?? '')).toBeNull()
+    }
+    // Closed panels keep the step lists out of the DOM.
+    expect(screen.queryByText(/^ステップ \d+$/)).not.toBeInTheDocument()
+    await userEvent.click(timeline)
+    const region = document.getElementById(timeline.getAttribute('aria-controls') ?? '')
+    expect(region).toHaveAttribute('aria-labelledby', timeline.id)
+    expect(screen.getByRole('list', { name: '計画全体の実行順' }).tagName).toBe('OL')
+    expect(screen.getAllByRole('heading', { level: 4, name: /^ステップ \d+$/ })).toHaveLength(4)
+  })
+
+  it('shows the generation-time CalculationContext only in Debug Mode', async () => {
+    const fixture = contentFixture()
+    fixture.plan.baseSnapshot.calculationContext = {
+      ...fixture.plan.baseSnapshot.calculationContext,
+      rngEngineVersion: 'snapshot-engine',
+    }
+    const deps = contentDependencies(fixture)
+    const offView = renderPage(deps, fixture.plan.id)
+    expect(await screen.findByText('計画の概要')).toBeInTheDocument()
+    expect(screen.queryByText('生成時CalculationContext（Debug）')).not.toBeInTheDocument()
+    offView.unmount()
+
+    useSettingsStore.setState({ debugMode: true })
+    try {
+      renderPage(deps, fixture.plan.id)
+      const toggle = await screen.findByRole('button', { name: '生成時CalculationContext（Debug）' })
+      expect(screen.getByRole('heading', { level: 2, name: '生成時CalculationContext（Debug）' })).toContainElement(toggle)
+      await userEvent.click(toggle)
+      const table = await screen.findByRole('table', { name: '生成時CalculationContext' })
+      expect(within(table).getByText('snapshot-engine')).toBeInTheDocument()
+      expect(within(table).getAllByText(fixture.plan.calculationContext.rngEngineVersion).length).toBeGreaterThanOrEqual(1)
+      expect(within(table).getByRole('rowheader', { name: 'appSchemaVersion' })).toBeInTheDocument()
+    } finally {
+      useSettingsStore.setState({ debugMode: false })
+    }
+  })
+
+  it('groups conflict participants under the conflict heading with text badges', async () => {
+    const fixture = multiParticipantFixture()
+    fixture.plan.conflicts[0].recommendedBuildListEntryId = fixture.entry.id
+    fixture.plan.conflicts[0].selectedBuildListEntryId = fixture.secondEntry.id
+    const client = plannerClient(async () => fixture.preparation)
+    renderPage(dependencies(fixture, client), fixture.plan.id)
+
+    expect(await screen.findByRole('heading', { level: 2, name: '競合と解決' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 3, name: '競合 1' })).toBeInTheDocument()
+    expect(screen.getByText('同じ巨戟カウンター位置')).toBeInTheDocument()
+    const participants = within(screen.getByRole('list', { name: '競合 1 の参加候補' })).getAllByRole('listitem')
+    expect(participants).toHaveLength(2)
+    expect(within(participants[0]).getByRole('heading', { level: 4, name: fixture.target.name })).toBeInTheDocument()
+    expect(within(participants[0]).getByText('Planner推奨')).toBeInTheDocument()
+    expect(within(participants[0]).queryByText('現在選択中')).not.toBeInTheDocument()
+    expect(within(participants[1]).getByText('現在選択中')).toBeInTheDocument()
+    expect(within(participants[1]).queryByText('Planner推奨')).not.toBeInTheDocument()
+    expect(screen.getAllByText('利用可能')).toHaveLength(2)
+    for (const participant of participants) {
+      expect(within(participant).getByRole('button', { name: '比較する' })).toBeEnabled()
+      expect(within(participant).getByRole('button', { name: 'この候補を優先' })).toBeEnabled()
+    }
+    // No Alert is shown while nothing is wrong.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+})
+
+describe('ProductionPlanPage read-only persisted Conflicts', () => {
+  function participantCards() {
+    return within(screen.getByRole('list', { name: '競合 1 の参加候補' })).getAllByRole('listitem')
+  }
+
+  function expectReadOnlyParticipants(reason: string) {
+    const cards = participantCards()
+    expect(cards).toHaveLength(2)
+    // Persisted recommendation / selection badges keep their display contract.
+    expect(within(cards[0]).getByText('Planner推奨')).toBeInTheDocument()
+    expect(within(cards[0]).queryByText('現在選択中')).not.toBeInTheDocument()
+    expect(within(cards[1]).getByText('現在選択中')).toBeInTheDocument()
+    expect(within(cards[1]).queryByText('Planner推奨')).not.toBeInTheDocument()
+    for (const card of cards) {
+      expect(within(card).getByText('利用不可')).toBeInTheDocument()
+      expect(within(card).getByText(reason)).toBeInTheDocument()
+      expect(within(card).queryByText('利用可能')).not.toBeInTheDocument()
+      for (const name of ['比較する', 'この候補を優先']) {
+        const button = within(card).getByRole('button', { name })
+        expect(button).toBeDisabled()
+        fireEvent.click(button)
+      }
+    }
+    // Nothing that only the current preparation knows is inferred from the
+    // persisted Plan: no Target name, no checkpoint involvement.
+    expect(screen.queryByText(fixtureTargetName)).not.toBeInTheDocument()
+    expect(screen.queryByText('チェックポイント関与')).not.toBeInTheDocument()
+    expect(screen.queryByText(
+      'この競合には選択済みチェックポイントが関係しています。作成リストでチェックポイントを変更または解除してください。',
+    )).not.toBeInTheDocument()
+  }
+
+  let fixtureTargetName = ''
+
+  function readOnlyFixture() {
+    const fixture = multiParticipantFixture()
+    fixture.plan.conflicts[0].recommendedBuildListEntryId = fixture.entry.id
+    fixture.plan.conflicts[0].selectedBuildListEntryId = fixture.secondEntry.id
+    // Persisted metadata that must never become a current authority.
+    fixture.plan.conflicts[0].checkpointParticipants = [{
+      buildListEntryId: fixture.secondEntry.id,
+      checkpointGroupId: 'checkpoint-group:persisted' as never,
+      checkpointOpportunityId: 'checkpoint-opportunity:persisted' as never,
+    }]
+    fixtureTargetName = fixture.target.name
+    return fixture
+  }
+
+  it('shows the persisted Conflicts read-only while the Worker preparation is still running, then switches to current availability', async () => {
+    const fixture = readOnlyFixture()
+    const pending = deferred<PlannerInteractionPreparationResult>()
+    const client = plannerClient(() => pending.promise)
+    const deps = dependencies(fixture, client)
+    renderPage(deps, fixture.plan.id)
+
+    expect(await screen.findByText('計画の概要')).toBeInTheDocument()
+    expect(screen.getByText('現在の保存状態から操作可否を確認しています。')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: '競合と解決' })).toBeInTheDocument()
+    expect(screen.getByText('Persisted fixture conflict')).toBeInTheDocument()
+    expect(screen.getByText('同じ巨戟カウンター位置')).toBeInTheDocument()
+    expectReadOnlyParticipants('現在の操作可否を確認しています。')
+    expect(client.createWhatIfComparison).not.toHaveBeenCalled()
+    expect(client.createConstrainedPlan).not.toHaveBeenCalled()
+
+    await act(async () => {
+      pending.resolve(fixture.preparation)
+      await pending.promise
+    })
+    // The fresh preparation is the availability authority once it arrives.
+    expect(await screen.findAllByText('利用可能')).toHaveLength(2)
+    expect(screen.queryByText('現在の操作可否を確認しています。')).not.toBeInTheDocument()
+    expect(screen.queryByText('現在の保存状態から操作可否を確認しています。')).not.toBeInTheDocument()
+    for (const card of participantCards()) {
+      expect(within(card).getByRole('button', { name: '比較する' })).toBeEnabled()
+      expect(within(card).getByRole('button', { name: 'この候補を優先' })).toBeEnabled()
+    }
+    expect(screen.getByText(fixture.target.name)).toBeInTheDocument()
+  })
+
+  it('keeps the persisted Conflicts visible read-only after the Worker preparation failed', async () => {
+    const fixture = readOnlyFixture()
+    const client = plannerClient(async () => {
+      throw new Error('Unexpected preparation failure')
+    })
+    const deps = dependencies(fixture, client)
+    renderPage(deps, fixture.plan.id)
+
+    expect(await screen.findByText('Unexpected preparation failure')).toBeInTheDocument()
+    // The Worker failure is an error, never a stale Plan.
+    expect(screen.queryByText(/再計算が必要な生産計画です/)).not.toBeInTheDocument()
+    expect(screen.getByText('計画の概要')).toBeInTheDocument()
+    expect(summaryValue('計画ID')).toBe(fixture.plan.id)
+    expect(screen.getByRole('heading', { level: 2, name: '競合と解決' })).toBeInTheDocument()
+    expect(screen.getByText('Persisted fixture conflict')).toBeInTheDocument()
+    expectReadOnlyParticipants('現在の操作可否を確認できないため、この候補は操作できません。')
+    expect(client.createWhatIfComparison).not.toHaveBeenCalled()
+    expect(client.createConstrainedPlan).not.toHaveBeenCalled()
+    expect(deps.savePlannerResult).not.toHaveBeenCalled()
+  })
+
+  it('gives every stale participant its unavailable reason beside the persisted badges', async () => {
+    const fixture = readOnlyFixture()
+    fixture.plan.status = 'stale'
+    const client = plannerClient(async () => fixture.preparation)
+    const deps = dependencies(fixture, client)
+    renderPage(deps, fixture.plan.id)
+
+    expect(await screen.findByText(
+      'この生産計画は現在の状態と一致しません。ビルドリストから再計算してください。',
+    )).toBeInTheDocument()
+    expect(screen.getByText('Persisted fixture conflict')).toBeInTheDocument()
+    expectReadOnlyParticipants('この生産計画は再計算が必要なため、この候補は操作できません。')
+    expect(deps.createInput).not.toHaveBeenCalled()
+    expect(client.prepareInteraction).not.toHaveBeenCalled()
+  })
+
+  it('uses the same read-only reason for a calculation-context-incompatible Plan', async () => {
+    const fixture = readOnlyFixture()
+    fixture.plan.calculationContext.appSchemaVersion = 9
+    fixture.plan.baseSnapshot.calculationContext.appSchemaVersion = 9
+    const deps = dependencies(fixture, plannerClient(async () => fixture.preparation))
+    deps.currentCalculationContext = {
+      ...fixture.plan.calculationContext,
+      appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
+    }
+    renderPage(deps, fixture.plan.id)
+
+    expect(await screen.findByText(
+      'この生産計画は現在の計算契約と互換性がありません。ビルドリストから再計算してください。',
+    )).toBeInTheDocument()
+    expectReadOnlyParticipants('この生産計画は再計算が必要なため、この候補は操作できません。')
+  })
+
+  it('keeps the empty Conflict presentation in a read-only state', async () => {
+    const fixture = readOnlyFixture()
+    fixture.plan.conflicts = []
+    const pending = deferred<PlannerInteractionPreparationResult>()
+    const client = plannerClient(() => pending.promise)
+    renderPage(dependencies(fixture, client), fixture.plan.id)
+
+    expect(await screen.findByText('計画の概要')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: '競合と解決' })).toBeInTheDocument()
+    expect(screen.getByText('この生産計画に表示する競合はありません。')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '比較する' })).not.toBeInTheDocument()
+    pending.resolve({ status: 'ready', validBuildListEntryIds: [], excludedBuildListEntries: [], currentConflicts: [] })
+  })
+
+  it('shows no Conflict section when the Plan itself could not be loaded', async () => {
+    const fixture = readOnlyFixture()
+    const deps = dependencies(fixture, plannerClient(async () => fixture.preparation))
+    vi.mocked(deps.getPlan).mockRejectedValue(new Error('計画を読み込めませんでした。'))
+    renderPage(deps, fixture.plan.id)
+
+    expect(await screen.findByText('計画を読み込めませんでした。')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { level: 2, name: '競合と解決' })).not.toBeInTheDocument()
+    expect(screen.queryByText('計画の概要')).not.toBeInTheDocument()
+  })
+})
+
+describe('ProductionPlanPage checkpoint milestones and heading depth', () => {
+  it('shows every persisted milestone on the physical Step that reaches it, in both views', async () => {
+    const fixture = contentFixture()
+    fixture.shared.checkpointMilestones = [
+      {
+        buildListEntryId: buildListEntryId('build-list.milestone.a'),
+        targetWeaponId: contentTargetA,
+        checkpointGroupId: 'checkpoint-group:a' as never,
+        checkpointOpportunityId: 'checkpoint-opportunity:a' as never,
+        remainingOperationCount: 2,
+      },
+      {
+        buildListEntryId: buildListEntryId('build-list.milestone.b'),
+        targetWeaponId: contentTargetB,
+        checkpointGroupId: 'checkpoint-group:b' as never,
+        checkpointOpportunityId: 'checkpoint-opportunity:b' as never,
+        remainingOperationCount: 1,
+      },
+    ]
+    fixture.plan.steps = [fixture.reserve, fixture.independent, fixture.primaryOnly, fixture.shared]
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+
+    await openPanel('全4ステップを表示')
+    const list = within(stepCard(1)).getByRole('list', { name: 'ステップ 1 のチェックポイント到達' })
+    expect(within(list).getAllByRole('listitem').map(({ textContent }) => textContent)).toEqual([
+      '双剣・水（理想まで残り2操作）',
+      '双剣・火（理想まで残り1操作）',
+    ])
+    // Only the Step carrying the metadata shows it; the Plan has no extra Step.
+    expect(screen.getAllByText('チェックポイント到達')).toHaveLength(1)
+    expect(screen.getAllByText(/^ステップ \d+$/)).toHaveLength(4)
+    expect(summaryValue('全ステップ数')).toBe('4')
+    expect(summaryValue('確保予定数')).toBe('1')
+    // The Target route shows the same persisted milestones on the shared Step.
+    await openPanel('双剣・火（2ステップ）')
+    expect(screen.getAllByText('チェックポイント到達')).toHaveLength(2)
+    // Labels inside a Step card are text, not headings: with every panel open
+    // the page outline never skips a level.
+    const levels = screen.getAllByRole('heading').map((heading) => Number(heading.tagName.slice(1)))
+    for (let index = 1; index < levels.length; index += 1) {
+      expect(levels[index] - levels[index - 1]).toBeLessThanOrEqual(1)
+    }
+    expect(screen.queryByRole('heading', { name: 'チェックポイント到達' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '想定結果' })).not.toBeInTheDocument()
+  })
+
+  it('shows no milestone section for a legacy Plan without the field or an empty list', async () => {
+    const fixture = contentFixture()
+    const legacy = { ...fixture.shared }
+    delete legacy.checkpointMilestones
+    fixture.plan.steps = [legacy, { ...fixture.primaryOnly, checkpointMilestones: [] }]
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+
+    await openPanel('全2ステップを表示')
+    expect(screen.getAllByText(/^ステップ \d+$/)).toHaveLength(2)
+    expect(screen.queryByText('チェックポイント到達')).not.toBeInTheDocument()
+  })
+
+  it('nests the what-if comparison below its participant heading', async () => {
+    const user = userEvent.setup()
+    const fixture = multiParticipantFixture()
+    const client = plannerClient(
+      async () => fixture.preparation,
+      async () => completedWhatIf(fixture.entry.id, fixture.secondTarget, 7),
+    )
+    renderPage(dependencies(fixture, client), fixture.plan.id)
+    const buttons = await screen.findAllByRole('button', { name: '比較する' })
+    await user.click(buttons[0])
+
+    expect(await screen.findByText('必要操作数: 7')).toBeInTheDocument()
+    const participant = screen.getByRole('heading', { level: 4, name: fixture.target.name })
+    const comparison = screen.getByRole('heading', { level: 5, name: '比較結果' })
+    const targetResult = screen.getByRole('heading', { level: 6, name: fixture.secondTarget.name })
+    expect(participant.closest('li')).toContainElement(comparison)
+    expect(participant.closest('li')).toContainElement(targetResult)
+    // The participant heading, the comparison and the Target result descend
+    // one level each; no two nested levels coincide.
+    expect(screen.getByRole('heading', { level: 3, name: '競合 1' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { level: 4, name: '比較結果' })).not.toBeInTheDocument()
   })
 })

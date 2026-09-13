@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   compromiseCheckpointBadgeLabel,
   candidateSearchProgressPhaseLabels,
+  conflictKindLabels,
+  rejectedBuildListEntryReasonLabels,
   getRngMissingRequirementLabel,
   getRouteOperationLabel,
   ownedWeaponStatusLabels,
@@ -29,6 +31,25 @@ describe('presentation labels', () => {
     expect(skippedRouteReasonLabels.master_data_unavailable).toContain('マスターデータ')
     expect(staleReasonLabels.target_definition_changed).toContain('目標武器')
     expect(rngStateSourceLabels.gogma_seed_finder_import).toBe('GogmaSeedFinderから取得')
+  })
+
+  it('names every persisted rejection reason and conflict kind for the Plan view', () => {
+    expect(Object.keys(rejectedBuildListEntryReasonLabels).sort()).toEqual([
+      'already_satisfied',
+      'dominated_by_better_candidate',
+      'longer_route',
+      'lower_priority',
+      'requires_protected_weapon',
+      'resource_conflict',
+    ])
+    expect(rejectedBuildListEntryReasonLabels.resource_conflict).toContain('競合')
+    expect(Object.keys(conflictKindLabels).sort()).toEqual([
+      'same_gogma_counter',
+      'same_normal_counter',
+      'same_owned_weapon_consumed',
+      'same_skill_counter',
+    ])
+    expect(conflictKindLabels.same_skill_counter).toContain('スキルカウンター')
   })
 
   it('names the Candidate Search progress phases', () => {

@@ -183,6 +183,61 @@ describe('CompromiseCheckpointList', () => {
     expect(onToggle).toHaveBeenCalledWith(alternativeGroup, alternativeGroup.opportunities[0], true)
   })
 
+  it('explains a selection in Search terms by default and in Build List terms on request', () => {
+    const searchText =
+      '選択すると、この到達点を作成途中で必ず経由する条件として作成リストへ登録します。何も選ばなければ理想品まで進みます。性能ごとに選べる到達点は1つまでです。'
+    const buildListText =
+      '選択中のチェックポイントは、この候補を作成する途中で必ず経由する条件としてPlannerに渡されます。変更すると既存の生産計画は再計算が必要です。性能ごとに選べる到達点は1つまでです。'
+    const { unmount } = renderList([practicalGroup])
+    expect(screen.getByText(searchText)).toBeInTheDocument()
+    unmount()
+
+    render(
+      <CompromiseCheckpointList
+        groups={[practicalGroup]}
+        weaponTypeId="weapon.fixture.a"
+        master={createValidMasterDataFixture()}
+        selectedOpportunityIds={[]}
+        onToggle={vi.fn()}
+        selectionContext="build_list"
+      />,
+    )
+    expect(screen.getByText(buildListText)).toBeInTheDocument()
+    expect(screen.queryByText(searchText)).not.toBeInTheDocument()
+    // The selection controls are the same in both contexts.
+    expect(screen.getByRole('checkbox', { name: '2手目（理想まで残り3操作）' })).toBeInTheDocument()
+  })
+
+  it('stops creating headings below h6 while keeping every disclosure operable', async () => {
+    const user = userEvent.setup()
+    render(
+      <CompromiseCheckpointList
+        groups={[practicalGroup, alternativeGroup]}
+        weaponTypeId="weapon.fixture.a"
+        master={createValidMasterDataFixture()}
+        selectedOpportunityIds={[]}
+        onToggle={vi.fn()}
+        headingLevel="h5"
+      />,
+    )
+    expect(screen.getByRole('heading', { level: 5, name: '途中で利用可能な妥協チェックポイント' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 6, name: 'チェックポイント 1' })).toBeInTheDocument()
+    // The later-arrival disclosure sits below h6: same ARIA wiring, no heading.
+    const later = screen.getByRole('button', { name: 'その他の到達点（1）' })
+    expect(screen.queryByRole('heading', { name: 'その他の到達点（1）' })).not.toBeInTheDocument()
+    expect(later).toHaveAttribute('aria-controls')
+    await user.click(later)
+    expect(await screen.findByRole('checkbox', { name: '4手目（理想まで残り1操作）' })).toBeInTheDocument()
+    // The secondary disclosure is a sibling of the primary groups (h6), and
+    // the groups inside it are labelled text rather than repeated h6s.
+    const secondary = screen.getByRole('button', { name: 'その他の候補（1）' })
+    expect(screen.getByRole('heading', { level: 6, name: 'その他の候補（1）' })).toContainElement(secondary)
+    await user.click(secondary)
+    expect(await screen.findByText('チェックポイント 2')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'チェックポイント 2' })).not.toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: '3手目（理想まで残り2操作）' })).toBeInTheDocument()
+  })
+
   it('renders read-only without checkboxes when no toggle handler is supplied', () => {
     render(
       <CompromiseCheckpointList

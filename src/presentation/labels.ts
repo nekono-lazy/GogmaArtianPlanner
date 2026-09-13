@@ -1,10 +1,12 @@
 import type {
   BuildListEntryStaleReason,
   CompromiseConditionMatch,
+  ConflictKind,
   NormalArtianRarity,
   OwnedWeaponStatus,
   PlanStepOperationType,
   ProductionPlanStatus,
+  RejectedBuildListEntry,
   RngStateSource,
   RouteKind,
   RouteOperation,
@@ -97,6 +99,31 @@ export const productionPlanStatusLabels: Record<ProductionPlanStatus, string> = 
   completed: '完了',
   stale: '再計算が必要',
   abandoned: '破棄済み',
+}
+
+/**
+ * Why the Planner left a BuildListEntry out of a persisted Plan
+ * (`docs/DATA_MODEL.md` 11.9). Display only: the persisted `detail` string is
+ * shown beside it and is never parsed to decide anything.
+ */
+export const rejectedBuildListEntryReasonLabels: Record<
+  RejectedBuildListEntry['reason'],
+  string
+> = {
+  lower_priority: '優先度の高い目標武器の候補を優先しました',
+  resource_conflict: '他の候補と資源（RNG位置または所持武器）が競合しました',
+  longer_route: 'より短い作成ルートの候補を優先しました',
+  already_satisfied: '目標武器はすでに満たされています',
+  requires_protected_weapon: '保護中の武器を変更する必要があるため使用できません',
+  dominated_by_better_candidate: 'より良い候補があるため採用されませんでした',
+}
+
+/** The shared resource a persisted `PlanConflict` competes for (`docs/DATA_MODEL.md` 11.8). */
+export const conflictKindLabels: Record<ConflictKind, string> = {
+  same_gogma_counter: '同じ巨戟カウンター位置',
+  same_skill_counter: '同じスキルカウンター位置',
+  same_normal_counter: '同じ通常アーティアカウンター位置',
+  same_owned_weapon_consumed: '同じ所持武器の使用',
 }
 
 export const planStepOperationLabels: Record<PlanStepOperationType, string> = {

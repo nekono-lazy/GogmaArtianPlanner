@@ -1,4 +1,4 @@
-import { Alert, Divider, Paper, Stack, Typography } from '@mui/material'
+import { Alert, Box, Paper, Stack, Typography } from '@mui/material'
 import type { TargetWeapon } from '../../domain/models/publicTypes'
 import type {
   PlannerWhatIfCalculationResult,
@@ -8,22 +8,38 @@ import {
   presentPlannerWhatIfInvalidResolution,
   presentPlannerWhatIfNoResult,
 } from '../../services/planner/presentProductionPlanWhatIf'
+import {
+  hasDeeperHeadingLevel,
+  nextHeadingLevel,
+  type SectionHeadingLevel,
+} from '../headingLevel'
 
 interface ProductionPlanWhatIfComparisonProps {
   result: PlannerWhatIfCalculationResult
   targetWeapons: TargetWeapon[]
+  /**
+   * Heading level of 「比較結果」, one below the participant heading the
+   * caller embeds this under. Each Target result takes the next level; below
+   * `h6` a Target name is labelled text rather than a false sibling heading.
+   */
+  headingLevel: SectionHeadingLevel
 }
 
 function assertNever(value: never): never {
   throw new Error(`Unexpected what-if value: ${String(value)}`)
 }
 
+/**
+ * One Target's outcome. `estimatedOperationCount` is the main distance; the
+ * three advances are relative amounts, never absolute Counter values, and a
+ * `null` Normal advance is "not represented", never `0`.
+ */
 function WhatIfOutcome({ outcome }: { outcome: PlannerWhatIfOutcome }) {
   switch (outcome.status) {
     case 'found':
       return (
-        <Stack spacing={0.5}>
-          <Typography variant="body2">
+        <Stack spacing={0.5} className="tabular-nums">
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>
             必要操作数: {outcome.distance.estimatedOperationCount}
           </Typography>
           <Typography variant="caption">
@@ -55,47 +71,78 @@ function WhatIfOutcome({ outcome }: { outcome: PlannerWhatIfOutcome }) {
   }
 }
 
+/**
+ * The transient what-if preview for one scenario.
+ *
+ * `alternatives` is shown in the Domain's stable order; no UI sort is added.
+ * Each typed failure keeps its own presentation instead of being folded into
+ * a generic "no result".
+ */
 export function ProductionPlanWhatIfComparison({
   result,
   targetWeapons,
+  headingLevel,
 }: ProductionPlanWhatIfComparisonProps) {
+  const targetLevel = hasDeeperHeadingLevel(headingLevel) ? nextHeadingLevel(headingLevel) : null
   switch (result.status) {
     case 'completed':
       return (
-        <Paper variant="outlined" sx={{ p: 2 }}>
-          <Stack spacing={2}>
-            <Typography component="h4" variant="subtitle1">
+        <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 }, minWidth: 0 }}>
+          <Stack spacing={1.5}>
+            <Typography component={headingLevel} variant="subtitle1">
               比較結果
             </Typography>
             {result.comparison.alternatives.length === 0 && (
               <Typography variant="body2">比較対象となる別の目標はありません。</Typography>
             )}
-            {result.comparison.alternatives.map((alternative) => {
-              const target = targetWeapons.find(
-                ({ id }) => id === alternative.targetWeaponId,
-              )
-              return (
-                <Stack spacing={1} key={alternative.targetWeaponId}>
-                  <Typography component="h5" variant="subtitle2">
-                    {target?.name ?? alternative.targetWeaponId}
-                  </Typography>
-                  <Paper variant="outlined" sx={{ p: 1.5 }}>
-                    <Stack spacing={1}>
-                      <Typography variant="subtitle2">理想候補</Typography>
-                      <WhatIfOutcome outcome={alternative.outcome} />
+            {result.comparison.alternatives.length > 0 && (
+              <Box
+                component="ul"
+                sx={{
+                  m: 0,
+                  p: 0,
+                  display: 'grid',
+                  gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))' },
+                  gap: 1,
+                }}
+              >
+                {result.comparison.alternatives.map((alternative) => {
+                  const target = targetWeapons.find(
+                    ({ id }) => id === alternative.targetWeaponId,
+                  )
+                  return (
+                    <Stack
+                      component="li"
+                      spacing={1}
+                      key={alternative.targetWeaponId}
+                      sx={{
+                        listStyle: 'none',
+                        border: 1,
+                        borderColor: 'divider',
+                        borderRadius: 1,
+                        p: 1.5,
+                        minWidth: 0,
+                      }}
+                    >
+                      <Typography component={targetLevel ?? 'div'} variant="subtitle2" sx={{ overflowWrap: 'anywhere' }}>
+                        {target?.name ?? alternative.targetWeaponId}
+                      </Typography>
+                      <Stack spacing={0.5}>
+                        <Typography variant="caption" color="text.secondary">理想候補</Typography>
+                        <WhatIfOutcome outcome={alternative.outcome} />
+                      </Stack>
                     </Stack>
-                  </Paper>
-                  <Divider />
-                </Stack>
-              )
-            })}
+                  )
+                })}
+              </Box>
+            )}
           </Stack>
         </Paper>
       )
     case 'planner_input_not_ready':
       return (
         <Alert severity="warning">
-          <Typography variant="subtitle2">
+          <Typography component="p" variant="subtitle2">
             Planner入力を準備できませんでした
           </Typography>
           {result.issues.map((issue, index) => (
@@ -124,7 +171,7 @@ export function ProductionPlanWhatIfComparison({
     case 'invalid_fixed_resolution':
       return (
         <Alert severity="warning">
-          <Typography variant="subtitle2">
+          <Typography component="p" variant="subtitle2">
             {presentPlannerWhatIfInvalidResolution(result.reason)}
           </Typography>
           <Typography variant="body2">{result.detail}</Typography>

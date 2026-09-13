@@ -18,7 +18,9 @@ import { bonusLabel } from './search/searchPresentation'
  *
  * `scope` selects the scope-specific Master definition label. Callers that
  * know the scope of what they render pass it; omitting it keeps the historical
- * lookup of `bonusLabel` for call sites that predate scope-aware display.
+ * lookup of `bonusLabel` for call sites that predate scope-aware display. An
+ * explicit `null` - a persisted result whose scope was not recorded - uses the
+ * generic Master type + rank label instead of guessing a scope.
  */
 export function RestorationBonusSlots({
   bonuses,
@@ -31,7 +33,7 @@ export function RestorationBonusSlots({
   bonuses: RestorationBonusSet
   weaponTypeId: string
   master: MasterDataRoot
-  scope?: ArtianBonusScope
+  scope?: ArtianBonusScope | null
   variant?: 'filled' | 'outlined'
   /** Accessible name of the slot list. */
   label?: string

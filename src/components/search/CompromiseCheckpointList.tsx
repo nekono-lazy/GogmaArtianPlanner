@@ -1,6 +1,7 @@
 import { useId } from 'react'
 import { Alert, Box, Checkbox, FormControlLabel, Paper, Stack, Typography } from '@mui/material'
 import { DisclosureAccordion, type DisclosureHeadingLevel } from '../DisclosureAccordion'
+import { hasDeeperHeadingLevel, nextHeadingLevel } from '../headingLevel'
 import { RestorationBonusSlots } from '../RestorationBonusSlots'
 import { StatusChip } from '../StatusChip'
 import { SearchDefinitionItem, SearchDefinitionList } from './SearchDefinitionList'
@@ -17,6 +18,25 @@ import {
   restorationBonusScopeLabels,
 } from '../../presentation/labels'
 import { groupSkillLabel, seriesSkillLabel } from './searchPresentation'
+
+/**
+ * Where an editable checkpoint list is shown.
+ *
+ * The selection semantics are identical in both places - one opportunity per
+ * group, a hard Planner constraint - but the explanatory sentence differs:
+ * on the Search screen a selection is *registered* together with the
+ * Candidate, while on the Build List the Candidate is already registered and
+ * a change makes the existing Plan a recalculation target. The owner states
+ * the context explicitly; it is never inferred from other props.
+ */
+export type CompromiseCheckpointSelectionContext = 'search' | 'build_list'
+
+const selectionDescriptions: Record<CompromiseCheckpointSelectionContext, string> = {
+  search:
+    '選択すると、この到達点を作成途中で必ず経由する条件として作成リストへ登録します。何も選ばなければ理想品まで進みます。性能ごとに選べる到達点は1つまでです。',
+  build_list:
+    '選択中のチェックポイントは、この候補を作成する途中で必ず経由する条件としてPlannerに渡されます。変更すると既存の生産計画は再計算が必要です。性能ごとに選べる到達点は1つまでです。',
+}
 
 export interface CompromiseCheckpointListProps {
   groups: readonly CompromiseCheckpointGroup[]
@@ -39,19 +59,8 @@ export interface CompromiseCheckpointListProps {
    * sequential wherever the list is embedded.
    */
   headingLevel?: DisclosureHeadingLevel
-}
-
-function nextHeadingLevel(level: DisclosureHeadingLevel): DisclosureHeadingLevel {
-  switch (level) {
-    case 'h2':
-      return 'h3'
-    case 'h3':
-      return 'h4'
-    case 'h4':
-      return 'h5'
-    default:
-      return 'h6'
-  }
+  /** Which screen the editable explanation is written for. Defaults to Search. */
+  selectionContext?: CompromiseCheckpointSelectionContext
 }
 
 function opportunityLabel(opportunity: CompromiseCheckpointOpportunity): string {
@@ -109,9 +118,19 @@ function CheckpointGroupCard({
   group: CompromiseCheckpointGroup
   /** 1-based display number; presentation only, never an identity. */
   index: number
-  headingLevel: DisclosureHeadingLevel
+  /**
+   * Heading level of the group title, or `null` when the group sits below an
+   * `h6` and its title is therefore labelled text rather than a heading.
+   */
+  headingLevel: DisclosureHeadingLevel | null
 }) {
   const headingId = useId()
+  // A later-arrival disclosure below the deepest heading level keeps its ARIA
+  // wiring but creates no heading of its own.
+  const laterArrivalsLevel =
+    headingLevel !== null && hasDeeperHeadingLevel(headingLevel)
+      ? nextHeadingLevel(headingLevel)
+      : 'none'
   const selected = new Set<string>(selectedOpportunityIds)
   // Ascending by Route position, so the first entry is the earliest arrival.
   const [primary, ...later] = group.opportunities
@@ -125,7 +144,7 @@ function CheckpointGroupCard({
     >
       <Stack spacing={1.25}>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
-          <Typography id={headingId} component={headingLevel} variant="subtitle2">
+          <Typography id={headingId} component={headingLevel ?? 'div'} variant="subtitle2">
             チェックポイント {index}
           </Typography>
           <StatusChip
@@ -175,7 +194,7 @@ function CheckpointGroupCard({
           // usable arrival (`docs/SEARCH_SPEC.md` 5.8.3).
           <DisclosureAccordion
             title={`その他の到達点（${later.length}）`}
-            headingLevel={nextHeadingLevel(headingLevel)}
+            headingLevel={laterArrivalsLevel}
           >
             <Stack>
               {later.map((opportunity) => (
@@ -207,12 +226,16 @@ function CheckpointGroupCard({
  * selectable behind them (`docs/UI_FLOW.md` 9).
  */
 export function CompromiseCheckpointList(props: CompromiseCheckpointListProps) {
-  const { groups, onToggle, headingLevel = 'h4' } = props
+  const { groups, onToggle, headingLevel = 'h4', selectionContext = 'search' } = props
   const sectionHeadingId = useId()
   const primary = groups.filter(({ isDisplaySecondary }) => !isDisplaySecondary)
   const secondary = groups.filter(({ isDisplaySecondary }) => isDisplaySecondary)
-  const groupLevel = nextHeadingLevel(headingLevel)
-  const secondaryGroupLevel = nextHeadingLevel(groupLevel)
+  // Each nesting level takes the next heading level while one exists; once
+  // `h6` is reached, deeper structure is expressed without new headings so a
+  // child never repeats its parent's level (`docs/UI_FLOW.md` 3.1).
+  const groupLevel = hasDeeperHeadingLevel(headingLevel) ? nextHeadingLevel(headingLevel) : null
+  const secondaryGroupLevel =
+    groupLevel !== null && hasDeeperHeadingLevel(groupLevel) ? nextHeadingLevel(groupLevel) : null
   return (
     <Box component="section" aria-labelledby={sectionHeadingId}>
       <Stack spacing={1}>
@@ -225,7 +248,7 @@ export function CompromiseCheckpointList(props: CompromiseCheckpointListProps) {
           <>
             {onToggle && (
               <Typography variant="body2" color="text.secondary">
-                選択すると、この到達点を作成途中で必ず経由する条件として作成リストへ登録します。何も選ばなければ理想品まで進みます。性能ごとに選べる到達点は1つまでです。
+                {selectionDescriptions[selectionContext]}
               </Typography>
             )}
             {primary.map((group, position) => (
@@ -240,7 +263,7 @@ export function CompromiseCheckpointList(props: CompromiseCheckpointListProps) {
             {secondary.length > 0 && (
               <DisclosureAccordion
                 title={`その他の候補（${secondary.length}）`}
-                headingLevel={groupLevel}
+                headingLevel={groupLevel ?? 'none'}
               >
                 <Stack spacing={1}>
                   <Typography variant="body2" color="text.secondary">
