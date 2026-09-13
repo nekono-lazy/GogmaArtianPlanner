@@ -30,7 +30,9 @@ export function PageShell({ title, description, actions, children }: PageShellPr
           <Typography component="h1" variant="h1">
             {title}
           </Typography>
-          <Typography color="text.secondary">{description}</Typography>
+          <Typography color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+            {description}
+          </Typography>
         </Stack>
         {actions && (
           <Stack

@@ -306,20 +306,19 @@ function ConflictItem({
           // A conflict a selected checkpoint takes part in has no winner: the
           // Domain refuses such a resolution, so the only way forward is the
           // Build List selection (`docs/UI_FLOW.md` 11.1).
-          <Alert
-            severity="warning"
-            action={
+          <Alert severity="warning">
+            <Stack spacing={1.5} sx={{ alignItems: 'flex-start' }}>
+              <Typography variant="body2">{CHECKPOINT_CONFLICT_MESSAGE}</Typography>
               <Button
                 component={RouterLink}
                 to="/build-list"
+                variant="outlined"
                 color="inherit"
-                size="small"
+                sx={{ minHeight: 44 }}
               >
                 ビルドリストでチェックポイントを変更
               </Button>
-            }
-          >
-            {CHECKPOINT_CONFLICT_MESSAGE}
+            </Stack>
           </Alert>
         )}
         <Box
@@ -974,7 +973,7 @@ export function ProductionPlanPage({
   return (
     <PageShell
       title="生産計画"
-      description={`作成計画（${loadedPlan?.id ?? planId ?? '未指定'}）の全体を確認します。`}
+      description={`生産計画（${loadedPlan?.id ?? planId ?? '未指定'}）の全体を確認します。`}
     >
       <Stack spacing={{ xs: 2, md: 3 }}>
         {state.status === 'loading_plan' && (
@@ -990,18 +989,27 @@ export function ProductionPlanPage({
           <Alert severity="error">{state.message}</Alert>
         )}
         {state.status === 'stale' && (
-          <Alert
-            severity="warning"
-            action={
-              <Button component={RouterLink} to="/build-list" color="inherit" size="small">
+          // The link sits inside the message instead of in the Alert action
+          // slot, so at 375px it wraps under the text with a full-height
+          // touch target rather than squeezing the message beside it.
+          <Alert severity="warning">
+            <AlertTitle>再計算が必要な生産計画です</AlertTitle>
+            <Stack spacing={1.5} sx={{ alignItems: 'flex-start' }}>
+              <Typography variant="body2">
+                {state.reason === 'calculation_context_changed'
+                  ? 'この生産計画は現在の計算契約と互換性がありません。ビルドリストから再計算してください。'
+                  : 'この生産計画は現在の状態と一致しません。ビルドリストから再計算してください。'}
+              </Typography>
+              <Button
+                component={RouterLink}
+                to="/build-list"
+                variant="outlined"
+                color="inherit"
+                sx={{ minHeight: 44 }}
+              >
                 ビルドリストへ戻る
               </Button>
-            }
-          >
-            <AlertTitle>再計算が必要な生産計画です</AlertTitle>
-            {state.reason === 'calculation_context_changed'
-              ? 'この生産計画は現在の計算契約と互換性がありません。ビルドリストから再計算してください。'
-              : 'この生産計画は現在の状態と一致しません。ビルドリストから再計算してください。'}
+            </Stack>
           </Alert>
         )}
         {/* Read-only Plan contents come straight from the exact persisted Plan,

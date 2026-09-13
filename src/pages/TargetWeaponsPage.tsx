@@ -482,7 +482,6 @@ export function TargetWeaponsPage({
           {draft && (
             <DialogContent dividers sx={{ px: { xs: 2, sm: 3 } }}>
               <Stack spacing={3}>
-                {formError && <Alert severity="error">{formError}</Alert>}
                 <Stack component="section" spacing={1.5}>
                   <Typography component="h3" variant="h3">基本情報</Typography>
                   <TextField
@@ -711,6 +710,14 @@ export function TargetWeaponsPage({
                 />
               </Stack>
             </DialogContent>
+          )}
+          {/* Outside the scrolling content, directly above 保存: a failure
+              reported after saving from the bottom of a long form stays in
+              view instead of scrolling out at the top (`docs/UI_FLOW.md` 3.1). */}
+          {formError && (
+            <Alert severity="error" sx={{ mx: { xs: 2, sm: 3 }, mt: 1.5, flexShrink: 0 }}>
+              {formError}
+            </Alert>
           )}
           <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: 1.5, gap: 1 }}>
             <Button onClick={closeDialog} sx={{ minHeight: 44 }}>キャンセル</Button>

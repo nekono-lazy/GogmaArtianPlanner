@@ -56,6 +56,16 @@ const body1 = {
 }
 
 export const appTheme = createTheme({
+  /**
+   * Keyboard focus ring. MUI 9 keeps this opt-in; without it a focused
+   * Button, IconButton, Checkbox, Switch, Chip, MenuItem, ListItemButton or
+   * AccordionSummary shows only its faint ripple, which is not a visible
+   * focus indicator on a light surface. `true` applies the MUI default ring
+   * (2px solid primary, 2px offset, inset automatically on clip-prone
+   * components) to every focusable MUI control at once, so no screen needs
+   * a `&.Mui-focusVisible` override of its own.
+   */
+  focusVisible: true,
   palette: {
     mode: 'light',
     primary: {

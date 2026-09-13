@@ -624,15 +624,24 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
         )}
 
         {loaded && entries.length === 0 && (
-          <Alert
-            severity="info"
-            action={
-              <Button component={RouterLink} to="/search" color="inherit" size="small">
+          // The link sits inside the message rather than in the Alert action
+          // slot, so it wraps under the text at 375px with a full-height
+          // touch target instead of squeezing the message beside it.
+          <Alert severity="info">
+            <Stack spacing={1.5} sx={{ alignItems: 'flex-start' }}>
+              <Typography variant="body2">
+                ビルドリストは空です。検索結果から候補を追加してください。
+              </Typography>
+              <Button
+                component={RouterLink}
+                to="/search"
+                variant="outlined"
+                color="inherit"
+                sx={{ minHeight: 44 }}
+              >
                 候補検索へ
               </Button>
-            }
-          >
-            ビルドリストは空です。検索結果から候補を追加してください。
+            </Stack>
           </Alert>
         )}
 

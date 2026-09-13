@@ -154,6 +154,38 @@ describe('AppLayout', () => {
     expect(within(banner).getByText('Monster Hunter Wilds')).toBeInTheDocument()
   })
 
+  it('exposes exactly one navigation landmark and one main landmark on desktop', () => {
+    mockDesktopViewport()
+    renderAppLayout('/rng')
+
+    expect(screen.getAllByRole('navigation')).toHaveLength(1)
+    expect(screen.getByRole('main')).toHaveAttribute('id', 'main-content')
+  })
+
+  it('leaves no empty navigation landmark around the closed mobile Drawer', () => {
+    renderAppLayout('/rng')
+
+    // The temporary Drawer is kept mounted but hidden, so no navigation
+    // landmark - and in particular no empty one - is exposed while closed.
+    expect(screen.queryAllByRole('navigation')).toHaveLength(0)
+    expect(screen.getByRole('main')).toHaveAttribute('id', 'main-content')
+  })
+
+  it('offers a skip link that moves keyboard focus to the main content without changing the route', async () => {
+    const user = userEvent.setup()
+    mockDesktopViewport()
+    renderAppLayout('/rng')
+
+    await user.tab()
+    const skipLink = screen.getByRole('link', { name: 'メインコンテンツへ移動' })
+    expect(skipLink).toHaveFocus()
+
+    await user.keyboard('{Enter}')
+    expect(screen.getByRole('main')).toHaveFocus()
+    // The HashRouter route is untouched: the RNG page is still rendered.
+    expect(screen.getByText('RNG画面')).toBeInTheDocument()
+  })
+
   it('opens the mobile Drawer from the hamburger button, reaching every primary screen', async () => {
     const user = userEvent.setup()
     renderAppLayout('/')
