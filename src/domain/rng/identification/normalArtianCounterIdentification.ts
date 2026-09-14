@@ -1,4 +1,10 @@
-import type { ElementId, RestorationBonusSet } from '../../models/publicTypes'
+import type {
+  ElementId,
+  NormalArtianRarity,
+  RestorationBonus,
+  RestorationBonusSet,
+  WeaponTypeId,
+} from '../../models/publicTypes'
 import { V1_NORMAL_ARTIAN_RARITY } from '../../models/common'
 import type { RngEngine, RngPredictionSupport } from '../rngEngine'
 import { gameVerifiedNormalCandidatesForWeaponAndElement } from '../production/gameNormalBonuses'
@@ -6,6 +12,7 @@ import { selectReferenceNormalLotteryIdsFromRawValues } from '../production/norm
 import { toReferenceNormalFinalAttribute } from '../production/referenceAdapters'
 import {
   referenceNormalIdFromRestorationBonus,
+  restorationBonusFromReferenceNormalId,
   type ReferenceNormalCandidate,
   type ReferenceNormalLotteryId,
 } from '../production/referenceNormalBonuses'
@@ -64,6 +71,52 @@ export function normalArtianAttributeClassFromElementId(
   elementId: ElementId,
 ): NormalArtianAttributeClass {
   return toReferenceNormalFinalAttribute(elementId) === 1 ? 'none' : 'attribute_present'
+}
+
+/**
+ * The semantic bonuses one observation slot may hold for a weapon type and
+ * attribute class: the Production pool of that class
+ * (`gameVerifiedNormalCandidatesForWeaponAndElement()`) mapped slot-wise
+ * through the reference semantic mapping, in pool order. It is the observation
+ * UI's option authority, so the UI never carries a lottery table of its own.
+ *
+ * A weapon type with no Production pool raises
+ * `UnsupportedGameVerifiedNormalPredictionError` exactly as the pool does;
+ * nothing falls back to the reference pools.
+ */
+export function normalArtianCounterObservationBonusOptions(
+  weaponTypeId: WeaponTypeId,
+  attributeClass: NormalArtianAttributeClass,
+): readonly RestorationBonus[] {
+  return gameVerifiedNormalCandidatesForWeaponAndElement(
+    weaponTypeId,
+    normalArtianAttributeClassRepresentativeElementId(attributeClass),
+  )
+    .map((candidate) => restorationBonusFromReferenceNormalId(weaponTypeId, candidate.referenceId))
+    .filter((bonus): bonus is RestorationBonus => bonus !== null)
+}
+
+/**
+ * Whether the active Engine can identify this weapon type's Counter at all,
+ * judged the way the kernel judges a request: the Engine capability first,
+ * then `getPredictionSupport()` for both attribute classes. The first
+ * unsupported reason wins (`normal_pool_unverified` for Switch Axe), so a UI
+ * can refuse to start before any observation is entered, with the same
+ * structured reason the kernel would return.
+ */
+export function getNormalArtianCounterIdentificationSupport(
+  weaponTypeId: WeaponTypeId,
+  rarity: NormalArtianRarity,
+  engine: RngEngine,
+): RngPredictionSupport {
+  if (!engine.capabilities.supportsNormalArtianPrediction) {
+    return { supported: false, reason: 'engine_capability_unavailable' }
+  }
+  for (const attributeClass of NORMAL_ARTIAN_ATTRIBUTE_CLASSES) {
+    const support = normalPredictionSupport({ weaponTypeId, rarity }, attributeClass, engine)
+    if (!support.supported) return support
+  }
+  return { supported: true }
 }
 
 type ReferenceNormalIdTuple = ReturnType<typeof selectReferenceNormalLotteryIdsFromRawValues>
@@ -186,7 +239,7 @@ function distinctAttributeClasses(
 }
 
 function normalPredictionSupport(
-  input: NormalArtianCounterIdentificationInput,
+  input: Pick<NormalArtianCounterIdentificationInput, 'weaponTypeId' | 'rarity'>,
   attributeClass: NormalArtianAttributeClass,
   engine: RngEngine,
 ): RngPredictionSupport {

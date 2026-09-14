@@ -1,20 +1,86 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NormalArtianCounter } from '../domain/models/publicTypes'
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { createDefaultAppSettings, createInitialRngState } from '../domain/models/factories'
+import type { AppSettings, NormalArtianCounter, RngState } from '../domain/models/publicTypes'
 import { useSettingsStore } from '../stores/settingsStore'
+import {
+  createFakeNormalArtianCounterIdentificationClient,
+  type FakeNormalArtianCounterIdentificationClient,
+} from '../test/fixtures/fakeNormalArtianCounterIdentificationClient'
 import { NormalCountersPage, type NormalCountersPageDependencies } from './NormalCountersPage'
 
-const fixture: NormalArtianCounter = { id: 'weapon.dual_blades:8', weaponTypeId: 'weapon.dual_blades', rarity: 8, counter: null, isConfirmed: false, observationCount: 0, lastObservedAt: null, candidateCount: null, createdAt: '2026-08-29T00:00:00.000Z', updatedAt: '2026-08-29T00:00:00.000Z' }
-const confirmedFixture: NormalArtianCounter = { ...fixture, id: 'weapon.great_sword:8', weaponTypeId: 'weapon.great_sword', counter: 98765, isConfirmed: true, observationCount: 4, candidateCount: 1 }
-const unconfirmedFixture: NormalArtianCounter = { ...fixture, id: 'weapon.long_sword:8', weaponTypeId: 'weapon.long_sword', counter: 43210, isConfirmed: false }
-function dependencies(values: NormalArtianCounter[] = [fixture]) { return { getAll: vi.fn(async () => values.map((value) => structuredClone(value))), save: vi.fn(async (value: NormalArtianCounter) => value) } satisfies NormalCountersPageDependencies }
+const FIXTURE_TIME = '2026-08-29T00:00:00.000Z'
+const NOW = '2026-09-14T12:00:00.000Z'
+const ATTACK = '基礎攻撃力強化'
+const AFFINITY = '会心率強化'
 
-async function rowFor(name: string): Promise<HTMLElement> {
-  const heading = await screen.findByRole('heading', { name })
+const fixture: NormalArtianCounter = { id: 'weapon.dual_blades:8', weaponTypeId: 'weapon.dual_blades', rarity: 8, counter: null, isConfirmed: false, observationCount: 0, lastObservedAt: null, candidateCount: null, createdAt: FIXTURE_TIME, updatedAt: FIXTURE_TIME }
+const confirmedFixture: NormalArtianCounter = { ...fixture, id: 'weapon.great_sword:8', weaponTypeId: 'weapon.great_sword', counter: 98765, isConfirmed: true, observationCount: 4, candidateCount: 1, lastObservedAt: '2026-08-30T00:00:00.000Z' }
+const unconfirmedFixture: NormalArtianCounter = { ...fixture, id: 'weapon.long_sword:8', weaponTypeId: 'weapon.long_sword', counter: 43210, isConfirmed: false }
+const multipleFixture: NormalArtianCounter = { ...fixture, id: 'weapon.hammer:8', weaponTypeId: 'weapon.hammer', counter: null, isConfirmed: false, observationCount: 1, candidateCount: 19 }
+
+function confirmedBaseSeedState(): RngState {
+  const state = createInitialRngState(FIXTURE_TIME)
+  return { ...state, baseSeed: { value: '51231782', isConfirmed: true, source: 'observation' } }
+}
+
+function unconfirmedBaseSeedState(): RngState {
+  const state = createInitialRngState(FIXTURE_TIME)
+  return { ...state, baseSeed: { value: '51231782', isConfirmed: false, source: 'manual' } }
+}
+
+interface TestDependencies extends NormalCountersPageDependencies {
+  readonly clients: FakeNormalArtianCounterIdentificationClient[]
+  getAll: Mock<NormalCountersPageDependencies['getAll']>
+  save: Mock<NormalCountersPageDependencies['save']>
+  createIdentificationClient: Mock<NormalCountersPageDependencies['createIdentificationClient']>
+}
+
+function dependencies(
+  values: NormalArtianCounter[] = [fixture],
+  options: { rngState?: RngState; settings?: AppSettings } = {},
+): TestDependencies {
+  const clients: FakeNormalArtianCounterIdentificationClient[] = []
+  let requestCounter = 0
+  return {
+    clients,
+    getAll: vi.fn(async () => values.map((value) => structuredClone(value))),
+    save: vi.fn(async (value: NormalArtianCounter) => value),
+    ensureRngState: vi.fn(async () => options.rngState ?? confirmedBaseSeedState()),
+    ensureSettings: vi.fn(async () => options.settings ?? createDefaultAppSettings(FIXTURE_TIME)),
+    createIdentificationClient: vi.fn(() => {
+      const client = createFakeNormalArtianCounterIdentificationClient()
+      clients.push(client)
+      return client
+    }),
+    now: () => NOW,
+    requestId: () => `request-${++requestCounter}`,
+  }
+}
+
+async function rowFor(name: string, options: { hidden?: boolean } = {}): Promise<HTMLElement> {
+  // While a modal Dialog is open MUI marks the page behind it aria-hidden, so
+  // a row asserted during a session is queried with `hidden: true`.
+  const heading = await screen.findByRole('heading', { name, hidden: options.hidden ?? false })
   const row = heading.closest<HTMLElement>('li')
   if (!row) throw new Error('Counter row was not rendered')
   return row
+}
+
+async function openIdentification(user: ReturnType<typeof userEvent.setup>, weaponName: string): Promise<HTMLElement> {
+  await user.click(within(await rowFor(weaponName)).getByRole('button', { name: '観測・検索' }))
+  return screen.findByRole('dialog', { name: `通常アーティアCounter検索: ${weaponName}` })
+}
+
+async function pickSlot(user: ReturnType<typeof userEvent.setup>, dialog: HTMLElement, number: number, slot: number, optionName: string) {
+  const card = within(dialog).getByRole('listitem', { name: `観測${number}` })
+  await user.click(within(card).getByRole('combobox', { name: new RegExp(`観測${number} 復元ボーナス${slot}`) }))
+  await user.click(within(await screen.findByRole('listbox')).getByRole('option', { name: optionName }))
+}
+
+async function fillObservation(user: ReturnType<typeof userEvent.setup>, dialog: HTMLElement, number: number, names: readonly [string, string, string, string, string]) {
+  for (let slot = 0; slot < 5; slot += 1) await pickSlot(user, dialog, number, slot + 1, names[slot]!)
 }
 
 describe('NormalCountersPage', () => {
@@ -27,10 +93,11 @@ describe('NormalCountersPage', () => {
     expect(screen.getAllByText(/検索に未使用/).length).toBeGreaterThan(0)
     expect(screen.queryByLabelText('Counter raw値')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'デバッグ保存' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/観測検索は未実装/)).not.toBeInTheDocument()
   })
 
   it('lists the 14 rarity-8 weapon types once each, with status, counts and last observation', async () => {
-    render(<NormalCountersPage dependencies={dependencies([fixture, confirmedFixture, unconfirmedFixture])} />)
+    render(<NormalCountersPage dependencies={dependencies([fixture, confirmedFixture, unconfirmedFixture, multipleFixture])} />)
     const list = (await screen.findByRole('heading', { name: '双剣' })).closest<HTMLElement>('ul')
     if (!list) throw new Error('Counter list was not rendered')
     // One DOM structure serves PC and smartphone, so every weapon type appears
@@ -45,6 +112,7 @@ describe('NormalCountersPage', () => {
     expect(confirmed.getByText('最終観測')).toBeInTheDocument()
     expect(within(await rowFor('太刀')).getByText('未確定・検索に未使用')).toBeInTheDocument()
     expect(within(await rowFor('双剣')).getByText('未設定・検索に未使用')).toBeInTheDocument()
+    expect(within(await rowFor('ハンマー')).getByText('候補複数・検索に未使用')).toBeInTheDocument()
     expect(screen.getByText('確定 1 / 14')).toBeInTheDocument()
   })
 
@@ -65,6 +133,7 @@ describe('NormalCountersPage', () => {
     await screen.findByRole('heading', { name: '大剣' })
     expect(screen.queryByText(/98765/)).not.toBeInTheDocument()
     expect(screen.queryByText(/43210/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/51231782/)).not.toBeInTheDocument()
   })
 
   it('shows raw Counter values only inside the Debug Mode editor', async () => {
@@ -102,4 +171,213 @@ describe('NormalCountersPage', () => {
     expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ counter: null, isConfirmed: false, rarity: 8 }))
     expect(await screen.findByText('カウンターを保存しました。')).toBeInTheDocument()
   }, 15_000)
+
+  it('cannot start a search until the Base Seed is confirmed, and requires nothing else of the RNG state', async () => {
+    const deps = dependencies([fixture], { rngState: unconfirmedBaseSeedState() })
+    render(<NormalCountersPage dependencies={deps} />)
+    const row = within(await rowFor('双剣'))
+    expect(await screen.findByText(/先にRNG状態設定でBase Seedを確定してください/)).toBeInTheDocument()
+    expect(row.getByRole('button', { name: '観測・検索' })).toBeDisabled()
+    expect(deps.createIdentificationClient).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('starts a search with only the Base Seed confirmed, even while Skill / Gogma Counters are unknown', async () => {
+    const user = userEvent.setup()
+    const state = confirmedBaseSeedState()
+    expect(state.skillCounter.value).toBeNull()
+    expect(state.gogmaCounter.value).toBeNull()
+    const deps = dependencies([fixture], { rngState: state })
+    render(<NormalCountersPage dependencies={deps} />)
+    await rowFor('双剣')
+    expect(screen.queryByText(/先にRNG状態設定でBase Seedを確定してください/)).not.toBeInTheDocument()
+    const dialog = await openIdentification(user, '双剣')
+    expect(deps.createIdentificationClient).toHaveBeenCalledTimes(1)
+    expect(within(dialog).getByText('観測後はゲームを保存しないでください。')).toBeInTheDocument()
+    expect(within(dialog).getAllByRole('combobox')).toHaveLength(5)
+    expect(within(dialog).queryByText(/レア度/)).not.toBeInTheDocument()
+  }, 15_000)
+
+  it('keeps Switch Axe outside Production support: the row explains it and never opens a session', async () => {
+    const deps = dependencies()
+    render(<NormalCountersPage dependencies={deps} />)
+    const row = within(await rowFor('スラッシュアックス'))
+    const button = row.getByRole('button', { name: '観測・検索' })
+    expect(button).toBeDisabled()
+    expect(row.getByText(/Production検証対象外のため、Counter検索できません/)).toBeInTheDocument()
+    expect(button).toHaveAccessibleDescription(/スラッシュアックス/)
+    expect(row.queryByText(/normal_pool_unverified/)).not.toBeInTheDocument()
+    expect(deps.createIdentificationClient).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    // Every supported weapon type stays available.
+    for (const name of ['弓', 'ライトボウガン', 'ヘビィボウガン', '大剣', '片手剣', '双剣', '太刀', 'ハンマー', '狩猟笛', 'ランス', 'ガンランス', 'チャージアックス', '操虫棍']) {
+      expect(within(await rowFor(name)).getByRole('button', { name: '観測・検索' })).toBeEnabled()
+    }
+  }, 15_000)
+
+  it('builds the initial range from AppSettings.defaultSearchLimit and sends it inclusively', async () => {
+    const user = userEvent.setup()
+    const deps = dependencies([fixture], { settings: { ...createDefaultAppSettings(FIXTURE_TIME), defaultSearchLimit: 1234 } })
+    render(<NormalCountersPage dependencies={deps} />)
+    const dialog = await openIdentification(user, '双剣')
+    expect(within(dialog).getByLabelText('検索範囲の開始')).toHaveValue(0)
+    expect(within(dialog).getByLabelText('検索範囲の終了')).toHaveValue(1234)
+    await fillObservation(user, dialog, 1, [ATTACK, ATTACK, ATTACK, ATTACK, ATTACK])
+    await user.click(within(dialog).getByRole('button', { name: '検索' }))
+    const client = deps.clients[0]!
+    await waitFor(() => expect(client.identify).toHaveBeenCalledTimes(1))
+    expect(client.lastCall().requestId).toBe('request-1')
+    expect(client.lastCall().input).toMatchObject({
+      baseSeed: '51231782',
+      weaponTypeId: 'weapon.dual_blades',
+      rarity: 8,
+      normalCounterRange: { startInclusive: 0, endInclusive: 1234 },
+    })
+    expect(client.lastCall().input.observations).toHaveLength(1)
+  }, 15_000)
+
+  it('saves the unique start Counter C itself with the observation count, never C + N', async () => {
+    const user = userEvent.setup()
+    const deps = dependencies([fixture])
+    render(<NormalCountersPage dependencies={deps} />)
+    const dialog = await openIdentification(user, '双剣')
+    await fillObservation(user, dialog, 1, [ATTACK, ATTACK, ATTACK, ATTACK, ATTACK])
+    await user.click(within(dialog).getByRole('button', { name: '観測を追加' }))
+    await fillObservation(user, dialog, 2, [AFFINITY, ATTACK, ATTACK, ATTACK, AFFINITY])
+    await user.click(within(dialog).getByRole('button', { name: '検索' }))
+    const client = deps.clients[0]!
+    await waitFor(() => expect(client.identify).toHaveBeenCalledTimes(1))
+    expect(client.lastCall().input.observations).toHaveLength(2)
+    await client.resolveLast({ matches: [{ startNormalCounter: 777 }], searchedCounterRange: { startInclusive: 0, endInclusive: 5000 }, isTruncated: false })
+    expect(await within(dialog).findByText('候補が1件に絞り込まれました')).toBeInTheDocument()
+    expect(screen.queryByText(/777/)).not.toBeInTheDocument()
+
+    const confirmButton = within(dialog).getByRole('button', { name: 'Counterを確定' })
+    expect(confirmButton).toBeDisabled()
+    await user.click(within(dialog).getByRole('checkbox', { name: /調査前の状態へ戻ったことを確認しました/ }))
+    await user.click(confirmButton)
+
+    await waitFor(() => expect(deps.save).toHaveBeenCalledTimes(1))
+    const saved = deps.save.mock.calls[0]![0]
+    expect(saved).toEqual({
+      id: 'weapon.dual_blades:8',
+      weaponTypeId: 'weapon.dual_blades',
+      rarity: 8,
+      counter: 777,
+      isConfirmed: true,
+      observationCount: 2,
+      candidateCount: 1,
+      lastObservedAt: NOW,
+      createdAt: FIXTURE_TIME,
+      updatedAt: NOW,
+    })
+    expect(saved.counter).not.toBe(777 + 2)
+    expect(await screen.findByText('双剣のカウンターを確定しました。')).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(client.dispose).toHaveBeenCalledTimes(1)
+    expect(within(await rowFor('双剣')).getByText('確定・検索に使用')).toBeInTheDocument()
+    expect(screen.getByText('確定 1 / 14')).toBeInTheDocument()
+    // The persisted history stays the Counter row alone: no observation is stored.
+    expect(saved).not.toHaveProperty('observations')
+  }, 30_000)
+
+  it('creates the row for a weapon type with no persisted Counter when its unique result is confirmed', async () => {
+    const user = userEvent.setup()
+    const deps = dependencies([])
+    render(<NormalCountersPage dependencies={deps} />)
+    const dialog = await openIdentification(user, '弓')
+    await fillObservation(user, dialog, 1, [ATTACK, ATTACK, ATTACK, ATTACK, ATTACK])
+    await user.click(within(dialog).getByRole('button', { name: '検索' }))
+    const client = deps.clients[0]!
+    await waitFor(() => expect(client.identify).toHaveBeenCalledTimes(1))
+    await client.resolveLast({ matches: [{ startNormalCounter: 4 }], searchedCounterRange: { startInclusive: 0, endInclusive: 5000 }, isTruncated: false })
+    await user.click(await within(dialog).findByRole('checkbox', { name: /調査前の状態へ戻ったことを確認しました/ }))
+    await user.click(within(dialog).getByRole('button', { name: 'Counterを確定' }))
+    await waitFor(() => expect(deps.save).toHaveBeenCalledTimes(1))
+    expect(deps.save.mock.calls[0]![0]).toEqual({
+      id: 'weapon.bow:8',
+      weaponTypeId: 'weapon.bow',
+      rarity: 8,
+      counter: 4,
+      isConfirmed: true,
+      observationCount: 1,
+      candidateCount: 1,
+      lastObservedAt: NOW,
+      createdAt: NOW,
+      updatedAt: NOW,
+    })
+  }, 20_000)
+
+  it('shows the raw unique Counter inside the Dialog only in Debug Mode', async () => {
+    useSettingsStore.getState().setDebugMode(true)
+    const user = userEvent.setup()
+    const deps = dependencies([fixture])
+    render(<NormalCountersPage dependencies={deps} />)
+    const dialog = await openIdentification(user, '双剣')
+    await fillObservation(user, dialog, 1, [ATTACK, ATTACK, ATTACK, ATTACK, ATTACK])
+    await user.click(within(dialog).getByRole('button', { name: '検索' }))
+    const client = deps.clients[0]!
+    await waitFor(() => expect(client.identify).toHaveBeenCalledTimes(1))
+    await client.resolveLast({ matches: [{ startNormalCounter: 777 }], searchedCounterRange: { startInclusive: 0, endInclusive: 5000 }, isTruncated: false })
+    expect(await within(dialog).findByText('デバッグ診断: startNormalCounter = 777')).toBeInTheDocument()
+  }, 15_000)
+
+  it('keeps a failed confirmation save inside the Dialog without touching the list', async () => {
+    const user = userEvent.setup()
+    const deps = dependencies([fixture])
+    deps.save = vi.fn(async (): Promise<NormalArtianCounter> => { throw new Error('IndexedDB write failed') })
+    render(<NormalCountersPage dependencies={deps} />)
+    const dialog = await openIdentification(user, '双剣')
+    await fillObservation(user, dialog, 1, [ATTACK, ATTACK, ATTACK, ATTACK, ATTACK])
+    await user.click(within(dialog).getByRole('button', { name: '検索' }))
+    const client = deps.clients[0]!
+    await waitFor(() => expect(client.identify).toHaveBeenCalledTimes(1))
+    await client.resolveLast({ matches: [{ startNormalCounter: 777 }], searchedCounterRange: { startInclusive: 0, endInclusive: 5000 }, isTruncated: false })
+    await user.click(await within(dialog).findByRole('checkbox', { name: /調査前の状態へ戻ったことを確認しました/ }))
+    await user.click(within(dialog).getByRole('button', { name: 'Counterを確定' }))
+    expect(await within(dialog).findByText(/Counterを確定できませんでした: IndexedDB write failed/)).toBeInTheDocument()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(within(await rowFor('双剣', { hidden: true })).getByText('未設定・検索に未使用')).toBeInTheDocument()
+    expect(client.dispose).not.toHaveBeenCalled()
+  }, 15_000)
+
+  it('unconfirms a Counter while keeping its value, observation count, candidate count and last observation', async () => {
+    const user = userEvent.setup()
+    const deps = dependencies([confirmedFixture, fixture])
+    render(<NormalCountersPage dependencies={deps} />)
+    expect(within(await rowFor('双剣')).queryByRole('button', { name: '確定解除' })).not.toBeInTheDocument()
+    await user.click(within(await rowFor('大剣')).getByRole('button', { name: '確定解除' }))
+    await waitFor(() => expect(deps.save).toHaveBeenCalledTimes(1))
+    expect(deps.save.mock.calls[0]![0]).toEqual({
+      ...confirmedFixture,
+      isConfirmed: false,
+      updatedAt: NOW,
+    })
+    expect(await screen.findByText('大剣のカウンターの確定を解除しました。')).toBeInTheDocument()
+    const row = within(await rowFor('大剣'))
+    expect(row.getByText('未確定・検索に未使用')).toBeInTheDocument()
+    expect(row.queryByRole('button', { name: '確定解除' })).not.toBeInTheDocument()
+    expect(screen.getByText('確定 0 / 14')).toBeInTheDocument()
+    expect(screen.queryByText(/98765/)).not.toBeInTheDocument()
+  }, 15_000)
+
+  it('disposes the Worker Client when the Dialog is closed and when the page unmounts', async () => {
+    const user = userEvent.setup()
+    const deps = dependencies([fixture])
+    const { unmount } = render(<NormalCountersPage dependencies={deps} />)
+    const dialog = await openIdentification(user, '双剣')
+    await user.click(within(dialog).getByRole('button', { name: '閉じる' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(deps.clients[0]!.dispose).toHaveBeenCalledTimes(1)
+
+    const secondDialog = await openIdentification(user, '双剣')
+    expect(deps.clients).toHaveLength(2)
+    await fillObservation(user, secondDialog, 1, [ATTACK, ATTACK, ATTACK, ATTACK, ATTACK])
+    await user.click(within(secondDialog).getByRole('button', { name: '検索' }))
+    const client = deps.clients[1]!
+    await waitFor(() => expect(client.identify).toHaveBeenCalledTimes(1))
+    unmount()
+    expect(client.cancel).toHaveBeenCalledWith('request-1')
+    expect(client.dispose).toHaveBeenCalledTimes(1)
+  }, 20_000)
 })
