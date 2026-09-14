@@ -266,6 +266,7 @@ function compileObservations(
       }
       throw error
     }
+    requireProducibleByPool(observation, referenceIds, candidates)
     return {
       candidates,
       referenceIds: [
@@ -273,6 +274,43 @@ function compileObservations(
       ],
     }
   })
+}
+
+/**
+ * An observation the selected game-verified pool can never draw is malformed
+ * input, not a legitimate zero-match search. Two conditions are checked: every
+ * slot's reference ID must be a candidate of that observation's attribute-class
+ * pool, and no candidate may occur more often than its `maximumOccurrences`,
+ * because the pool step removes a candidate once it reaches that count.
+ */
+function requireProducibleByPool(
+  observation: NormalArtianCounterObservation,
+  referenceIds: readonly ReferenceNormalLotteryId[],
+  candidates: readonly ReferenceNormalCandidate[],
+): void {
+  const occurrences = new Map<ReferenceNormalLotteryId, number>()
+  for (let slot = 0; slot < referenceIds.length; slot += 1) {
+    const referenceId = referenceIds[slot]!
+    const candidate = candidates.find((entry) => entry.referenceId === referenceId)
+    if (candidate === undefined) {
+      const bonus = observation.bonuses[slot]!
+      throw new NormalArtianCounterIdentificationError(
+        'invalid_input',
+        `Slot ${slot + 1} (${bonus.bonusTypeId} / ${bonus.bonusRankId}) cannot be produced by the ` +
+          `${observation.attributeClass} Normal Artian pool of this weapon type.`,
+      )
+    }
+    const count = (occurrences.get(referenceId) ?? 0) + 1
+    occurrences.set(referenceId, count)
+    if (count > candidate.maximumOccurrences) {
+      const bonus = observation.bonuses[slot]!
+      throw new NormalArtianCounterIdentificationError(
+        'invalid_input',
+        `${bonus.bonusTypeId} / ${bonus.bonusRankId} occurs more than ${candidate.maximumOccurrences} ` +
+          `times, which the ${observation.attributeClass} Normal Artian pool of this weapon type cannot produce.`,
+      )
+    }
+  }
 }
 
 function advance(state: ReferencePrngState, steps: number): ReferencePrngState {

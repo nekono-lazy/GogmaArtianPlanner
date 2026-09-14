@@ -282,16 +282,29 @@ describe('Normal Artian Counter Identification kernel', () => {
     }, engine)
     expect(result.matches).toEqual([{ startNormalCounter: 0 }])
 
-    // The same Fire slots declared elementless select the none pool and no longer match.
+    // The Fire slots contain Element, which the none pool cannot draw: declaring
+    // them elementless is impossible input, not a zero-match search.
     const misclassified = mixed.map((observation) => ({ ...observation, attributeClass: 'none' as const }))
-    const wrongPool = await identifyNormalArtianCounter({
+    await expect(identifyNormalArtianCounter({
       baseSeed: '51231782',
       weaponTypeId: 'weapon.long_sword',
       rarity: 8,
       observations: misclassified,
       normalCounterRange: { startInclusive: 0, endInclusive: 0 },
+    }, engine)).rejects.toMatchObject({ code: 'invalid_input' })
+
+    // The none slots are producible by both pools, so declaring them
+    // attribute-present is legal input that selects the other pool and no longer matches.
+    expect(mixed[1]!.bonuses.some((bonus) => bonus.bonusTypeId === 'bonus_type.element')).toBe(false)
+    expect(mixed[1]!.bonuses).not.toEqual(gameVerifiedLongSwordFireNormalVectors[1].bonuses)
+    const otherPool = await identifyNormalArtianCounter({
+      baseSeed: '51231782',
+      weaponTypeId: 'weapon.long_sword',
+      rarity: 8,
+      observations: [{ ...mixed[1]!, attributeClass: 'attribute_present' }],
+      normalCounterRange: { startInclusive: 1, endInclusive: 1 },
     }, engine)
-    expect(wrongPool.matches).toEqual([])
+    expect(otherPool.matches).toEqual([])
   })
 
   it('needs no concrete element for attribute-present observations of any element', async () => {
@@ -442,6 +455,107 @@ describe('Normal Artian Counter Identification kernel', () => {
       .rejects.toMatchObject({ code: 'invalid_input' })
     await expect(identifyNormalArtianCounter({ ...hbgInput(), maxMatches: 1.5 }, engine))
       .rejects.toMatchObject({ code: 'invalid_input' })
+  })
+
+  it('rejects an observation the selected game-verified pool can never draw as invalid_input, not as zero matches', async () => {
+    const engine = new ProductionRngEngine()
+    const base = { bonusRankId: 'bonus_rank.base' }
+    const attack = { bonusTypeId: 'bonus_type.attack', ...base }
+    const affinity = { bonusTypeId: 'bonus_type.affinity', ...base }
+    const element = { bonusTypeId: 'bonus_type.element', ...base }
+    const capacity = { bonusTypeId: 'bonus_type.normal_capacity', ...base }
+    const sharpness = { bonusTypeId: 'bonus_type.normal_sharpness', ...base }
+    const at = (
+      weaponTypeId: WeaponTypeId,
+      attributeClass: NormalArtianAttributeClass,
+      bonuses: RestorationBonusSet,
+    ): NormalArtianCounterIdentificationInput => ({
+      baseSeed: HBG_BASE_SEED,
+      weaponTypeId,
+      rarity: 8,
+      observations: [{ attributeClass, bonuses }],
+      normalCounterRange: { startInclusive: 0, endInclusive: 5_000 },
+    })
+
+    // Element is a legal Domain bonus, but absent from these pools: the input is impossible, not unmatched.
+    const impossible: readonly [WeaponTypeId, NormalArtianAttributeClass, RestorationBonusSet][] = [
+      ['weapon.heavy_bowgun', 'attribute_present', [element, attack, capacity, attack, attack]],
+      ['weapon.heavy_bowgun', 'none', [attack, element, capacity, attack, affinity]],
+      ['weapon.light_bowgun', 'attribute_present', [attack, attack, capacity, element, affinity]],
+      ['weapon.long_sword', 'none', [sharpness, attack, element, sharpness, affinity]],
+      ['weapon.bow', 'none', [affinity, affinity, attack, element, affinity]],
+    ]
+    for (const [weaponTypeId, attributeClass, bonuses] of impossible) {
+      const error = await identifyNormalArtianCounter(at(weaponTypeId, attributeClass, bonuses), engine)
+        .catch((caught: unknown) => caught)
+      expect(error).toBeInstanceOf(NormalArtianCounterIdentificationError)
+      expect(error).toMatchObject({ code: 'invalid_input', unsupportedReason: null })
+      expect((error as Error).message).toContain(attributeClass)
+    }
+
+    // The same Element slots are producible by the pools that do contain Element.
+    await expect(identifyNormalArtianCounter(
+      at('weapon.long_sword', 'attribute_present', [sharpness, attack, element, sharpness, affinity]),
+      engine,
+    )).resolves.toMatchObject({ isTruncated: false })
+    await expect(identifyNormalArtianCounter(
+      at('weapon.bow', 'attribute_present', [affinity, affinity, attack, element, affinity]),
+      engine,
+    )).resolves.toMatchObject({ isTruncated: false })
+    expect(gameVerifiedLongSwordFireNormalVectors[0].bonuses).toEqual([sharpness, attack, affinity, attack, element])
+  })
+
+  it('rejects more occurrences of one candidate than its pool maximum, and accepts counts within it', async () => {
+    const engine = new ProductionRngEngine()
+    const base = { bonusRankId: 'bonus_rank.base' }
+    const attack = { bonusTypeId: 'bonus_type.attack', ...base }
+    const affinity = { bonusTypeId: 'bonus_type.affinity', ...base }
+    const capacity = { bonusTypeId: 'bonus_type.normal_capacity', ...base }
+    const sharpness = { bonusTypeId: 'bonus_type.normal_sharpness', ...base }
+    const at = (
+      weaponTypeId: WeaponTypeId,
+      attributeClass: NormalArtianAttributeClass,
+      bonuses: RestorationBonusSet,
+    ): NormalArtianCounterIdentificationInput => ({
+      baseSeed: HBG_BASE_SEED,
+      weaponTypeId,
+      rarity: 8,
+      observations: [{ attributeClass, bonuses }],
+      normalCounterRange: { startInclusive: 0, endInclusive: 5_000 },
+    })
+    expect(gameVerifiedNormalCandidatesForWeaponAndElement('weapon.heavy_bowgun', 'element.none'))
+      .toContainEqual({ referenceId: 7, maximumOccurrences: 2 })
+
+    // Capacity (family 7) is capped at 2 in every Bowgun pool; a third is impossible.
+    for (const weaponTypeId of ['weapon.heavy_bowgun', 'weapon.light_bowgun'] as const) {
+      for (const attributeClass of ['none', 'attribute_present'] as const) {
+        const error = await identifyNormalArtianCounter(
+          at(weaponTypeId, attributeClass, [capacity, attack, capacity, affinity, capacity]),
+          engine,
+        ).catch((caught: unknown) => caught)
+        expect(error).toBeInstanceOf(NormalArtianCounterIdentificationError)
+        expect(error).toMatchObject({ code: 'invalid_input', unsupportedReason: null })
+        expect((error as Error).message).toContain('more than 2')
+      }
+    }
+    await expect(identifyNormalArtianCounter(
+      at('weapon.long_sword', 'none', [sharpness, sharpness, attack, sharpness, affinity]),
+      engine,
+    )).rejects.toMatchObject({ code: 'invalid_input' })
+
+    // Exactly two of family 7, and five of a maximum-5 candidate, stay within the pool limits.
+    await expect(identifyNormalArtianCounter(
+      at('weapon.heavy_bowgun', 'none', [capacity, attack, capacity, affinity, attack]),
+      engine,
+    )).resolves.toMatchObject({ isTruncated: false })
+    await expect(identifyNormalArtianCounter(
+      at('weapon.heavy_bowgun', 'attribute_present', [attack, attack, attack, attack, attack]),
+      engine,
+    )).resolves.toMatchObject({ isTruncated: false })
+    await expect(identifyNormalArtianCounter(
+      at('weapon.long_sword', 'none', [sharpness, sharpness, attack, attack, affinity]),
+      engine,
+    )).resolves.toMatchObject({ isTruncated: false })
   })
 
   it('rejects any rarity other than 8 before touching the Engine', async () => {

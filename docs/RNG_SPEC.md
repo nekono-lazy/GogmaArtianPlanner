@@ -759,6 +759,7 @@ Observation連続性。
 
 - 開始候補 `C` を `normalCounterRange` 全域で昇順に評価し、すべての観測が `C + i` の予測と一致した `C` だけをmatchとする。matchesは `startNormalCounter` 昇順で返し、同じ入力からは常に同じ配列を返す
 - correctness authorityは `ProductionRngEngine.predictNormalArtian()` である。kernelは同じNormal seed derivation、10-step block positioning、game-verified candidate pool、pool step（`selectReferenceNormalLotteryIdsFromRawValues()`）を共有し、独自のRNG規則を持たない。観測は `mapReferenceNormalResult()` の逆写像でreference ID namespaceへ変換して照合し、対象武器種のNormal lotteryが生成し得ないBonus（Gogma tier、未知type、Bowgunの斬れ味、Bowのfamily 7など）は `invalid_input` とする
+- さらに各観測は、その `attributeClass` に対応するgame-verified candidate poolで生成可能でなければならない。poolに存在しないreference ID（例: Heavy Bowgun / 属性あり / Element、Long Sword / 無属性 / Element、Bow / 無属性 / Element）を含む観測、または同一candidateが `maximumOccurrences` を超えて出現する観測（例: BowgunのCapacity 3枠）は、検索0件ではなく `invalid_input` とする。「入力自体がProduction poolから生成不能」と「範囲内に一致なし」は区別する
 - progressは開始Counter候補として評価を完了した `searchedCounters / totalCounters` と `matchesFound` であり、Observation数×prediction回数ではない。Counter chunk sizeはruntime tuning値で永続Production契約ではない
 - Workerは各chunk間でmacrotask yield（`setTimeout(..., 0)`）を挟み、pending cancel messageを処理できる。cancel後はresultをpostしない
 - `maxMatches` 到達時は探索を停止し、`searchedCounterRange.endInclusive` に実際に評価完了した最後の開始Counterを、未探索Counterが残る場合は `isTruncated = true` を返す
@@ -769,7 +770,7 @@ Observation連続性。
 - multiple: 追加観測（次の連続forge）を追加して同じ検索を再実行する。候補をユーザーに手動選択させない
 - zero: 観測入力、Base Seed、武器種、属性区分、検索範囲、forge順を確認する。範囲を自動拡張しない
 - truncated: 候補数に関係なくincompleteであり、unique確定不可とする
-- 確定時に既存 `NormalArtianCounter` へ反映する処理（`counter` / `isConfirmed` / `observationCount` / `candidateCount` / `lastObservedAt`）は後続UI PRの責務であり、kernel / WorkerはDBを変更しない。kernelが返す `startNormalCounter` は観測1に対応する開始Counter `C` であり、観測数を加算しない。Observation履歴のDB永続化schemaは追加しない
+- 確定時に既存 `NormalArtianCounter` へ反映する処理（`counter` / `isConfirmed` / `observationCount` / `candidateCount` / `lastObservedAt`）は後続UI PRの責務であり、kernel / WorkerはDBを変更しない。kernelが返す `startNormalCounter` は観測1を作成する直前のCounter `C`（調査前状態で次にforgeされるCounter）であり、観測数を加算しない。運用はSkill / Gogma Identificationと同じく、観測後はゲームを保存せず、調査前状態へ戻ったことを確認してから `counter = startNormalCounter` を確定する（[UI_FLOW.md](./UI_FLOW.md) 6）。`C + observationCount` を保存する運用は採用しない。Observation履歴のDB永続化schemaは追加しない
 
 Production support境界。
 

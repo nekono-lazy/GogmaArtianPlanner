@@ -390,11 +390,26 @@ activation条件。
 - Base Seedが未確定の場合はこの検索を開始できず、RNG Setupで先にBase Seedを確定するよう案内する
 - 未検証武器種（現時点のProduction supportは弓 / ライトボウガン / ヘビィボウガン / 太刀）では検索を開始できず、その武器種の通常アーティアpoolが実機未検証であることを表示する。referenceの推測poolで代替検索しない
 
-Counter確定。
+Counter確定とゲーム状態の復元。
+
+Base Seed / Skill Counter / Gogma CounterのIdentification Wizard（5.4）と同じ運用に統一する。`NormalArtianCounter.counter` は「次にforgeされる結果の0-based block index」（[DATA_MODEL.md](./DATA_MODEL.md) 6.2）であり、確定するのは調査前状態のその値である。
 
 - 候補が1件かつ探索が打ち切られていない場合だけ確定できる
-- 確定時は既存 `NormalArtianCounter` へ `counter = 候補値`、`isConfirmed = true`、`observationCount = 観測数`、`candidateCount = 1`、`lastObservedAt = now` を反映する
-- kernelが返す候補は観測1に対応する開始Counter `C`（`startNormalCounter`）であり、観測数を加算していない。観測のために作成した通常アーティアの本数分だけゲーム側のCounterが進んだ状態をどう扱うか（Skill / Gogma Identificationと同様に調査前状態へ戻してから確定するか、進行分を反映して確定するか）は本文書では未確定であり、後続UI PRで明示的に決定する。kernel / Workerはどちらの運用も前提にしない
+- kernelの `startNormalCounter = C` は観測1を作成する直前のCounter、つまり調査前状態で次にforgeされるCounterを表す
+- 観測のために通常アーティアを `N` 本作成すると、ゲーム側CounterはC, C+1, ..., C+N-1を消費して一時的に `C + N` へ進む
+- 観測後はゲームを保存しない
+- 調査前のゲーム状態へ戻ったことをユーザーに確認させてからCounterを確定する。復元後に次にforgeされるCounterは再び `C` である
+- 復元確認後、既存 `NormalArtianCounter` へ `counter = startNormalCounter`、`isConfirmed = true`、`observationCount = 観測数`、`candidateCount = 1`、`lastObservedAt = now` を反映する
+- `C + observationCount` を保存する運用は採用しない。kernel / Workerは観測数を加算せず、Counter確定処理とDB更新もkernel / Workerの責務ではない
+
+注意書き。通常ユーザー向けに、検索開始時と確定前の少なくとも2箇所で次の意味の注意を表示する。
+
+```text
+観測後はゲームを保存しないでください。
+調査前の状態へ戻ったことを確認してからCounterを確定してください。
+```
+
+「保存しない」だけでなく「調査前状態へ戻ったことを確認する」まで明記する。5.4と同様に、ゲーム側の保存仕様や安全を断定・保証しない。
 
 制約。
 
