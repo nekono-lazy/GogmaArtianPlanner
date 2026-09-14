@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  normalArtianAttributeClassFromElementId,
   type NormalArtianCounterIdentificationInput,
   type NormalArtianCounterIdentificationWorkerRequest,
   type NormalArtianCounterIdentificationWorkerResponse,
 } from '../../domain/rng/identification'
+import { normalArtianLotteryTableClassForWeaponAndElement } from '../../domain/rng/production/gameNormalBonuses'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../../domain/rng/production/productionRngEngine'
 import { gameVerifiedHeavyBowgunFireNormalVectors as live } from '../../test/fixtures/gameVerifiedNormalVectors'
 import {
@@ -55,7 +55,7 @@ function input(): NormalArtianCounterIdentificationInput {
     weaponTypeId: 'weapon.heavy_bowgun',
     rarity: 8,
     observations: live.map((vector) => ({
-      attributeClass: normalArtianAttributeClassFromElementId(vector.elementId),
+      tableClass: normalArtianLotteryTableClassForWeaponAndElement(vector.weaponTypeId, vector.elementId),
       bonuses: vector.bonuses,
     })),
     normalCounterRange: { startInclusive: 0, endInclusive: 5_000 },

@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  gameVerifiedBowBlastNormalVectors,
   gameVerifiedBowElementalNormalVectors,
   gameVerifiedBowNoneNormalVectors,
+  gameVerifiedBowParalysisNormalVectors,
+  gameVerifiedBowPoisonNormalVectors,
+  gameVerifiedBowSleepNormalVectors,
   gameVerifiedHeavyBowgunFireNormalVectors,
   gameVerifiedHeavyBowgunNoneNormalVectors,
   gameVerifiedLightBowgunFireNormalVectors,
@@ -11,16 +15,21 @@ import {
 } from '../../../test/fixtures/gameVerifiedNormalVectors'
 import { referenceNormalVectors } from '../../../test/fixtures/referenceNormalVectors'
 import {
-  GAME_VERIFIED_BOW_ELEMENTAL_NORMAL_CANDIDATES,
-  GAME_VERIFIED_BOW_NONE_NORMAL_CANDIDATES,
+  GAME_VERIFIED_BOW_TABLE_A_NORMAL_CANDIDATES,
+  GAME_VERIFIED_BOW_TABLE_B_NORMAL_CANDIDATES,
   GAME_VERIFIED_HEAVY_BOWGUN_NORMAL_CANDIDATES,
   GAME_VERIFIED_LIGHT_BOWGUN_NORMAL_CANDIDATES,
   GAME_VERIFIED_MELEE_ELEMENTAL_NORMAL_CANDIDATES,
   GAME_VERIFIED_MELEE_NONE_NORMAL_CANDIDATES,
+  deriveNormalArtianSeed,
   gameVerifiedNormalCandidatesForWeaponAndElement,
+  gameVerifiedNormalCandidatesForWeaponAndTableClass,
   isProductionMeleeNormalPoolWeaponType,
+  normalArtianLotteryTableClassElementIds,
+  normalArtianLotteryTableClassForWeaponAndElement,
   PRODUCTION_MELEE_NORMAL_POOL_WEAPON_TYPE_IDS,
   mapReferenceNormalResult,
+  readReferenceRngBlock,
   predictGameVerifiedNormalArtian,
   predictGameVerifiedNormalRaw,
   predictReferenceNormalArtian,
@@ -72,8 +81,8 @@ describe('reference-verified Production Normal Artian prediction', () => {
 
   it('fixes the exact game-verified Production limits: Attack 5 / Element 4 / family 7 2 / Affinity 3', () => {
     const everyGamePool = [
-      GAME_VERIFIED_BOW_ELEMENTAL_NORMAL_CANDIDATES,
-      GAME_VERIFIED_BOW_NONE_NORMAL_CANDIDATES,
+      GAME_VERIFIED_BOW_TABLE_A_NORMAL_CANDIDATES,
+      GAME_VERIFIED_BOW_TABLE_B_NORMAL_CANDIDATES,
       GAME_VERIFIED_LIGHT_BOWGUN_NORMAL_CANDIDATES,
       GAME_VERIFIED_HEAVY_BOWGUN_NORMAL_CANDIDATES,
       GAME_VERIFIED_MELEE_ELEMENTAL_NORMAL_CANDIDATES,
@@ -140,7 +149,7 @@ describe('reference-verified Production Normal Artian prediction', () => {
   })
 
   it('matches the game-observed elemental Bow 15-slot sequence with pool [6, 4, 8]', () => {
-    expect(GAME_VERIFIED_BOW_ELEMENTAL_NORMAL_CANDIDATES).toEqual([GAME_ATTACK, GAME_ELEMENT, GAME_AFFINITY])
+    expect(GAME_VERIFIED_BOW_TABLE_A_NORMAL_CANDIDATES).toEqual([GAME_ATTACK, GAME_ELEMENT, GAME_AFFINITY])
     for (const vector of gameVerifiedBowElementalNormalVectors) {
       expect(predictGameVerifiedNormalArtian(vector)).toEqual(vector.bonuses)
       expect(predictGameVerifiedNormalRaw(vector).referenceIds).not.toContain(7)
@@ -165,12 +174,12 @@ describe('reference-verified Production Normal Artian prediction', () => {
   })
 
   it('uses exactly the eight observed game-verified pool contracts', () => {
-    expect(GAME_VERIFIED_BOW_NONE_NORMAL_CANDIDATES).toEqual([GAME_ATTACK, GAME_AFFINITY])
+    expect(GAME_VERIFIED_BOW_TABLE_B_NORMAL_CANDIDATES).toEqual([GAME_ATTACK, GAME_AFFINITY])
     expect(GAME_VERIFIED_LIGHT_BOWGUN_NORMAL_CANDIDATES).toEqual([GAME_ATTACK, GAME_FAMILY_7, GAME_AFFINITY])
     expect(GAME_VERIFIED_MELEE_ELEMENTAL_NORMAL_CANDIDATES).toEqual([GAME_ATTACK, GAME_ELEMENT, GAME_FAMILY_7, GAME_AFFINITY])
     expect(GAME_VERIFIED_MELEE_NONE_NORMAL_CANDIDATES).toEqual([GAME_ATTACK, GAME_FAMILY_7, GAME_AFFINITY])
     expect(gameVerifiedNormalCandidatesForWeaponAndElement('weapon.bow', 'element.none'))
-      .toBe(GAME_VERIFIED_BOW_NONE_NORMAL_CANDIDATES)
+      .toBe(GAME_VERIFIED_BOW_TABLE_B_NORMAL_CANDIDATES)
     expect(gameVerifiedNormalCandidatesForWeaponAndElement('weapon.light_bowgun', 'element.fire'))
       .toBe(GAME_VERIFIED_LIGHT_BOWGUN_NORMAL_CANDIDATES)
     expect(gameVerifiedNormalCandidatesForWeaponAndElement('weapon.light_bowgun', 'element.none'))
@@ -225,14 +234,113 @@ describe('reference-verified Production Normal Artian prediction', () => {
     }
   })
 
-  it('uses one game-verified candidate pool for every attribute-present Bow element', () => {
-    for (const elementId of [
+  /*
+   * Bow Table A / Table B (docs/RNG_REFERENCE_AUDIT.md 14.15). Fire, Blast,
+   * Poison, Paralysis, Sleep, and none are direct game observations at Base
+   * Seed 51231782 / Counter 0; Water / Thunder / Ice / Dragon sit on Table A
+   * by category-level Production adoption and have no fixture.
+   */
+  const BOW_TABLE_A_ELEMENTS = [
+    'element.fire', 'element.water', 'element.thunder', 'element.ice', 'element.dragon', 'element.blast',
+  ] as const
+  const BOW_TABLE_B_ELEMENTS = ['element.none', 'element.poison', 'element.paralysis', 'element.sleep'] as const
+
+  it('classifies every Bow element exhaustively into Table A or Table B and selects that table pool', () => {
+    for (const elementId of BOW_TABLE_A_ELEMENTS) {
+      expect(normalArtianLotteryTableClassForWeaponAndElement('weapon.bow', elementId)).toBe('table_a')
+      expect(gameVerifiedNormalCandidatesForWeaponAndElement('weapon.bow', elementId))
+        .toBe(GAME_VERIFIED_BOW_TABLE_A_NORMAL_CANDIDATES)
+    }
+    for (const elementId of BOW_TABLE_B_ELEMENTS) {
+      expect(normalArtianLotteryTableClassForWeaponAndElement('weapon.bow', elementId)).toBe('table_b')
+      expect(gameVerifiedNormalCandidatesForWeaponAndElement('weapon.bow', elementId))
+        .toBe(GAME_VERIFIED_BOW_TABLE_B_NORMAL_CANDIDATES)
+    }
+    // The two sets partition the ten known elements; nothing is left unclassified.
+    expect([...BOW_TABLE_A_ELEMENTS, ...BOW_TABLE_B_ELEMENTS].sort()).toEqual([
+      'element.blast', 'element.dragon', 'element.fire', 'element.ice', 'element.none', 'element.paralysis',
+      'element.poison', 'element.sleep', 'element.thunder', 'element.water',
+    ])
+    expect(normalArtianLotteryTableClassElementIds('weapon.bow', 'table_a')).toEqual([...BOW_TABLE_A_ELEMENTS])
+    expect(normalArtianLotteryTableClassElementIds('weapon.bow', 'table_b')).toEqual([...BOW_TABLE_B_ELEMENTS])
+    expect(GAME_VERIFIED_BOW_TABLE_A_NORMAL_CANDIDATES).toEqual([GAME_ATTACK, GAME_ELEMENT, GAME_AFFINITY])
+    expect(GAME_VERIFIED_BOW_TABLE_B_NORMAL_CANDIDATES).toEqual([GAME_ATTACK, GAME_AFFINITY])
+    expect(gameVerifiedNormalCandidatesForWeaponAndTableClass('weapon.bow', 'table_a')).toBe(GAME_VERIFIED_BOW_TABLE_A_NORMAL_CANDIDATES)
+    expect(gameVerifiedNormalCandidatesForWeaponAndTableClass('weapon.bow', 'table_b')).toBe(GAME_VERIFIED_BOW_TABLE_B_NORMAL_CANDIDATES)
+    expect(() => normalArtianLotteryTableClassForWeaponAndElement('weapon.bow', 'element.unknown')).toThrow(RangeError)
+    expect(() => gameVerifiedNormalCandidatesForWeaponAndTableClass('weapon.bow', 'table_c' as never)).toThrow(RangeError)
+  })
+
+  it('reproduces every direct Bow Table A / Table B game observation at Counter 0 (Fire / Blast on A, Poison / Paralysis / Sleep / none on B)', () => {
+    const fire = gameVerifiedBowElementalNormalVectors[0]
+    const none = gameVerifiedBowNoneNormalVectors[0]
+    expect(fire.gameLotteryIds).toEqual([6, 6, 8, 4, 4])
+    expect(none.gameLotteryIds).toEqual([8, 8, 6, 6, 8])
+    const tableA = [fire, ...gameVerifiedBowBlastNormalVectors]
+    const tableB = [none, ...gameVerifiedBowPoisonNormalVectors, ...gameVerifiedBowParalysisNormalVectors, ...gameVerifiedBowSleepNormalVectors]
+    expect(tableA.map((vector) => vector.elementId)).toEqual(['element.fire', 'element.blast'])
+    expect(tableB.map((vector) => vector.elementId)).toEqual(['element.none', 'element.poison', 'element.paralysis', 'element.sleep'])
+    for (const vector of tableA) {
+      expect(vector.normalCounter).toBe(0)
+      expect(vector.gameLotteryIds).toEqual([6, 6, 8, 4, 4])
+      expect(normalArtianLotteryTableClassForWeaponAndElement(vector.weaponTypeId, vector.elementId)).toBe('table_a')
+      expect(predictGameVerifiedNormalRaw(vector).referenceIds).toEqual(vector.gameLotteryIds)
+      expect(predictGameVerifiedNormalArtian(vector)).toEqual(vector.bonuses)
+    }
+    for (const vector of tableB) {
+      expect(vector.normalCounter).toBe(0)
+      expect(vector.gameLotteryIds).toEqual([8, 8, 6, 6, 8])
+      expect(normalArtianLotteryTableClassForWeaponAndElement(vector.weaponTypeId, vector.elementId)).toBe('table_b')
+      expect(predictGameVerifiedNormalRaw(vector).referenceIds).toEqual(vector.gameLotteryIds)
+      expect(predictGameVerifiedNormalArtian(vector)).toEqual(vector.bonuses)
+      expect(predictGameVerifiedNormalRaw(vector).referenceIds).not.toContain(4)
+    }
+    // The former single elemental pool would have drawn Element for Poison at
+    // this Counter; the same raw block against the Table A pool shows the
+    // defect the Table B classification corrects.
+    expect(selectReferenceNormalLotteryIdsFromRawValues(
+      readReferenceRngBlock(deriveNormalArtianSeed(51231782, 'weapon.bow', 8), 0).values,
+      GAME_VERIFIED_BOW_TABLE_A_NORMAL_CANDIDATES,
+    )).toEqual([6, 6, 8, 4, 4])
+  })
+
+  it('keeps the Normal seed element-free: every Bow element shares one Counter and differs only by table pool', () => {
+    for (let normalCounter = 0; normalCounter < 50; normalCounter += 1) {
+      const at = (elementId: string) => predictGameVerifiedNormalRaw({
+        baseSeed: 51231782, weaponTypeId: 'weapon.bow', elementId, rarity: 8, normalCounter,
+      }).referenceIds
+      const tableA = at('element.fire')
+      const tableB = at('element.none')
+      for (const elementId of BOW_TABLE_A_ELEMENTS) expect(at(elementId)).toEqual(tableA)
+      for (const elementId of BOW_TABLE_B_ELEMENTS) expect(at(elementId)).toEqual(tableB)
+    }
+  })
+
+  it('keeps the Melee and Bowgun table classification at none versus any attribute, untouched by the Bow split', () => {
+    const attributes = [
       'element.fire', 'element.water', 'element.thunder', 'element.ice', 'element.dragon',
       'element.poison', 'element.paralysis', 'element.sleep', 'element.blast',
-    ]) {
-      expect(gameVerifiedNormalCandidatesForWeaponAndElement('weapon.bow', elementId))
-        .toBe(GAME_VERIFIED_BOW_ELEMENTAL_NORMAL_CANDIDATES)
+    ] as const
+    for (const weaponTypeId of ['weapon.light_bowgun', 'weapon.heavy_bowgun', 'weapon.long_sword', 'weapon.great_sword', 'weapon.insect_glaive'] as const) {
+      expect(normalArtianLotteryTableClassForWeaponAndElement(weaponTypeId, 'element.none')).toBe('table_b')
+      for (const elementId of attributes) {
+        expect(normalArtianLotteryTableClassForWeaponAndElement(weaponTypeId, elementId)).toBe('table_a')
+      }
+      expect(normalArtianLotteryTableClassElementIds(weaponTypeId, 'table_b')).toEqual(['element.none'])
     }
+    // Both Bowgun tables draw the same pool, so the class changes nothing there.
+    for (const weaponTypeId of ['weapon.light_bowgun', 'weapon.heavy_bowgun'] as const) {
+      expect(gameVerifiedNormalCandidatesForWeaponAndTableClass(weaponTypeId, 'table_a'))
+        .toBe(gameVerifiedNormalCandidatesForWeaponAndTableClass(weaponTypeId, 'table_b'))
+    }
+    expect(gameVerifiedNormalCandidatesForWeaponAndTableClass('weapon.long_sword', 'table_a')).toBe(GAME_VERIFIED_MELEE_ELEMENTAL_NORMAL_CANDIDATES)
+    expect(gameVerifiedNormalCandidatesForWeaponAndTableClass('weapon.long_sword', 'table_b')).toBe(GAME_VERIFIED_MELEE_NONE_NORMAL_CANDIDATES)
+    // Switch Axe has no verified table classification either.
+    for (const tableClass of ['table_a', 'table_b'] as const) {
+      expect(() => gameVerifiedNormalCandidatesForWeaponAndTableClass('weapon.switch_axe', tableClass)).toThrow(UnsupportedGameVerifiedNormalPredictionError)
+    }
+    expect(() => normalArtianLotteryTableClassForWeaponAndElement('weapon.switch_axe', 'element.poison')).toThrow(UnsupportedGameVerifiedNormalPredictionError)
+    expect(() => normalArtianLotteryTableClassForWeaponAndElement('weapon.unknown', 'element.fire')).toThrow(RangeError)
   })
 
   /*

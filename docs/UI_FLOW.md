@@ -372,12 +372,16 @@ activation条件。
 観測入力。
 
 - 武器種
-- 属性区分: 属性あり / 無属性
+- 抽選テーブル区分（`NormalArtianLotteryTableClass`、[RNG_SPEC.md](./RNG_SPEC.md) 6.3.1）
+  - 弓: テーブルA（火・水・雷・氷・龍・爆破）/ テーブルB（無属性・毒・麻痺・睡眠）
+  - スラッシュアックスを除く近接、ライト / ヘビィボウガン: 属性あり / 無属性
 - 復元ボーナス5枠
 
 通常アーティア観測の `rarity` はDomain上に保持するが、v1 UIでは8を内部的に自動設定し、レア度選択を表示しない。
 
-属性の具体的な種類（火 / 水 / 雷 / 氷 / 龍 / 毒 / 麻痺 / 睡眠 / 爆破）は選択させない。通常アーティアRNGでは属性の種類そのものではなく、無属性か属性ありかだけがcandidate poolを変えるため（[RNG_SPEC.md](./RNG_SPEC.md) 9.12）、Counter検索に必要な区分は「属性あり / 無属性」の2つだけである。属性ありを1つの区分として扱うことは、火と水、麻痺と爆破を別条件として観測し直す必要がないことを意味する。
+属性の具体的な種類（火 / 水 / 雷 / 氷 / 龍 / 毒 / 麻痺 / 睡眠 / 爆破）は選択させない。通常アーティアRNGでは属性の種類そのものではなく、その武器種の抽選テーブル区分（Table A / Table B）だけがcandidate poolを変えるため（[RNG_SPEC.md](./RNG_SPEC.md) 6.3.1 / 9.12）、Counter検索に必要な入力は2択のテーブル区分だけであり、Observationやworker inputにexact ElementIdを保持する必要はない。弓ではテーブルAが火・水・雷・氷・龍・爆破、テーブルBが無属性・毒・麻痺・睡眠であり、「属性あり / 無属性」では毒・麻痺・睡眠を誤るため、選択肢のラベルにそれぞれの属性名を列挙して表示する。その他の武器種ではテーブルAが属性あり、テーブルBが無属性に一致するため、ユーザー向けには従来どおり「属性あり / 無属性」と表示してよい（必要なら「属性あり（テーブルA）」のような補助表示も可）。どの武器種でも `table_a` / `table_b` の技術enumをそのまま表示しない。ラベルの導出はDomainの分類（`normalArtianLotteryTableClassElementIds()`）に従い、UI側に別の分類表やcandidate tableをハードコードしない。
+
+テーブル区分はCounterを分けない。弓でテーブルAとテーブルBの武器を交互に作成しても、消費するのは同じ武器種のレア8 Counter 1本であり、1回の検索セッション内でテーブルA / Bの観測が混在してよい。テーブル区分を切り替えたとき、切替先のpoolで抽選され得ない復元ボーナス（例: 弓のテーブルBで属性強化）が入力済みなら、そのslotを未入力へ戻す。
 
 観測は同じ武器種のレア8通常アーティアを連続して作成した結果を、作成した順に入力する。観測1の開始Counter候補を `C` とすると観測2は `C + 1`、観測3は `C + 2` に対応するため、間に同じ武器種の通常アーティア作成を挟んではならない。他武器種の通常アーティア作成はCounterが武器種別に独立しているため影響しない。各観測の5枠は表示順のまま入力し、並べ替えない。
 
@@ -428,6 +432,7 @@ UI接続状態。
 - 観測履歴はDialog内のin-memory stateだけに保持し、Observation履歴の永続化schemaは追加していない。Worker Clientはページが所有し、Dialogを閉じたとき・確定したとき・ページunmount時に `dispose()` する
 - 検索可能条件は確定済みBase Seed（Production canonical decimal form）だけである。Skill Counter / Gogma Counter / 旧Counter Gateは要求しない。Switch Axeは通常操作段階で「Production検証対象外」として検索を開始できず、Domain / Worker側の `normal_pool_unverified` fail closedも維持する
 - unique結果でも通常UIは「候補が1件に絞り込まれました」とだけ表示し、`startNormalCounter` の数値はDebug Mode ONの診断表示に限る
+- Bow Table A / B修正（[RNG_SPEC.md](./RNG_SPEC.md) 6.3.1、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.15）後、Dialogの区分入力は `tableClass` を送る。弓では「テーブルA（火・水・雷・氷・龍・爆破）/ テーブルB（無属性・毒・麻痺・睡眠）」の2択、その他の武器種では「属性あり / 無属性」の2択であり、exact ElementIdのdropdownは追加していない。選択可能Bonusは引き続き `normalArtianCounterObservationBonusOptions(weaponTypeId, tableClass)` がProduction poolから導出し、弓のテーブルAは基礎攻撃力強化 / 属性強化 / 会心率強化、テーブルBは基礎攻撃力強化 / 会心率強化である。unique / multiple / zero / truncated、progress / cancel、復元確認、`counter = startNormalCounter` の確定、raw CounterのDebug限定表示は変更していない
 
 ---
 

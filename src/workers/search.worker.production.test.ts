@@ -2,6 +2,7 @@ import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../domain/models/publicT
 import { describe, expect, it } from 'vitest'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import type {
+  ElementId,
   WeaponTypeId,
 } from '../domain/models/publicTypes'
 import {
@@ -15,18 +16,22 @@ import type {
   SearchWorkerResponse,
 } from '../domain/search'
 import { createCandidateSearchInput, candidatesOf } from '../test/fixtures/candidateSearch'
-import { gameVerifiedBowElementalNormalVectors } from '../test/fixtures/gameVerifiedNormalVectors'
+import {
+  gameVerifiedBowElementalNormalVectors,
+  gameVerifiedBowPoisonNormalVectors,
+} from '../test/fixtures/gameVerifiedNormalVectors'
 import { createSearchWorkerController } from './search.worker'
 import { createProductionSearchRngEngine } from './search.worker.production'
 
 function createProductionSearchInput(
   weaponTypeId: WeaponTypeId = 'weapon.bow',
+  elementId: ElementId = gameVerifiedBowElementalNormalVectors[0].elementId,
 ): CandidateSearchInput {
   const loaded = loadMasterData()
   if (!loaded.ok) throw new Error(JSON.stringify(loaded.issues))
-  const vector = gameVerifiedBowElementalNormalVectors[0]
+  const vector = { ...gameVerifiedBowElementalNormalVectors[0], elementId }
   const input = createCandidateSearchInput()
-  input.searchRunId = `production-search.${weaponTypeId}`
+  input.searchRunId = `production-search.${weaponTypeId}.${elementId}`
   input.routeFilter = 'normal_artian'
   input.ownedWeapons = []
   input.rngState.baseSeed = {
@@ -139,6 +144,50 @@ describe('Production Candidate Search Worker composition', () => {
         route: expect.objectContaining({ kind: 'normal_artian_to_gogma' }),
       }),
     ]))
+  })
+
+  it('predicts a Bow Poison Normal route from the Table B pool, so a Keep on the forged slots reaches an Ideal the Table A families could not', async () => {
+    const input = createProductionSearchInput('weapon.bow', 'element.poison')
+    const engine = createProductionSearchRngEngine()
+    const baseSeed = '51231782'
+    const forge = (elementId: ElementId) => engine.predictNormalArtian({
+      baseSeed, weaponTypeId: 'weapon.bow', elementId, rarity: 8, normalCounter: 0, master: input.master,
+    })
+    // Counter 0 forges: Poison draws the direct game observation of the Table B
+    // pool [6, 8] (no Element), Fire the Table A observation (with Element).
+    const poisonForged = forge('element.poison')
+    expect(poisonForged).toEqual(gameVerifiedBowPoisonNormalVectors[0].bonuses)
+    expect(poisonForged.map((bonus) => bonus.bonusTypeId)).not.toContain('bonus_type.element')
+    const fireForged = forge('element.fire')
+    expect(fireForged).toEqual(gameVerifiedBowElementalNormalVectors[0].bonuses)
+    expect(fireForged.map((bonus) => bonus.bonusTypeId)).toContain('bonus_type.element')
+
+    // Keep preserves the family at every slot, so an Ideal built from a Keep on
+    // the Table B forge holds no Element family at all; a Table A forge could
+    // never Keep into it. This is what the Poison / Paralysis / Sleep pool
+    // correction changes for Candidate Search.
+    const idealFromPoisonSlots = engine.predictGogmaBonus({
+      baseSeed, weaponTypeId: 'weapon.bow', elementId: 'element.poison', gogmaCounter: input.rngState.gogmaCounter.value!,
+      operation: { type: 'keep_bonuses', currentBonuses: poisonForged }, master: input.master,
+    })
+    expect(idealFromPoisonSlots.map((bonus) => bonus.bonusTypeId)).not.toContain('bonus_type.element')
+    input.targetWeapons[0].idealBonuses = idealFromPoisonSlots
+
+    const responses = await runProductionSearch(input)
+    expect(responses.some(({ type }) => type === 'error')).toBe(false)
+    const result = resultResponse(responses).result
+    expect(result.targetResult.searchedRoutes).toContain('normal_artian_to_gogma')
+    expect(result.warnings.some(({ severity }) => severity === 'info')).toBe(false)
+    const candidate = candidatesOf(result.targetResult).find(({ route }) =>
+      route.kind === 'normal_artian_to_gogma' && route.operations.some((operation) => operation.type === 'keep_bonuses'))
+    expect(candidate).toBeDefined()
+    expect(candidate!.route.operations.map((operation) => operation.type))
+      .toEqual(['create_normal_artian', 'convert_normal_to_gogma', 'keep_bonuses'])
+    expect(candidate!.route.operations[0]).toEqual(expect.objectContaining({
+      type: 'create_normal_artian', weaponTypeId: 'weapon.bow', rarity: 8, count: 1, normalCounterBefore: 0, normalCounterAfter: 1,
+    }))
+    expect(candidate!.finalBonuses).toEqual(idealFromPoisonSlots)
+    expect(candidate!.restorationBonusScope).toBe('gogma_artian')
   })
 
   it('searches a Melee Great Sword Normal route with the predicted variant now that the Melee category is supported', async () => {

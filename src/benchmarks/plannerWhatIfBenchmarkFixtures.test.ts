@@ -37,8 +37,8 @@ describe('B9 Production-valid benchmark fixtures', () => {
   it.each(plannerWhatIfBenchmarkWorkloads)('$id has valid non-stale entries, containment, real conflicts and fixed authority', (workload) => {
     const fixture = createPlannerWhatIfBenchmarkFixture(workload.id)
     const input = fixture.plannerInput
-    expect(new ProductionRngEngine().version).toBe('production-rng:c5-e4')
-    expect(input.calculationContext.rngEngineVersion).toBe('production-rng:c5-e4')
+    expect(new ProductionRngEngine().version).toBe('production-rng:c5-e5')
+    expect(input.calculationContext.rngEngineVersion).toBe('production-rng:c5-e5')
     expect(input.calculationContext.appSchemaVersion).toBe(
       CURRENT_CALCULATION_APP_SCHEMA_VERSION,
     )

@@ -3,7 +3,14 @@ import type { RestorationBonusSet } from '../../models/publicTypes'
 import { loadMasterData } from '../../master/loadMasterData'
 import { UnavailableRngEngine } from '../unavailableRngEngine'
 import { UnsupportedRngInputError } from '../rngEngine'
-import { gameVerifiedBowElementalNormalVectors } from '../../../test/fixtures/gameVerifiedNormalVectors'
+import {
+  gameVerifiedBowBlastNormalVectors,
+  gameVerifiedBowElementalNormalVectors,
+  gameVerifiedBowNoneNormalVectors,
+  gameVerifiedBowParalysisNormalVectors,
+  gameVerifiedBowPoisonNormalVectors,
+  gameVerifiedBowSleepNormalVectors,
+} from '../../../test/fixtures/gameVerifiedNormalVectors'
 import { gameVerifiedGogmaKeepVector, gameVerifiedGogmaResetVectors } from '../../../test/fixtures/gameVerifiedGogmaVectors'
 import { gameVerifiedSkillIdentificationVector } from '../../../test/fixtures/gameVerifiedSkillVectors'
 import { referenceRngVectors } from '../../../test/fixtures/referenceRngVectors'
@@ -28,7 +35,7 @@ function master() {
 describe('ProductionRngEngine facade', () => {
   it('advertises production operations without activating UnavailableRngEngine', () => {
     const engine = new ProductionRngEngine()
-    expect(PRODUCTION_RNG_ENGINE_VERSION).toBe('production-rng:c5-e4')
+    expect(PRODUCTION_RNG_ENGINE_VERSION).toBe('production-rng:c5-e5')
     expect(engine.version).toBe(PRODUCTION_RNG_ENGINE_VERSION)
     expect(engine.capabilities).toEqual({ supportsSeedSearch: false, supportsNormalArtianPrediction: true, supportsGogmaPrediction: true, supportsSkillPrediction: true, supportsKeepBonusesPrediction: true })
     expect(Object.values(new UnavailableRngEngine().capabilities)).toEqual([false, false, false, false, false])
@@ -105,6 +112,36 @@ describe('ProductionRngEngine facade', () => {
     // A Melee prediction goes through the shared game-verified Melee pool step.
     const greatSword = { baseSeed: 51231782, weaponTypeId: 'weapon.great_sword', elementId: 'element.fire', rarity: 8 as const, normalCounter: 156 }
     expect(engine.predictNormalArtian({ ...greatSword, baseSeed: String(greatSword.baseSeed), master: master() })).toEqual(predictGameVerifiedNormalArtian(greatSword))
+  })
+
+  it('selects the Bow Table A / Table B pool from the exact element while every Bow element shares one Normal seed and Counter', () => {
+    const engine = new ProductionRngEngine()
+    const predict = (elementId: string, normalCounter: number) => engine.predictNormalArtian({
+      baseSeed: '51231782', weaponTypeId: 'weapon.bow', elementId, rarity: 8, normalCounter, master: master(),
+    })
+    // Direct game observations at Counter 0 (docs/RNG_REFERENCE_AUDIT.md 14.15).
+    const tableA = [gameVerifiedBowElementalNormalVectors[0]!, ...gameVerifiedBowBlastNormalVectors]
+    const tableB = [
+      gameVerifiedBowNoneNormalVectors[0]!, ...gameVerifiedBowPoisonNormalVectors,
+      ...gameVerifiedBowParalysisNormalVectors, ...gameVerifiedBowSleepNormalVectors,
+    ]
+    for (const vector of [...tableA, ...tableB]) {
+      expect(predict(vector.elementId, vector.normalCounter)).toEqual(vector.bonuses)
+      expect(engine.getPredictionSupport({ type: 'normal_artian', weaponTypeId: 'weapon.bow', elementId: vector.elementId, rarity: 8 })).toEqual({ supported: true })
+    }
+    expect(tableA.map((vector) => vector.elementId)).toEqual(['element.fire', 'element.blast'])
+    expect(tableB.map((vector) => vector.elementId)).toEqual(['element.none', 'element.poison', 'element.paralysis', 'element.sleep'])
+    expect(predict('element.poison', 0)).toEqual(predict('element.none', 0))
+    expect(predict('element.poison', 0)).not.toEqual(predict('element.fire', 0))
+    expect(predict('element.blast', 0)).toEqual(predict('element.fire', 0))
+    // Water / Thunder / Ice / Dragon: Table A by category-level adoption, so they equal Fire at every Counter.
+    for (const elementId of ['element.water', 'element.thunder', 'element.ice', 'element.dragon']) {
+      for (const normalCounter of [0, 1, 2, 17]) expect(predict(elementId, normalCounter)).toEqual(predict('element.fire', normalCounter))
+    }
+    // The element never enters the seed: a Table B forge and a Table A forge are consecutive blocks of one Counter.
+    expect(predict('element.poison', 1).map((bonus) => bonus.bonusTypeId)).not.toContain('bonus_type.element')
+    expect(predict('element.fire', 1)).toEqual(gameVerifiedBowElementalNormalVectors[1]!.bonuses)
+    expect(predict('element.none', 1)).toEqual(gameVerifiedBowNoneNormalVectors[1]!.bonuses)
   })
 
   it('rethrows unexpected support errors and verifies Gogma adapter coverage before prediction', () => {

@@ -271,6 +271,13 @@ none `[6, 7, 8]`）へ昇格した。directly game-verifiedな武器・条件と
 adoptionにとどまる武器・条件の区別は14.14に従う。Switch Axeは引き続きunsupportedであり、
 「その他の近接武器」を一律に未検証とする本節の記述は14.14以前の状態を表す。
 
+補記（2026-09-15、Bow Table A / B修正）: 本節の「属性ありBowは属性種類では分岐しない」は
+C4-C時点でFire Bowだけを実測した結果に基づく記述であり、14.15の実機検証で誤りと確定した。
+Bowでは火 / 水 / 雷 / 氷 / 龍 / 爆破がTable A `[6, 4, 8]`、無属性 / 毒 / 麻痺 / 睡眠がTable B
+`[6, 8]` を使う。上表のBow「Attribute present」列は現在のTable A、「None」列はTable Bに対応し、
+毒 / 麻痺 / 睡眠は「None」側である。Production pool選択は `NormalArtianLotteryTableClass` を
+正式概念とし、Melee / Bowgunの分類（none / 属性あり）とNormal seed / Counterは変更していない。
+
 ### 5.4 numeric ID namespace注意
 
 参照Luaには別namespaceがある。
@@ -795,6 +802,65 @@ category-level adoptionの根拠は次のcategory-level evidenceである。
 
 - 以前unsupportedだったNormal Prediction inputがsupportedになり、Candidate SearchのRoute availabilityとCounter Identification supportが変わるため、observable Production RNG semantics changeとして `PRODUCTION_RNG_ENGINE_VERSION` を `production-rng:c5-e3` から `production-rng:c5-e4` へ更新した。`rngEngineVersion` の差がCalculationContextの失効境界である。`CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、Master dataVersionは変更していない
 - 変更していないもの: reference parity pool、reference golden、PRNG、seed derivation、10-step block、candidate `maximumOccurrences`、Normal Counter semantics（武器種 + rarityごとに1本、Table A / Bのどちらを作成しても1進む）、`NormalArtianCounter` persisted shape、persistence schema、`NormalArtianAttributeClass`、Bowの属性分類、Gogma RNG、Skill RNG、Search algorithm、Planner algorithm、UI。Table A / Bの新Domain model導入も行っていない
+
+---
+
+### 14.15 Bow Normal Table A / B実機検証（2026-09-15）
+
+監査日: 2026-09-15 (Asia/Tokyo)
+
+**背景**
+
+- PR #32以降のNormal Counter Identificationと従来のProduction poolは、Bowを `none -> [6, 8]` / それ以外すべて `-> [6, 4, 8]` の2分類（`NormalArtianAttributeClass = 'none' | 'attribute_present'`）で扱っていた。これはFire Bowだけを実測した5.3のC4-C matrixから一般化した契約であり、Bowの毒 / 麻痺 / 睡眠で実ゲームと異なることが今回の実機検証で確定した
+- ユーザー提示のGame8記事（<https://game8.jp/mhwilds/673616>）はBowの通常アーティア抽選poolをTable A（火 / 水 / 雷 / 氷 / 龍 / 爆破）とTable B（無属性 / 毒 / 麻痺 / 睡眠）に分類している
+
+**調査方法**
+
+- Base Seed 51231782、Bow Normal Counter 0
+- 同じ保存状態からCounter 0で開始し、対象Bowをforgeして復元ボーナス5枠を確認したのち、保存せず調査前状態へ戻し、再びCounter 0から別属性をforgeした。したがって異なる属性を同じPRNG Counter 0で比較できている
+
+**観測結果（Counter 0、lottery ID順 = 画面slot順）**
+
+| Bow element | 5枠 | lottery IDs | Table | provenance |
+|---|---|---|---|---|
+| 火 | 基礎攻撃力強化 / 基礎攻撃力強化 / 会心率強化 / 属性強化 / 属性強化 | `[6, 6, 8, 4, 4]` | A | direct observation（既存fixtureと再一致。Counter 1 `[4, 6, 4, 6, 4]` も再一致） |
+| 爆破 | 基礎攻撃力強化 / 基礎攻撃力強化 / 会心率強化 / 属性強化 / 属性強化 | `[6, 6, 8, 4, 4]` | A | direct observation（火Counter 0と完全一致） |
+| 毒 | 会心率強化 / 会心率強化 / 基礎攻撃力強化 / 基礎攻撃力強化 / 会心率強化 | `[8, 8, 6, 6, 8]` | B | direct observation（既存none Counter 0と完全一致） |
+| 麻痺 | 会心率強化 / 会心率強化 / 基礎攻撃力強化 / 基礎攻撃力強化 / 会心率強化 | `[8, 8, 6, 6, 8]` | B | direct observation |
+| 睡眠 | 会心率強化 / 会心率強化 / 基礎攻撃力強化 / 基礎攻撃力強化 / 会心率強化 | `[8, 8, 6, 6, 8]` | B | direct observation |
+| 無属性 | 会心率強化 / 会心率強化 / 基礎攻撃力強化 / 基礎攻撃力強化 / 会心率強化 | `[8, 8, 6, 6, 8]` | B | existing observation（C4-C fixture、Counter 0..2） |
+
+- Production predictionは、Table A pool `[6, 4, 8]`（Attack 5 / Element 4 / Affinity 3）とTable B pool `[6, 8]`（Attack 5 / Affinity 3）を同じNormal seed / 同じCounter 0のraw blockへ適用するだけで、上記6条件すべてと一致する。PRNG、seed derivation（ElementIdはseedへ入れない）、10-step block、pool step、occurrence limitは変更していない
+- Game8のTable A / B分類と、今回直接確認した5属性 + 既存noneの分類は完全に一致する
+
+**provenanceの区別（過剰主張の禁止）**
+
+| 区分 | Bow element | 根拠 |
+|---|---|---|
+| direct observation（今回） | 火 / 爆破 / 毒 / 麻痺 / 睡眠 | 本節の実機観測（Counter 0。火はCounter 1も再一致） |
+| existing observation | 無属性 | 5.3のC4-C fixture（Counter 0..2） |
+| category-level Production adoption | 水 / 雷 / 氷 / 龍 → Table A | Game8分類、火と爆破がTable Aである直接fixture、従来Productionが五属性を同一elemental poolとして扱っていたことを反証するevidenceがないこと |
+
+「Bowの全属性を今回直接実機検証した」と記述してはならない。
+
+**Domain / 実装**
+
+- Table A / Bを正式Domain概念 `NormalArtianLotteryTableClass = 'table_a' | 'table_b'`（`src/domain/rng/normalArtianLotteryTable.ts`）として導入し、`NormalArtianAttributeClass = 'none' | 'attribute_present'` は廃止した。Production側は exact ElementId → table class（`normalArtianLotteryTableClassForWeaponAndElement()`）、weaponType + table class → candidates（`gameVerifiedNormalCandidatesForWeaponAndTableClass()`）に責務を分離し、既存 `gameVerifiedNormalCandidatesForWeaponAndElement()` はその合成へdelegateする。Bow poolの定数は `GAME_VERIFIED_BOW_TABLE_A_NORMAL_CANDIDATES` / `GAME_VERIFIED_BOW_TABLE_B_NORMAL_CANDIDATES` へ整理した
+- Table A / BはCounter streamではない。Bowの火 / 爆破 / 毒 / 麻痺 / 睡眠 / 無属性はすべて同じ `weapon.bow:8` Counterを共有し、Counter Cで火、次に毒をforgeすればC+1を消費する。`NormalArtianCounter.id`、persisted shape、`normalArtianCounterId()`、DB schemaは変更していない
+- Melee 10種（Switch Axe除く）はTable A = 属性あり `[6, 4, 7, 8]`、Table B = 無属性 `[6, 7, 8]` のまま既存semanticsを維持し、毒 / 麻痺 / 睡眠 / 爆破の近接は従来どおりTable A側である。LBG / HBGは両tableとも `[6, 7, 8]` で変更なし。Switch Axeはtable class / pool対応が未確認のまま `normal_pool_unverified` でfail closedし、推測でsupportへ追加していない
+- Normal Counter Identificationは `NormalArtianCounterObservation.tableClass` を受け取り、各観測のpoolを `gameVerifiedNormalCandidatesForWeaponAndTableClass()` から直接取得する。`getPredictionSupport()` のsupport queryにだけ `table_a -> element.fire` / `table_b -> element.none` の内部代表値を使い、永続化・Observation・UIへは出さない。UIはBowで「テーブルA（火・水・雷・氷・龍・爆破）/ テーブルB（無属性・毒・麻痺・睡眠）」、その他の武器種で「属性あり / 無属性」を選ばせ、exact ElementIdは選ばせない。選択可能Bonusは引き続きProduction poolから導出する
+- fixture: `src/test/fixtures/gameVerifiedNormalVectors.ts` に爆破 / 毒 / 麻痺 / 睡眠のCounter 0 direct observationを追加した。既存Fire / None fixtureは保持し重複追加していない
+
+**golden**
+
+- Bow Counter 0: Fire `[6, 6, 8, 4, 4]`、Blast `[6, 6, 8, 4, 4]`、Poison `[8, 8, 6, 6, 8]`、Paralysis `[8, 8, 6, 6, 8]`、Sleep `[8, 8, 6, 6, 8]`、None `[8, 8, 6, 6, 8]` をProduction golden testで固定し、ElementId分類（Table A: fire / water / thunder / ice / dragon / blast、Table B: none / poison / paralysis / sleep）をexhaustiveにtestした
+- Counter Identification: HBG golden（Counter 4 / 5 / 6、0..5000で `startNormalCounter = 4` 唯一）不変、Bow Table A Counter 0観測 `[Attack, Attack, Affinity, Element, Element]` とTable B Counter 0観測 `[Affinity, Affinity, Attack, Attack, Affinity]` がC = 0に一致、同じBow identification内のTable A / B混在を受理、Bow / Table B / Elementは `invalid_input`、Switch Axeは `unsupported_input` / `normal_pool_unverified`
+- Candidate Search Production integration: Bow PoisonのNormal PredictionがTable B poolを使い、forged slotに対するKeepで到達するIdealをCandidate Searchが見つけることを1件固定した。Search / Planner algorithm自体は変更していない
+
+**version**
+
+- Bow毒 / 麻痺 / 睡眠のProduction Normal Prediction outputが変わるobservable Production RNG semantics changeとして、`PRODUCTION_RNG_ENGINE_VERSION` を `production-rng:c5-e4` から `production-rng:c5-e5` へ更新した。旧CalculationContextのBuildCandidate / BuildListEntry / ProductionPlanは `rngEngineVersion` の差で `calculation_context_changed` になる
+- 変更していないもの: `CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、Master dataVersion、`ExportRoot.schemaVersion`、`NormalArtianCounter` persisted shape、reference parity pool（`REFERENCE_NORMAL_ELEMENTAL_CANDIDATES` / `REFERENCE_NORMAL_NONE_CANDIDATES`、`predictReferenceNormalRaw()`、reference golden。referenceのnone / non-none分類はreference parity契約として残す）、PRNG、seed derivation、10-step block、occurrence limits、Counter increment semantics、Skill RNG、Gogma RNG、Search algorithm、Planner algorithm、Material rules、Switch Axeのunsupported
 
 ---
 

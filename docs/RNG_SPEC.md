@@ -296,28 +296,48 @@ provenanceは一様ではない。2026-09-14の1293個体 / 6465 slots（Great S
 
 「1293個体 / 6465 slotsでCapacityを含む全Production上限を直接game-verifiedした」と記述してはならない。
 
-Production supported武器種とpool構成（Melee support拡張後、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.14）。
+**Lottery table class（pool選択の正式Domain概念）**
 
-| Weapon | 属性あり | 無属性 | provenance |
+Normal seedはBase Seed + 武器種 + rarityだけで決まり、属性はseedへ入らない。属性が決めるのは「同じCounter Cに対してどのcandidate poolを使うか」だけであり、その区分を `NormalArtianLotteryTableClass = 'table_a' | 'table_b'`（`src/domain/rng/normalArtianLotteryTable.ts`）として正式化する。exact `ElementId` からtable classへの分類は `normalArtianLotteryTableClassForWeaponAndElement(weaponTypeId, elementId)`、table classからProduction poolへの選択は `gameVerifiedNormalCandidatesForWeaponAndTableClass(weaponTypeId, tableClass)` が担い、既存 `gameVerifiedNormalCandidatesForWeaponAndElement()` は両者へdelegateする。旧 `NormalArtianAttributeClass = 'none' | 'attribute_present'` は「Normal lottery全体の正式区分」ではなかった（Bowで誤る）ため廃止した。
+
+| Weapon | Table A | Table B |
+|---|---|---|
+| Bow | 火 / 水 / 雷 / 氷 / 龍 / 爆破 | 無属性 / 毒 / 麻痺 / 睡眠 |
+| Melee共通（Switch Axe除く） | 属性あり（毒 / 麻痺 / 睡眠 / 爆破を含む） | 無属性 |
+| Light / Heavy Bowgun | 属性あり | 無属性（両tableのpoolは同一） |
+| Switch Axe | 未確認 | 未確認 |
+
+Table A / BはCounter streamではない。Bowで火（Table A）をCounter Cで作成し、次に毒（Table B）を作成すればC+1を消費する同一streamであり、`weapon.bow:8` のCounterは1本だけである。table classを `NormalArtianCounter.id`、persisted shape、`normalArtianCounterId()`、DB schemaへ入れてはならず、Table A Counter / Table B Counterの2本へ分けてはならない。Melee / BowgunにBowのTable A / B分類を適用してはならず、Switch Axeのtable classとpool対応は未確認のままunsupportedである。
+
+Production supported武器種とpool構成（Melee support拡張後、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.14 / Bow Table A / B修正後、14.15）。
+
+| Weapon | Table A | Table B | provenance |
 |---|---|---|---|
-| Bow | `[6, 4, 8]` | `[6, 8]` | directly game-verified（C4-C fixture） |
+| Bow | `[6, 4, 8]` | `[6, 8]` | 下記のとおり二層（14.15） |
 | Light Bowgun | `[6, 7, 8]` | `[6, 7, 8]` | directly game-verified（C4-C fixture） |
 | Heavy Bowgun | `[6, 7, 8]` | `[6, 7, 8]` | directly game-verified（C4-C fixture） |
 | Melee共通: Great Sword / Sword and Shield / Dual Blades / Long Sword / Hammer / Hunting Horn / Lance / Gunlance / Charge Blade / Insect Glaive | `[6, 4, 7, 8]` | `[6, 7, 8]` | 下記のとおり二層 |
 | Switch Axe | unsupported | unsupported | 未検証。`normal_pool_unverified` でfail closed |
+
+Bow Table A / Bのprovenanceは二層であり、「Bowの全属性を実機検証した」と記述してはならない（[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.15）。
+
+- directly game-verified: 火（Counter 0..2の既存fixtureと、再確認したCounter 0 / 1）、爆破（Counter 0、`[6, 6, 8, 4, 4]` で火と完全一致 → Table A）、毒 / 麻痺 / 睡眠（Counter 0、`[8, 8, 6, 6, 8]` で無属性と完全一致 → Table B）、無属性（Counter 0..2の既存fixture）。いずれもBase Seed 51231782
+- category-level Production adoption: 水 / 雷 / 氷 / 龍のTable A分類。根拠はユーザー提示のGame8分類（<https://game8.jp/mhwilds/673616>）、火と爆破がTable Aである直接fixture、従来Productionが五属性を同一elemental poolとして扱っていたことを反証するevidenceがないことである
 
 Melee共通poolのprovenanceは二層であり、混同して記述してはならない。
 
 - directly game-verified: Long Sword（属性あり / none各15 slotsの既存fixture）と、Great Sword / Dual Blades / Hammer / Charge Bladeの属性ありpool（2026-09-14、Base Seed 51231782、1293個体 / 6465 slotsを保存画像authorityで確認し `[6, 4, 7, 8]` / Attack 5 / Element 4 / Sharpness 2 / Affinity 3と完全一致）
 - category-level Production adoption: Sword and Shield / Hunting Horn / Lance / Gunlance / Insect Glaiveの両pool、およびGreat Sword / Dual Blades / Hammer / Charge Bladeのnone pool。直接大量検証はしておらず、(1) Long Swordを含む5種類の独立したMelee weapon streamで共通規則が成立すること、(2) ユーザー提示のGame8通常アーティアTable情報でSwitch Axeだけが別カテゴリとされ、その他の近接武器が共通条件として扱われていること、(3) none poolが既存Long Sword none fixtureと整合すること、(4) PRNG / seed derivation / weaponType streamは全武器共通でweaponType numeric値だけがseedを分離すること、というcategory-level evidenceを根拠にProduction contractとして採用している
 
-Melee membershipは `PRODUCTION_MELEE_NORMAL_POOL_WEAPON_TYPE_IDS` の明示allow-listだけが決め、unknown WeaponTypeIdを暗黙にMelee扱いしない。Switch AxeはGame8上で他の近接とTable条件が異なり（パーツ構成によらず同一Table）、使用candidate pool、属性あり / noneの扱い、`NormalArtianAttributeClass` との対応を実ゲームfixtureで確認していないため、推測でMelee poolへ入れずunsupportedのまま維持する。Table A / Bの新Domain model、`NormalArtianAttributeClass` の再設計、Bowの属性分類再設計はこの拡張の対象外である。
+Melee membershipは `PRODUCTION_MELEE_NORMAL_POOL_WEAPON_TYPE_IDS` の明示allow-listだけが決め、unknown WeaponTypeIdを暗黙にMelee扱いしない。Switch AxeはGame8上で他の近接とTable条件が異なり（パーツ構成によらず同一Table）、使用candidate pool、属性の扱い、`NormalArtianLotteryTableClass` / pool対応を実ゲームfixtureで確認していないため、推測でMelee poolへ入れずunsupportedのまま維持する。Table A / BのDomain modelとBowの属性分類はMelee support拡張の対象外であり、その後のBow Table A / B修正（上記、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.15）で導入した。
 
 pinned reference implementation（`REFERENCE_NORMAL_NONE_CANDIDATES` / `REFERENCE_NORMAL_ELEMENTAL_CANDIDATES`、`predictReferenceNormalRaw()`）はElement 5 / Affinity 5のままであり、これはreference parity契約として変更しない。Element 5 / Affinity 5は「実ゲーム仕様」ではなく「pinned reference implementationの挙動」である。reference parity poolとgame-verified Production poolは別物として維持し、混同しない。`ReferenceNormalCandidate.maximumOccurrences` の型は `2 | 3 | 4 | 5` である。
 
 この上限修正はProduction Normal prediction結果を変えるobservable RNG semantics changeであり、`PRODUCTION_RNG_ENGINE_VERSION` を `production-rng:c5-e3` へ更新した。旧versionで生成されたBuildCandidate / BuildListEntry / ProductionPlanは `rngEngineVersion` の差で `calculation_context_changed` になる。`CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、Master dataVersion、Base Seed derivation、weaponType numeric mapping、block size 10、PRNG、Counter semanticsは変更していない。上限修正の時点ではProduction support対象武器種も変更していない。
 
-その後のMelee support拡張（[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.14）で、Production Normal support対象武器種をLong Sword単独からSwitch Axeを除く近接10武器種へ拡張した。以前unsupportedだったNormal Prediction inputがsupportedになり、Candidate SearchのRoute availabilityとCounter Identification supportが変わるため、これもobservable Production RNG semantics changeとして `PRODUCTION_RNG_ENGINE_VERSION` を `production-rng:c5-e3` から現在の `production-rng:c5-e4` へ更新した。`rngEngineVersion` の差だけがCalculationContextの失効境界であり、`CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、Master dataVersion、reference parity pool、reference golden、PRNG、seed derivation、10-step block、candidate `maximumOccurrences`、Normal Counter semantics、persistence schema、`NormalArtianAttributeClass` は変更していない。
+その後のMelee support拡張（[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.14）で、Production Normal support対象武器種をLong Sword単独からSwitch Axeを除く近接10武器種へ拡張した。以前unsupportedだったNormal Prediction inputがsupportedになり、Candidate SearchのRoute availabilityとCounter Identification supportが変わるため、これもobservable Production RNG semantics changeとして `PRODUCTION_RNG_ENGINE_VERSION` を `production-rng:c5-e3` から現在の `production-rng:c5-e4` へ更新した。`rngEngineVersion` の差だけがCalculationContextの失効境界であり、`CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、Master dataVersion、reference parity pool、reference golden、PRNG、seed derivation、10-step block、candidate `maximumOccurrences`、Normal Counter semantics、persistence schema、当時の `NormalArtianAttributeClass` は変更していない。
+
+さらにその後のBow Table A / B修正（[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.15）で、Bowの毒 / 麻痺 / 睡眠をTable B pool `[6, 8]` へ、爆破をTable A pool `[6, 4, 8]` へ分類した。Bow毒 / 麻痺 / 睡眠のProduction Normal prediction outputが変わるobservable Production RNG semantics changeとして、`PRODUCTION_RNG_ENGINE_VERSION` を `production-rng:c5-e4` から現在の `production-rng:c5-e5` へ更新した。旧versionのBuildCandidate / BuildListEntry / ProductionPlanは `rngEngineVersion` の差で `calculation_context_changed` になる。`CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、Master dataVersion、`ExportRoot.schemaVersion`、reference parity pool（`REFERENCE_NORMAL_ELEMENTAL_CANDIDATES` / `REFERENCE_NORMAL_NONE_CANDIDATES`、`predictReferenceNormalRaw()`、reference golden。referenceのnone / non-none分類はreference parity契約としてそのまま残す）、PRNG、seed derivation（ElementIdはNormal seedへ追加しない）、10-step block、candidate `maximumOccurrences`、Counter increment semantics、`NormalArtianCounter` ID / persisted shape、Melee / Bowgunの既存pool、Switch Axeのunsupportedは変更していない。
 
 ## 6.4 RngMasterSubset
 
@@ -746,10 +766,11 @@ Skill Identificationでcanonical Base Seedが確定した後のSTEP 2には、�
 型（`src/domain/rng/identification/normalArtianCounterIdentificationTypes.ts`）。
 
 ```ts
-export type NormalArtianAttributeClass = 'none' | 'attribute_present'
+// src/domain/rng/normalArtianLotteryTable.ts（6.3.1）
+export type NormalArtianLotteryTableClass = 'table_a' | 'table_b'
 
 export interface NormalArtianCounterObservation {
-  readonly attributeClass: NormalArtianAttributeClass
+  readonly tableClass: NormalArtianLotteryTableClass
   readonly bonuses: RestorationBonusSet
 }
 
@@ -791,21 +812,22 @@ export interface NormalArtianCounterIdentificationProgress {
 属性の扱い。
 
 - Normal seedは既存実装どおりBase Seed + 武器種 + rarityで決まり、属性の種類そのものはseedへ影響しない。属性はNormal bonus candidate poolの選択にだけ影響する
-- 通常アーティアRNGが区別するのは「無属性」か「属性あり」かだけである。火 / 水 / 雷 / 氷 / 龍 / 毒 / 麻痺 / 睡眠 / 爆破はすべて同じ `attribute_present` classであり、Counter Search上の別domainとして扱わない
-- したがって各Observationは `attributeClass` だけを持ち、exact `ElementId` を検索domainへ要求しない。UI上の日本語表記は「無属性 / 属性あり」とする（[UI_FLOW.md](./UI_FLOW.md) 6）
-- 既存 `RngEngine.predictNormalArtian()` / `getPredictionSupport()` は `elementId` を受け取るため、Production adapter内部でのみ `none -> element.none`、`attribute_present -> element.fire` を内部representativeとして写像する。`element.fire` は「attribute-present poolを選択する」以上の意味を持たず、実際に火属性だったことを意味しない。永続化、結果、Observation、表示へ漏らしてはならない
+- 通常アーティアRNGが区別するのは、その武器種のlottery table class（6.3.1、`NormalArtianLotteryTableClass = 'table_a' | 'table_b'`）だけである。Bowでは火 / 水 / 雷 / 氷 / 龍 / 爆破がTable A、無属性 / 毒 / 麻痺 / 睡眠がTable Bであり、Switch Axeを除く近接とBowgunでは属性ありがTable A、無属性がTable Bである。「無属性か属性ありか」はNormal lottery全体の正式区分ではなく（Bowの毒 / 麻痺 / 睡眠で誤る）、旧 `NormalArtianAttributeClass` は廃止した
+- したがって各Observationは `tableClass` だけを持ち、exact `ElementId` を検索domainへ要求しない。UI上の表記は、Bowでは「テーブルA（火・水・雷・氷・龍・爆破）/ テーブルB（無属性・毒・麻痺・睡眠）」、その他の武器種では「属性あり / 無属性」とし、`table_a` / `table_b` の技術enumを表示しない（[UI_FLOW.md](./UI_FLOW.md) 6）
+- Table A / Bは同じCounter Cに対するpool選択だけを表し、Counter streamではない。1回のIdentification内でTable AとTable Bの観測が混在しても、それは同じCounter stream上で各forgeが選んだpoolが異なるだけであり、別Counterではない。table classを `NormalArtianCounter` ID / persisted shape / DB schemaへ入れない
+- kernelのcandidate poolは `gameVerifiedNormalCandidatesForWeaponAndTableClass(weaponTypeId, tableClass)` から直接取得する。既存 `RngEngine.getPredictionSupport()` は `elementId` を受け取るため、support query内部でのみ `table_a -> element.fire`、`table_b -> element.none` を内部representativeとして写像する（`normalArtianLotteryTableClassSupportQueryElementId()`）。この代表値は「そのtableのpoolのsupportを問い合わせる」以上の意味を持たず、実際の観測属性を意味しない。永続化、結果、Observation、表示へ漏らしてはならず、core candidate authorityにもしない
 
 Observation連続性。
 
 - Observation配列は順序付き連続forgeである。開始Counter候補を `C` とすると、観測 `i`（観測1を `i = 0` とする）は `C + i` に対応する。kernelは配列をsortしない
 - 各観測は同じ武器種・レア8の実forge結果であり、5枠ordered exact matchで照合する。`bonusTypeId`、`bonusRankId`、slot順のすべてが一致した場合だけ一致とする。同じfamilyが5個含まれるだけでは一致としない
-- 各観測の候補poolは、その観測自身の `attributeClass` から選ぶ。1回のIdentification内で `none` と `attribute_present` の観測が混在してもよい
+- 各観測の候補poolは、その観測自身の `tableClass` から選ぶ。1回のIdentification内でTable AとTable Bの観測が混在してもよい（例: Bowで火 → 毒 → 爆破と連続forgeした場合、観測は `table_a` / `table_b` / `table_a` であり、同じCounter C / C+1 / C+2に対応する）
 
 探索とアルゴリズム。
 
 - 開始候補 `C` を `normalCounterRange` 全域で昇順に評価し、すべての観測が `C + i` の予測と一致した `C` だけをmatchとする。matchesは `startNormalCounter` 昇順で返し、同じ入力からは常に同じ配列を返す
 - correctness authorityは `ProductionRngEngine.predictNormalArtian()` である。kernelは同じNormal seed derivation、10-step block positioning、game-verified candidate pool、pool step（`selectReferenceNormalLotteryIdsFromRawValues()`）を共有し、独自のRNG規則を持たない。観測は `mapReferenceNormalResult()` の逆写像でreference ID namespaceへ変換して照合し、対象武器種のNormal lotteryが生成し得ないBonus（Gogma tier、未知type、Bowgunの斬れ味、Bowのfamily 7など）は `invalid_input` とする
-- さらに各観測は、その `attributeClass` に対応するgame-verified candidate poolで生成可能でなければならない。poolに存在しないreference ID（例: Heavy Bowgun / 属性あり / Element、Long Sword / 無属性 / Element、Bow / 無属性 / Element）を含む観測、または同一candidateが `maximumOccurrences` を超えて出現する観測（例: BowgunのCapacity 3枠、Long Sword / Bow / 属性ありのElement 5枠、任意のsupported poolのAffinity 4枠。上限は6.3.1のProduction値 Attack 5 / Element 4 / family 7 2 / Affinity 3）は、検索0件ではなく `invalid_input` とする。「入力自体がProduction poolから生成不能」と「範囲内に一致なし」は区別する
+- さらに各観測は、その `tableClass` に対応するgame-verified candidate poolで生成可能でなければならない。poolに存在しないreference ID（例: Heavy Bowgun / Table A / Element、Long Sword / Table B / Element、Bow / Table B / Element）を含む観測、または同一candidateが `maximumOccurrences` を超えて出現する観測（例: BowgunのCapacity 3枠、Long Sword / Bow / Table AのElement 5枠、Bow / Table BのAffinity 4枠、任意のsupported poolのAffinity 4枠。上限は6.3.1のProduction値 Attack 5 / Element 4 / family 7 2 / Affinity 3）は、検索0件ではなく `invalid_input` とする。「入力自体がProduction poolから生成不能」と「範囲内に一致なし」は区別する
 - progressは開始Counter候補として評価を完了した `searchedCounters / totalCounters` と `matchesFound` であり、Observation数×prediction回数ではない。Counter chunk sizeはruntime tuning値で永続Production契約ではない
 - Workerは各chunk間でmacrotask yield（`setTimeout(..., 0)`）を挟み、pending cancel messageを処理できる。cancel後はresultをpostしない
 - `maxMatches` 到達時は探索を停止し、`searchedCounterRange.endInclusive` に実際に評価完了した最後の開始Counterを、未探索Counterが残る場合は `isTruncated = true` を返す
@@ -835,7 +857,8 @@ Golden。
 - kernel / Worker foundationはimplementedである。NormalCountersPageへのUI接続、Counter確定処理、未検証武器種のProduction activationは後続PRである。`supportsSeedSearch = false`、`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`、Production Normal RNG output、Normal seed derivation、`NormalArtianCounter` persisted shape、`DATABASE_SCHEMA_VERSION`、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` は変更していない
 - その後の通常アーティア抽選上限修正（6.3.1）で、game-verified Production poolの `maximumOccurrences` はAttack 5 / Element 4 / family 7 2 / Affinity 3となり、`PRODUCTION_RNG_ENGINE_VERSION` は `production-rng:c5-e3` となった。Counter Identificationのpool membership / occurrence validationはこの値を使う。HBG golden（Base Seed 51231782、Counter 4 / 5 / 6、0..5000で `startNormalCounter = 4` 唯一）は上限修正後も変わらない。上限修正の時点ではsupport対象武器種、`NormalArtianAttributeClass`、Counter semanticsを変更していない
 - さらにその後のMelee support拡張（6.3.1、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.14）で、Counter IdentificationはSwitch Axeを除く近接10武器種を `attribute_present` / `none` の両classで検索可能になり、`PRODUCTION_RNG_ENGINE_VERSION` は現在 `production-rng:c5-e4` である。kernelは `ProductionRngEngine.getPredictionSupport()` と `gameVerifiedNormalCandidatesForWeaponAndElement()` を共有しているため、support境界の拡張はkernel側の変更なしに自動的に反映される。Switch Axeだけが `unsupported_input` / `normal_pool_unverified` のままである。HBG golden、`NormalArtianAttributeClass`、Counter semantics、`NormalArtianCounter` persisted shape、`DATABASE_SCHEMA_VERSION`、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` は変更していない
-- その後、NormalCountersPageへのUI接続が完了した（[UI_FLOW.md](./UI_FLOW.md) 6）。`createProductionNormalArtianCounterIdentificationWorkerClient()` は通常UIから呼ばれ、観測入力 → Counter検索 → 追加観測 → unique確認 → 調査前状態への復元確認 → `counter = startNormalCounter` 確定保存までを行える。観測で選択可能なBonusは `normalArtianCounterObservationBonusOptions()` がProduction pool（`gameVerifiedNormalCandidatesForWeaponAndElement()`）とreference semantic mapping（`restorationBonusFromReferenceNormalId()`）から導出し、UI側に別の抽選表を持たない。検索可否は `getNormalArtianCounterIdentificationSupport()` がkernelと同じcapability / `getPredictionSupport()` で判定する。この接続はUI / Application層だけの変更であり、kernelのアルゴリズム、Production pool、reference parity、`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e4`、`NormalArtianCounter` persisted shape、`DATABASE_SCHEMA_VERSION`、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` は変更していない。Observation履歴の永続化schemaも追加していない
+- その後、NormalCountersPageへのUI接続が完了した（[UI_FLOW.md](./UI_FLOW.md) 6）。`createProductionNormalArtianCounterIdentificationWorkerClient()` は通常UIから呼ばれ、観測入力 → Counter検索 → 追加観測 → unique確認 → 調査前状態への復元確認 → `counter = startNormalCounter` 確定保存までを行える。観測で選択可能なBonusは `normalArtianCounterObservationBonusOptions()` がProduction pool（`gameVerifiedNormalCandidatesForWeaponAndElement()`）とreference semantic mapping（`restorationBonusFromReferenceNormalId()`）から導出し、UI側に別の抽選表を持たない。検索可否は `getNormalArtianCounterIdentificationSupport()` がkernelと同じcapability / `getPredictionSupport()` で判定する。この接続はUI / Application層だけの変更であり、kernelのアルゴリズム、Production pool、reference parity、当時の `PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e4`、`NormalArtianCounter` persisted shape、`DATABASE_SCHEMA_VERSION`、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` は変更していない。Observation履歴の永続化schemaも追加していない
+- その後のBow Table A / B修正（6.3.1、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.15）で、Observationの区分を `attributeClass: 'none' | 'attribute_present'` から `tableClass: NormalArtianLotteryTableClass` へ再設計した。kernelのcandidate comparisonとPRNG walkは変更しておらず、candidate pool取得だけを `gameVerifiedNormalCandidatesForWeaponAndTableClass()` へ置き換えた。Worker request / Worker Client / UIも同じfieldへ更新した（Worker protocolは同一bundle内のtyped protocolでありDB persisted schemaではないため、旧 `attributeClass` payloadの互換handlingは持たない）。`PRODUCTION_RNG_ENGINE_VERSION` は `production-rng:c5-e5` である。HBG golden（Base Seed 51231782、Counter 4 / 5 / 6、0..5000で `startNormalCounter = 4` 唯一）は不変であり、Bow Table A Counter 0観測 `[Attack, Attack, Affinity, Element, Element]` とBow Table B Counter 0観測 `[Affinity, Affinity, Attack, Attack, Affinity]` がそれぞれC = 0に一致すること、同じBow identification内のTable A / B混在を受理すること、Bow / Table B / Elementが `invalid_input` であること、Switch Axeが `unsupported_input` / `normal_pool_unverified` のままであることをtestで固定した。`NormalArtianCounter` persisted shape、`DATABASE_SCHEMA_VERSION`、`CURRENT_CALCULATION_APP_SCHEMA_VERSION`、Observation履歴の非永続化は変更していない
 
 ---
 

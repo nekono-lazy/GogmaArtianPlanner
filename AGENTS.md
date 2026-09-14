@@ -215,16 +215,19 @@ Dexie separately moves to `DATABASE_SCHEMA_VERSION = 4` for the persisted status
 `AppSettings.schemaVersion = 1`; gameVersion, Master Data version,
 `RngState.schemaVersion = 1`, `CONSTRAINED_ROUTE_POLICY_VERSION`, and
 `supportsSeedSearch = false` remain unchanged. `PRODUCTION_RNG_ENGINE_VERSION` is
-currently `production-rng:c5-e4`. The Normal Artian occurrence-limit correction
+currently `production-rng:c5-e5`. The Normal Artian occurrence-limit correction
 (Production game-verified pool Attack 5 / Element 4 / family 7 2 / Affinity 3)
 changed Production Normal prediction output and moved the Engine version from
 `production-rng:c5-e2` to `production-rng:c5-e3`; the later Melee support
 expansion (Production Normal support for every melee weapon type except Switch
 Axe) made previously unsupported Normal prediction inputs supported, changing
 Candidate Search route availability and Counter Identification support, and
-moved it to `production-rng:c5-e4`. Neither touched
-`CURRENT_CALCULATION_APP_SCHEMA_VERSION`; `rngEngineVersion` alone is the
-CalculationContext staleness boundary for both changes. `DATABASE_SCHEMA_VERSION` stays 4 at the checkpoint boundary, while
+moved it to `production-rng:c5-e4`; the Bow Normal Table A / B correction
+(Bow Poison / Paralysis / Sleep draw the Table B pool `[6, 8]`, Blast the
+Table A pool `[6, 4, 8]`) changed Bow Poison / Paralysis / Sleep Production
+Normal prediction output and moved it to `production-rng:c5-e5`. None of the
+three touched `CURRENT_CALCULATION_APP_SCHEMA_VERSION`; `rngEngineVersion`
+alone is the CalculationContext staleness boundary for all of them. `DATABASE_SCHEMA_VERSION` stays 4 at the checkpoint boundary, while
 `ExportRoot.schemaVersion` moves to 5 with the persisted entity shape. Version 1 BuildCandidate, BuildListEntry, and ProductionPlan
 calculations are incompatible with any later version and must not be reused as current
 results. Existing staleness checks mark old BuildListEntry records with
@@ -386,8 +389,36 @@ explicit allow-list `PRODUCTION_MELEE_NORMAL_POOL_WEAPON_TYPE_IDS` in
 `gameNormalBonuses.ts`; an unknown weapon type is never treated as Melee
 implicitly. Switch Axe stays unsupported (`normal_pool_unverified`): Game8
 lists it as a separate table condition, and its pool, attribute handling, and
-`NormalArtianAttributeClass` mapping were not confirmed by any real-game
-fixture, so never add it by inference. Melee provenance is two-layered and
+`NormalArtianLotteryTableClass` / pool mapping were not confirmed by any
+real-game fixture, so never add it by inference.
+
+Pool selection is expressed by the formal Domain concept
+`NormalArtianLotteryTableClass = 'table_a' | 'table_b'`
+(`src/domain/rng/normalArtianLotteryTable.ts`, `docs/RNG_SPEC.md` 6.3.1). The
+element never enters the Normal seed (Base Seed + weapon type + rarity only);
+it decides only which table's pool one forge draws from. The exact `ElementId`
+is classified by `normalArtianLotteryTableClassForWeaponAndElement()`, the
+table selects its pool through `gameVerifiedNormalCandidatesForWeaponAndTableClass()`,
+and `gameVerifiedNormalCandidatesForWeaponAndElement()` delegates to both. The
+former `NormalArtianAttributeClass = 'none' | 'attribute_present'` was never a
+correct classification of the whole Normal lottery and is removed; do not
+reintroduce it. Bow (`docs/RNG_REFERENCE_AUDIT.md` 14.15): Table A = Fire /
+Water / Thunder / Ice / Dragon / Blast with pool `[6, 4, 8]`, Table B = none /
+Poison / Paralysis / Sleep with pool `[6, 8]`. Its provenance is layered and
+must never be written as "every Bow element was game-verified": Fire, Blast,
+Poison, Paralysis, Sleep (Base Seed 51231782 / Counter 0, Fire also Counters
+0..2) and none (Counters 0..2) are direct game observations, while Water /
+Thunder / Ice / Dragon on Table A are category-level Production adoption from
+the user-supplied Game8 classification, the direct Fire and Blast Table A
+fixtures, and the absence of evidence against the former single elemental
+pool. Melee: Table A = any attribute (Poison / Paralysis / Sleep / Blast
+included), Table B = none, unchanged. Light / Heavy Bowgun: both tables draw
+`[6, 7, 8]`, unchanged. Never apply the Bow split to Melee or Bowguns. A table
+class is not a Counter stream: every element of one weapon type shares its one
+rarity-8 Normal Counter, forging a Table A weapon and then a Table B weapon
+consumes C and C + 1, and the class never enters `NormalArtianCounter.id`, the
+persisted shape, `normalArtianCounterId()`, or the DB schema. Never split the
+Counter into a Table A Counter and a Table B Counter. Melee provenance is two-layered and
 must never be written as if all ten were directly verified
 (`docs/RNG_REFERENCE_AUDIT.md` 14.14): Long Sword (both conditions) and the
 attribute-present pool of Great Sword / Dual Blades / Hammer / Charge Blade are
@@ -520,9 +551,10 @@ C5-E2C3 integrates this policy atomically in the Production adapter, Domain
 prediction inputs, capability derivation, Candidate Search, Planner validation,
 Trace Replay, and semantic hashes. C5-E2C3 set `PRODUCTION_RNG_ENGINE_VERSION`
 to `production-rng:c5-e2`; the later Normal Artian occurrence-limit correction
-moved it to `production-rng:c5-e3`, and the Melee support expansion moved it
-to the current `production-rng:c5-e4` (see the Normal pool limits and the Melee
-category under RNG Rules). Do not reintroduce caller-supplied or persisted Gate as
+moved it to `production-rng:c5-e3`, the Melee support expansion moved it to
+`production-rng:c5-e4`, and the Bow Normal Table A / B correction moved it to
+the current `production-rng:c5-e5` (see the Normal pool limits, the Melee
+category, and the lottery table class under RNG Rules). Do not reintroduce caller-supplied or persisted Gate as
 Production authority. This runtime integration does not activate the Skill-first
 Identification UI; `supportsSeedSearch` remains `false`.
 
