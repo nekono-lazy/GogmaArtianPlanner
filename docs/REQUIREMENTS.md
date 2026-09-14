@@ -836,6 +836,8 @@ Production v1 adapterがpersisted exact Gateを要求せずactive representative
 
 通常アーティア復元ボーナス抽選のgame-verified Production pool上限をAttack 5 / Element 4 / 斬れ味・装填数 2 / Affinity 3へ修正した変更もobservable Production RNG semantics changeであり、`PRODUCTION_RNG_ENGINE_VERSION` を `production-rng:c5-e3` へ更新した（[RNG_SPEC.md](./RNG_SPEC.md) 6.3.1、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.13）。`rngEngineVersion` の差がCalculationContextの失効境界となるため、`CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、Master dataVersionは重ねて変更しない。pinned reference implementationとのparity pool（Element 5 / Affinity 5）は別契約として変更しない。
 
+通常アーティアPrediction / Counter IdentificationのProduction support対象武器種を、太刀単独からスラッシュアックスを除く近接10武器種（大剣・片手剣・双剣・太刀・ハンマー・狩猟笛・ランス・ガンランス・チャージアックス・操虫棍）の共通Meleeカテゴリへ拡張した変更も、以前unsupportedだったNormal Prediction inputがsupportedになりCandidate SearchのRoute availabilityとCounter Identification supportが変わるobservable Production RNG semantics changeであり、`PRODUCTION_RNG_ENGINE_VERSION` を `production-rng:c5-e4` へ更新した（[RNG_SPEC.md](./RNG_SPEC.md) 6.3.1、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.14）。太刀と、大剣・双剣・ハンマー・チャージアックスの属性ありpoolは直接game-verifiedであり、片手剣・狩猟笛・ランス・ガンランス・操虫棍と、大剣・双剣・ハンマー・チャージアックスの無属性poolはcategory-level Production adoptionである。スラッシュアックスはunsupportedのままfail closedする。この拡張でも `CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、Master dataVersionは変更しない。
+
 ---
 
 ## 33. 詳細表示とデバッグモード

@@ -215,12 +215,16 @@ Dexie separately moves to `DATABASE_SCHEMA_VERSION = 4` for the persisted status
 `AppSettings.schemaVersion = 1`; gameVersion, Master Data version,
 `RngState.schemaVersion = 1`, `CONSTRAINED_ROUTE_POLICY_VERSION`, and
 `supportsSeedSearch = false` remain unchanged. `PRODUCTION_RNG_ENGINE_VERSION` is
-currently `production-rng:c5-e3`: the Normal Artian occurrence-limit correction
+currently `production-rng:c5-e4`. The Normal Artian occurrence-limit correction
 (Production game-verified pool Attack 5 / Element 4 / family 7 2 / Affinity 3)
-changed Production Normal prediction output, so it moved the Engine version from
-`production-rng:c5-e2` without touching `CURRENT_CALCULATION_APP_SCHEMA_VERSION`;
-`rngEngineVersion` alone is the CalculationContext staleness boundary for that
-change. `DATABASE_SCHEMA_VERSION` stays 4 at the checkpoint boundary, while
+changed Production Normal prediction output and moved the Engine version from
+`production-rng:c5-e2` to `production-rng:c5-e3`; the later Melee support
+expansion (Production Normal support for every melee weapon type except Switch
+Axe) made previously unsupported Normal prediction inputs supported, changing
+Candidate Search route availability and Counter Identification support, and
+moved it to `production-rng:c5-e4`. Neither touched
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION`; `rngEngineVersion` alone is the
+CalculationContext staleness boundary for both changes. `DATABASE_SCHEMA_VERSION` stays 4 at the checkpoint boundary, while
 `ExportRoot.schemaVersion` moves to 5 with the persisted entity shape. Version 1 BuildCandidate, BuildListEntry, and ProductionPlan
 calculations are incompatible with any later version and must not be reused as current
 results. Existing staleness checks mark old BuildListEntry records with
@@ -372,9 +376,29 @@ Planner must not synthesize them.
 
 The Production Normal Artian lottery uses the reference-verified PRNG, seed
 derivation, 10-step block, and pool step unchanged, and replaces only the
-candidate pool with the game-verified pool of the supported weapon type (Bow,
-Light Bowgun, Heavy Bowgun, Long Sword). The Production per-candidate
-`maximumOccurrences` are (`docs/RNG_REFERENCE_AUDIT.md` 14.13):
+candidate pool with the Production pool of the supported weapon type: Bow,
+Light Bowgun, Heavy Bowgun, and the Melee category of every melee weapon type
+except Switch Axe (Great Sword, Sword and Shield, Dual Blades, Long Sword,
+Hammer, Hunting Horn, Lance, Gunlance, Charge Blade, Insect Glaive). The Melee
+pools are `[6, 4, 7, 8]` with an attribute and `[6, 7, 8]` without, identical
+to the former Long Sword pools, and Melee membership is decided only by the
+explicit allow-list `PRODUCTION_MELEE_NORMAL_POOL_WEAPON_TYPE_IDS` in
+`gameNormalBonuses.ts`; an unknown weapon type is never treated as Melee
+implicitly. Switch Axe stays unsupported (`normal_pool_unverified`): Game8
+lists it as a separate table condition, and its pool, attribute handling, and
+`NormalArtianAttributeClass` mapping were not confirmed by any real-game
+fixture, so never add it by inference. Melee provenance is two-layered and
+must never be written as if all ten were directly verified
+(`docs/RNG_REFERENCE_AUDIT.md` 14.14): Long Sword (both conditions) and the
+attribute-present pool of Great Sword / Dual Blades / Hammer / Charge Blade are
+directly game-verified, while Sword and Shield / Hunting Horn / Lance /
+Gunlance / Insect Glaive and the elementless pool of those four are
+category-level Production adoption based on five independent melee streams
+following one rule, the Game8 table treating every non-Switch-Axe melee weapon
+as one condition, the elementless pool agreeing with the Long Sword none
+fixture, and the shared PRNG / seed derivation / weapon type stream. The
+Production per-candidate `maximumOccurrences` are
+(`docs/RNG_REFERENCE_AUDIT.md` 14.13):
 
 ```text
 Attack (6)              5
@@ -496,8 +520,9 @@ C5-E2C3 integrates this policy atomically in the Production adapter, Domain
 prediction inputs, capability derivation, Candidate Search, Planner validation,
 Trace Replay, and semantic hashes. C5-E2C3 set `PRODUCTION_RNG_ENGINE_VERSION`
 to `production-rng:c5-e2`; the later Normal Artian occurrence-limit correction
-moved it to the current `production-rng:c5-e3` (see the Normal pool limits under
-RNG Rules). Do not reintroduce caller-supplied or persisted Gate as
+moved it to `production-rng:c5-e3`, and the Melee support expansion moved it
+to the current `production-rng:c5-e4` (see the Normal pool limits and the Melee
+category under RNG Rules). Do not reintroduce caller-supplied or persisted Gate as
 Production authority. This runtime integration does not activate the Skill-first
 Identification UI; `supportsSeedSearch` remains `false`.
 

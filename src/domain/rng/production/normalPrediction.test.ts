@@ -15,9 +15,11 @@ import {
   GAME_VERIFIED_BOW_NONE_NORMAL_CANDIDATES,
   GAME_VERIFIED_HEAVY_BOWGUN_NORMAL_CANDIDATES,
   GAME_VERIFIED_LIGHT_BOWGUN_NORMAL_CANDIDATES,
-  GAME_VERIFIED_LONG_SWORD_ELEMENTAL_NORMAL_CANDIDATES,
-  GAME_VERIFIED_LONG_SWORD_NONE_NORMAL_CANDIDATES,
+  GAME_VERIFIED_MELEE_ELEMENTAL_NORMAL_CANDIDATES,
+  GAME_VERIFIED_MELEE_NONE_NORMAL_CANDIDATES,
   gameVerifiedNormalCandidatesForWeaponAndElement,
+  isProductionMeleeNormalPoolWeaponType,
+  PRODUCTION_MELEE_NORMAL_POOL_WEAPON_TYPE_IDS,
   mapReferenceNormalResult,
   predictGameVerifiedNormalArtian,
   predictGameVerifiedNormalRaw,
@@ -64,8 +66,8 @@ describe('reference-verified Production Normal Artian prediction', () => {
     expect(referenceById.get(4)).toBe(5)
     expect(referenceById.get(8)).toBe(5)
     // Production game-verified pools carry the real-game limits instead.
-    expect(GAME_VERIFIED_LONG_SWORD_ELEMENTAL_NORMAL_CANDIDATES.find((c) => c.referenceId === 4)?.maximumOccurrences).toBe(4)
-    expect(GAME_VERIFIED_LONG_SWORD_ELEMENTAL_NORMAL_CANDIDATES.find((c) => c.referenceId === 8)?.maximumOccurrences).toBe(3)
+    expect(GAME_VERIFIED_MELEE_ELEMENTAL_NORMAL_CANDIDATES.find((c) => c.referenceId === 4)?.maximumOccurrences).toBe(4)
+    expect(GAME_VERIFIED_MELEE_ELEMENTAL_NORMAL_CANDIDATES.find((c) => c.referenceId === 8)?.maximumOccurrences).toBe(3)
   })
 
   it('fixes the exact game-verified Production limits: Attack 5 / Element 4 / family 7 2 / Affinity 3', () => {
@@ -74,8 +76,8 @@ describe('reference-verified Production Normal Artian prediction', () => {
       GAME_VERIFIED_BOW_NONE_NORMAL_CANDIDATES,
       GAME_VERIFIED_LIGHT_BOWGUN_NORMAL_CANDIDATES,
       GAME_VERIFIED_HEAVY_BOWGUN_NORMAL_CANDIDATES,
-      GAME_VERIFIED_LONG_SWORD_ELEMENTAL_NORMAL_CANDIDATES,
-      GAME_VERIFIED_LONG_SWORD_NONE_NORMAL_CANDIDATES,
+      GAME_VERIFIED_MELEE_ELEMENTAL_NORMAL_CANDIDATES,
+      GAME_VERIFIED_MELEE_NONE_NORMAL_CANDIDATES,
     ]
     const expectedByReferenceId: Record<number, number> = { 6: 5, 4: 4, 7: 2, 8: 3 }
     for (const pool of everyGamePool) {
@@ -91,7 +93,7 @@ describe('reference-verified Production Normal Artian prediction', () => {
     // with raw value 3 now wraps onto a 3-candidate pool and selects index 0 (Attack), never Affinity.
     expect(selectReferenceNormalLotteryIdsFromRawValues(
       [3, 3, 3, 3, 3],
-      GAME_VERIFIED_LONG_SWORD_ELEMENTAL_NORMAL_CANDIDATES,
+      GAME_VERIFIED_MELEE_ELEMENTAL_NORMAL_CANDIDATES,
     )).toEqual([8, 8, 8, 6, 6])
     // The same raw values against the pinned reference pool keep Affinity at 5 and draw it five times.
     expect(selectReferenceNormalLotteryIdsFromRawValues(
@@ -103,7 +105,7 @@ describe('reference-verified Production Normal Artian prediction', () => {
     // selects index 1 of the remaining [6, 7, 8] pool, which is family 7, never a fifth Element.
     expect(selectReferenceNormalLotteryIdsFromRawValues(
       [1, 1, 1, 1, 1],
-      GAME_VERIFIED_LONG_SWORD_ELEMENTAL_NORMAL_CANDIDATES,
+      GAME_VERIFIED_MELEE_ELEMENTAL_NORMAL_CANDIDATES,
     )).toEqual([4, 4, 4, 4, 7])
     expect(selectReferenceNormalLotteryIdsFromRawValues(
       [1, 1, 1, 1, 1],
@@ -113,11 +115,11 @@ describe('reference-verified Production Normal Artian prediction', () => {
     // Attack still fills all five slots, and family 7 is still removed after its second draw.
     expect(selectReferenceNormalLotteryIdsFromRawValues(
       [0, 0, 0, 0, 0],
-      GAME_VERIFIED_LONG_SWORD_ELEMENTAL_NORMAL_CANDIDATES,
+      GAME_VERIFIED_MELEE_ELEMENTAL_NORMAL_CANDIDATES,
     )).toEqual([6, 6, 6, 6, 6])
     expect(selectReferenceNormalLotteryIdsFromRawValues(
       [2, 2, 2, 2, 2],
-      GAME_VERIFIED_LONG_SWORD_ELEMENTAL_NORMAL_CANDIDATES,
+      GAME_VERIFIED_MELEE_ELEMENTAL_NORMAL_CANDIDATES,
     )).toEqual([7, 7, 8, 8, 8])
   })
 
@@ -165,8 +167,8 @@ describe('reference-verified Production Normal Artian prediction', () => {
   it('uses exactly the eight observed game-verified pool contracts', () => {
     expect(GAME_VERIFIED_BOW_NONE_NORMAL_CANDIDATES).toEqual([GAME_ATTACK, GAME_AFFINITY])
     expect(GAME_VERIFIED_LIGHT_BOWGUN_NORMAL_CANDIDATES).toEqual([GAME_ATTACK, GAME_FAMILY_7, GAME_AFFINITY])
-    expect(GAME_VERIFIED_LONG_SWORD_ELEMENTAL_NORMAL_CANDIDATES).toEqual([GAME_ATTACK, GAME_ELEMENT, GAME_FAMILY_7, GAME_AFFINITY])
-    expect(GAME_VERIFIED_LONG_SWORD_NONE_NORMAL_CANDIDATES).toEqual([GAME_ATTACK, GAME_FAMILY_7, GAME_AFFINITY])
+    expect(GAME_VERIFIED_MELEE_ELEMENTAL_NORMAL_CANDIDATES).toEqual([GAME_ATTACK, GAME_ELEMENT, GAME_FAMILY_7, GAME_AFFINITY])
+    expect(GAME_VERIFIED_MELEE_NONE_NORMAL_CANDIDATES).toEqual([GAME_ATTACK, GAME_FAMILY_7, GAME_AFFINITY])
     expect(gameVerifiedNormalCandidatesForWeaponAndElement('weapon.bow', 'element.none'))
       .toBe(GAME_VERIFIED_BOW_NONE_NORMAL_CANDIDATES)
     expect(gameVerifiedNormalCandidatesForWeaponAndElement('weapon.light_bowgun', 'element.fire'))
@@ -178,9 +180,9 @@ describe('reference-verified Production Normal Artian prediction', () => {
     expect(gameVerifiedNormalCandidatesForWeaponAndElement('weapon.heavy_bowgun', 'element.none'))
       .toBe(GAME_VERIFIED_HEAVY_BOWGUN_NORMAL_CANDIDATES)
     expect(gameVerifiedNormalCandidatesForWeaponAndElement('weapon.long_sword', 'element.fire'))
-      .toBe(GAME_VERIFIED_LONG_SWORD_ELEMENTAL_NORMAL_CANDIDATES)
+      .toBe(GAME_VERIFIED_MELEE_ELEMENTAL_NORMAL_CANDIDATES)
     expect(gameVerifiedNormalCandidatesForWeaponAndElement('weapon.long_sword', 'element.none'))
-      .toBe(GAME_VERIFIED_LONG_SWORD_NONE_NORMAL_CANDIDATES)
+      .toBe(GAME_VERIFIED_MELEE_NONE_NORMAL_CANDIDATES)
   })
 
   it('keeps Light Bowgun Fire and none identical, with no Element family', () => {
@@ -233,12 +235,86 @@ describe('reference-verified Production Normal Artian prediction', () => {
     }
   })
 
-  it('rejects unobserved weapon types instead of returning a reference fallback as game-verified', () => {
+  /*
+   * Melee category (docs/RNG_REFERENCE_AUDIT.md 14.14). Long Sword and the
+   * elemental pool of Great Sword / Dual Blades / Hammer / Charge Blade are
+   * directly game-verified; the other five melee weapons and the elementless
+   * pool of those four are category-level Production adoption. Switch Axe is
+   * deliberately not in the category.
+   */
+  const MELEE_WEAPON_TYPES = [
+    'weapon.great_sword', 'weapon.sword_and_shield', 'weapon.dual_blades', 'weapon.long_sword',
+    'weapon.hammer', 'weapon.hunting_horn', 'weapon.lance', 'weapon.gunlance',
+    'weapon.charge_blade', 'weapon.insect_glaive',
+  ] as const
+  const ATTRIBUTE_PRESENT_ELEMENTS = [
+    'element.fire', 'element.water', 'element.thunder', 'element.ice', 'element.dragon',
+    'element.poison', 'element.paralysis', 'element.sleep', 'element.blast',
+  ] as const
+
+  it('defines the Melee allow-list as exactly the ten melee weapon types without Switch Axe', () => {
+    expect([...PRODUCTION_MELEE_NORMAL_POOL_WEAPON_TYPE_IDS].sort()).toEqual([...MELEE_WEAPON_TYPES].sort())
+    for (const weaponTypeId of MELEE_WEAPON_TYPES) expect(isProductionMeleeNormalPoolWeaponType(weaponTypeId)).toBe(true)
+    for (const weaponTypeId of ['weapon.switch_axe', 'weapon.bow', 'weapon.light_bowgun', 'weapon.heavy_bowgun', 'weapon.unknown']) {
+      expect(isProductionMeleeNormalPoolWeaponType(weaponTypeId)).toBe(false)
+    }
+  })
+
+  it('draws every Melee weapon type from the shared [6, 4, 7, 8] elemental and [6, 7, 8] elementless pools', () => {
+    expect(GAME_VERIFIED_MELEE_ELEMENTAL_NORMAL_CANDIDATES).toEqual([GAME_ATTACK, GAME_ELEMENT, GAME_FAMILY_7, GAME_AFFINITY])
+    expect(GAME_VERIFIED_MELEE_NONE_NORMAL_CANDIDATES).toEqual([GAME_ATTACK, GAME_FAMILY_7, GAME_AFFINITY])
+    for (const weaponTypeId of MELEE_WEAPON_TYPES) {
+      for (const elementId of ATTRIBUTE_PRESENT_ELEMENTS) {
+        expect(gameVerifiedNormalCandidatesForWeaponAndElement(weaponTypeId, elementId))
+          .toBe(GAME_VERIFIED_MELEE_ELEMENTAL_NORMAL_CANDIDATES)
+      }
+      expect(gameVerifiedNormalCandidatesForWeaponAndElement(weaponTypeId, 'element.none'))
+        .toBe(GAME_VERIFIED_MELEE_NONE_NORMAL_CANDIDATES)
+    }
+  })
+
+  it('keeps the Melee pools distinct from the reference parity pools for every Melee weapon type', () => {
+    // Same PRNG, seed derivation, and block; only the occurrence limits differ
+    // (Element 4 / Affinity 3 versus the reference Element 5 / Affinity 5).
+    // While the reference block stays below the Production limits the two
+    // pools never shrink differently, so the results agree; once a block
+    // reaches a third Affinity or a fourth Element with a draw still to come,
+    // the Production pool has already dropped that candidate and the results
+    // diverge. Every Melee weapon type must show both regions.
+    for (const weaponTypeId of MELEE_WEAPON_TYPES) {
+      let diverged = false
+      let agreed = false
+      for (let normalCounter = 0; normalCounter < 400; normalCounter += 1) {
+        const input = { baseSeed: 51231782, weaponTypeId, elementId: 'element.fire', rarity: 8 as const, normalCounter }
+        const reference = predictReferenceNormalRaw(input).referenceIds
+        const production = predictGameVerifiedNormalRaw(input).referenceIds
+        expect(production.filter((id) => id === 4).length).toBeLessThanOrEqual(4)
+        expect(production.filter((id) => id === 8).length).toBeLessThanOrEqual(3)
+        const belowLimits = reference.filter((id) => id === 4).length <= 3 && reference.filter((id) => id === 8).length <= 2
+        if (belowLimits) {
+          expect(production).toEqual(reference)
+          agreed = true
+        } else if (production.join(',') !== reference.join(',')) {
+          diverged = true
+        }
+      }
+      expect(agreed).toBe(true)
+      expect(diverged).toBe(true)
+    }
+  })
+
+  it('rejects Switch Axe and unknown weapon types instead of returning a reference fallback as game-verified', () => {
     const input = gameVerifiedBowElementalNormalVectors[0]
-    expect(() => predictGameVerifiedNormalRaw({ ...input, weaponTypeId: 'weapon.great_sword' }))
+    expect(() => gameVerifiedNormalCandidatesForWeaponAndElement('weapon.switch_axe', 'element.fire'))
       .toThrow(UnsupportedGameVerifiedNormalPredictionError)
-    expect(() => predictGameVerifiedNormalRaw({ ...input, weaponTypeId: 'weapon.sword_and_shield' }))
+    expect(() => gameVerifiedNormalCandidatesForWeaponAndElement('weapon.switch_axe', 'element.none'))
       .toThrow(UnsupportedGameVerifiedNormalPredictionError)
+    expect(() => predictGameVerifiedNormalRaw({ ...input, weaponTypeId: 'weapon.switch_axe' }))
+      .toThrow(UnsupportedGameVerifiedNormalPredictionError)
+    expect(() => predictGameVerifiedNormalRaw({ ...input, weaponTypeId: 'weapon.switch_axe', elementId: 'element.none' }))
+      .toThrow(UnsupportedGameVerifiedNormalPredictionError)
+    // An unknown weapon type is the adapter's RangeError, never an implicit Melee member.
+    expect(() => gameVerifiedNormalCandidatesForWeaponAndElement('weapon.unknown', 'element.fire')).toThrow(RangeError)
   })
 
   it('matches a raw reference golden for every weapon type without changing the shared pool', () => {

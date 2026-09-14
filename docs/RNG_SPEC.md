@@ -296,18 +296,28 @@ provenanceは一様ではない。2026-09-14の1293個体 / 6465 slots（Great S
 
 「1293個体 / 6465 slotsでCapacityを含む全Production上限を直接game-verifiedした」と記述してはならない。
 
-Production supported武器種とpool構成（PR #32時点から変更なし）。
+Production supported武器種とpool構成（Melee support拡張後、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.14）。
 
-| Weapon | 属性あり | 無属性 |
-|---|---|---|
-| Bow | `[6, 4, 8]` | `[6, 8]` |
-| Light Bowgun | `[6, 7, 8]` | `[6, 7, 8]` |
-| Heavy Bowgun | `[6, 7, 8]` | `[6, 7, 8]` |
-| Long Sword | `[6, 4, 7, 8]` | `[6, 7, 8]` |
+| Weapon | 属性あり | 無属性 | provenance |
+|---|---|---|---|
+| Bow | `[6, 4, 8]` | `[6, 8]` | directly game-verified（C4-C fixture） |
+| Light Bowgun | `[6, 7, 8]` | `[6, 7, 8]` | directly game-verified（C4-C fixture） |
+| Heavy Bowgun | `[6, 7, 8]` | `[6, 7, 8]` | directly game-verified（C4-C fixture） |
+| Melee共通: Great Sword / Sword and Shield / Dual Blades / Long Sword / Hammer / Hunting Horn / Lance / Gunlance / Charge Blade / Insect Glaive | `[6, 4, 7, 8]` | `[6, 7, 8]` | 下記のとおり二層 |
+| Switch Axe | unsupported | unsupported | 未検証。`normal_pool_unverified` でfail closed |
+
+Melee共通poolのprovenanceは二層であり、混同して記述してはならない。
+
+- directly game-verified: Long Sword（属性あり / none各15 slotsの既存fixture）と、Great Sword / Dual Blades / Hammer / Charge Bladeの属性ありpool（2026-09-14、Base Seed 51231782、1293個体 / 6465 slotsを保存画像authorityで確認し `[6, 4, 7, 8]` / Attack 5 / Element 4 / Sharpness 2 / Affinity 3と完全一致）
+- category-level Production adoption: Sword and Shield / Hunting Horn / Lance / Gunlance / Insect Glaiveの両pool、およびGreat Sword / Dual Blades / Hammer / Charge Bladeのnone pool。直接大量検証はしておらず、(1) Long Swordを含む5種類の独立したMelee weapon streamで共通規則が成立すること、(2) ユーザー提示のGame8通常アーティアTable情報でSwitch Axeだけが別カテゴリとされ、その他の近接武器が共通条件として扱われていること、(3) none poolが既存Long Sword none fixtureと整合すること、(4) PRNG / seed derivation / weaponType streamは全武器共通でweaponType numeric値だけがseedを分離すること、というcategory-level evidenceを根拠にProduction contractとして採用している
+
+Melee membershipは `PRODUCTION_MELEE_NORMAL_POOL_WEAPON_TYPE_IDS` の明示allow-listだけが決め、unknown WeaponTypeIdを暗黙にMelee扱いしない。Switch AxeはGame8上で他の近接とTable条件が異なり（パーツ構成によらず同一Table）、使用candidate pool、属性あり / noneの扱い、`NormalArtianAttributeClass` との対応を実ゲームfixtureで確認していないため、推測でMelee poolへ入れずunsupportedのまま維持する。Table A / Bの新Domain model、`NormalArtianAttributeClass` の再設計、Bowの属性分類再設計はこの拡張の対象外である。
 
 pinned reference implementation（`REFERENCE_NORMAL_NONE_CANDIDATES` / `REFERENCE_NORMAL_ELEMENTAL_CANDIDATES`、`predictReferenceNormalRaw()`）はElement 5 / Affinity 5のままであり、これはreference parity契約として変更しない。Element 5 / Affinity 5は「実ゲーム仕様」ではなく「pinned reference implementationの挙動」である。reference parity poolとgame-verified Production poolは別物として維持し、混同しない。`ReferenceNormalCandidate.maximumOccurrences` の型は `2 | 3 | 4 | 5` である。
 
-この上限修正はProduction Normal prediction結果を変えるobservable RNG semantics changeであり、`PRODUCTION_RNG_ENGINE_VERSION` を `production-rng:c5-e3` へ更新した。旧versionで生成されたBuildCandidate / BuildListEntry / ProductionPlanは `rngEngineVersion` の差で `calculation_context_changed` になる。`CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、Master dataVersion、Base Seed derivation、weaponType numeric mapping、block size 10、PRNG、Counter semantics、Production support対象武器種は変更していない。
+この上限修正はProduction Normal prediction結果を変えるobservable RNG semantics changeであり、`PRODUCTION_RNG_ENGINE_VERSION` を `production-rng:c5-e3` へ更新した。旧versionで生成されたBuildCandidate / BuildListEntry / ProductionPlanは `rngEngineVersion` の差で `calculation_context_changed` になる。`CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、Master dataVersion、Base Seed derivation、weaponType numeric mapping、block size 10、PRNG、Counter semanticsは変更していない。上限修正の時点ではProduction support対象武器種も変更していない。
+
+その後のMelee support拡張（[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.14）で、Production Normal support対象武器種をLong Sword単独からSwitch Axeを除く近接10武器種へ拡張した。以前unsupportedだったNormal Prediction inputがsupportedになり、Candidate SearchのRoute availabilityとCounter Identification supportが変わるため、これもobservable Production RNG semantics changeとして `PRODUCTION_RNG_ENGINE_VERSION` を `production-rng:c5-e3` から現在の `production-rng:c5-e4` へ更新した。`rngEngineVersion` の差だけがCalculationContextの失効境界であり、`CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、Master dataVersion、reference parity pool、reference golden、PRNG、seed derivation、10-step block、candidate `maximumOccurrences`、Normal Counter semantics、persistence schema、`NormalArtianAttributeClass` は変更していない。
 
 ## 6.4 RngMasterSubset
 
@@ -810,9 +820,9 @@ Observation連続性。
 
 Production support境界。
 
-- Production supportはgame-verified Normal pool（`gameVerifiedNormalCandidatesForWeaponAndElement()`）の範囲だけである。現時点ではBow、Light Bowgun、Heavy Bowgun、Long Swordであり、これはアルゴリズム上の制約ではなく実機fixtureが存在する範囲である
-- 未検証武器種（大剣、双剣、片手剣など）でProduction Counter Searchを呼んだ場合は `unsupported_input` / `unsupportedReason = normal_pool_unverified` でfail closedする。reference poolへfallbackしない。`reference_adapter_unsupported` / `engine_capability_unavailable` も既存 `RngPredictionUnsupportedReason` のまま構造化して上位へ渡し、message文字列から推測させない
-- `predictReferenceNormalRaw()` によるreference parityは検証用であり、reference-verifiedとgame-verified Productionは別契約である。近接共通pool仮説（Bow / Bowgun / Meleeの3カテゴリ）は今後の実機検証対象であり、Long Swordの一致だけを根拠に他の近接武器をProduction supportedへ昇格しない
+- Production supportはProduction Normal pool（`gameVerifiedNormalCandidatesForWeaponAndElement()`）の範囲だけである。現時点ではBow、Light Bowgun、Heavy Bowgun、およびSwitch Axeを除く近接10武器種（Great Sword / Sword and Shield / Dual Blades / Long Sword / Hammer / Hunting Horn / Lance / Gunlance / Charge Blade / Insect Glaive）であり、これはアルゴリズム上の制約ではなくProduction poolが確定している範囲である。Melee共通poolのprovenance（directly game-verifiedとcategory-level Production adoptionの区別）は6.3.1と[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.14に従う
+- 未検証武器種（現時点ではSwitch Axeだけ）でProduction Counter Searchを呼んだ場合は `unsupported_input` / `unsupportedReason = normal_pool_unverified` でfail closedする。reference poolへfallbackせず、unknown WeaponTypeIdを暗黙にMelee扱いしない。`reference_adapter_unsupported` / `engine_capability_unavailable` も既存 `RngPredictionUnsupportedReason` のまま構造化して上位へ渡し、message文字列から推測させない
+- `predictReferenceNormalRaw()` によるreference parityは検証用であり、reference-verifiedとgame-verified Productionは別契約である。Bow / Bowgun / Meleeの3カテゴリのうちMeleeはSwitch Axeを除いてProduction supportedへ昇格済みであり、Switch AxeのTable条件、pool、属性区分は今後の実機検証対象である。Counter Identificationのobservation validation（pool membership / `maximumOccurrences`）は、Melee共通poolでもAttack 5 / Element 4 / Sharpness 2 / Affinity 3の6.3.1契約をそのまま使う
 
 Error semantics。
 
@@ -823,7 +833,8 @@ Golden。
 
 - 既存game-verified fixture `src/test/fixtures/gameVerifiedNormalVectors.ts` のHeavy Bowgun観測（Base Seed 51231782、Normal Counter 4 / 5 / 6の連続15slot）は、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 5.3の監査どおり開始Counter 0..5000で `startNormalCounter = 4` の1件だけに一致し、`isTruncated = false` である。同じ15slotは1観測では0..5000に19候補、2観測以降は4だけになる
 - kernel / Worker foundationはimplementedである。NormalCountersPageへのUI接続、Counter確定処理、未検証武器種のProduction activationは後続PRである。`supportsSeedSearch = false`、`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`、Production Normal RNG output、Normal seed derivation、`NormalArtianCounter` persisted shape、`DATABASE_SCHEMA_VERSION`、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` は変更していない
-- その後の通常アーティア抽選上限修正（6.3.1）で、game-verified Production poolの `maximumOccurrences` はAttack 5 / Element 4 / family 7 2 / Affinity 3となり、`PRODUCTION_RNG_ENGINE_VERSION` は `production-rng:c5-e3` である。Counter Identificationのpool membership / occurrence validationはこの値を使う。HBG golden（Base Seed 51231782、Counter 4 / 5 / 6、0..5000で `startNormalCounter = 4` 唯一）は上限修正後も変わらない。support対象武器種、`NormalArtianAttributeClass`、Counter semanticsは変更していない
+- その後の通常アーティア抽選上限修正（6.3.1）で、game-verified Production poolの `maximumOccurrences` はAttack 5 / Element 4 / family 7 2 / Affinity 3となり、`PRODUCTION_RNG_ENGINE_VERSION` は `production-rng:c5-e3` となった。Counter Identificationのpool membership / occurrence validationはこの値を使う。HBG golden（Base Seed 51231782、Counter 4 / 5 / 6、0..5000で `startNormalCounter = 4` 唯一）は上限修正後も変わらない。上限修正の時点ではsupport対象武器種、`NormalArtianAttributeClass`、Counter semanticsを変更していない
+- さらにその後のMelee support拡張（6.3.1、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.14）で、Counter IdentificationはSwitch Axeを除く近接10武器種を `attribute_present` / `none` の両classで検索可能になり、`PRODUCTION_RNG_ENGINE_VERSION` は現在 `production-rng:c5-e4` である。kernelは `ProductionRngEngine.getPredictionSupport()` と `gameVerifiedNormalCandidatesForWeaponAndElement()` を共有しているため、support境界の拡張はkernel側の変更なしに自動的に反映される。Switch Axeだけが `unsupported_input` / `normal_pool_unverified` のままである。HBG golden、`NormalArtianAttributeClass`、Counter semantics、`NormalArtianCounter` persisted shape、`DATABASE_SCHEMA_VERSION`、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` は変更していない
 
 ---
 
