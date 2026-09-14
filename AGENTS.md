@@ -373,9 +373,8 @@ Planner must not synthesize them.
 The Production Normal Artian lottery uses the reference-verified PRNG, seed
 derivation, 10-step block, and pool step unchanged, and replaces only the
 candidate pool with the game-verified pool of the supported weapon type (Bow,
-Light Bowgun, Heavy Bowgun, Long Sword). The game-verified per-candidate
-`maximumOccurrences` are real-game limits, verified on 1293 forges / 6465 slots
-(`docs/RNG_REFERENCE_AUDIT.md` 14.13):
+Light Bowgun, Heavy Bowgun, Long Sword). The Production per-candidate
+`maximumOccurrences` are (`docs/RNG_REFERENCE_AUDIT.md` 14.13):
 
 ```text
 Attack (6)              5
@@ -383,6 +382,17 @@ Element (4)             4
 Sharpness/Capacity (7)  2
 Affinity (8)            3
 ```
+
+Their provenance is not uniform, and must not be described as if it were.
+Attack 5 / Element 4 / Sharpness 2 / Affinity 3 were game-verified directly on
+1293 attribute-present melee forges / 6465 slots (Great Sword, Dual Blades,
+Hammer, Charge Blade; Base Seed 51231782, 2026-09-14). Capacity 2 on the
+Bowguns, the application of Element 4 / Affinity 3 to the Bow, Affinity 3 on
+the Bowguns, and Affinity 3 in the elementless pools were not boundary-observed
+in that data set. They are adopted as the Production contract from the
+user-supplied Game8 limit table plus the fact that the existing game-observed
+Bow / LBG / HBG / Long Sword fixtures do not contradict them. Never write that
+1293 forges game-verified every Production limit including Capacity.
 
 The pinned reference pools in `referenceNormalBonuses.ts` keep Element 5 /
 Affinity 5. That is the pinned reference implementation's behavior, not a game

@@ -259,9 +259,11 @@ game-verifiedとしてfallback返却してはならない。この観測は全we
 
 補記（2026-09-14）: 上記C4-C時点のgame-verified poolはcandidate構成だけを確定しており、
 candidate別 `maximumOccurrences` はreference値（Element 5 / Affinity 5）を流用していた。
-14.13の再検証で実ゲーム上限はAttack 5 / Element 4 / family 7 2 / Affinity 3と確定し、
-Production game-verified poolだけをその値へ修正した。本節のreference pool表（Element 5 /
-Affinity 5）はpinned reference implementationの挙動であり、変更しない。
+14.13の再検証（属性ありMelee 1293個体）でAttack 5 / Element 4 / Sharpness 2 / Affinity 3を
+直接game-verifiedし、Capacity 2およびBow / Bowgun / none poolへの適用はGame8上限情報と既存
+fixtureとの無矛盾を根拠に、Production poolだけをAttack 5 / Element 4 / family 7 2 /
+Affinity 3へ修正した。本節のreference pool表（Element 5 / Affinity 5）はpinned reference
+implementationの挙動であり、変更しない。
 
 ### 5.4 numeric ID namespace注意
 
@@ -729,8 +731,14 @@ C5-E2C2完了時点では仕様先行でruntime implementationはC5-E2C3 pending
 
 - 実ゲームの最大出現数を **Attack 5 / Element 4 / Sharpness（family 7）2 / Affinity 3** として属性ありMelee pool `[6, 4, 7, 8]` を適用すると、保存画像を正として **1293 / 1293個体、6465 / 6465 slots** がRNG予測と一致した。PRNG、seed derivation、100 mix、10-step block、raw値のskip/retryは一切変更していない
 - 元OCR CSVには10件の誤認識 / slot取り込み誤りがあった。保存されていた元画像をユーザーが手動確認し、10件すべてRNG予測側が正しいことを確認済みである。したがってこの10件はRNG反例ではない。双剣は348 / 348がOCR結果のまま完全一致している
-- 補助情報として、ユーザー提示のGame8記事（<https://game8.jp/mhwilds/673616>）も通常アーティアの上限を基礎攻撃力 5 / 属性 4 / 会心率 3 / 斬れ味 2 / 装填数 2と記載している。Production correctnessの根拠はGame8ではなく本節の実ゲーム画像確認である
-- **corrected Production limits**: game-verified Production pool（`src/domain/rng/production/gameNormalBonuses.ts`）の `maximumOccurrences` を、これまでreference値を流用していたElement 5 / Affinity 5から **Attack 5 / Element 4 / family 7 2 / Affinity 3** へ修正した。`ReferenceNormalCandidate.maximumOccurrences` の型は `2 | 3 | 4 | 5` へ拡張した。修正前のProductionは一部Counterで実ゲームと異なる予測（3回目以降のAffinity、4回目以降のElementが除外されない）を生成していた
+- この1293個体で直接game-verifiedした上限はAttack 5 / Element 4 / Sharpness 2 / Affinity 3であり、対象はいずれも属性ありMelee（Great Sword / Dual Blades / Hammer / Charge Blade）である
+- ユーザー提示のGame8記事（<https://game8.jp/mhwilds/673616>）も通常アーティアの上限を基礎攻撃力 5 / 属性 4 / 会心率 3 / 斬れ味 2 / 装填数 2と記載している。属性ありMeleeの上限についてはProduction correctnessの根拠はGame8ではなく本節の実ゲーム画像確認である
+- 次は今回の1293個体による直接境界観測ではない。ユーザー提示のGame8上限情報と、既存game-observed fixture（Bow 属性あり / none、LBG Fire / none、HBG Fire / none、Long Sword Fire / none、各15 slots）が新上限と矛盾しないことを根拠にProduction contractとして採用している
+  - Capacity 2（LBG / HBG）
+  - BowへのElement 4 / Affinity 3上限の適用
+  - LBG / HBGへのAffinity 3上限の適用
+  - none poolへのAffinity 3上限の適用
+- **corrected Production limits**: Production pool（`src/domain/rng/production/gameNormalBonuses.ts`）の `maximumOccurrences` を、これまでreference値を流用していたElement 5 / Affinity 5から **Attack 5 / Element 4 / family 7 2 / Affinity 3** へ修正した。`ReferenceNormalCandidate.maximumOccurrences` の型は `2 | 3 | 4 | 5` へ拡張した。修正前のProductionは一部Counterで実ゲームと異なる予測（3回目以降のAffinity、4回目以降のElementが除外されない）を生成していた
 - reference parity層（`REFERENCE_NORMAL_NONE_CANDIDATES` / `REFERENCE_NORMAL_ELEMENTAL_CANDIDATES`、`predictReferenceNormalRaw()`、`referenceNormalCandidatesForElement()`、reference golden）はpinned GARP.lua v0.9.4とのparity契約であり、Element 5 / Affinity 5のまま変更していない。Element 5 / Affinity 5は実ゲーム仕様ではなくpinned reference implementationの挙動である
 - 既存game-observed fixture（Bow 属性あり / none、LBG Fire / none、HBG Fire / none、Long Sword Fire / none）はすべて修正後のProduction poolで引き続き一致する。PR #32のHBG Counter golden（Base Seed 51231782、Counter 4 / 5 / 6、開始Counter 0..5000で `startNormalCounter = 4` の唯一一致）も維持されている
 - Normal Artian Counter Identificationのobservation validationは修正後の `maximumOccurrences` を使い、Element 5枠、Affinity 4枠、family 7 3枠の観測を「検索0件」ではなく `invalid_input` として拒否する。「入力自体がProduction poolから生成不能」と「範囲内に一致なし」の区別は維持した

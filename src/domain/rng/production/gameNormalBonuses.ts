@@ -3,14 +3,22 @@ import { toReferenceNormalFinalAttribute, toReferenceWeaponType } from './refere
 import type { ReferenceNormalCandidate } from './referenceNormalBonuses'
 
 /*
- * Game-verified per-candidate limits of the real rarity-8 Normal Artian lottery
- * (docs/RNG_REFERENCE_AUDIT.md 5.3, 2026-09-14 re-verification of 1293 forges /
- * 6465 slots at Base Seed 51231782):
+ * Per-candidate limits of the Production rarity-8 Normal Artian pool
+ * (docs/RNG_REFERENCE_AUDIT.md 5.3 / 14.13):
  *
  *   Attack (6)              5
  *   Element (4)             4
  *   Sharpness/Capacity (7)  2
  *   Affinity (8)            3
+ *
+ * Provenance is not uniform. Attack 5 / Element 4 / Sharpness 2 / Affinity 3
+ * were game-verified directly on 1293 attribute-present melee forges (Great
+ * Sword, Dual Blades, Hammer, Charge Blade; 6465 slots at Base Seed 51231782,
+ * 2026-09-14). Capacity 2 on the Bowguns, Element 4 / Affinity 3 on the Bow,
+ * Affinity 3 on the Bowguns, and Affinity 3 in the elementless pools were not
+ * boundary-observed in that data set: they are adopted as the Production
+ * contract from the user-supplied Game8 limit table and from the existing
+ * game-observed Bow / LBG / HBG / Long Sword fixtures not contradicting them.
  *
  * They deliberately differ from the pinned reference pools in
  * `referenceNormalBonuses.ts`, which cap Element and Affinity at 5 and are kept

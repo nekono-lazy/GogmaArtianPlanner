@@ -277,14 +277,24 @@ v1のDomain `rarity` は必ず8であり、レア6・7のPrediction、Counter、
 
 Production `predictNormalArtian` は、reference-verified PRNG・seed derivation・10-step block・pool step（`selectReferenceNormalLotteryIdsFromRawValues()`）をそのまま使い、candidate poolだけをgame-verified pool（`gameVerifiedNormalCandidatesForWeaponAndElement()`）へ置き換える。各candidateは `maximumOccurrences` に達した時点でpoolから除外される。
 
-game-verified Production poolのcandidate別上限（実ゲーム仕様、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 5.3 / 14.13）。
+Production poolのcandidate別上限（[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 5.3 / 14.13）。
 
-| candidate | reference lottery ID | 上限 |
-|---|---:|---:|
-| 基礎攻撃力強化（Attack） | 6 | 5 |
-| 属性強化（Element） | 4 | 4 |
-| 斬れ味強化 / 装填数強化（family 7） | 7 | 2 |
-| 会心率強化（Affinity） | 8 | 3 |
+| candidate | reference lottery ID | 上限 | provenance |
+|---|---:|---:|---|
+| 基礎攻撃力強化（Attack） | 6 | 5 | 属性ありMelee 1293個体で直接game-verified |
+| 属性強化（Element） | 4 | 4 | 属性ありMelee 1293個体で直接game-verified（Bowへの適用は下記） |
+| 斬れ味強化（family 7） | 7 | 2 | 属性ありMelee 1293個体で直接game-verified |
+| 装填数強化（family 7） | 7 | 2 | 直接境界観測なし。Game8上限表 + 既存LBG / HBG fixtureとの無矛盾 |
+| 会心率強化（Affinity） | 8 | 3 | 属性ありMelee 1293個体で直接game-verified（Bow / Bowgun / none poolへの適用は下記） |
+
+provenanceは一様ではない。2026-09-14の1293個体 / 6465 slots（Great Sword / Dual Blades / Hammer / Charge Blade、すべて属性あり）で保存画像まで直接確認しgame-verifiedしたのはAttack 5 / Element 4 / Sharpness 2 / Affinity 3である。次はその1293個体による直接境界観測ではなく、ユーザー提示のGame8上限情報と、既存game-observed fixture（Bow 属性あり / none、LBG Fire / none、HBG Fire / none、Long Sword Fire / none）が新上限と矛盾しないことを根拠にProduction contractとして採用している。
+
+- Capacity 2（LBG / HBG）
+- BowへのElement 4 / Affinity 3上限の適用
+- LBG / HBGへのAffinity 3上限の適用
+- none poolへのAffinity 3上限の適用
+
+「1293個体 / 6465 slotsでCapacityを含む全Production上限を直接game-verifiedした」と記述してはならない。
 
 Production supported武器種とpool構成（PR #32時点から変更なし）。
 
@@ -785,7 +795,7 @@ Observation連続性。
 
 - 開始候補 `C` を `normalCounterRange` 全域で昇順に評価し、すべての観測が `C + i` の予測と一致した `C` だけをmatchとする。matchesは `startNormalCounter` 昇順で返し、同じ入力からは常に同じ配列を返す
 - correctness authorityは `ProductionRngEngine.predictNormalArtian()` である。kernelは同じNormal seed derivation、10-step block positioning、game-verified candidate pool、pool step（`selectReferenceNormalLotteryIdsFromRawValues()`）を共有し、独自のRNG規則を持たない。観測は `mapReferenceNormalResult()` の逆写像でreference ID namespaceへ変換して照合し、対象武器種のNormal lotteryが生成し得ないBonus（Gogma tier、未知type、Bowgunの斬れ味、Bowのfamily 7など）は `invalid_input` とする
-- さらに各観測は、その `attributeClass` に対応するgame-verified candidate poolで生成可能でなければならない。poolに存在しないreference ID（例: Heavy Bowgun / 属性あり / Element、Long Sword / 無属性 / Element、Bow / 無属性 / Element）を含む観測、または同一candidateが `maximumOccurrences` を超えて出現する観測（例: BowgunのCapacity 3枠、Long Sword / Bow / 属性ありのElement 5枠、任意のsupported poolのAffinity 4枠。上限は6.3.1のgame-verified値 Attack 5 / Element 4 / family 7 2 / Affinity 3）は、検索0件ではなく `invalid_input` とする。「入力自体がProduction poolから生成不能」と「範囲内に一致なし」は区別する
+- さらに各観測は、その `attributeClass` に対応するgame-verified candidate poolで生成可能でなければならない。poolに存在しないreference ID（例: Heavy Bowgun / 属性あり / Element、Long Sword / 無属性 / Element、Bow / 無属性 / Element）を含む観測、または同一candidateが `maximumOccurrences` を超えて出現する観測（例: BowgunのCapacity 3枠、Long Sword / Bow / 属性ありのElement 5枠、任意のsupported poolのAffinity 4枠。上限は6.3.1のProduction値 Attack 5 / Element 4 / family 7 2 / Affinity 3）は、検索0件ではなく `invalid_input` とする。「入力自体がProduction poolから生成不能」と「範囲内に一致なし」は区別する
 - progressは開始Counter候補として評価を完了した `searchedCounters / totalCounters` と `matchesFound` であり、Observation数×prediction回数ではない。Counter chunk sizeはruntime tuning値で永続Production契約ではない
 - Workerは各chunk間でmacrotask yield（`setTimeout(..., 0)`）を挟み、pending cancel messageを処理できる。cancel後はresultをpostしない
 - `maxMatches` 到達時は探索を停止し、`searchedCounterRange.endInclusive` に実際に評価完了した最後の開始Counterを、未探索Counterが残る場合は `isTruncated = true` を返す
