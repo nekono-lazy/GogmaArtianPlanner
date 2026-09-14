@@ -451,3 +451,161 @@ describe('blind Normal Artian route validation', () => {
     )
   })
 })
+
+/**
+ * `docs/DATA_MODEL.md` 9 / `docs/SEARCH_SPEC.md` 6.1 / 6.1.1: one creation,
+ * then one conversion for the last forged weapon, then the transient Gogma's
+ * amendments. The blind variant is decided from the whole Route, so a blind
+ * creation placed after a Keep can never make that Keep look predicted.
+ */
+describe('normal_artian_to_gogma operation ordering', () => {
+  type Operation = BuildRoute['operations'][number]
+  const create = (blind: boolean): Operation => blind
+    ? {
+        type: 'create_normal_artian',
+        weaponTypeId: 'weapon.fixture.a',
+        rarity: 8,
+        count: 1,
+        normalCounterBefore: null,
+        normalCounterAfter: null,
+      }
+    : {
+        type: 'create_normal_artian',
+        weaponTypeId: 'weapon.fixture.a',
+        rarity: 8,
+        count: 1,
+        normalCounterBefore: 4,
+        normalCounterAfter: 5,
+      }
+  const convert = (): Operation => ({
+    type: 'convert_normal_to_gogma',
+    weaponTypeId: 'weapon.fixture.a',
+    skillCounterBefore: 7,
+    skillCounterAfter: 8,
+  })
+  const keep = (counter = 10): Operation => ({
+    type: 'keep_bonuses',
+    sourceOwnedWeaponId: null,
+    gogmaCounterBefore: counter,
+    gogmaCounterAfter: counter + 1,
+  })
+  const reset = (counter = 10): Operation => ({
+    type: 'reset_bonuses',
+    sourceOwnedWeaponId: null,
+    gogmaCounterBefore: counter,
+    gogmaCounterAfter: counter + 1,
+  })
+  const resetSkills = (): Operation => ({
+    type: 'reset_skills',
+    sourceOwnedWeaponId: null,
+    skillCounterBefore: 8,
+    skillCounterAfter: 9,
+  })
+  const route = (operations: Operation[]): BuildRoute => ({
+    kind: 'normal_artian_to_gogma',
+    sourceOwnedWeaponId: null,
+    operations,
+  })
+  it('accepts create, convert, then Keep for the predicted variant', () => {
+    const validation = validateBuildRoute(route([create(false), convert(), keep()]))
+    expect(validation.issues).toEqual([])
+    expect(validation.isValid).toBe(true)
+  })
+
+  it('rejects a blind create, convert, Keep, Reset sequence', () => {
+    const validation = validateBuildRoute(route([create(true), convert(), keep(), reset(11)]))
+    expect(validation.isValid).toBe(false)
+    expect(validation.issues).toContainEqual(
+      expect.objectContaining({ path: 'operations[2]', message: expect.stringMatching(/unknown five slots/) }),
+    )
+  })
+
+  it('rejects convert, Keep, blind create, Reset even though a Reset appears later', () => {
+    const validation = validateBuildRoute(route([convert(), keep(), create(true), reset(11)]))
+    expect(validation.isValid).toBe(false)
+    // The blind variant is decided Route-wide, so the early Keep is refused as
+    // reading unknown slots, and both the creation and the conversion are out
+    // of order.
+    expect(validation.issues).toContainEqual(
+      expect.objectContaining({ path: 'operations[1]', message: expect.stringMatching(/unknown five slots/) }),
+    )
+    expect(validation.issues).toContainEqual(
+      expect.objectContaining({ path: 'operations[2]', message: expect.stringMatching(/must precede the conversion/) }),
+    )
+    expect(validation.issues).toContainEqual(
+      expect.objectContaining({ path: 'operations[0]', message: expect.stringMatching(/preceding create_normal_artian/) }),
+    )
+  })
+
+  it('accepts a blind create, convert, Reset, Keep sequence', () => {
+    const validation = validateBuildRoute(route([create(true), convert(), reset(), keep(11)]))
+    expect(validation.issues).toEqual([])
+    expect(validation.isValid).toBe(true)
+  })
+
+  it.each([
+    ['Reset Bonuses', reset()],
+    ['Keep Bonuses', keep()],
+    ['Reset Skills', resetSkills()],
+  ])('rejects %s placed before the conversion', (_label, amendment) => {
+    const beforeConversion = validateBuildRoute(route([create(false), amendment, convert(), reset()]))
+    expect(beforeConversion.isValid).toBe(false)
+    expect(beforeConversion.issues).toContainEqual(
+      expect.objectContaining({ path: 'operations[1]', message: expect.stringMatching(/must follow the conversion/) }),
+    )
+    const beforeCreation = validateBuildRoute(route([amendment, create(false), convert()]))
+    expect(beforeCreation.isValid).toBe(false)
+    expect(beforeCreation.issues).toContainEqual(
+      expect.objectContaining({ path: 'operations[0]', message: expect.stringMatching(/must follow the conversion/) }),
+    )
+  })
+
+  it('accepts one predicted creation followed by the conversion, whatever its forge count', () => {
+    // `candidateOffset = k` forges `k + 1` weapons through one operation.
+    expect(validateBuildRoute(route([create(false), convert()])).isValid).toBe(true)
+    const threeForges: Operation = {
+      type: 'create_normal_artian',
+      weaponTypeId: 'weapon.fixture.a',
+      rarity: 8,
+      count: 3,
+      normalCounterBefore: 4,
+      normalCounterAfter: 7,
+    }
+    const validation = validateBuildRoute(route([threeForges, convert()]))
+    expect(validation.issues).toEqual([])
+    expect(validation.isValid).toBe(true)
+  })
+
+  it('accepts a blind creation, the conversion, and the forced Reset', () => {
+    const validation = validateBuildRoute(route([create(true), convert(), reset()]))
+    expect(validation.issues).toEqual([])
+    expect(validation.isValid).toBe(true)
+  })
+
+  it('requires exactly one creation and exactly one conversion', () => {
+    // A creation with no conversion produces no Gogma weapon.
+    expect(validateBuildRoute(route([create(false)])).issues)
+      .toContainEqual(expect.objectContaining({ message: expect.stringMatching(/exactly one convert_normal_to_gogma/) }))
+    // Several forges are one operation's count, never repeated creations.
+    expect(validateBuildRoute(route([create(false), create(false), convert()])).issues)
+      .toContainEqual(expect.objectContaining({ message: expect.stringMatching(/exactly one create_normal_artian/) }))
+    // SEARCH_SPEC 6.1: the conversion is one operation on the last forged weapon.
+    expect(validateBuildRoute(route([create(false), convert(), convert(), reset()])).issues)
+      .toContainEqual(expect.objectContaining({ message: expect.stringMatching(/exactly one convert_normal_to_gogma/) }))
+    expect(validateBuildRoute(route([convert(), reset()])).issues)
+      .toContainEqual(expect.objectContaining({ message: expect.stringMatching(/exactly one create_normal_artian/) }))
+    expect(validateBuildRoute(route([convert(), reset()])).issues)
+      .toContainEqual(expect.objectContaining({ path: 'operations[0]', message: expect.stringMatching(/preceding create_normal_artian/) }))
+    // An amendment with no conversion at all has no transient Gogma to act on.
+    expect(validateBuildRoute(route([create(false), reset()])).issues)
+      .toContainEqual(expect.objectContaining({ path: 'operations[1]', message: expect.stringMatching(/must follow the conversion/) }))
+    expect(validateBuildRoute(route([create(false), convert(), reset()])).issues).toEqual([])
+  })
+
+  it('leaves the owned Normal conversion route untouched', () => {
+    expect(validateBuildRoute(ownedNormalRoute()).isValid).toBe(true)
+    expect(validateBuildRoute(ownedNormalRoute(), [
+      { ...createValidOwnedWeapon(ownedWeaponId('owned.fixture.normal')), kind: 'normal', rarity: 8, restorationBonusScope: 'normal_artian', seriesSkillId: null, groupSkillId: null, status: null, isProtected: false } as never,
+    ]).isValid).toBe(true)
+  })
+})

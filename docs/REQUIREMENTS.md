@@ -185,7 +185,7 @@ Skill Identificationはreference-generated fixtureに加えて、C5-E2C9で独�
 ## 7. 通常アーティアCounter
 
 - Base Seedが判明していても、通常アーティアCounterが不明な場合は観測結果から現在位置を検索する
-- レア8 Counterが未確定の武器種について、通常アーティア経由の候補検索を行わない
+- レア8 Counterが未確定の武器種について、Normal Predictionを使う新規通常アーティア経由のpredicted variant([SEARCH_SPEC.md](./SEARCH_SPEC.md) 6.1)は検索しない。ただし必要条件を満たす場合は6.1.1のblind Reset variantで新規通常アーティア経由を検索でき、RouteKind全体を禁止するわけではない
 - Counterが未確定でも、既存巨戟アーティア経由の候補検索は利用可能とする
 - すべての武器種のレア8 Counterを事前に確定させる必要はない
 - Counter候補が複数ある状態を確定済みとして扱わない

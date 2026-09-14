@@ -123,18 +123,35 @@ function convertRoute(sourceId: string, skillCounter = 7): BuildRoute {
   }
 }
 
-function forgeRoute(weaponTypeId: string, normalCounterBefore: number): BuildRoute {
+/**
+ * The canonical new-Normal Route: one creation, then the conversion of the
+ * forged weapon. Each caller converts at its own Skill position, so only the
+ * Normal Counter resource under test is shared.
+ */
+function forgeRoute(
+  weaponTypeId: string,
+  normalCounterBefore: number,
+  skillCounterBefore: number,
+): BuildRoute {
   return {
     kind: 'normal_artian_to_gogma',
     sourceOwnedWeaponId: null,
-    operations: [{
-      type: 'create_normal_artian',
-      weaponTypeId,
-      rarity: 8,
-      count: 1,
-      normalCounterBefore,
-      normalCounterAfter: normalCounterBefore + 1,
-    }],
+    operations: [
+      {
+        type: 'create_normal_artian',
+        weaponTypeId,
+        rarity: 8,
+        count: 1,
+        normalCounterBefore,
+        normalCounterAfter: normalCounterBefore + 1,
+      },
+      {
+        type: 'convert_normal_to_gogma',
+        weaponTypeId,
+        skillCounterBefore,
+        skillCounterAfter: skillCounterBefore + 1,
+      },
+    ],
   }
 }
 
@@ -498,7 +515,7 @@ describe('B8-C3b resource re-association per ConflictKind', () => {
   })
 
   it('re-maps a same_normal_counter conflict', () => {
-    const build = (ids: readonly string[]) => {
+    const build = (ids: readonly string[], skillCounterBase: number) => {
       const targets = ids.map((id, index) =>
         target(`target.pf.kind-normal.${id}`, index === 0 ? 5 : 1),
       )
@@ -508,13 +525,13 @@ describe('B8-C3b resource re-association per ConflictKind', () => {
           routeEntry(
             `entry.pf.kind-normal.${id}`,
             targets[index],
-            forgeRoute('weapon.fixture.a', 4),
+            forgeRoute('weapon.fixture.a', 4, skillCounterBase + index),
           ),
         ),
       }
     }
-    const two = build(['first', 'second'])
-    const extra = build(['generated'])
+    const two = build(['first', 'second'], 7)
+    const extra = build(['generated'], 9)
     const { original, result } = remapped(
       two.targets,
       two.entries,

@@ -595,9 +595,40 @@ export function validateBuildRoute(
         'normal_artian_to_gogma cannot reference an existing OwnedWeapon.',
       )
     }
-    let converted = false
-    let blindCreateCount = 0
-    let createCount = 0
+    /**
+     * Canonical Route contract (`docs/DATA_MODEL.md` 9 / `docs/SEARCH_SPEC.md`
+     * 6.1 / 6.1.1): exactly one `create_normal_artian`, whose `count` is the
+     * forge count (`candidateOffset = k` forges `k + 1` weapons through one
+     * operation, never through repeated creations), then exactly one
+     * `convert_normal_to_gogma` for the last forged weapon, then the transient
+     * Gogma's Reset Bonuses / Keep Bonuses / Reset Skills. The blind variant is
+     * a property of the whole Route, decided before the ordering walk, so a
+     * misplaced blind creation can never hide from the Keep check below.
+     */
+    type CreateOperation = Extract<BuildRoute['operations'][number], { type: 'create_normal_artian' }>
+    const creates = route.operations.filter(
+      (operation): operation is CreateOperation => operation.type === 'create_normal_artian',
+    )
+    const isBlind = creates.some(isBlindCreateNormalArtianOperation)
+    const createIndex = route.operations.findIndex(({ type }) => type === 'create_normal_artian')
+    const conversionIndex = route.operations.findIndex(({ type }) => type === 'convert_normal_to_gogma')
+    const conversionCount = route.operations.filter(({ type }) => type === 'convert_normal_to_gogma').length
+    if (creates.length !== 1) {
+      addIssue(
+        issues,
+        'operations',
+        'invalid_route_operation',
+        'normal_artian_to_gogma carries exactly one create_normal_artian operation; several forges are expressed by its count.',
+      )
+    }
+    if (conversionCount !== 1) {
+      addIssue(
+        issues,
+        'operations',
+        'invalid_route_operation',
+        'normal_artian_to_gogma carries exactly one convert_normal_to_gogma operation for the last forged weapon.',
+      )
+    }
     let resetBonusesCount = 0
     route.operations.forEach((operation, index) => {
       if (!['create_normal_artian', 'convert_normal_to_gogma', 'reset_bonuses', 'keep_bonuses', 'reset_skills'].includes(operation.type)) {
@@ -607,21 +638,34 @@ export function validateBuildRoute(
           'invalid_route_operation',
           `Operation '${operation.type}' is not allowed in normal_artian_to_gogma.`,
         )
+        return
       }
       if (operation.type === 'create_normal_artian') {
-        createCount += 1
-        if (isBlindCreateNormalArtianOperation(operation)) blindCreateCount += 1
+        if (conversionIndex !== -1 && index > conversionIndex) {
+          addIssue(issues, `operations[${index}]`, 'invalid_route_operation', 'create_normal_artian must precede the conversion.')
+        }
+        return
       }
-      if (operation.type === 'convert_normal_to_gogma') converted = true
+      if (operation.type === 'convert_normal_to_gogma') {
+        if (createIndex === -1 || index < createIndex) {
+          addIssue(issues, `operations[${index}]`, 'invalid_route_operation', 'convert_normal_to_gogma requires a preceding create_normal_artian.')
+        }
+        return
+      }
+      // Every amendment operates on the converted transient Gogma, so it must
+      // follow the conversion and target the unregistered route output.
+      if (conversionIndex === -1 || index < conversionIndex) {
+        addIssue(issues, `operations[${index}]`, 'invalid_route_operation', `${operation.type} must follow the conversion in normal_artian_to_gogma.`)
+      }
       if (operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses') {
-        if (operation.sourceOwnedWeaponId !== null || !converted) {
+        if (operation.sourceOwnedWeaponId !== null) {
           addIssue(issues, `operations[${index}].sourceOwnedWeaponId`, 'invalid_state', 'A normal-route bonus amendment must target the converted route output.')
         }
         // The predicted variant knows the forged five slots, so Keep may be the
         // first amendment. Only the blind variant's slots are unknown until a
         // Reset rewrites them (`docs/SEARCH_SPEC.md` 6.1.1): an unknown-input
         // rule, not a prediction-support limit and not a game rule.
-        if (operation.type === 'keep_bonuses' && blindCreateCount > 0 && resetBonusesCount === 0) {
+        if (operation.type === 'keep_bonuses' && isBlind && resetBonusesCount === 0) {
           addIssue(issues, `operations[${index}]`, 'invalid_route_operation', 'Keep Bonuses cannot read the unknown five slots of a blind Normal Artian; a Reset Bonuses must precede it.')
         }
         if (operation.type === 'reset_bonuses') resetBonusesCount += 1
@@ -635,11 +679,11 @@ export function validateBuildRoute(
         )
       }
     })
-    if (blindCreateCount > 0) {
+    if (isBlind) {
       // The forged weapon's five slots are unknown, so the Route is executable
       // only when a Reset Bonuses rewrites all five of them
       // (`docs/SEARCH_SPEC.md` 6.1.1).
-      if (createCount !== 1 || blindCreateCount !== createCount) {
+      if (creates.length !== 1 || !creates.every(isBlindCreateNormalArtianOperation)) {
         addIssue(
           issues,
           'operations',
@@ -647,7 +691,7 @@ export function validateBuildRoute(
           'A blind Normal Artian route creates exactly one Normal Artian weapon.',
         )
       }
-      if (!converted) {
+      if (conversionCount === 0) {
         addIssue(
           issues,
           'operations',
