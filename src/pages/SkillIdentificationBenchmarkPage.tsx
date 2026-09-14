@@ -151,7 +151,7 @@ export function SkillIdentificationBenchmarkPage() {
       <Stack spacing={2}>
         <Alert severity="warning">Production buildで実行してください。固定入力: Insect Glaive / Thunder、4 ordered observations (275, 255, 245, 243)、Skill Counter 180–190。</Alert>
         <Paper variant="outlined" sx={{ p: 2 }}><Stack spacing={2}>
-          <Typography variant="body2">navigator.hardwareConcurrency: {navigator.hardwareConcurrency ?? 'unavailable'} · Production Engine: production-rng:c5-e3 · Expected Browser Workers: {workers}</Typography>
+          <Typography variant="body2">navigator.hardwareConcurrency: {navigator.hardwareConcurrency ?? 'unavailable'} · Production Engine: production-rng:c5-e4 · Expected Browser Workers: {workers}</Typography>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <FormControl fullWidth><InputLabel id="c8-range-label">Seed range</InputLabel><Select labelId="c8-range-label" label="Seed range" value={range} disabled={running} onChange={(event) => setRange(event.target.value as RangePreset)}>{Object.entries(rangePresets).map(([key, value]) => <MenuItem key={key} value={key}>{value.label}: {value.startInclusive.toLocaleString()}–{value.endInclusive.toLocaleString()} ({(value.endInclusive - value.startInclusive + 1).toLocaleString()})</MenuItem>)}</Select></FormControl>
             <FormControl fullWidth><InputLabel id="c8-workers-label">Workers</InputLabel><Select labelId="c8-workers-label" label="Workers" value={workers} disabled={running} onChange={(event) => setWorkers(Number(event.target.value) as BrowserBenchmarkWorkerCount)}>{[1, 2, 4].map((count) => <MenuItem key={count} value={count}>{count}</MenuItem>)}</Select></FormControl>

@@ -141,8 +141,35 @@ describe('Production Candidate Search Worker composition', () => {
     ]))
   })
 
-  it('skips an unsupported Production Normal input without a Worker error', async () => {
+  it('searches a Melee Great Sword Normal route with the predicted variant now that the Melee category is supported', async () => {
     const input = createProductionSearchInput('weapon.great_sword')
+    const responses = await runProductionSearch(input)
+
+    expect(responses.some(({ type }) => type === 'error')).toBe(false)
+    const result = resultResponse(responses).result
+    expect(result.targetResult.searchedRoutes).toContain('normal_artian_to_gogma')
+    // Production Normal prediction is now supported for the Melee category, so
+    // the predicted variant runs with concrete Normal Counter positions and
+    // the forced Reset notice of SEARCH_SPEC 6.1.1 is not emitted.
+    expect(result.warnings.some(({ severity }) => severity === 'info')).toBe(false)
+    const candidate = candidatesOf(result.targetResult).find(
+      ({ route }) => route.kind === 'normal_artian_to_gogma',
+    )
+    expect(candidate).toBeDefined()
+    expect(candidate?.route.operations[0]).toEqual(expect.objectContaining({
+      type: 'create_normal_artian',
+      weaponTypeId: 'weapon.great_sword',
+      rarity: 8,
+      count: 1,
+      normalCounterBefore: 0,
+      normalCounterAfter: 1,
+    }))
+    expect(candidate?.estimatedNormalAdvance).toBe(1)
+    expect(candidate?.restorationBonusScope).toBe('gogma_artian')
+  })
+
+  it('skips an unsupported Production Normal input without a Worker error', async () => {
+    const input = createProductionSearchInput('weapon.switch_axe')
     const responses = await runProductionSearch(input)
 
     expect(responses.some(({ type }) => type === 'error')).toBe(false)
@@ -171,7 +198,7 @@ describe('Production Candidate Search Worker composition', () => {
   })
 
   it('creates a forced Reset Production Candidate without Normal prediction', async () => {
-    const input = createProductionSearchInput('weapon.great_sword')
+    const input = createProductionSearchInput('weapon.switch_axe')
     const responses = await runProductionSearch(input)
 
     expect(responses.some(({ type }) => type === 'error')).toBe(false)

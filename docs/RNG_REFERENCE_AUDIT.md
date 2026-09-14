@@ -265,6 +265,12 @@ fixtureとの無矛盾を根拠に、Production poolだけをAttack 5 / Element 
 Affinity 3へ修正した。本節のreference pool表（Element 5 / Affinity 5）はpinned reference
 implementationの挙動であり、変更しない。
 
+補記（2026-09-14、Melee support拡張）: 上記C4-C時点のgame-verified matrixのうちLong Swordの
+2条件は、14.14でSwitch Axeを除く近接10武器種の共通Melee pool（属性あり `[6, 4, 7, 8]` /
+none `[6, 7, 8]`）へ昇格した。directly game-verifiedな武器・条件と、category-level Production
+adoptionにとどまる武器・条件の区別は14.14に従う。Switch Axeは引き続きunsupportedであり、
+「その他の近接武器」を一律に未検証とする本節の記述は14.14以前の状態を表す。
+
 ### 5.4 numeric ID namespace注意
 
 参照Luaには別namespaceがある。
@@ -745,6 +751,50 @@ C5-E2C2完了時点では仕様先行でruntime implementationはC5-E2C3 pending
 - Production Normal prediction結果が変わるobservable RNG semantics changeとして `PRODUCTION_RNG_ENGINE_VERSION` を `production-rng:c5-e2` から `production-rng:c5-e3` へ更新した。旧version下で生成されたBuildCandidate / BuildListEntry / ProductionPlanは `rngEngineVersion` の差で `calculation_context_changed` となる。`CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、Master dataVersionは変更していない
 - 今回の証拠は属性ありMelee（Great Sword、Dual Blades、Hammer、Charge Blade）についてMelee pool仮説 `[6, 4, 7, 8]` を非常に強く支持するが、本PRではProduction supportを拡張しない。`gameVerifiedNormalCandidatesForWeaponAndElement()` のsupport対象はBow / Light Bowgun / Heavy Bowgun / Long Swordのままである。Meleeカテゴリ化と全近接へのsupport拡張は別PRの責務である
 - Game8から武器種ごとのTable A / B条件に関する情報も得ているが、table-selection modelの正式化、PR #32の `NormalArtianAttributeClass = 'none' | 'attribute_present'` の再設計、Bowの属性分類変更は本PRの対象外であり別途検証・設計する。`NormalArtianCounter` persisted model、ID、Counter semantics（武器種 + rarityごとに1本、Table A / Bのどちらを作成しても1進む）は変更していない
+
+---
+
+### 14.14 通常アーティアPredictionの近接武器Melee support拡張（2026-09-14）
+
+監査日: 2026-09-14 (Asia/Tokyo)
+
+- 通常アーティアPrediction / Counter IdentificationのProduction support対象武器種を、Long Sword単独のMelee supportから、Switch Axeを除く近接10武器種（Great Sword / Sword and Shield / Dual Blades / Long Sword / Hammer / Hunting Horn / Lance / Gunlance / Charge Blade / Insect Glaive）の共通Meleeカテゴリへ拡張した。Bow / Light Bowgun / Heavy Bowgunの既存supportは変更していない。今回の拡張後にProduction Normal unsupportedな武器種はSwitch Axeだけである
+- Melee共通poolは14.13で確定したProduction candidate上限をそのまま使う。属性あり `[6, 4, 7, 8]`（Attack 5 / Element 4 / Sharpness 2 / Affinity 3）、none `[6, 7, 8]`（Attack 5 / Sharpness 2 / Affinity 3）であり、既存Long Sword poolと完全に同一である。`gameNormalBonuses.ts` ではLong Sword専用定数を `GAME_VERIFIED_MELEE_ELEMENTAL_NORMAL_CANDIDATES` / `GAME_VERIFIED_MELEE_NONE_NORMAL_CANDIDATES` へ整理し、Melee membershipは `PRODUCTION_MELEE_NORMAL_POOL_WEAPON_TYPE_IDS` の明示allow-listだけで決める。unknown WeaponTypeIdを暗黙にMelee扱いせず、allow-list外はfail closedする
+
+**verification provenance（直接検証とcategory-level adoptionの区別）**
+
+10武器すべてを個別に直接game-verifiedしたわけではない。
+
+| 区分 | 武器 / 条件 | 根拠 |
+|---|---|---|
+| directly game-verified | Long Sword 属性あり / none | 既存fixture（Base Seed 51231782、Counter 0..2、各15 slots、5.3） |
+| directly game-verified | Great Sword / Dual Blades / Hammer / Charge Blade 属性あり | 14.13の再検証。Base Seed 51231782、1293個体 / 6465 slotsを保存画像authorityで確認し、Melee属性ありpool `[6, 4, 7, 8]` / Attack 5 / Element 4 / Sharpness 2 / Affinity 3と完全一致 |
+| category-level Production adoption | Sword and Shield / Hunting Horn / Lance / Gunlance / Insect Glaive 属性あり / none | 直接大量検証なし |
+| category-level Production adoption | Great Sword / Dual Blades / Hammer / Charge Blade none | 14.13の1293個体には含まれていない |
+
+category-level adoptionの根拠は次のcategory-level evidenceである。
+
+- Long Sword + Great Sword + Dual Blades + Hammer + Charge Bladeという5種類の異なるMelee weapon streamで共通規則が成立する
+- ユーザー提示のGame8通常アーティアTable情報で、Switch Axeが明示的な別カテゴリとなり、その他の近接武器が共通条件として扱われている
+- none poolは既存Long Sword none fixtureと整合する
+- PRNG / seed derivation / weaponType stream自体は全武器共通であり、weaponType numeric値だけがseedを分離する
+
+**golden / fixture**
+
+- 14.13の1293件CSV全データはrepository fixtureへ入れていない（repositoryの巨大化を避ける）。再検証時点でユーザーが確認したcurrent Normal CounterはDual Blades 349、Great Sword 156、Hammer 24、Charge Blade 0であるが、各武器の正確な5-slot ordered sequenceはrepository内の監査記録に存在しないため、Production予測で生成した系列を「game-observed」としてfixture化することはしていない。テストはProduction Engineとkernelの一致、Melee poolの同一性、support境界、14.13上限の適用だけを固定する。game-observed goldenとして扱ってよいMelee fixtureは引き続きLong Sword Fire / noneの既存fixtureだけである
+
+**Switch Axe**
+
+- Game8情報ではSwitch Axeは他の近接とTable条件が異なり、パーツ構成によらず同一Tableとされている。しかし使用candidate pool、属性あり / noneの扱い、current `NormalArtianAttributeClass` との対応を今回の実ゲームfixtureでは確認していないため、推測でMelee poolへ入れない。`gameVerifiedNormalCandidatesForWeaponAndElement('weapon.switch_axe', ...)` は引き続き `UnsupportedGameVerifiedNormalPredictionError` であり、`getPredictionSupport` は `normal_pool_unverified`、Counter Identificationは `unsupported_input` / `normal_pool_unverified` でfail closedすることをtestで固定した
+
+**Counter Identification**
+
+- PR #32のNormal Counter Identification kernelは `ProductionRngEngine.getPredictionSupport()` と `gameVerifiedNormalCandidatesForWeaponAndElement()` を共有しているため、kernel側の変更なしに新しいMelee supportを利用できる。Great Sword / Dual Blades / Hammer / Charge Bladeの `attribute_present`、およびSword and Shield / Hunting Horn / Lance / Gunlance / Insect Glaiveの `attribute_present` / `none` がinput supportを通り、Switch Axeだけが `unsupported_input` のままであることをtestで固定した。observation validationのAttack 5 / Element 4 / Sharpness 2 / Affinity 3上限は14.13契約をそのまま使う。HBG golden（Counter 4 / 5 / 6、0..5000で `startNormalCounter = 4` 唯一）は変わらない
+
+**version**
+
+- 以前unsupportedだったNormal Prediction inputがsupportedになり、Candidate SearchのRoute availabilityとCounter Identification supportが変わるため、observable Production RNG semantics changeとして `PRODUCTION_RNG_ENGINE_VERSION` を `production-rng:c5-e3` から `production-rng:c5-e4` へ更新した。`rngEngineVersion` の差がCalculationContextの失効境界である。`CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、Master dataVersionは変更していない
+- 変更していないもの: reference parity pool、reference golden、PRNG、seed derivation、10-step block、candidate `maximumOccurrences`、Normal Counter semantics（武器種 + rarityごとに1本、Table A / Bのどちらを作成しても1進む）、`NormalArtianCounter` persisted shape、persistence schema、`NormalArtianAttributeClass`、Bowの属性分類、Gogma RNG、Skill RNG、Search algorithm、Planner algorithm、UI。Table A / Bの新Domain model導入も行っていない
 
 ---
 

@@ -32,8 +32,25 @@ const ATTRIBUTE_PRESENT_ELEMENTS: readonly ElementId[] = [
   'element.fire', 'element.water', 'element.thunder', 'element.ice', 'element.dragon',
   'element.poison', 'element.paralysis', 'element.sleep', 'element.blast',
 ]
+/**
+ * Melee category (docs/RNG_REFERENCE_AUDIT.md 14.14): Long Sword and the
+ * elemental pool of Great Sword / Dual Blades / Hammer / Charge Blade are
+ * directly game-verified; Sword and Shield / Hunting Horn / Lance / Gunlance /
+ * Insect Glaive and the elementless pool of those four are category-level
+ * Production adoption. Switch Axe is deliberately outside the category.
+ */
+const DIRECTLY_VERIFIED_MELEE_WEAPON_TYPES: readonly WeaponTypeId[] = [
+  'weapon.great_sword', 'weapon.dual_blades', 'weapon.hammer', 'weapon.charge_blade',
+]
+const CATEGORY_ADOPTED_MELEE_WEAPON_TYPES: readonly WeaponTypeId[] = [
+  'weapon.sword_and_shield', 'weapon.hunting_horn', 'weapon.lance', 'weapon.gunlance',
+  'weapon.insect_glaive',
+]
+const MELEE_WEAPON_TYPES: readonly WeaponTypeId[] = [
+  'weapon.long_sword', ...DIRECTLY_VERIFIED_MELEE_WEAPON_TYPES, ...CATEGORY_ADOPTED_MELEE_WEAPON_TYPES,
+]
 const SUPPORTED_WEAPON_TYPES: readonly WeaponTypeId[] = [
-  'weapon.bow', 'weapon.light_bowgun', 'weapon.heavy_bowgun', 'weapon.long_sword',
+  'weapon.bow', 'weapon.light_bowgun', 'weapon.heavy_bowgun', ...MELEE_WEAPON_TYPES,
 ]
 const HBG_BASE_SEED = String(gameVerifiedHeavyBowgunFireNormalVectors[0].baseSeed)
 
@@ -599,6 +616,16 @@ describe('Normal Artian Counter Identification kernel', () => {
     // Long Sword / none keeps the same Affinity and Sharpness limits.
     await expectProducible(at('weapon.long_sword', 'none', [affinity, affinity, affinity, attack, attack]))
     await expectImpossible(at('weapon.long_sword', 'none', [affinity, affinity, affinity, affinity, attack]), 3)
+    // Every other Melee weapon type shares the PR #33 limits through the same Melee pool.
+    for (const weaponTypeId of MELEE_WEAPON_TYPES) {
+      await expectProducible(at(weaponTypeId, 'attribute_present', [element, element, element, element, attack]))
+      await expectImpossible(at(weaponTypeId, 'attribute_present', [element, element, element, element, element]), 4)
+      await expectImpossible(at(weaponTypeId, 'attribute_present', [affinity, affinity, affinity, affinity, attack]), 3)
+      await expectImpossible(at(weaponTypeId, 'attribute_present', [sharpness, sharpness, sharpness, attack, element]), 2)
+      await expectProducible(at(weaponTypeId, 'none', [sharpness, sharpness, affinity, affinity, affinity]))
+      await expectImpossible(at(weaponTypeId, 'none', [sharpness, sharpness, sharpness, attack, attack]), 2)
+      await expectImpossible(at(weaponTypeId, 'none', [affinity, affinity, affinity, affinity, attack]), 3)
+    }
 
     // Bow: Element 4 valid, 5 impossible; Affinity 3 valid, 4 impossible.
     await expectProducible(at('weapon.bow', 'attribute_present', [element, element, element, element, affinity]))
@@ -651,22 +678,73 @@ describe('Normal Artian Counter Identification kernel', () => {
       .resolves.toMatchObject({ searchedCounterRange: { startInclusive: max, endInclusive: max } })
   })
 
-  it('fails closed with normal_pool_unverified for weapon types without a game-verified pool', async () => {
+  it('accepts every Melee weapon type as searchable input for both attribute classes', async () => {
     const engine = new ProductionRngEngine()
-    const observations = fixtureObservations(gameVerifiedLongSwordFireNormalVectors)
-    for (const weaponTypeId of [
-      'weapon.great_sword', 'weapon.sword_and_shield', 'weapon.dual_blades', 'weapon.hammer',
-      'weapon.hunting_horn', 'weapon.lance', 'weapon.gunlance', 'weapon.switch_axe',
-      'weapon.charge_blade', 'weapon.insect_glaive',
-    ]) {
+    // Directly verified elemental streams: Great Sword / Dual Blades / Hammer /
+    // Charge Blade at the Counters the 2026-09-14 audit recorded as current
+    // (156 / 349 / 24 / 0). The repository holds no per-weapon slot sequence
+    // fixture, so the observations come from the Production authority itself;
+    // the test fixes the support boundary and the kernel / Engine agreement,
+    // not a game-observed golden.
+    const audited = [
+      { weaponTypeId: 'weapon.great_sword', counter: 156 },
+      { weaponTypeId: 'weapon.dual_blades', counter: 349 },
+      { weaponTypeId: 'weapon.hammer', counter: 24 },
+      { weaponTypeId: 'weapon.charge_blade', counter: 0 },
+    ] as const
+    for (const { weaponTypeId, counter } of audited) {
+      const observations = predictedObservations(
+        engine, HBG_BASE_SEED, weaponTypeId, ['element.fire', 'element.fire', 'element.fire'], counter,
+      )
+      expect(observations.every((observation) => observation.attributeClass === 'attribute_present')).toBe(true)
       await expect(identifyNormalArtianCounter({
         ...hbgInput(observations),
         weaponTypeId,
+      }, engine)).resolves.toMatchObject({
+        matches: expect.arrayContaining([{ startNormalCounter: counter }]),
+        isTruncated: false,
+      })
+    }
+    // Category-level adoption: the remaining Melee weapons pass input support
+    // for attribute_present and none alike.
+    for (const weaponTypeId of CATEGORY_ADOPTED_MELEE_WEAPON_TYPES) {
+      for (const elementIds of [['element.thunder', 'element.ice'], ['element.none', 'element.none']] as const) {
+        const observations = predictedObservations(engine, '8524433', weaponTypeId, elementIds, 12)
+        await expect(identifyNormalArtianCounter({
+          baseSeed: '8524433',
+          weaponTypeId,
+          rarity: 8,
+          observations,
+          normalCounterRange: { startInclusive: 0, endInclusive: 200 },
+        }, engine)).resolves.toMatchObject({
+          matches: expect.arrayContaining([{ startNormalCounter: 12 }]),
+          isTruncated: false,
+        })
+      }
+    }
+    // The Long Sword fixture rows are producible by the shared Melee pool of
+    // every other Melee weapon type, so they are a legitimate search there.
+    const longSwordRows = fixtureObservations(gameVerifiedLongSwordFireNormalVectors)
+    for (const weaponTypeId of MELEE_WEAPON_TYPES) {
+      await expect(identifyNormalArtianCounter({ ...hbgInput(longSwordRows), weaponTypeId }, engine))
+        .resolves.toMatchObject({ isTruncated: false })
+    }
+  })
+
+  it('fails closed with normal_pool_unverified for Switch Axe only, never treating it as Melee', async () => {
+    const engine = new ProductionRngEngine()
+    const observations = fixtureObservations(gameVerifiedLongSwordFireNormalVectors)
+    const support = vi.spyOn(engine, 'getPredictionSupport')
+    for (const attributeClass of NORMAL_ARTIAN_ATTRIBUTE_CLASSES) {
+      await expect(identifyNormalArtianCounter({
+        ...hbgInput(observations.map((observation) => ({ ...observation, attributeClass }))),
+        weaponTypeId: 'weapon.switch_axe',
       }, engine)).rejects.toMatchObject({
         code: 'unsupported_input',
         unsupportedReason: 'normal_pool_unverified',
       })
     }
+    expect(support).toHaveBeenCalledTimes(2)
     await expect(identifyNormalArtianCounter({
       ...hbgInput(observations),
       weaponTypeId: 'weapon.unknown',

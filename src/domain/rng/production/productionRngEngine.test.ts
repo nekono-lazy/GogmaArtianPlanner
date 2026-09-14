@@ -28,7 +28,7 @@ function master() {
 describe('ProductionRngEngine facade', () => {
   it('advertises production operations without activating UnavailableRngEngine', () => {
     const engine = new ProductionRngEngine()
-    expect(PRODUCTION_RNG_ENGINE_VERSION).toBe('production-rng:c5-e3')
+    expect(PRODUCTION_RNG_ENGINE_VERSION).toBe('production-rng:c5-e4')
     expect(engine.version).toBe(PRODUCTION_RNG_ENGINE_VERSION)
     expect(engine.capabilities).toEqual({ supportsSeedSearch: false, supportsNormalArtianPrediction: true, supportsGogmaPrediction: true, supportsSkillPrediction: true, supportsKeepBonusesPrediction: true })
     expect(Object.values(new UnavailableRngEngine().capabilities)).toEqual([false, false, false, false, false])
@@ -78,8 +78,33 @@ describe('ProductionRngEngine facade', () => {
     const unavailable = { ...inputMaster, weaponBonusDefinitions: [] }
     expect(engine.getPredictionSupport({ type: 'gogma_reset', weaponTypeId: reset.weaponTypeId, elementId: reset.elementId, master: unavailable })).toEqual({ supported: false, reason: 'no_available_reset_candidates' })
     expect(() => engine.predictGogmaBonus({ ...reset, baseSeed: String(reset.baseSeed), operation: { type: 'reset_bonuses' }, master: unavailable })).toThrow(UnsupportedRngInputError)
-    expect(engine.getPredictionSupport({ type: 'normal_artian', weaponTypeId: 'weapon.great_sword', elementId: 'element.fire', rarity: 8 })).toEqual({ supported: false, reason: 'normal_pool_unverified' })
+    expect(engine.getPredictionSupport({ type: 'normal_artian', weaponTypeId: 'weapon.switch_axe', elementId: 'element.fire', rarity: 8 })).toEqual({ supported: false, reason: 'normal_pool_unverified' })
     expect(engine.getPredictionSupport({ type: 'gogma_keep', weaponTypeId: gameVerifiedGogmaKeepVector.weaponTypeId, elementId: gameVerifiedGogmaKeepVector.elementId, currentBonuses: [{ bonusTypeId: 'bonus_type.unknown', bonusRankId: 'bonus_rank.base' }, ...gameVerifiedGogmaKeepVector.currentBonuses.slice(1)] as never, master: inputMaster })).toEqual({ supported: false, reason: 'unsupported_current_bonus' })
+  })
+
+  it('supports Normal prediction for the ten Melee weapon types and the three ranged types, and only Switch Axe fails closed', () => {
+    const engine = new ProductionRngEngine()
+    const supported = [
+      'weapon.great_sword', 'weapon.sword_and_shield', 'weapon.dual_blades', 'weapon.long_sword',
+      'weapon.hammer', 'weapon.hunting_horn', 'weapon.lance', 'weapon.gunlance',
+      'weapon.charge_blade', 'weapon.insect_glaive',
+      'weapon.bow', 'weapon.light_bowgun', 'weapon.heavy_bowgun',
+    ]
+    for (const weaponTypeId of supported) {
+      for (const elementId of ['element.fire', 'element.dragon', 'element.none']) {
+        expect(engine.getPredictionSupport({ type: 'normal_artian', weaponTypeId, elementId, rarity: 8 })).toEqual({ supported: true })
+      }
+    }
+    for (const elementId of ['element.fire', 'element.none']) {
+      expect(engine.getPredictionSupport({ type: 'normal_artian', weaponTypeId: 'weapon.switch_axe', elementId, rarity: 8 })).toEqual({ supported: false, reason: 'normal_pool_unverified' })
+      expect(() => engine.predictNormalArtian({ baseSeed: '51231782', weaponTypeId: 'weapon.switch_axe', elementId, rarity: 8, normalCounter: 0, master: master() })).toThrow(UnsupportedRngInputError)
+    }
+    // Rarity other than 8 and unknown weapon types stay outside the Melee allow-list.
+    expect(engine.getPredictionSupport({ type: 'normal_artian', weaponTypeId: 'weapon.great_sword', elementId: 'element.fire', rarity: 7 as never })).toEqual({ supported: false, reason: 'reference_adapter_unsupported' })
+    expect(() => engine.getPredictionSupport({ type: 'normal_artian', weaponTypeId: 'weapon.unknown', elementId: 'element.fire', rarity: 8 })).toThrow(RangeError)
+    // A Melee prediction goes through the shared game-verified Melee pool step.
+    const greatSword = { baseSeed: 51231782, weaponTypeId: 'weapon.great_sword', elementId: 'element.fire', rarity: 8 as const, normalCounter: 156 }
+    expect(engine.predictNormalArtian({ ...greatSword, baseSeed: String(greatSword.baseSeed), master: master() })).toEqual(predictGameVerifiedNormalArtian(greatSword))
   })
 
   it('rethrows unexpected support errors and verifies Gogma adapter coverage before prediction', () => {
