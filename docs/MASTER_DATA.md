@@ -71,7 +71,7 @@ export interface MasterManifest {
 制約。
 
 - `dataVersion` は正の整数
-- ゲームアップデート対応でデータ内容が変わる場合は `dataVersion` を上げる
+- ゲームアップデート対応でデータ内容が変わる場合、およびMaster内容の訂正で定義を追加・削除する場合は `dataVersion` を上げる
 - UIには `gameVersion` と `dataVersion` を設定画面で表示する
 - User Exportにはユーザーデータの `schemaVersion` を含めるが、Master Data本体は含めない
 - 計算時は `gameVersion` を `CalculationContext.gameVersion`、`dataVersion` を `CalculationContext.masterDataVersion` として保存する
@@ -289,7 +289,7 @@ weapon_bonus.{scope}.{weaponTypeId}.{bonusTypeId}.{bonusRankId}
 - 弓は斬れ味強化、装填数強化、斬れ味・装填強化を利用しない
 - ライト／ヘビィボウガンは属性強化を利用しない
 
-巨戟側の現在Master Rankは、基礎攻撃力強化・会心率強化が I / II / III / EX、属性強化が I / II / EX、斬れ味・装填強化が通常 / EX。通常アーティア側の基本Bonusはsuffixなしの通常Rankを使う。このRank順は比較用であり、通常Rankと巨戟Rankの変換規則を意味しない。通常→巨戟化ではRankを変換せずnormal scope 5枠をそのまま継承する。
+巨戟側の現在Master Rankは、基礎攻撃力強化・会心率強化が II / III / EX、属性強化が II / EX、斬れ味・装填強化が通常 / EX。`gogma_artian` scopeのRank Iは実機でReset / Keep結果として確認されておらず、かつて確認したと記録したRank Iは巨戟化直後のnormal-scope状態の誤認だったため、Masterから除外した（`bonus_rank.i` 自体はBonusRankMasterに残るが、WeaponBonusDefinitionからは参照しない）。normal-scope表示上の「I」と `bonus_rank.base` の対応は未確認であり、`base` を機械的に `i` へ置換しない。通常アーティア側の基本Bonusはsuffixなしの通常Rankを使う。このRank順は比較用であり、通常Rankと巨戟Rankの変換規則を意味しない。通常→巨戟化ではRankを変換せずnormal scope 5枠をそのまま継承する。
 
 ## 8.2 ArtianBonusTypeMapping
 
@@ -312,9 +312,9 @@ export interface ArtianBonusTypeMapping {
 通常 装填数強化     -+
 ```
 
-複数の通常Bonus Typeから同一巨戟Bonus TypeへのMany-to-Oneは有効。逆引きは配列として扱う。MappingはBonus Typeの意味対応だけであり、conversion時のType / Rank変換、抽選、完成ボーナス生成には使用しない。巨戟化だけならnormal scopeを継承し、Reset / Keep後のgogma scope結果はRNG Engine Predictionが返す。
+複数の通常Bonus Typeから同一巨戟Bonus TypeへのMany-to-Oneは有効。逆引きは配列として扱う。MappingはBonus Typeの意味対応であり、conversion時のType / Rank変換、抽選、完成ボーナス生成には使用しない。Keep predictionでは、normal-scope current slotの通常側Bonus Typeを巨戟側Bonus Type（Keep family）へ正規化するためにだけ使用する（[RNG_SPEC.md](./RNG_SPEC.md) 6.1）。巨戟化だけならnormal scopeを継承し、Reset / Keep後のgogma scope結果はRNG Engine Predictionが返す。
 
-BowのSharpness/Ammo family、LBG/HBGのElement family、elementless GogmaのElement bonus、栄光の誉れ、祝祭の巡り、Gogma rank Iは参照RNG poolとCurrent Masterの差分が未確認である。今回、既存Master JSONまたはDomain制約を変更せず、現在Masterの存在／有効性をProduction RNG抽選poolの検証根拠にしない。
+BowのSharpness/Ammo family、LBG/HBGのElement family、elementless GogmaのElement bonus、栄光の誉れ、祝祭の巡りは参照RNG poolとCurrent Masterの差分が未確認である。今回、既存Master JSONまたはDomain制約を変更せず、現在Masterの存在／有効性をProduction RNG抽選poolの検証根拠にしない。
 
 ---
 

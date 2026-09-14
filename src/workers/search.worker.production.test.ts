@@ -57,6 +57,7 @@ function createProductionSearchInput(
     elements: loaded.data.elements,
     bonusTypes: loaded.data.bonusTypes,
     bonusRanks: loaded.data.bonusRanks,
+    artianBonusTypeMappings: loaded.data.artianBonusTypeMappings,
     lotteries: loaded.data.lotteries,
     materialCosts: loaded.data.materialCosts,
   }

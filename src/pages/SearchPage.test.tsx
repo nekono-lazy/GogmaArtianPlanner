@@ -95,6 +95,7 @@ function dependencies(
           elements: master.elements,
           bonusTypes: master.bonusTypes,
           bonusRanks: master.bonusRanks,
+          artianBonusTypeMappings: master.artianBonusTypeMappings,
           lotteries: master.lotteries,
           materialCosts: master.materialCosts,
         },

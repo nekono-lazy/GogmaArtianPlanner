@@ -345,7 +345,7 @@ activation条件。
 - statusはユーザー管理ラベルであり、Plannerの操作可否・Target Satisfaction・Search Route
   eligibilityに影響しない。武器性能を変更してよいかは `isProtected` だけが決める
 - `isProtected = true` の武器はPlannerがReset Bonuses・Keep Bonuses・Reset Skillsへ使用しない
-- `restorationBonusScope = "normal_artian"` の巨戟アーティアにはKeep Bonusesを提示せず、最初のamendmentとしてReset Bonusesだけを提示する
+- `restorationBonusScope = "normal_artian"` の巨戟アーティアにもReset Bonuses / Keep Bonusesの両方を提示する。所持巨戟の5枠は既知であり、Keep可否をscopeで決めない
 - 「素材用武器」「素材として使用」など、所持武器を消耗品と誤解させる文言を表示しない
 - 削除時にActive Planで参照されている場合は警告する
 - 旧「関連する目標武器」の表示・編集UIは廃止する。目標武器との紐づけ操作はTarget Weapons画面
@@ -551,8 +551,8 @@ TargetWeaponごとに候補を検索し、作成リストへ追加する。
 - protected武器でも現在性能がTarget条件を満たす場合は、操作なしの現在性能候補として表示する。この評価だけを理由にSkill / Gogma Predictionを実行しない
 - 通常アーティア経由では、候補位置までのforge数、最後の1本だけの巨戟化、conversion時の初回Skill、必要なfirst Reset、その後のReset / Keep / Reset Skillsを実行順に表示する
 - 既存の「通常アーティア最大進行量」入力は `maxNormalAdvance`、すなわち最大forge回数を表す。最大0-based offsetではなく、候補offsetの表示が必要なら `0 ... maxNormalAdvance - 1` とする
-- normal-tier bonusを持つ巨戟ではKeepを最初に表示せず、first Reset後だけKeepを表示する。
-  これはProduction Keep predictionの未対応によるものであり、ゲームルール上の禁止ではない
+- normal-tier bonusを持つ巨戟でも最初のBonus amendmentとしてKeepを表示できる。5枠未知のblind Normal経由だけfirst Reset後にKeepを表示する。
+  これはunknown入力によるものであり、ゲームルール上の禁止ではない
 - conversionだけのRouteでGogma Counter不足をskip理由にせず、Base Seed / Skill Counter不足、Skill Predictionまたはconcrete semantic input support不足を区別して表示する。persisted Counter Gate不足をskip理由にしない
 - レア8、非保護、かつTargetと武器種・属性が一致する所持通常アーティアだけを変換元候補として表示する
 - 理想品が見つからない場合は「現在の探索範囲では理想品が見つかりませんでした。
@@ -569,7 +569,6 @@ TargetWeaponごとに候補を検索し、作成リストへ追加する。
 - Search Worker自体が異常終了した場合は検索中表示を解除し、ページ再読み込みを促す
   errorを表示する。v1ではWorkerの自動再生成やページ自動reloadを行わない
 - skip理由の文言は、ゲームルール上の禁止とProduction予測未対応を混同しない。
-  normal scope継承状態のKeepは「現在の予測エンジンでは予測未対応」と表示し、
   「最初にReset必須」とは表示しない
 - 候補詳細の作成ルートでは、`reset_bonuses` / `keep_bonuses` の各操作について
   操作直後の予測復元ボーナス5枠をslot 1 - 5の順で表示する。表示都合で
@@ -1348,8 +1347,8 @@ export interface SearchUiState {
 - Skill Capability不足時にスキルのみ再付与Routeのskip理由が表示される
 - `candidateOffset = k` の通常アーティア経由で `forgeCount = k + 1` 本forgeし、最後の1本だけを巨戟化する操作列が表示される
 - conversion結果に継承normal bonus 5枠と初回Series / Groupが表示される
-- normal scopeの巨戟にfirst Reset前のKeepが表示されず、first Reset後は同一RouteのKeepを表示できる
-- normal scopeでKeepが選べない理由を「現在のProduction RNGが予測できない」と表示し、「ゲーム上Reset必須」とは表示しない
+- 5枠既知のnormal scopeの巨戟にfirst Reset前のKeepを表示でき、blind Normal経由ではfirst Reset後にKeepを表示する
+- blind Normal経由でfirst Reset前にKeepが無い理由を「ゲーム上Reset必須」とは表示しない
 - transient GogmaのReset / Keep / Reset Skillsにfake OwnedWeapon IDを表示しない
 - Search Resultsから候補を作成リストへ追加できる
 - 理想品が見つからない場合に「現在の探索範囲では理想品が見つかりませんでした」と表示し、

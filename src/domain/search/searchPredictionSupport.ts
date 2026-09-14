@@ -47,6 +47,7 @@ export function createSearchPredictionSupport(
         weaponTypeId: target.weaponTypeId,
         elementId: target.elementId,
         currentBonuses,
+        master,
       })
       gogmaKeep.set(key, support)
       return support

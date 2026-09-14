@@ -479,15 +479,18 @@ Keepした実ゲーム結果は `[8, 13, 16, 11, 11]` であり、C3 `predictRef
 Keepはslot family固定・family内tier再抽選のままとし、未確認の使用不能family current inputへの
 filter/retry/replacementは追加しない。
 
-Current Gogma MasterにはAttack/Affinity/Elementのrank Iも存在するが、参照Reset/Keep poolにはない。参照上、巨戟化直後は通常tierをそのまま持ち、rank Iへ変換しない。
+参照Reset/Keep poolにAttack/Affinity/Elementのrank Iは存在しない。参照上、巨戟化直後は通常tierをそのまま持ち、rank Iへ変換しない。
 
-追記: プロジェクトオーナーの実機確認により、`gogma_artian` scopeの所持巨戟アーティアが
-Attack/Affinity/Elementのrank Iを実際に保持し得ることを確認した。したがってrank Iは
-Keepの **current input** としては合法である。Keepはslot familyだけを保持してtierを再抽選する
-ため、current tierがrank Iでもfamilyは他tierと同じく `bonusTypeId` から一意に決まる。
-一方でrank Iは参照Reset/Keepの **抽選結果** poolには存在せず、reference IDも持たない。
-Reset candidate poolとKeep current inputは別概念として扱い、rank Iへreference IDを
-推測付与しない。rank I entryがどのゲーム操作で生成されるかは引き続き未確認である。
+訂正（normal-scope Keep仕様訂正）: かつてプロジェクトオーナーの実機確認として
+「`gogma_artian` scopeの所持巨戟アーティアがAttack/Affinity/Elementのrank Iを保持し得る」と
+追記していたが、再確認の結果、そのrank I表示は通常アーティアから巨戟化した直後でまだ
+Bonus amendmentを行っていないnormal-scope状態をGogma Bonusと誤認したものだった。
+Reset / Keep結果として基礎攻撃力強化I / 会心率強化I / 属性強化Iが出現した実機確認はない。
+したがってCurrent Gogma Masterから `gogma_artian` scopeのrank I定義を除外し、
+「gogma scope rank Iが実機で確認済み」という前提を撤回する。Keep family解決はrankを
+一切参照せず、`bonusTypeId`（通常側はArtianBonusTypeMappingで巨戟側へ正規化）だけで決める。
+normal-scope表示上の「I」と現行Master `bonus_rank.base` の対応はRepositoryからは確定できない
+ため、`base` を機械的に `i` へ置換せず、未確認のNormal rank tableも追加しない。
 
 ---
 
@@ -513,7 +516,9 @@ family:
 | Element | 11, 14 |
 | Sharpness/Ammo | 6, 10 |
 
-`enumerateKeepSelections()` に相当する分岐は参照実装にない。現在bonusの各slot familyから候補poolが一意に定まる。現行Searchのfrontier自体は連続Keep結果を追う用途には使えるが、各depthでselectionを列挙して枝分かれする必要はない。
+`enumerateKeepSelections()` に相当する分岐は参照実装にない。現在bonusの各slot familyから候補poolが一意に定まる。
+
+GogmaArtianPlannerでのfamily解決はscope非依存である。各current slotの `bonusTypeId` が巨戟側Bonus Typeならそのfamilyを直接使い、通常側Bonus Type（`bonus_type.normal_sharpness` / `bonus_type.normal_capacity` 等）は `ArtianBonusTypeMapping` で巨戟側Bonus Typeへ正規化してからfamilyを引く。`bonusRankId` はfamily判定に使わない。参照実装がbase-tier状態でKeep開始を許可しないのは、参照実装がnormal-scope current bonusesをPrediction入力として扱わないという実装上の制約であり、ゲームルールではない（12 F参照）。normal-scope current bonusesからのKeep結果はgame-verified fixtureをまだ持たない（20参照）。現行Searchのfrontier自体は連続Keep結果を追う用途には使えるが、各depthでselectionを列挙して枝分かれする必要はない。
 
 また現行 `predictGogmaBonus({ operation: { type: "keep_bonuses", selection }})` はsourceの現在5枠を直接受け取らない。`engineParameters`へpacked layoutを埋め込むことは技術上可能でも、参照numeric encodingをDomainへ漏らすため推奨しない。Keep prediction inputへcurrent `RestorationBonusSet` を明示する契約が必要である。
 
@@ -530,7 +535,7 @@ family:
 | C. conversionでSkill Counterは進むか | 1進む。 |
 | D. 初回Series/Group Skillはどの位置か | conversion前の`skillCounter`が指す次block。Gate適用後 `counter*10 + 1 step` の `w % 294`。 |
 | E. 巨戟化直後に通常tier bonusを保持するか | 保持する。Luaはpacked値中の各3桁が9未満のみならbase-tierと判定する。 |
-| F. 最初のReset Bonuses時の入力bonus | 継承したnormal/base-tierのpacked 5枠。Reset抽選自体は以前の値を無視するが、base-tier状態では最初のamendmentをResetに強制し、Keep開始を許可しない。 |
+| F. 最初のReset Bonuses時の入力bonus | 継承したnormal/base-tierのpacked 5枠。Reset抽選自体は以前の値を無視する。参照実装はbase-tier状態で最初のamendmentをResetに強制しKeep開始を許可しないが、これは参照実装がbase-tier packed値をKeep family入力へ変換しないことによる実装上の制約であり、ゲーム上Resetしか選べないという意味ではない。GogmaArtianPlannerはArtianBonusTypeMappingで通常側Bonus Typeを巨戟familyへ正規化し、5枠既知ならKeepを予測する。 |
 
 New weapon計算はNormal forge候補を何本進めてもNormal streamだけを進め、選択した1本を一度だけ巨戟化する。Skill initial resultは全Normal候補で同じ現在Skill位置から計算され、Gogma amendmentは必要な場合だけ現在Gogma位置から始まる。
 
@@ -713,7 +718,7 @@ C5-E2C2完了時点では仕様先行でruntime implementationはC5-E2C3 pending
 - conversion result bonusesはnormal scope継承、skillsはinitial prediction。
 - Reset Skills探索はconversionがSkillを1消費した後のcounterから始める。
 - Owned Normal routeも同じ。`predictGogmaBonus(new_gogma)`を呼ばない。
-- 巨戟tier targetへ進む場合、conversion後の最初のbonus amendmentはResetでなければならず、同Route Keep禁止の既存v1方針とは整合する。ただしResetを同Routeで扱うか、確保後の別routeとするかはproduct仕様判断が必要。
+- 巨戟tier targetへ進む場合、conversion後の最初のbonus amendmentはReset / Keepのどちらでもよい（normal-scope Keep仕様訂正で確定。参照実装のReset強制は実装上の制約であってゲームルールではない）。amendmentを同Routeで扱うか、確保後の別routeとするかはproduct仕様判断が必要。
 - Existing Gogma Keepはselection branchではなく、現在slot familyから一意の次結果を連鎖させる。
 - Search Trace、estimated advances、searchStateHashの依存streamを更新する。
 
@@ -896,7 +901,8 @@ commit固定fixtureを両実装へ流し、Web/Lua/reference extractorとProduct
 - 参照実装自体のアルゴリズムが全weapon/attribute/game versionで実ゲームと一致すること。
 - BowのSharpness/Ammo family、LBG/HBGのElement family、elementless Gogma Element bonusの実ゲーム可否。
 - Current Masterの栄光の誉れ、祝祭の巡りがArtian RNG対象か、別用途か、update差か。
-- Gogma rank I Master entriesを生成するゲーム操作。実機で所持武器のcurrent値としては確認済みだが、参照Reset/Keep抽選結果poolには存在しない（10.4追記を参照）。
+- `gogma_artian` scopeのrank I。かつて実機で確認したと記録したrank Iは巨戟化直後のnormal-scope状態の誤認であり、gogma scope rank IはMasterから除外した。normal-scope表示上の「I」と `bonus_rank.base` の対応は未確認（10.4訂正を参照）。
+- normal-scope current bonusesからのKeep結果の実機一致。family正規化はプロジェクトオーナー確認済みのMaster意味対応（ArtianBonusTypeMapping）、family内tier drawは参照実装に従うが、game-verified fixtureは未取得である。
 - Gate未満時の実counter保存更新。
 - use as materialのRNG進行。
 - Normal poolのnative recipe capture/fitted poolとconfigured fallbackが全recipeで一致すること。

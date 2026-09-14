@@ -20,7 +20,7 @@ Candidate Search再設計の背景、実測値、採用しなかった案、受�
 - 初期版では実用ラインを満たさない候補を原則表示しない
 - Candidateは常に理想品であり、実用品のcategoryや理想への近さを表す属性は持たない
 - 通常アーティア経由と既存巨戟アーティア経由を比較する
-- 対象武器種のレア8通常アーティアCounterが未確定なら新規通常アーティア経由を検索しない
+- 対象武器種のレア8通常アーティアCounterが未確定なら、Normal Predictionを使う新規通常アーティア経由のpredicted variant(6.1)は検索しない。ただし条件を満たす場合は6.1.1のblind Reset variantで新規通常アーティア経由を検索できるため、RouteKind全体が検索不可になるわけではない
 - Target条件を自動変更しない。条件緩和案も提示しない（9章）
 - 重い検索はWeb Workerで行う
 - Normal / Gogma / Skillは独立RNG streamとして独立に探索する
@@ -69,6 +69,7 @@ export interface SearchMasterSubset {
   elements: ElementMaster[];
   bonusTypes: BonusTypeMaster[];
   bonusRanks: BonusRankMaster[];
+  artianBonusTypeMappings: ArtianBonusTypeMapping[];
   lotteries: LotteryMaster[];
   materialCosts: MaterialCostMaster[];
 }
@@ -78,7 +79,7 @@ export interface SearchMasterSubset {
 structured clone可能なrequest dataとしてWorkerへ渡す。`lotteries` はlegacy payloadとして
 型に残るが、Production RNGのeligibility、input support、predictionの根拠には使用しない。
 
-`BuildCandidate.finalBonusScope` と `finalBonuses` はRoute完了時の巨戟アーティアが実際に保持するscopeと5枠である。巨戟化だけなら `normal_artian` scopeの通常5枠をslot順のまま継承し、Reset / Keepを実行した後はRNG Engineが返した `gogma_artian` scopeの5枠を使う。SearchはBonus Type Mappingから巨戟Rankや完成5枠を推測しない。
+`BuildCandidate.finalBonusScope` と `finalBonuses` はRoute完了時の巨戟アーティアが実際に保持するscopeと5枠である。巨戟化だけなら `normal_artian` scopeの通常5枠をslot順のまま継承し、Reset / Keepを実行した後はRNG Engineが返した `gogma_artian` scopeの5枠を使う。SearchはBonus Type Mappingから巨戟Rankや完成5枠を推測しない。MappingはKeep family解決（5.9）にだけ使う。
 
 初期値。
 
@@ -198,7 +199,6 @@ export interface SkippedRoute {
     | "gogma_prediction_unsupported"
     | "skill_prediction_unsupported"
     | "keep_prediction_unsupported"
-    | "normal_scope_keep_prediction_unsupported"
     | "master_data_unavailable"
     | "calculation_context_incompatible"
     | "disabled_by_filter";
@@ -539,11 +539,14 @@ full-prefix、incremental retention、差分Crossの重複判定はすべてこ�
 `gogmaAdvance` はBonus streamの操作数そのものなので、操作数を独立キーとして
 重ねない。
 
-conversionを含むRouteでは、最初のBonus amendmentがResetであり、Resetは現在Bonusを
-参照しない。したがって `depth >= 1` のBonus解集合は、`candidateOffset` と起点所持通常
-アーティアに依存しない。この集合を `(TargetWeaponId, baseSeed, gogmaCounterBefore)` ごとに
-1回だけ生成し、すべてのRoute baseで共有する。`depth = 0`(継承した通常5枠そのもの)だけが
-Route baseごとに異なる。
+Resetは現在Bonusを参照せず、Keepは現在5枠のslot順family layoutだけに依存する。
+したがって `depth >= 1` のBonus解集合は、Route baseの現在5枠にはそのfamily layout
+（通常側Bonus TypeはArtianBonusTypeMappingで巨戟側familyへ正規化したslot順の列）を
+通じてだけ依存し、`candidateOffset` や起点所持武器のIDには依存しない。この集合を
+`(TargetWeaponId, baseSeed, gogmaCounterBefore, family layout)` ごとに1回だけ生成し、
+同じfamily layoutを持つすべてのRoute baseで共有する。5枠が未知のblind base(6.1.1)は
+family layoutを持たず、`(TargetWeaponId, baseSeed, gogmaCounterBefore, unknown)` として
+1つのstreamを共有する。`depth = 0`(継承した通常5枠そのもの)だけがRoute baseごとに異なる。
 
 #### 5.5.3.1 canonical amendment historyの観測記録
 
@@ -1113,7 +1116,7 @@ canonical Idealによる探索終了
 - cancellation可能である
 - Worker yield可能である
 - Production RNGのinput-level support契約を維持する
-- normal scope Keep predictionは引き続きunsupportedとして扱う(5.9)
+- normal-scope current bonusesが既知ならKeepを初回Searchと同じ規則で扱い、5枠未知のblind baseだけ最初のKeepを生成しない(5.9)
 - B2のfamily-layout frontier dedup(5.5.3)を維持する
 - route-history完全探索へ拡張しない
 
@@ -1298,36 +1301,51 @@ checkpointの有無とは独立である。
 
 ### レイヤー2 現在のProduction prediction support
 
-Production RNG Engineは、normal-tier Bonusを現在値とするKeepをまだ予測できない。
+Production RNG EngineのKeep predictionは各current slotのBonus familyだけを必要とする。
+判定材料はcurrent bonusのscopeではなく、5枠が既知かどうかである。
 
 ```text
-getPredictionSupport({ type: "gogma_keep", currentBonuses: <normal scope 5枠> })
-  -> { supported: false, reason: "unsupported_current_bonus" }
+getPredictionSupport({ type: "gogma_keep", currentBonuses: <既知の5枠>, master })
+  -> { supported: true }   // normal_artian / gogma_artian のどちらのscopeでも
 ```
 
-参照実装のKeep family tableは巨戟tier Bonusだけを対象とし、normal-tier枠が
-どのfamilyへ属し、どの候補poolとweightでtierを引くかを定義していない。
-game-verified fixtureも存在しない。
+各slotのfamilyは `bonusTypeId` だけから解決する。巨戟側Bonus Typeはそのfamilyを直接使い、
+通常側Bonus Typeは `ArtianBonusTypeMapping` で巨戟側Bonus Typeへ正規化してからfamilyを引く。
+`bonusRankId` はfamily判定に使わない。Keep結果は常に `gogma_artian` scopeである。
+`master.artianBonusTypeMappings` が無い場合は `master_data_unavailable`、familyへ解決できない
+Bonus Typeを含む場合は `unsupported_current_bonus` となる。scope / rankの組み合わせが保存Entityとして
+合法かどうかはMaster / Domain validationの責務であり、Keep RNGへ持ち込まない。
 
-normal-tier familyからKeepした場合の具体的なProduction RNG prediction semanticsは
-未検証であり、B0では推測して定義しない。Master DataのBonus Type Mappingから
-family対応を導けそうに見えても、抽選pool・weight・repeat penaltyを推測しない。
+Keepを予測できないのは5枠が未知の場合だけである。Normal Counter未確定またはNormal Artian
+Prediction不能で作成したblind Normal(6.1.1)は変換直後の5枠を知らないため、最初のReset前に
+Keepを生成できない。これはunknown入力の問題であり、prediction support不足でもゲームルールでもない。
+blind Normalへ架空の5枠を合成しない。
+
+参照実装GARP.luaがbase-tier状態でResetから開始するのは、参照実装がnormal-scope current bonuses
+をPrediction入力として扱わないという実装上の制約であり、ゲーム上Resetしかできないからではない。
+GogmaArtianPlannerはOwned Weapon、Normal Artian Prediction、Restoration Bonus Scope、
+ArtianBonusTypeMappingを保持できるため、normal-scope current bonusesが既知なら直接Keep
+predictionを扱う。参照実装の制約とゲームルールを混同しない。
 
 ### レイヤー3 v1のProduct挙動
 
-- Searchはprediction supportが無い間、normal scope Keepを含むRouteを生成しない
-- Plannerはそのようなoperationを計画・実行しない
-- Domain検証は当面normal scopeの `keep_bonuses` を不正として扱う。
-  これはgame legalityの否定ではなく、期待結果を定義できないためである
+- Searchは、Route baseの5枠が既知なら（所持通常アーティアの変換後、`normal_artian` scopeの
+  所持巨戟、Normal Counterから5枠をPredictionできる新規通常アーティアの変換後）最初のdepthから
+  Reset / Keepの両方を生成する。Keep結果は `gogma_artian` scopeである
+- Searchは、5枠が未知のblind base(6.1.1)に対してだけ最初のKeepを生成せず、最初のReset後は
+  5枠既知の `gogma_artian` scopeとして以降のKeepを生成する
+- Normal Counterの既知 / 未知そのものをKeep可否の条件にしない。所持武器の5枠が既知なら
+  Normal Counterは不要である
+- Plannerも同じ規則で計画・実行し、Domain検証はnormal scopeの `keep_bonuses` を合法として
+  受け入れる。blind Routeの最初のReset前のKeepだけをunknown入力として拒否する
 - skip / 除外理由は `keep_prediction_unsupported` 系を使う。
   「ゲーム上Reset必須」を意味する理由コードや文言を使わない
-- 実装上のskip reason `normal_scope_requires_reset` と、それに対応するUI文言は
-  この方針と矛盾するため廃止した。B6で `normal_scope_keep_prediction_unsupported`
-  へ改称し、UI文言も「現在の予測エンジンでは予測未対応」という意味へ訂正済みである。
-  「ゲーム上できない」「最初にReset必須」を意味する理由コードや文言を再導入しない
+- 旧skip reason `normal_scope_requires_reset` とその後継 `normal_scope_keep_prediction_unsupported`
+  は、5枠既知のnormal scope Keepを予測できるようになったため廃止した。再導入しない
 
-normal-tier Keepのprediction semanticsがgame-verifiedになった時点で、
-レイヤー2とレイヤー3の制限を同時に解除する。
+normal-scope current bonusesからのKeep結果の実機fixtureは未取得である。family正規化は
+プロジェクトオーナー確認済みのMaster意味対応、family内tier drawは参照実装に従う。
+実機fixtureが得られた場合は [RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) へ記録する。
 
 ---
 
@@ -1358,7 +1376,7 @@ RouteKind。
 2. 各候補の `forgeCount = candidateOffset + 1` とする。先行する `forgeCount - 1` 本を通常のまま見送り、候補である最後の1本だけを巨戟化する
 3. 変換元の通常5枠をslot順のまま継承し、現在Skill位置を `predictSkills` して初回Series / Groupを付与する
 4. conversion時のSkillが `idealSkillCondition` を満たす場合はReset Skillsを探索しない。満たさない場合だけ、Skill Counter +1後の位置から5.5.2のSkill列を線形探索する
-5. 継承したnormal-tier bonusのままでTarget条件を満たさない場合、最初にReset Bonusesを行い、その後は必要に応じて追加Reset / Keepを探索する
+5. 継承したnormal-tier bonusのままでTarget条件を満たさない場合、継承した5枠は既知なので最初のBonus amendmentとしてReset / Keepの両方を探索し、その後も必要に応じて追加Reset / Keepを探索する
 6. Bonus解集合とSkill解集合を独立に求め、5.5.4のCross規則で合成する。Bonus結果 × Skill結果の直積を列挙しない
 7. TargetWeapon条件に照合し、条件を満たす場合はBuildCandidateを生成する
 8. `estimatedNormalAdvance`, `estimatedGogmaAdvance`, `estimatedSkillAdvance` と実行順の `RouteOperation[]` を設定する
@@ -1376,7 +1394,7 @@ RouteKind。
 - 操作列はconversion後にResetBonusesOperation、最初のReset以降のKeepBonusesOperation、必要なResetSkillsOperationを含めてよい
 - BuildRoute.sourceOwnedWeaponIdは `null` とする
 - 同一Routeのtransient Gogmaへ適用するReset / Keep / Reset Skillsは `sourceOwnedWeaponId = null` とし、未登録武器用のOwnedWeaponIdを生成しない
-- normal scopeのtransient Gogmaへ直接Keepを適用しない。理由はゲームルールではなく、Production RNGがnormal-tier BonusからのKeepをまだ予測できないことである(5.7参照)
+- normal scopeのtransient Gogmaの5枠はNormal Predictionで既知なので、最初のBonus amendmentとしてKeepを直接適用してよい。Keep familyは通常側Bonus TypeをArtianBonusTypeMappingで巨戟側familyへ正規化して解決する(5.9参照)
 - `candidateOffset` ごとにBonus解集合とSkill解集合を再計算しない。5.5.2と5.5.3の共有規則に従う
 
 ## 6.1.1 通常アーティア経由 / Counter未確定時の強制Reset variant
@@ -1427,7 +1445,7 @@ reset_bonuses                 <- 必須。最初のBonus amendmentは必ずReset
 - このnullは「このRouteのCandidate結果が特定のabsolute Normal Counter位置へ依存しない」という意味である。「Normal Counterが必ず未確定である」でも「実行してもCounterが進まない」でもない。Normal Counterが確定していてもNormal Artian Predictionだけが利用不能な場合、このvariantが選ばれる。Plan実行時に確定Counterを1進めるかどうかはPlannerの実行時契約であり、`docs/PLANNER_SPEC.md` 7.0.3が正本である
 - 通常アーティアを2本以上作成するblind Candidateを生成しない。5枠を読まずResetで全上書きするため、追加forgeは手数・アイテム素材・Normal Counter進行だけを増やす完全劣後経路である
 - 変換直後にCandidateを完成させない。変換直後の5枠はunknownであり、Candidateの最終結果へunknownを残さない
-- 変換直後にKeep Bonusesを適用しない。これはProduction predictionの制限ではなくunknown入力の問題であり、normal scope Keepの扱い(5.7)とは独立に禁止する
+- 変換直後にKeep Bonusesを適用しない。これはProduction predictionの制限でもゲームルールでもなくunknown入力の問題であり、5枠既知のnormal scope Keep(5.9)とは独立に禁止する
 - Reset Skillsだけを行ってCandidateを完成させない
 - 最初のResetを実行した時点で `restorationBonusScope = "gogma_artian"` かつ5枠known となり、以降は6.1と同じReset / Keep / Reset Skills semanticsをそのまま使う
 - `zeroBonus`(`gogmaAdvance = 0`)のBonus解は存在しない。Bonus軸は最初のResetから始まる。unknownを表すfake bonus setをstream解集合へ入れない
@@ -1479,7 +1497,7 @@ RouteKind。
 - conversionは変換元の `normal_artian` scope 5枠をslot順のまま継承し、Skill Predictionで初回Skillを付与する。Gogma Predictionを呼ばない
 - conversion直後はSkill Counterだけを1進め、Gogma Counterを進めない
 - 変換後のReset / Keep / Reset SkillsはRoute出力を対象とするため `sourceOwnedWeaponId = null` とする
-- normal scopeからの最初のBonus amendmentはv1ではResetだけを生成し、その結果を `gogma_artian` scopeとして以後のReset / Keepへ渡す。これはprediction support上の制限であり、ゲームルール上の制限ではない(5.7参照)
+- 変換元の5枠は既知なので、normal scopeからの最初のBonus amendmentとしてReset / Keepの両方を生成し、その結果を `gogma_artian` scopeとして以後のReset / Keepへ渡す(5.9参照)
 - 起点ごとにBonus解集合とSkill解集合を再計算しない。5.5.2と5.5.3の共有規則に従う
 - 変換元を `referencedOwnedWeaponsHash` へ含め、保護・bonus・kindの変更または削除を `owned_weapon_changed` として検出できるようにする
 - 同じ所持通常アーティアを1回の変換資源として扱い、Searchまたは将来Plannerで二重利用しない
@@ -1511,7 +1529,7 @@ RouteKind。
 
 `isProtected = true` のOwnedWeaponを起点とするReset Bonuses Routeは生成しない。保護解除overrideは初期版に持たない。
 
-起点の `restorationBonusScope` はnormal / gogmaの双方を許可する。normal scopeならこのResetが最初のBonus amendmentとなり、結果のscopeをgogmaへ置き換える。normal scopeの起点でKeepを選べないのはprediction support上の制限であり、ゲームルール上の制限ではない(5.7参照)。
+起点の `restorationBonusScope` はnormal / gogmaの双方を許可する。normal scopeならこのResetで結果のscopeをgogmaへ置き換える。normal scope起点からのKeepは6.4で同様に生成する(5.9参照)。
 
 利用可能な起点がprotected武器だけの場合は `no_unprotected_source_weapon` としてRouteをskipする。
 
@@ -1527,7 +1545,7 @@ RouteKind。
 
 - 起点OwnedWeaponがある
 - 起点OwnedWeaponの復元ボーナスの一部がTarget条件に有用
-- 起点OwnedWeaponの `restorationBonusScope = "gogma_artian"`。normal scope起点を除外するのはprediction support上の制限であり、ゲームルール上の制限ではない(5.7参照)
+- 起点OwnedWeaponの `restorationBonusScope` はnormal / gogmaのどちらでもよい。所持巨戟の5枠は常に既知であり、Keep familyは各slotの `bonusTypeId`（通常側はArtianBonusTypeMappingで巨戟側へ正規化）から解決する(5.9参照)
 - 起点OwnedWeaponの `isProtected = false`
 - `canPredictGogma = true`
 - RNG Engineが `supportsKeepBonusesPrediction = true`
@@ -1545,6 +1563,7 @@ RouteKind。
 
 - 同一Counter位置にユーザーselectionまたはslot subsetのbranchを作らない
 - Keepは現在5slotのfamilyをslotごとに保持し、各slotのtierを同family内で再抽選する
+- normal scope起点からのKeep結果は `gogma_artian` scopeになる
 - Keep depth 1、2、...という時間方向の探索は許可する
 - `isProtected = true` のOwnedWeaponを起点とするKeep Bonuses Routeは生成しない
 - Keepの起点候補がprotected武器だけの場合も `no_unprotected_source_weapon` としてskipする
@@ -1618,7 +1637,7 @@ RouteKind。
 
 Reset Bonuses、Keep Bonuses、Reset Skillsを組み合わせる場合に使用する。
 
-起点がnormal scopeの巨戟なら、v1では最初のBonus operationをReset Bonusesとし、その後に限りKeep Bonusesを組み合わせる。これはprediction support上の制限であり、ゲームルール上の制限ではない(5.7参照)。起点がgogma scopeならReset / Keepのいずれから開始してよい。
+起点がnormal scopeの巨戟でもgogma scopeの巨戟でも、Reset / Keepのいずれから開始してよい。normal scope起点の最初のamendment結果は `gogma_artian` scopeになる(5.9参照)。
 
 Mixed RouteでもBonus streamとSkill streamを独立に解き、5.5.4のCross規則で合成する。Bonus結果ごとにSkill探索を繰り返さない。
 
@@ -2001,7 +2020,7 @@ Worker error契約(B6)。
 - protectedな互換武器しかない場合、不要なSkill / Gogma Predictionを呼ばない
 - Reset Skills Routeの起点武器変更でreferencedOwnedWeaponsHashが変わる
 - Skill RNG値不足時とSkill Prediction未対応時を別reasonでskipする
-- normal scopeのtransient Gogmaへ適用するKeepを `keep_prediction_unsupported` 系の理由で除外し、ゲームルール由来の理由コード・文言を使わない
+- 5枠既知のnormal scope transient Gogma / 所持巨戟から最初のBonus amendmentとしてKeepを生成し、5枠未知のblind baseだけ最初のKeepを生成しない。除外理由にゲームルール由来の理由コード・文言を使わない
 - 最初のReset後はnormal / owned-Normal RouteでKeepBonusesOperationを生成できる
 - 巨戟化直後の未登録武器へOwnedWeaponIdを生成せず、後続Reset / Keep / Reset Skillsをnull sourceで表す
 - `candidateOffset = 0` で `forgeCount = 1`、一般のoffset kで `forgeCount = k + 1` となり、最後の1本だけを巨戟化する
@@ -2127,7 +2146,7 @@ Skill stream側はB1で実装済み、Bonus stream側はB2で実装済みであ�
 - boundsへ到達した場合に `stoppedByBound` を返し、`exhausted` としない
 - 軸外pairをlazyに評価し、full Cartesianを事前生成しない
 - 軸外評価数が `maxOffAxisPairEvaluations` を超えない
-- family-layout frontier dedupとnormal scope Keep未対応の扱いが初回Searchと一致する
+- family-layout frontier dedupとnormal scope Keep（5枠既知なら生成、blindなら最初のReset前は生成しない）の扱いが初回Searchと一致する
 - cancellationで列挙が停止し、以降のCandidateをyieldしない
 - Search Domain APIがPlannerのConflict DTOを受け取らない
 - `ConstrainedCandidateSearchInput` が `maxCandidateTrialsPerConflict` /

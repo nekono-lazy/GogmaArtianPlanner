@@ -291,7 +291,7 @@ describe('Constrained Bonus stream', () => {
     ).toEqual([1, 3])
   })
 
-  it('makes no Keep prediction from normal-scope current bonuses', async () => {
+  it('predicts Keep from normal-scope current bonuses exactly like gogma scope', async () => {
     const callCounts = { normal: 0, skill: 0, gogmaReset: 0, gogmaKeep: 0 }
     const origin = createConstrainedSearchOrigin({
       normalCounters: [],
@@ -307,6 +307,7 @@ describe('Constrained Bonus stream', () => {
       keepSupported: true,
       keepInputs: [belowPracticalBonuses()],
       resetResultAt: () => idealBonuses(),
+      keepResultAt: () => idealBonuses(),
     })
     const result = await enumerateConstrainedCandidates(
       constrainedInput(
@@ -315,13 +316,16 @@ describe('Constrained Bonus stream', () => {
       ),
       engine,
     )
-    expect(result.candidates.length).toBeGreaterThan(0)
-    // The exclusion is missing Production Keep prediction support for
-    // normal-scope current bonuses, never a game rule forbidding Keep.
-    expect(callCounts.gogmaKeep).toBe(0)
+    // The owned Gogma's five slots are known, so Keep is a first amendment
+    // from either scope (SEARCH_SPEC 5.9): one Keep and one Reset prediction.
+    expect(callCounts.gogmaKeep).toBe(1)
     expect(callCounts.gogmaReset).toBe(1)
-    for (const candidate of result.candidates) {
-      expect(operationTypes(candidate)).not.toContain('keep_bonuses')
+    const keepFirst = result.candidates.filter((candidate) =>
+      operationTypes(candidate)[0] === 'keep_bonuses',
+    )
+    expect(keepFirst.length).toBeGreaterThan(0)
+    for (const candidate of keepFirst) {
+      expect(candidate.restorationBonusScope).toBe('gogma_artian')
     }
   })
 
@@ -357,11 +361,12 @@ describe('Constrained Bonus stream', () => {
     ).toBe(true)
   })
 
-  it('emits Reset Bonuses before Keep Bonuses on a normal-scope conversion Route', async () => {
+  it('emits Keep Bonuses directly after conversion on a normal-scope conversion Route', async () => {
     const origin = createConstrainedSearchOrigin()
     const engine = createConstrainedEngine(origin, {
       keepSupported: true,
-      keepInputs: [belowPracticalBonuses()],
+      // Depth 2 also Keeps from the depth-1 Keep result, which is the Ideal.
+      keepInputs: [belowPracticalBonuses(), idealBonuses()],
       normalResultAt: () => belowPracticalBonuses(),
       resetResultAt: () => belowPracticalBonuses(),
       keepResultAt: () => idealBonuses(),
@@ -379,10 +384,6 @@ describe('Constrained Bonus stream', () => {
     )
     expect(result.candidates.length).toBeGreaterThan(0)
     for (const candidate of result.candidates) {
-      const amendments = operationTypes(candidate).filter(
-        (type) => type === 'reset_bonuses' || type === 'keep_bonuses',
-      )
-      expect(amendments[0]).toBe('reset_bonuses')
       // The post-conversion amendments target the unregistered route output.
       for (const operation of candidate.route.operations) {
         if (operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses') {
@@ -390,9 +391,11 @@ describe('Constrained Bonus stream', () => {
         }
       }
     }
+    // The predicted forge knows its five slots, so Keep is the first amendment
+    // (SEARCH_SPEC 6.1 / 5.9); no Reset is forced ahead of it.
     expect(
       result.candidates.some((candidate) =>
-        operationTypes(candidate).includes('keep_bonuses'),
+        operationTypes(candidate).join(',') === 'create_normal_artian,convert_normal_to_gogma,keep_bonuses',
       ),
     ).toBe(true)
   })

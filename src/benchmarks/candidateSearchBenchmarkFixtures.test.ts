@@ -106,6 +106,7 @@ describe('B5 Candidate Search benchmark fixtures', () => {
         weaponTypeId: source.weaponTypeId,
         elementId: source.elementId,
         currentBonuses: source.restorationBonuses,
+        master: input.master,
       }),
     ).toEqual({ supported: true })
   })

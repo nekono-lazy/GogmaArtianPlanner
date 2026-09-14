@@ -60,13 +60,15 @@ describe('presentation labels', () => {
     })
   })
 
-  it('states normal-scope Keep as a prediction limit, not a game rule', () => {
-    const label = skippedRouteReasonLabels.normal_scope_keep_prediction_unsupported
-    expect(label).toContain('予測未対応')
-    // The game allows Keep as the first amendment of inherited Normal-scope
-    // bonuses, so the label must not claim a Reset is required first.
-    expect(label).not.toContain('リセット')
-    expect(label).not.toContain('必要')
+  it('presents no skip reason as a game rule requiring a Reset first', () => {
+    // Keep from known normal-scope slots is predicted, so the former
+    // normal-scope reason no longer exists, and no remaining label may claim
+    // that the game forces a Reset before Keep.
+    expect('normal_scope_keep_prediction_unsupported' in skippedRouteReasonLabels).toBe(false)
+    for (const label of Object.values(skippedRouteReasonLabels)) {
+      expect(label).not.toContain('必須')
+      expect(label).not.toMatch(/リセット.*必要/)
+    }
   })
 
   it('keeps no_owned_weapon_available neutral for Normal and Gogma source routes', () => {

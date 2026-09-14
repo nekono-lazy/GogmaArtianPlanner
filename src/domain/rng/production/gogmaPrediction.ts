@@ -1,14 +1,15 @@
 import type { ElementId, RestorationBonusSet, WeaponTypeId } from '../../models/publicTypes'
 import {
   gameAdjustedGogmaResetCandidatesForWeaponAndElement,
-  requireGogmaScopeKeepCurrentBonusFamily,
   type GameAdjustedGogmaMasterSubset,
 } from './gameGogmaBonuses'
 import { readReferenceRngBlock } from './referencePrng'
 import {
   REFERENCE_GOGMA_RESET_CANDIDATES,
   type ReferenceGogmaBonus,
+  type ReferenceGogmaBonusFamily,
   referenceGogmaKeepFamilyCandidatesForFamily,
+  referenceGogmaKeepFamilyForBonusType,
   restorationBonusSetFromReferenceGogmaIds,
 } from './referenceGogmaBonuses'
 import { deriveGogmaSeed } from './seedDerivation'
@@ -29,7 +30,12 @@ export interface ReferenceGogmaPredictionInput {
 }
 
 export interface ReferenceGogmaKeepPredictionInput extends ReferenceGogmaPredictionInput {
-  /** Ordered current Gogma-scope bonuses; each slot fixes its own family. */
+  /**
+   * Ordered current bonuses in the reference namespace: each slot's bonus type
+   * is a Gogma-side family type and fixes its own family. A Normal-side type is
+   * normalized by the Production adapter before it reaches here
+   * (`toReferenceKeepCurrentBonuses`); the tier is never read.
+   */
   readonly currentBonuses: RestorationBonusSet
 }
 
@@ -111,15 +117,23 @@ export function predictGameAdjustedGogmaReset(
   }
 }
 
+/** The reference family of one current slot; the tier is deliberately not consulted. */
+function requireReferenceKeepFamily(bonus: RestorationBonusSet[number]): ReferenceGogmaBonusFamily {
+  const family = referenceGogmaKeepFamilyForBonusType(bonus.bonusTypeId)
+  if (family === null) {
+    throw new RangeError(`Unsupported reference Keep current bonus type: ${bonus.bonusTypeId}`)
+  }
+  return family
+}
+
 /** Keep redraws every slot from the explicit current slot's reference family. */
 export function predictReferenceGogmaKeep(input: ReferenceGogmaKeepPredictionInput): ReferenceGogmaPredictionResult {
   if (!Array.isArray(input.currentBonuses) || input.currentBonuses.length !== 5) {
     throw new RangeError('Keep current bonuses must contain exactly five slots')
   }
-  // Keep reads only the family of each current slot, so a legal Gogma-scope
-  // tier the reference lottery never draws (rank I) still resolves here. The
-  // draw pool itself stays the unchanged reference family candidate order.
-  const currentFamilies = input.currentBonuses.map(requireGogmaScopeKeepCurrentBonusFamily)
+  // Keep reads only the family of each current slot; the draw pool itself
+  // stays the unchanged reference family candidate order.
+  const currentFamilies = input.currentBonuses.map(requireReferenceKeepFamily)
   const { effectiveBlock, rawValues } = referenceGogmaBlock(input)
   return {
     bonuses: predictReferenceGogmaSlots(

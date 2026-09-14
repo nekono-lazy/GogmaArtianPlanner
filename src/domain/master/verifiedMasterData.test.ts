@@ -106,10 +106,13 @@ describe('project-owner verified Master Data', () => {
     },
   )
 
+  // Gogma-scope rank I is not a verified value: the earlier real-game report
+  // was an unamended normal-scope Gogma, so no `gogma_artian` definition
+  // declares it (`docs/RNG_REFERENCE_AUDIT.md` 10.4).
   it.each([
-    ['bonus_type.attack', ['I', 'II', 'III', 'EX']],
-    ['bonus_type.affinity', ['I', 'II', 'III', 'EX']],
-    ['bonus_type.element', ['I', 'II', 'EX']],
+    ['bonus_type.attack', ['II', 'III', 'EX']],
+    ['bonus_type.affinity', ['II', 'III', 'EX']],
+    ['bonus_type.element', ['II', 'EX']],
     ['bonus_type.gogma_sharpness_capacity', ['通常', 'EX']],
   ])('returns the confirmed Gogma ranks for %s', (bonusTypeId, expected) => {
     const ranks = getRanksForBonusType(

@@ -311,6 +311,7 @@ function benchmarkMaster(): BenchmarkMaster {
       elements: data.elements,
       bonusTypes: data.bonusTypes,
       bonusRanks: data.bonusRanks,
+      artianBonusTypeMappings: data.artianBonusTypeMappings,
       lotteries: data.lotteries,
       materialCosts: data.materialCosts,
     },

@@ -66,6 +66,7 @@ function plannerInput(): PlannerInput {
       elements: search.master.elements,
       bonusTypes: search.master.bonusTypes,
       bonusRanks: search.master.bonusRanks,
+      artianBonusTypeMappings: search.master.artianBonusTypeMappings,
       lotteries: search.master.lotteries,
       materialCosts: search.master.materialCosts,
     },

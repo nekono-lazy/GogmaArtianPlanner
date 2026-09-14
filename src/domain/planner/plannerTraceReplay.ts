@@ -336,9 +336,10 @@ export function replayPlannerSearchTrace(input: PlannerInput, bestState: Planner
           const current = operation.sourceOwnedWeaponId === null ? runtime.gogmas.get(entry.id) ?? null : currentGogma(runtime, entry.id, operation.sourceOwnedWeaponId); if (!current) return fail('missing_source_weapon', 'Gogma source is unavailable.', index)
           // Keep reads the current five slots, so it fails closed on an
           // unknown state; Reset reads nothing it replaces and is exactly the
-          // operation that turns unknown into known.
+          // operation that turns unknown into known. Known slots of either
+          // scope are a valid Keep input: the Engine resolves each slot's
+          // family from its bonus type alone (`docs/SEARCH_SPEC.md` 5.9).
           if (operation.type === 'keep_bonuses' && current.bonuses.kind !== 'known') return fail('unknown_restoration_bonuses', 'Keep Bonuses cannot read restoration bonuses that were never predicted.', index)
-          if (operation.type === 'keep_bonuses' && current.bonuses.kind === 'known' && current.bonuses.restorationBonusScope !== 'gogma_artian') return fail('invalid_source_weapon', 'Keep Bonuses requires Gogma-scope bonuses.', index)
           // Keep with unknown slots already failed closed above, so a null
           // `keepInput` here always means this operation is a Reset.
           const keepInput = operation.type === 'keep_bonuses' && current.bonuses.kind === 'known'
@@ -357,6 +358,7 @@ export function replayPlannerSearchTrace(input: PlannerInput, bestState: Planner
                   weaponTypeId: target.weaponTypeId,
                   elementId: target.elementId,
                   currentBonuses: keepInput,
+                  master: input.master,
                 },
             entry.id,
             index,

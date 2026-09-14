@@ -3,10 +3,8 @@ import type {
   CalculationContext,
   KnownValue,
   NormalArtianCounter,
-  OwnedWeaponId,
   PlanStepOperationType,
   RestorationBonus,
-  RestorationBonusScope,
   RngState,
 } from './common'
 import {
@@ -36,7 +34,7 @@ import type {
 import {
   areRestorationBonusSetsEqual,
   areRestorationBonusSlotsEqual,
-  canKeepBonusesFromScope,
+  canKeepBonuses,
   canResetBonuses,
   canResetSkills,
   isCalculationContextCompatible,
@@ -524,20 +522,9 @@ function validateProtectedRouteUse(
       `Referenced OwnedWeapon '${route.sourceOwnedWeaponId}' does not exist.`,
     )
   }
-  /**
-   * Route-local Bonus scope per referenced OwnedWeapon.
-   *
-   * Reset Bonuses replaces the source's five slots with Gogma-tier ones for the
-   * remainder of this Route, so a later Keep Bonuses in the same sequence reads
-   * Gogma-scope current bonuses. AGENTS.md Existing Gogma Mixed is the
-   * authority: a mixed Route from a `normal_artian` scope source performs Reset
-   * Bonuses before any Keep Bonuses. `normal scope -> Keep` stays rejected
-   * because Production Keep prediction does not support inherited Normal-tier
-   * current bonuses, not because the game forbids it. Reset Skills never
-   * changes the scope.
-   */
-  const routeLocalScope = new Map<OwnedWeaponId, RestorationBonusScope>()
-
+  // An owned Gogma's five slots are always known, so Keep Bonuses is legal from
+  // either stored scope (`docs/SEARCH_SPEC.md` 5.9); only kind and protection
+  // decide every amendment here.
   route.operations.forEach((operation, index) => {
     const path = `operations[${index}]`
     const id =
@@ -552,29 +539,19 @@ function validateProtectedRouteUse(
       addIssue(issues, path, 'invalid_reference', `Referenced OwnedWeapon '${id}' does not exist.`)
       return
     }
-    const currentScope =
-      routeLocalScope.get(weapon.id) ?? weapon.restorationBonusScope
     const allowed =
       operation.type === 'reset_bonuses'
         ? canResetBonuses(weapon)
         : operation.type === 'keep_bonuses'
-          ? canKeepBonusesFromScope(weapon, currentScope)
+          ? canKeepBonuses(weapon)
           : canResetSkills(weapon)
     if (!allowed) {
       addIssue(
         issues,
         path,
         'protected_destructive_use',
-        operation.type === 'keep_bonuses' &&
-          weapon.kind === 'gogma' &&
-          !weapon.isProtected
-          ? `Keep Bonuses on OwnedWeapon '${id}' needs Gogma-scope current bonuses at this position; Production Keep prediction does not support inherited Normal-scope slots.`
-          : `OwnedWeapon '${id}' cannot be used by this destructive operation.`,
+        `OwnedWeapon '${id}' cannot be used by this destructive operation.`,
       )
-      return
-    }
-    if (operation.type === 'reset_bonuses') {
-      routeLocalScope.set(weapon.id, 'gogma_artian')
     }
   })
 }
@@ -619,7 +596,6 @@ export function validateBuildRoute(
       )
     }
     let converted = false
-    let transientScope: 'normal_artian' | 'gogma_artian' | null = null
     let blindCreateCount = 0
     let createCount = 0
     let resetBonusesCount = 0
@@ -636,19 +612,19 @@ export function validateBuildRoute(
         createCount += 1
         if (isBlindCreateNormalArtianOperation(operation)) blindCreateCount += 1
       }
-      if (operation.type === 'reset_bonuses') resetBonusesCount += 1
-      if (operation.type === 'convert_normal_to_gogma') {
-        converted = true
-        transientScope = 'normal_artian'
-      }
+      if (operation.type === 'convert_normal_to_gogma') converted = true
       if (operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses') {
         if (operation.sourceOwnedWeaponId !== null || !converted) {
           addIssue(issues, `operations[${index}].sourceOwnedWeaponId`, 'invalid_state', 'A normal-route bonus amendment must target the converted route output.')
         }
-        if (operation.type === 'keep_bonuses' && transientScope !== 'gogma_artian') {
-          addIssue(issues, `operations[${index}]`, 'invalid_route_operation', 'Keep Bonuses requires a preceding Reset Bonuses operation after conversion.')
+        // The predicted variant knows the forged five slots, so Keep may be the
+        // first amendment. Only the blind variant's slots are unknown until a
+        // Reset rewrites them (`docs/SEARCH_SPEC.md` 6.1.1): an unknown-input
+        // rule, not a prediction-support limit and not a game rule.
+        if (operation.type === 'keep_bonuses' && blindCreateCount > 0 && resetBonusesCount === 0) {
+          addIssue(issues, `operations[${index}]`, 'invalid_route_operation', 'Keep Bonuses cannot read the unknown five slots of a blind Normal Artian; a Reset Bonuses must precede it.')
         }
-        if (operation.type === 'reset_bonuses') transientScope = 'gogma_artian'
+        if (operation.type === 'reset_bonuses') resetBonusesCount += 1
       }
       if (operation.type === 'reset_skills' && operation.sourceOwnedWeaponId !== null) {
         addIssue(
@@ -698,7 +674,6 @@ export function validateBuildRoute(
       )
     }
     let hasConversion = false
-    let transientScope: 'normal_artian' | 'gogma_artian' | null = null
     route.operations.forEach((operation, index) => {
       if (!['convert_normal_to_gogma', 'reset_bonuses', 'keep_bonuses', 'reset_skills'].includes(operation.type)) {
         addIssue(
@@ -708,18 +683,13 @@ export function validateBuildRoute(
           `Operation '${operation.type}' is not allowed in owned_normal_artian_to_gogma.`,
         )
       }
-      if (operation.type === 'convert_normal_to_gogma') {
-        hasConversion = true
-        transientScope = 'normal_artian'
-      }
+      if (operation.type === 'convert_normal_to_gogma') hasConversion = true
+      // The source Normal's five slots are known, so either Reset or Keep may be
+      // the first amendment after conversion (`docs/SEARCH_SPEC.md` 6.2 / 5.9).
       if (operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses') {
         if (operation.sourceOwnedWeaponId !== null || !hasConversion) {
           addIssue(issues, `operations[${index}].sourceOwnedWeaponId`, 'invalid_state', 'A post-conversion bonus amendment must target the converted route output.')
         }
-        if (operation.type === 'keep_bonuses' && transientScope !== 'gogma_artian') {
-          addIssue(issues, `operations[${index}]`, 'invalid_route_operation', 'Keep Bonuses requires a preceding Reset Bonuses operation after conversion.')
-        }
-        if (operation.type === 'reset_bonuses') transientScope = 'gogma_artian'
       }
       if (operation.type === 'reset_skills' && operation.sourceOwnedWeaponId !== null) {
         addIssue(

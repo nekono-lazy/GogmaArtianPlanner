@@ -97,9 +97,6 @@ export async function searchExistingGogmaRoutes(context: RouteSearchContext, sch
     && gogmaInputsConfirmed
     && engine.capabilities.supportsGogmaPrediction
   const canKeep = engine.capabilities.supportsKeepBonusesPrediction
-  const pureKeepSources = mutableSources.filter(
-    ({ restorationBonusScope }) => restorationBonusScope === 'gogma_artian',
-  )
   const searchedAmendmentRoutes = new Set<BuildRoute['kind']>()
   const keepUnsupportedSources = new Set<OwnedWeaponId>()
 
@@ -167,16 +164,14 @@ export async function searchExistingGogmaRoutes(context: RouteSearchContext, sch
 
     if (searchedAmendmentRoutes.has('existing_gogma_keep_bonuses')) {
       result.searchedRoutes.push('existing_gogma_keep_bonuses')
-    } else if (pureKeepSources.length === 0) {
-      // The game allows Keep as the first amendment of inherited Normal-scope
-      // bonuses. Only Production Keep prediction rejects that current input.
-      result.skippedRoutes.push({ route: 'existing_gogma_keep_bonuses', reason: 'normal_scope_keep_prediction_unsupported', detail: 'Keep Bonuses prediction does not support inherited Normal-scope current bonuses.' })
     } else {
+      // An owned Gogma's five slots are always known, so Keep is searched from
+      // either scope; only the Engine's input support can exclude a source.
       result.skippedRoutes.push({
         route: 'existing_gogma_keep_bonuses',
         reason: 'keep_prediction_unsupported',
         detail: canKeep
-          ? `Keep Bonuses input is unsupported for ${keepUnsupportedSources.size || pureKeepSources.length} available source(s).`
+          ? `Keep Bonuses input is unsupported for ${keepUnsupportedSources.size || mutableSources.length} available source(s).`
           : 'The active RNG Engine does not support Keep Bonuses prediction.',
       })
     }

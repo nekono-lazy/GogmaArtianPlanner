@@ -57,7 +57,22 @@ describe('BuildRoute validation', () => {
     expect(validateBuildRoute(route).isValid).toBe(false)
   })
 
-  it('rejects Keep Bonuses before the first Reset inside a normal route', () => {
+  it('accepts Keep Bonuses as the first amendment of a predicted normal route', () => {
+    // The forged five slots are known, so Keep needs no preceding Reset
+    // (`docs/SEARCH_SPEC.md` 6.1 / 5.9).
+    const route = normalRoute()
+    route.operations.push({
+      type: 'keep_bonuses',
+      sourceOwnedWeaponId: null,
+      gogmaCounterBefore: 1,
+      gogmaCounterAfter: 2,
+    })
+    const validation = validateBuildRoute(route)
+    expect(validation.issues).toEqual([])
+    expect(validation.isValid).toBe(true)
+  })
+
+  it('still requires a transient-output source for a normal-route Keep', () => {
     const route = normalRoute()
     route.operations.push({
       type: 'keep_bonuses',
@@ -66,7 +81,7 @@ describe('BuildRoute validation', () => {
       gogmaCounterAfter: 2,
     })
     expect(validateBuildRoute(route).issues).toContainEqual(
-      expect.objectContaining({ code: 'invalid_route_operation' }),
+      expect.objectContaining({ code: 'invalid_state' }),
     )
   })
 
@@ -259,17 +274,26 @@ describe('Existing Gogma route-local bonus scope', () => {
     expect(validation.isValid).toBe(true)
   })
 
-  it('rejects Keep Bonuses as the first amendment of an inherited normal scope', () => {
+  it('accepts Keep Bonuses as the first amendment of an inherited normal scope', () => {
+    // An owned Gogma's five slots are known, so Keep is legal from either
+    // stored scope (`docs/SEARCH_SPEC.md` 5.9); only protection decides.
     const validation = validateBuildRoute(
       amendmentRoute('existing_gogma_keep_bonuses', ['keep_bonuses']),
       [inheritedSource()],
+    )
+    expect(validation.issues).toEqual([])
+    expect(validation.isValid).toBe(true)
+  })
+
+  it('rejects Keep Bonuses as the first amendment of a protected inherited normal scope', () => {
+    const validation = validateBuildRoute(
+      amendmentRoute('existing_gogma_keep_bonuses', ['keep_bonuses']),
+      [inheritedSource({ isProtected: true })],
     )
     expect(validation.isValid).toBe(false)
     expect(validation.issues).toContainEqual(
       expect.objectContaining({ code: 'protected_destructive_use' }),
     )
-    // The reason is missing Production Keep prediction support, not a game rule.
-    expect(validation.issues[0].message).toMatch(/Keep prediction/)
   })
 
   it('rejects Reset Bonuses followed by Keep Bonuses on a protected source', () => {
@@ -291,7 +315,7 @@ describe('Existing Gogma route-local bonus scope', () => {
     expect(validation.isValid).toBe(true)
   })
 
-  it('does not let Reset Skills change the route-local bonus scope', () => {
+  it('accepts Keep Bonuses after Reset Skills from an inherited normal scope', () => {
     const route = amendmentRoute('existing_gogma_mixed', ['keep_bonuses'])
     route.operations.unshift({
       type: 'reset_skills',
@@ -299,7 +323,7 @@ describe('Existing Gogma route-local bonus scope', () => {
       skillCounterBefore: 7,
       skillCounterAfter: 8,
     })
-    expect(validateBuildRoute(route, [inheritedSource()]).isValid).toBe(false)
+    expect(validateBuildRoute(route, [inheritedSource()]).isValid).toBe(true)
   })
 })
 
@@ -364,7 +388,7 @@ describe('blind Normal Artian route validation', () => {
     )
   })
 
-  it('rejects Keep Bonuses as the first bonus amendment', () => {
+  it('rejects Keep Bonuses as the first bonus amendment, because the forged slots are unknown', () => {
     const route = blindRoute()
     route.operations[2] = {
       type: 'keep_bonuses',
@@ -372,7 +396,14 @@ describe('blind Normal Artian route validation', () => {
       gogmaCounterBefore: 10,
       gogmaCounterAfter: 11,
     }
-    expect(validateBuildRoute(route).isValid).toBe(false)
+    const validation = validateBuildRoute(route)
+    expect(validation.isValid).toBe(false)
+    expect(validation.issues).toContainEqual(
+      expect.objectContaining({
+        code: 'invalid_route_operation',
+        message: expect.stringMatching(/unknown five slots/),
+      }),
+    )
   })
 
   it('rejects a Reset Skills only route', () => {

@@ -10,7 +10,7 @@ function fixture() {
   const entry = createValidBuildListEntry(); entry.id = buildListEntryId('entry.replay'); entry.candidateId = candidateId('candidate.replay'); entry.candidateSnapshot.id = entry.candidateId
   entry.candidateSnapshot.route = { kind: 'normal_artian_to_gogma', sourceOwnedWeaponId: null, operations: [{ type: 'create_normal_artian', weaponTypeId: 'weapon.fixture.a', rarity: 8, count: 2, normalCounterBefore: 4, normalCounterAfter: 6 }, { type: 'convert_normal_to_gogma', weaponTypeId: 'weapon.fixture.a', skillCounterBefore: 7, skillCounterAfter: 8 }] }
   const rngState = createValidRngState(); rngState.skillCounter = { value: 7, isConfirmed: true, source: 'manual' }; const normal = createValidNormalArtianCounter(); const target = createValidTargetWeapon()
-  const input: PlannerInput = { rngState, normalCounters: [normal], ownedWeapons: [], targetWeapons: [target], buildListEntries: [entry], calculationContext: { gameVersion: 'x', masterDataVersion: 1, rngEngineVersion: 'x', appSchemaVersion: 1 }, options: { maxPlanSteps: 300, beamWidth: 50, maxExpandedStates: 10000 }, master: { weaponBonusDefinitions: [], weaponTypes: [], elements: [], bonusTypes: [], lotteries: [], bonusRanks: [], materialCosts: [] }, conflictResolutions: [] }
+  const input: PlannerInput = { rngState, normalCounters: [normal], ownedWeapons: [], targetWeapons: [target], buildListEntries: [entry], calculationContext: { gameVersion: 'x', masterDataVersion: 1, rngEngineVersion: 'x', appSchemaVersion: 1 }, options: { maxPlanSteps: 300, beamWidth: 50, maxExpandedStates: 10000 }, master: { weaponBonusDefinitions: [], weaponTypes: [], elements: [], bonusTypes: [], lotteries: [], bonusRanks: [], artianBonusTypeMappings: [], materialCosts: [] }, conflictResolutions: [] }
   const snap = (g: number, s: number, n: number) => ({ gogmaCounter: g, skillCounter: s, normalCounters: [{ id: normal.id, counter: n }] })
   const create = entry.candidateSnapshot.route.operations[0]
   const convert = entry.candidateSnapshot.route.operations[1]
@@ -61,9 +61,10 @@ describe('Planner trace replay', () => {
     expect(replay.isValid).toBe(false)
     expect(replay.issues[0]?.code).toBe('missing_rng_requirement')
   })
-  it('rejects transient Normal-scope Keep before calling the RNG Engine', () => {
-    const { input, state, engine, entry, trace, normal } = fixture()
+  it('Keeps the known transient Normal-scope slots through the RNG Engine', () => {
+    const { input, state, engine, entry, trace, normal, b, g } = fixture()
     engine.capabilities.supportsKeepBonusesPrediction = true
+    const predict = vi.spyOn(engine, 'predictGogmaBonus').mockImplementation(() => structuredClone(g))
     const keep = {
       type: 'keep_bonuses' as const,
       sourceOwnedWeaponId: null,
@@ -84,10 +85,17 @@ describe('Planner trace replay', () => {
       inventoryEffect: { addedOwnedWeaponIds: [], removedOwnedWeaponIds: [], updatedOwnedWeaponIds: [], reservedOwnedWeaponIds: [], routeOutputChangedForEntryIds: [] },
       satisfactionChanges: [],
     })
+    entry.candidateSnapshot.route.operations.push(keep)
+    state.currentRngState.gogmaCounter.value = 11
     const replay = replayPlannerSearchTrace(input, state, engine)
-    expect(replay.isValid).toBe(false)
-    expect(replay.issues[0]?.code).toBe('invalid_source_weapon')
-    expect(replay.issues[0]?.code).not.toBe('prediction_failed')
+    // The converted transient Gogma holds the known normal-scope slots `b`, so
+    // Keep reads them directly and moves the result to gogma_artian scope
+    // (`docs/SEARCH_SPEC.md` 5.9); a Reset is not forced first.
+    expect(replay.isValid, JSON.stringify(replay.issues)).toBe(true)
+    expect(predict).toHaveBeenCalledTimes(1)
+    expect(predict.mock.calls[0]![0].operation).toEqual({ type: 'keep_bonuses', currentBonuses: b })
+    expect(replay.drafts.at(-1)?.expectedResult?.restorationBonuses).toEqual(g)
+    expect(replay.drafts.at(-1)?.expectedResult?.restorationBonusScope).toBe('gogma_artian')
   })
   it('rejects an action whose rngBefore does not match the replay runtime', () => {
     const { input, state, engine, trace } = fixture(); trace[0].rngBefore.gogmaCounter = 99

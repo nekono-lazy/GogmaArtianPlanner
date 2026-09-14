@@ -74,6 +74,7 @@ function fixture(): { input: PlannerInput; dependencies: PlannerDependencies } {
       lotteries: search.master.lotteries,
       materialCosts: search.master.materialCosts,
       bonusRanks: search.master.bonusRanks,
+      artianBonusTypeMappings: search.master.artianBonusTypeMappings,
     },
     conflictResolutions: [],
   }

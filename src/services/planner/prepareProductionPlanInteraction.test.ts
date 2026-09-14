@@ -62,6 +62,7 @@ function plannerInput(
       elements: [],
       bonusTypes: [],
       bonusRanks: [],
+        artianBonusTypeMappings: [],
       lotteries: [],
       materialCosts: [],
     },

@@ -78,6 +78,7 @@ function createPlannerFixture(): {
         lotteries: searchInput.master.lotteries,
         materialCosts: searchInput.master.materialCosts,
         bonusRanks: searchInput.master.bonusRanks,
+        artianBonusTypeMappings: searchInput.master.artianBonusTypeMappings,
       },
       conflictResolutions: [],
     },

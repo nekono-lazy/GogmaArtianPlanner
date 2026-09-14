@@ -293,7 +293,11 @@ function inventoryPreconditionRejection(
   const operation = unit.operation
   if (operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses') {
     if (operation.sourceOwnedWeaponId === null) {
-      return state.routeRuntimeByEntryId[entry.id]?.hasUnregisteredGogmaOutput && (operation.type !== 'keep_bonuses' || state.routeRuntimeByEntryId[entry.id]?.transientRestorationBonusScope === 'gogma_artian')
+      // A transient Gogma of either scope may be Reset or Kept: its inherited
+      // slots are known whenever the Route knows them, and the blind variant's
+      // Keep-before-Reset is already refused by Route validation and fails
+      // closed in Trace Replay (`unknown_restoration_bonuses`).
+      return state.routeRuntimeByEntryId[entry.id]?.hasUnregisteredGogmaOutput
         ? null
         : rejection(
             entry.id,
@@ -435,7 +439,12 @@ function nextTransientRestorationBonusScope(
   operation: PlannerRouteUnit['operation'],
 ): PlannerSearchState['routeRuntimeByEntryId'][BuildListEntryId]['transientRestorationBonusScope'] {
   if (operation.type === 'convert_normal_to_gogma') return 'normal_artian'
-  if (operation.type === 'reset_bonuses' && operation.sourceOwnedWeaponId === null) {
+  // Either amendment rewrites all five slots as `gogma_artian` scope
+  // (`docs/DATA_MODEL.md` 7.1): Reset redraws them, Keep rerolls each tier.
+  if (
+    (operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses') &&
+    operation.sourceOwnedWeaponId === null
+  ) {
     return 'gogma_artian'
   }
   return current?.transientRestorationBonusScope ?? null

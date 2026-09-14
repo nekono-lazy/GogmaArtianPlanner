@@ -7,6 +7,7 @@ import type {
   WeaponTypeId,
 } from '../models/publicTypes'
 import type {
+  ArtianBonusTypeMapping,
   BonusRankMaster,
   BonusTypeMaster,
   ElementMaster,
@@ -35,6 +36,12 @@ export interface RngMasterSubset {
   bonusTypes?: BonusTypeMaster[]
   /** Required by the production Gogma Reset availability filter when used. */
   weaponTypes?: WeaponTypeMaster[]
+  /**
+   * Required by the production Keep family resolution when used: a Normal-side
+   * bonus type of a current slot is normalized to its Gogma-side family through
+   * this mapping (`docs/RNG_SPEC.md` 6.1 / 6.4).
+   */
+  artianBonusTypeMappings?: ArtianBonusTypeMapping[]
 }
 
 export interface GogmaBonusPredictionInput {
@@ -109,7 +116,9 @@ export type RngPredictionSupportInput =
       type: 'gogma_keep'
       weaponTypeId: WeaponTypeId
       elementId: ElementId
+      /** The current ordered five slots of either scope; families are read from bonus types only. */
       currentBonuses: RestorationBonusSet
+      master: RngMasterSubset
     }
 
 export type RngPredictionUnsupportedReason =
