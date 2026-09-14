@@ -424,7 +424,10 @@ Base Seed / Skill Counter / Gogma CounterのIdentification Wizard（5.4）と同
 UI接続状態。
 
 - Domain kernel / Worker / Worker Clientは実装済みである（[RNG_SPEC.md](./RNG_SPEC.md) 9.12）
-- 本画面への観測入力、検索、進捗、キャンセル、候補表示、追加観測、Counter確定の接続は後続PRで行う。接続までは「観測検索は未実装」の案内を残す
+- 本画面への接続は完了している。各武器種行の「観測・検索」が `NormalCounterIdentificationDialog` を開き、観測入力（属性区分 + ordered 5枠）、`AppSettings.defaultSearchLimit` を終了値とする初期検索範囲、Worker Clientによる検索、進捗、キャンセル、unique / multiple / zero / truncatedの候補表示、追加観測、復元確認後のCounter確定（`counter = startNormalCounter`）までを通常UIから行える。確定済み行には「確定解除」を提供し、`isConfirmed = false` へ戻す際に `counter` / `observationCount` / `candidateCount` / `lastObservedAt` は保持する
+- 観測履歴はDialog内のin-memory stateだけに保持し、Observation履歴の永続化schemaは追加していない。Worker Clientはページが所有し、Dialogを閉じたとき・確定したとき・ページunmount時に `dispose()` する
+- 検索可能条件は確定済みBase Seed（Production canonical decimal form）だけである。Skill Counter / Gogma Counter / 旧Counter Gateは要求しない。Switch Axeは通常操作段階で「Production検証対象外」として検索を開始できず、Domain / Worker側の `normal_pool_unverified` fail closedも維持する
+- unique結果でも通常UIは「候補が1件に絞り込まれました」とだけ表示し、`startNormalCounter` の数値はDebug Mode ONの診断表示に限る
 
 ---
 

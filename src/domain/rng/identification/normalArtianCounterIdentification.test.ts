@@ -7,6 +7,7 @@ import {
   gameVerifiedLongSwordFireNormalVectors,
   gameVerifiedLongSwordNoneNormalVectors,
 } from '../../../test/fixtures/gameVerifiedNormalVectors'
+import type { RngEngine } from '../rngEngine'
 import { ProductionRngEngine } from '../production/productionRngEngine'
 import { gameVerifiedNormalCandidatesForWeaponAndElement } from '../production/gameNormalBonuses'
 import {
@@ -15,9 +16,11 @@ import {
 } from '../production/referenceNormalBonuses'
 import { REFERENCE_RNG_BLOCK_SIZE } from '../production/referencePrng'
 import {
+  getNormalArtianCounterIdentificationSupport,
   identifyNormalArtianCounter,
   normalArtianAttributeClassFromElementId,
   normalArtianAttributeClassRepresentativeElementId,
+  normalArtianCounterObservationBonusOptions,
 } from './normalArtianCounterIdentification'
 import {
   MAX_NORMAL_ARTIAN_IDENTIFICATION_COUNTER,
@@ -800,5 +803,73 @@ describe('Normal Artian Counter Identification kernel', () => {
     expect(structuredClone(hbgInput()).observations.map((observation) => observation.attributeClass))
       .toEqual(['attribute_present', 'attribute_present', 'attribute_present'])
     expect(classes.every((attributeClass) => typeof attributeClass === 'string')).toBe(true)
+  })
+})
+
+describe('Normal Artian Counter Identification UI helpers', () => {
+  const engine = new ProductionRngEngine()
+  const base = (bonusTypeId: string) => ({ bonusTypeId, bonusRankId: 'bonus_rank.base' })
+
+  it('derives the observation options from the Production pool of the weapon type and attribute class', () => {
+    // Melee: Attack / Element / Sharpness / Affinity with an attribute, no Element without one.
+    expect(normalArtianCounterObservationBonusOptions('weapon.dual_blades', 'attribute_present')).toEqual([
+      base('bonus_type.attack'), base('bonus_type.element'), base('bonus_type.normal_sharpness'), base('bonus_type.affinity'),
+    ])
+    expect(normalArtianCounterObservationBonusOptions('weapon.dual_blades', 'none')).toEqual([
+      base('bonus_type.attack'), base('bonus_type.normal_sharpness'), base('bonus_type.affinity'),
+    ])
+    // Bowguns draw Capacity, never Sharpness, and never Element in either class.
+    for (const attributeClass of NORMAL_ARTIAN_ATTRIBUTE_CLASSES) {
+      expect(normalArtianCounterObservationBonusOptions('weapon.heavy_bowgun', attributeClass)).toEqual([
+        base('bonus_type.attack'), base('bonus_type.normal_capacity'), base('bonus_type.affinity'),
+      ])
+    }
+    // Bow family 7 has no Domain mapping, so it is absent rather than guessed.
+    expect(normalArtianCounterObservationBonusOptions('weapon.bow', 'attribute_present')).toEqual([
+      base('bonus_type.attack'), base('bonus_type.element'), base('bonus_type.affinity'),
+    ])
+    expect(normalArtianCounterObservationBonusOptions('weapon.bow', 'none')).toEqual([
+      base('bonus_type.attack'), base('bonus_type.affinity'),
+    ])
+  })
+
+  it('offers exactly the bonuses the pool can draw, so every option maps back into the pool', () => {
+    for (const weaponTypeId of SUPPORTED_WEAPON_TYPES) {
+      for (const attributeClass of NORMAL_ARTIAN_ATTRIBUTE_CLASSES) {
+        const pool = gameVerifiedNormalCandidatesForWeaponAndElement(
+          weaponTypeId, normalArtianAttributeClassRepresentativeElementId(attributeClass),
+        )
+        const options = normalArtianCounterObservationBonusOptions(weaponTypeId, attributeClass)
+        const mappedIds = options.map((bonus) => referenceNormalIdFromRestorationBonus(weaponTypeId, bonus))
+        expect(mappedIds).toEqual(
+          pool.map(({ referenceId }) => referenceId).filter((id) => !(weaponTypeId === 'weapon.bow' && id === 7)),
+        )
+      }
+    }
+  })
+
+  it('fails closed for Switch Axe instead of falling back to a reference pool', () => {
+    for (const attributeClass of NORMAL_ARTIAN_ATTRIBUTE_CLASSES) {
+      expect(() => normalArtianCounterObservationBonusOptions('weapon.switch_axe', attributeClass)).toThrow(
+        /unsupported for weapon\.switch_axe/,
+      )
+    }
+  })
+
+  it('judges identification support the way the kernel does: supported weapons pass, Switch Axe is normal_pool_unverified', () => {
+    for (const weaponTypeId of SUPPORTED_WEAPON_TYPES) {
+      expect(getNormalArtianCounterIdentificationSupport(weaponTypeId, 8, engine)).toEqual({ supported: true })
+    }
+    expect(getNormalArtianCounterIdentificationSupport('weapon.switch_axe', 8, engine)).toEqual({
+      supported: false, reason: 'normal_pool_unverified',
+    })
+    // The Production Engine with only its Normal capability switched off;
+    // every method still resolves through the prototype.
+    const noNormal = Object.create(engine, {
+      capabilities: { value: { ...engine.capabilities, supportsNormalArtianPrediction: false } },
+    }) as RngEngine
+    expect(getNormalArtianCounterIdentificationSupport('weapon.dual_blades', 8, noNormal)).toEqual({
+      supported: false, reason: 'engine_capability_unavailable',
+    })
   })
 })

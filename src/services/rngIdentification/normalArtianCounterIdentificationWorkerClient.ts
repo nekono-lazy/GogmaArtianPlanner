@@ -150,8 +150,9 @@ export function createUnavailableNormalArtianCounterIdentificationWorkerClient()
 }
 
 /**
- * Foundation only; no Production UI calls this factory yet. The Normal Counter
- * Setup screen connects it in a later task (`docs/UI_FLOW.md` 6).
+ * The Production Client the Normal Counter Setup screen uses
+ * (`docs/UI_FLOW.md` 6): `NormalCountersPage` creates one per observation
+ * session and disposes it when the session ends.
  */
 export function createProductionNormalArtianCounterIdentificationWorkerClient(): NormalArtianCounterIdentificationWorkerClient {
   if (typeof Worker === 'undefined') {

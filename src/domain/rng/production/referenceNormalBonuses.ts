@@ -126,6 +126,24 @@ export function mapReferenceNormalResult(
 const REFERENCE_NORMAL_LOTTERY_IDS: readonly ReferenceNormalLotteryId[] = [4, 6, 7, 8]
 
 /**
+ * The semantic Domain bonus one reference Normal lottery ID maps to for one
+ * weapon type — the single-slot form of `mapReferenceNormalResult`, sharing
+ * its mapping verbatim. `null` means the Domain has no representation (Bow
+ * family 7); an unknown weapon type raises the adapter's `RangeError`.
+ *
+ * It exists so the Normal Counter observation UI can list exactly the bonuses
+ * a Production pool can draw without hard-coding a second mapping table. It
+ * changes no lottery rule, pool, or reference parity.
+ */
+export function restorationBonusFromReferenceNormalId(
+  weaponTypeId: WeaponTypeId,
+  referenceId: ReferenceNormalLotteryId,
+): RestorationBonus | null {
+  toReferenceWeaponType(weaponTypeId)
+  return mapReferenceNormalId(referenceId, weaponTypeId)
+}
+
+/**
  * The reference Normal lottery ID a semantic Domain bonus corresponds to for
  * one weapon type — the exact inverse of `mapReferenceNormalResult` per slot.
  *
