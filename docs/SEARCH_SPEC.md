@@ -20,7 +20,7 @@ Candidate Search再設計の背景、実測値、採用しなかった案、受�
 - 初期版では実用ラインを満たさない候補を原則表示しない
 - Candidateは常に理想品であり、実用品のcategoryや理想への近さを表す属性は持たない
 - 通常アーティア経由と既存巨戟アーティア経由を比較する
-- 対象武器種のレア8通常アーティアCounterが未確定なら新規通常アーティア経由を検索しない
+- 対象武器種のレア8通常アーティアCounterが未確定なら、Normal Predictionを使う新規通常アーティア経由のpredicted variant(6.1)は検索しない。ただし条件を満たす場合は6.1.1のblind Reset variantで新規通常アーティア経由を検索できるため、RouteKind全体が検索不可になるわけではない
 - Target条件を自動変更しない。条件緩和案も提示しない（9章）
 - 重い検索はWeb Workerで行う
 - Normal / Gogma / Skillは独立RNG streamとして独立に探索する
