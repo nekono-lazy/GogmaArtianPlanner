@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createInitialRngState } from '../domain/models/factories'
@@ -321,24 +321,97 @@ describe('RngSetupPage', () => {
     expect(within(seedPanel).getByText('状態: 使用中')).toBeInTheDocument()
   })
 
-  it('edits and saves Counter Gate from the shared 詳細・互換情報 section', async () => {
-    const state = createInitialRngState('2026-08-29T00:00:00.000Z')
-    state.baseSeed = { value: '42', isConfirmed: true, source: 'observation' }
-    const user = userEvent.setup()
-    const fixture = dependencies(state)
-    render(<RngSetupPage dependencies={fixture.deps} />)
+  describe('legacy Counter Gate', () => {
+    // `docs/UI_FLOW.md` 5.2: the ordinary RNG Setup neither shows nor edits
+    // Counter Gate. The persisted KnownValue is legacy / diagnostic / import
+    // compatibility data and is carried through every save unchanged.
+    const legacyGate = { value: 200, isConfirmed: true, source: 'manual' } as const
 
-    const toggle = await screen.findByRole('button', { name: '詳細・互換情報（Counter Gate）' })
-    expect(screen.getByRole('heading', { level: 3, name: '詳細・互換情報（Counter Gate）' })).toContainElement(toggle)
-    expect(within(toggle).queryByRole('heading')).not.toBeInTheDocument()
-    expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    await user.click(toggle)
-    expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    await user.type(screen.getByLabelText('Counter Gate（カウンターゲート）'), '60')
-    await user.click(screen.getByRole('button', { name: '保存' }))
+    function legacyState(): RngState {
+      const state = createInitialRngState('2026-08-29T00:00:00.000Z')
+      state.baseSeed = { value: '42', isConfirmed: true, source: 'observation' }
+      state.counterGate = { ...legacyGate }
+      return state
+    }
 
-    await waitFor(() => expect(fixture.getStored().counterGate).toEqual({ value: 60, isConfirmed: false, source: 'manual' }))
-    expect(fixture.getStored().baseSeed).toEqual(state.baseSeed)
+    it('never shows a Counter Gate field, section, status, or source in the ordinary UI', async () => {
+      const state = legacyState()
+      render(<RngSetupPage dependencies={dependencies(state).deps} />)
+      await screen.findByLabelText('Base Seed（基準シード）')
+
+      expect(screen.queryByText(/Counter Gate（カウンターゲート）/)).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /詳細・互換情報/ })).not.toBeInTheDocument()
+      expect(screen.queryByText(/詳細・互換情報（Counter Gate）/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Counter Gateの状態/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Counter Gateの取得方法/)).not.toBeInTheDocument()
+      expect(document.querySelector('[data-known-field="counter-gate"]')).toBeNull()
+      // The saved summary lists the three ordinary KnownValues only.
+      const summary = screen.getByRole('region', { name: '保存済みのRNG状態' })
+      expect(within(summary).getAllByRole('term').map((term) => term.textContent))
+        .toEqual(['Base Seed（基準シード）', '巨戟カウンター', 'スキルカウンター'])
+      expect(screen.getAllByRole('checkbox', { name: 'この値を検索・予測に使用する' })).toHaveLength(3)
+      // The persisted value itself is not rendered anywhere in the ordinary UI.
+      expect(document.body).not.toHaveTextContent('200')
+    })
+
+    it('preserves the persisted Counter Gate exactly when only Base Seed is edited and saved', async () => {
+      const state = legacyState()
+      const user = userEvent.setup()
+      const fixture = dependencies(state)
+      render(<RngSetupPage dependencies={fixture.deps} />)
+
+      const seed = await screen.findByLabelText('Base Seed（基準シード）')
+      await user.clear(seed)
+      await user.type(seed, '100000001')
+      await user.click(screen.getByRole('button', { name: '保存' }))
+
+      expect(await screen.findByText('RNG状態を保存しました。')).toBeInTheDocument()
+      expect(fixture.deps.save).toHaveBeenCalledTimes(1)
+      expect(fixture.getStored().baseSeed).toEqual({
+        value: productionRngEngine.normalizeSeed('100000001'),
+        isConfirmed: false,
+        source: 'manual',
+      })
+      expect(fixture.getStored().counterGate).toEqual(legacyGate)
+    })
+
+    it('preserves the persisted Counter Gate exactly when a Counter is edited and saved', async () => {
+      const state = legacyState()
+      const user = userEvent.setup()
+      const fixture = dependencies(state)
+      render(<RngSetupPage dependencies={fixture.deps} />)
+
+      const counter = await screen.findByLabelText('スキルカウンター')
+      await user.type(counter, '7')
+      await user.click(within(counter.closest('[data-known-field]') as HTMLElement).getByRole('checkbox', { name: 'この値を検索・予測に使用する' }))
+      await user.click(screen.getByRole('button', { name: '保存' }))
+
+      expect(await screen.findByText('RNG状態を保存しました。')).toBeInTheDocument()
+      expect(fixture.getStored().skillCounter).toEqual({ value: 7, isConfirmed: true, source: 'manual' })
+      expect(fixture.getStored().counterGate).toEqual(legacyGate)
+      // Never nulled, never unconfirmed, never re-sourced, and never replaced
+      // by the Production active-branch representatives 54 / 35.
+      expect(fixture.getStored().counterGate.value).not.toBeNull()
+      expect([54, 35]).not.toContain(fixture.getStored().counterGate.value)
+    })
+
+    it.each([
+      { value: null, isConfirmed: false, source: null },
+      { value: 54, isConfirmed: true, source: 'observation' },
+      { value: 35, isConfirmed: false, source: 'gogma_seed_finder_import' },
+    ] as const)('carries persisted Counter Gate %j through a Notes-only save', async (counterGate) => {
+      const state = createInitialRngState('2026-08-29T00:00:00.000Z')
+      state.counterGate = { ...counterGate }
+      const user = userEvent.setup()
+      const fixture = dependencies(state)
+      render(<RngSetupPage dependencies={fixture.deps} />)
+
+      await user.type(await screen.findByLabelText('メモ'), 'memo')
+      await user.click(screen.getByRole('button', { name: '保存' }))
+
+      expect(await screen.findByText('RNG状態を保存しました。')).toBeInTheDocument()
+      expect(fixture.getStored().counterGate).toEqual(counterGate)
+    })
   })
 
   it('shows a load failure without any synthetic RNG state or form', async () => {

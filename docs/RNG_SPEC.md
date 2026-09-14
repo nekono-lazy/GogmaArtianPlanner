@@ -68,7 +68,7 @@ Domain Modelは `DATA_MODEL.md` の `RngState` と `NormalArtianCounter` を使�
 
 Base Seed、Gogma Counter、Skill Counter、Counter Gateは `KnownValue<T>` として独立に確定・未確定を保持する。RngState全体の確定フラグは使用しない。
 
-`RngState.counterGate` はlegacy/manual/import compatibility、将来のExport / Import round-trip、diagnostic / reference情報のために保持し、v1では削除またはmigrationしない。ただしpersisted exact GateはProduction Skill / Gogma Predictionのavailability、Candidate Search、Planner、Trace Replay、またはPrediction結果のauthorityに使用しない。
+`RngState.counterGate` はlegacy/manual/import compatibility、将来のExport / Import round-trip、diagnostic / reference情報のために保持し、v1では削除またはmigrationしない。ただしpersisted exact GateはProduction Skill / Gogma Predictionのavailability、Candidate Search、Planner、Trace Replay、またはPrediction結果のauthorityに使用しない。通常ユーザー向けRNG SetupではCounter Gateを表示・編集せず、他項目の保存でもpersisted値をそのまま保持する（[UI_FLOW.md](./UI_FLOW.md) 5.2）。
 
 予測前に、RngState、レア8通常Counter、必要なRouteOperation、現在の
 `RngEngineCapabilities` を渡して `deriveRngCapabilities` を呼ぶ。
@@ -422,7 +422,7 @@ export interface GogmaSeedFinderImportResult {
 
 ## 8.2 Manual Input
 
-ユーザーが正確に判明している値だけを直接入力する。4項目をすべて入力する必要はない。
+ユーザーが正確に判明している値だけを直接入力する。通常ユーザー向けの入力対象はBase Seed、Gogma Counter、Skill Counterの3項目であり、3項目をすべて入力する必要はない。
 
 制約。
 
@@ -432,7 +432,7 @@ export interface GogmaSeedFinderImportResult {
 - Counterは0以上の整数のみ
 - 入力した各KnownValueの `source` を `"manual"` とする
 - 空欄項目を既存値から削除する操作は、明示的な「確定解除」として別に扱う
-- manual Counter Gateはlegacy / diagnostic / compatibility値として保存可能だが、Production active Predictionのavailabilityまたは結果を変更しない
+- 通常ユーザー向けRNG SetupはCounter Gateの入力欄を提供しない。過去に保存されたmanual Counter Gateはlegacy / diagnostic / compatibility値としてそのまま保持し、Production active Predictionのavailabilityまたは結果を変更しない
 
 ---
 
@@ -612,7 +612,7 @@ export interface SeedMatchPosition {
 - 入力は武器種、属性、Series SkillとGroup Skillをともに持つ連続観測列、bounded inclusive Skill Counter rangeである
 - 観測1はNormal ArtianからGogma Artianへのconversion時に自動付与されたSkill、以後は連続するReset Skills結果である
 - 開始Skill Counterを`S`とすると、観測`i`は`S + i`（観測1を`i = 0`とする）に対応する
-- Base Seed探索domainはcanonical `0..99,999,999` inclusiveである。テストとbenchmarkでは、このdomain内のbounded inclusive Seed rangeを指定できる
+- Base Seed探索domainはcanonical `0..99,999,999` inclusiveである。テストとbenchmarkでは、このdomain内のbounded inclusive Seed rangeを指定できる。Wizard UIのSeed range初期値はこのcanonical全域であり、ユーザーが狭いbounded rangeへ変更できる（[UI_FLOW.md](./UI_FLOW.md) 5.4）。Seed range入力はcanonical 10進8桁の数字入力であり、RNG Setupの手動Base Seed入力（raw 10進 / 16進を `normalizeSeed()` で正規化）とは別契約である
 - Skill Counterのformal domainと1回の検索coverageは分離する。C5-E2B1時点の初期UX推奨幅は11候補だが、永久上限ではない
 - Counter Gateは入力、観測、探索対象にしない。kernelはSkill active branchを選ぶ内部代表値54を用いるが、これはactual Gate値ではなく永続化しない
 - Series SkillとGroup Skillはsemantic Domain IDで受け取り、両方を完全一致させる
