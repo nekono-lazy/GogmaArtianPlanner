@@ -63,7 +63,6 @@ function plannerInput(
       bonusTypes: [],
       bonusRanks: [],
         artianBonusTypeMappings: [],
-      lotteries: [],
       materialCosts: [],
     },
     conflictResolutions: [],

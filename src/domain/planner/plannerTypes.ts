@@ -21,7 +21,6 @@ import type {
   BonusRankMaster,
   BonusTypeMaster,
   ElementMaster,
-  LotteryMaster,
   MaterialCostMaster,
   WeaponBonusDefinition,
   WeaponTypeMaster,
@@ -94,10 +93,10 @@ export interface PlannerSearchTermination {
   totalTargetCount: number
 }
 
+/** Carries no `LotteryMaster`: Planner calculation and Trace Replay never read one. */
 export interface PlannerMasterSubset {
   /** Matches RngMasterSubset so trace replay can repeat Search predictions. */
   weaponBonusDefinitions: WeaponBonusDefinition[]
-  lotteries: LotteryMaster[]
   materialCosts: MaterialCostMaster[]
   bonusRanks: BonusRankMaster[]
   /** Keep family resolution authority for Normal-side bonus types (`docs/RNG_SPEC.md` 6.1). */

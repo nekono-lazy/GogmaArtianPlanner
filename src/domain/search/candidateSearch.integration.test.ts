@@ -319,10 +319,12 @@ describe('Candidate Search routes', () => {
     )).toBe(true)
   })
 
-  it('does not skip a Normal route only because the placeholder LotteryMaster is disabled', async () => {
+  it('searches a Normal route with no LotteryMaster in the Search input at all', async () => {
     const input = createCandidateSearchInput()
     input.routeFilter = 'normal_artian'
-    input.master.lotteries = []
+    // The Search Master carries no Lottery payload: a disabled or absent
+    // LotteryMaster can never skip a Production Route (`docs/SEARCH_SPEC.md` 4.1).
+    expect(input.master).not.toHaveProperty('lotteries')
     const result = await searchCandidates(
       input,
       createCandidateSearchEngine(input),

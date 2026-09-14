@@ -100,7 +100,7 @@ function validateInput(input: GogmaCounterIdentificationInput, engine: RngEngine
 }
 
 function supportMaster(master: WeaponBonusDefinitionsMasterSubset): RngMasterSubset {
-  return { ...master, lotteries: [], bonusRanks: [] }
+  return { ...master, bonusRanks: [] }
 }
 
 function requirePredictionSupport(input: GogmaCounterIdentificationInput, engine: RngEngine): void {

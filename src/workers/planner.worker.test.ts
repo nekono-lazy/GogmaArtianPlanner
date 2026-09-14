@@ -52,7 +52,6 @@ function fixture(): { input: PlannerInput; dependencies: PlannerDependencies } {
         weaponTypes: search.master.weaponTypes,
         elements: search.master.elements,
         bonusTypes: search.master.bonusTypes,
-        lotteries: search.master.lotteries,
         materialCosts: search.master.materialCosts,
         bonusRanks: search.master.bonusRanks,
         artianBonusTypeMappings: search.master.artianBonusTypeMappings,

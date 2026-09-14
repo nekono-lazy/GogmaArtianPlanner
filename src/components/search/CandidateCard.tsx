@@ -19,6 +19,7 @@ import {
   type CompromiseCheckpointSelectionContext,
 } from './CompromiseCheckpointList'
 import { SearchDefinitionItem, SearchDefinitionList } from './SearchDefinitionList'
+import { hasUsableMaterialCosts } from '../../domain/master/masterDataStatus'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import type {
   BuildCandidate,
@@ -159,6 +160,10 @@ export function CandidateCard({
     : ownedWeapons.find(({ id }) => id === candidate.route.sourceOwnedWeaponId)?.name ??
       '参照元の所持武器が見つかりません'
   const scope = candidate.restorationBonusScope
+  // An empty `requiredMaterials` is "unknown" whenever the Master has no usable
+  // material cost: the Search priced nothing, it did not find zero. Only a
+  // priced Route with nothing to pay may read as none (`docs/UI_FLOW.md` 9).
+  const materialCostsAvailable = hasUsableMaterialCosts(master)
 
   return (
     <Card component="section" aria-labelledby={headingId} variant="outlined">
@@ -319,7 +324,13 @@ export function CandidateCard({
                   必要素材（アイテム）
                 </Typography>
                 {candidate.requiredMaterials.length === 0 ? (
-                  <Typography variant="body2">なし</Typography>
+                  materialCostsAvailable ? (
+                    <Typography variant="body2">なし</Typography>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">
+                      素材コストは未検証のため表示できません。
+                    </Typography>
+                  )
                 ) : (
                   <Box
                     role="list"

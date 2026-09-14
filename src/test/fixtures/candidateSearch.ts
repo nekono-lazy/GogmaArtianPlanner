@@ -55,23 +55,6 @@ export const searchMasterFixture: SearchMasterSubset = {
       gogmaBonusTypeId: 'bonus_type.fixture.sharpness',
     },
   ],
-  lotteries: [
-    {
-      id: 'lottery.fixture.normal.a.8',
-      lotteryKind: 'normal_artian_bonus',
-      weaponTypeId: 'weapon.fixture.a',
-      rarity: 8,
-      resultType: 'bonus',
-      bonusTypeId: 'bonus_type.fixture.attack',
-      bonusRankId: 'bonus_rank.fixture.high',
-      seriesSkillId: null,
-      groupSkillId: null,
-      internalValue: 'fixture-only',
-      weight: 0,
-      sortOrder: 1,
-      isEnabled: true,
-    },
-  ],
   materialCosts: [],
 }
 
@@ -129,7 +112,6 @@ export function createCandidateSearchInput(): CandidateSearchInput {
       bonusTypes: searchMasterFixture.bonusTypes.map((bonusType) => ({ ...bonusType })),
       bonusRanks: searchMasterFixture.bonusRanks.map((rank) => ({ ...rank })),
       artianBonusTypeMappings: searchMasterFixture.artianBonusTypeMappings.map((mapping) => ({ ...mapping })),
-      lotteries: searchMasterFixture.lotteries.map((lottery) => ({ ...lottery })),
       materialCosts: searchMasterFixture.materialCosts.map((cost) => ({ ...cost })),
     },
     calculationContext: {

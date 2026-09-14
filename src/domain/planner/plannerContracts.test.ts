@@ -75,7 +75,6 @@ function createPlannerFixture(): {
         weaponTypes: searchInput.master.weaponTypes,
         elements: searchInput.master.elements,
         bonusTypes: searchInput.master.bonusTypes,
-        lotteries: searchInput.master.lotteries,
         materialCosts: searchInput.master.materialCosts,
         bonusRanks: searchInput.master.bonusRanks,
         artianBonusTypeMappings: searchInput.master.artianBonusTypeMappings,

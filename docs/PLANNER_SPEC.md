@@ -82,9 +82,14 @@ export interface PlannerMasterSubset {
   artianBonusTypeMappings: ArtianBonusTypeMapping[];
   materialCosts: MaterialCostMaster[];
   bonusRanks: BonusRankMaster[];
-  lotteries: LotteryMaster[];
 }
 ```
+
+`PlannerMasterSubset` は `LotteryMaster` を持たない。Planner計算、constrained
+re-search、Trace Replayはいずれも `LotteryMaster` を読まず、PredictionはRngEngineだけから
+取得する。`MasterDataRoot.lotteries` はprovisional / legacy Master structureとしてrootに
+残るが、`createPlannerInput()` はPlanner Workerへのpayloadに含めない。`materialCosts` は
+アイテム素材の表示用で、Plan可否・scoreの判定要素ではない（8.2）。
 
 初期値。
 

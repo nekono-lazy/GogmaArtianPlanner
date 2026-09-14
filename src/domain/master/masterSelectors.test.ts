@@ -7,7 +7,6 @@ import {
   getEnabledWeaponTypes,
   getGroupSkillOptions,
   getGogmaBonusTypeForNormalBonus,
-  getLotteryEntries,
   getMaterialCosts,
   getNormalBonusTypesForGogmaBonus,
   getRanksForBonusType,
@@ -100,15 +99,6 @@ describe('Master Data selectors', () => {
     ])
   })
 
-  it('filters Lottery entries without performing a lottery', () => {
-    const result = getLotteryEntries(
-      createValidMasterDataFixture(),
-      'gogma_bonus',
-      'weapon.fixture.a',
-      8,
-    )
-    expect(result.map(({ id }) => id)).toEqual(['lottery.fixture.a.bonus'])
-  })
 
   it('throws an explicit Domain Error for an unknown Master ID', () => {
     expect(() =>

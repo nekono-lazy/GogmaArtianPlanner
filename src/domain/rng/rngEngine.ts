@@ -11,7 +11,6 @@ import type {
   BonusRankMaster,
   BonusTypeMaster,
   ElementMaster,
-  LotteryMaster,
   WeaponBonusDefinition,
   WeaponTypeMaster,
 } from '../master/masterTypes'
@@ -26,9 +25,16 @@ export interface RngEngineCapabilities {
   supportsKeepBonusesPrediction: boolean
 }
 
+/**
+ * The minimal Master an RNG prediction reads.
+ *
+ * The provisional `LotteryMaster` is deliberately absent: Production RNG draws
+ * from its own reference-verified tables and Engine constants, never from
+ * `MasterDataRoot.lotteries`, so no calculation payload carries it
+ * (`docs/RNG_SPEC.md` 6.4).
+ */
 export interface RngMasterSubset {
   weaponBonusDefinitions: WeaponBonusDefinition[]
-  lotteries: LotteryMaster[]
   bonusRanks: BonusRankMaster[]
   /** Required by the production Gogma Reset availability filter when used. */
   elements?: ElementMaster[]

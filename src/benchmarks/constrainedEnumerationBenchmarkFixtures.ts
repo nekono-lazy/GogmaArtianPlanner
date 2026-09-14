@@ -312,7 +312,6 @@ function benchmarkMaster(): BenchmarkMaster {
       bonusTypes: data.bonusTypes,
       bonusRanks: data.bonusRanks,
       artianBonusTypeMappings: data.artianBonusTypeMappings,
-      lotteries: data.lotteries,
       materialCosts: data.materialCosts,
     },
     context: {

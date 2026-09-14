@@ -224,7 +224,6 @@ export function fixture(
       weaponTypes: [],
       elements: [],
       bonusTypes: [],
-      lotteries: [],
       materialCosts: [],
       bonusRanks: targetEvaluationMaster.bonusRanks,
       artianBonusTypeMappings: [],

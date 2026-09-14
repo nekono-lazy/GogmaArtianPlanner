@@ -70,7 +70,6 @@ export async function createPlannerInput(
       bonusTypes: master.bonusTypes,
       bonusRanks: master.bonusRanks,
       artianBonusTypeMappings: master.artianBonusTypeMappings,
-      lotteries: master.lotteries,
       materialCosts: master.materialCosts,
     },
     conflictResolutions: [],

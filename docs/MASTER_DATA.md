@@ -437,6 +437,9 @@ export interface LotteryMaster {
 - 表示順やUI名はLotteryMasterから取らず、各Masterを参照する
 - RNGロジックが必要とする内部値が未確定の場合は `internalValue` を暫定値にし、manifest notesに未検証と明記する
 - 暫定LotteryMasterだけを根拠に本番RNGアルゴリズムの正しさを判定しない
+- `LotteryMaster` はprovisional / legacy Master structureであり、Production RNGの抽選authorityではない。Production RNGはprovenance付きreference-verified tableとEngine内部定数を使う
+- `MasterDataRoot.lotteries` としてrootに残し、load / validationも維持するが、runtime calculation subset（`RngMasterSubset` / `SearchMasterSubset` / `PlannerMasterSubset`）には含めない。Search / Planner Workerへのpayloadにも渡さない
+- LotteryMasterのenabled有無をProduction Search readinessやRoute eligibilityの判定に使わない
 
 ---
 
@@ -520,7 +523,7 @@ export interface MasterDataRoot {
 - 起動時に静的importで読み込む
 - 読み込み直後に `validateMasterData` を実行する
 - validation errorがある場合はアプリを通常起動せず、エラー画面を表示する
-- Web Workerへ渡す場合は必要なsubsetだけをstructured cloneで送る
+- Web Workerへ渡す場合は必要なsubsetだけをstructured cloneで送る。`lotteries` はどのruntime subsetにも含めない
 
 ---
 
@@ -540,8 +543,9 @@ isExRank(master, bonusRankId): boolean
 getSeriesSkillOptions(master): SeriesSkillMaster[]
 getGroupSkillOptions(master): GroupSkillMaster[]
 getMaterialCosts(master, operationType, weaponTypeId): MaterialCostMaster[]
-getLotteryEntries(master, lotteryKind, weaponTypeId, rarity): LotteryMaster[]
 ```
+
+`getLotteryEntries` はruntime / testのどこからも使われていなかったため削除した。LotteryMasterはvalidation対象のprovisional structureとしてrootに残るだけで、selectorを通じてProduction計算へ供給しない。
 
 制約。
 

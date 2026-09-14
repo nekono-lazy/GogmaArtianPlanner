@@ -103,7 +103,6 @@ export function constrainedMaster() {
     bonusTypes: searchMasterFixture.bonusTypes.map((b) => ({ ...b })),
     bonusRanks: searchMasterFixture.bonusRanks.map((r) => ({ ...r })),
     artianBonusTypeMappings: searchMasterFixture.artianBonusTypeMappings.map((m) => ({ ...m })),
-    lotteries: searchMasterFixture.lotteries.map((l) => ({ ...l })),
     materialCosts: searchMasterFixture.materialCosts.map((c) => ({ ...c })),
   }
 }

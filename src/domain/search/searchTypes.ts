@@ -13,7 +13,6 @@ import type {
   BonusTypeMaster,
   BonusRankMaster,
   ElementMaster,
-  LotteryMaster,
   MaterialCostMaster,
   WeaponBonusDefinition,
   WeaponTypeMaster,
@@ -47,6 +46,15 @@ export const defaultCandidateSearchSettings: CandidateSearchSettings = {
   maxSkillAdvance: 1000,
 }
 
+/**
+ * The Master a Candidate Search reads. It carries no `LotteryMaster`: the
+ * Production RNG never reads one, so a disabled Lottery Master can neither skip
+ * a Route nor make a Search unavailable (`docs/SEARCH_SPEC.md` 4.1).
+ *
+ * `materialCosts` only prices the Route's item materials. With no usable enabled
+ * cost, `requiredMaterials` stays empty and means "unknown", never "zero", and
+ * the material tie-breaks compare nothing.
+ */
 export interface SearchMasterSubset {
   weaponBonusDefinitions: WeaponBonusDefinition[]
   weaponTypes: WeaponTypeMaster[]
@@ -55,7 +63,6 @@ export interface SearchMasterSubset {
   bonusRanks: BonusRankMaster[]
   /** Keep family resolution authority for Normal-side bonus types (`docs/RNG_SPEC.md` 6.1). */
   artianBonusTypeMappings: ArtianBonusTypeMapping[]
-  lotteries: LotteryMaster[]
   materialCosts: MaterialCostMaster[]
 }
 
