@@ -25,6 +25,11 @@ import {
 } from '../services/rngIdentification/identificationWizardCoordinator'
 import { RngSetupPage, type RngSetupPageDependencies } from './RngSetupPage'
 
+// jsdom has no `Worker`; a Browser does. The Wizard start control follows the
+// application-level Identification availability, which mirrors that check, so
+// these lifecycle tests run as in a Browser (the Coordinator itself is injected).
+vi.stubGlobal('Worker', class {})
+
 const WIZARD_DIALOG = { name: 'RNG Identification Wizard' } as const
 
 class ControllableSkillClient implements SkillIdentificationWorkerClient {

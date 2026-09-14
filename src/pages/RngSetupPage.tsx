@@ -213,9 +213,23 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
     } catch (caught: unknown) { setSaveError(caught instanceof Error ? caught.message : 'RNG状態を保存できません。') }
   }
 
+  // Application-level Wizard availability (`docs/UI_FLOW.md` 5): never read from
+  // the Engine's legacy `supportsSeedSearch` flag, which is a different contract.
+  // It is the single authority for both the status shown and the start guard.
+  const identificationAvailability = getProductionIdentificationAvailability()
+
   const startIdentification = () => {
     setWizardError(null)
     setAdoptionNotice(null)
+    // Fail closed: the disabled button is not the only guard, so a start that
+    // bypasses it (a programmatic call) still never opens a Wizard whose
+    // Identification would end in `worker_unavailable`.
+    if (!identificationAvailability.isAvailable) {
+      setWizardError(
+        productionIdentificationUnavailableReasonLabels[identificationAvailability.reason],
+      )
+      return
+    }
     if (hasUnsavedChanges) {
       setWizardError(UNSAVED_WIZARD_MESSAGE)
       return
@@ -239,9 +253,6 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
   }
 
   const engineCapabilities = productionRngRuntime.capabilities
-  // Application-level Wizard availability (`docs/UI_FLOW.md` 5): never read from
-  // the Engine's legacy `supportsSeedSearch` flag, which is a different contract.
-  const identificationAvailability = getProductionIdentificationAvailability()
 
   return <PageShell title="RNG状態設定" description="検索や予測に使うRNG状態を項目ごとに設定します。"><Stack spacing={{ xs: 2, md: 3 }}>
     {!form && !loadError && <LinearProgress aria-label="RNG状態を読み込み中" />}
@@ -278,7 +289,7 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
             {wizardError && wizardError !== UNSAVED_WIZARD_MESSAGE && <Alert severity="error">{wizardError}</Alert>}
             {adoptionNotice && <Alert severity="success" onClose={() => setAdoptionNotice(null)}>{adoptionNotice}</Alert>}
             <Box>
-              <Button variant="contained" sx={{ minHeight: 44 }} disabled={!masterResult.ok || identificationCoordinator !== null || hasUnsavedChanges} onClick={startIdentification}>Identification Wizardを開始</Button>
+              <Button variant="contained" sx={{ minHeight: 44 }} disabled={!masterResult.ok || !identificationAvailability.isAvailable || identificationCoordinator !== null || hasUnsavedChanges} onClick={startIdentification}>Identification Wizardを開始</Button>
             </Box>
           </Stack>
         </SectionCard>
