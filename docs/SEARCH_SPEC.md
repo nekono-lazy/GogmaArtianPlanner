@@ -1391,7 +1391,7 @@ RouteKind。
 - conversion直後のCounter進行はNormal `+0`、Skill `+1`、Gogma `+0` である。Normal / Gogma Counterをpaired advanceしない
 - conversionはGogma Predictionを呼ばず、通常5枠をslot順のまま継承する
 - conversionは初回Skill付与を内包し、別のassign操作へ分割しない
-- 操作列はconversion後にResetBonusesOperation、最初のReset以降のKeepBonusesOperation、必要なResetSkillsOperationを含めてよい
+- 操作列はconversion後にResetBonusesOperation / KeepBonusesOperation、必要なResetSkillsOperationを含めてよい。predicted variantではconversion後の5枠が既知なので、最初のBonus amendmentとしてReset / Keepのどちらも可能である(5.9)。blind variant(6.1.1)だけは5枠がunknownなので最初のBonus amendmentをResetとし、そのReset後はKeepを含めてよい
 - BuildRoute.sourceOwnedWeaponIdは `null` とする
 - 同一Routeのtransient Gogmaへ適用するReset / Keep / Reset Skillsは `sourceOwnedWeaponId = null` とし、未登録武器用のOwnedWeaponIdを生成しない
 - normal scopeのtransient Gogmaの5枠はNormal Predictionで既知なので、最初のBonus amendmentとしてKeepを直接適用してよい。Keep familyは通常側Bonus TypeをArtianBonusTypeMappingで巨戟側familyへ正規化して解決する(5.9参照)

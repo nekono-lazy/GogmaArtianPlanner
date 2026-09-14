@@ -34,6 +34,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Check for raw NUL bytes
+        run: npm run check:nul
+
       - name: Test
         run: npm test
 
