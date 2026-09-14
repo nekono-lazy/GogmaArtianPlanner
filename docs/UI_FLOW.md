@@ -374,7 +374,8 @@ activation条件。
 - 武器種
 - 抽選テーブル区分（`NormalArtianLotteryTableClass`、[RNG_SPEC.md](./RNG_SPEC.md) 6.3.1）
   - 弓: テーブルA（火・水・雷・氷・龍・爆破）/ テーブルB（無属性・毒・麻痺・睡眠）
-  - スラッシュアックスを除く近接、ライト / ヘビィボウガン: 属性あり / 無属性
+  - 弓以外（近接10種、スラッシュアックス、ライト / ヘビィボウガン）: 属性あり / 無属性
+  - スラッシュアックスとライト / ヘビィボウガンは両区分が同じProduction poolを参照するため、区分によって選択可能な復元ボーナスは変わらない。スラッシュアックスは両区分とも基礎攻撃力強化 / 属性強化 / 斬れ味強化 / 会心率強化であり、無属性でも属性強化を選択できる（[RNG_SPEC.md](./RNG_SPEC.md) 6.3.1、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.16）。この場合Dialogの案内にDomainのpool同一性から導出した補足文を表示し、UI側に武器種別のテーブルを持たない
 - 復元ボーナス5枠
 
 通常アーティア観測の `rarity` はDomain上に保持するが、v1 UIでは8を内部的に自動設定し、レア度選択を表示しない。
@@ -394,7 +395,7 @@ activation条件。
 - `maxMatches` 到達などで探索が打ち切られた結果（truncated）は候補数に関係なく確定不可とし、範囲の見直しまたは追加観測を促す
 - 候補0件なら観測入力、Base Seed、武器種、属性区分、検索範囲、作成順を確認する。範囲を自動拡張しない
 - Base Seedが未確定の場合はこの検索を開始できず、RNG Setupで先にBase Seedを確定するよう案内する
-- 未検証武器種（現時点のProduction supportは弓 / ライトボウガン / ヘビィボウガン / スラッシュアックスを除く近接10武器種（大剣・片手剣・双剣・太刀・ハンマー・狩猟笛・ランス・ガンランス・チャージアックス・操虫棍）であり、スラッシュアックスだけが未検証）では検索を開始できず、その武器種の通常アーティアpoolが実機未検証であることを表示する。referenceの推測poolで代替検索しない
+- Production poolを持たない武器種では検索を開始できず、その武器種の通常アーティアpoolが実機未検証であることを表示する。referenceの推測poolで代替検索しない。現時点のProduction supportは弓 / ライトボウガン / ヘビィボウガン / スラッシュアックスを除く近接10武器種（大剣・片手剣・双剣・太刀・ハンマー・狩猟笛・ランス・ガンランス・チャージアックス・操虫棍）/ スラッシュアックス（独立single pool、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.16）の14武器種すべてであり、該当する武器種はない。可否の判定はUI側の武器種リストではなく `getNormalArtianCounterIdentificationSupport()` に従う
 
 Counter確定とゲーム状態の復元。
 
@@ -430,9 +431,10 @@ UI接続状態。
 - Domain kernel / Worker / Worker Clientは実装済みである（[RNG_SPEC.md](./RNG_SPEC.md) 9.12）
 - 本画面への接続は完了している。各武器種行の「観測・検索」が `NormalCounterIdentificationDialog` を開き、観測入力（属性区分 + ordered 5枠）、`AppSettings.defaultSearchLimit` を終了値とする初期検索範囲、Worker Clientによる検索、進捗、キャンセル、unique / multiple / zero / truncatedの候補表示、追加観測、復元確認後のCounter確定（`counter = startNormalCounter`）までを通常UIから行える。確定済み行には「確定解除」を提供し、`isConfirmed = false` へ戻す際に `counter` / `observationCount` / `candidateCount` / `lastObservedAt` は保持する
 - 観測履歴はDialog内のin-memory stateだけに保持し、Observation履歴の永続化schemaは追加していない。Worker Clientはページが所有し、Dialogを閉じたとき・確定したとき・ページunmount時に `dispose()` する
-- 検索可能条件は確定済みBase Seed（Production canonical decimal form）だけである。Skill Counter / Gogma Counter / 旧Counter Gateは要求しない。Switch Axeは通常操作段階で「Production検証対象外」として検索を開始できず、Domain / Worker側の `normal_pool_unverified` fail closedも維持する
+- 検索可能条件は確定済みBase Seed（Production canonical decimal form）だけである。Skill Counter / Gogma Counter / 旧Counter Gateは要求しない。Switch AxeはSwitch Axe Normal Production activation（[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.16）以降、他の武器種と同様に「観測・検索」を利用できる。Production poolを持たない武器種を「Production検証対象外」として検索開始できなくする表示と、Domain / Worker側の `normal_pool_unverified` fail closedは契約として維持する（現時点で該当する武器種はない）
 - unique結果でも通常UIは「候補が1件に絞り込まれました」とだけ表示し、`startNormalCounter` の数値はDebug Mode ONの診断表示に限る
 - Bow Table A / B修正（[RNG_SPEC.md](./RNG_SPEC.md) 6.3.1、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.15）後、Dialogの区分入力は `tableClass` を送る。弓では「テーブルA（火・水・雷・氷・龍・爆破）/ テーブルB（無属性・毒・麻痺・睡眠）」の2択、その他の武器種では「属性あり / 無属性」の2択であり、exact ElementIdのdropdownは追加していない。選択可能Bonusは引き続き `normalArtianCounterObservationBonusOptions(weaponTypeId, tableClass)` がProduction poolから導出し、弓のテーブルAは基礎攻撃力強化 / 属性強化 / 会心率強化、テーブルBは基礎攻撃力強化 / 会心率強化である。unique / multiple / zero / truncated、progress / cancel、復元確認、`counter = startNormalCounter` の確定、raw CounterのDebug限定表示は変更していない
+- Switch Axe Normal Production activation（[RNG_SPEC.md](./RNG_SPEC.md) 6.3.1、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.16）後、スラッシュアックス行の「観測・検索」が有効になった。Dialogは弓ではないためgeneric表示「属性あり / 無属性」のままで、exact ElementIdのdropdownは追加していない。両区分の選択可能Bonusは `normalArtianCounterObservationBonusOptions('weapon.switch_axe', tableClass)` からの導出でどちらも基礎攻撃力強化 / 属性強化 / 斬れ味強化 / 会心率強化となり、区分を切り替えても属性強化のslotは未入力へ戻さない。Worker inputは従来どおり `table_a` / `table_b` を送り、Counterは `weapon.switch_axe:8` の1本を両区分で共有する。unique確認 / 復元確認 / `counter = startNormalCounter`（観測数を加算しない）の流れは変更していない
 
 ---
 

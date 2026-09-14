@@ -215,7 +215,7 @@ Dexie separately moves to `DATABASE_SCHEMA_VERSION = 4` for the persisted status
 `AppSettings.schemaVersion = 1`; gameVersion, Master Data version,
 `RngState.schemaVersion = 1`, `CONSTRAINED_ROUTE_POLICY_VERSION`, and
 `supportsSeedSearch = false` remain unchanged. `PRODUCTION_RNG_ENGINE_VERSION` is
-currently `production-rng:c5-e5`. The Normal Artian occurrence-limit correction
+currently `production-rng:c5-e6`. The Normal Artian occurrence-limit correction
 (Production game-verified pool Attack 5 / Element 4 / family 7 2 / Affinity 3)
 changed Production Normal prediction output and moved the Engine version from
 `production-rng:c5-e2` to `production-rng:c5-e3`; the later Melee support
@@ -225,9 +225,14 @@ Candidate Search route availability and Counter Identification support, and
 moved it to `production-rng:c5-e4`; the Bow Normal Table A / B correction
 (Bow Poison / Paralysis / Sleep draw the Table B pool `[6, 8]`, Blast the
 Table A pool `[6, 4, 8]`) changed Bow Poison / Paralysis / Sleep Production
-Normal prediction output and moved it to `production-rng:c5-e5`. None of the
-three touched `CURRENT_CALCULATION_APP_SCHEMA_VERSION`; `rngEngineVersion`
-alone is the CalculationContext staleness boundary for all of them. `DATABASE_SCHEMA_VERSION` stays 4 at the checkpoint boundary, while
+Normal prediction output and moved it to `production-rng:c5-e5`; the Switch
+Axe Normal Production activation (Switch Axe draws one single pool
+`[6, 4, 7, 8]` whatever its configuration) made the previously unsupported
+Switch Axe Normal prediction input supported, changing Candidate Search route
+availability and Counter Identification support, and moved it to the current
+`production-rng:c5-e6`. None of the four touched
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION`; `rngEngineVersion` alone is the
+CalculationContext staleness boundary for all of them. `DATABASE_SCHEMA_VERSION` stays 4 at the checkpoint boundary, while
 `ExportRoot.schemaVersion` moves to 5 with the persisted entity shape. Version 1 BuildCandidate, BuildListEntry, and ProductionPlan
 calculations are incompatible with any later version and must not be reused as current
 results. Existing staleness checks mark old BuildListEntry records with
@@ -380,17 +385,34 @@ Planner must not synthesize them.
 The Production Normal Artian lottery uses the reference-verified PRNG, seed
 derivation, 10-step block, and pool step unchanged, and replaces only the
 candidate pool with the Production pool of the supported weapon type: Bow,
-Light Bowgun, Heavy Bowgun, and the Melee category of every melee weapon type
+Light Bowgun, Heavy Bowgun, the Melee category of every melee weapon type
 except Switch Axe (Great Sword, Sword and Shield, Dual Blades, Long Sword,
-Hammer, Hunting Horn, Lance, Gunlance, Charge Blade, Insect Glaive). The Melee
-pools are `[6, 4, 7, 8]` with an attribute and `[6, 7, 8]` without, identical
-to the former Long Sword pools, and Melee membership is decided only by the
-explicit allow-list `PRODUCTION_MELEE_NORMAL_POOL_WEAPON_TYPE_IDS` in
-`gameNormalBonuses.ts`; an unknown weapon type is never treated as Melee
-implicitly. Switch Axe stays unsupported (`normal_pool_unverified`): Game8
-lists it as a separate table condition, and its pool, attribute handling, and
-`NormalArtianLotteryTableClass` / pool mapping were not confirmed by any
-real-game fixture, so never add it by inference.
+Hammer, Hunting Horn, Lance, Gunlance, Charge Blade, Insect Glaive), and
+Switch Axe as its own independent contract. The Melee pools are `[6, 4, 7, 8]`
+with an attribute and `[6, 7, 8]` without, identical to the former Long Sword
+pools, and Melee membership is decided only by the explicit allow-list
+`PRODUCTION_MELEE_NORMAL_POOL_WEAPON_TYPE_IDS` in `gameNormalBonuses.ts`; an
+unknown weapon type is never treated as Melee implicitly. Switch Axe is
+supported through `GAME_VERIFIED_SWITCH_AXE_NORMAL_CANDIDATES`, one single
+pool `[6, 4, 7, 8]` drawn whatever the parts configuration
+(`docs/RNG_REFERENCE_AUDIT.md` 14.16, 2026-09-15): at Base Seed 51231782 a Fire
+configuration and an all-different-parts (elementless) configuration both
+drew `[7, 7, 8, 6, 4]` at Counter 0 from the same save, and Fire Counter 0
+followed without reload by all-different Counter 1 drew `[7, 7, 8, 6, 4]` then
+`[8, 6, 4, 4, 6]`, matching the existing PRNG exactly. Game8 likewise lists
+Switch Axe as "the same table whatever the configuration", separate from the
+other melee weapons. Never add Switch Axe to the Melee allow-list, never
+describe "Melee 11 types" as one condition, and never write that Switch Axe
+has two game tables: the pool values coinciding with Melee Table A is not a
+shared category semantics, because Melee Table B is `[6, 7, 8]` while Switch
+Axe draws `[6, 4, 7, 8]` elementless too. Its provenance is layered: pool
+membership, configuration independence, and the Counter 0 -> 1 sequence are
+direct game observations (fixtures `gameVerifiedSwitchAxeFireNormalVectors` /
+`gameVerifiedSwitchAxeNoneNormalVectors`), while its Attack 5 / Element 4 /
+Sharpness 2 / Affinity 3 limits are category-level Production adoption from
+the 2026-09-14 Melee 1293-forge verification, the Game8 limit table, and the
+Switch Axe observations contradicting none of them. Never write that the
+Switch Axe limit boundaries were game-verified directly.
 
 Pool selection is expressed by the formal Domain concept
 `NormalArtianLotteryTableClass = 'table_a' | 'table_b'`
@@ -413,7 +435,11 @@ the user-supplied Game8 classification, the direct Fire and Blast Table A
 fixtures, and the absence of evidence against the former single elemental
 pool. Melee: Table A = any attribute (Poison / Paralysis / Sleep / Blast
 included), Table B = none, unchanged. Light / Heavy Bowgun: both tables draw
-`[6, 7, 8]`, unchanged. Never apply the Bow split to Melee or Bowguns. A table
+`[6, 7, 8]`, unchanged. Switch Axe: the same none / any-attribute
+classification, purely as the Identification / UI observation adapter, and
+both classes draw the one Switch Axe pool `[6, 4, 7, 8]` exactly as the
+Bowguns share one pool; the game has one Switch Axe table, not two. Never
+apply the Bow split to Melee, Bowguns, or Switch Axe. A table
 class is not a Counter stream: every element of one weapon type shares its one
 rarity-8 Normal Counter, forging a Table A weapon and then a Table B weapon
 consumes C and C + 1, and the class never enters `NormalArtianCounter.id`, the
@@ -552,9 +578,11 @@ prediction inputs, capability derivation, Candidate Search, Planner validation,
 Trace Replay, and semantic hashes. C5-E2C3 set `PRODUCTION_RNG_ENGINE_VERSION`
 to `production-rng:c5-e2`; the later Normal Artian occurrence-limit correction
 moved it to `production-rng:c5-e3`, the Melee support expansion moved it to
-`production-rng:c5-e4`, and the Bow Normal Table A / B correction moved it to
-the current `production-rng:c5-e5` (see the Normal pool limits, the Melee
-category, and the lottery table class under RNG Rules). Do not reintroduce caller-supplied or persisted Gate as
+`production-rng:c5-e4`, the Bow Normal Table A / B correction moved it to
+`production-rng:c5-e5`, and the Switch Axe Normal Production activation moved
+it to the current `production-rng:c5-e6` (see the Normal pool limits, the
+Melee category, the Switch Axe single pool, and the lottery table class under
+RNG Rules). Do not reintroduce caller-supplied or persisted Gate as
 Production authority. This runtime integration does not activate the Skill-first
 Identification UI; `supportsSeedSearch` remains `false`.
 

@@ -11,6 +11,8 @@ import {
   gameVerifiedHeavyBowgunNoneNormalVectors,
   gameVerifiedLongSwordFireNormalVectors,
   gameVerifiedLongSwordNoneNormalVectors,
+  gameVerifiedSwitchAxeFireNormalVectors,
+  gameVerifiedSwitchAxeNoneNormalVectors,
 } from '../../../test/fixtures/gameVerifiedNormalVectors'
 import type { RngEngine } from '../rngEngine'
 import { ProductionRngEngine } from '../production/productionRngEngine'
@@ -66,9 +68,15 @@ const CATEGORY_ADOPTED_MELEE_WEAPON_TYPES: readonly WeaponTypeId[] = [
 const MELEE_WEAPON_TYPES: readonly WeaponTypeId[] = [
   'weapon.long_sword', ...DIRECTLY_VERIFIED_MELEE_WEAPON_TYPES, ...CATEGORY_ADOPTED_MELEE_WEAPON_TYPES,
 ]
+/**
+ * Switch Axe (docs/RNG_REFERENCE_AUDIT.md 14.16) is supported through its own
+ * single pool, outside the Melee category: both table classes draw
+ * [6, 4, 7, 8], so unlike Melee Table B its Table B draws Element too.
+ */
 const SUPPORTED_WEAPON_TYPES: readonly WeaponTypeId[] = [
-  'weapon.bow', 'weapon.light_bowgun', 'weapon.heavy_bowgun', ...MELEE_WEAPON_TYPES,
+  'weapon.bow', 'weapon.light_bowgun', 'weapon.heavy_bowgun', ...MELEE_WEAPON_TYPES, 'weapon.switch_axe',
 ]
+const SWITCH_AXE_BASE_SEED = String(gameVerifiedSwitchAxeFireNormalVectors[0].baseSeed)
 const HBG_BASE_SEED = String(gameVerifiedHeavyBowgunFireNormalVectors[0].baseSeed)
 const BOW_BASE_SEED = String(gameVerifiedBowElementalNormalVectors[0].baseSeed)
 
@@ -150,8 +158,8 @@ describe('Normal Artian lottery table class', () => {
     expect(() => normalArtianLotteryTableClassForWeaponAndElement('weapon.bow', 'element.unknown')).toThrow(RangeError)
   })
 
-  it('keeps Melee and Bowgun classification at none versus any attribute', () => {
-    for (const weaponTypeId of ['weapon.light_bowgun', 'weapon.heavy_bowgun', ...MELEE_WEAPON_TYPES]) {
+  it('keeps Melee, Bowgun, and Switch Axe classification at none versus any attribute', () => {
+    for (const weaponTypeId of ['weapon.light_bowgun', 'weapon.heavy_bowgun', 'weapon.switch_axe', ...MELEE_WEAPON_TYPES]) {
       expect(normalArtianLotteryTableClassForWeaponAndElement(weaponTypeId, 'element.none')).toBe('table_b')
       for (const elementId of ATTRIBUTE_PRESENT_ELEMENTS) {
         expect(normalArtianLotteryTableClassForWeaponAndElement(weaponTypeId, elementId)).toBe('table_a')
@@ -365,6 +373,107 @@ describe('Normal Artian Counter Identification Bow Table A / Table B golden', ()
       bowInput([{ tableClass: 'table_a', bonuses: [affinity, affinity, attack, element, affinity] }]),
       engine,
     )).resolves.toMatchObject({ isTruncated: false })
+  })
+})
+
+describe('Normal Artian Counter Identification Switch Axe single-pool golden', () => {
+  /*
+   * docs/RNG_REFERENCE_AUDIT.md 14.16: Base Seed 51231782, Switch Axe Fire
+   * Counter 0 [Sharpness, Sharpness, Affinity, Attack, Element] followed, with
+   * no reload, by the all-different-parts Counter 1
+   * [Affinity, Attack, Element, Element, Attack]. The Counter before the
+   * investigation was only believed to be 0; the two-forge pair identifies it.
+   */
+  const fireC0 = gameVerifiedSwitchAxeFireNormalVectors[0]
+  const noneC1 = gameVerifiedSwitchAxeNoneNormalVectors[1]
+  const switchAxeInput = (
+    observations: readonly NormalArtianCounterObservation[],
+    startInclusive = 0,
+    endInclusive = 5_000,
+  ): NormalArtianCounterIdentificationInput => ({
+    baseSeed: SWITCH_AXE_BASE_SEED,
+    weaponTypeId: 'weapon.switch_axe',
+    rarity: 8,
+    observations,
+    normalCounterRange: { startInclusive, endInclusive },
+  })
+  const sharpness = { bonusTypeId: 'bonus_type.normal_sharpness', bonusRankId: 'bonus_rank.base' }
+  const affinity = { bonusTypeId: 'bonus_type.affinity', bonusRankId: 'bonus_rank.base' }
+  const attack = { bonusTypeId: 'bonus_type.attack', bonusRankId: 'bonus_rank.base' }
+  const element = { bonusTypeId: 'bonus_type.element', bonusRankId: 'bonus_rank.base' }
+
+  it('identifies the unique start Counter 0 over 0..5000 from the Table A Counter 0 and Table B Counter 1 direct observations', async () => {
+    const engine = new ProductionRngEngine()
+    const observations = fixtureObservations([fireC0, noneC1])
+    expect(observations.map(({ tableClass }) => tableClass)).toEqual(['table_a', 'table_b'])
+    expect(observations[0]!.bonuses).toEqual([sharpness, sharpness, affinity, attack, element])
+    expect(observations[1]!.bonuses).toEqual([affinity, attack, element, element, attack])
+    const result = await identifyNormalArtianCounter(switchAxeInput(observations), engine)
+    expect(result).toEqual({
+      matches: [{ startNormalCounter: 0 }],
+      searchedCounterRange: { startInclusive: 0, endInclusive: 5_000 },
+      isTruncated: false,
+    })
+    // The single Counter 0 forge alone is not unique; the consecutive pair is.
+    const single = await identifyNormalArtianCounter(switchAxeInput(observations.slice(0, 1)), engine)
+    expect(single.matches.map(({ startNormalCounter }) => startNormalCounter)).toContain(0)
+    expect(single.matches.length).toBeGreaterThan(1)
+    expect(single.isTruncated).toBe(false)
+    // The saved Counter is C itself, never C + observation count.
+    expect(result.matches[0]!.startNormalCounter).not.toBe(observations.length)
+    expect(JSON.stringify(result)).not.toContain('element.')
+  })
+
+  it('walks one shared Switch Axe Counter whichever table class each observation declares, because both draw the one pool', async () => {
+    const engine = new ProductionRngEngine()
+    const observations = fixtureObservations([fireC0, noneC1])
+    for (const classes of [['table_a', 'table_a'], ['table_b', 'table_b'], ['table_b', 'table_a']] as const) {
+      const relabelled = observations.map((observation, index) => ({ ...observation, tableClass: classes[index]! }))
+      await expect(identifyNormalArtianCounter(switchAxeInput(relabelled), engine)).resolves.toMatchObject({
+        matches: [{ startNormalCounter: 0 }],
+        isTruncated: false,
+      })
+    }
+    // Reproduced from the Production authority at other Counters too.
+    for (const start of [1, 17, 4_000]) {
+      const predicted = predictedObservations(engine, SWITCH_AXE_BASE_SEED, 'weapon.switch_axe', ['element.none', 'element.blast', 'element.fire'], start)
+      await expect(identifyNormalArtianCounter(switchAxeInput(predicted), engine)).resolves.toMatchObject({
+        matches: expect.arrayContaining([{ startNormalCounter: start }]),
+        isTruncated: false,
+      })
+    }
+  })
+
+  it('accepts Element in a Switch Axe Table B observation, while a Melee Table B observation with Element stays invalid_input', async () => {
+    const engine = new ProductionRngEngine()
+    const tableBWithElement: NormalArtianCounterObservation = { tableClass: 'table_b', bonuses: noneC1.bonuses }
+    await expect(identifyNormalArtianCounter(switchAxeInput([tableBWithElement], 0, 50), engine))
+      .resolves.toMatchObject({ isTruncated: false })
+    await expect(identifyNormalArtianCounter({
+      ...switchAxeInput([tableBWithElement], 0, 50), weaponTypeId: 'weapon.long_sword',
+    }, engine)).rejects.toMatchObject({ code: 'invalid_input' })
+  })
+
+  it('applies the Production occurrence limits to Switch Axe observations: Sharpness 3, Affinity 4, and Element 5 are invalid_input, Attack 5 is valid', async () => {
+    const engine = new ProductionRngEngine()
+    for (const tableClass of NORMAL_ARTIAN_LOTTERY_TABLE_CLASSES) {
+      const at = (bonuses: RestorationBonusSet) => identifyNormalArtianCounter(switchAxeInput([{ tableClass, bonuses }], 0, 50), engine)
+      await expect(at([sharpness, sharpness, sharpness, attack, attack])).rejects.toMatchObject({ code: 'invalid_input' })
+      await expect(at([affinity, affinity, affinity, affinity, attack])).rejects.toMatchObject({ code: 'invalid_input' })
+      await expect(at([element, element, element, element, element])).rejects.toMatchObject({ code: 'invalid_input' })
+      await expect(at([attack, attack, attack, attack, attack])).resolves.toMatchObject({ isTruncated: false })
+      await expect(at([sharpness, sharpness, affinity, affinity, affinity])).resolves.toMatchObject({ isTruncated: false })
+      await expect(at([element, element, element, element, attack])).resolves.toMatchObject({ isTruncated: false })
+    }
+  })
+
+  it('queries support with the two table representatives only and never predicts through predictNormalArtian', async () => {
+    const engine = new ProductionRngEngine()
+    const support = vi.spyOn(engine, 'getPredictionSupport')
+    const predict = vi.spyOn(engine, 'predictNormalArtian')
+    await identifyNormalArtianCounter(switchAxeInput(fixtureObservations([fireC0, noneC1]), 0, 100), engine)
+    expect(support.mock.calls.map(([query]) => (query as { elementId: ElementId }).elementId)).toEqual(['element.fire', 'element.none'])
+    expect(predict).not.toHaveBeenCalled()
   })
 })
 
@@ -900,20 +1009,9 @@ describe('Normal Artian Counter Identification kernel', () => {
     }
   })
 
-  it('fails closed with normal_pool_unverified for Switch Axe only, never treating it as Melee', async () => {
+  it('fails closed with reference_adapter_unsupported for an unknown weapon type, never treating it as Melee', async () => {
     const engine = new ProductionRngEngine()
     const observations = fixtureObservations(gameVerifiedLongSwordFireNormalVectors)
-    const support = vi.spyOn(engine, 'getPredictionSupport')
-    for (const tableClass of NORMAL_ARTIAN_LOTTERY_TABLE_CLASSES) {
-      await expect(identifyNormalArtianCounter({
-        ...hbgInput(observations.map((observation) => ({ ...observation, tableClass }))),
-        weaponTypeId: 'weapon.switch_axe',
-      }, engine)).rejects.toMatchObject({
-        code: 'unsupported_input',
-        unsupportedReason: 'normal_pool_unverified',
-      })
-    }
-    expect(support).toHaveBeenCalledTimes(2)
     await expect(identifyNormalArtianCounter({
       ...hbgInput(observations),
       weaponTypeId: 'weapon.unknown',
@@ -1014,20 +1112,24 @@ describe('Normal Artian Counter Identification UI helpers', () => {
     }
   })
 
-  it('fails closed for Switch Axe instead of falling back to a reference pool', () => {
+  it('derives the same four Switch Axe options on both table classes, Element included on Table B', () => {
     for (const tableClass of NORMAL_ARTIAN_LOTTERY_TABLE_CLASSES) {
-      expect(() => normalArtianCounterObservationBonusOptions('weapon.switch_axe', tableClass)).toThrow(
-        /unsupported for weapon\.switch_axe/,
-      )
+      expect(normalArtianCounterObservationBonusOptions('weapon.switch_axe', tableClass)).toEqual([
+        base('bonus_type.attack'), base('bonus_type.element'), base('bonus_type.normal_sharpness'), base('bonus_type.affinity'),
+      ])
     }
+    // Unlike the Melee category, whose Table B never draws Element.
+    expect(normalArtianCounterObservationBonusOptions('weapon.long_sword', 'table_b').map(({ bonusTypeId }) => bonusTypeId))
+      .not.toContain('bonus_type.element')
   })
 
-  it('judges identification support the way the kernel does: both tables of every supported weapon pass, Switch Axe is normal_pool_unverified', () => {
+  it('judges identification support the way the kernel does: both tables of every supported weapon pass, an unknown weapon type is reference_adapter_unsupported', () => {
     for (const weaponTypeId of SUPPORTED_WEAPON_TYPES) {
       expect(getNormalArtianCounterIdentificationSupport(weaponTypeId, 8, engine)).toEqual({ supported: true })
     }
-    expect(getNormalArtianCounterIdentificationSupport('weapon.switch_axe', 8, engine)).toEqual({
-      supported: false, reason: 'normal_pool_unverified',
+    expect(getNormalArtianCounterIdentificationSupport('weapon.switch_axe', 8, engine)).toEqual({ supported: true })
+    expect(getNormalArtianCounterIdentificationSupport('weapon.unknown', 8, engine)).toEqual({
+      supported: false, reason: 'reference_adapter_unsupported',
     })
     // The Production Engine with only its Normal capability switched off;
     // every method still resolves through the prototype.

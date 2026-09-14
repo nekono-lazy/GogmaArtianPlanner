@@ -9,6 +9,7 @@ import {
   ProductionRngEngine,
   PRODUCTION_RNG_ENGINE_VERSION,
 } from '../domain/rng/production/productionRngEngine'
+import type { RngEngine, RngPredictionSupport, RngPredictionSupportInput } from '../domain/rng/rngEngine'
 import { UnavailableRngEngine } from '../domain/rng/unavailableRngEngine'
 import type {
   CandidateSearchInput,
@@ -19,6 +20,7 @@ import { createCandidateSearchInput, candidatesOf } from '../test/fixtures/candi
 import {
   gameVerifiedBowElementalNormalVectors,
   gameVerifiedBowPoisonNormalVectors,
+  gameVerifiedSwitchAxeFireNormalVectors,
 } from '../test/fixtures/gameVerifiedNormalVectors'
 import { createSearchWorkerController } from './search.worker'
 import { createProductionSearchRngEngine } from './search.worker.production'
@@ -102,10 +104,23 @@ function resultResponse(
   return response
 }
 
-async function runProductionSearch(input: CandidateSearchInput) {
+/**
+ * The Production Engine with Normal prediction declared unsupported for every
+ * input. Every real weapon type now has a Production Normal pool, so the
+ * fail-closed path (a confirmed Counter whose prediction alone is unavailable)
+ * is exercised through this stub rather than through a real weapon type.
+ */
+class NormalPredictionUnsupportedEngine extends ProductionRngEngine {
+  override getPredictionSupport(input: RngPredictionSupportInput): RngPredictionSupport {
+    if (input.type === 'normal_artian') return { supported: false, reason: 'normal_pool_unverified' }
+    return super.getPredictionSupport(input)
+  }
+}
+
+async function runProductionSearch(input: CandidateSearchInput, engine: RngEngine = createProductionSearchRngEngine()) {
   const responses: SearchWorkerResponse[] = []
   const controller = createSearchWorkerController(
-    createProductionSearchRngEngine(),
+    engine,
     (response) => responses.push(response),
   )
   const request: SearchWorkerRequest = {
@@ -217,9 +232,55 @@ describe('Production Candidate Search Worker composition', () => {
     expect(candidate?.restorationBonusScope).toBe('gogma_artian')
   })
 
-  it('skips an unsupported Production Normal input without a Worker error', async () => {
+  it('searches a Switch Axe Normal route with the predicted variant through its own single pool', async () => {
     const input = createProductionSearchInput('weapon.switch_axe')
-    const responses = await runProductionSearch(input)
+    const engine = createProductionSearchRngEngine()
+    const forged = engine.predictNormalArtian({
+      baseSeed: '51231782', weaponTypeId: 'weapon.switch_axe', elementId: 'element.fire', rarity: 8, normalCounter: 0, master: input.master,
+    })
+    // The forge at Counter 0 is the direct game observation (docs/RNG_REFERENCE_AUDIT.md 14.16).
+    expect(forged).toEqual(gameVerifiedSwitchAxeFireNormalVectors[0].bonuses)
+    // Aim the Target at a Keep on those forged slots, so the Candidate's final
+    // bonuses can only come from the fixture families (Sharpness / Sharpness /
+    // Affinity / Attack / Element) the Switch Axe pool predicted.
+    const idealFromForgedSlots = engine.predictGogmaBonus({
+      baseSeed: '51231782', weaponTypeId: 'weapon.switch_axe', elementId: 'element.fire', gogmaCounter: input.rngState.gogmaCounter.value!,
+      operation: { type: 'keep_bonuses', currentBonuses: forged }, master: input.master,
+    })
+    input.targetWeapons[0].idealBonuses = idealFromForgedSlots
+    const responses = await runProductionSearch(input, engine)
+
+    expect(responses.some(({ type }) => type === 'error')).toBe(false)
+    const result = resultResponse(responses).result
+    expect(result.calculationContext.rngEngineVersion).toBe('production-rng:c5-e6')
+    expect(result.targetResult.searchedRoutes).toContain('normal_artian_to_gogma')
+    // Production Normal prediction is supported, so the predicted variant runs
+    // with concrete Normal Counter positions: no forced Reset notice and no
+    // normal_pool_unverified skip.
+    expect(result.warnings.some(({ severity }) => severity === 'info')).toBe(false)
+    expect(JSON.stringify(result.warnings)).not.toContain('normal_pool_unverified')
+    expect(result.targetResult.skippedRoutes.some(({ route }) => route === 'normal_artian_to_gogma')).toBe(false)
+    const candidate = candidatesOf(result.targetResult).find(({ route }) =>
+      route.kind === 'normal_artian_to_gogma' && route.operations.some((operation) => operation.type === 'keep_bonuses'))
+    expect(candidate).toBeDefined()
+    expect(candidate!.route.operations.map((operation) => operation.type))
+      .toEqual(['create_normal_artian', 'convert_normal_to_gogma', 'keep_bonuses'])
+    expect(candidate!.finalBonuses).toEqual(idealFromForgedSlots)
+    expect(candidate?.route.operations[0]).toEqual(expect.objectContaining({
+      type: 'create_normal_artian',
+      weaponTypeId: 'weapon.switch_axe',
+      rarity: 8,
+      count: 1,
+      normalCounterBefore: 0,
+      normalCounterAfter: 1,
+    }))
+    expect(candidate?.estimatedNormalAdvance).toBe(1)
+    expect(candidate?.restorationBonusScope).toBe('gogma_artian')
+  })
+
+  it('skips a Normal input the Engine declares unsupported without a Worker error', async () => {
+    const input = createProductionSearchInput('weapon.great_sword')
+    const responses = await runProductionSearch(input, new NormalPredictionUnsupportedEngine())
 
     expect(responses.some(({ type }) => type === 'error')).toBe(false)
     const result = resultResponse(responses).result
@@ -247,8 +308,8 @@ describe('Production Candidate Search Worker composition', () => {
   })
 
   it('creates a forced Reset Production Candidate without Normal prediction', async () => {
-    const input = createProductionSearchInput('weapon.switch_axe')
-    const responses = await runProductionSearch(input)
+    const input = createProductionSearchInput('weapon.great_sword')
+    const responses = await runProductionSearch(input, new NormalPredictionUnsupportedEngine())
 
     expect(responses.some(({ type }) => type === 'error')).toBe(false)
     const targetResult = resultResponse(responses).result.targetResult

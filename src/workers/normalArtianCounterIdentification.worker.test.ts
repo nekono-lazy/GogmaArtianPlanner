@@ -192,13 +192,13 @@ describe('Normal Artian Counter Identification Worker', () => {
     await controller.handleMessage({
       type: 'identify_normal_artian_counter',
       requestId: 'normal-identification.unsupported',
-      input: { ...input(), weaponTypeId: 'weapon.switch_axe' },
+      input: { ...input(), weaponTypeId: 'weapon.unknown' },
     })
     expect(responses).toEqual([expect.objectContaining({
       type: 'error',
       requestId: 'normal-identification.unsupported',
       code: 'unsupported_input',
-      unsupportedReason: 'normal_pool_unverified',
+      unsupportedReason: 'reference_adapter_unsupported',
     })])
   })
 

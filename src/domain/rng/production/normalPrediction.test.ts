@@ -12,6 +12,8 @@ import {
   gameVerifiedLightBowgunNoneNormalVectors,
   gameVerifiedLongSwordFireNormalVectors,
   gameVerifiedLongSwordNoneNormalVectors,
+  gameVerifiedSwitchAxeFireNormalVectors,
+  gameVerifiedSwitchAxeNoneNormalVectors,
 } from '../../../test/fixtures/gameVerifiedNormalVectors'
 import { referenceNormalVectors } from '../../../test/fixtures/referenceNormalVectors'
 import {
@@ -21,6 +23,7 @@ import {
   GAME_VERIFIED_LIGHT_BOWGUN_NORMAL_CANDIDATES,
   GAME_VERIFIED_MELEE_ELEMENTAL_NORMAL_CANDIDATES,
   GAME_VERIFIED_MELEE_NONE_NORMAL_CANDIDATES,
+  GAME_VERIFIED_SWITCH_AXE_NORMAL_CANDIDATES,
   deriveNormalArtianSeed,
   gameVerifiedNormalCandidatesForWeaponAndElement,
   gameVerifiedNormalCandidatesForWeaponAndTableClass,
@@ -87,6 +90,7 @@ describe('reference-verified Production Normal Artian prediction', () => {
       GAME_VERIFIED_HEAVY_BOWGUN_NORMAL_CANDIDATES,
       GAME_VERIFIED_MELEE_ELEMENTAL_NORMAL_CANDIDATES,
       GAME_VERIFIED_MELEE_NONE_NORMAL_CANDIDATES,
+      GAME_VERIFIED_SWITCH_AXE_NORMAL_CANDIDATES,
     ]
     const expectedByReferenceId: Record<number, number> = { 6: 5, 4: 4, 7: 2, 8: 3 }
     for (const pool of everyGamePool) {
@@ -335,11 +339,12 @@ describe('reference-verified Production Normal Artian prediction', () => {
     }
     expect(gameVerifiedNormalCandidatesForWeaponAndTableClass('weapon.long_sword', 'table_a')).toBe(GAME_VERIFIED_MELEE_ELEMENTAL_NORMAL_CANDIDATES)
     expect(gameVerifiedNormalCandidatesForWeaponAndTableClass('weapon.long_sword', 'table_b')).toBe(GAME_VERIFIED_MELEE_NONE_NORMAL_CANDIDATES)
-    // Switch Axe has no verified table classification either.
-    for (const tableClass of ['table_a', 'table_b'] as const) {
-      expect(() => gameVerifiedNormalCandidatesForWeaponAndTableClass('weapon.switch_axe', tableClass)).toThrow(UnsupportedGameVerifiedNormalPredictionError)
-    }
-    expect(() => normalArtianLotteryTableClassForWeaponAndElement('weapon.switch_axe', 'element.poison')).toThrow(UnsupportedGameVerifiedNormalPredictionError)
+    // Switch Axe classifies the same way as an observation adapter, but both
+    // classes read its one single pool (docs/RNG_REFERENCE_AUDIT.md 14.16).
+    expect(normalArtianLotteryTableClassForWeaponAndElement('weapon.switch_axe', 'element.none')).toBe('table_b')
+    expect(normalArtianLotteryTableClassForWeaponAndElement('weapon.switch_axe', 'element.poison')).toBe('table_a')
+    expect(gameVerifiedNormalCandidatesForWeaponAndTableClass('weapon.switch_axe', 'table_a'))
+      .toBe(gameVerifiedNormalCandidatesForWeaponAndTableClass('weapon.switch_axe', 'table_b'))
     expect(() => normalArtianLotteryTableClassForWeaponAndElement('weapon.unknown', 'element.fire')).toThrow(RangeError)
   })
 
@@ -411,18 +416,93 @@ describe('reference-verified Production Normal Artian prediction', () => {
     }
   })
 
-  it('rejects Switch Axe and unknown weapon types instead of returning a reference fallback as game-verified', () => {
-    const input = gameVerifiedBowElementalNormalVectors[0]
-    expect(() => gameVerifiedNormalCandidatesForWeaponAndElement('weapon.switch_axe', 'element.fire'))
-      .toThrow(UnsupportedGameVerifiedNormalPredictionError)
-    expect(() => gameVerifiedNormalCandidatesForWeaponAndElement('weapon.switch_axe', 'element.none'))
-      .toThrow(UnsupportedGameVerifiedNormalPredictionError)
-    expect(() => predictGameVerifiedNormalRaw({ ...input, weaponTypeId: 'weapon.switch_axe' }))
-      .toThrow(UnsupportedGameVerifiedNormalPredictionError)
-    expect(() => predictGameVerifiedNormalRaw({ ...input, weaponTypeId: 'weapon.switch_axe', elementId: 'element.none' }))
-      .toThrow(UnsupportedGameVerifiedNormalPredictionError)
+  it('rejects unknown weapon types and unknown table classes instead of returning a reference fallback as game-verified', () => {
     // An unknown weapon type is the adapter's RangeError, never an implicit Melee member.
     expect(() => gameVerifiedNormalCandidatesForWeaponAndElement('weapon.unknown', 'element.fire')).toThrow(RangeError)
+    expect(() => predictGameVerifiedNormalRaw({ ...gameVerifiedBowElementalNormalVectors[0], weaponTypeId: 'weapon.unknown' })).toThrow(RangeError)
+    expect(() => gameVerifiedNormalCandidatesForWeaponAndTableClass('weapon.switch_axe', 'table_c' as never)).toThrow(RangeError)
+    // The fail-closed error type stays in place for a future weapon type without a Production pool.
+    expect(new UnsupportedGameVerifiedNormalPredictionError('weapon.future', 'table_a')).toBeInstanceOf(Error)
+  })
+
+  /*
+   * Switch Axe single pool (docs/RNG_REFERENCE_AUDIT.md 14.16, 2026-09-15).
+   * Direct game observation at Base Seed 51231782: Fire Counter 0 and the
+   * all-different-parts (none) Counter 0 both drew [7, 7, 8, 6, 4], and the
+   * consecutive none Counter 1 drew [8, 6, 4, 4, 6]. Pool membership and
+   * configuration independence are direct observations; the occurrence
+   * limits are category-level adoption.
+   */
+  const SWITCH_AXE_EVERY_ELEMENT = ['element.none', ...ATTRIBUTE_PRESENT_ELEMENTS] as const
+
+  it('keeps Switch Axe out of the Melee allow-list while drawing its own single pool [6, 4, 7, 8] on both table classes', () => {
+    expect(GAME_VERIFIED_SWITCH_AXE_NORMAL_CANDIDATES).toEqual([GAME_ATTACK, GAME_ELEMENT, GAME_FAMILY_7, GAME_AFFINITY])
+    // Equal values, separate contract: the Switch Axe pool is never the Melee Table A constant.
+    expect(GAME_VERIFIED_SWITCH_AXE_NORMAL_CANDIDATES).not.toBe(GAME_VERIFIED_MELEE_ELEMENTAL_NORMAL_CANDIDATES)
+    expect(isProductionMeleeNormalPoolWeaponType('weapon.switch_axe')).toBe(false)
+    expect(PRODUCTION_MELEE_NORMAL_POOL_WEAPON_TYPE_IDS.has('weapon.switch_axe')).toBe(false)
+    for (const tableClass of ['table_a', 'table_b'] as const) {
+      expect(gameVerifiedNormalCandidatesForWeaponAndTableClass('weapon.switch_axe', tableClass))
+        .toBe(GAME_VERIFIED_SWITCH_AXE_NORMAL_CANDIDATES)
+    }
+    // Every exact element is supported and classified as an observation adapter only:
+    // none is Table B, every attribute is Table A, and both read the one pool.
+    for (const elementId of SWITCH_AXE_EVERY_ELEMENT) {
+      expect(normalArtianLotteryTableClassForWeaponAndElement('weapon.switch_axe', elementId))
+        .toBe(elementId === 'element.none' ? 'table_b' : 'table_a')
+      expect(gameVerifiedNormalCandidatesForWeaponAndElement('weapon.switch_axe', elementId))
+        .toBe(GAME_VERIFIED_SWITCH_AXE_NORMAL_CANDIDATES)
+    }
+    expect(normalArtianLotteryTableClassElementIds('weapon.switch_axe', 'table_b')).toEqual(['element.none'])
+    expect(normalArtianLotteryTableClassElementIds('weapon.switch_axe', 'table_a')).toEqual([...ATTRIBUTE_PRESENT_ELEMENTS])
+  })
+
+  it('reproduces the direct Switch Axe game observations: Fire C0 [7, 7, 8, 6, 4], none C0 [7, 7, 8, 6, 4], none C1 [8, 6, 4, 4, 6]', () => {
+    const fire = gameVerifiedSwitchAxeFireNormalVectors[0]
+    const [noneC0, noneC1] = gameVerifiedSwitchAxeNoneNormalVectors
+    expect(fire.normalCounter).toBe(0)
+    expect(noneC0.normalCounter).toBe(0)
+    expect(noneC1.normalCounter).toBe(1)
+    expect(fire.gameLotteryIds).toEqual([7, 7, 8, 6, 4])
+    expect(noneC0.gameLotteryIds).toEqual([7, 7, 8, 6, 4])
+    expect(noneC1.gameLotteryIds).toEqual([8, 6, 4, 4, 6])
+    for (const vector of [fire, noneC0, noneC1]) {
+      expect(predictGameVerifiedNormalRaw(vector).referenceIds).toEqual(vector.gameLotteryIds)
+      expect(predictGameVerifiedNormalArtian(vector)).toEqual(vector.bonuses)
+    }
+    // The elementless configuration drew Element: a Melee Table B pool [6, 7, 8]
+    // could never have produced it, which is what rules the Melee split out.
+    expect(selectReferenceNormalLotteryIdsFromRawValues(
+      readReferenceRngBlock(deriveNormalArtianSeed(51231782, 'weapon.switch_axe', 8), 0).values,
+      GAME_VERIFIED_MELEE_NONE_NORMAL_CANDIDATES,
+    )).not.toEqual(noneC0.gameLotteryIds)
+    expect(noneC0.gameLotteryIds).toContain(4)
+  })
+
+  it('keeps the Normal seed element-free for Switch Axe: every configuration shares one raw result at every Counter', () => {
+    for (let normalCounter = 0; normalCounter < 50; normalCounter += 1) {
+      const at = (elementId: string) => predictGameVerifiedNormalRaw({
+        baseSeed: 51231782, weaponTypeId: 'weapon.switch_axe', elementId, rarity: 8, normalCounter,
+      }).referenceIds
+      const fire = at('element.fire')
+      for (const elementId of SWITCH_AXE_EVERY_ELEMENT) expect(at(elementId)).toEqual(fire)
+      for (const id of fire) expect([6, 4, 7, 8]).toContain(id)
+      expect(fire.filter((id) => id === 4).length).toBeLessThanOrEqual(4)
+      expect(fire.filter((id) => id === 7).length).toBeLessThanOrEqual(2)
+      expect(fire.filter((id) => id === 8).length).toBeLessThanOrEqual(3)
+    }
+  })
+
+  it('keeps the Switch Axe Production pool distinct from the reference parity pools', () => {
+    // The reference none / non-none split stays the pinned parity contract and
+    // is never consulted for the Switch Axe Production pool: the reference
+    // none pool has no Element, and the reference elemental pool caps Element
+    // and Affinity at 5 instead of 4 / 3.
+    expect(REFERENCE_NORMAL_NONE_CANDIDATES.map(({ referenceId }) => referenceId)).not.toContain(4)
+    expect(referenceNormalCandidatesForElement('element.none')).toBe(REFERENCE_NORMAL_NONE_CANDIDATES)
+    const none = gameVerifiedSwitchAxeNoneNormalVectors[0]
+    expect(predictReferenceNormalRaw(none).referenceIds).not.toEqual(none.gameLotteryIds)
+    expect(GAME_VERIFIED_SWITCH_AXE_NORMAL_CANDIDATES).not.toEqual(REFERENCE_NORMAL_ELEMENTAL_CANDIDATES)
   })
 
   it('matches a raw reference golden for every weapon type without changing the shared pool', () => {

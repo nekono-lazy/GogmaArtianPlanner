@@ -91,9 +91,11 @@ export function normalArtianCounterObservationBonusOptions(
  * Whether the active Engine can identify this weapon type's Counter at all,
  * judged the way the kernel judges a request: the Engine capability first,
  * then `getPredictionSupport()` for both lottery table classes. The first
- * unsupported reason wins (`normal_pool_unverified` for Switch Axe), so a UI
- * can refuse to start before any observation is entered, with the same
- * structured reason the kernel would return.
+ * unsupported reason wins, so a UI can refuse to start before any observation
+ * is entered, with the same structured reason the kernel would return. Every
+ * rarity-8 weapon type the Production Engine knows is currently supported
+ * (Switch Axe since its single-pool verification); the check stays the
+ * fail-closed authority rather than a UI assumption.
  */
 export function getNormalArtianCounterIdentificationSupport(
   weaponTypeId: WeaponTypeId,
@@ -250,9 +252,9 @@ function normalPredictionSupport(
 
 /**
  * Fails closed on every lottery table class the observations use. The
- * Production Engine answers `normal_pool_unverified` for a weapon type with no
- * game-verified Normal pool; that reason is forwarded as structured data and
- * never replaced by a reference-pool fallback.
+ * Production Engine would answer `normal_pool_unverified` for a weapon type
+ * with no game-verified Normal pool; that reason is forwarded as structured
+ * data and never replaced by a reference-pool fallback.
  */
 function requirePredictionSupport(
   input: NormalArtianCounterIdentificationInput,

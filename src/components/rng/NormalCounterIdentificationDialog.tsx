@@ -22,6 +22,7 @@ import type { NormalizedSeed, RngPredictionUnsupportedReason } from '../../domai
 import {
   classifyNormalCounterIdentificationResult,
   normalCounterIdentificationTableClassOptions,
+  normalCounterIdentificationSharedPoolNote,
   normalCounterIdentificationUnsupportedLabel,
   type NormalCounterIdentificationTableClassOption,
 } from '../../presentation/normalCounterIdentification'
@@ -457,6 +458,9 @@ export function NormalCounterIdentificationDialog({
     () => normalCounterIdentificationTableClassOptions(weaponTypeId, elements),
     [weaponTypeId, elements],
   )
+  // Derived from the Domain pool identity, so a weapon type whose two classes
+  // share one pool (Bowguns, Switch Axe) is explained without a UI-side list.
+  const sharedPoolNote = useMemo(() => normalCounterIdentificationSharedPoolNote(weaponTypeId), [weaponTypeId])
   const bonusNames = useMemo(
     () => new Map(bonusTypes.map((bonusType) => [bonusType.id, bonusType.displayNameJa] as const)),
     [bonusTypes],
@@ -577,7 +581,7 @@ export function NormalCounterIdentificationDialog({
           ) : (
             <>
               <Alert severity="info">
-                同じ武器種を連続して作成した結果を、作成した順に入力してください。対象はレア8の通常アーティアです。属性の種類そのものは選択せず、各観測ではその武器の属性が属する抽選テーブル区分（{tableClassOptions.map((option) => option.label).join(' / ')}）だけを選びます。どちらの区分で作成してもCounterは同じ1本を消費します。各観測の復元ボーナスは表示順（1〜5）のまま入力し、並べ替えないでください。
+                同じ武器種を連続して作成した結果を、作成した順に入力してください。対象はレア8の通常アーティアです。属性の種類そのものは選択せず、各観測ではその武器の属性が属する抽選テーブル区分（{tableClassOptions.map((option) => option.label).join(' / ')}）だけを選びます。どちらの区分で作成してもCounterは同じ1本を消費します。各観測の復元ボーナスは表示順（1〜5）のまま入力し、並べ替えないでください。{sharedPoolNote === null ? '' : sharedPoolNote}
               </Alert>
 
               <Stack spacing={1.5}>

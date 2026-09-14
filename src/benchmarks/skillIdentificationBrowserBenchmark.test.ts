@@ -7,7 +7,7 @@ import { selectSkillIdentificationWorkerCount } from '../services/rngIdentificat
 import { createBrowserBenchmarkSkillIdentificationClient } from './skillIdentificationBrowserBenchmark'
 
 class KernelChildClient implements SkillIdentificationWorkerClient {
-  readonly engineVersion = 'production-rng:c5-e5'
+  readonly engineVersion = 'production-rng:c5-e6'
   identify(_requestId: string, input: SkillIdentificationInput, callbacks: SkillIdentificationWorkerClientCallbacks = {}) {
     return identifySkillSeedAndCounter(input, new ProductionRngEngine(), { onProgress: callbacks.onProgress })
   }

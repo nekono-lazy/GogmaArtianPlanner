@@ -12,6 +12,9 @@
  * - Melee (every melee weapon type except Switch Axe): Table A = any
  *   attribute, Table B = none
  * - Light / Heavy Bowgun: both tables draw the same pool
+ * - Switch Axe: the game uses one table for every configuration, so both
+ *   classes draw the same single pool; the class is only the Identification
+ *   observation adapter there (`docs/RNG_REFERENCE_AUDIT.md` 14.16)
  *
  * A table class is never a Counter stream. Forging a Table A weapon and then a
  * Table B weapon of the same weapon type consumes Counter C and C + 1 of the
