@@ -62,14 +62,20 @@ function mutablePool(candidates: readonly ReferenceNormalCandidate[]): MutableRe
   return candidates.map((candidate) => ({ ...candidate, count: 0 }))
 }
 
-function predictNormalRawFromCandidates(
-  input: ReferenceNormalPredictionInput,
+/**
+ * Selects the five ordered Normal lottery IDs from one block's raw words.
+ *
+ * This is the pool step of `predictNormalRawFromCandidates` factored out so
+ * that a Counter identification walk can feed it the same first five post-step
+ * words of each ten-step block without re-initializing the PRNG per Counter.
+ * It reads only `rawValues[0..4]`; the block's remaining words are unused, as
+ * in the pinned reference. It adds no draw rule of its own.
+ */
+export function selectReferenceNormalLotteryIdsFromRawValues(
+  rawValues: readonly number[],
   candidates: readonly ReferenceNormalCandidate[],
-): ReferenceNormalRawPredictionResult {
-  requireNonNegativeSafeInteger(input.normalCounter, 'Normal Artian counter')
+): ReferenceNormalRawPredictionResult['referenceIds'] {
   const pool = mutablePool(candidates)
-  const seed = deriveNormalArtianSeed(input.baseSeed, input.weaponTypeId, input.rarity)
-  const rawValues = readReferenceRngBlock(seed, input.normalCounter).values
   const selected: ReferenceNormalLotteryId[] = []
 
   for (let slot = 0; slot < 5; slot += 1) {
@@ -87,8 +93,18 @@ function predictNormalRawFromCandidates(
     if (candidate.count >= candidate.maximumOccurrences) pool.splice(poolIndex, 1)
   }
 
+  return [selected[0]!, selected[1]!, selected[2]!, selected[3]!, selected[4]!]
+}
+
+function predictNormalRawFromCandidates(
+  input: ReferenceNormalPredictionInput,
+  candidates: readonly ReferenceNormalCandidate[],
+): ReferenceNormalRawPredictionResult {
+  requireNonNegativeSafeInteger(input.normalCounter, 'Normal Artian counter')
+  const seed = deriveNormalArtianSeed(input.baseSeed, input.weaponTypeId, input.rarity)
+  const rawValues = readReferenceRngBlock(seed, input.normalCounter).values
   return {
-    referenceIds: [selected[0]!, selected[1]!, selected[2]!, selected[3]!, selected[4]!],
+    referenceIds: selectReferenceNormalLotteryIdsFromRawValues(rawValues, candidates),
     blockIndex: input.normalCounter,
   }
 }

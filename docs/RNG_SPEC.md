@@ -446,6 +446,16 @@ export interface GogmaSeedFinderImportResult {
 - 通常アーティアの武器種別レア8 Counter特定
 - 必要に応じたRNG状態の検証
 
+9.2〜9.4のgeneric `Observation` / `CounterSearchInput` / `CounterSearchResult` は初期設計の汎用Counter Search契約であり、9.5〜9.6のgeneric Seed Search案と同じく履歴契約として保持する。current Productionの観測検索は次の専用契約を使用する。
+
+| stream | current Production contract |
+|---|---|
+| Base Seed + 開始Skill Counter | 9.7 Skill Identification |
+| 開始Gogma Counter | 9.8 Gogma Counter Identification |
+| 武器種別レア8 通常アーティアCounter | 9.12 Normal Artian Counter Identification |
+
+新しい実装はgeneric契約の `Observation.id` / `observedAt` / `elementId` / `searchKind` / `CounterMatch.confidence` を実装対象にしない。9.12は9.3の `searchKind = "normal_artian_counter"` 案をsupersedeする。
+
 ## 9.2 Observation
 
 ```ts
@@ -682,6 +692,101 @@ Skill Identificationでcanonical Base Seedが確定した後のSTEP 2には、�
 - parent cancelは全active childへ伝播し、parent Promiseをcancelled errorでrejectする。1 childのfailure / unavailableは全active siblingをcancelしてlogical request全体をfailureにし、partial matchesを返さない。cancel / failure後のlate child result/progressはparent、次request、global progressへ反映しない
 - child Engine versionは全て同じProduction versionでなければならない。creation failureまたはversion mismatchはfail closedでWorker unavailableとし、生成済みchildをdisposeする。`dispose()`はactive childをcancelし、全child clientをdisposeする
 - C5-E2C6はorchestrationだけであり、Skill kernel、Production RNG semantics/version、`supportsSeedSearch`、Coordinator state machine、Gogma Identification、RngState、Search、Planner、React UIを変更しない。実Browser Worker benchmarkはC5-E2C8で、Skill live-game verificationはC5-E2C9で完了済みであり、C5-E2C10 Production activationは完了した（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）。Wizard UIはC5-E2C7でRNG Setupへ接続済みであり、development StrictMode環境のCoordinator lifecycle起因の表示不具合はC5-E2C7 lifecycle hotfixで解消済みである
+
+## 9.12 Normal Artian Counter Identification current contract
+
+`NormalArtianCounter.counter` が不明な武器種について、既知Base Seedと連続forgeした通常アーティアの5枠観測から開始Counterを特定する専用契約である。9.3のgeneric `searchKind = "normal_artian_counter"` 案をsupersedeし、Skill / Gogma Identification（9.7 / 9.8）と同じDomain kernel / Worker protocol / Worker Client構造を持つ。
+
+型（`src/domain/rng/identification/normalArtianCounterIdentificationTypes.ts`）。
+
+```ts
+export type NormalArtianAttributeClass = 'none' | 'attribute_present'
+
+export interface NormalArtianCounterObservation {
+  readonly attributeClass: NormalArtianAttributeClass
+  readonly bonuses: RestorationBonusSet
+}
+
+export interface NormalArtianCounterIdentificationInput {
+  readonly baseSeed: NormalizedSeed
+  readonly weaponTypeId: WeaponTypeId
+  readonly rarity: NormalArtianRarity
+  readonly observations: readonly NormalArtianCounterObservation[]
+  readonly normalCounterRange: InclusiveNumberRange
+  readonly maxMatches?: number
+}
+
+export interface NormalArtianCounterIdentificationMatch {
+  readonly startNormalCounter: number
+}
+
+export interface NormalArtianCounterIdentificationResult {
+  readonly matches: readonly NormalArtianCounterIdentificationMatch[]
+  readonly searchedCounterRange: InclusiveNumberRange
+  readonly isTruncated: boolean
+}
+
+export interface NormalArtianCounterIdentificationProgress {
+  readonly searchedCounters: number
+  readonly totalCounters: number
+  readonly matchesFound: number
+}
+```
+
+前提と入力。
+
+- Base Seedは既知が前提である。kernelはBase Seedを探索せず、generic Seed Searchへ戻さない。入力はProduction `NormalizedSeed` であり、`engine.normalizeSeed()` で再validationしてcanonical Production decimal formと一致しない値は `invalid_input` とする
+- v1は既存契約どおり `NormalArtianRarity = 8` だけを受け付け、それ以外は `invalid_input` とする。内部rarity 7への変換は既存Production adapterがそのまま行う
+- Counterは武器種ごとに独立している。1回のIdentificationは1武器種のレア8 Counterだけを対象にし、他武器種の通常アーティア作成が間に挟まっても対象武器種のCounter連続性には影響しない
+- Counter Gateは入力、観測、探索対象、結果、採用値のいずれにも使用しない
+- `normalCounterRange` はinclusiveで、`0 <= startInclusive <= endInclusive <= floor(Number.MAX_SAFE_INTEGER / 10)` とする。上限はProduction PRNGの10-step block positioning（`readReferenceRngBlock()` と同じ境界）から導出した値であり、persisted `NormalArtianCounter` domainとは別契約である。`endInclusive + observations.length - 1` がこの上限を超える入力は拒否する
+- `maxMatches` を指定する場合は1以上のsafe integerとする
+
+属性の扱い。
+
+- Normal seedは既存実装どおりBase Seed + 武器種 + rarityで決まり、属性の種類そのものはseedへ影響しない。属性はNormal bonus candidate poolの選択にだけ影響する
+- 通常アーティアRNGが区別するのは「無属性」か「属性あり」かだけである。火 / 水 / 雷 / 氷 / 龍 / 毒 / 麻痺 / 睡眠 / 爆破はすべて同じ `attribute_present` classであり、Counter Search上の別domainとして扱わない
+- したがって各Observationは `attributeClass` だけを持ち、exact `ElementId` を検索domainへ要求しない。UI上の日本語表記は「無属性 / 属性あり」とする（[UI_FLOW.md](./UI_FLOW.md) 6）
+- 既存 `RngEngine.predictNormalArtian()` / `getPredictionSupport()` は `elementId` を受け取るため、Production adapter内部でのみ `none -> element.none`、`attribute_present -> element.fire` を内部representativeとして写像する。`element.fire` は「attribute-present poolを選択する」以上の意味を持たず、実際に火属性だったことを意味しない。永続化、結果、Observation、表示へ漏らしてはならない
+
+Observation連続性。
+
+- Observation配列は順序付き連続forgeである。開始Counter候補を `C` とすると、観測 `i`（観測1を `i = 0` とする）は `C + i` に対応する。kernelは配列をsortしない
+- 各観測は同じ武器種・レア8の実forge結果であり、5枠ordered exact matchで照合する。`bonusTypeId`、`bonusRankId`、slot順のすべてが一致した場合だけ一致とする。同じfamilyが5個含まれるだけでは一致としない
+- 各観測の候補poolは、その観測自身の `attributeClass` から選ぶ。1回のIdentification内で `none` と `attribute_present` の観測が混在してもよい
+
+探索とアルゴリズム。
+
+- 開始候補 `C` を `normalCounterRange` 全域で昇順に評価し、すべての観測が `C + i` の予測と一致した `C` だけをmatchとする。matchesは `startNormalCounter` 昇順で返し、同じ入力からは常に同じ配列を返す
+- correctness authorityは `ProductionRngEngine.predictNormalArtian()` である。kernelは同じNormal seed derivation、10-step block positioning、game-verified candidate pool、pool step（`selectReferenceNormalLotteryIdsFromRawValues()`）を共有し、独自のRNG規則を持たない。観測は `mapReferenceNormalResult()` の逆写像でreference ID namespaceへ変換して照合し、対象武器種のNormal lotteryが生成し得ないBonus（Gogma tier、未知type、Bowgunの斬れ味、Bowのfamily 7など）は `invalid_input` とする
+- さらに各観測は、その `attributeClass` に対応するgame-verified candidate poolで生成可能でなければならない。poolに存在しないreference ID（例: Heavy Bowgun / 属性あり / Element、Long Sword / 無属性 / Element、Bow / 無属性 / Element）を含む観測、または同一candidateが `maximumOccurrences` を超えて出現する観測（例: BowgunのCapacity 3枠）は、検索0件ではなく `invalid_input` とする。「入力自体がProduction poolから生成不能」と「範囲内に一致なし」は区別する
+- progressは開始Counter候補として評価を完了した `searchedCounters / totalCounters` と `matchesFound` であり、Observation数×prediction回数ではない。Counter chunk sizeはruntime tuning値で永続Production契約ではない
+- Workerは各chunk間でmacrotask yield（`setTimeout(..., 0)`）を挟み、pending cancel messageを処理できる。cancel後はresultをpostしない
+- `maxMatches` 到達時は探索を停止し、`searchedCounterRange.endInclusive` に実際に評価完了した最後の開始Counterを、未探索Counterが残る場合は `isTruncated = true` を返す
+
+結果の解釈。
+
+- unique: `matches.length === 1 && isTruncated === false` の場合だけCounterを確定できる
+- multiple: 追加観測（次の連続forge）を追加して同じ検索を再実行する。候補をユーザーに手動選択させない
+- zero: 観測入力、Base Seed、武器種、属性区分、検索範囲、forge順を確認する。範囲を自動拡張しない
+- truncated: 候補数に関係なくincompleteであり、unique確定不可とする
+- 確定時に既存 `NormalArtianCounter` へ反映する処理（`counter` / `isConfirmed` / `observationCount` / `candidateCount` / `lastObservedAt`）は後続UI PRの責務であり、kernel / WorkerはDBを変更しない。kernelが返す `startNormalCounter` は観測1を作成する直前のCounter `C`（調査前状態で次にforgeされるCounter）であり、観測数を加算しない。運用はSkill / Gogma Identificationと同じく、観測後はゲームを保存せず、調査前状態へ戻ったことを確認してから `counter = startNormalCounter` を確定する（[UI_FLOW.md](./UI_FLOW.md) 6）。`C + observationCount` を保存する運用は採用しない。Observation履歴のDB永続化schemaは追加しない
+
+Production support境界。
+
+- Production supportはgame-verified Normal pool（`gameVerifiedNormalCandidatesForWeaponAndElement()`）の範囲だけである。現時点ではBow、Light Bowgun、Heavy Bowgun、Long Swordであり、これはアルゴリズム上の制約ではなく実機fixtureが存在する範囲である
+- 未検証武器種（大剣、双剣、片手剣など）でProduction Counter Searchを呼んだ場合は `unsupported_input` / `unsupportedReason = normal_pool_unverified` でfail closedする。reference poolへfallbackしない。`reference_adapter_unsupported` / `engine_capability_unavailable` も既存 `RngPredictionUnsupportedReason` のまま構造化して上位へ渡し、message文字列から推測させない
+- `predictReferenceNormalRaw()` によるreference parityは検証用であり、reference-verifiedとgame-verified Productionは別契約である。近接共通pool仮説（Bow / Bowgun / Meleeの3カテゴリ）は今後の実機検証対象であり、Long Swordの一致だけを根拠に他の近接武器をProduction supportedへ昇格しない
+
+Error semantics。
+
+- `invalid_input` / `unsupported_input` / `cancelled` / `unexpected_error` / Worker unavailable / duplicate requestIdを区別する。Domain errorは `NormalArtianCounterIdentificationError` であり、`unsupported_input` では `unsupportedReason` に `RngPredictionUnsupportedReason` を保持する
+- Worker requestは `identify_normal_artian_counter` / `cancel`、responseは `normal_artian_counter_identification_result` / `progress` / `error` である。active requestIdの再利用は拒否し、terminal後は再利用できる。late responseはClientがrequestIdで無視する
+
+Golden。
+
+- 既存game-verified fixture `src/test/fixtures/gameVerifiedNormalVectors.ts` のHeavy Bowgun観測（Base Seed 51231782、Normal Counter 4 / 5 / 6の連続15slot）は、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 5.3の監査どおり開始Counter 0..5000で `startNormalCounter = 4` の1件だけに一致し、`isTruncated = false` である。同じ15slotは1観測では0..5000に19候補、2観測以降は4だけになる
+- kernel / Worker foundationはimplementedである。NormalCountersPageへのUI接続、Counter確定処理、未検証武器種のProduction activationは後続PRである。`supportsSeedSearch = false`、`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`、Production Normal RNG output、Normal seed derivation、`NormalArtianCounter` persisted shape、`DATABASE_SCHEMA_VERSION`、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` は変更していない
 
 ---
 

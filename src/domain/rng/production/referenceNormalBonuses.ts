@@ -109,3 +109,32 @@ export function mapReferenceNormalResult(
     bonuses: [mapped[0]!, mapped[1]!, mapped[2]!, mapped[3]!, mapped[4]!],
   }
 }
+
+const REFERENCE_NORMAL_LOTTERY_IDS: readonly ReferenceNormalLotteryId[] = [4, 6, 7, 8]
+
+/**
+ * The reference Normal lottery ID a semantic Domain bonus corresponds to for
+ * one weapon type — the exact inverse of `mapReferenceNormalResult` per slot.
+ *
+ * It exists so an observed five-slot Normal result can be compared in the
+ * reference ID namespace. A bonus the Normal lottery of that weapon type can
+ * never produce (a Gogma tier, an unknown type, Sharpness on a Bowgun, any
+ * family 7 on a Bow) raises a `RangeError`; nothing is guessed.
+ */
+export function referenceNormalIdFromRestorationBonus(
+  weaponTypeId: WeaponTypeId,
+  bonus: RestorationBonus,
+): ReferenceNormalLotteryId {
+  toReferenceWeaponType(weaponTypeId)
+  for (const referenceId of REFERENCE_NORMAL_LOTTERY_IDS) {
+    const mapped = mapReferenceNormalId(referenceId, weaponTypeId)
+    if (
+      mapped !== null &&
+      mapped.bonusTypeId === bonus.bonusTypeId &&
+      mapped.bonusRankId === bonus.bonusRankId
+    ) return referenceId
+  }
+  throw new RangeError(
+    `Unsupported semantic Normal lottery result for ${weaponTypeId}: ${bonus.bonusTypeId} / ${bonus.bonusRankId}`,
+  )
+}
