@@ -834,6 +834,8 @@ Execution Navigatorの結果一致、武器確保、想定外結果記録は、R
 
 Production v1 adapterがpersisted exact Gateを要求せずactive representativeを使用する変更はobservable Production semantics changeである。runtime実装を行うC5-E2C3で `PRODUCTION_RNG_ENGINE_VERSION` を `production-rng:c5-e2` へ更新し、既存CalculationContextを `calculation_context_changed` として無効化する。C5-E2C2は仕様改訂だけでありversionを変更しない。
 
+通常アーティア復元ボーナス抽選のgame-verified Production pool上限をAttack 5 / Element 4 / 斬れ味・装填数 2 / Affinity 3へ修正した変更もobservable Production RNG semantics changeであり、`PRODUCTION_RNG_ENGINE_VERSION` を `production-rng:c5-e3` へ更新した（[RNG_SPEC.md](./RNG_SPEC.md) 6.3.1、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.13）。`rngEngineVersion` の差がCalculationContextの失効境界となるため、`CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、Master dataVersionは重ねて変更しない。pinned reference implementationとのparity pool（Element 5 / Affinity 5）は別契約として変更しない。
+
 ---
 
 ## 33. 詳細表示とデバッグモード

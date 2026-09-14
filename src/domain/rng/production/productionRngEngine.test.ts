@@ -28,7 +28,7 @@ function master() {
 describe('ProductionRngEngine facade', () => {
   it('advertises production operations without activating UnavailableRngEngine', () => {
     const engine = new ProductionRngEngine()
-    expect(PRODUCTION_RNG_ENGINE_VERSION).toBe('production-rng:c5-e2')
+    expect(PRODUCTION_RNG_ENGINE_VERSION).toBe('production-rng:c5-e3')
     expect(engine.version).toBe(PRODUCTION_RNG_ENGINE_VERSION)
     expect(engine.capabilities).toEqual({ supportsSeedSearch: false, supportsNormalArtianPrediction: true, supportsGogmaPrediction: true, supportsSkillPrediction: true, supportsKeepBonusesPrediction: true })
     expect(Object.values(new UnavailableRngEngine().capabilities)).toEqual([false, false, false, false, false])

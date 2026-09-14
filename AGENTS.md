@@ -213,9 +213,14 @@ only by `CURRENT_CALCULATION_APP_SCHEMA_VERSION` in `src/domain/models/common.ts
 Search, BuildList, Planner, and benchmark runtime creators share this authority.
 Dexie separately moves to `DATABASE_SCHEMA_VERSION = 4` for the persisted status rename; this is independent of
 `AppSettings.schemaVersion = 1`; gameVersion, Master Data version,
-`RngState.schemaVersion = 1`, `CONSTRAINED_ROUTE_POLICY_VERSION`,
-`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`, and `supportsSeedSearch = false`
-remain unchanged. `DATABASE_SCHEMA_VERSION` stays 4 at the checkpoint boundary, while
+`RngState.schemaVersion = 1`, `CONSTRAINED_ROUTE_POLICY_VERSION`, and
+`supportsSeedSearch = false` remain unchanged. `PRODUCTION_RNG_ENGINE_VERSION` is
+currently `production-rng:c5-e3`: the Normal Artian occurrence-limit correction
+(Production game-verified pool Attack 5 / Element 4 / family 7 2 / Affinity 3)
+changed Production Normal prediction output, so it moved the Engine version from
+`production-rng:c5-e2` without touching `CURRENT_CALCULATION_APP_SCHEMA_VERSION`;
+`rngEngineVersion` alone is the CalculationContext staleness boundary for that
+change. `DATABASE_SCHEMA_VERSION` stays 4 at the checkpoint boundary, while
 `ExportRoot.schemaVersion` moves to 5 with the persisted entity shape. Version 1 BuildCandidate, BuildListEntry, and ProductionPlan
 calculations are incompatible with any later version and must not be reused as current
 results. Existing staleness checks mark old BuildListEntry records with
@@ -365,6 +370,37 @@ the bonus family at each of the current five slot positions and rerolls the tier
 within each family. Reset and Keep results come from the RNG Engine; Search and
 Planner must not synthesize them.
 
+The Production Normal Artian lottery uses the reference-verified PRNG, seed
+derivation, 10-step block, and pool step unchanged, and replaces only the
+candidate pool with the game-verified pool of the supported weapon type (Bow,
+Light Bowgun, Heavy Bowgun, Long Sword). The Production per-candidate
+`maximumOccurrences` are (`docs/RNG_REFERENCE_AUDIT.md` 14.13):
+
+```text
+Attack (6)              5
+Element (4)             4
+Sharpness/Capacity (7)  2
+Affinity (8)            3
+```
+
+Their provenance is not uniform, and must not be described as if it were.
+Attack 5 / Element 4 / Sharpness 2 / Affinity 3 were game-verified directly on
+1293 attribute-present melee forges / 6465 slots (Great Sword, Dual Blades,
+Hammer, Charge Blade; Base Seed 51231782, 2026-09-14). Capacity 2 on the
+Bowguns, the application of Element 4 / Affinity 3 to the Bow, Affinity 3 on
+the Bowguns, and Affinity 3 in the elementless pools were not boundary-observed
+in that data set. They are adopted as the Production contract from the
+user-supplied Game8 limit table plus the fact that the existing game-observed
+Bow / LBG / HBG / Long Sword fixtures do not contradict them. Never write that
+1293 forges game-verified every Production limit including Capacity.
+
+The pinned reference pools in `referenceNormalBonuses.ts` keep Element 5 /
+Affinity 5. That is the pinned reference implementation's behavior, not a game
+rule, and it is the reference parity contract: never change the reference pool
+contents, `predictReferenceNormalRaw()`, or the reference golden vectors to match
+the game, and never let the Production pool fall back to them. Keep the two
+pools separate. `ReferenceNormalCandidate.maximumOccurrences` is `2 | 3 | 4 | 5`.
+
 `LotteryMaster` is provisional.
 
 Do not force reference-verified or game-verified RNG behavior to fit the provisional `LotteryMaster` schema. If real analysis requires a different representation, update the specification before changing the production model.
@@ -458,8 +494,10 @@ the low-Gate Core/reference semantics and tests.
 
 C5-E2C3 integrates this policy atomically in the Production adapter, Domain
 prediction inputs, capability derivation, Candidate Search, Planner validation,
-Trace Replay, and semantic hashes. `PRODUCTION_RNG_ENGINE_VERSION` is
-`production-rng:c5-e2`. Do not reintroduce caller-supplied or persisted Gate as
+Trace Replay, and semantic hashes. C5-E2C3 set `PRODUCTION_RNG_ENGINE_VERSION`
+to `production-rng:c5-e2`; the later Normal Artian occurrence-limit correction
+moved it to the current `production-rng:c5-e3` (see the Normal pool limits under
+RNG Rules). Do not reintroduce caller-supplied or persisted Gate as
 Production authority. This runtime integration does not activate the Skill-first
 Identification UI; `supportsSeedSearch` remains `false`.
 

@@ -558,6 +558,74 @@ describe('Normal Artian Counter Identification kernel', () => {
     )).resolves.toMatchObject({ isTruncated: false })
   })
 
+  it('applies the game-verified occurrence limits (Attack 5 / Element 4 / family 7 2 / Affinity 3) per weapon type', async () => {
+    const engine = new ProductionRngEngine()
+    const base = { bonusRankId: 'bonus_rank.base' }
+    const attack = { bonusTypeId: 'bonus_type.attack', ...base }
+    const affinity = { bonusTypeId: 'bonus_type.affinity', ...base }
+    const element = { bonusTypeId: 'bonus_type.element', ...base }
+    const capacity = { bonusTypeId: 'bonus_type.normal_capacity', ...base }
+    const sharpness = { bonusTypeId: 'bonus_type.normal_sharpness', ...base }
+    const at = (
+      weaponTypeId: WeaponTypeId,
+      attributeClass: NormalArtianAttributeClass,
+      bonuses: RestorationBonusSet,
+    ): NormalArtianCounterIdentificationInput => ({
+      baseSeed: HBG_BASE_SEED,
+      weaponTypeId,
+      rarity: 8,
+      observations: [{ attributeClass, bonuses }],
+      normalCounterRange: { startInclusive: 0, endInclusive: 500 },
+    })
+    const expectProducible = async (input: NormalArtianCounterIdentificationInput): Promise<void> => {
+      // Producible input is a legitimate search, whether or not any Counter in range matches.
+      await expect(identifyNormalArtianCounter(input, engine)).resolves.toMatchObject({ isTruncated: false })
+    }
+    const expectImpossible = async (input: NormalArtianCounterIdentificationInput, limit: number): Promise<void> => {
+      const error = await identifyNormalArtianCounter(input, engine).catch((caught: unknown) => caught)
+      expect(error).toBeInstanceOf(NormalArtianCounterIdentificationError)
+      expect(error).toMatchObject({ code: 'invalid_input', unsupportedReason: null })
+      expect((error as Error).message).toContain(`more than ${limit}`)
+    }
+
+    // Long Sword / attribute_present: Element 4 valid, 5 impossible; Affinity 3 valid, 4 impossible;
+    // Sharpness 2 valid, 3 impossible.
+    await expectProducible(at('weapon.long_sword', 'attribute_present', [element, element, element, element, attack]))
+    await expectImpossible(at('weapon.long_sword', 'attribute_present', [element, element, element, element, element]), 4)
+    await expectProducible(at('weapon.long_sword', 'attribute_present', [affinity, affinity, affinity, attack, element]))
+    await expectImpossible(at('weapon.long_sword', 'attribute_present', [affinity, affinity, affinity, affinity, attack]), 3)
+    await expectProducible(at('weapon.long_sword', 'attribute_present', [sharpness, sharpness, attack, element, affinity]))
+    await expectImpossible(at('weapon.long_sword', 'attribute_present', [sharpness, sharpness, sharpness, attack, element]), 2)
+    // Long Sword / none keeps the same Affinity and Sharpness limits.
+    await expectProducible(at('weapon.long_sword', 'none', [affinity, affinity, affinity, attack, attack]))
+    await expectImpossible(at('weapon.long_sword', 'none', [affinity, affinity, affinity, affinity, attack]), 3)
+
+    // Bow: Element 4 valid, 5 impossible; Affinity 3 valid, 4 impossible.
+    await expectProducible(at('weapon.bow', 'attribute_present', [element, element, element, element, affinity]))
+    await expectImpossible(at('weapon.bow', 'attribute_present', [element, element, element, element, element]), 4)
+    await expectProducible(at('weapon.bow', 'attribute_present', [affinity, affinity, affinity, attack, element]))
+    await expectImpossible(at('weapon.bow', 'attribute_present', [affinity, affinity, affinity, affinity, element]), 3)
+    await expectProducible(at('weapon.bow', 'none', [affinity, affinity, affinity, attack, attack]))
+    await expectImpossible(at('weapon.bow', 'none', [affinity, affinity, affinity, affinity, attack]), 3)
+
+    // Bowguns: Capacity 2 valid, 3 impossible; Affinity 3 valid, 4 impossible.
+    for (const weaponTypeId of ['weapon.light_bowgun', 'weapon.heavy_bowgun'] as const) {
+      for (const attributeClass of ['none', 'attribute_present'] as const) {
+        await expectProducible(at(weaponTypeId, attributeClass, [capacity, capacity, attack, affinity, attack]))
+        await expectImpossible(at(weaponTypeId, attributeClass, [capacity, capacity, capacity, attack, affinity]), 2)
+        await expectProducible(at(weaponTypeId, attributeClass, [affinity, affinity, affinity, attack, capacity]))
+        await expectImpossible(at(weaponTypeId, attributeClass, [affinity, affinity, affinity, affinity, attack]), 3)
+      }
+    }
+
+    // Attack alone may still fill all five slots in every pool.
+    for (const weaponTypeId of SUPPORTED_WEAPON_TYPES) {
+      for (const attributeClass of NORMAL_ARTIAN_ATTRIBUTE_CLASSES) {
+        await expectProducible(at(weaponTypeId, attributeClass, [attack, attack, attack, attack, attack]))
+      }
+    }
+  })
+
   it('rejects any rarity other than 8 before touching the Engine', async () => {
     const engine = new ProductionRngEngine()
     const support = vi.spyOn(engine, 'getPredictionSupport')
