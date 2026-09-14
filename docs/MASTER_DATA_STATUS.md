@@ -4,7 +4,7 @@
 
 v1に同梱する静的Master Dataの確認状況を記録する。2026-08-29の第8.2～第8.3実装で、プロジェクトオーナー確認済み情報と属性・出現スキル制約を入力・条件評価用Masterへ反映した。
 
-Manifestの `dataVersion` は3。`gameVersion` は引き続き `unknown-initial` であり、特定ゲームバージョンへの適合確認は未完了である。
+Manifestの `dataVersion` は4。`gameVersion` は引き続き `unknown-initial` であり、特定ゲームバージョンへの適合確認は未完了である。
 
 ## 監査結果（2026-08-29）
 
