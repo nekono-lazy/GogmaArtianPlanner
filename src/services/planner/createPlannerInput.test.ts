@@ -47,9 +47,11 @@ describe('createPlannerInput', () => {
       bonusTypes: master.bonusTypes,
       bonusRanks: master.bonusRanks,
       artianBonusTypeMappings: master.artianBonusTypeMappings,
-      lotteries: master.lotteries,
       materialCosts: master.materialCosts,
     })
+    // Planner calculation never reads a LotteryMaster (`docs/PLANNER_SPEC.md` 3).
+    expect(master.lotteries.length).toBeGreaterThan(0)
+    expect(input.master).not.toHaveProperty('lotteries')
     expect(input).not.toHaveProperty('rngEngine')
   })
 

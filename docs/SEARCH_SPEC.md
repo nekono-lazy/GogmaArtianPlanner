@@ -70,14 +70,26 @@ export interface SearchMasterSubset {
   bonusTypes: BonusTypeMaster[];
   bonusRanks: BonusRankMaster[];
   artianBonusTypeMappings: ArtianBonusTypeMapping[];
-  lotteries: LotteryMaster[];
   materialCosts: MaterialCostMaster[];
 }
 ```
 
 `createCandidateSearchInput()` は同じvalidated `MasterDataRoot`から上記subsetを構成し、
-structured clone可能なrequest dataとしてWorkerへ渡す。`lotteries` はlegacy payloadとして
-型に残るが、Production RNGのeligibility、input support、predictionの根拠には使用しない。
+structured clone可能なrequest dataとしてWorkerへ渡す。`SearchMasterSubset` は
+`LotteryMaster` を持たない。`MasterDataRoot.lotteries` はprovisional / legacy Master
+structureとしてrootに残るが、Production RNGのeligibility、input support、predictionの
+根拠ではなく、Search Workerへのpayloadにも含めない。disabled LotteryMasterはSearch
+readinessの判定要素でもなく、それだけを理由にProduction Routeをskipしたり検索を
+利用不可にしたりしない。
+
+`materialCosts` はRouteのアイテム素材（`requiredMaterials`）を積算するためだけに使う。
+Search可否の判定要素ではない。usableなenabled `MaterialCostMaster` entryがない場合でも
+Searchは実行でき、Route eligibilityは変わらない。その場合 `requiredMaterials` は空配列に
+なるが、これは「素材が0」ではなく「素材コスト情報を利用できない（unknown）」を意味する。
+UIは空配列を「なし」と表示せず、未検証のため表示できない旨を示す。5.5.3 / 8章の
+アイテム素材量によるtie-breakは、未検証（disabled）コストを一切読まないため、現在の
+all-disabled状態では候補間に有意な差を生じず、後続のdeterministic keyへ進む。未検証の
+素材コストを根拠に「素材が少ない候補」と主張しない。
 
 `BuildCandidate.finalBonusScope` と `finalBonuses` はRoute完了時の巨戟アーティアが実際に保持するscopeと5枠である。巨戟化だけなら `normal_artian` scopeの通常5枠をslot順のまま継承し、Reset / Keepを実行した後はRNG Engineが返した `gogma_artian` scopeの5枠を使う。SearchはBonus Type Mappingから巨戟Rankや完成5枠を推測しない。MappingはKeep family解決（5.9）にだけ使う。
 
@@ -225,7 +237,7 @@ export interface CandidateSearchWarning {
 未確定RNG値は `*_unconfirmed`、Engine機能不足は `*_prediction_unsupported`、所持source不足は `no_owned_weapon_available` / `no_unprotected_source_weapon` として区別する。`no_owned_weapon_available` は `owned_normal_artian_to_gogma` と `existing_gogma_*` の両方で使うため、UI文言は武器種を限定しない汎用表現にする。武器種はRouteKind labelが示す。値が確定していてもEngineが未対応なら予測可能とみなさず、逆にEngineが対応していても必要値が未確定なら該当RNG値のreasonを返す。
 
 Production Searchはroute-local / operation-local supportを維持し、RngState全体のall-or-nothing availabilityを設けない。Skill-dependent routeはBase SeedまたはSkill Counter不足、Skill Prediction / concrete semantic input unsupportedでskipする。Gogma amendment routeはBase SeedまたはGogma Counter不足、Gogma Prediction / concrete semantic input / Master unsupportedでskipする。persisted Counter Gateの未設定・未確定はskip reasonにしない。Normal Counter不足は `create_normal_artian` を含むrouteだけに適用する。
-`master_data_unavailable` は、Route実行に必要なWeaponBonusDefinition、BonusRank、アイテム素材等のMaster Dataが存在しない、無効、または利用不能な場合に使用する。Production RNG poolはEngineのreference-verified tableであり、disabled LotteryMasterだけを理由にこのreasonを返さない。reference-verifiedは参照repositoryとの一致を表し、全実ゲーム条件でのgame-verifiedを意味しない。
+`master_data_unavailable` は、Route実行に必要なWeaponBonusDefinition、BonusRank等、Predictionが実際に依存するsemantic Master Dataが存在しない、無効、または利用不能な場合に使用する。Production RNG poolはEngineのreference-verified tableであり、disabled LotteryMasterだけを理由にこのreasonを返さない。MaterialCostMasterはPredictionの依存ではないため、その未検証・無効もこのreasonにならない（3章）。reference-verifiedは参照repositoryとの一致を表し、全実ゲーム条件でのgame-verifiedを意味しない。
 
 `CandidateRouteFilter` はRouteグループを選ぶ入力であり、SkippedRouteの粒度には使用しない。`normal_artian` は `normal_artian_to_gogma` と `owned_normal_artian_to_gogma`、`existing_gogma` は操作0の `existing_gogma_current` と4つの amendment RouteKindを対象とする。`disabled_by_filter` も除外された具体的なRouteKindごとに返す。`searchedRoutes` と `skippedRoutes[].route` は同じRouteKind粒度で、同じRouteを両方へ含めない。
 
@@ -531,6 +543,8 @@ full-prefix、incremental retention、差分Crossの重複判定はすべてこ�
      idealDifference.matchedBonusCount 相当のBonus側一致枠数
 3. アイテム素材必要量合計 昇順
      同一depthでもReset / Keepの構成比でアイテム素材が変わり得るため
+     enabled MaterialCostMasterだけから積算する。usableなコストがない現在のMasterでは
+     全解が0で並び、この段は差を生じずに4へ進む
 4. 安定semantic key 昇順
      完成5枠multisetの正規化文字列、次に操作型列、最後にrestorationBonusScope
      異なるscopeを入力順依存にしないlocale非依存のtie-break

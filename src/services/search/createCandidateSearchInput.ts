@@ -67,7 +67,6 @@ export async function createCandidateSearchInput(
       bonusTypes: options.master.bonusTypes,
       bonusRanks: options.master.bonusRanks,
       artianBonusTypeMappings: options.master.artianBonusTypeMappings,
-      lotteries: options.master.lotteries,
       materialCosts: options.master.materialCosts,
     },
     calculationContext: { ...options.calculationContext },

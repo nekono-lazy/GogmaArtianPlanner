@@ -21,7 +21,6 @@ import {
 
 const EMPTY_RNG_MASTER = {
   weaponBonusDefinitions: [],
-  lotteries: [],
   bonusRanks: [],
 }
 

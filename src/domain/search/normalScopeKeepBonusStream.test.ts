@@ -35,7 +35,6 @@ function master(): SearchMasterSubset {
     bonusTypes: result.data.bonusTypes,
     bonusRanks: result.data.bonusRanks,
     artianBonusTypeMappings: result.data.artianBonusTypeMappings,
-    lotteries: result.data.lotteries,
     materialCosts: result.data.materialCosts,
   }
 }

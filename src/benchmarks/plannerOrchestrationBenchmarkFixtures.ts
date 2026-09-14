@@ -379,7 +379,6 @@ function benchmarkMaster(): BenchmarkMaster {
       bonusTypes: data.bonusTypes,
       bonusRanks: data.bonusRanks,
       artianBonusTypeMappings: data.artianBonusTypeMappings,
-      lotteries: data.lotteries,
       materialCosts: data.materialCosts,
     },
     context: {
@@ -830,7 +829,6 @@ export function createPlannerOrchestrationBenchmarkInput(
       bonusTypes: master.bonusTypes,
       bonusRanks: master.bonusRanks,
       artianBonusTypeMappings: master.artianBonusTypeMappings,
-      lotteries: master.lotteries,
       materialCosts: master.materialCosts,
     },
     conflictResolutions: [],

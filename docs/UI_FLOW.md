@@ -633,6 +633,15 @@ TargetWeaponごとに候補を検索し、作成リストへ追加する。
 - TargetWeaponなしなら検索開始不可
 - 通常Counter未確定Routeはskip理由を表示
 - Route実行に必要なWeaponBonusDefinition等のMaster Dataが利用不能な場合は `master_data_unavailable` としてskip理由を表示する。disabled LotteryMasterだけを理由にProduction Routeをskipしない
+- disabled LotteryMasterに由来する警告（「抽選マスターデータ」「通常アーティア経由の検索は
+  利用できません」等）を通常UIへ表示しない。LotteryMasterはSearch readinessの判定要素ではない
+- MaterialCostがunavailable（usableなenabled素材コストがない）でも検索開始を止めない。
+  Searchのblocking理由と混同しない独立のwarningとして「素材コストは未検証です。候補検索は
+  利用できますが…」の意味の文面を表示し、候補検索自体が利用できることが分かるようにする
+- MaterialCostがunavailableな場合、Candidateの必要素材（アイテム）は「なし」ではなく
+  「素材コストは未検証のため表示できません。」のようにunknownとして表示する。「なし」は
+  素材コストが利用可能で必要素材が空の場合だけに表示する。この表示契約はSearch画面と
+  作成リストで共通のCandidateカードが担う
 - protected武器を起点とするReset Bonuses / Keep Bonuses / Reset Skills / mixed amendment Routeは検索結果へ表示しない
 - amendmentの起点候補がprotected武器だけの場合は「保護されていない起点武器がない」と各該当Routeのskip理由を表示する
 - protected武器でも現在性能がTarget条件を満たす場合は、操作なしの現在性能候補として表示する。この評価だけを理由にSkill / Gogma Predictionを実行しない

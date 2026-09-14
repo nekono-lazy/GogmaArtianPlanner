@@ -4,8 +4,6 @@ import type {
   BonusRankMaster,
   ElementMaster,
   GroupSkillMaster,
-  LotteryKind,
-  LotteryMaster,
   MasterDataRoot,
   MaterialCostMaster,
   MaterialCostOperationType,
@@ -238,24 +236,4 @@ export function getMaterialCostsFromSubset(
         (cost.weaponTypeId === null || cost.weaponTypeId === weaponTypeId),
     )
     .sort((left, right) => left.id.localeCompare(right.id))
-}
-
-export function getLotteryEntries(
-  master: MasterDataRoot,
-  lotteryKind: LotteryKind,
-  weaponTypeId: WeaponTypeId | null,
-  rarity: LotteryMaster['rarity'],
-): LotteryMaster[] {
-  if (weaponTypeId !== null) {
-    requireById(master.weaponTypes, weaponTypeId, 'WeaponTypeMaster')
-  }
-  return master.lotteries
-    .filter(
-      (entry) =>
-        entry.isEnabled &&
-        entry.lotteryKind === lotteryKind &&
-        entry.weaponTypeId === weaponTypeId &&
-        entry.rarity === rarity,
-    )
-    .sort(compareBySortOrderAndId)
 }

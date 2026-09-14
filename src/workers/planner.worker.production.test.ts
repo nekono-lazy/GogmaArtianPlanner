@@ -81,7 +81,6 @@ function createProductionSearchInput(
     bonusTypes: loaded.data.bonusTypes,
     bonusRanks: loaded.data.bonusRanks,
     artianBonusTypeMappings: loaded.data.artianBonusTypeMappings,
-    lotteries: loaded.data.lotteries,
     materialCosts: loaded.data.materialCosts,
   }
   input.calculationContext = {
@@ -158,7 +157,6 @@ async function createProductionPlannerInput(): Promise<PlannerInput> {
       bonusTypes: searchInput.master.bonusTypes,
       bonusRanks: searchInput.master.bonusRanks,
       artianBonusTypeMappings: searchInput.master.artianBonusTypeMappings,
-      lotteries: searchInput.master.lotteries,
       materialCosts: searchInput.master.materialCosts,
     },
     conflictResolutions: [],

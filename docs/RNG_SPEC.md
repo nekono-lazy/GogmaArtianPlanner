@@ -280,7 +280,6 @@ Web Workerへ渡すRNG用の最小マスター。
 ```ts
 export interface RngMasterSubset {
   weaponBonusDefinitions: WeaponBonusDefinition[];
-  lotteries: LotteryMaster[];
   bonusRanks: BonusRankMaster[];
   elements?: ElementMaster[];
   bonusTypes?: BonusTypeMaster[];
@@ -291,7 +290,7 @@ export interface RngMasterSubset {
 
 `elements`、`bonusTypes`、`weaponTypes` は共通interfaceではoptionalだが、Production Gogma Resetのavailability判定ではcaller supplied Masterに存在する必要がある。不足時はinput supportが `master_data_unavailable` となる。`artianBonusTypeMappings` も共通interfaceではoptionalだが、Production Keepのfamily解決ではcaller supplied Masterに存在する必要がある。不足時は `gogma_keep` のinput supportが `master_data_unavailable` となる。Search / Plannerのsubset（`SearchMasterSubset` / `PlannerMasterSubset`）ではrequiredとし、validated Master rootから渡す。空配列やfake mappingを本番経路へ入れない。`weaponBonusDefinitions` とこれらのMasterを同じvalidated Master rootから渡し、predictor内部で別Masterを読み込まない。
 
-`lotteries` は現行の共通interfaceに残るlegacy payloadである。Production RNGのseed式、pool order、weight、repeat penalty、skill order、semantic ID↔reference numeric mappingは、provenance付きRNG-specific reference-verified tableとEngine内部定数の責務であり、Production Predictionは `LotteryMaster` に依存しない。現行disabled `LotteryMaster` を有効化したり、Production Predictionの前提にしたりしない。reference-verified tableは参照repositoryとの一致を表し、それだけで全実ゲーム条件のgame-verifiedを意味しない。
+`RngMasterSubset` は `LotteryMaster` を持たない。`MasterDataRoot.lotteries` はprovisional / legacy Master structureとしてrootに残るが、RNG Predictionのinput、input support、capability判定のいずれにも渡さない。Production RNGのseed式、pool order、weight、repeat penalty、skill order、semantic ID↔reference numeric mappingは、provenance付きRNG-specific reference-verified tableとEngine内部定数の責務であり、Production Predictionは `LotteryMaster` に依存しない。現行disabled `LotteryMaster` を有効化したり、Production Predictionの前提にしたりしない。reference-verified tableは参照repositoryとの一致を表し、それだけで全実ゲーム条件のgame-verifiedを意味しない。
 
 Normal Artian Predictionが扱う復元ボーナス定義は `normal_artian` scope、Gogma Predictionが返すamendment後の復元ボーナスは `gogma_artian` scopeである。通常→巨戟化時はNormal Predictionまたは所持Normalの `normal_artian` scope 5枠をslot順のまま継承し、通常→巨戟Bonus Type MappingからRank・抽選結果・完成5枠を生成しない。Mappingは、Keep predictionでnormal-scope current slotの通常側Bonus Typeを巨戟側Bonus Type（Keep family）へ正規化するためにだけ使う。
 

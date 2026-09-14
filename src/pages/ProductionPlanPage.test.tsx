@@ -119,7 +119,6 @@ function pageFixture(suffix = 'a'): {
       bonusTypes: [],
       bonusRanks: [],
         artianBonusTypeMappings: [],
-      lotteries: [],
       materialCosts: [],
     },
     conflictResolutions: [],

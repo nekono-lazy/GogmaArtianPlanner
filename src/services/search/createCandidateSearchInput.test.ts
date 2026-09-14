@@ -53,9 +53,12 @@ describe('createCandidateSearchInput', () => {
       bonusTypes: master.bonusTypes,
       bonusRanks: master.bonusRanks,
       artianBonusTypeMappings: master.artianBonusTypeMappings,
-      lotteries: master.lotteries,
       materialCosts: master.materialCosts,
     })
+    // The provisional LotteryMaster stays on the Master root only; no Worker
+    // payload carries it (`docs/SEARCH_SPEC.md` 4.1).
+    expect(master.lotteries.length).toBeGreaterThan(0)
+    expect(input.master).not.toHaveProperty('lotteries')
     expect(input.calculationContext).toEqual(calculationContext)
   })
 })

@@ -142,7 +142,6 @@ export function checkpointMaster(): SearchMasterSubset {
         isEnabled: true,
       })),
     ),
-    lotteries: [],
     materialCosts: [],
   }
 }

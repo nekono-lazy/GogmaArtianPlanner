@@ -74,8 +74,8 @@ function dependencies(
   client: ControlledClient,
   targets = [createValidTargetWeapon()],
   buildListEntries: BuildListEntry[] = [],
+  master = createValidMasterDataFixture(),
 ): SearchPageDependencies {
-  const master = createValidMasterDataFixture()
   return {
     master,
     getTargets: async () => targets,
@@ -96,7 +96,6 @@ function dependencies(
           bonusTypes: master.bonusTypes,
           bonusRanks: master.bonusRanks,
           artianBonusTypeMappings: master.artianBonusTypeMappings,
-          lotteries: master.lotteries,
           materialCosts: master.materialCosts,
         },
       }
@@ -515,6 +514,57 @@ describe('SearchPage disclosure ARIA wiring', () => {
     }
     const ids = [...document.querySelectorAll('[id]')].map((element) => element.id)
     expect(new Set(ids).size).toBe(ids.length)
+  })
+})
+
+describe('SearchPage Master Data readiness', () => {
+  /** The bundled Production Master: Lottery placeholder and material costs all disabled. */
+  function productionLikeMaster() {
+    const master = createValidMasterDataFixture()
+    master.lotteries = master.lotteries.map((lottery) => ({ ...lottery, isEnabled: false }))
+    master.materialCosts = master.materialCosts.map((cost) => ({ ...cost, isEnabled: false }))
+    return master
+  }
+
+  it('keeps Search available with a disabled Lottery Master and shows only the material cost advisory', async () => {
+    const user = userEvent.setup()
+    const client = new ControlledClient()
+    const target = createValidTargetWeapon()
+    const deps = dependencies(client, [target], [], productionLikeMaster())
+    render(<SearchPage dependencies={deps} />)
+
+    const button = await screen.findByRole('button', { name: '検索開始' })
+    // The provisional Lottery Master is never a Search readiness input
+    // (`docs/MASTER_DATA_STATUS.md`), so no normal-UI sentence mentions it.
+    expect(screen.queryByText(/抽選マスターデータ/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/通常アーティア経由の検索は利用できません/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/検索は利用できません/)).not.toBeInTheDocument()
+    // The unverified material cost is an advisory that says Search still works.
+    const advisory = screen.getByText(/素材コストは未検証です。/)
+    expect(advisory).toHaveTextContent('候補検索は利用できますが')
+    expect(button).toBeEnabled()
+
+    await user.click(button)
+    expect(client.input?.targetWeaponId).toBe(target.id)
+    expect(client.input?.master).not.toHaveProperty('lotteries')
+
+    const candidate = { ...createValidBuildCandidate(), requiredMaterials: [] }
+    client.resolve(resultFor(target, candidate))
+    expect(await screen.findByText('理想候補')).toBeInTheDocument()
+    await user.click(screen.getByText('候補詳細・作成ルート'))
+    const materials = screen.getByRole('heading', { name: '必要素材（アイテム）' })
+      .parentElement as HTMLElement
+    expect(
+      within(materials).getByText('素材コストは未検証のため表示できません。'),
+    ).toBeInTheDocument()
+    expect(within(materials).queryByText('なし')).not.toBeInTheDocument()
+  })
+
+  it('shows no Master advisory at all when a material cost is usable', async () => {
+    render(<SearchPage dependencies={dependencies(new ControlledClient())} />)
+    await screen.findByRole('button', { name: '検索開始' })
+    expect(screen.queryByText(/素材コストは未検証/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/抽選マスターデータ/)).not.toBeInTheDocument()
   })
 })
 

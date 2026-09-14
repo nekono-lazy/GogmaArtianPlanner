@@ -58,7 +58,6 @@ function createProductionSearchInput(
     bonusTypes: loaded.data.bonusTypes,
     bonusRanks: loaded.data.bonusRanks,
     artianBonusTypeMappings: loaded.data.artianBonusTypeMappings,
-    lotteries: loaded.data.lotteries,
     materialCosts: loaded.data.materialCosts,
   }
   input.calculationContext = {

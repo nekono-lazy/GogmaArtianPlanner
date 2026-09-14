@@ -691,3 +691,49 @@ describe('CandidateCard Build List add state', () => {
     expect(screen.getByRole('button', { name: 'ビルドリストへ追加' })).toBeEnabled()
   })
 })
+
+describe('CandidateCard required item materials', () => {
+  const unavailableMessage = '素材コストは未検証のため表示できません。'
+
+  async function renderMaterials(
+    requiredMaterials: BuildCandidate['requiredMaterials'],
+    materialCostsEnabled: boolean,
+  ) {
+    const candidate = createValidBuildCandidate()
+    candidate.requiredMaterials = requiredMaterials
+    const master = createValidMasterDataFixture()
+    if (!materialCostsEnabled) {
+      master.materialCosts = master.materialCosts.map((cost) => ({ ...cost, isEnabled: false }))
+    }
+    render(<CandidateCard candidate={candidate} target={target()} master={master} />)
+    await userEvent.click(screen.getByText('候補詳細・作成ルート'))
+    const heading = screen.getByRole('heading', { name: '必要素材（アイテム）' })
+    return heading.parentElement as HTMLElement
+  }
+
+  // An empty `requiredMaterials` under an all-disabled cost Master is
+  // "unknown", not "zero" (`docs/UI_FLOW.md` 9).
+  it('shows the unverified cost note instead of なし when no material cost is usable', async () => {
+    const section = await renderMaterials([], false)
+    expect(within(section).getByText(unavailableMessage)).toBeInTheDocument()
+    expect(within(section).queryByText('なし')).not.toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: '必要素材（アイテム）' })).not.toBeInTheDocument()
+  })
+
+  it('shows なし only for a priced Route that needs nothing', async () => {
+    const section = await renderMaterials([], true)
+    expect(within(section).getByText('なし')).toBeInTheDocument()
+    expect(within(section).queryByText(unavailableMessage)).not.toBeInTheDocument()
+  })
+
+  it('lists the priced materials with their quantities', async () => {
+    const section = await renderMaterials(
+      [{ materialId: 'material.fixture.active', quantity: 3 }],
+      true,
+    )
+    const list = within(section).getByRole('list', { name: '必要素材（アイテム）' })
+    expect(within(list).getByText('素材fixture × 3')).toBeInTheDocument()
+    expect(within(section).queryByText('なし')).not.toBeInTheDocument()
+    expect(within(section).queryByText(unavailableMessage)).not.toBeInTheDocument()
+  })
+})

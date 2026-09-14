@@ -19,7 +19,6 @@ function master() {
     weaponBonusDefinitions: result.data.weaponBonusDefinitions,
     weaponTypes: result.data.weaponTypes,
     bonusRanks: result.data.bonusRanks,
-    lotteries: result.data.lotteries,
     elements: result.data.elements,
     bonusTypes: result.data.bonusTypes,
     artianBonusTypeMappings: result.data.artianBonusTypeMappings,
