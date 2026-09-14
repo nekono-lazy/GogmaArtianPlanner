@@ -560,10 +560,40 @@ describe('normal_artian_to_gogma operation ordering', () => {
     )
   })
 
-  it('rejects a second conversion and a conversion with no preceding creation', () => {
+  it('accepts one predicted creation followed by the conversion, whatever its forge count', () => {
+    // `candidateOffset = k` forges `k + 1` weapons through one operation.
+    expect(validateBuildRoute(route([create(false), convert()])).isValid).toBe(true)
+    const threeForges: Operation = {
+      type: 'create_normal_artian',
+      weaponTypeId: 'weapon.fixture.a',
+      rarity: 8,
+      count: 3,
+      normalCounterBefore: 4,
+      normalCounterAfter: 7,
+    }
+    const validation = validateBuildRoute(route([threeForges, convert()]))
+    expect(validation.issues).toEqual([])
+    expect(validation.isValid).toBe(true)
+  })
+
+  it('accepts a blind creation, the conversion, and the forced Reset', () => {
+    const validation = validateBuildRoute(route([create(true), convert(), reset()]))
+    expect(validation.issues).toEqual([])
+    expect(validation.isValid).toBe(true)
+  })
+
+  it('requires exactly one creation and exactly one conversion', () => {
+    // A creation with no conversion produces no Gogma weapon.
+    expect(validateBuildRoute(route([create(false)])).issues)
+      .toContainEqual(expect.objectContaining({ message: expect.stringMatching(/exactly one convert_normal_to_gogma/) }))
+    // Several forges are one operation's count, never repeated creations.
+    expect(validateBuildRoute(route([create(false), create(false), convert()])).issues)
+      .toContainEqual(expect.objectContaining({ message: expect.stringMatching(/exactly one create_normal_artian/) }))
     // SEARCH_SPEC 6.1: the conversion is one operation on the last forged weapon.
     expect(validateBuildRoute(route([create(false), convert(), convert(), reset()])).issues)
-      .toContainEqual(expect.objectContaining({ message: expect.stringMatching(/at most one convert_normal_to_gogma/) }))
+      .toContainEqual(expect.objectContaining({ message: expect.stringMatching(/exactly one convert_normal_to_gogma/) }))
+    expect(validateBuildRoute(route([convert(), reset()])).issues)
+      .toContainEqual(expect.objectContaining({ message: expect.stringMatching(/exactly one create_normal_artian/) }))
     expect(validateBuildRoute(route([convert(), reset()])).issues)
       .toContainEqual(expect.objectContaining({ path: 'operations[0]', message: expect.stringMatching(/preceding create_normal_artian/) }))
     // An amendment with no conversion at all has no transient Gogma to act on.

@@ -775,29 +775,48 @@ describe('Planner Beam Search', () => {
       ...target('target.normal.second', 1),
       weaponTypeId: 'weapon.fixture.b',
     }
+    // Canonical new-Normal Routes: one creation, then the conversion. The two
+    // conversions sit at different Skill positions so only the Normal Counters
+    // are under test.
     const first = routeEntry('entry.normal.first', firstTarget, {
       kind: 'normal_artian_to_gogma',
       sourceOwnedWeaponId: null,
-      operations: [{
-        type: 'create_normal_artian',
-        weaponTypeId: 'weapon.fixture.a',
-        rarity: 8,
-        count: 1,
-        normalCounterBefore: 4,
-        normalCounterAfter: 5,
-      }],
+      operations: [
+        {
+          type: 'create_normal_artian',
+          weaponTypeId: 'weapon.fixture.a',
+          rarity: 8,
+          count: 1,
+          normalCounterBefore: 4,
+          normalCounterAfter: 5,
+        },
+        {
+          type: 'convert_normal_to_gogma',
+          weaponTypeId: 'weapon.fixture.a',
+          skillCounterBefore: 7,
+          skillCounterAfter: 8,
+        },
+      ],
     })
     const second = routeEntry('entry.normal.second', secondTarget, {
       kind: 'normal_artian_to_gogma',
       sourceOwnedWeaponId: null,
-      operations: [{
-        type: 'create_normal_artian',
-        weaponTypeId: 'weapon.fixture.b',
-        rarity: 8,
-        count: 1,
-        normalCounterBefore: 12,
-        normalCounterAfter: 13,
-      }],
+      operations: [
+        {
+          type: 'create_normal_artian',
+          weaponTypeId: 'weapon.fixture.b',
+          rarity: 8,
+          count: 1,
+          normalCounterBefore: 12,
+          normalCounterAfter: 13,
+        },
+        {
+          type: 'convert_normal_to_gogma',
+          weaponTypeId: 'weapon.fixture.b',
+          skillCounterBefore: 8,
+          skillCounterAfter: 9,
+        },
+      ],
     })
     const { input, dependencies } = fixture(
       [firstTarget, secondTarget],
@@ -1197,26 +1216,38 @@ describe('Planner Beam Search', () => {
       buildListEntryIds: [firstSkill.id, secondSkill.id],
     })
 
-    const normalEntry = (id: string, targetWeapon: TargetWeapon) =>
+    // Canonical new-Normal Routes converting at distinct Skill positions, so
+    // the only shared resource is the Normal Counter position.
+    const normalEntry = (id: string, targetWeapon: TargetWeapon, skillCounterBefore: number) =>
       routeEntry(id, targetWeapon, {
         kind: 'normal_artian_to_gogma',
         sourceOwnedWeaponId: null,
-        operations: [{
-          type: 'create_normal_artian',
-          weaponTypeId: 'weapon.fixture.a',
-          rarity: 8,
-          count: 1,
-          normalCounterBefore: 4,
-          normalCounterAfter: 5,
-        }],
+        operations: [
+          {
+            type: 'create_normal_artian',
+            weaponTypeId: 'weapon.fixture.a',
+            rarity: 8,
+            count: 1,
+            normalCounterBefore: 4,
+            normalCounterAfter: 5,
+          },
+          {
+            type: 'convert_normal_to_gogma',
+            weaponTypeId: 'weapon.fixture.a',
+            skillCounterBefore,
+            skillCounterAfter: skillCounterBefore + 1,
+          },
+        ],
       })
     const firstNormal = normalEntry(
       'entry.conflict.normal.first',
       firstTarget,
+      7,
     )
     const secondNormal = normalEntry(
       'entry.conflict.normal.second',
       secondTarget,
+      8,
     )
     const normalPlans = createPlannerRouteUnitPlans(
       [firstNormal, secondNormal],

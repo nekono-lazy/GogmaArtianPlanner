@@ -81,21 +81,35 @@ function convertRoute(sourceId: string, skillCounter = 7): BuildRoute {
   }
 }
 
+/**
+ * The canonical new-Normal Route: one creation, then the conversion of the
+ * forged weapon. Each caller converts at its own Skill position, so only the
+ * Normal Counter resource under test is shared.
+ */
 function forgeRoute(
   weaponTypeId: string,
   normalCounterBefore: number,
+  skillCounterBefore: number,
 ): BuildRoute {
   return {
     kind: 'normal_artian_to_gogma',
     sourceOwnedWeaponId: null,
-    operations: [{
-      type: 'create_normal_artian',
-      weaponTypeId,
-      rarity: 8,
-      count: 1,
-      normalCounterBefore,
-      normalCounterAfter: normalCounterBefore + 1,
-    }],
+    operations: [
+      {
+        type: 'create_normal_artian',
+        weaponTypeId,
+        rarity: 8,
+        count: 1,
+        normalCounterBefore,
+        normalCounterAfter: normalCounterBefore + 1,
+      },
+      {
+        type: 'convert_normal_to_gogma',
+        weaponTypeId,
+        skillCounterBefore,
+        skillCounterAfter: skillCounterBefore + 1,
+      },
+    ],
   }
 }
 
@@ -174,8 +188,8 @@ describe('B8-C3a Planner conflict resource identity', () => {
     const contexts = contextsOf(
       [first, second],
       [
-        routeEntry('entry.ctx.normal.first', first, forgeRoute('weapon.fixture.a', 4)),
-        routeEntry('entry.ctx.normal.second', second, forgeRoute('weapon.fixture.a', 4)),
+        routeEntry('entry.ctx.normal.first', first, forgeRoute('weapon.fixture.a', 4, 7)),
+        routeEntry('entry.ctx.normal.second', second, forgeRoute('weapon.fixture.a', 4, 8)),
       ],
     )
     expect(contexts).toHaveLength(1)
@@ -194,8 +208,8 @@ describe('B8-C3a Planner conflict resource identity', () => {
     const other = contextsOf(
       [first, second],
       [
-        routeEntry('entry.ctx.normal.b.first', first, forgeRoute('weapon.fixture.b', 12)),
-        routeEntry('entry.ctx.normal.b.second', second, forgeRoute('weapon.fixture.b', 12)),
+        routeEntry('entry.ctx.normal.b.first', first, forgeRoute('weapon.fixture.b', 12, 7)),
+        routeEntry('entry.ctx.normal.b.second', second, forgeRoute('weapon.fixture.b', 12, 8)),
       ],
     )
     const sameCounterId = contextsOf(
@@ -204,12 +218,12 @@ describe('B8-C3a Planner conflict resource identity', () => {
         routeEntry(
           'entry.ctx.normal.a.first',
           target('target.ctx.normal.a.first', 5),
-          forgeRoute('weapon.fixture.a', 4),
+          forgeRoute('weapon.fixture.a', 4, 7),
         ),
         routeEntry(
           'entry.ctx.normal.a.second',
           target('target.ctx.normal.a.second', 1),
-          forgeRoute('weapon.fixture.a', 4),
+          forgeRoute('weapon.fixture.a', 4, 8),
         ),
       ],
     )

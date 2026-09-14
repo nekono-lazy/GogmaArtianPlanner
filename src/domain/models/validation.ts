@@ -596,13 +596,14 @@ export function validateBuildRoute(
       )
     }
     /**
-     * Operation ordering contract (`docs/DATA_MODEL.md` 9 / `docs/SEARCH_SPEC.md`
-     * 6.1 / 6.1.1): `create_normal_artian` (its `count` is the forge count)
-     * before the single `convert_normal_to_gogma` of the last forged weapon,
-     * then the transient Gogma's Reset Bonuses / Keep Bonuses / Reset Skills.
-     * The blind variant is a property of the whole Route, decided before the
-     * ordering walk, so a misplaced blind creation can never hide from the Keep
-     * check below; only the blind variant pins the creation count to one.
+     * Canonical Route contract (`docs/DATA_MODEL.md` 9 / `docs/SEARCH_SPEC.md`
+     * 6.1 / 6.1.1): exactly one `create_normal_artian`, whose `count` is the
+     * forge count (`candidateOffset = k` forges `k + 1` weapons through one
+     * operation, never through repeated creations), then exactly one
+     * `convert_normal_to_gogma` for the last forged weapon, then the transient
+     * Gogma's Reset Bonuses / Keep Bonuses / Reset Skills. The blind variant is
+     * a property of the whole Route, decided before the ordering walk, so a
+     * misplaced blind creation can never hide from the Keep check below.
      */
     type CreateOperation = Extract<BuildRoute['operations'][number], { type: 'create_normal_artian' }>
     const creates = route.operations.filter(
@@ -612,12 +613,20 @@ export function validateBuildRoute(
     const createIndex = route.operations.findIndex(({ type }) => type === 'create_normal_artian')
     const conversionIndex = route.operations.findIndex(({ type }) => type === 'convert_normal_to_gogma')
     const conversionCount = route.operations.filter(({ type }) => type === 'convert_normal_to_gogma').length
-    if (conversionCount > 1) {
+    if (creates.length !== 1) {
       addIssue(
         issues,
         'operations',
         'invalid_route_operation',
-        'normal_artian_to_gogma converts only the last forged weapon, so it carries at most one convert_normal_to_gogma operation.',
+        'normal_artian_to_gogma carries exactly one create_normal_artian operation; several forges are expressed by its count.',
+      )
+    }
+    if (conversionCount !== 1) {
+      addIssue(
+        issues,
+        'operations',
+        'invalid_route_operation',
+        'normal_artian_to_gogma carries exactly one convert_normal_to_gogma operation for the last forged weapon.',
       )
     }
     let resetBonusesCount = 0
