@@ -695,6 +695,16 @@ C5-E2C2完了時点では仕様先行でruntime implementationはC5-E2C3 pending
 - ReviewはBase Seed、starting Skill Counter、starting Gogma Counterだけを表示し、調査前ゲーム状態への復元確認後にCoordinator経由でadoptする。DialogはCoordinatorのsubscriptionとpresentation lifecycleだけを所有し、unmount時にunsubscribeする。per-open Coordinatorのlifetimeは生成元であるRNG Setup側が所有し、実際のClose時とowner unmount時にdisposeする。この所有分離により、development StrictModeのeffect replayが利用中のCoordinatorをpremature disposeしない
 - 実Browser Worker benchmarkはC5-E2C8で完了した（測定記録は[C5_E2C8_BROWSER_WORKER_BENCHMARK.md](./C5_E2C8_BROWSER_WORKER_BENCHMARK.md)）。独立したSkill live-game verificationはC5-E2C9で完了した（[C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md](./C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md)）。C5-E2C10 Production Identification activationは完了した（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）。Production Engine versionは `production-rng:c5-e2`、`supportsSeedSearch = false`を維持する
 
+### 14.12 Normal Artian Counter Identification foundation（2026-09-14）
+
+- 既知canonical Base Seed、武器種、連続forgeした通常アーティアの5枠観測、bounded inclusive Counter rangeから、武器種別レア8の開始Normal Counterを昇順探索する専用kernel / Worker / Worker Clientを追加した（[RNG_SPEC.md](./RNG_SPEC.md) 9.12）。9.3のgeneric `searchKind = "normal_artian_counter"` 案はsupersededである
+- correctness authorityは `ProductionRngEngine.predictNormalArtian()` である。kernelはProductionのNormal seed derivation（Base Seed + weapon type + internal rarity 7）、100 mix、10-step block positioning、game-verified candidate pool、pool step（`selectReferenceNormalLotteryIdsFromRawValues()`）を共有し、`predictNormalArtian` を呼ばずにPRNG stateをblock単位で前進させる。Production Normal RNG output、Normal seed derivation、block size、Weapon Type numeric mapping、rarity mappingは変更していない
+- 属性はNormal seedへ影響せずcandidate pool選択だけを変えるため（5.3）、Counter Searchの入力domainは `none` / `attribute_present` の2 classだけである。Production adapter内部では `element.none` / `element.fire` をpool選択のrepresentativeとして使うが、`element.fire` は実属性を意味せず永続化・表示しない
+- 5.3のHBG監査（Base Seed 51231782 / Counter 4, 5, 6 / 15slot / 開始Counter 0..5000で `k = 4` の1件）を `src/test/fixtures/gameVerifiedNormalVectors.ts` の既存fixtureからkernel golden testとして固定した。1観測では0..5000に19候補（先頭 4 / 189 / 227）、2観測以降は4だけであり、0..100,000では2観測で 4 / 23662 / 36383 / 59681 / 64966 / 65023、3観測で4だけである
+- **Production pool coverageは既存実測範囲を維持する。** 5.3のgame-verified matrix（Bow / Light Bowgun / Heavy Bowgun / Long Sword）はC4-C時点の監査結果としてそのまま保持し、本foundationは他の10武器種をProduction supportedへ昇格しない。未検証武器種のCounter Searchは `unsupported_input` / `normal_pool_unverified` でfail closedし、reference poolへfallbackしない
+- 今後の実機検証仮説はBow / Bowgun / Meleeの3カテゴリ（Melee 属性あり `[6, 4, 7, 8]`、Melee none `[6, 7, 8]`、Bowgun `[6, 7, 8]`、Bow 属性あり `[6, 4, 8]`、Bow none `[6, 8]`）である。Long Swordの実測はMelee仮説と一致するが、Long Swordだけを根拠に他11近接武器を昇格しない。大剣・双剣等の連続観測fixtureが得られた後、`predictReferenceNormalRaw()` によるreference melee pool仮説の一致Counter調査を経て、別PRでカテゴリ化とProduction support拡張を判断する
+- `supportsSeedSearch = false`、`production-rng:c5-e2`、`NormalArtianCounter` persisted shape、`DATABASE_SCHEMA_VERSION`、`CURRENT_CALCULATION_APP_SCHEMA_VERSION`、Master dataVersionは変更していない。NormalCountersPageへのUI接続とCounter確定処理は後続PRである
+
 ---
 
 ## 15. 現在契約との仕様衝突
