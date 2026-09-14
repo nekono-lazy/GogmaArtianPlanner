@@ -20,20 +20,20 @@ import {
   restorationBonusFromReferenceGogmaId,
 } from './referenceGogmaBonuses'
 import {
-  GOGMA_SCOPE_KEEP_CURRENT_BONUSES,
   gameAdjustedGogmaResetCandidatesForWeaponAndElement,
-  gogmaScopeKeepCurrentBonusFamily,
-  requireGogmaScopeKeepCurrentBonusFamily,
+  keepCurrentBonusFamily,
+  toReferenceKeepCurrentBonuses,
 } from './gameGogmaBonuses'
 import { buildReferenceWeightedGogmaPool } from './weightedDraw'
 
 /**
- * Reads the ordered slot families of any legal Gogma-scope five-slot value.
- * It uses the Keep current-input authority instead of the reference result
- * namespace, so a rank I current slot resolves like every other tier.
+ * Reads the ordered slot families of any known five-slot value through the
+ * Keep current-input authority (bonus type only, Normal-side types through the
+ * Master mapping), never through the reference result namespace.
  */
-function familyLayout(bonuses: RestorationBonusSet): string[] {
-  return bonuses.map(requireGogmaScopeKeepCurrentBonusFamily)
+function familyLayout(bonuses: RestorationBonusSet): Array<string | null> {
+  const keepMaster = master()
+  return bonuses.map((bonus) => keepCurrentBonusFamily(bonus, keepMaster))
 }
 
 function bonus(bonusTypeId: string, bonusRankId: string) {
@@ -201,76 +201,94 @@ describe('reference-verified Production Gogma Reset / Keep prediction', () => {
       currentBonuses: [first, ...input.currentBonuses.slice(1)] as unknown as RestorationBonusSet,
     })
     expect(() => predictReferenceGogmaKeep({ ...input, currentBonuses: input.currentBonuses.slice(0, 4) as unknown as RestorationBonusSet })).toThrow(RangeError)
-    // Normal-tier current values stay unsupported: the reference defines no
-    // family mapping, pool, or weight for them.
-    expect(() => predictReferenceGogmaKeep(withFirstSlot(bonus('bonus_type.attack', 'bonus_rank.base')))).toThrow(RangeError)
+    // The reference layer reads Gogma-side bonus types only. A Normal-side
+    // type is normalized by the Production adapter before it reaches here, so
+    // it is unreadable at this level, exactly like an unknown type.
     expect(() => predictReferenceGogmaKeep(withFirstSlot(bonus('bonus_type.normal_sharpness', 'bonus_rank.base')))).toThrow(RangeError)
     expect(() => predictReferenceGogmaKeep(withFirstSlot(bonus('bonus_type.normal_capacity', 'bonus_rank.base')))).toThrow(RangeError)
-    // Tier values Master never declares under `gogma_artian` scope.
-    expect(() => predictReferenceGogmaKeep(withFirstSlot(bonus('bonus_type.element', 'bonus_rank.iii')))).toThrow(RangeError)
-    expect(() => predictReferenceGogmaKeep(withFirstSlot(bonus('bonus_type.gogma_sharpness_capacity', 'bonus_rank.ii')))).toThrow(RangeError)
     expect(() => predictReferenceGogmaKeep(withFirstSlot(bonus('bonus_type.unknown', 'bonus_rank.ex')))).toThrow(RangeError)
-    expect(() => predictReferenceGogmaKeep(withFirstSlot(bonus('bonus_type.attack', 'bonus_rank.unknown')))).toThrow(RangeError)
+    // The tier is never consulted: any rank of a Gogma-side family is readable
+    // here, and whether that rank is a legal persisted value is Master /
+    // Domain validation, not Keep RNG.
+    const expected = predictReferenceGogmaKeep(input)
+    expect(predictReferenceGogmaKeep(withFirstSlot(bonus(input.currentBonuses[0].bonusTypeId, 'bonus_rank.base')))).toEqual(expected)
+    expect(predictReferenceGogmaKeep(withFirstSlot(bonus(input.currentBonuses[0].bonusTypeId, 'bonus_rank.unknown')))).toEqual(expected)
   })
 })
 
 /**
- * A Keep current slot only selects its family, so a legal `gogma_artian` tier
- * the reference lottery never draws must still be readable
- * (`docs/RNG_SPEC.md` 6.1, `docs/RNG_REFERENCE_AUDIT.md` 10.4 and 11).
+ * A Keep current slot only selects its family, read from its bonus type alone:
+ * a Normal-side type is normalized through the Master mapping and the tier is
+ * never consulted (`docs/RNG_SPEC.md` 6.1, `docs/RNG_REFERENCE_AUDIT.md` 11).
  */
-describe('Gogma-scope rank I as a Keep current input', () => {
-  it('pins the Keep current bonus tiers to the Master `gogma_artian` scope definitions', () => {
-    const key = (bonusTypeId: string, bonusRankId: string) => `${bonusTypeId}/${bonusRankId}`
-    const declared = new Set(
-      master().weaponBonusDefinitions
-        .filter((definition) => definition.scope === 'gogma_artian')
-        .map((definition) => key(definition.bonusTypeId, definition.bonusRankId)),
-    )
-    expect(new Set(GOGMA_SCOPE_KEEP_CURRENT_BONUSES.map(
-      (entry) => key(entry.bonusTypeId, entry.bonusRankId),
-    ))).toEqual(declared)
+describe('Keep current input family resolution', () => {
+  it('resolves Gogma-side and Normal-side bonus types to the reference families through the Master mapping', () => {
+    const keepMaster = master()
+    for (const [bonusTypeId, family] of [
+      ['bonus_type.attack', 'attack'],
+      ['bonus_type.affinity', 'affinity'],
+      ['bonus_type.element', 'element'],
+      ['bonus_type.gogma_sharpness_capacity', 'sharpness_capacity'],
+      ['bonus_type.normal_sharpness', 'sharpness_capacity'],
+      ['bonus_type.normal_capacity', 'sharpness_capacity'],
+    ] as const) {
+      expect(keepCurrentBonusFamily(bonus(bonusTypeId, 'bonus_rank.base'), keepMaster)).toBe(family)
+    }
+    expect(keepCurrentBonusFamily(bonus('bonus_type.unknown', 'bonus_rank.ex'), keepMaster)).toBeNull()
+  })
+
+  it('ignores the tier entirely, including ranks the reference lottery never draws', () => {
+    const keepMaster = master()
+    for (const bonusRankId of ['bonus_rank.base', 'bonus_rank.ii', 'bonus_rank.ex', 'bonus_rank.fixture.unknown']) {
+      expect(keepCurrentBonusFamily(bonus('bonus_type.attack', bonusRankId), keepMaster)).toBe('attack')
+      expect(keepCurrentBonusFamily(bonus('bonus_type.normal_capacity', bonusRankId), keepMaster)).toBe('sharpness_capacity')
+    }
   })
 
   it('separates the Reset/Keep result namespace from the Keep current input', () => {
-    expect(REFERENCE_GOGMA_RESET_CANDIDATES.some((entry) => entry.bonus.bonusRankId === 'bonus_rank.i')).toBe(false)
-    for (const bonusTypeId of ['bonus_type.attack', 'bonus_type.affinity', 'bonus_type.element']) {
-      const rankOne = bonus(bonusTypeId, 'bonus_rank.i')
-      expect(gogmaScopeKeepCurrentBonusFamily(rankOne)).not.toBeNull()
-      expect(gogmaScopeKeepCurrentBonusFamily(rankOne)).toBe(referenceGogmaKeepFamilyForBonusType(bonusTypeId))
-      // Rank I is still not a reference lottery result and gained no reference ID.
-      expect(() => referenceGogmaIdFromRestorationBonus(rankOne)).toThrow(RangeError)
-    }
-    expect(gogmaScopeKeepCurrentBonusFamily(bonus('bonus_type.attack', 'bonus_rank.base'))).toBeNull()
-    expect(gogmaScopeKeepCurrentBonusFamily(bonus('bonus_type.normal_sharpness', 'bonus_rank.base'))).toBeNull()
+    expect(REFERENCE_GOGMA_RESET_CANDIDATES.some((entry) => entry.bonus.bonusRankId === 'bonus_rank.base' && entry.bonus.bonusTypeId !== 'bonus_type.gogma_sharpness_capacity')).toBe(false)
+    // A Normal-side current slot resolves a family but never gains a reference ID.
+    expect(() => referenceGogmaIdFromRestorationBonus(bonus('bonus_type.normal_sharpness', 'bonus_rank.base'))).toThrow(RangeError)
+    expect(() => referenceGogmaIdFromRestorationBonus(bonus('bonus_type.attack', 'bonus_rank.base'))).toThrow(RangeError)
+    expect(referenceGogmaKeepFamilyForBonusType('bonus_type.normal_sharpness')).toBeNull()
   })
 
-  it('produces the reference result of the same family layout from rank I current slots', () => {
+  it('produces the reference result of the same family layout from normalized normal-scope slots', () => {
     const vector = referenceGogmaVectors.keeps[1]
     expect(familyLayout(vector.currentBonuses)).toEqual(['attack', 'affinity', 'element', 'sharpness_capacity', 'attack'])
-    const rankOneCurrent = fiveSlots(
-      bonus('bonus_type.attack', 'bonus_rank.i'),
-      bonus('bonus_type.affinity', 'bonus_rank.i'),
-      bonus('bonus_type.element', 'bonus_rank.i'),
-      bonus('bonus_type.gogma_sharpness_capacity', 'bonus_rank.base'),
-      bonus('bonus_type.attack', 'bonus_rank.i'),
+    const normalScopeCurrent = fiveSlots(
+      bonus('bonus_type.attack', 'bonus_rank.base'),
+      bonus('bonus_type.affinity', 'bonus_rank.base'),
+      bonus('bonus_type.element', 'bonus_rank.base'),
+      bonus('bonus_type.normal_sharpness', 'bonus_rank.base'),
+      bonus('bonus_type.attack', 'bonus_rank.base'),
     )
-    const result = predictReferenceGogmaKeep({ ...vector, currentBonuses: rankOneCurrent })
+    const normalized = toReferenceKeepCurrentBonuses(normalScopeCurrent, master())
+    expect(normalized.map(({ bonusTypeId }) => bonusTypeId)).toEqual([
+      'bonus_type.attack',
+      'bonus_type.affinity',
+      'bonus_type.element',
+      'bonus_type.gogma_sharpness_capacity',
+      'bonus_type.attack',
+    ])
+    expect(normalized.map(({ bonusRankId }) => bonusRankId)).toEqual(Array.from({ length: 5 }, () => 'bonus_rank.base'))
+    const result = predictReferenceGogmaKeep({ ...vector, currentBonuses: normalized })
     expect(result.bonuses).toEqual(vector.bonuses)
-    expect(familyLayout(result.bonuses)).toEqual(familyLayout(rankOneCurrent))
+    expect(familyLayout(result.bonuses)).toEqual(familyLayout(normalScopeCurrent))
   })
 
-  it('depends on the ordered family layout rather than the current tier', () => {
+  it('depends on the ordered family layout rather than the current tier or spelling', () => {
     const { baseSeed, weaponTypeId, elementId, counterGate, gogmaCounter } = referenceGogmaVectors.keeps[1]
     const input = { baseSeed, weaponTypeId, elementId, counterGate, gogmaCounter }
-    // The real-game report layout: sharpness / element / element / attack / attack.
-    const rankOne = fiveSlots(
-      bonus('bonus_type.gogma_sharpness_capacity', 'bonus_rank.base'),
-      bonus('bonus_type.element', 'bonus_rank.i'),
-      bonus('bonus_type.element', 'bonus_rank.i'),
-      bonus('bonus_type.attack', 'bonus_rank.i'),
-      bonus('bonus_type.attack', 'bonus_rank.i'),
-    )
+    const keepMaster = master()
+    // Inherited normal-scope layout: sharpness / element / element / attack / attack.
+    const inherited = toReferenceKeepCurrentBonuses(fiveSlots(
+      bonus('bonus_type.normal_sharpness', 'bonus_rank.base'),
+      bonus('bonus_type.element', 'bonus_rank.base'),
+      bonus('bonus_type.element', 'bonus_rank.base'),
+      bonus('bonus_type.attack', 'bonus_rank.base'),
+      bonus('bonus_type.attack', 'bonus_rank.base'),
+    ), keepMaster)
     const higherTiers = fiveSlots(
       bonus('bonus_type.gogma_sharpness_capacity', 'bonus_rank.ex'),
       bonus('bonus_type.element', 'bonus_rank.ii'),
@@ -278,7 +296,7 @@ describe('Gogma-scope rank I as a Keep current input', () => {
       bonus('bonus_type.attack', 'bonus_rank.ii'),
       bonus('bonus_type.attack', 'bonus_rank.ex'),
     )
-    expect(predictReferenceGogmaKeep({ ...input, currentBonuses: rankOne }))
+    expect(predictReferenceGogmaKeep({ ...input, currentBonuses: inherited }))
       .toEqual(predictReferenceGogmaKeep({ ...input, currentBonuses: higherTiers }))
 
     const affinity = (bonusRankId: string) => fiveSlots(
@@ -288,8 +306,31 @@ describe('Gogma-scope rank I as a Keep current input', () => {
       bonus('bonus_type.affinity', bonusRankId),
       bonus('bonus_type.affinity', bonusRankId),
     )
-    expect(predictReferenceGogmaKeep({ ...input, currentBonuses: affinity('bonus_rank.i') }))
+    expect(predictReferenceGogmaKeep({ ...input, currentBonuses: affinity('bonus_rank.base') }))
       .toEqual(predictReferenceGogmaKeep({ ...input, currentBonuses: affinity('bonus_rank.iii') }))
+  })
+
+  it('keeps the reference layer free of the Master mapping', () => {
+    // The reference predictor reads Gogma-side bonus types only; the Production
+    // adapter normalizes Normal-side types before calling it.
+    const vector = referenceGogmaVectors.keeps[1]
+    expect(() => predictReferenceGogmaKeep({
+      ...vector,
+      currentBonuses: fiveSlots(
+        bonus('bonus_type.normal_sharpness', 'bonus_rank.base'),
+        bonus('bonus_type.element', 'bonus_rank.base'),
+        bonus('bonus_type.element', 'bonus_rank.base'),
+        bonus('bonus_type.attack', 'bonus_rank.base'),
+        bonus('bonus_type.attack', 'bonus_rank.base'),
+      ),
+    })).toThrow(RangeError)
+    expect(() => toReferenceKeepCurrentBonuses(fiveSlots(
+      bonus('bonus_type.unknown', 'bonus_rank.base'),
+      bonus('bonus_type.element', 'bonus_rank.base'),
+      bonus('bonus_type.element', 'bonus_rank.base'),
+      bonus('bonus_type.attack', 'bonus_rank.base'),
+      bonus('bonus_type.attack', 'bonus_rank.base'),
+    ), master())).toThrow(RangeError)
   })
 
   it('leaves every existing supported Keep golden vector unchanged', () => {

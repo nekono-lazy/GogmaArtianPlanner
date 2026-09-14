@@ -15,11 +15,13 @@ import {
   type SkillPredictionResult,
 } from '../rngEngine'
 import { normalizeBaseSeed } from './baseSeed'
+import type { KeepFamilyMasterSubset } from '../gogmaBonusFamily'
 import {
   GameAdjustedGogmaResetAvailabilityError,
   GameAdjustedGogmaResetMasterDataError,
   gameAdjustedGogmaResetCandidatesForWeaponAndElement,
-  gogmaScopeKeepCurrentBonusFamily,
+  keepCurrentBonusFamily,
+  toReferenceKeepCurrentBonuses,
 } from './gameGogmaBonuses'
 import {
   predictGameAdjustedGogmaReset,
@@ -66,6 +68,15 @@ function advanceOneCounter(current: number, label: string): number {
 
 function hasResetMaster(master: GogmaBonusPredictionInput['master']): master is GogmaBonusPredictionInput['master'] & Required<Pick<GogmaBonusPredictionInput['master'], 'weaponTypes' | 'elements' | 'bonusTypes'>> {
   return Boolean(master.weaponTypes && master.elements && master.bonusTypes)
+}
+
+/** Keep family resolution needs the Master bonus type mapping (`docs/RNG_SPEC.md` 6.4). */
+function hasKeepMaster(master: GogmaBonusPredictionInput['master']): master is GogmaBonusPredictionInput['master'] & KeepFamilyMasterSubset {
+  return Array.isArray(master.artianBonusTypeMappings)
+}
+
+function hasUnreadableKeepFamily(currentBonuses: RestorationBonusSet, master: KeepFamilyMasterSubset): boolean {
+  return currentBonuses.some((bonus) => keepCurrentBonusFamily(bonus, master) === null)
 }
 
 /** Production-only facade; it does not select the app's active Engine. */
@@ -120,14 +131,15 @@ export class ProductionRngEngine implements RngEngine {
           if (error instanceof RangeError) return { supported: false, reason: 'reference_adapter_unsupported' }
           throw error
         }
+        if (!hasKeepMaster(input.master)) return { supported: false, reason: 'master_data_unavailable' }
         if (!Array.isArray(input.currentBonuses) || input.currentBonuses.length !== 5) return { supported: false, reason: 'unsupported_current_bonus' }
-        // Keep needs the slot family only, so every legal `gogma_artian` tier
-        // is readable, including the rank I values the reference lottery never
-        // draws. Normal-tier current bonuses stay unsupported.
-        if (input.currentBonuses.some((bonus) => gogmaScopeKeepCurrentBonusFamily(bonus) === null)) {
-          return { supported: false, reason: 'unsupported_current_bonus' }
-        }
-        return { supported: true }
+        // Keep needs the slot family only. It is read from the bonus type alone,
+        // a Normal-side type through the Master mapping, so known five slots of
+        // either scope are supported and the tier is never consulted. The only
+        // unreadable current input is a bonus type with no Keep family at all.
+        return hasUnreadableKeepFamily(input.currentBonuses, input.master)
+          ? { supported: false, reason: 'unsupported_current_bonus' }
+          : { supported: true }
     }
   }
 
@@ -158,8 +170,14 @@ export class ProductionRngEngine implements RngEngine {
       requireSupport(this.getPredictionSupport({ type: 'gogma_reset', weaponTypeId: input.weaponTypeId, elementId: input.elementId, master: input.master }), 'gogma_reset')
       return predictGameAdjustedGogmaReset(base, input.master as Required<Pick<typeof input.master, 'weaponBonusDefinitions' | 'weaponTypes' | 'elements' | 'bonusTypes'>>).bonuses
     }
-    requireSupport(this.getPredictionSupport({ type: 'gogma_keep', weaponTypeId: input.weaponTypeId, elementId: input.elementId, currentBonuses: input.operation.currentBonuses }), 'gogma_keep')
-    return predictReferenceGogmaKeep({ ...base, currentBonuses: input.operation.currentBonuses }).bonuses
+    requireSupport(this.getPredictionSupport({ type: 'gogma_keep', weaponTypeId: input.weaponTypeId, elementId: input.elementId, currentBonuses: input.operation.currentBonuses, master: input.master }), 'gogma_keep')
+    // The reference predictor reads Gogma-side bonus types only, so the
+    // Production adapter normalizes each current slot's family through the
+    // Master mapping first; the support check above already proved it resolves.
+    return predictReferenceGogmaKeep({
+      ...base,
+      currentBonuses: toReferenceKeepCurrentBonuses(input.operation.currentBonuses, input.master as KeepFamilyMasterSubset),
+    }).bonuses
   }
 
   advanceGogmaCounter(current: number, operation: GogmaOperation): number { void operation; return advanceOneCounter(current, 'Gogma counter') }

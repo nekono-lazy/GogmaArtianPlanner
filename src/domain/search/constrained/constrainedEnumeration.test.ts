@@ -1070,13 +1070,19 @@ function materialOrderingSetup() {
   ]
   const engine = createConstrainedEngine(origin, {
     keepSupported: true,
-    keepInputs: [belowPracticalBonuses()],
+    keepInputs: [belowPracticalBonuses(), practicalBonuses()],
     // Two Routes reach the very same Ideal five slots at the same depth, one
     // through a second Reset and one through a Keep, so they tie on every
     // leading work priority and differ only in required material quantity.
+    // Keep is offered from the inherited normal-scope slots as well
+    // (SEARCH_SPEC 5.9), so only the Keep that reads the depth-1 Reset result
+    // reaches the Ideal; the direct Keep from the source's own slots does not.
     resetResultAt: (gogmaCounter) =>
-      gogmaCounter === 11 ? idealBonuses() : belowPracticalBonuses(),
-    keepResultAt: () => idealBonuses(),
+      gogmaCounter === 11 ? idealBonuses() : practicalBonuses(),
+    keepResultAt: (_gogmaCounter, currentBonuses) =>
+      JSON.stringify(currentBonuses) === JSON.stringify(practicalBonuses())
+        ? idealBonuses()
+        : belowPracticalBonuses(),
   })
   return { origin, engine }
 }

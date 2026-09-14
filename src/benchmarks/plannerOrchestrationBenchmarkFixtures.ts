@@ -101,8 +101,9 @@ const SOURCE_SKILL_SCAN_END = 900
 
 /**
  * `bonus_type.attack` at `bonus_rank.i` is absent from the reference Gogma
- * Reset candidate pool, and every Normal Artian slot is `bonus_rank.base`, so
- * no reachable result carries it. `group_skill.verified_14` is enabled in
+ * Reset candidate pool and from every `gogma_artian` Master definition, and
+ * every Normal Artian slot is `bonus_rank.base`, so no reachable result carries
+ * it (the synthetic Target bypasses Master reference validation on purpose). `group_skill.verified_14` is enabled in
  * Master but absent from the reference Group Skill pool, so `predictSkills`
  * never returns it. Both facts are the same ones the B8-B2 fixtures rely on.
  *
@@ -377,6 +378,7 @@ function benchmarkMaster(): BenchmarkMaster {
       elements: data.elements,
       bonusTypes: data.bonusTypes,
       bonusRanks: data.bonusRanks,
+      artianBonusTypeMappings: data.artianBonusTypeMappings,
       lotteries: data.lotteries,
       materialCosts: data.materialCosts,
     },
@@ -827,6 +829,7 @@ export function createPlannerOrchestrationBenchmarkInput(
       elements: master.elements,
       bonusTypes: master.bonusTypes,
       bonusRanks: master.bonusRanks,
+      artianBonusTypeMappings: master.artianBonusTypeMappings,
       lotteries: master.lotteries,
       materialCosts: master.materialCosts,
     },

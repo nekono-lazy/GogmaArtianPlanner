@@ -405,7 +405,7 @@ UIは「現在の探索範囲では理想品が見つかりませんでした」
 
 `maxNormalAdvance` は既存UIの「通常アーティア最大進行量」と既存検索ループの意味を維持し、1以上の「最大forge回数」とする。最大0-based offsetではない。探索する `candidateOffset` は `0 ... maxNormalAdvance - 1`、最大候補位置での `forgeCount` は `maxNormalAdvance` である。
 
-Gogma-tierのTarget条件へ到達する必要がある場合、同一Route内でconversion後のReset Bonuses、最初のReset後の追加Reset / Keep、必要なReset Skillsまでを表現できる。normal scopeの巨戟に対する最初のBonus amendmentは、実ゲームではReset / Keepのどちらも選べるが、v1ではProduction RNGがnormal-tier BonusからのKeepを予測できないためResetだけを生成する([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.7参照)。transient GogmaへのReset / Keep / Reset Skillsは `sourceOwnedWeaponId = null` で表し、fake IDまたはRoute-local IDを作らない。
+Gogma-tierのTarget条件へ到達する必要がある場合、同一Route内でconversion後のReset Bonuses、最初のReset後の追加Reset / Keep、必要なReset Skillsまでを表現できる。normal scopeの巨戟に対する最初のBonus amendmentは、5枠が既知ならReset / Keepの両方を生成する。5枠未知のblind Normal経由だけ最初のReset前のKeepを生成しない([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.9参照)。transient GogmaへのReset / Keep / Reset Skillsは `sourceOwnedWeaponId = null` で表し、fake IDまたはRoute-local IDを作らない。
 
 ### 16.2 既存巨戟アーティア経由
 
@@ -985,7 +985,7 @@ RNGの実データやアルゴリズムが未確定の段階では、推測値�
 
 本書および参照する詳細仕様書を、初期版実装のv1基準とする。実装中に意味変更が必要になった場合は、コードだけで吸収せず該当仕様書を更新して変更理由を記録する。
 
-conversionのNormal +0 / Skill +1 / Gogma +0、bonus継承、初回Skillはgame-verified（実機確認済み）である。create/reset/keepのstream進行、first Reset、Keep family保持はreference-verifiedであり、本書の正式製品契約として採用するが、全weapon、attribute、game versionでgame-verifiedという意味ではない。BowのSharpness/Ammo family、LBG/HBGのElement family、elementless GogmaのElement bonus、栄光の誉れ、祝祭の巡り、Gogma rank I、Gate未満の保存Counter進行はunverified（未確認）のため推測固定しない。Interface、Capability、Fake Engine、Fixtureの境界を維持する。
+conversionのNormal +0 / Skill +1 / Gogma +0、bonus継承、初回Skillはgame-verified（実機確認済み）である。create/reset/keepのstream進行、Keep family保持はreference-verifiedであり、本書の正式製品契約として採用するが、全weapon、attribute、game versionでgame-verifiedという意味ではない。BowのSharpness/Ammo family、LBG/HBGのElement family、elementless GogmaのElement bonus、栄光の誉れ、祝祭の巡り、Gate未満の保存Counter進行、normal-scope current bonusesからのKeep結果の実機一致はunverified（未確認）のため推測固定しない。`gogma_artian` scopeのRank Iは実機確認済みではなく（かつての確認は巨戟化直後のnormal-scope状態の誤認）、Masterから除外した。Interface、Capability、Fake Engine、Fixtureの境界を維持する。
 
 Practical同士の優劣判定は将来仕様とし、v1では実装しない。
 

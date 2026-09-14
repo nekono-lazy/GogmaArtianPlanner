@@ -175,7 +175,7 @@ export class TargetSearchScheduler {
   }
 
   private bonusChannel(base: BonusStreamBase, baseCost: number): BonusChannel {
-    const key = bonusStreamBaseKey(base)
+    const key = bonusStreamBaseKey(base, this.context.input.master)
     const existing = this.bonuses.get(key)
     if (existing) return existing
     const channel: BonusChannel = { retained: [], subscribers: [], notices: [], noticeSubscribers: [] }

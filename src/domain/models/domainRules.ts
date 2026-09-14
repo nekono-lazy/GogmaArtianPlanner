@@ -1,6 +1,5 @@
 import type {
   CalculationContext,
-  RestorationBonusScope,
   RestorationBonusSet,
 } from './common'
 import type { OwnedWeapon, SkillCondition } from './entities'
@@ -114,29 +113,16 @@ export function canResetBonuses(weapon: OwnedWeapon): boolean {
 }
 
 /**
- * Keep Bonuses legality at one position of a concrete Route sequence.
+ * Keep Bonuses legality of an owned Gogma source.
  *
- * `currentScope` is the route-local Bonus scope the source holds at that
- * position, which a preceding Reset Bonuses in the same Route has already moved
- * to `gogma_artian`. That is why `normal scope -> Reset -> Keep` is legal while
- * `normal scope -> Keep` is not: the restriction is missing Production Keep
- * prediction support for inherited Normal-tier current bonuses (B11), never a
- * game rule forbidding Keep.
+ * An owned Gogma's five slots are always known, so Keep is legal from either
+ * `restorationBonusScope`: the Engine resolves each slot's family from its
+ * bonus type alone (Normal-side types through the Master mapping) and the
+ * result is `gogma_artian` scope (`docs/SEARCH_SPEC.md` 5.9). Only kind and
+ * protection decide; scope and status never do.
  */
-export function canKeepBonusesFromScope(
-  weapon: OwnedWeapon,
-  currentScope: RestorationBonusScope,
-): boolean {
-  return (
-    weapon.kind === 'gogma' &&
-    !weapon.isProtected &&
-    currentScope === 'gogma_artian'
-  )
-}
-
-/** Keep Bonuses legality from the weapon's own stored scope. */
 export function canKeepBonuses(weapon: OwnedWeapon): boolean {
-  return canKeepBonusesFromScope(weapon, weapon.restorationBonusScope)
+  return weapon.kind === 'gogma' && !weapon.isProtected
 }
 
 export function canResetSkills(weapon: OwnedWeapon): boolean {

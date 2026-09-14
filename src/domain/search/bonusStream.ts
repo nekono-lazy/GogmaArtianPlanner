@@ -8,7 +8,7 @@ import type {
   TargetWeapon,
 } from '../models/publicTypes'
 import { stableStringify } from '../models/publicTypes'
-import { gogmaKeepFamilyLayoutKey } from '../rng/gogmaBonusFamily'
+import { keepFamilyLayoutKey, type KeepFamilyMasterSubset } from '../rng/gogmaBonusFamily'
 import type { RngEngine, RngPredictionUnsupportedReason } from '../rng/rngEngine'
 import type { SearchExecutionContext } from './searchExecution'
 import type { SearchPredictionSupport } from './searchPredictionSupport'
@@ -97,12 +97,13 @@ export interface BonusStreamSolutionSet {
 /**
  * The Route base state the Bonus stream starts from.
  *
- * A Gogma-scope base always carries its five current slots, because they are
- * the explicit Keep prediction input. A `normal_artian` scope base never
- * reaches Keep in v1, so its slots are never read by this stream; they stay
- * available for `bonusStreamBaseKey` symmetry and may be `null` when the Route
- * base forged its Normal Artian blind and therefore knows no five slots at all
- * (`docs/SEARCH_SPEC.md` 6.1.1). No fabricated bonus set is ever substituted.
+ * A base of either scope carries its five current slots whenever they are
+ * known, because they are the explicit Keep prediction input: an owned Normal,
+ * an owned `normal_artian` scope Gogma, and a predicted new Normal all know
+ * their slots, so Keep is searched from the first depth. The slots are `null`
+ * only when the Route base forged its Normal Artian blind and therefore knows
+ * no five slots at all (`docs/SEARCH_SPEC.md` 6.1.1 / 5.9). No fabricated
+ * bonus set is ever substituted.
  */
 export type BonusStreamBase =
   | {
@@ -203,32 +204,37 @@ interface BonusStateBase {
   results: BonusAmendmentResultNode | null
 }
 
-/** Every amendment result is Gogma-scope, so its Keep family layout is defined. */
-interface GogmaScopeBonusState extends BonusStateBase {
-  scope: 'gogma_artian'
+/**
+ * A state whose five slots are known. Its Keep family layout is defined
+ * regardless of scope: a Normal-side bonus type is normalized to its Gogma
+ * family through the Master mapping, so an inherited `normal_artian` base and
+ * every Gogma-scope amendment result share one layout vocabulary.
+ */
+interface KnownBonusState extends BonusStateBase {
+  scope: RestorationBonusScope
   bonuses: RestorationBonusSet
   familyLayoutKey: string
 }
 
 /**
- * Only a Route base can still hold inherited `normal_artian` scope slots. The
- * normal-tier family mapping is undefined until it is game-verified (B11), so
- * this state has no family layout at all rather than a derived one.
+ * Only a blind Route base (`docs/SEARCH_SPEC.md` 6.1.1) knows no five slots.
+ * It has no family layout at all rather than a derived one, so nothing can be
+ * Kept from it until the first Reset makes the slots known.
  */
-interface NormalScopeBonusState extends BonusStateBase {
+interface UnknownBonusState extends BonusStateBase {
   scope: 'normal_artian'
-  /** `null` when the Route base forged its Normal Artian blind. */
-  bonuses: RestorationBonusSet | null
+  bonuses: null
   familyLayoutKey: null
 }
 
-type BonusState = GogmaScopeBonusState | NormalScopeBonusState
+type BonusState = KnownBonusState | UnknownBonusState
 
 /**
- * A state produced by an amendment, so its history node always exists. Only a
- * depth-0 Route base has `results = null`.
+ * A state produced by an amendment, so its history node always exists and its
+ * scope is `gogma_artian`. Only a depth-0 Route base has `results = null`.
  */
-interface GeneratedBonusState extends GogmaScopeBonusState {
+interface GeneratedBonusState extends KnownBonusState {
+  scope: 'gogma_artian'
   results: BonusAmendmentResultNode
 }
 
@@ -239,8 +245,8 @@ interface GeneratedBonusState extends GogmaScopeBonusState {
  * depends on generation, Map insertion, or Promise resolution order.
  */
 function compareRepresentative(
-  left: GogmaScopeBonusState,
-  right: GogmaScopeBonusState,
+  left: GeneratedBonusState,
+  right: GeneratedBonusState,
 ): number {
   return (
     right.lastResetDepth - left.lastResetDepth ||
@@ -315,7 +321,7 @@ export function createTargetBonusStream(
       lastResetDepth,
       bonuses,
       scope: 'gogma_artian',
-      familyLayoutKey: gogmaKeepFamilyLayoutKey(bonuses),
+      familyLayoutKey: keepFamilyLayoutKey(bonuses, input.master),
       results: {
         depth,
         result: { restorationBonuses: bonuses, restorationBonusScope: 'gogma_artian' },
@@ -339,25 +345,25 @@ export function createTargetBonusStream(
       reason: RngPredictionUnsupportedReason,
     ) => unsupported.set(`${type}\u0000${reason}`, { type, reason })
 
-    // The Keep family layout is a Gogma-scope concept only. An inherited
-    // `normal_artian` scope base gets no layout, so no normal-tier family
-    // mapping is ever applied here.
+    // Known five slots of either scope get their Keep family layout from the
+    // shared resolver (Normal-side types through the Master mapping). Only a
+    // blind base has none, so only it cannot be Kept before its first Reset.
     let frontier: BonusState[] = [
-      base.restorationBonusScope === 'gogma_artian'
+      base.bonuses === null
         ? {
             depth: 0,
             lastResetDepth: 0,
-            bonuses: base.bonuses,
-            scope: 'gogma_artian',
-            familyLayoutKey: gogmaKeepFamilyLayoutKey(base.bonuses),
+            bonuses: null,
+            scope: 'normal_artian',
+            familyLayoutKey: null,
             results: null,
           }
         : {
             depth: 0,
             lastResetDepth: 0,
             bonuses: base.bonuses,
-            scope: 'normal_artian',
-            familyLayoutKey: null,
+            scope: base.restorationBonusScope,
+            familyLayoutKey: keepFamilyLayoutKey(base.bonuses, input.master),
             results: null,
           },
     ]
@@ -386,11 +392,12 @@ export function createTargetBonusStream(
 
       if (engine.capabilities.supportsKeepBonusesPrediction) {
         for (const state of frontier) {
-          // A `normal_artian` scope state has no predictable Keep result yet,
-          // so v1 never emits one. The exclusion is missing Production Keep
-          // prediction support, never a game rule. The discriminant also
-          // narrows `familyLayoutKey` to the Gogma-scope `string`.
-          if (state.scope !== 'gogma_artian') continue
+          // A blind base knows no five slots, so nothing can be Kept from it
+          // until the first Reset makes them known (SEARCH_SPEC 6.1.1). That is
+          // an unknown-input case, not a prediction-support gap and not a game
+          // rule: a known `normal_artian` state is Kept like any other. The
+          // discriminant also narrows `familyLayoutKey` to `string`.
+          if (state.bonuses === null) continue
           const keepSupport = predictionSupport.gogmaKeep(state.bonuses)
           if (!keepSupport.supported) {
             recordUnsupported('keep_bonuses', keepSupport.reason)
@@ -421,7 +428,7 @@ export function createTargetBonusStream(
         results,
       })))
 
-      const byLayout = new Map<string, GogmaScopeBonusState>()
+      const byLayout = new Map<string, GeneratedBonusState>()
       for (const state of generated) {
         const current = byLayout.get(state.familyLayoutKey)
         if (!current || compareRepresentative(state, current) < 0) {
@@ -448,7 +455,7 @@ export function createTargetBonusStream(
   }
 
   async function ensure(base: BonusStreamBase, through: number) {
-    const key = bonusStreamBaseKey(base)
+    const key = bonusStreamBaseKey(base, input.master)
     let cached = sets.get(key)
     if (!cached) {
       cached = { iterator: build(base), value: EMPTY_SET(base.startGogmaCounter), done: false, depths: [] }
@@ -487,9 +494,22 @@ export function createTargetBonusStream(
   }
 }
 
-/** Normal-scope first Reset makes every offset/source share one positive stream. */
-export function bonusStreamBaseKey(base: BonusStreamBase): string {
-  return stableStringify(base.restorationBonusScope === 'normal_artian'
-    ? [base.restorationBonusScope, base.startGogmaCounter]
-    : [base.restorationBonusScope, base.startGogmaCounter, base.bonuses])
+/**
+ * The stream identity of one Route base (`docs/SEARCH_SPEC.md` 5.5.3).
+ *
+ * Reset reads nothing it replaces and Keep reads only the ordered slot family
+ * layout, so the `depth >= 1` solution set depends on the base solely through
+ * that layout: every offset and source sharing a layout at one Gogma position
+ * shares one stream, whichever scope or tiers it holds. A blind base has no
+ * layout and shares the single unknown stream, whose axis starts at the first
+ * Reset.
+ */
+export function bonusStreamBaseKey(
+  base: BonusStreamBase,
+  master: KeepFamilyMasterSubset,
+): string {
+  return stableStringify([
+    base.startGogmaCounter,
+    base.bonuses === null ? null : keepFamilyLayoutKey(base.bonuses, master),
+  ])
 }

@@ -127,6 +127,7 @@ export function checkpointMaster(): SearchMasterSubset {
       isEnabled: true,
     })),
     bonusRanks: targetEvaluationMaster.bonusRanks.map((rank) => ({ ...rank })),
+    artianBonusTypeMappings: [],
     weaponBonusDefinitions: bonusTypeIds.flatMap((bonusTypeId) =>
       bonusRankIds.map((bonusRankId) => ({
         id: `weapon_bonus.checkpoint.${bonusTypeId}.${bonusRankId}`,

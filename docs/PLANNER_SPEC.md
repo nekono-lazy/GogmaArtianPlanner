@@ -79,6 +79,7 @@ export interface PlannerMasterSubset {
   weaponTypes: WeaponTypeMaster[];
   elements: ElementMaster[];
   bonusTypes: BonusTypeMaster[];
+  artianBonusTypeMappings: ArtianBonusTypeMapping[];
   materialCosts: MaterialCostMaster[];
   bonusRanks: BonusRankMaster[];
   lotteries: LotteryMaster[];
@@ -138,7 +139,7 @@ export interface PlannerClock {
 - capability確認後、Predictionが必要な各operationのsemantic inputを
   `getPredictionSupport()` で確認する。Normalはweapon/element/rarity、conversionと
   Reset SkillsはSkillのweapon/element、Resetはcaller-supplied Masterを含む
-  `gogma_reset`、Keepはその時点のordered 5slotを含む `gogma_keep` を使う
+  `gogma_reset`、Keepはその時点のordered 5slotとcaller-supplied Masterを含む `gogma_keep` を使う
 - `supported: false` は既知unsupportedとして該当BuildListEntryだけを除外する。
   他のsupported EntryはBeam Searchへ残す。support queryの例外と
   support確認後のPrediction例外は除外へ変換せずPlanner error経路へ伝播する
@@ -3280,7 +3281,7 @@ B8-E   orchestration側のBrowser / Planner benchmark            実装済み
 boundsのProduction defaultはB8-B2とB8-Eの2回に分けて決定する。orchestration
 boundsはPlanner再実行の実コストに依存し、B8-C / B8-D実装前には測定できないためである。
 
-B9 what-if、B10 Conflict UI、B11 normal-scope Keepは別Phaseとする。
+B9 what-if、B10 Conflict UIは別Phaseとする。B11として予定していたnormal-scope Keepはnormal-scope Keep仕様訂正で実装済みである([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.9)。
 
 B8 architecture自体は当時の次の値を変更しなかった。
 
@@ -3349,7 +3350,7 @@ prefixのsilent fast-forward修正で4へ更新されており、7.0.1のPlan失
 PlanStep変換用 `PlannerPlanStepDraft` を生成する。
 
 - `PlannerMasterSubset` はSearchのRNG Predictionと同じ `weaponBonusDefinitions`、
-  `bonusRanks` を保持する。PredictionはRngEngineのみから取得し、Lottery、
+  `bonusRanks`、`artianBonusTypeMappings` を保持する。PredictionはRngEngineのみから取得し、Lottery、
   Bonus Rank、Keep、Counter Gateを推測しない。
 - `ExpectedPlanState` はProduction semantic RNG KnownValueのvalue/isConfirmed、stable sorted Normal Counter、
   OwnedWeaponのsemantic fields（kindを含む）をstable hash化する。名前、memo、日時、
@@ -3380,7 +3381,7 @@ PlanStep変換用 `PlannerPlanStepDraft` を生成する。
   `prediction_failed` 等へ変換せず呼出元へ伝播する。
 - convertはGogma Predictionを呼ばない。変換元Normalの `normal_artian` scope 5-slot bonusesをslot順のままtransient Gogmaへ継承し、現在Skill位置で `predictSkills` を実行して初回Series / Groupを設定する。
 - convertのRNG遷移はSkill Counter `+1`、Normal / Gogma Counter `+0` とする。変換時のSkill結果を無視するRouteでも、実ゲームでconversionする限り同じSkill位置を消費する。
-- Reset / Keepはtransient Gogmaのscopeとslot順を追跡する。normal scopeならv1は最初のBonus amendmentとしてResetだけを許可し、Reset結果でgogma scopeへ置き換えた後に限りKeepを許可する。これはProduction prediction supportの制限であり、ゲームルール上の制限ではない([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.7参照)。
+- Reset / Keepはtransient Gogmaのscopeとslot順を追跡する。5枠が既知ならnormal scopeでも最初のBonus amendmentとしてReset / Keepの両方を実行でき、Keep familyは各slotの `bonusTypeId`（通常側はArtianBonusTypeMappingで巨戟側へ正規化）から解決する。Reset / Keepのどちらの結果もgogma scopeへ置き換える([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.9参照)。
 - unknown 5枠に対してはReset Bonusesだけが実行可能である。Resetは置き換える5枠を読まないため、unknownからknownな `gogma_artian` scope 5枠へ遷移できる唯一の操作である。Reset Skillsは5枠を読まずSeries / Group Skillだけを書き換えるため、unknownをunknownのまま通過させる
 - unknown 5枠を読む操作はReplay issue code `unknown_restoration_bonuses` でfail closedする。対象はKeep Bonusesの入力と、reserve時のCandidate Snapshot照合である。架空の5枠を合成してReplayを継続しない
 - reserve前にEntry固有transient Gogmaのbonuses、Series Skill、Group SkillがCandidate Snapshotと
@@ -3543,7 +3544,7 @@ Route別の典型例。
 6. confirm_result または reserve_weapon
 ```
 
-`candidateOffset = k` を採用する場合のconversion直後の合計進行はNormal `+(k + 1)`、Skill `+1`、Gogma `+0` である。`forgeCount = k + 1` の最後の1本だけを巨戟化し、先行k本を巨戟化しない。conversionは通常5枠をslot順のまま継承し、初回Series / Groupを付与する。conversion後のReset / Keep / Reset Skillsは `sourceOwnedWeaponId = null` のtransient Gogmaを対象とし、v1では最初のBonus amendmentをResetとする(prediction support上の制限)。
+`candidateOffset = k` を採用する場合のconversion直後の合計進行はNormal `+(k + 1)`、Skill `+1`、Gogma `+0` である。`forgeCount = k + 1` の最後の1本だけを巨戟化し、先行k本を巨戟化しない。conversionは通常5枠をslot順のまま継承し、初回Series / Groupを付与する。conversion後のReset / Keep / Reset Skillsは `sourceOwnedWeaponId = null` のtransient Gogmaを対象とし、5枠既知なら最初のBonus amendmentはReset / Keepのどちらでもよい。blind Normal（Counter位置null）からのtransient Gogmaだけは5枠未知のため最初のBonus amendmentをResetとする。
 
 `reserve_weapon` はPlanner生成時に新しいOwnedWeapon IDを予約し、Candidate Snapshotの
   finalBonuses / Series Skill / Group Skillを持つ `kind = "gogma"` の武器を追加する。
@@ -3565,7 +3566,7 @@ UI実行は1操作ずつ。
 5. reserve_weapon
 ```
 
-変換元の所持通常アーティアはレア8かつ非保護であることを要求する。`convert_normal_to_gogma` StepのInventoryChangeで元通常アーティアを除き、その時点以降同じIDを別Routeで再利用しない。変換後GogmaはまだOwnedWeaponへ登録せず未来IDも割り当てない。通常5枠をnormal scopeのまま継承し、初回Skillを予測してSkill Counterだけを1進める。後続Reset / Keep / Reset Skillsは `sourceOwnedWeaponId = null` とし、v1では最初のBonus amendmentをResetとする(prediction support上の制限)。Bonus Type MappingからRank変換を推測しない。
+変換元の所持通常アーティアはレア8かつ非保護であることを要求する。`convert_normal_to_gogma` StepのInventoryChangeで元通常アーティアを除き、その時点以降同じIDを別Routeで再利用しない。変換後GogmaはまだOwnedWeaponへ登録せず未来IDも割り当てない。通常5枠をnormal scopeのまま継承し、初回Skillを予測してSkill Counterだけを1進める。後続Reset / Keep / Reset Skillsは `sourceOwnedWeaponId = null` とし、変換元の5枠は既知なので最初のBonus amendmentはReset / Keepのどちらでもよい。Bonus Type MappingはKeep family解決にだけ使い、Rank変換を推測しない。
 
 `reserve_weapon` は元OwnedNormalArtianWeaponを再削除せず、別の予約IDで新しい
 OwnedGogmaArtianWeaponだけを追加する。元IDをkind変更して再利用しない。追加武器のstatus、
@@ -3971,7 +3972,7 @@ Planner-driven constrained re-search実装後に追加する観点。
 - Plan生成が入力を破壊しない
 - Candidate SnapshotのBuildRoute.operationsを書き換えない
 - BuildRoute.operationsと同じ順序でPlanStepが生成される
-- normal scopeのtransient Gogmaに最初のReset前のkeep_bonuses PlanStepを生成しない。除外理由をprediction support不足として扱う
+- 5枠既知のnormal scope transient Gogmaには最初のReset前でもkeep_bonuses PlanStepを生成でき、blind transient Gogmaにだけ最初のReset前のkeep_bonuses PlanStepを生成しない
 - 最初のReset後はnormal / owned-Normal Routeから後続keep_bonuses PlanStepを生成できる
 - conversion StepのExpectedResultが継承normal bonusと初回Skillを持ち、RngAdvanceがSkill +1 / Gogma +0になる
 - transient GogmaのReset / Keep / Reset Skills PlanStepがfake OwnedWeaponIdを持たない

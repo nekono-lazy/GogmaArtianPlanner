@@ -149,7 +149,8 @@ function initialRouteBonuses(
 
 /**
  * Checks every static semantic input and deterministically advances bonus state
- * only when a later Keep needs the preceding Reset/Keep result as its input.
+ * only when a later Keep needs the preceding result as its input: the forged
+ * Normal slots of a predicted creation, or the preceding Reset/Keep result.
  * It never reconstructs or rewrites the saved RouteOperation sequence.
  */
 function entryPredictionSupportFailure(
@@ -176,7 +177,8 @@ function entryPredictionSupportFailure(
     const operation = operations[operationIndex]
     if (operation.type === 'create_normal_artian') {
       // A blind creation predicts nothing, so it queries no Normal Artian
-      // prediction support (`docs/SEARCH_SPEC.md` 6.1.1).
+      // prediction support (`docs/SEARCH_SPEC.md` 6.1.1), and its unknown
+      // slots leave `currentBonuses` null until the first Reset.
       if (isBlindCreateNormalArtianOperation(operation)) continue
       const failure = query({
         type: 'normal_artian',
@@ -185,6 +187,18 @@ function entryPredictionSupportFailure(
         rarity: operation.rarity,
       })
       if (failure) return failure
+      // The converted weapon is the last forged one, whose slots a Keep as the
+      // first amendment reads (`docs/SEARCH_SPEC.md` 6.1 / 5.9).
+      if (nextBonusOperation(operations, operationIndex) === 'keep_bonuses') {
+        currentBonuses = engine.predictNormalArtian({
+          baseSeed: input.rngState.baseSeed.value!,
+          weaponTypeId: operation.weaponTypeId,
+          elementId: target.elementId,
+          rarity: operation.rarity,
+          normalCounter: operation.normalCounterAfter - 1,
+          master: input.master,
+        })
+      }
       continue
     }
     if (
@@ -233,6 +247,7 @@ function entryPredictionSupportFailure(
         weaponTypeId: target.weaponTypeId,
         elementId: target.elementId,
         currentBonuses,
+        master: input.master,
       })
       if (failure) return failure
       if (nextBonusOperation(operations, operationIndex) === 'keep_bonuses') {

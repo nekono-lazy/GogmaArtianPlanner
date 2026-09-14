@@ -5,6 +5,7 @@ import {
   practicalOnlyBonuses,
   SEARCH_FIXTURE_TIME,
   candidatesOf,
+  searchMasterFixture,
 } from '../../test/fixtures/candidateSearch'
 import {
   createRestorationBonusSet,
@@ -16,7 +17,7 @@ import type {
   RestorationBonusSet,
 } from '../models/publicTypes'
 import { FakeRngEngine, type FakeRngFixtures } from '../rng/fakeRngEngine'
-import { gogmaKeepFamilyLayoutKey } from '../rng/gogmaBonusFamily'
+import { keepFamilyLayoutKey } from '../rng/gogmaBonusFamily'
 import {
   bonusAmendmentOperations,
   createTargetBonusStream,
@@ -266,7 +267,7 @@ function gogmaCalls(engine: FakeRngEngine) {
       .map(([call]) => call.gogmaCounter),
     keepKeys: () => spy.mock.calls.flatMap(([call]) =>
       call.operation.type === 'keep_bonuses'
-        ? [`${call.gogmaCounter}|${gogmaKeepFamilyLayoutKey(call.operation.currentBonuses)}`]
+        ? [`${call.gogmaCounter}|${keepFamilyLayoutKey(call.operation.currentBonuses, searchMasterFixture)}`]
         : [],
     ),
     keepInputs: () => spy.mock.calls.flatMap(([call]) =>
@@ -378,9 +379,9 @@ describe('Bonus stream state search', () => {
     const calls = gogmaCalls(engine)
     await searchCandidates(input, engine, deterministicExecution)
 
-    expect(gogmaKeepFamilyLayoutKey(layoutSLower()))
-      .toBe(gogmaKeepFamilyLayoutKey(layoutS()))
-    expect(calls.keepKeys()).toEqual([`10|${gogmaKeepFamilyLayoutKey(layoutS())}`])
+    expect(keepFamilyLayoutKey(layoutSLower(), searchMasterFixture))
+      .toBe(keepFamilyLayoutKey(layoutS(), searchMasterFixture))
+    expect(calls.keepKeys()).toEqual([`10|${keepFamilyLayoutKey(layoutS(), searchMasterFixture)}`])
     expect(calls.resetCounters()).toEqual([10])
   })
 
@@ -404,8 +405,8 @@ describe('Bonus stream state search', () => {
     // Same bonus multiset, different slot order: two different family layouts.
     expect(new Set(layoutB().map(({ bonusTypeId }) => bonusTypeId)))
       .toEqual(new Set(layoutS().map(({ bonusTypeId }) => bonusTypeId)))
-    expect(gogmaKeepFamilyLayoutKey(layoutB()))
-      .not.toBe(gogmaKeepFamilyLayoutKey(layoutS()))
+    expect(keepFamilyLayoutKey(layoutB(), searchMasterFixture))
+      .not.toBe(keepFamilyLayoutKey(layoutS(), searchMasterFixture))
     expect(calls.keepKeys()).toHaveLength(2)
     expect(new Set(calls.keepKeys()).size).toBe(2)
   })
@@ -527,21 +528,26 @@ describe('Bonus stream state search', () => {
       isProtected: false,
     } as unknown as CandidateSearchInput['ownedWeapons'][number]
     input.ownedWeapons = [source]
-    // The Ideal is reached only by the depth-2 Keep, so the canonical Ideal
-    // Route is exactly the mixed `convert -> reset -> keep` sequence whose
-    // transient amendments this test is about.
+    // The Ideal is reached only by the depth-2 Keep after the depth-1 Reset, so
+    // the canonical Ideal Route is exactly the mixed `convert -> reset -> keep`
+    // sequence whose transient amendments this test is about. Keep is also
+    // offered directly from the inherited normal-scope slots (SEARCH_SPEC 5.9);
+    // that branch reaches nothing the Target accepts here.
     const engine = createBonusFixtureEngine(input, {
       resets: [layoutALower(), layoutAMiddle()],
       keepSupported: true,
       skillSupported: true,
       skillPositions: 2,
       idealSkillIndex: 0,
-      keeps: [{ counterOffset: 1, currentBonuses: layoutALower(), result: layoutA() }],
+      keeps: [
+        { counterOffset: 0, currentBonuses: practicalOnlyBonuses(), result: layoutB() },
+        { counterOffset: 1, currentBonuses: layoutB(), result: layoutBHigher() },
+        { counterOffset: 1, currentBonuses: layoutALower(), result: layoutA() },
+      ],
     })
     const result = await searchCandidates(input, engine, deterministicExecution)
     const candidates = candidatesOf(result.targetResult)
 
-    // Normal-scope Keep stays unsupported, so depth 1 is Reset only.
     expect(candidates.map(({ route }) => operationTypes(route.operations)))
       .not.toContain('convert_normal_to_gogma,keep_bonuses')
     const mixed = candidates.find(({ route }) =>

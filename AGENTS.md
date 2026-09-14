@@ -377,11 +377,20 @@ matches the reference implementation. The following remain unverified:
 - Element bonus behavior for elementless Gogma weapons
 - 栄光の誉れ
 - 祝祭の巡り
-- Gogma rank I
 - Persisted Counter advancement while Counter Gate is below threshold
-- Keep Bonuses prediction whose current bonuses are `normal_artian` scope
-  (family mapping, candidate pool, weights, and repeat penalties are all
-  undefined in the pinned reference and have no game-verified fixture)
+- The real-game result of a Keep Bonuses whose current bonuses are
+  `normal_artian` scope (the family normalization uses the project-owner
+  confirmed `ArtianBonusTypeMapping`, the tier draw is the reference family
+  draw, and no game-verified fixture exists yet)
+
+Rank I under `gogma_artian` scope is not a verified value. The earlier
+real-game report of Gogma rank I was a converted Gogma still holding its
+unamended normal-scope slots, so the Master declares no `gogma_artian` rank I
+definition and no code, test, or document may present Gogma-scope rank I as
+game-confirmed. The relation between the normal-scope "I" the game displays
+and the current `bonus_rank.base` representation is not settled by the
+repository: do not replace `base` with `i` mechanically and do not add a
+guessed Normal rank table.
 
 The Production RNG interface contract must preserve semantic Domain inputs:
 
@@ -620,21 +629,39 @@ In the real game, both Reset Bonuses and Keep Bonuses are legal as the first
 bonus amendment of a `normal_artian` scope Gogma weapon. Conversion itself is
 not a Gogma-bonus lottery operation, so it does not force a later Reset.
 
-The current Production RNG Engine still cannot predict Keep from `normal_artian`
-scope slots: `getPredictionSupport({ type: "gogma_keep" })` returns
-`unsupported_current_bonus` because the reference Keep family table covers only
-Gogma-tier bonuses. Therefore v1 keeps three layers strictly separate:
+The Production RNG Engine predicts Keep from either scope. The decisive
+question is never whether the Normal Counter is known but whether the five
+normal-scope current slots are known:
 
-- Game operation legality: normal-scope Keep is legal
-- Production prediction support: normal-scope Keep is unsupported today
-- Product behavior: Search and Planner must not generate or schedule a
-  normal-scope Keep route while prediction support is missing, and Domain
-  validation continues to reject such a `keep_bonuses` operation because no
-  expected result can be defined for it
+- Owned Normal: five slots known, so after conversion Reset and Keep both apply
+- Owned Gogma with `restorationBonusScope = normal_artian`: five slots known, so
+  Reset and Keep both apply without any conversion
+- New Normal whose five slots the Normal Counter can predict: known, so after
+  conversion Reset and Keep both apply
+- New Normal with no usable Normal Counter (the blind route): five slots
+  unknown, so Reset only until the first Reset makes them known
 
-State the reason as missing Production prediction support, never as a game rule
-that forbids Keep. Do not guess the normal-tier Keep family mapping, pool, or
-weights; that behavior stays unverified until a game-verified fixture exists.
+Keep prediction reads only the Bonus family of each slot. The family of a
+Gogma-side bonus type is the type itself; a Normal-side bonus type is
+normalized to its Gogma-side type through `ArtianBonusTypeMapping`
+(`src/data/master/artian-bonus-type-mappings.json`), which is the single
+authority and is never duplicated by a second mapping table. `bonusRankId`
+never takes part in family resolution, and `restorationBonusScope` is not an
+RngEngine Keep API parameter: the Keep operation stays
+`{ type: 'keep_bonuses'; currentBonuses: RestorationBonusSet }`. Whether a
+scope / rank combination is a legal persisted value is Master / Domain
+validation, not Keep RNG. Search and Production RNG share one family resolver
+(`src/domain/rng/gogmaBonusFamily.ts`); the reference layer keeps its own
+Gogma-type-to-family table and never reads the Master mapping.
+
+The blind route's exclusion is an unknown-input problem, never a
+prediction-support gap and never a game rule. Never fabricate five slots for
+a blind Normal. The pinned reference GARP.lua starts from Reset in its
+base-tier state because the reference implementation does not treat
+normal-scope current bonuses as a prediction input, not because the game
+allows only Reset. Do not confuse that implementation constraint with a game
+rule. The real-game result of a Keep from normal-scope slots has no
+game-verified fixture yet; do not describe it as game-verified.
 
 Statuses are:
 
@@ -1255,7 +1282,8 @@ then-current Practical horizon and dominance, Similarity formula and `resultFilt
 semantics (all since removed),
 `CalculationContext.appSchemaVersion = 2`, Production RNG semantics and version,
 the checkpoint interval of 50, and the MessagePort `workerYield` are all
-unchanged, and normal-scope Keep prediction is still unimplemented.
+unchanged; normal-scope Keep prediction was unimplemented at that time and was
+added later by the normal-scope Keep correction.
 
 - `defaultCandidateSearchSettings` was `1000 / 200 / 1000` with
   `maxCandidatesPerTarget = 200` and `similarityThreshold = 0.6`, from the B5
@@ -1281,10 +1309,11 @@ unchanged, and normal-scope Keep prediction is still unimplemented.
   automatic Worker re-creation or page reload. The Worker protocol
   `type: 'error'` response stays a separate path that rejects only its own
   request and leaves the Worker usable.
-- The skip reason `normal_scope_requires_reset` is renamed
-  `normal_scope_keep_prediction_unsupported`, and its label states missing
-  Production Keep prediction support. Never restate it as a game rule requiring
-  a Reset first. `no_owned_weapon_available` is used by both
+- The skip reason `normal_scope_requires_reset` was renamed
+  `normal_scope_keep_prediction_unsupported` in B6; the normal-scope Keep
+  correction later removed that reason entirely, because Keep from known
+  normal-scope slots is now predicted. Never reintroduce either reason, and
+  never add a label that states a game rule requiring a Reset first. `no_owned_weapon_available` is used by both
   `owned_normal_artian_to_gogma` and `existing_gogma_*`, so its label names no
   weapon kind; the RouteKind label carries that.
 
@@ -1444,10 +1473,9 @@ The operation sequence may contain:
 - `reset_skills`
 
 While the transient Gogma still has `normal_artian` scope, the game allows
-either `reset_bonuses` or `keep_bonuses` as its first bonus operation. Because
-Production Keep prediction does not support normal-scope input, v1 Search emits
-only `reset_bonuses` there and reports the exclusion as
-`keep_prediction_unsupported`, never as a game rule. That Reset produces five
+either `reset_bonuses` or `keep_bonuses` as its first bonus operation, and the
+predicted variant knows the forged five slots, so Search emits both
+`reset_bonuses` and `keep_bonuses` there. Either result produces five
 `gogma_artian` scope slots, after which `reset_bonuses` or `keep_bonuses` may
 occur in the same route.
 
@@ -1482,8 +1510,9 @@ reset_bonuses          mandatory first bonus amendment
   A confirmed Normal Counter is the ordinary case here: a Counter can be
   confirmed while only Normal Artian prediction is unavailable
 - Never complete a Candidate right after the conversion, and never apply Keep
-  Bonuses to the unknown five slots. Unlike normal-scope Keep (5.7), this is an
-  unknown-input problem, not a prediction-support one
+  Bonuses to the unknown five slots. This is an unknown-input problem, not a
+  prediction-support one and not a game rule: a known normal-scope five-slot
+  set may be Kept directly (5.9)
 - There is no `gogmaAdvance = 0` Bonus solution. The Bonus axis starts at the
   first Reset; no fake bonus set enters the stream
 - `estimatedNormalAdvance = null` means Candidate Search does not represent a
@@ -1548,10 +1577,9 @@ Reset Bonuses, Keep Bonuses, and Reset Skills performed after conversion use
 registered as a separate OwnedWeapon. Do not invent a replacement ID.
 
 The first bonus amendment while the converted weapon has `normal_artian` scope
-may be Reset Bonuses or Keep Bonuses in the real game, but v1 Search emits only
-Reset Bonuses there while Production Keep prediction rejects normal-scope input.
-After a Reset produces `gogma_artian` scope, further Reset Bonuses or Keep
-Bonuses may occur in the same route. Conversion itself does not map bonus types
+may be Reset Bonuses or Keep Bonuses: the source's five slots are known, so
+Search emits both. Either produces `gogma_artian` scope, after which further
+Reset Bonuses or Keep Bonuses may occur in the same route. Conversion itself does not map bonus types
 or ranks and does not call Gogma-bonus prediction.
 
 ### Existing Gogma Reset Bonuses
@@ -1580,9 +1608,10 @@ existing_gogma_keep_bonuses
 
 The source must be unprotected.
 
-In v1 the source must already have five `gogma_artian` scope slots, because
-Production Keep prediction supports only Gogma-tier current bonuses. This is a
-prediction-support restriction, not a game rule. Keep has no slot selection and
+The source may hold `normal_artian` or `gogma_artian` scope slots: an owned
+Gogma's five slots are always known, and Keep resolves each slot's family from
+its bonus type alone (Normal-side types through the Master mapping). A Keep from
+normal scope produces `gogma_artian` scope. Keep has no slot selection and
 creates no same-counter selection branches. The current ordered
 five slots are an explicit RNG Engine input; the family at each slot remains in
 that position while the tier is rerolled, and the complete final result comes
@@ -1624,9 +1653,9 @@ existing_gogma_mixed
 
 The source must be unprotected for every mixed Bonus / Skill amendment route.
 
-A mixed route whose source still has `normal_artian` scope performs Reset
-Bonuses before any Keep Bonuses operation in v1, because normal-scope Keep is
-unpredictable today, not because the game forbids it.
+A mixed route whose source still has `normal_artian` scope may start with
+either Reset Bonuses or Keep Bonuses; its five slots are known, so Keep is
+predicted directly.
 
 A Reset-Skills-only route must use `existing_gogma_reset_skills`, not Mixed.
 
@@ -1857,8 +1886,9 @@ only: no `src/**`, test, build, or DB schema change. The implementation phases
 are B8-B1 (Search-domain constrained enumerator), B8-B2 (enumerator Browser
 Worker benchmark and enumeration-bounds defaults), B8-C (Planner orchestration),
 B8-D (Worker / Application / Persistence), and B8-E (orchestration benchmark and
-orchestration-bounds defaults). B9 what-if, B10 conflict UI, and B11
-normal-scope Keep stay separate phases.
+orchestration-bounds defaults). B9 what-if and B10 conflict UI stay
+separate phases; the B11 normal-scope Keep phase was delivered by the
+normal-scope Keep correction.
 
 The pipeline is fixed:
 
@@ -2051,7 +2081,7 @@ Worker-yieldable. Off-axis Cross pairs (`i > 0` and `j > 0`) may be evaluated
 lazily for the Target and conflict that actually need them, capped by
 `maxOffAxisPairEvaluations`; never pre-generate the full Cartesian product,
 never break ties on a run-dependent value, and keep the B2 family-layout
-frontier dedup and the normal-scope Keep prediction exclusion unchanged.
+frontier dedup and the blind-base first-Keep exclusion unchanged.
 
 The Planner consumes the enumerator's streaming API, taking one Candidate at a
 time and stopping at the first adoptable trial, so a final array sort never runs
@@ -2169,6 +2199,15 @@ Calculation semantics and artifact validity are separate from the Dexie schema. 
 `DATABASE_SCHEMA_VERSION = 1`, `AppSettings.schemaVersion = 1`, and
 `PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2` were unchanged.
 The later Target compromise revision uses calculation version 6 and DB version 2.
+
+The normal-scope Keep correction removed the `gogma_artian` rank I
+`WeaponBonusDefinition` entries and moved Master `dataVersion` from 3 to 4, so
+every earlier calculation becomes `calculation_context_changed` through
+`masterDataVersion`. It widened the Production Keep input coverage (known
+normal-scope slots, rank ignored) without changing any seed derivation, PRNG,
+draw, weight, repeat penalty, or existing golden vector, so
+`PRODUCTION_RNG_ENGINE_VERSION`, `CURRENT_CALCULATION_APP_SCHEMA_VERSION`,
+`DATABASE_SCHEMA_VERSION`, and `ExportRoot.schemaVersion` were left unchanged.
 
 Do not replace Beam Search with a simple Candidate sort.
 
@@ -2712,11 +2751,12 @@ Search UI must:
   they already satisfy the Target, and do not show amendment routes for them
 - Show inherited normal-scope bonuses and the initial predicted Skills at
   conversion
-- Present Reset Bonuses as the only currently predictable first bonus amendment
-  for a converted normal-scope Gogma, and explain the exclusion as missing
-  Production Keep prediction support rather than as a game restriction
-- Allow later Reset Bonuses or Keep Bonuses in the same route after that first
-  Reset; never present a Keep slot-selection control
+- Present both Reset Bonuses and Keep Bonuses as the first bonus amendment of
+  a converted normal-scope Gogma whose five slots are known, and Reset Bonuses
+  alone as the first amendment of a blind Normal route, explained as an
+  unknown-input limit rather than as a game restriction
+- Allow later Reset Bonuses or Keep Bonuses in the same route; never present a
+  Keep slot-selection control
 
 Target Weapons UI must:
 
@@ -2796,8 +2836,13 @@ Relevant test areas include:
 - Conversion advancement: Normal +0, Skill +1, Gogma +0
 - Conversion inheritance of ordered `normal_artian` scope bonuses and initial
   Series/Group Skills
-- Normal-scope Keep is excluded as `keep_prediction_unsupported`, not as an
-  illegal game operation
+- Keep from known normal-scope slots is generated as the first bonus amendment
+  of owned Normal, owned normal-scope Gogma, and predicted new Normal routes,
+  while a blind route still starts with Reset and Keeps only after it
+- Keep family resolution maps `bonus_type.attack` / `affinity` / `element` /
+  `normal_sharpness` / `normal_capacity` to their Gogma families through the
+  Master mapping, ignores rank, keeps slot order, and leaves every existing
+  Gogma-scope Keep golden vector unchanged
 - The forced Reset Normal Artian route is searched with no owned weapon and no
   confirmed Normal Artian Counter, forges exactly one weapon, calls
   `predictNormalArtian` zero times, and produces no Candidate before its Reset
@@ -3109,8 +3154,9 @@ Relevant test areas include:
 - Native Worker `error` and `messageerror` reject every pending search, remove
   every listener, terminate the Worker, and make later searches reject, while
   the Worker protocol `type: 'error'` response keeps its existing behavior
-- Skip reason labels state normal-scope Keep as missing prediction support, and
-  `no_owned_weapon_available` reads naturally for Normal and Gogma source routes
+- No skip reason or label presents normal-scope Keep as unsupported or as a game
+  rule requiring a Reset first, and `no_owned_weapon_available` reads naturally
+  for Normal and Gogma source routes
 - `TargetWeapon.preferredOwnedWeaponId` accepts null, and the v2 -> v3 migration
   sets it to null for every Target, removes `relatedTargetWeaponIds` from every
   current OwnedWeapon, never infers a preference from the removed list, and

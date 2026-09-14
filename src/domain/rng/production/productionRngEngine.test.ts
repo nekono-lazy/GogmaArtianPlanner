@@ -22,6 +22,7 @@ function master() {
     lotteries: result.data.lotteries,
     elements: result.data.elements,
     bonusTypes: result.data.bonusTypes,
+    artianBonusTypeMappings: result.data.artianBonusTypeMappings,
   }
 }
 
@@ -79,91 +80,139 @@ describe('ProductionRngEngine facade', () => {
     expect(engine.getPredictionSupport({ type: 'gogma_reset', weaponTypeId: reset.weaponTypeId, elementId: reset.elementId, master: unavailable })).toEqual({ supported: false, reason: 'no_available_reset_candidates' })
     expect(() => engine.predictGogmaBonus({ ...reset, baseSeed: String(reset.baseSeed), operation: { type: 'reset_bonuses' }, master: unavailable })).toThrow(UnsupportedRngInputError)
     expect(engine.getPredictionSupport({ type: 'normal_artian', weaponTypeId: 'weapon.great_sword', elementId: 'element.fire', rarity: 8 })).toEqual({ supported: false, reason: 'normal_pool_unverified' })
-    expect(engine.getPredictionSupport({ type: 'gogma_keep', weaponTypeId: gameVerifiedGogmaKeepVector.weaponTypeId, elementId: gameVerifiedGogmaKeepVector.elementId, currentBonuses: [{ bonusTypeId: 'bonus_type.attack', bonusRankId: 'bonus_rank.base' }, ...gameVerifiedGogmaKeepVector.currentBonuses.slice(1)] as never })).toEqual({ supported: false, reason: 'unsupported_current_bonus' })
+    expect(engine.getPredictionSupport({ type: 'gogma_keep', weaponTypeId: gameVerifiedGogmaKeepVector.weaponTypeId, elementId: gameVerifiedGogmaKeepVector.elementId, currentBonuses: [{ bonusTypeId: 'bonus_type.unknown', bonusRankId: 'bonus_rank.base' }, ...gameVerifiedGogmaKeepVector.currentBonuses.slice(1)] as never, master: inputMaster })).toEqual({ supported: false, reason: 'unsupported_current_bonus' })
   })
 
   it('rethrows unexpected support errors and verifies Gogma adapter coverage before prediction', () => {
     const engine = new ProductionRngEngine(); const inputMaster = master(); const reset = gameVerifiedGogmaResetVectors[0]!; const keep = gameVerifiedGogmaKeepVector
     expect(engine.getPredictionSupport({ type: 'gogma_reset', weaponTypeId: reset.weaponTypeId, elementId: reset.elementId, master: inputMaster })).toEqual({ supported: true })
-    expect(engine.getPredictionSupport({ type: 'gogma_keep', weaponTypeId: keep.weaponTypeId, elementId: keep.elementId, currentBonuses: keep.currentBonuses })).toEqual({ supported: true })
+    expect(engine.getPredictionSupport({ type: 'gogma_keep', weaponTypeId: keep.weaponTypeId, elementId: keep.elementId, currentBonuses: keep.currentBonuses, master: inputMaster })).toEqual({ supported: true })
     expect(() => engine.getPredictionSupport({ type: 'gogma_reset', weaponTypeId: reset.weaponTypeId, elementId: reset.elementId, master: { ...inputMaster, bonusTypes: {} as never } })).toThrow(TypeError)
   })
 
   /**
-   * Keep reads only the slot family, so every legal `gogma_artian` tier is a
-   * supported current input, including the rank I values the reference lottery
-   * never draws (`docs/RNG_SPEC.md` 6.1, `docs/RNG_REFERENCE_AUDIT.md` 10.4).
+   * Keep reads only the slot family, resolved from the bonus type alone with a
+   * Normal-side type normalized through the Master mapping, so known five slots
+   * of either scope are supported and the tier is never consulted
+   * (`docs/RNG_SPEC.md` 6.1, `docs/SEARCH_SPEC.md` 5.9).
    */
-  describe('Gogma-scope Keep current input coverage', () => {
-    const keepSupport = (currentBonuses: unknown) => new ProductionRngEngine().getPredictionSupport({
+  describe('Keep current input coverage from either scope', () => {
+    const keepSupport = (
+      currentBonuses: unknown,
+      inputMaster: ReturnType<typeof master> | Record<string, unknown> = master(),
+      weaponTypeId = 'weapon.long_sword',
+      elementId = 'element.fire',
+    ) => new ProductionRngEngine().getPredictionSupport({
       type: 'gogma_keep',
-      weaponTypeId: gameVerifiedGogmaKeepVector.weaponTypeId,
-      elementId: gameVerifiedGogmaKeepVector.elementId,
+      weaponTypeId,
+      elementId,
       currentBonuses: currentBonuses as never,
+      master: inputMaster as never,
     })
     const bonus = (bonusTypeId: string, bonusRankId: string) => ({ bonusTypeId, bonusRankId })
     const repeated = (bonusTypeId: string, bonusRankId: string) =>
       Array.from({ length: 5 }, () => bonus(bonusTypeId, bonusRankId))
+    const inheritedLongSword = () => [
+      bonus('bonus_type.attack', 'bonus_rank.base'),
+      bonus('bonus_type.attack', 'bonus_rank.base'),
+      bonus('bonus_type.affinity', 'bonus_rank.base'),
+      bonus('bonus_type.element', 'bonus_rank.base'),
+      bonus('bonus_type.normal_sharpness', 'bonus_rank.base'),
+    ]
 
-    it('supports the reported real-game rank I current set', () => {
+    it('supports an inherited normal-scope current set through the Master mapping', () => {
+      expect(keepSupport(inheritedLongSword())).toEqual({ supported: true })
       expect(keepSupport([
-        bonus('bonus_type.gogma_sharpness_capacity', 'bonus_rank.base'),
-        bonus('bonus_type.element', 'bonus_rank.i'),
-        bonus('bonus_type.element', 'bonus_rank.i'),
-        bonus('bonus_type.attack', 'bonus_rank.i'),
-        bonus('bonus_type.attack', 'bonus_rank.i'),
-      ])).toEqual({ supported: true })
+        bonus('bonus_type.attack', 'bonus_rank.base'),
+        bonus('bonus_type.affinity', 'bonus_rank.base'),
+        bonus('bonus_type.normal_capacity', 'bonus_rank.base'),
+        bonus('bonus_type.normal_capacity', 'bonus_rank.base'),
+        bonus('bonus_type.attack', 'bonus_rank.base'),
+      ], master(), 'weapon.light_bowgun', 'element.fire')).toEqual({ supported: true })
     })
 
-    it.each([
-      'bonus_type.attack',
-      'bonus_type.affinity',
-      'bonus_type.element',
-    ])('supports rank I current slots of %s', (bonusTypeId) => {
-      expect(keepSupport(repeated(bonusTypeId, 'bonus_rank.i'))).toEqual({ supported: true })
+    it('supports a Gogma-scope current set exactly as before', () => {
+      expect(keepSupport(gameVerifiedGogmaKeepVector.currentBonuses, master(), gameVerifiedGogmaKeepVector.weaponTypeId, gameVerifiedGogmaKeepVector.elementId))
+        .toEqual({ supported: true })
     })
 
-    it('predicts the rank I current set without changing the family layout', () => {
+    it('never consults the tier: any rank of a known family is readable', () => {
+      expect(keepSupport(repeated('bonus_type.element', 'bonus_rank.iii'))).toEqual({ supported: true })
+      expect(keepSupport(repeated('bonus_type.attack', 'bonus_rank.fixture.unknown'))).toEqual({ supported: true })
+      // Whether such a rank is a legal persisted value is Master / Domain
+      // validation, not Keep RNG.
+    })
+
+    it('rejects a bonus type outside every Keep family, a wrong slot count, and a Master without the mapping', () => {
+      expect(keepSupport(repeated('bonus_type.unknown', 'bonus_rank.ex')))
+        .toEqual({ supported: false, reason: 'unsupported_current_bonus' })
+      expect(keepSupport(repeated('bonus_type.attack', 'bonus_rank.ii').slice(0, 4)))
+        .toEqual({ supported: false, reason: 'unsupported_current_bonus' })
+      const { artianBonusTypeMappings: _mappings, ...withoutMapping } = master()
+      void _mappings
+      expect(keepSupport(inheritedLongSword(), withoutMapping))
+        .toEqual({ supported: false, reason: 'master_data_unavailable' })
+    })
+
+    it('predicts the game-verified Keep result from the same layout spelled as inherited normal-scope slots', () => {
       const engine = new ProductionRngEngine()
-      const currentBonuses = [
-        bonus('bonus_type.attack', 'bonus_rank.i'),
-        bonus('bonus_type.attack', 'bonus_rank.i'),
-        bonus('bonus_type.affinity', 'bonus_rank.i'),
-        bonus('bonus_type.element', 'bonus_rank.i'),
-        bonus('bonus_type.gogma_sharpness_capacity', 'bonus_rank.base'),
+      const keep = gameVerifiedGogmaKeepVector
+      // attack / affinity / affinity / element / element in normal-scope spelling.
+      const inherited = [
+        bonus('bonus_type.attack', 'bonus_rank.base'),
+        bonus('bonus_type.affinity', 'bonus_rank.base'),
+        bonus('bonus_type.affinity', 'bonus_rank.base'),
+        bonus('bonus_type.element', 'bonus_rank.base'),
+        bonus('bonus_type.element', 'bonus_rank.base'),
       ] as never as RestorationBonusSet
       const predicted = engine.predictGogmaBonus({
+        baseSeed: String(keep.baseSeed),
+        weaponTypeId: keep.weaponTypeId,
+        elementId: keep.elementId,
+        gogmaCounter: keep.gogmaCounter,
+        operation: { type: 'keep_bonuses', currentBonuses: inherited },
+        master: master(),
+      })
+      expect(predicted).toEqual(keep.bonuses)
+    })
+
+    it('maps a Normal-side Sharpness slot onto the Gogma Sharpness / Capacity family in place', () => {
+      const engine = new ProductionRngEngine()
+      const currentBonuses = inheritedLongSword() as never as RestorationBonusSet
+      const predicted = engine.predictGogmaBonus({
         baseSeed: String(gameVerifiedGogmaKeepVector.baseSeed),
-        weaponTypeId: gameVerifiedGogmaKeepVector.weaponTypeId,
-        elementId: gameVerifiedGogmaKeepVector.elementId,
+        weaponTypeId: 'weapon.long_sword',
+        elementId: 'element.fire',
         gogmaCounter: gameVerifiedGogmaKeepVector.gogmaCounter,
         operation: { type: 'keep_bonuses', currentBonuses },
         master: master(),
       })
-      expect(predicted.map(({ bonusTypeId }) => bonusTypeId))
-        .toEqual(currentBonuses.map(({ bonusTypeId }) => bonusTypeId))
+      expect(predicted.map(({ bonusTypeId }) => bonusTypeId)).toEqual([
+        'bonus_type.attack',
+        'bonus_type.attack',
+        'bonus_type.affinity',
+        'bonus_type.element',
+        'bonus_type.gogma_sharpness_capacity',
+      ])
+      // The same families in Gogma-tier spelling give the identical result.
+      const gogmaSpelling = [
+        bonus('bonus_type.attack', 'bonus_rank.ii'),
+        bonus('bonus_type.attack', 'bonus_rank.ex'),
+        bonus('bonus_type.affinity', 'bonus_rank.iii'),
+        bonus('bonus_type.element', 'bonus_rank.ii'),
+        bonus('bonus_type.gogma_sharpness_capacity', 'bonus_rank.ex'),
+      ] as never as RestorationBonusSet
+      expect(engine.predictGogmaBonus({
+        baseSeed: String(gameVerifiedGogmaKeepVector.baseSeed),
+        weaponTypeId: 'weapon.long_sword',
+        elementId: 'element.fire',
+        gogmaCounter: gameVerifiedGogmaKeepVector.gogmaCounter,
+        operation: { type: 'keep_bonuses', currentBonuses: gogmaSpelling },
+        master: master(),
+      })).toEqual(predicted)
     })
 
-    it('still rejects normal-tier, unknown, and malformed current inputs', () => {
-      // `normal_artian` scope Keep stays unpredictable; that is missing
-      // Production prediction support, not a game rule.
-      expect(keepSupport([
-        bonus('bonus_type.attack', 'bonus_rank.base'),
-        bonus('bonus_type.attack', 'bonus_rank.base'),
-        bonus('bonus_type.affinity', 'bonus_rank.base'),
-        bonus('bonus_type.element', 'bonus_rank.base'),
-        bonus('bonus_type.normal_sharpness', 'bonus_rank.base'),
-      ])).toEqual({ supported: false, reason: 'unsupported_current_bonus' })
-      expect(keepSupport(repeated('bonus_type.attack', 'bonus_rank.base')))
-        .toEqual({ supported: false, reason: 'unsupported_current_bonus' })
-      expect(keepSupport(repeated('bonus_type.normal_capacity', 'bonus_rank.base')))
-        .toEqual({ supported: false, reason: 'unsupported_current_bonus' })
-      expect(keepSupport(repeated('bonus_type.element', 'bonus_rank.iii')))
-        .toEqual({ supported: false, reason: 'unsupported_current_bonus' })
-      expect(keepSupport(repeated('bonus_type.unknown', 'bonus_rank.ex')))
-        .toEqual({ supported: false, reason: 'unsupported_current_bonus' })
-      expect(keepSupport(repeated('bonus_type.attack', 'bonus_rank.i').slice(0, 4)))
-        .toEqual({ supported: false, reason: 'unsupported_current_bonus' })
+    it('still fails closed on an unreadable current input instead of guessing', () => {
       expect(() => new ProductionRngEngine().predictGogmaBonus({
         baseSeed: String(gameVerifiedGogmaKeepVector.baseSeed),
         weaponTypeId: gameVerifiedGogmaKeepVector.weaponTypeId,
@@ -171,7 +220,7 @@ describe('ProductionRngEngine facade', () => {
         gogmaCounter: gameVerifiedGogmaKeepVector.gogmaCounter,
         operation: {
           type: 'keep_bonuses',
-          currentBonuses: repeated('bonus_type.attack', 'bonus_rank.base') as never as RestorationBonusSet,
+          currentBonuses: repeated('bonus_type.unknown', 'bonus_rank.base') as never as RestorationBonusSet,
         },
         master: master(),
       })).toThrow(UnsupportedRngInputError)

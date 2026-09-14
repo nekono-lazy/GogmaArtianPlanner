@@ -54,9 +54,11 @@ const OWNED_GOGMA_SOURCE_SKILL_COUNTER =
   CANDIDATE_SEARCH_BENCHMARK_SKILL_COUNTER + 9
 
 /**
- * `bonus_rank.i` exists in the Bow Gogma Master definitions but is absent from
- * `REFERENCE_GOGMA_RESET_CANDIDATES`, and every Normal Artian slot is
- * `bonus_rank.base`, so no Reset or Keep result can contain it.
+ * `bonus_rank.i` is absent from `REFERENCE_GOGMA_RESET_CANDIDATES` and, since
+ * the normal-scope Keep correction, from every `gogma_artian` Master definition
+ * too, and every Normal Artian slot is `bonus_rank.base`, so no Reset or Keep
+ * result can contain it. The synthetic Target below bypasses Master reference
+ * validation on purpose: it is a benchmark workload, not a user-facing Target.
  */
 
 /**
@@ -269,6 +271,7 @@ function benchmarkMaster(): BenchmarkMaster {
       elements: data.elements,
       bonusTypes: data.bonusTypes,
       bonusRanks: data.bonusRanks,
+      artianBonusTypeMappings: data.artianBonusTypeMappings,
       lotteries: data.lotteries,
       materialCosts: data.materialCosts,
     },

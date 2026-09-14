@@ -71,7 +71,7 @@ export function alternativePracticalBonuses(): RestorationBonusSet {
 
 /**
  * The same ordered Bonus Type layout as `practicalBonuses()` with lower ranks,
- * so both share one `gogmaKeepFamilyLayoutKey()` and the B2 family-layout
+ * so both share one `keepFamilyLayoutKey()` and the B2 family-layout
  * frontier folds them into a single representative.
  */
 export function sameLayoutLowerRanks(): RestorationBonusSet {
@@ -102,6 +102,7 @@ export function constrainedMaster() {
     elements: searchMasterFixture.elements.map((e) => ({ ...e })),
     bonusTypes: searchMasterFixture.bonusTypes.map((b) => ({ ...b })),
     bonusRanks: searchMasterFixture.bonusRanks.map((r) => ({ ...r })),
+    artianBonusTypeMappings: searchMasterFixture.artianBonusTypeMappings.map((m) => ({ ...m })),
     lotteries: searchMasterFixture.lotteries.map((l) => ({ ...l })),
     materialCosts: searchMasterFixture.materialCosts.map((c) => ({ ...c })),
   }

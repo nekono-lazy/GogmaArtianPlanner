@@ -9,6 +9,7 @@ import type {
   TargetWeaponId,
 } from '../models/publicTypes'
 import type {
+  ArtianBonusTypeMapping,
   BonusTypeMaster,
   BonusRankMaster,
   ElementMaster,
@@ -52,6 +53,8 @@ export interface SearchMasterSubset {
   elements: ElementMaster[]
   bonusTypes: BonusTypeMaster[]
   bonusRanks: BonusRankMaster[]
+  /** Keep family resolution authority for Normal-side bonus types (`docs/RNG_SPEC.md` 6.1). */
+  artianBonusTypeMappings: ArtianBonusTypeMapping[]
   lotteries: LotteryMaster[]
   materialCosts: MaterialCostMaster[]
 }
@@ -89,7 +92,6 @@ export type SkippedRouteReason =
   | 'normal_prediction_unsupported'
   | 'skill_prediction_unsupported'
   | 'gogma_prediction_unsupported'
-  | 'normal_scope_keep_prediction_unsupported'
   | 'calculation_context_incompatible'
   | 'disabled_by_filter'
 

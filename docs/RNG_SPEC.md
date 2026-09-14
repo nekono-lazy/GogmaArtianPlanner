@@ -154,6 +154,7 @@ export type RngPredictionSupportInput =
       weaponTypeId: WeaponTypeId;
       elementId: ElementId;
       currentBonuses: RestorationBonusSet;
+      master: RngMasterSubset;
     };
 
 export type RngPredictionUnsupportedReason =
@@ -217,11 +218,24 @@ export interface GogmaBonusPredictionInput {
 
 `predictGogmaBonus` の対象は `reset_bonuses` と `keep_bonuses` だけである。通常アーティアからの巨戟化は復元ボーナスを再抽選せず、Gogma Predictionを呼ばない。
 
-Keep Bonusesにはユーザーが保持slotを選ぶ概念がない。入力した現在5slotのBonus familyをslotごとに保持し、各slotのtierだけを同じfamily内から再抽選する単一操作である。`currentBonuses` は必ず `gogma_artian` scopeの5枠であり、Engineはそのslot順を保持して抽選poolを構築する。Searchは同一Counter位置でselection branchを作らない。
+Keep Bonusesにはユーザーが保持slotを選ぶ概念がない。入力した現在5slotのBonus familyをslotごとに保持し、各slotのtierだけを同じfamily内から再抽選する単一操作である。`currentBonuses` は現在のordered 5枠そのものであり、`normal_artian` / `gogma_artian` のどちらのscopeでもよい。Keep入力にscopeフィールドは持たせず、Engineは各slotの `bonusTypeId` だけからBonus familyを解決する。巨戟側Bonus Typeはそのfamilyを直接使い、通常側Bonus Typeは `ArtianBonusTypeMapping`（`RngMasterSubset.artianBonusTypeMappings`）で巨戟側Bonus Typeへ正規化してからfamilyを引く。`bonusRankId` はfamily解決に使わない。Engineはslot順を保持して抽選poolを構築する。Searchは同一Counter位置でselection branchを作らない。
 
-`predictGogmaBonus` が返す `RestorationBonusSet` だけをamendment後の完成結果として使用する。Resetは入力武器が `normal_artian` / `gogma_artian` のどちらのscopeでも実行でき、結果を `gogma_artian` scopeへ置き換える。Keepは入力も結果も `gogma_artian` scopeである。EngineがKeep仕様を未対応の場合、`supportsKeepBonusesPrediction = false` としてRouteを生成しない。
+`predictGogmaBonus` が返す `RestorationBonusSet` だけをamendment後の完成結果として使用する。Resetは入力武器が `normal_artian` / `gogma_artian` のどちらのscopeでも実行でき、結果を `gogma_artian` scopeへ置き換える。Keepも入力は `normal_artian` / `gogma_artian` のどちらのscopeでもよく、結果は常に `gogma_artian` scopeである。EngineがKeep仕様を未対応の場合、`supportsKeepBonusesPrediction = false` としてRouteを生成しない。
 
-実ゲームでは巨戟化後の最初のBonus操作としてReset / Keepのどちらも選択できるが、現在のProduction RNGはnormal-tier Bonusを現在値とするKeepを予測できず、`getPredictionSupport({ type: "gogma_keep" })` が `unsupported_current_bonus` を返す。参照実装のKeep family tableは巨戟tierだけを対象とし、normal-tier枠のfamily対応・抽選pool・weightを定義していない。この挙動はunverifiedであり、game-verified fixtureが得られるまで推測して実装しない。Search / Plannerがnormal scope Keepを生成しない理由はこのprediction support不足であり、ゲームルール上の禁止ではない。
+実ゲームでは巨戟化後の最初のBonus操作としてReset / Keepのどちらも選択できる。Production RNGは、current 5枠が既知であればそのscopeを問わずKeepを予測する。Keep可否の判定基準は「Normal Counterが既知か」ではなく「normal-scope current bonuses 5枠が既知か」である。
+
+```text
+Owned Normal                                  -> 5枠既知 -> conversion後 Reset / Keep可能
+Owned Gogma / restorationBonusScope=normal_artian -> 5枠既知 -> conversion不要、Reset / Keep可能
+New Normal + Normal Counterから5枠Prediction可能   -> 5枠既知 -> conversion後 Reset / Keep可能
+New Normal + Normal Counter不明（blind、SEARCH_SPEC 6.1.1） -> 5枠未知 -> conversion後、最初はResetのみ
+```
+
+5枠が未知のblind Normalに対してだけKeepを予測できない。これはunknown入力の問題であり、prediction support不足でもゲームルールでもない。blind Normalへ架空の5枠を合成しない。
+
+参照実装GARP.luaがbase-tier（normal-scope）状態で最初のamendmentをResetへ強制するのは、参照実装がnormal-scope current bonusesをPrediction入力として扱わないという実装上の制約であり、ゲーム上Resetしかできないという意味ではない。GogmaArtianPlannerはOwned Weapon、Normal Artian Prediction、Restoration Bonus Scope、ArtianBonusTypeMappingを保持するため、normal-scope current bonusesが既知なら直接Keep predictionを扱える。参照実装の制約とゲームルールを混同しない。
+
+Keep familyへの正規化はBonus Typeの意味対応（ArtianBonusTypeMapping）だけを使い、family内の候補pool・weight・repeat penalty・tier draw algorithmは参照実装のGogma family tableをそのまま用いる。この正規化以外に通常tier専用のpool、weight、rank tableを推測しない。normal-scope current bonusesからのKeep結果はgame-verified fixtureをまだ持たない（[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 20）。
 
 ## 6.2 SkillPredictionInput
 
@@ -271,14 +285,15 @@ export interface RngMasterSubset {
   elements?: ElementMaster[];
   bonusTypes?: BonusTypeMaster[];
   weaponTypes?: WeaponTypeMaster[];
+  artianBonusTypeMappings?: ArtianBonusTypeMapping[];
 }
 ```
 
-`elements`、`bonusTypes`、`weaponTypes` は共通interfaceではoptionalだが、Production Gogma Resetのavailability判定ではcaller supplied Masterに存在する必要がある。不足時はinput supportが `master_data_unavailable` となる。`weaponBonusDefinitions` とこれらのMasterを同じvalidated Master rootから渡し、predictor内部で別Masterを読み込まない。
+`elements`、`bonusTypes`、`weaponTypes` は共通interfaceではoptionalだが、Production Gogma Resetのavailability判定ではcaller supplied Masterに存在する必要がある。不足時はinput supportが `master_data_unavailable` となる。`artianBonusTypeMappings` も共通interfaceではoptionalだが、Production Keepのfamily解決ではcaller supplied Masterに存在する必要がある。不足時は `gogma_keep` のinput supportが `master_data_unavailable` となる。Search / Plannerのsubset（`SearchMasterSubset` / `PlannerMasterSubset`）ではrequiredとし、validated Master rootから渡す。空配列やfake mappingを本番経路へ入れない。`weaponBonusDefinitions` とこれらのMasterを同じvalidated Master rootから渡し、predictor内部で別Masterを読み込まない。
 
 `lotteries` は現行の共通interfaceに残るlegacy payloadである。Production RNGのseed式、pool order、weight、repeat penalty、skill order、semantic ID↔reference numeric mappingは、provenance付きRNG-specific reference-verified tableとEngine内部定数の責務であり、Production Predictionは `LotteryMaster` に依存しない。現行disabled `LotteryMaster` を有効化したり、Production Predictionの前提にしたりしない。reference-verified tableは参照repositoryとの一致を表し、それだけで全実ゲーム条件のgame-verifiedを意味しない。
 
-Normal Artian Predictionが扱う復元ボーナス定義は `normal_artian` scope、Gogma Predictionが返すamendment後の復元ボーナスは `gogma_artian` scopeである。通常→巨戟化時はNormal Predictionまたは所持Normalの `normal_artian` scope 5枠をslot順のまま継承し、通常→巨戟Bonus Type MappingからRank・抽選結果・完成5枠を生成しない。
+Normal Artian Predictionが扱う復元ボーナス定義は `normal_artian` scope、Gogma Predictionが返すamendment後の復元ボーナスは `gogma_artian` scopeである。通常→巨戟化時はNormal Predictionまたは所持Normalの `normal_artian` scope 5枠をslot順のまま継承し、通常→巨戟Bonus Type MappingからRank・抽選結果・完成5枠を生成しない。Mappingは、Keep predictionでnormal-scope current slotの通常側Bonus Typeを巨戟側Bonus Type（Keep family）へ正規化するためにだけ使う。
 
 ---
 

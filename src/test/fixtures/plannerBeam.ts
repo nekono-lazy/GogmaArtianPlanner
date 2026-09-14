@@ -227,6 +227,7 @@ export function fixture(
       lotteries: [],
       materialCosts: [],
       bonusRanks: targetEvaluationMaster.bonusRanks,
+      artianBonusTypeMappings: [],
     },
     conflictResolutions: [],
   }

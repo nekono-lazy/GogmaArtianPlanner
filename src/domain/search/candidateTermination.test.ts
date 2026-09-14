@@ -20,7 +20,7 @@ import { searchNormalArtianRoutes } from './normalArtianRouteSearch'
 import { searchOwnedNormalArtianRoutes } from './ownedNormalArtianRouteSearch'
 import { searchExistingGogmaRoutes } from './existingGogmaRouteSearch'
 import { selectCanonicalIdealCandidate } from './candidateRetention'
-import { gogmaKeepFamilyLayoutKey } from '../rng/gogmaBonusFamily'
+import { keepFamilyLayoutKey } from '../rng/gogmaBonusFamily'
 
 function fixture(ideal = true, bound = 100) {
   const input = createCandidateSearchInput()
@@ -40,7 +40,7 @@ function fixture(ideal = true, bound = 100) {
     return { seriesSkillId: ideal && skillCounter === 8 ? 'series_skill.fixture.a' : 'series.other.' + skillCounter, groupSkillId: 'group_skill.fixture.a' }
   })
   vi.spyOn(engine, 'predictGogmaBonus').mockImplementation(({ gogmaCounter, operation }) => {
-    calls.push(operation.type + ':' + gogmaCounter + (operation.type === 'keep_bonuses' ? ':' + gogmaKeepFamilyLayoutKey(operation.currentBonuses) : ''))
+    calls.push(operation.type + ':' + gogmaCounter + (operation.type === 'keep_bonuses' ? ':' + keepFamilyLayoutKey(operation.currentBonuses, input.master) : ''))
     if (operation.type === 'reset_bonuses' && gogmaCounter === 10) return structuredClone(input.targetWeapons[0].idealBonuses)
     return practicalOnlyBonuses()
   })
@@ -76,9 +76,14 @@ describe('B4 actual Target-wide termination', () => {
     })
     expect(ideals[0].route.operations.map((op) => op.type))
       .toEqual(['create_normal_artian', 'convert_normal_to_gogma', 'reset_bonuses'])
-    expect(engine.predictGogmaBonus).toHaveBeenCalledTimes(1)
+    // Both first amendments are predicted from the known normal-scope slots:
+    // one Reset and one Keep at the same Gogma position (SEARCH_SPEC 5.9).
+    expect(engine.predictGogmaBonus).toHaveBeenCalledTimes(2)
     expect(engine.predictGogmaBonus).toHaveBeenCalledWith(expect.objectContaining({
       gogmaCounter: 10, operation: { type: 'reset_bonuses' },
+    }))
+    expect(engine.predictGogmaBonus).toHaveBeenCalledWith(expect.objectContaining({
+      gogmaCounter: 10, operation: { type: 'keep_bonuses', currentBonuses: idealBonuses },
     }))
     expect(engine.predictSkills).toHaveBeenCalledTimes(1) // Conversion only: independent Skill shortcut.
     expect(candidates.every((c) => c.estimatedOperationCount <= 3)).toBe(true)
@@ -97,9 +102,14 @@ describe('B4 actual Target-wide termination', () => {
       restorationBonusScope: 'gogma_artian', estimatedOperationCount: 1,
       route: { kind: 'existing_gogma_reset_bonuses', sourceOwnedWeaponId: source.id },
     })
-    expect(engine.predictGogmaBonus).toHaveBeenCalledTimes(1)
+    // Keep is offered from the inherited normal-scope slots too; its fixture
+    // result misses the Ideal, so the Reset stays the canonical Ideal Route.
+    expect(engine.predictGogmaBonus).toHaveBeenCalledTimes(2)
     expect(engine.predictGogmaBonus).toHaveBeenCalledWith(expect.objectContaining({
       operation: { type: 'reset_bonuses' },
+    }))
+    expect(engine.predictGogmaBonus).toHaveBeenCalledWith(expect.objectContaining({
+      operation: { type: 'keep_bonuses', currentBonuses: source.restorationBonuses },
     }))
     expect(engine.predictSkills).not.toHaveBeenCalled()
   })

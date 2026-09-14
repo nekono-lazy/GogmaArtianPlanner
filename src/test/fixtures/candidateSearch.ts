@@ -38,6 +38,23 @@ export const searchMasterFixture: SearchMasterSubset = {
   elements: [],
   bonusTypes: [],
   bonusRanks: targetEvaluationMaster.bonusRanks.map((rank) => ({ ...rank })),
+  /**
+   * The Keep family authority of the fixture bonus types. A Normal-side fixture
+   * type maps onto a Gogma-side one exactly like the real Master's Sharpness /
+   * Capacity mapping, so Search tests can exercise the mapping-aware layout.
+   */
+  artianBonusTypeMappings: [
+    {
+      id: 'artian_bonus_mapping.fixture.attack',
+      normalBonusTypeId: 'bonus_type.fixture.attack',
+      gogmaBonusTypeId: 'bonus_type.fixture.attack',
+    },
+    {
+      id: 'artian_bonus_mapping.fixture.sharpness',
+      normalBonusTypeId: 'bonus_type.fixture.normal_sharpness',
+      gogmaBonusTypeId: 'bonus_type.fixture.sharpness',
+    },
+  ],
   lotteries: [
     {
       id: 'lottery.fixture.normal.a.8',
@@ -111,6 +128,7 @@ export function createCandidateSearchInput(): CandidateSearchInput {
       elements: searchMasterFixture.elements.map((element) => ({ ...element })),
       bonusTypes: searchMasterFixture.bonusTypes.map((bonusType) => ({ ...bonusType })),
       bonusRanks: searchMasterFixture.bonusRanks.map((rank) => ({ ...rank })),
+      artianBonusTypeMappings: searchMasterFixture.artianBonusTypeMappings.map((mapping) => ({ ...mapping })),
       lotteries: searchMasterFixture.lotteries.map((lottery) => ({ ...lottery })),
       materialCosts: searchMasterFixture.materialCosts.map((cost) => ({ ...cost })),
     },

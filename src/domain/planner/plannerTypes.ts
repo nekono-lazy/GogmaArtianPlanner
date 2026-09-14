@@ -17,6 +17,7 @@ import type {
   TargetWeaponId,
 } from '../models/publicTypes'
 import type {
+  ArtianBonusTypeMapping,
   BonusRankMaster,
   BonusTypeMaster,
   ElementMaster,
@@ -99,6 +100,8 @@ export interface PlannerMasterSubset {
   lotteries: LotteryMaster[]
   materialCosts: MaterialCostMaster[]
   bonusRanks: BonusRankMaster[]
+  /** Keep family resolution authority for Normal-side bonus types (`docs/RNG_SPEC.md` 6.1). */
+  artianBonusTypeMappings: ArtianBonusTypeMapping[]
   /** Caller-supplied Production Gogma Reset availability inputs. */
   elements: ElementMaster[]
   /** Caller-supplied Production Gogma Reset availability inputs. */

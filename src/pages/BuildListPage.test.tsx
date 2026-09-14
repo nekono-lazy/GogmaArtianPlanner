@@ -104,6 +104,7 @@ function dependencies(
         elements: [],
         bonusTypes: [],
         bonusRanks: [],
+        artianBonusTypeMappings: [],
         lotteries: [],
         materialCosts: [],
       },

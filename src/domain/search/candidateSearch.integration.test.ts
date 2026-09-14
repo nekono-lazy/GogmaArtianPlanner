@@ -904,7 +904,9 @@ describe('Candidate Search routes', () => {
     )
   })
 
-  it('does not start Keep from inherited Normal-scope Gogma bonuses', async () => {
+  it('starts Keep directly from inherited Normal-scope Gogma bonuses', async () => {
+    // The owned Gogma's five slots are known, so Keep is its first amendment
+    // and the result carries gogma_artian scope (`docs/SEARCH_SPEC.md` 5.9).
     const input = createCandidateSearchInput()
     input.routeFilter = 'existing_gogma'
     input.ownedWeapons[0].isProtected = false
@@ -914,27 +916,21 @@ describe('Candidate Search routes', () => {
       input,
       createCandidateSearchEngine(input, {
         keepSupported: true,
-        resetResult: createRestorationBonusSet(),
+        keepResult: createRestorationBonusSet(),
       }),
       deterministicExecution,
     )
-    expect(candidatesOf(result.targetResult).some(({ route }) =>
-      route.operations[0]?.type === 'keep_bonuses',
-    )).toBe(false)
-    expect(candidatesOf(result.targetResult).some(({ route }) =>
-      route.operations.map(({ type }) => type).join(',') === 'reset_bonuses',
-    )).toBe(true)
-    expect(result.targetResult.searchedRoutes).not.toContain(
+    const keep = candidatesOf(result.targetResult).find(
+      ({ route }) => route.kind === 'existing_gogma_keep_bonuses',
+    )
+    expect(keep?.route.operations.map(({ type }) => type)).toEqual(['keep_bonuses'])
+    expect(keep?.restorationBonusScope).toBe('gogma_artian')
+    expect(keep?.finalBonuses).toEqual(createRestorationBonusSet())
+    expect(result.targetResult.searchedRoutes).toContain(
       'existing_gogma_keep_bonuses',
     )
-    expect(result.targetResult.searchedRoutes).toContain(
-      'existing_gogma_mixed',
-    )
-    expect(result.targetResult.skippedRoutes).toContainEqual(
-      expect.objectContaining({
-        route: 'existing_gogma_keep_bonuses',
-        reason: 'normal_scope_keep_prediction_unsupported',
-      }),
+    expect(result.targetResult.skippedRoutes).not.toContainEqual(
+      expect.objectContaining({ route: 'existing_gogma_keep_bonuses' }),
     )
   })
 

@@ -53,8 +53,8 @@ export function restorationBonusFromReferenceGogmaId(referenceId: number): Resto
  *
  * This is the Reset/Keep **result** namespace, so it stays limited to
  * `REFERENCE_GOGMA_RESET_CANDIDATES`. It is not the Keep **current input**
- * check: a legal current slot may hold a Gogma tier the lottery never produces
- * (see `gogmaScopeKeepCurrentBonusFamily`).
+ * check: a current slot only selects its family, read from its bonus type
+ * alone (see `keepCurrentBonusFamily`), and its tier is never looked up here.
  */
 export function referenceGogmaIdFromRestorationBonus(bonus: RestorationBonus): number {
   const referenceId = REFERENCE_ID_BY_SEMANTIC_BONUS.get(semanticBonusKey(bonus))

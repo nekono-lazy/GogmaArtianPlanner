@@ -175,21 +175,32 @@ describe('Planner Beam Search', () => {
 
   it.each([
     {
-      name: 'rejects conversion then Keep without Reset',
+      // The predicted forge knows its five slots, so Keep needs no Reset first.
+      name: 'accepts conversion then Keep without Reset',
+      amendments: ['keep_bonuses'] as const,
+      valid: true,
+      blind: false,
+    },
+    {
+      // A blind forge's slots are unknown until a Reset rewrites them.
+      name: 'rejects conversion then Keep without Reset after a blind forge',
       amendments: ['keep_bonuses'] as const,
       valid: false,
+      blind: true,
     },
     {
       name: 'accepts conversion then Reset',
       amendments: ['reset_bonuses'] as const,
       valid: true,
+      blind: false,
     },
     {
       name: 'accepts conversion then Reset then Keep',
       amendments: ['reset_bonuses', 'keep_bonuses'] as const,
       valid: true,
+      blind: false,
     },
-  ])('$name for a newly forged Normal output', async ({ amendments, valid }) => {
+  ])('$name for a newly forged Normal output', async ({ amendments, valid, blind }) => {
     const goal = target(`target.transient.new.${amendments.join('.')}`)
     const operations: BuildRoute['operations'] = [
       {
@@ -197,8 +208,8 @@ describe('Planner Beam Search', () => {
         weaponTypeId: goal.weaponTypeId,
         rarity: 8,
         count: 1,
-        normalCounterBefore: 4,
-        normalCounterAfter: 5,
+        normalCounterBefore: blind ? null : 4,
+        normalCounterAfter: blind ? null : 5,
       },
       {
         type: 'convert_normal_to_gogma',
@@ -222,6 +233,10 @@ describe('Planner Beam Search', () => {
     if (amendments.some((type) => String(type) === 'keep_bonuses')) {
       vi.spyOn(dependencies.rngEngine, 'predictGogmaBonus')
         .mockReturnValue(createRestorationBonusSet())
+      // A Keep as the first amendment reads the forged slots, which Planner
+      // validation predicts exactly like a later Keep reads a Reset result.
+      vi.spyOn(dependencies.rngEngine, 'predictNormalArtian')
+        .mockReturnValue(belowPracticalBonuses())
     }
     const validation = validatePlannerInput(input, dependencies)
     expect(validation.validBuildListEntries).toHaveLength(valid ? 1 : 0)
@@ -242,9 +257,10 @@ describe('Planner Beam Search', () => {
 
   it.each([
     {
-      name: 'rejects conversion then Keep without Reset',
+      // The owned Normal's five slots are known, so Keep needs no Reset first.
+      name: 'accepts conversion then Keep without Reset',
       amendments: ['keep_bonuses'] as const,
-      valid: false,
+      valid: true,
     },
     {
       name: 'accepts conversion then Reset then Keep',
@@ -339,7 +355,7 @@ describe('Planner Beam Search', () => {
     })
   })
 
-  it('requires Reset after transient Reset Skills before Keep', () => {
+  it('accepts Keep first on a predicted route and requires Reset first only on a blind route', () => {
     const route = (operations: BuildRoute['operations']): BuildRoute => ({
       kind: 'normal_artian_to_gogma',
       sourceOwnedWeaponId: null,
@@ -367,8 +383,17 @@ describe('Planner Beam Search', () => {
       type: 'reset_bonuses' as const, sourceOwnedWeaponId: null,
       gogmaCounterBefore: 10, gogmaCounterAfter: 11,
     }
-    expect(validateBuildRoute(route([...prefix, keep])).isValid).toBe(false)
+    // The predicted variant knows the forged slots: Keep may come first.
+    expect(validateBuildRoute(route([...prefix, keep])).isValid).toBe(true)
     expect(validateBuildRoute(route([...prefix, reset, { ...keep, gogmaCounterBefore: 11, gogmaCounterAfter: 12 }])).isValid).toBe(true)
+    // The blind variant's slots are unknown until a Reset rewrites them.
+    const blindPrefix: BuildRoute['operations'] = [
+      { ...prefix[0], normalCounterBefore: null, normalCounterAfter: null } as BuildRoute['operations'][number],
+      prefix[1],
+      prefix[2],
+    ]
+    expect(validateBuildRoute(route([...blindPrefix, keep])).isValid).toBe(false)
+    expect(validateBuildRoute(route([...blindPrefix, reset, { ...keep, gogmaCounterBefore: 11, gogmaCounterAfter: 12 }])).isValid).toBe(true)
   })
 
   it('keeps Owned-Normal transient scope through Reset Skills', async () => {
@@ -406,6 +431,48 @@ describe('Planner Beam Search', () => {
     expect(result.bestState?.routeRuntimeByEntryId[entry.id]).toEqual({
       hasUnregisteredGogmaOutput: true,
       transientRestorationBonusScope: 'normal_artian',
+    })
+  })
+
+  it('plans Keep as the first amendment of a converted Owned Normal and moves the transient scope to gogma', async () => {
+    const goal = target('target.transient.owned-keep-first')
+    const source = {
+      ...createValidOwnedWeapon(ownedWeaponId('owned.transient.keep-first')),
+      kind: 'normal' as const,
+      rarity: 8 as const,
+      restorationBonusScope: 'normal_artian' as const,
+      seriesSkillId: null,
+      groupSkillId: null,
+      status: null,
+      isProtected: false,
+    }
+    const entry = routeEntry('entry.transient.owned-keep-first', goal, {
+      kind: 'owned_normal_artian_to_gogma',
+      sourceOwnedWeaponId: source.id,
+      operations: [
+        {
+          type: 'convert_normal_to_gogma',
+          weaponTypeId: goal.weaponTypeId,
+          skillCounterBefore: 7,
+          skillCounterAfter: 8,
+        },
+        {
+          type: 'keep_bonuses',
+          sourceOwnedWeaponId: null,
+          gogmaCounterBefore: 10,
+          gogmaCounterAfter: 11,
+        },
+      ],
+    })
+    const { input, dependencies } = fixture([goal], [entry], [source])
+    const validation = validatePlannerInput(input, dependencies)
+    expect(validation.validBuildListEntries.map((valid) => valid.entry.id)).toEqual([entry.id])
+    const result = await runPlannerBeamSearch(input, dependencies)
+    expect(result.bestState?.trace.map(({ actionType }) => actionType))
+      .toEqual(['convert_normal_to_gogma', 'keep_bonuses', 'reserve_weapon'])
+    expect(result.bestState?.routeRuntimeByEntryId[entry.id]).toEqual({
+      hasUnregisteredGogmaOutput: true,
+      transientRestorationBonusScope: 'gogma_artian',
     })
   })
 
