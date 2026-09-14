@@ -351,6 +351,7 @@ export function NormalCountersPage({ dependencies = defaultDependencies }: { dep
           baseSeed={baseSeed.seed}
           initialCounterRange={{ startInclusive: 0, endInclusive: Math.min(settings.defaultSearchLimit, MAX_NORMAL_ARTIAN_IDENTIFICATION_COUNTER) }}
           bonusTypes={master.bonusTypes}
+          elements={master.elements}
           client={session.client}
           createRequestId={requestId}
           debugMode={debugMode}

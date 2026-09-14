@@ -4,8 +4,15 @@ import type {
   WeaponTypeId,
 } from '../../models/publicTypes'
 import type { NormalizedSeed, RngPredictionUnsupportedReason } from '../rngEngine'
+import type { NormalArtianLotteryTableClass } from '../normalArtianLotteryTable'
 import { REFERENCE_RNG_BLOCK_SIZE } from '../production/referencePrng'
 import type { InclusiveNumberRange } from './skillIdentificationTypes'
+
+export {
+  NORMAL_ARTIAN_LOTTERY_TABLE_CLASSES,
+  isNormalArtianLotteryTableClass,
+  type NormalArtianLotteryTableClass,
+} from '../normalArtianLotteryTable'
 
 /**
  * The largest starting Normal Counter one identification may evaluate.
@@ -22,25 +29,24 @@ export const MAX_NORMAL_ARTIAN_IDENTIFICATION_COUNTER = Math.floor(
 )
 
 /**
- * The only element distinction the Normal Artian lottery makes.
+ * One forged rarity-8 Normal Artian weapon: the lottery table it drew from and
+ * its five ordered slots.
  *
  * The Normal seed is Base Seed + weapon type + rarity; the element never
- * enters it. The element decides only which candidate pool is drawn from, and
- * that pool is the same for Fire, Water, Thunder, Ice, Dragon, Poison,
- * Paralysis, Sleep, and Blast (`docs/RNG_SPEC.md` 9.12). Counter
- * identification therefore never asks for an exact `ElementId`; it asks only
- * whether the forged weapon had an attribute at all.
+ * enters it. The element decides only which candidate pool one forge draws
+ * from, and that choice is the `NormalArtianLotteryTableClass` of the weapon
+ * type (`docs/RNG_SPEC.md` 9.12): for the Bow, Table A is Fire / Water /
+ * Thunder / Ice / Dragon / Blast and Table B is none / Poison / Paralysis /
+ * Sleep; for the Melee category and the Bowguns, Table A is any attribute and
+ * Table B is none. Counter identification therefore never asks for an exact
+ * `ElementId`; it asks only which table the forged weapon drew from.
+ *
+ * A table class is not a Counter stream: observations of both tables sit on
+ * the same weapon-type Counter, observation `i` at `C + i` whichever table it
+ * used.
  */
-export type NormalArtianAttributeClass = 'none' | 'attribute_present'
-
-export const NORMAL_ARTIAN_ATTRIBUTE_CLASSES: readonly NormalArtianAttributeClass[] = [
-  'none',
-  'attribute_present',
-]
-
-/** One forged rarity-8 Normal Artian weapon: its attribute class and five ordered slots. */
 export interface NormalArtianCounterObservation {
-  readonly attributeClass: NormalArtianAttributeClass
+  readonly tableClass: NormalArtianLotteryTableClass
   readonly bonuses: RestorationBonusSet
 }
 

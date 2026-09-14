@@ -1,4 +1,10 @@
-import type { NormalArtianCounterIdentificationResult } from '../domain/rng/identification'
+import type { ElementMaster } from '../domain/master/masterTypes'
+import type { ElementId, WeaponTypeId } from '../domain/models/publicTypes'
+import type {
+  NormalArtianCounterIdentificationResult,
+  NormalArtianLotteryTableClass,
+} from '../domain/rng/identification'
+import { normalArtianLotteryTableClassElementIds } from '../domain/rng/production/gameNormalBonuses'
 import type { RngPredictionUnsupportedReason } from '../domain/rng/rngEngine'
 
 /** The formal result classes of `docs/RNG_SPEC.md` 9.12; only `unique` may be confirmed. */
@@ -30,4 +36,51 @@ export function normalCounterIdentificationUnsupportedLabel(
     default:
       return 'この入力はCounter検索に対応していません。'
   }
+}
+
+/** One selectable lottery table of the observation UI, labelled for the weapon type. */
+export interface NormalCounterIdentificationTableClassOption {
+  readonly tableClass: NormalArtianLotteryTableClass
+  readonly label: string
+}
+
+/**
+ * The two table-class radio options for one weapon type (`docs/UI_FLOW.md` 6).
+ *
+ * The split itself comes from the Domain classification
+ * (`normalArtianLotteryTableClassElementIds()`); this function only decides
+ * how to word it. When Table B holds nothing but 無属性 the tables are the
+ * familiar 属性あり / 無属性 distinction and are labelled that way (Melee,
+ * Bowguns). When an attribute also draws from Table B (the Bow), the label
+ * spells out which elements belong to each table, using the Master display
+ * names, so the user never sees the internal `table_a` / `table_b` enum and
+ * never has to know the classification by heart. Returns `null` for a weapon
+ * type without a Production pool.
+ */
+export function normalCounterIdentificationTableClassOptions(
+  weaponTypeId: WeaponTypeId,
+  elements: readonly ElementMaster[],
+): readonly NormalCounterIdentificationTableClassOption[] | null {
+  let tableA: readonly ElementId[]
+  let tableB: readonly ElementId[]
+  try {
+    tableA = normalArtianLotteryTableClassElementIds(weaponTypeId, 'table_a')
+    tableB = normalArtianLotteryTableClassElementIds(weaponTypeId, 'table_b')
+  } catch {
+    return null
+  }
+  const attributeOnlySplit = tableB.length === 1 && tableB[0] === 'element.none'
+  if (attributeOnlySplit) {
+    return [
+      { tableClass: 'table_a', label: '属性あり' },
+      { tableClass: 'table_b', label: '無属性' },
+    ]
+  }
+  const names = new Map(elements.map((element) => [element.id, element.displayNameJa] as const))
+  const list = (elementIds: readonly ElementId[]) =>
+    elementIds.map((elementId) => names.get(elementId) ?? elementId).join('・')
+  return [
+    { tableClass: 'table_a', label: `テーブルA（${list(tableA)}）` },
+    { tableClass: 'table_b', label: `テーブルB（${list(tableB)}）` },
+  ]
 }

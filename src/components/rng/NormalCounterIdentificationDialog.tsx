@@ -5,23 +5,25 @@ import {
   RadioGroup, Select, Stack, TextField, Typography,
 } from '@mui/material'
 import { StatusChip, type StatusTone } from '../StatusChip'
-import type { BonusTypeMaster } from '../../domain/master/masterTypes'
+import type { BonusTypeMaster, ElementMaster } from '../../domain/master/masterTypes'
 import type { BonusTypeId, RestorationBonus, RestorationBonusSet, WeaponTypeId } from '../../domain/models/publicTypes'
 import { V1_NORMAL_ARTIAN_RARITY } from '../../domain/models/publicTypes'
 import {
   MAX_NORMAL_ARTIAN_IDENTIFICATION_COUNTER,
   normalArtianCounterObservationBonusOptions,
   type InclusiveNumberRange,
-  type NormalArtianAttributeClass,
   type NormalArtianCounterIdentificationInput,
   type NormalArtianCounterIdentificationProgress,
   type NormalArtianCounterIdentificationResult,
   type NormalArtianCounterObservation,
+  type NormalArtianLotteryTableClass,
 } from '../../domain/rng/identification'
 import type { NormalizedSeed, RngPredictionUnsupportedReason } from '../../domain/rng/rngEngine'
 import {
   classifyNormalCounterIdentificationResult,
+  normalCounterIdentificationTableClassOptions,
   normalCounterIdentificationUnsupportedLabel,
+  type NormalCounterIdentificationTableClassOption,
 } from '../../presentation/normalCounterIdentification'
 import {
   NormalArtianCounterIdentificationCancelledError,
@@ -47,19 +49,17 @@ const SAFETY_NOTICE_LINES = [
 type SlotDraft = BonusTypeId | null
 type SlotDrafts = readonly [SlotDraft, SlotDraft, SlotDraft, SlotDraft, SlotDraft]
 
-/** One forged weapon as typed so far: its attribute class and five ordered slots. */
+/** One forged weapon as typed so far: the lottery table it drew from and five ordered slots. */
 interface ObservationDraft {
-  readonly attributeClass: NormalArtianAttributeClass
+  readonly tableClass: NormalArtianLotteryTableClass
   readonly slots: SlotDrafts
 }
 
-const attributeClassLabels: Record<NormalArtianAttributeClass, string> = {
-  attribute_present: '属性あり',
-  none: '無属性',
-}
+/** The Production pool options of each lottery table for the session's weapon type. */
+type OptionsByTableClass = Readonly<Record<NormalArtianLotteryTableClass, readonly RestorationBonus[]>>
 
 function emptyObservation(): ObservationDraft {
-  return { attributeClass: 'attribute_present', slots: [null, null, null, null, null] }
+  return { tableClass: 'table_a', slots: [null, null, null, null, null] }
 }
 
 /** The Domain error kinds the ordinary UI distinguishes; never a raw enum on screen. */
@@ -157,10 +157,10 @@ function parseCounterRange(start: string, end: string, observationCount: number)
 
 function completeObservations(
   drafts: readonly ObservationDraft[],
-  optionsByClass: Readonly<Record<NormalArtianAttributeClass, readonly RestorationBonus[]>>,
+  optionsByClass: OptionsByTableClass,
 ): NormalArtianCounterObservation[] {
   return drafts.map((draft, observationIndex) => {
-    const options = optionsByClass[draft.attributeClass]
+    const options = optionsByClass[draft.tableClass]
     const bonuses = draft.slots.map((bonusTypeId, slotIndex) => {
       const bonus = bonusTypeId === null ? undefined : options.find((option) => option.bonusTypeId === bonusTypeId)
       if (bonus === undefined) {
@@ -169,7 +169,7 @@ function completeObservations(
       return bonus
     })
     return {
-      attributeClass: draft.attributeClass,
+      tableClass: draft.tableClass,
       bonuses: [bonuses[0]!, bonuses[1]!, bonuses[2]!, bonuses[3]!, bonuses[4]!] as RestorationBonusSet,
     }
   })
@@ -266,12 +266,13 @@ function ErrorAlert({ error, debugMode }: { error: IdentificationErrorState; deb
 }
 
 function ObservationCard({
-  index, draft, isLast, optionsByClass, bonusNames, disabled, deleteDisabled, onChange, onDelete,
+  index, draft, isLast, optionsByClass, tableClassOptions, bonusNames, disabled, deleteDisabled, onChange, onDelete,
 }: {
   index: number
   draft: ObservationDraft
   isLast: boolean
-  optionsByClass: Readonly<Record<NormalArtianAttributeClass, readonly RestorationBonus[]>>
+  optionsByClass: OptionsByTableClass
+  tableClassOptions: readonly NormalCounterIdentificationTableClassOption[]
   bonusNames: ReadonlyMap<BonusTypeId, string>
   disabled: boolean
   deleteDisabled: boolean
@@ -282,17 +283,17 @@ function ObservationCard({
   const headingId = useId()
   const attributeLabelId = useId()
   const fieldIdPrefix = useId()
-  const options = optionsByClass[draft.attributeClass]
+  const options = optionsByClass[draft.tableClass]
   const filled = draft.slots.filter((slot) => slot !== null).length
   const completion: { label: string; tone: StatusTone } = filled === SLOT_COUNT
     ? { label: '入力 5/5枠', tone: 'positive' }
     : { label: `入力 ${filled}/${SLOT_COUNT}枠`, tone: 'neutral' }
 
-  const changeAttributeClass = (attributeClass: NormalArtianAttributeClass) => {
-    const allowed = new Set(optionsByClass[attributeClass].map(({ bonusTypeId }) => bonusTypeId))
-    // A slot whose bonus the other pool cannot draw is cleared, never guessed.
+  const changeTableClass = (tableClass: NormalArtianLotteryTableClass) => {
+    const allowed = new Set(optionsByClass[tableClass].map(({ bonusTypeId }) => bonusTypeId))
+    // A slot whose bonus the other table's pool cannot draw is cleared, never guessed.
     const slots = draft.slots.map((slot) => (slot !== null && allowed.has(slot) ? slot : null)) as unknown as SlotDrafts
-    onChange({ attributeClass, slots })
+    onChange({ tableClass, slots })
   }
   const changeSlot = (slotIndex: number, bonusTypeId: SlotDraft) => {
     const slots = [...draft.slots] as [SlotDraft, SlotDraft, SlotDraft, SlotDraft, SlotDraft]
@@ -320,18 +321,18 @@ function ObservationCard({
         <FormControl disabled={disabled}>
           <FormLabel id={attributeLabelId}>観測{number} 属性区分</FormLabel>
           <RadioGroup
-            row
             aria-labelledby={attributeLabelId}
-            value={draft.attributeClass}
-            onChange={(event) => changeAttributeClass(event.target.value as NormalArtianAttributeClass)}
+            value={draft.tableClass}
+            onChange={(event) => changeTableClass(event.target.value as NormalArtianLotteryTableClass)}
+            sx={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 3 }}
           >
-            {(['attribute_present', 'none'] as const).map((attributeClass) => (
+            {tableClassOptions.map((option) => (
               <FormControlLabel
-                key={attributeClass}
-                value={attributeClass}
+                key={option.tableClass}
+                value={option.tableClass}
                 control={<Radio />}
-                label={attributeClassLabels[attributeClass]}
-                sx={{ minHeight: 44, mr: 3 }}
+                label={option.label}
+                sx={{ minHeight: 44, mr: 0, maxWidth: '100%', '& .MuiFormControlLabel-label': { overflowWrap: 'anywhere' } }}
               />
             ))}
           </RadioGroup>
@@ -386,6 +387,8 @@ export interface NormalCounterIdentificationDialogProps {
   baseSeed: NormalizedSeed
   initialCounterRange: InclusiveNumberRange
   bonusTypes: readonly BonusTypeMaster[]
+  /** Master elements, used only to word the lottery table options in Japanese. */
+  elements: readonly ElementMaster[]
   /** Owned by the caller: created when the session opens, disposed when it ends. */
   client: NormalArtianCounterIdentificationWorkerClient
   createRequestId(): string
@@ -407,7 +410,7 @@ const buttonSx = { minHeight: 44 } as const
  * confirmed Counter and nothing else.
  */
 export function NormalCounterIdentificationDialog({
-  weaponTypeId, weaponName, baseSeed, initialCounterRange, bonusTypes, client, createRequestId,
+  weaponTypeId, weaponName, baseSeed, initialCounterRange, bonusTypes, elements, client, createRequestId,
   debugMode, onConfirm, onClose,
 }: NormalCounterIdentificationDialogProps) {
   const titleId = useId()
@@ -437,16 +440,23 @@ export function NormalCounterIdentificationDialog({
 
   // The option authority is the Production pool itself; a weapon type without
   // one yields no options and the session fails closed instead of guessing.
-  const optionsByClass = useMemo<Readonly<Record<NormalArtianAttributeClass, readonly RestorationBonus[]>> | null>(() => {
+  const optionsByClass = useMemo<OptionsByTableClass | null>(() => {
     try {
       return {
-        attribute_present: normalArtianCounterObservationBonusOptions(weaponTypeId, 'attribute_present'),
-        none: normalArtianCounterObservationBonusOptions(weaponTypeId, 'none'),
+        table_a: normalArtianCounterObservationBonusOptions(weaponTypeId, 'table_a'),
+        table_b: normalArtianCounterObservationBonusOptions(weaponTypeId, 'table_b'),
       }
     } catch {
       return null
     }
   }, [weaponTypeId])
+  // The wording of the two tables follows the Domain classification of this
+  // weapon type: 属性あり / 無属性 where only 無属性 draws Table B, and the
+  // element lists (テーブルA / テーブルB) where an attribute draws Table B too.
+  const tableClassOptions = useMemo(
+    () => normalCounterIdentificationTableClassOptions(weaponTypeId, elements),
+    [weaponTypeId, elements],
+  )
   const bonusNames = useMemo(
     () => new Map(bonusTypes.map((bonusType) => [bonusType.id, bonusType.displayNameJa] as const)),
     [bonusTypes],
@@ -562,12 +572,12 @@ export function NormalCounterIdentificationDialog({
       <DialogContent dividers sx={{ px: { xs: 2, sm: 3 } }}>
         <Stack spacing={{ xs: 2, sm: 3 }}>
           <SafetyNotice title="開始前に必ず確認してください" />
-          {optionsByClass === null ? (
+          {optionsByClass === null || tableClassOptions === null ? (
             <Alert severity="error">{normalCounterIdentificationUnsupportedLabel('normal_pool_unverified')}</Alert>
           ) : (
             <>
               <Alert severity="info">
-                同じ武器種を連続して作成した結果を、作成した順に入力してください。対象はレア8の通常アーティアです。属性の種類は選択せず、属性あり / 無属性だけを区別します。各観測の復元ボーナスは表示順（1〜5）のまま入力し、並べ替えないでください。
+                同じ武器種を連続して作成した結果を、作成した順に入力してください。対象はレア8の通常アーティアです。属性の種類そのものは選択せず、各観測ではその武器の属性が属する抽選テーブル区分（{tableClassOptions.map((option) => option.label).join(' / ')}）だけを選びます。どちらの区分で作成してもCounterは同じ1本を消費します。各観測の復元ボーナスは表示順（1〜5）のまま入力し、並べ替えないでください。
               </Alert>
 
               <Stack spacing={1.5}>
@@ -580,6 +590,7 @@ export function NormalCounterIdentificationDialog({
                       draft={draft}
                       isLast={index === observations.length - 1}
                       optionsByClass={optionsByClass}
+                      tableClassOptions={tableClassOptions}
                       bonusNames={bonusNames}
                       disabled={editingLocked}
                       deleteDisabled={editingLocked || observations.length === 1}

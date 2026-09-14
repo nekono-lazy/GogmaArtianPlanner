@@ -7,9 +7,13 @@ import type {
 } from '../../models/publicTypes'
 import { V1_NORMAL_ARTIAN_RARITY } from '../../models/common'
 import type { RngEngine, RngPredictionSupport } from '../rngEngine'
-import { gameVerifiedNormalCandidatesForWeaponAndElement } from '../production/gameNormalBonuses'
+import {
+  NORMAL_ARTIAN_LOTTERY_TABLE_CLASSES,
+  isNormalArtianLotteryTableClass,
+  type NormalArtianLotteryTableClass,
+} from '../normalArtianLotteryTable'
+import { gameVerifiedNormalCandidatesForWeaponAndTableClass } from '../production/gameNormalBonuses'
 import { selectReferenceNormalLotteryIdsFromRawValues } from '../production/normalPrediction'
-import { toReferenceNormalFinalAttribute } from '../production/referenceAdapters'
 import {
   referenceNormalIdFromRestorationBonus,
   restorationBonusFromReferenceNormalId,
@@ -26,9 +30,7 @@ import { deriveNormalArtianSeed } from '../production/seedDerivation'
 import { applyReferencePrngJump, compileReferencePrngJump } from './referencePrngJump'
 import {
   MAX_NORMAL_ARTIAN_IDENTIFICATION_COUNTER,
-  NORMAL_ARTIAN_ATTRIBUTE_CLASSES,
   NormalArtianCounterIdentificationError,
-  type NormalArtianAttributeClass,
   type NormalArtianCounterIdentificationExecutionOptions,
   type NormalArtianCounterIdentificationInput,
   type NormalArtianCounterIdentificationResult,
@@ -39,44 +41,36 @@ const NORMAL_RESULT_SLOT_COUNT = 5
 const DEFAULT_COUNTER_CHUNK_SIZE = 1_000
 
 /**
- * Internal pool-selection representatives for the Production adapter.
+ * Internal support-query representatives for the Production adapter.
  *
- * `predictNormalArtian` and `getPredictionSupport` take an `ElementId`, while
- * the Normal lottery distinguishes only "no attribute" from "any attribute"
- * (`docs/RNG_SPEC.md` 9.12). `element.fire` here means "select the
- * attribute-present pool" and nothing else: it never claims the observed
- * weapon was Fire, and it must never be persisted, displayed, or written into
- * an observation or result.
+ * The candidate pool itself is taken directly from
+ * `gameVerifiedNormalCandidatesForWeaponAndTableClass()`; this map exists only
+ * because `RngEngine.getPredictionSupport()` takes an `ElementId`. `element.fire`
+ * here means "query support for the Table A pool" and `element.none` means
+ * "query support for the Table B pool", nothing more: neither claims the
+ * observed weapon had that element, and neither is persisted, displayed, or
+ * written into an observation or result. For every supported weapon type Fire
+ * is a Table A element and none is a Table B element, so the queried pool is
+ * the observed table's pool.
  */
-const REPRESENTATIVE_ELEMENT_BY_ATTRIBUTE_CLASS: Readonly<
-  Record<NormalArtianAttributeClass, ElementId>
+const SUPPORT_QUERY_ELEMENT_BY_TABLE_CLASS: Readonly<
+  Record<NormalArtianLotteryTableClass, ElementId>
 > = {
-  none: 'element.none',
-  attribute_present: 'element.fire',
+  table_a: 'element.fire',
+  table_b: 'element.none',
 }
 
-/** The Production adapter's pool-selection representative; see the constant above. */
-export function normalArtianAttributeClassRepresentativeElementId(
-  attributeClass: NormalArtianAttributeClass,
+/** The Production adapter's support-query representative; see the constant above. */
+export function normalArtianLotteryTableClassSupportQueryElementId(
+  tableClass: NormalArtianLotteryTableClass,
 ): ElementId {
-  return REPRESENTATIVE_ELEMENT_BY_ATTRIBUTE_CLASS[attributeClass]
-}
-
-/**
- * Classifies a concrete element the way the Normal lottery does: elementless
- * or attribute-present. Every non-none element of the reference final-attribute
- * adapter is one class. Unknown elements raise the adapter's `RangeError`.
- */
-export function normalArtianAttributeClassFromElementId(
-  elementId: ElementId,
-): NormalArtianAttributeClass {
-  return toReferenceNormalFinalAttribute(elementId) === 1 ? 'none' : 'attribute_present'
+  return SUPPORT_QUERY_ELEMENT_BY_TABLE_CLASS[tableClass]
 }
 
 /**
  * The semantic bonuses one observation slot may hold for a weapon type and
- * attribute class: the Production pool of that class
- * (`gameVerifiedNormalCandidatesForWeaponAndElement()`) mapped slot-wise
+ * lottery table class: the Production pool of that table
+ * (`gameVerifiedNormalCandidatesForWeaponAndTableClass()`) mapped slot-wise
  * through the reference semantic mapping, in pool order. It is the observation
  * UI's option authority, so the UI never carries a lottery table of its own.
  *
@@ -86,12 +80,9 @@ export function normalArtianAttributeClassFromElementId(
  */
 export function normalArtianCounterObservationBonusOptions(
   weaponTypeId: WeaponTypeId,
-  attributeClass: NormalArtianAttributeClass,
+  tableClass: NormalArtianLotteryTableClass,
 ): readonly RestorationBonus[] {
-  return gameVerifiedNormalCandidatesForWeaponAndElement(
-    weaponTypeId,
-    normalArtianAttributeClassRepresentativeElementId(attributeClass),
-  )
+  return gameVerifiedNormalCandidatesForWeaponAndTableClass(weaponTypeId, tableClass)
     .map((candidate) => restorationBonusFromReferenceNormalId(weaponTypeId, candidate.referenceId))
     .filter((bonus): bonus is RestorationBonus => bonus !== null)
 }
@@ -99,7 +90,7 @@ export function normalArtianCounterObservationBonusOptions(
 /**
  * Whether the active Engine can identify this weapon type's Counter at all,
  * judged the way the kernel judges a request: the Engine capability first,
- * then `getPredictionSupport()` for both attribute classes. The first
+ * then `getPredictionSupport()` for both lottery table classes. The first
  * unsupported reason wins (`normal_pool_unverified` for Switch Axe), so a UI
  * can refuse to start before any observation is entered, with the same
  * structured reason the kernel would return.
@@ -112,8 +103,8 @@ export function getNormalArtianCounterIdentificationSupport(
   if (!engine.capabilities.supportsNormalArtianPrediction) {
     return { supported: false, reason: 'engine_capability_unavailable' }
   }
-  for (const attributeClass of NORMAL_ARTIAN_ATTRIBUTE_CLASSES) {
-    const support = normalPredictionSupport({ weaponTypeId, rarity }, attributeClass, engine)
+  for (const tableClass of NORMAL_ARTIAN_LOTTERY_TABLE_CLASSES) {
+    const support = normalPredictionSupport({ weaponTypeId, rarity }, tableClass, engine)
     if (!support.supported) return support
   }
   return { supported: true }
@@ -130,10 +121,6 @@ function requireSafeInteger(value: number, label: string): void {
   if (!Number.isSafeInteger(value)) {
     throw new NormalArtianCounterIdentificationError('invalid_input', `${label} must be a safe integer.`)
   }
-}
-
-function isAttributeClass(value: unknown): value is NormalArtianAttributeClass {
-  return NORMAL_ARTIAN_ATTRIBUTE_CLASSES.includes(value as NormalArtianAttributeClass)
 }
 
 function isStructurallyValidBonusSet(bonuses: unknown): bonuses is RestorationBonusSet {
@@ -155,10 +142,10 @@ function validateObservation(observation: NormalArtianCounterObservation): void 
       'Every Normal Artian observation must be an object.',
     )
   }
-  if (!isAttributeClass(observation.attributeClass)) {
+  if (!isNormalArtianLotteryTableClass(observation.tableClass)) {
     throw new NormalArtianCounterIdentificationError(
       'invalid_input',
-      'Every Normal Artian observation must declare attributeClass "none" or "attribute_present".',
+      'Every Normal Artian observation must declare tableClass "table_a" or "table_b".',
     )
   }
   if (!isStructurallyValidBonusSet(observation.bonuses)) {
@@ -231,23 +218,23 @@ function validateInput(input: NormalArtianCounterIdentificationInput, engine: Rn
   return Number(normalizedSeed)
 }
 
-function distinctAttributeClasses(
+function distinctTableClasses(
   observations: readonly NormalArtianCounterObservation[],
-): readonly NormalArtianAttributeClass[] {
-  return NORMAL_ARTIAN_ATTRIBUTE_CLASSES.filter((attributeClass) =>
-    observations.some((observation) => observation.attributeClass === attributeClass))
+): readonly NormalArtianLotteryTableClass[] {
+  return NORMAL_ARTIAN_LOTTERY_TABLE_CLASSES.filter((tableClass) =>
+    observations.some((observation) => observation.tableClass === tableClass))
 }
 
 function normalPredictionSupport(
   input: Pick<NormalArtianCounterIdentificationInput, 'weaponTypeId' | 'rarity'>,
-  attributeClass: NormalArtianAttributeClass,
+  tableClass: NormalArtianLotteryTableClass,
   engine: RngEngine,
 ): RngPredictionSupport {
   try {
     return engine.getPredictionSupport({
       type: 'normal_artian',
       weaponTypeId: input.weaponTypeId,
-      elementId: normalArtianAttributeClassRepresentativeElementId(attributeClass),
+      elementId: normalArtianLotteryTableClassSupportQueryElementId(tableClass),
       rarity: input.rarity,
     })
   } catch (error) {
@@ -262,14 +249,14 @@ function normalPredictionSupport(
 }
 
 /**
- * Fails closed on every attribute class the observations use. The Production
- * Engine answers `normal_pool_unverified` for a weapon type with no
+ * Fails closed on every lottery table class the observations use. The
+ * Production Engine answers `normal_pool_unverified` for a weapon type with no
  * game-verified Normal pool; that reason is forwarded as structured data and
  * never replaced by a reference-pool fallback.
  */
 function requirePredictionSupport(
   input: NormalArtianCounterIdentificationInput,
-  attributeClasses: readonly NormalArtianAttributeClass[],
+  tableClasses: readonly NormalArtianLotteryTableClass[],
   engine: RngEngine,
 ): void {
   if (!engine.capabilities.supportsNormalArtianPrediction) {
@@ -279,8 +266,8 @@ function requirePredictionSupport(
       'engine_capability_unavailable',
     )
   }
-  for (const attributeClass of attributeClasses) {
-    const support = normalPredictionSupport(input, attributeClass, engine)
+  for (const tableClass of tableClasses) {
+    const support = normalPredictionSupport(input, tableClass, engine)
     if (!support.supported) {
       throw new NormalArtianCounterIdentificationError(
         'unsupported_input',
@@ -293,21 +280,18 @@ function requirePredictionSupport(
 
 function compileObservations(
   input: NormalArtianCounterIdentificationInput,
-  attributeClasses: readonly NormalArtianAttributeClass[],
+  tableClasses: readonly NormalArtianLotteryTableClass[],
 ): readonly CompiledObservation[] {
-  const candidatesByClass = new Map<NormalArtianAttributeClass, readonly ReferenceNormalCandidate[]>(
-    attributeClasses.map((attributeClass) => [
-      attributeClass,
-      gameVerifiedNormalCandidatesForWeaponAndElement(
-        input.weaponTypeId,
-        normalArtianAttributeClassRepresentativeElementId(attributeClass),
-      ),
+  const candidatesByTableClass = new Map<NormalArtianLotteryTableClass, readonly ReferenceNormalCandidate[]>(
+    tableClasses.map((tableClass) => [
+      tableClass,
+      gameVerifiedNormalCandidatesForWeaponAndTableClass(input.weaponTypeId, tableClass),
     ]),
   )
   return input.observations.map((observation) => {
-    const candidates = candidatesByClass.get(observation.attributeClass)
+    const candidates = candidatesByTableClass.get(observation.tableClass)
     if (candidates === undefined) {
-      throw new Error(`Normal Artian pool is missing for ${observation.attributeClass}`)
+      throw new Error(`Normal Artian pool is missing for ${observation.tableClass}`)
     }
     let referenceIds: ReferenceNormalLotteryId[]
     try {
@@ -332,7 +316,7 @@ function compileObservations(
 /**
  * An observation the selected game-verified pool can never draw is malformed
  * input, not a legitimate zero-match search. Two conditions are checked: every
- * slot's reference ID must be a candidate of that observation's attribute-class
+ * slot's reference ID must be a candidate of that observation's table-class
  * pool, and no candidate may occur more often than its `maximumOccurrences`,
  * because the pool step removes a candidate once it reaches that count.
  */
@@ -350,7 +334,7 @@ function requireProducibleByPool(
       throw new NormalArtianCounterIdentificationError(
         'invalid_input',
         `Slot ${slot + 1} (${bonus.bonusTypeId} / ${bonus.bonusRankId}) cannot be produced by the ` +
-          `${observation.attributeClass} Normal Artian pool of this weapon type.`,
+          `${observation.tableClass} Normal Artian pool of this weapon type.`,
       )
     }
     const count = (occurrences.get(referenceId) ?? 0) + 1
@@ -360,7 +344,7 @@ function requireProducibleByPool(
       throw new NormalArtianCounterIdentificationError(
         'invalid_input',
         `${bonus.bonusTypeId} / ${bonus.bonusRankId} occurs more than ${candidate.maximumOccurrences} ` +
-          `times, which the ${observation.attributeClass} Normal Artian pool of this weapon type cannot produce.`,
+          `times, which the ${observation.tableClass} Normal Artian pool of this weapon type cannot produce.`,
       )
     }
   }
@@ -417,7 +401,8 @@ function matchesObservations(
  * and steps ten words per Counter afterwards, so the correctness authority
  * stays `ProductionRngEngine.predictNormalArtian()`: the same seed derivation,
  * block addressing, game-verified pool, and pool step are shared, and nothing
- * is re-derived.
+ * is re-derived. Observations of both lottery tables walk the one shared
+ * Counter; each observation is matched against the pool of its own table.
  */
 export async function identifyNormalArtianCounter(
   input: NormalArtianCounterIdentificationInput,
@@ -425,9 +410,9 @@ export async function identifyNormalArtianCounter(
   options: NormalArtianCounterIdentificationExecutionOptions = {},
 ): Promise<NormalArtianCounterIdentificationResult> {
   const baseSeed = validateInput(input, engine)
-  const attributeClasses = distinctAttributeClasses(input.observations)
-  requirePredictionSupport(input, attributeClasses, engine)
-  const observations = compileObservations(input, attributeClasses)
+  const tableClasses = distinctTableClasses(input.observations)
+  requirePredictionSupport(input, tableClasses, engine)
+  const observations = compileObservations(input, tableClasses)
   const chunkSize = options.counterChunkSize ?? DEFAULT_COUNTER_CHUNK_SIZE
   requireSafeInteger(chunkSize, 'Counter chunk size')
   if (chunkSize < 1) {

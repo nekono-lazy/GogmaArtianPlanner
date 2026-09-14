@@ -1,9 +1,13 @@
 import type { RestorationBonus, RestorationBonusSet } from '../../domain/models/publicTypes'
 
 /**
- * Game-observed Normal Artian Bow results. These establish only the elemental
- * Bow candidate-pool behavior described below; they do not verify all Bows or
- * all game versions.
+ * Game-observed Normal Artian results. Each constant records real forges at
+ * Base Seed 51231782 and proves only the weapon type, element, and Counter
+ * positions it lists; none verifies all weapons, all elements, or all game
+ * versions. Bow provenance is layered (docs/RNG_REFERENCE_AUDIT.md 14.15):
+ * Fire, Blast, Poison, Paralysis, Sleep, and none are direct observations,
+ * while Water / Thunder / Ice / Dragon have no fixture here and sit on Table A
+ * by category-level adoption.
  */
 function bonus(bonusTypeId: string): RestorationBonus {
   return { bonusTypeId, bonusRankId: 'bonus_rank.base' }
@@ -162,5 +166,50 @@ export const gameVerifiedLongSwordNoneNormalVectors = [
   {
     baseSeed: 51231782, weaponTypeId: 'weapon.long_sword', elementId: 'element.none', rarity: 8, normalCounter: 2,
     gameLotteryIds: [6, 6, 6, 6, 7], bonuses: set(attack, attack, attack, attack, sharpness),
+  },
+] as const
+
+/*
+ * Bow Table A / Table B direct game observations (docs/RNG_REFERENCE_AUDIT.md
+ * 14.15). Each row below is a real forge observed directly in the game at
+ * Base Seed 51231782 / Normal Counter 0, produced by restoring the same save
+ * before every forge so that different elements could be compared at the same
+ * PRNG Counter. Fire Counter 0 / 1 were re-observed in the same session and
+ * matched `gameVerifiedBowElementalNormalVectors` again; they are not repeated
+ * here. Blast drew exactly the Fire result, so it is a Table A element;
+ * Poison, Paralysis, and Sleep drew exactly the `gameVerifiedBowNoneNormalVectors`
+ * Counter 0 result, so they are Table B elements. Water / Thunder / Ice /
+ * Dragon were not observed and have no fixture.
+ */
+
+/** Direct game observation: Bow Blast, Counter 0, Table A `[6, 4, 8]`. */
+export const gameVerifiedBowBlastNormalVectors = [
+  {
+    baseSeed: 51231782, weaponTypeId: 'weapon.bow', elementId: 'element.blast', rarity: 8, normalCounter: 0,
+    gameLotteryIds: [6, 6, 8, 4, 4], bonuses: set(attack, attack, affinity, element, element),
+  },
+] as const
+
+/** Direct game observation: Bow Poison, Counter 0, Table B `[6, 8]`. */
+export const gameVerifiedBowPoisonNormalVectors = [
+  {
+    baseSeed: 51231782, weaponTypeId: 'weapon.bow', elementId: 'element.poison', rarity: 8, normalCounter: 0,
+    gameLotteryIds: [8, 8, 6, 6, 8], bonuses: set(affinity, affinity, attack, attack, affinity),
+  },
+] as const
+
+/** Direct game observation: Bow Paralysis, Counter 0, Table B `[6, 8]`. */
+export const gameVerifiedBowParalysisNormalVectors = [
+  {
+    baseSeed: 51231782, weaponTypeId: 'weapon.bow', elementId: 'element.paralysis', rarity: 8, normalCounter: 0,
+    gameLotteryIds: [8, 8, 6, 6, 8], bonuses: set(affinity, affinity, attack, attack, affinity),
+  },
+] as const
+
+/** Direct game observation: Bow Sleep, Counter 0, Table B `[6, 8]`. */
+export const gameVerifiedBowSleepNormalVectors = [
+  {
+    baseSeed: 51231782, weaponTypeId: 'weapon.bow', elementId: 'element.sleep', rarity: 8, normalCounter: 0,
+    gameLotteryIds: [8, 8, 6, 6, 8], bonuses: set(affinity, affinity, attack, attack, affinity),
   },
 ] as const

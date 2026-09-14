@@ -189,9 +189,11 @@ validity境界とDexie schemaは別の概念であり、片方の更新はもう
 gameVersion、Master Data version、`supportsSeedSearch = false` は維持する。
 `PRODUCTION_RNG_ENGINE_VERSION` はこのcheckpoint境界では `production-rng:c5-e2` のまま維持し、
 その後の通常アーティア抽選上限修正（[RNG_SPEC.md](./RNG_SPEC.md) 6.3.1）で `production-rng:c5-e3` へ、
-さらに近接武器Melee support拡張（[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.14）で現在の
-`production-rng:c5-e4` へ更新した。いずれの修正もappSchemaVersionを上げず、`rngEngineVersion` の差だけで
+さらに近接武器Melee support拡張（[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.14）で
+`production-rng:c5-e4` へ、弓のNormal Table A / B分類修正（[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.15）で
+現在の `production-rng:c5-e5` へ更新した。いずれの修正もappSchemaVersionを上げず、`rngEngineVersion` の差だけで
 旧BuildCandidate / BuildListEntry / ProductionPlanを `calculation_context_changed` にする。
+Table A / BはNormal Counterを分けない: `NormalArtianCounter` のID、persisted shape、Counter semanticsは変更していない。
 
 version 1の既存BuildCandidate / BuildListEntry / ProductionPlanはversion 2以降とCalculationContext
 非互換であり、現行計算結果として再利用しない。BuildListEntryは既存のstale再判定で

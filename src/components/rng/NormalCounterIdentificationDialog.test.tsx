@@ -37,6 +37,7 @@ function setup(overrides: Partial<NormalCounterIdentificationDialogProps> = {}) 
     baseSeed: BASE_SEED,
     initialCounterRange: { startInclusive: 0, endInclusive: 5000 },
     bonusTypes: master.bonusTypes,
+    elements: master.elements,
     client,
     createRequestId: vi.fn(() => `request-${++requestCounter}`),
     debugMode: false,
@@ -63,7 +64,7 @@ async function fillObservation(user: ReturnType<typeof userEvent.setup>, number:
 }
 
 describe('NormalCounterIdentificationDialog', () => {
-  it('fixes rarity 8, offers only 属性あり / 無属性, and lists five ordered slots drawn from the Production pool', async () => {
+  it('fixes rarity 8, offers only 属性あり / 無属性 for a Melee weapon, and lists five ordered slots drawn from the Production pool', async () => {
     const user = userEvent.setup()
     setup()
     expect(screen.getByRole('dialog', { name: '通常アーティアCounter検索: 双剣' })).toBeInTheDocument()
@@ -151,7 +152,7 @@ describe('NormalCounterIdentificationDialog', () => {
       rarity: 8,
       observations: [
         {
-          attributeClass: 'attribute_present',
+          tableClass: 'table_a',
           bonuses: [
             { bonusTypeId: 'bonus_type.attack', bonusRankId: 'bonus_rank.base' },
             { bonusTypeId: 'bonus_type.element', bonusRankId: 'bonus_rank.base' },
@@ -161,7 +162,7 @@ describe('NormalCounterIdentificationDialog', () => {
           ],
         },
         {
-          attributeClass: 'none',
+          tableClass: 'table_b',
           bonuses: [
             { bonusTypeId: 'bonus_type.affinity', bonusRankId: 'bonus_rank.base' },
             { bonusTypeId: 'bonus_type.attack', bonusRankId: 'bonus_rank.base' },
@@ -391,5 +392,76 @@ describe('NormalCounterIdentificationDialog', () => {
     expect(screen.queryByRole('button', { name: '検索' })).not.toBeInTheDocument()
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
     expect(client.identify).not.toHaveBeenCalled()
+  })
+
+  describe('Bow lottery tables', () => {
+    const TABLE_A = 'テーブルA（火・水・雷・氷・龍・爆破）'
+    const TABLE_B = 'テーブルB（無属性・毒・麻痺・睡眠）'
+
+    it('offers exactly Table A / Table B with their element lists, no exact element dropdown, and no raw enum', () => {
+      setup({ weaponTypeId: 'weapon.bow', weaponName: '弓' })
+      const card = observationCard(1)
+      const radios = within(card).getAllByRole('radio')
+      expect(radios.map((radio) => radio.getAttribute('aria-label') ?? radio.closest('label')?.textContent)).toEqual([TABLE_A, TABLE_B])
+      expect(within(card).getByRole('radio', { name: TABLE_A })).toBeChecked()
+      expect(within(card).getByRole('radio', { name: TABLE_B })).not.toBeChecked()
+      expect(within(card).queryByRole('radio', { name: '属性あり' })).not.toBeInTheDocument()
+      expect(within(card).queryByRole('radio', { name: '無属性' })).not.toBeInTheDocument()
+      for (const exact of ['火', '水', '雷', '氷', '龍', '毒', '麻痺', '睡眠', '爆破', '無属性']) {
+        expect(within(card).queryByRole('radio', { name: exact })).not.toBeInTheDocument()
+        expect(within(card).queryByRole('option', { name: exact })).not.toBeInTheDocument()
+      }
+      // Only the five slot selects exist; there is no element combobox.
+      expect(within(card).getAllByRole('combobox')).toHaveLength(5)
+      expect(screen.queryByText(/table_a|table_b|attribute_present/)).not.toBeInTheDocument()
+      expect(screen.getByText(/属性の種類そのものは選択せず/)).toBeInTheDocument()
+      expect(screen.getByText(/どちらの区分で作成してもCounterは同じ1本を消費します/)).toBeInTheDocument()
+    })
+
+    it('draws Table A options from [Attack, Element, Affinity] and Table B from [Attack, Affinity], clearing an Element slot on switch', async () => {
+      const user = userEvent.setup()
+      setup({ weaponTypeId: 'weapon.bow', weaponName: '弓' })
+      const card = observationCard(1)
+      await user.click(within(card).getByRole('combobox', { name: /観測1 復元ボーナス1/ }))
+      const tableAOptions = within(await screen.findByRole('listbox')).getAllByRole('option').map((option) => option.textContent)
+      expect(tableAOptions).toEqual(['未入力', ATTACK, ELEMENT, AFFINITY])
+      expect(tableAOptions).not.toContain(SHARPNESS)
+      expect(tableAOptions).not.toContain(CAPACITY)
+      await user.keyboard('{Escape}')
+      await pickSlot(user, 1, 1, ELEMENT)
+      await pickSlot(user, 1, 2, ATTACK)
+      await user.click(within(card).getByRole('radio', { name: TABLE_B }))
+      // The Element slot cannot exist on Table B and is cleared; Attack survives.
+      expect(within(card).getByRole('combobox', { name: /観測1 復元ボーナス1/ })).toHaveTextContent('未入力')
+      expect(within(card).getByRole('combobox', { name: /観測1 復元ボーナス2/ })).toHaveTextContent(ATTACK)
+      await user.click(within(card).getByRole('combobox', { name: /観測1 復元ボーナス1/ }))
+      const tableBOptions = within(await screen.findByRole('listbox')).getAllByRole('option').map((option) => option.textContent)
+      expect(tableBOptions).toEqual(['未入力', ATTACK, AFFINITY])
+      expect(tableBOptions).not.toContain(ELEMENT)
+    }, 15_000)
+
+    it('sends tableClass table_a / table_b per observation on the one shared Bow Counter', async () => {
+      const user = userEvent.setup()
+      const { client } = setup({ weaponTypeId: 'weapon.bow', weaponName: '弓' })
+      // Observation 1: Blast (Table A) at Counter 0 as observed in the game.
+      await fillObservation(user, 1, [ATTACK, ATTACK, AFFINITY, ELEMENT, ELEMENT])
+      await user.click(screen.getByRole('button', { name: '観測を追加' }))
+      // Observation 2: Poison (Table B) at the next Counter of the same stream.
+      await user.click(within(observationCard(2)).getByRole('radio', { name: TABLE_B }))
+      await fillObservation(user, 2, [AFFINITY, AFFINITY, ATTACK, ATTACK, AFFINITY])
+      await user.click(screen.getByRole('button', { name: '検索' }))
+      await waitFor(() => expect(client.identify).toHaveBeenCalledTimes(1))
+      const { input } = client.lastCall()
+      expect(input.weaponTypeId).toBe('weapon.bow')
+      expect(input.observations.map((observation) => observation.tableClass)).toEqual(['table_a', 'table_b'])
+      expect(input.observations[0]!.bonuses.map((bonus) => bonus.bonusTypeId)).toEqual([
+        'bonus_type.attack', 'bonus_type.attack', 'bonus_type.affinity', 'bonus_type.element', 'bonus_type.element',
+      ])
+      expect(input.observations[1]!.bonuses.map((bonus) => bonus.bonusTypeId)).toEqual([
+        'bonus_type.affinity', 'bonus_type.affinity', 'bonus_type.attack', 'bonus_type.attack', 'bonus_type.affinity',
+      ])
+      for (const observation of input.observations) expect(observation).not.toHaveProperty('elementId')
+      expect(JSON.stringify(input)).not.toContain('element.')
+    }, 20_000)
   })
 })

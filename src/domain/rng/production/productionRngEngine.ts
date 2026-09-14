@@ -36,7 +36,7 @@ import {
   REFERENCE_SKILL_COUNTER_GATE_THRESHOLD,
 } from './skillPrediction'
 
-export const PRODUCTION_RNG_ENGINE_VERSION = 'production-rng:c5-e4'
+export const PRODUCTION_RNG_ENGINE_VERSION = 'production-rng:c5-e5'
 
 const capabilities: RngEngineCapabilities = {
   supportsSeedSearch: false,

@@ -1,4 +1,8 @@
 import type { ElementId, WeaponTypeId } from '../../models/publicTypes'
+import {
+  NORMAL_ARTIAN_LOTTERY_TABLE_CLASSES,
+  type NormalArtianLotteryTableClass,
+} from '../normalArtianLotteryTable'
 import { toReferenceNormalFinalAttribute, toReferenceWeaponType } from './referenceAdapters'
 import type { ReferenceNormalCandidate } from './referenceNormalBonuses'
 
@@ -29,30 +33,60 @@ const GAME_ELEMENT: ReferenceNormalCandidate = { referenceId: 4, maximumOccurren
 const GAME_SHARPNESS_OR_CAPACITY: ReferenceNormalCandidate = { referenceId: 7, maximumOccurrences: 2 }
 const GAME_AFFINITY: ReferenceNormalCandidate = { referenceId: 8, maximumOccurrences: 3 }
 
-/**
- * Game-verified only for an elemental rarity-8 Bow Normal Artian result.
- * Evidence: Base Seed 51231782 / Fire / counters 0, 1, 2 (15 slots).
+/*
+ * Bow Table A / Table B (docs/RNG_REFERENCE_AUDIT.md 14.15).
+ *
+ * The Bow is the one supported weapon type whose pool is not decided by
+ * "attribute present or not". Direct game observation at Base Seed 51231782 /
+ * Normal Counter 0 showed Blast drawing exactly the Fire result `[6, 6, 8, 4, 4]`
+ * while Poison, Paralysis, and Sleep drew exactly the elementless result
+ * `[8, 8, 6, 6, 8]`. Provenance of the classification below is layered:
+ *
+ * - directly game-verified: Fire (Counters 0..2, re-confirmed at 0 / 1),
+ *   Blast, Poison, Paralysis, Sleep (Counter 0 each), and none (Counters 0..2)
+ * - category-level Production adoption: Water / Thunder / Ice / Dragon on
+ *   Table A, from the user-supplied Game8 table classification, the direct
+ *   Fire and Blast Table A fixtures, and no evidence contradicting the former
+ *   single elemental pool for the five elements
+ *
+ * Never describe every Bow element as directly game-verified.
  */
-export const GAME_VERIFIED_BOW_ELEMENTAL_NORMAL_CANDIDATES: readonly ReferenceNormalCandidate[] = [
+const BOW_TABLE_A_ELEMENT_IDS: ReadonlySet<ElementId> = new Set<ElementId>([
+  'element.fire',
+  'element.water',
+  'element.thunder',
+  'element.ice',
+  'element.dragon',
+  'element.blast',
+])
+const BOW_TABLE_B_ELEMENT_IDS: ReadonlySet<ElementId> = new Set<ElementId>([
+  'element.none',
+  'element.poison',
+  'element.paralysis',
+  'element.sleep',
+])
+
+/** Bow Table A pool `[6, 4, 8]`: Fire / Water / Thunder / Ice / Dragon / Blast. */
+export const GAME_VERIFIED_BOW_TABLE_A_NORMAL_CANDIDATES: readonly ReferenceNormalCandidate[] = [
   GAME_ATTACK,
   GAME_ELEMENT,
   GAME_AFFINITY,
 ]
 
-/** Game-verified for an elementless rarity-8 Bow Normal Artian result. */
-export const GAME_VERIFIED_BOW_NONE_NORMAL_CANDIDATES: readonly ReferenceNormalCandidate[] = [
+/** Bow Table B pool `[6, 8]`: none / Poison / Paralysis / Sleep. */
+export const GAME_VERIFIED_BOW_TABLE_B_NORMAL_CANDIDATES: readonly ReferenceNormalCandidate[] = [
   GAME_ATTACK,
   GAME_AFFINITY,
 ]
 
-/** Game-verified for both elemental and elementless rarity-8 Light Bowgun results. */
+/** Game-verified for both table classes of a rarity-8 Light Bowgun result. */
 export const GAME_VERIFIED_LIGHT_BOWGUN_NORMAL_CANDIDATES: readonly ReferenceNormalCandidate[] = [
   GAME_ATTACK,
   GAME_SHARPNESS_OR_CAPACITY,
   GAME_AFFINITY,
 ]
 
-/** Game-verified for both elemental and elementless rarity-8 Heavy Bowgun results. */
+/** Game-verified for both table classes of a rarity-8 Heavy Bowgun result. */
 export const GAME_VERIFIED_HEAVY_BOWGUN_NORMAL_CANDIDATES: readonly ReferenceNormalCandidate[] = [
   GAME_ATTACK,
   GAME_SHARPNESS_OR_CAPACITY,
@@ -81,13 +115,18 @@ export const GAME_VERIFIED_HEAVY_BOWGUN_NORMAL_CANDIDATES: readonly ReferenceNor
  *   type stream are shared by every weapon type with only the weapon type
  *   numeric value separating the seeds.
  *
+ * For the Melee category Table A is "any attribute" and Table B is "no
+ * attribute"; Poison / Paralysis / Sleep / Blast melee weapons stay on Table A
+ * exactly as before. The Bow-specific Table A / B split is never applied to
+ * Melee.
+ *
  * Switch Axe stays outside the category on purpose: Game8 describes it as a
  * separate table condition, and its pool, its attribute handling, and its
- * mapping onto `NormalArtianAttributeClass` were not covered by any real-game
- * fixture. Never add it here by inference.
+ * mapping onto `NormalArtianLotteryTableClass` were not covered by any
+ * real-game fixture. Never add it here by inference.
  */
 
-/** Production elemental Melee pool `[6, 4, 7, 8]`; see the category note above. */
+/** Production Melee Table A pool `[6, 4, 7, 8]` (any attribute); see the category note above. */
 export const GAME_VERIFIED_MELEE_ELEMENTAL_NORMAL_CANDIDATES: readonly ReferenceNormalCandidate[] = [
   GAME_ATTACK,
   GAME_ELEMENT,
@@ -95,7 +134,7 @@ export const GAME_VERIFIED_MELEE_ELEMENTAL_NORMAL_CANDIDATES: readonly Reference
   GAME_AFFINITY,
 ]
 
-/** Production elementless Melee pool `[6, 7, 8]`; see the category note above. */
+/** Production Melee Table B pool `[6, 7, 8]` (no attribute); see the category note above. */
 export const GAME_VERIFIED_MELEE_NONE_NORMAL_CANDIDATES: readonly ReferenceNormalCandidate[] = [
   GAME_ATTACK,
   GAME_SHARPNESS_OR_CAPACITY,
@@ -107,8 +146,8 @@ export const GAME_VERIFIED_MELEE_NONE_NORMAL_CANDIDATES: readonly ReferenceNorma
  *
  * This is the single place that decides Melee membership. An unknown weapon
  * type, and Switch Axe in particular, is never treated as Melee implicitly:
- * `gameVerifiedNormalCandidatesForWeaponAndElement()` fails closed for every
- * weapon type outside this set and the three ranged cases.
+ * every Production pool query fails closed for a weapon type outside this set
+ * and the three ranged cases.
  */
 export const PRODUCTION_MELEE_NORMAL_POOL_WEAPON_TYPE_IDS: ReadonlySet<WeaponTypeId> = new Set<WeaponTypeId>([
   'weapon.great_sword',
@@ -130,37 +169,129 @@ export function isProductionMeleeNormalPoolWeaponType(weaponTypeId: WeaponTypeId
 
 /** Game verification has not established a Normal pool for this input. */
 export class UnsupportedGameVerifiedNormalPredictionError extends Error {
-  constructor(weaponTypeId: WeaponTypeId, elementId: ElementId) {
-    super(`Game-verified Normal prediction is unsupported for ${weaponTypeId} / ${elementId}`)
+  constructor(weaponTypeId: WeaponTypeId, condition: ElementId | NormalArtianLotteryTableClass) {
+    super(`Game-verified Normal prediction is unsupported for ${weaponTypeId} / ${condition}`)
     this.name = 'UnsupportedGameVerifiedNormalPredictionError'
   }
 }
 
+function isProductionNormalPoolWeaponType(weaponTypeId: WeaponTypeId): boolean {
+  return (
+    weaponTypeId === 'weapon.bow' ||
+    weaponTypeId === 'weapon.light_bowgun' ||
+    weaponTypeId === 'weapon.heavy_bowgun' ||
+    isProductionMeleeNormalPoolWeaponType(weaponTypeId)
+  )
+}
+
+/** Every element the Normal final-attribute adapter knows, in adapter order. */
+const NORMAL_FINAL_ATTRIBUTE_ELEMENT_IDS: readonly ElementId[] = [
+  'element.none',
+  'element.fire',
+  'element.water',
+  'element.thunder',
+  'element.ice',
+  'element.dragon',
+  'element.poison',
+  'element.paralysis',
+  'element.sleep',
+  'element.blast',
+]
+
 /**
- * Returns candidates only for an explicitly supported Production Normal pool.
- * Callers needing a reference-only result must use predictReferenceNormalRaw.
+ * Classifies one concrete element of one supported weapon type into the
+ * Production lottery table it draws from (`docs/RNG_SPEC.md` 6.3.1).
+ *
+ * - Bow: the explicit Table A / Table B element sets above
+ * - Melee category: Table B for `element.none`, Table A for any attribute
+ * - Light / Heavy Bowgun: the same rule as Melee; both tables share one pool
+ *
+ * An unknown weapon type raises the adapter's `RangeError`; an unknown element
+ * raises the Normal final-attribute adapter's `RangeError`; a known weapon
+ * type without a Production pool (Switch Axe) raises
+ * `UnsupportedGameVerifiedNormalPredictionError`, because its table
+ * classification is unverified too. The element never enters the Normal seed.
  */
-export function gameVerifiedNormalCandidatesForWeaponAndElement(
+export function normalArtianLotteryTableClassForWeaponAndElement(
   weaponTypeId: WeaponTypeId,
   elementId: ElementId,
-): readonly ReferenceNormalCandidate[] {
+): NormalArtianLotteryTableClass {
   toReferenceWeaponType(weaponTypeId)
   const finalAttribute = toReferenceNormalFinalAttribute(elementId)
+  if (!isProductionNormalPoolWeaponType(weaponTypeId)) {
+    throw new UnsupportedGameVerifiedNormalPredictionError(weaponTypeId, elementId)
+  }
+  if (weaponTypeId === 'weapon.bow') {
+    if (BOW_TABLE_A_ELEMENT_IDS.has(elementId)) return 'table_a'
+    if (BOW_TABLE_B_ELEMENT_IDS.has(elementId)) return 'table_b'
+    // The adapter knows the element but the Bow classification does not: fail
+    // closed rather than guess a table for it.
+    throw new UnsupportedGameVerifiedNormalPredictionError(weaponTypeId, elementId)
+  }
+  return finalAttribute === 1 ? 'table_b' : 'table_a'
+}
+
+/**
+ * The element IDs of one table class for one supported weapon type, in the
+ * reference final-attribute order. This is the same classification
+ * `normalArtianLotteryTableClassForWeaponAndElement()` applies, exposed as a
+ * list so presentation code can describe a table by its elements without
+ * holding a table of its own. It never adds an element the adapter does not
+ * know and fails closed for an unsupported weapon type.
+ */
+export function normalArtianLotteryTableClassElementIds(
+  weaponTypeId: WeaponTypeId,
+  tableClass: NormalArtianLotteryTableClass,
+): readonly ElementId[] {
+  return NORMAL_FINAL_ATTRIBUTE_ELEMENT_IDS.filter(
+    (elementId) => normalArtianLotteryTableClassForWeaponAndElement(weaponTypeId, elementId) === tableClass,
+  )
+}
+
+/**
+ * The Production candidate pool one table class of one supported weapon type
+ * draws from. This is the pool authority for both Production prediction and
+ * Counter Identification; nothing falls back to the reference pools.
+ */
+export function gameVerifiedNormalCandidatesForWeaponAndTableClass(
+  weaponTypeId: WeaponTypeId,
+  tableClass: NormalArtianLotteryTableClass,
+): readonly ReferenceNormalCandidate[] {
+  toReferenceWeaponType(weaponTypeId)
+  if (!NORMAL_ARTIAN_LOTTERY_TABLE_CLASSES.includes(tableClass)) {
+    throw new RangeError(`Unsupported Normal Artian lottery table class: ${String(tableClass)}`)
+  }
   switch (weaponTypeId) {
     case 'weapon.bow':
-      return finalAttribute === 1
-        ? GAME_VERIFIED_BOW_NONE_NORMAL_CANDIDATES
-        : GAME_VERIFIED_BOW_ELEMENTAL_NORMAL_CANDIDATES
+      return tableClass === 'table_a'
+        ? GAME_VERIFIED_BOW_TABLE_A_NORMAL_CANDIDATES
+        : GAME_VERIFIED_BOW_TABLE_B_NORMAL_CANDIDATES
     case 'weapon.light_bowgun':
       return GAME_VERIFIED_LIGHT_BOWGUN_NORMAL_CANDIDATES
     case 'weapon.heavy_bowgun':
       return GAME_VERIFIED_HEAVY_BOWGUN_NORMAL_CANDIDATES
     default:
       if (isProductionMeleeNormalPoolWeaponType(weaponTypeId)) {
-        return finalAttribute === 1
-          ? GAME_VERIFIED_MELEE_NONE_NORMAL_CANDIDATES
-          : GAME_VERIFIED_MELEE_ELEMENTAL_NORMAL_CANDIDATES
+        return tableClass === 'table_a'
+          ? GAME_VERIFIED_MELEE_ELEMENTAL_NORMAL_CANDIDATES
+          : GAME_VERIFIED_MELEE_NONE_NORMAL_CANDIDATES
       }
-      throw new UnsupportedGameVerifiedNormalPredictionError(weaponTypeId, elementId)
+      throw new UnsupportedGameVerifiedNormalPredictionError(weaponTypeId, tableClass)
   }
+}
+
+/**
+ * Returns candidates only for an explicitly supported Production Normal pool,
+ * by classifying the exact element into its table class and then selecting
+ * that table's pool. Callers needing a reference-only result must use
+ * predictReferenceNormalRaw.
+ */
+export function gameVerifiedNormalCandidatesForWeaponAndElement(
+  weaponTypeId: WeaponTypeId,
+  elementId: ElementId,
+): readonly ReferenceNormalCandidate[] {
+  return gameVerifiedNormalCandidatesForWeaponAndTableClass(
+    weaponTypeId,
+    normalArtianLotteryTableClassForWeaponAndElement(weaponTypeId, elementId),
+  )
 }
