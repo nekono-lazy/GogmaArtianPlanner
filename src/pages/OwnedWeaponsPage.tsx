@@ -11,6 +11,7 @@ import {
   DialogTitle,
   FormControl,
   FormControlLabel,
+  FormHelperText,
   InputLabel,
   LinearProgress,
   MenuItem,
@@ -55,8 +56,11 @@ import {
   artianWeaponKindLabels,
   getPersistenceReferenceKindLabel,
   ownedWeaponStatusLabels,
+  restorationBonusScopeFieldLabel,
+  restorationBonusScopeGogmaHelpText,
   restorationBonusScopeLabels,
 } from '../presentation/labels'
+import { upsertPreservingOrder } from '../presentation/managementListOrder'
 
 const masterResult = loadMasterData()
 
@@ -241,10 +245,9 @@ export function OwnedWeaponsPage({
     }
     try {
       const saved = await api.save(draft, editing)
-      setWeapons((current) => [
-        ...current.filter(({ id }) => id !== saved.id),
-        saved,
-      ])
+      // A new weapon is appended; an edited one stays where it was
+      // (`docs/UI_FLOW.md` 3.2).
+      setWeapons((current) => upsertPreservingOrder(current, saved))
       const releasedIds = new Set(releasedTargets.map(({ id }) => id))
       if (releasedIds.size > 0) {
         setTargets((current) =>
@@ -408,7 +411,7 @@ export function OwnedWeaponsPage({
                   detail={
                     <Stack spacing={1}>
                       <Typography variant="body2">
-                        ボーナス区分: {restorationBonusScopeLabels[weapon.restorationBonusScope]}
+                        {restorationBonusScopeFieldLabel}: {restorationBonusScopeLabels[weapon.restorationBonusScope]}
                       </Typography>
                       <BonusSlotList heading="復元ボーナス" labels={bonusLabels(weapon)} />
                       {weapon.kind === 'gogma' && (
@@ -565,14 +568,15 @@ export function OwnedWeaponsPage({
                   // inherited normal-tier slots before its first bonus amendment,
                   // or Gogma-tier slots after one.
                   <FormControl fullWidth>
-                    <InputLabel id="owned-bonus-scope">ボーナス区分</InputLabel>
+                    <InputLabel id="owned-bonus-scope">{restorationBonusScopeFieldLabel}</InputLabel>
                     <Select
                       labelId="owned-bonus-scope"
-                      label="ボーナス区分"
+                      label={restorationBonusScopeFieldLabel}
                       value={draft.restorationBonusScope}
                       onChange={(event) =>
                         changeScope(draft, event.target.value as ArtianBonusScope)
                       }
+                      slotProps={{ input: { 'aria-describedby': 'owned-bonus-scope-help' } }}
                     >
                       {(Object.keys(restorationBonusScopeLabels) as ArtianBonusScope[]).map((scope) => (
                         <MenuItem
@@ -584,10 +588,13 @@ export function OwnedWeaponsPage({
                         </MenuItem>
                       ))}
                     </Select>
+                    <FormHelperText id="owned-bonus-scope-help">
+                      {restorationBonusScopeGogmaHelpText}
+                    </FormHelperText>
                   </FormControl>
                 ) : (
                   <Typography variant="body2" color="text.secondary">
-                    ボーナス区分: {restorationBonusScopeLabels[draft.restorationBonusScope]}
+                    {restorationBonusScopeFieldLabel}: {restorationBonusScopeLabels[draft.restorationBonusScope]}
                   </Typography>
                 )}
                 <BonusSetEditor

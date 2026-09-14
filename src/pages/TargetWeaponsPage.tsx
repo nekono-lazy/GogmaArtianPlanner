@@ -55,6 +55,7 @@ import {
   ownedWeaponStatusLabels,
   skillMatchModeLabels,
 } from '../presentation/labels'
+import { upsertPreservingOrder } from '../presentation/managementListOrder'
 import {
   EntityFormValidationError,
   ReferencedEntityDeleteError,
@@ -240,8 +241,10 @@ export function TargetWeaponsPage({
     if (!api || !draft) return
     try {
       const saved = await api.save(draft, editing)
+      // A new Target is appended and an edited one stays where it was; the
+      // released previous holder keeps its place too (`docs/UI_FLOW.md` 3.2).
       setTargets((current) =>
-        [...current.filter(({ id }) => id !== saved.id), saved].map((target) =>
+        upsertPreservingOrder(current, saved).map((target) =>
           // The Service released the previous holder in the same transaction,
           // so the list must show that release too (`docs/UI_FLOW.md` 8.1).
           target.id !== saved.id &&

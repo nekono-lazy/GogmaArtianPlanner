@@ -1796,19 +1796,19 @@ describe('ProductionPlanPage supplementary persisted content', () => {
     expect(within(gogma).getAllByRole('listitem').map(({ textContent }) => textContent)).toEqual([
       '攻撃High fixture', '攻撃High fixture', '攻撃Special fixture', '攻撃High fixture', '攻撃Special fixture',
     ])
-    expect(within(stepCard(1)).getByText('ボーナス区分: 巨戟amendment後（巨戟のボーナス）')).toBeInTheDocument()
+    expect(within(stepCard(1)).getByText('復元ボーナスの種類: 巨戟アーティア系')).toBeInTheDocument()
     const normal = within(stepCard(5)).getByRole('list', { name: 'ステップ 5 の予測復元ボーナス5枠' })
     // The Normal-scope definition names slot 1 (attack High); Special has no
     // Normal definition and falls back to the generic label.
     expect(within(normal).getAllByRole('listitem').map(({ textContent }) => textContent)).toEqual([
       '通常攻撃fixture', '通常攻撃fixture', '攻撃fixture Special fixture', '通常攻撃fixture', '攻撃fixture Special fixture',
     ])
-    expect(within(stepCard(5)).getByText('ボーナス区分: 通常継承（通常アーティアのボーナス）')).toBeInTheDocument()
+    expect(within(stepCard(5)).getByText('復元ボーナスの種類: 通常アーティア系')).toBeInTheDocument()
     const nullScope = within(stepCard(6)).getByRole('list', { name: 'ステップ 6 の予測復元ボーナス5枠' })
     expect(within(nullScope).getAllByRole('listitem').map(({ textContent }) => textContent)).toEqual([
       '攻撃fixture High fixture', '攻撃fixture High fixture', '攻撃fixture Special fixture', '攻撃fixture High fixture', '攻撃fixture Special fixture',
     ])
-    expect(within(stepCard(6)).getByText('ボーナス区分: 記録なし')).toBeInTheDocument()
+    expect(within(stepCard(6)).getByText('復元ボーナスの種類: 記録なし')).toBeInTheDocument()
   })
 
   it('wires every disclosure with unique ids, a heading slot and unmounted collapsed content', async () => {

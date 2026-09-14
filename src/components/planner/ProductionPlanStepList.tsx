@@ -6,6 +6,7 @@ import type {
 } from '../../domain/models/publicTypes'
 import {
   planStepOperationLabels,
+  restorationBonusScopeFieldLabel,
   restorationBonusScopeLabels,
 } from '../../presentation/labels'
 import type { SectionHeadingLevel } from '../headingLevel'
@@ -81,7 +82,7 @@ function ExpectedResultView({
             label={`ステップ ${step.order} の予測復元ボーナス5枠`}
           />
           <Typography variant="caption" color="text.secondary">
-            ボーナス区分:{' '}
+            {restorationBonusScopeFieldLabel}:{' '}
             {expected.restorationBonusScope === null
               ? '記録なし'
               : restorationBonusScopeLabels[expected.restorationBonusScope]}

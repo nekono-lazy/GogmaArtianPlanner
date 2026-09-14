@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createInitialRngState } from '../domain/models/factories'
 import type { RngState } from '../domain/models/publicTypes'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../domain/rng/production/productionRngEngine'
@@ -15,6 +15,22 @@ function dependencies(initial = createInitialRngState('2026-08-29T00:00:00.000Z'
     getNormalCounters: vi.fn(async () => []),
   }
   return { deps, getStored: () => stored }
+}
+
+/**
+ * A Browser-like `Worker` that accepts listeners and messages but never runs:
+ * enough for the Production Worker clients to construct, so the Wizard Dialog
+ * opens exactly as it does in a Browser. Identification itself is never run
+ * through it in this suite.
+ */
+class InertWorker {
+  onmessage: unknown = null
+  onerror: unknown = null
+  onmessageerror: unknown = null
+  addEventListener(): void {}
+  removeEventListener(): void {}
+  postMessage(): void {}
+  terminate(): void {}
 }
 
 /** A `dt` / `dd` row of a definition list, found by its term. */
@@ -35,6 +51,18 @@ async function openEngineDetails(user: ReturnType<typeof userEvent.setup>): Prom
 }
 
 describe('RngSetupPage', () => {
+  // jsdom has no `Worker`; a Browser does. The Wizard start control follows
+  // the application-level Identification availability, which mirrors that
+  // check, so the ordinary tests run as in a Browser and the no-Worker case
+  // unstubs it explicitly.
+  beforeEach(() => {
+    vi.stubGlobal('Worker', InertWorker)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('normalizes a decimal Base Seed, marks it manual, and preserves untouched KnownValues', async () => {
     const state = createInitialRngState('2026-08-29T00:00:00.000Z')
     state.gogmaCounter = { value: 11, isConfirmed: true, source: 'observation' }
@@ -157,8 +185,56 @@ describe('RngSetupPage', () => {
     expect(definitionRow(engine, 'スキル予測').textContent).toBe('スキル予測対応')
     expect(definitionRow(engine, '巨戟アーティア予測').textContent).toBe('巨戟アーティア予測対応')
     expect(definitionRow(engine, 'Keep Bonuses予測').textContent).toBe('Keep Bonuses予測対応')
-    expect(definitionRow(engine, 'Seed Search').textContent).toBe('Seed Search未対応')
+    // The legacy generic API flag keeps its meaning but is named as such, so
+    // it never reads as the Identification Wizard being unsupported.
+    expect(definitionRow(engine, '旧generic Seed Search API').textContent).toBe('旧generic Seed Search API未対応')
+    expect(within(engine).queryByText('Seed Search', { selector: 'dt' })).not.toBeInTheDocument()
+    expect(within(engine).queryByText('RNG同定', { selector: 'dt' })).not.toBeInTheDocument()
+    expect(screen.getByText(/旧generic Seed Search APIはIdentification Wizard（RNG同定）とは別の旧API契約です/)).toBeInTheDocument()
     expect(screen.queryByText(/本番RNG予測エンジンが未実装/)).not.toBeInTheDocument()
+  })
+
+  it('shows RNG identification as available and enables the Wizard start, independent of supportsSeedSearch', async () => {
+    // The shared beforeEach stubs `Worker`, as a Browser provides it.
+    render(<RngSetupPage dependencies={dependencies().deps} />)
+    const wizard = await screen.findByRole('region', { name: '値が分からない場合' })
+    expect(definitionRow(wizard, 'RNG同定').textContent).toBe('RNG同定利用可能')
+    expect(within(wizard).queryByText(/Web Worker/)).not.toBeInTheDocument()
+    expect(within(wizard).getByRole('button', { name: 'Identification Wizardを開始' })).toBeEnabled()
+    // The legacy flag is still false: the two are different contracts.
+    expect(productionRngEngine.capabilities.supportsSeedSearch).toBe(false)
+  })
+
+  it('shows RNG identification as unavailable, with its reason, and disables the Wizard start when the runtime has no Worker', async () => {
+    vi.unstubAllGlobals()
+    expect(typeof Worker).toBe('undefined')
+    const fixture = dependencies()
+    const createIdentificationCoordinator = vi.fn()
+    render(<RngSetupPage dependencies={{ ...fixture.deps, createIdentificationCoordinator }} />)
+    const wizard = await screen.findByRole('region', { name: '値が分からない場合' })
+    expect(definitionRow(wizard, 'RNG同定').textContent).toBe('RNG同定利用不可')
+    expect(within(wizard).getByText(/Web Workerを利用できないため、RNG同定を実行できません/)).toBeInTheDocument()
+    // The status and the start control never contradict each other.
+    const startWizard = within(wizard).getByRole('button', { name: 'Identification Wizardを開始' })
+    expect(startWizard).toBeDisabled()
+    // user-event refuses to click a disabled control; a raw DOM click on it
+    // is inert too, so nothing starts.
+    fireEvent.click(startWizard)
+    expect(createIdentificationCoordinator).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('keeps the Wizard start disabled by unsaved changes even when identification is available', async () => {
+    const user = userEvent.setup()
+    render(<RngSetupPage dependencies={dependencies().deps} />)
+    const wizard = await screen.findByRole('region', { name: '値が分からない場合' })
+    expect(definitionRow(wizard, 'RNG同定').textContent).toBe('RNG同定利用可能')
+    expect(within(wizard).getByRole('button', { name: 'Identification Wizardを開始' })).toBeEnabled()
+
+    await user.type(screen.getByLabelText('巨戟カウンター'), '5')
+    expect(within(wizard).getByRole('button', { name: 'Identification Wizardを開始' })).toBeDisabled()
+    // The availability status itself is unchanged by the unsaved edit.
+    expect(definitionRow(wizard, 'RNG同定').textContent).toBe('RNG同定利用可能')
   })
 
   it('keeps current availability separate from what the Engine itself supports', async () => {

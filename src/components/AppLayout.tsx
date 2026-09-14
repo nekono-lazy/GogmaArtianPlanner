@@ -35,18 +35,20 @@ interface NavigationGroup {
 }
 
 /**
- * Primary navigation, grouped by purpose (`docs/UI_FLOW.md` 2).
+ * Primary navigation: the everyday screens, grouped by purpose
+ * (`docs/UI_FLOW.md` 2.1). Rendered above the Drawer divider.
  *
  * Every group is shown on both PC and smartphone: the device never narrows
- * which screens are reachable (`docs/UI_FLOW.md` 3.1).
+ * which screens are reachable (`docs/UI_FLOW.md` 3.1). Production Plan and
+ * Execution Navigator have no permanent entry here: they are reached from
+ * Build List / Dashboard once a Plan exists, and their Router paths are
+ * untouched.
  */
-const navigationGroups: NavigationGroup[] = [
+const primaryNavigationGroups: NavigationGroup[] = [
   { label: null, items: [{ label: 'ダッシュボード', to: '/', end: true }] },
   {
-    label: '準備',
+    label: '管理',
     items: [
-      { label: 'RNG状態設定', to: '/rng' },
-      { label: '通常アーティアカウンター', to: '/normal-counters' },
       { label: '所持武器', to: '/owned-weapons' },
       { label: '目標武器', to: '/target-weapons' },
     ],
@@ -56,6 +58,20 @@ const navigationGroups: NavigationGroup[] = [
     items: [
       { label: '候補検索', to: '/search' },
       { label: 'ビルドリスト', to: '/build-list' },
+    ],
+  },
+]
+
+/**
+ * One-time setup screens (`docs/UI_FLOW.md` 2.1), rendered below the Drawer
+ * divider so daily work sits above them.
+ */
+const setupNavigationGroups: NavigationGroup[] = [
+  {
+    label: '初期設定',
+    items: [
+      { label: 'RNG状態設定', to: '/rng' },
+      { label: '通常アーティアカウンター', to: '/normal-counters' },
     ],
   },
 ]
@@ -152,57 +168,56 @@ export function AppLayout() {
     },
   } as const
 
+  const renderNavigationItem = (item: NavigationItem) => (
+    <ListItemButton
+      key={item.to}
+      component={NavLink}
+      to={item.to}
+      end={item.end}
+      onClick={() => setMobileOpen(false)}
+      sx={navigationItemSx}
+    >
+      {/* A long label such as 通常アーティアカウンター wraps inside the
+          Drawer's usable width instead of widening the navigation. */}
+      <ListItemText primary={item.label} sx={{ minWidth: 0, overflowWrap: 'anywhere' }} />
+    </ListItemButton>
+  )
+
+  const renderNavigationGroup = (group: NavigationGroup, groupIndex: number) => (
+    <List
+      key={group.label ?? `group-${groupIndex}`}
+      subheader={
+        group.label ? (
+          <ListSubheader component="div" disableSticky>
+            {group.label}
+          </ListSubheader>
+        ) : undefined
+      }
+    >
+      {group.items.map(renderNavigationItem)}
+    </List>
+  )
+
+  /*
+    The navigation content is a block child that fills the Drawer paper's
+    *usable* width. It must not repeat `drawerWidth` as its own fixed width:
+    the paper is `overflow-y: auto`, so once its content is taller than the
+    viewport a vertical scrollbar takes part of the 240px paper width, and a
+    240px-wide child would then overflow horizontally and show a horizontal
+    scrollbar (`docs/UI_FLOW.md` 2.1). Vertical scrolling stays allowed.
+  */
   const navigationContent = (
-    <Box sx={{ width: drawerWidth }} role="navigation" aria-label="メインナビゲーション">
+    <Box sx={{ minWidth: 0 }} role="navigation" aria-label="メインナビゲーション">
       <Toolbar>
         <Typography variant="subtitle1">Gogma Artian Planner</Typography>
       </Toolbar>
       <Divider />
-      {navigationGroups.map((group, groupIndex) => (
-        <List
-          key={group.label ?? `group-${groupIndex}`}
-          subheader={
-            group.label ? (
-              <ListSubheader component="div" disableSticky>
-                {group.label}
-              </ListSubheader>
-            ) : undefined
-          }
-        >
-          {group.items.map((item) => (
-            <ListItemButton
-              key={item.to}
-              component={NavLink}
-              to={item.to}
-              end={item.end}
-              onClick={() => setMobileOpen(false)}
-              sx={navigationItemSx}
-            >
-              <ListItemText primary={item.label} />
-            </ListItemButton>
-          ))}
-        </List>
-      ))}
+      {primaryNavigationGroups.map(renderNavigationGroup)}
       <Divider />
+      {setupNavigationGroups.map(renderNavigationGroup)}
       <List>
-        <ListItemButton
-          component={NavLink}
-          to="/settings"
-          onClick={() => setMobileOpen(false)}
-          sx={navigationItemSx}
-        >
-          <ListItemText primary="設定" />
-        </ListItemButton>
-        {debugMode && (
-          <ListItemButton
-            component={NavLink}
-            to="/debug"
-            onClick={() => setMobileOpen(false)}
-            sx={navigationItemSx}
-          >
-            <ListItemText primary="デバッグ" />
-          </ListItemButton>
-        )}
+        {renderNavigationItem({ label: '設定', to: '/settings' })}
+        {debugMode && renderNavigationItem({ label: 'デバッグ', to: '/debug' })}
       </List>
     </Box>
   )
@@ -316,7 +331,7 @@ export function AppLayout() {
             open={mobileOpen}
             onClose={() => setMobileOpen(false)}
             ModalProps={{ keepMounted: true }}
-            sx={{ '& .MuiDrawer-paper': { width: drawerWidth } }}
+            sx={{ '& .MuiDrawer-paper': { width: drawerWidth, boxSizing: 'border-box' } }}
           >
             {navigationContent}
           </Drawer>

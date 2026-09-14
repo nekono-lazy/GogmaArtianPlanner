@@ -19,6 +19,10 @@ import {
   createProductionIdentificationWizardCoordinator,
   type IdentificationWizardCoordinator,
 } from '../services/rngIdentification/identificationWizardCoordinator'
+import {
+  getProductionIdentificationAvailability,
+  productionIdentificationUnavailableReasonLabels,
+} from '../services/rngIdentification/productionIdentificationAvailability'
 
 const masterResult = loadMasterData()
 
@@ -209,9 +213,23 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
     } catch (caught: unknown) { setSaveError(caught instanceof Error ? caught.message : 'RNG状態を保存できません。') }
   }
 
+  // Application-level Wizard availability (`docs/UI_FLOW.md` 5): never read from
+  // the Engine's legacy `supportsSeedSearch` flag, which is a different contract.
+  // It is the single authority for both the status shown and the start guard.
+  const identificationAvailability = getProductionIdentificationAvailability()
+
   const startIdentification = () => {
     setWizardError(null)
     setAdoptionNotice(null)
+    // Fail closed: the disabled button is not the only guard, so a start that
+    // bypasses it (a programmatic call) still never opens a Wizard whose
+    // Identification would end in `worker_unavailable`.
+    if (!identificationAvailability.isAvailable) {
+      setWizardError(
+        productionIdentificationUnavailableReasonLabels[identificationAvailability.reason],
+      )
+      return
+    }
     if (hasUnsavedChanges) {
       setWizardError(UNSAVED_WIZARD_MESSAGE)
       return
@@ -255,6 +273,10 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
 
         <SectionCard title="値が分からない場合" sx={{ borderLeftWidth: 4, borderLeftColor: 'primary.main' }}>
           <Stack spacing={1.5}>
+            <Box component="dl" sx={{ m: 0 }}>
+              <DefinitionRow label="RNG同定"><StatusChip label={identificationAvailability.isAvailable ? '利用可能' : '利用不可'} tone={identificationAvailability.isAvailable ? 'positive' : 'caution'} /></DefinitionRow>
+            </Box>
+            {!identificationAvailability.isAvailable && <Alert severity="warning">{productionIdentificationUnavailableReasonLabels[identificationAvailability.reason]}</Alert>}
             <Typography>Normal → Gogma conversionと連続Resetの観測から、専用Wizardで次の値を特定します。</Typography>
             <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
               <Typography component="li" variant="body2">Base Seed（基準シード）</Typography>
@@ -267,7 +289,7 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
             {wizardError && wizardError !== UNSAVED_WIZARD_MESSAGE && <Alert severity="error">{wizardError}</Alert>}
             {adoptionNotice && <Alert severity="success" onClose={() => setAdoptionNotice(null)}>{adoptionNotice}</Alert>}
             <Box>
-              <Button variant="contained" sx={{ minHeight: 44 }} disabled={!masterResult.ok || identificationCoordinator !== null || hasUnsavedChanges} onClick={startIdentification}>Identification Wizardを開始</Button>
+              <Button variant="contained" sx={{ minHeight: 44 }} disabled={!masterResult.ok || !identificationAvailability.isAvailable || identificationCoordinator !== null || hasUnsavedChanges} onClick={startIdentification}>Identification Wizardを開始</Button>
             </Box>
           </Stack>
         </SectionCard>
@@ -329,8 +351,9 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
         <DefinitionRow label="スキル予測"><StatusChip label={engineCapabilities.supportsSkillPrediction ? '対応' : '未対応'} tone={engineCapabilities.supportsSkillPrediction ? 'positive' : 'neutral'} /></DefinitionRow>
         <DefinitionRow label="巨戟アーティア予測"><StatusChip label={engineCapabilities.supportsGogmaPrediction ? '対応' : '未対応'} tone={engineCapabilities.supportsGogmaPrediction ? 'positive' : 'neutral'} /></DefinitionRow>
         <DefinitionRow label="Keep Bonuses予測"><StatusChip label={engineCapabilities.supportsKeepBonusesPrediction ? '対応' : '未対応'} tone={engineCapabilities.supportsKeepBonusesPrediction ? 'positive' : 'neutral'} /></DefinitionRow>
-        <DefinitionRow label="Seed Search"><StatusChip label={engineCapabilities.supportsSeedSearch ? '対応' : '未対応'} tone={engineCapabilities.supportsSeedSearch ? 'positive' : 'neutral'} /></DefinitionRow>
+        <DefinitionRow label="旧generic Seed Search API"><StatusChip label={engineCapabilities.supportsSeedSearch ? '対応' : '未対応'} tone={engineCapabilities.supportsSeedSearch ? 'positive' : 'neutral'} /></DefinitionRow>
       </Box>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>旧generic Seed Search APIはIdentification Wizard（RNG同定）とは別の旧API契約です。RNG同定の利用可否は「値が分からない場合」の表示を確認してください。</Typography>
     </DisclosureAccordion>
 
     {identificationCoordinator && state && masterResult.ok && <IdentificationWizardDialog coordinator={identificationCoordinator} initialRngState={state} master={masterResult.data} onAdopted={handleIdentificationAdopted} onClose={() => setIdentificationCoordinator(null)} />}
