@@ -157,8 +157,35 @@ describe('RngSetupPage', () => {
     expect(definitionRow(engine, 'スキル予測').textContent).toBe('スキル予測対応')
     expect(definitionRow(engine, '巨戟アーティア予測').textContent).toBe('巨戟アーティア予測対応')
     expect(definitionRow(engine, 'Keep Bonuses予測').textContent).toBe('Keep Bonuses予測対応')
-    expect(definitionRow(engine, 'Seed Search').textContent).toBe('Seed Search未対応')
+    // The legacy generic API flag keeps its meaning but is named as such, so
+    // it never reads as the Identification Wizard being unsupported.
+    expect(definitionRow(engine, '旧generic Seed Search API').textContent).toBe('旧generic Seed Search API未対応')
+    expect(within(engine).queryByText('Seed Search', { selector: 'dt' })).not.toBeInTheDocument()
+    expect(within(engine).queryByText('RNG同定', { selector: 'dt' })).not.toBeInTheDocument()
+    expect(screen.getByText(/旧generic Seed Search APIはIdentification Wizard（RNG同定）とは別の旧API契約です/)).toBeInTheDocument()
     expect(screen.queryByText(/本番RNG予測エンジンが未実装/)).not.toBeInTheDocument()
+  })
+
+  it('shows RNG identification as available from the Wizard availability, independent of supportsSeedSearch', async () => {
+    // A Browser has Workers; jsdom does not, so the environment is stubbed.
+    vi.stubGlobal('Worker', class {})
+    try {
+      render(<RngSetupPage dependencies={dependencies().deps} />)
+      const wizard = await screen.findByRole('region', { name: '値が分からない場合' })
+      expect(definitionRow(wizard, 'RNG同定').textContent).toBe('RNG同定利用可能')
+      expect(within(wizard).queryByText(/Web Worker/)).not.toBeInTheDocument()
+      // The legacy flag is still false: the two are different contracts.
+      expect(productionRngEngine.capabilities.supportsSeedSearch).toBe(false)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('shows RNG identification as unavailable, with its reason, when the runtime has no Worker', async () => {
+    render(<RngSetupPage dependencies={dependencies().deps} />)
+    const wizard = await screen.findByRole('region', { name: '値が分からない場合' })
+    expect(definitionRow(wizard, 'RNG同定').textContent).toBe('RNG同定利用不可')
+    expect(within(wizard).getByText(/Web Workerを利用できないため、RNG同定を実行できません/)).toBeInTheDocument()
   })
 
   it('keeps current availability separate from what the Engine itself supports', async () => {

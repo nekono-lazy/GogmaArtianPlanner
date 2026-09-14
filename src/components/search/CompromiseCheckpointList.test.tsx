@@ -118,7 +118,7 @@ describe('CompromiseCheckpointList', () => {
     expect(screen.getByRole('heading', { level: 4, name: '途中で利用可能な妥協チェックポイント' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 5, name: 'チェックポイント 1' })).toBeInTheDocument()
     // The scope comes from the group itself, through the shared scope labels.
-    expect(screen.getByText('巨戟amendment後（巨戟のボーナス）')).toBeInTheDocument()
+    expect(screen.getByText('巨戟アーティア系')).toBeInTheDocument()
     const slotList = screen.getByRole('list', { name: 'チェックポイント 1 の復元ボーナス5枠' })
     const items = within(slotList).getAllByRole('listitem')
     expect(items.map((item) => item.textContent)).toEqual([

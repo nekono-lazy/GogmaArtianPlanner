@@ -125,7 +125,7 @@ describe('ProductionPlanStepList', () => {
       '攻撃High fixture',
       '攻撃Special fixture',
     ])
-    expect(within(card(1)).getByText('ボーナス区分: 巨戟amendment後（巨戟のボーナス）')).toBeInTheDocument()
+    expect(within(card(1)).getByText('復元ボーナスの種類: 巨戟アーティア系')).toBeInTheDocument()
   })
 
   it('uses the persisted normal_artian scope for the slot labels', () => {
@@ -143,7 +143,7 @@ describe('ProductionPlanStepList', () => {
     // The Normal-scope definition, never the Gogma one, names the slot.
     expect(within(list).getAllByRole('listitem').map(({ textContent }) => textContent))
       .toEqual(Array<string>(5).fill('通常攻撃fixture'))
-    expect(within(card(1)).getByText('ボーナス区分: 通常継承（通常アーティアのボーナス）')).toBeInTheDocument()
+    expect(within(card(1)).getByText('復元ボーナスの種類: 通常アーティア系')).toBeInTheDocument()
     expect(within(card(1)).getByText('シリーズ: シリーズfixture ／ グループ: なし')).toBeInTheDocument()
   })
 
@@ -166,7 +166,7 @@ describe('ProductionPlanStepList', () => {
       '攻撃fixture High fixture',
       '攻撃fixture Special fixture',
     ])
-    expect(within(card(1)).getByText('ボーナス区分: 記録なし')).toBeInTheDocument()
+    expect(within(card(1)).getByText('復元ボーナスの種類: 記録なし')).toBeInTheDocument()
   })
 
   it('treats a null expectedResult and null restorationBonuses as ordinary states', () => {
@@ -187,7 +187,7 @@ describe('ProductionPlanStepList', () => {
     expect(within(card(1)).getByText('対象: 目標武器に紐づかない操作')).toBeInTheDocument()
     expect(within(card(1)).queryByText('確保予定')).not.toBeInTheDocument()
     expect(within(card(2)).getByText('復元ボーナス: 対象外')).toBeInTheDocument()
-    expect(within(card(2)).queryByText(/ボーナス区分/)).not.toBeInTheDocument()
+    expect(within(card(2)).queryByText(/復元ボーナスの種類/)).not.toBeInTheDocument()
     expect(within(card(2)).getByText('シリーズ: シリーズfixture ／ グループ: なし')).toBeInTheDocument()
   })
 

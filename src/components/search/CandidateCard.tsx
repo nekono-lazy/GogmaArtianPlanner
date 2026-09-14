@@ -29,7 +29,7 @@ import type {
   SkillAmendmentResult,
   TargetWeapon,
 } from '../../domain/models/publicTypes'
-import { restorationBonusScopeLabels } from '../../presentation/labels'
+import { restorationBonusScopeFieldLabel, restorationBonusScopeLabels } from '../../presentation/labels'
 import {
   bonusLabel,
   groupSkillLabel,
@@ -187,7 +187,7 @@ export function CandidateCard({
                 label="完成時の復元ボーナス5枠"
               />
             </SearchDefinitionItem>
-            <SearchDefinitionItem label="ボーナス区分">
+            <SearchDefinitionItem label={restorationBonusScopeFieldLabel}>
               <StatusChip
                 label={restorationBonusScopeLabels[scope]}
                 tone={scope === 'gogma_artian' ? 'info' : 'caution'}

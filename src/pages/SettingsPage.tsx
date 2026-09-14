@@ -3,6 +3,10 @@ import { useId, useState, type ReactNode } from 'react'
 import { PageShell } from '../components/PageShell'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import { productionRngRuntime } from '../domain/rng/production/productionRngRuntime'
+import {
+  getProductionIdentificationAvailability,
+  productionIdentificationUnavailableReasonLabels,
+} from '../services/rngIdentification/productionIdentificationAvailability'
 import { settingsRepository } from '../db/settingsRepository'
 import { useSettingsStore } from '../stores/settingsStore'
 
@@ -60,6 +64,7 @@ export function SettingsPage() {
   const setDebugMode = useSettingsStore((state) => state.setDebugMode)
   const [saveError, setSaveError] = useState(false)
   const debugHelpId = useId()
+  const identificationAvailability = getProductionIdentificationAvailability()
 
   const handleDebugMode = (enabled: boolean) => {
     setDebugMode(enabled)
@@ -108,8 +113,15 @@ export function SettingsPage() {
             )}
             <VersionRow label="RNG予測エンジン" value={productionRngRuntime.mode} />
             <VersionRow label="Engine version" value={productionRngRuntime.version} />
+            {/* RNG同定 is the Identification Wizard availability (application
+                level); the legacy generic Seed Search API flag is a different
+                contract and is named as such (`docs/UI_FLOW.md` 5 / 14). */}
             <VersionRow
-              label="Seed Search"
+              label="RNG同定"
+              value={identificationAvailability.isAvailable ? '利用可能' : `利用不可（${productionIdentificationUnavailableReasonLabels[identificationAvailability.reason]}）`}
+            />
+            <VersionRow
+              label="旧generic Seed Search API"
               value={productionRngRuntime.capabilities.supportsSeedSearch ? '対応' : '未対応'}
             />
           </Box>

@@ -201,3 +201,103 @@ describe('TargetWeaponsPage', () => {
     confirm.mockRestore()
   })
 })
+
+/**
+ * Display-order contract of the management list (`docs/UI_FLOW.md` 3.2 / 8): a
+ * new Target is appended, an edited one stays at its index, a deletion keeps
+ * the others' relative order, and a preferred-origin release triggered by the
+ * save leaves every Target where it was.
+ */
+describe('TargetWeaponsPage list order', () => {
+  function named(id: string, name: string, overrides: Partial<TargetWeapon> = {}): TargetWeapon {
+    return { ...existingTarget(), id: id as TargetWeapon['id'], name, ...overrides }
+  }
+
+  function compatibleGogma(id: string): OwnedWeapon {
+    return {
+      id: id as OwnedWeapon['id'], kind: 'gogma', name: id, weaponTypeId: 'weapon.dual_blades', elementId: 'element.thunder',
+      restorationBonusScope: 'gogma_artian', restorationBonuses: Array.from({ length: 5 }, () => ({ bonusTypeId: 'bonus_type.attack', bonusRankId: 'bonus_rank.ex' })) as OwnedWeapon['restorationBonuses'],
+      seriesSkillId: null, groupSkillId: null, status: 'unclassified', isProtected: false, memo: null, createdAt: 'created', updatedAt: 'updated',
+    }
+  }
+
+  /** Save keeps the existing identity on edit and mints a new one on add. */
+  function orderDependencies(targets: TargetWeapon[], ownedWeapons: OwnedWeapon[] = []) {
+    const deps = dependencies()
+    deps.getAll = vi.fn(async () => targets)
+    deps.getOwnedWeapons = vi.fn(async () => ownedWeapons)
+    deps.save = vi.fn(async (draft: TargetWeaponDraft, existing: TargetWeapon | null) => ({
+      ...draft,
+      id: existing?.id ?? (`target.${draft.name}` as TargetWeapon['id']),
+      createdAt: 'now',
+      updatedAt: 'now',
+    })) as typeof deps.save
+    return deps
+  }
+
+  async function listedNames(): Promise<string[]> {
+    const first = await screen.findByRole('heading', { name: 'A' })
+    const list = first.closest('ul') as HTMLElement
+    return Array.from(list.children).map(
+      (item) => within(item as HTMLElement).getAllByRole('heading')[0].textContent ?? '',
+    )
+  }
+
+  it('keeps an edited Target in place, appends a new one, and preserves order on delete', async () => {
+    const user = userEvent.setup()
+    const deps = orderDependencies([named('target.a', 'A'), named('target.b', 'B'), named('target.c', 'C')])
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<TargetWeaponsPage dependencies={deps} />)
+    expect(await listedNames()).toEqual(['A', 'B', 'C'])
+
+    // Edit B -> A B' C
+    await user.click(within(await itemFor('B')).getByRole('button', { name: '編集' }))
+    const nameField = within(screen.getByRole('dialog', { name: '目標武器を編集' })).getByRole('textbox', { name: /名前/ })
+    await user.clear(nameField)
+    await user.type(nameField, "B'")
+    await user.click(screen.getByRole('button', { name: '保存' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(await listedNames()).toEqual(['A', "B'", 'C'])
+
+    // Add D -> A B' C D
+    await user.click(screen.getByRole('button', { name: '目標武器を追加' }))
+    await user.type(screen.getByRole('textbox', { name: /名前/ }), 'D')
+    await user.click(screen.getByRole('button', { name: '保存' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(await listedNames()).toEqual(['A', "B'", 'C', 'D'])
+
+    // Delete B' -> A C D
+    await user.click(within(await itemFor("B'")).getByRole('button', { name: '削除' }))
+    await waitFor(() => expect(screen.queryByRole('heading', { name: "B'" })).toBeNull())
+    expect(await listedNames()).toEqual(['A', 'C', 'D'])
+    expect(deps.save).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps every Target in place when a save releases another Target preferred origin', async () => {
+    const user = userEvent.setup()
+    const weapon = compatibleGogma('owned.shared')
+    const deps = orderDependencies(
+      [named('target.a', 'A', { preferredOwnedWeaponId: weapon.id }), named('target.b', 'B'), named('target.c', 'C')],
+      [weapon],
+    )
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<TargetWeaponsPage dependencies={deps} />)
+    expect(await listedNames()).toEqual(['A', 'B', 'C'])
+    expect(within(await itemFor('A')).getByText(`優先起点: ${weapon.name}`)).toBeInTheDocument()
+
+    // Edit C to take A's preferred weapon: A is released in the same save.
+    await user.click(within(await itemFor('C')).getByRole('button', { name: '編集' }))
+    await user.click(await screen.findByLabelText('優先する所持武器'))
+    await user.click(within(await screen.findByRole('listbox')).getByRole('option', { name: /owned\.shared/ }))
+    await user.click(screen.getByRole('button', { name: '保存' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+
+    expect(deps.save).toHaveBeenCalledWith(
+      expect.objectContaining({ preferredOwnedWeaponId: weapon.id }),
+      expect.objectContaining({ id: 'target.c' }),
+    )
+    expect(await listedNames()).toEqual(['A', 'B', 'C'])
+    expect(within(await itemFor('A')).getByText('優先起点: なし')).toBeInTheDocument()
+    expect(within(await itemFor('C')).getByText(`優先起点: ${weapon.name}`)).toBeInTheDocument()
+  })
+})

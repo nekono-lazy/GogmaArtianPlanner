@@ -2,6 +2,7 @@ import { useId, type ReactNode } from 'react'
 import { Alert, List, ListItem, ListItemText, Paper, Stack, Typography } from '@mui/material'
 import { PageShell } from '../components/PageShell'
 import { productionRngRuntime } from '../domain/rng/production/productionRngRuntime'
+import { getProductionIdentificationAvailability } from '../services/rngIdentification/productionIdentificationAvailability'
 import { useSettingsStore } from '../stores/settingsStore'
 
 const futureDebugSections = [
@@ -18,8 +19,18 @@ const capabilityRows = [
   ['supportsSkillPrediction', productionRngRuntime.capabilities.supportsSkillPrediction],
   ['supportsGogmaPrediction', productionRngRuntime.capabilities.supportsGogmaPrediction],
   ['supportsKeepBonusesPrediction', productionRngRuntime.capabilities.supportsKeepBonusesPrediction],
-  ['supportsSeedSearch', productionRngRuntime.capabilities.supportsSeedSearch],
+  // The legacy generic Seed Search API flag (`docs/UI_FLOW.md` 5.3); it is not
+  // the Identification Wizard, whose availability is listed separately below.
+  ['旧generic Seed Search API (supportsSeedSearch)', productionRngRuntime.capabilities.supportsSeedSearch],
 ] as const
+
+/** Application-level Production Identification availability, never derived from `supportsSeedSearch`. */
+function identificationAvailabilityValue(): string {
+  const availability = getProductionIdentificationAvailability()
+  return availability.isAvailable
+    ? 'available（利用可能）'
+    : `unavailable: ${availability.reason}（利用不可）`
+}
 
 /** The raw flag plus its meaning, so a row never reads as a bare `true` / `false`. */
 function capabilityValue(supported: boolean): string {
@@ -77,6 +88,9 @@ export function DebugPage() {
                 <ListItemText primary={name} secondary={capabilityValue(supported)} slotProps={wrappingTextProps} />
               </ListItem>
             ))}
+            <ListItem divider disableGutters>
+              <ListItemText primary="Production Identification (Identification Wizard)" secondary={identificationAvailabilityValue()} slotProps={wrappingTextProps} />
+            </ListItem>
           </List>
         </DebugSection>
         <DebugSection title="Future debug sections">

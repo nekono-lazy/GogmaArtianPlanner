@@ -29,6 +29,40 @@ Debug Details
 
 PCブラウザとスマートフォンブラウザの双方を主要利用環境として想定する。端末ごとの適応方針は3.1で定義する。
 
+### 2.1 ナビゲーション
+
+固定ナビゲーション（Drawer）の表示順とグループは次のとおりとする。
+
+```text
+ダッシュボード
+
+管理
+  所持武器
+  目標武器
+
+計画
+  候補検索
+  ビルドリスト
+
+----------------
+
+初期設定
+  RNG状態設定
+  通常アーティアカウンター
+
+設定
+デバッグ          ※ Debug Mode ON時のみ
+```
+
+- Production PlanとExecution Navigatorは固定ナビゲーションへ追加しない。Planが存在するときに
+  Build List / Dashboard等から遷移する画面であり、17のRouter pathとcurrent page表示（AppBar）は
+  維持する
+- デバッグはDebug Mode ON時のみ表示する
+- PC（permanent Drawer）とスマートフォン（temporary Drawer）で到達可能な主要機能は同じとする
+- Drawerは縦スクロールを許容するが、縦スクロールバーの有無にかかわらず不要な横スクロールを
+  発生させない。ナビゲーション内容はDrawer paperの利用可能幅へ収め、固定幅で溢れさせない。
+  横overflowを `overflow-x: hidden` で隠すだけの対応は行わない
+
 ---
 
 ## 3. 共通UI方針
@@ -77,6 +111,36 @@ PCブラウザとスマートフォンブラウザの双方を主要利用環境
 - Execution Navigator（12）は双方で利用可能としたうえで、PC / PS5でゲームを操作しながら
   スマートフォンで確認・操作する利用形態を特に重視する。ゲーム画面から目を離して短時間で
   次の操作を確認できる表示と、片手操作しやすい位置の主要ボタンを優先する
+
+### 3.2 管理一覧の表示順
+
+Owned Weapons（7）とTarget Weapons（8）の一覧は自動sortしない。一覧順の契約は次のとおり。
+
+```text
+新規追加  -> 一覧末尾へ追加
+編集      -> 元の位置で置換
+削除      -> 削除した項目以外の相対順序を維持
+```
+
+編集しただけで項目を末尾へ移動してはならない。保存に伴って別項目が更新される場合
+（8.1の優先起点の付け替えで前の保持Targetの優先起点が解除される場合など）も、
+更新された各項目は元の一覧位置を維持する。
+
+### 3.3 復元ボーナスscopeの表示
+
+内部値 `normal_artian` / `gogma_artian`（`ArtianBonusScope`）は変更しない。通常ユーザー向けには
+次の表記を使う。
+
+```text
+normal_artian -> 通常アーティア系
+gogma_artian  -> 巨戟アーティア系
+```
+
+- フィールド名は原則「復元ボーナスの種類」とする
+- 巨戟アーティアでscopeを選択する場所には必要に応じて
+  「巨戟化直後、まだ復元ボーナス変更前は「通常アーティア系」です。」という補足を表示する
+- `scope`、`normal_artian`、`gogma_artian`、`amendment` 等の内部用語を通常ユーザー向け表示へ
+  漏らさない。Debug Modeの内部表示はこの制約の対象外とする
 
 ---
 
@@ -127,6 +191,19 @@ Base Seed、Gogma Counter、Skill CounterをProduction Prediction用に項目ご
 1. GogmaSeedFinder Import
 2. 直接入力
 3. 観測から検索
+
+RNG同定の利用可否表示。
+
+- 通常ユーザー向けには、5.4 Identification Wizard（Production Identification）の
+  Worker / application levelのavailabilityに基づいて「RNG同定: 利用可能」（利用不可なら
+  「利用不可」と理由）と表示する
+- この表示を `RngEngineCapabilities.supportsSeedSearch` へ接続しない。`supportsSeedSearch = false`
+  は5.3の旧generic Seed Search API契約を表す値であり、RNG同定機能自体が未対応であることを
+  意味しない
+- 技術情報で旧flagを表示する場合は「旧generic Seed Search API: 未対応」のように、Identification
+  Wizardとは別の旧API契約であることを明示する。Debug Modeでは
+  「旧generic Seed Search API (supportsSeedSearch): false（未対応）」のように内部名を併記してよい
+- `supportsSeedSearch` capability自体とlegacy generic Seed Search API契約は変更しない
 
 ## 5.1 GogmaSeedFinder Import
 
@@ -312,7 +389,7 @@ activation条件。
 - 種類（通常アーティア／巨戟アーティア）
 - 武器種
 - 属性
-- 復元ボーナスscope（通常継承／巨戟amendment）
+- 復元ボーナスの種類（通常アーティア系／巨戟アーティア系。3.3の表記に従う）
 - 復元ボーナス5枠
 - シリーズスキル（巨戟のみ）
 - グループスキル（巨戟のみ）
@@ -333,7 +410,8 @@ activation条件。
 入力制約。
 
 - 復元ボーナスは必ず5枠
-- 通常アーティアはscopeを `normal_artian` に固定する。巨戟アーティアは、最初のBonus amendment前の通常継承かamendment後の巨戟tierかを明示入力し、選択scope、武器種、属性に対応したWeaponBonusDefinitionだけを表示する
+- 通常アーティアはscopeを `normal_artian` に固定する。巨戟アーティアは、最初のBonus amendment前の通常継承かamendment後の巨戟tierかを「復元ボーナスの種類」（通常アーティア系／巨戟アーティア系）として明示入力し、選択scope、武器種、属性に対応したWeaponBonusDefinitionだけを表示する。この選択欄には「巨戟化直後、まだ復元ボーナス変更前は「通常アーティア系」です。」という補足を表示する
+- 一覧は3.2の表示順契約に従い、自動sortしない
 - 無属性では通常／巨戟とも属性強化を表示しない。ライト／ヘビィボウガンも属性にかかわらず表示しない
 - 通常アーティアではシリーズ／グループスキルとstatus入力を表示せず、保護初期値をOFFにする
 - 通常アーティアはレア8として自動登録し、レア度選択UIを表示しない
@@ -425,6 +503,8 @@ Plannerによる保護解除と、ユーザー確認前の状態変更は禁止�
 - 実用Skillの両項目未設定はスキル妥協なし。一覧は全妥協未設定なら「妥協なし（理想のみ検索）」
 - DB移行後は旧妥協条件の解除と再設定を案内する。武器種・属性変更はBonus条件を解除し、Ideal編集の不整合は保存validationで拒否する
 - 複雑な任意論理式UIは作らない
+- 一覧は3.2の表示順契約に従い、自動sortしない。8.1の付け替えで前の保持Targetの優先起点が解除
+  される場合も、保存したTargetと解除されたTargetはそれぞれ元の一覧位置を維持する
 
 ### 8.1 優先する所持武器
 
@@ -1190,6 +1270,10 @@ Undoはツール上の操作を戻すだけです。ゲーム内の操作は戻�
 - Master Data gameVersion
 - Master Data dataVersion
 - RNG Engine version
+- RNG同定の利用可否（5の表示ルールに従う。Identification Wizardのavailabilityに基づき、
+  `supportsSeedSearch` へ接続しない）
+- 旧generic Seed Search API（`supportsSeedSearch`）を表示する場合は
+  「旧generic Seed Search API: 未対応」と旧API契約であることを明示する
 - App schemaVersion
 - Export
 - Import
@@ -1225,6 +1309,9 @@ Debug Mode ONの場合のみ表示。
 - Planner判定理由
 - 再計算理由
 - 使用中RngEngine名
+- RngEngine capability flag。`supportsSeedSearch` は
+  「旧generic Seed Search API (supportsSeedSearch): false（未対応）」のように旧API契約であることを
+  明示し、Identification Wizard（Production Identification）のavailabilityは別行として表示する
 - Master Data version
 - 各StepのNormal / Skill / Gogma Counter before-after。conversionはSkillだけが+1でGogmaは同値として表示する
 

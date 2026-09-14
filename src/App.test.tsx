@@ -80,8 +80,36 @@ describe('App', () => {
     expect(
       within(row('Engine version')).getByText(PRODUCTION_RNG_ENGINE_VERSION, { selector: 'dd' }),
     ).toBeInTheDocument()
-    expect(within(row('Seed Search')).getByText('未対応', { selector: 'dd' })).toBeInTheDocument()
+    // The legacy flag is named as the old generic API, never as "Seed Search"
+    // on its own, so it cannot read as "RNG identification is unsupported".
+    expect(within(row('旧generic Seed Search API')).getByText('未対応', { selector: 'dd' })).toBeInTheDocument()
+    expect(within(versions).queryByText('Seed Search', { selector: 'dt' })).not.toBeInTheDocument()
     expect(within(versions).queryByText('未設定')).not.toBeInTheDocument()
+  })
+
+  it('reports RNG identification availability in Settings from the Wizard, not from supportsSeedSearch', () => {
+    // jsdom has no Worker; a Browser does. The row follows the Wizard's own
+    // application-level availability (`docs/UI_FLOW.md` 5 / 14).
+    vi.stubGlobal('Worker', class {})
+    try {
+      window.location.hash = '#/settings'
+      render(<App />)
+      const versions = screen.getByRole('region', { name: 'バージョン情報' })
+      const row = (label: string) =>
+        within(versions).getByText(label, { selector: 'dt' }).parentElement as HTMLElement
+      expect(within(row('RNG同定')).getByText('利用可能', { selector: 'dd' })).toBeInTheDocument()
+      expect(within(row('旧generic Seed Search API')).getByText('未対応', { selector: 'dd' })).toBeInTheDocument()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('reports RNG identification unavailable with its reason when the runtime has no Worker', () => {
+    window.location.hash = '#/settings'
+    render(<App />)
+    const versions = screen.getByRole('region', { name: 'バージョン情報' })
+    const row = within(versions).getByText('RNG同定', { selector: 'dt' }).parentElement as HTMLElement
+    expect(within(row).getByText(/利用不可（.*Web Worker.*）/, { selector: 'dd' })).toBeInTheDocument()
   })
 
   it('reports a Debug Mode persistence failure without claiming what is persisted', async () => {
@@ -136,11 +164,35 @@ describe('App', () => {
       const row = within(provenance).getByText(capability).closest('li') as HTMLElement
       expect(within(row).getByText('true（対応）')).toBeInTheDocument()
     }
-    const seedSearchRow = within(provenance).getByText('supportsSeedSearch').closest('li') as HTMLElement
+    // The legacy flag is labelled as the old generic API and stays false,
+    // while the Wizard availability is its own row and never reads that flag.
+    const seedSearchRow = within(provenance).getByText('旧generic Seed Search API (supportsSeedSearch)').closest('li') as HTMLElement
     expect(within(seedSearchRow).getByText('false（未対応）')).toBeInTheDocument()
+    const identificationRow = within(provenance)
+      .getByText('Production Identification (Identification Wizard)')
+      .closest('li') as HTMLElement
+    expect(within(identificationRow).getByText('unavailable: worker_unavailable（利用不可）')).toBeInTheDocument()
     // Every Debug section is a headed region, the placeholder list included.
     expect(screen.getByRole('heading', { level: 2, name: 'RNG Engine information' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 2, name: 'Future debug sections' })).toBeInTheDocument()
+  })
+
+  it('shows Production Identification available in Debug Details while supportsSeedSearch stays false', () => {
+    vi.stubGlobal('Worker', class {})
+    try {
+      useSettingsStore.setState({ debugMode: true })
+      window.location.hash = '#/debug'
+      render(<App />)
+      const provenance = screen.getByRole('list', { name: 'Production RNG Engine provenance' })
+      const identificationRow = within(provenance)
+        .getByText('Production Identification (Identification Wizard)')
+        .closest('li') as HTMLElement
+      expect(within(identificationRow).getByText('available（利用可能）')).toBeInTheDocument()
+      const seedSearchRow = within(provenance).getByText('旧generic Seed Search API (supportsSeedSearch)').closest('li') as HTMLElement
+      expect(within(seedSearchRow).getByText('false（未対応）')).toBeInTheDocument()
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('offers the Not Found page a heading, an explanation, and a way back', () => {

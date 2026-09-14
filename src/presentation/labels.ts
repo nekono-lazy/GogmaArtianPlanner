@@ -36,14 +36,26 @@ export const artianWeaponKindLabels: Record<ArtianWeaponKind, string> = {
 }
 
 /**
- * The restoration bonus scope an owned weapon currently holds. A Gogma weapon
- * keeps `normal_artian` slots inherited at conversion until its first bonus
- * amendment (`docs/UI_FLOW.md` 7 / `docs/DATA_MODEL.md` 7.1).
+ * The restoration bonus scope a weapon currently holds, in the everyday wording
+ * of `docs/UI_FLOW.md` 3.3. A Gogma weapon keeps `normal_artian` slots
+ * inherited at conversion until its first bonus amendment (`docs/UI_FLOW.md` 7 /
+ * `docs/DATA_MODEL.md` 7.1). The internal scope ids never change; the labels
+ * name the bonus family a user sees in the game and leak no internal term.
  */
 export const restorationBonusScopeLabels: Record<ArtianBonusScope, string> = {
-  normal_artian: '通常継承（通常アーティアのボーナス）',
-  gogma_artian: '巨戟amendment後（巨戟のボーナス）',
+  normal_artian: '通常アーティア系',
+  gogma_artian: '巨戟アーティア系',
 }
+
+/** The field name every normal-user screen uses for the restoration bonus scope. */
+export const restorationBonusScopeFieldLabel = '復元ボーナスの種類'
+
+/**
+ * Explains, where a Gogma weapon's scope is chosen, why a converted weapon
+ * still holds the normal family (`docs/UI_FLOW.md` 3.3 / 7).
+ */
+export const restorationBonusScopeGogmaHelpText =
+  '巨戟化直後、まだ復元ボーナス変更前は「通常アーティア系」です。'
 
 export const skillMatchModeLabels: Record<SkillMatchMode, string> = {
   all: 'すべて一致',

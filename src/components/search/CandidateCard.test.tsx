@@ -613,8 +613,8 @@ describe('CandidateCard restoration bonus scope', () => {
     expect(candidate.restorationBonusScope).toBe('normal_artian')
     render(<CandidateCard candidate={candidate} target={target()} master={createValidMasterDataFixture()} />)
 
-    expect(screen.getByText('通常継承（通常アーティアのボーナス）')).toBeInTheDocument()
-    expect(screen.queryByText('巨戟amendment後（巨戟のボーナス）')).not.toBeInTheDocument()
+    expect(screen.getByText('通常アーティア系')).toBeInTheDocument()
+    expect(screen.queryByText('巨戟アーティア系')).not.toBeInTheDocument()
     const texts = finalSlotTexts()
     expect(texts).toHaveLength(5)
     // The fixture defines a distinct normal-scope label for attack / high, so
@@ -629,8 +629,8 @@ describe('CandidateCard restoration bonus scope', () => {
     candidate.restorationBonusScope = 'gogma_artian'
     render(<CandidateCard candidate={candidate} target={target()} master={createValidMasterDataFixture()} />)
 
-    expect(screen.getByText('巨戟amendment後（巨戟のボーナス）')).toBeInTheDocument()
-    expect(screen.queryByText('通常継承（通常アーティアのボーナス）')).not.toBeInTheDocument()
+    expect(screen.getByText('巨戟アーティア系')).toBeInTheDocument()
+    expect(screen.queryByText('通常アーティア系')).not.toBeInTheDocument()
     const texts = finalSlotTexts()
     expect(texts).toHaveLength(5)
     expect(texts[0]).toBe(labels.attackHigh)

@@ -287,7 +287,7 @@ describe('OwnedWeaponsPage', () => {
     await user.click(await screen.findByRole('button', { name: '所持武器を追加' }))
     const dialog = within(screen.getByRole('dialog', { name: '所持武器を追加' }))
     expect(dialog.getByRole('checkbox', { name: '通常アーティアとして登録' })).not.toBeChecked()
-    const scope = dialog.getByRole('combobox', { name: 'ボーナス区分' })
+    const scope = dialog.getByRole('combobox', { name: '復元ボーナスの種類' })
     expect(scope).toHaveTextContent(GOGMA_SCOPE_LABEL)
     await user.click(scope)
     expect(screen.getAllByRole('option').map(({ textContent }) => textContent)).toEqual([NORMAL_SCOPE_LABEL, GOGMA_SCOPE_LABEL])
@@ -300,9 +300,9 @@ describe('OwnedWeaponsPage', () => {
     await user.click(await screen.findByRole('button', { name: '所持武器を追加' }))
     // A Gogma-only type in slot 1 must not survive the scope change.
     await chooseOption(user, screen.getAllByRole('combobox', { name: /ボーナス種別/ })[0], '斬れ味・装填強化')
-    await chooseOption(user, screen.getByRole('combobox', { name: 'ボーナス区分' }), NORMAL_SCOPE_LABEL)
+    await chooseOption(user, screen.getByRole('combobox', { name: '復元ボーナスの種類' }), NORMAL_SCOPE_LABEL)
 
-    expect(screen.getByRole('combobox', { name: 'ボーナス区分' })).toHaveTextContent(NORMAL_SCOPE_LABEL)
+    expect(screen.getByRole('combobox', { name: '復元ボーナスの種類' })).toHaveTextContent(NORMAL_SCOPE_LABEL)
     expect(screen.getAllByRole('combobox', { name: /ボーナス種別/ })).toHaveLength(5)
     expect(screen.getAllByRole('combobox', { name: /ボーナス種別/ })[0]).not.toHaveTextContent('斬れ味・装填強化')
     await user.click(screen.getAllByRole('combobox', { name: /ボーナス種別/ })[0])
@@ -322,9 +322,9 @@ describe('OwnedWeaponsPage', () => {
     const user = userEvent.setup(); const deps = dependencies()
     render(<OwnedWeaponsPage dependencies={deps} />)
     await user.click(await screen.findByRole('button', { name: '所持武器を追加' }))
-    await chooseOption(user, screen.getByRole('combobox', { name: 'ボーナス区分' }), NORMAL_SCOPE_LABEL)
+    await chooseOption(user, screen.getByRole('combobox', { name: '復元ボーナスの種類' }), NORMAL_SCOPE_LABEL)
     await chooseOption(user, screen.getAllByRole('combobox', { name: /ボーナス種別/ })[0], '斬れ味強化')
-    await chooseOption(user, screen.getByRole('combobox', { name: 'ボーナス区分' }), GOGMA_SCOPE_LABEL)
+    await chooseOption(user, screen.getByRole('combobox', { name: '復元ボーナスの種類' }), GOGMA_SCOPE_LABEL)
 
     expect(screen.getAllByRole('combobox', { name: /ボーナス種別/ })[0]).not.toHaveTextContent('斬れ味強化')
     await user.click(screen.getAllByRole('combobox', { name: /ボーナス種別/ })[0])
@@ -344,10 +344,10 @@ describe('OwnedWeaponsPage', () => {
     const user = userEvent.setup(); const deps = dependencies()
     render(<OwnedWeaponsPage dependencies={deps} />)
     await user.click(await screen.findByRole('button', { name: '所持武器を追加' }))
-    await chooseOption(user, screen.getByRole('combobox', { name: 'ボーナス区分' }), NORMAL_SCOPE_LABEL)
+    await chooseOption(user, screen.getByRole('combobox', { name: '復元ボーナスの種類' }), NORMAL_SCOPE_LABEL)
     await chooseOption(user, screen.getByLabelText('武器種'), '双剣')
 
-    expect(screen.getByRole('combobox', { name: 'ボーナス区分' })).toHaveTextContent(NORMAL_SCOPE_LABEL)
+    expect(screen.getByRole('combobox', { name: '復元ボーナスの種類' })).toHaveTextContent(NORMAL_SCOPE_LABEL)
     await user.type(screen.getByRole('textbox', { name: /名前/ }), '双剣')
     await user.click(screen.getByRole('button', { name: '保存' }))
     const saved = deps.save.mock.calls[0][0] as OwnedWeaponDraft
@@ -360,10 +360,10 @@ describe('OwnedWeaponsPage', () => {
     const user = userEvent.setup(); const deps = dependencies()
     render(<OwnedWeaponsPage dependencies={deps} />)
     await user.click(await screen.findByRole('button', { name: '所持武器を追加' }))
-    await chooseOption(user, screen.getByRole('combobox', { name: 'ボーナス区分' }), NORMAL_SCOPE_LABEL)
+    await chooseOption(user, screen.getByRole('combobox', { name: '復元ボーナスの種類' }), NORMAL_SCOPE_LABEL)
     await chooseOption(user, screen.getByLabelText('属性'), '火')
 
-    expect(screen.getByRole('combobox', { name: 'ボーナス区分' })).toHaveTextContent(NORMAL_SCOPE_LABEL)
+    expect(screen.getByRole('combobox', { name: '復元ボーナスの種類' })).toHaveTextContent(NORMAL_SCOPE_LABEL)
     await user.type(screen.getByRole('textbox', { name: /名前/ }), '火属性')
     await user.click(screen.getByRole('button', { name: '保存' }))
     const saved = deps.save.mock.calls[0][0] as OwnedWeaponDraft
@@ -376,7 +376,7 @@ describe('OwnedWeaponsPage', () => {
       .map((id) => master.bonusTypes.find((type) => type.id === id)?.displayNameJa)
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     await user.click(screen.getByRole('button', { name: '所持武器を追加' }))
-    await chooseOption(user, screen.getByRole('combobox', { name: 'ボーナス区分' }), NORMAL_SCOPE_LABEL)
+    await chooseOption(user, screen.getByRole('combobox', { name: '復元ボーナスの種類' }), NORMAL_SCOPE_LABEL)
     await chooseOption(user, screen.getByLabelText('属性'), '火')
     await user.click(screen.getAllByRole('combobox', { name: /ボーナス種別/ })[0])
     expect(screen.getAllByRole('option').map(({ textContent }) => textContent)).toEqual(expectedTypes)
@@ -390,13 +390,13 @@ describe('OwnedWeaponsPage', () => {
     render(<OwnedWeaponsPage dependencies={deps} />)
 
     await user.click(await screen.findByRole('button', { name: '編集' }))
-    await chooseOption(user, screen.getByRole('combobox', { name: 'ボーナス区分' }), GOGMA_SCOPE_LABEL)
+    await chooseOption(user, screen.getByRole('combobox', { name: '復元ボーナスの種類' }), GOGMA_SCOPE_LABEL)
     await user.click(screen.getByRole('button', { name: 'キャンセル' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(deps.save).not.toHaveBeenCalled()
 
     await user.click(screen.getByRole('button', { name: '編集' }))
-    expect(screen.getByRole('combobox', { name: 'ボーナス区分' })).toHaveTextContent(NORMAL_SCOPE_LABEL)
+    expect(screen.getByRole('combobox', { name: '復元ボーナスの種類' })).toHaveTextContent(NORMAL_SCOPE_LABEL)
     await user.click(screen.getByRole('button', { name: '保存' }))
     expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ kind: 'gogma', restorationBonusScope: 'normal_artian', restorationBonuses: inheritedBonuses }), weapon)
   })
@@ -407,8 +407,8 @@ describe('OwnedWeaponsPage', () => {
     await user.click(await screen.findByRole('button', { name: '所持武器を追加' }))
     await user.click(screen.getByRole('checkbox', { name: '通常アーティアとして登録' }))
     const dialog = within(screen.getByRole('dialog', { name: '所持武器を追加' }))
-    expect(dialog.queryByRole('combobox', { name: 'ボーナス区分' })).toBeNull()
-    expect(dialog.getByText(`ボーナス区分: ${NORMAL_SCOPE_LABEL}`)).toBeInTheDocument()
+    expect(dialog.queryByRole('combobox', { name: '復元ボーナスの種類' })).toBeNull()
+    expect(dialog.getByText(`復元ボーナスの種類: ${NORMAL_SCOPE_LABEL}`)).toBeInTheDocument()
     await user.type(dialog.getByRole('textbox', { name: /名前/ }), '通常')
     await user.click(dialog.getByRole('button', { name: '保存' }))
     expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ kind: 'normal', restorationBonusScope: 'normal_artian', status: null }), null)
@@ -427,14 +427,14 @@ describe('OwnedWeaponsPage', () => {
 
     const item = within(await itemFor('巨戟化直後'))
     expect(item.getByText('巨戟アーティア')).toBeInTheDocument()
-    expect(item.getByText('ボーナス区分: 通常継承（通常アーティアのボーナス）')).toBeInTheDocument()
+    expect(item.getByText('復元ボーナスの種類: 通常アーティア系')).toBeInTheDocument()
     const slots = within(item.getByRole('list', { name: '復元ボーナス' })).getAllByRole('listitem')
     expect(slots.map((slot) => slot.textContent)).toEqual(expectedLabels.map((label, index) => `${index + 1}${label}`))
     expect(item.queryByText('不明')).toBeNull()
 
     await user.click(item.getByRole('button', { name: '編集' }))
     // The selector opens on the stored scope; kind never decides it.
-    expect(within(screen.getByRole('dialog', { name: '所持武器を編集' })).getByRole('combobox', { name: 'ボーナス区分' })).toHaveTextContent(NORMAL_SCOPE_LABEL)
+    expect(within(screen.getByRole('dialog', { name: '所持武器を編集' })).getByRole('combobox', { name: '復元ボーナスの種類' })).toHaveTextContent(NORMAL_SCOPE_LABEL)
     await user.click(screen.getAllByRole('combobox', { name: /ボーナス種別/ })[0])
     expect(screen.getByRole('option', { name: '斬れ味強化' })).toBeInTheDocument()
     expect(screen.queryByRole('option', { name: '斬れ味・装填強化' })).toBeNull()
@@ -478,7 +478,7 @@ describe('OwnedWeaponsPage', () => {
   it('shows the Gogma amendment scope for gogma_artian slots', async () => {
     const deps = dependencies(); deps.getAll = vi.fn(async () => [existingWeapon()])
     render(<OwnedWeaponsPage dependencies={deps} />)
-    expect(within(await itemFor('既存武器')).getByText('ボーナス区分: 巨戟amendment後（巨戟のボーナス）')).toBeInTheDocument()
+    expect(within(await itemFor('既存武器')).getByText('復元ボーナスの種類: 巨戟アーティア系')).toBeInTheDocument()
   })
 
   it.each([
@@ -552,5 +552,98 @@ describe('OwnedWeaponsPage', () => {
     await user.click(await screen.findByRole('button', { name: '削除' }))
     expect(deps.delete).toHaveBeenCalledWith(weapon.id)
     confirm.mockRestore()
+  })
+})
+
+/**
+ * Display-order contract of the management list (`docs/UI_FLOW.md` 3.2): a new
+ * weapon is appended, an edited one stays at its index, a deletion keeps the
+ * others' relative order, and nothing is auto-sorted.
+ */
+describe('OwnedWeaponsPage list order', () => {
+  function named(id: string, name: string): OwnedGogmaArtianWeapon {
+    return { ...existingWeapon(), id: id as OwnedWeapon['id'], name, isProtected: false }
+  }
+
+  /** Save keeps the existing identity on edit and mints a new one on add. */
+  function orderDependencies(weapons: OwnedWeapon[]) {
+    const deps = dependencies()
+    deps.getAll = vi.fn(async () => weapons)
+    deps.save = vi.fn(async (draft: OwnedWeaponDraft, existing: OwnedWeapon | null) => ({
+      ...draft,
+      id: existing?.id ?? (`owned.${draft.name}` as OwnedWeapon['id']),
+      createdAt: 'now',
+      updatedAt: 'now',
+    })) as typeof deps.save
+    return deps
+  }
+
+  async function listedNames(): Promise<string[]> {
+    const first = await screen.findByRole('heading', { name: 'A' })
+    const list = first.closest('ul') as HTMLElement
+    return Array.from(list.children).map(
+      (item) => within(item as HTMLElement).getAllByRole('heading')[0].textContent ?? '',
+    )
+  }
+
+  it('keeps an edited weapon in place, appends a new one, and preserves order on delete', async () => {
+    const user = userEvent.setup()
+    const deps = orderDependencies([named('owned.a', 'A'), named('owned.b', 'B'), named('owned.c', 'C')])
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<OwnedWeaponsPage dependencies={deps} />)
+    expect(await listedNames()).toEqual(['A', 'B', 'C'])
+
+    // Edit B -> A B' C
+    await user.click(within(await itemFor('B')).getByRole('button', { name: '編集' }))
+    const nameField = within(screen.getByRole('dialog', { name: '所持武器を編集' })).getByRole('textbox', { name: /名前/ })
+    await user.clear(nameField)
+    await user.type(nameField, "B'")
+    await user.click(screen.getByRole('button', { name: '保存' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(await listedNames()).toEqual(['A', "B'", 'C'])
+
+    // Add D -> A B' C D
+    await user.click(screen.getByRole('button', { name: '所持武器を追加' }))
+    await user.type(screen.getByRole('textbox', { name: /名前/ }), 'D')
+    await user.click(screen.getByRole('button', { name: '保存' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(await listedNames()).toEqual(['A', "B'", 'C', 'D'])
+
+    // Delete B' -> A C D
+    await user.click(within(await itemFor("B'")).getByRole('button', { name: '削除' }))
+    await waitFor(() => expect(screen.queryByRole('heading', { name: "B'" })).toBeNull())
+    expect(await listedNames()).toEqual(['A', 'C', 'D'])
+    expect(deps.save).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('OwnedWeaponsPage restoration bonus scope wording', () => {
+  it('names the scope field 復元ボーナスの種類 with everyday labels and the conversion note', async () => {
+    const user = userEvent.setup()
+    render(<OwnedWeaponsPage dependencies={dependencies()} />)
+    await user.click(await screen.findByRole('button', { name: '所持武器を追加' }))
+    const dialog = within(screen.getByRole('dialog', { name: '所持武器を追加' }))
+
+    const scope = dialog.getByRole('combobox', { name: '復元ボーナスの種類' })
+    expect(scope).toHaveTextContent('巨戟アーティア系')
+    expect(scope).toHaveAccessibleDescription('巨戟化直後、まだ復元ボーナス変更前は「通常アーティア系」です。')
+    await user.click(scope)
+    expect(screen.getAllByRole('option').map(({ textContent }) => textContent)).toEqual(['通常アーティア系', '巨戟アーティア系'])
+    // No internal term reaches the normal UI.
+    for (const internal of ['normal_artian', 'gogma_artian', 'scope', 'amendment', 'ボーナス区分']) {
+      expect(screen.queryByText(new RegExp(internal))).toBeNull()
+    }
+  })
+
+  it('shows 復元ボーナスの種類 read-only for a Normal weapon, without the Gogma conversion note', async () => {
+    const user = userEvent.setup()
+    render(<OwnedWeaponsPage dependencies={dependencies()} />)
+    await user.click(await screen.findByRole('button', { name: '所持武器を追加' }))
+    await user.click(screen.getByRole('checkbox', { name: '通常アーティアとして登録' }))
+    const dialog = within(screen.getByRole('dialog', { name: '所持武器を追加' }))
+
+    expect(dialog.queryByRole('combobox', { name: '復元ボーナスの種類' })).toBeNull()
+    expect(dialog.getByText('復元ボーナスの種類: 通常アーティア系')).toBeInTheDocument()
+    expect(dialog.queryByText(/巨戟化直後/)).toBeNull()
   })
 })

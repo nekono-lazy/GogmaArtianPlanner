@@ -15,6 +15,7 @@ import {
   compromiseBonusMatchLabels,
   compromiseCheckpointBadgeLabel,
   compromiseSkillMatchLabels,
+  restorationBonusScopeFieldLabel,
   restorationBonusScopeLabels,
 } from '../../presentation/labels'
 import { groupSkillLabel, seriesSkillLabel } from './searchPresentation'
@@ -163,7 +164,7 @@ function CheckpointGroupCard({
               label={`チェックポイント ${index} の復元ボーナス5枠`}
             />
           </SearchDefinitionItem>
-          <SearchDefinitionItem label="ボーナス区分">
+          <SearchDefinitionItem label={restorationBonusScopeFieldLabel}>
             {restorationBonusScopeLabels[group.restorationBonusScope]}
           </SearchDefinitionItem>
           <SearchDefinitionItem label="判定理由">

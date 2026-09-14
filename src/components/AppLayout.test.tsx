@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -51,6 +51,8 @@ function renderAppLayout(initialPath: string) {
             <Route path="target-weapons" element={<div>目標武器画面</div>} />
             <Route path="search" element={<div>検索画面</div>} />
             <Route path="build-list" element={<div>ビルドリスト画面</div>} />
+            <Route path="plans/:planId" element={<div>生産計画画面</div>} />
+            <Route path="plans/:planId/run" element={<div>実行ナビゲーション画面</div>} />
             <Route path="settings" element={<div>設定画面</div>} />
             <Route path="debug" element={<div>デバッグ画面</div>} />
           </Route>
@@ -59,6 +61,42 @@ function renderAppLayout(initialPath: string) {
     </ThemeProvider>,
   )
 }
+
+/** Every primary screen the Drawer must reach on both devices (`docs/UI_FLOW.md` 2.1). */
+const primaryScreens = [
+  'ダッシュボード',
+  '所持武器',
+  '目標武器',
+  '候補検索',
+  'ビルドリスト',
+  'RNG状態設定',
+  '通常アーティアカウンター',
+  '設定',
+]
+
+/**
+ * The Drawer's group headings and links in document order, so grouping and
+ * order are asserted as one sequence rather than as a set.
+ */
+function navigationSequence(nav: HTMLElement): string[] {
+  return Array.from(nav.querySelectorAll('.MuiListSubheader-root, a')).map(
+    (element) => element.textContent ?? '',
+  )
+}
+
+const expectedSequence = [
+  'ダッシュボード',
+  '管理',
+  '所持武器',
+  '目標武器',
+  '計画',
+  '候補検索',
+  'ビルドリスト',
+  '初期設定',
+  'RNG状態設定',
+  '通常アーティアカウンター',
+  '設定',
+]
 
 describe('AppLayout', () => {
   beforeEach(() => {
@@ -75,20 +113,70 @@ describe('AppLayout', () => {
     ).not.toBeInTheDocument()
 
     const nav = screen.getByRole('navigation', { name: 'メインナビゲーション' })
-    for (const label of [
-      'ダッシュボード',
-      'RNG状態設定',
-      '通常アーティアカウンター',
-      '所持武器',
-      '目標武器',
-      '候補検索',
-      'ビルドリスト',
-      '設定',
-    ]) {
+    for (const label of primaryScreens) {
       expect(within(nav).getByRole('link', { name: label })).toBeInTheDocument()
     }
     // Debug Modeが無効な間はデバッグ項目を表示しない。
     expect(within(nav).queryByRole('link', { name: 'デバッグ' })).not.toBeInTheDocument()
+  })
+
+  it('groups and orders the navigation as 管理 / 計画, then 初期設定 and 設定', () => {
+    mockDesktopViewport()
+    renderAppLayout('/')
+
+    const nav = screen.getByRole('navigation', { name: 'メインナビゲーション' })
+    expect(navigationSequence(nav)).toEqual(expectedSequence)
+    // The former 準備 group no longer exists.
+    expect(within(nav).queryByText('準備')).not.toBeInTheDocument()
+  })
+
+  it('appends デバッグ after 設定 once Debug Mode is on, without reordering anything else', () => {
+    mockDesktopViewport()
+    useSettingsStore.setState({ debugMode: true })
+    renderAppLayout('/rng')
+
+    const nav = screen.getByRole('navigation', { name: 'メインナビゲーション' })
+    expect(within(nav).getByRole('link', { name: 'デバッグ' })).toBeInTheDocument()
+    expect(navigationSequence(nav)).toEqual([...expectedSequence, 'デバッグ'])
+  })
+
+  it('has no permanent entry for Production Plan or Execution Navigator', () => {
+    mockDesktopViewport()
+    renderAppLayout('/plans/plan-1')
+
+    const nav = screen.getByRole('navigation', { name: 'メインナビゲーション' })
+    const hrefs = within(nav)
+      .getAllByRole('link')
+      .map((link) => link.getAttribute('href') ?? '')
+    expect(hrefs.some((href) => href.includes('/plans'))).toBe(false)
+    expect(within(nav).queryByRole('link', { name: '生産計画' })).not.toBeInTheDocument()
+    expect(within(nav).queryByRole('link', { name: '実行ナビゲーション' })).not.toBeInTheDocument()
+    // The route itself is still reachable and still identified in the AppBar.
+    expect(screen.getByText('生産計画画面')).toBeInTheDocument()
+    expect(within(screen.getByRole('banner')).getByText('生産計画')).toBeInTheDocument()
+  })
+
+  it('identifies the Execution Navigator route in the AppBar without a Drawer entry', () => {
+    mockDesktopViewport()
+    renderAppLayout('/plans/plan-1/run')
+
+    expect(within(screen.getByRole('banner')).getByText('実行ナビゲーション')).toBeInTheDocument()
+    const nav = screen.getByRole('navigation', { name: 'メインナビゲーション' })
+    expect(within(nav).queryAllByRole('link', { current: 'page' })).toHaveLength(0)
+  })
+
+  it('does not give the navigation content a fixed width of its own', () => {
+    // The Drawer paper is `overflow-y: auto`; once its vertical scrollbar
+    // appears the usable width is narrower than `drawerWidth`, so a child
+    // fixed at the full paper width would overflow horizontally. The content
+    // must therefore fill the paper's usable width instead
+    // (`docs/UI_FLOW.md` 2.1).
+    mockDesktopViewport()
+    renderAppLayout('/rng')
+
+    const nav = screen.getByRole('navigation', { name: 'メインナビゲーション' })
+    expect(getComputedStyle(nav).width).not.toBe('240px')
+    expect(getComputedStyle(nav).minWidth).toBe('0px')
   })
 
   it('marks only the current route as the active navigation item', () => {
@@ -106,6 +194,22 @@ describe('AppLayout', () => {
     expect(within(nav).getByRole('link', { name: '所持武器' })).not.toHaveAttribute(
       'aria-current',
     )
+  })
+
+  it.each([
+    ['/owned-weapons', '所持武器'],
+    ['/target-weapons', '目標武器'],
+    ['/search', '候補検索'],
+    ['/build-list', 'ビルドリスト'],
+    ['/normal-counters', '通常アーティアカウンター'],
+    ['/settings', '設定'],
+  ])('keeps the active indicator on %s after the regrouping', (path, label) => {
+    mockDesktopViewport()
+    renderAppLayout(path)
+
+    const nav = screen.getByRole('navigation', { name: 'メインナビゲーション' })
+    expect(within(nav).getByRole('link', { name: label })).toHaveAttribute('aria-current', 'page')
+    expect(within(nav).getAllByRole('link', { current: 'page' })).toHaveLength(1)
   })
 
   it('marks the Dashboard link active only at the root path, not at a nested one', () => {
@@ -186,7 +290,7 @@ describe('AppLayout', () => {
     expect(screen.getByText('RNG画面')).toBeInTheDocument()
   })
 
-  it('opens the mobile Drawer from the hamburger button, reaching every primary screen', async () => {
+  it('opens the mobile Drawer from the hamburger button, reaching every primary screen in the same order', async () => {
     const user = userEvent.setup()
     renderAppLayout('/')
 
@@ -194,8 +298,37 @@ describe('AppLayout', () => {
     await user.click(openButton)
 
     const nav = screen.getByRole('navigation', { name: 'メインナビゲーション' })
-    for (const label of ['RNG状態設定', '所持武器', '目標武器', '候補検索', 'ビルドリスト']) {
+    for (const label of primaryScreens) {
       expect(within(nav).getByRole('link', { name: label })).toBeInTheDocument()
     }
+    expect(navigationSequence(nav)).toEqual(expectedSequence)
+    expect(within(nav).queryByRole('link', { name: 'デバッグ' })).not.toBeInTheDocument()
+    expect(getComputedStyle(nav).width).not.toBe('240px')
+  })
+
+  it('shows デバッグ in the mobile Drawer too once Debug Mode is on', async () => {
+    const user = userEvent.setup()
+    useSettingsStore.setState({ debugMode: true })
+    renderAppLayout('/')
+
+    await user.click(screen.getByRole('button', { name: 'ナビゲーションを開く' }))
+    const nav = screen.getByRole('navigation', { name: 'メインナビゲーション' })
+    expect(navigationSequence(nav)).toEqual([...expectedSequence, 'デバッグ'])
+  })
+
+  it('navigates from the mobile Drawer and closes it', async () => {
+    const user = userEvent.setup()
+    renderAppLayout('/')
+
+    await user.click(screen.getByRole('button', { name: 'ナビゲーションを開く' }))
+    const nav = screen.getByRole('navigation', { name: 'メインナビゲーション' })
+    await user.click(within(nav).getByRole('link', { name: '通常アーティアカウンター' }))
+
+    expect(screen.getByText('通常カウンター画面')).toBeInTheDocument()
+    // The AppBar is hidden from the accessibility tree while the modal Drawer
+    // is still closing; it is back once the Drawer has closed.
+    await waitFor(() =>
+      expect(within(screen.getByRole('banner')).getByText('通常アーティアカウンター')).toBeInTheDocument(),
+    )
   })
 })
