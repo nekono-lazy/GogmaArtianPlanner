@@ -27,6 +27,27 @@ import type {
 
 const INITIAL_OBSERVATION_COUNT = 4
 const DEFAULT_COUNTER_RADIUS = 5
+/**
+ * STEP 1 Seed range starts at the canonical Base Seed domain
+ * (`docs/UI_FLOW.md` 5.4). The user may narrow it; it is never widened
+ * automatically. The constants are the identification Domain's own authority.
+ */
+const INITIAL_SEED_RANGE_START = String(CANONICAL_BASE_SEED_MIN)
+const INITIAL_SEED_RANGE_END = String(CANONICAL_BASE_SEED_MAX)
+/**
+ * A Seed range draft is canonical decimal only: empty while editing, otherwise
+ * 0-9 up to eight digits. Sign, decimal point, exponent, whitespace, letters and
+ * a ninth digit are refused at the draft boundary, so a paste or programmatic
+ * change can no longer put them into state. This is the Wizard's search-range
+ * UX only; the RNG Setup manual Base Seed keeps its raw decimal / hexadecimal
+ * `normalizeSeed()` contract.
+ */
+const SEED_RANGE_DRAFT_PATTERN = /^[0-9]{0,8}$/
+const SEED_RANGE_MAX_LENGTH = 8
+
+function isSeedRangeDraft(value: string): boolean {
+  return SEED_RANGE_DRAFT_PATTERN.test(value)
+}
 
 interface ApproximateCounterDraft { readonly center: string; readonly radius: string }
 interface SkillObservationDraft {
@@ -425,8 +446,8 @@ export function IdentificationWizardDialog({
   const [weaponTypeId, setWeaponTypeId] = useState(initialWeaponTypeId)
   const [elementId, setElementId] = useState(initialElementId)
   const [skillObservations, setSkillObservations] = useState(emptySkillObservations)
-  const [seedStart, setSeedStart] = useState('')
-  const [seedEnd, setSeedEnd] = useState('')
+  const [seedStart, setSeedStart] = useState(INITIAL_SEED_RANGE_START)
+  const [seedEnd, setSeedEnd] = useState(INITIAL_SEED_RANGE_END)
   const [skillRange, setSkillRange] = useState<ApproximateCounterDraft>({
     center: initialRngState.skillCounter.value === null ? '' : String(initialRngState.skillCounter.value),
     radius: String(DEFAULT_COUNTER_RADIUS),
@@ -521,8 +542,8 @@ export function IdentificationWizardDialog({
     setWeaponTypeId(initialWeaponTypeId)
     setElementId(initialElementId)
     setSkillObservations(emptySkillObservations())
-    setSeedStart('')
-    setSeedEnd('')
+    setSeedStart(INITIAL_SEED_RANGE_START)
+    setSeedEnd(INITIAL_SEED_RANGE_END)
     setSkillRange({
       center: initialRngState.skillCounter.value === null
         ? ''
@@ -568,7 +589,7 @@ export function IdentificationWizardDialog({
           </Alert>
           <Alert severity="info">
             <AlertTitle>検証範囲</AlertTitle>
-            Production Identificationとして有効です。ただし実機検証済みのSkill streamは操虫棍 / 氷の特定Counter位置のみ、Gogma Reset streamはヘヴィボウガン / 氷の記録のみです。全武器種・全属性・全ゲームバージョンの正しさを保証するものではないため、採用後の予測はゲーム側でも確認してください。
+            Production Identificationは実機確認済みです。ただし確認条件は限定されており、全武器種・全属性・全ゲームバージョンを保証するものではありません。採用後の予測結果はゲーム側でも確認してください。
           </Alert>
 
           <StepSection title="STEP 1 — Base Seed / Starting Skill Counter" status={searchStatus(wizardState.skill)}>
@@ -669,20 +690,20 @@ export function IdentificationWizardDialog({
               <SubHeading>検索範囲</SubHeading>
               <Box sx={fieldPairSx}>
                 <TextField
-                  fullWidth label="Base Seed range start" type="number" value={seedStart}
+                  fullWidth label="Base Seed range start" type="text" value={seedStart}
                   disabled={skillSearching}
-                  slotProps={{ htmlInput: { min: CANONICAL_BASE_SEED_MIN, max: CANONICAL_BASE_SEED_MAX, step: 1 } }}
-                  onChange={(event) => setSeedStart(event.target.value)}
+                  slotProps={{ htmlInput: { inputMode: 'numeric', pattern: '[0-9]*', maxLength: SEED_RANGE_MAX_LENGTH, className: 'tabular-nums' } }}
+                  onChange={(event) => { if (isSeedRangeDraft(event.target.value)) setSeedStart(event.target.value) }}
                 />
                 <TextField
-                  fullWidth label="Base Seed range end" type="number" value={seedEnd}
+                  fullWidth label="Base Seed range end" type="text" value={seedEnd}
                   disabled={skillSearching}
-                  slotProps={{ htmlInput: { min: CANONICAL_BASE_SEED_MIN, max: CANONICAL_BASE_SEED_MAX, step: 1 } }}
-                  onChange={(event) => setSeedEnd(event.target.value)}
+                  slotProps={{ htmlInput: { inputMode: 'numeric', pattern: '[0-9]*', maxLength: SEED_RANGE_MAX_LENGTH, className: 'tabular-nums' } }}
+                  onChange={(event) => { if (isSeedRangeDraft(event.target.value)) setSeedEnd(event.target.value) }}
                 />
               </Box>
               <Typography variant="body2" color="text.secondary">
-                Production defaultは設定しません。検索するbounded rangeを毎回明示入力してください。自動拡張やbackground wideningは行いません。
+                初期値はBase Seed全域（{CANONICAL_BASE_SEED_MIN.toLocaleString()} ～ {CANONICAL_BASE_SEED_MAX.toLocaleString()}）です。数字のみ最大8桁で、必要なら狭い範囲へ変更できます。自動拡張やbackground wideningは行いません。
               </Typography>
               <ApproximateCounterFields
                 label="Skill Counter"

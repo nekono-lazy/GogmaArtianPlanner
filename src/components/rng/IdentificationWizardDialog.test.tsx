@@ -11,9 +11,10 @@ import type {
   BonusRankId, BonusTypeId, ElementId, GroupSkillId, RngState, SeriesSkillId,
   WeaponTypeId,
 } from '../../domain/models/publicTypes'
-import type {
-  SkillIdentificationInput,
-  SkillIdentificationResult,
+import {
+  CANONICAL_BASE_SEED_MAX, CANONICAL_BASE_SEED_MIN,
+  type SkillIdentificationInput,
+  type SkillIdentificationResult,
 } from '../../domain/rng/identification'
 import {
   REFERENCE_GROUP_SKILL_POOL, REFERENCE_SERIES_SKILL_POOL,
@@ -449,11 +450,24 @@ function fillSkillObservations(count = 4) {
   }
 }
 
+/**
+ * Narrows the STEP 1 Seed range to a bounded custom range. The fields start at
+ * the canonical full domain, so the fixture always overwrites them: the
+ * default-range journey is asserted separately without calling this.
+ */
 function fillSeedRange(start = '100', end = '200') {
-  const seedStart = screen.getByLabelText('Base Seed range start') as HTMLInputElement
-  const seedEnd = screen.getByLabelText('Base Seed range end') as HTMLInputElement
-  if (seedStart.value === '') fireEvent.change(seedStart, { target: { value: start } })
-  if (seedEnd.value === '') fireEvent.change(seedEnd, { target: { value: end } })
+  fireEvent.change(screen.getByLabelText('Base Seed range start'), { target: { value: start } })
+  fireEvent.change(screen.getByLabelText('Base Seed range end'), { target: { value: end } })
+}
+
+const CANONICAL_SEED_START = String(CANONICAL_BASE_SEED_MIN)
+const CANONICAL_SEED_END = String(CANONICAL_BASE_SEED_MAX)
+
+function seedRangeFields(): { start: HTMLInputElement; end: HTMLInputElement } {
+  return {
+    start: screen.getByLabelText('Base Seed range start') as HTMLInputElement,
+    end: screen.getByLabelText('Base Seed range end') as HTMLInputElement,
+  }
 }
 
 function fillStep1() {
@@ -539,12 +553,17 @@ async function seedReview(coordinator: FakeCoordinator) {
 }
 
 describe('IdentificationWizardDialog STEP 1', () => {
-  it('starts with blank Seed range and unentered Skill observation drafts', () => {
+  it('starts with the canonical full Base Seed range and unentered Skill observation drafts', () => {
     renderWizard()
 
-    expect(screen.getByLabelText('Base Seed range start')).toHaveValue(null)
-    expect(screen.getByLabelText('Base Seed range end')).toHaveValue(null)
-    expect(screen.queryByText(/canonical Base Seed全域/)).not.toBeInTheDocument()
+    // The Domain constants are the only range authority (0 .. 99,999,999).
+    expect(CANONICAL_SEED_START).toBe('0')
+    expect(CANONICAL_SEED_END).toBe('99999999')
+    const { start, end } = seedRangeFields()
+    expect(start).toHaveValue(CANONICAL_SEED_START)
+    expect(end).toHaveValue(CANONICAL_SEED_END)
+    expect(screen.getByText(/初期値はBase Seed全域（0 ～ 99,999,999）です/)).toBeInTheDocument()
+    expect(screen.queryByText(/Production defaultは設定しません/)).not.toBeInTheDocument()
     for (let index = 1; index <= 4; index += 1) {
       expect(screen.getByLabelText(`Observation ${index} Series Skill`))
         .toHaveTextContent('未入力')
@@ -553,15 +572,88 @@ describe('IdentificationWizardDialog STEP 1', () => {
     }
   })
 
+  it('renders the Seed range as eight-digit numeric text fields, not number spinners', () => {
+    renderWizard()
+    for (const field of Object.values(seedRangeFields())) {
+      expect(field).toHaveAttribute('type', 'text')
+      expect(field).toHaveAttribute('inputmode', 'numeric')
+      expect(field).toHaveAttribute('maxlength', '8')
+      expect(field).toHaveAttribute('pattern', '[0-9]*')
+      expect(field).not.toHaveAttribute('min')
+      expect(field).not.toHaveAttribute('max')
+      expect(field).not.toHaveAttribute('step')
+    }
+  })
+
+  it.each([
+    '12e3', '-1', '+1', '1.5', 'abcdef', '1 2', ' 12', '１２', '100000000', '0x5f5e101',
+  ])('refuses the non-canonical Seed range draft %j at the onChange boundary', (invalid) => {
+    renderWizard()
+    const { start, end } = seedRangeFields()
+    // fireEvent bypasses the `maxLength` attribute, so a nine-digit value here
+    // proves the onChange guard itself, not only the HTML attribute.
+    fireEvent.change(start, { target: { value: invalid } })
+    fireEvent.change(end, { target: { value: invalid } })
+
+    expect(start).toHaveValue(CANONICAL_SEED_START)
+    expect(end).toHaveValue(CANONICAL_SEED_END)
+  })
+
+  it('accepts digits up to eight and keeps a temporarily blank draft while editing', async () => {
+    const user = userEvent.setup()
+    renderWizard()
+    const { start, end } = seedRangeFields()
+    await user.clear(start)
+    expect(start).toHaveValue('')
+    await user.type(start, '123456789')
+    expect(start).toHaveValue('12345678')
+    await user.clear(end)
+    await user.type(end, '00000042')
+    expect(end).toHaveValue('00000042')
+  })
+
   it('does not call identifySkill while the Seed range is blank', async () => {
+    const user = userEvent.setup()
+    const { coordinator } = renderWizard()
+    fillSkillObservations()
+    fillSeedRange('', '')
+
+    await user.click(screen.getByRole('button', { name: 'STEP 1 Search' }))
+
+    expect(await screen.findByText(/Base Seed rangeの開始を入力してください/)).toBeInTheDocument()
+    expect(coordinator.skillInputs).toHaveLength(0)
+
+    fillSeedRange('100', '')
+    await user.click(screen.getByRole('button', { name: 'STEP 1 Search' }))
+    expect(await screen.findByText(/Base Seed rangeの終了を入力してください/)).toBeInTheDocument()
+    expect(coordinator.skillInputs).toHaveLength(0)
+  })
+
+  it('does not call identifySkill when the Seed range start exceeds its end', async () => {
+    const user = userEvent.setup()
+    const { coordinator } = renderWizard()
+    fillSkillObservations()
+    fillSeedRange('200', '100')
+
+    await user.click(screen.getByRole('button', { name: 'STEP 1 Search' }))
+
+    expect(await screen.findByText(/Base Seed rangeは0から99999999までの昇順inclusive rangeで入力してください/)).toBeInTheDocument()
+    expect(coordinator.skillInputs).toHaveLength(0)
+  })
+
+  it('sends the canonical full Seed range when the initial value is left unchanged', async () => {
     const user = userEvent.setup()
     const { coordinator } = renderWizard()
     fillSkillObservations()
 
     await user.click(screen.getByRole('button', { name: 'STEP 1 Search' }))
 
-    expect(await screen.findByText(/Base Seed rangeの開始を入力してください/)).toBeInTheDocument()
-    expect(coordinator.skillInputs).toHaveLength(0)
+    await waitFor(() => expect(coordinator.skillInputs).toHaveLength(1))
+    expect(coordinator.skillInputs[0]?.seedRange).toEqual({
+      startInclusive: CANONICAL_BASE_SEED_MIN,
+      endInclusive: CANONICAL_BASE_SEED_MAX,
+    })
+    expect(coordinator.skillInputs[0]?.seedRange).toEqual({ startInclusive: 0, endInclusive: 99_999_999 })
   })
 
   it('does not call identifySkill while any Skill observation row is incomplete', async () => {
@@ -652,16 +744,18 @@ describe('IdentificationWizardDialog STEP 1', () => {
     expect(screen.getByLabelText('Observation 5 Group Skill')).toHaveTextContent('未入力')
   })
 
-  it('restart clears the explicitly entered Seed range and observations', async () => {
+  it('restart returns a narrowed Seed range to the canonical full domain and clears observations', async () => {
     const user = userEvent.setup()
     const { coordinator } = renderWizard()
     fillStep1()
+    expect(screen.getByLabelText('Base Seed range start')).toHaveValue('100')
+    expect(screen.getByLabelText('Base Seed range end')).toHaveValue('200')
 
     await user.click(screen.getByRole('button', { name: 'Restart' }))
 
     expect(coordinator.restartCalls).toBe(1)
-    expect(screen.getByLabelText('Base Seed range start')).toHaveValue(null)
-    expect(screen.getByLabelText('Base Seed range end')).toHaveValue(null)
+    expect(screen.getByLabelText('Base Seed range start')).toHaveValue(CANONICAL_SEED_START)
+    expect(screen.getByLabelText('Base Seed range end')).toHaveValue(CANONICAL_SEED_END)
     expect(screen.getByLabelText('Observation 1 Series Skill')).toHaveTextContent('未入力')
     expect(screen.getByLabelText('Observation 1 Group Skill')).toHaveTextContent('未入力')
   })
@@ -696,7 +790,14 @@ describe('IdentificationWizardDialog STEP 1', () => {
       expect(dialog.getByText(item)).toBeInTheDocument()
     }
     expect(dialog.getByText('検証範囲')).toBeInTheDocument()
-    expect(dialog.getByText(/操虫棍 \/ 氷の特定Counter位置のみ/)).toBeInTheDocument()
+    // The verification level is stated generically from the repository's
+    // game-verified evidence; fixture enumeration belongs to
+    // `docs/RNG_REFERENCE_AUDIT.md`, and no blanket coverage claim is made.
+    expect(dialog.getByText(/Production Identificationは実機確認済みです。ただし確認条件は限定されており、全武器種・全属性・全ゲームバージョンを保証するものではありません。/)).toBeInTheDocument()
+    expect(dialog.getByText(/採用後の予測結果はゲーム側でも確認してください。/)).toBeInTheDocument()
+    expect(dialog.queryByText(/操虫棍/)).not.toBeInTheDocument()
+    expect(dialog.queryByText(/ヘヴィボウガン/)).not.toBeInTheDocument()
+    expect(dialog.queryByText(/全武器種・全属性・全ゲームバージョン(で|を)?確認済み/)).not.toBeInTheDocument()
   })
 
   it('numbers each Skill observation, shows its completion, and deletes by number down to one', async () => {

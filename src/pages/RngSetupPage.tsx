@@ -26,12 +26,16 @@ import {
 
 const masterResult = loadMasterData()
 
-type KnownKey = 'baseSeed' | 'gogmaCounter' | 'skillCounter' | 'counterGate'
+/**
+ * The KnownValues the ordinary RNG Setup edits (`docs/UI_FLOW.md` 5.2).
+ * `RngState.counterGate` is deliberately absent: it stays persisted for
+ * legacy / diagnostic / import compatibility, is never Production Prediction
+ * authority, and is neither shown nor edited here.
+ */
+type KnownKey = 'baseSeed' | 'gogmaCounter' | 'skillCounter'
 type FormKnown = { value: string; isConfirmed: boolean; source: RngStateSource | null }
 type RngForm = Record<KnownKey, FormKnown> & { notes: string }
-const knownKeys: readonly KnownKey[] = [
-  'baseSeed', 'gogmaCounter', 'skillCounter', 'counterGate',
-]
+const knownKeys: readonly KnownKey[] = ['baseSeed', 'gogmaCounter', 'skillCounter']
 
 const UNSAVED_WIZARD_MESSAGE =
   'Identification Wizardを開始する前に、RNG状態設定の変更を保存するか元に戻してください。'
@@ -40,12 +44,11 @@ const knownLabels: Record<KnownKey, string> = {
   baseSeed: 'Base Seed（基準シード）',
   gogmaCounter: '巨戟カウンター',
   skillCounter: 'スキルカウンター',
-  counterGate: 'Counter Gate（カウンターゲート）',
 }
 
 function toForm(state: RngState): RngForm {
   const map = <T,>(known: KnownValue<T>): FormKnown => ({ value: known.value === null ? '' : String(known.value), isConfirmed: known.isConfirmed, source: known.source })
-  return { baseSeed: map(state.baseSeed), gogmaCounter: map(state.gogmaCounter), skillCounter: map(state.skillCounter), counterGate: map(state.counterGate), notes: state.notes ?? '' }
+  return { baseSeed: map(state.baseSeed), gogmaCounter: map(state.gogmaCounter), skillCounter: map(state.skillCounter), notes: state.notes ?? '' }
 }
 
 function hasUnsavedRngFormChanges(form: RngForm, state: RngState): boolean {
@@ -89,7 +92,10 @@ function toState(
     baseSeed: updateKnown('baseSeed', form.baseSeed, current.baseSeed, (value) => engine.normalizeSeed(value)),
     gogmaCounter: updateKnown('gogmaCounter', form.gogmaCounter, current.gogmaCounter, (value) => parseCounter(value, '巨戟カウンター') as number),
     skillCounter: updateKnown('skillCounter', form.skillCounter, current.skillCounter, (value) => parseCounter(value, 'スキルカウンター') as number),
-    counterGate: updateKnown('counterGate', form.counterGate, current.counterGate, (value) => parseCounter(value, 'Counter Gate（カウンターゲート）') as number),
+    // The ordinary UI never edits Counter Gate: the persisted KnownValue is
+    // carried over exactly (value, confirmation, and source), never nulled,
+    // and never replaced by the Production representatives 54 / 35.
+    counterGate: current.counterGate,
     notes: form.notes || null,
     updatedAt: now,
   }
@@ -303,16 +309,6 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
             <KnownField fieldId="gogma-counter" label={knownLabels.gogmaCounter} description="巨戟アーティアの復元ボーナス予測に使う位置です。" numeric value={form.gogmaCounter} onChange={(value) => updateField('gogmaCounter', value)} />
             <KnownField fieldId="skill-counter" label={knownLabels.skillCounter} description="シリーズ・グループスキル予測に使う位置です。" numeric value={form.skillCounter} onChange={(value) => updateField('skillCounter', value)} />
           </Box>
-          {/* Kept mounted while collapsed: the Counter Gate draft is part of
-              the same unsaved form and must survive closing the disclosure. */}
-          <DisclosureAccordion title="詳細・互換情報（Counter Gate）" headingLevel="h3">
-            <Stack spacing={1.5}>
-              <Typography variant="body2" color="text.secondary">Counter Gateは旧形式・診断・互換性のために保持する値です。Production予測とIdentificationには使用しません。値を編集した場合も下の「保存」で保存します。</Typography>
-              <Box sx={{ maxWidth: { md: 'calc((100% - 32px) / 3)' } }}>
-                <KnownField fieldId="counter-gate" label={knownLabels.counterGate} description="legacy / diagnostic / compatibility情報です。Production予測やIdentificationのauthorityではありません。" numeric value={form.counterGate} onChange={(value) => updateField('counterGate', value)} />
-              </Box>
-            </Stack>
-          </DisclosureAccordion>
           <TextField label="メモ" multiline minRows={2} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
           {saveError && <Alert severity="error">{saveError}</Alert>}
           {saveNotice && <Alert severity="success" onClose={() => setSaveNotice(null)}>{saveNotice}</Alert>}

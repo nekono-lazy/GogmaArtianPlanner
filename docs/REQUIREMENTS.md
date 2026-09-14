@@ -109,7 +109,9 @@ candidateCounter = normalCounterBefore + forgeCount - 1
 
 Base Seed、Gogma Counter、Skill Counter、Counter Gateはそれぞれ独立した `KnownValue<T>` として、値、確定状態、取得元を保持する。一部だけ判明している状態を許可し、RNG状態全体を「全確定 / 未確定」の二択にしない。
 
-`RngState.counterGate` はv1で削除しない。legacy compatibility、manual input compatibility、将来のExport / Import round-trip、diagnostic / reference情報のために保持する。ただし、persisted Counter Gateのvalueまたは確定状態は、Production Skill Prediction、Production Gogma Prediction、Candidate Search、Planner、Trace ReplayのavailabilityまたはPrediction結果のauthorityにしない。
+`RngState.counterGate` はv1で削除しない。legacy compatibility、過去データとの互換性、Export / Import round-trip、diagnostic / reference情報のために保持する。ただし、persisted Counter Gateのvalueまたは確定状態は、Production Skill Prediction、Production Gogma Prediction、Candidate Search、Planner、Trace ReplayのavailabilityまたはPrediction結果のauthorityにしない。
+
+Counter Gateは通常ユーザーが直接操作する値ではない。通常ユーザー向けRNG SetupはCounter Gateを表示・編集せず、Identification Wizardの入力・探索対象・結果にもしない。persisted値はUIから見えなくても保持し、他項目の保存でnull化、確定解除、source書き換え、代表値54 / 35の書込みを行わない。
 
 機能ごとに必要な値からCapabilityを判定する。例えばGogma予測、Skill予測、通常アーティア検索、Planner実行は、それぞれが依存する確定値だけを要求する。不足値に依存する経路のみを無効化し、利用可能な経路まで一括で無効化しない。
 
@@ -151,16 +153,15 @@ Gogma Seed Finderが出力する既知形式の状態情報をユーザーが貼
 
 別ツールやREFrameworkなどで取得した値を入力できること。取得手段との直接連携は行わない。
 
-入力対象は次の値とする。
+通常ユーザー向けの入力対象は次の3項目とする。
 
 - Base Seed
 - Gogma Counter
 - Skill Counter
-- Counter Gate
 
-判明している項目だけを入力でき、4項目すべてを必須としない。
+判明している項目だけを入力でき、3項目すべてを必須としない。
 
-Counter Gateの直接入力はlegacy / diagnostic / compatibility情報の保存手段として維持する。値が200、54、または未設定のいずれでも、必要なBase Seed、該当Counter、Engine support、concrete semantic input supportが揃っていればProduction active predictionは成立する。入力されたexact GateをProduction Prediction結果のauthorityにしない。
+Counter Gateは `RngState` に互換・diagnostic目的で残るが、通常ユーザー向け直接入力UIは提供しない。過去に `source = manual` のCounter Gateを持つデータが存在しても、その値はそのまま保持する。persisted Gateが200、54、または未設定のいずれでも、必要なBase Seed、該当Counter、Engine support、concrete semantic input supportが揃っていればProduction active predictionは成立し、persisted GateをProduction Prediction結果のauthorityにしない。
 
 ### 6.3 観測結果から検索
 

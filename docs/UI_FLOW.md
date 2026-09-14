@@ -184,7 +184,7 @@ gogma_artian  -> 巨戟アーティア系
 
 目的。
 
-Base Seed、Gogma Counter、Skill CounterをProduction Prediction用に項目ごとに設定する。Counter Gateはlegacy / diagnostic / manual / import compatibility値として引き続き保存・表示できるが、Production Predictionの必須項目またはauthorityではない。判明している値だけの適用を許可する。
+Base Seed、Gogma Counter、Skill CounterをProduction Prediction用に項目ごとに設定する。Counter Gateは通常UIに表示・編集欄を設けない。persisted `RngState.counterGate` はlegacy / diagnostic / import compatibility値として保持するだけであり、Production Predictionの必須項目またはauthorityではない。判明している値だけの適用を許可する。
 
 タブ。
 
@@ -235,16 +235,15 @@ RNG同定の利用可否表示。
 - Base Seed
 - Gogma Counter
 - Skill Counter
-- Counter Gate
 
 制約。
 
 - Counterは0以上の整数
-- Base Seedは正規化後に保存
-- 4項目をすべて入力する必要はない
+- Base Seedは正規化後に保存。raw 10進 / `0x` 16進入力をProduction `normalizeSeed()` でcanonical 10進文字列へ正規化する手動入力semanticsは、Identification WizardのSeed range入力UXとは別契約であり変更しない
+- 3項目をすべて入力する必要はない
 - 入力した各KnownValueのsourceを `manual` にする
 - 空欄は既存値を削除しない。確定解除は別操作にする
-- Counter Gate入力欄はC5-E2C2時点ではUIから削除済みと扱わない。後続UI taskで詳細値への移動や説明追加を検討する
+- Counter Gateの入力欄・状態表示・取得方法表示を通常UIに出さない。保存時はpersisted `RngState.counterGate` をそのまま保持し、null化、確定解除、source書き換え、代表値54 / 35の書込みを行わない
 - persisted Gateが200、54、または未設定でも、他の必要値とsupportが同じならProduction active Predictionのavailabilityと結果は同じである
 
 ## 5.3 観測から検索（legacy generic Seed Search contract）
@@ -297,13 +296,21 @@ RNG Setupから専用Wizardを開始し、完了後のreview / adoption結果を
 - 観測終了後は調査前の状態へ戻してから結果を採用する
 - ゲーム側の保存仕様やセーブデータの安全をアプリが断定・保証しない
 
+検証状態の表示。
+
+- 通常ユーザー向けWizardは、repositoryに存在するgame-verified evidenceを根拠に「Production Identificationは実機確認済みです。ただし確認条件は限定されており、全武器種・全属性・全ゲームバージョンを保証するものではありません。」と表示し、採用後の予測結果をゲーム側でも確認するよう促す
+- 全武器種・全属性・全game versionが確認済みであるとは表現しない
+- 個別fixture（武器種 / 属性 / Counter位置）の列挙は [RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) の責務であり、通常Wizardへ固定表示しない
+
 STEP 1。
 
 1. Normal ArtianをGogma Artianへconversionし、自動付与されたSeries / Group SkillをObservation 1として記録する
 2. Reset Skillsを連続して行い、Observation 2以降へSeries / Groupの両方を記録する
 3. approximate Skill Counterはcenter + ±Nを基本入力とし、計算後のinclusive start / endを併記する。初期推奨幅は11候補である
-4. Base Seedとstarting Skill CounterをWorkerで探索する
-5. 完全・non-truncatedな結果がexactly oneになるまでSTEP 2へ進めない
+4. Base Seed rangeの初期値はcanonical全域 `0..99,999,999`（`CANONICAL_BASE_SEED_MIN` / `CANONICAL_BASE_SEED_MAX`）とし、Restart後も同じ初期値へ戻す。ユーザーは従来どおり狭いbounded rangeへ変更でき、自動range拡張は行わない
+5. Seed range入力は数字専用8桁（`type="text"` / `inputMode="numeric"` / `maxLength=8` 相当）とし、空文字と0-9最大8桁だけをdraftへ採用する。`-` / `+` / `.` / `e` / 空白 / 英字 / 9桁以上はpaste・programmatic changeでもdraftへ入れない。検索実行時はDomain validationで `0 <= start <= end <= 99,999,999` を確認し、空欄・逆順・domain外はerrorとしてCoordinatorへ渡さない。RNG Setupの手動Base Seed入力（raw 10進 / 16進をnormalize）とは別契約である
+6. Base Seedとstarting Skill CounterをWorkerで探索する
+7. 完全・non-truncatedな結果がexactly oneになるまでSTEP 2へ進めない
 
 STEP 2。
 
