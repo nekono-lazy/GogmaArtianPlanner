@@ -26,12 +26,23 @@ import {
   REFERENCE_NORMAL_ELEMENTAL_CANDIDATES,
   REFERENCE_NORMAL_NONE_CANDIDATES,
   referenceNormalCandidatesForElement,
+  selectReferenceNormalLotteryIdsFromRawValues,
   toReferenceNormalFinalAttribute,
   UnsupportedGameVerifiedNormalPredictionError,
 } from '.'
 
+/*
+ * Game-verified Production limits (docs/RNG_REFERENCE_AUDIT.md 5.3, 2026-09-14):
+ * Attack 5 / Element 4 / Sharpness-Capacity family 2 / Affinity 3. These are
+ * deliberately not the pinned reference pool's Element 5 / Affinity 5.
+ */
+const GAME_ATTACK = { referenceId: 6, maximumOccurrences: 5 } as const
+const GAME_ELEMENT = { referenceId: 4, maximumOccurrences: 4 } as const
+const GAME_FAMILY_7 = { referenceId: 7, maximumOccurrences: 2 } as const
+const GAME_AFFINITY = { referenceId: 8, maximumOccurrences: 3 } as const
+
 describe('reference-verified Production Normal Artian prediction', () => {
-  it('keeps the exact raw Normal pool IDs, order, and family limits', () => {
+  it('keeps the exact raw Normal pool IDs, order, and family limits of the pinned reference (Element 5 / Affinity 5)', () => {
     expect(REFERENCE_NORMAL_NONE_CANDIDATES).toEqual([
       { referenceId: 6, maximumOccurrences: 5 },
       { referenceId: 7, maximumOccurrences: 2 },
@@ -45,6 +56,69 @@ describe('reference-verified Production Normal Artian prediction', () => {
     ])
     expect(referenceNormalCandidatesForElement('element.none')).toBe(REFERENCE_NORMAL_NONE_CANDIDATES)
     expect(referenceNormalCandidatesForElement('element.thunder')).toBe(REFERENCE_NORMAL_ELEMENTAL_CANDIDATES)
+  })
+
+  it('keeps reference parity limits distinct from the game-verified Production limits', () => {
+    // Reference parity is the pinned GARP.lua behavior, not the real game's limits.
+    const referenceById = new Map(REFERENCE_NORMAL_ELEMENTAL_CANDIDATES.map((c) => [c.referenceId, c.maximumOccurrences]))
+    expect(referenceById.get(4)).toBe(5)
+    expect(referenceById.get(8)).toBe(5)
+    // Production game-verified pools carry the real-game limits instead.
+    expect(GAME_VERIFIED_LONG_SWORD_ELEMENTAL_NORMAL_CANDIDATES.find((c) => c.referenceId === 4)?.maximumOccurrences).toBe(4)
+    expect(GAME_VERIFIED_LONG_SWORD_ELEMENTAL_NORMAL_CANDIDATES.find((c) => c.referenceId === 8)?.maximumOccurrences).toBe(3)
+  })
+
+  it('fixes the exact game-verified Production limits: Attack 5 / Element 4 / family 7 2 / Affinity 3', () => {
+    const everyGamePool = [
+      GAME_VERIFIED_BOW_ELEMENTAL_NORMAL_CANDIDATES,
+      GAME_VERIFIED_BOW_NONE_NORMAL_CANDIDATES,
+      GAME_VERIFIED_LIGHT_BOWGUN_NORMAL_CANDIDATES,
+      GAME_VERIFIED_HEAVY_BOWGUN_NORMAL_CANDIDATES,
+      GAME_VERIFIED_LONG_SWORD_ELEMENTAL_NORMAL_CANDIDATES,
+      GAME_VERIFIED_LONG_SWORD_NONE_NORMAL_CANDIDATES,
+    ]
+    const expectedByReferenceId: Record<number, number> = { 6: 5, 4: 4, 7: 2, 8: 3 }
+    for (const pool of everyGamePool) {
+      for (const candidate of pool) {
+        expect(candidate.maximumOccurrences).toBe(expectedByReferenceId[candidate.referenceId])
+      }
+    }
+  })
+
+  it('removes a game-verified candidate from the pool after its third Affinity or fourth Element', () => {
+    // Long Sword elemental pool [6, 4, 7, 8]: raw values are chosen so each slot picks a known index.
+    // Slots 1..3 pick Affinity (index 3 of a 4-candidate pool); the 3rd Affinity removes it, so slot 4
+    // with raw value 3 now wraps onto a 3-candidate pool and selects index 0 (Attack), never Affinity.
+    expect(selectReferenceNormalLotteryIdsFromRawValues(
+      [3, 3, 3, 3, 3],
+      GAME_VERIFIED_LONG_SWORD_ELEMENTAL_NORMAL_CANDIDATES,
+    )).toEqual([8, 8, 8, 6, 6])
+    // The same raw values against the pinned reference pool keep Affinity at 5 and draw it five times.
+    expect(selectReferenceNormalLotteryIdsFromRawValues(
+      [3, 3, 3, 3, 3],
+      REFERENCE_NORMAL_ELEMENTAL_CANDIDATES,
+    )).toEqual([8, 8, 8, 8, 8])
+
+    // Slots 1..4 pick Element (index 1); the 4th Element removes it, so slot 5 with raw value 1
+    // selects index 1 of the remaining [6, 7, 8] pool, which is family 7, never a fifth Element.
+    expect(selectReferenceNormalLotteryIdsFromRawValues(
+      [1, 1, 1, 1, 1],
+      GAME_VERIFIED_LONG_SWORD_ELEMENTAL_NORMAL_CANDIDATES,
+    )).toEqual([4, 4, 4, 4, 7])
+    expect(selectReferenceNormalLotteryIdsFromRawValues(
+      [1, 1, 1, 1, 1],
+      REFERENCE_NORMAL_ELEMENTAL_CANDIDATES,
+    )).toEqual([4, 4, 4, 4, 4])
+
+    // Attack still fills all five slots, and family 7 is still removed after its second draw.
+    expect(selectReferenceNormalLotteryIdsFromRawValues(
+      [0, 0, 0, 0, 0],
+      GAME_VERIFIED_LONG_SWORD_ELEMENTAL_NORMAL_CANDIDATES,
+    )).toEqual([6, 6, 6, 6, 6])
+    expect(selectReferenceNormalLotteryIdsFromRawValues(
+      [2, 2, 2, 2, 2],
+      GAME_VERIFIED_LONG_SWORD_ELEMENTAL_NORMAL_CANDIDATES,
+    )).toEqual([7, 7, 8, 8, 8])
   })
 
   it('matches every independent raw five-slot golden from the pinned GARP.lua reference', () => {
@@ -64,11 +138,7 @@ describe('reference-verified Production Normal Artian prediction', () => {
   })
 
   it('matches the game-observed elemental Bow 15-slot sequence with pool [6, 4, 8]', () => {
-    expect(GAME_VERIFIED_BOW_ELEMENTAL_NORMAL_CANDIDATES).toEqual([
-      { referenceId: 6, maximumOccurrences: 5 },
-      { referenceId: 4, maximumOccurrences: 5 },
-      { referenceId: 8, maximumOccurrences: 5 },
-    ])
+    expect(GAME_VERIFIED_BOW_ELEMENTAL_NORMAL_CANDIDATES).toEqual([GAME_ATTACK, GAME_ELEMENT, GAME_AFFINITY])
     for (const vector of gameVerifiedBowElementalNormalVectors) {
       expect(predictGameVerifiedNormalArtian(vector)).toEqual(vector.bonuses)
       expect(predictGameVerifiedNormalRaw(vector).referenceIds).not.toContain(7)
@@ -93,10 +163,10 @@ describe('reference-verified Production Normal Artian prediction', () => {
   })
 
   it('uses exactly the eight observed game-verified pool contracts', () => {
-    expect(GAME_VERIFIED_BOW_NONE_NORMAL_CANDIDATES).toEqual([
-      { referenceId: 6, maximumOccurrences: 5 },
-      { referenceId: 8, maximumOccurrences: 5 },
-    ])
+    expect(GAME_VERIFIED_BOW_NONE_NORMAL_CANDIDATES).toEqual([GAME_ATTACK, GAME_AFFINITY])
+    expect(GAME_VERIFIED_LIGHT_BOWGUN_NORMAL_CANDIDATES).toEqual([GAME_ATTACK, GAME_FAMILY_7, GAME_AFFINITY])
+    expect(GAME_VERIFIED_LONG_SWORD_ELEMENTAL_NORMAL_CANDIDATES).toEqual([GAME_ATTACK, GAME_ELEMENT, GAME_FAMILY_7, GAME_AFFINITY])
+    expect(GAME_VERIFIED_LONG_SWORD_NONE_NORMAL_CANDIDATES).toEqual([GAME_ATTACK, GAME_FAMILY_7, GAME_AFFINITY])
     expect(gameVerifiedNormalCandidatesForWeaponAndElement('weapon.bow', 'element.none'))
       .toBe(GAME_VERIFIED_BOW_NONE_NORMAL_CANDIDATES)
     expect(gameVerifiedNormalCandidatesForWeaponAndElement('weapon.light_bowgun', 'element.fire'))
@@ -122,11 +192,7 @@ describe('reference-verified Production Normal Artian prediction', () => {
   })
 
   it('matches the HBG Fire/none counter 4-6 observations with no Element family', () => {
-    expect(GAME_VERIFIED_HEAVY_BOWGUN_NORMAL_CANDIDATES).toEqual([
-      { referenceId: 6, maximumOccurrences: 5 },
-      { referenceId: 7, maximumOccurrences: 2 },
-      { referenceId: 8, maximumOccurrences: 5 },
-    ])
+    expect(GAME_VERIFIED_HEAVY_BOWGUN_NORMAL_CANDIDATES).toEqual([GAME_ATTACK, GAME_FAMILY_7, GAME_AFFINITY])
     expect(gameVerifiedHeavyBowgunFireNormalVectors.map((vector) => vector.gameLotteryIds))
       .toEqual(gameVerifiedHeavyBowgunNoneNormalVectors.map((vector) => vector.gameLotteryIds))
     for (const vector of [...gameVerifiedHeavyBowgunFireNormalVectors, ...gameVerifiedHeavyBowgunNoneNormalVectors]) {

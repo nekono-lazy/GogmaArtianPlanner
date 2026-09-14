@@ -7,11 +7,24 @@ import { toReferenceWeaponType } from './referenceAdapters'
  */
 export type ReferenceNormalLotteryId = 4 | 6 | 7 | 8
 
+/**
+ * How many of the five slots one candidate may fill before the pool step
+ * removes it. The pinned reference pools use only 2 and 5; the game-verified
+ * Production pools in `gameNormalBonuses.ts` also need 3 (Affinity) and 4
+ * (Element).
+ */
+export type ReferenceNormalMaximumOccurrences = 2 | 3 | 4 | 5
+
 export interface ReferenceNormalCandidate {
   readonly referenceId: ReferenceNormalLotteryId
-  readonly maximumOccurrences: 2 | 5
+  readonly maximumOccurrences: ReferenceNormalMaximumOccurrences
 }
 
+/*
+ * Reference parity values: the pinned GARP.lua configuredBasePool caps Element
+ * and Affinity at 5. That is the pinned reference implementation's behavior,
+ * not the real game's limits, which the game-verified Production pools carry.
+ */
 const ATTACK: ReferenceNormalCandidate = { referenceId: 6, maximumOccurrences: 5 }
 const ELEMENT: ReferenceNormalCandidate = { referenceId: 4, maximumOccurrences: 5 }
 const SHARPNESS_OR_CAPACITY: ReferenceNormalCandidate = { referenceId: 7, maximumOccurrences: 2 }

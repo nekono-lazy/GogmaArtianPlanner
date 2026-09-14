@@ -39,7 +39,7 @@ export interface ReferenceNormalPredictionResult extends ReferenceNormalRawPredi
 
 interface MutableReferenceNormalCandidate {
   readonly referenceId: ReferenceNormalLotteryId
-  readonly maximumOccurrences: 2 | 5
+  readonly maximumOccurrences: ReferenceNormalCandidate['maximumOccurrences']
   count: number
 }
 
