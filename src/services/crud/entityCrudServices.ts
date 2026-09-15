@@ -2,7 +2,7 @@ import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import {
   validateOwnedWeaponMasterReferences,
   validateTargetWeaponMasterReferences,
-} from '../../domain/master/entityMasterValidation'
+} from '../../domain/artian/entityMasterValidation'
 import {
   createOwnedWeapon,
   createOwnedWeaponId,

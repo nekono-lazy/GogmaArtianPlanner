@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createValidMasterDataFixture } from '../../test/fixtures/masterData'
 import {
   getBonusDefinitionsForWeapon,
+  getBonusDefinitionsForWeaponAndScope,
   getBonusRankOrder,
   getEnabledElements,
   getEnabledWeaponTypes,
@@ -41,6 +42,25 @@ describe('Master Data selectors', () => {
       'weapon_bonus.fixture.a.attack.high',
       'weapon_bonus.fixture.a.attack.special',
     ])
+  })
+
+  it('returns enabled Bonus Definitions for one weapon and scope without any element exclusion', () => {
+    const master = createValidMasterDataFixture()
+    master.elements = master.elements.map((element) => ({ ...element, allowsElementBonus: false }))
+    master.bonusTypes[0] = { ...master.bonusTypes[0]!, category: 'element' }
+    expect(
+      getBonusDefinitionsForWeaponAndScope(master, 'weapon.fixture.a', 'gogma_artian').map(({ id }) => id),
+    ).toEqual([
+      'weapon_bonus.fixture.a.attack.high',
+      'weapon_bonus.fixture.a.attack.special',
+    ])
+    // The Master-only element-aware selector keeps excluding them.
+    expect(
+      getBonusDefinitionsForWeapon(master, 'weapon.fixture.a', 'element.fixture.a', 'gogma_artian'),
+    ).toEqual([])
+    expect(() =>
+      getBonusDefinitionsForWeaponAndScope(master, 'weapon.fixture.missing', 'gogma_artian'),
+    ).toThrow(MasterDataDomainError)
   })
 
   it('returns only ranks defined for the weapon and Bonus Type in rank order', () => {

@@ -114,6 +114,37 @@ export function getBonusDefinitionsForWeapon(
     .sort(compareBySortOrderAndId)
 }
 
+export type WeaponScopeBonusDefinitionsMasterSubset = Pick<
+  MasterDataRoot,
+  'weaponTypes' | 'weaponBonusDefinitions'
+>
+
+/**
+ * The enabled Bonus Definitions Master declares for one weapon type and scope,
+ * with no element exclusion at all.
+ *
+ * This is Master-only data. It deliberately ignores
+ * `ElementMaster.allowsElementBonus`, so it never decides on its own which
+ * bonuses a weapon may hold; the Production composite availability selector
+ * (`src/domain/artian/productionBonusAvailability.ts`) intersects it with the
+ * Production lottery authority. It never reads the Production RNG layer.
+ */
+export function getBonusDefinitionsForWeaponAndScope(
+  master: WeaponScopeBonusDefinitionsMasterSubset,
+  weaponTypeId: WeaponTypeId,
+  scope: ArtianBonusScope,
+): WeaponBonusDefinition[] {
+  requireById(master.weaponTypes, weaponTypeId, 'WeaponTypeMaster')
+  return master.weaponBonusDefinitions
+    .filter(
+      (definition) =>
+        definition.isEnabled &&
+        definition.weaponTypeId === weaponTypeId &&
+        definition.scope === scope,
+    )
+    .sort(compareBySortOrderAndId)
+}
+
 export function getRanksForBonusType(
   master: MasterDataRoot,
   weaponTypeId: WeaponTypeId,

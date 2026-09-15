@@ -302,7 +302,7 @@ Keep契約（6.1本文、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 11�
 - Bow / 毒: `allowsElementBonus = true` だが、Production Gogma ResetはElementを抽選しない（直接実測）
 - Switch Axe / `element.none`: `allowsElementBonus = false` だが、Production Gogma ResetはElementを抽選する（直接実測）
 
-したがって `allowsElementBonus` と現在のMaster availabilityをProduction lottery family authorityとして扱わない。Production上で利用可能なBonusDefinitionは、Masterのweapon type / scope定義とProduction family availabilityの積として決める方針とする。本仕様確定（PR-A）では `getBonusDefinitionsForWeapon()` の意味、Master JSON、`allowsElementBonus`、Master dataVersionを変更しない。後続PR-Cで、Master層がProduction RNG層へ依存しない依存方向を保った新しい複合availability selectorを設け、Owned Weapon editor、Target editor、Target compromise editor、Entity validation、Identification Wizard、new entity draftをconsumerとする。`getBonusDefinitionsForWeapon()` 自体を変更するかどうかは本節では決めない。
+したがって `allowsElementBonus` と現在のMaster availabilityをProduction lottery family authorityとして扱わない。Production上で利用可能なBonusDefinitionは、Masterのweapon type / scope定義とProduction family availabilityの積として決める方針とする。PR-A / PR-B / PR-Cのいずれでも `getBonusDefinitionsForWeapon()` の意味、Master JSON、`allowsElementBonus`、Master dataVersionを変更しない。PR-Cで、Master層がProduction RNG層へ依存しない依存方向を保った複合availability selector（`src/domain/artian/productionBonusAvailability.ts`、[MASTER_DATA.md](./MASTER_DATA.md) 15.1）を実装し、Owned Weapon editor、Target editor、Target compromise editor、Entity validation、Gogma Counter Identification Wizard STEP 2、new entity draftをconsumerとした。`getBonusDefinitionsForWeapon()` はMaster-only semanticsのまま残す。このavailabilityはUI / Entityの選択可否であり、Keep predictionの入力制約ではない（上記4）。availability外の保存済みbonusはnon-destructive load + fail-closed saveで扱う（[DATA_MODEL.md](./DATA_MODEL.md) 7.1）。
 
 **6. Gogma Counter Identification**
 
@@ -312,7 +312,7 @@ Gogma Counter Identification（9.8）はProduction Resetと同じcandidate avail
 
 - current implementation: `PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e7`（本節は実装済み）
 - 本節のfamily availabilityと `sharpness_capacity` family上限2はGogma Reset Prediction outputを変えるobservable Production RNG semantics changeであるため、PR-B実装時に `production-rng:c5-e6` から `production-rng:c5-e7` へ更新した。旧BuildCandidate / BuildListEntry / ProductionPlanは `rngEngineVersion` の差で `calculation_context_changed` になる
-- 仕様確定（PR-A）はsrcを変更しなかったため当時は `production-rng:c5-e6` のままだった。PR-A / PR-Bのいずれでも `CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、`ExportRoot.schemaVersion`、`RngState.schemaVersion`、`supportsSeedSearch = false`、PRNG、seed derivation、10-step block、Counter semanticsは変更していない。PR-BでもMaster JSON / `allowsElementBonus` / Master dataVersion / `getBonusDefinitionsForWeapon()` の意味、reference parity（候補表、`buildReferenceWeightedGogmaPool`、`predictReferenceGogmaReset`、reference golden / tests）、Keepアルゴリズム、Search / Planner algorithmは変更していない。UI / Validationへの反映はPR-Cで行う
+- 仕様確定（PR-A）はsrcを変更しなかったため当時は `production-rng:c5-e6` のままだった。PR-A / PR-Bのいずれでも `CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、`ExportRoot.schemaVersion`、`RngState.schemaVersion`、`supportsSeedSearch = false`、PRNG、seed derivation、10-step block、Counter semanticsは変更していない。PR-BでもMaster JSON / `allowsElementBonus` / Master dataVersion / `getBonusDefinitionsForWeapon()` の意味、reference parity（候補表、`buildReferenceWeightedGogmaPool`、`predictReferenceGogmaReset`、reference golden / tests）、Keepアルゴリズム、Search / Planner algorithmは変更していない。UI / Validationへの反映はPR-Cで実装済みであり、PR-CはPrediction outputを変えないため `production-rng:c5-e7` のままである
 
 **8. provenance**
 

@@ -564,12 +564,14 @@ Production Reset support no longer reads the caller Master.
   game-verified for Gogma Reset.
 - Production-usable restoration bonus definitions are the product of the
   Master weapon type / scope definitions and the Production family
-  availability. The specification change (PR-A) changes neither
+  availability. None of PR-A, PR-B, or PR-C changes
   `getBonusDefinitionsForWeapon()`, the Master JSON, `allowsElementBonus`, nor
-  Master `dataVersion`. PR-C adds a composite availability selector that keeps
-  Master independent of the Production RNG layer, for the Owned Weapon editor,
-  Target editor, Target compromise editor, entity validation, Identification
-  Wizard, and new entity drafts.
+  Master `dataVersion`. PR-C implemented the composite availability selector
+  (`src/domain/artian/productionBonusAvailability.ts`) that keeps Master
+  independent of the Production RNG layer, for the Owned Weapon editor, Target
+  editor, Target compromise editor, entity validation, Identification Wizard
+  STEP 2, and new entity drafts, without changing any Prediction output
+  (`production-rng:c5-e7` stays current). See Master Data Rules below.
 
 `LotteryMaster` is provisional.
 
@@ -2920,9 +2922,21 @@ table (`docs/RNG_SPEC.md` 6.1.1 / 6.3.1): Switch Axe `element.none` can hold
 Element Bonus in the game, Bow Poison / Paralysis / Sleep do not draw it, and
 Light Bowgun and Heavy Bowgun draw no Element Bonus regardless of element.
 Production-usable definitions are the product of the Master weapon type / scope
-definitions and that family availability; PR-C aligns UI and validation through
-a composite selector. Until then the current UI / validation keeps the
-`allowsElementBonus` exclusion, and it must not be described as a game rule.
+definitions and that family availability. PR-C implemented that composite
+selector in `src/domain/artian/productionBonusAvailability.ts`
+(`docs/MASTER_DATA.md` 15.1): the Owned Weapon, Target, and Target compromise
+editors, new entity drafts, entity validation
+(`src/domain/artian/entityMasterValidation.ts`), and Identification Wizard
+STEP 2 all read it, never `getBonusDefinitionsForWeapon()`. That Master-only
+selector and its `allowsElementBonus` exclusion stay unchanged and must not be
+described as a game rule. The composite selector reads `domain/master` and
+`domain/rng/production`; `domain/master` never imports the Production RNG
+layer, and nothing falls back to Master-only availability. A stored bonus
+outside the availability is never migrated, removed, or replaced on load or
+Import; editors show it as a disabled 「現在値・Production抽選対象外」 option and
+entity validation refuses it at save (non-destructive load plus fail-closed
+save). This availability is an entity / UI concern, never a Keep prediction
+input filter.
 
 The project-owner-confirmed semantic normal-to-Gogma Bonus Type mapping is:
 

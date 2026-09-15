@@ -1037,7 +1037,7 @@ Keep（Dual Blades / 龍、current family layout Element / Element / Element / E
 **後続PR**
 
 - PR-B（Production RNG、実装済み。下記「PR-B実装」）: Production Gogma Resetのcandidate availabilityをProduction Normal pool family集合へ置き換え、`sharpness_capacity` family上限2を実装した。Gogma Counter Identification kernelも同じauthorityへ移行した。今回の観測をprovenance付きgame-verified fixtureとして追加し、10.4 / 14.5の既存fixtureとreference golden / reference testsが不変であることを確認した。`PRODUCTION_RNG_ENGINE_VERSION` を `production-rng:c5-e6` から `production-rng:c5-e7` へ更新した
-- PR-C（UI / Validation）: Masterのweapon type / scope定義とProduction family availabilityの積を返す複合availability selectorを、Master層がProduction RNG層へ依存しない依存方向で追加し、Owned Weapon editor、Target editor、Target compromise editor、Entity validation、Identification Wizard、new entity draftへ適用する。現行UI / Validationで保存済みの、Production family availability外のbonusを持つ既存データの扱いはPR-Cで仕様決定する
+- PR-C（UI / Validation、実装済み。下記「PR-C実装」）: Masterのweapon type / scope定義とProduction family availabilityの積を返す複合availability selectorを、Master層がProduction RNG層へ依存しない依存方向で追加し、Owned Weapon editor、Target editor、Target compromise editor、Entity validation、Identification Wizard、new entity draftへ適用する。現行UI / Validationで保存済みの、Production family availability外のbonusを持つ既存データの扱いは、PR-Cでnon-destructive load + fail-closed saveと決定した
 
 **PR-B実装（2026-09-16）**
 
@@ -1046,6 +1046,13 @@ Keep（Dual Blades / 龍、current family layout Element / Element / Element / E
 - draw: `predictProductionGogmaResetSlotsFromRawValues()` がProduction Reset（`predictProductionGogmaReset()` / `ProductionRngEngine.predictGogmaBonus(reset)`）とGogma Counter Identification kernelで共有する唯一のdraw pathである。Identificationは旧Master availability pathを持たない
 - `ProductionRngEngine.getPredictionSupport(gogma_reset)` はMasterを読まない。unknown weapon / elementは `reference_adapter_unsupported`、Production Normal poolを持たない入力は `normal_pool_unverified`（現行14武器種には該当なし）である。Keepの `artianBonusTypeMappings` 要件は不変である
 - 本節の観測はgame-verified fixture（`gameVerifiedProductionGogmaResetVectors`、`gameVerifiedDualBladesDragonKeepChain`、`src/test/fixtures/gameVerifiedGogmaVectors.ts`）として追加した。Keep chain fixtureのcurrent rankはfamily layoutのtest encodingであり実ゲーム観測値ではない。C94はfixtureにしていない。10.4の5条件、14.5のHammer / 麻痺 C55..C60、reference golden / reference testsは不変のまま全件一致する
+
+**PR-C実装（2026-09-16）**
+
+- 複合availability selector: `src/domain/artian/productionBonusAvailability.ts`（[MASTER_DATA.md](./MASTER_DATA.md) 15.1）。`normal_artian` は `gameVerifiedNormalCandidatesForWeaponAndElement()` を `restorationBonusFromReferenceNormalId()` でsemantic bonusへ変換し、`gogma_artian` は `productionGogmaResetCandidatesForWeaponAndElement()` のcandidate bonusを使い、Master側はelement除外を持たないraw helper `getBonusDefinitionsForWeaponAndScope()` を使って積をとる。武器種別の分類はProduction RNG層から複製しない。Production authorityが分類できない入力と積が空の入力はfail closedし、`getBonusDefinitionsForWeapon()` へfallbackしない
+- consumer: Owned Weapon / Target editor（`BonusSetEditor`）、Target compromise editor、Entity validation（`src/domain/master` から `src/domain/artian/entityMasterValidation.ts` へ移動。関数名とshapeは不変）、new entity draft、Gogma Counter Identification Wizard STEP 2の選択肢と完成判定。Normal Counter Identification Dialogの `normalArtianCounterObservationBonusOptions()` は変更していない
+- 既存データ: non-destructive load + fail-closed save。migration、load / Import時の自動削除・自動置換はなく、editorはavailability外の現在値を無効化された「現在値・Production抽選対象外」選択肢として表示し、保存はEntity Validationが拒否する
+- 変更しないもの: `getBonusDefinitionsForWeapon()` / `getRanksForBonusType()` の意味、Master JSON / dataVersion、RNG Prediction output、Gogma Identification kernel、Keep / Reset predictor、Search / Planner algorithm、Worker protocol、`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e7`、`CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、`ExportRoot.schemaVersion`、`RngState.schemaVersion`、`supportsSeedSearch = false`
 
 **version**
 
