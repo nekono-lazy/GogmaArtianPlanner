@@ -1248,7 +1248,7 @@ commit固定fixtureを両実装へ流し、Web/Lua/reference extractorとProduct
 次は参照repositoryから確定できないため、Production値として推測しない。
 
 - 参照実装自体のアルゴリズムが全weapon/attribute/game versionで実ゲームと一致すること。
-- 直接観測していないweapon type / elementにおけるGogma Reset family availability（Production Normal pool family集合からのcategory-level adoption、14.17）と、Hammer / 麻痺以外への `sharpness_capacity` family上限2の適用。Bow火 / Bow none / LBG火 / HBG火 / Long Sword none / Hammer麻痺 / Bow毒 / Switch Axe none / Lance龍の観測範囲は14.17で直接確認済み。
+- 直接観測していないweapon type / elementにおけるGogma Reset family availability（Production Normal pool family集合からのcategory-level adoption、14.17）と、Hammer / 麻痺以外への `sharpness_capacity` family上限2の適用。直接観測済みの範囲は、Bow火 / Bow none / LBG火 / HBG火 / Long Sword noneが10.4、Hammer麻痺 C55..C60が14.5、2026-09-15の追加観測（Bow毒 / Switch Axe none / Hammer麻痺 / Lance龍、Dual Blades龍 Keep）が14.17である。
 - 武器種のProduction family availability外のfamily（Bow Table BのElement、LBG / HBGのElement等）をcurrentに持つKeepの実ゲーム結果。
 - `sharpness_capacity` familyを3枠以上currentに持つKeepの実ゲーム結果（unsupported化やfamily上限2の強制はしない）。
 - Current Masterの栄光の誉れ、祝祭の巡りがArtian RNG対象か、別用途か、update差か。
