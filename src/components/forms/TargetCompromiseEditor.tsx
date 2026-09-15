@@ -7,7 +7,7 @@ import {
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import type { AlternativeBonusOption, TargetWeapon } from '../../domain/models/publicTypes'
 import type { TargetWeaponDraft } from '../../services/crud/entityCrudServices'
-import { legacyBonusOptionLabel } from './productionBonusAvailabilityText'
+import { legacyBonusOptionLabel, missingIdealTypeOptionLabel } from './productionBonusAvailabilityText'
 
 type Compromise = Pick<TargetWeapon, 'practicalBonusConditions' | 'alternativeBonusRules'>
 
@@ -59,8 +59,24 @@ export function TargetCompromiseEditor({ target, master, onChange }: {
   const newOption = (type: string): AlternativeBonusOption => ({ alternativeBonusTypeId: type, minimumRankId: minimum(type), requiredExCount: 0 })
   const setPractical = (practicalBonusConditions: Compromise['practicalBonusConditions']) => onChange({ practicalBonusConditions, alternativeBonusRules: target.alternativeBonusRules })
   const setRules = (alternativeBonusRules: Compromise['alternativeBonusRules']) => onChange({ practicalBonusConditions: target.practicalBonusConditions, alternativeBonusRules })
-  const unusedPractical = idealTypes.filter((type) => !target.practicalBonusConditions.some((condition) => condition.bonusTypeId === type))
-  const unusedSources = idealTypes.filter((type) => !target.alternativeBonusRules.some((rule) => rule.sourceBonusTypeId === type))
+  // A practical condition and an alternative source must name an Ideal Bonus
+  // Type that the Production lottery can actually draw. A legacy Ideal type
+  // outside the availability (a Bow Poison Target whose Ideal still holds
+  // Element) is therefore never offered for a new selection; the stored value
+  // that already names one stays visible through `typeOptions()` below.
+  const availableIdealTypes = idealTypes.filter((type) => availableTypes.includes(type))
+  const unusedPractical = availableIdealTypes.filter((type) => !target.practicalBonusConditions.some((condition) => condition.bonusTypeId === type))
+  const unusedSources = availableIdealTypes.filter((type) => !target.alternativeBonusRules.some((rule) => rule.sourceBonusTypeId === type))
+  // A stored Bonus Type the selectable set no longer contains stays visible but
+  // disabled, whether it left the Production availability or the Ideal set. It
+  // is never removed or rewritten automatically: the user picks an available
+  // Ideal type or deletes the condition / rule.
+  const typeOptions = (current: string, selectable: readonly string[]) => {
+    const legacy = selectable.includes(current)
+      ? []
+      : [<MenuItem key={`legacy-${current}`} value={current} disabled>{availableTypes.includes(current) ? missingIdealTypeOptionLabel(label(current)) : legacyBonusOptionLabel(label(current))}</MenuItem>]
+    return [...legacy, ...selectable.map((type) => <MenuItem key={type} value={type}>{label(type)}</MenuItem>)]
+  }
   const number = (value: string) => value === '' ? Number.NaN : Number(value)
   const displayed = (value: number) => Number.isNaN(value) ? '' : value
   return <Stack spacing={3}>
@@ -72,7 +88,7 @@ export function TargetCompromiseEditor({ target, master, onChange }: {
         return <Paper key={condition.id} variant="outlined" sx={{ p: { xs: 1.5, sm: 2 } }}><Stack spacing={1.5}>
           <Box sx={fieldGridSx}>
             <TextField select label="ボーナス種別" value={condition.bonusTypeId} onChange={(event) => update({ bonusTypeId: event.target.value, minimumRankId: minimum(event.target.value), requiredExCount: 0 })}>
-              {idealTypes.filter((type) => type === condition.bonusTypeId || unusedPractical.includes(type)).map((type) => <MenuItem key={type} value={type}>{label(type)}</MenuItem>)}
+              {typeOptions(condition.bonusTypeId, availableIdealTypes.filter((type) => type === condition.bonusTypeId || unusedPractical.includes(type)))}
             </TextField>
             <TextField select label="最低ランク" value={condition.minimumRankId} onChange={(event) => update({ minimumRankId: event.target.value })}>
               {rankOptions(condition.bonusTypeId, condition.minimumRankId)}
@@ -101,7 +117,7 @@ export function TargetCompromiseEditor({ target, master, onChange }: {
               const alternative = availableTypes.find((type) => type !== source)
               update({ sourceBonusTypeId: source, maxReplacementCount: 1, options: alternative ? [newOption(alternative)] : [] })
             }}>
-              {idealTypes.filter((type) => type === rule.sourceBonusTypeId || unusedSources.includes(type)).map((type) => <MenuItem key={type} value={type}>{label(type)}</MenuItem>)}
+              {typeOptions(rule.sourceBonusTypeId, availableIdealTypes.filter((type) => type === rule.sourceBonusTypeId || unusedSources.includes(type)))}
             </TextField>
             <TextField label="最大置換数" type="number" value={displayed(rule.maxReplacementCount)} slotProps={{ htmlInput: { min: 1, max: count(rule.sourceBonusTypeId) } }} onChange={(event) => update({ maxReplacementCount: number(event.target.value) })} />
           </Box>

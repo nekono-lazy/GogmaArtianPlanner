@@ -12,6 +12,16 @@ export function legacyBonusOptionLabel(name: string): string {
   return `${name}（現在値・Production抽選対象外）`
 }
 
+/**
+ * The label of a stored Bonus Type that is Production-drawable but no longer
+ * part of the Target's Ideal set, so it cannot be re-selected as a practical
+ * condition or an alternative source. Like a legacy value, it stays visible and
+ * disabled instead of disappearing from the Select.
+ */
+export function missingIdealTypeOptionLabel(name: string): string {
+  return `${name}（現在値・理想に含まれません）`
+}
+
 export function productionBonusAvailabilityErrorMessage(
   error: ProductionBonusAvailabilityError,
 ): string {
