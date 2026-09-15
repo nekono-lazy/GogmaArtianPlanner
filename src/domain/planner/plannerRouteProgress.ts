@@ -10,7 +10,13 @@ import {
   stableStringify,
 } from '../models/publicTypes'
 import type { RngEngine } from '../rng/rngEngine'
-import { selectedCheckpointEndpointOperationIndexes } from './plannerCheckpoints'
+import { entryIntermediateSelection } from './plannerCheckpoints'
+import {
+  isPlannerLaneUnitBlockedByPin,
+  routeOperationLane,
+  type PlannerEntryLanes,
+  type PlannerRouteLane,
+} from './plannerRouteLanes'
 import type {
   PlannerSearchRejection,
   PlannerSearchRoutePosition,
@@ -23,6 +29,13 @@ export interface PlannerRouteUnit {
   entryId: BuildListEntryId
   operation: RouteOperation
   position: PlannerSearchRoutePosition
+  /**
+   * The execution lane of this unit (`docs/PLANNER_SPEC.md` 7.0.4) and its
+   * 0-based index inside that lane. Planner-internal only, derived from the
+   * saved operation type; never persisted.
+   */
+  lane: PlannerRouteLane
+  laneIndex: number
   counterStream: PlannerCounterStream
   counterId: string | null
   counterBefore: number | null
@@ -242,25 +255,33 @@ export function createPlannerPhysicalActionIdentity(
  * `convert_normal_to_gogma` carry physical or inventory side effects, and a
  * route's final operation forms the Candidate result itself.
  *
- * A unit that ends one of this Entry's selected compromise checkpoints is never
+ * "Immediately following" is judged inside the unit's own lane
+ * (`docs/PLANNER_SPEC.md` 7.0.4): a Skill amendment interleaved between two
+ * Bonus amendments reads nothing the first Bonus amendment wrote, so it does
+ * not make that amendment observed.
+ *
+ * A unit that ends one of this Entry's selected intermediate states is never
  * skippable either, whatever the operation types say: the whole point of
  * selecting it is that the player holds that exact intermediate weapon, so the
  * state is observed rather than immediately overwritten
  * (`docs/PLANNER_SPEC.md` 7.5.1). Earlier units whose entire output the next
- * operation rewrites stay skippable, because skipping them leaves the
- * checkpoint state itself unchanged.
+ * lane operation rewrites stay skippable, because skipping them leaves the
+ * selected state itself unchanged.
  */
 function canSkipWhenCounterPassed(
   operations: readonly RouteOperation[],
   operationIndex: number,
   unitIndex: number,
   unitCount: number,
-  checkpointEndpointOperationIndexes: ReadonlySet<number>,
+  selectedEndpointOperationIndexes: ReadonlySet<number>,
 ): boolean {
   if (unitIndex !== unitCount - 1) return false
-  if (checkpointEndpointOperationIndexes.has(operationIndex)) return false
+  if (selectedEndpointOperationIndexes.has(operationIndex)) return false
   const operation = operations[operationIndex]
-  const next = operations[operationIndex + 1]
+  const lane = routeOperationLane(operation)
+  const next = operations
+    .slice(operationIndex + 1)
+    .find((candidate) => routeOperationLane(candidate) === lane)
   if (next === undefined) return false
   if (operation.type === 'reset_skills') {
     return (
@@ -352,13 +373,34 @@ function rejection(
   }
 }
 
+/**
+ * The Route operation indexes that end this Entry's selected intermediate
+ * states. A selected lane start is held from the beginning and has no ending
+ * operation.
+ */
+function selectedEndpointOperationIndexes(entry: BuildListEntry): Set<number> {
+  const selection = entryIntermediateSelection(entry)
+  const indexes = new Set<number>()
+  for (const selected of [selection.skill, selection.bonus]) {
+    if (
+      selected !== null &&
+      selected.opportunity.lanePosition > 0 &&
+      selected.opportunity.operationIndex !== null
+    ) {
+      indexes.add(selected.opportunity.operationIndex)
+    }
+  }
+  return indexes
+}
+
 function createEntryUnitPlan(
   entry: BuildListEntry,
   engine: RngEngine,
 ): { units: PlannerRouteUnit[] | null; rejection: PlannerSearchRejection | null } {
   const units: PlannerRouteUnit[] = []
   const operations = entry.candidateSnapshot.route.operations
-  const checkpointEndpoints = selectedCheckpointEndpointOperationIndexes(entry)
+  const checkpointEndpoints = selectedEndpointOperationIndexes(entry)
+  const laneCounts: Record<PlannerRouteLane, number> = { base: 0, bonus: 0, skill: 0 }
   for (
     let operationIndex = 0;
     operationIndex < operations.length;
@@ -409,10 +451,13 @@ function createEntryUnitPlan(
         operationIndex,
         unitIndex,
       )
+      const lane = routeOperationLane(operation)
       units.push({
         entryId: entry.id,
         operation: structuredClone(operation),
         position: { operationIndex, unitIndex, unitCount },
+        lane,
+        laneIndex: laneCounts[lane],
         counterStream: detail.stream,
         counterId: detail.counterId,
         counterBefore: current,
@@ -431,6 +476,7 @@ function createEntryUnitPlan(
           checkpointEndpoints,
         ),
       })
+      laneCounts[lane] += 1
       current = next
     }
     if (
@@ -554,22 +600,27 @@ export function currentPlannerCounterValue(
  * the route runtime output, or any source mutation version
  * (`docs/PLANNER_SPEC.md` 7.0.2). A unit that is not
  * `canSkipWhenCounterPassed` is never passed here, so a past required unit
- * still fails closed in the ordinary counter precondition.
+ * still fails closed in the ordinary counter precondition. Each stream lane is
+ * passed on its own, and never beyond the Entry's checkpoint pin while the
+ * other lane has not reached its own pin (7.5.2).
  */
 export function fastForwardPlannerRouteProgress(
   state: PlannerSearchState,
-  unitPlans: ReadonlyMap<BuildListEntryId, readonly PlannerRouteUnit[]>,
+  lanePlans: ReadonlyMap<BuildListEntryId, PlannerEntryLanes>,
 ): void {
-  unitPlans.forEach((units, entryId) => {
+  lanePlans.forEach((lanes, entryId) => {
     const started = state.routeProgressByEntryId[entryId]
     if (started === undefined) return
     let progress = started
-    while (progress < units.length) {
-      const unit = units[progress]
-      if (!unit.canSkipWhenCounterPassed || unit.counterBefore === null) break
-      const current = currentPlannerCounterValue(state, unit)
-      if (current === null || current <= unit.counterBefore) break
-      progress += 1
+    for (const lane of ['bonus', 'skill'] as const) {
+      while (progress[lane] < lanes[lane].length) {
+        const unit = lanes[lane][progress[lane]]
+        if (!unit.canSkipWhenCounterPassed || unit.counterBefore === null) break
+        if (isPlannerLaneUnitBlockedByPin(unit, progress, lanes.pin)) break
+        const current = currentPlannerCounterValue(state, unit)
+        if (current === null || current <= unit.counterBefore) break
+        progress = { ...progress, [lane]: progress[lane] + 1 }
+      }
     }
     if (progress !== started) state.routeProgressByEntryId[entryId] = progress
   })

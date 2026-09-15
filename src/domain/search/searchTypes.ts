@@ -128,8 +128,8 @@ export interface CandidateSearchWarning {
  *
  * `candidate === null` means no Ideal was found inside the configured search
  * extent. It never means an Ideal does not exist, and compromise states found
- * on the way are deliberately not returned: only a strict prefix of an actual
- * Ideal Route can be offered as a checkpoint (`docs/SEARCH_SPEC.md` 5.7).
+ * on the way are deliberately not returned: only an intermediate state on a
+ * lane of an actual Ideal Route can be offered (`docs/SEARCH_SPEC.md` 5.7).
  */
 export interface TargetCandidateSearchResult {
   targetWeaponId: TargetWeaponId

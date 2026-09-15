@@ -133,7 +133,7 @@ describe('B4 actual Target-wide termination', () => {
     const result = await searchCandidates(input, engine, options)
     // No Ideal inside the configured extent means no Candidate at all: a
     // compromise state found on the way is never returned, because only a
-    // strict prefix of a real Ideal Route can be one (SEARCH_SPEC 5.7).
+    // lane state of a real Ideal Route can be one (SEARCH_SPEC 5.7).
     expect(candidatesOf(result.targetResult)).toEqual([])
     expect(engine.predictNormalArtian).toHaveBeenCalledTimes(4)
     expect(engine.predictSkills).toHaveBeenCalledTimes(5) // conversion S plus M Reset positions

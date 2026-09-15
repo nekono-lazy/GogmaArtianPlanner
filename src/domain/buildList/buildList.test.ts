@@ -107,7 +107,7 @@ describe('BuildCandidate semantic fingerprint', () => {
       searchRunId: 'search-run.other',
       createdAt: '2027-01-01T00:00:00.000Z',
       // Derived and presentational content, never Candidate meaning.
-      checkpointGroups: [],
+      intermediateStateGroups: [],
       estimatedOperationCount: candidate.estimatedOperationCount + 10,
       requiredMaterials: [],
     }

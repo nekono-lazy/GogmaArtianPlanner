@@ -19,7 +19,7 @@ import type {
 import { isBlindCreateNormalArtianOperation } from '../models/publicTypes'
 import { validateBuildCandidate } from '../models/validation'
 import { createIdealDifference, satisfiesIdealTarget } from '../target'
-import { extractCandidateCheckpointGroups } from './checkpointExtraction'
+import { extractIntermediateStateGroups } from './intermediateStateExtraction'
 import type { SearchExecutionContext } from './searchExecution'
 import { CandidateSearchError } from './searchTypes'
 import type { CandidateSearchInput } from './searchTypes'
@@ -304,8 +304,8 @@ export function createCandidateRouteEstimates(
  *
  * Only the Ideal condition is accepted now. A state that merely satisfies a
  * compromise condition is never an independent Candidate: it is offered to the
- * user as a checkpoint on an actual Ideal Route, and only when it really is a
- * strict prefix of one (`docs/SEARCH_SPEC.md` 5.5.4 / 5.8).
+ * user as an intermediate state on a lane of an actual Ideal Route, and only
+ * when it really lies on one (`docs/SEARCH_SPEC.md` 5.5.4 / 5.8).
  */
 export function createCandidateFromPrediction(
   target: TargetWeapon,
@@ -395,7 +395,7 @@ export function createCandidateFromPrediction(
   // Derived from the finished Route and the Target definition alone, so it
   // reuses the observational traces this Candidate already carries and adds no
   // RNG prediction call (`docs/SEARCH_SPEC.md` 5.8.1).
-  candidate.checkpointGroups = extractCandidateCheckpointGroups(candidate, {
+  candidate.intermediateStateGroups = extractIntermediateStateGroups(candidate, {
     target,
     master: input.master,
     ownedWeapons: input.ownedWeapons,

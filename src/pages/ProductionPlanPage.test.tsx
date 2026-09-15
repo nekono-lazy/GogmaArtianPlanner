@@ -1673,8 +1673,8 @@ describe('ProductionPlanPage read-only Plan content', () => {
     if (fixture.preparation.status !== 'ready') throw new Error('fixture')
     fixture.preparation.currentConflicts[0].checkpointParticipants = [{
       buildListEntryId: fixture.secondEntry.id,
-      checkpointGroupId: 'checkpoint-group:page' as never,
-      checkpointOpportunityId: 'checkpoint-opportunity:page' as never,
+      axis: 'bonus',
+      opportunityId: 'intermediate-opportunity:page' as never,
     }]
     const client = plannerClient(async () => fixture.preparation)
     const deps = dependencies(fixture, client)
@@ -1683,14 +1683,14 @@ describe('ProductionPlanPage read-only Plan content', () => {
 
     // Once for the conflict, then once per unavailable participant.
     expect(await screen.findAllByText(
-      'この競合には選択済みチェックポイントが関係しています。作成リストでチェックポイントを変更または解除してください。',
+      'この競合には途中採用する状態の選択が関係しています。作成リストで途中採用する状態を変更または解除してください。',
     )).toHaveLength(3)
     for (const name of ['比較する', 'この候補を優先']) {
       for (const button of screen.getAllByRole('button', { name })) {
         expect(button).toBeDisabled()
       }
     }
-    const link = screen.getByRole('link', { name: 'ビルドリストでチェックポイントを変更' })
+    const link = screen.getByRole('link', { name: 'ビルドリストで途中採用する状態を変更' })
     expect(link).toHaveAttribute('href', '/build-list')
     expect(screen.getByRole('link', { name: 'ビルドリストへ戻る' })).toBeInTheDocument()
     expect(client.createWhatIfComparison).not.toHaveBeenCalled()
@@ -1919,7 +1919,7 @@ describe('ProductionPlanPage read-only persisted Conflicts', () => {
     expect(screen.queryByText(fixtureTargetName)).not.toBeInTheDocument()
     expect(screen.queryByText('チェックポイント関与')).not.toBeInTheDocument()
     expect(screen.queryByText(
-      'この競合には選択済みチェックポイントが関係しています。作成リストでチェックポイントを変更または解除してください。',
+      'この競合には途中採用する状態の選択が関係しています。作成リストで途中採用する状態を変更または解除してください。',
     )).not.toBeInTheDocument()
   }
 
@@ -1932,8 +1932,8 @@ describe('ProductionPlanPage read-only persisted Conflicts', () => {
     // Persisted metadata that must never become a current authority.
     fixture.plan.conflicts[0].checkpointParticipants = [{
       buildListEntryId: fixture.secondEntry.id,
-      checkpointGroupId: 'checkpoint-group:persisted' as never,
-      checkpointOpportunityId: 'checkpoint-opportunity:persisted' as never,
+      axis: 'bonus',
+      opportunityId: 'intermediate-opportunity:persisted' as never,
     }]
     fixtureTargetName = fixture.target.name
     return fixture
@@ -2057,15 +2057,17 @@ describe('ProductionPlanPage checkpoint milestones and heading depth', () => {
       {
         buildListEntryId: buildListEntryId('build-list.milestone.a'),
         targetWeaponId: contentTargetA,
-        checkpointGroupId: 'checkpoint-group:a' as never,
-        checkpointOpportunityId: 'checkpoint-opportunity:a' as never,
+        skillOpportunityId: null,
+        bonusOpportunityId: 'intermediate-opportunity:a' as never,
+        conditionMatch: { bonus: 'practical', skill: 'ideal' },
         remainingOperationCount: 2,
       },
       {
         buildListEntryId: buildListEntryId('build-list.milestone.b'),
         targetWeaponId: contentTargetB,
-        checkpointGroupId: 'checkpoint-group:b' as never,
-        checkpointOpportunityId: 'checkpoint-opportunity:b' as never,
+        skillOpportunityId: 'intermediate-opportunity:b' as never,
+        bonusOpportunityId: null,
+        conditionMatch: { bonus: 'ideal', skill: 'practical' },
         remainingOperationCount: 1,
       },
     ]
@@ -2075,8 +2077,8 @@ describe('ProductionPlanPage checkpoint milestones and heading depth', () => {
     await openPanel('全4ステップを表示')
     const list = within(stepCard(1)).getByRole('list', { name: 'ステップ 1 のチェックポイント到達' })
     expect(within(list).getAllByRole('listitem').map(({ textContent }) => textContent)).toEqual([
-      '双剣・水（理想まで残り2操作）',
-      '双剣・火（理想まで残り1操作）',
+      '双剣・水（ボーナス判定: 実用 ／ スキル判定: 理想、理想まで残り2操作）',
+      '双剣・火（ボーナス判定: 理想 ／ スキル判定: 実用、理想まで残り1操作）',
     ])
     // Only the Step carrying the metadata shows it; the Plan has no extra Step.
     expect(screen.getAllByText('チェックポイント到達')).toHaveLength(1)

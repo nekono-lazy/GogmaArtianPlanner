@@ -10,7 +10,12 @@ import {
   createExpectedPlanState,
   isBlindCreateNormalArtianOperation,
 } from '../models/publicTypes'
-import { selectedCheckpointAtOperationIndex } from './plannerCheckpoints'
+import {
+  checkpointConditionMatchFor,
+  entryIntermediateSelection,
+  hasIntermediateStateSelection,
+  intermediatePinOperationIndex,
+} from './plannerCheckpoints'
 import type {
   RngEngine,
   RngPredictionSupportInput,
@@ -70,10 +75,11 @@ export type PlannerTraceReplayIssueCode =
    */
   | 'unknown_restoration_bonuses'
   /**
-   * A selected compromise checkpoint's Route position was reached, but the
-   * weapon state there is not the exact state the checkpoint records. A
-   * selected checkpoint is a hard constraint, so this fails closed rather than
-   * producing a Plan that quietly misses it (`docs/PLANNER_SPEC.md` 7.5.3).
+   * The compromise checkpoint an Entry's selected intermediate states pin was
+   * reached, but the weapon state there is not the exact state those
+   * selections record. A selection is a hard constraint, so this fails closed
+   * rather than producing a Plan that quietly misses it
+   * (`docs/PLANNER_SPEC.md` 7.5.3).
    */
   | 'checkpoint_state_mismatch'
 export interface PlannerTraceReplayIssue { code: PlannerTraceReplayIssueCode; message: string; actionIndex: number | null }
@@ -224,6 +230,16 @@ export function replayPlannerSearchTrace(input: PlannerInput, bestState: Planner
   const runtime: Runtime = { rngState: structuredClone(input.rngState), normalCounters: structuredClone(input.normalCounters), ownedWeapons: structuredClone(input.ownedWeapons), normals: new Map(), gogmas: new Map() }
   const drafts: PlannerPlanStepDraft[] = []
   const supportCache = new Map()
+  // Checkpoint bookkeeping per Entry: which Route operations really ran, how
+  // many operation units ran, and whether the pinned lane pair was already
+  // held. Silently fast-forwarded units never appear in the trace, so the
+  // arrival is judged by the pinned endpoint operations themselves - which are
+  // never skippable - rather than by a count (`docs/PLANNER_SPEC.md` 7.5.3).
+  const executedOperationIndexes = new Map<BuildListEntryId, Set<number>>()
+  const executedUnitCounts = new Map<BuildListEntryId, number>()
+  const reachedCheckpointEntryIds = new Set<BuildListEntryId>()
+  const pinHeld = (entryId: BuildListEntryId, pinOperationIndex: number | null): boolean =>
+    pinOperationIndex === null || (executedOperationIndexes.get(entryId)?.has(pinOperationIndex) ?? false)
   const fail = (code: PlannerTraceReplayIssueCode, message: string, actionIndex: number | null): PlannerTraceReplayResult => ({ isValid: false, drafts: [], issues: [{ code, message, actionIndex }], unsupportedInput: null })
   const requireSupport = (
     supportInput: RngPredictionSupportInput,
@@ -382,47 +398,70 @@ export function replayPlannerSearchTrace(input: PlannerInput, bestState: Planner
           assignGogma(runtime, action, { bonuses: current.bonuses, seriesSkillId: skills.seriesSkillId, groupSkillId: skills.groupSkillId }); expectedResult = result(...expectedResultBonusArgs(current.bonuses), skills.seriesSkillId, skills.groupSkillId)
         }
     }
-    // A selected checkpoint is a hard constraint, so the exact state it records
-    // is verified against the replayed state at its own Route position, and the
-    // Step that produced it carries the milestone (`docs/PLANNER_SPEC.md`
-    // 7.5.3 / 7.5.4).
+    // A selected intermediate state is a hard constraint, so the moment both
+    // pinned lane states are held is verified against the replayed weapon -
+    // exact ordered slots, scope, and Skills - and the Step that completed the
+    // pair carries the milestone (`docs/PLANNER_SPEC.md` 7.5.3 / 7.5.4).
     const checkpointMilestones: PlanStepCheckpointMilestone[] = []
     if (action.kind === 'route_operation') {
       for (const progressedId of action.progressedBuildListEntryIds) {
         const progressedEntry = entryFor(input, progressedId)
         const position = action.progressedRoutePositions[progressedId]
         if (!progressedEntry || !position) continue
+        executedUnitCounts.set(progressedId, (executedUnitCounts.get(progressedId) ?? 0) + 1)
         if (position.unitIndex !== position.unitCount - 1) continue
-        const checkpoint = selectedCheckpointAtOperationIndex(
-          progressedEntry,
-          position.operationIndex,
-        )
-        if (!checkpoint) continue
+        const executed = executedOperationIndexes.get(progressedId) ?? new Set<number>()
+        executed.add(position.operationIndex)
+        executedOperationIndexes.set(progressedId, executed)
+        if (!hasIntermediateStateSelection(progressedEntry)) continue
+        if (reachedCheckpointEntryIds.has(progressedId)) continue
+        if (
+          !pinHeld(progressedId, intermediatePinOperationIndex(progressedEntry, 'skill')) ||
+          !pinHeld(progressedId, intermediatePinOperationIndex(progressedEntry, 'bonus'))
+        ) {
+          continue
+        }
+        const selection = entryIntermediateSelection(progressedEntry)
+        const candidate = progressedEntry.candidateSnapshot
+        // A selected Skill state may legitimately carry a `null` Series or
+        // Group id, so the selected group decides explicitly rather than
+        // through a null-coalescing fallback to the Candidate's final Skills.
+        const expectedBonuses = selection.bonus === null
+          ? candidate.finalBonuses
+          : selection.bonus.opportunity.restorationBonuses
+        const expectedScope = selection.bonus === null
+          ? candidate.restorationBonusScope
+          : selection.bonus.opportunity.restorationBonusScope
+        const expectedSeries = selection.skill === null
+          ? candidate.seriesSkillId
+          : selection.skill.group.seriesSkillId
+        const expectedGroup = selection.skill === null
+          ? candidate.groupSkillId
+          : selection.skill.group.groupSkillId
         const reached = runtime.gogmas.get(progressedId)
-        const opportunity = checkpoint.opportunity
         if (
           !reached ||
           reached.bonuses.kind !== 'known' ||
-          reached.bonuses.restorationBonusScope !== opportunity.restorationBonusScope ||
-          !areRestorationBonusSlotsEqual(
-            reached.bonuses.restorationBonuses,
-            opportunity.restorationBonuses,
-          ) ||
-          reached.seriesSkillId !== opportunity.seriesSkillId ||
-          reached.groupSkillId !== opportunity.groupSkillId
+          reached.bonuses.restorationBonusScope !== expectedScope ||
+          !areRestorationBonusSlotsEqual(reached.bonuses.restorationBonuses, expectedBonuses) ||
+          reached.seriesSkillId !== expectedSeries ||
+          reached.groupSkillId !== expectedGroup
         ) {
           return fail(
             'checkpoint_state_mismatch',
-            'The replayed state at a selected checkpoint differs from the checkpoint the user selected.',
+            'The replayed state at the selected compromise checkpoint differs from the intermediate states the user selected.',
             index,
           )
         }
+        reachedCheckpointEntryIds.add(progressedId)
         checkpointMilestones.push({
           buildListEntryId: progressedId,
           targetWeaponId: progressedEntry.targetWeaponId,
-          checkpointGroupId: checkpoint.groupId,
-          checkpointOpportunityId: opportunity.id,
-          remainingOperationCount: opportunity.remainingOperationCount,
+          skillOpportunityId: selection.skill?.opportunity.id ?? null,
+          bonusOpportunityId: selection.bonus?.opportunity.id ?? null,
+          conditionMatch: checkpointConditionMatchFor(progressedEntry),
+          remainingOperationCount:
+            candidate.estimatedOperationCount - (executedUnitCounts.get(progressedId) ?? 0),
         })
       }
     }

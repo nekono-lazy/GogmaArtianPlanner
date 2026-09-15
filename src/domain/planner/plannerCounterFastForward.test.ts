@@ -29,6 +29,7 @@ import {
 } from './plannerRouteProgress'
 import { detectPlannerConflicts } from './plannerConflictDetection'
 import { createInitialPlannerSearchState } from './plannerInitialState'
+import { splitPlannerRouteUnitsByLane } from './plannerRouteLanes'
 import { runPlannerBeamSearch } from './plannerBeamSearch'
 import { createProductionPlan } from './productionPlanGeneration'
 
@@ -702,15 +703,18 @@ describe('Silent fast-forward in Beam Search', () => {
       input.buildListEntries,
       dependencies.rngEngine,
     )
+    const lanePlans = new Map(
+      [...plans.unitPlans].map(([id, units]) => [id, splitPlannerRouteUnitsByLane(units, null)]),
+    )
     const state = initialStateFor(input)
     state.currentRngState.gogmaCounter.value = 11
-    fastForwardPlannerRouteProgress(state, plans.unitPlans)
-    expect(state.routeProgressByEntryId[other.id]).toBe(1)
+    fastForwardPlannerRouteProgress(state, lanePlans)
+    expect(state.routeProgressByEntryId[other.id]).toEqual({ base: 0, bonus: 1, skill: 0 })
 
     state.currentRngState.gogmaCounter.value = 20
-    fastForwardPlannerRouteProgress(state, plans.unitPlans)
+    fastForwardPlannerRouteProgress(state, lanePlans)
     // Counter 11 holds the Route's required final Reset, so progress stops.
-    expect(state.routeProgressByEntryId[other.id]).toBe(1)
+    expect(state.routeProgressByEntryId[other.id]).toEqual({ base: 0, bonus: 1, skill: 0 })
   })
 })
 

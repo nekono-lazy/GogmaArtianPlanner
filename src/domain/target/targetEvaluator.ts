@@ -1,6 +1,6 @@
 import { areRestorationBonusSetsEqual } from '../models/domainRules'
 import type {
-  CompromiseConditionMatch, GroupSkillId, RestorationBonusScope, RestorationBonusSet,
+  GroupSkillId, RestorationBonusScope, RestorationBonusSet,
   SeriesSkillId, TargetWeapon,
 } from '../models/publicTypes'
 import {
@@ -69,35 +69,11 @@ export function satisfiesPracticalTarget(
 }
 
 /**
- * Whether one intermediate weapon state is a compromise checkpoint for this
- * Target, and which conditions it satisfies (`docs/SEARCH_SPEC.md` 5.8.1).
- *
- * A state qualifies when both axes match and the pair is not the full Ideal
- * condition, so it covers exactly the combinations the existing Target
- * evaluator already allows - Practical Bonus with Ideal Skill, Ideal Bonus with
- * Practical Skill, Practical with Practical, and the two Alternative Bonus
- * pairings. Alternative is never a search branch of its own.
- *
- * Ideal Bonus already requires `gogma_artian` scope, and so does every
- * compromise Bonus match, so a state whose five slots are still inherited
- * Normal-tier slots can never be a checkpoint.
- */
-export function evaluateCompromiseCheckpointCondition(
-  target: TargetWeapon, bonuses: RestorationBonusSet, scope: RestorationBonusScope,
-  series: SeriesSkillId | null, group: GroupSkillId | null, master: TargetEvaluationMasterSubset,
-): CompromiseConditionMatch | null {
-  const bonus = evaluateTargetBonusMatch(target, bonuses, scope, master)
-  const skill = evaluateTargetSkillMatch(target, series, group)
-  if (bonus === null || skill === null) return null
-  return bonus === 'ideal' && skill === 'ideal' ? null : { bonus, skill }
-}
-
-/**
  * The two axis matches plus the ideal difference of one concrete state.
  *
  * It no longer classifies a Candidate: the caller decides what the pair means -
- * `satisfiesIdealTarget()` for a Candidate, and
- * `evaluateCompromiseCheckpointCondition()` for a checkpoint.
+ * `satisfiesIdealTarget()` for a Candidate, and the intermediate state
+ * extraction evaluates each axis on its own lane (`docs/SEARCH_SPEC.md` 5.8).
  */
 export function evaluateTargetCandidate(
   target: TargetWeapon, bonuses: RestorationBonusSet, scope: RestorationBonusScope,

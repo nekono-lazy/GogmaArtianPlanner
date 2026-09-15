@@ -290,7 +290,7 @@ describe('the Planner-only material steps are gone from the PlanStep set', () =>
 
 describe('version authorities at the weapon-as-material removal boundary', () => {
   it('uses calculation app schema version 9', () => {
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(10)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(11)
   })
 
   it('fails every schema 1..8 artifact closed, with no build-result exception', () => {
@@ -309,7 +309,7 @@ describe('version authorities at the weapon-as-material removal boundary', () =>
   })
 
   it('declares Export schema version 4', () => {
-    const schemaVersion: ExportRoot['schemaVersion'] = 5
-    expect(schemaVersion).toBe(5)
+    const schemaVersion: ExportRoot['schemaVersion'] = 6
+    expect(schemaVersion).toBe(6)
   })
 })

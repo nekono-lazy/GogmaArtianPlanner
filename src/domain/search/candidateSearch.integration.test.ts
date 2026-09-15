@@ -572,8 +572,8 @@ describe('Candidate Search routes', () => {
 
   it('returns no Candidate when only a compromise result is reachable', async () => {
     // A state that satisfies the Target's compromise conditions but not its
-    // Ideal is never an independent Candidate: only a strict prefix of a real
-    // Ideal Route can be offered, and there is no Ideal Route here
+    // Ideal is never an independent Candidate: only an intermediate state on
+    // a real Ideal Route can be offered, and there is no Ideal Route here
     // (`docs/SEARCH_SPEC.md` 5.7).
     const input = createCandidateSearchInput()
     input.routeFilter = 'normal_artian'

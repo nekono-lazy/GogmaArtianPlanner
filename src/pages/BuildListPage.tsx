@@ -29,9 +29,7 @@ import type {
   BuildListEntry,
   BuildListEntryId,
   CalculationContext,
-  CompromiseCheckpointGroup,
-  CompromiseCheckpointOpportunity,
-  CompromiseCheckpointOpportunityId,
+  IntermediateStateSelection,
   OwnedWeapon,
   ProductionPlan,
   TargetWeapon,
@@ -49,6 +47,7 @@ import {
   defaultPlannerOptions,
   defaultPlannerOrchestrationBounds,
 } from '../domain/planner'
+import { defaultIntermediateStateSelection } from '../domain/buildList'
 import { plannerWarningLabels, staleReasonLabels } from '../presentation/labels'
 import { useSettingsStore } from '../stores/settingsStore'
 import { buildListService } from '../services/buildList/buildListService'
@@ -88,15 +87,17 @@ export interface BuildListPageDependencies {
   ): Promise<ProductionPlan | null>
   deleteEntry(id: BuildListEntryId): Promise<void>
   /**
-   * Replaces one Entry's checkpoint selection.
+   * Replaces one Entry's intermediate state selection and improvement
+   * preference.
    *
    * Editing it here is what makes a Counter conflict recoverable without
-   * re-searching: the user moves the checkpoint to another arrival, or turns it
-   * off, and runs the Planner again (`docs/UI_FLOW.md` 10).
+   * re-searching: the user moves a selected state to another arrival, turns
+   * it off, or changes the improvement order, and runs the Planner again
+   * (`docs/UI_FLOW.md` 10).
    */
-  updateCheckpointSelection(
+  updateIntermediateStateSelection(
     id: BuildListEntryId,
-    selectedCheckpointOpportunityIds: readonly CompromiseCheckpointOpportunityId[],
+    selection: IntermediateStateSelection,
   ): Promise<BuildListEntry>
 }
 
@@ -114,8 +115,8 @@ function createDefaultDependencies(master: MasterDataRoot): BuildListPageDepende
         currentCalculationContext,
       ),
     deleteEntry: (id) => buildListService.deleteEntry(id),
-    updateCheckpointSelection: (id, selectedCheckpointOpportunityIds) =>
-      buildListService.updateCheckpointSelection(id, selectedCheckpointOpportunityIds),
+    updateIntermediateStateSelection: (id, selection) =>
+      buildListService.updateIntermediateStateSelection(id, selection),
   }
 }
 
@@ -158,9 +159,9 @@ function parsePlannerOptions(inputs: PlannerOptionInputs): PlannerOptions | null
 }
 
 /**
- * Feedback about the last checkpoint selection save, kept apart from the
- * Planner run and from load / remove failures so each message stays next to
- * the action that caused it.
+ * Feedback about the last intermediate state selection save, kept apart from
+ * the Planner run and from load / remove failures so each message stays next
+ * to the action that caused it.
  */
 interface CheckpointFeedback {
   severity: 'info' | 'error'
@@ -209,8 +210,14 @@ function groupEntriesByTarget(
   return [...groups.values()]
 }
 
-function selectedCheckpointCount(entry: BuildListEntry): number {
-  return entry.selectedCheckpointOpportunityIds?.length ?? 0
+function entrySelection(entry: BuildListEntry): IntermediateStateSelection {
+  return entry.intermediateStateSelection ?? defaultIntermediateStateSelection()
+}
+
+/** How many lanes of this Entry hold a selected intermediate state. */
+function selectedIntermediateStateCount(entry: BuildListEntry): number {
+  const selection = entrySelection(entry)
+  return Number(selection.skillOpportunityId !== null) + Number(selection.bonusOpportunityId !== null)
 }
 
 /** One figure of the page summary. Display only, never a Planner authority. */
@@ -356,7 +363,7 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
   const [incompleteSearch, setIncompleteSearch] =
     useState<PlannerSearchTermination | null>(null)
   // The failure and notice sources stay separate: a load failure is never
-  // shown as an empty Build List, and a Planner, checkpoint, or remove problem
+  // shown as an empty Build List, and a Planner, selection, or remove problem
   // stays next to the control that caused it (`docs/UI_FLOW.md` 10).
   const [loadError, setLoadError] = useState<string | null>(
     dependencies ? null : 'マスターデータを読み込めません。',
@@ -368,20 +375,21 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
   const clientRef = useRef<PlannerWorkerClient | null>(null)
   const activeRequestRef = useRef<string | null>(null)
   /**
-   * Per-Entry serialization of checkpoint selection saves.
+   * Per-Entry serialization of intermediate state selection saves.
    *
    * The chain holds, per Entry, a continuation that resolves to the *last
    * selection known to be persisted*: the result of the latest successful
    * save, or - when that save failed - the stable value before it. Every new
-   * toggle is built on that value, so two quick toggles on different groups
-   * both survive, and a failed save in between never sends the next one back
-   * to the render-time Entry (`docs/UI_FLOW.md` 10, lost update). The
-   * continuation itself never rejects; only the individual attempt does, and
-   * that rejection is what the error feedback reports. The service's Domain
-   * validation stays the authority for what a selection may contain.
+   * change is built on that value, so two quick changes on different lanes or
+   * on the preference both survive, and a failed save in between never sends
+   * the next one back to the render-time Entry (`docs/UI_FLOW.md` 10, lost
+   * update). The continuation itself never rejects; only the individual
+   * attempt does, and that rejection is what the error feedback reports. The
+   * service's Domain validation stays the authority for what a selection may
+   * contain.
    */
   const checkpointSaveChainRef = useRef(
-    new Map<BuildListEntryId, Promise<readonly CompromiseCheckpointOpportunityId[]>>(),
+    new Map<BuildListEntryId, Promise<IntermediateStateSelection>>(),
   )
   const masterForDisplay = dependencies?.master ?? defaultMaster
   const plannerOptions = useMemo(
@@ -393,7 +401,7 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
   // Planner may run: that stays with the Planner's own input validation.
   const staleCount = entries.filter(({ isStale }) => isStale).length
   const checkpointEntryCount = entries.filter(
-    (entry) => selectedCheckpointCount(entry) > 0,
+    (entry) => selectedIntermediateStateCount(entry) > 0,
   ).length
 
   useEffect(() => {
@@ -516,54 +524,65 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
   }
 
   /**
-   * At most one opportunity may be selected per checkpoint group, so choosing
-   * another arrival at the same compromise product replaces the previous one.
+   * Applies one selector change to an Entry.
+   *
+   * The selector reports a whole selection built from the rendered one, so
+   * only the fields that differ from that rendered selection are carried onto
+   * the last persisted selection: two quick changes on different lanes, or on
+   * a lane and the preference, both survive.
    */
-  const toggleCheckpoint = async (
+  const changeSelection = async (
     entry: BuildListEntry,
-    group: CompromiseCheckpointGroup,
-    opportunity: CompromiseCheckpointOpportunity,
-    selected: boolean,
+    rendered: IntermediateStateSelection,
+    next: IntermediateStateSelection,
   ) => {
     if (!dependencies) return
     const deps = dependencies
-    const groupIds = new Set(group.opportunities.map(({ id }) => id))
     const chain = checkpointSaveChainRef.current
-    // The last selection known to be persisted. Only the very first toggle of
+    // The last selection known to be persisted. Only the very first change of
     // an Entry in this session starts from the loaded Entry; afterwards the
     // chain's own continuation is the authority, never a render-time Entry.
     const previousStable =
-      chain.get(entry.id) ??
-      Promise.resolve<readonly CompromiseCheckpointOpportunityId[]>(
-        entry.selectedCheckpointOpportunityIds ?? [],
-      )
+      chain.get(entry.id) ?? Promise.resolve<IntermediateStateSelection>(entrySelection(entry))
     const attempt = previousStable.then(async (latest) => {
-      const kept = latest.filter((id) => !groupIds.has(id))
-      const next = selected ? [...kept, opportunity.id] : kept
-      const updated = await deps.updateCheckpointSelection(entry.id, next)
+      const merged: IntermediateStateSelection = {
+        skillOpportunityId:
+          next.skillOpportunityId !== rendered.skillOpportunityId
+            ? next.skillOpportunityId
+            : latest.skillOpportunityId,
+        bonusOpportunityId:
+          next.bonusOpportunityId !== rendered.bonusOpportunityId
+            ? next.bonusOpportunityId
+            : latest.bonusOpportunityId,
+        improvementPreference:
+          next.improvementPreference !== rendered.improvementPreference
+            ? next.improvementPreference
+            : latest.improvementPreference,
+      }
+      const updated = await deps.updateIntermediateStateSelection(entry.id, merged)
       // Only a persisted result updates the displayed Entry; a failed
       // selection is never shown as saved.
       setEntries((current) =>
         current.map((existing) => (existing.id === updated.id ? updated : existing)),
       )
-      return updated.selectedCheckpointOpportunityIds ?? []
+      return entrySelection(updated)
     })
-    // The continuation handed to the next toggle: the new stable selection on
+    // The continuation handed to the next change: the new stable selection on
     // success, the previous stable one on failure. It never rejects, so a
     // failed save neither poisons the chain nor loses an earlier success.
-    const continuation: Promise<readonly CompromiseCheckpointOpportunityId[]> =
+    const continuation: Promise<IntermediateStateSelection> =
       attempt.catch(() => previousStable)
     chain.set(entry.id, continuation)
     try {
       await attempt
       setCheckpointFeedback({
         severity: 'info',
-        message: '利用チェックポイントを更新しました。生産計画を再作成してください。',
+        message: '途中採用する状態と改善優先を更新しました。生産計画を再作成してください。',
       })
     } catch (caught: unknown) {
       setCheckpointFeedback({
         severity: 'error',
-        message: caught instanceof Error ? caught.message : 'チェックポイントを更新できませんでした。',
+        message: caught instanceof Error ? caught.message : '途中採用する状態を更新できませんでした。',
       })
     }
   }
@@ -618,7 +637,7 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
                 value={staleCount}
                 note={staleCount > 0 ? '生産計画に含まれません' : '件'}
               />
-              <SummaryTile label="チェックポイント選択中" value={checkpointEntryCount} note="候補" />
+              <SummaryTile label="途中採用状態を選択中" value={checkpointEntryCount} note="候補" />
             </Box>
           </PageSection>
         )}
@@ -822,13 +841,13 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
                         sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' }, flexWrap: 'wrap' }}
                       >
                         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-                          {selectedCheckpointCount(entry) > 0 ? (
+                          {selectedIntermediateStateCount(entry) > 0 ? (
                             <StatusChip
-                              label={`チェックポイント選択中 ${selectedCheckpointCount(entry)}`}
+                              label={`途中採用状態を選択中 ${selectedIntermediateStateCount(entry)}`}
                               tone="info"
                             />
                           ) : (
-                            <StatusChip label="チェックポイント未選択" tone="neutral" />
+                            <StatusChip label="途中採用状態は未選択" tone="neutral" />
                           )}
                         </Stack>
                         <Typography variant="caption" color="text.secondary" className="tabular-nums">
@@ -860,10 +879,10 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
                         ownedWeapons={ownedWeapons}
                         debugMode={debugMode}
                         headingLevel="h4"
-                        checkpointSelectionContext="build_list"
-                        selectedCheckpointOpportunityIds={entry.selectedCheckpointOpportunityIds ?? []}
-                        onToggleCheckpoint={(checkpointGroup, opportunity, selected) =>
-                          void toggleCheckpoint(entry, checkpointGroup, opportunity, selected)
+                        intermediateStateSelectionContext="build_list"
+                        intermediateStateSelection={entrySelection(entry)}
+                        onIntermediateStateSelectionChange={(next) =>
+                          void changeSelection(entry, entrySelection(entry), next)
                         }
                       />
                       {debugMode && (

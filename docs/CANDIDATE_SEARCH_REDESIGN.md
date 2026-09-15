@@ -3838,3 +3838,67 @@ Route baseのOwnedWeaponからのpure replayである。RNG Engine呼び出し�
 - 妥協状態だけが到達可能でIdealが到達不能なTargetは、Candidate 0件になる。
   これは意図した挙動であり、「妥協品を作れない」という意味ではない。
   探索範囲上限を上げてIdeal Routeを見つければ、その途中でその妥協品を受け取れる
+
+## 9. lane別intermediate stateと改善優先への再設計
+
+### 9.0 この節の位置づけ
+
+8章は「canonical Ideal Routeのstrict prefix上のcheckpoint」を前提とした設計記録である。
+**歴史記録としてそのまま残す。** 本章はその前提のうち何が破綻し、どう置き換えたかを記録する。
+正式な契約は `docs/SEARCH_SPEC.md` 5.8、`docs/PLANNER_SPEC.md` 7.0.4 / 7.5 / 7.6、
+`docs/DATA_MODEL.md` 9.1 / 9.4 にある。
+
+### 9.1 変更の動機
+
+8章のモデルでは、checkpointはSearchが固定した1本の操作列（Bonus操作を先に並べ、Skill操作を
+後に並べる）のstrict prefixだけだった。そのため
+
+```text
+Practical Skill + Practical Bonus
+```
+
+のような状態は、Bonus laneがIdealへ到達したあとにしかSkill操作が現れないため、
+到達点として存在しなかった。Search側の並び順という実装都合が「どの妥協状態を
+受け取れるか」を決めていたことになる。
+
+また、両laneの独立性（Bonus amendmentはSkill amendmentの出力を読まず、逆も同様）を
+Plannerが利用できず、複数Targetのinterleaveで不要な順序制約を課していた。
+
+### 9.2 採用した設計
+
+- Routeを `base` / `bonus` / `skill` の3 laneとして読む。laneはRouteの並び順から純粋に
+  導出し、永続化しない
+- intermediate stateはlaneごとに抽出する。Skill候補（Practical / Ideal）と
+  復元ボーナス候補（Practical / Alternative / Ideal）を別々に提示し、Skill×Bonusの
+  組み合わせは提示しない
+- lane位置0（conversionが付与した初回Skill、既存巨戟の現在Skill / 現在gogma scope 5枠）を
+  正規のopportunityとする。8章の「Route baseの開始状態はprefixではない」という除外は、
+  片laneだけを既に持っていて、もう片laneだけを進めたいケースを表現できないため撤回した。
+  ただし両laneの開始状態の同時選択は「既に持っている武器」なので拒否する
+- 選択は `BuildListEntry.intermediateStateSelection`（lane別opportunity + 改善優先）。
+  Plannerはlane別のpinを導出し、両pinが揃った瞬間を妥協checkpointとする
+- checkpoint到達後の改善順序はSearchで固定せず、改善優先（soft preference）と全Planの
+  成立性でPlannerが決める
+
+### 9.3 Beam Searchでのlane展開
+
+lane分割をそのまま「各展開で両laneを試す」と実装すると、1 Entryあたりの状態数が
+Route内部のinterleave数だけ乗算され、実ユーザーregression（23操作 + 148/82操作の
+2 Target、232 Step）が `maxExpandedStates = 15000` で `incomplete` になった。
+
+採用したのは「Entryごとに優先laneを先に試し、優先laneのunitが現在stateで実行できない
+場合だけもう片方のlaneを展開する」である。優先laneが待ちに入る条件（Counter未到達、
+別Entryの必須unit、conflict resolution、pin gating）はいずれも既存の実行可否判定で
+あり、B8-only shortcutを追加していない。この制限下で232 Step regressionは
+`completed` を維持する。
+
+これは上限付き探索の挙動であり、契約ではない。改善優先の絶対最小違反数は保証しない。
+
+### 9.4 受け入れた制限
+
+- intermediate stateはcanonical Ideal Routeの各laneの履歴上の状態だけである。同じlaneの
+  別のKeep分岐（Searchが採用しなかった中間結果）は提示しない。これを提示するには
+  Candidate Search側の出力を増やす必要があり、本改訂の範囲外とした
+- 抽出はtraceのpure replayであり、RNG prediction call countは増えない（8.4と同じ）
+- version 10の `checkpointGroups` / `selectedCheckpointOpportunityIds` はlane pinへ
+  変換できないため、calculation schema version 11で旧artifactをfail closedする

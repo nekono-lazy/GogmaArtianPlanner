@@ -142,8 +142,8 @@ function scenario(options: ScenarioOptions = {}): OrchestrationScenario & {
 }
 
 function selectedOpportunityId(entry: BuildListEntry): string {
-  const [id] = entry.selectedCheckpointOpportunityIds ?? []
-  if (!id) throw new Error('The fixture Entry selects no checkpoint.')
+  const id = entry.intermediateStateSelection?.bonusOpportunityId ?? null
+  if (id === null) throw new Error('The fixture Entry selects no intermediate state.')
   return id
 }
 
@@ -180,7 +180,9 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
       .toEqual([
         expect.objectContaining({
           buildListEntryId: ENTRY_A,
-          checkpointOpportunityId: selectedOpportunityId(a),
+          bonusOpportunityId: selectedOpportunityId(a),
+          skillOpportunityId: null,
+          conditionMatch: { bonus: 'alternative', skill: 'ideal' },
         }),
       ])
     expect(result.plan?.steps[0].checkpointMilestones).toHaveLength(1)
@@ -315,7 +317,7 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
       expect.objectContaining({ kind: 'selected_checkpoint_target_already_ideal' }),
     )
     // The selection was never touched to get there.
-    expect(built.entries.a.selectedCheckpointOpportunityIds).toHaveLength(1)
+    expect(selectedOpportunityId(built.entries.a)).toBeTruthy()
   })
 
   it('G: an already-Ideal Target without a selection keeps its ordinary outcome', async () => {
@@ -370,7 +372,7 @@ describe('A malformed checkpoint selection fails the Planner input closed', () =
     expect(validation.isValid).toBe(false)
     expect(validation.issues).toContainEqual(
       expect.objectContaining({
-        path: `buildListEntries.${ENTRY_A}.selectedCheckpointOpportunityIds`,
+        path: `buildListEntries.${ENTRY_A}.intermediateStateSelection`,
         code: 'invalid_state',
         message: expect.stringContaining(detail) as string,
       }),
@@ -383,9 +385,12 @@ describe('A malformed checkpoint selection fails the Planner input closed', () =
 
   it('A: rejects an unknown opportunity id and never starts the Beam Search', async () => {
     const built = malformed((entry) => {
-      entry.selectedCheckpointOpportunityIds = ['checkpoint-opportunity:unknown' as never]
+      entry.intermediateStateSelection = {
+        ...entry.intermediateStateSelection!,
+        bonusOpportunityId: 'intermediate-opportunity:unknown' as never,
+      }
     })
-    expectFailClosed(built, 'must exist in the candidate snapshot')
+    expectFailClosed(built, 'must exist on its own lane in the candidate snapshot')
 
     const result = await runPlannerBeamSearch(built.input, built.dependencies)
     expect(result.bestState).toBeNull()
@@ -396,29 +401,33 @@ describe('A malformed checkpoint selection fails the Planner input closed', () =
     )
   })
 
-  it('B: rejects two opportunities of one group', () => {
+  it('B: rejects an opportunity of the other lane', () => {
     const built = malformed((entry) => {
-      const [group] = entry.candidateSnapshot.checkpointGroups ?? []
-      expect(group.opportunities.length).toBeGreaterThanOrEqual(2)
-      entry.selectedCheckpointOpportunityIds = [
-        group.opportunities[0].id,
-        group.opportunities[1].id,
-      ]
+      entry.intermediateStateSelection = {
+        ...entry.intermediateStateSelection!,
+        skillOpportunityId: entry.intermediateStateSelection!.bonusOpportunityId,
+        bonusOpportunityId: null,
+      }
     })
-    expectFailClosed(built, 'At most one opportunity may be selected per checkpoint group')
+    expectFailClosed(built, 'must exist on its own lane in the candidate snapshot')
   })
 
-  it('C: rejects a duplicated opportunity id', () => {
+  it('C: rejects an unknown improvement preference', () => {
     const built = malformed((entry) => {
-      const [id] = entry.selectedCheckpointOpportunityIds ?? []
-      entry.selectedCheckpointOpportunityIds = [id, id]
+      entry.intermediateStateSelection = {
+        ...entry.intermediateStateSelection!,
+        improvementPreference: 'fastest' as never,
+      }
     })
-    expectFailClosed(built, 'must not be selected twice')
+    expectFailClosed(built, 'improvement preference')
   })
 
   it('D: never reads the malformed selection as empty and never bypasses it through the other Entry', async () => {
     const built = malformed((entry) => {
-      entry.selectedCheckpointOpportunityIds = ['checkpoint-opportunity:unknown' as never]
+      entry.intermediateStateSelection = {
+        ...entry.intermediateStateSelection!,
+        bonusOpportunityId: 'intermediate-opportunity:unknown' as never,
+      }
     })
 
     const result = await createProductionPlan(built.input, built.dependencies)

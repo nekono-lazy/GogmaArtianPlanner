@@ -1,9 +1,10 @@
 import {
   applyBuildListEntryStaleness,
   createBuildListEntry,
+  defaultIntermediateStateSelection,
   evaluateBuildListEntryStaleness,
   isSameBuildListCandidate,
-  withSelectedCheckpointOpportunities,
+  withIntermediateStateSelection,
 } from '../../domain/buildList'
 import { validateBuildListEntry } from '../../domain/models/publicTypes'
 import type {
@@ -11,7 +12,7 @@ import type {
   BuildListEntry,
   BuildListEntryId,
   CalculationContext,
-  CompromiseCheckpointOpportunityId,
+  IntermediateStateSelection,
   NormalArtianCounter,
   OwnedWeapon,
   RngState,
@@ -55,36 +56,45 @@ export class BuildListService {
   /**
    * Adds one Candidate, or reports that an equivalent Entry already exists.
    *
-   * An existing Entry is returned untouched: its checkpoint selection is the
-   * user's Build List input, and the Search screen's current selection must
-   * never silently overwrite it (`docs/UI_FLOW.md` 6.5).
+   * An existing Entry is returned untouched: its intermediate state selection
+   * and improvement preference are the user's Build List input, and the
+   * Search screen's current selection must never silently overwrite them
+   * (`docs/UI_FLOW.md` 9).
    */
   async addCandidate(
     candidate: BuildCandidate,
     target: TargetWeapon,
-    selectedCheckpointOpportunityIds: readonly CompromiseCheckpointOpportunityId[] = [],
+    intermediateStateSelection: IntermediateStateSelection = defaultIntermediateStateSelection(),
   ): Promise<{ entry: BuildListEntry; added: boolean }> {
     const existing = (await this.repositories.getAllEntries()).find((entry) =>
       isSameBuildListCandidate(entry, candidate),
     )
     if (existing) return { entry: existing, added: false }
     const entry = createBuildListEntry(candidate, target, {
-      selectedCheckpointOpportunityIds,
+      intermediateStateSelection,
     })
+    const valid = validateBuildListEntry(entry)
+    if (!valid.isValid) {
+      throw new Error(
+        valid.issues.map(({ path, message }) => `${path}: ${message}`).join('\n'),
+      )
+    }
     await this.repositories.putEntry(entry)
     return { entry, added: true }
   }
 
   /**
-   * Replaces one Entry's checkpoint selection.
+   * Replaces one Entry's intermediate state selection and improvement
+   * preference.
    *
-   * The Domain validation is the authority for at most one opportunity per
-   * group and for every id existing in the Candidate Snapshot, so an invalid
+   * The Domain validation is the authority for at most one state per lane,
+   * for every id existing on its own lane of the Candidate Snapshot, and for
+   * the pair not being the weapon the user already holds, so an invalid
    * selection fails closed here rather than reaching the Planner.
    */
-  async updateCheckpointSelection(
+  async updateIntermediateStateSelection(
     id: BuildListEntryId,
-    selectedCheckpointOpportunityIds: readonly CompromiseCheckpointOpportunityId[],
+    intermediateStateSelection: IntermediateStateSelection,
   ): Promise<BuildListEntry> {
     const existing = (await this.repositories.getAllEntries()).find(
       (entry) => entry.id === id,
@@ -92,10 +102,7 @@ export class BuildListService {
     if (!existing) {
       throw new Error(`BuildListEntry '${id}' does not exist.`)
     }
-    const updated = withSelectedCheckpointOpportunities(
-      existing,
-      selectedCheckpointOpportunityIds,
-    )
+    const updated = withIntermediateStateSelection(existing, intermediateStateSelection)
     const valid = validateBuildListEntry(updated)
     if (!valid.isValid) {
       throw new Error(

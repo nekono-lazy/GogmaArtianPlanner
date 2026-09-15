@@ -1215,9 +1215,9 @@ describe('B8-C4b cancellation stays an ordinary Planner outcome', () => {
       const parts = checkpointParts(true)
       const built = fixedScenario(parts)
       const selectedBefore = structuredClone(
-        built.input.buildListEntries[1].selectedCheckpointOpportunityIds,
+        built.input.buildListEntries[1].intermediateStateSelection,
       )
-      expect(selectedBefore).toHaveLength(1)
+      expect(selectedBefore?.bonusOpportunityId).not.toBeNull()
 
       const result = await createProductionPlanWithConstrainedSearch(
         built.input,
@@ -1235,7 +1235,7 @@ describe('B8-C4b cancellation stays an ordinary Planner outcome', () => {
       expect(result.conflicts.some(({ kind }) => kind === 'same_gogma_counter')).toBe(true)
       expect(result.plan?.selectedBuildListEntryIds ?? []).not.toContain(ENTRY_B)
       // The selection itself was never touched, moved, or emptied.
-      expect(built.input.buildListEntries[1].selectedCheckpointOpportunityIds)
+      expect(built.input.buildListEntries[1].intermediateStateSelection)
         .toEqual(selectedBefore)
     })
 
@@ -1255,7 +1255,8 @@ describe('B8-C4b cancellation stays an ordinary Planner outcome', () => {
       expect(result.generatedBuildListEntries).toHaveLength(1)
       const [generated] = result.generatedBuildListEntries
       expect(generated.targetWeaponId).toBe(TARGET_B as never)
-      expect(generated.selectedCheckpointOpportunityIds ?? []).toEqual([])
+      expect(generated.intermediateStateSelection?.bonusOpportunityId ?? null).toBeNull()
+      expect(generated.intermediateStateSelection?.skillOpportunityId ?? null).toBeNull()
       expect(result.plan?.selectedBuildListEntryIds).toContain(generated.id)
     })
 
@@ -1383,7 +1384,7 @@ describe('B8-C4b cancellation stays an ordinary Planner outcome', () => {
       expect(warningKinds(result.warnings)).toContain('selected_checkpoint_fixes_target_entry')
       expect(result.plan?.selectedBuildListEntryIds ?? []).not.toContain(ENTRY_T_SKILL)
       expect(result.plan?.selectedBuildListEntryIds ?? []).toContain(ENTRY_T_BONUS)
-      expect(entryA.selectedCheckpointOpportunityIds).toHaveLength(1)
+      expect(entryA.intermediateStateSelection?.bonusOpportunityId).not.toBeNull()
     })
   })
 })

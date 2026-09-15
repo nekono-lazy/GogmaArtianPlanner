@@ -199,10 +199,10 @@ describe('Ideal-only Candidate Search', () => {
     expect(candidates).toHaveLength(1)
     expect(candidates[0].finalBonuses).toEqual(idealBonuses())
     expect(candidates[0].restorationBonusScope).toBe('gogma_artian')
-    expect(candidates[0].checkpointGroups).toHaveLength(1)
-    expect(candidates[0].checkpointGroups?.[0].conditionMatch).toEqual({
-      bonus: 'practical',
-      skill: 'ideal',
+    expect(candidates[0].intermediateStateGroups).toHaveLength(1)
+    expect(candidates[0].intermediateStateGroups?.[0]).toMatchObject({
+      axis: 'bonus',
+      match: 'practical',
     })
   })
 
@@ -231,7 +231,7 @@ describe('Ideal-only Candidate Search', () => {
     expect(result.targetResult.candidate).toBeNull()
   })
 
-  it('never turns a compromise state off the Ideal Route into a checkpoint', async () => {
+  it('never turns a compromise state off the Ideal Route into an intermediate state', async () => {
     const input = existingGogmaInput(2)
     const source = input.ownedWeapons[0] as OwnedGogmaArtianWeapon
     const engine = createEngine(input, {
@@ -265,10 +265,10 @@ describe('Ideal-only Candidate Search', () => {
       'reset_bonuses',
       'reset_bonuses',
     ])
-    expect(candidate.checkpointGroups).toEqual([])
+    expect(candidate.intermediateStateGroups).toEqual([])
   })
 
-  it('adds no RNG prediction call and moves no canonical Ideal for its checkpoints', async () => {
+  it('adds no RNG prediction call and moves no canonical Ideal for its intermediate states', async () => {
     const run = async (withCompromise: boolean) => {
       const input = existingGogmaInput(2)
       if (!withCompromise) {
@@ -301,8 +301,8 @@ describe('Ideal-only Candidate Search', () => {
     const withoutCheckpoints = await run(false)
 
     expect(withCheckpoints.calls).toEqual(withoutCheckpoints.calls)
-    expect(withCheckpoints.candidate.checkpointGroups).toHaveLength(1)
-    expect(withoutCheckpoints.candidate.checkpointGroups).toEqual([])
+    expect(withCheckpoints.candidate.intermediateStateGroups).toHaveLength(1)
+    expect(withoutCheckpoints.candidate.intermediateStateGroups).toEqual([])
     // Checkpoint existence never moves the canonical Ideal selection.
     expect(candidateStableKey(withCheckpoints.candidate)).toBe(
       candidateStableKey(withoutCheckpoints.candidate),

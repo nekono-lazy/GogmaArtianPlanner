@@ -3,7 +3,7 @@ import {
   type BuildListEntry,
   type BuildListEntryId,
   type CalculationContext,
-  type CompromiseCheckpointOpportunityId,
+  type IntermediateStateOpportunityId,
   type PlanConflict,
   type ProductionPlan,
   type ProductionPlanStatus,
@@ -38,15 +38,15 @@ export interface ProductionPlanParticipantViewModel {
   target: TargetWeapon | null
   targetName: string
   /**
-   * The compromise checkpoint this participant is competing for in the
+   * The selected intermediate state this participant is competing for in the
    * *current* conflict, or `null`.
    *
-   * A conflict involving a selected checkpoint cannot be resolved by picking a
-   * winning Entry: the loser's checkpoint would simply be dropped, which the
+   * A conflict involving a selected state cannot be resolved by picking a
+   * winning Entry: the loser's selection would simply be dropped, which the
    * Planner is never allowed to do. The UI uses this to say that the Build List
-   * checkpoint selection has to change instead (`docs/UI_FLOW.md` 11.1).
+   * selection has to change instead (`docs/UI_FLOW.md` 11.1).
    */
-  checkpointOpportunityId: CompromiseCheckpointOpportunityId | null
+  checkpointOpportunityId: IntermediateStateOpportunityId | null
   isRecommended: boolean
   isSelected: boolean
   isAvailable: boolean
@@ -146,7 +146,7 @@ export function mergeExplicitConflictResolution(
 }
 
 export const CHECKPOINT_CONFLICT_MESSAGE =
-  'この競合には選択済みチェックポイントが関係しています。作成リストでチェックポイントを変更または解除してください。'
+  'この競合には途中採用する状態の選択が関係しています。作成リストで途中採用する状態を変更または解除してください。'
 
 function planStatusMessage(status: ProductionPlanStatus): string | null {
   switch (status) {
@@ -288,7 +288,7 @@ export function createProductionPlanInteractionViewModel(
             checkpointOpportunityId:
               currentCheckpointParticipants.find(
                 (participant) => participant.buildListEntryId === buildListEntryId,
-              )?.checkpointOpportunityId ?? null,
+              )?.opportunityId ?? null,
             isRecommended:
               conflict.recommendedBuildListEntryId === buildListEntryId,
             isSelected: conflict.selectedBuildListEntryId === buildListEntryId,

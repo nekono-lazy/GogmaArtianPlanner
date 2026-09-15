@@ -97,10 +97,10 @@ export type BuildListEntryId = Brand<string, "BuildListEntryId">;
 export type ProductionPlanId = Brand<string, "ProductionPlanId">;
 export type PlanStepId = Brand<string, "PlanStepId">;
 export type ExecutionHistoryId = Brand<string, "ExecutionHistoryId">;
-export type CompromiseCheckpointGroupId =
-  Brand<string, "CompromiseCheckpointGroupId">;
-export type CompromiseCheckpointOpportunityId =
-  Brand<string, "CompromiseCheckpointOpportunityId">;
+export type IntermediateStateGroupId =
+  Brand<string, "IntermediateStateGroupId">;
+export type IntermediateStateOpportunityId =
+  Brand<string, "IntermediateStateOpportunityId">;
 ```
 
 DB保存時は通常のstringとして保存してよい。
@@ -178,11 +178,18 @@ Planner inventory semantics、Planner scoring、PlanStep operation set、OwnedWe
 hash契約を変更するため、versionは **9** になった。
 独立したPractical Candidateを廃止し、canonical Ideal Route上のselectable compromise
 checkpointへ再設計した改訂は、Candidate出力形状、Candidate分類、Build Listの計画入力、
-Planner fast-forward / conflict semanticsをすべて変更するため、現行versionは **10** である。
-旧1..9の全計算artifactは非互換とする。
+Planner fast-forward / conflict semanticsをすべて変更するため、versionは **10** になった。
+1本の固定操作列のstrict prefix checkpointを、Skill lane / Bonus laneごとのintermediate state
+（`BuildCandidate.intermediateStateGroups`）と、laneごとの選択＋改善優先
+（`BuildListEntry.intermediateStateSelection`）へ置き換え、PlannerがRouteをlane単位で
+interleaveする改訂は、Candidate出力形状、Build Listの計画入力、Planner Route実行semantics、
+PlanStep milestone / PlanConflict participantの形状をすべて変更するため、現行versionは
+**11** である。version 10の `checkpointGroups` / `selectedCheckpointOpportunityIds` は
+1本の操作列のindexで表現されており、lane pinへ変換できない。選択を「なし」と読めばhard
+constraintを黙って捨てることになるため、旧1..10の全計算artifactは非互換とする。
 以下の2..5互換例外は歴史的契約でありversion 6以降には適用しない。
 現行versionの単一authorityは `src/domain/models/common.ts` の
-`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 10` とし、Search、BuildList、Plannerと
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 11` とし、Search、BuildList、Plannerと
 benchmark入力のruntime creatorで共用する。永続モデル移行は独立してDexie
 `DATABASE_SCHEMA_VERSION = 4`、AppSettingsは `schemaVersion = 1` のままとする。Calculation semantics / artifact
 validity境界とDexie schemaは別の概念であり、片方の更新はもう片方の更新を意味しない。
@@ -572,7 +579,7 @@ export type OwnedWeapon =
 - Plannerに保護武器の消費を許可するoverride設定は持たない
 - statusを書き換える経路は、Owned Weapons画面の通常CRUDと、`reserve_weapon` が
   理想品ラベルを設定する場合だけとする。後者は新規生成Candidateでも既存Gogma
-  Candidateの確保でも同じで、既存Gogmaの保護状態は維持する。checkpointへの到達では
+  Candidateの確保でも同じで、既存Gogmaの保護状態は維持する。妥協checkpointへの到達では
   statusも保護も変更しない。Material化のためのstatus変更と
   `change_owned_weapon_status` PlanStepは廃止した
 - `status` は `name` / `memo` / timestampと同じく非semanticであり、`referencedOwnedWeaponsHash`、
@@ -771,47 +778,88 @@ export interface BuildCandidate {
   skillAmendmentTrace?: CandidateSkillAmendmentStep[];
   conversionSkillTrace?: CandidateConversionSkillStep;
   /**
-   * このCandidate自身のRouteのstrict prefixに現れる妥協checkpoint。
+   * このCandidate自身のRouteのSkill lane / Bonus laneに現れる受理済み途中状態。
    * 現行calculation schemaのCandidateでは必須であり、field自体が存在しない
    * 旧artifactはそのまま保持する（SEARCH_SPEC 5.8）。
    */
-  checkpointGroups?: CompromiseCheckpointGroup[];
+  intermediateStateGroups?: IntermediateStateGroup[];
 }
 
+/** Plannerが到達した妥協checkpointの両軸判定。説明情報であり判定authorityではない。 */
 export interface CompromiseConditionMatch {
   bonus: "ideal" | "practical" | "alternative";
   skill: "ideal" | "practical";
 }
 
-/** ユーザーから見て同一の妥協品。slot順はidentityに含めない。 */
-export interface CompromiseCheckpointGroup {
-  id: CompromiseCheckpointGroupId;
-  restorationBonusScope: ArtianBonusScope;
-  /** 代表として表示する5枠。最早opportunityのslot順をそのまま使う。 */
-  restorationBonuses: RestorationBonusSet;
-  seriesSkillId: SeriesSkillId | null;
-  groupSkillId: GroupSkillId | null;
-  conditionMatch: CompromiseConditionMatch;
-  /** Route位置の昇順。1件以上。 */
-  opportunities: CompromiseCheckpointOpportunity[];
-  /** 表示専用のdominance。Domainからは何も削除しない。 */
-  isDisplaySecondary: boolean;
-  dominatingGroupId: CompromiseCheckpointGroupId | null;
+export type IntermediateStateAxis = "skill" | "bonus";
+export type IntermediateSkillMatch = "practical" | "ideal";
+export type IntermediateBonusMatch = "practical" | "alternative" | "ideal";
+
+interface IntermediateStateOpportunityBase {
+  id: IntermediateStateOpportunityId;
+  /**
+   * そのlaneの操作を何回実行した直後の状態か。0はlane開始状態（conversionが付与した
+   * 初回Skill、既存巨戟の現在Skill / 現在5枠）。常にlaneの操作数より小さい:
+   * laneの終点は理想品でありintermediate stateではない。
+   */
+  lanePosition: number;
+  /** この状態を生む `route.operations` のindex。操作を持たないlane開始状態は null。 */
+  operationIndex: number | null;
 }
 
-/** その妥協品へ到達する具体的なRoute位置。 */
-export interface CompromiseCheckpointOpportunity {
-  id: CompromiseCheckpointOpportunityId;
-  /** `route.operations` のindex。常に `operations.length - 1` 未満。 */
-  afterOperationIndex: number;
-  operationCount: number;
-  remainingOperationCount: number;
+export interface IntermediateSkillOpportunity extends IntermediateStateOpportunityBase {
+  axis: "skill";
+}
+
+export interface IntermediateBonusOpportunity extends IntermediateStateOpportunityBase {
+  axis: "bonus";
   /** exactなslot順。groupの代表5枠とはslot順が異なりうる。 */
   restorationBonuses: RestorationBonusSet;
   restorationBonusScope: ArtianBonusScope;
+}
+
+export type IntermediateStateOpportunity =
+  | IntermediateSkillOpportunity
+  | IntermediateBonusOpportunity;
+
+/** ユーザーから見て同一のSkill状態。 */
+export interface IntermediateSkillStateGroup {
+  axis: "skill";
+  id: IntermediateStateGroupId;
   seriesSkillId: SeriesSkillId | null;
   groupSkillId: GroupSkillId | null;
-  conditionMatch: CompromiseConditionMatch;
+  match: IntermediateSkillMatch;
+  /** lane位置の昇順。1件以上。 */
+  opportunities: IntermediateSkillOpportunity[];
+}
+
+/** ユーザーから見て同一の復元ボーナス品。slot順はidentityに含めない。 */
+export interface IntermediateBonusStateGroup {
+  axis: "bonus";
+  id: IntermediateStateGroupId;
+  restorationBonusScope: ArtianBonusScope;
+  /** 代表として表示する5枠。最早opportunityのslot順をそのまま使う。 */
+  restorationBonuses: RestorationBonusSet;
+  match: IntermediateBonusMatch;
+  /** lane位置の昇順。1件以上。 */
+  opportunities: IntermediateBonusOpportunity[];
+  /** 表示専用のdominance。Domainからは何も削除しない。 */
+  isDisplaySecondary: boolean;
+  dominatingGroupId: IntermediateStateGroupId | null;
+}
+
+export type IntermediateStateGroup =
+  | IntermediateSkillStateGroup
+  | IntermediateBonusStateGroup;
+
+/** 妥協checkpoint到達後にどちらのlaneを先に理想へ近づけるかの希望。soft preference。 */
+export type ImprovementPreference = "planner" | "skill_first" | "bonus_first";
+
+/** BuildListEntryのlane別途中採用選択と改善優先。 */
+export interface IntermediateStateSelection {
+  skillOpportunityId: IntermediateStateOpportunityId | null;
+  bonusOpportunityId: IntermediateStateOpportunityId | null;
+  improvementPreference: ImprovementPreference;
 }
 
 export interface BonusAmendmentResult {
@@ -845,27 +893,23 @@ export interface CandidateConversionSkillStep extends SkillAmendmentResult {
 - `targetWeaponId` は存在するTargetWeaponを参照する
 - BuildCandidateは常に対象TargetWeaponの理想条件を満たす。妥協状態はCandidateにならない
 - `category` / `isSimilarToIdeal` / `similarityScore` は存在しない
-- `checkpointGroups` は現行calculation schemaのCandidateでは必須である。field自体が
+- `intermediateStateGroups` は現行calculation schemaのCandidateでは必須である。field自体が
   無い旧artifactは互換対象として保持し、補完も再分類もしない
-- 各checkpoint groupは `restorationBonusScope = "gogma_artian"` であり、
-  `conditionMatch` が両軸idealになることはない
-- 各opportunityの `afterOperationIndex` は `route.operations.length - 1` 未満の
-  strict prefixであり、group内で昇順に並ぶ
-- 各opportunityはgroupと同じscope / 5枠multiset / Series Skill / Group Skillへ到達する
-- 各opportunityの `conditionMatch` はgroupの `conditionMatch` と一致する
-- 各opportunityの `operationCount` はRoute先頭から `afterOperationIndex` までの
-  操作unit数(`create_normal_artian` は `count` 本分)と一致し、
-  `remainingOperationCount` はRoute全体のunit数からそれを引いた値と一致する
-- `dominatingGroupId` は同じCandidateの別groupのIDだけを参照する。自分自身や
+- 各Bonus groupは `restorationBonusScope = "gogma_artian"` である
+- 各opportunityの `lanePosition` はそのlaneの操作数未満であり、group内で昇順に並ぶ。
+  `operationIndex` はlane位置 `n >= 1` ではlaneの `n` 番目の操作、位置0ではconversion操作
+  （無ければ `null`）と一致する
+- 各Bonus opportunityはgroupと同じscope / 5枠multisetへ到達する
+- `dominatingGroupId` は同じCandidateの別のBonus groupのIDだけを参照する。自分自身や
   存在しないgroupを参照せず、`isDisplaySecondary` は `dominatingGroupId !== null`
   と一致する
-- group IDとopportunity IDは `candidateStableKey` とgroup identityから決まる
+- group IDとopportunity IDは `candidateStableKey`、lane、group identity、lanePositionから決まる
   deterministicな値であり、`searchRunId`・Clock・列挙順に依存しない。group IDは
-  `checkpoint-group:`、opportunity IDは `checkpoint-opportunity:` で始まる
+  `intermediate-group:`、opportunity IDは `intermediate-opportunity:` で始まる
 - 現行calculation schemaのCandidate validationは上記をすべて検証する。
-  `checkpointGroups` を持たないschema 9以前のartifactは互換対象として読めるまま
+  `intermediateStateGroups` を持たないschema 10以前のartifactは互換対象として読めるまま
   保持し、補完しない
-- `checkpointGroups` はCandidate semantic identityに含めない。Candidate ID
+- `intermediateStateGroups` はCandidate semantic identityに含めない。Candidate ID
   （`semanticHash`）、`candidateStableKey`、重複排除key、`BuildCandidateMeaning`
   fingerprint、`searchStateHash`、`referencedOwnedWeaponsHash` はいずれも参照しない
 - `calculationContext` は候補生成時の値を保存し、互換性が失われた候補はstaleとして扱う
@@ -1031,14 +1075,14 @@ export interface BuildListEntry {
   staleReasons: BuildListEntryStaleReason[];
   createdAt: ISODateTimeString;
   /**
-   * ユーザーが選択した妥協checkpointのopportunity ID。
-   * 初期値は空配列であり、1 groupにつき最大1件だけ選択できる。
+   * ユーザーがlaneごとに選択した途中採用状態のopportunity IDと、理想品までの改善優先。
+   * 初期値は両laneとも null、改善優先は "planner" であり、1 laneにつき最大1件だけ選択できる。
    * 選択はCandidateの意味ではなくユーザーの計画入力なので、Candidate Snapshot、
    * 両hash、CalculationContextのいずれも変更せず、Entryをstaleにしない。
-   * 一方でPlanの `buildListEntriesHash` には入るため、選択を変えると既存Planは
-   * 再計算対象になる（PLANNER_SPEC 7.5.5）。
+   * 一方でPlanの `buildListEntriesHash` には入るため、変えると既存Planは
+   * 再計算対象になる（PLANNER_SPEC 7.5.5）。改善優先はTargetWeaponへ保存しない。
    */
-  selectedCheckpointOpportunityIds?: CompromiseCheckpointOpportunityId[];
+  intermediateStateSelection?: IntermediateStateSelection;
 }
 
 export type BuildListEntryStaleReason =
@@ -1066,20 +1110,21 @@ export type BuildListEntryStaleReason =
 - Route成立性に影響しない変更を明示的かつテスト可能に証明できる場合だけ、将来 `rng_state_changed` を回避してよい
 - Active Plan開始後、PlanどおりのRNG進行またはOwnedWeapon変更でEntry自体が再利用不可になっても、進行中Planのstale判定はPlanStepの期待状態を優先する
 - 同じCandidateを重複追加しない。既に同一semanticのCandidateが存在する場合は既存Entryを
-  返し、`selectedCheckpointOpportunityIds` を上書きしない
-- `selectedCheckpointOpportunityIds` の各IDは `candidateSnapshot.checkpointGroups` の
-  いずれかのopportunityに存在しなければならない。存在しないIDはfail closedで拒否する
-- 同一groupから2件以上のopportunityを選択できない
-- 同じopportunity IDを2回含めない
-- checkpoint選択の変更は `isStale` / `staleReasons` に影響しない
-- checkpointを選択したEntryは、そのPlanner runにおける当該Targetのrequired Entryである。
+  返し、`intermediateStateSelection` を上書きしない
+- `skillOpportunityId` は `candidateSnapshot.intermediateStateGroups` のSkill group、
+  `bonusOpportunityId` はBonus groupのopportunityに存在しなければならない。存在しないID、
+  別laneのIDはfail closedで拒否する
+- `improvementPreference` は `planner | skill_first | bonus_first` のいずれかである
+- 両laneの開始状態（lane位置0）を同時に選択できない。ユーザーが既に持っている武器を
+  到達点にすることになるためである（SEARCH_SPEC 5.8.5）
+- 選択・改善優先の変更は `isStale` / `staleReasons` に影響しない
+- どちらかのlaneを選択したEntryは、そのPlanner runにおける当該Targetのrequired Entryである。
   同じTargetの別Entryの理想品完成で迂回できない
   ([PLANNER_SPEC.md](./PLANNER_SPEC.md) 7.5.6)
-- Planner入力のcollection-level invariantとして、1 Targetにつき
-  `selectedCheckpointOpportunityIds.length > 0` のvalid Entryは最大1件とする。
-  2件以上はPlanner入力をfail closedし、Build Listで片方の選択解除を求める。
+- Planner入力のcollection-level invariantとして、1 Targetにつき選択を持つvalid Entryは
+  最大1件とする。2件以上はPlanner入力をfail closedし、Build Listで片方の選択解除を求める。
   永続データとして複数Entryが共存すること自体は禁止しない(同 7.5.7)
-- 上記のcheckpoint選択構造validationは `validateBuildListEntryCheckpointSelection()`
+- 上記の選択構造validationは `validateBuildListEntryIntermediateStateSelection()`
   として共有され、`validateBuildListEntry()` とPlanner入力validationの両方が呼ぶ。
   Plannerは壊れた選択を「選択なし」と解釈せず、入力をfail closedする(同 7.5.9)
 
@@ -1169,7 +1214,7 @@ Planner-generated Entryの `candidateSnapshot` も本節9.1の `BuildCandidate` 
 あり、`BuildCandidate` 形状への変換はB8-Cのdeterministic materializerが行う。
 materialize時、`searchRunId` はdeterministic constrained search identity、`id` は
 そのidentityとCandidate semantic meaningから安定生成した値、`createdAt` は
-`PlannerClock` 由来の値、`checkpointGroups` はそのCandidateへcheckpoint抽出を
+`PlannerClock` 由来の値、`intermediateStateGroups` はそのCandidateへintermediate state抽出を
 適用した結果とする([PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.13、
 [SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.7)。通常Candidate Searchの
 `BuildCandidate` ID生成規則と `searchRunId` 契約は変更しない。
@@ -1387,7 +1432,7 @@ export interface PlanStep {
 - `normal_artian_to_gogma` のreserveは予約した新IDでGogmaを追加し、`status = "ideal"`、
   保護初期値 `true`、CandidateのfinalBonusScopeを含む完成結果を保持する。Candidateは
   常に理想品なので、reserve時のラベルは常にIdealである
-- checkpointへ到達しただけではreserveしない。statusも保護も変更しない。reserve semanticsは
+- 妥協checkpointへ到達しただけではreserveしない。statusも保護も変更しない。reserve semanticsは
   最終的に理想品が完成したときだけ適用する（PLANNER_SPEC 7.5.4）
 - `owned_normal_artian_to_gogma` のconvert Stepは元Normal IDをInventoryから削除し、変換後Gogmaをまだ登録しない。後続Reset / Keep / Reset SkillsはsourceOwnedWeaponId = nullを維持する
 - `owned_normal_artian_to_gogma` のreserveは元Normalを再削除せず、別の予約IDでGogmaだけを追加する。元IDのkind変更では表現しない
@@ -1472,8 +1517,8 @@ export interface PlanStepDebugInfo {
 ```ts
 export interface PlanConflictCheckpointParticipant {
   buildListEntryId: BuildListEntryId;
-  checkpointGroupId: CompromiseCheckpointGroupId;
-  checkpointOpportunityId: CompromiseCheckpointOpportunityId;
+  axis: IntermediateStateAxis;
+  opportunityId: IntermediateStateOpportunityId;
 }
 
 export interface PlanConflict {
@@ -1485,7 +1530,7 @@ export interface PlanConflict {
   selectedBuildListEntryId: BuildListEntryId | null;
   resolutionNote: string | null;
   /**
-   * 選択済みcompromise checkpointの終端unitとしてこの競合に参加するEntry。
+   * 選択済み途中採用状態の終端unitとしてこの競合に参加するEntryとそのlane。
    * schema 10で追加したoptional fieldであり、省略は空と同義である
    * (PLANNER_SPEC 9.5)。
    */
@@ -1751,7 +1796,7 @@ Planner constrained re-searchを経たPlan保存も原子的に行う。契約�
 
 ```ts
 export interface ExportRoot {
-  schemaVersion: 5;
+  schemaVersion: 6;
   appName: "mh-wilds-gogma-artian-planner";
   exportedAt: ISODateTimeString;
   rngState: RngState | null;
@@ -1787,8 +1832,9 @@ Import方式。
 
 ## 15.3 Migration
 
-現行ExportRootはschemaVersion=5である。BuildCandidateが `checkpointGroups` を、
-BuildListEntryが `selectedCheckpointOpportunityIds` を持つ最初の形状であり、
+現行ExportRootはschemaVersion=6である。BuildCandidateが `intermediateStateGroups` を、
+BuildListEntryが `intermediateStateSelection` を持つ最初の形状であり（schemaVersion 5は
+旧 `checkpointGroups` / `selectedCheckpointOpportunityIds` の形状）、
 Dexie `DATABASE_SCHEMA_VERSION = 4` とは独立して更新する。
 現実装は型のみであり全置換Import/Exportサービスは未実装。
 旧schema=1を新Targetとして直接受理しない。将来のimportも純粋Target移行関数を使用し、
@@ -1921,9 +1967,10 @@ Production RNG契約切替時の互換性は次のとおりとする。
 
 ### 妥協条件version 6の判定理由と監査記録
 
-妥協判定 `conditionMatch`（bonus: ideal/practical/alternative、skill: ideal/practical）は
-Candidate本体ではなくcheckpoint group / opportunityが保持し、Build List snapshotへそのまま複写する。
-これはTarget定義と完成結果から導出した説明情報であり、Candidate ID / stable key / deduplication key / meaning fingerprint / searchStateHashには追加しない。
+妥協判定はlaneごとの `match` としてCandidate本体ではなくintermediate state group / opportunityが
+保持し、Build List snapshotへそのまま複写する。両軸の `conditionMatch` はPlannerが到達した
+checkpoint milestoneが保持する。
+これらはTarget定義と到達状態から導出した説明情報であり、Candidate ID / stable key / deduplication key / meaning fingerprint / searchStateHashには追加しない。
 条件の意味はTarget definition hashとCalculationContext version 6で区別する。旧artifactではフィールドを省略でき、推測補完・再分類しない。
 UIは保存された判定理由を「ボーナス判定: 実用 / 代替」「スキル判定: 理想 / 実用」と表示する。
 両軸Idealは理想品そのものなのでcheckpointとしては存在しない。

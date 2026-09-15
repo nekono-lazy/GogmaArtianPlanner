@@ -2,8 +2,7 @@ import type {
   BuildCandidateId,
   BuildListEntryId,
   CalculationContext,
-  CompromiseCheckpointGroupId,
-  CompromiseCheckpointOpportunityId,
+  IntermediateStateOpportunityId,
   ConflictKind,
   ExecutionAction,
   ExecutionHistoryId,
@@ -23,6 +22,8 @@ import type {
   TargetWeaponId,
 } from './common'
 import type {
+  CompromiseConditionMatch,
+  IntermediateStateAxis,
   MaterialRequirement,
   OwnedWeapon,
 } from './entities'
@@ -73,14 +74,15 @@ export interface PlanStep {
    */
   progressedTargetWeaponIds?: TargetWeaponId[]
   /**
-   * The selected compromise checkpoints this one physical Step reaches
+   * The compromise checkpoints this one physical Step reaches
    * (`docs/PLANNER_SPEC.md` 7.5.4).
    *
    * A checkpoint is never its own operation: it is milestone metadata on the
-   * real Step that produces the state, so no `PlanStepOperationType` is added,
-   * nothing is reserved, no OwnedWeapon is created, no status or protection
-   * changes, and the Plan neither stops nor completes there. One shared
-   * physical Step can reach several Entries' milestones at once.
+   * real Step that completes the pinned lane pair, so no
+   * `PlanStepOperationType` is added, nothing is reserved, no OwnedWeapon is
+   * created, no status or protection changes, and the Plan neither stops nor
+   * completes there. One shared physical Step can reach several Entries'
+   * milestones at once.
    *
    * `undefined` means the Plan predates the field, which must not be read as
    * "this Step reaches no milestone".
@@ -109,8 +111,12 @@ export interface PlanStep {
 export interface PlanStepCheckpointMilestone {
   buildListEntryId: BuildListEntryId
   targetWeaponId: TargetWeaponId
-  checkpointGroupId: CompromiseCheckpointGroupId
-  checkpointOpportunityId: CompromiseCheckpointOpportunityId
+  /** The selected Skill state held here, or `null` when the Skill lane end (Ideal) is held. */
+  skillOpportunityId: IntermediateStateOpportunityId | null
+  /** The selected Bonus state held here, or `null` when the Bonus lane end (Ideal) is held. */
+  bonusOpportunityId: IntermediateStateOpportunityId | null
+  /** How the held pair rates on each Target axis; explanatory only. */
+  conditionMatch: CompromiseConditionMatch
   /** Operation units still remaining until this Entry's Ideal result. */
   remainingOperationCount: number
 }
@@ -167,8 +173,8 @@ export interface PlanStepDebugInfo {
  */
 export interface PlanConflictCheckpointParticipant {
   buildListEntryId: BuildListEntryId
-  checkpointGroupId: CompromiseCheckpointGroupId
-  checkpointOpportunityId: CompromiseCheckpointOpportunityId
+  axis: IntermediateStateAxis
+  opportunityId: IntermediateStateOpportunityId
 }
 
 export interface PlanConflict {

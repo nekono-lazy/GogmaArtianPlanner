@@ -431,7 +431,7 @@ describe('CandidateCard route skill results', () => {
     // The card header shows the finished weapon; the route step shows what that
     // one operation produces. `createValidBuildCandidate` uses a Master ID the
     // fixture does not define, so the header keeps its own fallback label.
-    expect(screen.getByText(/不明なシリーズスキル/)).toBeTruthy()
+    expect(screen.getAllByText(/不明なシリーズスキル/).length).toBeGreaterThan(0)
     expect(screen.getByText(new RegExp(skillLabels.disabledSeries))).toBeTruthy()
   })
 })
@@ -659,7 +659,7 @@ describe('CandidateCard restoration bonus scope', () => {
 })
 
 describe('CandidateCard Build List add state', () => {
-  const guidance = 'この候補は作成リストに追加済みです。チェックポイントは作成リストで変更してください。'
+  const guidance = 'この候補は作成リストに追加済みです。途中採用する状態と改善優先は作成リストで変更してください。'
 
   it('shows the formal checkpoint guidance once for an added Candidate and disables the button', () => {
     render(

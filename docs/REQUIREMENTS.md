@@ -345,8 +345,11 @@ BonusがIdeal / Practical / Alternativeのいずれか、SkillがIdeal / Practic
 両方Idealではない状態を「妥協状態」とする。
 
 妥協状態は独立した作成Candidateではない。理想品へ向かう1本の物理Routeの途中状態として
-だけ意味を持ち、Search結果としては「理想品Routeの途中で選べるチェックポイント」の形で
-提示する。妥協状態を単独のBuildCandidateやBuildListEntryとして扱わない。
+だけ意味を持ち、Search結果としては「理想品Routeの途中で採用できる状態」として、
+スキル軸（スキル候補）と復元ボーナス軸（復元ボーナス候補）に分けて提示する。
+スキル×復元ボーナスの組み合わせは提示しない。妥協は理想品への途中の使える状態であって
+最終目標ではなく、目標武器の完了は常に理想品である。妥協状態を単独のBuildCandidateや
+BuildListEntryとして扱わない。
 
 ### 13.2 理想品
 
@@ -371,10 +374,12 @@ BonusがIdeal / Practical / Alternativeのいずれか、SkillがIdeal / Practic
 存在しない。
 
 理想品が見つかった場合、その作成Routeの途中で妥協条件を満たす状態を
-「チェックポイント」として一覧表示する。ユーザーは必要なものだけを選択でき、
-既定では何も選択されていない。
+スキル候補と復元ボーナス候補として軸ごとに一覧表示する。ユーザーは軸ごとに
+必要な状態だけを選択でき、既定では何も選択されていない。あわせて理想品までの
+改善優先（生産計画に任せる / スキルを優先 / 復元ボーナスを優先。既定は生産計画に任せる）
+を選べる。
 
-理想品が見つからなかった場合は候補0件であり、チェックポイントも0件である。
+理想品が見つからなかった場合は候補0件であり、途中採用できる状態も0件である。
 UIは「現在の探索範囲では理想品が見つかりませんでした」と案内する。
 「この目標武器に理想品は存在しません」とは表示しない。
 
@@ -451,9 +456,10 @@ canonical Ideal 1件以下だからである。
 - 推奨作成経路
 
 理想品が見つかった場合は、その作成Routeの途中で妥協条件を満たす状態を
-チェックポイントとして一覧表示する。各チェックポイントには妥協品としての性能、
-判定理由、何操作目で手に入るか、残り何操作で理想品になるかを表示する。
-既定ではどのチェックポイントも選択されていない。
+スキル候補と復元ボーナス候補として軸ごとに一覧表示する。各状態には性能、
+判定理由、その軸の何操作目で手に入るか、残り何操作で理想品になるかを表示する。
+巨戟化直後のスキルや既存巨戟の現在スキルは「スキルリセット0回」の状態として選べる。
+既定ではどの状態も選択されていない。
 
 ---
 
@@ -465,13 +471,17 @@ BuildCandidateは検索結果、BuildListEntryはユーザーがPlannerへ渡す
 
 追加方式は個別追加だけである。返る候補が1件以下なので一括追加の対象がない。
 
-追加時には、選択中のチェックポイントを同じBuildListEntryへ一緒に登録する。
-1つの性能グループから選べるチェックポイントは1つまでである。選択の変更は
-作成リスト側で行い、同じ候補を再追加しても既存の選択を上書きしない。
+追加時には、軸ごとに選択中の状態と改善優先を同じBuildListEntryへ一緒に登録する。
+1つの軸から選べる状態は1つまでである。選択と改善優先の変更は作成リスト側で行い
+（改善優先は再検索なしに変更できる）、同じ候補を再追加しても既存の選択を上書きしない。
+改善優先は目標武器ではなく作成リストEntryの設定である。
 
-選択したチェックポイントはPlannerのhard constraintであり、Plannerが勝手に
-解除したり別の到達点へ読み替えたりしない。到達しても武器の確保や
-status / 保護の変更は行わず、その先の作成は続く。
+選択した状態はPlannerのhard constraintであり、Plannerが勝手に
+解除したり別の到達点へ読み替えたりしない。妥協checkpointは、生産計画上で現在の
+スキルと現在の復元ボーナスの両方が採用した状態になった瞬間である（両方理想は理想品で
+あってcheckpointではない）。到達しても武器の確保やstatus / 保護の変更は行わず、
+その先の作成は続く。checkpoint到達後にどちらの軸を先に理想へ近づけるかは検索時に
+固定せず、改善優先はPlannerのsoft preferenceとして扱う。
 
 再検索でBuildCandidateが置き換わってもBuildListEntryのSnapshotは失われない。ただしTarget条件、Candidate Route成立に使用したRNG状態、Routeが参照する起点武器の状態、または計算バージョンとの互換性が失われたEntryはstaleとし、Planner入力に使用しない。stale理由はそれぞれ `target_definition_changed`、`rng_state_changed`、`owned_weapon_changed`、`calculation_context_changed` とする。初期版では計算に使用したRNG状態Hashが変わった場合、安全側に倒してstaleとしてよい。Routeと無関係なOwnedWeaponの変更は参照武器Hashへ含めず、Entryをstaleにしない。
 
@@ -523,8 +533,9 @@ Plannerが自動判断できない局所競合では、ユーザーがBuildListE
 
 探索中はTargetごとに「理想品所持」を区別する。Ideal候補の確保で実用品所持かつ
 理想品所持へ更新する。実用品を先に確保する優先評価（practical-first）は行わない。
-ユーザーが選択したチェックポイントはscoreではなくhard constraintとして扱い、
-未到達のままそのEntryを完了できない。
+ユーザーが選択した途中採用状態はscoreではなくhard constraintとして扱い、
+妥協checkpoint未到達のままそのEntryを完了できない。複数目標武器のPlannerは
+各Entryの操作をCounter位置で全体的にinterleaveし、生産計画は1本の物理操作列である。
 
 BuildCandidateのRouteには、通常アーティア作成、巨戟化、Reset Bonuses、Keep Bonuses、Reset Skillsなどの具体的な操作列を保持する。Plannerはこの操作列からPlanStepを再現する。
 
@@ -536,11 +547,12 @@ BuildCandidateのRouteには、通常アーティア作成、巨戟化、Reset B
 
 1. 理想品未所持の目標武器の理想品を、優先度順に早く揃える
 2. 共有RNGの進行中に他の目標武器も効率よく取得する
-3. 作成リストで選択したチェックポイントは必ず経由する
-4. 同程度なら武器消費と操作量を抑える
+3. 作成リストで選択した途中採用状態（妥協checkpoint）は必ず経由する
+4. 同程度なら武器消費と操作量を抑え、さらに同程度なら作成リストの改善優先を反映する
 
-実用品を先に確保する優先評価は行わない。チェックポイントは評価点ではなく必須条件であり、
-同じ目標武器の別候補で迂回できない。
+実用品を先に確保する優先評価は行わない。途中採用状態は評価点ではなく必須条件であり、
+同じ目標武器の別候補で迂回できない。改善優先は必須条件ではなく、全体の計画が成立する
+範囲での希望である。
 
 ユーザーによる作成順の完全固定機能は初期版では実装しない。競合など判断が必要な箇所のみユーザーに選択を求める。
 
@@ -584,7 +596,7 @@ Candidateを reserve_weapon で確保
    新規生成武器  → status = ideal、保護あり
    既存Gogma更新 → status = ideal、保存済み保護値を維持する
 
-チェックポイントへ到達しただけではstatusも保護も変更しない。
+妥協checkpointへ到達しただけではstatusも保護も変更しない。
 ```
 
 `reserve_weapon` の設定は新規生成Candidateでも既存Gogma Candidateの確保でも同じであり、
@@ -957,7 +969,7 @@ RNGの実データやアルゴリズムが未確定の段階では、推測値�
 3. 必要に応じて所持通常アーティアと所持巨戟アーティアを登録する
 4. 理想構成と実用ラインを持つ目標武器を複数登録する
 5. 利用可能な経路から候補を検索する
-6. 理想品候補と、その作成Route上の妥協チェックポイント、到達距離を確認する
+6. 理想品候補と、その作成Route上で途中採用できるスキル / 復元ボーナス状態、到達距離を確認する
 7. 復元ボーナス条件を満たす既存武器から、スキルのみ再付与する候補を検索できる
 
 ### 38.2 複数目標の計画生成
@@ -1016,3 +1028,10 @@ Target妥協条件のversion 6への変更では、旧1..5のBuild List項目を
 `calculation_context_changed` でfail closedとする。Dexie `DATABASE_SCHEMA_VERSION = 4` と
 RNG Engine versionは変更しない。`OwnedWeaponStatus.practical` は所持武器の管理ラベルとして
 そのまま残す。
+
+1本の固定操作列のstrict prefix checkpointを、スキル軸 / 復元ボーナス軸ごとの途中採用状態と
+改善優先へ再設計し、Plannerが両軸をinterleaveする改訂では、CalculationContext
+appSchemaVersionを11へ、`ExportRoot.schemaVersion` を6へ更新する。version 10の
+checkpoint選択は軸ごとの選択へ変換できないため、version 1..10のCandidate / BuildListEntry /
+ProductionPlanは内容を保持したまま `calculation_context_changed` でfail closedとする。
+Dexie `DATABASE_SCHEMA_VERSION = 4` とRNG Engine versionは変更しない。

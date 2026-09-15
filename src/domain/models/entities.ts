@@ -5,8 +5,8 @@ import type {
   BuildCandidateId,
   BuildListEntryId,
   CalculationContext,
-  CompromiseCheckpointGroupId,
-  CompromiseCheckpointOpportunityId,
+  IntermediateStateGroupId,
+  IntermediateStateOpportunityId,
   ElementId,
   GroupSkillId,
   ISODateTimeString,
@@ -181,74 +181,141 @@ export interface CandidateConversionSkillStep extends SkillAmendmentResult {
  * Which Target condition one compromise checkpoint state satisfies.
  *
  * Purely explanatory: it is derived from the Target definition and the reached
- * performance state, so it is never a checkpoint group's identity authority,
- * never a Candidate identity input, and never a Planner decision input
- * (`docs/SEARCH_SPEC.md` 5.8.2).
+ * performance state, so it is never an intermediate state group's identity
+ * authority, never a Candidate identity input, and never a Planner decision
+ * input (`docs/SEARCH_SPEC.md` 5.8.2).
  */
 export interface CompromiseConditionMatch {
   bonus: 'ideal' | 'practical' | 'alternative'
   skill: 'ideal' | 'practical'
 }
 
-/**
- * One position on the canonical Ideal Route at which a checkpoint group's
- * exact weapon state is reached (`docs/SEARCH_SPEC.md` 5.8.3).
- *
- * The ordered five slots are kept here, not on the group: two Route positions
- * reaching the same unordered multiset are the same user-visible compromise
- * product but different Route states, and Planner / Trace Replay must use the
- * exact ordered state.
- */
-export interface CompromiseCheckpointOpportunity {
-  id: CompromiseCheckpointOpportunityId
+/** The two independent stream lanes of one Route (`docs/SEARCH_SPEC.md` 5.8). */
+export type IntermediateStateAxis = 'skill' | 'bonus'
+
+export type IntermediateSkillMatch = 'practical' | 'ideal'
+export type IntermediateBonusMatch = 'practical' | 'alternative' | 'ideal'
+
+interface IntermediateStateOpportunityBase {
+  id: IntermediateStateOpportunityId
   /**
-   * Index inside `BuildRoute.operations` of the last operation of the strict
-   * prefix that reaches this state. The prefix is `operations[0 ..
-   * afterOperationIndex]`, and it is always strict: the Ideal-completing final
-   * operation is never a checkpoint.
+   * How many operations of this lane have been executed when the state is
+   * held: `0` is the lane's starting state (the conversion-assigned Skills, or
+   * an existing Gogma's current Skills / five slots), `n` is the state right
+   * after the lane's `n`-th operation. It is always strictly less than the
+   * lane's operation count: the lane end is the Ideal result, never an
+   * intermediate state.
    */
-  afterOperationIndex: number
-  /** Operation units executed up to and including `afterOperationIndex`. */
-  operationCount: number
-  /** Operation units still remaining until the Ideal result is reached. */
-  remainingOperationCount: number
-  /** The exact ordered five slots at this Route position. */
-  restorationBonuses: RestorationBonusSet
-  restorationBonusScope: RestorationBonusScope
-  seriesSkillId: SeriesSkillId | null
-  groupSkillId: GroupSkillId | null
-  conditionMatch: CompromiseConditionMatch
+  lanePosition: number
+  /**
+   * Index inside `BuildRoute.operations` of the operation that produces this
+   * state, or `null` for a Route base state no operation produces (an existing
+   * Gogma's own current state).
+   */
+  operationIndex: number | null
+}
+
+/** One Skill lane position at which a Skill state group's pair is reached. */
+export interface IntermediateSkillOpportunity extends IntermediateStateOpportunityBase {
+  axis: 'skill'
 }
 
 /**
- * One user-visible compromise product reachable on the canonical Ideal Route.
+ * One Bonus lane position at which a Bonus state group's product is reached.
  *
- * Group identity is the performance state a player would recognise: scope, the
- * unordered five-slot multiset with duplicate counts preserved, and the two
- * Skills. Slot order is deliberately excluded here and preserved per
- * opportunity instead (`docs/SEARCH_SPEC.md` 5.8.2).
+ * The exact ordered five slots are kept here, not on the group: two lane
+ * positions reaching the same unordered multiset are the same user-visible
+ * product but different weapon states, and Planner / Trace Replay verify the
+ * exact ordered state (`docs/SEARCH_SPEC.md` 5.8.3).
  */
-export interface CompromiseCheckpointGroup {
-  id: CompromiseCheckpointGroupId
-  restorationBonusScope: RestorationBonusScope
-  /** Representative ordered slots, taken from the earliest opportunity. */
+export interface IntermediateBonusOpportunity extends IntermediateStateOpportunityBase {
+  axis: 'bonus'
   restorationBonuses: RestorationBonusSet
+  restorationBonusScope: RestorationBonusScope
+}
+
+export type IntermediateStateOpportunity =
+  | IntermediateSkillOpportunity
+  | IntermediateBonusOpportunity
+
+/**
+ * One user-visible Skill state of the Route's Skill lane that satisfies the
+ * Target's Skill condition (`docs/SEARCH_SPEC.md` 5.8.2).
+ */
+export interface IntermediateSkillStateGroup {
+  axis: 'skill'
+  id: IntermediateStateGroupId
   seriesSkillId: SeriesSkillId | null
   groupSkillId: GroupSkillId | null
   /** Explanatory only; derived from the Target and this state. */
-  conditionMatch: CompromiseConditionMatch
-  /** Ascending by `afterOperationIndex`; never empty, never deduplicated. */
-  opportunities: CompromiseCheckpointOpportunity[]
+  match: IntermediateSkillMatch
+  /** Ascending by `lanePosition`; never empty, never deduplicated. */
+  opportunities: IntermediateSkillOpportunity[]
+}
+
+/**
+ * One user-visible Bonus product of the Route's Bonus lane that satisfies the
+ * Target's Bonus condition (`docs/SEARCH_SPEC.md` 5.8.2).
+ *
+ * Group identity is scope plus the unordered five-slot multiset with duplicate
+ * counts preserved. Slot order is deliberately excluded here and preserved per
+ * opportunity instead.
+ */
+export interface IntermediateBonusStateGroup {
+  axis: 'bonus'
+  id: IntermediateStateGroupId
+  restorationBonusScope: RestorationBonusScope
+  /** Representative ordered slots, taken from the earliest opportunity. */
+  restorationBonuses: RestorationBonusSet
+  /** Explanatory only; derived from the Target and this state. */
+  match: IntermediateBonusMatch
+  /** Ascending by `lanePosition`; never empty, never deduplicated. */
+  opportunities: IntermediateBonusOpportunity[]
   /**
    * Display organisation only (`docs/SEARCH_SPEC.md` 5.8.4).
    *
-   * `true` means another retained group is conservatively, obviously better.
-   * It is never a Domain dominance: the group and every one of its
+   * `true` means another retained Bonus group is conservatively, obviously
+   * better. It is never a Domain dominance: the group and every one of its
    * opportunities stay available to the user and to the Planner, because a
-   * "worse" checkpoint can be the only one that avoids a Counter conflict.
+   * "worse" state can be the only one that avoids a Counter conflict.
    */
   isDisplaySecondary: boolean
-  dominatingGroupId: CompromiseCheckpointGroupId | null
+  dominatingGroupId: IntermediateStateGroupId | null
+}
+
+export type IntermediateStateGroup =
+  | IntermediateSkillStateGroup
+  | IntermediateBonusStateGroup
+
+/**
+ * Which lane the Planner should improve first once the compromise checkpoint
+ * has been reached (`docs/PLANNER_SPEC.md` 7.6).
+ *
+ * A soft Planner preference, never a hard constraint: `planner` leaves the
+ * order to the Planner, and either `_first` value only decides among Plans the
+ * existing evaluation rates equally.
+ */
+export type ImprovementPreference = 'planner' | 'skill_first' | 'bonus_first'
+
+export const improvementPreferences: readonly ImprovementPreference[] = [
+  'planner',
+  'skill_first',
+  'bonus_first',
+]
+
+/**
+ * The user's intermediate-state intent for one BuildListEntry
+ * (`docs/DATA_MODEL.md` 9.4).
+ *
+ * At most one selected opportunity per lane. A selected opportunity is a hard
+ * Planner constraint: the Entry's weapon must really hold that lane state, and
+ * the compromise checkpoint is the moment both lanes hold their pinned state -
+ * the selected one, or the Ideal lane end where nothing is selected.
+ */
+export interface IntermediateStateSelection {
+  skillOpportunityId: IntermediateStateOpportunityId | null
+  bonusOpportunityId: IntermediateStateOpportunityId | null
+  improvementPreference: ImprovementPreference
 }
 
 export interface BuildCandidate {
@@ -266,20 +333,21 @@ export interface BuildCandidate {
   requiredMaterials: MaterialRequirement[]
   idealDifference: IdealDifference
   /**
-   * The compromise checkpoints reachable on this Candidate's own Route.
+   * The accepted intermediate states of this Candidate's own Skill lane and
+   * Bonus lane (`docs/SEARCH_SPEC.md` 5.8).
    *
-   * Derived from the finished Route and the Target definition, so it changes
-   * no Candidate semantic identity: it never enters the Candidate ID
-   * `semanticHash`, `candidateStableKey`, the deduplication key, the
-   * `BuildCandidateMeaning` fingerprint, `searchStateHash`, or
-   * `referencedOwnedWeaponsHash`, and checkpoint availability never influences
-   * canonical Ideal selection (`docs/SEARCH_SPEC.md` 5.8.6).
+   * Derived from the finished Route, its observational traces and the Target
+   * definition, so it changes no Candidate semantic identity: it never enters
+   * the Candidate ID `semanticHash`, `candidateStableKey`, the deduplication
+   * key, the `BuildCandidateMeaning` fingerprint, `searchStateHash`, or
+   * `referencedOwnedWeaponsHash`, and intermediate state availability never
+   * influences canonical Ideal selection.
    *
    * Optional so a Candidate persisted before this field existed still loads
    * and renders. Every Candidate generated under the current
    * `CalculationContext` carries it, and validation requires it there.
    */
-  checkpointGroups?: CompromiseCheckpointGroup[]
+  intermediateStateGroups?: IntermediateStateGroup[]
   searchStateHash: string
   referencedOwnedWeaponsHash: string | null
   calculationContext: CalculationContext
@@ -438,20 +506,21 @@ export interface BuildListEntry {
   targetWeaponId: TargetWeaponId
   candidateSnapshot: BuildCandidate
   /**
-   * The checkpoint opportunities the user chose to use, as a hard Planner
-   * constraint (`docs/PLANNER_SPEC.md` 7.5).
+   * The intermediate states the user chose to hold on the way to the Ideal,
+   * plus the improvement preference (`docs/PLANNER_SPEC.md` 7.5 / 7.6).
    *
-   * Every id must exist in `candidateSnapshot.checkpointGroups`, and at most
-   * one id per group may be selected. It is the user's Planner input, not part
-   * of the Candidate's own meaning, so it never participates in
+   * Each selected id must exist in `candidateSnapshot.intermediateStateGroups`
+   * on its own lane. A selection is the user's Planner input, not part of the
+   * Candidate's own meaning, so it never participates in
    * `createBuildCandidateMeaningFingerprint()` and changing it alone never
    * makes this entry stale - but it does change what the Planner must achieve,
    * so it participates in the Plan's build-list semantic hash.
    *
    * Optional so a BuildListEntry persisted before this field existed still
-   * loads and renders; absent means no checkpoint is selected.
+   * loads and renders; absent means nothing is selected and the preference is
+   * `planner`.
    */
-  selectedCheckpointOpportunityIds?: CompromiseCheckpointOpportunityId[]
+  intermediateStateSelection?: IntermediateStateSelection
   targetDefinitionHash: string
   searchStateHash: string
   referencedOwnedWeaponsHash: string | null

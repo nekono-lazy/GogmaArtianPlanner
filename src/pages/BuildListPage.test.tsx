@@ -2,9 +2,13 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider, useParams } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
-import { createBuildListEntry, createTargetDefinitionHash } from '../domain/buildList'
+import {
+  createBuildListEntry,
+  createTargetDefinitionHash,
+  defaultIntermediateStateSelection,
+} from '../domain/buildList'
 import { createSearchStateHash } from '../domain/models/hashing'
-import type { BuildListEntryStaleReason } from '../domain/models/publicTypes'
+import type { BuildListEntryStaleReason, IntermediateStateSelection } from '../domain/models/publicTypes'
 import {
   buildListEntryId,
   candidateId,
@@ -32,14 +36,21 @@ import {
 import { createBuildListCalculationContext } from '../services/buildList/createBuildListCalculationContext'
 import type { PlannerWorkerClient } from '../services/planner/plannerWorkerClient'
 import {
+  CHECKPOINT_IDEAL_SKILL,
+  CHECKPOINT_PRACTICAL_SKILL,
   checkpointAlternativeBonuses,
   checkpointCandidate,
   checkpointIdealBonuses,
+  checkpointMixedCandidate,
   checkpointPracticalBonuses,
   checkpointSource,
   checkpointStrongerPracticalBonuses,
   checkpointTarget,
+  intermediateOpportunityAt,
 } from '../test/fixtures/checkpointRoute'
+
+const BONUS_ONE = 'この途中状態を採用する: 復元ボーナス操作1回目（再抽選）の直後'
+const SKILL_ONE = 'この途中状態を採用する: スキルリセット1回目の直後'
 import { BuildListPage, type BuildListPageDependencies } from './BuildListPage'
 
 function createOrchestrationResult(
@@ -110,7 +121,7 @@ function dependencies(
       conflictResolutions: [],
     })),
     savePlannerResult: vi.fn(async () => createValidProductionPlan()),
-    updateCheckpointSelection: vi.fn(async () => { throw new Error('not used in this fixture') }),
+    updateIntermediateStateSelection: vi.fn(async () => { throw new Error('not used in this fixture') }),
   deleteEntry: vi.fn(async () => undefined),
   }
 }
@@ -541,14 +552,13 @@ describe('BuildListPage', () => {
     expect(await screen.findByText('ビルドリストは空です。検索結果から候補を追加してください。')).toBeInTheDocument()
   })
 
-  it('keeps both groups selected when two toggles overlap in flight', async () => {
+  it('keeps both lanes selected when two changes overlap in flight', async () => {
     const user = userEvent.setup()
-    // Two independent checkpoint groups on one Route: one opportunity each.
-    const candidate = checkpointCandidate([
-      checkpointPracticalBonuses(),
-      checkpointAlternativeBonuses(),
-      checkpointIdealBonuses(),
-    ])
+    // One Practical state on each lane of one Route.
+    const { candidate, source } = checkpointMixedCandidate({
+      bonusResults: [checkpointPracticalBonuses(), checkpointIdealBonuses()],
+      skillResults: [CHECKPOINT_PRACTICAL_SKILL, CHECKPOINT_IDEAL_SKILL],
+    })
     const target = checkpointTarget()
     let entry = createBuildListEntry(candidate, target, {
       id: buildListEntryId('build-list.checkpoint.race'),
@@ -557,37 +567,40 @@ describe('BuildListPage', () => {
     const releases: Array<() => void> = []
     const deps: BuildListPageDependencies = {
       ...dependencies(),
-      refresh: vi.fn(async () => ({ entries: [entry], targets: [target], ownedWeapons: [checkpointSource()] })),
+      refresh: vi.fn(async () => ({ entries: [entry], targets: [target], ownedWeapons: [source] })),
       // Every save waits until the test releases it, in call order.
-      updateCheckpointSelection: vi.fn(async (_id, selected) => {
+      updateIntermediateStateSelection: vi.fn(async (_id, selection) => {
         await new Promise<void>((resolve) => releases.push(resolve))
-        entry = { ...entry, selectedCheckpointOpportunityIds: [...selected] }
+        entry = { ...entry, intermediateStateSelection: { ...selection } }
         return entry
       }),
     }
     renderPage(deps)
-    const first = await screen.findByRole('checkbox', { name: '1手目（理想まで残り2操作）' })
-    const second = screen.getByRole('checkbox', { name: '2手目（理想まで残り1操作）' })
+    const bonus = await screen.findByRole('checkbox', { name: BONUS_ONE })
+    const skill = screen.getByRole('checkbox', { name: SKILL_ONE })
 
-    // The second toggle starts while the first save is still pending.
-    await user.click(first)
-    await user.click(second)
+    // The second change starts while the first save is still pending.
+    await user.click(bonus)
+    await user.click(skill)
     expect(releases).toHaveLength(1)
     releases[0]()
     await waitFor(() => expect(releases).toHaveLength(2))
     releases[1]()
 
-    await waitFor(() => expect(deps.updateCheckpointSelection).toHaveBeenCalledTimes(2))
-    const [firstGroup, secondGroup] = (candidate.checkpointGroups ?? []).map(
-      ({ opportunities }) => opportunities[0].id,
-    )
-    const calls = vi.mocked(deps.updateCheckpointSelection).mock.calls
-    expect(calls[0][1]).toEqual([firstGroup])
+    await waitFor(() => expect(deps.updateIntermediateStateSelection).toHaveBeenCalledTimes(2))
+    const bonusId = intermediateOpportunityAt(candidate, 'bonus', 1).opportunity.id
+    const skillId = intermediateOpportunityAt(candidate, 'skill', 1).opportunity.id
+    const calls = vi.mocked(deps.updateIntermediateStateSelection).mock.calls
+    expect(calls[0][1]).toEqual({ ...defaultIntermediateStateSelection(), bonusOpportunityId: bonusId })
     // The second save starts from the first save's result, so the first
-    // selection survives: different groups may be selected together.
-    expect(calls[1][1]).toEqual([firstGroup, secondGroup])
-    await waitFor(() => expect(first).toBeChecked())
-    expect(second).toBeChecked()
+    // selection survives: the two lanes are selected together.
+    expect(calls[1][1]).toEqual({
+      ...defaultIntermediateStateSelection(),
+      bonusOpportunityId: bonusId,
+      skillOpportunityId: skillId,
+    })
+    await waitFor(() => expect(bonus).toBeChecked())
+    expect(skill).toBeChecked()
   })
 })
 
@@ -615,7 +628,7 @@ describe('BuildListPage presentation', () => {
       '登録候補',
       '目標武器',
       '再検索が必要な候補',
-      'チェックポイント選択中',
+      '途中採用状態を選択中',
     ])
     expect(tiles.map((tile) => tile.querySelector('p')?.textContent)).toEqual(['1', '1', '1', '0'])
   })
@@ -677,44 +690,51 @@ describe('BuildListPage presentation', () => {
     expect(screen.getByRole('button', { name: '候補詳細・作成ルート' })).toBeInTheDocument()
   })
 
-  it('explains checkpoints in Build List terms and reflects the persisted selection', async () => {
+  it('explains intermediate states in Build List terms and reflects the persisted selection', async () => {
     const user = userEvent.setup()
     const candidate = checkpointCandidate([
       checkpointPracticalBonuses(),
       checkpointIdealBonuses(),
     ])
     const target = checkpointTarget()
-    const selected = (candidate.checkpointGroups ?? [])[0].opportunities[0].id
+    const selected = intermediateOpportunityAt(candidate, 'bonus', 1).opportunity.id
     let entry = createBuildListEntry(candidate, target, {
       id: buildListEntryId('build-list.checkpoint.persisted'),
       createdAt: '2026-09-12T00:00:00.000Z',
-      selectedCheckpointOpportunityIds: [selected],
+      intermediateStateSelection: { ...defaultIntermediateStateSelection(), bonusOpportunityId: selected },
     })
     const deps: BuildListPageDependencies = {
       ...dependencies(),
       refresh: vi.fn(async () => ({ entries: [entry], targets: [target], ownedWeapons: [checkpointSource()] })),
-      updateCheckpointSelection: vi.fn(async (_id, next) => {
-        entry = { ...entry, selectedCheckpointOpportunityIds: [...next] }
+      updateIntermediateStateSelection: vi.fn(async (_id, next) => {
+        entry = { ...entry, intermediateStateSelection: { ...next } }
         return entry
       }),
     }
     renderPage(deps)
 
-    const checkbox = await screen.findByRole('checkbox', { name: '1手目（理想まで残り1操作）' })
+    const checkbox = await screen.findByRole('checkbox', { name: BONUS_ONE })
     expect(checkbox).toBeChecked()
-    expect(screen.getByText('チェックポイント選択中 1')).toBeInTheDocument()
+    expect(screen.getByText('途中採用状態を選択中 1')).toBeInTheDocument()
     expect(screen.getByText(
-      '選択中のチェックポイントは、この候補を作成する途中で必ず経由する条件としてPlannerに渡されます。変更すると既存の生産計画は再計算が必要です。性能ごとに選べる到達点は1つまでです。',
+      '選択中の途中採用状態は、この候補を作成する途中で必ず経由する条件としてPlannerに渡されます。変更すると既存の生産計画は再計算が必要です。スキル側・復元ボーナス側それぞれ1つまで選べます。',
     )).toBeInTheDocument()
-    expect(screen.queryByText(/作成リストへ登録します/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/作成リストへ登録され/)).not.toBeInTheDocument()
 
     await user.click(checkbox)
-    expect(deps.updateCheckpointSelection).toHaveBeenCalledWith(entry.id, [])
-    expect(await screen.findByText('利用チェックポイントを更新しました。生産計画を再作成してください。')).toBeInTheDocument()
-    expect(screen.getByText('チェックポイント未選択')).toBeInTheDocument()
+    expect(deps.updateIntermediateStateSelection).toHaveBeenCalledWith(entry.id, defaultIntermediateStateSelection())
+    expect(await screen.findByText('途中採用する状態と改善優先を更新しました。生産計画を再作成してください。')).toBeInTheDocument()
+    expect(screen.getByText('途中採用状態は未選択')).toBeInTheDocument()
+
+    // The preference is edited here too, without re-searching.
+    await user.click(screen.getByRole('radio', { name: '復元ボーナスを優先' }))
+    expect(deps.updateIntermediateStateSelection).toHaveBeenLastCalledWith(entry.id, {
+      ...defaultIntermediateStateSelection(),
+      improvementPreference: 'bonus_first',
+    })
   })
 
-  it('keeps a failed checkpoint save next to the Entries as an error', async () => {
+  it('keeps a failed selection save next to the Entries as an error', async () => {
     const user = userEvent.setup()
     const candidate = checkpointCandidate([checkpointPracticalBonuses(), checkpointIdealBonuses()])
     const target = checkpointTarget()
@@ -725,12 +745,12 @@ describe('BuildListPage presentation', () => {
     const deps: BuildListPageDependencies = {
       ...dependencies(),
       refresh: vi.fn(async () => ({ entries: [entry], targets: [target], ownedWeapons: [checkpointSource()] })),
-      updateCheckpointSelection: vi.fn(async () => {
+      updateIntermediateStateSelection: vi.fn(async () => {
         throw new Error('checkpoint: 選択内容が不正です。')
       }),
     }
     renderPage(deps)
-    await user.click(await screen.findByRole('checkbox', { name: '1手目（理想まで残り1操作）' }))
+    await user.click(await screen.findByRole('checkbox', { name: BONUS_ONE }))
     expect(await screen.findByText('checkpoint: 選択内容が不正です。')).toBeInTheDocument()
     // Nothing else is presented as a load failure.
     expect(screen.getByRole('button', { name: '生産計画を作成' })).toBeInTheDocument()
@@ -775,129 +795,133 @@ describe('BuildListPage presentation', () => {
   })
 })
 
-describe('BuildListPage checkpoint save chain recovery', () => {
+describe('BuildListPage intermediate state save chain recovery', () => {
   interface SaveAttempt {
-    selected: readonly string[]
+    selection: IntermediateStateSelection
     resolve(): void
     reject(): void
   }
 
   /**
-   * Three primary checkpoint groups on one Route: the Practical product
-   * (1手目), the Alternative product (2手目) and the stronger Practical product
-   * (3手目; arriving later, it dominates nothing). Every save waits for the test.
+   * One Practical state on each lane plus the improvement preference: three
+   * independent edits of one Entry. Every save waits for the test.
    */
-  function chainFixture(persisted: readonly string[] = []) {
-    const candidate = checkpointCandidate([
-      checkpointPracticalBonuses(),
-      checkpointAlternativeBonuses(),
-      checkpointStrongerPracticalBonuses(),
-      checkpointIdealBonuses(),
-    ])
+  function chainFixture(persisted: Partial<IntermediateStateSelection> = {}) {
+    const { candidate, source } = checkpointMixedCandidate({
+      bonusResults: [checkpointPracticalBonuses(), checkpointIdealBonuses()],
+      skillResults: [CHECKPOINT_PRACTICAL_SKILL, CHECKPOINT_IDEAL_SKILL],
+    })
     const target = checkpointTarget()
-    const groups = candidate.checkpointGroups ?? []
-    const byOperationCount = (count: number) =>
-      groups.flatMap(({ opportunities }) => opportunities).find(
-        ({ operationCount }) => operationCount === count,
-      )!.id
-    const ids = { practical: byOperationCount(1), alternative: byOperationCount(2), stronger: byOperationCount(3) }
+    const ids = {
+      bonus: intermediateOpportunityAt(candidate, 'bonus', 1).opportunity.id,
+      skill: intermediateOpportunityAt(candidate, 'skill', 1).opportunity.id,
+    }
     let entry = createBuildListEntry(candidate, target, {
       id: buildListEntryId('build-list.checkpoint.chain'),
       createdAt: '2026-09-12T00:00:00.000Z',
-      selectedCheckpointOpportunityIds: [...persisted] as never[],
+      intermediateStateSelection: { ...defaultIntermediateStateSelection(), ...persisted },
     })
     const attempts: SaveAttempt[] = []
     const deps: BuildListPageDependencies = {
       ...dependencies(),
-      refresh: vi.fn(async () => ({ entries: [entry], targets: [target], ownedWeapons: [checkpointSource()] })),
-      updateCheckpointSelection: vi.fn((_id, selected) =>
+      refresh: vi.fn(async () => ({ entries: [entry], targets: [target], ownedWeapons: [source] })),
+      updateIntermediateStateSelection: vi.fn((_id, selection) =>
         new Promise<typeof entry>((resolve, reject) => {
           attempts.push({
-            selected,
+            selection,
             resolve: () => {
-              entry = { ...entry, selectedCheckpointOpportunityIds: [...selected] }
+              entry = { ...entry, intermediateStateSelection: { ...selection } }
               resolve(entry)
             },
-            reject: () => reject(new Error('チェックポイントの保存に失敗しました（テスト）')),
+            reject: () => reject(new Error('途中採用状態の保存に失敗しました（テスト）')),
           })
         })),
     }
     return { deps, ids, attempts, latestEntry: () => entry }
   }
 
-  const names = {
-    practical: '1手目（理想まで残り3操作）',
-    alternative: '2手目（理想まで残り2操作）',
-    stronger: '3手目（理想まで残り1操作）',
-  }
+  const base = () => defaultIntermediateStateSelection()
 
   it('continues from the last persisted selection after a failed save (success -> failure -> success)', async () => {
     const user = userEvent.setup()
     const { deps, ids, attempts, latestEntry } = chainFixture()
     renderPage(deps)
-    const alternative = await screen.findByRole('checkbox', { name: names.alternative })
-    const stronger = screen.getByRole('checkbox', { name: names.stronger })
-    const practical = screen.getByRole('checkbox', { name: names.practical })
+    const bonus = await screen.findByRole('checkbox', { name: BONUS_ONE })
+    const skill = screen.getByRole('checkbox', { name: SKILL_ONE })
+    const skillFirst = screen.getByRole('radio', { name: 'スキルを優先' })
 
-    // A, B, C are toggled before any save settles.
-    await user.click(alternative)
-    await user.click(stronger)
-    await user.click(practical)
+    // A (Bonus lane), B (Skill lane), C (preference) are changed before any
+    // save settles.
+    await user.click(bonus)
+    await user.click(skill)
+    await user.click(skillFirst)
     expect(attempts).toHaveLength(1)
-    expect(attempts[0].selected).toEqual([ids.alternative])
+    expect(attempts[0].selection).toEqual({ ...base(), bonusOpportunityId: ids.bonus })
 
     attempts[0].resolve()
     await waitFor(() => expect(attempts).toHaveLength(2))
     // B starts from A's persisted result.
-    expect(attempts[1].selected).toEqual([ids.alternative, ids.stronger])
+    expect(attempts[1].selection).toEqual({ ...base(), bonusOpportunityId: ids.bonus, skillOpportunityId: ids.skill })
 
     attempts[1].reject()
-    expect(await screen.findByText('チェックポイントの保存に失敗しました（テスト）')).toBeInTheDocument()
+    expect(await screen.findByText('途中採用状態の保存に失敗しました（テスト）')).toBeInTheDocument()
     await waitFor(() => expect(attempts).toHaveLength(3))
-    // C starts from the last *persisted* selection [A], never from the
-    // render-time [] and never from the failed [A, B].
-    expect(attempts[2].selected).toEqual([ids.alternative, ids.practical])
+    // C starts from the last *persisted* selection {A}, never from the
+    // render-time default and never from the failed {A, B}.
+    expect(attempts[2].selection).toEqual({ ...base(), bonusOpportunityId: ids.bonus, improvementPreference: 'skill_first' })
 
     attempts[2].resolve()
-    await waitFor(() => expect(practical).toBeChecked())
-    expect(alternative).toBeChecked()
-    expect(stronger).not.toBeChecked()
-    expect(latestEntry().selectedCheckpointOpportunityIds).toEqual([ids.alternative, ids.practical])
-    expect(deps.updateCheckpointSelection).toHaveBeenCalledTimes(3)
-    // The chain is still usable after the failure: a fourth toggle builds on [A, C].
-    await user.click(stronger)
+    await waitFor(() => expect(skillFirst).toBeChecked())
+    expect(bonus).toBeChecked()
+    expect(skill).not.toBeChecked()
+    expect(latestEntry().intermediateStateSelection).toEqual({
+      ...base(),
+      bonusOpportunityId: ids.bonus,
+      improvementPreference: 'skill_first',
+    })
+    expect(deps.updateIntermediateStateSelection).toHaveBeenCalledTimes(3)
+    // The chain is still usable after the failure: a fourth change builds on {A, C}.
+    await user.click(skill)
     await waitFor(() => expect(attempts).toHaveLength(4))
-    expect(attempts[3].selected).toEqual([ids.alternative, ids.practical, ids.stronger])
+    expect(attempts[3].selection).toEqual({
+      ...base(),
+      bonusOpportunityId: ids.bonus,
+      skillOpportunityId: ids.skill,
+      improvementPreference: 'skill_first',
+    })
     attempts[3].resolve()
-    await waitFor(() => expect(stronger).toBeChecked())
+    await waitFor(() => expect(skill).toBeChecked())
   })
 
   it('starts the save after a first failure from the persisted selection, not from the failed one', async () => {
     const user = userEvent.setup()
-    // Persisted before the page opened: the Practical checkpoint (X). The ids
-    // are deterministic, so a throwaway fixture can name it.
+    // Persisted before the page opened: the Bonus state (X). The ids are
+    // deterministic, so a throwaway fixture can name it.
     const ids = chainFixture().ids
-    const persistedId = ids.practical
-    const fixture = chainFixture([persistedId])
+    const fixture = chainFixture({ bonusOpportunityId: ids.bonus })
     renderPage(fixture.deps)
-    const alternative = await screen.findByRole('checkbox', { name: names.alternative })
-    const stronger = screen.getByRole('checkbox', { name: names.stronger })
+    const skill = await screen.findByRole('checkbox', { name: SKILL_ONE })
+    const bonusFirst = screen.getByRole('radio', { name: '復元ボーナスを優先' })
 
-    await user.click(alternative)
-    await user.click(stronger)
-    expect(fixture.attempts[0].selected).toEqual([persistedId, ids.alternative])
+    await user.click(skill)
+    await user.click(bonusFirst)
+    expect(fixture.attempts[0].selection).toEqual({ ...base(), bonusOpportunityId: ids.bonus, skillOpportunityId: ids.skill })
     fixture.attempts[0].reject()
-    expect(await screen.findByText('チェックポイントの保存に失敗しました（テスト）')).toBeInTheDocument()
+    expect(await screen.findByText('途中採用状態の保存に失敗しました（テスト）')).toBeInTheDocument()
     await waitFor(() => expect(fixture.attempts).toHaveLength(2))
-    // B builds on the last persisted [X], not on the failed [X, A].
-    expect(fixture.attempts[1].selected).toEqual([persistedId, ids.stronger])
+    // B builds on the last persisted {X}, not on the failed {X, A}.
+    expect(fixture.attempts[1].selection).toEqual({ ...base(), bonusOpportunityId: ids.bonus, improvementPreference: 'bonus_first' })
     fixture.attempts[1].resolve()
-    await waitFor(() => expect(stronger).toBeChecked())
-    expect(alternative).not.toBeChecked()
-    expect(fixture.latestEntry().selectedCheckpointOpportunityIds).toEqual([persistedId, ids.stronger])
+    await waitFor(() => expect(bonusFirst).toBeChecked())
+    expect(skill).not.toBeChecked()
+    expect(fixture.latestEntry().intermediateStateSelection).toEqual({
+      ...base(),
+      bonusOpportunityId: ids.bonus,
+      improvementPreference: 'bonus_first',
+    })
   })
 
-  it('keeps the heading outline sequential down to the deepest checkpoint structure', async () => {
+  it('keeps the heading outline sequential down to the deepest selector structure', async () => {
     // The stronger Practical product arrives first, so the plain Practical
     // group (reached twice) is display-secondary and carries a later arrival.
     const candidate = checkpointCandidate([
@@ -919,20 +943,22 @@ describe('BuildListPage checkpoint save chain recovery', () => {
     renderPage(deps)
 
     expect(await screen.findByRole('heading', { level: 4, name: '理想候補' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 5, name: '途中で利用可能な妥協チェックポイント' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 6, name: 'チェックポイント 1' })).toBeInTheDocument()
-    // Below h6 nothing becomes a new heading: the disclosures keep their
-    // toggles, and the secondary group title is labelled text.
+    expect(screen.getByRole('heading', { level: 5, name: '途中採用できる状態と改善優先' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 6, name: '復元ボーナス候補' })).toBeInTheDocument()
+    // Below h6 nothing becomes a new heading: the group titles are labelled
+    // text and the disclosures keep their toggles.
+    expect(screen.getByText('復元ボーナス候補 1')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '復元ボーナス候補 1' })).not.toBeInTheDocument()
     const secondaryToggle = screen.getByRole('button', { name: 'その他の候補（1）' })
-    expect(screen.getByRole('heading', { level: 6, name: 'その他の候補（1）' })).toContainElement(secondaryToggle)
+    expect(secondaryToggle.closest('h6')).toBeNull()
     await userEvent.click(secondaryToggle)
-    expect(await screen.findByText('チェックポイント 3')).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'チェックポイント 3' })).not.toBeInTheDocument()
+    expect(await screen.findByText('復元ボーナス候補 3')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '復元ボーナス候補 3' })).not.toBeInTheDocument()
     const laterToggle = screen.getByRole('button', { name: 'その他の到達点（1）' })
     expect(laterToggle.closest('h6')).toBeNull()
     expect(screen.queryByRole('heading', { name: 'その他の到達点（1）' })).not.toBeInTheDocument()
     await userEvent.click(laterToggle)
-    expect(await screen.findByRole('checkbox', { name: '4手目（理想まで残り1操作）' })).toBeInTheDocument()
+    expect(await screen.findByRole('checkbox', { name: 'この途中状態を採用する: 復元ボーナス操作4回目（再抽選）の直後' })).toBeInTheDocument()
     // No heading level is skipped anywhere on the page.
     const levels = screen.getAllByRole('heading').map((heading) => Number(heading.tagName.slice(1)))
     for (let index = 1; index < levels.length; index += 1) {

@@ -15,17 +15,15 @@ import { nextHeadingLevel } from '../headingLevel'
 import { RestorationBonusSlots } from '../RestorationBonusSlots'
 import { StatusChip } from '../StatusChip'
 import {
-  CompromiseCheckpointList,
-  type CompromiseCheckpointSelectionContext,
-} from './CompromiseCheckpointList'
+  IntermediateStateSelector,
+  type IntermediateStateSelectionContext,
+} from './IntermediateStateSelector'
 import { SearchDefinitionItem, SearchDefinitionList } from './SearchDefinitionList'
 import { hasUsableMaterialCosts } from '../../domain/master/masterDataStatus'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import type {
   BuildCandidate,
-  CompromiseCheckpointGroup,
-  CompromiseCheckpointOpportunity,
-  CompromiseCheckpointOpportunityId,
+  IntermediateStateSelection,
   OwnedWeapon,
   SkillAmendmentResult,
   TargetWeapon,
@@ -64,26 +62,23 @@ interface CandidateCardProps {
    */
   buildListStatus?: 'added' | 'not_added'
   /**
-   * The compromise checkpoints the user has chosen to use.
+   * The intermediate states and improvement preference the user has chosen.
    *
-   * Checkpoints are a BuildListEntry input, never part of the Candidate, so the
-   * owner of the selection passes it in rather than the card holding it
-   * (`docs/DATA_MODEL.md` 9.4).
+   * They are a BuildListEntry input, never part of the Candidate, so the owner
+   * of the selection passes it in rather than the card holding it
+   * (`docs/DATA_MODEL.md` 9.4). Omitted means nothing is selected and the
+   * selector is read-only.
    */
-  selectedCheckpointOpportunityIds?: readonly CompromiseCheckpointOpportunityId[]
-  onToggleCheckpoint?: (
-    group: CompromiseCheckpointGroup,
-    opportunity: CompromiseCheckpointOpportunity,
-    selected: boolean,
-  ) => void
+  intermediateStateSelection?: IntermediateStateSelection
+  onIntermediateStateSelectionChange?: (selection: IntermediateStateSelection) => void
   /**
-   * Which screen the editable checkpoint explanation is written for. The
+   * Which screen the editable selection explanation is written for. The
    * Search screen is the default; the Build List, where the Candidate is
    * already registered, passes `build_list`.
    */
-  checkpointSelectionContext?: CompromiseCheckpointSelectionContext
+  intermediateStateSelectionContext?: IntermediateStateSelectionContext
   /**
-   * Heading level of the card heading. Detail and checkpoint sections take
+   * Heading level of the card heading. Detail and selection sections take
    * the following levels, so the outline stays sequential where the card is
    * embedded under a Target group heading (Build List) or directly under a
    * section heading (Search).
@@ -115,9 +110,13 @@ export function CandidateCard({
   addDisabled = false,
   addFeedback,
   buildListStatus,
-  selectedCheckpointOpportunityIds = [],
-  onToggleCheckpoint,
-  checkpointSelectionContext = 'search',
+  intermediateStateSelection = {
+    skillOpportunityId: null,
+    bonusOpportunityId: null,
+    improvementPreference: 'planner',
+  },
+  onIntermediateStateSelectionChange,
+  intermediateStateSelectionContext = 'search',
   headingLevel = 'h3',
 }: CandidateCardProps) {
   const headingId = useId()
@@ -360,17 +359,17 @@ export function CandidateCard({
             </Stack>
           </DisclosureAccordion>
 
-          {/* A checkpoint is an intermediate state of this very Route, so it
-              is shown on the Candidate that owns it rather than as a separate
-              result (`docs/UI_FLOW.md` 9). */}
-          <CompromiseCheckpointList
-            groups={candidate.checkpointGroups ?? []}
+          {/* An intermediate state belongs to this very Route, so it is shown
+              on the Candidate that owns it rather than as a separate result
+              (`docs/UI_FLOW.md` 9). */}
+          <IntermediateStateSelector
+            candidate={candidate}
             weaponTypeId={weaponTypeId}
             master={master}
-            selectedOpportunityIds={selectedCheckpointOpportunityIds}
-            onToggle={onToggleCheckpoint}
+            selection={intermediateStateSelection}
+            onChange={onIntermediateStateSelectionChange}
             headingLevel={sectionLevel}
-            selectionContext={checkpointSelectionContext}
+            selectionContext={intermediateStateSelectionContext}
           />
 
           <Divider />
@@ -379,11 +378,11 @@ export function CandidateCard({
               理想品の完成: {candidate.estimatedOperationCount}手目（この候補の最終状態）
             </Typography>
             {/* State-derived, permanent guidance for an already-added Candidate
-                (`docs/UI_FLOW.md` 9): the Build List owns its checkpoint
-                selection, and this screen's draft never overwrites it. */}
+                (`docs/UI_FLOW.md` 9): the Build List owns its selection, and
+                this screen's draft never overwrites it. */}
             {buildListStatus === 'added' && (
               <Alert severity="info">
-                この候補は作成リストに追加済みです。チェックポイントは作成リストで変更してください。
+                この候補は作成リストに追加済みです。途中採用する状態と改善優先は作成リストで変更してください。
               </Alert>
             )}
             {onAdd && (

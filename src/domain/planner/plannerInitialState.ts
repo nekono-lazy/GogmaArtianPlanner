@@ -6,6 +6,7 @@ import type {
   ValidatedBuildListEntry,
 } from './plannerTypes'
 import { derivePlannerCheckpointRequirements } from './plannerCheckpoints'
+import { initialPlannerLaneProgress, type PlannerLaneProgress } from './plannerRouteLanes'
 import { createSimulatedInventory } from './simulatedInventory'
 import {
   areAllEnabledTargetsAlreadySatisfied,
@@ -25,11 +26,11 @@ export function createInitialPlannerSearchState(input: PlannerInput, validEntrie
   if (!inventory.isValid || inventory.inventory === null) {
     return { isValid: false, state: null, issues: inventory.issues, warnings: [] }
   }
-  const routeProgressByEntryId: Record<string, number> = {}
+  const routeProgressByEntryId: Record<string, PlannerLaneProgress> = {}
   const routeRuntimeByEntryId: PlannerSearchState['routeRuntimeByEntryId'] = {}
   const routeSourceVersionByEntryId: PlannerSearchState['routeSourceVersionByEntryId'] = {}
   validEntries.forEach(({ entry }) => {
-    routeProgressByEntryId[entry.id] = 0
+    routeProgressByEntryId[entry.id] = initialPlannerLaneProgress()
     routeRuntimeByEntryId[entry.id] = { hasUnregisteredGogmaOutput: false, transientRestorationBonusScope: null }
     if (
       entry.candidateSnapshot.route.kind.startsWith('existing_gogma') &&
@@ -59,7 +60,7 @@ export function createInitialPlannerSearchState(input: PlannerInput, validEntrie
     .requirements.requiredEntryIdByTargetId.forEach((entryId, targetId) => {
       if (targetSatisfactionById[targetId]?.hasIdeal !== true) return
       const message =
-        `TargetWeapon '${targetId}' already holds an Ideal weapon, but BuildListEntry '${entryId}' carries a selected compromise checkpoint. Clear that checkpoint selection in the Build List before planning.`
+        `TargetWeapon '${targetId}' already holds an Ideal weapon, but BuildListEntry '${entryId}' carries a selected intermediate state. Clear that selection in the Build List before planning.`
       alreadyIdealIssues.push({ path: 'buildListEntries', code: 'invalid_state', message })
       alreadyIdealWarnings.push({ kind: 'selected_checkpoint_target_already_ideal', message })
     })
@@ -85,10 +86,11 @@ export function createInitialPlannerSearchState(input: PlannerInput, validEntrie
     routeSourceVersionByEntryId,
     inFlightExistingSourceByOwnedWeaponId: {},
     securedOwnedWeaponIdByEntryId: {},
-    reachedCheckpointOpportunityIdsByEntryId: {},
+    reachedCheckpointByEntryId: {},
     trace: [],
     weaponSwitchCount: 0,
     preferredSourceProgressCount: 0,
+    improvementPreferenceViolationCount: 0,
     lastWeaponOperationSubjectKey: null,
     totalCost: 0,
     evaluationScore: 0,

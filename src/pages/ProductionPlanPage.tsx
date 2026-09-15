@@ -316,7 +316,7 @@ function ConflictItem({
                 color="inherit"
                 sx={{ minHeight: 44 }}
               >
-                ビルドリストでチェックポイントを変更
+                ビルドリストで途中採用する状態を変更
               </Button>
             </Stack>
           </Alert>

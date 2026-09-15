@@ -26,6 +26,7 @@ import type {
   WeaponTypeMaster,
 } from '../master/masterTypes'
 import type { RngEngine } from '../rng/rngEngine'
+import type { PlannerLaneProgress } from './plannerRouteLanes'
 
 export interface PlannerOptions {
   maxPlanSteps: number
@@ -249,7 +250,13 @@ export interface PlannerSearchState {
   simulatedInventory: SimulatedInventory
   targetSatisfaction: Record<TargetWeaponId, PlannerTargetSatisfaction>
   selectedBuildListEntryIds: BuildListEntryId[]
-  routeProgressByEntryId: Record<string, number>
+  /**
+   * Units executed or silently passed per lane of each Entry's Route
+   * (`docs/PLANNER_SPEC.md` 7.0.4). The base lane runs first; the Bonus and
+   * Skill lanes advance independently, so the same Route can be executed in
+   * many interleavings.
+   */
+  routeProgressByEntryId: Record<string, PlannerLaneProgress>
   routeRuntimeByEntryId: Record<string, PlannerRouteRuntimeState>
   /** Incremented whenever an existing Gogma's physical state is changed in-flight. */
   sourceMutationVersionByOwnedWeaponId: Record<string, number>
@@ -261,14 +268,14 @@ export interface PlannerSearchState {
   inFlightExistingSourceByOwnedWeaponId: Record<string, true>
   securedOwnedWeaponIdByEntryId: Record<string, OwnedWeaponId>
   /**
-   * Which selected compromise checkpoints this branch has actually reached, as
-   * `entryId -> reached checkpoint opportunity ids`.
+   * Which Entries' compromise checkpoints this branch has actually reached:
+   * the moment both lanes held their pinned state at once.
    *
    * A hard constraint's progress record, not a score: a branch may only secure
-   * an Entry's Candidate once every checkpoint the user selected for it has
+   * an Entry's Candidate once the checkpoint the user selected for it has
    * really been reached (`docs/PLANNER_SPEC.md` 7.5.3).
    */
-  reachedCheckpointOpportunityIdsByEntryId: Record<string, string[]>
+  reachedCheckpointByEntryId: Record<string, true>
   trace: PlannerSearchAction[]
   /**
    * How many times the player has to put one weapon down and pick another one
@@ -290,6 +297,18 @@ export interface PlannerSearchState {
    */
   preferredSourceProgressCount: number
   /**
+   * How many stream-lane operations this branch executed against an Entry's
+   * improvement preference: a Bonus amendment while a `skill_first` Entry
+   * still had Skill lane units left, or the mirror image, counted only once
+   * that Entry's compromise checkpoint was reached (or from the start when it
+   * selected none).
+   *
+   * Plan preference only, never correctness or feasibility: it sits below the
+   * preferred-source preference and above `weaponSwitchCount` in
+   * `comparePlannerSearchStates()` (`docs/PLANNER_SPEC.md` 7.6).
+   */
+  improvementPreferenceViolationCount: number
+  /**
    * The weapon subject of the most recent switch-counted operation, or `null`
    * before the branch has run one. Operations with no continuously operated
    * subject - `reserve_weapon` above all - leave it untouched, so they never
@@ -310,8 +329,9 @@ export type PlannerSearchRejectionReason =
   | 'candidate_already_satisfied'
   | 'rng_contract_unavailable'
   /**
-   * A compromise checkpoint the user selected for this BuildListEntry was not
-   * reached, so its Candidate may not be secured (PLANNER_SPEC 7.5.3).
+   * The compromise checkpoint the user selected for this BuildListEntry was
+   * not reached: its Candidate may not be secured yet, and a lane may not run
+   * past its pinned state before the other lane arrived (PLANNER_SPEC 7.5.3).
    */
   | 'selected_checkpoint_not_reached'
 
@@ -382,8 +402,8 @@ export type PlannerWarningKind =
   | 'selected_checkpoint_target_already_ideal'
   | 'selected_checkpoint_fixes_target_entry'
   /**
-   * A BuildListEntry's `selectedCheckpointOpportunityIds` is structurally
-   * invalid (unknown id, two of one group, a duplicate). The Planner input
+   * A BuildListEntry's `intermediateStateSelection` is structurally invalid
+   * (unknown id, an id of the other lane, both lane starts). The Planner input
    * fails closed with a validation issue; the selection is never read as
    * empty (PLANNER_SPEC 7.5.9).
    */

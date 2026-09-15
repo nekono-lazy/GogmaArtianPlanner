@@ -197,7 +197,7 @@ describe('constrained Candidate metadata', () => {
     // nothing can reconstruct its intermediate states: the result is an empty
     // checkpoint set rather than an invented one
     // (`docs/PLANNER_SPEC.md` 9.2.13).
-    expect(materialized.checkpointGroups).toEqual([])
+    expect(materialized.intermediateStateGroups).toEqual([])
   })
 
   it('is deterministic across identical materializations', () => {

@@ -1,5 +1,9 @@
 import type { ArtianBonusScope, MasterDataRoot } from '../../domain/master/masterTypes'
-import type { RestorationBonus } from '../../domain/models/publicTypes'
+import type {
+  BuildCandidate,
+  IntermediateStateOpportunity,
+  RestorationBonus,
+} from '../../domain/models/publicTypes'
 export {
   compromiseCheckpointBadgeLabel,
   getRouteOperationLabel as operationLabel,
@@ -59,6 +63,41 @@ export function seriesSkillLabel(id: string | null, master: MasterDataRoot): str
 export function groupSkillLabel(id: string | null, master: MasterDataRoot): string {
   if (id === null) return 'なし'
   return master.groupSkills.find((skill) => skill.id === id)?.displayNameJa ?? '不明なグループスキル'
+}
+
+const bonusOperationLabels = {
+  reset_bonuses: '再抽選',
+  keep_bonuses: '保持して再抽選',
+} as const
+
+/** The lane position of one intermediate state, in the words of the game operation. */
+export function intermediateOpportunityLabel(
+  candidate: BuildCandidate,
+  opportunity: IntermediateStateOpportunity,
+): string {
+  const hasConversion = candidate.route.operations.some(
+    ({ type }) => type === 'convert_normal_to_gogma',
+  )
+  if (opportunity.axis === 'skill') {
+    if (opportunity.lanePosition === 0) {
+      return hasConversion
+        ? '巨戟化直後のスキル（スキルリセット0回）'
+        : '現在のスキルのまま（スキルリセット0回）'
+    }
+    return `スキルリセット${opportunity.lanePosition}回目の直後`
+  }
+  if (opportunity.lanePosition === 0) {
+    return '現在の復元ボーナスのまま（復元ボーナス操作0回）'
+  }
+  const operation =
+    opportunity.operationIndex === null
+      ? undefined
+      : candidate.route.operations[opportunity.operationIndex]
+  const operationLabel =
+    operation?.type === 'reset_bonuses' || operation?.type === 'keep_bonuses'
+      ? `（${bonusOperationLabels[operation.type]}）`
+      : ''
+  return `復元ボーナス操作${opportunity.lanePosition}回目${operationLabel}の直後`
 }
 
 export function materialLabel(id: string, master: MasterDataRoot): string {

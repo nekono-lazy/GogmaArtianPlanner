@@ -19,10 +19,7 @@ import {
 } from '../models/publicTypes'
 import { createTargetDefinitionHash } from '../buildList'
 import { runPlannerBeamSearch } from './plannerBeamSearch'
-import {
-  derivePlannerCheckpointRequirements,
-  selectedCheckpointsForEntry,
-} from './plannerCheckpoints'
+import { derivePlannerCheckpointRequirements } from './plannerCheckpoints'
 import {
   replayPlannerSearchTrace,
   type PlannerPlanStepDraft,
@@ -117,13 +114,16 @@ export function createPlanningBuildListEntriesHash(
       .map((entry) => ({
         id: entry.id,
         candidateSnapshot: normalizeCandidateSnapshot(entry.candidateSnapshot),
-        // The user's selected compromise checkpoints are a hard Planner
-        // constraint, so changing the selection changes what this Plan had to
-        // achieve and must make an existing Plan a recalculation target
-        // (`docs/PLANNER_SPEC.md` 7.5.5).
-        selectedCheckpointOpportunityIds: [
-          ...(entry.selectedCheckpointOpportunityIds ?? []),
-        ].sort(compareStableStrings),
+        // The user's selected intermediate states are a hard Planner
+        // constraint and the improvement preference steers the Plan, so
+        // changing either changes what this Plan had to achieve and must make
+        // an existing Plan a recalculation target (`docs/PLANNER_SPEC.md` 7.5.5).
+        intermediateStateSelection: {
+          skillOpportunityId: entry.intermediateStateSelection?.skillOpportunityId ?? null,
+          bonusOpportunityId: entry.intermediateStateSelection?.bonusOpportunityId ?? null,
+          improvementPreference:
+            entry.intermediateStateSelection?.improvementPreference ?? 'planner',
+        },
         targetDefinitionHash: entry.targetDefinitionHash,
         searchStateHash: entry.searchStateHash,
         referencedOwnedWeaponsHash: entry.referencedOwnedWeaponsHash,
@@ -602,10 +602,10 @@ function beamInputEntries(
 /**
  * Fail-closed defence behind the Beam Search (PLANNER_SPEC 7.5.6): a Plan that
  * claims completion must secure every required checkpoint Entry, and every
- * secured Entry's selected checkpoints must appear as milestones on the real
- * Steps that reached them. The Beam Search and Trace Replay already guarantee
- * both; a Plan that violates either is an internal inconsistency, never a
- * Draft.
+ * secured required Entry's compromise checkpoint must appear as a milestone
+ * on the real Step that reached it. The Beam Search and Trace Replay already
+ * guarantee both; a Plan that violates either is an internal inconsistency,
+ * never a Draft.
  */
 function assertCheckpointRequirementsSatisfied(
   entries: readonly BuildListEntry[],
@@ -616,10 +616,7 @@ function assertCheckpointRequirementsSatisfied(
   const selected = new Set(selectedBuildListEntryIds)
   const reached = new Set(
     steps.flatMap((step) =>
-      (step.checkpointMilestones ?? []).map(
-        ({ buildListEntryId, checkpointOpportunityId }) =>
-          `${buildListEntryId}\u0000${checkpointOpportunityId}`,
-      ),
+      (step.checkpointMilestones ?? []).map(({ buildListEntryId }) => buildListEntryId),
     ),
   )
   const { requirements } = derivePlannerCheckpointRequirements(entries)
@@ -632,15 +629,11 @@ function assertCheckpointRequirementsSatisfied(
       }
       return
     }
-    const entry = entries.find(({ id }) => id === entryId)
-    if (!entry) return
-    selectedCheckpointsForEntry(entry).forEach(({ opportunity }) => {
-      if (!reached.has(`${entryId}\u0000${opportunity.id}`)) {
-        throw new PlannerPlanGenerationError(
-          `Planner secured BuildListEntry '${entryId}' without a Step reaching its selected checkpoint '${opportunity.id}'.`,
-        )
-      }
-    })
+    if (!reached.has(entryId)) {
+      throw new PlannerPlanGenerationError(
+        `Planner secured BuildListEntry '${entryId}' without a Step reaching its selected compromise checkpoint.`,
+      )
+    }
   })
 }
 

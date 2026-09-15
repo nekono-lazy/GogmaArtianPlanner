@@ -172,9 +172,9 @@ describe('Canonical Ideal ordering', () => {
     // Checkpoints are derived from the chosen Route, so letting them choose the
     // Route would make the canonical Ideal depend on its own output
     // (`docs/SEARCH_SPEC.md` 5.8.6).
-    const withCheckpoints = candidate('with', { checkpointGroups: [] })
+    const withCheckpoints = candidate('with', { intermediateStateGroups: [] })
     const base = candidate('without')
-    delete base.checkpointGroups
+    delete base.intermediateStateGroups
     expect(compareCanonicalIdeals(withCheckpoints, base)).toBe(0)
     expect(compareCanonicalIdeals(base, withCheckpoints)).toBe(0)
   })

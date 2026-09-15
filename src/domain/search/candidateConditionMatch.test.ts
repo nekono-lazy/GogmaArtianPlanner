@@ -46,11 +46,11 @@ describe('Candidate acceptance is Ideal-only', () => {
     expect(record.similarityScore).toBeUndefined()
     expect(record.isSimilarToIdeal).toBeUndefined()
     expect(validateBuildCandidate(candidate, input.ownedWeapons).isValid).toBe(true)
-    expect(createBuildListEntry(candidate, target).candidateSnapshot.checkpointGroups)
-      .toEqual(candidate.checkpointGroups)
+    expect(createBuildListEntry(candidate, target).candidateSnapshot.intermediateStateGroups)
+      .toEqual(candidate.intermediateStateGroups)
   })
 
-  it('keeps checkpoint groups out of every Candidate identity', () => {
+  it('keeps intermediate state groups out of every Candidate identity', () => {
     const input = createCandidateSearchInput(), target = input.targetWeapons[0]
     input.ownedWeapons[0].isProtected = false
     const candidate = createCandidateFromPrediction(target, {
@@ -60,7 +60,7 @@ describe('Candidate acceptance is Ideal-only', () => {
     }, input, createSearchExecutionContext())
     if (!candidate) throw new Error('Expected accepted Candidate')
     const historical = structuredClone(candidate)
-    delete historical.checkpointGroups
+    delete historical.intermediateStateGroups
     expect(candidateStableKey(historical)).toBe(candidateStableKey(candidate))
     expect(candidateDeduplicationKey(historical)).toBe(candidateDeduplicationKey(candidate))
     expect(createBuildCandidateMeaningFingerprint(historical)).toBe(createBuildCandidateMeaningFingerprint(candidate))

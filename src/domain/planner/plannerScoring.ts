@@ -7,6 +7,7 @@ import type {
 import { stableStringify } from '../models/publicTypes'
 import type { PlannerCheckpointRequirements } from './plannerCheckpoints'
 import { entryIsRelevantForState } from './plannerEntryRelevance'
+import { totalPlannerLaneProgress } from './plannerRouteLanes'
 import type {
   CandidateScore,
   PlannerSearchState,
@@ -84,7 +85,8 @@ function progressPotentialScore(
     // Entry the requirement excludes never had any.
     if (!entryIsRelevantForState(state, entry, checkpointRequirements)) return
     const unitCount = routeUnitCountByEntryId.get(entry.id) ?? 0
-    const progress = state.routeProgressByEntryId[entry.id] ?? 0
+    const laneProgress = state.routeProgressByEntryId[entry.id]
+    const progress = laneProgress === undefined ? 0 : totalPlannerLaneProgress(laneProgress)
     if (unitCount <= 0 || progress <= 0) return
     const candidateScore = scoreCandidate(
       state,
@@ -165,16 +167,17 @@ function normalizedOwnedWeapons(state: PlannerSearchState) {
 /**
  * IDs reserved during search and timestamps are deliberately excluded.
  *
- * `weaponSwitchCount`, `lastWeaponOperationSubjectKey`, and
- * `preferredSourceProgressCount` are deliberately excluded too, and their
- * exclusion loses nothing. All three are pure functions of the trace projection
+ * `weaponSwitchCount`, `lastWeaponOperationSubjectKey`,
+ * `preferredSourceProgressCount`, and `improvementPreferenceViolationCount`
+ * are deliberately excluded too, and their exclusion loses nothing. All four
+ * are pure functions of the trace projection
  * already keyed below: each action's `primaryBuildListEntryId` and
  * `progressedBuildListEntryIds` plus its `progressedRoutePositions` pin the
  * exact saved `RouteOperation`, and therefore its weapon subject and which
  * Entries it progressed. Two states sharing this key therefore always share all
- * three values, so deduplication identity, future switch accounting, the
- * preferred-source preference, and the deterministic tie-break stay consistent
- * without restating them (`docs/PLANNER_SPEC.md` 7.3 / 7.4).
+ * four values, so deduplication identity, future switch accounting, the two
+ * user preferences, and the deterministic tie-break stay consistent without
+ * restating them (`docs/PLANNER_SPEC.md` 7.3 / 7.4 / 7.6).
  */
 export function createPlannerSearchStateSemanticKey(
   state: PlannerSearchState,
@@ -200,8 +203,7 @@ export function createPlannerSearchStateSemanticKey(
     routeSourceVersionByEntryId: state.routeSourceVersionByEntryId,
     inFlightExistingSourceByOwnedWeaponId:
       state.inFlightExistingSourceByOwnedWeaponId,
-    reachedCheckpointOpportunityIdsByEntryId:
-      state.reachedCheckpointOpportunityIdsByEntryId,
+    reachedCheckpointByEntryId: state.reachedCheckpointByEntryId,
     selectedBuildListEntryIds: [...state.selectedBuildListEntryIds].sort(
       compareStableStrings,
     ),
@@ -241,6 +243,20 @@ export function comparePlannerSearchStates(
   // reverse a cheaper Route (docs/PLANNER_SPEC.md 7.4).
   if (left.preferredSourceProgressCount !== right.preferredSourceProgressCount) {
     return right.preferredSourceProgressCount - left.preferredSourceProgressCount
+  }
+  // The user's improvement preference, below every existing evaluation term
+  // and the preferred-source preference, above the automatic weapon-switch
+  // heuristic: among equally rated branches, prefer the one that improved the
+  // lane the user asked for first. Soft by construction - it can never beat a
+  // cheaper or more complete Plan (docs/PLANNER_SPEC.md 7.6).
+  if (
+    left.improvementPreferenceViolationCount !==
+    right.improvementPreferenceViolationCount
+  ) {
+    return (
+      left.improvementPreferenceViolationCount -
+      right.improvementPreferenceViolationCount
+    )
   }
   // Plan quality, below the preferred-source preference and above the two
   // stable string tie-breaks: among Plans the existing evaluation already rates

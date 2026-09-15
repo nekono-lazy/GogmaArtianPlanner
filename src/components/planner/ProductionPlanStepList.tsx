@@ -5,6 +5,8 @@ import type {
   TargetWeaponId,
 } from '../../domain/models/publicTypes'
 import {
+  compromiseBonusMatchLabels,
+  compromiseSkillMatchLabels,
   planStepOperationLabels,
   restorationBonusScopeFieldLabel,
   restorationBonusScopeLabels,
@@ -192,12 +194,13 @@ export function ProductionPlanStepCard({
                 <Typography
                   component="li"
                   variant="body2"
-                  key={`${milestone.buildListEntryId}:${milestone.checkpointOpportunityId}:${index}`}
+                  key={`${milestone.buildListEntryId}:${index}`}
                   className="tabular-nums"
                   sx={{ overflowWrap: 'anywhere' }}
                 >
                   <TargetWeaponReference targetWeaponId={milestone.targetWeaponId} lookup={lookup} />
-                  （理想まで残り{milestone.remainingOperationCount}操作）
+                  （ボーナス判定: {compromiseBonusMatchLabels[milestone.conditionMatch.bonus]} ／ スキル判定:{' '}
+                  {compromiseSkillMatchLabels[milestone.conditionMatch.skill]}、理想まで残り{milestone.remainingOperationCount}操作）
                   {debugMode && (
                     <Typography
                       component="span"
@@ -205,7 +208,7 @@ export function ProductionPlanStepCard({
                       color="text.secondary"
                       sx={{ display: 'block', overflowWrap: 'anywhere' }}
                     >
-                      BuildListEntry ID: {milestone.buildListEntryId} ／ group: {milestone.checkpointGroupId} ／ opportunity: {milestone.checkpointOpportunityId}
+                      BuildListEntry ID: {milestone.buildListEntryId} ／ skill: {milestone.skillOpportunityId ?? 'ideal'} ／ bonus: {milestone.bonusOpportunityId ?? 'ideal'}
                     </Typography>
                   )}
                 </Typography>

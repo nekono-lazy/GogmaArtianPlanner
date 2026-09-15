@@ -133,9 +133,9 @@ export interface PlannerClock {
   現在状態から再validationし、実行可能なBuildListEntryだけを使用する
 - PlannerはBuildListEntryの `candidateSnapshot` を入力候補として使う
 - Planner入力validationでTarget定義Hash、searchStateHash、referencedOwnedWeaponsHash、CalculationContextを現在値から再確認し、保存済み `isStale` だけを信用しない
-- Planner入力validationは各BuildListEntryの `selectedCheckpointOpportunityIds` を
-  共有Domain関数 `validateBuildListEntryCheckpointSelection()` で検証し、未知ID・
-  同一group複数選択・重複IDはPlanner入力全体をfail closedする（7.5.9）
+- Planner入力validationは各BuildListEntryの `intermediateStateSelection` を
+  共有Domain関数 `validateBuildListEntryIntermediateStateSelection()` で検証し、未知ID・
+  別laneのID・未知の改善優先・両lane開始状態の同時選択はPlanner入力全体をfail closedする（7.5.9）
 - RngState全体の確定は要求しない
 - `deriveRngCapabilities(rngState, normalCounters, requiredOperations, engineCapabilities)` で、各BuildListEntryの全RouteOperationに必要なKnownValueと現在Engineのsupportが揃うか確認する
 - conversionだけのEntryはSkill Prediction、確定Base Seed / Skill Counter、concrete semantic input supportを要求し、persisted Counter Gate、Gogma Prediction、Gogma Counterを要求しない
@@ -509,6 +509,30 @@ runtimeの物理効果として次を行う。
 物理的に正しい。blind unitはCounter位置競合のparticipantではないため、この実行順は
 conflict resolutionではなくBeam Searchの探索が決める。
 
+##### Route lane: Bonus laneとSkill laneのinterleave（7.0.4）
+
+Route unitは3つのlaneへ分割して実行する（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.8）。
+
+```text
+base lane   create_normal_artian / convert_normal_to_gogma   必ず先頭で順に実行する
+bonus lane  reset_bonuses / keep_bonuses                       Gogma streamの順序を保つ
+skill lane  reset_skills                                       Skill streamの順序を保つ
+```
+
+`PlannerSearchState.routeProgressByEntryId` はEntryごとに `{ base, bonus, skill }` のlane進行を
+保持する。base lane完了後、bonus laneとskill laneの物理的な実行順序はRouteが固定せず、
+Plannerが決める。Beam Searchは各展開でEntryごとに1 laneだけを進める: 改善優先
+（7.6。`planner` はbonus lane）のlaneを先に試し、そのunitが現在stateで実行できない
+（counter precondition、inventory precondition、conflict resolution block、required unit
+dominance、7.5.2のpin gating）場合だけもう片方のlaneを展開する。これによりRoute内部の
+interleave数がbeamを乗算せず、それでも優先laneが待ちに入っているときはもう片方が進む。
+
+`canSkipWhenCounterPassed` の「直後の操作」は同一lane内の次の操作で判定する。別laneの操作は
+このunitの出力を読まないため、間に挟まっても観測されたことにならない。
+
+Trace ReplayはBeam Searchのtraceどおりに操作を再生するだけであり、lane分割の影響を受けない。
+`RouteOperation`、`BuildRoute`、`BuildCandidate`、`ProductionPlan`、DB schemaへlaneを永続化しない。
+
 ##### Conflict判定と実行順序の支配関係
 
 同じCounter位置に複数Entryのunitがあるだけでは競合ではない。skip可能unitはその位置を
@@ -811,10 +835,11 @@ correctness / feasibilityより下位のPlan quality preferenceを1つ定義す�
 
 ```text
 correctness / feasibility
-  -> 選択済みcheckpointの充足（hard constraint、7.5）
+  -> 選択済み途中採用状態の充足（hard constraint、7.5）
   -> Target satisfaction
   -> 既存evaluationScore（Target priority、satisfaction、resource cost、action count、conflict）
   -> preferred source match（7.4）
+  -> improvementPreferenceViolationCount 昇順（7.6）
   -> weaponSwitchCount 昇順
   -> 既存semantic stable tie-break
   -> 既存trace stable tie-break
@@ -924,9 +949,10 @@ Target priority、operation / resource / conflict cost、実行可能性はす�
 #### 優先順位
 
 ```text
-選択済みcheckpointの充足
+選択済み途中採用状態の充足
   -> 既存evaluationScore / correctness / cost
   -> preferred source match
+  -> improvementPreferenceViolationCount（7.6）
   -> weaponSwitchCount
   -> semantic stable tie-break
   -> trace stable tie-break
@@ -989,59 +1015,78 @@ Target Satisfactionは従来どおり武器種、属性、実際のボーナス�
 Target AがWeapon Xを優先起点にしていても、条件を満たすWeapon YによってTarget Aが
 Ideal satisfiedになってよい。
 
-### 7.5 選択済みcompromise checkpointの扱い
+### 7.5 選択済み途中採用状態と妥協checkpoint
 
-`BuildListEntry.selectedCheckpointOpportunityIds`（[DATA_MODEL.md](./DATA_MODEL.md) 9.4）は
-**hard constraint** である。Plannerはこれを無視・解除・別opportunityへの読み替えの
-いずれも行わない。できるのは「それを満たすPlanを作れない」と報告することだけである。
+`BuildListEntry.intermediateStateSelection`（[DATA_MODEL.md](./DATA_MODEL.md) 9.4）の
+`skillOpportunityId` / `bonusOpportunityId` は **hard constraint** である。Plannerはこれを
+無視・解除・別opportunityへの読み替えのいずれも行わない。できるのは「それを満たすPlanを
+作れない」と報告することだけである。`improvementPreference` はsoft preferenceであり7.6で扱う。
 
-#### 7.5.1 選択済みcheckpoint終端はfast-forwardしない
+#### 7.5.1 選択済みlane終端はfast-forwardしない
 
-選択したcheckpointが終わるRoute unitは、7.0.2のsilent fast-forward対象から外す。
-`canSkipWhenCounterPassed = false` とする。ユーザーはその瞬間に実際にその妥協武器を
+選択したopportunity（lane位置 `n >= 1`）を生むRoute unitは、7.0.2のsilent fast-forward対象から
+外す。`canSkipWhenCounterPassed = false` とする。ユーザーはその瞬間に実際にその武器を
 手に持つのだから、その状態は「直後に上書きされる未観測な中間状態」ではない。
+lane位置0の選択は操作を持たず、lane開始状態を保持することで表現する。
 
-選択されていないcheckpoint相当の中間unitは従来どおりskip可能である。
-選択したcheckpointより手前にあり、次の操作が出力全体を書き換えるprefix unitも
-従来どおりskip可能である。skipしてもcheckpoint状態そのものは変わらないためである。
+選択されていない中間unitは従来どおりskip可能である。選択したopportunityより手前にあり、
+同一laneの次の操作が出力全体を書き換えるprefix unitも従来どおりskip可能である。
 
-#### 7.5.2 checkpointはCounter競合の当事者になりうる
+#### 7.5.2 pinと妥協checkpoint
 
-7.0.2の通り、skip可能unitはCounter位置の競合参加者にならない。選択によって
-`canSkipWhenCounterPassed = false` になったunitは、通常の必須unitと同じく
-`same_gogma_counter` / `same_skill_counter` の当事者になる。
+Entryの選択から **pin** を導出する。
 
-したがって2武器が同じCounter位置で別々のcheckpointを選択し、その2 unitが
-1つの共有物理actionにならない場合、競合として報告する。ユーザーは作成リストで
-どちらかのcheckpointを別opportunityへ変更するか解除することで解消できる。
+```text
+pin.skill = 選択したSkill opportunityのlanePosition、未選択ならSkill laneの操作数（Ideal終点）
+pin.bonus = 選択したBonus opportunityのlanePosition、未選択ならBonus laneの操作数（Ideal終点）
+```
 
-1つの共有物理actionが複数Entryのcheckpointを同時に達成できる場合は、
-7.0の共有契約どおり1回だけ実行し、重複操作しない。
+妥協checkpointは、両laneが同時にpin状態を持った瞬間である。Plannerは次の順序制約を
+execution eligibilityとして課す（scoreではなくsemantic pruning）。
+
+```text
+lane L のunit（laneIndex k）は、k + 1 > pin[L] かつ progress[other] < pin[other] の間は実行しない
+silent fast-forwardも同じ条件でpinを越えない
+```
+
+したがって片laneがpinを越える前に、必ずもう片laneがpinへ到達する。両laneのpinへ到達した
+瞬間を `PlannerSearchState.reachedCheckpointByEntryId` に記録する。pin終端unitはskip不可なので、
+到達は必ず実物理actionで起こる。選択がまったく無いEntryにpinは無く、そのままIdealへ進む。
+
+片laneだけを選択した場合、もう片laneのpinはIdeal終点である。すなわち
+
+```text
+Skillのみ選択 -> 妥協checkpoint = 選択Skill + Ideal Bonus
+Bonusのみ選択 -> 妥協checkpoint = Ideal Skill + 選択Bonus
+両方選択      -> 妥協checkpoint = 選択Skill + 選択Bonus
+```
+
+checkpoint到達後の改善順序は固定しない。両laneの残りをどちらから進めるかは7.6のsoft
+preferenceが決め、全Planの成立性が優先される。
 
 #### 7.5.3 未到達のcheckpointはreserveを止める
 
-`reserve_weapon` の展開条件に、そのEntryの選択済みcheckpointをすべて実際に
-到達済みであることを加える。満たさない場合は
-`selected_checkpoint_not_reached` として拒否する。
-
-到達記録は `PlannerSearchState.reachedCheckpointOpportunityIdsByEntryId` が持つ。
-記録されるのは実際に実行されたunitだけである。checkpoint終端はfast-forwardされない
-ので、silent fast-forwardで到達済みになることはない。
+`reserve_weapon` の展開条件に、そのEntryの妥協checkpointへ実際に到達済みであることを加える。
+選択を持つEntryで未到達なら `selected_checkpoint_not_reached` として拒否する。
 
 同一groupの別opportunityへ到達しても、選択したopportunityの到達にはならない。
 Plannerが選択を勝手に読み替えないという契約はここで具体化される。
 
 #### 7.5.4 PlanStepはmilestoneを持つが、checkpoint専用Stepは作らない
 
-checkpointは新しい `PlanStepOperationType` ではない。到達を生む物理Step
-（Reset Bonusesなど）に `PlanStep.checkpointMilestones` を付ける。
+checkpointは新しい `PlanStepOperationType` ではない。両laneのpinを揃えた物理Step
+（Reset Bonuses / Reset Skillsなど）に `PlanStep.checkpointMilestones` を付ける。
 
 ```ts
 export interface PlanStepCheckpointMilestone {
   buildListEntryId: BuildListEntryId;
   targetWeaponId: TargetWeaponId;
-  checkpointGroupId: CompromiseCheckpointGroupId;
-  checkpointOpportunityId: CompromiseCheckpointOpportunityId;
+  /** 選択したSkill opportunity。未選択（Ideal終点）なら null */
+  skillOpportunityId: IntermediateStateOpportunityId | null;
+  /** 選択したBonus opportunity。未選択（Ideal終点）なら null */
+  bonusOpportunityId: IntermediateStateOpportunityId | null;
+  /** 到達した組み合わせの両軸判定。説明情報 */
+  conditionMatch: CompromiseConditionMatch;
   remainingOperationCount: number;
 }
 ```
@@ -1054,28 +1099,28 @@ export interface PlanStepCheckpointMilestone {
 - 1つの共有Stepが複数Entryのcheckpointを達成した場合、milestoneはEntryごとに
   1件ずつ並ぶ。Stepを複製しない
 
-Trace Replayは、milestoneを出す前に、そのRoute位置でreplayした状態が選択された
-opportunityの `restorationBonuses`（slot順まで）、`restorationBonusScope`、
-`seriesSkillId`、`groupSkillId` と一致することを検証する。一致しない場合は
-`checkpoint_state_mismatch` としてfail closeする。
+Trace Replayは、milestoneを出す前に、その時点でreplayした武器状態が選択Skill
+opportunityのSeries / Group Skill（未選択ならCandidate最終Skill）、選択Bonus opportunityの
+exact ordered 5枠とscope（未選択ならCandidateの `finalBonuses` / scope）と一致することを
+検証する。一致しない場合は `checkpoint_state_mismatch` としてfail closeする。到達判定は
+pin終端operationの実行有無で行い、silent fast-forwardで消えたunit数に依存しない。
 
 #### 7.5.5 選択変更とPlanのstale
 
-checkpoint選択はPlanの `PlanningInputSnapshot.buildListEntriesHash` に含める。
-選択を変えるとhashが変わるので、既存Planは通常のBuild List変更と同じく
+選択と改善優先はPlanの `PlanningInputSnapshot.buildListEntriesHash` に含める。
+変えるとhashが変わるので、既存Planは通常のBuild List変更と同じく
 再計算対象になる。一方でBuildListEntry自体はstaleにならない
 （[DATA_MODEL.md](./DATA_MODEL.md) 9.4）。
 
-#### 7.5.6 checkpoint-selected EntryはTargetのrequired Entry
+#### 7.5.6 選択を持つEntryはTargetのrequired Entry
 
-`selectedCheckpointOpportunityIds.length > 0` のBuildListEntryは、そのPlanner runに
-おける当該Targetの **required Entry** である。checkpoint選択は
-「このTargetではこのcanonical Ideal Route上の中間状態を必ず利用する」という
-ユーザー入力であり、同じTargetの別Entryで迂回できてはならない。
+どちらかのlaneを選択したBuildListEntryは、そのPlanner runにおける当該Targetの
+**required Entry** である。選択は「このTargetではこのcanonical Ideal Route上の途中状態を
+必ず利用する」というユーザー入力であり、同じTargetの別Entryで迂回できてはならない。
 
 required Entryを持つTargetについて、Plannerは次を保証する。
 
-- Targetの完了は、required Entry自身が選択済みcheckpointをすべて実到達し、その
+- Targetの完了は、required Entry自身が妥協checkpointへ実到達し、その
   Ideal Candidateを `reserve_weapon` でsecureしたときだけである。別Entry、別Target
   のEntry、または既存武器によって `hasIdeal = true` になっても、それだけでは
   Targetを完了扱いにしない
@@ -1098,52 +1143,49 @@ re-search / what-if（9.5.2）はすべてこの1つの導出を読む。どこ�
 「他Entryより高いscore」で優先する実装にしない。
 
 Plan生成後にも同じ不変条件をfail-closed defenseとして置く。`completed` を主張する
-Beam Searchの結果がrequired Entryをsecureしていない場合、またはsecure済みEntryの
-選択済みcheckpointに対応する `PlanStep.checkpointMilestones` が存在しない場合は
-`PlannerPlanGenerationError` として失敗し、Draft Planを作らない。
+Beam Searchの結果がrequired Entryをsecureしていない場合、またはsecure済みrequired Entryの
+`PlanStep.checkpointMilestones` が存在しない場合は `PlannerPlanGenerationError` として
+失敗し、Draft Planを作らない。
 
-#### 7.5.7 1 Targetにつきcheckpoint-selected Entryは最大1件
+#### 7.5.7 1 Targetにつき選択を持つEntryは最大1件
 
-同一TargetにBuildListEntryが複数存在すること自体は許可する。ただしcheckpointを
-選択したEntryが同一Targetに2件以上ある場合、ユーザーが2本のRouteを両方必須に
-したのか代替として選んだのかをPlannerは推測できない。
+同一TargetにBuildListEntryが複数存在すること自体は許可する。ただし選択を持つEntryが
+同一Targetに2件以上ある場合、ユーザーが2本のRouteを両方必須にしたのか代替として
+選んだのかをPlannerは推測できない。
 
 v1では保守的に、Planner入力のcollection-level invariantとして
 
 ```text
-1 Targetにつき selectedCheckpointOpportunityIds.length > 0 のBuildListEntryは最大1件
+1 Targetにつき intermediateStateSelection のどちらかのlaneを選択したBuildListEntryは最大1件
 ```
 
 を要求する（[DATA_MODEL.md](./DATA_MODEL.md) 9.4）。判定対象はvalidation後の
 valid Entry集合である。2件以上ある場合は `validatePlannerInput()` が
 `buildListEntries` のvalidation issueと `multiple_selected_checkpoint_entries`
-warningでfail closedし、Build Listで片方のcheckpoint選択を解除するよう案内する。
+warningでfail closedし、Build Listで片方の選択を解除するよう案内する。
 自動で片方を選ぶ、score・Candidate cost・入力順で決める、最初のEntryを採用する、
 のいずれも行わない。
 
-1つのEntry内で異なるcheckpoint groupを複数選択できる契約（1 groupにつき1件）は
-そのまま維持する。
+#### 7.5.8 既にIdeal所持のTargetに選択がある場合
 
-#### 7.5.8 既にIdeal所持のTargetにcheckpoint選択がある場合
-
-Planner開始時点で `hasIdeal = true` のTargetにrequired checkpoint Entryがある場合、
-Plannerはそのcheckpointを暗黙に捨てて正常終了してはならない。v1では安全側として、
+Planner開始時点で `hasIdeal = true` のTargetにrequired Entryがある場合、
+Plannerはその選択を暗黙に捨てて正常終了してはならない。v1では安全側として、
 `createInitialPlannerSearchState()` が `buildListEntries` のvalidation issue
 （`invalid_state`）と `selected_checkpoint_target_already_ideal` warningで
-Planner入力をfail closedし、「既に理想品を所持している目標武器のcheckpoint選択を
+Planner入力をfail closedし、「既に理想品を所持している目標武器の選択を
 Build Listで解除してください」と案内する。
 
-checkpoint選択の無いTargetが既にIdealを所持している場合は従来どおり
+選択の無いTargetが既にIdealを所持している場合は従来どおり
 （`all_targets_already_satisfied` など）である。
 
-#### 7.5.9 壊れたcheckpoint選択はPlanner入力をfail closedする
+#### 7.5.9 壊れた選択はPlanner入力をfail closedする
 
-`selectedCheckpointOpportunityIds` の構造違反（Candidate Snapshotに存在しない
-opportunity ID、同一groupからの複数選択、重複ID）は、
+`intermediateStateSelection` の構造違反（Candidate Snapshotに存在しないopportunity ID、
+別laneのID、未知の改善優先、両lane開始状態の同時選択）は、
 [DATA_MODEL.md](./DATA_MODEL.md) 9.4のDomain validationが拒否する。Planner入力
-validationも同じ共有関数 `validateBuildListEntryCheckpointSelection()` を各
+validationも同じ共有関数 `validateBuildListEntryIntermediateStateSelection()` を各
 BuildListEntryへ適用し、違反があればそのEntryを含むPlanner入力全体を
-`buildListEntries.<id>.selectedCheckpointOpportunityIds` のvalidation issueと
+`buildListEntries.<id>.intermediateStateSelection` のvalidation issueと
 `invalid_checkpoint_selection` warningでfail closedする。
 
 - 壊れた選択を「選択なし」と解釈してBeam Searchへ入れない
@@ -1153,7 +1195,55 @@ BuildListEntryへ適用し、違反があればそのEntryを含むPlanner入力
   この検証はstalenessではなく、現在入力の構造検証である
 - 正しい選択を持つEntryと選択のないEntryは従来どおり動作する
 
----
+### 7.6 Plan preference: 理想品までの改善優先
+
+`BuildListEntry.intermediateStateSelection.improvementPreference`
+（`planner | skill_first | bonus_first`）は、妥協checkpoint到達後（選択が無いEntryでは
+Route開始から）にSkill laneとBonus laneのどちらを先に理想へ近づけるかのユーザー希望である。
+これは **soft preference** であり、hard constraintではない。
+
+#### 優先順位
+
+```text
+correctness / feasibility
+  -> 選択済み途中採用状態の充足（7.5）
+  -> Target satisfaction
+  -> Counter / source / inventory feasibility
+  -> 複数Target全体のPlan成立
+  -> 既存evaluationScore / cost / conflict評価
+  -> preferred source match（7.4）
+  -> improvementPreferenceViolationCount 昇順
+  -> weaponSwitchCount（7.3）
+  -> stable tie-break
+```
+
+#### metric
+
+`PlannerSearchState.improvementPreferenceViolationCount` をincremental runtime stateとして持つ。
+物理actionで進んだ各Entryについて、その改善優先が `planner` でなく、そのEntryの
+checkpointが到達済み（選択が無ければ常に）で、実行したunitが非優先laneであり、かつ優先lane
+に残りunitがある場合に +1 する。base laneのunit、silent fast-forward、`reserve_weapon` は
+数えない。`createPlannerSearchStateSemanticKey()` へは入れない（trace projectionの純粋関数）。
+
+#### Beam Searchへの影響
+
+7.0.4のとおり、各展開はEntryごとに優先laneを先に試し、優先laneのunitが現在stateで実行できない
+場合だけもう片方のlaneを展開する。優先laneが待ちに入る典型は、必要なCounter位置へ
+まだ到達していない、別Entryの必須unitがその位置を先に消費する、conflict resolutionで
+blockされている、7.5.2のpin gatingで止まっている、である。したがって
+
+- 両laneが同等に成立する場合、Plannerはユーザー指定の改善優先を反映する
+- 指定順序では全TargetのPlanが成立しない場合、Plannerはもう片方のlaneを先に進めてよい。
+  violationは記録するが、branchを拒否せず、rejectionもconflictも生成しない
+- 選択済み途中採用状態のpin（hard constraint）は改善優先より常に上位である
+
+上限付きBeam Searchであるため、violation数の絶対最小は保証しない。決定性は従来どおり維持する。
+
+#### 変更しないもの
+
+改善優先はTargetWeaponに保存せず、Target定義hash、Candidate identity、
+`searchStateHash`、`referencedOwnedWeaponsHash` に入らない。Production RNG semantics、
+physical action sharing、silent fast-forward、conflict semantics、Trace Replay semanticsを変更しない。
 
 ## 8. 在庫シミュレーション
 
@@ -1284,20 +1374,20 @@ Counter位置にある場合、必須unitを先に実行する順序をPlanner�
 
 ### 9.5 checkpointが関係する競合
 
-競合の当事者が選択済みcheckpointの終端unitである場合、`PlanConflict` へ
+競合の当事者が選択済み途中採用状態の終端unitである場合、`PlanConflict` へ
 typed metadataとしてそれを記録する。
 
 ```ts
 export interface PlanConflictCheckpointParticipant {
   buildListEntryId: BuildListEntryId;
-  checkpointGroupId: CompromiseCheckpointGroupId;
-  checkpointOpportunityId: CompromiseCheckpointOpportunityId;
+  axis: IntermediateStateAxis;
+  opportunityId: IntermediateStateOpportunityId;
 }
 ```
 
 `PlanConflict.checkpointParticipants` は、その競合のどのEntryが「自分で選んだ
-checkpointのために」その位置を必要としているかを示す。UIはこれを使って
-「この競合には選択済みcheckpointが関係しています。作成リストでcheckpointを変更
+途中採用状態のために」その位置を必要としているかを示す。UIはこれを使って
+「この競合には途中採用する状態の選択が関係しています。作成リストで途中採用する状態を変更
 または解除してください。」と案内できる。
 
 - `PlanConflict.id` の生成規則には含めない。既存のConflictKind + kind固有position +
@@ -2622,7 +2712,7 @@ augmented PlannerInputでPlannerを完全再実行
 ```
 
 enumeratorは `BuildCandidate` を直接yieldしない。`BuildCandidate` は `id` /
-`searchRunId` / `createdAt` / `checkpointGroups` を必須とするが、
+`searchRunId` / `createdAt` / `intermediateStateGroups` を必須とするが、
 `ConstrainedSearchOrigin` は `searchRunId` と `settings` を持たないため、Search Domain
 側では完成させられない([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.7)。
 
@@ -2877,12 +2967,12 @@ BuildCandidate.id
 BuildCandidate.createdAt
   = PlannerClock
 
-BuildCandidate.checkpointGroups
-  = materializeしたCandidateのRouteへcheckpoint抽出を適用した結果
+BuildCandidate.intermediateStateGroups
+  = materializeしたCandidateのRouteへintermediate state抽出を適用した結果
     ([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.8)
 ```
 
-`checkpointGroups` は作成リストの選択入力を支える表示・選択データであり、次には使用しない。
+`intermediateStateGroups` は作成リストの選択入力を支える表示・選択データであり、次には使用しない。
 
 ```text
 Candidate yield可否
@@ -3915,16 +4005,19 @@ Workerを利用できない環境ではClientのversionを `production-engine-un
 
 ## 15.4.1 Checkpoint Constraint Test
 
-- 選択済みcheckpoint終端をsilent fast-forwardしない
-- 未選択のcheckpoint相当の中間unitは従来どおりsafe fast-forwardできる
-- checkpointに不要な完全上書き済みprefix unitは従来どおりskipできる
-- 選択済みcheckpointのexact stateがTrace Replayで検証され、不一致は
-  `checkpoint_state_mismatch` になる
-- 選択済みcheckpointを到達していないEntryはreserveできず、
-  `selected_checkpoint_not_reached` になる
-- Plannerが選択済みcheckpointを自動解除しない
-- Plannerが同一groupの別opportunityへ自動変更しない
-- checkpointなしのEntryでは従来のIdeal Route実行意味が変わらない
+- 選択済みopportunityの終端unitをsilent fast-forwardしない
+- 未選択の中間unitは従来どおりsafe fast-forwardできる
+- 選択に不要な完全上書き済みprefix unitは従来どおりskipできる
+- `canSkipWhenCounterPassed` の「直後の操作」を同一lane内で判定する
+- pinを片laneが越える前に必ずもう片laneがpinへ到達する（pin gating）
+- Skillのみ選択 -> Practical Skill + Ideal Bonusの瞬間にmilestoneが載り、その後Skillを改善する
+- Bonusのみ選択 -> Ideal Skill + Practical Bonusの瞬間にmilestoneが載り、その後Bonusを改善する
+- 両方選択 -> Practical + Practicalの瞬間にmilestoneが載り、Skill先行 / Bonus先行の両continuationが成立する
+- 選択済み状態のexact stateがTrace Replayで検証され、不一致は `checkpoint_state_mismatch` になる
+- checkpointへ到達していないEntryはreserveできず、`selected_checkpoint_not_reached` になる
+- Plannerが選択を自動解除しない
+- Plannerが同一groupの別opportunityへ自動変更しない（後続到達点を選んだ場合、その操作自体を実行する）
+- 選択なしのEntryでは従来のIdeal Route実行意味が変わらない
 - 1つの共有物理actionが複数Entryのcheckpointを同時達成する場合、操作を重複させない
 - checkpointは新しい `PlanStepOperationType` ではない
 - checkpoint milestoneが該当する物理PlanStepへ載る
@@ -3932,6 +4025,12 @@ Workerを利用できない環境ではClientのversionを `production-engine-un
 - checkpoint到達でOwnedWeaponをreserveしない
 - checkpoint到達でstatusも保護も変更しない
 - 最終的な理想品完成時だけ従来のreserve semanticsを適用する
+- 改善優先 `skill_first` / `bonus_first` が両lane同等成立時の実行順へ反映される
+- 指定した改善優先では全TargetのPlanが成立しない場合、Plannerがもう片方のlaneを先に進めて完了する
+- `comparePlannerSearchStates()` でevaluationScoreとpreferred sourceがviolation数より上位、
+  violation数がweaponSwitchCountより上位である
+- 複数TargetがSkill Counter / Gogma Counterを共有するとき、各Entryの物理依存順を守りながら
+  interleaveして全TargetをIdealまで進める
 
 ## 15.5 Conflict Test
 
@@ -4076,7 +4175,7 @@ B8-Aで固定した契約に対するテスト観点である。実装はB8-B1�
   `searchRunId` / `createdAt` を持たない
 - materializerが `searchRunId` にdeterministic constrained search identityを設定し、
   `id` をそのidentityとCandidate semantic meaningから安定生成する
-- materializerが `checkpointGroups` を抽出し、その値がyield可否・ordering・
+- materializerが `intermediateStateGroups` を抽出し、その値がyield可否・ordering・
   route scope・探索終了・探索範囲・off-axis評価・coexistence判定へ影響しない
 - 通常Candidate Searchの `searchRunId` 契約と `BuildCandidate` ID生成規則が
   変更されていない
