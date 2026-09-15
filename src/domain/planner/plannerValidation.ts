@@ -12,7 +12,7 @@ import {
   isBlindCreateNormalArtianOperation,
   stableStringify,
   validateBuildCandidate,
-  validateBuildListEntryCheckpointSelection,
+  validateBuildListEntryIntermediateStateSelection,
   validateBuildRoute,
   validateOwnedWeapon,
 } from '../models/publicTypes'
@@ -357,18 +357,18 @@ export function validatePlannerInput(
   const entriesByStableId = [...input.buildListEntries]
     .sort((left, right) => compareStableStrings(left.id, right.id))
   entriesByStableId.forEach((entry) => {
-      // A malformed checkpoint selection is corrupted planning input, not a
-      // stale Entry: it fails the whole input closed so that the selection is
-      // never read as empty and no other Entry of the Target stands in for it
-      // (`docs/PLANNER_SPEC.md` 7.5.9).
-      const selection = validateBuildListEntryCheckpointSelection(entry)
+      // A malformed intermediate state selection is corrupted planning input,
+      // not a stale Entry: it fails the whole input closed so that the
+      // selection is never read as empty and no other Entry of the Target
+      // stands in for it (`docs/PLANNER_SPEC.md` 7.5.9).
+      const selection = validateBuildListEntryIntermediateStateSelection(entry)
       if (!selection.isValid) {
         const detail = selection.issues
           .map(({ path, message }) => `${path}: ${message}`)
           .join(' ')
         const message =
-          `BuildListEntry '${entry.id}' has an invalid compromise checkpoint selection (${detail}). Clear that checkpoint selection in the Build List before planning.`
-        issues.push(issue(`buildListEntries.${entry.id}.selectedCheckpointOpportunityIds`, 'invalid_state', message))
+          `BuildListEntry '${entry.id}' has an invalid intermediate state selection (${detail}). Clear that selection in the Build List before planning.`
+        issues.push(issue(`buildListEntries.${entry.id}.intermediateStateSelection`, 'invalid_state', message))
         warnings.push({ kind: 'invalid_checkpoint_selection', message })
       }
       const eligibility = currentEntryEligibility(
@@ -394,7 +394,7 @@ export function validatePlannerInput(
     validBuildListEntries.map(({ entry }) => entry),
   ).violations.forEach(({ targetWeaponId, buildListEntryIds }) => {
     const message =
-      `TargetWeapon '${targetWeaponId}' has ${buildListEntryIds.length} BuildListEntries with a selected compromise checkpoint (${buildListEntryIds.join(', ')}); at most one is allowed. Clear the checkpoint selection of all but one in the Build List.`
+      `TargetWeapon '${targetWeaponId}' has ${buildListEntryIds.length} BuildListEntries with a selected intermediate state (${buildListEntryIds.join(', ')}); at most one is allowed. Clear the selection of all but one in the Build List.`
     issues.push(issue('buildListEntries', 'invalid_structure', message))
     warnings.push({ kind: 'multiple_selected_checkpoint_entries', message })
   })

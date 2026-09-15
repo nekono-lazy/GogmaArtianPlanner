@@ -5,11 +5,16 @@ import { describe, expect, it, vi } from 'vitest'
 import type {
   BuildCandidate,
   BuildListEntry,
-  CompromiseCheckpointGroup,
-  CompromiseCheckpointOpportunity,
   TargetWeapon,
 } from '../domain/models/publicTypes'
-import { createBuildListEntry } from '../domain/buildList'
+import { createBuildListEntry, defaultIntermediateStateSelection } from '../domain/buildList'
+import {
+  checkpointCandidate,
+  checkpointIdealBonuses,
+  checkpointPracticalBonuses,
+  checkpointPracticalBonusesReordered,
+  intermediateOpportunityAt,
+} from '../test/fixtures/checkpointRoute'
 import type {
   CandidateSearchInput,
   CandidateSearchProgress,
@@ -101,8 +106,8 @@ function dependencies(
       }
     },
     saveCandidates: vi.fn(async () => undefined),
-    addCandidate: vi.fn(async (candidate, target, selectedCheckpointOpportunityIds) => ({
-      entry: createBuildListEntry(candidate, target, { selectedCheckpointOpportunityIds }),
+    addCandidate: vi.fn(async (candidate, target, intermediateStateSelection) => ({
+      entry: createBuildListEntry(candidate, target, { intermediateStateSelection }),
       added: true,
     })),
   }
@@ -288,8 +293,8 @@ describe('SearchPage', () => {
     const candidate = createValidBuildCandidate()
     client.resolve(resultFor(target, candidate))
     await user.click(await screen.findByRole('button', { name: 'ビルドリストへ追加' }))
-    // Checkpoints start unselected, so a fresh result selects none.
-    expect(deps.addCandidate).toHaveBeenCalledWith(candidate, target, [])
+    // Intermediate states start unselected, so a fresh result selects none.
+    expect(deps.addCandidate).toHaveBeenCalledWith(candidate, target, defaultIntermediateStateSelection())
     expect(screen.getByText('ビルドリストへ追加しました。')).toBeInTheDocument()
   })
 
@@ -356,7 +361,7 @@ describe('SearchPage', () => {
     // permanent notice.
     await user.click(addButton)
     const duplicate = await screen.findByText(
-      'この候補は作成リストに追加済みです。チェックポイントは作成リストで変更してください。',
+      'この候補は作成リストに追加済みです。途中採用する状態と改善優先は作成リストで変更してください。',
     )
     expect(card).toContainElement(duplicate)
     expect(screen.getAllByText(/この候補は作成リストに追加済みです/)).toHaveLength(1)
@@ -365,57 +370,35 @@ describe('SearchPage', () => {
     expect(screen.queryByText('追加fixture失敗')).not.toBeInTheDocument()
   })
 
-  it('keeps at most one selected opportunity per checkpoint group', async () => {
+  it('keeps at most one selected state per lane and passes the preference on', async () => {
     const user = userEvent.setup()
     const client = new ControlledClient()
     const target = createValidTargetWeapon()
     const deps = dependencies(client, [target])
-    const candidate = createValidBuildCandidate()
-    const identity = {
-      seriesSkillId: 'series_skill.fixture.enabled',
-      groupSkillId: null,
-      conditionMatch: { bonus: 'practical', skill: 'ideal' },
-    } as const
-    const arrival = (id: string, afterOperationIndex: number): CompromiseCheckpointOpportunity => ({
-      id: id as CompromiseCheckpointOpportunity['id'],
-      afterOperationIndex,
-      operationCount: afterOperationIndex + 1,
-      remainingOperationCount: 2 - afterOperationIndex,
-      restorationBonuses: candidate.finalBonuses,
-      restorationBonusScope: 'gogma_artian',
-      ...identity,
-    })
-    const group: CompromiseCheckpointGroup = {
-      id: 'checkpoint-group:fixture.ui' as CompromiseCheckpointGroup['id'],
-      restorationBonusScope: 'gogma_artian',
-      restorationBonuses: candidate.finalBonuses,
-      ...identity,
-      opportunities: [
-        arrival('checkpoint-opportunity:fixture.ui.1', 0),
-        arrival('checkpoint-opportunity:fixture.ui.2', 1),
-      ],
-      isDisplaySecondary: false,
-      dominatingGroupId: null,
-    }
-    candidate.checkpointGroups = [group]
+    const candidate = checkpointCandidateWithArrivals()
     render(<SearchPage dependencies={deps} />)
     await user.click(await screen.findByRole('button', { name: '検索開始' }))
     client.resolve(resultFor(target, candidate))
 
-    const primary = await screen.findByRole('checkbox', { name: '1手目（理想まで残り2操作）' })
+    const primary = await screen.findByRole('checkbox', { name: BONUS_ONE })
     expect(primary).not.toBeChecked()
     await user.click(primary)
     expect(primary).toBeChecked()
 
     await user.click(screen.getByRole('button', { name: 'その他の到達点（1）' }))
-    const later = await screen.findByRole('checkbox', { name: '2手目（理想まで残り1操作）' })
+    const later = await screen.findByRole('checkbox', { name: BONUS_TWO })
     await user.click(later)
-    // Choosing another arrival at the same product replaces the first one.
+    // Choosing another arrival on the same lane replaces the first one.
     expect(later).toBeChecked()
     expect(primary).not.toBeChecked()
+    await user.click(screen.getByRole('radio', { name: 'スキルを優先' }))
 
     await user.click(screen.getByRole('button', { name: 'ビルドリストへ追加' }))
-    expect(deps.addCandidate).toHaveBeenCalledWith(candidate, target, [group.opportunities[1].id])
+    expect(deps.addCandidate).toHaveBeenCalledWith(candidate, target, {
+      skillOpportunityId: null,
+      bonusOpportunityId: intermediateOpportunityAt(candidate, 'bonus', 2).opportunity.id,
+      improvementPreference: 'skill_first',
+    })
 
     // The draft selection stays editable afterwards, while the Candidate is
     // now added and the button no longer offers a second addition.
@@ -426,34 +409,16 @@ describe('SearchPage', () => {
   })
 })
 
-/** One checkpoint group with two arrivals on the fixture Candidate's Route. */
-function checkpointGroupFor(candidate: BuildCandidate): CompromiseCheckpointGroup {
-  const identity = {
-    seriesSkillId: 'series_skill.fixture.enabled',
-    groupSkillId: null,
-    conditionMatch: { bonus: 'practical', skill: 'ideal' },
-  } as const
-  const arrival = (id: string, afterOperationIndex: number): CompromiseCheckpointOpportunity => ({
-    id: id as CompromiseCheckpointOpportunity['id'],
-    afterOperationIndex,
-    operationCount: afterOperationIndex + 1,
-    remainingOperationCount: 2 - afterOperationIndex,
-    restorationBonuses: candidate.finalBonuses,
-    restorationBonusScope: 'gogma_artian',
-    ...identity,
-  })
-  return {
-    id: 'checkpoint-group:fixture.status' as CompromiseCheckpointGroup['id'],
-    restorationBonusScope: 'gogma_artian',
-    restorationBonuses: candidate.finalBonuses,
-    ...identity,
-    opportunities: [
-      arrival('checkpoint-opportunity:fixture.status.1', 0),
-      arrival('checkpoint-opportunity:fixture.status.2', 1),
-    ],
-    isDisplaySecondary: false,
-    dominatingGroupId: null,
-  }
+const BONUS_ONE = 'この途中状態を採用する: 復元ボーナス操作1回目（再抽選）の直後'
+const BONUS_TWO = 'この途中状態を採用する: 復元ボーナス操作2回目（再抽選）の直後'
+
+/** A Candidate whose Bonus lane reaches one Practical product twice before the Ideal. */
+function checkpointCandidateWithArrivals(): BuildCandidate {
+  return checkpointCandidate([
+    checkpointPracticalBonuses(),
+    checkpointPracticalBonusesReordered(),
+    checkpointIdealBonuses(),
+  ])
 }
 
 /**
@@ -468,9 +433,10 @@ function equivalentEntryFor(candidate: BuildCandidate, target: TargetWeapon): Bu
   }
   return createBuildListEntry(earlier, target, {
     id: 'build-list.fixture.earlier' as BuildListEntry['id'],
-    selectedCheckpointOpportunityIds: [
-      'checkpoint-opportunity:fixture.status.2' as CompromiseCheckpointOpportunity['id'],
-    ],
+    intermediateStateSelection: {
+      ...defaultIntermediateStateSelection(),
+      bonusOpportunityId: intermediateOpportunityAt(candidate, 'bonus', 2).opportunity.id,
+    },
   })
 }
 
@@ -490,8 +456,7 @@ describe('SearchPage disclosure ARIA wiring', () => {
     const user = userEvent.setup()
     const client = new ControlledClient()
     const target = createValidTargetWeapon()
-    const candidate = createValidBuildCandidate()
-    candidate.checkpointGroups = [checkpointGroupFor(candidate)]
+    const candidate = checkpointCandidateWithArrivals()
     render(<SearchPage dependencies={dependencies(client, [target])} />)
     await searchFor(user, client, target, candidate)
 
@@ -586,11 +551,10 @@ describe('SearchPage Build List add state', () => {
     const user = userEvent.setup()
     const client = new ControlledClient()
     const target = createValidTargetWeapon()
-    const candidate = createValidBuildCandidate()
-    candidate.checkpointGroups = [checkpointGroupFor(candidate)]
+    const candidate = checkpointCandidateWithArrivals()
     const entry = equivalentEntryFor(candidate, target)
     expect(entry.candidateId).not.toBe(candidate.id)
-    expect(entry.selectedCheckpointOpportunityIds).toHaveLength(1)
+    expect(entry.intermediateStateSelection?.bonusOpportunityId).not.toBeNull()
     const deps = dependencies(client, [target], [entry])
     render(<SearchPage dependencies={deps} />)
     const addButton = await searchFor(user, client, target, candidate)
@@ -602,13 +566,13 @@ describe('SearchPage Build List add state', () => {
     // The formal guidance is shown from the state alone, before any click,
     // exactly once, inside the Candidate's own card (`docs/UI_FLOW.md` 9).
     const guidance = screen.getAllByText(
-      'この候補は作成リストに追加済みです。チェックポイントは作成リストで変更してください。',
+      'この候補は作成リストに追加済みです。途中採用する状態と改善優先は作成リストで変更してください。',
     )
     expect(guidance).toHaveLength(1)
     expect(screen.getByRole('heading', { level: 3, name: '理想候補' }).closest('section')).toContainElement(guidance[0])
     // The Search draft stays all-unselected: the Entry's own selection is
     // never restored into these checkboxes.
-    expect(screen.getByRole('checkbox', { name: '1手目（理想まで残り2操作）' })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: BONUS_ONE })).not.toBeChecked()
     expect(deps.addCandidate).not.toHaveBeenCalled()
   })
 
@@ -616,12 +580,12 @@ describe('SearchPage Build List add state', () => {
     const user = userEvent.setup()
     const client = new ControlledClient()
     const target = createValidTargetWeapon()
-    const stored = createValidBuildCandidate()
+    const stored = checkpointCandidateWithArrivals()
     const entry = equivalentEntryFor(stored, target)
     render(<SearchPage dependencies={dependencies(client, [target], [entry])} />)
     // Same five labels, other restoration bonus scope: a different Candidate
     // under the existing fingerprint (`docs/DATA_MODEL.md` 9.1).
-    const searched = { ...structuredClone(stored), restorationBonusScope: 'gogma_artian' as const }
+    const searched = { ...structuredClone(stored), restorationBonusScope: 'normal_artian' as const }
     const addButton = await searchFor(user, client, target, searched)
 
     expect(screen.getByText('作成リスト: 未追加')).toBeInTheDocument()
@@ -632,19 +596,19 @@ describe('SearchPage Build List add state', () => {
     const user = userEvent.setup()
     const client = new ControlledClient()
     const target = createValidTargetWeapon()
-    const candidate = createValidBuildCandidate()
-    candidate.checkpointGroups = [checkpointGroupFor(candidate)]
+    const candidate = checkpointCandidateWithArrivals()
     const deps = dependencies(client, [target], [])
     render(<SearchPage dependencies={deps} />)
     const addButton = await searchFor(user, client, target, candidate)
-    const primary = screen.getByRole('checkbox', { name: '1手目（理想まで残り2操作）' })
+    const primary = screen.getByRole('checkbox', { name: BONUS_ONE })
     await user.click(primary)
     expect(screen.getByText('作成リスト: 未追加')).toBeInTheDocument()
 
     await user.click(addButton)
-    expect(deps.addCandidate).toHaveBeenCalledWith(candidate, target, [
-      candidate.checkpointGroups[0].opportunities[0].id,
-    ])
+    expect(deps.addCandidate).toHaveBeenCalledWith(candidate, target, {
+      ...defaultIntermediateStateSelection(),
+      bonusOpportunityId: intermediateOpportunityAt(candidate, 'bonus', 1).opportunity.id,
+    })
     expect(await screen.findByText('作成リスト: 追加済み')).toBeInTheDocument()
     expect(screen.queryByText('作成リスト: 未追加')).not.toBeInTheDocument()
     expect(addButton).toBeDisabled()
@@ -657,21 +621,20 @@ describe('SearchPage Build List add state', () => {
     const user = userEvent.setup()
     const client = new ControlledClient()
     const target = createValidTargetWeapon()
-    const candidate = createValidBuildCandidate()
-    candidate.checkpointGroups = [checkpointGroupFor(candidate)]
+    const candidate = checkpointCandidateWithArrivals()
     const entry = equivalentEntryFor(candidate, target)
-    expect(entry.selectedCheckpointOpportunityIds).toEqual([
-      'checkpoint-opportunity:fixture.status.2',
-    ])
+    expect(entry.intermediateStateSelection?.bonusOpportunityId).toBe(
+      intermediateOpportunityAt(candidate, 'bonus', 2).opportunity.id,
+    )
     const deps = dependencies(client, [target], [entry])
     render(<SearchPage dependencies={deps} />)
     const addButton = await searchFor(user, client, target, candidate)
 
     expect(screen.getByText('作成リスト: 追加済み')).toBeInTheDocument()
     // The Entry selected the later arrival; the draft stays all-unselected.
-    expect(screen.getByRole('checkbox', { name: '1手目（理想まで残り2操作）' })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: BONUS_ONE })).not.toBeChecked()
     await user.click(screen.getByRole('button', { name: 'その他の到達点（1）' }))
-    expect(await screen.findByRole('checkbox', { name: '2手目（理想まで残り1操作）' })).not.toBeChecked()
+    expect(await screen.findByRole('checkbox', { name: BONUS_TWO })).not.toBeChecked()
     // Nothing reaches the Service, so the Entry's selection cannot change.
     expect(addButton).toBeDisabled()
     expect(deps.addCandidate).not.toHaveBeenCalled()

@@ -28,9 +28,10 @@ Practical Skillの両IDがnullなら妥協未設定であり、wildcardではな
 (ideal / practical / alternative / null)とskillMatch (ideal / practical / null)を返し、
 両軸Idealなら理想品、それ以外の受理組み合わせは「妥協状態」である。
 
-妥協状態は独立したCandidateではない。canonical Ideal Routeのstrict prefixとして
-到達する妥協状態だけが、選択可能なcompromise checkpointになる
-（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.7 / 5.8）。
+妥協状態は独立したCandidateではない。canonical Ideal RouteのSkill lane / Bonus laneの
+途中状態（intermediate state）をlaneごとに提示し、ユーザーがlaneごとに採用する状態を選ぶ。
+両laneが同時に受理状態を持った瞬間が妥協checkpointであり、Plannerが実行順へ組み込む
+（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.7 / 5.8、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7.5）。
 
 ## Validation
 
@@ -41,11 +42,11 @@ Rank順はMaster order、EXはMaster isExで評価し、表示名やID文字列�
 
 ## Search
 
-SearchはTargetの妥協設定にかかわらずIdeal-onlyである。妥協条件はcheckpointの
+SearchはTargetの妥協設定にかかわらずIdeal-onlyである。妥協条件はintermediate stateの
 有無だけを変え、探索範囲、canonical Idealの選択、RNG Prediction呼び出し回数の
 いずれも変えない。
 
-妥協条件がまったく未設定のTargetは、canonical Ideal Routeにcheckpointが
+妥協条件がまったく未設定のTargetは、canonical Ideal Routeの各laneにintermediate stateが
 1件も現れないというだけである。
 Normal / Gogma / Skillの独立性、Cross、determinism、保護、blind Normal、予測traceを維持する。
 評価のための追加RNG Predictionを行わない。
@@ -57,14 +58,15 @@ Dexie schemaを1から2に上げる。旧Practical / OR条件は新条件へ推�
 再設定を促す情報を残す。Candidate、BuildListEntry、Plan、履歴の内容は変更・削除しない。
 
 CalculationContext.appSchemaVersionは、妥協条件導入時に5から6へ上げた。
-現行は10であり、旧version 1..9のCandidate / BuildListEntry / Planはすべて非互換。
+現行は11（lane別intermediate stateと改善優先）であり、旧version 1..10のCandidate /
+BuildListEntry / Planはすべて非互換。
 既存のcalculation_context_changedによるfail closedを使う。RNG version、Master version、
 AppSettings.schemaVersion、RngState.schemaVersionは変更しない。
 searchStateHashと参照武器hashはRNG・武器依存の既存定義を維持する。
 Target definition hashは新Rule構造を含める。
 
 Import/Exportは現時点でExportRoot型のみであり、全置換UI・JSON parser・保存serviceは未実装。
-現行ExportRootはschemaVersion 5。将来のimportでも旧条件の推測変換を禁止し、
+現行ExportRootはschemaVersion 6。将来のimportでも旧条件の推測変換を禁止し、
 旧versionを新Targetとして直接受理しない。同じfail-closed Target移行を使用する。
 履歴artifactを新評価で再分類しない。
 
@@ -74,16 +76,19 @@ PracticalはIdealに含まれる種類、Ideal内個数(read-only)、最低Rank�
 未設定種類は理想条件のままと説明する。Alternativeは元種類・最大置換数・optionsを編集する。
 1元種類/1候補のみ、未置換枠は理想のまま、実用Bonusとは非併用であることを明示する。
 武器種・属性変更でBonus依存条件をリセットし、Ideal編集後の不整合はvalidationで拒否する。
-Search結果はcanonical Ideal 1件と、そのRoute上のcompromise checkpointの一覧である。
-checkpointは既定でOFFであり、ユーザーが明示的に選択したものだけが計画へ入る。
-Bonus/Skill結果の完全分離UIは将来検討とする。
+Search結果はcanonical Ideal 1件と、そのRouteのスキル候補（Skill lane）・復元ボーナス候補
+（Bonus lane）の一覧である。候補は既定でOFFであり、ユーザーがlaneごとに明示的に選択した状態と
+「理想品までの改善優先」（生産計画に任せる / スキルを優先 / 復元ボーナスを優先）が
+BuildListEntryへ保存され、作成リストでも変更できる。改善優先はTargetWeaponへ保存しない。
+UIがSkill × Bonusの組み合わせを列挙することはない。
 
 
 ### 妥協条件version 6の判定理由と監査記録
 
-妥協判定 `conditionMatch`（bonus: ideal/practical/alternative、skill: ideal/practical）は
-Candidate本体ではなくcheckpoint group / opportunityが保持し、Build List snapshotへそのまま複写する。
-これはTarget定義と到達状態から導出した説明情報であり、Candidate ID / stable key / deduplication key / meaning fingerprint / searchStateHashには追加しない。
+妥協判定はlaneごとの `match`（Bonus: ideal/practical/alternative、Skill: ideal/practical）を
+intermediate state group / opportunityが保持し、Build List snapshotへそのまま複写する。
+Plannerが到達したcheckpointのmilestoneは両軸の組み合わせを `conditionMatch` として持つ。
+これらはTarget定義と到達状態から導出した説明情報であり、Candidate ID / stable key / deduplication key / meaning fingerprint / searchStateHashには追加しない。
 旧artifactではフィールドを省略でき、推測補完・再分類しない。
 UIは保存された判定理由を「ボーナス判定: 実用 / 代替」「スキル判定: 理想 / 実用」と表示する。
 両軸Idealは理想品そのものなのでcheckpointとしては存在しない。
@@ -93,5 +98,5 @@ Productionベンチマークの旧wildcard条件も明示的な理想構成基�
 
 Build Listへの同一意味の候補の重複追加を防ぐ際はCalculationContext互換性も確認する。
 旧versionの項目を削除・上書きせず、新versionの再検索結果を別項目として追加できる。
-Candidate meaning fingerprint自体は変更しない。checkpoint選択はfingerprintに入らないため、
-同一意味のCandidateを再追加しても既存の選択を上書きしない。
+Candidate meaning fingerprint自体は変更しない。途中採用状態の選択と改善優先はfingerprintに
+入らないため、同一意味のCandidateを再追加しても既存の選択を上書きしない。

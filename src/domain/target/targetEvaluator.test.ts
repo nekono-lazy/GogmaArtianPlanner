@@ -12,7 +12,6 @@ import {
 } from '../../test/fixtures/targetEvaluation'
 import { createIdealDifference } from './idealDifference'
 import {
-  evaluateCompromiseCheckpointCondition,
   evaluateTargetCandidate,
   satisfiesIdealTarget,
   satisfiesIdealBonuses,
@@ -49,19 +48,18 @@ function practicalOnlyBonuses(): RestorationBonusSet {
  * evaluator still exposes.
  *
  * A state matching both axes at Ideal is an Ideal result; a state matching both
- * axes with at least one compromise is a checkpoint state; a state matching
+ * axes with at least one compromise is a compromise state; a state matching
  * neither is not accepted at all. Candidate Search now composes only the first
- * of the three, and the second reaches the user as a checkpoint on the
- * canonical Ideal Route (`docs/SEARCH_SPEC.md` 5.8).
+ * of the three, and the second reaches the user through the intermediate
+ * states of the canonical Ideal Route's lanes (`docs/SEARCH_SPEC.md` 5.8).
  */
 function classifyResult(
-  ...args: Parameters<typeof evaluateCompromiseCheckpointCondition>
+  ...args: Parameters<typeof evaluateTargetCandidate>
 ): 'ideal' | 'practical' | null {
   const [target, bonuses, scope, series, group, master] = args
   if (satisfiesIdealTarget(target, bonuses, scope, series, group, master)) return 'ideal'
-  return evaluateCompromiseCheckpointCondition(target, bonuses, scope, series, group, master) === null
-    ? null
-    : 'practical'
+  const result = evaluateTargetCandidate(target, bonuses, scope, series, group, master)
+  return result.bonusMatch === null || result.skillMatch === null ? null : 'practical'
 }
 
 describe('Target candidate classification', () => {
@@ -318,13 +316,13 @@ describe('evaluateTargetCandidate integration', () => {
     expect(result.bonusMatch).toBe('ideal')
     expect(result.skillMatch).toBe('ideal')
     // The Ideal result completes the Route, so it is never a checkpoint.
-    expect(evaluateCompromiseCheckpointCondition(
+    expect(classifyResult(
       target,
       target.idealBonuses,
       'gogma_artian',
       'series_skill.fixture.a',
       null,
       targetEvaluationMaster,
-    )).toBeNull()
+    )).toBe('ideal')
   })
 })

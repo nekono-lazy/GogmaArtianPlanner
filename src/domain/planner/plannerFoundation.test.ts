@@ -391,7 +391,9 @@ describe('Planner initial search state', () => {
     expect(initial.state?.targetSatisfaction).toEqual({
       [input.targetWeapons[0].id]: { hasPractical: true, hasIdeal: true },
     })
-    expect(initial.state?.routeProgressByEntryId).toEqual({ [input.buildListEntries[0].id]: 0 })
+    expect(initial.state?.routeProgressByEntryId).toEqual({
+      [input.buildListEntries[0].id]: { base: 0, bonus: 0, skill: 0 },
+    })
     expect(initial.state?.simulatedInventory.ownedWeapons[0]).not.toBe(input.ownedWeapons[0])
     expect(input.buildListEntries[0].candidateSnapshot.route).toEqual(routeBefore)
     expect(createInitialPlannerSearchState(input, validation.validBuildListEntries)).toEqual(initial)

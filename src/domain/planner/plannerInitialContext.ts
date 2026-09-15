@@ -11,8 +11,14 @@ import {
 } from './plannerConflictDetection'
 import {
   derivePlannerCheckpointRequirements,
+  intermediatePinFor,
   type PlannerCheckpointRequirements,
 } from './plannerCheckpoints'
+import {
+  remainingPlannerLaneUnits,
+  splitPlannerRouteUnitsByLane,
+  type PlannerEntryLanes,
+} from './plannerRouteLanes'
 import { entryIsRelevantForState } from './plannerEntryRelevance'
 import { createInitialPlannerSearchState } from './plannerInitialState'
 import {
@@ -54,6 +60,13 @@ export interface PlannerInitialContext {
   allSearchEntries: readonly BuildListEntry[]
   entriesById: ReadonlyMap<BuildListEntryId, BuildListEntry>
   allUnitPlans: ReadonlyMap<BuildListEntryId, readonly PlannerRouteUnit[]>
+  /**
+   * The same units split into their execution lanes, with each Entry's
+   * checkpoint pin (`docs/PLANNER_SPEC.md` 7.0.4 / 7.5.2). Beam Search
+   * expansion, fast-forward and remaining-unit conflict detection all read
+   * this one derivation.
+   */
+  allLanePlans: ReadonlyMap<BuildListEntryId, PlannerEntryLanes>
   routeUnitCountByEntryId: ReadonlyMap<BuildListEntryId, number>
   targets: readonly TargetWeapon[]
   targetsById: ReadonlyMap<TargetWeaponId, TargetWeapon>
@@ -138,7 +151,7 @@ export function preparePlannerInitialContext(
     if (required === undefined || required === entry.id) return
     warnings.push({
       kind: 'selected_checkpoint_fixes_target_entry',
-      message: `BuildListEntry '${entry.id}' is not used in this run: BuildListEntry '${required}' of the same TargetWeapon '${entry.targetWeaponId}' carries a selected compromise checkpoint and is that Target's required Route.`,
+      message: `BuildListEntry '${entry.id}' is not used in this run: BuildListEntry '${required}' of the same TargetWeapon '${entry.targetWeaponId}' carries a selected intermediate state and is that Target's required Route.`,
     })
   })
   const initialRelevantEntries = allSearchEntries.filter((entry) =>
@@ -151,6 +164,15 @@ export function preparePlannerInitialContext(
     allSearchEntries.flatMap((entry) => {
       const units = routePlans.unitPlans.get(entry.id)
       return units === undefined ? [] : [[entry.id, units] as const]
+    }),
+  )
+  const allLanePlans = new Map(
+    [...allUnitPlans].map(([entryId, units]) => {
+      const entry = entriesById.get(entryId)
+      return [
+        entryId,
+        splitPlannerRouteUnitsByLane(units, entry ? intermediatePinFor(entry) : null),
+      ] as const
     }),
   )
   const routeUnitCountByEntryId = new Map(
@@ -168,16 +190,14 @@ export function preparePlannerInitialContext(
   // A Route whose skippable prefix already sits behind the current Counter
   // starts at the position the Beam Search would reach, so the initial conflict
   // detection never reports an already passed prefix.
-  fastForwardPlannerRouteProgress(initialState, allUnitPlans)
+  fastForwardPlannerRouteProgress(initialState, allLanePlans)
   const initialRelevantUnitPlans = new Map(
     initialRelevantEntries.flatMap((entry) => {
-      const units = allUnitPlans.get(entry.id)
-      return units === undefined
+      const lanes = allLanePlans.get(entry.id)
+      const progress = initialState.routeProgressByEntryId[entry.id]
+      return lanes === undefined || progress === undefined
         ? []
-        : [[
-            entry.id,
-            units.slice(initialState.routeProgressByEntryId[entry.id] ?? 0),
-          ] as const]
+        : [[entry.id, remainingPlannerLaneUnits(lanes, progress)] as const]
     }),
   )
   const initialConflictDetection = detectPlannerConflicts(
@@ -199,6 +219,7 @@ export function preparePlannerInitialContext(
       allSearchEntries,
       entriesById,
       allUnitPlans,
+      allLanePlans,
       routeUnitCountByEntryId,
       targets,
       targetsById,

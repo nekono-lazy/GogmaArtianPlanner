@@ -19,7 +19,7 @@ import type {
   TargetWeapon,
   TargetWeaponId,
 } from '../../models/publicTypes'
-import { extractCandidateCheckpointGroups } from '../../search'
+import { extractIntermediateStateGroups } from '../../search'
 import type {
   ConstrainedCandidate,
   ConstrainedEnumerationBounds,
@@ -184,13 +184,13 @@ export function createConstrainedMaterializer(
       ),
     }
     // A `ConstrainedCandidate` deliberately carries no observational trace at
-    // all, so nothing here can reconstruct the intermediate weapon states of
-    // its Route. The result is an empty checkpoint set rather than an invented
-    // one: the enumerator's job is finding another way to the Target's Ideal
-    // under the Planner's fixed Candidates, and the user selects checkpoints on
-    // the Candidate an ordinary Search produced (`docs/PLANNER_SPEC.md`
-    // 9.2.13).
-    candidate.checkpointGroups = extractCandidateCheckpointGroups(candidate, {
+    // all, so nothing here can reconstruct the amended weapon states of its
+    // Route: only a lane start an existing source weapon already holds can be
+    // offered, never an invented amendment result. The enumerator's job is
+    // finding another way to the Target's Ideal under the Planner's fixed
+    // Candidates, and the user selects intermediate states on the Candidate an
+    // ordinary Search produced (`docs/PLANNER_SPEC.md` 9.2.13).
+    candidate.intermediateStateGroups = extractIntermediateStateGroups(candidate, {
       target,
       master: context.origin.master,
       ownedWeapons: context.origin.ownedWeapons,

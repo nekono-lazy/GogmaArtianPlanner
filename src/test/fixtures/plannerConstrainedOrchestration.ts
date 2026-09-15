@@ -13,7 +13,7 @@ import {
 import { createTargetDefinitionHash } from '../../domain/buildList'
 import type { FakeRngEngine } from '../../domain/rng/fakeRngEngine'
 import type { ConstrainedSearchOrigin } from '../../domain/search'
-import { extractCandidateCheckpointGroups } from '../../domain/search'
+import { extractIntermediateStateGroups } from '../../domain/search'
 import {
   defaultPlannerOptions,
   type PlannerConflictResolution,
@@ -192,13 +192,15 @@ export function orchestrationEntry(
 
 /**
  * An Entry whose Route reaches a selectable compromise checkpoint *before*
- * the contested Gogma position: Reset Skills at the Skill Counter (the source's
- * Practical five slots plus the Ideal Series Skill form the checkpoint), then
- * the Reset Bonuses at the contested Gogma Counter completes the Ideal.
+ * the contested Gogma position: the source's own Practical five slots are its
+ * Bonus lane start, and the Reset Skills at the Skill Counter makes the Skill
+ * Ideal, so holding the Bonus lane start while the Skill lane finishes is the
+ * checkpoint; the Reset Bonuses at the contested Gogma Counter then completes
+ * the Ideal.
  *
- * The checkpoint is extracted from the Entry's own recorded traces, exactly as
- * an ordinary Search would record them, and it is selected on the Entry. The
- * source must carry `practicalBonuses()` for the checkpoint to exist.
+ * The intermediate state is extracted from the Entry's own recorded traces,
+ * exactly as an ordinary Search would record them, and it is selected on the
+ * Entry. The source must carry `practicalBonuses()` for it to exist.
  */
 export function checkpointMixedEntry(
   id: string,
@@ -227,15 +229,21 @@ export function checkpointMixedEntry(
     restorationBonuses: idealBonuses(),
     restorationBonusScope: 'gogma_artian',
   }]
-  snapshot.checkpointGroups = extractCandidateCheckpointGroups(snapshot, {
+  snapshot.intermediateStateGroups = extractIntermediateStateGroups(snapshot, {
     target,
     master: constrainedMaster(),
     ownedWeapons: [source],
   })
-  const [group] = snapshot.checkpointGroups
-  if (!group) throw new Error('The checkpoint fixture Route reached no checkpoint.')
-  entry.selectedCheckpointOpportunityIds =
-    options.select === false ? [] : [group.opportunities[0].id]
+  const bonusStart = snapshot.intermediateStateGroups
+    .filter((group) => group.axis === 'bonus')
+    .flatMap(({ opportunities }) => opportunities)
+    .find(({ lanePosition }) => lanePosition === 0)
+  if (!bonusStart) throw new Error('The checkpoint fixture Route reached no intermediate state.')
+  entry.intermediateStateSelection = {
+    skillOpportunityId: null,
+    bonusOpportunityId: options.select === false ? null : bonusStart.id,
+    improvementPreference: 'planner',
+  }
   return entry
 }
 
@@ -254,12 +262,12 @@ export function checkpointBonusResultAt(gogmaCounter: number): RestorationBonusS
 
 /**
  * A five-operation Reset Bonuses Route whose first Reset already reaches a
- * compromise checkpoint (the source carries the Ideal Series Skill), and whose
+ * compromise state (the source carries the Ideal Series Skill), and whose
  * last Reset completes the Ideal. Pair it with
  * `engine: { resetResultAt: checkpointBonusResultAt }`.
  *
- * `select` picks the earliest opportunity of the first checkpoint group, so
- * the Entry becomes its Target's required Entry (`docs/PLANNER_SPEC.md` 7.5.6).
+ * `select` picks the Bonus state right after the first Reset, so the Entry
+ * becomes its Target's required Entry (`docs/PLANNER_SPEC.md` 7.5.6).
  */
 export function checkpointBonusEntry(
   id: string,
@@ -287,16 +295,21 @@ export function checkpointBonusEntry(
     restorationBonusScope: 'gogma_artian' as const,
   }))
   snapshot.skillAmendmentTrace = []
-  snapshot.checkpointGroups = extractCandidateCheckpointGroups(snapshot, {
+  snapshot.intermediateStateGroups = extractIntermediateStateGroups(snapshot, {
     target,
     master: constrainedMaster(),
     ownedWeapons: [source],
   })
-  const first = snapshot.checkpointGroups
+  const first = snapshot.intermediateStateGroups
+    .filter((group) => group.axis === 'bonus')
     .flatMap(({ opportunities }) => opportunities)
-    .find(({ afterOperationIndex }) => afterOperationIndex === 0)
-  if (!first) throw new Error('The checkpoint fixture Route reached no checkpoint.')
-  entry.selectedCheckpointOpportunityIds = options.select === false ? [] : [first.id]
+    .find(({ lanePosition }) => lanePosition === 1)
+  if (!first) throw new Error('The checkpoint fixture Route reached no intermediate state.')
+  entry.intermediateStateSelection = {
+    skillOpportunityId: null,
+    bonusOpportunityId: options.select === false ? null : first.id,
+    improvementPreference: 'planner',
+  }
   return entry
 }
 

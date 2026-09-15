@@ -9,7 +9,7 @@ import type {
   RouteOperation,
   TargetWeaponId,
 } from '../../models/publicTypes'
-import { selectedCheckpointsForEntry } from '../plannerCheckpoints'
+import { hasIntermediateStateSelection } from '../plannerCheckpoints'
 import {
   conflictInvolvesSelectedCheckpoint,
   plannerRouteUnitKey,
@@ -228,7 +228,7 @@ function participantContext(
     sourceOwnedWeaponId: participantSourceOwnedWeaponId(entry, unit),
     exclusiveConsumedOwnedWeaponId: unit.exclusiveConsumedOwnedWeaponId,
     physicalActionKey: unit.physicalActionKey,
-    hasSelectedCheckpoints: selectedCheckpointsForEntry(entry).length > 0,
+    hasSelectedCheckpoints: hasIntermediateStateSelection(entry),
   }
 }
 

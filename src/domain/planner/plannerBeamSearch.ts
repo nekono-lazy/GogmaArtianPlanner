@@ -44,10 +44,19 @@ import {
   isPlannerSearchStateComplete,
 } from './plannerEntryRelevance'
 import {
-  hasReachedEverySelectedCheckpoint,
-  selectedCheckpointAtOperationIndex,
+  entryImprovementPreference,
+  hasIntermediateStateSelection,
   type PlannerCheckpointRequirements,
 } from './plannerCheckpoints'
+import {
+  advancePlannerLaneProgress,
+  hasReachedIntermediatePin,
+  initialPlannerLaneProgress,
+  isPlannerLaneRouteComplete,
+  nextPlannerLaneUnits,
+  remainingPlannerLaneUnits,
+  type PlannerEntryLanes,
+} from './plannerRouteLanes'
 import {
   advancePlannerPreferredSourceMetric,
   collectPreferredSourceEntryIds,
@@ -488,7 +497,7 @@ function counterPositionKey(unit: PlannerRouteUnit): string | null {
 function executableRequiredUnitsByCounterPosition(
   state: PlannerSearchState,
   entries: readonly BuildListEntry[],
-  unitPlans: ReadonlyMap<BuildListEntryId, readonly PlannerRouteUnit[]>,
+  lanePlans: ReadonlyMap<BuildListEntryId, PlannerEntryLanes>,
   isUnitBlocked: (unit: PlannerRouteUnit) => boolean,
   requirements: PlannerCheckpointRequirements,
 ): Map<string, PlannerRouteUnit[]> {
@@ -496,14 +505,17 @@ function executableRequiredUnitsByCounterPosition(
   entries.forEach((entry) => {
     if (state.selectedBuildListEntryIds.includes(entry.id)) return
     if (!entryIsRelevantForState(state, entry, requirements)) return
-    const units = unitPlans.get(entry.id) ?? []
-    const unit = units[state.routeProgressByEntryId[entry.id] ?? 0]
-    if (!unit || unit.canSkipWhenCounterPassed) return
-    const key = counterPositionKey(unit)
-    if (key === null) return
-    if (isUnitBlocked(unit)) return
-    if (routeUnitPreconditionRejection(state, entry, unit) !== null) return
-    required.set(key, [...(required.get(key) ?? []), unit])
+    const lanes = lanePlans.get(entry.id)
+    if (!lanes) return
+    const progress = state.routeProgressByEntryId[entry.id] ?? initialPlannerLaneProgress()
+    for (const unit of nextPlannerLaneUnits(lanes, progress)) {
+      if (unit.canSkipWhenCounterPassed) continue
+      const key = counterPositionKey(unit)
+      if (key === null) continue
+      if (isUnitBlocked(unit)) continue
+      if (routeUnitPreconditionRejection(state, entry, unit) !== null) continue
+      required.set(key, [...(required.get(key) ?? []), unit])
+    }
   })
   return required
 }
@@ -532,7 +544,7 @@ function mergedProgressedEntries(
   state: PlannerSearchState,
   primary: PlannerRouteUnit,
   entriesById: ReadonlyMap<BuildListEntryId, BuildListEntry>,
-  unitPlans: ReadonlyMap<BuildListEntryId, readonly PlannerRouteUnit[]>,
+  lanePlans: ReadonlyMap<BuildListEntryId, PlannerEntryLanes>,
   conflictsById: ReadonlyMap<string, PlanConflict>,
   conflictIdsByUnitKey: ReadonlyMap<string, readonly string[]>,
   selectedPhysicalActionKeysByConflictId: ReadonlyMap<string, readonly string[]>,
@@ -540,18 +552,22 @@ function mergedProgressedEntries(
 ): PlannerRouteUnit[] {
   const shared = [primary]
   if (!primary.shareable) return shared
-  unitPlans.forEach((units, entryId) => {
+  lanePlans.forEach((lanes, entryId) => {
     if (entryId === primary.entryId) return
     if (state.selectedBuildListEntryIds.includes(entryId)) return
     const entry = entriesById.get(entryId)
     if (!entry) return
     if (!entryUsesCurrentSourceVersion(state, entry)) return
     if (!entryIsRelevantForState(state, entry, requirements)) return
-    const progress = state.routeProgressByEntryId[entryId] ?? 0
-    const next = units[progress]
+    const progress = state.routeProgressByEntryId[entryId] ?? initialPlannerLaneProgress()
+    // The pin gating applies to a shared progression too: an Entry whose lane
+    // may not advance yet is simply not progressed, and its Route is then
+    // superseded by the source mutation like any other unshared action.
+    const next = nextPlannerLaneUnits(lanes, progress).find((unit) =>
+      arePlannerRouteUnitsShareable(primary, unit),
+    )
     if (
       next &&
-      arePlannerRouteUnitsShareable(primary, next) &&
       !isUnitBlockedByConflictResolution(
         next,
         conflictsById,
@@ -583,7 +599,7 @@ function applyRouteAction(
   sourceState: PlannerSearchState,
   primary: PlannerRouteUnit,
   entriesById: ReadonlyMap<BuildListEntryId, BuildListEntry>,
-  unitPlans: ReadonlyMap<BuildListEntryId, readonly PlannerRouteUnit[]>,
+  lanePlans: ReadonlyMap<BuildListEntryId, PlannerEntryLanes>,
   conflictsById: ReadonlyMap<string, PlanConflict>,
   conflictIdsByUnitKey: ReadonlyMap<string, readonly string[]>,
   selectedPhysicalActionKeysByConflictId: ReadonlyMap<string, readonly string[]>,
@@ -641,7 +657,7 @@ function applyRouteAction(
     sourceState,
     primary,
     entriesById,
-    unitPlans,
+    lanePlans,
     conflictsById,
     conflictIdsByUnitKey,
     selectedPhysicalActionKeysByConflictId,
@@ -650,10 +666,48 @@ function applyRouteAction(
   const progressedRoutePositions: PlannerSearchAction['progressedRoutePositions'] =
     {}
   progressedUnits.forEach((unit) => {
-    state.routeProgressByEntryId[unit.entryId] =
-      (state.routeProgressByEntryId[unit.entryId] ?? 0) + 1
+    const lanes = lanePlans.get(unit.entryId)
+    const previousProgress =
+      state.routeProgressByEntryId[unit.entryId] ?? initialPlannerLaneProgress()
+    const nextProgress = advancePlannerLaneProgress(previousProgress, unit)
+    state.routeProgressByEntryId[unit.entryId] = nextProgress
     progressedRoutePositions[unit.entryId] = unit.position
     const entry = entriesById.get(unit.entryId)
+    if (entry && lanes) {
+      // The user's improvement preference (docs/PLANNER_SPEC.md 7.6): once
+      // this Entry's checkpoint is reached - or from the start when it selected
+      // none - a stream-lane unit executed while the lane the user wanted first
+      // still has units left counts against the branch. A ranking preference
+      // only: the unit is executed all the same.
+      const preference = entryImprovementPreference(entry)
+      const improving =
+        lanes.pin === null || state.reachedCheckpointByEntryId[entry.id] === true
+      if (
+        preference !== 'planner' &&
+        improving &&
+        unit.position.unitIndex === unit.position.unitCount - 1 &&
+        unit.lane !== 'base'
+      ) {
+        const preferredLane = preference === 'skill_first' ? 'skill' : 'bonus'
+        if (
+          unit.lane !== preferredLane &&
+          previousProgress[preferredLane] < lanes[preferredLane].length
+        ) {
+          state.improvementPreferenceViolationCount += 1
+        }
+      }
+      // The compromise checkpoint is reached the moment both lanes hold their
+      // pinned state. A pinned endpoint is never skippable, so this can only
+      // arrive through a real executed action - or be held from the start by
+      // an existing Gogma's lane starts (docs/PLANNER_SPEC.md 7.5.2 / 7.5.3).
+      if (
+        lanes.pin !== null &&
+        state.reachedCheckpointByEntryId[entry.id] !== true &&
+        hasReachedIntermediatePin(lanes, nextProgress)
+      ) {
+        state.reachedCheckpointByEntryId[entry.id] = true
+      }
+    }
     if (entry && routeOutputChanges(entry, unit)) {
       const currentRuntime = state.routeRuntimeByEntryId[entry.id]
       state.routeRuntimeByEntryId[entry.id] = {
@@ -665,7 +719,6 @@ function applyRouteAction(
       }
       appliedInventory.effect.routeOutputChangedForEntryIds.push(entry.id)
     }
-    const entryUnits = entry ? unitPlans.get(entry.id) : undefined
     const sourceId = entry ? existingRouteSourceId(entry) : null
     if (entry && sourceId !== null) {
       state.routeSourceVersionByEntryId[entry.id] =
@@ -673,40 +726,20 @@ function applyRouteAction(
     }
     if (
       entry &&
-      entryUnits !== undefined &&
+      lanes !== undefined &&
       isExistingGogmaRoute(entry) &&
-      state.routeProgressByEntryId[entry.id] === entryUnits.length &&
+      isPlannerLaneRouteComplete(lanes, nextProgress) &&
       sourceId !== null
     ) {
       state.candidateReadySourceVersionByEntryId[entry.id] =
         state.routeSourceVersionByEntryId[entry.id]
-    }
-    // A unit that ends one of this Entry's selected checkpoints really put the
-    // compromise weapon in the player's hands, so the hard constraint is
-    // recorded as satisfied here. It is never recorded for a unit that was only
-    // fast-forwarded: a checkpoint endpoint is never skippable, so it can only
-    // arrive through a real executed action (`docs/PLANNER_SPEC.md` 7.5.3).
-    if (entry && unit.position.unitIndex === unit.position.unitCount - 1) {
-      const checkpoint = selectedCheckpointAtOperationIndex(
-        entry,
-        unit.position.operationIndex,
-      )
-      if (checkpoint) {
-        const reached = state.reachedCheckpointOpportunityIdsByEntryId[entry.id] ?? []
-        if (!reached.includes(checkpoint.opportunity.id)) {
-          state.reachedCheckpointOpportunityIdsByEntryId[entry.id] = [
-            ...reached,
-            checkpoint.opportunity.id,
-          ]
-        }
-      }
     }
   })
   // Counter stream progression only: a Route prefix another Entry's real
   // operation already passed advances silently here. It creates no Search
   // Action, no trace entry, no progressed Entry / Target record, no inventory
   // effect, and no route runtime output (docs/PLANNER_SPEC.md 7.0.2).
-  fastForwardPlannerRouteProgress(state, unitPlans)
+  fastForwardPlannerRouteProgress(state, lanePlans)
   const progressedBuildListEntryIds = progressedUnits.map(
     ({ entryId }) => entryId,
   )
@@ -807,15 +840,13 @@ function applyReserveAction(
       ),
     }
   }
-  // The user's selected compromise checkpoints are a hard constraint: a branch
-  // that did not actually reach one of them may not finish this Entry, and the
-  // Planner never resolves that by dropping or moving the selection
-  // (`docs/PLANNER_SPEC.md` 7.5.3).
+  // The user's selected intermediate states are a hard constraint: a branch
+  // that did not actually reach the compromise checkpoint they pin may not
+  // finish this Entry, and the Planner never resolves that by dropping or
+  // moving the selection (`docs/PLANNER_SPEC.md` 7.5.3).
   if (
-    !hasReachedEverySelectedCheckpoint(
-      entry,
-      sourceState.reachedCheckpointOpportunityIdsByEntryId[entry.id] ?? [],
-    )
+    hasIntermediateStateSelection(entry) &&
+    sourceState.reachedCheckpointByEntryId[entry.id] !== true
   ) {
     return {
       state: null,
@@ -823,7 +854,7 @@ function applyReserveAction(
         entry.id,
         'reserve_weapon',
         'selected_checkpoint_not_reached',
-        'A compromise checkpoint selected for this BuildListEntry was not reached.',
+        'The compromise checkpoint selected for this BuildListEntry was not reached.',
       ),
     }
   }
@@ -989,7 +1020,7 @@ function addWarning(
 function detectCurrentPlannerConflicts(
   state: PlannerSearchState,
   allSearchEntries: readonly BuildListEntry[],
-  allUnitPlans: ReadonlyMap<BuildListEntryId, readonly PlannerRouteUnit[]>,
+  allLanePlans: ReadonlyMap<BuildListEntryId, PlannerEntryLanes>,
   targets: readonly TargetWeapon[],
   resolutions: readonly PlannerConflictResolution[],
   requirements: PlannerCheckpointRequirements,
@@ -999,9 +1030,10 @@ function detectCurrentPlannerConflicts(
   )
   const unitPlans = new Map(
     entries.flatMap((entry) => {
-      const units = allUnitPlans.get(entry.id) ?? []
-      const progress = state.routeProgressByEntryId[entry.id] ?? 0
-      return [[entry.id, units.slice(progress)] as const]
+      const lanes = allLanePlans.get(entry.id)
+      if (!lanes) return []
+      const progress = state.routeProgressByEntryId[entry.id] ?? initialPlannerLaneProgress()
+      return [[entry.id, remainingPlannerLaneUnits(lanes, progress)] as const]
     }),
   )
   return detectPlannerConflicts(entries, unitPlans, targets, resolutions, false)
@@ -1077,7 +1109,7 @@ export async function runPlannerBeamSearch(
   }
   const {
     allSearchEntries,
-    allUnitPlans,
+    allLanePlans,
     entriesById,
     excludedBuildListEntries,
     initialConflictDetection,
@@ -1186,7 +1218,7 @@ export async function runPlannerBeamSearch(
       const stateConflictDetection = detectCurrentPlannerConflicts(
         state,
         allSearchEntries,
-        allUnitPlans,
+        allLanePlans,
         targets,
         validConflictResolutions,
         checkpointRequirements,
@@ -1213,62 +1245,70 @@ export async function runPlannerBeamSearch(
         executableRequiredUnitsByCounterPosition(
           state,
           allSearchEntries,
-          allUnitPlans,
+          allLanePlans,
           isBlockedByConflictResolution,
           checkpointRequirements,
         )
       for (const entry of allSearchEntries) {
         if (state.selectedBuildListEntryIds.includes(entry.id)) continue
         if (!targetCanUseEntry(state, entry, checkpointRequirements)) continue
-        const units = allUnitPlans.get(entry.id) ?? []
-        const progress = state.routeProgressByEntryId[entry.id] ?? 0
-        let applied: AppliedActionResult
-        if (progress < units.length) {
-          const unit = units[progress]
-          if (isBlockedByConflictResolution(unit)) {
-            appendUniqueRejection(
-              rejections,
-              rejectionKeys,
-              rejection(
-                entry.id,
-                unit.operation.type,
-                'conflict_resolution_not_selected',
-                'A valid local conflict resolution selected another BuildListEntry.',
-              ),
-            )
-            continue
-          }
-          // Execution eligibility, not a conflict and not a score: another
-          // Entry must physically run at this Counter position, and this unit
-          // can fast-forward once it has (docs/PLANNER_SPEC.md 7.0.2). Running
-          // this one first would only push the Counter past a required unit, so
-          // the branch is never generated and no rejection is recorded.
-          if (
-            isSkippableUnitDominatedByRequiredUnit(
+        const lanes = allLanePlans.get(entry.id)
+        if (!lanes) continue
+        const progress = state.routeProgressByEntryId[entry.id] ?? initialPlannerLaneProgress()
+        const attempts: AppliedActionResult[] = []
+        if (!isPlannerLaneRouteComplete(lanes, progress)) {
+          // After the base prefix, the Bonus lane and the Skill lane are both
+          // candidates: the Planner, not the Route, decides their interleaving
+          // (docs/PLANNER_SPEC.md 7.0.4), subject to the checkpoint pin. Every
+          // lane that can run here becomes a successor, so a Skill-first and a
+          // Bonus-first branch both survive; the improvement preference is a
+          // soft ranking term of the comparator (7.6), never a branch filter.
+          for (const unit of nextPlannerLaneUnits(lanes, progress)) {
+            if (isBlockedByConflictResolution(unit)) {
+              appendUniqueRejection(
+                rejections,
+                rejectionKeys,
+                rejection(
+                  entry.id,
+                  unit.operation.type,
+                  'conflict_resolution_not_selected',
+                  'A valid local conflict resolution selected another BuildListEntry.',
+                ),
+              )
+              continue
+            }
+            // Execution eligibility, not a conflict and not a score: another
+            // Entry must physically run at this Counter position, and this unit
+            // can fast-forward once it has (docs/PLANNER_SPEC.md 7.0.2). Running
+            // this one first would only push the Counter past a required unit,
+            // so the branch is never generated and no rejection is recorded.
+            if (
+              isSkippableUnitDominatedByRequiredUnit(
+                unit,
+                requiredUnitsByCounterPosition,
+              )
+            ) {
+              continue
+            }
+            attempts.push(applyRouteAction(
+              state,
               unit,
-              requiredUnitsByCounterPosition,
-            )
-          ) {
-            continue
+              entriesById,
+              allLanePlans,
+              conflictsById,
+              stateConflictDetection.conflictIdsByUnitKey,
+              stateConflictDetection.selectedPhysicalActionKeysByConflictId,
+              targets,
+              input.master,
+              dependencies.rngEngine,
+              preferredSourceEntryIds,
+              checkpointRequirements,
+            ))
           }
-          applied = applyRouteAction(
-            state,
-            unit,
-            entriesById,
-            allUnitPlans,
-            conflictsById,
-            stateConflictDetection.conflictIdsByUnitKey,
-            stateConflictDetection.selectedPhysicalActionKeysByConflictId,
-            targets,
-            input.master,
-            dependencies.rngEngine,
-            preferredSourceEntryIds,
-            checkpointRequirements,
-          )
         } else {
           const target = targetsById.get(entry.targetWeaponId)
           if (!target) continue
-          applied = applyReserveAction(
+          attempts.push(applyReserveAction(
             state,
             entry,
             target,
@@ -1277,60 +1317,63 @@ export async function runPlannerBeamSearch(
             input.master,
             preferredSourceEntryIds,
             checkpointRequirements,
+          ))
+        }
+        for (const applied of attempts) {
+          if (applied.rejection) {
+            appendUniqueRejection(
+              rejections,
+              rejectionKeys,
+              applied.rejection,
+            )
+            continue
+          }
+          if (applied.state === null) continue
+          if (expandedStates >= input.options.maxExpandedStates) {
+            reachedExpandedLimit = true
+            stop = true
+            break
+          }
+          const successorConflictDetection = detectCurrentPlannerConflicts(
+            applied.state,
+            allSearchEntries,
+            allLanePlans,
+            targets,
+            validConflictResolutions,
+            checkpointRequirements,
           )
+          recordDetectedConflicts(successorConflictDetection)
+          applied.state.evaluationScore = evaluatePlannerSearchState(applied.state, {
+            ...scoreContext,
+            conflictCountByEntryId: conflictCountByEntryId(
+              successorConflictDetection.conflicts,
+            ),
+          })
+          if (applied.state.trace.length >= input.options.maxPlanSteps) {
+            reachedStepLimit = true
+          }
+          successors.push(applied.state)
+          expandedStates += 1
+          executionOptions.onProgress?.({
+            expandedStates,
+            maxExpandedStates: input.options.maxExpandedStates,
+          })
+          bestPartial = betterState(bestPartial, applied.state)
+          if (isComplete(applied.state)) {
+            bestComplete = betterState(bestComplete, applied.state)
+          }
+          if (expandedStates >= input.options.maxExpandedStates) {
+            reachedExpandedLimit = true
+            stop = true
+            break
+          }
+          if (executionOptions.shouldCancel?.()) {
+            cancelled = true
+            stop = true
+            break
+          }
         }
-        if (applied.rejection) {
-          appendUniqueRejection(
-            rejections,
-            rejectionKeys,
-            applied.rejection,
-          )
-          continue
-        }
-        if (applied.state === null) continue
-        if (expandedStates >= input.options.maxExpandedStates) {
-          reachedExpandedLimit = true
-          stop = true
-          break
-        }
-        const successorConflictDetection = detectCurrentPlannerConflicts(
-          applied.state,
-          allSearchEntries,
-          allUnitPlans,
-          targets,
-          validConflictResolutions,
-          checkpointRequirements,
-        )
-        recordDetectedConflicts(successorConflictDetection)
-        applied.state.evaluationScore = evaluatePlannerSearchState(applied.state, {
-          ...scoreContext,
-          conflictCountByEntryId: conflictCountByEntryId(
-            successorConflictDetection.conflicts,
-          ),
-        })
-        if (applied.state.trace.length >= input.options.maxPlanSteps) {
-          reachedStepLimit = true
-        }
-        successors.push(applied.state)
-        expandedStates += 1
-        executionOptions.onProgress?.({
-          expandedStates,
-          maxExpandedStates: input.options.maxExpandedStates,
-        })
-        bestPartial = betterState(bestPartial, applied.state)
-        if (isComplete(applied.state)) {
-          bestComplete = betterState(bestComplete, applied.state)
-        }
-        if (expandedStates >= input.options.maxExpandedStates) {
-          reachedExpandedLimit = true
-          stop = true
-          break
-        }
-        if (executionOptions.shouldCancel?.()) {
-          cancelled = true
-          stop = true
-          break
-        }
+        if (stop) break
       }
       if (stop) break
     }

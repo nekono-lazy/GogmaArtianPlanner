@@ -3,8 +3,8 @@ import type {
   BuildListEntry,
   BuildListEntryId,
   BuildRoute,
-  CompromiseCheckpointOpportunityId,
   GroupSkillId,
+  IntermediateStateSelection,
   RestorationBonus,
   RestorationBonusScope,
   RestorationBonusSet,
@@ -107,18 +107,24 @@ export interface CreateBuildListEntryOptions {
   id?: BuildListEntryId
   createdAt?: string
   /**
-   * The compromise checkpoints the user chose on the Search screen.
+   * The intermediate states and improvement preference the user chose on the
+   * Search screen.
    *
    * They are the Entry's own Planner input, so they never take part in
    * `createEntryId()` or `createBuildCandidateMeaningFingerprint()`: two Entries
-   * differing only in their checkpoint selection would otherwise be two
-   * different Candidates, which they are not (`docs/DATA_MODEL.md` 9.4).
+   * differing only in their selection would otherwise be two different
+   * Candidates, which they are not (`docs/DATA_MODEL.md` 9.4).
    */
-  selectedCheckpointOpportunityIds?: readonly CompromiseCheckpointOpportunityId[]
+  intermediateStateSelection?: IntermediateStateSelection
+}
+
+/** Nothing selected on either lane, and the improvement order left to the Planner. */
+export function defaultIntermediateStateSelection(): IntermediateStateSelection {
+  return { skillOpportunityId: null, bonusOpportunityId: null, improvementPreference: 'planner' }
 }
 
 /**
- * Replaces one Entry's checkpoint selection.
+ * Replaces one Entry's intermediate state selection and improvement preference.
  *
  * It is an ordinary Build List edit, not a recalculation: the Candidate
  * Snapshot, both hashes and the `CalculationContext` are untouched, so the
@@ -126,13 +132,13 @@ export interface CreateBuildListEntryOptions {
  * semantic hash, which is what makes an existing Plan a recalculation target
  * (`docs/PLANNER_SPEC.md` 7.5.5).
  */
-export function withSelectedCheckpointOpportunities(
+export function withIntermediateStateSelection(
   entry: BuildListEntry,
-  selectedCheckpointOpportunityIds: readonly CompromiseCheckpointOpportunityId[],
+  selection: IntermediateStateSelection,
 ): BuildListEntry {
   return {
     ...entry,
-    selectedCheckpointOpportunityIds: [...selectedCheckpointOpportunityIds],
+    intermediateStateSelection: { ...selection },
   }
 }
 
@@ -158,9 +164,9 @@ export function createBuildListEntry(
     candidateId: candidate.id,
     targetWeaponId: target.id,
     candidateSnapshot: structuredClone(candidate),
-    selectedCheckpointOpportunityIds: [
-      ...(options.selectedCheckpointOpportunityIds ?? []),
-    ],
+    intermediateStateSelection: {
+      ...(options.intermediateStateSelection ?? defaultIntermediateStateSelection()),
+    },
     targetDefinitionHash: createTargetDefinitionHash(target),
     searchStateHash: candidate.searchStateHash,
     referencedOwnedWeaponsHash: candidate.referencedOwnedWeaponsHash,

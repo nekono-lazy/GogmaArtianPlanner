@@ -11,12 +11,14 @@ import {
   CURRENT_CALCULATION_APP_SCHEMA_VERSION,
   V1_NORMAL_ARTIAN_RARITY,
 } from './common'
+import { improvementPreferences } from './entities'
 import type {
   AlternativeBonusRule,
   PracticalBonusCondition,
   BuildCandidate,
   BuildListEntry,
   BuildRoute,
+  IntermediateStateOpportunity,
   MaterialRequirement,
   OwnedWeapon,
   RouteOperation,
@@ -1065,18 +1067,40 @@ function validateCandidateConversionSkillTrace(
 }
 
 /**
- * Strict checkpoint shape validation (`docs/SEARCH_SPEC.md` 5.8).
+ * The Route operation indexes of each stream lane, in lane order
+ * (`docs/SEARCH_SPEC.md` 5.8.1): `skill[i]` is the Route index of the
+ * `(i + 1)`-th Reset Skills, `bonus[d]` that of the `(d + 1)`-th Bonus
+ * amendment, and `conversion` the Route index of the conversion, or `null`.
+ */
+function routeLaneOperationIndexes(route: BuildRoute): {
+  skill: number[]
+  bonus: number[]
+  conversion: number | null
+} {
+  const skill: number[] = []
+  const bonus: number[] = []
+  let conversion: number | null = null
+  route.operations.forEach((operation, index) => {
+    if (operation.type === 'reset_skills') skill.push(index)
+    else if (operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses') bonus.push(index)
+    else if (operation.type === 'convert_normal_to_gogma' && conversion === null) conversion = index
+  })
+  return { skill, bonus, conversion }
+}
+
+/**
+ * Strict intermediate state shape validation (`docs/SEARCH_SPEC.md` 5.8).
  *
  * Every Candidate generated under the current `CalculationContext` carries
- * `checkpointGroups`. A Candidate persisted before the field existed is left
- * alone rather than rewritten, so an absent field is an issue only at the
+ * `intermediateStateGroups`. A Candidate persisted before the field existed is
+ * left alone rather than rewritten, so an absent field is an issue only at the
  * current calculation schema version.
  */
-function validateCandidateCheckpointGroups(
+function validateCandidateIntermediateStateGroups(
   candidate: BuildCandidate,
   issues: DomainValidationIssue[],
 ): void {
-  const groups = candidate.checkpointGroups
+  const groups = candidate.intermediateStateGroups
   if (groups === undefined) {
     if (
       candidate.calculationContext.appSchemaVersion ===
@@ -1084,161 +1108,109 @@ function validateCandidateCheckpointGroups(
     ) {
       addIssue(
         issues,
-        'checkpointGroups',
+        'intermediateStateGroups',
         'invalid_state',
-        'A current-schema Candidate must carry its checkpoint groups.',
+        'A current-schema Candidate must carry its intermediate state groups.',
       )
     }
     return
   }
-  const operationCount = candidate.route.operations.length
-  // Operation units in Route order: `create_normal_artian` counts its forges,
-  // every other operation is one unit. `operationCount` / `remainingOperationCount`
-  // of an opportunity are derived from these, never stored independently.
-  const cumulativeUnits: number[] = []
-  let totalUnits = 0
-  candidate.route.operations.forEach((operation) => {
-    totalUnits += operation.type === 'create_normal_artian' ? operation.count : 1
-    cumulativeUnits.push(totalUnits)
-  })
-  const groupIds = new Set(groups.map(({ id }) => id))
+  const lanes = routeLaneOperationIndexes(candidate.route)
+  const bonusGroupIds = new Set(
+    groups.filter(({ axis }) => axis === 'bonus').map(({ id }) => id),
+  )
   const seenGroupIds = new Set<string>()
   const opportunityIds = new Set<string>()
   groups.forEach((group, groupIndex) => {
-    const path = `checkpointGroups[${groupIndex}]`
+    const path = `intermediateStateGroups[${groupIndex}]`
     validateId(group.id, `${path}.id`, issues)
-    if (!group.id.startsWith('checkpoint-group:')) {
-      addIssue(issues, `${path}.id`, 'invalid_id', 'Checkpoint group ids use the checkpoint-group prefix.')
+    if (!group.id.startsWith('intermediate-group:')) {
+      addIssue(issues, `${path}.id`, 'invalid_id', 'Intermediate state group ids use the intermediate-group prefix.')
     }
     if (seenGroupIds.has(group.id)) {
-      addIssue(issues, `${path}.id`, 'invalid_structure', 'Checkpoint group ids must be unique.')
+      addIssue(issues, `${path}.id`, 'invalid_structure', 'Intermediate state group ids must be unique.')
     }
     seenGroupIds.add(group.id)
-    if (
-      group.dominatingGroupId !== null &&
-      (group.dominatingGroupId === group.id || !groupIds.has(group.dominatingGroupId))
-    ) {
-      addIssue(
-        issues,
-        `${path}.dominatingGroupId`,
-        'invalid_reference',
-        'dominatingGroupId must reference another checkpoint group of the same Candidate.',
-      )
+    if (group.axis !== 'skill' && group.axis !== 'bonus') {
+      addIssue(issues, `${path}.axis`, 'invalid_literal', 'An intermediate state group belongs to the skill or the bonus lane.')
+      return
     }
-    validateRestorationBonusScope(group.restorationBonusScope, `${path}.restorationBonusScope`, issues)
-    appendIssues(issues, `${path}.restorationBonuses`, validateRestorationBonusSet(group.restorationBonuses))
-    if (
-      !['ideal', 'practical', 'alternative'].includes(group.conditionMatch.bonus) ||
-      !['ideal', 'practical'].includes(group.conditionMatch.skill) ||
-      (group.conditionMatch.bonus === 'ideal' && group.conditionMatch.skill === 'ideal')
-    ) {
-      addIssue(
-        issues,
-        `${path}.conditionMatch`,
-        'invalid_structure',
-        'A checkpoint must satisfy a compromise condition, never the full Ideal condition.',
-      )
-    }
-    if (group.restorationBonusScope !== 'gogma_artian') {
-      addIssue(
-        issues,
-        `${path}.restorationBonusScope`,
-        'invalid_state',
-        'A checkpoint state must have Gogma Artian scope.',
-      )
+    const laneIndexes = group.axis === 'skill' ? lanes.skill : lanes.bonus
+    if (group.axis === 'skill') {
+      if (!['practical', 'ideal'].includes(group.match)) {
+        addIssue(issues, `${path}.match`, 'invalid_literal', 'A Skill state satisfies the Practical or the Ideal Skill condition.')
+      }
+      if (group.seriesSkillId !== null) validateId(group.seriesSkillId, `${path}.seriesSkillId`, issues)
+      if (group.groupSkillId !== null) validateId(group.groupSkillId, `${path}.groupSkillId`, issues)
+    } else {
+      if (!['practical', 'alternative', 'ideal'].includes(group.match)) {
+        addIssue(issues, `${path}.match`, 'invalid_literal', 'A Bonus state satisfies the Practical, Alternative, or Ideal Bonus condition.')
+      }
+      validateRestorationBonusScope(group.restorationBonusScope, `${path}.restorationBonusScope`, issues)
+      if (group.restorationBonusScope !== 'gogma_artian') {
+        addIssue(issues, `${path}.restorationBonusScope`, 'invalid_state', 'An accepted Bonus state must have Gogma Artian scope.')
+      }
+      appendIssues(issues, `${path}.restorationBonuses`, validateRestorationBonusSet(group.restorationBonuses))
+      if (
+        group.dominatingGroupId !== null &&
+        (group.dominatingGroupId === group.id || !bonusGroupIds.has(group.dominatingGroupId))
+      ) {
+        addIssue(
+          issues,
+          `${path}.dominatingGroupId`,
+          'invalid_reference',
+          'dominatingGroupId must reference another Bonus state group of the same Candidate.',
+        )
+      }
+      if (group.isDisplaySecondary !== (group.dominatingGroupId !== null)) {
+        addIssue(issues, `${path}.isDisplaySecondary`, 'invalid_state', 'isDisplaySecondary must match the presence of dominatingGroupId.')
+      }
     }
     if (group.opportunities.length === 0) {
-      addIssue(issues, `${path}.opportunities`, 'invalid_state', 'A checkpoint group must keep at least one opportunity.')
-    }
-    if (group.isDisplaySecondary !== (group.dominatingGroupId !== null)) {
-      addIssue(
-        issues,
-        `${path}.isDisplaySecondary`,
-        'invalid_state',
-        'isDisplaySecondary must match the presence of dominatingGroupId.',
-      )
+      addIssue(issues, `${path}.opportunities`, 'invalid_state', 'An intermediate state group must keep at least one opportunity.')
     }
     group.opportunities.forEach((opportunity, index) => {
       const opportunityPath = `${path}.opportunities[${index}]`
       validateId(opportunity.id, `${opportunityPath}.id`, issues)
-      if (!opportunity.id.startsWith('checkpoint-opportunity:')) {
-        addIssue(issues, `${opportunityPath}.id`, 'invalid_id', 'Checkpoint opportunity ids use the checkpoint-opportunity prefix.')
+      if (!opportunity.id.startsWith('intermediate-opportunity:')) {
+        addIssue(issues, `${opportunityPath}.id`, 'invalid_id', 'Intermediate state opportunity ids use the intermediate-opportunity prefix.')
       }
       if (opportunityIds.has(opportunity.id)) {
-        addIssue(issues, `${opportunityPath}.id`, 'invalid_structure', 'Checkpoint opportunity ids must be unique.')
+        addIssue(issues, `${opportunityPath}.id`, 'invalid_structure', 'Intermediate state opportunity ids must be unique.')
       }
       opportunityIds.add(opportunity.id)
-      validateNonNegativeInteger(opportunity.afterOperationIndex, `${opportunityPath}.afterOperationIndex`, issues)
-      // The two counts are Route facts, so a current artifact whose stored
-      // counts disagree with its own Route is rejected rather than trusted.
-      const expectedOperationCount = cumulativeUnits[opportunity.afterOperationIndex]
-      if (
-        expectedOperationCount !== undefined &&
-        opportunity.operationCount !== expectedOperationCount
-      ) {
-        addIssue(
-          issues,
-          `${opportunityPath}.operationCount`,
-          'invalid_state',
-          'operationCount must equal the Route operation units through afterOperationIndex.',
-        )
+      if (opportunity.axis !== group.axis) {
+        addIssue(issues, `${opportunityPath}.axis`, 'invalid_state', 'An opportunity belongs to the lane of its group.')
       }
-      if (
-        expectedOperationCount !== undefined &&
-        opportunity.remainingOperationCount !== totalUnits - expectedOperationCount
-      ) {
-        addIssue(
-          issues,
-          `${opportunityPath}.remainingOperationCount`,
-          'invalid_state',
-          'remainingOperationCount must equal the Route operation units after afterOperationIndex.',
-        )
+      validateNonNegativeInteger(opportunity.lanePosition, `${opportunityPath}.lanePosition`, issues)
+      // The lane end is the Ideal result and never an intermediate state
+      // (`docs/SEARCH_SPEC.md` 5.8.1).
+      if (opportunity.lanePosition >= laneIndexes.length) {
+        addIssue(issues, `${opportunityPath}.lanePosition`, 'invalid_range', 'An intermediate state lies strictly before its lane end.')
+      } else {
+        // The producing operation is a Route fact: lane position `n >= 1` is
+        // produced by the lane's `n`-th operation, and position 0 by the
+        // conversion when the Route has one.
+        const expectedOperationIndex =
+          opportunity.lanePosition === 0
+            ? lanes.conversion
+            : laneIndexes[opportunity.lanePosition - 1]
+        if (opportunity.operationIndex !== expectedOperationIndex) {
+          addIssue(issues, `${opportunityPath}.operationIndex`, 'invalid_state', 'operationIndex must be the Route operation that produces this lane position.')
+        }
       }
-      if (
-        opportunity.conditionMatch.bonus !== group.conditionMatch.bonus ||
-        opportunity.conditionMatch.skill !== group.conditionMatch.skill
-      ) {
-        addIssue(
-          issues,
-          `${opportunityPath}.conditionMatch`,
-          'invalid_state',
-          'An opportunity carries the same compromise judgement as its group.',
-        )
+      if (index > 0 && opportunity.lanePosition <= group.opportunities[index - 1].lanePosition) {
+        addIssue(issues, `${opportunityPath}.lanePosition`, 'invalid_structure', 'Intermediate state opportunities must ascend by lane position.')
       }
-      // Strict prefix only: the Ideal-completing final operation is never a
-      // checkpoint (`docs/SEARCH_SPEC.md` 5.8.1).
-      if (opportunity.afterOperationIndex >= operationCount - 1) {
-        addIssue(
-          issues,
-          `${opportunityPath}.afterOperationIndex`,
-          'invalid_range',
-          'A checkpoint must end on a strict prefix of the Route.',
-        )
-      }
-      if (index > 0 && opportunity.afterOperationIndex <= group.opportunities[index - 1].afterOperationIndex) {
-        addIssue(
-          issues,
-          `${opportunityPath}.afterOperationIndex`,
-          'invalid_structure',
-          'Checkpoint opportunities must ascend by Route position.',
-        )
-      }
-      validatePositiveInteger(opportunity.operationCount, `${opportunityPath}.operationCount`, issues)
-      validatePositiveInteger(opportunity.remainingOperationCount, `${opportunityPath}.remainingOperationCount`, issues)
-      appendIssues(issues, `${opportunityPath}.restorationBonuses`, validateRestorationBonusSet(opportunity.restorationBonuses))
-      validateRestorationBonusScope(opportunity.restorationBonusScope, `${opportunityPath}.restorationBonusScope`, issues)
-      if (
-        opportunity.restorationBonusScope !== group.restorationBonusScope ||
-        opportunity.seriesSkillId !== group.seriesSkillId ||
-        opportunity.groupSkillId !== group.groupSkillId ||
-        !areRestorationBonusSetsEqual(opportunity.restorationBonuses, group.restorationBonuses)
-      ) {
-        addIssue(
-          issues,
-          opportunityPath,
-          'invalid_state',
-          'Every opportunity must reach its own group performance state.',
-        )
+      if (opportunity.axis === 'bonus' && group.axis === 'bonus') {
+        appendIssues(issues, `${opportunityPath}.restorationBonuses`, validateRestorationBonusSet(opportunity.restorationBonuses))
+        validateRestorationBonusScope(opportunity.restorationBonusScope, `${opportunityPath}.restorationBonusScope`, issues)
+        if (
+          opportunity.restorationBonusScope !== group.restorationBonusScope ||
+          !areRestorationBonusSetsEqual(opportunity.restorationBonuses, group.restorationBonuses)
+        ) {
+          addIssue(issues, opportunityPath, 'invalid_state', 'Every opportunity must reach its own group product.')
+        }
       }
     })
   })
@@ -1266,7 +1238,7 @@ export function validateBuildCandidate(
   if (candidate.idealDifference.matchedBonusCount < 0 || candidate.idealDifference.matchedBonusCount > 5) {
     addIssue(issues, 'idealDifference.matchedBonusCount', 'invalid_range', 'matchedBonusCount must be 0 through 5.')
   }
-  validateCandidateCheckpointGroups(candidate, issues)
+  validateCandidateIntermediateStateGroups(candidate, issues)
   validateId(candidate.searchStateHash, 'searchStateHash', issues)
   if (candidate.referencedOwnedWeaponsHash !== null) {
     validateId(candidate.referencedOwnedWeaponsHash, 'referencedOwnedWeaponsHash', issues)
@@ -1303,63 +1275,59 @@ export function validateBuildCandidate(
 }
 
 /**
- * The selected checkpoints are a hard Planner constraint, so an unknown id or a
- * second selection inside one group fails closed rather than being ignored
- * (`docs/DATA_MODEL.md` 9.4).
+ * The selected intermediate states are a hard Planner constraint, so an
+ * unknown id, an id of the other lane, or an unknown preference fails closed
+ * rather than being ignored (`docs/DATA_MODEL.md` 9.4). A lane start
+ * (position 0) is a legal selection on either lane or both: for an existing
+ * Gogma that names the weapon the user holds now, whose compromise checkpoint
+ * the Planner treats as reached at its start, while a conversion Route's lane
+ * start is reached once the conversion ran (`docs/PLANNER_SPEC.md` 7.5.2).
  *
  * Shared with the Planner's current-input validation: a malformed selection
- * must never reach `selectedCheckpointsForEntry()`, which would read it as an
- * empty selection (`docs/PLANNER_SPEC.md` 7.5.9).
+ * must never reach the Planner, which would otherwise read it as an empty
+ * selection (`docs/PLANNER_SPEC.md` 7.5.9).
  */
-export function validateBuildListEntryCheckpointSelection(
+export function validateBuildListEntryIntermediateStateSelection(
   entry: BuildListEntry,
 ): DomainValidationResult {
   const issues: DomainValidationIssue[] = []
-  appendCheckpointSelectionIssues(entry, issues)
+  appendIntermediateStateSelectionIssues(entry, issues)
   return result(issues)
 }
 
-function appendCheckpointSelectionIssues(
+function appendIntermediateStateSelectionIssues(
   entry: BuildListEntry,
   issues: DomainValidationIssue[],
 ): void {
-  const selected = entry.selectedCheckpointOpportunityIds
-  if (selected === undefined || selected.length === 0) return
-  const groupIdByOpportunityId = new Map<string, string>()
-  for (const group of entry.candidateSnapshot.checkpointGroups ?? []) {
-    for (const opportunity of group.opportunities) {
-      groupIdByOpportunityId.set(opportunity.id, group.id)
-    }
+  const selection = entry.intermediateStateSelection
+  if (selection === undefined) return
+  const path = 'intermediateStateSelection'
+  if (!improvementPreferences.includes(selection.improvementPreference)) {
+    addIssue(issues, `${path}.improvementPreference`, 'invalid_literal', 'The improvement preference must be planner, skill_first, or bonus_first.')
   }
-  const selectedGroupIds = new Set<string>()
-  const seen = new Set<string>()
-  selected.forEach((opportunityId, index) => {
-    const path = `selectedCheckpointOpportunityIds[${index}]`
-    const groupId = groupIdByOpportunityId.get(opportunityId)
-    if (groupId === undefined) {
+  // Any lane position may be selected, the lane start included: an existing
+  // Gogma that already holds a compromise state on both lanes is a checkpoint
+  // held at Planner start, and a conversion Route's lane starts are produced
+  // by the conversion itself (`docs/SEARCH_SPEC.md` 5.8.5). A selected id only
+  // has to exist on its own lane of the Candidate Snapshot.
+  const groups = entry.candidateSnapshot.intermediateStateGroups ?? []
+  const axes = ['skill', 'bonus'] as const
+  axes.forEach((axis) => {
+    const selectedId = axis === 'skill' ? selection.skillOpportunityId : selection.bonusOpportunityId
+    const field = axis === 'skill' ? 'skillOpportunityId' : 'bonusOpportunityId'
+    if (selectedId === null) return
+    const opportunity = groups
+      .filter((group) => group.axis === axis)
+      .flatMap((group): IntermediateStateOpportunity[] => [...group.opportunities])
+      .find(({ id }) => id === selectedId)
+    if (opportunity === undefined) {
       addIssue(
         issues,
-        path,
+        `${path}.${field}`,
         'invalid_reference',
-        'A selected checkpoint opportunity must exist in the candidate snapshot.',
+        'A selected intermediate state must exist on its own lane in the candidate snapshot.',
       )
-      return
     }
-    if (seen.has(opportunityId)) {
-      addIssue(issues, path, 'invalid_structure', 'A checkpoint opportunity must not be selected twice.')
-      return
-    }
-    seen.add(opportunityId)
-    if (selectedGroupIds.has(groupId)) {
-      addIssue(
-        issues,
-        path,
-        'invalid_state',
-        'At most one opportunity may be selected per checkpoint group.',
-      )
-      return
-    }
-    selectedGroupIds.add(groupId)
   })
 }
 
@@ -1386,7 +1354,7 @@ export function validateBuildListEntry(
   if (!isCalculationContextCompatible(entry.calculationContext, entry.candidateSnapshot.calculationContext)) {
     addIssue(issues, 'calculationContext', 'inconsistent_snapshot', 'CalculationContext must match the candidate snapshot.')
   }
-  appendCheckpointSelectionIssues(entry, issues)
+  appendIntermediateStateSelectionIssues(entry, issues)
   if (entry.isStale !== (entry.staleReasons.length > 0)) {
     addIssue(issues, 'isStale', 'invalid_state', 'isStale must match the presence of staleReasons.')
   }

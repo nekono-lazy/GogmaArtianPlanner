@@ -1,7 +1,7 @@
 import { createBuildListCalculationContext } from './createBuildListCalculationContext'
 import { createValidMasterDataFixture } from '../../test/fixtures/masterData'
 import { describe, expect, it, vi } from 'vitest'
-import { createBuildListEntry } from '../../domain/buildList'
+import { createBuildListEntry, defaultIntermediateStateSelection } from '../../domain/buildList'
 import { createSearchStateHash } from '../../domain/models/hashing'
 import type { BuildListEntry } from '../../domain/models/publicTypes'
 import {
@@ -17,8 +17,9 @@ import {
   checkpointPracticalBonuses,
   checkpointPracticalBonusesReordered,
   checkpointTarget,
+  intermediateOpportunityAt,
 } from '../../test/fixtures/checkpointRoute'
-import type { CompromiseCheckpointOpportunityId } from '../../domain/models/publicTypes'
+import type { IntermediateStateOpportunityId } from '../../domain/models/publicTypes'
 import { BuildListService, type BuildListServiceRepositories } from './buildListService'
 
 function memoryRepositories(initial: BuildListEntry[] = []) {
@@ -59,7 +60,7 @@ describe('BuildListService', () => {
     memory.entries.push(original)
 
     const refreshed = await new BuildListService(memory.repositories).refreshStaleness(current)
-    expect(current.appSchemaVersion).toBe(10)
+    expect(current.appSchemaVersion).toBe(11)
     expect(refreshed.entries[0].isStale).toBe(true)
     expect(refreshed.entries[0].staleReasons).toEqual(['calculation_context_changed'])
     expect(refreshed.entries[0].candidateSnapshot).toEqual(snapshot)
@@ -108,7 +109,7 @@ describe('BuildListService', () => {
     expect(memory.entries).toHaveLength(1)
   })
 
-  it.each([1, 2, 3, 4, 5, 6, 7, 8, 9])('adds a current Candidate beside an unchanged schema %i snapshot', async (appSchemaVersion) => {
+  it.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])('adds a current Candidate beside an unchanged schema %i snapshot', async (appSchemaVersion) => {
     const memory = memoryRepositories()
     const candidate = createValidBuildCandidate()
     candidate.calculationContext = createBuildListCalculationContext(createValidMasterDataFixture())
@@ -121,7 +122,7 @@ describe('BuildListService', () => {
     expect(result.added).toBe(true)
     expect(memory.entries).toHaveLength(2)
     expect(memory.entries[0]).toEqual(before)
-    expect(result.entry.calculationContext.appSchemaVersion).toBe(10)
+    expect(result.entry.calculationContext.appSchemaVersion).toBe(11)
     expect(memory.repositories.deleteEntry).not.toHaveBeenCalled()
   })
 
@@ -139,7 +140,7 @@ describe('BuildListService', () => {
     expect(refreshed.entries[0].searchStateHash).toBe(original.searchStateHash)
     expect(memory.repositories.putEntry).toHaveBeenCalledOnce()
   })
-  it('never overwrites an existing checkpoint selection when the Candidate is re-added', async () => {
+  it('L: stores the intermediate state selection and preference, and never overwrites them on a re-add', async () => {
     const memory = memoryRepositories()
     const service = new BuildListService(memory.repositories)
     const candidate = checkpointCandidate([
@@ -148,24 +149,30 @@ describe('BuildListService', () => {
     ])
     const target = checkpointTarget()
     memory.repositories.getTargets = async () => [target]
-    const selected = candidate.checkpointGroups![0].opportunities[0].id
+    const selected = intermediateOpportunityAt(candidate, 'bonus', 1).opportunity.id
+    const selection = {
+      ...defaultIntermediateStateSelection(),
+      bonusOpportunityId: selected,
+      improvementPreference: 'skill_first' as const,
+    }
 
-    const first = await service.addCandidate(candidate, target, [selected])
+    const first = await service.addCandidate(candidate, target, selection)
+    expect(first.entry.intermediateStateSelection).toEqual(selection)
     // A second Search finds the same Candidate again under a new run id.
     const repeated = structuredClone(candidate)
     repeated.id = 'candidate.checkpoint.another' as typeof repeated.id
     repeated.searchRunId = 'search-run.checkpoint.another'
-    const second = await service.addCandidate(repeated, target, [])
+    const second = await service.addCandidate(repeated, target, defaultIntermediateStateSelection())
 
     expect(first.added).toBe(true)
     expect(second.added).toBe(false)
     expect(memory.entries).toHaveLength(1)
     // The user's selection survives: it is edited in the Build List, never by
     // adding the same Candidate again.
-    expect(second.entry.selectedCheckpointOpportunityIds).toEqual([selected])
+    expect(second.entry.intermediateStateSelection).toEqual(selection)
   })
 
-  it('replaces a checkpoint selection through the Domain validation authority', async () => {
+  it('L: replaces the selection and preference through the Domain validation authority', async () => {
     const memory = memoryRepositories()
     const service = new BuildListService(memory.repositories)
     const candidate = checkpointCandidate([
@@ -175,28 +182,34 @@ describe('BuildListService', () => {
     ])
     const target = checkpointTarget()
     memory.repositories.getTargets = async () => [target]
-    const [group] = candidate.checkpointGroups!
+    const later = intermediateOpportunityAt(candidate, 'bonus', 2).opportunity
     const added = await service.addCandidate(candidate, target)
 
-    const updated = await service.updateCheckpointSelection(added.entry.id, [
-      group.opportunities[1].id,
-    ])
-    expect(updated.selectedCheckpointOpportunityIds).toEqual([group.opportunities[1].id])
+    const updated = await service.updateIntermediateStateSelection(added.entry.id, {
+      ...defaultIntermediateStateSelection(),
+      bonusOpportunityId: later.id,
+      improvementPreference: 'bonus_first',
+    })
+    expect(updated.intermediateStateSelection).toEqual({
+      skillOpportunityId: null,
+      bonusOpportunityId: later.id,
+      improvementPreference: 'bonus_first',
+    })
 
-    // Two opportunities of one group are refused, and nothing is persisted.
+    // An id of the other lane and an unknown id are refused, and nothing is persisted.
     await expect(
-      service.updateCheckpointSelection(added.entry.id, [
-        group.opportunities[0].id,
-        group.opportunities[1].id,
-      ]),
-    ).rejects.toThrow(/checkpoint group/)
+      service.updateIntermediateStateSelection(added.entry.id, {
+        ...defaultIntermediateStateSelection(),
+        skillOpportunityId: later.id,
+      }),
+    ).rejects.toThrow(/own lane/)
     await expect(
-      service.updateCheckpointSelection(added.entry.id, [
-        'checkpoint-opportunity:unknown' as CompromiseCheckpointOpportunityId,
-      ]),
+      service.updateIntermediateStateSelection(added.entry.id, {
+        ...defaultIntermediateStateSelection(),
+        bonusOpportunityId: 'intermediate-opportunity:unknown' as IntermediateStateOpportunityId,
+      }),
     ).rejects.toThrow(/candidate snapshot/)
-    expect(memory.entries[0].selectedCheckpointOpportunityIds).toEqual([
-      group.opportunities[1].id,
-    ])
+    expect(memory.entries[0].intermediateStateSelection?.bonusOpportunityId).toBe(later.id)
+    expect(memory.entries[0].intermediateStateSelection?.improvementPreference).toBe('bonus_first')
   })
 })

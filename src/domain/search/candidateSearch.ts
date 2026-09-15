@@ -205,9 +205,9 @@ async function searchTarget(
   }
 
   // At most one canonical Ideal. A compromise state discovered on the way is
-  // never returned as a Candidate: only a strict prefix of an actual Ideal
-  // Route may be offered, and without an Ideal there is no such prefix
-  // (`docs/SEARCH_SPEC.md` 5.7).
+  // never returned as a Candidate: only an intermediate state on a lane of an
+  // actual Ideal Route may be offered, and without an Ideal there is no such
+  // lane (`docs/SEARCH_SPEC.md` 5.7).
   const candidate = selectCanonicalIdealCandidate(
     candidates,
     target.preferredOwnedWeaponId,

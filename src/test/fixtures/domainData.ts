@@ -209,8 +209,8 @@ export function createValidBuildCandidate(): BuildCandidate {
       summary: 'Domain fixture only.',
     },
     // Every Candidate generated under the current CalculationContext carries
-    // its checkpoint groups, and validation requires them there.
-    checkpointGroups: [],
+    // its intermediate state groups, and validation requires them there.
+    intermediateStateGroups: [],
     searchStateHash: 'hash.fixture.search',
     referencedOwnedWeaponsHash: null,
     calculationContext: { ...domainFixtureContext },

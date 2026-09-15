@@ -3838,3 +3838,83 @@ Route baseのOwnedWeaponからのpure replayである。RNG Engine呼び出し�
 - 妥協状態だけが到達可能でIdealが到達不能なTargetは、Candidate 0件になる。
   これは意図した挙動であり、「妥協品を作れない」という意味ではない。
   探索範囲上限を上げてIdeal Routeを見つければ、その途中でその妥協品を受け取れる
+
+## 9. lane別intermediate stateと改善優先への再設計
+
+### 9.0 この節の位置づけ
+
+8章は「canonical Ideal Routeのstrict prefix上のcheckpoint」を前提とした設計記録である。
+**歴史記録としてそのまま残す。** 本章はその前提のうち何が破綻し、どう置き換えたかを記録する。
+正式な契約は `docs/SEARCH_SPEC.md` 5.8、`docs/PLANNER_SPEC.md` 7.0.4 / 7.5 / 7.6、
+`docs/DATA_MODEL.md` 9.1 / 9.4 にある。
+
+### 9.1 変更の動機
+
+8章のモデルでは、checkpointはSearchが固定した1本の操作列（Bonus操作を先に並べ、Skill操作を
+後に並べる）のstrict prefixだけだった。そのため
+
+```text
+Practical Skill + Practical Bonus
+```
+
+のような状態は、Bonus laneがIdealへ到達したあとにしかSkill操作が現れないため、
+到達点として存在しなかった。Search側の並び順という実装都合が「どの妥協状態を
+受け取れるか」を決めていたことになる。
+
+また、両laneの独立性（Bonus amendmentはSkill amendmentの出力を読まず、逆も同様）を
+Plannerが利用できず、複数Targetのinterleaveで不要な順序制約を課していた。
+
+### 9.2 採用した設計
+
+- Routeを `base` / `bonus` / `skill` の3 laneとして読む。laneはRouteの並び順から純粋に
+  導出し、永続化しない
+- intermediate stateはlaneごとに抽出する。Skill候補（Practical / Ideal）と
+  復元ボーナス候補（Practical / Alternative / Ideal）を別々に提示し、Skill×Bonusの
+  組み合わせは提示しない
+- lane位置0（conversionが付与した初回Skill、既存巨戟の現在Skill / 現在gogma scope 5枠）を
+  正規のopportunityとする。8章の「Route baseの開始状態はprefixではない」という除外は、
+  片laneだけを既に持っていて、もう片laneだけを進めたいケースを表現できないため撤回した。
+  両laneの開始状態の同時選択も有効で、既存巨戟ではPlanner開始時点で到達済みのcheckpointになる
+  （PR #38レビューで「機械的にinvalid扱いする」当初案を撤回した。9.5）
+- 選択は `BuildListEntry.intermediateStateSelection`（lane別opportunity + 改善優先）。
+  Plannerはlane別のpinを導出し、両pinが揃った瞬間を妥協checkpointとする
+- checkpoint到達後の改善順序はSearchで固定せず、改善優先（soft preference）と全Planの
+  成立性でPlannerが決める
+
+### 9.3 Beam Searchでのlane展開
+
+lane分割をそのまま「各展開で両laneを試す」と実装すると、1 Entryあたりの状態数が
+Route内部のinterleave数だけ乗算され、実ユーザーregression（23操作 + 148/82操作の
+2 Target、232 Step）が `maxExpandedStates = 15000` で `incomplete` になった。
+
+当初は「Entryごとに優先laneを先に試し、優先laneのunitが現在stateで実行できない
+場合だけもう片方のlaneを展開する」枝刈りを採用したが、PR #38レビューで撤回した（9.5）。
+現在は両laneのunitをどちらもsuccessorとして生成し、beamWidth / semantic dedup / scoring /
+maxExpandedStates / maxPlanStepsだけで有界にする。232 Step regressionの完了に必要な
+展開数は12,276から17,619へ増え、regressionテストの引き上げ後上限は15,000から20,000へ
+変更した。既定上限10,000での `incomplete` 報告は変わらない。
+
+これは上限付き探索の挙動であり、契約ではない。改善優先の絶対最小違反数は保証しない。
+
+### 9.4 受け入れた制限
+
+- intermediate stateはcanonical Ideal Routeの各laneの履歴上の状態だけである。同じlaneの
+  別のKeep分岐（Searchが採用しなかった中間結果）は提示しない。これを提示するには
+  Candidate Search側の出力を増やす必要があり、本改訂の範囲外とした
+- 抽出はtraceのpure replayであり、RNG prediction call countは増えない（8.4と同じ）
+- version 10の `checkpointGroups` / `selectedCheckpointOpportunityIds` はlane pinへ
+  変換できないため、calculation schema version 11で旧artifactをfail closedする
+
+### 9.5 PR #38レビューでの修正
+
+- **改善優先がhardになっていた。** 優先laneが実行可能な限り反対laneのsuccessorを生成しない
+  枝刈りは、優先laneを先に進めると将来別Targetの必須Counter位置を潰すケースを探索から
+  失わせ、`planner` を実質Bonus先行固定にしていた。両laneのsuccessorを常に生成し、
+  `improvementPreferenceViolationCount` と既存scoringで選ぶ構造へ改めた
+- **既存巨戟のlane位置0候補が保存できなかった。** UIでは選択できるのに、pinが両方0になる
+  選択（両lane開始状態、または片lane開始状態＋もう片laneが既にIdeal）をvalidationが
+  「既に持っている武器」として拒否していた。妥協品は途中で利用できる状態であり、既存巨戟が
+  最初からその状態なら「Planner開始時点で妥協品を所持している」と扱うのが設計意図に合う。
+  validationの拒否を撤廃し、`createInitialPlannerSearchState()` が到達済みとして初期化する。
+  milestone Stepは生成せず、Trace ReplayがPlan開始時点の起点武器の状態を検証する。
+  conversion Routeのlane位置0は巨戟化が生む状態なので開始時点では未到達のままである

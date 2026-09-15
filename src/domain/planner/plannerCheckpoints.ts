@@ -1,9 +1,15 @@
 import type {
   BuildListEntry,
   BuildListEntryId,
-  CompromiseCheckpointGroupId,
-  CompromiseCheckpointOpportunity,
-  CompromiseCheckpointOpportunityId,
+  CompromiseConditionMatch,
+  ImprovementPreference,
+  IntermediateBonusOpportunity,
+  IntermediateBonusStateGroup,
+  IntermediateSkillOpportunity,
+  IntermediateSkillStateGroup,
+  IntermediateStateAxis,
+  IntermediateStateOpportunityId,
+  RouteOperation,
   TargetWeaponId,
 } from '../models/publicTypes'
 
@@ -12,101 +18,188 @@ function compareStableStrings(left: string, right: string): number {
 }
 
 /**
- * One checkpoint the user selected for this Entry, together with the group it
- * belongs to.
+ * The intermediate states one BuildListEntry selected, resolved against its
+ * own Candidate Snapshot, plus the improvement preference.
  *
- * A checkpoint is a hard Planner constraint (`docs/PLANNER_SPEC.md` 7.5.3): the
- * Planner may never ignore it, treat it as unselected, or silently move the
- * selection to another opportunity of the same group. All it may do is fail to
- * produce a Plan that satisfies it.
- */
-export interface SelectedCheckpoint {
-  groupId: CompromiseCheckpointGroupId
-  opportunity: CompromiseCheckpointOpportunity
-}
-
-/**
- * The checkpoints one BuildListEntry has selected, in Route order.
+ * A selected state is a hard Planner constraint (`docs/PLANNER_SPEC.md` 7.5):
+ * the Planner may never ignore it, treat it as unselected, or silently move
+ * the selection to another opportunity of the same group. All it may do is
+ * fail to produce a Plan that satisfies it.
  *
  * A selected id that no longer exists in the snapshot is deliberately not
  * silently dropped here: `validateBuildListEntry()` fails closed on it, and the
  * Planner validation excludes such an Entry before the Beam Search sees it.
  */
-export function selectedCheckpointsForEntry(
-  entry: BuildListEntry,
-): SelectedCheckpoint[] {
-  const selected = new Set<string>(entry.selectedCheckpointOpportunityIds ?? [])
-  if (selected.size === 0) return []
-  return (entry.candidateSnapshot.checkpointGroups ?? [])
-    .flatMap((group) =>
-      group.opportunities
-        .filter((opportunity) => selected.has(opportunity.id))
-        .map((opportunity) => ({ groupId: group.id, opportunity })),
-    )
-    .sort(
-      (left, right) =>
-        left.opportunity.afterOperationIndex - right.opportunity.afterOperationIndex,
-    )
+export interface EntryIntermediateSelection {
+  skill: { group: IntermediateSkillStateGroup; opportunity: IntermediateSkillOpportunity } | null
+  bonus: { group: IntermediateBonusStateGroup; opportunity: IntermediateBonusOpportunity } | null
+  improvementPreference: ImprovementPreference
 }
 
-/**
- * The Route operation indexes at which this Entry's selected checkpoints are
- * reached.
- *
- * A unit at one of these indexes is an *observed* intermediate state, so it can
- * never be silently fast-forwarded past: the player really has to perform it to
- * hold the compromise weapon (`docs/PLANNER_SPEC.md` 7.5.1).
- */
-export function selectedCheckpointEndpointOperationIndexes(
-  entry: BuildListEntry,
-): Set<number> {
-  return new Set(
-    selectedCheckpointsForEntry(entry).map(
-      ({ opportunity }) => opportunity.afterOperationIndex,
-    ),
+export function entryIntermediateSelection(entry: BuildListEntry): EntryIntermediateSelection {
+  const selection = entry.intermediateStateSelection
+  const groups = entry.candidateSnapshot.intermediateStateGroups ?? []
+  const find = <Axis extends IntermediateStateAxis>(
+    axis: Axis,
+    id: IntermediateStateOpportunityId | null,
+  ) => {
+    if (id === null) return null
+    for (const group of groups) {
+      if (group.axis !== axis) continue
+      const opportunity = group.opportunities.find((candidate) => candidate.id === id)
+      if (opportunity) return { group, opportunity }
+    }
+    return null
+  }
+  const skill = find('skill', selection?.skillOpportunityId ?? null) as EntryIntermediateSelection['skill']
+  const bonus = find('bonus', selection?.bonusOpportunityId ?? null) as EntryIntermediateSelection['bonus']
+  return {
+    skill,
+    bonus,
+    improvementPreference: selection?.improvementPreference ?? 'planner',
+  }
+}
+
+/** Whether the Entry selected an intermediate state on at least one lane. */
+export function hasIntermediateStateSelection(entry: BuildListEntry): boolean {
+  const selection = entry.intermediateStateSelection
+  return (
+    selection !== undefined &&
+    (selection.skillOpportunityId !== null || selection.bonusOpportunityId !== null)
   )
 }
 
-/** The selected checkpoint ending at this operation index, if any. */
-export function selectedCheckpointAtOperationIndex(
+export function entryImprovementPreference(entry: BuildListEntry): ImprovementPreference {
+  return entry.intermediateStateSelection?.improvementPreference ?? 'planner'
+}
+
+/** The Route operation count of each stream lane. */
+export function routeLaneLengths(operations: readonly RouteOperation[]): {
+  skill: number
+  bonus: number
+} {
+  let skill = 0
+  let bonus = 0
+  operations.forEach((operation) => {
+    if (operation.type === 'reset_skills') skill += 1
+    else if (operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses') bonus += 1
+  })
+  return { skill, bonus }
+}
+
+/**
+ * The lane positions the Entry's weapon must hold at its compromise checkpoint
+ * (`docs/PLANNER_SPEC.md` 7.5.2): the selected position of a selected lane,
+ * and the Ideal lane end of an unselected lane.
+ *
+ * `null` means the Entry selected nothing, so it has no checkpoint at all and
+ * simply runs to its Ideal.
+ */
+export interface IntermediatePin {
+  skill: number
+  bonus: number
+}
+
+export function intermediatePinFor(entry: BuildListEntry): IntermediatePin | null {
+  if (!hasIntermediateStateSelection(entry)) return null
+  const selection = entryIntermediateSelection(entry)
+  const lengths = routeLaneLengths(entry.candidateSnapshot.route.operations)
+  return {
+    skill: selection.skill?.opportunity.lanePosition ?? lengths.skill,
+    bonus: selection.bonus?.opportunity.lanePosition ?? lengths.bonus,
+  }
+}
+
+/**
+ * Whether the Entry's pinned lane pair is the weapon the user holds right now
+ * (`docs/PLANNER_SPEC.md` 7.5.2): an existing Gogma Route whose selected lane
+ * states are both lane starts - a selected position 0 whose other lane is
+ * unselected and already at its Ideal end (no operation on that lane), or
+ * both lanes selected at position 0. Such a compromise checkpoint is held at
+ * Planner start; no Route operation produces it. A conversion Route never
+ * qualifies: its lane starts describe the converted weapon, which the base
+ * lane still has to create.
+ */
+export function isIntermediatePinHeldAtRouteStart(entry: BuildListEntry): boolean {
+  const pin = intermediatePinFor(entry)
+  if (pin === null || pin.skill !== 0 || pin.bonus !== 0) return false
+  return entry.candidateSnapshot.route.operations.every(
+    ({ type }) => type !== 'create_normal_artian' && type !== 'convert_normal_to_gogma',
+  )
+}
+
+/**
+ * The Route operation index that ends the pinned state of one lane, or `null`
+ * when the pinned state is the lane's own start and no operation has to run
+ * for it.
+ */
+export function intermediatePinOperationIndex(
+  entry: BuildListEntry,
+  axis: IntermediateStateAxis,
+): number | null {
+  const selection = entryIntermediateSelection(entry)
+  const selected = axis === 'skill' ? selection.skill : selection.bonus
+  if (selected !== null) {
+    return selected.opportunity.lanePosition === 0 ? null : selected.opportunity.operationIndex
+  }
+  const operations = entry.candidateSnapshot.route.operations
+  for (let index = operations.length - 1; index >= 0; index -= 1) {
+    const type = operations[index].type
+    if (axis === 'skill' ? type === 'reset_skills' : type === 'reset_bonuses' || type === 'keep_bonuses') {
+      return index
+    }
+  }
+  return null
+}
+
+/**
+ * The selected intermediate state ending at this Route operation, if any.
+ *
+ * Only a selected lane position of `1` or more has an ending operation; a
+ * selected lane start is held from the beginning of the Route.
+ */
+export function selectedIntermediateStateAtOperationIndex(
   entry: BuildListEntry,
   operationIndex: number,
-): SelectedCheckpoint | null {
-  return (
-    selectedCheckpointsForEntry(entry).find(
-      ({ opportunity }) => opportunity.afterOperationIndex === operationIndex,
-    ) ?? null
-  )
+): { axis: IntermediateStateAxis; opportunityId: IntermediateStateOpportunityId } | null {
+  const selection = entryIntermediateSelection(entry)
+  for (const axis of ['skill', 'bonus'] as const) {
+    const selected = axis === 'skill' ? selection.skill : selection.bonus
+    if (
+      selected !== null &&
+      selected.opportunity.lanePosition > 0 &&
+      selected.opportunity.operationIndex === operationIndex
+    ) {
+      return { axis, opportunityId: selected.opportunity.id }
+    }
+  }
+  return null
 }
 
 /**
- * Whether every checkpoint this Entry selected has actually been reached.
- *
- * The Candidate may only be secured once this holds, which is what makes the
- * selection a constraint rather than a preference: a branch that skipped a
- * selected checkpoint simply cannot finish that Entry.
+ * How the pinned lane pair rates on each Target axis: the selected group's
+ * own match, or `ideal` for an unselected lane, whose pinned state is the
+ * lane end. Explanatory only; it decides nothing in the Planner.
  */
-export function hasReachedEverySelectedCheckpoint(
-  entry: BuildListEntry,
-  reachedOpportunityIds: readonly string[],
-): boolean {
-  const reached = new Set(reachedOpportunityIds)
-  return selectedCheckpointsForEntry(entry).every(({ opportunity }) =>
-    reached.has(opportunity.id),
-  )
+export function checkpointConditionMatchFor(entry: BuildListEntry): CompromiseConditionMatch {
+  const selection = entryIntermediateSelection(entry)
+  return {
+    bonus: selection.bonus?.group.match ?? 'ideal',
+    skill: selection.skill?.group.match ?? 'ideal',
+  }
 }
 
 /**
  * The Target-wide checkpoint requirement of one Planner run
  * (`docs/PLANNER_SPEC.md` 7.5.6).
  *
- * A BuildListEntry that carries a selected checkpoint is that Target's
+ * A BuildListEntry that carries a selected intermediate state is that Target's
  * *required* Entry: the Target is not finished until this very Entry reached
- * every selected checkpoint and secured its Ideal Candidate, and no other
- * Entry of the Target is adopted as an alternative finishing Route. The map is
- * derived from the whole set of valid BuildListEntries of the run - never from
- * a conflict's participants alone - so constrained re-search and what-if read
- * the same authority the Beam Search does.
+ * its checkpoint and secured its Ideal Candidate, and no other Entry of the
+ * Target is adopted as an alternative finishing Route. The map is derived from
+ * the whole set of valid BuildListEntries of the run - never from a conflict's
+ * participants alone - so constrained re-search and what-if read the same
+ * authority the Beam Search does.
  */
 export interface PlannerCheckpointRequirements {
   requiredEntryIdByTargetId: ReadonlyMap<TargetWeaponId, BuildListEntryId>
@@ -142,7 +235,7 @@ export function derivePlannerCheckpointRequirements(
 ): PlannerCheckpointRequirementDerivation {
   const selectedByTarget = new Map<TargetWeaponId, BuildListEntryId[]>()
   entries.forEach((entry) => {
-    if (selectedCheckpointsForEntry(entry).length === 0) return
+    if (!hasIntermediateStateSelection(entry)) return
     selectedByTarget.set(entry.targetWeaponId, [
       ...(selectedByTarget.get(entry.targetWeaponId) ?? []),
       entry.id,
@@ -163,4 +256,4 @@ export function derivePlannerCheckpointRequirements(
   return { requirements: { requiredEntryIdByTargetId }, violations }
 }
 
-export type { CompromiseCheckpointOpportunityId }
+export type { IntermediateStateOpportunityId }

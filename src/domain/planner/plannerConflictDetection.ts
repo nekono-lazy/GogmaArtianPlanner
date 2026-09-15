@@ -7,7 +7,7 @@ import type {
   TargetWeaponId,
 } from '../models/publicTypes'
 import { createPlanConflictId } from './conflictKey'
-import { selectedCheckpointAtOperationIndex } from './plannerCheckpoints'
+import { selectedIntermediateStateAtOperationIndex } from './plannerCheckpoints'
 import type { PlannerRouteUnit } from './plannerRouteProgress'
 import type {
   PlannerConflictResolution,
@@ -56,7 +56,7 @@ export function conflictResolutionRefusalReason(
     return `BuildListEntry '${resolution.selectedBuildListEntryId}' is not a participant in conflict '${resolution.conflictKey}'.`
   }
   if (conflictInvolvesSelectedCheckpoint(conflict)) {
-    return `Conflict '${resolution.conflictKey}' involves a selected compromise checkpoint, so it cannot be resolved by preferring BuildListEntry '${resolution.selectedBuildListEntryId}'; change or clear the checkpoint in the Build List instead.`
+    return `Conflict '${resolution.conflictKey}' involves a selected intermediate state, so it cannot be resolved by preferring BuildListEntry '${resolution.selectedBuildListEntryId}'; change or clear the selection in the Build List instead.`
   }
   return null
 }
@@ -272,22 +272,19 @@ function checkpointParticipants(
     if (unit.position.unitIndex !== unit.position.unitCount - 1) return
     const entry = entriesById.get(unit.entryId)
     if (!entry) return
-    const checkpoint = selectedCheckpointAtOperationIndex(
+    const selected = selectedIntermediateStateAtOperationIndex(
       entry,
       unit.position.operationIndex,
     )
-    if (!checkpoint) return
-    participants.set(checkpoint.opportunity.id, {
+    if (!selected) return
+    participants.set(selected.opportunityId, {
       buildListEntryId: entry.id,
-      checkpointGroupId: checkpoint.groupId,
-      checkpointOpportunityId: checkpoint.opportunity.id,
+      axis: selected.axis,
+      opportunityId: selected.opportunityId,
     })
   })
   return [...participants.values()].sort((left, right) =>
-    compareStableStrings(
-      left.checkpointOpportunityId,
-      right.checkpointOpportunityId,
-    ),
+    compareStableStrings(left.opportunityId, right.opportunityId),
   )
 }
 

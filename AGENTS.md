@@ -207,9 +207,19 @@ semantics, Planner scoring, the PlanStep operation set, and the OwnedWeapon
 semantic hash contract, which moved it to version 9. Replacing the independent
 Practical Candidate with a canonical Ideal Route plus selectable compromise
 checkpoints changes the Candidate output shape, Candidate classification, the
-Build List planning input, and Planner fast-forward / conflict semantics, so
-current `CalculationContext.appSchemaVersion` is **10**, defined
+Build List planning input, and Planner fast-forward / conflict semantics, which
+moved it to version 10. Replacing the strict-prefix checkpoints of one fixed
+operation order with per-lane intermediate states
+(`BuildCandidate.intermediateStateGroups`), a per-lane selection plus an
+improvement preference (`BuildListEntry.intermediateStateSelection`), and a
+Planner that interleaves the Bonus and Skill lanes changes the Candidate output
+shape, the Build List planning input, Planner Route execution semantics, the
+PlanStep milestone shape, and the PlanConflict participant shape, so
+current `CalculationContext.appSchemaVersion` is **11**, defined
 only by `CURRENT_CALCULATION_APP_SCHEMA_VERSION` in `src/domain/models/common.ts`.
+A version 10 `checkpointGroups` / `selectedCheckpointOpportunityIds` cannot be
+mapped onto lane pins, and reading such a selection as empty would silently
+drop a hard constraint, so version 10 artifacts fail closed like every earlier one.
 Search, BuildList, Planner, and benchmark runtime creators share this authority.
 Dexie separately moves to `DATABASE_SCHEMA_VERSION = 4` for the persisted status rename; this is independent of
 `AppSettings.schemaVersion = 1`; gameVersion, Master Data version,
@@ -232,8 +242,9 @@ Switch Axe Normal prediction input supported, changing Candidate Search route
 availability and Counter Identification support, and moved it to the current
 `production-rng:c5-e6`. None of the four touched
 `CURRENT_CALCULATION_APP_SCHEMA_VERSION`; `rngEngineVersion` alone is the
-CalculationContext staleness boundary for all of them. `DATABASE_SCHEMA_VERSION` stays 4 at the checkpoint boundary, while
-`ExportRoot.schemaVersion` moves to 5 with the persisted entity shape. Version 1 BuildCandidate, BuildListEntry, and ProductionPlan
+CalculationContext staleness boundary for all of them. `DATABASE_SCHEMA_VERSION` stays 4 at the checkpoint boundary and at the lane
+boundary, while `ExportRoot.schemaVersion` moved to 5 with the checkpoint entity
+shape and to 6 with the lane entity shape. Version 1 BuildCandidate, BuildListEntry, and ProductionPlan
 calculations are incompatible with any later version and must not be reused as current
 results. Existing staleness checks mark old BuildListEntry records with
 `calculation_context_changed` and exclude them from Planner input. Preserve old
@@ -243,7 +254,7 @@ current Candidates by searching again.
 Do not delete historical results or add a migration or Export/Import semantic
 validation change as a substitute for CalculationContext compatibility.
 
-All version 1..9 Candidates, BuildListEntries and ProductionPlans are incompatible with version 10. Preserve their contents and fail closed with calculation_context_changed. Do not extend the historical build-result compatibility exception to version 9 or 10.
+All version 1..10 Candidates, BuildListEntries and ProductionPlans are incompatible with version 11. Preserve their contents and fail closed with calculation_context_changed. Do not extend the historical build-result compatibility exception to version 9, 10 or 11.
 
 The v3 -> v4 Dexie migration converts only `OwnedGogma.status === 'material'` to
 `'unclassified'`. `practical` and `ideal` keep their values, a Normal Artian
@@ -984,7 +995,7 @@ A Target's ideal five-slot multiset is the only Bonus authority.
 - Practical preserves types and counts; only explicitly configured types relax ranks (minimum + EX minimum).
 - Alternative uses exactly one source Rule and one Option, replacing 1..max slots and keeping every other Ideal slot unchanged.
 - Practical Bonus and Alternative Bonus never combine. Skill is an independent axis.
-- Unset Practical Skill (both IDs null) allows only Ideal Skills. Search is Ideal-only either way; compromise conditions decide only which checkpoints exist.
+- Unset Practical Skill (both IDs null) allows only Ideal Skills. Search is Ideal-only either way; compromise conditions decide only which intermediate states are offered.
 - All Bonus matches require gogma_artian scope. Normal creation/conversion routes remain available through Reset.
 - DATA_MODEL 8 and docs/TARGET_COMPROMISE_SEMANTICS.md define the new types and validation.
 - Target saving and Search validate structure, Master references and Ideal containment before evaluation.
@@ -1016,32 +1027,45 @@ Reaching a compromise state without reaching an Ideal produces nothing. The UI
 must say the Ideal was not found *in the current search range*, never that the
 Target has no Ideal.
 
-Compromise states are offered only as **checkpoints on the canonical Ideal
-Route's strict prefixes**. They are reconstructed by a pure replay of the
-Candidate's own observational traces (`bonusAmendmentTrace`,
-`skillAmendmentTrace`, `conversionSkillTrace`) plus the Route base OwnedWeapon,
-so extraction adds **zero** RNG prediction calls, and UI/presentation code must
-never re-run the RNG Engine to render one.
+A compromise is an intermediate, usable state on the way to the Ideal, never a
+final goal: Target completion is always the Ideal. The canonical Ideal Route is
+read as three **lanes** (`docs/SEARCH_SPEC.md` 5.8, `docs/PLANNER_SPEC.md`
+7.0.4): the base lane (create / convert), the Bonus lane (Reset / Keep Bonuses)
+and the Skill lane (Reset Skills). Compromise states are offered **per lane** as
+`IntermediateStateGroup`s on `BuildCandidate.intermediateStateGroups`, never as
+Skill x Bonus combinations and never as a strict prefix of one fixed operation
+order. They are reconstructed by a pure replay of the Candidate's own
+observational traces (`bonusAmendmentTrace`, `skillAmendmentTrace`,
+`conversionSkillTrace`) plus the Route base OwnedWeapon, so extraction adds
+**zero** RNG prediction calls, and UI/presentation code must never re-run the
+RNG Engine to render one.
 
-Checkpoints are two-layered. A `CompromiseCheckpointGroup` is the user-visible
-compromise product: scope, the unordered five-slot multiset with duplicate
-counts preserved, Series Skill, Group Skill, and `conditionMatch`. Slot order is
-deliberately excluded from group identity. A `CompromiseCheckpointOpportunity`
-is one arrival at that product and keeps the exact ordered five slots, the Route
-position, the operation counts, and `conditionMatch`. Both ids are deterministic
-functions of `candidateStableKey` and the group identity — never of
-`searchRunId`, the Clock, or an enumeration ordinal.
+Intermediate states are two-layered. A group is the user-visible state of one
+lane: a Skill group is Series Skill, Group Skill and `match`
+(`practical | ideal`); a Bonus group is scope, the unordered five-slot multiset
+with duplicate counts preserved and `match` (`practical | alternative | ideal`).
+Slot order is deliberately excluded from group identity. An opportunity is one
+arrival at that state and keeps its `lanePosition` (how many operations of that
+lane were run), its `operationIndex` (`null` for a lane start state), and for
+the Bonus lane the exact ordered five slots. Lane position 0 is a legitimate
+opportunity: the conversion-assigned Skill and an existing Gogma's current
+Skill are "Skill Reset 0" states, and an existing Gogma's current
+`gogma_artian` five slots are a Bonus lane start. A `normal_artian` scope
+five-slot set right after conversion is never offered. The lane end is the Ideal
+itself and is a goal, never an intermediate state; the UI shows it as 最終目標
+without a checkbox. Both ids are deterministic functions of `candidateStableKey`,
+the axis, the group identity and the lane position — never of `searchRunId`,
+the Clock, or an enumeration ordinal.
 
-Every arrival is retained. Two arrivals at the same product stay two
+Every arrival is retained. Two arrivals at the same state stay two
 opportunities; the earliest is the display representative and the rest are
 disclosed as 「その他の到達点」. A conservative, per-`bonusTypeId` rank-vector
-dominance may mark a group display-secondary, but it never removes a group or an
-opportunity from the Domain: a "worse" checkpoint can be the only one that
-avoids a Counter conflict. Differing Bonus Type compositions, differing Skills,
-and uncomparable Master references are never ranked against each other.
+dominance may mark a Bonus group display-secondary, but it never removes a group
+or an opportunity from the Domain: a "worse" state can be the only one that
+avoids a Counter conflict. Differing Bonus Type compositions and uncomparable
+Master references are never ranked against each other, and Skill groups are
+never dominated.
 
-The Route base's own starting state is not a Route prefix, so an owned weapon
-that already satisfies a compromise condition never becomes a checkpoint.
 `TargetWeapon.practicalBonusConditions`, `alternativeBonusRules`,
 `practicalSkillCondition`, `OwnedWeaponStatus.practical`,
 `satisfiesPracticalTarget()`, and `hasPractical` all stay: they decide what
@@ -1051,10 +1075,40 @@ Constrained enumeration yields Ideal Candidates only, for the same reason: a
 Planner-generated Entry for a compromise result would be exactly the separate
 Practical BuildListEntry this model forbids.
 
+### Selection, pins and the compromise checkpoint
+
+`BuildListEntry.intermediateStateSelection` holds `skillOpportunityId`,
+`bonusOpportunityId` (each `null` or one opportunity of its own lane) and
+`improvementPreference` (`planner | skill_first | bonus_first`, default
+`planner`). It is set in Candidate Search, saved on the Entry when the Candidate
+is added, and edited only in the Build List — never on `TargetWeapon`, never in
+Candidate identity, hashes or staleness, but always in the Plan's
+`buildListEntriesHash`. Selecting both lane starts at once is legal: for an
+existing Gogma that is the weapon the user already holds, and its compromise
+checkpoint is held at Planner start (see below).
+
+The Planner derives a **pin** per lane: the selected lane position, or the lane
+end (Ideal) when that lane is unselected. The compromise checkpoint is the
+moment both lanes hold their pinned state at once: Skill-only selection means
+selected Skill + Ideal Bonus, Bonus-only means Ideal Skill + selected Bonus,
+both means selected + selected, and Ideal + Ideal is the Ideal, not a
+checkpoint. A lane may not pass its pin — by execution or by silent
+fast-forward — before the other lane reached its own pin, and the unit that
+produces a pinned state is never `canSkipWhenCounterPassed`. After the
+checkpoint the improvement order is not fixed at Search time: both Skill-first
+and Bonus-first continuations stay reachable, and the preference is the soft
+tie-break of `docs/PLANNER_SPEC.md` 7.6 — below correctness, the hard pin
+constraint, Target satisfaction, feasibility of the whole multi-Target Plan,
+the existing evaluation score and the preferred source, above
+`weaponSwitchCount`. A preference is never a rejection, a conflict, or a
+transplant of the selected state onto another opportunity.
+
 ### Checkpoint conflicts and constrained re-search
 
-A selected checkpoint is a hard constraint the Planner never drops, moves, or
-empties on its own. Two rules follow, both Domain authority and never UI-only
+### Checkpoint conflicts and constrained re-search
+
+A selected intermediate state is a hard constraint the Planner never drops,
+moves, or empties on its own. Two rules follow, both Domain authority and never UI-only
 (`docs/PLANNER_SPEC.md` 9.5, `docs/DATA_MODEL.md` 11.8, `docs/UI_FLOW.md` 11.1):
 
 - A conflict whose `PlanConflict.checkpointParticipants` is non-empty cannot be
@@ -1211,7 +1265,7 @@ Candidate search runs per TargetWeapon, even if one Worker request handles multi
 Search only routes whose capabilities and prerequisites are available.
 
 A Target's `preferredOwnedWeaponId` never narrows that route scope, never changes
-the search horizon, the canonical-Ideal cost boundary, the extracted checkpoints,
+the search horizon, the canonical-Ideal cost boundary, the extracted intermediate states,
 the number of RNG prediction calls, the stream search depth, or any Counter
 semantics. It affects only the choice and ordering
 among Candidates every existing priority already rates equally
@@ -1231,8 +1285,8 @@ Planner
 Candidate Search must not pre-read second and third copies of the same Ideal,
 distant alternative Ideals, or the Bonus-alternative by Skill-alternative product
 merely because the Planner might later hit a conflict. The initial search ends
-once one canonical Ideal is settled; the checkpoints of that Route are then
-extracted from the traces it already recorded.
+once one canonical Ideal is settled; the per-lane intermediate states of that
+Route are then extracted from the traces it already recorded.
 
 Only when Counter conflicts actually occur across Targets does the Planner
 re-search the conflicting Targets, look up the next feasible Ideal Route for the
@@ -1269,8 +1323,8 @@ flow, not only in the recorded counters.
 - Normal-scope exact labels are not Bonus Ideal. Continue supported Reset
   exploration after conversion and from inherited normal-scope Gogma sources
 - A stream that currently satisfies only a compromise condition is not
-  finished: Ideal exploration continues on it, and a compromise state becomes a
-  checkpoint only when it lies on a strict prefix of the settled Ideal Route
+  finished: Ideal exploration continues on it, and a compromise state becomes an
+  intermediate state only when it lies on a lane of the settled Ideal Route
 
 Do not enumerate the Cartesian product of bonus results and Skill results, and
 do not reintroduce it as a lazily expanded priority queue or a small fixed
@@ -1302,12 +1356,12 @@ merely the same set — even though the `BuildCandidate.id` values differ. The
 `BuildCandidate` ID generation rule, including `searchRunId` inside its
 `semanticHash`, stays unchanged.
 
-Keep the checkpoint set independent of discovery order too. Every checkpoint
-of the settled canonical Ideal Route is extracted from the traces that Route
-already recorded, so the extracted groups and opportunities are the same
-whichever RouteKind or Promise settled first.
+Keep the intermediate state set independent of discovery order too. Every
+intermediate state of the settled canonical Ideal Route is extracted from the
+traces that Route already recorded, so the extracted groups and opportunities
+are the same whichever RouteKind or Promise settled first.
 
-Keep checkpoint groups plural. Nothing is removed from the Domain: the only
+Keep intermediate state groups plural. Nothing is removed from the Domain: the only
 dominance is the display-only conservative one of `docs/SEARCH_SPEC.md` 5.8.4
 (`isDisplaySecondary` / `dominatingGroupId`), which requires equal scope and
 Skills, a per-`bonusTypeId` rank vector that is at least as good everywhere and
@@ -1384,8 +1438,8 @@ does not change B2 family-layout frontier dedup or lastResetDepth representative
 Under the historical B5-F1 contract, normal scope with 5/5 Ideal labels and
 matching Skills could be Practical with similarityScore 1. That acceptance rule
 is obsolete. Current Ideal / Practical / Alternative Bonus matches all require
-gogma_artian scope; normal_artian scope is never accepted as a Candidate or as a
-checkpoint, regardless of matching labels or Skills.
+gogma_artian scope; normal_artian scope is never accepted as a Candidate or as an
+intermediate state, regardless of matching labels or Skills.
 Current tests reject normal-scope conversion D=2 and cover exploration
 continuing to a Gogma-scope canonical Ideal D=3 after Reset, and an existing
 normal-scope Gogma continuing Bonus exploration. The Gogma-scope current Ideal
@@ -2065,8 +2119,8 @@ a random or request ID, the Clock, or an enumeration ordinal into that result.
 B8-C's deterministic materializer is what converts it to `BuildCandidate` shape:
 `searchRunId` becomes the deterministic constrained search identity, `id` is
 derived stably from that identity plus the Candidate semantic meaning, `createdAt`
-comes from `PlannerClock`, and `checkpointGroups` comes from applying checkpoint
-extraction to that Candidate. `CandidateSearchSettings` is neither the filter
+comes from `PlannerClock`, and `intermediateStateGroups` comes from applying
+intermediate state extraction to that Candidate. `CandidateSearchSettings` is neither the filter
 authority nor the extent authority for constrained enumeration. The ordinary
 Candidate Search `searchRunId` contract and `BuildCandidate` ID generation rule are
 unchanged; "do not change the `BuildCandidate` ID generation rule" means for
@@ -2364,22 +2418,65 @@ Planning priority:
 3. Satisfy every selected compromise checkpoint as a hard constraint
 4. Reduce weapon consumption and operation count among otherwise similar states
 
-A `BuildListEntry.selectedCheckpointOpportunityIds` entry is a hard constraint.
-The Planner may never ignore it, disable it, or move the selection to another
-opportunity of the same group; a unit that ends a selected checkpoint is never
-`canSkipWhenCounterPassed`, and `reserve_weapon` is refused with
-`selected_checkpoint_not_reached` until every selected checkpoint was really
-reached. Reaching one reserves nothing, changes no status and no protection, and
-never stops the Plan: it is recorded as `PlanStep.checkpointMilestones` on the
-real physical Step that produced it, and no new `PlanStepOperationType` is added.
-Two selected checkpoints that need the same Counter position and are not one
-shareable physical action are an ordinary Counter conflict, reported with typed
-`PlanConflict.checkpointParticipants` so the UI can send the user to the Build
-List to change a selection.
+The Planner runs each Entry's Route as three lanes (`docs/PLANNER_SPEC.md`
+7.0.4): base first, then the Bonus lane and the Skill lane interleaved freely,
+each in its own Route order. `PlannerSearchState.routeProgressByEntryId` is a
+per-lane progress. Across several Targets the Beam Search interleaves all
+Entries' operations globally by Counter position; the Production Plan is one
+physical operation sequence, never per-axis columns. When both stream lanes of
+an Entry can run in a state, **both** become successors: a Skill-first and a
+Bonus-first branch stay alive and scoring chooses. Never prune the other lane
+because the preferred lane succeeded - that turns the soft preference into a
+hard one and loses the branch in which a preferred lane, executable now, would
+later break another Target. The search stays bounded by `beamWidth`, semantic
+dedup, scoring, `maxExpandedStates`, and `maxPlanSteps` only.
+`canSkipWhenCounterPassed` judges "the immediately following operation" within
+the same lane.
 
-A checkpoint-selected BuildListEntry is its Target's **required Entry** for the
+An existing Gogma whose selected lane states are both lane starts - both lanes
+selected at position 0, or one lane selected at position 0 while the other lane
+has no operation because it is already Ideal - holds its compromise checkpoint
+before the first action: `createInitialPlannerSearchState()` marks it reached,
+`reserve_weapon` is not refused, no Step carries a milestone for it, and Trace
+Replay verifies the source weapon at Plan start against the selected states
+(`checkpoint_state_mismatch` otherwise). A conversion Route's lane position 0
+is produced by the conversion and is never held at Planner start
+(`docs/PLANNER_SPEC.md` 7.5.2).
+
+A `BuildListEntry.intermediateStateSelection` lane selection is a hard
+constraint. The Planner may never ignore it, disable it, or move the selection to
+another opportunity of the same lane; the unit that produces a pinned state is
+never `canSkipWhenCounterPassed`, a lane never passes its pin before the other
+lane reached its own, and `reserve_weapon` is refused with
+`selected_checkpoint_not_reached` until the compromise checkpoint — both pins
+held at once — was really reached. Reaching it reserves nothing, changes no
+status and no protection, and never stops the Plan: it is recorded as
+`PlanStep.checkpointMilestones` (`skillOpportunityId` / `bonusOpportunityId`,
+`null` for an unselected lane, plus the two-axis `conditionMatch`) on the real
+physical Step that completed it, and no new `PlanStepOperationType` is added.
+Trace Replay verifies the exact replayed state against the selected
+opportunities and fails closed with `checkpoint_state_mismatch`. Two selected
+states that need the same Counter position and are not one shareable physical
+action are an ordinary Counter conflict, reported with typed
+`PlanConflict.checkpointParticipants` (`buildListEntryId`, `axis`,
+`opportunityId`) so the UI can send the user to the Build List to change a
+selection.
+
+`improvementPreference` is a soft Plan preference (`docs/PLANNER_SPEC.md` 7.6)
+and `planner` means no lane preference at all - never "Bonus first".
+`PlannerSearchState.improvementPreferenceViolationCount` counts, after the
+checkpoint (or from the start when nothing is selected), every physical unit run
+on the non-preferred lane while the preferred lane still had units;
+`comparePlannerSearchStates()` applies it after `evaluationScore` and the
+preferred source and before `weaponSwitchCount`. It never rejects a branch,
+never records a rejection or a conflict, never enters
+`createPlannerSearchStateSemanticKey()`, is never persisted, and never lets an
+otherwise infeasible multi-Target Plan win. A bounded Beam Search does not
+guarantee the absolute minimum violation count.
+
+A BuildListEntry with a lane selection is its Target's **required Entry** for the
 run (`docs/PLANNER_SPEC.md` 7.5.6). The Target is complete only once that very
-Entry reached every selected checkpoint and secured its Ideal Candidate; another
+Entry reached its compromise checkpoint and secured its Ideal Candidate; another
 Entry of the same Target, another Target's Entry, or an existing weapon making
 the Target `hasIdeal` never completes it, and the required Entry keeps its
 relevance until it is secured. The Target's other Entries are left out of that
@@ -2393,18 +2490,19 @@ re-search and what-if alike. It is a hard feasibility constraint, never a score,
 and Plan generation re-checks it as a fail-closed defence.
 
 Two collection-level rules fail the Planner input closed instead of guessing: at
-most one checkpoint-selected Entry per Target (`multiple_selected_checkpoint_entries`
+most one selection-holding Entry per Target (`multiple_selected_checkpoint_entries`
 - the user clears one selection in the Build List; the Planner never picks one
-by score, cost, or order), and no checkpoint selection on a Target that already
+by score, cost, or order), and no selection on a Target that already
 holds an Ideal weapon when planning starts
-(`selected_checkpoint_target_already_ideal`). Several groups selected inside one
-Entry stay allowed.
+(`selected_checkpoint_target_already_ideal`). Selecting both lanes inside one
+Entry stays allowed.
 
-A structurally invalid `selectedCheckpointOpportunityIds` - an unknown
-opportunity id, two opportunities of one group, a duplicate - is checked in the
-Planner's current-input validation through the same shared
-`validateBuildListEntryCheckpointSelection()` that `validateBuildListEntry()`
-uses, and fails the whole input closed (`invalid_checkpoint_selection`). A broken
+A structurally invalid `intermediateStateSelection` - an unknown opportunity id,
+an id of the other lane, an unknown preference - is checked in the Planner's
+current-input validation through the same
+shared `validateBuildListEntryIntermediateStateSelection()` that
+`validateBuildListEntry()` uses, and fails the whole input closed
+(`invalid_checkpoint_selection`). A broken
 selection is never read as an empty one, so no other Entry of that Target can
 stand in for it; the persisted `isStale` flag stays untrusted as before.
 
@@ -2863,12 +2961,17 @@ Search UI must:
 - Show at most one canonical Ideal Candidate, and say
   「現在の探索範囲では理想品が見つかりませんでした」 when none was found - never
   that the Target has no Ideal
-- List the compromise checkpoints of that Candidate's Route, all unselected by
-  default, at most one selectable opportunity per group, with 「その他の到達点」
-  for later arrivals of one group and 「その他の候補」 for display-secondary groups
-- Say 「この候補は作成リストに追加済みです。チェックポイントは作成リストで変更して
-  ください。」 when the same Candidate is added again, and never overwrite the
-  existing selection
+- List that Candidate's intermediate states as two separate axes, スキル候補
+  and 復元ボーナス候補, all unselected by default, at most one selectable
+  opportunity per lane, each axis ending with the Ideal as 最終目標 without a
+  checkbox, with 「その他の到達点」 for later arrivals of one group and
+  「その他の候補」 for display-secondary Bonus groups, and never a Skill x Bonus
+  combination list
+- Offer 理想品までの改善優先 (生産計画に任せる / スキルを優先 / 復元ボーナスを優先,
+  default 生産計画に任せる) next to the selection
+- Say 「この候補は作成リストに追加済みです。途中採用する状態と改善優先は作成リストで
+  変更してください。」 when the same Candidate is added again, and never overwrite
+  the existing selection
 - Show skipped-route reasons
 - Show protected existing Gogma only as zero-operation current-state Candidates when
   they already satisfy the Target, and do not show amendment routes for them
@@ -3014,11 +3117,12 @@ Relevant test areas include:
 - Changing only `searchRunId` leaves each Target's ordered
   `candidateStableKey` sequence identical while the `BuildCandidate.id` values
   differ, and complete semantic duplicates compare equal instead of by ID
-- Every checkpoint of the canonical Ideal Route is extracted from its recorded
-  traces, and the extracted set is unchanged across traversal orders
+- Every intermediate state of the canonical Ideal Route is extracted per lane
+  from its recorded traces, and the extracted set is unchanged across traversal orders
 - Stream anchors `b0` / `k0` come from the documented deterministic ordering
-- Checkpoint groups with differing bonus compositions or skill compositions stay
-  primary as incomparable rather than being tidied behind the secondary disclosure
+- Bonus state groups with differing bonus compositions stay primary as
+  incomparable rather than being tidied behind the secondary disclosure, and
+  Skill groups are never dominated
 - Bonus rank dominance is decided per `bonusTypeId` rank multiset, not by slot
   index, and an uncomparable Master rank ordering makes the pair incomparable
 - Material dominance is decided component-wise per `materialId`, so differing
@@ -3116,41 +3220,69 @@ Relevant test areas include:
 - `resultFilter`, `similarityThreshold` and `maxCandidatesPerTarget` being absent
 - One canonical Ideal Candidate when an Ideal is in range, none when it is not,
   and none when only a compromise state is reachable
-- Only strict prefixes of the canonical Ideal Route becoming checkpoints, never a
-  compromise state that branches off it and never the Route base's own state
-- Checkpoint extraction adding no RNG prediction call and never moving the
+- Intermediate states extracted per lane from the canonical Ideal Route only,
+  never a compromise state that branches off it; a Practical Skill and a
+  Practical Bonus each offered on their own lane so Practical + Practical is
+  reachable; the conversion-assigned and existing-Gogma current Skill offered as
+  a Skill Reset 0 state; an existing Gogma's current Gogma-scope slots offered as
+  a Bonus lane start; a normal-scope five-slot set right after conversion never
+  offered; the lane end never offered as an intermediate state
+- Intermediate state extraction adding no RNG prediction call and never moving the
   canonical Ideal selection
 - Two slot orders of one Bonus multiset grouping together while each opportunity
-  keeps its exact slot order, both arrivals at one product being retained, the
+  keeps its exact slot order, both arrivals at one state being retained, the
   earliest being the representative, conservative display dominance marking a
-  group secondary without removing any Domain group or opportunity, and differing
-  Skills or Bonus Type compositions never being ranked against each other
-- Checkpoint selection starting empty, accepting one opportunity per group,
-  rejecting two of one group and an unknown id, leaving the BuildListEntry
-  un-staled, moving the Plan's build-list hash, and surviving a re-add of the
-  same Candidate
-- A selected checkpoint endpoint never being silently fast-forwarded while an
-  unselected intermediate unit and a fully overwritten prefix unit still are
-- The exact selected checkpoint state actually holding, the Planner never
-  deselecting or substituting an opportunity, two incompatible selections on one
-  Counter becoming a conflict that a Build List change resolves, one shared
-  physical action reaching both without duplicating the operation, and an Entry
-  with no selection keeping its ordinary Ideal Route meaning
+  Bonus group secondary without removing any Domain group or opportunity, and
+  differing Bonus Type compositions never being ranked against each other
+- Selection starting empty with `improvementPreference = 'planner'`, accepting one
+  opportunity per lane, rejecting an id of the other lane, an unknown id and an
+  unknown preference, accepting both lane starts at once, leaving the BuildListEntry
+  un-staled, moving the Plan's build-list hash, surviving a re-add of the same
+  Candidate, and being editable in the Build List without a re-search
+- A selected lane endpoint never being silently fast-forwarded while an
+  unselected intermediate unit and a fully overwritten prefix unit still are, the
+  "immediately following operation" judged within one lane
+- Skill-only, Bonus-only and both-lane selections each producing a milestone at
+  the moment both pins hold (selected Skill + Ideal Bonus, Ideal Skill + selected
+  Bonus, selected + selected), Ideal + Ideal producing no milestone, a lane never
+  passing its pin before the other lane arrived, and both a Skill-first and a
+  Bonus-first continuation after the checkpoint being reachable
+- The exact selected state actually holding under Trace Replay
+  (`checkpoint_state_mismatch` otherwise), the Planner never deselecting or
+  substituting an opportunity, two incompatible selections on one Counter
+  becoming a conflict that a Build List change resolves, one shared physical
+  action reaching both without duplicating the operation, and an Entry with no
+  selection keeping its ordinary Ideal Route meaning
+- `skill_first` / `bonus_first` steering the order when both lanes are equally
+  feasible, the Planner still completing every Target by running the other lane
+  first when the preferred lane cannot run now, and also when the preferred lane
+  can run now but would break another Target later (violation count above zero),
+  `planner` completing a scenario only a Skill-first order can finish, and
+  `comparePlannerSearchStates()` ranking the violation count below
+  `evaluationScore` and the preferred source and above `weaponSwitchCount`
+- An existing Gogma holding a Practical Skill with Ideal slots (Skill lane start
+  selected), an Ideal Skill with compromise slots (Bonus lane start selected), or
+  a compromise on both lanes (both starts selected) validating, being reached at
+  Planner start, carrying no milestone Step, and still finishing at the Ideal,
+  while a conversion Route's Skill lane start is not held before the conversion
+- Several Targets sharing the Skill and Gogma Counters interleaved into one global
+  physical sequence that respects each Entry's per-lane dependency order, with no
+  synthetic Cartesian product and unchanged prediction call-count contracts
 - `practicalFirstProgressTargetIds` and `CandidateScore.categoryScore` being absent
 - `hasPractical` alone producing no `CandidateScore` difference at equal priority
   and cost, a higher-priority Ideal-unmet Target never overtaken by a
   lower-priority uncovered one on `hasPractical` alone, Beam pruning ordering
   unchanged whichever Target holds the compromise weapon, and a selected
   checkpoint kept through `PlannerCheckpointRequirements` rather than any score
-- An unknown checkpoint opportunity id, two opportunities of one group, and a
-  duplicate id each failing the Planner input closed before any Beam Search,
+- An unknown opportunity id and an id of the other lane each failing the
+  Planner input closed before any Beam Search,
   never read as an empty selection and never bypassed through a selection-free
   Entry of the same Target, while a well-formed selection and a selection-free
   Entry keep working
-- A checkpoint-selected Entry never bypassed by a cheaper selection-free Entry of
+- A selection-holding Entry never bypassed by a cheaper selection-free Entry of
   the same Target, staying relevant after another weapon made its Target Ideal,
   completing only once it reached its checkpoint and secured its Ideal, the typed
-  termination counting that Target complete only then, two checkpoint-selected
+  termination counting that Target complete only then, two selection-holding
   Entries of one Target failing closed without picking either, selection-free
   same-Target Entries keeping the ordinary candidate selection, an already-Ideal
   Target with a selection failing closed, and a conflict reached through a
@@ -3160,12 +3292,14 @@ Relevant test areas include:
   physical Step, leaving later Steps in place, reserving nothing, and changing no
   status or protection, while the final Ideal still applies the ordinary reserve
   semantics
-- A starting OwnedWeapon that already satisfies a compromise condition never
-  becoming a checkpoint, `hasPractical` still judged from actual performance, and
+- A starting OwnedWeapon whose current state satisfies a compromise condition
+  offered only as a lane start of its own Route (never as a checkpoint on its
+  own), `hasPractical` still judged from actual performance, and
   `OwnedWeaponStatus.practical` still present
-- Schema 9 artifacts failing closed under schema 10, current-schema checkpoint
-  shape validated strictly, a historical artifact with no checkpoint field still
-  validating and rendering, and `ExportRoot.schemaVersion = 5`
+- Schema 10 artifacts failing closed under schema 11, current-schema intermediate
+  state shape validated strictly, a historical artifact with no
+  `intermediateStateGroups` field still validating and rendering, and
+  `ExportRoot.schemaVersion = 6`
 - Build List detail settings starting at `defaultPlannerOptions`, sending the
   user-selected values as `PlannerInput.options`, restoring the defaults, and
   refusing `0`, a negative number, a fraction, and an empty field
@@ -3284,9 +3418,9 @@ Relevant test areas include:
   sets it to null for every Target, removes `relatedTargetWeaponIds` from every
   current OwnedWeapon, never infers a preference from the removed list, and
   rewrites no BuildCandidate, BuildListEntry, ProductionPlan, or ExecutionHistory
-- `DATABASE_SCHEMA_VERSION = 4`, `ExportRoot.schemaVersion = 5`,
-  `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 10`, schema 1..9 artifacts failing closed
-  under version 10, and no other version authority changed
+- `DATABASE_SCHEMA_VERSION = 4`, `ExportRoot.schemaVersion = 6`,
+  `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 11`, schema 1..10 artifacts failing closed
+  under version 11, and no other version authority changed
 - Collection validation rejects a missing preferred weapon, a weapon type or element
   mismatch, a protected weapon, and the same weapon preferred by two Targets, and
   accepts a compatible unprotected Normal, a compatible unprotected Gogma at every

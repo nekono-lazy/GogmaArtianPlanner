@@ -26,9 +26,7 @@ import type {
   BuildCandidate,
   BuildListEntry,
   CalculationContext,
-  CompromiseCheckpointGroup,
-  CompromiseCheckpointOpportunity,
-  CompromiseCheckpointOpportunityId,
+  IntermediateStateSelection,
   OwnedWeapon,
   TargetWeapon,
 } from '../domain/models/publicTypes'
@@ -41,7 +39,7 @@ import type {
   CandidateSearchSettings,
 } from '../domain/search'
 import { defaultCandidateSearchSettings } from '../domain/search'
-import { isSameBuildListCandidate } from '../domain/buildList'
+import { defaultIntermediateStateSelection, isSameBuildListCandidate } from '../domain/buildList'
 import {
   buildCandidateRepository,
   buildListEntryRepository,
@@ -95,7 +93,7 @@ export interface SearchPageDependencies {
   addCandidate(
     candidate: BuildCandidate,
     target: TargetWeapon,
-    selectedCheckpointOpportunityIds: readonly CompromiseCheckpointOpportunityId[],
+    intermediateStateSelection: IntermediateStateSelection,
   ): Promise<{ entry: BuildListEntry; added: boolean }>
 }
 
@@ -112,8 +110,8 @@ const defaultDependencies: SearchPageDependencies | null = defaultMaster
       // The Service result (existing or new Entry, plus whether it was added)
       // is passed through unchanged; its duplicate protection stays the
       // Domain authority.
-      addCandidate: (candidate, target, selectedCheckpointOpportunityIds) =>
-        buildListService.addCandidate(candidate, target, selectedCheckpointOpportunityIds),
+      addCandidate: (candidate, target, intermediateStateSelection) =>
+        buildListService.addCandidate(candidate, target, intermediateStateSelection),
     }
   : null
 
@@ -158,16 +156,17 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
   const [targets, setTargets] = useState<TargetWeapon[]>([])
   const [ownedWeapons, setOwnedWeapons] = useState<OwnedWeapon[]>([])
   // Read-only mirror of the Build List, kept only to show the add state of
-  // the displayed Candidate. It never feeds a checkpoint selection back into
-  // this screen's own draft selection.
+  // the displayed Candidate. It never feeds an intermediate state selection
+  // back into this screen's own draft selection.
   const [buildListEntries, setBuildListEntries] = useState<BuildListEntry[]>([])
   const [targetWeaponId, setTargetWeaponId] = useState<TargetWeapon['id'] | ''>('')
   const [routeFilter, setRouteFilter] = useState<CandidateRouteFilter>('all')
-  // Checkpoints always start unselected: choosing none means "go straight to
-  // the Ideal result" (`docs/UI_FLOW.md` 9).
-  const [selectedCheckpointIds, setSelectedCheckpointIds] = useState<
-    CompromiseCheckpointOpportunityId[]
-  >([])
+  // Intermediate states always start unselected and the improvement order is
+  // left to the Planner: choosing nothing means "go straight to the Ideal
+  // result" (`docs/UI_FLOW.md` 9).
+  const [intermediateSelection, setIntermediateSelection] = useState<IntermediateStateSelection>(
+    defaultIntermediateStateSelection(),
+  )
   const [settings, setSettings] = useState<CandidateSearchSettings>({ ...defaultCandidateSearchSettings })
   const [result, setResult] = useState<CandidateSearchResult | null>(null)
   const [progress, setProgress] = useState<CandidateSearchProgress | null>(null)
@@ -238,7 +237,7 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
     setSearchNotice(null)
     setAddFeedback(null)
     setResult(null)
-    setSelectedCheckpointIds([])
+    setIntermediateSelection(defaultIntermediateStateSelection())
     setProgress({
       targetWeaponId,
       phase: 'preparing',
@@ -292,23 +291,6 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
     setSearchNotice('検索をキャンセルしました。')
   }
 
-  /**
-   * At most one opportunity may be selected per checkpoint group, so choosing a
-   * different arrival at the same compromise product replaces the previous one
-   * rather than adding a second (`docs/DATA_MODEL.md` 9.4).
-   */
-  const toggleCheckpoint = (
-    group: CompromiseCheckpointGroup,
-    opportunity: CompromiseCheckpointOpportunity,
-    selected: boolean,
-  ) => {
-    const groupIds = new Set(group.opportunities.map(({ id }) => id))
-    setSelectedCheckpointIds((current) => {
-      const kept = current.filter((id) => !groupIds.has(id))
-      return selected ? [...kept, opportunity.id] : kept
-    })
-  }
-
   const addToBuildList = async (candidate: BuildCandidate) => {
     const target = targetById.get(candidate.targetWeaponId)
     if (!dependencies || !target) {
@@ -316,15 +298,15 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
       return
     }
     try {
-      const added = await dependencies.addCandidate(candidate, target, selectedCheckpointIds)
+      const added = await dependencies.addCandidate(candidate, target, intermediateSelection)
       // The Entry the Service returned (new or already existing) is mirrored
-      // so the add state updates at once; the Entry's own checkpoint
-      // selection is never copied back into this screen's draft.
+      // so the add state updates at once; the Entry's own selection is never
+      // copied back into this screen's draft.
       setBuildListEntries((current) =>
         current.some((entry) => entry.id === added.entry.id) ? current : [...current, added.entry],
       )
       // An equivalent Candidate already in the Build List keeps its own
-      // checkpoint selection: the Search screen never silently overwrites it
+      // selection: the Search screen never silently overwrites it
       // (`docs/UI_FLOW.md` 9). The mirrored Entry turns the Candidate's state
       // to "added", whose permanent guidance already carries the duplicate
       // sentence, so no second copy of it is shown as feedback.
@@ -367,7 +349,7 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
                 {/* One Target per search: reconciling several Targets is the
                     Production Planner's job (`docs/UI_FLOW.md` 9). */}
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                  1回の検索は目標武器1件が対象です。理想品へ到達する作成ルートを探し、途中で妥協条件を満たす状態があればそのルート上のチェックポイントとして表示します。チェックポイントを選ばなければ理想品まで進みます。
+                  1回の検索は目標武器1件が対象です。理想品へ到達する作成ルートを探し、スキル進行と復元ボーナス進行それぞれの途中で妥協条件を満たす状態を候補として表示します。途中採用する状態を選ばなければ理想品まで進みます。
                 </Typography>
               </Box>
               <Box
@@ -547,8 +529,8 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
               })}
               {/* No Ideal inside the configured extent is never a statement that
                   no Ideal exists, and a compromise state found on the way is
-                  deliberately not offered: only a strict prefix of a real Ideal
-                  Route can be a checkpoint (`docs/SEARCH_SPEC.md` 5.7). */}
+                  deliberately not offered: only a lane state of a real Ideal
+                  Route can be an intermediate state (`docs/SEARCH_SPEC.md` 5.7). */}
               {targetResult.candidate === null && (
                 <Alert severity="info">
                   現在の探索範囲では理想品が見つかりませんでした。探索量の上限を上げると見つかる場合があります。詳細設定の「通常アーティア最大進行量」「巨戟最大進行量」「スキル最大進行量」を見直してください。
@@ -562,8 +544,8 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
                   ownedWeapons={ownedWeapons}
                   debugMode={debugMode}
                   buildListStatus={buildListStatus}
-                  selectedCheckpointOpportunityIds={selectedCheckpointIds}
-                  onToggleCheckpoint={toggleCheckpoint}
+                  intermediateStateSelection={intermediateSelection}
+                  onIntermediateStateSelectionChange={setIntermediateSelection}
                   onAdd={(selected) => void addToBuildList(selected)}
                   addFeedback={
                     addFeedback && <Alert severity={addFeedback.severity}>{addFeedback.message}</Alert>

@@ -627,7 +627,7 @@ describe('Planner Beam Search', () => {
       first.id,
       second.id,
     ])
-    expect(result.bestState?.routeProgressByEntryId[first.id]).not.toBe(
+    expect(result.bestState?.routeProgressByEntryId[first.id]).not.toEqual(
       result.bestState?.routeProgressByEntryId[second.id],
     )
     expect(result.conflicts).toEqual([
@@ -830,7 +830,7 @@ describe('Planner Beam Search', () => {
       .toBe(5)
     expect(counters?.find(({ id }) => id === 'weapon.fixture.b:8')?.counter)
       .toBe(12)
-    expect(result.bestState?.routeProgressByEntryId[second.id]).toBe(0)
+    expect(result.bestState?.routeProgressByEntryId[second.id]).toEqual({ base: 0, bonus: 0, skill: 0 })
   })
 
   it('detects incompatible counter operations and applies a stable resolution', async () => {
@@ -1029,7 +1029,7 @@ describe('Planner Beam Search', () => {
     const result = await runPlannerBeamSearch(input, dependencies)
     expect(result.completed).toBe(false)
     expect(result.bestState).not.toBeNull()
-    expect(result.bestState?.routeProgressByEntryId[entry.id]).toBe(1)
+    expect(result.bestState?.routeProgressByEntryId[entry.id]).toEqual({ base: 0, bonus: 1, skill: 0 })
   })
 
   it('does no exploration when every enabled Target is already Ideal', async () => {

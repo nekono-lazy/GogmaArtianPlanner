@@ -8,20 +8,21 @@ export type ProductionPlanId = Brand<string, 'ProductionPlanId'>
 export type PlanStepId = Brand<string, 'PlanStepId'>
 export type ExecutionHistoryId = Brand<string, 'ExecutionHistoryId'>
 /**
- * One user-visible compromise product reachable on a canonical Ideal Route.
+ * One user-visible intermediate state of one stream lane (Skill or Bonus) of a
+ * canonical Ideal Route.
  *
- * Derived deterministically from the Candidate's own meaning and the group's
- * performance identity, never from a search run id, a clock, or an enumeration
- * ordinal (`docs/SEARCH_SPEC.md` 5.8).
+ * Derived deterministically from the Candidate's own meaning, the lane, and
+ * the state's performance identity, never from a search run id, a clock, or an
+ * enumeration ordinal (`docs/SEARCH_SPEC.md` 5.8).
  */
-export type CompromiseCheckpointGroupId = Brand<
+export type IntermediateStateGroupId = Brand<
   string,
-  'CompromiseCheckpointGroupId'
+  'IntermediateStateGroupId'
 >
-/** One Route position at which a checkpoint group's exact state is reached. */
-export type CompromiseCheckpointOpportunityId = Brand<
+/** One lane position at which an intermediate state group's exact state is reached. */
+export type IntermediateStateOpportunityId = Brand<
   string,
-  'CompromiseCheckpointOpportunityId'
+  'IntermediateStateOpportunityId'
 >
 
 export type ISODateTimeString = string
@@ -161,7 +162,21 @@ export interface KnownValue<T> {
 // exception is not extended to version 10. No Dexie table shape changed, so
 // `DATABASE_SCHEMA_VERSION` stays 4; the Export current shape does change, so
 // `ExportRoot.schemaVersion` moves to 5. RNG semantics remain unchanged.
-export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 10
+// Version 11 replaces the strict-prefix compromise checkpoint of one fixed
+// operation sequence with axis-separated intermediate states: a Candidate
+// carries the accepted states of its Skill lane and of its Bonus lane
+// (`intermediateStateGroups`), a BuildListEntry carries at most one selected
+// state per lane plus an improvement preference, and the Planner executes each
+// Route as interleavable Skill / Bonus lanes whose selected states pin the
+// compromise checkpoint. A version 10 `checkpointGroups` /
+// `selectedCheckpointOpportunityIds` pair names strict-prefix operation
+// indexes that no lane pin can be derived from, and reading it as "no
+// selection" would silently drop a hard constraint, so all version 1..10
+// Candidates, Build List snapshots and Plans are incompatible and fail closed
+// with `calculation_context_changed`. No Dexie table shape changed, so
+// `DATABASE_SCHEMA_VERSION` stays 4; the persisted entity shape does change, so
+// `ExportRoot.schemaVersion` moves to 6. RNG semantics remain unchanged.
+export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 11
 
 export interface CalculationContext {
   gameVersion: string

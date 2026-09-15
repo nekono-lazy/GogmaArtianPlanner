@@ -3,7 +3,7 @@
 
 ## 1. この文書の目的
 
-この文書は、目標武器ごとの候補検索、canonical Ideal Routeとcompromise checkpoint、作成経路、条件判定、Web Worker入出力、保存方針、テスト観点を定義する。
+この文書は、目標武器ごとの候補検索、canonical Ideal Routeとlane別intermediate state（妥協checkpointの構成要素）、作成経路、条件判定、Web Worker入出力、保存方針、テスト観点を定義する。
 
 候補検索はProduction Plannerの前段であり、Plannerは検索結果から作成リストへ追加された候補だけを入力として扱う。
 
@@ -27,7 +27,7 @@ Candidate Search再設計の背景、実測値、採用しなかった案、受�
 - Bonus結果とSkill結果のCartesian productを列挙しない
 - 現在状態が既に理想条件を満たすstreamは探索しない
 - 初回検索はcanonical Idealを1件確定した時点で終了する。Searchは常にIdeal-onlyである
-- 妥協状態は独立したCandidateではなく、canonical Ideal Routeのstrict prefixに現れるcheckpointである（5.7 / 5.8）
+- 妥協状態は独立したCandidateではなく、canonical Ideal RouteのSkill lane / Bonus laneに現れるintermediate stateである（5.7 / 5.8）。妥協checkpointはPlannerが両laneの選択状態から合成する
 - canonical Idealの選択を実装上の発見順へ依存させない
 - 理想品は実用ラインも必ず満たす(Ideal ⇒ Practical 包含不変条件)
 - Planner競合対策の先読みは初回検索の責務ではない
@@ -310,8 +310,11 @@ BonusのPracticalとAlternativeは非併用、Skillとの組み合わせは許�
 詳細はDATA_MODEL 8とTARGET_COMPROMISE_SEMANTICS.md。
 妥協条件なしならIdealだけを受理し、両ID=nullのPractical Skillをwildcardとして扱わない。
 
-妥協状態は独立したCandidateではない。5.7と5.8の通り、canonical Ideal Routeの
-strict prefixとして到達する妥協状態だけがcheckpointになる。
+妥協状態は独立したCandidateではない。5.7と5.8の通り、canonical Ideal RouteのSkill lane /
+Bonus laneそれぞれの途中状態（intermediate state）として提示し、ユーザーがlaneごとに採用する
+状態を選ぶ。実際の妥協checkpointは、Planner上で「現在Skillが受理条件を満たす AND 現在Bonusが
+受理条件を満たす」状態になった瞬間であり、Candidate SearchがSkill × Bonusの組み合わせを
+列挙することはない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7.5）。
 
 ```ts
 export interface CompromiseConditionMatch {
@@ -320,9 +323,9 @@ export interface CompromiseConditionMatch {
 }
 ```
 
-両軸がidealの組み合わせは理想品そのものであり、`CompromiseConditionMatch` としては
-存在しない。`evaluateCompromiseCheckpointCondition()` がこの判定authorityであり、
-両軸idealまたは受理不能な状態に対して `null` を返す。
+両軸がidealの組み合わせは理想品そのものであり、妥協checkpointとしては存在しない。
+`evaluateTargetBonusMatch()` / `evaluateTargetSkillMatch()` が各軸の判定authorityであり、
+`CompromiseConditionMatch` はPlannerが到達したcheckpointのmilestoneへ付ける説明情報である。
 
 ## 5.3 近似判定の廃止
 
@@ -649,7 +652,7 @@ K(c) = そのRoute baseでIdeal Skill条件を満たすSkill stream解
 ```
 
 妥協状態はCross合成に参加しない。合成されたCandidateは常に理想品であり、
-妥協状態はそのRouteのstrict prefixとしてcheckpointに現れるだけである。
+妥協状態はそのRouteの各laneのintermediate stateとして現れるだけである。
 
 この帰結として、Ideal Bonus multisetは定義上1種類しかないため、stream-local retentionを
 経た `|B|` は通常1になる。`|K|` は、Ideal Skill条件がGroup Skillを拘束しない場合などに
@@ -695,7 +698,7 @@ BonusとSkillで同一の原則を適用する。
 | 現在状態 | そのstreamの将来探索 | 生成できる解 |
 | --- | --- | --- |
 | Ideal条件を満たす | 不要。探索を終了してよい | 操作0のIdeal解 |
-| 妥協条件のみ満たす | Ideal到達可能性を探すため継続する | 探索で見つかるIdeal解（妥協状態はそのRouteのcheckpoint候補） |
+| 妥協条件のみ満たす | Ideal到達可能性を探すため継続する | 探索で見つかるIdeal解（妥協状態はそのlaneのintermediate state候補） |
 | 未達 | Ideal到達位置を探索する | 探索で見つかるIdeal解 |
 
 Ideal既達成streamの早期終了は、[DATA_MODEL.md](./DATA_MODEL.md) 8.1の
@@ -730,14 +733,14 @@ Bonus streamの早期終了はB2で実装済みである。
 ```text
 探索開始
   -> canonical Idealを確定
-  -> そのRouteのstrict prefixからcheckpointを抽出 (5.8)
+  -> そのRouteのSkill lane / Bonus laneからintermediate stateを抽出 (5.8)
   -> 通常探索終了
 ```
 
 Idealが探索範囲内に見つからない場合だけ、`max*Advance` の上限まで探索する。
 その場合の結果はCandidate 0件であり、checkpointも0件である（5.7）。
 
-妥協条件の有無は終了条件を変えない。妥協条件はcheckpointの有無だけを変え、
+妥協条件の有無は終了条件を変えない。妥協条件はintermediate stateの有無だけを変え、
 探索範囲、RNG Prediction呼び出し回数、canonical Idealの選択には影響しない。
 
 ### 5.6.3 canonical Idealの定義
@@ -1039,8 +1042,8 @@ BuildCandidate.id
 BuildCandidate.createdAt
   = PlannerClock
 
-BuildCandidate.checkpointGroups
-  = 5.8のcheckpoint抽出をそのCandidateへ適用した結果
+BuildCandidate.intermediateStateGroups
+  = 5.8のintermediate state抽出をそのCandidateへ適用した結果
 ```
 
 `CandidateSearchSettings` は、constrained enumerationのfilter authorityでも
@@ -1186,8 +1189,8 @@ identityを基点とする専用契約で `searchRunId` と `id` を決める(�
 1 Target 1 requestの出力は、canonical Ideal Candidate 1件または `null` である。
 
 ```text
-Idealが探索範囲内に存在する    -> canonical Ideal 1件 + そのRouteのcheckpoint
-Idealが探索範囲内に存在しない  -> Candidate 0件。checkpointも0件
+Idealが探索範囲内に存在する    -> canonical Ideal 1件 + その各laneのintermediate state
+Idealが探索範囲内に存在しない  -> Candidate 0件。intermediate stateも0件
 ```
 
 妥協状態を独立したCandidateとして返すことはない。Idealが見つからなかった場合、
@@ -1200,16 +1203,32 @@ UIは「現在の探索範囲では理想品が見つかりませんでした」
 「このTargetに理想品は存在しません」と表示してはならない。探索範囲上限を上げれば
 見つかる可能性を否定していないためである。
 
-## 5.8 canonical Ideal Routeのcompromise checkpoint
+## 5.8 canonical Ideal Routeのlane別intermediate state
 
-canonical Ideal CandidateのRouteのうち、Targetの妥協条件を満たす **strict prefix**
-の到達状態だけをcheckpointとして提示する。
+canonical Ideal CandidateのRouteは、5.4の独立性により次の3つのlaneへ分解できる。
 
-### 5.8.1 strict prefixとpure replay
+```text
+base lane   create_normal_artian / convert_normal_to_gogma   必ず先頭で順に実行する
+bonus lane  reset_bonuses / keep_bonuses                       Gogma streamの順序を保つ
+skill lane  reset_skills                                       Skill streamの順序を保つ
+```
 
-対象はcanonical Ideal Route自身の操作列 `operations[0 .. n-1]` のうち
-`operations[0 .. i]`(`i < n - 1`)を実行し終えた状態である。最終操作 `n - 1` は
-理想品を完成させる操作なのでcheckpointにならない。
+Bonus操作はSkill操作の出力を読まず、Skill操作はBonus操作の出力を読まない。したがって
+`BuildRoute.operations` が「Bonus操作列 → Skill操作列」の順で記録されていても、base lane完了後の
+bonus laneとskill laneの物理的な実行順序はPlannerが決めてよい
+（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7.0.4）。Searchが提示する妥協状態は、この2 laneそれぞれの
+**途中位置** である。
+
+```text
+Skill lane位置 i  : Reset Skillsを i 回実行した直後のSeries / Group Skill
+                    i = 0 はlane開始状態（conversionが付与した初回Skill、または既存巨戟の現在Skill）
+Bonus lane位置 d  : Bonus amendmentを d 回実行した直後の5枠とscope
+                    d = 0 はlane開始状態（継承した通常5枠、または既存巨戟の現在5枠）
+```
+
+各laneの最終位置（Ideal Skill / Ideal Bonus）はlaneの終点であり、intermediate stateではない。
+
+### 5.8.1 lane別pure replay
 
 状態の再構成は **既存の観測traceのpure replay** で行う。
 
@@ -1220,80 +1239,107 @@ reset_skills の結果      <- BuildCandidate.skillAmendmentTrace
 巨戟化時の初期Skill      <- BuildCandidate.conversionSkillTrace
 ```
 
-したがってcheckpoint抽出は `predictGogmaBonus` / `predictSkills` /
+したがってintermediate state抽出は `predictGogmaBonus` / `predictSkills` /
 `predictNormalArtian` を **1回も追加で呼ばない**。UI / presentation /
-CandidateCardも、checkpointを描画するためにRNG Engineを再実行してはならない。
+CandidateCardも、intermediate stateを描画するためにRNG Engineを再実行してはならない。
 
 記録が存在しない状態（blind forgeの5枠、trace以前に永続化されたCandidateなど）は
-`known: false` として扱い、checkpointにしない。値を捏造しない。
+`known: false` として扱い、intermediate stateにしない。値を捏造しない。
 
-replayした最終状態がCandidate自身の `finalBonuses` / `restorationBonusScope` /
-`seriesSkillId` / `groupSkillId` と食い違う場合は内部不整合であり、
-loudly失敗する。短い方へ切り詰めない。
+replayした各laneの終点がCandidate自身の `finalBonuses` / `restorationBonusScope` /
+`seriesSkillId` / `groupSkillId` と食い違う場合は内部不整合であり、loudly失敗する。
+
+各lane位置の受理判定は軸ごとに独立である。
+
+```text
+Skill lane位置  : evaluateTargetSkillMatch()  が ideal / practical を返す位置
+Bonus lane位置  : evaluateTargetBonusMatch()  が ideal / practical / alternative を返す位置
+                  （gogma_artian scope必須。conversion直後の通常scope 5枠は受理しない）
+```
+
+canonical Idealでは各laneの終点が最初のIdeal位置なので、終点より手前でIdeal判定になる位置は
+通常存在しない。Planner-driven constrained enumeration由来のCandidate（後続Counter位置の
+同一結果）では手前にIdeal位置が現れうるため、`match = "ideal"` の途中位置も許容する。
 
 ### 5.8.2 2層モデル : groupとopportunity
 
-checkpointは2層で表現する。
+intermediate stateはlaneごとに2層で表現する。
 
 ```text
-CompromiseCheckpointGroup       ユーザーが見る「妥協品としての性能」
+IntermediateSkillStateGroup      ユーザーが見る「Skill候補」
+  seriesSkillId / groupSkillId
+  match: practical | ideal
+
+IntermediateBonusStateGroup      ユーザーが見る「復元ボーナス候補」
   scope
   5枠の順不同multiset(重複数を保存)
-  seriesSkillId / groupSkillId
-  conditionMatch
+  match: practical | alternative | ideal
 
-CompromiseCheckpointOpportunity 到達機会
-  afterOperationIndex
-  operationCount / remainingOperationCount
-  exact ordered 5枠
-  seriesSkillId / groupSkillId
-  conditionMatch
+IntermediateSkillOpportunity / IntermediateBonusOpportunity   到達機会
+  lanePosition
+  operationIndex（その位置を生む操作。lane開始状態で操作を持たない場合は null）
+  Bonus側はexact ordered 5枠とscope
 ```
 
-group identityにslot順は含めない。同じ5枠をslot順違いで持つ2状態は、
-ユーザーから見て同じ妥協品なので同じgroupへまとめる。
-opportunity側にはexactなslot順を残す。PlannerとTrace Replayは
-「実際にその瞬間手に持つ武器」を検証するため、slot順が必要である。
+Bonus group identityにslot順は含めない。同じ5枠をslot順違いで持つ2位置は、
+ユーザーから見て同じ妥協品なので同じgroupへまとめる。opportunity側にはexactな
+slot順を残す。PlannerとTrace Replayは「実際にその瞬間手に持つ武器」を検証するため、
+slot順が必要である。
 
-group ID / opportunity IDは `candidateStableKey` とgroup identityから決まる
+group ID / opportunity IDは `candidateStableKey`、lane、group identity、lanePositionから決まる
 deterministicな値であり、`searchRunId`、Clock、列挙順序を含まない。
 
 ### 5.8.3 複数回の到達をすべて保持する
 
-同じgroupへ2手目と4手目の両方で到達する場合、両方のopportunityを保持する。
+同じgroupへlane位置1と3の両方で到達する場合、両方のopportunityを保持する。
 早い方を表示上のprimaryとして扱い、後続は「その他の到達点」として開示する。
 後続opportunityをDomainから削除しない。Counter競合により早い到達が使えず、
 遅い到達だけが実行可能なケースがあるためである。
 
-選択できるのは1 groupにつき最大1 opportunityである。Plannerは選択された
-opportunityを別のopportunityへ勝手に読み替えない。
+選択できるのは1 laneにつき最大1 opportunityである（[DATA_MODEL.md](./DATA_MODEL.md) 9.4）。
+Plannerは選択されたopportunityを別のopportunityへ勝手に読み替えない。
 
 ### 5.8.4 表示専用の保守的dominance
 
-表示整理のためだけに、次をすべて満たす場合に限りgroup `w` を
+Bonus groupの表示整理のためだけに、次をすべて満たす場合に限りgroup `w` を
 display-secondaryにできる。
 
 ```text
 scope が等しい
-seriesSkillId / groupSkillId が等しい
 bonusTypeId ごとのrank降順vectorが b >= w で、少なくとも1箇所で b > w
-b の最早opportunityが w の最早opportunity以下の操作数で到達する
+b の最早opportunityが w の最早opportunity以下のlane位置で到達する
 Master参照(BonusType / BonusRank / WeaponBonusDefinition)がすべて比較可能
 ```
 
-Bonus Type構成が異なる場合、Skillが異なる場合、Master参照が比較不能な場合は
-dominanceを成立させない。これは表示の優先度だけを決めるものであり、
-Domainのgroupもopportunityも削除しない。「劣る」checkpointが、
+Bonus Type構成が異なる場合、Master参照が比較不能な場合はdominanceを成立させない。
+Skill groupにdominanceはない。これは表示の優先度だけを決めるものであり、
+Domainのgroupもopportunityも削除しない。「劣る」stateが、
 Counter競合を避けられる唯一の選択肢になりうるためである。
 
-### 5.8.5 開始状態はcheckpointではない
+### 5.8.5 lane開始状態と「既に持っている武器」
 
-Route baseの開始状態（変換元のOwnedWeaponが既に持っている状態）はRouteのprefixでは
-ないので、それが妥協条件を満たしていてもcheckpointにしない。ユーザーが既に
-手元に持っているものを「到達点」として提示する意味がないためである。
+lane位置0（既存巨戟の現在Skill / 現在5枠、conversionが付与した初回Skill）は
+「操作0回で採用できる状態」としてintermediate stateになりうる。現在SkillがPractical /
+Idealの既存巨戟は「Skill Reset 0回」候補であり、巨戟化直後のSkillがPractical / Idealの
+conversion Routeも同様である。
+
+両laneの開始状態を同時に採用すること、および片laneの開始状態を採用しもう片laneが操作を
+持たない（既にIdealである）ことも有効である。それはユーザーが既に手元に持っている武器を
+妥協checkpointとして採用することであり、Plannerは開始時点で到達済みとして扱い、そこから
+理想品まで続ける（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7.5.2）。conversion Routeのlane開始状態は
+巨戟化が生む状態なので、開始時点では未到達である。UIは既存巨戟のlane位置0候補を通常どおり
+表示・選択可能にする。
 
 Target SatisfactionのhasPracticalは従来どおり実際の性能から判定する。
-checkpointの有無とは独立である。
+intermediate stateの有無とは独立である。
+
+### 5.8.6 妥協checkpointはPlannerが合成する
+
+Candidate SearchはSkill候補とBonus候補を独立に提示し、`Skill × Bonus` の組み合わせを
+列挙・実体化しない。ユーザーがlaneごとに採用状態を選ぶと、Plannerはその2つの
+lane位置（未選択laneはIdeal終点）を **pin** として扱い、両laneが同時にpin状態を持った
+瞬間を妥協checkpointとして実行順へ組み込む（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7.5）。
+到達不能なsynthetic combinationは、pin位置がそれぞれのlane上に実在するため生じない。
 
 ## 5.9 normal scope Keepのgame legalityとprediction support
 
@@ -1700,7 +1746,7 @@ canonical Idealの選択順序そのものである。
 5. preferred source match（8.1）
 6. `candidateStableKey` 昇順
 
-checkpoint groupの表示順は5.8.4に従う（最早到達、妥協軸の少なさ、stable key）。
+intermediate state groupの表示順はlaneごとに最早到達、次にstable keyとする（5.8）。
 
 TargetWeapon間の表示順。
 
@@ -1721,7 +1767,7 @@ run間で安定しない。**Candidateの最終出力順にrun依存値を使っ
 
 同一Search入力に対して `searchRunId` だけを変えて2回検索した場合、
 `BuildCandidate.id` は異なってよいが、`candidateStableKey` と
-`checkpointGroups` は完全に一致しなければならない。
+`intermediateStateGroups` は完全に一致しなければならない。
 これはB6-F1で実装済みである。`BuildCandidate.id` の生成規則
 (`searchRunId` を含む `semanticHash`)は変更していない。
 
@@ -1828,7 +1874,7 @@ preferredのために次を変更してはならない。同一コストCandidat
 
 - Search horizon
 - canonical Idealのcost境界
-- checkpoint抽出の結果
+- intermediate state抽出の結果
 - RNG Prediction call count
 - Stream探索深さ
 - Gogma / Skill / Normal Counter semantics
@@ -1849,7 +1895,7 @@ Searchが返すのはcanonical Ideal 1件以下であり、「候補が少ない
 探索範囲上限の引き上げであって、Target条件の自動緩和案ではない。
 
 妥協をどこまで許すかはTargetの妥協条件がすでに表現しており、
-その妥協をRouteのどこで受け取るかは5.8のcheckpoint選択が表現する。
+その妥協をRouteのどこで受け取るかは5.8のlane別intermediate state選択が表現する。
 Target条件は従来どおりユーザーの明示操作以外で変更しない。
 
 ---
@@ -1876,27 +1922,34 @@ createBuildListEntry(
 追加方式は個別追加だけである。1 Target 1 requestが返すCandidateは
 canonical Ideal 1件以下なので、一括追加の対象がない。
 
-追加時には、そのCandidateについてユーザーが選択したcheckpoint opportunityの
-IDを `BuildListEntry.selectedCheckpointOpportunityIds` として保存する。
+追加時には、そのCandidateについてユーザーがlaneごとに選択したopportunityのIDと
+「理想品までの改善優先」を `BuildListEntry.intermediateStateSelection` として保存する。
 
 ```ts
 createBuildListEntry(candidate, target, {
-  selectedCheckpointOpportunityIds,
+  intermediateStateSelection: {
+    skillOpportunityId,        // Skill laneの途中採用状態 or null
+    bonusOpportunityId,        // Bonus laneの途中採用状態 or null
+    improvementPreference,     // planner | skill_first | bonus_first
+  },
 });
 ```
 
-初期選択は空である。既に同一semanticのCandidateがBuildListに存在する場合は、
-既存Entryをそのまま返し、既存のcheckpoint選択を上書きしない。Search側は
-「この候補は作成リストに追加済みです。チェックポイントは作成リストで変更して
-ください。」と案内する。checkpoint選択の変更は作成リスト側の操作である。
+初期選択は両laneとも空、改善優先は `planner` である。既に同一semanticのCandidateが
+BuildListに存在する場合は、既存Entryをそのまま返し、既存の選択・改善優先を上書きしない。
+Search側は「この候補は作成リストに追加済みです。途中採用する状態と改善優先は
+作成リストで変更してください。」と案内する。選択の変更は作成リスト側の操作である。
+改善優先はBuild Plan固有の設定であり、TargetWeaponへ保存しない。
 
 制約。
 
-- 1 groupにつき選択できるopportunityは最大1件
-- Candidate Snapshotに存在しないopportunity IDはfail closedで拒否する
-- checkpoint選択はCandidateのidentityにもhashにも入らない。選択を変えても
+- 1 laneにつき選択できるopportunityは最大1件
+- Candidate Snapshotに存在しないopportunity ID、別laneのopportunity IDはfail closedで拒否する
+- 両laneの開始状態（lane位置0）の同時選択は有効である。既存巨戟ではPlanner開始時点で
+  到達済みのcheckpointになる（5.8.5）
+- 選択と改善優先はCandidateのidentityにもhashにも入らない。変えても
   BuildListEntry自体はstaleにならない
-- 一方でPlanの `buildListEntriesHash` には入る。選択を変えると既存Planは
+- 一方でPlanの `buildListEntriesHash` には入る。変えると既存Planは
   再計算対象になる
 - 同じCandidateのBuildListEntryを重複作成しない
 - Target定義変更、`searchStateHash` 不一致、`referencedOwnedWeaponsHash` 不一致、CalculationContext非互換時はBuildListEntryをstaleにする
@@ -2011,7 +2064,7 @@ Worker error契約(B6)。
 - SkillCondition `all` / `any` が正しく判定される
 - 理想条件が実用条件より優先分類される
 - 理想条件を満たす完成品が実用条件も満たす(Ideal ⇒ Practical 包含不変条件)
-- 妥協判定が両軸Idealのとき `null` を返し、checkpointにならない
+- 両軸Idealはcheckpoint milestoneにならず、片軸ずつの判定は独立に返る
 - 近似 (similarity) の概念が存在しない
 
 ## 13.2 Route Test
@@ -2078,7 +2131,7 @@ Worker error契約(B6)。
 - 同一 `(baseSeed, skillCounter)` に対する `predictSkills` を2回以上呼ばない
 - 同一Gogma Counter位置に対するReset予測を1回だけ行う
 - 同一family layoutのstateがfrontierで1代表へ畳まれ、それによって候補を失わない
-- checkpoint抽出のために `predictGogmaBonus` / `predictSkills` / `predictNormalArtian`
+- intermediate state抽出のために `predictGogmaBonus` / `predictSkills` / `predictNormalArtian`
   の呼び出し回数が1回も増えない
 
 ## 13.2.2 Candidate Composition Test
@@ -2098,7 +2151,7 @@ Worker error契約(B6)。
 - 確定したIdealが8章の標準ソート順で最小であり、RouteKindの評価順を入れ替えても同一になる
 - canonical Idealのtie-breakが `searchRunId` / `createdAt` / `BuildCandidate.id` に
   依存せず、`searchRunId` を変えて同一入力を再検索しても同じIdealが選ばれる
-- checkpointの有無でcanonical Idealの選択が変わらない
+- intermediate stateの有無でcanonical Idealの選択が変わらない
 - Idealが見つからない場合だけ `max*Advance` の上限まで探索する
 - Idealが見つからない場合はCandidate 0件であり、妥協状態へ到達できてもCandidateを返さない
 - 現在Bonusがgogma scopeでIdealと完全一致する起点についてBonus探索を行わない
@@ -2110,22 +2163,27 @@ Worker error契約(B6)。
 - 現在SkillがidealSkillConditionを満たす起点についてSkill探索を行わない
 - 同一結果の後続Counter位置を「支配された」として恒久除外しない
 
-### checkpoint抽出
+### intermediate state抽出
 
-- canonical Ideal Routeのstrict prefixだけをcheckpoint評価する
-- 最終操作（理想品を完成させる操作）をcheckpointにしない
-- canonical Ideal Routeから分岐する妥協状態をcheckpointにしない
-- 記録のない状態（blind forgeの5枠など）をcheckpointにしない
-- 開始OwnedWeaponが妥協条件を満たしていてもcheckpoint opportunityにしない
-- 同一Bonus multiset / scope / Skillでslot順だけが違う状態を同じgroupへまとめる
+- canonical Ideal RouteのSkill lane / Bonus laneをそれぞれ独立にreplayする
+- 各laneの終点（Ideal Skill / Ideal Bonus）をintermediate stateにしない
+- conversionが付与したPractical Skillをlane位置0（Reset 0回）のSkill候補にする
+- conversionが付与したIdeal Skillは終点であり、Skill候補にならない
+- conversion mismatch後のReset SkillsでPracticalになった位置をSkill候補にする
+- 既存巨戟の現在Practical Skill / 現在gogma scope受理5枠をlane位置0の候補にする
+- 片laneが未受理でももう片laneの候補は独立に抽出する
+- conversion直後の通常scope 5枠は、ラベルが一致してもBonus候補にしない
+- 記録のない状態（blind forgeの5枠など）をintermediate stateにしない
+- 同一Bonus multiset / scopeでslot順だけが違う状態を同じgroupへまとめる
 - opportunity側にexact slot順が残る
-- 同じ妥協品が2手目と4手目に存在した場合、両opportunityを保持する
+- 同じ状態がlane位置1と3に存在した場合、両opportunityを保持する
 - 最早opportunityがgroup代表として選ばれ、後続opportunityを削除しない
-- conservative dominanceで下位互換groupをdisplay-secondaryにできる
+- Bonus groupのconservative dominanceで下位互換groupをdisplay-secondaryにできる
 - display dominanceでDomainのgroupもopportunityも削除しない
-- 異なるSkill、異なるBonus Type構成、比較不能なMaster参照をdominance扱いしない
-- 後から到達するgroupが、より早く到達する下位groupをdominateしない
+- 異なるBonus Type構成、比較不能なMaster参照をdominance扱いしない
 - group ID / opportunity IDが `searchRunId` / Clock / 列挙順に依存しない
+- 同一入力の抽出結果が決定的である
+- 抽出が `predictSkills` / `predictGogmaBonus` を追加で呼ばない
 
 ## 13.2.4 Target Invariant Test
 
@@ -2185,15 +2243,17 @@ Skill stream側はB1で実装済み、Bonus stream側はB2で実装済みであ�
 - Routeに無関係なOwnedWeapon変更と、参照武器のname、memo、日時変更ではBuildListEntryがstaleにならない
 - OwnedWeaponを参照しないRouteではreferencedOwnedWeaponsHashが `null` のままになる
 
-## 13.4 Checkpoint選択Test
+## 13.4 途中採用状態選択Test
 
-- checkpoint初期選択が空である
-- 異なるgroupから複数checkpointを選択できる
-- 同一groupから複数opportunityの選択をrejectする
+- 初期選択が両laneとも空であり、改善優先が `planner` である
+- Skill lane / Bonus laneそれぞれ1件ずつ選択できる
 - Candidate Snapshotに存在しないopportunity IDをrejectする
-- checkpoint selection変更でBuildListEntry自体はstaleにならない
-- checkpoint selection変更でPlanの `buildListEntriesHash` が変わる
-- 同一semanticのCandidateを再追加しても既存checkpoint selectionを上書きしない
+- 別laneのopportunity IDをrejectする
+- 未知の改善優先をrejectする
+- 両laneの開始状態の同時選択を受け入れる
+- 選択・改善優先の変更でBuildListEntry自体はstaleにならない
+- 選択・改善優先の変更でPlanの `buildListEntriesHash` が変わる
+- 同一semanticのCandidateを再追加しても既存の選択・改善優先を上書きしない
 
 ## 13.5 Worker Test
 
@@ -2212,8 +2272,9 @@ Skill stream側はB1で実装済み、Bonus stream側はB2で実装済みであ�
 
 ### 妥協条件version 6の判定理由と監査記録
 
-妥協判定 `conditionMatch`（bonus: ideal/practical/alternative、skill: ideal/practical）は、
-Candidate本体ではなく5.8のcheckpoint group / opportunityが保持する。
+妥協判定はlaneごとの `match`（Bonus: ideal/practical/alternative、Skill: ideal/practical）として
+Candidate本体ではなく5.8のintermediate state group / opportunityが保持し、両軸の
+`conditionMatch` はPlannerが到達したcheckpoint milestoneが保持する。
 これはTarget定義と到達状態から導出した説明情報であり、Candidate ID / stable key /
 deduplication key / meaning fingerprint / searchStateHashには追加しない。
 UIは保存された判定理由を「ボーナス判定: 実用 / 代替」「スキル判定: 理想 / 実用」と表示する。

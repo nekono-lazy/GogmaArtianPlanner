@@ -205,8 +205,9 @@ describe('ProductionPlanStepList checkpoint milestones', () => {
   ) => ({
     buildListEntryId: `build-list.milestone.${suffix}` as never,
     targetWeaponId: targetId,
-    checkpointGroupId: `checkpoint-group:${suffix}` as never,
-    checkpointOpportunityId: `checkpoint-opportunity:${suffix}` as never,
+    skillOpportunityId: null,
+    bonusOpportunityId: `intermediate-opportunity:${suffix}` as never,
+    conditionMatch: { bonus: 'practical' as const, skill: 'ideal' as const },
     remainingOperationCount,
   })
 
@@ -215,7 +216,7 @@ describe('ProductionPlanStepList checkpoint milestones', () => {
     const list = within(card(1)).getByRole('list', { name: 'ステップ 1 のチェックポイント到達' })
     expect(within(card(1)).getByText('チェックポイント到達')).toBeInTheDocument()
     expect(within(list).getAllByRole('listitem').map(({ textContent }) => textContent))
-      .toEqual(['双剣・水（理想まで残り2操作）'])
+      .toEqual(['双剣・水（ボーナス判定: 実用 ／ スキル判定: 理想、理想まで残り2操作）'])
     // Raw identifiers stay out of the normal UI.
     expect(within(card(1)).queryByText(/BuildListEntry ID/)).not.toBeInTheDocument()
   })
@@ -227,8 +228,8 @@ describe('ProductionPlanStepList checkpoint milestones', () => {
     })], true)
     const list = within(card(1)).getByRole('list', { name: 'ステップ 1 のチェックポイント到達' })
     expect(within(list).getAllByRole('listitem').map(({ textContent }) => textContent)).toEqual([
-      '双剣・火（理想まで残り1操作）',
-      '双剣・水（理想まで残り2操作）',
+      '双剣・火（ボーナス判定: 実用 ／ スキル判定: 理想、理想まで残り1操作）',
+      '双剣・水（ボーナス判定: 実用 ／ スキル判定: 理想、理想まで残り2操作）',
     ])
     expect(within(card(1)).getByText('共有操作')).toBeInTheDocument()
   })
@@ -237,7 +238,7 @@ describe('ProductionPlanStepList checkpoint milestones', () => {
     renderList([step('step.milestone.gone', 1, {
       checkpointMilestones: [milestone(targetWeaponId('target.steps.gone'), 4, 'c')],
     })])
-    expect(within(card(1)).getByText('削除済みまたは参照できない目標武器（target.steps.gone）（理想まで残り4操作）')).toBeInTheDocument()
+    expect(within(card(1)).getByText('削除済みまたは参照できない目標武器（target.steps.gone）（ボーナス判定: 実用 ／ スキル判定: 理想、理想まで残り4操作）')).toBeInTheDocument()
   })
 
   it('shows no milestone section for a legacy undefined field or an empty list', () => {

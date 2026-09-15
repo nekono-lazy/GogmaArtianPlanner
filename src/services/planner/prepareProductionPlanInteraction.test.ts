@@ -441,8 +441,8 @@ describe('mergeExplicitConflictResolution', () => {
     const preparation = ready(persistedConflict)
     preparation.currentConflicts[0].checkpointParticipants = [{
       buildListEntryId: entries[1].id,
-      checkpointGroupId: 'checkpoint-group:fixture' as never,
-      checkpointOpportunityId: 'checkpoint-opportunity:fixture' as never,
+      axis: 'bonus',
+      opportunityId: 'intermediate-opportunity:fixture' as never,
     }]
 
     const result = createProductionPlanInteractionViewModel(
@@ -458,11 +458,11 @@ describe('mergeExplicitConflictResolution', () => {
       expect(participant).toMatchObject({
         isAvailable: false,
         unavailableReason: 'checkpoint_conflict',
-        unavailableMessage: expect.stringContaining('作成リストでチェックポイントを変更または解除'),
+        unavailableMessage: expect.stringContaining('作成リストで途中採用する状態を変更または解除'),
       })
     }
     expect(result.conflicts[0].participants.map(({ checkpointOpportunityId }) => checkpointOpportunityId))
-      .toEqual([null, 'checkpoint-opportunity:fixture'])
+      .toEqual([null, 'intermediate-opportunity:fixture'])
   })
 
   it('reads checkpoint involvement from the current preparation, not the persisted Plan', () => {
@@ -472,8 +472,8 @@ describe('mergeExplicitConflictResolution', () => {
     const persistedConflict = conflict(entries, {
       checkpointParticipants: [{
         buildListEntryId: entries[0].id,
-        checkpointGroupId: 'checkpoint-group:stale' as never,
-        checkpointOpportunityId: 'checkpoint-opportunity:stale' as never,
+        axis: 'bonus',
+        opportunityId: 'intermediate-opportunity:stale' as never,
       }],
     })
 

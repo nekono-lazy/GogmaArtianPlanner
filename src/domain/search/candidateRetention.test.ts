@@ -49,8 +49,8 @@ describe('canonical Ideal selection and semantic keys', () => {
 
   it('returns null when the search found no Ideal at all', () => {
     // No Ideal inside the configured extent means no Candidate and no
-    // checkpoint: a compromise state found on the way is never returned,
-    // because only a strict prefix of a real Ideal Route can be one
+    // intermediate state: a compromise state found on the way is never
+    // returned, because only a lane state of a real Ideal Route can be one
     // (`docs/SEARCH_SPEC.md` 5.7).
     expect(selectCanonicalIdealCandidate([])).toBeNull()
   })

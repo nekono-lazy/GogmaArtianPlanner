@@ -21,7 +21,10 @@ import { createTargetDefinitionHash } from '../buildList'
 import { runPlannerBeamSearch } from './plannerBeamSearch'
 import {
   derivePlannerCheckpointRequirements,
-  selectedCheckpointsForEntry,
+  entryIntermediateSelection,
+  hasIntermediateStateSelection,
+  isIntermediatePinHeldAtRouteStart,
+  routeLaneLengths,
 } from './plannerCheckpoints'
 import {
   replayPlannerSearchTrace,
@@ -91,6 +94,91 @@ function normalizeCandidateSnapshot(candidate: BuildCandidate) {
   }
 }
 
+/**
+ * The compromise checkpoint pin pair an Entry with a selection makes the
+ * Planner hold, for the planning Build List hash (`docs/PLANNER_SPEC.md`
+ * 7.5.2 / 7.5.5).
+ *
+ * The hard constraint is never the selected opportunity alone: the checkpoint
+ * is the pinned state of *both* lanes - the selected state of a selected
+ * lane and the Candidate's Ideal lane end of an unselected one - and Trace
+ * Replay verifies exactly that pair. So the hash carries, per lane, either
+ * the selected state (the lane position and ending operation the pin gating
+ * uses, the Series / Group Skills or the exact ordered five slots and scope,
+ * and the match the milestone reports) or the Ideal lane end (the Candidate's
+ * final Skills, or its final five slots in stored order and scope). Slot order
+ * is kept as stored on both variants, never sorted: the Candidate Snapshot
+ * hash normalizes `finalBonuses` as an unordered multiset, but the checkpoint
+ * verification is ordered, so a Skill-only selection whose Ideal Bonus slots
+ * were reordered is a different constraint.
+ *
+ * An Entry without any selection has no checkpoint and hashes `null` here,
+ * leaving the Candidate Snapshot semantics unchanged. Candidate identity, the
+ * deduplication key and the meaning fingerprint stay untouched. A selected id
+ * that does not resolve on its own lane is a validation failure elsewhere;
+ * here it is hashed deterministically as an unresolved id - never read as
+ * empty and never replaced by the Ideal lane end - so the helper never crashes.
+ */
+function normalizeCheckpointPinMeaning(entry: BuildListEntry) {
+  if (!hasIntermediateStateSelection(entry)) return null
+  const selection = entry.intermediateStateSelection
+  const candidate = entry.candidateSnapshot
+  const resolved = entryIntermediateSelection(entry)
+  const laneLengths = routeLaneLengths(candidate.route.operations)
+  const orderedSlots = (slots: BuildCandidate['finalBonuses']) =>
+    slots.map(({ bonusTypeId, bonusRankId }) => ({ bonusTypeId, bonusRankId }))
+
+  const skillOpportunityId = selection?.skillOpportunityId ?? null
+  const skill = skillOpportunityId === null
+    ? {
+        kind: 'ideal' as const,
+        axis: 'skill' as const,
+        lanePosition: laneLengths.skill,
+        seriesSkillId: candidate.seriesSkillId,
+        groupSkillId: candidate.groupSkillId,
+        match: 'ideal' as const,
+      }
+    : resolved.skill === null || resolved.skill.opportunity.id !== skillOpportunityId
+      ? { kind: 'selected' as const, opportunityId: skillOpportunityId, resolved: false as const }
+      : {
+          kind: 'selected' as const,
+          opportunityId: skillOpportunityId,
+          resolved: true as const,
+          axis: 'skill' as const,
+          lanePosition: resolved.skill.opportunity.lanePosition,
+          operationIndex: resolved.skill.opportunity.operationIndex,
+          seriesSkillId: resolved.skill.group.seriesSkillId,
+          groupSkillId: resolved.skill.group.groupSkillId,
+          match: resolved.skill.group.match,
+        }
+
+  const bonusOpportunityId = selection?.bonusOpportunityId ?? null
+  const bonus = bonusOpportunityId === null
+    ? {
+        kind: 'ideal' as const,
+        axis: 'bonus' as const,
+        lanePosition: laneLengths.bonus,
+        restorationBonuses: orderedSlots(candidate.finalBonuses),
+        restorationBonusScope: candidate.restorationBonusScope,
+        match: 'ideal' as const,
+      }
+    : resolved.bonus === null || resolved.bonus.opportunity.id !== bonusOpportunityId
+      ? { kind: 'selected' as const, opportunityId: bonusOpportunityId, resolved: false as const }
+      : {
+          kind: 'selected' as const,
+          opportunityId: bonusOpportunityId,
+          resolved: true as const,
+          axis: 'bonus' as const,
+          lanePosition: resolved.bonus.opportunity.lanePosition,
+          operationIndex: resolved.bonus.opportunity.operationIndex,
+          restorationBonuses: orderedSlots(resolved.bonus.opportunity.restorationBonuses),
+          restorationBonusScope: resolved.bonus.opportunity.restorationBonusScope,
+          match: resolved.bonus.group.match,
+        }
+
+  return { skill, bonus }
+}
+
 /** Stable semantic fingerprint for the targets on which a Plan was calculated. */
 export function createPlanningTargetWeaponsHash(
   targetWeapons: readonly TargetWeapon[],
@@ -117,13 +205,15 @@ export function createPlanningBuildListEntriesHash(
       .map((entry) => ({
         id: entry.id,
         candidateSnapshot: normalizeCandidateSnapshot(entry.candidateSnapshot),
-        // The user's selected compromise checkpoints are a hard Planner
-        // constraint, so changing the selection changes what this Plan had to
-        // achieve and must make an existing Plan a recalculation target
-        // (`docs/PLANNER_SPEC.md` 7.5.5).
-        selectedCheckpointOpportunityIds: [
-          ...(entry.selectedCheckpointOpportunityIds ?? []),
-        ].sort(compareStableStrings),
+        // The user's selected intermediate states are a hard Planner
+        // constraint and the improvement preference steers the Plan, so
+        // changing either changes what this Plan had to achieve and must make
+        // an existing Plan a recalculation target (`docs/PLANNER_SPEC.md` 7.5.5).
+        intermediateStateSelection: {
+          checkpointPin: normalizeCheckpointPinMeaning(entry),
+          improvementPreference:
+            entry.intermediateStateSelection?.improvementPreference ?? 'planner',
+        },
         targetDefinitionHash: entry.targetDefinitionHash,
         searchStateHash: entry.searchStateHash,
         referencedOwnedWeaponsHash: entry.referencedOwnedWeaponsHash,
@@ -602,10 +692,12 @@ function beamInputEntries(
 /**
  * Fail-closed defence behind the Beam Search (PLANNER_SPEC 7.5.6): a Plan that
  * claims completion must secure every required checkpoint Entry, and every
- * secured Entry's selected checkpoints must appear as milestones on the real
- * Steps that reached them. The Beam Search and Trace Replay already guarantee
- * both; a Plan that violates either is an internal inconsistency, never a
- * Draft.
+ * secured required Entry's compromise checkpoint must appear as a milestone
+ * on the real Step that reached it - unless the checkpoint is the weapon the
+ * user already holds (an existing Gogma's selected lane starts), which no
+ * Step produces and Trace Replay verified at Plan start instead. The Beam
+ * Search and Trace Replay already guarantee both; a Plan that violates either
+ * is an internal inconsistency, never a Draft.
  */
 function assertCheckpointRequirementsSatisfied(
   entries: readonly BuildListEntry[],
@@ -616,12 +708,10 @@ function assertCheckpointRequirementsSatisfied(
   const selected = new Set(selectedBuildListEntryIds)
   const reached = new Set(
     steps.flatMap((step) =>
-      (step.checkpointMilestones ?? []).map(
-        ({ buildListEntryId, checkpointOpportunityId }) =>
-          `${buildListEntryId}\u0000${checkpointOpportunityId}`,
-      ),
+      (step.checkpointMilestones ?? []).map(({ buildListEntryId }) => buildListEntryId),
     ),
   )
+  const entriesById = new Map(entries.map((entry) => [entry.id, entry]))
   const { requirements } = derivePlannerCheckpointRequirements(entries)
   requirements.requiredEntryIdByTargetId.forEach((entryId, targetId) => {
     if (!selected.has(entryId)) {
@@ -632,15 +722,13 @@ function assertCheckpointRequirementsSatisfied(
       }
       return
     }
-    const entry = entries.find(({ id }) => id === entryId)
-    if (!entry) return
-    selectedCheckpointsForEntry(entry).forEach(({ opportunity }) => {
-      if (!reached.has(`${entryId}\u0000${opportunity.id}`)) {
-        throw new PlannerPlanGenerationError(
-          `Planner secured BuildListEntry '${entryId}' without a Step reaching its selected checkpoint '${opportunity.id}'.`,
-        )
-      }
-    })
+    const entry = entriesById.get(entryId)
+    if (entry && isIntermediatePinHeldAtRouteStart(entry)) return
+    if (!reached.has(entryId)) {
+      throw new PlannerPlanGenerationError(
+        `Planner secured BuildListEntry '${entryId}' without a Step reaching its selected compromise checkpoint.`,
+      )
+    }
   })
 }
 

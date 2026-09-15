@@ -13,7 +13,7 @@ import type {
 import type { ExecutionHistory, ProductionPlan } from './planning'
 
 export interface ExportRoot {
-  schemaVersion: 5
+  schemaVersion: 6
   appName: 'mh-wilds-gogma-artian-planner'
   exportedAt: ISODateTimeString
   rngState: RngState | null

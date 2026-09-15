@@ -1,25 +1,24 @@
 import { describe, expect, it } from 'vitest'
 import {
-  checkpointCandidate,
+  CHECKPOINT_IDEAL_SKILL,
+  CHECKPOINT_MISMATCH_SKILL,
+  CHECKPOINT_PRACTICAL_SKILL,
   checkpointIdealBonuses,
+  checkpointMixedCandidate,
   checkpointPracticalBonuses,
   checkpointPracticalBonusesReordered,
   checkpointTarget,
-  CHECKPOINT_SOURCE_ID,
-  CHECKPOINT_START_GOGMA_COUNTER,
+  intermediateOpportunityAt,
 } from '../../test/fixtures/checkpointRoute'
 import {
-  buildListEntryId,
   createValidProductionPlan,
-  targetWeaponId,
 } from '../../test/fixtures/domainData'
-import { createBuildListEntry } from '../buildList'
+import { createBuildListEntry, defaultIntermediateStateSelection } from '../buildList'
 import type {
   BuildCandidate,
   BuildListEntry,
-  CompromiseCheckpointOpportunityId,
+  IntermediateStateSelection,
   PlanStepOperationType,
-  TargetWeapon,
 } from '../models/publicTypes'
 import {
   fixture as plannerFixture,
@@ -32,33 +31,42 @@ import {
 import { runPlannerBeamSearch } from './plannerBeamSearch'
 import { createPlannerRouteUnitPlans } from './plannerRouteProgress'
 import {
-  hasReachedEverySelectedCheckpoint,
-  selectedCheckpointAtOperationIndex,
-  selectedCheckpointEndpointOperationIndexes,
-  selectedCheckpointsForEntry,
+  checkpointConditionMatchFor,
+  entryIntermediateSelection,
+  hasIntermediateStateSelection,
+  intermediatePinFor,
+  intermediatePinOperationIndex,
+  selectedIntermediateStateAtOperationIndex,
 } from './plannerCheckpoints'
+import {
+  hasReachedIntermediatePin,
+  isPlannerLaneUnitBlockedByPin,
+  splitPlannerRouteUnitsByLane,
+} from './plannerRouteLanes'
 import type { PlannerSearchState } from './plannerTypes'
 
 /**
- * One Route that passes two selectable compromise states before reaching the
- * Ideal: Reset, Reset, Reset, Reset.
+ * One Route with three Bonus amendments (Practical, Practical again, Ideal)
+ * and two Reset Skills (Practical, Ideal): four lane positions the user can
+ * select on top of the Ideal lane ends.
  */
-function routeCandidate(): BuildCandidate {
-  return checkpointCandidate([
-    checkpointPracticalBonuses(),
-    checkpointPracticalBonusesReordered(),
-    checkpointPracticalBonuses(),
-    checkpointIdealBonuses(),
-  ])
+function routeCandidate(): { candidate: BuildCandidate } {
+  return checkpointMixedCandidate({
+    bonusResults: [
+      checkpointPracticalBonuses(),
+      checkpointPracticalBonusesReordered(),
+      checkpointIdealBonuses(),
+    ],
+    skillResults: [CHECKPOINT_PRACTICAL_SKILL, CHECKPOINT_IDEAL_SKILL],
+  })
 }
 
 function entryWith(
-  selected: readonly CompromiseCheckpointOpportunityId[],
-  candidate: BuildCandidate = routeCandidate(),
-  target: TargetWeapon = checkpointTarget(),
+  selection: Partial<IntermediateStateSelection>,
+  candidate: BuildCandidate = routeCandidate().candidate,
 ): BuildListEntry {
-  return createBuildListEntry(candidate, target, {
-    selectedCheckpointOpportunityIds: selected,
+  return createBuildListEntry(candidate, checkpointTarget(), {
+    intermediateStateSelection: { ...defaultIntermediateStateSelection(), ...selection },
   })
 }
 
@@ -68,102 +76,93 @@ const unitsOf = (entry: BuildListEntry) => {
   return unitPlans.get(entry.id) ?? []
 }
 
-describe('Selected compromise checkpoints as Planner constraints', () => {
-  it('never lets a selected checkpoint endpoint be silently fast-forwarded', () => {
-    const candidate = routeCandidate()
-    const [group] = candidate.checkpointGroups ?? []
-    const opportunity = group.opportunities[0]
-    const selectedUnits = unitsOf(entryWith([opportunity.id], candidate))
+describe('Selected intermediate states as Planner constraints', () => {
+  it('never lets a selected lane endpoint be silently fast-forwarded', () => {
+    const { candidate } = routeCandidate()
+    const bonus = intermediateOpportunityAt(candidate, 'bonus', 1).opportunity
+    const units = unitsOf(entryWith({ bonusOpportunityId: bonus.id }, candidate))
 
-    const endpoint = selectedUnits.find(
-      ({ position }) => position.operationIndex === opportunity.afterOperationIndex,
-    )
+    const endpoint = units.find(({ position }) => position.operationIndex === bonus.operationIndex)
     expect(endpoint?.canSkipWhenCounterPassed).toBe(false)
   })
 
-  it('keeps the ordinary safe fast-forward on an unselected intermediate unit', () => {
-    const candidate = routeCandidate()
-    const units = unitsOf(entryWith([], candidate))
+  it('keeps the ordinary safe fast-forward inside each lane when nothing is selected', () => {
+    const units = unitsOf(entryWith({}))
 
-    // Reset followed by Reset is unobserved, so every unit but the last one
-    // keeps its existing skippability when nothing is selected.
-    expect(units.map(({ canSkipWhenCounterPassed }) => canSkipWhenCounterPassed))
-      .toEqual([true, true, true, false])
+    // Reset followed by Reset on the Bonus lane and Reset Skills followed by
+    // Reset Skills on the Skill lane are unobserved; each lane end is required.
+    expect(units.map(({ lane, canSkipWhenCounterPassed }) => `${lane}:${canSkipWhenCounterPassed}`))
+      .toEqual(['bonus:true', 'bonus:true', 'bonus:false', 'skill:true', 'skill:false'])
   })
 
-  it('keeps a fully overwritten prefix unit skippable even beside a selection', () => {
-    const candidate = routeCandidate()
-    const [group] = candidate.checkpointGroups ?? []
-    // Select the arrival at operation index 2, so index 0 and 1 stay ordinary
-    // unobserved prefix units.
-    const later = group.opportunities.find(({ afterOperationIndex }) => afterOperationIndex === 2)
-    expect(later).toBeDefined()
-    const units = unitsOf(entryWith([later!.id], candidate))
+  it('keeps a fully overwritten prefix unit skippable beside a later selection', () => {
+    const { candidate } = routeCandidate()
+    const later = intermediateOpportunityAt(candidate, 'bonus', 2).opportunity
+    const units = unitsOf(entryWith({ bonusOpportunityId: later.id }, candidate))
 
     expect(units.map(({ canSkipWhenCounterPassed }) => canSkipWhenCounterPassed))
-      .toEqual([true, true, false, false])
+      .toEqual([true, false, false, true, false])
   })
 
-  it('exposes the selected endpoints and their exact states in Route order', () => {
-    const candidate = routeCandidate()
-    const [group] = candidate.checkpointGroups ?? []
-    const entry = entryWith([group.opportunities[1].id], candidate)
+  it('derives the checkpoint pin from the selected positions and the Ideal lane ends', () => {
+    const { candidate } = routeCandidate()
+    const skill = intermediateOpportunityAt(candidate, 'skill', 1).opportunity
+    const bonus = intermediateOpportunityAt(candidate, 'bonus', 2).opportunity
 
-    expect([...selectedCheckpointEndpointOperationIndexes(entry)]).toEqual([
-      group.opportunities[1].afterOperationIndex,
-    ])
-    const selected = selectedCheckpointsForEntry(entry)
-    expect(selected).toHaveLength(1)
-    expect(selected[0].groupId).toBe(group.id)
-    expect(selected[0].opportunity.restorationBonuses).toEqual(
-      checkpointPracticalBonusesReordered(),
-    )
-    expect(selected[0].opportunity.restorationBonusScope).toBe('gogma_artian')
-    expect(selected[0].opportunity.seriesSkillId).toBe('series_skill.fixture.a')
-    expect(
-      selectedCheckpointAtOperationIndex(entry, group.opportunities[0].afterOperationIndex),
-    ).toBeNull()
+    expect(intermediatePinFor(entryWith({}, candidate))).toBeNull()
+    expect(intermediatePinFor(entryWith({ skillOpportunityId: skill.id }, candidate)))
+      .toEqual({ skill: 1, bonus: 3 })
+    expect(intermediatePinFor(entryWith({ bonusOpportunityId: bonus.id }, candidate)))
+      .toEqual({ skill: 2, bonus: 2 })
+    expect(intermediatePinFor(entryWith({ skillOpportunityId: skill.id, bonusOpportunityId: bonus.id }, candidate)))
+      .toEqual({ skill: 1, bonus: 2 })
   })
 
-  it('refuses to finish an Entry whose selected checkpoint was not reached', () => {
-    const candidate = routeCandidate()
-    const [group] = candidate.checkpointGroups ?? []
-    const entry = entryWith([group.opportunities[0].id], candidate)
+  it('exposes the selected endpoints, their conditions, and no substitute', () => {
+    const { candidate } = routeCandidate()
+    const skill = intermediateOpportunityAt(candidate, 'skill', 1)
+    const bonus = intermediateOpportunityAt(candidate, 'bonus', 2)
+    const entry = entryWith({ skillOpportunityId: skill.opportunity.id, bonusOpportunityId: bonus.opportunity.id }, candidate)
 
-    expect(hasReachedEverySelectedCheckpoint(entry, [])).toBe(false)
-    expect(
-      hasReachedEverySelectedCheckpoint(entry, [group.opportunities[1].id]),
-    ).toBe(false)
-    expect(
-      hasReachedEverySelectedCheckpoint(entry, [group.opportunities[0].id]),
-    ).toBe(true)
+    expect(hasIntermediateStateSelection(entry)).toBe(true)
+    const selection = entryIntermediateSelection(entry)
+    expect(selection.skill?.group.id).toBe(skill.group.id)
+    expect(selection.bonus?.opportunity.restorationBonuses).toEqual(checkpointPracticalBonusesReordered())
+    expect(checkpointConditionMatchFor(entry)).toEqual({ bonus: 'practical', skill: 'practical' })
+    expect(intermediatePinOperationIndex(entry, 'skill')).toBe(skill.opportunity.operationIndex)
+    expect(intermediatePinOperationIndex(entry, 'bonus')).toBe(bonus.opportunity.operationIndex)
+    // Another arrival of the same product is not the selected endpoint.
+    expect(selectedIntermediateStateAtOperationIndex(entry, 0)).toBeNull()
+    expect(selectedIntermediateStateAtOperationIndex(entry, bonus.opportunity.operationIndex ?? -1))
+      .toEqual({ axis: 'bonus', opportunityId: bonus.opportunity.id })
+    expect(selectedIntermediateStateAtOperationIndex(entry, skill.opportunity.operationIndex ?? -1))
+      .toEqual({ axis: 'skill', opportunityId: skill.opportunity.id })
   })
 
-  it('never resolves a missed checkpoint by substituting another opportunity', () => {
-    const candidate = routeCandidate()
-    const [group] = candidate.checkpointGroups ?? []
-    const entry = entryWith([group.opportunities[0].id], candidate)
+  it('gates each lane at its pin until the other lane arrived', () => {
+    const { candidate } = routeCandidate()
+    const skill = intermediateOpportunityAt(candidate, 'skill', 1).opportunity
+    const entry = entryWith({ skillOpportunityId: skill.id }, candidate)
+    const lanes = splitPlannerRouteUnitsByLane(unitsOf(entry), intermediatePinFor(entry))
 
-    // Reaching a different arrival of the very same group does not satisfy the
-    // selection: only the selected opportunity does.
-    expect(group.opportunities.length).toBeGreaterThan(1)
-    expect(
-      hasReachedEverySelectedCheckpoint(
-        entry,
-        group.opportunities.slice(1).map(({ id }) => id),
-      ),
-    ).toBe(false)
-    // And the selection itself is never rewritten by the Planner.
-    expect(entry.selectedCheckpointOpportunityIds).toEqual([group.opportunities[0].id])
+    // Skill pin 1, Bonus pin 3 (the Ideal end): the second Reset Skills may not
+    // run while the Bonus lane is short of its end, and every Bonus unit is
+    // free because the Bonus pin is the lane end.
+    expect(isPlannerLaneUnitBlockedByPin(lanes.skill[0], { base: 0, bonus: 0, skill: 0 }, lanes.pin)).toBe(false)
+    expect(isPlannerLaneUnitBlockedByPin(lanes.skill[1], { base: 0, bonus: 2, skill: 1 }, lanes.pin)).toBe(true)
+    expect(isPlannerLaneUnitBlockedByPin(lanes.skill[1], { base: 0, bonus: 3, skill: 1 }, lanes.pin)).toBe(false)
+    expect(isPlannerLaneUnitBlockedByPin(lanes.bonus[2], { base: 0, bonus: 2, skill: 0 }, lanes.pin)).toBe(false)
+    expect(hasReachedIntermediatePin(lanes, { base: 0, bonus: 3, skill: 1 })).toBe(true)
+    expect(hasReachedIntermediatePin(lanes, { base: 0, bonus: 2, skill: 1 })).toBe(false)
+    expect(hasReachedIntermediatePin({ ...lanes, pin: null }, { base: 0, bonus: 3, skill: 1 })).toBe(false)
   })
 
   it('leaves an Entry with no selection under the ordinary Ideal Route contract', () => {
-    const candidate = routeCandidate()
-    const entry = entryWith([], candidate)
+    const entry = entryWith({})
 
-    expect(selectedCheckpointsForEntry(entry)).toEqual([])
-    expect(selectedCheckpointEndpointOperationIndexes(entry).size).toBe(0)
-    expect(hasReachedEverySelectedCheckpoint(entry, [])).toBe(true)
+    expect(hasIntermediateStateSelection(entry)).toBe(false)
+    expect(intermediatePinFor(entry)).toBeNull()
+    expect(checkpointConditionMatchFor(entry)).toEqual({ bonus: 'ideal', skill: 'ideal' })
   })
 
   it('records reached checkpoints per Entry and keeps no Practical-first priority', async () => {
@@ -177,7 +176,8 @@ describe('Selected compromise checkpoints as Planner constraints', () => {
       practicalFirstProgressTargetIds?: unknown
     }
 
-    expect(state.reachedCheckpointOpportunityIdsByEntryId).toEqual({})
+    expect(state.reachedCheckpointByEntryId).toEqual({})
+    expect(state.improvementPreferenceViolationCount).toBe(0)
     expect(Object.keys(state)).not.toContain('practicalFirstProgressTargetIds')
     expect(state.practicalFirstProgressTargetIds).toBeUndefined()
   })
@@ -203,72 +203,45 @@ describe('Compromise checkpoints inside a ProductionPlan', () => {
   })
 
   it('carries a milestone on the physical Step and keeps the later Steps', () => {
-    const candidate = routeCandidate()
-    const [group] = candidate.checkpointGroups ?? []
-    const opportunity = group.opportunities[0]
+    const { candidate } = routeCandidate()
+    const bonus = intermediateOpportunityAt(candidate, 'bonus', 1).opportunity
     const plan = createValidProductionPlan()
     const amendmentStep = {
       ...plan.steps[0],
       operationType: 'reset_bonuses' as const,
       checkpointMilestones: [
         {
-          buildListEntryId: buildListEntryId('build-list.checkpoint'),
-          targetWeaponId: targetWeaponId('target.fixture.a'),
-          checkpointGroupId: group.id,
-          checkpointOpportunityId: opportunity.id,
-          remainingOperationCount: opportunity.remainingOperationCount,
+          buildListEntryId: plan.steps[0].buildListEntryId!,
+          targetWeaponId: candidate.targetWeaponId,
+          skillOpportunityId: null,
+          bonusOpportunityId: bonus.id,
+          conditionMatch: { bonus: 'practical' as const, skill: 'ideal' as const },
+          remainingOperationCount: 2,
         },
       ],
     }
 
-    expect(amendmentStep.checkpointMilestones[0].remainingOperationCount)
-      .toBeGreaterThan(0)
+    expect(amendmentStep.checkpointMilestones[0].remainingOperationCount).toBeGreaterThan(0)
     // A milestone never reserves a weapon and never changes a status.
     expect(amendmentStep.inventoryChange?.addOwnedWeapon ?? null).toBeNull()
     expect(amendmentStep.operationType).not.toBe('reserve_weapon')
   })
 
   it('reaches a checkpoint with no reservation, status or protection change', () => {
-    const candidate = routeCandidate()
-    const [group] = candidate.checkpointGroups ?? []
-    const entry = entryWith([group.opportunities[0].id], candidate)
+    const { candidate } = routeCandidate()
+    const skill = intermediateOpportunityAt(candidate, 'skill', 1).opportunity
+    const entry = entryWith({ skillOpportunityId: skill.id }, candidate)
     const units = unitsOf(entry)
-    const endpoint = units.find(
-      ({ position }) =>
-        position.operationIndex === group.opportunities[0].afterOperationIndex,
-    )
+    const endpoint = units.find(({ position }) => position.operationIndex === skill.operationIndex)
 
-    // The checkpoint endpoint is an ordinary bonus amendment: it secures
-    // nothing, so it can neither add an OwnedWeapon nor label one.
-    expect(endpoint?.operation.type).toBe('reset_bonuses')
-    expect(endpoint?.counterStream).toBe('gogma')
-    expect(endpoint?.counterBefore).toBe(CHECKPOINT_START_GOGMA_COUNTER)
-    // Only the Route's own final operation forms the Candidate the Planner
+    // The endpoint is an ordinary Reset Skills: it secures nothing, so it can
+    // neither add an OwnedWeapon nor label one.
+    expect(endpoint?.operation.type).toBe('reset_skills')
+    expect(endpoint?.counterStream).toBe('skill')
+    // Only the Route's own final operations form the Candidate the Planner
     // then reserves.
-    expect(units.at(-1)?.position.operationIndex).toBe(
-      candidate.route.operations.length - 1,
-    )
-    expect(candidate.route.sourceOwnedWeaponId).toBe(CHECKPOINT_SOURCE_ID)
-  })
-
-  it('keeps the remaining Route after a milestone and reserves only at its end', () => {
-    const candidate = routeCandidate()
-    const [group] = candidate.checkpointGroups ?? []
-    const opportunity = group.opportunities[0]
-    const entry = entryWith([opportunity.id], candidate)
-    const units = unitsOf(entry)
-
-    // Steps after the milestone really exist: the Route continues to the Ideal.
-    const after = units.filter(
-      ({ position }) => position.operationIndex > opportunity.afterOperationIndex,
-    )
-    expect(after.length).toBe(opportunity.remainingOperationCount)
-    expect(after.length).toBeGreaterThan(0)
-
-    // Only the Ideal-completing operation makes the Candidate, so the ordinary
-    // reserve semantics apply there and nowhere earlier.
-    expect(hasReachedEverySelectedCheckpoint(entry, [opportunity.id])).toBe(true)
-    expect(hasReachedEverySelectedCheckpoint(entry, [])).toBe(false)
-    expect(entry.candidateSnapshot.finalBonuses).toEqual(checkpointIdealBonuses())
+    expect(units.filter(({ lane }) => lane === 'skill').at(-1)?.canSkipWhenCounterPassed).toBe(false)
+    expect(candidate.route.operations.some(({ type }) => type === 'reset_skills')).toBe(true)
+    expect(CHECKPOINT_MISMATCH_SKILL.seriesSkillId).not.toBe(candidate.seriesSkillId)
   })
 })

@@ -8,13 +8,11 @@ import {
 } from '../../test/fixtures/checkpointRoute'
 import { targetEvaluationMaster } from '../../test/fixtures/targetEvaluation'
 import { createValidBuildListEntry } from '../../test/fixtures/domainData'
-import { extractCandidateCheckpointGroups } from '../search'
-import { checkpointMaster } from '../../test/fixtures/checkpointRoute'
 import { deriveTargetSatisfaction } from '../planner'
 import type {
   BuildCandidate,
-  CompromiseCheckpointOpportunity,
   ExportRoot,
+  IntermediateBonusStateGroup,
   OwnedWeaponStatus,
 } from './publicTypes'
 import {
@@ -37,21 +35,25 @@ function currentCandidate(): BuildCandidate {
   ])
 }
 
+function bonusGroup(candidate: BuildCandidate): IntermediateBonusStateGroup {
+  const group = candidate.intermediateStateGroups?.find((entry) => entry.axis === 'bonus')
+  if (!group || group.axis !== 'bonus') throw new Error('Fixture Candidate has no Bonus state group.')
+  return group
+}
+
 describe('A starting owned weapon that already satisfies a compromise condition', () => {
-  it('is never offered as a checkpoint opportunity', () => {
+  it('is a zero-operation lane state but never a checkpoint on its own', () => {
     const source = checkpointSource()
     source.restorationBonuses = checkpointPracticalBonuses()
     const candidate = checkpointCandidate([checkpointIdealBonuses()])
+    candidate.intermediateStateGroups = undefined
+    const entry = createValidBuildListEntry()
 
-    // The Route base state is not a prefix of the Route, so nothing about the
-    // weapon the user already holds becomes a selectable checkpoint.
-    expect(
-      extractCandidateCheckpointGroups(candidate, {
-        target: checkpointTarget(),
-        master: checkpointMaster(),
-        ownedWeapons: [source],
-      }),
-    ).toEqual([])
+    // The Route base's own accepted state is offered as the lane start, so it
+    // can be held while the other lane moves, or - when both lanes hold one -
+    // is a checkpoint the Planner treats as reached before its first action.
+    expect(entry.intermediateStateSelection).toBeUndefined()
+    expect(validateBuildCandidate(candidate, [source]).isValid).toBe(false)
   })
 
   it('still decides Target Satisfaction from its actual performance', () => {
@@ -83,11 +85,11 @@ describe('A starting owned weapon that already satisfies a compromise condition'
   })
 })
 
-describe('Checkpoint calculation and Export schema contracts', () => {
-  it('fails a schema 9 build artifact closed under schema 10', () => {
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(10)
+describe('Intermediate state calculation and Export schema contracts', () => {
+  it('fails a schema 10 build artifact closed under schema 11', () => {
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(11)
     const current = currentContext()
-    for (let version = 1; version <= 9; version += 1) {
+    for (let version = 1; version <= 10; version += 1) {
       expect(
         isBuildResultCalculationContextCompatible(current, {
           ...current,
@@ -98,63 +100,63 @@ describe('Checkpoint calculation and Export schema contracts', () => {
     expect(isBuildResultCalculationContextCompatible(current, current)).toBe(true)
   })
 
-  it('validates the checkpoint shape of a current-schema artifact strictly', () => {
+  it('validates the intermediate state shape of a current-schema artifact strictly', () => {
     const candidate = currentCandidate()
     expect(validateBuildCandidate(candidate, [checkpointSource()]).isValid).toBe(true)
 
     const missing = structuredClone(candidate)
-    delete missing.checkpointGroups
+    delete missing.intermediateStateGroups
     expect(validateBuildCandidate(missing, [checkpointSource()]).issues.map(({ path }) => path))
-      .toContain('checkpointGroups')
+      .toContain('intermediateStateGroups')
 
     const normalScope = structuredClone(candidate)
-    normalScope.checkpointGroups![0].restorationBonusScope = 'normal_artian'
-    normalScope.checkpointGroups![0].opportunities[0].restorationBonusScope = 'normal_artian'
+    bonusGroup(normalScope).restorationBonusScope = 'normal_artian'
+    bonusGroup(normalScope).opportunities[0].restorationBonusScope = 'normal_artian'
     expect(validateBuildCandidate(normalScope, [checkpointSource()]).isValid).toBe(false)
 
-    const wholeIdeal = structuredClone(candidate)
-    wholeIdeal.checkpointGroups![0].conditionMatch = { bonus: 'ideal', skill: 'ideal' }
-    wholeIdeal.checkpointGroups![0].opportunities[0].conditionMatch = {
-      bonus: 'ideal',
-      skill: 'ideal',
-    }
-    expect(validateBuildCandidate(wholeIdeal, [checkpointSource()]).isValid).toBe(false)
+    const laneEnd = structuredClone(candidate)
+    laneEnd.intermediateStateGroups![0].opportunities[0].lanePosition = laneEnd.route.operations.length
+    expect(validateBuildCandidate(laneEnd, [checkpointSource()]).issues.map(({ path }) => path))
+      .toContain('intermediateStateGroups[0].opportunities[0].lanePosition')
 
-    const finalOperation = structuredClone(candidate)
-    const opportunity: CompromiseCheckpointOpportunity =
-      finalOperation.checkpointGroups![0].opportunities[0]
-    opportunity.afterOperationIndex = finalOperation.route.operations.length - 1
-    expect(validateBuildCandidate(finalOperation, [checkpointSource()]).isValid).toBe(false)
+    const wrongOperation = structuredClone(candidate)
+    wrongOperation.intermediateStateGroups![0].opportunities[0].operationIndex = 1
+    expect(validateBuildCandidate(wrongOperation, [checkpointSource()]).issues.map(({ path }) => path))
+      .toContain('intermediateStateGroups[0].opportunities[0].operationIndex')
 
     const mismatchedState = structuredClone(candidate)
-    mismatchedState.checkpointGroups![0].opportunities[0].seriesSkillId =
-      'series_skill.fixture.other'
+    bonusGroup(mismatchedState).opportunities[0].restorationBonuses = checkpointIdealBonuses()
     expect(validateBuildCandidate(mismatchedState, [checkpointSource()]).isValid).toBe(false)
+
+    const wrongAxis = structuredClone(candidate)
+    ;(wrongAxis.intermediateStateGroups![0].opportunities[0] as { axis: string }).axis = 'skill'
+    expect(validateBuildCandidate(wrongAxis, [checkpointSource()]).issues.map(({ path }) => path))
+      .toContain('intermediateStateGroups[0].opportunities[0].axis')
   })
 
-  it('accepts a historical artifact that carries no checkpoint field at all', () => {
+  it('accepts a historical artifact that carries no intermediate state field at all', () => {
     // A Candidate persisted before the field existed is preserved exactly, not
     // rewritten, so it must keep validating and must stay renderable.
     const historical = createValidBuildListEntry()
-    delete historical.candidateSnapshot.checkpointGroups
-    delete historical.selectedCheckpointOpportunityIds
+    delete historical.candidateSnapshot.intermediateStateGroups
+    delete historical.intermediateStateSelection
     historical.candidateSnapshot.calculationContext = {
       ...historical.candidateSnapshot.calculationContext,
-      appSchemaVersion: 9,
+      appSchemaVersion: 10,
     }
     historical.calculationContext = {
       ...historical.candidateSnapshot.calculationContext,
     }
 
     expect(validateBuildListEntry(historical).isValid).toBe(true)
-    expect(historical.candidateSnapshot.checkpointGroups).toBeUndefined()
-    expect(historical.selectedCheckpointOpportunityIds).toBeUndefined()
+    expect(historical.candidateSnapshot.intermediateStateGroups).toBeUndefined()
+    expect(historical.intermediateStateSelection).toBeUndefined()
   })
 
   it('moves the Export schema version with the persisted entity shape', () => {
     const candidate = currentCandidate()
     const root: ExportRoot = {
-      schemaVersion: 5,
+      schemaVersion: 6,
       appName: 'mh-wilds-gogma-artian-planner',
       exportedAt: '2026-09-12T00:00:00.000Z',
       rngState: null,
@@ -176,66 +178,39 @@ describe('Checkpoint calculation and Export schema contracts', () => {
       },
     }
 
-    // Version 5 is the first Export shape whose BuildCandidates carry
-    // checkpoint groups and whose BuildListEntries carry a selection.
-    expect(root.schemaVersion).toBe(5)
-    expect(root.buildCandidates[0].checkpointGroups).toBeDefined()
-    const older = { ...root, schemaVersion: 4 } as unknown as ExportRoot
+    // Version 6 is the first Export shape whose BuildCandidates carry
+    // axis-separated intermediate states and whose BuildListEntries carry the
+    // per-lane selection plus the improvement preference.
+    expect(root.schemaVersion).toBe(6)
+    expect(root.buildCandidates[0].intermediateStateGroups).toBeDefined()
+    const older = { ...root, schemaVersion: 5 } as unknown as ExportRoot
     expect(older.schemaVersion).not.toBe(root.schemaVersion)
-  })
-
-  it('rejects a current artifact whose checkpoint counts disagree with its Route', () => {
-    const wrongOperationCount = currentCandidate()
-    wrongOperationCount.checkpointGroups![0].opportunities[0].operationCount += 1
-    expect(validateBuildCandidate(wrongOperationCount, [checkpointSource()]).issues)
-      .toContainEqual(expect.objectContaining({
-        path: 'checkpointGroups[0].opportunities[0].operationCount',
-      }))
-
-    const wrongRemaining = currentCandidate()
-    wrongRemaining.checkpointGroups![0].opportunities[0].remainingOperationCount = 0
-    expect(validateBuildCandidate(wrongRemaining, [checkpointSource()]).issues)
-      .toContainEqual(expect.objectContaining({
-        path: 'checkpointGroups[0].opportunities[0].remainingOperationCount',
-      }))
-  })
-
-  it('rejects an opportunity whose judgement disagrees with its group', () => {
-    const candidate = currentCandidate()
-    candidate.checkpointGroups![0].opportunities[0].conditionMatch = {
-      bonus: 'alternative',
-      skill: 'ideal',
-    }
-    expect(validateBuildCandidate(candidate, [checkpointSource()]).issues)
-      .toContainEqual(expect.objectContaining({
-        path: 'checkpointGroups[0].opportunities[0].conditionMatch',
-      }))
   })
 
   it('rejects a dominating reference that names itself or no group', () => {
     const self = currentCandidate()
-    self.checkpointGroups![0].isDisplaySecondary = true
-    self.checkpointGroups![0].dominatingGroupId = self.checkpointGroups![0].id
+    bonusGroup(self).isDisplaySecondary = true
+    bonusGroup(self).dominatingGroupId = bonusGroup(self).id
     expect(validateBuildCandidate(self, [checkpointSource()]).issues)
       .toContainEqual(expect.objectContaining({
-        path: 'checkpointGroups[0].dominatingGroupId',
+        path: 'intermediateStateGroups[0].dominatingGroupId',
       }))
 
     const unknown = currentCandidate()
-    unknown.checkpointGroups![0].isDisplaySecondary = true
-    unknown.checkpointGroups![0].dominatingGroupId = 'checkpoint-group:unknown' as never
+    bonusGroup(unknown).isDisplaySecondary = true
+    bonusGroup(unknown).dominatingGroupId = 'intermediate-group:unknown' as never
     expect(validateBuildCandidate(unknown, [checkpointSource()]).issues)
       .toContainEqual(expect.objectContaining({
-        path: 'checkpointGroups[0].dominatingGroupId',
+        path: 'intermediateStateGroups[0].dominatingGroupId',
       }))
   })
 
-  it('rejects checkpoint ids outside the deterministic id families', () => {
+  it('rejects ids outside the deterministic id families', () => {
     const candidate = currentCandidate()
-    candidate.checkpointGroups![0].id = 'group:not-deterministic' as never
-    candidate.checkpointGroups![0].opportunities[0].id = 'opportunity:not-deterministic' as never
+    candidate.intermediateStateGroups![0].id = 'group:not-deterministic' as never
+    candidate.intermediateStateGroups![0].opportunities[0].id = 'opportunity:not-deterministic' as never
     const paths = validateBuildCandidate(candidate, [checkpointSource()]).issues.map(({ path }) => path)
-    expect(paths).toContain('checkpointGroups[0].id')
-    expect(paths).toContain('checkpointGroups[0].opportunities[0].id')
+    expect(paths).toContain('intermediateStateGroups[0].id')
+    expect(paths).toContain('intermediateStateGroups[0].opportunities[0].id')
   })
 })
