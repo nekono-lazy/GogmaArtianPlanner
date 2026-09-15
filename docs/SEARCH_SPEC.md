@@ -1323,9 +1323,12 @@ lane位置0（既存巨戟の現在Skill / 現在5枠、conversionが付与し�
 Idealの既存巨戟は「Skill Reset 0回」候補であり、巨戟化直後のSkillがPractical / Idealの
 conversion Routeも同様である。
 
-ただし両laneの開始状態を同時に採用することは、ユーザーが既に手元に持っている武器を
-「到達点」として提示することになるため、BuildListEntryの選択validationがfail closedで拒否する。
-片laneの開始状態と、もう片laneの終点（未選択）または途中状態の組み合わせは有効である。
+両laneの開始状態を同時に採用すること、および片laneの開始状態を採用しもう片laneが操作を
+持たない（既にIdealである）ことも有効である。それはユーザーが既に手元に持っている武器を
+妥協checkpointとして採用することであり、Plannerは開始時点で到達済みとして扱い、そこから
+理想品まで続ける（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7.5.2）。conversion Routeのlane開始状態は
+巨戟化が生む状態なので、開始時点では未到達である。UIは既存巨戟のlane位置0候補を通常どおり
+表示・選択可能にする。
 
 Target SatisfactionのhasPracticalは従来どおり実際の性能から判定する。
 intermediate stateの有無とは独立である。
@@ -1942,7 +1945,8 @@ Search側は「この候補は作成リストに追加済みです。途中採�
 
 - 1 laneにつき選択できるopportunityは最大1件
 - Candidate Snapshotに存在しないopportunity ID、別laneのopportunity IDはfail closedで拒否する
-- 両laneの開始状態（lane位置0）の同時選択は「既に持っている武器」なのでfail closedで拒否する
+- 両laneの開始状態（lane位置0）の同時選択は有効である。既存巨戟ではPlanner開始時点で
+  到達済みのcheckpointになる（5.8.5）
 - 選択と改善優先はCandidateのidentityにもhashにも入らない。変えても
   BuildListEntry自体はstaleにならない
 - 一方でPlanの `buildListEntriesHash` には入る。変えると既存Planは
@@ -2246,7 +2250,7 @@ Skill stream側はB1で実装済み、Bonus stream側はB2で実装済みであ�
 - Candidate Snapshotに存在しないopportunity IDをrejectする
 - 別laneのopportunity IDをrejectする
 - 未知の改善優先をrejectする
-- 両laneの開始状態の同時選択をrejectする
+- 両laneの開始状態の同時選択を受け入れる
 - 選択・改善優先の変更でBuildListEntry自体はstaleにならない
 - 選択・改善優先の変更でPlanの `buildListEntriesHash` が変わる
 - 同一semanticのCandidateを再追加しても既存の選択・改善優先を上書きしない

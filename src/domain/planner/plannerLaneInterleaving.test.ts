@@ -12,8 +12,10 @@ import { extractIntermediateStateGroups } from '../search'
 import {
   CHECKPOINT_IDEAL_SKILL,
   CHECKPOINT_PRACTICAL_SKILL,
+  checkpointConversionCandidate,
   checkpointIdealBonuses,
   checkpointMixedCandidate,
+  checkpointNormalSource,
   checkpointPracticalBonuses,
   checkpointTarget,
   intermediateOpportunityAt,
@@ -40,6 +42,8 @@ import {
 import { runPlannerBeamSearch } from './plannerBeamSearch'
 import { comparePlannerSearchStates } from './plannerScoring'
 import { createInitialPlannerSearchState } from './plannerInitialState'
+import { validatePlannerInput } from './plannerValidation'
+import { validateBuildListEntry } from '../models/validation'
 import { createProductionPlan } from './productionPlanGeneration'
 import type { PlannerSearchAction, PlannerSearchState } from './plannerTypes'
 
@@ -442,5 +446,255 @@ describe('comparePlannerSearchStates improvement preference', () => {
     const more = stateWith({ improvementPreferenceViolationCount: 1, weaponSwitchCount: 0 })
     expect(comparePlannerSearchStates(fewer, more)).toBeLessThan(0)
     expect(comparePlannerSearchStates(more, fewer)).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * Review follow-up on PR #38: the improvement preference is a soft ranking
+ * preference. When both stream lanes of an Entry can run, the Beam Search
+ * must keep both successors and let scoring choose; a preferred lane that is
+ * executable now must never delete the other lane's branch.
+ */
+describe('Soft improvement preference keeps both lane branches', () => {
+  it('A: skill_first yields when its executable Skill lane would break another Target later', async () => {
+    // A's Reset Skills at 7 (skippable, followed by 8) and Reset Bonuses at 10
+    // are both executable now. B holds its current Practical Skills as a
+    // selected lane start, so its Reset Skills at 7 is gated until its Bonus
+    // lane reaches Gogma 11 - which only A's Reset Bonuses at 10 provides.
+    // Running A's Skill lane first pushes the Skill Counter past 7 and kills
+    // B for good; running A's Bonus lane first lets every Target finish.
+    const goalA = plannerTarget('target.soft2.a')
+    const goalB: TargetWeapon = { ...plannerTarget('target.soft2.b'), weaponTypeId: 'weapon.fixture.b' }
+    const sourceA = sourceWeapon('owned.soft2.a')
+    const sourceB: OwnedGogmaArtianWeapon = {
+      ...sourceWeapon('owned.soft2.b'),
+      weaponTypeId: 'weapon.fixture.b',
+      seriesSkillId: null,
+      groupSkillId: PRACTICAL_GROUP_SKILL,
+    }
+    const entryA = routeEntry('entry.soft2.a', goalA, {
+      kind: 'existing_gogma_mixed',
+      sourceOwnedWeaponId: sourceA.id,
+      operations: [resetBonuses(sourceA.id, 10), resetSkills(sourceA.id, 7), resetSkills(sourceA.id, 8)],
+    })
+    entryA.intermediateStateSelection = { ...defaultIntermediateStateSelection(), improvementPreference: 'skill_first' }
+    const entryB = routeEntry('entry.soft2.b', goalB, {
+      kind: 'existing_gogma_mixed',
+      sourceOwnedWeaponId: sourceB.id,
+      operations: [resetBonuses(sourceB.id, 11), resetSkills(sourceB.id, 7)],
+    })
+    entryB.candidateSnapshot.intermediateStateGroups = extractIntermediateStateGroups(
+      entryB.candidateSnapshot,
+      { target: goalB, master: { ...constrainedMaster() }, ownedWeapons: [sourceB] },
+    )
+    const currentSkills = intermediateOpportunityAt(entryB.candidateSnapshot, 'skill', 0).opportunity
+    entryB.intermediateStateSelection = { ...defaultIntermediateStateSelection(), skillOpportunityId: currentSkills.id }
+    const { input, dependencies } = plannerFixture([goalA, goalB], [entryA, entryB], [sourceA, sourceB])
+    expect(input.rngState.skillCounter.value).toBe(7)
+
+    const result = await runPlannerBeamSearch(input, dependencies)
+
+    expect(result.completed).toBe(true)
+    expect(result.conflicts).toEqual([])
+    // A ran its Bonus amendment before its Skill amendment despite skill_first,
+    // and its first Reset Skills was fast-forwarded by B's Reset Skills at 7.
+    expect(actionTypesOf(result.bestState, entryA.id)).toEqual(['reset_bonuses', 'reset_skills'])
+    const skillActions = routeActions(result.bestState).filter(({ actionType }) => actionType === 'reset_skills')
+    expect(skillActions.map(({ primaryBuildListEntryId, routeOperation }) => [
+      primaryBuildListEntryId,
+      routeOperation.type === 'reset_skills' ? routeOperation.skillCounterBefore : null,
+    ])).toEqual([[entryB.id, 7], [entryA.id, 8]])
+    expect(result.bestState?.improvementPreferenceViolationCount).toBe(1)
+    expect(result.bestState?.reachedCheckpointByEntryId[entryB.id]).toBe(true)
+    expect(result.bestState?.selectedBuildListEntryIds.slice().sort()).toEqual([entryA.id, entryB.id].sort())
+  })
+
+  it('B: planner leaves the lane order to scoring and is not a fixed Bonus-first order', async () => {
+    // The mirror image: A's Reset Bonuses at 10 (skippable, followed by 11) and
+    // Reset Skills at 7 are both executable. B holds its current Practical
+    // five slots as a selected lane start, so its Reset Bonuses at 10 is gated
+    // until its Skill lane reaches Skill 8 - which only A's Reset Skills at 7
+    // provides. A Bonus-first order kills B; the Skill-first order completes.
+    const goalA = plannerTarget('target.planner2.a')
+    const goalB: TargetWeapon = { ...plannerTarget('target.planner2.b'), weaponTypeId: 'weapon.fixture.b' }
+    const sourceA = sourceWeapon('owned.planner2.a')
+    const sourceB: OwnedGogmaArtianWeapon = {
+      ...sourceWeapon('owned.planner2.b'),
+      weaponTypeId: 'weapon.fixture.b',
+      restorationBonuses: practicalBonuses(),
+      restorationBonusScope: 'gogma_artian',
+    }
+    const entryA = routeEntry('entry.planner2.a', goalA, {
+      kind: 'existing_gogma_mixed',
+      sourceOwnedWeaponId: sourceA.id,
+      operations: [resetBonuses(sourceA.id, 10), resetBonuses(sourceA.id, 11), resetSkills(sourceA.id, 7)],
+    })
+    entryA.intermediateStateSelection = { ...defaultIntermediateStateSelection(), improvementPreference: 'planner' }
+    const entryB = routeEntry('entry.planner2.b', goalB, {
+      kind: 'existing_gogma_mixed',
+      sourceOwnedWeaponId: sourceB.id,
+      operations: [resetBonuses(sourceB.id, 10), resetSkills(sourceB.id, 8)],
+    })
+    entryB.candidateSnapshot.intermediateStateGroups = extractIntermediateStateGroups(
+      entryB.candidateSnapshot,
+      { target: goalB, master: { ...constrainedMaster() }, ownedWeapons: [sourceB] },
+    )
+    const currentBonuses = intermediateOpportunityAt(entryB.candidateSnapshot, 'bonus', 0).opportunity
+    entryB.intermediateStateSelection = { ...defaultIntermediateStateSelection(), bonusOpportunityId: currentBonuses.id }
+    const { input, dependencies } = plannerFixture([goalA, goalB], [entryA, entryB], [sourceA, sourceB])
+
+    const result = await runPlannerBeamSearch(input, dependencies)
+
+    expect(result.completed).toBe(true)
+    expect(result.conflicts).toEqual([])
+    expect(actionTypesOf(result.bestState, entryA.id)).toEqual(['reset_skills', 'reset_bonuses'])
+    const bonusActions = routeActions(result.bestState).filter(({ actionType }) => actionType === 'reset_bonuses')
+    expect(bonusActions.map(({ primaryBuildListEntryId, routeOperation }) => [
+      primaryBuildListEntryId,
+      routeOperation.type === 'reset_bonuses' ? routeOperation.gogmaCounterBefore : null,
+    ])).toEqual([[entryB.id, 10], [entryA.id, 11]])
+    expect(result.bestState?.improvementPreferenceViolationCount).toBe(0)
+    expect(result.bestState?.reachedCheckpointByEntryId[entryB.id]).toBe(true)
+    expect(result.bestState?.selectedBuildListEntryIds.slice().sort()).toEqual([entryA.id, entryB.id].sort())
+  })
+})
+
+/**
+ * An existing Gogma whose current Skills or five slots already satisfy a
+ * compromise condition is offered as a lane start (position 0). Selecting a
+ * lane start whose other lane is already at its Ideal end - or both lane
+ * starts - pins the weapon the user holds right now, so the compromise
+ * checkpoint is held at Planner start rather than produced by an operation.
+ */
+describe('Existing Gogma lane starts held at Planner start', () => {
+  interface HeldStartOptions {
+    id: string
+    skill: 'practical' | 'ideal'
+    bonus: 'practical' | 'ideal'
+    operations: readonly ('reset_bonuses' | 'reset_skills')[]
+    select: { skill?: boolean; bonus?: boolean }
+  }
+
+  function heldStartScenario(options: HeldStartOptions) {
+    const target = orchestrationTarget(`target.held.${options.id}`)
+    const source = orchestrationSource(`owned.held.${options.id}`, {
+      restorationBonuses: options.bonus === 'ideal' ? idealBonuses() : practicalBonuses(),
+      seriesSkillId: options.skill === 'ideal' ? IDEAL_SERIES_SKILL_ID : null,
+      groupSkillId: options.skill === 'ideal' ? null : PRACTICAL_GROUP_SKILL,
+    })
+    const operations: RouteOperation[] = options.operations.map((type) =>
+      type === 'reset_bonuses' ? resetBonuses(source.id, 10) : resetSkills(source.id, 7),
+    )
+    const kind = options.operations.length === 2
+      ? 'existing_gogma_mixed'
+      : options.operations[0] === 'reset_bonuses'
+        ? 'existing_gogma_reset_bonuses'
+        : 'existing_gogma_reset_skills'
+    const entry = orchestrationEntry(`entry.held.${options.id}`, target, {
+      kind,
+      sourceOwnedWeaponId: source.id,
+      operations,
+    }, { finalBonuses: idealBonuses() })
+    const snapshot = entry.candidateSnapshot
+    snapshot.bonusAmendmentTrace = operations.flatMap((operation, operationIndex) =>
+      operation.type === 'reset_bonuses'
+        ? [{ operationIndex, operationType: 'reset_bonuses' as const, restorationBonuses: idealBonuses(), restorationBonusScope: 'gogma_artian' as const }]
+        : [],
+    )
+    snapshot.skillAmendmentTrace = operations.flatMap((operation, operationIndex) =>
+      operation.type === 'reset_skills'
+        ? [{ operationIndex, operationType: 'reset_skills' as const, seriesSkillId: IDEAL_SERIES_SKILL_ID, groupSkillId: null }]
+        : [],
+    )
+    snapshot.intermediateStateGroups = extractIntermediateStateGroups(snapshot, {
+      target,
+      master: constrainedMaster(),
+      ownedWeapons: [source],
+    })
+    entry.intermediateStateSelection = {
+      ...defaultIntermediateStateSelection(),
+      ...(options.select.skill ? { skillOpportunityId: intermediateOpportunityAt(snapshot, 'skill', 0).opportunity.id } : {}),
+      ...(options.select.bonus ? { bonusOpportunityId: intermediateOpportunityAt(snapshot, 'bonus', 0).opportunity.id } : {}),
+    }
+    const built = orchestrationScenario({
+      targets: [target],
+      entries: [entry],
+      ownedWeapons: [source],
+      engine: {
+        resetResultAt: () => idealBonuses(),
+        skillResultAt: () => ({ seriesSkillId: IDEAL_SERIES_SKILL_ID, groupSkillId: null }),
+      },
+    })
+    return { ...built, entry, target, source }
+  }
+
+  async function expectHeldAtStart(built: ReturnType<typeof heldStartScenario>, expectedTypes: string[]) {
+    expect(validateBuildListEntry(built.entry).isValid).toBe(true)
+    const validation = validatePlannerInput(built.input, built.dependencies)
+    expect(validation.validBuildListEntries.map(({ entry }) => entry.id)).toEqual([built.entry.id])
+    const initial = createInitialPlannerSearchState(built.input, validation.validBuildListEntries)
+    expect(initial.isValid).toBe(true)
+    // The pinned pair is the weapon the user holds now: reached before any action.
+    expect(initial.state?.reachedCheckpointByEntryId[built.entry.id]).toBe(true)
+
+    const result = await createProductionPlan(built.input, built.dependencies)
+
+    expect(result.termination.status).toBe('completed')
+    expect(result.warnings).toEqual([])
+    const types = result.plan?.steps.map(({ operationType }) => operationType) ?? []
+    expect(types).toEqual(expectedTypes)
+    // No operation produces the checkpoint, so no Step carries a milestone;
+    // the Domain still treats it as reached and secures the Ideal at the end.
+    expect(result.plan?.steps.flatMap((step) => step.checkpointMilestones ?? [])).toEqual([])
+    expect(result.plan?.steps.at(-1)?.expectedResult).toMatchObject({
+      restorationBonuses: idealBonuses(),
+      seriesSkillId: IDEAL_SERIES_SKILL_ID,
+      groupSkillId: null,
+    })
+  }
+
+  it('C: a Practical Skill with Ideal slots holds the Skill lane start and improves the Skill later', async () => {
+    const built = heldStartScenario({ id: 'c', skill: 'practical', bonus: 'ideal', operations: ['reset_skills'], select: { skill: true } })
+    expect(intermediateOpportunityAt(built.entry.candidateSnapshot, 'skill', 0).group.match).toBe('practical')
+    await expectHeldAtStart(built, ['reset_skills', 'reserve_weapon'])
+  })
+
+  it('D: an Ideal Skill with Practical slots holds the Bonus lane start and improves the slots later', async () => {
+    const built = heldStartScenario({ id: 'd', skill: 'ideal', bonus: 'practical', operations: ['reset_bonuses'], select: { bonus: true } })
+    // The fixture's compromise slots satisfy the Target's Alternative rule.
+    expect(intermediateOpportunityAt(built.entry.candidateSnapshot, 'bonus', 0).group.match).toBe('alternative')
+    await expectHeldAtStart(built, ['reset_bonuses', 'reserve_weapon'])
+  })
+
+  it('E: Practical + Practical holds both lane starts and continues to the Ideal', async () => {
+    const built = heldStartScenario({ id: 'e', skill: 'practical', bonus: 'practical', operations: ['reset_bonuses', 'reset_skills'], select: { skill: true, bonus: true } })
+    await expectHeldAtStart(built, ['reset_bonuses', 'reset_skills', 'reserve_weapon'])
+  })
+
+  it('F: a conversion-assigned Skill at lane position 0 is not held before the conversion ran', async () => {
+    const normal = checkpointNormalSource()
+    const candidate = checkpointConversionCandidate({
+      ownedNormalSource: normal,
+      conversionSkill: CHECKPOINT_PRACTICAL_SKILL,
+      bonusResults: [checkpointIdealBonuses()],
+      skillResults: [CHECKPOINT_IDEAL_SKILL],
+    })
+    const start = intermediateOpportunityAt(candidate, 'skill', 0)
+    expect(start.opportunity.operationIndex).toBe(0)
+    const goal: TargetWeapon = { ...checkpointTarget(), id: targetWeaponId('target.fixture.a') }
+    const entry = createBuildListEntry(candidate, goal, {
+      intermediateStateSelection: { ...defaultIntermediateStateSelection(), skillOpportunityId: start.opportunity.id },
+    })
+    const { input, dependencies } = plannerFixture([goal], [entry], [normal])
+
+    const initial = createInitialPlannerSearchState(input, [{ entry, missingRngRequirements: [] }])
+    // The Route base is a Normal weapon: its conversion Skill does not exist yet.
+    expect(initial.state?.reachedCheckpointByEntryId[entry.id]).toBeUndefined()
+
+    const result = await runPlannerBeamSearch(input, dependencies)
+
+    expect(result.completed).toBe(true)
+    expect(actionTypesOf(result.bestState, entry.id)).toEqual(['convert_normal_to_gogma', 'reset_bonuses', 'reset_skills'])
+    expect(result.bestState?.reachedCheckpointByEntryId[entry.id]).toBe(true)
   })
 })

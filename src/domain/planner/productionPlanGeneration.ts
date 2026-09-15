@@ -19,7 +19,10 @@ import {
 } from '../models/publicTypes'
 import { createTargetDefinitionHash } from '../buildList'
 import { runPlannerBeamSearch } from './plannerBeamSearch'
-import { derivePlannerCheckpointRequirements } from './plannerCheckpoints'
+import {
+  derivePlannerCheckpointRequirements,
+  isIntermediatePinHeldAtRouteStart,
+} from './plannerCheckpoints'
 import {
   replayPlannerSearchTrace,
   type PlannerPlanStepDraft,
@@ -603,9 +606,11 @@ function beamInputEntries(
  * Fail-closed defence behind the Beam Search (PLANNER_SPEC 7.5.6): a Plan that
  * claims completion must secure every required checkpoint Entry, and every
  * secured required Entry's compromise checkpoint must appear as a milestone
- * on the real Step that reached it. The Beam Search and Trace Replay already
- * guarantee both; a Plan that violates either is an internal inconsistency,
- * never a Draft.
+ * on the real Step that reached it - unless the checkpoint is the weapon the
+ * user already holds (an existing Gogma's selected lane starts), which no
+ * Step produces and Trace Replay verified at Plan start instead. The Beam
+ * Search and Trace Replay already guarantee both; a Plan that violates either
+ * is an internal inconsistency, never a Draft.
  */
 function assertCheckpointRequirementsSatisfied(
   entries: readonly BuildListEntry[],
@@ -619,6 +624,7 @@ function assertCheckpointRequirementsSatisfied(
       (step.checkpointMilestones ?? []).map(({ buildListEntryId }) => buildListEntryId),
     ),
   )
+  const entriesById = new Map(entries.map((entry) => [entry.id, entry]))
   const { requirements } = derivePlannerCheckpointRequirements(entries)
   requirements.requiredEntryIdByTargetId.forEach((entryId, targetId) => {
     if (!selected.has(entryId)) {
@@ -629,6 +635,8 @@ function assertCheckpointRequirementsSatisfied(
       }
       return
     }
+    const entry = entriesById.get(entryId)
+    if (entry && isIntermediatePinHeldAtRouteStart(entry)) return
     if (!reached.has(entryId)) {
       throw new PlannerPlanGenerationError(
         `Planner secured BuildListEntry '${entryId}' without a Step reaching its selected compromise checkpoint.`,

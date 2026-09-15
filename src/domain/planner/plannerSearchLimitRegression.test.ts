@@ -311,7 +311,8 @@ function scenario(): {
  * same position, keeps 8 times, and then resets Skills 82 times, so the
  * complete Plan is 148 Bonus operations, 82 Skill operations and 2 reserves -
  * 232 PlanSteps. It fits `maxPlanSteps = 300` comfortably, but the Beam Search
- * needs about 12,276 expanded states to reach it, so the default
+ * needs about 17,619 expanded states to reach it (12,276 before the Beam
+ * Search kept both lane branches of an Entry alive), so the default
  * `maxExpandedStates = 10_000` truncates it first and leaves only the water
  * Route secured.
  *
@@ -350,9 +351,9 @@ describe('Planner search limits on a long Bonus + Skill Route', () => {
 
   it('completes both Targets once maxExpandedStates is raised', async () => {
     const { input, dependencies, water, fire, waterTarget, fireTarget } = scenario()
-    // The measured complete search costs 12,276 expanded states; 15,000 is the
+    // The measured complete search costs 17,619 expanded states; 20,000 is the
     // round value a user would enter in the detail settings.
-    input.options = { maxPlanSteps: 300, beamWidth: 50, maxExpandedStates: 15_000 }
+    input.options = { maxPlanSteps: 300, beamWidth: 50, maxExpandedStates: 20_000 }
     const { plan, conflicts, warnings, termination } = await createProductionPlan(
       input,
       dependencies,
@@ -360,7 +361,7 @@ describe('Planner search limits on a long Bonus + Skill Route', () => {
 
     expect(termination.status).toBe('completed')
     expect(termination.reachedLimits).toEqual([])
-    expect(termination.expandedStates).toBeLessThan(15_000)
+    expect(termination.expandedStates).toBeLessThan(20_000)
     expect(termination.completedTargetCount).toBe(2)
     expect(termination.totalTargetCount).toBe(2)
     expect(conflicts).toEqual([])

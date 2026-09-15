@@ -50,8 +50,8 @@ describe('A starting owned weapon that already satisfies a compromise condition'
     const entry = createValidBuildListEntry()
 
     // The Route base's own accepted state is offered as the lane start, so it
-    // can be held while the other lane moves; holding both lane starts is the
-    // weapon the user already owns and is refused by the selection validation.
+    // can be held while the other lane moves, or - when both lanes hold one -
+    // is a checkpoint the Planner treats as reached before its first action.
     expect(entry.intermediateStateSelection).toBeUndefined()
     expect(validateBuildCandidate(candidate, [source]).isValid).toBe(false)
   })

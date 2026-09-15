@@ -135,7 +135,7 @@ export interface PlannerClock {
 - Planner入力validationでTarget定義Hash、searchStateHash、referencedOwnedWeaponsHash、CalculationContextを現在値から再確認し、保存済み `isStale` だけを信用しない
 - Planner入力validationは各BuildListEntryの `intermediateStateSelection` を
   共有Domain関数 `validateBuildListEntryIntermediateStateSelection()` で検証し、未知ID・
-  別laneのID・未知の改善優先・両lane開始状態の同時選択はPlanner入力全体をfail closedする（7.5.9）
+  別laneのID・未知の改善優先はPlanner入力全体をfail closedする（7.5.9）
 - RngState全体の確定は要求しない
 - `deriveRngCapabilities(rngState, normalCounters, requiredOperations, engineCapabilities)` で、各BuildListEntryの全RouteOperationに必要なKnownValueと現在Engineのsupportが揃うか確認する
 - conversionだけのEntryはSkill Prediction、確定Base Seed / Skill Counter、concrete semantic input supportを要求し、persisted Counter Gate、Gogma Prediction、Gogma Counterを要求しない
@@ -521,11 +521,14 @@ skill lane  reset_skills                                       Skill streamの�
 
 `PlannerSearchState.routeProgressByEntryId` はEntryごとに `{ base, bonus, skill }` のlane進行を
 保持する。base lane完了後、bonus laneとskill laneの物理的な実行順序はRouteが固定せず、
-Plannerが決める。Beam Searchは各展開でEntryごとに1 laneだけを進める: 改善優先
-（7.6。`planner` はbonus lane）のlaneを先に試し、そのunitが現在stateで実行できない
-（counter precondition、inventory precondition、conflict resolution block、required unit
-dominance、7.5.2のpin gating）場合だけもう片方のlaneを展開する。これによりRoute内部の
-interleave数がbeamを乗算せず、それでも優先laneが待ちに入っているときはもう片方が進む。
+Plannerが決める。Beam Searchは各展開で、そのstateで実行できる（counter precondition、
+inventory precondition、conflict resolution block、required unit dominance、7.5.2のpin gating
+を通る）両laneのunitを **どちらもsuccessorとして生成する**。Skill先行branchとBonus先行branchは
+両方beamに残り、どちらを採るかは既存のscoring（7.3）と7.6のsoft preferenceが決める。
+「先に成功したlaneだけを残す」「改善優先のlaneが実行可能なら反対laneを生成しない」という
+枝刈りは行わない: それは改善優先をhard constraintにし、優先laneを先に進めると将来の
+全体Planが破綻するケースを探索から失わせるためである。探索量は既存のbeamWidth、
+semantic dedup、scoring、maxExpandedStates、maxPlanStepsで有界にする。
 
 `canSkipWhenCounterPassed` の「直後の操作」は同一lane内の次の操作で判定する。別laneの操作は
 このunitの出力を読まないため、間に挟まっても観測されたことにならない。
@@ -1053,6 +1056,15 @@ silent fast-forwardも同じ条件でpinを越えない
 瞬間を `PlannerSearchState.reachedCheckpointByEntryId` に記録する。pin終端unitはskip不可なので、
 到達は必ず実物理actionで起こる。選択がまったく無いEntryにpinは無く、そのままIdealへ進む。
 
+**開始時点で既に到達しているcheckpoint。** 既存巨戟のRouteで両pinがlane位置0になる場合
+（両laneでlane開始状態を選択した場合、または片laneの開始状態を選択しもう片laneが操作を
+持たない＝既にIdealである場合）、pin状態はユーザーが今持っている武器そのものである。
+このcheckpointはどのRoute操作も生まず、`createInitialPlannerSearchState()` が
+`reachedCheckpointByEntryId[entry.id] = true` として初期化する（Planner開始時点で到達済み）。
+`reserve_weapon` は拒否されず、残りの操作はそこから理想品へ続く。conversion Routeのlane位置0
+（巨戟化直後のSkill / 5枠）は巨戟化が生む状態なので開始時点では未到達であり、base lane完了後に
+両pinが揃った時点で到達する。base lane未完了のEntryを到達済みと判定しない。
+
 片laneだけを選択した場合、もう片laneのpinはIdeal終点である。すなわち
 
 ```text
@@ -1104,6 +1116,12 @@ opportunityのSeries / Group Skill（未選択ならCandidate最終Skill）、�
 exact ordered 5枠とscope（未選択ならCandidateの `finalBonuses` / scope）と一致することを
 検証する。一致しない場合は `checkpoint_state_mismatch` としてfail closeする。到達判定は
 pin終端operationの実行有無で行い、silent fast-forwardで消えたunit数に依存しない。
+
+開始時点で到達済みのcheckpoint（7.5.2）はどのStepも生まないため、milestoneを持つStepは
+存在しない。Trace ReplayはPlan開始時点の起点OwnedWeaponが選択状態を正確に保持することを
+検証し（不一致は `checkpoint_state_mismatch`）、到達済みとして扱う。Plan生成後のfail-closed
+defence（7.5.6）もこのEntryにはmilestone Stepを要求しない。UIは開始時点のcheckpointに
+特別な表示を追加しない（最小変更）。
 
 #### 7.5.5 選択変更とPlanのstale
 
@@ -1181,7 +1199,7 @@ Build Listで解除してください」と案内する。
 #### 7.5.9 壊れた選択はPlanner入力をfail closedする
 
 `intermediateStateSelection` の構造違反（Candidate Snapshotに存在しないopportunity ID、
-別laneのID、未知の改善優先、両lane開始状態の同時選択）は、
+別laneのID、未知の改善優先）は、
 [DATA_MODEL.md](./DATA_MODEL.md) 9.4のDomain validationが拒否する。Planner入力
 validationも同じ共有関数 `validateBuildListEntryIntermediateStateSelection()` を各
 BuildListEntryへ適用し、違反があればそのEntryを含むPlanner入力全体を
@@ -1227,14 +1245,17 @@ checkpointが到達済み（選択が無ければ常に）で、実行したunit
 
 #### Beam Searchへの影響
 
-7.0.4のとおり、各展開はEntryごとに優先laneを先に試し、優先laneのunitが現在stateで実行できない
-場合だけもう片方のlaneを展開する。優先laneが待ちに入る典型は、必要なCounter位置へ
-まだ到達していない、別Entryの必須unitがその位置を先に消費する、conflict resolutionで
-blockされている、7.5.2のpin gatingで止まっている、である。したがって
+7.0.4のとおり、各展開はそのstateで実行できる両laneのunitをどちらもsuccessorとして生成する。
+改善優先はsuccessor生成に一切影響せず、`comparePlannerSearchStates()` のranking termとして
+だけ働く。`planner` はどちらのlaneにもpreferenceを付けない設定であり、「Bonusを先に試す」の
+意味ではない: 両laneのbranchを対等に生成し、既存scoringと全体feasibilityに任せる。
+したがって
 
 - 両laneが同等に成立する場合、Plannerはユーザー指定の改善優先を反映する
-- 指定順序では全TargetのPlanが成立しない場合、Plannerはもう片方のlaneを先に進めてよい。
-  violationは記録するが、branchを拒否せず、rejectionもconflictも生成しない
+- 優先laneが今実行可能でも、それを先に進めると将来の全体Planが成立しない場合（例:
+  別TargetがそのCounter位置を後で必要とする）、Plannerはもう片方のlaneを先に進めた
+  branchを選んでPlanを完成する。violationは記録するが、branchを拒否せず、rejectionも
+  conflictも生成しない
 - 選択済み途中採用状態のpin（hard constraint）は改善優先より常に上位である
 
 上限付きBeam Searchであるため、violation数の絶対最小は保証しない。決定性は従来どおり維持する。
@@ -4026,7 +4047,18 @@ Workerを利用できない環境ではClientのversionを `production-engine-un
 - checkpoint到達でstatusも保護も変更しない
 - 最終的な理想品完成時だけ従来のreserve semanticsを適用する
 - 改善優先 `skill_first` / `bonus_first` が両lane同等成立時の実行順へ反映される
-- 指定した改善優先では全TargetのPlanが成立しない場合、Plannerがもう片方のlaneを先に進めて完了する
+- 優先laneが現在実行不能な場合、Plannerがもう片方のlaneを先に進めて完了する
+- 優先laneが現在実行可能でも、それを先に進めると別Targetの必須Counter位置を潰して全体Planが
+  成立しない場合、Plannerは優先に反してもう片方のlaneを先に進めたbranchで完了する
+  （`improvementPreferenceViolationCount > 0`）
+- `planner` は両laneのbranchを対等に生成し、Bonus先行固定ではない（Skill先行しか成立しない
+  scenarioで完了する）
+- 既存巨戟の現在Skill（Practical）+ 現在5枠（Ideal）でSkill lane位置0を選択すると、validationを
+  通り、Planner開始時点でcheckpoint到達済みになり、Skillを後で理想化して完了する
+- 既存巨戟の現在Skill（Ideal）+ 現在5枠（妥協）でBonus lane位置0を選択した場合も同様である
+- 既存巨戟の現在Skill + 現在5枠がともに妥協条件を満たし両lane位置0を選択すると、validationを
+  通り、開始時点で到達済みとしてそこから理想品まで続く
+- conversion RouteのSkill lane位置0は開始時点では未到達で、巨戟化実行後に成立する
 - `comparePlannerSearchStates()` でevaluationScoreとpreferred sourceがviolation数より上位、
   violation数がweaponSwitchCountより上位である
 - 複数TargetがSkill Counter / Gogma Counterを共有するとき、各Entryの物理依存順を守りながら

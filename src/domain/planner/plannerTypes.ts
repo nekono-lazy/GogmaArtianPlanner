@@ -403,7 +403,7 @@ export type PlannerWarningKind =
   | 'selected_checkpoint_fixes_target_entry'
   /**
    * A BuildListEntry's `intermediateStateSelection` is structurally invalid
-   * (unknown id, an id of the other lane, both lane starts). The Planner input
+   * (unknown id, an id of the other lane, unknown preference). The Planner input
    * fails closed with a validation issue; the selection is never read as
    * empty (PLANNER_SPEC 7.5.9).
    */

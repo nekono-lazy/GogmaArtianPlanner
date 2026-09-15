@@ -1,4 +1,4 @@
-import type { ImprovementPreference, RouteOperation } from '../models/publicTypes'
+import type { RouteOperation } from '../models/publicTypes'
 import type { IntermediatePin } from './plannerCheckpoints'
 import type { PlannerRouteUnit } from './plannerRouteProgress'
 
@@ -95,36 +95,45 @@ export function isPlannerLaneUnitBlockedByPin(
   return unit.laneIndex + 1 > pin[unit.lane] && progress[other] < pin[other]
 }
 
-/** Whether both lanes hold their pinned state (`false` without a pin). */
+/**
+ * Whether the Entry's weapon holds both pinned lane states (`false` without a
+ * pin). The base lane must be finished too: a conversion Route's lane starts
+ * describe the converted weapon, which does not exist before the conversion
+ * ran, whereas an existing Gogma's lane starts are held from the very start
+ * (`docs/PLANNER_SPEC.md` 7.5.2).
+ */
 export function hasReachedIntermediatePin(
+  lanes: PlannerEntryLanes,
   progress: PlannerLaneProgress,
-  pin: IntermediatePin | null,
 ): boolean {
-  return pin !== null && progress.skill >= pin.skill && progress.bonus >= pin.bonus
+  const { pin } = lanes
+  return (
+    pin !== null &&
+    progress.base >= lanes.base.length &&
+    progress.skill >= pin.skill &&
+    progress.bonus >= pin.bonus
+  )
 }
 
 /**
- * The units this Entry may execute next, in the order the Beam Search tries
- * them: the next base unit while the base lane is unfinished, otherwise the
- * next unit of each stream lane that the checkpoint pin allows.
+ * The units this Entry may execute next: the next base unit while the base
+ * lane is unfinished, otherwise the next unit of each stream lane that the
+ * checkpoint pin allows, Bonus lane first in a fixed traversal order.
  *
- * The preferred lane comes first - the Skill lane for `skill_first`, the
- * Bonus lane otherwise, which is also the order the Search composed the
- * Route in (`docs/PLANNER_SPEC.md` 7.0.4 / 7.6). The Beam Search expands the
- * first lane that can run in the state and falls back to the other lane only
- * when it cannot, so a Route's two lanes never multiply the beam by every
- * interleaving while the other lane still runs whenever the preferred one is
- * waiting on a Counter, a pin, a conflict resolution, or a required unit.
+ * Both stream lanes are genuine successors (`docs/PLANNER_SPEC.md` 7.0.4):
+ * the Beam Search expands every unit returned here, so a Skill-first and a
+ * Bonus-first branch both stay alive and scoring - including the soft
+ * improvement preference of 7.6 - chooses between them. The order here is a
+ * traversal order only; it never removes a branch and never expresses the
+ * preference.
  */
 export function nextPlannerLaneUnits(
   lanes: PlannerEntryLanes,
   progress: PlannerLaneProgress,
-  preference: ImprovementPreference = 'planner',
 ): PlannerRouteUnit[] {
   if (progress.base < lanes.base.length) return [lanes.base[progress.base]]
-  const order = preference === 'skill_first' ? (['skill', 'bonus'] as const) : (['bonus', 'skill'] as const)
   const next: PlannerRouteUnit[] = []
-  for (const lane of order) {
+  for (const lane of ['bonus', 'skill'] as const) {
     const unit = lanes[lane][progress[lane]]
     if (unit && !isPlannerLaneUnitBlockedByPin(unit, progress, lanes.pin)) next.push(unit)
   }

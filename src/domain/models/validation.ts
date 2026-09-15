@@ -1302,17 +1302,17 @@ function appendIntermediateStateSelectionIssues(
   if (!improvementPreferences.includes(selection.improvementPreference)) {
     addIssue(issues, `${path}.improvementPreference`, 'invalid_literal', 'The improvement preference must be planner, skill_first, or bonus_first.')
   }
-  const lanes = routeLaneOperationIndexes(entry.candidateSnapshot.route)
+  // Any lane position may be selected, the lane start included: an existing
+  // Gogma that already holds a compromise state on both lanes is a checkpoint
+  // held at Planner start, and a conversion Route's lane starts are produced
+  // by the conversion itself (`docs/SEARCH_SPEC.md` 5.8.5). A selected id only
+  // has to exist on its own lane of the Candidate Snapshot.
   const groups = entry.candidateSnapshot.intermediateStateGroups ?? []
-  const pins: Record<'skill' | 'bonus', number | null> = { skill: null, bonus: null }
   const axes = ['skill', 'bonus'] as const
   axes.forEach((axis) => {
     const selectedId = axis === 'skill' ? selection.skillOpportunityId : selection.bonusOpportunityId
     const field = axis === 'skill' ? 'skillOpportunityId' : 'bonusOpportunityId'
-    if (selectedId === null) {
-      pins[axis] = axis === 'skill' ? lanes.skill.length : lanes.bonus.length
-      return
-    }
+    if (selectedId === null) return
     const opportunity = groups
       .filter((group) => group.axis === axis)
       .flatMap((group): IntermediateStateOpportunity[] => [...group.opportunities])
@@ -1324,21 +1324,8 @@ function appendIntermediateStateSelectionIssues(
         'invalid_reference',
         'A selected intermediate state must exist on its own lane in the candidate snapshot.',
       )
-      return
     }
-    pins[axis] = opportunity.lanePosition
   })
-  const anySelected = selection.skillOpportunityId !== null || selection.bonusOpportunityId !== null
-  if (anySelected && pins.skill === 0 && pins.bonus === 0) {
-    // Both lanes at their start is the weapon the user already holds, which
-    // is never a checkpoint (`docs/SEARCH_SPEC.md` 5.8.5).
-    addIssue(
-      issues,
-      path,
-      'invalid_state',
-      'Selecting the Route base state on both lanes names the weapon the user already holds, which is not a checkpoint.',
-    )
-  }
 }
 
 export function validateBuildListEntry(

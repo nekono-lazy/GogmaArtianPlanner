@@ -1115,8 +1115,9 @@ export type BuildListEntryStaleReason =
   `bonusOpportunityId` はBonus groupのopportunityに存在しなければならない。存在しないID、
   別laneのIDはfail closedで拒否する
 - `improvementPreference` は `planner | skill_first | bonus_first` のいずれかである
-- 両laneの開始状態（lane位置0）を同時に選択できない。ユーザーが既に持っている武器を
-  到達点にすることになるためである（SEARCH_SPEC 5.8.5）
+- 両laneの開始状態（lane位置0）の同時選択は有効である。既存巨戟ではユーザーが既に持っている
+  武器を妥協checkpointとして採用することになり、PlannerはPlanner開始時点で到達済みとして扱う
+  （SEARCH_SPEC 5.8.5、PLANNER_SPEC 7.5.2）
 - 選択・改善優先の変更は `isStale` / `staleReasons` に影響しない
 - どちらかのlaneを選択したEntryは、そのPlanner runにおける当該Targetのrequired Entryである。
   同じTargetの別Entryの理想品完成で迂回できない

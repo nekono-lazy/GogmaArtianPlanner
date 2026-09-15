@@ -15,6 +15,7 @@ import {
   entryIntermediateSelection,
   hasIntermediateStateSelection,
   intermediatePinOperationIndex,
+  isIntermediatePinHeldAtRouteStart,
 } from './plannerCheckpoints'
 import type {
   RngEngine,
@@ -241,6 +242,51 @@ export function replayPlannerSearchTrace(input: PlannerInput, bestState: Planner
   const pinHeld = (entryId: BuildListEntryId, pinOperationIndex: number | null): boolean =>
     pinOperationIndex === null || (executedOperationIndexes.get(entryId)?.has(pinOperationIndex) ?? false)
   const fail = (code: PlannerTraceReplayIssueCode, message: string, actionIndex: number | null): PlannerTraceReplayResult => ({ isValid: false, drafts: [], issues: [{ code, message, actionIndex }], unsupportedInput: null })
+  // The exact state the user selected on each lane (`docs/PLANNER_SPEC.md` 7.5.4):
+  // a selected opportunity's own Skills / ordered slots, the Candidate's final
+  // result for an unselected lane. A selected Skill state may legitimately
+  // carry a `null` Series or Group id, so the selected group decides
+  // explicitly rather than through a null-coalescing fallback.
+  const selectedCheckpointState = (entry: BuildListEntry) => {
+    const selection = entryIntermediateSelection(entry)
+    const candidate = entry.candidateSnapshot
+    return {
+      bonuses: selection.bonus === null ? candidate.finalBonuses : selection.bonus.opportunity.restorationBonuses,
+      scope: selection.bonus === null ? candidate.restorationBonusScope : selection.bonus.opportunity.restorationBonusScope,
+      seriesSkillId: selection.skill === null ? candidate.seriesSkillId : selection.skill.group.seriesSkillId,
+      groupSkillId: selection.skill === null ? candidate.groupSkillId : selection.skill.group.groupSkillId,
+    }
+  }
+  const holdsSelectedCheckpointState = (weapon: TransientGogma | null, entry: BuildListEntry): boolean => {
+    const expected = selectedCheckpointState(entry)
+    return (
+      weapon !== null &&
+      weapon.bonuses.kind === 'known' &&
+      weapon.bonuses.restorationBonusScope === expected.scope &&
+      areRestorationBonusSlotsEqual(weapon.bonuses.restorationBonuses, expected.bonuses) &&
+      weapon.seriesSkillId === expected.seriesSkillId &&
+      weapon.groupSkillId === expected.groupSkillId
+    )
+  }
+  // An existing Gogma whose selected lane states are its own lane starts holds
+  // its compromise checkpoint before the first action. The selected state is
+  // still a hard constraint, so the source weapon the Plan starts from must
+  // hold it exactly; nothing is reserved, changed, or marked as a milestone
+  // (`docs/PLANNER_SPEC.md` 7.5.2 / 7.5.4).
+  const traceEntryIds = new Set(bestState.trace.flatMap((action) => [action.primaryBuildListEntryId, ...action.progressedBuildListEntryIds]))
+  for (const entryId of traceEntryIds) {
+    const entry = entryFor(input, entryId)
+    if (!entry || !isIntermediatePinHeldAtRouteStart(entry)) continue
+    const sourceId = entry.candidateSnapshot.route.sourceOwnedWeaponId
+    if (sourceId === null || !holdsSelectedCheckpointState(currentGogma(runtime, entryId, sourceId), entry)) {
+      return fail(
+        'checkpoint_state_mismatch',
+        'The source weapon at Plan start does not hold the intermediate states the user selected as its lane starts.',
+        null,
+      )
+    }
+    reachedCheckpointEntryIds.add(entryId)
+  }
   const requireSupport = (
     supportInput: RngPredictionSupportInput,
     entryId: BuildListEntryId,
@@ -423,30 +469,7 @@ export function replayPlannerSearchTrace(input: PlannerInput, bestState: Planner
         }
         const selection = entryIntermediateSelection(progressedEntry)
         const candidate = progressedEntry.candidateSnapshot
-        // A selected Skill state may legitimately carry a `null` Series or
-        // Group id, so the selected group decides explicitly rather than
-        // through a null-coalescing fallback to the Candidate's final Skills.
-        const expectedBonuses = selection.bonus === null
-          ? candidate.finalBonuses
-          : selection.bonus.opportunity.restorationBonuses
-        const expectedScope = selection.bonus === null
-          ? candidate.restorationBonusScope
-          : selection.bonus.opportunity.restorationBonusScope
-        const expectedSeries = selection.skill === null
-          ? candidate.seriesSkillId
-          : selection.skill.group.seriesSkillId
-        const expectedGroup = selection.skill === null
-          ? candidate.groupSkillId
-          : selection.skill.group.groupSkillId
-        const reached = runtime.gogmas.get(progressedId)
-        if (
-          !reached ||
-          reached.bonuses.kind !== 'known' ||
-          reached.bonuses.restorationBonusScope !== expectedScope ||
-          !areRestorationBonusSlotsEqual(reached.bonuses.restorationBonuses, expectedBonuses) ||
-          reached.seriesSkillId !== expectedSeries ||
-          reached.groupSkillId !== expectedGroup
-        ) {
+        if (!holdsSelectedCheckpointState(runtime.gogmas.get(progressedId) ?? null, progressedEntry)) {
           return fail(
             'checkpoint_state_mismatch',
             'The replayed state at the selected compromise checkpoint differs from the intermediate states the user selected.',

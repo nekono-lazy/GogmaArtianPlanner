@@ -153,8 +153,9 @@ describe('Axis-separated intermediate state extraction', () => {
         opportunities: [expect.objectContaining({ lanePosition: 0, operationIndex: null })],
       }),
     ])
-    // Holding both lane starts is the weapon the user already owns, so the
-    // pair is refused; one start with the other lane's end is a real checkpoint.
+    // Holding both lane starts is the weapon the user already owns: a legal
+    // selection whose checkpoint the Planner holds from its start, exactly
+    // like one start with the other lane's Ideal end.
     const both = createBuildListEntry(candidate, checkpointTarget(), {
       intermediateStateSelection: {
         skillOpportunityId: skillGroups(candidate)[0].opportunities[0].id,
@@ -162,7 +163,7 @@ describe('Axis-separated intermediate state extraction', () => {
         improvementPreference: 'planner',
       },
     })
-    expect(validateBuildListEntry(both).issues.map(({ path }) => path)).toContain('intermediateStateSelection')
+    expect(validateBuildListEntry(both).isValid).toBe(true)
     const skillOnly = createBuildListEntry(candidate, checkpointTarget(), {
       intermediateStateSelection: {
         skillOpportunityId: skillGroups(candidate)[0].opportunities[0].id,

@@ -698,11 +698,12 @@ function applyRouteAction(
       }
       // The compromise checkpoint is reached the moment both lanes hold their
       // pinned state. A pinned endpoint is never skippable, so this can only
-      // arrive through a real executed action (docs/PLANNER_SPEC.md 7.5.3).
+      // arrive through a real executed action - or be held from the start by
+      // an existing Gogma's lane starts (docs/PLANNER_SPEC.md 7.5.2 / 7.5.3).
       if (
         lanes.pin !== null &&
         state.reachedCheckpointByEntryId[entry.id] !== true &&
-        hasReachedIntermediatePin(nextProgress, lanes.pin)
+        hasReachedIntermediatePin(lanes, nextProgress)
       ) {
         state.reachedCheckpointByEntryId[entry.id] = true
       }
@@ -1258,15 +1259,11 @@ export async function runPlannerBeamSearch(
         if (!isPlannerLaneRouteComplete(lanes, progress)) {
           // After the base prefix, the Bonus lane and the Skill lane are both
           // candidates: the Planner, not the Route, decides their interleaving
-          // (docs/PLANNER_SPEC.md 7.0.4), subject to the checkpoint pin. The
-          // preferred lane is tried first and the other lane only when it
-          // cannot run here, so one Entry yields one successor per state.
-          for (const unit of nextPlannerLaneUnits(
-            lanes,
-            progress,
-            entryImprovementPreference(entry),
-          )) {
-            if (attempts.some((attempt) => attempt.state !== null)) break
+          // (docs/PLANNER_SPEC.md 7.0.4), subject to the checkpoint pin. Every
+          // lane that can run here becomes a successor, so a Skill-first and a
+          // Bonus-first branch both survive; the improvement preference is a
+          // soft ranking term of the comparator (7.6), never a branch filter.
+          for (const unit of nextPlannerLaneUnits(lanes, progress)) {
             if (isBlockedByConflictResolution(unit)) {
               appendUniqueRejection(
                 rejections,

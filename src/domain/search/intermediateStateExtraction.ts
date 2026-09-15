@@ -322,10 +322,10 @@ export interface IntermediateStateExtractionInput {
  * is never an intermediate state; the lane start (position 0) is, so a
  * conversion whose assigned Skills already satisfy the Target, and an existing
  * Gogma whose current Skills or five slots already do, are offered as
- * zero-Reset states. Whether a combination of two selected states is a
- * meaningful checkpoint - both lanes at position 0 is the weapon the user
- * already holds - is decided by the BuildListEntry selection validation, not
- * here.
+ * zero-Reset states. An existing Gogma whose selected states are both lane
+ * starts already holds its compromise checkpoint at Planner start
+ * (`docs/PLANNER_SPEC.md` 7.5.2); that is the Planner's concern, not this
+ * extraction's.
  */
 export function extractIntermediateStateGroups(
   candidate: BuildCandidate,

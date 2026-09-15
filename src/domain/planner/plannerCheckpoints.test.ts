@@ -152,9 +152,9 @@ describe('Selected intermediate states as Planner constraints', () => {
     expect(isPlannerLaneUnitBlockedByPin(lanes.skill[1], { base: 0, bonus: 2, skill: 1 }, lanes.pin)).toBe(true)
     expect(isPlannerLaneUnitBlockedByPin(lanes.skill[1], { base: 0, bonus: 3, skill: 1 }, lanes.pin)).toBe(false)
     expect(isPlannerLaneUnitBlockedByPin(lanes.bonus[2], { base: 0, bonus: 2, skill: 0 }, lanes.pin)).toBe(false)
-    expect(hasReachedIntermediatePin({ base: 0, bonus: 3, skill: 1 }, lanes.pin)).toBe(true)
-    expect(hasReachedIntermediatePin({ base: 0, bonus: 2, skill: 1 }, lanes.pin)).toBe(false)
-    expect(hasReachedIntermediatePin({ base: 0, bonus: 3, skill: 1 }, null)).toBe(false)
+    expect(hasReachedIntermediatePin(lanes, { base: 0, bonus: 3, skill: 1 })).toBe(true)
+    expect(hasReachedIntermediatePin(lanes, { base: 0, bonus: 2, skill: 1 })).toBe(false)
+    expect(hasReachedIntermediatePin({ ...lanes, pin: null }, { base: 0, bonus: 3, skill: 1 })).toBe(false)
   })
 
   it('leaves an Entry with no selection under the ordinary Ideal Route contract', () => {

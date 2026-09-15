@@ -5,7 +5,10 @@ import type {
   PlannerWarning,
   ValidatedBuildListEntry,
 } from './plannerTypes'
-import { derivePlannerCheckpointRequirements } from './plannerCheckpoints'
+import {
+  derivePlannerCheckpointRequirements,
+  isIntermediatePinHeldAtRouteStart,
+} from './plannerCheckpoints'
 import { initialPlannerLaneProgress, type PlannerLaneProgress } from './plannerRouteLanes'
 import { createSimulatedInventory } from './simulatedInventory'
 import {
@@ -29,9 +32,14 @@ export function createInitialPlannerSearchState(input: PlannerInput, validEntrie
   const routeProgressByEntryId: Record<string, PlannerLaneProgress> = {}
   const routeRuntimeByEntryId: PlannerSearchState['routeRuntimeByEntryId'] = {}
   const routeSourceVersionByEntryId: PlannerSearchState['routeSourceVersionByEntryId'] = {}
+  const reachedCheckpointByEntryId: PlannerSearchState['reachedCheckpointByEntryId'] = {}
   validEntries.forEach(({ entry }) => {
     routeProgressByEntryId[entry.id] = initialPlannerLaneProgress()
     routeRuntimeByEntryId[entry.id] = { hasUnregisteredGogmaOutput: false, transientRestorationBonusScope: null }
+    // An existing Gogma whose selected lane states are its own lane starts
+    // already holds its compromise checkpoint: no operation produces it, so it
+    // is reached before the first action (`docs/PLANNER_SPEC.md` 7.5.2).
+    if (isIntermediatePinHeldAtRouteStart(entry)) reachedCheckpointByEntryId[entry.id] = true
     if (
       entry.candidateSnapshot.route.kind.startsWith('existing_gogma') &&
       entry.candidateSnapshot.route.sourceOwnedWeaponId !== null
@@ -86,7 +94,7 @@ export function createInitialPlannerSearchState(input: PlannerInput, validEntrie
     routeSourceVersionByEntryId,
     inFlightExistingSourceByOwnedWeaponId: {},
     securedOwnedWeaponIdByEntryId: {},
-    reachedCheckpointByEntryId: {},
+    reachedCheckpointByEntryId,
     trace: [],
     weaponSwitchCount: 0,
     preferredSourceProgressCount: 0,

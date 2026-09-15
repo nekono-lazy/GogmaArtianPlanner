@@ -111,6 +111,24 @@ export function intermediatePinFor(entry: BuildListEntry): IntermediatePin | nul
 }
 
 /**
+ * Whether the Entry's pinned lane pair is the weapon the user holds right now
+ * (`docs/PLANNER_SPEC.md` 7.5.2): an existing Gogma Route whose selected lane
+ * states are both lane starts - a selected position 0 whose other lane is
+ * unselected and already at its Ideal end (no operation on that lane), or
+ * both lanes selected at position 0. Such a compromise checkpoint is held at
+ * Planner start; no Route operation produces it. A conversion Route never
+ * qualifies: its lane starts describe the converted weapon, which the base
+ * lane still has to create.
+ */
+export function isIntermediatePinHeldAtRouteStart(entry: BuildListEntry): boolean {
+  const pin = intermediatePinFor(entry)
+  if (pin === null || pin.skill !== 0 || pin.bonus !== 0) return false
+  return entry.candidateSnapshot.route.operations.every(
+    ({ type }) => type !== 'create_normal_artian' && type !== 'convert_normal_to_gogma',
+  )
+}
+
+/**
  * The Route operation index that ends the pinned state of one lane, or `null`
  * when the pinned state is the lane's own start and no operation has to run
  * for it.

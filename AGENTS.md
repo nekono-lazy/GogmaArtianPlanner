@@ -1083,8 +1083,9 @@ Practical BuildListEntry this model forbids.
 `planner`). It is set in Candidate Search, saved on the Entry when the Candidate
 is added, and edited only in the Build List — never on `TargetWeapon`, never in
 Candidate identity, hashes or staleness, but always in the Plan's
-`buildListEntriesHash`. Selecting both lane starts at once is rejected: that is
-the weapon the user already holds.
+`buildListEntriesHash`. Selecting both lane starts at once is legal: for an
+existing Gogma that is the weapon the user already holds, and its compromise
+checkpoint is held at Planner start (see below).
 
 The Planner derives a **pin** per lane: the selected lane position, or the lane
 end (Ideal) when that lane is unselected. The compromise checkpoint is the
@@ -2422,11 +2423,25 @@ The Planner runs each Entry's Route as three lanes (`docs/PLANNER_SPEC.md`
 each in its own Route order. `PlannerSearchState.routeProgressByEntryId` is a
 per-lane progress. Across several Targets the Beam Search interleaves all
 Entries' operations globally by Counter position; the Production Plan is one
-physical operation sequence, never per-axis columns. To keep the bounded search
-tractable, one expansion advances at most one lane per Entry: the preferred lane
-(`skill_first` -> Skill, otherwise Bonus) is tried first and the other lane only
-when the preferred unit cannot run in that state. `canSkipWhenCounterPassed`
-judges "the immediately following operation" within the same lane.
+physical operation sequence, never per-axis columns. When both stream lanes of
+an Entry can run in a state, **both** become successors: a Skill-first and a
+Bonus-first branch stay alive and scoring chooses. Never prune the other lane
+because the preferred lane succeeded - that turns the soft preference into a
+hard one and loses the branch in which a preferred lane, executable now, would
+later break another Target. The search stays bounded by `beamWidth`, semantic
+dedup, scoring, `maxExpandedStates`, and `maxPlanSteps` only.
+`canSkipWhenCounterPassed` judges "the immediately following operation" within
+the same lane.
+
+An existing Gogma whose selected lane states are both lane starts - both lanes
+selected at position 0, or one lane selected at position 0 while the other lane
+has no operation because it is already Ideal - holds its compromise checkpoint
+before the first action: `createInitialPlannerSearchState()` marks it reached,
+`reserve_weapon` is not refused, no Step carries a milestone for it, and Trace
+Replay verifies the source weapon at Plan start against the selected states
+(`checkpoint_state_mismatch` otherwise). A conversion Route's lane position 0
+is produced by the conversion and is never held at Planner start
+(`docs/PLANNER_SPEC.md` 7.5.2).
 
 A `BuildListEntry.intermediateStateSelection` lane selection is a hard
 constraint. The Planner may never ignore it, disable it, or move the selection to
@@ -2447,7 +2462,8 @@ action are an ordinary Counter conflict, reported with typed
 `opportunityId`) so the UI can send the user to the Build List to change a
 selection.
 
-`improvementPreference` is a soft Plan preference (`docs/PLANNER_SPEC.md` 7.6).
+`improvementPreference` is a soft Plan preference (`docs/PLANNER_SPEC.md` 7.6)
+and `planner` means no lane preference at all - never "Bonus first".
 `PlannerSearchState.improvementPreferenceViolationCount` counts, after the
 checkpoint (or from the start when nothing is selected), every physical unit run
 on the non-preferred lane while the preferred lane still had units;
@@ -2482,8 +2498,8 @@ holds an Ideal weapon when planning starts
 Entry stays allowed.
 
 A structurally invalid `intermediateStateSelection` - an unknown opportunity id,
-an id of the other lane, an unknown preference, both lane starts selected at
-once - is checked in the Planner's current-input validation through the same
+an id of the other lane, an unknown preference - is checked in the Planner's
+current-input validation through the same
 shared `validateBuildListEntryIntermediateStateSelection()` that
 `validateBuildListEntry()` uses, and fails the whole input closed
 (`invalid_checkpoint_selection`). A broken
@@ -3219,8 +3235,8 @@ Relevant test areas include:
   Bonus group secondary without removing any Domain group or opportunity, and
   differing Bonus Type compositions never being ranked against each other
 - Selection starting empty with `improvementPreference = 'planner'`, accepting one
-  opportunity per lane, rejecting an id of the other lane, an unknown id, an
-  unknown preference and both lane starts at once, leaving the BuildListEntry
+  opportunity per lane, rejecting an id of the other lane, an unknown id and an
+  unknown preference, accepting both lane starts at once, leaving the BuildListEntry
   un-staled, moving the Plan's build-list hash, surviving a re-add of the same
   Candidate, and being editable in the Build List without a re-search
 - A selected lane endpoint never being silently fast-forwarded while an
@@ -3239,9 +3255,16 @@ Relevant test areas include:
   selection keeping its ordinary Ideal Route meaning
 - `skill_first` / `bonus_first` steering the order when both lanes are equally
   feasible, the Planner still completing every Target by running the other lane
-  first when the preferred order cannot, and `comparePlannerSearchStates()`
-  ranking the violation count below `evaluationScore` and the preferred source
-  and above `weaponSwitchCount`
+  first when the preferred lane cannot run now, and also when the preferred lane
+  can run now but would break another Target later (violation count above zero),
+  `planner` completing a scenario only a Skill-first order can finish, and
+  `comparePlannerSearchStates()` ranking the violation count below
+  `evaluationScore` and the preferred source and above `weaponSwitchCount`
+- An existing Gogma holding a Practical Skill with Ideal slots (Skill lane start
+  selected), an Ideal Skill with compromise slots (Bonus lane start selected), or
+  a compromise on both lanes (both starts selected) validating, being reached at
+  Planner start, carrying no milestone Step, and still finishing at the Ideal,
+  while a conversion Route's Skill lane start is not held before the conversion
 - Several Targets sharing the Skill and Gogma Counters interleaved into one global
   physical sequence that respects each Entry's per-lane dependency order, with no
   synthetic Cartesian product and unchanged prediction call-count contracts
@@ -3251,8 +3274,8 @@ Relevant test areas include:
   lower-priority uncovered one on `hasPractical` alone, Beam pruning ordering
   unchanged whichever Target holds the compromise weapon, and a selected
   checkpoint kept through `PlannerCheckpointRequirements` rather than any score
-- An unknown opportunity id, an id of the other lane, and both lane starts at
-  once each failing the Planner input closed before any Beam Search,
+- An unknown opportunity id and an id of the other lane each failing the
+  Planner input closed before any Beam Search,
   never read as an empty selection and never bypassed through a selection-free
   Entry of the same Target, while a well-formed selection and a selection-free
   Entry keep working
