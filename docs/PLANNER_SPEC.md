@@ -1135,14 +1135,27 @@ defence（7.5.6）もこのEntryにはmilestone Stepを要求しない。UIは�
 再計算対象になる。一方でBuildListEntry自体はstaleにならない
 （[DATA_MODEL.md](./DATA_MODEL.md) 9.4）。
 
-hashにはopportunity IDだけでなく、そのIDが指すhard constraintの実行意味を正規化して含める:
-Skillなら `lanePosition` / `operationIndex` / groupの `seriesSkillId` / `groupSkillId` / `match`、
-Bonusなら `lanePosition` / `operationIndex` / exact ordered 5枠（sortしない。Trace Replayの
-検証が順序付きのため）/ `restorationBonusScope` / `match`。同じIDのままpayloadが変わる
-structurally-valid artifactでも既存Planが再計算対象になる。未選択laneのIdeal意味はCandidate
-Snapshot（`finalBonuses` / scope / Skills / route）が既に表す。Candidate identityと
-deduplication keyは変更しない。Snapshot上で解決できない選択IDはvalidationの責務であり、
-hash helperは未解決IDとして決定的に扱うだけで、空選択とは読まない。
+途中採用状態を持つEntryでは、hashは選択したopportunityだけでなく、Plannerが実際に要求する
+**checkpoint pin pair全体**（7.5.2）を正規化して含める。laneごとに
+
+```text
+選択lane   -> kind = selected: opportunityId / lanePosition / operationIndex /
+              Skillなら groupの seriesSkillId / groupSkillId、Bonusなら exact ordered 5枠 /
+              restorationBonusScope、および groupの match
+未選択lane -> kind = ideal: CandidateのIdeal終点。Skillなら candidate.seriesSkillId /
+              groupSkillId、Bonusなら candidate.finalBonuses（exact ordered 5枠）/
+              candidate.restorationBonusScope、match = ideal
+```
+
+Skillのみ選択なら「選択Skill + exact Ideal Bonus」、Bonusのみ選択なら「exact Ideal Skill +
+選択Bonus」がhash対象である。Candidate Snapshot hashは `finalBonuses` を順不同multisetとして
+正規化するが、checkpointのTrace Replay検証は順序付きなので、pin pair側の5枠はselected /
+idealのどちらもsortしない。同じIDのままpayloadが変わるstructurally-valid artifactや、
+Skillのみ選択でIdeal Bonusのslot順だけが変わったartifactでも既存Planが再計算対象になる。
+途中採用状態をまったく持たないEntryはcheckpointを持たないため、pin pairは `null` であり、
+Candidate Snapshot hashの従来semanticsは変えない。Candidate identityとdeduplication keyは
+変更しない。Snapshot上で解決できない選択IDはvalidationの責務であり、hash helperは未解決IDとして
+決定的に扱うだけで、空選択とも Ideal終点とも読み替えない。
 
 #### 7.5.6 選択を持つEntryはTargetのrequired Entry
 

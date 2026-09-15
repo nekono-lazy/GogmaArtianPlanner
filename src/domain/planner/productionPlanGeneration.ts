@@ -22,7 +22,9 @@ import { runPlannerBeamSearch } from './plannerBeamSearch'
 import {
   derivePlannerCheckpointRequirements,
   entryIntermediateSelection,
+  hasIntermediateStateSelection,
   isIntermediatePinHeldAtRouteStart,
+  routeLaneLengths,
 } from './plannerCheckpoints'
 import {
   replayPlannerSearchTrace,
@@ -93,62 +95,88 @@ function normalizeCandidateSnapshot(candidate: BuildCandidate) {
 }
 
 /**
- * The execution meaning of one selected intermediate state, for the planning
- * Build List hash (`docs/PLANNER_SPEC.md` 7.5.5).
+ * The compromise checkpoint pin pair an Entry with a selection makes the
+ * Planner hold, for the planning Build List hash (`docs/PLANNER_SPEC.md`
+ * 7.5.2 / 7.5.5).
  *
- * An opportunity id alone does not fix what the Planner has to achieve: the
- * hard constraint is the state the id names - the lane position and the
- * ending operation the pin gating and Trace Replay use, the exact ordered
- * five slots and scope a Bonus milestone is verified against, the Series /
- * Group Skills of a Skill state, and the match the milestone reports. A
- * structurally valid artifact that changes that payload under the same id
- * changes the constraint, so the payload is hashed with the id. Slot order is
- * kept as stored, never sorted: the checkpoint verification is ordered.
+ * The hard constraint is never the selected opportunity alone: the checkpoint
+ * is the pinned state of *both* lanes - the selected state of a selected
+ * lane and the Candidate's Ideal lane end of an unselected one - and Trace
+ * Replay verifies exactly that pair. So the hash carries, per lane, either
+ * the selected state (the lane position and ending operation the pin gating
+ * uses, the Series / Group Skills or the exact ordered five slots and scope,
+ * and the match the milestone reports) or the Ideal lane end (the Candidate's
+ * final Skills, or its final five slots in stored order and scope). Slot order
+ * is kept as stored on both variants, never sorted: the Candidate Snapshot
+ * hash normalizes `finalBonuses` as an unordered multiset, but the checkpoint
+ * verification is ordered, so a Skill-only selection whose Ideal Bonus slots
+ * were reordered is a different constraint.
  *
- * Candidate identity, the deduplication key and the meaning fingerprint stay
- * untouched. A selected id that does not resolve on its own lane is a
- * validation failure elsewhere; here it is hashed deterministically as an
- * unresolved id so the helper never crashes and never treats it as empty.
+ * An Entry without any selection has no checkpoint and hashes `null` here,
+ * leaving the Candidate Snapshot semantics unchanged. Candidate identity, the
+ * deduplication key and the meaning fingerprint stay untouched. A selected id
+ * that does not resolve on its own lane is a validation failure elsewhere;
+ * here it is hashed deterministically as an unresolved id - never read as
+ * empty and never replaced by the Ideal lane end - so the helper never crashes.
  */
-function normalizeSelectedIntermediateState(
-  entry: BuildListEntry,
-  axis: 'skill' | 'bonus',
-) {
+function normalizeCheckpointPinMeaning(entry: BuildListEntry) {
+  if (!hasIntermediateStateSelection(entry)) return null
   const selection = entry.intermediateStateSelection
-  const opportunityId =
-    axis === 'skill' ? selection?.skillOpportunityId ?? null : selection?.bonusOpportunityId ?? null
-  if (opportunityId === null) return null
+  const candidate = entry.candidateSnapshot
   const resolved = entryIntermediateSelection(entry)
-  if (axis === 'skill') {
-    const skill = resolved.skill
-    return skill === null || skill.opportunity.id !== opportunityId
-      ? { opportunityId, resolved: false as const }
-      : {
-          opportunityId,
-          resolved: true as const,
-          axis,
-          lanePosition: skill.opportunity.lanePosition,
-          operationIndex: skill.opportunity.operationIndex,
-          seriesSkillId: skill.group.seriesSkillId,
-          groupSkillId: skill.group.groupSkillId,
-          match: skill.group.match,
-        }
-  }
-  const bonus = resolved.bonus
-  return bonus === null || bonus.opportunity.id !== opportunityId
-    ? { opportunityId, resolved: false as const }
-    : {
-        opportunityId,
-        resolved: true as const,
-        axis,
-        lanePosition: bonus.opportunity.lanePosition,
-        operationIndex: bonus.opportunity.operationIndex,
-        restorationBonuses: bonus.opportunity.restorationBonuses.map(
-          ({ bonusTypeId, bonusRankId }) => ({ bonusTypeId, bonusRankId }),
-        ),
-        restorationBonusScope: bonus.opportunity.restorationBonusScope,
-        match: bonus.group.match,
+  const laneLengths = routeLaneLengths(candidate.route.operations)
+  const orderedSlots = (slots: BuildCandidate['finalBonuses']) =>
+    slots.map(({ bonusTypeId, bonusRankId }) => ({ bonusTypeId, bonusRankId }))
+
+  const skillOpportunityId = selection?.skillOpportunityId ?? null
+  const skill = skillOpportunityId === null
+    ? {
+        kind: 'ideal' as const,
+        axis: 'skill' as const,
+        lanePosition: laneLengths.skill,
+        seriesSkillId: candidate.seriesSkillId,
+        groupSkillId: candidate.groupSkillId,
+        match: 'ideal' as const,
       }
+    : resolved.skill === null || resolved.skill.opportunity.id !== skillOpportunityId
+      ? { kind: 'selected' as const, opportunityId: skillOpportunityId, resolved: false as const }
+      : {
+          kind: 'selected' as const,
+          opportunityId: skillOpportunityId,
+          resolved: true as const,
+          axis: 'skill' as const,
+          lanePosition: resolved.skill.opportunity.lanePosition,
+          operationIndex: resolved.skill.opportunity.operationIndex,
+          seriesSkillId: resolved.skill.group.seriesSkillId,
+          groupSkillId: resolved.skill.group.groupSkillId,
+          match: resolved.skill.group.match,
+        }
+
+  const bonusOpportunityId = selection?.bonusOpportunityId ?? null
+  const bonus = bonusOpportunityId === null
+    ? {
+        kind: 'ideal' as const,
+        axis: 'bonus' as const,
+        lanePosition: laneLengths.bonus,
+        restorationBonuses: orderedSlots(candidate.finalBonuses),
+        restorationBonusScope: candidate.restorationBonusScope,
+        match: 'ideal' as const,
+      }
+    : resolved.bonus === null || resolved.bonus.opportunity.id !== bonusOpportunityId
+      ? { kind: 'selected' as const, opportunityId: bonusOpportunityId, resolved: false as const }
+      : {
+          kind: 'selected' as const,
+          opportunityId: bonusOpportunityId,
+          resolved: true as const,
+          axis: 'bonus' as const,
+          lanePosition: resolved.bonus.opportunity.lanePosition,
+          operationIndex: resolved.bonus.opportunity.operationIndex,
+          restorationBonuses: orderedSlots(resolved.bonus.opportunity.restorationBonuses),
+          restorationBonusScope: resolved.bonus.opportunity.restorationBonusScope,
+          match: resolved.bonus.group.match,
+        }
+
+  return { skill, bonus }
 }
 
 /** Stable semantic fingerprint for the targets on which a Plan was calculated. */
@@ -182,8 +210,7 @@ export function createPlanningBuildListEntriesHash(
         // changing either changes what this Plan had to achieve and must make
         // an existing Plan a recalculation target (`docs/PLANNER_SPEC.md` 7.5.5).
         intermediateStateSelection: {
-          skill: normalizeSelectedIntermediateState(entry, 'skill'),
-          bonus: normalizeSelectedIntermediateState(entry, 'bonus'),
+          checkpointPin: normalizeCheckpointPinMeaning(entry),
           improvementPreference:
             entry.intermediateStateSelection?.improvementPreference ?? 'planner',
         },

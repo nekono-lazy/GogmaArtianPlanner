@@ -245,6 +245,57 @@ describe('BuildListEntry intermediate state selection', () => {
     )
   })
 
+  it('hashes the whole checkpoint pin pair: the Ideal lane end of an unselected lane in stored slot order', () => {
+    const candidate = twoLaneCandidate()
+    const skill = intermediateOpportunityAt(candidate, 'skill', 1).opportunity
+    const bonus = intermediateOpportunityAt(candidate, 'bonus', 1).opportunity
+    /** The same unordered Ideal multiset with two differing slots swapped. */
+    const withReorderedIdealBonuses = (source: BuildListEntry): BuildListEntry => {
+      const copy = structuredClone(source)
+      const slots = [...copy.candidateSnapshot.finalBonuses]
+      const other = slots.findIndex((slot) => slot.bonusTypeId !== slots[0].bonusTypeId)
+      expect(other).toBeGreaterThan(0)
+      ;[slots[0], slots[other]] = [slots[other], slots[0]]
+      copy.candidateSnapshot.finalBonuses = slots as typeof copy.candidateSnapshot.finalBonuses
+      // Keep the artifact structurally consistent: the last Bonus amendment
+      // observed the same ordered result.
+      const trace = copy.candidateSnapshot.bonusAmendmentTrace ?? []
+      const last = trace[trace.length - 1]
+      if (last) last.restorationBonuses = structuredClone(copy.candidateSnapshot.finalBonuses)
+      expect(validateBuildListEntry(copy).isValid).toBe(true)
+      return copy
+    }
+
+    // A: Skill-only selection - the checkpoint is the selected Skill plus the
+    // exact Ideal Bonus, so reordering the Ideal slots changes the constraint.
+    const skillOnly = entryFor(candidate, { skillOpportunityId: skill.id })
+    expect(createPlanningBuildListEntriesHash([withReorderedIdealBonuses(skillOnly)])).not.toBe(
+      createPlanningBuildListEntriesHash([skillOnly]),
+    )
+
+    // B: Bonus-only selection - the Skill side of the pin is the Candidate's
+    // Ideal Skills.
+    const bonusOnly = entryFor(candidate, { bonusOpportunityId: bonus.id })
+    const otherIdealSkill = structuredClone(bonusOnly)
+    otherIdealSkill.candidateSnapshot.seriesSkillId = 'series_skill.fixture.z'
+    expect(createPlanningBuildListEntriesHash([otherIdealSkill])).not.toBe(
+      createPlanningBuildListEntriesHash([bonusOnly]),
+    )
+
+    // C: both lanes selected - the pair is the two selected states, and the
+    // Candidate's Ideal slot order is no longer part of the checkpoint.
+    const both = entryFor(candidate, { skillOpportunityId: skill.id, bonusOpportunityId: bonus.id })
+    expect(createPlanningBuildListEntriesHash([both])).not.toBe(createPlanningBuildListEntriesHash([skillOnly]))
+    expect(createPlanningBuildListEntriesHash([both])).not.toBe(createPlanningBuildListEntriesHash([bonusOnly]))
+
+    // D: no selection - no checkpoint, so the Candidate Snapshot's unordered
+    // multiset semantics still apply and a slot reorder alone hashes the same.
+    const none = entryFor(candidate)
+    expect(createPlanningBuildListEntriesHash([withReorderedIdealBonuses(none)])).toBe(
+      createPlanningBuildListEntriesHash([none]),
+    )
+  })
+
   it('treats a re-added equivalent Candidate as the same Build List membership', () => {
     const candidate = twoLaneCandidate()
     const skill = intermediateOpportunityAt(candidate, 'skill', 1).opportunity
