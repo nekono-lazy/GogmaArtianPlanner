@@ -87,10 +87,14 @@ export class BuildListService {
    * Replaces one Entry's intermediate state selection and improvement
    * preference.
    *
-   * The Domain validation is the authority for at most one state per lane,
-   * for every id existing on its own lane of the Candidate Snapshot, and for
-   * the pair not being the weapon the user already holds, so an invalid
-   * selection fails closed here rather than reaching the Planner.
+   * The Domain validation is the authority for at most one state per lane
+   * and for every id existing on its own lane of the Candidate Snapshot, so
+   * an invalid selection fails closed here rather than reaching the Planner.
+   * A lane start (position 0) is a legal selection: for an existing Gogma,
+   * both lane starts - or one start beside a lane that is already Ideal - is
+   * the weapon the user holds now, and the Planner treats that compromise
+   * checkpoint as reached at its start; a conversion Route's lane start is
+   * reached once the conversion ran (`docs/PLANNER_SPEC.md` 7.5.2).
    */
   async updateIntermediateStateSelection(
     id: BuildListEntryId,

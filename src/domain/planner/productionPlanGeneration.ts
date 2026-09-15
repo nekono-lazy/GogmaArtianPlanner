@@ -21,6 +21,7 @@ import { createTargetDefinitionHash } from '../buildList'
 import { runPlannerBeamSearch } from './plannerBeamSearch'
 import {
   derivePlannerCheckpointRequirements,
+  entryIntermediateSelection,
   isIntermediatePinHeldAtRouteStart,
 } from './plannerCheckpoints'
 import {
@@ -91,6 +92,65 @@ function normalizeCandidateSnapshot(candidate: BuildCandidate) {
   }
 }
 
+/**
+ * The execution meaning of one selected intermediate state, for the planning
+ * Build List hash (`docs/PLANNER_SPEC.md` 7.5.5).
+ *
+ * An opportunity id alone does not fix what the Planner has to achieve: the
+ * hard constraint is the state the id names - the lane position and the
+ * ending operation the pin gating and Trace Replay use, the exact ordered
+ * five slots and scope a Bonus milestone is verified against, the Series /
+ * Group Skills of a Skill state, and the match the milestone reports. A
+ * structurally valid artifact that changes that payload under the same id
+ * changes the constraint, so the payload is hashed with the id. Slot order is
+ * kept as stored, never sorted: the checkpoint verification is ordered.
+ *
+ * Candidate identity, the deduplication key and the meaning fingerprint stay
+ * untouched. A selected id that does not resolve on its own lane is a
+ * validation failure elsewhere; here it is hashed deterministically as an
+ * unresolved id so the helper never crashes and never treats it as empty.
+ */
+function normalizeSelectedIntermediateState(
+  entry: BuildListEntry,
+  axis: 'skill' | 'bonus',
+) {
+  const selection = entry.intermediateStateSelection
+  const opportunityId =
+    axis === 'skill' ? selection?.skillOpportunityId ?? null : selection?.bonusOpportunityId ?? null
+  if (opportunityId === null) return null
+  const resolved = entryIntermediateSelection(entry)
+  if (axis === 'skill') {
+    const skill = resolved.skill
+    return skill === null || skill.opportunity.id !== opportunityId
+      ? { opportunityId, resolved: false as const }
+      : {
+          opportunityId,
+          resolved: true as const,
+          axis,
+          lanePosition: skill.opportunity.lanePosition,
+          operationIndex: skill.opportunity.operationIndex,
+          seriesSkillId: skill.group.seriesSkillId,
+          groupSkillId: skill.group.groupSkillId,
+          match: skill.group.match,
+        }
+  }
+  const bonus = resolved.bonus
+  return bonus === null || bonus.opportunity.id !== opportunityId
+    ? { opportunityId, resolved: false as const }
+    : {
+        opportunityId,
+        resolved: true as const,
+        axis,
+        lanePosition: bonus.opportunity.lanePosition,
+        operationIndex: bonus.opportunity.operationIndex,
+        restorationBonuses: bonus.opportunity.restorationBonuses.map(
+          ({ bonusTypeId, bonusRankId }) => ({ bonusTypeId, bonusRankId }),
+        ),
+        restorationBonusScope: bonus.opportunity.restorationBonusScope,
+        match: bonus.group.match,
+      }
+}
+
 /** Stable semantic fingerprint for the targets on which a Plan was calculated. */
 export function createPlanningTargetWeaponsHash(
   targetWeapons: readonly TargetWeapon[],
@@ -122,8 +182,8 @@ export function createPlanningBuildListEntriesHash(
         // changing either changes what this Plan had to achieve and must make
         // an existing Plan a recalculation target (`docs/PLANNER_SPEC.md` 7.5.5).
         intermediateStateSelection: {
-          skillOpportunityId: entry.intermediateStateSelection?.skillOpportunityId ?? null,
-          bonusOpportunityId: entry.intermediateStateSelection?.bonusOpportunityId ?? null,
+          skill: normalizeSelectedIntermediateState(entry, 'skill'),
+          bonus: normalizeSelectedIntermediateState(entry, 'bonus'),
           improvementPreference:
             entry.intermediateStateSelection?.improvementPreference ?? 'planner',
         },

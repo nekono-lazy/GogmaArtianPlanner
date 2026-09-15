@@ -14,6 +14,10 @@ import { createValidRngState } from '../../test/fixtures/domainData'
 import type {
   BuildCandidate,
   BuildListEntry,
+  IntermediateBonusOpportunity,
+  IntermediateBonusStateGroup,
+  IntermediateSkillOpportunity,
+  IntermediateSkillStateGroup,
   IntermediateStateOpportunityId,
   IntermediateStateSelection,
 } from '../models/publicTypes'
@@ -164,6 +168,80 @@ describe('BuildListEntry intermediate state selection', () => {
           skillOpportunityId: skill.id,
         }),
       ]),
+    )
+  })
+
+  it('hashes the execution meaning of a selected state, not only its id (Codex review of PR #38)', () => {
+    const candidate = twoLaneCandidate()
+    const bonus = intermediateOpportunityAt(candidate, 'bonus', 1).opportunity
+    const skill = intermediateOpportunityAt(candidate, 'skill', 1).opportunity
+    const entry = entryFor(candidate, { skillOpportunityId: skill.id, bonusOpportunityId: bonus.id })
+    const base = createPlanningBuildListEntriesHash([entry])
+
+    const withSelectedBonus = (
+      mutate: (opportunity: IntermediateBonusOpportunity, group: IntermediateBonusStateGroup) => void,
+    ): BuildListEntry => {
+      const copy = structuredClone(entry)
+      for (const group of copy.candidateSnapshot.intermediateStateGroups ?? []) {
+        if (group.axis !== 'bonus') continue
+        const found = group.opportunities.find(({ id }) => id === bonus.id)
+        if (found) mutate(found, group)
+      }
+      return copy
+    }
+    const withSelectedSkill = (
+      mutate: (opportunity: IntermediateSkillOpportunity, group: IntermediateSkillStateGroup) => void,
+    ): BuildListEntry => {
+      const copy = structuredClone(entry)
+      for (const group of copy.candidateSnapshot.intermediateStateGroups ?? []) {
+        if (group.axis !== 'skill') continue
+        const found = group.opportunities.find(({ id }) => id === skill.id)
+        if (found) mutate(found, group)
+      }
+      return copy
+    }
+
+    // C: the same id, the same unordered five slots, another slot order - the
+    // checkpoint verification is ordered, so the hard constraint changed.
+    const reordered = withSelectedBonus((opportunity) => {
+      const slots = [...opportunity.restorationBonuses]
+      const other = slots.findIndex((slot) => slot.bonusTypeId !== slots[0].bonusTypeId)
+      expect(other).toBeGreaterThan(0)
+      ;[slots[0], slots[other]] = [slots[other], slots[0]]
+      opportunity.restorationBonuses = slots as typeof opportunity.restorationBonuses
+    })
+    expect(reordered.intermediateStateSelection).toEqual(entry.intermediateStateSelection)
+    expect(createPlanningBuildListEntriesHash([reordered])).not.toBe(base)
+    // Unrelated intermediate state metadata leaves the hash alone.
+    const untouched = structuredClone(entry)
+    for (const group of untouched.candidateSnapshot.intermediateStateGroups ?? []) {
+      if (group.axis === 'bonus') group.isDisplaySecondary = !group.isDisplaySecondary
+    }
+    expect(createPlanningBuildListEntriesHash([untouched])).toBe(base)
+
+    // D: lane semantics and the selected Skills move the hash too.
+    expect(createPlanningBuildListEntriesHash([
+      withSelectedBonus((opportunity) => { opportunity.lanePosition += 1 }),
+    ])).not.toBe(base)
+    expect(createPlanningBuildListEntriesHash([
+      withSelectedBonus((opportunity) => { opportunity.operationIndex = (opportunity.operationIndex ?? 0) + 1 }),
+    ])).not.toBe(base)
+    expect(createPlanningBuildListEntriesHash([
+      withSelectedSkill((_, group) => { group.seriesSkillId = 'series_skill.fixture.z' }),
+    ])).not.toBe(base)
+    expect(createPlanningBuildListEntriesHash([
+      withSelectedSkill((_, group) => { group.groupSkillId = null }),
+    ])).not.toBe(base)
+
+    // An id that resolves on no lane is a validation failure, not a crash and
+    // not an empty selection.
+    const unresolved = structuredClone(entry)
+    unresolved.candidateSnapshot.intermediateStateGroups = []
+    expect(validateBuildListEntry(unresolved).isValid).toBe(false)
+    expect(() => createPlanningBuildListEntriesHash([unresolved])).not.toThrow()
+    expect(createPlanningBuildListEntriesHash([unresolved])).not.toBe(base)
+    expect(createPlanningBuildListEntriesHash([unresolved])).not.toBe(
+      createPlanningBuildListEntriesHash([entryFor(candidate)]),
     )
   })
 

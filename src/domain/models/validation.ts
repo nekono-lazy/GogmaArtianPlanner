@@ -1276,9 +1276,12 @@ export function validateBuildCandidate(
 
 /**
  * The selected intermediate states are a hard Planner constraint, so an
- * unknown id, an id of the other lane, an unknown preference, or a pair that
- * names the weapon the user already holds fails closed rather than being
- * ignored (`docs/DATA_MODEL.md` 9.4).
+ * unknown id, an id of the other lane, or an unknown preference fails closed
+ * rather than being ignored (`docs/DATA_MODEL.md` 9.4). A lane start
+ * (position 0) is a legal selection on either lane or both: for an existing
+ * Gogma that names the weapon the user holds now, whose compromise checkpoint
+ * the Planner treats as reached at its start, while a conversion Route's lane
+ * start is reached once the conversion ran (`docs/PLANNER_SPEC.md` 7.5.2).
  *
  * Shared with the Planner's current-input validation: a malformed selection
  * must never reach the Planner, which would otherwise read it as an empty

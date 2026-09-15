@@ -698,3 +698,114 @@ describe('Existing Gogma lane starts held at Planner start', () => {
     expect(result.bestState?.reachedCheckpointByEntryId[entry.id]).toBe(true)
   })
 })
+
+/**
+ * Codex review of PR #38: a milestone's `remainingOperationCount` must count
+ * the physical Steps that really follow it in the settled trace. A prefix
+ * unit another Entry's action silently fast-forwarded never runs, so it must
+ * not be counted as still remaining.
+ */
+describe('Milestone remainingOperationCount under silent fast-forward', () => {
+  /**
+   * Entry A: Reset Skills at 7 (skippable), 8 and 9 on the shared Skill
+   * stream; Entry B: one Reset Skills at 7 whose result is B's Ideal. B's
+   * required unit at 7 runs first, A's skippable unit at 7 fast-forwards, and
+   * A's selected state is reached by its own Reset Skills at 8.
+   */
+  function fastForwardScenario(resultAt7: 'practical' | 'ideal') {
+    const practical = { seriesSkillId: null, groupSkillId: PRACTICAL_GROUP_SKILL }
+    const ideal = { seriesSkillId: IDEAL_SERIES_SKILL_ID, groupSkillId: null }
+    const skillAt = (counter: number) => (counter === 8 || (counter === 7 && resultAt7 === 'practical') ? practical : ideal)
+    const skillsB = skillAt(7)
+    const targetA = orchestrationTarget('target.ff.a')
+    // B's one Reset Skills at 7 is B's Ideal, whatever position 7 yields.
+    const targetB = orchestrationTarget('target.ff.b', resultAt7 === 'practical'
+      ? {
+          idealSkillCondition: { seriesSkillId: null, groupSkillId: PRACTICAL_GROUP_SKILL, matchMode: 'all' },
+          practicalSkillCondition: { seriesSkillId: null, groupSkillId: PRACTICAL_GROUP_SKILL, matchMode: 'all' },
+        }
+      : {})
+    const sourceA = orchestrationSource('owned.ff.a', { restorationBonuses: idealBonuses() })
+    const sourceB = orchestrationSource('owned.ff.b', { restorationBonuses: idealBonuses() })
+    const entryA = orchestrationEntry('entry.ff.a', targetA, {
+      kind: 'existing_gogma_reset_skills',
+      sourceOwnedWeaponId: sourceA.id,
+      operations: [resetSkills(sourceA.id, 7), resetSkills(sourceA.id, 8), resetSkills(sourceA.id, 9)],
+    }, { finalBonuses: idealBonuses() })
+    entryA.candidateSnapshot.bonusAmendmentTrace = []
+    entryA.candidateSnapshot.skillAmendmentTrace = [7, 8, 9].map((counter, operationIndex) => ({
+      operationIndex,
+      operationType: 'reset_skills' as const,
+      ...skillAt(counter),
+    }))
+    entryA.candidateSnapshot.intermediateStateGroups = extractIntermediateStateGroups(entryA.candidateSnapshot, {
+      target: targetA,
+      master: constrainedMaster(),
+      ownedWeapons: [sourceA],
+    })
+    const selected = intermediateOpportunityAt(entryA.candidateSnapshot, 'skill', 2)
+    entryA.intermediateStateSelection = { ...defaultIntermediateStateSelection(), skillOpportunityId: selected.opportunity.id }
+    const entryB = orchestrationEntry('entry.ff.b', targetB, {
+      kind: 'existing_gogma_reset_skills',
+      sourceOwnedWeaponId: sourceB.id,
+      operations: [resetSkills(sourceB.id, 7)],
+    }, { finalBonuses: idealBonuses(), seriesSkillId: skillsB.seriesSkillId })
+    entryB.candidateSnapshot.groupSkillId = skillsB.groupSkillId
+    entryB.candidateSnapshot.bonusAmendmentTrace = []
+    entryB.candidateSnapshot.skillAmendmentTrace = [{ operationIndex: 0, operationType: 'reset_skills', ...skillsB }]
+    const built = orchestrationScenario({
+      targets: [targetA, targetB],
+      entries: [entryA, entryB],
+      ownedWeapons: [sourceA, sourceB],
+      engine: { resetResultAt: () => idealBonuses(), skillResultAt: skillAt },
+    })
+    return { ...built, entryA, entryB, selected }
+  }
+
+  async function expectOneRemainingStep(built: ReturnType<typeof fastForwardScenario>) {
+    const result = await createProductionPlan(built.input, built.dependencies)
+
+    expect(result.termination.status).toBe('completed')
+    expect(result.conflicts).toEqual([])
+    const steps = result.plan?.steps ?? []
+    const skillSteps = steps
+      .filter(({ operationType }) => operationType === 'reset_skills')
+      .map(({ buildListEntryId, debug }) => [buildListEntryId, debug?.startSkillCounter ?? null])
+    // B ran the shared position 7; A's own unit there was fast-forwarded and
+    // never became a Step, so A executes exactly 8 and 9.
+    expect(skillSteps).toEqual([[built.entryB.id, 7], [built.entryA.id, 8], [built.entryA.id, 9]])
+    const milestoneIndex = steps.findIndex((step) => (step.checkpointMilestones ?? []).length > 0)
+    expect(steps[milestoneIndex]?.debug?.startSkillCounter).toBe(8)
+    const [milestone] = steps[milestoneIndex]?.checkpointMilestones ?? []
+    expect(milestone).toMatchObject({
+      buildListEntryId: built.entryA.id,
+      skillOpportunityId: built.selected.opportunity.id,
+      bonusOpportunityId: null,
+    })
+    // Exactly one later Step still progresses A: Reset Skills at 9. The
+    // Candidate's own estimate (3 operations) minus the one executed unit
+    // would have claimed 2.
+    const later = steps.slice(milestoneIndex + 1).filter(
+      ({ operationType, progressedTargetWeaponIds }) =>
+        operationType !== 'reserve_weapon' && progressedTargetWeaponIds?.includes(built.entryA.targetWeaponId),
+    )
+    expect(later).toHaveLength(1)
+    expect(milestone?.remainingOperationCount).toBe(1)
+    expect(built.entryA.candidateSnapshot.estimatedOperationCount - 1).toBe(2)
+  }
+
+  it('A: does not count a prefix unit another Entry fast-forwarded as still remaining', async () => {
+    const built = fastForwardScenario('ideal')
+    expect(built.selected.group.match).toBe('practical')
+    await expectOneRemainingStep(built)
+  })
+
+  it('B: executes the selected later arrival itself when the earlier arrival was fast-forwarded', async () => {
+    const built = fastForwardScenario('practical')
+    // Both position 1 (fast-forwarded) and position 2 (selected) reach the
+    // same Practical Skills; the selection is the later one.
+    expect(built.selected.group.opportunities.map(({ lanePosition }) => lanePosition)).toEqual([1, 2])
+    expect(built.selected.opportunity.lanePosition).toBe(2)
+    await expectOneRemainingStep(built)
+  })
+})

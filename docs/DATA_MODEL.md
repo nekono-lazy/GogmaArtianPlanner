@@ -1360,7 +1360,7 @@ export interface ExpectedPlanState {
 - `rngStateHash`: Base Seed、Gogma Counter、Skill Counterの各KnownValueについて正規化valueとisConfirmedを含み、legacy `counterGate`、source、notes、日時を除外する
 - `normalCountersHash`: id、counter、isConfirmedを含み、観測日時を除外する
 - `ownedWeaponsHash`: 共通項目としてID、kind、武器種、属性、restorationBonusScope、保存中のボーナス5枠順、isProtectedを含む。OwnedWeaponはTargetWeaponを参照しないため、Target関連情報は含めない。巨戟だけseriesSkillId、groupSkillIdを加える。`status` は管理ラベルであり計算に影響しないため、名称、memo、日時と同じく除外する。通常に存在しないSkillへ仮値を設定しない
-- `buildListEntriesHash`: Entry ID、Candidate Snapshot、Target定義Hash、searchStateHash、CalculationContextを含み、派生値のisStale、staleReasons、日時を除外する
+- `buildListEntriesHash`: Entry ID、Candidate Snapshot、途中採用状態の選択（opportunity IDと、そのIDが指すlane位置 / 終端操作index / Skill / exact ordered 5枠 / scope / matchの実行意味）と改善優先、Target定義Hash、searchStateHash、CalculationContextを含み、派生値のisStale、staleReasons、日時を除外する（PLANNER_SPEC 7.5.5）
 
 `ExpectedPlanState` の各hashは1つのPlan内で意味を持つ検証値である。`ownedWeaponsHash`
 はOwnedWeapon IDを含み、`reserve_weapon` の予約IDは

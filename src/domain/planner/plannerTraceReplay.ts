@@ -238,6 +238,21 @@ export function replayPlannerSearchTrace(input: PlannerInput, bestState: Planner
   // never skippable - rather than by a count (`docs/PLANNER_SPEC.md` 7.5.3).
   const executedOperationIndexes = new Map<BuildListEntryId, Set<number>>()
   const executedUnitCounts = new Map<BuildListEntryId, number>()
+  // `remainingOperationCount` of a milestone is the number of later physical
+  // Steps that still progress the Entry (`docs/PLANNER_SPEC.md` 7.5.4). The
+  // settled trace is its only authority: a unit another Entry's action
+  // silently fast-forwarded never appears there, a shared physical action
+  // that progresses several Entries is one Step for each of them, and a
+  // `reserve_weapon` is not a Route operation. The Candidate's
+  // `estimatedOperationCount` counts fast-forwarded units too, so it must not
+  // be used here.
+  const traceRouteOperationCounts = new Map<BuildListEntryId, number>()
+  bestState.trace.forEach((action) => {
+    if (action.kind !== 'route_operation') return
+    action.progressedBuildListEntryIds.forEach((entryId) => {
+      traceRouteOperationCounts.set(entryId, (traceRouteOperationCounts.get(entryId) ?? 0) + 1)
+    })
+  })
   const reachedCheckpointEntryIds = new Set<BuildListEntryId>()
   const pinHeld = (entryId: BuildListEntryId, pinOperationIndex: number | null): boolean =>
     pinOperationIndex === null || (executedOperationIndexes.get(entryId)?.has(pinOperationIndex) ?? false)
@@ -468,7 +483,6 @@ export function replayPlannerSearchTrace(input: PlannerInput, bestState: Planner
           continue
         }
         const selection = entryIntermediateSelection(progressedEntry)
-        const candidate = progressedEntry.candidateSnapshot
         if (!holdsSelectedCheckpointState(runtime.gogmas.get(progressedId) ?? null, progressedEntry)) {
           return fail(
             'checkpoint_state_mismatch',
@@ -484,7 +498,7 @@ export function replayPlannerSearchTrace(input: PlannerInput, bestState: Planner
           bonusOpportunityId: selection.bonus?.opportunity.id ?? null,
           conditionMatch: checkpointConditionMatchFor(progressedEntry),
           remainingOperationCount:
-            candidate.estimatedOperationCount - (executedUnitCounts.get(progressedId) ?? 0),
+            (traceRouteOperationCounts.get(progressedId) ?? 0) - (executedUnitCounts.get(progressedId) ?? 0),
         })
       }
     }

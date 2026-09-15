@@ -1105,7 +1105,12 @@ export interface PlanStepCheckpointMilestone {
 
 - checkpoint到達でOwnedWeaponをreserveしない
 - checkpoint到達でstatusも保護も変更しない
-- checkpoint到達でPlanは止まらない。`remainingOperationCount` 分の後続Stepが必ず残る
+- checkpoint到達でPlanは止まらない。`remainingOperationCount` 分の後続Stepが必ず残る。
+  この値のauthorityは確定済みSearch Traceであり、milestoneを載せたactionより後ろで
+  そのEntryをprogressする `route_operation` の数である。別Entryの操作でsilent
+  fast-forwardされたunitは数えず、shared physical actionは当該Entryにつき1操作、
+  `reserve_weapon` は数えない。Candidateの `estimatedOperationCount` からの引き算は
+  fast-forwardされたunitを未消化扱いするため使わない
 - 従来のreserve semantics（`status = "ideal"`、新規武器は保護あり）は、最終的に
   理想品が完成したときだけ適用する
 - 1つの共有Stepが複数Entryのcheckpointを達成した場合、milestoneはEntryごとに
@@ -1129,6 +1134,15 @@ defence（7.5.6）もこのEntryにはmilestone Stepを要求しない。UIは�
 変えるとhashが変わるので、既存Planは通常のBuild List変更と同じく
 再計算対象になる。一方でBuildListEntry自体はstaleにならない
 （[DATA_MODEL.md](./DATA_MODEL.md) 9.4）。
+
+hashにはopportunity IDだけでなく、そのIDが指すhard constraintの実行意味を正規化して含める:
+Skillなら `lanePosition` / `operationIndex` / groupの `seriesSkillId` / `groupSkillId` / `match`、
+Bonusなら `lanePosition` / `operationIndex` / exact ordered 5枠（sortしない。Trace Replayの
+検証が順序付きのため）/ `restorationBonusScope` / `match`。同じIDのままpayloadが変わる
+structurally-valid artifactでも既存Planが再計算対象になる。未選択laneのIdeal意味はCandidate
+Snapshot（`finalBonuses` / scope / Skills / route）が既に表す。Candidate identityと
+deduplication keyは変更しない。Snapshot上で解決できない選択IDはvalidationの責務であり、
+hash helperは未解決IDとして決定的に扱うだけで、空選択とは読まない。
 
 #### 7.5.6 選択を持つEntryはTargetのrequired Entry
 
