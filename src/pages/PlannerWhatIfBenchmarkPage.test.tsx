@@ -29,7 +29,7 @@ describe('B9 isolated benchmark page', () => {
     expect(api().records()).toEqual([])
     expect(api().sweep.maxCandidateTrialsPerTarget).toEqual([1, 2, 4, 8, 16])
     expect(api().sweep.maxPlannerReruns).toEqual([1, 2, 4, 8, 16, 32])
-    expect(api().environment.engineVersion).toBe('production-rng:c5-e6')
+    expect(api().environment.engineVersion).toBe('production-rng:c5-e7')
     expect(screen.getByText(/UNDECIDED/)).toBeInTheDocument()
     expect(run).not.toHaveBeenCalled()
     view.unmount()

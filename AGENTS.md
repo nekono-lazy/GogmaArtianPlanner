@@ -225,7 +225,7 @@ Dexie separately moves to `DATABASE_SCHEMA_VERSION = 4` for the persisted status
 `AppSettings.schemaVersion = 1`; gameVersion, Master Data version,
 `RngState.schemaVersion = 1`, `CONSTRAINED_ROUTE_POLICY_VERSION`, and
 `supportsSeedSearch = false` remain unchanged. `PRODUCTION_RNG_ENGINE_VERSION` is
-currently `production-rng:c5-e6`. The Normal Artian occurrence-limit correction
+currently `production-rng:c5-e7`. The Normal Artian occurrence-limit correction
 (Production game-verified pool Attack 5 / Element 4 / family 7 2 / Affinity 3)
 changed Production Normal prediction output and moved the Engine version from
 `production-rng:c5-e2` to `production-rng:c5-e3`; the later Melee support
@@ -239,15 +239,13 @@ Normal prediction output and moved it to `production-rng:c5-e5`; the Switch
 Axe Normal Production activation (Switch Axe draws one single pool
 `[6, 4, 7, 8]` whatever its configuration) made the previously unsupported
 Switch Axe Normal prediction input supported, changing Candidate Search route
-availability and Counter Identification support, and moved it to the current
-`production-rng:c5-e6`. None of the four touched
+availability and Counter Identification support, and moved it to
+`production-rng:c5-e6`; the Production Gogma Reset family availability and
+Sharpness/Capacity family limit (RNG Rules), implemented in PR-B, changed
+Gogma Reset prediction output and moved it to the current
+`production-rng:c5-e7`. None of the five touched
 `CURRENT_CALCULATION_APP_SCHEMA_VERSION`; `rngEngineVersion` alone is the
-CalculationContext staleness boundary for all of them. The Production Gogma
-Reset family availability and Sharpness/Capacity family limit (RNG Rules) are
-specified but not implemented, so the runtime is still `production-rng:c5-e6`;
-PR-B implementing them changes Gogma Reset prediction output and will move the
-Engine version to `production-rng:c5-e7`, again without touching
-`CURRENT_CALCULATION_APP_SCHEMA_VERSION`. `DATABASE_SCHEMA_VERSION` stays 4 at the checkpoint boundary and at the lane
+CalculationContext staleness boundary for all of them. `DATABASE_SCHEMA_VERSION` stays 4 at the checkpoint boundary and at the lane
 boundary, while `ExportRoot.schemaVersion` moved to 5 with the checkpoint entity
 shape and to 6 with the lane entity shape. Version 1 BuildCandidate, BuildListEntry, and ProductionPlan
 calculations are incompatible with any later version and must not be reused as current
@@ -500,13 +498,17 @@ pools separate. `ReferenceNormalCandidate.maximumOccurrences` is `2 | 3 | 4 | 5`
 
 The Production Gogma Reset family availability and family limit
 (`docs/RNG_SPEC.md` 6.1.1, `docs/RNG_REFERENCE_AUDIT.md` 14.17) are fixed as the
-Production contract but are **not implemented yet**. The current
-`production-rng:c5-e6` runtime still filters `REFERENCE_GOGMA_RESET_CANDIDATES`
-through Master availability
+Production contract and are implemented by PR-B in the current
+`production-rng:c5-e7` runtime: `productionGogmaResetCandidatesForWeaponAndElement()`
+derives the family set from `gameVerifiedNormalCandidatesForWeaponAndElement()`,
+`buildProductionWeightedGogmaResetPool()` adds the Sharpness/Capacity limit on
+top of the unchanged `buildReferenceWeightedGogmaPool()`, and
+`predictProductionGogmaResetSlotsFromRawValues()` is the one draw path Production
+Reset and Gogma Counter Identification share. Up to `production-rng:c5-e6` the
+runtime filtered `REFERENCE_GOGMA_RESET_CANDIDATES` through Master availability
 (`getBonusDefinitionsForWeapon(master, weaponTypeId, elementId, 'gogma_artian')`)
-and draws with the exact-ID repeat penalty only. PR-B implements the contract
-and moves `PRODUCTION_RNG_ENGINE_VERSION` to `production-rng:c5-e7`; never
-describe the current runtime as `c5-e7` before that.
+and drew with the exact-ID repeat penalty only; never reintroduce that path.
+Production Reset support no longer reads the caller Master.
 
 - The bonus families a Production Gogma Reset may draw are the family set of
   the Production Normal Artian pool of the same `weaponTypeId` + `elementId`
@@ -671,10 +673,12 @@ Trace Replay, and semantic hashes. C5-E2C3 set `PRODUCTION_RNG_ENGINE_VERSION`
 to `production-rng:c5-e2`; the later Normal Artian occurrence-limit correction
 moved it to `production-rng:c5-e3`, the Melee support expansion moved it to
 `production-rng:c5-e4`, the Bow Normal Table A / B correction moved it to
-`production-rng:c5-e5`, and the Switch Axe Normal Production activation moved
-it to the current `production-rng:c5-e6` (see the Normal pool limits, the
-Melee category, the Switch Axe single pool, and the lottery table class under
-RNG Rules). Do not reintroduce caller-supplied or persisted Gate as
+`production-rng:c5-e5`, the Switch Axe Normal Production activation moved
+it to `production-rng:c5-e6`, and the Production Gogma Reset family
+availability and Sharpness/Capacity limit moved it to the current
+`production-rng:c5-e7` (see the Normal pool limits, the Melee category, the
+Switch Axe single pool, the lottery table class, and the Production Gogma
+Reset contract under RNG Rules). Do not reintroduce caller-supplied or persisted Gate as
 Production authority. This runtime integration does not activate the Skill-first
 Identification UI; `supportsSeedSearch` remains `false`.
 

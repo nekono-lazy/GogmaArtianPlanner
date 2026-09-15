@@ -199,11 +199,9 @@ gameVersion、Master Data version、`supportsSeedSearch = false` は維持する
 さらに近接武器Melee support拡張（[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.14）で
 `production-rng:c5-e4` へ、弓のNormal Table A / B分類修正（[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.15）で
 `production-rng:c5-e5` へ、スラッシュアックスのNormal Production activation（[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.16）で
-現在の `production-rng:c5-e6` へ更新した。いずれの修正もappSchemaVersionを上げず、`rngEngineVersion` の差だけで
+`production-rng:c5-e6` へ、巨戟Reset Bonusesのfamily availability / 斬れ味・装填family上限2（[RNG_SPEC.md](./RNG_SPEC.md) 6.1.1）の
+実装（PR-B）で現在の `production-rng:c5-e7` へ更新した。いずれの修正もappSchemaVersionを上げず、`rngEngineVersion` の差だけで
 旧BuildCandidate / BuildListEntry / ProductionPlanを `calculation_context_changed` にする。
-巨戟Reset Bonusesのfamily availability / 斬れ味・装填family上限2（[RNG_SPEC.md](./RNG_SPEC.md) 6.1.1）は
-仕様確定済み・未実装であり、現在のruntime versionは `production-rng:c5-e6` のままである。これを実装する後続PR-Bで
-`production-rng:c5-e7` へ更新し、同じくappSchemaVersionを上げず `rngEngineVersion` の差だけで旧結果を失効させる。
 Table A / BはNormal Counterを分けない: `NormalArtianCounter` のID、persisted shape、Counter semanticsは変更していない。
 スラッシュアックスのsupport activationでも `weapon.switch_axe:8` の1本のCounterのままであり、
 `NormalArtianCounter` persisted shape / DB schemaは変更していない。

@@ -2,11 +2,17 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RestorationBonusSet } from '../../models/publicTypes'
 import { loadMasterData } from '../../master/loadMasterData'
 import type { WeaponBonusDefinitionsMasterSubset } from '../../master/masterSelectors'
-import { gameVerifiedGogmaCounterIdentificationVector as live } from '../../../test/fixtures/gameVerifiedGogmaVectors'
+import {
+  gameVerifiedGogmaCounterIdentificationVector as live,
+  gameVerifiedProductionGogmaResetVectors,
+} from '../../../test/fixtures/gameVerifiedGogmaVectors'
 import { ProductionRngEngine } from '../production/productionRngEngine'
 import { toReferenceAttributeForce, toReferenceWeaponType } from '../production/referenceAdapters'
-import { predictGameAdjustedGogmaReset } from '../production/gogmaPrediction'
-import { referenceGogmaIdFromRestorationBonus } from '../production/referenceGogmaBonuses'
+import { predictProductionGogmaReset } from '../production/gogmaPrediction'
+import {
+  REFERENCE_GOGMA_RESET_CANDIDATES,
+  referenceGogmaIdFromRestorationBonus,
+} from '../production/referenceGogmaBonuses'
 import { identifyGogmaCounter } from './gogmaCounterIdentification'
 import {
   GOGMA_IDENTIFICATION_ACTIVE_GATE_REPRESENTATIVE,
@@ -76,11 +82,11 @@ describe('Gogma Counter Identification live Production parity', () => {
       expect(representative.map(referenceGogmaIdFromRestorationBonus)).toEqual(
         live.referenceIds[offset],
       )
-      expect(representative).toEqual(predictGameAdjustedGogmaReset({
+      expect(representative).toEqual(predictProductionGogmaReset({
         ...shared,
         baseSeed: live.baseSeed,
         counterGate: live.actualCounterGate,
-      }, master).bonuses)
+      }).bonuses)
     }
   })
 
@@ -98,11 +104,11 @@ describe('Gogma Counter Identification live Production parity', () => {
     const expected = engine.predictGogmaBonus(shared)
     expect(GOGMA_IDENTIFICATION_ACTIVE_GATE_REPRESENTATIVE).toBe(35)
     for (const counterGate of [36, 54, 200]) {
-      expect(predictGameAdjustedGogmaReset({
+      expect(predictProductionGogmaReset({
         ...shared,
         baseSeed: live.baseSeed,
         counterGate,
-      }, master).bonuses).toEqual(expected)
+      }).bonuses).toEqual(expected)
     }
   })
 })
@@ -123,6 +129,9 @@ describe('Gogma Counter Identification kernel', () => {
       { weaponTypeId: 'weapon.bow', elementId: 'element.fire', baseSeed: 51_231_782 },
       { weaponTypeId: 'weapon.long_sword', elementId: 'element.none', baseSeed: 12_345_678 },
       { weaponTypeId: 'weapon.hammer', elementId: 'element.paralysis', baseSeed: 51_231_782 },
+      { weaponTypeId: 'weapon.switch_axe', elementId: 'element.none', baseSeed: 51_231_782 },
+      { weaponTypeId: 'weapon.bow', elementId: 'element.poison', baseSeed: 51_231_782 },
+      { weaponTypeId: 'weapon.light_bowgun', elementId: 'element.fire', baseSeed: 12_345_678 },
     ] as const
     for (let sample = 0; sample < 30; sample += 1) {
       const scenario = scenarios[sample % scenarios.length]!
@@ -243,12 +252,13 @@ describe('Gogma Counter Identification kernel', () => {
     await identifyGogmaCounter(input(live.observations.slice(0, 1)), engine)
     expect(support).toHaveBeenCalledOnce()
 
+    // The Master subset is not Reset availability authority: an empty one
+    // changes neither support nor the identified Counter.
     await expect(identifyGogmaCounter({
       ...input(),
       master: { weaponTypes: [], elements: [], bonusTypes: [], weaponBonusDefinitions: [] },
-    }, new ProductionRngEngine())).rejects.toMatchObject({
-      code: 'unsupported_input',
-      unsupportedReason: 'master_data_unavailable',
+    }, new ProductionRngEngine())).resolves.toMatchObject({
+      matches: [{ startGogmaCounter: 55 }],
     })
     for (const unsupported of [
       { weaponTypeId: 'weapon.unknown' },
@@ -270,6 +280,41 @@ describe('Gogma Counter Identification kernel', () => {
     await expect(identifyGogmaCounter(input(), fatalEngine)).rejects.toThrow(
       'unexpected support failure',
     )
+  })
+
+  it('identifies Switch Axe element.none Counter 55 from its 2026-09-15 game-observed Reset', async () => {
+    const vector = gameVerifiedProductionGogmaResetVectors.find(({ evidence }) => evidence === 'switch_axe_none_draws_element')!
+    await expect(identifyGogmaCounter({
+      ...input([vector.bonuses], 50, 65),
+      weaponTypeId: vector.weaponTypeId,
+      elementId: vector.elementId,
+    }, new ProductionRngEngine())).resolves.toEqual({
+      matches: [{ startGogmaCounter: 55 }],
+      searchedCounterRange: { startInclusive: 50, endInclusive: 65 },
+      isTruncated: false,
+    })
+  })
+
+  it('shares the Production Reset draw semantics, including the Sharpness/Capacity family limit', async () => {
+    const engine = new ProductionRngEngine()
+    for (const vector of gameVerifiedProductionGogmaResetVectors) {
+      const observed = await identifyGogmaCounter({
+        ...input([vector.bonuses], vector.gogmaCounter, vector.gogmaCounter),
+        weaponTypeId: vector.weaponTypeId,
+        elementId: vector.elementId,
+      }, engine)
+      expect(observed.matches).toEqual([{ startGogmaCounter: vector.gogmaCounter }])
+    }
+    // Hammer Paralysis Counter 104: the exact-ID-only result is not a Production result there.
+    const limit = gameVerifiedProductionGogmaResetVectors.find(({ evidence }) => evidence === 'sharpness_capacity_family_limit_two')!
+    if (limit.exactIdOnlyReferenceIds === null) throw new Error('Counter 104 fixture must record the exact-ID-only result')
+    const exactIdOnly = limit.exactIdOnlyReferenceIds.map((referenceId) =>
+      REFERENCE_GOGMA_RESET_CANDIDATES.find((entry) => entry.referenceId === referenceId)!.bonus) as unknown as RestorationBonusSet
+    await expect(identifyGogmaCounter({
+      ...input([exactIdOnly], limit.gogmaCounter, limit.gogmaCounter),
+      weaponTypeId: limit.weaponTypeId,
+      elementId: limit.elementId,
+    }, engine)).resolves.toMatchObject({ matches: [] })
   })
 
   it('preserves typed cancellation', async () => {
