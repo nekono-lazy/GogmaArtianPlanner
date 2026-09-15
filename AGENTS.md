@@ -242,7 +242,12 @@ Switch Axe Normal prediction input supported, changing Candidate Search route
 availability and Counter Identification support, and moved it to the current
 `production-rng:c5-e6`. None of the four touched
 `CURRENT_CALCULATION_APP_SCHEMA_VERSION`; `rngEngineVersion` alone is the
-CalculationContext staleness boundary for all of them. `DATABASE_SCHEMA_VERSION` stays 4 at the checkpoint boundary and at the lane
+CalculationContext staleness boundary for all of them. The Production Gogma
+Reset family availability and Sharpness/Capacity family limit (RNG Rules) are
+specified but not implemented, so the runtime is still `production-rng:c5-e6`;
+PR-B implementing them changes Gogma Reset prediction output and will move the
+Engine version to `production-rng:c5-e7`, again without touching
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION`. `DATABASE_SCHEMA_VERSION` stays 4 at the checkpoint boundary and at the lane
 boundary, while `ExportRoot.schemaVersion` moved to 5 with the checkpoint entity
 shape and to 6 with the lane entity shape. Version 1 BuildCandidate, BuildListEntry, and ProductionPlan
 calculations are incompatible with any later version and must not be reused as current
@@ -493,6 +498,77 @@ contents, `predictReferenceNormalRaw()`, or the reference golden vectors to matc
 the game, and never let the Production pool fall back to them. Keep the two
 pools separate. `ReferenceNormalCandidate.maximumOccurrences` is `2 | 3 | 4 | 5`.
 
+The Production Gogma Reset family availability and family limit
+(`docs/RNG_SPEC.md` 6.1.1, `docs/RNG_REFERENCE_AUDIT.md` 14.17) are fixed as the
+Production contract but are **not implemented yet**. The current
+`production-rng:c5-e6` runtime still filters `REFERENCE_GOGMA_RESET_CANDIDATES`
+through Master availability
+(`getBonusDefinitionsForWeapon(master, weaponTypeId, elementId, 'gogma_artian')`)
+and draws with the exact-ID repeat penalty only. PR-B implements the contract
+and moves `PRODUCTION_RNG_ENGINE_VERSION` to `production-rng:c5-e7`; never
+describe the current runtime as `c5-e7` before that.
+
+- The bonus families a Production Gogma Reset may draw are the family set of
+  the Production Normal Artian pool of the same `weaponTypeId` + `elementId`
+  (Normal lottery ID 6 attack, 4 element, 7 sharpness_capacity, 8 affinity),
+  expanded to the Gogma rank candidates in the fixed reference order (Attack
+  II / III / EX, Affinity II / III / EX, Element II / EX, Sharpness/Capacity
+  base / EX). Only the family set is shared: never reuse the Normal seed,
+  Normal Counter, or Normal `maximumOccurrences`, and in particular never apply
+  Normal Affinity 3 to Gogma. The draw stays Gogma seed / Gogma Counter /
+  10-step block / candidate order / exact-ID repeat penalty.
+- The Bow Table A / B split applies: Table A (Fire / Water / Thunder / Ice /
+  Dragon / Blast) draws Attack / Element / Affinity, Table B (none / Poison /
+  Paralysis / Sleep) draws Attack / Affinity. Switch Axe draws its single pool
+  families Attack / Element / Sharpness / Affinity whatever its configuration,
+  `element.none` included.
+- `WeaponBonusDefinition` plus `ElementMaster.allowsElementBonus` is never the
+  Production Gogma Reset family authority: Bow Poison has
+  `allowsElementBonus = true` yet draws no Element, and Switch Axe
+  `element.none` has `allowsElementBonus = false` yet draws Element.
+- Production adds exactly one family limit: once reference IDs 6 and 10
+  together fill two slots of one Reset result, both leave the pool. Never add
+  explicit Attack / Affinity / Element family limits: Gogma Affinity 5 is
+  game-observed, Element is capped at 4 (II x2 + EX x2) by the exact-ID repeat
+  penalty alone, and Attack gets no additional family limit because a Reset
+  result has only five slots.
+- The Gogma exact-ID repeat penalty (non-EX candidates 100 -> 50 -> 0, EX
+  candidates 100 -> 20 -> 0, counted per reference ID) stays for both Reset
+  and Keep.
+- Keep is unchanged: it preserves each slot's family and position, rerolls the
+  tier within the family, and uses the exact-ID repeat penalty. Never add the
+  family availability filter or the Sharpness/Capacity limit to Keep. A Keep
+  whose current layout holds three or more `sharpness_capacity` slots is
+  unverified: do not make it unsupported and do not enforce a limit of two on it.
+- The GARP v0.9.4 parity authority - `REFERENCE_GOGMA_RESET_CANDIDATES`,
+  `buildReferenceWeightedGogmaPool`, `predictReferenceGogmaReset`, and the
+  reference golden vectors and tests - reproduces the exact-ID repeat penalty
+  only and is never rewritten to match the game. The Normal family availability
+  and the Sharpness/Capacity limit are Production-only corrections.
+- Gogma Counter Identification uses the same Production candidate availability
+  and weighted draw semantics as Production Reset; never give it a separate
+  candidate table.
+- Provenance is layered. Directly game-verified at Base Seed 51231782 on
+  2026-09-15: Bow Poison drawing no Element (Gogma Counters 55 / 179), Switch
+  Axe `element.none` drawing Element (55), the Sharpness/Capacity limit of two
+  (primary evidence Hammer Paralysis 104; Counter 94 is a supporting
+  observation the contract does not depend on), Affinity 4 and 5 (Hammer Paralysis 160, Bow
+  Poison 179), Element II x2 + EX x2 (Lance Dragon 197), and five consecutive
+  Keeps matching the current Keep model (Dual Blades Dragon 55..59). Bow
+  Paralysis / Sleep use Table B by applying the Normal classification, not by
+  a Gogma observation; every other unobserved weapon type / element condition,
+  and the Sharpness/Capacity limit outside Hammer Paralysis, is category-level
+  Production adoption. Never write that every weapon or element was
+  game-verified for Gogma Reset.
+- Production-usable restoration bonus definitions are the product of the
+  Master weapon type / scope definitions and the Production family
+  availability. The specification change (PR-A) changes neither
+  `getBonusDefinitionsForWeapon()`, the Master JSON, `allowsElementBonus`, nor
+  Master `dataVersion`. PR-C adds a composite availability selector that keeps
+  Master independent of the Production RNG layer, for the Owned Weapon editor,
+  Target editor, Target compromise editor, entity validation, Identification
+  Wizard, and new entity drafts.
+
 `LotteryMaster` is provisional.
 
 Do not force reference-verified or game-verified RNG behavior to fit the provisional `LotteryMaster` schema. If real analysis requires a different representation, update the specification before changing the production model.
@@ -500,9 +576,14 @@ Do not force reference-verified or game-verified RNG behavior to fit the provisi
 Do not promote reference-verified behavior to game-verified merely because it
 matches the reference implementation. The following remain unverified:
 
-- Bow Sharpness/Ammo family behavior
-- LBG/HBG Element family behavior
-- Element bonus behavior for elementless Gogma weapons
+- Gogma Reset family availability for weapon type / element conditions not
+  observed directly (category-level adoption of the Production Normal pool
+  family set; see the Production Gogma Reset contract above)
+- A Keep Bonuses whose current bonuses hold a family outside the weapon's
+  Production family availability (for example Bow Sharpness/Ammo, LBG/HBG
+  Element, or Element on Bow Table B)
+- A Keep Bonuses whose current layout holds three or more
+  `sharpness_capacity` slots
 - 栄光の誉れ
 - 祝祭の巡り
 - Persisted Counter advancement while Counter Gate is below threshold
@@ -2827,7 +2908,17 @@ Restoration bonus availability is selected from Master Data using all of:
 - Element
 - `ArtianBonusScope`
 
-Do not infer availability from ID string patterns. Elementless weapons cannot use Element Bonus. Light Bowgun and Heavy Bowgun cannot use Element Bonus regardless of element.
+Do not infer availability from ID string patterns. The current Master selector
+excludes Element Bonus when `ElementMaster.allowsElementBonus` is false and for
+Light / Heavy Bowgun, but that exclusion is Master data, not the game's lottery
+availability. Production availability is decided per weapon type x lottery
+table (`docs/RNG_SPEC.md` 6.1.1 / 6.3.1): Switch Axe `element.none` can hold
+Element Bonus in the game, Bow Poison / Paralysis / Sleep do not draw it, and
+Light Bowgun and Heavy Bowgun draw no Element Bonus regardless of element.
+Production-usable definitions are the product of the Master weapon type / scope
+definitions and that family availability; PR-C aligns UI and validation through
+a composite selector. Until then the current UI / validation keeps the
+`allowsElementBonus` exclusion, and it must not be described as a game rule.
 
 The project-owner-confirmed semantic normal-to-Gogma Bonus Type mapping is:
 

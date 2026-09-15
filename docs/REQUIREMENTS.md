@@ -232,7 +232,7 @@ Plannerの操作可否、Search Route eligibility、Target Satisfactionを決定
 
 通常アーティアはレア8だけを登録でき、`normal_artian` scopeの復元ボーナス5枠を保持し、シリーズ／グループスキルとstatusを持たない。巨戟アーティアは、変換直後から最初のBonus amendmentまでは継承した `normal_artian` scopeの5枠、その後は `gogma_artian` scopeの5枠を保持できる。1本の5枠内でscopeを混在させない。レア度選択UIは持たない。通常／巨戟の両方で保護を設定でき、保護中の通常アーティアを自動計画の巨戟化元にしない。
 
-無属性武器では通常／巨戟とも属性強化を利用できない。ライト／ヘビィボウガンの属性強化不可ルールも維持し、ElementとWeaponBonusDefinitionのMasterから選択肢を決定する。
+復元ボーナスの選択肢は、Masterの武器種・scope定義（WeaponBonusDefinition）と、Production上で実際に抽選され得るbonus family（武器種 × 抽選テーブル区分、[RNG_SPEC.md](./RNG_SPEC.md) 6.1.1 / 6.3.1）の積として決める方針とする。`ElementMaster.allowsElementBonus` 単独ではゲームの抽選availabilityを表現できない。例えばスラッシュアックスの無属性構成は属性強化を持ち得、弓の毒・麻痺・睡眠は属性強化を抽選しない。ライト／ヘビィボウガンは属性にかかわらず属性強化を抽選しない。現行実装のUI / Validationは引き続き `allowsElementBonus` による除外（無属性では通常／巨戟とも属性強化を利用できない）とライト／ヘビィボウガンの属性強化不可を使っており、複合availabilityへの移行は後続PR-Cで行う。
 
 手動で新規登録する巨戟アーティアの初期値は `unclassified` かつ保護OFFである。Plannerが
 Candidateを確保する場合は、Practicalが保護OFF、Idealが保護ONで登録される。statusと保護は
@@ -854,6 +854,8 @@ Production v1 adapterがpersisted exact Gateを要求せずactive representative
 
 スラッシュアックスの通常アーティア復元ボーナス抽選を実機検証し（Base Seed 51231782、火属性構成と全部別々の属性パーツ構成のCounter 0比較、reloadなしのCounter 0 → 1連続作成）、パーツ構成に依存しないsingle pool `[6, 4, 7, 8]`（基礎攻撃力強化 / 属性強化 / 斬れ味強化 / 会心率強化）としてProduction Normal Prediction / Counter Identification / Candidate SearchのNormal routeで利用可能にした変更も、以前unsupportedだったNormal Prediction inputがsupportedになりCandidate SearchのRoute availabilityとCounter Identification supportが変わるobservable Production RNG semantics changeであり、`PRODUCTION_RNG_ENGINE_VERSION` を `production-rng:c5-e6` へ更新した（[RNG_SPEC.md](./RNG_SPEC.md) 6.3.1 / 9.12、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.16）。結果としてv1のレア8通常アーティアPrediction / Counter Identificationのweapon coverageは14武器種すべてになるが、verification provenanceは一様ではない: 弓 / ライト・ヘビィボウガン / Melee共通10種 / スラッシュアックス独立という構造を保ち、スラッシュアックスをMelee共通10種へ統合しない。スラッシュアックスのpool membership、構成非依存、Counter 0 → 1系列は直接実機観測であり、Attack 5 / Element 4 / Sharpness 2 / Affinity 3の上限境界はcategory-level Production adoptionである。Identification Domainの `table_a` / `table_b` はスラッシュアックスでも属性あり / 無属性の観測区分として残るが、両区分が同じsingle poolを参照するadapter表現であり、ゲーム上2つのtableがある意味ではない。Counterは `weapon.switch_axe:8` の1本のみで、この変更でも `CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、Master dataVersion、`ExportRoot.schemaVersion`、`NormalArtianCounter` persisted shape、reference parity poolは変更しない。
 
+巨戟アーティアのReset Bonuses / Keep Bonusesを2026-09-15に追加実機検証し（Base Seed 51231782）、Production Gogma Resetの契約を次のとおり確定した（[RNG_SPEC.md](./RNG_SPEC.md) 6.1.1、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.17）。候補となる復元ボーナスfamilyは、Masterの `WeaponBonusDefinition` + `ElementMaster.allowsElementBonus` ではなく、同じ武器種・属性のProduction通常アーティアpoolのfamily集合で決める（弓のテーブルA / B、スラッシュアックスのsingle poolを含む）。共有するのはfamily集合だけで、通常アーティアのseed、Counter、抽選上限は流用しない。1回のReset結果内で斬れ味・装填強化familyは合計2枠までとし、基礎攻撃力強化 / 会心率強化 / 属性強化には明示family上限を設けない（会心率強化5枠と属性強化4枠が実在する）。exact-ID repeat penaltyとKeepの契約（slot familyと位置を保持しtierだけ再抽選）は変更せず、GARP v0.9.4 reference parity（候補表、weighted draw、reference golden / tests）も変更しない。Gogma Counter IdentificationはProduction Resetと同じavailabilityとweighted drawを共有する。弓の毒、スラッシュアックスの無属性構成、ハンマー麻痺での斬れ味・装填2枠上限、会心率4 / 5枠、槍龍の属性強化4枠、双剣龍の連続Keepは直接実機観測であり、弓の麻痺・睡眠のfamily availability、未観測の武器種・属性、ハンマー麻痺以外への斬れ味・装填上限の適用はcategory-level Production adoptionである。斬れ味・装填familyを3枠以上currentに持つKeepは未確認のまま扱う。この確定は仕様変更のみであり、現在のruntimeは `production-rng:c5-e6` のままである。Production Gogma Reset（およびGogma Counter Identification）へ実装する後続PR-Bで、Prediction outputが変わるobservable Production RNG semantics changeとして `production-rng:c5-e7` へ更新する。`CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、`ExportRoot.schemaVersion`、`RngState.schemaVersion`、`supportsSeedSearch`、PRNG、seed derivation、10-step block、Counter semanticsは変更しない。所持武器・目標武器の選択肢とValidationをこのavailabilityへ揃える変更は後続PR-Cで行う。
+
 ---
 
 ## 33. 詳細表示とデバッグモード
@@ -1006,7 +1008,7 @@ RNGの実データやアルゴリズムが未確定の段階では、推測値�
 
 本書および参照する詳細仕様書を、初期版実装のv1基準とする。実装中に意味変更が必要になった場合は、コードだけで吸収せず該当仕様書を更新して変更理由を記録する。
 
-conversionのNormal +0 / Skill +1 / Gogma +0、bonus継承、初回Skillはgame-verified（実機確認済み）である。create/reset/keepのstream進行、Keep family保持はreference-verifiedであり、本書の正式製品契約として採用するが、全weapon、attribute、game versionでgame-verifiedという意味ではない。BowのSharpness/Ammo family、LBG/HBGのElement family、elementless GogmaのElement bonus、栄光の誉れ、祝祭の巡り、Gate未満の保存Counter進行、normal-scope current bonusesからのKeep結果の実機一致はunverified（未確認）のため推測固定しない。`gogma_artian` scopeのRank Iは実機確認済みではなく（かつての確認は巨戟化直後のnormal-scope状態の誤認）、Masterから除外した。Interface、Capability、Fake Engine、Fixtureの境界を維持する。
+conversionのNormal +0 / Skill +1 / Gogma +0、bonus継承、初回Skillはgame-verified（実機確認済み）である。create/reset/keepのstream進行、Keep family保持はreference-verifiedであり、本書の正式製品契約として採用するが、全weapon、attribute、game versionでgame-verifiedという意味ではない。直接観測していない武器種・属性におけるGogma Reset family availability（Production通常アーティアpoolのfamily集合からのcategory-level adoption、[RNG_SPEC.md](./RNG_SPEC.md) 6.1.1）、武器種のProduction family availability外のfamilyをcurrentに持つKeep、斬れ味・装填familyを3枠以上currentに持つKeep、栄光の誉れ、祝祭の巡り、Gate未満の保存Counter進行、normal-scope current bonusesからのKeep結果の実機一致はunverified（未確認）のため推測固定しない。`gogma_artian` scopeのRank Iは実機確認済みではなく（かつての確認は巨戟化直後のnormal-scope状態の誤認）、Masterから除外した。Interface、Capability、Fake Engine、Fixtureの境界を維持する。
 
 Practical同士の優劣判定は将来仕様とし、v1では実装しない。
 

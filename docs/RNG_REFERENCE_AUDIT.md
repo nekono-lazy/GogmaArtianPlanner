@@ -501,6 +501,15 @@ Keepした実ゲーム結果は `[8, 13, 16, 11, 11]` であり、C3 `predictRef
 Keepはslot family固定・family内tier再抽選のままとし、未確認の使用不能family current inputへの
 filter/retry/replacementは追加しない。
 
+訂正（2026-09-15、14.17）: 上記5条件は、Master availability filterでも、同じweapon / elementの
+Production Normal pool family集合によるfilterでも同じ結果になる。その後のBow / 毒とSwitch Axe /
+`element.none` の直接実測により、Master availability（`WeaponBonusDefinition` +
+`ElementMaster.allowsElementBonus`）を未観測のweapon / elementへ一般化する契約は誤りと確認された。
+Production Gogma Reset family availabilityのauthorityはProduction Normal pool family集合へ置き換え、
+さらに `sharpness_capacity` family上限2を加える（[RNG_SPEC.md](./RNG_SPEC.md) 6.1.1）。pre-draw filter
+mechanism（候補順維持、retry / 置換なし）とKeep parityは変わらない。現行runtime（`production-rng:c5-e6`）は
+本節のMaster availability filterのままであり、PR-Bで実装する。
+
 参照Reset/Keep poolにAttack/Affinity/Elementのrank Iは存在しない。参照上、巨戟化直後は通常tierをそのまま持ち、rank Iへ変換しない。
 
 訂正（normal-scope Keep仕様訂正）: かつてプロジェクトオーナーの実機確認として
@@ -935,6 +944,108 @@ category-level adoptionの根拠は次のcategory-level evidenceである。
 
 ---
 
+### 14.17 Gogma Reset family availability / family上限 / Keep実機検証（2026-09-15）
+
+監査日: 2026-09-15 (Asia/Tokyo)
+
+本節は仕様確定（PR-A）の記録である。src、test / fixture、Master JSON、DB / persistence schema、`PRODUCTION_RNG_ENGINE_VERSION` は変更していない。Production RNGへの実装はPR-B、UI / Validationへの反映はPR-Cで行う。正式契約は [RNG_SPEC.md](./RNG_SPEC.md) 6.1.1 である。
+
+**背景**
+
+- 現行Production Gogma Reset（`production-rng:c5-e6`）は `getBonusDefinitionsForWeapon(master, weaponTypeId, elementId, 'gogma_artian')` のMaster availabilityで `REFERENCE_GOGMA_RESET_CANDIDATES` をpre-draw filterし（10.4）、weighted drawはGARP v0.9.4 parityの `weight = max(0, 100 - exactIdOccurrenceCount * repeatPenalty)` だけを使う。family / category単位の上限は持たない
+- 10.4の5条件（Bow火 / Bow none / LBG火 / HBG火 / Long Sword none）はMaster availabilityで説明できたが、Master availabilityを未観測のweapon / elementへ一般化してよいことは直接確認していなかった
+
+**provenance**
+
+- Date: 2026-09-15
+- Time zone: Asia/Tokyo
+- Observation source: GogmaArtianPlanner user live-game observation
+- Base Seed: 51231782
+- Counter位置: Bow / 毒 C55、Switch Axe / 全パーツ別属性相当（Domain `element.none`）C55、Hammer / 麻痺 C64 / C79 / C94 / C103 / C104 / C105 / C129 / C154 / C159 / C160 / C161、Bow / 毒 C179、Lance / 龍 C197、Dual Blades / 龍 Keep C55..C59
+- 本節の仕様根拠として5枠値を記録するのは下表の観測である。上記Counter位置のうち下表にない補助観測は位置だけを記録し、5枠値は転記していない
+
+**仕様根拠とした観測（reference ID順 = 画面slot順）**
+
+Reset:
+
+| 条件 | Counter | 観測5枠 | reference IDs | 現行model（c5-e6） | 新Production model | 根拠とする事項 |
+|---|---:|---|---|---|---|---|
+| Bow / 毒 | 55 | Affinity EX / Attack EX / Attack II / Attack III / Affinity II | `[16, 15, 8, 12, 9]` | `[9, 8, 11, 14, 12]` 不一致 | 一致 | Table BにElement familyがない |
+| Switch Axe / none | 55 | Sharpness base / Element EX / Affinity II / Attack II / Sharpness base | `[6, 14, 9, 8, 6]` | `[13, 9, 6, 9, 8]` 不一致 | 一致 | single poolにElement familyがある |
+| Hammer / 麻痺 | 94 | Attack III / Sharpness base / Sharpness EX / Attack II / Attack EX | `[12, 6, 10, 8, 15]` | `[12, 6, 10, 8, 13]` 不一致 | 一致 | 補助観測（上限2と矛盾しない裏付け。仕様根拠はC104） |
+| Hammer / 麻痺 | 104 | Sharpness base / Sharpness base / Affinity EX / Attack II / Affinity III | `[6, 6, 16, 8, 13]` | `[6, 6, 8, 10, 8]` 不一致 | 一致 | `sharpness_capacity` family上限2（primary evidence） |
+| Hammer / 麻痺 | 160 | Affinity EX / Affinity II / Affinity EX / Element EX / Affinity III | `[16, 9, 16, 14, 13]` | 一致 | 一致 | Gogma ResetでAffinity 4枠 |
+| Bow / 毒 | 179 | Affinity EX / Affinity II / Affinity II / Affinity III / Affinity III | `[16, 9, 9, 13, 13]` | `[14, 9, 15, 11, 8]` 不一致 | 一致 | Gogma ResetでAffinity 5枠 |
+| Lance / 龍 | 197 | Element II / Affinity III / Element EX / Element II / Element EX | `[11, 13, 14, 11, 14]` | 一致 | 一致 | Element 4枠（II×2 + EX×2） |
+
+Keep（Dual Blades / 龍、current family layout Element / Element / Element / Element / Sharpness）:
+
+| Counter | reference IDs | 現行Keep model |
+|---:|---|---|
+| 55 | `[14, 14, 11, 11, 6]` | 一致 |
+| 56 | `[14, 14, 11, 11, 6]` | 一致 |
+| 57 | `[11, 14, 14, 11, 10]` | 一致 |
+| 58 | `[11, 14, 11, 14, 10]` | 一致 |
+| 59 | `[11, 11, 14, 14, 6]` | 一致 |
+
+- 「現行model」列はrepositoryの現行 `predictGameAdjustedGogmaReset()`（Master availability filter + exact-ID repeat penalty）、「新Production model」列はProduction Normal pool family集合によるpre-draw filter + exact-ID repeat penalty + `sharpness_capacity` family上限2を、同じPRNG / Gogma seed derivation / 10-step blockへ適用した検算値である。Keepは現行 `predictReferenceGogmaKeep()` の検算値である。検算はrepository外のscratch harnessで既存関数を呼び出して行い、repositoryは変更していない
+- Hammer / 麻痺 C104（`sharpness_capacity` family上限2のprimary evidence）: slot 1..2 `[6, 6]` で `sharpness_capacity` が2枠に達する。exact-ID repeat penaltyだけのmodel（現行 / GARP parity）ではID 6はweight 0になるがID 10のweightが残るため `[6, 6, 8, 10, 8]` となる。実ゲーム `[6, 6, 16, 8, 13]` は、2枠到達時点でID 6とID 10の両candidateをpoolから除外するmodelと一致した。slot 1..2は同一ID 6（Sharpness base）の2枠であり、rank転記の解釈に依存せずfamily 2枠到達を示すため、`sharpness_capacity` family上限2のProduction契約はC104単独で確定する
+- Hammer / 麻痺 C94（補助観測）: 5枠値は今回の観測入力で転記された `[12, 6, 10, 8, 15]`（slot 3 = Sharpness EX / ID 10）であり、repository内に独立した既存記録はない。この転記値ではslot 1..4 `[12, 6, 10, 8]` で `sharpness_capacity` が2枠に達し、上限なしmodelはslot 5でID 13、上限2 modelはID 15を引き、実ゲームは15だった。C104の契約と矛盾しない裏付けとして記録するが、上限2の仕様根拠をC94へ依存させない
+- Hammer / 麻痺 C160（Affinity 4枠）とBow / 毒 C179（Affinity 5枠）により、Normal Affinity上限3をGogma Resetへ適用するmodelは直接反証される
+- Lance / 龍 C197はElement II×2 + EX×2の4枠が実在することを示す。Element candidateはID 11 / 14の2つだけで、exact-ID repeat penaltyにより各2個でweight 0になるため、明示family上限なしで実効最大4となる
+- Keep 5件は、少なくとも今回のlayoutではElement II×3 + EX×1やII×1 + EX×3にならず、II×2 + EX×2となることを直接示し、現行Keep weighted modelとslot順を含め一致した
+
+**既存fixtureとの整合**
+
+- 10.4の5条件と14.5のHammer / 麻痺 C55..C60（30 ordered slots）は、新Production modelでも全slot一致した（同じscratch検算）。Bow火はTable A（Sharpnessなし）、Bow noneはTable B（Element / Sharpnessなし）、LBG / HBG火はElementなし、Long Sword noneはMelee Table B（Elementなし）であり、これらの条件ではMaster availabilityとNormal pool family集合が同じfamily集合になる
+- 10.4のBow火 C56 Keep fixtureは変更対象外である
+
+**結論（Production契約、[RNG_SPEC.md](./RNG_SPEC.md) 6.1.1）**
+
+1. Production Gogma Resetのfamily availabilityは、同じ `weaponTypeId` + `elementId` のProduction Normal Artian candidate poolのfamily集合とする。共有するのはfamily集合だけで、Normal seed / Counter / `maximumOccurrences` は共有しない
+2. Bow Table A / BとSwitch Axe single poolはGogma Reset family availabilityにもそのまま使う
+3. `WeaponBonusDefinition` + `ElementMaster.allowsElementBonus` はProduction lottery family authorityにしない
+4. Production Gogma Resetに追加するfamily上限は `sharpness_capacity` = 2だけである。Attack / Affinity / Elementには明示family上限を設けない
+5. Gogma exact-ID repeat penalty（非EX candidate 100 → 50 → 0、EX candidate 100 → 20 → 0）はReset / Keepとも維持する
+6. Keepアルゴリズムは変更しない
+7. Gogma Counter IdentificationはProduction Resetと同じcandidate availabilityとweighted draw semanticsを共有する
+8. reference parity（`REFERENCE_GOGMA_RESET_CANDIDATES`、`buildReferenceWeightedGogmaPool`、`predictReferenceGogmaReset`、reference golden / tests）は変更しない
+
+**provenanceの区別（過剰主張の禁止）**
+
+| 区分 | 対象 | 根拠 |
+|---|---|---|
+| direct observation（今回） | Bow Table B（毒）のGogma ResetでElement familyが候補にない | Bow / 毒 C55 / C179 |
+| direct observation（今回） | Switch Axe `element.none` のGogma ResetでElement familyが候補にある | Switch Axe / none C55 |
+| direct observation（今回） | `sharpness_capacity` family合計上限2（6 / 10の両方を除外） | Hammer / 麻痺 C104（primary evidence、単独で確定）。C94は補助観測であり根拠に含めない |
+| direct observation（今回） | Gogma ResetでAffinity 4 / 5枠が実在する | Hammer / 麻痺 C160、Bow / 毒 C179 |
+| direct observation（今回） | Element II×2 + EX×2の4枠が実在する | Lance / 龍 C197 |
+| direct observation（今回） | Element×4 + Sharpness layoutのKeepが現行Keep modelと一致する | Dual Blades / 龍 C55..C59 |
+| category-level Production adoption | Bow / 麻痺・睡眠のGogma Reset family availability（Table B） | Normal Table B分類（14.15）の適用。Gogma側の直接実測はない |
+| category-level Production adoption | 直接観測していないweapon type / elementへのNormal pool family集合の適用 | 上記直接観測と、10.4 / 14.5の既存fixtureがすべてこのmodelと一致し反証がないこと |
+| category-level Production adoption | Hammer / 麻痺以外（Capacityを持つLBG / HBGを含む）への `sharpness_capacity` family上限2の適用 | Hammer / 麻痺の直接観測と既存fixtureとの無矛盾 |
+
+「全weapon / 全elementでGogma Reset availabilityを実機検証した」「全武器種でSharpness / Capacity上限2を直接実測した」と記述してはならない。
+
+**未確認として残す事項**
+
+- current layoutに `sharpness_capacity` familyを3枠以上持つKeepの実ゲーム結果。unsupported化やKeepへのfamily上限2強制は行わない
+- 武器種のProduction family availability外のfamily（例: Bow Table BのElement、LBG / HBGのElement）をcurrentに持つKeepの実ゲーム結果（10.4の既存方針どおりfilter / retry / replacementを追加しない）
+- normal-scope current bonusesからのKeep結果（20）
+
+**後続PR**
+
+- PR-B（Production RNG）: Production Gogma Resetのcandidate availabilityをProduction Normal pool family集合へ置き換え、`sharpness_capacity` family上限2を実装する。Gogma Counter Identification kernelも同じauthorityへ移行する。今回の観測をprovenance付きgame-verified fixtureとして追加し、10.4 / 14.5の既存fixtureとreference golden / reference testsが不変であることを確認する。`PRODUCTION_RNG_ENGINE_VERSION` を `production-rng:c5-e6` から `production-rng:c5-e7` へ更新する
+- PR-C（UI / Validation）: Masterのweapon type / scope定義とProduction family availabilityの積を返す複合availability selectorを、Master層がProduction RNG層へ依存しない依存方向で追加し、Owned Weapon editor、Target editor、Target compromise editor、Entity validation、Identification Wizard、new entity draftへ適用する。現行UI / Validationで保存済みの、Production family availability外のbonusを持つ既存データの扱いはPR-Cで仕様決定する
+
+**version**
+
+- current implementation: `production-rng:c5-e6`。PR-Aは仕様変更だけでありversionを変更しない
+- planned implementation after PR-B: `production-rng:c5-e7`（Gogma Reset Prediction outputが変わるobservable Production RNG semantics change）
+- 変更しないもの: `CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、`ExportRoot.schemaVersion`、`RngState.schemaVersion`、`supportsSeedSearch = false`、PRNG、seed derivation、10-step block、Counter semantics、reference candidate table、reference weighted draw、Keepアルゴリズム、Search algorithm、Planner algorithm、Worker protocol。Master JSON / `allowsElementBonus` / Master dataVersionはPR-Aで変更していない
+
+---
+
 ## 15. 現在契約との仕様衝突
 
 ### 15.1 必ず先に直す衝突
@@ -1137,7 +1248,9 @@ commit固定fixtureを両実装へ流し、Web/Lua/reference extractorとProduct
 次は参照repositoryから確定できないため、Production値として推測しない。
 
 - 参照実装自体のアルゴリズムが全weapon/attribute/game versionで実ゲームと一致すること。
-- BowのSharpness/Ammo family、LBG/HBGのElement family、elementless Gogma Element bonusの実ゲーム可否。
+- 直接観測していないweapon type / elementにおけるGogma Reset family availability（Production Normal pool family集合からのcategory-level adoption、14.17）と、Hammer / 麻痺以外への `sharpness_capacity` family上限2の適用。Bow火 / Bow none / LBG火 / HBG火 / Long Sword none / Hammer麻痺 / Bow毒 / Switch Axe none / Lance龍の観測範囲は14.17で直接確認済み。
+- 武器種のProduction family availability外のfamily（Bow Table BのElement、LBG / HBGのElement等）をcurrentに持つKeepの実ゲーム結果。
+- `sharpness_capacity` familyを3枠以上currentに持つKeepの実ゲーム結果（unsupported化やfamily上限2の強制はしない）。
 - Current Masterの栄光の誉れ、祝祭の巡りがArtian RNG対象か、別用途か、update差か。
 - `gogma_artian` scopeのrank I。かつて実機で確認したと記録したrank Iは巨戟化直後のnormal-scope状態の誤認であり、gogma scope rank IはMasterから除外した。normal-scope表示上の「I」と `bonus_rank.base` の対応は未確認（10.4訂正を参照）。
 - normal-scope current bonusesからのKeep結果の実機一致。family正規化はプロジェクトオーナー確認済みのMaster意味対応（ArtianBonusTypeMapping）、family内tier drawは参照実装に従うが、game-verified fixtureは未取得である。
