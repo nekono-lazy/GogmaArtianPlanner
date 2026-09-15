@@ -314,7 +314,7 @@ export interface ArtianBonusTypeMapping {
 
 複数の通常Bonus Typeから同一巨戟Bonus TypeへのMany-to-Oneは有効。逆引きは配列として扱う。MappingはBonus Typeの意味対応であり、conversion時のType / Rank変換、抽選、完成ボーナス生成には使用しない。Keep predictionでは、normal-scope current slotの通常側Bonus Typeを巨戟側Bonus Type（Keep family）へ正規化するためにだけ使用する（[RNG_SPEC.md](./RNG_SPEC.md) 6.1）。巨戟化だけならnormal scopeを継承し、Reset / Keep後のgogma scope結果はRNG Engine Predictionが返す。
 
-Production Gogma Resetがどのbonus familyを抽選するかは、Current Masterの `WeaponBonusDefinition` + `ElementMaster.allowsElementBonus` ではなく、同じ武器種・属性のProduction通常アーティアpoolのfamily集合で決まる（[RNG_SPEC.md](./RNG_SPEC.md) 6.1.1 / 6.3.1）。例えば弓のテーブルB（無属性・毒・麻痺・睡眠）は `allowsElementBonus` の値にかかわらず属性強化を抽選せず、スラッシュアックスの `element.none` は `allowsElementBonus = false` でも属性強化を抽選する。弓は斬れ味・装填強化を、ライト／ヘビィボウガンは属性強化を抽選しない。このfamily availabilityには直接実機観測した条件とcategory-level Production adoptionが混在し、その区別は [RNG_SPEC.md](./RNG_SPEC.md) 6.1.1 に従う。したがってCurrent Masterの存在／有効性と `allowsElementBonus` を、Production RNG抽選poolまたはlottery family availabilityのauthority・検証根拠にしない。この契約はPR-B（現在の `production-rng:c5-e7`）でProduction Gogma ResetとGogma Counter Identificationへ実装済みであり、Gogma Reset PredictionはMaster availabilityを読まない（`production-rng:c5-e6` まではMaster availabilityでGogma Reset候補をfilterしていた）。仕様確定（PR-A）とPR-Bのいずれでも、Master JSON、`allowsElementBonus`、`getBonusDefinitionsForWeapon()` の意味、dataVersionは変更しておらず、UI / Validationへの反映は後続PR-Cで判断する。
+Production Gogma Resetがどのbonus familyを抽選するかは、Current Masterの `WeaponBonusDefinition` + `ElementMaster.allowsElementBonus` ではなく、同じ武器種・属性のProduction通常アーティアpoolのfamily集合で決まる（[RNG_SPEC.md](./RNG_SPEC.md) 6.1.1 / 6.3.1）。例えば弓のテーブルB（無属性・毒・麻痺・睡眠）は `allowsElementBonus` の値にかかわらず属性強化を抽選せず、スラッシュアックスの `element.none` は `allowsElementBonus = false` でも属性強化を抽選する。弓は斬れ味・装填強化を、ライト／ヘビィボウガンは属性強化を抽選しない。このfamily availabilityには直接実機観測した条件とcategory-level Production adoptionが混在し、その区別は [RNG_SPEC.md](./RNG_SPEC.md) 6.1.1 に従う。したがってCurrent Masterの存在／有効性と `allowsElementBonus` を、Production RNG抽選poolまたはlottery family availabilityのauthority・検証根拠にしない。この契約はPR-B（現在の `production-rng:c5-e7`）でProduction Gogma ResetとGogma Counter Identificationへ実装済みであり、Gogma Reset PredictionはMaster availabilityを読まない（`production-rng:c5-e6` まではMaster availabilityでGogma Reset候補をfilterしていた）。仕様確定（PR-A）、PR-B、PR-Cのいずれでも、Master JSON、`allowsElementBonus`、`getBonusDefinitionsForWeapon()` の意味、dataVersionは変更していない。UI / Validationへの反映はPR-Cで実装済みであり、所持武器・目標武器の復元ボーナス選択肢とEntity Validationは15.1の複合availability selectorを使う。
 
 武器種のProduction family availability外のfamilyをcurrentに持つKeepの実ゲーム結果、栄光の誉れ、祝祭の巡りは未確認である。
 
@@ -538,6 +538,7 @@ getEnabledWeaponTypes(master): WeaponTypeMaster[]
 getEnabledElements(master): ElementMaster[]
 getBonusDefinitionsForWeapon(master, weaponTypeId, elementId, scope): WeaponBonusDefinition[]
 getRanksForBonusType(master, weaponTypeId, elementId, bonusTypeId, scope): BonusRankMaster[]
+getBonusDefinitionsForWeaponAndScope(master, weaponTypeId, scope): WeaponBonusDefinition[]
 getGogmaBonusTypeForNormalBonus(master, normalBonusTypeId): BonusTypeId
 getNormalBonusTypesForGogmaBonus(master, gogmaBonusTypeId): BonusTypeId[]
 getBonusRankOrder(master, bonusRankId): number
@@ -555,8 +556,30 @@ getMaterialCosts(master, operationType, weaponTypeId): MaterialCostMaster[]
 - selectorはUIに依存しない
 - Bonus Definition selectorはscope、武器種、属性を必須入力とし、ElementMasterの `allowsElementBonus` がfalseなら属性強化を除外する
 - 無属性は `allowsElementBonus = false`、その他の現在有効な属性はtrueとする。実行時にElement ID文字列から意味を推測しない
-- 上記selectorと `allowsElementBonus` による除外はMaster Data上の定義であり、Production lotteryのfamily availability authorityではない（[RNG_SPEC.md](./RNG_SPEC.md) 6.1.1）。Production上で利用可能なBonusDefinitionは、Masterの武器種・scope定義とProduction family availabilityの積として決める方針とし、後続PR-Cで、Master層がProduction RNG層へ依存しない依存方向を保った新しい複合availability selectorとして追加する。`getBonusDefinitionsForWeapon()` 自体の意味を変更するかどうかは本仕様確定では決めない
+- 上記selectorと `allowsElementBonus` による除外はMaster Data上の定義であり、Production lotteryのfamily availability authorityではない（[RNG_SPEC.md](./RNG_SPEC.md) 6.1.1）。`getBonusDefinitionsForWeapon()` と `getRanksForBonusType()` はMaster-only semanticsのまま変更しない。Production上で利用可能な復元ボーナスは15.1の複合availability selectorが決める（PR-Cで実装済み）
+- `getBonusDefinitionsForWeaponAndScope()` は武器種とscopeだけでenabled WeaponBonusDefinitionを返し、`allowsElementBonus` による除外を適用しない。これはMaster層で完結するraw helperであり、Production RNG層をimportせず、単独で選択可否を決めない
 - 存在しないIDを指定された場合は明示的なDomain Errorを返す
+
+### 15.1 Production bonus availability selector
+
+所持武器・目標武器のUI、new entity draft、Entity Validation、Gogma Counter Identification Wizard STEP 2が使う復元ボーナスavailabilityは、Masterの武器種・scope定義とProduction lottery availabilityの積として `src/domain/artian/productionBonusAvailability.ts` が決める（PR-Cで実装済み）。
+
+```ts
+getProductionAvailableBonusDefinitions(master, weaponTypeId, elementId, scope): WeaponBonusDefinition[]
+getProductionAvailableBonusTypeIds(master, weaponTypeId, elementId, scope): BonusTypeId[]
+getProductionAvailableRanksForBonusType(master, weaponTypeId, elementId, bonusTypeId, scope): BonusRankMaster[]
+isProductionAvailableBonus(master, weaponTypeId, elementId, scope, bonus): boolean
+```
+
+- 依存方向は `domain/artian` → `domain/master` + `domain/rng/production` とする。`domain/master` はこのselectorもProduction RNG層もimportしない。Entity Validation（`validateOwnedWeaponMasterReferences()` / `validateTargetWeaponMasterReferences()`）も同じ理由で `src/domain/artian/entityMasterValidation.ts` に置く
+- `normal_artian`: 同じ武器種・属性の `gameVerifiedNormalCandidatesForWeaponAndElement()`（[RNG_SPEC.md](./RNG_SPEC.md) 6.3.1）の各candidateを `restorationBonusFromReferenceNormalId()` でsemantic Bonus Type / Rankへ変換したもの
+- `gogma_artian`: 同じ武器種・属性の `productionGogmaResetCandidatesForWeaponAndElement()`（[RNG_SPEC.md](./RNG_SPEC.md) 6.1.1）の各candidateのsemantic Bonus Type / Rank
+- 結果は `getBonusDefinitionsForWeaponAndScope()` が返すenabled definition（Rankもenabled）のうち、上記Production側と一致するものだけである。Production側にあってもMaster definitionがないbonusは生成せず、Masterにあってもproduction poolにないbonusは含めない。順序はMaster sortOrder、Rankはrank orderとする
+- fail closed: Production authorityが分類できない武器種・属性は `ProductionBonusAvailabilityError`（`production_authority_unavailable`）、積が空なら同（`no_available_definitions`）とする。旧Master-only availability（`getBonusDefinitionsForWeapon()`）へfallbackしない
+- 弓のテーブルA / B、スラッシュアックスのsingle pool、Melee / Bowgunの分類はProduction RNG層だけに置き、このselectorやUIへ複製しない。結果として、スラッシュアックスの無属性構成は通常／巨戟とも属性強化を持て、弓の毒・麻痺・睡眠とライト／ヘビィボウガンは属性強化を持てない
+- consumerはOwned Weapon editor / Target editor（`BonusSetEditor`）、Target compromise editor、Entity Validation、new entity draft（`createDefaultBonusSet()` / `createOwnedWeaponDraft()` / `createTargetWeaponDraft()`）、Gogma Counter Identification Wizard STEP 2のobservation選択肢と完成判定である。Normal Counter Identification Dialogは既存の `normalArtianCounterObservationBonusOptions()` を使い続ける
+- このavailabilityはUI / Entityの選択可否であり、Keep predictionの入力制約ではない。Keepへfamily availability filter、`sharpness_capacity` 上限、availability外current familyの削除を追加しない（[RNG_SPEC.md](./RNG_SPEC.md) 6.1.1 4）
+- availability外の保存済みbonusはnon-destructive load + fail-closed saveで扱う（[DATA_MODEL.md](./DATA_MODEL.md) 7.1）
 
 ---
 

@@ -317,7 +317,7 @@ STEP 1。
 STEP 2。
 
 1. STEP 1の一意なcanonical Base Seedを使用する
-2. Reset Bonusesを連続して行い、各結果をordered five-slot Observationとして記録する
+2. Reset Bonusesを連続して行い、各結果をordered five-slot Observationとして記録する。各slotのボーナス種別・ランク選択肢と観測の完成判定は、STEP 1の武器種・属性に対するProduction Gogma Reset候補（`productionGogmaResetCandidatesForWeaponAndElement()`）に基づく複合availability selector（[MASTER_DATA.md](./MASTER_DATA.md) 15.1）を使い、`getBonusDefinitionsForWeapon()` を使わない。スラッシュアックスの無属性構成では属性強化II / EXを入力でき、弓の毒・麻痺・睡眠では属性強化を提示しない
 3. approximate Gogma Counterはcenter + ±Nを基本入力とし、inclusive start / endを併記する
 4. starting Gogma CounterをWorkerで探索する
 5. 完全・non-truncatedな結果がexactly oneの場合だけreviewへ進む
@@ -473,7 +473,8 @@ UI接続状態。
 - 復元ボーナスは必ず5枠
 - 通常アーティアはscopeを `normal_artian` に固定する。巨戟アーティアは、最初のBonus amendment前の通常継承かamendment後の巨戟tierかを「復元ボーナスの種類」（通常アーティア系／巨戟アーティア系）として明示入力し、選択scope、武器種、属性に対応したWeaponBonusDefinitionだけを表示する。この選択欄には「巨戟化直後、まだ復元ボーナス変更前は「通常アーティア系」です。」という補足を表示する
 - 一覧は3.2の表示順契約に従い、自動sortしない
-- 現行実装では、無属性では通常／巨戟とも属性強化を表示しない。ライト／ヘビィボウガンも属性にかかわらず表示しない。この無属性除外はMasterの `allowsElementBonus` によるものであり、ゲームの抽選availabilityと一致しない条件がある（スラッシュアックスの無属性構成は属性強化を持ち得、弓の毒・麻痺・睡眠は属性強化を抽選しない。[RNG_SPEC.md](./RNG_SPEC.md) 6.1.1）。後続PR-Cで、Owned Weapon editor、Target editor、Target compromise editor、Identification Wizard、new entity draftの選択肢を、Masterの武器種・scope定義とProduction family availabilityの積を返す複合availability selectorへ揃える。UI側に武器種別の抽選テーブルをハードコードしない
+- 復元ボーナス種別とランクの選択肢は、Masterの武器種・scope定義とProduction family availabilityの積を返す複合availability selector（[MASTER_DATA.md](./MASTER_DATA.md) 15.1）から取る（PR-Cで実装済み）。スラッシュアックスの無属性構成は通常／巨戟とも属性強化を選択でき、弓の毒・麻痺・睡眠とライト／ヘビィボウガンは属性強化を表示しない。Masterの `allowsElementBonus` による除外は選択肢のauthorityにしない。UI側に武器種別の抽選テーブルをハードコードしない
+- 保存済みの値がこのavailability外の場合（旧UIで保存した弓 / 毒の属性強化等）、その値を自動削除・自動置換せず、「〇〇（現在値・Production抽選対象外）」という無効化された選択肢として表示し、注意文で選び直しを促す。この現在値は通常の選択肢として新規に選択できず、保存はEntity Validationが明示的に拒否する（[DATA_MODEL.md](./DATA_MODEL.md) 7.1）。空欄表示やconsole warningだけにしない
 - 通常アーティアではシリーズ／グループスキルとstatus入力を表示せず、保護初期値をOFFにする
 - 通常アーティアはレア8として自動登録し、レア度選択UIを表示しない
 - 巨戟アーティアのstatusと保護は独立項目として扱う
@@ -560,6 +561,7 @@ Plannerによる保護解除と、ユーザー確認前の状態変更は禁止�
 - 理想復元ボーナスは5枠完全指定
 - 実用は種類・理想内個数(read-only)・最低Rank・EX最低数。種類はIdeal内のみ、重複禁止
 - 代替は元種類・最大置換数・options(代替先種類/最低Rank/EX最低数)。同じ元は1 Rule
+- 理想復元ボーナス、実用条件の最低Rank、代替先種類、代替最低Rankの選択肢は、所持武器と同じ複合availability selector（`gogma_artian` scope、[MASTER_DATA.md](./MASTER_DATA.md) 15.1）と、availability外の現在値表示（7）に従う。妥協条件の意味（[TARGET_COMPROMISE_SEMANTICS.md](./TARGET_COMPROMISE_SEMANTICS.md)）は変更しない
 - 「未設定種類は理想条件のまま」「代替は1元/1候補のみ、未置換枠は理想、実用Bonusと非併用」を説明する
 - 実用Skillの両項目未設定はスキル妥協なし。一覧は全妥協未設定なら「妥協なし（理想のみ検索）」
 - DB移行後は旧妥協条件の解除と再設定を案内する。武器種・属性変更はBonus条件を解除し、Ideal編集の不整合は保存validationで拒否する

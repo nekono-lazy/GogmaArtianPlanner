@@ -3,10 +3,10 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { createInitialRngState } from '../../domain/models/factories'
 import { loadMasterData } from '../../domain/master/loadMasterData'
+import { getEnabledElements, getEnabledWeaponTypes } from '../../domain/master/masterSelectors'
 import {
-  getBonusDefinitionsForWeapon, getEnabledElements, getEnabledWeaponTypes,
-  getRanksForBonusType,
-} from '../../domain/master/masterSelectors'
+  getProductionAvailableBonusTypeIds, getProductionAvailableRanksForBonusType,
+} from '../../domain/artian/productionBonusAvailability'
 import type {
   BonusRankId, BonusTypeId, ElementId, GroupSkillId, RngState, SeriesSkillId,
   WeaponTypeId,
@@ -62,19 +62,16 @@ interface FixtureBonusChoice {
 
 /**
  * Reset observation fixtures must use pairs the Dialog itself offers for the
- * STEP 1 authoritative Weapon Type / Element under `gogma_artian` scope, in the
- * same Master order the Selects render.
+ * STEP 1 authoritative Weapon Type / Element under `gogma_artian` scope: the
+ * Production bonus availability, in the same Master order the Selects render.
  */
 function gogmaBonusChoices(
   weaponTypeId: WeaponTypeId,
   elementId: ElementId,
 ): readonly FixtureBonusChoice[] {
-  const definitions = getBonusDefinitionsForWeapon(
-    master, weaponTypeId, elementId, 'gogma_artian',
-  )
-  const choices = [...new Set(definitions.map(({ bonusTypeId }) => bonusTypeId))]
+  const choices = getProductionAvailableBonusTypeIds(master, weaponTypeId, elementId, 'gogma_artian')
     .map((bonusTypeId) => {
-      const rank = getRanksForBonusType(
+      const rank = getProductionAvailableRanksForBonusType(
         master, weaponTypeId, elementId, bonusTypeId, 'gogma_artian',
       )[0]
       if (rank === undefined) {
@@ -342,10 +339,13 @@ class FakeCoordinator implements IdentificationWizardCoordinator {
    * the STEP 1 journey tests, and `skillInputs` is recorded exactly as
    * `identifySkill` would record it so STEP 1 authority assertions still hold.
    */
-  seedUniqueSkillResult(): SkillIdentificationInput {
+  seedUniqueSkillResult(
+    weaponTypeId: WeaponTypeId = authoritativeWeaponTypeId,
+    elementId: ElementId = authoritativeElementId,
+  ): SkillIdentificationInput {
     const input: SkillIdentificationInput = {
-      weaponTypeId: authoritativeWeaponTypeId,
-      elementId: authoritativeElementId,
+      weaponTypeId,
+      elementId,
       observations: Array.from({ length: 4 }, () => ({
         seriesSkillId: fixtureSeriesSkillId,
         groupSkillId: fixtureGroupSkillId,
@@ -542,8 +542,12 @@ async function reachReview(coordinator: FakeCoordinator, user: ReturnType<typeof
   await screen.findByText('Review')
 }
 
-async function seedStep2(coordinator: FakeCoordinator) {
-  act(() => { coordinator.seedUniqueSkillResult() })
+async function seedStep2(
+  coordinator: FakeCoordinator,
+  weaponTypeId: WeaponTypeId = authoritativeWeaponTypeId,
+  elementId: ElementId = authoritativeElementId,
+) {
+  act(() => { coordinator.seedUniqueSkillResult(weaponTypeId, elementId) })
   await screen.findByText('STEP 2 — Starting Gogma Counter')
 }
 
@@ -922,6 +926,49 @@ describe('IdentificationWizardDialog STEP 2', { timeout: 15_000 }, () => {
       input?.observations[0]?.[0].bonusTypeId,
     )
   })
+
+  it('offers Element II / EX for a Switch Axe element.none Reset observation and completes with it', async () => {
+    const user = userEvent.setup()
+    const { coordinator } = renderWizard()
+    await seedStep2(coordinator, 'weapon.switch_axe', 'element.none')
+    const firstEditor = resetObservationEditor(1)
+
+    await user.click(within(firstEditor).getByLabelText('枠1 ボーナス種別'))
+    const types = within(await screen.findByRole('listbox'))
+    expect(types.getAllByRole('option').map((option) => option.textContent))
+      .toEqual(['未入力', '基礎攻撃力強化', '会心率強化', '属性強化', '斬れ味・装填強化'])
+    await user.click(types.getByRole('option', { name: '属性強化' }))
+    await user.click(within(firstEditor).getByLabelText('枠1 ランク'))
+    const ranks = within(await screen.findByRole('listbox'))
+    expect(ranks.getAllByRole('option').map((option) => option.textContent)).toEqual(['未入力', 'II', 'EX'])
+    await user.click(ranks.getByRole('option', { name: 'EX' }))
+
+    const choice = step1BonusChoices(coordinator)[0]!
+    for (let slotIndex = 2; slotIndex <= 5; slotIndex += 1) setBonusSlot(firstEditor, slotIndex, choice)
+    for (let observationIndex = 2; observationIndex <= 4; observationIndex += 1) {
+      const editor = resetObservationEditor(observationIndex)
+      for (let slotIndex = 1; slotIndex <= 5; slotIndex += 1) setBonusSlot(editor, slotIndex, choice)
+    }
+    await user.click(screen.getByRole('button', { name: 'STEP 2 Search' }))
+
+    expect(screen.queryByText(/を完成させてください/)).not.toBeInTheDocument()
+    expect(coordinator.gogmaInputs).toHaveLength(1)
+    expect(coordinator.gogmaInputs[0]).toMatchObject({ weaponTypeId: 'weapon.switch_axe', elementId: 'element.none' })
+    expect(coordinator.gogmaInputs[0]?.observations[0]?.[0]).toEqual({ bonusTypeId: 'bonus_type.element', bonusRankId: 'bonus_rank.ex' })
+  })
+
+  it.each(['element.poison', 'element.paralysis', 'element.sleep'])(
+    'never offers Element for a Bow %s Reset observation',
+    async (elementId) => {
+      const user = userEvent.setup()
+      const { coordinator } = renderWizard()
+      await seedStep2(coordinator, 'weapon.bow', elementId)
+      await user.click(within(resetObservationEditor(1)).getByLabelText('枠1 ボーナス種別'))
+      const types = within(await screen.findByRole('listbox'))
+      expect(types.getAllByRole('option').map((option) => option.textContent))
+        .toEqual(['未入力', '基礎攻撃力強化', '会心率強化'])
+    },
+  )
 
   it('summarizes the STEP 1 authority and counts filled slots per Reset observation', async () => {
     const { coordinator } = renderWizard()

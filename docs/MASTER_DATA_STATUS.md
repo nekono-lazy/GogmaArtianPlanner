@@ -28,7 +28,7 @@ Manifestの `dataVersion` は4。`gameVersion` は引き続き `unknown-initial`
 - 所持武器・目標武器の武器種、属性、scope別復元ボーナス、Rank、シリーズ／グループスキルは正式選択肢として利用できる。
 - 所持巨戟アーティアとBuildCandidateは、conversion直後の `normal_artian` またはamendment後の `gogma_artian` scopeを明示して保持する。目標武器の既存bonus条件は `gogma_artian` scopeを基準とする。
 - 所持通常アーティアの復元ボーナスは `normal_artian` scopeに限定する。
-- 無属性では両scopeとも属性強化を選択できない。ライト／ヘビィボウガンの属性強化不可ルールも維持する。これは現行Master selector（`allowsElementBonus`）の挙動であり、ゲームの抽選availabilityとは一致しない条件がある（スラッシュアックスの無属性構成は属性強化を持ち得、弓の毒・麻痺・睡眠は属性強化を抽選しない。[RNG_SPEC.md](./RNG_SPEC.md) 6.1.1）。UI / Validationは後続PR-Cで、Masterの武器種・scope定義とProduction family availabilityの積を返す複合availability selectorへ揃える。
+- 復元ボーナスの選択肢とValidationは、Masterの武器種・scope定義とProduction family availabilityの積を返す複合availability selectorを使う（PR-Cで実装済み。[MASTER_DATA.md](./MASTER_DATA.md) 15.1、[RNG_SPEC.md](./RNG_SPEC.md) 6.1.1）。スラッシュアックスの無属性構成は通常／巨戟とも属性強化を選択でき、弓の毒・麻痺・睡眠とライト／ヘビィボウガンは属性強化を選択できない。Masterの `allowsElementBonus`（無属性で属性強化を除外）は `getBonusDefinitionsForWeapon()` のMaster-only挙動として残るが、UI / Validationのauthorityではなく、ゲームルールとして記述しない。
 - 通常UIのスキル選択肢は有効なSeries 21件、Group 16件だけを表示する。無効レコードは履歴参照用にIDを保持する。
 - 通常アーティアPrediction・Debug用の復元ボーナス定義は `normal_artian` scopeを使用する。
 - LotteryMasterは無効のまま維持し、Production RNGはprovenance付きRNG-specific reference-verified tableとEngine内部定数を使用する。reference-verifiedは参照repositoryとの一致であり、全実ゲーム条件でのgame-verifiedを意味しない。disabled LotteryMasterだけを理由にProduction Routeをskipしない。

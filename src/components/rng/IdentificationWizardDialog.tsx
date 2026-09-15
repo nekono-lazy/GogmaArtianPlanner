@@ -6,10 +6,12 @@ import {
 } from '@mui/material'
 import { StatusChip, type StatusTone } from '../StatusChip'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
+import { getEnabledElements, getEnabledWeaponTypes } from '../../domain/master/masterSelectors'
 import {
-  getBonusDefinitionsForWeapon, getEnabledElements, getEnabledWeaponTypes,
-  getRanksForBonusType,
-} from '../../domain/master/masterSelectors'
+  getProductionAvailableBonusDefinitions, getProductionAvailableBonusTypeIds,
+  getProductionAvailableRanksForBonusType, ProductionBonusAvailabilityError,
+} from '../../domain/artian/productionBonusAvailability'
+import { productionBonusAvailabilityErrorMessage } from '../forms/productionBonusAvailabilityText'
 import type {
   BonusRankId, BonusTypeId, GroupSkillId, RestorationBonusSet, RngState,
   SeriesSkillId,
@@ -123,6 +125,25 @@ function completeSkillObservations(
   })
 }
 
+/**
+ * The Production Reset availability the observation Selects offer
+ * (`docs/RNG_SPEC.md` 6.1.1), so a slot the Reset cannot draw never completes.
+ */
+function productionResetDefinitions(
+  master: MasterDataRoot,
+  weaponTypeId: string,
+  elementId: string,
+) {
+  try {
+    return getProductionAvailableBonusDefinitions(master, weaponTypeId, elementId, 'gogma_artian')
+  } catch (caught) {
+    if (caught instanceof ProductionBonusAvailabilityError) {
+      throw new Error(productionBonusAvailabilityErrorMessage(caught), { cause: caught })
+    }
+    throw caught
+  }
+}
+
 function completeBonusObservations(
   drafts: readonly BonusObservationDraft[],
   master: MasterDataRoot,
@@ -130,9 +151,7 @@ function completeBonusObservations(
   elementId: string,
 ): RestorationBonusSet[] {
   const validPairs = new Set(
-    getBonusDefinitionsForWeapon(
-      master, weaponTypeId, elementId, 'gogma_artian',
-    ).map(({ bonusTypeId, bonusRankId }) => `${bonusTypeId}\u0000${bonusRankId}`),
+    productionResetDefinitions(master, weaponTypeId, elementId).map(({ bonusTypeId, bonusRankId }) => `${bonusTypeId}\u0000${bonusRankId}`),
   )
   return drafts.map((draft, observationIndex) => draft.map((slot, slotIndex) => {
     if (
@@ -342,12 +361,16 @@ function BonusObservationEditor({
   disabled: boolean
   onChange(value: BonusObservationDraft): void
 }) {
-  const definitions = getBonusDefinitionsForWeapon(
-    master, weaponTypeId, elementId, 'gogma_artian',
-  )
-  const typeIds = [...new Set(definitions.map(({ bonusTypeId }) => bonusTypeId))]
-  if (typeIds.length === 0) {
-    return <Alert severity="error">{label}: 復元ボーナスのマスターデータが利用できません。</Alert>
+  // Options follow the Production Reset candidates of the STEP 1 weapon type /
+  // element, never the Master-only `getBonusDefinitionsForWeapon()`.
+  let typeIds: string[]
+  try {
+    typeIds = getProductionAvailableBonusTypeIds(master, weaponTypeId, elementId, 'gogma_artian')
+  } catch (caught) {
+    if (caught instanceof ProductionBonusAvailabilityError) {
+      return <Alert severity="error">{label}: {productionBonusAvailabilityErrorMessage(caught)}</Alert>
+    }
+    throw caught
   }
   const fieldIdPrefix = label.replaceAll(' ', '-').toLowerCase()
 
@@ -363,7 +386,7 @@ function BonusObservationEditor({
     {value.map((slot, index) => {
       const ranks = slot.bonusTypeId === null
         ? []
-        : getRanksForBonusType(
+        : getProductionAvailableRanksForBonusType(
           master, weaponTypeId, elementId, slot.bonusTypeId, 'gogma_artian',
         )
       return <Box component="li" key={index} sx={{ listStyle: 'none', display: 'grid', gridTemplateColumns: 'minmax(0, 1.6fr) minmax(0, 1fr)', gap: 1 }}>

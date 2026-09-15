@@ -6,7 +6,7 @@ import {
   createTargetWeaponDraft,
 } from '../../domain/forms/entityDrafts'
 import { DOMAIN_FIXTURE_TIME } from '../../test/fixtures/domainData'
-import { createValidMasterDataFixture } from '../../test/fixtures/masterData'
+import { loadMasterData } from '../../domain/master/loadMasterData'
 import { AppDatabase } from '../../db/AppDatabase'
 import { ReferenceFinder } from '../../db/referenceFinder'
 import { OwnedWeaponRepository } from '../../db/repositories/ownedWeaponRepository'
@@ -21,7 +21,11 @@ import {
   type TargetWeaponDraft,
 } from './entityCrudServices'
 
-const master = createValidMasterDataFixture()
+const loadedMaster = loadMasterData()
+if (!loadedMaster.ok) throw new Error('Test Master is unavailable.')
+// Drafts and saves go through Production bonus availability, which only the
+// verified Master's weapon types / elements can satisfy.
+const master = loadedMaster.data
 
 let databaseSequence = 0
 

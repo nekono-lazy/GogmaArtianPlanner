@@ -1,5 +1,9 @@
-import type { ArtianBonusScope, MasterDataRoot } from '../master/masterTypes'
-import { getBonusDefinitionsForWeapon, getEnabledElements, getEnabledWeaponTypes } from '../master/masterSelectors'
+import type { ArtianBonusScope, MasterDataRoot, WeaponBonusDefinition } from '../master/masterTypes'
+import { getEnabledElements, getEnabledWeaponTypes } from '../master/masterSelectors'
+import {
+  getProductionAvailableBonusDefinitions,
+  ProductionBonusAvailabilityError,
+} from '../artian/productionBonusAvailability'
 import type {
   ArtianWeaponKind,
   OwnedWeaponStatus,
@@ -16,13 +20,33 @@ export class MasterOptionsUnavailableError extends Error {
   }
 }
 
+/**
+ * The Production bonus availability for a draft, or none when that
+ * availability cannot be decided. A draft is never seeded from the Master-only
+ * `getBonusDefinitionsForWeapon()`, so a new entity starts inside the
+ * availability its save validation enforces.
+ */
+function productionDefinitionsForDraft(
+  master: MasterDataRoot,
+  weaponTypeId: string,
+  elementId: string,
+  scope: ArtianBonusScope,
+): WeaponBonusDefinition[] {
+  try {
+    return getProductionAvailableBonusDefinitions(master, weaponTypeId, elementId, scope)
+  } catch (caught) {
+    if (caught instanceof ProductionBonusAvailabilityError) return []
+    throw caught
+  }
+}
+
 export function createDefaultBonusSet(
   master: MasterDataRoot,
   weaponTypeId: string,
   elementId: string,
   scope: ArtianBonusScope = 'gogma_artian',
 ): RestorationBonusSet {
-  const definition = getBonusDefinitionsForWeapon(
+  const definition = productionDefinitionsForDraft(
     master,
     weaponTypeId,
     elementId,
@@ -54,7 +78,7 @@ function baseOptions(master: MasterDataRoot, scope: ArtianBonusScope) {
     )
   }
   const weaponType = getEnabledWeaponTypes(master).find((type) =>
-    getBonusDefinitionsForWeapon(master, type.id, element.id, scope).length > 0,
+    productionDefinitionsForDraft(master, type.id, element.id, scope).length > 0,
   )
   if (!weaponType || !element) {
     throw new MasterOptionsUnavailableError(

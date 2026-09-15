@@ -565,7 +565,8 @@ export type OwnedWeapon =
 - 通常→巨戟化直後は通常アーティアの5枠とslot順を変更せず、`restorationBonusScope = "normal_artian"` の巨戟アーティアになる。巨戟Rank I等への暗黙変換は行わない
 - `normal_artian` scopeを持つ巨戟アーティアへの最初のBonus amendmentは、実ゲームでもDomainモデルでもReset / Keepのどちらも許可する。所持巨戟の5枠は既知であり、Keep familyは各slotの `bonusTypeId`（通常側はArtianBonusTypeMappingで巨戟側へ正規化）から解決する([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.9参照)。Reset / Keepのどちらの結果も5枠全体とscopeを `gogma_artian` へ置き換え、以後もReset / Keepの両方を許可する
 - 1本の武器の5枠はすべて `restorationBonusScope` と一致させ、normal / gogma scopeを混在させない
-- 属性強化を保持できるかは、`ElementMaster.allowsElementBonus` 単独ではなく、Masterの武器種・scope定義と、武器種 × 抽選テーブル区分のProduction family availability（[RNG_SPEC.md](./RNG_SPEC.md) 6.1.1 / 6.3.1）の積で決める方針とする。スラッシュアックスの無属性構成（`element.none`）は属性強化を保持し得、弓の毒・麻痺・睡眠は属性強化を抽選しない。現行実装のValidationは `allowsElementBonus = false`（無属性）で属性強化を拒否したままであり、複合availabilityへの移行は後続PR-Cで行う。現行Validationで保存済みの、Production family availability外のbonusを持つ既存データの扱いはPR-Cで仕様決定する
+- 属性強化を保持できるかは、`ElementMaster.allowsElementBonus` 単独ではなく、Masterの武器種・scope定義と、武器種 × 抽選テーブル区分のProduction family availability（[RNG_SPEC.md](./RNG_SPEC.md) 6.1.1 / 6.3.1）の積で決める（PR-Cで実装済み。[MASTER_DATA.md](./MASTER_DATA.md) 15.1）。スラッシュアックスの無属性構成（`element.none`）は属性強化を保持でき、弓の毒・麻痺・睡眠とライト／ヘビィボウガンは属性強化を保持しない。Entity Validation（`validateOwnedWeaponMasterReferences()` / `validateTargetWeaponMasterReferences()`）は、所持武器の復元ボーナス5枠と、目標武器の理想5枠・実用条件・代替候補をこのavailabilityで検証する
+- 旧UI / Validationで保存できた、Production availability外の復元ボーナス（例: 弓 / 毒の属性強化）を持つ既存データは **non-destructive load + fail-closed save** で扱う。schema migrationを行わず、load / Import時に自動削除・別bonusへの自動置換・silent normalizeをせず、既存entityを読み込み・表示できる状態を保つ。編集UIはその値を「現在値・Production抽選対象外」として認識できるように表示するが、通常の選択肢として提示せず新規に選択できない。保存しようとした場合はEntity Validationが明示的に拒否し、ユーザーに修正を促す。この扱いはSearch / Planner algorithmとKeep RNG semanticsを変更しない
 - statusにかかわらず `restorationBonuses` は必ず5枠保持する
 - `status` はユーザーが所持武器を整理するための管理ラベルだけを意味する。Plannerの操作可否、
   Search Route eligibility、Target Satisfactionをstatusから決定しない

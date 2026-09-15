@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { loadMasterData } from '../master/loadMasterData'
-import { validateOwnedWeaponMasterReferences } from '../master/entityMasterValidation'
+import { validateOwnedWeaponMasterReferences } from '../artian/entityMasterValidation'
 import {
   createOwnedWeapon,
   validateOwnedWeapon,
