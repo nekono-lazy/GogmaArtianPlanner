@@ -18,6 +18,12 @@ export interface GogmaCounterIdentificationInput {
   readonly elementId: ElementId
   readonly observations: readonly RestorationBonusSet[]
   readonly gogmaCounterRange: InclusiveNumberRange
+  /**
+   * Kept in the Worker input shape for protocol stability. It is not the Reset
+   * candidate availability authority: Identification uses the Production
+   * Normal pool family set exactly as Production Reset does
+   * (`docs/RNG_SPEC.md` 6.1.1 / 9.8).
+   */
   readonly master: WeaponBonusDefinitionsMasterSubset
   readonly maxMatches?: number
 }

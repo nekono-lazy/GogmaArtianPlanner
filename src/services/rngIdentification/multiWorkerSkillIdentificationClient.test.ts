@@ -82,7 +82,7 @@ class FakeChildClient implements SkillIdentificationWorkerClient {
 }
 
 class KernelChildClient implements SkillIdentificationWorkerClient {
-  readonly engineVersion = 'production-rng:c5-e6'
+  readonly engineVersion = 'production-rng:c5-e7'
   private readonly cancelled = new Set<string>()
 
   identify(
@@ -577,7 +577,7 @@ describe('Multi-Worker Skill Identification initialization safety', () => {
     )
     try {
       const client = createProductionMultiWorkerSkillIdentificationClient()
-      expect(client.engineVersion).toBe('production-rng:c5-e6')
+      expect(client.engineVersion).toBe('production-rng:c5-e7')
       expect(workers).toHaveLength(expectedWorkers)
       client.dispose()
       expect(workers.every(({ terminate }) => terminate.mock.calls.length === 1)).toBe(true)
@@ -605,7 +605,7 @@ describe('Multi-Worker Skill Identification initialization safety', () => {
   })
 
   it('fails closed and disposes every child on Engine version mismatch', async () => {
-    const first = new FakeChildClient('production-rng:c5-e6')
+    const first = new FakeChildClient('production-rng:c5-e7')
     const second = new FakeChildClient('different-version')
     const factoryQueue = [first, second]
     const client = createMultiWorkerSkillIdentificationClient({

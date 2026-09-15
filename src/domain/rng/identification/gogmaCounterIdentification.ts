@@ -1,9 +1,12 @@
 import type { RestorationBonusSet } from '../../models/publicTypes'
 import type { WeaponBonusDefinitionsMasterSubset } from '../../master/masterSelectors'
 import type { RngEngine, RngMasterSubset } from '../rngEngine'
-import { gameAdjustedGogmaResetCandidatesForWeaponAndElement } from '../production/gameGogmaBonuses'
-import { predictGameAdjustedGogmaResetSlotsFromRawValues } from '../production/gogmaPrediction'
-import { referenceGogmaIdFromRestorationBonus } from '../production/referenceGogmaBonuses'
+import { productionGogmaResetCandidatesForWeaponAndElement } from '../production/gameGogmaBonuses'
+import { predictProductionGogmaResetSlotsFromRawValues } from '../production/gogmaPrediction'
+import {
+  referenceGogmaIdFromRestorationBonus,
+  type ReferenceGogmaBonus,
+} from '../production/referenceGogmaBonuses'
 import {
   initializeReferencePrng,
   nextReferencePrngState,
@@ -155,11 +158,11 @@ function bonusesEqual(left: RestorationBonusSet, right: RestorationBonusSet): bo
 function matchesObservations(
   counterState: ReferencePrngState,
   observations: readonly RestorationBonusSet[],
-  candidates: ReturnType<typeof gameAdjustedGogmaResetCandidatesForWeaponAndElement>,
+  candidates: readonly ReferenceGogmaBonus[],
 ): boolean {
   let observationState = counterState
   for (let index = 0; index < observations.length; index += 1) {
-    const prediction = predictGameAdjustedGogmaResetSlotsFromRawValues(
+    const prediction = predictProductionGogmaResetSlotsFromRawValues(
       rawResetValues(observationState),
       candidates,
     )
@@ -179,10 +182,12 @@ export async function identifyGogmaCounter(
 ): Promise<GogmaCounterIdentificationResult> {
   const baseSeed = validateInput(input, engine)
   requirePredictionSupport(input, engine)
-  const candidates = gameAdjustedGogmaResetCandidatesForWeaponAndElement(
+  // The same Production family availability and draw path as
+  // `ProductionRngEngine.predictGogmaBonus(reset)`; there is no separate
+  // Identification candidate table and no Master availability filter.
+  const candidates = productionGogmaResetCandidatesForWeaponAndElement(
     input.weaponTypeId,
     input.elementId,
-    input.master,
   )
   const chunkSize = options.counterChunkSize ?? DEFAULT_COUNTER_CHUNK_SIZE
   requireSafeInteger(chunkSize, 'Counter chunk size')

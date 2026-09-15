@@ -17,14 +17,13 @@ import {
 import { normalizeBaseSeed } from './baseSeed'
 import type { KeepFamilyMasterSubset } from '../gogmaBonusFamily'
 import {
-  GameAdjustedGogmaResetAvailabilityError,
-  GameAdjustedGogmaResetMasterDataError,
-  gameAdjustedGogmaResetCandidatesForWeaponAndElement,
+  ProductionGogmaResetAvailabilityError,
   keepCurrentBonusFamily,
+  productionGogmaResetCandidatesForWeaponAndElement,
   toReferenceKeepCurrentBonuses,
 } from './gameGogmaBonuses'
 import {
-  predictGameAdjustedGogmaReset,
+  predictProductionGogmaReset,
   predictReferenceGogmaKeep,
   REFERENCE_GOGMA_COUNTER_GATE_THRESHOLD,
 } from './gogmaPrediction'
@@ -36,7 +35,7 @@ import {
   REFERENCE_SKILL_COUNTER_GATE_THRESHOLD,
 } from './skillPrediction'
 
-export const PRODUCTION_RNG_ENGINE_VERSION = 'production-rng:c5-e6'
+export const PRODUCTION_RNG_ENGINE_VERSION = 'production-rng:c5-e7'
 
 const capabilities: RngEngineCapabilities = {
   supportsSeedSearch: false,
@@ -64,10 +63,6 @@ function advanceOneCounter(current: number, label: string): number {
   const next = current + 1
   if (!Number.isSafeInteger(next)) throw new RangeError(`${label} exceeds the safe integer range`)
   return next
-}
-
-function hasResetMaster(master: GogmaBonusPredictionInput['master']): master is GogmaBonusPredictionInput['master'] & Required<Pick<GogmaBonusPredictionInput['master'], 'weaponTypes' | 'elements' | 'bonusTypes'>> {
-  return Boolean(master.weaponTypes && master.elements && master.bonusTypes)
 }
 
 /** Keep family resolution needs the Master bonus type mapping (`docs/RNG_SPEC.md` 6.4). */
@@ -111,15 +106,17 @@ export class ProductionRngEngine implements RngEngine {
           throw error
         }
       case 'gogma_reset':
-        if (!hasResetMaster(input.master)) return { supported: false, reason: 'master_data_unavailable' }
+        // Reset family availability is the Production Normal pool family set of
+        // the same weapon type + element (`docs/RNG_SPEC.md` 6.1.1), so the
+        // caller-supplied Master is not read here; Keep still needs its mapping.
         try {
           toReferenceWeaponType(input.weaponTypeId)
           toReferenceAttributeForce(input.elementId)
-          gameAdjustedGogmaResetCandidatesForWeaponAndElement(input.weaponTypeId, input.elementId, input.master)
+          productionGogmaResetCandidatesForWeaponAndElement(input.weaponTypeId, input.elementId)
           return { supported: true }
         } catch (error) {
-          if (error instanceof GameAdjustedGogmaResetAvailabilityError) return { supported: false, reason: 'no_available_reset_candidates' }
-          if (error instanceof GameAdjustedGogmaResetMasterDataError) return { supported: false, reason: 'master_data_unavailable' }
+          if (error instanceof UnsupportedGameVerifiedNormalPredictionError) return { supported: false, reason: 'normal_pool_unverified' }
+          if (error instanceof ProductionGogmaResetAvailabilityError) return { supported: false, reason: 'no_available_reset_candidates' }
           if (error instanceof RangeError) return { supported: false, reason: 'reference_adapter_unsupported' }
           throw error
         }
@@ -168,7 +165,7 @@ export class ProductionRngEngine implements RngEngine {
     }
     if (input.operation.type === 'reset_bonuses') {
       requireSupport(this.getPredictionSupport({ type: 'gogma_reset', weaponTypeId: input.weaponTypeId, elementId: input.elementId, master: input.master }), 'gogma_reset')
-      return predictGameAdjustedGogmaReset(base, input.master as Required<Pick<typeof input.master, 'weaponBonusDefinitions' | 'weaponTypes' | 'elements' | 'bonusTypes'>>).bonuses
+      return predictProductionGogmaReset(base).bonuses
     }
     requireSupport(this.getPredictionSupport({ type: 'gogma_keep', weaponTypeId: input.weaponTypeId, elementId: input.elementId, currentBonuses: input.operation.currentBonuses, master: input.master }), 'gogma_keep')
     // The reference predictor reads Gogma-side bonus types only, so the

@@ -13,10 +13,15 @@ import {
   gameVerifiedBowPoisonNormalVectors,
   gameVerifiedBowSleepNormalVectors,
 } from '../../../test/fixtures/gameVerifiedNormalVectors'
-import { gameVerifiedGogmaKeepVector, gameVerifiedGogmaResetVectors } from '../../../test/fixtures/gameVerifiedGogmaVectors'
+import {
+  gameVerifiedDualBladesDragonKeepChain,
+  gameVerifiedGogmaKeepVector,
+  gameVerifiedGogmaResetVectors,
+  gameVerifiedProductionGogmaResetVectors,
+} from '../../../test/fixtures/gameVerifiedGogmaVectors'
 import { gameVerifiedSkillIdentificationVector } from '../../../test/fixtures/gameVerifiedSkillVectors'
 import { referenceRngVectors } from '../../../test/fixtures/referenceRngVectors'
-import { predictGameAdjustedGogmaReset, predictReferenceGogmaKeep } from './gogmaPrediction'
+import { predictProductionGogmaReset, predictReferenceGogmaKeep } from './gogmaPrediction'
 import { predictGameVerifiedNormalArtian } from './normalPrediction'
 import { ProductionRngEngine, PRODUCTION_RNG_ENGINE_VERSION } from './productionRngEngine'
 import { predictReferenceSkills } from './skillPrediction'
@@ -37,7 +42,7 @@ function master() {
 describe('ProductionRngEngine facade', () => {
   it('advertises production operations without activating UnavailableRngEngine', () => {
     const engine = new ProductionRngEngine()
-    expect(PRODUCTION_RNG_ENGINE_VERSION).toBe('production-rng:c5-e6')
+    expect(PRODUCTION_RNG_ENGINE_VERSION).toBe('production-rng:c5-e7')
     expect(engine.version).toBe(PRODUCTION_RNG_ENGINE_VERSION)
     expect(engine.capabilities).toEqual({ supportsSeedSearch: false, supportsNormalArtianPrediction: true, supportsGogmaPrediction: true, supportsSkillPrediction: true, supportsKeepBonusesPrediction: true })
     expect(Object.values(new UnavailableRngEngine().capabilities)).toEqual([false, false, false, false, false])
@@ -52,7 +57,7 @@ describe('ProductionRngEngine facade', () => {
     expect(engine.predictSkills({ ...skillDomainInput, baseSeed: String(skill.baseSeed), master: inputMaster })).toEqual({ seriesSkillId: predictReferenceSkills(skill).seriesSkillId, groupSkillId: predictReferenceSkills(skill).groupSkillId })
     const reset = gameVerifiedGogmaResetVectors[0]!
     const { counterGate: _resetGate, ...resetDomainInput } = reset
-    expect(engine.predictGogmaBonus({ ...resetDomainInput, baseSeed: String(reset.baseSeed), operation: { type: 'reset_bonuses' }, master: inputMaster })).toEqual(predictGameAdjustedGogmaReset(reset, inputMaster).bonuses)
+    expect(engine.predictGogmaBonus({ ...resetDomainInput, baseSeed: String(reset.baseSeed), operation: { type: 'reset_bonuses' }, master: inputMaster })).toEqual(predictProductionGogmaReset(reset).bonuses)
     const keep = gameVerifiedGogmaKeepVector
     const { counterGate: _keepGate, ...keepDomainInput } = keep
     expect(engine.predictGogmaBonus({ ...keepDomainInput, baseSeed: String(keep.baseSeed), operation: { type: 'keep_bonuses', currentBonuses: keep.currentBonuses }, master: inputMaster })).toEqual(predictReferenceGogmaKeep(keep).bonuses)
@@ -74,7 +79,7 @@ describe('ProductionRngEngine facade', () => {
     const reset = gameVerifiedGogmaResetVectors[0]!
     const { counterGate: _resetGate, ...resetInput } = reset
     expect(engine.predictGogmaBonus({ ...resetInput, baseSeed: String(reset.baseSeed), operation: { type: 'reset_bonuses' }, master: inputMaster }))
-      .toEqual(predictGameAdjustedGogmaReset({ ...reset, counterGate: 35 }, inputMaster).bonuses)
+      .toEqual(predictProductionGogmaReset({ ...reset, counterGate: 35 }).bonuses)
     const keep = gameVerifiedGogmaKeepVector
     const { counterGate: _keepGate, ...keepInput } = keep
     expect(engine.predictGogmaBonus({ ...keepInput, baseSeed: String(keep.baseSeed), operation: { type: 'keep_bonuses', currentBonuses: keep.currentBonuses }, master: inputMaster }))
@@ -82,11 +87,28 @@ describe('ProductionRngEngine facade', () => {
     void _resetGate; void _keepGate
   })
 
-  it('uses only caller supplied Reset availability and reports unsupported inputs', () => {
+  it('decides Reset availability from the Production Normal pool family set, never from caller Master availability', () => {
     const engine = new ProductionRngEngine(); const inputMaster = master(); const reset = gameVerifiedGogmaResetVectors[0]!
-    const unavailable = { ...inputMaster, weaponBonusDefinitions: [] }
-    expect(engine.getPredictionSupport({ type: 'gogma_reset', weaponTypeId: reset.weaponTypeId, elementId: reset.elementId, master: unavailable })).toEqual({ supported: false, reason: 'no_available_reset_candidates' })
-    expect(() => engine.predictGogmaBonus({ ...reset, baseSeed: String(reset.baseSeed), operation: { type: 'reset_bonuses' }, master: unavailable })).toThrow(UnsupportedRngInputError)
+    // Neither empty Bonus definitions nor a Master without weapon types, elements, or bonus types changes Reset support or output.
+    const withoutDefinitions = { ...inputMaster, weaponBonusDefinitions: [] }
+    const { weaponTypes: _weaponTypes, elements: _elements, bonusTypes: _bonusTypes, ...withoutAvailabilityMaster } = inputMaster
+    void _weaponTypes; void _elements; void _bonusTypes
+    for (const resetMaster of [withoutDefinitions, withoutAvailabilityMaster]) {
+      expect(engine.getPredictionSupport({ type: 'gogma_reset', weaponTypeId: reset.weaponTypeId, elementId: reset.elementId, master: resetMaster })).toEqual({ supported: true })
+      expect(engine.predictGogmaBonus({ ...reset, baseSeed: String(reset.baseSeed), operation: { type: 'reset_bonuses' }, master: resetMaster })).toEqual(reset.bonuses)
+    }
+    for (const unsupported of [{ weaponTypeId: 'weapon.unknown', elementId: 'element.fire' }, { weaponTypeId: 'weapon.bow', elementId: 'element.unknown' }]) {
+      expect(engine.getPredictionSupport({ type: 'gogma_reset', ...unsupported, master: inputMaster })).toEqual({ supported: false, reason: 'reference_adapter_unsupported' })
+      expect(() => engine.predictGogmaBonus({ ...reset, ...unsupported, baseSeed: String(reset.baseSeed), operation: { type: 'reset_bonuses' }, master: inputMaster })).toThrow(UnsupportedRngInputError)
+    }
+    // Every weapon type / element the Master knows has a Production Normal pool, so every Reset input is supported.
+    const loaded = loadMasterData()
+    if (!loaded.ok) throw new Error(JSON.stringify(loaded.issues))
+    for (const { id: weaponTypeId } of loaded.data.weaponTypes) {
+      for (const { id: elementId } of loaded.data.elements) {
+        expect(engine.getPredictionSupport({ type: 'gogma_reset', weaponTypeId, elementId, master: inputMaster })).toEqual({ supported: true })
+      }
+    }
     expect(engine.getPredictionSupport({ type: 'normal_artian', weaponTypeId: 'weapon.great_sword', elementId: 'element.fire', rarity: 7 as never })).toEqual({ supported: false, reason: 'reference_adapter_unsupported' })
     expect(engine.getPredictionSupport({ type: 'gogma_keep', weaponTypeId: gameVerifiedGogmaKeepVector.weaponTypeId, elementId: gameVerifiedGogmaKeepVector.elementId, currentBonuses: [{ bonusTypeId: 'bonus_type.unknown', bonusRankId: 'bonus_rank.base' }, ...gameVerifiedGogmaKeepVector.currentBonuses.slice(1)] as never, master: inputMaster })).toEqual({ supported: false, reason: 'unsupported_current_bonus' })
   })
@@ -159,7 +181,26 @@ describe('ProductionRngEngine facade', () => {
     const engine = new ProductionRngEngine(); const inputMaster = master(); const reset = gameVerifiedGogmaResetVectors[0]!; const keep = gameVerifiedGogmaKeepVector
     expect(engine.getPredictionSupport({ type: 'gogma_reset', weaponTypeId: reset.weaponTypeId, elementId: reset.elementId, master: inputMaster })).toEqual({ supported: true })
     expect(engine.getPredictionSupport({ type: 'gogma_keep', weaponTypeId: keep.weaponTypeId, elementId: keep.elementId, currentBonuses: keep.currentBonuses, master: inputMaster })).toEqual({ supported: true })
-    expect(() => engine.getPredictionSupport({ type: 'gogma_reset', weaponTypeId: reset.weaponTypeId, elementId: reset.elementId, master: { ...inputMaster, bonusTypes: {} as never } })).toThrow(TypeError)
+  })
+
+  it('reproduces every 2026-09-15 game-observed Reset and the Dual Blades Dragon Keep chain through the facade', () => {
+    const engine = new ProductionRngEngine(); const inputMaster = master()
+    for (const vector of gameVerifiedProductionGogmaResetVectors) {
+      expect(engine.predictGogmaBonus({
+        baseSeed: String(vector.baseSeed), weaponTypeId: vector.weaponTypeId, elementId: vector.elementId,
+        gogmaCounter: vector.gogmaCounter, operation: { type: 'reset_bonuses' }, master: inputMaster,
+      })).toEqual(vector.bonuses)
+    }
+    const chain = gameVerifiedDualBladesDragonKeepChain
+    let current: RestorationBonusSet = chain.testEncodingCurrentBonuses
+    for (const observed of chain.results) {
+      const predicted = engine.predictGogmaBonus({
+        baseSeed: String(chain.baseSeed), weaponTypeId: chain.weaponTypeId, elementId: chain.elementId,
+        gogmaCounter: observed.gogmaCounter, operation: { type: 'keep_bonuses', currentBonuses: current }, master: inputMaster,
+      })
+      expect(predicted).toEqual(observed.bonuses)
+      current = predicted
+    }
   })
 
   /**

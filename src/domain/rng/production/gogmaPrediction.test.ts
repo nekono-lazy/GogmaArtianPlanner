@@ -3,28 +3,43 @@ import type { RestorationBonusSet } from '../../models/publicTypes'
 import { loadMasterData } from '../../master/loadMasterData'
 import { referenceGogmaVectors } from '../../../test/fixtures/referenceGogmaVectors'
 import {
+  gameVerifiedDualBladesDragonKeepChain,
+  gameVerifiedGogmaCounterIdentificationVector,
   gameVerifiedGogmaKeepVector,
   gameVerifiedGogmaResetVectors,
+  gameVerifiedProductionGogmaResetObservationProvenance,
+  gameVerifiedProductionGogmaResetVectors,
 } from '../../../test/fixtures/gameVerifiedGogmaVectors'
 import {
   REFERENCE_GOGMA_COUNTER_GATE_THRESHOLD,
-  predictGameAdjustedGogmaReset,
+  predictProductionGogmaReset,
+  predictProductionGogmaResetSlotsFromRawValues,
   predictReferenceGogmaKeep,
   predictReferenceGogmaReset,
 } from './gogmaPrediction'
 import {
   REFERENCE_GOGMA_RESET_CANDIDATES,
+  type ReferenceGogmaBonus,
   referenceGogmaIdFromRestorationBonus,
   referenceGogmaKeepFamilyCandidates,
   referenceGogmaKeepFamilyForBonusType,
   restorationBonusFromReferenceGogmaId,
 } from './referenceGogmaBonuses'
 import {
-  gameAdjustedGogmaResetCandidatesForWeaponAndElement,
+  PRODUCTION_GOGMA_RESET_SHARPNESS_CAPACITY_FAMILY_LIMIT,
+  buildProductionWeightedGogmaResetPool,
   keepCurrentBonusFamily,
+  productionGogmaResetCandidatesForWeaponAndElement,
+  productionGogmaResetFamiliesForWeaponAndElement,
   toReferenceKeepCurrentBonuses,
 } from './gameGogmaBonuses'
-import { buildReferenceWeightedGogmaPool } from './weightedDraw'
+import {
+  UnsupportedGameVerifiedNormalPredictionError,
+  gameVerifiedNormalCandidatesForWeaponAndElement,
+} from './gameNormalBonuses'
+import { readReferenceRngBlock } from './referencePrng'
+import { deriveGogmaSeed } from './seedDerivation'
+import { buildReferenceWeightedGogmaPool, drawReferenceWeightedGogmaBonus } from './weightedDraw'
 
 /**
  * Reads the ordered slot families of any known five-slot value through the
@@ -100,21 +115,36 @@ describe('reference-verified Production Gogma Reset / Keep prediction', () => {
     }
   })
 
-  it('matches every game-observed Reset with Master-availability filtering before weighted draws', () => {
+  it('matches every earlier game-observed Reset through Production family availability before weighted draws', () => {
     for (const vector of gameVerifiedGogmaResetVectors) {
-      expect(gameAdjustedGogmaResetCandidatesForWeaponAndElement(vector.weaponTypeId, vector.elementId, master())
+      expect(productionGogmaResetCandidatesForWeaponAndElement(vector.weaponTypeId, vector.elementId)
         .map((candidate) => candidate.referenceId)).toEqual(vector.candidateIds)
-      const result = predictGameAdjustedGogmaReset(vector, master())
+      const result = predictProductionGogmaReset(vector)
       expect(result.bonuses).toEqual(vector.bonuses)
       expect(result.bonuses.map(referenceGogmaIdFromRestorationBonus)).toEqual(vector.referenceIds)
       expect(result.effectiveBlock).toBe(vector.gogmaCounter)
     }
   })
 
+  it('still matches the Hammer Paralysis Counter 55..60 live Reset chain through the Production Reset', () => {
+    const live = gameVerifiedGogmaCounterIdentificationVector
+    live.observations.forEach((observation, offset) => {
+      const result = predictProductionGogmaReset({
+        baseSeed: live.baseSeed,
+        weaponTypeId: live.weaponTypeId,
+        elementId: live.elementId,
+        gogmaCounter: live.startGogmaCounter + offset,
+        counterGate: live.actualCounterGate,
+      })
+      expect(result.bonuses).toEqual(observation)
+      expect(result.bonuses.map(referenceGogmaIdFromRestorationBonus)).toEqual(live.referenceIds[offset])
+    })
+  })
+
   it('preserves reference candidate order and applies exact-ID penalties after availability filtering', () => {
-    const candidates = gameAdjustedGogmaResetCandidatesForWeaponAndElement('weapon.light_bowgun', 'element.fire', master())
+    const candidates = productionGogmaResetCandidatesForWeaponAndElement('weapon.light_bowgun', 'element.fire')
     expect(candidates.map((candidate) => candidate.referenceId)).toEqual([8, 12, 15, 9, 13, 16, 6, 10])
-    const afterOne = buildReferenceWeightedGogmaPool(candidates, [8, 15])
+    const afterOne = buildProductionWeightedGogmaResetPool(candidates, [8, 15])
     expect(afterOne.find((entry) => entry.bonus.referenceId === 8)?.weight).toBe(50)
     expect(afterOne.find((entry) => entry.bonus.referenceId === 15)?.weight).toBe(20)
     expect(afterOne.some((entry) => entry.bonus.referenceId === 11 || entry.bonus.referenceId === 14)).toBe(false)
@@ -339,5 +369,194 @@ describe('Keep current input family resolution', () => {
     }
     expect(predictReferenceGogmaKeep(gameVerifiedGogmaKeepVector).bonuses)
       .toEqual(gameVerifiedGogmaKeepVector.bonuses)
+  })
+})
+
+/** The Production active-branch representative; these observations carry no actual Gate value. */
+const ACTIVE_GOGMA_GATE = REFERENCE_GOGMA_COUNTER_GATE_THRESHOLD
+
+/** Exact-ID-repeat-penalty-only draw (the GARP parity pool) over the same candidates and raw values. */
+function exactIdOnlyResetIds(
+  vector: { baseSeed: number; weaponTypeId: string; elementId: string; gogmaCounter: number },
+  candidates: readonly ReferenceGogmaBonus[],
+): number[] {
+  const rawValues = readReferenceRngBlock(
+    deriveGogmaSeed(vector.baseSeed, vector.weaponTypeId, vector.elementId),
+    vector.gogmaCounter,
+  ).values
+  const selected: number[] = []
+  for (let slot = 0; slot < 5; slot += 1) {
+    selected.push(drawReferenceWeightedGogmaBonus(rawValues[slot]!, buildReferenceWeightedGogmaPool(candidates, selected)))
+  }
+  return selected
+}
+
+/**
+ * Production Gogma Reset family availability and the Sharpness/Capacity family
+ * limit (`docs/RNG_SPEC.md` 6.1.1, `docs/RNG_REFERENCE_AUDIT.md` 14.17).
+ */
+describe('Production Gogma Reset family availability and family limit', () => {
+  /** Independent expectation of the Normal lottery ID -> Gogma family correspondence. */
+  const expectedFamilyByNormalLotteryId: Readonly<Record<number, string>> = {
+    6: 'attack',
+    4: 'element',
+    7: 'sharpness_capacity',
+    8: 'affinity',
+  }
+
+  it('matches every 2026-09-15 game-observed Reset slot for slot', () => {
+    expect(gameVerifiedProductionGogmaResetObservationProvenance).toEqual({
+      status: 'game-verified',
+      liveObservationDate: '2026-09-15',
+      timeZone: 'Asia/Tokyo',
+      observationSource: 'GogmaArtianPlanner user live-game observation',
+    })
+    expect(gameVerifiedProductionGogmaResetVectors.map(({ weaponTypeId, elementId, gogmaCounter }) => [weaponTypeId, elementId, gogmaCounter])).toEqual([
+      ['weapon.bow', 'element.poison', 55],
+      ['weapon.switch_axe', 'element.none', 55],
+      ['weapon.hammer', 'element.paralysis', 104],
+      ['weapon.hammer', 'element.paralysis', 160],
+      ['weapon.bow', 'element.poison', 179],
+      ['weapon.lance', 'element.dragon', 197],
+    ])
+    for (const vector of gameVerifiedProductionGogmaResetVectors) {
+      expect(vector.bonuses.map(referenceGogmaIdFromRestorationBonus)).toEqual(vector.referenceIds)
+      expect(productionGogmaResetCandidatesForWeaponAndElement(vector.weaponTypeId, vector.elementId)
+        .map((candidate) => candidate.referenceId)).toEqual(vector.candidateIds)
+      const result = predictProductionGogmaReset({ ...vector, counterGate: ACTIVE_GOGMA_GATE })
+      expect(result.bonuses).toEqual(vector.bonuses)
+      expect(result.effectiveBlock).toBe(vector.gogmaCounter)
+    }
+  })
+
+  it('reproduces Hammer Paralysis Counter 104 only with the Sharpness/Capacity family limit of two', () => {
+    const vector = gameVerifiedProductionGogmaResetVectors.find(({ evidence }) => evidence === 'sharpness_capacity_family_limit_two')!
+    const candidates = productionGogmaResetCandidatesForWeaponAndElement(vector.weaponTypeId, vector.elementId)
+    // The exact-ID-only draw keeps ID 10 once ID 6 reaches weight 0.
+    expect(exactIdOnlyResetIds(vector, candidates)).toEqual(vector.exactIdOnlyReferenceIds)
+    expect(exactIdOnlyResetIds(vector, candidates)).not.toEqual(vector.referenceIds)
+    const rawValues = readReferenceRngBlock(deriveGogmaSeed(vector.baseSeed, vector.weaponTypeId, vector.elementId), vector.gogmaCounter).values
+    expect(predictProductionGogmaResetSlotsFromRawValues(rawValues, candidates).map(referenceGogmaIdFromRestorationBonus))
+      .toEqual(vector.referenceIds)
+  })
+
+  it('draws Affinity in four and five slots and Element as II x2 + EX x2 without any Normal occurrence limit', () => {
+    const familyCount = (referenceIds: readonly number[], family: string) =>
+      referenceIds.filter((id) => REFERENCE_GOGMA_RESET_CANDIDATES.find((entry) => entry.referenceId === id)!.family === family).length
+    const byEvidence = (evidence: string) => gameVerifiedProductionGogmaResetVectors.find((vector) => vector.evidence === evidence)!
+    expect(familyCount(byEvidence('affinity_four_slots').referenceIds, 'affinity')).toBe(4)
+    expect(familyCount(byEvidence('affinity_five_slots').referenceIds, 'affinity')).toBe(5)
+    const element = byEvidence('element_two_ii_two_ex').referenceIds
+    expect(element.filter((id) => id === 11)).toHaveLength(2)
+    expect(element.filter((id) => id === 14)).toHaveLength(2)
+    // Normal Affinity is capped at 3; that limit is never shared with Gogma.
+    expect(gameVerifiedNormalCandidatesForWeaponAndElement('weapon.bow', 'element.poison')
+      .find((candidate) => candidate.referenceId === 8)?.maximumOccurrences).toBe(3)
+  })
+
+  it('derives the Reset family set from the Production Normal pool of every weapon type and element', () => {
+    const loaded = master()
+    let checked = 0
+    for (const { id: weaponTypeId } of loaded.weaponTypes) {
+      for (const { id: elementId } of loaded.elements) {
+        const normalPool = gameVerifiedNormalCandidatesForWeaponAndElement(weaponTypeId, elementId)
+        const expectedFamilies = new Set(normalPool.map((candidate) => expectedFamilyByNormalLotteryId[candidate.referenceId]))
+        expect(new Set(productionGogmaResetFamiliesForWeaponAndElement(weaponTypeId, elementId))).toEqual(expectedFamilies)
+        // A pre-draw filter only: the fixed reference order with non-family candidates removed.
+        expect(productionGogmaResetCandidatesForWeaponAndElement(weaponTypeId, elementId))
+          .toEqual(REFERENCE_GOGMA_RESET_CANDIDATES.filter((candidate) => expectedFamilies.has(candidate.family)))
+        checked += 1
+      }
+    }
+    expect(checked).toBe(loaded.weaponTypes.length * loaded.elements.length)
+    expect(loaded.weaponTypes).toHaveLength(14)
+  })
+
+  it('draws Element on Switch Axe element.none and no Element on Bow Poison / Paralysis / Sleep', () => {
+    const families = (weaponTypeId: string, elementId: string) =>
+      [...productionGogmaResetFamiliesForWeaponAndElement(weaponTypeId, elementId)].sort()
+    expect(families('weapon.switch_axe', 'element.none')).toEqual(['affinity', 'attack', 'element', 'sharpness_capacity'])
+    for (const elementId of ['element.poison', 'element.paralysis', 'element.sleep']) {
+      expect(families('weapon.bow', elementId)).toEqual(['affinity', 'attack'])
+    }
+  })
+
+  it('fails closed for inputs outside the Production Normal pool authority instead of guessing', () => {
+    expect(() => productionGogmaResetCandidatesForWeaponAndElement('weapon.unknown', 'element.fire')).toThrow(RangeError)
+    expect(() => productionGogmaResetCandidatesForWeaponAndElement('weapon.bow', 'element.unknown')).toThrow(RangeError)
+    expect(new UnsupportedGameVerifiedNormalPredictionError('weapon.bow', 'element.fire')).not.toBeInstanceOf(RangeError)
+  })
+
+  it('removes both ID 6 and ID 10 once the Sharpness/Capacity family fills two slots, and nothing else', () => {
+    const all = REFERENCE_GOGMA_RESET_CANDIDATES
+    const ids = (pool: ReturnType<typeof buildProductionWeightedGogmaResetPool>) => pool.map((entry) => entry.bonus.referenceId)
+    expect(PRODUCTION_GOGMA_RESET_SHARPNESS_CAPACITY_FAMILY_LIMIT).toBe(2)
+    // One slot: only the exact-ID penalty applies.
+    const afterOne = buildProductionWeightedGogmaResetPool(all, [6])
+    expect(afterOne.find((entry) => entry.bonus.referenceId === 6)?.weight).toBe(50)
+    expect(afterOne.find((entry) => entry.bonus.referenceId === 10)?.weight).toBe(100)
+    // Two slots, by the same ID or by different IDs: the whole family leaves the pool.
+    for (const selected of [[6, 6], [6, 10], [10, 6]]) {
+      expect(ids(buildProductionWeightedGogmaResetPool(all, selected))).not.toContain(6)
+      expect(ids(buildProductionWeightedGogmaResetPool(all, selected))).not.toContain(10)
+    }
+    // The reference parity pool keeps ID 10 after [6, 6]: that pool is never changed.
+    expect(buildReferenceWeightedGogmaPool(all, [6, 6]).find((entry) => entry.bonus.referenceId === 10)?.weight).toBe(100)
+    // Remaining candidates keep exact-ID penalties.
+    const afterFamilyLimit = buildProductionWeightedGogmaResetPool(all, [6, 10, 8, 15])
+    expect(afterFamilyLimit.find((entry) => entry.bonus.referenceId === 8)?.weight).toBe(50)
+    expect(afterFamilyLimit.find((entry) => entry.bonus.referenceId === 15)?.weight).toBe(20)
+    // No explicit Attack / Affinity / Element family limit.
+    expect(buildProductionWeightedGogmaResetPool(all, [9, 13, 16, 9])).toEqual(buildReferenceWeightedGogmaPool(all, [9, 13, 16, 9]))
+    expect(buildProductionWeightedGogmaResetPool(all, [8, 12, 15, 8])).toEqual(buildReferenceWeightedGogmaPool(all, [8, 12, 15, 8]))
+    expect(buildProductionWeightedGogmaResetPool(all, [11, 14, 11])).toEqual(buildReferenceWeightedGogmaPool(all, [11, 14, 11]))
+  })
+
+  it('leaves the reference parity Reset unchanged where the Production contract differs', () => {
+    const vector = gameVerifiedProductionGogmaResetVectors.find(({ evidence }) => evidence === 'sharpness_capacity_family_limit_two')!
+    expect(predictReferenceGogmaReset({ ...vector, counterGate: ACTIVE_GOGMA_GATE }).bonuses.map(referenceGogmaIdFromRestorationBonus))
+      .toEqual(exactIdOnlyResetIds(vector, REFERENCE_GOGMA_RESET_CANDIDATES))
+  })
+})
+
+/**
+ * Keep is unchanged by the Production Reset corrections (`docs/RNG_SPEC.md`
+ * 6.1.1 item 4): no family availability filter, no family limit.
+ */
+describe('Keep stays the reference family-preserving draw', () => {
+  const chain = gameVerifiedDualBladesDragonKeepChain
+  const shared = {
+    baseSeed: chain.baseSeed,
+    weaponTypeId: chain.weaponTypeId,
+    elementId: chain.elementId,
+    counterGate: ACTIVE_GOGMA_GATE,
+  }
+
+  it('matches all five consecutive Dual Blades Dragon Keeps at Gogma Counters 55..59', () => {
+    expect(chain.provenance).toMatchObject({ status: 'game-verified', liveObservationDate: '2026-09-15', timeZone: 'Asia/Tokyo' })
+    expect(chain.results.map(({ gogmaCounter }) => gogmaCounter)).toEqual([55, 56, 57, 58, 59])
+    expect(familyLayout(chain.testEncodingCurrentBonuses)).toEqual(chain.currentFamilyLayout)
+    let current: RestorationBonusSet = chain.testEncodingCurrentBonuses
+    for (const observed of chain.results) {
+      expect(observed.bonuses.map(referenceGogmaIdFromRestorationBonus)).toEqual(observed.referenceIds)
+      // From the layout alone, and chained from the immediately prior result.
+      expect(predictReferenceGogmaKeep({ ...shared, gogmaCounter: observed.gogmaCounter, currentBonuses: chain.testEncodingCurrentBonuses }).bonuses)
+        .toEqual(observed.bonuses)
+      const result = predictReferenceGogmaKeep({ ...shared, gogmaCounter: observed.gogmaCounter, currentBonuses: current })
+      expect(result.bonuses).toEqual(observed.bonuses)
+      expect(familyLayout(result.bonuses)).toEqual(chain.currentFamilyLayout)
+      current = result.bonuses
+    }
+  })
+
+  it('applies neither the family availability filter nor the Sharpness/Capacity limit', () => {
+    const sharpnessEx = bonus('bonus_type.gogma_sharpness_capacity', 'bonus_rank.ex')
+    const threeSharpness = fiveSlots(sharpnessEx, sharpnessEx, sharpnessEx, bonus('bonus_type.attack', 'bonus_rank.ii'), bonus('bonus_type.affinity', 'bonus_rank.ii'))
+    const result = predictReferenceGogmaKeep({ ...shared, weaponTypeId: 'weapon.hammer', elementId: 'element.paralysis', gogmaCounter: 104, currentBonuses: threeSharpness })
+    expect(familyLayout(result.bonuses)).toEqual(['sharpness_capacity', 'sharpness_capacity', 'sharpness_capacity', 'attack', 'affinity'])
+    // An Element slot on Bow Poison keeps its family; Keep reads no Production family set.
+    const elementOnBowPoison = fiveSlots(bonus('bonus_type.element', 'bonus_rank.ii'), bonus('bonus_type.attack', 'bonus_rank.ii'), bonus('bonus_type.attack', 'bonus_rank.ii'), bonus('bonus_type.affinity', 'bonus_rank.ii'), bonus('bonus_type.affinity', 'bonus_rank.ii'))
+    expect(familyLayout(predictReferenceGogmaKeep({ ...shared, weaponTypeId: 'weapon.bow', elementId: 'element.poison', gogmaCounter: 55, currentBonuses: elementOnBowPoison }).bonuses))
+      .toEqual(['element', 'attack', 'attack', 'affinity', 'affinity'])
   })
 })

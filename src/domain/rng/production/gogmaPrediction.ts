@@ -1,7 +1,7 @@
 import type { ElementId, RestorationBonusSet, WeaponTypeId } from '../../models/publicTypes'
 import {
-  gameAdjustedGogmaResetCandidatesForWeaponAndElement,
-  type GameAdjustedGogmaMasterSubset,
+  buildProductionWeightedGogmaResetPool,
+  productionGogmaResetCandidatesForWeaponAndElement,
 } from './gameGogmaBonuses'
 import { readReferenceRngBlock } from './referencePrng'
 import {
@@ -79,12 +79,28 @@ function predictReferenceGogmaSlots(
   return restorationBonusSetFromReferenceGogmaIds(selectedReferenceIds)
 }
 
-/** Shared game-adjusted Reset draw used after caller availability is compiled. */
-export function predictGameAdjustedGogmaResetSlotsFromRawValues(
+/**
+ * The Production Reset draw over already-compiled Production candidates
+ * (`productionGogmaResetCandidatesForWeaponAndElement`). It is the single draw
+ * path shared by `predictProductionGogmaReset` and Gogma Counter
+ * Identification: the reference raw values, candidate order, and
+ * `w % total` subtraction are unchanged, and only the per-slot pool adds the
+ * Production Sharpness/Capacity family limit (`docs/RNG_SPEC.md` 6.1.1).
+ */
+export function predictProductionGogmaResetSlotsFromRawValues(
   rawValues: readonly number[],
   candidates: readonly ReferenceGogmaBonus[],
 ): RestorationBonusSet {
-  return predictReferenceGogmaSlots(rawValues, () => candidates)
+  const selectedReferenceIds: number[] = []
+  for (let slot = 0; slot < 5; slot += 1) {
+    const rawValue = rawValues[slot]
+    if (rawValue === undefined) {
+      throw new Error(`Reference Gogma block is missing raw value for slot ${slot + 1}`)
+    }
+    const pool = buildProductionWeightedGogmaResetPool(candidates, selectedReferenceIds)
+    selectedReferenceIds.push(drawReferenceWeightedGogmaBonus(rawValue, pool))
+  }
+  return restorationBonusSetFromReferenceGogmaIds(selectedReferenceIds)
 }
 
 /** Reset ignores the prior set and redraws all five slots from the fixed pool. */
@@ -97,22 +113,22 @@ export function predictReferenceGogmaReset(input: ReferenceGogmaPredictionInput)
 }
 
 /**
- * Applies the game-verified pre-draw availability filtering behavior to the fixed reference
- * Reset table, using formal Gogma-scope Master availability without changing
- * seed derivation, block consumption, draw order, or repeat penalties.
+ * Production Gogma Reset (`docs/RNG_SPEC.md` 6.1.1): the fixed reference
+ * Reset order filtered to the Production Normal pool family set of the same
+ * weapon type + element, drawn with the exact-ID repeat penalty plus the
+ * Sharpness/Capacity family limit of two. Seed derivation, block consumption,
+ * and draw order are the reference ones. No Master availability is read.
  */
-export function predictGameAdjustedGogmaReset(
+export function predictProductionGogmaReset(
   input: ReferenceGogmaPredictionInput,
-  master: GameAdjustedGogmaMasterSubset,
 ): ReferenceGogmaPredictionResult {
   const { effectiveBlock, rawValues } = referenceGogmaBlock(input)
-  const candidates = gameAdjustedGogmaResetCandidatesForWeaponAndElement(
+  const candidates = productionGogmaResetCandidatesForWeaponAndElement(
     input.weaponTypeId,
     input.elementId,
-    master,
   )
   return {
-    bonuses: predictGameAdjustedGogmaResetSlotsFromRawValues(rawValues, candidates),
+    bonuses: predictProductionGogmaResetSlotsFromRawValues(rawValues, candidates),
     effectiveBlock,
   }
 }

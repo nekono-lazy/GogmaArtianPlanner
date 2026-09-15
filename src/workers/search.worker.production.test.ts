@@ -252,7 +252,7 @@ describe('Production Candidate Search Worker composition', () => {
 
     expect(responses.some(({ type }) => type === 'error')).toBe(false)
     const result = resultResponse(responses).result
-    expect(result.calculationContext.rngEngineVersion).toBe('production-rng:c5-e6')
+    expect(result.calculationContext.rngEngineVersion).toBe('production-rng:c5-e7')
     expect(result.targetResult.searchedRoutes).toContain('normal_artian_to_gogma')
     // Production Normal prediction is supported, so the predicted variant runs
     // with concrete Normal Counter positions: no forced Reset notice and no
