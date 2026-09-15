@@ -4,7 +4,10 @@ import type {
   NormalArtianCounterIdentificationResult,
   NormalArtianLotteryTableClass,
 } from '../domain/rng/identification'
-import { normalArtianLotteryTableClassElementIds } from '../domain/rng/production/gameNormalBonuses'
+import {
+  gameVerifiedNormalCandidatesForWeaponAndTableClass,
+  normalArtianLotteryTableClassElementIds,
+} from '../domain/rng/production/gameNormalBonuses'
 import type { RngPredictionUnsupportedReason } from '../domain/rng/rngEngine'
 
 /** The formal result classes of `docs/RNG_SPEC.md` 9.12; only `unique` may be confirmed. */
@@ -36,6 +39,27 @@ export function normalCounterIdentificationUnsupportedLabel(
     default:
       return 'この入力はCounter検索に対応していません。'
   }
+}
+
+/**
+ * The supplementary sentence for a weapon type whose two table classes draw
+ * one and the same Production pool (`docs/RNG_SPEC.md` 6.3.1: Light / Heavy
+ * Bowgun, and Switch Axe since its single-pool verification). It is derived
+ * from the Domain pool authority itself, never from a weapon-type list in the
+ * UI, and says only what the pool identity proves: the two classes never
+ * change which bonuses can be drawn, while the class is still recorded per
+ * observation. Returns `null` when the pools differ or the weapon type has no
+ * Production pool.
+ */
+export function normalCounterIdentificationSharedPoolNote(weaponTypeId: WeaponTypeId): string | null {
+  try {
+    const tableA = gameVerifiedNormalCandidatesForWeaponAndTableClass(weaponTypeId, 'table_a')
+    const tableB = gameVerifiedNormalCandidatesForWeaponAndTableClass(weaponTypeId, 'table_b')
+    if (tableA !== tableB) return null
+  } catch {
+    return null
+  }
+  return 'この武器種は属性の有無によらず同じ復元ボーナス抽選を使用するため、どちらの区分でも選択できる復元ボーナスは同じです。'
 }
 
 /** One selectable lottery table of the observation UI, labelled for the weapon type. */

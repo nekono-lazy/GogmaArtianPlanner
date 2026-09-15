@@ -121,9 +121,10 @@ export const GAME_VERIFIED_HEAVY_BOWGUN_NORMAL_CANDIDATES: readonly ReferenceNor
  * Melee.
  *
  * Switch Axe stays outside the category on purpose: Game8 describes it as a
- * separate table condition, and its pool, its attribute handling, and its
- * mapping onto `NormalArtianLotteryTableClass` were not covered by any
- * real-game fixture. Never add it here by inference.
+ * separate table condition (one table whatever the parts configuration), and
+ * its direct game observation established a single pool that does not follow
+ * the Melee Table A / Table B rule. It has its own contract below; never fold
+ * it into this category because the Table A array values happen to coincide.
  */
 
 /** Production Melee Table A pool `[6, 4, 7, 8]` (any attribute); see the category note above. */
@@ -145,9 +146,10 @@ export const GAME_VERIFIED_MELEE_NONE_NORMAL_CANDIDATES: readonly ReferenceNorma
  * The explicit allow-list of weapon types that draw from the Melee pools.
  *
  * This is the single place that decides Melee membership. An unknown weapon
- * type, and Switch Axe in particular, is never treated as Melee implicitly:
- * every Production pool query fails closed for a weapon type outside this set
- * and the three ranged cases.
+ * type is never treated as Melee implicitly, and Switch Axe in particular is
+ * deliberately absent because it has its own single-pool contract below:
+ * every Production pool query fails closed for a weapon type outside this
+ * set, the three ranged cases, and the Switch Axe case.
  */
 export const PRODUCTION_MELEE_NORMAL_POOL_WEAPON_TYPE_IDS: ReadonlySet<WeaponTypeId> = new Set<WeaponTypeId>([
   'weapon.great_sword',
@@ -167,6 +169,49 @@ export function isProductionMeleeNormalPoolWeaponType(weaponTypeId: WeaponTypeId
   return PRODUCTION_MELEE_NORMAL_POOL_WEAPON_TYPE_IDS.has(weaponTypeId)
 }
 
+/*
+ * Switch Axe single pool (docs/RNG_REFERENCE_AUDIT.md 14.16, 2026-09-15).
+ *
+ * Switch Axe is not a Melee-category member. Game8 lists it as a separate
+ * table condition ("the same table whatever the parts configuration"), and
+ * direct game observation at Base Seed 51231782 confirmed exactly that:
+ *
+ * - Counter 0 with a Fire configuration drew `[7, 7, 8, 6, 4]`
+ * - Counter 0 with every part a different attribute (the Domain's
+ *   `element.none`), restored from the same save, drew the identical
+ *   `[7, 7, 8, 6, 4]`
+ * - Counter 0 Fire followed, without any reload, by Counter 1 all-different
+ *   drew `[7, 7, 8, 6, 4]` then `[8, 6, 4, 4, 6]`, matching the existing
+ *   PRNG / seed derivation / 10-step block at Counters 0 and 1
+ *
+ * A Melee Table B pool `[6, 7, 8]` could never draw Element for the
+ * elementless configuration, so the observation rules out the Melee split:
+ * every configuration draws one pool `[6, 4, 7, 8]`. Provenance is layered
+ * and must be stated that way:
+ *
+ * - directly game-verified: pool membership `[6, 4, 7, 8]`, its independence
+ *   from the Fire / all-different configuration, and the Counter 0 -> 1
+ *   sequence, all at Base Seed 51231782
+ * - category-level Production adoption: the per-candidate limits Attack 5 /
+ *   Element 4 / Sharpness 2 / Affinity 3. Those boundaries were not observed
+ *   on Switch Axe itself; they are taken from the 2026-09-14 Melee 1293-forge
+ *   / 6465-slot verification, the user-supplied Game8 limit table, and the
+ *   fact that the Switch Axe observations contradict none of them
+ *
+ * Never write that the Switch Axe limits were game-verified directly, and
+ * never write that Switch Axe has two game tables: both
+ * `NormalArtianLotteryTableClass` values map onto this one pool (see
+ * `gameVerifiedNormalCandidatesForWeaponAndTableClass()`).
+ */
+
+/** Switch Axe single pool `[6, 4, 7, 8]`, drawn by every table class; see the note above. */
+export const GAME_VERIFIED_SWITCH_AXE_NORMAL_CANDIDATES: readonly ReferenceNormalCandidate[] = [
+  GAME_ATTACK,
+  GAME_ELEMENT,
+  GAME_SHARPNESS_OR_CAPACITY,
+  GAME_AFFINITY,
+]
+
 /** Game verification has not established a Normal pool for this input. */
 export class UnsupportedGameVerifiedNormalPredictionError extends Error {
   constructor(weaponTypeId: WeaponTypeId, condition: ElementId | NormalArtianLotteryTableClass) {
@@ -180,6 +225,7 @@ function isProductionNormalPoolWeaponType(weaponTypeId: WeaponTypeId): boolean {
     weaponTypeId === 'weapon.bow' ||
     weaponTypeId === 'weapon.light_bowgun' ||
     weaponTypeId === 'weapon.heavy_bowgun' ||
+    weaponTypeId === 'weapon.switch_axe' ||
     isProductionMeleeNormalPoolWeaponType(weaponTypeId)
   )
 }
@@ -205,12 +251,15 @@ const NORMAL_FINAL_ATTRIBUTE_ELEMENT_IDS: readonly ElementId[] = [
  * - Bow: the explicit Table A / Table B element sets above
  * - Melee category: Table B for `element.none`, Table A for any attribute
  * - Light / Heavy Bowgun: the same rule as Melee; both tables share one pool
+ * - Switch Axe: the same two-valued rule, purely as the Identification / UI
+ *   observation adapter; both classes draw the one Switch Axe pool, because
+ *   the game uses a single table for every configuration
  *
  * An unknown weapon type raises the adapter's `RangeError`; an unknown element
  * raises the Normal final-attribute adapter's `RangeError`; a known weapon
- * type without a Production pool (Switch Axe) raises
- * `UnsupportedGameVerifiedNormalPredictionError`, because its table
- * classification is unverified too. The element never enters the Normal seed.
+ * type without a Production pool raises
+ * `UnsupportedGameVerifiedNormalPredictionError` (no current weapon type;
+ * kept as the fail-closed defence). The element never enters the Normal seed.
  */
 export function normalArtianLotteryTableClassForWeaponAndElement(
   weaponTypeId: WeaponTypeId,
@@ -270,6 +319,10 @@ export function gameVerifiedNormalCandidatesForWeaponAndTableClass(
       return GAME_VERIFIED_LIGHT_BOWGUN_NORMAL_CANDIDATES
     case 'weapon.heavy_bowgun':
       return GAME_VERIFIED_HEAVY_BOWGUN_NORMAL_CANDIDATES
+    case 'weapon.switch_axe':
+      // One game table for every configuration: both Identification table
+      // classes read the same Switch Axe pool, exactly like the Bowguns.
+      return GAME_VERIFIED_SWITCH_AXE_NORMAL_CANDIDATES
     default:
       if (isProductionMeleeNormalPoolWeaponType(weaponTypeId)) {
         return tableClass === 'table_a'

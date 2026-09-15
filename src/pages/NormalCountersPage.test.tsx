@@ -14,6 +14,8 @@ const FIXTURE_TIME = '2026-08-29T00:00:00.000Z'
 const NOW = '2026-09-14T12:00:00.000Z'
 const ATTACK = '基礎攻撃力強化'
 const AFFINITY = '会心率強化'
+const ELEMENT = '属性強化'
+const SHARPNESS = '斬れ味強化'
 
 const fixture: NormalArtianCounter = { id: 'weapon.dual_blades:8', weaponTypeId: 'weapon.dual_blades', rarity: 8, counter: null, isConfirmed: false, observationCount: 0, lastObservedAt: null, candidateCount: null, createdAt: FIXTURE_TIME, updatedAt: FIXTURE_TIME }
 const confirmedFixture: NormalArtianCounter = { ...fixture, id: 'weapon.great_sword:8', weaponTypeId: 'weapon.great_sword', counter: 98765, isConfirmed: true, observationCount: 4, candidateCount: 1, lastObservedAt: '2026-08-30T00:00:00.000Z' }
@@ -198,22 +200,67 @@ describe('NormalCountersPage', () => {
     expect(within(dialog).queryByText(/レア度/)).not.toBeInTheDocument()
   }, 15_000)
 
-  it('keeps Switch Axe outside Production support: the row explains it and never opens a session', async () => {
+  it('offers 観測・検索 for every one of the 14 weapon types, Switch Axe included, with no unsupported notice', async () => {
     const deps = dependencies()
     render(<NormalCountersPage dependencies={deps} />)
     const row = within(await rowFor('スラッシュアックス'))
-    const button = row.getByRole('button', { name: '観測・検索' })
-    expect(button).toBeDisabled()
-    expect(row.getByText(/Production検証対象外のため、Counter検索できません/)).toBeInTheDocument()
-    expect(button).toHaveAccessibleDescription(/スラッシュアックス/)
+    expect(row.getByRole('button', { name: '観測・検索' })).toBeEnabled()
+    expect(row.queryByText(/Production検証対象外/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Counter検索できません/)).not.toBeInTheDocument()
     expect(row.queryByText(/normal_pool_unverified/)).not.toBeInTheDocument()
-    expect(deps.createIdentificationClient).not.toHaveBeenCalled()
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    // Every supported weapon type stays available.
-    for (const name of ['弓', 'ライトボウガン', 'ヘビィボウガン', '大剣', '片手剣', '双剣', '太刀', 'ハンマー', '狩猟笛', 'ランス', 'ガンランス', 'チャージアックス', '操虫棍']) {
+    for (const name of ['弓', 'ライトボウガン', 'ヘビィボウガン', '大剣', '片手剣', '双剣', '太刀', 'ハンマー', '狩猟笛', 'ランス', 'ガンランス', 'スラッシュアックス', 'チャージアックス', '操虫棍']) {
       expect(within(await rowFor(name)).getByRole('button', { name: '観測・検索' })).toBeEnabled()
     }
+    expect(deps.createIdentificationClient).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   }, 15_000)
+
+  it('identifies a Switch Axe Counter from a 属性あり and a 無属性 observation, sends table_a / table_b, and saves C = 0 with two observations', async () => {
+    const user = userEvent.setup()
+    const deps = dependencies([])
+    render(<NormalCountersPage dependencies={deps} />)
+    const dialog = await openIdentification(user, 'スラッシュアックス')
+    expect(deps.createIdentificationClient).toHaveBeenCalledTimes(1)
+    expect(within(dialog).queryByText(/Production検証対象外/)).not.toBeInTheDocument()
+    const first = within(dialog).getByRole('listitem', { name: '観測1' })
+    expect(within(first).getByRole('radio', { name: '属性あり' })).toBeChecked()
+    expect(within(first).queryByRole('radio', { name: /テーブル/ })).not.toBeInTheDocument()
+    expect(within(first).getAllByRole('combobox')).toHaveLength(5)
+    // Observation 1: the direct Fire Counter 0 game observation.
+    await fillObservation(user, dialog, 1, [SHARPNESS, SHARPNESS, AFFINITY, ATTACK, ELEMENT])
+    await user.click(within(dialog).getByRole('button', { name: '観測を追加' }))
+    const second = within(dialog).getByRole('listitem', { name: '観測2' })
+    await user.click(within(second).getByRole('radio', { name: '無属性' }))
+    // Observation 2: the consecutive all-different-parts Counter 1 observation; Element is offered on 無属性 too.
+    await fillObservation(user, dialog, 2, [AFFINITY, ATTACK, ELEMENT, ELEMENT, ATTACK])
+    await user.click(within(dialog).getByRole('button', { name: '検索' }))
+    const client = deps.clients[0]!
+    await waitFor(() => expect(client.identify).toHaveBeenCalledTimes(1))
+    const { input } = client.lastCall()
+    expect(input).toMatchObject({ baseSeed: '51231782', weaponTypeId: 'weapon.switch_axe', rarity: 8 })
+    expect(input.observations.map((observation) => observation.tableClass)).toEqual(['table_a', 'table_b'])
+    expect(JSON.stringify(input)).not.toContain('element.')
+    await client.resolveLast({ matches: [{ startNormalCounter: 0 }], searchedCounterRange: { startInclusive: 0, endInclusive: 5000 }, isTruncated: false })
+    expect(await within(dialog).findByText('候補が1件に絞り込まれました')).toBeInTheDocument()
+    expect(within(dialog).queryByText(/startNormalCounter/)).not.toBeInTheDocument()
+    await user.click(within(dialog).getByRole('checkbox', { name: /調査前の状態へ戻ったことを確認しました/ }))
+    await user.click(within(dialog).getByRole('button', { name: 'Counterを確定' }))
+    await waitFor(() => expect(deps.save).toHaveBeenCalledTimes(1))
+    expect(deps.save.mock.calls[0]![0]).toEqual({
+      id: 'weapon.switch_axe:8',
+      weaponTypeId: 'weapon.switch_axe',
+      rarity: 8,
+      counter: 0,
+      isConfirmed: true,
+      observationCount: 2,
+      candidateCount: 1,
+      lastObservedAt: NOW,
+      createdAt: NOW,
+      updatedAt: NOW,
+    })
+    expect(await screen.findByText('スラッシュアックスのカウンターを確定しました。')).toBeInTheDocument()
+    expect(within(await rowFor('スラッシュアックス')).getByText('確定・検索に使用')).toBeInTheDocument()
+  }, 30_000)
 
   it('builds the initial range from AppSettings.defaultSearchLimit and sends it inclusively', async () => {
     const user = userEvent.setup()

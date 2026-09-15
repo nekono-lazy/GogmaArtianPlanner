@@ -386,12 +386,72 @@ describe('NormalCounterIdentificationDialog', () => {
     expect(client.cancel).toHaveBeenCalledWith('request-1')
   }, 15_000)
 
-  it('fails closed for Switch Axe instead of offering a reference-pool search', () => {
-    const { client } = setup({ weaponTypeId: 'weapon.switch_axe', weaponName: 'スラッシュアックス' })
-    expect(screen.getByText(/Production検証対象外のため、Counter検索できません/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '検索' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
-    expect(client.identify).not.toHaveBeenCalled()
+  describe('Switch Axe single pool', () => {
+    it('offers 属性あり / 無属性 with the same four options on both, keeps an Element slot across the switch, and explains the shared pool', async () => {
+      const user = userEvent.setup()
+      const { client } = setup({ weaponTypeId: 'weapon.switch_axe', weaponName: 'スラッシュアックス' })
+      expect(screen.getByRole('dialog', { name: '通常アーティアCounter検索: スラッシュアックス' })).toBeInTheDocument()
+      expect(screen.queryByText(/Production検証対象外/)).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '検索' })).toBeInTheDocument()
+      const card = observationCard(1)
+      expect(within(card).getByRole('radio', { name: '属性あり' })).toBeChecked()
+      expect(within(card).getByRole('radio', { name: '無属性' })).not.toBeChecked()
+      expect(within(card).queryByRole('radio', { name: /テーブル/ })).not.toBeInTheDocument()
+      for (const exact of ['火', '水', '雷', '氷', '龍', '毒', '麻痺', '睡眠', '爆破']) {
+        expect(within(card).queryByRole('radio', { name: exact })).not.toBeInTheDocument()
+      }
+      expect(within(card).getAllByRole('combobox')).toHaveLength(5)
+      expect(screen.queryByText(/table_a|table_b|normal_pool_unverified/)).not.toBeInTheDocument()
+      expect(screen.getByText(/属性の有無によらず同じ復元ボーナス抽選を使用する/)).toBeInTheDocument()
+
+      await user.click(within(card).getByRole('combobox', { name: /観測1 復元ボーナス1/ }))
+      const tableAOptions = within(await screen.findByRole('listbox')).getAllByRole('option').map((option) => option.textContent)
+      expect(tableAOptions).toEqual(['未入力', ATTACK, ELEMENT, SHARPNESS, AFFINITY])
+      await user.keyboard('{Escape}')
+      await pickSlot(user, 1, 1, ELEMENT)
+      await user.click(within(card).getByRole('radio', { name: '無属性' }))
+      // Table B draws Element too on Switch Axe, so the slot survives the switch.
+      expect(within(card).getByRole('combobox', { name: /観測1 復元ボーナス1/ })).toHaveTextContent(ELEMENT)
+      await user.click(within(card).getByRole('combobox', { name: /観測1 復元ボーナス2/ }))
+      const tableBOptions = within(await screen.findByRole('listbox')).getAllByRole('option').map((option) => option.textContent)
+      expect(tableBOptions).toEqual(['未入力', ATTACK, ELEMENT, SHARPNESS, AFFINITY])
+      expect(tableBOptions).not.toContain(CAPACITY)
+      await user.keyboard('{Escape}')
+      expect(client.identify).not.toHaveBeenCalled()
+    }, 20_000)
+
+    it('sends tableClass table_a / table_b per observation with no elementId, and confirms the unique Counter C itself', async () => {
+      const user = userEvent.setup()
+      const onConfirm = vi.fn(async () => undefined)
+      const { client } = setup({ weaponTypeId: 'weapon.switch_axe', weaponName: 'スラッシュアックス', onConfirm })
+      // Observation 1: Fire configuration at Counter 0 as observed in the game.
+      await fillObservation(user, 1, [SHARPNESS, SHARPNESS, AFFINITY, ATTACK, ELEMENT])
+      await user.click(screen.getByRole('button', { name: '観測を追加' }))
+      // Observation 2: all-different parts (無属性) forged next with no reload.
+      await user.click(within(observationCard(2)).getByRole('radio', { name: '無属性' }))
+      await fillObservation(user, 2, [AFFINITY, ATTACK, ELEMENT, ELEMENT, ATTACK])
+      await user.click(screen.getByRole('button', { name: '検索' }))
+      await waitFor(() => expect(client.identify).toHaveBeenCalledTimes(1))
+      const { input } = client.lastCall()
+      expect(input.weaponTypeId).toBe('weapon.switch_axe')
+      expect(input.baseSeed).toBe(BASE_SEED)
+      expect(input.observations.map((observation) => observation.tableClass)).toEqual(['table_a', 'table_b'])
+      expect(input.observations[0]!.bonuses.map((bonus) => bonus.bonusTypeId)).toEqual([
+        'bonus_type.normal_sharpness', 'bonus_type.normal_sharpness', 'bonus_type.affinity', 'bonus_type.attack', 'bonus_type.element',
+      ])
+      expect(input.observations[1]!.bonuses.map((bonus) => bonus.bonusTypeId)).toEqual([
+        'bonus_type.affinity', 'bonus_type.attack', 'bonus_type.element', 'bonus_type.element', 'bonus_type.attack',
+      ])
+      for (const observation of input.observations) expect(observation).not.toHaveProperty('elementId')
+      expect(JSON.stringify(input)).not.toContain('element.')
+
+      await client.resolveLast(uniqueResult(0))
+      expect(await screen.findByText('候補が1件に絞り込まれました')).toBeInTheDocument()
+      await user.click(await screen.findByRole('checkbox', { name: /調査前の状態へ戻ったことを確認しました/ }))
+      await user.click(screen.getByRole('button', { name: 'Counterを確定' }))
+      await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(1))
+      expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ startNormalCounter: 0, observationCount: 2 }))
+    }, 30_000)
   })
 
   describe('Bow lottery tables', () => {

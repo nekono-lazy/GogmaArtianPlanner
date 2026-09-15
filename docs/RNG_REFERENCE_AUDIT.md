@@ -268,7 +268,8 @@ implementationの挙動であり、変更しない。
 補記（2026-09-14、Melee support拡張）: 上記C4-C時点のgame-verified matrixのうちLong Swordの
 2条件は、14.14でSwitch Axeを除く近接10武器種の共通Melee pool（属性あり `[6, 4, 7, 8]` /
 none `[6, 7, 8]`）へ昇格した。directly game-verifiedな武器・条件と、category-level Production
-adoptionにとどまる武器・条件の区別は14.14に従う。Switch Axeは引き続きunsupportedであり、
+adoptionにとどまる武器・条件の区別は14.14に従う。Switch Axeは14.14の時点では引き続きunsupportedであり
+（その後14.16で独立したsingle poolとしてsupportedへ昇格）、
 「その他の近接武器」を一律に未検証とする本節の記述は14.14以前の状態を表す。
 
 補記（2026-09-15、Bow Table A / B修正）: 本節の「属性ありBowは属性種類では分岐しない」は
@@ -792,7 +793,7 @@ category-level adoptionの根拠は次のcategory-level evidenceである。
 
 **Switch Axe**
 
-- Game8情報ではSwitch Axeは他の近接とTable条件が異なり、パーツ構成によらず同一Tableとされている。しかし使用candidate pool、属性あり / noneの扱い、current `NormalArtianAttributeClass` との対応を今回の実ゲームfixtureでは確認していないため、推測でMelee poolへ入れない。`gameVerifiedNormalCandidatesForWeaponAndElement('weapon.switch_axe', ...)` は引き続き `UnsupportedGameVerifiedNormalPredictionError` であり、`getPredictionSupport` は `normal_pool_unverified`、Counter Identificationは `unsupported_input` / `normal_pool_unverified` でfail closedすることをtestで固定した
+- Game8情報ではSwitch Axeは他の近接とTable条件が異なり、パーツ構成によらず同一Tableとされている。しかし使用candidate pool、属性あり / noneの扱い、current `NormalArtianAttributeClass` との対応を今回の実ゲームfixtureでは確認していないため、推測でMelee poolへ入れない。`gameVerifiedNormalCandidatesForWeaponAndElement('weapon.switch_axe', ...)` は引き続き `UnsupportedGameVerifiedNormalPredictionError` であり、`getPredictionSupport` は `normal_pool_unverified`、Counter Identificationは `unsupported_input` / `normal_pool_unverified` でfail closedすることをtestで固定した（この状態は14.16のSwitch Axe実機検証で解除され、Switch Axeは独立したsingle pool contractとしてsupportedになった。Melee allow-listへは引き続き入れていない）
 
 **Counter Identification**
 
@@ -860,7 +861,77 @@ category-level adoptionの根拠は次のcategory-level evidenceである。
 **version**
 
 - Bow毒 / 麻痺 / 睡眠のProduction Normal Prediction outputが変わるobservable Production RNG semantics changeとして、`PRODUCTION_RNG_ENGINE_VERSION` を `production-rng:c5-e4` から `production-rng:c5-e5` へ更新した。旧CalculationContextのBuildCandidate / BuildListEntry / ProductionPlanは `rngEngineVersion` の差で `calculation_context_changed` になる
-- 変更していないもの: `CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、Master dataVersion、`ExportRoot.schemaVersion`、`NormalArtianCounter` persisted shape、reference parity pool（`REFERENCE_NORMAL_ELEMENTAL_CANDIDATES` / `REFERENCE_NORMAL_NONE_CANDIDATES`、`predictReferenceNormalRaw()`、reference golden。referenceのnone / non-none分類はreference parity契約として残す）、PRNG、seed derivation、10-step block、occurrence limits、Counter increment semantics、Skill RNG、Gogma RNG、Search algorithm、Planner algorithm、Material rules、Switch Axeのunsupported
+- 変更していないもの: `CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、Master dataVersion、`ExportRoot.schemaVersion`、`NormalArtianCounter` persisted shape、reference parity pool（`REFERENCE_NORMAL_ELEMENTAL_CANDIDATES` / `REFERENCE_NORMAL_NONE_CANDIDATES`、`predictReferenceNormalRaw()`、reference golden。referenceのnone / non-none分類はreference parity契約として残す）、PRNG、seed derivation、10-step block、occurrence limits、Counter increment semantics、Skill RNG、Gogma RNG、Search algorithm、Planner algorithm、Material rules、当時のSwitch Axeのunsupported（その後14.16で解除）
+
+---
+
+### 14.16 Switch Axe Normal single-pool実機検証（2026-09-15）
+
+監査日: 2026-09-15 (Asia/Tokyo)
+
+**背景**
+
+- 14.14 / 14.15の時点でSwitch Axeだけが `normal_pool_unverified` としてProduction Normal Prediction / Counter Identificationからfail closedされていた。Game8はSwitch Axeを他の近接と別条件（「どんなパーツ構成でも同じテーブル」）としているが、使用pool、属性あり / 無属性の扱い、`NormalArtianLotteryTableClass` / pool対応を実機fixtureで確認していなかった
+- 調査開始時のSwitch Axe rarity-8 Normal Counterは「過去に作成した記憶がないためおそらく0」という状態であり、確定値ではなかった
+
+**調査方法**
+
+- Base Seed 51231782、Switch Axe rarity 8
+- A. 調査前saveから火属性構成をCounter 0で作成 → 観測 → 保存せず戻る
+- B. 同じsaveから3パーツをすべて異なる属性にした構成（Domainでは `element.none` として表現する無属性構成）をCounter 0で作成 → 観測 → 保存せず戻る
+- C. 同じsaveから、reloadを挟まずに火構成（Counter 0）→ 全部別々構成（Counter 1）を連続作成 → 観測
+
+**観測結果（lottery ID順 = 画面slot順）**
+
+| 手順 | 構成 | Counter | 5枠 | lottery IDs |
+|---|---|---|---|---|
+| A | 火 | 0 | 斬れ味強化 / 斬れ味強化 / 会心率強化 / 基礎攻撃力強化 / 属性強化 | `[7, 7, 8, 6, 4]` |
+| B | 全部別々（none） | 0 | 斬れ味強化 / 斬れ味強化 / 会心率強化 / 基礎攻撃力強化 / 属性強化 | `[7, 7, 8, 6, 4]` |
+| C-1 | 火 | 0 | 斬れ味強化 / 斬れ味強化 / 会心率強化 / 基礎攻撃力強化 / 属性強化 | `[7, 7, 8, 6, 4]` |
+| C-2 | 全部別々（none） | 1 | 会心率強化 / 基礎攻撃力強化 / 属性強化 / 属性強化 / 基礎攻撃力強化 | `[8, 6, 4, 4, 6]` |
+
+- 既存PRNG、Switch Axe reference weapon type = 8、rarity 8 internal = 7、Base Seed 51231782、10-step blockに、pool `[6, 4, 7, 8]`（Attack 5 / Element 4 / Sharpness 2 / Affinity 3）を適用したCounter 0 / Counter 1のPredictionは、AとBとC-1の `[7, 7, 8, 6, 4]`、C-2の `[8, 6, 4, 4, 6]` とslot順を含め完全一致する。PRNG、seed derivation（ElementIdはseedへ入れない）、10-step block、pool step、occurrence limitは変更していない
+- AとBが完全一致することから、少なくとも直接比較した「属性あり構成」と「全部別々の属性パーツ構成」の間にはpool切替が存在しない。Melee Table B pool `[6, 7, 8]` は無属性構成の属性強化（4）を抽選できないため、この観測はSwitch AxeをMelee分類（属性あり `[6, 4, 7, 8]` / 無属性 `[6, 7, 8]`）で扱うことを直接反証する。Game8の「スラアクはどんなパーツ構成でも同じテーブル」という分類とも一致する
+- C-1 → C-2の連続観測は、既存Normal Counter semantics（武器種 + rarityごとに1本、1 forgeで1進む）と一致する。C `[7, 7, 8, 6, 4]` / C+1 `[8, 6, 4, 4, 6]` の2観測を開始Counter 0..5000で照合すると `startNormalCounter = 0` の1件だけに一致し（Counter 0観測1件だけでは候補が複数）、「おそらく0」だったCounterをCounter 0として再現できる。この一意性はrepositoryの現行kernel（`selectReferenceNormalLotteryIdsFromRawValues()` + `readReferenceRngBlock()`）でも独立に確認した
+
+**結論**
+
+- Switch Axeはパーツ構成非依存のsingle pool `[6, 4, 7, 8]`（Attack / Element / Sharpness / Affinity）である
+- Counter streamは `weapon.switch_axe:8` の1本であり、Table classやパーツ構成をIDへ追加しない
+- C0 / C1進行は既存Normal Counter semanticsと一致する
+
+**provenanceの区別（過剰主張の禁止）**
+
+| 区分 | 対象 | 根拠 |
+|---|---|---|
+| direct observation（今回） | pool membership `[6, 4, 7, 8]` | 本節のA / B / C観測（Base Seed 51231782、Counter 0 / 1） |
+| direct observation（今回） | 火 / 全部別々（none）構成に依存しないこと | AとBが同じCounter 0で完全一致 |
+| direct observation（今回） | Counter 0 → 1の連続stream | C-1 → C-2 |
+| category-level Production adoption | Attack 5 / Element 4 / Sharpness 2 / Affinity 3の `maximumOccurrences` 境界 | 14.13のMelee 1293個体 / 6465 slots直接検証、ユーザー提示のGame8上限表、今回のSwitch Axe観測がこれらを一切反証しないこと |
+
+「Switch AxeでAttack 5 / Element 4 / Sharpness 2 / Affinity 3の境界を直接game-verifiedした」と記述してはならない。
+
+**Domain / 実装**
+
+- `gameNormalBonuses.ts` にSwitch Axe専用Production定数 `GAME_VERIFIED_SWITCH_AXE_NORMAL_CANDIDATES = [GAME_ATTACK, GAME_ELEMENT, GAME_SHARPNESS_OR_CAPACITY, GAME_AFFINITY]` を追加した。`PRODUCTION_MELEE_NORMAL_POOL_WEAPON_TYPE_IDS`（Melee共通10種）には入れていない。pool配列の値がMelee Table Aと同じであっても、Melee Table Bが `[6, 7, 8]` である以上category semanticsは異なるため、provenance / classification上は独立したSwitch Axe contractとして扱う
+- formal Domainの `NormalArtianLotteryTableClass = 'table_a' | 'table_b'` は変更していない。Switch Axeでは `normalArtianLotteryTableClassForWeaponAndElement()` が `element.none -> table_b`、それ以外 -> `table_a` に分類し（Identification / UIのsemantic observation adapter）、`gameVerifiedNormalCandidatesForWeaponAndTableClass('weapon.switch_axe', ...)` は `table_a` / `table_b` のどちらでも同一のSwitch Axe poolを返す（LBG / HBGで両tableが同じpoolを返すのと同じadapter構造）。「Switch Axeにはゲーム上別々のTable A / Bがある」と主張してはならない。BowのTable A / B splitはSwitch Axeへ適用しない
+- `ProductionRngEngine.getPredictionSupport()` はSwitch Axe rarity 8 Normal Predictionを `supported: true` とする。rarity 8以外は従来どおり `reference_adapter_unsupported`、unknown weapon / unknown elementはfail closed。`normal_pool_unverified` の構造化reasonは、Production poolを持たない将来の武器種のためのfail-closed契約として残す（現時点で該当する武器種はない）
+- Counter Identification: `getNormalArtianCounterIdentificationSupport('weapon.switch_axe', 8)` は `supported: true`。kernelは `gameVerifiedNormalCandidatesForWeaponAndTableClass()` を共有しているため、Switch Axeの両table classが同じsingle poolで1本のCounterを検索できる。Observationのoption authority（`normalArtianCounterObservationBonusOptions()`）は両tableとも基礎攻撃力強化 / 属性強化 / 斬れ味強化 / 会心率強化であり、`table_b` でもElementは有効である。Melee Table BのElement invalidをSwitch Axeへ誤適用しない。occurrence validation（Sharpness 3 / Affinity 4 / Element 5は `invalid_input`、Attack 5は有効）は6.3.1契約をそのまま使う
+- UI: NormalCountersPageのSwitch Axe行は「Production検証対象外」ではなくなり「観測・検索」を利用できる。Dialogの区分は弓ではないため既存generic表示（属性あり / 無属性）を維持し、exact Element dropdownは追加していない。両区分のbonus optionsはDomainから導出し、UIにSwitch Axe専用lottery tableをハードコードしない。両table classが同じpoolを返す武器種（LBG / HBG / Switch Axe）には、Domainのpool同一性から導出した補足文「この武器種は属性の有無によらず同じ復元ボーナス抽選を使用するため、どちらの区分でも選択できる復元ボーナスは同じです。」を表示する
+- Candidate Search: 確定Base Seed + 確定Switch Axe Normal Counterがある場合、new Normal → convert Gogma系routeがpredicted variantで探索可能になる。Search algorithm / Planner algorithm自体は変更していない。Production integration testとして、Base Seed 51231782 / Switch Axe Normal Counter 0 confirmedで `create_normal_artian`（`normalCounterBefore = 0`）を含むrouteが `normal_pool_unverified` で除外されず探索され、forged slotがC0 fixture `[Sharpness, Sharpness, Affinity, Attack, Element]` であり、そのKeepで到達するIdealをCandidate Searchが見つけることを1件固定した
+- Counter persistence: `weapon.switch_axe:8` の1本のみ。Table class / パーツ構成をIDへ追加せず、DB schema、`NormalArtianCounter` persisted shape、Observation履歴のmemory-only運用は変更していない
+- fixture: `src/test/fixtures/gameVerifiedNormalVectors.ts` に `gameVerifiedSwitchAxeFireNormalVectors`（火 Counter 0）と `gameVerifiedSwitchAxeNoneNormalVectors`（none Counter 0 / 1）を追加し、各行のprovenance（save reload後の直接観測 / 火C0直後のreloadなし連続観測）をcommentに記録した
+
+**golden**
+
+- Production: Switch Axe Fire C0 `[7, 7, 8, 6, 4]`、None C0 `[7, 7, 8, 6, 4]`、None C1 `[8, 6, 4, 4, 6]`。supported exact ElementIdすべてでpool `[6, 4, 7, 8]`、両table classが同一定数、火 / none（および全属性）で同じCounterなら同じraw result（elementはNormal seedへ入らない）
+- Counter Identification: Table A C0観測 `[Sharpness, Sharpness, Affinity, Attack, Element]` + Table B C1観測 `[Affinity, Attack, Element, Element, Attack]`、Base Seed 51231782、0..5000で `matches = [{ startNormalCounter: 0 }]`、`isTruncated = false`。両tableが同じCounter streamを共有し、どちらのtable classで各観測を宣言しても同じ結果になる。結果にraw elementIdを含まない。Counter保存はC（観測数を加算しない）
+- Regression: Bow Table A / B、Melee 10種、LBG / HBG、HBG Counter golden、reference parityはすべて不変
+
+**version**
+
+- 以前unsupportedだったSwitch AxeのNormal Prediction inputがsupportedになり、Candidate SearchのRoute availabilityとCounter Identification supportが変わるため、observable Production RNG semantics changeとして `PRODUCTION_RNG_ENGINE_VERSION` を `production-rng:c5-e5` から `production-rng:c5-e6` へ更新した。旧CalculationContextのBuildCandidate / BuildListEntry / ProductionPlanは `rngEngineVersion` の差で `calculation_context_changed` になる
+- 変更していないもの: `CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、Master dataVersion、`ExportRoot.schemaVersion`、`NormalArtianCounter` ID / persisted shape、reference parity pool（`REFERENCE_NORMAL_ELEMENTAL_CANDIDATES` / `REFERENCE_NORMAL_NONE_CANDIDATES`、`predictReferenceNormalRaw()`、reference golden。referenceのnone / non-none分類はSwitch Axeでもreference parity契約として残す）、PRNG、seed derivation、10-step block、Counter increment rule、occurrence limits、Bow分類、Melee 10種の分類とallow-list、LBG / HBG pool、Skill RNG、Gogma RNG、Search algorithm、Planner algorithm、Material rules
 
 ---
 

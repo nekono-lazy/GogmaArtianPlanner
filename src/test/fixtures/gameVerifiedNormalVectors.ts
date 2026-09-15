@@ -7,7 +7,9 @@ import type { RestorationBonus, RestorationBonusSet } from '../../domain/models/
  * versions. Bow provenance is layered (docs/RNG_REFERENCE_AUDIT.md 14.15):
  * Fire, Blast, Poison, Paralysis, Sleep, and none are direct observations,
  * while Water / Thunder / Ice / Dragon have no fixture here and sit on Table A
- * by category-level adoption.
+ * by category-level adoption. Switch Axe (14.16) is a direct observation of
+ * its single pool at Counters 0 and 1 only; its occurrence limits are
+ * category-level adoption.
  */
 function bonus(bonusTypeId: string): RestorationBonus {
   return { bonusTypeId, bonusRankId: 'bonus_rank.base' }
@@ -211,5 +213,54 @@ export const gameVerifiedBowSleepNormalVectors = [
   {
     baseSeed: 51231782, weaponTypeId: 'weapon.bow', elementId: 'element.sleep', rarity: 8, normalCounter: 0,
     gameLotteryIds: [8, 8, 6, 6, 8], bonuses: set(affinity, affinity, attack, attack, affinity),
+  },
+] as const
+
+/*
+ * Switch Axe single-pool direct game observations (docs/RNG_REFERENCE_AUDIT.md
+ * 14.16, 2026-09-15). Base Seed 51231782, Switch Axe rarity 8. The Counter
+ * before the investigation was believed to be 0 ("never forged one before")
+ * and the three forges below match the existing PRNG / seed derivation /
+ * 10-step block at Counters 0 and 1 with the single pool `[6, 4, 7, 8]`
+ * (Attack 5 / Element 4 / Sharpness 2 / Affinity 3) exactly, slot order
+ * included; the two-observation C / C + 1 pair is unique over 0..5000.
+ *
+ * `element.none` below is the Domain representation of an elementless
+ * configuration built from three parts of all-different attributes. The
+ * investigation compared it against a Fire configuration from the same save:
+ *
+ * - Fire, Counter 0: forged from the pre-investigation save, observed, and
+ *   the save was then restored without saving
+ * - none, Counter 0: the same save restored again, all-different parts,
+ *   observed directly; identical to Fire Counter 0, so the configuration
+ *   does not switch the pool
+ * - none, Counter 1: the same save restored, Fire forged at Counter 0 again,
+ *   then, with no reload in between, all-different parts forged as the very
+ *   next Switch Axe; this row is that consecutive second forge
+ *
+ * These rows prove pool membership, configuration independence, and the
+ * Counter 0 -> 1 progression at this seed only. They do not boundary-verify
+ * the per-candidate occurrence limits on Switch Axe.
+ */
+
+/** Direct game observation: Switch Axe Fire configuration, Counter 0, single pool `[6, 4, 7, 8]`. */
+export const gameVerifiedSwitchAxeFireNormalVectors = [
+  {
+    baseSeed: 51231782, weaponTypeId: 'weapon.switch_axe', elementId: 'element.fire', rarity: 8, normalCounter: 0,
+    gameLotteryIds: [7, 7, 8, 6, 4], bonuses: set(sharpness, sharpness, affinity, attack, element),
+  },
+] as const
+
+/** Direct game observation: Switch Axe all-different-parts (elementless) configuration, Counters 0 and 1. */
+export const gameVerifiedSwitchAxeNoneNormalVectors = [
+  {
+    // Restored save, all-different parts at Counter 0: identical to the Fire Counter 0 forge.
+    baseSeed: 51231782, weaponTypeId: 'weapon.switch_axe', elementId: 'element.none', rarity: 8, normalCounter: 0,
+    gameLotteryIds: [7, 7, 8, 6, 4], bonuses: set(sharpness, sharpness, affinity, attack, element),
+  },
+  {
+    // Forged immediately after the Fire Counter 0 forge with no reload: the consecutive Counter 1.
+    baseSeed: 51231782, weaponTypeId: 'weapon.switch_axe', elementId: 'element.none', rarity: 8, normalCounter: 1,
+    gameLotteryIds: [8, 6, 4, 4, 6], bonuses: set(affinity, attack, element, element, attack),
   },
 ] as const
