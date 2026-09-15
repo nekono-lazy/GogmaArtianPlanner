@@ -314,7 +314,9 @@ export interface ArtianBonusTypeMapping {
 
 複数の通常Bonus Typeから同一巨戟Bonus TypeへのMany-to-Oneは有効。逆引きは配列として扱う。MappingはBonus Typeの意味対応であり、conversion時のType / Rank変換、抽選、完成ボーナス生成には使用しない。Keep predictionでは、normal-scope current slotの通常側Bonus Typeを巨戟側Bonus Type（Keep family）へ正規化するためにだけ使用する（[RNG_SPEC.md](./RNG_SPEC.md) 6.1）。巨戟化だけならnormal scopeを継承し、Reset / Keep後のgogma scope結果はRNG Engine Predictionが返す。
 
-BowのSharpness/Ammo family、LBG/HBGのElement family、elementless GogmaのElement bonus、栄光の誉れ、祝祭の巡りは参照RNG poolとCurrent Masterの差分が未確認である。今回、既存Master JSONまたはDomain制約を変更せず、現在Masterの存在／有効性をProduction RNG抽選poolの検証根拠にしない。
+Production Gogma Resetがどのbonus familyを抽選するかは、Current Masterの `WeaponBonusDefinition` + `ElementMaster.allowsElementBonus` ではなく、同じ武器種・属性のProduction通常アーティアpoolのfamily集合で決まる（[RNG_SPEC.md](./RNG_SPEC.md) 6.1.1 / 6.3.1）。例えば弓のテーブルB（無属性・毒・麻痺・睡眠）は `allowsElementBonus` の値にかかわらず属性強化を抽選せず、スラッシュアックスの `element.none` は `allowsElementBonus = false` でも属性強化を抽選する。弓は斬れ味・装填強化を、ライト／ヘビィボウガンは属性強化を抽選しない。このfamily availabilityには直接実機観測した条件とcategory-level Production adoptionが混在し、その区別は [RNG_SPEC.md](./RNG_SPEC.md) 6.1.1 に従う。したがってCurrent Masterの存在／有効性と `allowsElementBonus` を、Production RNG抽選poolまたはlottery family availabilityのauthority・検証根拠にしない。現行runtime（`production-rng:c5-e6`）はまだMaster availabilityでGogma Reset候補をfilterしており、この契約は後続PR-Bで実装する。Master JSON、`allowsElementBonus`、`getBonusDefinitionsForWeapon()` の意味、dataVersionはこの仕様確定では変更せず、変更要否は後続PR-B / PR-Cで判断する。
+
+武器種のProduction family availability外のfamilyをcurrentに持つKeepの実ゲーム結果、栄光の誉れ、祝祭の巡りは未確認である。
 
 ---
 
@@ -553,6 +555,7 @@ getMaterialCosts(master, operationType, weaponTypeId): MaterialCostMaster[]
 - selectorはUIに依存しない
 - Bonus Definition selectorはscope、武器種、属性を必須入力とし、ElementMasterの `allowsElementBonus` がfalseなら属性強化を除外する
 - 無属性は `allowsElementBonus = false`、その他の現在有効な属性はtrueとする。実行時にElement ID文字列から意味を推測しない
+- 上記selectorと `allowsElementBonus` による除外はMaster Data上の定義であり、Production lotteryのfamily availability authorityではない（[RNG_SPEC.md](./RNG_SPEC.md) 6.1.1）。Production上で利用可能なBonusDefinitionは、Masterの武器種・scope定義とProduction family availabilityの積として決める方針とし、後続PR-Cで、Master層がProduction RNG層へ依存しない依存方向を保った新しい複合availability selectorとして追加する。`getBonusDefinitionsForWeapon()` 自体の意味を変更するかどうかは本仕様確定では決めない
 - 存在しないIDを指定された場合は明示的なDomain Errorを返す
 
 ---

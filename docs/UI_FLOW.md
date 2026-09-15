@@ -473,7 +473,7 @@ UI接続状態。
 - 復元ボーナスは必ず5枠
 - 通常アーティアはscopeを `normal_artian` に固定する。巨戟アーティアは、最初のBonus amendment前の通常継承かamendment後の巨戟tierかを「復元ボーナスの種類」（通常アーティア系／巨戟アーティア系）として明示入力し、選択scope、武器種、属性に対応したWeaponBonusDefinitionだけを表示する。この選択欄には「巨戟化直後、まだ復元ボーナス変更前は「通常アーティア系」です。」という補足を表示する
 - 一覧は3.2の表示順契約に従い、自動sortしない
-- 無属性では通常／巨戟とも属性強化を表示しない。ライト／ヘビィボウガンも属性にかかわらず表示しない
+- 現行実装では、無属性では通常／巨戟とも属性強化を表示しない。ライト／ヘビィボウガンも属性にかかわらず表示しない。この無属性除外はMasterの `allowsElementBonus` によるものであり、ゲームの抽選availabilityと一致しない条件がある（スラッシュアックスの無属性構成は属性強化を持ち得、弓の毒・麻痺・睡眠は属性強化を抽選しない。[RNG_SPEC.md](./RNG_SPEC.md) 6.1.1）。後続PR-Cで、Owned Weapon editor、Target editor、Target compromise editor、Identification Wizard、new entity draftの選択肢を、Masterの武器種・scope定義とProduction family availabilityの積を返す複合availability selectorへ揃える。UI側に武器種別の抽選テーブルをハードコードしない
 - 通常アーティアではシリーズ／グループスキルとstatus入力を表示せず、保護初期値をOFFにする
 - 通常アーティアはレア8として自動登録し、レア度選択UIを表示しない
 - 巨戟アーティアのstatusと保護は独立項目として扱う
