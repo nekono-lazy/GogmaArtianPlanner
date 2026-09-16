@@ -651,13 +651,13 @@ describe('Planner Beam Search', () => {
     const resetSteps = plan?.steps.filter(
       ({ operationType }) => operationType === 'reset_bonuses',
     ) ?? []
-    const reserveSteps = plan?.steps.filter(
-      ({ operationType }) => operationType === 'reserve_weapon',
+    const completions = plan?.steps.flatMap(
+      ({ executionEffects }) => executionEffects?.targetCompletions ?? [],
     ) ?? []
 
     expect(resetSteps).toHaveLength(1)
     expect(resetSteps[0].progressedTargetWeaponIds).toHaveLength(1)
-    expect(reserveSteps).toHaveLength(1)
+    expect(completions).toHaveLength(1)
     expect(plan?.selectedBuildListEntryIds).toHaveLength(1)
   })
 
@@ -1963,7 +1963,18 @@ describe('Planner Beam Search', () => {
     )
     const before = structuredClone(input)
     const result = await runPlannerBeamSearch(input, dependencies)
-    expect(result.rejections).toContainEqual(expect.objectContaining({
+    // A Route is secured only right after its own last unit (PLANNER_SPEC
+    // 16.3), so the diverged Route is never secured once the shared weapon
+    // moved on: it is secured directly after the shared Reset, or never.
+    const trace = result.bestState?.trace ?? []
+    const secondReserve = trace.findIndex((action) =>
+      action.kind === 'reserve_candidate' && action.primaryBuildListEntryId === second.id)
+    const firstSkills = trace.findIndex(({ actionType }) => actionType === 'reset_skills')
+    if (secondReserve >= 0) {
+      expect(trace[secondReserve - 1]?.actionType).toBe('reset_bonuses')
+      expect(firstSkills === -1 || secondReserve < firstSkills).toBe(true)
+    }
+    expect(result.rejections).not.toContainEqual(expect.objectContaining({
       buildListEntryId: second.id,
       actionType: 'reserve_weapon',
       detail: 'The existing Gogma Candidate was superseded by a later source mutation.',

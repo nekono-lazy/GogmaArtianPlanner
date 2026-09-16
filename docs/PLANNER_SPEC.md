@@ -3584,8 +3584,9 @@ Application / Persistence層の責務である。
 
 #### PlanningInputSnapshot
 
-`initialExecutionState` は既存の`createExpectedPlanState(input.rngState, input.normalCounters,
-input.ownedWeapons)`で生成する。独自Hashを再実装しない。
+`initialExecutionState` は既存の`createExpectedPlanState()`で、Plannerの入力状態とPlan依存Target
+（16.5）から生成する。Plan依存Targetはexecution projection後に確定するため、snapshotはprojectionの後で作る。
+独自Hashを再実装しない。
 
 `targetWeaponsHash` はPlanner入力全体の監査用hashであり、`createTargetDefinitionHash()` の単純再利用
 ではないplanning-input用の独立契約である（16.11のTarget field責務表）。`PlannerInput.targetWeapons` の
@@ -4459,8 +4460,10 @@ dependencyでもrun間で一致する。
 Targetとの作成中紐付け、妥協checkpoint、妥協品での終了、理想品完成とTarget完了、
 武器切替案内、想定外結果、Undoである。
 
-本章は仕様確定であり、現行コードはまだ本章に追従していない。後続の実装PRが本章を
-authorityとして実装する。本章と矛盾する旧記述（Execution上の独立した「確保」操作、
+本章は仕様確定である。永続Entity基盤（Dexie 5 / Export 7）と、calculation schema 12の
+Execution Plan契約（16.3 / 16.5 / 16.6 / 16.11のhash、projection、`executionEffects`、Beam Searchのreserve
+適用位置と完成時保護）は実装済みである。Step確定、Undo、ゲーム内セーブ地点の記録 / 復元、Plan破棄、
+再計画採用などのExecution runtimeは後続の実装PRが本章をauthorityとして実装する。本章と矛盾する旧記述（Execution上の独立した「確保」操作、
 Target / Build List変更による一律stale、reserve時の既存保護維持など）は本改訂で
 本書・[REQUIREMENTS.md](./REQUIREMENTS.md)・[DATA_MODEL.md](./DATA_MODEL.md)・
 [SEARCH_SPEC.md](./SEARCH_SPEC.md)・[UI_FLOW.md](./UI_FLOW.md)から書き換えた。
@@ -4604,6 +4607,15 @@ target completion（16.13）を載せ、その物理Stepの確定と同じtransa
   Reset Skillsの起点にしない
 - Planner内部の `selected_checkpoint_not_reached` によるreserve拒否と、required Entry
   （7.5.6）の完成判定は従来どおり有効である
+
+calculation schema 12の実装では、Beam Searchは直前の物理action（とその後に続くreserveだけ）で
+Routeが完了したEntryにだけreserveを試みる。reserveしない分岐も通常の後続として残し、その場合その
+Entryは以後reserveしない（共有物理actionが別Entryの継続に使われる場合）。操作0 Candidateの
+`confirm_owned_ideal` は、RNGを進めないため展開前の初期状態で1 Targetにつき1件適用する。
+Trace Replayは探索表現の検証とRNG予測結果の確定だけを行い、PlanStepとexpected stateは
+Replay結果からexecution projection（`projectProductionPlanExecution()`）が作る。projectionの最終状態は
+確保済みEntryの武器について探索最終状態とsemanticに一致しなければならず、所持Normalの巨戟化だけは
+探索側の新規予約IDとprojection側の元IDを対応付けて比較する。
 
 #### executionEffects
 
@@ -5039,8 +5051,8 @@ staleにしない。`lifecycleStatus` も性能定義ではないため `createT
   （旧Target移行の案内flag `compromiseNeedsReview` などの表示用metadata）
 ```
 
-現行実装の `createTargetDefinitionHash()` は `priority`、`isEnabled`、`preferredOwnedWeaponId` を
-含んでいる。後続実装PRでこの集合へ正規化し、version境界（16.17）とともに適用する。
+calculation schema 11以前の `createTargetDefinitionHash()` は `priority`、`isEnabled`、`preferredOwnedWeaponId` を
+含んでいた。calculation schema 12でこの集合へ正規化し、version境界（16.17）とともに適用した。
 
 各fieldの責務は次のとおりである。
 
@@ -5253,7 +5265,9 @@ staleness semantics、PlanStep / reserve semantics、Expected execution state、
   本仕様PRでは実コードのversionを変更しない。最初の実装PR（永続Entity基盤）でDexie
   `DATABASE_SCHEMA_VERSION` を5、`ExportRoot.schemaVersion` を7へ更新し、
   `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は計算意味を切り替える後続PRまで11のまま維持した
-  （[DATA_MODEL.md](./DATA_MODEL.md) 3.5 / 14.2 / 15）
+  （[DATA_MODEL.md](./DATA_MODEL.md) 3.5 / 14.2 / 15）。2番目の実装PR（Execution Plan契約）で
+  `CURRENT_CALCULATION_APP_SCHEMA_VERSION` を12、`ExportRoot.schemaVersion` を8へ更新し、Dexieは
+  table / index変更が無いため5のまま維持した
 - 既存データを推測migrationして意味を変えない。所持Ideal武器の存在からTargetを
   `completed` と推測しない。既存OwnedWeaponを作成中と推測しない
 - 旧契約のProductionPlan（独立 `reserve_weapon` Step、旧expected state）はexact persisted

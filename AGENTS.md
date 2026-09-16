@@ -205,7 +205,20 @@ lifecycle, `OwnedWeapon.executionInProgress`, and `ExecutionSavePoint` persisted
 shapes and moved `DATABASE_SCHEMA_VERSION` to 5 and `ExportRoot.schemaVersion` to
 7. It switched no calculation semantics - not `createTargetDefinitionHash()`, the
 planning-input hashes, `ExpectedPlanState`, PlanStep effects, or reserve - so
-`CURRENT_CALCULATION_APP_SCHEMA_VERSION` stays 11 until the PR that does.
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION` stayed 11 until the PR that does.
+That second PR (the Execution Plan contract) moved
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION` to **12** and `ExportRoot.schemaVersion`
+to 8, and kept `DATABASE_SCHEMA_VERSION` at 5 because no table or index changed.
+It switched `createTargetDefinitionHash()` to the performance definition only, the
+planning-input `targetWeaponsHash` normalization, the Plan-dependent
+`dependentTargetDefinitionsHash` / `dependentBuildListEntriesHash`,
+`ExpectedPlanState.targetExecutionStateHash` and the binding token, the
+`PlanStep.executionEffects` projection (same OwnedWeapon ID, Counter-advance versus
+production-target Normal, observation binding, target link, compromise label,
+target completion), `confirm_owned_ideal`, and the search-side reserve placement
+and completion protection. The Execution runtime (Step confirmation, Undo, save
+point, abandonment, replan adoption) and the ProductionPlan abandonment / completion
+fields are not implemented by it.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -229,8 +242,11 @@ operation order with per-lane intermediate states
 improvement preference (`BuildListEntry.intermediateStateSelection`), and a
 Planner that interleaves the Bonus and Skill lanes changes the Candidate output
 shape, the Build List planning input, Planner Route execution semantics, the
-PlanStep milestone shape, and the PlanConflict participant shape, so
-current `CalculationContext.appSchemaVersion` is **11**, defined
+PlanStep milestone shape, and the PlanConflict participant shape, which moved it
+to version 11. The Execution Plan contract above (Target definition hash
+normalization, planning-input and Plan-dependent hashes, Target execution state,
+PlanStep `executionEffects`, reserve and zero-operation completion semantics) moved
+it to the current **12**, defined
 only by `CURRENT_CALCULATION_APP_SCHEMA_VERSION` in `src/domain/models/common.ts`.
 A version 10 `checkpointGroups` / `selectedCheckpointOpportunityIds` cannot be
 mapped onto lane pins, and reading such a selection as empty would silently
@@ -273,7 +289,7 @@ current Candidates by searching again.
 Do not delete historical results or add a migration or Export/Import semantic
 validation change as a substitute for CalculationContext compatibility.
 
-All version 1..10 Candidates, BuildListEntries and ProductionPlans are incompatible with version 11. Preserve their contents and fail closed with calculation_context_changed. Do not extend the historical build-result compatibility exception to version 9, 10 or 11.
+All version 1..11 Candidates, BuildListEntries and ProductionPlans are incompatible with version 12. Preserve their contents and fail closed with calculation_context_changed. Do not extend the historical build-result compatibility exception to version 9, 10, 11 or 12. Never convert a version 11 Plan into the version 12 PlanStep contract: no inferred `executionEffects`, no `reserve_weapon` merged into a physical Step, no inferred tracked OwnedWeapon or observation binding.
 
 The v3 -> v4 Dexie migration converts only `OwnedGogma.status === 'material'` to
 `'unclassified'`. `practical` and `ideal` keep their values, a Normal Artian
@@ -1147,8 +1163,8 @@ excluded: priority, isEnabled, preferredOwnedWeaponId, lifecycleStatus, complete
           completedByProductionPlanId, name, memo, timestamps
 ```
 
-The current implementation still includes `priority`, `isEnabled`, and
-`preferredOwnedWeaponId`; the implementation PR removes them with its version boundary.
+Calculation schema 11 and earlier included `priority`, `isEnabled`, and
+`preferredOwnedWeaponId`; calculation schema 12 removed them with its version boundary.
 
 ```text
 priority                 Planner planning input (order / score). Never stales an
@@ -2942,8 +2958,11 @@ The user explicitly initiates recalculation.
 ## Execution Lifecycle
 
 `docs/PLANNER_SPEC.md` 16 is the authority; `docs/DATA_MODEL.md` 7.1 / 8.1 / 11 / 12
-and `docs/UI_FLOW.md` 12 / 16 follow it. The specification is fixed but not yet
-implemented; implementation PRs follow it and must not fall back to the older
+and `docs/UI_FLOW.md` 12 / 16 follow it. The persisted entity foundation and the
+calculation schema 12 Execution Plan contract (Plan generation with
+`executionEffects`) are implemented; the Execution runtime (Step confirmation,
+Undo, save point record / restore, abandonment, replan adoption) is not yet.
+Implementation PRs follow the specification and must not fall back to the older
 Execution semantics.
 
 Core rules:
@@ -3800,9 +3819,10 @@ Relevant test areas include:
   sets it to null for every Target, removes `relatedTargetWeaponIds` from every
   current OwnedWeapon, never infers a preference from the removed list, and
   rewrites no BuildCandidate, BuildListEntry, ProductionPlan, or ExecutionHistory
-- `DATABASE_SCHEMA_VERSION = 5`, `ExportRoot.schemaVersion = 7`,
-  `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 11`, schema 1..10 artifacts failing closed
-  under version 11, and no other version authority changed
+- `DATABASE_SCHEMA_VERSION = 5`, `ExportRoot.schemaVersion = 8`,
+  `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 12`, schema 1..11 artifacts failing closed
+  under version 12, a schema 7 Export migrating to 8 with its Plans untouched, and no
+  other version authority changed
 - Collection validation rejects a missing preferred weapon, a weapon type or element
   mismatch, a protected weapon, and the same weapon preferred by two Targets, and
   accepts a compatible unprotected Normal, a compatible unprotected Gogma at every

@@ -1,14 +1,15 @@
 import type {
-  BuildListEntry, BuildListEntryId, ExpectedPlanState, ExpectedResult,
-  InventoryChange, NormalArtianCounter, OwnedGogmaArtianWeapon, OwnedWeapon,
+  BuildListEntry, BuildListEntryId, ExpectedResult,
+  NormalArtianCounter, OwnedGogmaArtianWeapon, OwnedWeapon,
   OwnedWeaponId, PlanStepCheckpointMilestone, PlanStepDebugInfo,
   PlanStepOperationType, RestorationBonusSet,
-  RngAdvance, RngState, TargetWeapon, TargetWeaponId, BuildCandidateId,
+  RngAdvance, RngState, RouteOperation, TargetWeapon, TargetWeaponId, BuildCandidateId,
 } from '../models/publicTypes'
 import {
   areRestorationBonusSlotsEqual,
-  createExpectedPlanState,
+  hashStableValue,
   isBlindCreateNormalArtianOperation,
+  normalizeReferencedOwnedWeapon,
 } from '../models/publicTypes'
 import {
   checkpointConditionMatchFor,
@@ -29,18 +30,30 @@ import {
 } from './plannerRouteProgress'
 import type { PlannerInput, PlannerSearchAction, PlannerSearchRngSnapshot, PlannerSearchState } from './plannerTypes'
 
-/** Non-persistent bridge between one physical Search Action and a future PlanStep. */
+/**
+ * Non-persistent result of replaying one Search Action.
+ *
+ * It carries what the RNG Engine and the Search trace established - the
+ * predicted result and the concrete RNG / Normal Counter state around the
+ * action - but no expected state hash and no inventory change: those belong to
+ * the ProductionPlan execution projection, which binds physical weapons to
+ * OwnedWeapon IDs (`docs/PLANNER_SPEC.md` 16.3) and is built from these drafts.
+ */
 export interface PlannerPlanStepDraft {
+  actionKind: PlannerSearchAction['kind']
   operationType: PlanStepOperationType
+  routeOperation: RouteOperation | null
   primaryBuildListEntryId: BuildListEntryId | null
   progressedBuildListEntryIds: BuildListEntryId[]
   targetWeaponId: TargetWeaponId | null
   candidateId: BuildCandidateId | null
+  /** The Search Action's own weapon reference: a Route source, or the reserved ID. */
   ownedWeaponId: OwnedWeaponId | null
   expectedResult: ExpectedResult | null
-  expectedStateBefore: ExpectedPlanState
-  expectedStateAfter: ExpectedPlanState
-  inventoryChange: InventoryChange | null
+  rngStateBefore: RngState
+  rngStateAfter: RngState
+  normalCountersBefore: NormalArtianCounter[]
+  normalCountersAfter: NormalArtianCounter[]
   rngAdvance: RngAdvance
   /**
    * The selected compromise checkpoints this physical Step reaches.
@@ -137,7 +150,6 @@ const expectedResultBonusArgs = (
     ? [structuredClone(bonuses.restorationBonuses), bonuses.restorationBonusScope]
     : [null, null]
 const cloneBonuses = (value: RestorationBonusSet): RestorationBonusSet => structuredClone(value)
-const emptyChange = (): InventoryChange => ({ addOwnedWeapon: null, removeOwnedWeaponIds: [], updateOwnedWeapons: [], materialRequirements: [] })
 const result = (restorationBonuses: RestorationBonusSet | null, restorationBonusScope: ExpectedResult['restorationBonusScope'], seriesSkillId: string | null, groupSkillId: string | null, shouldSecure = false): ExpectedResult => ({ restorationBonuses, restorationBonusScope, seriesSkillId, groupSkillId, shouldSecure })
 
 function sameSnapshot(runtime: Runtime, snapshot: PlannerSearchRngSnapshot) {
@@ -225,6 +237,22 @@ function reservedWeapon(entry: BuildListEntry, target: TargetWeapon, id: OwnedWe
   // is labelled Ideal and protected by default (`docs/DATA_MODEL.md` 3.2).
   return { id, kind: 'gogma', name: '', weaponTypeId: target.weaponTypeId, elementId: target.elementId, restorationBonuses: cloneBonuses(candidate.finalBonuses), restorationBonusScope: candidate.restorationBonusScope, seriesSkillId: candidate.seriesSkillId, groupSkillId: candidate.groupSkillId, status: 'ideal', isProtected: true, executionInProgress: null, memo: null, createdAt: candidate.createdAt, updatedAt: candidate.createdAt }
 }
+/** Semantic inventory comparison of the replay runtime and the settled Search state. */
+function semanticInventoryHash(weapons: readonly OwnedWeapon[]): string {
+  return hashStableValue(
+    [...weapons]
+      .sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0)
+      .map((weapon) => weapon.kind === 'normal'
+        ? { ...normalizeReferencedOwnedWeapon(weapon), rarity: weapon.rarity }
+        : normalizeReferencedOwnedWeapon(weapon)),
+  )
+}
+const semanticRngHash = (rngState: RngState, normalCounters: readonly NormalArtianCounter[]) => hashStableValue({
+  gogmaCounter: { value: rngState.gogmaCounter.value, isConfirmed: rngState.gogmaCounter.isConfirmed },
+  skillCounter: { value: rngState.skillCounter.value, isConfirmed: rngState.skillCounter.isConfirmed },
+  baseSeed: { value: rngState.baseSeed.value, isConfirmed: rngState.baseSeed.isConfirmed },
+  normalCounters: [...normalCounters].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0).map(({ id, counter, isConfirmed }) => ({ id, counter, isConfirmed })),
+})
 
 /** Pure, deterministic replay. It generates neither PlanStep IDs nor clocks. */
 export function replayPlannerSearchTrace(input: PlannerInput, bestState: PlannerSearchState, engine: RngEngine): PlannerTraceReplayResult {
@@ -329,10 +357,18 @@ export function replayPlannerSearchTrace(input: PlannerInput, bestState: Planner
     const advance = rngAdvance(action.rngBefore, action.rngAfter); if (!advance) return fail('counter_difference_unrepresentable', 'Search Action changes multiple or unknown Normal counters.', index)
     const entry = entryFor(input, action.primaryBuildListEntryId); if (!entry) return fail('missing_entry', 'Search Action references a missing BuildListEntry.', index)
     const target = targetFor(input, entry); if (!target) return fail('missing_target', 'BuildListEntry references a missing TargetWeapon.', index)
-    const expectedStateBefore = createExpectedPlanState(runtime.rngState, runtime.normalCounters, runtime.ownedWeapons)
-    let expectedResult: ExpectedResult | null = null; let inventoryChange: InventoryChange | null = null
+    const rngStateBefore = structuredClone(runtime.rngState)
+    const normalCountersBefore = structuredClone(runtime.normalCounters)
+    let expectedResult: ExpectedResult | null = null
     if (action.kind === 'reserve_candidate') {
-        const transient = runtime.gogmas.get(entry.id)
+        // A zero-operation Candidate ran no Route unit, so the owned Gogma it
+        // confirms is itself the result (`docs/PLANNER_SPEC.md` 16.3).
+        const routeSourceId = entry.candidateSnapshot.route.sourceOwnedWeaponId
+        const transient = runtime.gogmas.get(entry.id) ?? (
+          entry.candidateSnapshot.route.operations.length === 0 && routeSourceId !== null
+            ? currentGogma(runtime, entry.id, routeSourceId) ?? undefined
+            : undefined
+        )
         if (!transient) return fail('missing_transient_output', 'Reserve requires the Entry transient Gogma output.', index)
         const candidate = entry.candidateSnapshot
         if (transient.bonuses.kind !== 'known') {
@@ -341,19 +377,17 @@ export function replayPlannerSearchTrace(input: PlannerInput, bestState: Planner
         if (JSON.stringify(transient.bonuses.restorationBonuses) !== JSON.stringify(candidate.finalBonuses) || transient.seriesSkillId !== candidate.seriesSkillId || transient.groupSkillId !== candidate.groupSkillId) {
           return fail('candidate_result_mismatch', 'Transient Gogma result does not match the Candidate Snapshot.', index)
         }
-        inventoryChange = emptyChange()
         if (entry.candidateSnapshot.route.kind === 'normal_artian_to_gogma' || entry.candidateSnapshot.route.kind === 'owned_normal_artian_to_gogma') {
           if (runtime.ownedWeapons.some(({ id }) => id === action.ownedWeaponId)) return fail('inventory_transition_failed', 'Reserved OwnedWeapon ID already exists.', index)
-          const weapon = reservedWeapon(entry, target, action.ownedWeaponId); runtime.ownedWeapons.push(structuredClone(weapon)); inventoryChange.addOwnedWeapon = weapon
+          runtime.ownedWeapons.push(reservedWeapon(entry, target, action.ownedWeaponId))
         } else {
           const position = runtime.ownedWeapons.findIndex(({ id }) => id === action.ownedWeaponId); const source = runtime.ownedWeapons[position]
           if (!source || source.kind !== 'gogma') return fail('missing_source_weapon', 'Existing Gogma reserve source is unavailable.', index)
-          const updated: OwnedGogmaArtianWeapon = { ...source, restorationBonuses: cloneBonuses(entry.candidateSnapshot.finalBonuses), restorationBonusScope: entry.candidateSnapshot.restorationBonusScope, seriesSkillId: entry.candidateSnapshot.seriesSkillId, groupSkillId: entry.candidateSnapshot.groupSkillId, status: 'ideal' }
-          runtime.ownedWeapons[position] = updated; inventoryChange.updateOwnedWeapons = [structuredClone(updated)]
+          // Ideal completion protects an existing weapon too (`docs/PLANNER_SPEC.md` 16.13).
+          runtime.ownedWeapons[position] = { ...source, restorationBonuses: cloneBonuses(entry.candidateSnapshot.finalBonuses), restorationBonusScope: entry.candidateSnapshot.restorationBonusScope, seriesSkillId: entry.candidateSnapshot.seriesSkillId, groupSkillId: entry.candidateSnapshot.groupSkillId, status: 'ideal', isProtected: true } satisfies OwnedGogmaArtianWeapon
         }
         runtime.gogmas.delete(entry.id)
-        const reserved = inventoryChange.addOwnedWeapon ?? inventoryChange.updateOwnedWeapons[0]
-        expectedResult = result(cloneBonuses(entry.candidateSnapshot.finalBonuses), entry.candidateSnapshot.restorationBonusScope, entry.candidateSnapshot.seriesSkillId, entry.candidateSnapshot.groupSkillId, reserved?.isProtected ?? false)
+        expectedResult = result(cloneBonuses(entry.candidateSnapshot.finalBonuses), entry.candidateSnapshot.restorationBonusScope, entry.candidateSnapshot.seriesSkillId, entry.candidateSnapshot.groupSkillId, true)
     } else {
         const operation = action.routeOperation
         if (operation.type === 'create_normal_artian') {
@@ -395,7 +429,7 @@ export function replayPlannerSearchTrace(input: PlannerInput, bestState: Planner
           if (entry.candidateSnapshot.route.kind === 'owned_normal_artian_to_gogma') {
             const source = entry.candidateSnapshot.route.sourceOwnedWeaponId === null ? null : runtime.ownedWeapons.find(({ id }) => id === entry.candidateSnapshot.route.sourceOwnedWeaponId)
             if (!source) return fail('missing_source_weapon', 'Owned Normal conversion source is unavailable.', index); if (source.kind !== 'normal') return fail('invalid_source_weapon', 'Owned Normal conversion source is not Normal Artian.', index)
-            inheritedNormalBonuses = knownBonuses(source.restorationBonuses, 'normal_artian'); runtime.ownedWeapons = runtime.ownedWeapons.filter(({ id }) => id !== source.id); inventoryChange = { ...emptyChange(), removeOwnedWeaponIds: [source.id] }
+            inheritedNormalBonuses = knownBonuses(source.restorationBonuses, 'normal_artian'); runtime.ownedWeapons = runtime.ownedWeapons.filter(({ id }) => id !== source.id)
           } else { const normals = runtime.normals.get(entry.id) ?? []; inheritedNormalBonuses = normals.at(-1); if (!inheritedNormalBonuses) return fail('missing_transient_output', 'New Normal conversion requires a transient Normal result.', index); runtime.normals.delete(entry.id) }
           const unsupported = requireSupport({
             type: 'skill',
@@ -505,11 +539,12 @@ export function replayPlannerSearchTrace(input: PlannerInput, bestState: Planner
     applySnapshot(runtime, action.rngAfter); if (!sameSnapshot(runtime, action.rngAfter)) return fail('rng_after_mismatch', 'Replay runtime does not match Search Action rngAfter.', index)
     const normalBefore = advance.affectedNormalCounterId === null ? null : action.rngBefore.normalCounters.find(({ id }) => id === advance.affectedNormalCounterId)?.counter ?? null
     const normalAfter = advance.affectedNormalCounterId === null ? null : action.rngAfter.normalCounters.find(({ id }) => id === advance.affectedNormalCounterId)?.counter ?? null
-    drafts.push({ isBlindNormalCreation: action.kind === 'route_operation' && action.routeOperation.type === 'create_normal_artian' && isBlindCreateNormalArtianOperation(action.routeOperation), operationType: action.actionType, primaryBuildListEntryId: action.primaryBuildListEntryId, progressedBuildListEntryIds: [...action.progressedBuildListEntryIds], targetWeaponId: entry.targetWeaponId, candidateId: entry.candidateSnapshot.id, ownedWeaponId: action.ownedWeaponId, expectedResult, checkpointMilestones, expectedStateBefore, expectedStateAfter: createExpectedPlanState(runtime.rngState, runtime.normalCounters, runtime.ownedWeapons), inventoryChange, rngAdvance: advance, debug: { startBaseSeed: runtime.rngState.baseSeed.value, startGogmaCounter: action.rngBefore.gogmaCounter, endGogmaCounter: action.rngAfter.gogmaCounter, startSkillCounter: action.rngBefore.skillCounter, endSkillCounter: action.rngAfter.skillCounter, startNormalCounter: normalBefore, endNormalCounter: normalAfter, plannerReason: action.actionType } })
+    drafts.push({ isBlindNormalCreation: action.kind === 'route_operation' && action.routeOperation.type === 'create_normal_artian' && isBlindCreateNormalArtianOperation(action.routeOperation), actionKind: action.kind, operationType: action.actionType, routeOperation: action.routeOperation === null ? null : structuredClone(action.routeOperation), primaryBuildListEntryId: action.primaryBuildListEntryId, progressedBuildListEntryIds: [...action.progressedBuildListEntryIds], targetWeaponId: entry.targetWeaponId, candidateId: entry.candidateSnapshot.id, ownedWeaponId: action.ownedWeaponId, expectedResult, checkpointMilestones, rngStateBefore, rngStateAfter: structuredClone(runtime.rngState), normalCountersBefore, normalCountersAfter: structuredClone(runtime.normalCounters), rngAdvance: advance, debug: { startBaseSeed: runtime.rngState.baseSeed.value, startGogmaCounter: action.rngBefore.gogmaCounter, endGogmaCounter: action.rngAfter.gogmaCounter, startSkillCounter: action.rngBefore.skillCounter, endSkillCounter: action.rngAfter.skillCounter, startNormalCounter: normalBefore, endNormalCounter: normalAfter, plannerReason: action.actionType } })
   }
-  const expected = createExpectedPlanState(bestState.currentRngState, bestState.currentNormalCounters, bestState.simulatedInventory.ownedWeapons)
-  const actual = createExpectedPlanState(runtime.rngState, runtime.normalCounters, runtime.ownedWeapons)
-  return JSON.stringify(expected) === JSON.stringify(actual)
+  const matches =
+    semanticRngHash(bestState.currentRngState, bestState.currentNormalCounters) === semanticRngHash(runtime.rngState, runtime.normalCounters) &&
+    semanticInventoryHash(bestState.simulatedInventory.ownedWeapons) === semanticInventoryHash(runtime.ownedWeapons)
+  return matches
     ? { isValid: true, drafts, issues: [], unsupportedInput: null }
     : fail('final_state_mismatch', 'Replay final state differs from best PlannerSearchState.', null)
 }

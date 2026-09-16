@@ -1,8 +1,16 @@
-import type { NormalArtianCounter, OwnedWeaponId, RngState } from './common'
+import type {
+  NormalArtianCounter,
+  OwnedWeaponId,
+  PlanStepId,
+  RestorationBonusScope,
+  RestorationBonusSet,
+  RngState,
+  TargetWeaponId,
+} from './common'
 import { V1_NORMAL_ARTIAN_RARITY } from './common'
-import type { BuildRoute, OwnedWeapon } from './entities'
+import type { BuildRoute, OwnedWeapon, TargetWeapon } from './entities'
 import { isBlindCreateNormalArtianOperation } from './entities'
-import type { ExpectedPlanState } from './planning'
+import type { ExpectedPlanState, ExpectedStateObservationBindingToken } from './planning'
 
 export class StableSerializationError extends Error {
   constructor(message: string) {
@@ -211,13 +219,6 @@ export function normalizeReferencedOwnedWeapon(weapon: OwnedWeapon) {
       }
 }
 
-function normalizeExpectedOwnedWeapon(weapon: OwnedWeapon) {
-  const referenced = normalizeReferencedOwnedWeapon(weapon)
-  return weapon.kind === 'normal'
-    ? { ...referenced, rarity: weapon.rarity }
-    : referenced
-}
-
 export function createReferencedOwnedWeaponsHash(
   route: BuildRoute,
   ownedWeapons: readonly OwnedWeapon[],
@@ -233,10 +234,166 @@ export function createReferencedOwnedWeaponsHash(
   return hashStableValue(normalized)
 }
 
+type WithUnknownRestorationBonuses<T> = T extends OwnedWeapon
+  ? Omit<T, 'restorationBonuses'> & { restorationBonuses: null }
+  : never
+
+/**
+ * One OwnedWeapon as an expected execution state sees it.
+ *
+ * An actual persisted weapon always has its five slots. A weapon of a Plan's
+ * execution projection may instead hold `restorationBonuses: null`: a blind
+ * production-target Normal whose slots were never predicted and are bound to the
+ * user's observation (`docs/PLANNER_SPEC.md` 16.5). Such a weapon is hashable
+ * only together with its observation binding token, so no fabricated slots ever
+ * reach a hash.
+ */
+export type ExpectedPlanStateOwnedWeapon =
+  | OwnedWeapon
+  | WithUnknownRestorationBonuses<OwnedWeapon>
+
+/**
+ * The Plan-dependent Target execution state input of an expected state
+ * (`docs/PLANNER_SPEC.md` 16.5). Only `dependentTargetWeaponIds` are hashed; a
+ * Plan-independent Target never enters it.
+ */
+export interface ExpectedPlanTargetExecutionInput {
+  targetWeapons: readonly Pick<
+    TargetWeapon,
+    'id' | 'lifecycleStatus' | 'preferredOwnedWeaponId'
+  >[]
+  dependentTargetWeaponIds: readonly TargetWeaponId[]
+}
+
+export class ExpectedPlanStateNormalizationError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ExpectedPlanStateNormalizationError'
+  }
+}
+
+function compareStableIds(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0
+}
+
+function normalizeExpectedOwnedWeapon(
+  weapon: ExpectedPlanStateOwnedWeapon,
+  token: PlanStepId | undefined,
+) {
+  let restorationBonuses:
+    | ExpectedStateObservationBindingToken
+    | { bonusTypeId: string; bonusRankId: string }[]
+  if (token !== undefined) {
+    restorationBonuses = { observationBinding: token }
+  } else if (weapon.restorationBonuses === null) {
+    throw new ExpectedPlanStateNormalizationError(
+      `OwnedWeapon '${weapon.id}' has unknown restoration bonuses but no observation binding token.`,
+    )
+  } else {
+    restorationBonuses = weapon.restorationBonuses.map((bonus) => ({
+      bonusTypeId: bonus.bonusTypeId,
+      bonusRankId: bonus.bonusRankId,
+    }))
+  }
+  const common = {
+    id: weapon.id,
+    kind: weapon.kind,
+    weaponTypeId: weapon.weaponTypeId,
+    elementId: weapon.elementId,
+    restorationBonusScope: weapon.restorationBonusScope,
+    restorationBonuses,
+    isProtected: weapon.isProtected,
+  }
+  return weapon.kind === 'normal'
+    ? { ...common, rarity: weapon.rarity }
+    : {
+        ...common,
+        seriesSkillId: weapon.seriesSkillId,
+        groupSkillId: weapon.groupSkillId,
+      }
+}
+
+/**
+ * `targetExecutionStateHash`: `id`, `lifecycleStatus` and
+ * `preferredOwnedWeaponId` of each Plan-dependent Target in ID order
+ * (`docs/PLANNER_SPEC.md` 16.5). Every other Target, and every timestamp, is
+ * excluded, so adding or changing a Plan-independent Target never moves it. A
+ * dependent Target that no longer exists hashes as missing.
+ */
+export function createTargetExecutionStateHash(
+  input: ExpectedPlanTargetExecutionInput,
+): string {
+  const targetById = new Map(input.targetWeapons.map((target) => [target.id, target]))
+  return hashStableValue(
+    [...new Set(input.dependentTargetWeaponIds)]
+      .sort(compareStableIds)
+      .map((id) => {
+        const target = targetById.get(id)
+        return target
+          ? {
+              id,
+              lifecycleStatus: target.lifecycleStatus,
+              preferredOwnedWeaponId: target.preferredOwnedWeaponId,
+            }
+          : { id, missing: true }
+      }),
+  )
+}
+
+/** One confirmed observation binding of a Plan (`docs/PLANNER_SPEC.md` 16.5). */
+export interface ObservedRestorationBonusBinding {
+  ownedWeaponId: OwnedWeaponId
+  planStepId: PlanStepId
+  observedRestorationBonuses: RestorationBonusSet
+  observedRestorationBonusScope: RestorationBonusScope
+}
+
+/**
+ * Which actual weapons normalize to their observation binding token.
+ *
+ * A weapon is replaced by its token only when its current five slots, in slot
+ * order, and its scope equal what the user observed at the binding Step.
+ * Anything else keeps its real value, so an unplanned edit of an observed weapon
+ * is detected as a mismatch instead of being hidden behind the token.
+ */
+export function resolveObservationBindingTokens(
+  ownedWeapons: readonly OwnedWeapon[],
+  bindings: readonly ObservedRestorationBonusBinding[],
+): Map<OwnedWeaponId, PlanStepId> {
+  const weaponById = new Map(ownedWeapons.map((weapon) => [weapon.id, weapon]))
+  const tokens = new Map<OwnedWeaponId, PlanStepId>()
+  bindings.forEach((binding) => {
+    const weapon = weaponById.get(binding.ownedWeaponId)
+    if (
+      weapon !== undefined &&
+      weapon.restorationBonusScope === binding.observedRestorationBonusScope &&
+      weapon.restorationBonuses.every(
+        (bonus, slot) =>
+          bonus.bonusTypeId === binding.observedRestorationBonuses[slot]?.bonusTypeId &&
+          bonus.bonusRankId === binding.observedRestorationBonuses[slot]?.bonusRankId,
+      )
+    ) {
+      tokens.set(binding.ownedWeaponId, binding.planStepId)
+    }
+  })
+  return tokens
+}
+
+/**
+ * One expected execution state (`docs/DATA_MODEL.md` 11.2).
+ *
+ * `observationBindingTokens` names the weapons whose five slots normalize to a
+ * binding token. A Plan projection passes its still-bound weapons; an actual
+ * state passes `resolveObservationBindingTokens()` so only an exact match of the
+ * recorded observation is tokenized. `status`, `executionInProgress`, `name`,
+ * `memo` and timestamps stay out of every hash.
+ */
 export function createExpectedPlanState(
   rngState: RngState,
   normalCounters: readonly NormalArtianCounter[],
-  ownedWeapons: readonly OwnedWeapon[],
+  ownedWeapons: readonly ExpectedPlanStateOwnedWeapon[],
+  targetExecution: ExpectedPlanTargetExecutionInput,
+  observationBindingTokens: ReadonlyMap<OwnedWeaponId, PlanStepId> = new Map(),
 ): ExpectedPlanState {
   const normalizedRngState = {
     baseSeed: normalizeKnownValue(rngState.baseSeed),
@@ -244,17 +401,20 @@ export function createExpectedPlanState(
     skillCounter: normalizeKnownValue(rngState.skillCounter),
   }
   const normalizedCounters = [...normalCounters]
-    .sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0)
+    .sort((left, right) => compareStableIds(left.id, right.id))
     .map(({ id, counter, isConfirmed }) => ({ id, counter, isConfirmed }))
   const normalizedWeapons = [...ownedWeapons]
-    .sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0)
-    // A Target's preferred owned weapon is planning input on the Target, not
+    .sort((left, right) => compareStableIds(left.id, right.id))
+    // A Target's preferred owned weapon is Target execution state, not
     // inventory state, so it never enters this hash.
-    .map((weapon) => normalizeExpectedOwnedWeapon(weapon))
+    .map((weapon) =>
+      normalizeExpectedOwnedWeapon(weapon, observationBindingTokens.get(weapon.id)),
+    )
 
   return {
     rngStateHash: hashStableValue(normalizedRngState),
     normalCountersHash: hashStableValue(normalizedCounters),
     ownedWeaponsHash: hashStableValue(normalizedWeapons),
+    targetExecutionStateHash: createTargetExecutionStateHash(targetExecution),
   }
 }

@@ -296,8 +296,8 @@ describe('ExpectedPlanState hashing', () => {
     const state = createValidRngState(); const counter = createValidNormalArtianCounter()
     const normal = { ...createValidOwnedWeapon(), kind: 'normal' as const, rarity: 8 as const, seriesSkillId: null, groupSkillId: null, status: null }
     const alteredRarity = { ...normal, rarity: 7 as 8 }
-    expect(createExpectedPlanState(state, [counter], [alteredRarity]).ownedWeaponsHash)
-      .not.toBe(createExpectedPlanState(state, [counter], [normal]).ownedWeaponsHash)
+    expect(createExpectedPlanState(state, [counter], [alteredRarity], { targetWeapons: [], dependentTargetWeaponIds: [] }).ownedWeaponsHash)
+      .not.toBe(createExpectedPlanState(state, [counter], [normal], { targetWeapons: [], dependentTargetWeaponIds: [] }).ownedWeaponsHash)
   })
 
   it('carries no Target relation in either OwnedWeapon hash', () => {
@@ -308,8 +308,8 @@ describe('ExpectedPlanState hashing', () => {
     // it at all (`docs/DATA_MODEL.md` 8.5 / 11.2).
     expect(Object.keys(weapon)).not.toContain('relatedTargetWeaponIds')
     const renamed = { ...weapon, name: 'B', memo: 'x', updatedAt: 'later' }
-    expect(createExpectedPlanState(state, [counter], [renamed]).ownedWeaponsHash)
-      .toBe(createExpectedPlanState(state, [counter], [weapon]).ownedWeaponsHash)
+    expect(createExpectedPlanState(state, [counter], [renamed], { targetWeapons: [], dependentTargetWeaponIds: [] }).ownedWeaponsHash)
+      .toBe(createExpectedPlanState(state, [counter], [weapon], { targetWeapons: [], dependentTargetWeaponIds: [] }).ownedWeaponsHash)
     expect(createReferencedOwnedWeaponsHash(route, [renamed])).toBe(
       createReferencedOwnedWeaponsHash(route, [weapon]),
     )
@@ -318,7 +318,7 @@ describe('ExpectedPlanState hashing', () => {
   it('excludes name, memo, and timestamps from both weapon hash contracts', () => {
     const state = createValidRngState(); const counter = createValidNormalArtianCounter(); const route = referencedRoute(); const weapon = createValidOwnedWeapon()
     const changed = { ...weapon, name: 'Renamed', memo: 'Changed', createdAt: '2027-01-01T00:00:00.000Z', updatedAt: '2027-01-01T00:00:00.000Z' }
-    expect(createExpectedPlanState(state, [counter], [changed])).toEqual(createExpectedPlanState(state, [counter], [weapon]))
+    expect(createExpectedPlanState(state, [counter], [changed], { targetWeapons: [], dependentTargetWeaponIds: [] })).toEqual(createExpectedPlanState(state, [counter], [weapon], { targetWeapons: [], dependentTargetWeaponIds: [] }))
     expect(createReferencedOwnedWeaponsHash(route, [changed])).toBe(createReferencedOwnedWeaponsHash(route, [weapon]))
   })
 
@@ -326,28 +326,28 @@ describe('ExpectedPlanState hashing', () => {
     const state = createValidRngState()
     const counter = createValidNormalArtianCounter()
     const weapon = createValidOwnedWeapon()
-    const before = createExpectedPlanState(state, [counter], [weapon])
+    const before = createExpectedPlanState(state, [counter], [weapon], { targetWeapons: [], dependentTargetWeaponIds: [] })
     state.notes = 'Changed'
     state.updatedAt = '2026-08-30T00:00:00.000Z'
     counter.lastObservedAt = null
     weapon.memo = 'Changed'
     weapon.updatedAt = '2026-08-30T00:00:00.000Z'
-    expect(createExpectedPlanState(state, [counter], [weapon])).toEqual(before)
+    expect(createExpectedPlanState(state, [counter], [weapon], { targetWeapons: [], dependentTargetWeaponIds: [] })).toEqual(before)
   })
 
   it('excludes legacy Counter Gate while retaining Production semantic counters', () => {
     const state = createValidRngState()
     const counter = createValidNormalArtianCounter()
     const weapon = createValidOwnedWeapon()
-    const before = createExpectedPlanState(state, [counter], [weapon])
+    const before = createExpectedPlanState(state, [counter], [weapon], { targetWeapons: [], dependentTargetWeaponIds: [] })
     state.counterGate = { value: null, isConfirmed: false, source: null }
-    expect(createExpectedPlanState(state, [counter], [weapon]).rngStateHash)
+    expect(createExpectedPlanState(state, [counter], [weapon], { targetWeapons: [], dependentTargetWeaponIds: [] }).rngStateHash)
       .toBe(before.rngStateHash)
     state.counterGate = { value: 200, isConfirmed: true, source: 'observation' }
-    expect(createExpectedPlanState(state, [counter], [weapon]).rngStateHash)
+    expect(createExpectedPlanState(state, [counter], [weapon], { targetWeapons: [], dependentTargetWeaponIds: [] }).rngStateHash)
       .toBe(before.rngStateHash)
     state.skillCounter.value = (state.skillCounter.value ?? 0) + 1
-    expect(createExpectedPlanState(state, [counter], [weapon]).rngStateHash)
+    expect(createExpectedPlanState(state, [counter], [weapon], { targetWeapons: [], dependentTargetWeaponIds: [] }).rngStateHash)
       .not.toBe(before.rngStateHash)
   })
 
@@ -355,11 +355,11 @@ describe('ExpectedPlanState hashing', () => {
     const state = createValidRngState()
     const counter = createValidNormalArtianCounter()
     const gogma = createValidOwnedWeapon()
-    const before = createExpectedPlanState(state, [counter], [gogma])
+    const before = createExpectedPlanState(state, [counter], [gogma], { targetWeapons: [], dependentTargetWeaponIds: [] })
 
     gogma.name = '表示名だけ変更'
     gogma.memo = 'メモだけ変更'
-    expect(createExpectedPlanState(state, [counter], [gogma])).toEqual(before)
+    expect(createExpectedPlanState(state, [counter], [gogma], { targetWeapons: [], dependentTargetWeaponIds: [] })).toEqual(before)
 
     const normal = {
       ...gogma,
@@ -369,7 +369,7 @@ describe('ExpectedPlanState hashing', () => {
       groupSkillId: null,
       status: null,
     }
-    expect(createExpectedPlanState(state, [counter], [normal])).not.toEqual(
+    expect(createExpectedPlanState(state, [counter], [normal], { targetWeapons: [], dependentTargetWeaponIds: [] })).not.toEqual(
       before,
     )
   })

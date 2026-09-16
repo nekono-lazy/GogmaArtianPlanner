@@ -11,11 +11,13 @@ import {
   createSearchStateHash,
 } from '../models/hashing'
 import {
+  DOMAIN_FIXTURE_TIME,
   buildListEntryId,
   candidateId,
   createValidBuildListEntry,
   createValidOwnedWeapon,
   ownedWeaponId,
+  productionPlanId,
   targetWeaponId,
 } from '../../test/fixtures/domainData'
 import {
@@ -25,14 +27,15 @@ import {
 } from '../../test/fixtures/candidateSearch'
 import {
   collectRequiredMaterials,
-  createPlanStepsFromDrafts,
   createPlanningBuildListEntriesHash,
   createPlanningInputSnapshot,
   createPlanningTargetWeaponsHash,
   createProductionPlan,
   createRejectedBuildListEntries,
-  PlannerPlanGenerationError,
 } from './productionPlanGeneration'
+import { PlannerPlanGenerationError } from './plannerPlanGenerationError'
+import { projectProductionPlanExecution } from './productionPlanExecutionProjection'
+import type { PlannerPlanStepDraft } from './plannerTraceReplay'
 import { defaultPlannerOptions, type PlannerBeamSearchResult, type PlannerDependencies, type PlannerInput } from './plannerTypes'
 
 function fixture(): { input: PlannerInput; dependencies: PlannerDependencies } {
@@ -165,24 +168,34 @@ describe('Production plan generation', () => {
     expect(plan).not.toBeNull()
     expect(plan?.id).toBe('plan.fixed.1')
     expect(plan?.status).toBe('draft')
+    // The internal reserve is never a Step: completion rides on the last
+    // physical Step (PLANNER_SPEC 16.3).
     expect(plan?.steps.map(({ operationType }) => operationType)).toEqual([
       'create_normal_artian',
       'convert_normal_to_gogma',
       'reset_bonuses',
       'reset_skills',
-      'reserve_weapon',
     ])
-    expect(plan?.steps.map(({ order }) => order)).toEqual([1, 2, 3, 4, 5])
+    expect(plan?.steps.map(({ order }) => order)).toEqual([1, 2, 3, 4])
     expect(plan?.steps.map(({ id }) => id)).toEqual([
-      'step.fixed.1', 'step.fixed.2', 'step.fixed.3', 'step.fixed.4', 'step.fixed.5',
+      'step.fixed.1', 'step.fixed.2', 'step.fixed.3', 'step.fixed.4',
     ])
     expect(plan?.currentStepId).toBe('step.fixed.1')
     expect(plan?.steps.every((step) => step.requiresUserConfirmation)).toBe(true)
     expect(plan?.steps.every((step) => !step.isCompleted && step.completedAt === null)).toBe(true)
-    expect(plan?.steps[4].ownedWeaponId).toBe('owned.fixed.1')
-    expect(plan?.steps[4].inventoryChange?.addOwnedWeapon?.id).toBe('owned.fixed.1')
-    // A Planner-secured Ideal Candidate defaults to protected.
-    expect(plan?.steps[4].inventoryChange?.addOwnedWeapon?.isProtected).toBe(true)
+    // The Planner-reserved ID is the production-target Normal's ID from its
+    // creation Step on.
+    expect(plan?.steps.map(({ ownedWeaponId }) => ownedWeaponId)).toEqual([
+      'owned.fixed.1', 'owned.fixed.1', 'owned.fixed.1', 'owned.fixed.1',
+    ])
+    expect(plan?.steps[0].inventoryChange?.addOwnedWeapon?.id).toBe('owned.fixed.1')
+    expect(plan?.steps[3].executionEffects?.targetCompletions).toEqual([{
+      buildListEntryId: input.buildListEntries[0].id,
+      targetWeaponId: input.buildListEntries[0].targetWeaponId,
+      ownedWeaponId: 'owned.fixed.1',
+    }])
+    // The completed Ideal is protected.
+    expect(plan?.steps[3].inventoryChange?.updateOwnedWeapons[0]?.isProtected).toBe(true)
     expect(plan?.steps[0].expectedStateBefore).toEqual(plan?.baseSnapshot.initialExecutionState)
     plan?.steps.slice(0, -1).forEach((step, index) => {
       expect(step.expectedStateAfter).toEqual(plan.steps[index + 1].expectedStateBefore)
@@ -195,14 +208,16 @@ describe('Production plan generation', () => {
   it('registers a newly reserved Ideal candidate protected', async () => {
     const { input, dependencies } = fixture()
     const plan = (await createProductionPlan(input, dependencies)).plan
-    expect(plan?.steps.at(-1)?.operationType).toBe('reserve_weapon')
-    expect(plan?.steps.at(-1)?.inventoryChange?.addOwnedWeapon).toMatchObject({
+    expect(plan?.steps.some(({ operationType }) => operationType === 'reserve_weapon')).toBe(false)
+    expect(plan?.steps.at(-1)?.inventoryChange?.updateOwnedWeapons[0]).toMatchObject({
+      kind: 'gogma',
       status: 'ideal',
       isProtected: true,
+      executionInProgress: null,
     })
   })
 
-  it('replays owned Normal conversion by removing the source once and reserving a different Gogma ID', async () => {
+  it('projects an owned Normal conversion onto the same OwnedWeapon ID', async () => {
     const { input, dependencies } = fixture()
     const source = {
       ...createValidOwnedWeapon(ownedWeaponId('owned.normal.source')),
@@ -232,15 +247,26 @@ describe('Production plan generation', () => {
     synchronizeEntry(input)
     const plan = (await createProductionPlan(input, dependencies)).plan
     expect(plan?.steps.map(({ operationType }) => operationType)).toEqual([
-      'convert_normal_to_gogma', 'reset_bonuses', 'reserve_weapon',
+      'convert_normal_to_gogma', 'reset_bonuses',
     ])
-    expect(plan?.steps[0].inventoryChange?.removeOwnedWeaponIds).toEqual([source.id])
-    expect(plan?.steps[2].inventoryChange?.removeOwnedWeaponIds).toEqual([])
-    expect(plan?.steps[2].inventoryChange?.addOwnedWeapon?.id).not.toBe(source.id)
+    // The search consumes the Normal, but the execution projection updates the
+    // same OwnedWeapon ID to gogma and never removes it (PLANNER_SPEC 16.3).
+    expect(plan?.steps.map(({ ownedWeaponId }) => ownedWeaponId)).toEqual([source.id, source.id])
+    expect(plan?.steps.every(({ inventoryChange }) =>
+      inventoryChange?.removeOwnedWeaponIds.length === 0 && inventoryChange.addOwnedWeapon === null,
+    )).toBe(true)
+    expect(plan?.steps[0].inventoryChange?.updateOwnedWeapons[0]).toMatchObject({
+      id: source.id, kind: 'gogma', status: 'unclassified', restorationBonusScope: 'normal_artian',
+    })
+    expect(plan?.steps[0].executionEffects?.targetLinks).toEqual([{
+      buildListEntryId: entry.id, targetWeaponId: entry.targetWeaponId,
+    }])
+    expect(plan?.steps[1].executionEffects?.targetCompletions.map(({ ownedWeaponId }) => ownedWeaponId))
+      .toEqual([source.id])
     expect(plan?.steps.every(({ buildListEntryId }) => buildListEntryId === entry.id)).toBe(true)
   })
 
-  it('replays existing Reset Bonuses as a persistent update only at reserve', async () => {
+  it('projects existing Reset Bonuses onto the same weapon and completes it on that Step', async () => {
     const { input, dependencies } = fixture()
     const source = createValidOwnedWeapon(ownedWeaponId('owned.reset.source'))
     source.isProtected = false
@@ -274,15 +300,19 @@ describe('Production plan generation', () => {
     entry.candidateSnapshot.groupSkillId = source.groupSkillId
     synchronizeEntry(input)
     const plan = (await createProductionPlan(input, dependencies)).plan
-    expect(plan?.steps.map(({ operationType }) => operationType)).toEqual([
-      'reset_bonuses', 'reserve_weapon',
-    ])
-    expect(plan?.steps[0].inventoryChange).toBeNull()
-    expect(plan?.steps[1].ownedWeaponId).toBe(source.id)
-    expect(plan?.steps[1].inventoryChange?.updateOwnedWeapons[0]?.id).toBe(source.id)
+    expect(plan?.steps.map(({ operationType }) => operationType)).toEqual(['reset_bonuses'])
+    expect(plan?.steps[0].ownedWeaponId).toBe(source.id)
+    expect(plan?.steps[0].inventoryChange?.updateOwnedWeapons[0]).toMatchObject({
+      id: source.id, status: 'ideal', isProtected: true, createdAt: source.createdAt,
+    })
+    expect(plan?.steps[0].executionEffects).toMatchObject({
+      trackedOwnedWeaponId: source.id,
+      targetLinks: [{ buildListEntryId: entry.id, targetWeaponId: entry.targetWeaponId }],
+      targetCompletions: [{ buildListEntryId: entry.id, targetWeaponId: entry.targetWeaponId, ownedWeaponId: source.id }],
+    })
   })
 
-  it('replays existing Keep Bonuses once and does not update inventory before reserve', async () => {
+  it('replays existing Keep Bonuses once and completes the same weapon on that Step', async () => {
     const { input, dependencies } = fixture()
     const source = createValidOwnedWeapon(ownedWeaponId('owned.keep.source'))
     source.isProtected = false
@@ -318,12 +348,9 @@ describe('Production plan generation', () => {
     entry.candidateSnapshot.groupSkillId = source.groupSkillId
     synchronizeEntry(input)
     const plan = (await createProductionPlan(input, dependencies)).plan
-    expect(plan?.steps.map(({ operationType }) => operationType)).toEqual([
-      'keep_bonuses', 'reserve_weapon',
-    ])
-    expect(plan?.steps).toHaveLength(2)
-    expect(plan?.steps[0].inventoryChange).toBeNull()
-    expect(plan?.steps[1].inventoryChange?.updateOwnedWeapons[0]?.id).toBe(source.id)
+    expect(plan?.steps.map(({ operationType }) => operationType)).toEqual(['keep_bonuses'])
+    expect(plan?.steps[0].inventoryChange?.updateOwnedWeapons[0]?.id).toBe(source.id)
+    expect(plan?.steps[0].executionEffects?.targetCompletions).toHaveLength(1)
   })
 
   it('rejects a protected existing Gogma Reset Skills source in Planner validation', async () => {
@@ -455,7 +482,20 @@ describe('Production plan generation', () => {
     }]
     expect(createPlanningTargetWeaponsHash(semantic.targetWeapons)).not.toBe(targetsHash)
     expect(createPlanningBuildListEntriesHash(semantic.buildListEntries)).not.toBe(entriesHash)
-    const snapshot = createPlanningInputSnapshot(input, '2026-08-30T00:00:00.000Z')
+    const snapshot = createPlanningInputSnapshot(
+      input,
+      {
+        initialExecutionState: {
+          rngStateHash: 'hash.a',
+          normalCountersHash: 'hash.b',
+          ownedWeaponsHash: 'hash.c',
+          targetExecutionStateHash: 'hash.d',
+        },
+        dependentTargetWeaponIds: [],
+        selectedBuildListEntryIds: [],
+      },
+      '2026-08-30T00:00:00.000Z',
+    )
     expect(snapshot).toMatchObject({
       targetWeaponsHash: targetsHash,
       buildListEntriesHash: entriesHash,
@@ -608,7 +648,7 @@ describe('Production plan generation', () => {
       ({ progressedTargetWeaponIds }) => progressedTargetWeaponIds !== undefined,
     )).toBe(true)
     expect(plan?.steps.map(({ progressedTargetWeaponIds }) => progressedTargetWeaponIds))
-      .toEqual([[targetId], [targetId], [targetId], [targetId], [targetId]])
+      .toEqual([[targetId], [targetId], [targetId], [targetId]])
     expect(plan?.steps.every(({ targetWeaponId }) => targetWeaponId === targetId)).toBe(true)
   })
 
@@ -672,8 +712,15 @@ describe('Production plan generation', () => {
 
   it('fails closed when a Draft progresses an unknown BuildListEntry', () => {
     const { input, dependencies } = fixture()
-    const draft = {
-      operationType: 'reset_skills' as const,
+    const draft: PlannerPlanStepDraft = {
+      actionKind: 'route_operation',
+      operationType: 'reset_skills',
+      routeOperation: {
+        type: 'reset_skills',
+        sourceOwnedWeaponId: null,
+        skillCounterBefore: 1,
+        skillCounterAfter: 2,
+      },
       primaryBuildListEntryId: input.buildListEntries[0].id,
       progressedBuildListEntryIds: [
         input.buildListEntries[0].id,
@@ -683,13 +730,10 @@ describe('Production plan generation', () => {
       candidateId: input.buildListEntries[0].candidateId,
       ownedWeaponId: null,
       expectedResult: null,
-      expectedStateBefore: {
-        rngStateHash: 'hash.a', normalCountersHash: 'hash.b', ownedWeaponsHash: 'hash.c',
-      },
-      expectedStateAfter: {
-        rngStateHash: 'hash.a', normalCountersHash: 'hash.b', ownedWeaponsHash: 'hash.c',
-      },
-      inventoryChange: null,
+      rngStateBefore: input.rngState,
+      rngStateAfter: input.rngState,
+      normalCountersBefore: input.normalCounters,
+      normalCountersAfter: input.normalCounters,
       rngAdvance: {
         gogmaCounterDelta: 0,
         skillCounterDelta: 1,
@@ -698,13 +742,16 @@ describe('Production plan generation', () => {
       },
       debug: null,
       isBlindNormalCreation: false,
-    checkpointMilestones: [],
+      checkpointMilestones: [],
     }
-    expect(() => createPlanStepsFromDrafts(
-      [draft],
+    expect(() => projectProductionPlanExecution({
       input,
+      drafts: [draft],
+      selectedBuildListEntryIds: [],
+      searchFinalOwnedWeapons: input.ownedWeapons,
       dependencies,
-      draft.expectedStateBefore,
-    )).toThrow(PlannerPlanGenerationError)
+      productionPlanId: productionPlanId('plan.fixture.projection'),
+      now: DOMAIN_FIXTURE_TIME,
+    })).toThrow(PlannerPlanGenerationError)
   })
 })

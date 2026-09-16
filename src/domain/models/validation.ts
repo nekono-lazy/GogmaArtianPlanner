@@ -11,6 +11,7 @@ import {
   CURRENT_CALCULATION_APP_SCHEMA_VERSION,
   V1_NORMAL_ARTIAN_RARITY,
 } from './common'
+import { stableStringify } from './hashing'
 import { improvementPreferences, targetWeaponLifecycleStatuses } from './entities'
 import type {
   AlternativeBonusRule,
@@ -32,6 +33,7 @@ import type {
   ExecutionSavePoint,
   ExpectedPlanState,
   PlanStep,
+  PlanStepExecutionEffects,
   ProductionPlan,
 } from './planning'
 import { executionSavePointIdForPlan } from './planning'
@@ -96,7 +98,7 @@ function appendIssues(
 }
 
 function validateId(
-  value: string,
+  value: string | undefined,
   path: string,
   issues: DomainValidationIssue[],
 ) {
@@ -1447,32 +1449,180 @@ export function validateBuildListEntry(
   return result(issues)
 }
 
+/**
+ * The first calculation schema whose ProductionPlan follows the Execution
+ * lifecycle contract (`docs/PLANNER_SPEC.md` 16): four-hash expected states,
+ * Plan-dependent snapshot hashes, `executionEffects` on every Step, and no
+ * independent `reserve_weapon` / `confirm_result` Step.
+ */
+export const EXECUTION_PLAN_CONTRACT_APP_SCHEMA_VERSION = 12
+
+/** Whether a persisted Plan claims the current Execution Plan contract. */
+export function isExecutionContractProductionPlan(
+  plan: Pick<ProductionPlan, 'calculationContext'>,
+): boolean {
+  return plan.calculationContext.appSchemaVersion >= EXECUTION_PLAN_CONTRACT_APP_SCHEMA_VERSION
+}
+
+/** The operations a current Planner may generate; `reserve_weapon` / `confirm_result` are legacy only. */
+export const currentPlanStepOperationTypes: readonly PlanStepOperationType[] = [
+  'create_normal_artian',
+  'convert_normal_to_gogma',
+  'reset_bonuses',
+  'keep_bonuses',
+  'reset_skills',
+  'confirm_owned_ideal',
+]
+
+const legacyPlanStepOperationTypes: readonly PlanStepOperationType[] = [
+  'reserve_weapon',
+  'confirm_result',
+]
+
 function validateExpectedPlanState(
   state: ExpectedPlanState,
   path: string,
   issues: DomainValidationIssue[],
+  requireTargetExecutionState: boolean,
 ) {
   validateId(state.rngStateHash, `${path}.rngStateHash`, issues)
   validateId(state.normalCountersHash, `${path}.normalCountersHash`, issues)
   validateId(state.ownedWeaponsHash, `${path}.ownedWeaponsHash`, issues)
+  if (state.targetExecutionStateHash !== undefined || requireTargetExecutionState) {
+    validateId(state.targetExecutionStateHash, `${path}.targetExecutionStateHash`, issues)
+  }
+}
+
+function sameExpectedPlanState(left: ExpectedPlanState, right: ExpectedPlanState): boolean {
+  return stableStringify(left) === stableStringify(right)
+}
+
+function validatePlanStepExecutionEffects(
+  step: PlanStep,
+  effects: PlanStepExecutionEffects,
+  path: string,
+  issues: DomainValidationIssue[],
+) {
+  if (typeof effects !== 'object' || effects === null) {
+    addIssue(issues, path, 'invalid_structure', 'executionEffects must be an object.')
+    return
+  }
+  const lists = ['targetLinks', 'compromiseLabels', 'targetCompletions'] as const
+  if (lists.some((field) => !Array.isArray(effects[field]))) {
+    addIssue(issues, path, 'invalid_structure', 'executionEffects lists must be arrays.')
+    return
+  }
+  const tracked = effects.trackedOwnedWeaponId
+  if (tracked !== null) validateId(tracked, `${path}.trackedOwnedWeaponId`, issues)
+  if (step.ownedWeaponId !== tracked) {
+    addIssue(issues, `${path}.trackedOwnedWeaponId`, 'inconsistent_snapshot', 'PlanStep ownedWeaponId must be the tracked OwnedWeapon.')
+  }
+  effects.targetLinks.forEach((link, index) => {
+    validateId(link.buildListEntryId, `${path}.targetLinks[${index}].buildListEntryId`, issues)
+    validateId(link.targetWeaponId, `${path}.targetLinks[${index}].targetWeaponId`, issues)
+  })
+  effects.compromiseLabels.forEach((label, index) => {
+    validateId(label.buildListEntryId, `${path}.compromiseLabels[${index}].buildListEntryId`, issues)
+    if (label.ownedWeaponId !== tracked) {
+      addIssue(issues, `${path}.compromiseLabels[${index}].ownedWeaponId`, 'inconsistent_snapshot', 'A compromise label applies to the tracked OwnedWeapon.')
+    }
+  })
+  effects.targetCompletions.forEach((completion, index) => {
+    validateId(completion.buildListEntryId, `${path}.targetCompletions[${index}].buildListEntryId`, issues)
+    validateId(completion.targetWeaponId, `${path}.targetCompletions[${index}].targetWeaponId`, issues)
+    if (completion.ownedWeaponId !== tracked) {
+      addIssue(issues, `${path}.targetCompletions[${index}].ownedWeaponId`, 'inconsistent_snapshot', 'A Target completion applies to the tracked OwnedWeapon.')
+    }
+  })
+  if (
+    effects.observationBinding !== null &&
+    effects.observationBinding.kind !== 'normal_restoration_bonuses'
+  ) {
+    addIssue(issues, `${path}.observationBinding.kind`, 'invalid_literal', 'Observation binding kind is invalid.')
+  }
+
+  if (step.operationType === 'create_normal_artian') {
+    if (effects.normalCreationRole === 'counter_advance') {
+      if (
+        tracked !== null ||
+        effects.registersTrackedWeapon ||
+        effects.observationBinding !== null ||
+        effects.targetLinks.length > 0 ||
+        effects.compromiseLabels.length > 0 ||
+        effects.targetCompletions.length > 0
+      ) {
+        addIssue(issues, path, 'invalid_state', 'A Counter-advance Normal is never tracked, registered, observed, linked, labelled or completed.')
+      }
+    } else if (effects.normalCreationRole === 'production_target') {
+      if (tracked === null || !effects.registersTrackedWeapon) {
+        addIssue(issues, path, 'invalid_state', 'A production-target Normal registers its tracked OwnedWeapon.')
+      }
+      if (effects.compromiseLabels.length > 0 || effects.targetCompletions.length > 0) {
+        addIssue(issues, path, 'invalid_state', 'A Normal creation neither reaches a checkpoint nor completes a Target.')
+      }
+      if (effects.observationBinding !== null) {
+        if (
+          step.expectedResult?.restorationBonuses !== null ||
+          step.expectedResult?.restorationBonusScope !== null ||
+          step.inventoryChange?.addOwnedWeapon != null
+        ) {
+          addIssue(issues, path, 'invalid_state', 'An observation-bound Normal carries no predicted or registered five slots.')
+        }
+      } else if (
+        step.inventoryChange?.addOwnedWeapon == null ||
+        step.inventoryChange.addOwnedWeapon.id !== tracked
+      ) {
+        addIssue(issues, `${path}.inventoryChange.addOwnedWeapon`, 'invalid_state', 'A predicted production-target Normal registers its tracked weapon.')
+      }
+    } else {
+      addIssue(issues, `${path}.normalCreationRole`, 'invalid_literal', 'create_normal_artian requires counter_advance or production_target.')
+    }
+  } else {
+    if (effects.normalCreationRole !== null || effects.registersTrackedWeapon || effects.observationBinding !== null) {
+      addIssue(issues, path, 'invalid_state', 'Only a Normal creation carries a creation role, a registration or an observation binding.')
+    }
+    if (tracked === null) {
+      addIssue(issues, `${path}.trackedOwnedWeaponId`, 'invalid_state', 'This PlanStep operates on a tracked OwnedWeapon.')
+    }
+  }
+
+  if (step.operationType === 'confirm_owned_ideal') {
+    const advance = step.rngAdvance
+    if (
+      advance.gogmaCounterDelta !== 0 ||
+      advance.skillCounterDelta !== 0 ||
+      advance.normalCounterDelta !== null ||
+      advance.affectedNormalCounterId !== null
+    ) {
+      addIssue(issues, `${path}.rngAdvance`, 'invalid_state', 'confirm_owned_ideal advances no Counter.')
+    }
+    if (
+      effects.targetCompletions.length !== 1 ||
+      effects.targetLinks.length > 0 ||
+      effects.compromiseLabels.length > 0
+    ) {
+      addIssue(issues, path, 'invalid_state', 'confirm_owned_ideal carries exactly one Target completion and nothing else.')
+    }
+    if (
+      step.expectedStateBefore.rngStateHash !== step.expectedStateAfter.rngStateHash ||
+      step.expectedStateBefore.normalCountersHash !== step.expectedStateAfter.normalCountersHash
+    ) {
+      addIssue(issues, 'expectedStateAfter', 'inconsistent_snapshot', 'confirm_owned_ideal leaves the RNG and Normal Counter state unchanged.')
+    }
+  }
 }
 
 function validatePlanStep(
   step: PlanStep,
   expectedOrder: number,
   issues: DomainValidationIssue[],
+  executionContract: boolean,
 ) {
   const path = `steps[${expectedOrder - 1}]`
   validateId(step.id, `${path}.id`, issues)
-  const allowedOperationTypes: readonly PlanStepOperationType[] = [
-    'create_normal_artian',
-    'convert_normal_to_gogma',
-    'reset_bonuses',
-    'keep_bonuses',
-    'reset_skills',
-    'reserve_weapon',
-    'confirm_result',
-  ]
+  const allowedOperationTypes: readonly PlanStepOperationType[] = executionContract
+    ? currentPlanStepOperationTypes
+    : [...currentPlanStepOperationTypes, ...legacyPlanStepOperationTypes]
   if (!allowedOperationTypes.includes(step.operationType)) {
     addIssue(
       issues,
@@ -1512,8 +1662,13 @@ function validatePlanStep(
   if (step.isCompleted && step.completedAt === null) {
     addIssue(issues, `${path}.completedAt`, 'invalid_state', 'A completed PlanStep requires completedAt.')
   }
-  validateExpectedPlanState(step.expectedStateBefore, `${path}.expectedStateBefore`, issues)
-  validateExpectedPlanState(step.expectedStateAfter, `${path}.expectedStateAfter`, issues)
+  validateExpectedPlanState(step.expectedStateBefore, `${path}.expectedStateBefore`, issues, executionContract)
+  validateExpectedPlanState(step.expectedStateAfter, `${path}.expectedStateAfter`, issues, executionContract)
+  if (step.executionEffects !== undefined) {
+    validatePlanStepExecutionEffects(step, step.executionEffects, `${path}.executionEffects`, issues)
+  } else if (executionContract || step.operationType === 'confirm_owned_ideal') {
+    addIssue(issues, `${path}.executionEffects`, 'invalid_structure', 'A current PlanStep requires executionEffects.')
+  }
   if (step.expectedResult?.restorationBonuses !== null && step.expectedResult) {
     appendIssues(
       issues,
@@ -1539,10 +1694,47 @@ export function validateProductionPlan(
   if (!isCalculationContextCompatible(plan.calculationContext, plan.baseSnapshot.calculationContext)) {
     addIssue(issues, 'baseSnapshot.calculationContext', 'inconsistent_snapshot', 'Plan and base snapshot CalculationContext must match.')
   }
-  validateExpectedPlanState(plan.baseSnapshot.initialExecutionState, 'baseSnapshot.initialExecutionState', issues)
+  // A Plan of an earlier calculation schema keeps its exact persisted shape and
+  // is failed closed at the CalculationContext boundary; the current contract
+  // is required only of a Plan that claims it, never inferred for a legacy one.
+  const executionContract = isExecutionContractProductionPlan(plan)
+  validateExpectedPlanState(plan.baseSnapshot.initialExecutionState, 'baseSnapshot.initialExecutionState', issues, executionContract)
   validateId(plan.baseSnapshot.targetWeaponsHash, 'baseSnapshot.targetWeaponsHash', issues)
   validateId(plan.baseSnapshot.buildListEntriesHash, 'baseSnapshot.buildListEntriesHash', issues)
-  plan.steps.forEach((step, index) => validatePlanStep(step, index + 1, issues))
+  if (executionContract || plan.baseSnapshot.dependentTargetDefinitionsHash !== undefined) {
+    validateId(plan.baseSnapshot.dependentTargetDefinitionsHash, 'baseSnapshot.dependentTargetDefinitionsHash', issues)
+  }
+  if (executionContract || plan.baseSnapshot.dependentBuildListEntriesHash !== undefined) {
+    validateId(plan.baseSnapshot.dependentBuildListEntriesHash, 'baseSnapshot.dependentBuildListEntriesHash', issues)
+  }
+  plan.steps.forEach((step, index) => validatePlanStep(step, index + 1, issues, executionContract))
+  if (executionContract) {
+    if (
+      plan.steps.length > 0 &&
+      !sameExpectedPlanState(plan.steps[0].expectedStateBefore, plan.baseSnapshot.initialExecutionState)
+    ) {
+      addIssue(issues, 'steps[0].expectedStateBefore', 'inconsistent_snapshot', 'The first PlanStep must start at PlanningInputSnapshot.initialExecutionState.')
+    }
+    for (let index = 0; index + 1 < plan.steps.length; index += 1) {
+      if (!sameExpectedPlanState(plan.steps[index].expectedStateAfter, plan.steps[index + 1].expectedStateBefore)) {
+        addIssue(issues, `steps[${index + 1}].expectedStateBefore`, 'inconsistent_snapshot', 'The PlanStep expected-state chain is broken.')
+      }
+    }
+    const completedEntries = plan.steps.flatMap((step) =>
+      step.executionEffects?.targetCompletions.map(({ buildListEntryId }) => buildListEntryId) ?? [],
+    )
+    if (new Set(completedEntries).size !== completedEntries.length) {
+      addIssue(issues, 'steps', 'invalid_state', 'A BuildListEntry completes its Target at most once.')
+    }
+    const productionTargets = plan.steps.flatMap((step) =>
+      step.executionEffects?.registersTrackedWeapon === true && step.executionEffects.trackedOwnedWeaponId !== null
+        ? [step.executionEffects.trackedOwnedWeaponId]
+        : [],
+    )
+    if (new Set(productionTargets).size !== productionTargets.length) {
+      addIssue(issues, 'steps', 'invalid_state', 'An OwnedWeapon is registered at most once.')
+    }
+  }
   if (new Set(plan.steps.map(({ id }) => id)).size !== plan.steps.length) {
     addIssue(issues, 'steps', 'invalid_id', 'PlanStep IDs must be unique within a plan.')
   }

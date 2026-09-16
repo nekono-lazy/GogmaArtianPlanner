@@ -153,6 +153,7 @@ export const planStepOperationLabels: Record<PlanStepOperationType, string> = {
   reset_bonuses: '復元ボーナスをリセット',
   keep_bonuses: '復元ボーナスを保持して再抽選',
   reset_skills: 'スキルをリセット',
+  confirm_owned_ideal: '所持している理想品を確認',
   reserve_weapon: '目標武器として確保',
   confirm_result: '結果を確認',
 }

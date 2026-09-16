@@ -558,7 +558,9 @@ export function validateReserveWeaponInventoryChange(
         updated,
         'updateOwnedWeapons[0]',
         issues,
-        source?.isProtected ?? false,
+        // Ideal completion protects an existing weapon too
+        // (`docs/PLANNER_SPEC.md` 16.13); its former protection is not kept.
+        true,
       )
       if (source?.kind === 'gogma' && updated.createdAt !== source.createdAt) {
         issues.push(issue('updateOwnedWeapons[0]', 'invalid_state', 'createdAt must be preserved.'))

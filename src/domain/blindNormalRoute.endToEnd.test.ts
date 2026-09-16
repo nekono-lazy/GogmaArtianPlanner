@@ -135,13 +135,20 @@ describe('forced Reset Normal Artian route, Search to ProductionPlan', () => {
       'create_normal_artian',
       'convert_normal_to_gogma',
       'reset_bonuses',
-      'reserve_weapon',
     ])
-    const reserved = planned.plan?.steps[3].inventoryChange?.addOwnedWeapon
-    expect(reserved).toEqual(expect.objectContaining({
+    // The blind production target is registered at its creation Step from the
+    // user's observation, then the same ID is converted, reset and completed.
+    const trackedId = planned.plan?.steps[0].executionEffects?.trackedOwnedWeaponId
+    expect(trackedId).not.toBeNull()
+    expect(planned.plan?.steps.map(({ ownedWeaponId }) => ownedWeaponId))
+      .toEqual([trackedId, trackedId, trackedId])
+    const completed = planned.plan?.steps[2].inventoryChange?.updateOwnedWeapons[0]
+    expect(completed).toEqual(expect.objectContaining({
+      id: trackedId,
       kind: 'gogma',
       restorationBonuses: createRestorationBonusSet(),
       restorationBonusScope: 'gogma_artian',
+      status: 'ideal',
       isProtected: true,
     }))
     // Nothing claims to know a Normal Counter that was never identified.
@@ -187,6 +194,7 @@ describe('forced Reset Normal Artian route, Search to ProductionPlan', () => {
       plannerInput.rngState,
       [{ ...counter, counter: value }],
       [],
+      { targetWeapons: [], dependentTargetWeaponIds: [] },
     ).normalCountersHash
     expect(create?.expectedStateBefore.normalCountersHash).toBe(hashAt(4))
     expect(create?.expectedStateAfter.normalCountersHash).toBe(hashAt(5))

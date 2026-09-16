@@ -371,7 +371,7 @@ describe('Shared Gogma Counter Route prefix fast-forward', () => {
     ])
   }, 180_000)
 
-  it('replays the Beam Search trace into one 150 step ProductionPlan', async () => {
+  it('replays the Beam Search trace into one 148 step ProductionPlan', async () => {
     const { input, dependencies, water, fire, waterTarget, fireTarget } =
       sharedGogmaScenario()
     const before = structuredClone(input)
@@ -385,7 +385,8 @@ describe('Shared Gogma Counter Route prefix fast-forward', () => {
     expect(plan).not.toBeNull()
     expect(plan?.conflicts).toEqual([])
     expect(plan?.rejectedBuildListEntries).toEqual([])
-    expect(plan?.steps).toHaveLength(150)
+    // 148 physical operations; each Entry's completion rides on its last one.
+    expect(plan?.steps).toHaveLength(148)
 
     const steps = plan?.steps ?? []
     const waterKeeps = steps
@@ -414,7 +415,9 @@ describe('Shared Gogma Counter Route prefix fast-forward', () => {
     )
     expect(
       steps.filter(({ operationType }) => operationType === 'reserve_weapon'),
-    ).toHaveLength(2)
+    ).toHaveLength(0)
+    expect(steps.flatMap(({ executionEffects }) => executionEffects?.targetCompletions ?? []))
+      .toHaveLength(2)
 
     // Both Routes claim shared Counter positions 0-22, and every position is
     // executed exactly once: the Entry that does not run there fast-forwards.

@@ -32,6 +32,7 @@ import {
   validateRngState,
 } from '../../domain/models/publicTypes'
 import {
+  collectProductionPlanDependentTargetWeaponIds,
   createPlanningBuildListEntriesHash,
   createPlanningTargetWeaponsHash,
   type PlannerOrchestrationResult,
@@ -271,10 +272,19 @@ export class PlannerResultPersistenceService {
       )
     }
 
+    // A freshly calculated Draft has no confirmed Step yet, so no observation
+    // binding applies and the current state hashes with its real values.
     const currentExecutionState = createExpectedPlanState(
       current.rngState,
       current.normalCounters,
       current.ownedWeapons,
+      {
+        targetWeapons: current.targetWeapons,
+        dependentTargetWeaponIds: collectProductionPlanDependentTargetWeaponIds(
+          plan,
+          [...current.buildListEntries, ...generatedEntries],
+        ),
+      },
     )
     if (
       !sameExpectedPlanState(
@@ -283,7 +293,7 @@ export class PlannerResultPersistenceService {
       )
     ) {
       throw stateChanged(
-        'Current RngState, Normal Artian counters or OwnedWeapons differ from PlanningInputSnapshot.initialExecutionState.',
+        'Current RngState, Normal Artian counters, OwnedWeapons or Plan-dependent Target execution state differ from PlanningInputSnapshot.initialExecutionState.',
       )
     }
 

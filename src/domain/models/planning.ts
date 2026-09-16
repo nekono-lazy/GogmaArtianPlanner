@@ -47,8 +47,25 @@ export interface ProductionPlan {
 
 export interface PlanningInputSnapshot {
   initialExecutionState: ExpectedPlanState
+  /** Audit hash of every PlannerInput Target (planning-input normalization). */
   targetWeaponsHash: string
+  /** Audit hash of every PlannerInput BuildListEntry. */
   buildListEntriesHash: string
+  /**
+   * The planning definition (`id`, `createTargetDefinitionHash()`, `priority`,
+   * `isEnabled`) of the Plan-dependent Targets only (`docs/DATA_MODEL.md` 11.2).
+   *
+   * Calculation schema 12 and later. `undefined` means a Plan of an earlier
+   * calculation schema, which is failed closed at the CalculationContext
+   * boundary and never read as "no dependency".
+   */
+  dependentTargetDefinitionsHash?: string
+  /**
+   * The `buildListEntriesHash` normalization of `selectedBuildListEntryIds`
+   * only. Calculation schema 12 and later, exactly like
+   * `dependentTargetDefinitionsHash`.
+   */
+  dependentBuildListEntriesHash?: string
   calculationContext: CalculationContext
   createdAt: ISODateTimeString
 }
@@ -57,6 +74,76 @@ export interface ExpectedPlanState {
   rngStateHash: string
   normalCountersHash: string
   ownedWeaponsHash: string
+  /**
+   * `id`, `lifecycleStatus` and `preferredOwnedWeaponId` of the Plan-dependent
+   * Targets only (`docs/PLANNER_SPEC.md` 16.5).
+   *
+   * Calculation schema 12 and later. `undefined` means a Plan of an earlier
+   * calculation schema; it is never normalized to a computed value.
+   */
+  targetExecutionStateHash?: string
+}
+
+/**
+ * The PlanStep ID whose confirmation binds a user observation to a weapon's
+ * five restoration bonus slots (`docs/PLANNER_SPEC.md` 16.5).
+ *
+ * A blind production-target Normal has no predicted slots, so every expected
+ * state until a Reset Bonuses replaces them normalizes the slots to this token
+ * instead of to a fabricated value.
+ */
+export interface ExpectedStateObservationBindingToken {
+  observationBinding: PlanStepId
+}
+
+/** `create_normal_artian` Step role (`docs/PLANNER_SPEC.md` 16.3). */
+export type PlanStepNormalCreationRole = 'counter_advance' | 'production_target'
+
+/** A value unknown at Plan generation that the user observes at Step confirmation. */
+export interface PlanStepObservationBinding {
+  kind: 'normal_restoration_bonuses'
+}
+
+/** Sets the Target's preferred owned weapon to the Step's tracked weapon (16.11). */
+export interface PlanStepTargetLinkEffect {
+  buildListEntryId: BuildListEntryId
+  targetWeaponId: TargetWeaponId
+}
+
+/** Labels the tracked weapon `practical` at a reached selected checkpoint (16.12). */
+export interface PlanStepCompromiseLabelEffect {
+  buildListEntryId: BuildListEntryId
+  ownedWeaponId: OwnedWeaponId
+}
+
+/** Ideal completion and Target completion (16.13). */
+export interface PlanStepTargetCompletionEffect {
+  buildListEntryId: BuildListEntryId
+  targetWeaponId: TargetWeaponId
+  ownedWeaponId: OwnedWeaponId
+}
+
+/**
+ * The Execution effects one PlanStep applies when it is confirmed
+ * (`docs/DATA_MODEL.md` 11.3, `docs/PLANNER_SPEC.md` 16.3).
+ *
+ * Planner calculation only records them: it never writes a Target, an
+ * OwnedWeapon status, protection or in-progress state. The Execution service
+ * applies them in the Step confirmation transaction, in the order target links,
+ * compromise labels, target completions.
+ */
+export interface PlanStepExecutionEffects {
+  /** The weapon this Step operates on or registers; `null` for a Counter-advance Normal. */
+  trackedOwnedWeaponId: OwnedWeaponId | null
+  /** Non-null exactly for `create_normal_artian`. */
+  normalCreationRole: PlanStepNormalCreationRole | null
+  /** The production-target Normal is registered by this Step. */
+  registersTrackedWeapon: boolean
+  /** Non-null only for a blind production-target Normal. */
+  observationBinding: PlanStepObservationBinding | null
+  targetLinks: PlanStepTargetLinkEffect[]
+  compromiseLabels: PlanStepCompromiseLabelEffect[]
+  targetCompletions: PlanStepTargetCompletionEffect[]
 }
 
 export interface PlanStep {
@@ -96,6 +183,12 @@ export interface PlanStep {
   expectedStateAfter: ExpectedPlanState
   inventoryChange: InventoryChange | null
   rngAdvance: RngAdvance
+  /**
+   * Calculation schema 12 and later (`docs/DATA_MODEL.md` 11.3). `undefined`
+   * means a legacy Plan whose execution projection is unknown; it is never
+   * inferred from its Steps.
+   */
+  executionEffects?: PlanStepExecutionEffects
   requiresUserConfirmation: boolean
   isCompleted: boolean
   completedAt: ISODateTimeString | null
@@ -135,6 +228,11 @@ export interface ExpectedResult {
   restorationBonusScope: RestorationBonusScope | null
   seriesSkillId: SeriesSkillId | null
   groupSkillId: GroupSkillId | null
+  /**
+   * Whether this Step completes a Target's Ideal weapon. For a calculation
+   * schema 12 Plan it mirrors `executionEffects.targetCompletions` and is never
+   * the authority; a legacy Plan set it on its independent secure Step.
+   */
   shouldSecure: boolean
 }
 

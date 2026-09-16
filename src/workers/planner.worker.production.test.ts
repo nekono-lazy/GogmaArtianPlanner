@@ -218,7 +218,9 @@ function interactionFixture() {
   )
   const scenario = beamFixture(targets, entries, sources)
   // Persisted isStale is still false: current Domain validation must exclude it.
-  targets[2].priority = 5
+  // A Target performance-definition change stales the Entry; priority alone no
+  // longer does (PLANNER_SPEC 16.11).
+  targets[2].idealSkillCondition.matchMode = 'any'
   return { ...scenario, entries }
 }
 

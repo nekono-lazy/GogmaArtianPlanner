@@ -73,7 +73,19 @@ export type PlanStepOperationType =
   | 'reset_bonuses'
   | 'keep_bonuses'
   | 'reset_skills'
+  /**
+   * Current (calculation schema 12): confirms that an owned Gogma already holds
+   * the Target's Ideal and completes the Target without advancing any Counter
+   * (`docs/PLANNER_SPEC.md` 16.3).
+   */
+  | 'confirm_owned_ideal'
+  /**
+   * Legacy only: an independent secure Step of a calculation schema 11 or
+   * earlier Plan. It stays in the type so a historical Plan can be displayed,
+   * but the current Planner never generates it and it is never executable.
+   */
   | 'reserve_weapon'
+  /** Legacy only, exactly like `reserve_weapon`. */
   | 'confirm_result'
 export type ExecutionAction =
   | 'confirmed_expected'
@@ -179,7 +191,28 @@ export interface KnownValue<T> {
 // change no calculation meaning, and the Target definition hash, planning-input
 // hashes, expected execution state, PlanStep effects and reserve semantics are
 // switched together, with their own version boundary, by a later PR.
-export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 11
+// Version 12 switches the Execution lifecycle calculation contract
+// (`docs/PLANNER_SPEC.md` 16): `createTargetDefinitionHash()` covers the Target
+// performance definition only (priority, isEnabled, preferredOwnedWeaponId and
+// lifecycle leave it), `PlanningInputSnapshot.targetWeaponsHash` becomes its own
+// planning-input normalization and gains the Plan-dependent Target / Entry
+// hashes, `ExpectedPlanState` gains the Plan-dependent Target execution state,
+// every PlanStep carries `executionEffects` (tracked OwnedWeapon, Normal creation
+// role, registration, observation binding, Target link, compromise label and
+// Target completion), the independent `reserve_weapon` Step leaves the current
+// Plan (completion rides on the last physical Step, and a zero-operation Ideal
+// becomes `confirm_owned_ideal`), an owned Normal's conversion keeps its
+// OwnedWeapon ID, a blind production-target Normal is bound to the user's
+// observation instead of a prediction, and Ideal completion protects existing
+// weapons too. A version 11 Plan's Steps, expected states and reserve Steps
+// cannot be mapped onto that contract without guessing, and a version 11
+// Candidate / Build List Entry carries a Target definition hash of the old
+// normalization, so all version 1..11 Candidates, Build List snapshots and Plans
+// are incompatible and fail closed with `calculation_context_changed`; none is
+// migrated. No Dexie table or index changes, so `DATABASE_SCHEMA_VERSION` stays
+// 5; the persisted ProductionPlan shape does change, so `ExportRoot.schemaVersion`
+// moves to 8. RNG semantics remain unchanged.
+export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 12
 
 export interface CalculationContext {
   gameVersion: string

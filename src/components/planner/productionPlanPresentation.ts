@@ -101,8 +101,9 @@ export function groupPlanStepsByTargetWeapon(
 /**
  * The Plan overview counts.
  *
- * `securedStepCount` counts only steps the Plan itself marks
- * `expectedResult.shouldSecure === true`; neither the Target count nor
+ * `securedStepCount` counts only steps the Plan itself marks as completing a
+ * Target: `executionEffects.targetCompletions` for a current Plan and
+ * `expectedResult.shouldSecure === true` for a legacy one; neither the Target count nor
  * `selectedBuildListEntryIds.length` is assumed to be a weapon count.
  */
 export function createProductionPlanSummary(
@@ -114,7 +115,13 @@ export function createProductionPlanSummary(
     for (const id of getPlanStepRelatedTargetWeaponIds(step)) {
       targetWeaponIds.add(id)
     }
-    if (step.expectedResult?.shouldSecure === true) securedStepCount += 1
+    // A current Plan names its completions in executionEffects, the only
+    // authority (UI_FLOW 11.0); a legacy Plan only ever set shouldSecure.
+    if (step.executionEffects !== undefined) {
+      if (step.executionEffects.targetCompletions.length > 0) securedStepCount += 1
+    } else if (step.expectedResult?.shouldSecure === true) {
+      securedStepCount += 1
+    }
   }
   return {
     planId: plan.id,

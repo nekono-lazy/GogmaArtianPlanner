@@ -830,8 +830,12 @@ function applyReserveAction(
   master: PlannerInput['master'],
   preferredSourceEntryIds: ReadonlySet<BuildListEntryId>,
   requirements: PlannerCheckpointRequirements,
+  zeroOperationConfirm = false,
 ): AppliedActionResult {
-  if (!targetCanUseEntry(sourceState, entry, requirements)) {
+  // A zero-operation Candidate confirms a weapon that already satisfies its
+  // Target, so the Target is Ideal by definition; it is the one reserve that
+  // does not require an unsatisfied Target (`docs/PLANNER_SPEC.md` 16.3).
+  if (!zeroOperationConfirm && !targetCanUseEntry(sourceState, entry, requirements)) {
     return {
       state: null,
       rejection: rejection(
@@ -929,7 +933,9 @@ function applyReserveAction(
         ),
       }
     }
-    const readyVersion = state.candidateReadySourceVersionByEntryId[entry.id]
+    const readyVersion = zeroOperationConfirm
+      ? 0
+      : state.candidateReadySourceVersionByEntryId[entry.id]
     const currentVersion = state.sourceMutationVersionByOwnedWeaponId[sourceId] ?? 0
     if (readyVersion === undefined || readyVersion !== currentVersion) {
       return {
@@ -946,11 +952,14 @@ function applyReserveAction(
     const updated: OwnedGogmaArtianWeapon = {
       ...source,
       restorationBonuses: structuredClone(entry.candidateSnapshot.finalBonuses),
+      restorationBonusScope: entry.candidateSnapshot.restorationBonusScope,
       seriesSkillId: entry.candidateSnapshot.seriesSkillId,
       groupSkillId: entry.candidateSnapshot.groupSkillId,
-      // The Candidate category becomes the label, and the stored protection
-      // value is preserved exactly as PR #12 fixed.
+      // Ideal completion protects an existing weapon exactly like a newly
+      // created one, so a completed weapon is never the amendment source of a
+      // later unit of the same Plan (`docs/PLANNER_SPEC.md` 16.3 / 16.13).
       status: 'ideal',
+      isProtected: true,
     }
     const result = updateOwnedWeapon(state.simulatedInventory, updated)
     if (!result.isValid || result.inventory === null) {
@@ -996,6 +1005,40 @@ function applyReserveAction(
   )
   state.totalCost = state.trace.length
   return { state, rejection: null }
+}
+
+/**
+ * The Entries whose internal reserve must be applied before any other action
+ * (`docs/PLANNER_SPEC.md` 16.3).
+ *
+ * The execution projection completes a Target on the Entry's last physical
+ * Step, so the search secures a Candidate right after that unit, with nothing
+ * but other such reserves in between: these are the Entries the most recent
+ * physical action progressed, provided only reserves followed it, whose Route
+ * is now complete and whose Target can still use them. An Entry that misses
+ * this moment is never reserved later.
+ */
+function pendingReserveEntries(
+  state: PlannerSearchState,
+  entriesById: ReadonlyMap<BuildListEntryId, BuildListEntry>,
+  lanePlans: ReadonlyMap<BuildListEntryId, PlannerEntryLanes>,
+  requirements: PlannerCheckpointRequirements,
+): BuildListEntry[] {
+  let index = state.trace.length - 1
+  while (index >= 0 && state.trace[index].kind === 'reserve_candidate') index -= 1
+  const physical = index >= 0 ? state.trace[index] : undefined
+  if (physical?.kind !== 'route_operation') return []
+  return [...physical.progressedBuildListEntryIds]
+    .sort(compareStableStrings)
+    .flatMap((entryId) => {
+      const entry = entriesById.get(entryId)
+      const lanes = lanePlans.get(entryId)
+      if (!entry || !lanes) return []
+      if (state.selectedBuildListEntryIds.includes(entryId)) return []
+      const progress = state.routeProgressByEntryId[entryId] ?? initialPlannerLaneProgress()
+      if (!isPlannerLaneRouteComplete(lanes, progress)) return []
+      return targetCanUseEntry(state, entry, requirements) ? [entry] : []
+    })
 }
 
 function betterState(
@@ -1115,7 +1158,7 @@ export async function runPlannerBeamSearch(
     entriesById,
     excludedBuildListEntries,
     initialConflictDetection,
-    initialState,
+    initialState: preparedInitialState,
     routeUnitCountByEntryId,
     targets,
     targetsById,
@@ -1153,6 +1196,44 @@ export async function runPlannerBeamSearch(
     })
   }
   recordDetectedConflicts(initialConflictDetection)
+  // A zero-operation Candidate whose owned Gogma already satisfies its active
+  // Target is confirmed, not silently dropped as already satisfied: it becomes
+  // one `confirm_owned_ideal` Step that advances no Counter and completes the
+  // Target (`docs/PLANNER_SPEC.md` 16.3). It changes no RNG state, so it is
+  // applied before any expansion, one Entry per Target in stable ID order.
+  let initialState = preparedInitialState
+  const confirmedZeroOperationTargetIds = new Set<TargetWeaponId>()
+  for (const entry of allSearchEntries) {
+    const lanes = allLanePlans.get(entry.id)
+    if (
+      lanes === undefined ||
+      lanes.unitCount !== 0 ||
+      entry.candidateSnapshot.route.kind !== 'existing_gogma_current'
+    ) continue
+    const required = checkpointRequirements.requiredEntryIdByTargetId.get(entry.targetWeaponId)
+    if (required !== undefined && required !== entry.id) continue
+    const target = targetsById.get(entry.targetWeaponId)
+    if (!target || confirmedZeroOperationTargetIds.has(target.id)) continue
+    if (initialState.targetSatisfaction[target.id]?.hasIdeal !== true) continue
+    const confirmed = applyReserveAction(
+      initialState,
+      entry,
+      target,
+      dependencies,
+      targets,
+      input.master,
+      preferredSourceEntryIds,
+      checkpointRequirements,
+      true,
+    )
+    if (confirmed.rejection) {
+      appendUniqueRejection(rejections, rejectionKeys, confirmed.rejection)
+    }
+    if (confirmed.state) {
+      initialState = confirmed.state
+      confirmedZeroOperationTargetIds.add(target.id)
+    }
+  }
   initialState.evaluationScore = evaluatePlannerSearchState(
     initialState,
     {
@@ -1251,14 +1332,51 @@ export async function runPlannerBeamSearch(
           isBlockedByConflictResolution,
           checkpointRequirements,
         )
-      for (const entry of allSearchEntries) {
-        if (state.selectedBuildListEntryIds.includes(entry.id)) continue
-        if (!targetCanUseEntry(state, entry, checkpointRequirements)) continue
-        const lanes = allLanePlans.get(entry.id)
-        if (!lanes) continue
-        const progress = state.routeProgressByEntryId[entry.id] ?? initialPlannerLaneProgress()
+      // A just-finished Route can be secured only now, before any other action
+      // (docs/PLANNER_SPEC.md 16.3). Not securing it is a branch of its own: the
+      // ordinary successors below leave that Entry unsecured for good, which is
+      // how a shared physical action serves another Entry that keeps operating
+      // on the same weapon.
+      const pendingReserveAttempts = pendingReserveEntries(
+        state,
+        entriesById,
+        allLanePlans,
+        checkpointRequirements,
+      ).flatMap((entry) => {
+        const target = targetsById.get(entry.targetWeaponId)
+        return target
+          ? [{
+              entry,
+              applied: applyReserveAction(
+                state,
+                entry,
+                target,
+                dependencies,
+                targets,
+                input.master,
+                preferredSourceEntryIds,
+                checkpointRequirements,
+              ),
+            }]
+          : []
+      })
+      const expansionSources: { entry: BuildListEntry; reserveAttempt: AppliedActionResult | null }[] = [
+        ...pendingReserveAttempts.map(({ entry, applied }) => ({ entry, reserveAttempt: applied })),
+        ...allSearchEntries.map((entry) => ({ entry, reserveAttempt: null })),
+      ]
+      for (const { entry, reserveAttempt } of expansionSources) {
         const attempts: AppliedActionResult[] = []
-        if (!isPlannerLaneRouteComplete(lanes, progress)) {
+        const lanes = allLanePlans.get(entry.id)
+        const progress = state.routeProgressByEntryId[entry.id] ?? initialPlannerLaneProgress()
+        if (reserveAttempt !== null) {
+          attempts.push(reserveAttempt)
+        } else if (
+          state.selectedBuildListEntryIds.includes(entry.id) ||
+          !lanes ||
+          !targetCanUseEntry(state, entry, checkpointRequirements)
+        ) {
+          continue
+        } else if (!isPlannerLaneRouteComplete(lanes, progress)) {
           // After the base prefix, the Bonus lane and the Skill lane are both
           // candidates: the Planner, not the Route, decides their interleaving
           // (docs/PLANNER_SPEC.md 7.0.4), subject to the checkpoint pin. Every
@@ -1307,7 +1425,10 @@ export async function runPlannerBeamSearch(
               checkpointRequirements,
             ))
           }
-        } else {
+        } else if (lanes.unitCount === 0) {
+          // A Route with physical units is secured only right after its last
+          // unit (pendingReserveEntries); only a Route without any unit reaches
+          // its reserve here.
           const target = targetsById.get(entry.targetWeaponId)
           if (!target) continue
           attempts.push(applyReserveAction(

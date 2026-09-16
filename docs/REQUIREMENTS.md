@@ -953,7 +953,7 @@ Production v1 adapterがpersisted exact Gateを要求せずactive representative
 
 ---
 
-実行ナビのライフサイクル改訂（25章、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16章）は、目標武器のlifecycle、所持武器の実行時lifecycle、優先起点のstaleness semantics、PlanStepと確保（reserve）のsemantics、実行時の期待状態、Undo対象範囲を変更する。後続の実装PRではCalculationContextの `appSchemaVersion` 更新が必要になる可能性が高く、目標武器・所持武器・ゲーム内セーブ地点などの永続形状の変更によってはDexie `DATABASE_SCHEMA_VERSION` と `ExportRoot.schemaVersion` の更新も必要になる。本改訂は仕様PRであり実コードのversionを変更しない。実装PRで現行schemaとImport互換を監査し、必要なversion境界を確定する。既存データを推測migrationして意味を変えてはならない（所持している理想品から目標武器を完了済みと推測する、既存の所持武器を作成中と推測する、など）。最初の実装PR（永続Entity基盤）では目標武器lifecycle、所持武器の作成中状態、ゲーム内セーブ地点の永続形状を追加し、Dexie `DATABASE_SCHEMA_VERSION` を5、`ExportRoot.schemaVersion` を7へ更新した。計算意味はまだ切り替えないため `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は11のままである。
+実行ナビのライフサイクル改訂（25章、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16章）は、目標武器のlifecycle、所持武器の実行時lifecycle、優先起点のstaleness semantics、PlanStepと確保（reserve）のsemantics、実行時の期待状態、Undo対象範囲を変更する。後続の実装PRではCalculationContextの `appSchemaVersion` 更新が必要になる可能性が高く、目標武器・所持武器・ゲーム内セーブ地点などの永続形状の変更によってはDexie `DATABASE_SCHEMA_VERSION` と `ExportRoot.schemaVersion` の更新も必要になる。本改訂は仕様PRであり実コードのversionを変更しない。実装PRで現行schemaとImport互換を監査し、必要なversion境界を確定する。既存データを推測migrationして意味を変えてはならない（所持している理想品から目標武器を完了済みと推測する、既存の所持武器を作成中と推測する、など）。最初の実装PR（永続Entity基盤）では目標武器lifecycle、所持武器の作成中状態、ゲーム内セーブ地点の永続形状を追加し、Dexie `DATABASE_SCHEMA_VERSION` を5、`ExportRoot.schemaVersion` を7へ更新した。計算意味はまだ切り替えないため `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は11のままとした。2番目の実装PR（Execution Plan契約）で目標定義hashの正規化、計画入力hash、Plan依存hash、実行時の期待状態、PlanStepのexecution effect、確保（reserve）の扱いを切り替え、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を12、`ExportRoot.schemaVersion` を8へ更新した（Dexieは5のまま）。
 
 ---
 

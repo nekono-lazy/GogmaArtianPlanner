@@ -145,7 +145,8 @@ describe('Planner initial context preparation', () => {
 
   it('excludes a stale BuildListEntry from every derived structure', () => {
     const { input, dependencies, entry } = singleEntryFixture()
-    input.targetWeapons[0].priority = 5
+    // A performance-definition change; priority alone no longer stales an Entry.
+    input.targetWeapons[0].idealSkillCondition.matchMode = 'any'
     const context = readyContext(input, dependencies)
     expect(context.validBuildListEntries).toEqual([])
     expect(context.excludedBuildListEntries.map(({ entry: excluded }) => excluded.id))

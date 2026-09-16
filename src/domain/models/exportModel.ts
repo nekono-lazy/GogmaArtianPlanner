@@ -16,9 +16,11 @@ import type {
   ProductionPlan,
 } from './planning'
 import {
+  EXECUTION_PLAN_CONTRACT_APP_SCHEMA_VERSION,
   validateExecutionSavePoint,
   validateExecutionSavePointReferences,
   validateOwnedWeapon,
+  validateProductionPlan,
   validateTargetWeapon,
   type DomainValidationIssue,
   type DomainValidationResult,
@@ -27,10 +29,14 @@ import {
 /**
  * Current Export shape version. Version 7 adds the Execution lifecycle
  * persisted state: TargetWeapon lifecycle, `OwnedWeapon.executionInProgress`,
- * and `executionSavePoints` (`docs/DATA_MODEL.md` 15). It is independent of
- * `DATABASE_SCHEMA_VERSION` and of `CURRENT_CALCULATION_APP_SCHEMA_VERSION`.
+ * and `executionSavePoints`. Version 8 adds the calculation schema 12
+ * ProductionPlan shape: `PlanStep.executionEffects`, the
+ * `ExpectedPlanState.targetExecutionStateHash`, the Plan-dependent
+ * `PlanningInputSnapshot` hashes and the `confirm_owned_ideal` Step
+ * (`docs/DATA_MODEL.md` 15). It is independent of `DATABASE_SCHEMA_VERSION`
+ * and of `CURRENT_CALCULATION_APP_SCHEMA_VERSION`.
  */
-export const EXPORT_SCHEMA_VERSION = 7
+export const EXPORT_SCHEMA_VERSION = 8
 
 export const EXPORT_APP_NAME = 'mh-wilds-gogma-artian-planner'
 
@@ -70,6 +76,15 @@ export interface ExportRootV6
   schemaVersion: 6
   ownedWeapons: SchemaV6OwnedWeapon[]
   targetWeapons: SchemaV6TargetWeapon[]
+}
+
+/**
+ * The schema 7 Export shape. Its entity fields are the current ones; every
+ * ProductionPlan it holds predates calculation schema 12, so none carries the
+ * schema 8 Plan fields.
+ */
+export interface ExportRootV7 extends Omit<ExportRoot, 'schemaVersion'> {
+  schemaVersion: 7
 }
 
 export type ExportRootMigrationResult =
@@ -165,7 +180,7 @@ function runTypedValidation(
  */
 export function migrateExportRootV6ToV7(
   root: ExportRootV6,
-): ExportRootMigrationResult {
+): { ok: true; root: ExportRootV7 } | { ok: false; issues: DomainValidationIssue[] } {
   // Exported and pure, so it does not rely on its caller having checked the
   // runtime shape of the collections it reads.
   if (!isRecord(root)) {
@@ -219,7 +234,7 @@ export function migrateExportRootV6ToV7(
     ok: true,
     root: {
       ...migrated,
-      schemaVersion: EXPORT_SCHEMA_VERSION,
+      schemaVersion: 7,
       ownedWeapons: migrated.ownedWeapons.map(
         (weapon) => ({ ...weapon, executionInProgress: null }) as OwnedWeapon,
       ),
@@ -232,6 +247,100 @@ export function migrateExportRootV6ToV7(
       executionSavePoints: [],
     },
   }
+}
+
+/**
+ * The schema 8 fields a ProductionPlan can carry: a calculation schema 12 Plan
+ * shape. A schema 7 Export predates it, so any of them marks a record that is
+ * not really schema 7.
+ */
+function schemaV8PlanFieldIssues(plan: unknown, path: string): DomainValidationIssue[] {
+  if (!isRecord(plan)) return []
+  const issues: DomainValidationIssue[] = []
+  const context = plan.calculationContext
+  if (
+    isRecord(context) &&
+    typeof context.appSchemaVersion === 'number' &&
+    context.appSchemaVersion >= EXECUTION_PLAN_CONTRACT_APP_SCHEMA_VERSION
+  ) {
+    issues.push(structureIssue(`${path}.calculationContext.appSchemaVersion`, 'A schema 7 Export cannot carry a calculation schema 12 ProductionPlan.'))
+  }
+  const snapshot = plan.baseSnapshot
+  if (isRecord(snapshot)) {
+    ;(['dependentTargetDefinitionsHash', 'dependentBuildListEntriesHash'] as const).forEach((field) => {
+      if (field in snapshot) {
+        issues.push(structureIssue(`${path}.baseSnapshot.${field}`, `A schema 7 ProductionPlan cannot carry '${field}'.`))
+      }
+    })
+    if (isRecord(snapshot.initialExecutionState) && 'targetExecutionStateHash' in snapshot.initialExecutionState) {
+      issues.push(structureIssue(`${path}.baseSnapshot.initialExecutionState.targetExecutionStateHash`, 'A schema 7 ProductionPlan cannot carry targetExecutionStateHash.'))
+    }
+  }
+  if (Array.isArray(plan.steps)) {
+    plan.steps.forEach((step: unknown, index) => {
+      if (!isRecord(step)) return
+      const stepPath = `${path}.steps[${index}]`
+      if ('executionEffects' in step) {
+        issues.push(structureIssue(`${stepPath}.executionEffects`, 'A schema 7 PlanStep cannot carry executionEffects.'))
+      }
+      if (step.operationType === 'confirm_owned_ideal') {
+        issues.push(structureIssue(`${stepPath}.operationType`, 'A schema 7 PlanStep cannot be confirm_owned_ideal.'))
+      }
+      ;(['expectedStateBefore', 'expectedStateAfter'] as const).forEach((field) => {
+        const state = step[field]
+        if (isRecord(state) && 'targetExecutionStateHash' in state) {
+          issues.push(structureIssue(`${stepPath}.${field}.targetExecutionStateHash`, 'A schema 7 PlanStep cannot carry targetExecutionStateHash.'))
+        }
+      })
+    })
+  }
+  return issues
+}
+
+/**
+ * Pure schema 7 -> 8 Export migration.
+ *
+ * Schema 8 only adds the calculation schema 12 ProductionPlan shape, and every
+ * Plan in a schema 7 Export is a calculation schema 11 or earlier Plan. So the
+ * migration changes nothing but the version: it never adds `executionEffects`,
+ * never merges a `reserve_weapon` Step into a physical Step, never infers a
+ * tracked OwnedWeapon or an observation binding, and never computes a Target
+ * execution state hash. Those Plans keep their exact persisted contents and are
+ * failed closed at the CalculationContext boundary.
+ *
+ * A schema 7 root whose Plans - persisted, inside an ExecutionHistory Undo
+ * snapshot, or inside a game save point - already carry a schema 8 field is not
+ * a schema 7 root, so it fails closed.
+ */
+export function migrateExportRootV7ToV8(
+  root: ExportRootV7,
+): ExportRootMigrationResult {
+  if (!isRecord(root)) {
+    return { ok: false, issues: [structureIssue('', 'Export root must be an object.')] }
+  }
+  const record = root as unknown as Record<string, unknown>
+  const shapeIssues = ['productionPlans', 'executionHistory', 'executionSavePoints']
+    .flatMap((field) => collectionShapeIssues(record, field))
+  if (shapeIssues.length > 0) return { ok: false, issues: shapeIssues }
+  const issues = [
+    ...root.productionPlans.flatMap((plan, index) =>
+      schemaV8PlanFieldIssues(plan, `productionPlans[${index}]`)),
+    ...root.executionHistory.flatMap((history, index) =>
+      schemaV8PlanFieldIssues(
+        isRecord(history.undoSnapshot) ? history.undoSnapshot.productionPlanBefore : undefined,
+        `executionHistory[${index}].undoSnapshot.productionPlanBefore`,
+      )),
+    ...root.executionSavePoints.flatMap((savePoint, index) =>
+      schemaV8PlanFieldIssues(savePoint.productionPlan, `executionSavePoints[${index}].productionPlan`)),
+  ]
+  if (issues.length > 0) return { ok: false, issues }
+  let migrated: ExportRootV7
+  try {
+    migrated = structuredClone(root)
+  } catch {
+    return { ok: false, issues: [structureIssue('', 'Export root cannot be copied.')] }
+  }
+  return { ok: true, root: { ...migrated, schemaVersion: EXPORT_SCHEMA_VERSION } }
 }
 
 function prefixed(
@@ -297,6 +406,10 @@ export function validateExportRootExecutionLifecycle(
     const path = `targetWeapons[${index}]`
     issues.push(...runTypedValidation(path, () => prefixed(path, validateTargetWeapon(target))))
   })
+  root.productionPlans.forEach((plan, index) => {
+    const path = `productionPlans[${index}]`
+    issues.push(...runTypedValidation(path, () => prefixed(path, validateProductionPlan(plan))))
+  })
   root.executionSavePoints.forEach((savePoint, index) => {
     const path = `executionSavePoints[${index}]`
     issues.push(...runTypedValidation(path, () => prefixed(path, validateExecutionSavePoint(savePoint))))
@@ -318,9 +431,10 @@ export function validateExportRootExecutionLifecycle(
 
 /**
  * Brings a parsed Export object to the current schema and validates its
- * Execution lifecycle state, failing closed on anything else. Schema 7 is read
- * as is, schema 6 goes through `migrateExportRootV6ToV7()`, and every other
- * version is refused. Nothing is applied here: the caller replaces its data
+ * Execution lifecycle state, failing closed on anything else. Schema 8 is read
+ * as is, schema 7 goes through `migrateExportRootV7ToV8()`, schema 6 through
+ * `migrateExportRootV6ToV7()` and then `migrateExportRootV7ToV8()`, and every
+ * other version is refused. Nothing is applied here: the caller replaces its data
  * only after a successful result.
  */
 export function prepareExportRootForImport(
@@ -354,11 +468,17 @@ export function prepareExportRootForImport(
     } catch {
       return { ok: false, issues: [structureIssue('', 'Export root cannot be copied.')] }
     }
+  } else if (candidate.schemaVersion === 7) {
+    const migrated = migrateExportRootV7ToV8(input as ExportRootV7)
+    if (!migrated.ok) return migrated
+    root = migrated.root
   } else if (candidate.schemaVersion === 6) {
     const shapeIssues = ['productionPlans', 'executionHistory']
       .flatMap((field) => collectionShapeIssues(candidate, field))
     if (shapeIssues.length > 0) return { ok: false, issues: shapeIssues }
-    const migrated = migrateExportRootV6ToV7(input as ExportRootV6)
+    const toV7 = migrateExportRootV6ToV7(input as ExportRootV6)
+    if (!toV7.ok) return toV7
+    const migrated = migrateExportRootV7ToV8(toV7.root)
     if (!migrated.ok) return migrated
     root = migrated.root
   } else {

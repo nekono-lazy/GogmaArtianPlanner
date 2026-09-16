@@ -172,8 +172,9 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
       'reset_bonuses',
       'reset_bonuses',
       'reset_bonuses',
-      'reserve_weapon',
     ])
+    expect(result.plan?.steps.at(-1)?.executionEffects?.targetCompletions.map(({ buildListEntryId }) => buildListEntryId))
+      .toEqual([ENTRY_A])
     // The selected checkpoint was really reached, on the real Step that
     // produced it.
     expect(result.plan?.steps.flatMap(({ checkpointMilestones }) => checkpointMilestones ?? []))
@@ -227,9 +228,7 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
     expect(result.plan?.selectedBuildListEntryIds).toEqual([ENTRY_A, ENTRY_C])
     // Both Entries were secured, whichever order the Beam Search chose: C's
     // weapon satisfying T never let the Planner drop A.
-    expect(
-      result.plan?.steps.filter(({ operationType }) => operationType === 'reserve_weapon'),
-    ).toHaveLength(2)
+    expect(result.plan?.steps.flatMap(({ executionEffects }) => executionEffects?.targetCompletions ?? [])).toHaveLength(2)
     expect(result.plan?.steps.flatMap(({ checkpointMilestones }) => checkpointMilestones ?? []))
       .toEqual([expect.objectContaining({ buildListEntryId: ENTRY_A })])
     expect(result.termination.completedTargetCount).toBe(2)
@@ -287,8 +286,8 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
     expect(result.plan?.selectedBuildListEntryIds).toEqual([ENTRY_B])
     expect(result.plan?.steps.map(({ operationType }) => operationType)).toEqual([
       'reset_skills',
-      'reserve_weapon',
     ])
+    expect(result.plan?.steps[0].executionEffects?.targetCompletions).toHaveLength(1)
     expect(result.warnings.map(({ kind }) => kind)).not.toContain(
       'selected_checkpoint_fixes_target_entry',
     )

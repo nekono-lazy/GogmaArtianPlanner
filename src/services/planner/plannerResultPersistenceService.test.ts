@@ -19,6 +19,7 @@ import type {
   PlannerOrchestrationResult,
 } from '../../domain/planner'
 import { createPlanningInputSnapshot } from '../../domain/planner'
+import { createExpectedPlanState } from '../../domain/models/publicTypes'
 import {
   DOMAIN_FIXTURE_TIME,
   buildListEntryId,
@@ -123,7 +124,24 @@ async function withScenario(
     const owned = [sourceWeapon('owned.fixture.a'), sourceWeapon('owned.fixture.b')]
     const { input } = fixture([targetA, targetB], [...persisted, ...generated], owned)
     options.adjustGenerated?.(generated)
-    const snapshot = createPlanningInputSnapshot(input, DOMAIN_FIXTURE_TIME)
+    const selected = [...persisted, ...generated]
+    const snapshot = createPlanningInputSnapshot(
+      input,
+      {
+        initialExecutionState: createExpectedPlanState(
+          input.rngState,
+          input.normalCounters,
+          input.ownedWeapons,
+          {
+            targetWeapons: input.targetWeapons,
+            dependentTargetWeaponIds: [targetA.id, targetB.id],
+          },
+        ),
+        dependentTargetWeaponIds: [targetA.id, targetB.id],
+        selectedBuildListEntryIds: selected.map(({ id }) => id),
+      },
+      DOMAIN_FIXTURE_TIME,
+    )
     const plan = buildPlan(snapshot, input.calculationContext, [
       ...persisted,
       ...generated,

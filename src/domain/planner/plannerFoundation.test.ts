@@ -154,7 +154,8 @@ describe('Planner current-state entry validation', () => {
 
   it('rederives target, RNG, referenced-weapon, and CalculationContext staleness', () => {
     const target = fixture()
-    target.input.targetWeapons[0].priority = 5
+    // A performance-definition change; priority alone no longer stales an Entry.
+    target.input.targetWeapons[0].idealSkillCondition.matchMode = 'any'
     expect(validatePlannerInput(target.input, target.dependencies).excludedBuildListEntries)
       .toHaveLength(1)
 

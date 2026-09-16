@@ -37,8 +37,10 @@ describe('Planner trace replay', () => {
     expect(replay.isValid, JSON.stringify(replay.issues)).toBe(true); expect(replay.drafts).toHaveLength(4)
     expect(replay.drafts[0].expectedResult?.restorationBonuses).toEqual(a); expect(replay.drafts[2].expectedResult?.restorationBonuses).toEqual(b); expect(replay.drafts[2].expectedResult?.restorationBonusScope).toBe('normal_artian'); expect(replay.drafts[2].expectedResult?.seriesSkillId).toBe('series_skill.fixture.a')
     expect(replay.drafts[0].rngAdvance.normalCounterDelta).toBe(1); expect(replay.drafts[0].rngAdvance.affectedNormalCounterId).toBe('weapon.fixture.a:8')
-    expect(replay.drafts[1].expectedStateAfter).toEqual(replay.drafts[2].expectedStateBefore)
-    expect(replay.drafts.at(-1)?.inventoryChange?.addOwnedWeapon?.id).toBe(reservedId)
+    expect(replay.drafts[1].rngStateAfter).toEqual(replay.drafts[2].rngStateBefore)
+    expect(replay.drafts[1].normalCountersAfter).toEqual(replay.drafts[2].normalCountersBefore)
+    expect(replay.drafts.at(-1)?.actionKind).toBe('reserve_candidate')
+    expect(replay.drafts.at(-1)?.ownedWeaponId).toBe(reservedId)
     expect(support.mock.calls.some(([value]) => value.type === 'skill')).toBe(true)
     expect(support.mock.calls.some(([value]) =>
       value.type === 'gogma_reset' || value.type === 'gogma_keep',
@@ -172,12 +174,12 @@ describe('Planner trace replay', () => {
   it('hashes equivalent semantic state identically and includes kind', () => {
     const state = createValidRngState(); const counter = createValidNormalArtianCounter(); const weapon = { ...createValidBuildListEntry().candidateSnapshot }
     const owned = { id: ownedWeaponId('owned.hash'), kind: 'gogma' as const, restorationBonusScope: 'gogma_artian' as const, name: 'A', weaponTypeId: 'weapon.fixture.a', elementId: 'element.fixture.a', restorationBonuses: createRestorationBonusSet(), seriesSkillId: null, groupSkillId: null, status: 'unclassified' as const, isProtected: false, executionInProgress: null, memo: null, createdAt: 'a', updatedAt: 'a' }
-    const before = createExpectedPlanState(state, [counter], [owned]); expect(createExpectedPlanState({ ...state, notes: 'x', updatedAt: 'b' }, [{ ...counter, updatedAt: 'b' }], [{ ...owned, name: 'B', memo: 'x', updatedAt: 'b' }])).toEqual(before)
+    const before = createExpectedPlanState(state, [counter], [owned], { targetWeapons: [], dependentTargetWeaponIds: [] }); expect(createExpectedPlanState({ ...state, notes: 'x', updatedAt: 'b' }, [{ ...counter, updatedAt: 'b' }], [{ ...owned, name: 'B', memo: 'x', updatedAt: 'b' }], { targetWeapons: [], dependentTargetWeaponIds: [] })).toEqual(before)
     // The status label carries no calculation meaning, so it never moves the
     // expected inventory hash (`docs/DATA_MODEL.md` 3.2).
-    expect(createExpectedPlanState(state, [counter], [{ ...owned, status: 'ideal' as const }])).toEqual(before)
-    expect(createExpectedPlanState(state, [counter], [{ ...owned, isProtected: true }]).ownedWeaponsHash).not.toBe(before.ownedWeaponsHash)
-    expect(createExpectedPlanState(state, [counter], [{ ...owned, kind: 'normal' as const, restorationBonusScope: 'normal_artian' as const, rarity: 8, seriesSkillId: null, groupSkillId: null, status: null }]).ownedWeaponsHash).not.toBe(before.ownedWeaponsHash)
+    expect(createExpectedPlanState(state, [counter], [{ ...owned, status: 'ideal' as const }], { targetWeapons: [], dependentTargetWeaponIds: [] })).toEqual(before)
+    expect(createExpectedPlanState(state, [counter], [{ ...owned, isProtected: true }], { targetWeapons: [], dependentTargetWeaponIds: [] }).ownedWeaponsHash).not.toBe(before.ownedWeaponsHash)
+    expect(createExpectedPlanState(state, [counter], [{ ...owned, kind: 'normal' as const, restorationBonusScope: 'normal_artian' as const, rarity: 8, seriesSkillId: null, groupSkillId: null, status: null }], { targetWeapons: [], dependentTargetWeaponIds: [] }).ownedWeaponsHash).not.toBe(before.ownedWeaponsHash)
     void weapon
   })
   it('uses the replayed ordered result of each bonus operation for the next Keep support query', () => {

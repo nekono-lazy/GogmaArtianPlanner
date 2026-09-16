@@ -183,13 +183,14 @@ Planner fast-forward / conflict semanticsをすべて変更するため、versio
 （`BuildCandidate.intermediateStateGroups`）と、laneごとの選択＋改善優先
 （`BuildListEntry.intermediateStateSelection`）へ置き換え、PlannerがRouteをlane単位で
 interleaveする改訂は、Candidate出力形状、Build Listの計画入力、Planner Route実行semantics、
-PlanStep milestone / PlanConflict participantの形状をすべて変更するため、現行versionは
-**11** である。version 10の `checkpointGroups` / `selectedCheckpointOpportunityIds` は
+PlanStep milestone / PlanConflict participantの形状をすべて変更するため、versionは
+**11** になった。Execution lifecycle改訂の計算意味（下記）を切り替えた実装PRで現行versionは
+**12** である。version 10の `checkpointGroups` / `selectedCheckpointOpportunityIds` は
 1本の操作列のindexで表現されており、lane pinへ変換できない。選択を「なし」と読めばhard
 constraintを黙って捨てることになるため、旧1..10の全計算artifactは非互換とする。
 以下の2..5互換例外は歴史的契約でありversion 6以降には適用しない。
 現行versionの単一authorityは `src/domain/models/common.ts` の
-`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 11` とし、Search、BuildList、Plannerと
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 12` とし、Search、BuildList、Plannerと
 benchmark入力のruntime creatorで共用する。永続モデル移行は独立してDexie
 `DATABASE_SCHEMA_VERSION`（現行5。14.2）で管理し、AppSettingsは `schemaVersion = 1` のままとする。Calculation semantics / artifact
 validity境界とDexie schemaは別の概念であり、片方の更新はもう片方の更新を意味しない。
@@ -290,6 +291,16 @@ state、Undo対象範囲を変更する。本改訂は仕様確定だけであ�
 
 この改訂の最初の実装PR（Execution lifecycle永続Entity基盤）では、TargetWeapon lifecycle、OwnedWeapon `executionInProgress`、`ExecutionSavePoint` の永続形状を追加し、Dexie `DATABASE_SCHEMA_VERSION` を5へ、`ExportRoot.schemaVersion` を7へ更新した（14.2 / 15）。このPRはCandidate / Planner / PlanStep / expected stateの計算意味と `createTargetDefinitionHash()` の正規化をまだ切り替えないため、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` は11のまま維持する。計算artifactのversion境界は、hash正規化、planning-input hash、ExpectedPlanStateのTarget追跡、PlanStep `executionEffects`、reserve semanticsを実装する後続PRでまとめて切る。
 
+2番目の実装PR（Execution Plan契約）で `CURRENT_CALCULATION_APP_SCHEMA_VERSION` を **12** へ更新した。version 12の意味は次のとおりである。
+
+- `createTargetDefinitionHash()` をTarget性能定義だけの正規化へ切り替えた（`priority`、`isEnabled`、`preferredOwnedWeaponId`、lifecycleを除外。PLANNER_SPEC 16.11）
+- `PlanningInputSnapshot.targetWeaponsHash` をplanning-input専用正規化へ切り替え、`dependentTargetDefinitionsHash` / `dependentBuildListEntriesHash` を追加した（11.2）
+- `ExpectedPlanState.targetExecutionStateHash` とobservation binding tokenを追加した（11.2）
+- `PlanStep.executionEffects` を追加し、current ProductionPlanから独立 `reserve_weapon` Stepを除き、操作0 Idealを `confirm_owned_ideal` とした（11.3）
+- execution projectionで追跡OwnedWeaponのIDを維持し（所持Normalの巨戟化も同一ID）、Counter進行用Normalと作成対象Normalを区別し、blind作成対象を観測値でbindし、完成時に既存武器も保護する（PLANNER_SPEC 16.3 / 16.13）
+
+version 11以前のBuildCandidate / BuildListEntry / ProductionPlanは内容を保持したまま `calculation_context_changed` でfail closedにする。旧Planへ `executionEffects` を推測付与する、`reserve_weapon` を物理Stepへ合成する、追跡武器やobservation bindingを推測する変換は行わない。Dexieのtable / indexは変更しないため `DATABASE_SCHEMA_VERSION` は5のまま、ProductionPlanの永続形状が変わるため `ExportRoot.schemaVersion` は8へ更新した（15）。Production RNG semanticsと `PRODUCTION_RNG_ENGINE_VERSION` は変更していない。ProductionPlanの `abandonmentReason` / `abandonedAt` / `completedAt`（11.1）は、それを遷移させるExecution runtimeのPRで導入する。
+
 ---
 
 ## 4. Enum
@@ -385,8 +396,9 @@ export type ConflictKind =
 
 `TargetWeaponLifecycleStatus`、`ProductionPlanAbandonmentReason`、`confirm_owned_ideal`、
 `operation_uncertain`、`finished_as_compromise`、`execution_operation_uncertain` はExecution
-lifecycle改訂（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16章）で追加する仕様上の値であり、後続実装PRで
-コードへ反映する。legacy値は保存済みartifactの読み取り互換のためだけに残し、current Executionは
+lifecycle改訂（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16章）で追加する仕様上の値である。
+`TargetWeaponLifecycleStatus` は永続Entity基盤PR、`confirm_owned_ideal` はcalculation schema 12の
+Execution Plan契約PRでコードへ反映した。残りは後続のExecution runtime PRで反映する。legacy値は保存済みartifactの読み取り互換のためだけに残し、current Executionは
 生成しない。
 
 ---
@@ -1221,8 +1233,8 @@ export type BuildListEntryStaleReason =
   `target_definition_changed` にしない。`priority` と `preferredOwnedWeaponId` はPlannerのplanning input、
   `isEnabled = false` と `completed` はSearch / Planner入力からの除外条件として扱う。preferredはCandidate
   stable key、Candidate ID、Candidate dedup key、BuildCandidate meaning fingerprintへも混ぜない
-- 旧契約（現行実装）では `priority`、`isEnabled`、`preferredOwnedWeaponId` を `targetDefinitionHash` に
-  含めていた。この正規化変更はExecution lifecycle改訂の実装PRでversion境界とともに適用する（3.5）
+- calculation schema 11以前は `priority`、`isEnabled`、`preferredOwnedWeaponId` を `targetDefinitionHash` に
+  含めていた。この正規化変更はcalculation schema 12のversion境界とともに適用した（3.5）
 - `completed` TargetのEntryはstaleではなく、Planner入力validationで「完了済み目標武器」として除外する
 - `searchStateHash` は `candidateSnapshot.searchStateHash` を複製する
 - `referencedOwnedWeaponsHash` は `candidateSnapshot.referencedOwnedWeaponsHash` を複製する
@@ -1581,7 +1593,14 @@ export interface PlanStep {
 }
 ```
 
-`executionEffects` の概念型。field名は実装PRで確定してよいが、意味を変えてはならない。
+`executionEffects` の概念型。calculation schema 12の実装は下記と同じfield名で確定した
+（`src/domain/models/planning.ts` の `PlanStepExecutionEffects`）。
+
+TypeScript型では `PlanStep.executionEffects`、`ExpectedPlanState.targetExecutionStateHash`、
+`PlanningInputSnapshot.dependentTargetDefinitionsHash` / `dependentBuildListEntriesHash` をoptionalとする。
+`undefined` はcalculation schema 11以前に保存されたlegacy Planを表し、推測値で補完しない。
+`CalculationContext.appSchemaVersion >= 12` のPlanではDomain validationがすべてを必須とし、
+`reserve_weapon` / `confirm_result` Stepを拒否し、expected-state chainを検証する。
 
 ```ts
 export interface PlanStepExecutionEffects {
@@ -1675,7 +1694,8 @@ export interface ExpectedResult {
 
 `shouldSecure` は独立した確保Stepを持つ旧契約のfieldである。current ProductionPlanでは、
 そのStepで目標武器が完成するかどうかのauthorityを `PlanStep.executionEffects.targetCompletions` とし、
-`shouldSecure` から完成予定を推測しない。実装PRでfieldを削除するか互換用に残すかを決める。
+`shouldSecure` から完成予定を推測しない。calculation schema 12の実装では互換表示用にfieldを残し、
+current Planでは `executionEffects.targetCompletions` が空でないStepだけ `true` とする（authorityにはしない）。
 
 `candidateCategory` と `isSimilarToIdeal` は存在しない。PlanStepが表示するのは
 予測結果そのものであり、category分類ではない。妥協checkpointへ到達したStepは
@@ -1702,6 +1722,12 @@ current ProductionPlanでは、`addOwnedWeapon` は作成対象Normalの登録�
 同一ID更新（巨戟化のkind変更を含む）と完成時のstatus / 保護を表す。所持Normalの巨戟化で
 `removeOwnedWeaponIds` を使わない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.3）。blind作成対象の
 `addOwnedWeapon` の5枠はStep確定時の観測値でbindする。
+
+calculation schema 12の実装では、架空の5枠を作らないため、observation bindingがまだ有効な武器の
+InventoryChangeにはOwnedWeapon本体を載せない（blind作成対象Stepは `addOwnedWeapon = null`、binding中の
+巨戟化Stepは `updateOwnedWeapons = []`）。Execution serviceは `executionEffects` と観測値から登録・更新する。
+InventoryChangeのOwnedWeaponはsemantic状態とstatus / 保護の予定値を表し、作成中状態、名称、日時は
+16.10.1 / 16.3の規則に従いExecution serviceが確定する。Counter進行用Normal作成Stepの `inventoryChange` は `null` である。
 
 ## 11.6 RngAdvance
 
@@ -2070,6 +2096,9 @@ Execution lifecycle改訂（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16章）では�
 `lifecycleStatus` indexをDexie version(5)で追加した（14.2）。ProductionPlan / PlanStep /
 ExecutionHistoryのembedded field追加に伴うversion境界は、それらを実装する後続PRで監査して確定する。
 upgradeで既存Targetを `completed`、既存OwnedWeaponを作成中と推測しない。
+calculation schema 12のPlanStep `executionEffects`、ExpectedPlanStateの `targetExecutionStateHash`、
+PlanningInputSnapshotの依存hashはPlan内embedded fieldであり、table / indexを変えないため
+Dexie versionを上げていない（`DATABASE_SCHEMA_VERSION = 5` のまま）。
 
 ## 14.4 Execution Transaction
 
@@ -2126,7 +2155,7 @@ Planner constrained re-searchを経たPlan保存も原子的に行う。契約�
 
 ```ts
 export interface ExportRoot {
-  schemaVersion: 7;
+  schemaVersion: 8;
   appName: "mh-wilds-gogma-artian-planner";
   exportedAt: ISODateTimeString;
   rngState: RngState | null;
@@ -2156,7 +2185,17 @@ Import準備（`prepareExportRootForImport()`）はschema 7をそのまま、sch
 Targetを `active` / `completedAt = null` / `completedByProductionPlanId = null`、OwnedWeaponを
 `executionInProgress = null`、`executionSavePoints = []` とするだけで、ゲーム状態を推測しない。
 BuildCandidate / BuildListEntry / ProductionPlan / ExecutionHistoryは内容を変換しない。schema 6を
-名乗りながらschema 7のfieldを持つrecordは拒否する。ゲーム内セーブ地点は構造validationに加え、
+名乗りながらschema 7のfieldを持つrecordは拒否する。
+
+calculation schema 12の実装PRで `schemaVersion` を8へ更新した。schema 8はProductionPlanの
+calculation schema 12形状（PlanStep `executionEffects`、`confirm_owned_ideal`、ExpectedPlanStateの
+`targetExecutionStateHash`、PlanningInputSnapshotの依存hash）を含む。Import準備はschema 8をそのまま、
+schema 7を純粋関数 `migrateExportRootV7ToV8()`、schema 6を `migrateExportRootV6ToV7()` の後に
+`migrateExportRootV7ToV8()` で読む。schema 7 -> 8はversion番号だけを変え、legacy Plan
+（persisted Plan、ExecutionHistoryのUndo Snapshot、ゲーム内セーブ地点のPlan）へ `executionEffects` や
+Target execution state hashを推測付与しない。schema 7を名乗りながらschema 8のPlan field、
+`confirm_owned_ideal`、またはcalculation schema 12以上のPlanを持つrootは拒否する。Import validationは
+ProductionPlanを `validateProductionPlan()` でも検証し、calculation schema 12以上のPlanにだけcurrent契約を要求する。ゲーム内セーブ地点は構造validationに加え、
 Planの存在、`lastExecutionHistoryId` が同じPlanの既存履歴であること、1 Plan 1件であることを検証し、
 いずれかに違反すればImport全体をfail closedにする。セーブ地点の深いexpected-state検証は復元を
 行うExecution serviceの責務とする。
@@ -2182,7 +2221,7 @@ Import方式。
 
 ## 15.3 Migration
 
-現行ExportRootはschemaVersion=7である。schemaVersion 6はBuildCandidateが `intermediateStateGroups` を、
+現行ExportRootはschemaVersion=8である（schemaVersion 8はcalculation schema 12のProductionPlan形状を加えた形状）。schemaVersion 6はBuildCandidateが `intermediateStateGroups` を、
 BuildListEntryが `intermediateStateSelection` を持つ最初の形状であり（schemaVersion 5は
 旧 `checkpointGroups` / `selectedCheckpointOpportunityIds` の形状）、schemaVersion 7はそれに
 Execution lifecycleの永続状態を加えた形状である（15.1）。
