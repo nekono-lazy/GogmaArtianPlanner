@@ -16,6 +16,8 @@ Candidate Search再設計の背景、実測値、採用しなかった案、受�
 ## 2. 基本方針
 
 - 検索はTargetWeapon単位で実行する
+- 検索は最後にExecutionで確定済みの現在状態を起点とする。Active Plan中だけ「実行中Plan完了後（予測）」をPreview専用の追加起点として選べる（3.2）
+- `completed` Targetは検索しない
 - 検索結果はBuildCandidateとして保存する
 - 初期版では実用ラインを満たさない候補を原則表示しない
 - Candidateは常に理想品であり、実用品のcategoryや理想への近さを表す属性は持たない
@@ -125,8 +127,8 @@ Gogma   200 ≈ 1961 ms
 - input supportがfalseの場合は、該当Route、operation、またはsourceの最小単位だけを正常系としてskipし、他のsupported探索を継続する
 - support queryの予期しない例外、またはsupport=true確認後のPrediction例外は通常skipへ変換せず、既存Search / Worker error経路へ伝播する
 - すべての選択Routeが実行不能な場合のみ検索を開始不可とする
-- `targetWeaponId` は単一のTargetWeaponを指す。1 requestで検索するTargetはちょうど1件であり、`isEnabled = true` でなければならない
-- 存在しないTarget、`isEnabled = false` のTarget、Ideal implies Practical不変条件を満たさないTargetは、Candidateを返さず `CandidateSearchWarning` として報告する
+- `targetWeaponId` は単一のTargetWeaponを指す。1 requestで検索するTargetはちょうど1件であり、`isEnabled = true` かつ `lifecycleStatus = "active"` でなければならない
+- 存在しないTarget、`isEnabled = false` のTarget、`completed` のTarget、Ideal implies Practical不変条件を満たさないTargetは、Candidateを返さず `CandidateSearchWarning` として報告する
 - `max*Advance` は1以上
 - `maxNormalAdvance` は既存設定・既存UIの意味を維持した「最大forge回数」であり、最大0-based offsetではない。探索する `candidateOffset` は `0 ... maxNormalAdvance - 1`
 - 出力上限 (`maxCandidatesPerTarget`) と近似閾値 (`similarityThreshold`) は存在しない。Searchが返すCandidateはcanonical Ideal 1件以下であり、上限で打ち切る対象がない
@@ -177,6 +179,31 @@ Reset上限は常にMであり、余分な1位置はconversionの初回Skill付�
 - `maxNormalAdvance` はNormal streamのforge回数上限であり、Gogma / Skillの探索量を倍加させない
 - `maxNormalAdvance` はpredicted variantのoffset列挙だけに適用する。6.1.1のblind Reset variantはforge数が常に1で固定であり、`maxNormalAdvance` のoffsetを消費しない
 - これらの上限は探索範囲の上限であり、初回検索の終了条件ではない。終了条件は5.6に定義する
+
+### 3.2 検索起点
+
+Candidate Searchの入力状態（`rngState`、`normalCounters`、`ownedWeapons`、`targetWeapons`）の起点は
+次の2つである（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.7）。
+
+| 起点 | 入力状態 | 利用条件 | 結果の扱い |
+| --- | --- | --- | --- |
+| 現在地点（既定） | 最後にExecutionで確定済みの現在の永続状態 | 常に利用可能 | 通常どおり保存・Build List追加できる |
+| 実行中Plan完了後（予測） | 現在の永続状態へActive Planの未完了Stepを副作用なしで仮想適用した状態 | Planが `active`、CalculationContext互換、現在状態が現在Stepの `expectedStateBefore` と一致 | Preview専用。永続化せず、Build Listへ追加できない |
+
+制約。
+
+- Active Planの有無にかかわらず、現在地点の検索はPlan開始時Snapshot（`baseSnapshot`）を起点にしない
+- 作成中の武器（`executionInProgress`）も通常どおり起点候補であり、作成中状態を性能判断や
+  Route eligibilityに使わない
+- 「実行中Plan完了後（予測）」の仮想適用は、PlanStepに保存済みの `rngAdvance`、`expectedResult`、
+  `executionEffects` だけを使い、RNG Predictionを再実行しない。仮想状態でPlanが完了させるTargetは
+  `completed`、完成武器は `ideal` / protectedになる
+- 同起点では永続RngState / NormalArtianCounter / OwnedWeapon / TargetWeaponとActive Planを変更せず、
+  BuildCandidateを永続保存しない。結果の `searchStateHash` / `referencedOwnedWeaponsHash` は仮想状態から
+  計算されるため現在状態と一致せず、10章の追加時再検証でも追加できない
+- 同起点の結果には「実行中の生産計画が予測どおり完了した場合の予測」であることを明示する
+- どちらの起点でも `lifecycleStatus = "completed"` のTargetは検索しない。仮想状態で完了予定のTargetを
+  選んだ場合は検索せず、その旨を通知する
 
 ---
 
@@ -637,9 +664,29 @@ Cross規則と5.5.2 / 5.5.3のstream-local retention / orderingはB3で実装済
   `BuildRoute.operations = []` の操作0 Candidateを生成できる。保護中の巨戟も現在性能が
   Target条件を満たす場合はこの評価対象に残す
 - `existing_gogma_current` は操作を持たず、Plannerは所持巨戟アーティアからTarget充足を
-  直接導出する。Planner-driven constrained re-searchでは実行可能な代替Routeではないため列挙しない
+  直接導出する。そのEntryがactive TargetのBuild List Entryとして計画に含まれた場合だけ、RNGを
+  進めない `confirm_owned_ideal` Stepで完成を確定する（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.3）。
+  Planner-driven constrained re-searchでは実行可能な代替Routeではないため列挙しない
 - 通常アーティア経由と所持通常アーティア経由は `create_normal_artian` /
   `convert_normal_to_gogma` を必ず含むため、`d = 0` かつ `k = 0` でも操作列は空にならない
+
+#### 操作0 Idealの通知
+
+`active` Targetについて、所持巨戟が現在性能で理想条件を満たす場合（保護状態とstatusは問わない）、
+Target登録・編集の保存時とCandidate Search時に
+
+```text
+この目標の理想条件を満たす所持武器をすでに所有しています。
+```
+
+と通知できる。判定は既存のTarget評価（`satisfiesIdealBonuses()` を含む理想条件判定）だけで行い、
+Skill / Gogma Predictionを実行しない。
+
+- 不要なBuild List追加とProduction Plan生成を避けるため、通知から「この武器で目標を完了にする」
+  （[UI_FLOW.md](./UI_FLOW.md) 8.2）を優先導線として示す
+- それでも `existing_gogma_current` CandidateがBuild List -> Planへ含まれた場合だけ、Plannerは
+  RNGを進めない `confirm_owned_ideal` Stepを生成する（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.3）
+- 通知はCandidate出力、canonical Ideal選択、Candidate identity、hashを変更しない
 
 ### 5.5.6 Cross合成はIdeal軸だけを取る
 
@@ -1884,6 +1931,14 @@ preferredのために次を変更してはならない。同一コストCandidat
 Candidate ID、`candidateStableKey`、dedup key、`BuildCandidateMeaning` fingerprintへ
 preferred情報を入れない。preferredはCandidateそのものの意味ではなく、Target側の選好だからである。
 
+#### Build List stalenessへ入れない
+
+preferredは `createTargetDefinitionHash()` の対象でもない。preferredを変更しても既存BuildListEntryを
+`target_definition_changed` にしない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.11）。変更後の再検索では
+本節のtie-breakによりcanonical Idealが変わり得るが、既存Entryは有効なIdeal Routeのままである。
+PlannerはPlanner実行時の現在Targetのpreferredをplanning inputとして読む（同 7.4）。Executionが作成開始時に
+preferredを自動設定しても、Build Listはstaleにならない。
+
 ---
 
 ## 9. 条件緩和案の廃止
@@ -1952,7 +2007,8 @@ Search側は「この候補は作成リストに追加済みです。途中採�
 - 一方でPlanの `buildListEntriesHash` には入る。変えると既存Planは
   再計算対象になる
 - 同じCandidateのBuildListEntryを重複作成しない
-- Target定義変更、`searchStateHash` 不一致、`referencedOwnedWeaponsHash` 不一致、CalculationContext非互換時はBuildListEntryをstaleにする
+- Target性能定義変更（`createTargetDefinitionHash()` の対象。`preferredOwnedWeaponId` と lifecycleは含まない）、`searchStateHash` 不一致、`referencedOwnedWeaponsHash` 不一致、CalculationContext非互換時はBuildListEntryをstaleにする
+- `completed` TargetのEntryはstaleにせず、Planner入力から完了済み目標武器として除外する
 - `searchStateHash` 不一致のstale reasonは `rng_state_changed`
 - `referencedOwnedWeaponsHash` 不一致のstale reasonは `owned_weapon_changed`
 - 初期版ではRoute成立に使用したRNG状態が変わった場合、安全側に倒してstaleにする
@@ -2041,7 +2097,8 @@ Worker error契約(B6)。
 - Search実行ごとに `searchRunId` を発行する
 - 新しい検索結果を保存する前に、同じTargetWeaponの古いBuildCandidateを削除してよい
 - BuildListEntryはBuildCandidateの削除処理と分離する
-- TargetWeaponを変更した場合、紐づくBuildCandidateは再検索対象、BuildListEntryはstale扱いにする
+- TargetWeaponの性能定義を変更した場合、紐づくBuildCandidateは再検索対象、BuildListEntryはstale扱いにする。`preferredOwnedWeaponId` またはlifecycleだけの変更ではstaleにしない
+- 「実行中Plan完了後（予測）」起点（3.2）の検索結果はBuildCandidateとして永続保存しない
 - Candidate Route成立に使用したRNG状態が変わった場合、BuildListEntryを `rng_state_changed` としてstale扱いにする
 - Candidate Routeが参照する起点武器の状態が変わった場合、BuildListEntryを `owned_weapon_changed` としてstale扱いにする。`status` は非semanticであり、status変更だけではstaleにしない
 - Routeに無関係なOwnedWeaponの変更、または参照武器のname、memo、日時だけの変更ではBuildListEntryをstaleにしない
@@ -2268,6 +2325,17 @@ Skill stream側はB1で実装済み、Bonus stream側はB2で実装済みであ�
 - native `error` / `messageerror` で全pending Searchがrejectされ、listener解除・
   terminate・以降のstartSearch即rejectまで行われる
 - 大量検索でもUIスレッドがブロックされない
+
+## 13.6 検索起点とTarget lifecycle Test
+
+- 現在地点の検索がActive Planの `baseSnapshot` ではなく現在の永続状態を使う
+- 作成中の武器が通常どおり起点候補になり、作成中状態でRouteが増減しない
+- 「実行中Plan完了後（予測）」起点がRNG Predictionを再実行せずPlanStepの保存値から仮想状態を作り、
+  永続状態・Active Plan・BuildCandidate storeを変更せず、結果をBuild Listへ追加できない
+- 同起点がPlan非active、CalculationContext非互換、現在Step期待状態不一致で利用不可になる
+- `completed` Targetを検索せずwarningを返し、仮想状態で完了予定のTargetも検索しない
+- 所持巨戟が理想条件を満たすactive Targetで操作0 Idealの通知を返し、Predictionを呼ばない
+- `preferredOwnedWeaponId` だけの変更でBuildListEntryがstaleにならない
 
 
 ### 妥協条件version 6の判定理由と監査記録
