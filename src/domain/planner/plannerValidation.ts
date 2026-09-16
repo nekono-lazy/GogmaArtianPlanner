@@ -1,3 +1,4 @@
+import { isTargetWeaponPlanningEligible } from '../models/domainRules'
 import type {
   BuildListEntry,
   DomainValidationIssue,
@@ -279,8 +280,15 @@ function currentEntryEligibility(
     target, rngState: input.rngState, normalCounters: input.normalCounters,
     ownedWeapons: input.ownedWeapons, calculationContext: input.calculationContext,
   })
-  if (target === null || !target.isEnabled) {
-    return { valid: null, reason: target === null ? 'references a missing TargetWeapon.' : 'references a disabled TargetWeapon.', warningKind: 'build_list_entry_stale' }
+  if (target === null || !isTargetWeaponPlanningEligible(target)) {
+    // A completed Target's Entry is excluded from Planner input without being
+    // stale (`docs/DATA_MODEL.md` 8.1); its staleness is never rewritten.
+    const reason = target === null
+      ? 'references a missing TargetWeapon.'
+      : target.lifecycleStatus === 'active'
+        ? 'references a disabled TargetWeapon.'
+        : 'references a completed TargetWeapon.'
+    return { valid: null, reason, warningKind: 'build_list_entry_stale' }
   }
   if (dependencies.rngEngine.version !== input.calculationContext.rngEngineVersion) {
     return { valid: null, reason: 'uses an RNG Engine incompatible with CalculationContext.', warningKind: 'calculation_context_incompatible' }

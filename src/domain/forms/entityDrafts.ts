@@ -137,6 +137,7 @@ export function createOwnedWeaponDraft(
         groupSkillId: null,
         status: null,
         isProtected: false,
+        executionInProgress: null,
       }
     : {
         ...common,
@@ -145,6 +146,7 @@ export function createOwnedWeaponDraft(
         groupSkillId: null,
         status,
         isProtected: status === 'ideal',
+        executionInProgress: null,
       }
 }
 
@@ -156,6 +158,10 @@ export function createTargetWeaponDraft(master: MasterDataRoot): TargetWeaponDra
     priority: 3,
     isEnabled: true,
     preferredOwnedWeaponId: null,
+    // Execution-owned lifecycle, never a form input.
+    lifecycleStatus: 'active',
+    completedAt: null,
+    completedByProductionPlanId: null,
     idealBonuses: createDefaultBonusSet(master, base.weaponTypeId, base.elementId),
     practicalBonusConditions: [],
     alternativeBonusRules: [],

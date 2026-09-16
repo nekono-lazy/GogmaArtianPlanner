@@ -1,6 +1,7 @@
 export * from './buildCandidateRepository'
 export * from './buildListEntryRepository'
 export * from './executionHistoryRepository'
+export * from './executionSavePointRepository'
 export * from './normalArtianCounterRepository'
 export * from './ownedWeaponRepository'
 export * from './productionPlanRepository'

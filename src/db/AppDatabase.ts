@@ -5,6 +5,7 @@ import type {
   BuildCandidate,
   BuildListEntry,
   ExecutionHistory,
+  ExecutionSavePoint,
   NormalArtianCounter,
   OwnedWeapon,
   ProductionPlan,
@@ -13,7 +14,7 @@ import type {
 } from '../domain/models/publicTypes'
 
 export const DATABASE_NAME = 'mh-wilds-gogma-artian-planner'
-export const DATABASE_SCHEMA_VERSION = 4
+export const DATABASE_SCHEMA_VERSION = 5
 
 export class AppDatabase extends Dexie {
   rngState!: Table<RngState, 'current'>
@@ -24,6 +25,7 @@ export class AppDatabase extends Dexie {
   buildListEntries!: Table<BuildListEntry, string>
   productionPlans!: Table<ProductionPlan, string>
   executionHistory!: Table<ExecutionHistory, string>
+  executionSavePoints!: Table<ExecutionSavePoint, string>
   settings!: Table<AppSettings, 'settings'>
 
   constructor(name = DATABASE_NAME) {
@@ -80,11 +82,41 @@ export class AppDatabase extends Dexie {
     // keep their exact persisted contents and fail closed through
     // CalculationContext version 9 instead of being guessed into current
     // operations (`docs/DATA_MODEL.md` 14.2).
-    this.version(DATABASE_SCHEMA_VERSION).stores({}).upgrade(async (transaction) => {
+    this.version(4).stores({}).upgrade(async (transaction) => {
       await transaction.table('ownedWeapons').toCollection().modify((weapon: Record<string, unknown>) => {
         if (weapon.kind === 'gogma' && weapon.status === 'material') {
           weapon.status = 'unclassified'
         }
+      })
+    })
+    // v5 adds the Execution lifecycle persisted state (`docs/DATA_MODEL.md`
+    // 7.1 / 8.1 / 12.1 / 14.3). Every value it writes is the deterministic
+    // "no Execution has happened yet" value, never an inference:
+    //
+    // - every Target becomes `active` with no completion metadata, even when
+    //   the user already owns a weapon meeting its Ideal
+    // - every OwnedWeapon gets `executionInProgress = null`, whatever Plans
+    //   exist
+    // - the new `executionSavePoints` table starts empty; no game save is
+    //   guessed from ExecutionHistory
+    //
+    // `targetWeapons` gains a `lifecycleStatus` index, and `executionSavePoints`
+    // is keyed by the Plan-derived ID with a unique `productionPlanId` index as
+    // a second guard of the one-save-point-per-Plan rule. Past calculation
+    // artifacts (BuildCandidate, BuildListEntry, ProductionPlan,
+    // ExecutionHistory) keep their exact persisted contents. None of this moves
+    // `CURRENT_CALCULATION_APP_SCHEMA_VERSION`: no calculation semantics change.
+    this.version(DATABASE_SCHEMA_VERSION).stores({
+      targetWeapons: 'id, weaponTypeId, elementId, priority, isEnabled, lifecycleStatus, updatedAt',
+      executionSavePoints: 'id, &productionPlanId, recordedAt',
+    }).upgrade(async (transaction) => {
+      await transaction.table('targetWeapons').toCollection().modify((target: Record<string, unknown>) => {
+        target.lifecycleStatus = 'active'
+        target.completedAt = null
+        target.completedByProductionPlanId = null
+      })
+      await transaction.table('ownedWeapons').toCollection().modify((weapon: Record<string, unknown>) => {
+        weapon.executionInProgress = null
       })
     })
   }

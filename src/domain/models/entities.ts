@@ -14,6 +14,7 @@ import type {
   NormalArtianRarity,
   OwnedWeaponId,
   OwnedWeaponStatus,
+  ProductionPlanId,
   RestorationBonus,
   RestorationBonusSet,
   RestorationBonusScope,
@@ -23,6 +24,19 @@ import type {
   TargetWeaponId,
   WeaponTypeId,
 } from './common'
+
+/**
+ * The Execution-internal "作成中" state of an OwnedWeapon
+ * (`docs/PLANNER_SPEC.md` 16.10.1, `docs/DATA_MODEL.md` 7.1).
+ *
+ * Orthogonal to `status`: it is never a user-facing label, the user never edits
+ * it through ordinary CRUD, and only Execution turns it on or off. It holds a
+ * ProductionPlan ID only, never a Target ID.
+ */
+export interface OwnedWeaponExecutionInProgress {
+  productionPlanId: ProductionPlanId
+  startedAt: ISODateTimeString
+}
 
 export interface OwnedWeaponBase {
   id: OwnedWeaponId
@@ -34,6 +48,13 @@ export interface OwnedWeaponBase {
   /** All five stored slots belong to this family; mixed scope is invalid. */
   restorationBonusScope: RestorationBonusScope
   isProtected: boolean
+  /**
+   * `null` = not being produced by a running Plan. Like `status`, it carries no
+   * calculation meaning: it stays out of every semantic hash, Search route
+   * eligibility, and Planner inventory semantics, while Undo and game save
+   * point restore must restore it exactly.
+   */
+  executionInProgress: OwnedWeaponExecutionInProgress | null
   memo: string | null
   createdAt: ISODateTimeString
   updatedAt: ISODateTimeString
@@ -56,6 +77,16 @@ export interface OwnedGogmaArtianWeapon extends OwnedWeaponBase {
 
 export type OwnedWeapon = OwnedNormalArtianWeapon | OwnedGogmaArtianWeapon
 
+/**
+ * `active` = not yet completed. `completed` = its Ideal weapon was obtained; the
+ * record is kept for history and ProductionPlan references but is excluded from
+ * the ordinary Target list, Candidate Search, and Planner input
+ * (`docs/DATA_MODEL.md` 8.1, `docs/PLANNER_SPEC.md` 16.13).
+ */
+export const targetWeaponLifecycleStatuses = ['active', 'completed'] as const
+export type TargetWeaponLifecycleStatus =
+  (typeof targetWeaponLifecycleStatuses)[number]
+
 export interface TargetWeapon {
   id: TargetWeaponId
   name: string
@@ -74,6 +105,18 @@ export interface TargetWeapon {
    * Satisfaction, which stays a judgment about actual weapon performance.
    */
   preferredOwnedWeaponId: OwnedWeaponId | null
+  /**
+   * Target lifecycle. Not a performance definition. Existing data is never
+   * inferred `completed` by a migration, whatever weapons the user owns.
+   */
+  lifecycleStatus: TargetWeaponLifecycleStatus
+  /** Non-null exactly when `lifecycleStatus === 'completed'`. */
+  completedAt: ISODateTimeString | null
+  /**
+   * The Plan whose Execution completed this Target. `null` for an active Target
+   * and for a Target the user completed with an owned weapon.
+   */
+  completedByProductionPlanId: ProductionPlanId | null
   idealBonuses: RestorationBonusSet
   practicalBonusConditions: PracticalBonusCondition[]
   alternativeBonusRules: AlternativeBonusRule[]

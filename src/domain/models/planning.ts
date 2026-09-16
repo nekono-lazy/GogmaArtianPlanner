@@ -26,6 +26,7 @@ import type {
   IntermediateStateAxis,
   MaterialRequirement,
   OwnedWeapon,
+  TargetWeapon,
 } from './entities'
 
 export interface ProductionPlan {
@@ -236,4 +237,35 @@ export interface ExecutionUndoSnapshot {
   removedOwnedWeaponsBefore: OwnedWeapon[]
   /** Undo restores this snapshot verbatim; it must not infer new stale reasons. */
   productionPlanBefore: ProductionPlan
+}
+
+/**
+ * The game save point a user explicitly recorded for one ProductionPlan
+ * (`docs/DATA_MODEL.md` 12.1, `docs/PLANNER_SPEC.md` 16.9).
+ *
+ * It is a different concept from a compromise checkpoint and is never called
+ * one. At most one exists per Plan: its `id` is derived from
+ * `productionPlanId` by `executionSavePointIdForPlan()`, so recording again
+ * replaces the previous one instead of adding a second.
+ */
+export interface ExecutionSavePoint {
+  id: string
+  productionPlanId: ProductionPlanId
+  lastExecutionHistoryId: ExecutionHistoryId | null
+  rngState: RngState
+  /** Every NormalArtianCounter. */
+  normalCounters: NormalArtianCounter[]
+  /** Execution-scope OwnedWeapons. */
+  ownedWeapons: OwnedWeapon[]
+  /** Execution-scope TargetWeapons. */
+  targetWeapons: TargetWeapon[]
+  productionPlan: ProductionPlan
+  recordedAt: ISODateTimeString
+}
+
+const EXECUTION_SAVE_POINT_ID_PREFIX = 'execution-save-point:'
+
+/** The one stable save point ID of a Plan; never a clock or random value. */
+export function executionSavePointIdForPlan(planId: ProductionPlanId): string {
+  return `${EXECUTION_SAVE_POINT_ID_PREFIX}${planId}`
 }

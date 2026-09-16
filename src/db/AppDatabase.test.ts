@@ -5,6 +5,7 @@ import type {
   BuildCandidate,
   BuildListEntry,
   ExecutionHistory,
+  ExecutionSavePoint,
   NormalArtianCounter,
   OwnedWeapon,
   ProductionPlan,
@@ -14,13 +15,14 @@ import type {
 import { AppDatabase, DATABASE_SCHEMA_VERSION } from './AppDatabase'
 
 describe('AppDatabase schema', () => {
-  it('defines every v1 table', () => {
+  it('defines every table', () => {
     const database = new AppDatabase('schema-test')
 
     expect(database.tables.map((table) => table.name).sort()).toEqual([
       'buildCandidates',
       'buildListEntries',
       'executionHistory',
+      'executionSavePoints',
       'normalArtianCounters',
       'ownedWeapons',
       'productionPlans',
@@ -31,7 +33,7 @@ describe('AppDatabase schema', () => {
     database.close()
   })
 
-  it('uses schema version 4 and exposes tables with formal Domain types', () => {
+  it('uses schema version 5 and exposes tables with formal Domain types', () => {
     const database = new AppDatabase('schema-domain-types-test')
     const rngState: Table<RngState, 'current'> = database.rngState
     const normalCounters: Table<NormalArtianCounter, string> =
@@ -42,6 +44,8 @@ describe('AppDatabase schema', () => {
     const buildList: Table<BuildListEntry, string> = database.buildListEntries
     const plans: Table<ProductionPlan, string> = database.productionPlans
     const history: Table<ExecutionHistory, string> = database.executionHistory
+    const savePoints: Table<ExecutionSavePoint, string> =
+      database.executionSavePoints
     const settings: Table<AppSettings, 'settings'> = database.settings
     const typedTables = [
       rngState,
@@ -52,11 +56,12 @@ describe('AppDatabase schema', () => {
       buildList,
       plans,
       history,
+      savePoints,
       settings,
     ]
-    expect(DATABASE_SCHEMA_VERSION).toBe(4)
-    expect(database.verno).toBe(4)
-    expect(typedTables).toHaveLength(9)
+    expect(DATABASE_SCHEMA_VERSION).toBe(5)
+    expect(database.verno).toBe(5)
+    expect(typedTables).toHaveLength(10)
     database.close()
   })
 })

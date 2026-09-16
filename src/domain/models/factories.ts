@@ -12,18 +12,28 @@ import type {
   TargetWeapon,
 } from './entities'
 
+// `executionInProgress` is Execution-owned: a newly registered weapon is never
+// being produced, so the factory always starts it at null.
 type CreateOwnedWeaponInputFor<T extends OwnedWeapon> = Omit<
   T,
-  'isProtected' | 'createdAt' | 'updatedAt'
+  'isProtected' | 'executionInProgress' | 'createdAt' | 'updatedAt'
 > & { isProtected?: boolean }
 
 export type CreateOwnedWeaponInput =
   | CreateOwnedWeaponInputFor<OwnedNormalArtianWeapon>
   | CreateOwnedWeaponInputFor<OwnedGogmaArtianWeapon>
 
+// The lifecycle fields are not user input: a new Target is always active and
+// carries no completion metadata.
 export type CreateTargetWeaponInput = Omit<
   TargetWeapon,
-  'priority' | 'preferredOwnedWeaponId' | 'createdAt' | 'updatedAt'
+  | 'priority'
+  | 'preferredOwnedWeaponId'
+  | 'lifecycleStatus'
+  | 'completedAt'
+  | 'completedByProductionPlanId'
+  | 'createdAt'
+  | 'updatedAt'
 > & {
   priority?: TargetWeapon['priority']
   preferredOwnedWeaponId?: TargetWeapon['preferredOwnedWeaponId']
@@ -69,6 +79,7 @@ export function createOwnedWeapon(
     return {
       ...input,
       isProtected: input.isProtected ?? false,
+      executionInProgress: null,
       createdAt: now,
       updatedAt: now,
     }
@@ -76,6 +87,7 @@ export function createOwnedWeapon(
   return {
     ...input,
     isProtected: input.isProtected ?? input.status === 'ideal',
+    executionInProgress: null,
     createdAt: now,
     updatedAt: now,
   }
@@ -89,6 +101,9 @@ export function createTargetWeapon(
     ...input,
     priority: input.priority ?? 3,
     preferredOwnedWeaponId: input.preferredOwnedWeaponId ?? null,
+    lifecycleStatus: 'active',
+    completedAt: null,
+    completedByProductionPlanId: null,
     createdAt: now,
     updatedAt: now,
   }

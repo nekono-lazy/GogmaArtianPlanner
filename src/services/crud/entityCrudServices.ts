@@ -117,8 +117,10 @@ export class OwnedWeaponCrudService {
   getAll(): Promise<OwnedWeapon[]> { return this.dependencies.getAll() }
 
   async save(draft: OwnedWeaponDraft, existing: OwnedWeapon | null, now = new Date().toISOString()): Promise<OwnedWeapon> {
-    const value = existing
-      ? { ...draft, id: existing.id, createdAt: existing.createdAt, updatedAt: now }
+    // `executionInProgress` is Execution-owned: ordinary CRUD never takes it
+    // from the draft. An edit keeps the stored value, a new weapon starts null.
+    const value: OwnedWeapon = existing
+      ? { ...draft, id: existing.id, executionInProgress: existing.executionInProgress, createdAt: existing.createdAt, updatedAt: now }
       : createOwnedWeapon({ ...draft, id: createOwnedWeaponId() }, now)
     const issues = [
       ...(value.name.trim() ? [] : ['name: 名前を入力してください。']),
@@ -207,8 +209,19 @@ export class TargetWeaponCrudService {
   getAll(): Promise<TargetWeapon[]> { return this.dependencies.getAll() }
 
   async save(draft: TargetWeaponDraft, existing: TargetWeapon | null, now = new Date().toISOString()): Promise<TargetWeapon> {
-    const value = existing
-      ? { ...draft, id: existing.id, createdAt: existing.createdAt, updatedAt: now }
+    // The lifecycle is changed only by Execution and the explicit complete /
+    // reopen actions, never by an ordinary edit: an edit keeps the stored
+    // values, and a new Target is always active.
+    const value: TargetWeapon = existing
+      ? {
+          ...draft,
+          id: existing.id,
+          lifecycleStatus: existing.lifecycleStatus,
+          completedAt: existing.completedAt,
+          completedByProductionPlanId: existing.completedByProductionPlanId,
+          createdAt: existing.createdAt,
+          updatedAt: now,
+        }
       : createTargetWeapon({ ...draft, id: createTargetWeaponId() }, now)
     const issues = [
       ...(value.name.trim() ? [] : ['name: 名前を入力してください。']),

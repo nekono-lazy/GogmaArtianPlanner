@@ -200,6 +200,12 @@ specification-only: it moved none of `CURRENT_CALCULATION_APP_SCHEMA_VERSION`,
 `DATABASE_SCHEMA_VERSION`, or `ExportRoot.schemaVersion`. The implementation PR must
 audit the current schema and Import compatibility and fix the required version
 boundaries there; never infer-migrate existing data into the new meaning.
+The first implementation PR (the persistence foundation) added the Target
+lifecycle, `OwnedWeapon.executionInProgress`, and `ExecutionSavePoint` persisted
+shapes and moved `DATABASE_SCHEMA_VERSION` to 5 and `ExportRoot.schemaVersion` to
+7. It switched no calculation semantics - not `createTargetDefinitionHash()`, the
+planning-input hashes, `ExpectedPlanState`, PlanStep effects, or reserve - so
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION` stays 11 until the PR that does.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -230,7 +236,7 @@ A version 10 `checkpointGroups` / `selectedCheckpointOpportunityIds` cannot be
 mapped onto lane pins, and reading such a selection as empty would silently
 drop a hard constraint, so version 10 artifacts fail closed like every earlier one.
 Search, BuildList, Planner, and benchmark runtime creators share this authority.
-Dexie separately moves to `DATABASE_SCHEMA_VERSION = 4` for the persisted status rename; this is independent of
+Dexie separately moved to `DATABASE_SCHEMA_VERSION = 4` for the persisted status rename and to the current 5 for the Execution lifecycle persisted state; this is independent of
 `AppSettings.schemaVersion = 1`; gameVersion, Master Data version,
 `RngState.schemaVersion = 1`, and `CONSTRAINED_ROUTE_POLICY_VERSION`
 remain unchanged. `PRODUCTION_RNG_ENGINE_VERSION` is
@@ -256,7 +262,8 @@ Gogma Reset prediction output and moved it to the current
 `CURRENT_CALCULATION_APP_SCHEMA_VERSION`; `rngEngineVersion` alone is the
 CalculationContext staleness boundary for all of them. `DATABASE_SCHEMA_VERSION` stays 4 at the checkpoint boundary and at the lane
 boundary, while `ExportRoot.schemaVersion` moved to 5 with the checkpoint entity
-shape and to 6 with the lane entity shape. Version 1 BuildCandidate, BuildListEntry, and ProductionPlan
+shape, to 6 with the lane entity shape, and to the current 7 with the Execution
+lifecycle persisted state. Version 1 BuildCandidate, BuildListEntry, and ProductionPlan
 calculations are incompatible with any later version and must not be reused as current
 results. Existing staleness checks mark old BuildListEntry records with
 `calculation_context_changed` and exclude them from Planner input. Preserve old
@@ -3793,7 +3800,7 @@ Relevant test areas include:
   sets it to null for every Target, removes `relatedTargetWeaponIds` from every
   current OwnedWeapon, never infers a preference from the removed list, and
   rewrites no BuildCandidate, BuildListEntry, ProductionPlan, or ExecutionHistory
-- `DATABASE_SCHEMA_VERSION = 4`, `ExportRoot.schemaVersion = 6`,
+- `DATABASE_SCHEMA_VERSION = 5`, `ExportRoot.schemaVersion = 7`,
   `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 11`, schema 1..10 artifacts failing closed
   under version 11, and no other version authority changed
 - Collection validation rejects a missing preferred weapon, a weapon type or element

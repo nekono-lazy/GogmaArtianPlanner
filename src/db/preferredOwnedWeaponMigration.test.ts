@@ -45,16 +45,16 @@ function legacyRecords() {
 }
 
 describe('preferred owned weapon persistence migration', () => {
-  it('uses DATABASE_SCHEMA_VERSION 4', () => {
-    expect(DATABASE_SCHEMA_VERSION).toBe(4)
+  it('uses the current DATABASE_SCHEMA_VERSION', () => {
+    expect(DATABASE_SCHEMA_VERSION).toBe(5)
   })
 
-  it('declares Export schema version 4', () => {
-    const schemaVersion: ExportRoot['schemaVersion'] = 6
-    expect(schemaVersion).toBe(6)
+  it('declares the current Export schema version', () => {
+    const schemaVersion: ExportRoot['schemaVersion'] = 7
+    expect(schemaVersion).toBe(7)
   })
 
-  it('runs v1 -> v2 -> v3 -> v4 in order and clears every Target preference', async () => {
+  it('runs v1 -> v2 -> v3 -> v4 -> v5 in order and clears every Target preference', async () => {
     const name = `preferred-migration-${crypto.randomUUID()}`
     const old = new Dexie(name)
     old.version(1).stores(V1_STORES)
@@ -82,7 +82,7 @@ describe('preferred owned weapon persistence migration', () => {
     const database = new AppDatabase(name)
     try {
       await database.open()
-      expect(database.verno).toBe(4)
+      expect(database.verno).toBe(5)
 
       const migratedTarget = await database.targetWeapons.get(targetId)
       expect(migratedTarget?.preferredOwnedWeaponId).toBeNull()

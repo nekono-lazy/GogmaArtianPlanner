@@ -223,7 +223,7 @@ function reservedWeapon(entry: BuildListEntry, target: TargetWeapon, id: OwnedWe
   const candidate = entry.candidateSnapshot
   // Every Candidate is a canonical Ideal Candidate, so a newly generated weapon
   // is labelled Ideal and protected by default (`docs/DATA_MODEL.md` 3.2).
-  return { id, kind: 'gogma', name: '', weaponTypeId: target.weaponTypeId, elementId: target.elementId, restorationBonuses: cloneBonuses(candidate.finalBonuses), restorationBonusScope: candidate.restorationBonusScope, seriesSkillId: candidate.seriesSkillId, groupSkillId: candidate.groupSkillId, status: 'ideal', isProtected: true, memo: null, createdAt: candidate.createdAt, updatedAt: candidate.createdAt }
+  return { id, kind: 'gogma', name: '', weaponTypeId: target.weaponTypeId, elementId: target.elementId, restorationBonuses: cloneBonuses(candidate.finalBonuses), restorationBonusScope: candidate.restorationBonusScope, seriesSkillId: candidate.seriesSkillId, groupSkillId: candidate.groupSkillId, status: 'ideal', isProtected: true, executionInProgress: null, memo: null, createdAt: candidate.createdAt, updatedAt: candidate.createdAt }
 }
 
 /** Pure, deterministic replay. It generates neither PlanStep IDs nor clocks. */

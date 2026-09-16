@@ -112,6 +112,20 @@ describe('assertConstrainedCandidateSearchInput', () => {
     ).toThrowError(/disabled/)
   })
 
+  it('fails closed when the Target is completed', () => {
+    const origin = createConstrainedSearchOrigin()
+    origin.targetWeapons[0] = {
+      ...origin.targetWeapons[0],
+      preferredOwnedWeaponId: null,
+      lifecycleStatus: 'completed',
+      completedAt: '2026-09-17T00:00:00.000Z',
+      completedByProductionPlanId: null,
+    }
+    expect(() =>
+      assertConstrainedCandidateSearchInput(constrainedInput(origin)),
+    ).toThrowError(/completed/)
+  })
+
   it('fails closed when the Target violates the Ideal implies Practical invariant', () => {
     const origin = createConstrainedSearchOrigin()
     origin.targetWeapons[0].practicalBonusConditions = [

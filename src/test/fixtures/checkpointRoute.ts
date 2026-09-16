@@ -200,6 +200,7 @@ export function checkpointNormalSource(
     groupSkillId: null,
     status: null,
     isProtected: false,
+    executionInProgress: null,
     memo: null,
     createdAt: '2026-09-10T00:00:00.000Z',
     updatedAt: '2026-09-10T00:00:00.000Z',

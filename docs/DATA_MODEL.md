@@ -191,7 +191,7 @@ constraintを黙って捨てることになるため、旧1..10の全計算artif
 現行versionの単一authorityは `src/domain/models/common.ts` の
 `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 11` とし、Search、BuildList、Plannerと
 benchmark入力のruntime creatorで共用する。永続モデル移行は独立してDexie
-`DATABASE_SCHEMA_VERSION = 4`、AppSettingsは `schemaVersion = 1` のままとする。Calculation semantics / artifact
+`DATABASE_SCHEMA_VERSION`（現行5。14.2）で管理し、AppSettingsは `schemaVersion = 1` のままとする。Calculation semantics / artifact
 validity境界とDexie schemaは別の概念であり、片方の更新はもう片方の更新を意味しない。
 gameVersion、Master Data versionは維持する。
 `PRODUCTION_RNG_ENGINE_VERSION` はこのcheckpoint境界では `production-rng:c5-e2` のまま維持し、
@@ -287,6 +287,8 @@ state、Undo対象範囲を変更する。本改訂は仕様確定だけであ�
 `CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`ExportRoot.schemaVersion` は
 変更していない。後続実装PRで現行schemaとImport互換を監査し、必要なversion境界を確定する。
 既存データを推測migrationして意味を変えてはならない。
+
+この改訂の最初の実装PR（Execution lifecycle永続Entity基盤）では、TargetWeapon lifecycle、OwnedWeapon `executionInProgress`、`ExecutionSavePoint` の永続形状を追加し、Dexie `DATABASE_SCHEMA_VERSION` を5へ、`ExportRoot.schemaVersion` を7へ更新した（14.2 / 15）。このPRはCandidate / Planner / PlanStep / expected stateの計算意味と `createTargetDefinitionHash()` の正規化をまだ切り替えないため、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` は11のまま維持する。計算artifactのversion境界は、hash正規化、planning-input hash、ExpectedPlanStateのTarget追跡、PlanStep `executionEffects`、reserve semanticsを実装する後続PRでまとめて切る。
 
 ---
 
@@ -1995,7 +1997,7 @@ mh-wilds-gogma-artian-planner
 
 ## 14.2 DB schemaVersion
 
-初期作成schemaは1。現行DATABASE_SCHEMA_VERSIONは4。version(1)のstoresを保持し、
+初期作成schemaは1。現行DATABASE_SCHEMA_VERSIONは5。version(1)のstoresを保持し、
 version(2) upgradeでTarget妥協条件だけを解除する。Idealと他entityを保持し、compromiseNeedsReview=trueとする。
 旧Practical Skillも解除するため、移行直後はIdeal-onlyとなる。
 
@@ -2024,6 +2026,19 @@ version(4) upgradeで所持巨戟アーティアの `status = "material"` を `"
   fail closedにする。UIで表示する場合も、legacy operationをcurrent Domain operationとして
   再実行可能にしない
 
+version(5) upgradeでExecution lifecycleの永続状態を追加する。v1 -> v2 -> v3 -> v4 -> v5は
+順番に適用できること。
+
+- 全TargetWeaponを `lifecycleStatus = "active"`、`completedAt = null`、
+  `completedByProductionPlanId = null` とする。所持Ideal武器の存在から `completed` と推測しない
+- 全OwnedWeaponを `executionInProgress = null` とする。既存Planから作成中と推測しない
+- `executionSavePoints` table（key: `id`、index: `&productionPlanId`、`recordedAt`）を空で追加する。
+  ExecutionHistoryからゲーム内セーブ地点を推測しない。IDはPlan IDから決定し
+  （`executionSavePointIdForPlan()`）、unique indexは1 Plan 1件の二重の防御である
+- `targetWeapons` へ `lifecycleStatus` indexを追加する
+- BuildCandidate / BuildListEntry / ProductionPlan / ExecutionHistoryの過去artifactは書き換えない
+- `CURRENT_CALCULATION_APP_SCHEMA_VERSION` はこのupgradeでは変更しない（3.5）
+
 ```ts
 db.version(1).stores({
   rngState: "id",
@@ -2051,10 +2066,10 @@ db.version(1).stores({
 将来PlanStepが大量化した場合のみ `planSteps` tableへ分離する。
 
 Execution lifecycle改訂（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16章）では、ゲーム内セーブ地点を保存する
-`executionSavePoints` table（key: `id`、index: `productionPlanId`）と、TargetWeaponの
-`lifecycleStatus` indexを追加する想定である。TargetWeapon / OwnedWeapon / ProductionPlan / PlanStep /
-ExecutionHistoryのembedded field追加を含め、Dexie `DATABASE_SCHEMA_VERSION` の要否とupgrade手順は
-実装PRで監査して確定する。upgradeで既存Targetを `completed`、既存OwnedWeaponを作成中と推測しない。
+`executionSavePoints` table（key: `id`、index: `&productionPlanId`、`recordedAt`）と、TargetWeaponの
+`lifecycleStatus` indexをDexie version(5)で追加した（14.2）。ProductionPlan / PlanStep /
+ExecutionHistoryのembedded field追加に伴うversion境界は、それらを実装する後続PRで監査して確定する。
+upgradeで既存Targetを `completed`、既存OwnedWeaponを作成中と推測しない。
 
 ## 14.4 Execution Transaction
 
@@ -2111,7 +2126,7 @@ Planner constrained re-searchを経たPlan保存も原子的に行う。契約�
 
 ```ts
 export interface ExportRoot {
-  schemaVersion: 6;
+  schemaVersion: 7;
   appName: "mh-wilds-gogma-artian-planner";
   exportedAt: ISODateTimeString;
   rngState: RngState | null;
@@ -2122,6 +2137,7 @@ export interface ExportRoot {
   buildListEntries: BuildListEntry[];
   productionPlans: ProductionPlan[];
   executionHistory: ExecutionHistory[];
+  executionSavePoints: ExecutionSavePoint[];
   settings: AppSettings;
 }
 ```
@@ -2131,8 +2147,19 @@ Execution lifecycle改訂（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.17）で追�
 `executionEffects`、ExpectedPlanState `targetExecutionStateHash`、ExecutionHistory / Undo Snapshotの拡張、
 `executionSavePoints`）はExport / Importの対象である。ExportRootへ `executionSavePoints:
 ExecutionSavePoint[]` を追加し、Import時は参照整合性（Plan、ExecutionHistory、OwnedWeapon、TargetWeapon）を
-検証する。`schemaVersion` の更新と旧schemaの受理方針は実装PRで確定する。端末間同期は追加せず、
-既存の全置換Import / Exportで扱う。
+検証する。端末間同期は追加せず、既存の全置換Import / Exportで扱う。
+
+永続Entity基盤の実装PRで `schemaVersion` を7へ更新し、`executionSavePoints` を追加した。
+TargetWeapon lifecycleとOwnedWeapon `executionInProgress` もschema 7の形状に含まれる。
+Import準備（`prepareExportRootForImport()`）はschema 7をそのまま、schema 6を純粋関数
+`migrateExportRootV6ToV7()` で読み、それ以外のschemaVersionを拒否する。schema 6からの移行は
+Targetを `active` / `completedAt = null` / `completedByProductionPlanId = null`、OwnedWeaponを
+`executionInProgress = null`、`executionSavePoints = []` とするだけで、ゲーム状態を推測しない。
+BuildCandidate / BuildListEntry / ProductionPlan / ExecutionHistoryは内容を変換しない。schema 6を
+名乗りながらschema 7のfieldを持つrecordは拒否する。ゲーム内セーブ地点は構造validationに加え、
+Planの存在、`lastExecutionHistoryId` が同じPlanの既存履歴であること、1 Plan 1件であることを検証し、
+いずれかに違反すればImport全体をfail closedにする。セーブ地点の深いexpected-state検証は復元を
+行うExecution serviceの責務とする。
 
 ## 15.2 Import方針
 
@@ -2155,10 +2182,11 @@ Import方式。
 
 ## 15.3 Migration
 
-現行ExportRootはschemaVersion=6である。BuildCandidateが `intermediateStateGroups` を、
+現行ExportRootはschemaVersion=7である。schemaVersion 6はBuildCandidateが `intermediateStateGroups` を、
 BuildListEntryが `intermediateStateSelection` を持つ最初の形状であり（schemaVersion 5は
-旧 `checkpointGroups` / `selectedCheckpointOpportunityIds` の形状）、
-Dexie `DATABASE_SCHEMA_VERSION = 4` とは独立して更新する。
+旧 `checkpointGroups` / `selectedCheckpointOpportunityIds` の形状）、schemaVersion 7はそれに
+Execution lifecycleの永続状態を加えた形状である（15.1）。
+Dexie `DATABASE_SCHEMA_VERSION = 5` とは独立して更新する。
 現実装は型のみであり全置換Import/Exportサービスは未実装。
 旧schema=1を新Targetとして直接受理しない。将来のimportも純粋Target移行関数を使用し、
 旧Practical/OR/Practical Skillは解除、Ideal・ID・他entityは保持する。

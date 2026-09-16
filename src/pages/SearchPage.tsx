@@ -1,3 +1,4 @@
+import { isTargetWeaponPlanningEligible } from '../domain/models/domainRules'
 import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../domain/models/publicTypes'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
@@ -202,7 +203,7 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
         setTargets(loadedTargets)
         setOwnedWeapons(loadedWeapons)
         setBuildListEntries(loadedEntries)
-        setTargetWeaponId(loadedTargets.find(({ isEnabled }) => isEnabled)?.id ?? '')
+        setTargetWeaponId(loadedTargets.find(isTargetWeaponPlanningEligible)?.id ?? '')
       })
       .catch((caught: unknown) => {
         if (active) setLoadError(caught instanceof Error ? caught.message : '検索データの読み込みに失敗しました。')
@@ -218,7 +219,8 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
     }
   }, [dependencies])
 
-  const enabledTargets = useMemo(() => targets.filter(({ isEnabled }) => isEnabled), [targets])
+  // Completed Targets are not offered for a new search (`docs/UI_FLOW.md` 8.2).
+  const enabledTargets = useMemo(() => targets.filter(isTargetWeaponPlanningEligible), [targets])
   const targetById = useMemo(() => new Map(targets.map((target) => [target.id, target])), [targets])
   const masterForDisplay = dependencies?.master ?? defaultMaster
 

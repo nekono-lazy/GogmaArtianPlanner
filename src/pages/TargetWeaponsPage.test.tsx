@@ -18,6 +18,7 @@ function dependencies() { const save = vi.fn(async (draft: TargetWeaponDraft) =>
 function existingTarget(): TargetWeapon {
   return {
     id: 'target-ui' as TargetWeapon['id'], name: '既存Target', weaponTypeId: 'weapon.dual_blades', elementId: 'element.thunder', priority: 3, isEnabled: true, preferredOwnedWeaponId: null,
+    lifecycleStatus: 'active', completedAt: null, completedByProductionPlanId: null,
     idealBonuses: Array.from({ length: 5 }, () => ({ bonusTypeId: 'bonus_type.attack', bonusRankId: 'bonus_rank.ex' })) as TargetWeapon['idealBonuses'],
     practicalBonusConditions: [], alternativeBonusRules: [], idealSkillCondition: { seriesSkillId: null, groupSkillId: null, matchMode: 'all' }, practicalSkillCondition: { seriesSkillId: null, groupSkillId: null, matchMode: 'all' }, memo: null, createdAt: 'created', updatedAt: 'updated',
   }
@@ -217,7 +218,7 @@ describe('TargetWeaponsPage list order', () => {
     return {
       id: id as OwnedWeapon['id'], kind: 'gogma', name: id, weaponTypeId: 'weapon.dual_blades', elementId: 'element.thunder',
       restorationBonusScope: 'gogma_artian', restorationBonuses: Array.from({ length: 5 }, () => ({ bonusTypeId: 'bonus_type.attack', bonusRankId: 'bonus_rank.ex' })) as OwnedWeapon['restorationBonuses'],
-      seriesSkillId: null, groupSkillId: null, status: 'unclassified', isProtected: false, memo: null, createdAt: 'created', updatedAt: 'updated',
+      seriesSkillId: null, groupSkillId: null, status: 'unclassified', isProtected: false, executionInProgress: null, memo: null, createdAt: 'created', updatedAt: 'updated',
     }
   }
 

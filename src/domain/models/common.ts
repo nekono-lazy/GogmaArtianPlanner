@@ -173,6 +173,12 @@ export interface KnownValue<T> {
 // with `calculation_context_changed`. No Dexie table shape changed, so
 // `DATABASE_SCHEMA_VERSION` stays 4; the persisted entity shape does change, so
 // `ExportRoot.schemaVersion` moves to 6. RNG semantics remain unchanged.
+// The Execution lifecycle persistence foundation (Target lifecycle,
+// `OwnedWeapon.executionInProgress`, `ExecutionSavePoint`) moves Dexie to 5 and
+// `ExportRoot.schemaVersion` to 7 but deliberately stays at 11: its defaults
+// change no calculation meaning, and the Target definition hash, planning-input
+// hashes, expected execution state, PlanStep effects and reserve semantics are
+// switched together, with their own version boundary, by a later PR.
 export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 11
 
 export interface CalculationContext {

@@ -1,3 +1,4 @@
+import { isTargetWeaponPlanningEligible } from '../models/domainRules'
 import type { TargetWeapon, TargetWeaponId } from '../models/publicTypes'
 import type { PlannerCheckpointRequirements } from './plannerCheckpoints'
 import { isPlannerTargetComplete } from './plannerEntryRelevance'
@@ -116,6 +117,6 @@ export function createUnsearchedPlannerTermination(
     limits: { ...options },
     expandedStates: 0,
     completedTargetCount: 0,
-    totalTargetCount: targetWeapons.filter(({ isEnabled }) => isEnabled).length,
+    totalTargetCount: targetWeapons.filter(isTargetWeaponPlanningEligible).length,
   }
 }

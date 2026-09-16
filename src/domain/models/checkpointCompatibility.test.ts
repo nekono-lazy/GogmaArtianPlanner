@@ -156,7 +156,7 @@ describe('Intermediate state calculation and Export schema contracts', () => {
   it('moves the Export schema version with the persisted entity shape', () => {
     const candidate = currentCandidate()
     const root: ExportRoot = {
-      schemaVersion: 6,
+      schemaVersion: 7,
       appName: 'mh-wilds-gogma-artian-planner',
       exportedAt: '2026-09-12T00:00:00.000Z',
       rngState: null,
@@ -167,6 +167,7 @@ describe('Intermediate state calculation and Export schema contracts', () => {
       buildListEntries: [],
       productionPlans: [],
       executionHistory: [],
+      executionSavePoints: [],
       settings: {
         id: 'settings',
         schemaVersion: 1,
@@ -178,10 +179,11 @@ describe('Intermediate state calculation and Export schema contracts', () => {
       },
     }
 
-    // Version 6 is the first Export shape whose BuildCandidates carry
+    // Version 6 was the first Export shape whose BuildCandidates carry
     // axis-separated intermediate states and whose BuildListEntries carry the
-    // per-lane selection plus the improvement preference.
-    expect(root.schemaVersion).toBe(6)
+    // per-lane selection plus the improvement preference; version 7 keeps that
+    // shape and adds the Execution lifecycle state.
+    expect(root.schemaVersion).toBe(7)
     expect(root.buildCandidates[0].intermediateStateGroups).toBeDefined()
     const older = { ...root, schemaVersion: 5 } as unknown as ExportRoot
     expect(older.schemaVersion).not.toBe(root.schemaVersion)

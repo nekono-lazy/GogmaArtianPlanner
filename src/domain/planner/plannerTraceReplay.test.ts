@@ -31,7 +31,7 @@ describe('Planner trace replay', () => {
     const reservedId = ownedWeaponId('owned.replay.reserve')
     const last = trace.at(-1)!.rngAfter
     trace.push({ kind: 'reserve_candidate', actionType: 'reserve_weapon', primaryBuildListEntryId: entry.id, progressedBuildListEntryIds: [entry.id], progressedRoutePositions: {}, routeOperation: null, ownedWeaponId: reservedId, plannerOnly: true, rngBefore: last, rngAfter: last, inventoryEffect: { addedOwnedWeaponIds: [reservedId], removedOwnedWeaponIds: [], updatedOwnedWeaponIds: [], reservedOwnedWeaponIds: [reservedId], routeOutputChangedForEntryIds: [] }, satisfactionChanges: [] })
-    state.simulatedInventory = createSimulatedInventory([{ id: reservedId, kind: 'gogma', name: '', weaponTypeId: target.weaponTypeId, elementId: target.elementId, restorationBonuses: structuredClone(b), restorationBonusScope: 'normal_artian', seriesSkillId: 'series_skill.fixture.a', groupSkillId: null, status: 'ideal' as const, isProtected: true, memo: null, createdAt: entry.candidateSnapshot.createdAt, updatedAt: entry.candidateSnapshot.createdAt }]).inventory!
+    state.simulatedInventory = createSimulatedInventory([{ id: reservedId, kind: 'gogma', name: '', weaponTypeId: target.weaponTypeId, elementId: target.elementId, restorationBonuses: structuredClone(b), restorationBonusScope: 'normal_artian', seriesSkillId: 'series_skill.fixture.a', groupSkillId: null, status: 'ideal' as const, isProtected: true, executionInProgress: null, memo: null, createdAt: entry.candidateSnapshot.createdAt, updatedAt: entry.candidateSnapshot.createdAt }]).inventory!
     const support = vi.spyOn(engine, 'getPredictionSupport')
     const replay = replayPlannerSearchTrace(input, state, engine)
     expect(replay.isValid, JSON.stringify(replay.issues)).toBe(true); expect(replay.drafts).toHaveLength(4)
@@ -171,7 +171,7 @@ describe('Planner trace replay', () => {
   })
   it('hashes equivalent semantic state identically and includes kind', () => {
     const state = createValidRngState(); const counter = createValidNormalArtianCounter(); const weapon = { ...createValidBuildListEntry().candidateSnapshot }
-    const owned = { id: ownedWeaponId('owned.hash'), kind: 'gogma' as const, restorationBonusScope: 'gogma_artian' as const, name: 'A', weaponTypeId: 'weapon.fixture.a', elementId: 'element.fixture.a', restorationBonuses: createRestorationBonusSet(), seriesSkillId: null, groupSkillId: null, status: 'unclassified' as const, isProtected: false, memo: null, createdAt: 'a', updatedAt: 'a' }
+    const owned = { id: ownedWeaponId('owned.hash'), kind: 'gogma' as const, restorationBonusScope: 'gogma_artian' as const, name: 'A', weaponTypeId: 'weapon.fixture.a', elementId: 'element.fixture.a', restorationBonuses: createRestorationBonusSet(), seriesSkillId: null, groupSkillId: null, status: 'unclassified' as const, isProtected: false, executionInProgress: null, memo: null, createdAt: 'a', updatedAt: 'a' }
     const before = createExpectedPlanState(state, [counter], [owned]); expect(createExpectedPlanState({ ...state, notes: 'x', updatedAt: 'b' }, [{ ...counter, updatedAt: 'b' }], [{ ...owned, name: 'B', memo: 'x', updatedAt: 'b' }])).toEqual(before)
     // The status label carries no calculation meaning, so it never moves the
     // expected inventory hash (`docs/DATA_MODEL.md` 3.2).
@@ -194,6 +194,7 @@ describe('Planner trace replay', () => {
       groupSkillId: null,
       status: 'unclassified' as const,
       isProtected: false,
+      executionInProgress: null,
       memo: null,
       createdAt: 'x',
       updatedAt: 'x',
