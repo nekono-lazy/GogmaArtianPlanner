@@ -1937,7 +1937,8 @@ preferredは `createTargetDefinitionHash()` の対象でもない。preferredを
 `target_definition_changed` にしない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.11）。変更後の再検索では
 本節のtie-breakによりcanonical Idealが変わり得るが、既存Entryは有効なIdeal Routeのままである。
 PlannerはPlanner実行時の現在Targetのpreferredをplanning inputとして読む（同 7.4）。Executionが作成開始時に
-preferredを自動設定しても、Build Listはstaleにならない。
+preferredを自動設定しても、Build Listはstaleにならない。`createTargetDefinitionHash()` の対象field集合と、
+`priority` / `isEnabled` / lifecycleを含むTarget fieldの責務はPLANNER_SPEC 16.11の責務表を正本とする。
 
 ---
 
@@ -2007,7 +2008,7 @@ Search側は「この候補は作成リストに追加済みです。途中採�
 - 一方でPlanの `buildListEntriesHash` には入る。変えると既存Planは
   再計算対象になる
 - 同じCandidateのBuildListEntryを重複作成しない
-- Target性能定義変更（`createTargetDefinitionHash()` の対象。`preferredOwnedWeaponId` と lifecycleは含まない）、`searchStateHash` 不一致、`referencedOwnedWeaponsHash` 不一致、CalculationContext非互換時はBuildListEntryをstaleにする
+- Target性能定義変更（`createTargetDefinitionHash()` の対象: weaponTypeId、elementId、Ideal / Practical / Alternative bonus条件、Ideal / Practical skill条件。`priority`、`isEnabled`、`preferredOwnedWeaponId`、lifecycleは含まない）、`searchStateHash` 不一致、`referencedOwnedWeaponsHash` 不一致、CalculationContext非互換時はBuildListEntryをstaleにする
 - `completed` TargetのEntryはstaleにせず、Planner入力から完了済み目標武器として除外する
 - `searchStateHash` 不一致のstale reasonは `rng_state_changed`
 - `referencedOwnedWeaponsHash` 不一致のstale reasonは `owned_weapon_changed`
@@ -2097,7 +2098,7 @@ Worker error契約(B6)。
 - Search実行ごとに `searchRunId` を発行する
 - 新しい検索結果を保存する前に、同じTargetWeaponの古いBuildCandidateを削除してよい
 - BuildListEntryはBuildCandidateの削除処理と分離する
-- TargetWeaponの性能定義を変更した場合、紐づくBuildCandidateは再検索対象、BuildListEntryはstale扱いにする。`preferredOwnedWeaponId` またはlifecycleだけの変更ではstaleにしない
+- TargetWeaponの性能定義を変更した場合、紐づくBuildCandidateは再検索対象、BuildListEntryはstale扱いにする。`priority`、`isEnabled`、`preferredOwnedWeaponId`、lifecycleだけの変更ではstaleにしない（`isEnabled = false` と `completed` は検索・Planner入力から除外する）
 - 「実行中Plan完了後（予測）」起点（3.2）の検索結果はBuildCandidateとして永続保存しない
 - Candidate Route成立に使用したRNG状態が変わった場合、BuildListEntryを `rng_state_changed` としてstale扱いにする
 - Candidate Routeが参照する起点武器の状態が変わった場合、BuildListEntryを `owned_weapon_changed` としてstale扱いにする。`status` は非semanticであり、status変更だけではstaleにしない
@@ -2335,7 +2336,7 @@ Skill stream側はB1で実装済み、Bonus stream側はB2で実装済みであ�
 - 同起点がPlan非active、CalculationContext非互換、現在Step期待状態不一致で利用不可になる
 - `completed` Targetを検索せずwarningを返し、仮想状態で完了予定のTargetも検索しない
 - 所持巨戟が理想条件を満たすactive Targetで操作0 Idealの通知を返し、Predictionを呼ばない
-- `preferredOwnedWeaponId` だけの変更でBuildListEntryがstaleにならない
+- `preferredOwnedWeaponId`、`priority`、`isEnabled` だけの変更でBuildListEntryがstaleにならない
 
 
 ### 妥協条件version 6の判定理由と監査記録

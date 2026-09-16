@@ -670,6 +670,9 @@ Execution lifecycle改訂（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.13）で次�
   所持武器で理想品を満たすTargetをユーザーが明示操作で完了にする場合（`completedByProductionPlanId = null`、
   [UI_FLOW.md](./UI_FLOW.md) 8.2）だけである。妥協品での終了では `completed` にしない
 - `completed` Targetの `preferredOwnedWeaponId` は `null` とする
+- 理想品完成で武器Xをprotectedにする場合、完成対象Targetに加えて、Xを `preferredOwnedWeaponId` に持つ
+  他のすべてのTargetの `preferredOwnedWeaponId` も同一transactionで `null` にする（8.5）。他Targetの
+  性能条件、`priority`、`isEnabled`、lifecycleは変更しない
 - `completed` から `active` へ戻すのは、Undo / ゲーム内セーブ地点復元と、ユーザーの明示操作
   「未完了に戻す」（[UI_FLOW.md](./UI_FLOW.md) 8.2）だけである。戻しても所持武器は変更しない
 - `lifecycleStatus`、`completedAt`、`completedByProductionPlanId` は性能定義ではないため
@@ -798,8 +801,13 @@ soft preferenceである。
 - 例外はExecutionだけである。Execution Navigatorで実際の作成作業を開始したStep（新規Normal Routeの
   作成対象Normal作成、既存Normal / GogmaへのそのEntryの最初の実ゲーム操作）の確定時に、そのEntryの
   Targetへ追跡武器を自動設定し、別Targetが同じ武器を優先起点にしていればそのTargetを `null` にする。
-  両方を同じStep確定transactionで保存する。理想品完成時は `null` にする。Plan破棄後も紐付けは残す
-  （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.11 / 16.13）
+  両方を同じStep確定transactionで保存する。Plan破棄後も紐付けは残す
+  （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.11）
+- 理想品完成（Executionのtarget completion、`confirm_owned_ideal`、Target Weapons画面の
+  「この武器で目標を完了にする」）で武器Xが `isProtected = true` になる場合は、完成対象Targetと、
+  Xを優先起点にしている他のすべてのTargetの `preferredOwnedWeaponId` を同一transactionで `null` にする。
+  解除するのは `preferredOwnedWeaponId` だけである。完成後にXを優先起点に持つTargetが残れば
+  collection validation違反としてtransaction全体をrollbackする（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.13）
 
 staleness semanticsの分離（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.11）。
 
@@ -816,6 +824,9 @@ Active Plan Execution
   Execution自身による設定・付け替え・解除は正常進行であり、
   ExpectedPlanState.targetExecutionStateHash（11.2）で期待どおりか検証する
 ```
+
+TargetWeapon fieldごとのhash / validation / planning inputの責務表は
+[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.11「TargetWeapon fieldの責務」を正本とする。
 
 collection validation。TargetWeapon単体validationは構造だけを検証できるため、以下は
 OwnedWeapon collectionと他Targetを参照する専用のvalidation authorityでfail closedにする。
@@ -1193,15 +1204,23 @@ export type BuildListEntryStaleReason =
 不変条件。
 
 - 作成リスト追加時にBuildCandidate全体を `candidateSnapshot` へ複製する
-- `targetDefinitionHash` はTargetWeaponの性能定義（Candidateの成否と意味を決める項目）を安定serializeして
-  生成する。`preferredOwnedWeaponId` はTarget性能定義ではなくplanning preferenceであるため対象に
-  含めず、変更しても既存Entryを `target_definition_changed` にしない。`lifecycleStatus`、
-  `completedAt`、`completedByProductionPlanId` も対象に含めない（[PLANNER_SPEC.md](./PLANNER_SPEC.md)
-  16.11）。preferredはCandidate stable key、Candidate ID、Candidate dedup key、BuildCandidate meaning
-  fingerprintへも混ぜない。preferredはPlannerInputとDraft Planの `targetWeaponsHash` で
-  planning inputとして扱う（11.2）
-- 旧契約ではpreferredを `targetDefinitionHash` に含めていた。この正規化変更はExecution lifecycle
-  改訂の実装PRでversion境界とともに適用する（3.5）
+- `targetDefinitionHash` は `createTargetDefinitionHash()` でTargetWeaponの性能定義（Candidateの成否と意味を
+  決める項目）だけを安定serializeして生成する。対象fieldは次に固定する
+  （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.11）
+
+  ```text
+  含める:   weaponTypeId, elementId, idealBonuses, practicalBonusConditions,
+            alternativeBonusRules, idealSkillCondition, practicalSkillCondition
+  含めない: priority, isEnabled, preferredOwnedWeaponId, lifecycleStatus, completedAt,
+            completedByProductionPlanId, name, memo, timestamps
+  ```
+
+- `priority`、`isEnabled`、`preferredOwnedWeaponId`、lifecycleを変更しても既存Entryを
+  `target_definition_changed` にしない。`priority` と `preferredOwnedWeaponId` はPlannerのplanning input、
+  `isEnabled = false` と `completed` はSearch / Planner入力からの除外条件として扱う。preferredはCandidate
+  stable key、Candidate ID、Candidate dedup key、BuildCandidate meaning fingerprintへも混ぜない
+- 旧契約（現行実装）では `priority`、`isEnabled`、`preferredOwnedWeaponId` を `targetDefinitionHash` に
+  含めていた。この正規化変更はExecution lifecycle改訂の実装PRでversion境界とともに適用する（3.5）
 - `completed` TargetのEntryはstaleではなく、Planner入力validationで「完了済み目標武器」として除外する
 - `searchStateHash` は `candidateSnapshot.searchStateHash` を複製する
 - `referencedOwnedWeaponsHash` は `candidateSnapshot.referencedOwnedWeaponsHash` を複製する
@@ -1420,10 +1439,27 @@ export interface PlanningInputSnapshot {
 }
 ```
 
-- `targetWeaponsHash` / `buildListEntriesHash` はPlanner入力全体の監査用hashである。
-  `targetWeaponsHash` はplanning inputとして `preferredOwnedWeaponId` を含む
-- `dependentTargetDefinitionsHash` はPlan依存Target（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.5）ごとの
-  `createTargetDefinitionHash()` と `isEnabled` をID順にhash化する
+- `targetWeaponsHash` / `buildListEntriesHash` はPlanner入力全体の監査用hashである
+- `targetWeaponsHash` は `createTargetDefinitionHash()` の単純再利用ではないplanning-input用の独立契約である。
+  `PlannerInput.targetWeapons` の全TargetをID順に、次の構造へ正規化してhash化する
+  （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 11.0-B）
+
+  ```ts
+  {
+    id: TargetWeaponId;
+    definitionHash: string;                      // createTargetDefinitionHash(target)。preferredを含まない
+    priority: number;
+    isEnabled: boolean;
+    preferredOwnedWeaponId: OwnedWeaponId | null;
+    lifecycleStatus: TargetWeaponLifecycleStatus;
+  }
+  ```
+
+  `name`、`memo`、`completedAt`、`completedByProductionPlanId`、timestampsは含めない
+- `dependentTargetDefinitionsHash` はPlan依存Target（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.5）ごとに
+  `{ id, definitionHash: createTargetDefinitionHash(target), priority, isEnabled }` をID順にhash化する。
+  `preferredOwnedWeaponId` と `lifecycleStatus` はExecution自身が正常進行として変更するため含めず、
+  `ExpectedPlanState.targetExecutionStateHash` で検証する
 - `dependentBuildListEntriesHash` は `selectedBuildListEntryIds` のEntryだけについて、
   `buildListEntriesHash` と同じ不変項目をID順にhash化する
 - Active / draft Planの不変前提検証（`detectPlanInvalidation()`）は依存hashだけを使う。
@@ -1860,7 +1896,8 @@ ExecutionActionの意味（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.4）。
 
 - ExecutionHistoryはPlanとは別に保存する
 - `affectedTargetWeaponsBefore` は、そのStepのExecution effectで変更したTargetWeapon（紐付けを設定した
-  Target、紐付けを解除された別Target、完了にしたTarget）のStep前の本体を保持する
+  Target、紐付けを解除された別Target、完了にしたTarget、理想品完成で完成武器の優先起点を解除された
+  他のすべてのTarget）のStep前の本体を保持する
 - `executionSavePointBefore` は、Step確定または `finished_as_compromise` のtransactionでゲーム内セーブ地点を
   削除した場合にUndoで復元するために保持する
 - `operation_uncertain` ではRngState、NormalArtianCounter、OwnedWeapon、TargetWeaponを変更しないが、
@@ -1905,7 +1942,12 @@ export interface ExecutionSavePoint {
   TargetWeaponは、Plan依存Targetと、execution scopeの武器を `preferredOwnedWeaponId` に持つTargetの
   和集合とする
 - 復元は `active` / `stale` のPlanについて1つのDexie transactionで行い、Executionに関係するゲーム対応
-  状態だけを戻す。セーブ地点より後に追加したPlan非依存Target、Build List Entry、execution scope外の
+  状態だけを戻す。書き込み前に同じtransaction内で、復元後のProductionPlanが必要とするentity
+  （snapshotの全OwnedWeapon、復元後PlanのPlan依存Target、
+  `selectedBuildListEntryIds` のBuildListEntry）が現在すべて存在することを検証する。1つでも欠損して
+  いれば復元を拒否し、RngState、NormalArtianCounter、OwnedWeapon、TargetWeapon、ProductionPlan、
+  ExecutionHistory、ExecutionSavePointのいずれも変更しない（fail closed）。欠損entityを自動復活させない。
+  snapshot内のPlan非依存Targetの欠損は拒否理由にせず、そのTargetは復元しない。セーブ地点より後に追加したPlan非依存Target、Build List Entry、execution scope外の
   所持武器、設定を巻き戻さず、ユーザーが削除したentityを復活させない。セーブ地点より後のそのPlanの
   ExecutionHistoryは削除する（手順は同 16.9）
 - Planが `completed` / `abandoned` になったtransaction、および境界のExecutionHistoryをUndoした
@@ -2164,7 +2206,10 @@ Production RNG契約切替時の互換性は次のとおりとする。
 - `executionInProgress` はstatusと直交し、ユーザーが直接編集しない
 - 理想品完成は新規・既存武器を問わず `ideal` / protected / Target completed / preferred解除とする
 - `completed` TargetはSearch / Plannerの対象外だがレコードを保持する
-- `preferredOwnedWeaponId` は `createTargetDefinitionHash()` の対象外で、BuildListEntryをstaleにしない
+- `createTargetDefinitionHash()` は性能定義だけを対象とし、`priority` / `isEnabled` / `preferredOwnedWeaponId` / lifecycleの変更でBuildListEntryをstaleにしない
+- `targetWeaponsHash` はplanning-input用の独立契約で、`preferredOwnedWeaponId` を含む
+- 理想品完成で武器をprotectedにする場合、その武器を優先起点にする全Targetのpreferredを同一transactionで解除する
+- セーブ地点の復元は、復元後Planに必要なentityが欠損していれば何も変更せず拒否する
 - ゲーム内セーブ地点は妥協checkpointと別概念で、1 Planにつき最新1件
 - 保護武器をPlannerはReset Bonuses・Keep Bonuses・Reset Skillsへ使用しない
 - protected武器でも現在性能を変更しない操作0 Candidateとしては利用できる
@@ -2205,7 +2250,7 @@ Production RNG契約切替時の互換性は次のとおりとする。
 - RngStateの4項目を独立して確定・未確定にできる
 - 不足Capabilityに依存するRouteだけが無効になる
 - BuildCandidateを選択してもCandidate本体は変更されずBuildListEntryが作成される
-- Target性能定義変更でBuildListEntryがstaleになり、`preferredOwnedWeaponId` / lifecycleだけの変更ではstaleにならない
+- Target性能定義変更でBuildListEntryがstaleになり、`priority` / `isEnabled` / `preferredOwnedWeaponId` / lifecycleだけの変更ではstaleにならない
 - 検索に使用したRNG状態変更でBuildListEntryが `rng_state_changed` になる
 - Routeに影響しない表示項目変更では `searchStateHash` が変わらない
 - Route参照OwnedWeaponのボーナス、スキル、isProtected変更でBuildListEntryが `owned_weapon_changed` になり、status / `executionInProgress` だけの変更ではならない
@@ -2250,6 +2295,8 @@ Production RNG契約切替時の互換性は次のとおりとする。
 - PlannerOptionsはmaxPlanSteps、beamWidth、maxExpandedStatesだけを受け付け、各1以上を要求する
 - normal新規では作成対象Stepだけがadd（Counter進行用Stepは登録なし）、所持Normalはconvert Stepで同一IDのkind更新、既存Gogmaは各Stepで同一ID更新になり、独立したreserve Stepを持たない
 - `targetExecutionStateHash` がPlan依存Targetだけを対象にし、Plan非依存Targetの追加・変更で変わらない
+- `targetWeaponsHash` が `preferredOwnedWeaponId` / `priority` / `isEnabled` / `lifecycleStatus` の変更で変わり、
+  `createTargetDefinitionHash()` はそれらの変更で変わらない
 - binding tokenが観測値と一致する実状態だけをtokenへ置き換え、観測値と異なる5枠を不一致として検出する
 - `status` と `executionInProgress` の変更だけでは `ownedWeaponsHash` が変わらない
 - Candidate BuildRouteを変更せず、Candidate Route内の具体的な起点OwnedWeapon IDを別武器へ差し替えない
