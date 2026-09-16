@@ -30,7 +30,7 @@ describe('presentation labels', () => {
     expect(getRouteOperationLabel({ type: 'reset_skills', sourceOwnedWeaponId: null, skillCounterBefore: 1, skillCounterAfter: 2 })).toBe('スキルをリセット')
     expect(skippedRouteReasonLabels.master_data_unavailable).toContain('マスターデータ')
     expect(staleReasonLabels.target_definition_changed).toContain('目標武器')
-    expect(rngStateSourceLabels.gogma_seed_finder_import).toBe('GogmaSeedFinderから取得')
+    expect(rngStateSourceLabels.observation).toBe('観測検索')
   })
 
   it('names every persisted rejection reason and conflict kind for the Plan view', () => {

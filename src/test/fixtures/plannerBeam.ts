@@ -75,7 +75,6 @@ export function plannerEngine(): FakeRngEngine {
   return new FakeRngEngine({
     version: 'planner-beam-v1',
     capabilities: {
-      supportsSeedSearch: false,
       supportsNormalArtianPrediction: true,
       supportsGogmaPrediction: true,
       supportsSkillPrediction: true,

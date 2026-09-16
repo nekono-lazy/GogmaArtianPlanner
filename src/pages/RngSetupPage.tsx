@@ -219,9 +219,9 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
     } catch (caught: unknown) { setSaveError(caught instanceof Error ? caught.message : 'RNG状態を保存できません。') }
   }
 
-  // Application-level Wizard availability (`docs/UI_FLOW.md` 5): never read from
-  // the Engine's legacy `supportsSeedSearch` flag, which is a different contract.
-  // It is the single authority for both the status shown and the start guard.
+  // Application-level Wizard availability (`docs/UI_FLOW.md` 5): never derived
+  // from an RngEngine capability flag. It is the single authority for both the
+  // status shown and the start guard.
   const identificationAvailability = getProductionIdentificationAvailability()
 
   const startIdentification = () => {
@@ -347,9 +347,8 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
         <DefinitionRow label="スキル予測"><StatusChip label={engineCapabilities.supportsSkillPrediction ? '対応' : '未対応'} tone={engineCapabilities.supportsSkillPrediction ? 'positive' : 'neutral'} /></DefinitionRow>
         <DefinitionRow label="巨戟アーティア予測"><StatusChip label={engineCapabilities.supportsGogmaPrediction ? '対応' : '未対応'} tone={engineCapabilities.supportsGogmaPrediction ? 'positive' : 'neutral'} /></DefinitionRow>
         <DefinitionRow label="Keep Bonuses予測"><StatusChip label={engineCapabilities.supportsKeepBonusesPrediction ? '対応' : '未対応'} tone={engineCapabilities.supportsKeepBonusesPrediction ? 'positive' : 'neutral'} /></DefinitionRow>
-        <DefinitionRow label="旧generic Seed Search API"><StatusChip label={engineCapabilities.supportsSeedSearch ? '対応' : '未対応'} tone={engineCapabilities.supportsSeedSearch ? 'positive' : 'neutral'} /></DefinitionRow>
       </Box>
-      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>旧generic Seed Search APIはIdentification Wizard（RNG同定）とは別の旧API契約です。RNG同定の利用可否は「値が分からない場合」の表示を確認してください。</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>RNG同定（Identification Wizard）の利用可否はEngine capabilityではなくアプリ側で判定します。現在の状態は「値が分からない場合」の表示を確認してください。</Typography>
     </DisclosureAccordion>
 
     {identificationCoordinator && state && masterResult.ok && <IdentificationWizardDialog coordinator={identificationCoordinator} initialRngState={state} master={masterResult.data} onAdopted={handleIdentificationAdopted} onClose={() => setIdentificationCoordinator(null)} />}

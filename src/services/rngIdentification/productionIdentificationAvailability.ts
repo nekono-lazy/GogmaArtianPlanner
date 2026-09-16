@@ -3,11 +3,8 @@
  * the Skill-first Identification Wizard (`docs/UI_FLOW.md` 5 / 5.4).
  *
  * Identification availability lives at the Worker / application level, not in
- * `RngEngineCapabilities`. In particular it is never read from
- * `supportsSeedSearch`: that flag describes the legacy generic Seed Search API
- * of `docs/UI_FLOW.md` 5.3, stays `false`, and says nothing about the Wizard
- * that C5-E2C10 activated. Presenting that flag as "RNG identification is
- * unsupported" would be false, so user-facing screens read this module instead.
+ * `RngEngineCapabilities`, and no RngEngine capability flag stands in for it:
+ * user-facing screens read this module instead.
  *
  * The Production Wizard runs its Skill and Gogma Counter searches in Browser
  * Workers, and the Production Worker clients report `worker_unavailable` when

@@ -275,8 +275,8 @@ calculation_context_changedにより現行計算・実行から除外する。
 歴史的にはB5-F1で1→2、Plannerのみの変更で2→3→4→5と更新した。
 2..5間のCandidate / BuildList互換例外は当時の境界に限り、version 6以降へは適用しない。
 Targetの永続形状は独立してDexie DATABASE_SCHEMA_VERSIONを1→2へ更新する。
-AppSettings.schemaVersion、gameVersion、Master Data version、RNG Engine version、
-supportsSeedSearchは変更しない。移行・ExportRoot契約はDATA_MODELと
+AppSettings.schemaVersion、gameVersion、Master Data version、RNG Engine versionは
+変更しない。移行・ExportRoot契約はDATA_MODELと
 TARGET_COMPROMISE_SEMANTICSを参照する。
 
 ## 5. 条件判定

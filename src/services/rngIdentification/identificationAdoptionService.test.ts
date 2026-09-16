@@ -59,17 +59,17 @@ describe('IdentificationAdoptionService', () => {
     before.baseSeed = {
       value: '111',
       isConfirmed: true,
-      source: 'gogma_seed_finder_import',
+      source: 'manual',
     }
     before.skillCounter = {
       value: 20,
       isConfirmed: true,
-      source: 'gogma_seed_finder_import',
+      source: 'manual',
     }
     before.gogmaCounter = {
       value: 30,
       isConfirmed: true,
-      source: 'gogma_seed_finder_import',
+      source: 'manual',
     }
     before.counterGate = { value: 200, isConfirmed: true, source: 'manual' }
     before.notes = 'Preserve this diagnostic note.'
@@ -93,7 +93,7 @@ describe('IdentificationAdoptionService', () => {
   it.each([
     { value: null, isConfirmed: false, source: null },
     { value: 54, isConfirmed: true, source: 'manual' as const },
-    { value: 200, isConfirmed: true, source: 'gogma_seed_finder_import' as const },
+    { value: 200, isConfirmed: true, source: 'observation' as const },
   ])('does not require or modify legacy Counter Gate %#', async (counterGate) => {
     const before = createValidRngState()
     before.counterGate = counterGate

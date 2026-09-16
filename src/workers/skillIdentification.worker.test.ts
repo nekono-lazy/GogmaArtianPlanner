@@ -151,10 +151,9 @@ describe('Skill Identification Worker', () => {
     ])
   })
 
-  it('creates a Worker-local Production Engine without activating Seed Search capability', () => {
+  it('creates a Worker-local Production Engine with Skill prediction support', () => {
     const engine = createProductionSkillIdentificationRngEngine()
     expect(engine).toBeInstanceOf(ProductionRngEngine)
     expect(engine.capabilities.supportsSkillPrediction).toBe(true)
-    expect(engine.capabilities.supportsSeedSearch).toBe(false)
   })
 })

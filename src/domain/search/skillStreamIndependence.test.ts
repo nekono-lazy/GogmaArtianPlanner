@@ -64,7 +64,6 @@ function createStreamFixtureEngine(
   const fixtures: FakeRngFixtures = {
     version: 'skill-stream-independence',
     capabilities: {
-      supportsSeedSearch: false,
       supportsNormalArtianPrediction: normalForges > 0,
       supportsGogmaPrediction: true,
       supportsSkillPrediction: true,

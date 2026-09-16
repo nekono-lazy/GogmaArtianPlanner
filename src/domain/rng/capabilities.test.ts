@@ -13,7 +13,6 @@ import { deriveRngCapabilities } from './capabilities'
 import type { RngEngineCapabilities } from './rngEngine'
 
 const supportedEngine: RngEngineCapabilities = {
-  supportsSeedSearch: true,
   supportsNormalArtianPrediction: true,
   supportsGogmaPrediction: true,
   supportsSkillPrediction: true,
@@ -231,7 +230,6 @@ describe('deriveRngCapabilities', () => {
     rngState.skillCounter = { value: null, isConfirmed: false, source: null }
     rngState.counterGate = { value: null, isConfirmed: false, source: null }
     const unsupportedEngine: RngEngineCapabilities = {
-      supportsSeedSearch: false,
       supportsNormalArtianPrediction: false,
       supportsGogmaPrediction: false,
       supportsSkillPrediction: false,
@@ -259,23 +257,6 @@ describe('deriveRngCapabilities', () => {
       'engine:normal_artian_prediction',
       'engine:keep_prediction',
     ])
-  })
-
-  it('derives Seed search only from explicit Engine support', () => {
-    const supported = deriveRngCapabilities(
-      confirmedRngState(),
-      [],
-      [],
-      supportedEngine,
-    )
-    const unsupported = deriveRngCapabilities(
-      confirmedRngState(),
-      [],
-      [],
-      { ...supportedEngine, supportsSeedSearch: false },
-    )
-    expect(supported.canSearchSeed).toBe(true)
-    expect(unsupported.canSearchSeed).toBe(false)
   })
 })
 

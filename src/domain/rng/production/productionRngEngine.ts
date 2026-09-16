@@ -38,7 +38,6 @@ import {
 export const PRODUCTION_RNG_ENGINE_VERSION = 'production-rng:c5-e7'
 
 const capabilities: RngEngineCapabilities = {
-  supportsSeedSearch: false,
   supportsNormalArtianPrediction: true,
   supportsGogmaPrediction: true,
   supportsSkillPrediction: true,

@@ -20,7 +20,6 @@ export class UnavailableRngEngine implements RngEngine {
   readonly version = 'production-engine-unavailable'
 
   readonly capabilities: RngEngineCapabilities = {
-    supportsSeedSearch: false,
     supportsNormalArtianPrediction: false,
     supportsGogmaPrediction: false,
     supportsSkillPrediction: false,

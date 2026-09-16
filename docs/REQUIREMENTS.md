@@ -9,8 +9,8 @@
 
 - [DATA_MODEL.md](./DATA_MODEL.md): 型、ID、enum、関係、永続化、不変条件
 - [MASTER_DATA.md](./MASTER_DATA.md): 武器種、属性、ボーナス、スキル、抽選、アイテム素材のマスター
-- [RNG_SPEC.md](./RNG_SPEC.md): RNG状態、予測、進行、Import、観測検索
-- [SEARCH_SPEC.md](./SEARCH_SPEC.md): 条件評価、候補検索、経路比較、条件緩和
+- [RNG_SPEC.md](./RNG_SPEC.md): RNG状態、予測、進行、RNG同定
+- [SEARCH_SPEC.md](./SEARCH_SPEC.md): 条件評価、候補検索、経路比較、途中採用する状態
 - [PLANNER_SPEC.md](./PLANNER_SPEC.md): 候補選択、競合、在庫、作成計画、再計算
 - [UI_FLOW.md](./UI_FLOW.md): 画面、操作導線、表示ルール、実行ナビ
 
@@ -139,17 +139,9 @@ stream進行は次を正式契約とする。Statusはprovenanceの確認範囲�
 
 ## 6. RNG状態の取得
 
-初期版では次の3方式を提供する。
+初期版では次の2方式を提供する。外部toolの出力textを取り込む専用Import機能は提供しない。
 
-### 6.1 Gogma Seed Finder形式Import互換
-
-Gogma Seed Finderが出力する既知形式の状態情報をユーザーが貼り付け、解析結果を確認してから取り込めること。この機能は出力text formatとの互換性であり、外部toolのalgorithmまたは実装をIdentification authorityとして使用することを意味しない。
-
-一部の値だけ読み取れた場合は、読み取れた項目だけを適用できること。読み取れない項目や既存の他項目を暗黙に上書きしない。
-
-対応は入力textのparseと内部型への変換に限定し、Production Identificationを外部Seed Finder実装へ依存させない。対応する入力形式は[RNG_SPEC.md](./RNG_SPEC.md)で定義する。
-
-### 6.2 正確な値の直接入力
+### 6.1 正確な値の直接入力
 
 別ツールやREFrameworkなどで取得した値を入力できること。取得手段との直接連携は行わない。
 
@@ -163,13 +155,13 @@ Gogma Seed Finderが出力する既知形式の状態情報をユーザーが貼
 
 Counter Gateは `RngState` に互換・diagnostic目的で残るが、通常ユーザー向け直接入力UIは提供しない。過去に `source = manual` のCounter Gateを持つデータが存在しても、その値はそのまま保持する。persisted Gateが200、54、または未設定のいずれでも、必要なBase Seed、該当Counter、Engine support、concrete semantic input supportが揃っていればProduction active predictionは成立し、persisted GateをProduction Prediction結果のauthorityにしない。
 
-### 6.3 観測結果から検索
+### 6.2 観測結果から検索
 
 ゲーム内で確認した抽選結果を入力し、対応するSeedまたはCounter候補を検索できること。通常アーティアの現在位置特定はこの方式を主に使用する。
 
 一度の観測で候補が一意にならない場合は、追加観測が必要であることを明示する。
 
-Seed検索とCounter検索は別の入力・結果型として扱う。旧generic Seed Search案は履歴契約として保持するが、Production v1のRNG特定にはSkill-first Identification Wizardの専用kernelを使用し、`supportsSeedSearch`を有効化しない。
+Seed検索とCounter検索は別の入力・結果型として扱う。Production v1のRNG特定にはSkill-first Identification Wizardの専用kernelを使用する。Identification availabilityはWorker / application levelで判定し、RngEngine capability flagで表さない。
 
 Identification WizardはCounter Gateを入力、探索、観測、特定、結果化しない。STEP 1はNormalからGogmaへのconversion時の自動Skillと連続Reset Skills観測からcanonical Base Seedとstarting Skill Counter `S`を特定し、STEP 2はそのBase Seedと連続ordered Reset Bonuses観測からstarting Gogma Counter `G`を特定する。STEP 1が完全な探索で一意になるまでSTEP 2へ進めず、複数候補では候補選択ではなく追加観測を要求する。
 
@@ -387,17 +379,15 @@ UIは「現在の探索範囲では理想品が見つかりませんでした」
 
 ---
 
-## 15. 条件緩和
+## 15. 条件緩和案の廃止
 
-検索結果がない、少ない、または非常に遠い場合でも、目標条件を自動変更しない。代わりに条件緩和案を提示する。
+検索結果がない、少ない、または非常に遠い場合でも、目標条件を自動変更しない。条件緩和案も生成せず、UIへ提示しない（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 9章）。
 
-緩和案の例:
+Searchが返すのはcanonical Ideal 1件以下であり、「候補が少ない」という状態は「現在の探索範囲内にIdealが無かった」だけである。この場合にUIが案内するのはその事実だけであり、「この目標武器に理想品は存在しません」とは表示しない。
 
-- 攻撃III以上からII以上へ下げる
-- EX必須を解除する
-- EX最低数を2から1へ減らす（種類別個数は理想5枠がauthority）
+条件を変更するか探索上限を引き上げるかはユーザー自身の明示操作とし、その操作の後で再検索する。Domain / UIは `RelaxationSuggestion` に相当する緩和案の型も生成処理も持たない。
 
-各案について、適用した場合の最短候補までのおおよその距離を表示する。ユーザーが選択した場合のみ条件を変更し、再検索する。
+どこまで妥協を許すかはTargetの妥協条件がすでに表現しており、その妥協をRouteのどこで受け取るかは14章のlane別intermediate state選択が表現する。
 
 ---
 
@@ -854,7 +844,7 @@ Production v1 adapterがpersisted exact Gateを要求せずactive representative
 
 スラッシュアックスの通常アーティア復元ボーナス抽選を実機検証し（Base Seed 51231782、火属性構成と全部別々の属性パーツ構成のCounter 0比較、reloadなしのCounter 0 → 1連続作成）、パーツ構成に依存しないsingle pool `[6, 4, 7, 8]`（基礎攻撃力強化 / 属性強化 / 斬れ味強化 / 会心率強化）としてProduction Normal Prediction / Counter Identification / Candidate SearchのNormal routeで利用可能にした変更も、以前unsupportedだったNormal Prediction inputがsupportedになりCandidate SearchのRoute availabilityとCounter Identification supportが変わるobservable Production RNG semantics changeであり、`PRODUCTION_RNG_ENGINE_VERSION` を `production-rng:c5-e6` へ更新した（[RNG_SPEC.md](./RNG_SPEC.md) 6.3.1 / 9.12、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.16）。結果としてv1のレア8通常アーティアPrediction / Counter Identificationのweapon coverageは14武器種すべてになるが、verification provenanceは一様ではない: 弓 / ライト・ヘビィボウガン / Melee共通10種 / スラッシュアックス独立という構造を保ち、スラッシュアックスをMelee共通10種へ統合しない。スラッシュアックスのpool membership、構成非依存、Counter 0 → 1系列は直接実機観測であり、Attack 5 / Element 4 / Sharpness 2 / Affinity 3の上限境界はcategory-level Production adoptionである。Identification Domainの `table_a` / `table_b` はスラッシュアックスでも属性あり / 無属性の観測区分として残るが、両区分が同じsingle poolを参照するadapter表現であり、ゲーム上2つのtableがある意味ではない。Counterは `weapon.switch_axe:8` の1本のみで、この変更でも `CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、Master dataVersion、`ExportRoot.schemaVersion`、`NormalArtianCounter` persisted shape、reference parity poolは変更しない。
 
-巨戟アーティアのReset Bonuses / Keep Bonusesを2026-09-15に追加実機検証し（Base Seed 51231782）、Production Gogma Resetの契約を次のとおり確定した（[RNG_SPEC.md](./RNG_SPEC.md) 6.1.1、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.17）。候補となる復元ボーナスfamilyは、Masterの `WeaponBonusDefinition` + `ElementMaster.allowsElementBonus` ではなく、同じ武器種・属性のProduction通常アーティアpoolのfamily集合で決める（弓のテーブルA / B、スラッシュアックスのsingle poolを含む）。共有するのはfamily集合だけで、通常アーティアのseed、Counter、抽選上限は流用しない。1回のReset結果内で斬れ味・装填強化familyは合計2枠までとし、基礎攻撃力強化 / 会心率強化 / 属性強化には明示family上限を設けない（会心率強化5枠と属性強化4枠が実在する）。exact-ID repeat penaltyとKeepの契約（slot familyと位置を保持しtierだけ再抽選）は変更せず、GARP v0.9.4 reference parity（候補表、weighted draw、reference golden / tests）も変更しない。Gogma Counter IdentificationはProduction Resetと同じavailabilityとweighted drawを共有する。弓の毒、スラッシュアックスの無属性構成、ハンマー麻痺での斬れ味・装填2枠上限、会心率4 / 5枠、槍龍の属性強化4枠、双剣龍の連続Keepは直接実機観測であり、弓の麻痺・睡眠のfamily availability、未観測の武器種・属性、ハンマー麻痺以外への斬れ味・装填上限の適用はcategory-level Production adoptionである。斬れ味・装填familyを3枠以上currentに持つKeepは未確認のまま扱う。この契約はPR-BでProduction Gogma ResetとGogma Counter Identificationへ実装済みであり、Prediction outputが変わるobservable Production RNG semantics changeとして `PRODUCTION_RNG_ENGINE_VERSION` を現在の `production-rng:c5-e7` へ更新した（旧versionのBuildCandidate / BuildListEntry / ProductionPlanは `rngEngineVersion` の差で `calculation_context_changed` になる）。`CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、`ExportRoot.schemaVersion`、`RngState.schemaVersion`、`supportsSeedSearch`、PRNG、seed derivation、10-step block、Counter semanticsは変更しない。所持武器・目標武器の選択肢とValidationをこのavailabilityへ揃える変更はPR-Cで実装済みであり、RNG Prediction output、`PRODUCTION_RNG_ENGINE_VERSION`（`production-rng:c5-e7` のまま）、schema、Master JSON / dataVersionは変更していない。
+巨戟アーティアのReset Bonuses / Keep Bonusesを2026-09-15に追加実機検証し（Base Seed 51231782）、Production Gogma Resetの契約を次のとおり確定した（[RNG_SPEC.md](./RNG_SPEC.md) 6.1.1、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.17）。候補となる復元ボーナスfamilyは、Masterの `WeaponBonusDefinition` + `ElementMaster.allowsElementBonus` ではなく、同じ武器種・属性のProduction通常アーティアpoolのfamily集合で決める（弓のテーブルA / B、スラッシュアックスのsingle poolを含む）。共有するのはfamily集合だけで、通常アーティアのseed、Counter、抽選上限は流用しない。1回のReset結果内で斬れ味・装填強化familyは合計2枠までとし、基礎攻撃力強化 / 会心率強化 / 属性強化には明示family上限を設けない（会心率強化5枠と属性強化4枠が実在する）。exact-ID repeat penaltyとKeepの契約（slot familyと位置を保持しtierだけ再抽選）は変更せず、GARP v0.9.4 reference parity（候補表、weighted draw、reference golden / tests）も変更しない。Gogma Counter IdentificationはProduction Resetと同じavailabilityとweighted drawを共有する。弓の毒、スラッシュアックスの無属性構成、ハンマー麻痺での斬れ味・装填2枠上限、会心率4 / 5枠、槍龍の属性強化4枠、双剣龍の連続Keepは直接実機観測であり、弓の麻痺・睡眠のfamily availability、未観測の武器種・属性、ハンマー麻痺以外への斬れ味・装填上限の適用はcategory-level Production adoptionである。斬れ味・装填familyを3枠以上currentに持つKeepは未確認のまま扱う。この契約はPR-BでProduction Gogma ResetとGogma Counter Identificationへ実装済みであり、Prediction outputが変わるobservable Production RNG semantics changeとして `PRODUCTION_RNG_ENGINE_VERSION` を現在の `production-rng:c5-e7` へ更新した（旧versionのBuildCandidate / BuildListEntry / ProductionPlanは `rngEngineVersion` の差で `calculation_context_changed` になる）。`CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、`ExportRoot.schemaVersion`、`RngState.schemaVersion`、PRNG、seed derivation、10-step block、Counter semanticsは変更しない。所持武器・目標武器の選択肢とValidationをこのavailabilityへ揃える変更はPR-Cで実装済みであり、RNG Prediction output、`PRODUCTION_RNG_ENGINE_VERSION`（`production-rng:c5-e7` のまま）、schema、Master JSON / dataVersionは変更していない。
 
 ---
 
@@ -1014,7 +1004,7 @@ Practical同士の優劣判定は将来仕様とし、v1では実装しない。
 
 同一Route内で新規生成した武器を後続Operationから参照するRoute内武器参照型は将来仕様とし、v1では追加しない。
 
-C5-E2C2で、本書および詳細仕様のProduction Counter Gate契約を「exact persisted Gate不要、operation別active representative使用」へ正式改訂した。C5-E2C3 Active Gate runtime integrationでProduction adapter、Domain Prediction input、Capability、Search、Planner、Trace Replay、semantic Hashを本仕様へ同期し、`PRODUCTION_RNG_ENGINE_VERSION`を `production-rng:c5-e2`へ更新した。`RngState.counterGate`は互換・診断用に保持する。C5-E2C7でIdentification Wizard UIをRNG Setupへ接続し、実Browser Worker benchmarkはC5-E2C8で、Skill live-game verificationはC5-E2C9で完了した（[C5_E2C8_BROWSER_WORKER_BENCHMARK.md](./C5_E2C8_BROWSER_WORKER_BENCHMARK.md) / [C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md](./C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md)）。`supportsSeedSearch = false`を維持したまま、C5-E2C10 Production Identification activationが完了した（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）。
+C5-E2C2で、本書および詳細仕様のProduction Counter Gate契約を「exact persisted Gate不要、operation別active representative使用」へ正式改訂した。C5-E2C3 Active Gate runtime integrationでProduction adapter、Domain Prediction input、Capability、Search、Planner、Trace Replay、semantic Hashを本仕様へ同期し、`PRODUCTION_RNG_ENGINE_VERSION`を `production-rng:c5-e2`へ更新した。`RngState.counterGate`は互換・診断用に保持する。C5-E2C7でIdentification Wizard UIをRNG Setupへ接続し、実Browser Worker benchmarkはC5-E2C8で、Skill live-game verificationはC5-E2C9で完了した（[C5_E2C8_BROWSER_WORKER_BENCHMARK.md](./C5_E2C8_BROWSER_WORKER_BENCHMARK.md) / [C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md](./C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md)）。C5-E2C10 Production Identification activationが完了した（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）。
 
 
 Target妥協条件改訂ではDexie schema 2 / ExportRoot schema 2 / CalculationContext appSchemaVersion 6を採用する。旧Targetの妥協条件は推測変換せず解除し再設定を案内する。旧計算artifactは内容を保持してcalculation_context_changedでfail closedとする。詳細はTARGET_COMPROMISE_SEMANTICS.md。

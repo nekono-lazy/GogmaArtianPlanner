@@ -186,49 +186,34 @@ gogma_artian  -> 巨戟アーティア系
 
 目的。
 
-Base Seed、Gogma Counter、Skill CounterをProduction Prediction用に項目ごとに設定する。Counter Gateは通常UIに表示・編集欄を設けない。persisted `RngState.counterGate` はlegacy / diagnostic / import compatibility値として保持するだけであり、Production Predictionの必須項目またはauthorityではない。判明している値だけの適用を許可する。
+Base Seed、Gogma Counter、Skill CounterをProduction Prediction用に項目ごとに設定する。Counter Gateは通常UIに表示・編集欄を設けない。persisted `RngState.counterGate` はlegacy / diagnostic値として保持するだけであり、Production Predictionの必須項目またはauthorityではない。判明している値だけの適用を許可する。
 
-タブ。
+通常ユーザー向けのRNG取得方法は次の2つとする。外部toolの出力textを取り込む専用Import機能と、汎用Seed Search UIは提供しない。
 
-1. GogmaSeedFinder Import
-2. 直接入力
-3. 観測から検索
+1. 正確な値の手動入力（5.2）
+2. Production Skill-first Identification Wizard（5.4）
+
+画面構成。
+
+1. 保存済みのRNG状態: Base Seed / Gogma Counter / Skill Counterの確定状態だけを表示する。未保存の変更がある場合はその旨を示す
+2. 値が分からない場合: RNG同定の利用可否と、Wizardが特定する3値（Base Seed、調査開始前のSkill Counter、調査開始前のGogma Counter）、開始条件を示し、Wizard開始導線を置く
+3. 手動入力: Base Seed / Gogma Counter / Skill Counterとメモを編集し保存する
+4. 現在の入力内容で利用可能な機能: 現在値から導出したCapabilityと不足項目を表示する
+5. Production RNG Engine（技術情報）: 既定で折りたたみ、Engine mode / version とPrediction operationのsupportだけを表示する
 
 RNG同定の利用可否表示。
 
 - 通常ユーザー向けには、5.4 Identification Wizard（Production Identification）の
   Worker / application levelのavailabilityに基づいて「RNG同定: 利用可能」（利用不可なら
   「利用不可」と理由）と表示する
-- この表示を `RngEngineCapabilities.supportsSeedSearch` へ接続しない。`supportsSeedSearch = false`
-  は5.3の旧generic Seed Search API契約を表す値であり、RNG同定機能自体が未対応であることを
-  意味しない
-- 技術情報で旧flagを表示する場合は「旧generic Seed Search API: 未対応」のように、Identification
-  Wizardとは別の旧API契約であることを明示する。Debug Modeでは
-  「旧generic Seed Search API (supportsSeedSearch): false（未対応）」のように内部名を併記してよい
-- `supportsSeedSearch` capability自体とlegacy generic Seed Search API契約は変更しない
+- この表示をRngEngine capability flagへ接続しない。Engineの技術情報セクションが表すのは
+  Prediction operationのsupportだけであり、RNG同定機能の可否ではない
+- 技術情報セクションにも、Identificationの可否がEngine capabilityではなくアプリ側で
+  判定される旨を明記する
 
-## 5.1 GogmaSeedFinder Import
+5.1と5.3は欠番であり、5.2 / 5.4の番号はsrcコメントおよび他文書からの参照安定性のため
+そのまま維持する。
 
-入力。
-
-- 貼り付けテキスト
-
-操作。
-
-- 解析
-- 適用
-
-表示。
-
-- 読み取れた値
-- 読み取れなかった値
-- warning
-
-制約。
-
-- 読み取れた項目だけを選択して適用可能
-- 読み取れない項目があっても、他の項目の適用を妨げない
-- 適用した各KnownValueのsourceを `gogma_seed_finder_import` にする
 
 ## 5.2 直接入力
 
@@ -247,37 +232,6 @@ RNG同定の利用可否表示。
 - 空欄は既存値を削除しない。確定解除は別操作にする
 - Counter Gateの入力欄・状態表示・取得方法表示を通常UIに出さない。保存時はpersisted `RngState.counterGate` をそのまま保持し、null化、確定解除、source書き換え、代表値54 / 35の書込みを行わない
 - persisted Gateが200、54、または未設定でも、他の必要値とsupportが同じならProduction active Predictionのavailabilityと結果は同じである
-
-## 5.3 観測から検索（legacy generic Seed Search contract）
-
-本節は旧generic Seed Search UI案を記録する履歴契約であり、現在のProduction v1では提供しない。Production v1のRNG特定UIは5.4 Skill-first Identification Wizardを使用する。
-
-旧generic案ではSeed検索とCounter検索を別モードとして想定していた。Counter Gate候補を含むこのgeneric Seed Search contractはcurrent Production v1 Identification Wizardではsupersededであり、`supportsSeedSearch = false` のためinactiveとする。専用Wizardのavailability flagとして流用しない。
-
-入力。
-
-- 観測種別
-- 武器種
-- 属性（Gogma Bonus / Skillでは必須、Normal ArtianではEngineが不要なら省略可）
-- 復元ボーナスまたはスキル
-- Seed検索範囲またはCounter検索範囲
-- 既知Counter / Counter Gate候補
-
-結果。
-
-- 一致なし
-- 複数候補
-- 一意候補
-
-一意候補の場合のみ適用可能。
-
-- Seed検索ではBase Seed候補を表示する
-- Counter検索では既知Base Seedに対するCounter候補を表示する
-- Normal Artian、Gogma Bonus、Skillの観測を追加できる
-- 長時間処理中は進捗とキャンセルを表示する
-- RNG Engineが本番Seed検索未対応の場合は利用不可理由を表示し、推測結果を出さない
-- Gogma Bonus / Skill観測では属性未選択のまま検索できない
-- Normal Artian観測ではEngineが属性を使わない場合に属性入力を省略できる
 
 ## 5.4 Skill-first Identification Wizard
 
@@ -1364,9 +1318,7 @@ Undoはツール上の操作を戻すだけです。ゲーム内の操作は戻�
 - Master Data dataVersion
 - RNG Engine version
 - RNG同定の利用可否（5の表示ルールに従う。Identification Wizardのavailabilityに基づき、
-  `supportsSeedSearch` へ接続しない）
-- 旧generic Seed Search API（`supportsSeedSearch`）を表示する場合は
-  「旧generic Seed Search API: 未対応」と旧API契約であることを明示する
+  RngEngine capability flagへ接続しない）
 - App schemaVersion
 - Export
 - Import
@@ -1402,9 +1354,9 @@ Debug Mode ONの場合のみ表示。
 - Planner判定理由
 - 再計算理由
 - 使用中RngEngine名
-- RngEngine capability flag。`supportsSeedSearch` は
-  「旧generic Seed Search API (supportsSeedSearch): false（未対応）」のように旧API契約であることを
-  明示し、Identification Wizard（Production Identification）のavailabilityは別行として表示する
+- RngEngine capability flag。Prediction operationのsupportだけを表示し、
+  Identification Wizard（Production Identification）のavailabilityは
+  application levelの値として別行に表示する
 - Master Data version
 - 各StepのNormal / Skill / Gogma Counter before-after。conversionはSkillだけが+1でGogmaは同値として表示する
 
@@ -1518,8 +1470,8 @@ export interface SearchUiState {
 ## 19.2 Flow Test
 
 - RNG設定から候補検索まで進める
-- 観測検索でSeed検索とCounter検索の入力・結果が混在しない
-- Seed検索中に進捗表示とキャンセルが使える
+- Identification WizardのSTEP 1（Base Seed + 開始Skill Counter）とSTEP 2（開始Gogma Counter）の入力・結果が混在しない
+- Identification中に進捗表示とキャンセルが使える
 - 通常Counter未確定時に通常Route skipが表示される
 - 通常アーティアのnormal scope WeaponBonusDefinition不足時に `master_data_unavailable` の通常Route skipが表示される
 - 既存武器の復元ボーナスを維持したスキルのみ再付与Routeを表示できる

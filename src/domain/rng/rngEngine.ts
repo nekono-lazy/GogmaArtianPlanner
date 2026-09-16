@@ -18,7 +18,6 @@ import type {
 export type NormalizedSeed = string
 
 export interface RngEngineCapabilities {
-  supportsSeedSearch: boolean
   supportsNormalArtianPrediction: boolean
   supportsGogmaPrediction: boolean
   supportsSkillPrediction: boolean

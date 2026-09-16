@@ -538,7 +538,6 @@ export interface MaterialRequirement {
 export interface RngCapabilities {
   canPredictGogma: boolean
   canPredictSkills: boolean
-  canSearchSeed: boolean
   canSearchNormalArtian: boolean
   normalArtianSearchableCounterIds: string[]
   canRunPlanner: boolean

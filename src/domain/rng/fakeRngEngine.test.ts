@@ -6,7 +6,6 @@ function fixtures(): FakeRngFixtures {
   return {
     version: 'test-v1',
     capabilities: {
-      supportsSeedSearch: false,
       supportsNormalArtianPrediction: false,
       supportsGogmaPrediction: false,
       supportsSkillPrediction: false,
@@ -43,7 +42,7 @@ describe('FakeRngEngine', () => {
   it('reports prediction support from fixture capabilities without modeling production coverage', () => {
     const engine = new FakeRngEngine({
       ...fixtures(),
-      capabilities: { supportsSeedSearch: false, supportsNormalArtianPrediction: true, supportsGogmaPrediction: true, supportsSkillPrediction: false, supportsKeepBonusesPrediction: false },
+      capabilities: { supportsNormalArtianPrediction: true, supportsGogmaPrediction: true, supportsSkillPrediction: false, supportsKeepBonusesPrediction: false },
     })
     expect(engine.getPredictionSupport({ type: 'normal_artian', weaponTypeId: 'weapon.unknown', elementId: 'element.unknown', rarity: 8 })).toEqual({ supported: true })
     expect(engine.getPredictionSupport({ type: 'skill', weaponTypeId: 'weapon.unknown', elementId: 'element.unknown' })).toEqual({ supported: false, reason: 'engine_capability_unavailable' })

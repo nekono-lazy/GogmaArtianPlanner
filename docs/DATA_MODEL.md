@@ -193,7 +193,7 @@ constraintを黙って捨てることになるため、旧1..10の全計算artif
 benchmark入力のruntime creatorで共用する。永続モデル移行は独立してDexie
 `DATABASE_SCHEMA_VERSION = 4`、AppSettingsは `schemaVersion = 1` のままとする。Calculation semantics / artifact
 validity境界とDexie schemaは別の概念であり、片方の更新はもう片方の更新を意味しない。
-gameVersion、Master Data version、`supportsSeedSearch = false` は維持する。
+gameVersion、Master Data versionは維持する。
 `PRODUCTION_RNG_ENGINE_VERSION` はこのcheckpoint境界では `production-rng:c5-e2` のまま維持し、
 その後の通常アーティア抽選上限修正（[RNG_SPEC.md](./RNG_SPEC.md) 6.3.1）で `production-rng:c5-e3` へ、
 さらに近接武器Melee support拡張（[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.14）で
@@ -286,7 +286,6 @@ PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2を変更しなかった。
 
 ```ts
 export type RngStateSource =
-  | "gogma_seed_finder_import"
   | "manual"
   | "observation";
 
@@ -432,7 +431,7 @@ export interface RngState {
 - 各項目の確定状態と取得元は独立して保持する
 - RngState全体の `isConfirmed` は持たない
 - `gogmaCounter` / `skillCounter` はDomainが追跡するCounterであり、Counter Gate適用後のeffective PRNG blockを保存しない。Gate未満の保存Counter内部挙動は未確認のため推測migrationしない
-- `counterGate` はlegacy/manual/import compatibility、将来のExport / Import round-trip、diagnostic / reference情報のために保持する。v1でschema migrationまたはfield削除を行わない
+- `counterGate` はlegacy / manual compatibility、将来のExport / Import round-trip、diagnostic / reference情報のために保持する。v1でschema migrationまたはfield削除を行わない
 - `counterGate.value` と `counterGate.isConfirmed` はProduction Skill / Gogma Prediction、Candidate Search、Planner、Trace Replayのavailabilityまたは結果のsemantic authorityにしない
 - Identification adoptionはBase Seed、Skill Counter、Gogma Counterのsourceを既存の `observation` とし、`counterGate`を変更しない。新しい `identified` sourceはv1必須ではない
 
@@ -442,7 +441,6 @@ Capabilityは保存せず、現在値と実行対象から純粋関数で導出�
 export interface RngCapabilities {
   canPredictGogma: boolean;
   canPredictSkills: boolean;
-  canSearchSeed: boolean;
   canSearchNormalArtian: boolean;
   normalArtianSearchableCounterIds: string[];
   canRunPlanner: boolean;

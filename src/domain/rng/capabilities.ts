@@ -146,7 +146,6 @@ export function deriveRngCapabilities(
   return {
     canPredictGogma,
     canPredictSkills,
-    canSearchSeed: engineCapabilities.supportsSeedSearch,
     canSearchNormalArtian: normalArtianSearchableCounterIds.length > 0,
     normalArtianSearchableCounterIds,
     canRunPlanner: missingRequirements.size === 0,

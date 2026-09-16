@@ -3910,7 +3910,7 @@ Planner domainとTrace ReplayはProduction RNGのinput-level support契約へ対
 含めない。Client、Plannerのcurrent `CalculationContext`、Worker内Engineは
 `PRODUCTION_RNG_ENGINE_VERSION` を共通authorityとして使用する。
 
-C5-E2C3でactive Gate契約をPlanner validation、Trace Replay、expected-state hashへ同期済みである。exact persisted Gateはoperation preflightまたはReplay requirementではなく、expected-state hashにも含めない。Production adapterのruntime policy変更と同時に `PRODUCTION_RNG_ENGINE_VERSION`を `production-rng:c5-e2`へbumpした。これはIdentification Production UIのactivationを意味せず、`supportsSeedSearch = false`を維持する。
+C5-E2C3でactive Gate契約をPlanner validation、Trace Replay、expected-state hashへ同期済みである。exact persisted Gateはoperation preflightまたはReplay requirementではなく、expected-state hashにも含めない。Production adapterのruntime policy変更と同時に `PRODUCTION_RNG_ENGINE_VERSION`を `production-rng:c5-e2`へbumpした。これはIdentification Production UIのactivationを意味しない。
 
 B8-D1でconstrained re-search用のrequest kindを追加した。ordinary `create_plan` /
 `create_plan_result` は変更していない。実装名称の対応は次のとおりで、`cancel`、

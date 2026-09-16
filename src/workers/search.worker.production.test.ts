@@ -138,7 +138,6 @@ describe('Production Candidate Search Worker composition', () => {
     expect(engine).toBeInstanceOf(ProductionRngEngine)
     expect(engine).not.toBeInstanceOf(UnavailableRngEngine)
     expect(engine.version).toBe(PRODUCTION_RNG_ENGINE_VERSION)
-    expect(engine.capabilities.supportsSeedSearch).toBe(false)
   })
 
   it('searches a game-verified Bow Fire Normal route with Production RNG', async () => {

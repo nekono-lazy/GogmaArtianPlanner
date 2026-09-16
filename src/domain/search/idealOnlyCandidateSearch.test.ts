@@ -82,7 +82,6 @@ function createEngine(
   const fixtures: FakeRngFixtures = {
     version: 'ideal-only-search',
     capabilities: {
-      supportsSeedSearch: false,
       supportsNormalArtianPrediction: false,
       supportsGogmaPrediction: true,
       supportsSkillPrediction: true,

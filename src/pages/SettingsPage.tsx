@@ -113,16 +113,12 @@ export function SettingsPage() {
             )}
             <VersionRow label="RNG予測エンジン" value={productionRngRuntime.mode} />
             <VersionRow label="Engine version" value={productionRngRuntime.version} />
-            {/* RNG同定 is the Identification Wizard availability (application
-                level); the legacy generic Seed Search API flag is a different
-                contract and is named as such (`docs/UI_FLOW.md` 5 / 14). */}
+            {/* RNG同定 is the Identification Wizard availability, decided at the
+                application level and never by an RngEngine capability flag
+                (`docs/UI_FLOW.md` 5 / 14). */}
             <VersionRow
               label="RNG同定"
               value={identificationAvailability.isAvailable ? '利用可能' : `利用不可（${productionIdentificationUnavailableReasonLabels[identificationAvailability.reason]}）`}
-            />
-            <VersionRow
-              label="旧generic Seed Search API"
-              value={productionRngRuntime.capabilities.supportsSeedSearch ? '対応' : '未対応'}
             />
           </Box>
         </SettingsSection>

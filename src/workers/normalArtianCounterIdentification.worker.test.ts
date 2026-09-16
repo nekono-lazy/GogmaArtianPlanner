@@ -259,10 +259,9 @@ describe('Normal Artian Counter Identification Worker', () => {
     expect(controller.isCancelled('normal-identification.attached')).toBe(false)
   })
 
-  it('creates a Worker-local Production Engine without activating Seed Search capability', () => {
+  it('creates a Worker-local Production Engine with Normal Artian prediction support', () => {
     const engine = createProductionNormalArtianCounterIdentificationRngEngine()
     expect(engine).toBeInstanceOf(ProductionRngEngine)
     expect(engine.capabilities.supportsNormalArtianPrediction).toBe(true)
-    expect(engine.capabilities.supportsSeedSearch).toBe(false)
   })
 })

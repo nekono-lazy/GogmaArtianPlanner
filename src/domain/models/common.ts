@@ -34,10 +34,7 @@ export type SeriesSkillId = string
 export type GroupSkillId = string
 export type MaterialId = string
 
-export type RngStateSource =
-  | 'gogma_seed_finder_import'
-  | 'manual'
-  | 'observation'
+export type RngStateSource = 'manual' | 'observation'
 
 export const V1_NORMAL_ARTIAN_RARITY = 8 as const
 export type NormalArtianRarity = typeof V1_NORMAL_ARTIAN_RARITY
