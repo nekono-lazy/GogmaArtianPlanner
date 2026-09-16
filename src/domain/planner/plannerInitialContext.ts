@@ -1,3 +1,4 @@
+import { isTargetWeaponPlanningEligible } from '../models/domainRules'
 import type {
   BuildListEntry,
   BuildListEntryId,
@@ -136,7 +137,7 @@ export function preparePlannerInitialContext(
     .filter((entry) => routePlans.unitPlans.has(entry.id))
     .sort((left, right) => compareStableStrings(left.id, right.id))
   const targets = input.targetWeapons
-    .filter(({ isEnabled }) => isEnabled)
+    .filter(isTargetWeaponPlanningEligible)
     .sort((left, right) => compareStableStrings(left.id, right.id))
   const targetsById = new Map(targets.map((target) => [target.id, target]))
   // Violations already failed the input closed in validation, so only the

@@ -1,3 +1,4 @@
+import { isTargetWeaponPlanningEligible } from '../models/domainRules'
 import type {
   BuildListEntry,
   BuildListEntryId,
@@ -117,7 +118,7 @@ export function evaluatePlannerSearchState(
   context: StateScoreContext,
 ): number {
   const targets = [...context.targetsById.values()].filter(
-    ({ isEnabled }) => isEnabled,
+    isTargetWeaponPlanningEligible,
   )
   const achieved = achievedSatisfactionScore(state, targets)
   const progress = progressPotentialScore(

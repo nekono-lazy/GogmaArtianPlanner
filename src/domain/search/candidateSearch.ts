@@ -1,3 +1,4 @@
+import { isTargetWeaponPlanningEligible } from '../models/domainRules'
 import { TargetSearchScheduler } from './targetSearchScheduler'
 import type { BuildCandidate, RestorationBonusSet, RouteKind, TargetWeapon } from '../models/publicTypes'
 import type { RngEngine } from '../rng/rngEngine'
@@ -69,9 +70,9 @@ function uniqueSkippedRoutes(routes: readonly SkippedRoute[]): SkippedRoute[] {
  * The one TargetWeapon this request searches, or a warning explaining why it
  * cannot be searched (`docs/SEARCH_SPEC.md` 4.1).
  *
- * A disabled Target is refused rather than silently skipped: the Search UI only
- * offers enabled Targets, so reaching one here means the request no longer
- * matches current data.
+ * A disabled or completed Target is refused rather than silently skipped: the
+ * Search UI only offers enabled active Targets, so reaching one here means the
+ * request no longer matches current data.
  */
 function selectedTarget(
   input: CandidateSearchInput,
@@ -87,13 +88,15 @@ function selectedTarget(
       }],
     }
   }
-  if (!target.isEnabled) {
+  if (!isTargetWeaponPlanningEligible(target)) {
     return {
       target: null,
       warnings: [{
         targetWeaponId: target.id,
         severity: 'warning',
-        message: `TargetWeapon '${target.id}' is disabled and was not searched.`,
+        message: target.lifecycleStatus === 'active'
+          ? `TargetWeapon '${target.id}' is disabled and was not searched.`
+          : `TargetWeapon '${target.id}' is completed and was not searched.`,
       }],
     }
   }

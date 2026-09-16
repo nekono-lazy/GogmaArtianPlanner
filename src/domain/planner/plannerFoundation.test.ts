@@ -1,6 +1,6 @@
 import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../models/publicTypes'
 import { describe, expect, it } from 'vitest'
-import { createTargetDefinitionHash } from '../buildList'
+import { createTargetDefinitionHash, evaluateBuildListEntryStaleness } from '../buildList'
 import {
   createReferencedOwnedWeaponsHash,
   createSearchStateHash,
@@ -27,6 +27,7 @@ import {
   canUseAsResetSkillsSource,
   consumeOwnedNormalForConversion,
   createInitialPlannerSearchState,
+  createPlannerSearchStateSemanticKey,
   createSimulatedInventory,
   deriveTargetSatisfaction,
   type PlannerDependencies,
@@ -173,6 +174,80 @@ describe('Planner current-state entry validation', () => {
     context.input.calculationContext.masterDataVersion += 1
     expect(validatePlannerInput(context.input, context.dependencies).warnings[0].kind)
       .toBe('calculation_context_incompatible')
+  })
+
+  it('excludes a completed Target Entry from Planner input without staling it', () => {
+    const { input, dependencies } = fixture()
+    expect(validatePlannerInput(input, dependencies).validBuildListEntries).toHaveLength(1)
+    const entryBefore = structuredClone(input.buildListEntries[0])
+    input.targetWeapons[0] = {
+      ...input.targetWeapons[0],
+      lifecycleStatus: 'completed',
+      completedAt: '2026-09-17T00:00:00.000Z',
+      completedByProductionPlanId: null,
+    }
+
+    const result = validatePlannerInput(input, dependencies)
+
+    expect(result.validBuildListEntries).toEqual([])
+    expect(result.excludedBuildListEntries).toEqual([
+      expect.objectContaining({ reason: 'references a completed TargetWeapon.' }),
+    ])
+    // Its own diagnostic kind, never the re-search (stale) warning.
+    expect(result.warnings.map(({ kind }) => kind)).toEqual(['completed_target_excluded'])
+    // Completion is an input exclusion, never a staleness judgment: the Entry
+    // is not target_definition_changed and its persisted flags are untouched.
+    const staleness = evaluateBuildListEntryStaleness(input.buildListEntries[0], {
+      target: input.targetWeapons[0],
+      rngState: input.rngState,
+      normalCounters: input.normalCounters,
+      ownedWeapons: input.ownedWeapons,
+      calculationContext: input.calculationContext,
+    })
+    expect(staleness.isStale).toBe(false)
+    expect(staleness.staleReasons).toEqual([])
+    expect(input.buildListEntries[0]).toEqual(entryBefore)
+    // Neither Target satisfaction nor the typed termination counts it.
+    expect(deriveTargetSatisfaction(input.targetWeapons, input.ownedWeapons, input.master)).toEqual([])
+  })
+
+  it('keeps a disabled or missing Target distinct from a completed one', () => {
+    const disabled = fixture()
+    disabled.input.targetWeapons[0].isEnabled = false
+    const disabledResult = validatePlannerInput(disabled.input, disabled.dependencies)
+    expect(disabledResult.validBuildListEntries).toEqual([])
+    expect(disabledResult.excludedBuildListEntries).toEqual([
+      expect.objectContaining({ reason: 'references a disabled TargetWeapon.' }),
+    ])
+    expect(disabledResult.warnings.map(({ kind }) => kind)).toEqual(['build_list_entry_stale'])
+
+    const missing = fixture()
+    missing.input.targetWeapons = []
+    const missingResult = validatePlannerInput(missing.input, missing.dependencies)
+    expect(missingResult.excludedBuildListEntries).toEqual([
+      expect.objectContaining({ reason: 'references a missing TargetWeapon.' }),
+    ])
+    expect(missingResult.warnings.map(({ kind }) => kind)).toContain('build_list_entry_stale')
+    expect(missingResult.warnings.map(({ kind }) => kind)).not.toContain('completed_target_excluded')
+  })
+
+  it('keeps executionInProgress out of the Planner semantic inventory', () => {
+    const { input, dependencies } = fixture()
+    const keyFor = (plannerInput: PlannerInput) => {
+      const validation = validatePlannerInput(plannerInput, dependencies)
+      const initial = createInitialPlannerSearchState(plannerInput, validation.validBuildListEntries)
+      return createPlannerSearchStateSemanticKey(initial.state!)
+    }
+    const inProgress = structuredClone(input)
+    inProgress.ownedWeapons[0] = {
+      ...inProgress.ownedWeapons[0],
+      executionInProgress: {
+        productionPlanId: 'plan.foundation.running' as never,
+        startedAt: '2026-09-17T00:00:00.000Z',
+      },
+    }
+    expect(validatePlannerInput(inProgress, dependencies).validBuildListEntries).toHaveLength(1)
+    expect(keyFor(inProgress)).toBe(keyFor(input))
   })
 
   it('does not stale an entry for unrelated or presentation-only OwnedWeapon changes', () => {

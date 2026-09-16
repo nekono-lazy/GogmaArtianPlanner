@@ -1,3 +1,4 @@
+import { isTargetWeaponPlanningEligible } from '../../models/domainRules'
 import type {
   DomainValidationIssue,
   DomainValidationResult,
@@ -130,10 +131,12 @@ export function assertConstrainedCandidateSearchInput(
       path: 'targetWeaponId',
       message: `TargetWeapon '${input.targetWeaponId}' is not part of the constrained search origin.`,
     })
-  } else if (!target.isEnabled) {
+  } else if (!isTargetWeaponPlanningEligible(target)) {
     issues.push({
       path: 'targetWeaponId',
-      message: `TargetWeapon '${input.targetWeaponId}' is disabled.`,
+      message: target.lifecycleStatus === 'active'
+        ? `TargetWeapon '${input.targetWeaponId}' is disabled.`
+        : `TargetWeapon '${input.targetWeaponId}' is completed.`,
     })
   } else {
     // The structural check already ran over every Target above, so only the

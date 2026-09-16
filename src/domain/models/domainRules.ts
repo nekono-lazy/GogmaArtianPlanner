@@ -2,7 +2,7 @@ import type {
   CalculationContext,
   RestorationBonusSet,
 } from './common'
-import type { OwnedWeapon, SkillCondition } from './entities'
+import type { OwnedWeapon, SkillCondition, TargetWeapon } from './entities'
 
 function bonusKey(bonus: RestorationBonusSet[number]): string {
   return JSON.stringify([bonus.bonusTypeId, bonus.bonusRankId])
@@ -106,6 +106,19 @@ export function isBuildResultCalculationContextCompatible(
         COMPATIBLE_BUILD_RESULT_APP_SCHEMA_VERSIONS.get(current.appSchemaVersion) ?? []
       ).includes(result.appSchemaVersion))
   )
+}
+
+/**
+ * Whether Candidate Search and the Planner treat this Target as a planning
+ * target: it is enabled and still `active`. A `completed` Target keeps its
+ * record but is excluded from both inputs (`docs/DATA_MODEL.md` 8.1). This is
+ * an input exclusion, never a staleness judgment: the BuildListEntries of a
+ * completed Target are not stale.
+ */
+export function isTargetWeaponPlanningEligible(
+  target: Pick<TargetWeapon, 'isEnabled' | 'lifecycleStatus'>,
+): boolean {
+  return target.isEnabled && target.lifecycleStatus === 'active'
 }
 
 export function canResetBonuses(weapon: OwnedWeapon): boolean {

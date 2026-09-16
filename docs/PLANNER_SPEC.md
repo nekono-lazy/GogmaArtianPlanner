@@ -5250,7 +5250,10 @@ staleness semantics、PlanStep / reserve semantics、Expected execution state、
 
 - 現行schemaとImport互換を監査し、`CURRENT_CALCULATION_APP_SCHEMA_VERSION`、Dexie
   `DATABASE_SCHEMA_VERSION`、`ExportRoot.schemaVersion` の必要なversion境界を確定する。
-  本仕様PRでは実コードのversionを変更しない
+  本仕様PRでは実コードのversionを変更しない。最初の実装PR（永続Entity基盤）でDexie
+  `DATABASE_SCHEMA_VERSION` を5、`ExportRoot.schemaVersion` を7へ更新し、
+  `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は計算意味を切り替える後続PRまで11のまま維持した
+  （[DATA_MODEL.md](./DATA_MODEL.md) 3.5 / 14.2 / 15）
 - 既存データを推測migrationして意味を変えない。所持Ideal武器の存在からTargetを
   `completed` と推測しない。既存OwnedWeaponを作成中と推測しない
 - 旧契約のProductionPlan（独立 `reserve_weapon` Step、旧expected state）はexact persisted

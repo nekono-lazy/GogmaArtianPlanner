@@ -160,6 +160,29 @@ describe('Ideal-only Candidate Search', () => {
     ])
   })
 
+  it('refuses a completed Target with a notice instead of a Candidate', async () => {
+    const input = existingGogmaInput(2)
+    input.targetWeapons[0] = {
+      ...input.targetWeapons[0],
+      lifecycleStatus: 'completed',
+      completedAt: SEARCH_FIXTURE_TIME,
+      completedByProductionPlanId: null,
+    }
+    const engine = createEngine(input, { resets: [practicalBonuses(), idealBonuses()] })
+
+    const result = await searchCandidates(input, engine, deterministicExecution)
+
+    expect(result.targetResult.candidate).toBeNull()
+    expect(result.targetResult.searchedRoutes).toEqual([])
+    expect(result.warnings).toEqual([
+      expect.objectContaining({
+        targetWeaponId: input.targetWeapons[0].id,
+        severity: 'warning',
+        message: expect.stringContaining('completed'),
+      }),
+    ])
+  })
+
   it('still applies routeFilter to the searched and skipped Route kinds', async () => {
     const input = existingGogmaInput(2)
     const engine = createEngine(input, { resets: [practicalBonuses(), idealBonuses()] })

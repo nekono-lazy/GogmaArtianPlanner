@@ -38,6 +38,7 @@ function compatibleNormal(id = 'owned.preferred.normal'): OwnedNormalArtianWeapo
     groupSkillId: null,
     status: null,
     isProtected: false,
+    executionInProgress: null,
     memo: null,
     createdAt: base.createdAt,
     updatedAt: base.updatedAt,

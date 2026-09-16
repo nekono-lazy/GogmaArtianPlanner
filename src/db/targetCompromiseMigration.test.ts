@@ -48,8 +48,8 @@ describe('fail-closed Target compromise migration', () => {
     try {
       await db.open()
       const migrated = await db.targetWeapons.get(legacy.id)
-      expect(db.verno).toBe(4)
-      // v1 -> v2 -> v3 -> v4 runs in order: the compromise migration first,
+      expect(db.verno).toBe(5)
+      // v1 -> v2 -> v3 -> v4 -> v5 runs in order: the compromise migration first,
       // then the preferred owned weapon field, which starts unset for every
       // Target, then the owned Gogma status rename.
       expect(migrated).toEqual({

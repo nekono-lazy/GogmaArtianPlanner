@@ -813,6 +813,8 @@ function createReservedWeapon(
     // existing Ideal contract requires (`docs/DATA_MODEL.md` 3.2).
     status: 'ideal',
     isProtected: true,
+    // Non-semantic Execution state; Planner calculation never sets it.
+    executionInProgress: null,
     memo: null,
     createdAt: candidate.createdAt,
     updatedAt: candidate.createdAt,

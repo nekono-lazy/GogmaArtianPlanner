@@ -11,7 +11,7 @@ import {
   CURRENT_CALCULATION_APP_SCHEMA_VERSION,
   V1_NORMAL_ARTIAN_RARITY,
 } from './common'
-import { improvementPreferences } from './entities'
+import { improvementPreferences, targetWeaponLifecycleStatuses } from './entities'
 import type {
   AlternativeBonusRule,
   PracticalBonusCondition,
@@ -29,10 +29,12 @@ import { isBlindCreateNormalArtianOperation } from './entities'
 import type {
   ActualResult,
   ExecutionHistory,
+  ExecutionSavePoint,
   ExpectedPlanState,
   PlanStep,
   ProductionPlan,
 } from './planning'
+import { executionSavePointIdForPlan } from './planning'
 import {
   areRestorationBonusSetsEqual,
   areRestorationBonusSlotsEqual,
@@ -330,7 +332,35 @@ export function validateOwnedWeapon(
   } else if (!['unclassified', 'practical', 'ideal'].includes(weapon.status)) {
     addIssue(issues, 'status', 'invalid_literal', 'Gogma Artian weapons require a valid status.')
   }
+  validateOwnedWeaponExecutionInProgress(weapon.executionInProgress, issues)
   return result(issues)
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+/**
+ * `executionInProgress` must be present: `null` or a Plan ID plus a start time.
+ * A missing field is never read as `null`, because that would silently accept a
+ * record whose shape predates the Execution lifecycle.
+ */
+function validateOwnedWeaponExecutionInProgress(
+  value: unknown,
+  issues: DomainValidationIssue[],
+) {
+  if (value === null) return
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    addIssue(issues, 'executionInProgress', 'invalid_structure', 'executionInProgress must be null or an in-progress record.')
+    return
+  }
+  const record = value as Record<string, unknown>
+  if (!isNonEmptyString(record.productionPlanId)) {
+    addIssue(issues, 'executionInProgress.productionPlanId', 'invalid_id', 'ID must be a non-empty string.')
+  }
+  if (!isNonEmptyString(record.startedAt)) {
+    addIssue(issues, 'executionInProgress.startedAt', 'invalid_structure', 'startedAt must be an ISO date-time string.')
+  }
 }
 
 function validateBonusCondition(
@@ -388,6 +418,44 @@ function validateSkillCondition(
   }
 }
 
+/**
+ * Target lifecycle combinations (`docs/DATA_MODEL.md` 8.1). An active Target
+ * carries no completion metadata; a completed one carries its completion time,
+ * an optional completing Plan (null for a user completion with an owned
+ * weapon), and no preferred owned weapon. A missing field is never read as its
+ * default.
+ */
+function validateTargetWeaponLifecycle(
+  target: TargetWeapon,
+  issues: DomainValidationIssue[],
+) {
+  if (!(targetWeaponLifecycleStatuses as readonly unknown[]).includes(target.lifecycleStatus)) {
+    addIssue(issues, 'lifecycleStatus', 'invalid_literal', 'Target lifecycleStatus must be active or completed.')
+    return
+  }
+  if (target.completedAt !== null && typeof target.completedAt !== 'string') {
+    addIssue(issues, 'completedAt', 'invalid_structure', 'completedAt must be null or an ISO date-time string.')
+  }
+  if (target.completedByProductionPlanId !== null) {
+    validateId(target.completedByProductionPlanId, 'completedByProductionPlanId', issues)
+  }
+  if (target.lifecycleStatus === 'active') {
+    if (target.completedAt !== null) {
+      addIssue(issues, 'completedAt', 'invalid_state', 'An active Target cannot have completedAt.')
+    }
+    if (target.completedByProductionPlanId !== null) {
+      addIssue(issues, 'completedByProductionPlanId', 'invalid_state', 'An active Target cannot have completedByProductionPlanId.')
+    }
+    return
+  }
+  if (!isNonEmptyString(target.completedAt)) {
+    addIssue(issues, 'completedAt', 'invalid_state', 'A completed Target requires completedAt.')
+  }
+  if (target.preferredOwnedWeaponId !== null) {
+    addIssue(issues, 'preferredOwnedWeaponId', 'invalid_state', 'A completed Target cannot prefer an owned weapon.')
+  }
+}
+
 export function validateTargetWeapon(
   target: TargetWeapon,
 ): DomainValidationResult {
@@ -404,6 +472,7 @@ export function validateTargetWeapon(
   if (target.preferredOwnedWeaponId !== null) {
     validateId(target.preferredOwnedWeaponId, 'preferredOwnedWeaponId', issues)
   }
+  validateTargetWeaponLifecycle(target, issues)
   appendIssues(issues, 'idealBonuses', validateRestorationBonusSet(target.idealBonuses))
   if (!Array.isArray(target.practicalBonusConditions) || !Array.isArray(target.alternativeBonusRules) || 'practicalAlternativeGroups' in target) {
     addIssue(issues, 'alternativeBonusRules', 'invalid_structure', '旧条件または不正な妥協条件です。移行・再設定が必要です。')
@@ -1556,6 +1625,111 @@ export function validateExecutionHistory(
   history.undoSnapshot.addedOwnedWeaponIds.forEach((id, index) =>
     validateId(id, `undoSnapshot.addedOwnedWeaponIds[${index}]`, issues),
   )
+  return result(issues)
+}
+
+/**
+ * Structural validation of one game save point (`docs/DATA_MODEL.md` 12.1).
+ *
+ * Checks the stable one-per-Plan ID, the embedded entity snapshots, and that
+ * the snapshot Plan is the save point's own Plan. References to persisted
+ * ProductionPlans and ExecutionHistory need the whole collection and belong to
+ * `validateExecutionSavePointReferences()`.
+ */
+export function validateExecutionSavePoint(
+  savePoint: ExecutionSavePoint,
+): DomainValidationResult {
+  const issues: DomainValidationIssue[] = []
+  validateId(savePoint.id, 'id', issues)
+  validateId(savePoint.productionPlanId, 'productionPlanId', issues)
+  if (
+    isNonEmptyString(savePoint.productionPlanId) &&
+    savePoint.id !== executionSavePointIdForPlan(savePoint.productionPlanId)
+  ) {
+    addIssue(issues, 'id', 'invalid_id', 'An ExecutionSavePoint ID must be derived from its productionPlanId.')
+  }
+  if (savePoint.lastExecutionHistoryId !== null) {
+    validateId(savePoint.lastExecutionHistoryId, 'lastExecutionHistoryId', issues)
+  }
+  if (!isNonEmptyString(savePoint.recordedAt)) {
+    addIssue(issues, 'recordedAt', 'invalid_structure', 'recordedAt must be an ISO date-time string.')
+  }
+  if (
+    !Array.isArray(savePoint.normalCounters) ||
+    !Array.isArray(savePoint.ownedWeapons) ||
+    !Array.isArray(savePoint.targetWeapons) ||
+    typeof savePoint.rngState !== 'object' || savePoint.rngState === null ||
+    typeof savePoint.productionPlan !== 'object' || savePoint.productionPlan === null
+  ) {
+    addIssue(issues, '', 'invalid_structure', 'ExecutionSavePoint snapshot is incomplete.')
+    return result(issues)
+  }
+  appendIssues(issues, 'rngState', validateRngState(savePoint.rngState))
+  savePoint.normalCounters.forEach((counter, index) =>
+    appendIssues(issues, `normalCounters[${index}]`, validateNormalArtianCounter(counter)),
+  )
+  savePoint.ownedWeapons.forEach((weapon, index) =>
+    appendIssues(issues, `ownedWeapons[${index}]`, validateOwnedWeapon(weapon)),
+  )
+  savePoint.targetWeapons.forEach((target, index) =>
+    appendIssues(issues, `targetWeapons[${index}]`, validateTargetWeapon(target)),
+  )
+  const hasDuplicates = (ids: readonly string[]) => new Set(ids).size !== ids.length
+  if (hasDuplicates(savePoint.normalCounters.map(({ id }) => id))) {
+    addIssue(issues, 'normalCounters', 'invalid_id', 'Snapshot NormalArtianCounter IDs must be unique.')
+  }
+  if (hasDuplicates(savePoint.ownedWeapons.map(({ id }) => id))) {
+    addIssue(issues, 'ownedWeapons', 'invalid_id', 'Snapshot OwnedWeapon IDs must be unique.')
+  }
+  if (hasDuplicates(savePoint.targetWeapons.map(({ id }) => id))) {
+    addIssue(issues, 'targetWeapons', 'invalid_id', 'Snapshot TargetWeapon IDs must be unique.')
+  }
+  appendIssues(issues, 'productionPlan', validateProductionPlan(savePoint.productionPlan))
+  if (savePoint.productionPlan.id !== savePoint.productionPlanId) {
+    addIssue(issues, 'productionPlan.id', 'inconsistent_snapshot', 'The snapshot ProductionPlan must be the save point Plan.')
+  }
+  return result(issues)
+}
+
+/**
+ * Collection-level references of game save points: each belongs to an existing
+ * Plan, at most one exists per Plan, and a non-null `lastExecutionHistoryId`
+ * names an existing history entry of that same Plan.
+ */
+export function validateExecutionSavePointReferences(
+  savePoints: readonly ExecutionSavePoint[],
+  productionPlans: readonly Pick<ProductionPlan, 'id'>[],
+  executionHistory: readonly Pick<ExecutionHistory, 'id' | 'planId'>[],
+): DomainValidationResult {
+  const issues: DomainValidationIssue[] = []
+  const planIds = new Set<string>(productionPlans.map(({ id }) => id))
+  const historyById = new Map<string, Pick<ExecutionHistory, 'id' | 'planId'>>(
+    executionHistory.map((history) => [history.id, history]),
+  )
+  const seenPlans = new Set<string>()
+  const seenIds = new Set<string>()
+  savePoints.forEach((savePoint, index) => {
+    const path = `[${index}]`
+    if (seenIds.has(savePoint.id)) {
+      addIssue(issues, `${path}.id`, 'invalid_id', 'ExecutionSavePoint IDs must be unique.')
+    }
+    seenIds.add(savePoint.id)
+    if (seenPlans.has(savePoint.productionPlanId)) {
+      addIssue(issues, `${path}.productionPlanId`, 'invalid_state', 'A ProductionPlan can have at most one ExecutionSavePoint.')
+    }
+    seenPlans.add(savePoint.productionPlanId)
+    if (!planIds.has(savePoint.productionPlanId)) {
+      addIssue(issues, `${path}.productionPlanId`, 'invalid_reference', 'ExecutionSavePoint must reference an existing ProductionPlan.')
+    }
+    if (savePoint.lastExecutionHistoryId !== null) {
+      const history = historyById.get(savePoint.lastExecutionHistoryId)
+      if (!history) {
+        addIssue(issues, `${path}.lastExecutionHistoryId`, 'invalid_reference', 'lastExecutionHistoryId must reference an existing ExecutionHistory.')
+      } else if (history.planId !== savePoint.productionPlanId) {
+        addIssue(issues, `${path}.lastExecutionHistoryId`, 'invalid_reference', 'lastExecutionHistoryId must belong to the save point Plan.')
+      }
+    }
+  })
   return result(issues)
 }
 
