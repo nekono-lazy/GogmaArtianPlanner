@@ -337,6 +337,73 @@ describe('Export schema 7', () => {
     expect(prepareExportRootForImport({ ...exportRoot(), executionSavePoints: undefined }).ok).toBe(false)
   })
 
+  // Import input is untrusted: a malformed element must come back as an
+  // invalid_structure issue from an ordinary call, never as an exception.
+  const expectStructureFailure = (
+    run: () => ReturnType<typeof prepareExportRootForImport>,
+    path: string,
+  ) => {
+    let result: ReturnType<typeof prepareExportRootForImport> | undefined
+    expect(() => { result = run() }).not.toThrow()
+    expect(result?.ok).toBe(false)
+    if (!result || result.ok) return
+    expect(result.issues).toContainEqual(expect.objectContaining({ path, code: 'invalid_structure' }))
+  }
+
+  it.each([
+    ['ownedWeapons: [null]', { ownedWeapons: [null] }, 'ownedWeapons[0]'],
+    ['targetWeapons: [123]', { targetWeapons: [123] }, 'targetWeapons[0]'],
+    ['ownedWeapons: [[]]', { ownedWeapons: [[]] }, 'ownedWeapons[0]'],
+    ['targetWeapons: ["invalid"]', { targetWeapons: ['invalid'] }, 'targetWeapons[0]'],
+  ])('fails schema 6 %s closed without throwing', (_label, fields, path) => {
+    const malformed = { ...schema6Root(), ...fields } as unknown as ExportRootV6
+    // The exported migration itself ...
+    expectStructureFailure(() => migrateExportRootV6ToV7(malformed), path)
+    // ... and the Import preparation that routes schema 6 through it.
+    expectStructureFailure(
+      () => prepareExportRootForImport(JSON.parse(JSON.stringify(malformed))),
+      path,
+    )
+  })
+
+  it.each([
+    ['ownedWeapons: [null]', { ownedWeapons: [null] }, 'ownedWeapons[0]'],
+    ['targetWeapons: [null]', { targetWeapons: [null] }, 'targetWeapons[0]'],
+    ['executionSavePoints: [null]', { executionSavePoints: [null] }, 'executionSavePoints[0]'],
+    ['executionSavePoints: [123]', { executionSavePoints: [123] }, 'executionSavePoints[0]'],
+    ['productionPlans: [null]', { productionPlans: [null] }, 'productionPlans[0]'],
+    ['executionHistory: ["x"]', { executionHistory: ['x'] }, 'executionHistory[0]'],
+  ])('fails schema 7 %s closed without throwing', (_label, fields, path) => {
+    const malformed = { ...exportRoot(), ...fields }
+    expectStructureFailure(() => prepareExportRootForImport(malformed), path)
+  })
+
+  it('fails malformed save point snapshots and nested entities closed without throwing', () => {
+    const nullWeapon = { ...savePointFor(), ownedWeapons: [null] }
+    expectStructureFailure(
+      () => prepareExportRootForImport(exportRoot({
+        executionSavePoints: [nullWeapon as unknown as ExecutionSavePoint],
+      })),
+      'executionSavePoints[0].ownedWeapons[0]',
+    )
+    const noPlan = { ...savePointFor(), productionPlan: null }
+    expectStructureFailure(
+      () => prepareExportRootForImport(exportRoot({
+        executionSavePoints: [noPlan as unknown as ExecutionSavePoint],
+      })),
+      'executionSavePoints[0].productionPlan',
+    )
+    // An object element whose nested field has the wrong type reaches the
+    // typed validator, which must still not escape as an exception.
+    const brokenBonuses = { ...createValidOwnedWeapon(), executionInProgress: null, restorationBonuses: null }
+    expectStructureFailure(
+      () => prepareExportRootForImport(exportRoot({
+        ownedWeapons: [brokenBonuses as unknown as OwnedWeapon],
+      })),
+      'ownedWeapons[0]',
+    )
+  })
+
   it('refuses a save point that references a missing Plan', () => {
     const result = prepareExportRootForImport(exportRoot({
       executionSavePoints: [savePointFor(productionPlanId('plan.fixture.missing'))],

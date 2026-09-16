@@ -193,6 +193,8 @@ describe('Planner current-state entry validation', () => {
     expect(result.excludedBuildListEntries).toEqual([
       expect.objectContaining({ reason: 'references a completed TargetWeapon.' }),
     ])
+    // Its own diagnostic kind, never the re-search (stale) warning.
+    expect(result.warnings.map(({ kind }) => kind)).toEqual(['completed_target_excluded'])
     // Completion is an input exclusion, never a staleness judgment: the Entry
     // is not target_definition_changed and its persisted flags are untouched.
     const staleness = evaluateBuildListEntryStaleness(input.buildListEntries[0], {
@@ -207,6 +209,26 @@ describe('Planner current-state entry validation', () => {
     expect(input.buildListEntries[0]).toEqual(entryBefore)
     // Neither Target satisfaction nor the typed termination counts it.
     expect(deriveTargetSatisfaction(input.targetWeapons, input.ownedWeapons, input.master)).toEqual([])
+  })
+
+  it('keeps a disabled or missing Target distinct from a completed one', () => {
+    const disabled = fixture()
+    disabled.input.targetWeapons[0].isEnabled = false
+    const disabledResult = validatePlannerInput(disabled.input, disabled.dependencies)
+    expect(disabledResult.validBuildListEntries).toEqual([])
+    expect(disabledResult.excludedBuildListEntries).toEqual([
+      expect.objectContaining({ reason: 'references a disabled TargetWeapon.' }),
+    ])
+    expect(disabledResult.warnings.map(({ kind }) => kind)).toEqual(['build_list_entry_stale'])
+
+    const missing = fixture()
+    missing.input.targetWeapons = []
+    const missingResult = validatePlannerInput(missing.input, missing.dependencies)
+    expect(missingResult.excludedBuildListEntries).toEqual([
+      expect.objectContaining({ reason: 'references a missing TargetWeapon.' }),
+    ])
+    expect(missingResult.warnings.map(({ kind }) => kind)).toContain('build_list_entry_stale')
+    expect(missingResult.warnings.map(({ kind }) => kind)).not.toContain('completed_target_excluded')
   })
 
   it('keeps executionInProgress out of the Planner semantic inventory', () => {

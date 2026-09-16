@@ -408,6 +408,12 @@ export type PlannerWarningKind =
    * empty (PLANNER_SPEC 7.5.9).
    */
   | 'invalid_checkpoint_selection'
+  /**
+   * A BuildListEntry of a `completed` Target was left out of Planner input.
+   * The Entry is not stale and needs no re-search: its Target already has its
+   * Ideal weapon (`docs/DATA_MODEL.md` 8.1).
+   */
+  | 'completed_target_excluded'
   | 'max_planner_reruns_reached'
   | 'constrained_enumeration_bound_reached'
 
@@ -431,6 +437,7 @@ export const plannerWarningKinds: readonly PlannerWarningKind[] = [
   'selected_checkpoint_target_already_ideal',
   'selected_checkpoint_fixes_target_entry',
   'invalid_checkpoint_selection',
+  'completed_target_excluded',
 ]
 
 export interface PlannerWarning {

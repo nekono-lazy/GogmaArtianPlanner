@@ -280,15 +280,17 @@ function currentEntryEligibility(
     target, rngState: input.rngState, normalCounters: input.normalCounters,
     ownedWeapons: input.ownedWeapons, calculationContext: input.calculationContext,
   })
-  if (target === null || !isTargetWeaponPlanningEligible(target)) {
+  if (target === null) {
+    return { valid: null, reason: 'references a missing TargetWeapon.', warningKind: 'build_list_entry_stale' }
+  }
+  if (target.lifecycleStatus === 'completed') {
     // A completed Target's Entry is excluded from Planner input without being
-    // stale (`docs/DATA_MODEL.md` 8.1); its staleness is never rewritten.
-    const reason = target === null
-      ? 'references a missing TargetWeapon.'
-      : target.lifecycleStatus === 'active'
-        ? 'references a disabled TargetWeapon.'
-        : 'references a completed TargetWeapon.'
-    return { valid: null, reason, warningKind: 'build_list_entry_stale' }
+    // stale (`docs/DATA_MODEL.md` 8.1): it needs no re-search, so it reports
+    // its own warning kind and its staleness is never rewritten.
+    return { valid: null, reason: 'references a completed TargetWeapon.', warningKind: 'completed_target_excluded' }
+  }
+  if (!isTargetWeaponPlanningEligible(target)) {
+    return { valid: null, reason: 'references a disabled TargetWeapon.', warningKind: 'build_list_entry_stale' }
   }
   if (dependencies.rngEngine.version !== input.calculationContext.rngEngineVersion) {
     return { valid: null, reason: 'uses an RNG Engine incompatible with CalculationContext.', warningKind: 'calculation_context_incompatible' }

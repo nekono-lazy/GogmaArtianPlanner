@@ -27,6 +27,11 @@ describe('presentation labels', () => {
     expect(plannerWarningLabels.max_steps_reached).toContain('ステップ数')
     expect(plannerWarningLabels.max_expanded_states_reached).toContain('探索状態数')
     expect(plannerWarningLabels.rng_prediction_unsupported).toContain('予測入力')
+    // A completed Target is excluded, not broken: its label never asks for a
+    // re-search or calls the Entry stale.
+    expect(plannerWarningLabels.completed_target_excluded).toBe('完了済みの目標武器は生産計画の対象外です')
+    expect(plannerWarningLabels.completed_target_excluded).not.toMatch(/再検索|stale|古い/i)
+    expect(plannerWarningLabels.completed_target_excluded).not.toBe(plannerWarningLabels.build_list_entry_stale)
     expect(getRouteOperationLabel({ type: 'reset_skills', sourceOwnedWeaponId: null, skillCounterBefore: 1, skillCounterAfter: 2 })).toBe('スキルをリセット')
     expect(skippedRouteReasonLabels.master_data_unavailable).toContain('マスターデータ')
     expect(staleReasonLabels.target_definition_changed).toContain('目標武器')

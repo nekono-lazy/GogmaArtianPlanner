@@ -83,6 +83,72 @@ const SCHEMA_V7_TARGET_WEAPON_FIELDS = [
   'completedByProductionPlanId',
 ] as const
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function structureIssue(path: string, message: string): DomainValidationIssue {
+  return { path, code: 'invalid_structure', message }
+}
+
+/**
+ * Runtime shape of one entity collection of untrusted Export input: the field
+ * is an array and every element is a non-null, non-array object. Typed
+ * validators read fields of each element, so they only run once this holds.
+ */
+function collectionShapeIssues(
+  owner: Record<string, unknown>,
+  field: string,
+  pathPrefix = '',
+): DomainValidationIssue[] {
+  const path = `${pathPrefix}${field}`
+  const value = owner[field]
+  if (!Array.isArray(value)) {
+    return [structureIssue(path, `${path} must be an array.`)]
+  }
+  return value.flatMap((element: unknown, index) =>
+    isRecord(element)
+      ? []
+      : [structureIssue(`${path}[${index}]`, `${path}[${index}] must be an object.`)],
+  )
+}
+
+/**
+ * Shape of the save point snapshot fields its typed validator iterates or
+ * dereferences. Deeper entity shape is left to the typed validators, guarded by
+ * `runTypedValidation()`.
+ */
+function savePointShapeIssues(
+  savePoint: Record<string, unknown>,
+  path: string,
+): DomainValidationIssue[] {
+  const prefix = `${path}.`
+  return [
+    ...collectionShapeIssues(savePoint, 'normalCounters', prefix),
+    ...collectionShapeIssues(savePoint, 'ownedWeapons', prefix),
+    ...collectionShapeIssues(savePoint, 'targetWeapons', prefix),
+    ...(['rngState', 'productionPlan'] as const)
+      .filter((field) => !isRecord(savePoint[field]))
+      .map((field) => structureIssue(`${prefix}${field}`, `${prefix}${field} must be an object.`)),
+  ]
+}
+
+/**
+ * The typed Domain validators trust the declared entity shape. Import input is
+ * untrusted, so a nested value of the wrong type that the shallow shape checks
+ * did not cover must still become an issue rather than an exception.
+ */
+function runTypedValidation(
+  path: string,
+  validate: () => DomainValidationIssue[],
+): DomainValidationIssue[] {
+  try {
+    return validate()
+  } catch {
+    return [structureIssue(path, `${path || 'Export root'} has a malformed nested structure.`)]
+  }
+}
+
 /**
  * Pure schema 6 -> 7 Export migration.
  *
@@ -100,6 +166,17 @@ const SCHEMA_V7_TARGET_WEAPON_FIELDS = [
 export function migrateExportRootV6ToV7(
   root: ExportRootV6,
 ): ExportRootMigrationResult {
+  // Exported and pure, so it does not rely on its caller having checked the
+  // runtime shape of the collections it reads.
+  if (!isRecord(root)) {
+    return { ok: false, issues: [structureIssue('', 'Export root must be an object.')] }
+  }
+  const shapeIssues = [
+    ...collectionShapeIssues(root as unknown as Record<string, unknown>, 'ownedWeapons'),
+    ...collectionShapeIssues(root as unknown as Record<string, unknown>, 'targetWeapons'),
+  ]
+  if (shapeIssues.length > 0) return { ok: false, issues: shapeIssues }
+
   const issues: DomainValidationIssue[] = []
   root.ownedWeapons.forEach((weapon, index) => {
     SCHEMA_V7_OWNED_WEAPON_FIELDS.forEach((field) => {
@@ -132,7 +209,12 @@ export function migrateExportRootV6ToV7(
   }
   if (issues.length > 0) return { ok: false, issues }
 
-  const migrated = structuredClone(root)
+  let migrated: ExportRootV6
+  try {
+    migrated = structuredClone(root)
+  } catch {
+    return { ok: false, issues: [structureIssue('', 'Export root cannot be copied.')] }
+  }
   return {
     ok: true,
     root: {
@@ -175,6 +257,10 @@ function prefixed(
 export function validateExportRootExecutionLifecycle(
   root: ExportRoot,
 ): DomainValidationResult {
+  if (!isRecord(root)) {
+    return { isValid: false, issues: [structureIssue('', 'Export root must be an object.')] }
+  }
+  const record = root as unknown as Record<string, unknown>
   const issues: DomainValidationIssue[] = []
   if (root.schemaVersion !== EXPORT_SCHEMA_VERSION) {
     issues.push({
@@ -183,35 +269,47 @@ export function validateExportRootExecutionLifecycle(
       message: `Export schemaVersion must be ${EXPORT_SCHEMA_VERSION}.`,
     })
   }
-  if (!Array.isArray(root.executionSavePoints)) {
-    issues.push({
-      path: 'executionSavePoints',
-      code: 'invalid_structure',
-      message: 'executionSavePoints must be an array.',
-    })
-    return { isValid: false, issues }
+  // Every collection this function reads is shape-checked element by element
+  // before any typed validator dereferences a field.
+  const shapeIssues = [
+    'ownedWeapons',
+    'targetWeapons',
+    'productionPlans',
+    'executionHistory',
+    'executionSavePoints',
+  ].flatMap((field) => collectionShapeIssues(record, field))
+  if (shapeIssues.length > 0) {
+    return { isValid: false, issues: [...issues, ...shapeIssues] }
   }
-  root.ownedWeapons.forEach((weapon, index) =>
-    issues.push(...prefixed(`ownedWeapons[${index}]`, validateOwnedWeapon(weapon))),
+  const savePointShapeProblems = (root.executionSavePoints as unknown[]).flatMap(
+    (savePoint, index) =>
+      savePointShapeIssues(savePoint as Record<string, unknown>, `executionSavePoints[${index}]`),
   )
-  root.targetWeapons.forEach((target, index) =>
-    issues.push(...prefixed(`targetWeapons[${index}]`, validateTargetWeapon(target))),
-  )
-  root.executionSavePoints.forEach((savePoint, index) =>
-    issues.push(
-      ...prefixed(
-        `executionSavePoints[${index}]`,
-        validateExecutionSavePoint(savePoint),
-      ),
-    ),
-  )
+  if (savePointShapeProblems.length > 0) {
+    return { isValid: false, issues: [...issues, ...savePointShapeProblems] }
+  }
+
+  root.ownedWeapons.forEach((weapon, index) => {
+    const path = `ownedWeapons[${index}]`
+    issues.push(...runTypedValidation(path, () => prefixed(path, validateOwnedWeapon(weapon))))
+  })
+  root.targetWeapons.forEach((target, index) => {
+    const path = `targetWeapons[${index}]`
+    issues.push(...runTypedValidation(path, () => prefixed(path, validateTargetWeapon(target))))
+  })
+  root.executionSavePoints.forEach((savePoint, index) => {
+    const path = `executionSavePoints[${index}]`
+    issues.push(...runTypedValidation(path, () => prefixed(path, validateExecutionSavePoint(savePoint))))
+  })
   issues.push(
-    ...prefixed(
-      'executionSavePoints',
-      validateExecutionSavePointReferences(
-        root.executionSavePoints,
-        root.productionPlans,
-        root.executionHistory,
+    ...runTypedValidation('executionSavePoints', () =>
+      prefixed(
+        'executionSavePoints',
+        validateExecutionSavePointReferences(
+          root.executionSavePoints,
+          root.productionPlans,
+          root.executionHistory,
+        ),
       ),
     ),
   )
@@ -241,27 +339,25 @@ export function prepareExportRootForImport(
       issues: [{ path: 'appName', code: 'invalid_literal', message: 'Export appName is not supported.' }],
     }
   }
-  const collections = [
-    'ownedWeapons',
-    'targetWeapons',
-    'productionPlans',
-    'executionHistory',
-  ] as const
-  const notArray = collections.filter((field) => !Array.isArray(candidate[field]))
-  if (notArray.length > 0) {
-    return {
-      ok: false,
-      issues: notArray.map((field) => ({
-        path: field,
-        code: 'invalid_structure' as const,
-        message: `${field} must be an array.`,
-      })),
-    }
-  }
   let root: ExportRoot
   if (candidate.schemaVersion === EXPORT_SCHEMA_VERSION) {
-    root = structuredClone(input as ExportRoot)
+    const shapeIssues = [
+      'ownedWeapons',
+      'targetWeapons',
+      'productionPlans',
+      'executionHistory',
+      'executionSavePoints',
+    ].flatMap((field) => collectionShapeIssues(candidate, field))
+    if (shapeIssues.length > 0) return { ok: false, issues: shapeIssues }
+    try {
+      root = structuredClone(input as ExportRoot)
+    } catch {
+      return { ok: false, issues: [structureIssue('', 'Export root cannot be copied.')] }
+    }
   } else if (candidate.schemaVersion === 6) {
+    const shapeIssues = ['productionPlans', 'executionHistory']
+      .flatMap((field) => collectionShapeIssues(candidate, field))
+    if (shapeIssues.length > 0) return { ok: false, issues: shapeIssues }
     const migrated = migrateExportRootV6ToV7(input as ExportRootV6)
     if (!migrated.ok) return migrated
     root = migrated.root
