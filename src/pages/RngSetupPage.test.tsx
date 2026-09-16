@@ -66,7 +66,7 @@ describe('RngSetupPage', () => {
   it('normalizes a decimal Base Seed, marks it manual, and preserves untouched KnownValues', async () => {
     const state = createInitialRngState('2026-08-29T00:00:00.000Z')
     state.gogmaCounter = { value: 11, isConfirmed: true, source: 'observation' }
-    state.skillCounter = { value: 22, isConfirmed: false, source: 'gogma_seed_finder_import' }
+    state.skillCounter = { value: 22, isConfirmed: false, source: 'observation' }
     state.counterGate = { value: 55, isConfirmed: true, source: 'manual' }
     const untouched = {
       gogmaCounter: { ...state.gogmaCounter },
@@ -185,24 +185,21 @@ describe('RngSetupPage', () => {
     expect(definitionRow(engine, 'スキル予測').textContent).toBe('スキル予測対応')
     expect(definitionRow(engine, '巨戟アーティア予測').textContent).toBe('巨戟アーティア予測対応')
     expect(definitionRow(engine, 'Keep Bonuses予測').textContent).toBe('Keep Bonuses予測対応')
-    // The legacy generic API flag keeps its meaning but is named as such, so
-    // it never reads as the Identification Wizard being unsupported.
-    expect(definitionRow(engine, '旧generic Seed Search API').textContent).toBe('旧generic Seed Search API未対応')
-    expect(within(engine).queryByText('Seed Search', { selector: 'dt' })).not.toBeInTheDocument()
+    // The Engine section lists prediction support only; Identification
+    // availability is the application-level row of its own section.
+    expect(within(engine).queryByText(/Seed Search/, { selector: 'dt' })).not.toBeInTheDocument()
     expect(within(engine).queryByText('RNG同定', { selector: 'dt' })).not.toBeInTheDocument()
-    expect(screen.getByText(/旧generic Seed Search APIはIdentification Wizard（RNG同定）とは別の旧API契約です/)).toBeInTheDocument()
+    expect(screen.getByText(/RNG同定（Identification Wizard）の利用可否はEngine capabilityではなくアプリ側で判定します/)).toBeInTheDocument()
     expect(screen.queryByText(/本番RNG予測エンジンが未実装/)).not.toBeInTheDocument()
   })
 
-  it('shows RNG identification as available and enables the Wizard start, independent of supportsSeedSearch', async () => {
+  it('shows RNG identification as available and enables the Wizard start from the application-level authority', async () => {
     // The shared beforeEach stubs `Worker`, as a Browser provides it.
     render(<RngSetupPage dependencies={dependencies().deps} />)
     const wizard = await screen.findByRole('region', { name: '値が分からない場合' })
     expect(definitionRow(wizard, 'RNG同定').textContent).toBe('RNG同定利用可能')
     expect(within(wizard).queryByText(/Web Worker/)).not.toBeInTheDocument()
     expect(within(wizard).getByRole('button', { name: 'Identification Wizardを開始' })).toBeEnabled()
-    // The legacy flag is still false: the two are different contracts.
-    expect(productionRngEngine.capabilities.supportsSeedSearch).toBe(false)
   })
 
   it('shows RNG identification as unavailable, with its reason, and disables the Wizard start when the runtime has no Worker', async () => {
@@ -398,7 +395,7 @@ describe('RngSetupPage', () => {
     it.each([
       { value: null, isConfirmed: false, source: null },
       { value: 54, isConfirmed: true, source: 'observation' },
-      { value: 35, isConfirmed: false, source: 'gogma_seed_finder_import' },
+      { value: 35, isConfirmed: false, source: 'manual' },
     ] as const)('carries persisted Counter Gate %j through a Notes-only save', async (counterGate) => {
       const state = createInitialRngState('2026-08-29T00:00:00.000Z')
       state.counterGate = { ...counterGate }

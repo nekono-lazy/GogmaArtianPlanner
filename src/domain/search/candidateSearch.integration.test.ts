@@ -673,23 +673,23 @@ describe('Candidate Search routes', () => {
     base.ownedWeapons[0].isProtected = false
     const unknown = structuredClone(base)
     unknown.rngState.counterGate = { value: null, isConfirmed: false, source: null }
-    const imported = structuredClone(base)
-    imported.rngState.counterGate = {
+    const confirmed = structuredClone(base)
+    confirmed.rngState.counterGate = {
       value: 200,
       isConfirmed: true,
-      source: 'gogma_seed_finder_import',
+      source: 'manual',
     }
     const run = (input: typeof base) => searchCandidates(
       input,
       createCandidateSearchEngine(input, { resetResult: createRestorationBonusSet() }),
       deterministicExecution,
     )
-    const [unknownResult, importedResult] = await Promise.all([run(unknown), run(imported)])
-    expect(importedResult.targetResult.searchedRoutes)
+    const [unknownResult, confirmedResult] = await Promise.all([run(unknown), run(confirmed)])
+    expect(confirmedResult.targetResult.searchedRoutes)
       .toEqual(unknownResult.targetResult.searchedRoutes)
-    expect(importedResult.targetResult.skippedRoutes)
+    expect(confirmedResult.targetResult.skippedRoutes)
       .toEqual(unknownResult.targetResult.skippedRoutes)
-    expect(candidatesOf(importedResult.targetResult).map(({ route, searchStateHash }) => ({ route, searchStateHash })))
+    expect(candidatesOf(confirmedResult.targetResult).map(({ route, searchStateHash }) => ({ route, searchStateHash })))
       .toEqual(candidatesOf(unknownResult.targetResult).map(({ route, searchStateHash }) => ({ route, searchStateHash })))
   })
 
@@ -1066,7 +1066,6 @@ describe('Candidate Search routes', () => {
     const engine = new FakeRngEngine({
       version: 'bounded-amendment-frontier',
       capabilities: {
-        supportsSeedSearch: false,
         supportsNormalArtianPrediction: false,
         supportsGogmaPrediction: true,
         supportsSkillPrediction: false,

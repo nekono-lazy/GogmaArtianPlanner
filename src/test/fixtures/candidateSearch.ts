@@ -150,7 +150,6 @@ export function createCandidateSearchEngine(
   const fixtures: FakeRngFixtures = {
     version: 'candidate-search-v1',
     capabilities: {
-      supportsSeedSearch: false,
       supportsNormalArtianPrediction: true,
       supportsGogmaPrediction: true,
       supportsSkillPrediction: options.skillSupported ?? true,

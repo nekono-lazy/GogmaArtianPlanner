@@ -80,14 +80,13 @@ describe('App', () => {
     expect(
       within(row('Engine version')).getByText(PRODUCTION_RNG_ENGINE_VERSION, { selector: 'dd' }),
     ).toBeInTheDocument()
-    // The legacy flag is named as the old generic API, never as "Seed Search"
-    // on its own, so it cannot read as "RNG identification is unsupported".
-    expect(within(row('旧generic Seed Search API')).getByText('未対応', { selector: 'dd' })).toBeInTheDocument()
-    expect(within(versions).queryByText('Seed Search', { selector: 'dt' })).not.toBeInTheDocument()
+    // No Seed Search row remains: Identification availability is its own row
+    // and is decided at the application level.
+    expect(within(versions).queryByText(/Seed Search/, { selector: 'dt' })).not.toBeInTheDocument()
     expect(within(versions).queryByText('未設定')).not.toBeInTheDocument()
   })
 
-  it('reports RNG identification availability in Settings from the Wizard, not from supportsSeedSearch', () => {
+  it('reports RNG identification availability in Settings from the Wizard', () => {
     // jsdom has no Worker; a Browser does. The row follows the Wizard's own
     // application-level availability (`docs/UI_FLOW.md` 5 / 14).
     vi.stubGlobal('Worker', class {})
@@ -98,7 +97,6 @@ describe('App', () => {
       const row = (label: string) =>
         within(versions).getByText(label, { selector: 'dt' }).parentElement as HTMLElement
       expect(within(row('RNG同定')).getByText('利用可能', { selector: 'dd' })).toBeInTheDocument()
-      expect(within(row('旧generic Seed Search API')).getByText('未対応', { selector: 'dd' })).toBeInTheDocument()
     } finally {
       vi.unstubAllGlobals()
     }
@@ -164,10 +162,9 @@ describe('App', () => {
       const row = within(provenance).getByText(capability).closest('li') as HTMLElement
       expect(within(row).getByText('true（対応）')).toBeInTheDocument()
     }
-    // The legacy flag is labelled as the old generic API and stays false,
-    // while the Wizard availability is its own row and never reads that flag.
-    const seedSearchRow = within(provenance).getByText('旧generic Seed Search API (supportsSeedSearch)').closest('li') as HTMLElement
-    expect(within(seedSearchRow).getByText('false（未対応）')).toBeInTheDocument()
+    // The Wizard availability is its own row, listed as an application-level
+    // value rather than as an Engine capability.
+    expect(within(provenance).queryByText(/Seed Search/)).not.toBeInTheDocument()
     const identificationRow = within(provenance)
       .getByText('Production Identification (Identification Wizard)')
       .closest('li') as HTMLElement
@@ -177,7 +174,7 @@ describe('App', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Future debug sections' })).toBeInTheDocument()
   })
 
-  it('shows Production Identification available in Debug Details while supportsSeedSearch stays false', () => {
+  it('shows Production Identification available in Debug Details when the runtime has a Worker', () => {
     vi.stubGlobal('Worker', class {})
     try {
       useSettingsStore.setState({ debugMode: true })
@@ -188,8 +185,7 @@ describe('App', () => {
         .getByText('Production Identification (Identification Wizard)')
         .closest('li') as HTMLElement
       expect(within(identificationRow).getByText('available（利用可能）')).toBeInTheDocument()
-      const seedSearchRow = within(provenance).getByText('旧generic Seed Search API (supportsSeedSearch)').closest('li') as HTMLElement
-      expect(within(seedSearchRow).getByText('false（未対応）')).toBeInTheDocument()
+      expect(within(provenance).queryByText(/Seed Search/)).not.toBeInTheDocument()
     } finally {
       vi.unstubAllGlobals()
     }

@@ -491,7 +491,7 @@ B11 は実ゲーム観測を前提とする独立系列
 | B8-D | Worker / Application / Persistence | atomic save、既存UIへの最小配線 | B8-C。**完了**。B8-D1 Worker境界 / B8-D2a atomic save / B8-D2b BuildListPage配線（4.12 / 4.13 / 4.16章） |
 | B8-E | orchestration Browser / Planner benchmark | orchestration boundsのProduction default決定 | B8-D。**完了**。B8-E1 harness / B8-E2a real Browser measurement / B8-E2b default決定 `2 / 1 / 4`（4.15章、`B8_PLANNER_ORCHESTRATION_BROWSER_WORKER_BENCHMARK.md` 10-11章） |
 | B9 | what-if比較の算出 | 一方固定時の他方の次のPractical / Idealまでの距離算出。Domain計算、`PlannerWhatIfBounds`、Worker protocol / routing、Production Worker adapter、`PlannerWorkerClient` API、benchmarkとProduction default決定。表示は含まない | B8-E。B9-A / B9-B1 / B9-C / B9-B2 **完了**（4.17〜4.22章、`PLANNER_SPEC.md` 9.2.4.1〜9.2.4.13）。Production what-if defaultは独立実測で **2 / 8** に確定 |
-| B10 | 競合UI / what-if提示 | persisted Plan表示、current PlannerInput構築、Worker-side interaction preparation、participant / current Conflict availability、Conflict選択、what-if比較、B8再計算とfail-closed atomic保存 | B8-E, B9。B10-A契約確定は**完了**、B10-B〜D実装は未完了（4.23章） |
+| B10 | 競合UI / what-if提示 | persisted Plan表示、current PlannerInput構築、Worker-side interaction preparation、participant / current Conflict availability、Conflict選択、what-if比較、B8再計算とfail-closed atomic保存 | B8-E, B9。B10-A契約確定、B10-B / B10-C / B10-D実装とも**完了**（4.23章） |
 | B11 | normal-tier Keep prediction semantics | 実ゲーム観測 -> game-verified fixture -> Production prediction実装。Search / Planner / Domain検証の除外解除 | 実ゲーム観測 |
 
 ### 4.0 B7を先行させる理由
@@ -3609,11 +3609,25 @@ B10操作で変更しない。
 B10-A  UI / Application契約確定（本節）                         完了
 B10-B  ProductionPlanPageのroute Plan読込、fresh PlannerInput、
        explicit resolution復元、Worker-side current interaction preparation、
-       participant / current Conflict availability                    未実装
-B10-C  what-if request起動、async state、cancel、typed comparison card  未実装
+       participant / current Conflict availability                    完了
+B10-C  what-if request起動、async state、cancel、typed comparison card  完了
 B10-D  「この候補を優先」、B8 constrained再計算、atomic保存、
        invalid resolution fail-closed、新Plan遷移、status guard、
-       統合 / responsive test                                          未実装
+       統合 / responsive test                                          完了
+```
+
+現行main時点の実装位置は次のとおりである。
+
+```text
+B10-B  PlannerWorkerClient.prepareInteraction() / plannerWorkerContractsの
+       prepare_interaction request / result、ProductionPlanPageのPlan読込と
+       current PlannerInput構築
+B10-C  PlannerWorkerClient.createWhatIfComparison()、ProductionPlanPageの
+       what-if async state / cancel、ProductionPlanWhatIfComparisonの比較カード
+B10-D  ProductionPlanPageの「この候補を優先」、
+       PlannerWorkerClient.createConstrainedPlan()、
+       plannerResultPersistenceServiceのatomic save、
+       invalid resolutionとincomplete terminationのfail-closed、新Plan遷移
 ```
 
 B10-Bは表示authorityとcurrent calculation inputを確立し、B10-Cは保存を伴わないpreviewだけを

@@ -212,7 +212,6 @@ function scenarioEngine(baseSeed: string, master: PlannerInput['master']) {
   return new FakeRngEngine({
     version: 'planner-beam-v1',
     capabilities: {
-      supportsSeedSearch: false,
       supportsNormalArtianPrediction: true,
       supportsGogmaPrediction: true,
       supportsSkillPrediction: true,

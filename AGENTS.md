@@ -223,8 +223,8 @@ drop a hard constraint, so version 10 artifacts fail closed like every earlier o
 Search, BuildList, Planner, and benchmark runtime creators share this authority.
 Dexie separately moves to `DATABASE_SCHEMA_VERSION = 4` for the persisted status rename; this is independent of
 `AppSettings.schemaVersion = 1`; gameVersion, Master Data version,
-`RngState.schemaVersion = 1`, `CONSTRAINED_ROUTE_POLICY_VERSION`, and
-`supportsSeedSearch = false` remain unchanged. `PRODUCTION_RNG_ENGINE_VERSION` is
+`RngState.schemaVersion = 1`, and `CONSTRAINED_ROUTE_POLICY_VERSION`
+remain unchanged. `PRODUCTION_RNG_ENGINE_VERSION` is
 currently `production-rng:c5-e7`. The Normal Artian occurrence-limit correction
 (Production game-verified pool Attack 5 / Element 4 / family 7 2 / Affinity 3)
 changed Production Normal prediction output and moved the Engine version from
@@ -681,8 +681,8 @@ availability and Sharpness/Capacity limit moved it to the current
 `production-rng:c5-e7` (see the Normal pool limits, the Melee category, the
 Switch Axe single pool, the lottery table class, and the Production Gogma
 Reset contract under RNG Rules). Do not reintroduce caller-supplied or persisted Gate as
-Production authority. This runtime integration does not activate the Skill-first
-Identification UI; `supportsSeedSearch` remains `false`.
+Production authority. This runtime integration did not activate the Skill-first
+Identification UI by itself; activation was decided separately in C5-E2C10.
 
 ---
 
@@ -704,8 +704,9 @@ Current v1 rules include:
 
 Heavy Seed/Counter search runs in a Web Worker and supports progress and cancellation.
 
-The Production v1 RNG-identification path is the dedicated Skill-first Wizard,
-not the legacy generic Seed Search contract:
+The Production v1 RNG-identification path is the dedicated Skill-first Wizard.
+There is no generic Seed Search contract: `RngEngineCapabilities` describes
+prediction support only, and no capability flag stands for Identification.
 
 - Step 1 identifies canonical Base Seed and starting Skill Counter from the
   conversion-assigned Skill followed by consecutive Reset Skills observations.
@@ -745,10 +746,8 @@ not the legacy generic Seed Search contract:
   Skill client, Gogma Counter Worker client, and Adoption Service. Activation
   did not add a feature flag, an RngEngine capability, or new wiring, and it did
   not change Production RNG semantics.
-- `supportsSeedSearch` remains false because it describes the legacy generic
-  Seed Search API. Identification availability belongs at the Worker/application
-  level; do not add RngEngine capability flags without a separate specification
-  change.
+- Identification availability belongs at the Worker/application level; do not
+  add RngEngine capability flags for it without a separate specification change.
 - Skill live-game verification was completed in C5-E2C9. Base Seed 51231782 and
   starting Skill Counter 341 came from an independent GARP live RNG state read;
   `weapon.insect_glaive` / `element.ice` conversion plus three consecutive Reset
@@ -761,8 +760,7 @@ not the legacy generic Seed Search contract:
   `src/test/fixtures/gameVerifiedSkillVectors.ts`. It proves that weapon type,
   element, and Counter window only. The real Browser Worker benchmark was
   completed in C5-E2C8; a Node benchmark was not used as its substitute. C9
-  completion does not activate Production Identification and must not change
-  `supportsSeedSearch`.
+  completion does not activate Production Identification on its own.
 - Skill Seed search uses contiguous, non-overlapping, gap-free multi-worker
   chunks with deterministic merge, global progress, cancellation propagation,
   and explicit Worker-failure errors. Child Workers do not independently apply
@@ -1476,8 +1474,7 @@ reconsider them: an earlier same-result solution that is unusable under the
 Planner's fixed Candidates must never permanently hide a usable later one.
 
 This is a Candidate Search orchestration contract. It does not change Production
-RNG prediction semantics, `PRODUCTION_RNG_ENGINE_VERSION`, or
-`supportsSeedSearch`.
+RNG prediction semantics or `PRODUCTION_RNG_ENGINE_VERSION`.
 
 `docs/CANDIDATE_SEARCH_REDESIGN.md` records the audit measurements, the rejected
 alternatives, and the accepted limitations behind this contract. It is a design
@@ -1672,8 +1669,8 @@ with no extra legacy note of its own.
 These are presentation and reporting concerns only. They change no Search
 semantics, Planner semantics, RNG algorithm, or Dexie table shape. At the time,
 `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 5`, `DATABASE_SCHEMA_VERSION = 1`,
-`AppSettings.schemaVersion = 1`, `PRODUCTION_RNG_ENGINE_VERSION =
-production-rng:c5-e2`, and `supportsSeedSearch = false` were all unchanged.
+`AppSettings.schemaVersion = 1`, and `PRODUCTION_RNG_ENGINE_VERSION =
+production-rng:c5-e2` were all unchanged.
 The later Target compromise revision uses calculation version 6 and DB version 2.
 
 ### Normal Artian Route
@@ -2376,8 +2373,7 @@ exhaustion.
 B8 historically changed none of the then-current
 `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 2`,
 `DATABASE_SCHEMA_VERSION = 1`, `AppSettings.schemaVersion = 1`,
-`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`, or
-`supportsSeedSearch = false`, and it changes no Production RNG semantics,
+or `PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`, and it changes no Production RNG semantics,
 RouteOperation meaning, ProductionPlan persisted shape, PlanStep meaning, or
 existing BuildListEntry shape. If an implementation phase finds it must break
 one of these, stop and report instead of changing a version.

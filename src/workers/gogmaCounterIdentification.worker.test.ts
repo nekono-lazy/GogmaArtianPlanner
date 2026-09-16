@@ -137,10 +137,9 @@ describe('Gogma Counter Identification Worker', () => {
     })])
   })
 
-  it('creates a Worker-local Production Engine without activating Seed Search capability', () => {
+  it('creates a Worker-local Production Engine with Gogma prediction support', () => {
     const engine = createProductionGogmaCounterIdentificationRngEngine()
     expect(engine).toBeInstanceOf(ProductionRngEngine)
     expect(engine.capabilities.supportsGogmaPrediction).toBe(true)
-    expect(engine.capabilities.supportsSeedSearch).toBe(false)
   })
 })

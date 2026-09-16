@@ -94,11 +94,29 @@ const allWeaponIds = weapons.map(({ id }) => id)
 
 const bonusNameById = new Map(bonusTypes.map(({ id, displayNameJa }) => [id, displayNameJa]))
 const rankNameById = new Map(bonusRanks.map(({ id, displayNameJa }) => [id, displayNameJa]))
+
+/**
+ * `gogma_artian` scope Rank I is not a verified value and carries no
+ * WeaponBonusDefinition from dataVersion 4 on: the earlier real-game rank I
+ * report was a converted Gogma still holding its unamended `normal_artian`
+ * slots. `bonus_rank.i` itself stays in BonusRankMaster, and `normal_artian`
+ * scope is untouched.
+ *
+ * Removing it did not renumber the definitions that follow it, so the
+ * `sortOrder` values stay exactly the dataVersion 3 ones. A reserved rank
+ * therefore still consumes its original slot instead of being emitted, which
+ * keeps this generator reproducing `src/data/master` byte for byte without an
+ * unrelated Master change.
+ */
+const RESERVED_GOGMA_RANK_ID = 'bonus_rank.i'
+
 const definitions = []
 let definitionSortOrder = 1
 const addDefinitions = (scope, weaponIds, bonusTypeId, rankIds) => {
   for (const weaponTypeId of weaponIds) {
     for (const bonusRankId of rankIds) {
+      const sortOrder = definitionSortOrder++
+      if (scope === 'gogma_artian' && bonusRankId === RESERVED_GOGMA_RANK_ID) continue
       const rankSuffix = bonusRankId === 'bonus_rank.base' ? '' : rankNameById.get(bonusRankId)
       const displayName = `${bonusNameById.get(bonusTypeId)}${rankSuffix}`
       definitions.push({
@@ -110,7 +128,7 @@ const addDefinitions = (scope, weaponIds, bonusTypeId, rankIds) => {
         displayNameJa: displayName,
         displayNameEn: displayName,
         effectValue: '未検証',
-        sortOrder: definitionSortOrder++,
+        sortOrder,
         isEnabled: true,
       })
     }
@@ -124,10 +142,13 @@ addDefinitions('normal_artian', nonBowgunIds, 'bonus_type.element', baseRank)
 addDefinitions('normal_artian', meleeIds, 'bonus_type.normal_sharpness', baseRank)
 addDefinitions('normal_artian', bowgunIds, 'bonus_type.normal_capacity', baseRank)
 
-const fourGogmaRanks = ['bonus_rank.i', 'bonus_rank.ii', 'bonus_rank.iii', 'bonus_rank.ex']
-addDefinitions('gogma_artian', allWeaponIds, 'bonus_type.attack', fourGogmaRanks)
-addDefinitions('gogma_artian', allWeaponIds, 'bonus_type.affinity', fourGogmaRanks)
-addDefinitions('gogma_artian', nonBowgunIds, 'bonus_type.element', ['bonus_rank.i', 'bonus_rank.ii', 'bonus_rank.ex'])
+// Emitted Gogma ranks are Attack / Affinity II / III / EX, Element II / EX, and
+// Sharpness/Capacity 通常 / EX. `bonus_rank.i` appears only as the reserved
+// sortOrder slot described above and is never written out.
+const gogmaAttackAffinityRanks = [RESERVED_GOGMA_RANK_ID, 'bonus_rank.ii', 'bonus_rank.iii', 'bonus_rank.ex']
+addDefinitions('gogma_artian', allWeaponIds, 'bonus_type.attack', gogmaAttackAffinityRanks)
+addDefinitions('gogma_artian', allWeaponIds, 'bonus_type.affinity', gogmaAttackAffinityRanks)
+addDefinitions('gogma_artian', nonBowgunIds, 'bonus_type.element', [RESERVED_GOGMA_RANK_ID, 'bonus_rank.ii', 'bonus_rank.ex'])
 addDefinitions('gogma_artian', nonBowIds, 'bonus_type.gogma_sharpness_capacity', ['bonus_rank.base', 'bonus_rank.ex'])
 
 const seriesSkillNames = [
@@ -157,9 +178,9 @@ writeJson('manifest.json', {
   gameTitle: 'Monster Hunter Wilds',
   appDataKind: 'gogma-artian-planner-master',
   gameVersion: 'unknown-initial',
-  dataVersion: 3,
+  dataVersion: 4,
   generatedAt: null,
-  notes: 'Weapon, element, bonus, rank, applicability, mapping, series skill, and group skill masters are project-owner verified. Lottery and material data remain disabled and unverified.',
+  notes: 'Weapon, element, bonus, rank, applicability, mapping, series skill, and group skill masters are project-owner verified. gogma_artian rank I definitions were removed in dataVersion 4: the earlier real-game rank I report was an unamended normal-scope Gogma. Lottery and material data remain disabled and unverified.',
 })
 writeJson('weapon-types.json', weapons)
 writeJson('elements.json', elements)

@@ -239,7 +239,6 @@ export const staleReasonLabels: Record<BuildListEntryStaleReason, string> = {
 
 export const rngStateSourceLabels: Record<RngStateSource, string> = {
   manual: '手動入力',
-  gogma_seed_finder_import: 'GogmaSeedFinderから取得',
   observation: '観測検索',
 }
 

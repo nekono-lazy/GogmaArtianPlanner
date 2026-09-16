@@ -124,7 +124,6 @@ export interface RngEngine {
 export type NormalizedSeed = string;
 
 export interface RngEngineCapabilities {
-  supportsSeedSearch: boolean;
   supportsNormalArtianPrediction: boolean;
   supportsGogmaPrediction: boolean;
   supportsSkillPrediction: boolean;
@@ -170,7 +169,7 @@ export type RngPredictionSupport =
   | { supported: false; reason: RngPredictionUnsupportedReason };
 ```
 
-`supportsSeedSearch` は旧generic `SeedSearchInput` / `SeedSearchResult` の実行Capabilityだけを表し、Skill-first Identification Wizardのavailability flagとして使用しない。C5-E2C2、C5-E2C3、Wizard activation後も現行設計では `false` を維持する。Identification可否はWorker/application levelでSkill STEP 1とGogma Counter STEP 2を個別に表すconcrete availabilityとし、新しいRngEngine capability flagは追加しない。
+`RngEngineCapabilities` はPrediction operationのsupportだけを表す。Identification可否はRngEngine capability flagで表さず、Worker/application levelでSkill STEP 1とGogma Counter STEP 2を個別に表すconcrete availabilityとする。Identificationのために新しいRngEngine capability flagを追加しない。
 
 Prediction可否は二段階で判定する。
 
@@ -312,7 +311,7 @@ Gogma Counter Identification（9.8）はProduction Resetと同じcandidate avail
 
 - current implementation: `PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e7`（本節は実装済み）
 - 本節のfamily availabilityと `sharpness_capacity` family上限2はGogma Reset Prediction outputを変えるobservable Production RNG semantics changeであるため、PR-B実装時に `production-rng:c5-e6` から `production-rng:c5-e7` へ更新した。旧BuildCandidate / BuildListEntry / ProductionPlanは `rngEngineVersion` の差で `calculation_context_changed` になる
-- 仕様確定（PR-A）はsrcを変更しなかったため当時は `production-rng:c5-e6` のままだった。PR-A / PR-Bのいずれでも `CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、`ExportRoot.schemaVersion`、`RngState.schemaVersion`、`supportsSeedSearch = false`、PRNG、seed derivation、10-step block、Counter semanticsは変更していない。PR-BでもMaster JSON / `allowsElementBonus` / Master dataVersion / `getBonusDefinitionsForWeapon()` の意味、reference parity（候補表、`buildReferenceWeightedGogmaPool`、`predictReferenceGogmaReset`、reference golden / tests）、Keepアルゴリズム、Search / Planner algorithmは変更していない。UI / Validationへの反映はPR-Cで実装済みであり、PR-CはPrediction outputを変えないため `production-rng:c5-e7` のままである
+- 仕様確定（PR-A）はsrcを変更しなかったため当時は `production-rng:c5-e6` のままだった。PR-A / PR-Bのいずれでも `CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、`ExportRoot.schemaVersion`、`RngState.schemaVersion`、PRNG、seed derivation、10-step block、Counter semanticsは変更していない。PR-BでもMaster JSON / `allowsElementBonus` / Master dataVersion / `getBonusDefinitionsForWeapon()` の意味、reference parity（候補表、`buildReferenceWeightedGogmaPool`、`predictReferenceGogmaReset`、reference golden / tests）、Keepアルゴリズム、Search / Planner algorithmは変更していない。UI / Validationへの反映はPR-Cで実装済みであり、PR-CはPrediction outputを変えないため `production-rng:c5-e7` のままである
 
 **8. provenance**
 
@@ -541,44 +540,9 @@ Production v1は通常アーティアおよび巨戟アーティアを利用可�
 
 ---
 
-## 8. Import仕様
+## 8. 手動入力仕様
 
-## 8.1 Gogma Seed Finder format compatibility
-
-入力はユーザーが貼り付けるテキスト。
-
-このImportは外部toolの既知output formatとの互換機能である。入力textをparseして内部型へ変換するだけであり、Gogma Seed Finderのalgorithmまたは実装をProduction RNG / Identification authorityとして利用しない。既存の型名、永続source値、presentation labelは互換性のため維持する。
-
-Parser出力。
-
-```ts
-export interface GogmaSeedFinderImportResult {
-  values: {
-    baseSeed?: string;
-    gogmaCounter?: number;
-    skillCounter?: number;
-    counterGate?: number;
-  };
-  warnings: string[];
-}
-```
-
-実装方針。
-
-- 複数形式に対応できるようparserを分離する
-- 正規表現はparser内に閉じ込める
-- 読み取れた項目だけを確認画面に表示し、ユーザーが適用対象を選べる
-- 読み取れない項目があっても、読み取れた項目の適用を妨げない
-- 適用した各KnownValueの `source` を `"gogma_seed_finder_import"` とする
-- Importに含まれない既存項目を未確定へ戻さない
-- ImportでCounter Gateを取得した場合は従来どおりvalidation・保存し、将来のExport / Import round-trip対象にできる。ただしProduction active Predictionのauthorityにはしない
-
-禁止事項。
-
-- 外部Seed FinderのalgorithmをProduction Identificationへ移植・委譲しない
-- 外部ツールの内部実装にアプリを密結合しない
-
-## 8.2 Manual Input
+## 8.1 Manual Input
 
 ユーザーが正確に判明している値だけを直接入力する。通常ユーザー向けの入力対象はBase Seed、Gogma Counter、Skill Counterの3項目であり、3項目をすべて入力する必要はない。
 
@@ -605,7 +569,7 @@ export interface GogmaSeedFinderImportResult {
 - 通常アーティアの武器種別レア8 Counter特定
 - 必要に応じたRNG状態の検証
 
-9.2〜9.4のgeneric `Observation` / `CounterSearchInput` / `CounterSearchResult` は初期設計の汎用Counter Search契約であり、9.5〜9.6のgeneric Seed Search案と同じく履歴契約として保持する。current Productionの観測検索は次の専用契約を使用する。
+9.2〜9.4のgeneric `Observation` / `CounterSearchInput` / `CounterSearchResult` は初期設計の汎用Counter Search契約として保持する。current Productionの観測検索は次の専用契約を使用する。
 
 | stream | current Production contract |
 |---|---|
@@ -614,6 +578,8 @@ export interface GogmaSeedFinderImportResult {
 | 武器種別レア8 通常アーティアCounter | 9.12 Normal Artian Counter Identification |
 
 新しい実装はgeneric契約の `Observation.id` / `observedAt` / `elementId` / `searchKind` / `CounterMatch.confidence` を実装対象にしない。9.12は9.3の `searchKind = "normal_artian_counter"` 案をsupersedeする。
+
+Seed候補を汎用的に検索する契約はcurrent specificationに存在しない。Base Seedの特定は9.7のSkill Identificationだけが行う。9.5と9.6は欠番であり、9.7以降の番号はsrcコメントおよび他文書からの参照安定性のためそのまま維持する。
 
 ## 9.2 Observation
 
@@ -697,85 +663,9 @@ export interface CounterMatch {
 - 一致が0件なら入力ミス、Seed違い、検索範囲不足を提示
 - 検索が時間上限に達した場合は `isTruncated = true`
 
-## 9.5 SeedSearchInput
-
-Base Seedが不明な場合に、利用可能な観測情報からSeed候補を検索する。CounterSearchInputとは別の契約とする。
-
-本節と9.6は旧generic Seed Search案の履歴契約であり、Production v1 Identification Wizardのcurrent contractではsupersededである。ここに残るCounter Gate候補型はexternal referenceまたは将来のgeneric search設計を記録するもので、現在のProduction availability、Skill-first Identification入力、または `RngState.counterGate` requirementとして使用しない。generic Seed Searchはinactiveで、`supportsSeedSearch = false`を維持する。
-
-```ts
-export interface SeedSearchInput {
-  seedRange: SeedSearchRange;
-  observations: SeedSearchObservation[];
-  counterGateCandidates: number[];
-  maxMatches: number;
-  master: RngMasterSubset;
-}
-
-export interface SeedSearchRange {
-  startInclusive: string;
-  endInclusive: string;
-}
-
-export interface CounterRange {
-  startInclusive: number;
-  endInclusive: number;
-}
-
-export interface SeedSearchObservation {
-  observation: Observation;
-  knownCounter: number | null;
-  counterRange: CounterRange | null;
-  knownCounterGate: number | null;
-}
-```
-
-制約。
-
-- `seedRange` はRNG Engineが対応する正規化可能な範囲で、終了値は開始値以上
-- 各観測は、既知Counterまたは有限の `counterRange` のどちらかを持つ
-- Normal Artian観測は武器種とレア度を使用する
-- Normal Artian観測の `elementId` はEngineが不要とする場合nullを許可する
-- Gogma Bonus観測は武器種、必須の属性、Counter Gate候補を使用する
-- Skill観測は武器種、必須の属性、シリーズ / グループスキル、Counter Gate候補を使用する
-- `SeedSearchObservation.observation` はkind別Observation validationを必ず通過させる
-- `counterGateCandidates` は重複のない0以上の整数とする
-- `maxMatches` 到達時は検索を打ち切り、結果をtruncatedとする
-
-## 9.6 SeedSearchResult
-
-```ts
-export interface SeedSearchResult {
-  matches: SeedMatch[];
-  searchedSeedRange: SeedSearchRange;
-  elapsedMs: number;
-  isTruncated: boolean;
-}
-
-export interface SeedMatch {
-  baseSeed: NormalizedSeed;
-  matchedObservationIds: string[];
-  positions: SeedMatchPosition[];
-}
-
-export interface SeedMatchPosition {
-  observationId: string;
-  counter: number;
-  counterGate: number | null;
-}
-```
-
-処理方針。
-
-- すべての観測制約を満たすSeedだけを返す
-- 一意候補のみBase Seedを確定できる
-- 複数候補なら観測追加または検索条件の絞り込みを促す
-- 一致なしの場合は観測入力、範囲、Counter Gate候補を見直す
-- RNG EngineがSeed検索に必要なPredictionを未実装なら、本番検索を無効化しFake EngineでInterfaceのみ検証する
-
 ## 9.7 C5-E2B1 Skill Identification current contract
 
-9.5および9.6は汎用Seed Search案として保持する。Production Identification WizardのSkill-first経路には、次の専用契約を優先する。
+Production Identification WizardのSkill-first経路は次の専用契約を使用する。
 
 - 入力は武器種、属性、Series SkillとGroup Skillをともに持つ連続観測列、bounded inclusive Skill Counter rangeである
 - 観測1はNormal ArtianからGogma Artianへのconversion時に自動付与されたSkill、以後は連続するReset Skills結果である
@@ -788,12 +678,12 @@ export interface SeedMatchPosition {
 - `maxMatches`を使用する場合、現在処理中のSeedに属する全Counterを完了したprefixだけを保持・切り詰め対象とする。並列chunkは全chunk完了後にSeed range順でmergeし、Worker完了順を結果順へ使わない
 - 結果は候補、実際に完了したSeed range、truncation状態を返す。RngStateへのadopt/persistはC5-E2B1の責務外である
 - Production正解authorityは`ProductionRngEngine.predictSkills()`であり、compiled matcherは既存Production PRNG、Skill seed adapter、Skill table mappingとdifferential parityを維持する高速化kernelである
-- Skill Identification kernelとProduction Worker foundationはimplementedであり、C5-E2C7でWizard UIはRNG Setupへ接続済みである。C5-E2C10 Production Identification activationは完了した（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）。`supportsSeedSearch = false`と`production-rng:c5-e2`を維持する
+- Skill Identification kernelとProduction Worker foundationはimplementedであり、C5-E2C7でWizard UIはRNG Setupへ接続済みである。C5-E2C10 Production Identification activationは完了した（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）。`production-rng:c5-e2`を維持する
 - Worker requestIdはactive中の再利用を禁止し、新requestを明示的に拒否する。cancel状態はrequest-scoped tokenに保持し、旧処理のterminal completionまで解除せず、その後に破棄する
 - bounded goldenに加えて、C5-E2C9で独立したgame-verified fixture `src/test/fixtures/gameVerifiedSkillVectors.ts` を追加した（[C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md](./C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md)）。live verificationは完了しており、Production UI activationもC5-E2C10で完了した（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）
 - STEP 1は完全な探索で候補がexactly oneかつnon-truncatedの場合だけ一意とする。候補が複数なら候補をユーザーに選ばせず、次のReset Skills観測を追加して同じ検索を再実行する。候補0件では観測入力、Counter range、操作順を確認し、範囲を自動拡張しない
 - Skill live verificationはC5-E2C9で完了した。known Base Seed `51231782` / starting Skill Counter `341` / `weapon.insect_glaive` / `element.ice` と、conversion自動SkillおよびReset Skills 3回のSeries / Group両方をSkill Counter 341-344として記録したgame-verified fixtureを保持する。state sourceは独立したGARP live RNG state readであり、観測後にゲーム状態を復元済みのため、starting Counterへ観測回数を加算しない
-- 実Browser Worker benchmarkはC5-E2C8で完了した（[C5_E2C8_BROWSER_WORKER_BENCHMARK.md](./C5_E2C8_BROWSER_WORKER_BENCHMARK.md)）。Skill live-game verificationはC5-E2C9で完了した（[C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md](./C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md)）。Node benchmarkをBrowser benchmarkとして扱わない。C9完了自体はProduction Identification activationの完了ではなく、activationはC5-E2C10で別途判断した（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）。`supportsSeedSearch = false`を維持する
+- 実Browser Worker benchmarkはC5-E2C8で完了した（[C5_E2C8_BROWSER_WORKER_BENCHMARK.md](./C5_E2C8_BROWSER_WORKER_BENCHMARK.md)）。Skill live-game verificationはC5-E2C9で完了した（[C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md](./C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md)）。Node benchmarkをBrowser benchmarkとして扱わない。C9完了自体はProduction Identification activationの完了ではなく、activationはC5-E2C10で別途判断した（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）
 - Seed rangeをcontiguous / non-overlapping chunkへ分割するmulti-worker orchestrationはC5-E2C6で実装済みである。chunk結果はSeed range順にdeterministic mergeし、global progress、全Workerへのcancel propagation、Worker failureの明示errorを提供する。この契約を維持する
 
 ## 9.8 C5-E2B2 Gogma Counter Identification current contract
@@ -810,7 +700,7 @@ Skill Identificationでcanonical Base Seedが確定した後のSTEP 2には、�
 - 候補は`startGogmaCounter`数値昇順で返す。`maxMatches`は最初のN候補で停止し、完了した連続Counter prefixを`searchedCounterRange`として返し、未探索範囲があればtruncatedとする
 - progressは完全にaccept/rejectした`searchedCounters / totalCounters`と`matchesFound`である。Counter chunk sizeはruntime tuning値で、永続Production契約ではない
 - 2026-09-13（Asia/Tokyo）のgame-verified Hammer/Paralysis six-Reset fixture（Base Seed 51231782、start Counter 55、actual Gate 200）はCounter 55..60の30 ordered slotsすべてがProduction Gate 35/200で一致する。Counter 50..65では1観測から55だけ、0..100,000では1観測で5候補、2観測以降は55だけに一致する
-- Gogma Counter Identification kernelとProduction Worker foundationはimplementedであり、C5-E2C4 Identification Adoption Serviceもimplementedである。C5-E2C7でWizard UIはRNG Setupへ接続済みである。C5-E2C10 Production Identification activationは完了した（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）。`supportsSeedSearch = false`と`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`を維持する
+- Gogma Counter Identification kernelとProduction Worker foundationはimplementedであり、C5-E2C4 Identification Adoption Serviceもimplementedである。C5-E2C7でWizard UIはRNG Setupへ接続済みである。C5-E2C10 Production Identification activationは完了した（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）。`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`を維持する
 - STEP 2へ進めるのはSTEP 1がexactly oneかつnon-truncatedのBase Seed候補を返した場合だけとする。STEP 2も完全な探索でstarting Gogma Counter候補がexactly oneかつnon-truncatedの場合だけreviewへ進める。複数なら追加Reset観測、0件なら観測入力、range、操作順の確認を要求する
 - WizardはCounter Gateを入力、探索、Observation、resultへ含めず、Skill 54 / Gogma 35をactual Gateとしてpersistしない
 - 採用前に調査前のゲーム状態へ戻したことをユーザーに確認させる。採用するCounterはstarting Skill Counter `S` とstarting Gogma Counter `G`であり、観測中の操作回数を加算した `S + N` / `G + M`ではない
@@ -828,7 +718,7 @@ Skill Identificationでcanonical Base Seedが確定した後のSTEP 2には、�
 - 観測回数によるCounter advanceは行わず、starting `S` / `G`をそのまま保存する。単一のvalidated RngStateを `putRngState()`へ1回渡し、保存されたRngStateを返す
 - NormalArtianCounter、BuildCandidate、BuildListEntry、ProductionPlanのrepositoryには依存せず、直接mutationまたはstale書込みを行わない
 - state未作成時は既存ensure契約に従ってinitial RngStateを作成してからadoptする。現repositoryにCAS/version checkはなくread-modify-put間の同時manual updateを上書きし得るため、Wizard側は同時編集を避ける。C5-E2C4だけの新concurrency機構は追加しない
-- persistence failureとunexpected failureはsuccessへ変換せずcallerへ伝播する。`RngState.counterGate` schema、Production RNG semantics/version、`supportsSeedSearch = false`は変更しない
+- persistence failureとunexpected failureはsuccessへ変換せずcallerへ伝播する。`RngState.counterGate` schema、Production RNG semantics/versionは変更しない
 - Adoption Serviceはimplementedである。STEP 1/2 Coordinatorの契約は9.10、C5-E2C7 Wizard UIはRNG Setupへ接続済みであり、Production Identification activationはC5-E2C10で完了した（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）
 
 ## 9.10 C5-E2C5 Identification Wizard Coordinator current contract
@@ -839,7 +729,7 @@ Skill Identificationでcanonical Base Seedが確定した後のSTEP 2には、�
 - STEP 1再検索はSTEP 2、review、復元確認をinvalidateし、STEP 2再検索はSTEP 1 uniqueを保持してreview、復元確認をinvalidateする。request IDはstep / generation / sequenceで使い回さず、generation照合によってcancel後のlate responseがcurrent stateを上書きしない
 - cancelは再実行用input snapshotと有効な上流unique結果を保持する。restartはactive Worker requestをcancelして全transient stateを破棄し、disposeはCoordinatorが所有する両Worker Clientを停止する。Workerのinvalid / unsupported / cancelled / unavailable / duplicate / unexpected errorを0件へ変換しない
 - review後にユーザーが調査前ゲーム状態へ戻したことを明示確認しない限りadoptionを拒否する。adoption中および成功後の同一Coordinatorからの重複adoptionを拒否し、成功時はC5-E2C4が返す保存済みRngStateを保持する。persistence failure時はreviewと復元確認を保持して明示的retryを可能にする
-- Coordinatorはimplementedである。C5-E2C6 Skill multi-worker orchestrationも既存Client interfaceの背後でimplementedであり、C5-E2C7 Wizard UIはRNG Setupへ接続済みである。実Browser Worker benchmarkはC5-E2C8で、Skill live-game verificationはC5-E2C9で完了した（[C5_E2C8_BROWSER_WORKER_BENCHMARK.md](./C5_E2C8_BROWSER_WORKER_BENCHMARK.md) / [C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md](./C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md)）。C5-E2C10 Identification Production activationは完了した（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）。`production-rng:c5-e2`と`supportsSeedSearch = false`を維持する
+- Coordinatorはimplementedである。C5-E2C6 Skill multi-worker orchestrationも既存Client interfaceの背後でimplementedであり、C5-E2C7 Wizard UIはRNG Setupへ接続済みである。実Browser Worker benchmarkはC5-E2C8で、Skill live-game verificationはC5-E2C9で完了した（[C5_E2C8_BROWSER_WORKER_BENCHMARK.md](./C5_E2C8_BROWSER_WORKER_BENCHMARK.md) / [C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md](./C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md)）。C5-E2C10 Identification Production activationは完了した（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）。`production-rng:c5-e2`を維持する
 
 ## 9.11 C5-E2C6 Skill Identification Multi-Worker Orchestration current contract
 
@@ -851,7 +741,7 @@ Skill Identificationでcanonical Base Seedが確定した後のSTEP 2には、�
 - global progressは各childのlatest `searchedSeeds`と`matchesFound`を保持して合計し、元range全体を`totalSeeds`とする。out-of-order progressでも各child値を巻き戻さず、`searchedSeeds`を0から`totalSeeds`に収める。`matchesFound`はglobal limit前に発見済みの完全な候補数であり、`maxMatches`を超え得る
 - parent cancelは全active childへ伝播し、parent Promiseをcancelled errorでrejectする。1 childのfailure / unavailableは全active siblingをcancelしてlogical request全体をfailureにし、partial matchesを返さない。cancel / failure後のlate child result/progressはparent、次request、global progressへ反映しない
 - child Engine versionは全て同じProduction versionでなければならない。creation failureまたはversion mismatchはfail closedでWorker unavailableとし、生成済みchildをdisposeする。`dispose()`はactive childをcancelし、全child clientをdisposeする
-- C5-E2C6はorchestrationだけであり、Skill kernel、Production RNG semantics/version、`supportsSeedSearch`、Coordinator state machine、Gogma Identification、RngState、Search、Planner、React UIを変更しない。実Browser Worker benchmarkはC5-E2C8で、Skill live-game verificationはC5-E2C9で完了済みであり、C5-E2C10 Production activationは完了した（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）。Wizard UIはC5-E2C7でRNG Setupへ接続済みであり、development StrictMode環境のCoordinator lifecycle起因の表示不具合はC5-E2C7 lifecycle hotfixで解消済みである
+- C5-E2C6はorchestrationだけであり、Skill kernel、Production RNG semantics/version、Coordinator state machine、Gogma Identification、RngState、Search、Planner、React UIを変更しない。実Browser Worker benchmarkはC5-E2C8で、Skill live-game verificationはC5-E2C9で完了済みであり、C5-E2C10 Production activationは完了した（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）。Wizard UIはC5-E2C7でRNG Setupへ接続済みであり、development StrictMode環境のCoordinator lifecycle起因の表示不具合はC5-E2C7 lifecycle hotfixで解消済みである
 
 ## 9.12 Normal Artian Counter Identification current contract
 
@@ -896,7 +786,7 @@ export interface NormalArtianCounterIdentificationProgress {
 
 前提と入力。
 
-- Base Seedは既知が前提である。kernelはBase Seedを探索せず、generic Seed Searchへ戻さない。入力はProduction `NormalizedSeed` であり、`engine.normalizeSeed()` で再validationしてcanonical Production decimal formと一致しない値は `invalid_input` とする
+- Base Seedは既知が前提である。kernelはBase Seedを探索しない。入力はProduction `NormalizedSeed` であり、`engine.normalizeSeed()` で再validationしてcanonical Production decimal formと一致しない値は `invalid_input` とする
 - v1は既存契約どおり `NormalArtianRarity = 8` だけを受け付け、それ以外は `invalid_input` とする。内部rarity 7への変換は既存Production adapterがそのまま行う
 - Counterは武器種ごとに独立している。1回のIdentificationは1武器種のレア8 Counterだけを対象にし、他武器種の通常アーティア作成が間に挟まっても対象武器種のCounter連続性には影響しない
 - Counter Gateは入力、観測、探索対象、結果、採用値のいずれにも使用しない
@@ -948,7 +838,7 @@ Error semantics。
 Golden。
 
 - 既存game-verified fixture `src/test/fixtures/gameVerifiedNormalVectors.ts` のHeavy Bowgun観測（Base Seed 51231782、Normal Counter 4 / 5 / 6の連続15slot）は、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 5.3の監査どおり開始Counter 0..5000で `startNormalCounter = 4` の1件だけに一致し、`isTruncated = false` である。同じ15slotは1観測では0..5000に19候補、2観測以降は4だけになる
-- kernel / Worker foundationはimplementedである。NormalCountersPageへのUI接続、Counter確定処理、未検証武器種のProduction activationは後続PRである。`supportsSeedSearch = false`、`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`、Production Normal RNG output、Normal seed derivation、`NormalArtianCounter` persisted shape、`DATABASE_SCHEMA_VERSION`、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` は変更していない
+- kernel / Worker foundationはimplementedである。NormalCountersPageへのUI接続、Counter確定処理、未検証武器種のProduction activationは後続PRである。`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2`、Production Normal RNG output、Normal seed derivation、`NormalArtianCounter` persisted shape、`DATABASE_SCHEMA_VERSION`、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` は変更していない
 - その後の通常アーティア抽選上限修正（6.3.1）で、game-verified Production poolの `maximumOccurrences` はAttack 5 / Element 4 / family 7 2 / Affinity 3となり、`PRODUCTION_RNG_ENGINE_VERSION` は `production-rng:c5-e3` となった。Counter Identificationのpool membership / occurrence validationはこの値を使う。HBG golden（Base Seed 51231782、Counter 4 / 5 / 6、0..5000で `startNormalCounter = 4` 唯一）は上限修正後も変わらない。上限修正の時点ではsupport対象武器種、`NormalArtianAttributeClass`、Counter semanticsを変更していない
 - さらにその後のMelee support拡張（6.3.1、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.14）で、Counter IdentificationはSwitch Axeを除く近接10武器種を `attribute_present` / `none` の両classで検索可能になり、`PRODUCTION_RNG_ENGINE_VERSION` はこの時点では `production-rng:c5-e4` であった。kernelは `ProductionRngEngine.getPredictionSupport()` と `gameVerifiedNormalCandidatesForWeaponAndElement()` を共有しているため、support境界の拡張はkernel側の変更なしに自動的に反映される。Switch Axeだけが `unsupported_input` / `normal_pool_unverified` のままである。HBG golden、`NormalArtianAttributeClass`、Counter semantics、`NormalArtianCounter` persisted shape、`DATABASE_SCHEMA_VERSION`、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` は変更していない
 - その後、NormalCountersPageへのUI接続が完了した（[UI_FLOW.md](./UI_FLOW.md) 6）。`createProductionNormalArtianCounterIdentificationWorkerClient()` は通常UIから呼ばれ、観測入力 → Counter検索 → 追加観測 → unique確認 → 調査前状態への復元確認 → `counter = startNormalCounter` 確定保存までを行える。観測で選択可能なBonusは `normalArtianCounterObservationBonusOptions()` がProduction pool（`gameVerifiedNormalCandidatesForWeaponAndElement()`）とreference semantic mapping（`restorationBonusFromReferenceNormalId()`）から導出し、UI側に別の抽選表を持たない。検索可否は `getNormalArtianCounterIdentificationSupport()` がkernelと同じcapability / `getPredictionSupport()` で判定する。この接続はUI / Application層だけの変更であり、kernelのアルゴリズム、Production pool、reference parity、当時の `PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e4`、`NormalArtianCounter` persisted shape、`DATABASE_SCHEMA_VERSION`、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` は変更していない。Observation履歴の永続化schemaも追加していない
@@ -987,7 +877,7 @@ PlannerがRoute実行の予測を必要とする場合も注入EngineのPredicti
 Settings、Debug、RNG Setupのmain thread向け軽量操作は、
 `ProductionRngEngine`から生成したnon-persistent runtime descriptorを共通authorityとする。
 descriptorはmode `Production`、Engine version、operation-level capabilitiesを保持し、
-Settingsはmode/versionとSeed Search未対応を、Debugは全capabilityを表示する。
+Settingsはmode/versionとRNG同定の利用可否を、Debugは全capabilityを表示する。
 RNG Setupは同じProduction Engine instanceの`normalizeSeed()`と`capabilities`を使用する。
 具体的weapon/element/inputの対応範囲はoperation-level capabilityとは別に
 `getPredictionSupport()`で判定する。Worker実行可否はEngineの存在・modeとは別概念であり、
@@ -996,11 +886,11 @@ BuildCandidate、BuildListEntry、ProductionPlanへ追加保存せず、永続pr
 `CalculationContext.rngEngineVersion`をauthorityとする。
 
 現行Production capabilityはNormal Artian、Skill、Gogma Reset、Gogma KeepのPredictionがactive、
-generic Seed Searchはinactiveである。専用Skill / Gogma Identification Workerのavailabilityは
-`supportsSeedSearch`ではなくWorker/application levelで個別に判定し、`supportsSeedSearch = false`を維持する。
+専用Skill / Gogma Identification Workerのavailabilityは、RngEngine capability flagではなく
+Worker/application levelで個別に判定する。
 Production有効判定とPredictionはdisabled legacy `LotteryMaster`を要求しない。
 
-C5-E2C3でactive Gate policyをruntimeへ統合した。Production Domain Prediction inputはcaller-supplied Gateを持たず、Production adapterがCore/reference predictorへSkill 54、Gogma 35をoperation別のactive-branch representativeとして供給する。Capability、Search、Planner、Trace Replayはpersisted exact Gateを要求せず、semantic hashもlegacy Gateを除外する。observable semantics changeとして `PRODUCTION_RNG_ENGINE_VERSION` は `production-rng:c5-e2` である。C5-E2C7でIdentification UIは実装済みであり、C5-E2C10でProduction Identification activationが完了した（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）。`supportsSeedSearch = false`は維持する。
+C5-E2C3でactive Gate policyをruntimeへ統合した。Production Domain Prediction inputはcaller-supplied Gateを持たず、Production adapterがCore/reference predictorへSkill 54、Gogma 35をoperation別のactive-branch representativeとして供給する。Capability、Search、Planner、Trace Replayはpersisted exact Gateを要求せず、semantic hashもlegacy Gateを除外する。observable semantics changeとして `PRODUCTION_RNG_ENGINE_VERSION` は `production-rng:c5-e2` である。C5-E2C7でIdentification UIは実装済みであり、C5-E2C10でProduction Identification activationが完了した（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）。
 
 ## 10.2 Message
 
@@ -1012,11 +902,6 @@ export type RngWorkerRequest =
       input: CounterSearchInput;
     }
   | {
-      type: "seed_search";
-      requestId: string;
-      input: SeedSearchInput;
-    }
-  | {
       type: "cancel";
       requestId: string;
     };
@@ -1026,11 +911,6 @@ export type RngWorkerResponse =
       type: "counter_search_result";
       requestId: string;
       result: CounterSearchResult;
-    }
-  | {
-      type: "seed_search_result";
-      requestId: string;
-      result: SeedSearchResult;
     }
   | {
       type: "progress";
@@ -1095,7 +975,6 @@ Fake Engineの制約。
 - Gogma Bonus / Skill観測でelementId欠落を拒否する
 - Normal Artian観測でEngineが属性不要の場合にelementId nullを許可する
 - CounterSearchInputでsearchKindと異なるObservation kindの混在を拒否する
-- SeedSearchInput内の全Observationへkind別validationを適用する
 - KnownValueが項目ごとに独立して確定できる
 - Capability判定が不足値に依存する機能だけをfalseにする
 - Keepがcurrent 5slotを明示入力し、slot familyを維持した単一結果を返す

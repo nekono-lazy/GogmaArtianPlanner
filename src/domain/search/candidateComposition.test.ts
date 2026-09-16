@@ -108,7 +108,6 @@ function createCompositionEngine(
   const fixtures: FakeRngFixtures = {
     version: ENGINE_VERSION,
     capabilities: {
-      supportsSeedSearch: false,
       supportsNormalArtianPrediction: normals.length > 0,
       supportsGogmaPrediction: true,
       supportsSkillPrediction: true,

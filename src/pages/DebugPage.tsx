@@ -19,12 +19,12 @@ const capabilityRows = [
   ['supportsSkillPrediction', productionRngRuntime.capabilities.supportsSkillPrediction],
   ['supportsGogmaPrediction', productionRngRuntime.capabilities.supportsGogmaPrediction],
   ['supportsKeepBonusesPrediction', productionRngRuntime.capabilities.supportsKeepBonusesPrediction],
-  // The legacy generic Seed Search API flag (`docs/UI_FLOW.md` 5.3); it is not
-  // the Identification Wizard, whose availability is listed separately below.
-  ['旧generic Seed Search API (supportsSeedSearch)', productionRngRuntime.capabilities.supportsSeedSearch],
 ] as const
 
-/** Application-level Production Identification availability, never derived from `supportsSeedSearch`. */
+/**
+ * Application-level Production Identification availability. It is decided at the
+ * Worker / application level and never by an RngEngine capability flag.
+ */
 function identificationAvailabilityValue(): string {
   const availability = getProductionIdentificationAvailability()
   return availability.isAvailable

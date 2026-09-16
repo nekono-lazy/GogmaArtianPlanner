@@ -167,7 +167,7 @@ export function validateKnownValue<T>(
   const issues: DomainValidationIssue[] = []
   if (
     known.source !== null &&
-    !['gogma_seed_finder_import', 'manual', 'observation'].includes(known.source)
+    !['manual', 'observation'].includes(known.source)
   ) {
     addIssue(issues, 'source', 'invalid_literal', 'KnownValue source is invalid.')
   }

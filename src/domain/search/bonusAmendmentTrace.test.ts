@@ -135,7 +135,6 @@ function createTraceFixtureEngine(input: CandidateSearchInput): FakeRngEngine {
   const fixtures: FakeRngFixtures = {
     version: 'bonus-amendment-trace',
     capabilities: {
-      supportsSeedSearch: false,
       supportsNormalArtianPrediction: false,
       supportsGogmaPrediction: true,
       supportsSkillPrediction: false,

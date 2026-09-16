@@ -151,7 +151,6 @@ function createBonusFixtureEngine(
   const fixtures: FakeRngFixtures = {
     version: 'bonus-stream-independence',
     capabilities: {
-      supportsSeedSearch: false,
       supportsNormalArtianPrediction: normals.length > 0,
       supportsGogmaPrediction: true,
       supportsSkillPrediction: options.skillSupported ?? false,

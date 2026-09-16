@@ -336,7 +336,6 @@ export function createConstrainedEngine(
   const fixtures: FakeRngFixtures = {
     version: 'constrained-enumeration-v1',
     capabilities: {
-      supportsSeedSearch: false,
       supportsNormalArtianPrediction: options.normalSupported ?? true,
       supportsGogmaPrediction: options.gogmaSupported ?? true,
       supportsSkillPrediction: options.skillSupported ?? true,

@@ -44,8 +44,8 @@ describe('ProductionRngEngine facade', () => {
     const engine = new ProductionRngEngine()
     expect(PRODUCTION_RNG_ENGINE_VERSION).toBe('production-rng:c5-e7')
     expect(engine.version).toBe(PRODUCTION_RNG_ENGINE_VERSION)
-    expect(engine.capabilities).toEqual({ supportsSeedSearch: false, supportsNormalArtianPrediction: true, supportsGogmaPrediction: true, supportsSkillPrediction: true, supportsKeepBonusesPrediction: true })
-    expect(Object.values(new UnavailableRngEngine().capabilities)).toEqual([false, false, false, false, false])
+    expect(engine.capabilities).toEqual({ supportsNormalArtianPrediction: true, supportsGogmaPrediction: true, supportsSkillPrediction: true, supportsKeepBonusesPrediction: true })
+    expect(Object.values(new UnavailableRngEngine().capabilities)).toEqual([false, false, false, false])
   })
 
   it('dispatches Normal, Skill, Reset, and Keep to their production predictors', () => {

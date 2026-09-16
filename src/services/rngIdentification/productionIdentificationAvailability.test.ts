@@ -18,11 +18,17 @@ describe('getProductionIdentificationAvailability', () => {
     expect(productionIdentificationUnavailableReasonLabels[availability.reason]).toContain('RNG同定')
   })
 
-  it('is independent of the legacy generic Seed Search flag', () => {
-    // The legacy API stays unsupported while the Wizard is available: the two
-    // are different contracts (`docs/UI_FLOW.md` 5.3 / 5.4).
-    expect(productionRngRuntime.capabilities.supportsSeedSearch).toBe(false)
+  it('is decided at the application level, not by any RngEngine capability flag', () => {
+    // Availability is the Worker environment only (`docs/UI_FLOW.md` 5.4); the
+    // Engine capabilities describe prediction support and nothing else.
+    expect(Object.keys(productionRngRuntime.capabilities).sort()).toEqual([
+      'supportsGogmaPrediction',
+      'supportsKeepBonusesPrediction',
+      'supportsNormalArtianPrediction',
+      'supportsSkillPrediction',
+    ])
     expect(getProductionIdentificationAvailability({ hasWorker: true }).isAvailable).toBe(true)
+    expect(getProductionIdentificationAvailability({ hasWorker: false }).isAvailable).toBe(false)
   })
 
   it('mirrors the Worker-constructor check the Production Worker clients use', () => {

@@ -104,7 +104,6 @@ function createSkillTraceEngine(input: CandidateSearchInput): FakeRngEngine {
   const fixtures: FakeRngFixtures = {
     version: 'skill-amendment-trace',
     capabilities: {
-      supportsSeedSearch: false,
       supportsNormalArtianPrediction: false,
       supportsGogmaPrediction: true,
       supportsSkillPrediction: true,
