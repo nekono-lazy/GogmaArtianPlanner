@@ -280,6 +280,14 @@ PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2を変更しなかった。
 `PlannerSearchTermination` はruntime result metadataであり、
 `ProductionPlan`、`PlanStep`、`BuildListEntry`、Dexie schemaへ永続化しない。
 
+Execution lifecycle改訂（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16章）は、Target lifecycle、
+OwnedWeapon execution lifecycle、`preferredOwnedWeaponId` のstaleness semantics
+（`createTargetDefinitionHash()` の正規化対象）、PlanStep / reserve semantics、Expected execution
+state、Undo対象範囲を変更する。本改訂は仕様確定だけであり、実コードの
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`ExportRoot.schemaVersion` は
+変更していない。後続実装PRで現行schemaとImport互換を監査し、必要なversion境界を確定する。
+既存データを推測migrationして意味を変えてはならない。
+
 ---
 
 ## 4. Enum
@@ -314,6 +322,10 @@ export type SkillMatchMode =
   | "all"
   | "any";
 
+export type TargetWeaponLifecycleStatus =
+  | "active"
+  | "completed";
+
 export type ProductionPlanStatus =
   | "draft"
   | "active"
@@ -321,19 +333,30 @@ export type ProductionPlanStatus =
   | "stale"
   | "abandoned";
 
+export type ProductionPlanAbandonmentReason =
+  | "user_abandoned"
+  | "replan_adopted"
+  | "finished_as_compromise"
+  | "breaking_change_approved";
+
 export type PlanStepOperationType =
   | "create_normal_artian"
   | "convert_normal_to_gogma"
   | "reset_bonuses"
   | "keep_bonuses"
   | "reset_skills"
+  | "confirm_owned_ideal"
+  // legacy: current Plannerは生成しない（PLANNER_SPEC 16.3）
   | "reserve_weapon"
   | "confirm_result";
 
 export type ExecutionAction =
   | "confirmed_expected"
-  | "secured_weapon"
   | "actual_result_different"
+  | "operation_uncertain"
+  | "finished_as_compromise"
+  // legacy: 独立した確保Stepを持つ旧Planだけに現れる
+  | "secured_weapon"
   | "skipped_candidate";
 
 export type RecalculationReason =
@@ -344,6 +367,8 @@ export type RecalculationReason =
   | "owned_weapon_changed"
   | "calculation_context_changed"
   | "unexpected_result"
+  | "execution_operation_uncertain"
+  // legacy: 独立した確保Stepを持つ旧Planだけに現れる
   | "planned_candidate_not_secured"
   | "different_candidate_secured"
   | "planned_status_change_declined"
@@ -355,6 +380,12 @@ export type ConflictKind =
   | "same_normal_counter"
   | "same_owned_weapon_consumed";
 ```
+
+`TargetWeaponLifecycleStatus`、`ProductionPlanAbandonmentReason`、`confirm_owned_ideal`、
+`operation_uncertain`、`finished_as_compromise`、`execution_operation_uncertain` はExecution
+lifecycle改訂（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16章）で追加する仕様上の値であり、後続実装PRで
+コードへ反映する。legacy値は保存済みartifactの読み取り互換のためだけに残し、current Executionは
+生成しない。
 
 ---
 
@@ -530,9 +561,21 @@ export interface OwnedWeaponBase {
   restorationBonusScope: ArtianBonusScope;
   restorationBonuses: RestorationBonusSet;
   isProtected: boolean;
+  /**
+   * Execution lifecycle改訂で追加する作成中状態（PLANNER_SPEC 16.10.1）。
+   * null = 作成中ではない。ユーザーは直接編集できない。
+   */
+  executionInProgress: OwnedWeaponExecutionInProgress | null;
   memo: string | null;
   createdAt: ISODateTimeString;
   updatedAt: ISODateTimeString;
+}
+
+// OwnedWeaponはTargetWeaponを参照しない（8.5）ため、Target IDは持たない。
+// 表示用の目標武器名はPlanの追跡情報またはTarget側の preferredOwnedWeaponId から導出する。
+export interface OwnedWeaponExecutionInProgress {
+  productionPlanId: ProductionPlanId;
+  startedAt: ISODateTimeString;
 }
 
 export interface OwnedNormalArtianWeapon extends OwnedWeaponBase {
@@ -569,19 +612,29 @@ export type OwnedWeapon =
 - `status` はユーザーが所持武器を整理するための管理ラベルだけを意味する。Plannerの操作可否、
   Search Route eligibility、Target Satisfactionをstatusから決定しない
 - 手動で新規登録する巨戟アーティアの初期値は `status = "unclassified"`、`isProtected = false`
-- PlannerがCandidateを確保する場合、`status = "practical"` は `isProtected = false`、
-  `status = "ideal"` は `isProtected = true` を初期値とする
+- Executionが作成対象Normalを登録する場合は `status = null`、`isProtected = false`、巨戟化Stepの確定で
+  `status = "unclassified"` とする（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.3）
+- Executionで選択済み妥協checkpointへ到達した場合は `status = "practical"` とし、保護は変更しない。
+  理想品が完成した場合は、新規生成武器でも既存武器でも `status = "ideal"`、`isProtected = true` とする
+  （同 16.12 / 16.13）
 - `isProtected = true` はPlanner / Candidate Searchによる武器性能の変更から武器を保護する
 - `isProtected = true` の武器を、Reset Bonuses、Keep Bonuses、Reset Skillsの対象にしない
 - statusと保護は独立したユーザー設定であり、既存保存値をmigrationまたはstatus変更だけで暗黙変更しない
 - 通常アーティアの新規保護初期値はfalseとし、ユーザーが手動で保護できる
 - 保護中の通常アーティアは巨戟化Routeの変換元にしない
 - Plannerに保護武器の消費を許可するoverride設定は持たない
-- statusを書き換える経路は、Owned Weapons画面の通常CRUDと、`reserve_weapon` が
-  理想品ラベルを設定する場合だけとする。後者は新規生成Candidateでも既存Gogma
-  Candidateの確保でも同じで、既存Gogmaの保護状態は維持する。妥協checkpointへの到達では
-  statusも保護も変更しない。Material化のためのstatus変更と
-  `change_owned_weapon_status` PlanStepは廃止した
+- statusを書き換える経路は、Owned Weapons画面の通常CRUDと、Execution Step確定（巨戟化時の
+  `unclassified`、選択済み妥協checkpoint到達時の `practical`、理想品完成時の `ideal`）だけとする。
+  Planner計算はstatusを永続化しない。性能が条件を満たしただけでは自動でPractical / Idealにしない。
+  Material化のためのstatus変更と `change_owned_weapon_status` PlanStepは廃止した
+- `executionInProgress` はstatusと直交したExecution内部状態であり、`status` に `in_progress` 等を
+  追加しない。ONはExecutionが作成対象Normalを登録したStep、または既存武器へのそのEntryの最初の
+  実ゲーム操作を確定したStep、OFFは理想品完成、妥協品として終了、Planの `completed` /
+  `abandoned` 遷移とする。再計画採用では新Planが同じ武器を追跡する場合だけ新Plan IDへ
+  付け替える（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.8 / 16.10.1）。ユーザーは直接編集できない
+- `executionInProgress` はCandidate Searchの武器性能判断、Search route eligibility、Planner入力、
+  `referencedOwnedWeaponsHash`、`ExpectedPlanState.ownedWeaponsHash` に使わない。Undoとゲーム内
+  セーブ地点の復元では正確に戻す
 - `status` は `name` / `memo` / timestampと同じく非semanticであり、`referencedOwnedWeaponsHash`、
   `ExpectedPlanState.ownedWeaponsHash`、constrained search identity、Planner search
   semantic inventoryのいずれにも含めない。status変更だけではBuildCandidate、
@@ -600,6 +653,32 @@ export type OwnedWeapon =
 
 TargetWeaponは既存ID・名称・武器種・属性・priority(1..5、default 3)・isEnabled・
 `preferredOwnedWeaponId`(8.5)・Ideal5枠・Skill条件・memo・日時を保持する。
+
+Execution lifecycle改訂（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.13）で次のlifecycleを追加する。
+
+```ts
+// TargetWeaponの該当fields:
+// lifecycleStatus: TargetWeaponLifecycleStatus;       // "active" | "completed"
+// completedAt: ISODateTimeString | null;
+// completedByProductionPlanId: ProductionPlanId | null;
+```
+
+- `active`: 未完了。検索対象ON/OFF（`isEnabled`）はactive Targetにだけ意味を持つ
+- `completed`: 理想品が完成し目標武器が手に入った。通常の目標武器一覧、Candidate Search、Planner入力から
+  除外する。履歴とProductionPlan参照のためレコードは保持し、物理削除しない
+- `completed` にするのは、Executionの理想品完成Step確定（`completedByProductionPlanId` にPlan ID）と、
+  所持武器で理想品を満たすTargetをユーザーが明示操作で完了にする場合（`completedByProductionPlanId = null`、
+  [UI_FLOW.md](./UI_FLOW.md) 8.2）だけである。妥協品での終了では `completed` にしない
+- `completed` Targetの `preferredOwnedWeaponId` は `null` とする
+- 理想品完成で武器Xをprotectedにする場合、完成対象Targetに加えて、Xを `preferredOwnedWeaponId` に持つ
+  他のすべてのTargetの `preferredOwnedWeaponId` も同一transactionで `null` にする（8.5）。他Targetの
+  性能条件、`priority`、`isEnabled`、lifecycleは変更しない
+- `completed` から `active` へ戻すのは、Undo / ゲーム内セーブ地点復元と、ユーザーの明示操作
+  「未完了に戻す」（[UI_FLOW.md](./UI_FLOW.md) 8.2）だけである。戻しても所持武器は変更しない
+- `lifecycleStatus`、`completedAt`、`completedByProductionPlanId` は性能定義ではないため
+  `createTargetDefinitionHash()` の対象外とする（9.4）
+- 既存データのmigrationで、所持Ideal武器の存在などからTargetを `completed` と推測しない
+
 妥協条件の正式型は次のとおり。
 
 ```ts
@@ -716,8 +795,38 @@ soft preferenceである。
   [PLANNER_SPEC.md](./PLANNER_SPEC.md) 7.4に従う
 - Target Satisfactionを制限しない。あるTargetがWeapon Xを優先起点にしていても、性能を満たす
   別のWeapon YがそのTargetを満たしてよい。1対1制約は優先起点の関係にだけ適用する
-- `reserve_weapon` その他のPlanner処理がこの値を自動設定・自動付け替えしてはいけない。
-  設定はTarget Weapons画面からのユーザー操作だけで行う
+- Planner計算（Beam Search、Trace Replay、constrained re-search、what-if）、Candidate Search、
+  探索内部の `reserve_weapon` がこの値を自動設定・自動付け替えしてはいけない。通常の設定は
+  Target Weapons画面からのユーザー操作で行う
+- 例外はExecutionだけである。Execution Navigatorで実際の作成作業を開始したStep（新規Normal Routeの
+  作成対象Normal作成、既存Normal / GogmaへのそのEntryの最初の実ゲーム操作）の確定時に、そのEntryの
+  Targetへ追跡武器を自動設定し、別Targetが同じ武器を優先起点にしていればそのTargetを `null` にする。
+  両方を同じStep確定transactionで保存する。Plan破棄後も紐付けは残す
+  （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.11）
+- 理想品完成（Executionのtarget completion、`confirm_owned_ideal`、Target Weapons画面の
+  「この武器で目標を完了にする」）で武器Xが `isProtected = true` になる場合は、完成対象Targetと、
+  Xを優先起点にしている他のすべてのTargetの `preferredOwnedWeaponId` を同一transactionで `null` にする。
+  解除するのは `preferredOwnedWeaponId` だけである。完成後にXを優先起点に持つTargetが残れば
+  collection validation違反としてtransaction全体をrollbackする（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.13）
+
+staleness semanticsの分離（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.11）。
+
+```text
+BuildCandidate / BuildListEntry validity
+  Target性能定義として扱わない。createTargetDefinitionHash() の対象外であり、
+  変更してもBuildListEntryを target_definition_changed にしない
+
+Planner / Draft Planのplanning input
+  planning inputとして扱う。PlannerInput.targetWeapons と
+  PlanningInputSnapshot.targetWeaponsHash に含める
+
+Active Plan Execution
+  Execution自身による設定・付け替え・解除は正常進行であり、
+  ExpectedPlanState.targetExecutionStateHash（11.2）で期待どおりか検証する
+```
+
+TargetWeapon fieldごとのhash / validation / planning inputの責務表は
+[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.11「TargetWeapon fieldの責務」を正本とする。
 
 collection validation。TargetWeapon単体validationは構造だけを検証できるため、以下は
 OwnedWeapon collectionと他Targetを参照する専用のvalidation authorityでfail closedにする。
@@ -1095,17 +1204,30 @@ export type BuildListEntryStaleReason =
 不変条件。
 
 - 作成リスト追加時にBuildCandidate全体を `candidateSnapshot` へ複製する
-- `targetDefinitionHash` はTargetWeaponの意味を持つ項目を安定serializeして生成する。
-  `preferredOwnedWeaponId` はTargetの計画意味に影響するため対象に含め、変更すると既存Entryは
-  `target_definition_changed` としてstaleになる。一方でCandidate stable key、Candidate ID、
-  Candidate dedup key、BuildCandidate meaning fingerprintへは混ぜない。preferredはCandidate
-  自身の意味ではなくTarget側の選好だからである
+- `targetDefinitionHash` は `createTargetDefinitionHash()` でTargetWeaponの性能定義（Candidateの成否と意味を
+  決める項目）だけを安定serializeして生成する。対象fieldは次に固定する
+  （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.11）
+
+  ```text
+  含める:   weaponTypeId, elementId, idealBonuses, practicalBonusConditions,
+            alternativeBonusRules, idealSkillCondition, practicalSkillCondition
+  含めない: priority, isEnabled, preferredOwnedWeaponId, lifecycleStatus, completedAt,
+            completedByProductionPlanId, name, memo, timestamps
+  ```
+
+- `priority`、`isEnabled`、`preferredOwnedWeaponId`、lifecycleを変更しても既存Entryを
+  `target_definition_changed` にしない。`priority` と `preferredOwnedWeaponId` はPlannerのplanning input、
+  `isEnabled = false` と `completed` はSearch / Planner入力からの除外条件として扱う。preferredはCandidate
+  stable key、Candidate ID、Candidate dedup key、BuildCandidate meaning fingerprintへも混ぜない
+- 旧契約（現行実装）では `priority`、`isEnabled`、`preferredOwnedWeaponId` を `targetDefinitionHash` に
+  含めていた。この正規化変更はExecution lifecycle改訂の実装PRでversion境界とともに適用する（3.5）
+- `completed` TargetのEntryはstaleではなく、Planner入力validationで「完了済み目標武器」として除外する
 - `searchStateHash` は `candidateSnapshot.searchStateHash` を複製する
 - `referencedOwnedWeaponsHash` は `candidateSnapshot.referencedOwnedWeaponsHash` を複製する
 - `calculationContext` は `candidateSnapshot.calculationContext` と一致する
 - 再検索でBuildCandidateが削除または置換されてもSnapshotは保持する
 - `candidateId` は作成元の追跡用であり、作成元BuildCandidate削除後もSnapshotが有効ならEntryはstaleにならない
-- TargetWeapon変更、検索に使用したRNG状態変更、Route参照OwnedWeapon変更、CalculationContext非互換時は `isStale = true` とし、Planner入力から除外する
+- TargetWeapon性能定義の変更、検索に使用したRNG状態変更、Route参照OwnedWeapon変更、CalculationContext非互換時は `isStale = true` とし、Planner入力から除外する
 - 初期版では `searchStateHash` が現在値から再計算したHashと異なる場合、安全側に倒して `rng_state_changed` とする
 - Route成立性に影響しない変更を明示的かつテスト可能に証明できる場合だけ、将来 `rng_state_changed` を回避してよい
 - Active Plan開始後、PlanどおりのRNG進行またはOwnedWeapon変更でEntry自体が再利用不可になっても、進行中Planのstale判定はPlanStepの期待状態を優先する
@@ -1263,17 +1385,37 @@ export interface ProductionPlan {
   requiredMaterials: MaterialRequirement[];
   currentStepId: PlanStepId | null;
   recalculationReasons: RecalculationReason[];
+  // Execution lifecycle改訂で追加（PLANNER_SPEC 16.2）
+  abandonmentReason: ProductionPlanAbandonmentReason | null;
+  abandonedAt: ISODateTimeString | null;
+  completedAt: ISODateTimeString | null;
   createdAt: ISODateTimeString;
   updatedAt: ISODateTimeString;
 }
 ```
 
+statusの意味（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.2）。
+
+| status | 意味 |
+| --- | --- |
+| `draft` | まだ実行を開始していない |
+| `active` | 実行中。中断してブラウザやゲームを終了しても `active` のまま。一時中断用statusは持たない |
+| `completed` | Plan対象の必要な処理が正常完了した |
+| `stale` | 想定外結果や外部状態不一致などで予測を信用できず続行不可 |
+| `abandoned` | ユーザー意思で破棄、再計画採用、妥協品で終了、Plan前提を壊す手動変更の承認 |
+
 不変条件。
 
-- `status = "active"` のPlanは同時に1件まで
+- `status = "active"` または `"stale"` の実行中Planは同時に1件まで
+- `abandonmentReason` / `abandonedAt` は `status = "abandoned"` のときだけ非null。`completedAt` は
+  `status = "completed"` のときだけ非null
+- `stale` はPlanが壊れたことの検出、`abandoned` はユーザーの意図した終了であり、互いに読み替えない。
+  `stale` から `abandoned` へ遷移しても `recalculationReasons` を保持する
 - `currentStepId` は `steps` 内の未完了Stepを参照する
-- 現在Stepの期待状態またはPlanの不変前提と実態に差分が出た場合、既存Planは `stale` にする
-- `baseSnapshot` はPlanner開始状態の監査、再現、Target・Build List前提の検証に使用する
+- 現在Stepの期待状態またはPlanの不変前提（Plan依存Target / Plan依存Entry / CalculationContext）と
+  実態に差分が出た場合、既存Planは `stale` にする。Plan非依存Targetの追加・変更、Build Listへの
+  新規Entry追加ではstaleにしない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.6）
+- `baseSnapshot` はPlanner開始状態の監査、再現、Plan依存Target・Plan依存Entry前提の検証に使用する
 - 正常なStep進行後の可変状態を `baseSnapshot` の開始状態と比較してstaleにしない
 - `calculationContext` が現在環境と非互換なら `stale` にする
 - `selectedBuildListEntryIds` はPlanner-generated BuildListEntryを参照してよい。
@@ -1289,10 +1431,39 @@ export interface PlanningInputSnapshot {
   initialExecutionState: ExpectedPlanState;
   targetWeaponsHash: string;
   buildListEntriesHash: string;
+  // Execution lifecycle改訂で追加（PLANNER_SPEC 16.6）
+  dependentTargetDefinitionsHash: string;
+  dependentBuildListEntriesHash: string;
   calculationContext: CalculationContext;
   createdAt: ISODateTimeString;
 }
 ```
+
+- `targetWeaponsHash` / `buildListEntriesHash` はPlanner入力全体の監査用hashである
+- `targetWeaponsHash` は `createTargetDefinitionHash()` の単純再利用ではないplanning-input用の独立契約である。
+  `PlannerInput.targetWeapons` の全TargetをID順に、次の構造へ正規化してhash化する
+  （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 11.0-B）
+
+  ```ts
+  {
+    id: TargetWeaponId;
+    definitionHash: string;                      // createTargetDefinitionHash(target)。preferredを含まない
+    priority: number;
+    isEnabled: boolean;
+    preferredOwnedWeaponId: OwnedWeaponId | null;
+    lifecycleStatus: TargetWeaponLifecycleStatus;
+  }
+  ```
+
+  `name`、`memo`、`completedAt`、`completedByProductionPlanId`、timestampsは含めない
+- `dependentTargetDefinitionsHash` はPlan依存Target（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.5）ごとに
+  `{ id, definitionHash: createTargetDefinitionHash(target), priority, isEnabled }` をID順にhash化する。
+  `preferredOwnedWeaponId` と `lifecycleStatus` はExecution自身が正常進行として変更するため含めず、
+  `ExpectedPlanState.targetExecutionStateHash` で検証する
+- `dependentBuildListEntriesHash` は `selectedBuildListEntryIds` のEntryだけについて、
+  `buildListEntriesHash` と同じ不変項目をID順にhash化する
+- Active / draft Planの不変前提検証（`detectPlanInvalidation()`）は依存hashだけを使う。
+  全体hashの差分はDebug表示と「この生産計画に含まれない目標武器・候補がある」案内だけに使う
 
 Planner計算へ渡す非永続入力と実行時dependencyは次の契約とする。
 
@@ -1352,6 +1523,8 @@ export interface ExpectedPlanState {
   rngStateHash: string;
   normalCountersHash: string;
   ownedWeaponsHash: string;
+  // Execution lifecycle改訂で追加（PLANNER_SPEC 16.5）
+  targetExecutionStateHash: string;
 }
 ```
 
@@ -1359,11 +1532,12 @@ export interface ExpectedPlanState {
 
 - `rngStateHash`: Base Seed、Gogma Counter、Skill Counterの各KnownValueについて正規化valueとisConfirmedを含み、legacy `counterGate`、source、notes、日時を除外する
 - `normalCountersHash`: id、counter、isConfirmedを含み、観測日時を除外する
-- `ownedWeaponsHash`: 共通項目としてID、kind、武器種、属性、restorationBonusScope、保存中のボーナス5枠順、isProtectedを含む。OwnedWeaponはTargetWeaponを参照しないため、Target関連情報は含めない。巨戟だけseriesSkillId、groupSkillIdを加える。`status` は管理ラベルであり計算に影響しないため、名称、memo、日時と同じく除外する。通常に存在しないSkillへ仮値を設定しない
+- `ownedWeaponsHash`: 共通項目としてID、kind、武器種、属性、restorationBonusScope、保存中のボーナス5枠順、isProtectedを含む。OwnedWeaponはTargetWeaponを参照しないため、Target関連情報は含めない。巨戟だけseriesSkillId、groupSkillIdを加える。`status` と `executionInProgress` は計算に影響しないため、名称、memo、日時と同じく除外する。通常に存在しないSkillへ仮値を設定しない。execution projection（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.3）で登録される作成対象Normalは登録Stepの `expectedStateAfter` から含まれ、Counter進行用Normalは含まれない。observation bindingを持つ武器の5枠は、Plan生成時のexpected stateではbinding token `{ observationBinding: <binding StepのPlanStep ID> }` として正規化し、実状態側は5枠とscopeがbinding Stepの `ExecutionHistory.actualResult` とslot順まで完全一致する場合だけtokenへ置き換える（同 16.5）
+- `targetExecutionStateHash`: Plan依存Target（`selectedBuildListEntryIds` のEntryのTarget、全PlanStepの `targetWeaponId` / `progressedTargetWeaponIds` / `executionEffects` が参照するTarget）ごとに `id`、`lifecycleStatus`、`preferredOwnedWeaponId` をID順にhash化する。全Targetをhashしない。日時は含めない。Plan非依存Targetの紐付け解除（Execution target link）はhashではなくStep確定時のcollection validationとUndo Snapshotで扱う
 - `buildListEntriesHash`: Entry ID、Candidate Snapshot、途中採用状態を持つEntryのcheckpoint pin pair（選択laneは opportunity ID / lane位置 / 終端操作index / Skill または exact ordered 5枠 / scope / match、未選択laneはCandidateのIdeal終点の Skill または exact ordered `finalBonuses` / scope）と改善優先、Target定義Hash、searchStateHash、CalculationContextを含み、派生値のisStale、staleReasons、日時を除外する（PLANNER_SPEC 7.5.5）
 
 `ExpectedPlanState` の各hashは1つのPlan内で意味を持つ検証値である。`ownedWeaponsHash`
-はOwnedWeapon IDを含み、`reserve_weapon` の予約IDは
+はOwnedWeapon IDを含み、新規Normal Routeで登録する武器の予約IDは
 `PlannerIdFactory` 由来であるため、同じsemantic outcomeでもPlanner実行ごとに値が変わる。
 したがってPlanner実行間でhash文字列の完全一致を要求しない。要求するのは1つのPlan内の
 chain validity、すなわち先頭Stepの `expectedStateBefore` が
@@ -1396,12 +1570,41 @@ export interface PlanStep {
   expectedStateAfter: ExpectedPlanState;
   inventoryChange: InventoryChange | null;
   rngAdvance: RngAdvance;
+  // Execution lifecycle改訂で追加（PLANNER_SPEC 16.3）
+  executionEffects: PlanStepExecutionEffects;
   requiresUserConfirmation: boolean;
   isCompleted: boolean;
   completedAt: ISODateTimeString | null;
   debug: PlanStepDebugInfo | null;
 }
 ```
+
+`executionEffects` の概念型。field名は実装PRで確定してよいが、意味を変えてはならない。
+
+```ts
+export interface PlanStepExecutionEffects {
+  /** このStepが操作・登録する追跡武器。Counter進行用Normal作成Stepは null */
+  trackedOwnedWeaponId: OwnedWeaponId | null;
+  /** create_normal_artian Stepだけ非null */
+  normalCreationRole: "counter_advance" | "production_target" | null;
+  /** 作成対象Normalの登録。blindでは5枠をobservation bindingで受け取る */
+  registersTrackedWeapon: boolean;
+  observationBinding: { kind: "normal_restoration_bonuses" } | null;
+  /** Execution確定時にTargetへ追跡武器を紐付ける（16.11） */
+  targetLinks: { buildListEntryId: BuildListEntryId; targetWeaponId: TargetWeaponId }[];
+  /** 選択済み妥協checkpoint到達で追跡武器をpracticalにする（16.12） */
+  compromiseLabels: { buildListEntryId: BuildListEntryId; ownedWeaponId: OwnedWeaponId }[];
+  /** 理想品完成とTarget完了（16.13） */
+  targetCompletions: {
+    buildListEntryId: BuildListEntryId;
+    targetWeaponId: TargetWeaponId;
+    ownedWeaponId: OwnedWeaponId;
+  }[];
+}
+```
+
+「Counter進行用」「この後巨戟化する作成対象」のUI区別は `normalCreationRole` だけをauthorityとする。
+完成予定の目標武器数は `targetCompletions` だけをauthorityとする（[UI_FLOW.md](./UI_FLOW.md) 11.0）。
 
 不変条件。
 
@@ -1412,10 +1615,10 @@ export interface PlanStep {
 - Step実行前の実状態は `expectedStateBefore` と一致しなければならない
 - 期待どおりの操作と更新を適用した後の実状態は `expectedStateAfter` と一致しなければならない
 - 両方が一致して次Stepへ進む場合、Planをstaleにしない
-- statusだけを変更する専用PlanStepは持たない。`reserve_weapon` が理想品のラベル
-  （`ideal` / 保護あり）を設定する以外に、Plannerがstatusを書き換える経路はない。statusは
-  非semanticであるため、ユーザーがOwned Weapons画面でラベルを変更しても実行中Planの
-  ExpectedPlanState不一致にならない
+- statusだけを変更する専用PlanStepは持たない。statusは物理Step（または `confirm_owned_ideal`）の
+  execution effectとして、巨戟化時の `unclassified`、選択済み妥協checkpoint到達時の `practical`、
+  理想品完成時の `ideal` だけが書き換わる。statusは非semanticであるため、ユーザーがOwned Weapons
+  画面でラベルを変更しても実行中PlanのExpectedPlanState不一致にならない
 - Candidate由来のStepは `buildListEntryId` を判断記録の主参照とし、`candidateId` はSnapshot内の追跡情報としてのみ使用する
 - `progressedTargetWeaponIds` は、この1回の物理PlanStepでRoute進行が発生したTargetWeaponを記録するobservational metadataである
 - `progressedTargetWeaponIds` は `targetWeaponId` / `buildListEntryId` を置き換えない。primary presentationとprimary Entry権威は従来どおりこの2 fieldが持つ
@@ -1429,16 +1632,31 @@ export interface PlanStep {
   `use_weapon_as_material`、旧PracticalをMaterialへ変える `change_owned_weapon_status` は
   current `PlanStepOperationType` に存在しない。保存済みlegacy artifactがこれらを含んでいても
   current Domain operationとして再実行せず、CalculationContext境界でfail closeする(14.2)
-- `reserve_weapon` は結果確認だけの `confirm_result` と異なり、Target候補をInventoryへ正式確保してTargetSatisfactionを更新する
-- `normal_artian_to_gogma` のreserveは予約した新IDでGogmaを追加し、`status = "ideal"`、
-  保護初期値 `true`、CandidateのfinalBonusScopeを含む完成結果を保持する。Candidateは
-  常に理想品なので、reserve時のラベルは常にIdealである
-- 妥協checkpointへ到達しただけではreserveしない。statusも保護も変更しない。reserve semanticsは
-  最終的に理想品が完成したときだけ適用する（PLANNER_SPEC 7.5.4）
-- `owned_normal_artian_to_gogma` のconvert Stepは元Normal IDをInventoryから削除し、変換後Gogmaをまだ登録しない。後続Reset / Keep / Reset SkillsはsourceOwnedWeaponId = nullを維持する
-- `owned_normal_artian_to_gogma` のreserveは元Normalを再削除せず、別の予約IDでGogmaだけを追加する。元IDのkind変更では表現しない
-- amendmentを持つ `existing_gogma_*` のreserveは新規追加せず、Route sourceと同じGogma IDをCandidate結果、status、Target参照で更新する。保存済みの保護状態、既存Target参照、createdAtを失わない
-- reserveによるInventoryChangeはexpectedStateBefore / expectedStateAfterへ反映する。OwnedWeaponへTarget IDを追加する処理は存在せず、`TargetWeapon.preferredOwnedWeaponId` も変更しない
+- current ProductionPlanは独立した `reserve_weapon` PlanStepを持たない。探索内部のreserve actionは、
+  Entryの最後の物理Stepの `executionEffects.targetCompletions` へ統合する。操作0 Candidateの完成は
+  RNGを進めない `confirm_owned_ideal` Stepで表す（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.3）。
+  独立 `reserve_weapon` / `confirm_result` Stepを持つ保存済みlegacy Planは表示できても、current
+  Execution operationとして実行しない
+- `normal_artian_to_gogma` では、`count = forgeCount` を分割した作成Stepのうち最後の1本
+  （`normalCreationRole = "production_target"`）だけが予約IDでNormalを登録する。先行Step
+  （`counter_advance`）は登録しない。巨戟化Stepは同じIDを `kind = "gogma"`、`status = "unclassified"` へ
+  更新し、以後のReset / Keep / Reset Skillsも同じIDを更新する
+- blind variantの作成対象Stepは `observationBinding` を持ち、Step確定時にユーザーが入力した
+  観測5枠で登録する。架空の5枠を生成しない
+- `owned_normal_artian_to_gogma` のconvert Stepは元Normalと同じIDを `kind = "gogma"` へ更新する。
+  元IDを削除して別のGogma IDを作らない。探索上の排他source semantics（同じNormalを別Routeで
+  使わない）は維持する
+- `existing_gogma_*` の各物理Stepは新規追加せず、Route sourceと同じGogma IDを逐次更新し、
+  createdAtを失わない
+- 妥協checkpointへ到達したStepは `compromiseLabels` で追跡武器を `practical` にする。保護と作成中状態は
+  変更せず、Planは続く
+- 理想品完成は、新規生成武器でも既存武器でも `status = "ideal"`、`isProtected = true`、作成中OFF、
+  Target `completed`、`preferredOwnedWeaponId = null` とする。旧契約の「既存Gogmaは保存済みの保護状態を
+  維持する」は廃止した
+- OwnedWeaponへTarget IDを追加する処理は存在しない。`TargetWeapon.preferredOwnedWeaponId` はPlanner
+  計算では変更せず、`targetLinks` / `targetCompletions` のExecution effectだけが変更する
+- すべてのExecution effectはexpectedStateBefore / expectedStateAfterへ反映する（statusと作成中状態は
+  hash対象外、11.2）
 - 再計算はstale Planに対するUI / Planner操作であり、`recalculate_plan` PlanStepを旧Planへ追加しない
 
 ## 11.4 ExpectedResult
@@ -1452,6 +1670,10 @@ export interface ExpectedResult {
   shouldSecure: boolean;
 }
 ```
+
+`shouldSecure` は独立した確保Stepを持つ旧契約のfieldである。current ProductionPlanでは、
+そのStepで目標武器が完成するかどうかのauthorityを `PlanStep.executionEffects.targetCompletions` とし、
+`shouldSecure` から完成予定を推測しない。実装PRでfieldを削除するか互換用に残すかを決める。
 
 `candidateCategory` と `isSimilarToIdeal` は存在しない。PlanStepが表示するのは
 予測結果そのものであり、category分類ではない。妥協checkpointへ到達したStepは
@@ -1473,6 +1695,11 @@ export interface InventoryChange {
   materialRequirements: MaterialRequirement[];
 }
 ```
+
+current ProductionPlanでは、`addOwnedWeapon` は作成対象Normalの登録、`updateOwnedWeapons` は追跡武器の
+同一ID更新（巨戟化のkind変更を含む）と完成時のstatus / 保護を表す。所持Normalの巨戟化で
+`removeOwnedWeaponIds` を使わない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.3）。blind作成対象の
+`addOwnedWeapon` の5枠はStep確定時の観測値でbindする。
 
 ## 11.6 RngAdvance
 
@@ -1632,9 +1859,12 @@ export interface ExecutionHistory {
 }
 
 export interface ActualResult {
+  // Execution lifecycle改訂で追加。restorationBonusesと同時にnull / 非null
+  restorationBonusScope: ArtianBonusScope | null;
   restorationBonuses: RestorationBonusSet | null;
   seriesSkillId: SeriesSkillId | null;
   groupSkillId: GroupSkillId | null;
+  // legacy: 独立した確保Stepを持つ旧Planの記録
   securedOwnedWeaponId: OwnedWeaponId | null;
   note: string | null;
 }
@@ -1645,21 +1875,83 @@ export interface ExecutionUndoSnapshot {
   affectedOwnedWeaponsBefore: OwnedWeapon[];
   addedOwnedWeaponIds: OwnedWeaponId[];
   removedOwnedWeaponsBefore: OwnedWeapon[];
+  // Execution lifecycle改訂で追加（PLANNER_SPEC 16.16）
+  affectedTargetWeaponsBefore: TargetWeapon[];
   productionPlanBefore: ProductionPlan;
+  // Execution lifecycle改訂で追加。このStepの確定前に存在したそのPlanのゲーム内セーブ地点
+  executionSavePointBefore: ExecutionSavePoint | null;
 }
 ```
+
+ExecutionActionの意味（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.4）。
+
+| action | 内容 |
+| --- | --- |
+| `confirmed_expected` | 結果一致・次へ、blind作成対象の観測値入力（`actualResult` に観測値）、操作0 Idealの確認 |
+| `actual_result_different` | 操作は明確だが結果が予測と違う。Counter消費と実結果を保存しPlan stale |
+| `operation_uncertain` | 何を何回操作したか不明。Counterと武器を変更せずPlan stale |
+| `finished_as_compromise` | 妥協checkpoint到達後に妥協品として確定して終了。Plan abandoned |
 
 不変条件。
 
 - ExecutionHistoryはPlanとは別に保存する
+- `affectedTargetWeaponsBefore` は、そのStepのExecution effectで変更したTargetWeapon（紐付けを設定した
+  Target、紐付けを解除された別Target、完了にしたTarget、理想品完成で完成武器の優先起点を解除された
+  他のすべてのTarget）のStep前の本体を保持する
+- `executionSavePointBefore` は、Step確定または `finished_as_compromise` のtransactionでゲーム内セーブ地点を
+  削除した場合にUndoで復元するために保持する
+- `operation_uncertain` ではRngState、NormalArtianCounter、OwnedWeapon、TargetWeaponを変更しないが、
+  Planの `stale` 化を戻せるようにSnapshotは保存する
 - Step確定前に `ExecutionUndoSnapshot` を生成し、同じTransactionでExecutionHistoryへ保存する
 - `normalCountersBefore` は実装を単純化するため全NormalArtianCounterを保存する
 - `affectedOwnedWeaponsBefore` は更新対象としてStep開始前に存在した武器、`addedOwnedWeaponIds` はStepで新規追加した武器ID、`removedOwnedWeaponsBefore` はStepで削除した武器本体を保持する
 - 3つのOwnedWeapon集合は役割を重複させず、最後のExecutionHistoryだけでStepによる在庫変更を正確に取り消せること
 - `productionPlanBefore` はStep完了、currentStepId、status、recalculationReasonsを含む更新前Plan全体を保持する
-- Undoは最後のExecutionHistoryのSnapshotを適用し、そのExecutionHistoryを削除する。Undo自体のExecutionHistoryは追加しない
+- Undoは表示中の実行Planの最後のExecutionHistoryのSnapshotを適用し、そのExecutionHistoryを削除する。Undo自体のExecutionHistoryは追加しない
+- Undoできるのは、Planが `active` / `stale` の場合と、`completed` / `abandoned` への遷移を起こしたのがそのExecutionHistory自身（最終Step確定、`finished_as_compromise`）の場合だけである。再計画採用、ユーザー破棄、Planを壊す変更の承認で `abandoned` になったPlanのExecutionHistoryはUndoできない
+- Undoは少なくともRngState、全NormalArtianCounter、OwnedWeapon（status・`executionInProgress` を含む）、Executionが変更したTargetWeapon、ProductionPlan（status、abandonment理由、`currentStepId`）、ゲーム内セーブ地点を正確に戻す。取り消すExecutionHistoryがゲーム内セーブ地点の `lastExecutionHistoryId` なら、そのセーブ地点を削除する
 - Undoはツール上の誤操作修正であり、ゲーム内操作を巻き戻すものではない
 - `wasExpected = false` の場合、Planを `stale` にして再計算導線を出す
+
+## 12.1 ExecutionSavePoint（ゲーム内セーブ地点）
+
+Execution lifecycle改訂で追加する永続entity（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.9）。
+妥協checkpoint（BuildListEntryの途中採用状態）とは別概念であり、名称にcheckpointを使わない。
+
+```ts
+export interface ExecutionSavePoint {
+  id: string;                         // 1 Planにつき1件。productionPlanIdから決定してよい
+  productionPlanId: ProductionPlanId;
+  lastExecutionHistoryId: ExecutionHistoryId | null;
+  rngState: RngState;
+  normalCounters: NormalArtianCounter[];   // 全件
+  ownedWeapons: OwnedWeapon[];             // execution scope
+  targetWeapons: TargetWeapon[];           // execution scope
+  productionPlan: ProductionPlan;
+  recordedAt: ISODateTimeString;
+}
+```
+
+不変条件。
+
+- ユーザーの明示操作「ゲーム内セーブ済みとして記録」だけで作成・上書きする。アプリはゲーム側の
+  セーブ発生を推測しない
+- `productionPlanId` のPlanが `active` の場合だけ記録でき、1 Planにつき最新1件だけ保持する
+- execution scopeのOwnedWeaponは、Plan依存EntryのRouteが参照する所持武器、このPlanのExecutionが
+  登録した武器、このPlanを `executionInProgress` に持つ武器の和集合とする。execution scopeの
+  TargetWeaponは、Plan依存Targetと、execution scopeの武器を `preferredOwnedWeaponId` に持つTargetの
+  和集合とする
+- 復元は `active` / `stale` のPlanについて1つのDexie transactionで行い、Executionに関係するゲーム対応
+  状態だけを戻す。書き込み前に同じtransaction内で、復元後のProductionPlanが必要とするentity
+  （snapshotの全OwnedWeapon、復元後PlanのPlan依存Target、
+  `selectedBuildListEntryIds` のBuildListEntry）が現在すべて存在することを検証する。1つでも欠損して
+  いれば復元を拒否し、RngState、NormalArtianCounter、OwnedWeapon、TargetWeapon、ProductionPlan、
+  ExecutionHistory、ExecutionSavePointのいずれも変更しない（fail closed）。欠損entityを自動復活させない。
+  snapshot内のPlan非依存Targetの欠損は拒否理由にせず、そのTargetは復元しない。セーブ地点より後に追加したPlan非依存Target、Build List Entry、execution scope外の
+  所持武器、設定を巻き戻さず、ユーザーが削除したentityを復活させない。セーブ地点より後のそのPlanの
+  ExecutionHistoryは削除する（手順は同 16.9）
+- Planが `completed` / `abandoned` になったtransaction、および境界のExecutionHistoryをUndoした
+  transactionで削除する。再計画採用で新Planへ引き継がない
 
 ---
 
@@ -1758,21 +2050,43 @@ db.version(1).stores({
 
 将来PlanStepが大量化した場合のみ `planSteps` tableへ分離する。
 
+Execution lifecycle改訂（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16章）では、ゲーム内セーブ地点を保存する
+`executionSavePoints` table（key: `id`、index: `productionPlanId`）と、TargetWeaponの
+`lifecycleStatus` indexを追加する想定である。TargetWeapon / OwnedWeapon / ProductionPlan / PlanStep /
+ExecutionHistoryのembedded field追加を含め、Dexie `DATABASE_SCHEMA_VERSION` の要否とupgrade手順は
+実装PRで監査して確定する。upgradeで既存Targetを `completed`、既存OwnedWeaponを作成中と推測しない。
+
 ## 14.4 Execution Transaction
 
 Execution Navigatorの1Step確定処理は、次の更新を1つのDexie read-write transactionで原子的に行う。
 
+- 同じtransaction内で現在状態を読み、`expectedStateBefore` を検証する
 - Step実行前状態からExecutionUndoSnapshotを作成する
 - RngStateを更新する
 - NormalArtianCounterを更新する
-- OwnedWeaponを追加、更新、削除する
+- OwnedWeaponを追加、更新する（作成対象Normalの登録、同一ID更新、status、保護、作成中状態）
+- TargetWeaponを更新する（紐付けの設定と別Targetの解除、完了、完成時のpreferred解除）
+- 期待成功経路では `expectedStateAfter` を検証する
 - ExecutionHistoryを追加する
 - PlanStepを完了またはstaleとして更新する
-- ProductionPlanのcurrentStepId、status、recalculationReasons、updatedAtを更新する
+- ProductionPlanのcurrentStepId、status、recalculationReasons、abandonment理由、updatedAtを更新する
+- Planが `completed` / `abandoned` になる場合は、そのPlanのゲーム内セーブ地点を削除し、作成中状態を解除する
 
-対象操作は、結果一致、武器確保、想定外結果記録とする。Transaction内のいずれかが失敗した場合は全更新をrollbackし、Step確定前の状態を維持する。
+対象操作は、結果一致（観測値入力と操作0 Idealの確認を含む）、想定外結果記録、操作内容不明の記録、
+妥協品として確定して終了とする（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.4）。Transaction内のいずれかが
+失敗した場合は全更新をrollbackし、Step確定前の状態を維持する。
 
-UndoもRngState、全NormalArtianCounter、対象OwnedWeapon、ProductionPlan、ExecutionHistoryを1つのDexie transactionで復元する。復元途中に失敗した場合はUndoを適用せず、元の状態と履歴を維持する。
+UndoもRngState、全NormalArtianCounter、対象OwnedWeapon、対象TargetWeapon、ProductionPlan、ゲーム内
+セーブ地点、ExecutionHistoryを1つのDexie transactionで復元する。復元途中に失敗した場合はUndoを適用せず、
+元の状態と履歴を維持する。
+
+次も1つのDexie transactionで原子的に行い、失敗時は何も変更しない。
+
+- 再計画採用: 状態再検証、旧実行中Planの `abandoned`（`replan_adopted`）、新Planの保存と `active` 化、
+  generated BuildListEntryの保存、旧Planのセーブ地点削除、作成中状態の付け替え / 解除
+- ゲーム内セーブ地点の復元（12.1）
+- Planを壊す変更の承認: Planの `abandoned`（`breaking_change_approved`）と変更の保存
+- Plan破棄: Planの `abandoned`（`user_abandoned`）、セーブ地点削除、作成中状態の解除
 
 ## 14.5 Planner Save Transaction
 
@@ -1811,6 +2125,14 @@ export interface ExportRoot {
   settings: AppSettings;
 }
 ```
+
+Execution lifecycle改訂（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.17）で追加する永続状態
+（TargetWeapon lifecycle、OwnedWeapon `executionInProgress`、ProductionPlan abandonment、PlanStep
+`executionEffects`、ExpectedPlanState `targetExecutionStateHash`、ExecutionHistory / Undo Snapshotの拡張、
+`executionSavePoints`）はExport / Importの対象である。ExportRootへ `executionSavePoints:
+ExecutionSavePoint[]` を追加し、Import時は参照整合性（Plan、ExecutionHistory、OwnedWeapon、TargetWeapon）を
+検証する。`schemaVersion` の更新と旧schemaの受理方針は実装PRで確定する。端末間同期は追加せず、
+既存の全置換Import / Exportで扱う。
 
 ## 15.2 Import方針
 
@@ -1875,13 +2197,25 @@ Production RNG契約切替時の互換性は次のとおりとする。
 - 検索候補はTargetWeaponに紐づく
 - BuildCandidateとBuildListEntryは別Entity
 - Planner対象はstaleでないBuildListEntryのみ
-- Active Planは同時に1件まで
+- 実行中Plan（active / stale）は同時に1件まで。一時中断用statusは持たない
 - PlanとExecutionHistoryは分離する
+- Plan非依存Targetの追加・変更とBuild Listへの新規Entry追加ではPlanをstaleにしない
+- ExecutionはStepごとにrngAdvanceを即時反映し、Plan完了時にまとめて更新しない
+- Planで今後も使う物理武器だけをOwnedWeaponとして追跡し、Counter進行用Normalは登録しない
+- 所持Normalの巨戟化は同じOwnedWeapon IDのkind更新であり、別IDを作らない
+- `executionInProgress` はstatusと直交し、ユーザーが直接編集しない
+- 理想品完成は新規・既存武器を問わず `ideal` / protected / Target completed / preferred解除とする
+- `completed` TargetはSearch / Plannerの対象外だがレコードを保持する
+- `createTargetDefinitionHash()` は性能定義だけを対象とし、`priority` / `isEnabled` / `preferredOwnedWeaponId` / lifecycleの変更でBuildListEntryをstaleにしない
+- `targetWeaponsHash` はplanning-input用の独立契約で、`preferredOwnedWeaponId` を含む
+- 理想品完成で武器をprotectedにする場合、その武器を優先起点にする全Targetのpreferredを同一transactionで解除する
+- セーブ地点の復元は、復元後Planに必要なentityが欠損していれば何も変更せず拒否する
+- ゲーム内セーブ地点は妥協checkpointと別概念で、1 Planにつき最新1件
 - 保護武器をPlannerはReset Bonuses・Keep Bonuses・Reset Skillsへ使用しない
 - protected武器でも現在性能を変更しない操作0 Candidateとしては利用できる
 - 通常→巨戟化はNormal bonus 5枠をslot順のまま継承し、Skill Counterだけを1進め、Normal / Gogma Counterを進めない
 - normal scopeの巨戟に対する最初のBonus amendmentはReset / Keepの両方を許可する。5枠未知のblind transient Gogmaだけ最初のReset前のKeepを許可しない
-- Plannerは所持武器を素材として消費せず、statusは `reserve_weapon` の理想品ラベル設定以外で変更しない
+- Plannerは所持武器を素材として消費しない。statusはOwned Weapons画面の通常CRUDとExecution Step確定（巨戟化時の未分類、選択済み妥協checkpoint到達時の実用、理想品完成時の理想）以外で変更しない
 - Plan進行中は現在Stepの期待状態と実態を比較する
 - 期待状態Before / Afterと一致する正常進行ではPlanをstaleにしない
 - CalculationContext非互換のCandidate、BuildListEntry、Planはstaleとし、Planには `calculation_context_changed` を記録する
@@ -1910,16 +2244,16 @@ Production RNG契約切替時の互換性は次のとおりとする。
 - conversion直後のExpectedResultがnormal scope 5枠と初回Series / Groupを保持する
 - 5枠既知のnormal scope transient GogmaへKeep Bonusesを直接適用でき、blind transient Gogmaだけ最初のReset後にKeepする。除外理由をunknown入力として扱い、ゲームルール由来として扱わない
 - transient GogmaのReset / Keep / Reset Skillsが `sourceOwnedWeaponId = null` で表現され、fake OwnedWeaponIdを生成しない
-- 巨戟化直後の未登録武器用OwnedWeaponIdを生成しない
+- Candidate Route（BuildRoute / RouteOperation）へ巨戟化直後の未登録武器用OwnedWeaponIdを生成しない。ProductionPlanのexecution projectionだけが作成対象NormalへPlanner予約IDをbindする（PLANNER_SPEC 16.3）
 - TargetWeapon priority未指定時に3になる
 - NormalArtianCounter未確定時に通常経由検索から除外される
 - RngStateの4項目を独立して確定・未確定にできる
 - 不足Capabilityに依存するRouteだけが無効になる
 - BuildCandidateを選択してもCandidate本体は変更されずBuildListEntryが作成される
-- Target定義変更でBuildListEntryがstaleになる
+- Target性能定義変更でBuildListEntryがstaleになり、`priority` / `isEnabled` / `preferredOwnedWeaponId` / lifecycleだけの変更ではstaleにならない
 - 検索に使用したRNG状態変更でBuildListEntryが `rng_state_changed` になる
 - Routeに影響しない表示項目変更では `searchStateHash` が変わらない
-- Route参照OwnedWeaponのボーナス、スキル、status、isProtected変更でBuildListEntryが `owned_weapon_changed` になる
+- Route参照OwnedWeaponのボーナス、スキル、isProtected変更でBuildListEntryが `owned_weapon_changed` になり、status / `executionInProgress` だけの変更ではならない
 - Routeに無関係なOwnedWeapon変更、または参照武器のname、memo、日時変更では `referencedOwnedWeaponsHash` が変わらない
 - OwnedWeaponを参照しないRouteの `referencedOwnedWeaponsHash` は `null` になる
 - ProductionPlanのactive単一制約が守られる
@@ -1937,7 +2271,10 @@ Production RNG契約切替時の互換性は次のとおりとする。
 - 不正な参照IDを含むImportを拒否する
 - 存在しないMaster IDを含むImportを拒否する
 - schemaVersion不一致を検出する
-- Step確定中の任意の書き込み失敗でRNG、Normal Counter、OwnedWeapon、ExecutionHistory、ProductionPlanがすべて更新前にrollbackされる
+- Step確定中の任意の書き込み失敗でRNG、Normal Counter、OwnedWeapon、TargetWeapon、ExecutionHistory、ProductionPlan、ゲーム内セーブ地点がすべて更新前にrollbackされる
+- 再計画採用、ゲーム内セーブ地点の復元、Planを壊す変更の承認の途中失敗で部分更新が残らない
+- ゲーム内セーブ地点の復元がexecution scopeだけを戻し、Plan非依存Target、Build List Entry、scope外の所持武器を巻き戻さない
+- ExportしたExecutionSavePoint、TargetWeapon lifecycle、`executionInProgress` をImportで同一データに戻せる
 - Undoの任意の書き込み失敗で部分復元が残らない
 - 最後のExecutionHistoryのundoSnapshotだけからStep前のアプリ状態へ完全に戻せる
 
@@ -1956,7 +2293,12 @@ Production RNG契約切替時の互換性は次のとおりとする。
 - `recalculate_plan` がPlanStepOperationTypeとして受理されない
 - PlannerInputへRngEngine / engineCapabilities / existingActivePlanを含めずstructured cloneできる
 - PlannerOptionsはmaxPlanSteps、beamWidth、maxExpandedStatesだけを受け付け、各1以上を要求する
-- normal新規、所持Normal、既存Gogmaのreserve InventoryChangeがそれぞれadd、add-only、same-ID updateになる。所持Normalのremoveはconvert Stepで検証する
+- normal新規では作成対象Stepだけがadd（Counter進行用Stepは登録なし）、所持Normalはconvert Stepで同一IDのkind更新、既存Gogmaは各Stepで同一ID更新になり、独立したreserve Stepを持たない
+- `targetExecutionStateHash` がPlan依存Targetだけを対象にし、Plan非依存Targetの追加・変更で変わらない
+- `targetWeaponsHash` が `preferredOwnedWeaponId` / `priority` / `isEnabled` / `lifecycleStatus` の変更で変わり、
+  `createTargetDefinitionHash()` はそれらの変更で変わらない
+- binding tokenが観測値と一致する実状態だけをtokenへ置き換え、観測値と異なる5枠を不一致として検出する
+- `status` と `executionInProgress` の変更だけでは `ownedWeaponsHash` が変わらない
 - Candidate BuildRouteを変更せず、Candidate Route内の具体的な起点OwnedWeapon IDを別武器へ差し替えない
 - 有効な競合選択だけを適用し、削除済み・staleな選択をwarningにする
 - max_steps_reachedとmax_expanded_states_reachedを別kindとして検証する

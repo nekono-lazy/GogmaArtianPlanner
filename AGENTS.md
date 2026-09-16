@@ -192,6 +192,15 @@ appSchemaVersion
 
 These form `CalculationContext`.
 
+The Execution lifecycle specification (`docs/PLANNER_SPEC.md` 16) changes Target
+lifecycle, OwnedWeapon execution lifecycle, the `preferredOwnedWeaponId` staleness
+semantics (`createTargetDefinitionHash()` normalization), PlanStep / reserve
+semantics, the expected execution state, and the Undo scope. That revision is
+specification-only: it moved none of `CURRENT_CALCULATION_APP_SCHEMA_VERSION`,
+`DATABASE_SCHEMA_VERSION`, or `ExportRoot.schemaVersion`. The implementation PR must
+audit the current schema and Import compatibility and fix the required version
+boundaries there; never infer-migrate existing data into the new meaning.
+
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
 semantics at version 3, the shared-Counter Route prefix fast-forward correction changed
@@ -815,7 +824,8 @@ Each `OwnedWeapon` retains:
 
 An `OwnedWeapon` never references a `TargetWeapon`. The relation between the two
 is held only by `TargetWeapon.preferredOwnedWeaponId`, one-directionally from
-Target to weapon (see Target Weapon Rules).
+Target to weapon (see Target Weapon Rules). `OwnedWeapon.executionInProgress` holds
+a ProductionPlan ID only, never a Target ID.
 
 A normal Artian weapon:
 
@@ -908,12 +918,18 @@ in PR #12.
 Defaults:
 
 - A manually registered new Gogma weapon: `unclassified`, unprotected
-- A Planner-secured Candidate: `ideal`, protected. The Planner secures only the
-  canonical Ideal result; a compromise checkpoint is an intermediate state of
-  that same Route and is never reserved as a weapon of its own
-- `practical` is written only by the user's own relabelling
-- Updating an existing Gogma to a Candidate result preserves its explicit
-  protection value, exactly as PR #12 fixed
+- A Normal registered by Execution as a production target: `status = null`,
+  unprotected; the conversion Step confirmation sets `unclassified`
+- An Ideal completed by Execution: `ideal`, protected - for a newly created weapon
+  and for an existing weapon alike (`docs/PLANNER_SPEC.md` 16.13). The Planner
+  completes only the canonical Ideal result; a compromise checkpoint is an
+  intermediate state of that same Route and is never reserved as a weapon of its own
+- `practical` is written by the user's own relabelling, and by Execution when the
+  user-selected compromise checkpoint is actually reached (protection untouched,
+  `docs/PLANNER_SPEC.md` 16.12). Never label a weapon Practical merely because its
+  performance meets a compromise condition
+- The former "updating an existing Gogma to a Candidate result preserves its explicit
+  protection value" rule is superseded: Ideal completion protects existing weapons too
 
 Protected weapons must not be used by the Planner for:
 
@@ -927,7 +943,7 @@ source of future Bonus or Skill amendment exploration. Search must not invoke Sk
 Gogma prediction solely because a compatible protected source exists.
 
 Status and protection remain independent user settings. Outside the creation
-defaults above, changing one never changes the other: an `unclassified` protected
+defaults and Execution completion above, changing one never changes the other: an `unclassified` protected
 weapon relabelled `practical` stays protected, and an `ideal` unprotected weapon
 relabelled `unclassified` stays unprotected. The user changes protection
 explicitly when they want it. The Planner must never silently remove protection,
@@ -948,6 +964,12 @@ status-only change
 `id`, `kind`, `weaponTypeId`, `elementId`, `restorationBonusScope`, the five
 stored bonus slots, Series Skill, Group Skill, `isProtected`, and Normal rarity
 where applicable all stay semantic and still move those hashes.
+
+`OwnedWeapon.executionInProgress` (作成中) is an internal Execution state orthogonal
+to `status`. Never add `in_progress` or any similar value to `OwnedWeaponStatus`.
+The user cannot edit it; it is excluded from every semantic hash and from Search /
+Planner eligibility exactly like `status`, but Undo and game save point restore
+must restore it exactly (`docs/PLANNER_SPEC.md` 16.10.1).
 
 ---
 
@@ -979,19 +1001,23 @@ change, and never counts consumed weapons in its score. The number of
 `unclassified` weapons is not a Planner resource and must not affect
 `evaluationScore` or `totalCost`.
 
-Exactly two paths write `status`:
+Exactly these paths write `status` (`docs/PLANNER_SPEC.md` 8.1 / 16):
 
 ```text
-any user relabelling            ordinary Owned Weapons CRUD
-reserve_weapon securing a       an Ideal Candidate is always secured as
-Candidate                         status = ideal (new weapons also protected)
+any user relabelling                       ordinary Owned Weapons CRUD
+Execution: conversion Step confirmed       status = unclassified
+Execution: selected compromise checkpoint  status = practical (protection untouched)
+           reached, and "finish as
+           compromise"
+Execution: Ideal completion Step confirmed status = ideal, isProtected = true
+                                           (new and existing weapons alike)
 ```
 
-`reserve_weapon` applies that label the same way for a newly generated weapon
-and for an existing Gogma Candidate, and an existing Gogma keeps its stored
-protection exactly as PR #12 fixed. Never "fix" this by deleting
-the status write so the Planner touches no status at all. Even there
-status stays non-semantic: it decides no Search eligibility, no Planner
+Planner calculation (Beam Search, Trace Replay, the internal reserve action) never
+persists a status. The internal reserve effect follows the Ideal completion
+semantics above, so an existing weapon is treated as protected after completion.
+Never "fix" this by deleting the Execution status writes so nothing touches status.
+Even there status stays non-semantic: it decides no Search eligibility, no Planner
 operation eligibility, no Target Satisfaction, and no semantic hash.
 
 Current `RouteOperation` and `PlanStepOperationType` switches handle only the
@@ -1003,7 +1029,10 @@ weapon is the one remaining weapon consumption: `consumeOwnedNormalForConversion
 removes the source Normal from inventory so two Routes can never use it twice.
 `same_owned_weapon_consumed`, `exclusiveConsumedOwnedWeaponId`, and
 `consumedWeaponIds` serve that exclusive-source semantics and are kept unchanged;
-do not rename or delete them.
+do not rename or delete them. That is Planner search representation only: the
+ProductionPlan execution projection and the persisted state update the same
+OwnedWeapon ID from `normal` to `gogma` and never delete it to create another ID
+(`docs/PLANNER_SPEC.md` 16.3).
 
 Game item materials are a different concept and are untouched:
 `MaterialRequirement`, `BuildCandidate.requiredMaterials`,
@@ -1055,15 +1084,101 @@ tie-break, never as a weight inside a score.
 
 It never restricts Target Satisfaction, which stays a judgment about actual weapon
 performance: another weapon that meets the Target's conditions still satisfies it.
-`reserve_weapon` and every other Planner action must never set or reassign it -
-securing a Practical, securing an Ideal, registering a new Gogma, or updating an
-existing one are not reasons to rewrite the user's planning input.
+Planner calculation (Beam Search, Trace Replay, constrained re-search, what-if),
+Candidate Search, and the internal `reserve_weapon` action must never set or
+reassign it.
 
-Because the field is part of the Target's planning meaning, it participates in
-`createTargetDefinitionHash()` and changing it stales existing BuildListEntries with
-`target_definition_changed`. It never enters Candidate stable key, Candidate ID,
-Candidate deduplication key, or the `BuildCandidateMeaning` fingerprint: the
-preference belongs to the Target, not to the Candidate's own meaning.
+Execution is the one exception (`docs/PLANNER_SPEC.md` 16.11 / 16.13). When a Step
+that actually starts the production is confirmed - the production-target Normal
+creation of a new Normal Route, or the first real game operation on an existing
+Normal / Gogma for that Entry - Execution sets the Entry's Target to that weapon and
+clears any other Target preferring it, in the same Step transaction. The link survives
+Plan abandonment; the user removes it manually. Plan generation never changes it.
+
+Ideal completion protects weapon X, and a preference may only point at an unprotected
+weapon. Every Ideal completion - Execution target completion, `confirm_owned_ideal`, and
+the Target Weapons "この武器で目標を完了にする" action - therefore sets to `null`, in one
+transaction, the completed Target's preference and the preference of every other
+Target preferring X. Only the preference is cleared: never touch those Targets'
+conditions, priority, `isEnabled`, or lifecycle. In Execution, every cleared Target's
+before state goes into `ExecutionUndoSnapshot.affectedTargetWeaponsBefore`; a
+Plan-dependent Target's clearing is projected into `targetExecutionStateHash`, a
+Plan-independent one is checked by collection validation (no Target may still prefer
+X), and the save point restores them through its execution scope or the post-boundary
+Undo snapshots (`docs/PLANNER_SPEC.md` 16.5 / 16.9 / 16.13). The Target Weapons action
+names the affected Targets in its confirmation dialog.
+
+Responsibilities are split and must not be merged back:
+
+```text
+BuildCandidate / BuildListEntry validity   not a Target performance definition:
+                                           excluded from createTargetDefinitionHash(),
+                                           never target_definition_changed
+Planner / Draft Plan planning input        part of PlannerInput.targetWeapons and
+                                           PlanningInputSnapshot.targetWeaponsHash
+Active Plan Execution                      Execution's own link / relink / clear is
+                                           normal progress, verified through
+                                           ExpectedPlanState.targetExecutionStateHash
+```
+
+It never enters Candidate stable key, Candidate ID, Candidate deduplication key, or
+the `BuildCandidateMeaning` fingerprint either: the preference belongs to the Target,
+not to the Candidate's own meaning. The former rule that changing it stales
+BuildListEntries is superseded; the implementation PR applies the new
+`createTargetDefinitionHash()` normalization together with its version boundary.
+
+### Target field responsibilities
+
+`docs/PLANNER_SPEC.md` 16.11 ("TargetWeapon fieldの責務") is the authority.
+`createTargetDefinitionHash()` covers the Candidate-forming performance definition
+only:
+
+```text
+included: weaponTypeId, elementId, idealBonuses, practicalBonusConditions,
+          alternativeBonusRules, idealSkillCondition, practicalSkillCondition
+excluded: priority, isEnabled, preferredOwnedWeaponId, lifecycleStatus, completedAt,
+          completedByProductionPlanId, name, memo, timestamps
+```
+
+The current implementation still includes `priority`, `isEnabled`, and
+`preferredOwnedWeaponId`; the implementation PR removes them with its version boundary.
+
+```text
+priority                 Planner planning input (order / score). Never stales an
+                         Entry. Part of targetWeaponsHash and, for a Plan-dependent
+                         Target, dependentTargetDefinitionsHash: changing it breaks
+                         the Draft / Active Plan (target_changed, UI pre-warning)
+isEnabled                Search / Planner input exclusion. Never stales an Entry.
+                         Part of targetWeaponsHash and dependentTargetDefinitionsHash
+preferredOwnedWeaponId   Search tie-break and Planner plan preference. Never stales
+                         an Entry. Part of targetWeaponsHash; for a Plan-dependent
+                         Target verified by targetExecutionStateHash
+lifecycleStatus          completed is excluded from Search / Planner input, never
+                         stale. Part of targetWeaponsHash; for a Plan-dependent
+                         Target verified by targetExecutionStateHash
+```
+
+`PlanningInputSnapshot.targetWeaponsHash` is an independent planning-input contract,
+never just `createTargetDefinitionHash()` reused. It hashes every PlannerInput Target,
+sorted by ID, as
+`{ id, definitionHash: createTargetDefinitionHash(target), priority, isEnabled,
+preferredOwnedWeaponId, lifecycleStatus }`, excluding name, memo, completion
+timestamps / Plan ID, and timestamps. `dependentTargetDefinitionsHash` hashes each
+Plan-dependent Target as `{ id, definitionHash, priority, isEnabled }`
+(`docs/DATA_MODEL.md` 11.2).
+
+### Target lifecycle
+
+A `TargetWeapon` carries `lifecycleStatus: "active" | "completed"`
+(`docs/DATA_MODEL.md` 8.1). Ideal completion by Execution, or the user's explicit
+"complete this Target with this owned weapon" action, sets `completed` and clears
+`preferredOwnedWeaponId` of that Target and of every other Target preferring the
+completed weapon. A completed Target is kept as a record (never physically
+deleted for completion) but is excluded from the normal Target list, Candidate
+Search, and Planner input. Finishing as a compromise never completes a Target.
+Lifecycle is not a performance definition and stays out of
+`createTargetDefinitionHash()`. Never infer `completed` from owned Ideal weapons in a
+migration.
 
 A collection-level validation authority, separate from single-Target validation,
 fails closed on a missing referenced weapon, a weapon type or element mismatch, a
@@ -1256,6 +1371,13 @@ calculation_context_changed
 Recalculate stale reasons from current data.
 
 Do not trust only the persisted `isStale` flag.
+
+`target_definition_changed` follows the Target performance definition only.
+`priority`, `isEnabled`, `preferredOwnedWeaponId`, and Target lifecycle
+(`lifecycleStatus`, `completedAt`, `completedByProductionPlanId`) are outside
+`createTargetDefinitionHash()`, so changing them - including Execution's automatic
+link at production start - never stales an Entry. An Entry of a `completed` Target is not stale; Planner input excludes it as a
+completed Target.
 
 ### `searchStateHash`
 
@@ -2532,8 +2654,11 @@ another opportunity of the same lane; the unit that produces a pinned state is
 never `canSkipWhenCounterPassed`, a lane never passes its pin before the other
 lane reached its own, and `reserve_weapon` is refused with
 `selected_checkpoint_not_reached` until the compromise checkpoint — both pins
-held at once — was really reached. Reaching it reserves nothing, changes no
-status and no protection, and never stops the Plan: it is recorded as
+held at once — was really reached. In Planner calculation, reaching it reserves
+nothing, changes no status and no protection, and never stops the Plan; in
+Execution, confirming that Step labels the weapon `practical` (protection untouched)
+and offers an explicit, confirmed "finish as compromise" (`docs/PLANNER_SPEC.md`
+16.12). It is recorded as
 `PlanStep.checkpointMilestones` (`skillOpportunityId` / `bonusOpportunityId`,
 `null` for an unselected lane, plus the two-axis `conditionMatch`) on the real
 physical Step that completed it, and no new `PlanStepOperationType` is added.
@@ -2601,13 +2726,18 @@ Planner inventory is strict for both owned rarity-8 normal Artian and Gogma Arti
 
 When an owned normal Artian weapon is converted to Gogma, the source normal weapon is consumed from inventory and a Gogma weapon is generated. The same normal weapon must not be reused by multiple routes. Protected normal weapons are never automatic conversion sources.
 
-For `owned_normal_artian_to_gogma`, consume and remove the source Normal at the
-`convert_normal_to_gogma` Step. The converted Gogma remains an unregistered
-route output through any Reset Bonuses, Keep Bonuses, or Reset Skills operation
-whose `sourceOwnedWeaponId = null`.
-`reserve_weapon` later adds a new Gogma ID and must not remove the Normal again,
-reuse its ID, assign a future ID at conversion time, or add a route-local weapon
-reference.
+For `owned_normal_artian_to_gogma`, Planner search consumes the source Normal at the
+`convert_normal_to_gogma` unit so no other Route can use it. In search, the converted
+Gogma remains an unregistered route output through any Reset Bonuses, Keep Bonuses,
+or Reset Skills operation whose `sourceOwnedWeaponId = null`, and no route-local
+weapon reference is added to the Candidate Route.
+
+The ProductionPlan execution projection is different and authoritative for
+persistence (`docs/PLANNER_SPEC.md` 16.3): an owned Normal's conversion updates the
+same OwnedWeapon ID to `gogma`; a new Normal Route registers only its
+production-target Normal, at that creation Step, with a Planner-reserved ID; every
+later Step updates that same ID. Never delete an owned Normal to create a different
+Gogma ID, and never register a Counter-advance Normal.
 
 Game item materials are not a hard inventory constraint in v1; display required
 quantities instead.
@@ -2658,20 +2788,18 @@ both fail closed with the Trace Replay issue code
 `restorationBonusScope` both `null` means "this Step predicts no restoration
 bonus result", never "the weapon has no bonuses".
 
-`reserve_weapon` has Route-specific inventory semantics:
-
-- `normal_artian_to_gogma`: add a new Gogma with a reserved ID, `status = ideal`
-  and protection on
-- `owned_normal_artian_to_gogma`: add a new Gogma with a different reserved ID and
-  the same default; its source Normal was already consumed by the conversion Step
-- amendment `existing_gogma_*`: update the same source Gogma ID, do not add a new
-  weapon, and preserve its explicit protection value
-
-The secured weapon uses Candidate result bonuses and skills and has status Ideal,
-because a Candidate is always an Ideal Candidate. It stores no Target reference, and
-`reserve_weapon` never changes `TargetWeapon.preferredOwnedWeaponId`. Target
-satisfaction changes only when the weapon is reserved, not merely when an RNG
-operation is simulated or confirmed.
+`reserve_weapon` is an internal Planner search action only. It applies right after
+the Entry's last physical unit with no other action in between, and is never turned
+into a separate PlanStep. Its completion effect, for every RouteKind, is: the weapon
+holds the Candidate result bonuses and skills, `status = ideal`,
+`isProtected = true` (existing weapons included - the old "preserve its explicit
+protection value" rule is superseded), in-progress off, the Target `completed`, and
+the preference of that Target and of every other Target preferring the weapon cleared; in a ProductionPlan it rides on the last physical
+Step. A completed weapon is therefore never an amendment source for a later unit of
+the same Plan. The weapon stores no Target reference, and Planner calculation never
+changes `TargetWeapon.preferredOwnedWeaponId`; only Execution effects do. Target
+satisfaction in search changes only when the reserve action applies, not merely
+when an RNG operation is simulated.
 
 ---
 
@@ -2742,16 +2870,24 @@ expectedStateBefore
 expectedStateAfter
 ```
 
+`ExpectedPlanState` holds `rngStateHash`, `normalCountersHash`, `ownedWeaponsHash`,
+and `targetExecutionStateHash`. The last one covers only the Plan-dependent Targets
+(`id`, `lifecycleStatus`, `preferredOwnedWeaponId`), never every Target
+(`docs/PLANNER_SPEC.md` 16.5, `docs/DATA_MODEL.md` 11.2).
+
 Normal planned changes must not invalidate the Plan.
 
 Examples that must not stale a Plan when expected hashes match:
 
-- Counters advance as predicted
-- A Practical weapon is secured as planned
-- An Ideal weapon is secured as planned
-- Planned inventory changes occur
+- Counters advance as predicted, Step by Step
+- The production-target Normal is registered and the same OwnedWeapon ID is updated as planned
+- Execution links the Target to the weapon, relinks it away from another Target,
+  labels a reached selected checkpoint Practical, or completes the Target on Ideal
 - An owned weapon's status label is changed by the user
-- Referenced OwnedWeapon state changes exactly as the Plan predicted
+- A new Target is added, or a Target the Plan does not depend on is changed
+- A new BuildListEntry is added, or an Entry the Plan does not depend on is changed
+- A Candidate Search is run
+- The user saves the game and suspends; the Plan stays `active`
 
 Active Plan execution takes precedence over BuildListEntry derivative staleness caused solely by normal planned progression.
 
@@ -2761,19 +2897,101 @@ Examples that do require stale/recalculation behavior:
 
 - Runtime RNG state differs from the current step expectation
 - Normal Artian counter differs from the current step expectation
-- Target definition changes
-- Build List changes
+- A Plan-dependent Target's performance definition, priority, enablement, lifecycle,
+  or preference differs from the expectation (`target_changed`)
+- A Plan-dependent BuildListEntry changes (`build_list_changed`)
 - OwnedWeapon changes outside the Plan
 - CalculationContext becomes incompatible
-- Predicted result differs from observed result
-- Planned candidate is not secured
-- A different candidate is secured
+- Predicted result differs from observed result (`unexpected_result`)
+- The user records that what or how many operations were performed is unknown
+  (`execution_operation_uncertain`)
+
+`planned_candidate_not_secured` and `different_candidate_secured` belong to legacy
+Plans with a separate secure Step; current Execution never produces them.
+
+Never apply the old rule "any Target or Build List change stales the Active Plan".
+Plan invariance compares only the Plan-dependent Target definitions and the
+Plan-dependent Entries (`PlanningInputSnapshot.dependentTargetDefinitionsHash` /
+`dependentBuildListEntriesHash`); the whole-input hashes are audit only.
+
+When the user tries to save a Plan-breaking change through the UI while a Plan is
+`active` (manual RNG / Counter change, Identification adoption, a Plan-dependent
+Target / Entry change, a semantic change to a weapon the Plan tracks), warn before
+saving. On approval the Plan becomes `abandoned` with `breaking_change_approved` in
+the same transaction as the change; on cancel nothing changes. Keep this distinct
+from `stale`, which records a detected divergence.
 
 Use the specified recalculation reason where applicable.
 
-Do not automatically replace a stale Plan.
+Do not automatically replace a stale or active Plan. Replanning from the current
+point is a side-effect-free Preview followed by an explicit adoption that
+re-validates the Preview-start state and atomically switches old Plan ->
+`abandoned` (`replan_adopted`) and new Plan -> `active` (`docs/PLANNER_SPEC.md` 16.8).
 
 The user explicitly initiates recalculation.
+
+---
+
+## Execution Lifecycle
+
+`docs/PLANNER_SPEC.md` 16 is the authority; `docs/DATA_MODEL.md` 7.1 / 8.1 / 11 / 12
+and `docs/UI_FLOW.md` 12 / 16 follow it. The specification is fixed but not yet
+implemented; implementation PRs follow it and must not fall back to the older
+Execution semantics.
+
+Core rules:
+
+- Every physical operation is confirmed one Step at a time and its `rngAdvance` is
+  persisted immediately. Never batch Counter updates at Plan completion, and never
+  persist an unconfirmed Step's progress
+- `ProductionPlanStatus` meanings are fixed: `draft` not started, `active` running
+  (also while suspended - no pause status exists), `completed` all Steps done,
+  `stale` divergence detected, `abandoned` user intent with
+  `abandonmentReason` = `user_abandoned` / `replan_adopted` /
+  `finished_as_compromise` / `breaking_change_approved`. At most one `active` or
+  `stale` Plan exists
+- Only physical weapons the Plan keeps identifying or processing become
+  OwnedWeapons. Counter-advance Normals of a `forgeCount` creation are never
+  registered; only the final production-target Normal is registered, at its own
+  creation Step, with a Planner-reserved ID kept until completion. An owned Normal's
+  conversion updates the same ID to `gogma`. Candidate Routes keep
+  `sourceOwnedWeaponId = null` for transient weapons; only the ProductionPlan
+  execution projection binds IDs
+- A blind production-target Normal's five slots are a user observation entered at
+  Step confirmation, never a prediction and never fabricated. Expected states carry
+  a binding token instead of the unknown value
+- `reserve_weapon` is never a user-visible Execution Step. The internal reserve
+  applies right after the Entry's last physical unit, and its effect rides on that
+  Step as target completion: `status = ideal`, `isProtected = true` for new and
+  existing weapons, in-progress off, Target `completed`, and the preference of every
+  Target preferring that weapon cleared. A
+  zero-operation `existing_gogma_current` Entry gets a `confirm_owned_ideal` Step
+  that advances no Counter
+- Reaching a user-selected compromise checkpoint labels the weapon `practical`
+  (protection and in-progress unchanged) and offers "finish as compromise", which
+  needs a confirmation dialog and abandons the Plan while the Target stays `active`
+  and keeps its preference
+- Weapon switch guidance is presentation-only, derived from adjacent physical Steps'
+  tracked weapons. It is never a PlanStep, never an ExecutionHistory entry, and never
+  counted in Planner cost or `maxPlanSteps`
+- An unexpected result with a clearly performed operation applies the Counter
+  consumption and stores the actual result, stales the Plan, and guides to RNG
+  re-identification. When what or how many operations happened is unknown, never
+  guess Counters: change no state, stale the Plan, and guide to re-identification
+- Candidate Search always starts from the last confirmed persisted state. The
+  "after the running Plan completes" origin is a Preview that replays the stored
+  remaining Steps without prediction or side effects and cannot add to the Build List
+- The game save point (`ExecutionSavePoint`) is recorded only by explicit user
+  action, one per active Plan, never inferred from the game, and is a different
+  concept from a compromise checkpoint - never call it a checkpoint. Restoring it
+  resets only execution-scope state and never resurrects deleted entities: before any
+  write, if an OwnedWeapon of the snapshot, a Plan-dependent Target, or a Plan-dependent
+  BuildListEntry the restored Plan needs is missing, the restore is refused and none of
+  RngState, NormalArtianCounter, OwnedWeapon, TargetWeapon, ProductionPlan,
+  ExecutionHistory, or ExecutionSavePoint changes (`docs/PLANNER_SPEC.md` 16.9). Plan-abandoning actions after the save point
+  offer keep current / restore save point / cancel. It is not carried to a replanned
+  Plan
+- Normal UI still shows no Seed / Counter numbers; Debug Mode shows before / after
 
 ---
 
@@ -2790,15 +3008,21 @@ Plan steps may represent operations such as:
 - Reset Bonuses
 - Keep Bonuses
 - Reset Skills
-- Reserve/secure weapon
+- Confirm an owned Ideal (`confirm_owned_ideal`, no Counter advance)
 
-Every Step stores expected state before and after the operation.
+There is no separate Reserve / secure Step in a current Plan; completion rides on the
+last physical Step as an execution effect (`docs/PLANNER_SPEC.md` 16.3). Legacy Plans
+holding `reserve_weapon` / `confirm_result` Steps may be displayed but never executed.
+
+Every Step stores expected state before and after the operation, and its
+`executionEffects` (tracked weapon, Normal creation role, registration, observation
+binding, Target link, compromise label, Target completion).
 
 For `ExpectedPlanState.ownedWeaponsHash`, include OwnedWeapon `kind` and
 restoration-bonus scope in addition to the other semantic inventory fields. A
 kind or scope change must change this hash and `referencedOwnedWeaponsHash`;
-name, memo, status, and timestamps remain excluded. An OwnedWeapon carries no Target
-reference, so neither hash contains one, and a Target's
+name, memo, status, `executionInProgress`, and timestamps remain excluded. An
+OwnedWeapon carries no Target reference, so neither hash contains one, and a Target's
 `preferredOwnedWeaponId` must never be added to the
 `referencedOwnedWeaponsHash` of a Candidate whose Route does not reference that
 weapon.
@@ -2809,9 +3033,12 @@ the old Plan.
 
 A status change on its own is ordinary Owned Weapons CRUD, never a
 ProductionPlan operation, and there is no PlanStep whose only effect is one.
-`reserve_weapon` still records the Ideal label on the secured weapon. Because
+Execution writes status only as an effect of a physical Step (or
+`confirm_owned_ideal`): `unclassified` at conversion, `practical` when a selected
+compromise checkpoint is reached, `ideal` with protection at completion. Because
 status is non-semantic, relabelling a weapon never makes a running Plan stale.
-Reaching a compromise checkpoint changes neither status nor protection.
+Planner calculation reaching a compromise checkpoint changes neither status nor
+protection.
 
 ---
 
@@ -2819,23 +3046,34 @@ Reaching a compromise checkpoint changes neither status nor protection.
 
 Expected Plan state and `ExecutionHistory` are separate.
 
-Execution history records what the application/user confirmed happened.
+Execution history records what the application/user confirmed happened. Current
+actions are `confirmed_expected` (including a blind observation and a
+`confirm_owned_ideal` confirmation), `actual_result_different`,
+`operation_uncertain`, and `finished_as_compromise`; `secured_weapon` and
+`skipped_candidate` are legacy only.
 
 Before finalizing a Step, save an `ExecutionUndoSnapshot` containing the state required to restore that Step.
 
 The snapshot includes the required pre-Step state defined in `DATA_MODEL.md`, including:
 
 - RngState
-- Normal Artian counters
-- Affected OwnedWeapons
+- All Normal Artian counters
+- Affected OwnedWeapons (including status and `executionInProgress`)
 - Added OwnedWeapon IDs
 - Removed OwnedWeapons
-- Previous ProductionPlan
+- TargetWeapons the Step changed (the linked Target, any Target whose link was
+  cleared, a completed Target)
+- Previous ProductionPlan (status, abandonment reason, current Step)
+- The Plan's game save point before the Step
 
 Undo:
 
-- Applies only to the most recent ExecutionHistory entry
-- Restores application state
+- Applies only to the most recent ExecutionHistory entry of the shown Plan, while
+  the Plan is `active` / `stale`, or when that very entry completed or finished the
+  Plan. Plans abandoned by replan adoption, user abandonment, or an approved breaking
+  change are not undoable
+- Restores application state, including Targets and the save point; undoing the
+  save point's boundary entry deletes the save point
 - Deletes that ExecutionHistory entry
 - Does not add a new "Undo" history record
 - Does not reverse the actual in-game operation
@@ -2859,20 +3097,23 @@ For applicable actions, use one Dexie read-write transaction that includes the r
 - Undo snapshot creation
 - RngState update
 - Normal Artian counter update
-- OwnedWeapon add/update/delete
+- OwnedWeapon add/update (registration, same-ID update, status, protection, in-progress)
+- TargetWeapon update (link, relink, completion)
 - ExecutionHistory write
 - PlanStep update
 - ProductionPlan update
+- Game save point deletion when the Plan completes or is abandoned
 - `expectedStateAfter` validation for expected-success paths
 
 Expected-success paths such as:
 
-- Confirm expected result
-- Secure weapon
+- Confirm expected result (including completion on the last physical Step)
+- Confirm a blind observation
+- Confirm an owned Ideal (`confirm_owned_ideal`)
 
 must rollback the entire transaction if the resulting state does not match `expectedStateAfter`.
 
-The unexpected-result path intentionally persists stale state and the corresponding reason within the same transaction.
+The unexpected-result and operation-uncertain paths intentionally persist stale state and the corresponding reason within the same transaction.
 
 On any storage/validation failure:
 
@@ -2881,7 +3122,9 @@ On any storage/validation failure:
 - Keep the UI on the current Step
 - Surface a retryable save error
 
-Undo is also one Dexie transaction.
+Undo is also one Dexie transaction. Replan adoption, game save point restore,
+finishing as a compromise, Plan abandonment, and an approved breaking change are each
+one Dexie transaction too.
 
 Undo failure must leave the pre-Undo state and history unchanged.
 
@@ -2996,7 +3239,11 @@ If validation fails:
 - Do not partially apply data
 - Keep the current data unchanged
 
-Export must include the specified schema version and user entities.
+Export must include the specified schema version and user entities. The Execution
+lifecycle state - Target lifecycle, `OwnedWeapon.executionInProgress`, ProductionPlan
+abandonment, PlanStep `executionEffects`, the extended ExecutionHistory / Undo
+snapshot, and `ExecutionSavePoint` - is user data and belongs to Export / Import.
+Device-to-device sync is not added; full-replacement Export / Import covers it.
 
 Master Data itself is not copied into the user export.
 
@@ -3117,14 +3364,36 @@ Owned Weapons UI must:
   the weapon nor the Target on cancel, and on approval save the change together
   with the Target unlink
 
-Execution UI must:
+Target Weapons UI must also:
+
+- Hide `completed` Targets from the normal list and Search Select, show them read-only
+  under 完了済みの目標武器, and allow reopening only through the explicit
+  未完了に戻す action with confirmation
+- Notify 「この目標の理想条件を満たす所持武器をすでに所有しています。」 when an owned
+  Gogma already meets the Ideal, and offer completing the Target with it as the
+  preferred path over Build List / Plan
+
+Execution UI must (`docs/UI_FLOW.md` 12):
 
 - Present one operation at a time
 - Show expected result
-- Support result confirmation
-- Support actual-result mismatch recording
+- Distinguish a Counter-advance Normal creation from the production-target Normal
+- Require the actual five slots for a blind production-target Normal
+- Support result confirmation, with Ideal completion on the last physical Step and
+  no separate 確保 button or Step
+- Offer 次の操作へ進む and a confirmed この武器を妥協品として確定して終了 when a selected
+  compromise checkpoint is reached
+- Insert the presentation-only 作業する武器を「○○」へ切り替えてください guidance
+- Support actual-result mismatch recording and "operation unknown" recording, both
+  guiding to RNG re-identification
 - Support Undo
+- Support ゲーム内セーブ済みとして記録 and restoring the last game save point, and ask
+  現在地点を維持 / 最後のゲーム内セーブ地点へ戻す / キャンセル before a Plan-abandoning
+  action when Steps were confirmed after the save point
+- Warn before a Plan-breaking change is saved while a Plan is `active`
+- Offer 現在地点から再計画を試算 with a separate, re-validated adoption
 - Show stale/recalculation reason when execution diverges
+- Keep Seed / Counter numbers hidden unless Debug Mode is on
 
 ---
 
@@ -3394,9 +3663,10 @@ Relevant test areas include:
   selection-free Entry still blocking that Target's constrained re-search and
   what-if
 - Checkpoints adding no `PlanStepOperationType`, riding as milestones on the real
-  physical Step, leaving later Steps in place, reserving nothing, and changing no
-  status or protection, while the final Ideal still applies the ordinary reserve
-  semantics
+  physical Step, leaving later Steps in place, and reserving nothing; Planner
+  calculation changes no status or protection, Execution applies only the
+  `practical` label at the milestone Step, and the final Ideal applies the completion
+  semantics (`ideal`, protected, Target `completed`)
 - A starting OwnedWeapon whose current state satisfies a compromise condition
   offered only as a lane start of its own Route (never as a checkpoint on its
   own), `hasPractical` still judged from actual performance, and
@@ -3562,10 +3832,53 @@ Relevant test areas include:
   prefers the non-preferred one when the existing evaluation rates it higher, ranks
   the preference above `weaponSwitchCount` and below Target priority, satisfaction,
   category, cost, and conflict, works for owned Normal and existing Gogma routes,
-  never treats a new-Normal route as preferred, and never lets `reserve_weapon`
-  change a Target preference
-- Changing only `preferredOwnedWeaponId` changes `targetDefinitionHash` and stales
-  the BuildListEntry with `target_definition_changed`
+  never treats a new-Normal route as preferred, and never lets `reserve_weapon` or
+  any other Planner calculation change a Target preference
+- Changing only `preferredOwnedWeaponId`, `priority`, `isEnabled`, or lifecycle leaves
+  `createTargetDefinitionHash()` and BuildListEntry staleness unchanged, while
+  `targetWeaponsHash` still reflects each of them, and a Plan-dependent Target's
+  `priority` / `isEnabled` change moves `dependentTargetDefinitionsHash`
+- Execution Step confirmation persists each Step's `rngAdvance` immediately and
+  persists nothing for unconfirmed Steps; an interrupted Plan stays `active` and
+  resumes at `currentStepId`
+- A new Normal Route registers only its production-target Normal (never a
+  Counter-advance Normal), an owned Normal's conversion keeps its OwnedWeapon ID,
+  and an existing Gogma is updated in place Step by Step
+- A blind production-target Normal cannot be confirmed without user-entered observed
+  slots, no slots are fabricated, and the binding token matches only the recorded
+  observation
+- The first real production Step links the Target to the weapon and clears another
+  Target's link in the same transaction; Plan generation changes no preference
+- A reached selected compromise checkpoint labels the weapon `practical` without
+  touching protection; finishing as a compromise abandons the Plan with the Target
+  still `active` and its preference kept; a performance-only match never relabels
+- Ideal completion rides on the last physical Step (no separate reserve Step) and
+  sets `ideal`, protection on for new and existing weapons, in-progress off, Target
+  `completed`, preference cleared; `confirm_owned_ideal` advances no Counter
+- Every Ideal completion path clears the preference of all other Targets preferring the
+  completed weapon in the same transaction, changes nothing else on them, and Undo
+  restores them
+- Weapon switch guidance is derived for A -> B -> A without any PlanStep,
+  ExecutionHistory, Counter, cost, or `maxPlanSteps` effect
+- Adding a Target or a BuildListEntry, or changing a Plan-independent one, never
+  stales the Active Plan; a Plan-dependent change does, and a UI-initiated breaking
+  change warns first and abandons with `breaking_change_approved` atomically
+- Replan Preview changes nothing; adoption re-validates the Preview-start state,
+  refuses on any change, and atomically abandons the old Plan (`replan_adopted`) and
+  activates the new one while keeping the old ExecutionHistory
+- The game save point is recorded only explicitly, restores only execution-scope
+  state, refuses a restore with no write at all when an entity the restored Plan needs
+  is missing (a Plan-independent Target missing is not a refusal), offers keep / restore / cancel on Plan-abandoning actions only when Steps
+  were confirmed after it, and is never carried to a replanned Plan
+- An unexpected result applies the Counter consumption and actual result and stales
+  the Plan; an uncertain operation changes no state and stales the Plan
+- The "after the running Plan completes" Search origin replays stored Steps without
+  prediction or persistence and cannot add to the Build List; `completed` Targets are
+  excluded from Search and Planner input
+- Undo restores RngState, all Normal Counters, OwnedWeapons (status and in-progress
+  included), changed Targets, the ProductionPlan, and the save point, and is refused
+  for Plans abandoned by replan adoption, user abandonment, or an approved breaking
+  change
 - Export/import validation
 - Mobile UI flows where applicable
 

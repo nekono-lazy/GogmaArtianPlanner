@@ -160,7 +160,10 @@ gogma_artian  -> 巨戟アーティア系
 - 所持アーティア数（通常／巨戟）
 - 有効な目標武器数
 - 作成リスト候補数
-- Active Planの有無
+- Active Planの有無と進行（完了Step数 / 全Step数、作成中の武器数）
+- 完了済み目標武器数
+- RNG再同定を促す表示（直前の実行で想定外結果または操作内容不明を記録し、その後RNG状態を更新していない
+  場合、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.15）
 
 主要アクション。
 
@@ -177,8 +180,9 @@ gogma_artian  -> 巨戟アーティア系
 - RNG未設定: RNG Setupへ誘導
 - TargetWeaponなし: Target Weaponsへ誘導
 - Search結果なし: Search Resultsへ誘導
-- Active Planあり: Execution Navigatorへ誘導
-- Plan stale: 再計算へ誘導
+- Active Planあり: 「実行ナビを再開する」でExecution Navigatorの現在Stepへ誘導
+- Plan stale: stale理由、ゲーム内セーブ地点への復元（記録がある場合）、現在地点からの再計画試算へ誘導
+  （16.1）
 
 ---
 
@@ -232,6 +236,8 @@ RNG同定の利用可否表示。
 - 空欄は既存値を削除しない。確定解除は別操作にする
 - Counter Gateの入力欄・状態表示・取得方法表示を通常UIに出さない。保存時はpersisted `RngState.counterGate` をそのまま保持し、null化、確定解除、source書き換え、代表値54 / 35の書込みを行わない
 - persisted Gateが200、54、または未設定でも、他の必要値とsupportが同じならProduction active Predictionのavailabilityと結果は同じである
+- 実行中（active）の生産計画がある場合、保存前に16.3の警告を出し、承認時だけ生産計画を破棄して保存する。
+  Execution Navigatorの正常なStep確定によるCounter更新はこの画面の保存ではないため警告対象ではない
 
 ## 5.4 Skill-first Identification Wizard
 
@@ -292,6 +298,7 @@ review / adoption。
 - 調査前状態へ戻したことを明示確認してからadoptする
 - Base SeedをProduction `normalizeSeed()`で再validation / canonicalizeする
 - Base Seed、Skill Counter、Gogma Counterのsourceを既存の `observation` とし、Counter GateとNormal Counterを変更しない
+- 実行中（active）の生産計画がある場合、adopt前に16.3の警告を出し、承認時だけ生産計画を破棄してadoptする
 
 activation条件。
 
@@ -379,6 +386,8 @@ Base Seed / Skill Counter / Gogma CounterのIdentification Wizard（5.4）と同
 - 未確定の武器種のレア8 Counterは通常アーティア経由検索に使わない
 - Counterの直接修正は通常UIに表示しない
 - Debug Mode ONの場合のみ、警告と確認を伴う手動修正を許可してよい
+- 実行中（active）の生産計画がある場合、Counterの確定、確定解除、Debug修正の保存前に16.3の警告を出し、
+  承認時だけ生産計画を破棄して保存する
 
 UI接続状態。
 
@@ -411,6 +420,7 @@ UI接続状態。
 - 状態（巨戟のみ。通常は「—」）
 - 保護
 - 優先起点（この武器を優先起点にしているTarget名。未使用なら「なし」。read-only）
+- 作成中（実行中の生産計画で作成・加工中なら「作成中（目標武器名）」。read-only、編集不可）
 
 操作。
 
@@ -434,7 +444,7 @@ UI接続状態。
 - 巨戟アーティアのstatusと保護は独立項目として扱う
 - 既存武器の種類変更は互換項目の初期化を伴うためv1 UIでは禁止する
 - 新規巨戟アーティアの初期値は「未分類 / 保護OFF」とする
-- 新規作成時だけ、未分類 / 実用は保護OFF、理想は保護ONを初期値にする
+- 新規作成時だけ、未分類 / 実用は保護OFF、理想は保護ONを初期値にする（Owned Weapons画面での手動登録の初期値）
 - 登録済み巨戟アーティアの通常のstatus変更ではProtectionを自動上書きしない。Protectionは独立項目とする
 - statusはユーザー管理ラベルであり、Plannerの操作可否・Target Satisfaction・Search Route
   eligibilityに影響しない。武器性能を変更してよいかは `isProtected` だけが決める
@@ -442,6 +452,12 @@ UI接続状態。
 - `restorationBonusScope = "normal_artian"` の巨戟アーティアにもReset Bonuses / Keep Bonusesの両方を提示する。所持巨戟の5枠は既知であり、Keep可否をscopeで決めない
 - 「素材用武器」「素材として使用」など、所持武器を消耗品と誤解させる文言を表示しない
 - 削除時にActive Planで参照されている場合は警告する
+- 実行中（active）の生産計画が作成・加工中の武器、またはその計画の起点武器について、保護、復元ボーナス、
+  スキル、武器種、属性などsemantic項目の変更または削除を保存する前に16.3の警告を出す。status、名称、
+  memoだけの変更では警告しない
+- 作成中状態はユーザーが直接編集できない。生産計画の完了・終了、Undo、ゲーム内セーブ地点の復元だけで変わる
+- statusはユーザーが変更できるほか、Execution Navigatorが巨戟化時に未分類、選択済み妥協checkpoint到達時に
+  実用、理想品完成時に理想（保護あり）へ変更する（12.2 / 12.3）。Execution Navigator以外の自動変更はしない
 - 旧「関連する目標武器」の表示・編集UIは廃止する。目標武器との紐づけ操作はTarget Weapons画面
   だけから行い、この画面はread-only表示と確認付き解除のためにTarget関係を読み取るだけとする
 
@@ -470,7 +486,12 @@ statusの変更はこの画面の通常CRUDである。statusは非semanticで�
 変更してもActive Planやビルドリストはstaleにならず、確認ダイアログも表示しない。
 Protectionを変更したい場合は独立した項目として明示的に操作する。
 
-Plannerによる保護解除と、ユーザー確認前の状態変更は禁止する。
+優先起点の武器が実行中の生産計画で作成・加工中の場合、保護ONまたは武器種 / 属性変更の確認は
+16.3の警告（生産計画の破棄）と1つのダイアログにまとめ、承認時は武器の変更、Target側の紐付け解除、
+生産計画の破棄を同一トランザクションで保存する。
+
+Plannerによる保護解除と、ユーザー確認前の状態変更は禁止する。理想品完成時にExecution Navigatorが
+保護をONにすることは、Planの正常な完成処理であり保護解除ではない。
 
 ---
 
@@ -490,7 +511,11 @@ Plannerによる保護解除と、ユーザー確認前の状態変更は禁止�
 - 理想ボーナス要約
 - 実用ライン要約
 - スキル条件要約
-- 優先起点（設定済みなら武器名、未設定なら「なし」）
+- 優先起点（設定済みなら武器名、未設定なら「なし」。作成中なら「作成中」を併記）
+- 操作0 Idealの通知（所持巨戟が理想条件を満たす場合、8.2）
+
+通常の一覧は `lifecycleStatus = "active"` の目標武器だけを表示する。完了済みの目標武器は折りたたみの
+「完了済みの目標武器」に表示する（8.3）。
 
 操作。
 
@@ -499,6 +524,7 @@ Plannerによる保護解除と、ユーザー確認前の状態変更は禁止�
 - 複製
 - 削除
 - 検索対象ON/OFF
+- この武器で目標を完了にする（8.2）
 
 入力セクション。
 
@@ -522,6 +548,11 @@ Plannerによる保護解除と、ユーザー確認前の状態変更は禁止�
 - 複雑な任意論理式UIは作らない
 - 一覧は3.2の表示順契約に従い、自動sortしない。8.1の付け替えで前の保持Targetの優先起点が解除
   される場合も、保存したTargetと解除されたTargetはそれぞれ元の一覧位置を維持する
+- 実行中（active）の生産計画に含まれる目標武器について、性能定義、優先度、検索対象ON/OFF、優先起点を
+  変更して保存する前に16.3の警告を出す。名称とmemoだけの変更、計画に含まれない目標武器の変更、新規追加では
+  警告しない
+- 新規追加や計画に含まれない目標武器の変更では生産計画をstaleにしない。保存後に「実行中の生産計画には
+  含まれていません。候補検索と現在地点からの再計画の試算で取り込めます。」と案内してよい
 
 ### 8.1 優先する所持武器
 
@@ -575,6 +606,55 @@ Selectを置き、補助説明を添える。
 場合は `preferredOwnedWeaponId = null` へ戻す。これは編集中のdraftだけで行い、保存まではDBを
 書き換えない。Target自身の定義変更なので、別Targetから武器を奪う操作とは扱わず確認も出さない。
 
+#### Executionによる自動紐付けと作成中の武器
+
+- Execution Navigatorで作成作業を開始したStepの確定時に、その目標武器の優先起点は作成中の武器へ
+  自動設定され、別の目標武器の紐付けは解除される。理想品完成時は解除される
+  （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.11 / 16.13）。この自動変更に確認ダイアログは出さない
+- 優先起点Selectでは、実行中の生産計画で作成中の武器に「作成中（目標武器名）」を表示する
+- 別の目標武器で作成中の武器を選択する場合は、付け替え確認に加えて16.3の警告（その生産計画に含まれる
+  目標武器の紐付けを変えるため、生産計画を破棄する）を1つのダイアログにまとめる
+- 優先起点の変更だけでは作成リストの項目はstaleにならない（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 8.1）
+
+### 8.2 操作0 Idealの通知と目標の完了
+
+active Targetの保存時と一覧表示時に、所持巨戟が現在性能で理想条件を満たす場合は通知する
+（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.5.5）。
+
+```text
+この目標の理想条件を満たす所持武器をすでに所有しています。
+```
+
+- 該当する所持武器を表示し、「この武器で目標を完了にする」を優先導線として置く。候補検索、作成リスト
+  追加、生産計画作成を不要にするためである
+- 「この武器で目標を完了にする」は確認ダイアログを必須とし、「武器を理想・保護ありにし、目標武器を
+  完了済みにします。」を伝える。承認時は武器 `status = "ideal"`、`isProtected = true`、目標武器
+  `lifecycleStatus = "completed"`、`preferredOwnedWeaponId = null` を1つのトランザクションで保存する。
+  武器の復元ボーナスとスキルは変更しない
+- その武器を別の目標武器が優先起点にしている場合は、同じトランザクションでそれらの目標武器の
+  `preferredOwnedWeaponId` も `null` にする（保護武器は優先起点にできないため、
+  [PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.13）。解除するのは優先起点だけで、それらの目標武器の条件、
+  優先度、検索対象ON/OFF、完了状態は変更しない。確認ダイアログには影響する目標武器名とともに次を表示する
+
+```text
+この武器は別の目標武器（Target B）でも優先起点に設定されています。
+完了すると武器が保護されるため、その優先起点設定も解除されます。
+```
+
+- 実行中の生産計画に含まれる目標武器、または計画が作成・加工中の武器では、この操作の前に16.3の警告を出す
+- 通知の判定はTarget評価だけで行い、RNG Predictionを実行しない
+
+### 8.3 完了済みの目標武器
+
+- 理想品完成または8.2の操作で完了した目標武器は、通常の一覧から除き、折りたたみの
+  「完了済みの目標武器」にread-onlyで表示する（完了日時、完成に使った生産計画があればそのリンク）
+- 完了済みの目標武器は候補検索のSelectと作成リストのPlanner入力から除外される。作成リストの項目は
+  staleではなく「完了済みの目標武器」として表示する
+- 「未完了に戻す」を置く。確認ダイアログで「所持武器は変更しません。再び候補検索と生産計画の対象に
+  なります。」を伝え、承認時は `lifecycleStatus = "active"`、`completedAt = null`、`completedByProductionPlanId = null` にする。優先起点は
+  `null` のままとする
+- 削除は既存の参照中Entity削除保護に従う。生産計画から参照される目標武器は削除できない
+
 ---
 
 ## 9. Search Results
@@ -585,7 +665,8 @@ TargetWeaponごとに候補を検索し、作成リストへ追加する。
 
 表示構造。
 
-- 目標武器Select（検索対象がONの目標武器だけを並べる。単一選択）
+- 目標武器Select（検索対象がONかつ完了済みでない目標武器だけを並べる。単一選択）
+- 検索起点（実行中の生産計画がある場合だけ表示）: 現在地点（既定） / 実行中の生産計画の完了後（予測）
 - 経路フィルタ: すべて / 通常アーティア経由（新規作成・所持通常の両方） / 既存巨戟から
 - 探索量の詳細設定（通常 / 巨戟 / スキルの3上限のみ）
 - 理想品候補1件
@@ -647,6 +728,22 @@ TargetWeaponごとに候補を検索し、作成リストへ追加する。
 - 検索キャンセル
 - 途中採用する状態の選択 / 解除（lane別）と改善優先の変更
 - 作成リストへ追加（選択中の状態と改善優先を一緒に登録する）
+
+検索起点（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 3.2）。
+
+- 既定は「現在地点」であり、最後に実行ナビで確定したRNG状態・通常アーティアCounter・所持武器から検索する。
+  実行中の生産計画の開始時点ではない。作成中の武器も起点候補になる
+- 「実行中の生産計画の完了後（予測）」は、生産計画が実行中で、現在Stepの期待状態と一致する場合だけ
+  選べる。選べない場合は理由を表示する
+- この起点の結果には「実行中の生産計画が予測どおり完了した場合の予測です」と常時表示し、
+  「作成リストへ追加」を表示しない。途中採用する状態の選択UIも表示しない。現在地点から再検索するか、
+  計画完了後に検索するよう案内する
+- 実行中の生産計画で完了予定の目標武器を選んだ場合は検索せず、「この目標武器は実行中の生産計画で
+  完成予定です。」と表示する
+- 操作0 Idealの通知（8.2）に該当する目標武器では、検索結果の上に同じ通知と「この武器で目標を完了にする」
+  導線を表示する
+- 直前の実行で想定外結果または操作内容不明が記録され、RNG状態が未更新の場合は、RNG再同定を促す
+  warningを表示する（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.15）
 
 制約。
 
@@ -768,18 +865,27 @@ Plannerに検討させる候補集合を確認・調整する。
 - 途中採用する状態の選択 / 解除 / 別の到達点へ変更、改善優先の変更（再検索不要）
 - TargetWeapon優先度を変更
 - Planner探索上限の詳細設定
-- Planner実行
+- Planner実行（実行中の生産計画が無い場合）
+- 現在地点から再計画を試算（実行中の生産計画がある場合、16.4）
 
 制約。
 
 - 作成順の手動固定は提供しない
+- 実行中の生産計画に含まれる項目には「実行中の生産計画で使用中」を表示する。その項目の削除、途中採用する
+  状態・改善優先の変更、その目標武器の優先度変更は保存前に16.3の警告を出す
+- 優先度はPlannerの計画順・scoreへの入力であり、Candidateの性能条件ではない。優先度を変更しても作成リストの
+  項目はstaleにならない。計画に含まれない目標武器の優先度変更は生産計画をstaleにしない
+- 実行中の生産計画があっても新規追加と計画に含まれない項目の変更はでき、生産計画をstaleにしない。
+  取り込むには16.4の試算と採用を使う
+- 完了済みの目標武器の項目はstaleではなく「完了済みの目標武器」と表示し、Planner入力に含めない
 - 途中採用する状態と改善優先の変更はここが唯一の編集場所である。Search側での再追加では変更しない
 - 同じEntryへの選択保存は直列化し、各保存は直前の保存結果(または保存中の最新値)を
   起点に次の選択を組み立てる。描画時点の古い選択を起点にして、直前の保存を
   上書きしてはならない(lost update)。Domain validationが選択内容の唯一のauthorityである
 - 選択・改善優先を変更してもEntry自体はstaleにならない
-- 選択・改善優先を変更すると既存の作成プランは再計算対象になる。変更後は
-  「途中採用する状態と改善優先を更新しました。生産計画を再作成してください。」と案内する
+- 選択・改善優先を変更すると、その項目を含む既存の作成プランは再計算対象になる。変更後は
+  「途中採用する状態と改善優先を更新しました。生産計画を再作成してください。」と案内する。
+  実行中の生産計画に含まれる項目では保存前に16.3の警告を出す
 - 同一laneから2つ以上の到達点を選択できない。両laneの開始状態の同時選択は有効である
 - 改善優先はsoft preferenceであり、選択した途中状態（hard constraint）より常に下位である
   ことを説明する
@@ -797,9 +903,9 @@ Plannerに検討させる候補集合を確認・調整する。
 - BuildCandidateの検索結果とBuildListEntryを同一Entityとして扱わない
 - staleなBuildListEntryはPlanner入力に含めず、再検索または再追加を促す
 - 有効なBuildListEntryが0件ならPlanner実行不可
-- Target条件、検索に使用したRNG状態、Routeが参照する起点武器、CalculationContext変更時にEntryのstale理由を表示する
+- Target条件（性能定義）、検索に使用したRNG状態、Routeが参照する起点武器、CalculationContext変更時にEntryのstale理由を表示する。目標武器の優先度、検索対象ON/OFF、優先起点、完了状態だけの変更（Execution Navigatorの自動紐付けを含む）ではstale表示しない
 - RNG変更によるstaleは `rng_state_changed` と表示し、再検索・再追加へ誘導する
-- Route参照武器のボーナス、スキル、status、isProtected変更によるstaleは `owned_weapon_changed` と表示し、再検索・再追加へ誘導する
+- Route参照武器のボーナス、スキル、isProtected変更によるstaleは `owned_weapon_changed` と表示し、再検索・再追加へ誘導する。status、作成中状態だけの変更ではstale表示しない
 - Routeと無関係なOwnedWeapon変更、または参照武器の名前、メモ、日時だけの変更ではEntryをstale表示しない
 - CalculationContext非互換は `calculation_context_changed` と表示する
 
@@ -914,11 +1020,20 @@ Plannerが生成した作成計画を確認する。
 
 操作。
 
-- 作成開始
-- 再計算
-- Plan破棄
+- 作成開始（draft。実行中の生産計画がある場合は、そのPlanを16.4の試算・採用で置き換える案内を表示する）
+- 実行ナビを再開する（active）
+- 現在地点から再計画を試算（active / stale、16.4）
+- 再計算（draft / stale）
+- Plan破棄（確認必須、16.2）
 - Debug詳細表示
 - 生成時CalculationContext
+
+作成開始では、現在の永続状態が先頭Stepの `expectedStateBefore` と一致することを検証し、一致しない場合は
+開始せず再計算を促す。
+
+Plan statusの表示は[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.2に従い、`abandoned` では理由
+（ユーザーが破棄 / 再計画を採用 / 妥協品で終了 / 前提を壊す変更を承認）を、`stale` では再計算理由を
+区別して表示する。
 
 routeの `planId` に対応するPlanを
 `ProductionPlanRepository.getProductionPlan(planId)` で取得し、その保存済みPlanだけを
@@ -961,11 +1076,14 @@ Plan概要
 - 作成日時
 - 全Step数
 - 目標武器数
-- 確保予定数
+- 完成予定の目標武器数
 
 目標武器数は、そのPlanのStepから確認できるdistinct TargetWeapon ID数とする。
-確保予定数は `steps[].expectedResult?.shouldSecure === true` のStep数だけをauthorityとし、
-Target件数や `selectedBuildListEntryIds.length` を武器本数と仮定しない。
+完成予定の目標武器数は `steps[].executionEffects.targetCompletions` のdistinct TargetWeapon ID数だけを
+authorityとし、Target件数や `selectedBuildListEntryIds.length` を武器本数と仮定しない。
+独立した `reserve_weapon` Stepの数や `expectedResult.shouldSecure` は完成予定のauthorityにしない
+（[DATA_MODEL.md](./DATA_MODEL.md) 11.4）。`executionEffects` を持たないlegacy Planでは、完成予定数を
+推測せず「不明（旧形式の計画）」と表示する。
 
 #### 目標武器ごとの作成ルート
 
@@ -980,7 +1098,7 @@ relatedTargetIds = union(
 ```
 
 - shared physical Stepは `progressedTargetWeaponIds` により複数Targetへ帰属する
-- `reserve_weapon` のようにRoute進行を伴わないStepは `targetWeaponId` により帰属する
+- `confirm_owned_ideal`（legacy Planでは `reserve_weapon`）のようにRoute進行を伴わないStepは `targetWeaponId` により帰属する
 - 同じTarget IDを1Step内で重複させない
 - `targetWeaponId === null` かつ `progressedTargetWeaponIds` が空のStepは、
   目標武器ごとのルートに含めず、計画全体の実行順にだけ含める
@@ -1016,7 +1134,8 @@ rank順並び替えを行わない。同一bonusが複数slotにあっても欠�
 
 `expectedResult === null` および `expectedResult.restorationBonuses === null` は正常系として扱い、
 予測結果なしとして安全にfallbackする。nullを理由にpageをerrorにしない。
-`shouldSecure === true` のStepだけを確保予定として表示し、false / null から確保予定を推測しない。
+`executionEffects.targetCompletions` を持つStepだけを「このStepで完成する目標武器」として表示し、
+`shouldSecure` やStep種別から完成予定を推測しない。
 
 #### TargetWeapon名の解決
 
@@ -1174,14 +1293,18 @@ PlanStep表示。
 - 順番
 - 今回行う作業
 - 使用する武器
+- 通常アーティア作成Stepの区分（Counter進行用 / この後巨戟化する作成対象）
 - 想定結果
-- 確保対象かどうか
+- このStepで完成する目標武器（`executionEffects.targetCompletions` がある場合）
+
+独立した「確保」Stepは表示しない。legacy Planに残る `reserve_weapon` Stepは内容確認のために表示して
+よいが、実行可能な操作として扱わない。
 
 
 制約。
 
-- Active Planは同時に1件まで
-- stale Planでは作成開始不可。再計算を促す
+- 実行中（active / stale）のPlanは同時に1件まで
+- stale Planでは作成開始不可。再計算または現在地点からの再計画試算を促す
 - 現在CalculationContextと非互換なPlanはstaleとする
 - Debug Mode OFFではSeed / Counterを表示しない
 
@@ -1191,79 +1314,194 @@ PlanStep表示。
 
 目的。
 
-作成プランに従ってゲーム操作を1ステップずつ案内する。
+作成プランに従ってゲーム操作を1ステップずつ案内し、ユーザーが確認したゲーム状態をStepごとに
+確定する。意味論のauthorityは[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16章である。
 
 表示。
 
-- 現在Step番号
+- 現在Step番号と完了済み / 残りStep数
 - 今回行う作業
-- 使用する武器
-- 想定結果
-- 確保対象かどうか
-- 完了済み / 残りStep数
+- 使用する武器（tracked weaponの名称。Counter進行用Normal作成では武器名を出さない）
+- `create_normal_artian` の区分: 「Counter進行用（この武器は登録しません）」または
+  「この後巨戟化する作成対象」（`executionEffects.normalCreationRole` だけをauthorityとする）
+- 想定結果（予測しないStepでは「予測なし」。blind作成対象では「ゲーム画面で確認した5枠を入力」）
+- このStepで完成する目標武器（`executionEffects.targetCompletions` がある場合だけ）
+- このStepで到達する妥協checkpoint（`checkpointMilestones` がある場合だけ）
+- 「アプリはゲームのセーブを判別しません」の短い補足と、最後のゲーム内セーブ地点の記録有無
+- RNG再同定を促す表示（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.15の条件を満たす場合）
 
 基本操作。
 
 - 結果一致・次へ
-- 確保
+- 実際の5枠を入力して確定（blind作成対象Stepだけ）
+- 所持武器で完成を確認（`confirm_owned_ideal` Stepだけ）
 - 結果が違う
+- 何を何回操作したか分からない
 - Undo
+- ゲーム内セーブ済みとして記録
+- 最後のゲーム内セーブ地点へ戻す
 - プラン全体を見る
+
+独立した「確保」ボタンとStepは表示しない。理想品の完成は最後の物理操作Stepの「結果一致・次へ」で
+同時に確定する（12.2）。
+
+スマートフォンでは主要ボタン（結果一致・次へ、または入力して確定）を片手で押しやすい位置に置き、
+「結果が違う」「何を何回操作したか分からない」「Undo」はそれと誤タップしにくい配置にする（3.1）。
+
+中断と再開。
+
+- 一時中断用の操作やstatusは持たない。ブラウザやゲームを閉じてもPlanは `active` のままで、
+  再訪時は `currentStepId` のStepから再開する
+- Dashboard（4）とProduction Plan（11）から「実行ナビを再開する」で戻れる
 
 ## 12.1 結果一致・次へ
 
-処理。
+処理（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.1）。
 
-- 操作前に実状態が現在Stepの `expectedStateBefore` と一致することを確認
+- 実状態が現在Stepの `expectedStateBefore` と一致することを確認
 - 実行前状態からExecutionUndoSnapshotを作成
-- RNG状態を想定どおり進める
-- NormalArtianCounterを想定どおり進める
-- InventoryChangeを適用する
+- `rngAdvance` をRngState / NormalArtianCounterへ即時反映
+- `executionEffects` を適用（作成対象Normalの登録、同一ID更新、Target紐付け、妥協checkpointの実用ラベル、
+  理想品完成）
 - 更新後の実状態が `expectedStateAfter` と一致することを確認
 - ExecutionHistory追加
-- PlanStepとProductionPlan更新
-- 次Stepへ進む
+- PlanStep完了、次Stepへ進む（最後のStepならPlan完了）
 
-これらは12.5の共通Dexie transactionで確定する。両方の期待状態と一致する正常進行ではPlanをstaleにしない。不一致の場合はStep完了を確定せず、差分と再計算導線を表示する。
+これらは12.9の共通Dexie transactionで確定する。不一致の場合はStep完了を確定せず、差分と再計算導線を
+表示する。
 
-## 12.2 確保
+作成対象Normalの登録時、別の目標武器がその武器を優先起点にしていた場合は、紐付けが移ったことを
+確定後に短く通知する（確認ダイアログは出さない。Executionの正常進行であるため）。
+
+### blind作成対象の観測値入力
+
+- 作成対象がblind Normal（5枠を予測しない）の場合、「結果一致・次へ」の代わりに
+  「実際の5枠を入力して確定」を表示する
+- 入力UIは所持武器登録と同じ5枠入力部品と複合availability selectorを使い、5枠すべてが入力されるまで
+  確定できない
+- 「これは予測ではなく、ゲーム画面で確認した実際の5枠です」と表示する。予測との一致判定は行わない
+- 架空の5枠を初期値として埋めない
+- Counter進行用Normalでは入力を求めない
+
+## 12.2 理想品の完成
+
+`targetCompletions` を持つStepでは、Stepカードに「このStepで『（目標武器名）』が完成します」と表示し、
+「結果一致・次へ」で次を同時に確定する（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.13）。
+
+- 武器を理想（status ideal）にし、保護する（既存武器でも保護する）
+- 作成中を解除する
+- 目標武器を完了にし、優先起点の紐付けを解除する。その武器を優先起点にしている他の目標武器の紐付けも
+  同時に解除する（解除した目標武器はUndoで戻る）
+
+確定後、完成した武器と完了した目標武器を通知する。全Stepが終わった場合は「生産計画が完了しました」を
+表示する。
+
+### 操作0の完成確認
+
+`confirm_owned_ideal` Stepでは次を表示し、ゲーム操作を求めない。
+
+```text
+この所持武器はすでに目標条件を満たしています。
+理想品として確定します。
+```
+
+「所持武器で完成を確認」でCounterを進めずに12.2の完成処理だけを行う。武器切替案内（12.6）は出さない。
+
+## 12.3 妥協checkpointへの到達
+
+`checkpointMilestones` を持つStepを確定すると、そのStepの確定transactionで武器を実用（status practical）に
+する。作成中と保護は変更しない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.12）。
+
+確定後、次Stepへ進む前に次のパネルを表示する。
+
+```text
+作成リストで選んだ途中採用状態に到達しました。
+この武器は「実用」になりました。
+```
+
+- 次の操作へ進む（主要ボタン）
+- この武器を妥協品として確定して終了
+
+開始時点で既に到達しているcheckpoint（既存巨戟の現在状態を途中採用状態に選んだ場合）は、
+そのEntryの最初の物理Stepの前に同じパネルを表示する。
+
+パネルは直近に完了したStepのmilestoneから導出するpresentationであり、「次の操作へ進む」を押した事実を
+永続化しない。ブラウザ再開時に再表示されても安全である。
+
+「この武器を妥協品として確定して終了」は確認ダイアログを必須とする。
+
+```text
+この武器を妥協品として確定し、現在の生産計画を終了します。
+残りの作成手順は実行されません。
+未完了の目標武器がある場合は現在状態から再計画できます。
+
+[キャンセル] [妥協品として確定して終了]
+```
+
+承認時は武器を実用のまま確定し、作成中を解除し、目標武器は未完了のまま、優先起点の紐付けは維持し、
+Planを破棄（妥協品で終了）にする。ゲーム内セーブ地点の選択（16.2）は出さない。完了後はBuild List /
+Target Weaponsへの導線と「現在地点から再計画を試算」の案内を表示する。
+
+## 12.4 結果が違う
+
+「結果が違う」は、操作自体は案内どおり1回行ったことが明確で、結果だけが予測と異なる場合に使う。
 
 処理。
 
-- ExpectedResultをOwnedWeaponとして登録または更新
-- statusをPracticalまたはIdealに設定
-- 新規登録ではPracticalを保護OFF、Idealを保護ONにする。既存巨戟の更新では保存済みの保護状態を維持する
+- 実結果入力画面を開く（5枠、Series / Group Skillのうち、そのStepで確認できる項目）
 - 実行前状態をExecutionUndoSnapshotへ保存
-- ExecutionHistory追加
-- PlanStepとProductionPlan更新
-- 次Stepへ進む
+- 操作は実行済みとしてCounter消費を反映する
+- 実結果を追跡武器へ保存する（作成対象Normalなら実結果で登録する）
+- ActualResultとExecutionHistoryを保存する
+- Planをstale（予測と異なる結果）にする
+- RNG再同定への導線を表示する（Gogma / SkillはRNG SetupのIdentification Wizard、通常アーティアは
+  Normal Counter Setup）
 
-武器追加・更新からPlan更新までを12.5の共通Dexie transactionで確定する。
+妥協checkpointの実用ラベルと理想品完成は適用しない。自動で再計画しない。
 
-## 12.3 結果が違う
+## 12.5 何を何回操作したか分からない
 
-処理。
+「Resetを2回押したかもしれない」「別の操作をしてしまった」など、実際の操作内容が不明な場合に使う。
 
-- 実結果入力画面を開く
-- ActualResultを保存
-- 実行前状態をExecutionUndoSnapshotへ保存
-- ExecutionHistory追加
-- `expectedStateAfter` との不一致理由を記録してPlanをstaleにする
-- 再計算導線を表示
+- 確認ダイアログで「Counterと武器の状態は変更しません。RNG状態の再同定が必要です」と伝える
+- Counterを推測せず、RngState / NormalArtianCounter / 所持武器 / 目標武器を変更しない
+- ExecutionHistoryを記録し、Planをstale（操作内容不明）にする
+- RNG再同定と、必要なら所持武器の状態を登録し直す導線を表示する
 
-ActualResult、RNG / Counter / Inventoryの実変更、ExecutionHistory、PlanStep、ProductionPlanを12.5の共通Dexie transactionで確定する。
+## 12.6 武器切替案内
 
-## 12.4 Undo
+連続する物理操作Stepで対象の武器が変わる場合、現在Stepカードの前に次の案内を表示する
+（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.14）。
 
-処理。
+```text
+作業する武器を「○○」へ切り替えてください
+[武器を切り替えました]
+```
+
+- 判定は巨戟化 / Reset Bonuses / Keep Bonuses / Reset SkillsのStepのtracked weaponで行い、
+  通常アーティア作成と操作0の完成確認は対象外とする
+- 「武器を切り替えました」で現在Stepの操作ボタンを表示する。これはStep確定ではなく、Counter、所持武器、
+  ExecutionHistory、Undo対象のいずれも変更しない
+- 表示状態を永続化しない。ブラウザ再開時に再表示されてもよい
+- Case: 武器A操作 -> 武器B操作 -> 武器A操作 では、B操作の前とA操作の前に案内を出す
+
+## 12.7 Undo
+
+処理（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.16）。
 
 - 最後のExecutionHistoryのExecutionUndoSnapshotを読み込む
 - RngStateと全NormalArtianCounterを実行前へ戻す
-- Stepで追加したOwnedWeaponを削除し、更新・削除したOwnedWeaponを実行前へ戻す
+- Stepで追加した所持武器を削除し、更新した所持武器（status、作成中を含む）を実行前へ戻す
+- Stepで変更した目標武器（優先起点の紐付け、完了状態）を実行前へ戻す
 - ProductionPlanを実行前Snapshotへ戻す
+- ゲーム内セーブ地点を戻す（そのStepで削除されていれば復元し、取り消すStepがセーブ地点なら削除する）
 - 最後のExecutionHistoryを削除する
 
-Undoは上記すべてを1つのDexie transactionで行う。途中で失敗した場合は部分復元を残さず、Undo前の状態と履歴を維持する。Undo自体のExecutionHistoryは追加しない。
+Undoは上記すべてを1つのDexie transactionで行う。途中で失敗した場合は部分復元を残さず、Undo前の状態と
+履歴を維持する。Undo自体のExecutionHistoryは追加しない。
+
+Undoを表示できるのは、Planが実行中 / staleの場合と、完了または妥協品で終了した直後の最後の記録の場合
+だけである。再計画採用、Plan破棄、前提を壊す変更の承認で終了したPlanにはUndoを表示しない。
 
 注意表示。
 
@@ -1271,18 +1509,65 @@ Undoは上記すべてを1つのDexie transactionで行う。途中で失敗し�
 Undoはツール上の操作を戻すだけです。ゲーム内の操作は戻りません。
 ```
 
-## 12.5 Step確定Transaction
+取り消すStepがゲーム内セーブ地点の記録地点である場合は、Undo確認に「ゲーム内セーブ地点の記録も
+削除されます」を添える。
 
-結果一致、武器確保、想定外結果記録では、次の関連更新を1つのDexie read-write transactionで原子的に行う。
+## 12.8 ゲーム内セーブ地点
+
+「ゲーム内セーブ済みとして記録」（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.9）。
+
+- 補足: 「ゲーム側で現在の地点を保存したことを確認してから記録してください。アプリはゲームのセーブを
+  判別しません。」
+- 実行中（active）のPlanだけで押せる。既存の記録は上書きし、上書き前に確認する
+- 妥協checkpoint（途中採用状態）と混同しないよう、UI文言にcheckpointの語を使わない
+
+「最後のゲーム内セーブ地点へ戻す」。
+
+- 記録があり、その後に確定したStepがある場合だけ有効
+- 確認ダイアログ:
+
+```text
+ゲーム側も、記録したセーブ地点（Step 12完了時点）から再開していますか？
+アプリの実行状態（RNG状態、通常アーティアCounter、この計画で作成・加工中の武器、
+関係する目標武器、計画の進行）をその地点へ戻します。
+その後に追加した目標武器や作成リストなど、ゲーム進行と無関係なデータは戻しません。
+
+[キャンセル] [セーブ地点へ戻す]
+```
+
+- 実行中Planとstale Planの両方で使える。stale Planはセーブ地点の状態（実行中）へ戻る
+- 復元前に、復元後の計画に必要な所持武器、計画に含まれる目標武器、作成リスト項目が現在も存在するかを
+  検証する（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.9）。欠損があれば何も変更せず、次を表示する。
+  削除されたデータを自動で復活させない
+
+```text
+このセーブ地点の復元に必要な所持武器または目標武器が現在のデータに存在しないため、
+安全に復元できません。
+現在状態からRNG・所持武器を確認し、再計画してください。
+```
+
+- 16.2の「最後のゲーム内セーブ地点へ戻す」で復元が拒否された場合は、続けようとした破棄・採用・変更の
+  保存も行わず、選択前の状態へ戻す
+
+## 12.9 Step確定Transaction
+
+結果一致、観測値入力、操作0の完成確認、想定外結果記録、操作内容不明の記録、妥協品として終了では、
+次の関連更新を1つのDexie read-write transactionで原子的に行う。
 
 - RngState更新
 - NormalArtianCounter更新
-- OwnedWeapon追加・更新・削除
+- 所持武器の追加・更新（status、保護、作成中を含む）
+- 目標武器の更新（優先起点の紐付けと別目標の解除、完了）
 - ExecutionHistory追加
 - PlanStep完了または取消
 - ProductionPlan更新
+- Plan完了 / 終了時のゲーム内セーブ地点削除
 
-操作開始前に同じtransaction内で実状態を読み、`expectedStateBefore` のvalidationとExecutionUndoSnapshot生成を行う。結果一致と武器確保では `expectedStateAfter` 不一致をvalidation失敗としてtransaction全体をrollbackする。想定外結果は不一致を意図して記録する経路であるため、実状態とstale理由を同じtransactionで保存する。各経路で必要な読み書きまたはvalidationが失敗した場合は部分更新を残さず、Step確定前の状態を維持する。UIは次Stepへ遷移せず、再試行可能な保存エラーを表示する。
+操作開始前に同じtransaction内で実状態を読み、`expectedStateBefore` のvalidationとExecutionUndoSnapshot
+生成を行う。結果一致と操作0の完成確認では `expectedStateAfter` 不一致をvalidation失敗としてtransaction
+全体をrollbackする。想定外結果と操作内容不明は不一致を意図して記録する経路であるため、実状態とstale
+理由を同じtransactionで保存する。各経路で必要な読み書きまたはvalidationが失敗した場合は部分更新を
+残さず、Step確定前の状態を維持する。UIは次Stepへ遷移せず、再試行可能な保存エラーを表示する。
 
 ---
 
@@ -1297,7 +1582,9 @@ Undoはツール上の操作を戻すだけです。ゲーム内の操作は戻�
 - 完了済みStep
 - 現在Step
 - 今後のStep
-- 確保予定武器
+- 完成予定の目標武器（`executionEffects.targetCompletions` をauthorityとする）
+- 妥協checkpointを持つStep
+- 最後のゲーム内セーブ地点の位置
 
 操作。
 
@@ -1306,6 +1593,7 @@ Undoはツール上の操作を戻すだけです。ゲーム内の操作は戻�
 制約。
 
 - 初期版ではOverviewからPlan編集をしない
+- 武器切替案内（12.6）はStepとして一覧に数えない
 
 ---
 
@@ -1328,6 +1616,9 @@ Import制約。
 
 - 初期版は全置換Importのみ
 - Import前に現在データExportを促す
+- 実行中の生産計画、ゲーム内セーブ地点、作成中状態、目標武器の完了状態もExport / Importの対象である
+  （[DATA_MODEL.md](./DATA_MODEL.md) 15.1）。PCからスマートフォンへの移行などの端末間同期機能は追加せず、
+  このExport / Importで行う
 - schemaVersion不一致は拒否する
 - Master ID不一致は拒否または明示警告する
 
@@ -1369,34 +1660,121 @@ Debug Mode ONの場合のみ表示。
 
 ## 16. 再計算導線
 
-Planがstaleになる条件。
+意味論のauthorityは[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.2 / 16.6 / 16.8 / 16.10である。
+
+### 16.1 Planがstaleになる条件
 
 - 現在StepのexpectedStateBefore / Afterと一致しないRNG状態変更
 - 現在StepのexpectedStateBefore / Afterと一致しないNormalArtianCounter変更
-- TargetWeapon変更
-- 作成リスト変更
 - 現在StepのexpectedStateBefore / Afterと一致しないOwnedWeapon変更
-- 想定外結果
-- 予定候補未確保
-- 別候補確保
+- Plan依存TargetWeaponの性能定義、優先度、検索対象ON/OFF、完了状態、優先起点が期待と異なる
+- Plan依存BuildListEntryの変更
+- 想定外結果（12.4）
+- 操作内容不明（12.5）
 - CalculationContext非互換（`calculation_context_changed`）
 
-PlanどおりのStep完了でCounterまたは所持武器が変化しても、現在StepのexpectedStateAfterおよび次StepのexpectedStateBeforeと一致する限りstaleにしない。所持武器のstatusは非semanticであるため、status変更だけでは不一致にならない。Plan開始時Snapshotとの単純比較は行わない。
+次はPlanをstaleにしない。
 
-Active Planの正常進行によってBuildListEntryのsearchStateHashまたはreferencedOwnedWeaponsHashと現在値が一致しなくなっても、その派生staleだけを理由に進行中Planを停止しない。Execution NavigatorではPlanStep期待状態を優先する。
+- PlanどおりのStep完了によるCounter、所持武器、目標武器の紐付け・完了の変化
+- 新しい目標武器の追加、Planに含まれない目標武器の変更
+- Candidate Search、作成リストへの新規追加、Planに含まれない作成リスト項目の変更
+- 所持武器のstatusだけの変更
+- ゲーム内でセーブして中断すること、ブラウザを閉じること
 
-UI表示。
+Plan開始時Snapshotとの単純比較は行わない。Active Planの正常進行によってBuildListEntryの
+searchStateHashまたはreferencedOwnedWeaponsHashと現在値が一致しなくなっても、その派生staleだけを
+理由に進行中Planを停止しない。Execution NavigatorではPlanStep期待状態を優先する。
+
+stale表示。
 
 - stale理由
-- 期待状態と実状態の差分
+- 期待状態と実状態の差分（数値はDebug Mode ONだけ）
 - 影響を受けるPlan
-- 再計算ボタン
-- 現在Planを破棄するボタン
+- 最後のゲーム内セーブ地点へ戻す（記録がある場合、12.8）
+- 現在地点から再計画を試算（16.4）
+- 現在Planを破棄する（16.2）
+- 想定外結果・操作内容不明ではRNG再同定への導線
+
+### 16.2 Plan破棄とゲーム内セーブ地点の選択
+
+Plan破棄、再計画の採用（16.4）、Planを壊す変更の承認（16.3）では、ゲーム内セーブ地点が記録されており、
+その後に確定したStepがある場合だけ次を選ばせる。
+
+```text
+この生産計画は、最後のゲーム内セーブ地点（Step 12完了時点）より先まで進んでいます。
+ゲーム側の状態に合わせて選んでください。
+
+[現在地点を維持] [最後のゲーム内セーブ地点へ戻す] [キャンセル]
+```
+
+- 現在地点を維持: 現在のアプリ状態のまま操作を続ける
+- 最後のゲーム内セーブ地点へ戻す: 12.8の復元を行ってから操作を続ける。再計画の採用だけは、復元後に
+  採用を中止して再試算を求める
+- キャンセル: 何も変更しない
+- セーブ地点が無い、またはセーブ地点と現在位置が同じ場合はこの選択を出さない
+- アプリ側でゲームの保存状態を推測しない
+- 妥協品として確定して終了（12.3）ではこの選択を出さない
+
+Plan破棄自体にも確認ダイアログを必須とし、「残りの作成手順は実行されません。作成途中の武器と目標武器の
+紐付けは残ります。」を伝える。
+
+### 16.3 Planを壊す変更の事前警告
+
+実行中（active）のPlanがある状態で、次の変更を保存しようとした時点で警告する。
+
+- RNG Setupの直接入力保存、Identification Wizardの採用
+- Normal Counter Setupの確定、確定解除、Debug Modeの手動修正
+- Planが作成・加工中の所持武器、またはPlanの起点武器のsemantic項目（保護、復元ボーナス、スキル、
+  武器種、属性など）の変更、削除
+- Planに含まれる目標武器の性能定義、優先度、検索対象ON/OFF、優先起点の変更、未完了に戻す操作
+- Planに含まれる作成リスト項目の削除、途中採用状態・改善優先の変更
+
+例。
+
+```text
+実行中の生産計画があります。
+RNG状態を変更すると現在の生産計画は続行できなくなります。
+変更を保存すると、この生産計画は破棄されます。
+
+[キャンセル] [生産計画を破棄して保存]
+```
+
+- キャンセル: 何も保存しない
+- 承認: 16.2の選択を経て、Planの破棄（前提を壊す変更の承認）と変更の保存を同一transactionで行う
+- 警告はstaleとは区別する。承認による終了は「ユーザーが破棄した」として表示する
+- 所持武器のstatus、名称、memoだけの変更、Planに含まれない目標武器・作成リスト項目の変更、
+  新規追加では警告しない
+- stale Planはすでに続行できないため警告しない
+
+### 16.4 現在地点から再計画を試算
+
+実行中Planがある状態でも、Build List（10）とProduction Plan（11）から「現在地点から再計画を試算」を
+実行できる。
+
+Preview。
+
+- 入力は現在の確定済みRNG状態・通常アーティアCounter・所持武器、最新の目標武器、最新の作成リストである
+- 通常のPlanner実行と同じ進捗表示、キャンセル、探索未完了表示（10.1）を使う
+- Preview中は現在のPlanを実行中のまま変更せず、Execution Navigatorの現在Step、RNG状態、所持武器、
+  作成リストを変更しない。Preview結果を保存しない
+- Preview結果は通常のPlan内容確認（11.0）と同じ形式で、「再計画の試算（未採用）」と明示して表示する
+- 現在のPlanとの差（含まれる目標武器、全Step数、完成予定の目標武器数）を比較表示してよい
+
+採用。
+
+- 「この再計画を採用」を別操作として置き、確認ダイアログで「現在の生産計画を終了し、この計画を実行中に
+  します。現在の計画の実行履歴は残ります。」を伝える
+- 16.2の選択を経て、採用時に状態を再検証する。Preview後にRNG状態、Counter、所持武器、計画に含まれる
+  目標武器・作成リスト項目、現在Planの進行が変わっていた場合は採用を拒否し、
+  「試算後に状態が変わりました。もう一度試算してください。」と表示する
+- 正常採用時は旧Planの破棄（再計画採用）と新Planの実行中化を同一transactionで行い、新Planの
+  Execution Navigatorへ遷移する。旧Planのゲーム内セーブ地点は引き継がない
 
 制約。
 
 - 自動で新Planへ置き換えない
-- ユーザーが再計算を実行した場合のみ新Planを作成する
+- ユーザーが試算と採用を明示した場合だけ新Planを実行中にする
+- 実行中Planが無い場合は従来どおりBuild ListからPlanner実行し、Draft Planを作成する
 
 ---
 
@@ -1500,13 +1878,38 @@ export interface SearchUiState {
   その後も後続Stepが残る
 - Build ListからPlannerを実行できる
 - Production PlanからExecution Navigatorへ進める
-- 結果一致で次Stepへ進む
+- 結果一致で次Stepへ進み、そのStepのCounter進行が即時に保存される
+- ブラウザを閉じて再訪すると、active Planの現在Stepから再開できる
 - PlanどおりのStepで期待状態Afterに一致した場合はstaleにならない
 - Plan開始時からCounterが進んでも現在Step期待状態と一致すれば実行を継続できる
-- 結果が違う場合にPlanがstaleになる
+- Execution Navigatorに独立した「確保」ボタンとStepが表示されず、最後の物理操作の確定で理想品が完成し、
+  武器が理想・保護あり、目標武器が完了済みになる
+- 新規通常アーティア経由でCounter進行用の作成Stepと作成対象Stepが区別表示され、作成対象だけが所持武器に
+  登録される
+- blind作成対象Stepで実際の5枠を入力するまで確定できず、架空の5枠が初期値に入らない
+- 既存巨戟の最初の操作確定で目標武器の優先起点が自動設定され、別目標武器の紐付けが解除される
+- 選択済み妥協checkpoint到達後に武器が実用になり、「次の操作へ進む」「妥協品として確定して終了」を選べ、
+  終了は確認ダイアログ後にPlanを終了し目標武器を未完了のまま残す
+- 武器A -> 武器B -> 武器Aの操作で切替案内が2回表示され、案内がExecutionHistoryやUndo対象にならない
+- 操作0 Idealの目標武器で通知と「この武器で目標を完了にする」が表示され、Planへ含まれた場合は
+  Counterを進めない完成確認Stepになる
+- 結果が違う場合にCounter消費と実結果が保存され、Planがstaleになり、RNG再同定の導線が出る
+- 操作内容不明を記録するとCounterと武器を変更せずPlanがstaleになる
+- 実行中Plan中に目標武器・作成リスト項目を新規追加してもPlanがstaleにならない
+- 実行中Plan中にRNG状態、Planに含まれる目標武器、作成中の武器を変更しようとすると保存前に警告し、
+  キャンセルでは何も変わらず、承認でPlanが破棄（前提を壊す変更の承認）になってから保存される
+- 現在地点から再計画を試算しても現在Planが実行中のまま変わらず、採用時に状態が変わっていれば拒否され、
+  変わっていなければ旧Plan破棄と新Plan実行中が同時に切り替わる
+- ゲーム内セーブ済みとして記録した後に進めたPlanを破棄すると「現在地点を維持 / 最後のゲーム内セーブ地点へ
+  戻す / キャンセル」が表示され、セーブ地点が無い場合や現在位置と同じ場合は表示されない
+- セーブ地点へ戻すと実行状態だけが戻り、その後に追加した目標武器や作成リスト項目は残る
+- 「実行中の生産計画の完了後（予測）」起点の検索結果に予測である旨が表示され、作成リストへ追加できない
+- 完了済みの目標武器が通常一覧・候補検索Selectに出ず、「完了済みの目標武器」から未完了に戻せる
 - Undoで最後の操作を戻せる
-- Undoで最後のStepが変更したRNG、通常Counter、OwnedWeapon、ProductionPlanを完全に戻せる
-- Step確定またはUndoの途中で保存失敗しても部分更新が残らない
+- Undoで最後のStepが変更したRNG、通常Counter、OwnedWeapon、TargetWeapon、ProductionPlan、ゲーム内セーブ地点を完全に戻せる
+- 再計画採用や破棄で終了したPlanにはUndoが表示されない
+- Step確定、再計画採用、セーブ地点復元、Undoの途中で保存失敗しても部分更新が残らない
+- Debug Mode OFFではStep確定後もCounter数値が表示されず、Debug Mode ONではbefore / afterを確認できる
 - 所持武器のstatus選択肢が「未分類 / 実用 / 理想」であり、「素材」が表示されない
 - 新規巨戟アーティアの初期値が「未分類 / 保護OFF」である
 - 登録済み武器のstatus変更でProtectionが変わらない
@@ -1549,7 +1952,7 @@ export interface SearchUiState {
   Target非依存Stepは目標武器ごとのルートに現れず計画全体の実行順にだけ現れる
 - legacy Planでwarningを表示し、`undefined` からshared Targetを推測しない
 - `expectedResult.restorationBonuses` の5枠がstored slot orderで表示され、同一bonusの重複が欠落しない
-- `expectedResult === null` でも表示が壊れず、`shouldSecure === true` だけを確保予定として示す
+- `expectedResult === null` でも表示が壊れず、`executionEffects.targetCompletions` だけを完成予定として示す
 - TargetWeapon名をcurrent persisted Targetから解決し、欠損時はTargetWeapon IDへfallbackする
 - Planner保存成功時に、Persistenceが返したPlanの `/plans/:planId` だけへ遷移する
 
