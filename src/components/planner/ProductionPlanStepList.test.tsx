@@ -84,9 +84,49 @@ describe('ProductionPlanStepList', () => {
     expect(within(card(7)).getByText('対象: 双剣・水')).toBeInTheDocument()
   })
 
-  it('marks only a shouldSecure step and only a shared step, as text badges', () => {
+  it('names the Targets a Step completes from executionEffects.targetCompletions only', () => {
+    const effects = (completed: typeof target[]): PlanStep['executionEffects'] => ({
+      trackedOwnedWeaponId: null,
+      normalCreationRole: null,
+      registersTrackedWeapon: false,
+      observationBinding: null,
+      targetLinks: [],
+      compromiseLabels: [],
+      targetCompletions: completed.map(({ id }) => ({
+        buildListEntryId: `build-list.${id}` as never,
+        targetWeaponId: id,
+        ownedWeaponId: 'owned.steps' as never,
+      })),
+    })
+    const missing = { ...other, id: targetWeaponId('target.steps.missing') }
     renderList([
-      step('step.secure', 1, {
+      step('step.shared', 1, { executionEffects: effects([target, other]) }),
+      step('step.missing', 2, { executionEffects: effects([missing]) }),
+      // A shouldSecure flag alone is never read as a completion.
+      step('step.flag-only', 3, {
+        executionEffects: effects([]),
+        expectedResult: {
+          restorationBonuses: slots,
+          restorationBonusScope: 'gogma_artian',
+          seriesSkillId: null,
+          groupSkillId: null,
+          shouldSecure: true,
+        },
+      }),
+    ])
+
+    const completed = within(card(1)).getByRole('list', { name: 'ステップ 1 で完成する目標武器' })
+    expect(within(completed).getAllByRole('listitem').map(({ textContent }) => textContent))
+      .toEqual(['双剣・水', '双剣・火'])
+    expect(within(card(2)).getByRole('list', { name: 'ステップ 2 で完成する目標武器' }))
+      .toHaveTextContent('削除済みまたは参照できない目標武器（target.steps.missing）')
+    expect(within(card(3)).queryByText('このステップで完成する目標武器')).not.toBeInTheDocument()
+    expect(within(card(3)).queryByText('目標武器が完成')).not.toBeInTheDocument()
+  })
+
+  it('shows no completion for a legacy Step, even with shouldSecure', () => {
+    renderList([
+      step('step.legacy', 1, {
         operationType: 'reserve_weapon',
         expectedResult: {
           restorationBonuses: slots,
@@ -96,12 +136,18 @@ describe('ProductionPlanStepList', () => {
           shouldSecure: true,
         },
       }),
+    ])
+    expect(within(card(1)).queryByText('このステップで完成する目標武器')).not.toBeInTheDocument()
+    expect(within(card(1)).queryByText('目標武器が完成')).not.toBeInTheDocument()
+    expect(screen.queryByText('確保予定')).not.toBeInTheDocument()
+  })
+
+  it('marks only a shared step with the shared badge', () => {
+    renderList([
       step('step.shared', 2, { progressedTargetWeaponIds: [target.id, other.id] }),
       step('step.plain', 3),
     ], true)
 
-    expect(screen.getAllByText('確保予定')).toHaveLength(1)
-    expect(within(card(1)).getByText('確保予定')).toBeInTheDocument()
     expect(screen.getAllByText('共有操作')).toHaveLength(1)
     expect(within(card(2)).getByText('共有操作')).toBeInTheDocument()
     expect(within(card(2)).getByText(
@@ -185,7 +231,7 @@ describe('ProductionPlanStepList', () => {
     ])
     expect(within(card(1)).getByText('想定結果: 予測結果なし')).toBeInTheDocument()
     expect(within(card(1)).getByText('対象: 目標武器に紐づかない操作')).toBeInTheDocument()
-    expect(within(card(1)).queryByText('確保予定')).not.toBeInTheDocument()
+    expect(within(card(1)).queryByText('目標武器が完成')).not.toBeInTheDocument()
     expect(within(card(2)).getByText('復元ボーナス: 対象外')).toBeInTheDocument()
     expect(within(card(2)).queryByText(/復元ボーナスの種類/)).not.toBeInTheDocument()
     expect(within(card(2)).getByText('シリーズ: シリーズfixture ／ グループ: なし')).toBeInTheDocument()

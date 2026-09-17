@@ -47,6 +47,26 @@ function planWith(steps: PlanStep[]): ProductionPlan {
   return { ...createValidProductionPlan(), steps }
 }
 
+/** A calculation schema 12 Step naming the Targets it completes. */
+function completing(base: PlanStep, targets: TargetWeaponId[]): PlanStep {
+  return {
+    ...base,
+    executionEffects: {
+      trackedOwnedWeaponId: null,
+      normalCreationRole: null,
+      registersTrackedWeapon: false,
+      observationBinding: null,
+      targetLinks: [],
+      compromiseLabels: [],
+      targetCompletions: targets.map((id, index) => ({
+        buildListEntryId: `build-list.presentation.${id}.${index}` as never,
+        targetWeaponId: id,
+        ownedWeaponId: 'owned.presentation' as never,
+      })),
+    },
+  }
+}
+
 describe('productionPlanPresentation', () => {
   it('orders the persisted steps by order without mutating the Plan', () => {
     const plan = planWith([
@@ -123,11 +143,10 @@ describe('productionPlanPresentation', () => {
     ])
   })
 
-  it('summarizes distinct Targets and only the Plan-declared secured steps', () => {
+  it('summarizes the Plan and counts one Target completed on one Step', () => {
     const plan = planWith([
-      step('step.a', 1, targetA, [targetA, targetB], true),
-      step('step.b', 2, targetA, [], false),
-      step('step.c', 3, null, [], true),
+      completing(step('step.a', 1, targetA, [targetA, targetB]), [targetA]),
+      completing(step('step.b', 2, targetA, []), []),
     ])
     plan.selectedBuildListEntryIds = []
 
@@ -135,17 +154,46 @@ describe('productionPlanPresentation', () => {
     expect(summary.planId).toBe(plan.id)
     expect(summary.status).toBe(plan.status)
     expect(summary.createdAt).toBe(plan.createdAt)
-    expect(summary.totalStepCount).toBe(3)
+    expect(summary.totalStepCount).toBe(2)
     expect(summary.targetWeaponCount).toBe(2)
-    expect(summary.securedStepCount).toBe(2)
+    expect(summary.plannedCompletionTargetCount).toBe(1)
     expect(summary.isLegacy).toBe(false)
   })
 
-  it('never counts a Step without an expected result as secured', () => {
-    const withoutResult = step('step.a', 1, targetA, [])
-    withoutResult.expectedResult = null
+  it('counts both Targets one shared Step completes, without counting Steps', () => {
+    const plan = planWith([
+      completing(step('step.shared', 1, targetA, [targetA, targetB]), [targetA, targetB]),
+    ])
+    const summary = createProductionPlanSummary(plan)
+    expect(summary.totalStepCount).toBe(1)
+    expect(summary.plannedCompletionTargetCount).toBe(2)
+  })
 
-    expect(createProductionPlanSummary(planWith([withoutResult])).securedStepCount)
-      .toBe(0)
+  it('counts a Target named on several Steps once', () => {
+    const plan = planWith([
+      completing(step('step.a', 1, targetA, [targetA]), [targetA]),
+      completing(step('step.b', 2, targetA, [targetA]), [targetA]),
+    ])
+    expect(createProductionPlanSummary(plan).plannedCompletionTargetCount).toBe(1)
+  })
+
+  it('counts the distinct Targets completed across different Steps', () => {
+    const targetC = targetWeaponId('target.presentation.c')
+    const plan = planWith([
+      completing(step('step.a', 1, targetA, [targetA]), [targetA]),
+      completing(step('step.b', 2, targetB, [targetB, targetC]), [targetB, targetC]),
+      completing(step('step.c', 3, targetC, [targetC]), []),
+    ])
+    expect(createProductionPlanSummary(plan).plannedCompletionTargetCount).toBe(3)
+  })
+
+  it('does not infer planned completions of a legacy Plan from shouldSecure', () => {
+    // No Step carries executionEffects, so the count is unknown, whatever
+    // `shouldSecure` says (UI_FLOW 11.0).
+    const plan = planWith([
+      step('step.a', 1, targetA, [targetA], true),
+      step('step.b', 2, targetB, [targetB], true),
+    ])
+    expect(createProductionPlanSummary(plan).plannedCompletionTargetCount).toBeNull()
   })
 })

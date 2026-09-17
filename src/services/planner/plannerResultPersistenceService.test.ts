@@ -409,6 +409,37 @@ describe('PlannerResultPersistenceService', () => {
       },
     ))
 
+  it('rejects the save when only the Plan-dependent Target execution state differs', () =>
+    withScenario(
+      async ({ service, result, context, plan, storedEntryIds, storedPlanIds }) => {
+        // Current RngState, Normal Counters, OwnedWeapons and TargetWeapons are
+        // untouched, so the RNG / Normal / OwnedWeapon hashes and the whole
+        // TargetWeapons hash all still match: only the fourth ExpectedPlanState
+        // component differs (DATA_MODEL 11.2).
+        const initial = plan.baseSnapshot.initialExecutionState
+        const altered = structuredClone(result)
+        if (!altered.plan) throw new Error('Expected a Plan')
+        altered.plan.baseSnapshot.initialExecutionState = {
+          ...initial,
+          targetExecutionStateHash: 'fnv1a32:ffffffff',
+        }
+        altered.plan.steps.forEach((step) => {
+          step.expectedStateBefore = { ...altered.plan!.baseSnapshot.initialExecutionState }
+          step.expectedStateAfter = { ...altered.plan!.baseSnapshot.initialExecutionState }
+        })
+        expect(initial.targetExecutionStateHash).not.toBe('fnv1a32:ffffffff')
+        await expect(
+          service.savePlannerOrchestrationResult(altered, context),
+        ).rejects.toMatchObject({ code: 'planner_state_changed' })
+        // Nothing of the transaction survives: no Plan and no generated Entry.
+        expect(await storedPlanIds()).toEqual([])
+        expect(await storedEntryIds()).toEqual([
+          'build-list.persisted.a',
+          'build-list.persisted.b',
+        ])
+      },
+    ))
+
   it('rejects the save when a TargetWeapon changed semantically', () =>
     withScenario(
       async ({ service, result, context, input, repositories, storedPlanIds }) => {

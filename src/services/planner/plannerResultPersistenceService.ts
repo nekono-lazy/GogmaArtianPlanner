@@ -102,7 +102,11 @@ function sameExpectedPlanState(
   return (
     left.rngStateHash === right.rngStateHash &&
     left.normalCountersHash === right.normalCountersHash &&
-    left.ownedWeaponsHash === right.ownedWeaponsHash
+    left.ownedWeaponsHash === right.ownedWeaponsHash &&
+    // Calculation schema 12 state includes the Plan-dependent Target execution
+    // state; a stored Plan is always of the current schema here, because an
+    // incompatible CalculationContext fails closed before this comparison.
+    left.targetExecutionStateHash === right.targetExecutionStateHash
   )
 }
 

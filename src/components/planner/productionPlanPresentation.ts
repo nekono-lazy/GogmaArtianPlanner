@@ -27,7 +27,11 @@ export interface ProductionPlanSummary {
   createdAt: string
   totalStepCount: number
   targetWeaponCount: number
-  securedStepCount: number
+  /**
+   * The distinct TargetWeapons this Plan completes, or `null` when the Plan is
+   * of the legacy form without `executionEffects` and the count is unknown.
+   */
+  plannedCompletionTargetCount: number | null
   isLegacy: boolean
 }
 
@@ -99,28 +103,35 @@ export function groupPlanStepsByTargetWeapon(
 }
 
 /**
+ * Whether the Plan carries the execution effects that name its Target
+ * completions. A Plan with any Step lacking `executionEffects` is of the legacy
+ * form, and its completions are never reconstructed from `shouldSecure`.
+ */
+export function hasPlanTargetCompletionAuthority(plan: ProductionPlan): boolean {
+  return plan.steps.every((step) => step.executionEffects !== undefined)
+}
+
+/**
  * The Plan overview counts.
  *
- * `securedStepCount` counts only steps the Plan itself marks as completing a
- * Target: `executionEffects.targetCompletions` for a current Plan and
- * `expectedResult.shouldSecure === true` for a legacy one; neither the Target count nor
- * `selectedBuildListEntryIds.length` is assumed to be a weapon count.
+ * `plannedCompletionTargetCount` is the number of distinct TargetWeapon IDs in
+ * `steps[].executionEffects.targetCompletions`, the only authority (UI_FLOW
+ * 11.0). A shared Step completing two Targets counts two, and a Target named
+ * twice counts once. Neither `expectedResult.shouldSecure`, the number of
+ * completing or reserve Steps, the Target count, nor
+ * `selectedBuildListEntryIds.length` is used; a legacy Plan reports `null`.
  */
 export function createProductionPlanSummary(
   plan: ProductionPlan,
 ): ProductionPlanSummary {
   const targetWeaponIds = new Set<TargetWeaponId>()
-  let securedStepCount = 0
+  const completedTargetWeaponIds = new Set<TargetWeaponId>()
   for (const step of plan.steps) {
     for (const id of getPlanStepRelatedTargetWeaponIds(step)) {
       targetWeaponIds.add(id)
     }
-    // A current Plan names its completions in executionEffects, the only
-    // authority (UI_FLOW 11.0); a legacy Plan only ever set shouldSecure.
-    if (step.executionEffects !== undefined) {
-      if (step.executionEffects.targetCompletions.length > 0) securedStepCount += 1
-    } else if (step.expectedResult?.shouldSecure === true) {
-      securedStepCount += 1
+    for (const { targetWeaponId } of step.executionEffects?.targetCompletions ?? []) {
+      completedTargetWeaponIds.add(targetWeaponId)
     }
   }
   return {
@@ -129,7 +140,9 @@ export function createProductionPlanSummary(
     createdAt: plan.createdAt,
     totalStepCount: plan.steps.length,
     targetWeaponCount: targetWeaponIds.size,
-    securedStepCount,
+    plannedCompletionTargetCount: hasPlanTargetCompletionAuthority(plan)
+      ? completedTargetWeaponIds.size
+      : null,
     isLegacy: isLegacyProductionPlan(plan),
   }
 }

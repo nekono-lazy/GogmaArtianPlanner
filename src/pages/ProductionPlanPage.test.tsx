@@ -1313,9 +1313,9 @@ describe('ProductionPlanPage read-only Plan content', () => {
     expect(summaryValue('作成日時')).toBe(fixture.plan.createdAt)
     expect(summaryValue('全ステップ数')).toBe('4')
     expect(summaryValue('目標武器数')).toBe('2')
-    // Only `expectedResult.shouldSecure === true`, never the Target count or
-    // `selectedBuildListEntryIds.length`.
-    expect(summaryValue('確保予定数')).toBe('1')
+    // The fixture Steps carry no executionEffects: a legacy-form Plan, whose
+    // planned completions are never inferred from `shouldSecure`.
+    expect(summaryValue('完成予定の目標武器数')).toBe('不明（旧形式の計画）')
     // The adopted Entry count is its own figure, never presented as weapons.
     expect(summaryValue('採用候補（BuildListEntry）')).toBe('0')
   })
@@ -1357,14 +1357,46 @@ describe('ProductionPlanPage read-only Plan content', () => {
     expect(screen.queryByText('指定された生産計画が見つかりません。')).not.toBeInTheDocument()
   })
 
-  it('marks only a shouldSecure step as 確保予定', async () => {
+  it('never marks a legacy shouldSecure step as a completion', async () => {
     const fixture = contentFixture()
     renderPage(contentDependencies(fixture), fixture.plan.id)
 
     await openPanel('全4ステップを表示')
-    const secured = screen.getAllByText('確保予定')
-    expect(secured).toHaveLength(1)
-    expect(within(stepCard(4)).getByText('確保予定')).toBe(secured[0])
+    expect(screen.queryByText('確保予定')).not.toBeInTheDocument()
+    expect(screen.queryByText('このステップで完成する目標武器')).not.toBeInTheDocument()
+  })
+
+  it('counts and names the Targets a current Plan completes', async () => {
+    const fixture = contentFixture()
+    const effects = (targets: TargetWeapon['id'][]): PlanStep['executionEffects'] => ({
+      trackedOwnedWeaponId: null,
+      normalCreationRole: null,
+      registersTrackedWeapon: false,
+      observationBinding: null,
+      targetLinks: [],
+      compromiseLabels: [],
+      targetCompletions: targets.map((targetWeaponId) => ({
+        buildListEntryId: buildListEntryId(`build-list.content.${targetWeaponId}`),
+        targetWeaponId,
+        ownedWeaponId: 'owned.content' as never,
+      })),
+    })
+    fixture.plan.steps.forEach((planStep) => {
+      planStep.executionEffects = effects(
+        planStep.id === fixture.shared.id ? [contentTargetA, contentTargetB] : [],
+      )
+    })
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+
+    expect(await screen.findByText('計画の概要')).toBeInTheDocument()
+    // One shared Step completes both Targets: two planned completions.
+    expect(summaryValue('完成予定の目標武器数')).toBe('2')
+    await openPanel('全4ステップを表示')
+    const list = within(stepCard(1)).getByRole('list', { name: 'ステップ 1 で完成する目標武器' })
+    expect(within(list).getAllByRole('listitem').map(({ textContent }) => textContent))
+      .toEqual(['双剣・水', '双剣・火'])
+    // The legacy `shouldSecure` flag on step 4 is not a completion.
+    expect(within(stepCard(4)).queryByText('このステップで完成する目標武器')).not.toBeInTheDocument()
   })
 
   it('attributes one shared physical Step to both Target routes and lists it once globally', async () => {
@@ -1604,7 +1636,7 @@ describe('ProductionPlanPage read-only Plan content', () => {
     expect(screen.getByText('計画の概要')).toBeInTheDocument()
     expect(summaryValue('計画ID')).toBe(fixture.plan.id)
     expect(summaryValue('全ステップ数')).toBe('4')
-    expect(summaryValue('確保予定数')).toBe('1')
+    expect(summaryValue('完成予定の目標武器数')).toBe('不明（旧形式の計画）')
     await openPanel('全4ステップを表示')
     expect(screen.getAllByText(/^ステップ \d+$/)).toHaveLength(4)
     // Nothing downstream of the Worker Client ran.
@@ -1711,8 +1743,8 @@ describe('ProductionPlanPage supplementary persisted content', () => {
     expect(within(overview).getByText('下書き')).toBeInTheDocument()
     expect(screen.getAllByText('下書き')).toHaveLength(1)
     expect(summaryValue('採用候補（BuildListEntry）')).toBe('2')
-    // The secured count still comes from `shouldSecure` alone.
-    expect(summaryValue('確保予定数')).toBe('1')
+    // The planned completion count never comes from the Entry count.
+    expect(summaryValue('完成予定の目標武器数')).toBe('不明（旧形式の計画）')
   })
 
   it('lists the persisted item material totals with Master labels', async () => {
@@ -2084,7 +2116,7 @@ describe('ProductionPlanPage checkpoint milestones and heading depth', () => {
     expect(screen.getAllByText('チェックポイント到達')).toHaveLength(1)
     expect(screen.getAllByText(/^ステップ \d+$/)).toHaveLength(4)
     expect(summaryValue('全ステップ数')).toBe('4')
-    expect(summaryValue('確保予定数')).toBe('1')
+    expect(summaryValue('完成予定の目標武器数')).toBe('不明（旧形式の計画）')
     // The Target route shows the same persisted milestones on the shared Step.
     await openPanel('双剣・火（2ステップ）')
     expect(screen.getAllByText('チェックポイント到達')).toHaveLength(2)
