@@ -35,6 +35,15 @@ export type ExecutionRuntimeErrorCode =
   | 'observation_not_expected'
   /** The observed five slots fail OwnedWeapon validation. */
   | 'observation_invalid'
+  /**
+   * The Step has no result that can differ from a prediction: an owned Ideal
+   * confirmation, or a blind observation that is `confirmed_expected`.
+   */
+  | 'actual_result_not_applicable'
+  /** The actual result does not fit the operation or fails entity validation. */
+  | 'actual_result_invalid'
+  /** The actual result equals the expected result, so it is `confirmed_expected`. */
+  | 'actual_result_matches_expected'
   /** The Step's recorded Counter advance or Execution effects cannot apply to the state. */
   | 'execution_effect_inconsistent'
   /** The resulting state differs from the Step's `expectedStateAfter`. */

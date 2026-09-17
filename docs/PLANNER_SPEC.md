@@ -4464,9 +4464,10 @@ Targetとの作成中紐付け、妥協checkpoint、妥協品での終了、理�
 Execution Plan契約（16.3 / 16.5 / 16.6 / 16.11のhash、projection、`executionEffects`、Beam Searchのreserve
 適用位置と完成時保護）は実装済みである。Execution runtimeのうち、Plan開始（`draft` -> `active`）と
 `confirmed_expected` のStep確定（blind観測値入力、`confirm_owned_ideal`、Undo Snapshot生成、最終Stepの
-Plan completedを含む）は実装済みである。想定外結果・操作内容不明の記録、妥協品として終了、Undo、
-ゲーム内セーブ地点の記録 / 復元、Plan破棄、再計画採用、Planを壊す変更の警告などは後続の実装PRが
-本章をauthorityとして実装する。本章と矛盾する旧記述（Execution上の独立した「確保」操作、
+Plan completedを含む）、および想定外結果（`actual_result_different`）・操作内容不明（`operation_uncertain`）の
+記録（16.15）は実装済みである。妥協品として終了、Undo、ゲーム内セーブ地点の記録 / 復元、Plan破棄、
+再計画採用、Planを壊す変更の警告、Execution Navigator UI（RNG再同定への誘導表示を含む）などは
+後続の実装PRが本章をauthorityとして実装する。本章と矛盾する旧記述（Execution上の独立した「確保」操作、
 Target / Build List変更による一律stale、reserve時の既存保護維持など）は本改訂で
 本書・[REQUIREMENTS.md](./REQUIREMENTS.md)・[DATA_MODEL.md](./DATA_MODEL.md)・
 [SEARCH_SPEC.md](./SEARCH_SPEC.md)・[UI_FLOW.md](./UI_FLOW.md)から書き換えた。
@@ -5200,6 +5201,20 @@ validation違反としてtransaction全体をrollbackする。
 
 RNG実装不具合、ゲーム仕様漏れ、Master漏れ、Seed / Counter同定不良などがあり得るため、
 自動で再計画しない。
+
+実装上の確定事項（想定外結果Runtime PR）。
+
+- 操作自体は実行済みのため、対象Stepは `isCompleted = true` とし、`currentStepId` は次の最初の未完了Step
+  （最後のStepなら `null`）へ進める。最後のStepでもPlanは `completed` にしない（`stale`、`completedAt = null`）
+- 実結果は操作の結果契約（[DATA_MODEL.md](./DATA_MODEL.md) 11.4）に従う。Normal作成は `normal_artian` scopeの5枠、
+  Reset / Keep Bonusesは `gogma_artian` scopeの5枠、conversion / Reset SkillsはSeries / Group Skillだけを受け付ける。
+  conversionは同じOwnedWeapon IDを5枠とscopeを保ったまま `gogma` へ更新し、Reset Skillsは5枠を変更しない
+- Counter進行用Normalの実結果はOwnedWeaponへ登録せず `actualResult` にだけ記録する
+- 予測を持たない操作（blind作成対象Normal、`confirm_owned_ideal`）と、Plan予測と一致する結果は
+  `actual_result_different` として受け付けない。blind作成対象の観測値は `confirmed_expected` で記録する
+- 結果の武器は所持武器保存と同じEntity Validation（Master / Production availability）を通し、Counter進行用Normalの
+  5枠も対象Targetの武器種・属性で同じ検証を通す
+- `expectedStateBefore` は検証し、`expectedStateAfter` は比較しない。ゲーム内セーブ地点は削除しない
 
 #### 何を何回操作したか自体が不明
 

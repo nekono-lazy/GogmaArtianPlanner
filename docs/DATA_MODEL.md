@@ -398,7 +398,10 @@ export type ConflictKind =
 `operation_uncertain`、`finished_as_compromise`、`execution_operation_uncertain` はExecution
 lifecycle改訂（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16章）で追加する仕様上の値である。
 `TargetWeaponLifecycleStatus` は永続Entity基盤PR、`confirm_owned_ideal` はcalculation schema 12の
-Execution Plan契約PRでコードへ反映した。残りは後続のExecution runtime PRで反映する。legacy値は保存済みartifactの読み取り互換のためだけに残し、current Executionは
+Execution Plan契約PRでコードへ反映した。`ProductionPlanAbandonmentReason`、`operation_uncertain`、
+`finished_as_compromise`、`execution_operation_uncertain` のliteralはExecution runtime core PRでコードへ反映し、
+`actual_result_different` / `operation_uncertain` の記録Runtimeは想定外結果Runtime PRで実装した。
+`finished_as_compromise` のRuntimeは後続PRで実装する。legacy値は保存済みartifactの読み取り互換のためだけに残し、current Executionは
 生成しない。
 
 ---
@@ -1940,6 +1943,14 @@ ExecutionActionの意味（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.4）。
 - Undoは少なくともRngState、全NormalArtianCounter、OwnedWeapon（status・`executionInProgress` を含む）、Executionが変更したTargetWeapon、ProductionPlan（status、abandonment理由、`currentStepId`）、ゲーム内セーブ地点を正確に戻す。取り消すExecutionHistoryがゲーム内セーブ地点の `lastExecutionHistoryId` なら、そのセーブ地点を削除する
 - Undoはツール上の誤操作修正であり、ゲーム内操作を巻き戻すものではない
 - `wasExpected = false` の場合、Planを `stale` にして再計算導線を出す
+- action別の記録形状: `confirmed_expected` は `wasExpected = true`、`recalculationReason = null`。
+  `actual_result_different` は `wasExpected = false`、`recalculationReason = "unexpected_result"`、`actualResult` 非null
+  （`securedOwnedWeaponId = null`）。`operation_uncertain` は `wasExpected = false`、
+  `recalculationReason = "execution_operation_uncertain"`、`actualResult = null` で、Undo Snapshotの
+  OwnedWeapon / TargetWeapon集合（`affectedOwnedWeaponsBefore`、`addedOwnedWeaponIds`、`removedOwnedWeaponsBefore`、
+  `affectedTargetWeaponsBefore`）はすべて空とする。legacy actionと `finished_as_compromise` は汎用検証だけを行う
+- `ActualResult.seriesSkillId` / `groupSkillId` は非nullなら空でないIDとする。`note` はnullまたは文字列で、
+  Runtimeの判定には使わない
 
 ## 12.1 ExecutionSavePoint（ゲーム内セーブ地点）
 

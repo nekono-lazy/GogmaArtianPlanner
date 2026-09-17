@@ -4,12 +4,16 @@ import { validateOwnedWeaponMasterReferences } from '../../domain/artian/entityM
 import {
   ExecutionRuntimeError,
   executionFailure,
+  prepareActualResultDifferent,
   prepareExpectedStepConfirmation,
+  prepareOperationUncertain,
   prepareProductionPlanStart,
+  type ExecutionActualResultObservation,
   type ExecutionCounterAuthority,
   type ExecutionNormalRestorationBonusObservation,
   type ExecutionPersistedState,
-  type ExpectedStepConfirmation,
+  type ExecutionResultingWeaponValidator,
+  type ExecutionStepWrite,
 } from '../../domain/execution'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import type {
@@ -17,7 +21,6 @@ import type {
   ExecutionHistory,
   ExecutionHistoryId,
   ISODateTimeString,
-  OwnedWeapon,
   PlanStepId,
   ProductionPlan,
   ProductionPlanId,
@@ -40,7 +43,11 @@ export interface ProductionPlanExecutionServiceDependencies {
   database: AppDatabase
   currentCalculationContext: CalculationContext
   counterAuthority: ExecutionCounterAuthority
-  validateObservedWeapon: (weapon: OwnedWeapon) => readonly string[]
+  /**
+   * The Master / Production availability authority for an OwnedWeapon whose
+   * contents come from the game: a blind observation or an actual result.
+   */
+  validateResultingWeapon: ExecutionResultingWeaponValidator
   idFactory: ExecutionIdFactory
   clock: ExecutionClock
 }
@@ -52,14 +59,30 @@ export interface ConfirmExpectedPlanStepRequest {
   observation?: ExecutionNormalRestorationBonusObservation | null
 }
 
+/** The Plan after a Step transaction and the ExecutionHistory it recorded. */
 export interface ConfirmExpectedPlanStepResult {
   plan: ProductionPlan
   history: ExecutionHistory
 }
 
+export type ExecutionStepRecordResult = ConfirmExpectedPlanStepResult
+
+export interface RecordActualResultDifferentRequest {
+  planId: ProductionPlanId
+  planStepId: PlanStepId
+  /** What the game actually showed after the one planned operation. */
+  actualResult: ExecutionActualResultObservation
+  note?: string | null
+}
+
+export interface RecordOperationUncertainRequest {
+  planId: ProductionPlanId
+  planStepId: PlanStepId
+}
+
 /**
  * The Execution runtime of a calculation schema 12 ProductionPlan
- * (`docs/PLANNER_SPEC.md` 16.1 / 16.2, `docs/DATA_MODEL.md` 14.4).
+ * (`docs/PLANNER_SPEC.md` 16.1 / 16.2 / 16.15, `docs/DATA_MODEL.md` 14.4).
  *
  * Each operation is one Dexie read-write transaction: it reads the current
  * persisted state inside the transaction, lets the pure Execution Domain decide
@@ -67,11 +90,12 @@ export interface ConfirmExpectedPlanStepResult {
  * `ExecutionRuntimeError` and a storage failure `RepositoryError`; in both
  * cases the transaction is rolled back and nothing is changed.
  *
- * Implemented: starting a draft Plan and the ordinary `confirmed_expected`
- * Step confirmation (including a blind observation and `confirm_owned_ideal`).
- * Unexpected results, uncertain operations, finishing as a compromise, Undo,
- * game save point recording / restore, abandonment and replan adoption are not
- * implemented here yet.
+ * Implemented: starting a draft Plan, the ordinary `confirmed_expected` Step
+ * confirmation (including a blind observation and `confirm_owned_ideal`), and
+ * the two divergence records `actual_result_different` and
+ * `operation_uncertain`. Finishing as a compromise, Undo, game save point
+ * recording / restore, abandonment and replan adoption are not implemented
+ * here yet.
  */
 export class ProductionPlanExecutionService {
   private readonly dependencies: ProductionPlanExecutionServiceDependencies
@@ -114,36 +138,87 @@ export class ProductionPlanExecutionService {
         state: await this.readState(plan),
         currentCalculationContext: this.dependencies.currentCalculationContext,
         counterAuthority: this.dependencies.counterAuthority,
-        validateObservedWeapon: this.dependencies.validateObservedWeapon,
+        validateResultingWeapon: this.dependencies.validateResultingWeapon,
         executionHistoryId: this.dependencies.idFactory.executionHistoryId(),
         now: this.dependencies.clock.now(),
       })
-      await this.writeConfirmation(confirmation)
+      await this.writeStep(confirmation)
       return { plan: confirmation.plan, history: confirmation.history }
     })
   }
 
-  private async writeConfirmation(confirmation: ExpectedStepConfirmation): Promise<void> {
+  /**
+   * The current Step's one planned operation was performed but its result
+   * differs from the prediction (16.15): the Counter consumption and the actual
+   * result are persisted, the Step is completed, and the Plan becomes `stale`
+   * with `unexpected_result`.
+   */
+  recordActualResultDifferent(
+    request: RecordActualResultDifferentRequest,
+  ): Promise<ExecutionStepRecordResult> {
+    return this.runExecutionTransaction(async () => {
+      const plan = await this.requirePlan(request.planId)
+      const record = prepareActualResultDifferent({
+        plan,
+        planStepId: request.planStepId,
+        actualResult: request.actualResult,
+        note: request.note ?? null,
+        state: await this.readState(plan),
+        currentCalculationContext: this.dependencies.currentCalculationContext,
+        counterAuthority: this.dependencies.counterAuthority,
+        validateResultingWeapon: this.dependencies.validateResultingWeapon,
+        executionHistoryId: this.dependencies.idFactory.executionHistoryId(),
+        now: this.dependencies.clock.now(),
+      })
+      await this.writeStep(record)
+      return { plan: record.plan, history: record.history }
+    })
+  }
+
+  /**
+   * What or how many operations were performed is unknown (16.15): only the
+   * Plan (`stale`, `execution_operation_uncertain`) and the ExecutionHistory
+   * record are written.
+   */
+  recordOperationUncertain(
+    request: RecordOperationUncertainRequest,
+  ): Promise<ExecutionStepRecordResult> {
+    return this.runExecutionTransaction(async () => {
+      const plan = await this.requirePlan(request.planId)
+      const record = prepareOperationUncertain({
+        plan,
+        planStepId: request.planStepId,
+        state: await this.readState(plan),
+        currentCalculationContext: this.dependencies.currentCalculationContext,
+        executionHistoryId: this.dependencies.idFactory.executionHistoryId(),
+        now: this.dependencies.clock.now(),
+      })
+      await this.writeStep(record)
+      return { plan: record.plan, history: record.history }
+    })
+  }
+
+  private async writeStep(write: ExecutionStepWrite): Promise<void> {
     const { database } = this.dependencies
-    if (confirmation.rngState !== null) await database.rngState.put(confirmation.rngState)
-    if (confirmation.normalCounters.length > 0) {
-      await database.normalArtianCounters.bulkPut(confirmation.normalCounters)
+    if (write.rngState !== null) await database.rngState.put(write.rngState)
+    if (write.normalCounters.length > 0) {
+      await database.normalArtianCounters.bulkPut(write.normalCounters)
     }
-    if (confirmation.ownedWeapons.length > 0) {
-      await database.ownedWeapons.bulkPut(confirmation.ownedWeapons)
+    if (write.ownedWeapons.length > 0) {
+      await database.ownedWeapons.bulkPut(write.ownedWeapons)
     }
-    if (confirmation.targetWeapons.length > 0) {
-      await database.targetWeapons.bulkPut(confirmation.targetWeapons)
+    if (write.targetWeapons.length > 0) {
+      await database.targetWeapons.bulkPut(write.targetWeapons)
     }
-    await database.productionPlans.put(confirmation.plan)
-    if (confirmation.deletesExecutionSavePoint) {
+    await database.productionPlans.put(write.plan)
+    if (write.deletesExecutionSavePoint) {
       await database.executionSavePoints
         .where('productionPlanId')
-        .equals(confirmation.plan.id)
+        .equals(write.plan.id)
         .delete()
     }
     // A history ID that already exists is a different record; never replace it.
-    await database.executionHistory.add(confirmation.history)
+    await database.executionHistory.add(write.history)
   }
 
   private async requirePlan(planId: ProductionPlanId): Promise<ProductionPlan> {
@@ -208,8 +283,8 @@ export function createProductionPlanExecutionService(
     currentCalculationContext: createBuildListCalculationContext(master),
     counterAuthority: productionRngEngine,
     // The same Master / Production availability authority an Owned Weapon save
-    // applies (`docs/PLANNER_SPEC.md` 16.4).
-    validateObservedWeapon: (weapon) => validateOwnedWeaponMasterReferences(weapon, master),
+    // applies (`docs/PLANNER_SPEC.md` 16.4 / 16.15).
+    validateResultingWeapon: (weapon) => validateOwnedWeaponMasterReferences(weapon, master),
     idFactory: { executionHistoryId: () => globalThis.crypto.randomUUID() as ExecutionHistoryId },
     clock: { now: () => new Date().toISOString() },
   })

@@ -2,7 +2,7 @@ import Dexie from 'dexie'
 import { describe, expect, it } from 'vitest'
 import { AppDatabase } from '../../db/AppDatabase'
 import { RepositoryError } from '../../db/repositoryError'
-import { ExecutionRuntimeError } from '../../domain/execution'
+import { ExecutionRuntimeError, withRecalculationReason } from '../../domain/execution'
 import type {
   BuildListEntry,
   BuildRoute,
@@ -27,10 +27,12 @@ import {
   CONSTRAINED_START_NORMAL_COUNTER,
   CONSTRAINED_START_SKILL_COUNTER,
   IDEAL_SERIES_SKILL_ID,
+  alternativePracticalBonuses,
   belowPracticalBonuses,
   idealBonuses,
   normalWeapon,
   practicalBonuses,
+  sameLayoutLowerRanks,
 } from '../../test/fixtures/constrainedEnumeration'
 import {
   checkpointBonusEntry,
@@ -100,7 +102,7 @@ function executionService(
     database,
     currentCalculationContext: structuredClone(built.input.calculationContext),
     counterAuthority: built.engine,
-    validateObservedWeapon: () => [],
+    validateResultingWeapon: () => [],
     idFactory: { executionHistoryId: () => `history.execution.${++historyCount}` as ExecutionHistoryId },
     clock: { now: () => `2026-09-17T00:00:${String(++clockCount).padStart(2, '0')}.000Z` },
     ...overrides,
@@ -459,7 +461,7 @@ describe('confirmed_expected Step confirmation', () => {
         database,
         'observation_invalid',
       )
-      const rejecting = executionService(database, fixture.built, { validateObservedWeapon: () => ['not available'] })
+      const rejecting = executionService(database, fixture.built, { validateResultingWeapon: () => ['not available'] })
       await expectRefusal(() => confirmCurrent(rejecting, database, fixture.plan, observed), database, 'observation_invalid')
 
       const registration = await confirmCurrent(service, database, fixture.plan, observed)
@@ -725,4 +727,618 @@ describe('atomic Step confirmation', () => {
       expect(failure).toMatchObject({ code: 'transaction_failed' })
       expect(await dump(database)).toEqual(before)
     }))
+})
+
+function differentBonuses(expected: RestorationBonusSet | null | undefined): RestorationBonusSet {
+  const candidates = [sameLayoutLowerRanks(), alternativePracticalBonuses(), belowPracticalBonuses()]
+  const different = candidates.find((candidate) =>
+    expected == null || JSON.stringify(candidate) !== JSON.stringify(expected))
+  return different as RestorationBonusSet
+}
+
+function bonusResult(restorationBonuses: RestorationBonusSet, restorationBonusScope: 'normal_artian' | 'gogma_artian') {
+  return { kind: 'restoration_bonuses' as const, restorationBonuses, restorationBonusScope }
+}
+
+const DIFFERENT_SERIES = 'series_skill.fixture.different'
+const DIFFERENT_GROUP = 'group_skill.fixture.different'
+
+function existingResetFixture() {
+  const source = orchestrationSource('owned.execution.reset', { seriesSkillId: IDEAL_SERIES_SKILL_ID })
+  const goal = orchestrationTarget('target.execution.reset')
+  const entry = orchestrationEntry('entry.execution.reset', goal, {
+    kind: 'existing_gogma_reset_bonuses',
+    sourceOwnedWeaponId: source.id,
+    operations: [
+      { type: 'reset_bonuses', sourceOwnedWeaponId: source.id, gogmaCounterBefore: CONSTRAINED_START_GOGMA_COUNTER, gogmaCounterAfter: CONSTRAINED_START_GOGMA_COUNTER + 1 },
+    ],
+  })
+  return planFor(orchestrationScenario({ targets: [goal], entries: [entry], ownedWeapons: [source] }))
+}
+
+function ownedNormalFixture() {
+  const source = normalWeapon('owned.execution.normal')
+  const goal = orchestrationTarget('target.execution.owned-normal')
+  const entry = orchestrationEntry('entry.execution.owned-normal', goal, {
+    kind: 'owned_normal_artian_to_gogma',
+    sourceOwnedWeaponId: source.id,
+    operations: [
+      { type: 'convert_normal_to_gogma', weaponTypeId: WEAPON_TYPE, skillCounterBefore: CONSTRAINED_START_SKILL_COUNTER, skillCounterAfter: CONSTRAINED_START_SKILL_COUNTER + 1 },
+      { type: 'reset_bonuses', sourceOwnedWeaponId: null, gogmaCounterBefore: CONSTRAINED_START_GOGMA_COUNTER, gogmaCounterAfter: CONSTRAINED_START_GOGMA_COUNTER + 1 },
+    ],
+  })
+  return planFor(orchestrationScenario({ targets: [goal], entries: [entry], ownedWeapons: [source] }))
+}
+
+type ActualResultInput = Parameters<ProductionPlanExecutionService['recordActualResultDifferent']>[0]['actualResult']
+
+async function recordDifferent(
+  service: ProductionPlanExecutionService,
+  database: AppDatabase,
+  plan: ProductionPlan,
+  actualResult: ActualResultInput,
+) {
+  const stored = await currentPlan(database, plan)
+  return service.recordActualResultDifferent({
+    planId: plan.id,
+    planStepId: stored.currentStepId as PlanStep['id'],
+    actualResult,
+  })
+}
+
+async function putSavePoint(
+  database: AppDatabase,
+  plan: ProductionPlan,
+  lastExecutionHistoryId: ExecutionHistoryId | null,
+  recordedAt: string,
+): Promise<ExecutionSavePoint> {
+  const savePoint: ExecutionSavePoint = {
+    id: executionSavePointIdForPlan(plan.id),
+    productionPlanId: plan.id,
+    lastExecutionHistoryId,
+    rngState: (await database.rngState.get('current')) as ExecutionSavePoint['rngState'],
+    normalCounters: await database.normalArtianCounters.toArray(),
+    ownedWeapons: [],
+    targetWeapons: [],
+    productionPlan: await currentPlan(database, plan),
+    recordedAt,
+  }
+  await database.executionSavePoints.put(savePoint)
+  return savePoint
+}
+
+describe('actual_result_different', () => {
+  it('stores a different Reset Bonuses result, consumes the Gogma Counter and stales the Plan without completing anything', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingResetFixture()
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      const source = fixture.built.input.ownedWeapons[0]
+      const goal = fixture.built.input.targetWeapons[0]
+      const step = stepOf(fixture.plan, 0)
+      expect(step.executionEffects?.targetCompletions).toHaveLength(1)
+      const before = await dump(database)
+      const activePlan = await currentPlan(database, fixture.plan)
+      const actual = differentBonuses(step.expectedResult?.restorationBonuses)
+
+      const { plan, history } = await recordDifferent(service, database, fixture.plan, bonusResult(actual, 'gogma_artian'))
+
+      const after = await dump(database)
+      const rng = await database.rngState.get('current')
+      expect(rng?.gogmaCounter.value).toBe(CONSTRAINED_START_GOGMA_COUNTER + 1)
+      expect(rng?.skillCounter.value).toBe(CONSTRAINED_START_SKILL_COUNTER)
+      expect(after.normalCounters).toEqual(before.normalCounters)
+      expect(after.ownedWeapons).toEqual([{
+        ...source,
+        restorationBonuses: actual,
+        restorationBonusScope: 'gogma_artian',
+        executionInProgress: { productionPlanId: fixture.plan.id, startedAt: history.createdAt },
+        updatedAt: history.createdAt,
+      }])
+      // Neither `ideal` nor protection, and the Target stays active but linked.
+      expect(await database.targetWeapons.get(goal.id)).toEqual({ ...goal, preferredOwnedWeaponId: source.id, updatedAt: history.createdAt })
+      expect(plan).toEqual({
+        ...activePlan,
+        steps: [{ ...activePlan.steps[0], isCompleted: true, completedAt: history.createdAt }],
+        status: 'stale',
+        currentStepId: null,
+        completedAt: null,
+        abandonmentReason: null,
+        abandonedAt: null,
+        recalculationReasons: ['unexpected_result'],
+        updatedAt: history.createdAt,
+      })
+      expect(after.productionPlans).toEqual([plan])
+      expect(after.executionHistory).toEqual([history])
+      expect(history).toMatchObject({
+        planId: fixture.plan.id,
+        planStepId: step.id,
+        action: 'actual_result_different',
+        actualResult: {
+          restorationBonuses: actual,
+          restorationBonusScope: 'gogma_artian',
+          seriesSkillId: null,
+          groupSkillId: null,
+          securedOwnedWeaponId: null,
+          note: null,
+        },
+        wasExpected: false,
+        recalculationReason: 'unexpected_result',
+      })
+      expect(history.undoSnapshot).toEqual({
+        rngStateBefore: (before.rngState as unknown[])[0],
+        normalCountersBefore: before.normalCounters,
+        affectedOwnedWeaponsBefore: [source],
+        addedOwnedWeaponIds: [],
+        removedOwnedWeaponsBefore: [],
+        affectedTargetWeaponsBefore: [goal],
+        productionPlanBefore: activePlan,
+        executionSavePointBefore: null,
+      })
+      expect(validateExecutionHistory(history).issues).toEqual([])
+      expect(validateProductionPlan(plan).issues).toEqual([])
+
+      // A stale Plan accepts no further Execution record.
+      await expectRefusal(
+        () => service.confirmExpectedPlanStep({ planId: fixture.plan.id, planStepId: step.id }),
+        database,
+        'plan_not_active',
+      )
+    }))
+
+  it('stores the note without reading it', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingResetFixture()
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      const { history } = await service.recordActualResultDifferent({
+        planId: fixture.plan.id,
+        planStepId: stepOf(fixture.plan, 0).id,
+        actualResult: bonusResult(differentBonuses(stepOf(fixture.plan, 0).expectedResult?.restorationBonuses), 'gogma_artian'),
+        note: '2回押したかもしれない',
+      })
+      expect(history.actualResult?.note).toBe('2回押したかもしれない')
+    }))
+
+  it('stores different Reset Skills, keeps the five slots and the ID, and keeps the save point and in-progress state', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      const source = fixture.built.input.ownedWeapons[0]
+      const first = await confirmCurrent(service, database, fixture.plan)
+      const savePoint = await putSavePoint(database, fixture.plan, first.history.id, first.history.createdAt)
+      const beforeRecord = await dump(database)
+      const weaponBefore = (await database.ownedWeapons.get(source.id)) as OwnedWeapon
+      expect(weaponBefore.executionInProgress).toEqual({ productionPlanId: fixture.plan.id, startedAt: first.history.createdAt })
+      const step = stepOf(fixture.plan, 1)
+      expect(step.operationType).toBe('reset_skills')
+      expect(step.executionEffects?.targetCompletions).toHaveLength(1)
+
+      const { plan, history } = await recordDifferent(service, database, fixture.plan, {
+        kind: 'skills', seriesSkillId: DIFFERENT_SERIES, groupSkillId: DIFFERENT_GROUP,
+      })
+
+      const rng = await database.rngState.get('current')
+      expect(rng?.skillCounter.value).toBe(CONSTRAINED_START_SKILL_COUNTER + 1)
+      expect(rng?.gogmaCounter.value).toBe(CONSTRAINED_START_GOGMA_COUNTER + 1)
+      // Same ID, same five slots and scope, the start time kept, no completion.
+      expect(await database.ownedWeapons.get(source.id)).toEqual({
+        ...weaponBefore,
+        seriesSkillId: DIFFERENT_SERIES,
+        groupSkillId: DIFFERENT_GROUP,
+        updatedAt: history.createdAt,
+      })
+      expect(await database.targetWeapons.toArray()).toEqual(beforeRecord.targetWeapons)
+      expect(await database.executionSavePoints.toArray()).toEqual([savePoint])
+      expect(plan).toMatchObject({ status: 'stale', currentStepId: null, completedAt: null, recalculationReasons: ['unexpected_result'] })
+      expect(history.actualResult).toMatchObject({ restorationBonuses: null, restorationBonusScope: null, seriesSkillId: DIFFERENT_SERIES, groupSkillId: DIFFERENT_GROUP })
+      expect(history.undoSnapshot).toMatchObject({
+        affectedOwnedWeaponsBefore: [weaponBefore],
+        addedOwnedWeaponIds: [],
+        affectedTargetWeaponsBefore: [],
+        executionSavePointBefore: savePoint,
+      })
+      expect(validateExecutionHistory(history).issues).toEqual([])
+    }))
+
+  it('converts an owned Normal under its own ID with the actual Skills and moves to the next Step', () =>
+    withDatabase(async (database) => {
+      const fixture = await ownedNormalFixture()
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      const source = fixture.built.input.ownedWeapons[0]
+      const goal = fixture.built.input.targetWeapons[0]
+      const expectedSkills = stepOf(fixture.plan, 0).expectedResult
+      expect(expectedSkills?.seriesSkillId).not.toBe(DIFFERENT_SERIES)
+
+      const { plan, history } = await recordDifferent(service, database, fixture.plan, {
+        kind: 'skills', seriesSkillId: DIFFERENT_SERIES, groupSkillId: null,
+      })
+
+      const [converted] = await database.ownedWeapons.toArray()
+      expect(await database.ownedWeapons.count()).toBe(1)
+      expect(converted).toMatchObject({
+        id: source.id,
+        kind: 'gogma',
+        seriesSkillId: DIFFERENT_SERIES,
+        groupSkillId: null,
+        status: 'unclassified',
+        restorationBonuses: source.restorationBonuses,
+        restorationBonusScope: 'normal_artian',
+        createdAt: source.createdAt,
+        executionInProgress: { productionPlanId: fixture.plan.id, startedAt: history.createdAt },
+      })
+      expect(converted).not.toHaveProperty('rarity')
+      const rng = await database.rngState.get('current')
+      expect(rng?.skillCounter.value).toBe(CONSTRAINED_START_SKILL_COUNTER + 1)
+      expect(rng?.gogmaCounter.value).toBe(CONSTRAINED_START_GOGMA_COUNTER)
+      expect((await database.targetWeapons.get(goal.id))?.preferredOwnedWeaponId).toBe(source.id)
+      expect(plan).toMatchObject({ status: 'stale', currentStepId: stepOf(fixture.plan, 1).id, completedAt: null })
+      expect(plan.steps.map(({ isCompleted }) => isCompleted)).toEqual([true, false])
+      expect(history.undoSnapshot).toMatchObject({ affectedOwnedWeaponsBefore: [source], addedOwnedWeaponIds: [], affectedTargetWeaponsBefore: [goal] })
+      expect(validateProductionPlan(plan).issues).toEqual([])
+    }))
+
+  it('registers a predicted production-target Normal under its reserved ID with the actual slots', () =>
+    withDatabase(async (database) => {
+      const fixture = await newNormalFixture(1)
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      const goal = fixture.built.input.targetWeapons[0]
+      const step = stepOf(fixture.plan, 0)
+      expect(step.executionEffects?.normalCreationRole).toBe('production_target')
+      const tracked = step.executionEffects?.trackedOwnedWeaponId as OwnedWeaponId
+      const actual = differentBonuses(step.expectedResult?.restorationBonuses)
+
+      const { plan, history } = await recordDifferent(service, database, fixture.plan, bonusResult(actual, 'normal_artian'))
+
+      expect(await database.ownedWeapons.toArray()).toEqual([expect.objectContaining({
+        id: tracked,
+        kind: 'normal',
+        name: goal.name,
+        rarity: 8,
+        restorationBonuses: actual,
+        restorationBonusScope: 'normal_artian',
+        status: null,
+        isProtected: false,
+        executionInProgress: { productionPlanId: fixture.plan.id, startedAt: history.createdAt },
+      })])
+      expect((await database.normalArtianCounters.toArray())[0].counter).toBe(CONSTRAINED_START_NORMAL_COUNTER + 1)
+      expect((await database.targetWeapons.get(goal.id))?.preferredOwnedWeaponId).toBe(tracked)
+      expect(plan).toMatchObject({ status: 'stale', currentStepId: stepOf(fixture.plan, 1).id })
+      expect(history.undoSnapshot).toMatchObject({ addedOwnedWeaponIds: [tracked], affectedOwnedWeaponsBefore: [], affectedTargetWeaponsBefore: [goal] })
+    }))
+
+  it('advances only the Normal Counter for a Counter-advance Normal and registers nothing', () =>
+    withDatabase(async (database) => {
+      const fixture = await newNormalFixture(3)
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      const step = stepOf(fixture.plan, 0)
+      expect(step.executionEffects?.normalCreationRole).toBe('counter_advance')
+      const before = await dump(database)
+      const actual = differentBonuses(step.expectedResult?.restorationBonuses)
+
+      const { plan, history } = await recordDifferent(service, database, fixture.plan, bonusResult(actual, 'normal_artian'))
+
+      const after = await dump(database)
+      expect((after.normalCounters as { counter: number }[])[0].counter).toBe(CONSTRAINED_START_NORMAL_COUNTER + 1)
+      expect(after.rngState).toEqual(before.rngState)
+      expect(after.ownedWeapons).toEqual([])
+      expect(after.targetWeapons).toEqual(before.targetWeapons)
+      expect(plan).toMatchObject({ status: 'stale', currentStepId: stepOf(fixture.plan, 1).id })
+      expect(history.actualResult).toMatchObject({ restorationBonuses: actual, restorationBonusScope: 'normal_artian' })
+      expect(history.undoSnapshot).toMatchObject({
+        affectedOwnedWeaponsBefore: [],
+        addedOwnedWeaponIds: [],
+        affectedTargetWeaponsBefore: [],
+        normalCountersBefore: before.normalCounters,
+      })
+    }))
+
+  it('never labels a reached compromise checkpoint when the result differs', () =>
+    withDatabase(async (database) => {
+      const source = orchestrationSource('owned.execution.checkpoint', { seriesSkillId: IDEAL_SERIES_SKILL_ID })
+      const goal = orchestrationTarget('target.execution.checkpoint')
+      const entry = checkpointBonusEntry('entry.execution.checkpoint', goal, source.id, source)
+      const fixture = await planFor(orchestrationScenario({
+        targets: [goal],
+        entries: [entry],
+        ownedWeapons: [source],
+        engine: { resetResultAt: checkpointBonusResultAt },
+      }))
+      const labelled = fixture.plan.steps.findIndex((step) => (step.executionEffects?.compromiseLabels.length ?? 0) > 0)
+      expect(labelled).toBeGreaterThanOrEqual(0)
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      for (let index = 0; index < labelled; index += 1) await confirmCurrent(service, database, fixture.plan)
+      const step = stepOf(fixture.plan, labelled)
+
+      await recordDifferent(service, database, fixture.plan, bonusResult(differentBonuses(step.expectedResult?.restorationBonuses), 'gogma_artian'))
+      expect(await database.ownedWeapons.get(source.id)).toMatchObject({ status: 'unclassified', isProtected: false })
+      expect((await currentPlan(database, fixture.plan)).status).toBe('stale')
+    }))
+
+  it('refuses a blind production-target Normal, whose observation is confirmed_expected', () =>
+    withDatabase(async (database) => {
+      const fixture = await blindFixture()
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      await expectRefusal(
+        () => recordDifferent(service, database, fixture.plan, bonusResult(belowPracticalBonuses(), 'normal_artian')),
+        database,
+        'actual_result_not_applicable',
+      )
+      expect((await confirmCurrent(service, database, fixture.plan, belowPracticalBonuses())).history.action).toBe('confirmed_expected')
+    }))
+
+  it('refuses a result equal to the expected result', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      const bonusStep = stepOf(fixture.plan, 0)
+      await expectRefusal(
+        () => recordDifferent(service, database, fixture.plan, bonusResult(bonusStep.expectedResult?.restorationBonuses as RestorationBonusSet, 'gogma_artian')),
+        database,
+        'actual_result_matches_expected',
+      )
+      await confirmCurrent(service, database, fixture.plan)
+      const skillStep = stepOf(fixture.plan, 1)
+      await expectRefusal(
+        () => recordDifferent(service, database, fixture.plan, {
+          kind: 'skills',
+          seriesSkillId: skillStep.expectedResult?.seriesSkillId ?? null,
+          groupSkillId: skillStep.expectedResult?.groupSkillId ?? null,
+        }),
+        database,
+        'actual_result_matches_expected',
+      )
+    }))
+
+  it('refuses an owned Ideal confirmation, which has no game result', () =>
+    withDatabase(async (database) => {
+      const source = orchestrationSource('owned.execution.zero', {
+        restorationBonuses: idealBonuses(), seriesSkillId: IDEAL_SERIES_SKILL_ID, isProtected: true,
+      })
+      const goal = orchestrationTarget('target.execution.zero')
+      const entry = orchestrationEntry('entry.execution.zero', goal, {
+        kind: 'existing_gogma_current', sourceOwnedWeaponId: source.id, operations: [],
+      })
+      const fixture = await planFor(orchestrationScenario({ targets: [goal], entries: [entry], ownedWeapons: [source] }))
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      await expectRefusal(
+        () => recordDifferent(service, database, fixture.plan, bonusResult(belowPracticalBonuses(), 'gogma_artian')),
+        database,
+        'actual_result_not_applicable',
+      )
+    }))
+
+  it('refuses a result of the wrong kind or scope, and an invalid or Master-unavailable result', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      const expected = stepOf(fixture.plan, 0).expectedResult?.restorationBonuses
+      await expectRefusal(
+        () => recordDifferent(service, database, fixture.plan, { kind: 'skills', seriesSkillId: DIFFERENT_SERIES, groupSkillId: null }),
+        database,
+        'actual_result_invalid',
+      )
+      await expectRefusal(
+        () => recordDifferent(service, database, fixture.plan, bonusResult(differentBonuses(expected), 'normal_artian')),
+        database,
+        'actual_result_invalid',
+      )
+      await expectRefusal(
+        () => recordDifferent(service, database, fixture.plan, bonusResult(differentBonuses(expected).slice(0, 4) as unknown as RestorationBonusSet, 'gogma_artian')),
+        database,
+        'actual_result_invalid',
+      )
+      const unavailable = executionService(database, fixture.built, {
+        validateResultingWeapon: (weapon) => weapon.restorationBonuses.some(({ bonusTypeId }) => bonusTypeId === 'bonus_type.fixture.sharpness')
+          ? ['restorationBonuses: not available']
+          : [],
+      })
+      await expectRefusal(
+        () => recordDifferent(unavailable, database, fixture.plan, bonusResult(alternativePracticalBonuses(), 'gogma_artian')),
+        database,
+        'actual_result_invalid',
+      )
+
+      await confirmCurrent(service, database, fixture.plan)
+      await expectRefusal(
+        () => recordDifferent(service, database, fixture.plan, { kind: 'skills', seriesSkillId: '', groupSkillId: null }),
+        database,
+        'actual_result_invalid',
+      )
+      const unknownSkill = executionService(database, fixture.built, {
+        validateResultingWeapon: (weapon) => weapon.seriesSkillId === 'series_skill.fixture.unknown' ? ['seriesSkillId: not available'] : [],
+      })
+      await expectRefusal(
+        () => recordDifferent(unknownSkill, database, fixture.plan, { kind: 'skills', seriesSkillId: 'series_skill.fixture.unknown', groupSkillId: null }),
+        database,
+        'actual_result_invalid',
+      )
+    }))
+
+  it('validates the recorded slots of a Counter-advance Normal against Master availability too', () =>
+    withDatabase(async (database) => {
+      const fixture = await newNormalFixture(3)
+      await seed(database, fixture)
+      await executionService(database, fixture.built).startProductionPlan(fixture.plan.id)
+      const rejecting = executionService(database, fixture.built, { validateResultingWeapon: () => ['not available'] })
+      await expectRefusal(
+        () => recordDifferent(rejecting, database, fixture.plan, bonusResult(differentBonuses(stepOf(fixture.plan, 0).expectedResult?.restorationBonuses), 'normal_artian')),
+        database,
+        'actual_result_invalid',
+      )
+    }))
+
+  it('re-checks the Plan status, the current Step and the expectedStateBefore inside the transaction', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingResetFixture()
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      const actual = bonusResult(differentBonuses(stepOf(fixture.plan, 0).expectedResult?.restorationBonuses), 'gogma_artian')
+      await expectRefusal(
+        () => service.recordActualResultDifferent({ planId: fixture.plan.id, planStepId: stepOf(fixture.plan, 0).id, actualResult: actual }),
+        database,
+        'plan_not_active',
+      )
+      await service.startProductionPlan(fixture.plan.id)
+      await expectRefusal(
+        () => service.recordActualResultDifferent({ planId: fixture.plan.id, planStepId: 'step.unknown' as PlanStep['id'], actualResult: actual }),
+        database,
+        'step_not_current',
+      )
+      const rng = structuredClone(fixture.built.input.rngState)
+      rng.gogmaCounter.value = CONSTRAINED_START_GOGMA_COUNTER + 3
+      await database.rngState.put(rng)
+      await expectRefusal(() => recordDifferent(service, database, fixture.plan, actual), database, 'execution_state_mismatch')
+    }))
+
+  it('rolls back every earlier write when the last write of the transaction fails', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingResetFixture()
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      await putSavePoint(database, fixture.plan, null, '2026-09-17T00:00:00.000Z')
+      // The ExecutionHistory add runs after the RngState, OwnedWeapon, Target
+      // and Plan writes of the record.
+      database.executionHistory.hook('creating', () => {
+        throw new Error('storage failure')
+      })
+      const before = await dump(database)
+      const failure = await recordDifferent(
+        service,
+        database,
+        fixture.plan,
+        bonusResult(differentBonuses(stepOf(fixture.plan, 0).expectedResult?.restorationBonuses), 'gogma_artian'),
+      ).catch((error: unknown) => error)
+      expect(failure).toBeInstanceOf(RepositoryError)
+      expect(failure).toMatchObject({ code: 'transaction_failed' })
+      expect(await dump(database)).toEqual(before)
+    }))
+})
+
+describe('operation_uncertain', () => {
+  it('changes only the Plan to stale and records the history with an entity-free Undo snapshot', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      fixture.plan.recalculationReasons = ['manual_recalculate']
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      const first = await confirmCurrent(service, database, fixture.plan)
+      const savePoint = await putSavePoint(database, fixture.plan, first.history.id, first.history.createdAt)
+      const before = await dump(database)
+      const activePlan = await currentPlan(database, fixture.plan)
+      const current = activePlan.currentStepId as PlanStep['id']
+
+      const { plan, history } = await service.recordOperationUncertain({ planId: fixture.plan.id, planStepId: current })
+
+      const after = await dump(database)
+      // RngState, Normal Counters, OwnedWeapons (in-progress included),
+      // TargetWeapons, BuildListEntries and the save point are untouched.
+      expect({ ...after, productionPlans: [], executionHistory: [] }).toEqual({ ...before, productionPlans: [], executionHistory: [] })
+      expect(after.ownedWeapons.find(({ id }) => id === fixture.built.input.ownedWeapons[0].id)?.executionInProgress)
+        .toEqual({ productionPlanId: fixture.plan.id, startedAt: first.history.createdAt })
+      expect(after.executionSavePoints).toEqual([savePoint])
+      expect(plan).toEqual({
+        ...activePlan,
+        status: 'stale',
+        recalculationReasons: ['manual_recalculate', 'execution_operation_uncertain'],
+        updatedAt: history.createdAt,
+      })
+      expect(plan.currentStepId).toBe(current)
+      expect(plan.steps.find(({ id }) => id === current)).toMatchObject({ isCompleted: false, completedAt: null })
+      expect(after.productionPlans).toEqual([plan])
+      expect(after.executionHistory).toHaveLength(2)
+      expect(after.executionHistory).toContainEqual(history)
+      expect(history).toMatchObject({
+        planStepId: current,
+        action: 'operation_uncertain',
+        actualResult: null,
+        wasExpected: false,
+        recalculationReason: 'execution_operation_uncertain',
+      })
+      expect(history.undoSnapshot).toEqual({
+        rngStateBefore: (before.rngState as unknown[])[0],
+        normalCountersBefore: before.normalCounters,
+        affectedOwnedWeaponsBefore: [],
+        addedOwnedWeaponIds: [],
+        removedOwnedWeaponsBefore: [],
+        affectedTargetWeaponsBefore: [],
+        productionPlanBefore: activePlan,
+        executionSavePointBefore: savePoint,
+      })
+      expect(validateExecutionHistory(history).issues).toEqual([])
+      expect(validateProductionPlan(plan).issues).toEqual([])
+
+      await expectRefusal(
+        () => service.recordOperationUncertain({ planId: fixture.plan.id, planStepId: current }),
+        database,
+        'plan_not_active',
+      )
+    }))
+
+  it('refuses a Step that is not current and a state that differs from expectedStateBefore', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      await expectRefusal(
+        () => service.recordOperationUncertain({ planId: fixture.plan.id, planStepId: stepOf(fixture.plan, 1).id }),
+        database,
+        'step_not_current',
+      )
+      const rng = structuredClone(fixture.built.input.rngState)
+      rng.skillCounter.value = CONSTRAINED_START_SKILL_COUNTER + 2
+      await database.rngState.put(rng)
+      await expectRefusal(
+        () => service.recordOperationUncertain({ planId: fixture.plan.id, planStepId: stepOf(fixture.plan, 0).id }),
+        database,
+        'execution_state_mismatch',
+      )
+    }))
+
+  it('rolls back the Plan write when the history write fails', () =>
+    withDatabase(async (database) => {
+      const fixture = await newNormalFixture(3)
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      database.executionHistory.hook('creating', () => {
+        throw new Error('storage failure')
+      })
+      const before = await dump(database)
+      const failure = await service.recordOperationUncertain({ planId: fixture.plan.id, planStepId: stepOf(fixture.plan, 0).id })
+        .catch((error: unknown) => error)
+      expect(failure).toBeInstanceOf(RepositoryError)
+      expect(failure).toMatchObject({ code: 'transaction_failed' })
+      expect(await dump(database)).toEqual(before)
+    }))
+})
+
+describe('recalculation reasons', () => {
+  it('adds a reason once and keeps the existing reasons', () => {
+    expect(withRecalculationReason(['target_changed'], 'unexpected_result')).toEqual(['target_changed', 'unexpected_result'])
+    expect(withRecalculationReason(['unexpected_result', 'target_changed'], 'unexpected_result')).toEqual(['unexpected_result', 'target_changed'])
+  })
 })
