@@ -1860,8 +1860,74 @@ function validateActualResult(
   if ((actual.restorationBonuses !== null) !== (actual.restorationBonusScope !== null)) {
     addIssue(issues, `${path}.restorationBonusScope`, 'invalid_state', 'restorationBonuses and restorationBonusScope must both be null or both be present.')
   }
+  if (actual.seriesSkillId !== null) {
+    validateId(actual.seriesSkillId, `${path}.seriesSkillId`, issues)
+  }
+  if (actual.groupSkillId !== null) {
+    validateId(actual.groupSkillId, `${path}.groupSkillId`, issues)
+  }
   if (actual.securedOwnedWeaponId !== null) {
     validateId(actual.securedOwnedWeaponId, `${path}.securedOwnedWeaponId`, issues)
+  }
+  if (actual.note !== null && typeof actual.note !== 'string') {
+    addIssue(issues, `${path}.note`, 'invalid_structure', 'note must be null or a string.')
+  }
+}
+
+/**
+ * The record shape each implemented current Execution action fixes
+ * (`docs/DATA_MODEL.md` 12, `docs/PLANNER_SPEC.md` 16.4 / 16.15). The legacy
+ * actions and `finished_as_compromise`, whose runtime is not implemented, keep
+ * only the generic checks.
+ */
+function validateExecutionActionRecord(
+  history: ExecutionHistory,
+  issues: DomainValidationIssue[],
+) {
+  const snapshot = history.undoSnapshot
+  switch (history.action) {
+    case 'confirmed_expected':
+      if (!history.wasExpected) {
+        addIssue(issues, 'wasExpected', 'invalid_state', 'confirmed_expected is an expected result.')
+      }
+      if (history.recalculationReason !== null) {
+        addIssue(issues, 'recalculationReason', 'invalid_state', 'confirmed_expected has no recalculation reason.')
+      }
+      break
+    case 'actual_result_different':
+      if (history.wasExpected) {
+        addIssue(issues, 'wasExpected', 'invalid_state', 'actual_result_different is not an expected result.')
+      }
+      if (history.recalculationReason !== 'unexpected_result') {
+        addIssue(issues, 'recalculationReason', 'invalid_state', 'actual_result_different records unexpected_result.')
+      }
+      if (history.actualResult === null) {
+        addIssue(issues, 'actualResult', 'invalid_state', 'actual_result_different records the actual result.')
+      } else if (history.actualResult.securedOwnedWeaponId !== null) {
+        addIssue(issues, 'actualResult.securedOwnedWeaponId', 'invalid_state', 'A current actual result secures no weapon.')
+      }
+      break
+    case 'operation_uncertain':
+      if (history.wasExpected) {
+        addIssue(issues, 'wasExpected', 'invalid_state', 'operation_uncertain is not an expected result.')
+      }
+      if (history.recalculationReason !== 'execution_operation_uncertain') {
+        addIssue(issues, 'recalculationReason', 'invalid_state', 'operation_uncertain records execution_operation_uncertain.')
+      }
+      if (history.actualResult !== null) {
+        addIssue(issues, 'actualResult', 'invalid_state', 'operation_uncertain records no actual result.')
+      }
+      if (
+        snapshot.affectedOwnedWeaponsBefore.length > 0 ||
+        snapshot.addedOwnedWeaponIds.length > 0 ||
+        snapshot.removedOwnedWeaponsBefore.length > 0 ||
+        snapshot.affectedTargetWeaponsBefore.length > 0
+      ) {
+        addIssue(issues, 'undoSnapshot', 'invalid_state', 'operation_uncertain changes no OwnedWeapon or TargetWeapon.')
+      }
+      break
+    default:
+      break
   }
 }
 
@@ -1921,6 +1987,7 @@ export function validateExecutionHistory(
       addIssue(issues, 'undoSnapshot.executionSavePointBefore.productionPlanId', 'inconsistent_snapshot', 'The save point snapshot must belong to the history Plan.')
     }
   }
+  validateExecutionActionRecord(history, issues)
   if (!history.wasExpected && history.recalculationReason === null) {
     addIssue(issues, 'recalculationReason', 'invalid_state', 'Unexpected execution requires a recalculation reason.')
   }

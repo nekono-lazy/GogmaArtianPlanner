@@ -231,9 +231,17 @@ confirmation transaction (`src/domain/execution`,
 persisted and fail validation) and `ExportRoot.schemaVersion` to 9 (schema 8 roots
 holding a terminal Plan or any ExecutionHistory fail closed). It changed no
 calculation semantics, so `CURRENT_CALCULATION_APP_SCHEMA_VERSION` stays 12.
-`actual_result_different`, `operation_uncertain`, `finished_as_compromise`, Undo,
-save point record / restore, abandonment, replan adoption, and the breaking-change
-guard are still not implemented.
+The fourth PR (the Execution unexpected-result runtime) implemented the
+`actual_result_different` and `operation_uncertain` record transactions
+(`src/domain/execution/unexpectedStepResult.ts`, sharing the Step premises, Counter
+advance, target link, in-progress, Undo snapshot, and validation helpers of
+`src/domain/execution/stepExecution.ts` with `confirmed_expected`) and the
+action-specific ExecutionHistory / ActualResult validation. It added no persisted
+field and changed no calculation semantics, so `CURRENT_CALCULATION_APP_SCHEMA_VERSION`
+stays 12, `DATABASE_SCHEMA_VERSION` 6, and `ExportRoot.schemaVersion` 9.
+`finished_as_compromise`, Undo, save point record / restore, abandonment, replan
+adoption, the breaking-change guard, and the Execution Navigator UI are still not
+implemented.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -2977,10 +2985,10 @@ and `docs/UI_FLOW.md` 12 / 16 follow it. The persisted entity foundation and the
 calculation schema 12 Execution Plan contract (Plan generation with
 `executionEffects`) are implemented. Of the Execution runtime, Plan start and the
 ordinary `confirmed_expected` Step confirmation (blind observation and
-`confirm_owned_ideal` included, with the full Undo snapshot and Plan completion) are
-implemented; unexpected-result and uncertain-operation recording, finishing as a
-compromise, Undo, save point record / restore, abandonment, replan adoption, and the
-breaking-change guard are not yet.
+`confirm_owned_ideal` included, with the full Undo snapshot and Plan completion), and
+the `actual_result_different` / `operation_uncertain` records are implemented;
+finishing as a compromise, Undo, save point record / restore, abandonment, replan
+adoption, the breaking-change guard, and the Execution Navigator UI are not yet.
 Implementation PRs follow the specification and must not fall back to the older
 Execution semantics.
 

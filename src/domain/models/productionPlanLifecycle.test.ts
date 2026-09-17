@@ -141,11 +141,100 @@ describe('ExecutionHistory actualResult', () => {
   })
 })
 
+function actualResultDifferentHistory(): ExecutionHistory {
+  return {
+    ...createValidExecutionHistory(),
+    action: 'actual_result_different',
+    wasExpected: false,
+    recalculationReason: 'unexpected_result',
+    actualResult: {
+      restorationBonuses: null,
+      restorationBonusScope: null,
+      seriesSkillId: 'series.fixture.a',
+      groupSkillId: 'group.fixture.a',
+      securedOwnedWeaponId: null,
+      note: null,
+    },
+  }
+}
+
+function operationUncertainHistory(): ExecutionHistory {
+  const history = createValidExecutionHistory()
+  return {
+    ...history,
+    action: 'operation_uncertain',
+    wasExpected: false,
+    recalculationReason: 'execution_operation_uncertain',
+    actualResult: null,
+    undoSnapshot: { ...history.undoSnapshot, affectedOwnedWeaponsBefore: [] },
+  }
+}
+
+describe('ExecutionHistory actualResult Skill IDs', () => {
+  it.each(['seriesSkillId', 'groupSkillId'] as const)('refuses an empty non-null %s', (field) => {
+    const history = actualResultDifferentHistory()
+    history.actualResult = { ...history.actualResult!, [field]: '' }
+    expect(validateExecutionHistory(history).issues).toContainEqual(
+      expect.objectContaining({ path: `actualResult.${field}`, code: 'invalid_id' }),
+    )
+    history.actualResult = { ...history.actualResult, [field]: '   ' }
+    expect(validateExecutionHistory(history).isValid).toBe(false)
+  })
+
+  it('accepts null Skill IDs and refuses a non-string note', () => {
+    expect(validateExecutionHistory(createValidExecutionHistory()).issues).toEqual([])
+    const history = actualResultDifferentHistory()
+    history.actualResult = { ...history.actualResult!, note: 42 as never }
+    expect(validateExecutionHistory(history).issues).toContainEqual(expect.objectContaining({ path: 'actualResult.note' }))
+    expect(validateExecutionHistory({ ...actualResultDifferentHistory(), actualResult: { ...actualResultDifferentHistory().actualResult!, note: 'memo' } }).issues).toEqual([])
+  })
+})
+
+describe('ExecutionHistory action records', () => {
+  const paths = (history: ExecutionHistory) => validateExecutionHistory(history).issues.map(({ path }) => path)
+
+  it('fixes confirmed_expected as an expected result without a reason', () => {
+    expect(paths({ ...createValidExecutionHistory(), wasExpected: false, recalculationReason: 'unexpected_result' })).toEqual(
+      expect.arrayContaining(['wasExpected', 'recalculationReason']),
+    )
+  })
+
+  it('fixes actual_result_different as unexpected, with unexpected_result and an actual result', () => {
+    expect(paths({ ...actualResultDifferentHistory(), wasExpected: true })).toContain('wasExpected')
+    expect(paths({ ...actualResultDifferentHistory(), recalculationReason: 'execution_operation_uncertain' })).toContain('recalculationReason')
+    expect(paths({ ...actualResultDifferentHistory(), actualResult: null })).toContain('actualResult')
+    const secured = actualResultDifferentHistory()
+    secured.actualResult = { ...secured.actualResult!, securedOwnedWeaponId: 'owned.fixture.a' as never }
+    expect(paths(secured)).toContain('actualResult.securedOwnedWeaponId')
+  })
+
+  it('fixes operation_uncertain as unexpected, with its reason, no actual result and no entity change', () => {
+    expect(paths({ ...operationUncertainHistory(), wasExpected: true })).toContain('wasExpected')
+    expect(paths({ ...operationUncertainHistory(), recalculationReason: 'unexpected_result' })).toContain('recalculationReason')
+    expect(paths({ ...operationUncertainHistory(), actualResult: actualResultDifferentHistory().actualResult })).toContain('actualResult')
+    const changed = operationUncertainHistory()
+    changed.undoSnapshot = { ...changed.undoSnapshot, affectedTargetWeaponsBefore: [createValidTargetWeapon()] }
+    expect(paths(changed)).toContain('undoSnapshot')
+  })
+
+  it('keeps the legacy action records valid', () => {
+    const legacy = {
+      ...createValidExecutionHistory(),
+      action: 'secured_weapon' as const,
+      actualResult: { ...actualResultDifferentHistory().actualResult!, securedOwnedWeaponId: 'owned.fixture.a' as never },
+    }
+    expect(validateExecutionHistory(legacy).issues).toEqual([])
+    expect(validateExecutionHistory({ ...createValidExecutionHistory(), action: 'skipped_candidate', wasExpected: false, recalculationReason: 'planned_candidate_not_secured' }).issues).toEqual([])
+  })
+})
+
 describe('ExecutionHistory Undo snapshot', () => {
   it('accepts the current actions and the full snapshot', () => {
-    for (const action of ['confirmed_expected', 'actual_result_different', 'operation_uncertain', 'finished_as_compromise', 'secured_weapon', 'skipped_candidate'] as const) {
+    for (const action of ['confirmed_expected', 'finished_as_compromise', 'secured_weapon', 'skipped_candidate'] as const) {
       expect(validateExecutionHistory({ ...createValidExecutionHistory(), action }).issues).toEqual([])
     }
+    expect(validateExecutionHistory(actualResultDifferentHistory()).issues).toEqual([])
+    expect(validateExecutionHistory(operationUncertainHistory()).issues).toEqual([])
     expect(validateExecutionHistory({ ...createValidExecutionHistory(), action: 'undo' as never }).isValid).toBe(false)
   })
 
