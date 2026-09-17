@@ -135,16 +135,16 @@ describe('status is excluded from every semantic hash and calculation identity',
     const rngState = createValidRngState()
     const counters = [createValidNormalArtianCounter()]
     const base = { ...createValidOwnedWeapon(), status: 'unclassified' as const }
-    const before = createExpectedPlanState(rngState, counters, [base])
+    const before = createExpectedPlanState(rngState, counters, [base], { targetWeapons: [], dependentTargetWeaponIds: [] })
     for (const status of EVERY_STATUS) {
       expect(
-        createExpectedPlanState(rngState, counters, [{ ...base, status }]),
+        createExpectedPlanState(rngState, counters, [{ ...base, status }], { targetWeapons: [], dependentTargetWeaponIds: [] }),
       ).toEqual(before)
     }
     expect(
       createExpectedPlanState(rngState, counters, [
         { ...base, isProtected: !base.isProtected },
-      ]).ownedWeaponsHash,
+      ], { targetWeapons: [], dependentTargetWeaponIds: [] }).ownedWeaponsHash,
     ).not.toBe(before.ownedWeaponsHash)
   })
 
@@ -248,6 +248,7 @@ describe('the Planner-only material steps are gone from the PlanStep set', () =>
 
   it('labels exactly the current PlanStep operations and none of the removed ones', () => {
     expect(Object.keys(planStepOperationLabels).sort()).toEqual([
+      'confirm_owned_ideal',
       'confirm_result',
       'convert_normal_to_gogma',
       'create_normal_artian',
@@ -289,8 +290,8 @@ describe('the Planner-only material steps are gone from the PlanStep set', () =>
 })
 
 describe('version authorities at the weapon-as-material removal boundary', () => {
-  it('uses calculation app schema version 9', () => {
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(11)
+  it('uses calculation app schema version 9 or later', () => {
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(12)
   })
 
   it('fails every schema 1..8 artifact closed, with no build-result exception', () => {
@@ -309,7 +310,7 @@ describe('version authorities at the weapon-as-material removal boundary', () =>
   })
 
   it('declares the current Export schema version', () => {
-    const schemaVersion: ExportRoot['schemaVersion'] = 7
-    expect(schemaVersion).toBe(7)
+    const schemaVersion: ExportRoot['schemaVersion'] = 8
+    expect(schemaVersion).toBe(8)
   })
 })

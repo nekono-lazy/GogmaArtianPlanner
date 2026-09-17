@@ -86,10 +86,10 @@ describe('A starting owned weapon that already satisfies a compromise condition'
 })
 
 describe('Intermediate state calculation and Export schema contracts', () => {
-  it('fails a schema 10 build artifact closed under schema 11', () => {
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(11)
+  it('fails every schema 1..11 build artifact closed under schema 12', () => {
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(12)
     const current = currentContext()
-    for (let version = 1; version <= 10; version += 1) {
+    for (let version = 1; version <= 11; version += 1) {
       expect(
         isBuildResultCalculationContextCompatible(current, {
           ...current,
@@ -156,7 +156,7 @@ describe('Intermediate state calculation and Export schema contracts', () => {
   it('moves the Export schema version with the persisted entity shape', () => {
     const candidate = currentCandidate()
     const root: ExportRoot = {
-      schemaVersion: 7,
+      schemaVersion: 8,
       appName: 'mh-wilds-gogma-artian-planner',
       exportedAt: '2026-09-12T00:00:00.000Z',
       rngState: null,
@@ -182,8 +182,9 @@ describe('Intermediate state calculation and Export schema contracts', () => {
     // Version 6 was the first Export shape whose BuildCandidates carry
     // axis-separated intermediate states and whose BuildListEntries carry the
     // per-lane selection plus the improvement preference; version 7 keeps that
-    // shape and adds the Execution lifecycle state.
-    expect(root.schemaVersion).toBe(7)
+    // shape and adds the Execution lifecycle state, and version 8 adds the
+    // calculation schema 12 ProductionPlan shape.
+    expect(root.schemaVersion).toBe(8)
     expect(root.buildCandidates[0].intermediateStateGroups).toBeDefined()
     const older = { ...root, schemaVersion: 5 } as unknown as ExportRoot
     expect(older.schemaVersion).not.toBe(root.schemaVersion)

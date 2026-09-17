@@ -78,7 +78,7 @@ function savePointFor(
 function exportRoot(overrides: Partial<ExportRoot> = {}): ExportRoot {
   const plan = createValidProductionPlan()
   return {
-    schemaVersion: 7,
+    schemaVersion: 8,
     appName: 'mh-wilds-gogma-artian-planner',
     exportedAt: DOMAIN_FIXTURE_TIME,
     rngState: createValidRngState(),
@@ -121,9 +121,11 @@ function schema6Root(): ExportRootV6 {
 }
 
 describe('Execution lifecycle version boundaries', () => {
-  it('moves the Export schema only and keeps the calculation schema at 11', () => {
-    expect(EXPORT_SCHEMA_VERSION).toBe(7)
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(11)
+  it('keeps the Export schema at or beyond 7 and the calculation schema at or beyond 11', () => {
+    // The persistence foundation moved Export to 7 and left the calculation
+    // schema at 11; the Execution Plan contract then moved them to 8 and 12.
+    expect(EXPORT_SCHEMA_VERSION).toBe(8)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(12)
   })
 })
 
@@ -241,20 +243,18 @@ describe('executionInProgress stays out of every semantic identity', () => {
   it('does not move ExpectedPlanState.ownedWeaponsHash', () => {
     const rng = createValidRngState()
     const counters = [createValidNormalArtianCounter()]
-    expect(createExpectedPlanState(rng, counters, [inProgress]))
-      .toEqual(createExpectedPlanState(rng, counters, [weapon]))
+    expect(createExpectedPlanState(rng, counters, [inProgress], { targetWeapons: [], dependentTargetWeaponIds: [] }))
+      .toEqual(createExpectedPlanState(rng, counters, [weapon], { targetWeapons: [], dependentTargetWeaponIds: [] }))
   })
 
-  it('leaves createTargetDefinitionHash untouched by lifecycle in this boundary', () => {
-    // The current normalization lists its fields explicitly, so the new
-    // lifecycle fields never enter it. The PR #43 normalization change (removing
-    // priority / isEnabled / preferredOwnedWeaponId) is deliberately NOT applied
-    // here; it lands with the calculation schema 12 boundary.
+  it('leaves createTargetDefinitionHash untouched by lifecycle', () => {
+    // Calculation schema 12 normalizes the hash to the performance definition
+    // only, so neither lifecycle nor priority moves it (PLANNER_SPEC 16.11).
     const target = createValidTargetWeapon()
     expect(createTargetDefinitionHash(completedTarget(PLAN_ID)))
       .toBe(createTargetDefinitionHash(target))
     expect(createTargetDefinitionHash({ ...target, priority: 5 }))
-      .not.toBe(createTargetDefinitionHash(target))
+      .toBe(createTargetDefinitionHash(target))
   })
 })
 
@@ -283,7 +283,7 @@ describe('ExecutionSavePoint validation', () => {
   })
 })
 
-describe('Export schema 7', () => {
+describe('Export schema 8', () => {
   it('round-trips save points, Target lifecycle, and executionInProgress through JSON', () => {
     const root = exportRoot()
     const parsed: unknown = JSON.parse(JSON.stringify(root))
@@ -301,6 +301,8 @@ describe('Export schema 7', () => {
     expect(migrated.ok).toBe(true)
     if (!migrated.ok) return
     expect(migrated.root.schemaVersion).toBe(7)
+    const imported = prepareExportRootForImport(JSON.parse(JSON.stringify(legacy)))
+    expect(imported.ok && imported.root.schemaVersion).toBe(8)
     expect(migrated.root.executionSavePoints).toEqual([])
     migrated.root.targetWeapons.forEach((target) => {
       expect(target).toMatchObject({ lifecycleStatus: 'active', completedAt: null, completedByProductionPlanId: null })
@@ -330,7 +332,7 @@ describe('Export schema 7', () => {
 
   it('refuses unsupported schema versions and malformed roots', () => {
     expect(prepareExportRootForImport({ ...exportRoot(), schemaVersion: 5 }).ok).toBe(false)
-    expect(prepareExportRootForImport({ ...exportRoot(), schemaVersion: 8 }).ok).toBe(false)
+    expect(prepareExportRootForImport({ ...exportRoot(), schemaVersion: 9 }).ok).toBe(false)
     expect(prepareExportRootForImport({ ...exportRoot(), appName: 'other' }).ok).toBe(false)
     expect(prepareExportRootForImport({ ...exportRoot(), ownedWeapons: null }).ok).toBe(false)
     expect(prepareExportRootForImport(null).ok).toBe(false)
@@ -358,7 +360,10 @@ describe('Export schema 7', () => {
   ])('fails schema 6 %s closed without throwing', (_label, fields, path) => {
     const malformed = { ...schema6Root(), ...fields } as unknown as ExportRootV6
     // The exported migration itself ...
-    expectStructureFailure(() => migrateExportRootV6ToV7(malformed), path)
+    expectStructureFailure(
+      () => migrateExportRootV6ToV7(malformed) as unknown as ReturnType<typeof prepareExportRootForImport>,
+      path,
+    )
     // ... and the Import preparation that routes schema 6 through it.
     expectStructureFailure(
       () => prepareExportRootForImport(JSON.parse(JSON.stringify(malformed))),
@@ -373,7 +378,7 @@ describe('Export schema 7', () => {
     ['executionSavePoints: [123]', { executionSavePoints: [123] }, 'executionSavePoints[0]'],
     ['productionPlans: [null]', { productionPlans: [null] }, 'productionPlans[0]'],
     ['executionHistory: ["x"]', { executionHistory: ['x'] }, 'executionHistory[0]'],
-  ])('fails schema 7 %s closed without throwing', (_label, fields, path) => {
+  ])('fails schema 8 %s closed without throwing', (_label, fields, path) => {
     const malformed = { ...exportRoot(), ...fields }
     expectStructureFailure(() => prepareExportRootForImport(malformed), path)
   })

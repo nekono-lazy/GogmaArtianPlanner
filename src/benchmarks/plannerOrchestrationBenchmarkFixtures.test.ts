@@ -529,7 +529,10 @@ describe('B8-E1 benchmark outcome normalization', () => {
     const ownedIds = input.ownedWeapons.map(({ id }) => id as string)
     const withRuntimeId = structuredClone(result)
     if (!withRuntimeId.plan) throw new Error('Expected Plan')
-    const reserve = withRuntimeId.plan.steps.find(({ operationType }) => operationType === 'reserve_weapon')
+    // The completion rides on a physical Step and names its tracked weapon.
+    const reserve = withRuntimeId.plan.steps.find(({ executionEffects }) =>
+      (executionEffects?.targetCompletions.length ?? 0) > 0,
+    )
     if (!reserve) throw new Error('Expected reservation')
     reserve.ownedWeaponId = 'owned.fixture.runtime-generated' as NonNullable<typeof reserve.ownedWeaponId>
     const outcome = createPlannerOrchestrationOutcome(withRuntimeId, ownedIds)

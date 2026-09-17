@@ -127,6 +127,9 @@ export function ProductionPlanStepCard({
   // from a Candidate or Entry, and no section is shown. `[]` means this Step
   // reaches no selected checkpoint (`docs/PLANNER_SPEC.md` 7.5.4).
   const milestones = step.checkpointMilestones ?? []
+  // The only completion authority (UI_FLOW 11.0). A legacy Step without
+  // `executionEffects` shows none: `shouldSecure` is never read as one.
+  const completions = step.executionEffects?.targetCompletions ?? []
   // The primary Target decides which weapon-type bonus names apply; a shared
   // Step keeps that single persisted resolution rather than inventing one.
   const weaponTypeId =
@@ -153,8 +156,8 @@ export function ProductionPlanStepCard({
           <Typography variant="body2" color="text.secondary">
             {planStepOperationLabels[step.operationType]}
           </Typography>
-          {step.expectedResult?.shouldSecure === true && (
-            <StatusChip label="確保予定" tone="positive" />
+          {completions.length > 0 && (
+            <StatusChip label="目標武器が完成" tone="positive" />
           )}
           {shared && <StatusChip label="共有操作" tone="info" />}
         </Stack>
@@ -177,6 +180,32 @@ export function ProductionPlanStepCard({
           <Typography variant="caption" color="text.secondary">
             この操作は他の目標武器と共有され、計画全体では1回だけ実行します。
           </Typography>
+        )}
+        {completions.length > 0 && (
+          <Box>
+            <Typography component="p" variant="subtitle2">
+              このステップで完成する目標武器
+            </Typography>
+            <Box
+              component="ul"
+              aria-label={`ステップ ${step.order} で完成する目標武器`}
+              sx={{ m: 0, mt: 0.25, pl: 2.5, display: 'grid', gap: 0.25 }}
+            >
+              {completions.map((completion, index) => (
+                <Typography
+                  component="li"
+                  variant="body2"
+                  key={`${completion.buildListEntryId}:${index}`}
+                  sx={{ overflowWrap: 'anywhere' }}
+                >
+                  <TargetWeaponReference
+                    targetWeaponId={completion.targetWeaponId}
+                    lookup={lookup}
+                  />
+                </Typography>
+              ))}
+            </Box>
+          </Box>
         )}
         {milestones.length > 0 && (
           // Persisted milestone metadata on the physical Step that reaches the

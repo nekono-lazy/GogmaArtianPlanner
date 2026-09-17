@@ -59,9 +59,11 @@ function schema4Target(id: string) {
 }
 
 describe('Execution lifecycle persistence migration (Dexie v4 -> v5)', () => {
-  it('uses DATABASE_SCHEMA_VERSION 5 without moving the calculation schema', () => {
+  it('uses DATABASE_SCHEMA_VERSION 5 independently of the calculation schema', () => {
+    // The v5 upgrade moved no calculation schema; the later Execution Plan
+    // contract moved the calculation schema to 12 without a Dexie upgrade.
     expect(DATABASE_SCHEMA_VERSION).toBe(5)
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(11)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(12)
   })
 
   it('writes only the deterministic defaults and infers nothing', async () => {

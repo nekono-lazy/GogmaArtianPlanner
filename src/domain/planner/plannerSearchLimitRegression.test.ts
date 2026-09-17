@@ -368,23 +368,29 @@ describe('Planner search limits on a long Bonus + Skill Route', () => {
 
     expect(plan).not.toBeNull()
     const steps = plan?.steps ?? []
-    // 23 water Keeps + 125 fire Bonus operations + 82 Reset Skills + 2 reserves.
-    // Fire's first 23 Route units are fast-forwarded by water's Keeps, so they
-    // never become PlanSteps (PLANNER_SPEC 7.0.2).
-    expect(steps).toHaveLength(232)
+    // 23 water Keeps + 125 fire Bonus operations + 82 Reset Skills. Fire's first
+    // 23 Route units are fast-forwarded by water's Keeps, so they never become
+    // PlanSteps (PLANNER_SPEC 7.0.2), and each completion rides on its Entry's
+    // last physical Step instead of a reserve Step (16.3).
+    expect(steps).toHaveLength(230)
     const countFor = (entryId: string, operationType: string) =>
       steps.filter(
         (step) =>
           step.buildListEntryId === entryId && step.operationType === operationType,
       ).length
     expect(countFor(water.id, 'keep_bonuses')).toBe(WATER_KEEP_COUNT)
-    expect(countFor(water.id, 'reserve_weapon')).toBe(1)
+    expect(countFor(water.id, 'reserve_weapon')).toBe(0)
+    const completionsFor = (entryId: string) =>
+      steps.flatMap(({ executionEffects }) => executionEffects?.targetCompletions ?? [])
+        .filter(({ buildListEntryId }) => buildListEntryId === entryId).length
+    expect(completionsFor(water.id)).toBe(1)
     expect(
       countFor(fire.id, 'reset_bonuses') + countFor(fire.id, 'keep_bonuses'),
     ).toBe(LAST_GOGMA_COUNTER + 1 - WATER_KEEP_COUNT)
     expect(countFor(fire.id, 'keep_bonuses')).toBe(FIRE_KEEP_COUNT)
     expect(countFor(fire.id, 'reset_skills')).toBe(FIRE_SKILL_RESET_COUNT)
-    expect(countFor(fire.id, 'reserve_weapon')).toBe(1)
+    expect(countFor(fire.id, 'reserve_weapon')).toBe(0)
+    expect(completionsFor(fire.id)).toBe(1)
 
     // The global order the Beam Search actually selected: one water Bonus
     // block, then the fire Bonus block, then the fire Skill block, so the

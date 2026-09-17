@@ -27,16 +27,21 @@ function normalizeBonuses(bonuses: readonly RestorationBonus[]) {
     .sort(compareStable)
 }
 
+/**
+ * The Target performance definition that decides whether a Candidate exists and
+ * what it means (`docs/PLANNER_SPEC.md` 16.11).
+ *
+ * `priority`, `isEnabled`, `preferredOwnedWeaponId`, the lifecycle
+ * (`lifecycleStatus`, `completedAt`, `completedByProductionPlanId`), `name`,
+ * `memo` and timestamps are deliberately excluded: they are planning input or
+ * execution state, not what a Candidate satisfies, so changing them never stales
+ * a BuildListEntry with `target_definition_changed`. The planning-input hashes of
+ * a ProductionPlan carry them separately.
+ */
 export function createTargetDefinitionHash(target: TargetWeapon): string {
   return hashStableValue({
     weaponTypeId: target.weaponTypeId,
     elementId: target.elementId,
-    priority: target.priority,
-    isEnabled: target.isEnabled,
-    // The preferred owned weapon changes which Route the Planner prefers for
-    // this Target, so changing it must stale existing entries with
-    // `target_definition_changed` (`docs/DATA_MODEL.md` 9.4).
-    preferredOwnedWeaponId: target.preferredOwnedWeaponId,
     idealBonuses: normalizeBonuses(target.idealBonuses),
     practicalBonusConditions: target.practicalBonusConditions
       .map((condition) => ({ ...condition }))

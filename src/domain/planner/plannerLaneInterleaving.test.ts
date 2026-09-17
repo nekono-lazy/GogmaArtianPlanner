@@ -142,8 +142,10 @@ describe('Lane-interleaved compromise checkpoints in a ProductionPlan', () => {
 
     expect(result.termination.status).toBe('completed')
     const types = result.plan?.steps.map(({ operationType }) => operationType) ?? []
-    expect(types).toHaveLength(5)
-    expect(types.at(-1)).toBe('reserve_weapon')
+    // Completion rides on the last physical Step; there is no reserve Step.
+    expect(types).toHaveLength(4)
+    expect(types).not.toContain('reserve_weapon')
+    expect(result.plan?.steps.at(-1)?.executionEffects?.targetCompletions).toHaveLength(1)
     // The second Reset Skills may only run once the Bonus lane reached its
     // Ideal end: the checkpoint is Practical Skill + Ideal Bonus.
     expect(types[3]).toBe('reset_skills')
@@ -204,7 +206,7 @@ describe('Lane-interleaved compromise checkpoints in a ProductionPlan', () => {
 
       expect(result.termination.status).toBe('completed')
       const types = result.plan?.steps.map(({ operationType }) => operationType) ?? []
-      expect(types).toHaveLength(5)
+      expect(types).toHaveLength(4)
       // The checkpoint completes with the second physical step, whichever lane
       // came first, and the Plan does not stop there.
       expect(new Set(types.slice(0, 2))).toEqual(new Set(['reset_bonuses', 'reset_skills']))
@@ -228,12 +230,24 @@ describe('Lane-interleaved compromise checkpoints in a ProductionPlan', () => {
       } else {
         expect(new Set(types.slice(2, 4))).toEqual(new Set(['reset_bonuses', 'reset_skills']))
       }
-      // The reserved weapon is the Ideal, never the compromise product.
-      expect(result.plan?.steps[4].expectedResult).toMatchObject({
+      // Reaching the checkpoint labels the tracked weapon Practical and the
+      // Plan continues (PLANNER_SPEC 16.12).
+      expect(result.plan?.steps[1].executionEffects?.compromiseLabels).toEqual([{
+        buildListEntryId: built.entry.id,
+        ownedWeaponId: built.source.id,
+      }])
+      expect(result.plan?.steps[1].executionEffects?.targetCompletions).toEqual([])
+      // The completed weapon is the Ideal, never the compromise product.
+      expect(result.plan?.steps[3].expectedResult).toMatchObject({
         restorationBonuses: idealBonuses(),
         seriesSkillId: IDEAL_SERIES_SKILL_ID,
-        shouldSecure: false,
+        shouldSecure: true,
       })
+      expect(result.plan?.steps[3].executionEffects?.targetCompletions).toEqual([{
+        buildListEntryId: built.entry.id,
+        targetWeaponId: built.target.id,
+        ownedWeaponId: built.source.id,
+      }])
     },
   )
 
@@ -646,6 +660,12 @@ describe('Existing Gogma lane starts held at Planner start', () => {
     // No operation produces the checkpoint, so no Step carries a milestone;
     // the Domain still treats it as reached and secures the Ideal at the end.
     expect(result.plan?.steps.flatMap((step) => step.checkpointMilestones ?? [])).toEqual([])
+    // A checkpoint held at Plan start is labelled Practical on the Entry's
+    // first physical Step (PLANNER_SPEC 16.12).
+    expect(result.plan?.steps[0].executionEffects?.compromiseLabels).toEqual([{
+      buildListEntryId: built.entry.id,
+      ownedWeaponId: built.source.id,
+    }])
     expect(result.plan?.steps.at(-1)?.expectedResult).toMatchObject({
       restorationBonuses: idealBonuses(),
       seriesSkillId: IDEAL_SERIES_SKILL_ID,
@@ -656,19 +676,19 @@ describe('Existing Gogma lane starts held at Planner start', () => {
   it('C: a Practical Skill with Ideal slots holds the Skill lane start and improves the Skill later', async () => {
     const built = heldStartScenario({ id: 'c', skill: 'practical', bonus: 'ideal', operations: ['reset_skills'], select: { skill: true } })
     expect(intermediateOpportunityAt(built.entry.candidateSnapshot, 'skill', 0).group.match).toBe('practical')
-    await expectHeldAtStart(built, ['reset_skills', 'reserve_weapon'])
+    await expectHeldAtStart(built, ['reset_skills'])
   })
 
   it('D: an Ideal Skill with Practical slots holds the Bonus lane start and improves the slots later', async () => {
     const built = heldStartScenario({ id: 'd', skill: 'ideal', bonus: 'practical', operations: ['reset_bonuses'], select: { bonus: true } })
     // The fixture's compromise slots satisfy the Target's Alternative rule.
     expect(intermediateOpportunityAt(built.entry.candidateSnapshot, 'bonus', 0).group.match).toBe('alternative')
-    await expectHeldAtStart(built, ['reset_bonuses', 'reserve_weapon'])
+    await expectHeldAtStart(built, ['reset_bonuses'])
   })
 
   it('E: Practical + Practical holds both lane starts and continues to the Ideal', async () => {
     const built = heldStartScenario({ id: 'e', skill: 'practical', bonus: 'practical', operations: ['reset_bonuses', 'reset_skills'], select: { skill: true, bonus: true } })
-    await expectHeldAtStart(built, ['reset_bonuses', 'reset_skills', 'reserve_weapon'])
+    await expectHeldAtStart(built, ['reset_bonuses', 'reset_skills'])
   })
 
   it('F: a conversion-assigned Skill at lane position 0 is not held before the conversion ran', async () => {

@@ -50,10 +50,10 @@ describe('targetDefinitionHash', () => {
     ['ideal bonuses', (target: ReturnType<typeof createValidTargetWeapon>) => { target.idealBonuses[0] = { bonusTypeId: 'bonus.changed', bonusRankId: 'rank.changed' } }],
     ['practical condition', (target: ReturnType<typeof createValidTargetWeapon>) => { target.practicalBonusConditions[0].requiredExCount = 1 }],
     ['skill condition', (target: ReturnType<typeof createValidTargetWeapon>) => { target.idealSkillCondition.seriesSkillId = null }],
-    // The preferred owned weapon changes which Route the Planner prefers for
-    // this Target, so it is part of the Target's planning meaning
-    // (`docs/DATA_MODEL.md` 9.4).
-    ['preferred owned weapon', (target: ReturnType<typeof createValidTargetWeapon>) => { target.preferredOwnedWeaponId = ownedWeaponId('owned.preferred') }],
+    ['alternative bonus rule', (target: ReturnType<typeof createValidTargetWeapon>) => { target.alternativeBonusRules[0].maxReplacementCount = 2 }],
+    ['practical skill condition', (target: ReturnType<typeof createValidTargetWeapon>) => { target.practicalSkillCondition = { ...target.practicalSkillCondition, groupSkillId: 'group_skill.changed' } }],
+    ['weapon type', (target: ReturnType<typeof createValidTargetWeapon>) => { target.weaponTypeId = 'weapon.changed' }],
+    ['element', (target: ReturnType<typeof createValidTargetWeapon>) => { target.elementId = 'element.changed' }],
   ])('changes for %s', (_label, mutate) => {
     const target = createValidTargetWeapon()
     const changed = structuredClone(target)
@@ -151,12 +151,19 @@ describe('BuildListEntry staleness', () => {
     expect(evaluateBuildListEntryStaleness(base.entry, { target: base.target, rngState, normalCounters: [...base.normalCounters, unrelated], ownedWeapons: [], calculationContext: domainFixtureContext }).isStale).toBe(false)
   })
 
-  it('stales an entry when only the Target preferred owned weapon changes', () => {
+  it.each([
+    ['preferred owned weapon', { preferredOwnedWeaponId: ownedWeaponId('owned.preferred') }],
+    ['priority', { priority: 5 as const }],
+    ['isEnabled', { isEnabled: false }],
+    ['lifecycle', { lifecycleStatus: 'completed' as const, completedAt: DOMAIN_FIXTURE_TIME, completedByProductionPlanId: null }],
+    ['name and memo', { name: 'renamed', memo: 'changed' }],
+  ])('does not stale an entry when only the Target %s changes', (_label, fields) => {
+    // None of these is the Target performance definition (PLANNER_SPEC 16.11).
     const base = createFixtureEntry()
-    const changed = { ...base.target, preferredOwnedWeaponId: ownedWeaponId('owned.preferred') }
+    const changed = { ...base.target, ...fields }
     expect(
       evaluateBuildListEntryStaleness(base.entry, { target: changed, rngState: base.rngState, normalCounters: base.normalCounters, ownedWeapons: [], calculationContext: domainFixtureContext }).staleReasons,
-    ).toEqual(['target_definition_changed'])
+    ).toEqual([])
   })
 
   it('detects a route-dependent RNG change', () => {
@@ -268,7 +275,7 @@ describe('BuildListEntry staleness', () => {
   it('returns every reason in deterministic order', () => {
     const base = createFixtureEntry()
     const target = structuredClone(base.target)
-    target.priority = 5
+    target.idealSkillCondition.seriesSkillId = null
     const rngState = structuredClone(base.rngState)
     rngState.skillCounter.value = 999
     const result = evaluateBuildListEntryStaleness(base.entry, { target, rngState, normalCounters: base.normalCounters, ownedWeapons: [], calculationContext: { ...domainFixtureContext, gameVersion: 'changed' } })

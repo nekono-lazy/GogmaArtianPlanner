@@ -19,6 +19,7 @@ import type {
   PlannerOrchestrationResult,
 } from '../../domain/planner'
 import { createPlanningInputSnapshot } from '../../domain/planner'
+import { createExpectedPlanState } from '../../domain/models/publicTypes'
 import {
   DOMAIN_FIXTURE_TIME,
   buildListEntryId,
@@ -123,7 +124,24 @@ async function withScenario(
     const owned = [sourceWeapon('owned.fixture.a'), sourceWeapon('owned.fixture.b')]
     const { input } = fixture([targetA, targetB], [...persisted, ...generated], owned)
     options.adjustGenerated?.(generated)
-    const snapshot = createPlanningInputSnapshot(input, DOMAIN_FIXTURE_TIME)
+    const selected = [...persisted, ...generated]
+    const snapshot = createPlanningInputSnapshot(
+      input,
+      {
+        initialExecutionState: createExpectedPlanState(
+          input.rngState,
+          input.normalCounters,
+          input.ownedWeapons,
+          {
+            targetWeapons: input.targetWeapons,
+            dependentTargetWeaponIds: [targetA.id, targetB.id],
+          },
+        ),
+        dependentTargetWeaponIds: [targetA.id, targetB.id],
+        selectedBuildListEntryIds: selected.map(({ id }) => id),
+      },
+      DOMAIN_FIXTURE_TIME,
+    )
     const plan = buildPlan(snapshot, input.calculationContext, [
       ...persisted,
       ...generated,
@@ -388,6 +406,37 @@ describe('PlannerResultPersistenceService', () => {
           service.savePlannerOrchestrationResult(result, context),
         ).rejects.toMatchObject({ code: 'planner_state_changed' })
         expect(await storedPlanIds()).toEqual([])
+      },
+    ))
+
+  it('rejects the save when only the Plan-dependent Target execution state differs', () =>
+    withScenario(
+      async ({ service, result, context, plan, storedEntryIds, storedPlanIds }) => {
+        // Current RngState, Normal Counters, OwnedWeapons and TargetWeapons are
+        // untouched, so the RNG / Normal / OwnedWeapon hashes and the whole
+        // TargetWeapons hash all still match: only the fourth ExpectedPlanState
+        // component differs (DATA_MODEL 11.2).
+        const initial = plan.baseSnapshot.initialExecutionState
+        const altered = structuredClone(result)
+        if (!altered.plan) throw new Error('Expected a Plan')
+        altered.plan.baseSnapshot.initialExecutionState = {
+          ...initial,
+          targetExecutionStateHash: 'fnv1a32:ffffffff',
+        }
+        altered.plan.steps.forEach((step) => {
+          step.expectedStateBefore = { ...altered.plan!.baseSnapshot.initialExecutionState }
+          step.expectedStateAfter = { ...altered.plan!.baseSnapshot.initialExecutionState }
+        })
+        expect(initial.targetExecutionStateHash).not.toBe('fnv1a32:ffffffff')
+        await expect(
+          service.savePlannerOrchestrationResult(altered, context),
+        ).rejects.toMatchObject({ code: 'planner_state_changed' })
+        // Nothing of the transaction survives: no Plan and no generated Entry.
+        expect(await storedPlanIds()).toEqual([])
+        expect(await storedEntryIds()).toEqual([
+          'build-list.persisted.a',
+          'build-list.persisted.b',
+        ])
       },
     ))
 

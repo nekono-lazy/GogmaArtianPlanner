@@ -252,7 +252,6 @@ describe('Planner execution of the forced Reset Normal Artian route', () => {
       'create_normal_artian',
       'convert_normal_to_gogma',
       'reset_bonuses',
-      'reserve_weapon',
     ])
     const create = plan?.steps[0]
     // The Normal Counter is unknown, so nothing claims it advanced or did not.
@@ -264,13 +263,22 @@ describe('Planner execution of the forced Reset Normal Artian route', () => {
     })
     expect(create?.expectedResult?.restorationBonuses).toBeNull()
     expect(create?.expectedResult?.restorationBonusScope).toBeNull()
-    expect(create?.instruction).toContain('復元ボーナス内容は問いません')
+    // The blind production target is registered from the user's observation,
+    // never from fabricated slots (PLANNER_SPEC 16.4).
+    expect(create?.executionEffects).toMatchObject({
+      normalCreationRole: 'production_target',
+      registersTrackedWeapon: true,
+      observationBinding: { kind: 'normal_restoration_bonuses' },
+    })
+    expect(create?.inventoryChange?.addOwnedWeapon).toBeNull()
+    expect(create?.instruction).toContain('5 枠を入力')
     expect(plan?.steps[1].expectedResult?.restorationBonuses).toBeNull()
     expect(plan?.steps[2].expectedResult).toEqual(expect.objectContaining({
       restorationBonuses: resetResult(),
       restorationBonusScope: 'gogma_artian',
     }))
-    expect(plan?.steps[3].expectedResult?.shouldSecure).toBe(true)
+    expect(plan?.steps[2].expectedResult?.shouldSecure).toBe(true)
+    expect(plan?.steps[2].executionEffects?.targetCompletions).toHaveLength(1)
   })
 
   it('advances a confirmed Normal Counter even though the Route has no Counter position', async () => {
@@ -312,6 +320,7 @@ describe('Planner execution of the forced Reset Normal Artian route', () => {
       input.rngState,
       [{ ...confirmedCounter(), counter }],
       [],
+      { targetWeapons: [], dependentTargetWeaponIds: [] },
     ).normalCountersHash
     expect(create?.expectedStateBefore.normalCountersHash).toBe(hashAt(4))
     expect(create?.expectedStateAfter.normalCountersHash).toBe(hashAt(5))
@@ -438,7 +447,9 @@ describe('Planner execution of the forced Reset Normal Artian route', () => {
     // identical RNG transition is never collapsed into one shared action.
     expect(byType('create_normal_artian')).toHaveLength(2)
     expect(byType('convert_normal_to_gogma')).toHaveLength(2)
-    expect(byType('reserve_weapon')).toHaveLength(2)
+    expect(byType('reserve_weapon')).toHaveLength(0)
+    expect(plan?.steps.flatMap(({ executionEffects }) => executionEffects?.targetCompletions ?? []))
+      .toHaveLength(2)
     byType('create_normal_artian').forEach((step) => {
       expect(step.progressedTargetWeaponIds).toHaveLength(1)
     })

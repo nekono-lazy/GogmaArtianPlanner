@@ -27,7 +27,11 @@ export interface ProductionPlanSummary {
   createdAt: string
   totalStepCount: number
   targetWeaponCount: number
-  securedStepCount: number
+  /**
+   * The distinct TargetWeapons this Plan completes, or `null` when the Plan is
+   * of the legacy form without `executionEffects` and the count is unknown.
+   */
+  plannedCompletionTargetCount: number | null
   isLegacy: boolean
 }
 
@@ -99,22 +103,36 @@ export function groupPlanStepsByTargetWeapon(
 }
 
 /**
+ * Whether the Plan carries the execution effects that name its Target
+ * completions. A Plan with any Step lacking `executionEffects` is of the legacy
+ * form, and its completions are never reconstructed from `shouldSecure`.
+ */
+export function hasPlanTargetCompletionAuthority(plan: ProductionPlan): boolean {
+  return plan.steps.every((step) => step.executionEffects !== undefined)
+}
+
+/**
  * The Plan overview counts.
  *
- * `securedStepCount` counts only steps the Plan itself marks
- * `expectedResult.shouldSecure === true`; neither the Target count nor
- * `selectedBuildListEntryIds.length` is assumed to be a weapon count.
+ * `plannedCompletionTargetCount` is the number of distinct TargetWeapon IDs in
+ * `steps[].executionEffects.targetCompletions`, the only authority (UI_FLOW
+ * 11.0). A shared Step completing two Targets counts two, and a Target named
+ * twice counts once. Neither `expectedResult.shouldSecure`, the number of
+ * completing or reserve Steps, the Target count, nor
+ * `selectedBuildListEntryIds.length` is used; a legacy Plan reports `null`.
  */
 export function createProductionPlanSummary(
   plan: ProductionPlan,
 ): ProductionPlanSummary {
   const targetWeaponIds = new Set<TargetWeaponId>()
-  let securedStepCount = 0
+  const completedTargetWeaponIds = new Set<TargetWeaponId>()
   for (const step of plan.steps) {
     for (const id of getPlanStepRelatedTargetWeaponIds(step)) {
       targetWeaponIds.add(id)
     }
-    if (step.expectedResult?.shouldSecure === true) securedStepCount += 1
+    for (const { targetWeaponId } of step.executionEffects?.targetCompletions ?? []) {
+      completedTargetWeaponIds.add(targetWeaponId)
+    }
   }
   return {
     planId: plan.id,
@@ -122,7 +140,9 @@ export function createProductionPlanSummary(
     createdAt: plan.createdAt,
     totalStepCount: plan.steps.length,
     targetWeaponCount: targetWeaponIds.size,
-    securedStepCount,
+    plannedCompletionTargetCount: hasPlanTargetCompletionAuthority(plan)
+      ? completedTargetWeaponIds.size
+      : null,
     isLegacy: isLegacyProductionPlan(plan),
   }
 }

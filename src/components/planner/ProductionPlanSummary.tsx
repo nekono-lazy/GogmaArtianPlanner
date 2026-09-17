@@ -55,8 +55,9 @@ function SummaryFigure({
 /**
  * The Plan overview, derived only from the exact persisted Plan.
  *
- * The secured-weapon count comes from the steps the Plan itself marks
- * `expectedResult.shouldSecure === true`; neither the Target count nor
+ * The planned completion count is the distinct Targets of
+ * `executionEffects.targetCompletions` (UI_FLOW 11.0); a legacy Plan shows it
+ * as unknown. Neither the Target count nor
  * `selectedBuildListEntryIds.length` is treated as a weapon count. The
  * adopted BuildListEntry count is shown as its own figure, named as an Entry
  * count, so the two are never confused.
@@ -102,7 +103,15 @@ export function ProductionPlanSummary({ plan }: { plan: ProductionPlan }) {
         >
           <SummaryFigure label="全ステップ数" value={summary.totalStepCount} numeric />
           <SummaryFigure label="目標武器数" value={summary.targetWeaponCount} numeric />
-          <SummaryFigure label="確保予定数" value={summary.securedStepCount} numeric />
+          {summary.plannedCompletionTargetCount === null ? (
+            <SummaryFigure label="完成予定の目標武器数" value="不明（旧形式の計画）" />
+          ) : (
+            <SummaryFigure
+              label="完成予定の目標武器数"
+              value={summary.plannedCompletionTargetCount}
+              numeric
+            />
+          )}
           <SummaryFigure
             label="採用候補（BuildListEntry）"
             value={plan.selectedBuildListEntryIds.length}

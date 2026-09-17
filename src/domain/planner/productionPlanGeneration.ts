@@ -5,18 +5,13 @@ import type {
   ExpectedPlanState,
   MaterialRequirement,
   PlanStep,
-  PlanStepOperationType,
   PlanningInputSnapshot,
   ProductionPlan,
   RejectedBuildListEntry,
   TargetWeapon,
   TargetWeaponId,
 } from '../models/publicTypes'
-import {
-  createExpectedPlanState,
-  hashStableValue,
-  stableStringify,
-} from '../models/publicTypes'
+import { hashStableValue } from '../models/publicTypes'
 import { createTargetDefinitionHash } from '../buildList'
 import { runPlannerBeamSearch } from './plannerBeamSearch'
 import {
@@ -28,10 +23,11 @@ import {
 } from './plannerCheckpoints'
 import {
   replayPlannerSearchTrace,
-  type PlannerPlanStepDraft,
   type PlannerTraceReplayResult,
   type PlannerTraceReplayIssue,
 } from './plannerTraceReplay'
+import { PlannerPlanGenerationError } from './plannerPlanGenerationError'
+import { projectProductionPlanExecution } from './productionPlanExecutionProjection'
 import type {
   CreateProductionPlanCalculation,
   PlannerBeamSearchResult,
@@ -46,13 +42,6 @@ import type {
 
 function compareStableStrings(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
-}
-
-function sameExpectedPlanState(
-  left: ExpectedPlanState,
-  right: ExpectedPlanState,
-): boolean {
-  return stableStringify(left) === stableStringify(right)
 }
 
 function normalizeCandidateBonuses(candidate: BuildCandidate) {
@@ -179,7 +168,16 @@ function normalizeCheckpointPinMeaning(entry: BuildListEntry) {
   return { skill, bonus }
 }
 
-/** Stable semantic fingerprint for the targets on which a Plan was calculated. */
+/**
+ * `PlanningInputSnapshot.targetWeaponsHash`: the planning-input normalization
+ * of every PlannerInput Target (`docs/DATA_MODEL.md` 11.2).
+ *
+ * It is its own contract, never `createTargetDefinitionHash()` reused: the
+ * performance definition hash is one field of it, and `priority`, `isEnabled`,
+ * `preferredOwnedWeaponId` and `lifecycleStatus` - planning input that no
+ * longer stales a BuildListEntry - are added beside it. `name`, `memo`,
+ * completion metadata and timestamps stay out.
+ */
 export function createPlanningTargetWeaponsHash(
   targetWeapons: readonly TargetWeapon[],
 ): string {
@@ -188,9 +186,66 @@ export function createPlanningTargetWeaponsHash(
       .map((target) => ({
         id: target.id,
         definitionHash: createTargetDefinitionHash(target),
+        priority: target.priority,
+        isEnabled: target.isEnabled,
+        preferredOwnedWeaponId: target.preferredOwnedWeaponId,
+        lifecycleStatus: target.lifecycleStatus,
       }))
       .sort((left, right) => compareStableStrings(left.id, right.id)),
   )
+}
+
+/**
+ * `PlanningInputSnapshot.dependentTargetDefinitionsHash`: the planning
+ * definition of the Plan-dependent Targets only (`docs/PLANNER_SPEC.md` 16.6).
+ *
+ * `preferredOwnedWeaponId` and `lifecycleStatus` are excluded because Execution
+ * itself links, relinks, clears and completes them as normal progress; the
+ * expected `targetExecutionStateHash` of each Step verifies those instead. A
+ * Target the Plan does not depend on never enters, so adding or changing one
+ * leaves the hash unchanged. A dependent Target missing from the collection
+ * hashes as missing.
+ */
+export function createDependentTargetDefinitionsHash(
+  targetWeapons: readonly TargetWeapon[],
+  dependentTargetWeaponIds: readonly TargetWeaponId[],
+): string {
+  const targetById = new Map(targetWeapons.map((target) => [target.id, target]))
+  return hashStableValue(
+    [...new Set(dependentTargetWeaponIds)]
+      .sort(compareStableStrings)
+      .map((id) => {
+        const target = targetById.get(id)
+        return target
+          ? {
+              id,
+              definitionHash: createTargetDefinitionHash(target),
+              priority: target.priority,
+              isEnabled: target.isEnabled,
+            }
+          : { id, missing: true }
+      }),
+  )
+}
+
+function normalizePlanningBuildListEntry(entry: BuildListEntry) {
+  return {
+    id: entry.id,
+    candidateSnapshot: normalizeCandidateSnapshot(entry.candidateSnapshot),
+    // The user's selected intermediate states are a hard Planner
+    // constraint and the improvement preference steers the Plan, so
+    // changing either changes what this Plan had to achieve and must make
+    // an existing Plan a recalculation target (`docs/PLANNER_SPEC.md` 7.5.5).
+    intermediateStateSelection: {
+      checkpointPin: normalizeCheckpointPinMeaning(entry),
+      improvementPreference:
+        entry.intermediateStateSelection?.improvementPreference ?? 'planner',
+    },
+    targetDefinitionHash: entry.targetDefinitionHash,
+    searchStateHash: entry.searchStateHash,
+    referencedOwnedWeaponsHash: entry.referencedOwnedWeaponsHash,
+    calculationContext: entry.calculationContext,
+  }
 }
 
 /**
@@ -202,111 +257,85 @@ export function createPlanningBuildListEntriesHash(
 ): string {
   return hashStableValue(
     entries
-      .map((entry) => ({
-        id: entry.id,
-        candidateSnapshot: normalizeCandidateSnapshot(entry.candidateSnapshot),
-        // The user's selected intermediate states are a hard Planner
-        // constraint and the improvement preference steers the Plan, so
-        // changing either changes what this Plan had to achieve and must make
-        // an existing Plan a recalculation target (`docs/PLANNER_SPEC.md` 7.5.5).
-        intermediateStateSelection: {
-          checkpointPin: normalizeCheckpointPinMeaning(entry),
-          improvementPreference:
-            entry.intermediateStateSelection?.improvementPreference ?? 'planner',
-        },
-        targetDefinitionHash: entry.targetDefinitionHash,
-        searchStateHash: entry.searchStateHash,
-        referencedOwnedWeaponsHash: entry.referencedOwnedWeaponsHash,
-        calculationContext: entry.calculationContext,
-      }))
+      .map(normalizePlanningBuildListEntry)
       .sort((left, right) => compareStableStrings(left.id, right.id)),
   )
 }
 
-export function createPlanningInputSnapshot(
-  input: PlannerInput,
-  createdAt: PlanningInputSnapshot['createdAt'],
-): PlanningInputSnapshot {
-  return {
-    initialExecutionState: createExpectedPlanState(
-      input.rngState,
-      input.normalCounters,
-      input.ownedWeapons,
-    ),
-    targetWeaponsHash: createPlanningTargetWeaponsHash(input.targetWeapons),
-    buildListEntriesHash: createPlanningBuildListEntriesHash(input.buildListEntries),
-    calculationContext: structuredClone(input.calculationContext),
-    createdAt,
-  }
-}
-
-const operationPresentation: Record<
-  PlanStepOperationType,
-  { title: string; instruction: string }
-> = {
-  create_normal_artian: {
-    title: '通常アーティアを作成',
-    instruction: '対象の通常アーティアを1回作成し、結果を確認してください。',
-  },
-  convert_normal_to_gogma: {
-    title: '巨戟アーティアへ変換',
-    instruction: '対象の通常アーティアを巨戟アーティアへ変換し、結果を確認してください。',
-  },
-  reset_bonuses: {
-    title: '復元ボーナスを再抽選',
-    instruction: '復元ボーナスを再抽選し、結果を確認してください。',
-  },
-  keep_bonuses: {
-    title: '復元ボーナスを保持して再抽選',
-    instruction: '指定された復元ボーナスを保持して再抽選し、結果を確認してください。',
-  },
-  reset_skills: {
-    title: 'スキルを再付与',
-    instruction: 'スキルを再付与し、結果を確認してください。',
-  },
-  reserve_weapon: {
-    title: '候補武器を確保',
-    instruction: '候補武器を確保し、結果を確認してください。',
-  },
-  confirm_result: {
-    title: '結果を確認',
-    instruction: '操作結果を確認してください。',
-  },
+/**
+ * `PlanningInputSnapshot.dependentBuildListEntriesHash`: the
+ * `buildListEntriesHash` normalization of the Plan's selected Entries only
+ * (`docs/DATA_MODEL.md` 11.2). Adding an Entry the Plan does not use never
+ * moves it; changing a selected Entry's snapshot, checkpoint selection or
+ * improvement preference does. A selected Entry missing from the collection
+ * hashes as missing.
+ */
+export function createDependentBuildListEntriesHash(
+  entries: readonly BuildListEntry[],
+  selectedBuildListEntryIds: readonly BuildListEntryId[],
+): string {
+  const entryById = new Map(entries.map((entry) => [entry.id, entry]))
+  return hashStableValue(
+    [...new Set(selectedBuildListEntryIds)]
+      .sort(compareStableStrings)
+      .map((id) => {
+        const entry = entryById.get(id)
+        return entry ? normalizePlanningBuildListEntry(entry) : { id, missing: true }
+      }),
+  )
 }
 
 /**
- * The blind Normal creation instruction (`docs/SEARCH_SPEC.md` 6.1.1).
- *
- * The forged weapon's restoration bonuses were never predicted, and the very
- * next bonus amendment redraws all five slots, so the player is told plainly
- * that the created contents do not matter here.
+ * The Plan-dependent Targets of a persisted ProductionPlan
+ * (`docs/PLANNER_SPEC.md` 16.5): the Targets of its selected Entries and every
+ * Target a Step names as its primary Target, a progressed Target, a Target link
+ * or a Target completion. A selected Entry absent from `buildListEntries`
+ * contributes nothing here; callers that require it verify it separately.
  */
-const blindCreateNormalArtianInstruction =
-  '対象の通常アーティアを 1 本作成してください。' +
-  'この時点の復元ボーナス内容は問いません。' +
-  '後の「復元ボーナスを再抽選」で 5 枠すべてが引き直されます。'
-
-/** Pure deterministic presentation text; no game UI labels or navigation are assumed. */
-export function createPlanStepPresentation(
-  operationType: PlanStepOperationType,
-  target: TargetWeapon | null,
-  isBlindNormalCreation = false,
-): Pick<PlanStep, 'title' | 'instruction'> {
-  const base = operationPresentation[operationType]
-  const targetSuffix = target === null ? '' : ` 「${target.name}」用`
-  return {
-    title: `${base.title}${targetSuffix}`,
-    instruction:
-      isBlindNormalCreation && operationType === 'create_normal_artian'
-        ? blindCreateNormalArtianInstruction
-        : base.instruction,
-  }
+export function collectProductionPlanDependentTargetWeaponIds(
+  plan: Pick<ProductionPlan, 'selectedBuildListEntryIds' | 'steps'>,
+  buildListEntries: readonly BuildListEntry[],
+): TargetWeaponId[] {
+  const entryById = new Map(buildListEntries.map((entry) => [entry.id, entry]))
+  return [
+    ...new Set([
+      ...plan.selectedBuildListEntryIds.flatMap((id) => {
+        const entry = entryById.get(id)
+        return entry ? [entry.targetWeaponId] : []
+      }),
+      ...plan.steps.flatMap((step) => [
+        ...(step.targetWeaponId === null ? [] : [step.targetWeaponId]),
+        ...(step.progressedTargetWeaponIds ?? []),
+        ...(step.executionEffects?.targetLinks.map(({ targetWeaponId }) => targetWeaponId) ?? []),
+        ...(step.executionEffects?.targetCompletions.map(({ targetWeaponId }) => targetWeaponId) ?? []),
+      ]),
+    ]),
+  ].sort(compareStableStrings)
 }
 
-export class PlannerPlanGenerationError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'PlannerPlanGenerationError'
+export function createPlanningInputSnapshot(
+  input: PlannerInput,
+  projection: {
+    initialExecutionState: ExpectedPlanState
+    dependentTargetWeaponIds: readonly TargetWeaponId[]
+    selectedBuildListEntryIds: readonly BuildListEntryId[]
+  },
+  createdAt: PlanningInputSnapshot['createdAt'],
+): PlanningInputSnapshot {
+  return {
+    initialExecutionState: structuredClone(projection.initialExecutionState),
+    targetWeaponsHash: createPlanningTargetWeaponsHash(input.targetWeapons),
+    buildListEntriesHash: createPlanningBuildListEntriesHash(input.buildListEntries),
+    dependentTargetDefinitionsHash: createDependentTargetDefinitionsHash(
+      input.targetWeapons,
+      projection.dependentTargetWeaponIds,
+    ),
+    dependentBuildListEntriesHash: createDependentBuildListEntriesHash(
+      input.buildListEntries,
+      projection.selectedBuildListEntryIds,
+    ),
+    calculationContext: structuredClone(input.calculationContext),
+    createdAt,
   }
 }
 
@@ -315,91 +344,6 @@ function replayErrorMessage(issues: readonly PlannerTraceReplayIssue[]): string 
     .map(({ code, message, actionIndex }) =>
       `[${code}] actionIndex=${actionIndex ?? 'null'}: ${message}`)
     .join('; ')
-}
-
-/**
- * Observational Target attribution for one physical PlanStep
- * (PLANNER_SPEC 11.0-B). `draft.progressedBuildListEntryIds` is the authority,
- * so a shared action reports every Target whose Route it advanced without
- * touching the primary `targetWeaponId` / `buildListEntryId` semantics. An
- * unknown BuildListEntry is a Plan generation inconsistency, never a silent
- * omission.
- */
-function createProgressedTargetWeaponIds(
-  draft: PlannerPlanStepDraft,
-  entriesById: ReadonlyMap<BuildListEntryId, BuildListEntry>,
-): TargetWeaponId[] {
-  const targetWeaponIds = draft.progressedBuildListEntryIds.map((entryId) => {
-    const entry = entriesById.get(entryId)
-    if (!entry) {
-      throw new PlannerPlanGenerationError(
-        `PlanStep draft references a missing BuildListEntry '${entryId}'.`,
-      )
-    }
-    return entry.targetWeaponId
-  })
-  return [...new Set(targetWeaponIds)].sort(compareStableStrings)
-}
-
-export function createPlanStepsFromDrafts(
-  drafts: readonly PlannerPlanStepDraft[],
-  input: PlannerInput,
-  dependencies: PlannerDependencies,
-  initialExecutionState: ExpectedPlanState,
-): PlanStep[] {
-  const targetsById = new Map(input.targetWeapons.map((target) => [target.id, target]))
-  const entriesById = new Map(input.buildListEntries.map((entry) => [entry.id, entry]))
-  const steps = drafts.map((draft, index) => {
-    const target = draft.targetWeaponId === null
-      ? null
-      : targetsById.get(draft.targetWeaponId) ?? null
-    const presentation = createPlanStepPresentation(
-      draft.operationType,
-      target,
-      draft.isBlindNormalCreation,
-    )
-    return {
-      id: dependencies.idFactory.planStepId(),
-      order: index + 1,
-      operationType: draft.operationType,
-      ...presentation,
-      targetWeaponId: draft.targetWeaponId,
-      buildListEntryId: draft.primaryBuildListEntryId,
-      progressedTargetWeaponIds: createProgressedTargetWeaponIds(draft, entriesById),
-      candidateId: draft.candidateId,
-      ownedWeaponId: draft.ownedWeaponId,
-      expectedResult: structuredClone(draft.expectedResult),
-      checkpointMilestones: structuredClone(draft.checkpointMilestones),
-      expectedStateBefore: structuredClone(draft.expectedStateBefore),
-      expectedStateAfter: structuredClone(draft.expectedStateAfter),
-      inventoryChange: structuredClone(draft.inventoryChange),
-      rngAdvance: structuredClone(draft.rngAdvance),
-      requiresUserConfirmation: true,
-      isCompleted: false,
-      completedAt: null,
-      debug: structuredClone(draft.debug),
-    } satisfies PlanStep
-  })
-
-  if (
-    steps.length > 0 &&
-    !sameExpectedPlanState(steps[0].expectedStateBefore, initialExecutionState)
-  ) {
-    throw new PlannerPlanGenerationError(
-      'The first PlanStep expectedStateBefore differs from PlanningInputSnapshot.initialExecutionState.',
-    )
-  }
-  for (let index = 0; index + 1 < steps.length; index += 1) {
-    if (!sameExpectedPlanState(
-      steps[index].expectedStateAfter,
-      steps[index + 1].expectedStateBefore,
-    )) {
-      throw new PlannerPlanGenerationError(
-        `PlanStep expected-state chain is broken between orders ${steps[index].order} and ${steps[index + 1].order}.`,
-      )
-    }
-  }
-  return steps
 }
 
 function rejectedReason(
@@ -629,16 +573,24 @@ export async function createProductionPlanWithObserver(
   }
 
   const now = dependencies.clock.now()
-  const baseSnapshot = createPlanningInputSnapshot(input, now)
   const productionPlanId = dependencies.idFactory.productionPlanId()
-  const steps = createPlanStepsFromDrafts(
-    replay.drafts,
-    input,
-    dependencies,
-    baseSnapshot.initialExecutionState,
-  )
   const selectedBuildListEntryIds = [...new Set(beamResult.bestState.selectedBuildListEntryIds)]
     .sort(compareStableStrings)
+  const projection = projectProductionPlanExecution({
+    input,
+    drafts: replay.drafts,
+    selectedBuildListEntryIds,
+    searchFinalOwnedWeapons: beamResult.bestState.simulatedInventory.ownedWeapons,
+    dependencies,
+    productionPlanId,
+    now,
+  })
+  const steps = projection.steps
+  const baseSnapshot = createPlanningInputSnapshot(
+    input,
+    { ...projection, selectedBuildListEntryIds },
+    now,
+  )
   assertCheckpointRequirementsSatisfied(
     beamInputEntries(input, beamResult),
     selectedBuildListEntryIds,
