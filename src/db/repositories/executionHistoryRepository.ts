@@ -3,16 +3,13 @@ import type {
   ExecutionHistoryId,
   ProductionPlanId,
 } from '../../domain/models/publicTypes'
+import { compareExecutionHistoryOrder } from '../../domain/models/planning'
 import { validateExecutionHistory } from '../../domain/models/validation'
 import { appDatabase, type AppDatabase } from '../AppDatabase'
 import { assertRepositoryValidation } from '../repositoryError'
 
 function sortHistory(history: ExecutionHistory[]): ExecutionHistory[] {
-  return history.sort(
-    (left, right) =>
-      left.createdAt.localeCompare(right.createdAt) ||
-      left.id.localeCompare(right.id),
-  )
+  return history.sort(compareExecutionHistoryOrder)
 }
 
 export class ExecutionHistoryRepository {

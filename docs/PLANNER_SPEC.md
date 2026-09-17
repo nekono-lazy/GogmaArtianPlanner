@@ -4465,7 +4465,7 @@ Execution Plan契約（16.3 / 16.5 / 16.6 / 16.11のhash、projection、`executi
 適用位置と完成時保護）は実装済みである。Execution runtimeのうち、Plan開始（`draft` -> `active`）と
 `confirmed_expected` のStep確定（blind観測値入力、`confirm_owned_ideal`、Undo Snapshot生成、最終Stepの
 Plan completedを含む）、および想定外結果（`actual_result_different`）・操作内容不明（`operation_uncertain`）の
-記録（16.15）は実装済みである。妥協品として終了、Undo、ゲーム内セーブ地点の記録 / 復元、Plan破棄、
+記録（16.15）、最新ExecutionHistoryのUndo（16.16）は実装済みである。妥協品として終了、ゲーム内セーブ地点の記録 / 復元、Plan破棄、
 再計画採用、Planを壊す変更の警告、Execution Navigator UI（RNG再同定への誘導表示を含む）などは
 後続の実装PRが本章をauthorityとして実装する。本章と矛盾する旧記述（Execution上の独立した「確保」操作、
 Target / Build List変更による一律stale、reserve時の既存保護維持など）は本改訂で
@@ -5257,6 +5257,26 @@ transactionで正確に戻す（[DATA_MODEL.md](./DATA_MODEL.md) 12）。
 
 Undo自体のExecutionHistoryは追加しない。Snapshotどおり復元したPlanのstatusと再計算理由を
 そのまま使い、現在値との差分を新たに推測しない。
+
+実装上の確定事項（Undo Runtime PR）。
+
+- Undo要求は取り消すExecutionHistory IDを指定する。transaction内で、それがPlanの最新
+  ExecutionHistory（`createdAt` 昇順、同時刻は `id` 昇順で最後）であることを再確認し、違えば拒否する。
+  表示後に追加された新しい記録を代わりに取り消さない
+- `completed` Planは、最新記録が `confirmed_expected` で、Snapshot PlanのただひとつのStep未完了が
+  その記録のStepであり、現在Planの `completedAt`・そのStepの `completedAt` が記録の `createdAt` と一致する
+  場合だけ取り消せる。`abandoned` Planは、最新記録が `finished_as_compromise` で、
+  `abandonmentReason = finished_as_compromise`、`abandonedAt` が記録の `createdAt` と一致する場合だけ取り消せる
+- 現行Validationを満たさない記録、legacy action、Snapshot Planが記録Stepを現在Stepとする `active` Planでない
+  記録は推測補完せず拒否する
+- 復元値はSnapshot本体そのものであり、RNG予測の再実行、Counter差分の逆算、timestampの付け直しをしない。
+  NormalArtianCounterはcollection全体をSnapshotで置き換える
+- ゲーム内セーブ地点は、取り消す記録が境界（`lastExecutionHistoryId`）なら削除し、Snapshotの古いセーブ地点を
+  代わりに復活させない。取り消す記録の終端遷移（`completed` / `abandoned`）が削除したセーブ地点は
+  Snapshotから復元する。それ以外は変更しない
+- 書き込み前に復元後のRngState、NormalArtianCounter、OwnedWeapon、TargetWeapon、ProductionPlan、
+  Target優先起点collection、残す / 復元するセーブ地点とその参照を検証し、不正なら何も書かない。
+  RNG予測やMaster availabilityの再判定はしない
 
 ### 16.17 Persistence、Export / Import、versioning
 

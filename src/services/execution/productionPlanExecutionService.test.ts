@@ -2,7 +2,7 @@ import Dexie from 'dexie'
 import { describe, expect, it } from 'vitest'
 import { AppDatabase } from '../../db/AppDatabase'
 import { RepositoryError } from '../../db/repositoryError'
-import { ExecutionRuntimeError, withRecalculationReason } from '../../domain/execution'
+import { ExecutionRuntimeError, prepareExecutionUndo, withRecalculationReason } from '../../domain/execution'
 import type {
   BuildListEntry,
   BuildRoute,
@@ -17,6 +17,7 @@ import type {
   TargetWeapon,
 } from '../../domain/models/publicTypes'
 import {
+  compareExecutionHistoryOrder,
   executionSavePointIdForPlan,
   validateExecutionHistory,
   validateProductionPlan,
@@ -1341,4 +1342,441 @@ describe('recalculation reasons', () => {
     expect(withRecalculationReason(['target_changed'], 'unexpected_result')).toEqual(['target_changed', 'unexpected_result'])
     expect(withRecalculationReason(['unexpected_result', 'target_changed'], 'unexpected_result')).toEqual(['unexpected_result', 'target_changed'])
   })
+})
+
+async function latestHistoryOf(database: AppDatabase, plan: ProductionPlan): Promise<ExecutionHistory> {
+  const history = await database.executionHistory.where('planId').equals(plan.id).toArray()
+  return history.sort(compareExecutionHistoryOrder).at(-1) as ExecutionHistory
+}
+
+async function undoLatest(service: ProductionPlanExecutionService, database: AppDatabase, plan: ProductionPlan) {
+  const latest = await latestHistoryOf(database, plan)
+  return service.undoLatestExecution({ planId: plan.id, executionHistoryId: latest.id })
+}
+
+describe('Execution Undo', () => {
+  it('restores an intermediate confirmed_expected Step exactly, Targets relinked away included', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      const before = await dump(database)
+
+      const { history } = await confirmCurrent(service, database, fixture.plan)
+      expect((await dump(database)).rngState).not.toEqual(before.rngState)
+      expect(history.undoSnapshot.affectedTargetWeaponsBefore).toHaveLength(2)
+      const { plan, undoneExecutionHistoryId } = await service.undoLatestExecution({ planId: fixture.plan.id, executionHistoryId: history.id })
+
+      expect(undoneExecutionHistoryId).toBe(history.id)
+      expect(plan).toEqual(history.undoSnapshot.productionPlanBefore)
+      expect(plan).toMatchObject({ status: 'active', currentStepId: stepOf(fixture.plan, 0).id })
+      expect(plan.steps[0]).toMatchObject({ isCompleted: false, completedAt: null })
+      // Every entity, timestamps included, is the state before the Step; no Undo record is added.
+      expect(await dump(database)).toEqual(before)
+    }))
+
+  it('deletes a registered production-target Normal and restores the Normal Counter and Target link', () =>
+    withDatabase(async (database) => {
+      const fixture = await newNormalFixture(1)
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      const before = await dump(database)
+      const { history } = await confirmCurrent(service, database, fixture.plan)
+      const tracked = history.undoSnapshot.addedOwnedWeaponIds[0]
+      expect(await database.ownedWeapons.get(tracked)).toMatchObject({ executionInProgress: { productionPlanId: fixture.plan.id } })
+
+      await undoLatest(service, database, fixture.plan)
+
+      expect(await database.ownedWeapons.get(tracked)).toBeUndefined()
+      expect(await dump(database)).toEqual(before)
+    }))
+
+  it('restores a converted owned Normal under the same ID as the Normal it was', () =>
+    withDatabase(async (database) => {
+      const fixture = await ownedNormalFixture()
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      const before = await dump(database)
+      const source = fixture.built.input.ownedWeapons[0]
+      await confirmCurrent(service, database, fixture.plan)
+      expect(await database.ownedWeapons.get(source.id)).toMatchObject({ kind: 'gogma' })
+
+      await undoLatest(service, database, fixture.plan)
+
+      expect(await database.ownedWeapons.get(source.id)).toEqual(source)
+      expect(await dump(database)).toEqual(before)
+    }))
+
+  it('restores the status label a reached compromise checkpoint wrote', () =>
+    withDatabase(async (database) => {
+      const source = orchestrationSource('owned.execution.checkpoint', { seriesSkillId: IDEAL_SERIES_SKILL_ID })
+      const goal = orchestrationTarget('target.execution.checkpoint')
+      const entry = checkpointBonusEntry('entry.execution.checkpoint', goal, source.id, source)
+      const fixture = await planFor(orchestrationScenario({
+        targets: [goal],
+        entries: [entry],
+        ownedWeapons: [source],
+        engine: { resetResultAt: checkpointBonusResultAt },
+      }))
+      const labelled = fixture.plan.steps.findIndex((step) => (step.executionEffects?.compromiseLabels.length ?? 0) > 0)
+      expect(labelled).toBeGreaterThanOrEqual(0)
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      for (let index = 0; index < labelled; index += 1) await confirmCurrent(service, database, fixture.plan)
+      const before = await dump(database)
+      await confirmCurrent(service, database, fixture.plan)
+      expect(await database.ownedWeapons.get(source.id)).toMatchObject({ status: 'practical' })
+
+      await undoLatest(service, database, fixture.plan)
+
+      expect(await database.ownedWeapons.get(source.id)).toMatchObject({ status: 'unclassified' })
+      expect(await dump(database)).toEqual(before)
+    }))
+
+  it('reopens a completed Plan: final Step, Ideal weapon, completed Target, in-progress weapons and the deleted save point', () =>
+    withDatabase(async (database) => {
+      const unrelated = normalWeapon('owned.execution.unrelated')
+      const fixture = await existingGogmaFixture([unrelated])
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      const first = await confirmCurrent(service, database, fixture.plan)
+      const savePoint = await putSavePoint(database, fixture.plan, first.history.id, first.history.createdAt)
+      await database.ownedWeapons.put({ ...unrelated, executionInProgress: { productionPlanId: fixture.plan.id, startedAt: first.history.createdAt } })
+      const before = await dump(database)
+      const source = fixture.built.input.ownedWeapons[0]
+      const goal = fixture.built.input.targetWeapons[0]
+
+      const last = await confirmCurrent(service, database, fixture.plan)
+      expect(last.plan.status).toBe('completed')
+      expect(await database.executionSavePoints.count()).toBe(0)
+      expect(await database.targetWeapons.get(goal.id)).toMatchObject({ lifecycleStatus: 'completed' })
+
+      const { plan } = await undoLatest(service, database, fixture.plan)
+
+      expect(plan).toMatchObject({ status: 'active', currentStepId: stepOf(fixture.plan, 1).id, completedAt: null })
+      expect(plan.steps[1]).toMatchObject({ isCompleted: false, completedAt: null })
+      expect(await database.ownedWeapons.get(source.id)).toMatchObject({ status: 'unclassified', isProtected: false, executionInProgress: { productionPlanId: fixture.plan.id } })
+      expect(await database.ownedWeapons.get(unrelated.id)).toMatchObject({ executionInProgress: { productionPlanId: fixture.plan.id } })
+      expect(await database.targetWeapons.get(goal.id)).toMatchObject({ lifecycleStatus: 'active', preferredOwnedWeaponId: source.id, completedAt: null })
+      expect(await database.executionSavePoints.toArray()).toEqual([savePoint])
+      expect(await dump(database)).toEqual(before)
+
+      // The reopened final Step can be confirmed again.
+      expect((await confirmCurrent(service, database, fixture.plan)).plan.status).toBe('completed')
+    }))
+
+  it('removes a blind observation with its record so the Step is observed again from scratch', () =>
+    withDatabase(async (database) => {
+      const fixture = await blindFixture()
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      const tracked = stepOf(fixture.plan, 0).executionEffects?.trackedOwnedWeaponId as OwnedWeaponId
+      const before = await dump(database)
+
+      await confirmCurrent(service, database, fixture.plan, belowPracticalBonuses())
+      await undoLatest(service, database, fixture.plan)
+      expect(await dump(database)).toEqual(before)
+
+      // A second, different observation is the only binding authority now.
+      const second = await confirmCurrent(service, database, fixture.plan, practicalBonuses())
+      expect(second.history.actualResult?.restorationBonuses).toEqual(practicalBonuses())
+      expect(await database.executionHistory.count()).toBe(1)
+      expect(await database.ownedWeapons.get(tracked)).toMatchObject({ restorationBonuses: practicalBonuses() })
+      await confirmCurrent(service, database, fixture.plan)
+      expect(await database.ownedWeapons.get(tracked)).toMatchObject({ kind: 'gogma', restorationBonuses: practicalBonuses() })
+      expect((await confirmCurrent(service, database, fixture.plan)).plan.status).toBe('completed')
+    }))
+
+  it('undoes actual_result_different: stale -> active, Counter, actual weapon, Target link and Step all restored', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingResetFixture()
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      const before = await dump(database)
+      const step = stepOf(fixture.plan, 0)
+      await recordDifferent(service, database, fixture.plan, bonusResult(differentBonuses(step.expectedResult?.restorationBonuses), 'gogma_artian'))
+      expect((await currentPlan(database, fixture.plan)).status).toBe('stale')
+
+      const { plan } = await undoLatest(service, database, fixture.plan)
+
+      expect(plan).toMatchObject({ status: 'active', currentStepId: step.id, recalculationReasons: [] })
+      expect(plan.steps[0]).toMatchObject({ isCompleted: false, completedAt: null })
+      expect((await database.rngState.get('current'))?.gogmaCounter.value).toBe(CONSTRAINED_START_GOGMA_COUNTER)
+      expect(await dump(database)).toEqual(before)
+
+      // The same Step is executable again.
+      expect((await confirmCurrent(service, database, fixture.plan)).plan.status).toBe('completed')
+    }))
+
+  it('undoes operation_uncertain back to active and keeps a save point that is not its boundary', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      const first = await confirmCurrent(service, database, fixture.plan)
+      const savePoint = await putSavePoint(database, fixture.plan, first.history.id, first.history.createdAt)
+      const before = await dump(database)
+      const current = (await currentPlan(database, fixture.plan)).currentStepId as PlanStep['id']
+      await service.recordOperationUncertain({ planId: fixture.plan.id, planStepId: current })
+
+      const { plan } = await undoLatest(service, database, fixture.plan)
+
+      expect(plan).toMatchObject({ status: 'active', currentStepId: current, recalculationReasons: [] })
+      expect(await database.executionSavePoints.toArray()).toEqual([savePoint])
+      expect(await database.executionHistory.toArray()).toEqual([first.history])
+      expect(await dump(database)).toEqual(before)
+    }))
+
+  it('undoes only the latest ExecutionHistory the request names', () =>
+    withDatabase(async (database) => {
+      const fixture = await newNormalFixture(3)
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      const start = await dump(database)
+      const first = await confirmCurrent(service, database, fixture.plan)
+      const afterFirst = await dump(database)
+      const second = await confirmCurrent(service, database, fixture.plan)
+      const otherPlanId = 'plan.execution.other' as ProductionPlan['id']
+
+      await expectRefusal(() => service.undoLatestExecution({ planId: fixture.plan.id, executionHistoryId: first.history.id }), database, 'undo_history_not_latest')
+      await expectRefusal(() => service.undoLatestExecution({ planId: fixture.plan.id, executionHistoryId: 'history.unknown' as ExecutionHistoryId }), database, 'undo_history_not_found')
+      await expectRefusal(() => service.undoLatestExecution({ planId: 'plan.unknown' as ProductionPlan['id'], executionHistoryId: second.history.id }), database, 'plan_not_found')
+      await database.productionPlans.put({ ...structuredClone(fixture.plan), id: otherPlanId })
+      await expectRefusal(() => service.undoLatestExecution({ planId: otherPlanId, executionHistoryId: second.history.id }), database, 'undo_history_not_found')
+      await database.productionPlans.delete(otherPlanId)
+
+      await service.undoLatestExecution({ planId: fixture.plan.id, executionHistoryId: second.history.id })
+      expect(await dump(database)).toEqual(afterFirst)
+      expect(await database.executionHistory.toArray()).toEqual([first.history])
+      await service.undoLatestExecution({ planId: fixture.plan.id, executionHistoryId: first.history.id })
+      expect(await dump(database)).toEqual(start)
+    }))
+
+  it('orders ExecutionHistory recorded at the same time by ID', () =>
+    withDatabase(async (database) => {
+      const fixture = await newNormalFixture(3)
+      await seed(database, fixture)
+      const ids = ['history.same-time.a', 'history.same-time.b']
+      const service = executionService(database, fixture.built, {
+        idFactory: { executionHistoryId: () => ids.shift() as ExecutionHistoryId },
+        clock: { now: () => '2026-09-17T02:00:00.000Z' },
+      })
+      await service.startProductionPlan(fixture.plan.id)
+      await confirmCurrent(service, database, fixture.plan)
+      const second = await confirmCurrent(service, database, fixture.plan)
+      expect(second.history.id).toBe('history.same-time.b')
+
+      await expectRefusal(
+        () => service.undoLatestExecution({ planId: fixture.plan.id, executionHistoryId: 'history.same-time.a' as ExecutionHistoryId }),
+        database,
+        'undo_history_not_latest',
+      )
+      // The order the histories are handed over in is never the authority.
+      const decided = prepareExecutionUndo({
+        plan: await currentPlan(database, fixture.plan),
+        executionHistoryId: second.history.id,
+        state: {
+          normalCounters: await database.normalArtianCounters.toArray(),
+          ownedWeapons: await database.ownedWeapons.toArray(),
+          targetWeapons: await database.targetWeapons.toArray(),
+          planExecutionHistory: (await database.executionHistory.toArray()).reverse(),
+          executionSavePoint: null,
+        },
+      })
+      expect(decided.deletedExecutionHistoryId).toBe(second.history.id)
+      await service.undoLatestExecution({ planId: fixture.plan.id, executionHistoryId: second.history.id })
+      expect((await database.executionHistory.toArray()).map(({ id }) => id)).toEqual(['history.same-time.a'])
+    }))
+
+  it.each(['user_abandoned', 'replan_adopted', 'breaking_change_approved', 'finished_as_compromise'] as const)(
+    'refuses an abandoned (%s) Plan whose abandonment the latest ExecutionHistory did not cause',
+    (reason) =>
+      withDatabase(async (database) => {
+        const fixture = await existingGogmaFixture()
+        await seed(database, fixture)
+        const service = executionService(database, fixture.built)
+        await service.startProductionPlan(fixture.plan.id)
+        const first = await confirmCurrent(service, database, fixture.plan)
+        await database.productionPlans.put({
+          ...first.plan,
+          status: 'abandoned',
+          abandonmentReason: reason,
+          abandonedAt: '2026-09-17T03:00:00.000Z',
+        })
+        expect(validateProductionPlan(await currentPlan(database, fixture.plan)).issues).toEqual([])
+        await expectRefusal(() => undoLatest(service, database, fixture.plan), database, 'undo_not_allowed')
+      }))
+
+  it('refuses a completed Plan whose completion the latest ExecutionHistory did not cause', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      await confirmCurrent(service, database, fixture.plan)
+      const last = await confirmCurrent(service, database, fixture.plan)
+      await database.productionPlans.put({ ...last.plan, completedAt: '2026-09-17T09:00:00.000Z' })
+      await expectRefusal(() => undoLatest(service, database, fixture.plan), database, 'undo_not_allowed')
+
+      // The latest record is an ordinary record, not the confirmation that completed the Plan.
+      await database.productionPlans.put(last.plan)
+      await database.executionHistory.put({ ...last.history, action: 'operation_uncertain', wasExpected: false, recalculationReason: 'execution_operation_uncertain', undoSnapshot: { ...last.history.undoSnapshot, affectedOwnedWeaponsBefore: [], affectedTargetWeaponsBefore: [] } })
+      await expectRefusal(() => undoLatest(service, database, fixture.plan), database, 'undo_not_allowed')
+    }))
+
+  it('refuses a draft Plan', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      const first = await confirmCurrent(service, database, fixture.plan)
+      await database.productionPlans.put(fixture.plan)
+      await expectRefusal(
+        () => service.undoLatestExecution({ planId: fixture.plan.id, executionHistoryId: first.history.id }),
+        database,
+        'undo_not_allowed',
+      )
+    }))
+
+  it('deletes the save point whose boundary is the undone record and never revives an older one', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      const older = await putSavePoint(database, fixture.plan, null, '2026-09-17T00:00:00.000Z')
+      const before = await dump(database)
+      const first = await confirmCurrent(service, database, fixture.plan)
+      expect(first.history.undoSnapshot.executionSavePointBefore).toEqual(older)
+      await putSavePoint(database, fixture.plan, first.history.id, first.history.createdAt)
+
+      await undoLatest(service, database, fixture.plan)
+
+      expect(await database.executionSavePoints.count()).toBe(0)
+      expect({ ...(await dump(database)), executionSavePoints: before.executionSavePoints }).toEqual(before)
+    }))
+
+  it('restores the whole Normal Counter collection, dropping a record added after the Step', () =>
+    withDatabase(async (database) => {
+      const fixture = await newNormalFixture(3)
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      const { history } = await confirmCurrent(service, database, fixture.plan)
+      const [counter] = await database.normalArtianCounters.toArray()
+      await database.normalArtianCounters.put({ ...counter, id: 'weapon.fixture.b:8', weaponTypeId: 'weapon.fixture.b', counter: 7 })
+      expect(await database.normalArtianCounters.count()).toBe(2)
+
+      await undoLatest(service, database, fixture.plan)
+
+      const byId = (values: { id: string }[]) => [...values].sort((a, b) => a.id.localeCompare(b.id))
+      expect(byId(await database.normalArtianCounters.toArray())).toEqual(byId(history.undoSnapshot.normalCountersBefore))
+      expect(history.undoSnapshot.normalCountersBefore).toHaveLength(1)
+    }))
+
+  it('applies each OwnedWeapon role of the snapshot: affected restored, added deleted, removed restored', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      const { history } = await confirmCurrent(service, database, fixture.plan)
+      const source = fixture.built.input.ownedWeapons[0]
+      const added = normalWeapon('owned.execution.added')
+      const removed = normalWeapon('owned.execution.removed', { memo: 'removed by the Step' })
+      await database.ownedWeapons.put(added)
+      const crafted: ExecutionHistory = {
+        ...history,
+        undoSnapshot: {
+          ...history.undoSnapshot,
+          addedOwnedWeaponIds: [added.id],
+          removedOwnedWeaponsBefore: [removed],
+        },
+      }
+      expect(validateExecutionHistory(crafted).issues).toEqual([])
+      await database.executionHistory.put(crafted)
+
+      await undoLatest(service, database, fixture.plan)
+
+      expect((await database.ownedWeapons.toArray()).map(({ id }) => id).sort()).toEqual([removed.id, source.id].sort())
+      expect(await database.ownedWeapons.get(source.id)).toEqual(source)
+      expect(await database.ownedWeapons.get(removed.id)).toEqual(removed)
+    }))
+
+  it('refuses a history whose snapshot fails validation or is not the start of its Step, without guessing', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      const { history } = await confirmCurrent(service, database, fixture.plan)
+
+      const incomplete = structuredClone(history) as unknown as { undoSnapshot: Record<string, unknown> }
+      delete incomplete.undoSnapshot.affectedTargetWeaponsBefore
+      await database.executionHistory.put(incomplete as unknown as ExecutionHistory)
+      await expectRefusal(() => undoLatest(service, database, fixture.plan), database, 'undo_snapshot_invalid')
+
+      await database.executionHistory.put({
+        ...history,
+        undoSnapshot: {
+          ...history.undoSnapshot,
+          productionPlanBefore: { ...history.undoSnapshot.productionPlanBefore, currentStepId: stepOf(fixture.plan, 1).id },
+        },
+      })
+      await expectRefusal(() => undoLatest(service, database, fixture.plan), database, 'undo_snapshot_invalid')
+
+      await database.executionHistory.put({ ...history, action: 'secured_weapon' })
+      await expectRefusal(() => undoLatest(service, database, fixture.plan), database, 'undo_not_allowed')
+    }))
+
+  it('writes nothing when the restored Target preference collection would be invalid', () =>
+    withDatabase(async (database) => {
+      const fixture = await newNormalFixture(1)
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      const { history } = await confirmCurrent(service, database, fixture.plan)
+      const tracked = history.undoSnapshot.addedOwnedWeaponIds[0]
+      const goal = (await database.targetWeapons.get(fixture.built.input.targetWeapons[0].id)) as TargetWeapon
+      // The weapon moved to a Target the Step never touched, so deleting it would dangle that preference.
+      await database.targetWeapons.bulkPut([
+        { ...goal, preferredOwnedWeaponId: null },
+        orchestrationTarget('target.execution.taker', { preferredOwnedWeaponId: tracked }),
+      ])
+      await expectRefusal(() => undoLatest(service, database, fixture.plan), database, 'undo_result_invalid')
+    }))
+
+  it('rolls back every restore write when the ExecutionHistory delete fails', () =>
+    withDatabase(async (database) => {
+      const unrelated = normalWeapon('owned.execution.unrelated')
+      const fixture = await existingGogmaFixture([unrelated])
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      const first = await confirmCurrent(service, database, fixture.plan)
+      await putSavePoint(database, fixture.plan, first.history.id, first.history.createdAt)
+      await confirmCurrent(service, database, fixture.plan)
+      const [counter] = await database.normalArtianCounters.toArray()
+      await database.normalArtianCounters.put({ ...counter, id: 'weapon.fixture.b:8', weaponTypeId: 'weapon.fixture.b' })
+      // The history delete runs after the RngState, Counter, OwnedWeapon,
+      // Target, Plan and save point restore writes.
+      database.executionHistory.hook('deleting', () => {
+        throw new Error('storage failure')
+      })
+      const before = await dump(database)
+      const failure = await undoLatest(service, database, fixture.plan).catch((error: unknown) => error)
+      expect(failure).toBeInstanceOf(RepositoryError)
+      expect(failure).toMatchObject({ code: 'transaction_failed' })
+      expect(await dump(database)).toEqual(before)
+    }))
 })

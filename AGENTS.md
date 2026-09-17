@@ -239,7 +239,18 @@ advance, target link, in-progress, Undo snapshot, and validation helpers of
 action-specific ExecutionHistory / ActualResult validation. It added no persisted
 field and changed no calculation semantics, so `CURRENT_CALCULATION_APP_SCHEMA_VERSION`
 stays 12, `DATABASE_SCHEMA_VERSION` 6, and `ExportRoot.schemaVersion` 9.
-`finished_as_compromise`, Undo, save point record / restore, abandonment, replan
+The fifth PR (the Execution Undo runtime) implemented Undo of the latest
+ExecutionHistory (`src/domain/execution/executionUndo.ts`,
+`ProductionPlanExecutionService.undoLatestExecution()`): the request names the
+ExecutionHistory ID, which must still be the Plan's latest by
+`compareExecutionHistoryOrder()` (`createdAt`, then `id`); the
+`ExecutionUndoSnapshot` bodies are restored exactly in one transaction (whole
+Normal Counter collection replaced, added OwnedWeapons deleted, updated / removed
+OwnedWeapons and changed Targets put, Plan put), the save point whose boundary is the
+undone record is deleted, a save point the undone terminal transition deleted is
+restored, and the record is deleted with no Undo record added. It added no persisted
+field and changed no calculation semantics, so the three versions stay 12 / 6 / 9.
+`finished_as_compromise`, save point record / restore, abandonment, replan
 adoption, the breaking-change guard, and the Execution Navigator UI are still not
 implemented.
 
@@ -2986,9 +2997,10 @@ calculation schema 12 Execution Plan contract (Plan generation with
 `executionEffects`) are implemented. Of the Execution runtime, Plan start and the
 ordinary `confirmed_expected` Step confirmation (blind observation and
 `confirm_owned_ideal` included, with the full Undo snapshot and Plan completion), and
-the `actual_result_different` / `operation_uncertain` records are implemented;
-finishing as a compromise, Undo, save point record / restore, abandonment, replan
-adoption, the breaking-change guard, and the Execution Navigator UI are not yet.
+the `actual_result_different` / `operation_uncertain` records, and Undo of the latest
+ExecutionHistory are implemented; finishing as a compromise, save point record /
+restore, abandonment, replan adoption, the breaking-change guard, and the Execution
+Navigator UI are not yet.
 Implementation PRs follow the specification and must not fall back to the older
 Execution semantics.
 
