@@ -108,21 +108,101 @@ export function collectExecutionScopeTargetWeaponIds(
 }
 
 /**
- * The part of the execution scope a save point must hold whatever else changed
- * (16.9): every Plan-dependent Target and every OwnedWeapon a Plan-dependent
- * Entry Route references. Returns the IDs the save point lacks.
+ * The execution state at the moment a save point was recorded, as far as the
+ * formal execution scope needs it: the OwnedWeapons and TargetWeapons that
+ * existed then, and the Plan's ExecutionHistory up to the save point boundary.
  */
-function missingRequiredScope(
+interface ExecutionScopeState {
+  ownedWeapons: readonly OwnedWeapon[]
+  targetWeapons: readonly TargetWeapon[]
+  buildListEntries: readonly BuildListEntry[]
+  planExecutionHistory: readonly ExecutionHistory[]
+}
+
+/**
+ * The formal execution scope (`docs/PLANNER_SPEC.md` 16.9) the save point must
+ * hold, checked against the save point's own snapshots. Recording and restoring
+ * share this one authority; only where the state at the save point comes from
+ * differs. Returns the IDs the save point lacks; nothing is ever filled in.
+ *
+ * OwnedWeapons: the Route references of the Plan-dependent Entries, every weapon
+ * this Plan's ExecutionHistory up to the boundary registered (Execution never
+ * deletes one, so each existed at the save point), every weapon in progress for
+ * the Plan, and the tracked weapon of every Step the snapshot Plan completed
+ * (already registered or operated on; never an unexecuted Step's weapon).
+ * TargetWeapons: the Plan-dependent Targets and every Target preferring one of
+ * those OwnedWeapons.
+ */
+function missingExecutionScope(
   savePoint: Pick<ExecutionSavePoint, 'productionPlan' | 'ownedWeapons' | 'targetWeapons'>,
-  buildListEntries: readonly BuildListEntry[],
+  scopeState: ExecutionScopeState,
 ): { ownedWeaponIds: OwnedWeaponId[]; targetWeaponIds: TargetWeaponId[] } {
-  const weapons = new Set<string>(savePoint.ownedWeapons.map(({ id }) => id))
-  const targets = new Set<string>(savePoint.targetWeapons.map(({ id }) => id))
+  const plan = savePoint.productionPlan
+  const snapshotWeapons = new Set<string>(savePoint.ownedWeapons.map(({ id }) => id))
+  const snapshotTargets = new Set<string>(savePoint.targetWeapons.map(({ id }) => id))
+  const requiredOwnedWeaponIds = sortedUnique([
+    ...collectExecutionScopeOwnedWeaponIds(plan, scopeState),
+    ...orderedPlanHistory(plan, [...scopeState.planExecutionHistory])
+      .flatMap(({ undoSnapshot }) => undoSnapshot.addedOwnedWeaponIds),
+    ...plan.steps.flatMap((step) => {
+      const tracked = step.executionEffects?.trackedOwnedWeaponId ?? null
+      return step.isCompleted && tracked !== null ? [tracked] : []
+    }),
+  ])
   return {
-    ownedWeaponIds: collectPlanRouteOwnedWeaponIds(savePoint.productionPlan, buildListEntries)
-      .filter((id) => !weapons.has(id)),
-    targetWeaponIds: collectProductionPlanDependentTargetWeaponIds(savePoint.productionPlan, buildListEntries)
-      .filter((id) => !targets.has(id)),
+    ownedWeaponIds: requiredOwnedWeaponIds.filter((id) => !snapshotWeapons.has(id)),
+    targetWeaponIds: collectExecutionScopeTargetWeaponIds(plan, scopeState, requiredOwnedWeaponIds)
+      .filter((id) => !snapshotTargets.has(id)),
+  }
+}
+
+/**
+ * The OwnedWeapons and TargetWeapons as they were when the save point was
+ * recorded, used only to check the save point's completeness and never to
+ * restore anything (16.9). Inside the snapshot the snapshot body is the
+ * authority. Outside it, an entity is the before body of the earliest later
+ * ExecutionHistory that changed it, or else its current body, and only if that
+ * body was last updated no later than `recordedAt`: an entity the user added or
+ * edited after the save point is never taken as having been in its scope.
+ * OwnedWeapons a later record registered did not exist at the save point.
+ */
+function reconstructScopeStateAtSavePoint(
+  savePoint: ExecutionSavePoint,
+  state: Pick<ExecutionPersistedState, 'ownedWeapons' | 'targetWeapons' | 'buildListEntries'>,
+  kept: readonly ExecutionHistory[],
+  after: readonly ExecutionHistory[],
+): ExecutionScopeState {
+  const addedAfter = new Set<string>(after.flatMap(({ undoSnapshot }) => undoSnapshot.addedOwnedWeaponIds))
+  function outsideSnapshot<T extends { id: string; updatedAt: ISODateTimeString }>(
+    snapshot: readonly T[],
+    current: readonly T[],
+    befores: (history: ExecutionHistory) => readonly T[],
+  ): T[] {
+    const inSnapshot = new Set<string>(snapshot.map(({ id }) => id))
+    const bodies = new Map<string, T>()
+    after.forEach((history) => befores(history).forEach((body) => {
+      if (!bodies.has(body.id)) bodies.set(body.id, body)
+    }))
+    current.forEach((body) => {
+      if (!bodies.has(body.id)) bodies.set(body.id, body)
+    })
+    return [...bodies.values()].filter(({ id, updatedAt }) =>
+      !inSnapshot.has(id) && !addedAfter.has(id) && updatedAt <= savePoint.recordedAt)
+  }
+  return {
+    ownedWeapons: [
+      ...savePoint.ownedWeapons,
+      ...outsideSnapshot(savePoint.ownedWeapons, state.ownedWeapons, ({ undoSnapshot }) => [
+        ...undoSnapshot.affectedOwnedWeaponsBefore,
+        ...undoSnapshot.removedOwnedWeaponsBefore,
+      ]),
+    ],
+    targetWeapons: [
+      ...savePoint.targetWeapons,
+      ...outsideSnapshot(savePoint.targetWeapons, state.targetWeapons, ({ undoSnapshot }) => undoSnapshot.affectedTargetWeaponsBefore),
+    ],
+    buildListEntries: state.buildListEntries,
+    planExecutionHistory: kept,
   }
 }
 
@@ -203,19 +283,10 @@ export function prepareExecutionSavePointRecord(input: ExecutionSavePointRecordI
   if (!references.isValid) {
     executionFailure('entity_validation_failed', `The game save point of ProductionPlan '${plan.id}' has an invalid reference.`, references.issues)
   }
-  // Completeness of the snapshot itself, independent of how the scope was derived.
-  const missing = missingRequiredScope(savePoint, state.buildListEntries)
-  const snapshotWeapons = new Set<string>(savePoint.ownedWeapons.map(({ id }) => id))
-  const uncovered = [
-    ...missing.ownedWeaponIds,
-    ...missing.targetWeaponIds,
-    ...state.ownedWeapons
-      .filter(({ id, executionInProgress }) => executionInProgress?.productionPlanId === plan.id && !snapshotWeapons.has(id))
-      .map(({ id }) => id),
-    ...history
-      .flatMap(({ undoSnapshot }) => undoSnapshot.addedOwnedWeaponIds)
-      .filter((id) => weaponById.has(id) && !snapshotWeapons.has(id)),
-  ]
+  // Completeness of the snapshot itself, by the same formal scope authority the
+  // restore re-checks it with.
+  const missing = missingExecutionScope(savePoint, { ...state, planExecutionHistory: history })
+  const uncovered = [...missing.ownedWeaponIds, ...missing.targetWeaponIds]
   if (uncovered.length > 0) {
     executionFailure('save_point_snapshot_invalid', `The game save point does not cover execution scope entities: ${uncovered.join(', ')}.`)
   }
@@ -370,7 +441,13 @@ export function prepareExecutionSavePointRestore(input: ExecutionSavePointRestor
       `The restored ProductionPlan '${plan.id}' needs entities that no longer exist: ${missing.join(', ')}.`,
     )
   }
-  const uncovered = missingRequiredScope(savePoint, state.buildListEntries)
+  // Snapshot completeness, separate from current existence above: the save point
+  // must hold its whole formal execution scope as it was when recorded, and a
+  // lacking snapshot is never completed from the current state.
+  const uncovered = missingExecutionScope(
+    savePoint,
+    reconstructScopeStateAtSavePoint(savePoint, state, kept, after),
+  )
   if (uncovered.ownedWeaponIds.length > 0 || uncovered.targetWeaponIds.length > 0) {
     snapshotInvalid(
       `The game save point does not cover its execution scope: ${[...uncovered.ownedWeaponIds, ...uncovered.targetWeaponIds].join(', ')}.`,

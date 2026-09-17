@@ -4952,8 +4952,19 @@ execution scope外の所持武器、設定などは巻き戻さない。ユー�
   別タブ等で上書きされた、ユーザーが見ていないセーブ地点を代わりに復元しない
 - 境界（`lastExecutionHistoryId`）の記録が存在しない、または別Planの記録である場合、nullとみなさず拒否する。
   境界より後（`compareExecutionHistoryOrder()` で境界より大きい記録）だけを「セーブ地点より後」とする
-- セーブ地点が自身のscope（Plan依存Target、Plan依存EntryのRoute参照武器）を含まない、snapshot Planが `active`
-  でない、またはセーブ地点より後に登録された武器がsnapshotに含まれる場合は、現在値から補完せず拒否する
+- ExecutionSavePointは、本節で定義したexecution scope（Plan依存EntryのRoute参照武器、このPlanのExecutionが
+  登録した武器、作成中の武器、Plan依存Target、scope武器を `preferredOwnedWeaponId` に持つTarget）を完全に含む
+  必要がある。記録時と復元時は同じscope定義で検証し、復元時もscope完全性を再検証する。不足は現在値から補完せず
+  拒否する（`save_point_snapshot_invalid`）
+  - 復元時の「記録時点の状態」は、snapshot内のentityはsnapshot本体、snapshot外のentityはセーブ地点より後で
+    最も古いExecutionHistoryのUndo Snapshotのbefore状態（無ければ現在値）とし、`updatedAt` が `recordedAt`
+    以前のものだけを記録時点に存在した状態とみなす。境界以前のExecutionHistoryが登録した武器と、snapshot Planの
+    完了済みStepの追跡武器（`executionEffects.trackedOwnedWeaponId`）もscopeとして要求する。未実行Stepの
+    追跡武器は要求しない。これは完全性の検出だけに使い、復元値には使わない
+  - snapshot完全性（`save_point_snapshot_invalid`）と、復元後Planに必要なentityの現在の存在
+    （`save_point_required_entity_missing`）は別の検証である。snapshotに含まれるPlan非依存Targetが現在削除
+    されていることは、どちらの拒否理由にもしない
+- snapshot Planが `active` でない、またはセーブ地点より後に登録された武器がsnapshotに含まれる場合は拒否する
 - 復元値はsnapshot本体そのものであり、RNG予測の再実行、Counter差分の逆算、timestampの付け直しをしない。
   NormalArtianCounterはcollection全体を置き換える。書き込み前に復元後のentity、Target優先起点collection、
   セーブ地点とその参照（残すExecutionHistoryに対して）を検証する

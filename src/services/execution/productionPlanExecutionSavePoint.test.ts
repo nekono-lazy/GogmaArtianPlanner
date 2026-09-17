@@ -587,6 +587,78 @@ describe('ExecutionSavePoint restore', () => {
       await expectRefusal(() => restore(service, fixture.plan, savePoint), database, 'save_point_snapshot_invalid')
     }))
 
+  it('refuses a save point lacking a production-target Normal registered before it, without filling it from the current state', () =>
+    withDatabase(async (database) => {
+      const fixture = await newNormalFixture(3)
+      const service = await started(database, fixture)
+      await confirmCurrent(service, database, fixture.plan)
+      await confirmCurrent(service, database, fixture.plan)
+      const registration = await confirmCurrent(service, database, fixture.plan)
+      const tracked = registration.history.undoSnapshot.addedOwnedWeaponIds[0]
+      const savePoint = await record(service, fixture.plan)
+      expect(ids(savePoint.ownedWeapons)).toEqual([tracked])
+      // The Route references no owned weapon, so only the registered / tracked
+      // weapon authority can notice the gap.
+      const corrupted: ExecutionSavePoint = { ...savePoint, ownedWeapons: [] }
+      expect(validateExecutionSavePoint(corrupted).issues).toEqual([])
+      await database.executionSavePoints.put(corrupted)
+      await confirmCurrent(service, database, fixture.plan)
+      expect(await database.ownedWeapons.get(tracked)).toMatchObject({ kind: 'gogma' })
+
+      await expectRefusal(() => restore(service, fixture.plan, savePoint), database, 'save_point_snapshot_invalid')
+    }))
+
+  it('refuses a save point lacking a weapon in progress for the Plan', () =>
+    withDatabase(async (database) => {
+      const inProgress = normalWeapon('owned.execution.in-progress')
+      const fixture = await existingGogmaFixture([inProgress])
+      const service = await started(database, fixture)
+      await database.ownedWeapons.put({ ...inProgress, executionInProgress: { productionPlanId: fixture.plan.id, startedAt: '2026-09-17T00:00:00.000Z' } })
+      const savePoint = await record(service, fixture.plan)
+      expect(ids(savePoint.ownedWeapons)).toContain(inProgress.id)
+      await database.executionSavePoints.put({ ...savePoint, ownedWeapons: savePoint.ownedWeapons.filter(({ id }) => id !== inProgress.id) })
+
+      await expectRefusal(() => restore(service, fixture.plan, savePoint), database, 'save_point_snapshot_invalid')
+    }))
+
+  it('refuses a save point lacking a Plan-independent Target that preferred a scope weapon', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      const service = await started(database, fixture)
+      const [, other] = fixture.built.input.targetWeapons
+      const source = fixture.built.input.ownedWeapons[0]
+      expect(other.preferredOwnedWeaponId).toBe(source.id)
+      const savePoint = await record(service, fixture.plan)
+      expect(ids(savePoint.targetWeapons)).toContain(other.id)
+      await database.executionSavePoints.put({ ...savePoint, targetWeapons: savePoint.targetWeapons.filter(({ id }) => id !== other.id) })
+
+      await expectRefusal(() => restore(service, fixture.plan, savePoint), database, 'save_point_snapshot_invalid')
+
+      // Still refused after a later Step released the Target: the earliest later
+      // record's before body shows it preferred the scope weapon at the save point.
+      await confirmCurrent(service, database, fixture.plan)
+      expect(await database.targetWeapons.get(other.id)).toMatchObject({ preferredOwnedWeaponId: null })
+      await expectRefusal(() => restore(service, fixture.plan, savePoint), database, 'save_point_snapshot_invalid')
+    }))
+
+  it('does not treat a Target that started preferring a scope weapon after the save point as missing', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingResetFixture()
+      const service = await started(database, fixture)
+      const source = fixture.built.input.ownedWeapons[0]
+      const savePoint = await record(service, fixture.plan)
+      const later = orchestrationTarget('target.execution.later', {
+        preferredOwnedWeaponId: source.id,
+        createdAt: '2026-09-17T09:00:00.000Z',
+        updatedAt: '2026-09-17T09:00:00.000Z',
+      })
+      await database.targetWeapons.put(later)
+
+      await restore(service, fixture.plan, savePoint)
+
+      expect(await database.targetWeapons.get(later.id)).toEqual(later)
+    }))
+
   it('rolls back every restore write when the ExecutionHistory delete fails', () =>
     withDatabase(async (database) => {
       const fixture = await newNormalFixture(3)

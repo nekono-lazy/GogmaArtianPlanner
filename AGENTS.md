@@ -264,7 +264,11 @@ ExecutionHistory added. Restoring an `active` / `stale` Plan names the save poin
 `recordedAt` (a save point recorded again is refused with `save_point_changed`),
 refuses before any write when a snapshot OwnedWeapon, a selected BuildListEntry, or a
 Plan-dependent Target is missing (never revived), or when the boundary record is
-missing / foreign or the snapshot does not cover its scope, and then in one transaction
+missing / foreign or the snapshot does not cover its whole formal execution scope
+(the same scope recording derives: Route references, weapons registered up to the
+boundary, in-progress weapons, completed Steps' tracked weapons, Plan-dependent Targets,
+Targets preferring a scope weapon; `save_point_snapshot_invalid`, never filled in from
+the current state and kept separate from current-existence refusals), and then in one transaction
 restores the snapshot bodies (whole Normal Counter collection replaced, still-existing
 snapshot Targets only), deletes the OwnedWeapons registered by later records, returns a
 Target outside the snapshot to the before body of the earliest later record that
