@@ -5152,10 +5152,21 @@ TargetのIdeal条件自体は変更しない。後日そのPractical武器を起
   projectionと突き合わせて再検証する。表示後に別のStepが確定していれば拒否する
 - 実行できるのは `active` なcurrent Execution契約Planだけである。`stale` Planは、予測と現在状態が
   乖離しているため「選択済みcheckpointへ到達済み」を推測せず拒否する
-- 到達判定のauthorityは `BuildListEntry.intermediateStateSelection` とPlanの `executionEffects.compromiseLabels`
-  であり、武器性能をその場で再評価しない。通常は妥協labelを持つStepが確定済みであること、
-  開始時点到達済みcheckpoint（7.5.2）はそのEntryの最初の物理Step確定前でも可とする。未選択のcheckpointへ
-  性能上到達しただけ、選択済みcheckpoint未到達、別EntryのIDはいずれも拒否する
+- 終了できるのは、選択済みcheckpointへ過去に到達したことではなく、**現在もそのcheckpoint状態を
+  保持している**場合だけである。提示は「次の操作へ進む」と並ぶ選択肢なので、続行してその武器へ
+  次の操作を行った時点で終了対象外になる
+  - 通常のcheckpointは、妥協labelを持つStepが確定済みで、かつそれより後に**同じ追跡武器**を
+    対象とするStepが1つも確定していない間だけ保持中とする
+  - 開始時点到達済みcheckpoint（7.5.2）は、そのEntryの最初の物理Step（= そのcheckpointをlabelする
+    Step）を確定するまで保持中とする。`isIntermediatePinHeldAtRouteStart()` はEntry定義として
+    恒久的にtrueなので、単独では終了可否に使わない
+  - 境界はPlan全体の進行ではなく追跡武器である。別EntryのStepが別武器に対して確定しても、
+    この武器の状態は変わらないため終了可否に影響しない
+- 到達判定のauthorityは `BuildListEntry.intermediateStateSelection`、Planの
+  `executionEffects.compromiseLabels`、およびPlan StepのExecution進行状態
+  （`executionEffects.trackedOwnedWeaponId`、Step順、`isCompleted`）であり、武器性能をその場で
+  再評価しない。未選択のcheckpointへ性能上到達しただけ、選択済みcheckpoint未到達、既に通過済み、
+  別EntryのIDはいずれも拒否する
 - 対象OwnedWeaponはPlanの妥協label effectが持つIDだけであり、`preferredOwnedWeaponId` や
   `status = practical` の検索、性能一致からは決めない
 - ExecutionHistoryは `wasExpected = true`、`recalculationReason = null`、`actualResult = null` とする。

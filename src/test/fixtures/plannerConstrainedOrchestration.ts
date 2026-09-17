@@ -378,6 +378,53 @@ export function startReachedCheckpointEntry(
   return entry
 }
 
+/**
+ * A second start-held checkpoint Entry (7.5.2), pinned on the *Skill* lane.
+ *
+ * Its Route is Reset Skills only, so its Bonus lane is already at its end and
+ * both pins sit at lane position 0: the source's own current Skills are a
+ * Practical Skill lane start. Pair it with a Target whose `idealBonuses` the
+ * source already holds, and with a Skill result that reaches
+ * `IDEAL_SERIES_SKILL_ID` at `CONFLICT_SKILL_COUNTER`.
+ *
+ * It exists so a Plan can mix this Entry's weapon with another Entry's weapon
+ * on the other Counter stream, which is how the Execution tests prove that
+ * another weapon's confirmed Step leaves this checkpoint untouched.
+ */
+export function startReachedSkillCheckpointEntry(
+  id: string,
+  target: TargetWeapon,
+  source: OwnedGogmaArtianWeapon,
+): BuildListEntry {
+  const entry = orchestrationEntry(id, target, resetSkillsRoute(source.id), {
+    finalBonuses: structuredClone(source.restorationBonuses),
+  })
+  const snapshot = entry.candidateSnapshot
+  snapshot.skillAmendmentTrace = [{
+    operationIndex: 0,
+    operationType: 'reset_skills',
+    seriesSkillId: IDEAL_SERIES_SKILL_ID,
+    groupSkillId: null,
+  }]
+  snapshot.bonusAmendmentTrace = []
+  snapshot.intermediateStateGroups = extractIntermediateStateGroups(snapshot, {
+    target,
+    master: constrainedMaster(),
+    ownedWeapons: [source],
+  })
+  const laneStart = snapshot.intermediateStateGroups
+    .filter((group) => group.axis === 'skill')
+    .flatMap(({ opportunities }) => opportunities)
+    .find(({ lanePosition }) => lanePosition === 0)
+  if (!laneStart) throw new Error('The Skill checkpoint fixture Route has no Skill lane start.')
+  entry.intermediateStateSelection = {
+    skillOpportunityId: laneStart.id,
+    bonusOpportunityId: null,
+    improvementPreference: 'planner',
+  }
+  return entry
+}
+
 /** Keeps every derived hash of an Entry consistent with the Planner input. */
 export function synchronizeOrchestrationEntry(
   input: PlannerInput,

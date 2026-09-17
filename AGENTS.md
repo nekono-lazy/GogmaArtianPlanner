@@ -284,8 +284,15 @@ same Step premises `confirmed_expected` uses plus the Plan's own
 a `stale` Plan never has its checkpoint arrival inferred - and eligibility comes from
 `BuildListEntry.intermediateStateSelection` and that label projection, never from
 re-evaluating a weapon's performance, `preferredOwnedWeaponId`, or a `practical` status
-search: ordinarily the label Step is confirmed, and a checkpoint held at Plan start
-(7.5.2) is finishable before its Entry's first physical Step. In one transaction it sets
+search. Having reached the checkpoint once is not enough: the offer sits beside 「次の操作へ
+進む」, so the checkpoint must still be the weapon's current state. An ordinary checkpoint
+is held from its label Step's confirmation until a later Step on the *same tracked weapon*
+is confirmed; a checkpoint held at Plan start (7.5.2) is held until its Entry's first
+physical Step - the Step that labels it - is confirmed, so
+`isIntermediatePinHeldAtRouteStart()`, which stays true for the Entry forever, is never
+eligibility on its own. The boundary is the tracked weapon, not the Plan's overall
+progress, so another Entry's Step on another weapon leaves the checkpoint intact. In one
+transaction it sets
 the labelled weapon `status = practical` (protection, slots, scope and Skills untouched),
 clears `executionInProgress` for every weapon of that Plan and no other, leaves the
 Target `active` with its preference kept, moves the Plan to `abandoned` /

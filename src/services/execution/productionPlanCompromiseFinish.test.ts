@@ -21,6 +21,7 @@ import { DATABASE_SCHEMA_VERSION } from '../../db/AppDatabase'
 import { EXPORT_SCHEMA_VERSION } from '../../domain/models/exportModel'
 import { IDEAL_SERIES_SKILL_ID, gogmaWeapon, practicalBonuses } from '../../test/fixtures/constrainedEnumeration'
 import {
+  OTHER_WEAPON_ID,
   checkpointFixture,
   compromiseLabelStepIndex,
   confirmCurrent,
@@ -29,6 +30,7 @@ import {
   executionService,
   expectRefusal,
   finishAsCompromise,
+  otherWeaponCheckpointFixture,
   seed,
   startReachedCheckpointFixture,
   withDatabase,
@@ -295,8 +297,72 @@ describe('finish as a compromise', () => {
       await expectRefusal(
         () => finishAsCompromise(service, database, fixture),
         database,
-        'compromise_checkpoint_not_reached',
+        'compromise_checkpoint_not_current',
       )
+    }))
+
+  it('refuses a checkpoint the next operation on the same weapon left behind', () =>
+    withDatabase(async (database) => {
+      const fixture = await checkpointFixture()
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await reachCheckpoint(service, database, fixture)
+      // 「次の操作へ進む」: the next Step operates on the very same weapon.
+      const next = await confirmCurrent(service, database, fixture.plan)
+      const labelled = compromiseLabelStepIndex(fixture.plan)
+      const confirmed = next.plan.steps.filter(({ isCompleted }) => isCompleted)
+      expect(confirmed).toHaveLength(labelled + 2)
+      expect(confirmed.at(-1)?.executionEffects?.trackedOwnedWeaponId).toBe(fixture.source.id)
+
+      await expectRefusal(
+        () => finishAsCompromise(service, database, fixture),
+        database,
+        'compromise_checkpoint_not_current',
+      )
+    }))
+
+  it('refuses a start-held checkpoint the Entry first physical Step left behind', () =>
+    withDatabase(async (database) => {
+      const fixture = await startReachedCheckpointFixture()
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      expect(compromiseLabelStepIndex(fixture.plan)).toBe(0)
+      // The Entry's first physical Step is the one that labels it.
+      await confirmCurrent(service, database, fixture.plan)
+      expect(await database.ownedWeapons.get(fixture.source.id)).toMatchObject({ status: 'practical' })
+
+      await expectRefusal(
+        () => finishAsCompromise(service, database, fixture),
+        database,
+        'compromise_checkpoint_not_current',
+      )
+    }))
+
+  it('keeps a checkpoint another weapon Step advanced past', () =>
+    withDatabase(async (database) => {
+      const fixture = await otherWeaponCheckpointFixture()
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      // The Plan runs the other Entry's weapon first; this Entry's start-held
+      // checkpoint is labelled by its own, still unconfirmed, first Step.
+      const labelled = compromiseLabelStepIndex(fixture.plan)
+      expect(labelled).toBeGreaterThan(0)
+      expect(fixture.plan.steps[0].executionEffects?.trackedOwnedWeaponId).toBe(OTHER_WEAPON_ID)
+
+      const advanced = await confirmCurrent(service, database, fixture.plan)
+      // The Plan's current Step moved on, and the checkpoint weapon is untouched.
+      expect(advanced.plan.currentStepId).not.toBe(fixture.plan.currentStepId)
+      expect(await database.ownedWeapons.get(fixture.source.id)).toEqual(
+        fixture.built.input.ownedWeapons.find(({ id }) => id === fixture.source.id),
+      )
+
+      const { plan, history } = await finishAsCompromise(service, database, fixture)
+
+      expect(plan).toMatchObject({ status: 'abandoned', abandonmentReason: 'finished_as_compromise' })
+      expect(history.planStepId).toBe(advanced.plan.currentStepId)
+      expect(await database.ownedWeapons.get(fixture.source.id)).toMatchObject({ status: 'practical' })
     }))
 
   it('refuses a stale Plan whose checkpoint was already reached', () =>

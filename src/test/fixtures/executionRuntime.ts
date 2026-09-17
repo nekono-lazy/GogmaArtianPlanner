@@ -39,8 +39,10 @@ import {
   orchestrationScenario,
   orchestrationSource,
   orchestrationTarget,
+  resetRoute,
   startReachedCheckpointEntry,
   startReachedCheckpointResultAt,
+  startReachedSkillCheckpointEntry,
   type OrchestrationScenario,
 } from './plannerConstrainedOrchestration'
 
@@ -320,6 +322,43 @@ export function startReachedCheckpointFixture(extraOwnedWeapons: OwnedWeapon[] =
     startReachedCheckpointResultAt,
     extraOwnedWeapons,
   )
+}
+
+export const OTHER_WEAPON_ID = 'owned.execution.other'
+
+/**
+ * A two-weapon Plan: this Entry's start-held Skill checkpoint on one weapon,
+ * and another Entry's Reset Bonuses on another weapon. The Beam Search puts the
+ * other weapon's Step first, so a test can confirm it and then finish at this
+ * checkpoint, which no Step has touched.
+ */
+export function otherWeaponCheckpointFixture(): Promise<CheckpointFixture> {
+  const source = orchestrationSource(CHECKPOINT_SOURCE_ID, {
+    restorationBonuses: practicalBonuses(),
+    seriesSkillId: 'series_skill.fixture.z',
+    groupSkillId: 'group_skill.fixture.a',
+  })
+  const other = orchestrationSource(OTHER_WEAPON_ID, {
+    restorationBonuses: belowPracticalBonuses(),
+    seriesSkillId: IDEAL_SERIES_SKILL_ID,
+  })
+  // The two Targets must not be satisfiable by each other's weapon, or the
+  // Beam Search drops the second Entry: this one's Ideal is the five slots the
+  // source already holds, the other one's is the default Ideal set.
+  const goal = orchestrationTarget(CHECKPOINT_TARGET_ID, { idealBonuses: practicalBonuses() })
+  const otherGoal = orchestrationTarget('target.execution.otherweapon')
+  const entry = startReachedSkillCheckpointEntry(CHECKPOINT_ENTRY_ID, goal, source)
+  return planFor(orchestrationScenario({
+    targets: [goal, otherGoal],
+    entries: [entry, orchestrationEntry('entry.execution.other', otherGoal, resetRoute(other.id))],
+    ownedWeapons: [source, other],
+    engine: {
+      skillResultAt: (skillCounter: number) =>
+        skillCounter === CONSTRAINED_START_SKILL_COUNTER
+          ? { seriesSkillId: IDEAL_SERIES_SKILL_ID, groupSkillId: null }
+          : { seriesSkillId: `series_skill.fixture.s${skillCounter}`, groupSkillId: null },
+    },
+  })).then((fixture) => ({ ...fixture, source, goal, entry }))
 }
 
 /** The index of the Step whose Execution effects label the checkpoint weapon. */

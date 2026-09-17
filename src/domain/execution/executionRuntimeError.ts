@@ -59,8 +59,12 @@ export type ExecutionRuntimeErrorCode =
    * checkpoint with another weapon (`docs/PLANNER_SPEC.md` 16.12).
    */
   | 'compromise_finish_not_applicable'
-  /** The Entry's selected compromise checkpoint is not reached yet (16.12). */
-  | 'compromise_checkpoint_not_reached'
+  /**
+   * The Entry's selected compromise checkpoint is not the current state (16.12):
+   * it is either not reached yet, or already left behind by a confirmed Step on
+   * the same tracked weapon.
+   */
+  | 'compromise_checkpoint_not_current'
   /** The ExecutionHistory to undo does not exist or belongs to another Plan. */
   | 'undo_history_not_found'
   /** The ExecutionHistory to undo is not the Plan's latest ExecutionHistory. */

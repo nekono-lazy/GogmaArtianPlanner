@@ -86,16 +86,50 @@ function requireCompromiseLabelStep(
 }
 
 /**
- * Whether the Entry's selected compromise checkpoint is already reached
+ * Whether the Entry's selected compromise checkpoint is held *right now*
  * (`docs/PLANNER_SPEC.md` 7.5.2 / 16.12).
  *
- * Ordinarily the labelling Step has been confirmed, so the tracked weapon is
- * already `practical`. A checkpoint held at Plan start is reachable before its
- * Entry's first physical Step runs, so the finish is offered from Plan start
- * and this very transaction applies the label instead.
+ * Having reached the checkpoint once is not enough. The offer sits beside
+ * 「次の操作へ進む」 at the checkpoint, so choosing to continue and running the
+ * next operation on that weapon leaves the compromise state behind and the
+ * finish is no longer available.
+ *
+ * The answer comes from the Plan's own Execution projection and its Step
+ * completion state, never from re-evaluating the weapon's Bonuses or Skills
+ * against the Target's compromise conditions:
+ *
+ * - a checkpoint held at Plan start (7.5.2) is held until the Entry's first
+ *   physical Step - the very Step that labels it - is confirmed
+ * - an ordinary checkpoint is held from the confirmation of its labelling Step
+ *   until a later Step that operates on the same tracked weapon is confirmed
+ *
+ * The boundary is the *tracked weapon*, not the Plan's overall progress:
+ * confirming another Entry's Step on another weapon leaves this weapon, and so
+ * this checkpoint, exactly where it was. Every current Execution operation that
+ * names a tracked weapon changes that weapon's persisted state - a
+ * production-target Normal registration, a conversion, the three amendments and
+ * an owned Ideal confirmation alike - while a Counter-advance Normal creation
+ * tracks no weapon at all, so matching on `trackedOwnedWeaponId` needs no
+ * operation-type list that a later operation could make stale.
  */
-function checkpointIsReached(entry: BuildListEntry, labelStep: PlanStep): boolean {
-  return labelStep.isCompleted || isIntermediatePinHeldAtRouteStart(entry)
+function isCompromiseCheckpointStillCurrent(
+  plan: ProductionPlan,
+  entry: BuildListEntry,
+  labelStep: PlanStep,
+  ownedWeaponId: OwnedWeaponId,
+): boolean {
+  const heldAtRouteStart = isIntermediatePinHeldAtRouteStart(entry)
+  if (!heldAtRouteStart && !labelStep.isCompleted) return false
+  // A start-held checkpoint is held before its own labelling Step, so every
+  // confirmed Step on the weapon leaves it; an ordinary one is left only by a
+  // Step confirmed after the labelling Step.
+  const boundary = heldAtRouteStart ? -1 : plan.steps.findIndex(({ id }) => id === labelStep.id)
+  return !plan.steps.some(
+    (step, index) =>
+      index > boundary &&
+      step.isCompleted &&
+      step.executionEffects?.trackedOwnedWeaponId === ownedWeaponId,
+  )
 }
 
 /**
@@ -113,9 +147,10 @@ function checkpointIsReached(entry: BuildListEntry, labelStep: PlanStep): boolea
  *
  * It is refused unless the Plan is an executable `active` current Plan whose
  * current Step and persisted state are exactly what the user saw, and the named
- * Entry's *selected* compromise checkpoint is really reached. A weapon that
- * merely satisfies a compromise condition, or an unselected state reached by
- * chance, never finishes a Plan.
+ * Entry's *selected* compromise checkpoint is the weapon's current state. A
+ * weapon that merely satisfies a compromise condition, an unselected state
+ * reached by chance, and a checkpoint the Plan has already moved past all never
+ * finish a Plan.
  */
 export function prepareCompromiseFinish(input: CompromiseFinishInput): CompromiseFinish {
   const { plan, state, now } = input
@@ -140,10 +175,10 @@ export function prepareCompromiseFinish(input: CompromiseFinishInput): Compromis
       `The compromise checkpoint of BuildListEntry '${entry.id}' is held by OwnedWeapon '${label.ownedWeaponId}', not '${input.ownedWeaponId}'.`,
     )
   }
-  if (!checkpointIsReached(entry, label.step)) {
+  if (!isCompromiseCheckpointStillCurrent(plan, entry, label.step, label.ownedWeaponId)) {
     executionFailure(
-      'compromise_checkpoint_not_reached',
-      `The selected compromise checkpoint of BuildListEntry '${entry.id}' is not reached yet.`,
+      'compromise_checkpoint_not_current',
+      `The selected compromise checkpoint of BuildListEntry '${entry.id}' is not the current state: it is either not reached yet or already left behind.`,
     )
   }
 
