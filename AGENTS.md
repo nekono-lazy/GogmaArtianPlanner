@@ -219,6 +219,21 @@ target completion), `confirm_owned_ideal`, and the search-side reserve placement
 and completion protection. The Execution runtime (Step confirmation, Undo, save
 point, abandonment, replan adoption) and the ProductionPlan abandonment / completion
 fields are not implemented by it.
+The third PR (the Execution runtime core) added the ProductionPlan lifecycle
+fields (`abandonmentReason`, `abandonedAt`, `completedAt`), the current
+`ExecutionAction` / `execution_operation_uncertain` literals, and the full
+`ExecutionUndoSnapshot` (`affectedTargetWeaponsBefore`, `executionSavePointBefore`),
+and implemented Plan start (`draft -> active`) plus the `confirmed_expected` Step
+confirmation transaction (`src/domain/execution`,
+`src/services/execution/productionPlanExecutionService.ts`). It moved
+`DATABASE_SCHEMA_VERSION` to 6 (a data-only upgrade filling the lifecycle `null`s of
+`draft` / `active` / `stale` Plans; terminal Plans and ExecutionHistory are left as
+persisted and fail validation) and `ExportRoot.schemaVersion` to 9 (schema 8 roots
+holding a terminal Plan or any ExecutionHistory fail closed). It changed no
+calculation semantics, so `CURRENT_CALCULATION_APP_SCHEMA_VERSION` stays 12.
+`actual_result_different`, `operation_uncertain`, `finished_as_compromise`, Undo,
+save point record / restore, abandonment, replan adoption, and the breaking-change
+guard are still not implemented.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -252,7 +267,7 @@ A version 10 `checkpointGroups` / `selectedCheckpointOpportunityIds` cannot be
 mapped onto lane pins, and reading such a selection as empty would silently
 drop a hard constraint, so version 10 artifacts fail closed like every earlier one.
 Search, BuildList, Planner, and benchmark runtime creators share this authority.
-Dexie separately moved to `DATABASE_SCHEMA_VERSION = 4` for the persisted status rename and to the current 5 for the Execution lifecycle persisted state; this is independent of
+Dexie separately moved to `DATABASE_SCHEMA_VERSION = 4` for the persisted status rename, to 5 for the Execution lifecycle persisted state, and to the current 6 for the ProductionPlan lifecycle metadata; this is independent of
 `AppSettings.schemaVersion = 1`; gameVersion, Master Data version,
 `RngState.schemaVersion = 1`, and `CONSTRAINED_ROUTE_POLICY_VERSION`
 remain unchanged. `PRODUCTION_RNG_ENGINE_VERSION` is
@@ -2960,8 +2975,12 @@ The user explicitly initiates recalculation.
 `docs/PLANNER_SPEC.md` 16 is the authority; `docs/DATA_MODEL.md` 7.1 / 8.1 / 11 / 12
 and `docs/UI_FLOW.md` 12 / 16 follow it. The persisted entity foundation and the
 calculation schema 12 Execution Plan contract (Plan generation with
-`executionEffects`) are implemented; the Execution runtime (Step confirmation,
-Undo, save point record / restore, abandonment, replan adoption) is not yet.
+`executionEffects`) are implemented. Of the Execution runtime, Plan start and the
+ordinary `confirmed_expected` Step confirmation (blind observation and
+`confirm_owned_ideal` included, with the full Undo snapshot and Plan completion) are
+implemented; unexpected-result and uncertain-operation recording, finishing as a
+compromise, Undo, save point record / restore, abandonment, replan adoption, and the
+breaking-change guard are not yet.
 Implementation PRs follow the specification and must not fall back to the older
 Execution semantics.
 
@@ -3819,10 +3838,11 @@ Relevant test areas include:
   sets it to null for every Target, removes `relatedTargetWeaponIds` from every
   current OwnedWeapon, never infers a preference from the removed list, and
   rewrites no BuildCandidate, BuildListEntry, ProductionPlan, or ExecutionHistory
-- `DATABASE_SCHEMA_VERSION = 5`, `ExportRoot.schemaVersion = 8`,
+- `DATABASE_SCHEMA_VERSION = 6`, `ExportRoot.schemaVersion = 9`,
   `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 12`, schema 1..11 artifacts failing closed
-  under version 12, a schema 7 Export migrating to 8 with its Plans untouched, and no
-  other version authority changed
+  under version 12, a schema 7 Export migrating to 8 with its Plans untouched, a
+  schema 8 Export migrating to 9 only when it holds no terminal Plan and no
+  ExecutionHistory, and no other version authority changed
 - Collection validation rejects a missing preferred weapon, a weapon type or element
   mismatch, a protected weapon, and the same weapon preferred by two Targets, and
   accepts a compatible unprotected Normal, a compatible unprotected Gogma at every

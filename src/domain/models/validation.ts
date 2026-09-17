@@ -9,6 +9,9 @@ import type {
 } from './common'
 import {
   CURRENT_CALCULATION_APP_SCHEMA_VERSION,
+  currentExecutionActions,
+  legacyExecutionActions,
+  productionPlanAbandonmentReasons,
   V1_NORMAL_ARTIAN_RARITY,
 } from './common'
 import { stableStringify } from './hashing'
@@ -1681,6 +1684,87 @@ function validatePlanStep(
   )
 }
 
+/**
+ * Plan lifecycle metadata (`docs/DATA_MODEL.md` 11.1). The three fields must be
+ * present on every Plan: a missing field is a record whose shape predates the
+ * lifecycle, and it is never read as `null`.
+ */
+function validateProductionPlanLifecycle(
+  plan: ProductionPlan,
+  issues: DomainValidationIssue[],
+) {
+  const fields = ['abandonmentReason', 'abandonedAt', 'completedAt'] as const
+  const missing = fields.filter((field) => plan[field] === undefined)
+  if (missing.length > 0) {
+    missing.forEach((field) =>
+      addIssue(issues, field, 'invalid_structure', `ProductionPlan ${field} must be present (null or a value).`),
+    )
+    return
+  }
+  if (plan.abandonmentReason !== null && !(productionPlanAbandonmentReasons as readonly string[]).includes(plan.abandonmentReason)) {
+    addIssue(issues, 'abandonmentReason', 'invalid_literal', 'ProductionPlan abandonmentReason is invalid.')
+  }
+  if (plan.abandonedAt !== null && !isNonEmptyString(plan.abandonedAt)) {
+    addIssue(issues, 'abandonedAt', 'invalid_structure', 'abandonedAt must be an ISO date-time string.')
+  }
+  if (plan.completedAt !== null && !isNonEmptyString(plan.completedAt)) {
+    addIssue(issues, 'completedAt', 'invalid_structure', 'completedAt must be an ISO date-time string.')
+  }
+  const abandoned = plan.status === 'abandoned'
+  if (abandoned !== (plan.abandonmentReason !== null)) {
+    addIssue(issues, 'abandonmentReason', 'invalid_state', 'abandonmentReason is non-null exactly for an abandoned Plan.')
+  }
+  if (abandoned !== (plan.abandonedAt !== null)) {
+    addIssue(issues, 'abandonedAt', 'invalid_state', 'abandonedAt is non-null exactly for an abandoned Plan.')
+  }
+  if ((plan.status === 'completed') !== (plan.completedAt !== null)) {
+    addIssue(issues, 'completedAt', 'invalid_state', 'completedAt is non-null exactly for a completed Plan.')
+  }
+}
+
+/**
+ * Step progression of a current Execution contract Plan
+ * (`docs/PLANNER_SPEC.md` 16.1 / 16.2): Steps are confirmed one at a time in
+ * order, so the completed Steps form a prefix and `currentStepId` is the first
+ * incomplete Step while the Plan runs.
+ */
+function validateExecutionPlanProgression(
+  plan: ProductionPlan,
+  issues: DomainValidationIssue[],
+) {
+  const firstIncompleteIndex = plan.steps.findIndex(({ isCompleted }) => !isCompleted)
+  const firstIncomplete = firstIncompleteIndex < 0 ? null : plan.steps[firstIncompleteIndex]
+  if (firstIncompleteIndex >= 0 && plan.steps.slice(firstIncompleteIndex).some(({ isCompleted }) => isCompleted)) {
+    addIssue(issues, 'steps', 'invalid_state', 'Completed PlanSteps must form a prefix of the Plan.')
+  }
+  switch (plan.status) {
+    case 'draft':
+      if (plan.steps.some(({ isCompleted }) => isCompleted)) {
+        addIssue(issues, 'steps', 'invalid_state', 'A draft Plan has no completed PlanStep.')
+      }
+      if (plan.currentStepId !== (plan.steps[0]?.id ?? null)) {
+        addIssue(issues, 'currentStepId', 'invalid_state', 'A draft Plan starts at its first PlanStep.')
+      }
+      break
+    case 'active':
+      if (firstIncomplete === null || plan.currentStepId !== firstIncomplete.id) {
+        addIssue(issues, 'currentStepId', 'invalid_state', 'An active Plan is at its first incomplete PlanStep.')
+      }
+      break
+    case 'completed':
+      if (plan.currentStepId !== null || firstIncomplete !== null) {
+        addIssue(issues, 'currentStepId', 'invalid_state', 'A completed Plan has every PlanStep completed and no current PlanStep.')
+      }
+      break
+    case 'stale':
+    case 'abandoned':
+      if (plan.currentStepId !== null && plan.currentStepId !== firstIncomplete?.id) {
+        addIssue(issues, 'currentStepId', 'invalid_state', 'currentStepId must be the first incomplete PlanStep.')
+      }
+      break
+  }
+}
+
 export function validateProductionPlan(
   plan: ProductionPlan,
 ): DomainValidationResult {
@@ -1707,8 +1791,10 @@ export function validateProductionPlan(
   if (executionContract || plan.baseSnapshot.dependentBuildListEntriesHash !== undefined) {
     validateId(plan.baseSnapshot.dependentBuildListEntriesHash, 'baseSnapshot.dependentBuildListEntriesHash', issues)
   }
+  validateProductionPlanLifecycle(plan, issues)
   plan.steps.forEach((step, index) => validatePlanStep(step, index + 1, issues, executionContract))
   if (executionContract) {
+    validateExecutionPlanProgression(plan, issues)
     if (
       plan.steps.length > 0 &&
       !sameExpectedPlanState(plan.steps[0].expectedStateBefore, plan.baseSnapshot.initialExecutionState)
@@ -1767,6 +1853,9 @@ function validateActualResult(
   if (actual.restorationBonuses !== null) {
     appendIssues(issues, `${path}.restorationBonuses`, validateRestorationBonusSet(actual.restorationBonuses))
   }
+  if (actual.restorationBonusScope !== null) {
+    validateRestorationBonusScope(actual.restorationBonusScope, `${path}.restorationBonusScope`, issues)
+  }
   if (actual.securedOwnedWeaponId !== null) {
     validateId(actual.securedOwnedWeaponId, `${path}.securedOwnedWeaponId`, issues)
   }
@@ -1779,42 +1868,77 @@ export function validateExecutionHistory(
   validateId(history.id, 'id', issues)
   validateId(history.planId, 'planId', issues)
   validateId(history.planStepId, 'planStepId', issues)
-  if (
-    ![
-      'confirmed_expected',
-      'secured_weapon',
-      'actual_result_different',
-      'skipped_candidate',
-    ].includes(history.action)
-  ) {
+  const actions: readonly string[] = [...currentExecutionActions, ...legacyExecutionActions]
+  if (!actions.includes(history.action)) {
     addIssue(issues, 'action', 'invalid_literal', 'Execution action is invalid.')
   }
+  if (!isNonEmptyString(history.createdAt)) {
+    addIssue(issues, 'createdAt', 'invalid_structure', 'createdAt must be an ISO date-time string.')
+  }
   if (history.actualResult !== null) validateActualResult(history.actualResult, 'actualResult', issues)
-  appendIssues(issues, 'undoSnapshot.rngStateBefore', validateRngState(history.undoSnapshot.rngStateBefore))
-  history.undoSnapshot.normalCountersBefore.forEach((counter, index) =>
+  const snapshot = history.undoSnapshot
+  // The Execution lifecycle Undo snapshot shape. A snapshot without the Target
+  // or save point fields predates it and cannot restore a Step exactly, so it
+  // is never read as "no Target changed" or "no save point existed".
+  if (
+    typeof snapshot !== 'object' || snapshot === null ||
+    !Array.isArray(snapshot.normalCountersBefore) ||
+    !Array.isArray(snapshot.affectedOwnedWeaponsBefore) ||
+    !Array.isArray(snapshot.addedOwnedWeaponIds) ||
+    !Array.isArray(snapshot.removedOwnedWeaponsBefore) ||
+    !Array.isArray(snapshot.affectedTargetWeaponsBefore) ||
+    snapshot.executionSavePointBefore === undefined ||
+    typeof snapshot.rngStateBefore !== 'object' || snapshot.rngStateBefore === null ||
+    typeof snapshot.productionPlanBefore !== 'object' || snapshot.productionPlanBefore === null
+  ) {
+    addIssue(issues, 'undoSnapshot', 'invalid_structure', 'ExecutionUndoSnapshot is incomplete.')
+    return result(issues)
+  }
+  appendIssues(issues, 'undoSnapshot.rngStateBefore', validateRngState(snapshot.rngStateBefore))
+  snapshot.normalCountersBefore.forEach((counter, index) =>
     appendIssues(issues, `undoSnapshot.normalCountersBefore[${index}]`, validateNormalArtianCounter(counter)),
   )
-  history.undoSnapshot.affectedOwnedWeaponsBefore.forEach((weapon, index) =>
+  snapshot.affectedOwnedWeaponsBefore.forEach((weapon, index) =>
     appendIssues(issues, `undoSnapshot.affectedOwnedWeaponsBefore[${index}]`, validateOwnedWeapon(weapon)),
   )
-  history.undoSnapshot.removedOwnedWeaponsBefore.forEach((weapon, index) =>
+  snapshot.removedOwnedWeaponsBefore.forEach((weapon, index) =>
     appendIssues(issues, `undoSnapshot.removedOwnedWeaponsBefore[${index}]`, validateOwnedWeapon(weapon)),
   )
-  appendIssues(issues, 'undoSnapshot.productionPlanBefore', validateProductionPlan(history.undoSnapshot.productionPlanBefore))
-  if (history.planId !== history.undoSnapshot.productionPlanBefore.id) {
+  snapshot.affectedTargetWeaponsBefore.forEach((target, index) =>
+    appendIssues(issues, `undoSnapshot.affectedTargetWeaponsBefore[${index}]`, validateTargetWeapon(target)),
+  )
+  appendIssues(issues, 'undoSnapshot.productionPlanBefore', validateProductionPlan(snapshot.productionPlanBefore))
+  if (history.planId !== snapshot.productionPlanBefore.id) {
     addIssue(issues, 'planId', 'inconsistent_snapshot', 'History planId must match productionPlanBefore.id.')
+  }
+  if (snapshot.executionSavePointBefore !== null) {
+    appendIssues(issues, 'undoSnapshot.executionSavePointBefore', validateExecutionSavePoint(snapshot.executionSavePointBefore))
+    if (snapshot.executionSavePointBefore.productionPlanId !== history.planId) {
+      addIssue(issues, 'undoSnapshot.executionSavePointBefore.productionPlanId', 'inconsistent_snapshot', 'The save point snapshot must belong to the history Plan.')
+    }
   }
   if (!history.wasExpected && history.recalculationReason === null) {
     addIssue(issues, 'recalculationReason', 'invalid_state', 'Unexpected execution requires a recalculation reason.')
   }
-  const affected = new Set(history.undoSnapshot.affectedOwnedWeaponsBefore.map(({ id }) => id))
-  const added = new Set(history.undoSnapshot.addedOwnedWeaponIds)
-  const removed = new Set(history.undoSnapshot.removedOwnedWeaponsBefore.map(({ id }) => id))
+  const affected = new Set(snapshot.affectedOwnedWeaponsBefore.map(({ id }) => id))
+  const added = new Set(snapshot.addedOwnedWeaponIds)
+  const removed = new Set(snapshot.removedOwnedWeaponsBefore.map(({ id }) => id))
   const overlaps = [...affected].some((id) => added.has(id) || removed.has(id)) || [...added].some((id) => removed.has(id))
   if (overlaps) {
     addIssue(issues, 'undoSnapshot', 'invalid_state', 'Undo OwnedWeapon roles must not overlap.')
   }
-  history.undoSnapshot.addedOwnedWeaponIds.forEach((id, index) =>
+  const hasDuplicates = (ids: readonly string[]) => new Set(ids).size !== ids.length
+  if (
+    hasDuplicates(snapshot.affectedOwnedWeaponsBefore.map(({ id }) => id)) ||
+    hasDuplicates(snapshot.addedOwnedWeaponIds) ||
+    hasDuplicates(snapshot.removedOwnedWeaponsBefore.map(({ id }) => id))
+  ) {
+    addIssue(issues, 'undoSnapshot', 'invalid_id', 'Undo OwnedWeapon IDs must be unique within their role.')
+  }
+  if (hasDuplicates(snapshot.affectedTargetWeaponsBefore.map(({ id }) => id))) {
+    addIssue(issues, 'undoSnapshot.affectedTargetWeaponsBefore', 'invalid_id', 'Undo TargetWeapon IDs must be unique.')
+  }
+  snapshot.addedOwnedWeaponIds.forEach((id, index) =>
     validateId(id, `undoSnapshot.addedOwnedWeaponIds[${index}]`, issues),
   )
   return result(issues)

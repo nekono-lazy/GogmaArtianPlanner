@@ -67,6 +67,18 @@ export type ProductionPlanStatus =
   | 'completed'
   | 'stale'
   | 'abandoned'
+/** Why a Plan became `abandoned` (`docs/PLANNER_SPEC.md` 16.2). */
+export type ProductionPlanAbandonmentReason =
+  | 'user_abandoned'
+  | 'replan_adopted'
+  | 'finished_as_compromise'
+  | 'breaking_change_approved'
+export const productionPlanAbandonmentReasons = [
+  'user_abandoned',
+  'replan_adopted',
+  'finished_as_compromise',
+  'breaking_change_approved',
+] as const satisfies readonly ProductionPlanAbandonmentReason[]
 export type PlanStepOperationType =
   | 'create_normal_artian'
   | 'convert_normal_to_gogma'
@@ -87,11 +99,32 @@ export type PlanStepOperationType =
   | 'reserve_weapon'
   /** Legacy only, exactly like `reserve_weapon`. */
   | 'confirm_result'
+/**
+ * What the user confirmed happened at one Step (`docs/PLANNER_SPEC.md` 16.4).
+ *
+ * Current Execution records only `confirmed_expected`,
+ * `actual_result_different`, `operation_uncertain` and
+ * `finished_as_compromise`. `secured_weapon` and `skipped_candidate` belong to
+ * legacy Plans with an independent secure Step; they stay in the type so a
+ * historical record can be displayed, and current Execution never writes them.
+ */
 export type ExecutionAction =
   | 'confirmed_expected'
-  | 'secured_weapon'
   | 'actual_result_different'
+  | 'operation_uncertain'
+  | 'finished_as_compromise'
+  | 'secured_weapon'
   | 'skipped_candidate'
+export const currentExecutionActions = [
+  'confirmed_expected',
+  'actual_result_different',
+  'operation_uncertain',
+  'finished_as_compromise',
+] as const satisfies readonly ExecutionAction[]
+export const legacyExecutionActions = [
+  'secured_weapon',
+  'skipped_candidate',
+] as const satisfies readonly ExecutionAction[]
 export type RecalculationReason =
   | 'rng_state_changed'
   | 'normal_counter_changed'
@@ -100,6 +133,8 @@ export type RecalculationReason =
   | 'owned_weapon_changed'
   | 'calculation_context_changed'
   | 'unexpected_result'
+  /** The user recorded that what or how many operations were performed is unknown (16.15). */
+  | 'execution_operation_uncertain'
   | 'planned_candidate_not_secured'
   | 'different_candidate_secured'
   | 'manual_recalculate'

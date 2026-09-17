@@ -2,6 +2,7 @@ import type {
   ISODateTimeString,
   ProductionPlan,
   ProductionPlanId,
+  ProductionPlanStatus,
 } from '../../domain/models/publicTypes'
 import { validateProductionPlan } from '../../domain/models/validation'
 import { appDatabase, type AppDatabase } from '../AppDatabase'
@@ -10,6 +11,13 @@ import {
   RepositoryError,
 } from '../repositoryError'
 import { runInRepositoryTransaction } from '../transaction'
+
+/** At most one Plan may be running at a time (`docs/PLANNER_SPEC.md` 16.2). */
+const RUNNING_PLAN_STATUSES: readonly ProductionPlanStatus[] = ['active', 'stale']
+
+export function isRunningProductionPlanStatus(status: ProductionPlanStatus): boolean {
+  return RUNNING_PLAN_STATUSES.includes(status)
+}
 
 function sortPlans(plans: ProductionPlan[]): ProductionPlan[] {
   return plans.sort(
@@ -51,6 +59,40 @@ export class ProductionPlanRepository {
   }
 
   /**
+   * The one running Plan (`active` or `stale`, `docs/PLANNER_SPEC.md` 16.2), or
+   * `undefined`. More than one fails closed.
+   */
+  async getRunningProductionPlan(): Promise<ProductionPlan | undefined> {
+    const running = await this.readRunningPlans()
+    if (running.length > 1) {
+      throw new RepositoryError(
+        'active_plan_conflict',
+        'Persistence contains more than one running (active or stale) ProductionPlan.',
+      )
+    }
+    return running[0]
+  }
+
+  /** Reads every running Plan in the current transaction zone. */
+  private readRunningPlans(): Promise<ProductionPlan[]> {
+    return this.database.productionPlans
+      .where('status')
+      .anyOf(RUNNING_PLAN_STATUSES)
+      .toArray()
+  }
+
+  private async assertNoOtherRunningPlan(plan: ProductionPlan): Promise<void> {
+    if (!isRunningProductionPlanStatus(plan.status)) return
+    const running = await this.readRunningPlans()
+    if (running.some(({ id }) => id !== plan.id)) {
+      throw new RepositoryError(
+        'active_plan_conflict',
+        'Another ProductionPlan is already running (active or stale).',
+      )
+    }
+  }
+
+  /**
    * Inserts a Plan that must not already exist.
    *
    * A newly calculated Plan carries a fresh ID, so a colliding key means the
@@ -63,18 +105,7 @@ export class ProductionPlanRepository {
       this.database,
       [this.database.productionPlans],
       async () => {
-        if (plan.status === 'active') {
-          const activePlans = await this.database.productionPlans
-            .where('status')
-            .equals('active')
-            .toArray()
-          if (activePlans.some(({ id }) => id !== plan.id)) {
-            throw new RepositoryError(
-              'active_plan_conflict',
-              'Another ProductionPlan is already active.',
-            )
-          }
-        }
+        await this.assertNoOtherRunningPlan(plan)
         await this.database.productionPlans.add(plan)
         return plan
       },
@@ -87,18 +118,7 @@ export class ProductionPlanRepository {
       this.database,
       [this.database.productionPlans],
       async () => {
-        if (plan.status === 'active') {
-          const activePlans = await this.database.productionPlans
-            .where('status')
-            .equals('active')
-            .toArray()
-          if (activePlans.some(({ id }) => id !== plan.id)) {
-            throw new RepositoryError(
-              'active_plan_conflict',
-              'Another ProductionPlan is already active.',
-            )
-          }
-        }
+        await this.assertNoOtherRunningPlan(plan)
         await this.database.productionPlans.put(plan)
         return plan
       },
@@ -119,10 +139,10 @@ export class ProductionPlanRepository {
         'ProductionPlan',
         validateProductionPlan(previousActivePlanReplacement),
       )
-      if (previousActivePlanReplacement.status === 'active') {
+      if (isRunningProductionPlanStatus(previousActivePlanReplacement.status)) {
         throw new RepositoryError(
           'active_plan_conflict',
-          'The previous active Plan replacement must have a non-active status.',
+          'The previous running Plan replacement must be neither active nor stale.',
         )
       }
     }
@@ -138,17 +158,14 @@ export class ProductionPlanRepository {
             `ProductionPlan '${planId}' was not found.`,
           )
         }
-        const activePlans = await this.database.productionPlans
-          .where('status')
-          .equals('active')
-          .toArray()
-        if (activePlans.length > 1) {
+        const runningPlans = await this.readRunningPlans()
+        if (runningPlans.length > 1) {
           throw new RepositoryError(
             'active_plan_conflict',
-            'Persistence contains more than one active ProductionPlan.',
+            'Persistence contains more than one running (active or stale) ProductionPlan.',
           )
         }
-        const current = activePlans[0]
+        const current = runningPlans[0]
         if (current && current.id !== planId) {
           if (
             !previousActivePlanReplacement ||
