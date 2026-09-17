@@ -250,9 +250,32 @@ OwnedWeapons and changed Targets put, Plan put), the save point whose boundary i
 undone record is deleted, a save point the undone terminal transition deleted is
 restored, and the record is deleted with no Undo record added. It added no persisted
 field and changed no calculation semantics, so the three versions stay 12 / 6 / 9.
-`finished_as_compromise`, save point record / restore, abandonment, replan
-adoption, the breaking-change guard, and the Execution Navigator UI are still not
-implemented.
+The sixth PR (the Execution save point runtime) implemented recording and restoring
+the game save point (`src/domain/execution/executionSavePoint.ts`,
+`ProductionPlanExecutionService.recordExecutionSavePoint()` /
+`restoreExecutionSavePoint()`). Recording is allowed only for an `active` Plan whose
+current Step premises and `expectedStateBefore` hold; it snapshots the whole RngState,
+every Normal Counter, the execution scope OwnedWeapons (Route references of the
+selected Entries, weapons this Plan's ExecutionHistory registered, weapons in progress
+for the Plan) and TargetWeapons (Plan-dependent Targets plus Targets preferring a scope
+weapon), the whole Plan, and the latest ExecutionHistory ID by
+`compareExecutionHistoryOrder()`, replacing the Plan's one save point with no
+ExecutionHistory added. Restoring an `active` / `stale` Plan names the save point's
+`recordedAt` (a save point recorded again is refused with `save_point_changed`),
+refuses before any write when a snapshot OwnedWeapon, a selected BuildListEntry, or a
+Plan-dependent Target is missing (never revived), or when the boundary record is
+missing / foreign or the snapshot does not cover its whole formal execution scope
+(the same scope recording derives: Route references, weapons registered up to the
+boundary, in-progress weapons, completed Steps' tracked weapons, Plan-dependent Targets,
+Targets preferring a scope weapon; `save_point_snapshot_invalid`, never filled in from
+the current state and kept separate from current-existence refusals), and then in one transaction
+restores the snapshot bodies (whole Normal Counter collection replaced, still-existing
+snapshot Targets only), deletes the OwnedWeapons registered by later records, returns a
+Target outside the snapshot to the before body of the earliest later record that
+changed it, deletes the later records, and keeps the save point. It added no persisted
+field and changed no calculation semantics, so the three versions stay 12 / 6 / 9.
+`finished_as_compromise`, abandonment, replan adoption, the breaking-change guard,
+and the Execution Navigator UI are still not implemented.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -2997,10 +3020,10 @@ calculation schema 12 Execution Plan contract (Plan generation with
 `executionEffects`) are implemented. Of the Execution runtime, Plan start and the
 ordinary `confirmed_expected` Step confirmation (blind observation and
 `confirm_owned_ideal` included, with the full Undo snapshot and Plan completion), and
-the `actual_result_different` / `operation_uncertain` records, and Undo of the latest
-ExecutionHistory are implemented; finishing as a compromise, save point record /
-restore, abandonment, replan adoption, the breaking-change guard, and the Execution
-Navigator UI are not yet.
+the `actual_result_different` / `operation_uncertain` records, Undo of the latest
+ExecutionHistory, and game save point record / restore are implemented; finishing as
+a compromise, abandonment, replan adoption, the breaking-change guard, and the
+Execution Navigator UI are not yet.
 Implementation PRs follow the specification and must not fall back to the older
 Execution semantics.
 
