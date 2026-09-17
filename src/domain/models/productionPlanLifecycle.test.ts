@@ -11,6 +11,7 @@ import {
 } from './publicTypes'
 import {
   DOMAIN_FIXTURE_TIME,
+  createRestorationBonusSet,
   createValidExecutionHistory,
   createValidNormalArtianCounter,
   createValidProductionPlan,
@@ -103,6 +104,40 @@ describe('ProductionPlan lifecycle metadata', () => {
       expect.arrayContaining(['steps', 'currentStepId']),
     )
     expect(issuePaths({ ...advanced, status: 'completed', currentStepId: null, completedAt: DOMAIN_FIXTURE_TIME })).toContain('currentStepId')
+  })
+})
+
+describe('ExecutionHistory actualResult', () => {
+  const actual = (
+    restorationBonuses: ReturnType<typeof createRestorationBonusSet> | null,
+    restorationBonusScope: 'normal_artian' | null,
+  ): ExecutionHistory => ({
+    ...createValidExecutionHistory(),
+    actualResult: {
+      restorationBonuses,
+      restorationBonusScope,
+      seriesSkillId: null,
+      groupSkillId: null,
+      securedOwnedWeaponId: null,
+      note: null,
+    },
+  })
+
+  it('accepts restoration bonuses and scope that are both null or both present', () => {
+    expect(validateExecutionHistory(actual(null, null)).issues).toEqual([])
+    expect(validateExecutionHistory(actual(createRestorationBonusSet(), 'normal_artian')).issues).toEqual([])
+  })
+
+  it.each([
+    ['slots without a scope', () => actual(createRestorationBonusSet(), null)],
+    ['a scope without slots', () => actual(null, 'normal_artian')],
+  ])('refuses %s', (_label, build) => {
+    const result = validateExecutionHistory(build())
+    expect(result.isValid).toBe(false)
+    expect(result.issues).toContainEqual(expect.objectContaining({
+      path: 'actualResult.restorationBonusScope',
+      code: 'invalid_state',
+    }))
   })
 })
 

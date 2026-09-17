@@ -458,6 +458,28 @@ describe('Export schema 9', () => {
     }))
   })
 
+  it('refuses an ExecutionHistory whose actual slots carry no scope without throwing', () => {
+    const history = createValidExecutionHistory()
+    history.actualResult = {
+      restorationBonuses: createValidOwnedWeapon().restorationBonuses,
+      restorationBonusScope: null,
+      seriesSkillId: null,
+      groupSkillId: null,
+      securedOwnedWeaponId: null,
+      note: null,
+    }
+    let result: ReturnType<typeof prepareExportRootForImport> | undefined
+    expect(() => {
+      result = prepareExportRootForImport(JSON.parse(JSON.stringify(exportRoot({ executionHistory: [history] }))))
+    }).not.toThrow()
+    expect(result?.ok).toBe(false)
+    if (!result || result.ok) return
+    expect(result.issues).toContainEqual(expect.objectContaining({
+      path: 'executionHistory[0].actualResult.restorationBonusScope',
+      code: 'invalid_state',
+    }))
+  })
+
   it('refuses an invalid Target lifecycle or executionInProgress', () => {
     expect(prepareExportRootForImport(exportRoot({
       targetWeapons: [{ ...createValidTargetWeapon(), completedAt: DOMAIN_FIXTURE_TIME }],

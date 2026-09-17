@@ -1856,6 +1856,10 @@ function validateActualResult(
   if (actual.restorationBonusScope !== null) {
     validateRestorationBonusScope(actual.restorationBonusScope, `${path}.restorationBonusScope`, issues)
   }
+  // The five slots and their scope are one observation: both null or both present.
+  if ((actual.restorationBonuses !== null) !== (actual.restorationBonusScope !== null)) {
+    addIssue(issues, `${path}.restorationBonusScope`, 'invalid_state', 'restorationBonuses and restorationBonusScope must both be null or both be present.')
+  }
   if (actual.securedOwnedWeaponId !== null) {
     validateId(actual.securedOwnedWeaponId, `${path}.securedOwnedWeaponId`, issues)
   }
