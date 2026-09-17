@@ -1,4 +1,5 @@
 export * from './executionRuntimeError'
+export * from './executionSavePoint'
 export * from './executionUndo'
 export * from './expectedStepConfirmation'
 export * from './planExecutionState'

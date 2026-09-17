@@ -65,6 +65,27 @@ export type ExecutionRuntimeErrorCode =
   | 'undo_snapshot_invalid'
   /** The state restored from the snapshot fails entity, collection or reference validation. */
   | 'undo_result_invalid'
+  /** A game save point is recorded only for an active Plan (`docs/PLANNER_SPEC.md` 16.9). */
+  | 'save_point_record_not_allowed'
+  /** A game save point is restored only for an active or stale Plan (16.9). */
+  | 'save_point_restore_not_allowed'
+  /** The Plan has no game save point to restore. */
+  | 'save_point_not_found'
+  /** The Plan's game save point is not the one the user saw (it was recorded again). */
+  | 'save_point_changed'
+  /**
+   * The game save point cannot be restored exactly: it fails Domain validation,
+   * its ExecutionHistory boundary is missing or foreign, its snapshot Plan is not
+   * active, or it does not cover its execution scope.
+   */
+  | 'save_point_snapshot_invalid'
+  /**
+   * An entity the Plan needs no longer exists: a snapshot OwnedWeapon, a selected
+   * BuildListEntry or a Plan-dependent Target. It is never revived.
+   */
+  | 'save_point_required_entity_missing'
+  /** The state restored from the save point fails entity, collection or reference validation. */
+  | 'save_point_restore_invalid'
 
 export class ExecutionRuntimeError extends Error {
   readonly code: ExecutionRuntimeErrorCode

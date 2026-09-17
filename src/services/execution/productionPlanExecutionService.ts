@@ -5,6 +5,8 @@ import {
   ExecutionRuntimeError,
   executionFailure,
   prepareActualResultDifferent,
+  prepareExecutionSavePointRecord,
+  prepareExecutionSavePointRestore,
   prepareExecutionUndo,
   prepareExpectedStepConfirmation,
   prepareOperationUncertain,
@@ -14,6 +16,7 @@ import {
   type ExecutionNormalRestorationBonusObservation,
   type ExecutionPersistedState,
   type ExecutionResultingWeaponValidator,
+  type ExecutionSavePointRestoreWrite,
   type ExecutionStepWrite,
   type ExecutionUndoWrite,
 } from '../../domain/execution'
@@ -22,6 +25,7 @@ import type {
   CalculationContext,
   ExecutionHistory,
   ExecutionHistoryId,
+  ExecutionSavePoint,
   ISODateTimeString,
   PlanStepId,
   ProductionPlan,
@@ -98,6 +102,27 @@ export interface UndoLatestExecutionResult {
   undoneExecutionHistoryId: ExecutionHistoryId
 }
 
+export interface RecordExecutionSavePointRequest {
+  planId: ProductionPlanId
+}
+
+export interface RestoreExecutionSavePointRequest {
+  planId: ProductionPlanId
+  /**
+   * The `recordedAt` of the save point the user saw. The Plan's save point must
+   * still be exactly that one inside the transaction; a save point recorded
+   * again later is never restored in its place.
+   */
+  recordedAt: ISODateTimeString
+}
+
+/** The Plan restored from its game save point, the kept save point and the deleted records. */
+export interface RestoreExecutionSavePointResult {
+  plan: ProductionPlan
+  savePoint: ExecutionSavePoint
+  deletedExecutionHistoryIds: ExecutionHistoryId[]
+}
+
 /**
  * The Execution runtime of a calculation schema 12 ProductionPlan
  * (`docs/PLANNER_SPEC.md` 16.1 / 16.2 / 16.15, `docs/DATA_MODEL.md` 14.4).
@@ -111,9 +136,9 @@ export interface UndoLatestExecutionResult {
  * Implemented: starting a draft Plan, the ordinary `confirmed_expected` Step
  * confirmation (including a blind observation and `confirm_owned_ideal`), and
  * the two divergence records `actual_result_different` and
- * `operation_uncertain`, and the Undo of the latest ExecutionHistory. Finishing
- * as a compromise, game save point recording / restore, abandonment and replan
- * adoption are not implemented here yet.
+ * `operation_uncertain`, the Undo of the latest ExecutionHistory, and recording /
+ * restoring the Plan's game save point. Finishing as a compromise, abandonment
+ * and replan adoption are not implemented here yet.
  */
 export class ProductionPlanExecutionService {
   private readonly dependencies: ProductionPlanExecutionServiceDependencies
@@ -240,6 +265,81 @@ export class ProductionPlanExecutionService {
       await this.writeUndo(undo)
       return { plan: undo.plan, undoneExecutionHistoryId: undo.deletedExecutionHistoryId }
     })
+  }
+
+  /**
+   * "ゲーム内セーブ済みとして記録" (16.9): stores the snapshot of the current
+   * execution state as the Plan's one save point, replacing an earlier one. Only
+   * the user's explicit action calls this. No other entity changes and no
+   * ExecutionHistory is added.
+   */
+  recordExecutionSavePoint(request: RecordExecutionSavePointRequest): Promise<ExecutionSavePoint> {
+    const { database } = this.dependencies
+    return this.runExecutionTransaction(async () => {
+      const plan = await this.requirePlan(request.planId)
+      const savePoint = prepareExecutionSavePointRecord({
+        plan,
+        state: await this.readState(plan),
+        currentCalculationContext: this.dependencies.currentCalculationContext,
+        now: this.dependencies.clock.now(),
+      })
+      // The ID is derived from the Plan, so `put` replaces the previous one; any
+      // other record of the Plan is removed too.
+      await database.executionSavePoints
+        .where('productionPlanId')
+        .equals(plan.id)
+        .and(({ id }) => id !== savePoint.id)
+        .delete()
+      await database.executionSavePoints.put(savePoint)
+      return savePoint
+    })
+  }
+
+  /**
+   * "最後のゲーム内セーブ地点へ戻す" (16.9): restores the Execution state the game
+   * save corresponds to and deletes the Plan's later ExecutionHistory, keeping
+   * the save point. The in-game state itself is the user's responsibility.
+   */
+  restoreExecutionSavePoint(request: RestoreExecutionSavePointRequest): Promise<RestoreExecutionSavePointResult> {
+    const { database } = this.dependencies
+    return this.runExecutionTransaction(async () => {
+      const plan = await this.requirePlan(request.planId)
+      const restore = prepareExecutionSavePointRestore({
+        plan,
+        recordedAt: request.recordedAt,
+        state: {
+          ownedWeapons: await database.ownedWeapons.toArray(),
+          targetWeapons: await database.targetWeapons.toArray(),
+          buildListEntries: await database.buildListEntries.toArray(),
+          planExecutionHistory: await database.executionHistory.where('planId').equals(plan.id).toArray(),
+          executionSavePoint:
+            (await database.executionSavePoints.get(executionSavePointIdForPlan(plan.id))) ?? null,
+        },
+        currentCalculationContext: this.dependencies.currentCalculationContext,
+      })
+      await this.writeSavePointRestore(restore)
+      return {
+        plan: restore.plan,
+        savePoint: restore.savePoint,
+        deletedExecutionHistoryIds: restore.deletedExecutionHistoryIds,
+      }
+    })
+  }
+
+  private async writeSavePointRestore(restore: ExecutionSavePointRestoreWrite): Promise<void> {
+    const { database } = this.dependencies
+    await database.rngState.put(restore.rngState)
+    // The save point holds the whole collection: a Counter record absent from
+    // it must not survive the restore.
+    await database.normalArtianCounters.clear()
+    if (restore.normalCounters.length > 0) await database.normalArtianCounters.bulkPut(restore.normalCounters)
+    if (restore.deletedOwnedWeaponIds.length > 0) await database.ownedWeapons.bulkDelete(restore.deletedOwnedWeaponIds)
+    if (restore.restoredOwnedWeapons.length > 0) await database.ownedWeapons.bulkPut(restore.restoredOwnedWeapons)
+    if (restore.restoredTargetWeapons.length > 0) await database.targetWeapons.bulkPut(restore.restoredTargetWeapons)
+    await database.productionPlans.put(restore.plan)
+    if (restore.deletedExecutionHistoryIds.length > 0) {
+      await database.executionHistory.bulkDelete(restore.deletedExecutionHistoryIds)
+    }
   }
 
   private async writeUndo(undo: ExecutionUndoWrite): Promise<void> {

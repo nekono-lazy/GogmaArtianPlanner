@@ -4465,7 +4465,7 @@ Execution Plan契約（16.3 / 16.5 / 16.6 / 16.11のhash、projection、`executi
 適用位置と完成時保護）は実装済みである。Execution runtimeのうち、Plan開始（`draft` -> `active`）と
 `confirmed_expected` のStep確定（blind観測値入力、`confirm_owned_ideal`、Undo Snapshot生成、最終Stepの
 Plan completedを含む）、および想定外結果（`actual_result_different`）・操作内容不明（`operation_uncertain`）の
-記録（16.15）、最新ExecutionHistoryのUndo（16.16）は実装済みである。妥協品として終了、ゲーム内セーブ地点の記録 / 復元、Plan破棄、
+記録（16.15）、最新ExecutionHistoryのUndo（16.16）、ゲーム内セーブ地点の記録 / 復元（16.9）は実装済みである。妥協品として終了、Plan破棄、
 再計画採用、Planを壊す変更の警告、Execution Navigator UI（RNG再同定への誘導表示を含む）などは
 後続の実装PRが本章をauthorityとして実装する。本章と矛盾する旧記述（Execution上の独立した「確保」操作、
 Target / Build List変更による一律stale、reserve時の既存保護維持など）は本改訂で
@@ -4939,6 +4939,25 @@ preferredにしていたPlan非依存Target）が現在欠損していても、�
 機能ではない。セーブ地点より後に追加したPlan非依存Target、Build List Entry、
 execution scope外の所持武器、設定などは巻き戻さない。ユーザーが削除したentityを復活させない。
 復元後のPlanに必要なentityが欠損している場合は、復活させず復元自体を拒否する（復元前検証）。
+
+実装上の確定事項（セーブ地点Runtime PR）。
+
+- 記録時は、Planが `active` であることに加え、Step確定と同じ前提検証（current Step、Plan依存Target / Entry、
+  `expectedStateBefore` との一致）を満たす場合だけ記録する。乖離した状態をsnapshotしない。
+  `lastExecutionHistoryId` はPlanのExecutionHistoryを `compareExecutionHistoryOrder()` で並べた最後の記録とする
+- execution scopeの「Plan依存EntryのRouteが参照する所持武器」は `referencedOwnedWeaponsHash` と同じRoute参照
+  authority（`collectReferencedOwnedWeaponIds()`）で導出する。「このPlanのExecutionが登録した武器」は現在残っている
+  ExecutionHistoryの `addedOwnedWeaponIds` のうち現存する武器とする。snapshotはID順に保持する
+- 復元要求は表示中セーブ地点の `recordedAt` を指定し、transaction内で現在のセーブ地点と一致しなければ拒否する。
+  別タブ等で上書きされた、ユーザーが見ていないセーブ地点を代わりに復元しない
+- 境界（`lastExecutionHistoryId`）の記録が存在しない、または別Planの記録である場合、nullとみなさず拒否する。
+  境界より後（`compareExecutionHistoryOrder()` で境界より大きい記録）だけを「セーブ地点より後」とする
+- セーブ地点が自身のscope（Plan依存Target、Plan依存EntryのRoute参照武器）を含まない、snapshot Planが `active`
+  でない、またはセーブ地点より後に登録された武器がsnapshotに含まれる場合は、現在値から補完せず拒否する
+- 復元値はsnapshot本体そのものであり、RNG予測の再実行、Counter差分の逆算、timestampの付け直しをしない。
+  NormalArtianCounterはcollection全体を置き換える。書き込み前に復元後のentity、Target優先起点collection、
+  セーブ地点とその参照（残すExecutionHistoryに対して）を検証する
+- 復元成功後もセーブ地点は変更せず残す。記録・復元のいずれもExecutionHistoryを追加しない
 
 #### 失効
 
