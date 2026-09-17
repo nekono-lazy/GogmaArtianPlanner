@@ -307,6 +307,35 @@ describe('ProductionPlanRepository', () => {
       expect(await database.productionPlans.where('status').equals('active').count()).toBe(1)
     }))
 
+  it('treats a stale Plan as the one running Plan', () =>
+    withDatabase(async (database) => {
+      const repository = new ProductionPlanRepository(database)
+      const stale = planWithIdentity('plan.fixture.stale', 'step.fixture.stale')
+      stale.status = 'stale'
+      const active = planWithIdentity('plan.fixture.active', 'step.fixture.active')
+      active.status = 'active'
+      await repository.putProductionPlan(stale)
+      expect(await repository.getRunningProductionPlan()).toEqual(stale)
+      // `getActiveProductionPlan()` keeps meaning `active` only.
+      expect(await repository.getActiveProductionPlan()).toBeUndefined()
+      await expect(repository.putProductionPlan(active)).rejects.toMatchObject({
+        code: 'active_plan_conflict',
+      })
+      await expect(repository.addProductionPlan(active)).rejects.toMatchObject({
+        code: 'active_plan_conflict',
+      })
+      const draft = planWithIdentity('plan.fixture.draft', 'step.fixture.draft')
+      await repository.putProductionPlan(draft)
+      await expect(
+        repository.activateProductionPlan(draft.id, undefined, DOMAIN_FIXTURE_TIME),
+      ).rejects.toMatchObject({ code: 'active_plan_conflict' })
+      // A replacement that is itself still running cannot end the running Plan.
+      expect(() =>
+        repository.activateProductionPlan(draft.id, { ...stale, status: 'stale' }, DOMAIN_FIXTURE_TIME),
+      ).toThrow(RepositoryError)
+      expect((await repository.getProductionPlan(draft.id))?.status).toBe('draft')
+    }))
+
   it('switches active Plans atomically using an explicit previous snapshot', () =>
     withDatabase(async (database) => {
       const repository = new ProductionPlanRepository(database)
@@ -318,6 +347,8 @@ describe('ProductionPlanRepository', () => {
       const previousReplacement: ProductionPlan = {
         ...first,
         status: 'abandoned',
+        abandonmentReason: 'replan_adopted',
+        abandonedAt: DOMAIN_FIXTURE_TIME,
       }
 
       const activated = await repository.activateProductionPlan(
@@ -341,7 +372,12 @@ describe('ProductionPlanRepository', () => {
       await expect(
         repository.activateProductionPlan(
           productionPlanId('plan.fixture.missing'),
-          { ...current, status: 'abandoned' },
+          {
+            ...current,
+            status: 'abandoned',
+            abandonmentReason: 'replan_adopted',
+            abandonedAt: DOMAIN_FIXTURE_TIME,
+          },
         ),
       ).rejects.toMatchObject({ code: 'not_found' })
       expect(await repository.getActiveProductionPlan()).toEqual(current)

@@ -12,6 +12,7 @@ import type {
   OwnedWeaponId,
   PlanStepId,
   PlanStepOperationType,
+  ProductionPlanAbandonmentReason,
   ProductionPlanId,
   ProductionPlanStatus,
   RecalculationReason,
@@ -41,6 +42,14 @@ export interface ProductionPlan {
   requiredMaterials: MaterialRequirement[]
   currentStepId: PlanStepId | null
   recalculationReasons: RecalculationReason[]
+  /**
+   * Plan lifecycle metadata (`docs/DATA_MODEL.md` 11.1). `abandonmentReason` /
+   * `abandonedAt` are non-null exactly when `status === 'abandoned'`, and
+   * `completedAt` exactly when `status === 'completed'`.
+   */
+  abandonmentReason: ProductionPlanAbandonmentReason | null
+  abandonedAt: ISODateTimeString | null
+  completedAt: ISODateTimeString | null
   createdAt: ISODateTimeString
   updatedAt: ISODateTimeString
 }
@@ -333,8 +342,17 @@ export interface ExecutionUndoSnapshot {
   affectedOwnedWeaponsBefore: OwnedWeapon[]
   addedOwnedWeaponIds: OwnedWeaponId[]
   removedOwnedWeaponsBefore: OwnedWeapon[]
+  /**
+   * Every TargetWeapon the Step changed, as it was before the Step: the linked
+   * Target, any Target whose link was cleared, a completed Target, and every
+   * Target whose preference an Ideal completion cleared - Plan-dependent or not
+   * (`docs/DATA_MODEL.md` 12).
+   */
+  affectedTargetWeaponsBefore: TargetWeapon[]
   /** Undo restores this snapshot verbatim; it must not infer new stale reasons. */
   productionPlanBefore: ProductionPlan
+  /** The Plan's game save point before the Step, so a deletion by the Step can be undone. */
+  executionSavePointBefore: ExecutionSavePoint | null
 }
 
 /**

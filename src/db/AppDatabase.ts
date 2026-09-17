@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie'
 import { migrateLegacyTargetCompromise } from './migrateLegacyTargetCompromise'
+import { fillNonTerminalPlanLifecycle } from '../domain/models/persistenceCompatibility'
 import type {
   AppSettings,
   BuildCandidate,
@@ -14,7 +15,7 @@ import type {
 } from '../domain/models/publicTypes'
 
 export const DATABASE_NAME = 'mh-wilds-gogma-artian-planner'
-export const DATABASE_SCHEMA_VERSION = 5
+export const DATABASE_SCHEMA_VERSION = 6
 
 export class AppDatabase extends Dexie {
   rngState!: Table<RngState, 'current'>
@@ -106,7 +107,7 @@ export class AppDatabase extends Dexie {
     // artifacts (BuildCandidate, BuildListEntry, ProductionPlan,
     // ExecutionHistory) keep their exact persisted contents. None of this moves
     // `CURRENT_CALCULATION_APP_SCHEMA_VERSION`: no calculation semantics change.
-    this.version(DATABASE_SCHEMA_VERSION).stores({
+    this.version(5).stores({
       targetWeapons: 'id, weaponTypeId, elementId, priority, isEnabled, lifecycleStatus, updatedAt',
       executionSavePoints: 'id, &productionPlanId, recordedAt',
     }).upgrade(async (transaction) => {
@@ -117,6 +118,36 @@ export class AppDatabase extends Dexie {
       })
       await transaction.table('ownedWeapons').toCollection().modify((weapon: Record<string, unknown>) => {
         weapon.executionInProgress = null
+      })
+    })
+    // v6 adds the ProductionPlan lifecycle metadata (`abandonmentReason`,
+    // `abandonedAt`, `completedAt`, `docs/DATA_MODEL.md` 11.1) required by the
+    // Execution runtime. No table or index changes.
+    //
+    // Before this version no runtime ever moved a Plan past `active`: the
+    // Planner saves `draft` Plans only, and nothing wrote `completed`,
+    // `abandoned`, or any ExecutionHistory. So a `draft` / `active` / `stale`
+    // Plan deterministically gets the three `null`s - the value its status
+    // requires, not an inference. A `completed` or `abandoned` record has no
+    // known completion time or abandonment reason, so it is left exactly as
+    // persisted and fails Domain validation instead of being guessed
+    // (`completedAt = updatedAt`, `user_abandoned`, ...). The same rule applies
+    // to the Plan snapshot inside a game save point.
+    //
+    // ExecutionHistory is not rewritten either: an Undo snapshot written before
+    // this version carries no `affectedTargetWeaponsBefore` or
+    // `executionSavePointBefore`, which cannot be reconstructed, so it keeps its
+    // persisted contents and is never undoable. None of this moves
+    // `CURRENT_CALCULATION_APP_SCHEMA_VERSION`.
+    this.version(DATABASE_SCHEMA_VERSION).stores({}).upgrade(async (transaction) => {
+      await transaction.table('productionPlans').toCollection().modify((plan: Record<string, unknown>) => {
+        fillNonTerminalPlanLifecycle(plan)
+      })
+      await transaction.table('executionSavePoints').toCollection().modify((savePoint: Record<string, unknown>) => {
+        const plan = savePoint.productionPlan
+        if (typeof plan === 'object' && plan !== null && !Array.isArray(plan)) {
+          fillNonTerminalPlanLifecycle(plan as Record<string, unknown>)
+        }
       })
     })
   }

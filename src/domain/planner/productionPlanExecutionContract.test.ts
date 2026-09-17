@@ -88,10 +88,13 @@ function completionsOf(step: PlanStep | undefined) {
 }
 
 describe('calculation schema 12 version boundary', () => {
-  it('moves the calculation schema to 12, Export to 8, and keeps Dexie at 5', () => {
+  it('keeps the calculation schema at 12 while the Execution runtime moved Export to 9 and Dexie to 6', () => {
+    // The Execution Plan contract moved the calculation schema to 12 and Export
+    // to 8 without a Dexie upgrade; the Execution runtime lifecycle metadata then
+    // moved Export to 9 and Dexie to 6 without touching calculation semantics.
     expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(12)
-    expect(EXPORT_SCHEMA_VERSION).toBe(8)
-    expect(DATABASE_SCHEMA_VERSION).toBe(5)
+    expect(EXPORT_SCHEMA_VERSION).toBe(9)
+    expect(DATABASE_SCHEMA_VERSION).toBe(6)
   })
 
   it('fails a version 11 Plan closed instead of reusing it as a current Plan', () => {
@@ -557,8 +560,17 @@ describe('Export schema 7 -> 8', () => {
     }
   }
 
+  /** A Plan as a schema 7 Export stores it: before the lifecycle metadata. */
+  function schema7Plan(): ProductionPlan {
+    const plan = createValidProductionPlan() as Partial<ProductionPlan>
+    delete plan.abandonmentReason
+    delete plan.abandonedAt
+    delete plan.completedAt
+    return plan as ProductionPlan
+  }
+
   it('changes only the version and keeps every legacy Plan exactly as persisted', () => {
-    const legacy = createValidProductionPlan()
+    const legacy = schema7Plan()
     legacy.steps[0].operationType = 'reserve_weapon'
     const migrated = migrateExportRootV7ToV8(schema7Root(legacy))
     expect(migrated.ok).toBe(true)
@@ -566,17 +578,22 @@ describe('Export schema 7 -> 8', () => {
     expect(migrated.root.schemaVersion).toBe(8)
     expect(migrated.root.productionPlans).toEqual([legacy])
     expect(migrated.root.productionPlans[0].steps[0].executionEffects).toBeUndefined()
-    expect(prepareExportRootForImport(JSON.parse(JSON.stringify(schema7Root(legacy)))).ok).toBe(true)
+    const imported = prepareExportRootForImport(JSON.parse(JSON.stringify(schema7Root(legacy))))
+    expect(imported.ok).toBe(true)
+    if (!imported.ok) return
+    // Schema 8 -> 9 then gives the draft Plan its deterministic lifecycle nulls.
+    expect(imported.root.schemaVersion).toBe(9)
+    expect(imported.root.productionPlans).toEqual([{ ...legacy, abandonmentReason: null, abandonedAt: null, completedAt: null }])
   })
 
   it('refuses a schema 7 root whose Plan already carries a schema 8 field', () => {
-    const forged = createValidProductionPlan()
+    const forged = schema7Plan()
     forged.steps[0].executionEffects = {
       trackedOwnedWeaponId: null, normalCreationRole: null, registersTrackedWeapon: false,
       observationBinding: null, targetLinks: [], compromiseLabels: [], targetCompletions: [],
     }
     expect(migrateExportRootV7ToV8(schema7Root(forged)).ok).toBe(false)
-    const current = createValidProductionPlan()
+    const current = schema7Plan()
     current.calculationContext.appSchemaVersion = 12
     expect(migrateExportRootV7ToV8(schema7Root(current)).ok).toBe(false)
   })

@@ -16,7 +16,13 @@ import type {
   ProductionPlan,
 } from './planning'
 import {
+  fillNonTerminalPlanLifecycle,
+  hasProductionPlanLifecycleField,
+  isTerminalProductionPlanRecord,
+} from './persistenceCompatibility'
+import {
   EXECUTION_PLAN_CONTRACT_APP_SCHEMA_VERSION,
+  validateExecutionHistory,
   validateExecutionSavePoint,
   validateExecutionSavePointReferences,
   validateOwnedWeapon,
@@ -34,9 +40,12 @@ import {
  * `ExpectedPlanState.targetExecutionStateHash`, the Plan-dependent
  * `PlanningInputSnapshot` hashes and the `confirm_owned_ideal` Step
  * (`docs/DATA_MODEL.md` 15). It is independent of `DATABASE_SCHEMA_VERSION`
- * and of `CURRENT_CALCULATION_APP_SCHEMA_VERSION`.
+ * and of `CURRENT_CALCULATION_APP_SCHEMA_VERSION`. Version 9 adds the
+ * ProductionPlan lifecycle metadata (`abandonmentReason`, `abandonedAt`,
+ * `completedAt`) and the Execution lifecycle Undo snapshot
+ * (`affectedTargetWeaponsBefore`, `executionSavePointBefore`).
  */
-export const EXPORT_SCHEMA_VERSION = 8
+export const EXPORT_SCHEMA_VERSION = 9
 
 export const EXPORT_APP_NAME = 'mh-wilds-gogma-artian-planner'
 
@@ -85,6 +94,15 @@ export interface ExportRootV6
  */
 export interface ExportRootV7 extends Omit<ExportRoot, 'schemaVersion'> {
   schemaVersion: 7
+}
+
+/**
+ * The schema 8 Export shape. Its ProductionPlans carry no lifecycle metadata
+ * and its ExecutionHistory Undo snapshots no Target or save point fields; the
+ * entity types are the current ones only for reading convenience.
+ */
+export interface ExportRootV8 extends Omit<ExportRoot, 'schemaVersion'> {
+  schemaVersion: 8
 }
 
 export type ExportRootMigrationResult =
@@ -314,7 +332,7 @@ function schemaV8PlanFieldIssues(plan: unknown, path: string): DomainValidationI
  */
 export function migrateExportRootV7ToV8(
   root: ExportRootV7,
-): ExportRootMigrationResult {
+): { ok: true; root: ExportRootV8 } | { ok: false; issues: DomainValidationIssue[] } {
   if (!isRecord(root)) {
     return { ok: false, issues: [structureIssue('', 'Export root must be an object.')] }
   }
@@ -340,6 +358,68 @@ export function migrateExportRootV7ToV8(
   } catch {
     return { ok: false, issues: [structureIssue('', 'Export root cannot be copied.')] }
   }
+  return { ok: true, root: { ...migrated, schemaVersion: 8 } }
+}
+
+/**
+ * Pure schema 8 -> 9 Export migration.
+ *
+ * Schema 9 adds the ProductionPlan lifecycle metadata and the Execution
+ * lifecycle Undo snapshot. No runtime before schema 9 moved a Plan past
+ * `active` or wrote an ExecutionHistory, so:
+ *
+ * - a `draft` / `active` / `stale` Plan - persisted or inside a game save point -
+ *   gets `abandonmentReason = abandonedAt = completedAt = null`, the only value
+ *   its status allows
+ * - a `completed` or `abandoned` Plan would need a completion time or an
+ *   abandonment reason nobody recorded, so the root fails closed instead of
+ *   guessing one
+ * - an ExecutionHistory Undo snapshot has no `affectedTargetWeaponsBefore` or
+ *   `executionSavePointBefore`, which cannot be reconstructed (an empty list or
+ *   `null` would claim that no Target changed and no save point existed), so a
+ *   root with any ExecutionHistory fails closed
+ *
+ * A schema 8 Plan that already carries a lifecycle field is not a schema 8
+ * record, so it fails closed too.
+ */
+export function migrateExportRootV8ToV9(
+  root: ExportRootV8,
+): ExportRootMigrationResult {
+  if (!isRecord(root)) {
+    return { ok: false, issues: [structureIssue('', 'Export root must be an object.')] }
+  }
+  const record = root as unknown as Record<string, unknown>
+  const shapeIssues = ['productionPlans', 'executionHistory', 'executionSavePoints']
+    .flatMap((field) => collectionShapeIssues(record, field))
+  if (shapeIssues.length > 0) return { ok: false, issues: shapeIssues }
+  const planIssues = (plan: unknown, path: string): DomainValidationIssue[] => {
+    if (!isRecord(plan)) return [structureIssue(path, `${path} must be an object.`)]
+    if (hasProductionPlanLifecycleField(plan)) {
+      return [structureIssue(path, 'A schema 8 ProductionPlan cannot carry the schema 9 lifecycle fields.')]
+    }
+    if (isTerminalProductionPlanRecord(plan)) {
+      return [structureIssue(`${path}.status`, 'A schema 8 completed or abandoned ProductionPlan has no recorded lifecycle metadata and cannot be migrated.')]
+    }
+    return []
+  }
+  const issues = [
+    ...root.productionPlans.flatMap((plan, index) => planIssues(plan, `productionPlans[${index}]`)),
+    ...root.executionSavePoints.flatMap((savePoint, index) =>
+      planIssues(savePoint.productionPlan, `executionSavePoints[${index}].productionPlan`)),
+    ...root.executionHistory.map((_history, index) =>
+      structureIssue(`executionHistory[${index}].undoSnapshot`, 'A schema 8 ExecutionHistory Undo snapshot lacks the Target and save point state and cannot be migrated.')),
+  ]
+  if (issues.length > 0) return { ok: false, issues }
+  let migrated: ExportRootV8
+  try {
+    migrated = structuredClone(root)
+  } catch {
+    return { ok: false, issues: [structureIssue('', 'Export root cannot be copied.')] }
+  }
+  migrated.productionPlans.forEach((plan) =>
+    fillNonTerminalPlanLifecycle(plan as unknown as Record<string, unknown>))
+  migrated.executionSavePoints.forEach((savePoint) =>
+    fillNonTerminalPlanLifecycle(savePoint.productionPlan as unknown as Record<string, unknown>))
   return { ok: true, root: { ...migrated, schemaVersion: EXPORT_SCHEMA_VERSION } }
 }
 
@@ -410,6 +490,10 @@ export function validateExportRootExecutionLifecycle(
     const path = `productionPlans[${index}]`
     issues.push(...runTypedValidation(path, () => prefixed(path, validateProductionPlan(plan))))
   })
+  root.executionHistory.forEach((history, index) => {
+    const path = `executionHistory[${index}]`
+    issues.push(...runTypedValidation(path, () => prefixed(path, validateExecutionHistory(history))))
+  })
   root.executionSavePoints.forEach((savePoint, index) => {
     const path = `executionSavePoints[${index}]`
     issues.push(...runTypedValidation(path, () => prefixed(path, validateExecutionSavePoint(savePoint))))
@@ -431,10 +515,10 @@ export function validateExportRootExecutionLifecycle(
 
 /**
  * Brings a parsed Export object to the current schema and validates its
- * Execution lifecycle state, failing closed on anything else. Schema 8 is read
- * as is, schema 7 goes through `migrateExportRootV7ToV8()`, schema 6 through
- * `migrateExportRootV6ToV7()` and then `migrateExportRootV7ToV8()`, and every
- * other version is refused. Nothing is applied here: the caller replaces its data
+ * Execution lifecycle state, failing closed on anything else. Schema 9 is read
+ * as is; schema 8, 7 and 6 go through the pure migrations in order
+ * (`migrateExportRootV6ToV7()`, `migrateExportRootV7ToV8()`,
+ * `migrateExportRootV8ToV9()`), and every other version is refused. Nothing is applied here: the caller replaces its data
  * only after a successful result.
  */
 export function prepareExportRootForImport(
@@ -468,8 +552,14 @@ export function prepareExportRootForImport(
     } catch {
       return { ok: false, issues: [structureIssue('', 'Export root cannot be copied.')] }
     }
+  } else if (candidate.schemaVersion === 8) {
+    const migrated = migrateExportRootV8ToV9(input as ExportRootV8)
+    if (!migrated.ok) return migrated
+    root = migrated.root
   } else if (candidate.schemaVersion === 7) {
-    const migrated = migrateExportRootV7ToV8(input as ExportRootV7)
+    const toV8 = migrateExportRootV7ToV8(input as ExportRootV7)
+    if (!toV8.ok) return toV8
+    const migrated = migrateExportRootV8ToV9(toV8.root)
     if (!migrated.ok) return migrated
     root = migrated.root
   } else if (candidate.schemaVersion === 6) {
@@ -478,7 +568,9 @@ export function prepareExportRootForImport(
     if (shapeIssues.length > 0) return { ok: false, issues: shapeIssues }
     const toV7 = migrateExportRootV6ToV7(input as ExportRootV6)
     if (!toV7.ok) return toV7
-    const migrated = migrateExportRootV7ToV8(toV7.root)
+    const toV8 = migrateExportRootV7ToV8(toV7.root)
+    if (!toV8.ok) return toV8
+    const migrated = migrateExportRootV8ToV9(toV8.root)
     if (!migrated.ok) return migrated
     root = migrated.root
   } else {

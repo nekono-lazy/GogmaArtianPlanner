@@ -297,6 +297,9 @@ export function createValidProductionPlan(): ProductionPlan {
     requiredMaterials: [{ materialId: 'material.fixture.a', quantity: 1 }],
     currentStepId: stepId,
     recalculationReasons: [],
+    abandonmentReason: null,
+    abandonedAt: null,
+    completedAt: null,
     createdAt: DOMAIN_FIXTURE_TIME,
     updatedAt: DOMAIN_FIXTURE_TIME,
   }
@@ -318,7 +321,9 @@ export function createValidExecutionHistory(): ExecutionHistory {
       affectedOwnedWeaponsBefore: [createValidOwnedWeapon()],
       addedOwnedWeaponIds: [],
       removedOwnedWeaponsBefore: [],
+      affectedTargetWeaponsBefore: [],
       productionPlanBefore: plan,
+      executionSavePointBefore: null,
     },
     createdAt: DOMAIN_FIXTURE_TIME,
   }

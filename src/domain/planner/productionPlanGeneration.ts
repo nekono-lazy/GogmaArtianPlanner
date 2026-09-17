@@ -613,6 +613,9 @@ export async function createProductionPlanWithObserver(
     requiredMaterials: collectRequiredMaterials(input, selectedBuildListEntryIds),
     currentStepId: steps[0]?.id ?? null,
     recalculationReasons: [],
+    abandonmentReason: null,
+    abandonedAt: null,
+    completedAt: null,
     createdAt: now,
     updatedAt: now,
   }

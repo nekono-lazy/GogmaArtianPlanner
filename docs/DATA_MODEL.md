@@ -192,7 +192,7 @@ constraintを黙って捨てることになるため、旧1..10の全計算artif
 現行versionの単一authorityは `src/domain/models/common.ts` の
 `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 12` とし、Search、BuildList、Plannerと
 benchmark入力のruntime creatorで共用する。永続モデル移行は独立してDexie
-`DATABASE_SCHEMA_VERSION`（現行5。14.2）で管理し、AppSettingsは `schemaVersion = 1` のままとする。Calculation semantics / artifact
+`DATABASE_SCHEMA_VERSION`（現行6。14.2）で管理し、AppSettingsは `schemaVersion = 1` のままとする。Calculation semantics / artifact
 validity境界とDexie schemaは別の概念であり、片方の更新はもう片方の更新を意味しない。
 gameVersion、Master Data versionは維持する。
 `PRODUCTION_RNG_ENGINE_VERSION` はこのcheckpoint境界では `production-rng:c5-e2` のまま維持し、
@@ -2023,7 +2023,7 @@ mh-wilds-gogma-artian-planner
 
 ## 14.2 DB schemaVersion
 
-初期作成schemaは1。現行DATABASE_SCHEMA_VERSIONは5。version(1)のstoresを保持し、
+初期作成schemaは1。現行DATABASE_SCHEMA_VERSIONは6。version(1)のstoresを保持し、
 version(2) upgradeでTarget妥協条件だけを解除する。Idealと他entityを保持し、compromiseNeedsReview=trueとする。
 旧Practical Skillも解除するため、移行直後はIdeal-onlyとなる。
 
@@ -2065,6 +2065,19 @@ version(5) upgradeでExecution lifecycleの永続状態を追加する。v1 -> v
 - BuildCandidate / BuildListEntry / ProductionPlan / ExecutionHistoryの過去artifactは書き換えない
 - `CURRENT_CALCULATION_APP_SCHEMA_VERSION` はこのupgradeでは変更しない（3.5）
 
+version(6) upgradeでProductionPlanのlifecycle metadata（`abandonmentReason`、`abandonedAt`、
+`completedAt`、11.1）を追加する。table / indexは変更しない。v1 -> ... -> v5 -> v6は順番に適用できること。
+
+- version 6より前のruntimeはPlanを `draft` でしか保存せず、`completed` / `abandoned` への遷移も
+  ExecutionHistoryの書き込みも行っていない
+- lifecycle fieldを持たない `draft` / `active` / `stale` のPlanだけに3 fieldの `null` を補完する。
+  statusが許す唯一の値であり推測ではない。ゲーム内セーブ地点snapshot内のPlanにも同じ規則を適用する
+- `completed` / `abandoned` のPlanは完了日時・破棄理由が記録されていないため、`completedAt = updatedAt`、
+  `user_abandoned` などを推測せず保存内容のまま残し、Domain validationでfail closedにする
+- ExecutionHistoryは書き換えない。旧Undo Snapshotには `affectedTargetWeaponsBefore` /
+  `executionSavePointBefore` が無く再構成できないため、保存内容のまま残しUndo対象にしない
+- `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は変更しない（12のまま）
+
 ```ts
 db.version(1).stores({
   rngState: "id",
@@ -2098,7 +2111,8 @@ ExecutionHistoryのembedded field追加に伴うversion境界は、それらを�
 upgradeで既存Targetを `completed`、既存OwnedWeaponを作成中と推測しない。
 calculation schema 12のPlanStep `executionEffects`、ExpectedPlanStateの `targetExecutionStateHash`、
 PlanningInputSnapshotの依存hashはPlan内embedded fieldであり、table / indexを変えないため
-Dexie versionを上げていない（`DATABASE_SCHEMA_VERSION = 5` のまま）。
+Dexie versionを上げていない（`DATABASE_SCHEMA_VERSION = 5` のまま）。Execution runtimeの実装PRで
+ProductionPlan lifecycle metadataのdata-only upgradeとしてversion(6)を追加した（14.2）。
 
 ## 14.4 Execution Transaction
 
@@ -2155,7 +2169,7 @@ Planner constrained re-searchを経たPlan保存も原子的に行う。契約�
 
 ```ts
 export interface ExportRoot {
-  schemaVersion: 8;
+  schemaVersion: 9;
   appName: "mh-wilds-gogma-artian-planner";
   exportedAt: ISODateTimeString;
   rngState: RngState | null;
@@ -2200,6 +2214,22 @@ Planの存在、`lastExecutionHistoryId` が同じPlanの既存履歴である�
 いずれかに違反すればImport全体をfail closedにする。セーブ地点の深いexpected-state検証は復元を
 行うExecution serviceの責務とする。
 
+Execution runtimeの実装PRで `schemaVersion` を9へ更新した。schema 9はProductionPlanのlifecycle metadata
+（`abandonmentReason`、`abandonedAt`、`completedAt`、11.1）と、ExecutionUndoSnapshotの
+`affectedTargetWeaponsBefore` / `executionSavePointBefore`（12）を含む。Import準備はschema 9をそのまま、
+schema 8を純粋関数 `migrateExportRootV8ToV9()`、schema 7 / 6を既存migrationの後に
+`migrateExportRootV8ToV9()` で読む。schema 8 -> 9は次だけを行い、推測をしない。
+
+- lifecycle fieldを持たない `draft` / `active` / `stale` のPlan（persistedとゲーム内セーブ地点のPlan）に
+  3 fieldの `null` を補完する
+- `completed` / `abandoned` のPlanは完了日時・破棄理由を推測できないため、root全体をfail closedにする
+- ExecutionHistoryが1件でもあれば、Undo Snapshotの `affectedTargetWeaponsBefore` /
+  `executionSavePointBefore` を再構成できない（空配列や `null` は「Targetを変更していない」
+  「セーブ地点が無かった」という事実の主張になる）ため、root全体をfail closedにする
+- schema 8を名乗りながらlifecycle fieldを持つPlanは拒否する
+
+Import validationはExecutionHistoryを `validateExecutionHistory()` でも検証する。
+
 ## 15.2 Import方針
 
 Import時は以下の順序で検証する。
@@ -2221,11 +2251,11 @@ Import方式。
 
 ## 15.3 Migration
 
-現行ExportRootはschemaVersion=8である（schemaVersion 8はcalculation schema 12のProductionPlan形状を加えた形状）。schemaVersion 6はBuildCandidateが `intermediateStateGroups` を、
+現行ExportRootはschemaVersion=9である（schemaVersion 8はcalculation schema 12のProductionPlan形状を加えた形状、schemaVersion 9はProductionPlan lifecycle metadataとExecution Undo Snapshotを加えた形状）。schemaVersion 6はBuildCandidateが `intermediateStateGroups` を、
 BuildListEntryが `intermediateStateSelection` を持つ最初の形状であり（schemaVersion 5は
 旧 `checkpointGroups` / `selectedCheckpointOpportunityIds` の形状）、schemaVersion 7はそれに
 Execution lifecycleの永続状態を加えた形状である（15.1）。
-Dexie `DATABASE_SCHEMA_VERSION = 5` とは独立して更新する。
+Dexie `DATABASE_SCHEMA_VERSION = 6` とは独立して更新する。
 現実装は型のみであり全置換Import/Exportサービスは未実装。
 旧schema=1を新Targetとして直接受理しない。将来のimportも純粋Target移行関数を使用し、
 旧Practical/OR/Practical Skillは解除、Ideal・ID・他entityは保持する。

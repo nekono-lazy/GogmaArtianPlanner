@@ -4462,8 +4462,11 @@ Targetとの作成中紐付け、妥協checkpoint、妥協品での終了、理�
 
 本章は仕様確定である。永続Entity基盤（Dexie 5 / Export 7）と、calculation schema 12の
 Execution Plan契約（16.3 / 16.5 / 16.6 / 16.11のhash、projection、`executionEffects`、Beam Searchのreserve
-適用位置と完成時保護）は実装済みである。Step確定、Undo、ゲーム内セーブ地点の記録 / 復元、Plan破棄、
-再計画採用などのExecution runtimeは後続の実装PRが本章をauthorityとして実装する。本章と矛盾する旧記述（Execution上の独立した「確保」操作、
+適用位置と完成時保護）は実装済みである。Execution runtimeのうち、Plan開始（`draft` -> `active`）と
+`confirmed_expected` のStep確定（blind観測値入力、`confirm_owned_ideal`、Undo Snapshot生成、最終Stepの
+Plan completedを含む）は実装済みである。想定外結果・操作内容不明の記録、妥協品として終了、Undo、
+ゲーム内セーブ地点の記録 / 復元、Plan破棄、再計画採用、Planを壊す変更の警告などは後続の実装PRが
+本章をauthorityとして実装する。本章と矛盾する旧記述（Execution上の独立した「確保」操作、
 Target / Build List変更による一律stale、reserve時の既存保護維持など）は本改訂で
 本書・[REQUIREMENTS.md](./REQUIREMENTS.md)・[DATA_MODEL.md](./DATA_MODEL.md)・
 [SEARCH_SPEC.md](./SEARCH_SPEC.md)・[UI_FLOW.md](./UI_FLOW.md)から書き換えた。
@@ -5267,7 +5270,11 @@ staleness semantics、PlanStep / reserve semantics、Expected execution state、
   `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は計算意味を切り替える後続PRまで11のまま維持した
   （[DATA_MODEL.md](./DATA_MODEL.md) 3.5 / 14.2 / 15）。2番目の実装PR（Execution Plan契約）で
   `CURRENT_CALCULATION_APP_SCHEMA_VERSION` を12、`ExportRoot.schemaVersion` を8へ更新し、Dexieは
-  table / index変更が無いため5のまま維持した
+  table / index変更が無いため5のまま維持した。3番目の実装PR（Execution runtime core）で
+  ProductionPlan lifecycle metadataとExecutionUndoSnapshotの拡張を永続形状へ加え、Dexie
+  `DATABASE_SCHEMA_VERSION` を6（non-terminal Planへのnull補完だけのdata-only upgrade）、
+  `ExportRoot.schemaVersion` を9へ更新した。計算意味は変更しないため
+  `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は12のまま維持した
 - 既存データを推測migrationして意味を変えない。所持Ideal武器の存在からTargetを
   `completed` と推測しない。既存OwnedWeaponを作成中と推測しない
 - 旧契約のProductionPlan（独立 `reserve_weapon` Step、旧expected state）はexact persisted
