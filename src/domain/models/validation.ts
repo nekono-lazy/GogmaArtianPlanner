@@ -1875,10 +1875,15 @@ function validateActualResult(
 }
 
 /**
- * The record shape each implemented current Execution action fixes
- * (`docs/DATA_MODEL.md` 12, `docs/PLANNER_SPEC.md` 16.4 / 16.15). The legacy
- * actions and `finished_as_compromise`, whose runtime is not implemented, keep
- * only the generic checks.
+ * The record shape each current Execution action fixes
+ * (`docs/DATA_MODEL.md` 12, `docs/PLANNER_SPEC.md` 16.4 / 16.15).
+ *
+ * The legacy actions and `finished_as_compromise` keep only the generic checks,
+ * exactly as `docs/DATA_MODEL.md` 12 specifies. The compromise finish runtime
+ * records `wasExpected = true`, `recalculationReason = null` and
+ * `actualResult = null` - an explicit user decision abandons the Plan rather
+ * than staling it - but that shape is the runtime's, not an additional
+ * validation contract.
  */
 function validateExecutionActionRecord(
   history: ExecutionHistory,

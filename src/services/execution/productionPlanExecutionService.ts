@@ -5,6 +5,7 @@ import {
   ExecutionRuntimeError,
   executionFailure,
   prepareActualResultDifferent,
+  prepareCompromiseFinish,
   prepareExecutionSavePointRecord,
   prepareExecutionSavePointRestore,
   prepareExecutionUndo,
@@ -22,14 +23,17 @@ import {
 } from '../../domain/execution'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import type {
+  BuildListEntryId,
   CalculationContext,
   ExecutionHistory,
   ExecutionHistoryId,
   ExecutionSavePoint,
   ISODateTimeString,
+  OwnedWeaponId,
   PlanStepId,
   ProductionPlan,
   ProductionPlanId,
+  TargetWeaponId,
 } from '../../domain/models/publicTypes'
 import { executionSavePointIdForPlan } from '../../domain/models/publicTypes'
 import { productionRngEngine } from '../../domain/rng/production/productionRngRuntime'
@@ -86,6 +90,28 @@ export interface RecordOperationUncertainRequest {
   planStepId: PlanStepId
 }
 
+/**
+ * "この武器を妥協品として確定して終了" (`docs/PLANNER_SPEC.md` 16.12). Every ID
+ * is what the user saw when the offer was shown; none of them is taken as
+ * authority, and each is re-verified against the Plan's own checkpoint
+ * projection inside the transaction.
+ */
+export interface FinishProductionPlanAsCompromiseRequest {
+  planId: ProductionPlanId
+  /** The Plan's current Step at the moment the offer was shown. */
+  planStepId: PlanStepId
+  /** The Entry whose selected compromise checkpoint is being finished at. */
+  buildListEntryId: BuildListEntryId
+  targetWeaponId: TargetWeaponId
+  ownedWeaponId: OwnedWeaponId
+}
+
+/** The abandoned Plan and the `finished_as_compromise` record it added. */
+export interface FinishProductionPlanAsCompromiseResult {
+  plan: ProductionPlan
+  history: ExecutionHistory
+}
+
 export interface UndoLatestExecutionRequest {
   planId: ProductionPlanId
   /**
@@ -136,9 +162,10 @@ export interface RestoreExecutionSavePointResult {
  * Implemented: starting a draft Plan, the ordinary `confirmed_expected` Step
  * confirmation (including a blind observation and `confirm_owned_ideal`), and
  * the two divergence records `actual_result_different` and
- * `operation_uncertain`, the Undo of the latest ExecutionHistory, and recording /
- * restoring the Plan's game save point. Finishing as a compromise, abandonment
- * and replan adoption are not implemented here yet.
+ * `operation_uncertain`, the Undo of the latest ExecutionHistory, recording /
+ * restoring the Plan's game save point, and finishing as a compromise. User
+ * abandonment, replan adoption and the breaking-change guard are not
+ * implemented here yet.
  */
 export class ProductionPlanExecutionService {
   private readonly dependencies: ProductionPlanExecutionServiceDependencies
@@ -238,6 +265,35 @@ export class ProductionPlanExecutionService {
       })
       await this.writeStep(record)
       return { plan: record.plan, history: record.history }
+    })
+  }
+
+  /**
+   * "この武器を妥協品として確定して終了" (16.12): the tracked weapon of a reached
+   * selected compromise checkpoint becomes `practical` with its protection
+   * untouched, every weapon in progress for the Plan stops being in progress,
+   * the Target stays `active` and keeps its preference, the Plan becomes
+   * `abandoned` with `finished_as_compromise`, and its game save point is
+   * deleted. No Counter advances and no game operation is implied.
+   */
+  finishProductionPlanAsCompromise(
+    request: FinishProductionPlanAsCompromiseRequest,
+  ): Promise<FinishProductionPlanAsCompromiseResult> {
+    return this.runExecutionTransaction(async () => {
+      const plan = await this.requirePlan(request.planId)
+      const finish = prepareCompromiseFinish({
+        plan,
+        planStepId: request.planStepId,
+        buildListEntryId: request.buildListEntryId,
+        targetWeaponId: request.targetWeaponId,
+        ownedWeaponId: request.ownedWeaponId,
+        state: await this.readState(plan),
+        currentCalculationContext: this.dependencies.currentCalculationContext,
+        executionHistoryId: this.dependencies.idFactory.executionHistoryId(),
+        now: this.dependencies.clock.now(),
+      })
+      await this.writeStep(finish)
+      return { plan: finish.plan, history: finish.history }
     })
   }
 

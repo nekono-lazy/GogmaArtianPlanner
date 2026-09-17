@@ -52,6 +52,15 @@ export type ExecutionRuntimeErrorCode =
   | 'collection_validation_failed'
   /** A resulting entity fails Domain validation. */
   | 'entity_validation_failed'
+  /**
+   * The Plan has no selected compromise checkpoint the request can finish at:
+   * the named BuildListEntry is not a selected Entry of the Plan, no longer
+   * exists, plans another Target, selected no intermediate state, or holds its
+   * checkpoint with another weapon (`docs/PLANNER_SPEC.md` 16.12).
+   */
+  | 'compromise_finish_not_applicable'
+  /** The Entry's selected compromise checkpoint is not reached yet (16.12). */
+  | 'compromise_checkpoint_not_reached'
   /** The ExecutionHistory to undo does not exist or belongs to another Plan. */
   | 'undo_history_not_found'
   /** The ExecutionHistory to undo is not the Plan's latest ExecutionHistory. */
