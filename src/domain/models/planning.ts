@@ -379,6 +379,19 @@ export interface ExecutionSavePoint {
   recordedAt: ISODateTimeString
 }
 
+/**
+ * The chronological order of a Plan's ExecutionHistory: `createdAt` ascending,
+ * then `id` ascending for entries recorded at the same time. The last entry in
+ * this order is the Plan's latest ExecutionHistory; storage insertion order is
+ * never an authority.
+ */
+export function compareExecutionHistoryOrder(
+  left: Pick<ExecutionHistory, 'createdAt' | 'id'>,
+  right: Pick<ExecutionHistory, 'createdAt' | 'id'>,
+): number {
+  return left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id)
+}
+
 const EXECUTION_SAVE_POINT_ID_PREFIX = 'execution-save-point:'
 
 /** The one stable save point ID of a Plan; never a clock or random value. */

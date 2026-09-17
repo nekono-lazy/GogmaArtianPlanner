@@ -14,6 +14,7 @@ import type {
   TargetWeapon,
 } from '../models/publicTypes'
 import {
+  compareExecutionHistoryOrder,
   createExpectedPlanState,
   isCalculationContextCompatible,
   isExecutionContractProductionPlan,
@@ -174,8 +175,7 @@ export function collectPlanObservationBindings(
   const stepById = new Map(plan.steps.map((step) => [step.id, step]))
   return [...planExecutionHistory]
     .filter(({ planId }) => planId === plan.id)
-    .sort((left, right) =>
-      left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id))
+    .sort(compareExecutionHistoryOrder)
     .flatMap((history) => {
       const step = stepById.get(history.planStepId)
       const tracked = step?.executionEffects?.trackedOwnedWeaponId ?? null

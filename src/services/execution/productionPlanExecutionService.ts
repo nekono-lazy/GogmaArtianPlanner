@@ -5,6 +5,7 @@ import {
   ExecutionRuntimeError,
   executionFailure,
   prepareActualResultDifferent,
+  prepareExecutionUndo,
   prepareExpectedStepConfirmation,
   prepareOperationUncertain,
   prepareProductionPlanStart,
@@ -14,6 +15,7 @@ import {
   type ExecutionPersistedState,
   type ExecutionResultingWeaponValidator,
   type ExecutionStepWrite,
+  type ExecutionUndoWrite,
 } from '../../domain/execution'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import type {
@@ -80,6 +82,22 @@ export interface RecordOperationUncertainRequest {
   planStepId: PlanStepId
 }
 
+export interface UndoLatestExecutionRequest {
+  planId: ProductionPlanId
+  /**
+   * The ExecutionHistory the user saw as the latest. It must still be the
+   * Plan's latest ExecutionHistory inside the transaction; a newer record is
+   * never undone in its place.
+   */
+  executionHistoryId: ExecutionHistoryId
+}
+
+/** The Plan restored by Undo and the ExecutionHistory ID that was deleted. */
+export interface UndoLatestExecutionResult {
+  plan: ProductionPlan
+  undoneExecutionHistoryId: ExecutionHistoryId
+}
+
 /**
  * The Execution runtime of a calculation schema 12 ProductionPlan
  * (`docs/PLANNER_SPEC.md` 16.1 / 16.2 / 16.15, `docs/DATA_MODEL.md` 14.4).
@@ -93,9 +111,9 @@ export interface RecordOperationUncertainRequest {
  * Implemented: starting a draft Plan, the ordinary `confirmed_expected` Step
  * confirmation (including a blind observation and `confirm_owned_ideal`), and
  * the two divergence records `actual_result_different` and
- * `operation_uncertain`. Finishing as a compromise, Undo, game save point
- * recording / restore, abandonment and replan adoption are not implemented
- * here yet.
+ * `operation_uncertain`, and the Undo of the latest ExecutionHistory. Finishing
+ * as a compromise, game save point recording / restore, abandonment and replan
+ * adoption are not implemented here yet.
  */
 export class ProductionPlanExecutionService {
   private readonly dependencies: ProductionPlanExecutionServiceDependencies
@@ -196,6 +214,56 @@ export class ProductionPlanExecutionService {
       await this.writeStep(record)
       return { plan: record.plan, history: record.history }
     })
+  }
+
+  /**
+   * Undoes the Plan's latest ExecutionHistory (16.16): the app state is
+   * restored exactly from its `ExecutionUndoSnapshot` and the record is deleted,
+   * without adding an Undo record. The in-game operation is not reversed.
+   */
+  undoLatestExecution(request: UndoLatestExecutionRequest): Promise<UndoLatestExecutionResult> {
+    const { database } = this.dependencies
+    return this.runExecutionTransaction(async () => {
+      const plan = await this.requirePlan(request.planId)
+      const undo = prepareExecutionUndo({
+        plan,
+        executionHistoryId: request.executionHistoryId,
+        state: {
+          normalCounters: await database.normalArtianCounters.toArray(),
+          ownedWeapons: await database.ownedWeapons.toArray(),
+          targetWeapons: await database.targetWeapons.toArray(),
+          planExecutionHistory: await database.executionHistory.where('planId').equals(plan.id).toArray(),
+          executionSavePoint:
+            (await database.executionSavePoints.get(executionSavePointIdForPlan(plan.id))) ?? null,
+        },
+      })
+      await this.writeUndo(undo)
+      return { plan: undo.plan, undoneExecutionHistoryId: undo.deletedExecutionHistoryId }
+    })
+  }
+
+  private async writeUndo(undo: ExecutionUndoWrite): Promise<void> {
+    const { database } = this.dependencies
+    await database.rngState.put(undo.rngState)
+    // The snapshot holds the whole collection: a Counter record absent from it
+    // must not survive the Undo.
+    await database.normalArtianCounters.clear()
+    if (undo.normalCounters.length > 0) await database.normalArtianCounters.bulkPut(undo.normalCounters)
+    if (undo.deletedOwnedWeaponIds.length > 0) await database.ownedWeapons.bulkDelete(undo.deletedOwnedWeaponIds)
+    if (undo.restoredOwnedWeapons.length > 0) await database.ownedWeapons.bulkPut(undo.restoredOwnedWeapons)
+    if (undo.restoredTargetWeapons.length > 0) await database.targetWeapons.bulkPut(undo.restoredTargetWeapons)
+    await database.productionPlans.put(undo.plan)
+    switch (undo.executionSavePoint.kind) {
+      case 'delete':
+        await database.executionSavePoints.delete(executionSavePointIdForPlan(undo.plan.id))
+        break
+      case 'restore':
+        await database.executionSavePoints.put(undo.executionSavePoint.savePoint)
+        break
+      case 'keep':
+        break
+    }
+    await database.executionHistory.delete(undo.deletedExecutionHistoryId)
   }
 
   private async writeStep(write: ExecutionStepWrite): Promise<void> {

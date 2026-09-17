@@ -52,6 +52,19 @@ export type ExecutionRuntimeErrorCode =
   | 'collection_validation_failed'
   /** A resulting entity fails Domain validation. */
   | 'entity_validation_failed'
+  /** The ExecutionHistory to undo does not exist or belongs to another Plan. */
+  | 'undo_history_not_found'
+  /** The ExecutionHistory to undo is not the Plan's latest ExecutionHistory. */
+  | 'undo_history_not_latest'
+  /**
+   * The Plan's status, or the terminal transition the ExecutionHistory did not
+   * cause, or a legacy action does not allow Undo (`docs/PLANNER_SPEC.md` 16.16).
+   */
+  | 'undo_not_allowed'
+  /** The ExecutionHistory or its ExecutionUndoSnapshot cannot restore the Step exactly. */
+  | 'undo_snapshot_invalid'
+  /** The state restored from the snapshot fails entity, collection or reference validation. */
+  | 'undo_result_invalid'
 
 export class ExecutionRuntimeError extends Error {
   readonly code: ExecutionRuntimeErrorCode
