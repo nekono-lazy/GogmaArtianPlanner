@@ -4465,8 +4465,9 @@ Execution Plan契約（16.3 / 16.5 / 16.6 / 16.11のhash、projection、`executi
 適用位置と完成時保護）は実装済みである。Execution runtimeのうち、Plan開始（`draft` -> `active`）と
 `confirmed_expected` のStep確定（blind観測値入力、`confirm_owned_ideal`、Undo Snapshot生成、最終Stepの
 Plan completedを含む）、および想定外結果（`actual_result_different`）・操作内容不明（`operation_uncertain`）の
-記録（16.15）、最新ExecutionHistoryのUndo（16.16）、ゲーム内セーブ地点の記録 / 復元（16.9）は実装済みである。妥協品として終了、Plan破棄、
-再計画採用、Planを壊す変更の警告、Execution Navigator UI（RNG再同定への誘導表示を含む）などは
+記録（16.15）、最新ExecutionHistoryのUndo（16.16）、ゲーム内セーブ地点の記録 / 復元（16.9）、
+妥協品として確定して終了（16.12）は実装済みである。Plan破棄、
+再計画採用、16.10のセーブ地点3択、Planを壊す変更の警告、Execution Navigator UI（RNG再同定への誘導表示を含む）などは
 後続の実装PRが本章をauthorityとして実装する。本章と矛盾する旧記述（Execution上の独立した「確保」操作、
 Target / Build List変更による一律stale、reserve時の既存保護維持など）は本改訂で
 本書・[REQUIREMENTS.md](./REQUIREMENTS.md)・[DATA_MODEL.md](./DATA_MODEL.md)・
@@ -5143,6 +5144,37 @@ ProductionPlan                 = abandoned（finished_as_compromise）
 ```
 
 TargetのIdeal条件自体は変更しない。後日そのPractical武器を起点に再びIdealを目指せる。
+
+実装上の確定事項（妥協品終了Runtime PR）。
+
+- 終了要求は、ユーザーが提示を見た時点のPlanのcurrent Step ID、対象BuildListEntry ID、Target ID、
+  OwnedWeapon IDを指定する。どれもauthorityとしては扱わず、transaction内でPlan自身のcheckpoint
+  projectionと突き合わせて再検証する。表示後に別のStepが確定していれば拒否する
+- 実行できるのは `active` なcurrent Execution契約Planだけである。`stale` Planは、予測と現在状態が
+  乖離しているため「選択済みcheckpointへ到達済み」を推測せず拒否する
+- 終了できるのは、選択済みcheckpointへ過去に到達したことではなく、**現在もそのcheckpoint状態を
+  保持している**場合だけである。提示は「次の操作へ進む」と並ぶ選択肢なので、続行してその武器へ
+  次の操作を行った時点で終了対象外になる
+  - 通常のcheckpointは、妥協labelを持つStepが確定済みで、かつそれより後に**同じ追跡武器**を
+    対象とするStepが1つも確定していない間だけ保持中とする
+  - 開始時点到達済みcheckpoint（7.5.2）は、そのEntryの最初の物理Step（= そのcheckpointをlabelする
+    Step）を確定するまで保持中とする。`isIntermediatePinHeldAtRouteStart()` はEntry定義として
+    恒久的にtrueなので、単独では終了可否に使わない
+  - 境界はPlan全体の進行ではなく追跡武器である。別EntryのStepが別武器に対して確定しても、
+    この武器の状態は変わらないため終了可否に影響しない
+- 到達判定のauthorityは `BuildListEntry.intermediateStateSelection`、Planの
+  `executionEffects.compromiseLabels`、およびPlan StepのExecution進行状態
+  （`executionEffects.trackedOwnedWeaponId`、Step順、`isCompleted`）であり、武器性能をその場で
+  再評価しない。未選択のcheckpointへ性能上到達しただけ、選択済みcheckpoint未到達、既に通過済み、
+  別EntryのIDはいずれも拒否する
+- 対象OwnedWeaponはPlanの妥協label effectが持つIDだけであり、`preferredOwnedWeaponId` や
+  `status = practical` の検索、性能一致からは決めない
+- ExecutionHistoryは `wasExpected = true`、`recalculationReason = null`、`actualResult = null` とする。
+  ユーザーの明示的な意思決定であり、Planを `stale` にせず `abandoned` にするためである。
+  `createdAt` はPlanの `abandonedAt` と一致させ、16.16のUndoが終端遷移の原因記録として認識できるようにする
+- `currentStepId` とStep完了状態は終了直前のまま保持し、未実行Stepを完了扱いにしない
+- 書き込み前に、Plan終了後に当該Plan IDの作成中武器が残らないこと、対象武器がPracticalであること、
+  変更entityとTarget優先起点collectionが妥当であることを検証し、不正なら何も書かない
 
 ### 16.13 理想品完成とTarget完了
 

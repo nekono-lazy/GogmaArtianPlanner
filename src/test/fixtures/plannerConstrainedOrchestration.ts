@@ -313,6 +313,118 @@ export function checkpointBonusEntry(
   return entry
 }
 
+/**
+ * The Gogma Counter positions of `startReachedCheckpointEntry()`'s Route, and
+ * the Reset result the Fake Engine must return at each of them: the Ideal only
+ * at the last one, so the checkpoint is never produced by an operation.
+ */
+export const START_REACHED_ROUTE_COUNTERS = [
+  CONFLICT_GOGMA_COUNTER,
+  CONFLICT_GOGMA_COUNTER + 1,
+] as const
+
+export function startReachedCheckpointResultAt(gogmaCounter: number): RestorationBonusSet {
+  return gogmaCounter === CONFLICT_GOGMA_COUNTER + 1 ? idealBonuses() : belowPracticalBonuses()
+}
+
+/**
+ * An Entry whose compromise checkpoint is held before the first action
+ * (`docs/PLANNER_SPEC.md` 7.5.2): an existing Gogma whose own five slots are a
+ * Practical Bonus lane start, and whose Skills already satisfy the Target, so
+ * the Route has no Skill lane at all and both pins sit at lane position 0.
+ *
+ * The source must carry `practicalBonuses()` and `IDEAL_SERIES_SKILL_ID`. Pair
+ * it with `engine: { resetResultAt: startReachedCheckpointResultAt }`.
+ */
+export function startReachedCheckpointEntry(
+  id: string,
+  target: TargetWeapon,
+  source: OwnedGogmaArtianWeapon,
+): BuildListEntry {
+  const counters = [...START_REACHED_ROUTE_COUNTERS]
+  const entry = orchestrationEntry(id, target, {
+    kind: 'existing_gogma_reset_bonuses',
+    sourceOwnedWeaponId: source.id,
+    operations: counters.map((gogmaCounter) => ({
+      type: 'reset_bonuses' as const,
+      sourceOwnedWeaponId: source.id,
+      gogmaCounterBefore: gogmaCounter,
+      gogmaCounterAfter: gogmaCounter + 1,
+    })),
+  }, { finalBonuses: idealBonuses() })
+  const snapshot = entry.candidateSnapshot
+  snapshot.bonusAmendmentTrace = counters.map((gogmaCounter, operationIndex) => ({
+    operationIndex,
+    operationType: 'reset_bonuses' as const,
+    restorationBonuses: startReachedCheckpointResultAt(gogmaCounter),
+    restorationBonusScope: 'gogma_artian' as const,
+  }))
+  snapshot.skillAmendmentTrace = []
+  snapshot.intermediateStateGroups = extractIntermediateStateGroups(snapshot, {
+    target,
+    master: constrainedMaster(),
+    ownedWeapons: [source],
+  })
+  const laneStart = snapshot.intermediateStateGroups
+    .filter((group) => group.axis === 'bonus')
+    .flatMap(({ opportunities }) => opportunities)
+    .find(({ lanePosition }) => lanePosition === 0)
+  if (!laneStart) throw new Error('The start-reached fixture Route has no Bonus lane start.')
+  entry.intermediateStateSelection = {
+    skillOpportunityId: null,
+    bonusOpportunityId: laneStart.id,
+    improvementPreference: 'planner',
+  }
+  return entry
+}
+
+/**
+ * A second start-held checkpoint Entry (7.5.2), pinned on the *Skill* lane.
+ *
+ * Its Route is Reset Skills only, so its Bonus lane is already at its end and
+ * both pins sit at lane position 0: the source's own current Skills are a
+ * Practical Skill lane start. Pair it with a Target whose `idealBonuses` the
+ * source already holds, and with a Skill result that reaches
+ * `IDEAL_SERIES_SKILL_ID` at `CONFLICT_SKILL_COUNTER`.
+ *
+ * It exists so a Plan can mix this Entry's weapon with another Entry's weapon
+ * on the other Counter stream, which is how the Execution tests prove that
+ * another weapon's confirmed Step leaves this checkpoint untouched.
+ */
+export function startReachedSkillCheckpointEntry(
+  id: string,
+  target: TargetWeapon,
+  source: OwnedGogmaArtianWeapon,
+): BuildListEntry {
+  const entry = orchestrationEntry(id, target, resetSkillsRoute(source.id), {
+    finalBonuses: structuredClone(source.restorationBonuses),
+  })
+  const snapshot = entry.candidateSnapshot
+  snapshot.skillAmendmentTrace = [{
+    operationIndex: 0,
+    operationType: 'reset_skills',
+    seriesSkillId: IDEAL_SERIES_SKILL_ID,
+    groupSkillId: null,
+  }]
+  snapshot.bonusAmendmentTrace = []
+  snapshot.intermediateStateGroups = extractIntermediateStateGroups(snapshot, {
+    target,
+    master: constrainedMaster(),
+    ownedWeapons: [source],
+  })
+  const laneStart = snapshot.intermediateStateGroups
+    .filter((group) => group.axis === 'skill')
+    .flatMap(({ opportunities }) => opportunities)
+    .find(({ lanePosition }) => lanePosition === 0)
+  if (!laneStart) throw new Error('The Skill checkpoint fixture Route has no Skill lane start.')
+  entry.intermediateStateSelection = {
+    skillOpportunityId: laneStart.id,
+    bonusOpportunityId: null,
+    improvementPreference: 'planner',
+  }
+  return entry
+}
+
 /** Keeps every derived hash of an Entry consistent with the Planner input. */
 export function synchronizeOrchestrationEntry(
   input: PlannerInput,

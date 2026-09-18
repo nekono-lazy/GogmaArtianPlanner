@@ -7,6 +7,7 @@ import type {
   ExecutionHistory,
   ExecutionHistoryId,
   ExecutionSavePoint,
+  OwnedGogmaArtianWeapon,
   OwnedWeapon,
   PlanStep,
   ProductionPlan,
@@ -27,14 +28,21 @@ import {
   alternativePracticalBonuses,
   belowPracticalBonuses,
   normalWeapon,
+  practicalBonuses,
   sameLayoutLowerRanks,
 } from './constrainedEnumeration'
 import {
+  checkpointBonusEntry,
+  checkpointBonusResultAt,
   orchestrationEntry,
   orchestrationNormalCounters,
   orchestrationScenario,
   orchestrationSource,
   orchestrationTarget,
+  resetRoute,
+  startReachedCheckpointEntry,
+  startReachedCheckpointResultAt,
+  startReachedSkillCheckpointEntry,
   type OrchestrationScenario,
 } from './plannerConstrainedOrchestration'
 
@@ -248,6 +256,132 @@ export function ownedNormalFixture() {
     ],
   })
   return planFor(orchestrationScenario({ targets: [goal], entries: [entry], ownedWeapons: [source] }))
+}
+
+export const CHECKPOINT_SOURCE_ID = 'owned.execution.checkpoint'
+export const CHECKPOINT_TARGET_ID = 'target.execution.checkpoint'
+export const CHECKPOINT_ENTRY_ID = 'entry.execution.checkpoint'
+
+export interface CheckpointFixture extends ExecutionFixture {
+  source: OwnedGogmaArtianWeapon
+  goal: TargetWeapon
+  entry: BuildListEntry
+}
+
+async function checkpointScenario(
+  source: OwnedGogmaArtianWeapon,
+  goal: TargetWeapon,
+  entry: BuildListEntry,
+  resetResultAt: (gogmaCounter: number) => RestorationBonusSet,
+  extraOwnedWeapons: OwnedWeapon[],
+): Promise<CheckpointFixture> {
+  const fixture = await planFor(orchestrationScenario({
+    targets: [goal],
+    entries: [entry],
+    ownedWeapons: [source, ...extraOwnedWeapons],
+    engine: { resetResultAt },
+  }))
+  return { ...fixture, source, goal, entry }
+}
+
+/**
+ * A selected compromise checkpoint the Route actually produces: the Bonus lane
+ * position 1 state, reached by confirming the Step that carries its compromise
+ * label.
+ */
+export function checkpointFixture(
+  extraOwnedWeapons: OwnedWeapon[] = [],
+  options: { select?: boolean } = {},
+) {
+  const source = orchestrationSource(CHECKPOINT_SOURCE_ID, { seriesSkillId: IDEAL_SERIES_SKILL_ID })
+  const goal = orchestrationTarget(CHECKPOINT_TARGET_ID)
+  return checkpointScenario(
+    source,
+    goal,
+    checkpointBonusEntry(CHECKPOINT_ENTRY_ID, goal, source.id, source, options),
+    checkpointBonusResultAt,
+    extraOwnedWeapons,
+  )
+}
+
+/**
+ * A selected compromise checkpoint held from Plan start (7.5.2): the source's
+ * own Practical five slots are its Bonus lane start and its Skills are already
+ * Ideal, so the finish is available before the Entry's first physical Step.
+ */
+export function startReachedCheckpointFixture(extraOwnedWeapons: OwnedWeapon[] = []) {
+  const source = orchestrationSource(CHECKPOINT_SOURCE_ID, {
+    restorationBonuses: practicalBonuses(),
+    seriesSkillId: IDEAL_SERIES_SKILL_ID,
+  })
+  const goal = orchestrationTarget(CHECKPOINT_TARGET_ID)
+  return checkpointScenario(
+    source,
+    goal,
+    startReachedCheckpointEntry(CHECKPOINT_ENTRY_ID, goal, source),
+    startReachedCheckpointResultAt,
+    extraOwnedWeapons,
+  )
+}
+
+export const OTHER_WEAPON_ID = 'owned.execution.other'
+
+/**
+ * A two-weapon Plan: this Entry's start-held Skill checkpoint on one weapon,
+ * and another Entry's Reset Bonuses on another weapon. The Beam Search puts the
+ * other weapon's Step first, so a test can confirm it and then finish at this
+ * checkpoint, which no Step has touched.
+ */
+export function otherWeaponCheckpointFixture(): Promise<CheckpointFixture> {
+  const source = orchestrationSource(CHECKPOINT_SOURCE_ID, {
+    restorationBonuses: practicalBonuses(),
+    seriesSkillId: 'series_skill.fixture.z',
+    groupSkillId: 'group_skill.fixture.a',
+  })
+  const other = orchestrationSource(OTHER_WEAPON_ID, {
+    restorationBonuses: belowPracticalBonuses(),
+    seriesSkillId: IDEAL_SERIES_SKILL_ID,
+  })
+  // The two Targets must not be satisfiable by each other's weapon, or the
+  // Beam Search drops the second Entry: this one's Ideal is the five slots the
+  // source already holds, the other one's is the default Ideal set.
+  const goal = orchestrationTarget(CHECKPOINT_TARGET_ID, { idealBonuses: practicalBonuses() })
+  const otherGoal = orchestrationTarget('target.execution.otherweapon')
+  const entry = startReachedSkillCheckpointEntry(CHECKPOINT_ENTRY_ID, goal, source)
+  return planFor(orchestrationScenario({
+    targets: [goal, otherGoal],
+    entries: [entry, orchestrationEntry('entry.execution.other', otherGoal, resetRoute(other.id))],
+    ownedWeapons: [source, other],
+    engine: {
+      skillResultAt: (skillCounter: number) =>
+        skillCounter === CONSTRAINED_START_SKILL_COUNTER
+          ? { seriesSkillId: IDEAL_SERIES_SKILL_ID, groupSkillId: null }
+          : { seriesSkillId: `series_skill.fixture.s${skillCounter}`, groupSkillId: null },
+    },
+  })).then((fixture) => ({ ...fixture, source, goal, entry }))
+}
+
+/** The index of the Step whose Execution effects label the checkpoint weapon. */
+export function compromiseLabelStepIndex(plan: ProductionPlan): number {
+  return plan.steps.findIndex((step) => (step.executionEffects?.compromiseLabels.length ?? 0) > 0)
+}
+
+/** Finishes at the fixture's selected checkpoint, from the Plan's current Step. */
+export async function finishAsCompromise(
+  service: ProductionPlanExecutionService,
+  database: AppDatabase,
+  fixture: CheckpointFixture,
+  overrides: Partial<Parameters<ProductionPlanExecutionService['finishProductionPlanAsCompromise']>[0]> = {},
+) {
+  const stored = await currentPlan(database, fixture.plan)
+  return service.finishProductionPlanAsCompromise({
+    planId: fixture.plan.id,
+    planStepId: stored.currentStepId as PlanStep['id'],
+    buildListEntryId: fixture.entry.id,
+    targetWeaponId: fixture.goal.id,
+    ownedWeaponId: fixture.source.id,
+    ...overrides,
+  })
 }
 
 export type ActualResultInput = Parameters<ProductionPlanExecutionService['recordActualResultDifferent']>[0]['actualResult']

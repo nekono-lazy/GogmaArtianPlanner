@@ -274,8 +274,39 @@ snapshot Targets only), deletes the OwnedWeapons registered by later records, re
 Target outside the snapshot to the before body of the earliest later record that
 changed it, deletes the later records, and keeps the save point. It added no persisted
 field and changed no calculation semantics, so the three versions stay 12 / 6 / 9.
-`finished_as_compromise`, abandonment, replan adoption, the breaking-change guard,
-and the Execution Navigator UI are still not implemented.
+The seventh PR (the compromise finish runtime) implemented "この武器を妥協品として
+確定して終了" (`src/domain/execution/compromiseFinish.ts`,
+`ProductionPlanExecutionService.finishProductionPlanAsCompromise()`). The request names
+the Plan's current Step, the BuildListEntry, its Target and the weapon the user saw;
+none of them is authority, and each is re-verified inside the transaction against the
+same Step premises `confirmed_expected` uses plus the Plan's own
+`executionEffects.compromiseLabels` projection. Only an `active` current Plan qualifies -
+a `stale` Plan never has its checkpoint arrival inferred - and eligibility comes from
+`BuildListEntry.intermediateStateSelection` and that label projection, never from
+re-evaluating a weapon's performance, `preferredOwnedWeaponId`, or a `practical` status
+search. Having reached the checkpoint once is not enough: the offer sits beside 「次の操作へ
+進む」, so the checkpoint must still be the weapon's current state. An ordinary checkpoint
+is held from its label Step's confirmation until a later Step on the *same tracked weapon*
+is confirmed; a checkpoint held at Plan start (7.5.2) is held until its Entry's first
+physical Step - the Step that labels it - is confirmed, so
+`isIntermediatePinHeldAtRouteStart()`, which stays true for the Entry forever, is never
+eligibility on its own. The boundary is the tracked weapon, not the Plan's overall
+progress, so another Entry's Step on another weapon leaves the checkpoint intact. In one
+transaction it sets
+the labelled weapon `status = practical` (protection, slots, scope and Skills untouched),
+clears `executionInProgress` for every weapon of that Plan and no other, leaves the
+Target `active` with its preference kept, moves the Plan to `abandoned` /
+`finished_as_compromise` / `abandonedAt = now` while keeping `currentStepId` and every
+Step completion as they were, deletes the Plan's save point into
+`ExecutionUndoSnapshot.executionSavePointBefore`, and adds a `finished_as_compromise`
+ExecutionHistory with `wasExpected = true`, `recalculationReason = null`,
+`actualResult = null` and `createdAt === plan.abandonedAt`, so `causedCompromiseFinish()`
+recognises it. It advances no Counter, runs no RNG prediction, added no persisted field
+and changed no calculation semantics, so the three versions stay 12 / 6 / 9.
+`docs/DATA_MODEL.md` 12 still gives `finished_as_compromise` generic ExecutionHistory
+validation only; that record shape is the runtime's, not an added validation contract.
+Abandonment, replan adoption, the 16.10 save point three-choice handling, the
+breaking-change guard, and the Execution Navigator UI are still not implemented.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -3021,9 +3052,9 @@ calculation schema 12 Execution Plan contract (Plan generation with
 ordinary `confirmed_expected` Step confirmation (blind observation and
 `confirm_owned_ideal` included, with the full Undo snapshot and Plan completion), and
 the `actual_result_different` / `operation_uncertain` records, Undo of the latest
-ExecutionHistory, and game save point record / restore are implemented; finishing as
-a compromise, abandonment, replan adoption, the breaking-change guard, and the
-Execution Navigator UI are not yet.
+ExecutionHistory, game save point record / restore, and finishing as a compromise are
+implemented; abandonment, replan adoption, the 16.10 save point three-choice handling,
+the breaking-change guard, and the Execution Navigator UI are not yet.
 Implementation PRs follow the specification and must not fall back to the older
 Execution semantics.
 
