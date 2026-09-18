@@ -4998,6 +4998,27 @@ Planを壊す変更の承認）を行う場合、ゲーム側でユーザーが�
 - 妥協品として確定して終了（16.12）は、現在の武器状態を確定する操作なので選択を出さない
 - アプリ側でゲームの保存状態を推測しない
 
+実装上の確定事項（Plan破棄Runtime PR）。
+
+- 選択要否は再計画採用・Planを壊す変更の承認でも共有するpure helper
+  （`deriveRunningPlanSavePointChoiceRequirement()`）で導出する。境界の解釈はセーブ地点復元と同じ
+  authority（`compareExecutionHistoryOrder()`、境界記録の欠損 / 別Planは拒否）を使い、挿入順を使わない
+- Plan破棄（`user_abandoned`）は `active` / `stale` のPlanだけを対象とする。Planの終了でありExecutionの
+  継続ではないため、「現在地点を維持」（選択が出ない通常破棄を含む）はCalculationContext非互換の
+  `stale` Planでも実行できる。「最後のゲーム内セーブ地点へ戻す」は16.9の復元契約（CalculationContext
+  互換性とfail-closed条件を含む）をそのまま適用し、復元が拒否された場合はPlanを破棄しない
+- 破棄要求は、確認時にユーザーが見たPlanの `status`、`currentStepId`、`updatedAt` を指定し、
+  transaction内で一致しなければ拒否する。選択要否はtransaction内で再導出し、選択が必要なのに選択が
+  無い場合、選択が不要なのに選択がある場合、選択が指すセーブ地点の `recordedAt` が現在と異なる場合は
+  いずれも拒否する。「キャンセル」はServiceを呼ばないことであり、永続actionを持たない
+- 「現在地点を維持」は現在の永続状態を基準に、Planだけを `abandoned`（`user_abandoned`）へ遷移させる。
+  `currentStepId`、Step完了状態、`recalculationReasons`、ExecutionHistory、Targetの優先起点を保持する
+- 「最後のゲーム内セーブ地点へ戻す」は16.9の復元結果（セーブ地点より後の記録と登録武器の削除を含む）を
+  基準に、snapshot PlanをPlanとして `abandoned`（`user_abandoned`）へ遷移させる。`recalculationReasons`
+  はsnapshot Planの値であり、復元で消えた後続のstale理由を現在Planから再注入しない
+- どちらも当該Plan IDの作成中状態を全武器で解除し（他Planの作成中状態は変更しない）、セーブ地点を
+  削除し、ExecutionHistoryを追加しない。破棄自体はUndo対象外である（16.16）
+
 #### 16.10.1 作成中状態
 
 作成中かどうかは `OwnedWeapon.status` と直交した内部状態 `executionInProgress`

@@ -401,7 +401,7 @@ lifecycle改訂（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16章）で追加する�
 Execution Plan契約PRでコードへ反映した。`ProductionPlanAbandonmentReason`、`operation_uncertain`、
 `finished_as_compromise`、`execution_operation_uncertain` のliteralはExecution runtime core PRでコードへ反映し、
 `actual_result_different` / `operation_uncertain` の記録Runtimeは想定外結果Runtime PRで実装した。
-最新ExecutionHistoryのUndo RuntimeはUndo Runtime PRで、ゲーム内セーブ地点（12.1）の記録 / 復元Runtimeはセーブ地点Runtime PRで実装した。`finished_as_compromise` のRuntimeは妥協品終了Runtime PRで実装した。legacy値は保存済みartifactの読み取り互換のためだけに残し、current Executionは
+最新ExecutionHistoryのUndo RuntimeはUndo Runtime PRで、ゲーム内セーブ地点（12.1）の記録 / 復元Runtimeはセーブ地点Runtime PRで実装した。`finished_as_compromise` のRuntimeは妥協品終了Runtime PRで、`user_abandoned` のPlan破棄と破棄時のゲーム内セーブ地点選択（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.10）のRuntimeはPlan破棄Runtime PRで実装した。legacy値は保存済みartifactの読み取り互換のためだけに残し、current Executionは
 生成しない。
 
 ---

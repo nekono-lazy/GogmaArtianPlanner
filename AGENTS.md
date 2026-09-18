@@ -305,8 +305,32 @@ recognises it. It advances no Counter, runs no RNG prediction, added no persiste
 and changed no calculation semantics, so the three versions stay 12 / 6 / 9.
 `docs/DATA_MODEL.md` 12 still gives `finished_as_compromise` generic ExecutionHistory
 validation only; that record shape is the runtime's, not an added validation contract.
-Abandonment, replan adoption, the 16.10 save point three-choice handling, the
-breaking-change guard, and the Execution Navigator UI are still not implemented.
+The eighth PR (the user abandonment runtime) implemented "現在Planを破棄する"
+(`src/domain/execution/planAbandonment.ts`,
+`ProductionPlanExecutionService.inspectProductionPlanAbandonment()` /
+`abandonProductionPlan()`) with the 16.10 save point choice. Whether the choice is
+required comes from the shared pure helper `deriveRunningPlanSavePointChoiceRequirement()`
+- a save point exists and at least one of the Plan's records is ordered after its
+boundary by `compareExecutionHistoryOrder()`, with a missing / foreign boundary refused
+through the same authority the restore uses - so replan adoption and an approved
+breaking change can reuse it. Only an `active` / `stale` Plan qualifies. The request
+names the Plan `status` / `currentStepId` / `updatedAt` the user saw
+(`plan_abandon_state_changed` otherwise) and a decision: `null` only where no choice
+applies (`save_point_choice_required` otherwise), `keep_current` / `restore_save_point`
+only where it does (`save_point_choice_not_required` otherwise), each naming the
+`recordedAt` of the save point the user saw (`save_point_changed` otherwise). 「キャンセル」
+is not a request. Keeping the current state abandons the Plan (`user_abandoned`)
+exactly as persisted - `currentStepId`, Step completions, `recalculationReasons`,
+every ExecutionHistory record and every Target preference kept - and works for a
+`calculation_context_changed` stale Plan too, because ending a Plan is not executing
+it. Restoring runs `prepareExecutionSavePointRestore()` unchanged (its CalculationContext
+and fail-closed checks included; a refused restore abandons nothing) and abandons the
+restored snapshot Plan, whose `recalculationReasons` are the snapshot's own. Both clear
+`executionInProgress` of every weapon of that Plan and no other, delete the save point,
+and add no ExecutionHistory, so a user abandonment is never undoable. It added no
+persisted field and changed no calculation semantics, so the three versions stay
+12 / 6 / 9. Replan adoption, the breaking-change guard, and the Execution Navigator UI
+are still not implemented.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -3052,9 +3076,9 @@ calculation schema 12 Execution Plan contract (Plan generation with
 ordinary `confirmed_expected` Step confirmation (blind observation and
 `confirm_owned_ideal` included, with the full Undo snapshot and Plan completion), and
 the `actual_result_different` / `operation_uncertain` records, Undo of the latest
-ExecutionHistory, game save point record / restore, and finishing as a compromise are
-implemented; abandonment, replan adoption, the 16.10 save point three-choice handling,
-the breaking-change guard, and the Execution Navigator UI are not yet.
+ExecutionHistory, game save point record / restore, finishing as a compromise, and user
+abandonment with the 16.10 save point choice are implemented; replan adoption, the
+breaking-change guard, and the Execution Navigator UI are not yet.
 Implementation PRs follow the specification and must not fall back to the older
 Execution semantics.
 

@@ -349,10 +349,11 @@ function assertRestoredValid(label: string, validation: DomainValidationResult):
  * The Plan's ExecutionHistory recorded after the save point: every record
  * ordered after the boundary `lastExecutionHistoryId`, or every record when the
  * save point was recorded before any. A boundary that no longer exists or
- * belongs to another Plan is refused, never read as `null`.
+ * belongs to another Plan is refused, never read as `null`. The restore and the
+ * save point choice of a Plan-ending action (16.10) share this one authority.
  */
-function splitHistoryAtBoundary(
-  plan: ProductionPlan,
+export function splitExecutionHistoryAtSavePoint(
+  plan: Pick<ProductionPlan, 'id'>,
   savePoint: ExecutionSavePoint,
   planExecutionHistory: readonly ExecutionHistory[],
 ): { kept: ExecutionHistory[]; after: ExecutionHistory[] } {
@@ -423,7 +424,7 @@ export function prepareExecutionSavePointRestore(input: ExecutionSavePointRestor
     snapshotInvalid(`The snapshot Plan of the game save point is '${snapshotPlan.status}', not active.`)
   }
   assertExecutableProductionPlan(snapshotPlan, input.currentCalculationContext)
-  const { kept, after } = splitHistoryAtBoundary(plan, savePoint, state.planExecutionHistory)
+  const { kept, after } = splitExecutionHistoryAtSavePoint(plan, savePoint, state.planExecutionHistory)
 
   // Fail closed before any write when the restored Plan needs a deleted entity.
   const weapons = new Map(state.ownedWeapons.map((weapon) => [weapon.id, weapon]))
