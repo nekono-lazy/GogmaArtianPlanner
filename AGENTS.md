@@ -329,8 +329,41 @@ restored snapshot Plan, whose `recalculationReasons` are the snapshot's own. Bot
 `executionInProgress` of every weapon of that Plan and no other, delete the save point,
 and add no ExecutionHistory, so a user abandonment is never undoable. It added no
 persisted field and changed no calculation semantics, so the three versions stay
-12 / 6 / 9. Replan adoption, the breaking-change guard, and the Execution Navigator UI
-are still not implemented.
+12 / 6 / 9.
+The ninth PR (the replan Preview and adoption runtime) implemented 16.8
+「現在地点から再計画を試算」 / 「この再計画を採用」
+(`src/domain/execution/replanAdoption.ts`,
+`src/services/execution/productionPlanReplanPreviewService.ts`,
+`ProductionPlanExecutionService.inspectProductionPlanReplanAdoption()` /
+`adoptProductionPlanReplanPreview()`). The Preview reads, in one read-only transaction,
+the running Plan's token (`planId`, `status`, `currentStepId` - never `updatedAt`) and a
+PlannerInput built by the ordinary `createPlannerInput()` from the current persisted
+state; the running Plan, its `baseSnapshot` and its conflict resolutions are never
+Planner input. The caller runs the existing `PlannerWorkerClient.createConstrainedPlan()`
+with `defaultPlannerOrchestrationBounds` (no new Worker protocol) and bundles the result
+into a transient, never-persisted `ProductionPlanReplanPreview`. Adoption re-checks, in
+one transaction, the token, an adoptable result (a Plan, no `incomplete` search, the
+ordinary save-time shape checks now shared through
+`src/domain/planner/plannerResultPersistenceValidation.ts`), the 16.10 choice through
+`deriveRunningPlanSavePointChoiceRequirement()` and the shared decision assertion, then
+the CalculationContext, the new Plan ID (never overwritten), generated Entry collisions
+and freshness, the new Plan's `dependentBuildListEntriesHash` /
+`dependentTargetDefinitionsHash` over the Build List plus the generated Entries, and
+`initialExecutionState` - never the whole-input `targetWeaponsHash` /
+`buildListEntriesHash`, so a Plan-independent Target or Entry added after the Preview
+never refuses it. The new Plan is started through `prepareProductionPlanStart()` with the
+running Plan treated as abandoned (any other running Plan still refuses). On success the
+running Plan becomes `abandoned` / `replan_adopted` (current Step, Step completions and
+`recalculationReasons` kept), the new Plan and the generated Entries are added (never
+put), a weapon in progress for the running Plan moves to the new Plan with its
+`startedAt` kept when a selected Entry Route of the new Plan references it and it
+exists, and is cleared otherwise; a weapon not in progress never becomes in progress by
+adoption, Target preferences stay, the running Plan's ExecutionHistory stays with no
+record added, and its save point is deleted. Choosing 「最後のゲーム内セーブ地点へ戻す」
+runs `prepareExecutionSavePointRestore()` unchanged and adopts nothing; the old Preview
+then no longer matches and a new Preview is required. It added no persisted field and
+changed no calculation semantics, so the three versions stay 12 / 6 / 9. The
+breaking-change guard and the Execution Navigator UI are still not implemented.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -3077,8 +3110,8 @@ ordinary `confirmed_expected` Step confirmation (blind observation and
 `confirm_owned_ideal` included, with the full Undo snapshot and Plan completion), and
 the `actual_result_different` / `operation_uncertain` records, Undo of the latest
 ExecutionHistory, game save point record / restore, finishing as a compromise, and user
-abandonment with the 16.10 save point choice are implemented; replan adoption, the
-breaking-change guard, and the Execution Navigator UI are not yet.
+abandonment with the 16.10 save point choice, and the replan Preview and adoption are
+implemented; the breaking-change guard and the Execution Navigator UI are not yet.
 Implementation PRs follow the specification and must not fall back to the older
 Execution semantics.
 

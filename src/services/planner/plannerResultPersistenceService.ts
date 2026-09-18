@@ -12,10 +12,8 @@ import {
   RepositoryError,
 } from '../../db/repositoryError'
 import { runInRepositoryTransaction } from '../../db/transaction'
-import { evaluateBuildListEntryStaleness } from '../../domain/buildList'
 import type {
   BuildListEntry,
-  BuildListEntryId,
   CalculationContext,
   ExpectedPlanState,
   NormalArtianCounter,
@@ -27,15 +25,18 @@ import type {
 import {
   createExpectedPlanState,
   isCalculationContextCompatible,
-  validateBuildListEntry,
-  validateProductionPlan,
   validateRngState,
 } from '../../domain/models/publicTypes'
 import {
+  checkGeneratedBuildListEntriesFresh,
+  checkPersistablePlannerResultShape,
+  checkProductionPlanBuildListReferences,
   collectProductionPlanDependentTargetWeaponIds,
   createPlanningBuildListEntriesHash,
   createPlanningTargetWeaponsHash,
+  findPersistedGeneratedBuildListEntryCollision,
   type PlannerOrchestrationResult,
+  type PlannerResultPersistenceIssue,
   type PlannerSearchTermination,
 } from '../../domain/planner'
 
@@ -93,6 +94,23 @@ function stateChanged(message: string): RepositoryError {
  */
 function resultInvalid(message: string): RepositoryError {
   return new RepositoryError('planner_result_invalid', message)
+}
+
+/**
+ * Maps a shared save-time issue onto this service's `RepositoryError`
+ * boundary; `null` passes.
+ */
+function throwIssue(issue: PlannerResultPersistenceIssue | null): void {
+  if (issue === null) return
+  switch (issue.kind) {
+    case 'result_invalid':
+      throw resultInvalid(issue.message)
+    case 'state_changed':
+      throw stateChanged(issue.message)
+    case 'entity_invalid':
+      assertRepositoryValidation(issue.entityName, issue.validation)
+      return
+  }
 }
 
 function sameExpectedPlanState(
@@ -196,37 +214,12 @@ export class PlannerResultPersistenceService {
     generatedEntries: readonly BuildListEntry[],
     termination: PlannerSearchTermination,
   ) {
-    // PLANNER_SPEC 7.2.1: a Plan calculated from a Beam Search that a
-    // `PlannerOptions` bound truncated is a partial search artifact, not a
-    // finished production plan, so it never becomes an executable Draft. The
-    // typed termination decides this - never a `PlannerWarning` message, and
-    // never the presence of `max_expanded_states_reached`, which a completed
-    // search can carry too. Raising the bound and recalculating is the
-    // recovery, so nothing is written and no generated Entry is salvaged.
-    if (termination.status === 'incomplete') {
-      throw resultInvalid(
-        `The Planner search did not complete: it reached ${termination.reachedLimits.join(', ')} after ${termination.expandedStates} expanded states with ${termination.completedTargetCount} of ${termination.totalTargetCount} target weapons completed. A truncated search result must not be saved as an executable ProductionPlan.`,
-      )
-    }
-    // B8-D2a stores a freshly calculated Draft. Activation, replacement and the
+    // PLANNER_SPEC 7.2.1 / 9.2.15, shared with the replan adoption (16.8):
+    // an incomplete search, a non-draft Plan, duplicated generated Entry IDs,
+    // or a Domain-invalid Plan / Entry is never persisted. B8-D2a stores a
+    // freshly calculated Draft; activation, replacement and the
     // single-active-Plan constraint stay the existing Application concerns.
-    if (plan.status !== 'draft') {
-      throw resultInvalid(
-        `A Planner orchestration result must be saved as a draft ProductionPlan, but its status is '${plan.status}'.`,
-      )
-    }
-    const duplicated = generatedEntries
-      .map(({ id }) => id)
-      .filter((id, index, all) => all.indexOf(id) !== index)
-    if (duplicated.length > 0) {
-      throw resultInvalid(
-        `Generated BuildListEntry IDs must be unique: '${duplicated[0]}' appears more than once.`,
-      )
-    }
-    assertRepositoryValidation('ProductionPlan', validateProductionPlan(plan))
-    for (const entry of generatedEntries) {
-      assertRepositoryValidation('BuildListEntry', validateBuildListEntry(entry))
-    }
+    throwIssue(checkPersistablePlannerResultShape(plan, generatedEntries, termination))
   }
 
   private async readCurrentState(): Promise<PlannerSaveCurrentState> {
@@ -310,16 +303,9 @@ export class PlannerResultPersistenceService {
       )
     }
 
-    // A generated Entry that is already persisted was not the `reusedExisting`
-    // case - a reused Entry is never returned as generated - so the same ID
-    // appearing now is a save-time race, never a silent reuse or overwrite.
-    const persistedIds = new Set(current.buildListEntries.map(({ id }) => id))
-    const collided = generatedEntries.find(({ id }) => persistedIds.has(id))
-    if (collided) {
-      throw stateChanged(
-        `Generated BuildListEntry '${collided.id}' already exists in persistence; current state changed after the Planner ran.`,
-      )
-    }
+    throwIssue(
+      findPersistedGeneratedBuildListEntryCollision(generatedEntries, current.buildListEntries),
+    )
 
     const augmentedEntries = [...current.buildListEntries, ...generatedEntries]
     if (
@@ -331,24 +317,9 @@ export class PlannerResultPersistenceService {
       )
     }
 
-    const targetById = new Map(
-      current.targetWeapons.map((target) => [target.id, target]),
+    throwIssue(
+      checkGeneratedBuildListEntriesFresh(generatedEntries, current, currentCalculationContext),
     )
-    for (const entry of generatedEntries) {
-      // Recomputed from current state, never read off the persisted flags.
-      const staleness = evaluateBuildListEntryStaleness(entry, {
-        target: targetById.get(entry.targetWeaponId) ?? null,
-        rngState: current.rngState,
-        normalCounters: current.normalCounters,
-        ownedWeapons: current.ownedWeapons,
-        calculationContext: currentCalculationContext,
-      })
-      if (staleness.isStale) {
-        throw stateChanged(
-          `Generated BuildListEntry '${entry.id}' is stale against current state (${staleness.staleReasons.join(', ')}).`,
-        )
-      }
-    }
 
     return augmentedEntries
   }
@@ -359,67 +330,7 @@ export class PlannerResultPersistenceService {
     generatedEntries: readonly BuildListEntry[],
     augmentedEntries: readonly BuildListEntry[],
   ) {
-    const entryById = new Map(augmentedEntries.map((entry) => [entry.id, entry]))
-    const requireEntry = (id: BuildListEntryId, path: string) => {
-      const entry = entryById.get(id)
-      if (!entry) {
-        throw resultInvalid(
-          `${path} references BuildListEntry '${id}', which is not part of the final augmented Build List.`,
-        )
-      }
-      return entry
-    }
-
-    plan.selectedBuildListEntryIds.forEach((id, index) =>
-      requireEntry(id, `selectedBuildListEntryIds[${index}]`),
-    )
-    plan.conflicts.forEach((conflict, index) => {
-      conflict.buildListEntryIds.forEach((id, participant) =>
-        requireEntry(id, `conflicts[${index}].buildListEntryIds[${participant}]`),
-      )
-      if (conflict.recommendedBuildListEntryId !== null) {
-        requireEntry(
-          conflict.recommendedBuildListEntryId,
-          `conflicts[${index}].recommendedBuildListEntryId`,
-        )
-      }
-      if (conflict.selectedBuildListEntryId !== null) {
-        requireEntry(
-          conflict.selectedBuildListEntryId,
-          `conflicts[${index}].selectedBuildListEntryId`,
-        )
-      }
-    })
-    plan.rejectedBuildListEntries.forEach((rejected, index) =>
-      requireEntry(
-        rejected.buildListEntryId,
-        `rejectedBuildListEntries[${index}].buildListEntryId`,
-      ),
-    )
-
-    plan.steps.forEach((step, index) => {
-      if (step.buildListEntryId === null) return
-      const entry = requireEntry(
-        step.buildListEntryId,
-        `steps[${index}].buildListEntryId`,
-      )
-      // A Candidate-derived Step carries that Entry Snapshot's Candidate ID.
-      if (step.candidateId !== entry.candidateSnapshot.id) {
-        throw resultInvalid(
-          `steps[${index}].candidateId '${step.candidateId}' does not match the candidate Snapshot '${entry.candidateSnapshot.id}' of BuildListEntry '${entry.id}'.`,
-        )
-      }
-    })
-
-    // PLANNER_SPEC 9.2.14 adoption: a generated Entry exists only because the
-    // final Plan selected it. Persistence defends the same invariant.
-    const selected = new Set(plan.selectedBuildListEntryIds)
-    const unselected = generatedEntries.find(({ id }) => !selected.has(id))
-    if (unselected) {
-      throw resultInvalid(
-        `Generated BuildListEntry '${unselected.id}' is not selected by the final ProductionPlan.`,
-      )
-    }
+    throwIssue(checkProductionPlanBuildListReferences(plan, generatedEntries, augmentedEntries))
   }
 }
 

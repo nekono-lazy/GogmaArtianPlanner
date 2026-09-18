@@ -109,6 +109,37 @@ export type PlanAbandonSavePointDecision =
   | { kind: 'keep_current'; recordedAt: ISODateTimeString }
   | { kind: 'restore_save_point'; recordedAt: ISODateTimeString }
 
+/**
+ * The user's 16.10 decision must answer exactly the choice re-derived inside
+ * the transaction: a required choice needs a decision naming the very save
+ * point the user saw, and no decision is accepted where no choice applies.
+ * Shared by user abandonment and replan adoption.
+ */
+export function assertRunningPlanSavePointDecision(
+  plan: Pick<ProductionPlan, 'id'>,
+  choice: RunningPlanSavePointChoiceRequirement,
+  savePointDecision: PlanAbandonSavePointDecision,
+): void {
+  if (choice.required && savePointDecision === null) {
+    executionFailure(
+      'save_point_choice_required',
+      `ProductionPlan '${plan.id}' ran past its game save point; choose whether to keep the current state or return to the save point.`,
+    )
+  }
+  if (!choice.required && savePointDecision !== null) {
+    executionFailure(
+      'save_point_choice_not_required',
+      `ProductionPlan '${plan.id}' did not run past a game save point, so no save point decision applies.`,
+    )
+  }
+  if (choice.required && savePointDecision !== null && savePointDecision.recordedAt !== choice.savePoint.recordedAt) {
+    executionFailure(
+      'save_point_changed',
+      `The game save point of ProductionPlan '${plan.id}' was recorded at '${choice.savePoint.recordedAt}', not at the chosen '${savePointDecision.recordedAt}'.`,
+    )
+  }
+}
+
 /** The Plan as the user saw it when confirming the abandonment. */
 export interface ObservedProductionPlanState {
   status: ProductionPlan['status']
@@ -259,24 +290,7 @@ export function prepareProductionPlanAbandonment(input: ProductionPlanAbandonmen
   requireRunningPlan(plan)
 
   const choice = deriveRunningPlanSavePointChoiceRequirement(plan, state.executionSavePoint, state.planExecutionHistory)
-  if (choice.required && savePointDecision === null) {
-    executionFailure(
-      'save_point_choice_required',
-      `ProductionPlan '${plan.id}' ran past its game save point; choose whether to keep the current state or return to the save point.`,
-    )
-  }
-  if (!choice.required && savePointDecision !== null) {
-    executionFailure(
-      'save_point_choice_not_required',
-      `ProductionPlan '${plan.id}' did not run past a game save point, so no save point decision applies.`,
-    )
-  }
-  if (choice.required && savePointDecision !== null && savePointDecision.recordedAt !== choice.savePoint.recordedAt) {
-    executionFailure(
-      'save_point_changed',
-      `The game save point of ProductionPlan '${plan.id}' was recorded at '${choice.savePoint.recordedAt}', not at the chosen '${savePointDecision.recordedAt}'.`,
-    )
-  }
+  assertRunningPlanSavePointDecision(plan, choice, savePointDecision)
 
   return savePointDecision?.kind === 'restore_save_point'
     ? abandonAtSavePoint(input, savePointDecision.recordedAt)
