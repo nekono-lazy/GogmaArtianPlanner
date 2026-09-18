@@ -6,6 +6,7 @@ import type {
   ProductionPlanId,
   TargetWeapon,
 } from '../../domain/models/publicTypes'
+import { inMemoryPlanGuardedPersistence } from '../../test/fixtures/planGuardedPersistence'
 import { OwnedWeaponCrudService, TargetWeaponCrudService } from './entityCrudServices'
 
 const loadedMaster = loadMasterData()
@@ -15,26 +16,22 @@ const NOW = '2026-09-17T00:00:00.000Z'
 const LATER = '2026-09-17T01:00:00.000Z'
 const PLAN_ID = 'plan.execution-lifecycle' as ProductionPlanId
 
-function ownedService() {
-  return new OwnedWeaponCrudService(master, {
+function ownedService(memory = inMemoryPlanGuardedPersistence()) {
+  const service = new OwnedWeaponCrudService(master, {
     getAll: vi.fn(async () => [] as OwnedWeapon[]),
     getTargets: vi.fn(async () => [] as TargetWeapon[]),
-    put: vi.fn(async (value: OwnedWeapon) => value),
-    putReleasingTargets: vi.fn(async (value: OwnedWeapon) => value),
-    delete: vi.fn(async () => undefined),
-    findReferences: vi.fn(async () => []),
+    persistence: memory.persistence,
   })
+  return Object.assign(service, { memory })
 }
 
-function targetService() {
-  return new TargetWeaponCrudService(master, {
+function targetService(memory = inMemoryPlanGuardedPersistence()) {
+  const service = new TargetWeaponCrudService(master, {
     getAll: vi.fn(async () => [] as TargetWeapon[]),
     getOwnedWeapons: vi.fn(async () => [] as OwnedWeapon[]),
-    put: vi.fn(async (value: TargetWeapon) => value),
-    putReleasingTargets: vi.fn(async (value: TargetWeapon) => value),
-    delete: vi.fn(async () => undefined),
-    findReferences: vi.fn(async () => []),
+    persistence: memory.persistence,
   })
+  return Object.assign(service, { memory })
 }
 
 describe('Execution lifecycle fields in ordinary CRUD', () => {
@@ -58,6 +55,8 @@ describe('Execution lifecycle fields in ordinary CRUD', () => {
     expect(created.executionInProgress).toBeNull()
 
     const existing: OwnedWeapon = { ...created, executionInProgress: inProgress }
+    // Execution-owned fields come from the stored weapon, never from the draft.
+    service.memory.seed({ ownedWeapons: [existing] })
     const edited = await service.save(
       { ...existing, name: 'Renamed', executionInProgress: null },
       existing,
@@ -99,6 +98,7 @@ describe('Execution lifecycle fields in ordinary CRUD', () => {
       completedAt: NOW,
       completedByProductionPlanId: PLAN_ID,
     }
+    service.memory.seed({ targetWeapons: [existing] })
     const edited = await service.save(
       { ...existing, memo: 'edited', lifecycleStatus: 'active', completedAt: null, completedByProductionPlanId: null },
       existing,

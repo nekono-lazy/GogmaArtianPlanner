@@ -158,7 +158,8 @@ describe('NormalCountersPage', () => {
     await user.click(save)
     expect(await screen.findByText(/non-negative integer/)).toBeInTheDocument()
     await user.clear(input); await user.type(input, '12'); await user.click(save)
-    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ counter: 12 }))
+    // The stored row the edit started from is passed as the basis of the save.
+    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ counter: 12 }), expect.objectContaining({ id: 'weapon.dual_blades:8' }))
   }, 15_000)
 
   it('never confirms a Counter without a value', async () => {
@@ -170,7 +171,7 @@ describe('NormalCountersPage', () => {
     expect(row.getByRole('checkbox', { name: '確定済み' })).toBeDisabled()
     expect(row.getByRole('checkbox', { name: '確定済み' })).not.toBeChecked()
     await user.click(row.getByRole('button', { name: 'デバッグ保存' }))
-    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ counter: null, isConfirmed: false, rarity: 8 }))
+    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ counter: null, isConfirmed: false, rarity: 8 }), expect.objectContaining({ id: confirmedFixture.id }))
     expect(await screen.findByText('カウンターを保存しました。')).toBeInTheDocument()
   }, 15_000)
 

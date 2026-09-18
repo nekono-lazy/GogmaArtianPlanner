@@ -222,7 +222,7 @@ export interface ProductionPlanAbandonmentWrite {
   deletesExecutionSavePoint: boolean
 }
 
-function withoutPlanInProgress(
+export function withoutPlanInProgress(
   planId: ProductionPlanId,
   weapons: readonly OwnedWeapon[],
   now: ISODateTimeString,
@@ -233,14 +233,22 @@ function withoutPlanInProgress(
       : weapon)
 }
 
-function abandonedPlan(base: ProductionPlan, now: ISODateTimeString): ProductionPlan {
+/**
+ * The Plan-ending transition to `abandoned` with the given reason, shared by
+ * user abandonment and an approved breaking change (16.2 / 16.6).
+ */
+export function abandonedProductionPlan(
+  base: ProductionPlan,
+  now: ISODateTimeString,
+  abandonmentReason: 'user_abandoned' | 'breaking_change_approved' = 'user_abandoned',
+): ProductionPlan {
   // `currentStepId`, every Step completion and `recalculationReasons` stay as
   // they are on the base: the Plan records where it stopped, and a stale reason
   // survives the abandonment (16.2).
   return {
     ...structuredClone(base),
     status: 'abandoned',
-    abandonmentReason: 'user_abandoned',
+    abandonmentReason,
     abandonedAt: now,
     completedAt: null,
     updatedAt: now,
@@ -305,7 +313,7 @@ function abandonAtCurrentState(
 ): ProductionPlanAbandonmentWrite {
   const nextWeapons = withoutPlanInProgress(plan.id, state.ownedWeapons, now)
   const changedWeapons = nextWeapons.filter((weapon, index) => weapon !== state.ownedWeapons[index])
-  const nextPlan = abandonedPlan(plan, now)
+  const nextPlan = abandonedProductionPlan(plan, now)
   assertAbandonedStateValid(nextPlan, changedWeapons, nextWeapons, state.targetWeapons)
   return {
     savePointHandling,
@@ -351,7 +359,7 @@ function abandonAtSavePoint(
     ...state.targetWeapons.filter(({ id }) => !restoredTargetIds.has(id)),
     ...restore.restoredTargetWeapons,
   ]
-  const nextPlan = abandonedPlan(restore.plan, now)
+  const nextPlan = abandonedProductionPlan(restore.plan, now)
   assertAbandonedStateValid(nextPlan, writtenWeapons, nextWeapons, nextTargets)
   return {
     savePointHandling: 'restore_save_point',
@@ -371,7 +379,7 @@ function abandonAtSavePoint(
  * this abandonment changed, the Target preference collection, and no weapon
  * left in progress for the abandoned Plan (16.10.1).
  */
-function assertAbandonedStateValid(
+export function assertAbandonedStateValid(
   plan: ProductionPlan,
   changedWeapons: readonly OwnedWeapon[],
   nextWeapons: readonly OwnedWeapon[],

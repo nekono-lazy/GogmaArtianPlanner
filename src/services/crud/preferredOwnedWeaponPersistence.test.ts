@@ -5,13 +5,13 @@ import {
   createOwnedWeaponDraft,
   createTargetWeaponDraft,
 } from '../../domain/forms/entityDrafts'
-import { DOMAIN_FIXTURE_TIME } from '../../test/fixtures/domainData'
+import { DOMAIN_FIXTURE_TIME, domainFixtureContext } from '../../test/fixtures/domainData'
 import { loadMasterData } from '../../domain/master/loadMasterData'
 import { AppDatabase } from '../../db/AppDatabase'
 import { ReferenceFinder } from '../../db/referenceFinder'
 import { OwnedWeaponRepository } from '../../db/repositories/ownedWeaponRepository'
 import { TargetWeaponRepository } from '../../db/repositories/targetWeaponRepository'
-import { runInRepositoryTransaction } from '../../db/transaction'
+import { createPlanBreakingChangeGuard } from '../execution/planBreakingChangeGuard'
 import {
   EntityFormValidationError,
   OwnedWeaponCrudService,
@@ -34,43 +34,20 @@ function services(database: AppDatabase) {
   const targets = new TargetWeaponRepository(database)
   const weapons = new OwnedWeaponRepository(database)
   const finder = new ReferenceFinder(database)
-  const targetDependencies = {
-    getAll: () => targets.getAllTargetWeapons(),
-    getOwnedWeapons: () => weapons.getAllOwnedWeapons(),
-    put: (value: TargetWeapon) => targets.putTargetWeapon(value),
-    putReleasingTargets: (
-      value: TargetWeapon,
-      released: readonly TargetWeapon[],
-    ) =>
-      runInRepositoryTransaction(database, [database.targetWeapons], async () => {
-        for (const target of released) await targets.putTargetWeapon(target)
-        return targets.putTargetWeapon(value)
-      }),
-    delete: (id: TargetWeapon['id']) => targets.deleteTargetWeapon(id),
-    findReferences: (id: TargetWeapon['id']) =>
-      finder.findTargetWeaponReferences(id),
-  }
+  const persistence = createPlanBreakingChangeGuard(domainFixtureContext, database)
   return {
     targets,
     weapons,
     finder,
-    targetDependencies,
-    targetService: new TargetWeaponCrudService(master, targetDependencies),
+    targetService: new TargetWeaponCrudService(master, {
+      getAll: () => targets.getAllTargetWeapons(),
+      getOwnedWeapons: () => weapons.getAllOwnedWeapons(),
+      persistence,
+    }),
     ownedService: new OwnedWeaponCrudService(master, {
       getAll: () => weapons.getAllOwnedWeapons(),
       getTargets: () => targets.getAllTargetWeapons(),
-      put: (value) => weapons.putOwnedWeapon(value),
-      putReleasingTargets: (value, released) =>
-        runInRepositoryTransaction(
-          database,
-          [database.ownedWeapons, database.targetWeapons],
-          async () => {
-            for (const target of released) await targets.putTargetWeapon(target)
-            return weapons.putOwnedWeapon(value)
-          },
-        ),
-      delete: (id) => weapons.deleteOwnedWeapon(id),
-      findReferences: (id) => finder.findOwnedWeaponReferences(id),
+      persistence,
     }),
   }
 }
@@ -177,22 +154,13 @@ describe('preferred owned weapon persistence', () => {
   it('leaves both Targets unchanged when the reassignment transaction fails', () =>
     withScenario(async (scenario, database) => {
       await prefer(scenario, scenario.firstTarget, scenario.firstWeapon)
-      const failing = new TargetWeaponCrudService(master, {
-        ...scenario.targetDependencies,
-        putReleasingTargets: (_value, released) =>
-          runInRepositoryTransaction(
-            database,
-            [database.targetWeapons],
-            async () => {
-              for (const target of released) {
-                await scenario.targets.putTargetWeapon(target)
-              }
-              // The release already succeeded inside this transaction; the
-              // failure must roll it back together with the rest.
-              throw new Error('persistence failure')
-            },
-          ),
+      // The release of the first Target is written in the same transaction as
+      // the second Target; failing the second write must roll back both.
+      database.targetWeapons.hook('updating', (_modifications, primaryKey) => {
+        if (primaryKey === scenario.secondTarget.id) throw new Error('persistence failure')
+        return undefined
       })
+      const failing = scenario.targetService
 
       await expect(
         failing.save(

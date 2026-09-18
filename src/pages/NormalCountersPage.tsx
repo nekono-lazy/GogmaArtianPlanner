@@ -19,6 +19,7 @@ import {
 import { productionRngEngine } from '../domain/rng/production/productionRngRuntime'
 import type { NormalizedSeed } from '../domain/rng/rngEngine'
 import { normalArtianCounterId, normalArtianCounterRepository, rngStateRepository, settingsRepository } from '../db/repositories'
+import { rngStatePersistenceService } from '../services/rngState/rngStatePersistenceService'
 import { normalCounterIdentificationUnsupportedLabel } from '../presentation/normalCounterIdentification'
 import {
   createProductionNormalArtianCounterIdentificationWorkerClient,
@@ -33,7 +34,8 @@ const BASE_SEED_NOT_CANONICAL_MESSAGE = '保存済みのBase Seedが予測用の
 
 export interface NormalCountersPageDependencies {
   getAll(): Promise<NormalArtianCounter[]>
-  save(value: NormalArtianCounter): Promise<NormalArtianCounter>
+  /** `basis` is the stored record the edit started from, if any. */
+  save(value: NormalArtianCounter, basis?: NormalArtianCounter): Promise<NormalArtianCounter>
   ensureRngState(): Promise<RngState>
   ensureSettings(): Promise<AppSettings>
   createIdentificationClient(): NormalArtianCounterIdentificationWorkerClient
@@ -42,7 +44,7 @@ export interface NormalCountersPageDependencies {
 }
 const defaultDependencies: NormalCountersPageDependencies = {
   getAll: () => normalArtianCounterRepository.getAllNormalArtianCounters(),
-  save: (value) => normalArtianCounterRepository.putNormalArtianCounter(value),
+  save: (value, basis) => rngStatePersistenceService.saveNormalArtianCounter(value, basis ?? null),
   ensureRngState: () => rngStateRepository.ensureInitialRngState(),
   ensureSettings: () => settingsRepository.ensureSettings(),
   createIdentificationClient: createProductionNormalArtianCounterIdentificationWorkerClient,
@@ -244,7 +246,7 @@ export function NormalCountersPage({ dependencies = defaultDependencies }: { dep
     const next = { ...value, isConfirmed: value.counter === null ? false : value.isConfirmed, updatedAt: now() }
     const validation = validateNormalArtianCounter(next)
     if (!validation.isValid) throw new Error(validation.issues.map(({ message }) => message).join(' / '))
-    const saved = await dependencies.save(next)
+    const saved = await dependencies.save(next, values.find(({ id }) => id === next.id))
     update(saved)
     setNotice(successNotice)
   }

@@ -362,8 +362,48 @@ adoption, Target preferences stay, the running Plan's ExecutionHistory stays wit
 record added, and its save point is deleted. Choosing 「最後のゲーム内セーブ地点へ戻す」
 runs `prepareExecutionSavePointRestore()` unchanged and adopts nothing; the old Preview
 then no longer matches and a new Preview is required. It added no persisted field and
-changed no calculation semantics, so the three versions stay 12 / 6 / 9. The
-breaking-change guard and the Execution Navigator UI are still not implemented.
+changed no calculation semantics, so the three versions stay 12 / 6 / 9.
+The tenth PR (the Plan-breaking change guard runtime) implemented 16.6 「生産計画を破棄して
+保存」 with the 16.10 save point choice (`src/domain/execution/planBreakingChange.ts`,
+`src/services/execution/planBreakingChangeGuard.ts`). Every save that can break an
+`active` Plan - RNG Setup, Identification adoption, Normal Counter save / confirm /
+unconfirm / Debug edit, OwnedWeapon and TargetWeapon save / delete, and the Build List
+selection change / Entry delete - goes through one `PlanBreakingChangeGuard` Dexie
+transaction; a Build List addition and a staleness refresh cannot break a Plan and are
+not guarded. Each change is a pure mutation from the persisted state to its post-state,
+its own validation and the existing reference protection included, and is applied and
+validated before any Plan decision. Only an `active` Plan is judged (two or more
+`active` / `stale` Plans refuse with `running_plan_invariant_violated`); a `stale` Plan
+or no running Plan saves as before and touches no Plan, save point, ExecutionHistory or
+in-progress mark. `detectPlanBreakingMutation()` judges the whole post-state, side
+effects included, by the existing authorities only: `createExpectedPlanState()`'s
+`rngStateHash` / `normalCountersHash`, its `ownedWeaponsHash` over the execution scope
+weapons (`collectExecutionScopeOwnedWeaponIds()`), the Plan-dependent Targets'
+`createDependentTargetDefinitionsHash()` and `createTargetExecutionStateHash()`, and
+`createDependentBuildListEntriesHash()`. The reasons reuse `rng_state_changed`,
+`normal_counter_changed`, `owned_weapon_changed`, `target_changed` and
+`build_list_changed` as transient warning reasons and never stale the Plan. Without an
+approval a breaking change is refused (`plan_breaking_change_approval_required`,
+carrying the read-only inspection); an approval names the Plan the user saw and the
+16.10 decision, and is refused when the Plan moved on, became stale or ended
+(`plan_breaking_change_state_changed`) or the change no longer breaks it
+(`plan_breaking_change_approval_not_required`); the choice is re-derived through
+`deriveRunningPlanSavePointChoiceRequirement()` / `assertRunningPlanSavePointDecision()`.
+「現在地点を維持」 applies the change to the current state; 「最後のゲーム内セーブ地点へ戻す」
+decides `prepareExecutionSavePointRestore()` first and applies the change again to the
+restored state. A change applies only the fields the user changed from what the screen
+showed (`applyUserChanges()`; for an OwnedWeapon `applyOwnedWeaponUserChanges()`,
+which keeps the stored `kind` as authority - a weapon a restore returned from Gogma to
+Normal stays Normal - and applies across kinds only the shared name / memo / protection /
+weapon type / element, refusing a change the stored kind cannot hold), so no pre-restore
+body is written back over the restore; a save returns the record as finally persisted.
+Then the (restored) Plan becomes `abandoned` / `breaking_change_approved` with its
+current Step, Step completions and `recalculationReasons` kept, every weapon in progress
+for it stops being in progress, its save point is deleted, Target preferences change only
+through the change itself, and no ExecutionHistory is added, so it is never undoable. It
+added no persisted field and changed no calculation semantics, so the three versions stay
+12 / 6 / 9. The warning / confirmation UI, the save point choice dialog UI and the
+Execution Navigator UI are still not implemented.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -3110,8 +3150,10 @@ ordinary `confirmed_expected` Step confirmation (blind observation and
 `confirm_owned_ideal` included, with the full Undo snapshot and Plan completion), and
 the `actual_result_different` / `operation_uncertain` records, Undo of the latest
 ExecutionHistory, game save point record / restore, finishing as a compromise, and user
-abandonment with the 16.10 save point choice, and the replan Preview and adoption are
-implemented; the breaking-change guard and the Execution Navigator UI are not yet.
+abandonment with the 16.10 save point choice, the replan Preview and adoption, and the
+Plan-breaking change guard with its approved `breaking_change_approved` abandonment are
+implemented; the warning / confirmation UI, the save point choice dialog UI and the
+Execution Navigator UI are not yet.
 Implementation PRs follow the specification and must not fall back to the older
 Execution semantics.
 

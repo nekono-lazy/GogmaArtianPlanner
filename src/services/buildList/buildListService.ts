@@ -6,6 +6,12 @@ import {
   isSameBuildListCandidate,
   withIntermediateStateSelection,
 } from '../../domain/buildList'
+import {
+  unchangedMutableState,
+  type PlanBreakingChangeApproval,
+  type PlanBreakingChangeInspection,
+  type PlanGuardedMutation,
+} from '../../domain/execution'
 import { validateBuildListEntry } from '../../domain/models/publicTypes'
 import type {
   BuildCandidate,
@@ -25,25 +31,81 @@ import {
   rngStateRepository,
   targetWeaponRepository,
 } from '../../db/repositories'
+import {
+  defaultPlanGuardedPersistence,
+  type PlanGuardedPersistence,
+} from '../execution/planBreakingChangeGuard'
 
 export interface BuildListServiceRepositories {
   getAllEntries(): Promise<BuildListEntry[]>
+  /**
+   * Adds an Entry or refreshes its derived staleness flags. Neither can break
+   * a ProductionPlan (`docs/PLANNER_SPEC.md` 16.6), so neither is guarded.
+   */
   putEntry(entry: BuildListEntry): Promise<BuildListEntry>
-  deleteEntry(id: BuildListEntryId): Promise<void>
   ensureRngState(): Promise<RngState>
   getNormalCounters(): Promise<NormalArtianCounter[]>
   getOwnedWeapons(): Promise<OwnedWeapon[]>
   getTargets(): Promise<TargetWeapon[]>
+  /**
+   * The breaking-change guard of the two Build List operations that can break
+   * the `active` Plan: changing a selected Entry's intermediate state selection
+   * or improvement preference, and deleting a selected Entry.
+   */
+  persistence: PlanGuardedPersistence
 }
 
 export const defaultBuildListRepositories: BuildListServiceRepositories = {
   getAllEntries: () => buildListEntryRepository.getAllBuildListEntries(),
   putEntry: (entry) => buildListEntryRepository.putBuildListEntry(entry),
-  deleteEntry: (id) => buildListEntryRepository.deleteBuildListEntry(id),
   ensureRngState: () => rngStateRepository.ensureInitialRngState(),
   getNormalCounters: () => normalArtianCounterRepository.getAllNormalArtianCounters(),
   getOwnedWeapons: () => ownedWeaponRepository.getAllOwnedWeapons(),
   getTargets: () => targetWeaponRepository.getAllTargetWeapons(),
+  persistence: defaultPlanGuardedPersistence,
+}
+
+/**
+ * One intermediate state selection change as a guarded mutation. The Domain
+ * validation is the authority for at most one state per lane and for every id
+ * existing on its own lane of the Candidate Snapshot, so an invalid selection
+ * fails closed here rather than reaching the Planner.
+ */
+export function intermediateStateSelectionMutation(
+  id: BuildListEntryId,
+  intermediateStateSelection: IntermediateStateSelection,
+): PlanGuardedMutation<BuildListEntry> {
+  return (base) => {
+    const existing = base.buildListEntries.find((entry) => entry.id === id)
+    if (!existing) {
+      throw new Error(`BuildListEntry '${id}' does not exist.`)
+    }
+    const updated = withIntermediateStateSelection(existing, intermediateStateSelection)
+    const valid = validateBuildListEntry(updated)
+    if (!valid.isValid) {
+      throw new Error(
+        valid.issues.map(({ path, message }) => `${path}: ${message}`).join('\n'),
+      )
+    }
+    return {
+      result: updated,
+      state: {
+        ...unchangedMutableState(base),
+        buildListEntries: base.buildListEntries.map((entry) => (entry.id === id ? updated : entry)),
+      },
+    }
+  }
+}
+
+/** One Build List Entry delete as a guarded mutation. */
+export function buildListEntryDeleteMutation(id: BuildListEntryId): PlanGuardedMutation<void> {
+  return (base) => ({
+    result: undefined,
+    state: {
+      ...unchangedMutableState(base),
+      buildListEntries: base.buildListEntries.filter((entry) => entry.id !== id),
+    },
+  })
 }
 
 export class BuildListService {
@@ -99,21 +161,18 @@ export class BuildListService {
   async updateIntermediateStateSelection(
     id: BuildListEntryId,
     intermediateStateSelection: IntermediateStateSelection,
+    approval: PlanBreakingChangeApproval | null = null,
   ): Promise<BuildListEntry> {
-    const existing = (await this.repositories.getAllEntries()).find(
-      (entry) => entry.id === id,
-    )
-    if (!existing) {
-      throw new Error(`BuildListEntry '${id}' does not exist.`)
-    }
-    const updated = withIntermediateStateSelection(existing, intermediateStateSelection)
-    const valid = validateBuildListEntry(updated)
-    if (!valid.isValid) {
-      throw new Error(
-        valid.issues.map(({ path, message }) => `${path}: ${message}`).join('\n'),
-      )
-    }
-    return this.repositories.putEntry(updated)
+    const mutation = intermediateStateSelectionMutation(id, intermediateStateSelection)
+    return (await this.repositories.persistence.apply(mutation, approval)).result
+  }
+
+  /** Whether the selection change needs the breaking-change approval (`docs/UI_FLOW.md` 16.3). Writes nothing. */
+  inspectIntermediateStateSelectionUpdate(
+    id: BuildListEntryId,
+    intermediateStateSelection: IntermediateStateSelection,
+  ): Promise<PlanBreakingChangeInspection> {
+    return this.repositories.persistence.inspect(intermediateStateSelectionMutation(id, intermediateStateSelection))
   }
 
   async refreshStaleness(
@@ -155,8 +214,13 @@ export class BuildListService {
     return { entries: refreshed, targets, ownedWeapons }
   }
 
-  deleteEntry(id: BuildListEntryId): Promise<void> {
-    return this.repositories.deleteEntry(id)
+  async deleteEntry(id: BuildListEntryId, approval: PlanBreakingChangeApproval | null = null): Promise<void> {
+    await this.repositories.persistence.apply(buildListEntryDeleteMutation(id), approval)
+  }
+
+  /** Whether deleting the Entry needs the breaking-change approval (`docs/UI_FLOW.md` 16.3). Writes nothing. */
+  inspectEntryDelete(id: BuildListEntryId): Promise<PlanBreakingChangeInspection> {
+    return this.repositories.persistence.inspect(buildListEntryDeleteMutation(id))
   }
 }
 
