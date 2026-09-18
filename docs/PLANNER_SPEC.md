@@ -5736,7 +5736,10 @@ staleness semantics、PlanStep / reserve semantics、Expected execution state、
   Dexieのtable / index / field形状、ExportRootの形状、Plan生成・Candidate Search・Plannerの計算意味は
   変わらないため、`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 13`、`DATABASE_SCHEMA_VERSION = 6`、
   `ExportRoot.schemaVersion = 9` を維持する。この記録を含むExportを旧版が読むと、action literalの
-  検証でImport全体がfail closedになり、部分適用はしない
+  検証でImport全体がfail closedになり、部分適用はしない。その後のIdentification provenance
+  （16.15の解決authority、[DATA_MODEL.md](./DATA_MODEL.md) 6.1 / 6.2）の追加でDexie
+  `DATABASE_SCHEMA_VERSION` を7、`ExportRoot.schemaVersion` を10、`RngState.schemaVersion` を2へ更新した
+  （現行値）。計算意味は変わらないため `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は13のままである
 - 既存データを推測migrationして意味を変えない。所持Ideal武器の存在からTargetを
   `completed` と推測しない。既存OwnedWeaponを作成中と推測しない
 - 旧契約のProductionPlan（独立 `reserve_weapon` Step、旧expected state）はexact persisted

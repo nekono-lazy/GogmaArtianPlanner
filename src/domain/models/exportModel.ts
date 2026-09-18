@@ -29,8 +29,10 @@ import {
   validateExecutionHistory,
   validateExecutionSavePoint,
   validateExecutionSavePointReferences,
+  validateNormalArtianCounter,
   validateOwnedWeapon,
   validateProductionPlan,
+  validateRngState,
   validateTargetWeapon,
   type DomainValidationIssue,
   type DomainValidationResult,
@@ -630,8 +632,57 @@ export function validateExportRootExecutionLifecycle(
 }
 
 /**
+ * Validates the root-level RNG persistent state of a current-schema Export
+ * root: `rngState` (`null`, or a RngState meeting the current Domain contract -
+ * record schema version 2, KnownValue shapes and the Identification provenance
+ * `lastIdentifiedAt`) and every `normalArtianCounters` record
+ * (`validateNormalArtianCounter()`, provenance included). A root claiming the
+ * current schema is never trusted by its cast: an untrusted body is shape-checked
+ * before any typed validator dereferences a field, so a malformed one is refused
+ * without throwing. The RngState / Normal Counter bodies inside a game save
+ * point or an Undo snapshot are validated by their own entity validators through
+ * `validateExportRootExecutionLifecycle()` and are not repeated here.
+ */
+export function validateExportRootPersistentState(
+  root: ExportRoot,
+): DomainValidationResult {
+  if (!isRecord(root)) {
+    return { isValid: false, issues: [structureIssue('', 'Export root must be an object.')] }
+  }
+  const record = root as unknown as Record<string, unknown>
+  const issues: DomainValidationIssue[] = []
+  if (record.rngState !== null) {
+    if (!isRecord(record.rngState)) {
+      issues.push(structureIssue('rngState', 'rngState must be an object or null.'))
+    } else {
+      issues.push(...runTypedValidation('rngState', () => prefixed('rngState', validateRngState(root.rngState as RngState))))
+    }
+  }
+  const shapeIssues = collectionShapeIssues(record, 'normalArtianCounters')
+  if (shapeIssues.length > 0) return { isValid: false, issues: [...issues, ...shapeIssues] }
+  root.normalArtianCounters.forEach((counter, index) => {
+    const path = `normalArtianCounters[${index}]`
+    issues.push(...runTypedValidation(path, () => prefixed(path, validateNormalArtianCounter(counter))))
+  })
+  return { isValid: issues.length === 0, issues }
+}
+
+/**
+ * The whole current-schema Export root validation Import preparation runs: the
+ * Execution lifecycle state (`validateExportRootExecutionLifecycle()`) and the
+ * root-level RNG persistent state (`validateExportRootPersistentState()`).
+ */
+export function validateCurrentExportRoot(root: ExportRoot): DomainValidationResult {
+  const lifecycle = validateExportRootExecutionLifecycle(root)
+  const persistent = validateExportRootPersistentState(root)
+  const issues = [...lifecycle.issues, ...persistent.issues]
+  return { isValid: issues.length === 0, issues }
+}
+
+/**
  * Brings a parsed Export object to the current schema and validates its
- * Execution lifecycle state, failing closed on anything else. Schema 10 is read
+ * Execution lifecycle state and root-level RNG persistent state, failing closed
+ * on anything else. Schema 10 is read
  * as is; schema 9, 8, 7 and 6 go through the pure migrations in order
  * (`migrateExportRootV6ToV7()`, `migrateExportRootV7ToV8()`,
  * `migrateExportRootV8ToV9()`, `migrateExportRootV9ToV10()`), and every other
@@ -710,6 +761,6 @@ export function prepareExportRootForImport(
       }],
     }
   }
-  const validation = validateExportRootExecutionLifecycle(root)
+  const validation = validateCurrentExportRoot(root)
   return validation.isValid ? { ok: true, root } : { ok: false, issues: validation.issues }
 }

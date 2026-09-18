@@ -3,6 +3,7 @@ import {
   EXPORT_SCHEMA_VERSION,
   migrateExportRootV9ToV10,
   prepareExportRootForImport,
+  validateExportRootPersistentState,
   type ExportRoot,
   type ExportRootV9,
 } from './exportModel'
@@ -130,6 +131,73 @@ describe('Identification provenance model', () => {
     const identifiedCounter = { ...counter, lastIdentifiedAt: IDENTIFIED_AT }
     expect(createExpectedPlanState(identifiedState, [identifiedCounter], [weapon], { targetWeapons: [], dependentTargetWeaponIds: [] })).toEqual(before)
     expect(createSearchStateHash(route, identifiedState, [identifiedCounter])).toBe(searchBefore)
+  })
+})
+
+/**
+ * A root claiming the current schema is validated as the current contract, not
+ * trusted by its cast: the root-level RngState and every Normal Counter go
+ * through the current Domain validators, and a malformed body is refused
+ * without throwing.
+ */
+describe('Export schema 10 current Import validation', () => {
+  const importOf = (mutate: (root: Record<string, unknown>) => void) => {
+    const root = JSON.parse(JSON.stringify(exportRoot())) as Record<string, unknown>
+    mutate(root)
+    return prepareExportRootForImport(root)
+  }
+  const rngStateOf = (root: Record<string, unknown>) => root.rngState as Record<string, unknown>
+  const countersOf = (root: Record<string, unknown>) => root.normalArtianCounters as Record<string, unknown>[]
+
+  it('Case 7: accepts the valid current root and a null RngState', () => {
+    expect(importOf(() => undefined).ok).toBe(true)
+    expect(importOf((root) => { root.rngState = null }).ok).toBe(true)
+  })
+
+  it('Case 1: refuses a RngState at record schema 1 behind the current Export schema', () => {
+    const result = importOf((root) => { rngStateOf(root).schemaVersion = 1 })
+    expect(result.ok).toBe(false)
+    expect(!result.ok && result.issues.map(({ path }) => path)).toEqual(['rngState.schemaVersion'])
+  })
+
+  it('Case 2 / 3: refuses a RngState missing or malforming its provenance, without throwing', () => {
+    expect(importOf((root) => { delete rngStateOf(root).lastIdentifiedAt }).ok).toBe(false)
+    expect(importOf((root) => { rngStateOf(root).lastIdentifiedAt = {} }).ok).toBe(false)
+    expect(importOf((root) => { rngStateOf(root).lastIdentifiedAt = 123 }).ok).toBe(false)
+    expect(importOf((root) => { rngStateOf(root).lastIdentifiedAt = '' }).ok).toBe(false)
+    // Malformed KnownValues and a non-object RngState are refused the same way.
+    expect(importOf((root) => { rngStateOf(root).baseSeed = 'broken' }).ok).toBe(false)
+    expect(importOf((root) => { root.rngState = 'broken' }).ok).toBe(false)
+    expect(importOf((root) => { root.rngState = [] }).ok).toBe(false)
+  })
+
+  it('Case 4 / 5: refuses a Normal Counter missing or malforming its provenance, without throwing', () => {
+    expect(importOf((root) => { delete countersOf(root)[0].lastIdentifiedAt }).ok).toBe(false)
+    expect(importOf((root) => { countersOf(root)[0].lastIdentifiedAt = 123 }).ok).toBe(false)
+    expect(importOf((root) => { countersOf(root)[0].lastIdentifiedAt = {} }).ok).toBe(false)
+    // The rest of the current Counter contract is checked too.
+    expect(importOf((root) => { countersOf(root)[0].counter = -1 }).ok).toBe(false)
+    expect(importOf((root) => { countersOf(root)[0].id = 'weapon.other:8' }).ok).toBe(false)
+    expect(importOf((root) => { countersOf(root)[0].isConfirmed = true; countersOf(root)[0].counter = null }).ok).toBe(false)
+  })
+
+  it('Case 6: refuses a malformed Normal Counter collection without throwing', () => {
+    expect(importOf((root) => { root.normalArtianCounters = [null] }).ok).toBe(false)
+    expect(importOf((root) => { root.normalArtianCounters = ['x'] }).ok).toBe(false)
+    expect(importOf((root) => { root.normalArtianCounters = 'x' }).ok).toBe(false)
+    expect(importOf((root) => { delete root.normalArtianCounters }).ok).toBe(false)
+  })
+
+  it('reports the root-level issues with their paths', () => {
+    const root = JSON.parse(JSON.stringify(exportRoot())) as ExportRoot
+    const broken = {
+      ...root,
+      rngState: { ...root.rngState, lastIdentifiedAt: 5 },
+      normalArtianCounters: [{ ...root.normalArtianCounters[0], lastIdentifiedAt: 5 }],
+    } as unknown as ExportRoot
+    expect(validateExportRootPersistentState(broken).issues.map(({ path }) => path))
+      .toEqual(['rngState.lastIdentifiedAt', 'normalArtianCounters[0].lastIdentifiedAt'])
+    expect(validateExportRootPersistentState(root).isValid).toBe(true)
   })
 })
 

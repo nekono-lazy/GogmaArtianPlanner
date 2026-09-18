@@ -194,7 +194,7 @@ ProductionPlanの実行意味だけを変えたため、build結果に限りvers
 現行versionの単一authorityは `src/domain/models/common.ts` の
 `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 13` とし、Search、BuildList、Plannerと
 benchmark入力のruntime creatorで共用する。永続モデル移行は独立してDexie
-`DATABASE_SCHEMA_VERSION`（現行6。14.2）で管理し、AppSettingsは `schemaVersion = 1` のままとする。Calculation semantics / artifact
+`DATABASE_SCHEMA_VERSION`（現行7。14.2）で管理し、AppSettingsは `schemaVersion = 1` のままとする。Calculation semantics / artifact
 validity境界とDexie schemaは別の概念であり、片方の更新はもう片方の更新を意味しない。
 gameVersion、Master Data versionは維持する。
 `PRODUCTION_RNG_ENGINE_VERSION` はこのcheckpoint境界では `production-rng:c5-e2` のまま維持し、
