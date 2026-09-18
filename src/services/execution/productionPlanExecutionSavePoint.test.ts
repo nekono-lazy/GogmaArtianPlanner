@@ -66,6 +66,25 @@ async function started(database: AppDatabase, fixture: ExecutionFixture, service
   return service
 }
 
+/**
+ * A weapon the Plan was calculated with that no Route of it uses, marked in
+ * progress for the Plan (so it is an execution scope weapon the start effect
+ * does not link), and a Plan-independent Target preferring it: since the Plan
+ * start links the Targets of the Plan's own existing weapons, this is how a
+ * Plan-independent Target comes to prefer an execution scope weapon.
+ */
+const SPARE_ID = 'owned.execution.spare' as OwnedWeaponId
+const spareWeapon = () => normalWeapon(SPARE_ID)
+async function markSpareInProgress(database: AppDatabase, plan: ProductionPlan): Promise<void> {
+  await database.ownedWeapons.put({ ...spareWeapon(), executionInProgress: { productionPlanId: plan.id, startedAt: '2026-09-17T00:00:00.000Z' } })
+}
+async function holdSpareInProgress(database: AppDatabase, plan: ProductionPlan): Promise<TargetWeapon> {
+  await markSpareInProgress(database, plan)
+  const holder = orchestrationTarget('target.execution.holder', { preferredOwnedWeaponId: SPARE_ID })
+  await database.targetWeapons.put(holder)
+  return holder
+}
+
 function record(service: ProductionPlanExecutionService, plan: ProductionPlan) {
   return service.recordExecutionSavePoint({ planId: plan.id })
 }
@@ -212,8 +231,9 @@ describe('ExecutionSavePoint record', () => {
   it('holds exactly the Plan-dependent Targets and the Targets preferring a scope weapon', () =>
     withDatabase(async (database) => {
       const unrelated = normalWeapon('owned.execution.unrelated')
-      const fixture = await existingGogmaFixture([unrelated])
+      const fixture = await existingGogmaFixture([unrelated, spareWeapon()])
       const service = await started(database, fixture)
+      const holder = await holdSpareInProgress(database, fixture.plan)
       await database.targetWeapons.bulkPut([
         orchestrationTarget('target.execution.unrelated-preference', { preferredOwnedWeaponId: unrelated.id }),
         orchestrationTarget('target.execution.no-preference'),
@@ -222,8 +242,12 @@ describe('ExecutionSavePoint record', () => {
 
       const savePoint = await record(service, fixture.plan)
 
-      expect(ids(savePoint.targetWeapons)).toEqual([goal.id, other.id].sort())
-      expect(savePoint.targetWeapons).toEqual([goal, other].sort((a, b) => a.id.localeCompare(b.id)))
+      // The Plan start released `other` from the Plan's source, so it prefers
+      // no scope weapon any more and is not held.
+      expect(await database.targetWeapons.get(other.id)).toMatchObject({ preferredOwnedWeaponId: null })
+      const startedGoal = (await database.targetWeapons.get(goal.id)) as TargetWeapon
+      expect(ids(savePoint.targetWeapons)).toEqual([goal.id, holder.id].sort())
+      expect(savePoint.targetWeapons).toEqual([startedGoal, holder].sort((a, b) => a.id.localeCompare(b.id)))
     }))
 })
 
@@ -286,7 +310,7 @@ describe('ExecutionSavePoint restore', () => {
       expect(await dump(database)).toEqual(before)
     }))
 
-  it('returns an existing Gogma, its Plan-dependent Target and a relinked-away Target exactly', () =>
+  it('returns an existing Gogma and its Plan-dependent Target exactly, the Plan start links kept', () =>
     withDatabase(async (database) => {
       const fixture = await existingGogmaFixture()
       const service = await started(database, fixture)
@@ -295,14 +319,13 @@ describe('ExecutionSavePoint restore', () => {
       const [goal, other] = fixture.built.input.targetWeapons
       const source = fixture.built.input.ownedWeapons[0]
       await confirmCurrent(service, database, fixture.plan)
-      expect(await database.targetWeapons.get(goal.id)).toMatchObject({ preferredOwnedWeaponId: source.id })
-      expect(await database.targetWeapons.get(other.id)).toMatchObject({ preferredOwnedWeaponId: null })
       expect(await database.ownedWeapons.get(source.id)).not.toEqual(source)
 
       await restore(service, fixture.plan, savePoint)
 
-      expect(await database.targetWeapons.get(goal.id)).toEqual(goal)
-      expect(await database.targetWeapons.get(other.id)).toEqual(other)
+      // The save point is after the Plan start, so the start links stay.
+      expect(await database.targetWeapons.get(goal.id)).toMatchObject({ preferredOwnedWeaponId: source.id })
+      expect(await database.targetWeapons.get(other.id)).toMatchObject({ preferredOwnedWeaponId: null })
       expect(await database.ownedWeapons.get(source.id)).toEqual(source)
       expect(await dump(database)).toEqual(before)
     }))
@@ -360,10 +383,12 @@ describe('ExecutionSavePoint restore', () => {
 
   it('keeps a deleted Plan-independent snapshot Target deleted, but refuses a deleted Plan-dependent Target', () =>
     withDatabase(async (database) => {
-      const fixture = await existingGogmaFixture()
+      const fixture = await existingGogmaFixture([spareWeapon()])
       const service = await started(database, fixture)
+      const other = await holdSpareInProgress(database, fixture.plan)
       const savePoint = await record(service, fixture.plan)
-      const [goal, other] = fixture.built.input.targetWeapons
+      const [goal] = fixture.built.input.targetWeapons
+      const goalAtSavePoint = await database.targetWeapons.get(goal.id)
       expect(ids(savePoint.targetWeapons)).toContain(other.id)
       await confirmCurrent(service, database, fixture.plan)
 
@@ -376,7 +401,7 @@ describe('ExecutionSavePoint restore', () => {
       await restore(service, fixture.plan, savePoint)
 
       expect(await database.targetWeapons.get(other.id)).toBeUndefined()
-      expect(await database.targetWeapons.get(goal.id)).toEqual(goal)
+      expect(await database.targetWeapons.get(goal.id)).toEqual(goalAtSavePoint)
     }))
 
   it('refuses a missing snapshot OwnedWeapon or selected BuildListEntry and never revives it', () =>
@@ -623,32 +648,32 @@ describe('ExecutionSavePoint restore', () => {
 
   it('refuses a save point lacking a Plan-independent Target that preferred a scope weapon', () =>
     withDatabase(async (database) => {
-      const fixture = await existingGogmaFixture()
+      const fixture = await existingGogmaFixture([spareWeapon()])
       const service = await started(database, fixture)
-      const [, other] = fixture.built.input.targetWeapons
-      const source = fixture.built.input.ownedWeapons[0]
-      expect(other.preferredOwnedWeaponId).toBe(source.id)
+      const other = await holdSpareInProgress(database, fixture.plan)
       const savePoint = await record(service, fixture.plan)
       expect(ids(savePoint.targetWeapons)).toContain(other.id)
       await database.executionSavePoints.put({ ...savePoint, targetWeapons: savePoint.targetWeapons.filter(({ id }) => id !== other.id) })
 
       await expectRefusal(() => restore(service, fixture.plan, savePoint), database, 'save_point_snapshot_invalid')
 
-      // Still refused after a later Step released the Target: the earliest later
-      // record's before body shows it preferred the scope weapon at the save point.
+      // Still refused after a later Step on another weapon.
       await confirmCurrent(service, database, fixture.plan)
-      expect(await database.targetWeapons.get(other.id)).toMatchObject({ preferredOwnedWeaponId: null })
+      expect(await database.targetWeapons.get(other.id)).toMatchObject({ preferredOwnedWeaponId: SPARE_ID })
       await expectRefusal(() => restore(service, fixture.plan, savePoint), database, 'save_point_snapshot_invalid')
     }))
 
   it('does not treat a Target that started preferring a scope weapon after the save point as missing', () =>
     withDatabase(async (database) => {
-      const fixture = await existingResetFixture()
+      const fixture = await existingGogmaFixture([spareWeapon()])
       const service = await started(database, fixture)
-      const source = fixture.built.input.ownedWeapons[0]
+      // The Plan's own source is linked to its Target from the Plan start, so a
+      // later Target can only come to prefer a scope weapon the start does not
+      // link: a weapon in progress for the Plan.
+      await markSpareInProgress(database, fixture.plan)
       const savePoint = await record(service, fixture.plan)
       const later = orchestrationTarget('target.execution.later', {
-        preferredOwnedWeaponId: source.id,
+        preferredOwnedWeaponId: SPARE_ID,
         createdAt: '2026-09-17T09:00:00.000Z',
         updatedAt: '2026-09-17T09:00:00.000Z',
       })

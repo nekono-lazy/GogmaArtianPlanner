@@ -1016,9 +1016,10 @@ Planner計算（Beam Search、Trace Replay、constrained re-search、what-if）�
 Idealを確保した、新規Gogmaを登録した、既存Gogmaを更新したという探索上の理由で優先起点を
 自動設定・付け替えしない。優先起点はユーザーがTarget Weapons画面から設定する計画入力である。
 
-唯一の例外はExecutionである。Execution Navigatorで実際の作成作業を開始したStepの確定時に
-Targetへ作成中の武器を紐付け、理想品完成時に解除する（16.11 / 16.13）。これはPlanner計算ではなく
-Application / Persistence層のExecution effectであり、Active Planの正常進行として扱う。
+唯一の例外はExecutionである。既存の所持武器はPlan開始（「作成開始」、`draft -> active`）の
+transactionで、Plan内で新規登録する作成対象Normalはその登録Stepの確定でTargetへ紐付け、
+理想品完成時に解除する（16.2 / 16.11 / 16.13）。これはPlanner計算ではなくApplication /
+Persistence層のExecution effectであり、Active Planの正常進行として扱う。
 
 #### Target Satisfaction
 
@@ -3746,7 +3747,8 @@ Candidate Snapshotの finalBonuses / `finalBonusScope` / Series Skill / Group Sk
 完成状態を、status ideal、protected、Target completedとして確定する（16.13）。
 checkpointは同じRouteの途中状態であり、完成の対象にならない(7.5.3)。
 OwnedWeaponへTarget IDを追加する処理は存在しない。`TargetWeapon.preferredOwnedWeaponId` は
-Planner計算では変更せず、Executionの作成Step確定で紐付け、完成時に解除する（16.11 / 16.13）。
+Planner計算では変更せず、既存武器はPlan開始時、新規登録武器は登録Step確定で紐付け、完成時に解除する
+（16.11 / 16.13）。
 
 UI実行は1操作ずつ。
 
@@ -3764,7 +3766,7 @@ UI実行は1操作ずつ。
 
 探索内部のreserveは元OwnedNormalArtianWeaponを再削除しない。execution projectionでは
 同じIDのまま完成状態、status ideal、protected、Target completedを最後の物理Stepで確定する。
-Target紐付けは最初の実ゲーム操作であるconvert Stepの確定で行う（16.11）。
+変換元の所持通常アーティアはPlan開始時点で存在するため、Target紐付けはPlan開始時に行う（16.11）。
 
 ## 11.3 既存巨戟 Reset Bonuses
 
@@ -3775,7 +3777,8 @@ Target紐付けは最初の実ゲーム操作であるconvert Stepの確定で�
 ```
 
 既存巨戟Routeは新しい武器を追加せず、各物理Stepの確定でRouteの `sourceOwnedWeaponId` と同じ
-OwnedGogmaArtianWeaponを逐次更新する。最初の物理Stepの確定でTargetへ紐付け、作成中にする。
+OwnedGogmaArtianWeaponを逐次更新する。Targetへの紐付けはPlan開始時に行い（16.11）、最初の物理Stepの
+確定で作成中にする。
 最後の物理Stepで理想品が完成した場合は、既存武器でも `status = "ideal"`、`isProtected = true`、
 作成中OFF、Target completed、preferred解除とする（16.13）。旧契約の「既存武器の保護状態を維持する」
 は廃止した。
@@ -4406,8 +4409,9 @@ dependencyでもrun間で一致する。
   完成Stepでideal / protected / 作成中OFF / Target completed / preferred解除、全Step完了でPlan completed
 - Case B（blind Normal）: 作成対象の5枠をユーザー観測値として入力しない限り確定できず、架空5枠を
   生成せず、binding tokenで後続Stepの期待状態が一致し、観測値と異なる計画外編集は不一致になる
-- Case C（既存Gogma）: Plan生成時は紐付けを変更せず、最初のReset確定でTargetへ紐付け、別Targetの
-  紐付けを同一transactionで解除し、同じIDを更新し、完成時に既存武器でもprotectedになる
+- Case C（既存Gogma）: Plan生成時は紐付けを変更せず、Plan開始のtransactionでTargetへ紐付け、別Targetの
+  紐付けを同じtransactionで解除し、最初のStepはその開始後状態から確定でき、同じIDを更新し、完成時に
+  既存武器でもprotectedになる
 - Case D（妥協品で終了）: 選択済みcheckpoint到達Stepでpracticalになり作成中は継続し、確認後の終了で
   Plan abandoned（`finished_as_compromise`）、Target active、preferred維持、作成中OFFになる。
   未選択の状態へ性能上到達してもpracticalにしない
@@ -4467,8 +4471,13 @@ Execution Plan契約（16.3 / 16.5 / 16.6 / 16.11のhash、projection、`executi
 Plan completedを含む）、および想定外結果（`actual_result_different`）・操作内容不明（`operation_uncertain`）の
 記録（16.15）、最新ExecutionHistoryのUndo（16.16）、ゲーム内セーブ地点の記録 / 復元（16.9）、
 妥協品として確定して終了（16.12）、Plan破棄と16.10のセーブ地点選択、再計画Previewと採用（16.8）の
-Runtimeは実装済みである。Planを壊す変更の警告、Execution Navigator UI（RNG再同定への誘導表示、
-再計画Preview画面とセーブ地点3択の確認Dialogを含む）などは後続の実装PRが本章をauthorityとして実装する。本章と矛盾する旧記述（Execution上の独立した「確保」操作、
+Runtimeは実装済みである。Execution Navigator UIは正常系（作成開始 / 再開、Step確定、blind観測値入力、
+`confirm_owned_ideal`、武器切替案内、妥協checkpointパネルと妥協品での終了、完了表示）まで接続済みである。
+calculation schema 13で、既存武器のTarget紐付けを各Entryの最初の物理Step確定からPlan開始effect
+（16.2 / 16.11）へ移し、Production Plan画面での事前表示とともに実装した。
+Planを壊す変更の警告、Execution Navigator UIの残り（結果が違う / 操作内容不明、Undo、ゲーム内セーブ地点、
+Plan破棄、RNG再同定への誘導表示、再計画Preview画面とセーブ地点3択の確認Dialogを含む）などは後続の実装PRが
+本章をauthorityとして実装する。本章と矛盾する旧記述（Execution上の独立した「確保」操作、
 Target / Build List変更による一律stale、reserve時の既存保護維持など）は本改訂で
 本書・[REQUIREMENTS.md](./REQUIREMENTS.md)・[DATA_MODEL.md](./DATA_MODEL.md)・
 [SEARCH_SPEC.md](./SEARCH_SPEC.md)・[UI_FLOW.md](./UI_FLOW.md)から書き換えた。
@@ -4548,8 +4557,11 @@ breaking_change_approved   Plan前提を壊す手動変更をユーザーが承�
 - ゲーム内でセーブして中断しただけではPlanをstaleにしない
 - 実行中Plan（`active` または `stale`）は同時に1件まで。別のPlanを開始するには
   再計画採用（16.8）または破棄で現在の実行中Planを終わらせる
-- `draft` から `active` への開始時は、現在の永続状態が先頭未完了Stepの
-  `expectedStateBefore` と一致することを検証する
+- `draft` から `active` への開始時は、現在の永続状態が `PlanningInputSnapshot.initialExecutionState`
+  （Plan開始前の前提）と一致することを検証し、同じtransactionでPlan開始effect（16.11の既存武器の
+  Target紐付け）を適用し、適用後の状態が先頭Stepの `expectedStateBefore` と一致することを検証する。
+  Draftの生成・保存・表示だけでは永続状態を変更しない。開始が拒否・失敗した場合はPlan statusも
+  Targetの紐付けも変更しない
 - `completed` / `abandoned` への遷移transactionで、そのPlanのゲーム内セーブ地点（16.9）を
   削除し、作成中状態（16.10.1）を解除する（再計画採用時の付け替えは16.8）
 
@@ -4633,7 +4645,7 @@ PlanStepは次の意味を持つexecution effectを保持する。型名・field
 | normal creation role | `create_normal_artian` Stepの `counter_advance` / `production_target` |
 | weapon registration | 作成対象Normalの登録内容（blindでは5枠をobservation bindingとする） |
 | observation binding | Plan生成時に未知で、Step確定時にユーザー観測値をbindする値（16.4） |
-| target link | そのEntryで追跡武器を最初に実際に扱うStepで、Targetの `preferredOwnedWeaponId` を設定する（16.11） |
+| target link | Plan内で新規登録する作成対象Normalの登録Stepで、Targetの `preferredOwnedWeaponId` を設定する（16.11）。既存武器の紐付けはStep effectではなくPlan開始effect（16.2 / 16.11）である |
 | compromise label | 選択済み妥協checkpointへ到達するStepで、追跡武器を `practical` にする（16.12） |
 | target completion | Entryの最後の物理Step（操作0では確認Step）で、理想品完成とTarget完了を適用する（16.13） |
 
@@ -4712,9 +4724,9 @@ Plan依存Targetは、`selectedBuildListEntryIds` のEntryの `targetWeaponId` �
 `preferredOwnedWeaponId` をID順に安定hash化する。全Targetをhashしない。Plan非依存Targetの
 追加・変更はActive Planを壊さないためである。`completedAt` 等の日時は含めない。
 
-target link effect（16.11）またはtarget completion effect（16.13）で別Targetの紐付けを外す場合、
-Plan依存Targetについては、Planner入力時点の `preferredOwnedWeaponId` からその解除をprojectionで予測し
-`targetExecutionStateHash` へ反映する。Plan非依存Targetの解除はhashで検証しない。代わりにStep確定
+Plan開始effect・target link effect（16.11）またはtarget completion effect（16.13）で別Targetの
+紐付けを外す場合、Plan依存Targetについては、Planner入力時点の `preferredOwnedWeaponId` からその解除を
+projectionで予測し `targetExecutionStateHash` へ反映する。Plan非依存Targetの解除はhashで検証しない。代わりにStep確定
 transactionで、link後は「追跡武器を `preferredOwnedWeaponId` に持つTargetはlink先Targetだけである」、
 完成後は「完成武器を `preferredOwnedWeaponId` に持つTargetは存在しない」ことをcollection validationで
 検証し、解除したTargetのbefore状態をUndo Snapshotへ保存する。
@@ -4744,8 +4756,27 @@ tokenへ置き換える。一致しない場合は実値のまま正規化する
 
 #### chain validity
 
-Plan内のchain validity（先頭 `expectedStateBefore` = `initialExecutionState`、
-Step Nの `expectedStateAfter` = Step N+1の `expectedStateBefore`）は変更しない。
+#### Plan開始前の前提と先頭Step
+
+calculation schema 13以降は、次の3つを区別する。
+
+```text
+PlanningInputSnapshot.initialExecutionState   Plan開始前の永続状態の前提（Planner入力時点）
+Plan開始effect（16.11）                        既存武器のTarget紐付け。PlanStepではない
+先頭Stepの expectedStateBefore                 Plan開始effectを適用した直後の状態
+```
+
+Plan開始effectはTargetの `preferredOwnedWeaponId` だけを変更するため、先頭Stepの
+`expectedStateBefore` は `initialExecutionState` と `rngStateHash` / `normalCountersHash` /
+`ownedWeaponsHash` が一致し、`targetExecutionStateHash` だけが異なり得る（変更がなければ全て一致する）。
+Plan内のchain validity（Step Nの `expectedStateAfter` = Step N+1の `expectedStateBefore`）は変更しない。
+calculation schema 12以前のPlanは先頭 `expectedStateBefore` = `initialExecutionState` の契約のまま
+保持し、schema 13ではProductionPlanの完全一致判定（`isCalculationContextCompatible()`）により
+`calculation_context_changed` でfail closedする。schema 13の変更はCandidate Search、BuildCandidate、
+BuildListEntry snapshotの意味を変えないため、version 12のBuildCandidate / BuildListEntryは
+build-result互換判定の明示的な `13 -> [12]` 例外によりschema 13でもそのまま利用できる（他の
+CalculationContext fieldの一致と通常のstaleness判定は必要。version 1..11は非互換のまま。
+ProductionPlanには適用しない）。
 
 ### 16.6 Plan依存性とPlanを壊す変更
 
@@ -5103,21 +5134,41 @@ Planを壊す変更の承認）を行う場合、ゲーム側でユーザーが�
 
 #### 自動設定
 
-Plan生成時点では `preferredOwnedWeaponId` を変更しない。Executionで実際の作成作業を開始した
-時点で自動設定する。
+Planner計算とDraft Planの生成・保存・表示では `preferredOwnedWeaponId` を変更しない。Planは
+「どの既存OwnedWeaponをどのTargetの作成起点に使うか」を決めるだけであり、その反映は次の2経路に限る。
 
-- 新規Normal Route: 作成対象の通常アーティアを実際に作成してStep確定した時点
-- 所持Normal / 所持Gogma Route: そのOwnedWeaponに対するそのEntryの最初の実ゲーム操作
-  （conversion、Reset Bonuses、Keep Bonuses、Reset Skills）を確定した時点
+- **Plan開始effect（既存武器）**: Planの選択Entry（`selectedBuildListEntryIds`）のうち、Routeが既存の
+  OwnedWeapon（`BuildRoute.sourceOwnedWeaponId`。所持Normal / 所持Gogma）から始まり、1操作以上を行う
+  Entryについて、そのTargetをその武器へ紐付ける。Production Plan画面の「作成開始」
+  （`draft -> active`）と同じtransactionで適用する。再計画採用（16.8）で新Planを開始する場合も同じ
+  effectを同じtransactionで適用する。操作0 Entry（`confirm_owned_ideal`）は紐付けず完成だけを行う
+- **登録Step（新規作成対象Normal）**: Plan内の `create_normal_artian` で新規登録する作成対象Normalは
+  Plan開始時に存在しないため、Plan開始時には紐付けない。その登録Step（blindでは観測値入力による確定）の
+  transactionで `executionEffects.targetLinks` によりTargetへ紐付ける。Counter進行用Normalは登録も
+  紐付けもしない
 
-Target AのEntryがOwnedWeapon Xの作成を開始した場合、`Target A.preferredOwnedWeaponId = X`
-とする。別のTarget BがXを優先起点にしていた場合は `Target B.preferredOwnedWeaponId = null` と
-`Target A.preferredOwnedWeaponId = X` を同じStep確定transactionで行う。Target Aが別の武器を
-優先起点にしていた場合もXへ置き換える。既にXなら変更しない。
+Target AをOwnedWeapon Xへ紐付ける場合、別のTarget BがXを優先起点にしていれば
+`Target B.preferredOwnedWeaponId = null` と `Target A.preferredOwnedWeaponId = X` を同じtransactionで
+行う。Target Aが別の武器を優先起点にしていた場合もXへ置き換える。既にXなら変更も更新日時の書き換えも
+しない。途中状態は永続化しない。
+
+Plan開始effectの紐付けは、Planの選択Entryから決定的に導出する（永続fieldを追加しない）。選択Entryの
+内容は開始時に `dependentBuildListEntriesHash` で不変を検証するため、Production Plan画面の事前表示、
+Plan開始のRuntime、execution projectionは同じ導出authorityを共有する。preferredの関係は1:1であるため、
+1つの既存武器を複数の選択Entry（別Target、共有物理actionによる）が起点にする場合、および1つのTargetを
+複数の武器へ紐付けることになる場合は、Planがその武器の起点Targetを1つに決めていないため紐付けない
+（順序で1つを選ばない）。
+
+Production Plan画面は、Draft Planの表示時に「作成開始」で実際に変わる紐付け（武器、現在の紐付け先
+Target または未設定、紐付け先Target、紐付け先Targetがそれまで優先していた武器）を事前表示する
+（[UI_FLOW.md](./UI_FLOW.md) 11）。既に同じ紐付けで変更がないものは表示しない。変更予定を確認できるまで
+（確認中・確認失敗時）は「作成開始」を受け付けず、失敗時は再確認できる。この表示は読み取り専用で
+あり、「作成開始」はtransaction内で最新の永続状態から改めて導出・検証して適用する。表示結果を書き込みの
+authorityにしない。Execution Navigatorの通常Stepでは、紐付けの移動を改めて通知しない。
 
 この自動設定はExecutionだけの経路である。Planner計算、Candidate Search、`reserve_weapon`
-（探索内部action）は引き続き `preferredOwnedWeaponId` を変更しない。紐付けはPlan破棄後も残し、
-外したい場合はユーザーがTarget Weapons画面で変更する。1 Target 1武器、1武器1 Target、
+（探索内部action）は引き続き `preferredOwnedWeaponId` を変更しない。紐付けはPlan破棄・妥協品での終了
+後も残し、外したい場合はユーザーがTarget Weapons画面で変更する。1 Target 1武器、1武器1 Target、
 非保護、武器種・属性一致のcollection validation（[DATA_MODEL.md](./DATA_MODEL.md) 8.5）は
 自動設定後も満たされなければならない。
 
@@ -5340,7 +5391,7 @@ validation違反としてtransaction全体をrollbackする。
 
 - `rngAdvance` を適用する
 - 追跡武器の実結果（5枠とscope、Series / Group Skill）をOwnedWeaponへ保存する。作成対象
-  Normalなら実結果で登録し、target linkと作成中ONは通常どおり適用する
+  Normalなら実結果で登録し、登録Stepのtarget linkと作成中ONは通常どおり適用する
 - compromise labelとtarget completionは適用しない（期待状態に到達していない）
 - `ExecutionHistory` に `actual_result_different` と `actualResult` を記録する
 - Planを `stale`（`unexpected_result`）にし、以降のStepの予測を使わない

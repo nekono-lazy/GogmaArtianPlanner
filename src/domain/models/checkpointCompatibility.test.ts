@@ -86,8 +86,8 @@ describe('A starting owned weapon that already satisfies a compromise condition'
 })
 
 describe('Intermediate state calculation and Export schema contracts', () => {
-  it('fails every schema 1..11 build artifact closed under schema 12', () => {
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(12)
+  it('fails every schema 1..11 build artifact closed under schema 13', () => {
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(13)
     const current = currentContext()
     for (let version = 1; version <= 11; version += 1) {
       expect(

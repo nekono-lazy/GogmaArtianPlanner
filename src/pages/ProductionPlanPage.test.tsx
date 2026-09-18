@@ -25,9 +25,11 @@ import {
   buildListEntryId,
   createValidBuildListEntry,
   createValidNormalArtianCounter,
+  createValidOwnedWeapon,
   createValidProductionPlan,
   createValidRngState,
   createValidTargetWeapon,
+  ownedWeaponId,
   planStepId,
   productionPlanId,
   targetWeaponId,
@@ -46,6 +48,8 @@ import {
   completedPlannerTermination,
 } from '../test/fixtures/plannerTermination'
 import { useSettingsStore } from '../stores/settingsStore'
+import { ExecutionRuntimeError } from '../domain/execution'
+import type { ProductionPlanStartInspection } from '../services/execution/productionPlanExecutionService'
 
 interface Deferred<T> {
   promise: Promise<T>
@@ -229,6 +233,15 @@ function dependencies(
     createInput: vi.fn(async () => fixture.input),
     createWorkerClient: vi.fn(() => client),
     savePlannerResult: vi.fn(async () => null),
+    inspectProductionPlanStart: vi.fn(async (planId) => ({
+      planId,
+      changes: [],
+      ownedWeapons: [],
+      targetWeapons: [],
+    })),
+    startProductionPlan: vi.fn(async () => {
+      throw new Error('startProductionPlan is not expected in this test')
+    }),
   }
 }
 
@@ -242,6 +255,7 @@ function renderPage(
       element: <ProductionPlanPage dependencies={deps} />,
     },
     { path: '/build-list', element: <div>Build list destination</div> },
+    { path: '/plans/:planId/run', element: <div>Execution navigator destination</div> },
   ], { initialEntries: [`/plans/${planId}`] })
   return { router, ...render(<RouterProvider router={router} />) }
 }
@@ -2163,5 +2177,253 @@ describe('ProductionPlanPage checkpoint milestones and heading depth', () => {
     // one level each; no two nested levels coincide.
     expect(screen.getByRole('heading', { level: 3, name: '競合 1' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { level: 4, name: '比較結果' })).not.toBeInTheDocument()
+  })
+})
+
+describe('ProductionPlanPage Execution entry', () => {
+  /** 「作成開始」 once the start preview is ready; it is disabled before that. */
+  async function readyStartButton(): Promise<HTMLElement> {
+    const button = await screen.findByRole('button', { name: '作成開始' })
+    await waitFor(() => expect(button).toBeEnabled())
+    return button
+  }
+
+  function withStatus(patch: Partial<ProductionPlan>) {
+    const fixture = pageFixture()
+    fixture.plan = { ...fixture.plan, ...patch }
+    return fixture
+  }
+
+  it('offers 作成開始 for a draft Plan only', async () => {
+    const fixture = withStatus({ status: 'draft' })
+    renderPage(dependencies(fixture), fixture.plan.id)
+    expect(await readyStartButton()).toBeEnabled()
+    expect(screen.queryByRole('link', { name: '実行ナビを再開する' })).not.toBeInTheDocument()
+  })
+
+  it('offers 実行ナビを再開する for an active Plan', async () => {
+    const fixture = withStatus({ status: 'active' })
+    renderPage(dependencies(fixture), fixture.plan.id)
+    expect(await screen.findByRole('link', { name: '実行ナビを再開する' }))
+      .toHaveAttribute('href', `/plans/${fixture.plan.id}/run`)
+    expect(screen.queryByRole('button', { name: '作成開始' })).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ['stale', { status: 'stale' as const, recalculationReasons: ['unexpected_result' as const] }, '再計算が必要な生産計画です'],
+    ['completed', { status: 'completed' as const, completedAt: '2026-09-17T00:00:00.000Z' }, 'この生産計画は完了しています。'],
+    [
+      'abandoned',
+      { status: 'abandoned' as const, abandonmentReason: 'finished_as_compromise' as const, abandonedAt: '2026-09-17T00:00:00.000Z' },
+      'この生産計画は終了しています（妥協品で終了）。',
+    ],
+  ])('never offers to start or resume a %s Plan', async (_, patch, text) => {
+    const fixture = withStatus(patch)
+    const deps = dependencies(fixture)
+    renderPage(deps, fixture.plan.id)
+    expect(await screen.findByText(text)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '作成開始' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '実行ナビを再開する' })).not.toBeInTheDocument()
+    expect(deps.startProductionPlan).not.toHaveBeenCalled()
+  })
+
+  it('starts through the runtime and then opens the Execution Navigator', async () => {
+    const fixture = withStatus({ status: 'draft' })
+    const deps = dependencies(fixture)
+    vi.mocked(deps.startProductionPlan).mockResolvedValue({ ...fixture.plan, status: 'active' })
+    const user = userEvent.setup()
+    const { router } = renderPage(deps, fixture.plan.id)
+    await user.click(await readyStartButton())
+    expect(await screen.findByText('Execution navigator destination')).toBeInTheDocument()
+    expect(deps.startProductionPlan).toHaveBeenCalledExactlyOnceWith(fixture.plan.id)
+    expect(router.state.location.pathname).toBe(`/plans/${fixture.plan.id}/run`)
+  })
+
+  function inspectionWith(
+    fixture: ReturnType<typeof withStatus>,
+    changes: ProductionPlanStartInspection['changes'],
+  ): ProductionPlanStartInspection {
+    const targetA = createValidTargetWeapon()
+    targetA.id = targetWeaponId('target.start.a')
+    targetA.name = '目標A'
+    const weaponX = { ...createValidOwnedWeapon(ownedWeaponId('owned.start.x')), name: '武器X' }
+    const weaponY = { ...createValidOwnedWeapon(ownedWeaponId('owned.start.y')), name: '武器Y' }
+    return {
+      planId: fixture.plan.id,
+      changes,
+      ownedWeapons: [weaponX, weaponY],
+      targetWeapons: [targetA, { ...fixture.target, name: '目標B' }],
+    }
+  }
+
+  it('previews the Target links the start will make, by name, before 作成開始', async () => {
+    const fixture = withStatus({ status: 'draft' })
+    const deps = dependencies(fixture)
+    vi.mocked(deps.inspectProductionPlanStart).mockResolvedValue(inspectionWith(fixture, [
+      {
+        buildListEntryId: fixture.entry.id,
+        ownedWeaponId: ownedWeaponId('owned.start.x'),
+        targetWeaponId: fixture.target.id,
+        fromTargetWeaponId: targetWeaponId('target.start.a'),
+        replacedOwnedWeaponId: ownedWeaponId('owned.start.y'),
+      },
+    ]))
+    renderPage(deps, fixture.plan.id)
+
+    const region = await screen.findByRole('region', { name: '開始時の優先起点の変更' })
+    expect(region).toHaveTextContent('この生産計画を開始すると、目標武器の優先起点が変更されます。')
+    expect(region).toHaveTextContent('所持武器「武器X」')
+    expect(region).toHaveTextContent('目標A → 目標B')
+    expect(region).toHaveTextContent('「目標B」の優先起点だった「武器Y」は解除されます。')
+    expect(region).toHaveTextContent('変更は「作成開始」を押した時点で反映されます。')
+    expect(region).not.toHaveTextContent('owned.start.x')
+    expect(deps.inspectProductionPlanStart).toHaveBeenCalledWith(fixture.plan.id)
+    expect(screen.getByRole('button', { name: '作成開始' })).toBeEnabled()
+  })
+
+  it('previews a weapon no Target prefers yet as 未設定', async () => {
+    const fixture = withStatus({ status: 'draft' })
+    const deps = dependencies(fixture)
+    vi.mocked(deps.inspectProductionPlanStart).mockResolvedValue(inspectionWith(fixture, [
+      {
+        buildListEntryId: fixture.entry.id,
+        ownedWeaponId: ownedWeaponId('owned.start.x'),
+        targetWeaponId: fixture.target.id,
+        fromTargetWeaponId: null,
+        replacedOwnedWeaponId: null,
+      },
+    ]))
+    renderPage(deps, fixture.plan.id)
+
+    const region = await screen.findByRole('region', { name: '開始時の優先起点の変更' })
+    expect(region).toHaveTextContent('未設定 → 目標B')
+    expect(region).not.toHaveTextContent('解除されます')
+  })
+
+  it('shows no preview when the start changes no link', async () => {
+    const fixture = withStatus({ status: 'draft' })
+    const deps = dependencies(fixture)
+    renderPage(deps, fixture.plan.id)
+    expect(await readyStartButton()).toBeEnabled()
+    expect(deps.inspectProductionPlanStart).toHaveBeenCalledWith(fixture.plan.id)
+    expect(screen.queryByRole('region', { name: '開始時の優先起点の変更' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/優先起点が変更されます/)).not.toBeInTheDocument()
+  })
+
+  it('never previews a start for an active Plan', async () => {
+    const fixture = withStatus({ status: 'active' })
+    const deps = dependencies(fixture)
+    renderPage(deps, fixture.plan.id)
+    expect(await screen.findByRole('link', { name: '実行ナビを再開する' })).toBeInTheDocument()
+    expect(deps.inspectProductionPlanStart).not.toHaveBeenCalled()
+    expect(screen.queryByText(/開始すると/)).not.toBeInTheDocument()
+  })
+
+  it('keeps the preview and the draft when the start with link changes is refused', async () => {
+    const fixture = withStatus({ status: 'draft' })
+    const deps = dependencies(fixture)
+    vi.mocked(deps.inspectProductionPlanStart).mockResolvedValue(inspectionWith(fixture, [
+      {
+        buildListEntryId: fixture.entry.id,
+        ownedWeaponId: ownedWeaponId('owned.start.x'),
+        targetWeaponId: fixture.target.id,
+        fromTargetWeaponId: targetWeaponId('target.start.a'),
+        replacedOwnedWeaponId: null,
+      },
+    ]))
+    vi.mocked(deps.startProductionPlan).mockRejectedValue(
+      new ExecutionRuntimeError('execution_state_mismatch', 'changed'),
+    )
+    const user = userEvent.setup()
+    const { router } = renderPage(deps, fixture.plan.id)
+    await screen.findByRole('region', { name: '開始時の優先起点の変更' })
+    await user.click(await readyStartButton())
+
+    expect(await screen.findByText(/生産計画は開始していません。ビルドリストから再計算してください。/)).toBeInTheDocument()
+    expect(deps.startProductionPlan).toHaveBeenCalledExactlyOnceWith(fixture.plan.id)
+    expect(router.state.location.pathname).toBe(`/plans/${fixture.plan.id}`)
+    expect(screen.getByRole('region', { name: '開始時の優先起点の変更' })).toBeInTheDocument()
+  })
+
+  it('keeps 作成開始 disabled while the start preview is loading', async () => {
+    const fixture = withStatus({ status: 'draft' })
+    const deps = dependencies(fixture)
+    vi.mocked(deps.inspectProductionPlanStart).mockReturnValue(new Promise(() => undefined))
+    const user = userEvent.setup({ pointerEventsCheck: 0 })
+    renderPage(deps, fixture.plan.id)
+
+    const button = await screen.findByRole('button', { name: '作成開始' })
+    expect(button).toBeDisabled()
+    expect(screen.getByText('開始時に変わる目標武器の優先起点を確認しています。')).toBeInTheDocument()
+    await user.click(button)
+    expect(deps.startProductionPlan).not.toHaveBeenCalled()
+  })
+
+  it('refuses to start after a failed preview until 再確認 succeeds with changes', async () => {
+    const fixture = withStatus({ status: 'draft' })
+    const deps = dependencies(fixture)
+    vi.mocked(deps.inspectProductionPlanStart)
+      .mockRejectedValueOnce(new Error('read failed'))
+      .mockResolvedValueOnce(inspectionWith(fixture, [
+        {
+          buildListEntryId: fixture.entry.id,
+          ownedWeaponId: ownedWeaponId('owned.start.x'),
+          targetWeaponId: fixture.target.id,
+          fromTargetWeaponId: targetWeaponId('target.start.a'),
+          replacedOwnedWeaponId: null,
+        },
+      ]))
+    const user = userEvent.setup({ pointerEventsCheck: 0 })
+    renderPage(deps, fixture.plan.id)
+
+    expect(await screen.findByText(/開始時に変わる目標武器の優先起点を確認できませんでした。/)).toBeInTheDocument()
+    const button = screen.getByRole('button', { name: '作成開始' })
+    expect(button).toBeDisabled()
+    await user.click(button)
+    expect(deps.startProductionPlan).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: '再確認' }))
+    const region = await screen.findByRole('region', { name: '開始時の優先起点の変更' })
+    expect(region).toHaveTextContent('所持武器「武器X」')
+    expect(region).toHaveTextContent('目標A → 目標B')
+    expect(screen.queryByRole('button', { name: '再確認' })).not.toBeInTheDocument()
+    expect(await readyStartButton()).toBeEnabled()
+    expect(deps.inspectProductionPlanStart).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows loading again while 再確認 runs, and no preview when it finds no change', async () => {
+    const fixture = withStatus({ status: 'draft' })
+    const deps = dependencies(fixture)
+    let resolveRetry!: (value: ProductionPlanStartInspection) => void
+    vi.mocked(deps.inspectProductionPlanStart)
+      .mockRejectedValueOnce(new Error('read failed'))
+      .mockReturnValueOnce(new Promise((resolve) => { resolveRetry = resolve }))
+    const user = userEvent.setup()
+    renderPage(deps, fixture.plan.id)
+
+    await user.click(await screen.findByRole('button', { name: '再確認' }))
+    expect(await screen.findByText('開始時に変わる目標武器の優先起点を確認しています。')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '作成開始' })).toBeDisabled()
+
+    resolveRetry(inspectionWith(fixture, []))
+    expect(await readyStartButton()).toBeEnabled()
+    expect(screen.queryByRole('region', { name: '開始時の優先起点の変更' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/確認できませんでした/)).not.toBeInTheDocument()
+    expect(deps.startProductionPlan).not.toHaveBeenCalled()
+  })
+
+  it('stays on the Plan and shows the typed refusal when starting fails', async () => {
+    const fixture = withStatus({ status: 'draft' })
+    const deps = dependencies(fixture)
+    vi.mocked(deps.startProductionPlan).mockRejectedValue(
+      new ExecutionRuntimeError('running_plan_conflict', 'another plan'),
+    )
+    const user = userEvent.setup()
+    const { router } = renderPage(deps, fixture.plan.id)
+    await user.click(await readyStartButton())
+    expect(await screen.findByText('別の生産計画が実行中です。実行中の生産計画を終えてから開始してください。'))
+      .toBeInTheDocument()
+    expect(router.state.location.pathname).toBe(`/plans/${fixture.plan.id}`)
+    expect(screen.getByRole('button', { name: '作成開始' })).toBeEnabled()
   })
 })

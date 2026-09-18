@@ -12,6 +12,7 @@ import {
   prepareExpectedStepConfirmation,
   inspectProductionPlanAbandonment,
   inspectProductionPlanReplanAdoption,
+  inspectProductionPlanStartTargetLinks,
   prepareOperationUncertain,
   prepareProductionPlanAbandonment,
   prepareProductionPlanReplanAdoption,
@@ -33,6 +34,7 @@ import {
   type ProductionPlanReplanPreview,
 } from '../../domain/execution'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
+import type { ProductionPlanStartTargetLinkChange } from '../../domain/planner/productionPlanStartEffects'
 import type {
   BuildListEntry,
   BuildListEntryId,
@@ -41,10 +43,12 @@ import type {
   ExecutionHistoryId,
   ExecutionSavePoint,
   ISODateTimeString,
+  OwnedWeapon,
   OwnedWeaponId,
   PlanStepId,
   ProductionPlan,
   ProductionPlanId,
+  TargetWeapon,
   TargetWeaponId,
 } from '../../domain/models/publicTypes'
 import { executionSavePointIdForPlan } from '../../domain/models/publicTypes'
@@ -72,6 +76,17 @@ export interface ProductionPlanExecutionServiceDependencies {
   validateResultingWeapon: ExecutionResultingWeaponValidator
   idFactory: ExecutionIdFactory
   clock: ExecutionClock
+}
+
+/**
+ * The pre-start preview of a draft Plan: the real Target preference changes
+ * its start would make, with the weapons and Targets they name for display.
+ */
+export interface ProductionPlanStartInspection {
+  planId: ProductionPlanId
+  changes: ProductionPlanStartTargetLinkChange[]
+  ownedWeapons: OwnedWeapon[]
+  targetWeapons: TargetWeapon[]
 }
 
 export interface ConfirmExpectedPlanStepRequest {
@@ -257,7 +272,36 @@ export class ProductionPlanExecutionService {
     this.dependencies = dependencies
   }
 
-  /** `draft -> active` with no other change (16.2). */
+  /**
+   * The Target preference changes starting this Plan would make, read in one
+   * read-only transaction for the pre-start preview (`docs/UI_FLOW.md` 11). It
+   * is never write authority: the start re-derives and re-verifies them.
+   */
+  inspectProductionPlanStart(planId: ProductionPlanId): Promise<ProductionPlanStartInspection> {
+    const { database } = this.dependencies
+    return this.runExecutionTransaction(async () => {
+      const plan = await this.requirePlan(planId)
+      const [targetWeapons, buildListEntries, ownedWeapons] = await Promise.all([
+        database.targetWeapons.toArray(),
+        database.buildListEntries.toArray(),
+        database.ownedWeapons.toArray(),
+      ])
+      const changes = inspectProductionPlanStartTargetLinks(plan, { targetWeapons, buildListEntries })
+      const named = new Set(changes.flatMap((change) => [change.ownedWeaponId, change.replacedOwnedWeaponId]))
+      return {
+        planId: plan.id,
+        changes,
+        ownedWeapons: ownedWeapons.filter(({ id }) => named.has(id)),
+        targetWeapons: targetWeapons.filter(({ id }) =>
+          changes.some((change) => change.targetWeaponId === id || change.fromTargetWeaponId === id)),
+      }
+    }, 'r')
+  }
+
+  /**
+   * `draft -> active` together with the Plan start effect's Target links, in
+   * one transaction (16.2 / 16.11).
+   */
   startProductionPlan(planId: ProductionPlanId): Promise<ProductionPlan> {
     const { database } = this.dependencies
     return this.runExecutionTransaction(async () => {
@@ -266,15 +310,16 @@ export class ProductionPlanExecutionService {
         .where('status')
         .anyOf(['active', 'stale'])
         .toArray()
-      const started = prepareProductionPlanStart({
+      const start = prepareProductionPlanStart({
         plan,
         runningPlans,
         state: await this.readState(plan),
         currentCalculationContext: this.dependencies.currentCalculationContext,
         now: this.dependencies.clock.now(),
       })
-      await database.productionPlans.put(started)
-      return started
+      if (start.targetWeapons.length > 0) await database.targetWeapons.bulkPut(start.targetWeapons)
+      await database.productionPlans.put(start.plan)
+      return start.plan
     })
   }
 
@@ -596,6 +641,7 @@ export class ProductionPlanExecutionService {
     await database.productionPlans.put(write.oldPlan)
     await database.productionPlans.add(write.newPlan)
     if (write.ownedWeapons.length > 0) await database.ownedWeapons.bulkPut(write.ownedWeapons)
+    if (write.targetWeapons.length > 0) await database.targetWeapons.bulkPut(write.targetWeapons)
     if (write.deletesExecutionSavePoint) {
       await database.executionSavePoints
         .where('productionPlanId')

@@ -58,8 +58,10 @@ export function BonusSetEditor({ label, master, weaponTypeId, elementId, scope, 
     return {
       bonus,
       ranks,
-      legacyType: !typeIds.includes(bonus.bonusTypeId),
-      legacyRank: !ranks.some((rank) => rank.id === bonus.bonusRankId),
+      // An empty id is an unfilled slot (a blind observation starts with no
+      // value at all), never a stored value outside the availability.
+      legacyType: bonus.bonusTypeId !== '' && !typeIds.includes(bonus.bonusTypeId),
+      legacyRank: bonus.bonusRankId !== '' && !ranks.some((rank) => rank.id === bonus.bonusRankId),
     }
   })
   const hasLegacy = slots.some(({ legacyType, legacyRank }) => legacyType || legacyRank)

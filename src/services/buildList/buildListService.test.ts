@@ -92,7 +92,7 @@ describe('BuildListService', () => {
     memory.entries.push(original)
 
     const refreshed = await new BuildListService(memory.repositories).refreshStaleness(current)
-    expect(current.appSchemaVersion).toBe(12)
+    expect(current.appSchemaVersion).toBe(13)
     expect(refreshed.entries[0].isStale).toBe(true)
     expect(refreshed.entries[0].staleReasons).toEqual(['calculation_context_changed'])
     expect(refreshed.entries[0].candidateSnapshot).toEqual(snapshot)
@@ -128,6 +128,72 @@ describe('BuildListService', () => {
     },
   )
 
+  it('keeps a schema 12 BuildListEntry usable under schema 13 when nothing else changed', async () => {
+    const memory = memoryRepositories()
+    const current = createBuildListCalculationContext(createValidMasterDataFixture())
+    expect(current.appSchemaVersion).toBe(13)
+    const candidate = createValidBuildCandidate()
+    candidate.calculationContext = { ...current, appSchemaVersion: 12 }
+    candidate.searchStateHash = createSearchStateHash(candidate.route, memory.rngState, memory.normalCounters)
+    const original = createBuildListEntry(candidate, memory.target, { createdAt: '2026-08-29T04:00:00.000Z' })
+    memory.entries.push(original)
+
+    const refreshed = await new BuildListService(memory.repositories).refreshStaleness(current)
+
+    // The schema 13 change is ProductionPlan execution only (PLANNER_SPEC 16.11),
+    // so the version 12 Entry is not stale for its calculation context.
+    expect(refreshed.entries[0]).toMatchObject({ isStale: false, staleReasons: [] })
+    expect(refreshed.entries[0].candidateSnapshot).toEqual(original.candidateSnapshot)
+    expect(refreshed.entries[0].calculationContext.appSchemaVersion).toBe(12)
+  })
+
+  it('still stales a schema 12 BuildListEntry for its real reasons, not for the schema', async () => {
+    const memory = memoryRepositories()
+    const current = createBuildListCalculationContext(createValidMasterDataFixture())
+    const candidate = createValidBuildCandidate()
+    candidate.calculationContext = { ...current, appSchemaVersion: 12 }
+    candidate.searchStateHash = createSearchStateHash(candidate.route, memory.rngState, memory.normalCounters)
+    memory.entries.push(createBuildListEntry(candidate, memory.target, { createdAt: '2026-08-29T04:00:00.000Z' }))
+    // The RNG state the Route depends on moved.
+    memory.rngState.skillCounter = { value: 8, isConfirmed: true, source: 'manual' }
+
+    const refreshed = await new BuildListService(memory.repositories).refreshStaleness(current)
+
+    expect(refreshed.entries[0]).toMatchObject({ isStale: true, staleReasons: ['rng_state_changed'] })
+  })
+
+  it.each([
+    ['gameVersion', { gameVersion: 'game.other' }],
+    ['masterDataVersion', { masterDataVersion: 999 }],
+    ['rngEngineVersion', { rngEngineVersion: 'production-rng:other' }],
+  ])('stales a schema 12 BuildListEntry whose %s differs', async (_, difference) => {
+    const memory = memoryRepositories()
+    const current = createBuildListCalculationContext(createValidMasterDataFixture())
+    const candidate = createValidBuildCandidate()
+    candidate.calculationContext = { ...current, appSchemaVersion: 12, ...difference }
+    candidate.searchStateHash = createSearchStateHash(candidate.route, memory.rngState, memory.normalCounters)
+    memory.entries.push(createBuildListEntry(candidate, memory.target, { createdAt: '2026-08-29T04:00:00.000Z' }))
+
+    const refreshed = await new BuildListService(memory.repositories).refreshStaleness(current)
+
+    expect(refreshed.entries[0]).toMatchObject({ isStale: true, staleReasons: ['calculation_context_changed'] })
+  })
+
+  it('treats a current Candidate identical to a schema 12 Entry as already added', async () => {
+    const memory = memoryRepositories()
+    const candidate = createValidBuildCandidate()
+    candidate.calculationContext = createBuildListCalculationContext(createValidMasterDataFixture())
+    candidate.searchStateHash = createSearchStateHash(candidate.route, memory.rngState, memory.normalCounters)
+    const historical = structuredClone(candidate)
+    historical.calculationContext.appSchemaVersion = 12
+    memory.entries.push(createBuildListEntry(historical, memory.target, { createdAt: '2026-08-29T04:00:00.000Z' }))
+
+    const result = await new BuildListService(memory.repositories).addCandidate(candidate, memory.target)
+
+    expect(result.added).toBe(false)
+    expect(memory.entries).toHaveLength(1)
+  })
+
   it('adds a Candidate snapshot once and rejects a semantic duplicate from a new search', async () => {
     const memory = memoryRepositories()
     const service = new BuildListService(memory.repositories)
@@ -154,7 +220,7 @@ describe('BuildListService', () => {
     expect(result.added).toBe(true)
     expect(memory.entries).toHaveLength(2)
     expect(memory.entries[0]).toEqual(before)
-    expect(result.entry.calculationContext.appSchemaVersion).toBe(12)
+    expect(result.entry.calculationContext.appSchemaVersion).toBe(13)
     expect(memory.repositories.persistence.apply).not.toHaveBeenCalled()
   })
 

@@ -130,9 +130,11 @@ describe('Execution lifecycle version boundaries', () => {
   it('keeps the Export schema at or beyond 7 and the calculation schema at or beyond 11', () => {
     // The persistence foundation moved Export to 7 and left the calculation
     // schema at 11; the Execution Plan contract then moved them to 8 and 12,
-    // and the Execution runtime lifecycle metadata moved Export to 9.
+    // and the Execution runtime lifecycle metadata moved Export to 9. The Plan
+    // start effect moved the calculation schema to 13 with no persisted shape
+    // change.
     expect(EXPORT_SCHEMA_VERSION).toBe(9)
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(12)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(13)
   })
 })
 

@@ -7,6 +7,7 @@ import type {
   OwnedWeaponStatus,
   PlanStepOperationType,
   ProductionPlanStatus,
+  ProductionPlanAbandonmentReason,
   RejectedBuildListEntry,
   RngStateSource,
   RouteKind,
@@ -120,6 +121,14 @@ export const productionPlanStatusLabels: Record<ProductionPlanStatus, string> = 
   completed: '完了',
   stale: '再計算が必要',
   abandoned: '破棄済み',
+}
+
+/** Why an `abandoned` Plan ended (`docs/PLANNER_SPEC.md` 16.2). */
+export const productionPlanAbandonmentReasonLabels: Record<ProductionPlanAbandonmentReason, string> = {
+  user_abandoned: 'ユーザーが破棄',
+  replan_adopted: '再計画を採用',
+  finished_as_compromise: '妥協品で終了',
+  breaking_change_approved: '前提を壊す変更を承認',
 }
 
 /**

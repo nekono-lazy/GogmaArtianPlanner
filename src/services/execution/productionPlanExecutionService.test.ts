@@ -359,6 +359,9 @@ describe('confirmed_expected Step confirmation', () => {
       await seed(database, fixture)
       const service = executionService(database, fixture.built)
       await service.startProductionPlan(fixture.plan.id)
+      // The owned Normal exists before the Plan, so the Plan start links it.
+      expect((await database.targetWeapons.get(goal.id))?.preferredOwnedWeaponId).toBe(source.id)
+      const startedGoal = await database.targetWeapons.get(goal.id)
 
       const conversion = await confirmCurrent(service, database, fixture.plan)
       expect(await database.ownedWeapons.toArray()).toEqual([
@@ -374,28 +377,34 @@ describe('confirmed_expected Step confirmation', () => {
         affectedOwnedWeaponsBefore: [source],
         addedOwnedWeaponIds: [],
         removedOwnedWeaponsBefore: [],
-        affectedTargetWeaponsBefore: [goal],
+        // The conversion links nothing: the Target was linked at Plan start.
+        affectedTargetWeaponsBefore: [],
       })
-      expect((await database.targetWeapons.get(goal.id))?.preferredOwnedWeaponId).toBe(source.id)
+      expect(await database.targetWeapons.get(goal.id)).toEqual(startedGoal)
     }))
 
-  it('links an existing Gogma to its Target, releases another Target, and protects it at completion', () =>
+  it('links an existing Gogma to its Target at Plan start, releases another Target, and protects it at completion', () =>
     withDatabase(async (database) => {
       const fixture = await existingGogmaFixture()
       await seed(database, fixture)
       const source = fixture.built.input.ownedWeapons[0]
       const [goal, other] = fixture.built.input.targetWeapons
       const service = executionService(database, fixture.built)
-      await service.startProductionPlan(fixture.plan.id)
+      const started = await service.startProductionPlan(fixture.plan.id)
 
-      const first = await confirmCurrent(service, database, fixture.plan)
+      // The Plan start moves the link in the same transaction as `draft -> active`.
+      expect(started.status).toBe('active')
       expect(await database.targetWeapons.get(goal.id)).toMatchObject({ preferredOwnedWeaponId: source.id, lifecycleStatus: 'active' })
       expect(await database.targetWeapons.get(other.id)).toMatchObject({ preferredOwnedWeaponId: null, priority: other.priority, lifecycleStatus: 'active' })
+      const targetsAfterStart = await database.targetWeapons.toArray()
+
+      const first = await confirmCurrent(service, database, fixture.plan)
+      expect(await database.targetWeapons.toArray()).toEqual(targetsAfterStart)
       expect(await database.ownedWeapons.get(source.id)).toMatchObject({
         executionInProgress: { productionPlanId: fixture.plan.id, startedAt: first.history.createdAt },
         isProtected: false,
       })
-      expect(first.history.undoSnapshot.affectedTargetWeaponsBefore).toEqual([goal, other])
+      expect(first.history.undoSnapshot.affectedTargetWeaponsBefore).toEqual([])
       expect(first.history.undoSnapshot.affectedOwnedWeaponsBefore).toEqual([source])
 
       const second = await confirmCurrent(service, database, fixture.plan)
@@ -624,8 +633,10 @@ describe('actual_result_different', () => {
         executionInProgress: { productionPlanId: fixture.plan.id, startedAt: history.createdAt },
         updatedAt: history.createdAt,
       }])
-      // Neither `ideal` nor protection, and the Target stays active but linked.
-      expect(await database.targetWeapons.get(goal.id)).toEqual({ ...goal, preferredOwnedWeaponId: source.id, updatedAt: history.createdAt })
+      // Neither `ideal` nor protection, and the Target stays active and linked
+      // exactly as the Plan start left it.
+      expect(await database.targetWeapons.get(goal.id)).toEqual(before.targetWeapons.find(({ id }) => id === goal.id))
+      expect(await database.targetWeapons.get(goal.id)).toMatchObject({ preferredOwnedWeaponId: source.id, lifecycleStatus: 'active' })
       expect(plan).toEqual({
         ...activePlan,
         steps: [{ ...activePlan.steps[0], isCompleted: true, completedAt: history.createdAt }],
@@ -660,7 +671,8 @@ describe('actual_result_different', () => {
         affectedOwnedWeaponsBefore: [source],
         addedOwnedWeaponIds: [],
         removedOwnedWeaponsBefore: [],
-        affectedTargetWeaponsBefore: [goal],
+        // Linked at Plan start: the record changes no Target.
+        affectedTargetWeaponsBefore: [],
         productionPlanBefore: activePlan,
         executionSavePointBefore: null,
       })
@@ -768,7 +780,8 @@ describe('actual_result_different', () => {
       expect((await database.targetWeapons.get(goal.id))?.preferredOwnedWeaponId).toBe(source.id)
       expect(plan).toMatchObject({ status: 'stale', currentStepId: stepOf(fixture.plan, 1).id, completedAt: null })
       expect(plan.steps.map(({ isCompleted }) => isCompleted)).toEqual([true, false])
-      expect(history.undoSnapshot).toMatchObject({ affectedOwnedWeaponsBefore: [source], addedOwnedWeaponIds: [], affectedTargetWeaponsBefore: [goal] })
+      // The Target was linked at Plan start, so the Step changes no Target.
+      expect(history.undoSnapshot).toMatchObject({ affectedOwnedWeaponsBefore: [source], addedOwnedWeaponIds: [], affectedTargetWeaponsBefore: [] })
       expect(validateProductionPlan(plan).issues).toEqual([])
     }))
 
@@ -1142,7 +1155,7 @@ async function undoLatest(service: ProductionPlanExecutionService, database: App
 }
 
 describe('Execution Undo', () => {
-  it('restores an intermediate confirmed_expected Step exactly, Targets relinked away included', () =>
+  it('restores an intermediate confirmed_expected Step exactly, leaving the Plan start links in place', () =>
     withDatabase(async (database) => {
       const fixture = await existingGogmaFixture()
       await seed(database, fixture)
@@ -1152,7 +1165,8 @@ describe('Execution Undo', () => {
 
       const { history } = await confirmCurrent(service, database, fixture.plan)
       expect((await dump(database)).rngState).not.toEqual(before.rngState)
-      expect(history.undoSnapshot.affectedTargetWeaponsBefore).toHaveLength(2)
+      // The relink happened at Plan start and is not part of this Step.
+      expect(history.undoSnapshot.affectedTargetWeaponsBefore).toEqual([])
       const { plan, undoneExecutionHistoryId } = await service.undoLatestExecution({ planId: fixture.plan.id, executionHistoryId: history.id })
 
       expect(undoneExecutionHistoryId).toBe(history.id)

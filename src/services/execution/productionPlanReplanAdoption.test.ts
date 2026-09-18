@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import {
+  applyProductionPlanStartTargetLinks,
+  deriveProductionPlanStartTargetLinks,
+} from '../../domain/planner/productionPlanStartEffects'
 import { DATABASE_SCHEMA_VERSION, type AppDatabase } from '../../db/AppDatabase'
 import { RepositoryError } from '../../db/repositoryError'
 import {
@@ -175,10 +179,21 @@ function adoptedDump(
 ): PersistedDump {
   const byId = <T extends { id: string }>(values: T[]) => values.sort((a, b) => a.id.localeCompare(b.id))
   const changedWeapons = new Map((changes.ownedWeapons ?? []).map((weapon) => [weapon.id, weapon]))
+  const entries = byId([...before.buildListEntries, ...(changes.generatedEntries ?? [])])
+  // The new Plan's start effect (PLANNER_SPEC 16.11): the Target of each Entry
+  // starting from an existing weapon comes to prefer it.
+  const startedTargets = applyProductionPlanStartTargetLinks(
+    before.targetWeapons,
+    deriveProductionPlanStartTargetLinks(newPlan.selectedBuildListEntryIds, entries),
+  ).map((target, index) =>
+    target.preferredOwnedWeaponId === before.targetWeapons[index].preferredOwnedWeaponId
+      ? target
+      : { ...target, updatedAt: now })
   return {
     ...before,
     ownedWeapons: before.ownedWeapons.map((weapon) => changedWeapons.get(weapon.id) ?? weapon),
-    buildListEntries: byId([...before.buildListEntries, ...(changes.generatedEntries ?? [])]),
+    targetWeapons: startedTargets,
+    buildListEntries: entries,
     productionPlans: byId([
       ...before.productionPlans.map((plan) =>
         plan.id === oldPlan.id
@@ -382,9 +397,10 @@ describe('replan adoption', () => {
       expect(result.oldPlan.steps).toEqual(oldBefore.steps)
       expect(result.newPlan).toEqual({ ...draft, status: 'active', updatedAt: now })
       expect(result.generatedBuildListEntries).toEqual([])
-      // RNG, Counters, Targets and their preferences, Entries and every
-      // ExecutionHistory record stay as they are.
+      // RNG, Counters, Entries and every ExecutionHistory record stay as they
+      // are; the only Target change is the new Plan's start link.
       expect(await dump(database)).toEqual(adoptedDump(before, oldBefore, draft, now))
+      expect(await database.targetWeapons.get(EXTRA_TARGET_ID)).toMatchObject({ preferredOwnedWeaponId: EXTRA_SOURCE_ID, updatedAt: now })
       expect((await database.productionPlans.get(draft.id))?.status).toBe('active')
     }))
 
@@ -455,7 +471,7 @@ describe('replan adoption', () => {
     }))
 
   it('moves no version authority', () => {
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(12)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(13)
     expect(DATABASE_SCHEMA_VERSION).toBe(6)
     expect(EXPORT_SCHEMA_VERSION).toBe(9)
   })
@@ -515,7 +531,7 @@ describe('replan adoption in-progress weapons', () => {
       expect(await database.ownedWeapons.get(EXTRA_SOURCE_ID)).toEqual(harness.source)
     }))
 
-  it('leaves another Plan\'s in-progress mark and Target preferences alone', () =>
+  it('leaves another Plan\'s in-progress mark alone and moves only the new Plan start link', () =>
     withDatabase(async (database) => {
       const harness = await running(database)
       const otherPlanId = 'plan.replan.other' as ProductionPlanId
@@ -530,8 +546,10 @@ describe('replan adoption in-progress weapons', () => {
         productionPlanId: otherPlanId,
         startedAt: EARLIER_START,
       })
-      expect(await database.targetWeapons.get(preferring.id)).toEqual(preferring)
-      expect(await database.targetWeapons.get(EXTRA_TARGET_ID)).toEqual(harness.goal)
+      // The new Plan starts from the weapon for its own Target, so its start
+      // effect moves the link there and releases the preferring Target.
+      expect(await database.targetWeapons.get(preferring.id)).toMatchObject({ preferredOwnedWeaponId: null })
+      expect(await database.targetWeapons.get(EXTRA_TARGET_ID)).toMatchObject({ preferredOwnedWeaponId: EXTRA_SOURCE_ID })
     }))
 })
 

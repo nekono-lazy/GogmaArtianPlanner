@@ -404,6 +404,44 @@ through the change itself, and no ExecutionHistory is added, so it is never undo
 added no persisted field and changed no calculation semantics, so the three versions stay
 12 / 6 / 9. The warning / confirmation UI, the save point choice dialog UI and the
 Execution Navigator UI are still not implemented.
+The eleventh PR (the Execution Navigator core UI) connected the ordinary path in the UI:
+「作成開始」 / 「実行ナビを再開する」 on the Production Plan page, and
+`src/pages/ExecutionNavigatorPage.tsx` with Step confirmation (「結果一致・次へ」, the
+blind observation, `confirm_owned_ideal`), the presentation-only weapon switch guidance,
+the compromise checkpoint panel with the confirmed 「この武器を妥協品として確定して終了」,
+and the completed / ended Plan views. It reads the current checkpoint through
+`listCurrentCompromiseCheckpoints()`, the same still-current authority
+`prepareCompromiseFinish()` uses. The divergence records, Undo, the game save point,
+abandonment, replan Preview / adoption and breaking-change warning UIs are still not
+implemented.
+The same PR then moved the Target link of an existing OwnedWeapon from the Entry's first
+physical Step to the **Plan start effect** (`docs/PLANNER_SPEC.md` 16.2 / 16.11,
+`src/domain/planner/productionPlanStartEffects.ts`). Draft generation, saving and display
+change nothing persisted. `deriveProductionPlanStartTargetLinks()` derives the links from
+the Plan's selected Entries alone (a selected Entry whose Route starts from an existing
+weapon and performs at least one operation; a weapon several selected Entries start from,
+or a Target that would get two weapons, is linked for nobody rather than picked by order),
+so no persisted field is added: the execution projection, `prepareProductionPlanStart()`
+and the Production Plan screen preview (`inspectProductionPlanStart()`) share that one
+authority, and the preview is never write authority. The start verifies the persisted
+state against `PlanningInputSnapshot.initialExecutionState` (the pre-start premise), applies
+the links with `draft -> active` in one transaction (a Target already preferring its weapon
+is not rewritten; a refused or failed start changes neither the Plan nor any link), and
+verifies the result against the first Step's `expectedStateBefore` plus Target entity and
+preference collection validation. Replan adoption starts its new Plan through the same
+start and writes the same links. Only a production-target Normal the Plan registers is
+still linked by a Step (`executionEffects.targetLinks` on its registration Step), and the
+Navigator never re-announces a link move. This moved `CURRENT_CALCULATION_APP_SCHEMA_VERSION`
+to **13**: a version 12 Plan expects the links on its Steps, so every version 1..12
+ProductionPlan fails closed with `calculation_context_changed` (Plan compatibility stays
+the exact four-field `isCalculationContextCompatible()`). The change does not touch
+Candidate Search, BuildCandidate or BuildListEntry snapshot semantics, so an explicit
+build-result exception `13 -> [12]` in `COMPATIBLE_BUILD_RESULT_APP_SCHEMA_VERSIONS`
+(`isBuildResultCalculationContextCompatible()`) keeps version 12 Candidates and
+BuildListEntries usable under 13 - still requiring equal gameVersion, masterDataVersion
+and rngEngineVersion and every ordinary staleness check - while version 1..11 build
+results stay incompatible. `DATABASE_SCHEMA_VERSION` stays 6 and
+`ExportRoot.schemaVersion` 9 because no persisted shape changed.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -431,7 +469,8 @@ PlanStep milestone shape, and the PlanConflict participant shape, which moved it
 to version 11. The Execution Plan contract above (Target definition hash
 normalization, planning-input and Plan-dependent hashes, Target execution state,
 PlanStep `executionEffects`, reserve and zero-operation completion semantics) moved
-it to the current **12**, defined
+it to 12, and the Plan start effect (existing-weapon Target links at `draft -> active`
+instead of at the first physical Step) moved it to the current **13**, defined
 only by `CURRENT_CALCULATION_APP_SCHEMA_VERSION` in `src/domain/models/common.ts`.
 A version 10 `checkpointGroups` / `selectedCheckpointOpportunityIds` cannot be
 mapped onto lane pins, and reading such a selection as empty would silently
@@ -474,7 +513,7 @@ current Candidates by searching again.
 Do not delete historical results or add a migration or Export/Import semantic
 validation change as a substitute for CalculationContext compatibility.
 
-All version 1..11 Candidates, BuildListEntries and ProductionPlans are incompatible with version 12. Preserve their contents and fail closed with calculation_context_changed. Do not extend the historical build-result compatibility exception to version 9, 10, 11 or 12. Never convert a version 11 Plan into the version 12 PlanStep contract: no inferred `executionEffects`, no `reserve_weapon` merged into a physical Step, no inferred tracked OwnedWeapon or observation binding.
+All version 1..12 ProductionPlans are incompatible with version 13, and all version 1..11 Candidates and BuildListEntries are incompatible with version 13 (version 1..11 were already incompatible with version 12). Preserve their contents and fail closed with calculation_context_changed. The only build-result exception at this boundary is the explicit `13 -> [12]` one: the version 13 change is ProductionPlan execution only (the Plan start effect), so a version 12 Candidate or BuildListEntry stays usable under 13 when gameVersion, masterDataVersion and rngEngineVersion are equal and no ordinary stale reason applies. Never widen it to version 1..11, never apply it to a ProductionPlan, and never extend the historical 2..5 exception. Never execute a version 12 Plan under the Plan start effect: its first Step expects the pre-start state. Never convert a version 11 Plan into the version 12 PlanStep contract: no inferred `executionEffects`, no `reserve_weapon` merged into a physical Step, no inferred tracked OwnedWeapon or observation binding.
 
 The v3 -> v4 Dexie migration converts only `OwnedGogma.status === 'material'` to
 `'unclassified'`. `practical` and `ideal` keep their values, a Normal Artian
@@ -1296,12 +1335,15 @@ Planner calculation (Beam Search, Trace Replay, constrained re-search, what-if),
 Candidate Search, and the internal `reserve_weapon` action must never set or
 reassign it.
 
-Execution is the one exception (`docs/PLANNER_SPEC.md` 16.11 / 16.13). When a Step
-that actually starts the production is confirmed - the production-target Normal
-creation of a new Normal Route, or the first real game operation on an existing
-Normal / Gogma for that Entry - Execution sets the Entry's Target to that weapon and
-clears any other Target preferring it, in the same Step transaction. The link survives
-Plan abandonment; the user removes it manually. Plan generation never changes it.
+Execution is the one exception (`docs/PLANNER_SPEC.md` 16.2 / 16.11 / 16.13). The Plan
+decides which existing OwnedWeapon each Target is produced from, but generating, saving or
+displaying the Draft changes nothing. The Production Plan screen previews the link changes
+the start will make (weapon, current holder Target or 未設定, destination Target), and
+「作成開始」 applies them with `draft -> active` in one transaction: the Entry's Target
+prefers that existing weapon and any other Target preferring it prefers nothing. A
+production-target Normal the Plan registers does not exist at start and is linked by its
+registration Step instead. The link survives Plan abandonment and finishing as a
+compromise; the user removes it manually.
 
 Ideal completion protects weapon X, and a preference may only point at an unprotected
 weapon. Every Ideal completion - Execution target completion, `confirm_owned_ideal`, and
@@ -3152,8 +3194,11 @@ the `actual_result_different` / `operation_uncertain` records, Undo of the lates
 ExecutionHistory, game save point record / restore, finishing as a compromise, and user
 abandonment with the 16.10 save point choice, the replan Preview and adoption, and the
 Plan-breaking change guard with its approved `breaking_change_approved` abandonment are
-implemented; the warning / confirmation UI, the save point choice dialog UI and the
-Execution Navigator UI are not yet.
+implemented. The Execution Navigator UI covers the ordinary path (Plan start / resume,
+Step confirmation including the blind observation and `confirm_owned_ideal`, weapon switch
+guidance, the compromise checkpoint panel and finish, completion); the divergence record,
+Undo, save point, abandonment, replan and breaking-change warning / confirmation UIs are
+not yet.
 Implementation PRs follow the specification and must not fall back to the older
 Execution semantics.
 
@@ -4012,8 +4057,10 @@ Relevant test areas include:
   current OwnedWeapon, never infers a preference from the removed list, and
   rewrites no BuildCandidate, BuildListEntry, ProductionPlan, or ExecutionHistory
 - `DATABASE_SCHEMA_VERSION = 6`, `ExportRoot.schemaVersion = 9`,
-  `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 12`, schema 1..11 artifacts failing closed
-  under version 12, a schema 7 Export migrating to 8 with its Plans untouched, a
+  `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 13`, schema 1..12 ProductionPlans and
+  schema 1..11 Candidates / BuildListEntries failing closed under version 13, schema 12
+  Candidates / BuildListEntries staying usable under 13 through the explicit build-result
+  exception only while the other CalculationContext fields match, a schema 7 Export migrating to 8 with its Plans untouched, a
   schema 8 Export migrating to 9 only when it holds no terminal Plan and no
   ExecutionHistory, and no other version authority changed
 - Collection validation rejects a missing preferred weapon, a weapon type or element
@@ -4067,8 +4114,12 @@ Relevant test areas include:
 - A blind production-target Normal cannot be confirmed without user-entered observed
   slots, no slots are fabricated, and the binding token matches only the recorded
   observation
-- The first real production Step links the Target to the weapon and clears another
-  Target's link in the same transaction; Plan generation changes no preference
+- The Plan start links each existing weapon a selected Entry starts from to its Target
+  and clears another Target's link in the same transaction as `draft -> active`, the
+  first Step then confirms from that state, the Production Plan screen previews only the
+  real changes, a refused or failed start changes neither the Plan nor any link, a
+  production-target Normal is linked only by its registration Step, a shared weapon is
+  linked for nobody, and Plan generation changes no preference
 - A reached selected compromise checkpoint labels the weapon `practical` without
   touching protection; finishing as a compromise abandons the Plan with the Target
   still `active` and its preference kept; a performance-only match never relabels

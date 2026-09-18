@@ -132,6 +132,62 @@ function isCompromiseCheckpointStillCurrent(
   )
 }
 
+/** One selected compromise checkpoint the Plan's tracked weapon holds right now. */
+export interface CurrentCompromiseCheckpoint {
+  buildListEntryId: BuildListEntryId
+  targetWeaponId: TargetWeaponId
+  /** The weapon the Plan's compromise label effect names; the only finish authority. */
+  ownedWeaponId: OwnedWeaponId
+  /** The Step whose `executionEffects.compromiseLabels` labels the weapon. */
+  labelPlanStepId: PlanStepId
+  /**
+   * The checkpoint is held because the Entry started there (7.5.2) and its
+   * labelling Step is not confirmed yet.
+   */
+  heldBeforeLabelStep: boolean
+}
+
+/**
+ * Every selected compromise checkpoint that is the current state of its
+ * tracked weapon (`docs/PLANNER_SPEC.md` 16.12), in `selectedBuildListEntryIds`
+ * order.
+ *
+ * It reads exactly the authorities `prepareCompromiseFinish()` checks - the
+ * Entry's `intermediateStateSelection`, the Plan's own compromise label
+ * projection and the Plan Step completion state - through the same
+ * still-current rule, so a presentation that offers "finish as compromise"
+ * never offers a checkpoint the runtime would refuse as not current. An Entry
+ * that no longer exists, selected nothing, or whose label projection is not
+ * exactly one Step is simply not listed; the runtime stays the authority that
+ * refuses such a request. It never re-evaluates weapon performance and does
+ * not look at the Plan status: the caller decides where an offer applies.
+ */
+export function listCurrentCompromiseCheckpoints(
+  plan: ProductionPlan,
+  buildListEntries: readonly BuildListEntry[],
+): CurrentCompromiseCheckpoint[] {
+  const entries = new Map(buildListEntries.map((entry) => [entry.id, entry]))
+  return plan.selectedBuildListEntryIds.flatMap((buildListEntryId) => {
+    const entry = entries.get(buildListEntryId)
+    if (entry === undefined || !hasIntermediateStateSelection(entry)) return []
+    const labelled = plan.steps.flatMap((step) =>
+      (step.executionEffects?.compromiseLabels ?? [])
+        .filter((label) => label.buildListEntryId === entry.id)
+        .map(({ ownedWeaponId }) => ({ step, ownedWeaponId })),
+    )
+    if (labelled.length !== 1) return []
+    const [{ step, ownedWeaponId }] = labelled
+    if (!isCompromiseCheckpointStillCurrent(plan, entry, step, ownedWeaponId)) return []
+    return [{
+      buildListEntryId: entry.id,
+      targetWeaponId: entry.targetWeaponId,
+      ownedWeaponId,
+      labelPlanStepId: step.id,
+      heldBeforeLabelStep: !step.isCompleted,
+    }]
+  })
+}
+
 /**
  * Decides one "この武器を妥協品として確定して終了" (`docs/PLANNER_SPEC.md` 16.12).
  *

@@ -1460,6 +1460,38 @@ export function validateBuildListEntry(
  */
 export const EXECUTION_PLAN_CONTRACT_APP_SCHEMA_VERSION = 12
 
+/**
+ * The first calculation schema whose Plans link the Targets of Entries starting
+ * from an existing OwnedWeapon at Plan start rather than at the Entry's first
+ * physical Step (`docs/PLANNER_SPEC.md` 16.2 / 16.11). From it on,
+ * `PlanningInputSnapshot.initialExecutionState` is the pre-start premise and
+ * the first Step's `expectedStateBefore` is the state after the start effect.
+ */
+export const PLAN_START_EFFECT_APP_SCHEMA_VERSION = 13
+
+export function isPlanStartEffectProductionPlan(
+  plan: Pick<ProductionPlan, 'calculationContext'>,
+): boolean {
+  return plan.calculationContext.appSchemaVersion >= PLAN_START_EFFECT_APP_SCHEMA_VERSION
+}
+
+/**
+ * The start effect changes Target preferences only, so the first Step's
+ * `expectedStateBefore` equals the pre-start premise in every hash but
+ * `targetExecutionStateHash`. A schema 12 Plan has no start effect and starts
+ * exactly at the premise.
+ */
+function firstStepStartsFromPlanStart(plan: ProductionPlan): boolean {
+  const first = plan.steps[0].expectedStateBefore
+  const initial = plan.baseSnapshot.initialExecutionState
+  if (!isPlanStartEffectProductionPlan(plan)) return sameExpectedPlanState(first, initial)
+  return (
+    first.rngStateHash === initial.rngStateHash &&
+    first.normalCountersHash === initial.normalCountersHash &&
+    first.ownedWeaponsHash === initial.ownedWeaponsHash
+  )
+}
+
 /** Whether a persisted Plan claims the current Execution Plan contract. */
 export function isExecutionContractProductionPlan(
   plan: Pick<ProductionPlan, 'calculationContext'>,
@@ -1795,11 +1827,15 @@ export function validateProductionPlan(
   plan.steps.forEach((step, index) => validatePlanStep(step, index + 1, issues, executionContract))
   if (executionContract) {
     validateExecutionPlanProgression(plan, issues)
-    if (
-      plan.steps.length > 0 &&
-      !sameExpectedPlanState(plan.steps[0].expectedStateBefore, plan.baseSnapshot.initialExecutionState)
-    ) {
-      addIssue(issues, 'steps[0].expectedStateBefore', 'inconsistent_snapshot', 'The first PlanStep must start at PlanningInputSnapshot.initialExecutionState.')
+    if (plan.steps.length > 0 && !firstStepStartsFromPlanStart(plan)) {
+      addIssue(
+        issues,
+        'steps[0].expectedStateBefore',
+        'inconsistent_snapshot',
+        isPlanStartEffectProductionPlan(plan)
+          ? 'The first PlanStep may differ from PlanningInputSnapshot.initialExecutionState only by the Plan start Target links.'
+          : 'The first PlanStep must start at PlanningInputSnapshot.initialExecutionState.',
+      )
     }
     for (let index = 0; index + 1 < plan.steps.length; index += 1) {
       if (!sameExpectedPlanState(plan.steps[index].expectedStateAfter, plan.steps[index + 1].expectedStateBefore)) {
