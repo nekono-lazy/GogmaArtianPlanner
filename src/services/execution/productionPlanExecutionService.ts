@@ -10,7 +10,9 @@ import {
   prepareExecutionSavePointRestore,
   prepareExecutionUndo,
   prepareExpectedStepConfirmation,
+  inspectProductionPlanAbandonment,
   prepareOperationUncertain,
+  prepareProductionPlanAbandonment,
   prepareProductionPlanStart,
   type ExecutionActualResultObservation,
   type ExecutionCounterAuthority,
@@ -20,6 +22,10 @@ import {
   type ExecutionSavePointRestoreWrite,
   type ExecutionStepWrite,
   type ExecutionUndoWrite,
+  type ObservedProductionPlanState,
+  type PlanAbandonSavePointDecision,
+  type ProductionPlanAbandonmentOptions,
+  type ProductionPlanAbandonmentWrite,
 } from '../../domain/execution'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import type {
@@ -149,6 +155,36 @@ export interface RestoreExecutionSavePointResult {
   deletedExecutionHistoryIds: ExecutionHistoryId[]
 }
 
+export interface InspectProductionPlanAbandonmentRequest {
+  planId: ProductionPlanId
+}
+
+/**
+ * 「現在Planを破棄する」 (`docs/PLANNER_SPEC.md` 16.2 / 16.10). 「キャンセル」 is
+ * not a request: cancelling simply never calls the abandonment.
+ */
+export interface AbandonProductionPlanRequest {
+  planId: ProductionPlanId
+  /**
+   * The Plan's status, current Step and `updatedAt` as the user saw them when
+   * confirming. Any difference inside the transaction refuses the request.
+   */
+  observedPlan: ObservedProductionPlanState
+  /**
+   * `null` when no save point choice was offered; otherwise the user's choice
+   * naming the `recordedAt` of the save point they saw.
+   */
+  savePointDecision: PlanAbandonSavePointDecision
+}
+
+/** The abandoned Plan and what the abandonment did to the save point state. */
+export interface AbandonProductionPlanResult {
+  plan: ProductionPlan
+  savePointHandling: ProductionPlanAbandonmentWrite['savePointHandling']
+  /** The records after the save point a restore deleted; empty otherwise. */
+  deletedExecutionHistoryIds: ExecutionHistoryId[]
+}
+
 /**
  * The Execution runtime of a calculation schema 12 ProductionPlan
  * (`docs/PLANNER_SPEC.md` 16.1 / 16.2 / 16.15, `docs/DATA_MODEL.md` 14.4).
@@ -163,9 +199,9 @@ export interface RestoreExecutionSavePointResult {
  * confirmation (including a blind observation and `confirm_owned_ideal`), and
  * the two divergence records `actual_result_different` and
  * `operation_uncertain`, the Undo of the latest ExecutionHistory, recording /
- * restoring the Plan's game save point, and finishing as a compromise. User
- * abandonment, replan adoption and the breaking-change guard are not
- * implemented here yet.
+ * restoring the Plan's game save point, finishing as a compromise, and the
+ * user's abandonment with its save point choice. Replan adoption and the
+ * breaking-change guard are not implemented here yet.
  */
 export class ProductionPlanExecutionService {
   private readonly dependencies: ProductionPlanExecutionServiceDependencies
@@ -382,6 +418,83 @@ export class ProductionPlanExecutionService {
     })
   }
 
+  /**
+   * Reads whether abandoning the running Plan must ask the 16.10 save point
+   * choice, with the tokens the abandonment request echoes back. It writes
+   * nothing, and the abandonment re-derives everything itself.
+   */
+  inspectProductionPlanAbandonment(
+    request: InspectProductionPlanAbandonmentRequest,
+  ): Promise<ProductionPlanAbandonmentOptions> {
+    const { database } = this.dependencies
+    return this.runExecutionTransaction(async () => {
+      const plan = await this.requirePlan(request.planId)
+      return inspectProductionPlanAbandonment(plan, {
+        planExecutionHistory: await database.executionHistory.where('planId').equals(plan.id).toArray(),
+        executionSavePoint:
+          (await database.executionSavePoints.get(executionSavePointIdForPlan(plan.id))) ?? null,
+      })
+    }, 'r')
+  }
+
+  /**
+   * 「現在Planを破棄する」 (16.2 / 16.10): the running Plan becomes `abandoned`
+   * (`user_abandoned`) at the current state, or after restoring its game save
+   * point when the user chose so. Every weapon in progress for the Plan stops
+   * being in progress, Target preferences stay, the save point is deleted, and
+   * no ExecutionHistory is added.
+   */
+  abandonProductionPlan(request: AbandonProductionPlanRequest): Promise<AbandonProductionPlanResult> {
+    const { database } = this.dependencies
+    return this.runExecutionTransaction(async () => {
+      const plan = await this.requirePlan(request.planId)
+      const abandonment = prepareProductionPlanAbandonment({
+        plan,
+        observedPlan: request.observedPlan,
+        savePointDecision: request.savePointDecision,
+        state: {
+          ownedWeapons: await database.ownedWeapons.toArray(),
+          targetWeapons: await database.targetWeapons.toArray(),
+          buildListEntries: await database.buildListEntries.toArray(),
+          planExecutionHistory: await database.executionHistory.where('planId').equals(plan.id).toArray(),
+          executionSavePoint:
+            (await database.executionSavePoints.get(executionSavePointIdForPlan(plan.id))) ?? null,
+        },
+        currentCalculationContext: this.dependencies.currentCalculationContext,
+        now: this.dependencies.clock.now(),
+      })
+      await this.writeAbandonment(abandonment)
+      return {
+        plan: abandonment.plan,
+        savePointHandling: abandonment.savePointHandling,
+        deletedExecutionHistoryIds: abandonment.deletedExecutionHistoryIds,
+      }
+    })
+  }
+
+  private async writeAbandonment(write: ProductionPlanAbandonmentWrite): Promise<void> {
+    const { database } = this.dependencies
+    if (write.rngState !== null) await database.rngState.put(write.rngState)
+    if (write.normalCounters !== null) {
+      // A save point restore replaces the whole collection.
+      await database.normalArtianCounters.clear()
+      if (write.normalCounters.length > 0) await database.normalArtianCounters.bulkPut(write.normalCounters)
+    }
+    if (write.deletedOwnedWeaponIds.length > 0) await database.ownedWeapons.bulkDelete(write.deletedOwnedWeaponIds)
+    if (write.ownedWeapons.length > 0) await database.ownedWeapons.bulkPut(write.ownedWeapons)
+    if (write.targetWeapons.length > 0) await database.targetWeapons.bulkPut(write.targetWeapons)
+    await database.productionPlans.put(write.plan)
+    if (write.deletedExecutionHistoryIds.length > 0) {
+      await database.executionHistory.bulkDelete(write.deletedExecutionHistoryIds)
+    }
+    if (write.deletesExecutionSavePoint) {
+      await database.executionSavePoints
+        .where('productionPlanId')
+        .equals(write.plan.id)
+        .delete()
+    }
+  }
+
   private async writeSavePointRestore(restore: ExecutionSavePointRestoreWrite): Promise<void> {
     const { database } = this.dependencies
     await database.rngState.put(restore.rngState)
@@ -469,11 +582,11 @@ export class ProductionPlanExecutionService {
     }
   }
 
-  private async runExecutionTransaction<T>(operation: () => Promise<T>): Promise<T> {
+  private async runExecutionTransaction<T>(operation: () => Promise<T>, mode: 'rw' | 'r' = 'rw'): Promise<T> {
     const { database } = this.dependencies
     try {
       return await database.transaction(
-        'rw',
+        mode,
         [
           database.rngState,
           database.normalArtianCounters,

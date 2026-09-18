@@ -99,6 +99,28 @@ export type ExecutionRuntimeErrorCode =
   | 'save_point_required_entity_missing'
   /** The state restored from the save point fails entity, collection or reference validation. */
   | 'save_point_restore_invalid'
+  /**
+   * Only an `active` or `stale` Plan can be abandoned by the user
+   * (`docs/PLANNER_SPEC.md` 16.2): a draft has not started, and a completed or
+   * abandoned Plan has already ended.
+   */
+  | 'plan_abandon_not_allowed'
+  /**
+   * The Plan's status, current Step or `updatedAt` is no longer what the user
+   * saw when confirming the abandonment, so a state the user never saw is not
+   * abandoned.
+   */
+  | 'plan_abandon_state_changed'
+  /**
+   * The Plan ran past its game save point, so the user must choose between
+   * keeping the current state and returning to the save point (16.10).
+   */
+  | 'save_point_choice_required'
+  /**
+   * A save point decision was given although the Plan did not run past a game
+   * save point, so no choice was offered and none is applied (16.10).
+   */
+  | 'save_point_choice_not_required'
 
 export class ExecutionRuntimeError extends Error {
   readonly code: ExecutionRuntimeErrorCode
