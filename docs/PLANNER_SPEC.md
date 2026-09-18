@@ -4782,6 +4782,44 @@ Step Nの `expectedStateAfter` = Step N+1の `expectedStateBefore`）は変更�
 同一transactionで行い、片方だけを残さない。キャンセルした場合は何も変更しない。
 `stale` Planはすでに続行できないため、この警告を出さずに変更を保存してよい。
 
+実装上の確定事項（Planを壊す変更の承認Runtime PR）。
+
+- RNG Setupの直接保存、Identification Wizardの採用、Normal Counterの保存（確定 / 確定解除 / Debug修正 /
+  Identification結果）、OwnedWeapon / TargetWeaponの保存・削除、Build Listの途中採用状態・改善優先の変更と
+  Entry削除は、すべて同じguard（`PlanBreakingChangeGuard`）を通る1つのDexie transactionで保存する。
+  各変更は「保存時の永続状態 -> 変更後状態」の純関数（変更自身のvalidationと既存の参照保護を含む）として
+  表し、guardは変更を先に適用・検証してからPlanの扱いを判定する。Build Listへの新規追加と
+  staleness再評価（`isStale` / `staleReasons` のderived metadata）はPlanを壊さないためguardを通さない
+- 判定対象は `active` Planだけである。`active` / `stale` のPlanが2件以上ある場合は推測で選ばず拒否する
+  （`running_plan_invariant_violated`）。`stale` Planや実行中Planが無い場合は警告せず通常保存し、Plan、
+  セーブ地点、ExecutionHistory、作成中状態を変更しない
+- 壊すかどうかは変更の主Entityではなく、副作用（優先起点の奪取・解除など）を含む保存後の状態全体で
+  判定する（`detectPlanBreakingMutation()`）。判定は既存authorityだけを使う: RngState / Normal Counterは
+  `createExpectedPlanState()` の `rngStateHash` / `normalCountersHash`、所持武器はexecution scope
+  （`collectExecutionScopeOwnedWeaponIds()`）の武器の同 `ownedWeaponsHash`、TargetはPlan依存Targetの
+  `createDependentTargetDefinitionsHash()` と `createTargetExecutionStateHash()`、Build Listは
+  `createDependentBuildListEntriesHash()`。理由は既存の `rng_state_changed` / `normal_counter_changed` /
+  `owned_weapon_changed` / `target_changed` / `build_list_changed` を警告用に一時的に使うだけで、Planを
+  `stale` にせず永続化もしない
+- 承認が無い場合は何も保存せず拒否する（`plan_breaking_change_approval_required`、警告の内容となる
+  inspectionを保持）。読み取り専用のinspectionは理由、ユーザーが見たPlan（`planId`、`status`、
+  `currentStepId`、`updatedAt`）、16.10の選択要否とセーブ地点の `recordedAt` を返す
+- 承認はユーザーが見たPlanと16.10の選択を持つ。transaction内で現在のPlanがそのPlanでない（進行、stale化、
+  終了を含む）場合は `plan_breaking_change_state_changed`、変更がもうPlanを壊さない場合は
+  `plan_breaking_change_approval_not_required` で拒否する。選択要否と選択の検証はPlan破棄と同じ
+  `deriveRunningPlanSavePointChoiceRequirement()` / `assertRunningPlanSavePointDecision()` で再導出する
+- 「現在地点を維持」（選択が出ない場合を含む）は現在の永続状態へ変更を適用する。「最後のゲーム内セーブ地点へ
+  戻す」は `prepareExecutionSavePointRestore()` をそのまま使って復元を先に決め、その復元後の状態へ変更を
+  もう一度適用する。変更はユーザーが画面で見た値から変えた項目だけを保存時の状態へ適用する
+  （`applyUserChanges()`）ため、復元前に読んだEntity本体（5枠、Skill、優先起点、Counter値、作成中状態、
+  lifecycleなど）で復元結果を上書きしない
+- どちらも（復元後の）Planを `abandoned`（`breaking_change_approved`）にし、`currentStepId`、Step完了状態、
+  `recalculationReasons` を維持し、そのPlan IDの作成中状態を全武器で解除し、セーブ地点を削除する。
+  Targetの優先起点は変更自身とその既存の副作用でだけ変わる。ExecutionHistoryは追加しないため、この終了は
+  Undoできない（16.16）
+- 変更のvalidation失敗、既存の参照保護（`ReferencedEntityDeleteError`）による削除拒否、復元の拒否、
+  保存失敗のいずれでも、Plan、変更、セーブ地点、ExecutionHistory、作成中状態のどれも変更しない
+
 #### UIを経由しない不一致
 
 Import、別タブ、保存失敗からの復旧などで警告を経ずに前提が壊れた場合は、次のStep確定時の

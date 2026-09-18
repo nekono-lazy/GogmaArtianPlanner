@@ -4,6 +4,7 @@ import { createReferencedOwnedWeaponsHash, createSearchStateHash } from '../../d
 import type { AppSettings, BuildListEntry, OwnedWeapon, TargetWeapon } from '../../domain/models/publicTypes'
 import { createCandidateSearchInput } from '../search/createCandidateSearchInput'
 import { BuildListService, type BuildListServiceRepositories } from '../buildList/buildListService'
+import { inMemoryPlanGuardedPersistence } from '../../test/fixtures/planGuardedPersistence'
 import { createValidMasterDataFixture } from '../../test/fixtures/masterData'
 import { createValidBuildCandidate, createValidNormalArtianCounter, createValidOwnedWeapon, createValidRngState, createValidTargetWeapon, domainFixtureContext, ownedWeaponId } from '../../test/fixtures/domainData'
 
@@ -14,11 +15,11 @@ function buildListMemory(entry: BuildListEntry, target: TargetWeapon, owned: Own
   const refs: BuildListServiceRepositories = {
     getAllEntries: async () => entries,
     putEntry: vi.fn(async (next) => { entries[0] = next; return next }),
-    deleteEntry: async () => undefined,
     ensureRngState: async () => rngState,
     getNormalCounters: async () => counters,
     getOwnedWeapons: async () => owned,
     getTargets: async () => [target],
+    persistence: inMemoryPlanGuardedPersistence().persistence,
   }
   return { service: new BuildListService(refs), entries, rngState, counters }
 }

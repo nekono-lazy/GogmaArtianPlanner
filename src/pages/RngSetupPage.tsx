@@ -14,6 +14,7 @@ import { deriveRngCapabilities, type RngCapabilityMissingRequirement } from '../
 import { productionRngEngine, productionRngRuntime } from '../domain/rng/production/productionRngRuntime'
 import type { RngEngine } from '../domain/rng/rngEngine'
 import { normalArtianCounterRepository, rngStateRepository } from '../db/repositories'
+import { rngStatePersistenceService } from '../services/rngState/rngStatePersistenceService'
 import { getRngMissingRequirementLabel, rngStateSourceLabels } from '../presentation/labels'
 import {
   createProductionIdentificationWizardCoordinator,
@@ -148,13 +149,14 @@ function KnownField({ fieldId, label, description, numeric = false, value, onCha
 
 export interface RngSetupPageDependencies {
   ensure(): Promise<RngState>
-  save(state: RngState): Promise<RngState>
+  /** `basis` is the RngState the edit started from, so only changed fields are saved. */
+  save(state: RngState, basis?: RngState): Promise<RngState>
   getNormalCounters(): ReturnType<typeof normalArtianCounterRepository.getAllNormalArtianCounters>
   createIdentificationCoordinator?(): IdentificationWizardCoordinator
 }
 const defaultDependencies: RngSetupPageDependencies = {
   ensure: () => rngStateRepository.ensureInitialRngState(),
-  save: (state) => rngStateRepository.putRngState(state),
+  save: (state, basis) => rngStatePersistenceService.saveRngState(state, basis ?? null),
   getNormalCounters: () => normalArtianCounterRepository.getAllNormalArtianCounters(),
   createIdentificationCoordinator: createProductionIdentificationWizardCoordinator,
 }
@@ -214,7 +216,7 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
       const next = toState(form, state, modifiedKeys, new Date().toISOString(), productionRngEngine)
       const validation = validateRngState(next)
       if (!validation.isValid) throw new Error(validation.issues.map(({ message }) => message).join(' / '))
-      const saved = await dependencies.save(next)
+      const saved = await dependencies.save(next, state)
       setState(saved); setForm(toForm(saved)); setModifiedKeys(new Set()); setSaveNotice('RNG状態を保存しました。')
     } catch (caught: unknown) { setSaveError(caught instanceof Error ? caught.message : 'RNG状態を保存できません。') }
   }

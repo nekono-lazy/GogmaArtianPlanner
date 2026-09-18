@@ -247,7 +247,8 @@ export type AdoptProductionPlanReplanPreviewResult =
  * `operation_uncertain`, the Undo of the latest ExecutionHistory, recording /
  * restoring the Plan's game save point, finishing as a compromise, and the
  * user's abandonment with its save point choice, and the replan adoption with
- * its save point choice. The breaking-change guard is not implemented here yet.
+ * its save point choice. An approved breaking change ends the Plan through
+ * `PlanBreakingChangeGuard` together with the change that breaks it.
  */
 export class ProductionPlanExecutionService {
   private readonly dependencies: ProductionPlanExecutionServiceDependencies

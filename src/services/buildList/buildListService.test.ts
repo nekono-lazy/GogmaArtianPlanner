@@ -20,6 +20,14 @@ import {
   intermediateOpportunityAt,
 } from '../../test/fixtures/checkpointRoute'
 import type { IntermediateStateOpportunityId } from '../../domain/models/publicTypes'
+import {
+  inspectPlanGuardedMutation,
+  preparePlanGuardedMutation,
+  type PlanBreakingChangeApproval,
+  type PlanGuardPersistedState,
+  type PlanGuardedMutation,
+} from '../../domain/execution'
+import type { PlanGuardedPersistence } from '../execution/planBreakingChangeGuard'
 import { BuildListService, type BuildListServiceRepositories } from './buildListService'
 
 function memoryRepositories(initial: BuildListEntry[] = []) {
@@ -36,14 +44,38 @@ function memoryRepositories(initial: BuildListEntry[] = []) {
       else entries.push(entry)
       return entry
     }),
-    deleteEntry: vi.fn(async (id) => {
-      const index = entries.findIndex((entry) => entry.id === id)
-      if (index >= 0) entries.splice(index, 1)
-    }),
     ensureRngState: async () => rngState,
     getNormalCounters: async () => normalCounters,
     getOwnedWeapons: async () => [],
     getTargets: async () => [target],
+    // The guarded Build List operations over the same in-memory Entries.
+    persistence: {
+      inspect: async (mutation) => inspectPlanGuardedMutation(guardState(), mutation),
+      apply: vi.fn(async (mutation: PlanGuardedMutation<unknown>, approval: PlanBreakingChangeApproval | null = null) => {
+        const write = preparePlanGuardedMutation({
+          state: guardState(),
+          mutation,
+          approval,
+          currentCalculationContext: domainFixtureContext,
+          now: '2026-09-18T00:00:00.000Z',
+        })
+        entries.splice(0, entries.length, ...write.state.buildListEntries)
+        return { result: write.result, planTermination: write.planTermination }
+      }) as unknown as PlanGuardedPersistence['apply'],
+    },
+  }
+  function guardState(): PlanGuardPersistedState {
+    return {
+      rngState,
+      normalCounters,
+      ownedWeapons: [],
+      targetWeapons: [target],
+      buildListEntries: [...entries],
+      buildCandidates: [],
+      productionPlans: [],
+      executionHistory: [],
+      executionSavePoints: [],
+    }
   }
   return { entries, target, rngState, normalCounters, repositories }
 }
@@ -66,7 +98,7 @@ describe('BuildListService', () => {
     expect(refreshed.entries[0].candidateSnapshot).toEqual(snapshot)
     expect(refreshed.entries[0].candidateSnapshot.restorationBonusScope).toBe('normal_artian')
     expect(memory.repositories.putEntry).toHaveBeenCalledOnce()
-    expect(memory.repositories.deleteEntry).not.toHaveBeenCalled()
+    expect(memory.repositories.persistence.apply).not.toHaveBeenCalled()
   })
 
   it.each([2, 3, 4, 5, 6, 7])(
@@ -123,7 +155,7 @@ describe('BuildListService', () => {
     expect(memory.entries).toHaveLength(2)
     expect(memory.entries[0]).toEqual(before)
     expect(result.entry.calculationContext.appSchemaVersion).toBe(12)
-    expect(memory.repositories.deleteEntry).not.toHaveBeenCalled()
+    expect(memory.repositories.persistence.apply).not.toHaveBeenCalled()
   })
 
   it('persists changed stale flags without replacing the snapshot contract', async () => {

@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { createOwnedWeaponDraft, createTargetWeaponDraft } from '../../domain/forms/entityDrafts'
 import { loadMasterData } from '../../domain/master/loadMasterData'
 import type { OwnedGogmaArtianWeapon, OwnedWeapon, RestorationBonus, TargetWeapon } from '../../domain/models/publicTypes'
-import { createValidOwnedWeapon, createValidTargetWeapon, DOMAIN_FIXTURE_TIME } from '../../test/fixtures/domainData'
+import { createBuildListEntry } from '../../domain/buildList'
+import type { PlanGuardPersistedState } from '../../domain/execution'
+import { createValidBuildCandidate, createValidOwnedWeapon, createValidTargetWeapon, DOMAIN_FIXTURE_TIME } from '../../test/fixtures/domainData'
+import { inMemoryPlanGuardedPersistence } from '../../test/fixtures/planGuardedPersistence'
 import { EntityFormValidationError, OwnedWeaponCrudService, ReferencedEntityDeleteError, TargetWeaponCrudService } from './entityCrudServices'
 
 // Saves are validated against Production bonus availability, which only the
@@ -35,23 +38,13 @@ describe('entity draft defaults', () => {
 
 describe('OwnedWeaponCrudService', () => {
   const master = verifiedMaster
-  function dependencies(
-    references: Array<{ kind: 'build_list_entry'; entityId: string; path: string }> = [],
-    targets: TargetWeapon[] = [],
-  ) {
+  function dependencies(ownedWeapons: OwnedWeapon[] = [], initial: Partial<PlanGuardPersistedState> = {}) {
+    const memory = inMemoryPlanGuardedPersistence({ ownedWeapons, ...initial })
     return {
       getAll: vi.fn(async () => [] as OwnedWeapon[]),
-      getTargets: vi.fn(async () => targets),
-      put: vi.fn(async (value: OwnedWeapon) => value),
-      putReleasingTargets: vi.fn(async (value: OwnedWeapon, released: readonly TargetWeapon[]) => {
-        released.forEach((target) => {
-          const index = targets.findIndex(({ id }) => id === target.id)
-          if (index >= 0) targets[index] = target
-        })
-        return value
-      }),
-      delete: vi.fn(async () => undefined),
-      findReferences: vi.fn(async () => references),
+      getTargets: vi.fn(async () => [] as TargetWeapon[]),
+      persistence: memory.persistence,
+      memory,
     }
   }
   function storedGogma(weaponTypeId: string, elementId: string, first: RestorationBonus): OwnedGogmaArtianWeapon {
@@ -68,8 +61,8 @@ describe('OwnedWeaponCrudService', () => {
     } as OwnedGogmaArtianWeapon
   }
   it('preserves ID/createdAt and changes only updatedAt while editing', async () => {
-    const deps = dependencies(); const service = new OwnedWeaponCrudService(master, deps)
     const existing = storedGogma('weapon.great_sword', 'element.none', GOGMA_ATTACK)
+    const deps = dependencies([existing]); const service = new OwnedWeaponCrudService(master, deps)
     const { id: _id, createdAt: _created, updatedAt: _updated, ...draft } = existing; void _id; void _created; void _updated
     const saved = await service.save({ ...draft, name: 'edited', status: 'unclassified', isProtected: true }, existing, '2026-08-29T09:00:00.000Z')
     expect(saved.id).toBe(existing.id); expect(saved.createdAt).toBe(existing.createdAt); expect(saved.updatedAt).toBe('2026-08-29T09:00:00.000Z'); expect(saved.isProtected).toBe(true)
@@ -80,50 +73,44 @@ describe('OwnedWeaponCrudService', () => {
     await expect(service.save(draft, null, DOMAIN_FIXTURE_TIME)).rejects.toBeInstanceOf(EntityFormValidationError)
   })
   it('saves an Element bonus on a Switch Axe element.none weapon', async () => {
-    const deps = dependencies(); const service = new OwnedWeaponCrudService(master, deps)
     const existing = storedGogma('weapon.switch_axe', 'element.none', GOGMA_ELEMENT)
+    const deps = dependencies([existing]); const service = new OwnedWeaponCrudService(master, deps)
     const { id: _id, createdAt: _created, updatedAt: _updated, ...draft } = existing; void _id; void _created; void _updated
     await expect(service.save(draft, existing, DOMAIN_FIXTURE_TIME)).resolves.toMatchObject({ restorationBonuses: existing.restorationBonuses })
-    expect(deps.put).toHaveBeenCalledTimes(1)
+    expect(deps.memory.commits()).toBe(1)
   })
   it('refuses to save a stored Bow Poison Element bonus outside Production availability without rewriting it', async () => {
-    const deps = dependencies(); const service = new OwnedWeaponCrudService(master, deps)
     const existing = storedGogma('weapon.bow', 'element.poison', GOGMA_ELEMENT)
+    const deps = dependencies([existing]); const service = new OwnedWeaponCrudService(master, deps)
     const { id: _id, createdAt: _created, updatedAt: _updated, ...draft } = existing; void _id; void _created; void _updated
     const error = await service.save({ ...draft, name: 'renamed' }, existing, DOMAIN_FIXTURE_TIME).catch((caught: unknown) => caught)
     expect(error).toBeInstanceOf(EntityFormValidationError)
     expect((error as EntityFormValidationError).issues).toContainEqual(expect.stringMatching(/^restorationBonuses\[0\]: .*Productionで抽選されない/))
-    expect(deps.put).not.toHaveBeenCalled()
-    expect(deps.putReleasingTargets).not.toHaveBeenCalled()
+    expect(deps.memory.commits()).toBe(0)
+    expect(deps.memory.state().ownedWeapons).toEqual([existing])
     expect(existing.restorationBonuses[0]).toEqual(GOGMA_ELEMENT)
   })
   it('blocks referenced deletion and exposes references', async () => {
-    const deps = dependencies([{ kind: 'build_list_entry', entityId: 'entry-1', path: 'candidateSnapshot.route' }]); const service = new OwnedWeaponCrudService(master, deps)
-    await expect(service.delete(createValidOwnedWeapon().id)).rejects.toBeInstanceOf(ReferencedEntityDeleteError)
-    expect(deps.delete).not.toHaveBeenCalled()
+    const weapon = createValidOwnedWeapon()
+    const target = { ...createValidTargetWeapon(), preferredOwnedWeaponId: weapon.id }
+    const deps = dependencies([weapon], { targetWeapons: [target] }); const service = new OwnedWeaponCrudService(master, deps)
+    const error = await service.delete(weapon.id).catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(ReferencedEntityDeleteError)
+    expect((error as ReferencedEntityDeleteError).references).toEqual([{ kind: 'target_weapon', entityId: target.id, path: 'preferredOwnedWeaponId' }])
+    expect(deps.memory.commits()).toBe(0)
+    expect(deps.memory.state().ownedWeapons).toEqual([weapon])
   })
 })
 
 describe('TargetWeaponCrudService', () => {
   const master = verifiedMaster
-  function dependencies(
-    referenced = false,
-    targets: TargetWeapon[] = [],
-    ownedWeapons: OwnedWeapon[] = [],
-  ) {
+  function dependencies(initial: Partial<PlanGuardPersistedState> = {}) {
+    const memory = inMemoryPlanGuardedPersistence(initial)
     return {
-      getAll: vi.fn(async () => targets),
-      getOwnedWeapons: vi.fn(async () => ownedWeapons),
-      put: vi.fn(async (value: TargetWeapon) => value),
-      putReleasingTargets: vi.fn(async (value: TargetWeapon, released: readonly TargetWeapon[]) => {
-        released.forEach((target) => {
-          const index = targets.findIndex(({ id }) => id === target.id)
-          if (index >= 0) targets[index] = target
-        })
-        return value
-      }),
-      delete: vi.fn(async () => undefined),
-      findReferences: vi.fn(async () => referenced ? [{ kind: 'build_list_entry' as const, entityId: 'entry-1', path: 'targetWeaponId' }] : []),
+      getAll: vi.fn(async () => [] as TargetWeapon[]),
+      getOwnedWeapons: vi.fn(async () => [] as OwnedWeapon[]),
+      persistence: memory.persistence,
+      memory,
     }
   }
   it('saves Practical/Alternative/Skill conditions and validates count ranges', async () => {
@@ -157,7 +144,7 @@ describe('TargetWeaponCrudService', () => {
     draft.idealSkillCondition = { seriesSkillId: ENABLED_SERIES_SKILL_ID, groupSkillId: ENABLED_GROUP_SKILL_ID, matchMode: 'all' }
     draft.practicalSkillCondition = { seriesSkillId: ENABLED_SERIES_SKILL_ID, groupSkillId: null, matchMode: 'all' }
     await expect(service.save(draft, null, DOMAIN_FIXTURE_TIME)).resolves.toMatchObject({ practicalBonusConditions: draft.practicalBonusConditions })
-    expect(deps.put).toHaveBeenCalledTimes(1)
+    expect(deps.memory.commits()).toBe(1)
   })
   it('refuses to save an Element ideal bonus on a Bow Poison Target', async () => {
     const deps = dependencies(); const service = new TargetWeaponCrudService(master, deps)
@@ -167,11 +154,16 @@ describe('TargetWeaponCrudService', () => {
     const error = await service.save(draft, null, DOMAIN_FIXTURE_TIME).catch((caught: unknown) => caught)
     expect(error).toBeInstanceOf(EntityFormValidationError)
     expect((error as EntityFormValidationError).issues).toContainEqual(expect.stringMatching(/^idealBonuses\[0\]: .*Productionで抽選されない/))
-    expect(deps.put).not.toHaveBeenCalled()
+    expect(deps.memory.commits()).toBe(0)
   })
   it('blocks referenced Target deletion', async () => {
-    const deps = dependencies(true); const service = new TargetWeaponCrudService(master, deps)
-    await expect(service.delete(createValidTargetWeapon().id)).rejects.toBeInstanceOf(ReferencedEntityDeleteError)
-    expect(deps.delete).not.toHaveBeenCalled()
+    const target = createValidTargetWeapon()
+    const entry = createBuildListEntry(createValidBuildCandidate(), target, { createdAt: DOMAIN_FIXTURE_TIME })
+    const deps = dependencies({ targetWeapons: [target], buildListEntries: [entry] }); const service = new TargetWeaponCrudService(master, deps)
+    const error = await service.delete(target.id).catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(ReferencedEntityDeleteError)
+    expect((error as ReferencedEntityDeleteError).references).toEqual([{ kind: 'build_list_entry', entityId: entry.id, path: 'targetWeaponId' }])
+    expect(deps.memory.commits()).toBe(0)
+    expect(deps.memory.state().targetWeapons).toEqual([target])
   })
 })

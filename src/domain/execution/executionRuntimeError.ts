@@ -143,6 +143,28 @@ export type ExecutionRuntimeErrorCode =
   | 'replan_result_invalid'
   /** The Preview's new ProductionPlan ID is already persisted, or equals the running Plan's. */
   | 'replan_plan_id_collision'
+  /**
+   * More than one ProductionPlan is `active` or `stale`. The one-running-Plan
+   * invariant (16.2) is broken, and no Plan is picked by guessing.
+   */
+  | 'running_plan_invariant_violated'
+  /**
+   * The change would break the `active` Plan (`docs/PLANNER_SPEC.md` 16.6) and
+   * no approval was given. Nothing was saved and the Plan is unchanged; the
+   * error carries the inspection the warning is built from.
+   */
+  | 'plan_breaking_change_approval_required'
+  /**
+   * The Plan the approval names is no longer the `active` Plan with the status,
+   * current Step and `updatedAt` the user saw, so a Plan the user never saw is
+   * not abandoned.
+   */
+  | 'plan_breaking_change_state_changed'
+  /**
+   * An approval was given although the change no longer breaks an `active`
+   * Plan; nothing is abandoned on a stale approval.
+   */
+  | 'plan_breaking_change_approval_not_required'
 
 export class ExecutionRuntimeError extends Error {
   readonly code: ExecutionRuntimeErrorCode

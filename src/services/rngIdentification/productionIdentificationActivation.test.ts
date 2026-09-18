@@ -31,6 +31,8 @@ import {
   type IdentificationWizardCoordinator,
 } from './identificationWizardCoordinator'
 import { IdentificationAdoptionService } from './identificationAdoptionService'
+import { createBuildListCalculationContext } from '../buildList/createBuildListCalculationContext'
+import { createPlanBreakingChangeGuard } from '../execution/planBreakingChangeGuard'
 import {
   SkillIdentificationWorkerError,
   type SkillIdentificationWorkerClient,
@@ -217,6 +219,7 @@ async function createHarness(
     gogmaClient,
     adoptionService: new IdentificationAdoptionService({
       repository: rngRepository,
+      persistence: createPlanBreakingChangeGuard(createBuildListCalculationContext(loadedMaster()), database),
       seedNormalizer: new ProductionRngEngine(),
       clock: { now: () => ADOPTION_TIME },
     }),

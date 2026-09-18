@@ -2157,6 +2157,13 @@ UndoもRngState、全NormalArtianCounter、対象OwnedWeapon、対象TargetWeapo
 - Planを壊す変更の承認: Planの `abandoned`（`breaking_change_approved`）と変更の保存
 - Plan破棄: Planの `abandoned`（`user_abandoned`）、セーブ地点削除、作成中状態の解除
 
+Planを壊す変更の承認はRuntimeとして実装済みである（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.6の
+実装上の確定事項）。RngState、NormalArtianCounter、OwnedWeapon、TargetWeapon、BuildListEntryを変更し得る
+通常保存は、`active` Planの有無にかかわらず同じguard transactionを通り、永続状態との差分だけを書き込む。
+「最後のゲーム内セーブ地点へ戻す」を選んだ場合は、セーブ地点の復元、変更の保存、Planの `abandoned` 化、
+セーブ地点後のExecutionHistoryと登録武器の削除、セーブ地点の削除を同じtransactionで行う。新しい永続fieldは
+追加しない。警告・確認ダイアログのUIは未実装である。
+
 ## 14.5 Planner Save Transaction
 
 Planner constrained re-searchを経たPlan保存も原子的に行う。契約本文は

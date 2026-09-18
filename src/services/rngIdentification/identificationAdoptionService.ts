@@ -1,3 +1,9 @@
+import {
+  unchangedMutableState,
+  type PlanBreakingChangeApproval,
+  type PlanBreakingChangeInspection,
+  type PlanGuardedMutation,
+} from '../../domain/execution'
 import type {
   DomainValidationIssue,
   ISODateTimeString,
@@ -8,6 +14,10 @@ import { validateRngState } from '../../domain/models/validation'
 import { productionRngEngine } from '../../domain/rng/production/productionRngRuntime'
 import type { RngEngine } from '../../domain/rng/rngEngine'
 import { rngStateRepository } from '../../db/repositories'
+import {
+  defaultPlanGuardedPersistence,
+  type PlanGuardedPersistence,
+} from '../execution/planBreakingChangeGuard'
 
 export interface IdentificationAdoptionInput {
   readonly baseSeed: string
@@ -17,7 +27,6 @@ export interface IdentificationAdoptionInput {
 
 export interface IdentificationAdoptionRepository {
   ensureInitialRngState(): Promise<RngState>
-  putRngState(state: RngState): Promise<RngState>
 }
 
 export interface IdentificationAdoptionClock {
@@ -26,6 +35,12 @@ export interface IdentificationAdoptionClock {
 
 export interface IdentificationAdoptionDependencies {
   readonly repository: IdentificationAdoptionRepository
+  /**
+   * The breaking-change guard the adopted RngState is saved through: on an
+   * `active` Plan the adoption is a Plan-breaking change (`docs/PLANNER_SPEC.md`
+   * 16.6) and is refused without the user's approval.
+   */
+  readonly persistence: PlanGuardedPersistence
   readonly seedNormalizer: Pick<RngEngine, 'normalizeSeed'>
   readonly clock: IdentificationAdoptionClock
 }
@@ -59,8 +74,8 @@ const INPUT_VALIDATION_TIME = '1970-01-01T00:00:00.000Z'
 const defaultDependencies: IdentificationAdoptionDependencies = {
   repository: {
     ensureInitialRngState: () => rngStateRepository.ensureInitialRngState(),
-    putRngState: (state) => rngStateRepository.putRngState(state),
   },
+  persistence: defaultPlanGuardedPersistence,
   seedNormalizer: productionRngEngine,
   clock: { now: () => new Date().toISOString() },
 }
@@ -138,43 +153,74 @@ export class IdentificationAdoptionService {
     this.dependencies = dependencies
   }
 
-  async adopt(input: IdentificationAdoptionInput): Promise<RngState> {
+  /**
+   * Saves the adopted values. On an `active` Plan this breaks the Plan and is
+   * refused unless `approval` names that Plan and the save point decision; with
+   * it the Plan is abandoned (`breaking_change_approved`) in the same
+   * transaction. A `stale` Plan is never asked about.
+   */
+  async adopt(
+    input: IdentificationAdoptionInput,
+    approval: PlanBreakingChangeApproval | null = null,
+  ): Promise<RngState> {
+    const mutation = await this.prepareAdoption(input)
+    return (await this.dependencies.persistence.apply(mutation, approval)).result
+  }
+
+  /** Whether adopting needs the breaking-change approval (`docs/UI_FLOW.md` 16.3). Writes nothing. */
+  async inspectAdoption(input: IdentificationAdoptionInput): Promise<PlanBreakingChangeInspection> {
+    return this.dependencies.persistence.inspect(await this.prepareAdoption(input))
+  }
+
+  private async prepareAdoption(input: IdentificationAdoptionInput): Promise<PlanGuardedMutation<RngState>> {
     const canonicalBaseSeed = normalizeAdoptionSeed(
       input.baseSeed,
       this.dependencies.seedNormalizer,
     )
     assertValidAdoptionInput(input, canonicalBaseSeed)
 
-    const current = await this.dependencies.repository.ensureInitialRngState()
-    if (!current) {
+    const ensured = await this.dependencies.repository.ensureInitialRngState()
+    if (!ensured) {
       throw new IdentificationAdoptionError(
         'persistent_state_unavailable',
         'The current RngState is unavailable.',
       )
     }
-    assertValidPersistentState(current)
-
-    const next: RngState = {
-      ...current,
-      baseSeed: {
-        value: canonicalBaseSeed,
-        isConfirmed: true,
-        source: 'observation',
-      },
-      skillCounter: {
-        value: input.startingSkillCounter,
-        isConfirmed: true,
-        source: 'observation',
-      },
-      gogmaCounter: {
-        value: input.startingGogmaCounter,
-        isConfirmed: true,
-        source: 'observation',
-      },
-      updatedAt: this.dependencies.clock.now(),
+    const now = this.dependencies.clock.now()
+    // The adopted values are applied over the RngState of the state the save
+    // runs on, so a save point restore before it is never overwritten by a
+    // body read earlier, and every unrelated field is preserved.
+    return (base) => {
+      const current = base.rngState
+      if (!current) {
+        throw new IdentificationAdoptionError(
+          'persistent_state_unavailable',
+          'The current RngState is unavailable.',
+        )
+      }
+      assertValidPersistentState(current)
+      const next: RngState = {
+        ...current,
+        baseSeed: {
+          value: canonicalBaseSeed,
+          isConfirmed: true,
+          source: 'observation',
+        },
+        skillCounter: {
+          value: input.startingSkillCounter,
+          isConfirmed: true,
+          source: 'observation',
+        },
+        gogmaCounter: {
+          value: input.startingGogmaCounter,
+          isConfirmed: true,
+          source: 'observation',
+        },
+        updatedAt: now,
+      }
+      assertValidPersistentState(next)
+      return { result: next, state: { ...unchangedMutableState(base), rngState: next } }
     }
-    assertValidPersistentState(next)
-    return this.dependencies.repository.putRngState(next)
   }
 }
 
