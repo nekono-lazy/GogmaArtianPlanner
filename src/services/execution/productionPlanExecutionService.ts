@@ -11,8 +11,10 @@ import {
   prepareExecutionUndo,
   prepareExpectedStepConfirmation,
   inspectProductionPlanAbandonment,
+  inspectProductionPlanReplanAdoption,
   prepareOperationUncertain,
   prepareProductionPlanAbandonment,
+  prepareProductionPlanReplanAdoption,
   prepareProductionPlanStart,
   type ExecutionActualResultObservation,
   type ExecutionCounterAuthority,
@@ -26,9 +28,13 @@ import {
   type PlanAbandonSavePointDecision,
   type ProductionPlanAbandonmentOptions,
   type ProductionPlanAbandonmentWrite,
+  type ProductionPlanReplanAdoptionOptions,
+  type ProductionPlanReplanAdoptionWrite,
+  type ProductionPlanReplanPreview,
 } from '../../domain/execution'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import type {
+  BuildListEntry,
   BuildListEntryId,
   CalculationContext,
   ExecutionHistory,
@@ -185,6 +191,46 @@ export interface AbandonProductionPlanResult {
   deletedExecutionHistoryIds: ExecutionHistoryId[]
 }
 
+export interface InspectProductionPlanReplanAdoptionRequest {
+  preview: ProductionPlanReplanPreview
+}
+
+/**
+ * 「この再計画を採用」 (`docs/PLANNER_SPEC.md` 16.8). 「キャンセル」 is not a
+ * request: cancelling simply never calls the adoption.
+ */
+export interface AdoptProductionPlanReplanPreviewRequest {
+  /** The transient Preview the user reviewed. */
+  preview: ProductionPlanReplanPreview
+  /**
+   * `null` when no save point choice was offered; otherwise the user's 16.10
+   * choice naming the `recordedAt` of the save point they saw.
+   */
+  savePointDecision: PlanAbandonSavePointDecision
+}
+
+/**
+ * The outcome of a replan adoption request. Returning to the game save point
+ * never adopts the Preview: it restores the save point only and a new Preview
+ * from the restored state is required (16.8).
+ */
+export type AdoptProductionPlanReplanPreviewResult =
+  | {
+      kind: 'adopted'
+      savePointHandling: 'no_choice' | 'keep_current'
+      /** The running Plan, now `abandoned` with `replan_adopted`. */
+      oldPlan: ProductionPlan
+      /** The Preview's Plan, now `active`. */
+      newPlan: ProductionPlan
+      generatedBuildListEntries: BuildListEntry[]
+    }
+  | {
+      kind: 'save_point_restored_repreview_required'
+      restoredPlan: ProductionPlan
+      savePoint: ExecutionSavePoint
+      deletedExecutionHistoryIds: ExecutionHistoryId[]
+    }
+
 /**
  * The Execution runtime of a calculation schema 12 ProductionPlan
  * (`docs/PLANNER_SPEC.md` 16.1 / 16.2 / 16.15, `docs/DATA_MODEL.md` 14.4).
@@ -200,8 +246,8 @@ export interface AbandonProductionPlanResult {
  * the two divergence records `actual_result_different` and
  * `operation_uncertain`, the Undo of the latest ExecutionHistory, recording /
  * restoring the Plan's game save point, finishing as a compromise, and the
- * user's abandonment with its save point choice. Replan adoption and the
- * breaking-change guard are not implemented here yet.
+ * user's abandonment with its save point choice, and the replan adoption with
+ * its save point choice. The breaking-change guard is not implemented here yet.
  */
 export class ProductionPlanExecutionService {
   private readonly dependencies: ProductionPlanExecutionServiceDependencies
@@ -470,6 +516,91 @@ export class ProductionPlanExecutionService {
         deletedExecutionHistoryIds: abandonment.deletedExecutionHistoryIds,
       }
     })
+  }
+
+  /**
+   * Reads what adopting a replan Preview would ask (16.8 / 16.10), refusing a
+   * Preview that can never be adopted or whose running Plan moved on. It
+   * writes nothing, and the adoption re-derives everything itself.
+   */
+  inspectProductionPlanReplanAdoption(
+    request: InspectProductionPlanReplanAdoptionRequest,
+  ): Promise<ProductionPlanReplanAdoptionOptions> {
+    const { database } = this.dependencies
+    return this.runExecutionTransaction(async () => {
+      const plan = await this.requirePlan(request.preview.runningPlanToken.planId)
+      return inspectProductionPlanReplanAdoption(request.preview, plan, {
+        planExecutionHistory: await database.executionHistory.where('planId').equals(plan.id).toArray(),
+        executionSavePoint:
+          (await database.executionSavePoints.get(executionSavePointIdForPlan(plan.id))) ?? null,
+      })
+    }, 'r')
+  }
+
+  /**
+   * 「この再計画を採用」 (16.8): re-verifies the Preview against the current
+   * persisted state and, in one transaction, abandons the running Plan
+   * (`replan_adopted`), starts the Preview's Plan, adds its generated
+   * BuildListEntries, moves or clears the running Plan's in-progress marks and
+   * deletes its game save point. The running Plan's ExecutionHistory stays and
+   * no ExecutionHistory is added. Choosing to return to the save point restores
+   * it and adopts nothing.
+   */
+  adoptProductionPlanReplanPreview(
+    request: AdoptProductionPlanReplanPreviewRequest,
+  ): Promise<AdoptProductionPlanReplanPreviewResult> {
+    const { database } = this.dependencies
+    return this.runExecutionTransaction(async () => {
+      const runningPlan = await this.requirePlan(request.preview.runningPlanToken.planId)
+      const newPlanId = request.preview.result.plan?.id ?? null
+      const adoption = prepareProductionPlanReplanAdoption({
+        preview: request.preview,
+        runningPlan,
+        savePointDecision: request.savePointDecision,
+        state: {
+          ...(await this.readState(runningPlan)),
+          runningPlans: await database.productionPlans.where('status').anyOf(['active', 'stale']).toArray(),
+          newPlanIdPersisted: newPlanId !== null && (await database.productionPlans.get(newPlanId)) !== undefined,
+        },
+        currentCalculationContext: this.dependencies.currentCalculationContext,
+        now: this.dependencies.clock.now(),
+      })
+      await this.writeReplanAdoption(adoption)
+      return adoption.kind === 'save_point_restored'
+        ? {
+            kind: 'save_point_restored_repreview_required',
+            restoredPlan: adoption.restore.plan,
+            savePoint: adoption.restore.savePoint,
+            deletedExecutionHistoryIds: adoption.restore.deletedExecutionHistoryIds,
+          }
+        : {
+            kind: 'adopted',
+            savePointHandling: adoption.savePointHandling,
+            oldPlan: adoption.oldPlan,
+            newPlan: adoption.newPlan,
+            generatedBuildListEntries: adoption.generatedBuildListEntries,
+          }
+    })
+  }
+
+  private async writeReplanAdoption(write: ProductionPlanReplanAdoptionWrite): Promise<void> {
+    if (write.kind === 'save_point_restored') {
+      await this.writeSavePointRestore(write.restore)
+      return
+    }
+    const { database } = this.dependencies
+    // Added, never put: an Entry or Plan that already exists is a different
+    // record and is never overwritten.
+    for (const entry of write.generatedBuildListEntries) await database.buildListEntries.add(entry)
+    await database.productionPlans.put(write.oldPlan)
+    await database.productionPlans.add(write.newPlan)
+    if (write.ownedWeapons.length > 0) await database.ownedWeapons.bulkPut(write.ownedWeapons)
+    if (write.deletesExecutionSavePoint) {
+      await database.executionSavePoints
+        .where('productionPlanId')
+        .equals(write.oldPlan.id)
+        .delete()
+    }
   }
 
   private async writeAbandonment(write: ProductionPlanAbandonmentWrite): Promise<void> {

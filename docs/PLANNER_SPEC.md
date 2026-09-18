@@ -4466,9 +4466,9 @@ Execution Plan契約（16.3 / 16.5 / 16.6 / 16.11のhash、projection、`executi
 `confirmed_expected` のStep確定（blind観測値入力、`confirm_owned_ideal`、Undo Snapshot生成、最終Stepの
 Plan completedを含む）、および想定外結果（`actual_result_different`）・操作内容不明（`operation_uncertain`）の
 記録（16.15）、最新ExecutionHistoryのUndo（16.16）、ゲーム内セーブ地点の記録 / 復元（16.9）、
-妥協品として確定して終了（16.12）は実装済みである。Plan破棄、
-再計画採用、16.10のセーブ地点3択、Planを壊す変更の警告、Execution Navigator UI（RNG再同定への誘導表示を含む）などは
-後続の実装PRが本章をauthorityとして実装する。本章と矛盾する旧記述（Execution上の独立した「確保」操作、
+妥協品として確定して終了（16.12）、Plan破棄と16.10のセーブ地点選択、再計画Previewと採用（16.8）の
+Runtimeは実装済みである。Planを壊す変更の警告、Execution Navigator UI（RNG再同定への誘導表示、
+再計画Preview画面とセーブ地点3択の確認Dialogを含む）などは後続の実装PRが本章をauthorityとして実装する。本章と矛盾する旧記述（Execution上の独立した「確保」操作、
 Target / Build List変更による一律stale、reserve時の既存保護維持など）は本改訂で
 本書・[REQUIREMENTS.md](./REQUIREMENTS.md)・[DATA_MODEL.md](./DATA_MODEL.md)・
 [SEARCH_SPEC.md](./SEARCH_SPEC.md)・[UI_FLOW.md](./UI_FLOW.md)から書き換えた。
@@ -4868,6 +4868,30 @@ generated BuildListEntry       -> 保存
 再試算を求める（Preview時の状態と一致しなくなるため）。
 
 実行中Planが無い場合は従来どおりDraft Planを作成し、作成開始でactiveにする。
+
+実装上の確定事項（再計画採用Runtime PR）。
+
+- Preview開始時に保持する旧Plan tokenは `planId`、`status`、`currentStepId` だけであり、`updatedAt` は
+  採用の一致条件にしない。Preview入力は1つの読み取りtransaction内で通常の `createPlannerInput()` から作り、
+  旧Planの `baseSnapshot`・expected state・conflict resolutionを流用しない。Planner計算は既存の
+  Planner Worker（constrained orchestration、`defaultPlannerOrchestrationBounds`）で行い、Worker protocolは
+  追加しない。Preview（旧Plan token、Planner結果、CalculationContext）はplain dataとしてメモリ上だけに保持し、
+  永続化・Exportしない
+- 採用は、旧Plan tokenの一致、採用可能な結果（Planがあり、`incomplete` でなく、通常Planner保存と共有する
+  save-time検証を満たす）、16.10の選択を先に確認する。現在地点での採用では続けてCalculationContext、
+  新Plan IDの非衝突（既存Planを上書きしない）、generated Entryの非衝突と鮮度、generated Entryを加えた
+  Build Listに対する新Planの `dependentBuildListEntriesHash` / `dependentTargetDefinitionsHash`、
+  `initialExecutionState` を再検証する。全体hash（`targetWeaponsHash` / `buildListEntriesHash`）は採用の
+  authorityにしないため、新Planに依存しないTarget / Entryの追加・変更だけでは採用を拒否しない
+- 新Planの `active` 化は通常のPlan開始authority（`prepareProductionPlanStart()`）を、旧Planを破棄済みとみなした
+  状態に適用して判定する。旧Plan以外の実行中Planがあれば拒否する。新Planとgenerated Entryは追加であり、
+  既存レコードを上書きしない
+- 作成中状態の付け替え先は、新Planのselected EntryのRouteが参照し、かつ現在存在する所持武器である。
+  付け替え時は `startedAt` を維持する。採用だけで作成中でない武器を作成中にせず、Targetの優先起点も
+  変更しない。旧PlanのExecutionHistoryは残し、採用のExecutionHistoryは追加しない
+- 「最後のゲーム内セーブ地点へ戻す」を選んだ場合は16.9の復元（`prepareExecutionSavePointRestore()`）だけを
+  行い、旧Planの破棄、新Plan / generated Entryの保存、作成中状態の付け替え、セーブ地点削除は行わない。
+  復元後は旧Plan tokenが一致しなくなるため、同じPreviewの採用は拒否され、再試算が必要になる
 
 ### 16.9 ゲーム内セーブ地点
 

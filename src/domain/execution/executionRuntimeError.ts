@@ -121,6 +121,28 @@ export type ExecutionRuntimeErrorCode =
    * save point, so no choice was offered and none is applied (16.10).
    */
   | 'save_point_choice_not_required'
+  /**
+   * Only an `active` or `stale` Plan can be replanned from the current state
+   * (`docs/PLANNER_SPEC.md` 16.8): a draft has not started, and a completed or
+   * abandoned Plan has already ended.
+   */
+  | 'replan_preview_not_allowed'
+  /**
+   * The state the replan Preview was calculated from no longer holds: the
+   * running Plan's status or current Step, the RNG / Normal Counter / OwnedWeapon
+   * state, a Target or BuildListEntry the new Plan depends on, a generated
+   * Entry, or the CalculationContext changed (16.8). Nothing was written; a new
+   * Preview from the current state is the recovery.
+   */
+  | 'replan_state_changed'
+  /**
+   * The replan Preview's Planner result cannot become the running Plan: it has
+   * no Plan, a truncated search, a non-draft or Domain-invalid Plan or Entry,
+   * or broken BuildListEntry references (16.8, PLANNER_SPEC 9.2.15).
+   */
+  | 'replan_result_invalid'
+  /** The Preview's new ProductionPlan ID is already persisted, or equals the running Plan's. */
+  | 'replan_plan_id_collision'
 
 export class ExecutionRuntimeError extends Error {
   readonly code: ExecutionRuntimeErrorCode
