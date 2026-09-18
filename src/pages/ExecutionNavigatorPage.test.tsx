@@ -1133,15 +1133,40 @@ describe('ExecutionNavigatorPage operation_uncertain recovery', () => {
     })
     expect(follow).toBeDisabled()
 
-    vi.mocked(deps.loadSnapshot).mockResolvedValue(atStep(base, 4))
-    pending.resolve({} as never)
+    const resumed = atStep(base, 4)
+    vi.mocked(deps.loadSnapshot).mockResolvedValue(resumed)
+    // The notice follows the Plan the recovery transaction returned.
+    pending.resolve({ plan: resumed.plan, history: {} } as never)
     expect(await screen.findByText('現在位置に合わせて作成プランを再開しました。')).toBeInTheDocument()
+    expect(screen.queryByText('現在位置に合わせて生産計画を完了しました。')).not.toBeInTheDocument()
     expect(screen.getByText('Step 5 / 6')).toBeInTheDocument()
+  })
+
+  it('announces a completed Plan when the recovery reached its last Step', async () => {
+    const { fixture, base, deps } = await keepRecovery()
+    const completedPlan: ProductionPlan = {
+      ...base.plan,
+      status: 'completed',
+      currentStepId: null,
+      steps: base.plan.steps.map((step) => ({ ...step, isCompleted: true })),
+    }
+    vi.mocked(deps.recoverOperationCount).mockResolvedValue({ plan: completedPlan, history: {} } as never)
+    const user = userEvent.setup()
+    renderNavigator(deps, fixture.plan.id)
+    await user.click(within(await region()).getByRole('button', { name: '同じ操作を何回行ったか分からない' }))
+    await enterSlots(user, X)
+    vi.mocked(deps.loadSnapshot).mockResolvedValue({ ...base, plan: completedPlan })
+    await user.click(screen.getByRole('button', { name: 'この位置に合わせて続ける' }))
+
+    expect(await screen.findByText('現在位置に合わせて生産計画を完了しました。')).toBeInTheDocument()
+    expect(screen.getAllByText('現在位置に合わせて生産計画を完了しました。')).toHaveLength(1)
+    expect(screen.queryByText(/再開しました/)).not.toBeInTheDocument()
+    expect(screen.getByText('生産計画が完了しました')).toBeInTheDocument()
   })
 
   it('asks for one more Plan operation while every candidate stays inside the window', async () => {
     const { fixture, deps } = await keepRecovery()
-    vi.mocked(deps.recoverOperationCount).mockResolvedValue({} as never)
+    vi.mocked(deps.recoverOperationCount).mockResolvedValue({ plan: { status: 'active' }, history: {} } as never)
     const user = userEvent.setup()
     renderNavigator(deps, fixture.plan.id)
     await user.click(within(await region()).getByRole('button', { name: '同じ操作を何回行ったか分からない' }))
@@ -1290,6 +1315,9 @@ describe('ExecutionNavigatorPage operation_uncertain recovery', () => {
       await user.click(screen.getByRole('button', { name: 'この位置に合わせて続ける' }))
 
       expect(await screen.findByText('生産計画が完了しました', {}, { timeout: 5000 })).toBeInTheDocument()
+      // The real runtime returned the completed Plan: completion wording, once, and never 「再開しました」.
+      expect(screen.getAllByText('現在位置に合わせて生産計画を完了しました。')).toHaveLength(1)
+      expect(screen.queryByText(/再開しました/)).not.toBeInTheDocument()
       expect(deps.recoverOperationCount).toHaveBeenCalledOnce()
       expect(await database.productionPlans.get(fixture.plan.id)).toMatchObject({ status: 'completed', recalculationReasons: [] })
       const history = await database.executionHistory.where('planId').equals(fixture.plan.id).toArray()

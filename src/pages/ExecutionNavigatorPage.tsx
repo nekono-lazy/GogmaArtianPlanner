@@ -286,22 +286,22 @@ function ExecutionNavigator({
    * Runs one Execution transaction. The Navigator never moves to the next Step
    * on its own: it re-reads the persisted state after the runtime accepted the
    * request, because the transaction may have registered or updated weapons and
-   * Targets too.
+   * Targets too. The success notices may read the runtime's own result.
    */
-  const runTransaction = async (
-    operation: () => Promise<unknown>,
-    successNotices: () => string[],
+  const runTransaction = async <T,>(
+    operation: () => Promise<T>,
+    successNotices: (result: T) => string[],
   ) => {
     if (submittingRef.current) return
     submittingRef.current = true
     setAction({ status: 'submitting' })
     setNotices([])
     try {
-      await operation()
+      const result = await operation()
       if (!aliveRef.current) return
       await reload()
       if (!aliveRef.current) return
-      setNotices(successNotices())
+      setNotices(successNotices(result))
       setAction({ status: 'idle' })
     } catch (caught: unknown) {
       if (!aliveRef.current) return
@@ -401,7 +401,13 @@ function ExecutionNavigator({
           observations,
           recoveredPosition,
         }),
-      () => ['現在位置に合わせて作成プランを再開しました。'],
+      // The Plan the recovery transaction persisted decides the wording: a
+      // recovery that reached the last Step completed the Plan.
+      ({ plan }) => [
+        plan.status === 'completed'
+          ? '現在位置に合わせて生産計画を完了しました。'
+          : '現在位置に合わせて作成プランを再開しました。',
+      ],
     )
   }
 
