@@ -1967,6 +1967,31 @@ function validateExecutionActionRecord(
         addIssue(issues, 'undoSnapshot', 'invalid_state', 'operation_uncertain changes no OwnedWeapon or TargetWeapon.')
       }
       break
+    case 'operation_count_recovered':
+      if (!history.wasExpected) {
+        addIssue(issues, 'wasExpected', 'invalid_state', 'operation_count_recovered follows the Plan as expected.')
+      }
+      if (history.recalculationReason !== null) {
+        addIssue(issues, 'recalculationReason', 'invalid_state', 'operation_count_recovered has no recalculation reason.')
+      }
+      if (history.actualResult === null) {
+        addIssue(issues, 'actualResult', 'invalid_state', 'operation_count_recovered records the last observed game result.')
+      } else {
+        if (history.actualResult.securedOwnedWeaponId !== null) {
+          addIssue(issues, 'actualResult.securedOwnedWeaponId', 'invalid_state', 'A current actual result secures no weapon.')
+        }
+        // One observation: the five slots with their scope, or the Skill pair.
+        if (
+          history.actualResult.restorationBonuses !== null &&
+          (history.actualResult.seriesSkillId !== null || history.actualResult.groupSkillId !== null)
+        ) {
+          addIssue(issues, 'actualResult', 'invalid_state', 'operation_count_recovered observes either five slots or Skills, not both.')
+        }
+      }
+      if (snapshot.removedOwnedWeaponsBefore.length > 0) {
+        addIssue(issues, 'undoSnapshot.removedOwnedWeaponsBefore', 'invalid_state', 'operation_count_recovered removes no OwnedWeapon.')
+      }
+      break
     default:
       break
   }

@@ -13,6 +13,8 @@ import {
   inspectProductionPlanAbandonment,
   inspectProductionPlanReplanAdoption,
   inspectProductionPlanStartTargetLinks,
+  deriveOperationCountRecovery,
+  prepareOperationCountRecovery,
   prepareOperationUncertain,
   prepareProductionPlanAbandonment,
   prepareProductionPlanReplanAdoption,
@@ -26,6 +28,8 @@ import {
   type ExecutionStepWrite,
   type ExecutionUndoWrite,
   type ObservedProductionPlanState,
+  type OperationCountRecoveryAvailability,
+  type OperationCountRecoveryObservation,
   type PlanAbandonSavePointDecision,
   type ProductionPlanAbandonmentOptions,
   type ProductionPlanAbandonmentWrite,
@@ -115,6 +119,23 @@ export interface RecordActualResultDifferentRequest {
 export interface RecordOperationUncertainRequest {
   planId: ProductionPlanId
   planStepId: PlanStepId
+}
+
+/**
+ * 「この位置に合わせて続ける」 (`docs/PLANNER_SPEC.md` 16.15). Every field is
+ * what the user saw; the transaction derives the Recovery Window and the
+ * position again from the persisted state and refuses on any difference.
+ */
+export interface RecoverOperationCountRequest {
+  planId: ProductionPlanId
+  /** The Plan's current Step, which the `operation_uncertain` record named. */
+  planStepId: PlanStepId
+  /** The `operation_uncertain` record the user saw as the latest. */
+  uncertainExecutionHistoryId: ExecutionHistoryId
+  /** The current game result, then the results of the extra Plan operations, in order. */
+  observations: OperationCountRecoveryObservation[]
+  /** The Window position the user confirmed. */
+  recoveredPosition: number
 }
 
 /**
@@ -259,7 +280,8 @@ export type AdoptProductionPlanReplanPreviewResult =
  * Implemented: starting a draft Plan, the ordinary `confirmed_expected` Step
  * confirmation (including a blind observation and `confirm_owned_ideal`), and
  * the two divergence records `actual_result_different` and
- * `operation_uncertain`, the Undo of the latest ExecutionHistory, recording /
+ * `operation_uncertain`, the Current Position Recovery after
+ * `operation_uncertain` (`operation_count_recovered`), the Undo of the latest ExecutionHistory, recording /
  * restoring the Plan's game save point, finishing as a compromise, and the
  * user's abandonment with its save point choice, and the replan adoption with
  * its save point choice. An approved breaking change ends the Plan through
@@ -393,6 +415,48 @@ export class ProductionPlanExecutionService {
       })
       await this.writeStep(record)
       return { plan: record.plan, history: record.history }
+    })
+  }
+
+  /**
+   * Whether Current Position Recovery applies to the Plan and its Recovery
+   * Window (16.15), read in one read-only transaction. Never write authority:
+   * the recovery derives the Window again.
+   */
+  inspectOperationCountRecovery(planId: ProductionPlanId): Promise<OperationCountRecoveryAvailability> {
+    const { database } = this.dependencies
+    return this.runExecutionTransaction(async () => {
+      const plan = await this.requirePlan(planId)
+      return deriveOperationCountRecovery(plan, {
+        ownedWeapons: await database.ownedWeapons.toArray(),
+        planExecutionHistory: await database.executionHistory.where('planId').equals(plan.id).toArray(),
+      })
+    }, 'r')
+  }
+
+  /**
+   * Follows a unique Recovery Window position after `operation_uncertain`
+   * (16.15): replays the Plan's own Steps up to it, returns the Plan to
+   * `active` (or `completed`), and records `operation_count_recovered`.
+   */
+  recoverOperationCount(request: RecoverOperationCountRequest): Promise<ExecutionStepRecordResult> {
+    return this.runExecutionTransaction(async () => {
+      const plan = await this.requirePlan(request.planId)
+      const recovery = prepareOperationCountRecovery({
+        plan,
+        planStepId: request.planStepId,
+        uncertainExecutionHistoryId: request.uncertainExecutionHistoryId,
+        observations: request.observations,
+        recoveredPosition: request.recoveredPosition,
+        state: await this.readState(plan),
+        currentCalculationContext: this.dependencies.currentCalculationContext,
+        counterAuthority: this.dependencies.counterAuthority,
+        validateResultingWeapon: this.dependencies.validateResultingWeapon,
+        executionHistoryId: this.dependencies.idFactory.executionHistoryId(),
+        now: this.dependencies.clock.now(),
+      })
+      await this.writeStep(recovery)
+      return { plan: recovery.plan, history: recovery.history }
     })
   }
 

@@ -1,5 +1,6 @@
 import type { ExecutionRuntimeErrorCode } from '../../domain/execution'
 import type {
+  ExecutionHistory,
   ExpectedResult,
   OwnedWeapon,
   OwnedWeaponId,
@@ -79,6 +80,8 @@ export interface ExecutionStepPresentation {
   weaponLabel: string | null
   /** The weapon type whose bonus names the expected result uses. */
   weaponTypeId: string
+  /** The element the actual result input offers bonuses for (tracked weapon, else the Target). */
+  elementId: string
   /** The Step's primary Target name, or its ID when it cannot be resolved. */
   targetLabel: string | null
   expected: ExecutionExpectedView
@@ -134,6 +137,8 @@ export function createExecutionStepPresentation(
   const target = step.targetWeaponId === null
     ? null
     : targetWeapons.find(({ id }) => id === step.targetWeaponId) ?? null
+  // A weapon the Step registers does not exist yet: the Target's type / element apply.
+  const existingTracked = effects?.registersTrackedWeapon === true ? null : tracked
   const weaponLabel =
     trackedId === null || effects?.registersTrackedWeapon === true
       ? null
@@ -151,6 +156,7 @@ export function createExecutionStepPresentation(
     normalCreationRole: effects?.normalCreationRole ?? null,
     weaponLabel,
     weaponTypeId: tracked?.weaponTypeId ?? target?.weaponTypeId ?? '',
+    elementId: existingTracked?.elementId ?? target?.elementId ?? '',
     targetLabel:
       step.targetWeaponId === null ? null : targetWeaponLabel(step.targetWeaponId, targetWeapons),
     expected,
@@ -226,6 +232,37 @@ export function executionErrorMessage(code: ExecutionRuntimeErrorCode): string {
       return 'このStepでは5枠の入力は不要です。'
     case 'observation_invalid':
       return '入力した5枠は、この武器種・属性の通常アーティアとして保存できません。入力を確認してください。'
+    case 'actual_result_not_applicable':
+      return 'このStepには比較できる想定結果がないため、「結果が違う」として記録できません。'
+    case 'actual_result_invalid':
+      return '入力した実際の結果は、この武器の結果として保存できません。入力を確認してください。'
+    case 'actual_result_matches_expected':
+      return '入力した結果は想定結果と一致しています。「結果一致・次へ」を使用してください。'
+    case 'operation_count_recovery_not_applicable':
+      return 'この作成プランは、現在位置の確認で再開できる状態ではありません。'
+    case 'operation_count_recovery_changed':
+      return '表示後に作成プランの状態が変わったため、現在位置の確認を確定しませんでした。最新の状態を読み込み直しました。'
+    case 'operation_count_recovery_observation_invalid':
+      return '入力したゲームの結果が、この操作の結果として正しくありません。入力を確認してください。'
+    case 'operation_count_recovery_not_unique':
+      return '入力した結果から現在位置を1つに特定できないため、確定しませんでした。'
+    case 'save_point_changed':
+      return '表示後にゲーム内セーブ地点が変わったため、復元しませんでした。最新の状態を読み込み直しました。'
+    case 'save_point_not_found':
+      return 'ゲーム内セーブ地点が見つかりません。'
+    case 'save_point_restore_not_allowed':
+      return 'この作成プランは、ゲーム内セーブ地点へ戻せる状態ではありません。'
+    case 'save_point_required_entity_missing':
+      return 'セーブ地点の復元に必要な所持武器・目標武器・作成リスト項目が削除されているため、復元できません。'
+    case 'save_point_snapshot_invalid':
+    case 'save_point_restore_invalid':
+      return 'ゲーム内セーブ地点の記録が不正なため、復元できません。'
+    case 'plan_abandon_state_changed':
+      return '表示後に作成プランの状態が変わったため、破棄しませんでした。最新の状態を読み込み直しました。'
+    case 'plan_abandon_not_allowed':
+      return 'この作成プランは破棄できる状態ではありません。'
+    case 'save_point_choice_required':
+      return 'ゲーム内セーブ地点の扱いを選ぶ必要があります。最新の状態を読み込み直しました。'
     case 'compromise_finish_not_applicable':
       return 'この武器は作成リストで選んだ途中採用状態として終了できません。'
     case 'compromise_checkpoint_not_current':
@@ -248,4 +285,119 @@ export function isRecalculationRequiredError(code: ExecutionRuntimeErrorCode): b
     code === 'calculation_context_changed' ||
     code === 'plan_not_executable'
   )
+}
+
+/**
+ * The actual result input 「結果が違う」 offers for a Step
+ * (`docs/UI_FLOW.md` 12.4, `docs/PLANNER_SPEC.md` 16.15), or `null` when the
+ * Step has no predicted result that can differ.
+ *
+ * Presentation only: it mirrors the operation's result contract
+ * (`docs/DATA_MODEL.md` 11.4) so the form asks for the right fields with a
+ * fixed scope. The runtime still validates the kind, scope and content and
+ * stays the authority that accepts or refuses the record.
+ */
+export type ActualResultInputKind =
+  | { kind: 'restoration_bonuses'; scope: 'normal_artian' | 'gogma_artian' }
+  | { kind: 'skills' }
+
+export function actualResultInputKind(step: PlanStep): ActualResultInputKind | null {
+  const effects = step.executionEffects
+  if (effects === undefined) return null
+  switch (step.operationType) {
+    case 'create_normal_artian':
+      // A blind production-target Normal predicts no five slots: its
+      // observation is the result itself, never a differing one.
+      return effects.observationBinding !== null ? null : { kind: 'restoration_bonuses', scope: 'normal_artian' }
+    case 'reset_bonuses':
+    case 'keep_bonuses':
+      return { kind: 'restoration_bonuses', scope: 'gogma_artian' }
+    case 'convert_normal_to_gogma':
+    case 'reset_skills':
+      return { kind: 'skills' }
+    case 'confirm_owned_ideal':
+    case 'reserve_weapon':
+    case 'confirm_result':
+      return null
+  }
+}
+
+/**
+ * Whether 「何を何回操作したか分からない」 applies: every executable game
+ * operation, a blind production-target Normal included. An owned Ideal
+ * confirmation involves no game operation and a legacy Step is never executed.
+ */
+export function offersOperationUncertain(step: PlanStep): boolean {
+  if (step.executionEffects === undefined) return false
+  switch (step.operationType) {
+    case 'create_normal_artian':
+    case 'convert_normal_to_gogma':
+    case 'reset_bonuses':
+    case 'keep_bonuses':
+    case 'reset_skills':
+      return true
+    case 'confirm_owned_ideal':
+    case 'reserve_weapon':
+    case 'confirm_result':
+      return false
+  }
+}
+
+/** Where the RNG re-identification of a diverged operation happens (UI_FLOW 12.4 / 12.5). */
+export type ReidentificationDestination = 'normal_counters' | 'rng'
+
+/**
+ * The divergence a stale Plan stopped on, from the Plan's latest
+ * ExecutionHistory (ordered by `compareExecutionHistoryOrder()` in the
+ * repository). `null` whenever the latest record is not an
+ * `actual_result_different` / `operation_uncertain` record of this Plan whose
+ * reason the Plan still carries: a reason in `recalculationReasons` alone never
+ * names the Step, so an older divergence record is never taken for the cause.
+ *
+ * Only `actual_result_different` names an RNG re-identification destination.
+ * `operation_uncertain` is recovered inside the Execution Navigator
+ * (`docs/PLANNER_SPEC.md` 16.15) and never sends the user straight to the
+ * ordinary Identification.
+ */
+export type ExecutionDivergenceView =
+  | {
+      action: 'actual_result_different'
+      planStepId: PlanStep['id']
+      operationLabel: string
+      destination: ReidentificationDestination
+    }
+  | {
+      action: 'operation_uncertain'
+      planStepId: PlanStep['id']
+      operationLabel: string
+    }
+
+export function executionDivergenceView(
+  plan: ProductionPlan,
+  latestHistory: ExecutionHistory | null,
+): ExecutionDivergenceView | null {
+  if (plan.status !== 'stale' || latestHistory === null || latestHistory.planId !== plan.id) return null
+  const { action } = latestHistory
+  if (action !== 'actual_result_different' && action !== 'operation_uncertain') return null
+  const reason = action === 'actual_result_different' ? 'unexpected_result' : 'execution_operation_uncertain'
+  if (latestHistory.recalculationReason !== reason || !plan.recalculationReasons.includes(reason)) return null
+  const step = plan.steps.find(({ id }) => id === latestHistory.planStepId)
+  if (step === undefined) return null
+  const operationLabel = planStepOperationLabels[step.operationType]
+  return action === 'actual_result_different'
+    ? {
+        action,
+        planStepId: step.id,
+        operationLabel,
+        destination: step.operationType === 'create_normal_artian' ? 'normal_counters' : 'rng',
+      }
+    : { action, planStepId: step.id, operationLabel }
+}
+
+/** 「Step N（操作名）」 in the Plan's display order; the Step ID when it is unknown. */
+export function planStepPositionLabel(plan: ProductionPlan, stepId: PlanStep['id']): string {
+  const steps = orderPlanSteps(plan)
+  const index = steps.findIndex(({ id }) => id === stepId)
+  if (index < 0) return `Step（${stepId}）`
+  return `Step ${index + 1}（${planStepOperationLabels[steps[index].operationType]}）`
 }

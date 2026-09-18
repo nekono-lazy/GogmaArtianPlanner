@@ -103,8 +103,8 @@ export type PlanStepOperationType =
  * What the user confirmed happened at one Step (`docs/PLANNER_SPEC.md` 16.4).
  *
  * Current Execution records only `confirmed_expected`,
- * `actual_result_different`, `operation_uncertain` and
- * `finished_as_compromise`. `secured_weapon` and `skipped_candidate` belong to
+ * `actual_result_different`, `operation_uncertain`,
+ * `operation_count_recovered` and `finished_as_compromise`. `secured_weapon` and `skipped_candidate` belong to
  * legacy Plans with an independent secure Step; they stay in the type so a
  * historical record can be displayed, and current Execution never writes them.
  */
@@ -112,6 +112,12 @@ export type ExecutionAction =
   | 'confirmed_expected'
   | 'actual_result_different'
   | 'operation_uncertain'
+  /**
+   * After `operation_uncertain`, the current game result matched exactly one
+   * position of the same-operation Recovery Window, and the app state was
+   * replayed along the Plan to that position (`docs/PLANNER_SPEC.md` 16.15).
+   */
+  | 'operation_count_recovered'
   | 'finished_as_compromise'
   | 'secured_weapon'
   | 'skipped_candidate'
@@ -119,6 +125,7 @@ export const currentExecutionActions = [
   'confirmed_expected',
   'actual_result_different',
   'operation_uncertain',
+  'operation_count_recovered',
   'finished_as_compromise',
 ] as const satisfies readonly ExecutionAction[]
 export const legacyExecutionActions = [

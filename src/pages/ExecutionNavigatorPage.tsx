@@ -2,38 +2,53 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Alert,
   AlertTitle,
+  Box,
   Button,
+  Divider,
   LinearProgress,
   Stack,
   Typography,
 } from '@mui/material'
 import { Link as RouterLink, useParams } from 'react-router-dom'
 import { PageShell } from '../components/PageShell'
+import { ActualResultDifferentForm } from '../components/execution/ActualResultDifferentForm'
+import { emptyActualResultDraft, type ActualResultDraft } from '../components/execution/actualResultDraft'
 import { BlindObservationForm } from '../components/execution/BlindObservationForm'
 import { CompromiseCheckpointPanel } from '../components/execution/CompromiseCheckpointPanel'
+import { ExecutionDivergenceRecovery } from '../components/execution/ExecutionDivergenceRecovery'
 import { ExecutionProgress } from '../components/execution/ExecutionProgress'
 import { ExecutionStepCard } from '../components/execution/ExecutionStepCard'
 import {
+  actualResultInputKind,
   createExecutionProgress,
   createExecutionStepPresentation,
+  executionDivergenceView,
   executionErrorMessage,
   isRecalculationRequiredError,
+  offersOperationUncertain,
   ownedWeaponLabel,
   targetWeaponLabel,
   weaponSwitchTarget,
+  type ExecutionDivergenceView,
+  type ExecutionStepPresentation,
 } from '../components/execution/executionStepPresentation'
+import { OperationUncertainDialog } from '../components/execution/OperationUncertainDialog'
+import { OperationUncertainRecovery } from '../components/execution/OperationUncertainRecovery'
 import { WeaponSwitchPrompt } from '../components/execution/WeaponSwitchPrompt'
 import { RepositoryError } from '../db/repositoryError'
 import {
   ExecutionRuntimeError,
   listCurrentCompromiseCheckpoints,
   type CurrentCompromiseCheckpoint,
+  type ExecutionActualResultObservation,
   type ExecutionNormalRestorationBonusObservation,
+  type OperationCountRecoveryObservation,
   type ExecutionRuntimeErrorCode,
 } from '../domain/execution'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import type {
   BuildListEntryId,
+  ExecutionHistory,
   PlanStep,
   PlanStepId,
   ProductionPlan,
@@ -95,7 +110,16 @@ function NavigationLinks({ links }: { links: { label: string; to: string }[] }) 
 }
 
 /** A Plan that no longer runs: what happened and where to go next. */
-function EndedPlanView({ plan }: { plan: ProductionPlan }) {
+function EndedPlanView({
+  plan,
+  divergence,
+  latestExecutionHistory,
+}: {
+  plan: ProductionPlan
+  /** The `actual_result_different` record that stopped a stale Plan, from its latest ExecutionHistory. */
+  divergence: Extract<ExecutionDivergenceView, { action: 'actual_result_different' }> | null
+  latestExecutionHistory: ExecutionHistory | null
+}) {
   const planLink = { label: '作成プランを見る', to: `/plans/${plan.id}` }
   if (plan.status === 'completed') {
     return (
@@ -133,6 +157,32 @@ function EndedPlanView({ plan }: { plan: ProductionPlan }) {
       </Alert>
     )
   }
+  if (
+    plan.status === 'abandoned' &&
+    plan.abandonmentReason === 'user_abandoned' &&
+    latestExecutionHistory?.action === 'operation_uncertain'
+  ) {
+    // Abandoned from the operation_uncertain recovery (16.15): the Plan has
+    // ended, so the ordinary Identification is the way back now.
+    return (
+      <Alert severity="info">
+        <AlertTitle>作成プランを破棄しました</AlertTitle>
+        <Stack spacing={1.5}>
+          <Typography variant="body2">
+            現在のゲーム状態に合わせて、RNG状態・通常アーティアCounter・所持武器を確認・再登録してから再計画してください。
+          </Typography>
+          <NavigationLinks
+            links={[
+              { label: 'RNG状態設定へ', to: '/rng' },
+              { label: '通常アーティアCounterへ', to: '/normal-counters' },
+              { label: '所持武器を確認する', to: '/owned-weapons' },
+              { label: 'ビルドリストへ', to: '/build-list' },
+            ]}
+          />
+        </Stack>
+      </Alert>
+    )
+  }
   if (plan.status === 'abandoned') {
     return (
       <Alert severity="info">
@@ -148,6 +198,9 @@ function EndedPlanView({ plan }: { plan: ProductionPlan }) {
         </Stack>
       </Alert>
     )
+  }
+  if (plan.status === 'stale' && divergence !== null) {
+    return <ExecutionDivergenceRecovery divergence={divergence} planId={plan.id} />
   }
   if (plan.status === 'stale') {
     return (
@@ -233,29 +286,37 @@ function ExecutionNavigator({
    * Runs one Execution transaction. The Navigator never moves to the next Step
    * on its own: it re-reads the persisted state after the runtime accepted the
    * request, because the transaction may have registered or updated weapons and
-   * Targets too.
+   * Targets too. The success notices may read the runtime's own result.
    */
-  const runTransaction = async (
-    operation: () => Promise<unknown>,
-    successNotices: () => string[],
+  const runTransaction = async <T,>(
+    operation: () => Promise<T>,
+    successNotices: (result: T) => string[],
   ) => {
     if (submittingRef.current) return
     submittingRef.current = true
     setAction({ status: 'submitting' })
     setNotices([])
     try {
-      await operation()
+      const result = await operation()
       if (!aliveRef.current) return
       await reload()
       if (!aliveRef.current) return
-      setNotices(successNotices())
+      setNotices(successNotices(result))
       setAction({ status: 'idle' })
     } catch (caught: unknown) {
       if (!aliveRef.current) return
       const failure = failureFrom(caught)
       setAction(failure)
       // The Plan moved on or ended elsewhere: show what is persisted now.
-      if (failure.code === 'step_not_current' || failure.code === 'plan_not_active') {
+      if (
+        failure.code === 'step_not_current' ||
+        failure.code === 'plan_not_active' ||
+        failure.code === 'operation_count_recovery_changed' ||
+        failure.code === 'operation_count_recovery_not_applicable' ||
+        failure.code === 'save_point_changed' ||
+        failure.code === 'save_point_choice_required' ||
+        failure.code === 'plan_abandon_state_changed'
+      ) {
         await reload()
       }
     } finally {
@@ -298,6 +359,79 @@ function ExecutionNavigator({
         }),
       () => [],
     )
+  }
+
+  const recordActualResultDifferent = (
+    snapshot: ExecutionNavigatorSnapshot,
+    step: PlanStep,
+    actualResult: ExecutionActualResultObservation,
+  ) => {
+    void runTransaction(
+      () =>
+        dependencies.recordActualResultDifferent({
+          planId: snapshot.plan.id,
+          planStepId: step.id,
+          actualResult,
+        }),
+      () => [],
+    )
+  }
+
+  const recordOperationUncertain = (snapshot: ExecutionNavigatorSnapshot, step: PlanStep) => {
+    void runTransaction(
+      () => dependencies.recordOperationUncertain({ planId: snapshot.plan.id, planStepId: step.id }),
+      () => [],
+    )
+  }
+
+  const recoverOperationCount = (
+    snapshot: ExecutionNavigatorSnapshot,
+    observations: OperationCountRecoveryObservation[],
+    recoveredPosition: number,
+  ) => {
+    const history = snapshot.latestExecutionHistory
+    const planStepId = snapshot.plan.currentStepId
+    if (history === null || planStepId === null) return
+    void runTransaction(
+      () =>
+        dependencies.recoverOperationCount({
+          planId: snapshot.plan.id,
+          planStepId,
+          uncertainExecutionHistoryId: history.id,
+          observations,
+          recoveredPosition,
+        }),
+      // The Plan the recovery transaction persisted decides the wording: a
+      // recovery that reached the last Step completed the Plan.
+      ({ plan }) => [
+        plan.status === 'completed'
+          ? '現在位置に合わせて生産計画を完了しました。'
+          : '現在位置に合わせて作成プランを再開しました。',
+      ],
+    )
+  }
+
+  const restoreSavePoint = (snapshot: ExecutionNavigatorSnapshot, recordedAt: string) => {
+    void runTransaction(
+      () => dependencies.restoreExecutionSavePoint({ planId: snapshot.plan.id, recordedAt }),
+      () => ['最後のゲーム内セーブ地点の状態へ戻しました。ゲーム内の状態と一致していることを確認してから続けてください。'],
+    )
+  }
+
+  const abandonPlan = (snapshot: ExecutionNavigatorSnapshot) => {
+    void runTransaction(async () => {
+      // The existing user abandonment (16.2 / 16.10), with the Plan tokens it re-checks.
+      const options = await dependencies.inspectProductionPlanAbandonment({ planId: snapshot.plan.id })
+      return dependencies.abandonProductionPlan({
+        planId: snapshot.plan.id,
+        observedPlan: {
+          status: options.planStatus,
+          currentStepId: options.planCurrentStepId,
+          updatedAt: options.planUpdatedAt,
+        },
+        savePointDecision: null,
+      })
+    }, () => [])
   }
 
   const planLink = `/plans/${planId}`
@@ -362,6 +496,15 @@ function ExecutionNavigator({
             onDismissCheckpoint={(id) => setDismissedCheckpointEntryIds((current) => [...current, id])}
             onConfirm={(step, observation) => confirmStep(load.snapshot, step, observation)}
             onFinish={(checkpoint) => finishAsCompromise(load.snapshot, checkpoint)}
+            onRecordActualResult={(step, actualResult) =>
+              recordActualResultDifferent(load.snapshot, step, actualResult)
+            }
+            onRecordOperationUncertain={(step) => recordOperationUncertain(load.snapshot, step)}
+            onRecoverOperationCount={(observations, position) =>
+              recoverOperationCount(load.snapshot, observations, position)
+            }
+            onRestoreSavePoint={(recordedAt) => restoreSavePoint(load.snapshot, recordedAt)}
+            onAbandon={() => abandonPlan(load.snapshot)}
           />
         )}
       </Stack>
@@ -379,6 +522,11 @@ function LoadedNavigator({
   onDismissCheckpoint,
   onConfirm,
   onFinish,
+  onRecordActualResult,
+  onRecordOperationUncertain,
+  onRecoverOperationCount,
+  onRestoreSavePoint,
+  onAbandon,
 }: {
   snapshot: ExecutionNavigatorSnapshot
   dependencies: ExecutionNavigatorPageDependencies
@@ -389,15 +537,54 @@ function LoadedNavigator({
   onDismissCheckpoint(buildListEntryId: BuildListEntryId): void
   onConfirm(step: PlanStep, observation?: ExecutionNormalRestorationBonusObservation): void
   onFinish(checkpoint: CurrentCompromiseCheckpoint): void
+  onRecordActualResult(step: PlanStep, actualResult: ExecutionActualResultObservation): void
+  onRecordOperationUncertain(step: PlanStep): void
+  onRecoverOperationCount(observations: OperationCountRecoveryObservation[], position: number): void
+  onRestoreSavePoint(recordedAt: string): void
+  onAbandon(): void
 }) {
-  const { plan, ownedWeapons, targetWeapons, buildListEntries } = snapshot
+  const { plan, ownedWeapons, targetWeapons, buildListEntries, latestExecutionHistory } = snapshot
   const progress = createExecutionProgress(plan)
 
   if (plan.status !== 'active') {
+    const divergence = executionDivergenceView(plan, latestExecutionHistory)
+    const uncertainStep = divergence?.action === 'operation_uncertain'
+      ? plan.steps.find(({ id }) => id === divergence.planStepId) ?? null
+      : null
+    if (uncertainStep !== null) {
+      const presentation = createExecutionStepPresentation(uncertainStep, ownedWeapons, targetWeapons)
+      return (
+        <>
+          <ExecutionProgress progress={progress} />
+          {submitting && (
+            <Stack spacing={1} role="status" aria-live="polite">
+              <LinearProgress aria-label="操作を保存中" />
+              <Typography variant="body2">操作を保存しています。</Typography>
+            </Stack>
+          )}
+          <OperationUncertainRecovery
+            plan={plan}
+            availability={snapshot.operationCountRecovery}
+            savePoint={snapshot.executionSavePoint}
+            master={dependencies.master}
+            weaponTypeId={presentation.weaponTypeId}
+            elementId={presentation.elementId}
+            submitting={submitting}
+            onRecover={onRecoverOperationCount}
+            onRestoreSavePoint={onRestoreSavePoint}
+            onAbandon={onAbandon}
+          />
+        </>
+      )
+    }
     return (
       <>
         {plan.status !== 'draft' && <ExecutionProgress progress={progress} />}
-        <EndedPlanView plan={plan} />
+        <EndedPlanView
+          plan={plan}
+          divergence={divergence?.action === 'actual_result_different' ? divergence : null}
+          latestExecutionHistory={latestExecutionHistory}
+        />
       </>
     )
   }
@@ -469,50 +656,161 @@ function LoadedNavigator({
         />
       )}
       <ExecutionStepCard presentation={presentation} master={dependencies.master}>
-        {showsActions && presentation.actionKind === 'confirm_expected' && (
-          <Button
-            variant="contained"
-            size="large"
-            disabled={submitting}
-            onClick={() => onConfirm(step)}
-            sx={primarySx}
-          >
-            結果一致・次へ
-          </Button>
-        )}
-        {showsActions && presentation.actionKind === 'confirm_owned_ideal' && (
-          <Button
-            variant="contained"
-            size="large"
-            disabled={submitting}
-            onClick={() => onConfirm(step)}
-            sx={primarySx}
-          >
-            所持武器で完成を確認
-          </Button>
-        )}
-        {showsActions && presentation.actionKind === 'observe_normal_bonuses' && (
-          target === null ? (
-            <Alert severity="error">
-              このStepの目標武器が見つからないため、5枠を入力できません。
-            </Alert>
-          ) : (
-            <BlindObservationForm
-              key={step.id}
-              master={dependencies.master}
-              weaponTypeId={target.weaponTypeId}
-              elementId={target.elementId}
-              disabled={submitting}
-              onSubmit={(observation) => onConfirm(step, observation)}
-            />
-          )
-        )}
-        {presentation.actionKind === 'not_executable' && (
+        {presentation.actionKind === 'not_executable' ? (
           <Alert severity="warning">
             このStepは現在の実行形式ではないため、実行ナビでは確定できません。
           </Alert>
+        ) : (
+          showsActions && (
+            <StepActions
+              key={step.id}
+              presentation={presentation}
+              dependencies={dependencies}
+              targetFound={target !== null}
+              submitting={submitting}
+              onConfirm={(observation) => onConfirm(step, observation)}
+              onRecordActualResult={(actualResult) => onRecordActualResult(step, actualResult)}
+              onRecordOperationUncertain={() => onRecordOperationUncertain(step)}
+            />
+          )
         )}
       </ExecutionStepCard>
+    </>
+  )
+}
+
+/**
+ * The current Step's actions (`docs/UI_FLOW.md` 12): the ordinary
+ * confirmation first, and the divergence records 「結果が違う」 / 「何を何回
+ * 操作したか分からない」 in a separate section below it, so they are not
+ * tapped by mistake. Keyed by the Step, so a draft never outlives its Step; a
+ * refused record keeps the draft.
+ */
+function StepActions({
+  presentation,
+  dependencies,
+  targetFound,
+  submitting,
+  onConfirm,
+  onRecordActualResult,
+  onRecordOperationUncertain,
+}: {
+  presentation: ExecutionStepPresentation
+  dependencies: ExecutionNavigatorPageDependencies
+  targetFound: boolean
+  submitting: boolean
+  onConfirm(observation?: ExecutionNormalRestorationBonusObservation): void
+  onRecordActualResult(actualResult: ExecutionActualResultObservation): void
+  onRecordOperationUncertain(): void
+}) {
+  const [enteringActualResult, setEnteringActualResult] = useState(false)
+  const [draft, setDraft] = useState<ActualResultDraft>(emptyActualResultDraft)
+  const [confirmingUncertain, setConfirmingUncertain] = useState(false)
+  const { step, actionKind } = presentation
+  const actualKind = actualResultInputKind(step)
+  const uncertain = offersOperationUncertain(step)
+
+  if (enteringActualResult && actualKind !== null) {
+    return (
+      <ActualResultDifferentForm
+        master={dependencies.master}
+        kind={actualKind}
+        weaponTypeId={presentation.weaponTypeId}
+        elementId={presentation.elementId}
+        draft={draft}
+        disabled={submitting}
+        onChange={setDraft}
+        onSubmit={onRecordActualResult}
+        onCancel={() => setEnteringActualResult(false)}
+      />
+    )
+  }
+
+  return (
+    <>
+      {actionKind === 'confirm_expected' && (
+        <Button
+          variant="contained"
+          size="large"
+          disabled={submitting}
+          onClick={() => onConfirm()}
+          sx={primarySx}
+        >
+          結果一致・次へ
+        </Button>
+      )}
+      {actionKind === 'confirm_owned_ideal' && (
+        <Button
+          variant="contained"
+          size="large"
+          disabled={submitting}
+          onClick={() => onConfirm()}
+          sx={primarySx}
+        >
+          所持武器で完成を確認
+        </Button>
+      )}
+      {actionKind === 'observe_normal_bonuses' && (
+        targetFound ? (
+          <BlindObservationForm
+            master={dependencies.master}
+            weaponTypeId={presentation.weaponTypeId}
+            elementId={presentation.elementId}
+            disabled={submitting}
+            onSubmit={(observation) => onConfirm(observation)}
+          />
+        ) : (
+          <Alert severity="error">
+            このStepの目標武器が見つからないため、5枠を入力できません。
+          </Alert>
+        )
+      )}
+      {(actualKind !== null || uncertain) && (
+        <>
+          {/* Kept apart from the primary action so it is never tapped by mistake. */}
+          <Divider sx={{ pt: 2 }} />
+          <Box role="group" aria-label="想定外の結果を記録" sx={{ pt: 1 }}>
+            <Stack spacing={1}>
+              <Typography variant="body2" color="text.secondary">
+                ゲーム内の結果や操作が案内と違った場合
+              </Typography>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+                {actualKind !== null && (
+                  <Button
+                    variant="outlined"
+                    color="warning"
+                    disabled={submitting}
+                    onClick={() => setEnteringActualResult(true)}
+                    sx={buttonSx}
+                  >
+                    結果が違う
+                  </Button>
+                )}
+                {uncertain && (
+                  <Button
+                    variant="outlined"
+                    color="warning"
+                    disabled={submitting}
+                    onClick={() => setConfirmingUncertain(true)}
+                    sx={buttonSx}
+                  >
+                    何を何回操作したか分からない
+                  </Button>
+                )}
+              </Stack>
+            </Stack>
+          </Box>
+          <OperationUncertainDialog
+            open={confirmingUncertain}
+            submitting={submitting}
+            onCancel={() => setConfirmingUncertain(false)}
+            onConfirm={() => {
+              setConfirmingUncertain(false)
+              onRecordOperationUncertain()
+            }}
+          />
+        </>
+      )}
     </>
   )
 }

@@ -391,6 +391,65 @@ export async function finishAsCompromise(
   })
 }
 
+export const WINDOW_SOURCE_ID = 'owned.execution.window'
+
+export type WindowOperation = 'reset_bonuses' | 'keep_bonuses' | 'reset_skills'
+
+/**
+ * One existing Gogma whose Route runs the given operations in order, for the
+ * Current Position Recovery Window (`docs/PLANNER_SPEC.md` 16.15). Each Reset /
+ * Keep Bonuses advances the Gogma Counter by one from the fixture start and
+ * yields the next entry of `bonusResults`; the last one must be the Ideal.
+ * The Reset Skills reaches the Ideal Series Skill. The source starts with
+ * `sourceBonuses` (below Practical by default) and a non-Ideal Skill.
+ */
+export function sameWeaponWindowFixture(
+  operations: readonly WindowOperation[],
+  bonusResults: readonly RestorationBonusSet[],
+  options: {
+    improvementPreference?: 'planner' | 'skill_first' | 'bonus_first'
+    sourceBonuses?: RestorationBonusSet
+  } = {},
+) {
+  const source = orchestrationSource(WINDOW_SOURCE_ID, {
+    restorationBonuses: options.sourceBonuses ?? belowPracticalBonuses(),
+  })
+  const goal = orchestrationTarget('target.execution.window')
+  let gogma = CONSTRAINED_START_GOGMA_COUNTER
+  let skill = CONSTRAINED_START_SKILL_COUNTER
+  const routeOperations = operations.map((type) => {
+    if (type === 'reset_skills') {
+      skill += 1
+      return { type, sourceOwnedWeaponId: source.id, skillCounterBefore: skill - 1, skillCounterAfter: skill }
+    }
+    gogma += 1
+    return { type, sourceOwnedWeaponId: source.id, gogmaCounterBefore: gogma - 1, gogmaCounterAfter: gogma }
+  })
+  const entry = orchestrationEntry('entry.execution.window', goal, {
+    kind: 'existing_gogma_mixed',
+    sourceOwnedWeaponId: source.id,
+    operations: routeOperations,
+  })
+  entry.intermediateStateSelection = {
+    skillOpportunityId: null,
+    bonusOpportunityId: null,
+    improvementPreference: options.improvementPreference ?? 'bonus_first',
+  }
+  const resultAt = (gogmaCounter: number) =>
+    bonusResults[gogmaCounter - CONSTRAINED_START_GOGMA_COUNTER] ?? belowPracticalBonuses()
+  return planFor(orchestrationScenario({
+    targets: [goal],
+    entries: [entry],
+    ownedWeapons: [source],
+    engine: {
+      resetResultAt: resultAt,
+      keepResultAt: resultAt,
+      keepSupported: true,
+      keepInputs: [source.restorationBonuses, ...bonusResults],
+    },
+  })).then((fixture) => ({ ...fixture, source, goal, entry }))
+}
+
 export type ActualResultInput = Parameters<ProductionPlanExecutionService['recordActualResultDifferent']>[0]['actualResult']
 
 export async function recordDifferent(

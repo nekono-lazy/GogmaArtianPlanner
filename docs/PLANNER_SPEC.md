@@ -3879,7 +3879,8 @@ export function detectPlanInvalidation(
 - OwnedWeaponが現在Stepの期待状態と異なる
 - CalculationContextとの互換性が失われた。この場合は `calculation_context_changed` を記録する
 - 想定結果と実結果が違った（`unexpected_result`）
-- 何を何回操作したか不明と記録された（`execution_operation_uncertain`）
+- 何を何回操作したか不明と記録された（`execution_operation_uncertain`）。Recovery Window内で現在位置を
+  一意に特定して追従した場合（`operation_count_recovered`、16.15）はこの理由を取り除いて `active` へ戻す
 
 次は再計算条件にしない（16.6）。
 
@@ -4426,8 +4427,10 @@ dependencyでもrun間で一致する。
   「現在地点を維持 / Step 12へ戻す / キャンセル」を選ばせ、復元はexecution scopeだけを戻して
   Plan非依存Targetなどを巻き戻さない。セーブ地点が無い、または現在位置と同じなら選択を出さない
 - Case I（想定外結果）: 操作が明確ならCounter消費と実結果を保存してPlan stale（`unexpected_result`）、
-  操作内容不明ならCounterも武器も変更せずPlan stale（`execution_operation_uncertain`）となり、
-  どちらもRNG再同定を促す
+  操作内容不明ならCounterも武器も変更せずPlan stale（`execution_operation_uncertain`）となる。
+  想定外結果はRNG再同定を促し、操作内容不明は通常のRNG同定へ直接誘導せず、同じ操作の回数不明なら
+  Recovery Window内の現在位置確認（`operation_count_recovered`）、別操作・別武器や一意に特定できない場合は
+  ゲーム内セーブ地点の復元、セーブ地点が無ければPlan破棄を案内する（16.15）
 - Case J（操作0 Ideal）: Target登録時・Search時に通知でき、Planへ入った場合は `confirm_owned_ideal`
   StepだけでCounterを進めずにideal / protected / Target completedになる
 - UIからのPlanを壊す変更は警告し、承認時はPlan abandoned（`breaking_change_approved`）と変更保存が
@@ -4472,11 +4475,16 @@ Plan completedを含む）、および想定外結果（`actual_result_different
 記録（16.15）、最新ExecutionHistoryのUndo（16.16）、ゲーム内セーブ地点の記録 / 復元（16.9）、
 妥協品として確定して終了（16.12）、Plan破棄と16.10のセーブ地点選択、再計画Previewと採用（16.8）の
 Runtimeは実装済みである。Execution Navigator UIは正常系（作成開始 / 再開、Step確定、blind観測値入力、
-`confirm_owned_ideal`、武器切替案内、妥協checkpointパネルと妥協品での終了、完了表示）まで接続済みである。
+`confirm_owned_ideal`、武器切替案内、妥協checkpointパネルと妥協品での終了、完了表示）と、Execution
+Navigator内の想定外結果（「結果が違う」の実結果入力と最新ExecutionHistoryに基づく再同定導線、
+「何を何回操作したか分からない」の確認Dialog）と、操作内容不明後のExecution Recovery（16.15の
+Recovery Window内の現在位置確認と `operation_count_recovered` の追従Runtime、ゲーム内セーブ地点の復元と
+セーブ地点が無い場合のPlan破棄への最小導線）まで接続済みである。
 calculation schema 13で、既存武器のTarget紐付けを各Entryの最初の物理Step確定からPlan開始effect
 （16.2 / 16.11）へ移し、Production Plan画面での事前表示とともに実装した。
-Planを壊す変更の警告、Execution Navigator UIの残り（結果が違う / 操作内容不明、Undo、ゲーム内セーブ地点、
-Plan破棄、RNG再同定への誘導表示、再計画Preview画面とセーブ地点3択の確認Dialogを含む）などは後続の実装PRが
+Planを壊す変更の警告、Execution Navigator UIの残り（一般のUndo、ゲーム内セーブ地点の記録、通常のPlan破棄、
+再計画Preview画面とセーブ地点3択の確認Dialogを含む）、16.15のDashboard / RNG Setup / Candidate Searchでの
+RNG再同定の継続表示などは後続の実装PRが
 本章をauthorityとして実装する。本章と矛盾する旧記述（Execution上の独立した「確保」操作、
 Target / Build List変更による一律stale、reserve時の既存保護維持など）は本改訂で
 本書・[REQUIREMENTS.md](./REQUIREMENTS.md)・[DATA_MODEL.md](./DATA_MODEL.md)・
@@ -4678,6 +4686,7 @@ Target登録時・Candidate Search時の通知から、この確認Stepへ至る
 | 所持武器で完成を確認 | `confirmed_expected` | 変更なし | target completion | 次Step / completed |
 | 結果が違う | `actual_result_different` | rngAdvanceを適用 | 実結果を保存（16.15） | stale |
 | 何を何回操作したか不明 | `operation_uncertain` | 変更なし | 変更なし | stale |
+| 同じ操作の回数不明から現在位置へ追従 | `operation_count_recovered` | 区間内Stepの `rngAdvance` を順に適用 | 区間内Stepの `executionEffects` をreplay（16.15） | active / completed |
 | 妥協品として確定して終了 | `finished_as_compromise` | 変更なし | 16.12 | abandoned |
 
 `secured_weapon` と `skipped_candidate` は独立した確保Stepを持つlegacy Planの記録だけに
@@ -5419,14 +5428,181 @@ RNG実装不具合、ゲーム仕様漏れ、Master漏れ、Seed / Counter同定
 
 例: Resetを2回押したかもしれない、別操作をしてしまった、アプリ確定前に複数回進めた。
 
+記録（`operation_uncertain`）の意味。
+
 - Counterを推測しない。RngState、NormalArtianCounter、OwnedWeapon、TargetWeaponを変更しない
+- 対象Stepは未完了のまま、`currentStepId` も変えない。ゲーム内セーブ地点も変えない
 - `ExecutionHistory` に `operation_uncertain` を記録する
 - Planを `stale`（`execution_operation_uncertain`）にする
-- RNG再同定と、必要なら所持武器の実状態の再登録へ誘導する
 
-どちらの場合も、RngStateがその記録より後に更新されるまで、Dashboard、RNG Setup、Candidate
-SearchでRNG再同定を促す表示を出す。この表示は永続flagを追加せず、最新の該当
-ExecutionHistoryとRngStateの更新日時から導出する。
+記録後の回復（Execution Recovery）。
+
+通常のRNG同定（Identification Wizard / Normal Counter Setup）は、追加のReset等をゲーム内で行って
+観測を集める調査手順である。実行中Planの途中でそれを使うと、回復のためにPlan外の操作でゲーム状態を
+さらに進めることになる。また「ResetのつもりでKeepした」「別の武器を操作した」はCounter位置の推測では
+なくPlan外のゲーム状態変更である。したがって `operation_uncertain` の記録後は通常のRNG同定へ直接
+誘導せず、Execution Navigatorで次のどちらに近いかをユーザーに選ばせる。
+
+- **同じ操作を何回行ったか分からない**（操作種類と操作した武器は分かっていて、回数だけが分からない）:
+  現在位置の確認（Current Position Recovery）。ゲーム内セーブ地点があれば、その復元も同時に選べる。
+  どちらを使うかはユーザーが選び、現在位置の確認を強制しない
+- **別の操作・別の武器を操作してしまった**: 現在位置の確認は提示しない。Counterだけ合わせれば済む
+  保証がないためである。ゲーム内セーブ地点があればその復元（16.9）を案内し、無ければPlan破棄（16.2）を
+  案内する
+
+##### Recovery Window
+
+Current Position Recoveryが追従してよい範囲は、現在Step（`operation_uncertain` を記録したStep）から
+Plan順（`ProductionPlan.steps` の配列順。`currentStepId` と未完了Stepの決定と同じ順序）に連続する、
+**同一の物理操作identity** を持つ未完了Stepの区間 `W = [w1 .. wn]`（`w1` が現在Step）である。
+これをRecovery Windowと呼び、Planどおりの同じ操作だけで現在のゲーム状態を説明できる範囲そのものである。
+
+物理操作identityは次のすべてが一致することである。
+
+- `operationType`
+- 物理対象: `executionEffects.trackedOwnedWeaponId`（Counter進行用Normalでは `null` 同士）
+- Counter stream: `reset_bonuses` / `keep_bonuses` はGogma Counter、`convert_normal_to_gogma` /
+  `reset_skills` はSkill Counter、`create_normal_artian` は `rngAdvance.affectedNormalCounterId` の
+  Normal Counter
+- `create_normal_artian` では `executionEffects.normalCreationRole` も一致すること。Counter進行用から
+  作成対象Normal登録への意味の境界は、同じNormal Counter streamでも越えない
+
+Windowに入るStepは、比較できる予測結果を持つことも条件とする。
+
+- `executionEffects` を持つ現行Stepである（legacy Stepは入らない）
+- `executionEffects.observationBinding === null`（blind作成対象Normalは予測5枠が無いため入らない）
+- `expectedResult` が操作の結果契約（[DATA_MODEL.md](./DATA_MODEL.md) 11.4）の比較項目を持つ。
+  Normal作成は `normal_artian` scopeの5枠と `affectedNormalCounterId`、Reset / Keep Bonusesは
+  `gogma_artian` scopeの5枠、conversion / Reset SkillsはSeries / Group Skill
+- `confirm_owned_ideal` はゲーム操作ではないため入らない
+
+`executionEffects.targetCompletions` を持つStepはWindowの最後のStepになる（完成した武器は保護され、
+同じ物理操作は続かない）。現在Step自体がWindowに入らない場合（blind作成対象Normal、比較できる予測が
+無いStep）はCurrent Position Recoveryを適用しない。Recovery WindowはPlan外へ一切広げず、
+Plan全体を検索しない。Window外のStepで現在結果が一致しても候補にしない。現在ツールが確定済みの位置より
+前も検索しない。ゲームが以前の状態へ戻っている可能性はゲーム内セーブ地点の復元の責務である。
+
+Reset BonusesとKeep BonusesはどちらもGogma Counterを1進める（RNG_SPEC、`advanceGogmaCounter`）。
+WindowのStepは各自の記録済み `rngAdvance` を持ち、Keepを含めてCounter進行なしとして扱わない。
+
+##### 位置と観測
+
+Window内の位置 `p`（`0 <= p <= n`）は「Windowの先頭から `p` 個のStepをゲームで実行済み」を表す。
+位置 `p` の結果は、`p >= 1` なら `w_p.expectedResult`、`p = 0` なら現在位置のbaseline結果である。
+
+baseline結果（現在永続化されている位置そのもの）は、安全に導出できる場合だけ定義する。
+
+- Reset / Keep Bonuses: 追跡武器（Gogma）の現在の5枠が `gogma_artian` scopeならその順序付き5枠
+- Reset Skills: 追跡武器（Gogma）の現在のSeries / Group Skill
+- conversion: 定義しない（追跡武器はまだNormalであり、観測するSkillが存在しない）
+- Normal作成: Plan順で直前のStepが完了済みの予測ありNormal作成で `affectedNormalCounterId` が同じであり、
+  かつPlanのExecutionHistory順で `operation_uncertain` 記録の直前の記録がそのStepの `confirmed_expected`
+  （`actualResult = null`）である場合だけ、そのStepの `expectedResult` の5枠（`normal_artian`）
+
+baselineを安全に導出できない場合は架空値を作らず、位置0を候補に含めない。
+
+観測はユーザーがゲーム画面で確認した現在の結果である。
+
+- Reset / Keep Bonuses: 現在表示されている復元ボーナス5枠（順序付き、scopeは `gogma_artian` 固定）
+- conversion / Reset Skills: 現在のSeries / Group Skill（`null` は「スキルなし」の明示入力）
+- Normal作成: 最後に作成した通常アーティアの5枠（scopeは `normal_artian` 固定）
+
+照合は完全一致である。5枠は順序付き5枠とscope、Skillは `seriesSkillId` と `groupSkillId` の両方を
+比較する。この比較はpure Domain helperが唯一のauthorityであり、RNG Predictionを再実行しない。
+
+観測列 `o1 .. om` に対し、候補 `k` は `k + m - 1 <= n` かつ全 `j` で「位置 `k + j - 1` の結果が
+定義されていて `o_j` と一致」する位置である。候補 `k` の現在位置は `k + m - 1` である。
+候補はWindow全体（`p = 0 .. n`）で求める。照合は保存済みの結果列の比較だけでRNGの計算を伴わないため、
+UIで範囲を段階的に広げる必要はなく、hard boundは常にRecovery Windowである。
+
+- 候補がちょうど1件: 現在位置を一意に特定できた。確定すれば後述のreplayでアプリ状態をその位置まで
+  追従させる
+- 候補が2件以上: 残る全候補 `k` について「次に行う操作 `w_{k+m}`」がWindow内に存在する（`k + m <= n`）
+  場合だけ、Planどおり次の同じ操作を1回だけ行い、その結果を次の観測として入力させる。Window内の
+  Stepは同一identityなので、どの候補でも次の操作は同じ操作・同じ武器・同じCounter streamである。
+  1候補でも次がWindow外（Plan上は別の操作）なら、追加の操作を求めない。本当の位置がその候補なら
+  追加操作はPlan外の操作になるためである。回復のためだけのPlan外操作は求めない
+- 候補0件: まず入力の修正を許す。Window全体で一致が無ければ、現在のゲーム状態はこのPlanの同一操作
+  連続区間では説明できない。通常のRNG同定で強引にCounterを探さない
+- 候補が2件以上で安全な追加観測も無い場合も、推測で候補を選ばない
+
+一意に特定できない（0件、または安全な追加観測の無い2件以上）場合は、ゲーム内セーブ地点があれば
+その復元（16.9）を、無ければPlan破棄（16.2）を案内する。
+
+##### 追従の確定（`operation_count_recovered`）
+
+一意に特定した位置 `p` への追従は1つのDexie transactionで確定する。transaction内で最新の永続状態から
+すべてを再導出し、表示時の候補をwrite authorityにしない。
+
+再確認する前提。
+
+- Planが `stale` で、`recalculationReasons` がちょうど `execution_operation_uncertain` だけである。
+  それ以外の理由が1つでもあれば `active` へ戻せないためfail closedとする
+- CalculationContextが互換で、現行Execution契約のPlanである
+- Planの最新ExecutionHistory（`compareExecutionHistoryOrder()`）が要求の指す `operation_uncertain`
+  記録であり、その記録のStepが現在Step（要求のStep）である。表示後に別の記録が追加されていれば拒否する
+- Plan依存Target / Entryが変わっていない（16.6）
+- 永続状態が現在Stepの `expectedStateBefore` と一致する（`operation_uncertain` は何も変えないため）
+- 同じ手順で導出したRecovery Windowと観測列から候補がちょうど1件で、その位置が要求の表示位置と同じ
+
+replay。`w1 .. wp` を順に、各Stepの記録済み `rngAdvance`、`expectedResult`、`executionEffects` だけで
+適用する。適用内容は `confirmed_expected` のStep確定と同じstate transition authority（Counter authority
+経由のrngAdvance、追跡武器の登録 / 同一ID更新、作成中、target link、compromise label、target completion、
+Step完了）であり、Counterだけを `+N` で書き換えない。RNG Prediction、Candidate Search、Plannerは
+再実行しない。各Stepの適用後に `expectedStateAfter` と一致することを検証する。最後に、追跡武器を
+持つ操作では追従後の追跡武器の結果（5枠とscope、またはSkill）が最後の観測と一致することを検証する。
+
+追従後のPlan。
+
+- `recalculationReasons` から `execution_operation_uncertain` を除く（前提によりそれ以外は無い）
+- 未完了Stepが残れば `active`、`currentStepId` は最初の未完了Step。元Planをそのまま再開し、再計画しない
+- 位置 `p` がPlan最後のStepで未完了Stepが無くなれば、通常のStep確定と同じく `completed`
+  （`completedAt`、作成中の解除、target completionを含む）。回復だからといって完成処理を省略しない
+- `p = 0`（baselineと一致）: Counter、武器、Targetは変えず、Step完了も無く、`currentStepId` も維持し、
+  Planだけ `stale -> active` に戻す
+
+ゲーム内セーブ地点は通常のPlan実行と同じく維持する。追従でPlanが `completed` になる場合だけ、通常の
+Plan completionと同じ規則で削除する。
+
+ExecutionHistoryは1件だけ追加する。中間Stepの `confirmed_expected` を複数捏造しない。
+
+- `action = "operation_count_recovered"`
+- `planStepId`: `p >= 1` なら追従で到達した最後のStep `wp`、`p = 0` なら `operation_uncertain` 記録の
+  Step（現在Stepのまま）
+- `actualResult`: 最後の観測（5枠とscope、またはSeries / Group Skill）。`note = null`
+- `wasExpected = true`、`recalculationReason = null`
+- `undoSnapshot`: 追従直前の `stale` 状態（RngState、全Normal Counter、追従で変わったOwnedWeapon /
+  TargetWeapon、追加されたOwnedWeapon ID、`stale` のPlan、セーブ地点）
+
+Undo（16.16）はこの記録を通常どおり取り消せ、`operation_uncertain` 記録後の `stale` 状態へアプリ状態
+だけを戻す。ゲーム内の操作は戻さない。
+
+##### ゲーム内セーブ地点への復元とPlan破棄
+
+ゲーム内セーブ地点の復元は16.9の既存Runtime（`restoreExecutionSavePoint()`）をそのまま使う。
+アプリ側だけを先に戻さないため、「ゲーム側を最後のゲーム内セーブ地点まで戻しました」という明示確認の
+後にだけ実行する。復元はセーブ地点より後の記録（`operation_uncertain` を含む）を削除し、セーブ地点の
+Plan状態へ戻す。
+
+セーブ地点が無く、現在位置を一意に特定できない、または別の操作・別の武器を操作した場合は、Planを安全に
+継続する根拠が無い。16.2 / 16.10の既存ユーザー破棄（`user_abandoned`）で確認Dialogの後に破棄する。
+破棄後は、現在のゲーム状態に合わせてRNG状態、通常アーティアCounter、所持武器を確認・再登録してから
+再計画するよう案内する。Planは終了しているため、この段階で通常のRNG同定を使ってよい。
+
+##### RNG再同定を促す継続表示
+
+Dashboard、RNG Setup、Candidate SearchでRNG再同定を促す継続表示は、永続flagを追加せず、最新の
+divergence記録、Planの状態、RngStateの更新日時から導出する。RngState.updatedAtだけを唯一の解決判定
+authorityにしない。
+
+- `actual_result_different`: 最新の該当記録より後にRngStateが更新されるまで表示する（従来どおり）
+- `operation_uncertain`: 実行中Planが `stale` で最新ExecutionHistoryがその記録である間は、通常のRNG同定
+  ではなくExecution Navigatorでの回復（現在位置の確認 / セーブ地点の復元 / Plan破棄）を促す。
+  現在位置の追従（`operation_count_recovered`）とセーブ地点の復元（記録が削除される）では解決済みとし、
+  表示しない。Plan破棄で終わった場合は、RngStateがPlanの `abandonedAt` より後に更新されるまで
+  RNG再同定を促す
+
+この継続表示のUI実装は後続PRで行う。
 
 ### 16.16 Undo
 
@@ -5464,10 +5640,15 @@ Undo自体のExecutionHistoryは追加しない。Snapshotどおり復元したP
   表示後に追加された新しい記録を代わりに取り消さない
 - `completed` Planは、最新記録が `confirmed_expected` で、Snapshot PlanのただひとつのStep未完了が
   その記録のStepであり、現在Planの `completedAt`・そのStepの `completedAt` が記録の `createdAt` と一致する
-  場合だけ取り消せる。`abandoned` Planは、最新記録が `finished_as_compromise` で、
+  場合だけ取り消せる。最新記録が `operation_count_recovered` の場合は、Snapshot Planで未完了だったStepが
+  すべて現在Planで記録の `createdAt` に完了し、現在Planの `completedAt` が記録の `createdAt` と一致する
+  場合だけ取り消せる（追従がPlanを完了させた場合）。`abandoned` Planは、最新記録が `finished_as_compromise` で、
   `abandonmentReason = finished_as_compromise`、`abandonedAt` が記録の `createdAt` と一致する場合だけ取り消せる
 - 現行Validationを満たさない記録、legacy action、Snapshot Planが記録Stepを現在Stepとする `active` Planでない
-  記録は推測補完せず拒否する
+  記録は推測補完せず拒否する。例外は `operation_count_recovered` で、Snapshot Planは
+  `execution_operation_uncertain` を持つ `stale` Planであり、その `currentStepId` が未完了Stepで、記録Stepが
+  Snapshot Planで未完了かつ現在Step以降（Plan順）にあることを要求する（16.15）。取り消すと
+  `operation_uncertain` 記録後の `stale` 状態へ戻り、その記録が再び最新になる
 - 復元値はSnapshot本体そのものであり、RNG予測の再実行、Counter差分の逆算、timestampの付け直しをしない。
   NormalArtianCounterはcollection全体をSnapshotで置き換える
 - ゲーム内セーブ地点は、取り消す記録が境界（`lastExecutionHistoryId`）なら削除し、Snapshotの古いセーブ地点を
@@ -5508,7 +5689,13 @@ staleness semantics、PlanStep / reserve semantics、Expected execution state、
   ProductionPlan lifecycle metadataとExecutionUndoSnapshotの拡張を永続形状へ加え、Dexie
   `DATABASE_SCHEMA_VERSION` を6（non-terminal Planへのnull補完だけのdata-only upgrade）、
   `ExportRoot.schemaVersion` を9へ更新した。計算意味は変更しないため
-  `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は12のまま維持した
+  `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は12のまま維持した。
+  操作内容不明からの現在位置追従（16.15）はExecutionHistoryの新action literal
+  `operation_count_recovered` だけを加え、既存のfield（`actualResult`、`undoSnapshot` など）をそのまま使う。
+  Dexieのtable / index / field形状、ExportRootの形状、Plan生成・Candidate Search・Plannerの計算意味は
+  変わらないため、`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 13`、`DATABASE_SCHEMA_VERSION = 6`、
+  `ExportRoot.schemaVersion = 9` を維持する。この記録を含むExportを旧版が読むと、action literalの
+  検証でImport全体がfail closedになり、部分適用はしない
 - 既存データを推測migrationして意味を変えない。所持Ideal武器の存在からTargetを
   `completed` と推測しない。既存OwnedWeaponを作成中と推測しない
 - 旧契約のProductionPlan（独立 `reserve_weapon` Step、旧expected state）はexact persisted

@@ -809,7 +809,10 @@ RNG状態と通常アーティアCounterは計画完了時にまとめて更新�
 ### 25.8 想定外結果
 
 - 操作は正しく行ったが結果だけ予測と違う場合は、その操作のCounter消費を反映し、実結果を所持武器と操作履歴へ保存し、計画をstaleにして以降の予測を使わず、RNG再同定へ誘導する。RNG実装不具合、ゲーム仕様漏れ、マスター漏れ、Seed / Counter同定不良などがあり得るためである
-- 何を何回操作したか自体が分からない場合は、Counterを推測せず、RNG状態・所持武器を変更せず、計画をstaleにしてRNG再同定へ誘導する
+- 何を何回操作したか自体が分からない場合は、記録の時点ではCounterを推測せず、RNG状態・所持武器を変更せず、計画をstaleにする。記録後は通常のRNG同定（追加のゲーム内操作を伴う調査）へ直接誘導せず、実行ナビで回復方法を選ばせる
+  - 同じ操作を何回行ったか分からないだけなら、現在のゲーム結果を入力し、計画に保存済みの予測結果列と照合して、同じ操作が連続する区間（Recovery Window）の中だけで現在位置を確認する。一意に特定できた場合だけ、その位置までのStepを計画どおり再生してアプリ状態を追従させ、同じ計画を再開する。候補が複数なら、すべての候補で次も同じ操作である場合に限り、計画どおり次の操作を1回行った結果を追加入力させて絞り込む。区間外や計画全体は検索しない
+  - 別の操作・別の武器を操作した場合、または現在位置を安全に特定できない場合は、ゲーム内セーブ地点があれば（ゲーム側を戻したことを確認してから）その復元を、無ければ計画の破棄を案内する
+  - Reset BonusesとKeep BonusesはどちらもGogma Counterを進める操作として扱う
 
 ---
 
@@ -889,7 +892,7 @@ Plan開始前のBuildListEntryは検索開始RNG状態との不一致でstaleに
 
 旧RNG契約のconversion Gogma Counter、巨戟化時のbonus再抽選、Keep selectionを保存したBuildCandidate / BuildListEntry Candidate Snapshotは新契約と非互換である。推測変換せずinvalid / staleとして再検索を要求する。Target、OwnedWeapon、RngStateなど意味を維持できるデータは不用意に削除しない。ProductionPlanは本契約確定時点で永続化前のためmigration対象外とし、Dexie migration手順は次のコード実装フェーズで決定する。
 
-Execution Navigatorの結果一致（観測値入力と操作0 Idealの完成確認を含む）、想定外結果記録、操作内容不明の記録、妥協品として終了は、RNG状態、通常アーティアCounter、OwnedWeapon、TargetWeapon、ExecutionHistory、PlanStep、ProductionPlan、ゲーム内セーブ地点の関連更新を1つのDexie transactionで確定する。Undo、再計画の採用、ゲーム内セーブ地点の復元、計画の前提を壊す変更の承認もそれぞれ1つのtransactionで行う。transaction失敗時は部分更新を残さず、操作前の状態を維持する。
+Execution Navigatorの結果一致（観測値入力と操作0 Idealの完成確認を含む）、想定外結果記録、操作内容不明の記録、操作内容不明後の現在位置への追従、妥協品として終了は、RNG状態、通常アーティアCounter、OwnedWeapon、TargetWeapon、ExecutionHistory、PlanStep、ProductionPlan、ゲーム内セーブ地点の関連更新を1つのDexie transactionで確定する。Undo、再計画の採用、ゲーム内セーブ地点の復元、計画の前提を壊す変更の承認もそれぞれ1つのtransactionで行う。transaction失敗時は部分更新を残さず、操作前の状態を維持する。
 
 ---
 
