@@ -124,6 +124,7 @@ function mockedSnapshot(fixture: ExecutionFixture): ExecutionNavigatorSnapshot {
     operationCountRecovery: { kind: 'unavailable', reason: 'not_operation_uncertain' },
     undo: { kind: 'available', history, terminal: false, deletesExecutionSavePoint: false },
     savePointRestore: { kind: 'available', savePoint },
+    rngReidentificationReminder: { kind: 'none' },
   }
 }
 
@@ -515,6 +516,137 @@ describe('ExecutionNavigatorPage Plan abandonment with the real runtime', () => 
       expect(await database.ownedWeapons.get(registered[0].id)).toBeUndefined()
       expect((await database.ownedWeapons.toArray()).filter(({ executionInProgress }) => executionInProgress !== null)).toEqual([])
       expect(await database.rngState.get('current')).toEqual(savePoint.rngState)
+    }), 20_000)
+})
+
+/**
+ * An ordinary abandonment resolves no `actual_result_different` (16.15): until
+ * the RngState is updated after the record, the ended view still asks for RNG
+ * re-identification, at the destination of the diverged operation.
+ */
+describe('ExecutionNavigatorPage abandonment after an unresolved actual result', () => {
+  const reidentifyText = '予測と異なる結果が記録された後、RNG状態の再同定がまだ完了していません。'
+
+  async function abandonThroughDialog(user: ReturnType<typeof userEvent.setup>, choice: 'plain' | 'keep' | 'restore') {
+    await user.click(await screen.findByRole('button', { name: '現在Planを破棄する' }, { timeout: 5000 }))
+    const dialog = await screen.findByRole('dialog', { name: '現在の生産計画を破棄します' })
+    if (choice === 'plain') {
+      await user.click(within(dialog).getByRole('button', { name: '作成プランを破棄する' }))
+    } else if (choice === 'keep') {
+      await user.click(within(dialog).getByRole('button', { name: '現在地点を維持' }))
+    } else {
+      await user.click(within(dialog).getByRole('button', { name: '最後のゲーム内セーブ地点へ戻す' }))
+      await user.click(within(dialog).getByRole('checkbox', { name: 'ゲーム側を最後のゲーム内セーブ地点まで戻しました' }))
+      await user.click(within(dialog).getByRole('button', { name: 'セーブ地点へ戻して破棄する' }))
+    }
+    expect(await screen.findByText('作成プランを破棄しました', {}, { timeout: 5000 })).toBeInTheDocument()
+    await dialogClosed()
+  }
+
+  const recordGogmaDivergence = async (service: Awaited<ReturnType<typeof realRuntime>>['service'], database: AppDatabase, fixture: ExecutionFixture) =>
+    recordDifferent(service, database, fixture.plan, bonusResult(differentBonuses(stepOf(fixture.plan, 0).expectedResult?.restorationBonuses), 'gogma_artian'))
+
+  it('keeps asking for RNG Setup re-identification after a plain abandonment of a Gogma divergence', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      const { service, deps } = await realRuntime(database, fixture)
+      await recordGogmaDivergence(service, database, fixture)
+      const user = userEvent.setup()
+      renderNavigator(deps, fixture.plan.id)
+      await abandonThroughDialog(user, 'plain')
+
+      expect(screen.getByText(reidentifyText)).toBeInTheDocument()
+      expect(screen.getByText('現在のゲーム状態に合わせてRNG状態を再同定してから、候補検索・再計画を行ってください。')).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: 'RNG状態設定へ' })).toHaveAttribute('href', '/rng')
+      expect(screen.queryByRole('link', { name: '通常アーティアCounterへ' })).not.toBeInTheDocument()
+      expect(screen.getByRole('link', { name: 'ビルドリストへ' })).toHaveAttribute('href', '/build-list')
+      expect(screen.getByRole('link', { name: '作成プランを見る' })).toBeInTheDocument()
+      // Not the generic 「そのまま再計画」 ending, and not the operation_uncertain re-registration.
+      expect(screen.queryByText('現在状態から必要に応じて再計画できます。')).not.toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: '所持武器を確認する' })).not.toBeInTheDocument()
+    }), 20_000)
+
+  it('keeps the record and the reminder when abandoning with 「現在地点を維持」', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      const { service, deps } = await realRuntime(database, fixture)
+      await service.recordExecutionSavePoint({ planId: fixture.plan.id })
+      await recordGogmaDivergence(service, database, fixture)
+      const user = userEvent.setup()
+      renderNavigator(deps, fixture.plan.id)
+      await abandonThroughDialog(user, 'keep')
+
+      expect(screen.getByText(reidentifyText)).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: 'RNG状態設定へ' })).toHaveAttribute('href', '/rng')
+      expect((await planHistory(database, fixture.plan)).map(({ action }) => action)).toEqual(['actual_result_different'])
+    }), 20_000)
+
+  it('asks for nothing once the save point restore deleted the record', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      const { service, deps } = await realRuntime(database, fixture)
+      const savePoint = await service.recordExecutionSavePoint({ planId: fixture.plan.id })
+      await recordGogmaDivergence(service, database, fixture)
+      const user = userEvent.setup()
+      renderNavigator(deps, fixture.plan.id)
+      await abandonThroughDialog(user, 'restore')
+
+      expect(screen.queryByText(reidentifyText)).not.toBeInTheDocument()
+      expect(screen.getByText('現在状態から必要に応じて再計画できます。')).toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: 'RNG状態設定へ' })).not.toBeInTheDocument()
+      expect(await planHistory(database, fixture.plan)).toEqual([])
+      expect(await database.rngState.get('current')).toEqual(savePoint.rngState)
+      expect(await database.normalArtianCounters.toArray()).toEqual(savePoint.normalCounters)
+    }), 20_000)
+
+  it('asks for nothing once the RngState was re-identified after the record', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      const { service, deps } = await realRuntime(database, fixture)
+      const { history } = await recordGogmaDivergence(service, database, fixture)
+      // Re-identified in RNG Setup after the record (the runtime clock is 2026-09-17).
+      const rng = await database.rngState.get('current')
+      if (!rng) throw new Error('rng')
+      expect(history.createdAt < '2026-09-18T00:00:00.000Z').toBe(true)
+      await database.rngState.put({ ...rng, updatedAt: '2026-09-18T00:00:00.000Z' })
+      const user = userEvent.setup()
+      renderNavigator(deps, fixture.plan.id)
+      await abandonThroughDialog(user, 'plain')
+
+      expect(screen.queryByText(reidentifyText)).not.toBeInTheDocument()
+      expect(screen.getByText('現在状態から必要に応じて再計画できます。')).toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: 'RNG状態設定へ' })).not.toBeInTheDocument()
+    }), 20_000)
+
+  it('sends a Normal Artian creation divergence to the Normal Counters, never to RNG Setup', () =>
+    withDatabase(async (database) => {
+      const fixture = await newNormalFixture()
+      const { service, deps } = await realRuntime(database, fixture)
+      expect(stepOf(fixture.plan, 0).operationType).toBe('create_normal_artian')
+      await recordDifferent(service, database, fixture.plan, bonusResult(differentBonuses(stepOf(fixture.plan, 0).expectedResult?.restorationBonuses), 'normal_artian'))
+      const user = userEvent.setup()
+      renderNavigator(deps, fixture.plan.id)
+      await abandonThroughDialog(user, 'plain')
+
+      expect(screen.getByText(reidentifyText)).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: '通常アーティアCounterへ' })).toHaveAttribute('href', '/normal-counters')
+      expect(screen.queryByRole('link', { name: 'RNG状態設定へ' })).not.toBeInTheDocument()
+    }), 20_000)
+
+  it('sends a Skill divergence to RNG Setup', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      const { service, deps } = await realRuntime(database, fixture)
+      await confirmCurrent(service, database, fixture.plan)
+      expect(stepOf(fixture.plan, 1).operationType).toBe('reset_skills')
+      await recordDifferent(service, database, fixture.plan, { kind: 'skills', seriesSkillId: null, groupSkillId: null })
+      const user = userEvent.setup()
+      renderNavigator(deps, fixture.plan.id)
+      await abandonThroughDialog(user, 'plain')
+
+      expect(screen.getByText(reidentifyText)).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: 'RNG状態設定へ' })).toHaveAttribute('href', '/rng')
+      expect(screen.queryByRole('link', { name: '通常アーティアCounterへ' })).not.toBeInTheDocument()
     }), 20_000)
 })
 

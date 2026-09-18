@@ -510,8 +510,15 @@ function) and `inspectExecutionSavePointRestore()` (through
 `deriveRunningPlanSavePointChoiceRequirement()`). The `operation_uncertain` recovery keeps its own
 save point restore / no-save-point abandonment and now shares
 `ExecutionSavePointRestoreDialog`; its RNG re-check guidance after abandonment stays, and an
-ordinary abandonment shows none. It added no persisted field and changed no calculation
-semantics, so the three versions stay 13 / 6 / 9.
+ordinary abandonment shows none - unless the Plan's latest `actual_result_different` is still
+unresolved: abandoning resolves no divergence, so the ended view keeps asking for RNG
+re-identification (Normal Counters for a Normal creation, RNG Setup otherwise) until the RngState
+is updated strictly after that record. `deriveExecutionRngReidentificationReminder()`
+(`src/domain/execution/rngReidentificationReminder.ts`) is that 16.15 authority, derived from the
+Plan's ExecutionHistory and `RngState.updatedAt` alone and meant for the future persistent
+reminder too; `executionReidentificationDestination()` is the shared destination authority. A
+save point restore that deleted the record resolves it. It added no persisted field and changed
+no calculation semantics, so the three versions stay 13 / 6 / 9.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation

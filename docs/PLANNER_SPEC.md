@@ -4484,6 +4484,8 @@ Recovery Window内の現在位置確認と `operation_count_recovered` の追従
 Runtimeと同じ判定を共有するread-only helperから導出）、ゲーム内セーブ地点の記録 / 上書き確認 / 直接復元
 （16.9。ゲーム側復元の明示確認つき）、active / stale Planの通常のPlan破棄と16.10の3択（破棄前inspectを
 authorityとし、セーブ地点への復元と破棄は既存Runtimeの1 transaction）を接続した。
+通常のPlan破棄後も、未解決の `actual_result_different`（最新の該当記録より後にRngStateが更新されていない）
+があれば終了画面でRNG再同定を引き続き案内する（16.15の判定をpure helperとして実装し、後続の継続表示と共有する）。
 calculation schema 13で、既存武器のTarget紐付けを各Entryの最初の物理Step確定からPlan開始effect
 （16.2 / 16.11）へ移し、Production Plan画面での事前表示とともに実装した。
 Planを壊す変更の警告、Execution Navigator UIの残り（再計画Preview画面と採用時のセーブ地点3択の確認Dialog）、

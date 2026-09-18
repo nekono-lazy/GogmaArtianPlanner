@@ -1,4 +1,8 @@
-import type { ExecutionRuntimeErrorCode } from '../../domain/execution'
+import {
+  executionReidentificationDestination,
+  type ExecutionRuntimeErrorCode,
+  type ReidentificationDestination,
+} from '../../domain/execution'
 import type {
   ExecutionHistory,
   ExpectedResult,
@@ -364,7 +368,7 @@ export function offersOperationUncertain(step: PlanStep): boolean {
 }
 
 /** Where the RNG re-identification of a diverged operation happens (UI_FLOW 12.4 / 12.5). */
-export type ReidentificationDestination = 'normal_counters' | 'rng'
+export type { ReidentificationDestination }
 
 /**
  * The divergence a stale Plan stopped on, from the Plan's latest
@@ -409,7 +413,7 @@ export function executionDivergenceView(
         action,
         planStepId: step.id,
         operationLabel,
-        destination: step.operationType === 'create_normal_artian' ? 'normal_counters' : 'rng',
+        destination: executionReidentificationDestination(step),
       }
     : { action, planStepId: step.id, operationLabel }
 }

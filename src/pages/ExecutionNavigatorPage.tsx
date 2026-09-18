@@ -43,6 +43,7 @@ import {
   type CurrentCompromiseCheckpoint,
   type ExecutionActualResultObservation,
   type ExecutionNormalRestorationBonusObservation,
+  type ExecutionRngReidentificationReminder,
   type OperationCountRecoveryObservation,
   type ExecutionRuntimeErrorCode,
   type PlanAbandonSavePointDecision,
@@ -117,11 +118,14 @@ function EndedPlanView({
   plan,
   divergence,
   latestExecutionHistory,
+  rngReidentificationReminder,
 }: {
   plan: ProductionPlan
   /** The `actual_result_different` record that stopped a stale Plan, from its latest ExecutionHistory. */
   divergence: Extract<ExecutionDivergenceView, { action: 'actual_result_different' }> | null
   latestExecutionHistory: ExecutionHistory | null
+  /** The 16.15 reminder derived from the persisted records and the RngState. */
+  rngReidentificationReminder: ExecutionRngReidentificationReminder
 }) {
   const planLink = { label: '作成プランを見る', to: `/plans/${plan.id}` }
   if (plan.status === 'completed') {
@@ -182,6 +186,31 @@ function EndedPlanView({
               { label: 'ビルドリストへ', to: '/build-list' },
             ]}
           />
+        </Stack>
+      </Alert>
+    )
+  }
+  if (
+    plan.status === 'abandoned' &&
+    plan.abandonmentReason === 'user_abandoned' &&
+    rngReidentificationReminder.kind === 'actual_result_different'
+  ) {
+    // Abandoning resolves no divergence (16.15): the RNG prediction still differs
+    // from the game until the RngState is re-identified after the record.
+    const destination = rngReidentificationReminder.destination === 'normal_counters'
+      ? { label: '通常アーティアCounterへ', to: '/normal-counters' }
+      : { label: 'RNG状態設定へ', to: '/rng' }
+    return (
+      <Alert severity="warning">
+        <AlertTitle>作成プランを破棄しました</AlertTitle>
+        <Stack spacing={1.5}>
+          <Typography variant="body2">
+            予測と異なる結果が記録された後、RNG状態の再同定がまだ完了していません。
+          </Typography>
+          <Typography variant="body2">
+            現在のゲーム状態に合わせてRNG状態を再同定してから、候補検索・再計画を行ってください。
+          </Typography>
+          <NavigationLinks links={[destination, { label: 'ビルドリストへ', to: '/build-list' }, planLink]} />
         </Stack>
       </Alert>
     )
@@ -707,6 +736,7 @@ function LoadedNavigator({
           plan={plan}
           divergence={divergence?.action === 'actual_result_different' ? divergence : null}
           latestExecutionHistory={latestExecutionHistory}
+          rngReidentificationReminder={snapshot.rngReidentificationReminder}
         />
         {plan.status !== 'draft' &&
           stateControls({ running, canRecordSavePoint: false, showsSavePointRestore: running })}
