@@ -290,6 +290,8 @@ describe('ProductionPlanPage replan Preview', () => {
     expect(deps.replan.createProductionPlanReplanPreview).toHaveBeenCalledExactlyOnceWith(request, expect.objectContaining({ plan: expect.objectContaining({ id: PREVIEW_PLAN_ID }) }))
     // Displayed as a draft-equivalent, never as the running Plan, with the comparison.
     expect(screen.getByRole('table', { name: '現在の生産計画と再計画の試算の比較' })).toBeInTheDocument()
+    // The Preview's Conflicts are read-only, and adoption offers no later resolution either.
+    expect(screen.getByText('試算の競合はここでは変更できません。Plannerが選択したこの試算内容を確認したうえで採用してください。')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: ADOPT })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'この試算を破棄' })).toBeEnabled()
     // Nothing was adopted, saved, or started.

@@ -137,7 +137,7 @@ function PreviewConflicts({ plan }: { plan: ProductionPlan }) {
           </Stack>
         )}
         <Typography variant="body2" color="text.secondary">
-          試算の競合はここでは変更できません。採用後に保存された生産計画の画面で扱います。
+          試算の競合はここでは変更できません。Plannerが選択したこの試算内容を確認したうえで採用してください。
         </Typography>
       </Stack>
     </Paper>
