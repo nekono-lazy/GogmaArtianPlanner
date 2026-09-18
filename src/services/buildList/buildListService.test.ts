@@ -60,7 +60,7 @@ function memoryRepositories(initial: BuildListEntry[] = []) {
           now: '2026-09-18T00:00:00.000Z',
         })
         entries.splice(0, entries.length, ...write.state.buildListEntries)
-        return { result: write.result, planTermination: write.planTermination }
+        return { result: write.result, state: write.state, planTermination: write.planTermination }
       }) as unknown as PlanGuardedPersistence['apply'],
     },
   }

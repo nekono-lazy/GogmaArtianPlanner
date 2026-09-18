@@ -41,7 +41,7 @@ export function inMemoryPlanGuardedPersistence(
       if (options.writeFailure) throw options.writeFailure
       state = { ...state, ...structuredClone(write.state) }
       commits += 1
-      return { result: write.result, planTermination: write.planTermination }
+      return { result: write.result, state: write.state, planTermination: write.planTermination }
     },
   }
   return {

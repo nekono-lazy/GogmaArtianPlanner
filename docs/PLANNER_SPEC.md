@@ -4812,7 +4812,10 @@ Step Nの `expectedStateAfter` = Step N+1の `expectedStateBefore`）は変更�
   戻す」は `prepareExecutionSavePointRestore()` をそのまま使って復元を先に決め、その復元後の状態へ変更を
   もう一度適用する。変更はユーザーが画面で見た値から変えた項目だけを保存時の状態へ適用する
   （`applyUserChanges()`）ため、復元前に読んだEntity本体（5枠、Skill、優先起点、Counter値、作成中状態、
-  lifecycleなど）で復元結果を上書きしない
+  lifecycleなど）で復元結果を上書きしない。所持武器は保存時点の `kind` をauthorityとし、復元で同じ
+  OwnedWeapon IDが巨戟から通常へ戻った場合も画面で見たvariantの本体を持ち込まない。両variantに共通する
+  項目（名称、memo、保護、武器種、属性）の変更だけを適用し、保存時点のvariantが持てない項目（Skill、status、
+  5枠とscope、kind）の変更は変換・破棄せず拒否する。保存の戻り値はPlan終了処理後に永続化された本体とする
 - どちらも（復元後の）Planを `abandoned`（`breaking_change_approved`）にし、`currentStepId`、Step完了状態、
   `recalculationReasons` を維持し、そのPlan IDの作成中状態を全武器で解除し、セーブ地点を削除する。
   Targetの優先起点は変更自身とその既存の副作用でだけ変わる。ExecutionHistoryは追加しないため、この終了は

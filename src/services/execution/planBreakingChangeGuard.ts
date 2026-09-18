@@ -20,6 +20,12 @@ import { createBuildListCalculationContext } from '../buildList/createBuildListC
 /** The outcome of one guarded save: the mutation's own result, and how it ended the Plan if it did. */
 export interface PlanGuardedMutationOutcome<R> {
   result: R
+  /**
+   * The mutable collections exactly as persisted by this save, after any Plan
+   * termination (an approved breaking change clears the Plan's in-progress
+   * marks after the mutation ran), so a caller can return the final record.
+   */
+  state: PlanBreakingMutableState
   /** `null` unless an approved breaking change ended the `active` Plan. */
   planTermination: PlanBreakingChangeTermination | null
 }
@@ -101,7 +107,7 @@ export class PlanBreakingChangeGuard implements PlanGuardedPersistence {
         now: this.dependencies.clock.now(),
       }))
       await this.write(state, write)
-      return { result: write.result, planTermination: write.planTermination }
+      return { result: write.result, state: write.state, planTermination: write.planTermination }
     })
   }
 

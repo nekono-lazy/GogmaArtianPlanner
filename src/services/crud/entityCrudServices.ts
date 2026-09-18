@@ -89,17 +89,66 @@ function withRecord<T extends { id: string }>(records: readonly T[], record: T):
     : [...records, record]
 }
 
+/** Never user intent: identity, timestamps and the Execution-owned in-progress mark. */
+const OWNED_WEAPON_NON_EDITABLE_FIELDS = new Set<string>(['id', 'createdAt', 'updatedAt', 'executionInProgress'])
+
+/**
+ * The fields both OwnedWeapon kinds hold with the same meaning, so a change of
+ * one can be applied to a stored weapon of the other kind. `status`, the five
+ * slots and their scope, Skills and `rarity` are kind-specific (a Normal has no
+ * status and holds `normal_artian` slots only).
+ */
+const OWNED_WEAPON_CROSS_KIND_FIELDS = new Set<string>(['name', 'memo', 'isProtected', 'weaponTypeId', 'elementId'])
+
+/**
+ * The OwnedWeapon form of `applyUserChanges()`: the user's changes from
+ * `basis` (the weapon the screen showed) to `draft`, applied to `current` (the
+ * weapon in the state the save runs on).
+ *
+ * The stored kind is the authority. When `current` is still of the basis kind
+ * this is the ordinary three-way apply, and a kind the user changed replaces
+ * the whole body as before. When the stored weapon changed kind in between -
+ * the same OwnedWeapon ID returned from Gogma to Normal by a save point restore
+ * (`docs/PLANNER_SPEC.md` 16.3 / 16.10) - nothing of the basis variant is
+ * carried over: only changed fields both kinds share are applied, and a change
+ * the stored kind cannot hold (a Skill, status, the five slots, the kind
+ * itself) is refused rather than converted, dropped or forced back in.
+ * `executionInProgress`, `id` and the timestamps are never taken from the draft.
+ */
+export function applyOwnedWeaponUserChanges(
+  current: OwnedWeapon,
+  basis: OwnedWeapon,
+  draft: OwnedWeaponDraft,
+): OwnedWeapon {
+  const changed = (Object.keys(draft) as (keyof OwnedWeaponDraft & string)[]).filter((key) =>
+    !OWNED_WEAPON_NON_EDITABLE_FIELDS.has(key) &&
+    JSON.stringify((draft as Record<string, unknown>)[key]) !== JSON.stringify((basis as unknown as Record<string, unknown>)[key]))
+  if (current.kind === basis.kind) {
+    return draft.kind === basis.kind
+      ? applyUserChanges<OwnedWeapon>(current, basis, draft)
+      : ({ ...draft, id: current.id } as OwnedWeapon)
+  }
+  const inapplicable = changed.filter((key) => !OWNED_WEAPON_CROSS_KIND_FIELDS.has(key))
+  if (inapplicable.length > 0) {
+    throw new EntityFormValidationError([
+      `保存時点の所持武器の種別（${current.kind === 'normal' ? '通常アーティア' : '巨戟アーティア'}）が編集開始時と異なるため、次の変更を適用できません: ${inapplicable.join(', ')}。一覧を更新して編集し直してください。`,
+    ])
+  }
+  const next: Record<string, unknown> = { ...current }
+  changed.forEach((key) => { next[key] = (draft as Record<string, unknown>)[key] })
+  return next as unknown as OwnedWeapon
+}
+
 /**
  * One OwnedWeapon save as a guarded mutation (`docs/PLANNER_SPEC.md` 16.6).
  *
  * The user's intent is what they changed in the draft from `basis`, the weapon
  * the screen showed; it is applied to the weapon as it is in the state the
- * mutation runs on (`applyUserChanges()`). So after a save point restore the
- * restored five slots, Skills and status stay unless the user changed them, and
- * Execution-owned `executionInProgress` and `createdAt` always come from the
- * stored weapon. A change of kind replaces the whole body, since the two kinds
- * hold different fields. An edit of a weapon that no longer exists is refused
- * rather than recreating it.
+ * mutation runs on (`applyOwnedWeaponUserChanges()`). So after a save point
+ * restore the restored kind, five slots, Skills and status stay unless the user
+ * changed them, and Execution-owned `executionInProgress` and `createdAt`
+ * always come from the stored weapon. An edit of a weapon that no longer
+ * exists is refused rather than recreating it.
  */
 export function ownedWeaponSaveMutation(
   master: MasterDataRoot,
@@ -117,9 +166,7 @@ export function ownedWeaponSaveMutation(
       if (current === undefined) {
         throw new EntityFormValidationError(['この所持武器はすでに存在しません。一覧を更新してください。'])
       }
-      const edited: OwnedWeapon = draft.kind === basis.kind && draft.kind === current.kind
-        ? applyUserChanges<OwnedWeapon>(current, basis, draft)
-        : ({ ...draft, id: current.id } as OwnedWeapon)
+      const edited = applyOwnedWeaponUserChanges(current, basis, draft)
       // `executionInProgress` is Execution-owned: ordinary CRUD never takes it
       // from the draft. An edit keeps the stored value, a new weapon starts null.
       value = { ...edited, id: current.id, executionInProgress: current.executionInProgress, createdAt: current.createdAt, updatedAt: now }
@@ -204,7 +251,11 @@ export class OwnedWeaponCrudService {
     approval: PlanBreakingChangeApproval | null = null,
   ): Promise<OwnedWeapon> {
     const mutation = ownedWeaponSaveMutation(this.master, draft, existing, createOwnedWeaponId(), now)
-    return (await this.dependencies.persistence.apply(mutation, approval)).result
+    const outcome = await this.dependencies.persistence.apply(mutation, approval)
+    // An approved breaking change ends the Plan after the mutation ran and
+    // clears its in-progress marks, this weapon's included: return the weapon
+    // exactly as it was persisted.
+    return outcome.state.ownedWeapons.find(({ id }) => id === outcome.result.id) ?? outcome.result
   }
 
   /** Whether saving the draft needs the breaking-change approval (`docs/UI_FLOW.md` 16.3). Writes nothing. */

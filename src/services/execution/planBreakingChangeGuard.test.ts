@@ -556,6 +556,75 @@ describe('Approved breaking changes', () => {
       expect(await database.executionSavePoints.count()).toBe(0)
     }))
 
+  it('keeps the restored Normal when the weapon shown as Gogma returns to Normal by the restore', () =>
+    withDatabase(async (database) => {
+      const fixture = await newNormalFixture(3)
+      const { execution, services } = await started(database, fixture)
+      await confirmCurrent(execution, database, fixture.plan)
+      await confirmCurrent(execution, database, fixture.plan)
+      await confirmCurrent(execution, database, fixture.plan)
+      const savePoint = await execution.recordExecutionSavePoint({ planId: fixture.plan.id })
+      const lastBeforeSavePoint = savePoint.lastExecutionHistoryId
+      await confirmCurrent(execution, database, fixture.plan)
+      const snapshotWeapon = savePoint.ownedWeapons.find(({ id }) => id === CREATED_WEAPON_ID) as OwnedWeapon
+      expect(snapshotWeapon.kind).toBe('normal')
+      expect(snapshotWeapon.executionInProgress).not.toBeNull()
+      // The screen shows the weapon after the conversion: the same ID, now Gogma.
+      const shown = await stored<OwnedWeapon>(database.ownedWeapons, CREATED_WEAPON_ID)
+      expect(shown.kind).toBe('gogma')
+      const draft = { ...draftOf(shown), isProtected: true } as OwnedWeaponDraft
+      const inspection = await services.owned.inspectSave(draft, shown, GUARD_NOW)
+      expect(inspection).toMatchObject({ approvalRequired: true, savePointChoiceRequired: true })
+
+      const saved = await services.owned.save(draft, shown, GUARD_NOW, approvalOf(inspection, 'restore_save_point'))
+
+      expect(saved.kind).toBe('normal')
+      expect(saved).toEqual({ ...snapshotWeapon, isProtected: true, executionInProgress: null, updatedAt: GUARD_NOW })
+      expect(saved).toMatchObject({ seriesSkillId: null, groupSkillId: null, status: null })
+      expect(saved.createdAt).toBe(snapshotWeapon.createdAt)
+      expect(await stored<OwnedWeapon>(database.ownedWeapons, CREATED_WEAPON_ID)).toEqual(saved)
+      expect(await currentPlan(database, fixture.plan)).toEqual(abandonedBreaking(savePoint.productionPlan))
+      expect(await database.executionSavePoints.count()).toBe(0)
+      const remaining = await database.executionHistory.toArray()
+      expect(remaining).toHaveLength(3)
+      expect(remaining.map(({ id }) => id)).toContain(lastBeforeSavePoint)
+    }))
+
+  it('returns the tracked weapon exactly as persisted after the Plan ends at the current state', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      const { execution, services } = await started(database, fixture)
+      await confirmCurrent(execution, database, fixture.plan)
+      const shown = await stored<OwnedWeapon>(database.ownedWeapons, SOURCE_ID)
+      expect(shown.executionInProgress).toMatchObject({ productionPlanId: fixture.plan.id })
+      const draft = { ...draftOf(shown), isProtected: true } as OwnedWeaponDraft
+      const approval = approvalOf(await services.owned.inspectSave(draft, shown, GUARD_NOW))
+      expect(approval.savePointDecision).toBeNull()
+
+      const saved = await services.owned.save(draft, shown, GUARD_NOW, approval)
+
+      expect(saved.executionInProgress).toBeNull()
+      expect(await stored<OwnedWeapon>(database.ownedWeapons, SOURCE_ID)).toEqual(saved)
+      expect(saved).toMatchObject({ isProtected: true, restorationBonuses: shown.restorationBonuses })
+      expect(await currentPlan(database, fixture.plan)).toMatchObject({ status: 'abandoned', abandonmentReason: 'breaking_change_approved' })
+    }))
+
+  it('returns the tracked weapon exactly as persisted when kept with a save point choice', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      const { execution, services } = await started(database, fixture)
+      await execution.recordExecutionSavePoint({ planId: fixture.plan.id })
+      await confirmCurrent(execution, database, fixture.plan)
+      const shown = await stored<OwnedWeapon>(database.ownedWeapons, SOURCE_ID)
+      const draft = { ...draftOf(shown), isProtected: true } as OwnedWeaponDraft
+
+      const saved = await services.owned.save(draft, shown, GUARD_NOW, approvalOf(await services.owned.inspectSave(draft, shown, GUARD_NOW), 'keep_current'))
+
+      expect(saved.executionInProgress).toBeNull()
+      expect(await stored<OwnedWeapon>(database.ownedWeapons, SOURCE_ID)).toEqual(saved)
+      expect(await database.executionHistory.count()).toBe(1)
+    }))
+
   it('deletes a selected Build List Entry and abandons the Plan together', () =>
     withDatabase(async (database) => {
       const fixture = await existingGogmaFixture()

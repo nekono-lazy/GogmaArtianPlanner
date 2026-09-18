@@ -392,7 +392,11 @@ carrying the read-only inspection); an approval names the Plan the user saw and 
 「現在地点を維持」 applies the change to the current state; 「最後のゲーム内セーブ地点へ戻す」
 decides `prepareExecutionSavePointRestore()` first and applies the change again to the
 restored state. A change applies only the fields the user changed from what the screen
-showed (`applyUserChanges()`), so no pre-restore body is written back over the restore.
+showed (`applyUserChanges()`; for an OwnedWeapon `applyOwnedWeaponUserChanges()`,
+which keeps the stored `kind` as authority - a weapon a restore returned from Gogma to
+Normal stays Normal - and applies across kinds only the shared name / memo / protection /
+weapon type / element, refusing a change the stored kind cannot hold), so no pre-restore
+body is written back over the restore; a save returns the record as finally persisted.
 Then the (restored) Plan becomes `abandoned` / `breaking_change_approved` with its
 current Step, Step completions and `recalculationReasons` kept, every weapon in progress
 for it stops being in progress, its save point is deleted, Target preferences change only

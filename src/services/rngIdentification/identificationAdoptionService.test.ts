@@ -93,7 +93,7 @@ function guardedPersistenceOver(
         now: ADOPTION_TIME,
       })
       if (prepared.state.rngState !== null) write(prepared.state.rngState)
-      return { result: prepared.result, planTermination: prepared.planTermination }
+      return { result: prepared.result, state: prepared.state, planTermination: prepared.planTermination }
     },
   }
 }

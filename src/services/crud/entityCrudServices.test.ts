@@ -1,12 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createOwnedWeaponDraft, createTargetWeaponDraft } from '../../domain/forms/entityDrafts'
 import { loadMasterData } from '../../domain/master/loadMasterData'
-import type { OwnedGogmaArtianWeapon, OwnedWeapon, RestorationBonus, TargetWeapon } from '../../domain/models/publicTypes'
+import type { OwnedGogmaArtianWeapon, OwnedWeapon, ProductionPlanId, RestorationBonus, TargetWeapon } from '../../domain/models/publicTypes'
+import { normalWeapon } from '../../test/fixtures/constrainedEnumeration'
+import { orchestrationSource } from '../../test/fixtures/plannerConstrainedOrchestration'
 import { createBuildListEntry } from '../../domain/buildList'
 import type { PlanGuardPersistedState } from '../../domain/execution'
 import { createValidBuildCandidate, createValidOwnedWeapon, createValidTargetWeapon, DOMAIN_FIXTURE_TIME } from '../../test/fixtures/domainData'
 import { inMemoryPlanGuardedPersistence } from '../../test/fixtures/planGuardedPersistence'
-import { EntityFormValidationError, OwnedWeaponCrudService, ReferencedEntityDeleteError, TargetWeaponCrudService } from './entityCrudServices'
+import { applyOwnedWeaponUserChanges, EntityFormValidationError, OwnedWeaponCrudService, ReferencedEntityDeleteError, TargetWeaponCrudService, type OwnedWeaponDraft } from './entityCrudServices'
 
 // Saves are validated against Production bonus availability, which only the
 // verified Master's weapon types / elements can satisfy.
@@ -165,5 +167,49 @@ describe('TargetWeaponCrudService', () => {
     expect((error as ReferencedEntityDeleteError).references).toEqual([{ kind: 'build_list_entry', entityId: entry.id, path: 'targetWeaponId' }])
     expect(deps.memory.commits()).toBe(0)
     expect(deps.memory.state().targetWeapons).toEqual([target])
+  })
+})
+
+describe('applyOwnedWeaponUserChanges', () => {
+  // The same OwnedWeapon ID as a Normal (at a save point) and as the Gogma it
+  // was converted into afterwards.
+  const restoredNormal = { ...normalWeapon('owned.cross-kind'), isProtected: false, memo: 'at save point' }
+  const shownGogma = { ...orchestrationSource('owned.cross-kind'), memo: 'at save point', createdAt: '2026-09-17T05:00:00.000Z' }
+  function draftFrom(weapon: OwnedWeapon): OwnedWeaponDraft {
+    const { id: _id, createdAt: _created, updatedAt: _updated, ...draft } = weapon
+    void _id; void _created; void _updated
+    return draft as OwnedWeaponDraft
+  }
+
+  it('keeps the stored kind and applies only the shared fields the user changed', () => {
+    const draft = { ...draftFrom(shownGogma), isProtected: true, name: 'renamed' } as OwnedWeaponDraft
+    const applied = applyOwnedWeaponUserChanges(restoredNormal, shownGogma, draft)
+
+    expect(applied.kind).toBe('normal')
+    expect(applied).toEqual({ ...restoredNormal, isProtected: true, name: 'renamed' })
+    // The Normal variant holds no Skill and no status: the shown Gogma's never come back.
+    expect(shownGogma.seriesSkillId).not.toBeNull()
+    expect(applied).toMatchObject({ seriesSkillId: null, groupSkillId: null, status: null, rarity: 8, restorationBonusScope: 'normal_artian' })
+  })
+
+  it('refuses a change the stored kind cannot hold instead of forcing the shown Gogma back', () => {
+    const skill = { ...draftFrom(shownGogma), seriesSkillId: 'series_skill.fixture.y' } as OwnedWeaponDraft
+    expect(() => applyOwnedWeaponUserChanges(restoredNormal, shownGogma, skill)).toThrow(EntityFormValidationError)
+    const status = { ...draftFrom(shownGogma), status: 'ideal' } as OwnedWeaponDraft
+    expect(() => applyOwnedWeaponUserChanges(restoredNormal, shownGogma, status)).toThrow(/seriesSkillId|status/)
+  })
+
+  it('never takes the in-progress mark or the timestamps from the draft', () => {
+    const draft = {
+      ...draftFrom(shownGogma),
+      executionInProgress: { productionPlanId: 'plan.stale' as ProductionPlanId, startedAt: DOMAIN_FIXTURE_TIME },
+    } as OwnedWeaponDraft
+    expect(applyOwnedWeaponUserChanges(restoredNormal, shownGogma, draft)).toEqual(restoredNormal)
+  })
+
+  it('is the ordinary three-way apply while the stored kind matches what the screen showed', () => {
+    const stored = { ...shownGogma, seriesSkillId: 'series_skill.fixture.stored' }
+    const draft = { ...draftFrom(shownGogma), isProtected: true } as OwnedWeaponDraft
+    expect(applyOwnedWeaponUserChanges(stored, shownGogma, draft)).toEqual({ ...stored, isProtected: true })
   })
 })
