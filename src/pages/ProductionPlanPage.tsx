@@ -17,7 +17,7 @@ import {
   ProductionPlanContent,
 } from '../components/planner/ProductionPlanContent'
 import { ProductionPlanWhatIfComparison } from '../components/planner/ProductionPlanWhatIfComparison'
-import { PlanExecutionEntry } from '../components/execution/PlanExecutionEntry'
+import { PlanExecutionEntry, type PlanStartPreviewState } from '../components/execution/PlanExecutionEntry'
 import { executionErrorMessage } from '../components/execution/executionStepPresentation'
 import { ExecutionRuntimeError } from '../domain/execution'
 import { loadMasterData } from '../domain/master/loadMasterData'
@@ -60,7 +60,10 @@ import {
   type PlannerWorkerClient,
 } from '../services/planner/plannerWorkerClient'
 import { plannerResultPersistenceService } from '../services/planner/plannerResultPersistenceService'
-import { createProductionPlanExecutionService } from '../services/execution/productionPlanExecutionService'
+import {
+  createProductionPlanExecutionService,
+  type ProductionPlanStartInspection,
+} from '../services/execution/productionPlanExecutionService'
 import { useSettingsStore } from '../stores/settingsStore'
 import type { PlannerInteractionPreparationResult } from '../workers/plannerWorkerContracts'
 
@@ -85,7 +88,15 @@ export interface ProductionPlanPageDependencies {
     result: PlannerOrchestrationResult,
     currentCalculationContext: CalculationContext,
   ): Promise<ProductionPlan | null>
-  /** `draft -> active` through the Execution runtime (`docs/PLANNER_SPEC.md` 16.2). */
+  /**
+   * The read-only preview of the Target links a draft's start makes
+   * (`docs/UI_FLOW.md` 11). Never write authority: the start re-verifies.
+   */
+  inspectProductionPlanStart(planId: ProductionPlanId): Promise<ProductionPlanStartInspection>
+  /**
+   * `draft -> active` and the Plan start Target links, in one Execution
+   * runtime transaction (`docs/PLANNER_SPEC.md` 16.2 / 16.11).
+   */
   startProductionPlan(planId: ProductionPlanId): Promise<ProductionPlan>
 }
 
@@ -109,6 +120,7 @@ function createDefaultDependencies(
         result,
         currentCalculationContext,
       ),
+    inspectProductionPlanStart: (planId) => executionService.inspectProductionPlanStart(planId),
     startProductionPlan: (planId) => executionService.startProductionPlan(planId),
   }
 }
@@ -476,6 +488,9 @@ export function ProductionPlanPage({
     { status: 'idle' } | { status: 'starting' } | { status: 'failure'; message: string }
   >({ status: 'idle' })
   const startingRef = useRef(false)
+  const [startPreview, setStartPreview] = useState<
+    { planId: ProductionPlanId; state: Exclude<PlanStartPreviewState, { status: 'loading' }> } | null
+  >(null)
   const mountedRef = useRef(false)
   useEffect(() => {
     mountedRef.current = true
@@ -484,6 +499,34 @@ export function ProductionPlanPage({
     }
   }, [])
   const replanBusy = replanState.status === 'loading' || replanState.status === 'saving'
+
+  // The start preview is read only for a draft that can start: never for a
+  // stale or ended Plan, and never after the start, so no future-tense link
+  // change is shown for an active Plan.
+  const startableDraftPlanId =
+    (state.status === 'preparing' || state.status === 'ready' || (state.status === 'error' && state.plan !== null)) &&
+    state.plan?.status === 'draft'
+      ? state.plan.id
+      : null
+  useEffect(() => {
+    if (!dependencies || startableDraftPlanId === null) return
+    let active = true
+    dependencies.inspectProductionPlanStart(startableDraftPlanId).then(
+      (inspection) => {
+        if (active) setStartPreview({ planId: startableDraftPlanId, state: { status: 'ready', inspection } })
+      },
+      () => {
+        if (active) setStartPreview({ planId: startableDraftPlanId, state: { status: 'failed' } })
+      },
+    )
+    return () => {
+      active = false
+    }
+  }, [dependencies, startableDraftPlanId])
+  const startPreviewState: PlanStartPreviewState =
+    startPreview !== null && startPreview.planId === startableDraftPlanId
+      ? startPreview.state
+      : { status: 'loading' }
 
   // Target display names load on their own, so neither a slow nor a failed
   // Target read can delay or hide the persisted Plan contents; an unresolved
@@ -1068,6 +1111,7 @@ export function ProductionPlanPage({
             plan={loadedPlan}
             starting={startState.status === 'starting'}
             startError={startState.status === 'failure' ? startState.message : null}
+            startPreview={startPreviewState}
             onStart={() => void startPlan(loadedPlan)}
           />
         )}

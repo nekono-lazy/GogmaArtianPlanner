@@ -458,9 +458,15 @@ describe('Shared Gogma Counter Route prefix fast-forward', () => {
       ),
     ).toEqual(new Set([waterTarget.id, fireTarget.id]))
 
-    expect(plan?.steps[0].expectedStateBefore).toEqual(
-      plan?.baseSnapshot.initialExecutionState,
-    )
+    // The first Step starts after the Plan start effect, which changes Target
+    // preferences only (PLANNER_SPEC 16.5).
+    expect({
+      ...plan?.steps[0].expectedStateBefore,
+      targetExecutionStateHash: undefined,
+    }).toEqual({
+      ...plan?.baseSnapshot.initialExecutionState,
+      targetExecutionStateHash: undefined,
+    })
     plan?.steps.slice(0, -1).forEach((step, index) => {
       expect(step.expectedStateAfter).toEqual(
         plan.steps[index + 1].expectedStateBefore,

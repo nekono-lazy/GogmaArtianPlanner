@@ -25,9 +25,11 @@ import {
   buildListEntryId,
   createValidBuildListEntry,
   createValidNormalArtianCounter,
+  createValidOwnedWeapon,
   createValidProductionPlan,
   createValidRngState,
   createValidTargetWeapon,
+  ownedWeaponId,
   planStepId,
   productionPlanId,
   targetWeaponId,
@@ -47,6 +49,7 @@ import {
 } from '../test/fixtures/plannerTermination'
 import { useSettingsStore } from '../stores/settingsStore'
 import { ExecutionRuntimeError } from '../domain/execution'
+import type { ProductionPlanStartInspection } from '../services/execution/productionPlanExecutionService'
 
 interface Deferred<T> {
   promise: Promise<T>
@@ -230,6 +233,12 @@ function dependencies(
     createInput: vi.fn(async () => fixture.input),
     createWorkerClient: vi.fn(() => client),
     savePlannerResult: vi.fn(async () => null),
+    inspectProductionPlanStart: vi.fn(async (planId) => ({
+      planId,
+      changes: [],
+      ownedWeapons: [],
+      targetWeapons: [],
+    })),
     startProductionPlan: vi.fn(async () => {
       throw new Error('startProductionPlan is not expected in this test')
     }),
@@ -2221,6 +2230,112 @@ describe('ProductionPlanPage Execution entry', () => {
     expect(await screen.findByText('Execution navigator destination')).toBeInTheDocument()
     expect(deps.startProductionPlan).toHaveBeenCalledExactlyOnceWith(fixture.plan.id)
     expect(router.state.location.pathname).toBe(`/plans/${fixture.plan.id}/run`)
+  })
+
+  function inspectionWith(
+    fixture: ReturnType<typeof withStatus>,
+    changes: ProductionPlanStartInspection['changes'],
+  ): ProductionPlanStartInspection {
+    const targetA = createValidTargetWeapon()
+    targetA.id = targetWeaponId('target.start.a')
+    targetA.name = '目標A'
+    const weaponX = { ...createValidOwnedWeapon(ownedWeaponId('owned.start.x')), name: '武器X' }
+    const weaponY = { ...createValidOwnedWeapon(ownedWeaponId('owned.start.y')), name: '武器Y' }
+    return {
+      planId: fixture.plan.id,
+      changes,
+      ownedWeapons: [weaponX, weaponY],
+      targetWeapons: [targetA, { ...fixture.target, name: '目標B' }],
+    }
+  }
+
+  it('previews the Target links the start will make, by name, before 作成開始', async () => {
+    const fixture = withStatus({ status: 'draft' })
+    const deps = dependencies(fixture)
+    vi.mocked(deps.inspectProductionPlanStart).mockResolvedValue(inspectionWith(fixture, [
+      {
+        buildListEntryId: fixture.entry.id,
+        ownedWeaponId: ownedWeaponId('owned.start.x'),
+        targetWeaponId: fixture.target.id,
+        fromTargetWeaponId: targetWeaponId('target.start.a'),
+        replacedOwnedWeaponId: ownedWeaponId('owned.start.y'),
+      },
+    ]))
+    renderPage(deps, fixture.plan.id)
+
+    const region = await screen.findByRole('region', { name: '開始時の優先起点の変更' })
+    expect(region).toHaveTextContent('この生産計画を開始すると、目標武器の優先起点が変更されます。')
+    expect(region).toHaveTextContent('所持武器「武器X」')
+    expect(region).toHaveTextContent('目標A → 目標B')
+    expect(region).toHaveTextContent('「目標B」の優先起点だった「武器Y」は解除されます。')
+    expect(region).toHaveTextContent('変更は「作成開始」を押した時点で反映されます。')
+    expect(region).not.toHaveTextContent('owned.start.x')
+    expect(deps.inspectProductionPlanStart).toHaveBeenCalledWith(fixture.plan.id)
+    expect(screen.getByRole('button', { name: '作成開始' })).toBeEnabled()
+  })
+
+  it('previews a weapon no Target prefers yet as 未設定', async () => {
+    const fixture = withStatus({ status: 'draft' })
+    const deps = dependencies(fixture)
+    vi.mocked(deps.inspectProductionPlanStart).mockResolvedValue(inspectionWith(fixture, [
+      {
+        buildListEntryId: fixture.entry.id,
+        ownedWeaponId: ownedWeaponId('owned.start.x'),
+        targetWeaponId: fixture.target.id,
+        fromTargetWeaponId: null,
+        replacedOwnedWeaponId: null,
+      },
+    ]))
+    renderPage(deps, fixture.plan.id)
+
+    const region = await screen.findByRole('region', { name: '開始時の優先起点の変更' })
+    expect(region).toHaveTextContent('未設定 → 目標B')
+    expect(region).not.toHaveTextContent('解除されます')
+  })
+
+  it('shows no preview when the start changes no link', async () => {
+    const fixture = withStatus({ status: 'draft' })
+    const deps = dependencies(fixture)
+    renderPage(deps, fixture.plan.id)
+    expect(await screen.findByRole('button', { name: '作成開始' })).toBeEnabled()
+    await waitFor(() => expect(deps.inspectProductionPlanStart).toHaveBeenCalledWith(fixture.plan.id))
+    expect(screen.queryByRole('region', { name: '開始時の優先起点の変更' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/優先起点が変更されます/)).not.toBeInTheDocument()
+  })
+
+  it('never previews a start for an active Plan', async () => {
+    const fixture = withStatus({ status: 'active' })
+    const deps = dependencies(fixture)
+    renderPage(deps, fixture.plan.id)
+    expect(await screen.findByRole('link', { name: '実行ナビを再開する' })).toBeInTheDocument()
+    expect(deps.inspectProductionPlanStart).not.toHaveBeenCalled()
+    expect(screen.queryByText(/開始すると/)).not.toBeInTheDocument()
+  })
+
+  it('keeps the preview and the draft when the start with link changes is refused', async () => {
+    const fixture = withStatus({ status: 'draft' })
+    const deps = dependencies(fixture)
+    vi.mocked(deps.inspectProductionPlanStart).mockResolvedValue(inspectionWith(fixture, [
+      {
+        buildListEntryId: fixture.entry.id,
+        ownedWeaponId: ownedWeaponId('owned.start.x'),
+        targetWeaponId: fixture.target.id,
+        fromTargetWeaponId: targetWeaponId('target.start.a'),
+        replacedOwnedWeaponId: null,
+      },
+    ]))
+    vi.mocked(deps.startProductionPlan).mockRejectedValue(
+      new ExecutionRuntimeError('execution_state_mismatch', 'changed'),
+    )
+    const user = userEvent.setup()
+    const { router } = renderPage(deps, fixture.plan.id)
+    await screen.findByRole('region', { name: '開始時の優先起点の変更' })
+    await user.click(screen.getByRole('button', { name: '作成開始' }))
+
+    expect(await screen.findByText(/生産計画は開始していません。ビルドリストから再計算してください。/)).toBeInTheDocument()
+    expect(deps.startProductionPlan).toHaveBeenCalledExactlyOnceWith(fixture.plan.id)
+    expect(router.state.location.pathname).toBe(`/plans/${fixture.plan.id}`)
+    expect(screen.getByRole('region', { name: '開始時の優先起点の変更' })).toBeInTheDocument()
   })
 
   it('stays on the Plan and shows the typed refusal when starting fails', async () => {

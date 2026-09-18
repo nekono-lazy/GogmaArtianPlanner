@@ -506,22 +506,23 @@ describe('Approved breaking changes', () => {
 
   it('restores the save point before a Target edit without writing back the pre-restore preference', () =>
     withDatabase(async (database) => {
-      const fixture = await existingGogmaFixture()
+      // A production-target Normal is linked by its registration Step, so a
+      // save point recorded before that Step does not hold the link.
+      const fixture = await newNormalFixture(1)
       const { execution, services } = await started(database, fixture)
       const savePoint = await execution.recordExecutionSavePoint({ planId: fixture.plan.id })
       await confirmCurrent(execution, database, fixture.plan)
-      const edit = await targetPriorityEdit(services, database)
+      const edit = await targetPriorityEdit(services, database, NEW_NORMAL_TARGET_ID)
       // What the screen showed: the link Execution made after the save point.
-      expect(edit.basis.preferredOwnedWeaponId).toBe(SOURCE_ID)
-      const snapshotGoal = savePoint.targetWeapons.find(({ id }) => id === GOAL_ID) as TargetWeapon
-      const snapshotOther = savePoint.targetWeapons.find(({ id }) => id === OTHER_TARGET_ID) as TargetWeapon
+      expect(edit.basis.preferredOwnedWeaponId).toBe(CREATED_WEAPON_ID)
+      const snapshotGoal = savePoint.targetWeapons.find(({ id }) => id === NEW_NORMAL_TARGET_ID) as TargetWeapon
       expect(snapshotGoal.preferredOwnedWeaponId).toBeNull()
 
       const saved = await services.targets.save(edit.draft, edit.basis, GUARD_NOW, approvalOf(await edit.inspection(), 'restore_save_point'))
 
       expect(saved).toEqual({ ...snapshotGoal, priority: edit.draft.priority, compromiseNeedsReview: false, updatedAt: GUARD_NOW })
-      expect(await stored<TargetWeapon>(database.targetWeapons, GOAL_ID)).toEqual(saved)
-      expect(await stored<TargetWeapon>(database.targetWeapons, OTHER_TARGET_ID)).toEqual(snapshotOther)
+      expect(await stored<TargetWeapon>(database.targetWeapons, NEW_NORMAL_TARGET_ID)).toEqual(saved)
+      expect(await database.ownedWeapons.get(CREATED_WEAPON_ID)).toBeUndefined()
       expect(await database.ownedWeapons.toArray()).toEqual(savePoint.ownedWeapons)
       expect(await currentPlan(database, fixture.plan)).toEqual(abandonedBreaking(savePoint.productionPlan))
       expect(await database.executionHistory.count()).toBe(0)
@@ -547,9 +548,11 @@ describe('Approved breaking changes', () => {
       expect(saved).toEqual({ ...snapshotSource, isProtected: true, updatedAt: GUARD_NOW })
       expect(saved.executionInProgress).toBeNull()
       expect(await stored<OwnedWeapon>(database.ownedWeapons, SOURCE_ID)).toEqual(saved)
-      // The restored Plan-independent Target preferred the weapon; protecting it releases that link.
-      expect(await stored<TargetWeapon>(database.targetWeapons, OTHER_TARGET_ID)).toMatchObject({ preferredOwnedWeaponId: null, updatedAt: GUARD_NOW })
-      expect(await stored<TargetWeapon>(database.targetWeapons, GOAL_ID)).toMatchObject({ preferredOwnedWeaponId: null })
+      // The Plan start linked the weapon to the Plan's Target before the save
+      // point; protecting it releases that restored link, and the Target the
+      // start released stays released.
+      expect(await stored<TargetWeapon>(database.targetWeapons, GOAL_ID)).toMatchObject({ preferredOwnedWeaponId: null, updatedAt: GUARD_NOW })
+      expect(await stored<TargetWeapon>(database.targetWeapons, OTHER_TARGET_ID)).toMatchObject({ preferredOwnedWeaponId: null })
       expect(await stored<RngState>(database.rngState, 'current')).toEqual(savePoint.rngState)
       expect(await currentPlan(database, fixture.plan)).toEqual(abandonedBreaking(savePoint.productionPlan))
       expect(await database.executionHistory.count()).toBe(0)
@@ -675,7 +678,7 @@ describe('Approved breaking changes', () => {
         database,
         'undo_not_allowed',
       )
-      expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(12)
+      expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(13)
       expect(DATABASE_SCHEMA_VERSION).toBe(6)
       expect(EXPORT_SCHEMA_VERSION).toBe(9)
     }))

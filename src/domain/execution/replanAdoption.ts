@@ -7,6 +7,7 @@ import type {
   PlanStepId,
   ProductionPlan,
   ProductionPlanId,
+  TargetWeapon,
 } from '../models/publicTypes'
 import { collectReferencedOwnedWeaponIds } from '../models/hashing'
 import {
@@ -279,6 +280,8 @@ export type ProductionPlanReplanAdoptionWrite =
       generatedBuildListEntries: BuildListEntry[]
       /** Weapons whose in-progress mark moved to the new Plan or was cleared. */
       ownedWeapons: OwnedWeapon[]
+      /** Targets the new Plan's start effect changed (16.11). */
+      targetWeapons: TargetWeapon[]
       deletesExecutionSavePoint: boolean
     }
 
@@ -346,7 +349,8 @@ export function prepareProductionPlanReplanAdoption(
 
   // The ordinary Plan start authority, over the post-state in which the
   // running Plan is already abandoned: any other running Plan still refuses.
-  const startedPlan = prepareProductionPlanStart({
+  // Its start effect links the new Plan's existing weapons (16.11).
+  const start = prepareProductionPlanStart({
     plan: newPlan,
     runningPlans: state.runningPlans.filter(({ id }) => id !== runningPlan.id),
     state: {
@@ -362,6 +366,7 @@ export function prepareProductionPlanReplanAdoption(
     currentCalculationContext: input.currentCalculationContext,
     now,
   })
+  const startedPlan = start.plan
 
   const oldPlan: ProductionPlan = {
     // `currentStepId`, every Step completion and `recalculationReasons` stay:
@@ -389,7 +394,7 @@ export function prepareProductionPlanReplanAdoption(
     }]
   })
 
-  assertAdoptedStateValid(oldPlan, startedPlan, ownedWeapons, input)
+  assertAdoptedStateValid(oldPlan, startedPlan, ownedWeapons, start.targetWeapons, input)
   return {
     kind: 'adopted',
     savePointHandling: savePointDecision === null ? 'no_choice' : 'keep_current',
@@ -397,6 +402,7 @@ export function prepareProductionPlanReplanAdoption(
     newPlan: startedPlan,
     generatedBuildListEntries: structuredClone(generatedEntries),
     ownedWeapons,
+    targetWeapons: start.targetWeapons,
     deletesExecutionSavePoint: state.executionSavePoint !== null,
   }
 }
@@ -484,13 +490,15 @@ function collectNewPlanTrackedOwnedWeaponIds(
 
 /**
  * The adopted state validated before any write: both Plans, every changed
- * weapon, the unchanged Target preference collection over the next weapons,
- * and no weapon left in progress for the abandoned Plan.
+ * weapon, the Target preference collection over the next weapons and the
+ * Targets the new Plan's start effect changed, and no weapon left in progress
+ * for the abandoned Plan.
  */
 function assertAdoptedStateValid(
   oldPlan: ProductionPlan,
   newPlan: ProductionPlan,
   changedWeapons: readonly OwnedWeapon[],
+  changedTargets: readonly TargetWeapon[],
   input: ProductionPlanReplanAdoptionInput,
 ): void {
   for (const plan of [oldPlan, newPlan]) {
@@ -507,7 +515,9 @@ function assertAdoptedStateValid(
   }
   const changedById = new Map(changedWeapons.map((weapon) => [weapon.id, weapon]))
   const nextWeapons = input.state.ownedWeapons.map((weapon) => changedById.get(weapon.id) ?? weapon)
-  const preferences = validateTargetPreferredOwnedWeapons([...input.state.targetWeapons], nextWeapons)
+  const targetById = new Map(changedTargets.map((target) => [target.id, target]))
+  const nextTargets = input.state.targetWeapons.map((target) => targetById.get(target.id) ?? target)
+  const preferences = validateTargetPreferredOwnedWeapons(nextTargets, nextWeapons)
   if (!preferences.isValid) {
     executionFailure('collection_validation_failed', 'The Target preferred owned weapon collection is invalid after the replan adoption.', preferences.issues)
   }

@@ -261,9 +261,10 @@ Execution Navigatorは、巨戟化したStepで `unclassified`、作成リスト
 
 目標武器には、その目標を作る際に候補検索とPlannerが起点として優先したい所持武器を任意で
 1本だけ設定できる。通常の設定は目標武器画面からのユーザー操作で行い、所持武器側は目標武器を
-参照しない。例外として、Execution Navigatorで実際の作成作業を開始したStepの確定時に、その目標武器へ
-作成中の武器を自動で紐付け（別の目標武器の紐付けは同時に解除）、理想品完成時に解除する。Plannerの
-計算とCandidate Searchは優先起点を変更しない（25章）。
+参照しない。例外として、作成計画が既存の所持武器を起点に使う目標武器は「作成開始」の時点で、計画内で
+新規作成する武器はその登録を確定した時点で、その目標武器へ自動で紐付け（別の目標武器の紐付けは同時に
+解除）、理想品完成時に解除する。Plannerの計算、作成計画の生成・表示とCandidate Searchは優先起点を
+変更しない（25章）。
 
 優先起点はPlannerが起点武器を選ぶ計画入力であり、Candidateの性能定義ではない。優先起点だけの変更では
 作成リスト項目をstaleにしない（18章）。
@@ -714,7 +715,7 @@ Plannerの結果を時系列のPlanStepとして表示する。
 
 Plan全体の開始Snapshotは監査と再現用に保持する。加えて各PlanStepに、実行前と実行後に期待するRNG状態・通常Counter・所持武器状態・計画に関係する目標武器の実行状態、またはそれらの安定Hashを保持する。
 
-PlanStepは物理操作ごとに、その確定で適用する実行時の効果（作成対象の武器の登録、同じ武器IDの更新、目標武器との紐付け、妥協checkpoint到達時の実用ラベル、理想品の完成と目標武器の完了）を保持する。完成予定の目標武器数は、この完成効果だけから数える。独立した「確保」Stepは持たない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.3）。
+PlanStepは物理操作ごとに、その確定で適用する実行時の効果（作成対象の武器の登録とその目標武器との紐付け、同じ武器IDの更新、妥協checkpoint到達時の実用ラベル、理想品の完成と目標武器の完了）を保持する。既存の所持武器と目標武器の紐付けはStepではなく作成開始時の効果である。完成予定の目標武器数は、この完成効果だけから数える。独立した「確保」Stepは持たない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.3）。
 
 作成プランのstatusは次の意味を持つ。
 
@@ -777,7 +778,7 @@ RNG状態と通常アーティアCounterは計画完了時にまとめて更新�
 
 ### 25.4 目標武器との紐付けと完成
 
-- 作成計画の生成時点では目標武器の優先起点を変更しない。実行ナビで実際の作成作業を開始したStep（新規通常アーティア経由では作成対象の作成、所持武器経由ではその武器への最初の実ゲーム操作）の確定時に、目標武器の優先起点を作成中の武器へ自動設定する。別の目標武器がその武器を優先起点にしていれば、同じtransactionで解除する。計画を破棄しても紐付けは残す
+- 作成計画の生成・保存・表示では目標武器の優先起点を変更しない。作成計画は既存の所持武器をどの目標武器の起点に使うかを決め、その紐付けは作成計画画面の「作成開始」（計画の実行開始）と同じtransactionで反映する。開始で変わる紐付けは、開始前に作成計画画面で武器と変更前後の目標武器を示して事前表示する。計画内で新規作成する通常アーティアは開始時に存在しないため、その作成対象の登録を確定した時点で紐付ける。別の目標武器がその武器を優先起点にしていれば、同じtransactionで解除する。開始が失敗した場合は計画も紐付けも変更しない。計画を破棄しても紐付けは残す
 - 作成リストで選択した妥協checkpointへ実際に到達した場合、武器を実用にする。作成中は継続し、計画はそのまま理想品へ進む
 - 妥協checkpoint到達時は「次の操作へ進む」と「この武器を妥協品として確定して終了」を選べる。後者は確認ダイアログ必須で、武器を実用のまま確定し、作成中を解除し、目標武器は未完了のまま、優先起点の紐付けは維持し、計画をabandonedにする
 - 理想品が完成したStepの確定では、新規・既存を問わず武器を理想かつ保護ありにし、作成中を解除し、目標武器を完了にして優先起点を解除する。保護された武器は優先起点にできないため、その武器を優先起点にしている他の目標武器の優先起点も同じtransactionで解除する（条件や完了状態は変更しない）。独立した「確保」操作は表示しない
@@ -953,7 +954,7 @@ Production v1 adapterがpersisted exact Gateを要求せずactive representative
 
 ---
 
-実行ナビのライフサイクル改訂（25章、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16章）は、目標武器のlifecycle、所持武器の実行時lifecycle、優先起点のstaleness semantics、PlanStepと確保（reserve）のsemantics、実行時の期待状態、Undo対象範囲を変更する。後続の実装PRではCalculationContextの `appSchemaVersion` 更新が必要になる可能性が高く、目標武器・所持武器・ゲーム内セーブ地点などの永続形状の変更によってはDexie `DATABASE_SCHEMA_VERSION` と `ExportRoot.schemaVersion` の更新も必要になる。本改訂は仕様PRであり実コードのversionを変更しない。実装PRで現行schemaとImport互換を監査し、必要なversion境界を確定する。既存データを推測migrationして意味を変えてはならない（所持している理想品から目標武器を完了済みと推測する、既存の所持武器を作成中と推測する、など）。最初の実装PR（永続Entity基盤）では目標武器lifecycle、所持武器の作成中状態、ゲーム内セーブ地点の永続形状を追加し、Dexie `DATABASE_SCHEMA_VERSION` を5、`ExportRoot.schemaVersion` を7へ更新した。計算意味はまだ切り替えないため `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は11のままとした。2番目の実装PR（Execution Plan契約）で目標定義hashの正規化、計画入力hash、Plan依存hash、実行時の期待状態、PlanStepのexecution effect、確保（reserve）の扱いを切り替え、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を12、`ExportRoot.schemaVersion` を8へ更新した（Dexieは5のまま）。3番目の実装PR（Execution runtime core）で生産計画のlifecycle metadataとUndo Snapshotの拡張を永続形状へ加え、Dexie `DATABASE_SCHEMA_VERSION` を6、`ExportRoot.schemaVersion` を9へ更新した（計算意味は変えないため `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は12のまま）。
+実行ナビのライフサイクル改訂（25章、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16章）は、目標武器のlifecycle、所持武器の実行時lifecycle、優先起点のstaleness semantics、PlanStepと確保（reserve）のsemantics、実行時の期待状態、Undo対象範囲を変更する。後続の実装PRではCalculationContextの `appSchemaVersion` 更新が必要になる可能性が高く、目標武器・所持武器・ゲーム内セーブ地点などの永続形状の変更によってはDexie `DATABASE_SCHEMA_VERSION` と `ExportRoot.schemaVersion` の更新も必要になる。本改訂は仕様PRであり実コードのversionを変更しない。実装PRで現行schemaとImport互換を監査し、必要なversion境界を確定する。既存データを推測migrationして意味を変えてはならない（所持している理想品から目標武器を完了済みと推測する、既存の所持武器を作成中と推測する、など）。最初の実装PR（永続Entity基盤）では目標武器lifecycle、所持武器の作成中状態、ゲーム内セーブ地点の永続形状を追加し、Dexie `DATABASE_SCHEMA_VERSION` を5、`ExportRoot.schemaVersion` を7へ更新した。計算意味はまだ切り替えないため `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は11のままとした。2番目の実装PR（Execution Plan契約）で目標定義hashの正規化、計画入力hash、Plan依存hash、実行時の期待状態、PlanStepのexecution effect、確保（reserve）の扱いを切り替え、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を12、`ExportRoot.schemaVersion` を8へ更新した（Dexieは5のまま）。3番目の実装PR（Execution runtime core）で生産計画のlifecycle metadataとUndo Snapshotの拡張を永続形状へ加え、Dexie `DATABASE_SCHEMA_VERSION` を6、`ExportRoot.schemaVersion` を9へ更新した（計算意味は変えないため `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は12のまま）。後続の実装PRで、既存の所持武器と目標武器の紐付けを作成開始時へ移し（計画内で新規作成する武器は登録時のまま）、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を13へ更新した。永続形状は変えないためDexieは6、`ExportRoot.schemaVersion` は9のままである。
 
 ---
 
@@ -1102,7 +1103,7 @@ RNGの実データやアルゴリズムが未確定の段階では、推測値�
 
 - A 単一目標・新規通常アーティア: Counter進行用の通常アーティアを複数作成し、最後の1本だけを所持武器へ登録し、巨戟化、Reset / スキルリセット、理想品完成、目標武器完了、計画完了まで進む
 - B blind通常アーティア: 作成対象の5枠は予測せず、ユーザーが実際の5枠を入力して所持武器へ登録し、巨戟化、Reset、理想品完成へ進む。架空の5枠を生成しない
-- C 既存巨戟: 計画生成時は目標武器を紐付けず、最初のReset確定で自動紐付けし、同じ所持武器IDを更新し、理想品完成で理想・保護あり・目標武器完了になる
+- C 既存巨戟: 計画生成時は目標武器を紐付けず、作成開始時に自動紐付けし（変更予定は開始前に表示）、同じ所持武器IDを更新し、理想品完成で理想・保護あり・目標武器完了になる
 - D 妥協品で終了: 妥協checkpoint到達で実用になり、ユーザーが確認のうえ終了を選ぶと計画はabandonedになり、目標武器は未完了のまま残る
 - E 複数目標・武器切替: 武器A操作、武器B操作、武器A操作の間に切替案内を挟み、案内自体はRNG操作Stepにしない
 - F 計画中の目標追加: 実行中の計画があっても新しい目標武器を追加でき、計画はstaleにならず、現在地点から候補検索できる

@@ -1,3 +1,4 @@
+import { deriveProductionPlanStartTargetLinks } from './productionPlanStartEffects'
 import { describe, expect, it } from 'vitest'
 import type {
   BuildListEntry,
@@ -258,9 +259,11 @@ describe('Production plan generation', () => {
     expect(plan?.steps[0].inventoryChange?.updateOwnedWeapons[0]).toMatchObject({
       id: source.id, kind: 'gogma', status: 'unclassified', restorationBonusScope: 'normal_artian',
     })
-    expect(plan?.steps[0].executionEffects?.targetLinks).toEqual([{
-      buildListEntryId: entry.id, targetWeaponId: entry.targetWeaponId,
-    }])
+    // The owned Normal exists before the Plan starts: the Plan start effect
+    // links it (PLANNER_SPEC 16.11), so no Step carries the link.
+    expect(plan?.steps[0].executionEffects?.targetLinks).toEqual([])
+    expect(deriveProductionPlanStartTargetLinks(plan?.selectedBuildListEntryIds ?? [], input.buildListEntries))
+      .toEqual([{ buildListEntryId: entry.id, targetWeaponId: entry.targetWeaponId, ownedWeaponId: source.id }])
     expect(plan?.steps[1].executionEffects?.targetCompletions.map(({ ownedWeaponId }) => ownedWeaponId))
       .toEqual([source.id])
     expect(plan?.steps.every(({ buildListEntryId }) => buildListEntryId === entry.id)).toBe(true)
@@ -307,9 +310,11 @@ describe('Production plan generation', () => {
     })
     expect(plan?.steps[0].executionEffects).toMatchObject({
       trackedOwnedWeaponId: source.id,
-      targetLinks: [{ buildListEntryId: entry.id, targetWeaponId: entry.targetWeaponId }],
+      targetLinks: [],
       targetCompletions: [{ buildListEntryId: entry.id, targetWeaponId: entry.targetWeaponId, ownedWeaponId: source.id }],
     })
+    expect(deriveProductionPlanStartTargetLinks(plan?.selectedBuildListEntryIds ?? [], input.buildListEntries))
+      .toEqual([{ buildListEntryId: entry.id, targetWeaponId: entry.targetWeaponId, ownedWeaponId: source.id }])
   })
 
   it('replays existing Keep Bonuses once and completes the same weapon on that Step', async () => {

@@ -247,7 +247,21 @@ export interface KnownValue<T> {
 // migrated. No Dexie table or index changes, so `DATABASE_SCHEMA_VERSION` stays
 // 5; the persisted ProductionPlan shape does change, so `ExportRoot.schemaVersion`
 // moves to 8. RNG semantics remain unchanged.
-export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 12
+//
+// Version 13 moves the Target link of every Entry that starts from an existing
+// OwnedWeapon from the Entry's first physical Step to the Plan start effect
+// (`docs/PLANNER_SPEC.md` 16.2 / 16.11): Draft generation still changes nothing
+// persisted, `draft -> active` applies those links in the same transaction, and
+// `PlanningInputSnapshot.initialExecutionState` becomes the pre-start premise
+// while the first Step's `expectedStateBefore` is the state after the start
+// effect. Only a registered production-target Normal is still linked by a Step.
+// A version 12 Plan expects those links on its Steps, and executing it under
+// the new start would disagree with its own expected states, so every version
+// 1..12 Plan fails closed with `calculation_context_changed`. No build-result
+// compatibility exception is added: version 1..12 Candidates and Build List
+// Entries fail closed too and are searched again. No persisted shape changes,
+// so `DATABASE_SCHEMA_VERSION` stays 6 and `ExportRoot.schemaVersion` stays 9.
+export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 13
 
 export interface CalculationContext {
   gameVersion: string

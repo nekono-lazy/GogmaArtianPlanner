@@ -503,7 +503,7 @@ describe('finish as a compromise', () => {
     }))
 
   it('keeps every schema version authority unchanged', () => {
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(12)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(13)
     expect(DATABASE_SCHEMA_VERSION).toBe(6)
     expect(EXPORT_SCHEMA_VERSION).toBe(9)
   })

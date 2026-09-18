@@ -55,6 +55,10 @@ import {
   createPlanningTargetWeaponsHash,
   createProductionPlan,
 } from './productionPlanGeneration'
+import {
+  applyProductionPlanStartTargetLinks,
+  deriveProductionPlanStartTargetLinks,
+} from './productionPlanStartEffects'
 
 const WEAPON_TYPE = 'weapon.fixture.a'
 const NO_TARGETS = { targetWeapons: [], dependentTargetWeaponIds: [] }
@@ -76,10 +80,33 @@ async function plan(built: ReturnType<typeof orchestrationScenario>): Promise<Pr
   return result.plan as ProductionPlan
 }
 
+/**
+ * The first Step starts from the state after the Plan start effect, which
+ * changes Target preferences only, and every Step starts where the previous one
+ * ended (`docs/PLANNER_SPEC.md` 16.5).
+ */
 function expectChain(built: ProductionPlan) {
-  expect(built.steps[0].expectedStateBefore).toEqual(built.baseSnapshot.initialExecutionState)
+  const { targetExecutionStateHash: _first, ...firstRest } = built.steps[0].expectedStateBefore
+  const { targetExecutionStateHash: _initial, ...initialRest } = built.baseSnapshot.initialExecutionState
+  void _first
+  void _initial
+  expect(firstRest).toEqual(initialRest)
   built.steps.slice(0, -1).forEach((step, index) => {
     expect(step.expectedStateAfter).toEqual(built.steps[index + 1].expectedStateBefore)
+  })
+}
+
+/** The dependent Target execution hash of the given Targets after the Plan start effect. */
+function startedTargetHash(
+  result: ProductionPlan,
+  input: { targetWeapons: TargetWeapon[]; buildListEntries: BuildListEntry[] },
+): string {
+  return createTargetExecutionStateHash({
+    targetWeapons: applyProductionPlanStartTargetLinks(
+      input.targetWeapons,
+      deriveProductionPlanStartTargetLinks(result.selectedBuildListEntryIds, input.buildListEntries),
+    ),
+    dependentTargetWeaponIds: collectProductionPlanDependentTargetWeaponIds(result, input.buildListEntries),
   })
 }
 
@@ -87,19 +114,21 @@ function completionsOf(step: PlanStep | undefined) {
   return step?.executionEffects?.targetCompletions ?? []
 }
 
-describe('calculation schema 12 version boundary', () => {
-  it('keeps the calculation schema at 12 while the Execution runtime moved Export to 9 and Dexie to 6', () => {
+describe('calculation schema version boundaries', () => {
+  it('moves the calculation schema to 13 for the Plan start effect and keeps Export 9 and Dexie 6', () => {
     // The Execution Plan contract moved the calculation schema to 12 and Export
     // to 8 without a Dexie upgrade; the Execution runtime lifecycle metadata then
     // moved Export to 9 and Dexie to 6 without touching calculation semantics.
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(12)
+    // The Plan start effect moved the Target link of existing weapons from the
+    // first physical Step to the Plan start: a calculation change only.
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(13)
     expect(EXPORT_SCHEMA_VERSION).toBe(9)
     expect(DATABASE_SCHEMA_VERSION).toBe(6)
   })
 
-  it('fails a version 11 Plan closed instead of reusing it as a current Plan', () => {
-    const current = { ...createValidProductionPlan().calculationContext, appSchemaVersion: 12 }
-    expect(isCalculationContextCompatible({ ...current, appSchemaVersion: 11 }, current)).toBe(false)
+  it.each([11, 12])('fails a version %i Plan closed instead of reusing it as a current Plan', (version) => {
+    const current = { ...createValidProductionPlan().calculationContext, appSchemaVersion: 13 }
+    expect(isCalculationContextCompatible({ ...current, appSchemaVersion: version }, current)).toBe(false)
   })
 
   it('keeps a legacy Plan with an independent reserve Step valid as a historical record', () => {
@@ -374,7 +403,14 @@ describe('ProductionPlan execution projection', () => {
     expect(result.steps[0].inventoryChange?.updateOwnedWeapons[0]).toMatchObject({
       id: source.id, kind: 'gogma', status: 'unclassified', createdAt: source.createdAt,
     })
-    expect(result.steps[0].executionEffects?.targetLinks).toEqual([{ buildListEntryId: entry.id, targetWeaponId: goal.id }])
+    // The owned Normal exists before the Plan starts, so the Plan start effect
+    // links it; no Step carries the link (16.11).
+    expect(result.steps.flatMap((step) => step.executionEffects?.targetLinks ?? [])).toEqual([])
+    expect(deriveProductionPlanStartTargetLinks(result.selectedBuildListEntryIds, built.input.buildListEntries))
+      .toEqual([{ buildListEntryId: entry.id, targetWeaponId: goal.id, ownedWeaponId: source.id }])
+    expect(result.steps[0].expectedStateBefore.targetExecutionStateHash).toBe(startedTargetHash(result, built.input))
+    expect(result.steps[0].expectedStateBefore.targetExecutionStateHash)
+      .not.toBe(result.baseSnapshot.initialExecutionState.targetExecutionStateHash)
     expect(completionsOf(result.steps[1]).map(({ ownedWeaponId }) => ownedWeaponId)).toEqual([source.id])
     expectChain(result)
   })
@@ -394,8 +430,11 @@ describe('ProductionPlan execution projection', () => {
     const result = await plan(built)
 
     expect(result.steps.map(({ ownedWeaponId }) => ownedWeaponId)).toEqual([source.id, source.id])
-    expect(result.steps[0].executionEffects?.targetLinks).toEqual([{ buildListEntryId: entry.id, targetWeaponId: goal.id }])
+    expect(result.steps[0].executionEffects?.targetLinks).toEqual([])
     expect(result.steps[1].executionEffects?.targetLinks).toEqual([])
+    expect(deriveProductionPlanStartTargetLinks(result.selectedBuildListEntryIds, built.input.buildListEntries))
+      .toEqual([{ buildListEntryId: entry.id, targetWeaponId: goal.id, ownedWeaponId: source.id }])
+    expect(result.steps[0].expectedStateBefore.targetExecutionStateHash).toBe(startedTargetHash(result, built.input))
     const last = result.steps[1]
     expect(completionsOf(last)).toEqual([{ buildListEntryId: entry.id, targetWeaponId: goal.id, ownedWeaponId: source.id }])
     // An existing weapon becomes protected at completion: a semantic change.
@@ -467,7 +506,15 @@ describe('ProductionPlan execution projection', () => {
     // the unrelated Target C never is.
     expect(dependent).toEqual([goalA.id])
     const [reset] = result.steps
-    expect(reset.executionEffects?.targetLinks).toEqual([{ buildListEntryId: entryA.id, targetWeaponId: goalA.id }])
+    // The Plan start effect links Target A to the shared weapon and releases
+    // Target B; the Step itself links nothing.
+    expect(reset.executionEffects?.targetLinks).toEqual([])
+    expect(reset.expectedStateBefore.targetExecutionStateHash).toBe(
+      createTargetExecutionStateHash({
+        targetWeapons: [{ ...goalA, preferredOwnedWeaponId: shared.id }, { ...goalB, preferredOwnedWeaponId: null }, goalC],
+        dependentTargetWeaponIds: dependent,
+      }),
+    )
     const afterTargets = [
       { ...goalA, lifecycleStatus: 'completed' as const, completedAt: DOMAIN_FIXTURE_TIME, preferredOwnedWeaponId: null },
       { ...goalB, preferredOwnedWeaponId: null },
@@ -523,10 +570,20 @@ describe('ProductionPlan execution projection', () => {
     expect(result.selectedBuildListEntryIds).toEqual([entryA.id, entryB.id].sort())
     expect(result.steps.flatMap((step) => completionsOf(step).map(({ targetWeaponId }) => targetWeaponId)).sort())
       .toEqual([goalA.id, goalB.id].sort())
-    // Target A's link relinks sourceA away from Target B, a dependent Target,
-    // so that clearing is part of the very Step's expected state.
-    const linkA = result.steps.find((step) => step.executionEffects?.targetLinks.some(({ targetWeaponId }) => targetWeaponId === goalA.id))
-    expect(linkA).toBeDefined()
+    // The Plan start effect relinks sourceA from Target B to Target A and links
+    // Target B to sourceB, both dependent Targets, so the first Step starts from
+    // that state and no Step links anything.
+    expect(result.steps.flatMap((step) => step.executionEffects?.targetLinks ?? [])).toEqual([])
+    expect(result.steps[0].expectedStateBefore.targetExecutionStateHash).toBe(
+      createTargetExecutionStateHash({
+        targetWeapons: [
+          { ...goalA, preferredOwnedWeaponId: sourceA.id },
+          { ...goalB, preferredOwnedWeaponId: sourceB.id },
+        ],
+        dependentTargetWeaponIds: dependent,
+      }),
+    )
+    expect(startedTargetHash(result, built.input)).toBe(result.steps[0].expectedStateBefore.targetExecutionStateHash)
     expectChain(result)
     const finalTargets = [
       { ...goalA, lifecycleStatus: 'completed' as const, completedAt: DOMAIN_FIXTURE_TIME, preferredOwnedWeaponId: null },

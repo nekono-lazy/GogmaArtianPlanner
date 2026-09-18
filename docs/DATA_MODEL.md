@@ -301,6 +301,17 @@ state、Undo対象範囲を変更する。本改訂は仕様確定だけであ�
 
 version 11以前のBuildCandidate / BuildListEntry / ProductionPlanは内容を保持したまま `calculation_context_changed` でfail closedにする。旧Planへ `executionEffects` を推測付与する、`reserve_weapon` を物理Stepへ合成する、追跡武器やobservation bindingを推測する変換は行わない。Dexieのtable / indexは変更しないため `DATABASE_SCHEMA_VERSION` は5のまま、ProductionPlanの永続形状が変わるため `ExportRoot.schemaVersion` は8へ更新した（15）。Production RNG semanticsと `PRODUCTION_RNG_ENGINE_VERSION` は変更していない。ProductionPlanの `abandonmentReason` / `abandonedAt` / `completedAt`（11.1）は、それを遷移させるExecution runtimeのPRで導入する。
 
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION` **13** は、既存OwnedWeaponを起点にするEntryのTarget紐付けを、
+Entryの最初の物理Step確定からPlan開始effect（`draft -> active` と同じtransaction、PLANNER_SPEC 16.2 /
+16.11）へ移した。Draftの生成・保存・表示では永続状態を変更せず、`PlanningInputSnapshot.initialExecutionState`
+はPlan開始前の前提、先頭Stepの `expectedStateBefore` はPlan開始effect適用後の状態になる（11.2）。
+PlanStepの `executionEffects.targetLinks` はPlan内で新規登録する作成対象Normalの登録Stepだけが持つ。
+version 12のPlanはStepでの紐付けを前提とした期待状態を持ち、新しい開始処理で実行すると自身の期待状態と
+食い違うため、version 1..12のProductionPlanは互換扱いせず `calculation_context_changed` でfail closedに
+する。BuildCandidate / BuildListEntryにもbuild-result互換例外を追加せず、version 1..12はfail closedとして
+再検索する。Plan開始effectは選択Entryから導出し永続fieldを追加しないため、Dexie
+`DATABASE_SCHEMA_VERSION` は6、`ExportRoot.schemaVersion` は9のままである。
+
 ---
 
 ## 4. Enum
@@ -815,11 +826,12 @@ soft preferenceである。
 - Planner計算（Beam Search、Trace Replay、constrained re-search、what-if）、Candidate Search、
   探索内部の `reserve_weapon` がこの値を自動設定・自動付け替えしてはいけない。通常の設定は
   Target Weapons画面からのユーザー操作で行う
-- 例外はExecutionだけである。Execution Navigatorで実際の作成作業を開始したStep（新規Normal Routeの
-  作成対象Normal作成、既存Normal / GogmaへのそのEntryの最初の実ゲーム操作）の確定時に、そのEntryの
-  Targetへ追跡武器を自動設定し、別Targetが同じ武器を優先起点にしていればそのTargetを `null` にする。
-  両方を同じStep確定transactionで保存する。Plan破棄後も紐付けは残す
-  （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.11）
+- 例外はExecutionだけである。Planが既存Normal / Gogmaを起点に使うEntryは、Plan開始（`draft -> active`）の
+  transactionでそのTargetへ既存武器を自動設定する（Plan開始effect。Planの選択Entryから導出し、永続field
+  を持たない）。新規Normal Routeの作成対象Normalは、その登録Stepの確定transactionで自動設定する
+  （`executionEffects.targetLinks`）。どちらも別Targetが同じ武器を優先起点にしていればそのTargetを
+  `null` にし、両方を同じtransactionで保存する。Draftの生成・保存・表示では変更しない。Plan破棄後も
+  紐付けは残す（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.11）
 - 理想品完成（Executionのtarget completion、`confirm_owned_ideal`、Target Weapons画面の
   「この武器で目標を完了にする」）で武器Xが `isProtected = true` になる場合は、完成対象Targetと、
   Xを優先起点にしている他のすべてのTargetの `preferredOwnedWeaponId` を同一transactionで `null` にする。
@@ -1445,6 +1457,7 @@ statusの意味（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.2）。
 
 ```ts
 export interface PlanningInputSnapshot {
+  /** Plan開始前の永続状態の前提。calculation schema 13以降、先頭Stepの前はPlan開始effect適用後の状態 */
   initialExecutionState: ExpectedPlanState;
   targetWeaponsHash: string;
   buildListEntriesHash: string;
@@ -1550,7 +1563,7 @@ export interface ExpectedPlanState {
 - `rngStateHash`: Base Seed、Gogma Counter、Skill Counterの各KnownValueについて正規化valueとisConfirmedを含み、legacy `counterGate`、source、notes、日時を除外する
 - `normalCountersHash`: id、counter、isConfirmedを含み、観測日時を除外する
 - `ownedWeaponsHash`: 共通項目としてID、kind、武器種、属性、restorationBonusScope、保存中のボーナス5枠順、isProtectedを含む。OwnedWeaponはTargetWeaponを参照しないため、Target関連情報は含めない。巨戟だけseriesSkillId、groupSkillIdを加える。`status` と `executionInProgress` は計算に影響しないため、名称、memo、日時と同じく除外する。通常に存在しないSkillへ仮値を設定しない。execution projection（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.3）で登録される作成対象Normalは登録Stepの `expectedStateAfter` から含まれ、Counter進行用Normalは含まれない。observation bindingを持つ武器の5枠は、Plan生成時のexpected stateではbinding token `{ observationBinding: <binding StepのPlanStep ID> }` として正規化し、実状態側は5枠とscopeがbinding Stepの `ExecutionHistory.actualResult` とslot順まで完全一致する場合だけtokenへ置き換える（同 16.5）
-- `targetExecutionStateHash`: Plan依存Target（`selectedBuildListEntryIds` のEntryのTarget、全PlanStepの `targetWeaponId` / `progressedTargetWeaponIds` / `executionEffects` が参照するTarget）ごとに `id`、`lifecycleStatus`、`preferredOwnedWeaponId` をID順にhash化する。全Targetをhashしない。日時は含めない。Plan非依存Targetの紐付け解除（Execution target link）はhashではなくStep確定時のcollection validationとUndo Snapshotで扱う
+- `targetExecutionStateHash`: Plan依存Target（`selectedBuildListEntryIds` のEntryのTarget、全PlanStepの `targetWeaponId` / `progressedTargetWeaponIds` / `executionEffects` が参照するTarget）ごとに `id`、`lifecycleStatus`、`preferredOwnedWeaponId` をID順にhash化する。全Targetをhashしない。日時は含めない。Plan開始effectと登録Stepのtarget linkによる紐付けはPlan依存Targetについてhashへ反映し、Plan非依存Targetの紐付け解除はhashではなく開始 / Step確定時のcollection validation（とStepではUndo Snapshot）で扱う
 - `buildListEntriesHash`: Entry ID、Candidate Snapshot、途中採用状態を持つEntryのcheckpoint pin pair（選択laneは opportunity ID / lane位置 / 終端操作index / Skill または exact ordered 5枠 / scope / match、未選択laneはCandidateのIdeal終点の Skill または exact ordered `finalBonuses` / scope）と改善優先、Target定義Hash、searchStateHash、CalculationContextを含み、派生値のisStale、staleReasons、日時を除外する（PLANNER_SPEC 7.5.5）
 
 `ExpectedPlanState` の各hashは1つのPlan内で意味を持つ検証値である。`ownedWeaponsHash`
@@ -1558,7 +1571,10 @@ export interface ExpectedPlanState {
 `PlannerIdFactory` 由来であるため、同じsemantic outcomeでもPlanner実行ごとに値が変わる。
 したがってPlanner実行間でhash文字列の完全一致を要求しない。要求するのは1つのPlan内の
 chain validity、すなわち先頭Stepの `expectedStateBefore` が
-`PlanningInputSnapshot.initialExecutionState` と一致し、Step Nの `expectedStateAfter`
+`PlanningInputSnapshot.initialExecutionState` にPlan開始effect（既存武器のTarget紐付け、
+[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.11）を適用した状態と一致し（calculation schema 13以降。
+開始effectはTargetの紐付けだけを変えるため、`targetExecutionStateHash` 以外の3 hashは
+`initialExecutionState` と一致する。schema 12以前は完全一致）、Step Nの `expectedStateAfter`
 が Step N+1 の `expectedStateBefore` と一致することである
 ([PLANNER_SPEC.md](./PLANNER_SPEC.md) 15.9.1)。12章の再計算不変条件と14.4の
 Execution Transactionはこのchain validityに依存しており、B8で変更しない。
@@ -1614,7 +1630,10 @@ export interface PlanStepExecutionEffects {
   /** 作成対象Normalの登録。blindでは5枠をobservation bindingで受け取る */
   registersTrackedWeapon: boolean;
   observationBinding: { kind: "normal_restoration_bonuses" } | null;
-  /** Execution確定時にTargetへ追跡武器を紐付ける（16.11） */
+  /**
+   * このStepの確定時にTargetへ追跡武器を紐付ける（16.11）。calculation schema 13以降は、Plan内で
+   * 新規登録する作成対象Normalの登録Stepだけが持つ。既存武器の紐付けはStepではなくPlan開始effect
+   */
   targetLinks: { buildListEntryId: BuildListEntryId; targetWeaponId: TargetWeaponId }[];
   /** 選択済み妥協checkpoint到達で追跡武器をpracticalにする（16.12） */
   compromiseLabels: { buildListEntryId: BuildListEntryId; ownedWeaponId: OwnedWeaponId }[];
@@ -1678,7 +1697,8 @@ export interface PlanStepExecutionEffects {
   Target `completed`、`preferredOwnedWeaponId = null` とする。旧契約の「既存Gogmaは保存済みの保護状態を
   維持する」は廃止した
 - OwnedWeaponへTarget IDを追加する処理は存在しない。`TargetWeapon.preferredOwnedWeaponId` はPlanner
-  計算では変更せず、`targetLinks` / `targetCompletions` のExecution effectだけが変更する
+  計算では変更せず、Plan開始effect（既存武器）と `targetLinks` / `targetCompletions` のExecution effect
+  だけが変更する
 - すべてのExecution effectはexpectedStateBefore / expectedStateAfterへ反映する（statusと作成中状態は
   hash対象外、11.2）
 - 再計算はstale Planに対するUI / Planner操作であり、`recalculate_plan` PlanStepを旧Planへ追加しない

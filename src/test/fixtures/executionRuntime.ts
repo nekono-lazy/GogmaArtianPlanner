@@ -345,7 +345,14 @@ export function otherWeaponCheckpointFixture(): Promise<CheckpointFixture> {
   // The two Targets must not be satisfiable by each other's weapon, or the
   // Beam Search drops the second Entry: this one's Ideal is the five slots the
   // source already holds, the other one's is the default Ideal set.
-  const goal = orchestrationTarget(CHECKPOINT_TARGET_ID, { idealBonuses: practicalBonuses() })
+  // Its Ideal five slots are the Practical set, so the default Bonus compromise
+  // conditions (which relax that set's own types) would not be contained in it:
+  // the Target carries none and compromises on its Skills only.
+  const goal = orchestrationTarget(CHECKPOINT_TARGET_ID, {
+    idealBonuses: practicalBonuses(),
+    practicalBonusConditions: [],
+    alternativeBonusRules: [],
+  })
   const otherGoal = orchestrationTarget('target.execution.otherweapon')
   const entry = startReachedSkillCheckpointEntry(CHECKPOINT_ENTRY_ID, goal, source)
   return planFor(orchestrationScenario({

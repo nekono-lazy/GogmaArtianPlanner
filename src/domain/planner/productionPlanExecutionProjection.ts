@@ -27,6 +27,10 @@ import {
   V1_NORMAL_ARTIAN_RARITY,
 } from '../models/publicTypes'
 import { isIntermediatePinHeldAtRouteStart } from './plannerCheckpoints'
+import {
+  applyProductionPlanStartTargetLinks,
+  deriveProductionPlanStartTargetLinks,
+} from './productionPlanStartEffects'
 import { PlannerPlanGenerationError } from './plannerPlanGenerationError'
 import type { PlannerPlanStepDraft } from './plannerTraceReplay'
 import type { PlannerDependencies, PlannerInput } from './plannerTypes'
@@ -44,6 +48,9 @@ import { createPlanStepPresentation } from './planStepPresentation'
  *   one is a Counter-advance Normal that is never registered, and the last one
  *   is the production target registered under a Planner-reserved ID
  * - conversion updates that same ID (or an owned Normal's own ID) to `gogma`
+ * - the Targets of Entries starting from an existing weapon are linked to it by
+ *   the Plan start effect, before the first Step; only a registered
+ *   production-target Normal is linked by a Step (its registration Step)
  * - every later amendment, and the completion, updates the same ID
  * - the internal reserve is never a Step: its completion rides on the Entry's
  *   last physical Step, and a zero-operation Candidate becomes
@@ -68,7 +75,10 @@ export interface ProductionPlanExecutionProjection {
   steps: PlanStep[]
   /** Sorted, deduplicated Plan-dependent Target IDs (`docs/PLANNER_SPEC.md` 16.5). */
   dependentTargetWeaponIds: TargetWeaponId[]
+  /** The Plan-start premise: the persisted state before the start effect. */
   initialExecutionState: ExpectedPlanState
+  /** The state right after the start effect, which the first Step starts from. */
+  startExecutionState: ExpectedPlanState
 }
 
 interface StepGroup {
@@ -270,6 +280,13 @@ export function projectProductionPlanExecution(
   }
 
   const initial = snapshot()
+  // The Plan start effect (16.2 / 16.11): the Targets of Entries that start
+  // from an existing weapon prefer it from the moment the Plan starts.
+  applyProductionPlanStartTargetLinks(
+    [...targets.values()],
+    deriveProductionPlanStartTargetLinks(request.selectedBuildListEntryIds, input.buildListEntries),
+  ).forEach((target) => targets.set(target.id, target))
+  const started = snapshot()
   const befores: ProjectionSnapshot[] = []
   const afters: ProjectionSnapshot[] = []
   const stepBodies: Omit<PlanStep, 'expectedStateBefore' | 'expectedStateAfter'>[] = []
@@ -404,7 +421,8 @@ export function projectProductionPlanExecution(
         progressedEntries.forEach((entry) => {
           if (physicallyStartedEntries.has(entry.id)) return
           physicallyStartedEntries.add(entry.id)
-          link(effects, entry, weaponId)
+          // An existing weapon was linked by the Plan start effect; only a
+          // registered production-target Normal is linked by a Step.
           // A checkpoint already held at Plan start is labelled on the Entry's
           // first physical Step (`docs/PLANNER_SPEC.md` 16.12).
           if (isIntermediatePinHeldAtRouteStart(entry)) labelPractical(effects, entry, weaponId)
@@ -531,13 +549,14 @@ export function projectProductionPlanExecution(
       state.bindingTokens,
     )
   const initialExecutionState = hash(initial)
+  const startExecutionState = hash(started)
   const steps: PlanStep[] = stepBodies.map((body, index) => ({
     ...body,
     expectedStateBefore: hash(befores[index]),
     expectedStateAfter: hash(afters[index]),
   }))
-  assertExpectedStateChain(steps, initialExecutionState)
-  return { steps, dependentTargetWeaponIds, initialExecutionState }
+  assertExpectedStateChain(steps, startExecutionState)
+  return { steps, dependentTargetWeaponIds, initialExecutionState, startExecutionState }
 }
 
 /**
@@ -593,14 +612,18 @@ function sameExpectedPlanState(left: ExpectedPlanState, right: ExpectedPlanState
   return hashStableValue(left) === hashStableValue(right)
 }
 
-/** Chain validity (`docs/PLANNER_SPEC.md` 16.5): the projection fails closed on any break. */
+/**
+ * Chain validity (`docs/PLANNER_SPEC.md` 16.5): the first Step starts at the
+ * state right after the Plan start effect, and every Step starts where the
+ * previous one ended. The projection fails closed on any break.
+ */
 export function assertExpectedStateChain(
   steps: readonly Pick<PlanStep, 'order' | 'expectedStateBefore' | 'expectedStateAfter'>[],
-  initialExecutionState: ExpectedPlanState,
+  startExecutionState: ExpectedPlanState,
 ): void {
-  if (steps.length > 0 && !sameExpectedPlanState(steps[0].expectedStateBefore, initialExecutionState)) {
+  if (steps.length > 0 && !sameExpectedPlanState(steps[0].expectedStateBefore, startExecutionState)) {
     throw new PlannerPlanGenerationError(
-      'The first PlanStep expectedStateBefore differs from PlanningInputSnapshot.initialExecutionState.',
+      'The first PlanStep expectedStateBefore differs from the state after the Plan start effect.',
     )
   }
   for (let index = 0; index + 1 < steps.length; index += 1) {
