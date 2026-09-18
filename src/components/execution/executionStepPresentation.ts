@@ -238,6 +238,31 @@ export function executionErrorMessage(code: ExecutionRuntimeErrorCode): string {
       return '入力した実際の結果は、この武器の結果として保存できません。入力を確認してください。'
     case 'actual_result_matches_expected':
       return '入力した結果は想定結果と一致しています。「結果一致・次へ」を使用してください。'
+    case 'operation_count_recovery_not_applicable':
+      return 'この作成プランは、現在位置の確認で再開できる状態ではありません。'
+    case 'operation_count_recovery_changed':
+      return '表示後に作成プランの状態が変わったため、現在位置の確認を確定しませんでした。最新の状態を読み込み直しました。'
+    case 'operation_count_recovery_observation_invalid':
+      return '入力したゲームの結果が、この操作の結果として正しくありません。入力を確認してください。'
+    case 'operation_count_recovery_not_unique':
+      return '入力した結果から現在位置を1つに特定できないため、確定しませんでした。'
+    case 'save_point_changed':
+      return '表示後にゲーム内セーブ地点が変わったため、復元しませんでした。最新の状態を読み込み直しました。'
+    case 'save_point_not_found':
+      return 'ゲーム内セーブ地点が見つかりません。'
+    case 'save_point_restore_not_allowed':
+      return 'この作成プランは、ゲーム内セーブ地点へ戻せる状態ではありません。'
+    case 'save_point_required_entity_missing':
+      return 'セーブ地点の復元に必要な所持武器・目標武器・作成リスト項目が削除されているため、復元できません。'
+    case 'save_point_snapshot_invalid':
+    case 'save_point_restore_invalid':
+      return 'ゲーム内セーブ地点の記録が不正なため、復元できません。'
+    case 'plan_abandon_state_changed':
+      return '表示後に作成プランの状態が変わったため、破棄しませんでした。最新の状態を読み込み直しました。'
+    case 'plan_abandon_not_allowed':
+      return 'この作成プランは破棄できる状態ではありません。'
+    case 'save_point_choice_required':
+      return 'ゲーム内セーブ地点の扱いを選ぶ必要があります。最新の状態を読み込み直しました。'
     case 'compromise_finish_not_applicable':
       return 'この武器は作成リストで選んだ途中採用状態として終了できません。'
     case 'compromise_checkpoint_not_current':
@@ -328,13 +353,24 @@ export type ReidentificationDestination = 'normal_counters' | 'rng'
  * `actual_result_different` / `operation_uncertain` record of this Plan whose
  * reason the Plan still carries: a reason in `recalculationReasons` alone never
  * names the Step, so an older divergence record is never taken for the cause.
+ *
+ * Only `actual_result_different` names an RNG re-identification destination.
+ * `operation_uncertain` is recovered inside the Execution Navigator
+ * (`docs/PLANNER_SPEC.md` 16.15) and never sends the user straight to the
+ * ordinary Identification.
  */
-export interface ExecutionDivergenceView {
-  action: 'actual_result_different' | 'operation_uncertain'
-  planStepId: PlanStep['id']
-  operationLabel: string
-  destination: ReidentificationDestination
-}
+export type ExecutionDivergenceView =
+  | {
+      action: 'actual_result_different'
+      planStepId: PlanStep['id']
+      operationLabel: string
+      destination: ReidentificationDestination
+    }
+  | {
+      action: 'operation_uncertain'
+      planStepId: PlanStep['id']
+      operationLabel: string
+    }
 
 export function executionDivergenceView(
   plan: ProductionPlan,
@@ -347,10 +383,21 @@ export function executionDivergenceView(
   if (latestHistory.recalculationReason !== reason || !plan.recalculationReasons.includes(reason)) return null
   const step = plan.steps.find(({ id }) => id === latestHistory.planStepId)
   if (step === undefined) return null
-  return {
-    action,
-    planStepId: step.id,
-    operationLabel: planStepOperationLabels[step.operationType],
-    destination: step.operationType === 'create_normal_artian' ? 'normal_counters' : 'rng',
-  }
+  const operationLabel = planStepOperationLabels[step.operationType]
+  return action === 'actual_result_different'
+    ? {
+        action,
+        planStepId: step.id,
+        operationLabel,
+        destination: step.operationType === 'create_normal_artian' ? 'normal_counters' : 'rng',
+      }
+    : { action, planStepId: step.id, operationLabel }
+}
+
+/** 「Step N（操作名）」 in the Plan's display order; the Step ID when it is unknown. */
+export function planStepPositionLabel(plan: ProductionPlan, stepId: PlanStep['id']): string {
+  const steps = orderPlanSteps(plan)
+  const index = steps.findIndex(({ id }) => id === stepId)
+  if (index < 0) return `Step（${stepId}）`
+  return `Step ${index + 1}（${planStepOperationLabels[steps[index].operationType]}）`
 }

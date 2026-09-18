@@ -2,6 +2,7 @@ import type {
   ActualResult,
   BuildListEntry,
   CalculationContext,
+  NormalArtianCounter,
   ExecutionHistory,
   ExecutionHistoryId,
   ISODateTimeString,
@@ -10,6 +11,7 @@ import type {
   PlanStepId,
   ProductionPlan,
   RestorationBonusSet,
+  RngState,
 } from '../models/publicTypes'
 import { areRestorationBonusSlotsEqual } from '../models/publicTypes'
 import { executionFailure } from './executionRuntimeError'
@@ -74,12 +76,31 @@ export interface ExpectedStepConfirmationInput {
 export type ExpectedStepConfirmation = ExecutionStepWrite
 
 /**
+ * What applying one Step's recorded effects needs besides the working state:
+ * the Plan and clock, the Counter authority, the resulting weapon validator,
+ * and the observation of a blind production-target Normal (`null` otherwise).
+ */
+export interface ExpectedStepTransitionContext extends StepExecutionContext {
+  counterAuthority: ExecutionCounterAuthority
+  validateResultingWeapon: ExecutionResultingWeaponValidator
+  observation: ExecutionNormalRestorationBonusObservation | null
+}
+
+/** The Counters and entities one Step transition reads and advances. */
+export interface ExpectedStepWorkingState {
+  rngState: RngState
+  normalCounters: NormalArtianCounter[]
+  mutable: MutableExecutionState
+  entryById: ReadonlyMap<string, BuildListEntry>
+}
+
+/**
  * Registers the production-target Normal (`docs/PLANNER_SPEC.md` 16.3): the
  * predicted five slots of a predicted Normal, or the user's observed five slots
  * of a blind one - never fabricated slots.
  */
 function registerExpectedProductionTargetNormal(
-  input: ExpectedStepConfirmationInput,
+  input: ExpectedStepTransitionContext,
   step: ExecutableProductionPlanStep,
   state: MutableExecutionState,
 ): void {
@@ -104,7 +125,7 @@ function registerExpectedProductionTargetNormal(
 
 /** Updates the tracked weapon in place with the Step's recorded expected result. */
 function updateTrackedWeapon(
-  input: ExpectedStepConfirmationInput,
+  input: StepExecutionContext,
   step: ExecutableProductionPlanStep,
   state: MutableExecutionState,
 ): void {
@@ -227,7 +248,11 @@ function applyTargetCompletions(
   })
 }
 
-function nextPlanAfterStep(
+/**
+ * The Plan after `step` is completed: the next incomplete Step becomes current,
+ * or the Plan is `completed` when none is left.
+ */
+export function nextPlanAfterStep(
   plan: ProductionPlan,
   step: ExecutableProductionPlanStep,
   now: ISODateTimeString,
@@ -244,6 +269,55 @@ function nextPlanAfterStep(
     abandonedAt: null,
     updatedAt: now,
   }
+}
+
+/**
+ * Applies one Step exactly as the Plan recorded it (`docs/PLANNER_SPEC.md`
+ * 16.1 / 16.3): its `rngAdvance` through the Counter authority, the tracked
+ * weapon registration or same-ID update with the recorded expected result (or
+ * a blind observation), the in-progress mark, target links, compromise labels
+ * and target completions. It completes no Step, writes no ExecutionHistory and
+ * runs no RNG prediction; the working entity state is updated in place and the
+ * advanced Counters are returned.
+ *
+ * This is the one state transition authority `confirmed_expected` and the
+ * Current Position Recovery replay (16.15) share.
+ */
+export function applyExpectedStepTransition(
+  context: ExpectedStepTransitionContext,
+  step: ExecutableProductionPlanStep,
+  working: ExpectedStepWorkingState,
+): { rngState: RngState; normalCounters: NormalArtianCounter[] } {
+  const effects = step.executionEffects
+  const counters = applyRngAdvance(step, working.rngState, working.normalCounters, context.counterAuthority, context.now)
+  const { mutable } = working
+  if (step.operationType === 'create_normal_artian') {
+    if (effects.normalCreationRole === 'production_target') {
+      registerExpectedProductionTargetNormal(context, step, mutable)
+    } else if (effects.normalCreationRole !== 'counter_advance') {
+      inconsistent(`PlanStep '${step.id}' has no Normal creation role.`)
+    }
+  } else if (step.operationType !== 'confirm_owned_ideal') {
+    updateTrackedWeapon(context, step, mutable)
+    markTrackedWeaponInProgress(context, step, mutable)
+  }
+  applyTargetLinks(context, step, mutable)
+  applyCompromiseLabels(context, step, mutable)
+  applyTargetCompletions(context, step, mutable, working.entryById)
+  return counters
+}
+
+/** 16.2 / 16.10.1: a completed Plan leaves no weapon in progress for it. */
+export function clearPlanInProgress(
+  plan: ProductionPlan,
+  mutable: MutableExecutionState,
+  now: ISODateTimeString,
+): void {
+  mutable.weapons.forEach((weapon) => {
+    if (weapon.executionInProgress?.productionPlanId === plan.id) {
+      mutable.weapons.set(weapon.id, { ...weapon, executionInProgress: null, updatedAt: now })
+    }
+  })
 }
 
 /**
@@ -273,33 +347,16 @@ export function prepareExpectedStepConfirmation(
     executionFailure('observation_required', `PlanStep '${step.id}' needs the five restoration bonus slots observed in the game.`)
   }
 
-  const counters = applyRngAdvance(step, state.rngState, state.normalCounters, input.counterAuthority, now)
   const mutable = createMutableExecutionState(state)
-  const entryById = new Map(state.buildListEntries.map((entry) => [entry.id, entry]))
-
-  if (step.operationType === 'create_normal_artian') {
-    if (effects.normalCreationRole === 'production_target') {
-      registerExpectedProductionTargetNormal(input, step, mutable)
-    } else if (effects.normalCreationRole !== 'counter_advance') {
-      inconsistent(`PlanStep '${step.id}' has no Normal creation role.`)
-    }
-  } else if (step.operationType !== 'confirm_owned_ideal') {
-    updateTrackedWeapon(input, step, mutable)
-    markTrackedWeaponInProgress(input, step, mutable)
-  }
-  applyTargetLinks(input, step, mutable)
-  applyCompromiseLabels(input, step, mutable)
-  applyTargetCompletions(input, step, mutable, entryById)
+  const counters = applyExpectedStepTransition(input, step, {
+    rngState: state.rngState,
+    normalCounters: [...state.normalCounters],
+    mutable,
+    entryById: new Map(state.buildListEntries.map((entry) => [entry.id, entry])),
+  })
 
   const nextPlan = nextPlanAfterStep(plan, step, now)
-  if (nextPlan.status === 'completed') {
-    // 16.2 / 16.10.1: a completed Plan leaves no weapon in progress for it.
-    mutable.weapons.forEach((weapon) => {
-      if (weapon.executionInProgress?.productionPlanId === plan.id) {
-        mutable.weapons.set(weapon.id, { ...weapon, executionInProgress: null, updatedAt: now })
-      }
-    })
-  }
+  if (nextPlan.status === 'completed') clearPlanInProgress(plan, mutable, now)
 
   const changes = collectEntityChanges(state, mutable)
   assertStepResultValid(changes, nextPlan)

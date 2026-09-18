@@ -1,21 +1,33 @@
 import { appDatabase, type AppDatabase } from '../../db/AppDatabase'
 import { ExecutionHistoryRepository } from '../../db/repositories/executionHistoryRepository'
+import {
+  deriveOperationCountRecovery,
+  type OperationCountRecoveryAvailability,
+} from '../../domain/execution'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import type {
   BuildListEntry,
   CalculationContext,
   ExecutionHistory,
+  ExecutionSavePoint,
   OwnedWeapon,
   ProductionPlan,
   ProductionPlanId,
   TargetWeapon,
 } from '../../domain/models/publicTypes'
+import { executionSavePointIdForPlan } from '../../domain/models/publicTypes'
 import { createBuildListCalculationContext } from '../buildList/createBuildListCalculationContext'
 import {
   createProductionPlanExecutionService,
   type ConfirmExpectedPlanStepRequest,
   type ConfirmExpectedPlanStepResult,
+  type AbandonProductionPlanRequest,
+  type AbandonProductionPlanResult,
   type ExecutionStepRecordResult,
+  type InspectProductionPlanAbandonmentRequest,
+  type RecoverOperationCountRequest,
+  type RestoreExecutionSavePointRequest,
+  type RestoreExecutionSavePointResult,
   type FinishProductionPlanAsCompromiseRequest,
   type FinishProductionPlanAsCompromiseResult,
   type ProductionPlanExecutionService,
@@ -39,6 +51,14 @@ export interface ExecutionNavigatorSnapshot {
    * which divergence record stopped the Plan.
    */
   latestExecutionHistory: ExecutionHistory | null
+  /** The Plan's game save point, or `null` when none was recorded. */
+  executionSavePoint: ExecutionSavePoint | null
+  /**
+   * Whether Current Position Recovery applies and its Recovery Window
+   * (`docs/PLANNER_SPEC.md` 16.15), derived from this same read. Display only:
+   * the recovery transaction derives it again.
+   */
+  operationCountRecovery: OperationCountRecoveryAvailability
 }
 
 export interface ExecutionNavigatorPageDependencies {
@@ -52,6 +72,12 @@ export interface ExecutionNavigatorPageDependencies {
   ): Promise<FinishProductionPlanAsCompromiseResult>
   recordActualResultDifferent(request: RecordActualResultDifferentRequest): Promise<ExecutionStepRecordResult>
   recordOperationUncertain(request: RecordOperationUncertainRequest): Promise<ExecutionStepRecordResult>
+  recoverOperationCount(request: RecoverOperationCountRequest): Promise<ExecutionStepRecordResult>
+  restoreExecutionSavePoint(request: RestoreExecutionSavePointRequest): Promise<RestoreExecutionSavePointResult>
+  inspectProductionPlanAbandonment(
+    request: InspectProductionPlanAbandonmentRequest,
+  ): ReturnType<ProductionPlanExecutionService['inspectProductionPlanAbandonment']>
+  abandonProductionPlan(request: AbandonProductionPlanRequest): Promise<AbandonProductionPlanResult>
 }
 
 export async function loadExecutionNavigatorSnapshot(
@@ -60,18 +86,22 @@ export async function loadExecutionNavigatorSnapshot(
 ): Promise<ExecutionNavigatorSnapshot | null> {
   const plan = await database.productionPlans.get(planId)
   if (!plan) return null
-  const [ownedWeapons, targetWeapons, buildListEntries, latestExecutionHistory] = await Promise.all([
+  const [ownedWeapons, targetWeapons, buildListEntries, planExecutionHistory, executionSavePoint] = await Promise.all([
     database.ownedWeapons.toArray(),
     database.targetWeapons.toArray(),
     database.buildListEntries.toArray(),
-    new ExecutionHistoryRepository(database).getLatestExecutionHistory(planId),
+    // Ordered by `compareExecutionHistoryOrder()`: the last one is the latest.
+    new ExecutionHistoryRepository(database).getExecutionHistoryByPlan(planId),
+    database.executionSavePoints.get(executionSavePointIdForPlan(planId)),
   ])
   return {
     plan,
     ownedWeapons,
     targetWeapons,
     buildListEntries,
-    latestExecutionHistory: latestExecutionHistory ?? null,
+    latestExecutionHistory: planExecutionHistory.at(-1) ?? null,
+    executionSavePoint: executionSavePoint ?? null,
+    operationCountRecovery: deriveOperationCountRecovery(plan, { ownedWeapons, planExecutionHistory }),
   }
 }
 
@@ -88,5 +118,9 @@ export function createExecutionNavigatorDependencies(
     finishProductionPlanAsCompromise: (request) => service.finishProductionPlanAsCompromise(request),
     recordActualResultDifferent: (request) => service.recordActualResultDifferent(request),
     recordOperationUncertain: (request) => service.recordOperationUncertain(request),
+    recoverOperationCount: (request) => service.recoverOperationCount(request),
+    restoreExecutionSavePoint: (request) => service.restoreExecutionSavePoint(request),
+    inspectProductionPlanAbandonment: (request) => service.inspectProductionPlanAbandonment(request),
+    abandonProductionPlan: (request) => service.abandonProductionPlan(request),
   }
 }

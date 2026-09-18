@@ -165,6 +165,25 @@ export type ExecutionRuntimeErrorCode =
    * Plan; nothing is abandoned on a stale approval.
    */
   | 'plan_breaking_change_approval_not_required'
+  /**
+   * Current Position Recovery (`docs/PLANNER_SPEC.md` 16.15) does not apply:
+   * the Plan is not `stale` with `execution_operation_uncertain` alone, its
+   * latest ExecutionHistory is not the `operation_uncertain` record of its
+   * current Step, or the current Step has no comparable same-operation window.
+   */
+  | 'operation_count_recovery_not_applicable'
+  /**
+   * The `operation_uncertain` record, the current Step or the recovered
+   * position the user saw is no longer what the persisted state derives.
+   */
+  | 'operation_count_recovery_changed'
+  /** An observation does not fit the window's result contract. */
+  | 'operation_count_recovery_observation_invalid'
+  /**
+   * The observations do not match exactly one position of the Recovery Window,
+   * so no position is guessed.
+   */
+  | 'operation_count_recovery_not_unique'
 
 export class ExecutionRuntimeError extends Error {
   readonly code: ExecutionRuntimeErrorCode

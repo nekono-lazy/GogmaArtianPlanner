@@ -104,9 +104,31 @@ function requireLatestHistory(input: ExecutionUndoInput): { history: ExecutionHi
  * Every current Execution record starts from the `active` Plan whose current
  * Step is the recorded Step, so a snapshot Plan that is not exactly that cannot
  * be the state before this record.
+ *
+ * `operation_count_recovered` starts from the `stale` Plan an
+ * `operation_uncertain` record left (16.15): its current Step is incomplete and
+ * the recorded Step - the last Step the recovery reached, or the current Step
+ * itself for a position 0 recovery - is incomplete at or after it.
  */
 function assertSnapshotPlanIsStepStart(history: ExecutionHistory): void {
   const before = history.undoSnapshot.productionPlanBefore
+  if (history.action === 'operation_count_recovered') {
+    const currentIndex = before.steps.findIndex(({ id }) => id === before.currentStepId)
+    const recordedIndex = before.steps.findIndex(({ id }) => id === history.planStepId)
+    if (
+      before.status !== 'stale' ||
+      !before.recalculationReasons.includes('execution_operation_uncertain') ||
+      currentIndex < 0 ||
+      before.steps[currentIndex].isCompleted ||
+      recordedIndex < currentIndex ||
+      before.steps[recordedIndex].isCompleted
+    ) {
+      snapshotInvalid(
+        `The snapshot Plan of ExecutionHistory '${history.id}' is not the stale Plan an uncertain operation left before PlanStep '${history.planStepId}'.`,
+      )
+    }
+    return
+  }
   if (before.status !== 'active' || before.currentStepId !== history.planStepId) {
     snapshotInvalid(
       `The snapshot Plan of ExecutionHistory '${history.id}' is not the active Plan at PlanStep '${history.planStepId}'.`,
@@ -135,6 +157,27 @@ function causedCompletion(plan: ProductionPlan, history: ExecutionHistory): bool
     step.isCompleted &&
     step.completedAt === history.createdAt &&
     before.steps.filter(({ isCompleted }) => !isCompleted).map(({ id }) => id).join('\n') === history.planStepId
+  )
+}
+
+/**
+ * Whether the latest `operation_count_recovered` itself completed the Plan
+ * (16.15): every Step incomplete in the snapshot Plan was completed by it.
+ */
+function causedRecoveryCompletion(plan: ProductionPlan, history: ExecutionHistory): boolean {
+  const before = history.undoSnapshot.productionPlanBefore
+  const replayed = before.steps.filter(({ isCompleted }) => !isCompleted).map(({ id }) => id)
+  return (
+    history.action === 'operation_count_recovered' &&
+    plan.status === 'completed' &&
+    plan.currentStepId === null &&
+    plan.completedAt === history.createdAt &&
+    replayed.length > 0 &&
+    replayed.at(-1) === history.planStepId &&
+    replayed.every((id) => {
+      const step = plan.steps.find((candidate) => candidate.id === id)
+      return step !== undefined && step.isCompleted && step.completedAt === history.createdAt
+    })
   )
 }
 
@@ -167,7 +210,7 @@ function assertUndoAllowed(plan: ProductionPlan, history: ExecutionHistory): { t
       }
       return { terminal: false }
     case 'completed':
-      if (!causedCompletion(plan, history)) {
+      if (!causedCompletion(plan, history) && !causedRecoveryCompletion(plan, history)) {
         executionFailure('undo_not_allowed', `ExecutionHistory '${history.id}' did not complete ProductionPlan '${plan.id}'.`)
       }
       return { terminal: true }

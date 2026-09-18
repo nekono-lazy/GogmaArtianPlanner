@@ -3,12 +3,18 @@ import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import type { AppDatabase } from '../db/AppDatabase'
-import { ExecutionRuntimeError } from '../domain/execution'
+import { deriveOperationCountRecovery, ExecutionRuntimeError } from '../domain/execution'
+import {
+  getProductionAvailableBonusTypeIds,
+  getProductionAvailableRanksForBonusType,
+} from '../domain/artian/productionBonusAvailability'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import { getSeriesSkillOptions } from '../domain/master/masterSelectors'
 import type {
   ExecutionAction,
   ExecutionHistory,
+  ExecutionSavePoint,
+  OwnedWeapon,
   OwnedWeaponId,
   PlanStep,
   ProductionPlan,
@@ -18,6 +24,12 @@ import type {
 } from '../domain/models/publicTypes'
 import { createValidMasterDataFixture } from '../test/fixtures/masterData'
 import {
+  alternativePracticalBonuses,
+  idealBonuses,
+  practicalBonuses,
+  sameLayoutLowerRanks,
+} from '../test/fixtures/constrainedEnumeration'
+import {
   blindFixture,
   checkpointFixture,
   dump,
@@ -26,6 +38,7 @@ import {
   OTHER_WEAPON_ID,
   otherWeaponCheckpointFixture,
   ownedNormalFixture,
+  sameWeaponWindowFixture,
   seed,
   startReachedCheckpointFixture,
   withDatabase,
@@ -83,6 +96,10 @@ async function realRuntime(database: AppDatabase, fixture: ExecutionFixture) {
     finishProductionPlanAsCompromise: vi.fn((request) => service.finishProductionPlanAsCompromise(request)),
     recordActualResultDifferent: vi.fn((request) => service.recordActualResultDifferent(request)),
     recordOperationUncertain: vi.fn((request) => service.recordOperationUncertain(request)),
+    recoverOperationCount: vi.fn((request) => service.recoverOperationCount(request)),
+    restoreExecutionSavePoint: vi.fn((request) => service.restoreExecutionSavePoint(request)),
+    inspectProductionPlanAbandonment: vi.fn((request) => service.inspectProductionPlanAbandonment(request)),
+    abandonProductionPlan: vi.fn((request) => service.abandonProductionPlan(request)),
   }
   return { service, deps }
 }
@@ -112,6 +129,18 @@ function mockedRuntime(snapshot: ExecutionNavigatorSnapshot | null, master = cre
     recordOperationUncertain: vi.fn(async () => {
       throw new Error('recordOperationUncertain is not expected')
     }),
+    recoverOperationCount: vi.fn(async () => {
+      throw new Error('recoverOperationCount is not expected')
+    }),
+    restoreExecutionSavePoint: vi.fn(async () => {
+      throw new Error('restoreExecutionSavePoint is not expected')
+    }),
+    inspectProductionPlanAbandonment: vi.fn(async () => {
+      throw new Error('inspectProductionPlanAbandonment is not expected')
+    }),
+    abandonProductionPlan: vi.fn(async () => {
+      throw new Error('abandonProductionPlan is not expected')
+    }),
   }
   return deps
 }
@@ -123,6 +152,8 @@ async function snapshotOf(fixture: ExecutionFixture, plan: Partial<ProductionPla
     targetWeapons: structuredClone(fixture.built.input.targetWeapons),
     buildListEntries: structuredClone(fixture.built.input.buildListEntries),
     latestExecutionHistory: null,
+    executionSavePoint: null,
+    operationCountRecovery: { kind: 'unavailable', reason: 'not_operation_uncertain' },
   }
 }
 
@@ -531,6 +562,9 @@ describe('ExecutionNavigatorPage weapon switching and checkpoints with the real 
       await user.click(within(dialog).getByRole('button', { name: '妥協品として確定して終了' }))
 
       expect(await screen.findByText('妥協品として現在の生産計画を終了しました', {}, { timeout: 5000 })).toBeInTheDocument()
+      // The page behind a closing MUI Dialog stays aria-hidden until the exit
+      // transition ends: wait for it, exactly as the Cancel path does.
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument(), { timeout: 5000 })
       expect(deps.finishProductionPlanAsCompromise).toHaveBeenCalledExactlyOnceWith({
         planId: fixture.plan.id,
         planStepId: fixture.plan.steps[1].id,
@@ -607,8 +641,29 @@ function staleAfter(
 ): ExecutionNavigatorSnapshot {
   const reason: RecalculationReason =
     action === 'actual_result_different' ? 'unexpected_result' : 'execution_operation_uncertain'
-  const plan: ProductionPlan = { ...structuredClone(snapshot.plan), status: 'stale', recalculationReasons: [reason] }
-  return { ...snapshot, plan, latestExecutionHistory: divergenceHistory(plan, step, action, reason) }
+  const stepIndex = snapshot.plan.steps.findIndex(({ id }) => id === step.id)
+  const plan: ProductionPlan = {
+    ...structuredClone(snapshot.plan),
+    status: 'stale',
+    recalculationReasons: [reason],
+    // operation_uncertain leaves its Step current; actual_result_different completes it.
+    ...(action === 'operation_uncertain'
+      ? {
+          currentStepId: step.id,
+          steps: snapshot.plan.steps.map((candidate, index) => ({ ...candidate, isCompleted: index < stepIndex })),
+        }
+      : {}),
+  }
+  const latestExecutionHistory = divergenceHistory(plan, step, action, reason)
+  return {
+    ...snapshot,
+    plan,
+    latestExecutionHistory,
+    operationCountRecovery: deriveOperationCountRecovery(plan, {
+      ownedWeapons: snapshot.ownedWeapons,
+      planExecutionHistory: [latestExecutionHistory],
+    }),
+  }
 }
 
 const differentButton = () => screen.queryByRole('button', { name: '結果が違う' })
@@ -871,11 +926,11 @@ describe('ExecutionNavigatorPage operation uncertain', () => {
 
     vi.mocked(deps.loadSnapshot).mockResolvedValue(staleAfter(snapshot, reset, 'operation_uncertain'))
     pending.resolve({} as never)
-    const recovery = await screen.findByRole('region', { name: '生産計画の停止' })
-    expect(recovery).toHaveTextContent('操作内容が不明なため生産計画を停止しました')
+    const recovery = await screen.findByRole('region', { name: '操作状況の回復' })
+    expect(recovery).toHaveTextContent('操作状況を確認できなくなりました')
     expect(recovery).toHaveTextContent('Counterや武器の状態は推測して変更していません。')
-    expect(within(recovery).getByRole('link', { name: 'RNG状態を再同定する' })).toHaveAttribute('href', '/rng')
-    expect(within(recovery).getByRole('link', { name: '所持武器を確認する' })).toHaveAttribute('href', '/owned-weapons')
+    // Never straight to the ordinary Identification.
+    expect(screen.queryByRole('link', { name: /再同定/ })).not.toBeInTheDocument()
     expect(deps.recordOperationUncertain).toHaveBeenCalledOnce()
   })
 })
@@ -883,9 +938,7 @@ describe('ExecutionNavigatorPage operation uncertain', () => {
 describe('ExecutionNavigatorPage stale recovery', () => {
   it.each([
     ['actual_result_different', 0, '/normal-counters', '通常アーティアCounterを再同定する'],
-    ['operation_uncertain', 0, '/normal-counters', '通常アーティアCounterを再同定する'],
     ['actual_result_different', 3, '/rng', 'RNG状態を再同定する'],
-    ['operation_uncertain', 4, '/rng', 'RNG状態を再同定する'],
   ] as const)('guides %s of Step %i to %s', async (action, index, href, label) => {
     const fixture = await newNormalFixture()
     const snapshot = await snapshotOf(fixture)
@@ -895,6 +948,18 @@ describe('ExecutionNavigatorPage stale recovery', () => {
     expect(within(recovery).getByRole('link', { name: '作成プランを見る' })).toHaveAttribute('href', `/plans/${fixture.plan.id}`)
     expect(within(recovery).getByRole('link', { name: 'ビルドリストへ' })).toHaveAttribute('href', '/build-list')
     expect(screen.queryByText('この計画は再計算が必要です')).not.toBeInTheDocument()
+  })
+
+  it.each([0, 3, 4])('never sends operation_uncertain of Step %i to the ordinary Identification', async (index) => {
+    const fixture = await newNormalFixture()
+    const snapshot = await snapshotOf(fixture)
+    renderNavigator(mockedRuntime(staleAfter(snapshot, snapshot.plan.steps[index], 'operation_uncertain')), fixture.plan.id)
+    const recovery = await screen.findByRole('region', { name: '操作状況の回復' })
+    expect(within(recovery).getByRole('button', { name: '同じ操作を何回行ったか分からない' })).toBeInTheDocument()
+    expect(within(recovery).getByRole('button', { name: '別の操作・別の武器を操作してしまった' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /再同定/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'RNG状態設定へ' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: '生産計画の停止' })).not.toBeInTheDocument()
   })
 
   it('keeps the generic stale view for an unrelated stale reason', async () => {
@@ -958,9 +1023,9 @@ describe('ExecutionNavigatorPage divergence records with the real runtime', () =
       const dialog = await screen.findByRole('dialog', { name: '操作内容が分からない状態として記録しますか？' })
       await user.click(within(dialog).getByRole('button', { name: '操作内容不明として記録' }))
 
-      const recovery = await screen.findByRole('region', { name: '生産計画の停止' }, { timeout: 5000 })
-      expect(within(recovery).getByRole('link', { name: '通常アーティアCounterを再同定する' })).toHaveAttribute('href', '/normal-counters')
-      expect(within(recovery).getByRole('link', { name: '所持武器を確認する' })).toHaveAttribute('href', '/owned-weapons')
+      const recovery = await screen.findByRole('region', { name: '操作状況の回復' }, { timeout: 5000 })
+      expect(within(recovery).getByRole('button', { name: '同じ操作を何回行ったか分からない' })).toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: /再同定/ })).not.toBeInTheDocument()
       const after = await dump(database)
       expect(after.rngState).toEqual(before.rngState)
       expect(after.normalCounters).toEqual(before.normalCounters)
@@ -972,5 +1037,262 @@ describe('ExecutionNavigatorPage divergence records with the real runtime', () =
         currentStepId: fixture.plan.steps[0].id,
         recalculationReasons: ['execution_operation_uncertain'],
       })
+    }), 20_000)
+})
+
+describe('ExecutionNavigatorPage operation_uncertain recovery', () => {
+  const master = realMaster()
+  const REAL_WEAPON = 'weapon.long_sword'
+  const REAL_ELEMENT = 'element.fire'
+  /** A Gogma-scope five-slot set picked by option index, exactly as the editor offers it. */
+  function realSet(indexes: readonly number[]): RestorationBonusSet {
+    const typeIds = getProductionAvailableBonusTypeIds(master, REAL_WEAPON, REAL_ELEMENT, 'gogma_artian')
+    return indexes.map((index) => {
+      const bonusTypeId = typeIds[index]
+      const [rank] = getProductionAvailableRanksForBonusType(master, REAL_WEAPON, REAL_ELEMENT, bonusTypeId, 'gogma_artian')
+      return { bonusTypeId, bonusRankId: rank.id }
+    }) as RestorationBonusSet
+  }
+  const BASELINE = [0, 0, 0, 0, 0]
+  const A = [1, 0, 0, 0, 0]
+  const B = [0, 1, 0, 0, 0]
+  const X = [0, 0, 1, 0, 0]
+  const I = [1, 1, 0, 0, 0]
+
+  /** Keep x5 on one weapon then Reset Skills, stopped by operation_uncertain at the first Keep. */
+  async function keepRecovery(options: { savePoint?: boolean; results?: number[][] } = {}) {
+    const fixture = await sameWeaponWindowFixture(
+      ['keep_bonuses', 'keep_bonuses', 'keep_bonuses', 'keep_bonuses', 'keep_bonuses', 'reset_skills'],
+      [sameLayoutLowerRanks(), practicalBonuses(), sameLayoutLowerRanks(), alternativePracticalBonuses(), idealBonuses()],
+    )
+    const base = withRealWeapons(await snapshotOf(fixture))
+    // The Plan's recorded results, in real Master IDs the editor can offer.
+    const results = options.results ?? [A, B, A, X, I]
+    base.plan.steps.slice(0, 5).forEach((step, index) => {
+      (step.expectedResult as NonNullable<PlanStep['expectedResult']>).restorationBonuses = realSet(results[index])
+    })
+    base.ownedWeapons = base.ownedWeapons.map((weapon): OwnedWeapon =>
+      weapon.id === fixture.source.id ? { ...weapon, restorationBonuses: realSet(BASELINE) } : weapon)
+    const stale = staleAfter(base, base.plan.steps[0], 'operation_uncertain')
+    const snapshot: ExecutionNavigatorSnapshot = {
+      ...stale,
+      executionSavePoint: options.savePoint ? ({ recordedAt: '2026-09-18T01:00:00.000Z' } as ExecutionSavePoint) : null,
+    }
+    expect(snapshot.operationCountRecovery.kind).toBe('available')
+    return { fixture, base, snapshot, deps: mockedRuntime(snapshot, master) }
+  }
+
+  async function enterSlots(user: ReturnType<typeof userEvent.setup>, indexes: readonly number[]) {
+    for (const [slot, index] of indexes.entries()) {
+      await user.click(screen.getByRole('combobox', { name: `枠${slot + 1} ボーナス種別` }))
+      await user.click(within(screen.getByRole('listbox')).getAllByRole('option')[index])
+    }
+    await user.click(screen.getByRole('button', { name: '作成プランと照合する' }))
+  }
+
+  const region = () => screen.findByRole('region', { name: '操作状況の回復' })
+
+  it('asks which situation it is, with the save point when one exists', async () => {
+    const { fixture, deps } = await keepRecovery({ savePoint: true })
+    renderNavigator(deps, fixture.plan.id)
+    const recovery = await region()
+    expect(recovery).toHaveTextContent('どの状況に近いですか？')
+    expect(within(recovery).getByRole('button', { name: '同じ操作を何回行ったか分からない' })).toBeInTheDocument()
+    expect(within(recovery).getByRole('button', { name: '別の操作・別の武器を操作してしまった' })).toBeInTheDocument()
+    expect(within(recovery).getByRole('button', { name: '最後のゲーム内セーブ地点へ戻す' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /再同定/ })).not.toBeInTheDocument()
+  })
+
+  it('follows a unique position only after the user confirms it, once', async () => {
+    const { fixture, base, snapshot, deps } = await keepRecovery()
+    const pending = deferred<never>()
+    vi.mocked(deps.recoverOperationCount).mockReturnValue(pending.promise)
+    const user = userEvent.setup({ pointerEventsCheck: 0 })
+    renderNavigator(deps, fixture.plan.id)
+    await user.click(within(await region()).getByRole('button', { name: '同じ操作を何回行ったか分からない' }))
+    expect(screen.getByText(/ゲーム内では、ここで案内された操作以外を行わないでください。/)).toBeInTheDocument()
+    // No fabricated or expected value: the slots start empty and matching waits for all five.
+    expect(screen.getByRole('button', { name: '作成プランと照合する' })).toBeDisabled()
+    await enterSlots(user, X)
+
+    const found = screen.getByText('現在位置を特定できました').closest('[role="note"]') as HTMLElement
+    expect(found).toHaveTextContent('Step 4（')
+    expect(found).toHaveTextContent('まで実行済みと判断できます')
+    expect(found).toHaveTextContent('次の操作: Step 5（')
+    expect(deps.recoverOperationCount).not.toHaveBeenCalled()
+
+    const follow = screen.getByRole('button', { name: 'この位置に合わせて続ける' })
+    await user.click(follow)
+    await user.click(follow)
+    expect(deps.recoverOperationCount).toHaveBeenCalledExactlyOnceWith({
+      planId: fixture.plan.id,
+      planStepId: base.plan.steps[0].id,
+      uncertainExecutionHistoryId: snapshot.latestExecutionHistory?.id,
+      observations: [{ kind: 'restoration_bonuses', restorationBonuses: realSet(X), restorationBonusScope: 'gogma_artian' }],
+      recoveredPosition: 4,
+    })
+    expect(follow).toBeDisabled()
+
+    vi.mocked(deps.loadSnapshot).mockResolvedValue(atStep(base, 4))
+    pending.resolve({} as never)
+    expect(await screen.findByText('現在位置に合わせて作成プランを再開しました。')).toBeInTheDocument()
+    expect(screen.getByText('Step 5 / 6')).toBeInTheDocument()
+  })
+
+  it('asks for one more Plan operation while every candidate stays inside the window', async () => {
+    const { fixture, deps } = await keepRecovery()
+    vi.mocked(deps.recoverOperationCount).mockResolvedValue({} as never)
+    const user = userEvent.setup()
+    renderNavigator(deps, fixture.plan.id)
+    await user.click(within(await region()).getByRole('button', { name: '同じ操作を何回行ったか分からない' }))
+    await enterSlots(user, A)
+    const narrowing = screen.getByText('候補を1件に絞れませんでした').closest('[role="note"]') as HTMLElement
+    expect(narrowing).toHaveTextContent('候補: 2件')
+    expect(narrowing).toHaveTextContent('1回だけ実行し、その結果を入力してください。')
+    expect(screen.queryByRole('button', { name: 'この位置に合わせて続ける' })).not.toBeInTheDocument()
+
+    await enterSlots(user, B)
+    expect(screen.getByText('現在位置を特定できました').closest('[role="note"]')).toHaveTextContent('Step 3（')
+    await user.click(screen.getByRole('button', { name: 'この位置に合わせて続ける' }))
+    const [request] = vi.mocked(deps.recoverOperationCount).mock.calls[0]
+    expect(request.observations).toHaveLength(2)
+    expect(request.recoveredPosition).toBe(2)
+  })
+
+  it('does not guess when nothing matches, and offers abandoning without a save point', async () => {
+    const { fixture, deps } = await keepRecovery()
+    const user = userEvent.setup()
+    renderNavigator(deps, fixture.plan.id)
+    await user.click(within(await region()).getByRole('button', { name: '同じ操作を何回行ったか分からない' }))
+    await enterSlots(user, [2, 2, 2, 2, 2])
+    const unsafe = screen.getByText('現在位置を安全に特定できません').closest('[role="note"]') as HTMLElement
+    expect(unsafe).toHaveTextContent('推測で続けることはできません')
+    expect(screen.queryByRole('button', { name: 'この位置に合わせて続ける' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '作成プランを破棄する' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /再同定/ })).not.toBeInTheDocument()
+    // The input can be corrected.
+    await user.click(screen.getByRole('button', { name: '入力をやり直す' }))
+    expect(screen.getByRole('button', { name: '作成プランと照合する' })).toBeDisabled()
+    expect(deps.recoverOperationCount).not.toHaveBeenCalled()
+  })
+
+  it('never asks for an operation past the window end, and recommends the save point', async () => {
+    const { fixture, deps } = await keepRecovery({ savePoint: true, results: [A, B, A, I, I] })
+    const user = userEvent.setup()
+    renderNavigator(deps, fixture.plan.id)
+    await user.click(within(await region()).getByRole('button', { name: '同じ操作を何回行ったか分からない' }))
+    await enterSlots(user, I)
+    const unsafe = screen.getByText('現在位置を安全に特定できません').closest('[role="note"]') as HTMLElement
+    expect(unsafe).toHaveTextContent('作成プランの外の操作になる可能性')
+    expect(screen.queryByRole('button', { name: '作成プランと照合する' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '最後のゲーム内セーブ地点へ戻す' })).toBeInTheDocument()
+  })
+
+  it('restores the save point only after the game-side confirmation', async () => {
+    const { fixture, base, deps } = await keepRecovery({ savePoint: true })
+    vi.mocked(deps.restoreExecutionSavePoint).mockResolvedValue({} as never)
+    const user = userEvent.setup()
+    renderNavigator(deps, fixture.plan.id)
+    await user.click(within(await region()).getByRole('button', { name: '別の操作・別の武器を操作してしまった' }))
+    expect(screen.getByText(/最後のゲーム内セーブ地点へ戻すことを推奨します。/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '作成プランと照合する' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '最後のゲーム内セーブ地点へ戻す' }))
+    let dialog = await screen.findByRole('dialog', { name: '最後のゲーム内セーブ地点へ戻す' })
+    expect(within(dialog).getByRole('button', { name: 'アプリ側もセーブ地点へ戻す' })).toBeDisabled()
+    await user.click(within(dialog).getByRole('button', { name: 'キャンセル' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(deps.restoreExecutionSavePoint).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: '最後のゲーム内セーブ地点へ戻す' }))
+    dialog = await screen.findByRole('dialog', { name: '最後のゲーム内セーブ地点へ戻す' })
+    await user.click(within(dialog).getByRole('checkbox', { name: 'ゲーム側を最後のゲーム内セーブ地点まで戻しました' }))
+    vi.mocked(deps.loadSnapshot).mockResolvedValue(atStep(base, 0))
+    await user.click(within(dialog).getByRole('button', { name: 'アプリ側もセーブ地点へ戻す' }))
+    expect(deps.restoreExecutionSavePoint).toHaveBeenCalledExactlyOnceWith({
+      planId: fixture.plan.id,
+      recordedAt: '2026-09-18T01:00:00.000Z',
+    })
+    expect(await screen.findByText(/最後のゲーム内セーブ地点の状態へ戻しました。/)).toBeInTheDocument()
+  })
+
+  it('abandons through the existing user abandonment when no save point exists', async () => {
+    const { fixture, snapshot, deps } = await keepRecovery()
+    vi.mocked(deps.inspectProductionPlanAbandonment).mockResolvedValue({
+      planId: snapshot.plan.id,
+      planStatus: 'stale',
+      planCurrentStepId: snapshot.plan.currentStepId,
+      planUpdatedAt: snapshot.plan.updatedAt,
+      savePointChoiceRequired: false,
+    })
+    vi.mocked(deps.abandonProductionPlan).mockResolvedValue({} as never)
+    const user = userEvent.setup()
+    renderNavigator(deps, fixture.plan.id)
+    await user.click(within(await region()).getByRole('button', { name: '別の操作・別の武器を操作してしまった' }))
+    await user.click(screen.getByRole('button', { name: '作成プランを破棄する' }))
+    let dialog = await screen.findByRole('dialog', { name: '作成プランを破棄しますか？' })
+    await user.click(within(dialog).getByRole('button', { name: 'キャンセル' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(deps.abandonProductionPlan).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: '作成プランを破棄する' }))
+    dialog = await screen.findByRole('dialog', { name: '作成プランを破棄しますか？' })
+    vi.mocked(deps.loadSnapshot).mockResolvedValue({
+      ...snapshot,
+      plan: { ...snapshot.plan, status: 'abandoned', abandonmentReason: 'user_abandoned', abandonedAt: '2026-09-18T02:00:00.000Z' },
+    })
+    await user.click(within(dialog).getByRole('button', { name: '作成プランを破棄する' }))
+    await waitFor(() => expect(deps.abandonProductionPlan).toHaveBeenCalledOnce())
+    expect(deps.abandonProductionPlan).toHaveBeenCalledWith({
+      planId: fixture.plan.id,
+      observedPlan: { status: 'stale', currentStepId: snapshot.plan.currentStepId, updatedAt: snapshot.plan.updatedAt },
+      savePointDecision: null,
+    })
+    expect(await screen.findByText('作成プランを破棄しました')).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(screen.getByRole('link', { name: 'RNG状態設定へ' })).toHaveAttribute('href', '/rng')
+    expect(screen.getByRole('link', { name: '通常アーティアCounterへ' })).toHaveAttribute('href', '/normal-counters')
+    expect(screen.getByRole('link', { name: '所持武器を確認する' })).toHaveAttribute('href', '/owned-weapons')
+  })
+
+  it('does not offer the position check for a blind production-target Normal', async () => {
+    const fixture = await blindFixture()
+    const snapshot = await snapshotOf(fixture)
+    const deps = mockedRuntime(staleAfter(snapshot, snapshot.plan.steps[0], 'operation_uncertain'))
+    const user = userEvent.setup()
+    renderNavigator(deps, fixture.plan.id)
+    await user.click(within(await region()).getByRole('button', { name: '同じ操作を何回行ったか分からない' }))
+    expect(screen.getByText('現在位置を確認できません')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '作成プランと照合する' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '作成プランを破棄する' })).toBeInTheDocument()
+  })
+
+  it('recovers through the real service to the Plan completion', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      const { service, deps } = await realRuntime(database, fixture)
+      await service.confirmExpectedPlanStep({ planId: fixture.plan.id, planStepId: fixture.plan.steps[0].id })
+      await service.recordOperationUncertain({ planId: fixture.plan.id, planStepId: fixture.plan.steps[1].id })
+      // The fixture's Ideal Series Skill as a Master option the Select can offer.
+      const expected = fixture.plan.steps[1].expectedResult as NonNullable<PlanStep['expectedResult']>
+      const withSkill = createValidMasterDataFixture()
+      const template = withSkill.seriesSkills.find(({ isEnabled }) => isEnabled) as (typeof withSkill.seriesSkills)[number]
+      withSkill.seriesSkills.push({ ...template, id: expected.seriesSkillId as string, displayNameJa: '理想シリーズ（fixture）' })
+      deps.master = withSkill
+      const user = userEvent.setup()
+      renderNavigator(deps, fixture.plan.id)
+
+      await user.click(within(await region()).getByRole('button', { name: '同じ操作を何回行ったか分からない' }))
+      await chooseOption(user, '実際のシリーズスキル', '理想シリーズ（fixture）')
+      await chooseOption(user, '実際のグループスキル', 'スキルなし')
+      await user.click(screen.getByRole('button', { name: '作成プランと照合する' }))
+      expect(screen.getByText('この作成プランの操作はすべて完了します。')).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'この位置に合わせて続ける' }))
+
+      expect(await screen.findByText('生産計画が完了しました', {}, { timeout: 5000 })).toBeInTheDocument()
+      expect(deps.recoverOperationCount).toHaveBeenCalledOnce()
+      expect(await database.productionPlans.get(fixture.plan.id)).toMatchObject({ status: 'completed', recalculationReasons: [] })
+      const history = await database.executionHistory.where('planId').equals(fixture.plan.id).toArray()
+      expect(history.map(({ action }) => action).sort()).toEqual(['confirmed_expected', 'operation_count_recovered', 'operation_uncertain'])
     }), 20_000)
 })

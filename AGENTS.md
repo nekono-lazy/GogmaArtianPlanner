@@ -450,14 +450,50 @@ apart from スキルなし), starts from no fabricated or expected value, and ca
 `recordActualResultDifferent()`; 「何を何回操作したか分からない」 confirms in a dialog and
 calls only `recordOperationUncertain()`. A blind production-target Normal offers no
 「結果が違う」, and `confirm_owned_ideal` and legacy Steps offer neither. After a record the
-Navigator re-reads the persisted state, and a stale Plan whose latest ExecutionHistory
-(`ExecutionHistoryRepository.getLatestExecutionHistory()`, ordered by
-`compareExecutionHistoryOrder()`) is that divergence record shows its own recovery - Normal
-creation to `/normal-counters`, every other operation to `/rng`, plus `/owned-weapons` after
-an uncertain operation; any other stale Plan keeps the generic view. The persistent RNG
-re-identification reminder on Dashboard / RNG Setup / Candidate Search (16.15) is still not
-implemented. It added no persisted field and changed no calculation semantics, so the three
-versions stay 13 / 6 / 9.
+Navigator re-reads the persisted state. A stale Plan whose latest ExecutionHistory (ordered
+by `compareExecutionHistoryOrder()`) is an `actual_result_different` record guides to RNG
+re-identification - Normal creation to `/normal-counters`, every other operation to `/rng`;
+any other stale Plan keeps the generic view.
+The same PR then replaced the `operation_uncertain` recovery (`docs/PLANNER_SPEC.md` 16.15,
+`docs/UI_FLOW.md` 12.5): the ordinary Identification is an investigation that runs more game
+operations, so a Plan stopped by `operation_uncertain` is never sent straight to it. The
+Navigator asks whether only the count of the same operation is unknown or another operation /
+weapon was used. The first is **Current Position Recovery**
+(`src/domain/execution/operationCountRecovery.ts`): the **Recovery Window** is the current Step
+plus the consecutive incomplete Steps with the same physical operation identity (operation
+type, `executionEffects.trackedOwnedWeaponId`, Counter stream - Gogma for Reset **and** Keep
+Bonuses, Skill for conversion / Reset Skills, the `affectedNormalCounterId` Normal Counter for a
+Normal creation - and, for a Normal creation, `normalCreationRole`), each with a comparable
+recorded `expectedResult` (never a blind Normal or `confirm_owned_ideal`), ending after a Step
+with a Target completion. Position 0 is the persisted position, a candidate only where its
+result is derivable safely (the tracked Gogma's current `gogma_artian` slots or Skills; a Normal
+creation only from the immediately preceding confirmed predicted creation on the same Counter;
+never for conversion). The user's observations are matched exactly (ordered five slots and
+scope, or both Skills) against the Window only - never the whole Plan, never before the current
+Step - with no RNG prediction. One candidate is followed; several are narrowed by performing
+the next Plan operation once only when every candidate's next Step is still inside the Window;
+none, or several at the Window end, is never guessed. Following it
+(`ProductionPlanExecutionService.recoverOperationCount()`, one transaction) re-derives
+everything from the persisted state (stale with `execution_operation_uncertain` as the only
+reason, that `operation_uncertain` as the latest record of the current Step, dependencies,
+`expectedStateBefore`, the unique position the user saw), replays the Window Steps through
+`applyExpectedStepTransition()` - the one state transition `confirmed_expected` also uses, so
+Counters go through `rngAdvance` and the Counter authority and every Execution effect is
+applied - verifies each `expectedStateAfter` and the tracked weapon against the last
+observation, returns the Plan to `active` (or `completed`, deleting the save point exactly as
+an ordinary completion does), and records one new `operation_count_recovered` ExecutionHistory
+(`planStepId` = last replayed Step, or the current Step for position 0; `actualResult` = the last
+observation; the Undo snapshot is the stale state). Undo accepts it and returns to the
+`operation_uncertain` stale state. Another operation / weapon, or a position that cannot be
+fixed, uses `restoreExecutionSavePoint()` after the user confirms the game went back first, or
+the existing `user_abandoned` abandonment when there is no save point. `operation_uncertain`
+recording itself is unchanged, and `actual_result_different` is unchanged. The new action literal
+reuses existing fields, so no table, index, persisted field, Export shape or calculation
+semantics changed and the three versions stay 13 / 6 / 9 (an older build refuses an Export
+holding it through action validation, all or nothing). The persistent re-identification
+reminder on Dashboard / RNG Setup / Candidate Search (16.15, now derived from the latest
+divergence record, the Plan state and RngState - not RngState.updatedAt alone) is still not
+implemented.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -3206,17 +3242,19 @@ calculation schema 12 Execution Plan contract (Plan generation with
 `executionEffects`) are implemented. Of the Execution runtime, Plan start and the
 ordinary `confirmed_expected` Step confirmation (blind observation and
 `confirm_owned_ideal` included, with the full Undo snapshot and Plan completion), and
-the `actual_result_different` / `operation_uncertain` records, Undo of the latest
+the `actual_result_different` / `operation_uncertain` records, the Current Position Recovery
+after `operation_uncertain` (`operation_count_recovered`), Undo of the latest
 ExecutionHistory, game save point record / restore, finishing as a compromise, and user
 abandonment with the 16.10 save point choice, the replan Preview and adoption, and the
 Plan-breaking change guard with its approved `breaking_change_approved` abandonment are
 implemented. The Execution Navigator UI covers the ordinary path (Plan start / resume,
 Step confirmation including the blind observation and `confirm_owned_ideal`, weapon switch
 guidance, the compromise checkpoint panel and finish, completion) and the divergence
-records (「結果が違う」 / 「何を何回操作したか分からない」 with the stale Plan's recovery
-guidance inside the Navigator); Undo, save point, abandonment, replan and breaking-change
-warning / confirmation UIs, and the persistent RNG re-identification reminder on Dashboard /
-RNG Setup / Candidate Search, are not yet.
+records (「結果が違う」 with its re-identification guidance, 「何を何回操作したか分からない」
+with the Execution Recovery: current position check, the save point restore and the Plan
+abandonment it needs); the general Undo, save point record, ordinary abandonment, replan and
+breaking-change warning / confirmation UIs, and the persistent RNG re-identification reminder
+on Dashboard / RNG Setup / Candidate Search, are not yet.
 Implementation PRs follow the specification and must not fall back to the older
 Execution semantics.
 
@@ -3258,7 +3296,12 @@ Core rules:
 - An unexpected result with a clearly performed operation applies the Counter
   consumption and stores the actual result, stales the Plan, and guides to RNG
   re-identification. When what or how many operations happened is unknown, never
-  guess Counters: change no state, stale the Plan, and guide to re-identification
+  guess Counters: change no state and stale the Plan. Its recovery never goes straight to
+  the ordinary Identification: an unknown count of the same operation is Current Position
+  Recovery inside the Recovery Window (`operation_count_recovered`, only a unique position,
+  replayed through the Plan's own Steps); another operation / weapon or an unfixable
+  position restores the game save point, or abandons the Plan when there is none
+  (`docs/PLANNER_SPEC.md` 16.15)
 - Candidate Search always starts from the last confirmed persisted state. The
   "after the running Plan completes" origin is a Preview that replays the stored
   remaining Steps without prediction or side effects and cannot add to the Build List
@@ -3330,8 +3373,10 @@ Expected Plan state and `ExecutionHistory` are separate.
 Execution history records what the application/user confirmed happened. Current
 actions are `confirmed_expected` (including a blind observation and a
 `confirm_owned_ideal` confirmation), `actual_result_different`,
-`operation_uncertain`, and `finished_as_compromise`; `secured_weapon` and
-`skipped_candidate` are legacy only.
+`operation_uncertain`, `operation_count_recovered`, and `finished_as_compromise`;
+`secured_weapon` and `skipped_candidate` are legacy only. `operation_count_recovered` is one
+record for a whole Current Position Recovery - never a set of fabricated `confirmed_expected`
+records - and its Undo snapshot is the `stale` state the `operation_uncertain` record left.
 
 Before finalizing a Step, save an `ExecutionUndoSnapshot` containing the state required to restore that Step.
 
@@ -3404,8 +3449,8 @@ On any storage/validation failure:
 - Surface a retryable save error
 
 Undo is also one Dexie transaction. Replan adoption, game save point restore,
-finishing as a compromise, Plan abandonment, and an approved breaking change are each
-one Dexie transaction too.
+finishing as a compromise, Plan abandonment, an approved breaking change, and a Current
+Position Recovery after `operation_uncertain` are each one Dexie transaction too.
 
 Undo failure must leave the pre-Undo state and history unchanged.
 
@@ -3665,8 +3710,11 @@ Execution UI must (`docs/UI_FLOW.md` 12):
 - Offer 次の操作へ進む and a confirmed この武器を妥協品として確定して終了 when a selected
   compromise checkpoint is reached
 - Insert the presentation-only 作業する武器を「○○」へ切り替えてください guidance
-- Support actual-result mismatch recording and "operation unknown" recording, both
-  guiding to RNG re-identification
+- Support actual-result mismatch recording, guiding to RNG re-identification
+- Support "operation unknown" recording and its recovery: choose between an unknown count
+  of the same operation (current position check against the Plan's recorded results) and
+  another operation / weapon (game save point restore after the game-side confirmation, or
+  Plan abandonment without a save point); never link straight to the ordinary Identification
 - Support Undo
 - Support ゲーム内セーブ済みとして記録 and restoring the last game save point, and ask
   現在地点を維持 / 最後のゲーム内セーブ地点へ戻す / キャンセル before a Plan-abandoning
@@ -4161,6 +4209,14 @@ Relevant test areas include:
   were confirmed after it, and is never carried to a replanned Plan
 - An unexpected result applies the Counter consumption and actual result and stales
   the Plan; an uncertain operation changes no state and stales the Plan
+- Current Position Recovery derives the Recovery Window by operation, tracked weapon and
+  Counter stream (Keep advances the Gogma Counter too), never crosses a Counter-advance /
+  production-target Normal boundary, never searches outside the Window, follows only a
+  unique position (position 0 included), asks for one more Plan operation only when every
+  candidate's next Step is inside the Window, replays Execution effects exactly like
+  `confirmed_expected`, keeps the save point unless the Plan completes, records one
+  `operation_count_recovered`, is undoable back to the stale state, and refuses a changed
+  record, Step, position, dependency, context, or an extra stale reason with no write
 - The "after the running Plan completes" Search origin replays stored Steps without
   prediction or persistence and cannot add to the Build List; `completed` Targets are
   excluded from Search and Planner input

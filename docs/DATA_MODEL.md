@@ -384,6 +384,7 @@ export type ExecutionAction =
   | "confirmed_expected"
   | "actual_result_different"
   | "operation_uncertain"
+  | "operation_count_recovered"
   | "finished_as_compromise"
   // legacy: 独立した確保Stepを持つ旧Planだけに現れる
   | "secured_weapon"
@@ -418,7 +419,10 @@ lifecycle改訂（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16章）で追加する�
 Execution Plan契約PRでコードへ反映した。`ProductionPlanAbandonmentReason`、`operation_uncertain`、
 `finished_as_compromise`、`execution_operation_uncertain` のliteralはExecution runtime core PRでコードへ反映し、
 `actual_result_different` / `operation_uncertain` の記録Runtimeは想定外結果Runtime PRで実装した。
-最新ExecutionHistoryのUndo RuntimeはUndo Runtime PRで、ゲーム内セーブ地点（12.1）の記録 / 復元Runtimeはセーブ地点Runtime PRで実装した。`finished_as_compromise` のRuntimeは妥協品終了Runtime PRで、`user_abandoned` のPlan破棄と破棄時のゲーム内セーブ地点選択（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.10）のRuntimeはPlan破棄Runtime PRで実装した。legacy値は保存済みartifactの読み取り互換のためだけに残し、current Executionは
+最新ExecutionHistoryのUndo RuntimeはUndo Runtime PRで、ゲーム内セーブ地点（12.1）の記録 / 復元Runtimeはセーブ地点Runtime PRで実装した。`finished_as_compromise` のRuntimeは妥協品終了Runtime PRで、`user_abandoned` のPlan破棄と破棄時のゲーム内セーブ地点選択（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.10）のRuntimeはPlan破棄Runtime PRで実装した。`operation_count_recovered`（操作内容不明後に同じ操作の連続区間内で現在位置を一意に特定して追従した記録、
+[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.15）はExecution Recovery PRで追加した。既存fieldだけを使う
+literal追加であり、Dexie / Export / calculation schemaのversionは変えない（PLANNER_SPEC 16.17）。
+legacy値は保存済みartifactの読み取り互換のためだけに残し、current Executionは
 生成しない。
 
 ---
@@ -1947,6 +1951,7 @@ ExecutionActionの意味（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.4）。
 | `confirmed_expected` | 結果一致・次へ、blind作成対象の観測値入力（`actualResult` に観測値）、操作0 Idealの確認 |
 | `actual_result_different` | 操作は明確だが結果が予測と違う。Counter消費と実結果を保存しPlan stale |
 | `operation_uncertain` | 何を何回操作したか不明。Counterと武器を変更せずPlan stale |
+| `operation_count_recovered` | `operation_uncertain` 後、現在のゲーム結果とPlanの `expectedResult` 列からRecovery Window内の現在位置を一意に特定し、区間内StepをPlanどおりreplayしてアプリ状態を追従させた。Plan active / completed |
 | `finished_as_compromise` | 妥協checkpoint到達後に妥協品として確定して終了。Plan abandoned |
 
 不変条件。
@@ -1959,13 +1964,16 @@ ExecutionActionの意味（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.4）。
   削除した場合にUndoで復元するために保持する
 - `operation_uncertain` ではRngState、NormalArtianCounter、OwnedWeapon、TargetWeaponを変更しないが、
   Planの `stale` 化を戻せるようにSnapshotは保存する
+- `operation_count_recovered` は中間Stepごとの `confirmed_expected` を捏造せず1件だけ記録する。
+  `planStepId` は追従で到達した最後のStep（位置0の追従では `operation_uncertain` 記録のStep）、
+  `productionPlanBefore` は追従直前の `stale` Planである
 - Step確定前に `ExecutionUndoSnapshot` を生成し、同じTransactionでExecutionHistoryへ保存する
 - `normalCountersBefore` は実装を単純化するため全NormalArtianCounterを保存する
 - `affectedOwnedWeaponsBefore` は更新対象としてStep開始前に存在した武器、`addedOwnedWeaponIds` はStepで新規追加した武器ID、`removedOwnedWeaponsBefore` はStepで削除した武器本体を保持する
 - 3つのOwnedWeapon集合は役割を重複させず、最後のExecutionHistoryだけでStepによる在庫変更を正確に取り消せること
 - `productionPlanBefore` はStep完了、currentStepId、status、recalculationReasonsを含む更新前Plan全体を保持する
 - Undoは表示中の実行Planの最後のExecutionHistoryのSnapshotを適用し、そのExecutionHistoryを削除する。Undo自体のExecutionHistoryは追加しない
-- Undoできるのは、Planが `active` / `stale` の場合と、`completed` / `abandoned` への遷移を起こしたのがそのExecutionHistory自身（最終Step確定、`finished_as_compromise`）の場合だけである。再計画採用、ユーザー破棄、Planを壊す変更の承認で `abandoned` になったPlanのExecutionHistoryはUndoできない
+- Undoできるのは、Planが `active` / `stale` の場合と、`completed` / `abandoned` への遷移を起こしたのがそのExecutionHistory自身（最終Step確定、Planを完了させた `operation_count_recovered`、`finished_as_compromise`）の場合だけである。再計画採用、ユーザー破棄、Planを壊す変更の承認で `abandoned` になったPlanのExecutionHistoryはUndoできない
 - Undoは少なくともRngState、全NormalArtianCounter、OwnedWeapon（status・`executionInProgress` を含む）、Executionが変更したTargetWeapon、ProductionPlan（status、abandonment理由、`currentStepId`）、ゲーム内セーブ地点を正確に戻す。取り消すExecutionHistoryがゲーム内セーブ地点の `lastExecutionHistoryId` なら、そのセーブ地点を削除する
 - Undoはツール上の誤操作修正であり、ゲーム内操作を巻き戻すものではない
 - `wasExpected = false` の場合、Planを `stale` にして再計算導線を出す
@@ -1974,7 +1982,10 @@ ExecutionActionの意味（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.4）。
   （`securedOwnedWeaponId = null`）。`operation_uncertain` は `wasExpected = false`、
   `recalculationReason = "execution_operation_uncertain"`、`actualResult = null` で、Undo Snapshotの
   OwnedWeapon / TargetWeapon集合（`affectedOwnedWeaponsBefore`、`addedOwnedWeaponIds`、`removedOwnedWeaponsBefore`、
-  `affectedTargetWeaponsBefore`）はすべて空とする。legacy actionと `finished_as_compromise` は汎用検証だけを行う
+  `affectedTargetWeaponsBefore`）はすべて空とする。`operation_count_recovered` は `wasExpected = true`、
+  `recalculationReason = null`、`actualResult` 非null（`securedOwnedWeaponId = null`。最後の観測であり、5枠と
+  scopeを持つならSeries / Group Skillは `null`、5枠が `null` ならSkill観測）、`removedOwnedWeaponsBefore` は空とする。
+  legacy actionと `finished_as_compromise` は汎用検証だけを行う
 - `ActualResult.seriesSkillId` / `groupSkillId` は非nullなら空でないIDとする。`note` はnullまたは文字列で、
   Runtimeの判定には使わない
 
@@ -2182,6 +2193,10 @@ UndoもRngState、全NormalArtianCounter、対象OwnedWeapon、対象TargetWeapo
 - ゲーム内セーブ地点の復元（12.1）
 - Planを壊す変更の承認: Planの `abandoned`（`breaking_change_approved`）と変更の保存
 - Plan破棄: Planの `abandoned`（`user_abandoned`）、セーブ地点削除、作成中状態の解除
+- 操作内容不明後の現在位置追従（`operation_count_recovered`、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.15）:
+  前提の再確認、Recovery Windowと候補の再導出、区間内Stepのreplay（RngState、NormalArtianCounter、OwnedWeapon、
+  TargetWeapon、Step完了、Planの `active` / `completed` 化）、各Stepの `expectedStateAfter` と最後の観測の検証、
+  ExecutionHistory追加。Planが完了した場合だけセーブ地点を削除する
 
 Planを壊す変更の承認はRuntimeとして実装済みである（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.6の
 実装上の確定事項）。RngState、NormalArtianCounter、OwnedWeapon、TargetWeapon、BuildListEntryを変更し得る

@@ -111,17 +111,23 @@ describe('executionDivergenceView', () => {
     })
   })
 
-  it('sends a Gogma / Skill divergence to RNG Setup', async () => {
+  it('sends a Gogma / Skill unexpected result to RNG Setup', async () => {
     const { plan } = await existingGogmaFixture()
-    const [reset, resetSkills] = plan.steps
+    const [reset] = plan.steps
     expect(executionDivergenceView(
       stale(plan, ['unexpected_result']),
       history(plan, reset, 'actual_result_different', 'unexpected_result'),
-    )?.destination).toBe('rng')
+    )).toMatchObject({ action: 'actual_result_different', destination: 'rng' })
+  })
+
+  it('names no Identification destination for operation_uncertain', async () => {
+    const { plan } = await newNormalFixture()
+    const [create] = plan.steps
+    // Recovered inside the Navigator (16.15), never sent to the ordinary Identification.
     expect(executionDivergenceView(
       stale(plan, ['execution_operation_uncertain']),
-      history(plan, resetSkills, 'operation_uncertain', 'execution_operation_uncertain'),
-    )).toMatchObject({ action: 'operation_uncertain', destination: 'rng' })
+      history(plan, create, 'operation_uncertain', 'execution_operation_uncertain'),
+    )).toEqual({ action: 'operation_uncertain', planStepId: create.id, operationLabel: expect.any(String) })
   })
 
   it('reads only the latest record, never a reason left by an older divergence', async () => {

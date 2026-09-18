@@ -1,69 +1,9 @@
-import { useId } from 'react'
-import {
-  Alert,
-  Button,
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
-  Stack,
-  Typography,
-} from '@mui/material'
+import { Alert, Button, Stack, Typography } from '@mui/material'
 import type { ExecutionActualResultObservation } from '../../domain/execution'
-import { getGroupSkillOptions, getSeriesSkillOptions } from '../../domain/master/masterSelectors'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
-import { BonusSetEditor } from '../forms/BonusSetEditor'
-import { actualResultFromDraft, type ActualResultDraft, type ActualSkillChoice } from './actualResultDraft'
+import { actualResultFromDraft, type ActualResultDraft } from './actualResultDraft'
 import type { ActualResultInputKind } from './executionStepPresentation'
-
-const UNSET = ''
-const NONE = '__none__'
-
-function toSelectValue(choice: ActualSkillChoice): string {
-  if (choice.status === 'unset') return UNSET
-  return choice.status === 'none' ? NONE : choice.id
-}
-
-function fromSelectValue(value: string): ActualSkillChoice {
-  if (value === UNSET) return { status: 'unset' }
-  if (value === NONE) return { status: 'none' }
-  return { status: 'skill', id: value }
-}
-
-function ActualSkillSelect({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string
-  options: { id: string; displayNameJa: string }[]
-  value: ActualSkillChoice
-  onChange(value: ActualSkillChoice): void
-}) {
-  const labelId = useId()
-  return (
-    <FormControl fullWidth>
-      <InputLabel id={labelId}>{label}</InputLabel>
-      <Select
-        labelId={labelId}
-        label={label}
-        value={toSelectValue(value)}
-        onChange={(event) => onChange(fromSelectValue(String(event.target.value)))}
-      >
-        <MenuItem value={UNSET} disabled>
-          未入力
-        </MenuItem>
-        <MenuItem value={NONE}>スキルなし</MenuItem>
-        {options.map((skill) => (
-          <MenuItem key={skill.id} value={skill.id}>
-            {skill.displayNameJa}
-          </MenuItem>
-        ))}
-      </Select>
-    </FormControl>
-  )
-}
+import { GameResultFields } from './GameResultFields'
 
 /**
  * 「結果が違う」 actual result input (`docs/UI_FLOW.md` 12.4).
@@ -104,32 +44,15 @@ export function ActualResultDifferentForm({
         記録すると、この操作のCounter消費と実際の結果を保存し、生産計画を停止します。
       </Alert>
       <Typography variant="body2">ゲーム画面に表示された実際の結果を入力してください。</Typography>
-      {kind.kind === 'restoration_bonuses' ? (
-        <BonusSetEditor
-          label="実際の復元ボーナス5枠"
-          master={master}
-          weaponTypeId={weaponTypeId}
-          elementId={elementId}
-          scope={kind.scope}
-          value={draft.slots}
-          onChange={(slots) => onChange({ ...draft, slots })}
-        />
-      ) : (
-        <Stack spacing={1.5}>
-          <ActualSkillSelect
-            label="実際のシリーズスキル"
-            options={getSeriesSkillOptions(master)}
-            value={draft.series}
-            onChange={(series) => onChange({ ...draft, series })}
-          />
-          <ActualSkillSelect
-            label="実際のグループスキル"
-            options={getGroupSkillOptions(master)}
-            value={draft.group}
-            onChange={(group) => onChange({ ...draft, group })}
-          />
-        </Stack>
-      )}
+      <GameResultFields
+        master={master}
+        kind={kind}
+        weaponTypeId={weaponTypeId}
+        elementId={elementId}
+        draft={draft}
+        bonusLabel="実際の復元ボーナス5枠"
+        onChange={onChange}
+      />
       {actualResult === null && (
         <Typography variant="body2" color="text.secondary">
           {kind.kind === 'restoration_bonuses'

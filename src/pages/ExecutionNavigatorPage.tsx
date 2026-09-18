@@ -33,6 +33,7 @@ import {
   type ExecutionStepPresentation,
 } from '../components/execution/executionStepPresentation'
 import { OperationUncertainDialog } from '../components/execution/OperationUncertainDialog'
+import { OperationUncertainRecovery } from '../components/execution/OperationUncertainRecovery'
 import { WeaponSwitchPrompt } from '../components/execution/WeaponSwitchPrompt'
 import { RepositoryError } from '../db/repositoryError'
 import {
@@ -41,11 +42,13 @@ import {
   type CurrentCompromiseCheckpoint,
   type ExecutionActualResultObservation,
   type ExecutionNormalRestorationBonusObservation,
+  type OperationCountRecoveryObservation,
   type ExecutionRuntimeErrorCode,
 } from '../domain/execution'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import type {
   BuildListEntryId,
+  ExecutionHistory,
   PlanStep,
   PlanStepId,
   ProductionPlan,
@@ -110,10 +113,12 @@ function NavigationLinks({ links }: { links: { label: string; to: string }[] }) 
 function EndedPlanView({
   plan,
   divergence,
+  latestExecutionHistory,
 }: {
   plan: ProductionPlan
-  /** The divergence record that stopped a stale Plan, from its latest ExecutionHistory. */
-  divergence: ExecutionDivergenceView | null
+  /** The `actual_result_different` record that stopped a stale Plan, from its latest ExecutionHistory. */
+  divergence: Extract<ExecutionDivergenceView, { action: 'actual_result_different' }> | null
+  latestExecutionHistory: ExecutionHistory | null
 }) {
   const planLink = { label: '作成プランを見る', to: `/plans/${plan.id}` }
   if (plan.status === 'completed') {
@@ -146,6 +151,32 @@ function EndedPlanView({
               { label: 'ビルドリストへ', to: '/build-list' },
               { label: '目標武器へ', to: '/target-weapons' },
               planLink,
+            ]}
+          />
+        </Stack>
+      </Alert>
+    )
+  }
+  if (
+    plan.status === 'abandoned' &&
+    plan.abandonmentReason === 'user_abandoned' &&
+    latestExecutionHistory?.action === 'operation_uncertain'
+  ) {
+    // Abandoned from the operation_uncertain recovery (16.15): the Plan has
+    // ended, so the ordinary Identification is the way back now.
+    return (
+      <Alert severity="info">
+        <AlertTitle>作成プランを破棄しました</AlertTitle>
+        <Stack spacing={1.5}>
+          <Typography variant="body2">
+            現在のゲーム状態に合わせて、RNG状態・通常アーティアCounter・所持武器を確認・再登録してから再計画してください。
+          </Typography>
+          <NavigationLinks
+            links={[
+              { label: 'RNG状態設定へ', to: '/rng' },
+              { label: '通常アーティアCounterへ', to: '/normal-counters' },
+              { label: '所持武器を確認する', to: '/owned-weapons' },
+              { label: 'ビルドリストへ', to: '/build-list' },
             ]}
           />
         </Stack>
@@ -277,7 +308,15 @@ function ExecutionNavigator({
       const failure = failureFrom(caught)
       setAction(failure)
       // The Plan moved on or ended elsewhere: show what is persisted now.
-      if (failure.code === 'step_not_current' || failure.code === 'plan_not_active') {
+      if (
+        failure.code === 'step_not_current' ||
+        failure.code === 'plan_not_active' ||
+        failure.code === 'operation_count_recovery_changed' ||
+        failure.code === 'operation_count_recovery_not_applicable' ||
+        failure.code === 'save_point_changed' ||
+        failure.code === 'save_point_choice_required' ||
+        failure.code === 'plan_abandon_state_changed'
+      ) {
         await reload()
       }
     } finally {
@@ -343,6 +382,50 @@ function ExecutionNavigator({
       () => dependencies.recordOperationUncertain({ planId: snapshot.plan.id, planStepId: step.id }),
       () => [],
     )
+  }
+
+  const recoverOperationCount = (
+    snapshot: ExecutionNavigatorSnapshot,
+    observations: OperationCountRecoveryObservation[],
+    recoveredPosition: number,
+  ) => {
+    const history = snapshot.latestExecutionHistory
+    const planStepId = snapshot.plan.currentStepId
+    if (history === null || planStepId === null) return
+    void runTransaction(
+      () =>
+        dependencies.recoverOperationCount({
+          planId: snapshot.plan.id,
+          planStepId,
+          uncertainExecutionHistoryId: history.id,
+          observations,
+          recoveredPosition,
+        }),
+      () => ['現在位置に合わせて作成プランを再開しました。'],
+    )
+  }
+
+  const restoreSavePoint = (snapshot: ExecutionNavigatorSnapshot, recordedAt: string) => {
+    void runTransaction(
+      () => dependencies.restoreExecutionSavePoint({ planId: snapshot.plan.id, recordedAt }),
+      () => ['最後のゲーム内セーブ地点の状態へ戻しました。ゲーム内の状態と一致していることを確認してから続けてください。'],
+    )
+  }
+
+  const abandonPlan = (snapshot: ExecutionNavigatorSnapshot) => {
+    void runTransaction(async () => {
+      // The existing user abandonment (16.2 / 16.10), with the Plan tokens it re-checks.
+      const options = await dependencies.inspectProductionPlanAbandonment({ planId: snapshot.plan.id })
+      return dependencies.abandonProductionPlan({
+        planId: snapshot.plan.id,
+        observedPlan: {
+          status: options.planStatus,
+          currentStepId: options.planCurrentStepId,
+          updatedAt: options.planUpdatedAt,
+        },
+        savePointDecision: null,
+      })
+    }, () => [])
   }
 
   const planLink = `/plans/${planId}`
@@ -411,6 +494,11 @@ function ExecutionNavigator({
               recordActualResultDifferent(load.snapshot, step, actualResult)
             }
             onRecordOperationUncertain={(step) => recordOperationUncertain(load.snapshot, step)}
+            onRecoverOperationCount={(observations, position) =>
+              recoverOperationCount(load.snapshot, observations, position)
+            }
+            onRestoreSavePoint={(recordedAt) => restoreSavePoint(load.snapshot, recordedAt)}
+            onAbandon={() => abandonPlan(load.snapshot)}
           />
         )}
       </Stack>
@@ -430,6 +518,9 @@ function LoadedNavigator({
   onFinish,
   onRecordActualResult,
   onRecordOperationUncertain,
+  onRecoverOperationCount,
+  onRestoreSavePoint,
+  onAbandon,
 }: {
   snapshot: ExecutionNavigatorSnapshot
   dependencies: ExecutionNavigatorPageDependencies
@@ -442,15 +533,52 @@ function LoadedNavigator({
   onFinish(checkpoint: CurrentCompromiseCheckpoint): void
   onRecordActualResult(step: PlanStep, actualResult: ExecutionActualResultObservation): void
   onRecordOperationUncertain(step: PlanStep): void
+  onRecoverOperationCount(observations: OperationCountRecoveryObservation[], position: number): void
+  onRestoreSavePoint(recordedAt: string): void
+  onAbandon(): void
 }) {
   const { plan, ownedWeapons, targetWeapons, buildListEntries, latestExecutionHistory } = snapshot
   const progress = createExecutionProgress(plan)
 
   if (plan.status !== 'active') {
+    const divergence = executionDivergenceView(plan, latestExecutionHistory)
+    const uncertainStep = divergence?.action === 'operation_uncertain'
+      ? plan.steps.find(({ id }) => id === divergence.planStepId) ?? null
+      : null
+    if (uncertainStep !== null) {
+      const presentation = createExecutionStepPresentation(uncertainStep, ownedWeapons, targetWeapons)
+      return (
+        <>
+          <ExecutionProgress progress={progress} />
+          {submitting && (
+            <Stack spacing={1} role="status" aria-live="polite">
+              <LinearProgress aria-label="操作を保存中" />
+              <Typography variant="body2">操作を保存しています。</Typography>
+            </Stack>
+          )}
+          <OperationUncertainRecovery
+            plan={plan}
+            availability={snapshot.operationCountRecovery}
+            savePoint={snapshot.executionSavePoint}
+            master={dependencies.master}
+            weaponTypeId={presentation.weaponTypeId}
+            elementId={presentation.elementId}
+            submitting={submitting}
+            onRecover={onRecoverOperationCount}
+            onRestoreSavePoint={onRestoreSavePoint}
+            onAbandon={onAbandon}
+          />
+        </>
+      )
+    }
     return (
       <>
         {plan.status !== 'draft' && <ExecutionProgress progress={progress} />}
-        <EndedPlanView plan={plan} divergence={executionDivergenceView(plan, latestExecutionHistory)} />
+        <EndedPlanView
+          plan={plan}
+          divergence={divergence?.action === 'actual_result_different' ? divergence : null}
+          latestExecutionHistory={latestExecutionHistory}
+        />
       </>
     )
   }
