@@ -40,6 +40,7 @@ import {
 import { createValidMasterDataFixture } from '../test/fixtures/masterData'
 import {
   completedPlannerTermination,
+  exhaustedPlannerTermination,
   incompletePlannerTermination,
 } from '../test/fixtures/plannerTermination'
 import type { PlannerInteractionPreparationResult } from '../workers/plannerWorkerContracts'
@@ -388,7 +389,11 @@ describe('ProductionPlanPage replan Preview', () => {
 
   it('shows a no-Plan result as a normal Preview that cannot be adopted', async () => {
     const plan = runningPlan()
-    const client = workerClient(async () => orchestrationResult({ plan: null, warnings: [{ kind: 'no_build_list_entries', message: 'nothing to plan' }] }))
+    const client = workerClient(async () => orchestrationResult({
+      plan: null,
+      termination: exhaustedPlannerTermination(),
+      warnings: [{ kind: 'no_build_list_entries', message: 'nothing to plan' }],
+    }))
     const deps = dependencies(plan, client)
     const user = userEvent.setup()
     renderPage(deps, plan.id)
@@ -398,6 +403,31 @@ describe('ProductionPlanPage replan Preview', () => {
     const section = await previewShown()
     expect(screen.getByText('現在の状態から作成できる生産計画はありませんでした。現在の生産計画は変更されていません。')).toBeInTheDocument()
     expect(screen.getByText('利用できるビルドリスト項目がありません')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: ADOPT })).not.toBeInTheDocument()
+    expect(within(section).queryByRole('heading', { name: '計画の概要' })).not.toBeInTheDocument()
+    // The ordinary no-Plan result alone: neither the incomplete nor the invalid display.
+    expect(screen.queryByText('生産計画の探索が完了していません')).not.toBeInTheDocument()
+    expect(screen.queryByText('この試算結果は採用できません。もう一度、現在地点から再計画を試算してください。')).not.toBeInTheDocument()
+  })
+
+  it('shows a no-Plan incomplete search as an incomplete search, never as a normal no-Plan result', async () => {
+    // PLANNER_SPEC 7.2.1: the typed termination is the authority. A search a
+    // bound truncated before any Plan formed is not a finished no-Plan result.
+    const plan = runningPlan()
+    const termination = incompletePlannerTermination()
+    const client = workerClient(async () => orchestrationResult({ plan: null, termination }))
+    const user = userEvent.setup()
+    renderPage(dependencies(plan, client), plan.id)
+
+    await startPreview(user)
+
+    const section = await previewShown()
+    expect(screen.getByText('生産計画の探索が完了していません')).toBeInTheDocument()
+    expect(screen.getByText(/最大探索状態数 .* に到達しました/)).toBeInTheDocument()
+    expect(screen.getByText(/^探索状態数: /)).toBeInTheDocument()
+    expect(screen.getByText(/^完成した目標武器: /)).toBeInTheDocument()
+    expect(screen.getByText('探索が完了していないため、この試算は採用できません。')).toBeInTheDocument()
+    expect(screen.queryByText('現在の状態から作成できる生産計画はありませんでした。現在の生産計画は変更されていません。')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: ADOPT })).not.toBeInTheDocument()
     expect(within(section).queryByRole('heading', { name: '計画の概要' })).not.toBeInTheDocument()
   })
@@ -434,6 +464,9 @@ describe('ProductionPlanPage replan Preview', () => {
 
     await previewShown()
     expect(screen.getByText('この試算結果は採用できません。もう一度、現在地点から再計画を試算してください。')).toBeInTheDocument()
+    // Not an ordinary no-Plan result, and not an incomplete search.
+    expect(screen.queryByText('現在の状態から作成できる生産計画はありませんでした。現在の生産計画は変更されていません。')).not.toBeInTheDocument()
+    expect(screen.queryByText('生産計画の探索が完了していません')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: ADOPT })).not.toBeInTheDocument()
   })
 

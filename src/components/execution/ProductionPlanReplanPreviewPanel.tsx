@@ -158,11 +158,15 @@ function PreviewResult({
   debugMode: boolean
 }) {
   const { plan, warnings, termination, generatedBuildListEntries } = preview.result
+  // The Domain classification is the only display authority: the typed
+  // termination first, then the ordinary no-Plan result, then an invalid
+  // result. The three never show together, and no message text is parsed.
   const adoptability = describeReplanPreviewAdoptability(preview)
-  const incomplete = termination.status === 'incomplete'
+  const reason = adoptability.adoptable ? null : adoptability.reason
+  const incomplete = reason === 'incomplete_search'
   return (
     <Stack spacing={2}>
-      {plan === null && <Alert severity="info">{REPLAN_NO_PLAN_MESSAGE}</Alert>}
+      {reason === 'no_plan' && <Alert severity="info">{REPLAN_NO_PLAN_MESSAGE}</Alert>}
       {incomplete && (
         // The same typed termination display as the Build List (UI_FLOW 10.1):
         // the partial result is neither shown as a Plan nor adoptable.
@@ -182,7 +186,7 @@ function PreviewResult({
           </Stack>
         </Alert>
       )}
-      {!adoptability.adoptable && adoptability.reason === 'invalid_result' && (
+      {reason === 'invalid_result' && (
         <Alert severity="warning">{REPLAN_INVALID_RESULT_MESSAGE}</Alert>
       )}
       {warnings.length > 0 && (
@@ -202,6 +206,7 @@ function PreviewResult({
           </Box>
         </Alert>
       )}
+      {/* A partial Plan of an incomplete search is never shown as a Plan (7.2.1). */}
       {plan !== null && !incomplete && (
         <>
           {runningPlan !== null && <PlanComparison runningPlan={runningPlan} previewPlan={plan} />}

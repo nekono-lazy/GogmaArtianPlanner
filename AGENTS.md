@@ -564,7 +564,11 @@ drop it, and a late Worker result never lands. The Preview is shown as 「再計
 with 「まだ現在の生産計画は変更されていません」 through the shared `ProductionPlanContent` plus a
 read-only Conflict list and the optional three-count comparison of UI_FLOW 16.4; a no-Plan
 result and an `incomplete` search (the 10.1 display) are ordinary Previews that offer no
-adoption, and adoptability is `describeReplanPreviewAdoptability()` only. 「この再計画を採用」
+adoption, and adoptability is `describeReplanPreviewAdoptability()` only, which judges the
+typed termination first (7.2.1): an `incomplete` search is `incomplete_search` whether or not a
+partial Plan exists, a finished search with no Plan and no generated Entry is `no_plan`, and a
+no-Plan result carrying generated Entries or a Plan failing the save-time checks is
+`invalid_result`; the panel shows exactly one of the three and parses no message text. 「この再計画を採用」
 first runs `inspectProductionPlanReplanAdoption()`, whose result alone decides whether the 16.10
 choice is asked (its position label comes from `savePointCurrentStepId`); 「現在地点を維持」 and
 「最後のゲーム内セーブ地点へ戻す」 (the shared `ExecutionSavePointRestoreDialog` with the
