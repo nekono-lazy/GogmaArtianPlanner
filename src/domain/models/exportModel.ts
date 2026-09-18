@@ -17,8 +17,12 @@ import type {
 } from './planning'
 import {
   fillNonTerminalPlanLifecycle,
+  fillNormalCounterIdentificationProvenance,
+  fillRngStateIdentificationProvenance,
+  hasIdentificationProvenanceField,
   hasProductionPlanLifecycleField,
   isTerminalProductionPlanRecord,
+  RNG_STATE_PROVENANCE_SCHEMA_VERSION,
 } from './persistenceCompatibility'
 import {
   EXECUTION_PLAN_CONTRACT_APP_SCHEMA_VERSION,
@@ -43,9 +47,11 @@ import {
  * and of `CURRENT_CALCULATION_APP_SCHEMA_VERSION`. Version 9 adds the
  * ProductionPlan lifecycle metadata (`abandonmentReason`, `abandonedAt`,
  * `completedAt`) and the Execution lifecycle Undo snapshot
- * (`affectedTargetWeaponsBefore`, `executionSavePointBefore`).
+ * (`affectedTargetWeaponsBefore`, `executionSavePointBefore`). Version 10 adds
+ * the Identification provenance `lastIdentifiedAt` of RngState (record schema
+ * version 2) and NormalArtianCounter (`docs/DATA_MODEL.md` 6.1 / 6.2).
  */
-export const EXPORT_SCHEMA_VERSION = 9
+export const EXPORT_SCHEMA_VERSION = 10
 
 export const EXPORT_APP_NAME = 'mh-wilds-gogma-artian-planner'
 
@@ -103,6 +109,16 @@ export interface ExportRootV7 extends Omit<ExportRoot, 'schemaVersion'> {
  */
 export interface ExportRootV8 extends Omit<ExportRoot, 'schemaVersion'> {
   schemaVersion: 8
+}
+
+/**
+ * The schema 9 Export shape. Its RngState and NormalArtianCounter bodies -
+ * top-level, inside save points and inside Undo snapshots - carry no
+ * `lastIdentifiedAt`; the entity types are the current ones only for reading
+ * convenience.
+ */
+export interface ExportRootV9 extends Omit<ExportRoot, 'schemaVersion'> {
+  schemaVersion: 9
 }
 
 export type ExportRootMigrationResult =
@@ -384,7 +400,7 @@ export function migrateExportRootV7ToV8(
  */
 export function migrateExportRootV8ToV9(
   root: ExportRootV8,
-): ExportRootMigrationResult {
+): { ok: true; root: ExportRootV9 } | { ok: false; issues: DomainValidationIssue[] } {
   if (!isRecord(root)) {
     return { ok: false, issues: [structureIssue('', 'Export root must be an object.')] }
   }
@@ -420,6 +436,106 @@ export function migrateExportRootV8ToV9(
     fillNonTerminalPlanLifecycle(plan as unknown as Record<string, unknown>))
   migrated.executionSavePoints.forEach((savePoint) =>
     fillNonTerminalPlanLifecycle(savePoint.productionPlan as unknown as Record<string, unknown>))
+  return { ok: true, root: { ...migrated, schemaVersion: 9 } }
+}
+
+/**
+ * Pure migration from Export schema 9 to 10 (`docs/DATA_MODEL.md` 15.3): the
+ * Identification provenance `lastIdentifiedAt` is added as `null` to the
+ * RngState (record schema version 2) and to every NormalArtianCounter, in the
+ * root, in every game save point and in every ExecutionHistory Undo snapshot.
+ * `null` is the only value a schema 9 record can state - no adoption time was
+ * recorded - and is never backfilled from `updatedAt`, `lastObservedAt` or a
+ * `source === 'observation'`. A schema 9 body that already carries the field,
+ * or an RngState already at record schema version 2, is not a schema 9 record
+ * and fails closed. Nothing else is converted.
+ */
+export function migrateExportRootV9ToV10(
+  root: ExportRootV9,
+): ExportRootMigrationResult {
+  if (!isRecord(root)) {
+    return { ok: false, issues: [structureIssue('', 'Export root must be an object.')] }
+  }
+  const record = root as unknown as Record<string, unknown>
+  const shapeIssues = ['normalArtianCounters', 'executionHistory', 'executionSavePoints']
+    .flatMap((field) => collectionShapeIssues(record, field))
+  if (record.rngState !== null && !isRecord(record.rngState)) {
+    shapeIssues.push(structureIssue('rngState', 'rngState must be an object or null.'))
+  }
+  if (shapeIssues.length > 0) return { ok: false, issues: shapeIssues }
+
+  const issues: DomainValidationIssue[] = []
+  const checkRngState = (value: unknown, path: string) => {
+    if (!isRecord(value)) {
+      issues.push(structureIssue(path, `${path} must be an object.`))
+      return
+    }
+    if (hasIdentificationProvenanceField(value) || value.schemaVersion === RNG_STATE_PROVENANCE_SCHEMA_VERSION) {
+      issues.push(structureIssue(path, 'A schema 9 RngState cannot carry the schema 10 Identification provenance.'))
+    }
+  }
+  const checkCounters = (value: unknown, path: string) => {
+    if (!Array.isArray(value)) {
+      issues.push(structureIssue(path, `${path} must be an array.`))
+      return
+    }
+    value.forEach((counter: unknown, index) => {
+      const counterPath = `${path}[${index}]`
+      if (!isRecord(counter)) {
+        issues.push(structureIssue(counterPath, `${counterPath} must be an object.`))
+      } else if (hasIdentificationProvenanceField(counter)) {
+        issues.push(structureIssue(counterPath, 'A schema 9 NormalArtianCounter cannot carry the schema 10 Identification provenance.'))
+      }
+    })
+  }
+  if (record.rngState !== null) checkRngState(record.rngState, 'rngState')
+  checkCounters(record.normalArtianCounters, 'normalArtianCounters')
+  root.executionSavePoints.forEach((savePoint, index) => {
+    const body = savePoint as unknown as Record<string, unknown>
+    checkRngState(body.rngState, `executionSavePoints[${index}].rngState`)
+    checkCounters(body.normalCounters, `executionSavePoints[${index}].normalCounters`)
+  })
+  root.executionHistory.forEach((history, index) => {
+    const snapshot = (history as unknown as Record<string, unknown>).undoSnapshot
+    const path = `executionHistory[${index}].undoSnapshot`
+    if (!isRecord(snapshot)) {
+      issues.push(structureIssue(path, `${path} must be an object.`))
+      return
+    }
+    checkRngState(snapshot.rngStateBefore, `${path}.rngStateBefore`)
+    checkCounters(snapshot.normalCountersBefore, `${path}.normalCountersBefore`)
+  })
+  if (issues.length > 0) return { ok: false, issues }
+
+  let migrated: ExportRootV9
+  try {
+    migrated = structuredClone(root)
+  } catch {
+    return { ok: false, issues: [structureIssue('', 'Export root cannot be copied.')] }
+  }
+  const fillRngState = (value: unknown) => {
+    if (isRecord(value)) fillRngStateIdentificationProvenance(value)
+  }
+  const fillCounters = (value: unknown) => {
+    if (Array.isArray(value)) {
+      value.forEach((counter: unknown) => {
+        if (isRecord(counter)) fillNormalCounterIdentificationProvenance(counter)
+      })
+    }
+  }
+  const migratedRecord = migrated as unknown as Record<string, unknown>
+  fillRngState(migratedRecord.rngState)
+  fillCounters(migratedRecord.normalArtianCounters)
+  migrated.executionSavePoints.forEach((savePoint) => {
+    const body = savePoint as unknown as Record<string, unknown>
+    fillRngState(body.rngState)
+    fillCounters(body.normalCounters)
+  })
+  migrated.executionHistory.forEach((history) => {
+    const snapshot = (history as unknown as Record<string, unknown>).undoSnapshot as Record<string, unknown>
+    fillRngState(snapshot.rngStateBefore)
+    fillCounters(snapshot.normalCountersBefore)
+  })
   return { ok: true, root: { ...migrated, schemaVersion: EXPORT_SCHEMA_VERSION } }
 }
 
@@ -515,10 +631,11 @@ export function validateExportRootExecutionLifecycle(
 
 /**
  * Brings a parsed Export object to the current schema and validates its
- * Execution lifecycle state, failing closed on anything else. Schema 9 is read
- * as is; schema 8, 7 and 6 go through the pure migrations in order
+ * Execution lifecycle state, failing closed on anything else. Schema 10 is read
+ * as is; schema 9, 8, 7 and 6 go through the pure migrations in order
  * (`migrateExportRootV6ToV7()`, `migrateExportRootV7ToV8()`,
- * `migrateExportRootV8ToV9()`), and every other version is refused. Nothing is applied here: the caller replaces its data
+ * `migrateExportRootV8ToV9()`, `migrateExportRootV9ToV10()`), and every other
+ * version is refused. Nothing is applied here: the caller replaces its data
  * only after a successful result.
  */
 export function prepareExportRootForImport(
@@ -552,14 +669,22 @@ export function prepareExportRootForImport(
     } catch {
       return { ok: false, issues: [structureIssue('', 'Export root cannot be copied.')] }
     }
+  } else if (candidate.schemaVersion === 9) {
+    const migrated = migrateExportRootV9ToV10(input as ExportRootV9)
+    if (!migrated.ok) return migrated
+    root = migrated.root
   } else if (candidate.schemaVersion === 8) {
-    const migrated = migrateExportRootV8ToV9(input as ExportRootV8)
+    const toV9 = migrateExportRootV8ToV9(input as ExportRootV8)
+    if (!toV9.ok) return toV9
+    const migrated = migrateExportRootV9ToV10(toV9.root)
     if (!migrated.ok) return migrated
     root = migrated.root
   } else if (candidate.schemaVersion === 7) {
     const toV8 = migrateExportRootV7ToV8(input as ExportRootV7)
     if (!toV8.ok) return toV8
-    const migrated = migrateExportRootV8ToV9(toV8.root)
+    const toV9 = migrateExportRootV8ToV9(toV8.root)
+    if (!toV9.ok) return toV9
+    const migrated = migrateExportRootV9ToV10(toV9.root)
     if (!migrated.ok) return migrated
     root = migrated.root
   } else if (candidate.schemaVersion === 6) {
@@ -570,7 +695,9 @@ export function prepareExportRootForImport(
     if (!toV7.ok) return toV7
     const toV8 = migrateExportRootV7ToV8(toV7.root)
     if (!toV8.ok) return toV8
-    const migrated = migrateExportRootV8ToV9(toV8.root)
+    const toV9 = migrateExportRootV8ToV9(toV8.root)
+    if (!toV9.ok) return toV9
+    const migrated = migrateExportRootV9ToV10(toV9.root)
     if (!migrated.ok) return migrated
     root = migrated.root
   } else {

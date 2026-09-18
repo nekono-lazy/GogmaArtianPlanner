@@ -42,12 +42,13 @@ const RAW_SKILL_COUNTER = 8765
 function rngState(overrides: Partial<Pick<RngState, 'baseSeed' | 'gogmaCounter' | 'skillCounter'>> = {}): RngState {
   return {
     id: 'current',
-    schemaVersion: 1,
+    schemaVersion: 2,
     baseSeed: { value: RAW_SEED, isConfirmed: true, source: 'manual' },
     gogmaCounter: { value: RAW_GOGMA_COUNTER, isConfirmed: true, source: 'manual' },
     skillCounter: { value: RAW_SKILL_COUNTER, isConfirmed: true, source: 'manual' },
     counterGate: { value: null, isConfirmed: false, source: null },
     notes: null,
+    lastIdentifiedAt: null,
     createdAt: DOMAIN_FIXTURE_TIME,
     updatedAt: DOMAIN_FIXTURE_TIME,
     ...overrides,
@@ -64,6 +65,7 @@ function confirmedNormalCounter(): NormalArtianCounter {
     observationCount: 1,
     lastObservedAt: DOMAIN_FIXTURE_TIME,
     candidateCount: 1,
+    lastIdentifiedAt: null,
     createdAt: DOMAIN_FIXTURE_TIME,
     updatedAt: DOMAIN_FIXTURE_TIME,
   }

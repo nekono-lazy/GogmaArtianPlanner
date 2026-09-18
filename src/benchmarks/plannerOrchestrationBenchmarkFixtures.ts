@@ -511,7 +511,7 @@ function sourceSkillCounter(
 function benchmarkRngState(): RngState {
   return {
     id: 'current',
-    schemaVersion: 1,
+    schemaVersion: 2,
     baseSeed: {
       value: PLANNER_ORCHESTRATION_BENCHMARK_BASE_SEED,
       isConfirmed: true,
@@ -529,6 +529,7 @@ function benchmarkRngState(): RngState {
     },
     counterGate: { value: null, isConfirmed: false, source: null },
     notes: null,
+    lastIdentifiedAt: null,
     createdAt: FIXTURE_TIME,
     updatedAt: FIXTURE_TIME,
   }
@@ -544,6 +545,7 @@ function benchmarkNormalCounter(weaponTypeId: WeaponTypeId): NormalArtianCounter
     observationCount: 1,
     lastObservedAt: FIXTURE_TIME,
     candidateCount: 1,
+    lastIdentifiedAt: null,
     createdAt: FIXTURE_TIME,
     updatedAt: FIXTURE_TIME,
   }

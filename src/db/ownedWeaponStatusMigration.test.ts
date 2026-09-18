@@ -54,7 +54,7 @@ function legacyTarget(preferredOwnedWeaponId: string | null) {
 
 describe('owned weapon status persistence migration', () => {
   it('uses the current DATABASE_SCHEMA_VERSION', () => {
-    expect(DATABASE_SCHEMA_VERSION).toBe(6)
+    expect(DATABASE_SCHEMA_VERSION).toBe(7)
   })
 
   it('renames only material, keeps every other status, protection and preference', async () => {
@@ -110,7 +110,7 @@ describe('owned weapon status persistence migration', () => {
     try {
       await database.open()
       // v1 -> v2 -> v3 -> v4 -> v5 all run, in order.
-      expect(database.verno).toBe(6)
+      expect(database.verno).toBe(7)
 
       const read = async (id: string) =>
         database.ownedWeapons.get(ownedWeaponId(id))
@@ -159,7 +159,7 @@ describe('owned weapon status persistence migration', () => {
     const database = new AppDatabase(name)
     try {
       await database.open()
-      expect(database.verno).toBe(6)
+      expect(database.verno).toBe(7)
       const migratedTarget = await database.targetWeapons.get(
         createValidTargetWeapon().id,
       )

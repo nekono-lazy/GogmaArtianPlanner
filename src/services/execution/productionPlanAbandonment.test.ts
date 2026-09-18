@@ -678,7 +678,7 @@ describe('Plan abandonment Undo and atomicity', () => {
 
       expect((await database.executionHistory.toArray()).map(({ id }) => id)).toEqual([savePoint.lastExecutionHistoryId])
       expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(13)
-      expect(DATABASE_SCHEMA_VERSION).toBe(6)
-      expect(EXPORT_SCHEMA_VERSION).toBe(9)
+      expect(DATABASE_SCHEMA_VERSION).toBe(7)
+      expect(EXPORT_SCHEMA_VERSION).toBe(10)
     }))
 })

@@ -164,7 +164,7 @@ async function snapshotOf(fixture: ExecutionFixture, plan: Partial<ProductionPla
     operationCountRecovery: { kind: 'unavailable', reason: 'not_operation_uncertain' },
     undo: { kind: 'unavailable' },
     savePointRestore: { kind: 'no_save_point' },
-    rngReidentificationReminder: { kind: 'none' },
+    reidentificationReminder: { kind: 'none' },
   }
 }
 

@@ -7,8 +7,10 @@ import { ExecutionRuntimeError } from '../domain/execution'
 import type {
   ExecutionHistory,
   ExecutionSavePoint,
+  NormalArtianCounter,
   PlanStep,
   ProductionPlan,
+  RngState,
 } from '../domain/models/publicTypes'
 import { createValidMasterDataFixture } from '../test/fixtures/masterData'
 import {
@@ -33,6 +35,11 @@ import {
   type ExecutionNavigatorSnapshot,
 } from '../services/execution/executionNavigatorDependencies'
 import { ExecutionNavigatorPage } from './ExecutionNavigatorPage'
+import { RngStateRepository } from '../db/repositories/rngStateRepository'
+import { ProductionRngEngine } from '../domain/rng/production/productionRngEngine'
+import { PlanBreakingChangeGuard } from '../services/execution/planBreakingChangeGuard'
+import { IdentificationAdoptionService } from '../services/rngIdentification/identificationAdoptionService'
+import { RngStatePersistenceService } from '../services/rngState/rngStatePersistenceService'
 
 /**
  * The Execution Navigator's 「実行状態の管理」: Undo, the game save point and the
@@ -124,7 +131,7 @@ function mockedSnapshot(fixture: ExecutionFixture): ExecutionNavigatorSnapshot {
     operationCountRecovery: { kind: 'unavailable', reason: 'not_operation_uncertain' },
     undo: { kind: 'available', history, terminal: false, deletesExecutionSavePoint: false },
     savePointRestore: { kind: 'available', savePoint },
-    rngReidentificationReminder: { kind: 'none' },
+    reidentificationReminder: { kind: 'none' },
   }
 }
 
@@ -521,11 +528,35 @@ describe('ExecutionNavigatorPage Plan abandonment with the real runtime', () => 
 
 /**
  * An ordinary abandonment resolves no `actual_result_different` (16.15): until
- * the RngState is updated after the record, the ended view still asks for RNG
- * re-identification, at the destination of the diverged operation.
+ * the diverged prediction stream is formally re-identified after the record -
+ * the RNG Identification adoption for a Gogma / Skill operation, the unique
+ * Normal Counter Identification of the named Counter for a Normal creation -
+ * the ended view still asks for re-identification at that destination.
  */
 describe('ExecutionNavigatorPage abandonment after an unresolved actual result', () => {
   const reidentifyText = '予測と異なる結果が記録された後、RNG状態の再同定がまだ完了していません。'
+  const reidentifyNormalText = '予測と異なる結果が記録された後、通常アーティアCounterの再同定がまだ完了していません。'
+  const NORMAL_COUNTER_ID = 'weapon.fixture.a:8'
+  const IDENTIFICATION_CLOCK = '2026-09-18T00:00:00.000Z'
+
+  /** The real Identification adoption paths over the test database, behind the real breaking-change guard. */
+  function identificationServices(database: AppDatabase, fixture: ExecutionFixture) {
+    const guard = new PlanBreakingChangeGuard({
+      database,
+      currentCalculationContext: structuredClone(fixture.built.input.calculationContext),
+      clock: { now: () => IDENTIFICATION_CLOCK },
+    })
+    return {
+      rng: new RngStatePersistenceService({ persistence: guard, clock: { now: () => IDENTIFICATION_CLOCK } }),
+      adoption: new IdentificationAdoptionService({
+        repository: new RngStateRepository(database),
+        persistence: guard,
+        seedNormalizer: new ProductionRngEngine(),
+        clock: { now: () => IDENTIFICATION_CLOCK },
+      }),
+    }
+  }
+  const adoptionInput = { baseSeed: '086315169', startingSkillCounter: 186, startingGogmaCounter: 480 }
 
   async function abandonThroughDialog(user: ReturnType<typeof userEvent.setup>, choice: 'plain' | 'keep' | 'restore') {
     await user.click(await screen.findByRole('button', { name: '現在Planを破棄する' }, { timeout: 5000 }))
@@ -599,16 +630,38 @@ describe('ExecutionNavigatorPage abandonment after an unresolved actual result',
       expect(await database.normalArtianCounters.toArray()).toEqual(savePoint.normalCounters)
     }), 20_000)
 
-  it('asks for nothing once the RngState was re-identified after the record', () =>
+  it('R1 / R2: an RNG Setup save after the record - notes only, or a manual Counter edit - resolves nothing', () =>
     withDatabase(async (database) => {
       const fixture = await existingGogmaFixture()
       const { service, deps } = await realRuntime(database, fixture)
       const { history } = await recordGogmaDivergence(service, database, fixture)
-      // Re-identified in RNG Setup after the record (the runtime clock is 2026-09-17).
-      const rng = await database.rngState.get('current')
-      if (!rng) throw new Error('rng')
-      expect(history.createdAt < '2026-09-18T00:00:00.000Z').toBe(true)
-      await database.rngState.put({ ...rng, updatedAt: '2026-09-18T00:00:00.000Z' })
+      expect(history.createdAt < IDENTIFICATION_CLOCK).toBe(true)
+      const { rng } = identificationServices(database, fixture)
+      const shown = (await database.rngState.get('current')) as RngState
+      await rng.saveRngState({ ...shown, notes: 'notes after the divergence' }, shown)
+      const withNotes = (await database.rngState.get('current')) as RngState
+      await rng.saveRngState({ ...withNotes, gogmaCounter: { value: 999, isConfirmed: true, source: 'manual' } }, withNotes)
+      // `updatedAt` moved past the record, which is exactly what must not count.
+      expect((await database.rngState.get('current'))?.updatedAt).toBe(IDENTIFICATION_CLOCK)
+      expect((await database.rngState.get('current'))?.lastIdentifiedAt).toBeNull()
+      const user = userEvent.setup()
+      renderNavigator(deps, fixture.plan.id)
+      await abandonThroughDialog(user, 'plain')
+
+      expect(screen.getByText(reidentifyText)).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: 'RNG状態設定へ' })).toHaveAttribute('href', '/rng')
+    }), 20_000)
+
+  it('R3 / R4: the formal RNG Identification adoption after the record resolves it, and a later notes-only save keeps it resolved', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      const { service, deps } = await realRuntime(database, fixture)
+      await recordGogmaDivergence(service, database, fixture)
+      const { rng, adoption } = identificationServices(database, fixture)
+      const adopted = await adoption.adopt(adoptionInput)
+      expect(adopted.lastIdentifiedAt).toBe(IDENTIFICATION_CLOCK)
+      await rng.saveRngState({ ...adopted, notes: 'notes after the adoption' }, adopted)
+      expect((await database.rngState.get('current'))?.lastIdentifiedAt).toBe(IDENTIFICATION_CLOCK)
       const user = userEvent.setup()
       renderNavigator(deps, fixture.plan.id)
       await abandonThroughDialog(user, 'plain')
@@ -616,6 +669,23 @@ describe('ExecutionNavigatorPage abandonment after an unresolved actual result',
       expect(screen.queryByText(reidentifyText)).not.toBeInTheDocument()
       expect(screen.getByText('現在状態から必要に応じて再計画できます。')).toBeInTheDocument()
       expect(screen.queryByRole('link', { name: 'RNG状態設定へ' })).not.toBeInTheDocument()
+      // The record itself stays: the Plan end and the adoption deleted nothing.
+      expect((await planHistory(database, fixture.plan)).map(({ action }) => action)).toEqual(['actual_result_different'])
+    }), 20_000)
+
+  it('R5: a manual edit of an adopted value after the adoption is no longer the identified state', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      const { service, deps } = await realRuntime(database, fixture)
+      await recordGogmaDivergence(service, database, fixture)
+      const { rng, adoption } = identificationServices(database, fixture)
+      const adopted = await adoption.adopt(adoptionInput)
+      await rng.saveRngState({ ...adopted, skillCounter: { value: 187, isConfirmed: true, source: 'manual' } }, adopted)
+      const user = userEvent.setup()
+      renderNavigator(deps, fixture.plan.id)
+      await abandonThroughDialog(user, 'plain')
+
+      expect(screen.getByText(reidentifyText)).toBeInTheDocument()
     }), 20_000)
 
   it('sends a Normal Artian creation divergence to the Normal Counters, never to RNG Setup', () =>
@@ -628,9 +698,75 @@ describe('ExecutionNavigatorPage abandonment after an unresolved actual result',
       renderNavigator(deps, fixture.plan.id)
       await abandonThroughDialog(user, 'plain')
 
-      expect(screen.getByText(reidentifyText)).toBeInTheDocument()
+      expect(screen.getByText(reidentifyNormalText)).toBeInTheDocument()
+      expect(screen.queryByText(reidentifyText)).not.toBeInTheDocument()
+      expect(screen.getByText('現在のゲーム状態に合わせて通常アーティアCounterを再同定してから、候補検索・再計画を行ってください。')).toBeInTheDocument()
       expect(screen.getByRole('link', { name: '通常アーティアCounterへ' })).toHaveAttribute('href', '/normal-counters')
       expect(screen.queryByRole('link', { name: 'RNG状態設定へ' })).not.toBeInTheDocument()
+    }), 20_000)
+
+  /** A Normal creation divergence on the fixture Counter, then the Plan abandoned. */
+  async function normalDivergence(database: AppDatabase) {
+    const fixture = await newNormalFixture()
+    const { service, deps } = await realRuntime(database, fixture)
+    expect(stepOf(fixture.plan, 0).rngAdvance.affectedNormalCounterId).toBe(NORMAL_COUNTER_ID)
+    const { history } = await recordDifferent(service, database, fixture.plan, bonusResult(differentBonuses(stepOf(fixture.plan, 0).expectedResult?.restorationBonuses), 'normal_artian'))
+    expect(history.createdAt < IDENTIFICATION_CLOCK).toBe(true)
+    return { fixture, deps, services: identificationServices(database, fixture) }
+  }
+
+  it('N2: the unique Identification of the named Counter after the record resolves it', () =>
+    withDatabase(async (database) => {
+      const { fixture, deps, services } = await normalDivergence(database)
+      const adopted = await services.rng.adoptNormalArtianCounterIdentification({
+        weaponTypeId: 'weapon.fixture.a',
+        startNormalCounter: 10,
+        observationCount: 2,
+      })
+      expect(adopted).toMatchObject({ id: NORMAL_COUNTER_ID, counter: 10, isConfirmed: true, lastIdentifiedAt: IDENTIFICATION_CLOCK })
+      const user = userEvent.setup()
+      renderNavigator(deps, fixture.plan.id)
+      await abandonThroughDialog(user, 'plain')
+
+      expect(screen.queryByText(reidentifyNormalText)).not.toBeInTheDocument()
+      expect(screen.getByText('現在状態から必要に応じて再計画できます。')).toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: '通常アーティアCounterへ' })).not.toBeInTheDocument()
+    }), 20_000)
+
+  it('N3 / R3: another weapon type Counter or the RNG adoption never resolves a Normal creation divergence', () =>
+    withDatabase(async (database) => {
+      const { fixture, deps, services } = await normalDivergence(database)
+      await services.rng.adoptNormalArtianCounterIdentification({
+        weaponTypeId: 'weapon.fixture.b',
+        startNormalCounter: 10,
+        observationCount: 2,
+      })
+      await services.adoption.adopt(adoptionInput)
+      const user = userEvent.setup()
+      renderNavigator(deps, fixture.plan.id)
+      await abandonThroughDialog(user, 'plain')
+
+      expect(screen.getByText(reidentifyNormalText)).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: '通常アーティアCounterへ' })).toHaveAttribute('href', '/normal-counters')
+      expect(screen.queryByRole('link', { name: 'RNG状態設定へ' })).not.toBeInTheDocument()
+    }), 20_000)
+
+  it('N4 / N5: a manual save of the named Counter resolves nothing, and an unconfirmed identified Counter stays unresolved', () =>
+    withDatabase(async (database) => {
+      const { fixture, deps, services } = await normalDivergence(database)
+      const stored = (await database.normalArtianCounters.get(NORMAL_COUNTER_ID)) as NormalArtianCounter
+      // A manual / Debug save that changes the value, after the record.
+      await services.rng.saveNormalArtianCounter({ ...stored, counter: 10, isConfirmed: true, candidateCount: 1, lastObservedAt: IDENTIFICATION_CLOCK }, stored)
+      expect((await database.normalArtianCounters.get(NORMAL_COUNTER_ID))?.lastIdentifiedAt).toBeNull()
+      // A unique Identification, then unconfirmed: Search cannot use it, so it is not resolved.
+      const adopted = await services.rng.adoptNormalArtianCounterIdentification({ weaponTypeId: 'weapon.fixture.a', startNormalCounter: 10, observationCount: 1 })
+      await services.rng.saveNormalArtianCounter({ ...adopted, isConfirmed: false }, adopted)
+      expect((await database.normalArtianCounters.get(NORMAL_COUNTER_ID))).toMatchObject({ isConfirmed: false, lastIdentifiedAt: IDENTIFICATION_CLOCK })
+      const user = userEvent.setup()
+      renderNavigator(deps, fixture.plan.id)
+      await abandonThroughDialog(user, 'plain')
+
+      expect(screen.getByText(reidentifyNormalText)).toBeInTheDocument()
     }), 20_000)
 
   it('sends a Skill divergence to RNG Setup', () =>

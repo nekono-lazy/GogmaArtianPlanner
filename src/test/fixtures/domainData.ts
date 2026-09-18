@@ -69,12 +69,13 @@ export function createRestorationBonusSet(): RestorationBonusSet {
 export function createValidRngState(): RngState {
   return {
     id: 'current',
-    schemaVersion: 1,
+    schemaVersion: 2,
     baseSeed: { value: 'fixture-seed', isConfirmed: true, source: 'manual' },
     gogmaCounter: { value: 10, isConfirmed: true, source: 'observation' },
     skillCounter: { value: null, isConfirmed: false, source: null },
     counterGate: { value: 2, isConfirmed: true, source: 'manual' },
     notes: 'Fixture note excluded from semantic hashes.',
+    lastIdentifiedAt: null,
     createdAt: DOMAIN_FIXTURE_TIME,
     updatedAt: DOMAIN_FIXTURE_TIME,
   }
@@ -90,6 +91,7 @@ export function createValidNormalArtianCounter(): NormalArtianCounter {
     observationCount: 1,
     lastObservedAt: DOMAIN_FIXTURE_TIME,
     candidateCount: 1,
+    lastIdentifiedAt: null,
     createdAt: DOMAIN_FIXTURE_TIME,
     updatedAt: DOMAIN_FIXTURE_TIME,
   }

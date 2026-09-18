@@ -127,8 +127,11 @@ describe('IdentificationAdoptionService', () => {
       baseSeed: { value: '86315169', isConfirmed: true, source: 'observation' },
       skillCounter: { value: 186, isConfirmed: true, source: 'observation' },
       gogmaCounter: { value: 480, isConfirmed: true, source: 'observation' },
+      // The Identification provenance (`docs/DATA_MODEL.md` 6.1): only this adoption writes it.
+      lastIdentifiedAt: ADOPTION_TIME,
       updatedAt: ADOPTION_TIME,
     })
+    expect(before.lastIdentifiedAt).toBeNull()
     expect(saved.counterGate).toEqual(before.counterGate)
     expect(saved.createdAt).toBe(before.createdAt)
     expect(saved.notes).toBe(before.notes)

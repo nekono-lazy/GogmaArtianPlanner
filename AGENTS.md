@@ -491,9 +491,9 @@ recording itself is unchanged, and `actual_result_different` is unchanged. The n
 reuses existing fields, so no table, index, persisted field, Export shape or calculation
 semantics changed and the three versions stay 13 / 6 / 9 (an older build refuses an Export
 holding it through action validation, all or nothing). The persistent re-identification
-reminder on Dashboard / RNG Setup / Candidate Search (16.15, now derived from the latest
-divergence record, the Plan state and RngState - not RngState.updatedAt alone) is still not
-implemented.
+reminder on Dashboard / RNG Setup / Candidate Search (16.15, derived from the divergence
+records, the Plan state and the Identification provenance the thirteenth PR fixed - never from
+RngState.updatedAt) is still not implemented.
 The thirteenth PR (the Execution Navigator state controls UI) connected, in a separate
 「実行状態の管理」 section below the Step's game actions, Undo of the latest ExecutionHistory
 (`undoLatestExecution()` naming the record the user saw; `undo_history_not_latest` never undoes
@@ -510,15 +510,39 @@ function) and `inspectExecutionSavePointRestore()` (through
 `deriveRunningPlanSavePointChoiceRequirement()`). The `operation_uncertain` recovery keeps its own
 save point restore / no-save-point abandonment and now shares
 `ExecutionSavePointRestoreDialog`; its RNG re-check guidance after abandonment stays, and an
-ordinary abandonment shows none - unless the Plan's latest `actual_result_different` is still
-unresolved: abandoning resolves no divergence, so the ended view keeps asking for RNG
-re-identification (Normal Counters for a Normal creation, RNG Setup otherwise) until the RngState
-is updated strictly after that record. `deriveExecutionRngReidentificationReminder()`
-(`src/domain/execution/rngReidentificationReminder.ts`) is that 16.15 authority, derived from the
-Plan's ExecutionHistory and `RngState.updatedAt` alone and meant for the future persistent
-reminder too; `executionReidentificationDestination()` is the shared destination authority. A
-save point restore that deleted the record resolves it. It added no persisted field and changed
-no calculation semantics, so the three versions stay 13 / 6 / 9.
+ordinary abandonment shows none - unless an `actual_result_different` of the Plan is still
+unresolved: abandoning resolves no divergence, so the ended view keeps asking for
+re-identification (Normal Counters for a Normal creation, RNG Setup otherwise) until the diverged
+stream was formally re-identified after that record.
+The same PR then fixed the 16.15 resolution authority, because "RngState updated after the record"
+described no real re-identification: `RngState.updatedAt` moves on a notes-only save, and a Normal
+Counter Setup save never touches the RngState. Existing persisted fields cannot prove a formal
+adoption after a divergence (`source === 'observation'` carries no time, `lastObservedAt` /
+`candidateCount` / `isConfirmed` are Debug-editable), so it added the Identification provenance
+`lastIdentifiedAt: ISODateTimeString | null` to `RngState` (record `schemaVersion` **2**) and to
+`NormalArtianCounter` (`docs/DATA_MODEL.md` 6.1 / 6.2). Only `IdentificationAdoptionService.adopt()`
+writes the RngState one; only `RngStatePersistenceService.adoptNormalArtianCounterIdentification()`
+(the Normal Counter Setup confirmation path) writes the Counter one, and an ordinary Counter save
+resets it to `null` when it changes the `counter` value and keeps it otherwise. An RNG Setup save
+never writes it. `deriveExecutionReidentificationReminder()`
+(`src/domain/execution/reidentificationReminder.ts`) is the 16.15 authority for the Navigator and
+the future persistent reminder: per diverged stream (the `affectedNormalCounterId` Counter of a
+Normal creation; the RNG Identification for every other operation) the latest
+`actual_result_different` is resolved only by `isNormalCounterIdentifiedAfter()` (that very
+Counter: `lastIdentifiedAt` strictly after the record, still confirmed and held; another weapon
+type's Counter, a manual / Debug save, an unconfirmed record, a `null` / missing Counter never
+resolve it) or `isRngIdentifiedAfter()` (`lastIdentifiedAt` strictly after the record and Base
+Seed / Skill Counter / Gogma Counter still confirmed, `observation`-sourced and held; a notes-only
+save keeps it, a manual edit of one of them un-identifies it). Timestamps are compared only as
+canonical UTC ISO strings, and an equal instant or a non-canonical value is never "resolved".
+Ending the Plan resolves nothing; a save point restore or Undo that deleted the record does.
+`executionReidentificationDestination()` is the shared destination authority. The provenance is
+reminder / recovery metadata only: it enters no `searchStateHash`, `ExpectedPlanState` hash,
+Candidate / Entry identity or CalculationContext, so `CURRENT_CALCULATION_APP_SCHEMA_VERSION` stays
+13, while Dexie moved to `DATABASE_SCHEMA_VERSION` **7** and `ExportRoot.schemaVersion` to **10**,
+each filling every RngState / Normal Counter body (tables, save point snapshots, Undo snapshots)
+with `lastIdentifiedAt = null` and never backfilling an adoption time from `updatedAt`,
+`lastObservedAt` or `source`.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -553,9 +577,9 @@ A version 10 `checkpointGroups` / `selectedCheckpointOpportunityIds` cannot be
 mapped onto lane pins, and reading such a selection as empty would silently
 drop a hard constraint, so version 10 artifacts fail closed like every earlier one.
 Search, BuildList, Planner, and benchmark runtime creators share this authority.
-Dexie separately moved to `DATABASE_SCHEMA_VERSION = 4` for the persisted status rename, to 5 for the Execution lifecycle persisted state, and to the current 6 for the ProductionPlan lifecycle metadata; this is independent of
+Dexie separately moved to `DATABASE_SCHEMA_VERSION = 4` for the persisted status rename, to 5 for the Execution lifecycle persisted state, to 6 for the ProductionPlan lifecycle metadata, and to the current 7 for the Identification provenance (`ExportRoot.schemaVersion` 10, `RngState.schemaVersion` 2); this is independent of
 `AppSettings.schemaVersion = 1`; gameVersion, Master Data version,
-`RngState.schemaVersion = 1`, and `CONSTRAINED_ROUTE_POLICY_VERSION`
+and `CONSTRAINED_ROUTE_POLICY_VERSION`
 remain unchanged. `PRODUCTION_RNG_ENGINE_VERSION` is
 currently `production-rng:c5-e7`. The Normal Artian occurrence-limit correction
 (Production game-verified pool Attack 5 / Element 4 / family 7 2 / Affinity 3)
@@ -4148,13 +4172,28 @@ Relevant test areas include:
   sets it to null for every Target, removes `relatedTargetWeaponIds` from every
   current OwnedWeapon, never infers a preference from the removed list, and
   rewrites no BuildCandidate, BuildListEntry, ProductionPlan, or ExecutionHistory
-- `DATABASE_SCHEMA_VERSION = 6`, `ExportRoot.schemaVersion = 9`,
+- `DATABASE_SCHEMA_VERSION = 7`, `ExportRoot.schemaVersion = 10`, `RngState.schemaVersion = 2`,
   `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 13`, schema 1..12 ProductionPlans and
   schema 1..11 Candidates / BuildListEntries failing closed under version 13, schema 12
   Candidates / BuildListEntries staying usable under 13 through the explicit build-result
   exception only while the other CalculationContext fields match, a schema 7 Export migrating to 8 with its Plans untouched, a
   schema 8 Export migrating to 9 only when it holds no terminal Plan and no
-  ExecutionHistory, and no other version authority changed
+  ExecutionHistory, a schema 9 Export migrating to 10 with `lastIdentifiedAt = null` in every
+  RngState / Normal Counter body and a schema 9 body already carrying it refused, and no
+  other version authority changed
+- `RngState.lastIdentifiedAt` written only by the Identification adoption and kept through a
+  notes-only / Counter Gate / value save, `NormalArtianCounter.lastIdentifiedAt` written only by
+  the Normal Counter Identification confirmation and reset by a save that changes the value,
+  neither entering `searchStateHash` or `ExpectedPlanState`, and the Dexie v6 -> v7 upgrade
+  filling `null` (RngState record schema 2) in the tables, the save point snapshots and the
+  Undo snapshots without inferring an adoption time
+- After an abandonment, an unresolved Normal creation divergence keeps asking for the Normal
+  Counters (never resolved by another weapon type's Counter, a manual / Debug save, an
+  unconfirmed record or the RNG adoption) and an unresolved Gogma / Skill divergence keeps
+  asking for RNG Setup (never resolved by a notes-only save or a manual Counter edit, resolved
+  by `IdentificationAdoptionService.adopt()` and kept resolved by a later notes-only save,
+  un-resolved again by a manual edit of an adopted value); a save point restore that deleted
+  the record shows nothing
 - Collection validation rejects a missing preferred weapon, a weapon type or element
   mismatch, a protected weapon, and the same weapon preferred by two Targets, and
   accepts a compatible unprotected Normal, a compatible unprotected Gogma at every

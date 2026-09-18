@@ -78,7 +78,7 @@ function savePointFor(
 function exportRoot(overrides: Partial<ExportRoot> = {}): ExportRoot {
   const plan = createValidProductionPlan()
   return {
-    schemaVersion: 9,
+    schemaVersion: 10,
     appName: 'mh-wilds-gogma-artian-planner',
     exportedAt: DOMAIN_FIXTURE_TIME,
     rngState: createValidRngState(),
@@ -111,6 +111,9 @@ function schema6Root(): ExportRootV6 {
   return {
     ...without(root, ['executionSavePoints']),
     schemaVersion: 6,
+    // A schema 6 RngState / Normal Counter predates the schema 10 Identification provenance.
+    rngState: { ...without(root.rngState as never, ['lastIdentifiedAt']), schemaVersion: 1 },
+    normalArtianCounters: root.normalArtianCounters.map((counter) => without(counter, ['lastIdentifiedAt'])),
     // No runtime before Export schema 9 wrote an ExecutionHistory, and one could
     // not carry the Undo snapshot schema 9 requires.
     executionHistory: [],
@@ -132,8 +135,8 @@ describe('Execution lifecycle version boundaries', () => {
     // schema at 11; the Execution Plan contract then moved them to 8 and 12,
     // and the Execution runtime lifecycle metadata moved Export to 9. The Plan
     // start effect moved the calculation schema to 13 with no persisted shape
-    // change.
-    expect(EXPORT_SCHEMA_VERSION).toBe(9)
+    // change. The Identification provenance moved Export to 10.
+    expect(EXPORT_SCHEMA_VERSION).toBe(10)
     expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(13)
   })
 })
@@ -292,7 +295,7 @@ describe('ExecutionSavePoint validation', () => {
   })
 })
 
-describe('Export schema 9', () => {
+describe('Export schema 10', () => {
   it('round-trips save points, Target lifecycle, and executionInProgress through JSON', () => {
     const root = exportRoot()
     const parsed: unknown = JSON.parse(JSON.stringify(root))
@@ -311,7 +314,7 @@ describe('Export schema 9', () => {
     if (!migrated.ok) return
     expect(migrated.root.schemaVersion).toBe(7)
     const imported = prepareExportRootForImport(JSON.parse(JSON.stringify(legacy)))
-    expect(imported.ok && imported.root.schemaVersion).toBe(9)
+    expect(imported.ok && imported.root.schemaVersion).toBe(10)
     expect(migrated.root.executionSavePoints).toEqual([])
     migrated.root.targetWeapons.forEach((target) => {
       expect(target).toMatchObject({ lifecycleStatus: 'active', completedAt: null, completedByProductionPlanId: null })
@@ -341,7 +344,7 @@ describe('Export schema 9', () => {
 
   it('refuses unsupported schema versions and malformed roots', () => {
     expect(prepareExportRootForImport({ ...exportRoot(), schemaVersion: 5 }).ok).toBe(false)
-    expect(prepareExportRootForImport({ ...exportRoot(), schemaVersion: 10 }).ok).toBe(false)
+    expect(prepareExportRootForImport({ ...exportRoot(), schemaVersion: 11 }).ok).toBe(false)
     expect(prepareExportRootForImport({ ...exportRoot(), appName: 'other' }).ok).toBe(false)
     expect(prepareExportRootForImport({ ...exportRoot(), ownedWeapons: null }).ok).toBe(false)
     expect(prepareExportRootForImport(null).ok).toBe(false)

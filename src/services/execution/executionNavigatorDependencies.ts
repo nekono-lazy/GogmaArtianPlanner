@@ -1,11 +1,11 @@
 import { appDatabase, type AppDatabase } from '../../db/AppDatabase'
 import { ExecutionHistoryRepository } from '../../db/repositories/executionHistoryRepository'
 import {
-  deriveExecutionRngReidentificationReminder,
+  deriveExecutionReidentificationReminder,
   deriveOperationCountRecovery,
   inspectExecutionSavePointRestore,
   inspectExecutionUndo,
-  type ExecutionRngReidentificationReminder,
+  type ExecutionReidentificationReminder,
   type ExecutionSavePointRestoreAvailability,
   type ExecutionUndoAvailability,
   type OperationCountRecoveryAvailability,
@@ -80,11 +80,11 @@ export interface ExecutionNavigatorSnapshot {
   savePointRestore: ExecutionSavePointRestoreAvailability
   /**
    * Whether an unresolved `actual_result_different` of this Plan still asks for
-   * RNG re-identification (16.15), from this same read of the Plan's
-   * ExecutionHistory and the RngState. Display only: the RngState is never
-   * written here.
+   * re-identification (16.15), from this same read of the Plan's
+   * ExecutionHistory, the RngState and the Normal Counters. Display only: none
+   * of them is written here.
    */
-  rngReidentificationReminder: ExecutionRngReidentificationReminder
+  reidentificationReminder: ExecutionReidentificationReminder
 }
 
 export interface ExecutionNavigatorPageDependencies {
@@ -114,7 +114,7 @@ export async function loadExecutionNavigatorSnapshot(
 ): Promise<ExecutionNavigatorSnapshot | null> {
   const plan = await database.productionPlans.get(planId)
   if (!plan) return null
-  const [ownedWeapons, targetWeapons, buildListEntries, planExecutionHistory, executionSavePoint, rngState] = await Promise.all([
+  const [ownedWeapons, targetWeapons, buildListEntries, planExecutionHistory, executionSavePoint, rngState, normalCounters] = await Promise.all([
     database.ownedWeapons.toArray(),
     database.targetWeapons.toArray(),
     database.buildListEntries.toArray(),
@@ -122,6 +122,7 @@ export async function loadExecutionNavigatorSnapshot(
     new ExecutionHistoryRepository(database).getExecutionHistoryByPlan(planId),
     database.executionSavePoints.get(executionSavePointIdForPlan(planId)),
     database.rngState.get('current'),
+    database.normalArtianCounters.toArray(),
   ])
   const latestExecutionHistory = planExecutionHistory.at(-1) ?? null
   const savePoint = executionSavePoint ?? null
@@ -135,10 +136,11 @@ export async function loadExecutionNavigatorSnapshot(
     operationCountRecovery: deriveOperationCountRecovery(plan, { ownedWeapons, planExecutionHistory }),
     undo: inspectExecutionUndo(plan, latestExecutionHistory, savePoint),
     savePointRestore: inspectExecutionSavePointRestore(plan, savePoint, planExecutionHistory),
-    rngReidentificationReminder: deriveExecutionRngReidentificationReminder({
+    reidentificationReminder: deriveExecutionReidentificationReminder({
       plan,
       planExecutionHistory,
       rngState: rngState ?? null,
+      normalCounters,
     }),
   }
 }
