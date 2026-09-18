@@ -411,9 +411,9 @@ blind observation, `confirm_owned_ideal`), the presentation-only weapon switch g
 the compromise checkpoint panel with the confirmed 「この武器を妥協品として確定して終了」,
 and the completed / ended Plan views. It reads the current checkpoint through
 `listCurrentCompromiseCheckpoints()`, the same still-current authority
-`prepareCompromiseFinish()` uses. The divergence records, Undo, the game save point,
-abandonment, replan Preview / adoption and breaking-change warning UIs are still not
-implemented.
+`prepareCompromiseFinish()` uses. The divergence records were connected by the twelfth
+PR below; Undo, the game save point, abandonment, replan Preview / adoption and
+breaking-change warning UIs are still not implemented.
 The same PR then moved the Target link of an existing OwnedWeapon from the Entry's first
 physical Step to the **Plan start effect** (`docs/PLANNER_SPEC.md` 16.2 / 16.11,
 `src/domain/planner/productionPlanStartEffects.ts`). Draft generation, saving and display
@@ -442,6 +442,22 @@ BuildListEntries usable under 13 - still requiring equal gameVersion, masterData
 and rngEngineVersion and every ordinary staleness check - while version 1..11 build
 results stay incompatible. `DATABASE_SCHEMA_VERSION` stays 6 and
 `ExportRoot.schemaVersion` 9 because no persisted shape changed.
+The twelfth PR (the Execution Navigator divergence UI) connected 16.15 in the Navigator:
+「結果が違う」 opens an actual result input whose kind and fixed scope follow the Step
+operation (predicted Normal creation: `normal_artian` five slots; Reset / Keep Bonuses:
+`gogma_artian` five slots; conversion / Reset Skills: Series / Group Skill with 未入力 kept
+apart from スキルなし), starts from no fabricated or expected value, and calls only
+`recordActualResultDifferent()`; 「何を何回操作したか分からない」 confirms in a dialog and
+calls only `recordOperationUncertain()`. A blind production-target Normal offers no
+「結果が違う」, and `confirm_owned_ideal` and legacy Steps offer neither. After a record the
+Navigator re-reads the persisted state, and a stale Plan whose latest ExecutionHistory
+(`ExecutionHistoryRepository.getLatestExecutionHistory()`, ordered by
+`compareExecutionHistoryOrder()`) is that divergence record shows its own recovery - Normal
+creation to `/normal-counters`, every other operation to `/rng`, plus `/owned-weapons` after
+an uncertain operation; any other stale Plan keeps the generic view. The persistent RNG
+re-identification reminder on Dashboard / RNG Setup / Candidate Search (16.15) is still not
+implemented. It added no persisted field and changed no calculation semantics, so the three
+versions stay 13 / 6 / 9.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -3196,9 +3212,11 @@ abandonment with the 16.10 save point choice, the replan Preview and adoption, a
 Plan-breaking change guard with its approved `breaking_change_approved` abandonment are
 implemented. The Execution Navigator UI covers the ordinary path (Plan start / resume,
 Step confirmation including the blind observation and `confirm_owned_ideal`, weapon switch
-guidance, the compromise checkpoint panel and finish, completion); the divergence record,
-Undo, save point, abandonment, replan and breaking-change warning / confirmation UIs are
-not yet.
+guidance, the compromise checkpoint panel and finish, completion) and the divergence
+records (「結果が違う」 / 「何を何回操作したか分からない」 with the stale Plan's recovery
+guidance inside the Navigator); Undo, save point, abandonment, replan and breaking-change
+warning / confirmation UIs, and the persistent RNG re-identification reminder on Dashboard /
+RNG Setup / Candidate Search, are not yet.
 Implementation PRs follow the specification and must not fall back to the older
 Execution semantics.
 

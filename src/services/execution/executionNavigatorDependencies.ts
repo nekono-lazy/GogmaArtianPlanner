@@ -1,8 +1,10 @@
 import { appDatabase, type AppDatabase } from '../../db/AppDatabase'
+import { ExecutionHistoryRepository } from '../../db/repositories/executionHistoryRepository'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import type {
   BuildListEntry,
   CalculationContext,
+  ExecutionHistory,
   OwnedWeapon,
   ProductionPlan,
   ProductionPlanId,
@@ -13,9 +15,12 @@ import {
   createProductionPlanExecutionService,
   type ConfirmExpectedPlanStepRequest,
   type ConfirmExpectedPlanStepResult,
+  type ExecutionStepRecordResult,
   type FinishProductionPlanAsCompromiseRequest,
   type FinishProductionPlanAsCompromiseResult,
   type ProductionPlanExecutionService,
+  type RecordActualResultDifferentRequest,
+  type RecordOperationUncertainRequest,
 } from './productionPlanExecutionService'
 
 /**
@@ -28,6 +33,12 @@ export interface ExecutionNavigatorSnapshot {
   ownedWeapons: OwnedWeapon[]
   targetWeapons: TargetWeapon[]
   buildListEntries: BuildListEntry[]
+  /**
+   * The Plan's latest ExecutionHistory by `compareExecutionHistoryOrder()`, or
+   * `null` when none exists. A stale Plan's recovery guidance reads it to tell
+   * which divergence record stopped the Plan.
+   */
+  latestExecutionHistory: ExecutionHistory | null
 }
 
 export interface ExecutionNavigatorPageDependencies {
@@ -39,6 +50,8 @@ export interface ExecutionNavigatorPageDependencies {
   finishProductionPlanAsCompromise(
     request: FinishProductionPlanAsCompromiseRequest,
   ): Promise<FinishProductionPlanAsCompromiseResult>
+  recordActualResultDifferent(request: RecordActualResultDifferentRequest): Promise<ExecutionStepRecordResult>
+  recordOperationUncertain(request: RecordOperationUncertainRequest): Promise<ExecutionStepRecordResult>
 }
 
 export async function loadExecutionNavigatorSnapshot(
@@ -47,12 +60,19 @@ export async function loadExecutionNavigatorSnapshot(
 ): Promise<ExecutionNavigatorSnapshot | null> {
   const plan = await database.productionPlans.get(planId)
   if (!plan) return null
-  const [ownedWeapons, targetWeapons, buildListEntries] = await Promise.all([
+  const [ownedWeapons, targetWeapons, buildListEntries, latestExecutionHistory] = await Promise.all([
     database.ownedWeapons.toArray(),
     database.targetWeapons.toArray(),
     database.buildListEntries.toArray(),
+    new ExecutionHistoryRepository(database).getLatestExecutionHistory(planId),
   ])
-  return { plan, ownedWeapons, targetWeapons, buildListEntries }
+  return {
+    plan,
+    ownedWeapons,
+    targetWeapons,
+    buildListEntries,
+    latestExecutionHistory: latestExecutionHistory ?? null,
+  }
 }
 
 export function createExecutionNavigatorDependencies(
@@ -66,5 +86,7 @@ export function createExecutionNavigatorDependencies(
     loadSnapshot: (planId) => loadExecutionNavigatorSnapshot(database, planId),
     confirmExpectedPlanStep: (request) => service.confirmExpectedPlanStep(request),
     finishProductionPlanAsCompromise: (request) => service.finishProductionPlanAsCompromise(request),
+    recordActualResultDifferent: (request) => service.recordActualResultDifferent(request),
+    recordOperationUncertain: (request) => service.recordOperationUncertain(request),
   }
 }
