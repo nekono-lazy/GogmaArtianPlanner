@@ -52,6 +52,18 @@ import {
 const BONUS_ONE = 'この途中状態を採用する: 復元ボーナス操作1回目（再抽選）の直後'
 const SKILL_ONE = 'この途中状態を採用する: スキルリセット1回目の直後'
 import { BuildListPage, type BuildListPageDependencies } from './BuildListPage'
+import type { ProductionPlanReplanDependencies } from '../services/execution/productionPlanReplanDependencies'
+
+/** No Plan runs in these fixtures, so the replan runtime is never reached. */
+function unusedReplanDependencies(): ProductionPlanReplanDependencies {
+  const notExpected = () => Promise.reject(new Error('replan is not expected in this test'))
+  return {
+    prepareProductionPlanReplanPreview: vi.fn(notExpected),
+    createProductionPlanReplanPreview: vi.fn(() => { throw new Error('replan is not expected in this test') }),
+    inspectProductionPlanReplanAdoption: vi.fn(notExpected),
+    adoptProductionPlanReplanPreview: vi.fn(notExpected),
+  }
+}
 
 function createOrchestrationResult(
   overrides: Partial<PlannerOrchestrationResult> = {},
@@ -122,7 +134,9 @@ function dependencies(
     })),
     savePlannerResult: vi.fn(async () => createValidProductionPlan()),
     updateIntermediateStateSelection: vi.fn(async () => { throw new Error('not used in this fixture') }),
-  deleteEntry: vi.fn(async () => undefined),
+    deleteEntry: vi.fn(async () => undefined),
+    getRunningProductionPlan: vi.fn(async () => undefined),
+    replan: unusedReplanDependencies(),
   }
 }
 

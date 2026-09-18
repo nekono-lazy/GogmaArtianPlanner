@@ -278,6 +278,15 @@ export function executionErrorMessage(code: ExecutionRuntimeErrorCode): string {
       return 'ゲーム内セーブ地点の扱いを選ぶ必要があります。最新の状態を読み込み直しました。もう一度操作してください。'
     case 'save_point_choice_not_required':
       return '表示後にゲーム内セーブ地点の状態が変わったため、破棄しませんでした。最新の状態を読み込み直しました。'
+    case 'replan_preview_not_allowed':
+      return '現在の生産計画からは再計画を試算できません。'
+    case 'replan_state_changed':
+      return '試算後に状態が変わりました。もう一度、現在地点から再計画を試算してください。'
+    case 'replan_result_invalid':
+    case 'replan_plan_id_collision':
+      return 'この試算結果は採用できません。もう一度、現在地点から再計画を試算してください。'
+    case 'running_plan_invariant_violated':
+      return '実行中の生産計画が複数存在するため、操作できません。'
     case 'undo_history_not_latest':
       return '表示後に新しい操作が記録されたため、Undoしませんでした。最新の状態を読み込み直しました。'
     case 'undo_history_not_found':

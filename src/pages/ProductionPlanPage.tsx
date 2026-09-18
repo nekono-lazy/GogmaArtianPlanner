@@ -19,6 +19,8 @@ import {
 import { ProductionPlanWhatIfComparison } from '../components/planner/ProductionPlanWhatIfComparison'
 import { PlanExecutionEntry, type PlanStartPreviewState } from '../components/execution/PlanExecutionEntry'
 import { executionErrorMessage } from '../components/execution/executionStepPresentation'
+import { ProductionPlanReplanPreviewPanel } from '../components/execution/ProductionPlanReplanPreviewPanel'
+import { useProductionPlanReplanPreview } from '../components/execution/useProductionPlanReplanPreview'
 import { ExecutionRuntimeError } from '../domain/execution'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import type { MasterDataRoot } from '../domain/master/masterTypes'
@@ -39,6 +41,7 @@ import {
   type PlannerWhatIfCalculationResult,
 } from '../domain/planner'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../domain/rng/production/productionRngEngine'
+import { appDatabase } from '../db/AppDatabase'
 import { productionPlanRepository } from '../db/repositories/productionPlanRepository'
 import { targetWeaponRepository } from '../db/repositories/targetWeaponRepository'
 import { conflictKindLabels } from '../presentation/labels'
@@ -64,6 +67,10 @@ import {
   createProductionPlanExecutionService,
   type ProductionPlanStartInspection,
 } from '../services/execution/productionPlanExecutionService'
+import {
+  createProductionPlanReplanDependencies,
+  type ProductionPlanReplanDependencies,
+} from '../services/execution/productionPlanReplanDependencies'
 import { useSettingsStore } from '../stores/settingsStore'
 import type { PlannerInteractionPreparationResult } from '../workers/plannerWorkerContracts'
 
@@ -98,6 +105,14 @@ export interface ProductionPlanPageDependencies {
    * runtime transaction (`docs/PLANNER_SPEC.md` 16.2 / 16.11).
    */
   startProductionPlan(planId: ProductionPlanId): Promise<ProductionPlan>
+  /**
+   * 「現在地点から再計画を試算」 / 「この再計画を採用」 of an active or stale
+   * Plan (`docs/PLANNER_SPEC.md` 16.8, `docs/UI_FLOW.md` 16.4): the Preview
+   * input, the transient Preview, the read-only adoption inspection and the
+   * one adoption transaction. Kept apart from the Draft-only Conflict
+   * recalculation above.
+   */
+  replan: ProductionPlanReplanDependencies
 }
 
 function createDefaultDependencies(
@@ -122,6 +137,7 @@ function createDefaultDependencies(
       ),
     inspectProductionPlanStart: (planId) => executionService.inspectProductionPlanStart(planId),
     startProductionPlan: (planId) => executionService.startProductionPlan(planId),
+    replan: createProductionPlanReplanDependencies(master, appDatabase, executionService),
   }
 }
 
@@ -192,6 +208,19 @@ function createRequestId(): string {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
   fallbackRequestSequence += 1
   return `planner-interaction-${Date.now()}-${fallbackRequestSequence}`
+}
+
+/**
+ * The replan runtime of a page without Master Data: it never runs, because the
+ * page renders no replan control then, and it rejects rather than guesses.
+ */
+const unavailableReplanDependencies: ProductionPlanReplanDependencies = {
+  prepareProductionPlanReplanPreview: () => Promise.reject(new Error('マスターデータを読み込めません。')),
+  createProductionPlanReplanPreview: () => {
+    throw new Error('マスターデータを読み込めません。')
+  },
+  inspectProductionPlanReplanAdoption: () => Promise.reject(new Error('マスターデータを読み込めません。')),
+  adoptProductionPlanReplanPreview: () => Promise.reject(new Error('マスターデータを読み込めません。')),
 }
 
 function caughtMessage(caught: unknown): string {
@@ -505,6 +534,26 @@ export function ProductionPlanPage({
     }
   }, [])
   const replanBusy = replanState.status === 'loading' || replanState.status === 'saving'
+  // A runtime change against the running Plan (a save point restore, a refused
+  // adoption) re-reads the exact persisted Plan through the ordinary lifecycle.
+  const [planReloadSequence, setPlanReloadSequence] = useState(0)
+
+  // The 16.8 replan Preview / adoption of an active or stale Plan. Its state
+  // machine and its Planner Worker are its own: the Draft-only Conflict
+  // recalculation (`replanState`) and what-if never share them.
+  const executionReplan = useProductionPlanReplanPreview({
+    replan: dependencies?.replan ?? unavailableReplanDependencies,
+    createWorkerClient: () => {
+      if (!dependencies) throw new Error('マスターデータを読み込めません。')
+      return dependencies.createWorkerClient()
+    },
+    // The new Plan is `active` now: its Execution Navigator, never this page.
+    onAdopted: (result) => void navigate(`/plans/${result.newPlan.id}/run`),
+    onRunningPlanChanged: () => setPlanReloadSequence((sequence) => sequence + 1),
+  })
+  const discardExecutionReplan = executionReplan.discard
+  // A Preview belongs to the Plan it was started from; another route Plan drops it.
+  useEffect(() => () => discardExecutionReplan(), [planId, discardExecutionReplan])
 
   // The start preview is read only for a draft that can start: never for a
   // stale or ended Plan, and never after the start, so no future-tense link
@@ -687,7 +736,7 @@ export function ProductionPlanPage({
         if (clientRef.current === client) clientRef.current = null
       }
     }
-  }, [dependencies, planId])
+  }, [dependencies, planId, planReloadSequence])
 
   const startWhatIfComparison = async (
     conflictId: string,
@@ -1126,6 +1175,21 @@ export function ProductionPlanPage({
             onRetryStartPreview={() => setStartPreviewAttempt((attempt) => attempt + 1)}
             onStart={() => void startPlan(loadedPlan)}
           />
+        )}
+        {/* 16.8: only a running (active / stale) Plan can be replanned from the
+            current state. A draft keeps its ordinary start / recalculation, and
+            an ended Plan offers nothing. The runtime decides every refusal. */}
+        {dependencies && loadedPlan && (loadedPlan.status === 'active' || loadedPlan.status === 'stale') && (
+          <PlanPageSection title="現在地点からの再計画">
+            <ProductionPlanReplanPreviewPanel
+              controller={executionReplan}
+              runningPlan={loadedPlan}
+              targetWeapons={targetWeapons}
+              master={dependencies.master}
+              debugMode={debugMode}
+              onStart={() => executionReplan.start(loadedPlan.id)}
+            />
+          </PlanPageSection>
         )}
         {/* Read-only Plan contents come straight from the exact persisted Plan,
             so they render as soon as it is loaded - while the Worker

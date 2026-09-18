@@ -4489,7 +4489,16 @@ authorityとし、セーブ地点への復元と破棄は既存Runtimeの1 trans
 後続の継続表示と共有する。Normal作成のdivergenceは通常アーティアCounterの再同定へ案内する）。
 calculation schema 13で、既存武器のTarget紐付けを各Entryの最初の物理Step確定からPlan開始effect
 （16.2 / 16.11）へ移し、Production Plan画面での事前表示とともに実装した。
-Planを壊す変更の警告、Execution Navigator UIの残り（再計画Preview画面と採用時のセーブ地点3択の確認Dialog）、
+続いて、再計画Previewと採用（16.8）のUIをBuild ListとProduction Plan画面に接続した。対象は永続状態が
+active / staleのPlanだけであり、Preview入力はRuntimeの `prepareProductionPlanReplanPreview()` から取り、
+既存のPlanner Worker（constrained orchestration、`defaultPlannerOrchestrationBounds`）で計算し、結果は
+メモリ上だけの「再計画の試算（未採用）」として通常のPlan内容確認（UI_FLOW 11.0）と同じ形式で表示する
+（Plan無し・探索未完了のPreviewは採用不可）。「この再計画を採用」は `inspectProductionPlanReplanAdoption()`
+の結果だけで16.10の3択を出し、いずれの選択も `adoptProductionPlanReplanPreview()` 1回で行う。
+「最後のゲーム内セーブ地点へ戻す」ではゲーム側復元の明示確認の後に復元だけを行い、同じPreviewは採用せず
+再試算を求める。採用成功時は新PlanのExecution Navigatorへ遷移し、`replan_state_changed` ではPreviewを破棄して
+再試算を案内する（自動再試算・自動採用はしない）。
+Planを壊す変更の警告、
 16.15のDashboard / RNG Setup / Candidate Searchでの
 RNG再同定の継続表示などは後続の実装PRが
 本章をauthorityとして実装する。本章と矛盾する旧記述（Execution上の独立した「確保」操作、

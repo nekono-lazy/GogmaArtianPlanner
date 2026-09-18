@@ -50,6 +50,18 @@ import {
 import { useSettingsStore } from '../stores/settingsStore'
 import { ExecutionRuntimeError } from '../domain/execution'
 import type { ProductionPlanStartInspection } from '../services/execution/productionPlanExecutionService'
+import type { ProductionPlanReplanDependencies } from '../services/execution/productionPlanReplanDependencies'
+
+/** These cases never start a replan Preview, so the replan runtime is never reached. */
+function unusedReplanDependencies(): ProductionPlanReplanDependencies {
+  const notExpected = () => Promise.reject(new Error('replan is not expected in this test'))
+  return {
+    prepareProductionPlanReplanPreview: vi.fn(notExpected),
+    createProductionPlanReplanPreview: vi.fn(() => { throw new Error('replan is not expected in this test') }),
+    inspectProductionPlanReplanAdoption: vi.fn(notExpected),
+    adoptProductionPlanReplanPreview: vi.fn(notExpected),
+  }
+}
 
 interface Deferred<T> {
   promise: Promise<T>
@@ -242,6 +254,7 @@ function dependencies(
     startProductionPlan: vi.fn(async () => {
       throw new Error('startProductionPlan is not expected in this test')
     }),
+    replan: unusedReplanDependencies(),
   }
 }
 

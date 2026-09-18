@@ -14,6 +14,8 @@ import { Link as RouterLink, useNavigate } from 'react-router-dom'
 import { DisclosureAccordion } from '../components/DisclosureAccordion'
 import { PageShell } from '../components/PageShell'
 import { StatusChip } from '../components/StatusChip'
+import { ProductionPlanReplanPreviewPanel } from '../components/execution/ProductionPlanReplanPreviewPanel'
+import { useProductionPlanReplanPreview } from '../components/execution/useProductionPlanReplanPreview'
 import { CandidateCard } from '../components/search/CandidateCard'
 import {
   createPlannerCompletedTargetsText,
@@ -48,7 +50,8 @@ import {
   defaultPlannerOrchestrationBounds,
 } from '../domain/planner'
 import { defaultIntermediateStateSelection } from '../domain/buildList'
-import { plannerWarningLabels, staleReasonLabels } from '../presentation/labels'
+import { plannerWarningLabels, productionPlanStatusLabels, staleReasonLabels } from '../presentation/labels'
+import { productionPlanRepository } from '../db/repositories/productionPlanRepository'
 import { useSettingsStore } from '../stores/settingsStore'
 import { buildListService } from '../services/buildList/buildListService'
 import { createBuildListCalculationContext } from '../services/buildList/createBuildListCalculationContext'
@@ -57,6 +60,10 @@ import {
   createPlannerInput,
 } from '../services/planner/createPlannerInput'
 import { plannerResultPersistenceService } from '../services/planner/plannerResultPersistenceService'
+import {
+  createProductionPlanReplanDependencies,
+  type ProductionPlanReplanDependencies,
+} from '../services/execution/productionPlanReplanDependencies'
 import {
   createProductionPlannerWorkerClient,
   PlannerCancelledError,
@@ -99,6 +106,16 @@ export interface BuildListPageDependencies {
     id: BuildListEntryId,
     selection: IntermediateStateSelection,
   ): Promise<BuildListEntry>
+  /**
+   * The one running (`active` / `stale`) Plan, or `undefined`
+   * (`docs/PLANNER_SPEC.md` 16.2). It decides which Planner entry the page
+   * offers: the ordinary Draft creation, or the 16.8 replan Preview. More than
+   * one running Plan is a persistence invariant violation the repository
+   * reports, never something the page resolves.
+   */
+  getRunningProductionPlan(): Promise<ProductionPlan | undefined>
+  /** 「現在地点から再計画を試算」 / 「この再計画を採用」 (16.8, `docs/UI_FLOW.md` 16.4). */
+  replan: ProductionPlanReplanDependencies
 }
 
 function createDefaultDependencies(master: MasterDataRoot): BuildListPageDependencies {
@@ -117,12 +134,27 @@ function createDefaultDependencies(master: MasterDataRoot): BuildListPageDepende
     deleteEntry: (id) => buildListService.deleteEntry(id),
     updateIntermediateStateSelection: (id, selection) =>
       buildListService.updateIntermediateStateSelection(id, selection),
+    getRunningProductionPlan: () => productionPlanRepository.getRunningProductionPlan(),
+    replan: createProductionPlanReplanDependencies(master),
   }
 }
 
 const defaultDependencies: BuildListPageDependencies | null = defaultMaster
   ? createDefaultDependencies(defaultMaster)
   : null
+
+/**
+ * The replan runtime of a page without Master Data: it never runs, because the
+ * page renders no replan control then, and it rejects rather than guesses.
+ */
+const unavailableReplanDependencies: ProductionPlanReplanDependencies = {
+  prepareProductionPlanReplanPreview: () => Promise.reject(new Error('マスターデータを読み込めません。')),
+  createProductionPlanReplanPreview: () => {
+    throw new Error('マスターデータを読み込めません。')
+  },
+  inspectProductionPlanReplanAdoption: () => Promise.reject(new Error('マスターデータを読み込めません。')),
+  adoptProductionPlanReplanPreview: () => Promise.reject(new Error('マスターデータを読み込めません。')),
+}
 
 /**
  * The Build List detail settings hold raw strings, so an in-progress or invalid
@@ -175,6 +207,17 @@ const plannerNoticeMessages: Record<PlannerNotice, string> = {
   cancelled: '生産計画の作成をキャンセルしました。',
   no_plan: '現在の入力から作成できる生産計画はありませんでした。',
 }
+
+/**
+ * Whether a Plan is running now. `error` means the read failed or the running
+ * Plan invariant is broken: neither Planner entry is offered then, because the
+ * page cannot tell which one applies.
+ */
+type RunningPlanState =
+  | { status: 'loading' }
+  | { status: 'none' }
+  | { status: 'running'; plan: ProductionPlan }
+  | { status: 'error' }
 
 /**
  * Entries grouped by the Target they belong to, in first-appearance order.
@@ -372,6 +415,12 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
   const [plannerNotice, setPlannerNotice] = useState<PlannerNotice | null>(null)
   const [checkpointFeedback, setCheckpointFeedback] = useState<CheckpointFeedback | null>(null)
   const [removeError, setRemoveError] = useState<string | null>(null)
+  const [runningPlan, setRunningPlan] = useState<RunningPlanState>(
+    dependencies ? { status: 'loading' } : { status: 'error' },
+  )
+  // A runtime change against the running Plan (a save point restore, a refused
+  // adoption) re-reads the Build List and the running Plan.
+  const [loadSequence, setLoadSequence] = useState(0)
   const clientRef = useRef<PlannerWorkerClient | null>(null)
   const activeRequestRef = useRef<string | null>(null)
   /**
@@ -404,6 +453,20 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
     (entry) => selectedIntermediateStateCount(entry) > 0,
   ).length
 
+  // The 16.8 replan Preview / adoption while a Plan is running. Its state
+  // machine and its Planner Worker are its own; the ordinary Draft creation
+  // below never shares them, and no Draft is saved beside a running Plan.
+  const executionReplan = useProductionPlanReplanPreview({
+    replan: dependencies?.replan ?? unavailableReplanDependencies,
+    createWorkerClient: () => {
+      if (!dependencies) throw new Error('マスターデータを読み込めません。')
+      return dependencies.createWorkerClient()
+    },
+    // The new Plan is `active` now: its Execution Navigator (UI_FLOW 16.4).
+    onAdopted: (result) => void navigate(`/plans/${result.newPlan.id}/run`),
+    onRunningPlanChanged: () => setLoadSequence((sequence) => sequence + 1),
+  })
+
   useEffect(() => {
     let active = true
     if (!dependencies) {
@@ -412,6 +475,11 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
     const client = dependencies.createWorkerClient()
     clientRef.current = client
     const calculationContext = createBuildListCalculationContext(dependencies.master)
+    void dependencies.getRunningProductionPlan().then((plan) => {
+      if (active) setRunningPlan(plan === undefined ? { status: 'none' } : { status: 'running', plan })
+    }).catch(() => {
+      if (active) setRunningPlan({ status: 'error' })
+    })
     void dependencies.refresh(calculationContext).then((loaded) => {
       if (!active) return
       setEntries(loaded.entries)
@@ -426,7 +494,7 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
       client.dispose()
       clientRef.current = null
     }
-  }, [dependencies])
+  }, [dependencies, loadSequence])
 
   const startPlanning = async () => {
     if (!dependencies || !clientRef.current || plannerOptions === null) return
@@ -600,6 +668,55 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
   }
 
   const loaded = !loading && loadError === null
+  // The Beam Search bounds the user reviews. They reach the ordinary Planner
+  // run and the replan Preview alike as `PlannerInput.options`.
+  const plannerDetailSettings = (
+    <DisclosureAccordion title="詳細設定" headingLevel="h3">
+      <Stack spacing={1.5}>
+        <Typography variant="body2" color="text.secondary">
+          Beam Searchの探索上限です。3項目とも1以上の整数だけが有効で、この画面を再読み込みすると既定値へ戻ります。
+        </Typography>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(3, minmax(0, 1fr))' },
+            gap: 1.5,
+          }}
+        >
+          {plannerOptionFields.map(({ key, label, helperText }) => {
+            const invalid = parsePlannerOptionValue(optionInputs[key]) === null
+            return (
+              <TextField
+                key={key}
+                fullWidth
+                label={label}
+                type="number"
+                value={optionInputs[key]}
+                error={invalid}
+                helperText={invalid ? plannerOptionInvalidMessage : helperText}
+                onChange={(event) =>
+                  setOptionInputs((current) => ({
+                    ...current,
+                    [key]: event.target.value,
+                  }))
+                }
+                slotProps={{ htmlInput: { min: 1, step: 1 } }}
+              />
+            )
+          })}
+        </Box>
+        <Button
+          variant="outlined"
+          onClick={() =>
+            setOptionInputs(createPlannerOptionInputs(defaultPlannerOptions))
+          }
+          sx={{ minHeight: 44, alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
+        >
+          既定値に戻す
+        </Button>
+      </Stack>
+    </DisclosureAccordion>
+  )
   const progressRatio =
     progress && progress.maxExpandedStates > 0
       ? Math.min(100, (progress.expandedStates / progress.maxExpandedStates) * 100)
@@ -664,7 +781,69 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
           </Alert>
         )}
 
-        {loaded && entries.length > 0 && (
+        {loaded && runningPlan.status === 'error' && (
+          <Alert severity="error">
+            実行中の生産計画を確認できないため、生産計画の作成と再計画の試算はできません。
+          </Alert>
+        )}
+
+        {loaded && runningPlan.status === 'running' && (
+          // 16.8: while a Plan runs, the Build List offers the replan Preview
+          // instead of a second, independent Draft (UI_FLOW 10 / 16.4).
+          <PageSection title="現在地点からの再計画" accent>
+            <Alert severity="info">
+              <Stack spacing={1.5} sx={{ alignItems: 'flex-start' }}>
+                <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                  実行中の生産計画（{runningPlan.plan.id}、{productionPlanStatusLabels[runningPlan.plan.status]}）があります。
+                  再計画を試算して採用すると、現在の生産計画を終了し、新しい生産計画を実行中にします。再検索が必要な候補は再計画に含まれません。
+                </Typography>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignSelf: 'stretch' }}>
+                  <Button
+                    component={RouterLink}
+                    to={`/plans/${runningPlan.plan.id}`}
+                    variant="outlined"
+                    color="inherit"
+                    sx={{ minHeight: 44 }}
+                  >
+                    実行中の生産計画を見る
+                  </Button>
+                  {runningPlan.plan.status === 'active' && (
+                    <Button
+                      component={RouterLink}
+                      to={`/plans/${runningPlan.plan.id}/run`}
+                      variant="outlined"
+                      color="inherit"
+                      sx={{ minHeight: 44 }}
+                    >
+                      実行ナビを再開する
+                    </Button>
+                  )}
+                </Stack>
+              </Stack>
+            </Alert>
+            {plannerOptions === null && (
+              <Alert severity="warning">
+                詳細設定に無効な値があるため、再計画を試算できません。
+              </Alert>
+            )}
+            {plannerDetailSettings}
+            {masterForDisplay && (
+              <ProductionPlanReplanPreviewPanel
+                controller={executionReplan}
+                runningPlan={runningPlan.plan}
+                targetWeapons={targets}
+                master={masterForDisplay}
+                debugMode={debugMode}
+                startDisabled={plannerOptions === null}
+                onStart={() => {
+                  if (plannerOptions !== null) executionReplan.start(runningPlan.plan.id, plannerOptions)
+                }}
+              />
+            )}
+          </PageSection>
+        )}
+
+        {loaded && runningPlan.status === 'none' && entries.length > 0 && (
           <PageSection title="生産計画の作成" accent>
             <Stack
               direction={{ xs: 'column', md: 'row' }}
@@ -688,51 +867,7 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
                 詳細設定に無効な値があるため、生産計画を作成できません。
               </Alert>
             )}
-            <DisclosureAccordion title="詳細設定" headingLevel="h3">
-              <Stack spacing={1.5}>
-                <Typography variant="body2" color="text.secondary">
-                  Beam Searchの探索上限です。3項目とも1以上の整数だけが有効で、この画面を再読み込みすると既定値へ戻ります。
-                </Typography>
-                <Box
-                  sx={{
-                    display: 'grid',
-                    gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(3, minmax(0, 1fr))' },
-                    gap: 1.5,
-                  }}
-                >
-                  {plannerOptionFields.map(({ key, label, helperText }) => {
-                    const invalid = parsePlannerOptionValue(optionInputs[key]) === null
-                    return (
-                      <TextField
-                        key={key}
-                        fullWidth
-                        label={label}
-                        type="number"
-                        value={optionInputs[key]}
-                        error={invalid}
-                        helperText={invalid ? plannerOptionInvalidMessage : helperText}
-                        onChange={(event) =>
-                          setOptionInputs((current) => ({
-                            ...current,
-                            [key]: event.target.value,
-                          }))
-                        }
-                        slotProps={{ htmlInput: { min: 1, step: 1 } }}
-                      />
-                    )
-                  })}
-                </Box>
-                <Button
-                  variant="outlined"
-                  onClick={() =>
-                    setOptionInputs(createPlannerOptionInputs(defaultPlannerOptions))
-                  }
-                  sx={{ minHeight: 44, alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
-                >
-                  既定値に戻す
-                </Button>
-              </Stack>
-            </DisclosureAccordion>
+            {plannerDetailSettings}
 
             {planning && progress && (
               <Paper
