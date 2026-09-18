@@ -81,9 +81,20 @@ export function isCalculationContextCompatible(
  * executable ProductionPlan. None of the three touches Candidate Search or
  * BuildListEntry snapshot semantics, so a version 2, 3 or 4 BuildCandidate or
  * BuildListEntry remains safe to use under a later version when the other
- * calculation authorities are unchanged. This exception is directional and
- * deliberately narrow: version 1 stays incompatible, it is never a general
- * forward compatibility for future versions, and ProductionPlan compatibility
+ * calculation authorities are unchanged.
+ *
+ * App schema 13 changes only ProductionPlan execution: the Target link of an
+ * Entry starting from an existing OwnedWeapon moves from its first physical
+ * Step to the Plan start effect (`docs/PLANNER_SPEC.md` 16.2 / 16.11). Candidate
+ * Search, BuildCandidate and BuildListEntry snapshot semantics, the checkpoint
+ * selection and the improvement preference are untouched, so a version 12
+ * BuildCandidate or BuildListEntry stays usable under version 13. Version 1..11
+ * stay incompatible under 13.
+ *
+ * Each exception is directional and deliberately narrow: version 1 stays
+ * incompatible, it is never a general forward compatibility for future
+ * versions, every other CalculationContext field must still be equal, the
+ * ordinary staleness checks still apply, and ProductionPlan compatibility
  * continues to require exact four-field equality.
  */
 const COMPATIBLE_BUILD_RESULT_APP_SCHEMA_VERSIONS: ReadonlyMap<number, readonly number[]> =
@@ -91,6 +102,7 @@ const COMPATIBLE_BUILD_RESULT_APP_SCHEMA_VERSIONS: ReadonlyMap<number, readonly 
     [3, [2]],
     [4, [2, 3]],
     [5, [2, 3, 4]],
+    [13, [12]],
   ])
 
 export function isBuildResultCalculationContextCompatible(

@@ -489,8 +489,14 @@ export function ProductionPlanPage({
   >({ status: 'idle' })
   const startingRef = useRef(false)
   const [startPreview, setStartPreview] = useState<
-    { planId: ProductionPlanId; state: Exclude<PlanStartPreviewState, { status: 'loading' }> } | null
+    {
+      planId: ProductionPlanId
+      attempt: number
+      state: Exclude<PlanStartPreviewState, { status: 'loading' }>
+    } | null
   >(null)
+  // 「再確認」 starts another preview read; a result of an earlier attempt never lands.
+  const [startPreviewAttempt, setStartPreviewAttempt] = useState(0)
   const mountedRef = useRef(false)
   useEffect(() => {
     mountedRef.current = true
@@ -511,20 +517,25 @@ export function ProductionPlanPage({
   useEffect(() => {
     if (!dependencies || startableDraftPlanId === null) return
     let active = true
+    const attempt = startPreviewAttempt
     dependencies.inspectProductionPlanStart(startableDraftPlanId).then(
       (inspection) => {
-        if (active) setStartPreview({ planId: startableDraftPlanId, state: { status: 'ready', inspection } })
+        if (active) setStartPreview({ planId: startableDraftPlanId, attempt, state: { status: 'ready', inspection } })
       },
       () => {
-        if (active) setStartPreview({ planId: startableDraftPlanId, state: { status: 'failed' } })
+        if (active) setStartPreview({ planId: startableDraftPlanId, attempt, state: { status: 'failed' } })
       },
     )
     return () => {
       active = false
     }
-  }, [dependencies, startableDraftPlanId])
+  }, [dependencies, startableDraftPlanId, startPreviewAttempt])
+  // Only the result of the current Plan's current attempt counts; anything else
+  // is still loading, and 「作成開始」 waits for it.
   const startPreviewState: PlanStartPreviewState =
-    startPreview !== null && startPreview.planId === startableDraftPlanId
+    startPreview !== null &&
+    startPreview.planId === startableDraftPlanId &&
+    startPreview.attempt === startPreviewAttempt
       ? startPreview.state
       : { status: 'loading' }
 
@@ -1112,6 +1123,7 @@ export function ProductionPlanPage({
             starting={startState.status === 'starting'}
             startError={startState.status === 'failure' ? startState.message : null}
             startPreview={startPreviewState}
+            onRetryStartPreview={() => setStartPreviewAttempt((attempt) => attempt + 1)}
             onStart={() => void startPlan(loadedPlan)}
           />
         )}

@@ -188,9 +188,11 @@ PlanStep milestone / PlanConflict participantの形状をすべて変更する�
 **12** である。version 10の `checkpointGroups` / `selectedCheckpointOpportunityIds` は
 1本の操作列のindexで表現されており、lane pinへ変換できない。選択を「なし」と読めばhard
 constraintを黙って捨てることになるため、旧1..10の全計算artifactは非互換とする。
-以下の2..5互換例外は歴史的契約でありversion 6以降には適用しない。
+以下の2..5互換例外は歴史的契約でありversion 6以降には適用しない。Plan開始effect（version 13）は
+ProductionPlanの実行意味だけを変えたため、build結果に限りversion 12 -> 13の明示的互換例外を持つ
+（本節末尾、ProductionPlanには適用しない）。
 現行versionの単一authorityは `src/domain/models/common.ts` の
-`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 12` とし、Search、BuildList、Plannerと
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 13` とし、Search、BuildList、Plannerと
 benchmark入力のruntime creatorで共用する。永続モデル移行は独立してDexie
 `DATABASE_SCHEMA_VERSION`（現行6。14.2）で管理し、AppSettingsは `schemaVersion = 1` のままとする。Calculation semantics / artifact
 validity境界とDexie schemaは別の概念であり、片方の更新はもう片方の更新を意味しない。
@@ -308,8 +310,12 @@ Entryの最初の物理Step確定からPlan開始effect（`draft -> active` と�
 PlanStepの `executionEffects.targetLinks` はPlan内で新規登録する作成対象Normalの登録Stepだけが持つ。
 version 12のPlanはStepでの紐付けを前提とした期待状態を持ち、新しい開始処理で実行すると自身の期待状態と
 食い違うため、version 1..12のProductionPlanは互換扱いせず `calculation_context_changed` でfail closedに
-する。BuildCandidate / BuildListEntryにもbuild-result互換例外を追加せず、version 1..12はfail closedとして
-再検索する。Plan開始effectは選択Entryから導出し永続fieldを追加しないため、Dexie
+する（Planの互換判定は従来どおり4 fieldの完全一致）。一方、version 13の変更はProductionPlanの実行意味だけで
+あり、Candidate Search、BuildCandidate、BuildListEntry snapshot、途中採用状態の選択、改善優先の意味は
+変えていないため、build-result互換判定（`isBuildResultCalculationContextCompatible()`）に明示的な
+`13 -> [12]` 例外を追加し、version 12のBuildCandidate / BuildListEntryはversion 13でそのまま利用できる
+（gameVersion、masterDataVersion、rngEngineVersionの一致と通常のstaleness判定は引き続き必要）。
+version 1..11のbuild結果は従来どおり非互換である。Plan開始effectは選択Entryから導出し永続fieldを追加しないため、Dexie
 `DATABASE_SCHEMA_VERSION` は6、`ExportRoot.schemaVersion` は9のままである。
 
 ---

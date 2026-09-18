@@ -137,6 +137,28 @@ describe('Plan start effect', () => {
       expect((await currentPlan(database, fixture.plan)).status).toBe('draft')
     }))
 
+  it('never starts or executes a calculation schema 12 Plan under schema 13', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      const legacy = structuredClone(fixture.plan)
+      legacy.calculationContext.appSchemaVersion = 12
+      legacy.baseSnapshot.calculationContext.appSchemaVersion = 12
+      await seed(database, { ...fixture, plan: legacy })
+      const service = executionService(database, fixture.built)
+      expect(fixture.built.input.calculationContext.appSchemaVersion).toBe(13)
+
+      await expectRefusal(() => service.startProductionPlan(legacy.id), database, 'calculation_context_changed')
+      expect((await currentPlan(database, legacy)).status).toBe('draft')
+
+      // Even persisted as active, no Step of it is executed.
+      await database.productionPlans.put({ ...legacy, status: 'active' })
+      await expectRefusal(
+        () => service.confirmExpectedPlanStep({ planId: legacy.id, planStepId: legacy.currentStepId as PlanStep['id'] }),
+        database,
+        'calculation_context_changed',
+      )
+    }))
+
   it('rolls back the Plan status and every link when a write fails', () =>
     withDatabase(async (database) => {
       const fixture = await existingGogmaFixture()

@@ -5,15 +5,17 @@ import { productionPlanAbandonmentReasonLabels } from '../../presentation/labels
 import type { ProductionPlanStartInspection } from '../../services/execution/productionPlanExecutionService'
 
 /**
- * The read-only pre-start preview of a draft Plan (`docs/UI_FLOW.md` 11). It
- * only informs: the start re-derives and re-verifies every change itself.
+ * The read-only pre-start preview of a draft Plan (`docs/UI_FLOW.md` 11). The
+ * user sees the Target link changes before starting, so 「作成開始」 is enabled
+ * only once the preview is `ready`. It only informs: the start re-derives and
+ * re-verifies every change itself and never takes the preview as authority.
  */
 export type PlanStartPreviewState =
   | { status: 'loading' }
   | { status: 'ready'; inspection: ProductionPlanStartInspection }
   | { status: 'failed' }
 
-function StartLinkPreview({ preview }: { preview: PlanStartPreviewState }) {
+function StartLinkPreview({ preview, onRetry }: { preview: PlanStartPreviewState; onRetry(): void }) {
   if (preview.status === 'loading') {
     return (
       <Typography variant="body2" color="text.secondary" role="status">
@@ -24,7 +26,14 @@ function StartLinkPreview({ preview }: { preview: PlanStartPreviewState }) {
   if (preview.status === 'failed') {
     return (
       <Alert severity="warning">
-        開始時に変わる目標武器の優先起点を確認できませんでした。「作成開始」では現在の保存状態から改めて確認して反映します。
+        <Stack spacing={1.5} sx={{ alignItems: 'flex-start' }}>
+          <Typography variant="body2">
+            開始時に変わる目標武器の優先起点を確認できませんでした。確認できるまで作成を開始できません。
+          </Typography>
+          <Button variant="outlined" color="inherit" onClick={onRetry} sx={{ minHeight: 44 }}>
+            再確認
+          </Button>
+        </Stack>
       </Alert>
     )
   }
@@ -72,12 +81,14 @@ export function PlanExecutionEntry({
   starting,
   startError,
   startPreview,
+  onRetryStartPreview,
   onStart,
 }: {
   plan: ProductionPlan
   starting: boolean
   startError: string | null
   startPreview: PlanStartPreviewState
+  onRetryStartPreview(): void
   onStart(): void
 }) {
   const buttonSx = { minHeight: 48, width: { xs: '100%', sm: 'auto' }, alignSelf: { sm: 'flex-start' } }
@@ -85,8 +96,14 @@ export function PlanExecutionEntry({
     case 'draft':
       return (
         <Stack spacing={1.5}>
-          <StartLinkPreview preview={startPreview} />
-          <Button variant="contained" size="large" disabled={starting} onClick={onStart} sx={buttonSx}>
+          <StartLinkPreview preview={startPreview} onRetry={onRetryStartPreview} />
+          <Button
+            variant="contained"
+            size="large"
+            disabled={starting || startPreview.status !== 'ready'}
+            onClick={onStart}
+            sx={buttonSx}
+          >
             作成開始
           </Button>
           {starting && (

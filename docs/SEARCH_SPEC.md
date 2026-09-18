@@ -301,6 +301,9 @@ calculation_context_changedにより現行計算・実行から除外する。
 
 歴史的にはB5-F1で1→2、Plannerのみの変更で2→3→4→5と更新した。
 2..5間のCandidate / BuildList互換例外は当時の境界に限り、version 6以降へは適用しない。
+version 13（ProductionPlanのPlan開始effect、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.11）はCandidate
+Searchの意味を変えないため、version 12のCandidate / BuildListEntryに限りversion 13で明示的に互換とする
+（`13 -> [12]`。他のCalculationContext fieldの一致と通常のstaleness判定は必要）。
 Targetの永続形状は独立してDexie DATABASE_SCHEMA_VERSIONを1→2へ更新する。
 AppSettings.schemaVersion、gameVersion、Master Data version、RNG Engine versionは
 変更しない。移行・ExportRoot契約はDATA_MODELと

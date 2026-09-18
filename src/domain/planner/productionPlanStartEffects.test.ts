@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { BuildListEntry, BuildRoute, OwnedWeaponId, TargetWeapon } from '../models/publicTypes'
-import { validateProductionPlan } from '../models/publicTypes'
+import {
+  CURRENT_CALCULATION_APP_SCHEMA_VERSION,
+  isBuildResultCalculationContextCompatible,
+  isCalculationContextCompatible,
+  validateProductionPlan,
+} from '../models/publicTypes'
+import { createValidBuildCandidate } from '../../test/fixtures/domainData'
 import { CONSTRAINED_START_GOGMA_COUNTER } from '../../test/fixtures/constrainedEnumeration'
 import { orchestrationEntry, orchestrationTarget } from '../../test/fixtures/plannerConstrainedOrchestration'
 import { existingGogmaFixture } from '../../test/fixtures/executionRuntime'
@@ -89,6 +95,31 @@ describe('applyProductionPlanStartTargetLinks / inspectProductionPlanStartTarget
     const b = orchestrationTarget('target.start.b', { preferredOwnedWeaponId: X })
     expect(applyProductionPlanStartTargetLinks([b], [link])).toEqual([b])
     expect(inspectProductionPlanStartTargetLinkChanges([b], [link])).toEqual([])
+  })
+})
+
+describe('calculation schema 13 compatibility boundary', () => {
+  const current = { ...createValidBuildCandidate().calculationContext, appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION }
+
+  it('keeps a schema 12 BuildCandidate / BuildListEntry result compatible under schema 13', () => {
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(13)
+    expect(isBuildResultCalculationContextCompatible({ ...current, appSchemaVersion: 12 }, current)).toBe(true)
+  })
+
+  it.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])('keeps a schema %i build result incompatible under schema 13', (version) => {
+    expect(isBuildResultCalculationContextCompatible({ ...current, appSchemaVersion: version }, current)).toBe(false)
+  })
+
+  it.each([
+    ['gameVersion', { gameVersion: 'game.other' }],
+    ['masterDataVersion', { masterDataVersion: 999 }],
+    ['rngEngineVersion', { rngEngineVersion: 'production-rng:other' }],
+  ])('never lets the 12 -> 13 exception cover a different %s', (_, difference) => {
+    expect(isBuildResultCalculationContextCompatible({ ...current, appSchemaVersion: 12, ...difference }, current)).toBe(false)
+  })
+
+  it('keeps a schema 12 ProductionPlan incompatible under schema 13', () => {
+    expect(isCalculationContextCompatible({ ...current, appSchemaVersion: 12 }, current)).toBe(false)
   })
 })
 

@@ -432,9 +432,15 @@ preference collection validation. Replan adoption starts its new Plan through th
 start and writes the same links. Only a production-target Normal the Plan registers is
 still linked by a Step (`executionEffects.targetLinks` on its registration Step), and the
 Navigator never re-announces a link move. This moved `CURRENT_CALCULATION_APP_SCHEMA_VERSION`
-to **13**: a version 12 Plan expects the links on its Steps, so every version 1..12 Plan,
-Candidate and BuildListEntry fails closed with `calculation_context_changed` (no
-build-result compatibility exception). `DATABASE_SCHEMA_VERSION` stays 6 and
+to **13**: a version 12 Plan expects the links on its Steps, so every version 1..12
+ProductionPlan fails closed with `calculation_context_changed` (Plan compatibility stays
+the exact four-field `isCalculationContextCompatible()`). The change does not touch
+Candidate Search, BuildCandidate or BuildListEntry snapshot semantics, so an explicit
+build-result exception `13 -> [12]` in `COMPATIBLE_BUILD_RESULT_APP_SCHEMA_VERSIONS`
+(`isBuildResultCalculationContextCompatible()`) keeps version 12 Candidates and
+BuildListEntries usable under 13 - still requiring equal gameVersion, masterDataVersion
+and rngEngineVersion and every ordinary staleness check - while version 1..11 build
+results stay incompatible. `DATABASE_SCHEMA_VERSION` stays 6 and
 `ExportRoot.schemaVersion` 9 because no persisted shape changed.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
@@ -507,7 +513,7 @@ current Candidates by searching again.
 Do not delete historical results or add a migration or Export/Import semantic
 validation change as a substitute for CalculationContext compatibility.
 
-All version 1..12 Candidates, BuildListEntries and ProductionPlans are incompatible with version 13 (version 1..11 were already incompatible with version 12). Preserve their contents and fail closed with calculation_context_changed. Do not extend the historical build-result compatibility exception to version 9, 10, 11, 12 or 13. Never execute a version 12 Plan under the Plan start effect: its first Step expects the pre-start state. Never convert a version 11 Plan into the version 12 PlanStep contract: no inferred `executionEffects`, no `reserve_weapon` merged into a physical Step, no inferred tracked OwnedWeapon or observation binding.
+All version 1..12 ProductionPlans are incompatible with version 13, and all version 1..11 Candidates and BuildListEntries are incompatible with version 13 (version 1..11 were already incompatible with version 12). Preserve their contents and fail closed with calculation_context_changed. The only build-result exception at this boundary is the explicit `13 -> [12]` one: the version 13 change is ProductionPlan execution only (the Plan start effect), so a version 12 Candidate or BuildListEntry stays usable under 13 when gameVersion, masterDataVersion and rngEngineVersion are equal and no ordinary stale reason applies. Never widen it to version 1..11, never apply it to a ProductionPlan, and never extend the historical 2..5 exception. Never execute a version 12 Plan under the Plan start effect: its first Step expects the pre-start state. Never convert a version 11 Plan into the version 12 PlanStep contract: no inferred `executionEffects`, no `reserve_weapon` merged into a physical Step, no inferred tracked OwnedWeapon or observation binding.
 
 The v3 -> v4 Dexie migration converts only `OwnedGogma.status === 'material'` to
 `'unclassified'`. `practical` and `ideal` keep their values, a Normal Artian
@@ -4051,8 +4057,10 @@ Relevant test areas include:
   current OwnedWeapon, never infers a preference from the removed list, and
   rewrites no BuildCandidate, BuildListEntry, ProductionPlan, or ExecutionHistory
 - `DATABASE_SCHEMA_VERSION = 6`, `ExportRoot.schemaVersion = 9`,
-  `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 13`, schema 1..12 artifacts failing closed
-  under version 13, a schema 7 Export migrating to 8 with its Plans untouched, a
+  `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 13`, schema 1..12 ProductionPlans and
+  schema 1..11 Candidates / BuildListEntries failing closed under version 13, schema 12
+  Candidates / BuildListEntries staying usable under 13 through the explicit build-result
+  exception only while the other CalculationContext fields match, a schema 7 Export migrating to 8 with its Plans untouched, a
   schema 8 Export migrating to 9 only when it holds no terminal Plan and no
   ExecutionHistory, and no other version authority changed
 - Collection validation rejects a missing preferred weapon, a weapon type or element

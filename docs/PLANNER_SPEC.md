@@ -4771,7 +4771,12 @@ Plan開始effectはTargetの `preferredOwnedWeaponId` だけを変更するた�
 `ownedWeaponsHash` が一致し、`targetExecutionStateHash` だけが異なり得る（変更がなければ全て一致する）。
 Plan内のchain validity（Step Nの `expectedStateAfter` = Step N+1の `expectedStateBefore`）は変更しない。
 calculation schema 12以前のPlanは先頭 `expectedStateBefore` = `initialExecutionState` の契約のまま
-保持し、fail closedする。
+保持し、schema 13ではProductionPlanの完全一致判定（`isCalculationContextCompatible()`）により
+`calculation_context_changed` でfail closedする。schema 13の変更はCandidate Search、BuildCandidate、
+BuildListEntry snapshotの意味を変えないため、version 12のBuildCandidate / BuildListEntryは
+build-result互換判定の明示的な `13 -> [12]` 例外によりschema 13でもそのまま利用できる（他の
+CalculationContext fieldの一致と通常のstaleness判定は必要。version 1..11は非互換のまま。
+ProductionPlanには適用しない）。
 
 ### 16.6 Plan依存性とPlanを壊す変更
 
@@ -5156,7 +5161,8 @@ Plan開始のRuntime、execution projectionは同じ導出authorityを共有す�
 
 Production Plan画面は、Draft Planの表示時に「作成開始」で実際に変わる紐付け（武器、現在の紐付け先
 Target または未設定、紐付け先Target、紐付け先Targetがそれまで優先していた武器）を事前表示する
-（[UI_FLOW.md](./UI_FLOW.md) 11）。既に同じ紐付けで変更がないものは表示しない。この表示は読み取り専用で
+（[UI_FLOW.md](./UI_FLOW.md) 11）。既に同じ紐付けで変更がないものは表示しない。変更予定を確認できるまで
+（確認中・確認失敗時）は「作成開始」を受け付けず、失敗時は再確認できる。この表示は読み取り専用で
 あり、「作成開始」はtransaction内で最新の永続状態から改めて導出・検証して適用する。表示結果を書き込みの
 authorityにしない。Execution Navigatorの通常Stepでは、紐付けの移動を改めて通知しない。
 
