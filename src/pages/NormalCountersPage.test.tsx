@@ -17,7 +17,7 @@ const AFFINITY = '会心率強化'
 const ELEMENT = '属性強化'
 const SHARPNESS = '斬れ味強化'
 
-const fixture: NormalArtianCounter = { id: 'weapon.dual_blades:8', weaponTypeId: 'weapon.dual_blades', rarity: 8, counter: null, isConfirmed: false, observationCount: 0, lastObservedAt: null, candidateCount: null, createdAt: FIXTURE_TIME, updatedAt: FIXTURE_TIME }
+const fixture: NormalArtianCounter = { id: 'weapon.dual_blades:8', weaponTypeId: 'weapon.dual_blades', rarity: 8, counter: null, isConfirmed: false, observationCount: 0, lastObservedAt: null, candidateCount: null, lastIdentifiedAt: null, createdAt: FIXTURE_TIME, updatedAt: FIXTURE_TIME }
 const confirmedFixture: NormalArtianCounter = { ...fixture, id: 'weapon.great_sword:8', weaponTypeId: 'weapon.great_sword', counter: 98765, isConfirmed: true, observationCount: 4, candidateCount: 1, lastObservedAt: '2026-08-30T00:00:00.000Z' }
 const unconfirmedFixture: NormalArtianCounter = { ...fixture, id: 'weapon.long_sword:8', weaponTypeId: 'weapon.long_sword', counter: 43210, isConfirmed: false }
 const multipleFixture: NormalArtianCounter = { ...fixture, id: 'weapon.hammer:8', weaponTypeId: 'weapon.hammer', counter: null, isConfirmed: false, observationCount: 1, candidateCount: 19 }
@@ -36,6 +36,7 @@ interface TestDependencies extends NormalCountersPageDependencies {
   readonly clients: FakeNormalArtianCounterIdentificationClient[]
   getAll: Mock<NormalCountersPageDependencies['getAll']>
   save: Mock<NormalCountersPageDependencies['save']>
+  adoptIdentification: Mock<NormalCountersPageDependencies['adoptIdentification']>
   createIdentificationClient: Mock<NormalCountersPageDependencies['createIdentificationClient']>
 }
 
@@ -49,6 +50,20 @@ function dependencies(
     clients,
     getAll: vi.fn(async () => values.map((value) => structuredClone(value))),
     save: vi.fn(async (value: NormalArtianCounter) => value),
+    // The persisted record the service builds from the adoption (`docs/UI_FLOW.md` 6).
+    adoptIdentification: vi.fn(async ({ weaponTypeId, startNormalCounter, observationCount }) => ({
+      ...(values.find((value) => value.weaponTypeId === weaponTypeId) ?? { createdAt: NOW }),
+      id: `${weaponTypeId}:8`,
+      weaponTypeId,
+      rarity: 8 as const,
+      counter: startNormalCounter,
+      isConfirmed: true,
+      observationCount,
+      candidateCount: 1,
+      lastObservedAt: NOW,
+      lastIdentifiedAt: NOW,
+      updatedAt: NOW,
+    })),
     ensureRngState: vi.fn(async () => options.rngState ?? confirmedBaseSeedState()),
     ensureSettings: vi.fn(async () => options.settings ?? createDefaultAppSettings(FIXTURE_TIME)),
     createIdentificationClient: vi.fn(() => {
@@ -246,19 +261,10 @@ describe('NormalCountersPage', () => {
     expect(within(dialog).queryByText(/startNormalCounter/)).not.toBeInTheDocument()
     await user.click(within(dialog).getByRole('checkbox', { name: /調査前の状態へ戻ったことを確認しました/ }))
     await user.click(within(dialog).getByRole('button', { name: 'Counterを確定' }))
-    await waitFor(() => expect(deps.save).toHaveBeenCalledTimes(1))
-    expect(deps.save.mock.calls[0]![0]).toEqual({
-      id: 'weapon.switch_axe:8',
-      weaponTypeId: 'weapon.switch_axe',
-      rarity: 8,
-      counter: 0,
-      isConfirmed: true,
-      observationCount: 2,
-      candidateCount: 1,
-      lastObservedAt: NOW,
-      createdAt: NOW,
-      updatedAt: NOW,
-    })
+    await waitFor(() => expect(deps.adoptIdentification).toHaveBeenCalledTimes(1))
+    // The adoption goes through the Identification path, never the ordinary save.
+    expect(deps.adoptIdentification).toHaveBeenCalledWith({ weaponTypeId: 'weapon.switch_axe', startNormalCounter: 0, observationCount: 2 })
+    expect(deps.save).not.toHaveBeenCalled()
     expect(await screen.findByText('スラッシュアックスのカウンターを確定しました。')).toBeInTheDocument()
     expect(within(await rowFor('スラッシュアックス')).getByText('確定・検索に使用')).toBeInTheDocument()
   }, 30_000)
@@ -305,28 +311,19 @@ describe('NormalCountersPage', () => {
     await user.click(within(dialog).getByRole('checkbox', { name: /調査前の状態へ戻ったことを確認しました/ }))
     await user.click(confirmButton)
 
-    await waitFor(() => expect(deps.save).toHaveBeenCalledTimes(1))
-    const saved = deps.save.mock.calls[0]![0]
-    expect(saved).toEqual({
-      id: 'weapon.dual_blades:8',
-      weaponTypeId: 'weapon.dual_blades',
-      rarity: 8,
-      counter: 777,
-      isConfirmed: true,
-      observationCount: 2,
-      candidateCount: 1,
-      lastObservedAt: NOW,
-      createdAt: FIXTURE_TIME,
-      updatedAt: NOW,
-    })
-    expect(saved.counter).not.toBe(777 + 2)
+    await waitFor(() => expect(deps.adoptIdentification).toHaveBeenCalledTimes(1))
+    const adoption = deps.adoptIdentification.mock.calls[0]![0]
+    // `startNormalCounter = C` as the kernel returned it, never `C + observationCount`.
+    expect(adoption).toEqual({ weaponTypeId: 'weapon.dual_blades', startNormalCounter: 777, observationCount: 2 })
+    expect(adoption.startNormalCounter).not.toBe(777 + 2)
+    expect(deps.save).not.toHaveBeenCalled()
     expect(await screen.findByText('双剣のカウンターを確定しました。')).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(client.dispose).toHaveBeenCalledTimes(1)
     expect(within(await rowFor('双剣')).getByText('確定・検索に使用')).toBeInTheDocument()
     expect(screen.getByText('確定 1 / 14')).toBeInTheDocument()
     // The persisted history stays the Counter row alone: no observation is stored.
-    expect(saved).not.toHaveProperty('observations')
+    expect(adoption).not.toHaveProperty('observations')
   }, 30_000)
 
   it('creates the row for a weapon type with no persisted Counter when its unique result is confirmed', async () => {
@@ -341,19 +338,9 @@ describe('NormalCountersPage', () => {
     await client.resolveLast({ matches: [{ startNormalCounter: 4 }], searchedCounterRange: { startInclusive: 0, endInclusive: 5000 }, isTruncated: false })
     await user.click(await within(dialog).findByRole('checkbox', { name: /調査前の状態へ戻ったことを確認しました/ }))
     await user.click(within(dialog).getByRole('button', { name: 'Counterを確定' }))
-    await waitFor(() => expect(deps.save).toHaveBeenCalledTimes(1))
-    expect(deps.save.mock.calls[0]![0]).toEqual({
-      id: 'weapon.bow:8',
-      weaponTypeId: 'weapon.bow',
-      rarity: 8,
-      counter: 4,
-      isConfirmed: true,
-      observationCount: 1,
-      candidateCount: 1,
-      lastObservedAt: NOW,
-      createdAt: NOW,
-      updatedAt: NOW,
-    })
+    await waitFor(() => expect(deps.adoptIdentification).toHaveBeenCalledTimes(1))
+    expect(deps.adoptIdentification).toHaveBeenCalledWith({ weaponTypeId: 'weapon.bow', startNormalCounter: 4, observationCount: 1 })
+    expect(within(await rowFor('弓')).getByText('確定・検索に使用')).toBeInTheDocument()
   }, 20_000)
 
   it('shows the raw unique Counter inside the Dialog only in Debug Mode', async () => {
@@ -373,7 +360,7 @@ describe('NormalCountersPage', () => {
   it('keeps a failed confirmation save inside the Dialog without touching the list', async () => {
     const user = userEvent.setup()
     const deps = dependencies([fixture])
-    deps.save = vi.fn(async (): Promise<NormalArtianCounter> => { throw new Error('IndexedDB write failed') })
+    deps.adoptIdentification = vi.fn(async (): Promise<NormalArtianCounter> => { throw new Error('IndexedDB write failed') })
     render(<NormalCountersPage dependencies={deps} />)
     const dialog = await openIdentification(user, '双剣')
     await fillObservation(user, dialog, 1, [ATTACK, ATTACK, ATTACK, ATTACK, ATTACK])

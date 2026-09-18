@@ -12,6 +12,7 @@ import {
   currentExecutionActions,
   legacyExecutionActions,
   productionPlanAbandonmentReasons,
+  RNG_STATE_SCHEMA_VERSION,
   V1_NORMAL_ARTIAN_RARITY,
 } from './common'
 import { stableStringify } from './hashing'
@@ -213,19 +214,27 @@ export function validateRngState(state: RngState): DomainValidationResult {
   if (state.id !== 'current') {
     addIssue(issues, 'id', 'invalid_literal', "RngState id must be 'current'.")
   }
-  if (state.schemaVersion !== 1) {
+  if (state.schemaVersion !== RNG_STATE_SCHEMA_VERSION) {
     addIssue(
       issues,
       'schemaVersion',
       'invalid_literal',
-      'RngState schemaVersion must be 1.',
+      `RngState schemaVersion must be ${RNG_STATE_SCHEMA_VERSION}.`,
     )
   }
   appendIssues(issues, 'baseSeed', validateKnownValue(state.baseSeed))
   validateCounterKnownValue(state.gogmaCounter, 'gogmaCounter', issues)
   validateCounterKnownValue(state.skillCounter, 'skillCounter', issues)
   validateCounterKnownValue(state.counterGate, 'counterGate', issues)
+  validateIdentificationProvenance(state.lastIdentifiedAt, issues)
   return result(issues)
+}
+
+/** `lastIdentifiedAt` is `null` or an ISO date-time string; a missing field is a pre-provenance record. */
+function validateIdentificationProvenance(value: unknown, issues: DomainValidationIssue[]) {
+  if (value !== null && !isNonEmptyString(value)) {
+    addIssue(issues, 'lastIdentifiedAt', 'invalid_structure', 'lastIdentifiedAt must be null or an ISO date-time string.')
+  }
 }
 
 export function validateNormalArtianCounter(
@@ -260,6 +269,7 @@ export function validateNormalArtianCounter(
   if (counter.candidateCount !== null) {
     validateNonNegativeInteger(counter.candidateCount, 'candidateCount', issues)
   }
+  validateIdentificationProvenance(counter.lastIdentifiedAt, issues)
   return result(issues)
 }
 

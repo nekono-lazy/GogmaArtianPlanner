@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Alert,
   AlertTitle,
@@ -17,6 +17,7 @@ import { BlindObservationForm } from '../components/execution/BlindObservationFo
 import { CompromiseCheckpointPanel } from '../components/execution/CompromiseCheckpointPanel'
 import { ExecutionDivergenceRecovery } from '../components/execution/ExecutionDivergenceRecovery'
 import { ExecutionProgress } from '../components/execution/ExecutionProgress'
+import { ExecutionStateControls } from '../components/execution/ExecutionStateControls'
 import { ExecutionStepCard } from '../components/execution/ExecutionStepCard'
 import {
   actualResultInputKind,
@@ -42,8 +43,12 @@ import {
   type CurrentCompromiseCheckpoint,
   type ExecutionActualResultObservation,
   type ExecutionNormalRestorationBonusObservation,
+  type ExecutionReidentificationReminder,
   type OperationCountRecoveryObservation,
+  type ReidentificationDestination,
   type ExecutionRuntimeErrorCode,
+  type PlanAbandonSavePointDecision,
+  type ProductionPlanAbandonmentOptions,
 } from '../domain/execution'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import type {
@@ -114,11 +119,14 @@ function EndedPlanView({
   plan,
   divergence,
   latestExecutionHistory,
+  reidentificationReminder,
 }: {
   plan: ProductionPlan
   /** The `actual_result_different` record that stopped a stale Plan, from its latest ExecutionHistory. */
   divergence: Extract<ExecutionDivergenceView, { action: 'actual_result_different' }> | null
   latestExecutionHistory: ExecutionHistory | null
+  /** The 16.15 reminder derived from the persisted records, the RngState and the Normal Counters. */
+  reidentificationReminder: ExecutionReidentificationReminder
 }) {
   const planLink = { label: '作成プランを見る', to: `/plans/${plan.id}` }
   if (plan.status === 'completed') {
@@ -177,6 +185,65 @@ function EndedPlanView({
               { label: '通常アーティアCounterへ', to: '/normal-counters' },
               { label: '所持武器を確認する', to: '/owned-weapons' },
               { label: 'ビルドリストへ', to: '/build-list' },
+            ]}
+          />
+        </Stack>
+      </Alert>
+    )
+  }
+  if (
+    plan.status === 'abandoned' &&
+    plan.abandonmentReason === 'user_abandoned' &&
+    reidentificationReminder.kind === 'actual_result_different'
+  ) {
+    // Abandoning resolves no divergence (16.15): the prediction still differs
+    // from the game until the diverged stream is formally re-identified after
+    // the record. The wording and the link follow the destination the shared
+    // authority derived; nothing is re-read from the Step here.
+    const destinations = [...new Set(reidentificationReminder.unresolved.map(({ destination }) => destination))]
+    const subject = (destination: ReidentificationDestination) =>
+      destination === 'normal_counters' ? '通常アーティアCounter' : 'RNG状態'
+    return (
+      <Alert severity="warning">
+        <AlertTitle>作成プランを破棄しました</AlertTitle>
+        <Stack spacing={1.5}>
+          {destinations.map((destination) => (
+            <Stack key={destination} spacing={0.5}>
+              <Typography variant="body2">
+                予測と異なる結果が記録された後、{subject(destination)}の再同定がまだ完了していません。
+              </Typography>
+              <Typography variant="body2">
+                現在のゲーム状態に合わせて{subject(destination)}を再同定してから、候補検索・再計画を行ってください。
+              </Typography>
+            </Stack>
+          ))}
+          <NavigationLinks
+            links={[
+              ...destinations.map((destination) =>
+                destination === 'normal_counters'
+                  ? { label: '通常アーティアCounterへ', to: '/normal-counters' }
+                  : { label: 'RNG状態設定へ', to: '/rng' }),
+              { label: 'ビルドリストへ', to: '/build-list' },
+              planLink,
+            ]}
+          />
+        </Stack>
+      </Alert>
+    )
+  }
+  if (plan.status === 'abandoned' && plan.abandonmentReason === 'user_abandoned') {
+    // The ordinary 「現在Planを破棄する」 (16.2): no divergence is implied, so no
+    // RNG re-identification is asked for.
+    return (
+      <Alert severity="info">
+        <AlertTitle>作成プランを破棄しました</AlertTitle>
+        <Stack spacing={1.5}>
+          <Typography variant="body2">現在状態から必要に応じて再計画できます。</Typography>
+          <NavigationLinks
+            links={[
+              { label: 'ビルドリストへ', to: '/build-list' },
+              { label: '目標武器へ', to: '/target-weapons' },
+              planLink,
             ]}
           />
         </Stack>
@@ -314,8 +381,16 @@ function ExecutionNavigator({
         failure.code === 'operation_count_recovery_changed' ||
         failure.code === 'operation_count_recovery_not_applicable' ||
         failure.code === 'save_point_changed' ||
+        failure.code === 'save_point_not_found' ||
         failure.code === 'save_point_choice_required' ||
-        failure.code === 'plan_abandon_state_changed'
+        failure.code === 'save_point_choice_not_required' ||
+        failure.code === 'save_point_record_not_allowed' ||
+        failure.code === 'save_point_restore_not_allowed' ||
+        failure.code === 'plan_abandon_state_changed' ||
+        failure.code === 'plan_abandon_not_allowed' ||
+        failure.code === 'undo_history_not_latest' ||
+        failure.code === 'undo_history_not_found' ||
+        failure.code === 'undo_not_allowed'
       ) {
         await reload()
       }
@@ -414,7 +489,63 @@ function ExecutionNavigator({
   const restoreSavePoint = (snapshot: ExecutionNavigatorSnapshot, recordedAt: string) => {
     void runTransaction(
       () => dependencies.restoreExecutionSavePoint({ planId: snapshot.plan.id, recordedAt }),
-      () => ['最後のゲーム内セーブ地点の状態へ戻しました。ゲーム内の状態と一致していることを確認してから続けてください。'],
+      () => ['最後のゲーム内セーブ地点へ戻しました。ゲーム側も同じ地点から再開していることを確認してください。'],
+    )
+  }
+
+  const recordSavePoint = (snapshot: ExecutionNavigatorSnapshot) => {
+    // The runtime re-checks the Plan, its current Step and its premises; the
+    // displayed state is never the write authority.
+    void runTransaction(
+      () => dependencies.recordExecutionSavePoint({ planId: snapshot.plan.id }),
+      () => ['ゲーム内セーブ地点を記録しました。'],
+    )
+  }
+
+  const undoLatest = (snapshot: ExecutionNavigatorSnapshot, executionHistoryId: ExecutionHistory['id']) => {
+    // Names the record the user saw; a newer one is refused, never undone instead.
+    void runTransaction(
+      () => dependencies.undoLatestExecution({ planId: snapshot.plan.id, executionHistoryId }),
+      () => ['最後のツール上の操作を元に戻しました。ゲーム内の操作は戻っていません。'],
+    )
+  }
+
+  /** The read-only 16.10 inspection the abandonment dialog is built from. */
+  const inspectAbandonment = async (
+    snapshot: ExecutionNavigatorSnapshot,
+  ): Promise<ProductionPlanAbandonmentOptions | null> => {
+    if (submittingRef.current) return null
+    setNotices([])
+    try {
+      const options = await dependencies.inspectProductionPlanAbandonment({ planId: snapshot.plan.id })
+      if (!aliveRef.current) return null
+      setAction({ status: 'idle' })
+      return options
+    } catch (caught: unknown) {
+      if (!aliveRef.current) return null
+      setAction(failureFrom(caught))
+      await reload()
+      return null
+    }
+  }
+
+  const abandonWithDecision = (
+    options: ProductionPlanAbandonmentOptions,
+    savePointDecision: PlanAbandonSavePointDecision,
+  ) => {
+    // One runtime call: a save point restore and the abandonment are one transaction.
+    void runTransaction(
+      () =>
+        dependencies.abandonProductionPlan({
+          planId: options.planId,
+          observedPlan: {
+            status: options.planStatus,
+            currentStepId: options.planCurrentStepId,
+            updatedAt: options.planUpdatedAt,
+          },
+          savePointDecision,
+        }),
+      () => [],
     )
   }
 
@@ -505,11 +636,36 @@ function ExecutionNavigator({
             }
             onRestoreSavePoint={(recordedAt) => restoreSavePoint(load.snapshot, recordedAt)}
             onAbandon={() => abandonPlan(load.snapshot)}
+            stateControls={(options) => (
+              <ExecutionStateControls
+                plan={load.snapshot.plan}
+                savePoint={load.snapshot.executionSavePoint}
+                undo={load.snapshot.undo}
+                savePointRestore={load.snapshot.savePointRestore}
+                canRecordSavePoint={options.canRecordSavePoint}
+                showsSavePoint={options.running}
+                showsSavePointRestore={options.showsSavePointRestore}
+                showsAbandon={options.running}
+                submitting={submitting}
+                onRecordSavePoint={() => recordSavePoint(load.snapshot)}
+                onRestoreSavePoint={(recordedAt) => restoreSavePoint(load.snapshot, recordedAt)}
+                onUndo={(historyId) => undoLatest(load.snapshot, historyId)}
+                onInspectAbandonment={() => inspectAbandonment(load.snapshot)}
+                onAbandon={abandonWithDecision}
+              />
+            )}
           />
         )}
       </Stack>
     </PageShell>
   )
+}
+
+interface StateControlsOptions {
+  /** An `active` / `stale` Plan: the save point and the abandonment apply. */
+  running: boolean
+  canRecordSavePoint: boolean
+  showsSavePointRestore: boolean
 }
 
 function LoadedNavigator({
@@ -527,6 +683,7 @@ function LoadedNavigator({
   onRecoverOperationCount,
   onRestoreSavePoint,
   onAbandon,
+  stateControls,
 }: {
   snapshot: ExecutionNavigatorSnapshot
   dependencies: ExecutionNavigatorPageDependencies
@@ -542,6 +699,8 @@ function LoadedNavigator({
   onRecoverOperationCount(observations: OperationCountRecoveryObservation[], position: number): void
   onRestoreSavePoint(recordedAt: string): void
   onAbandon(): void
+  /** 「実行状態の管理」, below the Step's game actions. */
+  stateControls(options: StateControlsOptions): ReactNode
 }) {
   const { plan, ownedWeapons, targetWeapons, buildListEntries, latestExecutionHistory } = snapshot
   const progress = createExecutionProgress(plan)
@@ -574,37 +733,52 @@ function LoadedNavigator({
             onRestoreSavePoint={onRestoreSavePoint}
             onAbandon={onAbandon}
           />
+          {/* The recovery owns its save point restore; Undo and the ordinary abandonment stay here. */}
+          {stateControls({ running: true, canRecordSavePoint: false, showsSavePointRestore: false })}
         </>
       )
     }
+    const running = plan.status === 'stale'
     return (
       <>
         {plan.status !== 'draft' && <ExecutionProgress progress={progress} />}
+        {submitting && (
+          <Stack spacing={1} role="status" aria-live="polite">
+            <LinearProgress aria-label="操作を保存中" />
+            <Typography variant="body2">操作を保存しています。</Typography>
+          </Stack>
+        )}
         <EndedPlanView
           plan={plan}
           divergence={divergence?.action === 'actual_result_different' ? divergence : null}
           latestExecutionHistory={latestExecutionHistory}
+          reidentificationReminder={snapshot.reidentificationReminder}
         />
+        {plan.status !== 'draft' &&
+          stateControls({ running, canRecordSavePoint: false, showsSavePointRestore: running })}
       </>
     )
   }
 
   if (!evaluateProductionPlanCalculationCompatibility(plan, dependencies.currentCalculationContext).isCompatible) {
     return (
-      <Alert severity="warning">
-        <AlertTitle>この計画は再計算が必要です</AlertTitle>
-        <Stack spacing={1.5}>
-          <Typography variant="body2">
-            この生産計画は現在の計算契約と互換性がないため、実行を続けられません。
-          </Typography>
-          <NavigationLinks
-            links={[
-              { label: '作成プランを見る', to: `/plans/${plan.id}` },
-              { label: 'ビルドリストへ', to: '/build-list' },
-            ]}
-          />
-        </Stack>
-      </Alert>
+      <>
+        <Alert severity="warning">
+          <AlertTitle>この計画は再計算が必要です</AlertTitle>
+          <Stack spacing={1.5}>
+            <Typography variant="body2">
+              この生産計画は現在の計算契約と互換性がないため、実行を続けられません。
+            </Typography>
+            <NavigationLinks
+              links={[
+                { label: '作成プランを見る', to: `/plans/${plan.id}` },
+                { label: 'ビルドリストへ', to: '/build-list' },
+              ]}
+            />
+          </Stack>
+        </Alert>
+        {stateControls({ running: true, canRecordSavePoint: false, showsSavePointRestore: false })}
+      </>
     )
   }
 
@@ -675,6 +849,7 @@ function LoadedNavigator({
           )
         )}
       </ExecutionStepCard>
+      {stateControls({ running: true, canRecordSavePoint: true, showsSavePointRestore: true })}
     </>
   )
 }

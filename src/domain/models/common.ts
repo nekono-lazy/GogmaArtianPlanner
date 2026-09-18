@@ -292,14 +292,29 @@ export type RestorationBonusSet = [
   RestorationBonus,
 ]
 
+/**
+ * The RngState record shape version. Version 2 adds `lastIdentifiedAt`, the
+ * Identification provenance (`docs/DATA_MODEL.md` 6.1).
+ */
+export const RNG_STATE_SCHEMA_VERSION = 2
+
 export interface RngState {
   id: 'current'
-  schemaVersion: 1
+  schemaVersion: typeof RNG_STATE_SCHEMA_VERSION
   baseSeed: KnownValue<string>
   gogmaCounter: KnownValue<number>
   skillCounter: KnownValue<number>
   counterGate: KnownValue<number>
   notes: string | null
+  /**
+   * When the current Base Seed / Skill Counter / Gogma Counter were adopted from
+   * a formal Identification result (`docs/RNG_SPEC.md` 9.9), or `null` when no
+   * such adoption is recorded. Written only by the Identification adoption;
+   * an RNG Setup save, a Debug edit, a save point record and an Execution Step
+   * never write it. Reminder / recovery provenance only: it is not a
+   * calculation semantic and enters no semantic hash (`docs/DATA_MODEL.md` 6.1).
+   */
+  lastIdentifiedAt: ISODateTimeString | null
   createdAt: ISODateTimeString
   updatedAt: ISODateTimeString
 }
@@ -313,6 +328,15 @@ export interface NormalArtianCounter {
   observationCount: number
   lastObservedAt: ISODateTimeString | null
   candidateCount: number | null
+  /**
+   * When the current `counter` value was adopted from a unique Normal Counter
+   * Identification result (`docs/UI_FLOW.md` 6), or `null` when it was not.
+   * Written only by that adoption; a manual / Debug save that changes `counter`
+   * resets it to `null`, and one that leaves `counter` as it is keeps it.
+   * Reminder / recovery provenance only, never a calculation semantic
+   * (`docs/DATA_MODEL.md` 6.2).
+   */
+  lastIdentifiedAt: ISODateTimeString | null
   createdAt: ISODateTimeString
   updatedAt: ISODateTimeString
 }

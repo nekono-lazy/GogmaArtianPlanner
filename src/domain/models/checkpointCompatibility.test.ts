@@ -156,7 +156,7 @@ describe('Intermediate state calculation and Export schema contracts', () => {
   it('moves the Export schema version with the persisted entity shape', () => {
     const candidate = currentCandidate()
     const root: ExportRoot = {
-      schemaVersion: 9,
+      schemaVersion: 10,
       appName: 'mh-wilds-gogma-artian-planner',
       exportedAt: '2026-09-12T00:00:00.000Z',
       rngState: null,
@@ -185,7 +185,7 @@ describe('Intermediate state calculation and Export schema contracts', () => {
     // shape and adds the Execution lifecycle state, version 8 adds the
     // calculation schema 12 ProductionPlan shape, and version 9 adds the Plan
     // lifecycle metadata and the Execution Undo snapshot.
-    expect(root.schemaVersion).toBe(9)
+    expect(root.schemaVersion).toBe(10)
     expect(root.buildCandidates[0].intermediateStateGroups).toBeDefined()
     const older = { ...root, schemaVersion: 5 } as unknown as ExportRoot
     expect(older.schemaVersion).not.toBe(root.schemaVersion)

@@ -216,6 +216,9 @@ export class IdentificationAdoptionService {
           isConfirmed: true,
           source: 'observation',
         },
+        // The Identification provenance (`docs/DATA_MODEL.md` 6.1): this
+        // adoption is its only writer.
+        lastIdentifiedAt: now,
         updatedAt: now,
       }
       assertValidPersistentState(next)

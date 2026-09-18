@@ -194,7 +194,7 @@ ProductionPlanの実行意味だけを変えたため、build結果に限りvers
 現行versionの単一authorityは `src/domain/models/common.ts` の
 `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 13` とし、Search、BuildList、Plannerと
 benchmark入力のruntime creatorで共用する。永続モデル移行は独立してDexie
-`DATABASE_SCHEMA_VERSION`（現行6。14.2）で管理し、AppSettingsは `schemaVersion = 1` のままとする。Calculation semantics / artifact
+`DATABASE_SCHEMA_VERSION`（現行7。14.2）で管理し、AppSettingsは `schemaVersion = 1` のままとする。Calculation semantics / artifact
 validity境界とDexie schemaは別の概念であり、片方の更新はもう片方の更新を意味しない。
 gameVersion、Master Data versionは維持する。
 `PRODUCTION_RNG_ENGINE_VERSION` はこのcheckpoint境界では `production-rng:c5-e2` のまま維持し、
@@ -481,12 +481,13 @@ export type RestorationBonusSet = [
 ```ts
 export interface RngState {
   id: "current";
-  schemaVersion: 1;
+  schemaVersion: 2;
   baseSeed: KnownValue<string>;
   gogmaCounter: KnownValue<number>;
   skillCounter: KnownValue<number>;
   counterGate: KnownValue<number>;
   notes: string | null;
+  lastIdentifiedAt: ISODateTimeString | null;
   createdAt: ISODateTimeString;
   updatedAt: ISODateTimeString;
 }
@@ -495,6 +496,16 @@ export interface RngState {
 制約。
 
 - `id` は常に `"current"`
+- `schemaVersion` は2。version 2は `lastIdentifiedAt`（Identification provenance）を追加した形状である
+- `lastIdentifiedAt` は、現在のBase Seed / Skill Counter / Gogma Counterを正式なIdentification結果として採用した
+  時刻（[RNG_SPEC.md](./RNG_SPEC.md) 9.9のadoption）であり、採用が記録されていなければ `null`。
+  Identification Adoption Serviceだけが書き、RNG Setupの通常保存（値の編集、確定変更、notes、Counter Gate）、
+  Debug編集、ゲーム内セーブ地点の記録、Execution Stepは書き換えない。手動編集後の値は `source = manual` になる
+  ため、「Identification結果のまま」かどうかは `lastIdentifiedAt` と3値の `source` / `isConfirmed` の組で判定する
+  （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.15）
+- `lastIdentifiedAt` はreminder / recovery用のprovenance metadataであり、Calculation semanticsではない。
+  `searchStateHash`、`ExpectedPlanState.rngStateHash`、Candidate / BuildListEntry identity、CalculationContextに
+  含めない
 - `baseSeed.value` はUI入力では10進文字列または16進文字列を受け付けてもよいが、内部保存形式はRNG実装で定める正規化文字列に統一する
 - Counterの確定値は0以上の整数
 - 各項目の確定状態と取得元は独立して保持する
@@ -550,6 +561,7 @@ export interface NormalArtianCounter {
   observationCount: number;
   lastObservedAt: ISODateTimeString | null;
   candidateCount: number | null;
+  lastIdentifiedAt: ISODateTimeString | null;
   createdAt: ISODateTimeString;
   updatedAt: ISODateTimeString;
 }
@@ -568,6 +580,12 @@ id = `${weaponTypeId}:${rarity}`;
 - `isConfirmed = true` の場合、`counter` は0以上の整数
 - `isConfirmed = false` の場合、通常アーティア経由の候補検索には使わない
 - `candidateCount` は観測検索時の残候補数。未検索なら `null`
+- `lastIdentifiedAt` は、現在の `counter` 値をunique Normal Counter Identification結果として正式確定した時刻
+  （[UI_FLOW.md](./UI_FLOW.md) 6）であり、そうでなければ `null`。Identification確定の保存経路だけが書く。
+  手動 / Debug保存で `counter` 値を変更した場合は `null` へ戻し、値を変えない保存（確定 / 確定解除、観測数の編集）
+  では保持する。`lastObservedAt` / `candidateCount` / `isConfirmed` はDebug編集で任意に書けるためprovenanceの
+  証明にはならない。reminder / recovery用のprovenanceであり、`normalCountersHash` / `searchStateHash` /
+  Calculation semanticsに含めない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.15）
 
 候補位置の正式な関係は次のとおり。
 
@@ -2071,7 +2089,7 @@ mh-wilds-gogma-artian-planner
 
 ## 14.2 DB schemaVersion
 
-初期作成schemaは1。現行DATABASE_SCHEMA_VERSIONは6。version(1)のstoresを保持し、
+初期作成schemaは1。現行DATABASE_SCHEMA_VERSIONは7。version(1)のstoresを保持し、
 version(2) upgradeでTarget妥協条件だけを解除する。Idealと他entityを保持し、compromiseNeedsReview=trueとする。
 旧Practical Skillも解除するため、移行直後はIdeal-onlyとなる。
 
@@ -2125,6 +2143,17 @@ version(6) upgradeでProductionPlanのlifecycle metadata（`abandonmentReason`�
 - ExecutionHistoryは書き換えない。旧Undo Snapshotには `affectedTargetWeaponsBefore` /
   `executionSavePointBefore` が無く再構成できないため、保存内容のまま残しUndo対象にしない
 - `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は変更しない（12のまま）
+
+version(7) upgradeでIdentification provenance `lastIdentifiedAt` をRngState（record schemaVersion 2）と
+NormalArtianCounterへ追加する（6.1 / 6.2）。table / indexは変更しない。v1 -> ... -> v6 -> v7は順番に適用できること。
+
+- `rngState` / `normalArtianCounters` tableの全record、ゲーム内セーブ地点snapshot内の `rngState` / `normalCounters`、
+  ExecutionHistory Undo Snapshot内の `rngStateBefore` / `normalCountersBefore` のすべてに `lastIdentifiedAt = null`
+  を補完し、RngState bodyは `schemaVersion = 2` にする
+- 値は常に `null`（「正式なIdentification採用が記録されていない」）である。旧runtimeは採用時刻を記録していない
+  ため、`updatedAt`、`lastObservedAt`、`source = observation` から採用時刻を推測してbackfillしない
+- 既にfieldを持つbodyは変更しない
+- reminder / recovery用のprovenanceであり、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` は変更しない（13のまま）
 
 ```ts
 db.version(1).stores({
@@ -2228,7 +2257,7 @@ Planner constrained re-searchを経たPlan保存も原子的に行う。契約�
 
 ```ts
 export interface ExportRoot {
-  schemaVersion: 9;
+  schemaVersion: 10;
   appName: "mh-wilds-gogma-artian-planner";
   exportedAt: ISODateTimeString;
   rngState: RngState | null;
@@ -2289,6 +2318,14 @@ schema 8を純粋関数 `migrateExportRootV8ToV9()`、schema 7 / 6を既存migra
 
 Import validationはExecutionHistoryを `validateExecutionHistory()` でも検証する。
 
+Identification provenanceの実装PRで `schemaVersion` を10へ更新した。schema 10はRngState（record schemaVersion 2）と
+NormalArtianCounterの `lastIdentifiedAt`（6.1 / 6.2）を、root直下、ゲーム内セーブ地点snapshot、ExecutionHistory
+Undo Snapshotのすべてのbodyに含む。Import準備はschema 10をそのまま、schema 9を純粋関数
+`migrateExportRootV9ToV10()`、schema 8 / 7 / 6を既存migrationの後に `migrateExportRootV9ToV10()` で読む。
+schema 9 -> 10は該当bodyへ `lastIdentifiedAt = null`（RngStateは `schemaVersion = 2` も）を補完するだけであり、
+`updatedAt` / `lastObservedAt` / `source = observation` から採用時刻を推測しない。schema 9を名乗りながら
+`lastIdentifiedAt` を持つbody、またはrecord schemaVersion 2のRngStateを持つrootは拒否する。
+
 ## 15.2 Import方針
 
 Import時は以下の順序で検証する。
@@ -2310,11 +2347,11 @@ Import方式。
 
 ## 15.3 Migration
 
-現行ExportRootはschemaVersion=9である（schemaVersion 8はcalculation schema 12のProductionPlan形状を加えた形状、schemaVersion 9はProductionPlan lifecycle metadataとExecution Undo Snapshotを加えた形状）。schemaVersion 6はBuildCandidateが `intermediateStateGroups` を、
+現行ExportRootはschemaVersion=10である（schemaVersion 8はcalculation schema 12のProductionPlan形状を加えた形状、schemaVersion 9はProductionPlan lifecycle metadataとExecution Undo Snapshotを加えた形状、schemaVersion 10はRngState / NormalArtianCounterのIdentification provenance `lastIdentifiedAt` を加えた形状）。schemaVersion 6はBuildCandidateが `intermediateStateGroups` を、
 BuildListEntryが `intermediateStateSelection` を持つ最初の形状であり（schemaVersion 5は
 旧 `checkpointGroups` / `selectedCheckpointOpportunityIds` の形状）、schemaVersion 7はそれに
 Execution lifecycleの永続状態を加えた形状である（15.1）。
-Dexie `DATABASE_SCHEMA_VERSION = 6` とは独立して更新する。
+Dexie `DATABASE_SCHEMA_VERSION = 7` とは独立して更新する。
 現実装は型のみであり全置換Import/Exportサービスは未実装。
 旧schema=1を新Targetとして直接受理しない。将来のimportも純粋Target移行関数を使用し、
 旧Practical/OR/Practical Skillは解除、Ideal・ID・他entityは保持する。

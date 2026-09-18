@@ -162,8 +162,9 @@ gogma_artian  -> 巨戟アーティア系
 - 作成リスト候補数
 - Active Planの有無と進行（完了Step数 / 全Step数、作成中の武器数）
 - 完了済み目標武器数
-- RNG再同定を促す表示（想定外結果の記録後にRNG状態を更新していない場合。操作内容不明は実行ナビでの
-  回復を促し、回復済みなら表示しない。導出条件は[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.15）
+- 再同定を促す表示（想定外結果の記録後に、対象stream（RNG Identification、または該当武器種の通常アーティア
+  Counter）の正式なIdentificationを採用していない場合。操作内容不明は実行ナビでの回復を促し、回復済みなら
+  表示しない。導出条件は[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.15）
 
 主要アクション。
 
@@ -367,7 +368,7 @@ Base Seed / Skill Counter / Gogma CounterのIdentification Wizard（5.4）と同
 - 観測のために通常アーティアを `N` 本作成すると、ゲーム側CounterはC, C+1, ..., C+N-1を消費して一時的に `C + N` へ進む
 - 観測後はゲームを保存しない
 - 調査前のゲーム状態へ戻ったことをユーザーに確認させてからCounterを確定する。復元後に次にforgeされるCounterは再び `C` である
-- 復元確認後、既存 `NormalArtianCounter` へ `counter = startNormalCounter`、`isConfirmed = true`、`observationCount = 観測数`、`candidateCount = 1`、`lastObservedAt = now` を反映する
+- 復元確認後、既存 `NormalArtianCounter` へ `counter = startNormalCounter`、`isConfirmed = true`、`observationCount = 観測数`、`candidateCount = 1`、`lastObservedAt = now`、`lastIdentifiedAt = now`（Identification provenance、[DATA_MODEL.md](./DATA_MODEL.md) 6.2）を反映する。この経路だけが `lastIdentifiedAt` を書き、Debug編集や確定 / 確定解除は書かない
 - `C + observationCount` を保存する運用は採用しない。kernel / Workerは観測数を加算せず、Counter確定処理とDB更新もkernel / Workerの責務ではない
 
 注意書き。通常ユーザー向けに、検索開始時と確定前の少なくとも2箇所で次の意味の注意を表示する。
@@ -392,7 +393,7 @@ Base Seed / Skill Counter / Gogma CounterのIdentification Wizard（5.4）と同
 UI接続状態。
 
 - Domain kernel / Worker / Worker Clientは実装済みである（[RNG_SPEC.md](./RNG_SPEC.md) 9.12）
-- 本画面への接続は完了している。各武器種行の「観測・検索」が `NormalCounterIdentificationDialog` を開き、観測入力（属性区分 + ordered 5枠）、`AppSettings.defaultSearchLimit` を終了値とする初期検索範囲、Worker Clientによる検索、進捗、キャンセル、unique / multiple / zero / truncatedの候補表示、追加観測、復元確認後のCounter確定（`counter = startNormalCounter`）までを通常UIから行える。確定済み行には「確定解除」を提供し、`isConfirmed = false` へ戻す際に `counter` / `observationCount` / `candidateCount` / `lastObservedAt` は保持する
+- 本画面への接続は完了している。各武器種行の「観測・検索」が `NormalCounterIdentificationDialog` を開き、観測入力（属性区分 + ordered 5枠）、`AppSettings.defaultSearchLimit` を終了値とする初期検索範囲、Worker Clientによる検索、進捗、キャンセル、unique / multiple / zero / truncatedの候補表示、追加観測、復元確認後のCounter確定（`counter = startNormalCounter`）までを通常UIから行える。確定済み行には「確定解除」を提供し、`isConfirmed = false` へ戻す際に `counter` / `observationCount` / `candidateCount` / `lastObservedAt` / `lastIdentifiedAt` は保持する
 - 観測履歴はDialog内のin-memory stateだけに保持し、Observation履歴の永続化schemaは追加していない。Worker Clientはページが所有し、Dialogを閉じたとき・確定したとき・ページunmount時に `dispose()` する
 - 検索可能条件は確定済みBase Seed（Production canonical decimal form）だけである。Skill Counter / Gogma Counter / 旧Counter Gateは要求しない。Switch AxeはSwitch Axe Normal Production activation（[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.16）以降、他の武器種と同様に「観測・検索」を利用できる。Production poolを持たない武器種を「Production検証対象外」として検索開始できなくする表示と、Domain / Worker側の `normal_pool_unverified` fail closedは契約として維持する（現時点で該当する武器種はない）
 - unique結果でも通常UIは「候補が1件に絞り込まれました」とだけ表示し、`startNormalCounter` の数値はDebug Mode ONの診断表示に限る
@@ -743,8 +744,9 @@ TargetWeaponごとに候補を検索し、作成リストへ追加する。
   完成予定です。」と表示する
 - 操作0 Idealの通知（8.2）に該当する目標武器では、検索結果の上に同じ通知と「この武器で目標を完了にする」
   導線を表示する
-- 想定外結果の記録後にRNG状態が未更新の場合はRNG再同定を、操作内容不明で実行中Planが停止している場合は
-  実行ナビでの回復を促すwarningを表示する（導出条件は[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.15）
+- 想定外結果の記録後に対象streamの正式なIdentificationが未採用の場合は再同定（RNG Setup、または通常アーティア
+  Counter Setup）を、操作内容不明で実行中Planが停止している場合は実行ナビでの回復を促すwarningを表示する
+  （導出条件は[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.15）
 
 制約。
 

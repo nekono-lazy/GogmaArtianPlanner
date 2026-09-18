@@ -4480,10 +4480,17 @@ Navigator内の想定外結果（「結果が違う」の実結果入力と最�
 「何を何回操作したか分からない」の確認Dialog）と、操作内容不明後のExecution Recovery（16.15の
 Recovery Window内の現在位置確認と `operation_count_recovered` の追従Runtime、ゲーム内セーブ地点の復元と
 セーブ地点が無い場合のPlan破棄への最小導線）まで接続済みである。
+続いて、Execution Navigatorの「実行状態の管理」として、最新ExecutionHistoryのUndo（16.16。表示可否は
+Runtimeと同じ判定を共有するread-only helperから導出）、ゲーム内セーブ地点の記録 / 上書き確認 / 直接復元
+（16.9。ゲーム側復元の明示確認つき）、active / stale Planの通常のPlan破棄と16.10の3択（破棄前inspectを
+authorityとし、セーブ地点への復元と破棄は既存Runtimeの1 transaction）を接続した。
+通常のPlan破棄後も、未解決の `actual_result_different`（対象streamの正式なIdentificationがその記録より後に
+採用されていない）があれば終了画面で再同定を引き続き案内する（16.15の解決authorityをpure helperとして実装し、
+後続の継続表示と共有する。Normal作成のdivergenceは通常アーティアCounterの再同定へ案内する）。
 calculation schema 13で、既存武器のTarget紐付けを各Entryの最初の物理Step確定からPlan開始effect
 （16.2 / 16.11）へ移し、Production Plan画面での事前表示とともに実装した。
-Planを壊す変更の警告、Execution Navigator UIの残り（一般のUndo、ゲーム内セーブ地点の記録、通常のPlan破棄、
-再計画Preview画面とセーブ地点3択の確認Dialogを含む）、16.15のDashboard / RNG Setup / Candidate Searchでの
+Planを壊す変更の警告、Execution Navigator UIの残り（再計画Preview画面と採用時のセーブ地点3択の確認Dialog）、
+16.15のDashboard / RNG Setup / Candidate Searchでの
 RNG再同定の継続表示などは後続の実装PRが
 本章をauthorityとして実装する。本章と矛盾する旧記述（Execution上の独立した「確保」操作、
 Target / Build List変更による一律stale、reserve時の既存保護維持など）は本改訂で
@@ -5589,20 +5596,54 @@ Plan状態へ戻す。
 破棄後は、現在のゲーム状態に合わせてRNG状態、通常アーティアCounter、所持武器を確認・再登録してから
 再計画するよう案内する。Planは終了しているため、この段階で通常のRNG同定を使ってよい。
 
-##### RNG再同定を促す継続表示
+##### 再同定を促す継続表示と解決authority
 
-Dashboard、RNG Setup、Candidate SearchでRNG再同定を促す継続表示は、永続flagを追加せず、最新の
-divergence記録、Planの状態、RngStateの更新日時から導出する。RngState.updatedAtだけを唯一の解決判定
-authorityにしない。
+Dashboard、RNG Setup、Candidate Search、およびExecution NavigatorのPlan終了表示で再同定を促す継続表示は、
+永続flagを追加せず、divergence記録、Planの状態、対象streamのIdentification provenanceから導出する。
+`RngState.updatedAt` は通常保存（notes、Counter Gate、手動編集）でも更新されるため、解決判定のauthorityに
+しない。`KnownValue.source = observation` だけでも「そのdivergenceより後に採用された」ことは証明できない。
+解決の根拠は、正式なIdentification adoptionだけが書くprovenance（[DATA_MODEL.md](./DATA_MODEL.md) 6.1 / 6.2の
+`lastIdentifiedAt`）である。
 
-- `actual_result_different`: 最新の該当記録より後にRngStateが更新されるまで表示する（従来どおり）
-- `operation_uncertain`: 実行中Planが `stale` で最新ExecutionHistoryがその記録である間は、通常のRNG同定
-  ではなくExecution Navigatorでの回復（現在位置の確認 / セーブ地点の復元 / Plan破棄）を促す。
-  現在位置の追従（`operation_count_recovered`）とセーブ地点の復元（記録が削除される）では解決済みとし、
-  表示しない。Plan破棄で終わった場合は、RngStateがPlanの `abandonedAt` より後に更新されるまで
-  RNG再同定を促す
+`actual_result_different` の解決条件。対象Stepの予測streamについて、そのdivergence記録（`createdAt`）より
+後に正式なIdentification結果が採用され、現在のpersisted stateがそのIdentification済み状態を満たすまで
+未解決とする。
 
-この継続表示のUI実装は後続PRで行う。
+- `create_normal_artian`: 対象streamは `step.rngAdvance.affectedNormalCounterId` のNormalArtianCounterである。
+  そのCounterのunique Normal Counter Identification（Normal Counter Setup、[UI_FLOW.md](./UI_FLOW.md) 6）が
+  divergence後に正式確定され、現在も `isConfirmed = true` かつ `counter` が保持されていれば解決とする
+  （`NormalArtianCounter.lastIdentifiedAt > record.createdAt`）。別武器種のCounterの再同定、RNG Identification、
+  手動 / Debug保存では解決しない。`affectedNormalCounterId` が `null`、または対象Counter recordが存在しない
+  場合は解決できないものとしてfail closedし、他のCounterを推測しない。確定解除中（`isConfirmed = false`）は
+  Candidate Searchが使えないため未解決のままとし、再確定で解決に戻る
+- `convert_normal_to_gogma` / `reset_bonuses` / `keep_bonuses` / `reset_skills`: 対象streamはRNG Identification
+  （Gogma / Skill）である。Identification Wizardの正式adoption（[RNG_SPEC.md](./RNG_SPEC.md) 9.9）は
+  Base Seed / Skill Counter / Gogma Counterを一体として採用するため、1回の採用でGogma側・Skill側の
+  divergenceを解決してよい。解決条件は `RngState.lastIdentifiedAt > record.createdAt` かつ、採用した3値が
+  現在も `isConfirmed = true` / `source = observation` / 値ありであること。divergence後にnotesやCounter Gateだけを
+  保存しても解決せず（R1）、Base Seed / Gogma Counter / Skill Counterをmanual編集した値は `source = manual` になる
+  ため、採用後にそれらを編集した場合もIdentification済み状態とは扱わない（R2 / R5）
+- 時刻比較は正規UTC ISO文字列（`Date.prototype.toISOString()` 形式）同士の文字列比較で行い、同時刻・非正規形式・
+  provenanceが `null` の場合は解決済みにしない
+- 同一Planに複数の `actual_result_different` がある場合は、divergence streamごとに最新の記録
+  （`compareExecutionHistoryOrder()`）を判定し、その後の採用で同じstreamのそれ以前の記録も解決とする。
+  別streamの記録は解決しない。現行lifecycleでは記録後にPlanが `stale` になり以降のStepは確定されないため
+  1 Plan 1件が通常だが、判定はそれに依存しない
+- Planの終了（`user_abandoned` / `replan_adopted` / `breaking_change_approved` / 妥協終了）は解決ではない。
+  記録が残り対象Identificationが未実施なら継続表示する
+- セーブ地点の復元やUndoで該当記録自体が削除された場合は解決である。provenanceを別途クリアしない
+
+`operation_uncertain`: 実行中Planが `stale` で最新ExecutionHistoryがその記録である間は、通常のRNG同定
+ではなくExecution Navigatorでの回復（現在位置の確認 / セーブ地点の復元 / Plan破棄）を促す。
+現在位置の追従（`operation_count_recovered`）とセーブ地点の復元（記録が削除される）では解決済みとし、
+表示しない。Plan破棄で終わった場合は、RNG状態・通常アーティアCounter・所持武器の確認・再登録を案内する
+（`actual_result_different` のprovenance判定へ吸収しない）。
+
+判定はpure Domain helper `deriveExecutionReidentificationReminder()`
+（`src/domain/execution/reidentificationReminder.ts`）が担い、再同定先は
+`executionReidentificationDestination()`（Normal作成はNormal Counter Setup、他はRNG Setup）を共有する。
+Execution NavigatorのPlan終了表示は接続済みであり、Dashboard / RNG Setup / Candidate Searchの継続表示UIは
+後続PRで同じhelperを使う。
 
 ### 16.16 Undo
 
@@ -5695,7 +5736,10 @@ staleness semantics、PlanStep / reserve semantics、Expected execution state、
   Dexieのtable / index / field形状、ExportRootの形状、Plan生成・Candidate Search・Plannerの計算意味は
   変わらないため、`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 13`、`DATABASE_SCHEMA_VERSION = 6`、
   `ExportRoot.schemaVersion = 9` を維持する。この記録を含むExportを旧版が読むと、action literalの
-  検証でImport全体がfail closedになり、部分適用はしない
+  検証でImport全体がfail closedになり、部分適用はしない。その後のIdentification provenance
+  （16.15の解決authority、[DATA_MODEL.md](./DATA_MODEL.md) 6.1 / 6.2）の追加でDexie
+  `DATABASE_SCHEMA_VERSION` を7、`ExportRoot.schemaVersion` を10、`RngState.schemaVersion` を2へ更新した
+  （現行値）。計算意味は変わらないため `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は13のままである
 - 既存データを推測migrationして意味を変えない。所持Ideal武器の存在からTargetを
   `completed` と推測しない。既存OwnedWeaponを作成中と推測しない
 - 旧契約のProductionPlan（独立 `reserve_weapon` Step、旧expected state）はexact persisted

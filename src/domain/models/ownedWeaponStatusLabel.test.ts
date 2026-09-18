@@ -310,7 +310,7 @@ describe('version authorities at the weapon-as-material removal boundary', () =>
   })
 
   it('declares the current Export schema version', () => {
-    const schemaVersion: ExportRoot['schemaVersion'] = 9
-    expect(schemaVersion).toBe(9)
+    const schemaVersion: ExportRoot['schemaVersion'] = 10
+    expect(schemaVersion).toBe(10)
   })
 })

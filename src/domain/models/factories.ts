@@ -11,6 +11,7 @@ import type {
   OwnedWeapon,
   TargetWeapon,
 } from './entities'
+import { RNG_STATE_SCHEMA_VERSION } from './common'
 
 // `executionInProgress` is Execution-owned: a newly registered weapon is never
 // being produced, so the factory always starts it at null.
@@ -60,12 +61,13 @@ export function createInitialRngState(
 ): RngState {
   return {
     id: 'current',
-    schemaVersion: 1,
+    schemaVersion: RNG_STATE_SCHEMA_VERSION,
     baseSeed: { value: null, isConfirmed: false, source: null },
     gogmaCounter: { value: null, isConfirmed: false, source: null },
     skillCounter: { value: null, isConfirmed: false, source: null },
     counterGate: { value: null, isConfirmed: false, source: null },
     notes: null,
+    lastIdentifiedAt: null,
     createdAt: now,
     updatedAt: now,
   }

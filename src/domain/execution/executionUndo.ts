@@ -194,36 +194,88 @@ function causedCompromiseFinish(plan: ProductionPlan, history: ExecutionHistory)
 /**
  * Undo eligibility (`docs/PLANNER_SPEC.md` 16.16): an `active` or `stale` Plan,
  * or a `completed` / `abandoned` Plan whose terminal transition this very
- * ExecutionHistory caused. Returns whether the Undo reverses a terminal
- * transition.
+ * ExecutionHistory caused. `terminal` tells whether the Undo reverses a
+ * terminal transition. The one eligibility authority of both the Undo runtime
+ * and the Navigator's display (`inspectExecutionUndo()`).
  */
-function assertUndoAllowed(plan: ProductionPlan, history: ExecutionHistory): { terminal: boolean } {
+type ExecutionUndoEligibility =
+  | { allowed: true; terminal: boolean }
+  | { allowed: false; message: string }
+
+function deriveExecutionUndoEligibility(plan: ProductionPlan, history: ExecutionHistory): ExecutionUndoEligibility {
   const action: string = history.action
   if (!(currentExecutionActions as readonly string[]).includes(action)) {
-    executionFailure('undo_not_allowed', `ExecutionHistory '${history.id}' is a legacy '${action}' record and is never undone as a current Execution.`)
+    return { allowed: false, message: `ExecutionHistory '${history.id}' is a legacy '${action}' record and is never undone as a current Execution.` }
   }
   switch (plan.status) {
     case 'active':
     case 'stale':
       if (history.action === 'finished_as_compromise') {
-        executionFailure('undo_not_allowed', `ExecutionHistory '${history.id}' finished a Plan that is now '${plan.status}'.`)
+        return { allowed: false, message: `ExecutionHistory '${history.id}' finished a Plan that is now '${plan.status}'.` }
       }
-      return { terminal: false }
+      return { allowed: true, terminal: false }
     case 'completed':
       if (!causedCompletion(plan, history) && !causedRecoveryCompletion(plan, history)) {
-        executionFailure('undo_not_allowed', `ExecutionHistory '${history.id}' did not complete ProductionPlan '${plan.id}'.`)
+        return { allowed: false, message: `ExecutionHistory '${history.id}' did not complete ProductionPlan '${plan.id}'.` }
       }
-      return { terminal: true }
+      return { allowed: true, terminal: true }
     case 'abandoned':
       if (!causedCompromiseFinish(plan, history)) {
-        executionFailure(
-          'undo_not_allowed',
-          `ProductionPlan '${plan.id}' was abandoned by '${plan.abandonmentReason}', not by ExecutionHistory '${history.id}'.`,
-        )
+        return {
+          allowed: false,
+          message: `ProductionPlan '${plan.id}' was abandoned by '${plan.abandonmentReason}', not by ExecutionHistory '${history.id}'.`,
+        }
       }
-      return { terminal: true }
+      return { allowed: true, terminal: true }
     case 'draft':
-      return executionFailure('undo_not_allowed', `ProductionPlan '${plan.id}' has not started.`)
+      return { allowed: false, message: `ProductionPlan '${plan.id}' has not started.` }
+  }
+}
+
+function assertUndoAllowed(plan: ProductionPlan, history: ExecutionHistory): { terminal: boolean } {
+  const eligibility = deriveExecutionUndoEligibility(plan, history)
+  if (!eligibility.allowed) executionFailure('undo_not_allowed', eligibility.message)
+  return { terminal: eligibility.terminal }
+}
+
+/**
+ * Whether the Navigator offers Undo of the Plan's latest ExecutionHistory
+ * (`docs/PLANNER_SPEC.md` 16.16, `docs/UI_FLOW.md` 12.7). Read-only and display
+ * only: it applies the same Plan / snapshot contract checks and the same
+ * eligibility as `prepareExecutionUndo()`, which stays the write authority and
+ * re-derives everything inside its transaction (the latest record, the snapshot
+ * validation and the resulting state included).
+ */
+export type ExecutionUndoAvailability =
+  | {
+      kind: 'available'
+      /** The record Undo removes; the request names it as the latest the user saw. */
+      history: ExecutionHistory
+      /** The Undo reverses the Plan's completion or compromise finish. */
+      terminal: boolean
+      /** The undone record is the game save point's boundary, so Undo deletes the save point too. */
+      deletesExecutionSavePoint: boolean
+    }
+  | { kind: 'unavailable' }
+
+export function inspectExecutionUndo(
+  plan: ProductionPlan,
+  latestExecutionHistory: ExecutionHistory | null,
+  executionSavePoint: Pick<ExecutionSavePoint, 'lastExecutionHistoryId'> | null,
+): ExecutionUndoAvailability {
+  const history = latestExecutionHistory
+  if (history === null || history.planId !== plan.id) return { kind: 'unavailable' }
+  if (history.undoSnapshot.productionPlanBefore.id !== plan.id) return { kind: 'unavailable' }
+  if (!isExecutionContractProductionPlan(plan) || !isExecutionContractProductionPlan(history.undoSnapshot.productionPlanBefore)) {
+    return { kind: 'unavailable' }
+  }
+  const eligibility = deriveExecutionUndoEligibility(plan, history)
+  if (!eligibility.allowed) return { kind: 'unavailable' }
+  return {
+    kind: 'available',
+    history,
+    terminal: eligibility.terminal,
+    deletesExecutionSavePoint: executionSavePoint !== null && executionSavePoint.lastExecutionHistoryId === history.id,
   }
 }
 

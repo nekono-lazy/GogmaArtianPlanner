@@ -1,4 +1,8 @@
-import type { ExecutionRuntimeErrorCode } from '../../domain/execution'
+import {
+  executionReidentificationDestination,
+  type ExecutionRuntimeErrorCode,
+  type ReidentificationDestination,
+} from '../../domain/execution'
 import type {
   ExecutionHistory,
   ExpectedResult,
@@ -205,6 +209,14 @@ export function weaponSwitchTarget(
   return previous !== null && previous !== current ? current : null
 }
 
+/**
+ * The game save point cannot be restored safely (UI_FLOW 12.8): an entity the
+ * restored Plan needs was deleted, or the record itself cannot be restored
+ * exactly. Nothing is revived and nothing was changed.
+ */
+export const SAVE_POINT_UNSAFE_MESSAGE =
+  'このセーブ地点を安全に復元できません。必要な所持武器・目標武器・作成リストの状態を確認し、現在状態から再計画してください。状態は変更されていません。'
+
 /** A typed Execution runtime refusal, in the words the Navigator shows. */
 export function executionErrorMessage(code: ExecutionRuntimeErrorCode): string {
   switch (code) {
@@ -247,22 +259,34 @@ export function executionErrorMessage(code: ExecutionRuntimeErrorCode): string {
     case 'operation_count_recovery_not_unique':
       return '入力した結果から現在位置を1つに特定できないため、確定しませんでした。'
     case 'save_point_changed':
-      return '表示後にゲーム内セーブ地点が変わったため、復元しませんでした。最新の状態を読み込み直しました。'
+      return '表示後にゲーム内セーブ地点の記録が変わったため、操作を確定しませんでした。最新の状態を読み込み直しました。'
     case 'save_point_not_found':
-      return 'ゲーム内セーブ地点が見つかりません。'
+      return 'ゲーム内セーブ地点の記録が見つかりません。最新の状態を読み込み直しました。'
     case 'save_point_restore_not_allowed':
       return 'この作成プランは、ゲーム内セーブ地点へ戻せる状態ではありません。'
+    case 'save_point_record_not_allowed':
+      return '実行中ではない作成プランでは、ゲーム内セーブ地点を記録できません。'
     case 'save_point_required_entity_missing':
-      return 'セーブ地点の復元に必要な所持武器・目標武器・作成リスト項目が削除されているため、復元できません。'
     case 'save_point_snapshot_invalid':
     case 'save_point_restore_invalid':
-      return 'ゲーム内セーブ地点の記録が不正なため、復元できません。'
+      return SAVE_POINT_UNSAFE_MESSAGE
     case 'plan_abandon_state_changed':
       return '表示後に作成プランの状態が変わったため、破棄しませんでした。最新の状態を読み込み直しました。'
     case 'plan_abandon_not_allowed':
       return 'この作成プランは破棄できる状態ではありません。'
     case 'save_point_choice_required':
-      return 'ゲーム内セーブ地点の扱いを選ぶ必要があります。最新の状態を読み込み直しました。'
+      return 'ゲーム内セーブ地点の扱いを選ぶ必要があります。最新の状態を読み込み直しました。もう一度操作してください。'
+    case 'save_point_choice_not_required':
+      return '表示後にゲーム内セーブ地点の状態が変わったため、破棄しませんでした。最新の状態を読み込み直しました。'
+    case 'undo_history_not_latest':
+      return '表示後に新しい操作が記録されたため、Undoしませんでした。最新の状態を読み込み直しました。'
+    case 'undo_history_not_found':
+      return '取り消す操作の記録が見つかりません。最新の状態を読み込み直しました。'
+    case 'undo_not_allowed':
+      return 'この作成プランの状態では、最後の操作を元に戻せません。'
+    case 'undo_snapshot_invalid':
+    case 'undo_result_invalid':
+      return '操作前の状態を正しく復元できないため、Undoしませんでした。状態は変更されていません。'
     case 'compromise_finish_not_applicable':
       return 'この武器は作成リストで選んだ途中採用状態として終了できません。'
     case 'compromise_checkpoint_not_current':
@@ -344,7 +368,7 @@ export function offersOperationUncertain(step: PlanStep): boolean {
 }
 
 /** Where the RNG re-identification of a diverged operation happens (UI_FLOW 12.4 / 12.5). */
-export type ReidentificationDestination = 'normal_counters' | 'rng'
+export type { ReidentificationDestination }
 
 /**
  * The divergence a stale Plan stopped on, from the Plan's latest
@@ -389,7 +413,7 @@ export function executionDivergenceView(
         action,
         planStepId: step.id,
         operationLabel,
-        destination: step.operationType === 'create_normal_artian' ? 'normal_counters' : 'rng',
+        destination: executionReidentificationDestination(step),
       }
     : { action, planStepId: step.id, operationLabel }
 }
@@ -400,4 +424,40 @@ export function planStepPositionLabel(plan: ProductionPlan, stepId: PlanStep['id
   const index = steps.findIndex(({ id }) => id === stepId)
   if (index < 0) return `Step（${stepId}）`
   return `Step ${index + 1}（${planStepOperationLabels[steps[index].operationType]}）`
+}
+
+/**
+ * Where the game save point was recorded, as 「Step N完了時点」 in the Plan's
+ * display order: the Step before the snapshot Plan's current Step. Derived from
+ * the save point's own Plan snapshot `currentStepId` only; no Counter value.
+ */
+export function savePointPositionLabel(
+  plan: ProductionPlan,
+  savePointCurrentStepId: PlanStep['id'] | null,
+): string {
+  const steps = orderPlanSteps(plan)
+  if (savePointCurrentStepId === null) return `Step ${steps.length}完了時点`
+  const index = steps.findIndex(({ id }) => id === savePointCurrentStepId)
+  if (index < 0) return '記録地点（Stepを特定できません）'
+  return index === 0 ? '作成開始時点（最初の操作の前）' : `Step ${index}完了時点`
+}
+
+/** What Undo removes, in the Navigator's words (UI_FLOW 12.7). */
+export function executionUndoTargetLabel(plan: ProductionPlan, history: ExecutionHistory): string {
+  const step = planStepPositionLabel(plan, history.planStepId)
+  switch (history.action) {
+    case 'confirmed_expected':
+      return `${step} の確定`
+    case 'actual_result_different':
+      return `${step} の「結果が違う」の記録`
+    case 'operation_uncertain':
+      return `${step} の「何を何回操作したか分からない」の記録`
+    case 'operation_count_recovered':
+      return `現在位置の確認による再開（${step}まで）`
+    case 'finished_as_compromise':
+      return '妥協品として確定して終了'
+    case 'secured_weapon':
+    case 'skipped_candidate':
+      return step
+  }
 }

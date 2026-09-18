@@ -7,6 +7,7 @@ import type {
   OwnedWeapon,
   PlanStep,
   ProductionPlan,
+  RngState,
   TargetWeapon,
 } from '../models/publicTypes'
 import {
@@ -115,15 +116,17 @@ function completionsOf(step: PlanStep | undefined) {
 }
 
 describe('calculation schema version boundaries', () => {
-  it('moves the calculation schema to 13 for the Plan start effect and keeps Export 9 and Dexie 6', () => {
+  it('moves the calculation schema to 13 for the Plan start effect; Export and Dexie move only with persisted shapes', () => {
     // The Execution Plan contract moved the calculation schema to 12 and Export
     // to 8 without a Dexie upgrade; the Execution runtime lifecycle metadata then
     // moved Export to 9 and Dexie to 6 without touching calculation semantics.
     // The Plan start effect moved the Target link of existing weapons from the
-    // first physical Step to the Plan start: a calculation change only.
+    // first physical Step to the Plan start: a calculation change only. The
+    // Identification provenance later moved Export to 10 and Dexie to 7, again
+    // without touching calculation semantics.
     expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(13)
-    expect(EXPORT_SCHEMA_VERSION).toBe(9)
-    expect(DATABASE_SCHEMA_VERSION).toBe(6)
+    expect(EXPORT_SCHEMA_VERSION).toBe(10)
+    expect(DATABASE_SCHEMA_VERSION).toBe(7)
   })
 
   it.each([11, 12])('fails a version %i Plan closed instead of reusing it as a current Plan', (version) => {
@@ -601,7 +604,12 @@ describe('Export schema 7 -> 8', () => {
       schemaVersion: 7,
       appName: 'mh-wilds-gogma-artian-planner',
       exportedAt: DOMAIN_FIXTURE_TIME,
-      rngState: createValidRngState(),
+      // A schema 7 RngState predates the schema 10 Identification provenance.
+      rngState: (() => {
+        const state = { ...createValidRngState(), schemaVersion: 1 } as unknown as Record<string, unknown>
+        delete state.lastIdentifiedAt
+        return state as unknown as RngState
+      })(),
       normalArtianCounters: [],
       ownedWeapons: [],
       targetWeapons: [],
@@ -639,7 +647,7 @@ describe('Export schema 7 -> 8', () => {
     expect(imported.ok).toBe(true)
     if (!imported.ok) return
     // Schema 8 -> 9 then gives the draft Plan its deterministic lifecycle nulls.
-    expect(imported.root.schemaVersion).toBe(9)
+    expect(imported.root.schemaVersion).toBe(10)
     expect(imported.root.productionPlans).toEqual([{ ...legacy, abandonmentReason: null, abandonedAt: null, completedAt: null }])
   })
 

@@ -714,7 +714,7 @@ Skill Identificationでcanonical Base Seedが確定した後のSTEP 2には、�
 - `matches.length === 1 && isTruncated === false` のunique判定と、調査前ゲーム状態へ戻したことの確認は後続Wizard Coordinatorの責務である
 - Base Seedは保存前にProduction `normalizeSeed()`で再validation / canonicalizeする。RNG Setupと同様、valid noncanonical入力はcanonical decimal stringへ変換し、invalid入力は永続化前に拒否する
 - starting Skill / Gogma Counterは既存 `validateRngState()` のpersisted Counter domainで検証する。Identification kernel固有のsearch range上限をadoption domainへ持ち込まない
-- repositoryの `ensureInitialRngState()`でcurrent stateを取得し、Base Seed、Skill Counter、Gogma Counterだけをconfirmed / source `observation`へoverrideする。Counter Gate、notes、createdAt、その他fieldを保持し、`updatedAt`をRNG Setupと同じく更新する
+- repositoryの `ensureInitialRngState()`でcurrent stateを取得し、Base Seed、Skill Counter、Gogma Counterだけをconfirmed / source `observation`へoverrideする。Counter Gate、notes、createdAt、その他fieldを保持し、`updatedAt`をRNG Setupと同じく更新する。あわせてIdentification provenance `RngState.lastIdentifiedAt` を採用時刻で更新する（[DATA_MODEL.md](./DATA_MODEL.md) 6.1）。このfieldを書くのは本adoptionだけであり、RNG Setupの通常保存やDebug編集は書かない。3値を一体で採用するため、1回の採用でGogma / Skill両streamの `actual_result_different` を解決してよい（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.15）
 - 観測回数によるCounter advanceは行わず、starting `S` / `G`をそのまま保存する。単一のvalidated RngStateを `putRngState()`へ1回渡し、保存されたRngStateを返す
 - NormalArtianCounter、BuildCandidate、BuildListEntry、ProductionPlanのrepositoryには依存せず、直接mutationまたはstale書込みを行わない
 - state未作成時は既存ensure契約に従ってinitial RngStateを作成してからadoptする。現repositoryにCAS/version checkはなくread-modify-put間の同時manual updateを上書きし得るため、Wizard側は同時編集を避ける。C5-E2C4だけの新concurrency機構は追加しない
@@ -822,7 +822,7 @@ Observation連続性。
 - multiple: 追加観測（次の連続forge）を追加して同じ検索を再実行する。候補をユーザーに手動選択させない
 - zero: 観測入力、Base Seed、武器種、属性区分、検索範囲、forge順を確認する。範囲を自動拡張しない
 - truncated: 候補数に関係なくincompleteであり、unique確定不可とする
-- 確定時に既存 `NormalArtianCounter` へ反映する処理（`counter` / `isConfirmed` / `observationCount` / `candidateCount` / `lastObservedAt`）は後続UI PRの責務であり、kernel / WorkerはDBを変更しない。kernelが返す `startNormalCounter` は観測1を作成する直前のCounter `C`（調査前状態で次にforgeされるCounter）であり、観測数を加算しない。運用はSkill / Gogma Identificationと同じく、観測後はゲームを保存せず、調査前状態へ戻ったことを確認してから `counter = startNormalCounter` を確定する（[UI_FLOW.md](./UI_FLOW.md) 6）。`C + observationCount` を保存する運用は採用しない。Observation履歴のDB永続化schemaは追加しない
+- 確定時に既存 `NormalArtianCounter` へ反映する処理（`counter` / `isConfirmed` / `observationCount` / `candidateCount` / `lastObservedAt`、およびIdentification provenance `lastIdentifiedAt`、[DATA_MODEL.md](./DATA_MODEL.md) 6.2）はNormal Counter Setupの確定経路（`RngStatePersistenceService.adoptNormalArtianCounterIdentification()`）の責務であり、kernel / WorkerはDBを変更しない。kernelが返す `startNormalCounter` は観測1を作成する直前のCounter `C`（調査前状態で次にforgeされるCounter）であり、観測数を加算しない。運用はSkill / Gogma Identificationと同じく、観測後はゲームを保存せず、調査前状態へ戻ったことを確認してから `counter = startNormalCounter` を確定する（[UI_FLOW.md](./UI_FLOW.md) 6）。`C + observationCount` を保存する運用は採用しない。Observation履歴のDB永続化schemaは追加しない
 
 Production support境界。
 

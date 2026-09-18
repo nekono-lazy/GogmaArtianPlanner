@@ -19,7 +19,10 @@ import {
 import { productionRngEngine } from '../domain/rng/production/productionRngRuntime'
 import type { NormalizedSeed } from '../domain/rng/rngEngine'
 import { normalArtianCounterId, normalArtianCounterRepository, rngStateRepository, settingsRepository } from '../db/repositories'
-import { rngStatePersistenceService } from '../services/rngState/rngStatePersistenceService'
+import {
+  rngStatePersistenceService,
+  type NormalArtianCounterIdentificationAdoption,
+} from '../services/rngState/rngStatePersistenceService'
 import { normalCounterIdentificationUnsupportedLabel } from '../presentation/normalCounterIdentification'
 import {
   createProductionNormalArtianCounterIdentificationWorkerClient,
@@ -36,6 +39,8 @@ export interface NormalCountersPageDependencies {
   getAll(): Promise<NormalArtianCounter[]>
   /** `basis` is the stored record the edit started from, if any. */
   save(value: NormalArtianCounter, basis?: NormalArtianCounter): Promise<NormalArtianCounter>
+  /** The unique Identification result adoption: the only path that records `lastIdentifiedAt`. */
+  adoptIdentification(adoption: NormalArtianCounterIdentificationAdoption): Promise<NormalArtianCounter>
   ensureRngState(): Promise<RngState>
   ensureSettings(): Promise<AppSettings>
   createIdentificationClient(): NormalArtianCounterIdentificationWorkerClient
@@ -45,13 +50,14 @@ export interface NormalCountersPageDependencies {
 const defaultDependencies: NormalCountersPageDependencies = {
   getAll: () => normalArtianCounterRepository.getAllNormalArtianCounters(),
   save: (value, basis) => rngStatePersistenceService.saveNormalArtianCounter(value, basis ?? null),
+  adoptIdentification: (adoption) => rngStatePersistenceService.adoptNormalArtianCounterIdentification(adoption),
   ensureRngState: () => rngStateRepository.ensureInitialRngState(),
   ensureSettings: () => settingsRepository.ensureSettings(),
   createIdentificationClient: createProductionNormalArtianCounterIdentificationWorkerClient,
 }
 
 function emptyCounter(weaponTypeId: string, now: string): NormalArtianCounter {
-  return { id: normalArtianCounterId(weaponTypeId, V1_NORMAL_ARTIAN_RARITY), weaponTypeId, rarity: V1_NORMAL_ARTIAN_RARITY, counter: null, isConfirmed: false, observationCount: 0, lastObservedAt: null, candidateCount: null, createdAt: now, updatedAt: now }
+  return { id: normalArtianCounterId(weaponTypeId, V1_NORMAL_ARTIAN_RARITY), weaponTypeId, rarity: V1_NORMAL_ARTIAN_RARITY, counter: null, isConfirmed: false, observationCount: 0, lastObservedAt: null, candidateCount: null, lastIdentifiedAt: null, createdAt: now, updatedAt: now }
 }
 
 /**
@@ -288,22 +294,16 @@ export function NormalCountersPage({ dependencies = defaultDependencies }: { dep
    * (`docs/UI_FLOW.md` 6). The observation history itself is not saved.
    */
   const confirmIdentifiedCounter = async (weaponTypeId: WeaponTypeId, confirmation: NormalCounterIdentificationConfirmation) => {
-    const timestamp = now()
-    // The persisted row when one exists; otherwise a row created now, so a new
-    // row's `createdAt` is the confirmation time rather than the render time.
-    const row = values.find((candidate) => candidate.weaponTypeId === weaponTypeId && candidate.rarity === V1_NORMAL_ARTIAN_RARITY)
-      ?? emptyCounter(weaponTypeId, timestamp)
-    await persist(
-      {
-        ...row,
-        counter: confirmation.startNormalCounter,
-        isConfirmed: true,
-        observationCount: confirmation.observationCount,
-        candidateCount: 1,
-        lastObservedAt: timestamp,
-      },
-      `${weaponName(weaponTypeId)}のカウンターを確定しました。`,
-    )
+    setError(null)
+    // The persistence service builds the record and is the only writer of the
+    // Identification provenance `lastIdentifiedAt`.
+    const saved = await dependencies.adoptIdentification({
+      weaponTypeId,
+      startNormalCounter: confirmation.startNormalCounter,
+      observationCount: confirmation.observationCount,
+    })
+    update(saved)
+    setNotice(`${weaponName(weaponTypeId)}のカウンターを確定しました。`)
     setSession(null)
   }
 

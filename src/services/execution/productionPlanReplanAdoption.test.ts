@@ -472,8 +472,8 @@ describe('replan adoption', () => {
 
   it('moves no version authority', () => {
     expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(13)
-    expect(DATABASE_SCHEMA_VERSION).toBe(6)
-    expect(EXPORT_SCHEMA_VERSION).toBe(9)
+    expect(DATABASE_SCHEMA_VERSION).toBe(7)
+    expect(EXPORT_SCHEMA_VERSION).toBe(10)
   })
 })
 

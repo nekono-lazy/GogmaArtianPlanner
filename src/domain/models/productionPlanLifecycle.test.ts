@@ -8,6 +8,7 @@ import {
   type ExecutionHistory,
   type ExportRootV8,
   type ProductionPlan,
+  type RngState,
 } from './publicTypes'
 import {
   DOMAIN_FIXTURE_TIME,
@@ -283,12 +284,19 @@ describe('Export schema 8 -> 9', () => {
     return plan as ProductionPlan
   }
 
+  /** A schema 8 RngState predates the schema 10 Identification provenance. */
+  function schema8RngState(): RngState {
+    const state = { ...createValidRngState(), schemaVersion: 1 } as unknown as Partial<RngState>
+    delete state.lastIdentifiedAt
+    return state as RngState
+  }
+
   function schema8Root(overrides: Partial<ExportRootV8> = {}): ExportRootV8 {
     return {
       schemaVersion: 8,
       appName: 'mh-wilds-gogma-artian-planner',
       exportedAt: DOMAIN_FIXTURE_TIME,
-      rngState: createValidRngState(),
+      rngState: schema8RngState(),
       normalArtianCounters: [],
       ownedWeapons: [],
       targetWeapons: [],
@@ -313,7 +321,7 @@ describe('Export schema 8 -> 9', () => {
         id: executionSavePointIdForPlan('plan.fixture.b' as ProductionPlan['id']),
         productionPlanId: 'plan.fixture.b' as ProductionPlan['id'],
         lastExecutionHistoryId: null,
-        rngState: createValidRngState(),
+        rngState: schema8RngState(),
         normalCounters: [],
         ownedWeapons: [],
         targetWeapons: [],

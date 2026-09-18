@@ -52,3 +52,38 @@ export function fillNonTerminalPlanLifecycle(plan: Record<string, unknown>): boo
   })
   return true
 }
+
+/**
+ * The Identification provenance fields (`RngState.lastIdentifiedAt`,
+ * `NormalArtianCounter.lastIdentifiedAt`, `docs/DATA_MODEL.md` 6.1 / 6.2).
+ */
+export const IDENTIFICATION_PROVENANCE_FIELD = 'lastIdentifiedAt'
+export const RNG_STATE_PROVENANCE_SCHEMA_VERSION = 2
+
+/** Whether an untrusted RngState / NormalArtianCounter record already carries the provenance field. */
+export function hasIdentificationProvenanceField(record: Record<string, unknown>): boolean {
+  return IDENTIFICATION_PROVENANCE_FIELD in record
+}
+
+/**
+ * Gives a RngState record written before the Identification provenance existed
+ * its deterministic `lastIdentifiedAt = null` and record schema version 2
+ * (`docs/DATA_MODEL.md` 14.2, 15.3). `null` means "no formal Identification
+ * adoption is recorded", which is exactly what such a record can say: the time
+ * of an adoption is never reconstructed from `updatedAt` or a `source ===
+ * 'observation'`. A record already carrying the field is not a legacy record
+ * and is left as it is. Mutates and returns whether it filled the record.
+ */
+export function fillRngStateIdentificationProvenance(state: Record<string, unknown>): boolean {
+  if (hasIdentificationProvenanceField(state)) return false
+  state[IDENTIFICATION_PROVENANCE_FIELD] = null
+  state.schemaVersion = RNG_STATE_PROVENANCE_SCHEMA_VERSION
+  return true
+}
+
+/** The NormalArtianCounter counterpart of `fillRngStateIdentificationProvenance()`; no record version exists. */
+export function fillNormalCounterIdentificationProvenance(counter: Record<string, unknown>): boolean {
+  if (hasIdentificationProvenanceField(counter)) return false
+  counter[IDENTIFICATION_PROVENANCE_FIELD] = null
+  return true
+}

@@ -1,6 +1,10 @@
 import Dexie, { type Table } from 'dexie'
 import { migrateLegacyTargetCompromise } from './migrateLegacyTargetCompromise'
-import { fillNonTerminalPlanLifecycle } from '../domain/models/persistenceCompatibility'
+import {
+  fillNonTerminalPlanLifecycle,
+  fillNormalCounterIdentificationProvenance,
+  fillRngStateIdentificationProvenance,
+} from '../domain/models/persistenceCompatibility'
 import type {
   AppSettings,
   BuildCandidate,
@@ -15,7 +19,7 @@ import type {
 } from '../domain/models/publicTypes'
 
 export const DATABASE_NAME = 'mh-wilds-gogma-artian-planner'
-export const DATABASE_SCHEMA_VERSION = 6
+export const DATABASE_SCHEMA_VERSION = 7
 
 export class AppDatabase extends Dexie {
   rngState!: Table<RngState, 'current'>
@@ -139,7 +143,7 @@ export class AppDatabase extends Dexie {
     // `executionSavePointBefore`, which cannot be reconstructed, so it keeps its
     // persisted contents and is never undoable. None of this moves
     // `CURRENT_CALCULATION_APP_SCHEMA_VERSION`.
-    this.version(DATABASE_SCHEMA_VERSION).stores({}).upgrade(async (transaction) => {
+    this.version(6).stores({}).upgrade(async (transaction) => {
       await transaction.table('productionPlans').toCollection().modify((plan: Record<string, unknown>) => {
         fillNonTerminalPlanLifecycle(plan)
       })
@@ -150,7 +154,50 @@ export class AppDatabase extends Dexie {
         }
       })
     })
+    // v7 adds the Identification provenance `lastIdentifiedAt` to RngState
+    // (record schema version 2) and NormalArtianCounter (`docs/DATA_MODEL.md`
+    // 6.1 / 6.2 / 14.2). No table or index changes. Every RngState /
+    // NormalArtianCounter body is filled: the `rngState` and
+    // `normalArtianCounters` tables, the bodies inside a game save point and the
+    // bodies inside an ExecutionHistory Undo snapshot. The value written is
+    // always `null` - "no formal Identification adoption is recorded" - because
+    // no earlier runtime recorded when an adoption happened, and `updatedAt`,
+    // `lastObservedAt` or a `source === 'observation'` never prove one. It is
+    // reminder / recovery provenance only, so no calculation semantics change
+    // and `CURRENT_CALCULATION_APP_SCHEMA_VERSION` stays where it is.
+    this.version(DATABASE_SCHEMA_VERSION).stores({}).upgrade(async (transaction) => {
+      const fillCounters = (value: unknown) => {
+        if (Array.isArray(value)) {
+          value.forEach((counter: unknown) => {
+            if (isPlainRecord(counter)) fillNormalCounterIdentificationProvenance(counter)
+          })
+        }
+      }
+      const fillRngState = (value: unknown) => {
+        if (isPlainRecord(value)) fillRngStateIdentificationProvenance(value)
+      }
+      await transaction.table('rngState').toCollection().modify((state: Record<string, unknown>) => {
+        fillRngStateIdentificationProvenance(state)
+      })
+      await transaction.table('normalArtianCounters').toCollection().modify((counter: Record<string, unknown>) => {
+        fillNormalCounterIdentificationProvenance(counter)
+      })
+      await transaction.table('executionSavePoints').toCollection().modify((savePoint: Record<string, unknown>) => {
+        fillRngState(savePoint.rngState)
+        fillCounters(savePoint.normalCounters)
+      })
+      await transaction.table('executionHistory').toCollection().modify((history: Record<string, unknown>) => {
+        const snapshot = history.undoSnapshot
+        if (!isPlainRecord(snapshot)) return
+        fillRngState(snapshot.rngStateBefore)
+        fillCounters(snapshot.normalCountersBefore)
+      })
+    })
   }
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 export const appDatabase = new AppDatabase()

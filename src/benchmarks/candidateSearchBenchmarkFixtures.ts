@@ -286,7 +286,7 @@ function benchmarkMaster(): BenchmarkMaster {
 function benchmarkRngState(): RngState {
   return {
     id: 'current',
-    schemaVersion: 1,
+    schemaVersion: 2,
     baseSeed: {
       value: CANDIDATE_SEARCH_BENCHMARK_BASE_SEED,
       isConfirmed: true,
@@ -306,6 +306,7 @@ function benchmarkRngState(): RngState {
     // Legacy field only; Production active prediction never reads it.
     counterGate: { value: null, isConfirmed: false, source: null },
     notes: null,
+    lastIdentifiedAt: null,
     createdAt: FIXTURE_TIME,
     updatedAt: FIXTURE_TIME,
   }
@@ -321,6 +322,7 @@ function benchmarkNormalCounter(): NormalArtianCounter {
     observationCount: 1,
     lastObservedAt: FIXTURE_TIME,
     candidateCount: 1,
+    lastIdentifiedAt: null,
     createdAt: FIXTURE_TIME,
     updatedAt: FIXTURE_TIME,
   }
