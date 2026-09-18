@@ -4,14 +4,12 @@ import {
   AlertTitle,
   Box,
   Button,
-  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
   DialogContentText,
   DialogTitle,
   Divider,
-  FormControlLabel,
   Stack,
   Typography,
 } from '@mui/material'
@@ -27,7 +25,8 @@ import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import type { ExecutionSavePoint, ProductionPlan } from '../../domain/models/publicTypes'
 import { planStepOperationLabels } from '../../presentation/labels'
 import { actualResultFromDraft, emptyActualResultDraft, type ActualResultDraft } from './actualResultDraft'
-import { planStepPositionLabel } from './executionStepPresentation'
+import { ExecutionSavePointRestoreDialog } from './ExecutionSavePointRestoreDialog'
+import { planStepPositionLabel, savePointPositionLabel } from './executionStepPresentation'
 import { GameResultFields } from './GameResultFields'
 
 const buttonSx = { minHeight: 44, width: { xs: '100%', sm: 'auto' } } as const
@@ -45,72 +44,6 @@ function safeMatch(
   } catch {
     return { kind: 'unrecoverable', candidates: [], reason: 'no_match' }
   }
-}
-
-/** Save point restore, only after the user confirms the game went back first (16.9 / 16.15). */
-function RestoreSavePointDialog({
-  open,
-  submitting,
-  onCancel,
-  onConfirm,
-}: {
-  open: boolean
-  submitting: boolean
-  onCancel(): void
-  onConfirm(): void
-}) {
-  const [gameRestored, setGameRestored] = useState(false)
-  const titleId = useId()
-  const descriptionId = useId()
-  const close = () => {
-    if (submitting) return
-    setGameRestored(false)
-    onCancel()
-  }
-  return (
-    <Dialog open={open} onClose={close} aria-labelledby={titleId} aria-describedby={descriptionId}>
-      <DialogTitle id={titleId}>最後のゲーム内セーブ地点へ戻す</DialogTitle>
-      <DialogContent>
-        <DialogContentText id={descriptionId} component="div">
-          <Typography component="p" variant="body2">
-            先にゲームを最後のゲーム内セーブ地点から読み込み直してください。アプリ側だけを先に戻すことはしません。
-          </Typography>
-          <Typography component="p" variant="body2" sx={{ mt: 1 }}>
-            確認後、アプリの状態をセーブ地点を記録した時点へ戻し、その後の記録（操作内容不明の記録を含む）を削除します。
-          </Typography>
-        </DialogContentText>
-        <FormControlLabel
-          sx={{ mt: 1.5, alignItems: 'flex-start' }}
-          control={
-            <Checkbox
-              checked={gameRestored}
-              onChange={(event) => setGameRestored(event.target.checked)}
-              disabled={submitting}
-              sx={{ mt: -0.5 }}
-            />
-          }
-          label="ゲーム側を最後のゲーム内セーブ地点まで戻しました"
-        />
-      </DialogContent>
-      <DialogActions sx={{ flexWrap: 'wrap', gap: 1 }}>
-        <Button onClick={close} disabled={submitting} sx={{ minHeight: 44 }}>
-          キャンセル
-        </Button>
-        <Button
-          variant="contained"
-          color="warning"
-          disabled={submitting || !gameRestored}
-          onClick={() => {
-            setGameRestored(false)
-            onConfirm()
-          }}
-          sx={{ minHeight: 44 }}
-        >
-          アプリ側もセーブ地点へ戻す
-        </Button>
-      </DialogActions>
-    </Dialog>
-  )
 }
 
 function AbandonPlanDialog({
@@ -184,7 +117,7 @@ export function OperationUncertainRecovery({
 }: {
   plan: ProductionPlan
   availability: OperationCountRecoveryAvailability
-  savePoint: Pick<ExecutionSavePoint, 'recordedAt'> | null
+  savePoint: Pick<ExecutionSavePoint, 'recordedAt' | 'productionPlan'> | null
   master: MasterDataRoot
   weaponTypeId: string
   elementId: string
@@ -458,9 +391,11 @@ export function OperationUncertainRecovery({
           </Button>
         )}
       </Stack>
-      <RestoreSavePointDialog
+      <ExecutionSavePointRestoreDialog
         open={restoreOpen}
         submitting={submitting}
+        positionLabel={savePoint === null ? null : savePointPositionLabel(plan, savePoint.productionPlan.currentStepId)}
+        note="セーブ地点より後の記録（操作内容不明の記録を含む）は削除されます。"
         onCancel={() => setRestoreOpen(false)}
         onConfirm={() => {
           setRestoreOpen(false)

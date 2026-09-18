@@ -97,6 +97,8 @@ async function realRuntime(database: AppDatabase, fixture: ExecutionFixture) {
     recordActualResultDifferent: vi.fn((request) => service.recordActualResultDifferent(request)),
     recordOperationUncertain: vi.fn((request) => service.recordOperationUncertain(request)),
     recoverOperationCount: vi.fn((request) => service.recoverOperationCount(request)),
+    undoLatestExecution: vi.fn((request) => service.undoLatestExecution(request)),
+    recordExecutionSavePoint: vi.fn((request) => service.recordExecutionSavePoint(request)),
     restoreExecutionSavePoint: vi.fn((request) => service.restoreExecutionSavePoint(request)),
     inspectProductionPlanAbandonment: vi.fn((request) => service.inspectProductionPlanAbandonment(request)),
     abandonProductionPlan: vi.fn((request) => service.abandonProductionPlan(request)),
@@ -132,6 +134,12 @@ function mockedRuntime(snapshot: ExecutionNavigatorSnapshot | null, master = cre
     recoverOperationCount: vi.fn(async () => {
       throw new Error('recoverOperationCount is not expected')
     }),
+    undoLatestExecution: vi.fn(async () => {
+      throw new Error('undoLatestExecution is not expected')
+    }),
+    recordExecutionSavePoint: vi.fn(async () => {
+      throw new Error('recordExecutionSavePoint is not expected')
+    }),
     restoreExecutionSavePoint: vi.fn(async () => {
       throw new Error('restoreExecutionSavePoint is not expected')
     }),
@@ -154,6 +162,8 @@ async function snapshotOf(fixture: ExecutionFixture, plan: Partial<ProductionPla
     latestExecutionHistory: null,
     executionSavePoint: null,
     operationCountRecovery: { kind: 'unavailable', reason: 'not_operation_uncertain' },
+    undo: { kind: 'unavailable' },
+    savePointRestore: { kind: 'no_save_point' },
   }
 }
 
@@ -181,7 +191,7 @@ describe('ExecutionNavigatorPage load states', () => {
   it.each([
     ['stale', { status: 'stale' as const, recalculationReasons: ['unexpected_result' as const] }, 'この計画は再計算が必要です'],
     ['completed', { status: 'completed' as const }, '生産計画が完了しました'],
-    ['abandoned', { status: 'abandoned' as const, abandonmentReason: 'user_abandoned' as const }, 'この生産計画は終了しています'],
+    ['abandoned', { status: 'abandoned' as const, abandonmentReason: 'user_abandoned' as const }, '作成プランを破棄しました'],
     ['draft', { status: 'draft' as const }, 'この生産計画はまだ開始されていません'],
   ])('shows a %s Plan without any Step action', async (_, plan, title) => {
     const fixture = await newNormalFixture()
@@ -1076,7 +1086,9 @@ describe('ExecutionNavigatorPage operation_uncertain recovery', () => {
     const stale = staleAfter(base, base.plan.steps[0], 'operation_uncertain')
     const snapshot: ExecutionNavigatorSnapshot = {
       ...stale,
-      executionSavePoint: options.savePoint ? ({ recordedAt: '2026-09-18T01:00:00.000Z' } as ExecutionSavePoint) : null,
+      executionSavePoint: options.savePoint
+        ? ({ recordedAt: '2026-09-18T01:00:00.000Z', productionPlan: atStep(base, 0).plan } as ExecutionSavePoint)
+        : null,
     }
     expect(snapshot.operationCountRecovery.kind).toBe('available')
     return { fixture, base, snapshot, deps: mockedRuntime(snapshot, master) }
@@ -1238,7 +1250,7 @@ describe('ExecutionNavigatorPage operation_uncertain recovery', () => {
       planId: fixture.plan.id,
       recordedAt: '2026-09-18T01:00:00.000Z',
     })
-    expect(await screen.findByText(/最後のゲーム内セーブ地点の状態へ戻しました。/)).toBeInTheDocument()
+    expect(await screen.findByText(/最後のゲーム内セーブ地点へ戻しました。/)).toBeInTheDocument()
   })
 
   it('abandons through the existing user abandonment when no save point exists', async () => {

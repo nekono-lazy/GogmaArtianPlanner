@@ -4480,10 +4480,14 @@ Navigator内の想定外結果（「結果が違う」の実結果入力と最�
 「何を何回操作したか分からない」の確認Dialog）と、操作内容不明後のExecution Recovery（16.15の
 Recovery Window内の現在位置確認と `operation_count_recovered` の追従Runtime、ゲーム内セーブ地点の復元と
 セーブ地点が無い場合のPlan破棄への最小導線）まで接続済みである。
+続いて、Execution Navigatorの「実行状態の管理」として、最新ExecutionHistoryのUndo（16.16。表示可否は
+Runtimeと同じ判定を共有するread-only helperから導出）、ゲーム内セーブ地点の記録 / 上書き確認 / 直接復元
+（16.9。ゲーム側復元の明示確認つき）、active / stale Planの通常のPlan破棄と16.10の3択（破棄前inspectを
+authorityとし、セーブ地点への復元と破棄は既存Runtimeの1 transaction）を接続した。
 calculation schema 13で、既存武器のTarget紐付けを各Entryの最初の物理Step確定からPlan開始effect
 （16.2 / 16.11）へ移し、Production Plan画面での事前表示とともに実装した。
-Planを壊す変更の警告、Execution Navigator UIの残り（一般のUndo、ゲーム内セーブ地点の記録、通常のPlan破棄、
-再計画Preview画面とセーブ地点3択の確認Dialogを含む）、16.15のDashboard / RNG Setup / Candidate Searchでの
+Planを壊す変更の警告、Execution Navigator UIの残り（再計画Preview画面と採用時のセーブ地点3択の確認Dialog）、
+16.15のDashboard / RNG Setup / Candidate Searchでの
 RNG再同定の継続表示などは後続の実装PRが
 本章をauthorityとして実装する。本章と矛盾する旧記述（Execution上の独立した「確保」操作、
 Target / Build List変更による一律stale、reserve時の既存保護維持など）は本改訂で

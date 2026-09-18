@@ -412,8 +412,8 @@ the compromise checkpoint panel with the confirmed 「この武器を妥協品�
 and the completed / ended Plan views. It reads the current checkpoint through
 `listCurrentCompromiseCheckpoints()`, the same still-current authority
 `prepareCompromiseFinish()` uses. The divergence records were connected by the twelfth
-PR below; Undo, the game save point, abandonment, replan Preview / adoption and
-breaking-change warning UIs are still not implemented.
+PR below and Undo, the game save point and the ordinary abandonment by the thirteenth;
+replan Preview / adoption and breaking-change warning UIs are still not implemented.
 The same PR then moved the Target link of an existing OwnedWeapon from the Entry's first
 physical Step to the **Plan start effect** (`docs/PLANNER_SPEC.md` 16.2 / 16.11,
 `src/domain/planner/productionPlanStartEffects.ts`). Draft generation, saving and display
@@ -494,6 +494,24 @@ holding it through action validation, all or nothing). The persistent re-identif
 reminder on Dashboard / RNG Setup / Candidate Search (16.15, now derived from the latest
 divergence record, the Plan state and RngState - not RngState.updatedAt alone) is still not
 implemented.
+The thirteenth PR (the Execution Navigator state controls UI) connected, in a separate
+「実行状態の管理」 section below the Step's game actions, Undo of the latest ExecutionHistory
+(`undoLatestExecution()` naming the record the user saw; `undo_history_not_latest` never undoes
+another), the game save point (「ゲーム内セーブ済みとして記録」 with a first-record / overwrite
+confirmation, its position 「Step N完了時点」 from the save point's own Plan snapshot, and
+「最後のゲーム内セーブ地点へ戻す」 only after the game-side confirmation, naming the `recordedAt`
+the user saw) and the ordinary 「現在Planを破棄する」 of an `active` / `stale` Plan. The
+abandonment dialog is built from `inspectProductionPlanAbandonment()`, never from the displayed
+snapshot, and asks 現在地点を維持 / 最後のゲーム内セーブ地点へ戻す / キャンセル only where it says
+the choice is required; the restore choice is one `abandonProductionPlan()` call. Display
+availability comes from pure read-only Domain helpers sharing the runtime authorities:
+`inspectExecutionUndo()` (the same eligibility `prepareExecutionUndo()` applies, now one shared
+function) and `inspectExecutionSavePointRestore()` (through
+`deriveRunningPlanSavePointChoiceRequirement()`). The `operation_uncertain` recovery keeps its own
+save point restore / no-save-point abandonment and now shares
+`ExecutionSavePointRestoreDialog`; its RNG re-check guidance after abandonment stays, and an
+ordinary abandonment shows none. It added no persisted field and changed no calculation
+semantics, so the three versions stay 13 / 6 / 9.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -3252,9 +3270,10 @@ Step confirmation including the blind observation and `confirm_owned_ideal`, wea
 guidance, the compromise checkpoint panel and finish, completion) and the divergence
 records (「結果が違う」 with its re-identification guidance, 「何を何回操作したか分からない」
 with the Execution Recovery: current position check, the save point restore and the Plan
-abandonment it needs); the general Undo, save point record, ordinary abandonment, replan and
-breaking-change warning / confirmation UIs, and the persistent RNG re-identification reminder
-on Dashboard / RNG Setup / Candidate Search, are not yet.
+abandonment it needs) and the state controls (Undo of the latest ExecutionHistory, the game
+save point record / overwrite / restore, and the ordinary Plan abandonment with the 16.10
+choice); the replan and breaking-change warning / confirmation UIs, and the persistent RNG
+re-identification reminder on Dashboard / RNG Setup / Candidate Search, are not yet.
 Implementation PRs follow the specification and must not fall back to the older
 Execution semantics.
 

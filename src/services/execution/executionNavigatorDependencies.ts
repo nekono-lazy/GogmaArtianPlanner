@@ -2,6 +2,10 @@ import { appDatabase, type AppDatabase } from '../../db/AppDatabase'
 import { ExecutionHistoryRepository } from '../../db/repositories/executionHistoryRepository'
 import {
   deriveOperationCountRecovery,
+  inspectExecutionSavePointRestore,
+  inspectExecutionUndo,
+  type ExecutionSavePointRestoreAvailability,
+  type ExecutionUndoAvailability,
   type OperationCountRecoveryAvailability,
 } from '../../domain/execution'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
@@ -25,6 +29,7 @@ import {
   type AbandonProductionPlanResult,
   type ExecutionStepRecordResult,
   type InspectProductionPlanAbandonmentRequest,
+  type RecordExecutionSavePointRequest,
   type RecoverOperationCountRequest,
   type RestoreExecutionSavePointRequest,
   type RestoreExecutionSavePointResult,
@@ -33,6 +38,8 @@ import {
   type ProductionPlanExecutionService,
   type RecordActualResultDifferentRequest,
   type RecordOperationUncertainRequest,
+  type UndoLatestExecutionRequest,
+  type UndoLatestExecutionResult,
 } from './productionPlanExecutionService'
 
 /**
@@ -59,6 +66,16 @@ export interface ExecutionNavigatorSnapshot {
    * the recovery transaction derives it again.
    */
   operationCountRecovery: OperationCountRecoveryAvailability
+  /**
+   * Whether Undo of the latest ExecutionHistory is offered (16.16), from this
+   * same read. Display only: the Undo transaction re-derives it.
+   */
+  undo: ExecutionUndoAvailability
+  /**
+   * Whether 「最後のゲーム内セーブ地点へ戻す」 is offered (UI_FLOW 12.8), from
+   * this same read. Display only: the restore transaction re-derives it.
+   */
+  savePointRestore: ExecutionSavePointRestoreAvailability
 }
 
 export interface ExecutionNavigatorPageDependencies {
@@ -73,6 +90,8 @@ export interface ExecutionNavigatorPageDependencies {
   recordActualResultDifferent(request: RecordActualResultDifferentRequest): Promise<ExecutionStepRecordResult>
   recordOperationUncertain(request: RecordOperationUncertainRequest): Promise<ExecutionStepRecordResult>
   recoverOperationCount(request: RecoverOperationCountRequest): Promise<ExecutionStepRecordResult>
+  undoLatestExecution(request: UndoLatestExecutionRequest): Promise<UndoLatestExecutionResult>
+  recordExecutionSavePoint(request: RecordExecutionSavePointRequest): Promise<ExecutionSavePoint>
   restoreExecutionSavePoint(request: RestoreExecutionSavePointRequest): Promise<RestoreExecutionSavePointResult>
   inspectProductionPlanAbandonment(
     request: InspectProductionPlanAbandonmentRequest,
@@ -94,14 +113,18 @@ export async function loadExecutionNavigatorSnapshot(
     new ExecutionHistoryRepository(database).getExecutionHistoryByPlan(planId),
     database.executionSavePoints.get(executionSavePointIdForPlan(planId)),
   ])
+  const latestExecutionHistory = planExecutionHistory.at(-1) ?? null
+  const savePoint = executionSavePoint ?? null
   return {
     plan,
     ownedWeapons,
     targetWeapons,
     buildListEntries,
-    latestExecutionHistory: planExecutionHistory.at(-1) ?? null,
-    executionSavePoint: executionSavePoint ?? null,
+    latestExecutionHistory,
+    executionSavePoint: savePoint,
     operationCountRecovery: deriveOperationCountRecovery(plan, { ownedWeapons, planExecutionHistory }),
+    undo: inspectExecutionUndo(plan, latestExecutionHistory, savePoint),
+    savePointRestore: inspectExecutionSavePointRestore(plan, savePoint, planExecutionHistory),
   }
 }
 
@@ -119,6 +142,8 @@ export function createExecutionNavigatorDependencies(
     recordActualResultDifferent: (request) => service.recordActualResultDifferent(request),
     recordOperationUncertain: (request) => service.recordOperationUncertain(request),
     recoverOperationCount: (request) => service.recoverOperationCount(request),
+    undoLatestExecution: (request) => service.undoLatestExecution(request),
+    recordExecutionSavePoint: (request) => service.recordExecutionSavePoint(request),
     restoreExecutionSavePoint: (request) => service.restoreExecutionSavePoint(request),
     inspectProductionPlanAbandonment: (request) => service.inspectProductionPlanAbandonment(request),
     abandonProductionPlan: (request) => service.abandonProductionPlan(request),

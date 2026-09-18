@@ -19,7 +19,7 @@ import {
   validateProductionPlan,
 } from '../models/publicTypes'
 import { validateTargetPreferredOwnedWeapons } from '../target/preferredOwnedWeapon'
-import { executionFailure } from './executionRuntimeError'
+import { ExecutionRuntimeError, executionFailure } from './executionRuntimeError'
 import {
   prepareExecutionSavePointRestore,
   splitExecutionHistoryAtSavePoint,
@@ -75,6 +75,42 @@ export function deriveRunningPlanSavePointChoiceRequirement(
   return after.length === 0
     ? { required: false, savePoint }
     : { required: true, savePoint, historyAfterSavePoint: after }
+}
+
+/**
+ * Whether the Navigator offers 「最後のゲーム内セーブ地点へ戻す」 on its own
+ * (`docs/UI_FLOW.md` 12.8): only a running Plan with a save point that at least
+ * one of its records is ordered after. Read-only and display only, derived by
+ * `deriveRunningPlanSavePointChoiceRequirement()` - the boundary authority the
+ * restore and the 16.10 choice use - and never by array position or timestamps.
+ * `prepareExecutionSavePointRestore()` stays the write authority.
+ */
+export type ExecutionSavePointRestoreAvailability =
+  | { kind: 'no_save_point' }
+  /** The Plan is not `active` / `stale`, so no save point restore applies. */
+  | { kind: 'not_running'; savePoint: ExecutionSavePoint }
+  /** The save point is the current position: nothing was confirmed after it. */
+  | { kind: 'at_current_position'; savePoint: ExecutionSavePoint }
+  | { kind: 'available'; savePoint: ExecutionSavePoint }
+  /** Its boundary is missing or foreign: the restore would refuse it (`save_point_snapshot_invalid`). */
+  | { kind: 'invalid'; savePoint: ExecutionSavePoint }
+
+export function inspectExecutionSavePointRestore(
+  plan: Pick<ProductionPlan, 'id' | 'status'>,
+  savePoint: ExecutionSavePoint | null,
+  planExecutionHistory: readonly ExecutionHistory[],
+): ExecutionSavePointRestoreAvailability {
+  if (savePoint === null) return { kind: 'no_save_point' }
+  if (plan.status !== 'active' && plan.status !== 'stale') return { kind: 'not_running', savePoint }
+  try {
+    const choice = deriveRunningPlanSavePointChoiceRequirement(plan, savePoint, planExecutionHistory)
+    return choice.required ? { kind: 'available', savePoint } : { kind: 'at_current_position', savePoint }
+  } catch (caught: unknown) {
+    if (caught instanceof ExecutionRuntimeError && caught.code === 'save_point_snapshot_invalid') {
+      return { kind: 'invalid', savePoint }
+    }
+    throw caught
+  }
 }
 
 /**
