@@ -46,6 +46,7 @@ import {
   completedPlannerTermination,
 } from '../test/fixtures/plannerTermination'
 import { useSettingsStore } from '../stores/settingsStore'
+import { ExecutionRuntimeError } from '../domain/execution'
 
 interface Deferred<T> {
   promise: Promise<T>
@@ -229,6 +230,9 @@ function dependencies(
     createInput: vi.fn(async () => fixture.input),
     createWorkerClient: vi.fn(() => client),
     savePlannerResult: vi.fn(async () => null),
+    startProductionPlan: vi.fn(async () => {
+      throw new Error('startProductionPlan is not expected in this test')
+    }),
   }
 }
 
@@ -242,6 +246,7 @@ function renderPage(
       element: <ProductionPlanPage dependencies={deps} />,
     },
     { path: '/build-list', element: <div>Build list destination</div> },
+    { path: '/plans/:planId/run', element: <div>Execution navigator destination</div> },
   ], { initialEntries: [`/plans/${planId}`] })
   return { router, ...render(<RouterProvider router={router} />) }
 }
@@ -2163,5 +2168,73 @@ describe('ProductionPlanPage checkpoint milestones and heading depth', () => {
     // one level each; no two nested levels coincide.
     expect(screen.getByRole('heading', { level: 3, name: '競合 1' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { level: 4, name: '比較結果' })).not.toBeInTheDocument()
+  })
+})
+
+describe('ProductionPlanPage Execution entry', () => {
+  function withStatus(patch: Partial<ProductionPlan>) {
+    const fixture = pageFixture()
+    fixture.plan = { ...fixture.plan, ...patch }
+    return fixture
+  }
+
+  it('offers 作成開始 for a draft Plan only', async () => {
+    const fixture = withStatus({ status: 'draft' })
+    renderPage(dependencies(fixture), fixture.plan.id)
+    expect(await screen.findByRole('button', { name: '作成開始' })).toBeEnabled()
+    expect(screen.queryByRole('link', { name: '実行ナビを再開する' })).not.toBeInTheDocument()
+  })
+
+  it('offers 実行ナビを再開する for an active Plan', async () => {
+    const fixture = withStatus({ status: 'active' })
+    renderPage(dependencies(fixture), fixture.plan.id)
+    expect(await screen.findByRole('link', { name: '実行ナビを再開する' }))
+      .toHaveAttribute('href', `/plans/${fixture.plan.id}/run`)
+    expect(screen.queryByRole('button', { name: '作成開始' })).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ['stale', { status: 'stale' as const, recalculationReasons: ['unexpected_result' as const] }, '再計算が必要な生産計画です'],
+    ['completed', { status: 'completed' as const, completedAt: '2026-09-17T00:00:00.000Z' }, 'この生産計画は完了しています。'],
+    [
+      'abandoned',
+      { status: 'abandoned' as const, abandonmentReason: 'finished_as_compromise' as const, abandonedAt: '2026-09-17T00:00:00.000Z' },
+      'この生産計画は終了しています（妥協品で終了）。',
+    ],
+  ])('never offers to start or resume a %s Plan', async (_, patch, text) => {
+    const fixture = withStatus(patch)
+    const deps = dependencies(fixture)
+    renderPage(deps, fixture.plan.id)
+    expect(await screen.findByText(text)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '作成開始' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '実行ナビを再開する' })).not.toBeInTheDocument()
+    expect(deps.startProductionPlan).not.toHaveBeenCalled()
+  })
+
+  it('starts through the runtime and then opens the Execution Navigator', async () => {
+    const fixture = withStatus({ status: 'draft' })
+    const deps = dependencies(fixture)
+    vi.mocked(deps.startProductionPlan).mockResolvedValue({ ...fixture.plan, status: 'active' })
+    const user = userEvent.setup()
+    const { router } = renderPage(deps, fixture.plan.id)
+    await user.click(await screen.findByRole('button', { name: '作成開始' }))
+    expect(await screen.findByText('Execution navigator destination')).toBeInTheDocument()
+    expect(deps.startProductionPlan).toHaveBeenCalledExactlyOnceWith(fixture.plan.id)
+    expect(router.state.location.pathname).toBe(`/plans/${fixture.plan.id}/run`)
+  })
+
+  it('stays on the Plan and shows the typed refusal when starting fails', async () => {
+    const fixture = withStatus({ status: 'draft' })
+    const deps = dependencies(fixture)
+    vi.mocked(deps.startProductionPlan).mockRejectedValue(
+      new ExecutionRuntimeError('running_plan_conflict', 'another plan'),
+    )
+    const user = userEvent.setup()
+    const { router } = renderPage(deps, fixture.plan.id)
+    await user.click(await screen.findByRole('button', { name: '作成開始' }))
+    expect(await screen.findByText('別の生産計画が実行中です。実行中の生産計画を終えてから開始してください。'))
+      .toBeInTheDocument()
+    expect(router.state.location.pathname).toBe(`/plans/${fixture.plan.id}`)
+    expect(screen.getByRole('button', { name: '作成開始' })).toBeEnabled()
   })
 })

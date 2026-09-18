@@ -4467,8 +4467,11 @@ Execution Plan契約（16.3 / 16.5 / 16.6 / 16.11のhash、projection、`executi
 Plan completedを含む）、および想定外結果（`actual_result_different`）・操作内容不明（`operation_uncertain`）の
 記録（16.15）、最新ExecutionHistoryのUndo（16.16）、ゲーム内セーブ地点の記録 / 復元（16.9）、
 妥協品として確定して終了（16.12）、Plan破棄と16.10のセーブ地点選択、再計画Previewと採用（16.8）の
-Runtimeは実装済みである。Planを壊す変更の警告、Execution Navigator UI（RNG再同定への誘導表示、
-再計画Preview画面とセーブ地点3択の確認Dialogを含む）などは後続の実装PRが本章をauthorityとして実装する。本章と矛盾する旧記述（Execution上の独立した「確保」操作、
+Runtimeは実装済みである。Execution Navigator UIは正常系（作成開始 / 再開、Step確定、blind観測値入力、
+`confirm_owned_ideal`、武器切替案内、妥協checkpointパネルと妥協品での終了、完了表示）まで接続済みである。
+Planを壊す変更の警告、Execution Navigator UIの残り（結果が違う / 操作内容不明、Undo、ゲーム内セーブ地点、
+Plan破棄、RNG再同定への誘導表示、再計画Preview画面とセーブ地点3択の確認Dialogを含む）などは後続の実装PRが
+本章をauthorityとして実装する。本章と矛盾する旧記述（Execution上の独立した「確保」操作、
 Target / Build List変更による一律stale、reserve時の既存保護維持など）は本改訂で
 本書・[REQUIREMENTS.md](./REQUIREMENTS.md)・[DATA_MODEL.md](./DATA_MODEL.md)・
 [SEARCH_SPEC.md](./SEARCH_SPEC.md)・[UI_FLOW.md](./UI_FLOW.md)から書き換えた。

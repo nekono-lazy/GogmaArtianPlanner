@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AppDatabase } from '../../db/AppDatabase'
 import { RepositoryError } from '../../db/repositoryError'
-import { ExecutionRuntimeError } from '../../domain/execution'
+import { ExecutionRuntimeError, listCurrentCompromiseCheckpoints } from '../../domain/execution'
 import type {
   BuildListEntryId,
   ExecutionHistory,
@@ -535,4 +535,101 @@ describe('finish as a compromise', () => {
     expect(fixture.source.seriesSkillId).toBe(IDEAL_SERIES_SKILL_ID)
     expect(fixture.entry.intermediateStateSelection?.bonusOpportunityId).not.toBeNull()
   })
+})
+
+/**
+ * `listCurrentCompromiseCheckpoints()` is what the Execution Navigator offers
+ * "finish as compromise" from. It must list a checkpoint exactly when the
+ * runtime accepts the finish, through the same still-current authority.
+ */
+describe('listCurrentCompromiseCheckpoints', () => {
+  async function listed(database: AppDatabase, fixture: CheckpointFixture) {
+    return listCurrentCompromiseCheckpoints(
+      await currentPlan(database, fixture.plan),
+      await database.buildListEntries.toArray(),
+    )
+  }
+
+  it('lists a reached checkpoint only until the same weapon is operated on again', () =>
+    withDatabase(async (database) => {
+      const fixture = await checkpointFixture()
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      // Not reached yet: nothing listed, and the runtime refuses.
+      expect(await listed(database, fixture)).toEqual([])
+      await expectRefusal(
+        () => finishAsCompromise(service, database, fixture),
+        database,
+        'compromise_checkpoint_not_current',
+      )
+
+      const labelled = compromiseLabelStepIndex(fixture.plan)
+      for (let index = 0; index <= labelled; index += 1) {
+        await confirmCurrent(service, database, fixture.plan)
+      }
+      expect(await listed(database, fixture)).toEqual([{
+        buildListEntryId: fixture.entry.id,
+        targetWeaponId: fixture.goal.id,
+        ownedWeaponId: fixture.source.id,
+        labelPlanStepId: fixture.plan.steps[labelled].id,
+        heldBeforeLabelStep: false,
+      }])
+
+      // 「次の操作へ進む」 and the next Step on the same weapon: left behind.
+      await confirmCurrent(service, database, fixture.plan)
+      expect(await listed(database, fixture)).toEqual([])
+      await expectRefusal(
+        () => finishAsCompromise(service, database, fixture),
+        database,
+        'compromise_checkpoint_not_current',
+      )
+    }))
+
+  it('lists a start-held checkpoint before its first physical Step only', () =>
+    withDatabase(async (database) => {
+      const fixture = await startReachedCheckpointFixture()
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      expect(await listed(database, fixture)).toEqual([expect.objectContaining({
+        buildListEntryId: fixture.entry.id,
+        ownedWeaponId: fixture.source.id,
+        heldBeforeLabelStep: true,
+      })])
+
+      await confirmCurrent(service, database, fixture.plan)
+      expect(await listed(database, fixture)).toEqual([])
+    }))
+
+  it('keeps a checkpoint while only another weapon advances, and the runtime finishes it', () =>
+    withDatabase(async (database) => {
+      const fixture = await otherWeaponCheckpointFixture()
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      await confirmCurrent(service, database, fixture.plan)
+
+      const [checkpoint] = await listed(database, fixture)
+      expect(checkpoint).toMatchObject({ ownedWeaponId: fixture.source.id, heldBeforeLabelStep: true })
+      const stored = await currentPlan(database, fixture.plan)
+      const { plan } = await service.finishProductionPlanAsCompromise({
+        planId: stored.id,
+        planStepId: stored.currentStepId as PlanStep['id'],
+        buildListEntryId: checkpoint.buildListEntryId,
+        targetWeaponId: checkpoint.targetWeaponId,
+        ownedWeaponId: checkpoint.ownedWeaponId,
+      })
+      expect(plan).toMatchObject({ status: 'abandoned', abandonmentReason: 'finished_as_compromise' })
+    }))
+
+  it('lists nothing for an unselected state reached by performance', () =>
+    withDatabase(async (database) => {
+      const fixture = await checkpointFixture([], { select: false })
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      await confirmCurrent(service, database, fixture.plan)
+      expect(await listed(database, fixture)).toEqual([])
+    }))
 })

@@ -404,6 +404,17 @@ through the change itself, and no ExecutionHistory is added, so it is never undo
 added no persisted field and changed no calculation semantics, so the three versions stay
 12 / 6 / 9. The warning / confirmation UI, the save point choice dialog UI and the
 Execution Navigator UI are still not implemented.
+The eleventh PR (the Execution Navigator core UI) connected the ordinary path in the UI:
+「作成開始」 / 「実行ナビを再開する」 on the Production Plan page, and
+`src/pages/ExecutionNavigatorPage.tsx` with Step confirmation (「結果一致・次へ」, the
+blind observation, `confirm_owned_ideal`), the presentation-only weapon switch guidance,
+the compromise checkpoint panel with the confirmed 「この武器を妥協品として確定して終了」,
+and the completed / ended Plan views. It reads the current checkpoint through
+`listCurrentCompromiseCheckpoints()`, the same still-current authority
+`prepareCompromiseFinish()` uses. The divergence records, Undo, the game save point,
+abandonment, replan Preview / adoption and breaking-change warning UIs are still not
+implemented. It added no persisted field and changed no calculation semantics, so the
+three versions stay 12 / 6 / 9.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -3152,8 +3163,11 @@ the `actual_result_different` / `operation_uncertain` records, Undo of the lates
 ExecutionHistory, game save point record / restore, finishing as a compromise, and user
 abandonment with the 16.10 save point choice, the replan Preview and adoption, and the
 Plan-breaking change guard with its approved `breaking_change_approved` abandonment are
-implemented; the warning / confirmation UI, the save point choice dialog UI and the
-Execution Navigator UI are not yet.
+implemented. The Execution Navigator UI covers the ordinary path (Plan start / resume,
+Step confirmation including the blind observation and `confirm_owned_ideal`, weapon switch
+guidance, the compromise checkpoint panel and finish, completion); the divergence record,
+Undo, save point, abandonment, replan and breaking-change warning / confirmation UIs are
+not yet.
 Implementation PRs follow the specification and must not fall back to the older
 Execution semantics.
 

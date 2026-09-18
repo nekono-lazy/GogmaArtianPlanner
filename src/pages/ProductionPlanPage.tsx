@@ -17,6 +17,9 @@ import {
   ProductionPlanContent,
 } from '../components/planner/ProductionPlanContent'
 import { ProductionPlanWhatIfComparison } from '../components/planner/ProductionPlanWhatIfComparison'
+import { PlanExecutionEntry } from '../components/execution/PlanExecutionEntry'
+import { executionErrorMessage } from '../components/execution/executionStepPresentation'
+import { ExecutionRuntimeError } from '../domain/execution'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import type { MasterDataRoot } from '../domain/master/masterTypes'
 import type {
@@ -57,6 +60,7 @@ import {
   type PlannerWorkerClient,
 } from '../services/planner/plannerWorkerClient'
 import { plannerResultPersistenceService } from '../services/planner/plannerResultPersistenceService'
+import { createProductionPlanExecutionService } from '../services/execution/productionPlanExecutionService'
 import { useSettingsStore } from '../stores/settingsStore'
 import type { PlannerInteractionPreparationResult } from '../workers/plannerWorkerContracts'
 
@@ -81,11 +85,14 @@ export interface ProductionPlanPageDependencies {
     result: PlannerOrchestrationResult,
     currentCalculationContext: CalculationContext,
   ): Promise<ProductionPlan | null>
+  /** `draft -> active` through the Execution runtime (`docs/PLANNER_SPEC.md` 16.2). */
+  startProductionPlan(planId: ProductionPlanId): Promise<ProductionPlan>
 }
 
 function createDefaultDependencies(
   master: MasterDataRoot,
 ): ProductionPlanPageDependencies {
+  const executionService = createProductionPlanExecutionService(master)
   return {
     master,
     currentCalculationContext: createPlannerCalculationContext(
@@ -102,6 +109,7 @@ function createDefaultDependencies(
         result,
         currentCalculationContext,
       ),
+    startProductionPlan: (planId) => executionService.startProductionPlan(planId),
   }
 }
 
@@ -464,6 +472,17 @@ export function ProductionPlanPage({
   const [whatIfNotice, setWhatIfNotice] = useState<string | null>(null)
 
   const [replanState, setReplanState] = useState<ReplanUiState>({ status: 'idle' })
+  const [startState, setStartState] = useState<
+    { status: 'idle' } | { status: 'starting' } | { status: 'failure'; message: string }
+  >({ status: 'idle' })
+  const startingRef = useRef(false)
+  const mountedRef = useRef(false)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
   const replanBusy = replanState.status === 'loading' || replanState.status === 'saving'
 
   // Target display names load on their own, so neither a slow nor a failed
@@ -521,6 +540,7 @@ export function ProductionPlanPage({
       setWhatIfState({ status: 'idle' })
       setWhatIfNotice(null)
       setReplanState({ status: 'idle' })
+      setStartState({ status: 'idle' })
     })
 
     const run = async () => {
@@ -923,6 +943,37 @@ export function ProductionPlanPage({
     setReplanState({ status: 'idle' })
   }
 
+  /**
+   * 「作成開始」: the runtime alone moves the Plan to `active`; the page only
+   * navigates once it did, and never for a Plan the route has left.
+   */
+  const startPlan = async (plan: ProductionPlan) => {
+    if (!dependencies || startingRef.current) return
+    startingRef.current = true
+    const lifecycleIdentity = lifecycleIdentityRef.current
+    const isCurrent = () => mountedRef.current && lifecycleIdentityRef.current === lifecycleIdentity
+    setStartState({ status: 'starting' })
+    try {
+      const started = await dependencies.startProductionPlan(plan.id)
+      if (!isCurrent()) return
+      setStartState({ status: 'idle' })
+      navigate(`/plans/${started.id}/run`)
+    } catch (caught: unknown) {
+      if (!isCurrent()) return
+      setStartState({
+        status: 'failure',
+        message:
+          caught instanceof ExecutionRuntimeError
+            ? caught.code === 'execution_state_mismatch' || caught.code === 'plan_dependency_changed'
+              ? `${executionErrorMessage(caught.code)}生産計画は開始していません。ビルドリストから再計算してください。`
+              : executionErrorMessage(caught.code)
+            : '生産計画を開始できませんでした。状態は変更されていません。',
+      })
+    } finally {
+      startingRef.current = false
+    }
+  }
+
   const loadedPlan =
     state.status === 'preparing' || state.status === 'ready' || state.status === 'stale'
       ? state.plan
@@ -1011,6 +1062,14 @@ export function ProductionPlanPage({
               </Button>
             </Stack>
           </Alert>
+        )}
+        {loadedPlan && state.status !== 'stale' && (
+          <PlanExecutionEntry
+            plan={loadedPlan}
+            starting={startState.status === 'starting'}
+            startError={startState.status === 'failure' ? startState.message : null}
+            onStart={() => void startPlan(loadedPlan)}
+          />
         )}
         {/* Read-only Plan contents come straight from the exact persisted Plan,
             so they render as soon as it is loaded - while the Worker
