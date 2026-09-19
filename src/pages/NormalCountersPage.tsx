@@ -2,6 +2,9 @@ import { useEffect, useId, useMemo, useState } from 'react'
 import { Alert, Box, Button, Checkbox, FormControlLabel, LinearProgress, Paper, Stack, TextField, Typography } from '@mui/material'
 import type { Theme } from '@mui/material/styles'
 import { PageShell } from '../components/PageShell'
+import { PlanBreakingChangeDialog } from '../components/execution/PlanBreakingChangeDialog'
+import { usePlanBreakingChangeApproval } from '../components/execution/usePlanBreakingChangeApproval'
+import type { PlanBreakingChangeApproval, PlanBreakingChangeInspection } from '../domain/execution'
 import { StatusChip, type StatusTone } from '../components/StatusChip'
 import {
   NormalCounterIdentificationDialog,
@@ -34,13 +37,34 @@ const masterResult = loadMasterData()
 
 const BASE_SEED_REQUIRED_MESSAGE = '先にRNG状態設定でBase Seedを確定してください。Base Seedが確定するまでCounter検索を開始できません。'
 const BASE_SEED_NOT_CANONICAL_MESSAGE = '保存済みのBase Seedが予測用の形式ではありません。RNG状態設定でBase Seedを保存し直してからCounter検索を開始してください。'
+/** The operation-specific line under the breaking-change warning (`docs/UI_FLOW.md` 16.3). */
+const NORMAL_COUNTER_PLAN_BREAKING_NOTE =
+  '通常アーティアカウンターを変更すると、現在の生産計画で使用している予測位置と一致しなくなります。'
+const PLAN_ABANDONED_SUFFIX = '実行中の生産計画を破棄しました。'
 
 export interface NormalCountersPageDependencies {
   getAll(): Promise<NormalArtianCounter[]>
-  /** `basis` is the stored record the edit started from, if any. */
-  save(value: NormalArtianCounter, basis?: NormalArtianCounter): Promise<NormalArtianCounter>
+  /**
+   * `basis` is the stored record the edit started from, if any. `approval` is
+   * the breaking-change approval when the inspection required one
+   * (`docs/UI_FLOW.md` 16.3).
+   */
+  save(
+    value: NormalArtianCounter,
+    basis?: NormalArtianCounter,
+    approval?: PlanBreakingChangeApproval | null,
+  ): Promise<NormalArtianCounter>
+  /** The read-only breaking-change inspection of that very save. */
+  inspectSave(value: NormalArtianCounter, basis?: NormalArtianCounter): Promise<PlanBreakingChangeInspection>
   /** The unique Identification result adoption: the only path that records `lastIdentifiedAt`. */
-  adoptIdentification(adoption: NormalArtianCounterIdentificationAdoption): Promise<NormalArtianCounter>
+  adoptIdentification(
+    adoption: NormalArtianCounterIdentificationAdoption,
+    approval?: PlanBreakingChangeApproval | null,
+  ): Promise<NormalArtianCounter>
+  /** The read-only breaking-change inspection of that very adoption. */
+  inspectIdentificationAdoption(
+    adoption: NormalArtianCounterIdentificationAdoption,
+  ): Promise<PlanBreakingChangeInspection>
   ensureRngState(): Promise<RngState>
   ensureSettings(): Promise<AppSettings>
   createIdentificationClient(): NormalArtianCounterIdentificationWorkerClient
@@ -49,8 +73,13 @@ export interface NormalCountersPageDependencies {
 }
 const defaultDependencies: NormalCountersPageDependencies = {
   getAll: () => normalArtianCounterRepository.getAllNormalArtianCounters(),
-  save: (value, basis) => rngStatePersistenceService.saveNormalArtianCounter(value, basis ?? null),
-  adoptIdentification: (adoption) => rngStatePersistenceService.adoptNormalArtianCounterIdentification(adoption),
+  save: (value, basis, approval) =>
+    rngStatePersistenceService.saveNormalArtianCounter(value, basis ?? null, approval ?? null),
+  inspectSave: (value, basis) => rngStatePersistenceService.inspectNormalArtianCounterSave(value, basis ?? null),
+  adoptIdentification: (adoption, approval) =>
+    rngStatePersistenceService.adoptNormalArtianCounterIdentification(adoption, approval ?? null),
+  inspectIdentificationAdoption: (adoption) =>
+    rngStatePersistenceService.inspectNormalArtianCounterIdentificationAdoption(adoption),
   ensureRngState: () => rngStateRepository.ensureInitialRngState(),
   ensureSettings: () => settingsRepository.ensureSettings(),
   createIdentificationClient: createProductionNormalArtianCounterIdentificationWorkerClient,
@@ -126,11 +155,13 @@ interface RowIdentification {
   readonly unsupported: boolean
 }
 
-function CounterRow({ row, weaponName, debugMode, identification, onChange, onSave, onStartIdentification, onUnconfirm }: {
+function CounterRow({ row, weaponName, debugMode, identification, disabled, onChange, onSave, onStartIdentification, onUnconfirm }: {
   row: NormalArtianCounter
   weaponName: string
   debugMode: boolean
   identification: RowIdentification
+  /** A save of a Counter is in flight or waits for the user's confirmation. */
+  disabled: boolean
   onChange(next: NormalArtianCounter): void
   onSave(value: NormalArtianCounter): void
   onStartIdentification(): void
@@ -158,14 +189,14 @@ function CounterRow({ row, weaponName, debugMode, identification, onChange, onSa
             variant="outlined"
             size="small"
             sx={{ minHeight: 44 }}
-            disabled={identification.blockedReason !== null}
+            disabled={disabled || identification.blockedReason !== null}
             aria-describedby={identification.unsupported ? `${headingId} ${unsupportedId}` : headingId}
             onClick={onStartIdentification}
           >
             観測・検索
           </Button>
           {row.isConfirmed && (
-            <Button variant="text" size="small" color="warning" sx={{ minHeight: 44 }} aria-describedby={headingId} onClick={onUnconfirm}>
+            <Button variant="text" size="small" color="warning" sx={{ minHeight: 44 }} disabled={disabled} aria-describedby={headingId} onClick={onUnconfirm}>
               確定解除
             </Button>
           )}
@@ -194,7 +225,7 @@ function CounterRow({ row, weaponName, debugMode, identification, onChange, onSa
           <TextField size="small" label="candidateCount" type="number" value={row.candidateCount ?? ''} onChange={(event) => onChange({ ...row, candidateCount: event.target.value === '' ? null : Number(event.target.value) })} />
           <TextField size="small" label="lastObservedAt" value={row.lastObservedAt ?? ''} onChange={(event) => onChange({ ...row, lastObservedAt: event.target.value || null })} sx={{ gridColumn: { xs: '1 / -1', md: 'auto' } }} />
           <FormControlLabel sx={{ m: 0, minHeight: 44 }} control={<Checkbox checked={row.isConfirmed} disabled={row.counter === null} onChange={(event) => onChange({ ...row, isConfirmed: event.target.checked })} />} label="確定済み" />
-          <Button variant="outlined" onClick={() => onSave(row)} aria-describedby={headingId} sx={{ minHeight: 44, justifySelf: { xs: 'end', md: 'stretch' } }}>デバッグ保存</Button>
+          <Button variant="outlined" disabled={disabled} onClick={() => onSave(row)} aria-describedby={headingId} sx={{ minHeight: 44, justifySelf: { xs: 'end', md: 'stretch' } }}>デバッグ保存</Button>
         </Box>
       )}
     </Box>
@@ -218,6 +249,9 @@ export function NormalCountersPage({ dependencies = defaultDependencies }: { dep
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [session, setSession] = useState<IdentificationSession | null>(null)
+  // The breaking-change warning every Counter save and the Identification
+  // adoption go through (`docs/UI_FLOW.md` 16.3).
+  const planGuard = usePlanBreakingChangeApproval()
   const listHeadingId = useId()
   const now = dependencies.now ?? (() => new Date().toISOString())
   const requestId = dependencies.requestId ?? (() => crypto.randomUUID())
@@ -252,9 +286,18 @@ export function NormalCountersPage({ dependencies = defaultDependencies }: { dep
     const next = { ...value, isConfirmed: value.counter === null ? false : value.isConfirmed, updatedAt: now() }
     const validation = validateNormalArtianCounter(next)
     if (!validation.isValid) throw new Error(validation.issues.map(({ message }) => message).join(' / '))
-    const saved = await dependencies.save(next, values.find(({ id }) => id === next.id))
-    update(saved)
-    setNotice(successNotice)
+    const basis = values.find(({ id }) => id === next.id)
+    // The inspection and the save close over the same record against the same
+    // basis; the runtime alone decides whether the warning is shown.
+    const outcome = await planGuard.run({
+      inspect: () => dependencies.inspectSave(next, basis),
+      apply: (approval) => dependencies.save(next, basis, approval),
+      note: NORMAL_COUNTER_PLAN_BREAKING_NOTE,
+    })
+    if (outcome.status === 'cancelled') return
+    if (outcome.status === 'refused') throw new Error(outcome.message)
+    update(outcome.result)
+    setNotice(outcome.planAbandoned ? `${successNotice}${PLAN_ABANDONED_SUFFIX}` : successNotice)
   }
   const save = async (value: NormalArtianCounter) => {
     try { await persist(value, 'カウンターを保存しました。') } catch (caught: unknown) { setError(caught instanceof Error ? caught.message : '保存できません。') }
@@ -295,15 +338,25 @@ export function NormalCountersPage({ dependencies = defaultDependencies }: { dep
    */
   const confirmIdentifiedCounter = async (weaponTypeId: WeaponTypeId, confirmation: NormalCounterIdentificationConfirmation) => {
     setError(null)
-    // The persistence service builds the record and is the only writer of the
-    // Identification provenance `lastIdentifiedAt`.
-    const saved = await dependencies.adoptIdentification({
+    const adoption: NormalArtianCounterIdentificationAdoption = {
       weaponTypeId,
       startNormalCounter: confirmation.startNormalCounter,
       observationCount: confirmation.observationCount,
+    }
+    // The persistence service builds the record and is the only writer of the
+    // Identification provenance `lastIdentifiedAt`; the same adoption is
+    // inspected and saved. A cancelled warning keeps the Dialog, its result
+    // and the game-restored confirmation open for another try.
+    const outcome = await planGuard.run({
+      inspect: () => dependencies.inspectIdentificationAdoption(adoption),
+      apply: (approval) => dependencies.adoptIdentification(adoption, approval),
+      note: NORMAL_COUNTER_PLAN_BREAKING_NOTE,
     })
-    update(saved)
-    setNotice(`${weaponName(weaponTypeId)}のカウンターを確定しました。`)
+    if (outcome.status === 'cancelled') return
+    if (outcome.status === 'refused') throw new Error(outcome.message)
+    update(outcome.result)
+    const notice = `${weaponName(weaponTypeId)}のカウンターを確定しました。`
+    setNotice(outcome.planAbandoned ? `${notice}${PLAN_ABANDONED_SUFFIX}` : notice)
     setSession(null)
   }
 
@@ -335,6 +388,7 @@ export function NormalCountersPage({ dependencies = defaultDependencies }: { dep
                     weaponName={weaponName(row.weaponTypeId)}
                     debugMode={debugMode}
                     identification={rowIdentification(row)}
+                    disabled={planGuard.busy}
                     onChange={update}
                     onSave={(value) => void save(value)}
                     onStartIdentification={() => startIdentification(row)}
@@ -346,6 +400,7 @@ export function NormalCountersPage({ dependencies = defaultDependencies }: { dep
           )}
         </Paper>}
       </Stack>
+      <PlanBreakingChangeDialog controller={planGuard} />
       {session && baseSeed.seed !== null && settings !== null && (
         <NormalCounterIdentificationDialog
           weaponTypeId={session.weaponTypeId}

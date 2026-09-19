@@ -139,3 +139,19 @@ describe('RngStatePersistenceService: Normal Counter Identification provenance',
     expect(created.lastIdentifiedAt).toBeNull()
   })
 })
+
+describe('RngStatePersistenceService: Normal Counter Identification adoption inspection', () => {
+  it('inspects the very adoption mutation without writing, then adopts it', async () => {
+    const counter = createValidNormalArtianCounter()
+    const { service, current } = memoryPersistence({ rngState: createValidRngState(), normalCounters: [counter] })
+    const adoption = { weaponTypeId: counter.weaponTypeId, startNormalCounter: 7, observationCount: 2 }
+    const before = current()
+
+    await expect(service.inspectNormalArtianCounterIdentificationAdoption(adoption)).resolves.toEqual({ approvalRequired: false })
+    expect(current()).toEqual(before)
+
+    const adopted = await service.adoptNormalArtianCounterIdentification(adoption)
+    expect(adopted).toMatchObject({ counter: 7, isConfirmed: true, observationCount: 2, candidateCount: 1, lastIdentifiedAt: NOW })
+    expect(current().normalCounters.find(({ id }) => id === counter.id)).toEqual(adopted)
+  })
+})

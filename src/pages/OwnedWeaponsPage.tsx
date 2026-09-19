@@ -22,6 +22,9 @@ import {
   Typography,
 } from '@mui/material'
 import { DialogFormError } from '../components/DialogFormError'
+import { PlanBreakingChangeDialog } from '../components/execution/PlanBreakingChangeDialog'
+import { usePlanBreakingChangeApproval } from '../components/execution/usePlanBreakingChangeApproval'
+import type { PlanBreakingChangeApproval, PlanBreakingChangeInspection } from '../domain/execution'
 import { PageShell } from '../components/PageShell'
 import { StatusChip } from '../components/StatusChip'
 import { BonusSlotList, ManagementListItem } from '../components/ManagementListItem'
@@ -64,6 +67,13 @@ import { upsertPreservingOrder } from '../presentation/managementListOrder'
 
 const masterResult = loadMasterData()
 
+/** The operation-specific line under the breaking-change warning (`docs/UI_FLOW.md` 16.3). */
+const OWNED_WEAPON_PLAN_BREAKING_NOTE =
+  'この所持武器を変更すると、現在の生産計画の前提と一致しなくなります。'
+const OWNED_WEAPON_DELETE_PLAN_BREAKING_NOTE =
+  'この所持武器を削除すると、現在の生産計画の前提と一致しなくなります。'
+const PLAN_ABANDONED_SUFFIX = '実行中の生産計画を破棄しました。'
+
 /**
  * Smartphone: a narrower outer margin so the form keeps a usable width.
  * The title and actions stay outside the scrolling content (MUI `scroll="paper"`),
@@ -83,8 +93,17 @@ export interface OwnedWeaponsPageDependencies {
    * before a change would break that link (`docs/UI_FLOW.md` 7.1).
    */
   getTargets(): Promise<TargetWeapon[]>
-  save(draft: OwnedWeaponDraft, existing: OwnedWeapon | null): Promise<OwnedWeapon>
-  delete(id: OwnedWeapon['id']): Promise<void>
+  /** `approval` is the breaking-change approval when the inspection required one (`docs/UI_FLOW.md` 16.3). */
+  save(
+    draft: OwnedWeaponDraft,
+    existing: OwnedWeapon | null,
+    approval?: PlanBreakingChangeApproval | null,
+  ): Promise<OwnedWeapon>
+  /** The read-only breaking-change inspection of that very save. */
+  inspectSave(draft: OwnedWeaponDraft, existing: OwnedWeapon | null): Promise<PlanBreakingChangeInspection>
+  delete(id: OwnedWeapon['id'], approval?: PlanBreakingChangeApproval | null): Promise<void>
+  /** The read-only breaking-change inspection of that very delete. */
+  inspectDelete(id: OwnedWeapon['id']): Promise<PlanBreakingChangeInspection>
 }
 
 function referenceMessage(error: ReferencedEntityDeleteError): string {
@@ -112,8 +131,10 @@ export function OwnedWeaponsPage({
         ? {
             getAll: () => defaultService.getAll(),
             getTargets: () => targetWeaponRepository.getAllTargetWeapons(),
-            save: (draft, existing) => defaultService.save(draft, existing),
-            delete: (id) => defaultService.delete(id),
+            save: (draft, existing, approval) => defaultService.save(draft, existing, undefined, approval ?? null),
+            inspectSave: (draft, existing) => defaultService.inspectSave(draft, existing),
+            delete: (id, approval) => defaultService.delete(id, approval ?? null),
+            inspectDelete: (id) => defaultService.inspectDelete(id),
           }
         : null),
     [defaultService, dependencies],
@@ -131,6 +152,11 @@ export function OwnedWeaponsPage({
   // the open Dialog, where the modal keeps it reachable next to 保存.
   const [formError, setFormError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  // An approved breaking change ends the `active` Plan, which clears the
+  // in-progress marks the list shows: the list is re-read afterwards.
+  const [loadSequence, setLoadSequence] = useState(0)
+  // The breaking-change warning of every save and delete (`docs/UI_FLOW.md` 16.3).
+  const planGuard = usePlanBreakingChangeApproval()
   const listHeadingId = useId()
   const kindHelpId = useId()
 
@@ -160,7 +186,7 @@ export function OwnedWeaponsPage({
     return () => {
       active = false
     }
-  }, [api])
+  }, [api, loadSequence])
 
   if (!masterResult.ok) {
     return (
@@ -244,7 +270,20 @@ export function OwnedWeaponsPage({
       }
     }
     try {
-      const saved = await api.save(draft, editing)
+      // The inspection and the save close over the same draft against the same
+      // shown weapon; the runtime alone judges the whole post-state, the
+      // Target releases included.
+      const outcome = await planGuard.run({
+        inspect: () => api.inspectSave(draft, editing),
+        apply: (approval) => api.save(draft, editing, approval),
+        note: OWNED_WEAPON_PLAN_BREAKING_NOTE,
+      })
+      if (outcome.status === 'cancelled') return
+      if (outcome.status === 'refused') {
+        setFormError(outcome.message)
+        return
+      }
+      const saved = outcome.result
       // A new weapon is appended; an edited one stays where it was
       // (`docs/UI_FLOW.md` 3.2).
       setWeapons((current) => upsertPreservingOrder(current, saved))
@@ -261,8 +300,9 @@ export function OwnedWeaponsPage({
       setDraft(null)
       setEditing(null)
       setFormError(null)
-      setNotice('所持武器を保存しました。')
+      setNotice(outcome.planAbandoned ? `所持武器を保存し、${PLAN_ABANDONED_SUFFIX}` : '所持武器を保存しました。')
       setError(null)
+      if (outcome.planAbandoned) setLoadSequence((sequence) => sequence + 1)
     } catch (caught: unknown) {
       setFormError(
         caught instanceof EntityFormValidationError
@@ -275,12 +315,24 @@ export function OwnedWeaponsPage({
   }
 
   const remove = async (weapon: OwnedWeapon) => {
-    if (!api || !window.confirm(`${weapon.name}を削除しますか？`)) return
+    if (!api || planGuard.busy || !window.confirm(`${weapon.name}を削除しますか？`)) return
     try {
-      await api.delete(weapon.id)
+      // The existing reference protection refuses inside the inspection, so a
+      // referenced weapon is reported as before and never warned about.
+      const outcome = await planGuard.run({
+        inspect: () => api.inspectDelete(weapon.id),
+        apply: (approval) => api.delete(weapon.id, approval),
+        note: OWNED_WEAPON_DELETE_PLAN_BREAKING_NOTE,
+      })
+      if (outcome.status === 'cancelled') return
+      if (outcome.status === 'refused') {
+        setError(outcome.message)
+        return
+      }
       setWeapons((current) => current.filter(({ id }) => id !== weapon.id))
-      setNotice('所持武器を削除しました。')
+      setNotice(outcome.planAbandoned ? `所持武器を削除し、${PLAN_ABANDONED_SUFFIX}` : '所持武器を削除しました。')
       setError(null)
+      if (outcome.planAbandoned) setLoadSequence((sequence) => sequence + 1)
     } catch (caught: unknown) {
       setError(
         caught instanceof ReferencedEntityDeleteError
@@ -728,12 +780,13 @@ export function OwnedWeaponsPage({
           {/* Never shrinks: 保存 / キャンセル stay reachable however long the
               form or the error is. */}
           <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: 1.5, gap: 1, flexShrink: 0 }}>
-            <Button onClick={closeDialog} sx={{ minHeight: 44 }}>キャンセル</Button>
-            <Button variant="contained" onClick={() => void save()} sx={{ minHeight: 44, minWidth: 96 }}>
+            <Button onClick={closeDialog} disabled={planGuard.busy} sx={{ minHeight: 44 }}>キャンセル</Button>
+            <Button variant="contained" disabled={planGuard.busy} onClick={() => void save()} sx={{ minHeight: 44, minWidth: 96 }}>
               保存
             </Button>
           </DialogActions>
         </Dialog>
+        <PlanBreakingChangeDialog controller={planGuard} />
       </Stack>
     </PageShell>
   )

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RngState } from '../../domain/models/publicTypes'
+import { PlanBreakingChangeApprovalRequiredError, type PlanBreakingChangeApproval } from '../../domain/execution'
+import type { ProductionPlanId, RngState } from '../../domain/models/publicTypes'
 import {
   SkillIdentificationCancelledError,
   SkillIdentificationDuplicateRequestError,
@@ -179,6 +180,7 @@ function createHarness() {
   const skillClient = new FakeSkillClient()
   const gogmaClient = new FakeGogmaClient()
   const adoptionService: IdentificationAdoptionPort = {
+    inspectAdoption: vi.fn(async () => ({ approvalRequired: false as const })),
     adopt: vi.fn(async () => savedState()),
   }
   const coordinator = new DefaultIdentificationWizardCoordinator({
@@ -541,7 +543,7 @@ describe('IdentificationWizardCoordinator adoption', () => {
       baseSeed: '86315169',
       startingSkillCounter: 42,
       startingGogmaCounter: 84,
-    })
+    }, null)
     expect(harness.coordinator.getState().adoption).toEqual({
       status: 'adopted',
       savedRngState: expectedSavedState,
@@ -590,6 +592,68 @@ describe('IdentificationWizardCoordinator adoption', () => {
     })
 
     await expect(harness.coordinator.adopt()).resolves.toBeDefined()
+    expect(harness.adoptionService.adopt).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('IdentificationWizardCoordinator breaking-change approval', () => {
+  it('inspects the reviewed values through the port after the same preconditions, changing no state', async () => {
+    const harness = createHarness()
+    await expect(harness.coordinator.inspectAdoption()).rejects.toMatchObject({ code: 'invalid_state' })
+    await completeReview(harness)
+    await expect(harness.coordinator.inspectAdoption()).rejects.toMatchObject({ code: 'confirmation_required' })
+    harness.coordinator.setGameRestoredConfirmed(true)
+    const before = harness.coordinator.getState()
+
+    await expect(harness.coordinator.inspectAdoption()).resolves.toEqual({ approvalRequired: false })
+
+    expect(harness.adoptionService.inspectAdoption).toHaveBeenCalledWith({
+      baseSeed: '86315169',
+      startingSkillCounter: 42,
+      startingGogmaCounter: 84,
+    })
+    expect(harness.adoptionService.adopt).not.toHaveBeenCalled()
+    expect(harness.coordinator.getState()).toBe(before)
+  })
+
+  it('passes the approval to the port unchanged', async () => {
+    const harness = createHarness()
+    await completeReview(harness)
+    harness.coordinator.setGameRestoredConfirmed(true)
+    const approval: PlanBreakingChangeApproval = {
+      observedPlan: { planId: 'plan.x' as ProductionPlanId, status: 'active', currentStepId: null, updatedAt: '2026-09-18T00:00:00.000Z' },
+      savePointDecision: null,
+    }
+
+    await harness.coordinator.adopt(approval)
+
+    expect(harness.adoptionService.adopt).toHaveBeenCalledWith(
+      { baseSeed: '86315169', startingSkillCounter: 42, startingGogmaCounter: 84 },
+      approval,
+    )
+    expect(harness.coordinator.getState().adoption.status).toBe('adopted')
+  })
+
+  it('returns to the reviewed state, not an error, when the save is refused for a missing approval', async () => {
+    const harness = createHarness()
+    await completeReview(harness)
+    harness.coordinator.setGameRestoredConfirmed(true)
+    const refusal = new PlanBreakingChangeApprovalRequiredError({
+      approvalRequired: true,
+      reasons: ['rng_state_changed'],
+      observedPlan: { planId: 'plan.x' as ProductionPlanId, status: 'active', currentStepId: null, updatedAt: '2026-09-18T00:00:00.000Z' },
+      savePointChoiceRequired: false,
+    })
+    vi.mocked(harness.adoptionService.adopt).mockRejectedValueOnce(refusal)
+
+    await expect(harness.coordinator.adopt()).rejects.toBe(refusal)
+
+    expect(harness.coordinator.getState()).toMatchObject({
+      review: { baseSeed: '86315169', startingSkillCounter: 42, startingGogmaCounter: 84 },
+      gameRestoredConfirmed: true,
+      adoption: { status: 'idle', savedRngState: null, error: null },
+    })
+    await expect(harness.coordinator.adopt({ observedPlan: refusal.inspection.observedPlan, savePointDecision: null })).resolves.toBeDefined()
     expect(harness.adoptionService.adopt).toHaveBeenCalledTimes(2)
   })
 })

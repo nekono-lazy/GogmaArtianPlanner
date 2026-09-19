@@ -14,7 +14,11 @@ import { Link as RouterLink, useNavigate } from 'react-router-dom'
 import { DisclosureAccordion } from '../components/DisclosureAccordion'
 import { PageShell } from '../components/PageShell'
 import { StatusChip } from '../components/StatusChip'
+import { PlanBreakingChangeDialog } from '../components/execution/PlanBreakingChangeDialog'
+import { savePointPositionLabel } from '../components/execution/executionStepPresentation'
 import { ProductionPlanReplanPreviewPanel } from '../components/execution/ProductionPlanReplanPreviewPanel'
+import { usePlanBreakingChangeApproval } from '../components/execution/usePlanBreakingChangeApproval'
+import type { PlanBreakingChangeApproval, PlanBreakingChangeInspection } from '../domain/execution'
 import { useProductionPlanReplanPreview } from '../components/execution/useProductionPlanReplanPreview'
 import { CandidateCard } from '../components/search/CandidateCard'
 import {
@@ -92,7 +96,10 @@ export interface BuildListPageDependencies {
     result: PlannerOrchestrationResult,
     currentCalculationContext: CalculationContext,
   ): Promise<ProductionPlan | null>
-  deleteEntry(id: BuildListEntryId): Promise<void>
+  /** `approval` is the breaking-change approval when the inspection required one (`docs/UI_FLOW.md` 16.3). */
+  deleteEntry(id: BuildListEntryId, approval?: PlanBreakingChangeApproval | null): Promise<void>
+  /** The read-only breaking-change inspection of that very delete. */
+  inspectEntryDelete(id: BuildListEntryId): Promise<PlanBreakingChangeInspection>
   /**
    * Replaces one Entry's intermediate state selection and improvement
    * preference.
@@ -100,12 +107,19 @@ export interface BuildListPageDependencies {
    * Editing it here is what makes a Counter conflict recoverable without
    * re-searching: the user moves a selected state to another arrival, turns
    * it off, or changes the improvement order, and runs the Planner again
-   * (`docs/UI_FLOW.md` 10).
+   * (`docs/UI_FLOW.md` 10). `approval` is the breaking-change approval when
+   * the inspection required one.
    */
   updateIntermediateStateSelection(
     id: BuildListEntryId,
     selection: IntermediateStateSelection,
+    approval?: PlanBreakingChangeApproval | null,
   ): Promise<BuildListEntry>
+  /** The read-only breaking-change inspection of that very selection change. */
+  inspectIntermediateStateSelectionUpdate(
+    id: BuildListEntryId,
+    selection: IntermediateStateSelection,
+  ): Promise<PlanBreakingChangeInspection>
   /**
    * The one running (`active` / `stale`) Plan, or `undefined`
    * (`docs/PLANNER_SPEC.md` 16.2). It decides which Planner entry the page
@@ -131,9 +145,12 @@ function createDefaultDependencies(master: MasterDataRoot): BuildListPageDepende
         result,
         currentCalculationContext,
       ),
-    deleteEntry: (id) => buildListService.deleteEntry(id),
-    updateIntermediateStateSelection: (id, selection) =>
-      buildListService.updateIntermediateStateSelection(id, selection),
+    deleteEntry: (id, approval) => buildListService.deleteEntry(id, approval ?? null),
+    inspectEntryDelete: (id) => buildListService.inspectEntryDelete(id),
+    updateIntermediateStateSelection: (id, selection, approval) =>
+      buildListService.updateIntermediateStateSelection(id, selection, approval ?? null),
+    inspectIntermediateStateSelectionUpdate: (id, selection) =>
+      buildListService.inspectIntermediateStateSelectionUpdate(id, selection),
     getRunningProductionPlan: () => productionPlanRepository.getRunningProductionPlan(),
     replan: createProductionPlanReplanDependencies(master),
   }
@@ -207,6 +224,17 @@ const plannerNoticeMessages: Record<PlannerNotice, string> = {
   cancelled: '生産計画の作成をキャンセルしました。',
   no_plan: '現在の入力から作成できる生産計画はありませんでした。',
 }
+
+/** The operation-specific line under the breaking-change warning (`docs/UI_FLOW.md` 16.3). */
+const BUILD_LIST_SELECTION_PLAN_BREAKING_NOTE =
+  'この作成リスト項目の条件を変更すると、現在の生産計画の前提と一致しなくなります。'
+const BUILD_LIST_DELETE_PLAN_BREAKING_NOTE =
+  'この作成リスト項目を削除すると、現在の生産計画の前提と一致しなくなります。'
+const SELECTION_UPDATED_MESSAGE = '途中採用する状態と改善優先を更新しました。生産計画を再作成してください。'
+const SELECTION_UPDATED_PLAN_ABANDONED_MESSAGE =
+  '途中採用する状態と改善優先を更新し、実行中の生産計画を破棄しました。生産計画を再作成してください。'
+const SELECTION_CANCELLED_MESSAGE = '途中採用する状態の変更を保存しませんでした。生産計画は変更されていません。'
+const ENTRY_DELETED_PLAN_ABANDONED_MESSAGE = 'ビルドリストから削除し、実行中の生産計画を破棄しました。'
 
 /**
  * Whether a Plan is running now. `error` means the read failed or the running
@@ -415,9 +443,16 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
   const [plannerNotice, setPlannerNotice] = useState<PlannerNotice | null>(null)
   const [checkpointFeedback, setCheckpointFeedback] = useState<CheckpointFeedback | null>(null)
   const [removeError, setRemoveError] = useState<string | null>(null)
+  // An Entry delete that also ended the running Plan, reported at the top:
+  // the Entry list may be empty afterwards.
+  const [removeNotice, setRemoveNotice] = useState<string | null>(null)
   const [runningPlan, setRunningPlan] = useState<RunningPlanState>(
     dependencies ? { status: 'loading' } : { status: 'error' },
   )
+  // The breaking-change warning of a selected Entry's selection change or
+  // delete (`docs/UI_FLOW.md` 16.3). While it decides, no other guarded
+  // change is queued: the selection controls and the delete buttons wait.
+  const planGuard = usePlanBreakingChangeApproval()
   // A runtime change against the running Plan (a save point restore, a refused
   // adoption) re-reads the Build List and the running Plan.
   const [loadSequence, setLoadSequence] = useState(0)
@@ -604,7 +639,7 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
     rendered: IntermediateStateSelection,
     next: IntermediateStateSelection,
   ) => {
-    if (!dependencies) return
+    if (!dependencies || planGuard.deciding) return
     const deps = dependencies
     const chain = checkpointSaveChainRef.current
     // The last selection known to be persisted. Only the very first change of
@@ -612,7 +647,11 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
     // chain's own continuation is the authority, never a render-time Entry.
     const previousStable =
       chain.get(entry.id) ?? Promise.resolve<IntermediateStateSelection>(entrySelection(entry))
-    const attempt = previousStable.then(async (latest) => {
+    const attempt = previousStable.then(async (latest): Promise<{
+      selection: IntermediateStateSelection
+      saved: 'applied' | 'cancelled'
+      planAbandoned: boolean
+    }> => {
       const merged: IntermediateStateSelection = {
         skillOpportunityId:
           next.skillOpportunityId !== rendered.skillOpportunityId
@@ -627,26 +666,43 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
             ? next.improvementPreference
             : latest.improvementPreference,
       }
-      const updated = await deps.updateIntermediateStateSelection(entry.id, merged)
+      // The inspection and the save close over the same merged selection; the
+      // runtime alone decides whether the warning is shown. A cancelled
+      // warning leaves the Entry, the chain and the database as they were.
+      const outcome = await planGuard.run({
+        inspect: () => deps.inspectIntermediateStateSelectionUpdate(entry.id, merged),
+        apply: (approval) => deps.updateIntermediateStateSelection(entry.id, merged, approval),
+        note: BUILD_LIST_SELECTION_PLAN_BREAKING_NOTE,
+      })
+      if (outcome.status === 'cancelled') return { selection: latest, saved: 'cancelled', planAbandoned: false }
+      if (outcome.status === 'refused') throw new Error(outcome.message)
+      const updated = outcome.result
       // Only a persisted result updates the displayed Entry; a failed
       // selection is never shown as saved.
       setEntries((current) =>
         current.map((existing) => (existing.id === updated.id ? updated : existing)),
       )
-      return entrySelection(updated)
+      return { selection: entrySelection(updated), saved: 'applied', planAbandoned: outcome.planAbandoned }
     })
     // The continuation handed to the next change: the new stable selection on
     // success, the previous stable one on failure. It never rejects, so a
     // failed save neither poisons the chain nor loses an earlier success.
     const continuation: Promise<IntermediateStateSelection> =
-      attempt.catch(() => previousStable)
+      attempt.then(({ selection }) => selection).catch(() => previousStable)
     chain.set(entry.id, continuation)
     try {
-      await attempt
+      const { saved, planAbandoned } = await attempt
+      if (saved === 'cancelled') {
+        setCheckpointFeedback({ severity: 'info', message: SELECTION_CANCELLED_MESSAGE })
+        return
+      }
       setCheckpointFeedback({
         severity: 'info',
-        message: '途中採用する状態と改善優先を更新しました。生産計画を再作成してください。',
+        message: planAbandoned ? SELECTION_UPDATED_PLAN_ABANDONED_MESSAGE : SELECTION_UPDATED_MESSAGE,
       })
+      // The Plan the approval ended is no longer running: the running Plan
+      // state, its replan entry and the Entries are re-read.
+      if (planAbandoned) setLoadSequence((sequence) => sequence + 1)
     } catch (caught: unknown) {
       setCheckpointFeedback({
         severity: 'error',
@@ -656,12 +712,26 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
   }
 
   const remove = async (id: BuildListEntryId) => {
-    if (!dependencies) return
+    if (!dependencies || planGuard.deciding) return
     setRemoveError(null)
+    setRemoveNotice(null)
     try {
-      await dependencies.deleteEntry(id)
+      const outcome = await planGuard.run({
+        inspect: () => dependencies.inspectEntryDelete(id),
+        apply: (approval) => dependencies.deleteEntry(id, approval),
+        note: BUILD_LIST_DELETE_PLAN_BREAKING_NOTE,
+      })
+      if (outcome.status === 'cancelled') return
+      if (outcome.status === 'refused') {
+        setRemoveError(outcome.message)
+        return
+      }
       checkpointSaveChainRef.current.delete(id)
       setEntries((current) => current.filter((entry) => entry.id !== id))
+      if (outcome.planAbandoned) {
+        setRemoveNotice(ENTRY_DELETED_PLAN_ABANDONED_MESSAGE)
+        setLoadSequence((sequence) => sequence + 1)
+      }
     } catch (caught: unknown) {
       setRemoveError(caught instanceof Error ? caught.message : 'ビルドリストから削除できませんでした。')
     }
@@ -731,6 +801,11 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
         {loading && <LinearProgress aria-label="ビルドリストを読み込み中" />}
         {loadError && <Alert severity="error">{loadError}</Alert>}
         {removeError && <Alert severity="error">{removeError}</Alert>}
+        {removeNotice && (
+          <Alert severity="info" onClose={() => setRemoveNotice(null)}>
+            {removeNotice}
+          </Alert>
+        )}
 
         {loaded && (
           <PageSection title="ページ概要">
@@ -1016,6 +1091,7 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
                         headingLevel="h4"
                         intermediateStateSelectionContext="build_list"
                         intermediateStateSelection={entrySelection(entry)}
+                        intermediateStateSelectionDisabled={planGuard.deciding}
                         onIntermediateStateSelectionChange={(next) =>
                           void changeSelection(entry, entrySelection(entry), next)
                         }
@@ -1031,6 +1107,7 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
                       <Button
                         color="error"
                         variant="text"
+                        disabled={planGuard.deciding}
                         onClick={() => void remove(entry.id)}
                         sx={{ minHeight: 44, alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
                       >
@@ -1044,6 +1121,15 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
           </Stack>
         )}
       </Stack>
+      <PlanBreakingChangeDialog
+        controller={planGuard}
+        // The Plan this page holds resolves the save point's Step; display only.
+        savePointPositionLabel={(inspection) =>
+          runningPlan.status === 'running' && runningPlan.plan.id === inspection.observedPlan.planId
+            ? savePointPositionLabel(runningPlan.plan, inspection.savePointCurrentStepId)
+            : null
+        }
+      />
     </PageShell>
   )
 }

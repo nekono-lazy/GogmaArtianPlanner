@@ -7,6 +7,9 @@ import { DisclosureAccordion } from '../components/DisclosureAccordion'
 import { PageShell } from '../components/PageShell'
 import { StatusChip, type StatusTone } from '../components/StatusChip'
 import { IdentificationWizardDialog } from '../components/rng/IdentificationWizardDialog'
+import { PlanBreakingChangeDialog } from '../components/execution/PlanBreakingChangeDialog'
+import { usePlanBreakingChangeApproval } from '../components/execution/usePlanBreakingChangeApproval'
+import type { PlanBreakingChangeApproval, PlanBreakingChangeInspection } from '../domain/execution'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import type { KnownValue, RngState, RngStateSource } from '../domain/models/publicTypes'
 import { validateRngState } from '../domain/models/validation'
@@ -40,6 +43,14 @@ const knownKeys: readonly KnownKey[] = ['baseSeed', 'gogmaCounter', 'skillCounte
 
 const UNSAVED_WIZARD_MESSAGE =
   'Identification Wizardを開始する前に、RNG状態設定の変更を保存するか元に戻してください。'
+/** The operation-specific line under the breaking-change warning (`docs/UI_FLOW.md` 16.3). */
+const RNG_SETUP_PLAN_BREAKING_NOTE =
+  'RNG状態を変更すると、現在の生産計画で使用している予測位置と一致しなくなります。'
+const RNG_SAVED_MESSAGE = 'RNG状態を保存しました。'
+const RNG_SAVED_PLAN_ABANDONED_MESSAGE = 'RNG状態を保存し、実行中の生産計画を破棄しました。'
+const IDENTIFICATION_ADOPTED_MESSAGE = 'Identification結果をRNG状態へ採用しました。'
+const IDENTIFICATION_ADOPTED_PLAN_ABANDONED_MESSAGE =
+  'Identification結果をRNG状態へ採用し、実行中の生産計画を破棄しました。'
 
 const knownLabels: Record<KnownKey, string> = {
   baseSeed: 'Base Seed（基準シード）',
@@ -149,14 +160,21 @@ function KnownField({ fieldId, label, description, numeric = false, value, onCha
 
 export interface RngSetupPageDependencies {
   ensure(): Promise<RngState>
-  /** `basis` is the RngState the edit started from, so only changed fields are saved. */
-  save(state: RngState, basis?: RngState): Promise<RngState>
+  /**
+   * `basis` is the RngState the edit started from, so only changed fields are
+   * saved. `approval` is the breaking-change approval when the inspection
+   * required one (`docs/UI_FLOW.md` 16.3).
+   */
+  save(state: RngState, basis?: RngState, approval?: PlanBreakingChangeApproval | null): Promise<RngState>
+  /** The read-only breaking-change inspection of that very save. */
+  inspectSave(state: RngState, basis?: RngState): Promise<PlanBreakingChangeInspection>
   getNormalCounters(): ReturnType<typeof normalArtianCounterRepository.getAllNormalArtianCounters>
   createIdentificationCoordinator?(): IdentificationWizardCoordinator
 }
 const defaultDependencies: RngSetupPageDependencies = {
   ensure: () => rngStateRepository.ensureInitialRngState(),
-  save: (state, basis) => rngStatePersistenceService.saveRngState(state, basis ?? null),
+  save: (state, basis, approval) => rngStatePersistenceService.saveRngState(state, basis ?? null, approval ?? null),
+  inspectSave: (state, basis) => rngStatePersistenceService.inspectRngStateSave(state, basis ?? null),
   getNormalCounters: () => normalArtianCounterRepository.getAllNormalArtianCounters(),
   createIdentificationCoordinator: createProductionIdentificationWizardCoordinator,
 }
@@ -174,6 +192,9 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
   const [adoptionNotice, setAdoptionNotice] = useState<string | null>(null)
   const [identificationCoordinator, setIdentificationCoordinator] =
     useState<IdentificationWizardCoordinator | null>(null)
+  // The breaking-change warning of the direct save (`docs/UI_FLOW.md` 16.3).
+  // The Wizard's adoption runs its own, inside the Wizard Dialog.
+  const planGuard = usePlanBreakingChangeApproval()
   useEffect(() => { let active = true; void Promise.all([dependencies.ensure(), dependencies.getNormalCounters()]).then(([loaded, counters]) => { if (active) { setState(loaded); setForm(toForm(loaded)); setNormalCounters(counters) } }).catch((caught: unknown) => { if (active) setLoadError(caught instanceof Error ? caught.message : 'RNG状態を読み込めません。') }); return () => { active = false } }, [dependencies])
 
   // The page owns Coordinator lifetime: the Wizard session ends only when the
@@ -216,8 +237,18 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
       const next = toState(form, state, modifiedKeys, new Date().toISOString(), productionRngEngine)
       const validation = validateRngState(next)
       if (!validation.isValid) throw new Error(validation.issues.map(({ message }) => message).join(' / '))
-      const saved = await dependencies.save(next, state)
-      setState(saved); setForm(toForm(saved)); setModifiedKeys(new Set()); setSaveNotice('RNG状態を保存しました。')
+      // The inspection and the save close over the same edit against the same
+      // basis; the runtime alone decides whether the warning is shown.
+      const outcome = await planGuard.run({
+        inspect: () => dependencies.inspectSave(next, state),
+        apply: (approval) => dependencies.save(next, state, approval),
+        note: RNG_SETUP_PLAN_BREAKING_NOTE,
+      })
+      if (outcome.status === 'cancelled') return
+      if (outcome.status === 'refused') { setSaveError(outcome.message); return }
+      const saved = outcome.result
+      setState(saved); setForm(toForm(saved)); setModifiedKeys(new Set())
+      setSaveNotice(outcome.planAbandoned ? RNG_SAVED_PLAN_ABANDONED_MESSAGE : RNG_SAVED_MESSAGE)
     } catch (caught: unknown) { setSaveError(caught instanceof Error ? caught.message : 'RNG状態を保存できません。') }
   }
 
@@ -252,12 +283,12 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
     }
   }
 
-  const handleIdentificationAdopted = (saved: RngState) => {
+  const handleIdentificationAdopted = (saved: RngState, adoption: { planAbandoned: boolean }) => {
     setState(saved)
     setForm(toForm(saved))
     setModifiedKeys(new Set())
     setSaveNotice(null)
-    setAdoptionNotice('Identification結果をRNG状態へ採用しました。')
+    setAdoptionNotice(adoption.planAbandoned ? IDENTIFICATION_ADOPTED_PLAN_ABANDONED_MESSAGE : IDENTIFICATION_ADOPTED_MESSAGE)
   }
 
   const engineCapabilities = productionRngRuntime.capabilities
@@ -316,7 +347,7 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
           {saveNotice && <Alert severity="success" onClose={() => setSaveNotice(null)}>{saveNotice}</Alert>}
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'flex-end' }}>
             {hasUnsavedChanges && <Typography variant="body2" color="text.secondary">未保存の変更があります。</Typography>}
-            <Button variant="contained" sx={{ minHeight: 44, minWidth: 120 }} onClick={() => void save()}>保存</Button>
+            <Button variant="contained" sx={{ minHeight: 44, minWidth: 120 }} disabled={planGuard.busy} onClick={() => void save()}>保存</Button>
           </Stack>
         </Stack>
       </SectionCard>
@@ -353,6 +384,7 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
       <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>RNG同定（Identification Wizard）の利用可否はEngine capabilityではなくアプリ側で判定します。現在の状態は「値が分からない場合」の表示を確認してください。</Typography>
     </DisclosureAccordion>
 
+    <PlanBreakingChangeDialog controller={planGuard} />
     {identificationCoordinator && state && masterResult.ok && <IdentificationWizardDialog coordinator={identificationCoordinator} initialRngState={state} master={masterResult.data} onAdopted={handleIdentificationAdopted} onClose={() => setIdentificationCoordinator(null)} />}
   </Stack></PageShell>
 }

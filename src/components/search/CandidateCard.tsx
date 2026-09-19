@@ -72,6 +72,11 @@ interface CandidateCardProps {
   intermediateStateSelection?: IntermediateStateSelection
   onIntermediateStateSelectionChange?: (selection: IntermediateStateSelection) => void
   /**
+   * The selection controls stay visible but cannot be changed while a save of
+   * a selection is in flight or waits for the user's confirmation.
+   */
+  intermediateStateSelectionDisabled?: boolean
+  /**
    * Which screen the editable selection explanation is written for. The
    * Search screen is the default; the Build List, where the Candidate is
    * already registered, passes `build_list`.
@@ -116,6 +121,7 @@ export function CandidateCard({
     improvementPreference: 'planner',
   },
   onIntermediateStateSelectionChange,
+  intermediateStateSelectionDisabled = false,
   intermediateStateSelectionContext = 'search',
   headingLevel = 'h3',
 }: CandidateCardProps) {
@@ -368,6 +374,7 @@ export function CandidateCard({
             master={master}
             selection={intermediateStateSelection}
             onChange={onIntermediateStateSelectionChange}
+            disabled={intermediateStateSelectionDisabled}
             headingLevel={sectionLevel}
             selectionContext={intermediateStateSelectionContext}
           />

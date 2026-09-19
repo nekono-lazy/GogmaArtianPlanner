@@ -118,7 +118,9 @@ function targetDependencies(
     getAll: vi.fn(async () => targets),
     getOwnedWeapons: vi.fn(async () => ownedWeapons),
     save,
+    inspectSave: vi.fn(async () => ({ approvalRequired: false as const })),
     delete: vi.fn(async () => undefined),
+    inspectDelete: vi.fn(async () => ({ approvalRequired: false as const })),
   } satisfies TargetWeaponsPageDependencies
 }
 
@@ -141,7 +143,9 @@ function ownedDependencies(
     getAll: vi.fn(async () => weapons),
     getTargets: vi.fn(async () => targets),
     save,
+    inspectSave: vi.fn(async () => ({ approvalRequired: false as const })),
     delete: vi.fn(async () => undefined),
+    inspectDelete: vi.fn(async () => ({ approvalRequired: false as const })),
   } satisfies OwnedWeaponsPageDependencies
 }
 
@@ -260,7 +264,7 @@ describe('Target Weapons preferred owned weapon select', () => {
     await user.click(screen.getByRole('button', { name: '保存' }))
     expect(deps.save).toHaveBeenCalledWith(
       expect.objectContaining({ preferredOwnedWeaponId: null }),
-      expect.anything(),
+      expect.anything(), null,
     )
   })
 
@@ -287,7 +291,7 @@ describe('Target Weapons preferred owned weapon select', () => {
 
     expect(deps.save).toHaveBeenCalledWith(
       expect.objectContaining({ preferredOwnedWeaponId: taken.id }),
-      expect.objectContaining({ id: 'target.a' }),
+      expect.objectContaining({ id: 'target.a' }), null,
     )
     // The Service releases the previous holder atomically, and the list shows
     // that release.
@@ -310,7 +314,7 @@ describe('Target Weapons preferred owned weapon select', () => {
 
     expect(deps.save).toHaveBeenCalledWith(
       expect.objectContaining({ preferredOwnedWeaponId: null }),
-      expect.anything(),
+      expect.anything(), null,
     )
   })
 
@@ -335,7 +339,7 @@ describe('Target Weapons preferred owned weapon select', () => {
     expect(confirm).not.toHaveBeenCalled()
     expect(deps.save).toHaveBeenCalledWith(
       expect.objectContaining({ preferredOwnedWeaponId: null }),
-      expect.anything(),
+      expect.anything(), null,
     )
   })
 })
@@ -404,7 +408,7 @@ describe('Owned Weapons preferred-origin relation', () => {
 
     expect(deps.save).toHaveBeenCalledWith(
       expect.objectContaining({ isProtected: true }),
-      expect.objectContaining({ id: weapon.id }),
+      expect.objectContaining({ id: weapon.id }), null,
     )
     expect(await screen.findByText('優先起点: なし')).toBeInTheDocument()
   })
