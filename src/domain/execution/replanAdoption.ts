@@ -122,15 +122,29 @@ function issueMessage(issue: PlannerResultPersistenceIssue): string {
 }
 
 /**
- * Whether the Preview's Planner result could ever become the running Plan: a
- * Plan exists, the search was not truncated, and the result passes the same
- * save-time shape checks the ordinary Planner result save applies. A no-Plan
- * result is a valid Preview to show, never one to adopt.
+ * Whether the Preview's Planner result could ever become the running Plan: the
+ * search was not truncated, a Plan exists, and the result passes the same
+ * save-time shape checks the ordinary Planner result save applies.
+ *
+ * The typed termination is judged first (`docs/PLANNER_SPEC.md` 7.2.1,
+ * `docs/UI_FLOW.md` 10.1): an `incomplete` search is a partial Beam Search
+ * artifact whether or not it carries a partial Plan, never a finished no-Plan
+ * result. Only a search that ended on its own with no Plan and nothing to
+ * persist is the ordinary `no_plan`; a no-Plan result that still carries
+ * generated Entries breaks the Planner result invariant. A no-Plan Preview is
+ * a valid Preview to show, never one to adopt.
  */
 export function describeReplanPreviewAdoptability(
   preview: ProductionPlanReplanPreview,
 ): ProductionPlanReplanPreviewAdoptability {
   const { plan, generatedBuildListEntries, termination } = preview.result
+  if (termination.status === 'incomplete') {
+    return {
+      adoptable: false,
+      reason: 'incomplete_search',
+      message: 'The replan Preview search was truncated by a Planner bound and holds no finished ProductionPlan.',
+    }
+  }
   if (plan === null) {
     return generatedBuildListEntries.length > 0
       ? {
@@ -140,13 +154,11 @@ export function describeReplanPreviewAdoptability(
         }
       : { adoptable: false, reason: 'no_plan', message: 'The replan Preview has no ProductionPlan to adopt.' }
   }
+  // `incomplete` was classified above, so every remaining shape or Domain
+  // validation issue is an invalid result.
   const issue = checkPersistablePlannerResultShape(plan, generatedBuildListEntries, termination)
   if (issue !== null) {
-    return {
-      adoptable: false,
-      reason: termination.status === 'incomplete' ? 'incomplete_search' : 'invalid_result',
-      message: issueMessage(issue),
-    }
+    return { adoptable: false, reason: 'invalid_result', message: issueMessage(issue) }
   }
   return { adoptable: true, plan }
 }

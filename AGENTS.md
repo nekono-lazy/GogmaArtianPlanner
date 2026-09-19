@@ -412,8 +412,9 @@ the compromise checkpoint panel with the confirmed 「この武器を妥協品�
 and the completed / ended Plan views. It reads the current checkpoint through
 `listCurrentCompromiseCheckpoints()`, the same still-current authority
 `prepareCompromiseFinish()` uses. The divergence records were connected by the twelfth
-PR below and Undo, the game save point and the ordinary abandonment by the thirteenth;
-replan Preview / adoption and breaking-change warning UIs are still not implemented.
+PR below, Undo, the game save point and the ordinary abandonment by the thirteenth, and the
+replan Preview / adoption by the fourteenth; the breaking-change warning UI is still not
+implemented.
 The same PR then moved the Target link of an existing OwnedWeapon from the Entry's first
 physical Step to the **Plan start effect** (`docs/PLANNER_SPEC.md` 16.2 / 16.11,
 `src/domain/planner/productionPlanStartEffects.ts`). Draft generation, saving and display
@@ -543,6 +544,43 @@ Candidate / Entry identity or CalculationContext, so `CURRENT_CALCULATION_APP_SC
 each filling every RngState / Normal Counter body (tables, save point snapshots, Undo snapshots)
 with `lastIdentifiedAt = null` and never backfilling an adoption time from `updatedAt`,
 `lastObservedAt` or `source`.
+The fourteenth PR (the replan Preview / adoption UI) connected 16.8 on the Build List and the
+Production Plan page (`src/components/execution/useProductionPlanReplanPreview.ts`,
+`ProductionPlanReplanPreviewPanel.tsx`, `ProductionPlanReplanAdoptionDialog.tsx`,
+`src/services/execution/productionPlanReplanDependencies.ts`). 「現在地点から再計画を試算」 is
+offered only for the exact persisted `active` / `stale` Plan of `/plans/:planId` and, on the
+Build List, only while `productionPlanRepository.getRunningProductionPlan()` returns a running
+Plan (no running Plan keeps the ordinary 「生産計画を作成」 and its Draft save; a failed or
+invariant-breaking read offers neither, and no second independent Draft is ever saved beside a
+running Plan). The Preview input comes only from `prepareProductionPlanReplanPreview()` - never
+the page's `state.input`, the Plan's `baseSnapshot` or a Conflict preparation input - the
+calculation runs the existing `PlannerWorkerClient.createConstrainedPlan()` with
+`defaultPlannerOrchestrationBounds` on the hook's own Worker (the Build List writes its reviewed
+detail settings into `PlannerInput.options`; the Production Plan page passes the request as it
+is), and the result is bundled by `createProductionPlanReplanPreview()` and held in React memory
+only: never Dexie, never Export, never `savePlannerResult()`. A cancel (`cancelPlan()`, a notice
+rather than a failure), a discard, a superseded generation, a route change and an unmount all
+drop it, and a late Worker result never lands. The Preview is shown as 「再計画の試算（未採用）」
+with 「まだ現在の生産計画は変更されていません」 through the shared `ProductionPlanContent` plus a
+read-only Conflict list and the optional three-count comparison of UI_FLOW 16.4; a no-Plan
+result and an `incomplete` search (the 10.1 display) are ordinary Previews that offer no
+adoption, and adoptability is `describeReplanPreviewAdoptability()` only, which judges the
+typed termination first (7.2.1): an `incomplete` search is `incomplete_search` whether or not a
+partial Plan exists, a finished search with no Plan and no generated Entry is `no_plan`, and a
+no-Plan result carrying generated Entries or a Plan failing the save-time checks is
+`invalid_result`; the panel shows exactly one of the three and parses no message text. 「この再計画を採用」
+first runs `inspectProductionPlanReplanAdoption()`, whose result alone decides whether the 16.10
+choice is asked (its position label comes from `savePointCurrentStepId`); 「現在地点を維持」 and
+「最後のゲーム内セーブ地点へ戻す」 (the shared `ExecutionSavePointRestoreDialog` with the
+game-side confirmation checkbox) each become one `adoptProductionPlanReplanPreview()` call naming
+the `recordedAt` the user saw, never a separate `restoreExecutionSavePoint()`. `adopted`
+navigates to the new Plan's `/plans/{id}/run`; `save_point_restored_repreview_required` drops
+the Preview, re-reads the running Plan and asks for a new Preview; `replan_state_changed` /
+`replan_result_invalid` / `replan_plan_id_collision` (at the inspection or the adoption) drop
+the Preview with a Japanese notice and never re-preview or adopt automatically; every other
+refusal keeps the Preview and reports through `executionErrorMessage()`. The Draft-only Conflict
+recalculation (`replanState`) and what-if are untouched. It added no persisted field and changed
+no calculation semantics, so the versions stay 13 / 7 / 10 (`RngState.schemaVersion` 2).
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -3303,8 +3341,10 @@ records (「結果が違う」 with its re-identification guidance, 「何を何
 with the Execution Recovery: current position check, the save point restore and the Plan
 abandonment it needs) and the state controls (Undo of the latest ExecutionHistory, the game
 save point record / overwrite / restore, and the ordinary Plan abandonment with the 16.10
-choice); the replan and breaking-change warning / confirmation UIs, and the persistent RNG
-re-identification reminder on Dashboard / RNG Setup / Candidate Search, are not yet.
+choice) and the replan Preview / adoption (「現在地点から再計画を試算」 on the Build List and the
+Production Plan page, the transient 「再計画の試算（未採用）」, 「この再計画を採用」 with the 16.10
+choice); the breaking-change warning / confirmation UI and the persistent RNG re-identification
+reminder on Dashboard / RNG Setup / Candidate Search are not yet.
 Implementation PRs follow the specification and must not fall back to the older
 Execution semantics.
 
