@@ -4879,6 +4879,34 @@ ProductionPlanには適用しない）。
 - 変更のvalidation失敗、既存の参照保護（`ReferencedEntityDeleteError`）による削除拒否、復元の拒否、
   保存失敗のいずれでも、Plan、変更、セーブ地点、ExecutionHistory、作成中状態のどれも変更しない
 
+実装上の確定事項（Planを壊す変更の事前警告UI PR）。Runtime semanticsは変更していない。
+
+- 対象画面はRNG Setupの直接保存、Identification Wizardの採用、Normal Counter Setupの保存 / 確定解除 /
+  Debug修正 / Identification結果の採用、所持武器・目標武器の保存と削除、Build Listの途中採用状態・改善優先の
+  変更とEntry削除である。すべて共通のcontroller（`usePlanBreakingChangeApproval()`）と共通Dialog
+  （`PlanBreakingChangeDialog`）を通り、画面ごとにDialogを複製しない
+- 順序は「操作固有のvalidation・既存確認（優先起点の解除確認、takeover確認、削除確認、調査前状態へ戻した確認）
+  -> Application serviceの `inspect` -> `approvalRequired: false` なら通常保存、`true` なら警告 -> 必要なら
+  16.10の選択 -> 同じ操作を承認付きで再実行」である。`inspect` は読み取り専用で、警告表示だけでは何も保存しない。
+  UIはPlanを壊すかどうかを判定せず、Planを直接abandonせず、セーブ地点を別APIで復元しない
+- 警告の内容は `inspection.reasons` だけをauthorityとする（画面やbuttonから理由を決め打ちしない）。承認は
+  `{ observedPlan: inspection.observedPlan, savePointDecision }` であり、`planId` / `status` / `currentStepId` /
+  `updatedAt` をUI側で作り直さない。inspectionと承認はそのpending mutation専用で、別操作へ流用しない
+- 承認無しの保存が `PlanBreakingChangeApprovalRequiredError` を返した場合（inspectと保存の間にactive Planが
+  開始した等）は、そのerrorが持つ `inspection` をそのまま警告へ昇格する。Identification Wizard Coordinatorは
+  この拒否をadoption errorではなくreview保持のidle状態へ戻す
+- `plan_breaking_change_state_changed` / `plan_breaking_change_approval_not_required` /
+  `running_plan_invariant_violated` / セーブ地点選択の不一致 / 復元の拒否 / `transaction_failed` は保存せず、
+  自動再実行せず、typed codeから日本語で案内し、画面のdraftを可能な限り保持する
+- 「最後のゲーム内セーブ地点へ戻す」はゲーム側復元確認（共通の `ExecutionSavePointRestoreDialog`）を必須とし、
+  確認後に `restore_save_point` の決定を付けて元の保存を1回だけ実行する。復元・変更保存・Plan破棄は
+  `PlanBreakingChangeGuard.apply()` の1 transactionで行われる
+- 承認付き保存の成功後は「…実行中の生産計画を破棄しました。」を示し、各画面の関連状態を最新化する（Build Listは
+  実行中Planを再読込し、再計画導線を通常の生産計画作成へ戻す）。警告待ちの間は同じ画面で別のguarded変更を
+  積まない（Build Listは選択controlと削除buttonを一時無効化し、既存のper-Entry save chainは維持する）
+- 永続shape、Calculation semantics、`breaking_change_approved` の意味、Undo / 再計画 / `user_abandoned` の
+  各flowは変更していない
+
 #### UIを経由しない不一致
 
 Import、別タブ、保存失敗からの復旧などで警告を経ずに前提が壊れた場合は、次のStep確定時の

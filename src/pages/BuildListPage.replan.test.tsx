@@ -167,9 +167,11 @@ function dependencies(options: {
     createInput: vi.fn(async (calculationContext): Promise<PlannerInput> => ({ ...plannerInput(target, entry), calculationContext })),
     savePlannerResult: vi.fn(async () => createValidProductionPlan()),
     deleteEntry: vi.fn(async () => undefined),
+    inspectEntryDelete: vi.fn(async () => ({ approvalRequired: false as const })),
     updateIntermediateStateSelection: vi.fn(async () => {
       throw new Error('not used in this fixture')
     }),
+    inspectIntermediateStateSelectionUpdate: vi.fn(async () => ({ approvalRequired: false as const })),
     getRunningProductionPlan: vi.fn(async () => {
       if (options.running instanceof Error) throw options.running
       return options.running === 'none' ? undefined : plan

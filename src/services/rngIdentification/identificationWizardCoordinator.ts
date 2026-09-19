@@ -29,6 +29,11 @@ import {
   identificationAdoptionService,
   type IdentificationAdoptionInput,
 } from './identificationAdoptionService'
+import {
+  PlanBreakingChangeApprovalRequiredError,
+  type PlanBreakingChangeApproval,
+  type PlanBreakingChangeInspection,
+} from '../../domain/execution'
 
 export type IdentificationResultClassification =
   | 'zero'
@@ -138,7 +143,13 @@ export class IdentificationWizardCoordinatorError extends Error {
 }
 
 export interface IdentificationAdoptionPort {
-  adopt(input: IdentificationAdoptionInput): Promise<RngState>
+  /**
+   * Whether adopting these values needs the breaking-change approval
+   * (`docs/PLANNER_SPEC.md` 16.6, `docs/UI_FLOW.md` 16.3). Read-only.
+   */
+  inspectAdoption(input: IdentificationAdoptionInput): Promise<PlanBreakingChangeInspection>
+  /** Saves the values; on an `active` Plan only with the user's approval. */
+  adopt(input: IdentificationAdoptionInput, approval?: PlanBreakingChangeApproval | null): Promise<RngState>
 }
 
 export interface IdentificationWizardCoordinatorDependencies {
@@ -160,7 +171,19 @@ export interface IdentificationWizardCoordinator {
   ): Promise<IdentificationResultClassification>
   cancelGogma(): void
   setGameRestoredConfirmed(value: boolean): void
-  adopt(): Promise<RngState>
+  /**
+   * The read-only breaking-change inspection of adopting the reviewed values.
+   * The values are the Coordinator's own review, exactly as `adopt()` saves
+   * them; it changes no Wizard state and writes nothing.
+   */
+  inspectAdoption(): Promise<PlanBreakingChangeInspection>
+  /**
+   * Adopts the reviewed values. `approval` is the breaking-change approval
+   * when the inspection required one; without it a save that breaks the
+   * `active` Plan is refused with `PlanBreakingChangeApprovalRequiredError`,
+   * and the Wizard keeps its review and confirmation for the warning.
+   */
+  adopt(approval?: PlanBreakingChangeApproval | null): Promise<RngState>
   restart(): void
   dispose(): void
 }
@@ -555,7 +578,13 @@ export class DefaultIdentificationWizardCoordinator
     })
   }
 
-  async adopt(): Promise<RngState> {
+  /**
+   * The reviewed values `adopt()` saves, after the same preconditions: a
+   * complete, unique STEP 1 and STEP 2 review and the game-restored
+   * confirmation. The review is the only source of the values; nothing is
+   * rebuilt from the Dialog's inputs.
+   */
+  private reviewedAdoptionInput(): IdentificationAdoptionInput {
     this.assertNotDisposed()
     if (this.state.adoption.status === 'adopting') {
       throw new IdentificationWizardCoordinatorError(
@@ -586,6 +615,19 @@ export class DefaultIdentificationWizardCoordinator
         'Confirm that the game has been restored to its pre-investigation state.',
       )
     }
+    return {
+      baseSeed: review.baseSeed,
+      startingSkillCounter: review.startingSkillCounter,
+      startingGogmaCounter: review.startingGogmaCounter,
+    }
+  }
+
+  async inspectAdoption(): Promise<PlanBreakingChangeInspection> {
+    return this.dependencies.adoptionService.inspectAdoption(this.reviewedAdoptionInput())
+  }
+
+  async adopt(approval: PlanBreakingChangeApproval | null = null): Promise<RngState> {
+    const input = this.reviewedAdoptionInput()
 
     this.publish({
       ...this.state,
@@ -597,11 +639,7 @@ export class DefaultIdentificationWizardCoordinator
     })
 
     try {
-      const savedRngState = await this.dependencies.adoptionService.adopt({
-        baseSeed: review.baseSeed,
-        startingSkillCounter: review.startingSkillCounter,
-        startingGogmaCounter: review.startingGogmaCounter,
-      })
+      const savedRngState = await this.dependencies.adoptionService.adopt(input, approval)
       if (this.disposed) {
         return savedRngState
       }
@@ -616,13 +654,18 @@ export class DefaultIdentificationWizardCoordinator
       return savedRngState
     } catch (error) {
       if (!this.disposed) {
+        // A refusal for a missing approval is not a failure of the adoption:
+        // the Wizard returns to its reviewed state so the breaking-change
+        // warning can be shown and the adoption retried with the approval.
         this.publish({
           ...this.state,
-          adoption: {
-            status: 'error',
-            savedRngState: null,
-            error: { kind: 'adoption_error', error },
-          },
+          adoption: error instanceof PlanBreakingChangeApprovalRequiredError
+            ? createIdleAdoptionState()
+            : {
+                status: 'error',
+                savedRngState: null,
+                error: { kind: 'adoption_error', error },
+              },
         })
       }
       throw error

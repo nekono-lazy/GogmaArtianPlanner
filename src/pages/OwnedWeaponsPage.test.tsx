@@ -46,7 +46,14 @@ async function itemFor(name: string): Promise<HTMLElement> {
 
 function dependencies() {
   const save = vi.fn(async (draft: OwnedWeaponDraft) => ({ ...draft, id: crypto.randomUUID() as OwnedWeapon['id'], createdAt: 'now', updatedAt: 'now' }))
-  return { getAll: vi.fn(async (): Promise<OwnedWeapon[]> => []), getTargets: vi.fn(async () => []), save, delete: vi.fn(async () => undefined) } satisfies OwnedWeaponsPageDependencies
+  return {
+    getAll: vi.fn(async (): Promise<OwnedWeapon[]> => []),
+    getTargets: vi.fn(async () => []),
+    save,
+    inspectSave: vi.fn(async () => ({ approvalRequired: false as const })),
+    delete: vi.fn(async () => undefined),
+    inspectDelete: vi.fn(async () => ({ approvalRequired: false as const })),
+  } satisfies OwnedWeaponsPageDependencies
 }
 
 function existingWeapon(): OwnedGogmaArtianWeapon {
@@ -66,7 +73,7 @@ describe('OwnedWeaponsPage', () => {
     expect(screen.getByRole('checkbox', { name: '保護する' })).not.toBeChecked()
     await user.type(screen.getByRole('textbox', { name: /名前/ }), '登録武器')
     await user.click(screen.getByRole('button', { name: '保存' }))
-    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ name: '登録武器', status: 'unclassified', isProtected: false, restorationBonuses: expect.any(Array) }), null)
+    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ name: '登録武器', status: 'unclassified', isProtected: false, restorationBonuses: expect.any(Array) }), null, null)
     expect((deps.save.mock.calls[0][0] as OwnedWeaponDraft).restorationBonuses).toHaveLength(5)
   })
 
@@ -98,7 +105,7 @@ describe('OwnedWeaponsPage', () => {
       await user.click(screen.getByRole('button', { name: '保存' }))
       expect(deps.save).toHaveBeenCalledWith(
         expect.objectContaining({ status, isProtected }),
-        null,
+        null, null,
       )
     },
   )
@@ -112,7 +119,7 @@ describe('OwnedWeaponsPage', () => {
     await user.click(await screen.findByRole('button', { name: '編集' }))
     await user.click(screen.getByLabelText('状態')); await user.click(screen.getByRole('option', { name: '未分類' })); await user.click(screen.getByRole('button', { name: '保存' }))
     expect(confirm).not.toHaveBeenCalled()
-    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ status: 'unclassified', isProtected: true }), weapon)
+    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ status: 'unclassified', isProtected: true }), weapon, null)
     confirm.mockRestore()
   })
 
@@ -140,7 +147,7 @@ describe('OwnedWeaponsPage', () => {
     await user.click(screen.getByRole('button', { name: '保存' }))
     expect(deps.save).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'ideal', isProtected: true }),
-      weapon,
+      weapon, null,
     )
   })
 
@@ -161,7 +168,7 @@ describe('OwnedWeaponsPage', () => {
     await user.click(screen.getByRole('button', { name: '保存' }))
     expect(deps.save).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'practical', isProtected: false }),
-      weapon,
+      weapon, null,
     )
   })
 
@@ -228,7 +235,7 @@ describe('OwnedWeaponsPage', () => {
     await user.click(screen.getByRole('button', { name: '保存' }))
     expect(deps.save).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'normal', rarity: 8 }),
-      null,
+      null, null,
     )
   })
 
@@ -398,7 +405,7 @@ describe('OwnedWeaponsPage', () => {
     await user.click(screen.getByRole('button', { name: '編集' }))
     expect(screen.getByRole('combobox', { name: '復元ボーナスの種類' })).toHaveTextContent(NORMAL_SCOPE_LABEL)
     await user.click(screen.getByRole('button', { name: '保存' }))
-    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ kind: 'gogma', restorationBonusScope: 'normal_artian', restorationBonuses: inheritedBonuses }), weapon)
+    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ kind: 'gogma', restorationBonusScope: 'normal_artian', restorationBonuses: inheritedBonuses }), weapon, null)
   })
 
   it('keeps Normal Artian fixed to normal_artian with no scope selector', async () => {
@@ -411,7 +418,7 @@ describe('OwnedWeaponsPage', () => {
     expect(dialog.getByText(`復元ボーナスの種類: ${NORMAL_SCOPE_LABEL}`)).toBeInTheDocument()
     await user.type(dialog.getByRole('textbox', { name: /名前/ }), '通常')
     await user.click(dialog.getByRole('button', { name: '保存' }))
-    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ kind: 'normal', restorationBonusScope: 'normal_artian', status: null }), null)
+    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ kind: 'normal', restorationBonusScope: 'normal_artian', status: null }), null, null)
   })
 
   it('keeps a Gogma weapon inherited normal_artian scope in the list, the editor, and after a weapon type change', async () => {
@@ -518,7 +525,7 @@ describe('OwnedWeaponsPage', () => {
     expect(kind).toBeDisabled()
     expect(kind).toHaveAccessibleDescription('登録済み武器の種類は変更できません。')
     await user.click(screen.getByRole('button', { name: '保存' }))
-    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ kind: 'gogma' }), weapon)
+    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ kind: 'gogma' }), weapon, null)
     expect(await screen.findByText('所持武器を保存しました。')).toBeInTheDocument()
   })
 
@@ -550,7 +557,7 @@ describe('OwnedWeaponsPage', () => {
     const user = userEvent.setup(); const weapon = existingWeapon(); const deps = dependencies(); deps.getAll = vi.fn(async () => [weapon]); const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
     render(<OwnedWeaponsPage dependencies={deps} />)
     await user.click(await screen.findByRole('button', { name: '削除' }))
-    expect(deps.delete).toHaveBeenCalledWith(weapon.id)
+    expect(deps.delete).toHaveBeenCalledWith(weapon.id, null)
     confirm.mockRestore()
   })
 })

@@ -82,11 +82,13 @@ function fixture(initial = createInitialRngState('2026-09-01T00:00:00.000Z')) {
   let stored = initial
   const created: CoordinatorFixture[] = []
   const adoptionService: IdentificationAdoptionPort = {
+    inspectAdoption: vi.fn(async () => ({ approvalRequired: false as const })),
     adopt: vi.fn(async () => stored),
   }
   const deps: RngSetupPageDependencies = {
     ensure: vi.fn(async () => stored),
     save: vi.fn(async (state: RngState) => { stored = state; return state }),
+    inspectSave: vi.fn(async () => ({ approvalRequired: false as const })),
     getNormalCounters: vi.fn(async () => []),
     createIdentificationCoordinator: () => {
       const skillClient = new ControllableSkillClient()

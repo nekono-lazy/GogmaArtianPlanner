@@ -134,7 +134,9 @@ function dependencies(
     })),
     savePlannerResult: vi.fn(async () => createValidProductionPlan()),
     updateIntermediateStateSelection: vi.fn(async () => { throw new Error('not used in this fixture') }),
+    inspectIntermediateStateSelectionUpdate: vi.fn(async () => ({ approvalRequired: false as const })),
     deleteEntry: vi.fn(async () => undefined),
+    inspectEntryDelete: vi.fn(async () => ({ approvalRequired: false as const })),
     getRunningProductionPlan: vi.fn(async () => undefined),
     replan: unusedReplanDependencies(),
   }
@@ -736,7 +738,7 @@ describe('BuildListPage presentation', () => {
     expect(screen.queryByText(/作成リストへ登録され/)).not.toBeInTheDocument()
 
     await user.click(checkbox)
-    expect(deps.updateIntermediateStateSelection).toHaveBeenCalledWith(entry.id, defaultIntermediateStateSelection())
+    expect(deps.updateIntermediateStateSelection).toHaveBeenCalledWith(entry.id, defaultIntermediateStateSelection(), null)
     expect(await screen.findByText('途中採用する状態と改善優先を更新しました。生産計画を再作成してください。')).toBeInTheDocument()
     expect(screen.getByText('途中採用状態は未選択')).toBeInTheDocument()
 
@@ -745,7 +747,7 @@ describe('BuildListPage presentation', () => {
     expect(deps.updateIntermediateStateSelection).toHaveBeenLastCalledWith(entry.id, {
       ...defaultIntermediateStateSelection(),
       improvementPreference: 'bonus_first',
-    })
+    }, null)
   })
 
   it('keeps a failed selection save next to the Entries as an error', async () => {

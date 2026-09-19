@@ -12,6 +12,7 @@ function dependencies(initial = createInitialRngState('2026-08-29T00:00:00.000Z'
   const deps: RngSetupPageDependencies = {
     ensure: vi.fn(async () => stored),
     save: vi.fn(async (state: RngState) => { stored = state; return state }),
+    inspectSave: vi.fn(async () => ({ approvalRequired: false as const })),
     getNormalCounters: vi.fn(async () => []),
   }
   return { deps, getStored: () => stored }

@@ -26,6 +26,13 @@ import type {
   IdentificationResultClassification, IdentificationWizardCoordinator,
   IdentificationWizardErrorState, IdentificationWizardState,
 } from '../../services/rngIdentification/identificationWizardCoordinator'
+import { PlanBreakingChangeDialog } from '../execution/PlanBreakingChangeDialog'
+import { planGuardedRefusalMessage } from '../execution/planBreakingChangePresentation'
+import { usePlanBreakingChangeApproval } from '../execution/usePlanBreakingChangeApproval'
+
+/** The operation-specific line under the breaking-change warning (`docs/UI_FLOW.md` 16.3). */
+const IDENTIFICATION_PLAN_BREAKING_NOTE =
+  'Identification結果を採用すると、現在の生産計画で使用している予測位置と一致しなくなります。'
 
 const INITIAL_OBSERVATION_COUNT = 4
 const DEFAULT_COUNTER_RADIUS = 5
@@ -68,7 +75,8 @@ export interface IdentificationWizardDialogProps {
   coordinator: IdentificationWizardCoordinator
   initialRngState: RngState
   master: MasterDataRoot
-  onAdopted(state: RngState): void
+  /** The adopted RngState; `planAbandoned` when the adoption ended the `active` Plan with the user's approval. */
+  onAdopted(state: RngState, adoption: { planAbandoned: boolean }): void
   onClose(): void
 }
 
@@ -197,6 +205,11 @@ function previewApproximateRange(draft: ApproximateCounterDraft, maximum: number
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : '不明なエラーが発生しました。'
+}
+
+/** An adoption failure: a guarded-save refusal in the user's words, otherwise the error itself. */
+function adoptionErrorMessage(error: unknown): string {
+  return planGuardedRefusalMessage(error) ?? errorMessage(error)
 }
 
 function classificationAlert(classification: IdentificationResultClassification | null, step: 'skill' | 'gogma') {
@@ -482,6 +495,13 @@ export function IdentificationWizardDialog({
   const [gogmaObservations, setGogmaObservations] = useState(emptyBonusObservations)
   const [step1FormError, setStep1FormError] = useState<string | null>(null)
   const [step2FormError, setStep2FormError] = useState<string | null>(null)
+  // A refusal the Coordinator did not record itself (one raised by the
+  // read-only inspection, before any adoption started).
+  const [adoptionRefusal, setAdoptionRefusal] = useState<string | null>(null)
+  // The breaking-change warning of the adoption (`docs/UI_FLOW.md` 16.3),
+  // shown above this Dialog. Cancelling it keeps the review, the results and
+  // the game-restored confirmation exactly as they are.
+  const planGuard = usePlanBreakingChangeApproval()
 
   const authoritativeStep1Input = wizardState.skill.input
   const step2WeaponTypeId = authoritativeStep1Input?.weaponTypeId ?? weaponTypeId
@@ -496,7 +516,7 @@ export function IdentificationWizardDialog({
 
   const skillSearching = wizardState.skill.status === 'searching'
   const gogmaSearching = wizardState.gogma.status === 'searching'
-  const adopting = wizardState.adoption.status === 'adopting'
+  const adopting = wizardState.adoption.status === 'adopting' || planGuard.busy
 
   const identifySkill = async () => {
     setStep1FormError(null)
@@ -551,9 +571,22 @@ export function IdentificationWizardDialog({
   }
 
   const adopt = async () => {
+    setAdoptionRefusal(null)
     try {
-      const saved = await coordinator.adopt()
-      if (mounted.current) onAdopted(saved)
+      // The reviewed values stay the Coordinator's: the inspection and the
+      // adoption both read them there, and the approval is built from the
+      // inspection the user saw.
+      const outcome = await planGuard.run({
+        inspect: () => coordinator.inspectAdoption(),
+        apply: (approval) => coordinator.adopt(approval),
+        note: IDENTIFICATION_PLAN_BREAKING_NOTE,
+      })
+      if (!mounted.current) return
+      if (outcome.status === 'applied') {
+        onAdopted(outcome.result, { planAbandoned: outcome.planAbandoned })
+      } else if (outcome.status === 'refused' && coordinator.getState().adoption.status !== 'error') {
+        setAdoptionRefusal(outcome.message)
+      }
     } catch {
       // Coordinator publishes the failure while retaining review and confirmation.
     }
@@ -877,8 +910,11 @@ export function IdentificationWizardDialog({
               )}
               {wizardState.adoption.error && (
                 <Alert severity="error">
-                  Adoption failure: {errorMessage(wizardState.adoption.error.error)}。Reviewと復元確認を保持しています。再試行できます。
+                  Adoption failure: {adoptionErrorMessage(wizardState.adoption.error.error)}。Reviewと復元確認を保持しています。再試行できます。
                 </Alert>
+              )}
+              {adoptionRefusal !== null && wizardState.adoption.error === null && (
+                <Alert severity="error">{adoptionRefusal} Reviewと復元確認を保持しています。</Alert>
               )}
               {wizardState.adoption.status === 'adopted' && (
                 <Alert severity="success">Identification結果をRNG状態へ採用しました。</Alert>
@@ -901,6 +937,8 @@ export function IdentificationWizardDialog({
         <Button variant="outlined" sx={buttonSx} disabled={adopting} onClick={restart}>Restart</Button>
         <Button sx={buttonSx} disabled={adopting} onClick={onClose}>Close</Button>
       </DialogActions>
+      {/* Above this Dialog while it decides; a cancel returns to the review untouched. */}
+      <PlanBreakingChangeDialog controller={planGuard} />
     </Dialog>
   )
 }
