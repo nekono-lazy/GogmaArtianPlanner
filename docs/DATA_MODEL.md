@@ -2358,7 +2358,11 @@ Dexie `DATABASE_SCHEMA_VERSION = 7` とは独立して更新する。
 全置換Import / Export / 全データクリアのPersistence / Application Service基盤は実装済みである
 （`src/services/dataTransfer/importExportService.ts`、`importExportValidation.ts`）。Settings画面への接続
 （Export download、Import file picker、Import確認Dialog、全データクリア確認Dialog、Settings Storeの
-rehydrate）は未実装であり、後続PRで行う。
+rehydrate）も実装済みである（`src/pages/SettingsPage.tsx`、`src/components/settings/`、
+[UI_FLOW.md](./UI_FLOW.md) 14）。UI側はvalidation / migration / writeを再実装せず、`prepareImportJson()` の
+typed resultだけをImport可否のauthorityとし、確認後にだけ `applyImport()` を、確認後にだけ `clearAllData()` を
+呼ぶ。Import / Clear成功後はServiceが返した（Importでは `root.settings` の）AppSettingsをそのままSettings Storeへ
+hydrateし、`getOrCreateDefault()` で上書きしない。
 
 - Export（`exportRoot()` / `serializeExport()`）は全user tableを1つのread-only Dexie transactionで読み、
   `schemaVersion = 10` / `appName` をService自身が設定し、`exportedAt` は注入したclockの時刻とする。

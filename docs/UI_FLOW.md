@@ -1706,6 +1706,28 @@ Import制約。
 - 確認ダイアログを必須にする
 - クリア後は初期状態へ戻る
 
+実装状況（Settings UI接続済み、[DATA_MODEL.md](./DATA_MODEL.md) 15.3）。
+
+- Settings画面の「データ管理」sectionにバックアップ（データをエクスポート）、復元（データをインポート）、
+  初期化（全データを削除）を置く。既存の表示設定（Debug Mode）とバージョン情報は維持する
+- Exportは `ImportExportService.serializeExport()` の結果をブラウザ側でJSON Blobとしてdownloadする
+  （object URLは使用後にrelease）。失敗（`export_state_invalid` / `transaction_failed` / 予期しない失敗）は
+  日本語で表示し、validation issueは有界のscroll領域に列挙する。Exportはデータを変更しない
+- Importはfile input（`.json` / `application/json` を補助的に受け付ける）で選んだファイル本文を
+  `prepareImportJson()` へ渡し、その結果だけをauthorityとする。`invalid_json` / `invalid_import` は
+  確認Dialogを開かず、`applyImport()` を呼ばず、現在データを変更しない。成功したrootは全置換の確認Dialog
+  （現在データが置き換わること、必要なら実行前にExportすること）を経てから `applyImport()` へ渡す。
+  Import自体はbackup Exportを自動実行しない
+- 全データクリアは確認Dialog（元に戻せないこと、必要なら先にExportすること）を経てから
+  `clearAllData()` を呼ぶ。追加の文字入力確認は設けない
+- Import / Clear成功後は、Importでは `root.settings`、ClearではServiceが返したdefault AppSettingsを
+  そのままSettings Storeへhydrateし、Debug Modeの表示とnavigationを即時に同期する。失敗時はStoreを変更せず、
+  保存済みデータが変更されていないことを日本語で表示する
+- Export / Import準備 / Import適用 / Clearは同時に1つだけ実行でき、確認Dialogの二重submitも防ぐ。
+  Debug Mode保存中はData Transferを開始せず、Data Transfer中はDebug Mode toggleを変更できない
+- 成功表示と失敗表示は同時に残らない。Dialogは `aria-labelledby` / `aria-describedby` を持ち、
+  actionsは小画面でwrapする。PC / スマートフォン双方で主要操作を完結できる
+
 ---
 
 ## 15. Debug Details
