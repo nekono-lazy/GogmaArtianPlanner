@@ -137,6 +137,8 @@ describe('ImportExportService export', () => {
       { ...root.ownedWeapons[0], id: ownedWeaponId('owned.a') },
     ]
     root.targetWeapons = [root.targetWeapons[1], root.targetWeapons[0]]
+    // The save point snapshot names the renamed weapon, which must still exist.
+    root.executionSavePoints[0].ownedWeapons = [{ ...root.executionSavePoints[0].ownedWeapons[0], id: ownedWeaponId('owned.a') }]
     const plan = root.productionPlans[0]
     plan.steps = [
       { ...plan.steps[0], id: 'step.fixture.b' as never, order: 1 },

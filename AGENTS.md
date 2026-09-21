@@ -3760,13 +3760,18 @@ contract:
   Entry-paired Target equal to that Entry's own `targetWeaponId` as Plan generation and
   the Plan start effect derive it, ExecutionHistory `planId` / `planStepId`,
   `executionInProgress.productionPlanId` naming a running (`active` / `stale`) Plan,
-  `completedByProductionPlanId`, `validateExecutionSavePointReferences()` plus the save
-  point's Plan being running and its snapshot Plan's selected Entries and
-  Plan-dependent Targets existing now), and Master ID existence. A Plan-registered
-  future OwnedWeapon ID, a Step `candidateId`, an Undo snapshot or save point snapshot
-  body (OwnedWeapon / TargetWeapon), and `BuildListEntry.candidateId` are never current
-  foreign keys; no restore-time precondition is asked, and a running Plan is never
-  required to have an in-progress weapon
+  `completedByProductionPlanId`, `validateExecutionSavePointReferences()` plus the
+  current-entity contract `prepareExecutionSavePointRestore()` requires: the save
+  point's Plan is running, its snapshot Plan is `active` (the only status a save point
+  is recorded at; the current Plan may be stale meanwhile), every
+  `savePoint.ownedWeapons` ID still exists (the restore never revives a deleted weapon;
+  the body is not compared), and its snapshot Plan's selected Entries and
+  Plan-dependent Targets exist now), and Master ID existence. A Plan-registered future
+  OwnedWeapon ID, a Step `candidateId`, an Undo snapshot body, a Plan-independent
+  Target inside `savePoint.targetWeapons`, and `BuildListEntry.candidateId` are never
+  current foreign keys; no restore-time precondition (CalculationContext, executable
+  Step, expected state, scope completeness, history boundary) is asked, and a running
+  Plan is never required to have an in-progress weapon
 - Master ID validation is existence only, never the save-time
   `validateOwnedWeaponMasterReferences()` / `validateTargetWeaponMasterReferences()`:
   a stored bonus outside the Production availability (Bow / Poison + Element) is

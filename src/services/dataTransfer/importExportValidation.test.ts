@@ -698,14 +698,69 @@ describe('validateExportRootForFullReplacement', () => {
       expectRejected(root, 'executionSavePoints[0].productionPlan.dependentTargetWeaponIds', 'invalid_reference')
     })
 
-    it('never reads the snapshot OwnedWeapon / TargetWeapon bodies as current foreign keys', () => {
-      // A Plan-independent Target that preferred a scope weapon at the save
-      // point, and a scope weapon body, both exist only inside the snapshot.
+    it('A: rejects a snapshot OwnedWeapon whose ID no longer exists in the current collection', () => {
+      // The restore never revives a deleted weapon, so such a save point could
+      // never be restored after the Import.
       const root = dataTransferRoot()
-      const savePoint = root.executionSavePoints[0]
-      savePoint.ownedWeapons.push({ ...createValidOwnedWeapon(ownedWeaponId('owned.snapshot.only')), isProtected: false })
-      savePoint.targetWeapons.push({ ...createValidTargetWeapon(), id: targetWeaponId('target.snapshot.only'), preferredOwnedWeaponId: ownedWeaponId('owned.snapshot.only') })
+      root.executionSavePoints[0].ownedWeapons.push({ ...createValidOwnedWeapon(ownedWeaponId('owned.snapshot.only')), isProtected: false })
+      expectRejected(root, 'executionSavePoints[0].ownedWeapons[1].id', 'invalid_reference')
+    })
+
+    it('B: accepts a snapshot OwnedWeapon that exists now, without requiring the bodies to match', () => {
+      const root = dataTransferRoot()
+      const current = { ...createValidOwnedWeapon(ownedWeaponId('owned.snapshot.current')), isProtected: false, name: 'renamed since the save point', status: 'ideal' as const }
+      root.ownedWeapons.push(current)
+      root.executionSavePoints[0].ownedWeapons.push({ ...current, name: 'as recorded', status: 'unclassified', executionInProgress: null })
       expect(validate(root).issues).toEqual([])
+    })
+
+    it('C: accepts an active current Plan with an active snapshot Plan', () => {
+      const root = dataTransferRoot()
+      expect(root.productionPlans[0].status).toBe('active')
+      expect(root.executionSavePoints[0].productionPlan.status).toBe('active')
+      expect(validate(root).issues).toEqual([])
+    })
+
+    it('D: accepts a stale current Plan with an active snapshot Plan', () => {
+      // The Plan became stale after the save point was recorded; returning to
+      // that active moment is exactly what the restore is for.
+      const root = dataTransferRoot()
+      root.productionPlans[0].status = 'stale'
+      root.productionPlans[0].recalculationReasons = ['rng_state_changed']
+      root.executionHistory[0].undoSnapshot.productionPlanBefore = { ...root.productionPlans[0] }
+      expect(root.executionSavePoints[0].productionPlan.status).toBe('active')
+      expect(validate(root).issues).toEqual([])
+    })
+
+    it.each(['stale', 'draft', 'completed', 'abandoned'] as const)('E: rejects a %s snapshot Plan', (status) => {
+      const root = dataTransferRoot()
+      const snapshotPlan = root.executionSavePoints[0].productionPlan
+      snapshotPlan.status = status
+      snapshotPlan.recalculationReasons = status === 'stale' ? ['rng_state_changed'] : []
+      snapshotPlan.abandonmentReason = status === 'abandoned' ? 'user_abandoned' : null
+      snapshotPlan.abandonedAt = status === 'abandoned' ? DOMAIN_FIXTURE_TIME : null
+      snapshotPlan.completedAt = status === 'completed' ? DOMAIN_FIXTURE_TIME : null
+      if (status === 'completed') {
+        snapshotPlan.currentStepId = null
+        snapshotPlan.steps = [{ ...snapshotPlan.steps[0], isCompleted: true, completedAt: DOMAIN_FIXTURE_TIME }]
+      }
+      expectRejected(root, 'executionSavePoints[0].productionPlan.status', 'invalid_state')
+    })
+
+    it('F: accepts a Plan-independent snapshot Target that was deleted since', () => {
+      // A Target preferring a scope weapon at the save point exists only inside
+      // the snapshot now; the restore does not revive it, so its absence is not
+      // an Import refusal.
+      const root = dataTransferRoot()
+      root.executionSavePoints[0].targetWeapons.push({ ...createValidTargetWeapon(), id: targetWeaponId('target.snapshot.only'), preferredOwnedWeaponId: ownedWeaponId('owned.fixture.a') })
+      expect(root.targetWeapons.some(({ id }) => id === 'target.snapshot.only')).toBe(false)
+      expect(validate(root).issues).toEqual([])
+    })
+
+    it('G: still rejects a Plan-dependent Target the snapshot Plan needs', () => {
+      const root = dataTransferRoot()
+      root.executionSavePoints[0].productionPlan.steps[0].progressedTargetWeaponIds = [targetWeaponId('target.missing')]
+      expectRejected(root, 'executionSavePoints[0].productionPlan.dependentTargetWeaponIds', 'invalid_reference')
     })
   })
 

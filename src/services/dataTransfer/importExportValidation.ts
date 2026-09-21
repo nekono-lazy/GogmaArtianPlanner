@@ -304,20 +304,31 @@ function productionPlanReferenceIssues(
 
 /**
  * The current-collection references of one game save point beyond
- * `validateExecutionSavePointReferences()` (`docs/DATA_MODEL.md` 12.1): the
- * save point belongs to a running (active / stale) Plan - it is recorded only
- * for an active Plan and deleted when the Plan completes or is abandoned - and
- * the entities the restored snapshot Plan needs still exist: its selected
- * BuildListEntries and its Plan-dependent Targets, judged by the same
- * authorities the restore uses. The snapshot's own OwnedWeapon / TargetWeapon
- * bodies are past state, never current foreign keys, and no restore-time
- * precondition (CalculationContext, executable Step, scope completeness) is
- * asked here.
+ * `validateExecutionSavePointReferences()` (`docs/DATA_MODEL.md` 12.1,
+ * `docs/PLANNER_SPEC.md` 16.9), exactly the current-entity contract
+ * `prepareExecutionSavePointRestore()` requires before it writes:
+ *
+ * - the save point belongs to a running (active / stale) Plan - it is
+ *   recorded only for an active Plan and deleted when the Plan completes or
+ *   is abandoned
+ * - the snapshot Plan is `active`, the only status a save point can be
+ *   recorded at; the current top-level Plan may be stale meanwhile
+ * - every snapshot OwnedWeapon ID still exists, because the restore never
+ *   revives a deleted weapon; the snapshot body itself is past state and is
+ *   not compared with the current body
+ * - the snapshot Plan's selected BuildListEntries and Plan-dependent Targets
+ *   (`collectProductionPlanDependentTargetWeaponIds()`) still exist
+ *
+ * A Plan-independent Target inside `savePoint.targetWeapons` is not a current
+ * foreign key: the restore simply does not revive it. No restore-time
+ * precondition (CalculationContext, executable Step, expected state, scope
+ * completeness, history boundary) is asked here.
  */
 function executionSavePointScopeIssues(
   savePoint: ExecutionSavePoint,
   path: string,
   buildListEntries: readonly BuildListEntry[],
+  ownedWeaponIds: ReadonlySet<string>,
   targetIds: ReadonlySet<string>,
   planById: ReadonlyMap<string, ProductionPlan>,
 ): DomainValidationIssue[] {
@@ -326,8 +337,27 @@ function executionSavePointScopeIssues(
   if (plan !== undefined && !isRunningProductionPlanStatus(plan.status)) {
     issues.push(issue(`${path}.productionPlanId`, 'invalid_state', `ゲーム内セーブ地点は実行中（active / stale）の生産計画にだけ存在できます: ${plan.id} は ${plan.status} です`))
   }
+  // Every snapshot OwnedWeapon must still exist: the restore refuses to revive
+  // a weapon the user deleted (`docs/DATA_MODEL.md` 12.1), so an Import that
+  // lacks one would leave a save point that can never be restored. Only the ID
+  // is required here; the body is the snapshot's own past state.
+  if (Array.isArray(savePoint.ownedWeapons)) {
+    savePoint.ownedWeapons.forEach((weapon, index) => {
+      const weaponId = isRecord(weapon) ? weapon.id : undefined
+      if (typeof weaponId !== 'string' || !ownedWeaponIds.has(weaponId)) {
+        issues.push(issue(`${path}.ownedWeapons[${index}].id`, 'invalid_reference', `ゲーム内セーブ地点が保持する所持武器が存在しません: ${String(weaponId)}`))
+      }
+    })
+  }
   const snapshotPlan = savePoint.productionPlan
   if (!isRecord(snapshotPlan)) return issues
+  // The snapshot Plan is the Plan as it was when the user recorded the save
+  // point, which is allowed only while the Plan is active (12.1); the current
+  // top-level Plan may have become stale since, which is exactly the state a
+  // restore returns from.
+  if (snapshotPlan.status !== 'active') {
+    issues.push(issue(`${path}.productionPlan.status`, 'invalid_state', `ゲーム内セーブ地点の生産計画snapshotはactiveでなければなりません: ${String(snapshotPlan.status)}`))
+  }
   const entryIds = idSet(buildListEntries)
   if (Array.isArray(snapshotPlan.selectedBuildListEntryIds)) {
     snapshotPlan.selectedBuildListEntryIds.forEach((entryId, index) => {
@@ -420,7 +450,7 @@ function referenceIssues(root: ExportRoot): DomainValidationIssue[] {
     issues.push(...productionPlanReferenceIssues(plan, `productionPlans[${index}]`, root.buildListEntries, targetIds))
   })
   root.executionSavePoints.forEach((savePoint, index) => {
-    issues.push(...executionSavePointScopeIssues(savePoint, `executionSavePoints[${index}]`, root.buildListEntries, targetIds, planById))
+    issues.push(...executionSavePointScopeIssues(savePoint, `executionSavePoints[${index}]`, root.buildListEntries, ownedWeaponIds, targetIds, planById))
   })
   root.executionHistory.forEach((history, index) => {
     const path = `executionHistory[${index}]`

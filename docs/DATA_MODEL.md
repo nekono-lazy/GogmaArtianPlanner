@@ -2382,11 +2382,14 @@ rehydrate）は未実装であり、後続PRで行う。
   （Plan生成 / Plan開始効果と同じ導出）、ExecutionHistoryの `planId` / `planStepId`、
   `executionInProgress.productionPlanId` が実行中（active / stale）Planであること、
   `completedByProductionPlanId`、ゲーム内セーブ地点参照とそのPlanが実行中であること、セーブ地点のsnapshot Planが
-  必要とする `selectedBuildListEntryIds` のEntryとPlan依存Targetが現在存在すること）、現在Masterに存在する
-  Master ID。Plan / PlanStepが持つ将来登録されるOwnedWeapon ID、PlanStepの `candidateId`、Undo Snapshot /
-  セーブ地点snapshot内の過去body（OwnedWeapon / TargetWeapon）はcurrent FKとして扱わず、BuildListEntryの
-  作成元BuildCandidate recordも要求しない。復元時固有の前提条件（CalculationContext、実行可能Step、scope完全性）
-  はImportへ持ち込まない。実行中Planに作成中OwnedWeaponの存在を要求しない
+  `active` であること（記録できるのはactive時だけ。current PlanはstaleでもよいのはRestoreと同じ）、
+  `savePoint.ownedWeapons` の全IDが現在存在すること（Restoreは削除済み武器を復活させないため。bodyの一致は
+  要求しない）、snapshot Planが必要とする `selectedBuildListEntryIds` のEntryとPlan依存Targetが現在存在すること）、
+  現在Masterに存在するMaster ID。Plan / PlanStepが持つ将来登録されるOwnedWeapon ID、PlanStepの `candidateId`、
+  Undo Snapshot内の過去body、セーブ地点snapshot内のPlan非依存TargetはcurrentFKとして扱わず、BuildListEntryの
+  作成元BuildCandidate recordも要求しない。復元時固有の前提条件（CalculationContext、実行可能Step、
+  expected state一致、scope完全性の再計算、ExecutionHistory boundary）はImportへ持ち込まない。実行中Planに
+  作成中OwnedWeaponの存在を要求しない
 - Master ID検証は存在確認だけであり、Production抽選availability（7.1）は判定しない。旧UIで保存できた
   availability外の復元ボーナスはImportで受理し内容を変えない（non-destructive load）。Candidate snapshotの
   Route起点OwnedWeaponはIDの存在だけを確認し、save時の起点適格性（Normal kind / 非保護）は要求しない。
