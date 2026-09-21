@@ -158,8 +158,9 @@ export class AppDatabase extends Dexie {
     // (record schema version 2) and NormalArtianCounter (`docs/DATA_MODEL.md`
     // 6.1 / 6.2 / 14.2). No table or index changes. Every RngState /
     // NormalArtianCounter body is filled: the `rngState` and
-    // `normalArtianCounters` tables, the bodies inside a game save point and the
-    // bodies inside an ExecutionHistory Undo snapshot. The value written is
+    // `normalArtianCounters` tables, the bodies inside a game save point, the
+    // bodies inside an ExecutionHistory Undo snapshot and the bodies of the save
+    // point an Undo snapshot holds as `executionSavePointBefore`. The value written is
     // always `null` - "no formal Identification adoption is recorded" - because
     // no earlier runtime recorded when an adoption happened, and `updatedAt`,
     // `lastObservedAt` or a `source === 'observation'` never prove one. It is
@@ -191,6 +192,14 @@ export class AppDatabase extends Dexie {
         if (!isPlainRecord(snapshot)) return
         fillRngState(snapshot.rngStateBefore)
         fillCounters(snapshot.normalCountersBefore)
+        // The save point a terminal transition deleted into the Undo snapshot
+        // carries its own RngState / Normal Counter bodies; they are filled
+        // exactly like the snapshot's own.
+        const savePointBefore = snapshot.executionSavePointBefore
+        if (isPlainRecord(savePointBefore)) {
+          fillRngState(savePointBefore.rngState)
+          fillCounters(savePointBefore.normalCounters)
+        }
       })
     })
   }

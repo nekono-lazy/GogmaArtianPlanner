@@ -81,6 +81,22 @@ describe('Identification provenance persistence migration (Dexie v6 -> v7)', () 
     const snapshot = history.undoSnapshot as Record<string, unknown>
     snapshot.rngStateBefore = schema6RngState()
     snapshot.normalCountersBefore = [schema6Counter()]
+    // A compromise finish deleted the Plan's save point into the Undo snapshot
+    // before the provenance existed: its bodies are schema 6 too.
+    const nestedSavePoint = {
+      id: executionSavePointIdForPlan(plan.id),
+      productionPlanId: plan.id,
+      lastExecutionHistoryId: null,
+      rngState: schema6RngState(),
+      normalCounters: [schema6Counter()],
+      ownedWeapons: [],
+      targetWeapons: [],
+      productionPlan: plan,
+      recordedAt: DOMAIN_FIXTURE_TIME,
+    }
+    history.planId = plan.id
+    ;(snapshot.productionPlanBefore as Record<string, unknown>).id = plan.id
+    snapshot.executionSavePointBefore = nestedSavePoint
     const savePoint = {
       id: executionSavePointIdForPlan(plan.id),
       productionPlanId: plan.id,
@@ -120,7 +136,12 @@ describe('Identification provenance persistence migration (Dexie v6 -> v7)', () 
       const migratedHistory = await database.executionHistory.get(history.id as string)
       expect(migratedHistory?.undoSnapshot.rngStateBefore).toEqual({ ...snapshot.rngStateBefore as object, schemaVersion: 2, lastIdentifiedAt: null })
       expect(migratedHistory?.undoSnapshot.normalCountersBefore).toEqual([{ ...(snapshot.normalCountersBefore as object[])[0], lastIdentifiedAt: null }])
-      expect(validateExecutionHistory(migratedHistory as never).isValid).toBe(true)
+      // The save point nested inside the Undo snapshot is filled the same way.
+      const migratedNested = migratedHistory?.undoSnapshot.executionSavePointBefore
+      expect(migratedNested?.rngState).toEqual({ ...nestedSavePoint.rngState, schemaVersion: 2, lastIdentifiedAt: null })
+      expect(migratedNested?.normalCounters).toEqual([{ ...nestedSavePoint.normalCounters[0], lastIdentifiedAt: null }])
+      expect(validateExecutionSavePoint(migratedNested as never).isValid).toBe(true)
+      expect(validateExecutionHistory(migratedHistory as never).issues).toEqual([])
 
       const migratedSavePoint = await database.executionSavePoints.get(savePoint.id)
       expect(migratedSavePoint?.rngState).toEqual({ ...savePoint.rngState, schemaVersion: 2, lastIdentifiedAt: null })

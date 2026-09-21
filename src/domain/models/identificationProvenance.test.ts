@@ -11,6 +11,7 @@ import { createExpectedPlanState, createSearchStateHash } from './hashing'
 import {
   RNG_STATE_SCHEMA_VERSION,
   executionSavePointIdForPlan,
+  validateExecutionHistory,
   validateNormalArtianCounter,
   validateRngState,
   type ExecutionSavePoint,
@@ -100,8 +101,22 @@ function schema9Root(): ExportRootV9 {
         ...history.undoSnapshot,
         rngStateBefore: stripProvenance(history.undoSnapshot.rngStateBefore as unknown as Record<string, unknown>, true) as never,
         normalCountersBefore: history.undoSnapshot.normalCountersBefore.map((counter) => stripProvenance(counter as unknown as Record<string, unknown>) as never),
+        // A compromise finish deleted the Plan's save point into the Undo
+        // snapshot before the provenance existed: its bodies are schema 9 too.
+        executionSavePointBefore: schema9SavePointBefore(),
       },
     }],
+  }
+}
+
+/** A save point inside an Undo snapshot as schema 9 stored it: no provenance anywhere. */
+function schema9SavePointBefore(): ExecutionSavePoint {
+  const savePoint = savePointFor()
+  return {
+    ...savePoint,
+    lastExecutionHistoryId: null,
+    rngState: stripProvenance(savePoint.rngState as unknown as Record<string, unknown>, true) as never,
+    normalCounters: savePoint.normalCounters.map((counter) => stripProvenance(counter as unknown as Record<string, unknown>) as never),
   }
 }
 
@@ -221,6 +236,12 @@ describe('Export schema 9 -> 10', () => {
     expect(migrated.root.executionSavePoints[0].normalCounters).toEqual([{ ...createValidNormalArtianCounter(), lastIdentifiedAt: null }])
     expect(migrated.root.executionHistory[0].undoSnapshot.rngStateBefore).toEqual({ ...createValidRngState(), lastIdentifiedAt: null })
     expect(migrated.root.executionHistory[0].undoSnapshot.normalCountersBefore).toEqual([{ ...createValidNormalArtianCounter(), lastIdentifiedAt: null }])
+    // The save point nested inside the Undo snapshot is filled exactly the same way.
+    const nested = migrated.root.executionHistory[0].undoSnapshot.executionSavePointBefore
+    expect(nested?.rngState).toEqual({ ...createValidRngState(), lastIdentifiedAt: null })
+    expect(nested?.rngState.schemaVersion).toBe(2)
+    expect(nested?.normalCounters).toEqual([{ ...createValidNormalArtianCounter(), lastIdentifiedAt: null }])
+    expect(validateExecutionHistory(migrated.root.executionHistory[0]).issues).toEqual([])
     // Every other entity is untouched.
     expect(migrated.root.productionPlans).toEqual(legacy.productionPlans)
     expect(migrated.root.buildListEntries).toEqual(legacy.buildListEntries)
@@ -252,6 +273,25 @@ describe('Export schema 9 -> 10', () => {
     expect(migrateExportRootV9ToV10({
       ...legacy,
       executionHistory: [{ ...history, undoSnapshot: { ...history.undoSnapshot, rngStateBefore: { ...history.undoSnapshot.rngStateBefore, lastIdentifiedAt: null } } }],
+    }).ok).toBe(false)
+    // The save point nested inside the Undo snapshot is judged the same way.
+    const nested = history.undoSnapshot.executionSavePointBefore as ExecutionSavePoint
+    expect(migrateExportRootV9ToV10({
+      ...legacy,
+      executionHistory: [{ ...history, undoSnapshot: { ...history.undoSnapshot, executionSavePointBefore: { ...nested, rngState: { ...nested.rngState, lastIdentifiedAt: null } } } }],
+    }).ok).toBe(false)
+    expect(migrateExportRootV9ToV10({
+      ...legacy,
+      executionHistory: [{ ...history, undoSnapshot: { ...history.undoSnapshot, executionSavePointBefore: { ...nested, rngState: { ...nested.rngState, schemaVersion: 2 } } } }],
+    }).ok).toBe(false)
+    expect(migrateExportRootV9ToV10({
+      ...legacy,
+      executionHistory: [{ ...history, undoSnapshot: { ...history.undoSnapshot, executionSavePointBefore: { ...nested, normalCounters: [{ ...nested.normalCounters[0], lastIdentifiedAt: IDENTIFIED_AT }] } } }],
+    }).ok).toBe(false)
+    // A malformed nested save point is refused without throwing.
+    expect(migrateExportRootV9ToV10({
+      ...legacy,
+      executionHistory: [{ ...history, undoSnapshot: { ...history.undoSnapshot, executionSavePointBefore: 'x' as never } }],
     }).ok).toBe(false)
     // A schema 10 root claiming schema 9 is refused the same way.
     expect(prepareExportRootForImport({ ...exportRoot(), schemaVersion: 9 }).ok).toBe(false)

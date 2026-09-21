@@ -445,7 +445,8 @@ export function migrateExportRootV8ToV9(
  * Pure migration from Export schema 9 to 10 (`docs/DATA_MODEL.md` 15.3): the
  * Identification provenance `lastIdentifiedAt` is added as `null` to the
  * RngState (record schema version 2) and to every NormalArtianCounter, in the
- * root, in every game save point and in every ExecutionHistory Undo snapshot.
+ * root, in every game save point, in every ExecutionHistory Undo snapshot and
+ * in the save point an Undo snapshot holds as `executionSavePointBefore`.
  * `null` is the only value a schema 9 record can state - no adoption time was
  * recorded - and is never backfilled from `updatedAt`, `lastObservedAt` or a
  * `source === 'observation'`. A schema 9 body that already carries the field,
@@ -506,6 +507,19 @@ export function migrateExportRootV9ToV10(
     }
     checkRngState(snapshot.rngStateBefore, `${path}.rngStateBefore`)
     checkCounters(snapshot.normalCountersBefore, `${path}.normalCountersBefore`)
+    // The save point a terminal transition deleted into the Undo snapshot
+    // carries its own RngState / Normal Counter bodies (`docs/DATA_MODEL.md`
+    // 12); they are schema 9 bodies exactly like the snapshot's own.
+    const savePointBefore = snapshot.executionSavePointBefore
+    if (savePointBefore !== null && savePointBefore !== undefined) {
+      const savePointPath = `${path}.executionSavePointBefore`
+      if (!isRecord(savePointBefore)) {
+        issues.push(structureIssue(savePointPath, `${savePointPath} must be an object or null.`))
+        return
+      }
+      checkRngState(savePointBefore.rngState, `${savePointPath}.rngState`)
+      checkCounters(savePointBefore.normalCounters, `${savePointPath}.normalCounters`)
+    }
   })
   if (issues.length > 0) return { ok: false, issues }
 
@@ -537,6 +551,11 @@ export function migrateExportRootV9ToV10(
     const snapshot = (history as unknown as Record<string, unknown>).undoSnapshot as Record<string, unknown>
     fillRngState(snapshot.rngStateBefore)
     fillCounters(snapshot.normalCountersBefore)
+    const savePointBefore = snapshot.executionSavePointBefore
+    if (isRecord(savePointBefore)) {
+      fillRngState(savePointBefore.rngState)
+      fillCounters(savePointBefore.normalCounters)
+    }
   })
   return { ok: true, root: { ...migrated, schemaVersion: EXPORT_SCHEMA_VERSION } }
 }
