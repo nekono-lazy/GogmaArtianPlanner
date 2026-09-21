@@ -9,6 +9,20 @@ export type RepositoryErrorCode =
   | 'reference_conflict'
   | 'active_plan_conflict'
   /**
+   * At most one not-yet-started `draft` ProductionPlan exists
+   * (`docs/DATA_MODEL.md` 11.1); a second, different Draft is refused at the
+   * ordinary persistence boundary. The Planner save replaces the previous
+   * Draft atomically instead (PLANNER_SPEC 9.2.15).
+   */
+  | 'draft_plan_conflict'
+  /**
+   * A ProductionPlan ID the collection already holds - whatever that Plan's
+   * status, the current Draft included. A newly calculated Plan carries a
+   * fresh ID, so a colliding key names a different Plan and is never silently
+   * replaced (`ProductionPlanRepository.assertProductionPlanIdFree()`).
+   */
+  | 'production_plan_id_conflict'
+  /**
    * Save-time current state no longer matches the Planner calculation's own
    * snapshot (PLANNER_SPEC 9.2.15). Nothing was written, and the caller can
    * recover by re-running the Planner over the current state.

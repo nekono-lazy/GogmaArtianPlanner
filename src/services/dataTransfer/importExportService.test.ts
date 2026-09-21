@@ -8,10 +8,12 @@ import type {
   ExportRootV8,
   ExportRootV9,
   OwnedWeapon,
+  ProductionPlan,
 } from '../../domain/models/publicTypes'
 import { createDefaultAppSettings } from '../../domain/models/publicTypes'
 import {
   DOMAIN_FIXTURE_TIME,
+  buildListEntryId,
   createValidBuildListEntry,
   createValidOwnedWeapon,
   createValidProductionPlan,
@@ -21,6 +23,7 @@ import {
   targetWeaponId,
 } from '../../test/fixtures/domainData'
 import {
+  completedFixtureTarget,
   dataTransferMaster,
   dataTransferRoot,
   dataTransferSettings,
@@ -117,13 +120,13 @@ async function expectUnchanged(database: AppDatabase, run: () => Promise<unknown
 }
 
 describe('ImportExportService export', () => {
-  it('builds the schema 10 root from every table with the service-owned version, app name and clock', () => withDatabase(async (database) => {
+  it('builds the schema 11 root from every table with the service-owned version, app name and clock', () => withDatabase(async (database) => {
     const root = dataTransferRoot()
     await seedRoot(database, root)
 
     const exported = await service(database).exportRoot()
 
-    expect(exported.schemaVersion).toBe(10)
+    expect(exported.schemaVersion).toBe(11)
     expect(exported.appName).toBe('mh-wilds-gogma-artian-planner')
     expect(exported.exportedAt).toBe(NOW)
     expect(without(exported, ['exportedAt'])).toEqual(without(root, ['exportedAt']))
@@ -231,7 +234,7 @@ describe('ImportExportService export', () => {
 
     const json = await service(database).serializeExport()
 
-    expect(json.startsWith('{\n  "schemaVersion": 10,')).toBe(true)
+    expect(json.startsWith('{\n  "schemaVersion": 11,')).toBe(true)
     expect(JSON.parse(json)).toEqual(await service(database).exportRoot())
   }))
 })
@@ -239,13 +242,13 @@ describe('ImportExportService export', () => {
 describe('ImportExportService prepare', () => {
   it.each<[string, string]>([
     ['an empty string', ''],
-    ['broken JSON', '{"schemaVersion": 10,'],
+    ['broken JSON', '{"schemaVersion": 11,'],
     ['an array root', '[]'],
     ['a null root', 'null'],
     ['a string root', '"root"'],
     ['another app', JSON.stringify({ ...dataTransferRoot(), appName: 'other-app' })],
     ['an unsupported older schema', JSON.stringify({ ...dataTransferRoot(), schemaVersion: 5 })],
-    ['an unsupported newer schema', JSON.stringify({ ...dataTransferRoot(), schemaVersion: 11 })],
+    ['an unsupported newer schema', JSON.stringify({ ...dataTransferRoot(), schemaVersion: 12 })],
   ])('rejects %s with a typed result instead of throwing', (_label, json) => withDatabase(async (database) => {
     const result = service(database).prepareImportJson(json)
     expect(result.ok).toBe(false)
@@ -346,16 +349,16 @@ describe('ImportExportService prepare', () => {
       } as unknown as ExportRootV6
     }
 
-    it('reads schema 10 as it is', () => withDatabase(async (database) => {
+    it('reads schema 11 as it is', () => withDatabase(async (database) => {
       const result = service(database).prepareImportRoot(dataTransferRoot())
       expect(result.ok).toBe(true)
     }))
 
-    it('migrates schema 9 to 10 with null provenance and record schema 2, inferring no adoption time', () => withDatabase(async (database) => {
+    it('migrates schema 9 through 10 to 11 with null provenance and record schema 2, inferring no adoption time', () => withDatabase(async (database) => {
       const result = service(database).prepareImportRoot(schema9Root())
       expect(result.ok, JSON.stringify(result)).toBe(true)
       if (!result.ok) return
-      expect(result.root.schemaVersion).toBe(10)
+      expect(result.root.schemaVersion).toBe(11)
       expect(result.root.rngState).toMatchObject({ schemaVersion: 2, lastIdentifiedAt: null })
       expect(result.root.normalArtianCounters[0].lastIdentifiedAt).toBeNull()
       expect(result.root.executionSavePoints[0].rngState.lastIdentifiedAt).toBeNull()
@@ -367,11 +370,11 @@ describe('ImportExportService prepare', () => {
       expect(nested?.normalCounters[0].lastIdentifiedAt).toBeNull()
     }))
 
-    it('migrates schema 8 through 9 to 10, filling only the non-terminal lifecycle nulls', () => withDatabase(async (database) => {
+    it('migrates schema 8 through 9 and 10 to 11, filling only the non-terminal lifecycle nulls', () => withDatabase(async (database) => {
       const result = service(database).prepareImportRoot(schema8Root())
       expect(result.ok, JSON.stringify(result)).toBe(true)
       if (!result.ok) return
-      expect(result.root.schemaVersion).toBe(10)
+      expect(result.root.schemaVersion).toBe(11)
       expect(result.root.productionPlans[0]).toMatchObject({ status: 'active', abandonmentReason: null, abandonedAt: null, completedAt: null })
       expect(result.root.executionSavePoints[0].productionPlan.abandonmentReason).toBeNull()
     }))
@@ -384,11 +387,11 @@ describe('ImportExportService prepare', () => {
       expect(service(database).prepareImportRoot(withHistory)).toMatchObject({ ok: false, code: 'invalid_import' })
     }))
 
-    it('migrates schema 7 through 8, 9 and 10 without adding executionEffects to its Plans', () => withDatabase(async (database) => {
+    it('migrates schema 7 through 8, 9, 10 and 11 without adding executionEffects to its Plans', () => withDatabase(async (database) => {
       const result = service(database).prepareImportRoot(schema7Root())
       expect(result.ok, JSON.stringify(result)).toBe(true)
       if (!result.ok) return
-      expect(result.root.schemaVersion).toBe(10)
+      expect(result.root.schemaVersion).toBe(11)
       expect(result.root.productionPlans[0].steps[0].executionEffects).toBeUndefined()
       expect(result.root.productionPlans[0].baseSnapshot.dependentTargetDefinitionsHash).toBeUndefined()
     }))
@@ -397,7 +400,7 @@ describe('ImportExportService prepare', () => {
       const result = service(database).prepareImportRoot(schema6Root())
       expect(result.ok, JSON.stringify(result)).toBe(true)
       if (!result.ok) return
-      expect(result.root.schemaVersion).toBe(10)
+      expect(result.root.schemaVersion).toBe(11)
       expect(result.root.ownedWeapons[0].executionInProgress).toBeNull()
       expect(result.root.targetWeapons[0]).toMatchObject({ lifecycleStatus: 'active', completedAt: null, completedByProductionPlanId: null })
       expect(result.root.executionSavePoints).toEqual([])
@@ -602,4 +605,120 @@ describe('ImportExportService round-trip', () => {
 
     expect(await fullDump(destination)).toEqual(before)
   })))
+})
+
+describe('ImportExportService Draft lifecycle (schema 11)', () => {
+  /** The Entry ID of the reported Export failure: an ordinary `createBuildListEntry()` ID. */
+  const MISSING_ENTRY = buildListEntryId('build-list.fnv1a32-7ab0e079')
+
+  /** A Draft whose every Entry reference names an Entry the Build List no longer holds. */
+  function divergentDraft(id = 'plan.draft.divergent'): ProductionPlan {
+    const draft = createValidProductionPlan()
+    return {
+      ...draft,
+      id: productionPlanId(id),
+      selectedBuildListEntryIds: [MISSING_ENTRY],
+      steps: draft.steps.map((step) => ({ ...step, buildListEntryId: MISSING_ENTRY })),
+    }
+  }
+
+  function breakActivePlanReferences(root: ExportRoot) {
+    const plan = root.productionPlans[0]
+    expect(plan.status).toBe('active')
+    plan.selectedBuildListEntryIds = [MISSING_ENTRY]
+    plan.steps = plan.steps.map((step) => ({ ...step, buildListEntryId: MISSING_ENTRY }))
+    root.executionHistory[0].undoSnapshot.productionPlanBefore = { ...plan }
+  }
+
+  it('exports a database whose Draft names Build List Entries that no longer exist (the reported failure)', () => withDatabase(async (database) => {
+    const root = dataTransferRoot()
+    root.productionPlans.push(divergentDraft())
+    expect(root.buildListEntries.some(({ id }) => id === MISSING_ENTRY)).toBe(false)
+    await seedRoot(database, root)
+
+    const exported = await service(database).exportRoot()
+
+    expect(exported.schemaVersion).toBe(11)
+    expect(exported.productionPlans.map(({ id }) => id)).toEqual(['plan.draft.divergent', 'plan.fixture.a', 'plan.fixture.abandoned'])
+    expect(exported.productionPlans[0]).toEqual(divergentDraft())
+    expect(exported.buildListEntries).toEqual(root.buildListEntries)
+  }))
+
+  it('still refuses to export an active Plan with the same broken references', () => withDatabase(async (database) => {
+    const root = dataTransferRoot()
+    breakActivePlanReferences(root)
+    await seedRoot(database, root)
+    const before = await fullDump(database)
+    let failure: unknown
+    try {
+      await service(database).exportRoot()
+    } catch (error: unknown) {
+      failure = error
+    }
+    expect(failure).toBeInstanceOf(DataTransferError)
+    if (!(failure instanceof DataTransferError)) return
+    expect(failure.code).toBe('export_state_invalid')
+    expect(failure.validationIssues.map(({ path }) => path)).toContain('productionPlans[0].selectedBuildListEntryIds[0]')
+    expect(failure.validationIssues.map(({ path }) => path)).toContain('productionPlans[0].steps[0].buildListEntryId')
+    expect(await fullDump(database)).toEqual(before)
+  }))
+
+  it('reads a schema 11 root holding one Draft as it is and keeps the Draft', () => withDatabase(async (database) => {
+    const root = dataTransferRoot()
+    root.productionPlans.unshift(divergentDraft())
+    const prepared = service(database).prepareImportRoot(root)
+    expect(prepared.ok, JSON.stringify(prepared)).toBe(true)
+    if (!prepared.ok) return
+    expect(prepared.root.productionPlans).toEqual(root.productionPlans)
+  }))
+
+  it('imports a schema 11 backup holding one Draft whose Entries are gone, leaving its start to the runtime', () => withDatabase(async (database) => {
+    const draft = divergentDraft()
+    const root = dataTransferRoot({
+      productionPlans: [draft],
+      executionHistory: [],
+      executionSavePoints: [],
+      ownedWeapons: [{ ...createValidOwnedWeapon(), isProtected: false, executionInProgress: null }],
+      targetWeapons: [createValidTargetWeapon(), completedFixtureTarget('target.fixture.completed', null)],
+    })
+    const s = service(database)
+    const prepared = s.prepareImportRoot(root)
+    expect(prepared.ok, JSON.stringify(prepared)).toBe(true)
+    if (!prepared.ok) return
+    await s.applyImport(prepared.root)
+    expect(await database.productionPlans.get(draft.id)).toEqual(draft)
+    expect(await database.buildListEntries.toArray()).toEqual(root.buildListEntries)
+  }))
+
+  it('rejects a schema 11 root holding two Drafts as invalid_import', () => withDatabase(async (database) => {
+    const root = dataTransferRoot()
+    root.productionPlans.push(divergentDraft('plan.draft.one'), divergentDraft('plan.draft.two'))
+    const prepared = service(database).prepareImportRoot(root)
+    expect(prepared).toMatchObject({ ok: false, code: 'invalid_import' })
+    if (prepared.ok) return
+    expect(prepared.issues.map(({ path }) => path)).toEqual(['productionPlans[3].status'])
+  }))
+
+  it('migrates a schema 10 backup by deleting every Draft and keeping the other Plans and the Entries they named', () => withDatabase(async (database) => {
+    const current = dataTransferRoot()
+    const [active, abandoned] = current.productionPlans
+    const legacy = {
+      ...current,
+      schemaVersion: 10,
+      productionPlans: [divergentDraft('plan.draft.old.a'), active, divergentDraft('plan.draft.old.b'), abandoned],
+    }
+    const s = service(database)
+    const prepared = s.prepareImportRoot(legacy)
+    expect(prepared.ok, JSON.stringify(prepared)).toBe(true)
+    if (!prepared.ok) return
+    expect(prepared.root.schemaVersion).toBe(11)
+    expect(prepared.root.productionPlans).toEqual([active, abandoned])
+    expect(prepared.root.buildListEntries).toEqual(current.buildListEntries)
+
+    await s.applyImport(prepared.root)
+    const exported = await s.exportRoot()
+    expect(exported.schemaVersion).toBe(11)
+    expect(exported.productionPlans.map(({ id }) => id)).toEqual(['plan.fixture.a', 'plan.fixture.abandoned'])
+    expect(await database.productionPlans.where('status').equals('draft').count()).toBe(0)
+  }))
 })

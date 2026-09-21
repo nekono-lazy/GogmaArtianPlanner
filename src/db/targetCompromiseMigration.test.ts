@@ -35,7 +35,7 @@ describe('fail-closed Target compromise migration', () => {
       buildListEntries: 'id, candidateId, targetWeaponId, searchStateHash, isStale, createdAt',
       productionPlans: 'id, status, createdAt, updatedAt', executionHistory: 'id, planId, planStepId, createdAt', settings: 'id',
     })
-    const candidate = createValidBuildCandidate(), entry = createValidBuildListEntry(), plan = createValidProductionPlan()
+    const candidate = createValidBuildCandidate(), entry = createValidBuildListEntry(), plan = { ...createValidProductionPlan(), status: 'active' as const }
     const practical = createValidOwnedWeapon()
     const legacy = legacyTarget()
     await old.table('targetWeapons').put(legacy)
@@ -48,7 +48,7 @@ describe('fail-closed Target compromise migration', () => {
     try {
       await db.open()
       const migrated = await db.targetWeapons.get(legacy.id)
-      expect(db.verno).toBe(7)
+      expect(db.verno).toBe(8)
       // v1 -> v2 -> v3 -> v4 -> v5 runs in order: the compromise migration first,
       // then the preferred owned weapon field, which starts unset for every
       // Target, then the owned Gogma status rename.

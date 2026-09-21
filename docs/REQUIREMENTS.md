@@ -729,6 +729,20 @@ PlanStepは物理操作ごとに、その確定で適用する実行時の効果
 
 staleは計画が壊れたことの検出、abandonedはユーザーが意図して終えたことを表し、区別して記録する。
 
+作成プランのcollectionは次の件数制約を持つ（[DATA_MODEL.md](./DATA_MODEL.md) 11.1）。
+
+```text
+draft                 0..1（現在の下書き）
+active + stale 合計   0..1（現在の実行中プラン）
+completed / abandoned 0..N（履歴）
+```
+
+draftの上限は実行中プランの上限とは独立した不変条件であり、draftと実行中プランの同時存在は禁止しない。
+Plannerの新しい結果を保存するときは、旧draftの削除・生成された作成リスト項目の追加・新draftの追加を
+同一transactionで行い、保存が完全に成功した場合だけ旧draftが置き換わる。保存に失敗した場合は旧draftを
+維持する。draftの置換では、旧draftが参照していた作成リスト項目・作成候補・目標武器を削除しない。
+実行中・完了・破棄済みのプランも新draft保存で削除しない。
+
 ---
 
 ## 25. 実行ナビ
@@ -908,6 +922,8 @@ Execution Navigatorの結果一致（観測値入力と操作0 Idealの完成確
 - データクリアには確認を必要とする
 - 実行ナビに関係する永続状態（目標武器の完了状態、所持武器の作成中状態、計画の終了理由、PlanStepの実行時効果、ゲーム内セーブ地点、拡張した操作履歴とUndo Snapshot）もExport / Importの対象とする
 - PCからスマートフォンへの移行など端末間の同期機能は追加せず、既存のExport / Importで扱う
+- 作成プランのbody内にある作成リスト項目・プラン依存目標武器の参照を現在データへの参照として要求するのは、実行中（active）のプランだけとする。未開始（draft）、続行不可（stale）、完了・破棄済みのプランは、作成リストや目標武器を後から整理していてもExport / Importを拒否しない。プランの開始・再計画・復元の可否はそれぞれの実行時の検証が判断する。ゲーム内セーブ地点の復元に必要な参照は緩めない（[DATA_MODEL.md](./DATA_MODEL.md) 15.2）
+- ExportおよびImportで扱う未開始（draft）のプランは最大1件とし、2件以上を含むデータは拒否する。旧形式のExportに蓄積していたdraftは、どれが現在の下書きか判断できないため、Import時にすべて削除する
 
 ---
 
@@ -1159,3 +1175,5 @@ ProductionPlanは内容を保持したまま `calculation_context_changed` でfa
 Dexie `DATABASE_SCHEMA_VERSION = 4` とRNG Engine versionは変更しない。
 
 実行ナビのライフサイクル（Step単位のCounter確定、中断 / 再開、現在地点と計画完了後予測からの検索、実行中の目標追加と再計画の試算・採用、計画の破棄、ゲーム内セーブ地点、作成中武器の所持武器管理、目標武器との作成中紐付け、妥協checkpointと妥協品での終了、理想品完成と目標武器の完了、確保（reserve）の実行上の役割変更、武器切替案内、想定外結果とRNG再同定、Undo対象の拡張、優先起点とstalenessの分離、blind作成とCounter進行用通常アーティア）を25章と[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16章で正式仕様として確定した。これは仕様確定であり、コード実装、Dexie migration、Export schema変更、CalculationContext version bumpは後続の実装PRで行う（32章）。Production RNG semantics、Candidate Search algorithm、direct observation / category-level adoption / reference parity / unverifiedの確認状態の境界は変更していない。Plannerについては、探索内部の確保（reserve）をRouteの最後の物理unitの直後に適用することと、完成時に既存武器も保護することだけを探索契約として定めた（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.3）。
+
+作成プランの下書き（draft）lifecycle整理（24章、[DATA_MODEL.md](./DATA_MODEL.md) 11.1 / 14.2 / 14.5 / 15、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.15 / 16.2）は、Persistence / backup lifecycle契約の変更である。通常draftをtop-level collectionで最大1件とし、Planner結果の保存で旧draftを同一transaction内でatomicに置換し、Export / Importの作成プランbody内参照をlifecycle-aware（activeだけcurrent参照を要求）にした。旧契約で蓄積したdraftはどれが現在の下書きか判断できないため、Dexie v7 -> v8 upgradeとExport schema 10 -> 11 migrationでdraftを全件削除し、他のプラン・作成リスト項目・その他のデータは変更しない。これに合わせて `DATABASE_SCHEMA_VERSION` を8、`ExportRoot.schemaVersion` を11へ更新した。Planner計算semantics、RNG semantics、Build resultのCalculationContext semanticsは変わらないため、`CURRENT_CALCULATION_APP_SCHEMA_VERSION`（13）、`RngState.schemaVersion`（2）、`AppSettings.schemaVersion`（1）、`PRODUCTION_RNG_ENGINE_VERSION`、Master dataVersionは変更していない。

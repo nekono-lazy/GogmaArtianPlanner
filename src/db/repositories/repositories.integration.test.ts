@@ -506,3 +506,86 @@ describe('ReferenceFinder', () => {
       ])
     }))
 })
+
+describe('ProductionPlanRepository Draft invariant (DATA_MODEL 11.1)', () => {
+  it('adds the first Draft and refuses a second, different Draft through add and put', () =>
+    withDatabase(async (database) => {
+      const repository = new ProductionPlanRepository(database)
+      const first = planWithIdentity('plan.draft.first', 'step.draft.first')
+      const second = planWithIdentity('plan.draft.second', 'step.draft.second')
+      await repository.addProductionPlan(first)
+      expect(await repository.getDraftProductionPlan()).toEqual(first)
+      await expect(repository.addProductionPlan(second)).rejects.toMatchObject({
+        code: 'draft_plan_conflict',
+      })
+      await expect(repository.putProductionPlan(second)).rejects.toMatchObject({
+        code: 'draft_plan_conflict',
+      })
+      expect(await database.productionPlans.where('status').equals('draft').count()).toBe(1)
+      expect(await database.productionPlans.get(second.id)).toBeUndefined()
+    }))
+
+  it('allows updating the stored Draft under its own ID', () =>
+    withDatabase(async (database) => {
+      const repository = new ProductionPlanRepository(database)
+      const draft = planWithIdentity('plan.draft.same', 'step.draft.same')
+      await repository.addProductionPlan(draft)
+      const updated = { ...draft, updatedAt: '2026-09-22T00:00:00.000Z' }
+      await repository.putProductionPlan(updated)
+      expect(await repository.getDraftProductionPlan()).toEqual(updated)
+      expect(await database.productionPlans.count()).toBe(1)
+    }))
+
+  it('keeps the running-Plan invariant independent: a Draft beside an active Plan is accepted', () =>
+    withDatabase(async (database) => {
+      const repository = new ProductionPlanRepository(database)
+      const active = planWithIdentity('plan.running', 'step.running')
+      active.status = 'active'
+      const draft = planWithIdentity('plan.draft.beside', 'step.draft.beside')
+      await repository.putProductionPlan(active)
+      await repository.addProductionPlan(draft)
+      expect(await repository.getRunningProductionPlan()).toEqual(active)
+      expect(await repository.getDraftProductionPlan()).toEqual(draft)
+      // The running-Plan guard is unchanged.
+      const second = planWithIdentity('plan.running.second', 'step.running.second')
+      second.status = 'stale'
+      await expect(repository.putProductionPlan(second)).rejects.toMatchObject({ code: 'active_plan_conflict' })
+    }))
+
+  it('fails closed when a legacy collection still holds two Drafts', () =>
+    withDatabase(async (database) => {
+      const repository = new ProductionPlanRepository(database)
+      // Written around the repository: the state the v8 upgrade removes.
+      await database.productionPlans.bulkPut([
+        planWithIdentity('plan.legacy.a', 'step.legacy.a'),
+        planWithIdentity('plan.legacy.b', 'step.legacy.b'),
+      ])
+      await expect(repository.getDraftProductionPlan()).rejects.toMatchObject({ code: 'draft_plan_conflict' })
+      await expect(repository.addProductionPlan(planWithIdentity('plan.legacy.c', 'step.legacy.c'))).rejects.toMatchObject({ code: 'draft_plan_conflict' })
+    }))
+
+  it('deleteDraftProductionPlans deletes only Drafts and returns their IDs', () =>
+    withDatabase(async (database) => {
+      const repository = new ProductionPlanRepository(database)
+      const active = planWithIdentity('plan.running', 'step.running')
+      active.status = 'active'
+      const completed: ProductionPlan = {
+        ...planWithIdentity('plan.done', 'step.done'),
+        status: 'completed',
+        completedAt: DOMAIN_FIXTURE_TIME,
+        currentStepId: null,
+      }
+      completed.steps = completed.steps.map((step) => ({ ...step, isCompleted: true, completedAt: DOMAIN_FIXTURE_TIME }))
+      await database.productionPlans.bulkPut([
+        planWithIdentity('plan.legacy.a', 'step.legacy.a'),
+        planWithIdentity('plan.legacy.b', 'step.legacy.b'),
+        active,
+        completed,
+      ])
+      const deleted = await repository.deleteDraftProductionPlans()
+      expect(deleted.sort()).toEqual(['plan.legacy.a', 'plan.legacy.b'])
+      expect((await database.productionPlans.toArray()).map(({ id }) => id).sort()).toEqual(['plan.done', 'plan.running'])
+      expect(await repository.getDraftProductionPlan()).toBeUndefined()
+      expect(await repository.deleteDraftProductionPlans()).toEqual([])
+    }))
+})

@@ -15,6 +15,14 @@ import { runInRepositoryTransaction } from '../transaction'
 /** At most one Plan may be running at a time (`docs/PLANNER_SPEC.md` 16.2). */
 const RUNNING_PLAN_STATUSES: readonly ProductionPlanStatus[] = ['active', 'stale']
 
+/**
+ * At most one not-yet-started Draft exists at a time (`docs/DATA_MODEL.md`
+ * 11.1): the current Draft, which the next Planner save replaces atomically.
+ * This is independent of the running-Plan rule - a Draft beside an `active` /
+ * `stale` Plan is legal.
+ */
+const DRAFT_PLAN_STATUS: ProductionPlanStatus = 'draft'
+
 export function isRunningProductionPlanStatus(status: ProductionPlanStatus): boolean {
   return RUNNING_PLAN_STATUSES.includes(status)
 }
@@ -73,11 +81,34 @@ export class ProductionPlanRepository {
     return running[0]
   }
 
+  /**
+   * The one not-yet-started Draft (`docs/DATA_MODEL.md` 11.1), or `undefined`.
+   * More than one fails closed.
+   */
+  async getDraftProductionPlan(): Promise<ProductionPlan | undefined> {
+    const drafts = await this.readDraftPlans()
+    if (drafts.length > 1) {
+      throw new RepositoryError(
+        'draft_plan_conflict',
+        'Persistence contains more than one draft ProductionPlan.',
+      )
+    }
+    return drafts[0]
+  }
+
   /** Reads every running Plan in the current transaction zone. */
   private readRunningPlans(): Promise<ProductionPlan[]> {
     return this.database.productionPlans
       .where('status')
       .anyOf(RUNNING_PLAN_STATUSES)
+      .toArray()
+  }
+
+  /** Reads every Draft in the current transaction zone. */
+  private readDraftPlans(): Promise<ProductionPlan[]> {
+    return this.database.productionPlans
+      .where('status')
+      .equals(DRAFT_PLAN_STATUS)
       .toArray()
   }
 
@@ -93,11 +124,50 @@ export class ProductionPlanRepository {
   }
 
   /**
+   * Writing a Draft while a *different* Draft exists is refused. Updating the
+   * stored Draft under its own ID is not a second Draft. The Planner save does
+   * not hit this guard: it deletes the previous Draft first, in the same
+   * transaction (`deleteDraftProductionPlans()`).
+   */
+  private async assertNoOtherDraftPlan(plan: ProductionPlan): Promise<void> {
+    if (plan.status !== DRAFT_PLAN_STATUS) return
+    const drafts = await this.readDraftPlans()
+    if (drafts.some(({ id }) => id !== plan.id)) {
+      throw new RepositoryError(
+        'draft_plan_conflict',
+        'Another draft ProductionPlan already exists.',
+      )
+    }
+  }
+
+  /**
+   * Refuses a Plan ID the collection already holds, in the current transaction
+   * zone.
+   *
+   * A newly calculated Plan carries a fresh ID, so an ID already stored -
+   * whatever that Plan's status, the current Draft included - names a
+   * different Plan and is never silently replaced. The Planner save calls this
+   * before its Draft replacement (`deleteDraftProductionPlans()`), so a Draft
+   * that happens to hold the new Plan's ID is refused rather than deleted and
+   * re-added under the same key.
+   */
+  async assertProductionPlanIdFree(id: ProductionPlanId): Promise<void> {
+    if ((await this.database.productionPlans.get(id)) !== undefined) {
+      throw new RepositoryError(
+        'production_plan_id_conflict',
+        `ProductionPlan '${id}' already exists and is never replaced by a new Plan.`,
+      )
+    }
+  }
+
+  /**
    * Inserts a Plan that must not already exist.
    *
    * A newly calculated Plan carries a fresh ID, so a colliding key means the
-   * stored Plan is a different Plan; it is never silently replaced. The active
-   * Plan guard and Domain validation are the same authorities `put` uses.
+   * stored Plan is a different Plan; it is never silently replaced
+   * (`assertProductionPlanIdFree()`, a typed refusal ahead of the Dexie key
+   * constraint). The running Plan guard, the Draft guard and Domain validation
+   * are the same authorities `put` uses.
    */
   addProductionPlan(plan: ProductionPlan): Promise<ProductionPlan> {
     assertRepositoryValidation('ProductionPlan', validateProductionPlan(plan))
@@ -105,7 +175,9 @@ export class ProductionPlanRepository {
       this.database,
       [this.database.productionPlans],
       async () => {
+        await this.assertProductionPlanIdFree(plan.id)
         await this.assertNoOtherRunningPlan(plan)
+        await this.assertNoOtherDraftPlan(plan)
         await this.database.productionPlans.add(plan)
         return plan
       },
@@ -119,10 +191,27 @@ export class ProductionPlanRepository {
       [this.database.productionPlans],
       async () => {
         await this.assertNoOtherRunningPlan(plan)
+        await this.assertNoOtherDraftPlan(plan)
         await this.database.productionPlans.put(plan)
         return plan
       },
     )
+  }
+
+  /**
+   * Deletes every Draft in the current transaction zone and returns their IDs.
+   *
+   * This is the atomic replacement step of the Planner save
+   * (`docs/PLANNER_SPEC.md` 9.2.15): the caller adds the new Draft in the same
+   * transaction, so a failed save rolls the deletion back and the previous
+   * Draft survives. Only Draft records are deleted; `active` / `stale` /
+   * `completed` / `abandoned` Plans and the BuildListEntries a Draft referenced
+   * are never touched, because a Draft owns no Entry.
+   */
+  async deleteDraftProductionPlans(): Promise<ProductionPlanId[]> {
+    const ids = (await this.readDraftPlans()).map(({ id }) => id)
+    await this.database.productionPlans.bulkDelete(ids)
+    return ids
   }
 
   deleteProductionPlan(id: ProductionPlanId): Promise<void> {
@@ -176,6 +265,7 @@ export class ProductionPlanRepository {
               'Switching active Plans requires the previous Plan replacement.',
             )
           }
+          await this.assertNoOtherDraftPlan(previousActivePlanReplacement)
           await this.database.productionPlans.put(previousActivePlanReplacement)
         }
         const activated: ProductionPlan = {

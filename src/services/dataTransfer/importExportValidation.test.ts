@@ -605,7 +605,6 @@ describe('validateExportRootForFullReplacement', () => {
       ['one active Plan', ['active']],
       ['one stale Plan', ['stale']],
       ['several terminal Plans beside one active Plan', ['completed', 'abandoned', 'completed', 'active', 'abandoned']],
-      ['several draft Plans', ['draft', 'draft', 'active']],
       ['no running Plan', ['draft', 'completed', 'abandoned']],
     ])('accepts %s', (_label, statuses) => {
       const root = dataTransferRoot()
@@ -772,5 +771,158 @@ describe('validateExportRootForFullReplacement', () => {
     history.undoSnapshot.productionPlanBefore = { ...createValidProductionPlan(), id: DATA_TRANSFER_PLAN_ID, status: 'active' }
     root.executionHistory.push(history)
     expect(validate(root).issues).toEqual([])
+  })
+
+  describe('Draft collection invariant', () => {
+    type Status = 'draft' | 'active' | 'stale' | 'completed' | 'abandoned'
+
+    /** Only the given Plans, with nothing else of the fixture bound to a Plan. */
+    function withPlans(statuses: Status[]): ExportRoot {
+      const root = dataTransferRoot()
+      root.executionSavePoints = []
+      root.executionHistory = []
+      root.ownedWeapons[0].executionInProgress = null
+      root.targetWeapons[1] = completedFixtureTarget('target.fixture.completed', null)
+      root.productionPlans = statuses.map((status, index) => ({
+        ...createValidProductionPlan(),
+        id: productionPlanId(`plan.fixture.${index}`),
+        status,
+        abandonmentReason: status === 'abandoned' ? 'user_abandoned' : null,
+        abandonedAt: status === 'abandoned' ? DOMAIN_FIXTURE_TIME : null,
+        completedAt: status === 'completed' ? DOMAIN_FIXTURE_TIME : null,
+        recalculationReasons: status === 'stale' ? ['rng_state_changed'] : [],
+        currentStepId: status === 'completed' ? null : 'step.fixture.a' as never,
+        steps: status === 'completed'
+          ? [{ ...createValidProductionPlan().steps[0], isCompleted: true, completedAt: DOMAIN_FIXTURE_TIME }]
+          : createValidProductionPlan().steps,
+      }))
+      return root
+    }
+
+    it.each<[string, Status[]]>([
+      ['no Draft', ['active', 'completed']],
+      ['one Draft alone', ['draft']],
+      // The Draft invariant is independent of the running-Plan invariant: a
+      // Draft beside the running Plan is legal (DATA_MODEL 11.1).
+      ['one Draft beside an active Plan', ['draft', 'active']],
+      ['one Draft beside a stale Plan', ['stale', 'draft']],
+      ['one Draft beside terminal Plans', ['completed', 'draft', 'abandoned']],
+    ])('accepts %s', (_label, statuses) => {
+      expect(validate(withPlans(statuses)).issues).toEqual([])
+    })
+
+    it('rejects two Drafts with invalid_state at the second one', () => {
+      const root = withPlans(['draft', 'draft'])
+      const result = validate(root)
+      expect(result.isValid).toBe(false)
+      expect(result.issues).toEqual([{
+        path: 'productionPlans[1].status',
+        code: 'invalid_state',
+        message: '未開始（draft）の生産計画は同時に1件までです: plan.fixture.0 と plan.fixture.1',
+      }])
+    })
+
+    it('names every extra Draft beside a running Plan, and only the Drafts', () => {
+      const result = validate(withPlans(['draft', 'active', 'draft', 'completed', 'draft']))
+      expect(result.isValid).toBe(false)
+      expect(result.issues.map(({ path }) => path)).toEqual(['productionPlans[2].status', 'productionPlans[4].status'])
+    })
+  })
+
+  describe('lifecycle-aware ProductionPlan references', () => {
+    type Status = 'draft' | 'active' | 'stale' | 'completed' | 'abandoned'
+    /** The Entry ID of the reported Export failure: an ordinary `createBuildListEntry()` ID. */
+    const MISSING_ENTRY = buildListEntryId('build-list.fnv1a32-7ab0e079')
+    const MISSING_TARGET = targetWeaponId('target.missing')
+
+    /** The fixture's one top-level Plan at the given status, with nothing bound to it that the status forbids. */
+    function rootWithPlan(status: Status): ExportRoot {
+      const root = dataTransferRoot()
+      root.productionPlans = [root.productionPlans[0]]
+      const plan = root.productionPlans[0]
+      plan.status = status
+      plan.abandonmentReason = status === 'abandoned' ? 'user_abandoned' : null
+      plan.abandonedAt = status === 'abandoned' ? DOMAIN_FIXTURE_TIME : null
+      plan.completedAt = status === 'completed' ? DOMAIN_FIXTURE_TIME : null
+      plan.recalculationReasons = status === 'stale' ? ['rng_state_changed'] : []
+      if (status === 'completed') {
+        plan.currentStepId = null
+        plan.steps = [{ ...plan.steps[0], isCompleted: true, completedAt: DOMAIN_FIXTURE_TIME }]
+      }
+      root.executionSavePoints = []
+      root.executionHistory = []
+      root.ownedWeapons[0].executionInProgress = null
+      return root
+    }
+
+    /** Every Entry reference of the Plan names an Entry that is not in `root.buildListEntries`. */
+    function breakEntryReferences(root: ExportRoot) {
+      const plan = root.productionPlans[0]
+      plan.selectedBuildListEntryIds = [MISSING_ENTRY]
+      plan.steps = plan.steps.map((step) => ({ ...step, buildListEntryId: MISSING_ENTRY }))
+      expect(root.buildListEntries.some(({ id }) => id === MISSING_ENTRY)).toBe(false)
+    }
+
+    /** The Plan depends on a Target that is not in `root.targetWeapons`. */
+    function breakTargetReference(root: ExportRoot) {
+      root.productionPlans[0].steps[0].progressedTargetWeaponIds = [MISSING_TARGET]
+    }
+
+    it('regression: a Draft naming Build List Entries that no longer exist is not an invalid backup', () => {
+      // The reported failure: every `selectedBuildListEntryIds[*]` and
+      // `steps[*].buildListEntryId` of a not-yet-started Draft was refused as a
+      // missing current Entry, so the whole Export failed.
+      const root = rootWithPlan('draft')
+      breakEntryReferences(root)
+      expect(validate(root).issues).toEqual([])
+    })
+
+    it.each<Status>(['draft', 'stale', 'completed', 'abandoned'])('does not read the Entry references of a %s Plan as current foreign keys', (status) => {
+      const root = rootWithPlan(status)
+      breakEntryReferences(root)
+      expect(validate(root).issues).toEqual([])
+    })
+
+    it('still rejects the missing Entry references of an active Plan', () => {
+      const root = rootWithPlan('active')
+      breakEntryReferences(root)
+      expectRejected(root, 'productionPlans[0].selectedBuildListEntryIds[0]', 'invalid_reference')
+      expectRejected(root, 'productionPlans[0].steps[0].buildListEntryId', 'invalid_reference')
+    })
+
+    it.each<Status>(['draft', 'stale', 'completed', 'abandoned'])('does not read the dependent Target of a %s Plan as a current foreign key', (status) => {
+      const root = rootWithPlan(status)
+      breakTargetReference(root)
+      expect(validate(root).issues).toEqual([])
+    })
+
+    it('still rejects a missing dependent Target of an active Plan', () => {
+      const root = rootWithPlan('active')
+      breakTargetReference(root)
+      expectRejected(root, 'productionPlans[0].dependentTargetWeaponIds', 'invalid_reference')
+    })
+
+    it('still validates the Plan body itself whatever its lifecycle', () => {
+      const root = rootWithPlan('draft')
+      breakEntryReferences(root)
+      ;(root.productionPlans[0] as { currentStepId: string }).currentStepId = 'step.missing'
+      expectRejected(root, /^productionPlans\[0\]/)
+    })
+
+    it('keeps the restore-required references of a game save point on a stale Plan', () => {
+      // The top-level stale Plan may have lost its Entries, but the snapshot
+      // Plan inside its save point must still find what a restore needs.
+      const root = dataTransferRoot()
+      root.productionPlans = [root.productionPlans[0]]
+      root.productionPlans[0].status = 'stale'
+      root.productionPlans[0].recalculationReasons = ['rng_state_changed']
+      root.executionHistory[0].undoSnapshot.productionPlanBefore = { ...root.productionPlans[0] }
+      breakEntryReferences(root)
+      expect(validate(root).issues).toEqual([])
+      root.executionSavePoints[0].productionPlan.selectedBuildListEntryIds = [MISSING_ENTRY]
+      const result = validate(root)
+      expect(result.issues.map(({ path }) => path)).toEqual(['executionSavePoints[0].productionPlan.selectedBuildListEntryIds[0]'])
+      expect(result.issues[0].code).toBe('invalid_reference')
+    })
   })
 })

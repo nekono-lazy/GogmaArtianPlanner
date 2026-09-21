@@ -34,6 +34,16 @@ export function isTerminalProductionPlanRecord(plan: Record<string, unknown>): b
 }
 
 /**
+ * Whether an untrusted Plan record is a not-yet-started `draft`
+ * (`docs/DATA_MODEL.md` 11.1). Shared by the Dexie v7 -> v8 upgrade and the
+ * Export schema 10 -> 11 migration, which both delete every accumulated Draft
+ * of the old contract instead of guessing which one the user meant.
+ */
+export function isDraftProductionPlanRecord(plan: Record<string, unknown>): boolean {
+  return plan.status === 'draft'
+}
+
+/**
  * Gives a Plan record written before the lifecycle metadata existed its
  * deterministic `null`s (`docs/DATA_MODEL.md` 11.1, 14.2).
  *

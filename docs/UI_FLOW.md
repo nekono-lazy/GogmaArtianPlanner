@@ -1316,8 +1316,11 @@ resolutionを無視したordinary Planを保存しない。
 上記warningが無い結果だけ、既存
 `plannerResultPersistenceService.savePlannerOrchestrationResult()` でgenerated BuildListEntryと
 ProductionPlanをatomic保存する。新しいPlanが保存された場合はその
-`/plans/:planId` へ遷移する。Planが生成されない場合または保存失敗時は旧Planを黙って置換・削除
-せず、B10の判断だけで旧Planを自動削除しない。
+`/plans/:planId` へ遷移する。Planが生成されない場合または保存失敗時は旧Draftを置換・削除しない。
+保存が完全に成功した場合だけ、Persistence serviceが同一transaction内で旧Draftを新Draftへatomicに
+置換する（通常Draftは最大1件、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.15 /
+[DATA_MODEL.md](./DATA_MODEL.md) 11.1）。B10が独自の判断で旧Planを削除することはなく、実行中・
+完了・破棄済みのPlanは新Draft保存で削除されない。
 
 B10の編集対象は原則 `status === 'draft'` とする。`stale` はwhat-if / Conflict固定を継続せず
 既存の再計算へ誘導する。`active` / `completed` / `abandoned` PlanをB10操作で書き換えない。
@@ -1698,7 +1701,10 @@ Import制約。
 - 実行中の生産計画、ゲーム内セーブ地点、作成中状態、目標武器の完了状態もExport / Importの対象である
   （[DATA_MODEL.md](./DATA_MODEL.md) 15.1）。PCからスマートフォンへの移行などの端末間同期機能は追加せず、
   このExport / Importで行う
-- schemaVersion不一致は拒否する
+- 未対応の `schemaVersion` は拒否する。対応する旧 `schemaVersion`（6..10）は
+  [DATA_MODEL.md](./DATA_MODEL.md) 15.3の純粋migrationを順に通してcurrent schema（11）へ変換してから
+  検証する。current schemaのrootはそのまま読む。migrationの内容と拒否条件は15.3をauthorityとし、
+  UI側で再実装しない
 - Master ID不一致は拒否または明示警告する
 
 全データクリア。
@@ -2087,7 +2093,7 @@ export interface SearchUiState {
 
 - ExportボタンでJSONを出力できる
 - ExportしたJSONをImportできる
-- 不正schemaVersionを拒否する
+- 未対応のschemaVersionを拒否し、対応する旧schemaVersionはmigrationを通してImportできる
 - Master ID不一致を検出する
 
 ## 19.4 Responsive Test

@@ -42,8 +42,11 @@ import { isRunningProductionPlanStatus } from '../../db/repositories/productionP
  *   BuildListEntry, AppSettings) and the Target Ideal => Practical containment
  * - primary ID uniqueness inside every top-level collection
  * - the running-Plan collection invariant (at most one active / stale Plan)
+ *   and the independent Draft collection invariant (at most one draft Plan)
  * - the formal persisted references between collections, including every
- *   BuildListEntry / TargetWeapon reference of a ProductionPlan, the Plan
+ *   BuildListEntry / TargetWeapon reference of an `active` ProductionPlan
+ *   (a `draft` / `stale` / `completed` / `abandoned` Plan body is not read as
+ *   current foreign keys, see `productionPlanReferenceIssues()`), the Plan
  *   lifecycle an in-progress weapon or a game save point may name, and the
  *   current entities a game save point's snapshot Plan needs
  * - the collection-level Target preference contract
@@ -250,7 +253,11 @@ function planBuildListEntryReferences(plan: ProductionPlan, path: string): PlanB
 
 /**
  * The BuildListEntry / TargetWeapon references of one persisted Plan against
- * the current collections (`docs/DATA_MODEL.md` 15.2 step 7):
+ * the current collections (`docs/DATA_MODEL.md` 15.2 step 7), judged by the
+ * Plan's lifecycle:
+ *
+ * Only a top-level `active` Plan is checked, because only it must be executable
+ * against the current collections now:
  *
  * - every BuildListEntry the Plan names exists
  * - where the Plan names an Entry together with a Target, that Target is the
@@ -259,6 +266,20 @@ function planBuildListEntryReferences(plan: ProductionPlan, path: string): PlanB
  * - every Plan-dependent Target (`collectProductionPlanDependentTargetWeaponIds()`,
  *   the one dependent-Target authority) and every checkpoint milestone Target
  *   exists
+ *
+ * A `draft` is the Plan artifact as generated and not yet started: the Build
+ * List or the Targets may legally have changed since, and
+ * `prepareProductionPlanStart()` is the authority that refuses to start it
+ * then. A `stale` Plan can legally lose its Entries or Targets, because the
+ * Plan-breaking change guard warns for an `active` Plan only, and its replan,
+ * recovery and save point restore each re-verify what they need at runtime. A
+ * `completed` / `abandoned` Plan is history the user may tidy the Build List or
+ * the Targets behind. None of those Plan bodies is read as current foreign keys
+ * here, so a backup of such a state stays exportable and importable; their
+ * structural, Master ID, CalculationContext and lifecycle validation is
+ * unchanged. The restore-required references of a game save point
+ * (`executionSavePointScopeIssues()`) are a separate contract that this
+ * lifecycle rule never relaxes.
  *
  * A Step's `candidateId` and `ownedWeaponId` are not current foreign keys: the
  * former names the Entry snapshot's Candidate, the latter may be a weapon the
@@ -270,6 +291,7 @@ function productionPlanReferenceIssues(
   buildListEntries: readonly BuildListEntry[],
   targetIds: ReadonlySet<string>,
 ): DomainValidationIssue[] {
+  if (plan.status !== 'active') return []
   const issues: DomainValidationIssue[] = []
   const entryById = new Map(buildListEntries.map((entry) => [entry.id as string, entry]))
   planBuildListEntryReferences(plan, path).forEach((reference) => {
@@ -390,6 +412,23 @@ function runningPlanIssues(root: ExportRoot): DomainValidationIssue[] {
 }
 
 /**
+ * At most one `draft` Plan exists in the top-level collection
+ * (`docs/DATA_MODEL.md` 11.1): the current Draft, which the next Planner save
+ * replaces atomically. It is independent of the running-Plan invariant - a
+ * Draft beside an active / stale Plan is legal - and, like it, counts only
+ * `root.productionPlans`, never the Plan bodies inside an Undo snapshot or a
+ * save point.
+ */
+function draftPlanIssues(root: ExportRoot): DomainValidationIssue[] {
+  const drafts = root.productionPlans
+    .map((plan, index) => ({ plan, index }))
+    .filter(({ plan }) => plan.status === 'draft')
+  if (drafts.length <= 1) return []
+  return drafts.slice(1).map(({ plan, index }) =>
+    issue(`productionPlans[${index}].status`, 'invalid_state', `未開始（draft）の生産計画は同時に1件までです: ${drafts[0].plan.id} と ${plan.id}`))
+}
+
+/**
  * The formal persisted references between collections (`docs/DATA_MODEL.md`
  * 15.2 step 3 / 7). Only fields the specification defines as references to a
  * currently persisted entity are checked:
@@ -401,6 +440,8 @@ function runningPlanIssues(root: ExportRoot): DomainValidationIssue[] {
  * - a Plan / PlanStep may name OwnedWeapon IDs the Execution registers later
  *   (`docs/PLANNER_SPEC.md` 16.3) and an Undo snapshot holds past bodies, so
  *   neither is read as a current foreign key
+ * - the BuildListEntry / Target references inside a Plan body are current
+ *   foreign keys only for an `active` Plan (`productionPlanReferenceIssues()`)
  * - `BuildListEntry.candidateId` needs no BuildCandidate record: the snapshot
  *   is the authority and the source Candidate may have been replaced
  */
@@ -843,6 +884,7 @@ export function validateExportRootForFullReplacement(
   issues.push(
     ...guarded('', () => duplicateIdIssues(root)),
     ...guarded('productionPlans', () => runningPlanIssues(root)),
+    ...guarded('productionPlans', () => draftPlanIssues(root)),
     ...guarded('', () => referenceIssues(root)),
     ...guarded('targetWeapons', () => validateTargetPreferredOwnedWeapons(root.targetWeapons, root.ownedWeapons).issues),
   )

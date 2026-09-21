@@ -5,6 +5,7 @@ import {
   BuildListEntryRepository,
   NormalArtianCounterRepository,
   OwnedWeaponRepository,
+  ProductionPlanRepository,
   TargetWeaponRepository,
 } from '../../db/repositories'
 import type {
@@ -600,11 +601,11 @@ describe('PlannerResultPersistenceService', () => {
   it('rolls the generated Entry back when the Plan write fails', () =>
     withScenario(
       async ({ service, result, context, database, plan, storedEntryIds }) => {
-        const existing = { ...createValidProductionPlan(), id: plan.id }
+        const existing = { ...createValidProductionPlan(), id: plan.id, status: 'active' as const }
         await database.productionPlans.put(existing)
         await expect(
           service.savePlannerOrchestrationResult(result, context),
-        ).rejects.toBeInstanceOf(Error)
+        ).rejects.toMatchObject({ code: 'production_plan_id_conflict' })
         expect(await storedEntryIds()).toEqual([
           'build-list.persisted.a',
           'build-list.persisted.b',
@@ -721,4 +722,222 @@ describe('PlannerResultPersistenceService', () => {
         },
       },
     ))
+})
+
+describe('PlannerResultPersistenceService Draft replacement (DATA_MODEL 11.1 / PLANNER_SPEC 9.2.15)', () => {
+  /** A previous Draft as the old contract left it: it may name Entries the scenario database does not hold. */
+  function oldDraft(id: string): ProductionPlan {
+    return { ...createValidProductionPlan(), id: productionPlanId(id) }
+  }
+
+  function terminalPlan(id: string, status: 'completed' | 'abandoned'): ProductionPlan {
+    const base = createValidProductionPlan()
+    return {
+      ...base,
+      id: productionPlanId(id),
+      status,
+      abandonmentReason: status === 'abandoned' ? 'user_abandoned' : null,
+      abandonedAt: status === 'abandoned' ? DOMAIN_FIXTURE_TIME : null,
+      completedAt: status === 'completed' ? DOMAIN_FIXTURE_TIME : null,
+      currentStepId: status === 'completed' ? null : base.currentStepId,
+      steps: status === 'completed'
+        ? base.steps.map((step) => ({ ...step, isCompleted: true, completedAt: DOMAIN_FIXTURE_TIME }))
+        : base.steps,
+    }
+  }
+
+  const PERSISTED_ENTRY_IDS = ['build-list.persisted.a', 'build-list.persisted.b']
+
+  it('A: replaces the previous Draft with the new one and saves the generated Entries', () =>
+    withScenario(async ({ service, result, context, database, plan, storedEntryIds, storedPlanIds }) => {
+      const previous = oldDraft('plan.draft.previous')
+      await database.productionPlans.put(previous)
+
+      const saved = await service.savePlannerOrchestrationResult(result, context)
+
+      expect(saved?.id).toBe(plan.id)
+      expect(saved?.status).toBe('draft')
+      expect(await storedPlanIds()).toEqual(['plan.b8d2a.a'])
+      expect(await database.productionPlans.get(previous.id)).toBeUndefined()
+      expect(await storedEntryIds()).toEqual(['build-list.generated.0', ...PERSISTED_ENTRY_IDS])
+    }))
+
+  it('B: replaces every accumulated legacy Draft inside the one transaction', () =>
+    withScenario(async ({ service, result, context, database, storedPlanIds }) => {
+      // A state the v8 upgrade removes and the repository refuses to create;
+      // seeded around the repository to prove the replacement clears it whole.
+      await database.productionPlans.bulkPut([oldDraft('plan.draft.a'), oldDraft('plan.draft.b'), oldDraft('plan.draft.c')])
+
+      await service.savePlannerOrchestrationResult(result, context)
+
+      expect(await storedPlanIds()).toEqual(['plan.b8d2a.a'])
+      expect(await database.productionPlans.where('status').equals('draft').count()).toBe(1)
+    }))
+
+  it('C: keeps the previous Draft when the save-time validation refuses the result', () =>
+    withScenario(async ({ service, result, database, storedEntryIds, storedPlanIds }) => {
+      const previous = oldDraft('plan.draft.previous')
+      await database.productionPlans.put(previous)
+
+      await expect(
+        service.savePlannerOrchestrationResult(result, { ...result.plan!.calculationContext, rngEngineVersion: 'other-engine' }),
+      ).rejects.toMatchObject({ code: 'planner_state_changed' })
+
+      expect(await storedPlanIds()).toEqual(['plan.draft.previous'])
+      expect(await database.productionPlans.get(previous.id)).toEqual(previous)
+      expect(await storedEntryIds()).toEqual(PERSISTED_ENTRY_IDS)
+    }))
+
+  it('D: rolls the Draft deletion back when a generated Entry write fails', () =>
+    withScenario(
+      async ({ service, result, context, database, storedEntryIds, storedPlanIds }) => {
+        const previous = oldDraft('plan.draft.previous')
+        await database.productionPlans.put(previous)
+
+        await expect(service.savePlannerOrchestrationResult(result, context)).rejects.toBeInstanceOf(Error)
+
+        expect(await storedPlanIds()).toEqual(['plan.draft.previous'])
+        expect(await database.productionPlans.get(previous.id)).toEqual(previous)
+        expect(await storedEntryIds()).toEqual(PERSISTED_ENTRY_IDS)
+      },
+      {
+        generatedCount: 2,
+        createRepositories: (database) => {
+          const repositories = createPlannerResultPersistenceRepositories(database)
+          class FailingSecondWriteRepository extends BuildListEntryRepository {
+            async addBuildListEntry(entry: BuildListEntry) {
+              if (entry.id === buildListEntryId('build-list.generated.1')) {
+                throw new Error('fixture Entry write failure')
+              }
+              return super.addBuildListEntry(entry)
+            }
+          }
+          return { ...repositories, buildListEntries: new FailingSecondWriteRepository(database) }
+        },
+      },
+    ))
+
+  describe('E / G: a stored Plan already holding the new Plan ID is refused before any Draft is deleted', () => {
+    type Status = ProductionPlan['status']
+
+    function storedPlan(id: ProductionPlan['id'], status: Status): ProductionPlan {
+      const base = createValidProductionPlan()
+      return {
+        ...base,
+        id,
+        status,
+        abandonmentReason: status === 'abandoned' ? 'user_abandoned' : null,
+        abandonedAt: status === 'abandoned' ? DOMAIN_FIXTURE_TIME : null,
+        completedAt: status === 'completed' ? DOMAIN_FIXTURE_TIME : null,
+        recalculationReasons: status === 'stale' ? ['rng_state_changed'] : [],
+        currentStepId: status === 'completed' ? null : base.currentStepId,
+        steps: status === 'completed'
+          ? base.steps.map((step) => ({ ...step, isCompleted: true, completedAt: DOMAIN_FIXTURE_TIME }))
+          : base.steps,
+      }
+    }
+
+    /** Counts the Draft deletions the save attempts, so "refused before deleting" is observable, not inferred from a rollback. */
+    function countingRepositories(deletions: { count: number }) {
+      return (database: AppDatabase): PlannerResultPersistenceRepositories => {
+        class CountingProductionPlanRepository extends ProductionPlanRepository {
+          override async deleteDraftProductionPlans() {
+            deletions.count += 1
+            return super.deleteDraftProductionPlans()
+          }
+        }
+        return {
+          ...createPlannerResultPersistenceRepositories(database),
+          productionPlans: new CountingProductionPlanRepository(database),
+        }
+      }
+    }
+
+    // G is the `draft` row: the previous Draft itself holds the new Plan's ID.
+    // The Draft replacement replaces the Draft *record*; a result carrying the
+    // same ID is not the same Plan and is never accepted by deleting and
+    // re-adding under that key. The other rows keep the existing non-Draft
+    // collision refusals.
+    it.each<Status>(['draft', 'active', 'stale', 'completed', 'abandoned'])(
+      'refuses a new Plan whose ID a %s Plan already holds, keeping every Plan and Entry and deleting no Draft',
+      async (status) => {
+        const deletions = { count: 0 }
+        await withScenario(
+          async ({ service, result, context, database, plan, storedEntryIds }) => {
+            const colliding = storedPlan(plan.id, status)
+            const previous = status === 'draft' ? colliding : oldDraft('plan.draft.previous')
+            await database.productionPlans.bulkPut(status === 'draft' ? [colliding] : [previous, colliding])
+            const plansBefore = await database.productionPlans.orderBy('id').toArray()
+
+            await expect(
+              service.savePlannerOrchestrationResult(result, context),
+            ).rejects.toMatchObject({ name: 'RepositoryError', code: 'production_plan_id_conflict' })
+
+            // Refused before the replacement: no Draft deletion was even attempted.
+            expect(deletions.count).toBe(0)
+            expect(await database.productionPlans.orderBy('id').toArray()).toEqual(plansBefore)
+            expect(await database.productionPlans.get(previous.id)).toEqual(previous)
+            expect(await database.productionPlans.get(plan.id)).toEqual(colliding)
+            expect(await storedEntryIds()).toEqual(PERSISTED_ENTRY_IDS)
+          },
+          { createRepositories: countingRepositories(deletions) },
+        )
+      },
+    )
+
+    it('still replaces a previous Draft under a different ID through the same counted path', async () => {
+      const deletions = { count: 0 }
+      await withScenario(
+        async ({ service, result, context, database, storedPlanIds }) => {
+          await database.productionPlans.put(oldDraft('plan.draft.previous'))
+          await service.savePlannerOrchestrationResult(result, context)
+          expect(deletions.count).toBe(1)
+          expect(await storedPlanIds()).toEqual(['plan.b8d2a.a'])
+        },
+        { createRepositories: countingRepositories(deletions) },
+      )
+    })
+  })
+
+  it('F: deletes only Drafts - completed and abandoned Plans survive the replacement', () =>
+    withScenario(async ({ service, result, context, database, storedPlanIds }) => {
+      const completed = terminalPlan('plan.done.completed', 'completed')
+      const abandoned = terminalPlan('plan.done.abandoned', 'abandoned')
+      await database.productionPlans.bulkPut([oldDraft('plan.draft.previous'), completed, abandoned])
+
+      await service.savePlannerOrchestrationResult(result, context)
+
+      expect(await storedPlanIds()).toEqual(['plan.b8d2a.a', 'plan.done.abandoned', 'plan.done.completed'])
+      expect(await database.productionPlans.get(completed.id)).toEqual(completed)
+      expect(await database.productionPlans.get(abandoned.id)).toEqual(abandoned)
+    }))
+
+  it('keeps the previous Draft when the Planner produced no Plan', () =>
+    withScenario(async ({ service, context, database, storedPlanIds }) => {
+      const previous = oldDraft('plan.draft.previous')
+      await database.productionPlans.put(previous)
+      const saved = await service.savePlannerOrchestrationResult(
+        { plan: null, conflicts: [], warnings: [], termination: exhaustedPlannerTermination(), generatedBuildListEntries: [] },
+        context,
+      )
+      expect(saved).toBeNull()
+      expect(await storedPlanIds()).toEqual(['plan.draft.previous'])
+    }))
+
+  it('never cascades the Entries the previous Draft referenced', () =>
+    withScenario(async ({ service, result, context, database, storedEntryIds, persisted }) => {
+      // The previous Draft names a persisted Entry of the scenario; the
+      // replacement deletes the Draft record only.
+      const previous = {
+        ...oldDraft('plan.draft.previous'),
+        selectedBuildListEntryIds: [persisted[0].id],
+        steps: createValidProductionPlan().steps.map((step) => ({ ...step, buildListEntryId: persisted[0].id, targetWeaponId: persisted[0].targetWeaponId })),
+      }
+      await database.productionPlans.put(previous)
+
+      await service.savePlannerOrchestrationResult(result, context)
+
+      expect(await storedEntryIds()).toEqual(['build-list.generated.0', ...PERSISTED_ENTRY_IDS])
+      expect(await database.buildListEntries.get(persisted[0].id)).toEqual(persisted[0])
+    }))
 })

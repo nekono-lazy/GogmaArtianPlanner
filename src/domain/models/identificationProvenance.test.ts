@@ -50,7 +50,7 @@ function exportRoot(): ExportRoot {
   const plan = createValidProductionPlan()
   const history = createValidExecutionHistory()
   return {
-    schemaVersion: 10,
+    schemaVersion: 11,
     appName: 'mh-wilds-gogma-artian-planner',
     exportedAt: DOMAIN_FIXTURE_TIME,
     rngState: { ...createValidRngState(), lastIdentifiedAt: IDENTIFIED_AT },
@@ -59,7 +59,7 @@ function exportRoot(): ExportRoot {
     targetWeapons: [createValidTargetWeapon()],
     buildCandidates: [createValidBuildCandidate()],
     buildListEntries: [createValidBuildListEntry()],
-    productionPlans: [plan],
+    productionPlans: [{ ...plan, status: 'active' }],
     executionHistory: [history],
     executionSavePoints: [{ ...savePointFor(), productionPlanId: plan.id, id: executionSavePointIdForPlan(plan.id), lastExecutionHistoryId: history.id, productionPlan: { ...plan, status: 'active' } }],
     settings: {
@@ -221,7 +221,7 @@ describe('Export schema 9 -> 10', () => {
     const root = exportRoot()
     const imported = prepareExportRootForImport(JSON.parse(JSON.stringify(root)))
     expect(imported).toEqual({ ok: true, root })
-    expect(EXPORT_SCHEMA_VERSION).toBe(10)
+    expect(EXPORT_SCHEMA_VERSION).toBe(11)
   })
 
   it('fills null provenance and record schema 2 in the root, the save points and the Undo snapshots, and infers nothing', () => {
@@ -249,7 +249,7 @@ describe('Export schema 9 -> 10', () => {
     expect(legacy.schemaVersion).toBe(9)
     // The whole import chain accepts the schema 9 root.
     const imported = prepareExportRootForImport(JSON.parse(JSON.stringify(legacy)))
-    expect(imported.ok && imported.root.schemaVersion).toBe(10)
+    expect(imported.ok && imported.root.schemaVersion).toBe(11)
     expect(imported.ok && imported.root.rngState?.lastIdentifiedAt).toBeNull()
   })
 

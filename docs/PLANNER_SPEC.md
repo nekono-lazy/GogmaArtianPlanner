@@ -2623,7 +2623,9 @@ Planを保存しない。
 `plannerResultPersistenceService.savePlannerOrchestrationResult()` だけを使用し、generated
 BuildListEntryとProductionPlanのatomic save契約を維持する。B10専用Persistence serviceを
 追加しない。新しいPlanが保存された場合は `/plans/:newPlanId` へ遷移する。`plan === null` または
-保存失敗時は表示中の旧Planを置換・削除しない。B10の判断だけで旧Planを自動削除しない。
+保存失敗時は表示中の旧Draftを置換・削除しない。保存が完全に成功した場合だけ、
+`savePlannerOrchestrationResult()` が同一transaction内で旧Draftを新Draftへatomicに置換する
+（9.2.15、[DATA_MODEL.md](./DATA_MODEL.md) 11.1）。B10が独自の判断で旧Planを削除することはない。
 
 Conflict選択とwhat-ifはPlan確定前の意思決定機能であり、編集対象は原則 `status === 'draft'`
 とする。`stale` は比較・固定を続けず既存の明示再計算へ誘導し、`active` / `completed` /
@@ -3195,6 +3197,24 @@ PlanStepのcandidateIdとEntry Snapshot
 
 `PlanningInputSnapshot.buildListEntriesHash` は最終augmented PlannerInput全体を表す。
 したがって最終inputへ含めたgenerated Entryは、例外なく同一transaction内で保存する。
+
+旧Draftのatomic replacement（[DATA_MODEL.md](./DATA_MODEL.md) 11.1 / 14.5）。
+
+```text
+既存Draft全削除 + generated BuildListEntries追加 + 新Draft追加
+```
+
+- 通常Draftはtop-level collectionに最大1件であり、新しいPlanner resultの保存はこの3つを
+  同一Dexie transactionで行う。保存が完全に成功した場合だけ旧Draftが消え、transaction終了時の
+  Draftは新Draft 1件になる
+- current state再validation、CalculationContext validation、generated Entry validation /
+  collision、Plan reference validation、generated Entryのadd、新Draftのadd、Dexie writeの
+  いずれかが失敗した場合はtransaction rollbackにより旧Draftが残り、新Draftもpartialな
+  generated Entryも存在しない。旧Draftを先に別transactionで削除しない
+- 削除するのはDraft recordだけである。旧Draftが参照していたBuildListEntry / BuildCandidate /
+  TargetWeaponをcascade deleteしない（Entry ownershipのauthorityが無く、generated Entryも既存
+  Entryとreuseされ得るため）。`active` / `stale` / `completed` / `abandoned` のPlanも削除しない
+- `plan === null` の結果は何も書かず、旧Draftを維持する
 
 Active Plan単一制約、置換、破棄、再計算は従来どおりApplication / Persistence層の
 責務であり、B8で変更しない。
@@ -4581,6 +4601,10 @@ breaking_change_approved   Plan前提を壊す手動変更をユーザーが承�
 - ゲーム内でセーブして中断しただけではPlanをstaleにしない
 - 実行中Plan（`active` または `stale`）は同時に1件まで。別のPlanを開始するには
   再計画採用（16.8）または破棄で現在の実行中Planを終わらせる
+- 未開始Plan（`draft`）はtop-level collectionに同時に1件まで（現在の下書き）。実行中Planの件数制約とは
+  独立しており、Draftと実行中Planの同時存在は禁止しない。新Draftの保存成功時に旧Draftを同一transactionで
+  atomicに置換し、保存失敗時は旧Draftを維持する（9.2.15、[DATA_MODEL.md](./DATA_MODEL.md) 11.1）。
+  実行中・完了・破棄済みのPlanは新Draft保存で削除しない
 - `draft` から `active` への開始時は、現在の永続状態が `PlanningInputSnapshot.initialExecutionState`
   （Plan開始前の前提）と一致することを検証し、同じtransactionでPlan開始effect（16.11の既存武器の
   Target紐付け）を適用し、適用後の状態が先頭Stepの `expectedStateBefore` と一致することを検証する。

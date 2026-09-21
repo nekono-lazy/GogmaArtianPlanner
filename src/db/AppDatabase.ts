@@ -4,6 +4,7 @@ import {
   fillNonTerminalPlanLifecycle,
   fillNormalCounterIdentificationProvenance,
   fillRngStateIdentificationProvenance,
+  isDraftProductionPlanRecord,
 } from '../domain/models/persistenceCompatibility'
 import type {
   AppSettings,
@@ -19,7 +20,7 @@ import type {
 } from '../domain/models/publicTypes'
 
 export const DATABASE_NAME = 'mh-wilds-gogma-artian-planner'
-export const DATABASE_SCHEMA_VERSION = 7
+export const DATABASE_SCHEMA_VERSION = 8
 
 export class AppDatabase extends Dexie {
   rngState!: Table<RngState, 'current'>
@@ -166,7 +167,7 @@ export class AppDatabase extends Dexie {
     // `lastObservedAt` or a `source === 'observation'` never prove one. It is
     // reminder / recovery provenance only, so no calculation semantics change
     // and `CURRENT_CALCULATION_APP_SCHEMA_VERSION` stays where it is.
-    this.version(DATABASE_SCHEMA_VERSION).stores({}).upgrade(async (transaction) => {
+    this.version(7).stores({}).upgrade(async (transaction) => {
       const fillCounters = (value: unknown) => {
         if (Array.isArray(value)) {
           value.forEach((counter: unknown) => {
@@ -201,6 +202,27 @@ export class AppDatabase extends Dexie {
           fillCounters(savePointBefore.normalCounters)
         }
       })
+    })
+    // v8 deletes every `draft` ProductionPlan (`docs/DATA_MODEL.md` 11.1 / 14.2,
+    // `docs/PLANNER_SPEC.md` 9.2.15). Before this version the Planner saved a
+    // new Draft beside every earlier one and no UI could list or delete them,
+    // so the collection could hold any number of Drafts, each possibly naming
+    // BuildListEntries the user has since removed. The new contract keeps at
+    // most one Draft - the current one, replaced atomically by the next Planner
+    // save - and no persisted authority says which accumulated Draft the user
+    // meant, so none is picked by `createdAt`, `updatedAt` or ID: all are
+    // deleted. Nothing else changes: `active` / `stale` / `completed` /
+    // `abandoned` Plans, BuildListEntries (a Draft owns no Entry, so nothing is
+    // cascaded), BuildCandidates, Targets, OwnedWeapons, ExecutionHistory,
+    // ExecutionSavePoints, RngState, Normal Counters and Settings keep their
+    // exact persisted contents. No table or index changes and no calculation
+    // semantics change, so `CURRENT_CALCULATION_APP_SCHEMA_VERSION` stays 13.
+    this.version(DATABASE_SCHEMA_VERSION).stores({}).upgrade(async (transaction) => {
+      await transaction
+        .table('productionPlans')
+        .toCollection()
+        .filter((plan: unknown) => isPlainRecord(plan) && isDraftProductionPlanRecord(plan))
+        .delete()
     })
   }
 }
