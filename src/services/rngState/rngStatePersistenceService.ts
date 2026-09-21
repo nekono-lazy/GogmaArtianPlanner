@@ -231,6 +231,20 @@ export class RngStatePersistenceService {
     return (await this.dependencies.persistence.apply(mutation, approval)).result
   }
 
+  /**
+   * Whether adopting the unique Normal Counter Identification result needs the
+   * breaking-change approval (`docs/UI_FLOW.md` 16.3). The very same mutation
+   * the adoption saves is inspected; the screen never builds the Counter
+   * record itself. Writes nothing.
+   */
+  inspectNormalArtianCounterIdentificationAdoption(
+    adoption: NormalArtianCounterIdentificationAdoption,
+  ): Promise<PlanBreakingChangeInspection> {
+    return this.dependencies.persistence.inspect(
+      normalArtianCounterIdentificationAdoptionMutation(adoption, this.dependencies.clock.now()),
+    )
+  }
+
   /** Whether the Normal Counter save needs the breaking-change approval. Writes nothing. */
   inspectNormalArtianCounterSave(
     counter: NormalArtianCounter,

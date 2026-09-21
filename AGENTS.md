@@ -402,8 +402,8 @@ current Step, Step completions and `recalculationReasons` kept, every weapon in 
 for it stops being in progress, its save point is deleted, Target preferences change only
 through the change itself, and no ExecutionHistory is added, so it is never undoable. It
 added no persisted field and changed no calculation semantics, so the three versions stay
-12 / 6 / 9. The warning / confirmation UI, the save point choice dialog UI and the
-Execution Navigator UI are still not implemented.
+12 / 6 / 9. The Execution Navigator UI followed in the eleventh PR, and the warning /
+confirmation UI with its save point choice dialog in the fifteenth.
 The eleventh PR (the Execution Navigator core UI) connected the ordinary path in the UI:
 「作成開始」 / 「実行ナビを再開する」 on the Production Plan page, and
 `src/pages/ExecutionNavigatorPage.tsx` with Step confirmation (「結果一致・次へ」, the
@@ -581,6 +581,40 @@ the Preview with a Japanese notice and never re-preview or adopt automatically; 
 refusal keeps the Preview and reports through `executionErrorMessage()`. The Draft-only Conflict
 recalculation (`replanState`) and what-if are untouched. It added no persisted field and changed
 no calculation semantics, so the versions stay 13 / 7 / 10 (`RngState.schemaVersion` 2).
+The fifteenth PR (the Plan-breaking change warning UI) connected 16.6 / `docs/UI_FLOW.md` 16.3 on
+every guarded screen through one shared controller and dialog
+(`src/components/execution/usePlanBreakingChangeApproval.ts`, `PlanBreakingChangeDialog.tsx`,
+`planBreakingChangePresentation.ts`): RNG Setup's direct save, the Identification Wizard's
+adoption (the Coordinator gained `inspectAdoption()` / `adopt(approval?)` and the
+`IdentificationAdoptionPort` `inspectAdoption()`; the reviewed values stay the Coordinator's),
+Normal Counter Setup's save / unconfirm / Debug edit / Identification adoption (through the new
+`RngStatePersistenceService.inspectNormalArtianCounterIdentificationAdoption()`, the same
+mutation the adoption saves), Owned Weapons and Target Weapons save / delete, and the Build List
+selection / improvement preference change and Entry delete. Every guarded save runs the
+operation's existing validation and confirmations first, then the Application `inspect`, then
+either the ordinary save (`approvalRequired: false`, no warning, no UI-side judgement - a notes-only,
+name / memo / status-only, Plan-independent or stale-Plan change saves as before) or the warning
+built from `inspection.reasons` alone (the five reasons in Japanese, an optional
+operation-specific note, 「キャンセル」 / the destructive 「生産計画を破棄して保存」), the 16.10
+choice only when `savePointChoiceRequired` (「現在地点を維持」 / 「最後のゲーム内セーブ地点へ戻す」
+with the shared `ExecutionSavePointRestoreDialog` game-side checkbox / 「キャンセル」), and the
+same save re-run with `{ observedPlan: inspection.observedPlan, savePointDecision }` - never a
+rebuilt Plan token, never a separate `restoreExecutionSavePoint()`. A
+`PlanBreakingChangeApprovalRequiredError` from an unapproved save (an `active` Plan started
+between the inspection and the save) is promoted to the warning through `error.inspection`; the
+Coordinator returns to its reviewed state on it instead of an adoption error.
+`plan_breaking_change_state_changed`, `plan_breaking_change_approval_not_required`,
+`running_plan_invariant_violated`, the save point decision refusals, the restore refusals and a
+`transaction_failed` are reported in Japanese by typed code (`planGuardedRefusalMessage()`), never
+retried, and the screen keeps its draft. A cancel at any phase saves nothing. An approved save
+reports 「…実行中の生産計画を破棄しました。」 and re-reads what the screen shows (the Build List
+re-reads the running Plan, so its replan entry gives way to the ordinary Draft creation). At most
+one change waits for a decision; the Build List disables its selection controls and delete
+buttons while one does, and keeps its per-Entry save chain otherwise. `IntermediateStateSelector`
+/ `CandidateCard` gained a display-only `disabled` prop for that. Nothing judges Plan-breaking on
+the UI side, nothing is persisted by the UI, no reason is written anywhere, and the Undo, Replan
+and `user_abandoned` flows are untouched. It added no persisted field and changed no calculation
+semantics, so the versions stay 13 / 7 / 10 (`RngState.schemaVersion` 2).
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -3343,8 +3377,10 @@ abandonment it needs) and the state controls (Undo of the latest ExecutionHistor
 save point record / overwrite / restore, and the ordinary Plan abandonment with the 16.10
 choice) and the replan Preview / adoption (「現在地点から再計画を試算」 on the Build List and the
 Production Plan page, the transient 「再計画の試算（未採用）」, 「この再計画を採用」 with the 16.10
-choice); the breaking-change warning / confirmation UI and the persistent RNG re-identification
-reminder on Dashboard / RNG Setup / Candidate Search are not yet.
+choice) and the breaking-change warning (the one shared warning / save point choice dialog on
+RNG Setup, the Identification Wizard, Normal Counter Setup, Owned Weapons, Target Weapons and
+the Build List); the persistent RNG re-identification reminder on Dashboard / RNG Setup /
+Candidate Search is not yet.
 Implementation PRs follow the specification and must not fall back to the older
 Execution semantics.
 

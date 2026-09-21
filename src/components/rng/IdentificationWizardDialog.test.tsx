@@ -26,6 +26,7 @@ import type {
   IdentificationWizardState,
   IdentificationWizardStateListener,
 } from '../../services/rngIdentification/identificationWizardCoordinator'
+import type { PlanBreakingChangeInspection } from '../../domain/execution'
 import { IdentificationWizardDialog } from './IdentificationWizardDialog'
 
 const loadedMaster = loadMasterData()
@@ -120,6 +121,8 @@ class FakeCoordinator implements IdentificationWizardCoordinator {
   adoptCalls = 0
   disposeCalls = 0
   adoptionFailure: Error | null = null
+  /** The breaking-change inspection of the adoption; no `active` Plan in these fixtures. */
+  inspectAdoption = vi.fn(async (): Promise<PlanBreakingChangeInspection> => ({ approvalRequired: false }))
   private skillRequest = 0
   private gogmaRequest = 0
 
@@ -1048,7 +1051,7 @@ describe('IdentificationWizardDialog Review and lifecycle', { timeout: 15_000 },
       baseSeed: { value: '86315169', isConfirmed: true, source: 'observation' },
       skillCounter: { value: 42, isConfirmed: true, source: 'observation' },
       gogmaCounter: { value: 84, isConfirmed: true, source: 'observation' },
-    }))
+    }), { planAbandoned: false })
   })
 
   it('retains Review and confirmation after adoption failure and allows retry', async () => {

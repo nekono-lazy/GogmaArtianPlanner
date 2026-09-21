@@ -78,6 +78,11 @@ export interface IntermediateStateSelectorProps {
    */
   onChange?: (selection: IntermediateStateSelection) => void
   /**
+   * The controls stay visible but cannot be changed: a save of this selection
+   * is in flight or waiting for the user's confirmation.
+   */
+  disabled?: boolean
+  /**
    * Heading level of the section heading. Lane headings, group headings and
    * the disclosures take the following levels, so the page outline stays
    * sequential wherever the selector is embedded.
@@ -104,11 +109,13 @@ function OpportunityRow({
   opportunity,
   selected,
   onToggle,
+  disabled = false,
 }: {
   candidate: BuildCandidate
   opportunity: IntermediateStateOpportunity
   selected: boolean
   onToggle?: (opportunity: IntermediateStateOpportunity, selected: boolean) => void
+  disabled?: boolean
 }) {
   const label = intermediateOpportunityLabel(candidate, opportunity)
   if (!onToggle) {
@@ -125,6 +132,7 @@ function OpportunityRow({
       control={
         <Checkbox
           checked={selected}
+          disabled={disabled}
           onChange={(event) => onToggle(opportunity, event.target.checked)}
           slotProps={{ input: { 'aria-label': `この途中状態を採用する: ${label}` } }}
         />
@@ -146,6 +154,7 @@ function GroupCard({
   master,
   selectedOpportunityId,
   onToggle,
+  disabled,
   headingLevel,
 }: {
   candidate: BuildCandidate
@@ -156,6 +165,7 @@ function GroupCard({
   master: MasterDataRoot
   selectedOpportunityId: string | null
   onToggle?: (opportunity: IntermediateStateOpportunity, selected: boolean) => void
+  disabled: boolean
   /**
    * Heading level of the group title, or `null` when the group sits below an
    * `h6` and its title is therefore labelled text rather than a heading.
@@ -227,6 +237,7 @@ function GroupCard({
             opportunity={primary}
             selected={selectedOpportunityId === primary.id}
             onToggle={onToggle}
+            disabled={disabled}
           />
         </Box>
         {later.length > 0 && (
@@ -245,6 +256,7 @@ function GroupCard({
                   opportunity={opportunity}
                   selected={selectedOpportunityId === opportunity.id}
                   onToggle={onToggle}
+                  disabled={disabled}
                 />
               ))}
             </Stack>
@@ -334,6 +346,7 @@ function AxisSection({
   master,
   selection,
   onChange,
+  disabled = false,
   headingLevel,
 }: Omit<IntermediateStateSelectorProps, 'headingLevel' | 'selectionContext'> & {
   axis: IntermediateStateAxis
@@ -380,6 +393,7 @@ function AxisSection({
             master={master}
             selectedOpportunityId={selectedOpportunityId}
             onToggle={onToggle}
+            disabled={disabled}
             headingLevel={groupLevel}
           />
         ))}
@@ -402,6 +416,7 @@ function AxisSection({
                   master={master}
                   selectedOpportunityId={selectedOpportunityId}
                   onToggle={onToggle}
+                  disabled={disabled}
                   headingLevel={secondaryGroupLevel}
                 />
               ))}
@@ -423,9 +438,11 @@ function AxisSection({
 function ImprovementPreferenceControl({
   value,
   onChange,
+  disabled = false,
 }: {
   value: ImprovementPreference
   onChange?: (value: ImprovementPreference) => void
+  disabled?: boolean
 }) {
   const labelId = useId()
   if (!onChange) {
@@ -453,6 +470,7 @@ function ImprovementPreferenceControl({
             key={preference}
             value={preference}
             control={<Radio />}
+            disabled={disabled}
             label={improvementPreferenceLabels[preference]}
             sx={{ minHeight: 44 }}
           />
@@ -472,7 +490,7 @@ function ImprovementPreferenceControl({
  * checkpoint, and the Route continues to the Ideal afterwards.
  */
 export function IntermediateStateSelector(props: IntermediateStateSelectorProps) {
-  const { candidate, selection, onChange, headingLevel = 'h4', selectionContext = 'search' } = props
+  const { candidate, selection, onChange, disabled = false, headingLevel = 'h4', selectionContext = 'search' } = props
   const sectionHeadingId = useId()
   const axisLevel = hasDeeperHeadingLevel(headingLevel) ? nextHeadingLevel(headingLevel) : headingLevel
   const groups = candidate.intermediateStateGroups ?? []
@@ -497,6 +515,7 @@ export function IntermediateStateSelector(props: IntermediateStateSelectorProps)
         <AxisSection {...props} axis="bonus" headingLevel={axisLevel} />
         <ImprovementPreferenceControl
           value={selection.improvementPreference}
+          disabled={disabled}
           onChange={
             onChange
               ? (improvementPreference) => onChange({ ...selection, improvementPreference })

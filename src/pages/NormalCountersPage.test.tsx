@@ -50,6 +50,9 @@ function dependencies(
     clients,
     getAll: vi.fn(async () => values.map((value) => structuredClone(value))),
     save: vi.fn(async (value: NormalArtianCounter) => value),
+    // No `active` Plan in these fixtures: no breaking-change warning.
+    inspectSave: vi.fn(async () => ({ approvalRequired: false as const })),
+    inspectIdentificationAdoption: vi.fn(async () => ({ approvalRequired: false as const })),
     // The persisted record the service builds from the adoption (`docs/UI_FLOW.md` 6).
     adoptIdentification: vi.fn(async ({ weaponTypeId, startNormalCounter, observationCount }) => ({
       ...(values.find((value) => value.weaponTypeId === weaponTypeId) ?? { createdAt: NOW }),
@@ -174,7 +177,7 @@ describe('NormalCountersPage', () => {
     expect(await screen.findByText(/non-negative integer/)).toBeInTheDocument()
     await user.clear(input); await user.type(input, '12'); await user.click(save)
     // The stored row the edit started from is passed as the basis of the save.
-    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ counter: 12 }), expect.objectContaining({ id: 'weapon.dual_blades:8' }))
+    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ counter: 12 }), expect.objectContaining({ id: 'weapon.dual_blades:8' }), null)
   }, 15_000)
 
   it('never confirms a Counter without a value', async () => {
@@ -186,7 +189,7 @@ describe('NormalCountersPage', () => {
     expect(row.getByRole('checkbox', { name: '確定済み' })).toBeDisabled()
     expect(row.getByRole('checkbox', { name: '確定済み' })).not.toBeChecked()
     await user.click(row.getByRole('button', { name: 'デバッグ保存' }))
-    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ counter: null, isConfirmed: false, rarity: 8 }), expect.objectContaining({ id: confirmedFixture.id }))
+    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ counter: null, isConfirmed: false, rarity: 8 }), expect.objectContaining({ id: confirmedFixture.id }), null)
     expect(await screen.findByText('カウンターを保存しました。')).toBeInTheDocument()
   }, 15_000)
 
@@ -263,7 +266,7 @@ describe('NormalCountersPage', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Counterを確定' }))
     await waitFor(() => expect(deps.adoptIdentification).toHaveBeenCalledTimes(1))
     // The adoption goes through the Identification path, never the ordinary save.
-    expect(deps.adoptIdentification).toHaveBeenCalledWith({ weaponTypeId: 'weapon.switch_axe', startNormalCounter: 0, observationCount: 2 })
+    expect(deps.adoptIdentification).toHaveBeenCalledWith({ weaponTypeId: 'weapon.switch_axe', startNormalCounter: 0, observationCount: 2 }, null)
     expect(deps.save).not.toHaveBeenCalled()
     expect(await screen.findByText('スラッシュアックスのカウンターを確定しました。')).toBeInTheDocument()
     expect(within(await rowFor('スラッシュアックス')).getByText('確定・検索に使用')).toBeInTheDocument()
@@ -339,7 +342,7 @@ describe('NormalCountersPage', () => {
     await user.click(await within(dialog).findByRole('checkbox', { name: /調査前の状態へ戻ったことを確認しました/ }))
     await user.click(within(dialog).getByRole('button', { name: 'Counterを確定' }))
     await waitFor(() => expect(deps.adoptIdentification).toHaveBeenCalledTimes(1))
-    expect(deps.adoptIdentification).toHaveBeenCalledWith({ weaponTypeId: 'weapon.bow', startNormalCounter: 4, observationCount: 1 })
+    expect(deps.adoptIdentification).toHaveBeenCalledWith({ weaponTypeId: 'weapon.bow', startNormalCounter: 4, observationCount: 1 }, null)
     expect(within(await rowFor('弓')).getByText('確定・検索に使用')).toBeInTheDocument()
   }, 20_000)
 

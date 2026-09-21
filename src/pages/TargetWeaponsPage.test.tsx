@@ -13,7 +13,17 @@ async function itemFor(name: string): Promise<HTMLElement> {
   return item
 }
 
-function dependencies() { const save = vi.fn(async (draft: TargetWeaponDraft) => ({ ...draft, id: crypto.randomUUID() as TargetWeapon['id'], createdAt: 'now', updatedAt: 'now' })); return { getAll: vi.fn(async (): Promise<TargetWeapon[]> => []), getOwnedWeapons: vi.fn(async (): Promise<OwnedWeapon[]> => []), save, delete: vi.fn(async () => undefined) } satisfies TargetWeaponsPageDependencies }
+function dependencies() {
+  const save = vi.fn(async (draft: TargetWeaponDraft) => ({ ...draft, id: crypto.randomUUID() as TargetWeapon['id'], createdAt: 'now', updatedAt: 'now' }))
+  return {
+    getAll: vi.fn(async (): Promise<TargetWeapon[]> => []),
+    getOwnedWeapons: vi.fn(async (): Promise<OwnedWeapon[]> => []),
+    save,
+    inspectSave: vi.fn(async () => ({ approvalRequired: false as const })),
+    delete: vi.fn(async () => undefined),
+    inspectDelete: vi.fn(async () => ({ approvalRequired: false as const })),
+  } satisfies TargetWeaponsPageDependencies
+}
 
 function existingTarget(): TargetWeapon {
   return {
@@ -40,7 +50,7 @@ describe('TargetWeaponsPage', () => {
     expect(screen.getByRole('button', { name: '代替条件を追加' })).toBeDisabled()
     await user.type(screen.getByRole('textbox', { name: /名前/ }), '新規Target')
     await user.click(screen.getByRole('button', { name: '保存' }))
-    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ name: '新規Target', priority: 3, isEnabled: true, practicalBonusConditions: expect.any(Array), alternativeBonusRules: expect.any(Array) }), null)
+    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ name: '新規Target', priority: 3, isEnabled: true, practicalBonusConditions: expect.any(Array), alternativeBonusRules: expect.any(Array) }), null, null)
   })
 
   it('shows Japanese Master-backed options without exposing English Domain labels', async () => {
@@ -75,7 +85,7 @@ describe('TargetWeaponsPage', () => {
     render(<TargetWeaponsPage dependencies={deps} />)
     await user.click(await screen.findByRole('button', { name: '編集' }))
     await user.click(screen.getByRole('checkbox', { name: '有効' })); await user.click(screen.getByRole('button', { name: '保存' }))
-    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ isEnabled: false }), target)
+    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ isEnabled: false }), target, null)
   })
 
   it('shows an empty state with the add action when nothing is registered', async () => {
@@ -135,7 +145,7 @@ describe('TargetWeaponsPage', () => {
     await user.click(dialog.getByLabelText('優先度'))
     await user.click(screen.getByRole('option', { name: '1' }))
     await user.click(dialog.getByRole('button', { name: '保存' }))
-    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ priority: 1 }), target)
+    expect(deps.save).toHaveBeenCalledWith(expect.objectContaining({ priority: 1 }), target, null)
     expect(await screen.findByText('目標武器を保存しました。')).toBeInTheDocument()
   })
 
@@ -198,7 +208,7 @@ describe('TargetWeaponsPage', () => {
     const user = userEvent.setup(); const target = existingTarget(); const deps = dependencies(); deps.getAll = vi.fn(async () => [target]); const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
     render(<TargetWeaponsPage dependencies={deps} />)
     await user.click(await screen.findByRole('button', { name: '削除' }))
-    expect(deps.delete).toHaveBeenCalledWith(target.id)
+    expect(deps.delete).toHaveBeenCalledWith(target.id, null)
     confirm.mockRestore()
   })
 })
@@ -295,7 +305,7 @@ describe('TargetWeaponsPage list order', () => {
 
     expect(deps.save).toHaveBeenCalledWith(
       expect.objectContaining({ preferredOwnedWeaponId: weapon.id }),
-      expect.objectContaining({ id: 'target.c' }),
+      expect.objectContaining({ id: 'target.c' }), null,
     )
     expect(await listedNames()).toEqual(['A', 'B', 'C'])
     expect(within(await itemFor('A')).getByText('優先起点: なし')).toBeInTheDocument()
