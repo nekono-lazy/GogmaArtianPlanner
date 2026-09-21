@@ -3729,10 +3729,19 @@ Master Data itself is not copied into the user export.
 
 The full-replacement Import / Export / clear-all-data Persistence / Application
 Service foundation is implemented (`src/services/dataTransfer/importExportService.ts`,
-`importExportValidation.ts`, `docs/DATA_MODEL.md` 15.3); the Settings screen
-connection (Export download, Import file picker, the Import and clear confirmation
-dialogs, the Settings Store rehydrate) is not, and follows in a later PR. Its
-contract:
+`importExportValidation.ts`, `docs/DATA_MODEL.md` 15.3), and so is the Settings
+screen connection (`src/pages/SettingsPage.tsx`, `src/components/settings/`,
+`docs/UI_FLOW.md` 14): the Export download (a browser-side JSON Blob of
+`serializeExport()`), the Import file picker whose file text goes to
+`prepareImportJson()` as the only importability authority (a refused preparation
+opens no dialog, calls no `applyImport()` and changes nothing), the
+full-replacement Import confirmation dialog that asks for an Export of the current
+data first without running one, the clear confirmation dialog, and the Settings
+Store rehydrate from the imported `root.settings` / the `clearAllData()` return
+value (never from `getOrCreateDefault()`). The UI re-implements no validation,
+migration or write, runs one Data Transfer operation at a time, never starts one
+while the Debug Mode save is pending, and disables the Debug Mode toggle while one
+runs. Its contract:
 
 - `exportRoot()` reads every user table in one read-only Dexie transaction, sets
   `schemaVersion` / `appName` itself, takes `exportedAt` from an injected clock,
