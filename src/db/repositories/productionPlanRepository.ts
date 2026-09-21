@@ -141,12 +141,33 @@ export class ProductionPlanRepository {
   }
 
   /**
+   * Refuses a Plan ID the collection already holds, in the current transaction
+   * zone.
+   *
+   * A newly calculated Plan carries a fresh ID, so an ID already stored -
+   * whatever that Plan's status, the current Draft included - names a
+   * different Plan and is never silently replaced. The Planner save calls this
+   * before its Draft replacement (`deleteDraftProductionPlans()`), so a Draft
+   * that happens to hold the new Plan's ID is refused rather than deleted and
+   * re-added under the same key.
+   */
+  async assertProductionPlanIdFree(id: ProductionPlanId): Promise<void> {
+    if ((await this.database.productionPlans.get(id)) !== undefined) {
+      throw new RepositoryError(
+        'production_plan_id_conflict',
+        `ProductionPlan '${id}' already exists and is never replaced by a new Plan.`,
+      )
+    }
+  }
+
+  /**
    * Inserts a Plan that must not already exist.
    *
    * A newly calculated Plan carries a fresh ID, so a colliding key means the
-   * stored Plan is a different Plan; it is never silently replaced. The running
-   * Plan guard, the Draft guard and Domain validation are the same authorities
-   * `put` uses.
+   * stored Plan is a different Plan; it is never silently replaced
+   * (`assertProductionPlanIdFree()`, a typed refusal ahead of the Dexie key
+   * constraint). The running Plan guard, the Draft guard and Domain validation
+   * are the same authorities `put` uses.
    */
   addProductionPlan(plan: ProductionPlan): Promise<ProductionPlan> {
     assertRepositoryValidation('ProductionPlan', validateProductionPlan(plan))
@@ -154,6 +175,7 @@ export class ProductionPlanRepository {
       this.database,
       [this.database.productionPlans],
       async () => {
+        await this.assertProductionPlanIdFree(plan.id)
         await this.assertNoOtherRunningPlan(plan)
         await this.assertNoOtherDraftPlan(plan)
         await this.database.productionPlans.add(plan)

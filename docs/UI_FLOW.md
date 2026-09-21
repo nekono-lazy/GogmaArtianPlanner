@@ -1701,7 +1701,10 @@ Import制約。
 - 実行中の生産計画、ゲーム内セーブ地点、作成中状態、目標武器の完了状態もExport / Importの対象である
   （[DATA_MODEL.md](./DATA_MODEL.md) 15.1）。PCからスマートフォンへの移行などの端末間同期機能は追加せず、
   このExport / Importで行う
-- schemaVersion不一致は拒否する
+- 未対応の `schemaVersion` は拒否する。対応する旧 `schemaVersion`（6..10）は
+  [DATA_MODEL.md](./DATA_MODEL.md) 15.3の純粋migrationを順に通してcurrent schema（11）へ変換してから
+  検証する。current schemaのrootはそのまま読む。migrationの内容と拒否条件は15.3をauthorityとし、
+  UI側で再実装しない
 - Master ID不一致は拒否または明示警告する
 
 全データクリア。
@@ -2090,7 +2093,7 @@ export interface SearchUiState {
 
 - ExportボタンでJSONを出力できる
 - ExportしたJSONをImportできる
-- 不正schemaVersionを拒否する
+- 未対応のschemaVersionを拒否し、対応する旧schemaVersionはmigrationを通してImportできる
 - Master ID不一致を検出する
 
 ## 19.4 Responsive Test

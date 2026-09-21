@@ -57,7 +57,10 @@ import {
  * `stale` / `completed` / `abandoned` Plan, and never the BuildListEntries,
  * BuildCandidates or Targets the previous Draft referenced, because a Draft
  * owns no Entry and no persisted authority could say which Entry belonged to
- * it alone. It is never done in a separate transaction ahead of the save.
+ * it alone. It is never done in a separate transaction ahead of the save, and it
+ * never replaces a Plan under its ID: the new Plan's ID is checked against the
+ * whole collection in the same transaction before any Draft is deleted
+ * (`production_plan_id_conflict`).
  *
  * It re-runs nothing. Beam Search, Trace Replay, constrained enumeration and
  * Candidate trials stay the Worker's authority, so no `RngEngine` is created on
@@ -209,6 +212,13 @@ export class PlannerResultPersistenceService {
           currentCalculationContext,
         )
         this.assertPlanReferences(plan, generatedEntries, augmentedEntries)
+
+        // A newly calculated Plan carries a fresh ID: an ID the collection
+        // already holds - whatever that Plan's status, the previous Draft
+        // included - is a different Plan and is refused here, inside the
+        // transaction and before the Draft replacement, so a Draft holding the
+        // same ID is never deleted and re-added under it.
+        await this.repositories.productionPlans.assertProductionPlanIdFree(plan.id)
 
         // The new Draft replaces the previous one (DATA_MODEL 11.1): only Draft
         // records are deleted, their referenced Entries stay, and any failure
