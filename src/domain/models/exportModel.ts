@@ -21,6 +21,7 @@ import {
   fillRngStateIdentificationProvenance,
   hasIdentificationProvenanceField,
   hasProductionPlanLifecycleField,
+  isDraftProductionPlanRecord,
   isTerminalProductionPlanRecord,
   RNG_STATE_PROVENANCE_SCHEMA_VERSION,
 } from './persistenceCompatibility'
@@ -51,9 +52,13 @@ import {
  * `completedAt`) and the Execution lifecycle Undo snapshot
  * (`affectedTargetWeaponsBefore`, `executionSavePointBefore`). Version 10 adds
  * the Identification provenance `lastIdentifiedAt` of RngState (record schema
- * version 2) and NormalArtianCounter (`docs/DATA_MODEL.md` 6.1 / 6.2).
+ * version 2) and NormalArtianCounter (`docs/DATA_MODEL.md` 6.1 / 6.2). Version
+ * 11 changes no entity shape: it is the Draft lifecycle boundary
+ * (`docs/DATA_MODEL.md` 11.1 / 15.3) under which `root.productionPlans` holds at
+ * most one `draft` Plan, the current one; a schema 10 root was written under the
+ * old contract that accumulated Drafts, so its migration deletes them all.
  */
-export const EXPORT_SCHEMA_VERSION = 10
+export const EXPORT_SCHEMA_VERSION = 11
 
 export const EXPORT_APP_NAME = 'mh-wilds-gogma-artian-planner'
 
@@ -121,6 +126,15 @@ export interface ExportRootV8 extends Omit<ExportRoot, 'schemaVersion'> {
  */
 export interface ExportRootV9 extends Omit<ExportRoot, 'schemaVersion'> {
   schemaVersion: 9
+}
+
+/**
+ * The schema 10 Export shape. Its entity fields are the current ones; it was
+ * written under the old Draft contract, so `productionPlans` may hold any
+ * number of `draft` Plans.
+ */
+export interface ExportRootV10 extends Omit<ExportRoot, 'schemaVersion'> {
+  schemaVersion: 10
 }
 
 export type ExportRootMigrationResult =
@@ -455,7 +469,7 @@ export function migrateExportRootV8ToV9(
  */
 export function migrateExportRootV9ToV10(
   root: ExportRootV9,
-): ExportRootMigrationResult {
+): { ok: true; root: ExportRootV10 } | { ok: false; issues: DomainValidationIssue[] } {
   if (!isRecord(root)) {
     return { ok: false, issues: [structureIssue('', 'Export root must be an object.')] }
   }
@@ -557,7 +571,43 @@ export function migrateExportRootV9ToV10(
       fillCounters(savePointBefore.normalCounters)
     }
   })
-  return { ok: true, root: { ...migrated, schemaVersion: EXPORT_SCHEMA_VERSION } }
+  return { ok: true, root: { ...migrated, schemaVersion: 10 } }
+}
+
+/**
+ * Pure migration from Export schema 10 to 11 (`docs/DATA_MODEL.md` 15.3): every
+ * `draft` ProductionPlan of `root.productionPlans` is deleted and nothing else
+ * changes. A schema 10 root was written under the old Draft contract, in which
+ * every Planner save added a Draft beside the earlier ones and no UI could list
+ * or delete them, so it may hold any number of Drafts, each possibly naming
+ * BuildListEntries the user has since removed. Schema 11 keeps at most one
+ * Draft - the current one - and no persisted authority says which accumulated
+ * Draft the user meant, so none is chosen by `createdAt`, `updatedAt` or ID: all
+ * are deleted. The BuildListEntries, BuildCandidates and Targets a deleted Draft
+ * referenced are kept, because a Draft owns no Entry and nothing is cascaded.
+ * `active` / `stale` / `completed` / `abandoned` Plans, the Plan bodies inside an
+ * ExecutionHistory Undo snapshot or a game save point, and every other
+ * collection keep their exact contents. A root already at schema 11 never
+ * passes through here, so a schema 11 Draft is kept.
+ */
+export function migrateExportRootV10ToV11(
+  root: ExportRootV10,
+): ExportRootMigrationResult {
+  if (!isRecord(root)) {
+    return { ok: false, issues: [structureIssue('', 'Export root must be an object.')] }
+  }
+  const shapeIssues = collectionShapeIssues(root as unknown as Record<string, unknown>, 'productionPlans')
+  if (shapeIssues.length > 0) return { ok: false, issues: shapeIssues }
+  let migrated: ExportRootV10
+  try {
+    migrated = structuredClone(root)
+  } catch {
+    return { ok: false, issues: [structureIssue('', 'Export root cannot be copied.')] }
+  }
+  const productionPlans = migrated.productionPlans.filter(
+    (plan) => !isDraftProductionPlanRecord(plan as unknown as Record<string, unknown>),
+  )
+  return { ok: true, root: { ...migrated, productionPlans, schemaVersion: EXPORT_SCHEMA_VERSION } }
 }
 
 function prefixed(
@@ -701,12 +751,12 @@ export function validateCurrentExportRoot(root: ExportRoot): DomainValidationRes
 /**
  * Brings a parsed Export object to the current schema and validates its
  * Execution lifecycle state and root-level RNG persistent state, failing closed
- * on anything else. Schema 10 is read
- * as is; schema 9, 8, 7 and 6 go through the pure migrations in order
- * (`migrateExportRootV6ToV7()`, `migrateExportRootV7ToV8()`,
- * `migrateExportRootV8ToV9()`, `migrateExportRootV9ToV10()`), and every other
- * version is refused. Nothing is applied here: the caller replaces its data
- * only after a successful result.
+ * on anything else. Schema 11 is read as is - its Drafts are current data and
+ * are never deleted; schema 10, 9, 8, 7 and 6 go through the pure migrations in
+ * order (`migrateExportRootV6ToV7()`, `migrateExportRootV7ToV8()`,
+ * `migrateExportRootV8ToV9()`, `migrateExportRootV9ToV10()`,
+ * `migrateExportRootV10ToV11()`), and every other version is refused. Nothing
+ * is applied here: the caller replaces its data only after a successful result.
  */
 export function prepareExportRootForImport(
   input: unknown,
@@ -724,7 +774,23 @@ export function prepareExportRootForImport(
       issues: [{ path: 'appName', code: 'invalid_literal', message: 'Export appName is not supported.' }],
     }
   }
-  let root: ExportRoot
+  // Each step of the chain runs the pure migrations in order and stops at the
+  // first refusal.
+  const fromV10 = (v10: ExportRootV10): ExportRootMigrationResult =>
+    migrateExportRootV10ToV11(v10)
+  const fromV9 = (v9: ExportRootV9): ExportRootMigrationResult => {
+    const toV10 = migrateExportRootV9ToV10(v9)
+    return toV10.ok ? fromV10(toV10.root) : toV10
+  }
+  const fromV8 = (v8: ExportRootV8): ExportRootMigrationResult => {
+    const toV9 = migrateExportRootV8ToV9(v8)
+    return toV9.ok ? fromV9(toV9.root) : toV9
+  }
+  const fromV7 = (v7: ExportRootV7): ExportRootMigrationResult => {
+    const toV8 = migrateExportRootV7ToV8(v7)
+    return toV8.ok ? fromV8(toV8.root) : toV8
+  }
+  let migrated: ExportRootMigrationResult
   if (candidate.schemaVersion === EXPORT_SCHEMA_VERSION) {
     const shapeIssues = [
       'ownedWeapons',
@@ -735,41 +801,24 @@ export function prepareExportRootForImport(
     ].flatMap((field) => collectionShapeIssues(candidate, field))
     if (shapeIssues.length > 0) return { ok: false, issues: shapeIssues }
     try {
-      root = structuredClone(input as ExportRoot)
+      migrated = { ok: true, root: structuredClone(input as ExportRoot) }
     } catch {
       return { ok: false, issues: [structureIssue('', 'Export root cannot be copied.')] }
     }
+  } else if (candidate.schemaVersion === 10) {
+    migrated = fromV10(input as ExportRootV10)
   } else if (candidate.schemaVersion === 9) {
-    const migrated = migrateExportRootV9ToV10(input as ExportRootV9)
-    if (!migrated.ok) return migrated
-    root = migrated.root
+    migrated = fromV9(input as ExportRootV9)
   } else if (candidate.schemaVersion === 8) {
-    const toV9 = migrateExportRootV8ToV9(input as ExportRootV8)
-    if (!toV9.ok) return toV9
-    const migrated = migrateExportRootV9ToV10(toV9.root)
-    if (!migrated.ok) return migrated
-    root = migrated.root
+    migrated = fromV8(input as ExportRootV8)
   } else if (candidate.schemaVersion === 7) {
-    const toV8 = migrateExportRootV7ToV8(input as ExportRootV7)
-    if (!toV8.ok) return toV8
-    const toV9 = migrateExportRootV8ToV9(toV8.root)
-    if (!toV9.ok) return toV9
-    const migrated = migrateExportRootV9ToV10(toV9.root)
-    if (!migrated.ok) return migrated
-    root = migrated.root
+    migrated = fromV7(input as ExportRootV7)
   } else if (candidate.schemaVersion === 6) {
     const shapeIssues = ['productionPlans', 'executionHistory']
       .flatMap((field) => collectionShapeIssues(candidate, field))
     if (shapeIssues.length > 0) return { ok: false, issues: shapeIssues }
     const toV7 = migrateExportRootV6ToV7(input as ExportRootV6)
-    if (!toV7.ok) return toV7
-    const toV8 = migrateExportRootV7ToV8(toV7.root)
-    if (!toV8.ok) return toV8
-    const toV9 = migrateExportRootV8ToV9(toV8.root)
-    if (!toV9.ok) return toV9
-    const migrated = migrateExportRootV9ToV10(toV9.root)
-    if (!migrated.ok) return migrated
-    root = migrated.root
+    migrated = toV7.ok ? fromV7(toV7.root) : toV7
   } else {
     return {
       ok: false,
@@ -780,6 +829,8 @@ export function prepareExportRootForImport(
       }],
     }
   }
+  if (!migrated.ok) return migrated
+  const root = migrated.root
   const validation = validateCurrentExportRoot(root)
   return validation.isValid ? { ok: true, root } : { ok: false, issues: validation.issues }
 }

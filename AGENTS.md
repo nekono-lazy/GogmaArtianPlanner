@@ -642,6 +642,56 @@ is shown as 「再同定状態を確認できませんでした」, never as "no
 stays the Navigator's recovery and enters no persistent reminder. It added no persisted field, no
 writer of `lastIdentifiedAt` and no calculation semantics, so the versions stay 13 / 7 / 10
 (`RngState.schemaVersion` 2).
+The seventeenth PR (the Draft ProductionPlan lifecycle and the Import / Export reference
+integrity) fixed a real Export failure: under the old contract every Planner save added a
+Draft beside the earlier ones, no UI could list or delete them, and
+`productionPlanReferenceIssues()` read every top-level Plan body - status regardless - as
+current foreign keys, so a not-yet-started Draft naming a Build List Entry the user had since
+removed (`build-list.fnv1a32-*`, an ordinary `createBuildListEntry()` ID) refused the whole
+Export with `invalid_reference`. The new lifecycle contract (`docs/DATA_MODEL.md` 11.1 / 14.2 /
+14.5 / 15, `docs/PLANNER_SPEC.md` 9.2.15 / 16.2, `docs/REQUIREMENTS.md` 24 / 30) is `draft`
+0..1 (the current Draft), `active` + `stale` 0..1 (unchanged), `completed` / `abandoned` 0..N.
+The Draft bound is an independent invariant: a Draft beside a running Plan is not refused.
+`ProductionPlanRepository.addProductionPlan()` / `putProductionPlan()` refuse a Draft while a
+*different* Draft exists (`draft_plan_conflict`; updating the stored Draft under its own ID is
+not a second Draft), `getDraftProductionPlan()` fails closed on two, and
+`deleteDraftProductionPlans()` is the replacement step:
+`PlannerResultPersistenceService.savePlannerOrchestrationResult()` now runs "delete every
+Draft + add the generated BuildListEntries + add the new Draft" in its one transaction after
+every existing save-time check, so only a fully successful save replaces the previous Draft,
+and a refused state, an invalid result, a generated Entry collision, an Entry write failure or
+a Plan write failure rolls the deletion back with the rest (the previous Draft survives, no
+partial Entry exists); a `plan === null` result writes nothing and keeps it. Only Draft records
+are deleted - never an `active` / `stale` / `completed` / `abandoned` Plan, and never the
+BuildListEntries, BuildCandidates or Targets a Draft referenced, because no persisted authority
+says an Entry belongs to one Draft alone. The old rule that a new Plan save never replaces or
+deletes the previous Draft is superseded. Import / Export became lifecycle-aware in
+`productionPlanReferenceIssues()`: only a top-level `active` Plan must resolve its
+`selectedBuildListEntryIds`, Step `buildListEntryId`, milestone / effect / conflict / rejection
+Entry references, Entry-paired Targets, Plan-dependent Targets and milestone Targets against
+the current collections; a `draft` (the artifact as generated, whose start
+`prepareProductionPlanStart()` still refuses on divergence), a `stale` Plan (the Plan-breaking
+guard warns for `active` only, so a stale Plan can legally lose its Entries through ordinary
+UI saves; replan / recovery / restore re-verify at runtime) and a `completed` / `abandoned`
+Plan (history the user may tidy the Build List behind) are never read as current foreign
+keys, while their structural, Master ID, CalculationContext and lifecycle validation is
+unchanged. A new Draft collection invariant refuses two or more top-level Drafts with
+`invalid_state` (「未開始（draft）の生産計画は同時に1件までです」), counting `root.productionPlans`
+only. Nothing else was relaxed: `executionSavePointScopeIssues()` (running current Plan,
+`active` snapshot Plan, every snapshot OwnedWeapon ID, the snapshot Plan's selected Entries
+and Plan-dependent Targets), ExecutionHistory `planId` / `planStepId`,
+`completedByProductionPlanId`, `executionInProgress.productionPlanId`, the Candidate / Entry
+Target and Route source references, Master IDs, duplicate IDs and entity validation all
+stay. Because the accumulated Drafts of the old contract carry no authority for which one
+the user meant, Dexie v7 -> v8 deletes every `draft` ProductionPlan (never picking one by
+`createdAt`, `updatedAt` or ID, never cascading to Entries, touching no other table) and the
+pure `migrateExportRootV10ToV11()` does the same for a schema 10 root, while a schema 11
+root keeps its one Draft. This moved `DATABASE_SCHEMA_VERSION` to **8** and
+`ExportRoot.schemaVersion` to **11**; `CURRENT_CALCULATION_APP_SCHEMA_VERSION` stays 13,
+`RngState.schemaVersion` 2, `AppSettings.schemaVersion` 1, `PRODUCTION_RNG_ENGINE_VERSION`
+and Master `dataVersion` unchanged, because no Planner, RNG or build-result calculation
+semantics changed. The `/plans` list UI, Draft deletion UI and the Build List / Dashboard
+notices about the current Draft are the next PR's work and were not implemented.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -676,7 +726,7 @@ A version 10 `checkpointGroups` / `selectedCheckpointOpportunityIds` cannot be
 mapped onto lane pins, and reading such a selection as empty would silently
 drop a hard constraint, so version 10 artifacts fail closed like every earlier one.
 Search, BuildList, Planner, and benchmark runtime creators share this authority.
-Dexie separately moved to `DATABASE_SCHEMA_VERSION = 4` for the persisted status rename, to 5 for the Execution lifecycle persisted state, to 6 for the ProductionPlan lifecycle metadata, and to the current 7 for the Identification provenance (`ExportRoot.schemaVersion` 10, `RngState.schemaVersion` 2); this is independent of
+Dexie separately moved to `DATABASE_SCHEMA_VERSION = 4` for the persisted status rename, to 5 for the Execution lifecycle persisted state, to 6 for the ProductionPlan lifecycle metadata, to 7 for the Identification provenance, and to the current 8 for the Draft lifecycle (every accumulated `draft` Plan deleted; `ExportRoot.schemaVersion` 11, `RngState.schemaVersion` 2); this is independent of
 `AppSettings.schemaVersion = 1`; gameVersion, Master Data version,
 and `CONSTRAINED_ROUTE_POLICY_VERSION`
 remain unchanged. `PRODUCTION_RNG_ENGINE_VERSION` is
@@ -702,8 +752,9 @@ Gogma Reset prediction output and moved it to the current
 `CURRENT_CALCULATION_APP_SCHEMA_VERSION`; `rngEngineVersion` alone is the
 CalculationContext staleness boundary for all of them. `DATABASE_SCHEMA_VERSION` stays 4 at the checkpoint boundary and at the lane
 boundary, while `ExportRoot.schemaVersion` moved to 5 with the checkpoint entity
-shape, to 6 with the lane entity shape, and to the current 7 with the Execution
-lifecycle persisted state. Version 1 BuildCandidate, BuildListEntry, and ProductionPlan
+shape, to 6 with the lane entity shape, to 7 with the Execution lifecycle persisted
+state, and later to the current 11 (see the Calculation Context paragraphs above).
+Version 1 BuildCandidate, BuildListEntry, and ProductionPlan
 calculations are incompatible with any later version and must not be reused as current
 results. Existing staleness checks mark old BuildListEntry records with
 `calculation_context_changed` and exclude them from Planner input. Preserve old
@@ -3753,21 +3804,25 @@ runs. Its contract:
 - `prepareImportJson()` / `prepareImportRoot()` return typed results (`invalid_json`
   for a non-JSON body, `invalid_import` otherwise) and never throw on untrusted
   input. Schema migration is only the existing `prepareExportRootForImport()`
-  (schema 6..10, unchanged semantics); `validateExportRootForFullReplacement()` then
+  (schema 6..11; the 10 -> 11 step deletes every Draft of the old accumulating contract);
+  `validateExportRootForFullReplacement()` then
   adds BuildCandidate / BuildListEntry / AppSettings entity validation, the Target
   Ideal => Practical containment, primary ID uniqueness per collection, the running-Plan
   collection invariant (at most one `active` / `stale` Plan in `root.productionPlans`;
-  snapshot Plans inside Undo snapshots and save points are not counted, and terminal /
-  draft Plans get no count constraint), the formal persisted references (Candidate /
+  snapshot Plans inside Undo snapshots and save points are not counted, and terminal
+  Plans get no count constraint) and the independent Draft collection invariant (at most
+  one `draft` Plan in `root.productionPlans`, `invalid_state` otherwise; a Draft beside a
+  running Plan is not refused), the formal persisted references (Candidate /
   Entry `targetWeaponId` and the Route's `collectReferencedOwnedWeaponIds()`,
-  `validateTargetPreferredOwnedWeapons()`, every BuildListEntry reference of a
+  `validateTargetPreferredOwnedWeapons()`, every BuildListEntry reference of an `active`
   ProductionPlan - `selectedBuildListEntryIds`, Step `buildListEntryId`, checkpoint
   milestones, `executionEffects` target links / compromise labels / target completions,
   conflict participants / recommendation / selection / checkpoint participants,
   `rejectedBuildListEntries` - plus the Plan-dependent Targets of
   `collectProductionPlanDependentTargetWeaponIds()` and milestone Targets, with every
   Entry-paired Target equal to that Entry's own `targetWeaponId` as Plan generation and
-  the Plan start effect derive it, ExecutionHistory `planId` / `planStepId`,
+  the Plan start effect derive it (a `draft` / `stale` / `completed` / `abandoned` Plan
+  body is never read as current foreign keys, see the seventeenth PR above), ExecutionHistory `planId` / `planStepId`,
   `executionInProgress.productionPlanId` naming a running (`active` / `stale`) Plan,
   `completedByProductionPlanId`, `validateExecutionSavePointReferences()` plus the
   current-entity contract `prepareExecutionSavePointRestore()` requires: the save
@@ -3796,8 +3851,9 @@ runs. Its contract:
 - `clearAllData()` clears every user table and creates one default AppSettings in one
   transaction, creating no other entity; a failure keeps the previous data
 - None of it moved `CURRENT_CALCULATION_APP_SCHEMA_VERSION` (13),
-  `DATABASE_SCHEMA_VERSION` (7), `ExportRoot.schemaVersion` (10), or
-  `RngState.schemaVersion` (2)
+  `DATABASE_SCHEMA_VERSION` (then 7), `ExportRoot.schemaVersion` (then 10), or
+  `RngState.schemaVersion` (2); the later Draft lifecycle PR moved Dexie to 8 and
+  Export to 11 without touching the other two
 
 ---
 
@@ -4348,15 +4404,42 @@ Relevant test areas include:
   sets it to null for every Target, removes `relatedTargetWeaponIds` from every
   current OwnedWeapon, never infers a preference from the removed list, and
   rewrites no BuildCandidate, BuildListEntry, ProductionPlan, or ExecutionHistory
-- `DATABASE_SCHEMA_VERSION = 7`, `ExportRoot.schemaVersion = 10`, `RngState.schemaVersion = 2`,
+- `DATABASE_SCHEMA_VERSION = 8`, `ExportRoot.schemaVersion = 11`, `RngState.schemaVersion = 2`,
   `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 13`, schema 1..12 ProductionPlans and
   schema 1..11 Candidates / BuildListEntries failing closed under version 13, schema 12
   Candidates / BuildListEntries staying usable under 13 through the explicit build-result
   exception only while the other CalculationContext fields match, a schema 7 Export migrating to 8 with its Plans untouched, a
   schema 8 Export migrating to 9 only when it holds no terminal Plan and no
   ExecutionHistory, a schema 9 Export migrating to 10 with `lastIdentifiedAt = null` in every
-  RngState / Normal Counter body and a schema 9 body already carrying it refused, and no
-  other version authority changed
+  RngState / Normal Counter body and a schema 9 body already carrying it refused, a schema 10
+  Export migrating to 11 with every `draft` Plan deleted (none chosen by `createdAt`,
+  `updatedAt` or ID) and every other Plan, Entry and collection untouched, a schema 11 Export
+  keeping its one Draft, and no other version authority changed
+- The Dexie v7 -> v8 upgrade deleting every `draft` ProductionPlan of a legacy database
+  (three Drafts beside an active, a completed and an abandoned Plan) while keeping every
+  other Plan body, the BuildListEntry a Draft referenced, and every other collection exactly
+- `ProductionPlanRepository` adding a first Draft, refusing a second different Draft through
+  `add` and `put` (`draft_plan_conflict`), allowing a `put` of the same Draft ID, accepting a
+  Draft beside an active Plan, and keeping the running-Plan invariant unchanged
+- `savePlannerOrchestrationResult()` replacing the previous Draft (and every accumulated
+  legacy Draft) with the new one and its generated Entries in one transaction, keeping the
+  previous Draft with no new Plan and no partial Entry when the save-time validation refuses
+  the result, when a generated Entry write fails or when the new Plan write fails, keeping
+  `completed` / `abandoned` Plans, keeping the previous Draft on a `plan === null` result, and
+  never cascading the Entries the previous Draft referenced
+- The reported Export failure: a `draft` Plan whose `selectedBuildListEntryIds` and every
+  Step `buildListEntryId` name a Build List Entry absent from the current collection is
+  accepted by `validateExportRootForFullReplacement()` and exported by `exportRoot()`, while
+  an `active` Plan with the same missing references is still refused with
+  `invalid_reference` and the database is left unchanged
+- A `draft` / `stale` / `completed` / `abandoned` Plan body's missing Entry or dependent
+  Target references never refusing Import / Export, an `active` one's still refusing, the
+  Plan body's own Domain validation still applying whatever the lifecycle, a schema 11 backup
+  holding one divergent Draft importing with the Draft kept (its start left to the runtime),
+  and two top-level Drafts refused with `invalid_state` while one Draft beside an active or
+  stale Plan is accepted
+- A stale top-level Plan whose game save point snapshot names a missing selected Entry,
+  OwnedWeapon or Plan-dependent Target, or a non-active snapshot Plan, still refused
 - `RngState.lastIdentifiedAt` written only by the Identification adoption and kept through a
   notes-only / Counter Gate / value save, `NormalArtianCounter.lastIdentifiedAt` written only by
   the Normal Counter Identification confirmation and reset by a save that changes the value,

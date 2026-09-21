@@ -17,6 +17,7 @@ import {
   createTargetExecutionStateHash,
   isCalculationContextCompatible,
   migrateExportRootV7ToV8,
+  migrateExportRootV8ToV9,
   prepareExportRootForImport,
   resolveObservationBindingTokens,
   validateProductionPlan,
@@ -125,8 +126,8 @@ describe('calculation schema version boundaries', () => {
     // Identification provenance later moved Export to 10 and Dexie to 7, again
     // without touching calculation semantics.
     expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(13)
-    expect(EXPORT_SCHEMA_VERSION).toBe(10)
-    expect(DATABASE_SCHEMA_VERSION).toBe(7)
+    expect(EXPORT_SCHEMA_VERSION).toBe(11)
+    expect(DATABASE_SCHEMA_VERSION).toBe(8)
   })
 
   it.each([11, 12])('fails a version %i Plan closed instead of reusing it as a current Plan', (version) => {
@@ -643,12 +644,16 @@ describe('Export schema 7 -> 8', () => {
     expect(migrated.root.schemaVersion).toBe(8)
     expect(migrated.root.productionPlans).toEqual([legacy])
     expect(migrated.root.productionPlans[0].steps[0].executionEffects).toBeUndefined()
+    // Schema 8 -> 9 gives the draft Plan its deterministic lifecycle nulls ...
+    const toV9 = migrateExportRootV8ToV9(migrated.root)
+    expect(toV9.ok && toV9.root.productionPlans).toEqual([{ ...legacy, abandonmentReason: null, abandonedAt: null, completedAt: null }])
+    // ... and schema 10 -> 11 then deletes it as an accumulated Draft of the old
+    // contract, so the full Import chain reaches 11 without it.
     const imported = prepareExportRootForImport(JSON.parse(JSON.stringify(schema7Root(legacy))))
     expect(imported.ok).toBe(true)
     if (!imported.ok) return
-    // Schema 8 -> 9 then gives the draft Plan its deterministic lifecycle nulls.
-    expect(imported.root.schemaVersion).toBe(10)
-    expect(imported.root.productionPlans).toEqual([{ ...legacy, abandonmentReason: null, abandonedAt: null, completedAt: null }])
+    expect(imported.root.schemaVersion).toBe(11)
+    expect(imported.root.productionPlans).toEqual([])
   })
 
   it('refuses a schema 7 root whose Plan already carries a schema 8 field', () => {

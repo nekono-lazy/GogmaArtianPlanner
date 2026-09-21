@@ -54,7 +54,7 @@ function legacyTarget(preferredOwnedWeaponId: string | null) {
 
 describe('owned weapon status persistence migration', () => {
   it('uses the current DATABASE_SCHEMA_VERSION', () => {
-    expect(DATABASE_SCHEMA_VERSION).toBe(7)
+    expect(DATABASE_SCHEMA_VERSION).toBe(8)
   })
 
   it('renames only material, keeps every other status, protection and preference', async () => {
@@ -93,7 +93,7 @@ describe('owned weapon status persistence migration', () => {
 
     const candidate = createValidBuildCandidate()
     const entry = createValidBuildListEntry()
-    const plan = createValidProductionPlan()
+    const plan = { ...createValidProductionPlan(), status: 'active' as const }
     const history = createValidExecutionHistory()
 
     for (const weapon of [material, protectedMaterial, practical, ideal, normal]) {
@@ -110,7 +110,7 @@ describe('owned weapon status persistence migration', () => {
     try {
       await database.open()
       // v1 -> v2 -> v3 -> v4 -> v5 all run, in order.
-      expect(database.verno).toBe(7)
+      expect(database.verno).toBe(8)
 
       const read = async (id: string) =>
         database.ownedWeapons.get(ownedWeaponId(id))
@@ -159,7 +159,7 @@ describe('owned weapon status persistence migration', () => {
     const database = new AppDatabase(name)
     try {
       await database.open()
-      expect(database.verno).toBe(7)
+      expect(database.verno).toBe(8)
       const migratedTarget = await database.targetWeapons.get(
         createValidTargetWeapon().id,
       )
@@ -182,7 +182,7 @@ describe('owned weapon status persistence migration', () => {
 
     // A schema-8 Plan holding the removed operations and a `material` status
     // snapshot, exactly as an older runtime persisted it.
-    const legacyPlan = createValidProductionPlan()
+    const legacyPlan = { ...createValidProductionPlan(), status: 'active' as const }
     legacyPlan.calculationContext = {
       ...legacyPlan.calculationContext,
       appSchemaVersion: 8,

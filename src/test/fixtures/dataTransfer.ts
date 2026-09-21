@@ -100,7 +100,7 @@ export function dataTransferRoot(overrides: Partial<ExportRoot> = {}): ExportRoo
   history.undoSnapshot.affectedTargetWeaponsBefore = [createValidTargetWeapon()]
   history.undoSnapshot.executionSavePointBefore = fixtureSavePoint(plan.id, null)
   return {
-    schemaVersion: 10,
+    schemaVersion: 11,
     appName: 'mh-wilds-gogma-artian-planner',
     exportedAt: DOMAIN_FIXTURE_TIME,
     rngState: { ...createValidRngState(), lastIdentifiedAt: '2026-08-28T12:00:00.000Z' },

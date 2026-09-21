@@ -1464,6 +1464,16 @@ statusの意味（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.2）。
 不変条件。
 
 - `status = "active"` または `"stale"` の実行中Planは同時に1件まで
+- `status = "draft"` の未開始Plan（現在の下書き）はtop-level collectionに同時に1件まで。これは実行中Plan
+  の件数制約とは独立した不変条件であり、Draftと実行中Plan（active / stale）の同時存在は禁止しない。
+  新しいDraftの保存は、Planner保存transaction（14.5、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.15）の
+  中で旧Draftをatomicに置換する: 保存が完全に成功した場合だけ旧Draftが消えて新Draftだけが残り、
+  保存が失敗した場合はrollbackで旧Draftを維持する。`ProductionPlanRepository` は別IDのDraftが既に
+  ある状態でDraftを `add` / `put` することを `draft_plan_conflict` で拒否する（同じIDのDraft更新は
+  別Draftと数えない）。旧Draftの削除で、そのDraftが参照していたBuildListEntry / BuildCandidate /
+  TargetWeaponをcascade deleteしない（「このEntryは特定Draftだけが所有する」というauthorityが
+  persisted shapeに無いため）。`active` / `stale` / `completed` / `abandoned` のPlanは新Draft保存で
+  削除しない
 - `abandonmentReason` / `abandonedAt` は `status = "abandoned"` のときだけ非null。`completedAt` は
   `status = "completed"` のときだけ非null
 - `stale` はPlanが壊れたことの検出、`abandoned` はユーザーの意図した終了であり、互いに読み替えない。
@@ -2089,7 +2099,7 @@ mh-wilds-gogma-artian-planner
 
 ## 14.2 DB schemaVersion
 
-初期作成schemaは1。現行DATABASE_SCHEMA_VERSIONは7。version(1)のstoresを保持し、
+初期作成schemaは1。現行DATABASE_SCHEMA_VERSIONは8。version(1)のstoresを保持し、
 version(2) upgradeでTarget妥協条件だけを解除する。Idealと他entityを保持し、compromiseNeedsReview=trueとする。
 旧Practical Skillも解除するため、移行直後はIdeal-onlyとなる。
 
@@ -2155,6 +2165,19 @@ NormalArtianCounterへ追加する（6.1 / 6.2）。table / indexは変更しな
   ため、`updatedAt`、`lastObservedAt`、`source = observation` から採用時刻を推測してbackfillしない
 - 既にfieldを持つbodyは変更しない
 - reminder / recovery用のprovenanceであり、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` は変更しない（13のまま）
+
+version(8) upgradeで `status = "draft"` のProductionPlanを全件削除する（11.1のDraft最大1件契約）。
+table / indexは変更しない。v1 -> ... -> v7 -> v8は順番に適用できること。
+
+- 旧契約ではPlanner保存のたびにDraftが旧Draftの横へ追加され、一覧・削除UIも無かったため、Draftは
+  何件でも蓄積し得た。どのDraftがユーザーの意図した「現在Draft」かを示すauthorityは永続データに
+  無いため、`createdAt` / `updatedAt` / ID順などから残すDraftを推測せず、全Draftを削除する
+- `active` / `stale` / `completed` / `abandoned` のPlan、BuildListEntry（Draftが参照していたEntryを
+  含む。Draft削除はEntryへcascadeしない）、BuildCandidate、TargetWeapon、OwnedWeapon、ExecutionHistory、
+  ExecutionSavePoint、RngState、NormalArtianCounter、Settingsは変更しない
+- `TargetWeapon.completedByProductionPlanId` や `OwnedWeapon.executionInProgress` がDraftを指す
+  データは正規lifecycle上存在しないため、Draft削除に合わせた推測修正を行わない
+- Persistence lifecycle契約の変更であり、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` は変更しない（13のまま）
 
 ```ts
 db.version(1).stores({
@@ -2246,9 +2269,19 @@ Planner constrained re-searchを経たPlan保存も原子的に行う。契約�
 - 保存直前にcurrent stateを再読込・再validationし、失敗時は何も書き込まない
 - Planner Domain / WorkerはIndexedDBへ直接アクセスしない。この保存は
   Application / Persistence層の責務とする
+- 同じtransactionで、既存の `draft` ProductionPlanを全件削除してから新Draftを追加する
+  （旧Draftのatomic replacement、11.1）。transaction終了時のDraftは新Draft 1件だけになる
+- current state再validation、CalculationContext validation、generated Entry validation /
+  collision、Plan reference validation、generated Entryのadd、新Draftのadd、Dexie writeの
+  いずれかが失敗した場合はtransaction全体をrollbackし、旧Draftは残り、新Draftもpartialな
+  generated Entryも存在しない。旧Draftを先に別transactionで削除しない
+- 削除するのはDraft recordだけであり、旧Draftが参照していたBuildListEntry / BuildCandidate /
+  TargetWeaponをcascade deleteしない。`active` / `stale` / `completed` / `abandoned` のPlanも
+  削除しない
 
 新しいtableもDexie schema versionの変更も伴わない。`buildListEntries` と
-`productionPlans` の既存tableをそのまま使う。
+`productionPlans` の既存tableをそのまま使う（Draft最大1件契約自体はDexie v8で既存Draftを
+全削除して導入した、14.2）。
 
 ---
 
@@ -2258,7 +2291,7 @@ Planner constrained re-searchを経たPlan保存も原子的に行う。契約�
 
 ```ts
 export interface ExportRoot {
-  schemaVersion: 10;
+  schemaVersion: 11;
   appName: "mh-wilds-gogma-artian-planner";
   exportedAt: ISODateTimeString;
   rngState: RngState | null;
@@ -2328,6 +2361,18 @@ schema 9 -> 10は該当bodyへ `lastIdentifiedAt = null`（RngStateは `schemaVe
 `updatedAt` / `lastObservedAt` / `source = observation` から採用時刻を推測しない。schema 9を名乗りながら
 `lastIdentifiedAt` を持つbody、またはrecord schemaVersion 2のRngStateを持つrootは拒否する。
 
+Draft lifecycle整理の実装PRで `schemaVersion` を11へ更新した。schema 11はentityの形状を変えず、
+`productionPlans` に `status = "draft"` のPlanを最大1件（現在の下書き）だけ含むというcollection契約
+（11.1）の境界である。Import準備はschema 11をそのまま読み、そのDraftを削除しない。schema 10は旧契約
+（Draftが蓄積し得た）のrootなので純粋関数 `migrateExportRootV10ToV11()` で読み、schema 9 / 8 / 7 / 6は
+既存migrationの後に `migrateExportRootV10ToV11()` で読む。schema 10 -> 11は次だけを行い、推測をしない。
+
+- `productionPlans` から `status = "draft"` のPlanを全件削除する。`createdAt` / `updatedAt` / ID順から
+  残すDraftを1件選ばない
+- `active` / `stale` / `completed` / `abandoned` のPlan、ExecutionHistory Undo Snapshotやゲーム内セーブ地点
+  の中のPlan body、BuildListEntry（削除したDraftが参照していたEntryを含む）、その他すべてのcollectionは
+  変更しない
+
 ## 15.2 Import方針
 
 Import時は以下の順序で検証する。
@@ -2338,7 +2383,16 @@ Import時は以下の順序で検証する。
 4. マスターIDが現在のMaster Dataに存在する
 5. RestorationBonusSetがすべて5枠
 6. Counterが0以上の整数
-7. BuildListEntryのTarget参照とPlanの参照整合性が保たれている。作成元BuildCandidateの削除はSnapshotがあるため許可する
+7. BuildListEntryのTarget参照とPlanの参照整合性が保たれている。作成元BuildCandidateの削除はSnapshotがあるため許可する。
+   Plan body内のBuildListEntry / Plan依存Target参照をcurrent collectionへのforeign keyとして要求するのは
+   top-level `active` Planだけとする。`draft`（生成時点のartifactで未開始。開始可否は
+   `prepareProductionPlanStart()` の既存validationが判断する）、`stale`（Plan-breaking guardは
+   active Planだけを警告対象とするため、Build List等の変更を正規UI操作で合法に保存できる。replan /
+   recovery / restore可否はそれぞれの既存runtime authorityが判断する）、`completed` / `abandoned`
+   （履歴。Build ListやTargetを後から整理してもbackupを取れる必要がある）のPlan bodyはcurrent
+   foreign keyとして扱わない。ProductionPlan自身のDomain structural validation、Master ID validation、
+   CalculationContext shape validation、lifecycle metadata validationは全statusで行う。
+   ExecutionSavePoint snapshotのrestore必須参照（12.1、15.3）はこの規則で緩めない
 8. CalculationContextの形式が正しい
 
 Import方式。
@@ -2349,11 +2403,11 @@ Import方式。
 
 ## 15.3 Migration
 
-現行ExportRootはschemaVersion=10である（schemaVersion 8はcalculation schema 12のProductionPlan形状を加えた形状、schemaVersion 9はProductionPlan lifecycle metadataとExecution Undo Snapshotを加えた形状、schemaVersion 10はRngState / NormalArtianCounterのIdentification provenance `lastIdentifiedAt` を加えた形状）。schemaVersion 6はBuildCandidateが `intermediateStateGroups` を、
+現行ExportRootはschemaVersion=11である（schemaVersion 8はcalculation schema 12のProductionPlan形状を加えた形状、schemaVersion 9はProductionPlan lifecycle metadataとExecution Undo Snapshotを加えた形状、schemaVersion 10はRngState / NormalArtianCounterのIdentification provenance `lastIdentifiedAt` を加えた形状、schemaVersion 11はentity形状を変えずDraft最大1件のcollection契約を導入した境界）。schemaVersion 6はBuildCandidateが `intermediateStateGroups` を、
 BuildListEntryが `intermediateStateSelection` を持つ最初の形状であり（schemaVersion 5は
 旧 `checkpointGroups` / `selectedCheckpointOpportunityIds` の形状）、schemaVersion 7はそれに
 Execution lifecycleの永続状態を加えた形状である（15.1）。
-Dexie `DATABASE_SCHEMA_VERSION = 7` とは独立して更新する。
+Dexie `DATABASE_SCHEMA_VERSION = 8` とは独立して更新する。
 
 全置換Import / Export / 全データクリアのPersistence / Application Service基盤は実装済みである
 （`src/services/dataTransfer/importExportService.ts`、`importExportValidation.ts`）。Settings画面への接続
@@ -2365,25 +2419,29 @@ typed resultだけをImport可否のauthorityとし、確認後にだけ `applyI
 hydrateし、`getOrCreateDefault()` で上書きしない。
 
 - Export（`exportRoot()` / `serializeExport()`）は全user tableを1つのread-only Dexie transactionで読み、
-  `schemaVersion = 10` / `appName` をService自身が設定し、`exportedAt` は注入したclockの時刻とする。
+  `schemaVersion = 11` / `appName` をService自身が設定し、`exportedAt` は注入したclockの時刻とする。
   top-level entity collectionだけをprimary IDで安定sortし、復元ボーナス5枠順、PlanStep順、その他のnested
   arrayの順序は永続化どおり保つ。作成したrootを後述のImport full validationに通し、Settings recordの欠落や
   Domain不変条件違反があればDBを書き換えずに `export_state_invalid` でfail closedする。旧CalculationContextの
   計算artifactは拒否しない
 - Import準備（`prepareImportJson()` / `prepareImportRoot()`）はJSON parse失敗を `invalid_json`、それ以外の
   拒否を `invalid_import` のtyped resultとして返し、untrusted inputに対してthrowしない。schema migrationは
-  既存の `prepareExportRootForImport()`（schema 6..10）だけを使い、その成功後に全置換用のfull validation
+  既存の `prepareExportRootForImport()`（schema 6..11。10 -> 11は旧契約で蓄積したDraftを全削除する）だけを
+  使い、その成功後に全置換用のfull validation
   （`validateExportRootForFullReplacement()`）を追加で行う: BuildCandidate / BuildListEntry / AppSettingsの
   entity validation、Target Ideal ⇒ Practical containment、全top-level collectionのprimary ID一意性、
   実行中Plan（active / stale）がtop-level collectionで最大1件というcollection invariant（11.1 / 16。Undo
-  SnapshotやセーブポイントのPlan bodyは数えず、terminal / draftに件数制約を追加しない）、
+  SnapshotやセーブポイントのPlan bodyは数えず、terminalに件数制約を追加しない）とそれとは独立した
+  未開始Plan（draft）がtop-level collectionで最大1件というcollection invariant（11.1。2件以上は
+  `invalid_state` でfail closed。Draftと実行中Planの同時存在は拒否しない）、
   formalなpersisted reference（Candidate / Entry snapshotの `targetWeaponId` とRouteが参照する所持武器、
-  `preferredOwnedWeaponId` のcollection契約、ProductionPlanが持つすべてのBuildListEntry参照
+  `preferredOwnedWeaponId` のcollection契約、top-level `active` ProductionPlanが持つすべてのBuildListEntry参照
   （`selectedBuildListEntryIds`、PlanStepの `buildListEntryId`、checkpoint milestone、`executionEffects` の
   targetLinks / compromiseLabels / targetCompletions、conflictの参加者・推奨・選択・checkpointParticipants、
   `rejectedBuildListEntries`）と、`collectProductionPlanDependentTargetWeaponIds()` が定義するPlan依存Target
   およびmilestoneのTarget、Entryと組で名指しされるTargetがそのEntryの `targetWeaponId` と一致すること
-  （Plan生成 / Plan開始効果と同じ導出）、ExecutionHistoryの `planId` / `planStepId`、
+  （Plan生成 / Plan開始効果と同じ導出。`draft` / `stale` / `completed` / `abandoned` のPlan bodyはこれらを
+  current foreign keyとして要求しない、15.2）、ExecutionHistoryの `planId` / `planStepId`、
   `executionInProgress.productionPlanId` が実行中（active / stale）Planであること、
   `completedByProductionPlanId`、ゲーム内セーブ地点参照とそのPlanが実行中であること、セーブ地点のsnapshot Planが
   `active` であること（記録できるのはactive時だけ。current PlanはstaleでもよいのはRestoreと同じ）、
@@ -2404,8 +2462,11 @@ hydrateし、`getOrCreateDefault()` で上書きしない。
   rollbackする
 - 全データクリア（`clearAllData()`）は全user tableのclearとdefault AppSettings 1件の作成を1つの
   transactionで行い、RngStateや目標武器を推測作成しない。失敗時は元データを維持する
-- この基盤は `CURRENT_CALCULATION_APP_SCHEMA_VERSION`（13）、`DATABASE_SCHEMA_VERSION`（7）、
-  `ExportRoot.schemaVersion`（10）、`RngState.schemaVersion`（2）を変更しない
+- この基盤は `CURRENT_CALCULATION_APP_SCHEMA_VERSION`（13）、`DATABASE_SCHEMA_VERSION`（当時7）、
+  `ExportRoot.schemaVersion`（当時10）、`RngState.schemaVersion`（2）を変更しなかった。後続のDraft
+  lifecycle整理でDexieを8、Exportを11へ更新した（14.2 / 15.1）。`CURRENT_CALCULATION_APP_SCHEMA_VERSION`
+  （13）、`RngState.schemaVersion`（2）、`AppSettings.schemaVersion`（1）、`PRODUCTION_RNG_ENGINE_VERSION`、
+  Master dataVersionは変更していない
 旧schema=1を新Targetとして直接受理しない。将来のimportも純粋Target移行関数を使用し、
 旧Practical/OR/Practical Skillは解除、Ideal・ID・他entityは保持する。
 
@@ -2444,6 +2505,8 @@ Production RNG契約切替時の互換性は次のとおりとする。
 - BuildCandidateとBuildListEntryは別Entity
 - Planner対象はstaleでないBuildListEntryのみ
 - 実行中Plan（active / stale）は同時に1件まで。一時中断用statusは持たない
+- 未開始Plan（draft）はtop-level collectionに同時に1件まで。新Draftの保存成功時だけ旧Draftを同一transactionで
+  置換し、保存失敗時は旧Draftを維持する。Draftの置換・削除でBuildListEntryをcascade deleteしない
 - PlanとExecutionHistoryは分離する
 - Plan非依存Targetの追加・変更とBuild Listへの新規Entry追加ではPlanをstaleにしない
 - ExecutionはStepごとにrngAdvanceを即時反映し、Plan完了時にまとめて更新しない

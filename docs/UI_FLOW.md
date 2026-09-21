@@ -1316,8 +1316,11 @@ resolutionを無視したordinary Planを保存しない。
 上記warningが無い結果だけ、既存
 `plannerResultPersistenceService.savePlannerOrchestrationResult()` でgenerated BuildListEntryと
 ProductionPlanをatomic保存する。新しいPlanが保存された場合はその
-`/plans/:planId` へ遷移する。Planが生成されない場合または保存失敗時は旧Planを黙って置換・削除
-せず、B10の判断だけで旧Planを自動削除しない。
+`/plans/:planId` へ遷移する。Planが生成されない場合または保存失敗時は旧Draftを置換・削除しない。
+保存が完全に成功した場合だけ、Persistence serviceが同一transaction内で旧Draftを新Draftへatomicに
+置換する（通常Draftは最大1件、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.15 /
+[DATA_MODEL.md](./DATA_MODEL.md) 11.1）。B10が独自の判断で旧Planを削除することはなく、実行中・
+完了・破棄済みのPlanは新Draft保存で削除されない。
 
 B10の編集対象は原則 `status === 'draft'` とする。`stale` はwhat-if / Conflict固定を継続せず
 既存の再計算へ誘導する。`active` / `completed` / `abandoned` PlanをB10操作で書き換えない。

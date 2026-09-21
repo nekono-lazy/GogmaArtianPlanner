@@ -600,7 +600,7 @@ describe('PlannerResultPersistenceService', () => {
   it('rolls the generated Entry back when the Plan write fails', () =>
     withScenario(
       async ({ service, result, context, database, plan, storedEntryIds }) => {
-        const existing = { ...createValidProductionPlan(), id: plan.id }
+        const existing = { ...createValidProductionPlan(), id: plan.id, status: 'active' as const }
         await database.productionPlans.put(existing)
         await expect(
           service.savePlannerOrchestrationResult(result, context),
@@ -721,4 +721,156 @@ describe('PlannerResultPersistenceService', () => {
         },
       },
     ))
+})
+
+describe('PlannerResultPersistenceService Draft replacement (DATA_MODEL 11.1 / PLANNER_SPEC 9.2.15)', () => {
+  /** A previous Draft as the old contract left it: it may name Entries the scenario database does not hold. */
+  function oldDraft(id: string): ProductionPlan {
+    return { ...createValidProductionPlan(), id: productionPlanId(id) }
+  }
+
+  function terminalPlan(id: string, status: 'completed' | 'abandoned'): ProductionPlan {
+    const base = createValidProductionPlan()
+    return {
+      ...base,
+      id: productionPlanId(id),
+      status,
+      abandonmentReason: status === 'abandoned' ? 'user_abandoned' : null,
+      abandonedAt: status === 'abandoned' ? DOMAIN_FIXTURE_TIME : null,
+      completedAt: status === 'completed' ? DOMAIN_FIXTURE_TIME : null,
+      currentStepId: status === 'completed' ? null : base.currentStepId,
+      steps: status === 'completed'
+        ? base.steps.map((step) => ({ ...step, isCompleted: true, completedAt: DOMAIN_FIXTURE_TIME }))
+        : base.steps,
+    }
+  }
+
+  const PERSISTED_ENTRY_IDS = ['build-list.persisted.a', 'build-list.persisted.b']
+
+  it('A: replaces the previous Draft with the new one and saves the generated Entries', () =>
+    withScenario(async ({ service, result, context, database, plan, storedEntryIds, storedPlanIds }) => {
+      const previous = oldDraft('plan.draft.previous')
+      await database.productionPlans.put(previous)
+
+      const saved = await service.savePlannerOrchestrationResult(result, context)
+
+      expect(saved?.id).toBe(plan.id)
+      expect(saved?.status).toBe('draft')
+      expect(await storedPlanIds()).toEqual(['plan.b8d2a.a'])
+      expect(await database.productionPlans.get(previous.id)).toBeUndefined()
+      expect(await storedEntryIds()).toEqual(['build-list.generated.0', ...PERSISTED_ENTRY_IDS])
+    }))
+
+  it('B: replaces every accumulated legacy Draft inside the one transaction', () =>
+    withScenario(async ({ service, result, context, database, storedPlanIds }) => {
+      // A state the v8 upgrade removes and the repository refuses to create;
+      // seeded around the repository to prove the replacement clears it whole.
+      await database.productionPlans.bulkPut([oldDraft('plan.draft.a'), oldDraft('plan.draft.b'), oldDraft('plan.draft.c')])
+
+      await service.savePlannerOrchestrationResult(result, context)
+
+      expect(await storedPlanIds()).toEqual(['plan.b8d2a.a'])
+      expect(await database.productionPlans.where('status').equals('draft').count()).toBe(1)
+    }))
+
+  it('C: keeps the previous Draft when the save-time validation refuses the result', () =>
+    withScenario(async ({ service, result, database, storedEntryIds, storedPlanIds }) => {
+      const previous = oldDraft('plan.draft.previous')
+      await database.productionPlans.put(previous)
+
+      await expect(
+        service.savePlannerOrchestrationResult(result, { ...result.plan!.calculationContext, rngEngineVersion: 'other-engine' }),
+      ).rejects.toMatchObject({ code: 'planner_state_changed' })
+
+      expect(await storedPlanIds()).toEqual(['plan.draft.previous'])
+      expect(await database.productionPlans.get(previous.id)).toEqual(previous)
+      expect(await storedEntryIds()).toEqual(PERSISTED_ENTRY_IDS)
+    }))
+
+  it('D: rolls the Draft deletion back when a generated Entry write fails', () =>
+    withScenario(
+      async ({ service, result, context, database, storedEntryIds, storedPlanIds }) => {
+        const previous = oldDraft('plan.draft.previous')
+        await database.productionPlans.put(previous)
+
+        await expect(service.savePlannerOrchestrationResult(result, context)).rejects.toBeInstanceOf(Error)
+
+        expect(await storedPlanIds()).toEqual(['plan.draft.previous'])
+        expect(await database.productionPlans.get(previous.id)).toEqual(previous)
+        expect(await storedEntryIds()).toEqual(PERSISTED_ENTRY_IDS)
+      },
+      {
+        generatedCount: 2,
+        createRepositories: (database) => {
+          const repositories = createPlannerResultPersistenceRepositories(database)
+          class FailingSecondWriteRepository extends BuildListEntryRepository {
+            async addBuildListEntry(entry: BuildListEntry) {
+              if (entry.id === buildListEntryId('build-list.generated.1')) {
+                throw new Error('fixture Entry write failure')
+              }
+              return super.addBuildListEntry(entry)
+            }
+          }
+          return { ...repositories, buildListEntries: new FailingSecondWriteRepository(database) }
+        },
+      },
+    ))
+
+  it('E: rolls the Draft deletion and the generated Entries back when the new Plan write fails', () =>
+    withScenario(async ({ service, result, context, database, plan, storedEntryIds, storedPlanIds }) => {
+      const previous = oldDraft('plan.draft.previous')
+      await database.productionPlans.put(previous)
+      // A stored Plan already holds the new Plan's ID, so the add fails on the key.
+      const colliding = { ...createValidProductionPlan(), id: plan.id, status: 'active' as const }
+      await database.productionPlans.put(colliding)
+
+      await expect(service.savePlannerOrchestrationResult(result, context)).rejects.toBeInstanceOf(Error)
+
+      expect(await storedPlanIds()).toEqual(['plan.b8d2a.a', 'plan.draft.previous'])
+      expect(await database.productionPlans.get(previous.id)).toEqual(previous)
+      expect(await database.productionPlans.get(plan.id)).toEqual(colliding)
+      expect(await storedEntryIds()).toEqual(PERSISTED_ENTRY_IDS)
+    }))
+
+  it('F: deletes only Drafts - completed and abandoned Plans survive the replacement', () =>
+    withScenario(async ({ service, result, context, database, storedPlanIds }) => {
+      const completed = terminalPlan('plan.done.completed', 'completed')
+      const abandoned = terminalPlan('plan.done.abandoned', 'abandoned')
+      await database.productionPlans.bulkPut([oldDraft('plan.draft.previous'), completed, abandoned])
+
+      await service.savePlannerOrchestrationResult(result, context)
+
+      expect(await storedPlanIds()).toEqual(['plan.b8d2a.a', 'plan.done.abandoned', 'plan.done.completed'])
+      expect(await database.productionPlans.get(completed.id)).toEqual(completed)
+      expect(await database.productionPlans.get(abandoned.id)).toEqual(abandoned)
+    }))
+
+  it('keeps the previous Draft when the Planner produced no Plan', () =>
+    withScenario(async ({ service, context, database, storedPlanIds }) => {
+      const previous = oldDraft('plan.draft.previous')
+      await database.productionPlans.put(previous)
+      const saved = await service.savePlannerOrchestrationResult(
+        { plan: null, conflicts: [], warnings: [], termination: exhaustedPlannerTermination(), generatedBuildListEntries: [] },
+        context,
+      )
+      expect(saved).toBeNull()
+      expect(await storedPlanIds()).toEqual(['plan.draft.previous'])
+    }))
+
+  it('never cascades the Entries the previous Draft referenced', () =>
+    withScenario(async ({ service, result, context, database, storedEntryIds, persisted }) => {
+      // The previous Draft names a persisted Entry of the scenario; the
+      // replacement deletes the Draft record only.
+      const previous = {
+        ...oldDraft('plan.draft.previous'),
+        selectedBuildListEntryIds: [persisted[0].id],
+        steps: createValidProductionPlan().steps.map((step) => ({ ...step, buildListEntryId: persisted[0].id, targetWeaponId: persisted[0].targetWeaponId })),
+      }
+      await database.productionPlans.put(previous)
+
+      await service.savePlannerOrchestrationResult(result, context)
+
+      expect(await storedEntryIds()).toEqual(['build-list.generated.0', ...PERSISTED_ENTRY_IDS])
+      expect(await database.buildListEntries.get(persisted[0].id)).toEqual(persisted[0])
+    }))
 })

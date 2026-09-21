@@ -47,9 +47,17 @@ import {
  * Planner Worker was handed. Persisting it therefore re-reads the current state
  * *inside* the same Dexie read-write transaction that writes, re-validates the
  * Plan against that state with the existing snapshot authorities, and only then
- * writes the generated BuildListEntries and the ProductionPlan together. There
- * is no window between the check and the write, and no partial save: either
- * every Entry and the Plan are stored, or nothing is.
+ * deletes the previous Draft, writes the generated BuildListEntries and adds the
+ * new Draft together. There is no window between the check and the write, and
+ * no partial save: either the previous Draft is gone and every Entry and the
+ * new Plan are stored, or nothing changed and the previous Draft survives.
+ *
+ * The Draft replacement (`docs/DATA_MODEL.md` 11.1, `docs/PLANNER_SPEC.md`
+ * 9.2.15) deletes only `draft` ProductionPlan records - never an `active` /
+ * `stale` / `completed` / `abandoned` Plan, and never the BuildListEntries,
+ * BuildCandidates or Targets the previous Draft referenced, because a Draft
+ * owns no Entry and no persisted authority could say which Entry belonged to
+ * it alone. It is never done in a separate transaction ahead of the save.
  *
  * It re-runs nothing. Beam Search, Trace Replay, constrained enumeration and
  * Candidate trials stay the Worker's authority, so no `RngEngine` is created on
@@ -150,14 +158,16 @@ export class PlannerResultPersistenceService {
   }
 
   /**
-   * Saves the generated BuildListEntries and the ProductionPlan atomically.
+   * Saves the generated BuildListEntries and the ProductionPlan atomically,
+   * replacing the previous Draft in the same transaction.
    *
-   * Returns the stored Plan, or `null` when the calculation produced no Plan.
-   * Every failure throws a `RepositoryError` and writes nothing:
-   * `planner_state_changed` means the current state moved under the
-   * calculation, `planner_result_invalid` means the result violates an
-   * invariant it must satisfy to be persisted, and `validation_failed` means
-   * Domain validation rejected the Plan or an Entry.
+   * Returns the stored Plan, or `null` when the calculation produced no Plan
+   * (the previous Draft is then kept). Every failure throws a `RepositoryError`
+   * and writes nothing - the previous Draft, the Build List and every other
+   * table stay as they were: `planner_state_changed` means the current state
+   * moved under the calculation, `planner_result_invalid` means the result
+   * violates an invariant it must satisfy to be persisted, and
+   * `validation_failed` means Domain validation rejected the Plan or an Entry.
    */
   async savePlannerOrchestrationResult(
     result: PlannerOrchestrationResult,
@@ -200,6 +210,10 @@ export class PlannerResultPersistenceService {
         )
         this.assertPlanReferences(plan, generatedEntries, augmentedEntries)
 
+        // The new Draft replaces the previous one (DATA_MODEL 11.1): only Draft
+        // records are deleted, their referenced Entries stay, and any failure
+        // below rolls this deletion back with the rest of the transaction.
+        await this.repositories.productionPlans.deleteDraftProductionPlans()
         for (const entry of generatedEntries) {
           await this.repositories.buildListEntries.addBuildListEntry(entry)
         }

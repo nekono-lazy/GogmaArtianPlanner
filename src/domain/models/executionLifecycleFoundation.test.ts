@@ -78,7 +78,7 @@ function savePointFor(
 function exportRoot(overrides: Partial<ExportRoot> = {}): ExportRoot {
   const plan = createValidProductionPlan()
   return {
-    schemaVersion: 10,
+    schemaVersion: 11,
     appName: 'mh-wilds-gogma-artian-planner',
     exportedAt: DOMAIN_FIXTURE_TIME,
     rngState: createValidRngState(),
@@ -136,7 +136,7 @@ describe('Execution lifecycle version boundaries', () => {
     // and the Execution runtime lifecycle metadata moved Export to 9. The Plan
     // start effect moved the calculation schema to 13 with no persisted shape
     // change. The Identification provenance moved Export to 10.
-    expect(EXPORT_SCHEMA_VERSION).toBe(10)
+    expect(EXPORT_SCHEMA_VERSION).toBe(11)
     expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(13)
   })
 })
@@ -314,7 +314,7 @@ describe('Export schema 10', () => {
     if (!migrated.ok) return
     expect(migrated.root.schemaVersion).toBe(7)
     const imported = prepareExportRootForImport(JSON.parse(JSON.stringify(legacy)))
-    expect(imported.ok && imported.root.schemaVersion).toBe(10)
+    expect(imported.ok && imported.root.schemaVersion).toBe(11)
     expect(migrated.root.executionSavePoints).toEqual([])
     migrated.root.targetWeapons.forEach((target) => {
       expect(target).toMatchObject({ lifecycleStatus: 'active', completedAt: null, completedByProductionPlanId: null })
@@ -344,7 +344,7 @@ describe('Export schema 10', () => {
 
   it('refuses unsupported schema versions and malformed roots', () => {
     expect(prepareExportRootForImport({ ...exportRoot(), schemaVersion: 5 }).ok).toBe(false)
-    expect(prepareExportRootForImport({ ...exportRoot(), schemaVersion: 11 }).ok).toBe(false)
+    expect(prepareExportRootForImport({ ...exportRoot(), schemaVersion: 12 }).ok).toBe(false)
     expect(prepareExportRootForImport({ ...exportRoot(), appName: 'other' }).ok).toBe(false)
     expect(prepareExportRootForImport({ ...exportRoot(), ownedWeapons: null }).ok).toBe(false)
     expect(prepareExportRootForImport(null).ok).toBe(false)
