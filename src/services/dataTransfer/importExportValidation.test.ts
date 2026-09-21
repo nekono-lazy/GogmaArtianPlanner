@@ -448,6 +448,267 @@ describe('validateExportRootForFullReplacement', () => {
     expect(validate(root).issues).toEqual([])
   })
 
+  describe('ProductionPlan BuildListEntry / TargetWeapon references', () => {
+    const ENTRY = buildListEntryId('build-list.fixture.a')
+    const TARGET = targetWeaponId('target.fixture.a')
+    const OTHER_TARGET = targetWeaponId('target.fixture.completed')
+    const MISSING_ENTRY = buildListEntryId('entry.missing')
+    const MISSING_TARGET = targetWeaponId('target.missing')
+
+    /** Each reference category of a Plan, set to the given Entry / Target pair. */
+    const categories: [string, (root: ExportRoot, entry: typeof ENTRY, target: typeof TARGET) => void, string][] = [
+      ['selectedBuildListEntryIds', (root, entry) => { root.productionPlans[0].selectedBuildListEntryIds = [entry] }, 'productionPlans[0].selectedBuildListEntryIds[0]'],
+      ['steps[*].buildListEntryId / targetWeaponId', (root, entry, target) => {
+        root.productionPlans[0].steps[0].buildListEntryId = entry
+        root.productionPlans[0].steps[0].targetWeaponId = target
+      }, 'productionPlans[0].steps[0].buildListEntryId'],
+      ['steps[*].progressedTargetWeaponIds', (root, _entry, target) => { root.productionPlans[0].steps[0].progressedTargetWeaponIds = [target] }, 'productionPlans[0].dependentTargetWeaponIds'],
+      ['steps[*].checkpointMilestones[*]', (root, entry, target) => {
+        root.productionPlans[0].steps[0].checkpointMilestones = [{
+          buildListEntryId: entry,
+          targetWeaponId: target,
+          skillOpportunityId: null,
+          bonusOpportunityId: null,
+          conditionMatch: { bonus: 'practical', skill: 'ideal' },
+          remainingOperationCount: 1,
+        }]
+      }, 'productionPlans[0].steps[0].checkpointMilestones[0].buildListEntryId'],
+      ['steps[*].executionEffects.targetLinks[*]', (root, entry, target) => {
+        root.productionPlans[0].steps[0].ownedWeaponId = ownedWeaponId('owned.fixture.a')
+        root.productionPlans[0].steps[0].executionEffects = effects({ targetLinks: [{ buildListEntryId: entry, targetWeaponId: target }] })
+      }, 'productionPlans[0].steps[0].executionEffects.targetLinks[0].buildListEntryId'],
+      ['steps[*].executionEffects.compromiseLabels[*]', (root, entry) => {
+        root.productionPlans[0].steps[0].ownedWeaponId = ownedWeaponId('owned.fixture.a')
+        root.productionPlans[0].steps[0].executionEffects = effects({ compromiseLabels: [{ buildListEntryId: entry, ownedWeaponId: ownedWeaponId('owned.fixture.a') }] })
+      }, 'productionPlans[0].steps[0].executionEffects.compromiseLabels[0].buildListEntryId'],
+      ['steps[*].executionEffects.targetCompletions[*]', (root, entry, target) => {
+        root.productionPlans[0].steps[0].ownedWeaponId = ownedWeaponId('owned.fixture.a')
+        root.productionPlans[0].steps[0].executionEffects = effects({ targetCompletions: [{ buildListEntryId: entry, targetWeaponId: target, ownedWeaponId: ownedWeaponId('owned.fixture.a') }] })
+      }, 'productionPlans[0].steps[0].executionEffects.targetCompletions[0].buildListEntryId'],
+      ['conflicts[*].buildListEntryIds', (root, entry) => { root.productionPlans[0].conflicts = [conflict({ buildListEntryIds: [entry] })] }, 'productionPlans[0].conflicts[0].buildListEntryIds[0]'],
+      ['conflicts[*].recommendedBuildListEntryId', (root, entry) => { root.productionPlans[0].conflicts = [conflict({ recommendedBuildListEntryId: entry })] }, 'productionPlans[0].conflicts[0].recommendedBuildListEntryId'],
+      ['conflicts[*].selectedBuildListEntryId', (root, entry) => { root.productionPlans[0].conflicts = [conflict({ selectedBuildListEntryId: entry })] }, 'productionPlans[0].conflicts[0].selectedBuildListEntryId'],
+      ['conflicts[*].checkpointParticipants[*]', (root, entry) => {
+        root.productionPlans[0].conflicts = [conflict({ checkpointParticipants: [{ buildListEntryId: entry, axis: 'skill', opportunityId: 'opportunity.fixture' as never }] })]
+      }, 'productionPlans[0].conflicts[0].checkpointParticipants[0].buildListEntryId'],
+      ['rejectedBuildListEntries[*]', (root, entry) => {
+        root.productionPlans[0].rejectedBuildListEntries = [{ buildListEntryId: entry, reason: 'counter_before_current' as never, detail: 'fixture' }]
+      }, 'productionPlans[0].rejectedBuildListEntries[0].buildListEntryId'],
+    ]
+
+    function effects(overrides: Partial<NonNullable<ExportRoot['productionPlans'][number]['steps'][number]['executionEffects']>>) {
+      return {
+        trackedOwnedWeaponId: ownedWeaponId('owned.fixture.a'),
+        normalCreationRole: null,
+        registersTrackedWeapon: false,
+        observationBinding: null,
+        targetLinks: [],
+        compromiseLabels: [],
+        targetCompletions: [],
+        ...overrides,
+      }
+    }
+
+    function conflict(overrides: Partial<ExportRoot['productionPlans'][number]['conflicts'][number]>) {
+      return {
+        id: 'conflict.fixture',
+        kind: 'gogma_counter_position' as never,
+        buildListEntryIds: [ENTRY],
+        reason: 'fixture',
+        recommendedBuildListEntryId: null,
+        selectedBuildListEntryId: null,
+        resolutionNote: null,
+        ...overrides,
+      }
+    }
+
+    /** The abandoned fixture Plan shares the Step; keep the run to one Plan under test. */
+    function planRoot(): ExportRoot {
+      const root = dataTransferRoot()
+      root.productionPlans = [root.productionPlans[0]]
+      root.executionSavePoints[0].productionPlan = { ...root.productionPlans[0] }
+      root.executionHistory[0].undoSnapshot.productionPlanBefore = { ...root.productionPlans[0] }
+      return root
+    }
+
+    it.each(categories)('accepts a valid %s reference', (_label, mutate) => {
+      const root = planRoot()
+      mutate(root, ENTRY, TARGET)
+      expect(validate(root).issues).toEqual([])
+    })
+
+    it.each(categories.filter(([label]) => !label.includes('progressedTargetWeaponIds')))('rejects a missing BuildListEntry in %s', (_label, mutate, path) => {
+      const root = planRoot()
+      mutate(root, MISSING_ENTRY, TARGET)
+      expectRejected(root, path, 'invalid_reference')
+    })
+
+    it.each<[string, (root: ExportRoot) => void, string]>([
+      ['steps[*].targetWeaponId', (root) => { root.productionPlans[0].steps[0].targetWeaponId = MISSING_TARGET; root.productionPlans[0].steps[0].buildListEntryId = null }, 'productionPlans[0].dependentTargetWeaponIds'],
+      ['steps[*].progressedTargetWeaponIds', (root) => { root.productionPlans[0].steps[0].progressedTargetWeaponIds = [MISSING_TARGET] }, 'productionPlans[0].dependentTargetWeaponIds'],
+      ['steps[*].checkpointMilestones[*].targetWeaponId', (root) => { categories[3][1](root, ENTRY, MISSING_TARGET) }, 'productionPlans[0].steps[0].checkpointMilestones[0].targetWeaponId'],
+      ['steps[*].executionEffects.targetLinks[*].targetWeaponId', (root) => { categories[4][1](root, ENTRY, MISSING_TARGET) }, 'productionPlans[0].dependentTargetWeaponIds'],
+      ['steps[*].executionEffects.targetCompletions[*].targetWeaponId', (root) => { categories[6][1](root, ENTRY, MISSING_TARGET) }, 'productionPlans[0].dependentTargetWeaponIds'],
+    ])('rejects a missing TargetWeapon in %s', (_label, mutate, path) => {
+      const root = planRoot()
+      mutate(root)
+      expectRejected(root, path, 'invalid_reference')
+    })
+
+    it.each<[string, number]>([
+      ['steps[*].targetWeaponId', 1],
+      ['steps[*].checkpointMilestones[*]', 3],
+      ['steps[*].executionEffects.targetLinks[*]', 4],
+      ['steps[*].executionEffects.targetCompletions[*]', 6],
+    ])('rejects %s naming an existing Target that is not the Entry own Target', (_label, categoryIndex) => {
+      const root = planRoot()
+      categories[categoryIndex][1](root, ENTRY, OTHER_TARGET)
+      expectRejected(root, categories[categoryIndex][2], 'inconsistent_snapshot')
+    })
+
+    it('never reads a Step candidateId or ownedWeaponId as a current foreign key', () => {
+      const root = planRoot()
+      root.productionPlans[0].steps[0].candidateId = candidateId('candidate.replaced')
+      root.productionPlans[0].steps[0].ownedWeaponId = ownedWeaponId('owned.planned.future')
+      root.buildCandidates = []
+      expect(validate(root).issues).toEqual([])
+    })
+
+    it('accepts a Plan-independent Target being absent from the Plan', () => {
+      const root = planRoot()
+      root.targetWeapons.push({ ...createValidTargetWeapon(), id: targetWeaponId('target.independent') })
+      expect(validate(root).issues).toEqual([])
+    })
+  })
+
+  describe('running Plan collection invariant', () => {
+    function plans(root: ExportRoot, statuses: ('draft' | 'active' | 'stale' | 'completed' | 'abandoned')[]) {
+      root.executionSavePoints = []
+      root.executionHistory = []
+      root.ownedWeapons[0].executionInProgress = null
+      root.targetWeapons[1] = completedFixtureTarget('target.fixture.completed', null)
+      root.productionPlans = statuses.map((status, index) => ({
+        ...createValidProductionPlan(),
+        id: productionPlanId(`plan.fixture.${index}`),
+        status,
+        abandonmentReason: status === 'abandoned' ? 'user_abandoned' : null,
+        abandonedAt: status === 'abandoned' ? DOMAIN_FIXTURE_TIME : null,
+        completedAt: status === 'completed' ? DOMAIN_FIXTURE_TIME : null,
+        currentStepId: status === 'completed' ? null : 'step.fixture.a' as never,
+        steps: status === 'completed'
+          ? [{ ...createValidProductionPlan().steps[0], isCompleted: true, completedAt: DOMAIN_FIXTURE_TIME }]
+          : createValidProductionPlan().steps,
+      }))
+    }
+
+    it.each<[string, ('draft' | 'active' | 'stale' | 'completed' | 'abandoned')[]]>([
+      ['one active Plan', ['active']],
+      ['one stale Plan', ['stale']],
+      ['several terminal Plans beside one active Plan', ['completed', 'abandoned', 'completed', 'active', 'abandoned']],
+      ['several draft Plans', ['draft', 'draft', 'active']],
+      ['no running Plan', ['draft', 'completed', 'abandoned']],
+    ])('accepts %s', (_label, statuses) => {
+      const root = dataTransferRoot()
+      plans(root, statuses)
+      expect(validate(root).issues).toEqual([])
+    })
+
+    it.each<[string, ('active' | 'stale')[], string]>([
+      ['active + stale', ['active', 'stale'], 'productionPlans[1].status'],
+      ['two active Plans', ['active', 'active'], 'productionPlans[1].status'],
+      ['two stale Plans', ['stale', 'stale'], 'productionPlans[1].status'],
+    ])('rejects %s', (_label, statuses, path) => {
+      const root = dataTransferRoot()
+      plans(root, statuses)
+      expectRejected(root, path, 'invalid_state')
+    })
+
+    it('counts only the top-level collection, never the Plans inside an Undo snapshot or a save point', () => {
+      // The fixture already holds an active snapshot Plan in its save point and
+      // in its Undo snapshot beside the one running top-level Plan.
+      const root = dataTransferRoot()
+      expect(root.executionSavePoints[0].productionPlan.status).toBe('active')
+      expect(root.executionHistory[0].undoSnapshot.productionPlanBefore.status).toBe('active')
+      expect(validate(root).issues).toEqual([])
+    })
+  })
+
+  describe('executionInProgress and save point Plan lifecycle', () => {
+    function withPlanStatus(status: 'draft' | 'active' | 'stale' | 'completed' | 'abandoned'): ExportRoot {
+      const root = dataTransferRoot()
+      const plan = root.productionPlans[0]
+      plan.status = status
+      plan.abandonmentReason = status === 'abandoned' ? 'user_abandoned' : null
+      plan.abandonedAt = status === 'abandoned' ? DOMAIN_FIXTURE_TIME : null
+      plan.completedAt = status === 'completed' ? DOMAIN_FIXTURE_TIME : null
+      if (status === 'completed') {
+        plan.currentStepId = null
+        plan.steps = [{ ...plan.steps[0], isCompleted: true, completedAt: DOMAIN_FIXTURE_TIME }]
+      }
+      // The history and the save point of the fixture belong to this Plan; the
+      // save point is dropped here so the in-progress rule is judged alone.
+      root.executionHistory[0].undoSnapshot.productionPlanBefore = { ...plan }
+      root.executionSavePoints = []
+      return root
+    }
+
+    it.each(['active', 'stale'] as const)('accepts executionInProgress naming a %s Plan', (status) => {
+      expect(validate(withPlanStatus(status)).issues).toEqual([])
+    })
+
+    it.each(['completed', 'abandoned', 'draft'] as const)('rejects executionInProgress naming a %s Plan', (status) => {
+      expectRejected(withPlanStatus(status), 'ownedWeapons[0].executionInProgress.productionPlanId', 'invalid_state')
+    })
+
+    it('still rejects executionInProgress naming a missing Plan', () => {
+      const root = withPlanStatus('active')
+      root.ownedWeapons[0].executionInProgress = { productionPlanId: productionPlanId('plan.missing'), startedAt: DOMAIN_FIXTURE_TIME }
+      expectRejected(root, 'ownedWeapons[0].executionInProgress.productionPlanId', 'invalid_reference')
+    })
+
+    it('never requires a running Plan to have an in-progress weapon', () => {
+      const root = withPlanStatus('active')
+      root.ownedWeapons[0].executionInProgress = null
+      expect(validate(root).issues).toEqual([])
+    })
+
+    it.each(['completed', 'abandoned', 'draft'] as const)('rejects a game save point left on a %s Plan', (status) => {
+      const root = withPlanStatus(status)
+      root.ownedWeapons[0].executionInProgress = null
+      root.executionSavePoints = [fixtureSavePoint(DATA_TRANSFER_PLAN_ID)]
+      expectRejected(root, 'executionSavePoints[0].productionPlanId', 'invalid_state')
+    })
+  })
+
+  describe('ExecutionSavePoint current scope references', () => {
+    it('accepts a save point whose snapshot Plan finds its selected Entries and dependent Targets', () => {
+      expect(validate(dataTransferRoot()).issues).toEqual([])
+    })
+
+    it('rejects a snapshot Plan naming a selected BuildListEntry that no longer exists', () => {
+      const root = dataTransferRoot()
+      root.executionSavePoints[0].productionPlan.selectedBuildListEntryIds = [buildListEntryId('entry.missing')]
+      expectRejected(root, 'executionSavePoints[0].productionPlan.selectedBuildListEntryIds[0]', 'invalid_reference')
+    })
+
+    it('rejects a snapshot Plan depending on a TargetWeapon that no longer exists', () => {
+      const root = dataTransferRoot()
+      root.executionSavePoints[0].productionPlan.steps[0].targetWeaponId = targetWeaponId('target.missing')
+      root.executionSavePoints[0].productionPlan.steps[0].buildListEntryId = null
+      expectRejected(root, 'executionSavePoints[0].productionPlan.dependentTargetWeaponIds', 'invalid_reference')
+    })
+
+    it('never reads the snapshot OwnedWeapon / TargetWeapon bodies as current foreign keys', () => {
+      // A Plan-independent Target that preferred a scope weapon at the save
+      // point, and a scope weapon body, both exist only inside the snapshot.
+      const root = dataTransferRoot()
+      const savePoint = root.executionSavePoints[0]
+      savePoint.ownedWeapons.push({ ...createValidOwnedWeapon(ownedWeaponId('owned.snapshot.only')), isProtected: false })
+      savePoint.targetWeapons.push({ ...createValidTargetWeapon(), id: targetWeaponId('target.snapshot.only'), preferredOwnedWeaponId: ownedWeaponId('owned.snapshot.only') })
+      expect(validate(root).issues).toEqual([])
+    })
+  })
+
   it('leaves the ExecutionHistory / Plan pair validation to the Domain validators it reuses', () => {
     const root = dataTransferRoot()
     const history = createValidExecutionHistory()

@@ -94,7 +94,8 @@ function without<T extends object>(value: T, keys: readonly string[]): Record<st
 
 /** A different persisted state, so a replacement is observable table by table. */
 function otherRoot(): ExportRoot {
-  const plan = { ...createValidProductionPlan(), id: productionPlanId('plan.other'), status: 'active' as const, selectedBuildListEntryIds: [] }
+  // A running Plan referencing nothing of the other root's Build List / Targets.
+  const plan = { ...createValidProductionPlan(), id: productionPlanId('plan.other'), status: 'active' as const, selectedBuildListEntryIds: [], steps: [], currentStepId: null }
   return dataTransferRoot({
     rngState: null,
     normalArtianCounters: [],
@@ -201,6 +202,19 @@ describe('ImportExportService export', () => {
     await expectUnchanged(database, () => service(database).exportRoot(), 'export_state_invalid')
   }))
 
+  it('fails closed when the current database holds two running Plans', () => withDatabase(async (database) => {
+    const root = dataTransferRoot()
+    await seedRoot(database, root)
+    await database.productionPlans.put({ ...root.productionPlans[0], id: productionPlanId('plan.second-running'), status: 'stale', recalculationReasons: ['rng_state_changed'] })
+
+    const before = await fullDump(database)
+    const error = await service(database).exportRoot().catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(DataTransferError)
+    expect((error as DataTransferError).code).toBe('export_state_invalid')
+    expect((error as DataTransferError).validationIssues.map(({ code }) => code)).toContain('invalid_state')
+    expect(await fullDump(database)).toEqual(before)
+  }))
+
   it('keeps historical calculation artifacts exportable', () => withDatabase(async (database) => {
     const root = dataTransferRoot()
     expect(root.buildListEntries[0].calculationContext.appSchemaVersion).toBe(1)
@@ -281,16 +295,19 @@ describe('ImportExportService prepare', () => {
           rngState: stripRng(savePoint.rngState),
           normalCounters: stripCounters(savePoint.normalCounters),
         })),
-        // The existing schema 9 -> 10 authority fills the Undo snapshot's own
-        // RngState / Normal Counter bodies; a save point nested inside the Undo
-        // snapshot is outside its coverage and is not part of this fixture.
         executionHistory: root.executionHistory.map((history) => ({
           ...history,
           undoSnapshot: {
             ...history.undoSnapshot,
             rngStateBefore: stripRng(history.undoSnapshot.rngStateBefore),
             normalCountersBefore: stripCounters(history.undoSnapshot.normalCountersBefore),
-            executionSavePointBefore: null,
+            executionSavePointBefore: history.undoSnapshot.executionSavePointBefore === null
+              ? null
+              : {
+                  ...history.undoSnapshot.executionSavePointBefore,
+                  rngState: stripRng(history.undoSnapshot.executionSavePointBefore.rngState),
+                  normalCounters: stripCounters(history.undoSnapshot.executionSavePointBefore.normalCounters),
+                },
           },
         })),
       } as unknown as ExportRootV9
@@ -342,6 +359,10 @@ describe('ImportExportService prepare', () => {
       expect(result.root.executionSavePoints[0].rngState.lastIdentifiedAt).toBeNull()
       expect(result.root.executionHistory[0].undoSnapshot.rngStateBefore.lastIdentifiedAt).toBeNull()
       expect(result.root.executionHistory[0].undoSnapshot.normalCountersBefore[0].lastIdentifiedAt).toBeNull()
+      const nested = result.root.executionHistory[0].undoSnapshot.executionSavePointBefore
+      expect(nested).not.toBeNull()
+      expect(nested?.rngState).toMatchObject({ schemaVersion: 2, lastIdentifiedAt: null })
+      expect(nested?.normalCounters[0].lastIdentifiedAt).toBeNull()
     }))
 
     it('migrates schema 8 through 9 to 10, filling only the non-terminal lifecycle nulls', () => withDatabase(async (database) => {

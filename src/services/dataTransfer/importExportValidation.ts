@@ -26,6 +26,8 @@ import {
 } from '../../domain/models/publicTypes'
 import { validateTargetPreferredOwnedWeapons } from '../../domain/target/preferredOwnedWeapon'
 import { validateTargetIdealImpliesPractical } from '../../domain/target/targetInvariantValidation'
+import { collectProductionPlanDependentTargetWeaponIds } from '../../domain/planner/productionPlanGeneration'
+import { isRunningProductionPlanStatus } from '../../db/repositories/productionPlanRepository'
 
 /*
  * Full-replacement Import validation of a current-schema Export root
@@ -39,7 +41,11 @@ import { validateTargetIdealImpliesPractical } from '../../domain/target/targetI
  * - the entity validation of every collection it leaves out (BuildCandidate,
  *   BuildListEntry, AppSettings) and the Target Ideal => Practical containment
  * - primary ID uniqueness inside every top-level collection
- * - the formal persisted references between collections
+ * - the running-Plan collection invariant (at most one active / stale Plan)
+ * - the formal persisted references between collections, including every
+ *   BuildListEntry / TargetWeapon reference of a ProductionPlan, the Plan
+ *   lifecycle an in-progress weapon or a game save point may name, and the
+ *   current entities a game save point's snapshot Plan needs
  * - the collection-level Target preference contract
  * - the existence of every persisted Master ID in the current Master Data
  *
@@ -162,6 +168,198 @@ function routeOwnedWeaponReferenceIssues(
 }
 
 /**
+ * One BuildListEntry reference a persisted Plan carries, with the Target the
+ * same field names when the generating authority derived that Target from the
+ * Entry (`entry.targetWeaponId`: PlanStep primary Target, checkpoint milestone,
+ * Target link, Target completion).
+ */
+interface PlanBuildListEntryReference {
+  id: unknown
+  path: string
+  targetWeaponId?: unknown
+}
+
+/**
+ * Every BuildListEntry reference of a persisted ProductionPlan: the selected
+ * Entries, each Step's Entry, milestone, Target link, compromise label and
+ * Target completion, each conflict's participants / recommendation / selection
+ * / checkpoint participants, and the rejected Entries. Fields a legacy Plan
+ * does not carry are simply absent; every field is read defensively.
+ */
+function planBuildListEntryReferences(plan: ProductionPlan, path: string): PlanBuildListEntryReference[] {
+  const references: PlanBuildListEntryReference[] = []
+  const add = (id: unknown, refPath: string, targetWeaponId?: unknown) => {
+    if (id !== null && id !== undefined) references.push({ id, path: refPath, targetWeaponId })
+  }
+  if (Array.isArray(plan.selectedBuildListEntryIds)) {
+    plan.selectedBuildListEntryIds.forEach((id, index) => add(id, `${path}.selectedBuildListEntryIds[${index}]`))
+  }
+  if (Array.isArray(plan.steps)) {
+    plan.steps.forEach((step, index) => {
+      if (!isRecord(step)) return
+      const stepPath = `${path}.steps[${index}]`
+      add(step.buildListEntryId, `${stepPath}.buildListEntryId`, step.targetWeaponId)
+      if (Array.isArray(step.checkpointMilestones)) {
+        step.checkpointMilestones.forEach((milestone, milestoneIndex) => {
+          if (isRecord(milestone)) add(milestone.buildListEntryId, `${stepPath}.checkpointMilestones[${milestoneIndex}].buildListEntryId`, milestone.targetWeaponId)
+        })
+      }
+      const effects = step.executionEffects
+      if (!isRecord(effects)) return
+      const effectsPath = `${stepPath}.executionEffects`
+      if (Array.isArray(effects.targetLinks)) {
+        effects.targetLinks.forEach((link, linkIndex) => {
+          if (isRecord(link)) add(link.buildListEntryId, `${effectsPath}.targetLinks[${linkIndex}].buildListEntryId`, link.targetWeaponId)
+        })
+      }
+      if (Array.isArray(effects.compromiseLabels)) {
+        effects.compromiseLabels.forEach((label, labelIndex) => {
+          if (isRecord(label)) add(label.buildListEntryId, `${effectsPath}.compromiseLabels[${labelIndex}].buildListEntryId`)
+        })
+      }
+      if (Array.isArray(effects.targetCompletions)) {
+        effects.targetCompletions.forEach((completion, completionIndex) => {
+          if (isRecord(completion)) add(completion.buildListEntryId, `${effectsPath}.targetCompletions[${completionIndex}].buildListEntryId`, completion.targetWeaponId)
+        })
+      }
+    })
+  }
+  if (Array.isArray(plan.conflicts)) {
+    plan.conflicts.forEach((conflict, index) => {
+      if (!isRecord(conflict)) return
+      const conflictPath = `${path}.conflicts[${index}]`
+      if (Array.isArray(conflict.buildListEntryIds)) {
+        conflict.buildListEntryIds.forEach((id, idIndex) => add(id, `${conflictPath}.buildListEntryIds[${idIndex}]`))
+      }
+      add(conflict.recommendedBuildListEntryId, `${conflictPath}.recommendedBuildListEntryId`)
+      add(conflict.selectedBuildListEntryId, `${conflictPath}.selectedBuildListEntryId`)
+      if (Array.isArray(conflict.checkpointParticipants)) {
+        conflict.checkpointParticipants.forEach((participant, participantIndex) => {
+          if (isRecord(participant)) add(participant.buildListEntryId, `${conflictPath}.checkpointParticipants[${participantIndex}].buildListEntryId`)
+        })
+      }
+    })
+  }
+  if (Array.isArray(plan.rejectedBuildListEntries)) {
+    plan.rejectedBuildListEntries.forEach((rejected, index) => {
+      if (isRecord(rejected)) add(rejected.buildListEntryId, `${path}.rejectedBuildListEntries[${index}].buildListEntryId`)
+    })
+  }
+  return references
+}
+
+/**
+ * The BuildListEntry / TargetWeapon references of one persisted Plan against
+ * the current collections (`docs/DATA_MODEL.md` 15.2 step 7):
+ *
+ * - every BuildListEntry the Plan names exists
+ * - where the Plan names an Entry together with a Target, that Target is the
+ *   Entry's own `targetWeaponId`, exactly as the Plan generation and the Plan
+ *   start effect derived it
+ * - every Plan-dependent Target (`collectProductionPlanDependentTargetWeaponIds()`,
+ *   the one dependent-Target authority) and every checkpoint milestone Target
+ *   exists
+ *
+ * A Step's `candidateId` and `ownedWeaponId` are not current foreign keys: the
+ * former names the Entry snapshot's Candidate, the latter may be a weapon the
+ * Execution registers later.
+ */
+function productionPlanReferenceIssues(
+  plan: ProductionPlan,
+  path: string,
+  buildListEntries: readonly BuildListEntry[],
+  targetIds: ReadonlySet<string>,
+): DomainValidationIssue[] {
+  const issues: DomainValidationIssue[] = []
+  const entryById = new Map(buildListEntries.map((entry) => [entry.id as string, entry]))
+  planBuildListEntryReferences(plan, path).forEach((reference) => {
+    const entry = typeof reference.id === 'string' ? entryById.get(reference.id) : undefined
+    if (entry === undefined) {
+      issues.push(issue(reference.path, 'invalid_reference', `生産計画が参照する作成リスト項目が存在しません: ${String(reference.id)}`))
+      return
+    }
+    if (reference.targetWeaponId !== undefined && reference.targetWeaponId !== null && reference.targetWeaponId !== entry.targetWeaponId) {
+      issues.push(issue(reference.path, 'inconsistent_snapshot', `作成リスト項目 ${entry.id} の目標武器は ${entry.targetWeaponId} ですが、生産計画は ${String(reference.targetWeaponId)} と組み合わせています`))
+    }
+  })
+  collectProductionPlanDependentTargetWeaponIds(plan, buildListEntries).forEach((targetId) => {
+    if (!targetIds.has(targetId)) {
+      issues.push(issue(`${path}.dependentTargetWeaponIds`, 'invalid_reference', `生産計画が依存する目標武器が存在しません: ${targetId}`))
+    }
+  })
+  if (Array.isArray(plan.steps)) {
+    plan.steps.forEach((step, index) => {
+      if (!isRecord(step) || !Array.isArray(step.checkpointMilestones)) return
+      step.checkpointMilestones.forEach((milestone, milestoneIndex) => {
+        if (!isRecord(milestone)) return
+        const targetId = milestone.targetWeaponId
+        if (typeof targetId !== 'string' || !targetIds.has(targetId)) {
+          issues.push(issue(`${path}.steps[${index}].checkpointMilestones[${milestoneIndex}].targetWeaponId`, 'invalid_reference', `妥協checkpointが参照する目標武器が存在しません: ${String(targetId)}`))
+        }
+      })
+    })
+  }
+  return issues
+}
+
+/**
+ * The current-collection references of one game save point beyond
+ * `validateExecutionSavePointReferences()` (`docs/DATA_MODEL.md` 12.1): the
+ * save point belongs to a running (active / stale) Plan - it is recorded only
+ * for an active Plan and deleted when the Plan completes or is abandoned - and
+ * the entities the restored snapshot Plan needs still exist: its selected
+ * BuildListEntries and its Plan-dependent Targets, judged by the same
+ * authorities the restore uses. The snapshot's own OwnedWeapon / TargetWeapon
+ * bodies are past state, never current foreign keys, and no restore-time
+ * precondition (CalculationContext, executable Step, scope completeness) is
+ * asked here.
+ */
+function executionSavePointScopeIssues(
+  savePoint: ExecutionSavePoint,
+  path: string,
+  buildListEntries: readonly BuildListEntry[],
+  targetIds: ReadonlySet<string>,
+  planById: ReadonlyMap<string, ProductionPlan>,
+): DomainValidationIssue[] {
+  const issues: DomainValidationIssue[] = []
+  const plan = planById.get(savePoint.productionPlanId)
+  if (plan !== undefined && !isRunningProductionPlanStatus(plan.status)) {
+    issues.push(issue(`${path}.productionPlanId`, 'invalid_state', `ゲーム内セーブ地点は実行中（active / stale）の生産計画にだけ存在できます: ${plan.id} は ${plan.status} です`))
+  }
+  const snapshotPlan = savePoint.productionPlan
+  if (!isRecord(snapshotPlan)) return issues
+  const entryIds = idSet(buildListEntries)
+  if (Array.isArray(snapshotPlan.selectedBuildListEntryIds)) {
+    snapshotPlan.selectedBuildListEntryIds.forEach((entryId, index) => {
+      if (typeof entryId !== 'string' || !entryIds.has(entryId)) {
+        issues.push(issue(`${path}.productionPlan.selectedBuildListEntryIds[${index}]`, 'invalid_reference', `ゲーム内セーブ地点の生産計画が参照する作成リスト項目が存在しません: ${String(entryId)}`))
+      }
+    })
+  }
+  collectProductionPlanDependentTargetWeaponIds(snapshotPlan, buildListEntries).forEach((targetId) => {
+    if (!targetIds.has(targetId)) {
+      issues.push(issue(`${path}.productionPlan.dependentTargetWeaponIds`, 'invalid_reference', `ゲーム内セーブ地点の生産計画が依存する目標武器が存在しません: ${targetId}`))
+    }
+  })
+  return issues
+}
+
+/**
+ * At most one running (active / stale) Plan exists in the top-level collection
+ * (`docs/DATA_MODEL.md` 11.1 / 16). Only `root.productionPlans` is counted:
+ * the Plan bodies inside an Undo snapshot or a save point are historical
+ * snapshots, and terminal or draft Plans get no count constraint.
+ */
+function runningPlanIssues(root: ExportRoot): DomainValidationIssue[] {
+  const running = root.productionPlans
+    .map((plan, index) => ({ plan, index }))
+    .filter(({ plan }) => isRunningProductionPlanStatus(plan.status))
+  if (running.length <= 1) return []
+  return running.slice(1).map(({ plan, index }) =>
+    issue(`productionPlans[${index}].status`, 'invalid_state', `実行中（active / stale）の生産計画は同時に1件までです: ${running[0].plan.id} と ${plan.id}`))
+}
+
+/**
  * The formal persisted references between collections (`docs/DATA_MODEL.md`
  * 15.2 step 3 / 7). Only fields the specification defines as references to a
  * currently persisted entity are checked:
@@ -180,7 +378,6 @@ function referenceIssues(root: ExportRoot): DomainValidationIssue[] {
   const issues: DomainValidationIssue[] = []
   const targetIds = idSet(root.targetWeapons)
   const ownedWeaponIds = idSet(root.ownedWeapons)
-  const entryIds = idSet(root.buildListEntries)
   const planById = new Map(root.productionPlans.map((plan) => [plan.id as string, plan]))
 
   root.buildCandidates.forEach((candidate, index) => {
@@ -207,16 +404,23 @@ function referenceIssues(root: ExportRoot): DomainValidationIssue[] {
   })
   root.ownedWeapons.forEach((weapon, index) => {
     const inProgress = weapon.executionInProgress
-    if (inProgress !== null && !planById.has(inProgress.productionPlanId)) {
-      issues.push(issue(`ownedWeapons[${index}].executionInProgress.productionPlanId`, 'invalid_reference', `作成中状態が参照する生産計画が存在しません: ${inProgress.productionPlanId}`))
+    if (inProgress === null) return
+    const path = `ownedWeapons[${index}].executionInProgress.productionPlanId`
+    const plan = planById.get(inProgress.productionPlanId)
+    if (plan === undefined) {
+      issues.push(issue(path, 'invalid_reference', `作成中状態が参照する生産計画が存在しません: ${inProgress.productionPlanId}`))
+    } else if (!isRunningProductionPlanStatus(plan.status)) {
+      // The in-progress mark is set by Execution Steps only and cleared when the
+      // Plan completes or is abandoned (`docs/DATA_MODEL.md` 7.1 / 14.4), so it
+      // can only name a running (active / stale) Plan.
+      issues.push(issue(path, 'invalid_state', `作成中状態が参照する生産計画は実行中（active / stale）でなければなりません: ${inProgress.productionPlanId} は ${plan.status} です`))
     }
   })
   root.productionPlans.forEach((plan, index) => {
-    plan.selectedBuildListEntryIds.forEach((entryId, entryIndex) => {
-      if (!entryIds.has(entryId)) {
-        issues.push(issue(`productionPlans[${index}].selectedBuildListEntryIds[${entryIndex}]`, 'invalid_reference', `生産計画が参照する作成リスト項目が存在しません: ${entryId}`))
-      }
-    })
+    issues.push(...productionPlanReferenceIssues(plan, `productionPlans[${index}]`, root.buildListEntries, targetIds))
+  })
+  root.executionSavePoints.forEach((savePoint, index) => {
+    issues.push(...executionSavePointScopeIssues(savePoint, `executionSavePoints[${index}]`, root.buildListEntries, targetIds, planById))
   })
   root.executionHistory.forEach((history, index) => {
     const path = `executionHistory[${index}]`
@@ -608,6 +812,7 @@ export function validateExportRootForFullReplacement(
 
   issues.push(
     ...guarded('', () => duplicateIdIssues(root)),
+    ...guarded('productionPlans', () => runningPlanIssues(root)),
     ...guarded('', () => referenceIssues(root)),
     ...guarded('targetWeapons', () => validateTargetPreferredOwnedWeapons(root.targetWeapons, root.ownedWeapons).issues),
   )

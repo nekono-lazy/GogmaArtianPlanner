@@ -541,7 +541,8 @@ Ending the Plan resolves nothing; a save point restore or Undo that deleted the 
 reminder / recovery metadata only: it enters no `searchStateHash`, `ExpectedPlanState` hash,
 Candidate / Entry identity or CalculationContext, so `CURRENT_CALCULATION_APP_SCHEMA_VERSION` stays
 13, while Dexie moved to `DATABASE_SCHEMA_VERSION` **7** and `ExportRoot.schemaVersion` to **10**,
-each filling every RngState / Normal Counter body (tables, save point snapshots, Undo snapshots)
+each filling every RngState / Normal Counter body (tables, save point snapshots, Undo snapshots,
+and the save point an Undo snapshot holds as `executionSavePointBefore`)
 with `lastIdentifiedAt = null` and never backfilling an adoption time from `updatedAt`,
 `lastObservedAt` or `source`.
 The fourteenth PR (the replan Preview / adoption UI) connected 16.8 on the Build List and the
@@ -3745,14 +3746,27 @@ contract:
   input. Schema migration is only the existing `prepareExportRootForImport()`
   (schema 6..10, unchanged semantics); `validateExportRootForFullReplacement()` then
   adds BuildCandidate / BuildListEntry / AppSettings entity validation, the Target
-  Ideal => Practical containment, primary ID uniqueness per collection, the formal
-  persisted references (Candidate / Entry `targetWeaponId` and the Route's
-  `collectReferencedOwnedWeaponIds()`, `validateTargetPreferredOwnedWeapons()`,
-  `selectedBuildListEntryIds`, ExecutionHistory `planId` / `planStepId`,
-  `executionInProgress.productionPlanId`, `completedByProductionPlanId`,
-  `validateExecutionSavePointReferences()`), and Master ID existence. A
-  Plan-registered future OwnedWeapon ID, an Undo snapshot body, and
-  `BuildListEntry.candidateId` are never current foreign keys
+  Ideal => Practical containment, primary ID uniqueness per collection, the running-Plan
+  collection invariant (at most one `active` / `stale` Plan in `root.productionPlans`;
+  snapshot Plans inside Undo snapshots and save points are not counted, and terminal /
+  draft Plans get no count constraint), the formal persisted references (Candidate /
+  Entry `targetWeaponId` and the Route's `collectReferencedOwnedWeaponIds()`,
+  `validateTargetPreferredOwnedWeapons()`, every BuildListEntry reference of a
+  ProductionPlan - `selectedBuildListEntryIds`, Step `buildListEntryId`, checkpoint
+  milestones, `executionEffects` target links / compromise labels / target completions,
+  conflict participants / recommendation / selection / checkpoint participants,
+  `rejectedBuildListEntries` - plus the Plan-dependent Targets of
+  `collectProductionPlanDependentTargetWeaponIds()` and milestone Targets, with every
+  Entry-paired Target equal to that Entry's own `targetWeaponId` as Plan generation and
+  the Plan start effect derive it, ExecutionHistory `planId` / `planStepId`,
+  `executionInProgress.productionPlanId` naming a running (`active` / `stale`) Plan,
+  `completedByProductionPlanId`, `validateExecutionSavePointReferences()` plus the save
+  point's Plan being running and its snapshot Plan's selected Entries and
+  Plan-dependent Targets existing now), and Master ID existence. A Plan-registered
+  future OwnedWeapon ID, a Step `candidateId`, an Undo snapshot or save point snapshot
+  body (OwnedWeapon / TargetWeapon), and `BuildListEntry.candidateId` are never current
+  foreign keys; no restore-time precondition is asked, and a running Plan is never
+  required to have an in-progress weapon
 - Master ID validation is existence only, never the save-time
   `validateOwnedWeaponMasterReferences()` / `validateTargetWeaponMasterReferences()`:
   a stored bonus outside the Production availability (Bow / Poison + Element) is

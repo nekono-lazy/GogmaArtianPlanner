@@ -2148,8 +2148,9 @@ version(7) upgradeでIdentification provenance `lastIdentifiedAt` をRngState（
 NormalArtianCounterへ追加する（6.1 / 6.2）。table / indexは変更しない。v1 -> ... -> v6 -> v7は順番に適用できること。
 
 - `rngState` / `normalArtianCounters` tableの全record、ゲーム内セーブ地点snapshot内の `rngState` / `normalCounters`、
-  ExecutionHistory Undo Snapshot内の `rngStateBefore` / `normalCountersBefore` のすべてに `lastIdentifiedAt = null`
-  を補完し、RngState bodyは `schemaVersion = 2` にする
+  ExecutionHistory Undo Snapshot内の `rngStateBefore` / `normalCountersBefore`、およびUndo Snapshotが
+  `executionSavePointBefore` として保持するセーブ地点内の `rngState` / `normalCounters` のすべてに
+  `lastIdentifiedAt = null` を補完し、RngState bodyは `schemaVersion = 2` にする
 - 値は常に `null`（「正式なIdentification採用が記録されていない」）である。旧runtimeは採用時刻を記録していない
   ため、`updatedAt`、`lastObservedAt`、`source = observation` から採用時刻を推測してbackfillしない
 - 既にfieldを持つbodyは変更しない
@@ -2320,7 +2321,8 @@ Import validationはExecutionHistoryを `validateExecutionHistory()` でも検�
 
 Identification provenanceの実装PRで `schemaVersion` を10へ更新した。schema 10はRngState（record schemaVersion 2）と
 NormalArtianCounterの `lastIdentifiedAt`（6.1 / 6.2）を、root直下、ゲーム内セーブ地点snapshot、ExecutionHistory
-Undo Snapshotのすべてのbodyに含む。Import準備はschema 10をそのまま、schema 9を純粋関数
+Undo Snapshot、およびUndo Snapshotが `executionSavePointBefore` として保持するセーブ地点のすべてのbodyに含む。
+Import準備はschema 10をそのまま、schema 9を純粋関数
 `migrateExportRootV9ToV10()`、schema 8 / 7 / 6を既存migrationの後に `migrateExportRootV9ToV10()` で読む。
 schema 9 -> 10は該当bodyへ `lastIdentifiedAt = null`（RngStateは `schemaVersion = 2` も）を補完するだけであり、
 `updatedAt` / `lastObservedAt` / `source = observation` から採用時刻を推測しない。schema 9を名乗りながら
@@ -2369,11 +2371,22 @@ rehydrate）は未実装であり、後続PRで行う。
   既存の `prepareExportRootForImport()`（schema 6..10）だけを使い、その成功後に全置換用のfull validation
   （`validateExportRootForFullReplacement()`）を追加で行う: BuildCandidate / BuildListEntry / AppSettingsの
   entity validation、Target Ideal ⇒ Practical containment、全top-level collectionのprimary ID一意性、
+  実行中Plan（active / stale）がtop-level collectionで最大1件というcollection invariant（11.1 / 16。Undo
+  SnapshotやセーブポイントのPlan bodyは数えず、terminal / draftに件数制約を追加しない）、
   formalなpersisted reference（Candidate / Entry snapshotの `targetWeaponId` とRouteが参照する所持武器、
-  `preferredOwnedWeaponId` のcollection契約、`selectedBuildListEntryIds`、ExecutionHistoryの
-  `planId` / `planStepId`、`executionInProgress.productionPlanId`、`completedByProductionPlanId`、
-  ゲーム内セーブ地点参照）、現在Masterに存在するMaster ID。Plan / PlanStepが持つ将来登録されるOwnedWeapon ID
-  とUndo Snapshot内の過去bodyはcurrent FKとして扱わず、BuildListEntryの作成元BuildCandidate recordも要求しない
+  `preferredOwnedWeaponId` のcollection契約、ProductionPlanが持つすべてのBuildListEntry参照
+  （`selectedBuildListEntryIds`、PlanStepの `buildListEntryId`、checkpoint milestone、`executionEffects` の
+  targetLinks / compromiseLabels / targetCompletions、conflictの参加者・推奨・選択・checkpointParticipants、
+  `rejectedBuildListEntries`）と、`collectProductionPlanDependentTargetWeaponIds()` が定義するPlan依存Target
+  およびmilestoneのTarget、Entryと組で名指しされるTargetがそのEntryの `targetWeaponId` と一致すること
+  （Plan生成 / Plan開始効果と同じ導出）、ExecutionHistoryの `planId` / `planStepId`、
+  `executionInProgress.productionPlanId` が実行中（active / stale）Planであること、
+  `completedByProductionPlanId`、ゲーム内セーブ地点参照とそのPlanが実行中であること、セーブ地点のsnapshot Planが
+  必要とする `selectedBuildListEntryIds` のEntryとPlan依存Targetが現在存在すること）、現在Masterに存在する
+  Master ID。Plan / PlanStepが持つ将来登録されるOwnedWeapon ID、PlanStepの `candidateId`、Undo Snapshot /
+  セーブ地点snapshot内の過去body（OwnedWeapon / TargetWeapon）はcurrent FKとして扱わず、BuildListEntryの
+  作成元BuildCandidate recordも要求しない。復元時固有の前提条件（CalculationContext、実行可能Step、scope完全性）
+  はImportへ持ち込まない。実行中Planに作成中OwnedWeaponの存在を要求しない
 - Master ID検証は存在確認だけであり、Production抽選availability（7.1）は判定しない。旧UIで保存できた
   availability外の復元ボーナスはImportで受理し内容を変えない（non-destructive load）。Candidate snapshotの
   Route起点OwnedWeaponはIDの存在だけを確認し、save時の起点適格性（Normal kind / 非保護）は要求しない。
