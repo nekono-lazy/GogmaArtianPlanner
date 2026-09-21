@@ -18,6 +18,8 @@ import {
 } from '@mui/material'
 import { DisclosureAccordion } from '../components/DisclosureAccordion'
 import { PageShell } from '../components/PageShell'
+import { PersistentReidentificationReminderAlert } from '../components/execution/PersistentReidentificationReminderAlert'
+import { usePersistentReidentificationReminder } from '../components/execution/usePersistentReidentificationReminder'
 import { StatusChip } from '../components/StatusChip'
 import { CandidateCard } from '../components/search/CandidateCard'
 import { MasterDataStatusAlert } from '../components/MasterDataStatusAlert'
@@ -49,6 +51,10 @@ import {
 } from '../db/repositories'
 import { useSettingsStore } from '../stores/settingsStore'
 import { buildListService } from '../services/buildList/buildListService'
+import {
+  loadPersistentReidentificationReminder,
+  type PersistentReidentificationReminder,
+} from '../services/execution/persistentReidentificationReminderService'
 import { createCandidateSearchInput } from '../services/search/createCandidateSearchInput'
 import {
   createProductionSearchWorkerClient,
@@ -81,6 +87,12 @@ export interface SearchPageDependencies {
    * Candidate is already added (`docs/UI_FLOW.md` 9 「作成リスト追加状態」).
    */
   getBuildListEntries(): Promise<BuildListEntry[]>
+  /**
+   * The persistent re-identification reminder over every Plan
+   * (`docs/PLANNER_SPEC.md` 16.15): a warning above the search conditions,
+   * never a gate on the search. Read-only.
+   */
+  getReidentificationReminder(): Promise<PersistentReidentificationReminder>
   createWorkerClient(): SearchWorkerClient
   createInput(options: {
     searchRunId: string
@@ -104,6 +116,7 @@ const defaultDependencies: SearchPageDependencies | null = defaultMaster
       getTargets: () => targetWeaponRepository.getAllTargetWeapons(),
       getOwnedWeapons: () => ownedWeaponRepository.getAllOwnedWeapons(),
       getBuildListEntries: () => buildListEntryRepository.getAllBuildListEntries(),
+      getReidentificationReminder: () => loadPersistentReidentificationReminder(),
       createWorkerClient: createProductionSearchWorkerClient,
       createInput: (options) => createCandidateSearchInput(options),
       saveCandidates: (targetId, candidates) =>
@@ -170,6 +183,13 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
   )
   const [settings, setSettings] = useState<CandidateSearchSettings>({ ...defaultCandidateSearchSettings })
   const [result, setResult] = useState<CandidateSearchResult | null>(null)
+  // Read once on mount from the persisted provenance; a search changes no
+  // provenance, so the reminder stays whatever the search returns (16.15).
+  const loadReminder = useMemo(
+    () => (dependencies ? () => dependencies.getReidentificationReminder() : undefined),
+    [dependencies],
+  )
+  const reminder = usePersistentReidentificationReminder(loadReminder)
   const [progress, setProgress] = useState<CandidateSearchProgress | null>(null)
   const [loading, setLoading] = useState(dependencies !== undefined)
   const [searching, setSearching] = useState(false)
@@ -329,6 +349,9 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
     <PageShell title="候補検索" description="目標武器ごとに、理想品へ到達する作成ルートを検索して作成リストへ追加します。">
       <Stack spacing={{ xs: 2, md: 3 }}>
         {masterForDisplay && <MasterDataStatusAlert master={masterForDisplay} feature="search" />}
+        {dependencies && (
+          <PersistentReidentificationReminderAlert state={reminder.state} master={dependencies.master} surface="search" />
+        )}
         {loading && <LinearProgress aria-label="検索データを読み込み中" />}
         {/* A failed load shows only the failure: no synthetic data, and no
             "register a Target" empty state that would read as empty data. */}

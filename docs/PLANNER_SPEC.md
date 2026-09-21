@@ -5679,8 +5679,13 @@ Dashboard、RNG Setup、Candidate Search、およびExecution NavigatorのPlan�
 判定はpure Domain helper `deriveExecutionReidentificationReminder()`
 （`src/domain/execution/reidentificationReminder.ts`）が担い、再同定先は
 `executionReidentificationDestination()`（Normal作成はNormal Counter Setup、他はRNG Setup）を共有する。
-Execution NavigatorのPlan終了表示は接続済みであり、Dashboard / RNG Setup / Candidate Searchの継続表示UIは
-後続PRで同じhelperを使う。
+Execution NavigatorのPlan終了表示、およびDashboard / RNG Setup / Candidate Searchの継続表示UIは接続済みであり、
+同じhelperを使う。継続表示は全ProductionPlanのExecutionHistoryをPlanごとにこのhelperへ渡し、返された未解決
+streamをRNG stream / Normal Counter ID / 解決不能Normal streamの単位で表示用にまとめるだけである
+（`src/services/execution/persistentReidentificationReminderService.ts`）。集約側は解決を判定せず、永続flagを
+持たず、Plan statusで絞らない。RNG Setupは直接保存とIdentification adoptionの成功後に再読込し、Dashboard /
+Candidate Searchはmount時に読み込む。読み込み失敗は「再同定不要」と扱わずerrorとして表示する。Candidate Searchは
+警告表示のみで、検索を禁止するhard gateは追加しない。
 
 ### 16.16 Undo
 

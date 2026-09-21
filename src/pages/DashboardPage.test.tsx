@@ -112,6 +112,7 @@ function dependencies(overrides: Partial<DashboardPageDependencies> = {}): Dashb
     getTargetWeapons: vi.fn(async () => []),
     getBuildListEntries: vi.fn(async () => []),
     getActivePlan: vi.fn(async () => undefined),
+    getReidentificationReminder: vi.fn(async () => ({ kind: 'none' as const })),
     ...overrides,
   }
 }

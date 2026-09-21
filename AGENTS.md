@@ -494,7 +494,7 @@ semantics changed and the three versions stay 13 / 6 / 9 (an older build refuses
 holding it through action validation, all or nothing). The persistent re-identification
 reminder on Dashboard / RNG Setup / Candidate Search (16.15, derived from the divergence
 records, the Plan state and the Identification provenance the thirteenth PR fixed - never from
-RngState.updatedAt) is still not implemented.
+RngState.updatedAt) was connected by the sixteenth PR below.
 The thirteenth PR (the Execution Navigator state controls UI) connected, in a separate
 「実行状態の管理」 section below the Step's game actions, Undo of the latest ExecutionHistory
 (`undoLatestExecution()` naming the record the user saw; `undo_history_not_latest` never undoes
@@ -615,6 +615,32 @@ buttons while one does, and keeps its per-Entry save chain otherwise. `Intermedi
 the UI side, nothing is persisted by the UI, no reason is written anywhere, and the Undo, Replan
 and `user_abandoned` flows are untouched. It added no persisted field and changed no calculation
 semantics, so the versions stay 13 / 7 / 10 (`RngState.schemaVersion` 2).
+The sixteenth PR (the persistent re-identification reminder) connected 16.15 「再同定を促す継続表示」
+on Dashboard, RNG Setup and Candidate Search through one read-only aggregation
+(`src/services/execution/persistentReidentificationReminderService.ts`) and one shared warning
+(`src/components/execution/PersistentReidentificationReminderAlert.tsx`,
+`persistentReidentificationPresentation.ts`, `usePersistentReidentificationReminder.ts`). The
+aggregation reads every ProductionPlan, every ExecutionHistory record, the current RngState and
+every NormalArtianCounter, groups the records by Plan, judges every Plan - `completed` and
+`abandoned` included, never only the running or latest one - through the unchanged
+`deriveExecutionReidentificationReminder()`, and merges the unresolved streams for display only:
+the RNG stream once, each Normal Counter ID once (named through the current record's
+`weaponTypeId` and the Master, never by parsing the ID), and one flag for the divergences nothing
+can resolve (a Step naming no Counter, a missing Step, or a record whose Plan no longer exists,
+which is judged against a Plan without Steps so the helper's own fail-closed applies). It decides
+no resolution of its own and persists no flag; `RngState.updatedAt`, `source === 'observation'`
+alone, a value match, a manual / Debug save and a Plan ending never resolve anything, and an
+Undo / save point restore that deleted the record resolves it by absence. The Dashboard shows the
+warning above 「次の操作」 without changing `DashboardSummary.nextAction` or any capability; RNG
+Setup shows it at the top, names this screen's Identification Wizard (no self-link) with 「手動入力
+だけではこの再同定要求は解消されません」, shows the Normal Counter stream too, and re-reads it after a
+successful direct save and after an Identification adoption; Candidate Search shows it above the
+search conditions with 「この検索に使われる予測位置が、ゲーム側と一致していない可能性があります」 and
+adds no hard gate - the search stays available and the warning stays after a search. A failed read
+is shown as 「再同定状態を確認できませんでした」, never as "nothing to re-identify". `operation_uncertain`
+stays the Navigator's recovery and enters no persistent reminder. It added no persisted field, no
+writer of `lastIdentifiedAt` and no calculation semantics, so the versions stay 13 / 7 / 10
+(`RngState.schemaVersion` 2).
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -3379,8 +3405,9 @@ choice) and the replan Preview / adoption (「現在地点から再計画を試�
 Production Plan page, the transient 「再計画の試算（未採用）」, 「この再計画を採用」 with the 16.10
 choice) and the breaking-change warning (the one shared warning / save point choice dialog on
 RNG Setup, the Identification Wizard, Normal Counter Setup, Owned Weapons, Target Weapons and
-the Build List); the persistent RNG re-identification reminder on Dashboard / RNG Setup /
-Candidate Search is not yet.
+the Build List) and the persistent RNG re-identification reminder on Dashboard / RNG Setup /
+Candidate Search (the one shared warning derived from every Plan's divergence records and the
+Identification provenance).
 Implementation PRs follow the specification and must not fall back to the older
 Execution semantics.
 

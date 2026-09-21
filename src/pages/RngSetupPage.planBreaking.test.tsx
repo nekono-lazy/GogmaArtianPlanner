@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { ExecutionRuntimeError, PlanBreakingChangeApprovalRequiredError } from '../domain/execution'
 import { createInitialRngState } from '../domain/models/factories'
@@ -22,6 +23,7 @@ function fixture(initial = createInitialRngState('2026-08-29T00:00:00.000Z')) {
     save: vi.fn(async (state: RngState) => { stored = state; return state }),
     inspectSave: vi.fn(async () => ({ approvalRequired: false as const })),
     getNormalCounters: vi.fn(async () => []),
+    getReidentificationReminder: vi.fn(async () => ({ kind: 'none' as const })),
   }
   return { deps, getStored: () => stored }
 }
@@ -36,7 +38,7 @@ describe('RngSetupPage breaking-change warning', () => {
   it('saves a notes-only change without a warning when the inspection needs no approval', async () => {
     const user = userEvent.setup()
     const { deps, getStored } = fixture()
-    render(<RngSetupPage dependencies={deps} />)
+    render(<RngSetupPage dependencies={deps} />, { wrapper: MemoryRouter })
     await user.type(await screen.findByLabelText('メモ'), 'メモだけ')
     await user.click(screen.getByRole('button', { name: '保存' }))
 
@@ -52,7 +54,7 @@ describe('RngSetupPage breaking-change warning', () => {
     const user = userEvent.setup()
     const { deps, getStored } = fixture()
     deps.inspectSave = vi.fn(async () => planBreakingInspection({ reasons: ['rng_state_changed'] }))
-    render(<RngSetupPage dependencies={deps} />)
+    render(<RngSetupPage dependencies={deps} />, { wrapper: MemoryRouter })
     await editGogmaCounter(user, '50')
     await user.click(screen.getByRole('button', { name: '保存' }))
 
@@ -73,7 +75,7 @@ describe('RngSetupPage breaking-change warning', () => {
     const { deps, getStored } = fixture()
     const inspection = planBreakingInspection()
     deps.inspectSave = vi.fn(async () => inspection)
-    render(<RngSetupPage dependencies={deps} />)
+    render(<RngSetupPage dependencies={deps} />, { wrapper: MemoryRouter })
     await editGogmaCounter(user, '50')
     await user.click(screen.getByRole('button', { name: '保存' }))
     await user.click(within(await screen.findByRole('dialog', WARNING)).getByRole('button', { name: '生産計画を破棄して保存' }))
@@ -94,7 +96,7 @@ describe('RngSetupPage breaking-change warning', () => {
     const inspection = planBreakingInspection()
     const save = vi.mocked(deps.save)
     save.mockImplementationOnce(async () => { throw new PlanBreakingChangeApprovalRequiredError(inspection) })
-    render(<RngSetupPage dependencies={deps} />)
+    render(<RngSetupPage dependencies={deps} />, { wrapper: MemoryRouter })
     await editGogmaCounter(user, '50')
     await user.click(screen.getByRole('button', { name: '保存' }))
 
@@ -111,7 +113,7 @@ describe('RngSetupPage breaking-change warning', () => {
     const { deps, getStored } = fixture()
     deps.inspectSave = vi.fn(async () => planBreakingInspection())
     deps.save = vi.fn(async () => { throw new ExecutionRuntimeError('plan_breaking_change_state_changed', 'moved on') })
-    render(<RngSetupPage dependencies={deps} />)
+    render(<RngSetupPage dependencies={deps} />, { wrapper: MemoryRouter })
     await editGogmaCounter(user, '50')
     await user.click(screen.getByRole('button', { name: '保存' }))
     await user.click(within(await screen.findByRole('dialog', WARNING)).getByRole('button', { name: '生産計画を破棄して保存' }))
@@ -128,7 +130,7 @@ describe('RngSetupPage breaking-change warning', () => {
     const { deps } = fixture()
     deps.inspectSave = vi.fn(async () => planBreakingInspection())
     deps.save = vi.fn(async () => { throw new ExecutionRuntimeError('plan_breaking_change_approval_not_required', 'gone') })
-    render(<RngSetupPage dependencies={deps} />)
+    render(<RngSetupPage dependencies={deps} />, { wrapper: MemoryRouter })
     await editGogmaCounter(user, '50')
     await user.click(screen.getByRole('button', { name: '保存' }))
     await user.click(within(await screen.findByRole('dialog', WARNING)).getByRole('button', { name: '生産計画を破棄して保存' }))

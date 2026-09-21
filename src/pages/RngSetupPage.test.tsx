@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createInitialRngState } from '../domain/models/factories'
 import type { RngState } from '../domain/models/publicTypes'
@@ -14,6 +15,7 @@ function dependencies(initial = createInitialRngState('2026-08-29T00:00:00.000Z'
     save: vi.fn(async (state: RngState) => { stored = state; return state }),
     inspectSave: vi.fn(async () => ({ approvalRequired: false as const })),
     getNormalCounters: vi.fn(async () => []),
+    getReidentificationReminder: vi.fn(async () => ({ kind: 'none' as const })),
   }
   return { deps, getStored: () => stored }
 }
@@ -76,7 +78,7 @@ describe('RngSetupPage', () => {
     }
     const user = userEvent.setup()
     const fixture = dependencies(state)
-    render(<RngSetupPage dependencies={fixture.deps} />)
+    render(<RngSetupPage dependencies={fixture.deps} />, { wrapper: MemoryRouter })
 
     const seed = await screen.findByLabelText('Base Seed（基準シード）')
     const seedPanel = seed.closest('[data-known-field]') as HTMLElement
@@ -97,7 +99,7 @@ describe('RngSetupPage', () => {
   it('normalizes equivalent hexadecimal and decimal Base Seeds to the same stored value', async () => {
     const user = userEvent.setup()
     const fixture = dependencies()
-    render(<RngSetupPage dependencies={fixture.deps} />)
+    render(<RngSetupPage dependencies={fixture.deps} />, { wrapper: MemoryRouter })
     const seed = await screen.findByLabelText('Base Seed（基準シード）')
     await user.type(seed, '0x5f5e101')
     await user.click(screen.getByRole('button', { name: '保存' }))
@@ -112,7 +114,7 @@ describe('RngSetupPage', () => {
   it.each(['not-a-seed', '0xnothex', '   '])('does not save invalid Base Seed input %j', async (input) => {
     const user = userEvent.setup()
     const fixture = dependencies()
-    render(<RngSetupPage dependencies={fixture.deps} />)
+    render(<RngSetupPage dependencies={fixture.deps} />, { wrapper: MemoryRouter })
     const seed = await screen.findByLabelText('Base Seed（基準シード）')
     fireEvent.change(seed, { target: { value: input } })
     await user.click(screen.getByRole('button', { name: '保存' }))
@@ -127,7 +129,7 @@ describe('RngSetupPage', () => {
     state.baseSeed = { value: '123', isConfirmed: true, source: 'manual' }
     const user = userEvent.setup()
     const fixture = dependencies(state)
-    render(<RngSetupPage dependencies={fixture.deps} />)
+    render(<RngSetupPage dependencies={fixture.deps} />, { wrapper: MemoryRouter })
     const seed = await screen.findByLabelText('Base Seed（基準シード）')
     await user.clear(seed)
     await user.click(screen.getByRole('button', { name: '保存' }))
@@ -144,7 +146,7 @@ describe('RngSetupPage', () => {
     state.counterGate = { value: 54, isConfirmed: true, source: 'observation' }
     const user = userEvent.setup()
     const fixture = dependencies(state)
-    render(<RngSetupPage dependencies={fixture.deps} />)
+    render(<RngSetupPage dependencies={fixture.deps} />, { wrapper: MemoryRouter })
     const counter = await screen.findByLabelText('巨戟カウンター')
     await user.clear(counter)
     await user.type(counter, '9')
@@ -159,7 +161,7 @@ describe('RngSetupPage', () => {
   it('rejects negative counters without saving', async () => {
     const user = userEvent.setup()
     const fixture = dependencies()
-    render(<RngSetupPage dependencies={fixture.deps} />)
+    render(<RngSetupPage dependencies={fixture.deps} />, { wrapper: MemoryRouter })
     const counter = await screen.findByLabelText('巨戟カウンター')
     await user.type(counter, '-1')
     await user.click(screen.getByRole('button', { name: '保存' }))
@@ -171,7 +173,7 @@ describe('RngSetupPage', () => {
   it('shows Production authority capabilities independently from current KnownValues', async () => {
     const user = userEvent.setup()
     const fixture = dependencies()
-    render(<RngSetupPage dependencies={fixture.deps} />)
+    render(<RngSetupPage dependencies={fixture.deps} />, { wrapper: MemoryRouter })
     const seed = await screen.findByLabelText('Base Seed（基準シード）')
     const seedPanel = seed.closest('[data-known-field]') as HTMLElement
     const useValue = within(seedPanel).getByRole('checkbox', { name: 'この値を検索・予測に使用する' })
@@ -196,7 +198,7 @@ describe('RngSetupPage', () => {
 
   it('shows RNG identification as available and enables the Wizard start from the application-level authority', async () => {
     // The shared beforeEach stubs `Worker`, as a Browser provides it.
-    render(<RngSetupPage dependencies={dependencies().deps} />)
+    render(<RngSetupPage dependencies={dependencies().deps} />, { wrapper: MemoryRouter })
     const wizard = await screen.findByRole('region', { name: '値が分からない場合' })
     expect(definitionRow(wizard, 'RNG同定').textContent).toBe('RNG同定利用可能')
     expect(within(wizard).queryByText(/Web Worker/)).not.toBeInTheDocument()
@@ -208,7 +210,7 @@ describe('RngSetupPage', () => {
     expect(typeof Worker).toBe('undefined')
     const fixture = dependencies()
     const createIdentificationCoordinator = vi.fn()
-    render(<RngSetupPage dependencies={{ ...fixture.deps, createIdentificationCoordinator }} />)
+    render(<RngSetupPage dependencies={{ ...fixture.deps, createIdentificationCoordinator }} />, { wrapper: MemoryRouter })
     const wizard = await screen.findByRole('region', { name: '値が分からない場合' })
     expect(definitionRow(wizard, 'RNG同定').textContent).toBe('RNG同定利用不可')
     expect(within(wizard).getByText(/Web Workerを利用できないため、RNG同定を実行できません/)).toBeInTheDocument()
@@ -224,7 +226,7 @@ describe('RngSetupPage', () => {
 
   it('keeps the Wizard start disabled by unsaved changes even when identification is available', async () => {
     const user = userEvent.setup()
-    render(<RngSetupPage dependencies={dependencies().deps} />)
+    render(<RngSetupPage dependencies={dependencies().deps} />, { wrapper: MemoryRouter })
     const wizard = await screen.findByRole('region', { name: '値が分からない場合' })
     expect(definitionRow(wizard, 'RNG同定').textContent).toBe('RNG同定利用可能')
     expect(within(wizard).getByRole('button', { name: 'Identification Wizardを開始' })).toBeEnabled()
@@ -237,7 +239,7 @@ describe('RngSetupPage', () => {
 
   it('keeps current availability separate from what the Engine itself supports', async () => {
     const user = userEvent.setup()
-    render(<RngSetupPage dependencies={dependencies().deps} />)
+    render(<RngSetupPage dependencies={dependencies().deps} />, { wrapper: MemoryRouter })
     const current = await screen.findByRole('region', { name: '現在の入力内容で利用可能な機能' })
 
     // Nothing is confirmed yet, so the current state cannot predict even though
@@ -258,7 +260,7 @@ describe('RngSetupPage', () => {
     state.skillCounter = { value: 2, isConfirmed: true, source: 'manual' }
     const user = userEvent.setup()
     const fixture = dependencies(state)
-    render(<RngSetupPage dependencies={fixture.deps} />)
+    render(<RngSetupPage dependencies={fixture.deps} />, { wrapper: MemoryRouter })
 
     // The saved state can predict both streams.
     const saved = await screen.findByRole('region', { name: '現在の入力内容で利用可能な機能' })
@@ -286,7 +288,7 @@ describe('RngSetupPage', () => {
 
   it('still judges a valid unsaved draft and says it includes unsaved input', async () => {
     const user = userEvent.setup()
-    render(<RngSetupPage dependencies={dependencies().deps} />)
+    render(<RngSetupPage dependencies={dependencies().deps} />, { wrapper: MemoryRouter })
     const current = await screen.findByRole('region', { name: '現在の入力内容で利用可能な機能' })
     expect(definitionRow(current, 'スキル予測').textContent).toBe('スキル予測利用不可')
 
@@ -306,7 +308,7 @@ describe('RngSetupPage', () => {
     const state = createInitialRngState('2026-08-29T00:00:00.000Z')
     state.baseSeed = { value: '987654', isConfirmed: true, source: 'manual' }
     state.gogmaCounter = { value: 4321, isConfirmed: false, source: 'manual' }
-    render(<RngSetupPage dependencies={dependencies(state).deps} />)
+    render(<RngSetupPage dependencies={dependencies(state).deps} />, { wrapper: MemoryRouter })
     const summary = await screen.findByRole('region', { name: '保存済みのRNG状態' })
 
     expect(definitionRow(summary, 'Base Seed（基準シード）').textContent).toBe('Base Seed（基準シード）使用中')
@@ -334,7 +336,7 @@ describe('RngSetupPage', () => {
 
     it('never shows a Counter Gate field, section, status, or source in the ordinary UI', async () => {
       const state = legacyState()
-      render(<RngSetupPage dependencies={dependencies(state).deps} />)
+      render(<RngSetupPage dependencies={dependencies(state).deps} />, { wrapper: MemoryRouter })
       await screen.findByLabelText('Base Seed（基準シード）')
 
       expect(screen.queryByText(/Counter Gate（カウンターゲート）/)).not.toBeInTheDocument()
@@ -356,7 +358,7 @@ describe('RngSetupPage', () => {
       const state = legacyState()
       const user = userEvent.setup()
       const fixture = dependencies(state)
-      render(<RngSetupPage dependencies={fixture.deps} />)
+      render(<RngSetupPage dependencies={fixture.deps} />, { wrapper: MemoryRouter })
 
       const seed = await screen.findByLabelText('Base Seed（基準シード）')
       await user.clear(seed)
@@ -377,7 +379,7 @@ describe('RngSetupPage', () => {
       const state = legacyState()
       const user = userEvent.setup()
       const fixture = dependencies(state)
-      render(<RngSetupPage dependencies={fixture.deps} />)
+      render(<RngSetupPage dependencies={fixture.deps} />, { wrapper: MemoryRouter })
 
       const counter = await screen.findByLabelText('スキルカウンター')
       await user.type(counter, '7')
@@ -402,7 +404,7 @@ describe('RngSetupPage', () => {
       state.counterGate = { ...counterGate }
       const user = userEvent.setup()
       const fixture = dependencies(state)
-      render(<RngSetupPage dependencies={fixture.deps} />)
+      render(<RngSetupPage dependencies={fixture.deps} />, { wrapper: MemoryRouter })
 
       await user.type(await screen.findByLabelText('メモ'), 'memo')
       await user.click(screen.getByRole('button', { name: '保存' }))
@@ -415,7 +417,7 @@ describe('RngSetupPage', () => {
   it('shows a load failure without any synthetic RNG state or form', async () => {
     const fixture = dependencies()
     fixture.deps.ensure = vi.fn(async (): Promise<RngState> => { throw new Error('IndexedDB read failed') })
-    render(<RngSetupPage dependencies={fixture.deps} />)
+    render(<RngSetupPage dependencies={fixture.deps} />, { wrapper: MemoryRouter })
 
     expect(await screen.findByText('IndexedDB read failed')).toBeInTheDocument()
     expect(screen.queryByLabelText('Base Seed（基準シード）')).not.toBeInTheDocument()
@@ -429,7 +431,7 @@ describe('RngSetupPage', () => {
   it('shows a save failure inside the manual input section next to 保存', async () => {
     const user = userEvent.setup()
     const fixture = dependencies()
-    render(<RngSetupPage dependencies={fixture.deps} />)
+    render(<RngSetupPage dependencies={fixture.deps} />, { wrapper: MemoryRouter })
     await user.type(await screen.findByLabelText('スキルカウンター'), '-5')
     await user.click(screen.getByRole('button', { name: '保存' }))
 
@@ -439,7 +441,7 @@ describe('RngSetupPage', () => {
   })
 
   it('states what the Wizard identifies next to its start button', async () => {
-    render(<RngSetupPage dependencies={dependencies().deps} />)
+    render(<RngSetupPage dependencies={dependencies().deps} />, { wrapper: MemoryRouter })
     const cta = await screen.findByRole('region', { name: '値が分からない場合' })
     expect(within(cta).getByText('調査開始前のスキルカウンター')).toBeInTheDocument()
     expect(within(cta).getByText('調査開始前の巨戟カウンター')).toBeInTheDocument()
@@ -449,7 +451,7 @@ describe('RngSetupPage', () => {
   it('opens the dedicated Identification Wizard without replacing the manual workflow', async () => {
     const user = userEvent.setup()
     const fixture = dependencies()
-    render(<RngSetupPage dependencies={fixture.deps} />)
+    render(<RngSetupPage dependencies={fixture.deps} />, { wrapper: MemoryRouter })
 
     await screen.findByLabelText('Base Seed（基準シード）')
     expect(screen.getByRole('button', { name: '保存' })).toBeInTheDocument()
@@ -466,7 +468,7 @@ describe('RngSetupPage', () => {
   it('blocks Wizard start while a KnownField has an unsaved manual draft', async () => {
     const user = userEvent.setup()
     const fixture = dependencies()
-    render(<RngSetupPage dependencies={fixture.deps} />)
+    render(<RngSetupPage dependencies={fixture.deps} />, { wrapper: MemoryRouter })
 
     await user.type(await screen.findByLabelText('Base Seed（基準シード）'), '42')
 
@@ -482,7 +484,7 @@ describe('RngSetupPage', () => {
   it('blocks Wizard start when Notes are the only unsaved change', async () => {
     const user = userEvent.setup()
     const fixture = dependencies()
-    render(<RngSetupPage dependencies={fixture.deps} />)
+    render(<RngSetupPage dependencies={fixture.deps} />, { wrapper: MemoryRouter })
 
     await user.type(await screen.findByLabelText('メモ'), '未保存メモ')
 
@@ -496,7 +498,7 @@ describe('RngSetupPage', () => {
   it('allows Wizard start after the manual draft has been saved', async () => {
     const user = userEvent.setup()
     const fixture = dependencies()
-    render(<RngSetupPage dependencies={fixture.deps} />)
+    render(<RngSetupPage dependencies={fixture.deps} />, { wrapper: MemoryRouter })
 
     await user.type(await screen.findByLabelText('メモ'), '保存済みメモ')
     expect(screen.getByRole('button', { name: 'Identification Wizardを開始' }))
