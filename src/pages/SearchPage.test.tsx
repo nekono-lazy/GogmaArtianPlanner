@@ -1,6 +1,7 @@
 import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../domain/models/publicTypes'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import type {
   BuildCandidate,
@@ -86,6 +87,7 @@ function dependencies(
     getTargets: async () => targets,
     getOwnedWeapons: async () => [],
     getBuildListEntries: async () => buildListEntries,
+    getReidentificationReminder: async () => ({ kind: 'none' as const }),
     createWorkerClient: () => client,
     createInput: async (options) => {
       const fixture = createFixtureInput()
@@ -115,7 +117,7 @@ function dependencies(
 
 describe('SearchPage', () => {
   it('shows the Target empty state', async () => {
-    render(<SearchPage dependencies={dependencies(new ControlledClient(), [])} />)
+    render(<SearchPage dependencies={dependencies(new ControlledClient(), [])} />, { wrapper: MemoryRouter })
     expect(await screen.findByText('目標武器を登録してください。')).toBeInTheDocument()
   })
 
@@ -124,7 +126,7 @@ describe('SearchPage', () => {
     const client = new ControlledClient()
     const target = createValidTargetWeapon()
     const deps = dependencies(client, [target])
-    render(<SearchPage dependencies={deps} />)
+    render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
     await user.click(await screen.findByRole('button', { name: '検索開始' }))
     // One Target per search: reconciling several Targets is the Planner's job
     // (`docs/UI_FLOW.md` 6.1).
@@ -142,7 +144,7 @@ describe('SearchPage', () => {
   })
 
   it('offers no result filter and no output-cap settings at all', async () => {
-    render(<SearchPage dependencies={dependencies(new ControlledClient())} />)
+    render(<SearchPage dependencies={dependencies(new ControlledClient())} />, { wrapper: MemoryRouter })
     await screen.findByRole('button', { name: '検索開始' })
     // A Search result is one canonical Ideal or nothing, so there is nothing to
     // filter by category or by closeness (`docs/UI_FLOW.md` 6.1).
@@ -155,7 +157,7 @@ describe('SearchPage', () => {
     const user = userEvent.setup()
     const client = new ControlledClient()
     const target = createValidTargetWeapon()
-    render(<SearchPage dependencies={dependencies(client, [target])} />)
+    render(<SearchPage dependencies={dependencies(client, [target])} />, { wrapper: MemoryRouter })
     await user.click(await screen.findByRole('button', { name: '検索開始' }))
     expect(screen.getByText(`対象: ${target.name}`)).toBeInTheDocument()
     expect(screen.getByText('準備中')).toBeInTheDocument()
@@ -171,7 +173,7 @@ describe('SearchPage', () => {
     const user = userEvent.setup()
     const client = new ControlledClient()
     const target = createValidTargetWeapon()
-    render(<SearchPage dependencies={dependencies(client, [target])} />)
+    render(<SearchPage dependencies={dependencies(client, [target])} />, { wrapper: MemoryRouter })
     await user.click(await screen.findByRole('button', { name: '検索開始' }))
     client.reject(new SearchWorkerRuntimeError('worker_error', 'boom'))
     expect(
@@ -185,7 +187,7 @@ describe('SearchPage', () => {
     const user = userEvent.setup()
     const target = createValidTargetWeapon()
     const zeroClient = new ControlledClient()
-    const view = render(<SearchPage dependencies={dependencies(zeroClient, [target])} />)
+    const view = render(<SearchPage dependencies={dependencies(zeroClient, [target])} />, { wrapper: MemoryRouter })
     await user.click(await screen.findByRole('button', { name: '検索開始' }))
     zeroClient.resolve(resultFor(target, null))
     // Never "no Ideal exists": only "not inside the configured extent"
@@ -194,7 +196,7 @@ describe('SearchPage', () => {
     view.unmount()
 
     const errorClient = new ControlledClient()
-    render(<SearchPage dependencies={dependencies(errorClient, [target])} />)
+    render(<SearchPage dependencies={dependencies(errorClient, [target])} />, { wrapper: MemoryRouter })
     await user.click(await screen.findByRole('button', { name: '検索開始' }))
     errorClient.reject(new Error('Worker fixture error'))
     expect(await screen.findByText('Worker fixture error')).toBeInTheDocument()
@@ -204,7 +206,7 @@ describe('SearchPage', () => {
     const user = userEvent.setup()
     const target = createValidTargetWeapon()
     const client = new ControlledClient()
-    render(<SearchPage dependencies={dependencies(client, [target])} />)
+    render(<SearchPage dependencies={dependencies(client, [target])} />, { wrapper: MemoryRouter })
     await user.click(await screen.findByRole('button', { name: '検索開始' }))
     client.resolve(resultFor(target, null, [{
       route: 'owned_normal_artian_to_gogma',
@@ -219,7 +221,7 @@ describe('SearchPage', () => {
     const user = userEvent.setup()
     const client = new ControlledClient()
     const target = createValidTargetWeapon()
-    render(<SearchPage dependencies={dependencies(client, [target])} />)
+    render(<SearchPage dependencies={dependencies(client, [target])} />, { wrapper: MemoryRouter })
     await user.click(await screen.findByRole('button', { name: '検索開始' }))
     await user.click(screen.getByRole('button', { name: 'キャンセル' }))
     expect(screen.getByText('検索をキャンセルしました。')).toBeInTheDocument()
@@ -232,7 +234,7 @@ describe('SearchPage', () => {
     const user = userEvent.setup()
     const target = createValidTargetWeapon()
     const client = new ControlledClient()
-    render(<SearchPage dependencies={dependencies(client, [target])} />)
+    render(<SearchPage dependencies={dependencies(client, [target])} />, { wrapper: MemoryRouter })
     await user.click(await screen.findByRole('button', { name: '検索開始' }))
     client.resolve(resultWithNotices(target, [{
       targetWeaponId: target.id,
@@ -250,7 +252,7 @@ describe('SearchPage', () => {
     const user = userEvent.setup()
     const target = createValidTargetWeapon()
     const client = new ControlledClient()
-    render(<SearchPage dependencies={dependencies(client, [target])} />)
+    render(<SearchPage dependencies={dependencies(client, [target])} />, { wrapper: MemoryRouter })
     await user.click(await screen.findByRole('button', { name: '検索開始' }))
     client.resolve(resultWithNotices(target, [{
       targetWeaponId: target.id,
@@ -267,7 +269,7 @@ describe('SearchPage', () => {
     const user = userEvent.setup()
     const target = createValidTargetWeapon()
     const client = new ControlledClient()
-    render(<SearchPage dependencies={dependencies(client, [target])} />)
+    render(<SearchPage dependencies={dependencies(client, [target])} />, { wrapper: MemoryRouter })
     await user.click(await screen.findByRole('button', { name: '検索開始' }))
     client.resolve(resultWithNotices(target, [
       { targetWeaponId: target.id, severity: 'warning', message: '警告メッセージfixture' },
@@ -288,7 +290,7 @@ describe('SearchPage', () => {
     const client = new ControlledClient()
     const target = createValidTargetWeapon()
     const deps = dependencies(client, [target])
-    render(<SearchPage dependencies={deps} />)
+    render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
     await user.click(await screen.findByRole('button', { name: '検索開始' }))
     const candidate = createValidBuildCandidate()
     client.resolve(resultFor(target, candidate))
@@ -303,7 +305,7 @@ describe('SearchPage', () => {
     deps.getTargets = async () => {
       throw new Error('読み込みfixture失敗')
     }
-    render(<SearchPage dependencies={deps} />)
+    render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
 
     expect(await screen.findByText('読み込みfixture失敗')).toBeInTheDocument()
     // A failed load is never presented as "no Targets", and no synthetic
@@ -315,7 +317,7 @@ describe('SearchPage', () => {
 
   it('heads the search conditions and detail settings with sequential headings', async () => {
     const user = userEvent.setup()
-    render(<SearchPage dependencies={dependencies(new ControlledClient())} />)
+    render(<SearchPage dependencies={dependencies(new ControlledClient())} />, { wrapper: MemoryRouter })
     await screen.findByRole('button', { name: '検索開始' })
 
     expect(screen.getByRole('heading', { level: 1, name: '候補検索' })).toBeInTheDocument()
@@ -343,7 +345,7 @@ describe('SearchPage', () => {
       if (attempt === 1) throw new Error('追加fixture失敗')
       return { entry: createBuildListEntry(candidate, target), added: false }
     })
-    render(<SearchPage dependencies={deps} />)
+    render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
     await user.click(await screen.findByRole('button', { name: '検索開始' }))
     client.resolve(resultFor(target, createValidBuildCandidate()))
 
@@ -376,7 +378,7 @@ describe('SearchPage', () => {
     const target = createValidTargetWeapon()
     const deps = dependencies(client, [target])
     const candidate = checkpointCandidateWithArrivals()
-    render(<SearchPage dependencies={deps} />)
+    render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
     await user.click(await screen.findByRole('button', { name: '検索開始' }))
     client.resolve(resultFor(target, candidate))
 
@@ -457,7 +459,7 @@ describe('SearchPage disclosure ARIA wiring', () => {
     const client = new ControlledClient()
     const target = createValidTargetWeapon()
     const candidate = checkpointCandidateWithArrivals()
-    render(<SearchPage dependencies={dependencies(client, [target])} />)
+    render(<SearchPage dependencies={dependencies(client, [target])} />, { wrapper: MemoryRouter })
     await searchFor(user, client, target, candidate)
 
     // Detail settings, Candidate detail, later arrivals, skipped routes are
@@ -496,7 +498,7 @@ describe('SearchPage Master Data readiness', () => {
     const client = new ControlledClient()
     const target = createValidTargetWeapon()
     const deps = dependencies(client, [target], [], productionLikeMaster())
-    render(<SearchPage dependencies={deps} />)
+    render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
 
     const button = await screen.findByRole('button', { name: '検索開始' })
     // The provisional Lottery Master is never a Search readiness input
@@ -526,7 +528,7 @@ describe('SearchPage Master Data readiness', () => {
   })
 
   it('shows no Master advisory at all when a material cost is usable', async () => {
-    render(<SearchPage dependencies={dependencies(new ControlledClient())} />)
+    render(<SearchPage dependencies={dependencies(new ControlledClient())} />, { wrapper: MemoryRouter })
     await screen.findByRole('button', { name: '検索開始' })
     expect(screen.queryByText(/素材コストは未検証/)).not.toBeInTheDocument()
     expect(screen.queryByText(/抽選マスターデータ/)).not.toBeInTheDocument()
@@ -538,7 +540,7 @@ describe('SearchPage Build List add state', () => {
     const user = userEvent.setup()
     const client = new ControlledClient()
     const target = createValidTargetWeapon()
-    render(<SearchPage dependencies={dependencies(client, [target], [])} />)
+    render(<SearchPage dependencies={dependencies(client, [target], [])} />, { wrapper: MemoryRouter })
     const addButton = await searchFor(user, client, target, createValidBuildCandidate())
 
     expect(screen.getByText('作成リスト: 未追加')).toBeInTheDocument()
@@ -556,7 +558,7 @@ describe('SearchPage Build List add state', () => {
     expect(entry.candidateId).not.toBe(candidate.id)
     expect(entry.intermediateStateSelection?.bonusOpportunityId).not.toBeNull()
     const deps = dependencies(client, [target], [entry])
-    render(<SearchPage dependencies={deps} />)
+    render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
     const addButton = await searchFor(user, client, target, candidate)
 
     // Decided by the Build List Domain authority, not by Candidate ID.
@@ -582,7 +584,7 @@ describe('SearchPage Build List add state', () => {
     const target = createValidTargetWeapon()
     const stored = checkpointCandidateWithArrivals()
     const entry = equivalentEntryFor(stored, target)
-    render(<SearchPage dependencies={dependencies(client, [target], [entry])} />)
+    render(<SearchPage dependencies={dependencies(client, [target], [entry])} />, { wrapper: MemoryRouter })
     // Same five labels, other restoration bonus scope: a different Candidate
     // under the existing fingerprint (`docs/DATA_MODEL.md` 9.1).
     const searched = { ...structuredClone(stored), restorationBonusScope: 'normal_artian' as const }
@@ -598,7 +600,7 @@ describe('SearchPage Build List add state', () => {
     const target = createValidTargetWeapon()
     const candidate = checkpointCandidateWithArrivals()
     const deps = dependencies(client, [target], [])
-    render(<SearchPage dependencies={deps} />)
+    render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
     const addButton = await searchFor(user, client, target, candidate)
     const primary = screen.getByRole('checkbox', { name: BONUS_ONE })
     await user.click(primary)
@@ -627,7 +629,7 @@ describe('SearchPage Build List add state', () => {
       intermediateOpportunityAt(candidate, 'bonus', 2).opportunity.id,
     )
     const deps = dependencies(client, [target], [entry])
-    render(<SearchPage dependencies={deps} />)
+    render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
     const addButton = await searchFor(user, client, target, candidate)
 
     expect(screen.getByText('作成リスト: 追加済み')).toBeInTheDocument()
@@ -646,7 +648,7 @@ describe('SearchPage Build List add state', () => {
     deps.getBuildListEntries = async () => {
       throw new Error('作成リスト読み込みfixture失敗')
     }
-    render(<SearchPage dependencies={deps} />)
+    render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
 
     expect(await screen.findByText('作成リスト読み込みfixture失敗')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '検索開始' })).not.toBeInTheDocument()

@@ -8,6 +8,8 @@ import { PageShell } from '../components/PageShell'
 import { StatusChip, type StatusTone } from '../components/StatusChip'
 import { IdentificationWizardDialog } from '../components/rng/IdentificationWizardDialog'
 import { PlanBreakingChangeDialog } from '../components/execution/PlanBreakingChangeDialog'
+import { PersistentReidentificationReminderAlert } from '../components/execution/PersistentReidentificationReminderAlert'
+import { usePersistentReidentificationReminder } from '../components/execution/usePersistentReidentificationReminder'
 import { usePlanBreakingChangeApproval } from '../components/execution/usePlanBreakingChangeApproval'
 import type { PlanBreakingChangeApproval, PlanBreakingChangeInspection } from '../domain/execution'
 import { loadMasterData } from '../domain/master/loadMasterData'
@@ -17,6 +19,10 @@ import { deriveRngCapabilities, type RngCapabilityMissingRequirement } from '../
 import { productionRngEngine, productionRngRuntime } from '../domain/rng/production/productionRngRuntime'
 import type { RngEngine } from '../domain/rng/rngEngine'
 import { normalArtianCounterRepository, rngStateRepository } from '../db/repositories'
+import {
+  loadPersistentReidentificationReminder,
+  type PersistentReidentificationReminder,
+} from '../services/execution/persistentReidentificationReminderService'
 import { rngStatePersistenceService } from '../services/rngState/rngStatePersistenceService'
 import { getRngMissingRequirementLabel, rngStateSourceLabels } from '../presentation/labels'
 import {
@@ -169,6 +175,12 @@ export interface RngSetupPageDependencies {
   /** The read-only breaking-change inspection of that very save. */
   inspectSave(state: RngState, basis?: RngState): Promise<PlanBreakingChangeInspection>
   getNormalCounters(): ReturnType<typeof normalArtianCounterRepository.getAllNormalArtianCounters>
+  /**
+   * The persistent re-identification reminder over every Plan
+   * (`docs/PLANNER_SPEC.md` 16.15), re-read after a direct save and after an
+   * Identification adoption. Read-only.
+   */
+  getReidentificationReminder(): Promise<PersistentReidentificationReminder>
   createIdentificationCoordinator?(): IdentificationWizardCoordinator
 }
 const defaultDependencies: RngSetupPageDependencies = {
@@ -176,6 +188,7 @@ const defaultDependencies: RngSetupPageDependencies = {
   save: (state, basis, approval) => rngStatePersistenceService.saveRngState(state, basis ?? null, approval ?? null),
   inspectSave: (state, basis) => rngStatePersistenceService.inspectRngStateSave(state, basis ?? null),
   getNormalCounters: () => normalArtianCounterRepository.getAllNormalArtianCounters(),
+  getReidentificationReminder: () => loadPersistentReidentificationReminder(),
   createIdentificationCoordinator: createProductionIdentificationWizardCoordinator,
 }
 
@@ -195,6 +208,10 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
   // The breaking-change warning of the direct save (`docs/UI_FLOW.md` 16.3).
   // The Wizard's adoption runs its own, inside the Wizard Dialog.
   const planGuard = usePlanBreakingChangeApproval()
+  // The reminder is derived from the persisted provenance alone; a save or an
+  // adoption may resolve or re-open it, so both re-read it (16.15).
+  const loadReminder = useMemo(() => () => dependencies.getReidentificationReminder(), [dependencies])
+  const reminder = usePersistentReidentificationReminder(loadReminder)
   useEffect(() => { let active = true; void Promise.all([dependencies.ensure(), dependencies.getNormalCounters()]).then(([loaded, counters]) => { if (active) { setState(loaded); setForm(toForm(loaded)); setNormalCounters(counters) } }).catch((caught: unknown) => { if (active) setLoadError(caught instanceof Error ? caught.message : 'RNG状態を読み込めません。') }); return () => { active = false } }, [dependencies])
 
   // The page owns Coordinator lifetime: the Wizard session ends only when the
@@ -249,6 +266,7 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
       const saved = outcome.result
       setState(saved); setForm(toForm(saved)); setModifiedKeys(new Set())
       setSaveNotice(outcome.planAbandoned ? RNG_SAVED_PLAN_ABANDONED_MESSAGE : RNG_SAVED_MESSAGE)
+      reminder.reload()
     } catch (caught: unknown) { setSaveError(caught instanceof Error ? caught.message : 'RNG状態を保存できません。') }
   }
 
@@ -289,6 +307,7 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
     setModifiedKeys(new Set())
     setSaveNotice(null)
     setAdoptionNotice(adoption.planAbandoned ? IDENTIFICATION_ADOPTED_PLAN_ABANDONED_MESSAGE : IDENTIFICATION_ADOPTED_MESSAGE)
+    reminder.reload()
   }
 
   const engineCapabilities = productionRngRuntime.capabilities
@@ -296,6 +315,7 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
   return <PageShell title="RNG状態設定" description="検索や予測に使うRNG状態を項目ごとに設定します。"><Stack spacing={{ xs: 2, md: 3 }}>
     {!form && !loadError && <LinearProgress aria-label="RNG状態を読み込み中" />}
     {loadError && <Alert severity="error">{loadError}</Alert>}
+    <PersistentReidentificationReminderAlert state={reminder.state} master={masterResult.ok ? masterResult.data : null} surface="rng_setup" />
     {form && state && <>
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))' }, gap: { xs: 2, md: 3 }, alignItems: 'start' }}>
         <SectionCard title="保存済みのRNG状態">

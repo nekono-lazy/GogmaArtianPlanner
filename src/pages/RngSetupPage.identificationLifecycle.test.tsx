@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { createInitialRngState } from '../domain/models/factories'
 import { loadMasterData } from '../domain/master/loadMasterData'
@@ -90,6 +91,7 @@ function fixture(initial = createInitialRngState('2026-09-01T00:00:00.000Z')) {
     save: vi.fn(async (state: RngState) => { stored = state; return state }),
     inspectSave: vi.fn(async () => ({ approvalRequired: false as const })),
     getNormalCounters: vi.fn(async () => []),
+    getReidentificationReminder: vi.fn(async () => ({ kind: 'none' as const })),
     createIdentificationCoordinator: () => {
       const skillClient = new ControllableSkillClient()
       const gogmaClient = new ControllableGogmaClient()
@@ -127,7 +129,7 @@ describe('RngSetupPage Identification Wizard lifecycle', () => {
   it('opens the Wizard under React StrictMode without disposing the live Coordinator', async () => {
     const user = userEvent.setup()
     const { deps, created } = fixture()
-    render(<StrictMode><RngSetupPage dependencies={deps} /></StrictMode>)
+    render(<StrictMode><RngSetupPage dependencies={deps} /></StrictMode>, { wrapper: MemoryRouter })
 
     await screen.findByLabelText('Base Seed（基準シード）')
     await user.click(screen.getByRole('button', { name: 'Identification Wizardを開始' }))
@@ -142,7 +144,7 @@ describe('RngSetupPage Identification Wizard lifecycle', () => {
   it('keeps the StrictMode-mounted Wizard subscribed to Coordinator state updates', async () => {
     const user = userEvent.setup()
     const { deps, created } = fixture()
-    render(<StrictMode><RngSetupPage dependencies={deps} /></StrictMode>)
+    render(<StrictMode><RngSetupPage dependencies={deps} /></StrictMode>, { wrapper: MemoryRouter })
 
     await screen.findByLabelText('Base Seed（基準シード）')
     await user.click(screen.getByRole('button', { name: 'Identification Wizardを開始' }))
@@ -166,7 +168,7 @@ describe('RngSetupPage Identification Wizard lifecycle', () => {
   it('disposes the Coordinator and its Worker Clients when the user really closes the Wizard', async () => {
     const user = userEvent.setup()
     const { deps, created } = fixture()
-    render(<StrictMode><RngSetupPage dependencies={deps} /></StrictMode>)
+    render(<StrictMode><RngSetupPage dependencies={deps} /></StrictMode>, { wrapper: MemoryRouter })
 
     await screen.findByLabelText('Base Seed（基準シード）')
     await user.click(screen.getByRole('button', { name: 'Identification Wizardを開始' }))
@@ -181,7 +183,7 @@ describe('RngSetupPage Identification Wizard lifecycle', () => {
   it('reopens the Wizard with a new Coordinator after a real close', async () => {
     const user = userEvent.setup()
     const { deps, created } = fixture()
-    render(<StrictMode><RngSetupPage dependencies={deps} /></StrictMode>)
+    render(<StrictMode><RngSetupPage dependencies={deps} /></StrictMode>, { wrapper: MemoryRouter })
 
     await screen.findByLabelText('Base Seed（基準シード）')
     await user.click(screen.getByRole('button', { name: 'Identification Wizardを開始' }))
@@ -197,7 +199,7 @@ describe('RngSetupPage Identification Wizard lifecycle', () => {
   it('disposes the Coordinator when the owning page unmounts while the Wizard is open', async () => {
     const user = userEvent.setup()
     const { deps, created } = fixture()
-    const view = render(<StrictMode><RngSetupPage dependencies={deps} /></StrictMode>)
+    const view = render(<StrictMode><RngSetupPage dependencies={deps} /></StrictMode>, { wrapper: MemoryRouter })
 
     await screen.findByLabelText('Base Seed（基準シード）')
     await user.click(screen.getByRole('button', { name: 'Identification Wizardを開始' }))

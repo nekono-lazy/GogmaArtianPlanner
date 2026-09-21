@@ -1,7 +1,9 @@
-import { useEffect, useId, useState, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
 import { Alert, Box, Button, LinearProgress, Paper, Stack, Typography } from '@mui/material'
 import { Link as RouterLink } from 'react-router-dom'
 import { PageShell } from '../components/PageShell'
+import { PersistentReidentificationReminderAlert } from '../components/execution/PersistentReidentificationReminderAlert'
+import { usePersistentReidentificationReminder } from '../components/execution/usePersistentReidentificationReminder'
 import { StatusChip, type StatusTone } from '../components/StatusChip'
 import {
   createDashboardSummary,
@@ -26,6 +28,10 @@ import {
 } from '../db/repositories'
 import { getRngMissingRequirementLabel } from '../presentation/labels'
 import { createBuildListCalculationContext } from '../services/buildList/createBuildListCalculationContext'
+import {
+  loadPersistentReidentificationReminder,
+  type PersistentReidentificationReminder,
+} from '../services/execution/persistentReidentificationReminderService'
 import { createPlannerCalculationContext } from '../services/planner/createPlannerInput'
 
 const loadedMaster = loadMasterData()
@@ -35,6 +41,12 @@ export interface DashboardPageDependencies {
   master: MasterDataRoot
   /** Read-only: never creates the initial RngState. */
   getRngState(): Promise<DashboardSnapshot['rngState'] | undefined>
+  /**
+   * The persistent re-identification reminder over every Plan
+   * (`docs/PLANNER_SPEC.md` 16.15). Read-only, derived on every load; a failed
+   * read is shown as such, never as "nothing to re-identify".
+   */
+  getReidentificationReminder(): Promise<PersistentReidentificationReminder>
   getNormalCounters(): Promise<DashboardSnapshot['normalCounters']>
   getOwnedWeapons(): Promise<DashboardSnapshot['ownedWeapons']>
   getTargetWeapons(): Promise<DashboardSnapshot['targetWeapons']>
@@ -52,6 +64,7 @@ const defaultDependencies: DashboardPageDependencies | null = defaultMaster
       getTargetWeapons: () => targetWeaponRepository.getAllTargetWeapons(),
       getBuildListEntries: () => buildListEntryRepository.getAllBuildListEntries(),
       getActivePlan: () => productionPlanRepository.getActiveProductionPlan(),
+      getReidentificationReminder: () => loadPersistentReidentificationReminder(),
     }
   : null
 
@@ -505,6 +518,13 @@ export function DashboardPage({
       ? { status: 'loading' }
       : { status: 'error', message: 'マスターデータを読み込めません。' },
   )
+  // Loaded beside the summary, not inside it: the reminder changes no
+  // DashboardSummary value and no next action (16.15 asks for a display).
+  const loadReminder = useMemo(
+    () => (dependencies ? () => dependencies.getReidentificationReminder() : undefined),
+    [dependencies],
+  )
+  const reminder = usePersistentReidentificationReminder(loadReminder)
 
   useEffect(() => {
     if (!dependencies) return
@@ -555,6 +575,9 @@ export function DashboardPage({
 
   return (
     <PageShell title="ダッシュボード" description="準備状況を確認し、次に行う操作へ進みます。">
+      {dependencies && (
+        <PersistentReidentificationReminderAlert state={reminder.state} master={dependencies.master} surface="dashboard" />
+      )}
       {state.status === 'loading' && <LinearProgress aria-label="ダッシュボードを読み込み中" />}
       {state.status === 'error' && <Alert severity="error">{state.message}</Alert>}
       {state.status === 'ready' && <DashboardContent summary={state.summary} />}
