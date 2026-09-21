@@ -166,6 +166,10 @@ describe('PlanBreakingChangeDialog warning', () => {
       planBreakingReasonLabels.normal_counter_changed,
       planBreakingReasonLabels.build_list_changed,
     ])
+    // Ending the Plan changes no preference; the change being saved may (PLANNER_SPEC 16.6).
+    expect(warning.getByText('破棄した生産計画は元に戻せません。作成途中の武器の「作成中」は解除されます。生産計画を破棄すること自体では優先起点を変更しませんが、今回保存する変更によって優先起点が変更・解除される場合があります。')).toBeInTheDocument()
+    expect(warning.queryByText(/優先起点の紐付けは残ります/)).toBeNull()
+    expect(warning.queryByText(/優先起点は(残ります|維持されます|変更されません|解除されます)/)).toBeNull()
     expect(screen.getByTestId('deciding')).toHaveTextContent('deciding')
     expect(approveButton()).toHaveClass('MuiButton-colorError')
 

@@ -21,8 +21,14 @@ export const PLAN_BREAKING_WARNING_LINES: readonly string[] = [
 ]
 export const PLAN_BREAKING_REASONS_HEADING = 'この変更で変わるもの'
 export const PLAN_BREAKING_APPROVE_LABEL = '生産計画を破棄して保存'
+/**
+ * Ending the Plan itself changes no Target preference (`docs/PLANNER_SPEC.md`
+ * 16.6: the preference changes only through the change being saved and its
+ * existing CRUD side effects), so the note asserts neither that the link
+ * survives nor that it is released.
+ */
 export const PLAN_BREAKING_NOT_UNDOABLE_NOTE =
-  '破棄した生産計画は元に戻せません。作成途中の武器の「作成中」は解除され、目標武器の優先起点の紐付けは残ります。'
+  '破棄した生産計画は元に戻せません。作成途中の武器の「作成中」は解除されます。生産計画を破棄すること自体では優先起点を変更しませんが、今回保存する変更によって優先起点が変更・解除される場合があります。'
 
 /** The transient warning reasons, in the user's words (`docs/PLANNER_SPEC.md` 16.6). */
 export const planBreakingReasonLabels: Record<PlanBreakingReason, string> = {
