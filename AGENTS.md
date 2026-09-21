@@ -3726,6 +3726,51 @@ Device-to-device sync is not added; full-replacement Export / Import covers it.
 
 Master Data itself is not copied into the user export.
 
+The full-replacement Import / Export / clear-all-data Persistence / Application
+Service foundation is implemented (`src/services/dataTransfer/importExportService.ts`,
+`importExportValidation.ts`, `docs/DATA_MODEL.md` 15.3); the Settings screen
+connection (Export download, Import file picker, the Import and clear confirmation
+dialogs, the Settings Store rehydrate) is not, and follows in a later PR. Its
+contract:
+
+- `exportRoot()` reads every user table in one read-only Dexie transaction, sets
+  `schemaVersion` / `appName` itself, takes `exportedAt` from an injected clock,
+  sorts only the top-level entity collections by primary ID (never the five bonus
+  slots, PlanStep order, or any other nested array), validates the built root with
+  the same full validation Import applies, and fails closed with
+  `export_state_invalid` - never creating a missing AppSettings, never rewriting the
+  database - while a historical CalculationContext is never a reason to fail
+- `prepareImportJson()` / `prepareImportRoot()` return typed results (`invalid_json`
+  for a non-JSON body, `invalid_import` otherwise) and never throw on untrusted
+  input. Schema migration is only the existing `prepareExportRootForImport()`
+  (schema 6..10, unchanged semantics); `validateExportRootForFullReplacement()` then
+  adds BuildCandidate / BuildListEntry / AppSettings entity validation, the Target
+  Ideal => Practical containment, primary ID uniqueness per collection, the formal
+  persisted references (Candidate / Entry `targetWeaponId` and the Route's
+  `collectReferencedOwnedWeaponIds()`, `validateTargetPreferredOwnedWeapons()`,
+  `selectedBuildListEntryIds`, ExecutionHistory `planId` / `planStepId`,
+  `executionInProgress.productionPlanId`, `completedByProductionPlanId`,
+  `validateExecutionSavePointReferences()`), and Master ID existence. A
+  Plan-registered future OwnedWeapon ID, an Undo snapshot body, and
+  `BuildListEntry.candidateId` are never current foreign keys
+- Master ID validation is existence only, never the save-time
+  `validateOwnedWeaponMasterReferences()` / `validateTargetWeaponMasterReferences()`:
+  a stored bonus outside the Production availability (Bow / Poison + Element) is
+  imported unchanged (`docs/DATA_MODEL.md` 7.1 non-destructive load). A snapshot
+  Route's source OwnedWeapon is checked for existence only, not for the save-time
+  Normal-kind / unprotected eligibility, because Execution converts an owned Normal in
+  place and the user may protect a source afterwards; that divergence is
+  `owned_weapon_changed` staleness, not an invalid backup
+- `applyImport()` re-validates the root, then clears every user table and inserts
+  the root with duplicate-failing `add` / `bulkAdd` in one read-write transaction. No
+  CRUD service, Plan-breaking guard, `updatedAt` change, or reminder flag is involved,
+  `exportedAt` is stored nowhere, and a failing write rolls the whole replacement back
+- `clearAllData()` clears every user table and creates one default AppSettings in one
+  transaction, creating no other entity; a failure keeps the previous data
+- None of it moved `CURRENT_CALCULATION_APP_SCHEMA_VERSION` (13),
+  `DATABASE_SCHEMA_VERSION` (7), `ExportRoot.schemaVersion` (10), or
+  `RngState.schemaVersion` (2)
+
 ---
 
 ## Web Worker Rules

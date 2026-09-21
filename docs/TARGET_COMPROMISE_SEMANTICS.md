@@ -65,8 +65,9 @@ AppSettings.schemaVersion、RngState.schemaVersionは変更しない。
 searchStateHashと参照武器hashはRNG・武器依存の既存定義を維持する。
 Target definition hashは新Rule構造を含める。
 
-Import/Exportは現時点でExportRoot型のみであり、全置換UI・JSON parser・保存serviceは未実装。
-現行ExportRootはschemaVersion 6。将来のimportでも旧条件の推測変換を禁止し、
+Import/Exportの全置換Persistence / Application Service基盤（JSON parser、full validation、
+保存service）は実装済みであり、Settings画面のUIは未接続である（[DATA_MODEL.md](./DATA_MODEL.md) 15.3）。
+この文書の執筆時点のExportRootはschemaVersion 6であった（現行は10）。将来のimportでも旧条件の推測変換を禁止し、
 旧versionを新Targetとして直接受理しない。同じfail-closed Target移行を使用する。
 履歴artifactを新評価で再分類しない。
 

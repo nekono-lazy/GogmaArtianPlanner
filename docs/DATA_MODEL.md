@@ -2352,7 +2352,40 @@ BuildListEntryが `intermediateStateSelection` を持つ最初の形状であり
 旧 `checkpointGroups` / `selectedCheckpointOpportunityIds` の形状）、schemaVersion 7はそれに
 Execution lifecycleの永続状態を加えた形状である（15.1）。
 Dexie `DATABASE_SCHEMA_VERSION = 7` とは独立して更新する。
-現実装は型のみであり全置換Import/Exportサービスは未実装。
+
+全置換Import / Export / 全データクリアのPersistence / Application Service基盤は実装済みである
+（`src/services/dataTransfer/importExportService.ts`、`importExportValidation.ts`）。Settings画面への接続
+（Export download、Import file picker、Import確認Dialog、全データクリア確認Dialog、Settings Storeの
+rehydrate）は未実装であり、後続PRで行う。
+
+- Export（`exportRoot()` / `serializeExport()`）は全user tableを1つのread-only Dexie transactionで読み、
+  `schemaVersion = 10` / `appName` をService自身が設定し、`exportedAt` は注入したclockの時刻とする。
+  top-level entity collectionだけをprimary IDで安定sortし、復元ボーナス5枠順、PlanStep順、その他のnested
+  arrayの順序は永続化どおり保つ。作成したrootを後述のImport full validationに通し、Settings recordの欠落や
+  Domain不変条件違反があればDBを書き換えずに `export_state_invalid` でfail closedする。旧CalculationContextの
+  計算artifactは拒否しない
+- Import準備（`prepareImportJson()` / `prepareImportRoot()`）はJSON parse失敗を `invalid_json`、それ以外の
+  拒否を `invalid_import` のtyped resultとして返し、untrusted inputに対してthrowしない。schema migrationは
+  既存の `prepareExportRootForImport()`（schema 6..10）だけを使い、その成功後に全置換用のfull validation
+  （`validateExportRootForFullReplacement()`）を追加で行う: BuildCandidate / BuildListEntry / AppSettingsの
+  entity validation、Target Ideal ⇒ Practical containment、全top-level collectionのprimary ID一意性、
+  formalなpersisted reference（Candidate / Entry snapshotの `targetWeaponId` とRouteが参照する所持武器、
+  `preferredOwnedWeaponId` のcollection契約、`selectedBuildListEntryIds`、ExecutionHistoryの
+  `planId` / `planStepId`、`executionInProgress.productionPlanId`、`completedByProductionPlanId`、
+  ゲーム内セーブ地点参照）、現在Masterに存在するMaster ID。Plan / PlanStepが持つ将来登録されるOwnedWeapon ID
+  とUndo Snapshot内の過去bodyはcurrent FKとして扱わず、BuildListEntryの作成元BuildCandidate recordも要求しない
+- Master ID検証は存在確認だけであり、Production抽選availability（7.1）は判定しない。旧UIで保存できた
+  availability外の復元ボーナスはImportで受理し内容を変えない（non-destructive load）。Candidate snapshotの
+  Route起点OwnedWeaponはIDの存在だけを確認し、save時の起点適格性（Normal kind / 非保護）は要求しない。
+  それらの乖離は既存の `owned_weapon_changed` stalenessが扱う
+- Import適用（`applyImport()`）はrootを再validationしてから、全user tableのclearと `add` / `bulkAdd` による
+  挿入を1つのread-write Dexie transactionで行う。通常CRUD serviceやPlan-breaking guardを通さず、
+  `updatedAt` 等を書き換えず、`exportedAt` をどのtableにも保存しない。途中失敗時は全tableがImport前の状態へ
+  rollbackする
+- 全データクリア（`clearAllData()`）は全user tableのclearとdefault AppSettings 1件の作成を1つの
+  transactionで行い、RngStateや目標武器を推測作成しない。失敗時は元データを維持する
+- この基盤は `CURRENT_CALCULATION_APP_SCHEMA_VERSION`（13）、`DATABASE_SCHEMA_VERSION`（7）、
+  `ExportRoot.schemaVersion`（10）、`RngState.schemaVersion`（2）を変更しない
 旧schema=1を新Targetとして直接受理しない。将来のimportも純粋Target移行関数を使用し、
 旧Practical/OR/Practical Skillは解除、Ideal・ID・他entityは保持する。
 
