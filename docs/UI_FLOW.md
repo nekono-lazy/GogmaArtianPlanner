@@ -165,8 +165,9 @@ Planner、Target評価、Master、persisted schema、calculation semanticsを変
 - 通常アーティア側とGogma側で同じ意味の系統（斬れ味 / 装填）は同じ色系統として扱う
 - 色は補助表現に留め、現在の文字ラベル（種類名とRank）はそのまま維持する。色だけが種類やRankを
   伝える唯一の手段になってはならない
-- EX Rankは `BonusRankMaster.isEx` で判定し、同じ色系統のまま、文字の太さと枠線の強さなど
-  色以外の差でも通常Rankより明確に強調する。ラベル中の `EX` 表示は維持する
+- EX Rankは `BonusRankMaster.isEx` で判定し、ラベル中の `EX` 表示を維持したうえで、同じ色系統の
+  まま背景tint等で通常Rankより少し識別しやすくする。強調は控えめな補助表現に留め、EXだけ文字を
+  太くしたり枠線を太くしたりはしない。`EX` の文字があるため、色だけが唯一の情報伝達手段にはならない
 - 既知の系統に属さない `bonusTypeId` には推測で色を付けず、標準のChip表示へfallbackする
 - 既存の `filled` / `outlined` の違いは維持し、色分けやEX強調でChipの寸法やwrap挙動を変えない
 - 文字色は白背景およびtint背景に対して通常テキストのコントラスト基準（4.5:1）を、枠線色は

@@ -10,8 +10,8 @@ import type { BonusRankId, BonusTypeId } from '../domain/models/publicTypes'
  * A tone is a display family of the Bonus Type: it makes the five slots
  * easier to tell apart at a glance and carries no Domain meaning. The text
  * label stays the authority - `RestorationBonusSlots` never changes it - so
- * colour is only a secondary cue, and an EX rank is additionally emphasised
- * through weight and border, never through colour alone.
+ * colour is only a secondary cue, and an EX rank - already named by the `EX`
+ * text of its label - is set apart only by a slightly stronger tint.
  *
  * The family is resolved from the stable `bonusTypeId`, never from a display
  * name. Normal-side and Gogma-side types of one meaning share a family, so a
@@ -79,7 +79,6 @@ export interface RestorationBonusChipStyle {
   borderColor: string
   bgcolor: string
   boxShadow: string
-  '& .MuiChip-label': { fontWeight: number | undefined }
 }
 
 /**
@@ -87,10 +86,14 @@ export interface RestorationBonusChipStyle {
  *
  * The two variants keep their existing contrast: `outlined` stays a
  * transparent chip with a coloured 1px border, `filled` stays a tinted chip
- * and draws its border as an inset ring so no Chip dimension changes. EX adds
- * weight 700, one more ring pixel and a stronger tint, all inside the Chip's
- * fixed box, so an EX slot is exactly as tall and wide as a normal one and
- * the five slots wrap the same way as before.
+ * and draws its border as an inset ring so no Chip dimension changes. EX is
+ * emphasised only by a slightly stronger background tint of the same family
+ * colour (one Material state-layer step: 8% on `outlined`, 10% -> 16% on
+ * `filled`); the label weight and the border / ring strength are the same as
+ * a normal rank, because the `EX` text already names the rank and the tint
+ * is a secondary cue. Nothing changes the Chip's fixed box, so an EX slot is
+ * exactly as tall and wide as a normal one and the five slots wrap the same
+ * way as before.
  */
 export function restorationBonusChipSx(
   tone: RestorationBonusTone,
@@ -98,13 +101,12 @@ export function restorationBonusChipSx(
   variant: RestorationBonusChipVariant,
 ): RestorationBonusChipStyle {
   const { text, border } = RESTORATION_BONUS_TONE_COLORS[tone]
-  const ringWidth = variant === 'outlined' ? (isEx ? 1 : 0) : isEx ? 2 : 1
-  const tint = variant === 'outlined' ? (isEx ? 0.08 : 0) : isEx ? 0.18 : 0.1
+  const ringWidth = variant === 'outlined' ? 0 : 1
+  const tint = variant === 'outlined' ? (isEx ? 0.08 : 0) : isEx ? 0.16 : 0.1
   return {
     color: text,
     borderColor: border,
     bgcolor: tint === 0 ? 'transparent' : alpha(text, tint),
     boxShadow: ringWidth === 0 ? 'none' : `inset 0 0 0 ${ringWidth}px ${border}`,
-    '& .MuiChip-label': { fontWeight: isEx ? 700 : undefined },
   }
 }
