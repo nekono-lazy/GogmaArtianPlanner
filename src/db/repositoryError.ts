@@ -16,6 +16,14 @@ export type RepositoryErrorCode =
    */
   | 'draft_plan_conflict'
   /**
+   * The guarded Draft delete (`ProductionPlanRepository.deleteDraftProductionPlan()`)
+   * found the named Plan stored with a status other than `draft`. Only the
+   * not-yet-started Draft may be deleted from the Production Plan list; an
+   * `active` / `stale` / `completed` / `abandoned` Plan is never deleted by it,
+   * even when the screen that asked still showed it as a Draft.
+   */
+  | 'draft_plan_delete_not_allowed'
+  /**
    * A ProductionPlan ID the collection already holds - whatever that Plan's
    * status, the current Draft included. A newly calculated Plan carries a
    * fresh ID, so a colliding key names a different Plan and is never silently

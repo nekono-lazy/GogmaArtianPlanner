@@ -51,6 +51,7 @@ function renderAppLayout(initialPath: string) {
             <Route path="target-weapons" element={<div>目標武器画面</div>} />
             <Route path="search" element={<div>検索画面</div>} />
             <Route path="build-list" element={<div>ビルドリスト画面</div>} />
+            <Route path="plans" element={<div>生産計画一覧画面</div>} />
             <Route path="plans/:planId" element={<div>生産計画画面</div>} />
             <Route path="plans/:planId/run" element={<div>実行ナビゲーション画面</div>} />
             <Route path="settings" element={<div>設定画面</div>} />
@@ -69,6 +70,7 @@ const primaryScreens = [
   '目標武器',
   '候補検索',
   'ビルドリスト',
+  '生産計画',
   'RNG状態設定',
   '通常アーティアカウンター',
   '設定',
@@ -92,6 +94,7 @@ const expectedSequence = [
   '計画',
   '候補検索',
   'ビルドリスト',
+  '生産計画',
   '初期設定',
   'RNG状態設定',
   '通常アーティアカウンター',
@@ -140,29 +143,43 @@ describe('AppLayout', () => {
     expect(navigationSequence(nav)).toEqual([...expectedSequence, 'デバッグ'])
   })
 
-  it('has no permanent entry for Production Plan or Execution Navigator', () => {
+  it('offers 生産計画 in the 計画 group, leading to the Production Plan list', () => {
     mockDesktopViewport()
-    renderAppLayout('/plans/plan-1')
+    renderAppLayout('/plans')
 
     const nav = screen.getByRole('navigation', { name: 'メインナビゲーション' })
-    const hrefs = within(nav)
-      .getAllByRole('link')
-      .map((link) => link.getAttribute('href') ?? '')
-    expect(hrefs.some((href) => href.includes('/plans'))).toBe(false)
-    expect(within(nav).queryByRole('link', { name: '生産計画' })).not.toBeInTheDocument()
-    expect(within(nav).queryByRole('link', { name: '実行ナビゲーション' })).not.toBeInTheDocument()
-    // The route itself is still reachable and still identified in the AppBar.
-    expect(screen.getByText('生産計画画面')).toBeInTheDocument()
+    const link = within(nav).getByRole('link', { name: '生産計画' })
+    expect(link).toHaveAttribute('href', '/plans')
+    expect(link).toHaveAttribute('aria-current', 'page')
+    expect(within(nav).getAllByRole('link', { current: 'page' })).toHaveLength(1)
+    expect(screen.getByText('生産計画一覧画面')).toBeInTheDocument()
     expect(within(screen.getByRole('banner')).getByText('生産計画')).toBeInTheDocument()
   })
 
-  it('identifies the Execution Navigator route in the AppBar without a Drawer entry', () => {
+  it.each([
+    ['/plans/plan-1', '生産計画', '生産計画画面'],
+    ['/plans/plan-1/run', '実行ナビゲーション', '実行ナビゲーション画面'],
+  ])('keeps 生産計画 active on %s while the AppBar says %s', (path, title, page) => {
+    mockDesktopViewport()
+    renderAppLayout(path)
+
+    const nav = screen.getByRole('navigation', { name: 'メインナビゲーション' })
+    expect(within(nav).getByRole('link', { name: '生産計画' })).toHaveAttribute('aria-current', 'page')
+    expect(within(nav).getAllByRole('link', { current: 'page' })).toHaveLength(1)
+    expect(screen.getByText(page)).toBeInTheDocument()
+    expect(within(screen.getByRole('banner')).getByText(title)).toBeInTheDocument()
+  })
+
+  it('adds no permanent entry for the Execution Navigator', () => {
     mockDesktopViewport()
     renderAppLayout('/plans/plan-1/run')
 
-    expect(within(screen.getByRole('banner')).getByText('実行ナビゲーション')).toBeInTheDocument()
     const nav = screen.getByRole('navigation', { name: 'メインナビゲーション' })
-    expect(within(nav).queryAllByRole('link', { current: 'page' })).toHaveLength(0)
+    expect(within(nav).queryByRole('link', { name: '実行ナビゲーション' })).not.toBeInTheDocument()
+    const planLinks = within(nav)
+      .getAllByRole('link')
+      .filter((link) => (link.getAttribute('href') ?? '').startsWith('/plans'))
+    expect(planLinks.map((link) => link.getAttribute('href'))).toEqual(['/plans'])
   })
 
   it('does not give the navigation content a fixed width of its own', () => {

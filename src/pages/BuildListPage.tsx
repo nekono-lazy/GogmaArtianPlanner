@@ -128,6 +128,16 @@ export interface BuildListPageDependencies {
    * reports, never something the page resolves.
    */
   getRunningProductionPlan(): Promise<ProductionPlan | undefined>
+  /**
+   * The one not-yet-started Draft, or `undefined` (`docs/DATA_MODEL.md` 11.1).
+   * Display only (`docs/UI_FLOW.md` 10.3): the page links to it and says that
+   * the next Planner save replaces it. It never decides which Planner entry is
+   * offered - that stays with the running Plan - and a Draft beside a running
+   * Plan is legal, so it is never read away because a Plan runs. More than one
+   * Draft is a persistence invariant violation the repository reports, never
+   * something the page resolves or reads as "no Draft".
+   */
+  getDraftProductionPlan(): Promise<ProductionPlan | undefined>
   /** 「現在地点から再計画を試算」 / 「この再計画を採用」 (16.8, `docs/UI_FLOW.md` 16.4). */
   replan: ProductionPlanReplanDependencies
 }
@@ -152,6 +162,7 @@ function createDefaultDependencies(master: MasterDataRoot): BuildListPageDepende
     inspectIntermediateStateSelectionUpdate: (id, selection) =>
       buildListService.inspectIntermediateStateSelectionUpdate(id, selection),
     getRunningProductionPlan: () => productionPlanRepository.getRunningProductionPlan(),
+    getDraftProductionPlan: () => productionPlanRepository.getDraftProductionPlan(),
     replan: createProductionPlanReplanDependencies(master),
   }
 }
@@ -245,6 +256,19 @@ type RunningPlanState =
   | { status: 'loading' }
   | { status: 'none' }
   | { status: 'running'; plan: ProductionPlan }
+  | { status: 'error' }
+
+/**
+ * Whether the current Draft exists. `error` means the read failed or the Draft
+ * invariant is broken (two Drafts): the state is reported, never guessed as
+ * "no Draft", and the ordinary Draft creation is withheld exactly as it is
+ * when the running Plan cannot be read, because the page cannot say what the
+ * save would replace. The replan Preview of a running Plan is untouched.
+ */
+type DraftPlanState =
+  | { status: 'loading' }
+  | { status: 'none' }
+  | { status: 'draft'; plan: ProductionPlan }
   | { status: 'error' }
 
 /**
@@ -449,6 +473,9 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
   const [runningPlan, setRunningPlan] = useState<RunningPlanState>(
     dependencies ? { status: 'loading' } : { status: 'error' },
   )
+  const [draftPlan, setDraftPlan] = useState<DraftPlanState>(
+    dependencies ? { status: 'loading' } : { status: 'error' },
+  )
   // The breaking-change warning of a selected Entry's selection change or
   // delete (`docs/UI_FLOW.md` 16.3). While it decides, no other guarded
   // change is queued: the selection controls and the delete buttons wait.
@@ -514,6 +541,11 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
       if (active) setRunningPlan(plan === undefined ? { status: 'none' } : { status: 'running', plan })
     }).catch(() => {
       if (active) setRunningPlan({ status: 'error' })
+    })
+    void dependencies.getDraftProductionPlan().then((plan) => {
+      if (active) setDraftPlan(plan === undefined ? { status: 'none' } : { status: 'draft', plan })
+    }).catch(() => {
+      if (active) setDraftPlan({ status: 'error' })
     })
     void dependencies.refresh(calculationContext).then((loaded) => {
       if (!active) return
@@ -862,6 +894,51 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
           </Alert>
         )}
 
+        {loaded && draftPlan.status === 'error' && (
+          // A failed Draft read is never "no Draft": the save would replace
+          // something the page cannot name, so the ordinary creation waits
+          // (`docs/UI_FLOW.md` 10.3).
+          <Alert severity="error">
+            <Stack spacing={1.5} sx={{ alignItems: 'flex-start' }}>
+              <Typography variant="body2">
+                未開始の生産計画（下書き）を確認できないため、生産計画の作成はできません。生産計画一覧で状態を確認してください。
+              </Typography>
+              <Button component={RouterLink} to="/plans" variant="outlined" color="inherit" sx={{ minHeight: 44 }}>
+                生産計画一覧を見る
+              </Button>
+            </Stack>
+          </Alert>
+        )}
+
+        {loaded && draftPlan.status === 'draft' && (
+          // The current Draft (`docs/DATA_MODEL.md` 11.1). Read-only guidance:
+          // beside a running Plan it is still shown, and no second Draft
+          // creation is offered there (`docs/UI_FLOW.md` 10.3).
+          <Alert severity="info">
+            <Stack spacing={1.5} sx={{ alignItems: 'flex-start' }}>
+              <Typography variant="body2">
+                {runningPlan.status === 'running'
+                  ? '未開始の下書きも保存されています。'
+                  : '未開始の生産計画があります。'}
+              </Typography>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignSelf: 'stretch' }}>
+                <Button
+                  component={RouterLink}
+                  to={`/plans/${draftPlan.plan.id}`}
+                  variant="outlined"
+                  color="inherit"
+                  sx={{ minHeight: 44 }}
+                >
+                  下書きを開く
+                </Button>
+                <Button component={RouterLink} to="/plans" variant="outlined" color="inherit" sx={{ minHeight: 44 }}>
+                  生産計画一覧を見る
+                </Button>
+              </Stack>
+            </Stack>
+          </Alert>
+        )}
+
         {loaded && runningPlan.status === 'running' && (
           // 16.8: while a Plan runs, the Build List offers the replan Preview
           // instead of a second, independent Draft (UI_FLOW 10 / 16.4).
@@ -918,7 +995,7 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
           </PageSection>
         )}
 
-        {loaded && runningPlan.status === 'none' && entries.length > 0 && (
+        {loaded && runningPlan.status === 'none' && (draftPlan.status === 'none' || draftPlan.status === 'draft') && entries.length > 0 && (
           <PageSection title="生産計画の作成" accent>
             <Stack
               direction={{ xs: 'column', md: 'row' }}
@@ -927,6 +1004,14 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
             >
               <Typography variant="body2" color="text.secondary" sx={{ minWidth: 0 }}>
                 再検索が必要な候補は生産計画に含まれません。作成に成功すると、保存された生産計画の画面へ移動します。
+                {draftPlan.status === 'draft' && (
+                  // An explanation of the existing atomic replacement
+                  // (`savePlannerOrchestrationResult()`), not a UI-side rule.
+                  <>
+                    {' '}
+                    新しい生産計画を保存すると、現在の未開始の生産計画は置き換えられます。
+                  </>
+                )}
               </Typography>
               <Button
                 variant="contained"

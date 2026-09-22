@@ -39,10 +39,11 @@ interface NavigationGroup {
  * (`docs/UI_FLOW.md` 2.1). Rendered above the Drawer divider.
  *
  * Every group is shown on both PC and smartphone: the device never narrows
- * which screens are reachable (`docs/UI_FLOW.md` 3.1). Production Plan and
- * Execution Navigator have no permanent entry here: they are reached from
- * Build List / Dashboard once a Plan exists, and their Router paths are
- * untouched.
+ * which screens are reachable (`docs/UI_FLOW.md` 3.1). 生産計画 leads to the
+ * Production Plan list (`/plans`); it is also the active entry on a Plan's
+ * detail (`/plans/:planId`) and its Execution Navigator (`/plans/:planId/run`),
+ * because `NavLink` matches those nested paths without `end`. The Execution
+ * Navigator has no entry of its own: it is reached from a Plan once one runs.
  */
 const primaryNavigationGroups: NavigationGroup[] = [
   { label: null, items: [{ label: 'ダッシュボード', to: '/', end: true }] },
@@ -58,6 +59,7 @@ const primaryNavigationGroups: NavigationGroup[] = [
     items: [
       { label: '候補検索', to: '/search' },
       { label: 'ビルドリスト', to: '/build-list' },
+      { label: '生産計画', to: '/plans' },
     ],
   },
 ]
@@ -87,12 +89,11 @@ interface RouteTitle {
  * in the AppBar.
  *
  * Covers every path `App.tsx` registers, including the dynamic Production
- * Plan / Execution Navigator routes that have no permanent Drawer entry
- * (they are reached from Build List / Dashboard once a Plan exists). Order
+ * Plan / Execution Navigator routes below the Production Plan list. Order
  * matters: a more specific pattern is listed before a less specific one that
- * would also match it (`/plans/:planId/run` before `/plans/:planId`). This is
- * a read-only presentation lookup; it does not change any Router path or
- * navigation semantics.
+ * would also match it (`/plans/:planId/run` before `/plans/:planId`, and both
+ * before the generic `/plans`). This is a read-only presentation lookup; it
+ * does not change any Router path or navigation semantics.
  */
 const routeTitles: RouteTitle[] = [
   { pattern: '/', end: true, label: 'ダッシュボード' },
@@ -104,6 +105,7 @@ const routeTitles: RouteTitle[] = [
   { pattern: '/build-list', label: 'ビルドリスト' },
   { pattern: '/plans/:planId/run', label: '実行ナビゲーション' },
   { pattern: '/plans/:planId', label: '生産計画' },
+  { pattern: '/plans', label: '生産計画' },
   { pattern: '/settings', label: '設定' },
   { pattern: '/debug', label: 'デバッグ' },
 ]

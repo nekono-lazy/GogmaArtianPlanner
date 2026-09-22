@@ -29,6 +29,7 @@ describe('App', () => {
     ['#/target-weapons', '目標武器'],
     ['#/search', '候補検索'],
     ['#/build-list', 'ビルドリスト'],
+    ['#/plans', '生産計画'],
     ['#/plans/plan-1', '生産計画'],
     ['#/plans/plan-1/run', '実行ナビゲーション'],
     ['#/settings', '設定'],

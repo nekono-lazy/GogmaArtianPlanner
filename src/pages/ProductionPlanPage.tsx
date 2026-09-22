@@ -1128,6 +1128,14 @@ export function ProductionPlanPage({
     <PageShell
       title="生産計画"
       description={`生産計画（${loadedPlan?.id ?? planId ?? '未指定'}）の全体を確認します。`}
+      actions={
+        // Presentation only: the list is a separate read-only screen, and
+        // this link takes no part in the Plan display / what-if / start /
+        // replan state machine below.
+        <Button component={RouterLink} to="/plans" variant="outlined" sx={{ minHeight: 44 }}>
+          生産計画一覧へ
+        </Button>
+      }
     >
       <Stack spacing={{ xs: 2, md: 3 }}>
         {state.status === 'loading_plan' && (
