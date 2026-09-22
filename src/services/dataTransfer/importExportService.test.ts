@@ -568,6 +568,19 @@ describe('ImportExportService round-trip', () => {
     expect(reExported.exportedAt).toBe('2026-09-22T00:00:00.000Z')
   })))
 
+  it('38.4-1: reopens the database and restores every user table without an Import', () => withDatabase(async (database) => {
+    await seedRoot(database, dataTransferRoot())
+    const before = await service(database).serializeExport()
+    database.close()
+    const reopened = new AppDatabase(database.name)
+    try {
+      await reopened.open()
+      expect(await service(reopened).serializeExport()).toBe(before)
+    } finally {
+      reopened.close()
+    }
+  }))
+
   it('survives export, clear and import on one database', () => withDatabase(async (database) => {
     const s = service(database)
     await s.applyImport(dataTransferRoot())

@@ -26,3 +26,25 @@ export function hasMaxHeightRule(element: Element): boolean {
   }
   return [...document.styleSheets].some((sheet) => [...sheet.cssRules].some(declaresMaxHeight))
 }
+
+/** Checks an emitted sx contract, not browser geometry or CSS cascade resolution. */
+export function hasStyleRule(
+  element: Element,
+  property: string,
+  value: string,
+  media?: string,
+): boolean {
+  const matches = (rule: CSSRule, currentMedia?: string): boolean => {
+    if (rule instanceof CSSStyleRule) {
+      return (media === undefined || currentMedia === media)
+        && element.matches(rule.selectorText)
+        && rule.style.getPropertyValue(property) === value
+    }
+    if (rule instanceof CSSGroupingRule) {
+      const nestedMedia = rule instanceof CSSMediaRule ? rule.conditionText : currentMedia
+      return [...rule.cssRules].some((child) => matches(child, nestedMedia))
+    }
+    return false
+  }
+  return [...document.styleSheets].some((sheet) => [...sheet.cssRules].some((rule) => matches(rule)))
+}

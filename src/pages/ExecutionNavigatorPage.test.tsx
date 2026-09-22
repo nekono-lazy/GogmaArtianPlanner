@@ -24,12 +24,15 @@ import type {
 } from '../domain/models/publicTypes'
 import { createValidMasterDataFixture } from '../test/fixtures/masterData'
 import {
+  CONSTRAINED_START_GOGMA_COUNTER,
+  IDEAL_SERIES_SKILL_ID,
   alternativePracticalBonuses,
   idealBonuses,
   practicalBonuses,
   sameLayoutLowerRanks,
 } from '../test/fixtures/constrainedEnumeration'
 import {
+  planFor,
   blindFixture,
   checkpointFixture,
   dump,
@@ -45,6 +48,8 @@ import {
   executionService,
   type ExecutionFixture,
 } from '../test/fixtures/executionRuntime'
+import { orchestrationEntry, orchestrationScenario, orchestrationSource, orchestrationTarget, resetRoute } from '../test/fixtures/plannerConstrainedOrchestration'
+import { hasStyleRule } from '../test/cssRuleAssertions'
 import { ExecutionNavigatorPage } from './ExecutionNavigatorPage'
 import {
   loadExecutionNavigatorSnapshot,
@@ -460,6 +465,51 @@ describe('ExecutionNavigatorPage owned Ideal confirmation', () => {
 })
 
 describe('ExecutionNavigatorPage weapon switching and checkpoints with the real runtime', () => {
+  it('38.5-E: guides A to B to A twice without adding a Step, history or Undo action', () =>
+    withDatabase(async (database) => {
+      const a = orchestrationSource('owned.acceptance.a', { seriesSkillId: IDEAL_SERIES_SKILL_ID })
+      const b = orchestrationSource('owned.acceptance.b', { seriesSkillId: 'series_skill.fixture.z' })
+      const targetA = orchestrationTarget('target.acceptance.a')
+      const otherSkill = { seriesSkillId: 'series_skill.fixture.z', groupSkillId: null, matchMode: 'all' as const }
+      const targetB = orchestrationTarget('target.acceptance.b', { idealSkillCondition: otherSkill, practicalSkillCondition: otherSkill })
+      const routeA = resetRoute(a.id)
+      routeA.operations.push(...resetRoute(a.id, CONSTRAINED_START_GOGMA_COUNTER + 2).operations)
+      const fixture = await planFor(orchestrationScenario({
+        targets: [targetA, targetB], ownedWeapons: [a, b],
+        entries: [orchestrationEntry('entry.acceptance.a', targetA, routeA),
+          orchestrationEntry('entry.acceptance.b', targetB, resetRoute(b.id, CONSTRAINED_START_GOGMA_COUNTER + 1), { seriesSkillId: otherSkill.seriesSkillId })],
+        engine: { resetResultAt: (counter) => counter === CONSTRAINED_START_GOGMA_COUNTER ? practicalBonuses() : idealBonuses() },
+      }))
+      expect(fixture.plan.steps.map((step) => step.executionEffects?.trackedOwnedWeaponId)).toEqual([a.id, b.id, a.id])
+      const { deps } = await realRuntime(database, fixture)
+      const user = userEvent.setup()
+      renderNavigator(deps, fixture.plan.id)
+      await screen.findByText('Step 1 / 3')
+      // xs covers 375px; jsdom verifies emitted CSS, not physical geometry.
+      expect(hasStyleRule(primary(), 'width', '100%', '(min-width:0px)')).toBe(true)
+      expect(getComputedStyle(primary()).minHeight).toBe('48px')
+      expect(screen.queryByRole('button', { name: '武器を切り替えました' })).not.toBeInTheDocument()
+      for (const [index, weapon] of [b, a].entries()) {
+        await user.click(primary())
+        await screen.findByText(`Step ${index + 2} / 3`)
+        expect(screen.getByText(`作業する武器を「${weapon.name}」へ切り替えてください`)).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: '結果一致・次へ' })).not.toBeInTheDocument()
+        const before = await dump(database)
+        const switchButton = screen.getByRole('button', { name: '武器を切り替えました' })
+        expect(hasStyleRule(switchButton, 'width', '100%', '(min-width:0px)')).toBe(true)
+        expect(getComputedStyle(switchButton).minHeight).toBe('48px')
+        await user.click(switchButton)
+        expect(primary()).toBeEnabled()
+        expect(await dump(database)).toEqual(before)
+        expect(deps.undoLatestExecution).not.toHaveBeenCalled()
+        expect(deps.confirmExpectedPlanStep).toHaveBeenCalledTimes(index + 1)
+      }
+      await user.click(primary())
+      await waitFor(async () => expect((await database.productionPlans.get(fixture.plan.id))?.status).toBe('completed'))
+      expect(await database.executionHistory.count()).toBe(3)
+      expect((await database.productionPlans.get(fixture.plan.id))?.steps).toHaveLength(3)
+    }))
+
   it('guides a switch to another weapon and never persists the acknowledgement', () =>
     withDatabase(async (database) => {
       const fixture = await otherWeaponCheckpointFixture()
@@ -592,6 +642,8 @@ describe('ExecutionNavigatorPage weapon switching and checkpoints with the real 
         status: 'abandoned',
         abandonmentReason: 'finished_as_compromise',
       })
+      expect(await database.targetWeapons.get(fixture.goal.id)).toMatchObject({ lifecycleStatus: 'active', preferredOwnedWeaponId: fixture.source.id })
+      expect(await database.ownedWeapons.get(fixture.source.id)).toMatchObject({ status: 'practical', executionInProgress: null })
     }), 20_000)
 })
 

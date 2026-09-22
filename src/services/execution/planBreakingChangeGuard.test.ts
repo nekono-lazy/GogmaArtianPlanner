@@ -36,6 +36,9 @@ import {
   type ExecutionFixture,
 } from '../../test/fixtures/executionRuntime'
 import { orchestrationSource, orchestrationTarget } from '../../test/fixtures/plannerConstrainedOrchestration'
+import { searchCandidates } from '../../domain/search/candidateSearch'
+import { createCandidateSearchInput } from '../search/createCandidateSearchInput'
+import { createDefaultAppSettings } from '../../domain/models/publicTypes'
 import { BuildListService } from '../buildList/buildListService'
 import {
   EntityFormValidationError,
@@ -261,6 +264,40 @@ describe('Plan-breaking saves without approval', () => {
 })
 
 describe('Non-breaking saves on an active Plan', () => {
+  it('38.5-F: adds a Target during execution and searches it from the persisted current position', () =>
+    withDatabase(async (database) => {
+      const fixture = await newNormalFixture(3)
+      const { execution, services } = await started(database, fixture)
+      await confirmCurrent(execution, database, fixture.plan)
+      const before = await dump(database)
+      const draft = draftOf(orchestrationTarget('target.acceptance.added'))
+      expect(await services.targets.inspectSave(draft, null, GUARD_NOW)).toMatchObject({ approvalRequired: false })
+      const added = await services.targets.save(draft, null, GUARD_NOW)
+      const input = await createCandidateSearchInput({
+        searchRunId: 'acceptance-active-plan', targetWeaponId: added.id, routeFilter: 'normal_artian',
+        settings: { maxNormalAdvance: 1, maxGogmaAdvance: 1, maxSkillAdvance: 1 },
+        master: fixture.built.input.master as unknown as MasterDataRoot,
+        calculationContext: fixture.built.input.calculationContext,
+      }, {
+        ensureInitialRngState: async () => (await database.rngState.get('current')) as RngState,
+        getAllNormalArtianCounters: () => database.normalArtianCounters.toArray(),
+        getAllOwnedWeapons: () => database.ownedWeapons.toArray(),
+        getAllTargetWeapons: () => database.targetWeapons.toArray(),
+        ensureSettings: async () => createDefaultAppSettings(GUARD_NOW),
+      })
+      expect(input.normalCounters[0].counter).toBe(fixture.built.input.normalCounters[0].counter! + 1)
+      const result = await searchCandidates(input, fixture.built.engine)
+      expect(result.targetResult.targetWeaponId).toBe(added.id)
+      expect(result.targetResult.candidate).not.toBeNull()
+      const after = await dump(database)
+      expect(after.productionPlans).toEqual(before.productionPlans)
+      expect(after.productionPlans[0].status).toBe('active')
+      expect({ ...after, targetWeapons: [] }).toEqual({ ...before, targetWeapons: [] })
+      expect(after.targetWeapons).toEqual(expect.arrayContaining([...before.targetWeapons, added]))
+      // The same active Plan can still confirm its next Step.
+      expect((await confirmCurrent(execution, database, fixture.plan)).plan.status).toBe('active')
+    }))
+
   it('saves status, name and memo of a tracked weapon and non-semantic Target edits without approval', () =>
     withDatabase(async (database) => {
       const fixture = await existingGogmaFixture()
