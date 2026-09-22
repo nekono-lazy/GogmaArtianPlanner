@@ -438,6 +438,8 @@ describe('OwnedWeaponsPage', () => {
     const slots = within(item.getByRole('list', { name: '復元ボーナス' })).getAllByRole('listitem')
     expect(slots.map((slot) => slot.textContent)).toEqual(expectedLabels.map((label, index) => `${index + 1}${label}`))
     expect(item.queryByText('不明')).toBeNull()
+    // The stored normal_artian scope also decides the colour family of the normal-side types (never the kind).
+    expect(slots.every((slot) => slot.hasAttribute('data-bonus-tone'))).toBe(true)
 
     await user.click(item.getByRole('button', { name: '編集' }))
     // The selector opens on the stored scope; kind never decides it.
@@ -480,6 +482,32 @@ describe('OwnedWeaponsPage', () => {
     // The region is bounded and scrolls rather than pushing the actions away.
     expect(getComputedStyle(alert).overflowY).toBe('auto')
     expect(hasMaxHeightRule(alert)).toBe(true)
+  })
+
+  it('colour-codes the five slots by Bonus Type through the stored scope, keeping the numbers and labels', async () => {
+    const master = loadedMaster()
+    const bonuses = [
+      { bonusTypeId: 'bonus_type.element', bonusRankId: 'bonus_rank.ex' },
+      { bonusTypeId: 'bonus_type.attack', bonusRankId: 'bonus_rank.ii' },
+      { bonusTypeId: 'bonus_type.element', bonusRankId: 'bonus_rank.ex' },
+      { bonusTypeId: 'bonus_type.affinity', bonusRankId: 'bonus_rank.iii' },
+      { bonusTypeId: 'bonus_type.gogma_sharpness_capacity', bonusRankId: 'bonus_rank.base' },
+    ] as OwnedWeapon['restorationBonuses']
+    const weapon: OwnedWeapon = { ...existingWeapon(), name: '色分け武器', restorationBonuses: bonuses }
+    const deps = dependencies(); deps.getAll = vi.fn(async () => [weapon])
+    render(<OwnedWeaponsPage dependencies={deps} />)
+
+    const item = within(await itemFor('色分け武器'))
+    const list = item.getByRole('list', { name: '復元ボーナス' })
+    expect(list.tagName).toBe('OL')
+    const slots = within(list).getAllByRole('listitem')
+    // The family follows the stable bonusTypeId in slot order, duplicates kept; EX follows the Master rank.
+    expect(slots.map((slot) => slot.getAttribute('data-bonus-tone'))).toEqual(['element', 'attack', 'element', 'affinity', 'sharpness_capacity'])
+    expect(slots.map((slot) => slot.getAttribute('data-bonus-ex'))).toEqual(['true', 'false', 'true', 'false', 'false'])
+    // The label is still the Gogma-scope Master definition, numbered 1..5.
+    const expectedLabels = bonuses.map((bonus) => master.weaponBonusDefinitions.find((definition) => definition.scope === 'gogma_artian' && definition.weaponTypeId === 'weapon.dual_blades' && definition.bonusTypeId === bonus.bonusTypeId && definition.bonusRankId === bonus.bonusRankId)?.displayNameJa)
+    expect(expectedLabels.every((label) => typeof label === 'string')).toBe(true)
+    expect(slots.map((slot) => slot.textContent)).toEqual(expectedLabels.map((label, index) => `${index + 1}${label}`))
   })
 
   it('shows the Gogma amendment scope for gogma_artian slots', async () => {

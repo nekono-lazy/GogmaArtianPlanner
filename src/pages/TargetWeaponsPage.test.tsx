@@ -117,6 +117,10 @@ describe('TargetWeaponsPage', () => {
     expect(plainItem.getByText('優先度 3')).toBeInTheDocument()
     expect(plainItem.getByText('双剣 / 雷')).toBeInTheDocument()
     expect(within(plainItem.getByRole('list', { name: '理想ボーナス' })).getAllByRole('listitem')).toHaveLength(5)
+    const idealSlots = within(plainItem.getByRole('list', { name: '理想ボーナス' })).getAllByRole('listitem')
+    // Ideal slots are Gogma-side definitions, colour-coded by family with the EX tint flag, numbered 1..5.
+    expect(idealSlots.map((slot) => slot.textContent)).toEqual(['1基礎攻撃力強化EX', '2基礎攻撃力強化EX', '3基礎攻撃力強化EX', '4基礎攻撃力強化EX', '5基礎攻撃力強化EX'])
+    expect(idealSlots.every((slot) => slot.getAttribute('data-bonus-tone') === 'attack' && slot.getAttribute('data-bonus-ex') === 'true')).toBe(true)
     expect(plainItem.getByText('理想スキル: 指定なし')).toBeInTheDocument()
     expect(plainItem.getByText('妥協なし（理想のみ検索）')).toBeInTheDocument()
     expect(plainItem.queryByText('妥協条件の再設定が必要')).toBeNull()

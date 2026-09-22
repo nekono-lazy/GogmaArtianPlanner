@@ -382,20 +382,6 @@ export function OwnedWeaponsPage({
     }
   }
 
-  const bonusLabels = (weapon: OwnedWeapon) => {
-    const scope = weapon.restorationBonusScope
-    return weapon.restorationBonuses.map(
-      (bonus) =>
-        master.weaponBonusDefinitions.find(
-          (definition) =>
-            definition.scope === scope &&
-            definition.weaponTypeId === weapon.weaponTypeId &&
-            definition.bonusTypeId === bonus.bonusTypeId &&
-            definition.bonusRankId === bonus.bonusRankId,
-        )?.displayNameJa ?? '不明',
-    )
-  }
-
   return (
     <PageShell
       title="所持武器"
@@ -465,7 +451,13 @@ export function OwnedWeaponsPage({
                       <Typography variant="body2">
                         {restorationBonusScopeFieldLabel}: {restorationBonusScopeLabels[weapon.restorationBonusScope]}
                       </Typography>
-                      <BonusSlotList heading="復元ボーナス" labels={bonusLabels(weapon)} />
+                      <BonusSlotList
+                        heading="復元ボーナス"
+                        bonuses={weapon.restorationBonuses}
+                        weaponTypeId={weapon.weaponTypeId}
+                        master={master}
+                        scope={weapon.restorationBonusScope}
+                      />
                       {weapon.kind === 'gogma' && (
                         <Typography variant="body2">
                           シリーズスキル:{' '}
