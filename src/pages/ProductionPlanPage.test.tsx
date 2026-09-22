@@ -1809,11 +1809,13 @@ describe('ProductionPlanPage supplementary persisted content', () => {
     ])
   })
 
-  it('states when no item material total was recorded', async () => {
+  it('omits the persisted material section when none was recorded and still shows the whole-Plan cost estimate', async () => {
     const fixture = contentFixture()
     fixture.plan.requiredMaterials = []
     renderPage(contentDependencies(fixture), fixture.plan.id)
-    expect(await screen.findByText('記録されている必要素材（アイテム）はありません。')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 2, name: '必要素材・費用の目安' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { level: 2, name: '必要素材（アイテム）合計' })).not.toBeInTheDocument()
+    expect(screen.queryByText('記録されている必要素材（アイテム）はありません。')).not.toBeInTheDocument()
   })
 
   it('discloses the persisted rejected Entries with a reason label, detail and ID', async () => {

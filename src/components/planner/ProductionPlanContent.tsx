@@ -26,6 +26,7 @@ import {
   isLegacyProductionPlan,
   orderPlanSteps,
 } from './productionPlanPresentation'
+import { ProductionPlanCostEstimate } from './ProductionPlanCostEstimate'
 import { ProductionPlanSummary } from './ProductionPlanSummary'
 import { ProductionPlanStepList } from './ProductionPlanStepList'
 
@@ -67,9 +68,10 @@ function PlanSection({ title, children }: { title: string; children: ReactNode }
  * preparation still shows the stored contents.
  *
  * The order is the one UI_FLOW 11.0 fixes: overview, Target routes, global
- * timeline. The persisted item material totals and the rejected Entries follow
- * as supplementary sections, before the Conflict UI the page renders after
- * this component.
+ * timeline, the whole-Plan cost estimate derived from the persisted physical
+ * Steps. The persisted item material totals (only when any were recorded) and
+ * the rejected Entries follow as supplementary sections, before the Conflict
+ * UI the page renders after this component.
  *
  * A Plan reaches a few hundred steps, so both step sections are disclosures
  * whose contents are unmounted while collapsed, and the grouping is computed
@@ -155,13 +157,15 @@ export function ProductionPlanContent({
         </DisclosureAccordion>
       </PlanSection>
 
-      <PlanSection title="必要素材（アイテム）合計">
-        {plan.requiredMaterials.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
-            記録されている必要素材（アイテム）はありません。
-          </Typography>
-        ) : (
-          // The persisted totals are shown as stored: nothing is re-summed.
+      <PlanSection title="必要素材・費用の目安">
+        <ProductionPlanCostEstimate plan={plan} targetWeapons={targetWeapons} />
+      </PlanSection>
+
+      {/* The Master-priced persisted totals, shown as stored only when the Plan
+          recorded any: nothing is re-summed, and the estimate above is the
+          user-facing figure (`docs/UI_FLOW.md` 11.0). */}
+      {plan.requiredMaterials.length > 0 && (
+        <PlanSection title="必要素材（アイテム）合計">
           <Box
             component="ul"
             aria-label="必要素材（アイテム）合計"
@@ -194,8 +198,8 @@ export function ProductionPlanContent({
               </Box>
             ))}
           </Box>
-        )}
-      </PlanSection>
+        </PlanSection>
+      )}
 
       {plan.rejectedBuildListEntries.length === 0 ? (
         <PlanSection title="採用されなかった候補">

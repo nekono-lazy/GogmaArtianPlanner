@@ -1662,6 +1662,52 @@ Plan rejection. Where UI or documentation could confuse the two, say
 
 ---
 
+## Display-only Cost Estimate
+
+The Candidate card and the Production Plan detail show 「必要素材・費用の目安」
+(`docs/REQUIREMENTS.md` 22.1, `docs/SEARCH_SPEC.md` 4.3, `docs/PLANNER_SPEC.md`
+8.2, `docs/UI_FLOW.md` 9 / 11.0, `docs/MASTER_DATA.md` 13.1). It is display /
+advisory only and lives in `src/domain/cost`: one operation cost definition
+(`summarizeCostEstimate()`), a Route adapter
+(`collectCostEstimateOperationsFromRoute()` / `estimateCandidateCost()`) and a
+Plan adapter (`collectCostEstimateOperationsFromPlan()` /
+`estimateProductionPlanCost()`), with the display names in the Presentation
+layer.
+
+- It is never persisted, never added to a Candidate, an Entry, a Plan, a Step,
+  the Worker protocol or Export / Import, and it moves no schema or calculation
+  version. It never enters Candidate identity, `candidateStableKey`, the dedup
+  key, any hash, Search ordering, stream ordering, constrained enumeration,
+  Planner scoring, Plan validity or Execution. The Search, Planner, Execution,
+  Worker and Service layers never import it (a test enforces this)
+- It manages no owned item count and judges no shortage. Never use it to prefer
+  a cheaper Route
+- The unit costs are fixed: a rarity-8 Normal forge is the weapon type's
+  three-part recipe plus 10,000z per forge; the production-target Normal alone
+  gets one full restoration (ナナイロカネ ×50 / 10,000z), never a Counter-advance
+  Normal; a conversion is 油濁した遺装置 ×3 of one 激化 type / 30,000z; Reset and
+  Keep Bonuses are each ナナイロカネ ×20 OR 歴戦錬磨の証 ×2 / 5,000z (an
+  alternative, never summed, 歴戦錬磨の証 shown for Reset / Keep only); Reset
+  Skills is 油濁した遺装置 ×6 (a different 激化 type) with ×3 for the same type
+  as a note / 9,000z; `confirm_owned_ideal`, legacy Steps and weapon switch
+  guidance cost nothing; no alchemy conversion is represented
+- An owned weapon's sunk cost is never re-counted: an owned Normal Route starts
+  at the conversion, an existing Gogma Route at its first amendment
+- A Plan's total is derived from its physical Steps, never by summing Entry or
+  Candidate estimates, so a shared Step counts once. A `create_normal_artian`
+  Step's role comes from `executionEffects.normalCreationRole` only; a legacy
+  Plan without it is reported as not derivable, never guessed
+- `MaterialMaster` / `MaterialCostMaster` are not its authority and stay as the
+  legacy Master-priced `requiredMaterials` model; never enable the unverified
+  placeholder to make a display work, and never reintroduce the
+  `material_cost_unverified` advisory or the 「素材コストは未検証」 texts
+- Provenance: the 10,000z forge and 30,000z conversion are project owner direct
+  game observations; the other unit costs and the 14 part recipes are reference
+  information adopted for this feature. Neither is an RNG `game-verified` /
+  `reference-verified` claim
+
+---
+
 ## Target Weapon Rules
 
 One desired build equals one `TargetWeapon`.

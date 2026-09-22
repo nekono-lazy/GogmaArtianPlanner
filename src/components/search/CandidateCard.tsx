@@ -5,7 +5,6 @@ import {
   Button,
   Card,
   CardContent,
-  Chip,
   Divider,
   Stack,
   Typography,
@@ -19,7 +18,8 @@ import {
   type IntermediateStateSelectionContext,
 } from './IntermediateStateSelector'
 import { SearchDefinitionItem, SearchDefinitionList } from './SearchDefinitionList'
-import { hasUsableMaterialCosts } from '../../domain/master/masterDataStatus'
+import { CostEstimateSummary } from '../cost/CostEstimateSummary'
+import { estimateCandidateCost } from '../../domain/cost'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import type {
   BuildCandidate,
@@ -32,7 +32,6 @@ import { restorationBonusScopeFieldLabel, restorationBonusScopeLabels } from '..
 import {
   bonusLabel,
   groupSkillLabel,
-  materialLabel,
   operationLabel,
   routeKindLabels,
   seriesSkillLabel,
@@ -165,10 +164,9 @@ export function CandidateCard({
     : ownedWeapons.find(({ id }) => id === candidate.route.sourceOwnedWeaponId)?.name ??
       '参照元の所持武器が見つかりません'
   const scope = candidate.restorationBonusScope
-  // An empty `requiredMaterials` is "unknown" whenever the Master has no usable
-  // material cost: the Search priced nothing, it did not find zero. Only a
-  // priced Route with nothing to pay may read as none (`docs/UI_FLOW.md` 9).
-  const materialCostsAvailable = hasUsableMaterialCosts(master)
+  // Display-only, derived from the saved Route at render time: never persisted,
+  // never a Search or Planner input (`docs/SEARCH_SPEC.md` 4.3).
+  const costEstimate = estimateCandidateCost(candidate)
 
   return (
     <Card component="section" aria-labelledby={headingId} variant="outlined">
@@ -324,37 +322,10 @@ export function CandidateCard({
                   })}
                 </Box>
               </Box>
-              <Box>
-                <Typography component={detailLevel} variant="subtitle2" sx={{ mb: 1 }}>
-                  必要素材（アイテム）
-                </Typography>
-                {candidate.requiredMaterials.length === 0 ? (
-                  materialCostsAvailable ? (
-                    <Typography variant="body2">なし</Typography>
-                  ) : (
-                    <Typography variant="body2" color="text.secondary">
-                      素材コストは未検証のため表示できません。
-                    </Typography>
-                  )
-                ) : (
-                  <Box
-                    role="list"
-                    aria-label="必要素材（アイテム）"
-                    sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}
-                  >
-                    {candidate.requiredMaterials.map((item) => (
-                      <Box role="listitem" key={item.materialId} sx={{ maxWidth: '100%' }}>
-                        <Chip
-                          size="small"
-                          variant="outlined"
-                          label={`${materialLabel(item.materialId, master)} × ${item.quantity}`}
-                          sx={{ maxWidth: '100%' }}
-                        />
-                      </Box>
-                    ))}
-                  </Box>
-                )}
-              </Box>
+              {/* The persisted `requiredMaterials` (Master-priced, empty under the
+                  bundled all-disabled cost Master) is not shown here; the
+                  estimate below is the user-facing figure (`docs/UI_FLOW.md` 9). */}
+              <CostEstimateSummary summary={costEstimate} headingLevel={detailLevel} />
               {debugMode && (
                 <Alert severity="info">
                   Candidate ID: {candidate.id}<br />searchRunId: {candidate.searchRunId}<br />

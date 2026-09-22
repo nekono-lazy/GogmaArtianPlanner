@@ -46,34 +46,38 @@ Manifest（`src/data/master/manifest.json`）がcurrent authorityであり、`da
 - 通常UIのスキル選択肢は有効なSeries 21件、Group 16件だけを表示する。無効レコードは履歴参照用にIDを保持する。
 - 通常アーティアPrediction・Debug用の復元ボーナス定義は `normal_artian` scopeを使用する。
 - LotteryMasterは無効のまま維持し、Production RNGはprovenance付きRNG-specific reference-verified tableとEngine内部定数を使用する。reference-verifiedは参照repositoryとの一致であり、全実ゲーム条件でのgame-verifiedを意味しない。disabled LotteryMasterだけを理由にProduction Routeをskipしない。
-- 素材名とMaterial Costは未検証のため、必要素材を推測して表示しない。
+- 素材名とMaterial Costは未検証のため、Master価格付きの必要素材（`requiredMaterials`）を推測して
+  表示しない。ユーザー向けの「必要素材・費用の目安」はMasterではなく `src/domain/cost` の出典付き
+  固定データから導出する表示専用の値であり、Masterの状態に依存しない
+  （[MASTER_DATA.md](./MASTER_DATA.md) 13.1、[REQUIREMENTS.md](./REQUIREMENTS.md) 22.1）。
 - Bonus Type Mappingから巨戟Rankまたは完成5枠を生成しない。conversionはnormal scopeを継承し、Reset / Keep結果はreference-verified tableを使用するProduction RNG Engineに委ねる。game-verified範囲は実機fixtureの確認範囲に限定する。
 - Current Masterの有効Series 21 / Group 16は入力・表示用集合であり、Production skill抽選poolの21 × 14をMaster enabled数から再構築しない。差分の栄光の誉れ、祝祭の巡り等は実機確認まで未確認とする。
 
 ## Production Search readiness と advisory
 
-`getMasterDataStatus(master, 'search')` の判定契約は次のとおりである。
+`getMasterDataStatus(master)` の判定契約は次のとおりである。
 
 ```text
-isProductionReady   Searchそのものを利用できるか（core Masterの有無だけで決まる）
-blockingReason      isProductionReady = false の理由。Search自体が利用不能
-advisories          Searchは利用できるが、結果の一部が制限される注意（型で区別）
+isProductionReady   画面そのものを利用できるか（core Masterの有無だけで決まる）
+blockingReason      isProductionReady = false の理由。画面自体が利用不能
 ```
+
+かつて存在した `material_cost_unverified` advisory（「素材コストは未検証です…」）は、
+表示専用Cost Estimateの導入で廃止した。Candidate SearchはMaster価格付きの `requiredMaterials` を
+表示しなくなったため、MaterialCostMasterの状態がユーザーに見える結果を狭めることはなく、
+advisoryとして伝えるべきことが無い。
 
 - disabled LotteryMasterはProduction Searchのblocking reasonではない。Production RNGは
   `LotteryMaster` を読まず、`RngMasterSubset` / `SearchMasterSubset` / `PlannerMasterSubset`
   にも含めない。LotteryMasterのenabled有無でSearch readinessは変化しない
 - MaterialCostがunavailable（usableなenabled `MaterialCostMaster` entryがない）でも
-  Searchのblocking reasonではない。`material_cost_unverified` advisoryとして扱い、
-  「候補検索は利用できる」ことが分かる文面で表示する
-- MaterialCost advisoryは必要素材の表示とアイテム素材量による候補比較に関する注意である。
-  unavailableな場合、Candidateの `requiredMaterials` 空配列は「素材が0」ではなく
-  「素材コスト情報を利用できない」を意味し、UIは「なし」と表示しない。未検証コストは
+  Searchのblocking reasonではなく、advisoryも出さない。Candidateの `requiredMaterials` 空配列は
+  「素材が0」ではなく「Master価格付きコスト情報を利用できない」を意味するが、通常UIはこの値を
+  表示せず、Routeから導出する表示専用Cost Estimateを表示する。未検証コストは
   Searchのmaterial tie-breakにも読まれないため、現在のall-disabled状態では候補間に有意な
   差を生じない
-- MaterialCost availabilityは「enabled entryが1件以上あるか」というcurrent stateの判定だけ
-  である。一部enabledなら完全検証済み、全operation coverage済み、といった完全性ルールは
-  Repositoryに権威がないため設けない
+- 表示専用Cost Estimateを成立させるために未検証のMaterialCostMaster placeholderを
+  `isEnabled = true` へ変更しない。Cost EstimateはMasterの状態に依存しない
 - Search Routeの実行可否はこのgeneric statusではなく、RngState、Normal Counter、
   Owned Weapon、RngEngine capability、concrete `getPredictionSupport()`、Predictionが実際に
   依存するsemantic Master（WeaponBonusDefinition等）、protected state等のRoute eligibilityで
