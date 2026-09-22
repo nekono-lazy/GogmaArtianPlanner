@@ -43,7 +43,6 @@ import { StatusChip } from '../components/StatusChip'
 import { BonusSlotList, ManagementListItem } from '../components/ManagementListItem'
 import { BonusSetEditor } from '../components/forms/BonusSetEditor'
 import { TargetCompromiseEditor } from '../components/forms/TargetCompromiseEditor'
-import { bonusLabel } from '../components/search/searchPresentation'
 import {
   findOwnedIdealWeaponsForTarget,
   hasTargetCompromise,
@@ -642,9 +641,10 @@ export function TargetWeaponsPage({
                     <Stack spacing={1}>
                       <BonusSlotList
                         heading="理想ボーナス"
-                        labels={target.idealBonuses.map((bonus) =>
-                          bonusLabel(bonus, target.weaponTypeId, master),
-                        )}
+                        bonuses={target.idealBonuses}
+                        weaponTypeId={target.weaponTypeId}
+                        master={master}
+                        scope="gogma_artian"
                       />
                       <Typography variant="body2">
                         理想スキル: {skillConditionSummary(target.idealSkillCondition, master)}

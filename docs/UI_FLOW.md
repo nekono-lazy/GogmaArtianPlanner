@@ -150,8 +150,10 @@ gogma_artian  -> 巨戟アーティア系
 ### 3.4 復元ボーナスの種類別カラー表示
 
 復元ボーナス5枠の読み取り専用表示（Candidate Search、途中採用する状態、Production Plan、
-Execution Navigator等が共用する `RestorationBonusSlots`）は、Bonus Typeごとに文字色と枠線色で
-種類を判別しやすくする。これはPresentationのみの補助表現であり、Bonusの意味、RNG、Search、
+Execution Navigator等が共用する `RestorationBonusSlots`、および所持武器一覧（7）／目標武器一覧（8）の
+番号付き5枠表示 `BonusSlotList`）は、Bonus Typeごとに文字色と枠線色で種類を判別しやすくする。
+両者は同じPresentation authority（色系統、文字色、枠線色、EXのtint、未知Typeのfallback）を共有し、
+片方だけが別の配色や別のEX強調を持ってはならない。これはPresentationのみの補助表現であり、Bonusの意味、RNG、Search、
 Planner、Target評価、Master、persisted schema、calculation semanticsを変更しない。
 
 ```text
@@ -170,6 +172,11 @@ Planner、Target評価、Master、persisted schema、calculation semanticsを変
   太くしたり枠線を太くしたりはしない。`EX` の文字があるため、色だけが唯一の情報伝達手段にはならない
 - 既知の系統に属さない `bonusTypeId` には推測で色を付けず、標準のChip表示へfallbackする
 - 既存の `filled` / `outlined` の違いは維持し、色分けやEX強調でChipの寸法やwrap挙動を変えない
+- 所持武器一覧／目標武器一覧の番号付き表示は、slot番号1〜5と保存順（sortしない、group化しない、重複も
+  5枠のまま）を維持したうえで同じ色分けを適用する。slot番号はBonus Typeではなく順序を表す情報なので、
+  系統色で染めず中立の補助テキスト色のまま残す。ラベルのscopeは呼び出し側の権威に従う（所持武器は保存済みの
+  `restorationBonusScope`、目標武器の理想ボーナスはGogma側定義）。`<ol>` / `<li>` の順序付きリストとしての
+  意味は維持する
 - 文字色は白背景およびtint背景に対して通常テキストのコントラスト基準（4.5:1）を、枠線色は
   ページ背景に対して非テキストの基準（3:1）を満たす。黄色系は明るい黄色文字を避け、文字は
   濃いamber系、枠線を黄色系とする

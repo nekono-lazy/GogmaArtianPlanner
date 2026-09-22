@@ -1,5 +1,13 @@
 import { useId, type ReactNode } from 'react'
 import { Box, Button, Stack, Typography } from '@mui/material'
+import type { ArtianBonusScope, MasterDataRoot } from '../domain/master/masterTypes'
+import type { RestorationBonusSet } from '../domain/models/publicTypes'
+import {
+  isRestorationBonusExRank,
+  resolveRestorationBonusTone,
+  restorationBonusChipSx,
+} from './restorationBonusPresentation'
+import { bonusLabel } from './search/searchPresentation'
 
 /**
  * One registered entity (an owned weapon or a Target weapon) in a management
@@ -100,11 +108,43 @@ export function ManagementListItem({
 }
 
 /**
- * Five restoration bonus slots as an ordered list in stored slot order. The
- * slots are never sorted or grouped, and the key is the slot index because two
- * slots may legitimately hold the identical bonus.
+ * Five restoration bonus slots as a numbered list in stored slot order.
+ *
+ * The slots are never sorted or grouped, and the key is the slot index because
+ * two slots may legitimately hold the identical bonus. The list stays an
+ * `<ol>` of `<li>` items, so slot 1..5 reaches assistive technology as an
+ * ordered list, and the visible slot number is kept beside each label.
+ *
+ * `scope` is the caller's authority - an owned weapon's stored
+ * `restorationBonusScope`, the Gogma-side definition for a Target's Ideal
+ * bonuses - and is never inferred here from the weapon kind or an ID pattern.
+ * The label is the scope-aware Master definition name through `bonusLabel`.
+ *
+ * Each slot is colour-coded by its Bonus Type family and set apart by a
+ * slightly stronger tint when its rank is EX, through the same
+ * `restorationBonusPresentation.ts` authority `RestorationBonusSlots` uses
+ * (`docs/UI_FLOW.md` 3.4): the family comes from the stable `bonusTypeId`,
+ * never from the label text, and a Bonus Type without a known family keeps
+ * the standard bordered style. The slot number is an index, not a Bonus Type,
+ * so it keeps the neutral secondary text colour rather than the family colour;
+ * only the label, the border and the background carry the family cue, and the
+ * text label (type, rank and `EX`) stays the primary information. The family
+ * and the EX flag are exposed as `data-bonus-tone` / `data-bonus-ex` so tests
+ * can read the applied category without depending on colour values.
  */
-export function BonusSlotList({ heading, labels }: { heading: string; labels: readonly string[] }) {
+export function BonusSlotList({
+  heading,
+  bonuses,
+  weaponTypeId,
+  master,
+  scope,
+}: {
+  heading: string
+  bonuses: RestorationBonusSet
+  weaponTypeId: string
+  master: MasterDataRoot
+  scope: ArtianBonusScope
+}) {
   const headingId = useId()
   return (
     <Stack spacing={0.5}>
@@ -116,32 +156,44 @@ export function BonusSlotList({ heading, labels }: { heading: string; labels: re
         aria-labelledby={headingId}
         sx={{ m: 0, p: 0, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}
       >
-        {labels.map((label, index) => (
-          <Box
-            component="li"
-            key={`slot-${index}`}
-            sx={{
-              listStyle: 'none',
-              display: 'flex',
-              alignItems: 'baseline',
-              gap: 0.5,
-              minWidth: 0,
-              maxWidth: '100%',
-              px: 0.75,
-              py: 0.25,
-              border: 1,
-              borderColor: 'divider',
-              borderRadius: 1,
-            }}
-          >
-            <Typography component="span" variant="caption" color="text.secondary" className="tabular-nums">
-              {index + 1}
-            </Typography>
-            <Typography component="span" variant="body2" sx={{ overflowWrap: 'anywhere' }}>
-              {label}
-            </Typography>
-          </Box>
-        ))}
+        {bonuses.map((bonus, index) => {
+          const tone = resolveRestorationBonusTone(bonus.bonusTypeId)
+          const isEx = tone === null ? false : isRestorationBonusExRank(master, bonus.bonusRankId)
+          return (
+            <Box
+              component="li"
+              key={`slot-${index}`}
+              data-bonus-tone={tone ?? undefined}
+              data-bonus-ex={tone === null ? undefined : String(isEx)}
+              sx={{
+                listStyle: 'none',
+                display: 'flex',
+                alignItems: 'baseline',
+                gap: 0.5,
+                minWidth: 0,
+                maxWidth: '100%',
+                px: 0.75,
+                py: 0.25,
+                border: 1,
+                borderColor: 'divider',
+                borderRadius: 1,
+                ...(tone === null ? {} : restorationBonusChipSx(tone, isEx, 'outlined')),
+              }}
+            >
+              <Typography
+                component="span"
+                variant="caption"
+                className="tabular-nums"
+                sx={{ color: 'text.secondary' }}
+              >
+                {index + 1}
+              </Typography>
+              <Typography component="span" variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                {bonusLabel(bonus, weaponTypeId, master, scope)}
+              </Typography>
+            </Box>
+          )
+        })}
       </Box>
     </Stack>
   )
