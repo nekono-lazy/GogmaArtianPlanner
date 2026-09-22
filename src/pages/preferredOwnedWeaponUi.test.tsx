@@ -121,6 +121,10 @@ function targetDependencies(
     inspectSave: vi.fn(async () => ({ approvalRequired: false as const })),
     delete: vi.fn(async () => undefined),
     inspectDelete: vi.fn(async () => ({ approvalRequired: false as const })),
+    inspectCompleteWithOwnedIdeal: vi.fn(async () => ({ approvalRequired: false as const })),
+    completeWithOwnedIdeal: vi.fn(async () => { throw new Error('not used in this test') }),
+    inspectReopen: vi.fn(async () => ({ approvalRequired: false as const })),
+    reopen: vi.fn(async () => { throw new Error('not used in this test') }),
   } satisfies TargetWeaponsPageDependencies
 }
 

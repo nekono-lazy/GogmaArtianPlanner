@@ -724,6 +724,50 @@ Production Plan page's header link to `/plans`; the Execution Navigator is uncha
 added no persisted field, no Domain status and no calculation semantics, so the versions
 stay 13 / 8 / 11 (`RngState.schemaVersion` 2, `AppSettings.schemaVersion` 1,
 `PRODUCTION_RNG_ENGINE_VERSION` and Master `dataVersion` unchanged).
+The nineteenth PR (the owned Ideal notice, the direct Target completion and the completed
+Target management; the 38.5-J follow-up of the v1 acceptance audit) connected
+`docs/UI_FLOW.md` 8.2 / 8.3 and `docs/SEARCH_SPEC.md` 5.5.5 「操作0 Idealの通知」 on the
+Target Weapons and Search screens. The one judgement authority is the pure
+`isOwnedIdealForTarget()` / `findOwnedIdealWeaponsForTarget()`
+(`src/domain/target/ownedIdealTarget.ts`): a Gogma of the Target's weapon type and element
+whose current five slots, scope and Skills pass the existing `satisfiesIdealTarget()` -
+never `status`, never `isProtected`, never an RNG prediction - listed in name-then-ID order
+so several owned Ideals are all shown and the user picks one. The lifecycle actions live in
+their own Application Service (`src/services/crud/targetWeaponLifecycleService.ts`,
+`TargetWeaponLifecycleService.inspectCompleteWithOwnedIdeal()` / `completeWithOwnedIdeal()` /
+`inspectReopen()` / `reopen()`), never in `TargetWeaponCrudService.save()`, which still
+changes no lifecycle. Both are `PlanGuardedMutation`s through the existing
+`PlanGuardedPersistence` / `PlanBreakingChangeGuard`: the request names IDs only, the
+mutation re-reads the Target and the weapon from the state it runs on and refuses by typed
+`TargetWeaponLifecycleError` code (`target_not_found` / `target_not_active` /
+`target_not_completed` / `owned_weapon_not_found` / `owned_weapon_not_gogma` /
+`owned_weapon_incompatible` / `owned_weapon_no_longer_ideal`) when the screen's judgement is
+stale, so no completion is ever saved from an old read. A completion sets the same
+OwnedWeapon ID to `status = ideal` / `isProtected = true` with its five slots, scope, Skills
+and `executionInProgress` untouched, the Target to `completed` / `completedAt = now` /
+`completedByProductionPlanId = null` / `preferredOwnedWeaponId = null`, and clears only the
+`preferredOwnedWeaponId` of every other Target preferring that weapon, then passes
+`validateTargetPreferredOwnedWeapons()`; a reopening returns the Target alone to `active`
+with no completion metadata and no preference and never guesses, un-protects or relabels the
+weapon that completed it. Neither touches RngState, any Normal Counter, a BuildCandidate, a
+BuildListEntry, ExecutionHistory or a save point, and neither adds a record: whether an
+`active` Plan is broken is decided by the unchanged `detectPlanBreakingMutation()` alone
+(`target_changed` for a Plan-dependent Target, `owned_weapon_changed` for an execution scope
+weapon), with the same warning / 16.10 choice dialog and the same approved
+`breaking_change_approved` abandonment. The UI is the shared
+`OwnedIdealWeaponNotice` / `OwnedIdealCompletionDialog` / `useOwnedIdealCompletion`
+(`src/components/target/`): the Target Weapons list shows the notice per active Target from
+the loaded Targets and weapons (after a save too, with no reload), lists only `active`
+Targets in 「登録済みの目標武器」 with a matching count, shows `completed` Targets read-only
+under 「完了済みの目標武器」 (completed time, a `/plans/:planId` link only when
+`completedByProductionPlanId` is set, no edit / delete / enablement / preference control, no
+guessed completing weapon) with the confirmed 「未完了に戻す」; the Search screen shows the
+notice for the selected active Target beside the conditions without gating the search, and
+after a completion cancels a running search, drops the result and the intermediate
+selection, re-reads Targets and weapons, and selects the next eligible Target or empties the
+Select. It added no persisted field, no Domain status and no calculation semantics, so the
+versions stay 13 / 8 / 11 (`RngState.schemaVersion` 2, `AppSettings.schemaVersion` 1,
+`PRODUCTION_RNG_ENGINE_VERSION` and Master `dataVersion` unchanged).
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation

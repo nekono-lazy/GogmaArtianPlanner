@@ -1,6 +1,6 @@
 import { isTargetWeaponPlanningEligible } from '../domain/models/domainRules'
 import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../domain/models/publicTypes'
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   AlertTitle,
@@ -19,7 +19,12 @@ import {
 import { DisclosureAccordion } from '../components/DisclosureAccordion'
 import { PageShell } from '../components/PageShell'
 import { PersistentReidentificationReminderAlert } from '../components/execution/PersistentReidentificationReminderAlert'
+import { PlanBreakingChangeDialog } from '../components/execution/PlanBreakingChangeDialog'
 import { usePersistentReidentificationReminder } from '../components/execution/usePersistentReidentificationReminder'
+import { usePlanBreakingChangeApproval } from '../components/execution/usePlanBreakingChangeApproval'
+import { OwnedIdealCompletionDialog } from '../components/target/OwnedIdealCompletionDialog'
+import { OwnedIdealWeaponNotice } from '../components/target/OwnedIdealWeaponNotice'
+import { useOwnedIdealCompletion, type OwnedIdealCompletionApi } from '../components/target/useOwnedIdealCompletion'
 import { StatusChip } from '../components/StatusChip'
 import { CandidateCard } from '../components/search/CandidateCard'
 import { MasterDataStatusAlert } from '../components/MasterDataStatusAlert'
@@ -30,9 +35,11 @@ import type {
   BuildListEntry,
   CalculationContext,
   IntermediateStateSelection,
+  OwnedGogmaArtianWeapon,
   OwnedWeapon,
   TargetWeapon,
 } from '../domain/models/publicTypes'
+import { findOwnedIdealWeaponsForTarget } from '../domain/target'
 import type {
   CandidateRouteFilter,
   CandidateSearchInput,
@@ -52,6 +59,10 @@ import {
 import { useSettingsStore } from '../stores/settingsStore'
 import { buildListService } from '../services/buildList/buildListService'
 import {
+  TargetWeaponLifecycleService,
+  type TargetOwnedIdealCompletion,
+} from '../services/crud/targetWeaponLifecycleService'
+import {
   loadPersistentReidentificationReminder,
   type PersistentReidentificationReminder,
 } from '../services/execution/persistentReidentificationReminderService'
@@ -70,6 +81,7 @@ import {
 
 const loadedMaster = loadMasterData()
 const defaultMaster = loadedMaster.ok ? loadedMaster.data : null
+const defaultLifecycleService = defaultMaster ? new TargetWeaponLifecycleService(defaultMaster) : null
 
 /** Notices are rendered info-first, so the successful-search case reads first. */
 const noticeSeverities: readonly CandidateSearchNoticeSeverity[] = ['info', 'warning']
@@ -78,7 +90,7 @@ function createSearchRunId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `search-${Date.now()}`
 }
 
-export interface SearchPageDependencies {
+export interface SearchPageDependencies extends OwnedIdealCompletionApi {
   master: MasterDataRoot
   getTargets(): Promise<TargetWeapon[]>
   getOwnedWeapons(): Promise<OwnedWeapon[]>
@@ -110,9 +122,14 @@ export interface SearchPageDependencies {
   ): Promise<{ entry: BuildListEntry; added: boolean }>
 }
 
-const defaultDependencies: SearchPageDependencies | null = defaultMaster
+const defaultDependencies: SearchPageDependencies | null = defaultMaster && defaultLifecycleService
   ? {
       master: defaultMaster,
+      // 「この武器で目標を完了にする」 from the owned Ideal notice (`docs/UI_FLOW.md` 8.2).
+      inspectCompleteWithOwnedIdeal: (targetId, weaponId) =>
+        defaultLifecycleService.inspectCompleteWithOwnedIdeal(targetId, weaponId),
+      completeWithOwnedIdeal: (targetId, weaponId, approval) =>
+        defaultLifecycleService.completeWithOwnedIdeal(targetId, weaponId, undefined, approval ?? null),
       getTargets: () => targetWeaponRepository.getAllTargetWeapons(),
       getOwnedWeapons: () => ownedWeaponRepository.getAllOwnedWeapons(),
       getBuildListEntries: () => buildListEntryRepository.getAllBuildListEntries(),
@@ -203,6 +220,52 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
   const [addFeedback, setAddFeedback] = useState<AddFeedback | null>(null)
   const clientRef = useRef<SearchWorkerClient | null>(null)
   const activeRequestRef = useRef<string | null>(null)
+  // The owned Ideal notice and 「この武器で目標を完了にする」 (`docs/UI_FLOW.md` 8.2):
+  // a preferred path beside the search, never a gate on it.
+  const planGuard = usePlanBreakingChangeApproval()
+  const [completionNotice, setCompletionNotice] = useState<string | null>(null)
+  const onCompletionApplied = useCallback((result: TargetOwnedIdealCompletion, planAbandoned: boolean) => {
+    // A search still running was started for a Target that is now completed:
+    // its result must never land, and no stale result stays operable.
+    const requestId = activeRequestRef.current
+    if (requestId !== null) {
+      activeRequestRef.current = null
+      clientRef.current?.cancelSearch(requestId)
+      setSearching(false)
+    }
+    setProgress(null)
+    setResult(null)
+    setIntermediateSelection(defaultIntermediateStateSelection())
+    setAddFeedback(null)
+    setSearchError(null)
+    setSearchNotice(null)
+    setCompletionNotice(
+      planAbandoned
+        ? `目標武器「${result.target.name}」を完了にし、実行中の生産計画を破棄しました。`
+        : `目標武器「${result.target.name}」を完了にしました。`,
+    )
+    if (!dependencies) return
+    // Re-read the persisted Targets and weapons: the completed Target leaves
+    // the Select, and the next eligible Target (if any) is selected.
+    void Promise.all([dependencies.getTargets(), dependencies.getOwnedWeapons()])
+      .then(([loadedTargets, loadedWeapons]) => {
+        setTargets(loadedTargets)
+        setOwnedWeapons(loadedWeapons)
+        setTargetWeaponId((current) => {
+          const eligible = loadedTargets.filter(isTargetWeaponPlanningEligible)
+          return eligible.some(({ id }) => id === current) ? current : (eligible[0]?.id ?? '')
+        })
+      })
+      .catch((caught: unknown) => {
+        setLoadError(caught instanceof Error ? caught.message : '検索データの読み込みに失敗しました。')
+      })
+  }, [dependencies])
+  const completion = useOwnedIdealCompletion({
+    api: dependencies ?? null,
+    planGuard,
+    targets,
+    onApplied: onCompletionApplied,
+  })
 
   useEffect(() => {
     if (!dependencies) {
@@ -243,6 +306,18 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
   const enabledTargets = useMemo(() => targets.filter(isTargetWeaponPlanningEligible), [targets])
   const targetById = useMemo(() => new Map(targets.map((target) => [target.id, target])), [targets])
   const masterForDisplay = dependencies?.master ?? defaultMaster
+  const selectedTarget = targetWeaponId === '' ? null : (targetById.get(targetWeaponId) ?? null)
+  // Judged by the shared Domain authority from the loaded Target and weapons
+  // (`docs/SEARCH_SPEC.md` 5.5.5); it runs no search and no RNG prediction. A
+  // judgement failure is reported, never read as "no owned Ideal".
+  const ownedIdeal = useMemo<{ weapons: OwnedGogmaArtianWeapon[]; error: string | null }>(() => {
+    if (!selectedTarget || !masterForDisplay || selectedTarget.lifecycleStatus !== 'active') return { weapons: [], error: null }
+    try {
+      return { weapons: findOwnedIdealWeaponsForTarget(selectedTarget, ownedWeapons, masterForDisplay), error: null }
+    } catch (caught: unknown) {
+      return { weapons: [], error: `既所持の理想武器を判定できませんでした: ${caught instanceof Error ? caught.message : String(caught)}` }
+    }
+  }, [masterForDisplay, ownedWeapons, selectedTarget])
 
   const updateSetting = (key: keyof CandidateSearchSettings, raw: string) => {
     const value = Number(raw)
@@ -356,6 +431,11 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
         {/* A failed load shows only the failure: no synthetic data, and no
             "register a Target" empty state that would read as empty data. */}
         {loadError && <Alert severity="error">{loadError}</Alert>}
+        {completionNotice && (
+          <Alert severity="success" onClose={() => setCompletionNotice(null)}>
+            {completionNotice}
+          </Alert>
+        )}
         {!loading && !loadError && enabledTargets.length === 0 && (
           <Alert severity="info">目標武器を登録してください。</Alert>
         )}
@@ -416,6 +496,16 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
                   </Select>
                 </FormControl>
               </Box>
+              {ownedIdeal.error && <Alert severity="error">{ownedIdeal.error}</Alert>}
+              {selectedTarget && masterForDisplay && ownedIdeal.weapons.length > 0 && (
+                <OwnedIdealWeaponNotice
+                  target={selectedTarget}
+                  weapons={ownedIdeal.weapons}
+                  master={masterForDisplay}
+                  onComplete={(weapon) => completion.begin(selectedTarget, weapon)}
+                  disabled={planGuard.busy || completion.pending !== null}
+                />
+              )}
               <DisclosureAccordion title="詳細設定（探索量の上限）" headingLevel="h3">
                 <Stack spacing={1.5}>
                   <Typography variant="body2" color="text.secondary">
@@ -611,6 +701,15 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
             </Stack>
           )
         })()}
+        <OwnedIdealCompletionDialog
+          pending={completion.pending}
+          affectedTargets={completion.affectedTargets}
+          submitting={completion.submitting}
+          error={completion.error}
+          onCancel={completion.cancel}
+          onConfirm={() => void completion.confirm()}
+        />
+        <PlanBreakingChangeDialog controller={planGuard} />
       </Stack>
     </PageShell>
   )

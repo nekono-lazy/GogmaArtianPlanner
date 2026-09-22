@@ -51,6 +51,10 @@ function dependencies(targets: TargetWeapon[], ownedWeapons: OwnedWeapon[] = [])
     inspectSave: vi.fn<() => Promise<PlanBreakingChangeInspection>>(async () => ({ approvalRequired: false })),
     delete: vi.fn(async (id: TargetWeapon['id']) => { stored = stored.filter((value) => value.id !== id) }),
     inspectDelete: vi.fn<() => Promise<PlanBreakingChangeInspection>>(async () => ({ approvalRequired: false })),
+    inspectCompleteWithOwnedIdeal: vi.fn(async () => ({ approvalRequired: false as const })),
+    completeWithOwnedIdeal: vi.fn(async () => { throw new Error('not used in this test') }),
+    inspectReopen: vi.fn(async () => ({ approvalRequired: false as const })),
+    reopen: vi.fn(async () => { throw new Error('not used in this test') }),
   } satisfies TargetWeaponsPageDependencies
   return deps
 }

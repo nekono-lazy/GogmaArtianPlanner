@@ -1,5 +1,6 @@
 export * from './bonusConditionEvaluator'
 export * from './idealDifference'
+export * from './ownedIdealTarget'
 export * from './preferredOwnedWeapon'
 export * from './skillConditionEvaluator'
 export * from './targetEvaluationTypes'
