@@ -1,6 +1,11 @@
 import { Box, Chip } from '@mui/material'
 import type { ArtianBonusScope, MasterDataRoot } from '../domain/master/masterTypes'
 import type { RestorationBonusSet } from '../domain/models/publicTypes'
+import {
+  isRestorationBonusExRank,
+  resolveRestorationBonusTone,
+  restorationBonusChipSx,
+} from './restorationBonusPresentation'
 import { bonusLabel } from './search/searchPresentation'
 
 /**
@@ -21,13 +26,20 @@ import { bonusLabel } from './search/searchPresentation'
  * lookup of `bonusLabel` for call sites that predate scope-aware display. An
  * explicit `null` - a persisted result whose scope was not recorded - uses the
  * generic Master type + rank label instead of guessing a scope.
+ *
+ * Each chip is colour-coded by its Bonus Type family and emphasised when its
+ * rank is EX (`restorationBonusPresentation.ts`). That is a secondary cue on
+ * top of the unchanged text label; a Bonus Type without a known family keeps
+ * the standard Chip style. The family and the EX flag are also exposed as
+ * `data-bonus-tone` / `data-bonus-ex`, so tests can read the applied category
+ * without depending on colour values.
  */
 export function RestorationBonusSlots({
   bonuses,
   weaponTypeId,
   master,
   scope,
-  variant,
+  variant = 'filled',
   label = '復元ボーナス5枠',
 }: {
   bonuses: RestorationBonusSet
@@ -44,16 +56,25 @@ export function RestorationBonusSlots({
       aria-label={label}
       sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, minWidth: 0 }}
     >
-      {bonuses.map((bonus, index) => (
-        <Box role="listitem" key={`slot-${index}`} sx={{ minWidth: 0, maxWidth: '100%' }}>
-          <Chip
-            label={bonusLabel(bonus, weaponTypeId, master, scope)}
-            size="small"
-            variant={variant}
-            sx={{ maxWidth: '100%' }}
-          />
-        </Box>
-      ))}
+      {bonuses.map((bonus, index) => {
+        const tone = resolveRestorationBonusTone(bonus.bonusTypeId)
+        const isEx = tone === null ? false : isRestorationBonusExRank(master, bonus.bonusRankId)
+        return (
+          <Box role="listitem" key={`slot-${index}`} sx={{ minWidth: 0, maxWidth: '100%' }}>
+            <Chip
+              label={bonusLabel(bonus, weaponTypeId, master, scope)}
+              size="small"
+              variant={variant}
+              data-bonus-tone={tone ?? undefined}
+              data-bonus-ex={tone === null ? undefined : String(isEx)}
+              sx={{
+                maxWidth: '100%',
+                ...(tone === null ? {} : restorationBonusChipSx(tone, isEx, variant)),
+              }}
+            />
+          </Box>
+        )
+      })}
     </Box>
   )
 }
