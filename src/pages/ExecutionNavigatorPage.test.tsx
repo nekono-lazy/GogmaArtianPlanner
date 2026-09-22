@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppDatabase } from '../db/AppDatabase'
 import { deriveOperationCountRecovery, ExecutionRuntimeError } from '../domain/execution'
 import {
@@ -50,6 +50,7 @@ import {
 } from '../test/fixtures/executionRuntime'
 import { orchestrationEntry, orchestrationScenario, orchestrationSource, orchestrationTarget, resetRoute } from '../test/fixtures/plannerConstrainedOrchestration'
 import { hasStyleRule } from '../test/cssRuleAssertions'
+import { useSettingsStore } from '../stores/settingsStore'
 import { ExecutionNavigatorPage } from './ExecutionNavigatorPage'
 import {
   loadExecutionNavigatorSnapshot,
@@ -1387,5 +1388,140 @@ describe('ExecutionNavigatorPage operation_uncertain recovery', () => {
       expect(await database.productionPlans.get(fixture.plan.id)).toMatchObject({ status: 'completed', recalculationReasons: [] })
       const history = await database.executionHistory.where('planId').equals(fixture.plan.id).toArray()
       expect(history.map(({ action }) => action).sort()).toEqual(['confirmed_expected', 'operation_count_recovered', 'operation_uncertain'])
+    }), 20_000)
+})
+
+describe('ExecutionNavigatorPage Debug Mode', () => {
+  beforeEach(() => useSettingsStore.getState().reset())
+  afterEach(() => useSettingsStore.getState().reset())
+
+  const debugToggle = () => screen.queryByRole('button', { name: /のPlanStep Debug$/ })
+
+  /** The value cell of one labelled Debug row of the opened current-Step block. */
+  function debugRow(groupName: string, label: string): HTMLElement {
+    const value = within(screen.getByRole('group', { name: groupName }))
+      .getByText(label, { selector: 'dt' }).nextElementSibling
+    if (!(value instanceof HTMLElement)) throw new Error(`Missing Debug value for ${label}`)
+    return value
+  }
+
+  it('shows no internal Counter before / after while Debug Mode is off', async () => {
+    const fixture = await newNormalFixture()
+    renderNavigator(mockedRuntime(await snapshotOf(fixture)), fixture.plan.id)
+    await screen.findByText('Step 1 / 5')
+
+    expect(debugToggle()).not.toBeInTheDocument()
+    expect(screen.queryByText(/開始 .* → 終了 /)).not.toBeInTheDocument()
+    expect(screen.queryByText(/plannerReason/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/startBaseSeed/)).not.toBeInTheDocument()
+  })
+
+  it('shows the current Step internals below the game actions in Debug Mode', async () => {
+    useSettingsStore.setState({ debugMode: true })
+    const fixture = await newNormalFixture()
+    const user = userEvent.setup()
+    renderNavigator(mockedRuntime(await snapshotOf(fixture)), fixture.plan.id)
+    await screen.findByText('Step 1 / 5')
+
+    const toggle = debugToggle()
+    expect(toggle).toBeInTheDocument()
+    // Collapsed by default, and after the primary action in document order, so
+    // the game operation stays the prominent control.
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(
+      primary().compareDocumentPosition(toggle as HTMLElement) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+
+    await user.click(toggle as HTMLElement)
+    const step = fixture.plan.steps[0]
+    const info = `ステップ ${step.order} のPlanStepDebugInfo`
+    const counters = `ステップ ${step.order} のCounter開始終了`
+    expect(debugRow(info, 'startBaseSeed')).toHaveTextContent(String(step.debug?.startBaseSeed))
+    expect(debugRow(info, 'plannerReason')).toHaveTextContent(String(step.debug?.plannerReason))
+    expect(debugRow(counters, 'Gogma Counter')).toHaveTextContent(
+      `開始 ${step.debug?.startGogmaCounter} → 終了 ${step.debug?.endGogmaCounter}（delta ${step.rngAdvance.gogmaCounterDelta}）`,
+    )
+    expect(debugRow(counters, 'Skill Counter')).toHaveTextContent(
+      `開始 ${step.debug?.startSkillCounter} → 終了 ${step.debug?.endSkillCounter}（delta ${step.rngAdvance.skillCounterDelta}）`,
+    )
+    expect(debugRow(counters, 'Normal Counter')).toHaveTextContent(
+      `開始 ${step.debug?.startNormalCounter} → 終了 ${step.debug?.endNormalCounter}（delta ${step.rngAdvance.normalCounterDelta}）`,
+    )
+    expect(debugRow(counters, 'affectedNormalCounterId')).toHaveTextContent(
+      String(step.rngAdvance.affectedNormalCounterId),
+    )
+  })
+
+  it('shows a conversion Step as Skill +1 and Gogma +0', async () => {
+    useSettingsStore.setState({ debugMode: true })
+    const fixture = await existingGogmaFixture()
+    const conversion = (await newNormalFixture()).plan.steps.find(
+      ({ operationType }) => operationType === 'convert_normal_to_gogma',
+    )
+    if (conversion === undefined) throw new Error('The fixture Plan must contain a conversion Step.')
+    const plan: ProductionPlan = {
+      ...structuredClone(fixture.plan),
+      status: 'active',
+      steps: [conversion],
+      currentStepId: conversion.id,
+    }
+    const user = userEvent.setup()
+    renderNavigator(mockedRuntime({ ...(await snapshotOf(fixture)), plan }), fixture.plan.id)
+    await screen.findByRole('button', { name: /のPlanStep Debug$/ })
+    await user.click(screen.getByRole('button', { name: /のPlanStep Debug$/ }))
+
+    const counters = `ステップ ${conversion.order} のCounter開始終了`
+    expect(conversion.rngAdvance.skillCounterDelta).toBe(1)
+    expect(conversion.rngAdvance.gogmaCounterDelta).toBe(0)
+    expect(debugRow(counters, 'Skill Counter')).toHaveTextContent(
+      `開始 ${conversion.debug?.startSkillCounter} → 終了 ${Number(conversion.debug?.startSkillCounter) + 1}（delta 1）`,
+    )
+    expect(debugRow(counters, 'Gogma Counter')).toHaveTextContent(
+      `開始 ${conversion.debug?.startGogmaCounter} → 終了 ${conversion.debug?.startGogmaCounter}（delta 0）`,
+    )
+  })
+
+  it('says a stale Plan prediction may no longer match the current state', async () => {
+    useSettingsStore.setState({ debugMode: true })
+    const fixture = await newNormalFixture()
+    const user = userEvent.setup()
+    renderNavigator(
+      mockedRuntime(
+        await snapshotOf(fixture, { status: 'stale', recalculationReasons: ['unexpected_result'] }),
+      ),
+      fixture.plan.id,
+    )
+    await screen.findByRole('button', { name: /のPlanStep Debug$/ })
+    await user.click(screen.getByRole('button', { name: /のPlanStep Debug$/ }))
+
+    expect(
+      screen.getByText(/この予測は現在状態と一致しない可能性があります。/),
+    ).toBeInTheDocument()
+  })
+
+  it('switches to the next Step internals after a confirmation instead of keeping the old ones', () =>
+    withDatabase(async (database) => {
+      useSettingsStore.setState({ debugMode: true })
+      const fixture = await newNormalFixture()
+      const { deps } = await realRuntime(database, fixture)
+      const user = userEvent.setup()
+      renderNavigator(deps, fixture.plan.id)
+      await screen.findByText('Step 1 / 5')
+
+      const first = fixture.plan.steps[0]
+      const second = fixture.plan.steps[1]
+      expect(
+        screen.getByRole('button', { name: `現在Step（ステップ ${first.order}）のPlanStep Debug` }),
+      ).toBeInTheDocument()
+
+      await user.click(primary())
+      expect(await screen.findByText('Step 2 / 5')).toBeInTheDocument()
+
+      expect(
+        screen.getByRole('button', { name: `現在Step（ステップ ${second.order}）のPlanStep Debug` }),
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: `現在Step（ステップ ${first.order}）のPlanStep Debug` }),
+      ).not.toBeInTheDocument()
     }), 20_000)
 })

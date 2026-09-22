@@ -55,6 +55,13 @@ describe('App', () => {
       screen.getByText('Debug Modeが無効です。「設定」画面のデバッグモードから有効にしてください。'),
     ).toBeInTheDocument()
     expect(screen.queryByText('Base Seed')).not.toBeInTheDocument()
+    expect(screen.queryByText('Gogma Counter')).not.toBeInTheDocument()
+    expect(screen.queryByText('Skill Counter')).not.toBeInTheDocument()
+    expect(screen.queryByText('Counter Gate')).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '現在のRNG状態' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '通常アーティアCounter' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '実行中の生産計画' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/PlanStepDebugInfo/)).not.toBeInTheDocument()
   })
 
   it('can turn Debug Mode on and off from Settings', async () => {
@@ -159,7 +166,7 @@ describe('App', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'バージョン情報' })).toBeInTheDocument()
   })
 
-  it('shows Production Engine capabilities and version in Debug Details', () => {
+  it('shows Production Engine capabilities and version in Debug Details', async () => {
     useSettingsStore.setState({ debugMode: true })
     window.location.hash = '#/debug'
     render(<App />)
@@ -183,12 +190,39 @@ describe('App', () => {
       .getByText('Production Identification (Identification Wizard)')
       .closest('li') as HTMLElement
     expect(within(identificationRow).getByText('unavailable: worker_unavailable（利用不可）')).toBeInTheDocument()
-    // Every Debug section is a headed region, the placeholder list included.
+    // Every Debug section is a headed region. The former placeholder list is
+    // gone: its contents are connected sections of their own now.
     expect(screen.getByRole('heading', { level: 2, name: 'RNG Engine information' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 2, name: 'Future debug sections' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Master data / calculation versions' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Future debug sections' })).not.toBeInTheDocument()
+    // The store is hydrated from persistence after mount; waiting for it keeps
+    // that update from landing after teardown.
+    await waitFor(() => expect(useSettingsStore.getState().isHydrated).toBe(true))
   })
 
-  it('shows Production Identification available in Debug Details when the runtime has a Worker', () => {
+  it('connects every persisted-state Debug section once Debug Mode is on in persistence', async () => {
+    await settingsRepository.setDebugMode(true)
+    try {
+      window.location.hash = '#/debug'
+      render(<App />)
+
+      expect(
+        await screen.findByRole('heading', { level: 2, name: '現在のRNG状態' }),
+      ).toBeInTheDocument()
+      expect(screen.getByRole('heading', { level: 2, name: '通常アーティアCounter' })).toBeInTheDocument()
+      expect(screen.getByRole('heading', { level: 2, name: '実行中の生産計画' })).toBeInTheDocument()
+      // Read from the empty application database, and reported as empty rather
+      // than as a failed read.
+      expect(screen.getByText('保存済みの通常アーティアCounterはありません。')).toBeInTheDocument()
+      expect(screen.getByText('実行中または続行不可の生産計画はありません。')).toBeInTheDocument()
+    } finally {
+      await settingsRepository.setDebugMode(false)
+    }
+  })
+
+  it('shows Production Identification available in Debug Details when the runtime has a Worker', async () => {
     vi.stubGlobal('Worker', class {})
     try {
       useSettingsStore.setState({ debugMode: true })
@@ -200,6 +234,7 @@ describe('App', () => {
         .closest('li') as HTMLElement
       expect(within(identificationRow).getByText('available（利用可能）')).toBeInTheDocument()
       expect(within(provenance).queryByText(/Seed Search/)).not.toBeInTheDocument()
+      await waitFor(() => expect(useSettingsStore.getState().isHydrated).toBe(true))
     } finally {
       vi.unstubAllGlobals()
     }

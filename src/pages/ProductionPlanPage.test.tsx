@@ -2458,3 +2458,100 @@ describe('ProductionPlanPage Execution entry', () => {
     expect(screen.getByRole('button', { name: '作成開始' })).toBeEnabled()
   })
 })
+
+describe('ProductionPlanPage PlanStep Debug', () => {
+  function debugFixture() {
+    const fixture = contentFixture()
+    fixture.plan.steps = fixture.plan.steps.map((step) =>
+      step.id === fixture.shared.id
+        ? {
+            ...step,
+            rngAdvance: {
+              gogmaCounterDelta: 1,
+              skillCounterDelta: 0,
+              normalCounterDelta: null,
+              affectedNormalCounterId: null,
+            },
+            debug: {
+              startBaseSeed: '51231782',
+              startGogmaCounter: 120,
+              endGogmaCounter: 121,
+              startSkillCounter: 341,
+              endSkillCounter: 341,
+              startNormalCounter: null,
+              endNormalCounter: null,
+              plannerReason: 'reset_bonuses',
+            },
+          }
+        : step,
+    )
+    return fixture
+  }
+
+  it('shows no PlanStep Debug block in the normal UI', async () => {
+    const fixture = debugFixture()
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+    await userEvent.click(await screen.findByRole('button', { name: '全4ステップを表示' }))
+
+    expect(screen.getAllByRole('heading', { level: 4, name: /^ステップ \d+$/ })).toHaveLength(4)
+    expect(screen.queryByRole('button', { name: 'PlanStep Debug' })).not.toBeInTheDocument()
+    expect(screen.queryByText('51231782')).not.toBeInTheDocument()
+    expect(screen.queryByText(/plannerReason/)).not.toBeInTheDocument()
+  })
+
+  it('adds one collapsed PlanStep Debug block per Step in Debug Mode', async () => {
+    useSettingsStore.setState({ debugMode: true })
+    try {
+      const fixture = debugFixture()
+      renderPage(contentDependencies(fixture), fixture.plan.id)
+      await userEvent.click(await screen.findByRole('button', { name: '全4ステップを表示' }))
+
+      const toggles = screen.getAllByRole('button', { name: 'PlanStep Debug' })
+      expect(toggles).toHaveLength(4)
+      // Nested one level below the Step heading, and collapsed, so a long Plan
+      // does not expand every Debug block into the DOM.
+      expect(screen.getAllByRole('heading', { level: 5, name: 'PlanStep Debug' })).toHaveLength(4)
+      for (const toggle of toggles) {
+        expect(toggle).toHaveAttribute('aria-expanded', 'false')
+      }
+      expect(screen.queryByText('51231782')).not.toBeInTheDocument()
+
+      await userEvent.click(toggles[0])
+      const info = screen.getByRole('group', { name: 'ステップ 1 のPlanStepDebugInfo' })
+      expect(
+        within(info).getByText('startBaseSeed', { selector: 'dt' }).nextElementSibling,
+      ).toHaveTextContent('51231782')
+      expect(
+        within(info).getByText('plannerReason', { selector: 'dt' }).nextElementSibling,
+      ).toHaveTextContent('reset_bonuses')
+      const counters = screen.getByRole('group', { name: 'ステップ 1 のCounter開始終了' })
+      expect(
+        within(counters).getByText('Gogma Counter', { selector: 'dt' }).nextElementSibling,
+      ).toHaveTextContent('開始 120 → 終了 121（delta 1）')
+      expect(
+        within(counters).getByText('Normal Counter', { selector: 'dt' }).nextElementSibling,
+      ).toHaveTextContent('開始 記録なし → 終了 記録なし（delta 記録なし）')
+    } finally {
+      useSettingsStore.setState({ debugMode: false })
+    }
+  })
+
+  it('says a legacy Step recorded no PlanStepDebugInfo instead of reconstructing one', async () => {
+    useSettingsStore.setState({ debugMode: true })
+    try {
+      const fixture = debugFixture()
+      renderPage(contentDependencies(fixture), fixture.plan.id)
+      await userEvent.click(await screen.findByRole('button', { name: '全4ステップを表示' }))
+      // Step 2 keeps the fixture default of no persisted debug record.
+      await userEvent.click(screen.getAllByRole('button', { name: 'PlanStep Debug' })[1])
+
+      expect(screen.getByText('PlanStepDebugInfo: 記録なし')).toBeInTheDocument()
+      expect(
+        within(screen.getByRole('group', { name: 'ステップ 2 のPlanStepDebugInfo' }))
+          .getByText('startBaseSeed', { selector: 'dt' }).nextElementSibling,
+      ).toHaveTextContent('記録なし')
+    } finally {
+      useSettingsStore.setState({ debugMode: false })
+    }
+  })
+})

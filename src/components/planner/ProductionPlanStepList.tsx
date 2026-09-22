@@ -11,7 +11,8 @@ import {
   restorationBonusScopeFieldLabel,
   restorationBonusScopeLabels,
 } from '../../presentation/labels'
-import type { SectionHeadingLevel } from '../headingLevel'
+import { PlanStepDebugDetails } from '../debug/PlanStepDebugDetails'
+import { hasDeeperHeadingLevel, nextHeadingLevel, type SectionHeadingLevel } from '../headingLevel'
 import { RestorationBonusSlots } from '../RestorationBonusSlots'
 import { StatusChip } from '../StatusChip'
 import { groupSkillLabel, seriesSkillLabel } from '../search/searchPresentation'
@@ -120,7 +121,10 @@ export function ProductionPlanStepCard({
   master: MasterDataRoot
   showSharedBadge?: boolean
   headingLevel?: SectionHeadingLevel
-  /** Debug Mode adds the raw milestone identifiers; the normal UI shows none. */
+  /**
+   * Debug Mode adds the raw milestone identifiers and the Step's persisted
+   * internal information; the normal UI shows neither.
+   */
   debugMode?: boolean
 }) {
   // `undefined` means the Plan predates the field: nothing is inferred for it
@@ -247,6 +251,15 @@ export function ProductionPlanStepCard({
         )}
         <Divider />
         <ExpectedResultView step={step} weaponTypeId={weaponTypeId} master={master} />
+        {debugMode && (
+          // Persisted internal information only (`docs/UI_FLOW.md` 15), behind
+          // a disclosure so a few hundred Steps do not all expand their Debug
+          // block into the DOM at once.
+          <PlanStepDebugDetails
+            step={step}
+            headingLevel={hasDeeperHeadingLevel(headingLevel) ? nextHeadingLevel(headingLevel) : 'none'}
+          />
+        )}
       </Stack>
     </Paper>
   )

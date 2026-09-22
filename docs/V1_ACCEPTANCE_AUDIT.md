@@ -210,3 +210,38 @@ npx vitest run src/domain/planner/plannerFoundation.test.ts
 `npm run build`、`npm run check:nul`、`git diff --check` がすべて成功した。
 Buildは既存の500kB超chunk警告あり。性能調整は今回対象外。
 `git status --short --untracked-files=all`で変更がdocs / tests / test helperの11ファイルだけであることを確認した。
+
+## PR #66 follow-up（REQUIREMENTS 33）
+
+PR #64時点の判定（REQUIREMENTS 33 Debug必須情報 `partially_covered`）は上表のとおり歴史として残す。
+PR #66（`feat/debug-details-v1`）で未接続だった保存済み内部状態とStep before/after導線を接続し、
+同じ判定基準で再判定した。Debug Modeは観測機能であり、ON/OFFでRNG計算、Candidate Search、Planner、
+Prediction support、Persistence semantics、Validation、Execution semantics、Counter advance、
+Production Engine selectionのいずれも変更しない。
+
+| 要件 | 実装authority | test evidence | coverage（PR #66後） |
+| --- | --- | --- | --- |
+| Base Seed / Gogma Counter / Skill Counter / Counter Gate | `DebugPage.tsx` の「現在のRNG状態」section（`DebugPageDependencies.getRngState()` の保存済 `RngState` をそのまま表示。`value` / `isConfirmed` / `source` / `lastIdentifiedAt` / `updatedAt` / `schemaVersion`。Counter Gateには診断・互換用でありProduction Prediction authorityではない旨を併記） | `src/pages/DebugPage.test.tsx`、`src/components/debug/debugStatePresentation.test.ts` | covered |
+| 通常アーティアCounter | `DebugPage.tsx` の「通常アーティアCounter」section（保存済み全件を Master `sortOrder` → rarity → id の安定順で表示。`counter` / `isConfirmed` / `observationCount` / `candidateCount` / `lastObservedAt` / `lastIdentifiedAt` / `id`） | 同上（複数件の安定順、0件empty、read failureとemptyの区別） | covered |
+| PlanStep内部情報 / RNG予測情報 | 共有component `src/components/debug/PlanStepDebugDetails.tsx` と純関数 `planStepDebugPresentation.ts`。`PlanStep.debug` / `rngAdvance` / `expectedResult` / `expectedStateBefore` / `expectedStateAfter` を保存値のまま表示し、UI側で再計算・再予測しない。`debug === null` は「記録なし」 | `src/components/debug/PlanStepDebugDetails.test.tsx`、`planStepDebugPresentation.test.ts`、`src/components/planner/ProductionPlanStepList.test.tsx`、`src/pages/ProductionPlanPage.test.tsx`、`src/pages/ExecutionNavigatorPage.test.tsx` | covered |
+| 各StepのNormal / Skill / Gogma Counter before-after（conversionはSkill +1 / Gogma +0） | 同上（`開始 N → 終了 M（delta D）` をstreamごとに表示。`affectedNormalCounterId` を併記。`0` と `null` を混同せず、未記録は「記録なし」） | `PlanStepDebugDetails.test.tsx`（conversion、確定Normal creation、blind、legacy null）、`ExecutionNavigatorPage.test.tsx`（実fixtureのconversion Step） | covered |
+| Planner判定理由 | `PlanStep.debug.plannerReason` を内部文字列のまま表示。新しいPlanner traceは作らず、既存の `RejectedBuildListEntry` / `PlanConflict` 表示も変更しない | `PlanStepDebugDetails.test.tsx`、`ProductionPlanPage.test.tsx` | covered |
+| 再計算理由 | `DebugPage.tsx` の実行中Plan section（`recalculationReasons` 全件を `productionPlanRecalculationReasonLabels` + raw enum併記で表示。message parsingなし） | `DebugPage.test.tsx`（stale Planの全reason） | covered |
+| 使用中RngEngine名 / capability / Identification availability | 既存 `RNG Engine information` section（変更なし） | `src/App.test.tsx`、`DebugPage.test.tsx` | covered（継続） |
+| Master Data version | `DebugPage.tsx` の `Master data / calculation versions` section（Master `gameVersion` / `dataVersion` と `CURRENT_CALCULATION_APP_SCHEMA_VERSION`。Settingsの「アプリスキーマバージョン」= `AppSettings.schemaVersion` とは別概念として内部識別子で表示） | `DebugPage.test.tsx`、`App.test.tsx` | covered |
+| 実行ナビのStep before/after | `ExecutionNavigatorPage.tsx` が `useSettingsStore` からDebug Modeを読み、現在Stepだけに同じ共有componentをゲーム操作の下へ折りたたみで表示。stale Planでは現在状態と一致しない可能性を明示 | `ExecutionNavigatorPage.test.tsx`（OFFで内部値なし、ON表示、conversion +1 / +0、stale注記、Step確定後に次Stepへ切り替わる） | partially_covered → covered |
+| Debug Mode OFFの非表示 | `DebugPage` はOFF時に読み取りcomponentをmountせずIndexedDB readを開始しない。`ProductionPlanStepCard` / Navigatorも `debugMode` falseでDebug blockを描画しない | `DebugPage.test.tsx`（read未呼出とDOM文字列のleakage）、`App.test.tsx`、`ProductionPlanStepList.test.tsx`、`ProductionPlanPage.test.tsx`、`ExecutionNavigatorPage.test.tsx` | covered |
+
+`docs/REQUIREMENTS.md` 34の「全Planner探索trace viewer」「全Candidate履歴viewer」「PRNG内部10-step dump」
+「DebugからのRNG再実行 / Counter編集 / Plan編集 / Execution state編集」「専用E2E」は引き続き
+`out_of_scope` であり、本PRでも追加しない。`/debug` はread-onlyで、新しい保存・編集操作を持たない。
+
+375px実表示は開発サーバーのBrowser pane（375x812）で確認した。Debug Details全体および
+PlanStep Debugを展開した状態で `document.documentElement.scrollWidth === clientWidth === 375`、
+横スクロールする子要素は0件、104文字のhash行は `overflow-wrap: anywhere` で折り返した。
+巨大なraw JSONの `pre` 表示は追加していない。
+
+バージョン不変: `DATABASE_SCHEMA_VERSION = 8`、`EXPORT_SCHEMA_VERSION = 11`、
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 13`、`RngState.schemaVersion = 2`、
+`AppSettings.schemaVersion = 1`、`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e7`、
+Master `dataVersion` 不変。persisted shapeの変更なし。
