@@ -171,6 +171,26 @@ JS/CSS/Worker assetの404がなく、検索／Plannerの開始・cancelが動く
 | PLANNER_SPEC 16.0 | warning UI／persistent reminderを後続扱いする現在状態が古い | PR #58 / #59相当の実装authorityを記載。章のdomain meaningは不変 |
 | RNG_REFERENCE_AUDIT、CANDIDATE_SEARCH_REDESIGN、B/C phase・benchmark文書、REQUIREMENTS 39等の仕様改訂時記録 | historical_note_only | 「当時は未実装／後続」の履歴を現状の欠落根拠にせず変更しない。受入項目は現行sourceとtestsで判定 |
 
+## PR #65 follow-up（38.5-J）
+
+PR #64時点の判定（38.5-J `partially_covered`、登録・検索時の既所持Ideal通知 `not_implemented`）は上表のとおり
+歴史として残す。PR #65（`feat/owned-ideal-target-completion`）で未接続部分を実装し、同じ判定基準で再判定した。
+
+| 要件 | 実装authority | test evidence | coverage（PR #65後） |
+| --- | --- | --- | --- |
+| 38.5-J 全体 | 既存 `existingGogmaRouteSearch.ts` / `productionPlanExecutionProjection` / `confirm_owned_ideal` に加え、`src/domain/target/ownedIdealTarget.ts`（`isOwnedIdealForTarget` / `findOwnedIdealWeaponsForTarget`）、`src/services/crud/targetWeaponLifecycleService.ts`、`src/components/target/` | 下記 | partially_covered → covered_after_followup |
+| Target登録・一覧時の既所持Ideal通知 + direct completion | `TargetWeaponsPage.tsx` + `OwnedIdealWeaponNotice` / `OwnedIdealCompletionDialog` / `useOwnedIdealCompletion` | `src/pages/TargetWeaponsPage.ownedIdeal.test.tsx`: 通知（複数Ideal、非Ideal無通知、status / 保護状態の表示）、cancelでService未呼出、確認→完了→active一覧から完了済みsectionへ移動、他Target名の表示とpreferred解除の反映、Plan-breaking Dialog接続、Service拒否の表示、新規保存直後のreloadなし通知。`src/domain/target/ownedIdealTarget.test.ts` は判定authority | covered |
+| Search時の既所持Ideal通知 + direct completion | `SearchPage.tsx` + 同component | `src/pages/SearchPage.ownedIdeal.test.tsx`: 通知、検索は禁止しない、cancelで不変、完了後にcompleted TargetをSelectから除外・result clear・次Target選択 / Select空、進行中Searchのcancel、Plan-breaking Dialog接続 | covered |
+| 直接完了の永続契約（同一IDでideal / protected、Target completed、`completedByProductionPlanId = null`、他Target preferred解除、Counter / artifact不変、stale read raceの拒否、rollback） | `TargetWeaponLifecycleService` + `PlanBreakingChangeGuard` | `src/services/crud/targetWeaponLifecycleService.test.ts`、`src/services/crud/targetWeaponLifecyclePlanBreaking.test.ts`（実Dexie: Plan非依存は承認不要、Plan依存Targetは承認必須でatomic abandon、execution scope武器の検出、write失敗のrollback） | covered |
+| 完了済みTargetの分離・「未完了に戻す」（UI_FLOW 8.3） | `TargetWeaponsPage.tsx`（activeのみの通常一覧、「完了済みの目標武器」section、`ReopenTargetDialog`）、`reopenTargetWeaponMutation` | `TargetWeaponsPage.ownedIdeal.test.tsx`: activeのみ表示、完了日時、`completedByProductionPlanId` がある場合だけ `/plans/:id`、通常編集 / 削除なし、reopenのcancel / confirm / OwnedWeapon不変 / Plan-breaking接続。Service testはreopenの正常 / 異常 | covered |
+| confirm_owned_ideal | 既存 | 既存coverage継続（runtime test / Navigator test） | covered（継続） |
+
+375px相当の実表示は、Vite dev + Browser paneのJS計測（`scrollWidth === 375`、主要button 44px、直接完了Dialogと
+完了済みsectionのoverflowなし、本番Serviceを通した完了の永続化）で確認した。REQUIREMENTS 36 / 37の他画面の
+手動smoke判定は変更しない。バージョン（`DATABASE_SCHEMA_VERSION = 8`、`EXPORT_SCHEMA_VERSION = 11`、
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 13`、`RngState.schemaVersion = 2`、`AppSettings.schemaVersion = 1`、
+`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e7`）とProduction RNG / Search / Planner semanticsは不変。
+
 ## バージョンと検証
 
 バージョン不変: `DATABASE_SCHEMA_VERSION = 8`、`EXPORT_SCHEMA_VERSION = 11`、
