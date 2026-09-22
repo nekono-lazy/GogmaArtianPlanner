@@ -47,6 +47,13 @@ function rgb(hex: string): string {
   return `rgb(${r}, ${g}, ${b})`
 }
 
+/** The alpha of an `rgba()` background; `transparent` and an opaque colour are 0 / 1. */
+function tintAlpha(color: string): number {
+  if (color === 'transparent') return 0
+  const match = /rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*([\d.]+)\s*\)/.exec(color)
+  return match ? Number(match[1]) : 1
+}
+
 describe('resolveRestorationBonusTone', () => {
   it('maps every current Bonus Type ID to its display family', () => {
     expect(resolveRestorationBonusTone('bonus_type.attack')).toBe('attack')
@@ -87,18 +94,22 @@ describe('isRestorationBonusExRank', () => {
 })
 
 describe('restorationBonusChipSx', () => {
-  it('emphasises EX beyond colour: heavier label, stronger ring and tint', () => {
+  it('sets EX apart from a normal rank only by a slightly stronger tint', () => {
     for (const variant of ['filled', 'outlined'] as const) {
       const normal = restorationBonusChipSx('attack', false, variant)
       const ex = restorationBonusChipSx('attack', true, variant)
       // Same family colours - EX is not a different colour.
       expect(ex.color).toBe(normal.color)
       expect(ex.borderColor).toBe(normal.borderColor)
-      // Non-colour emphasis.
-      expect(normal['& .MuiChip-label'].fontWeight).toBeUndefined()
-      expect(ex['& .MuiChip-label'].fontWeight).toBe(700)
-      expect(ex.boxShadow).not.toBe(normal.boxShadow)
+      // Same border / ring strength and no label weight override: the `EX`
+      // text of the label already names the rank.
+      expect(ex.boxShadow).toBe(normal.boxShadow)
+      expect(ex).not.toHaveProperty('& .MuiChip-label')
+      expect(normal).not.toHaveProperty('& .MuiChip-label')
+      // Only the background tint differs, and only by a small step.
       expect(ex.bgcolor).not.toBe(normal.bgcolor)
+      expect(tintAlpha(ex.bgcolor)).toBeGreaterThan(tintAlpha(normal.bgcolor))
+      expect(tintAlpha(ex.bgcolor) - tintAlpha(normal.bgcolor)).toBeLessThanOrEqual(0.1)
     }
   })
 
@@ -154,7 +165,7 @@ describe('RestorationBonusSlots', () => {
     ])
   })
 
-  it('colours the label and border by family and emphasises EX with a heavier label', () => {
+  it('colours the label and border by family and sets EX apart by tint alone', () => {
     renderSlots(
       [
         bonus(attack, rankIi),
@@ -178,12 +189,21 @@ describe('RestorationBonusSlots', () => {
     // The four families use four different label colours.
     expect(new Set(families.map((family) => RESTORATION_BONUS_TONE_COLORS[family].text)).size).toBe(4)
 
-    const normalLabel = chips[0]?.querySelector('.MuiChip-label')
-    const exLabel = chips[4]?.querySelector('.MuiChip-label')
-    expect(chips[4]).toHaveStyle({ color: rgb(RESTORATION_BONUS_TONE_COLORS.attack.text) })
-    expect(exLabel).toHaveStyle({ fontWeight: '700' })
-    expect(normalLabel).not.toHaveStyle({ fontWeight: '700' })
+    // The EX slot of the same family keeps the family colours, the same label
+    // weight and the same border as the normal slot; only its background
+    // tint is stronger, and its label still says `EX`.
+    const normalChip = chips[0]!
+    const exChip = chips[4]!
+    const normalLabel = normalChip.querySelector<HTMLElement>('.MuiChip-label')!
+    const exLabel = exChip.querySelector<HTMLElement>('.MuiChip-label')!
+    expect(exChip).toHaveStyle({ color: rgb(RESTORATION_BONUS_TONE_COLORS.attack.text) })
+    expect(exChip).toHaveStyle({ borderColor: rgb(RESTORATION_BONUS_TONE_COLORS.attack.border) })
     expect(exLabel).toHaveTextContent('EX')
+    expect(getComputedStyle(exLabel).fontWeight).toBe(getComputedStyle(normalLabel).fontWeight)
+    expect(getComputedStyle(exChip).boxShadow).toBe(getComputedStyle(normalChip).boxShadow)
+    expect(getComputedStyle(exChip).borderWidth).toBe(getComputedStyle(normalChip).borderWidth)
+    expect(tintAlpha(getComputedStyle(normalChip).backgroundColor)).toBe(0)
+    expect(tintAlpha(getComputedStyle(exChip).backgroundColor)).toBeGreaterThan(0)
   })
 
   it('keeps the standard chip style for a Bonus Type without a known family', () => {
@@ -206,7 +226,6 @@ describe('RestorationBonusSlots', () => {
     for (const chip of chips) {
       expect(chip).not.toHaveAttribute('data-bonus-tone')
       expect(chip).not.toHaveAttribute('data-bonus-ex')
-      expect(chip?.querySelector('.MuiChip-label')).not.toHaveStyle({ fontWeight: '700' })
     }
   })
 })
