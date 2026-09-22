@@ -1027,7 +1027,11 @@ describe('ExecutionNavigatorPage operation uncertain', () => {
     let dialog = await screen.findByRole('dialog', { name: '操作内容が分からない状態として記録しますか？' })
     expect(dialog).toHaveTextContent('Counterと武器の状態は変更しません。')
     expect(dialog).toHaveTextContent('この生産計画を続行できない状態')
-    expect(dialog).toHaveTextContent('RNG状態の再同定が必要です。')
+    // The record leads to the Navigator's own recovery, never straight to the
+    // ordinary RNG Identification (UI_FLOW 12.5).
+    expect(dialog).toHaveTextContent('この画面で現在位置の確認やゲーム内セーブ地点への復元など、回復方法を選びます。')
+    expect(dialog).not.toHaveTextContent('RNG状態の再同定が必要です。')
+    expect(dialog).toHaveTextContent('誤って記録した場合は、記録後に「実行状態の管理」からこの記録を取り消して元の操作へ戻せます。')
     await user.click(within(dialog).getByRole('button', { name: 'キャンセル' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(deps.recordOperationUncertain).not.toHaveBeenCalled()

@@ -470,3 +470,53 @@ export function executionUndoTargetLabel(plan: ProductionPlan, history: Executio
       return step
   }
 }
+
+/**
+ * How the Undo control introduces itself in 「実行状態の管理」
+ * (`docs/UI_FLOW.md` 12.7).
+ *
+ * The generic wording names the last tool-side operation. A record of
+ * 「何を何回操作したか分からない」 gets its own wording, because the user
+ * reaches it from the recovery screen and has to recognise it as taking back
+ * the record they made by mistake. It is deliberately not a bare
+ * 「キャンセル」 / 「戻る」: a user whose in-game situation really is unknown
+ * must not leave the recovery by mistake.
+ *
+ * This is presentation only. The record it applies to, its eligibility and
+ * what Undo restores are the runtime's (`docs/PLANNER_SPEC.md` 16.16); nothing
+ * here changes which record `undoLatestExecution()` removes.
+ */
+export interface ExecutionUndoControlPresentation {
+  /** The short description above the button. */
+  description: string
+  buttonLabel: string
+  dialogTitle: string
+  confirmLabel: string
+  /** Lines specific to this record, added to the generic Undo notice. */
+  notes: readonly string[]
+}
+
+export function executionUndoControlPresentation(
+  history: ExecutionHistory,
+): ExecutionUndoControlPresentation {
+  if (history.action === 'operation_uncertain') {
+    return {
+      description:
+        '「何を何回操作したか分からない」を誤って記録した場合は、この記録を取り消して記録前の操作へ戻せます。実際にゲーム内の操作状況が分からない場合は取り消さず、上の現在位置の確認やゲーム内セーブ地点への復元を使用してください。',
+      buttonLabel: '「操作内容不明」の記録を取り消す',
+      dialogTitle: '「操作内容不明」の記録を取り消しますか？',
+      confirmLabel: '記録を取り消して元の操作に戻る',
+      notes: [
+        '「何を何回操作したか分からない」を誤って記録し、ゲーム内の状況がツールの案内と一致している場合だけ使用してください。',
+        'ゲーム内の操作状況が実際に分からない場合は取り消さず、現在位置の確認やゲーム内セーブ地点への復元を使用してください。',
+      ],
+    }
+  }
+  return {
+    description: '最後に確定した記録をツール上だけ取り消します。ゲーム内の操作は戻りません。',
+    buttonLabel: '最後の操作をUndo',
+    dialogTitle: '最後のツール上の操作を元に戻します',
+    confirmLabel: 'Undoする',
+    notes: [],
+  }
+}

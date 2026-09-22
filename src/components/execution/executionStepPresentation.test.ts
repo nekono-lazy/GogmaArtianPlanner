@@ -16,6 +16,7 @@ import {
   actualResultInputKind,
   executionDivergenceView,
   executionErrorMessage,
+  executionUndoControlPresentation,
   offersOperationUncertain,
 } from './executionStepPresentation'
 
@@ -157,5 +158,45 @@ describe('executionErrorMessage for the divergence records', () => {
     )
     expect(executionErrorMessage('actual_result_invalid')).toMatch(/入力を確認してください/)
     expect(executionErrorMessage('actual_result_not_applicable')).toMatch(/「結果が違う」として記録できません/)
+  })
+})
+
+describe('executionUndoControlPresentation', () => {
+  const actions: readonly ExecutionAction[] = [
+    'confirmed_expected',
+    'actual_result_different',
+    'operation_count_recovered',
+    'finished_as_compromise',
+  ]
+
+  it('names the operation_uncertain record explicitly, never a bare cancel or back', async () => {
+    const { plan } = await newNormalFixture()
+    const [create] = plan.steps
+    const presentation = executionUndoControlPresentation(
+      history(plan, create, 'operation_uncertain', 'execution_operation_uncertain'),
+    )
+    expect(presentation.buttonLabel).toBe('「操作内容不明」の記録を取り消す')
+    expect(presentation.dialogTitle).toBe('「操作内容不明」の記録を取り消しますか？')
+    expect(presentation.confirmLabel).toBe('記録を取り消して元の操作に戻る')
+    // A user whose in-game situation really is unknown must not read this as a
+    // way out of the recovery.
+    for (const label of [presentation.buttonLabel, presentation.confirmLabel]) {
+      expect(['キャンセル', '戻る', '元に戻る']).not.toContain(label)
+    }
+    expect(presentation.description).toContain('誤って記録した場合')
+    expect(presentation.description).toContain('実際にゲーム内の操作状況が分からない場合は取り消さず')
+    expect(presentation.notes.length).toBeGreaterThan(0)
+  })
+
+  it.each(actions)('keeps the generic Undo wording for %s', async (action) => {
+    const { plan } = await newNormalFixture()
+    const [create] = plan.steps
+    expect(executionUndoControlPresentation(history(plan, create, action, null))).toEqual({
+      description: '最後に確定した記録をツール上だけ取り消します。ゲーム内の操作は戻りません。',
+      buttonLabel: '最後の操作をUndo',
+      dialogTitle: '最後のツール上の操作を元に戻します',
+      confirmLabel: 'Undoする',
+      notes: [],
+    })
   })
 })

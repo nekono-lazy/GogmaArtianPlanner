@@ -151,6 +151,18 @@ async function undoThroughDialog(user: ReturnType<typeof userEvent.setup>) {
   return dialog
 }
 
+/** The `operation_uncertain` record's own Undo control (Issue #82, UI_FLOW 12.5 / 12.7). */
+const uncertainUndoButton = () => screen.queryByRole('button', { name: '「操作内容不明」の記録を取り消す' })
+const uncertainUndoDialog = () =>
+  screen.findByRole('dialog', { name: '「操作内容不明」の記録を取り消しますか？' }, { timeout: 5000 })
+
+async function openUncertainUndoDialog(user: ReturnType<typeof userEvent.setup>) {
+  // The generic wording is not offered for this record.
+  expect(undoButton()).not.toBeInTheDocument()
+  await user.click(uncertainUndoButton() as HTMLElement)
+  return uncertainUndoDialog()
+}
+
 describe('ExecutionNavigatorPage state controls layout', () => {
   it('keeps the management controls apart from the Step primary action', () =>
     withDatabase(async (database) => {
@@ -242,20 +254,58 @@ describe('ExecutionNavigatorPage Undo with the real runtime', () => {
       expect(await planHistory(database, fixture.plan)).toEqual([])
     }), 20_000)
 
-  it('undoes operation_uncertain from its recovery screen', () =>
+  it('undoes operation_uncertain from its recovery screen through its own dedicated control', () =>
+    withDatabase(async (database) => {
+      const fixture = await newNormalFixture()
+      const { service, deps } = await realRuntime(database, fixture)
+      const before = await currentPlan(database, fixture.plan)
+      await service.recordOperationUncertain({ planId: fixture.plan.id, planStepId: fixture.plan.steps[0].id })
+      const user = userEvent.setup()
+      renderNavigator(deps, fixture.plan.id)
+      const recovery = await screen.findByRole('region', { name: '操作状況の回復' }, { timeout: 5000 })
+      // The recovery panel points at the dedicated control without offering it
+      // as one of the recovery choices.
+      expect(recovery).toHaveTextContent('下の「実行状態の管理」からこの記録を取り消して、記録前の操作へ戻せます。')
+      expect(within(recovery).queryByRole('button', { name: /取り消/ })).not.toBeInTheDocument()
+      const section = await controls()
+      expect(section).toHaveTextContent('「何を何回操作したか分からない」を誤って記録した場合は、この記録を取り消して記録前の操作へ戻せます。')
+
+      const dialog = await openUncertainUndoDialog(user)
+      expect(dialog).toHaveTextContent('ゲーム内で行った操作は元に戻りません。')
+      expect(dialog).toHaveTextContent('戻す操作: Step 1（通常アーティアを作成） の「何を何回操作したか分からない」の記録')
+      expect(dialog).toHaveTextContent('ゲーム内の状況がツールの案内と一致している場合だけ使用してください。')
+      await user.click(within(dialog).getByRole('button', { name: '記録を取り消して元の操作に戻る' }))
+
+      expect(await screen.findByText('Step 1 / 5', {}, { timeout: 5000 })).toBeInTheDocument()
+      expect(await currentPlan(database, fixture.plan)).toMatchObject({
+        status: 'active',
+        recalculationReasons: [],
+        currentStepId: before.currentStepId,
+      })
+      expect(await planHistory(database, fixture.plan)).toEqual([])
+    }), 20_000)
+
+  it('changes nothing when the dedicated operation_uncertain Undo is cancelled', () =>
     withDatabase(async (database) => {
       const fixture = await newNormalFixture()
       const { service, deps } = await realRuntime(database, fixture)
       await service.recordOperationUncertain({ planId: fixture.plan.id, planStepId: fixture.plan.steps[0].id })
+      const stale = await currentPlan(database, fixture.plan)
+      const history = await planHistory(database, fixture.plan)
       const user = userEvent.setup()
       renderNavigator(deps, fixture.plan.id)
       expect(await screen.findByRole('region', { name: '操作状況の回復' }, { timeout: 5000 })).toBeInTheDocument()
 
-      const dialog = await undoThroughDialog(user)
-      expect(dialog).toHaveTextContent('ゲーム内で行った操作は元に戻りません。')
-      expect(await screen.findByText('Step 1 / 5', {}, { timeout: 5000 })).toBeInTheDocument()
-      expect(await currentPlan(database, fixture.plan)).toMatchObject({ status: 'active', recalculationReasons: [] })
-      expect(await planHistory(database, fixture.plan)).toEqual([])
+      const dialog = await openUncertainUndoDialog(user)
+      await user.click(within(dialog).getByRole('button', { name: 'キャンセル' }))
+      await dialogClosed()
+
+      expect(deps.undoLatestExecution).not.toHaveBeenCalled()
+      expect(await currentPlan(database, fixture.plan)).toEqual(stale)
+      expect(await planHistory(database, fixture.plan)).toEqual(history)
+      // Still on the recovery, with the dedicated control ready again.
+      expect(screen.getByRole('region', { name: '操作状況の回復' })).toBeInTheDocument()
+      expect(uncertainUndoButton()).toBeInTheDocument()
     }), 20_000)
 
   it('undoes the Step that completed the Plan and returns to the Navigator', () =>
@@ -293,9 +343,12 @@ describe('ExecutionNavigatorPage Undo with the real runtime', () => {
       renderNavigator(deps, fixture.plan.id)
       expect(await screen.findByText('生産計画が完了しました')).toBeInTheDocument()
 
+      // An operation_count_recovered record keeps the generic Undo wording.
       const dialog = await undoThroughDialog(user)
       expect(dialog).toHaveTextContent('現在位置の確認による再開')
       expect(await screen.findByRole('region', { name: '操作状況の回復' }, { timeout: 5000 })).toBeInTheDocument()
+      // Back at the operation_uncertain stale state, the dedicated control applies again.
+      expect(await screen.findByRole('button', { name: '「操作内容不明」の記録を取り消す' })).toBeInTheDocument()
       expect(await currentPlan(database, fixture.plan)).toMatchObject({
         status: 'stale',
         recalculationReasons: ['execution_operation_uncertain'],

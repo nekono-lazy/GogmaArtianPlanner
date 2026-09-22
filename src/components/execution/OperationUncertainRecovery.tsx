@@ -107,6 +107,7 @@ export function OperationUncertainRecovery({
   plan,
   availability,
   savePoint,
+  undoAvailable,
   master,
   weaponTypeId,
   elementId,
@@ -118,6 +119,12 @@ export function OperationUncertainRecovery({
   plan: ProductionPlan
   availability: OperationCountRecoveryAvailability
   savePoint: Pick<ExecutionSavePoint, 'recordedAt' | 'productionPlan'> | null
+  /**
+   * The 「操作内容不明」 record can still be undone, so 「実行状態の管理」 below
+   * shows the control that takes it back. Display only: this panel never undoes
+   * anything and never decides the eligibility.
+   */
+  undoAvailable: boolean
   master: MasterDataRoot
   weaponTypeId: string
   elementId: string
@@ -342,6 +349,15 @@ export function OperationUncertainRecovery({
                     最後のゲーム内セーブ地点へ戻す
                   </Button>
                 </Box>
+              </>
+            )}
+            {undoAvailable && (
+              <>
+                <Divider />
+                <Typography variant="body2" color="text.secondary">
+                  「何を何回操作したか分からない」を誤って記録した場合は、下の「実行状態の管理」からこの記録を取り消して、記録前の操作へ戻せます。
+                  実際にゲーム内の操作状況が分からない場合は取り消さず、上のいずれかの回復方法を選んでください。
+                </Typography>
               </>
             )}
           </>
