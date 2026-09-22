@@ -768,6 +768,49 @@ selection, re-reads Targets and weapons, and selects the next eligible Target or
 Select. It added no persisted field, no Domain status and no calculation semantics, so the
 versions stay 13 / 8 / 11 (`RngState.schemaVersion` 2, `AppSettings.schemaVersion` 1,
 `PRODUCTION_RNG_ENGINE_VERSION` and Master `dataVersion` unchanged).
+The twentieth PR (the v1 Debug required information) connected `docs/REQUIREMENTS.md` 33 /
+`docs/UI_FLOW.md` 15 in the UI. Debug Mode stays an observation feature: it changes no RNG
+prediction, Candidate Search, Planner, prediction support, persistence semantics, validation,
+Execution semantics, Counter advance or Production Engine selection, and Debug Details stays
+read-only - it adds no save or edit, and Normal Counter Setup keeps its own existing Debug
+editor. `src/pages/DebugPage.tsx` reaches persistence only through the new
+`DebugPageDependencies` (`getRngState()` / `getNormalCounters()` /
+`getRunningProductionPlan()`, defaulting to the existing repositories in
+`src/services/debug/debugPageDependencies.ts`), mounts the reading component only while Debug
+Mode is on - so nothing is read and no internal value reaches the DOM while it is off - and
+distinguishes loading / loaded / error per read, never reporting a read failure (a Repository
+running-Plan invariant failure included) as "no value", "no Counter" or "no Plan". It shows the
+persisted `RngState` (Base Seed, Gogma Counter, Skill Counter and Counter Gate with `value` /
+`isConfirmed` / `source`, plus `lastIdentifiedAt`, `updatedAt` and `schemaVersion`; a `null`
+reads 未設定, never the string "null"), with Counter Gate named as the legacy / diagnostic /
+compatibility value Production Prediction never reads; every persisted `NormalArtianCounter`
+in a stable Master `sortOrder` -> rarity -> id order independent of the repository's; the one
+running (`active` / `stale`) Plan with its identity, CalculationContext, every
+`recalculationReason` (typed label plus raw enum, no message parsed) and its current Step
+resolved from `currentStepId` inside the stored Plan body - a Draft is never substituted, and
+an unresolvable id is reported as the anomaly it is; and the Master `gameVersion` /
+`dataVersion` plus `CURRENT_CALCULATION_APP_SCHEMA_VERSION`, named by their internal
+identifiers so they are not confused with the Settings screen's
+`AppSettings.schemaVersion`. The former placeholder "Future debug sections" list is gone.
+The one PlanStep Debug presentation authority is the shared
+`src/components/debug/PlanStepDebugDetails.tsx` plus the pure
+`planStepDebugPresentation.ts`, used by Debug Details, the Production Plan detail
+(`ProductionPlanStepCard`, Debug Mode only) and the Execution Navigator, so none of the three
+grows a copy. It shows `PlanStep.debug`, `PlanStep.rngAdvance` (the deltas and
+`affectedNormalCounterId`), `PlanStep.expectedResult` raw identifiers and both
+`ExpectedPlanState`s' persisted hashes exactly as stored: no delta or hash is recomputed in the
+UI, no RNG prediction and no Planner run, `PlanStep.debug === null` reads
+「PlanStepDebugInfo: 記録なし」 and is never reconstructed from a Candidate or the current
+Counter, and `0` is never confused with an unrecorded value. Each Counter stream reads
+`開始 N → 終了 M（delta D）` in text rather than by colour, so a conversion shows Skill +1 and
+Gogma +0 and no PRNG internal step count. The Execution Navigator reads Debug Mode from
+`useSettingsStore` and shows the block for the current Step only, collapsed, below the Step's
+game actions, with a stale Plan saying its prediction may no longer match the current state.
+Planner internal inspection stays limited to `PlanStep.debug.plannerReason`, the persisted
+`RejectedBuildListEntry` and the persisted `PlanConflict`; no Planner trace, Candidate history
+or PRNG dump viewer is added. It added no persisted field and no calculation semantics, so the
+versions stay 13 / 8 / 11 (`RngState.schemaVersion` 2, `AppSettings.schemaVersion` 1,
+`PRODUCTION_RNG_ENGINE_VERSION` and Master `dataVersion` unchanged).
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation

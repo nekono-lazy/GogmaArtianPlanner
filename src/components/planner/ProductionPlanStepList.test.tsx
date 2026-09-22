@@ -1,4 +1,5 @@
 import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import type { PlanStep, RestorationBonusSet } from '../../domain/models/publicTypes'
 import {
@@ -307,5 +308,82 @@ describe('ProductionPlanStepList checkpoint milestones', () => {
       />,
     )
     expect(screen.getByText(/BuildListEntry ID: build-list\.milestone\.dbg/)).toBeInTheDocument()
+  })
+})
+
+describe('ProductionPlanStepList PlanStep Debug', () => {
+  const debugStep = () =>
+    step('step.debug.a', 4, {
+      operationType: 'convert_normal_to_gogma',
+      rngAdvance: {
+        gogmaCounterDelta: 0,
+        skillCounterDelta: 1,
+        normalCounterDelta: null,
+        affectedNormalCounterId: null,
+      },
+      debug: {
+        startBaseSeed: '51231782',
+        startGogmaCounter: 55,
+        endGogmaCounter: 55,
+        startSkillCounter: 341,
+        endSkillCounter: 342,
+        startNormalCounter: null,
+        endNormalCounter: null,
+        plannerReason: 'convert_normal_to_gogma',
+      },
+    })
+
+  function renderWithDebug(debugMode: boolean) {
+    return render(
+      <ProductionPlanStepList
+        steps={[debugStep()]}
+        lookup={createTargetWeaponLookup([target, other])}
+        master={createValidMasterDataFixture()}
+        label="テスト手順"
+        debugMode={debugMode}
+      />,
+    )
+  }
+
+  it('shows no PlanStep Debug disclosure or internal value in the normal UI', () => {
+    const { container } = renderWithDebug(false)
+
+    expect(screen.queryByRole('button', { name: 'PlanStep Debug' })).not.toBeInTheDocument()
+    for (const leaked of ['51231782', 'plannerReason', 'convert_normal_to_gogma', '341', '342']) {
+      expect(container.innerHTML).not.toContain(leaked)
+    }
+  })
+
+  it('offers a collapsed PlanStep Debug disclosure per Step in Debug Mode', () => {
+    renderWithDebug(true)
+    const toggle = screen.getByRole('button', { name: 'PlanStep Debug' })
+
+    // Collapsed by default, so a few hundred Steps do not all expand at once.
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText('51231782')).not.toBeInTheDocument()
+  })
+
+  it('shows the persisted Counter before / after and Planner reason once opened', async () => {
+    const user = userEvent.setup()
+    renderWithDebug(true)
+    await user.click(screen.getByRole('button', { name: 'PlanStep Debug' }))
+
+    const info = screen.getByRole('group', { name: 'ステップ 4 のPlanStepDebugInfo' })
+    expect(within(info).getByText('startBaseSeed', { selector: 'dt' }).nextElementSibling)
+      .toHaveTextContent('51231782')
+    expect(within(info).getByText('plannerReason', { selector: 'dt' }).nextElementSibling)
+      .toHaveTextContent('convert_normal_to_gogma')
+
+    const counters = screen.getByRole('group', { name: 'ステップ 4 のCounter開始終了' })
+    expect(within(counters).getByText('Skill Counter', { selector: 'dt' }).nextElementSibling)
+      .toHaveTextContent('開始 341 → 終了 342（delta 1）')
+    expect(within(counters).getByText('Gogma Counter', { selector: 'dt' }).nextElementSibling)
+      .toHaveTextContent('開始 55 → 終了 55（delta 0）')
+  })
+
+  it('keeps the existing user-facing expected result beside the Debug block', () => {
+    renderWithDebug(true)
+
+    expect(within(card(4)).getByText('想定結果')).toBeInTheDocument()
   })
 })

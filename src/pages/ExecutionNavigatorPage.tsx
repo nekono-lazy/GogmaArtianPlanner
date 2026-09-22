@@ -33,6 +33,7 @@ import {
   type ExecutionDivergenceView,
   type ExecutionStepPresentation,
 } from '../components/execution/executionStepPresentation'
+import { PlanStepDebugDetails } from '../components/debug/PlanStepDebugDetails'
 import { OperationUncertainDialog } from '../components/execution/OperationUncertainDialog'
 import { OperationUncertainRecovery } from '../components/execution/OperationUncertainRecovery'
 import { WeaponSwitchPrompt } from '../components/execution/WeaponSwitchPrompt'
@@ -67,6 +68,7 @@ import {
 } from '../services/execution/executionNavigatorDependencies'
 import type { ConfirmExpectedPlanStepRequest } from '../services/execution/productionPlanExecutionService'
 import { evaluateProductionPlanCalculationCompatibility } from '../services/planner/prepareProductionPlanInteraction'
+import { useSettingsStore } from '../stores/settingsStore'
 
 const loadedMaster = loadMasterData()
 // Created once for the application database; tests inject their own.
@@ -301,6 +303,9 @@ function ExecutionNavigator({
   planId: ProductionPlanId
   dependencies: ExecutionNavigatorPageDependencies
 }) {
+  // Observation only (`docs/REQUIREMENTS.md` 33): Debug Mode adds the current
+  // Step's persisted internal information and changes no Execution semantics.
+  const debugMode = useSettingsStore((state) => state.debugMode)
   const [load, setLoad] = useState<LoadState>({ status: 'loading' })
   const [action, setAction] = useState<ActionState>({ status: 'idle' })
   const [notices, setNotices] = useState<string[]>([])
@@ -620,6 +625,7 @@ function ExecutionNavigator({
           <LoadedNavigator
             snapshot={load.snapshot}
             dependencies={dependencies}
+            debugMode={debugMode}
             submitting={submitting}
             acknowledgedSwitchStepId={acknowledgedSwitchStepId}
             dismissedCheckpointEntryIds={dismissedCheckpointEntryIds}
@@ -671,6 +677,7 @@ interface StateControlsOptions {
 function LoadedNavigator({
   snapshot,
   dependencies,
+  debugMode,
   submitting,
   acknowledgedSwitchStepId,
   dismissedCheckpointEntryIds,
@@ -687,6 +694,7 @@ function LoadedNavigator({
 }: {
   snapshot: ExecutionNavigatorSnapshot
   dependencies: ExecutionNavigatorPageDependencies
+  debugMode: boolean
   submitting: boolean
   acknowledgedSwitchStepId: PlanStepId | null
   dismissedCheckpointEntryIds: readonly BuildListEntryId[]
@@ -704,6 +712,32 @@ function LoadedNavigator({
 }) {
   const { plan, ownedWeapons, targetWeapons, buildListEntries, latestExecutionHistory } = snapshot
   const progress = createExecutionProgress(plan)
+
+  /**
+   * The current Step's persisted internal information, in Debug Mode only
+   * (`docs/REQUIREMENTS.md` 33, `docs/UI_FLOW.md` 15).
+   *
+   * Placed below the Step's game actions and collapsed by default, so the
+   * primary action stays the prominent control. Only the current Step is
+   * shown, so a confirmed Step's values never linger as the current ones. A
+   * `stale` Plan keeps its persisted Debug values but says they may no longer
+   * match the current state.
+   */
+  const stepDebugDetails = (step: PlanStep) =>
+    debugMode ? (
+      <PlanStepDebugDetails
+        step={step}
+        headingLevel="h2"
+        title={`現在Step（ステップ ${step.order}）のPlanStep Debug`}
+        note={
+          plan.status === 'stale' ? (
+            <Alert severity="warning">
+              この生産計画は再計算が必要な状態です。この予測は現在状態と一致しない可能性があります。
+            </Alert>
+          ) : null
+        }
+      />
+    ) : null
 
   if (plan.status !== 'active') {
     const divergence = executionDivergenceView(plan, latestExecutionHistory)
@@ -735,6 +769,7 @@ function LoadedNavigator({
           />
           {/* The recovery owns its save point restore; Undo and the ordinary abandonment stay here. */}
           {stateControls({ running: true, canRecordSavePoint: false, showsSavePointRestore: false })}
+          {stepDebugDetails(uncertainStep)}
         </>
       )
     }
@@ -756,6 +791,7 @@ function LoadedNavigator({
         />
         {plan.status !== 'draft' &&
           stateControls({ running, canRecordSavePoint: false, showsSavePointRestore: running })}
+        {progress.currentStep !== null && stepDebugDetails(progress.currentStep)}
       </>
     )
   }
@@ -850,6 +886,7 @@ function LoadedNavigator({
         )}
       </ExecutionStepCard>
       {stateControls({ running: true, canRecordSavePoint: true, showsSavePointRestore: true })}
+      {stepDebugDetails(step)}
     </>
   )
 }

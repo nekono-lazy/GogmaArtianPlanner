@@ -1834,7 +1834,39 @@ Debug Mode ONの場合のみ表示。
 制約。
 
 - Debug Mode OFFでは通常導線に内部値を表示しない
+- Debug Modeは観測機能であり、ON / OFFでRNG計算、Candidate Search、Planner、Prediction support、
+  Persistence semantics、Validation、Execution semantics、Counter advance、
+  Production Engine selectionのいずれも変更しない
+- Debug DetailsはRead-onlyとする。保存済みの状態、Planのpersisted metadata、
+  Engine / Master metadataを読むだけで、保存や編集の操作を持たない。
+  Normal Counter Setupに既存のDebug編集（6）を置く契約は変更しない
 - ExportにはDebug Modeに関係なく必要な内部状態を含める
+
+実装authority（表示接続）。
+
+- 現在のRNG状態 / 通常アーティアCounter / 実行中の生産計画 / Master・calculation versionは
+  `src/pages/DebugPage.tsx`。永続層へは `DebugPageDependencies`
+  （`getRngState()` / `getNormalCounters()` / `getRunningProductionPlan()`）だけで触れ、
+  loading / loaded / errorを区別する。read failureを「値なし」「Counterなし」「Planなし」と
+  読み替えず、Repository invariant error（running Plan 2件など）もerrorとして表示する
+- 実行中の生産計画はrunning（`active` / `stale`）のみを対象とし、Draftを代替表示しない。
+  Draftと終了済みPlanは `/plans` と `/plans/:planId` で確認する
+- 通常アーティアCounterはMaster `sortOrder` → rarity → idの安定順で表示し、
+  Repositoryの返却順に依存しない
+- PlanStep内部情報 / RNG予測情報 / Planner判定理由 / Counter before-afterは共有component
+  `src/components/debug/PlanStepDebugDetails.tsx` と純関数
+  `src/components/debug/planStepDebugPresentation.ts` が唯一のDebug表示authorityで、
+  Debug Details、生産計画詳細（11）、実行ナビ（12）が同じものを使う。
+  `PlanStep.debug` / `rngAdvance` / `expectedResult` / `expectedStateBefore` /
+  `expectedStateAfter` を保存値のまま表示し、UI側でdeltaやhashを再計算せず、
+  RNG PredictionもPlannerも再実行しない。`PlanStep.debug === null` は
+  「PlanStepDebugInfo: 記録なし」と表示し、Candidateや現在Counterから再構成しない。
+  `0` と未記録を混同しない
+- 実行ナビはゲーム操作より下に折りたたみで現在Stepだけを表示する。`stale` Planでは
+  保存値を表示したうえで現在状態と一致しない可能性を明示する
+- Planner内部確認のauthorityは `PlanStep.debug.plannerReason`、persist済み
+  `RejectedBuildListEntry`、persist済み `PlanConflict` に限る。
+  Planner探索traceの再構築viewerは持たない（[REQUIREMENTS.md](./REQUIREMENTS.md) 34）
 
 ---
 
