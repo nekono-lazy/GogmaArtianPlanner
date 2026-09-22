@@ -69,6 +69,8 @@ function dependencies(
     }),
     saveCandidates: vi.fn(async () => undefined),
     addCandidate: vi.fn(async () => { throw new Error('not expected') }),
+    inspectCompleteWithOwnedIdeal: vi.fn(async () => ({ approvalRequired: false as const })),
+    completeWithOwnedIdeal: vi.fn(async () => { throw new Error('not expected') }),
   }
 }
 

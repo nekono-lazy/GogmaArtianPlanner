@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useState } from 'react'
 import {
   Alert,
   Box,
@@ -7,6 +7,7 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
+  DialogContentText,
   DialogTitle,
   FormControl,
   FormControlLabel,
@@ -19,7 +20,21 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
+import { Link as RouterLink } from 'react-router-dom'
 import { DialogFormError } from '../components/DialogFormError'
+import { DisclosureAccordion } from '../components/DisclosureAccordion'
+import { OwnedIdealCompletionDialog } from '../components/target/OwnedIdealCompletionDialog'
+import { OwnedIdealWeaponNotice } from '../components/target/OwnedIdealWeaponNotice'
+import {
+  COMPLETED_TARGETS_HEADING,
+  formatCompletedAt,
+  REOPEN_TARGET_LABEL,
+  REOPEN_TARGET_LINES,
+  REOPEN_TARGET_PLAN_BREAKING_NOTE,
+  REOPEN_TARGET_TITLE,
+  targetLifecycleErrorMessage,
+} from '../components/target/ownedIdealPresentation'
+import { useOwnedIdealCompletion, type OwnedIdealCompletionApi } from '../components/target/useOwnedIdealCompletion'
 import { PlanBreakingChangeDialog } from '../components/execution/PlanBreakingChangeDialog'
 import { usePlanBreakingChangeApproval } from '../components/execution/usePlanBreakingChangeApproval'
 import type { PlanBreakingChangeApproval, PlanBreakingChangeInspection } from '../domain/execution'
@@ -30,6 +45,7 @@ import { BonusSetEditor } from '../components/forms/BonusSetEditor'
 import { TargetCompromiseEditor } from '../components/forms/TargetCompromiseEditor'
 import { bonusLabel } from '../components/search/searchPresentation'
 import {
+  findOwnedIdealWeaponsForTarget,
   hasTargetCompromise,
   isCompatiblePreferredOwnedWeapon,
   isEligiblePreferredOwnedWeapon,
@@ -48,6 +64,7 @@ import {
   MasterOptionsUnavailableError,
 } from '../domain/forms/entityDrafts'
 import type {
+  OwnedGogmaArtianWeapon,
   OwnedWeapon,
   SkillCondition,
   TargetWeapon,
@@ -66,6 +83,10 @@ import {
   type TargetWeaponDraft,
 } from '../services/crud/entityCrudServices'
 import { getPersistenceReferenceKindLabel } from '../presentation/labels'
+import {
+  TargetWeaponLifecycleService,
+  type TargetOwnedIdealCompletion,
+} from '../services/crud/targetWeaponLifecycleService'
 
 const NO_PREFERRED_OWNED_WEAPON = ''
 
@@ -118,9 +139,54 @@ function skillConditionSummary(condition: SkillCondition, master: MasterDataRoot
     : parts[0]
 }
 
+/** The confirmation 「未完了に戻す」 needs (`docs/UI_FLOW.md` 8.3). */
+function ReopenTargetDialog({
+  target,
+  submitting,
+  error,
+  onCancel,
+  onConfirm,
+}: {
+  target: TargetWeapon | null
+  submitting: boolean
+  error: string | null
+  onCancel(): void
+  onConfirm(): void
+}) {
+  const titleId = useId()
+  const descriptionId = useId()
+  if (target === null) return null
+  return (
+    <Dialog open onClose={onCancel} aria-labelledby={titleId} aria-describedby={descriptionId}>
+      <DialogTitle id={titleId}>{REOPEN_TARGET_TITLE}</DialogTitle>
+      <DialogContent>
+        <DialogContentText id={descriptionId} component="div">
+          <Typography component="p" variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+            目標武器「{target.name}」を未完了に戻します。
+          </Typography>
+          {REOPEN_TARGET_LINES.map((line) => (
+            <Typography component="p" variant="body2" key={line} sx={{ mt: 1 }}>
+              {line}
+            </Typography>
+          ))}
+        </DialogContentText>
+      </DialogContent>
+      {error !== null && <DialogFormError message={error} />}
+      <DialogActions sx={{ flexWrap: 'wrap', gap: 1 }}>
+        <Button onClick={onCancel} disabled={submitting} sx={{ minHeight: 44, width: { xs: '100%', sm: 'auto' } }}>
+          キャンセル
+        </Button>
+        <Button variant="contained" onClick={onConfirm} disabled={submitting} sx={{ minHeight: 44, width: { xs: '100%', sm: 'auto' } }}>
+          {REOPEN_TARGET_LABEL}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  )
+}
+
 const masterResult = loadMasterData()
 
-export interface TargetWeaponsPageDependencies {
+export interface TargetWeaponsPageDependencies extends OwnedIdealCompletionApi {
   getAll(): Promise<TargetWeapon[]>
   /** `approval` is the breaking-change approval when the inspection required one (`docs/UI_FLOW.md` 16.3). */
   save(
@@ -133,8 +199,11 @@ export interface TargetWeaponsPageDependencies {
   delete(id: TargetWeapon['id'], approval?: PlanBreakingChangeApproval | null): Promise<void>
   /** The read-only breaking-change inspection of that very delete. */
   inspectDelete(id: TargetWeapon['id']): Promise<PlanBreakingChangeInspection>
-  /** The preferred-origin candidates shown in the edit dialog. */
+  /** The preferred-origin candidates shown in the edit dialog, and the owned Ideal notice's input. */
   getOwnedWeapons(): Promise<OwnedWeapon[]>
+  /** The read-only breaking-change inspection of returning that Target to active (`docs/UI_FLOW.md` 8.3). */
+  inspectReopen(id: TargetWeapon['id']): Promise<PlanBreakingChangeInspection>
+  reopen(id: TargetWeapon['id'], approval?: PlanBreakingChangeApproval | null): Promise<TargetWeapon>
 }
 
 function deleteReferenceMessage(error: ReferencedEntityDeleteError) {
@@ -155,10 +224,14 @@ export function TargetWeaponsPage({
     () => (masterResult.ok ? new TargetWeaponCrudService(masterResult.data) : null),
     [],
   )
+  const defaultLifecycleService = useMemo(
+    () => (masterResult.ok ? new TargetWeaponLifecycleService(masterResult.data) : null),
+    [],
+  )
   const api = useMemo<TargetWeaponsPageDependencies | null>(
     () =>
       dependencies ??
-      (defaultService
+      (defaultService && defaultLifecycleService
         ? {
             getAll: () => defaultService.getAll(),
             save: (draft, existing, approval) => defaultService.save(draft, existing, undefined, approval ?? null),
@@ -166,9 +239,15 @@ export function TargetWeaponsPage({
             delete: (id, approval) => defaultService.delete(id, approval ?? null),
             inspectDelete: (id) => defaultService.inspectDelete(id),
             getOwnedWeapons: () => ownedWeaponRepository.getAllOwnedWeapons(),
+            inspectCompleteWithOwnedIdeal: (targetId, weaponId) =>
+              defaultLifecycleService.inspectCompleteWithOwnedIdeal(targetId, weaponId),
+            completeWithOwnedIdeal: (targetId, weaponId, approval) =>
+              defaultLifecycleService.completeWithOwnedIdeal(targetId, weaponId, undefined, approval ?? null),
+            inspectReopen: (id) => defaultLifecycleService.inspectReopen(id),
+            reopen: (id, approval) => defaultLifecycleService.reopen(id, undefined, approval ?? null),
           }
         : null),
-    [defaultService, dependencies],
+    [defaultLifecycleService, defaultService, dependencies],
   )
   const [targets, setTargets] = useState<TargetWeapon[]>([])
   const [ownedWeapons, setOwnedWeapons] = useState<OwnedWeapon[]>([])
@@ -189,7 +268,32 @@ export function TargetWeaponsPage({
   // The breaking-change warning of every save and delete (`docs/UI_FLOW.md` 16.3).
   const planGuard = usePlanBreakingChangeApproval()
   const listHeadingId = useId()
+  const completedHeadingId = useId()
   const preferredHelpId = useId()
+  // 「この武器で目標を完了にする」 (`docs/UI_FLOW.md` 8.2): the Service result is
+  // mirrored into the lists without a reload - the completed Target, the
+  // protected weapon and the released preferences alike.
+  const onCompletionApplied = useCallback((result: TargetOwnedIdealCompletion, planAbandoned: boolean) => {
+    const released = new Set<string>(result.releasedTargetIds)
+    setTargets((current) =>
+      upsertPreservingOrder(current, result.target).map((target) =>
+        released.has(target.id) ? { ...target, preferredOwnedWeaponId: null } : target,
+      ),
+    )
+    setOwnedWeapons((current) => upsertPreservingOrder(current, result.ownedWeapon))
+    setNotice(
+      planAbandoned
+        ? `目標武器「${result.target.name}」を完了にし、${PLAN_ABANDONED_SUFFIX}`
+        : `目標武器「${result.target.name}」を完了にしました。`,
+    )
+    setError(null)
+    if (planAbandoned) setLoadSequence((sequence) => sequence + 1)
+  }, [])
+  const completion = useOwnedIdealCompletion({ api, planGuard, targets, onApplied: onCompletionApplied })
+  // 「未完了に戻す」 (`docs/UI_FLOW.md` 8.3), behind its own confirmation.
+  const [reopening, setReopening] = useState<TargetWeapon | null>(null)
+  const [reopenSubmitting, setReopenSubmitting] = useState(false)
+  const [reopenError, setReopenError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!api) return
@@ -230,6 +334,28 @@ export function TargetWeaponsPage({
   const master = masterResult.data
   const weaponTypes = getEnabledWeaponTypes(master)
   const elements = getEnabledElements(master)
+  // The ordinary list holds active Targets only; completed ones sit in their
+  // own read-only section (`docs/UI_FLOW.md` 8 / 8.3).
+  const activeTargets = targets.filter(({ lifecycleStatus }) => lifecycleStatus === 'active')
+  const completedTargets = targets.filter(({ lifecycleStatus }) => lifecycleStatus === 'completed')
+  // The owned Ideal notice per active Target (`docs/UI_FLOW.md` 8.2), judged by
+  // the shared Domain authority from the loaded Targets and weapons - after a
+  // save too, with no reload. A judgement failure is reported, never read as
+  // "no owned Ideal".
+  const ownedIdealByTarget = new Map<string, OwnedGogmaArtianWeapon[]>()
+  let ownedIdealEvaluationError: string | null = null
+  if (!loading && !loadFailed) {
+    for (const target of activeTargets) {
+      try {
+        ownedIdealByTarget.set(target.id, findOwnedIdealWeaponsForTarget(target, ownedWeapons, master))
+      } catch (caught: unknown) {
+        ownedIdealEvaluationError = `既所持の理想武器を判定できませんでした: ${caught instanceof Error ? caught.message : String(caught)}`
+        break
+      }
+    }
+  }
+  const weaponTypeName = (id: string) => weaponTypes.find((type) => type.id === id)?.displayNameJa ?? id
+  const elementName = (id: string) => elements.find((element) => element.id === id)?.displayNameJa ?? id
   const openNew = () => {
     try {
       setEditing(null)
@@ -340,6 +466,41 @@ export function TargetWeaponsPage({
     }
   }
 
+  const reopen = async () => {
+    if (!api || reopening === null || reopenSubmitting) return
+    setReopenSubmitting(true)
+    setReopenError(null)
+    try {
+      // The inspection and the save name the same Target; the runtime re-reads
+      // it inside its own transaction and touches no owned weapon.
+      const outcome = await planGuard.run({
+        inspect: () => api.inspectReopen(reopening.id),
+        apply: (approval) => api.reopen(reopening.id, approval),
+        note: REOPEN_TARGET_PLAN_BREAKING_NOTE,
+      })
+      if (outcome.status === 'cancelled') return
+      if (outcome.status === 'refused') {
+        setReopenError(outcome.message)
+        return
+      }
+      setTargets((current) => upsertPreservingOrder(current, outcome.result))
+      setReopening(null)
+      setNotice(
+        outcome.planAbandoned
+          ? `目標武器「${outcome.result.name}」を未完了に戻し、${PLAN_ABANDONED_SUFFIX}`
+          : `目標武器「${outcome.result.name}」を未完了に戻しました。`,
+      )
+      setError(null)
+      if (outcome.planAbandoned) setLoadSequence((sequence) => sequence + 1)
+    } catch (caught: unknown) {
+      setReopenError(
+        targetLifecycleErrorMessage(caught) ?? (caught instanceof Error ? caught.message : '未完了に戻せません。'),
+      )
+    } finally {
+      setReopenSubmitting(false)
+    }
+  }
+
   const resetBonusConditions = (
     value: TargetWeaponDraft,
     weaponTypeId: string,
@@ -418,6 +579,7 @@ export function TargetWeaponsPage({
       <Stack spacing={2}>
         <MasterDataStatusAlert master={master} />
         {error && <Alert severity="error">{error}</Alert>}
+        {ownedIdealEvaluationError && <Alert severity="error">{ownedIdealEvaluationError}</Alert>}
         {notice && (
           <Alert severity="success" onClose={() => setNotice(null)}>
             {notice}
@@ -440,22 +602,22 @@ export function TargetWeaponsPage({
             </Typography>
             {!loading && !loadFailed && (
               <Typography variant="body2" color="text.secondary" className="tabular-nums">
-                {targets.length}件（有効 {targets.filter(({ isEnabled }) => isEnabled).length}件）
+                {activeTargets.length}件（有効 {activeTargets.filter(({ isEnabled }) => isEnabled).length}件）
               </Typography>
             )}
           </Stack>
           {loading && <LinearProgress aria-label="目標武器を読み込み中" />}
-          {!loading && !loadFailed && targets.length === 0 && (
+          {!loading && !loadFailed && activeTargets.length === 0 && (
             <Box sx={{ px: { xs: 2, md: 2.5 }, py: 3, borderTop: 1, borderColor: 'divider' }}>
-              <Typography>目標武器は未登録です。</Typography>
+              <Typography>{targets.length === 0 ? '目標武器は未登録です。' : '未完了の目標武器はありません。'}</Typography>
               <Typography variant="body2" color="text.secondary">
                 「目標武器を追加」から、欲しい完成武器の理想条件を登録します。
               </Typography>
             </Box>
           )}
-          {!loading && targets.length > 0 && (
-            <Box component="ul" sx={{ m: 0, p: 0 }}>
-              {targets.map((target) => (
+          {!loading && activeTargets.length > 0 && (
+            <Box component="ul" aria-labelledby={listHeadingId} sx={{ m: 0, p: 0 }}>
+              {activeTargets.map((target) => (
                 <ManagementListItem
                   key={target.id}
                   title={target.name}
@@ -487,6 +649,15 @@ export function TargetWeaponsPage({
                       <Typography variant="body2">
                         理想スキル: {skillConditionSummary(target.idealSkillCondition, master)}
                       </Typography>
+                      {(ownedIdealByTarget.get(target.id)?.length ?? 0) > 0 && (
+                        <OwnedIdealWeaponNotice
+                          target={target}
+                          weapons={ownedIdealByTarget.get(target.id) ?? []}
+                          master={master}
+                          onComplete={(weapon) => completion.begin(target, weapon)}
+                          disabled={planGuard.busy || completion.pending !== null}
+                        />
+                      )}
                     </Stack>
                   }
                   status={
@@ -525,6 +696,68 @@ export function TargetWeaponsPage({
             </Box>
           )}
         </Paper>
+        {!loading && !loadFailed && completedTargets.length > 0 && (
+          <Paper component="section" variant="outlined" aria-labelledby={completedHeadingId} sx={{ overflow: 'hidden' }}>
+            <Typography id={completedHeadingId} component="h2" variant="h2" sx={{ px: { xs: 2, md: 2.5 }, pt: 2, pb: 1 }}>
+              {COMPLETED_TARGETS_HEADING}
+            </Typography>
+            <Box sx={{ px: { xs: 2, md: 2.5 }, pb: 2 }}>
+              {/* Read-only history (`docs/UI_FLOW.md` 8.3): no edit, delete, enablement
+                  or preference control. The weapon that completed a Target is not
+                  persisted on it, so none is guessed here. */}
+              <DisclosureAccordion title={`完了済みの目標武器（${completedTargets.length}件）`} headingLevel="h3">
+                <Box component="ul" aria-label={COMPLETED_TARGETS_HEADING} sx={{ m: 0, p: 0, listStyle: 'none', display: 'grid', gap: 1.5 }}>
+                  {completedTargets.map((target) => (
+                    <Stack
+                      component="li"
+                      key={target.id}
+                      direction={{ xs: 'column', sm: 'row' }}
+                      spacing={1.5}
+                      sx={{ alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between', minWidth: 0, borderTop: 1, borderColor: 'divider', pt: 1.5 }}
+                    >
+                      <Stack spacing={0.5} sx={{ minWidth: 0 }}>
+                        <Typography component="h4" variant="h3" sx={{ overflowWrap: 'anywhere' }}>
+                          {target.name}
+                        </Typography>
+                        <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+                          <StatusChip label="完了済み" tone="positive" />
+                          <Typography variant="body2" color="text.secondary">
+                            {weaponTypeName(target.weaponTypeId)} / {elementName(target.elementId)}
+                          </Typography>
+                        </Stack>
+                        <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                          完了日時: {target.completedAt === null ? '不明' : formatCompletedAt(target.completedAt)}
+                        </Typography>
+                        {target.completedByProductionPlanId !== null && (
+                          <Button
+                            component={RouterLink}
+                            to={`/plans/${target.completedByProductionPlanId}`}
+                            variant="text"
+                            sx={{ minHeight: 44, alignSelf: 'flex-start', px: 0 }}
+                          >
+                            完成に使った生産計画を見る
+                          </Button>
+                        )}
+                      </Stack>
+                      <Button
+                        variant="outlined"
+                        onClick={() => {
+                          setReopening(target)
+                          setReopenError(null)
+                        }}
+                        disabled={planGuard.busy || reopening !== null}
+                        aria-label={`${target.name}を${REOPEN_TARGET_LABEL}`}
+                        sx={{ minHeight: 44, flexShrink: 0 }}
+                      >
+                        {REOPEN_TARGET_LABEL}
+                      </Button>
+                    </Stack>
+                  ))}
+                </Box>
+              </DisclosureAccordion>
+            </Box>
+          </Paper>
+        )}
         <Dialog
           open={draft !== null}
           onClose={closeDialog}
@@ -781,6 +1014,26 @@ export function TargetWeaponsPage({
             </Button>
           </DialogActions>
         </Dialog>
+        <OwnedIdealCompletionDialog
+          pending={completion.pending}
+          affectedTargets={completion.affectedTargets}
+          submitting={completion.submitting}
+          error={completion.error}
+          onCancel={completion.cancel}
+          onConfirm={() => void completion.confirm()}
+        />
+        <ReopenTargetDialog
+          target={reopening}
+          submitting={reopenSubmitting}
+          error={reopenError}
+          onCancel={() => {
+            if (!reopenSubmitting) {
+              setReopening(null)
+              setReopenError(null)
+            }
+          }}
+          onConfirm={() => void reopen()}
+        />
         <PlanBreakingChangeDialog controller={planGuard} />
       </Stack>
     </PageShell>

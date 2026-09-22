@@ -114,6 +114,8 @@ function dependencies(
       entry: createBuildListEntry(candidate, target, { intermediateStateSelection }),
       added: true,
     })),
+    inspectCompleteWithOwnedIdeal: vi.fn(async () => ({ approvalRequired: false as const })),
+    completeWithOwnedIdeal: vi.fn(async () => { throw new Error('not used in this test') }),
   }
 }
 
