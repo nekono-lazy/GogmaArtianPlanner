@@ -50,6 +50,7 @@ import {
 } from '../test/fixtures/executionRuntime'
 import { orchestrationEntry, orchestrationScenario, orchestrationSource, orchestrationTarget, resetRoute } from '../test/fixtures/plannerConstrainedOrchestration'
 import { hasStyleRule } from '../test/cssRuleAssertions'
+import { planStepOperationLabels } from '../presentation/labels'
 import { useSettingsStore } from '../stores/settingsStore'
 import { ExecutionNavigatorPage } from './ExecutionNavigatorPage'
 import {
@@ -175,6 +176,33 @@ async function snapshotOf(fixture: ExecutionFixture, plan: Partial<ProductionPla
 }
 
 const primary = () => screen.getByRole('button', { name: '結果一致・次へ' })
+
+/**
+ * Issue #77: while the weapon switch guidance is shown, nothing about the
+ * current Step's game operation may be readable or reachable - the Step card
+ * is not rendered at all, so assistive technology and keyboard navigation
+ * cannot reach the next operation either.
+ */
+function expectCurrentStepHidden(step: PlanStep): void {
+  expect(screen.queryByRole('heading', { name: planStepOperationLabels[step.operationType] })).not.toBeInTheDocument()
+  expect(screen.queryByText(step.title)).not.toBeInTheDocument()
+  expect(screen.queryByText(step.instruction)).not.toBeInTheDocument()
+  expect(screen.queryByText('想定結果')).not.toBeInTheDocument()
+  expect(screen.queryByText('使用する武器')).not.toBeInTheDocument()
+  for (const name of ['結果一致・次へ', '結果が違う', '何を何回操作したか分からない']) {
+    expect(screen.queryByRole('button', { name })).not.toBeInTheDocument()
+  }
+}
+
+/** After 「武器を切り替えました」 the whole Step card takes over. */
+function expectCurrentStepShown(step: PlanStep): void {
+  expect(screen.queryByText(/作業する武器を/)).not.toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: planStepOperationLabels[step.operationType] })).toBeInTheDocument()
+  expect(screen.getByText(step.title)).toBeInTheDocument()
+  expect(screen.getByText(step.instruction)).toBeInTheDocument()
+  expect(screen.getByText('想定結果')).toBeInTheDocument()
+  expect(screen.getByText('使用する武器')).toBeInTheDocument()
+}
 
 describe('ExecutionNavigatorPage load states', () => {
   it('shows not-found for a missing Plan', async () => {
@@ -493,13 +521,19 @@ describe('ExecutionNavigatorPage weapon switching and checkpoints with the real 
       for (const [index, weapon] of [b, a].entries()) {
         await user.click(primary())
         await screen.findByText(`Step ${index + 2} / 3`)
+        const next = fixture.plan.steps[index + 1]
         expect(screen.getByText(`作業する武器を「${weapon.name}」へ切り替えてください`)).toBeInTheDocument()
-        expect(screen.queryByRole('button', { name: '結果一致・次へ' })).not.toBeInTheDocument()
+        // Issue #77: the guidance is an interstitial, so the current Step card
+        // itself is absent from the DOM - not merely stripped of its actions.
+        expectCurrentStepHidden(next)
         const before = await dump(database)
         const switchButton = screen.getByRole('button', { name: '武器を切り替えました' })
         expect(hasStyleRule(switchButton, 'width', '100%', '(min-width:0px)')).toBe(true)
         expect(getComputedStyle(switchButton).minHeight).toBe('48px')
+        // The Plan's own state controls stay available during the interstitial.
+        expect(screen.getByRole('region', { name: '実行状態の管理' })).toBeInTheDocument()
         await user.click(switchButton)
+        expectCurrentStepShown(next)
         expect(primary()).toBeEnabled()
         expect(await dump(database)).toEqual(before)
         expect(deps.undoLatestExecution).not.toHaveBeenCalled()
@@ -531,24 +565,47 @@ describe('ExecutionNavigatorPage weapon switching and checkpoints with the real 
       expect(await screen.findByText('Step 2 / 2')).toBeInTheDocument()
       expect(screen.queryByRole('region', { name: '途中採用状態への到達' })).not.toBeInTheDocument()
 
-      // Other weapon -> checkpoint weapon: the switch guidance hides the Step actions.
+      // Other weapon -> checkpoint weapon: the switch guidance replaces the
+      // whole current Step card (Issue #77), not only its actions.
       const historyBefore = await database.executionHistory.toArray()
       const planBefore = await database.productionPlans.get(fixture.plan.id)
+      const second = fixture.plan.steps[1]
       expect(screen.getByText('作業する武器を「Constrained fixture owned.execution.checkpoint」へ切り替えてください')).toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: '結果一致・次へ' })).not.toBeInTheDocument()
+      expectCurrentStepHidden(second)
       await user.click(screen.getByRole('button', { name: '武器を切り替えました' }))
+      expectCurrentStepShown(second)
       expect(primary()).toBeEnabled()
       expect(await database.executionHistory.toArray()).toEqual(historyBefore)
       expect(await database.productionPlans.get(fixture.plan.id)).toEqual(planBefore)
 
       // A reload shows both again: the checkpoint is still held because only
-      // the other weapon advanced, and the switch was never recorded.
+      // the other weapon advanced, and the switch was never recorded. The
+      // acknowledgement is not persisted, so the Step card is hidden again.
       view.unmount()
       renderNavigator(deps, fixture.plan.id)
       const panel2 = await screen.findByRole('region', { name: '途中採用状態への到達' })
       await user.click(within(panel2).getByRole('button', { name: '次の操作へ進む' }))
       expect(screen.getByText('作業する武器を「Constrained fixture owned.execution.checkpoint」へ切り替えてください')).toBeInTheDocument()
+      expectCurrentStepHidden(second)
       expect(OTHER_WEAPON_ID).not.toBe(fixture.source.id)
+    }))
+
+  it('keeps the checkpoint panel ahead of the switch guidance and the Step card', () =>
+    withDatabase(async (database) => {
+      const fixture = await otherWeaponCheckpointFixture()
+      const { deps } = await realRuntime(database, fixture)
+      const user = userEvent.setup()
+      renderNavigator(deps, fixture.plan.id)
+
+      // The Entry's start-held checkpoint comes first: while it is open the
+      // switch guidance stays closed, and the Step card keeps its actions.
+      expect(await screen.findByText('Step 1 / 2')).toBeInTheDocument()
+      const panel = screen.getByRole('region', { name: '途中採用状態への到達' })
+      expect(screen.queryByText(/作業する武器を/)).not.toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: planStepOperationLabels[fixture.plan.steps[0].operationType] })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: '結果一致・次へ' })).not.toBeInTheDocument()
+      await user.click(within(panel).getByRole('button', { name: '次の操作へ進む' }))
+      expectCurrentStepShown(fixture.plan.steps[0])
     }))
 
   it('shows the checkpoint panel right after its Step until the same weapon moves on', () =>
@@ -1524,4 +1581,39 @@ describe('ExecutionNavigatorPage Debug Mode', () => {
         screen.queryByRole('button', { name: `現在Step（ステップ ${first.order}）のPlanStep Debug` }),
       ).not.toBeInTheDocument()
     }), 20_000)
+
+  it('keeps the current Step Debug block behind the weapon switch guidance', async () => {
+    useSettingsStore.setState({ debugMode: true })
+    const fixture = await existingGogmaFixture()
+    const [first, second] = fixture.plan.steps
+    // The previous completed Step ran on another weapon, so the current Step
+    // opens with the switch guidance.
+    const plan: ProductionPlan = {
+      ...structuredClone(fixture.plan),
+      status: 'active',
+      steps: [
+        {
+          ...structuredClone(first),
+          isCompleted: true,
+          executionEffects: {
+            ...structuredClone(first.executionEffects as NonNullable<PlanStep['executionEffects']>),
+            trackedOwnedWeaponId: OTHER_WEAPON_ID as OwnedWeaponId,
+          },
+        },
+        structuredClone(second),
+      ],
+      currentStepId: second.id,
+    }
+    const user = userEvent.setup()
+    renderNavigator(mockedRuntime({ ...(await snapshotOf(fixture)), plan }), fixture.plan.id)
+
+    const debugName = `現在Step（ステップ ${second.order}）のPlanStep Debug`
+    expect(await screen.findByRole('button', { name: '武器を切り替えました' })).toBeInTheDocument()
+    expectCurrentStepHidden(second)
+    expect(screen.queryByRole('button', { name: debugName })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '武器を切り替えました' }))
+    expectCurrentStepShown(second)
+    expect(screen.getByRole('button', { name: debugName })).toBeInTheDocument()
+  })
 })
