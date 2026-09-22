@@ -1421,6 +1421,13 @@ export interface MaterialRequirement {
 - `quantity` は1以上の整数
 - Plannerは必要数を表示するだけで、アイテム素材の不足による作成不能判定は行わない
 
+ユーザー向けの「必要素材・費用の目安」（[REQUIREMENTS.md](./REQUIREMENTS.md) 22.1、
+[SEARCH_SPEC.md](./SEARCH_SPEC.md) 4.3）は `MaterialRequirement` ではなく、persisted entityでもない。
+`BuildCandidate.route` またはProductionPlanの物理Step列から表示時に導出し、`BuildCandidate`、
+`BuildListEntry`、`ProductionPlan`、`PlanStep`、Worker protocol、Export / Import、DB schemaの
+いずれにも追加しない。したがってこの目安の導入は `DATABASE_SCHEMA_VERSION`、
+`ExportRoot.schemaVersion`、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` のいずれも動かさない。
+
 ---
 
 ## 11. ProductionPlan

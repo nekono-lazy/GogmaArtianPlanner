@@ -697,7 +697,7 @@ TargetWeaponごとに候補を検索し、作成リストへ追加する。
 - 推奨作成経路
 - 既存巨戟のスキルのみ再付与経路では、復元ボーナスを維持すること
 - 所持通常アーティア経由では「所持通常アーティアから巨戟化」と変換元の名称
-- 必要素材（アイテム）
+- 必要素材・費用の目安（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 4.3。表示専用）
 - 作成リスト追加状態
 - 作成ルート内の `reset_bonuses` / `keep_bonuses` については、その操作直後の予測復元ボーナス5枠
 - 通常アーティアCounter未確定の強制Resetルート([SEARCH_SPEC.md](./SEARCH_SPEC.md) 6.1.1)では、
@@ -762,13 +762,24 @@ TargetWeaponごとに候補を検索し、作成リストへ追加する。
 - Route実行に必要なWeaponBonusDefinition等のMaster Dataが利用不能な場合は `master_data_unavailable` としてskip理由を表示する。disabled LotteryMasterだけを理由にProduction Routeをskipしない
 - disabled LotteryMasterに由来する警告（「抽選マスターデータ」「通常アーティア経由の検索は
   利用できません」等）を通常UIへ表示しない。LotteryMasterはSearch readinessの判定要素ではない
-- MaterialCostがunavailable（usableなenabled素材コストがない）でも検索開始を止めない。
-  Searchのblocking理由と混同しない独立のwarningとして「素材コストは未検証です。候補検索は
-  利用できますが…」の意味の文面を表示し、候補検索自体が利用できることが分かるようにする
-- MaterialCostがunavailableな場合、Candidateの必要素材（アイテム）は「なし」ではなく
-  「素材コストは未検証のため表示できません。」のようにunknownとして表示する。「なし」は
-  素材コストが利用可能で必要素材が空の場合だけに表示する。この表示契約はSearch画面と
-  作成リストで共通のCandidateカードが担う
+- MaterialCostMasterのenabled有無はSearch readinessにもCandidate表示にも関係しない。
+  「素材コストは未検証です」「素材コストは未検証のため表示できません」のようなMaterialCost由来の
+  warning / 表示を通常UIへ出さない
+- Candidateカードの候補詳細には「必要素材・費用の目安」セクションを表示する
+  （[SEARCH_SPEC.md](./SEARCH_SPEC.md) 4.3、[REQUIREMENTS.md](./REQUIREMENTS.md) 22.1）。
+  Candidateの `requiredMaterials` は表示しない。この表示契約はSearch画面と作成リストで共通の
+  Candidateカードが担う
+  - 区分は RARE8アーティアパーツ（パーツ名と個数）/ 通常復元（ナナイロカネ）/ 巨戟化
+    （油濁した遺装置 ×3 と「※巨戟化に使用する激化タイプ」）/ 巨戟復元（回数、ナナイロカネ、
+    「または 歴戦錬磨の証」）/ スキル再付与（回数、油濁した遺装置 ×6換算、
+    「※巨戟化時と同じ激化タイプなら ×3換算」）/ 必要ゼニー（「約 XXX,XXXz」、3桁区切り）とする
+  - Routeに存在しない区分は表示しない。既存巨戟RouteならRARE8パーツ・通常復元・巨戟化を表示しない
+  - 操作0の既所持Idealでは「追加の素材・ゼニーは不要」と表示する
+  - ナナイロカネと歴戦錬磨の証を「両方必要」と誤認させず、数値と素材名の対応が分かる形にする。
+    長い素材名はwrapでき、数値は素材名から離れない
+  - パーツ構成が未定義の武器種のforgeは、パーツを推測せず本数だけを示す
+  - PCと375px幅のスマートフォンの両方で横スクロールを発生させない。過剰な表形式にせず
+    Candidateカードのデザインに合わせる
 - protected武器を起点とするReset Bonuses / Keep Bonuses / Reset Skills / mixed amendment Routeは検索結果へ表示しない
 - amendmentの起点候補がprotected武器だけの場合は「保護されていない起点武器がない」と各該当Routeのskip理由を表示する
 - protected武器でも現在性能がTarget条件を満たす場合は、操作なしの現在性能候補として表示する。この評価だけを理由にSkill / Gogma Predictionを実行しない
@@ -1046,7 +1057,8 @@ Plannerが生成した作成計画を確認する。
 - RejectedBuildListEntryと理由
 - BuildListEntry基準の競合と解決結果
 - 競合ごとの推奨候補とユーザー選択
-- 必要素材（アイテム）合計
+- 必要素材・費用の目安（計画全体。表示専用）
+- 必要素材（アイテム）合計（記録がある場合だけ）
 - タイムライン形式のPlanStep
 
 操作。
@@ -1130,6 +1142,8 @@ statusやStepを読取時に書き換えずexact persisted内容を表示する�
 Plan概要
 目標武器ごとの作成ルート
 計画全体の実行順
+必要素材・費用の目安（計画全体）
+必要素材（アイテム）合計（記録がある場合だけ）
 既存のConflict / what-if UI
 ```
 
@@ -1175,6 +1189,27 @@ relatedTargetIds = union(
 
 authorityは `ProductionPlan.steps`、表示順は `step.order` の昇順とする。UI独自の並べ替えや
 Candidate順への変換を行わない。shared physical Stepもここでは1回だけ表示する。
+
+#### 必要素材・費用の目安（計画全体）
+
+計画全体を最後まで実行した場合に必要となる素材・ゼニーの目安を、Candidateカードと同じ区分
+（RARE8アーティアパーツ / 通常復元 / 巨戟化 / 巨戟復元 / スキル再付与 / 必要ゼニー）で表示する
+（[REQUIREMENTS.md](./REQUIREMENTS.md) 22.1、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 8.2）。
+
+- authorityは `ProductionPlan.steps` の物理Step列であり、表示時に導出する。Build List Entryや
+  CandidateのCost Estimateを加算しない。shared physical Stepは1回だけ加算する。
+  `confirm_owned_ideal`、legacyの `reserve_weapon` / `confirm_result`、武器切替案内は加算しない
+- 完了済みStepも含めた計画全体の総量である旨を表示する
+- `create_normal_artian` Stepの役割は `executionEffects.normalCreationRole` だけをauthorityとし、
+  作成対象Normal（`production_target`）だけに完全復元を加算する。武器種は同じEntryの登録Stepの
+  `inventoryChange.addOwnedWeapon.weaponTypeId` から解決し、無い場合だけcurrent TargetWeaponの
+  武器種へfallbackする。`executionEffects` を持たないlegacy Planの作成Stepでは役割を推測せず、
+  「旧形式の計画のため、必要素材・費用の目安を算出できません。」と表示する
+- 目安であることを明示し、素材不足の判定やwarningを行わない。Plannerの結果、Step順、Plan validity、
+  実行semanticsを変えず、persistもしない
+- 「必要素材（アイテム）合計」（Master価格付きの `plan.requiredMaterials`）は記録がある場合だけ、
+  保存値のまま別セクションとして表示する。記録が無い場合はセクション自体を表示しない
+- 375px幅で横overflowを発生させない
 
 #### legacy Plan
 
@@ -2078,6 +2113,12 @@ export interface SearchUiState {
 - Normal Artian観測入力にレア度選択を表示せず、内部値を8に固定する
 - RNG項目を一部だけ入力して保存できる
 - Capability不足の機能だけが無効表示になる
+- Candidateカードに必要素材・費用の目安が表示され、Routeにない区分を表示しない、
+  ナナイロカネと歴戦錬磨の証をalternativeとして表示する、スキル再付与の同タイプ補足を表示する、
+  ゼニーを3桁区切りで表示する、操作0では「追加の素材・ゼニーは不要」と表示する、
+  旧「素材コスト未検証」表示がCandidate Searchに残らない
+- 生産計画詳細に計画全体の必要素材・費用の目安が表示され、共有Stepを二重計上せず、
+  legacy Planでは算出できない旨を表示する
 
 ## 19.2 Flow Test
 
@@ -2212,6 +2253,8 @@ export interface SearchUiState {
 - スマートフォン幅で登録、編集、検索、作成リスト操作を完結できる
 - 長いフォームやDialogの主要操作へスマートフォン幅で無理なく到達でき、固定UIがコンテンツや
   フォーカスを隠さない
+- 必要素材・費用の目安がCandidateカードと生産計画詳細の両方で375px幅でも横overflowせず、
+  長い素材名がwrapし数値が素材名から離れない
 
 
 ### 妥協条件version 6の判定理由と監査記録

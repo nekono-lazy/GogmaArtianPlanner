@@ -423,7 +423,7 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
   return (
     <PageShell title="候補検索" description="目標武器ごとに、理想品へ到達する作成ルートを検索して作成リストへ追加します。">
       <Stack spacing={{ xs: 2, md: 3 }}>
-        {masterForDisplay && <MasterDataStatusAlert master={masterForDisplay} feature="search" />}
+        {masterForDisplay && <MasterDataStatusAlert master={masterForDisplay} />}
         {dependencies && (
           <PersistentReidentificationReminderAlert state={reminder.state} master={dependencies.master} surface="search" />
         )}

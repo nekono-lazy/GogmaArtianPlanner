@@ -465,8 +465,10 @@ export interface MaterialMaster {
 
 用途。
 
-- 候補ごとの必要アイテム素材表示
-- Plan全体の必要アイテム素材集計
+- Master価格付き `requiredMaterials` の素材名解決（Plan全体の必要アイテム素材集計の表示）
+
+ユーザー向けの「必要素材・費用の目安」（[REQUIREMENTS.md](./REQUIREMENTS.md) 22.1）は
+このMasterから引かない。13.1を参照。
 
 ---
 
@@ -496,6 +498,27 @@ export interface MaterialCostMaster {
 - 武器種共通コストは `weaponTypeId = null`
 - 武器種別コストがある場合は `weaponTypeId` を指定する
 - 初期版ではアイテム素材不足によるPlan不可判定は行わない
+
+### 13.1 表示専用Cost Estimateとの責務分離
+
+`MaterialMaster` / `MaterialCostMaster` は、操作ごとに素材を加算するlegacyの価格付けモデルであり、
+`BuildCandidate.requiredMaterials` / `ProductionPlan.requiredMaterials` の積算と、Searchの
+アイテム素材量tie-break（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.5.3 / 8）だけに使う。同梱Masterでは
+placeholder 1件が無効のままであり、この状態でも警告やadvisoryは出さない。未検証のplaceholderを
+`isEnabled = true` にして表示を成立させることはしない。
+
+ユーザーへ表示する「必要素材・費用の目安」（[REQUIREMENTS.md](./REQUIREMENTS.md) 22.1、
+[SEARCH_SPEC.md](./SEARCH_SPEC.md) 4.3）は、`src/domain/cost` が持つ出典付きの固定データ
+（14武器種のRARE8パーツ構成、各操作の単価とゼニー）からRoute / Plan Stepを集計して導出する
+表示専用の値である。Master JSON、Master schema、`dataVersion` には含めず、Master validationの
+対象にもしない。理由は、加算モデルのMasterでは「ナナイロカネ または 歴戦錬磨の証」のalternative、
+スキル再付与の異タイプ / 同タイプの2つの個数、作成対象Normalだけに掛かる完全復元を誤解なく
+表現できないためである。
+
+- Cost EstimateのパーツIDや素材名はMaster IDではなく、Presentation層が表示名を持つ
+- Cost EstimateはSearch / Planner / Execution / Persistenceのいずれの入力にもならない
+- 将来Master化する場合は、alternative costを「両方必要」と誤集計しない設計と、既存の
+  `MaterialCostMaster` との責務分離を仕様で決めてから行う
 
 ---
 

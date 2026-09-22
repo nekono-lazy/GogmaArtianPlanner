@@ -12,6 +12,7 @@ import type {
 import {
   createValidBuildCandidate,
   createValidTargetWeapon,
+  ownedWeaponId,
 } from '../../test/fixtures/domainData'
 import { createValidMasterDataFixture } from '../../test/fixtures/masterData'
 import { CandidateCard } from './CandidateCard'
@@ -692,48 +693,74 @@ describe('CandidateCard Build List add state', () => {
   })
 })
 
-describe('CandidateCard required item materials', () => {
-  const unavailableMessage = '素材コストは未検証のため表示できません。'
+describe('CandidateCard cost estimate', () => {
+  const legacyUnavailableMessage = '素材コストは未検証のため表示できません。'
 
-  async function renderMaterials(
-    requiredMaterials: BuildCandidate['requiredMaterials'],
-    materialCostsEnabled: boolean,
-  ) {
-    const candidate = createValidBuildCandidate()
-    candidate.requiredMaterials = requiredMaterials
+  async function renderCostEstimate(candidate: BuildCandidate, materialCostsEnabled = false) {
     const master = createValidMasterDataFixture()
     if (!materialCostsEnabled) {
       master.materialCosts = master.materialCosts.map((cost) => ({ ...cost, isEnabled: false }))
     }
     render(<CandidateCard candidate={candidate} target={target()} master={master} />)
     await userEvent.click(screen.getByText('候補詳細・作成ルート'))
-    const heading = screen.getByRole('heading', { name: '必要素材（アイテム）' })
-    return heading.parentElement as HTMLElement
+    return screen.getByRole('heading', { name: '必要素材・費用の目安' }).parentElement as HTMLElement
   }
 
-  // An empty `requiredMaterials` under an all-disabled cost Master is
-  // "unknown", not "zero" (`docs/UI_FLOW.md` 9).
-  it('shows the unverified cost note instead of なし when no material cost is usable', async () => {
-    const section = await renderMaterials([], false)
-    expect(within(section).getByText(unavailableMessage)).toBeInTheDocument()
-    expect(within(section).queryByText('なし')).not.toBeInTheDocument()
-    expect(screen.queryByRole('list', { name: '必要素材（アイテム）' })).not.toBeInTheDocument()
+  function lines(section: HTMLElement, group: string): (string | null)[] {
+    return within(within(section).getByRole('list', { name: group })).getAllByRole('listitem')
+      .map((item) => item.textContent)
+  }
+
+  // The figure comes from the saved Route alone (`docs/SEARCH_SPEC.md` 4.3):
+  // the bundled all-disabled cost Master, once shown as "unverified", no longer
+  // hides anything (`docs/UI_FLOW.md` 9).
+  it('derives the estimate from the Route with the Master cost placeholders disabled', async () => {
+    const candidate = createValidBuildCandidate()
+    candidate.route.operations = [
+      { type: 'create_normal_artian', weaponTypeId: 'weapon.great_sword', rarity: 8, count: 1, normalCounterBefore: 4, normalCounterAfter: 5 },
+      { type: 'convert_normal_to_gogma', weaponTypeId: 'weapon.great_sword', skillCounterBefore: 7, skillCounterAfter: 8 },
+      { type: 'reset_skills', sourceOwnedWeaponId: null, skillCounterBefore: 8, skillCounterAfter: 9 },
+    ]
+    candidate.requiredMaterials = []
+    const section = await renderCostEstimate(candidate)
+    expect(lines(section, 'RARE8アーティアパーツ')).toEqual(['砕かれた古刃 ×2', '潰された古筒 ×1'])
+    expect(lines(section, '通常復元')).toEqual(['ナナイロカネ ×50'])
+    expect(lines(section, '巨戟化')).toEqual(['油濁した遺装置 ×3', '※巨戟化に使用する激化タイプ'])
+    expect(lines(section, 'スキル再付与')).toEqual(['1回', '油濁した遺装置 ×6', '※巨戟化時と同じ激化タイプなら ×3'])
+    expect(lines(section, '必要ゼニー')).toEqual(['約 59,000z'])
+    expect(within(section).queryByRole('list', { name: '巨戟復元' })).not.toBeInTheDocument()
+    expect(screen.queryByText(legacyUnavailableMessage)).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '必要素材（アイテム）' })).not.toBeInTheDocument()
   })
 
-  it('shows なし only for a priced Route that needs nothing', async () => {
-    const section = await renderMaterials([], true)
-    expect(within(section).getByText('なし')).toBeInTheDocument()
-    expect(within(section).queryByText(unavailableMessage)).not.toBeInTheDocument()
+  it('omits the groups the Route has no operation for and never shows the persisted requiredMaterials', async () => {
+    const candidate = createValidBuildCandidate()
+    candidate.route = {
+      kind: 'existing_gogma_mixed',
+      sourceOwnedWeaponId: ownedWeaponId('owned.fixture.source'),
+      operations: [
+        { type: 'reset_bonuses', sourceOwnedWeaponId: ownedWeaponId('owned.fixture.source'), gogmaCounterBefore: 10, gogmaCounterAfter: 11 },
+        { type: 'keep_bonuses', sourceOwnedWeaponId: ownedWeaponId('owned.fixture.source'), gogmaCounterBefore: 11, gogmaCounterAfter: 12 },
+      ],
+    }
+    candidate.requiredMaterials = [{ materialId: 'material.fixture.active', quantity: 99 }]
+    const section = await renderCostEstimate(candidate, true)
+    expect(lines(section, '巨戟復元')).toEqual(['2回', 'ナナイロカネ ×40', 'または 歴戦錬磨の証 ×4'])
+    expect(lines(section, '必要ゼニー')).toEqual(['約 10,000z'])
+    expect(within(section).queryByRole('list', { name: 'RARE8アーティアパーツ' })).not.toBeInTheDocument()
+    expect(within(section).queryByRole('list', { name: '通常復元' })).not.toBeInTheDocument()
+    expect(within(section).queryByRole('list', { name: '巨戟化' })).not.toBeInTheDocument()
+    expect(within(section).queryByRole('list', { name: 'スキル再付与' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/素材fixture/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/× 99/)).not.toBeInTheDocument()
   })
 
-  it('lists the priced materials with their quantities', async () => {
-    const section = await renderMaterials(
-      [{ materialId: 'material.fixture.active', quantity: 3 }],
-      true,
-    )
-    const list = within(section).getByRole('list', { name: '必要素材（アイテム）' })
-    expect(within(list).getByText('素材fixture × 3')).toBeInTheDocument()
-    expect(within(section).queryByText('なし')).not.toBeInTheDocument()
-    expect(within(section).queryByText(unavailableMessage)).not.toBeInTheDocument()
+  it('says a zero-operation owned Ideal needs no more items or zenny', async () => {
+    const candidate = createValidBuildCandidate()
+    candidate.route = { kind: 'existing_gogma_current', sourceOwnedWeaponId: ownedWeaponId('owned.fixture.source'), operations: [] }
+    candidate.estimatedOperationCount = 0
+    const section = await renderCostEstimate(candidate)
+    expect(within(section).getByText('追加の素材・ゼニーは不要')).toBeInTheDocument()
+    expect(within(section).queryByRole('group', { name: '必要素材・費用の目安' })).not.toBeInTheDocument()
   })
 })

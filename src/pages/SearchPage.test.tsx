@@ -521,7 +521,7 @@ describe('SearchPage Master Data readiness', () => {
     return master
   }
 
-  it('keeps Search available with a disabled Lottery Master and shows only the material cost advisory', async () => {
+  it('keeps Search available with the disabled Lottery and material cost placeholders and shows the cost estimate instead of an advisory', async () => {
     const user = userEvent.setup()
     const client = new ControlledClient()
     const target = createValidTargetWeapon()
@@ -529,33 +529,33 @@ describe('SearchPage Master Data readiness', () => {
     render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
 
     const button = await screen.findByRole('button', { name: '検索開始' })
-    // The provisional Lottery Master is never a Search readiness input
-    // (`docs/MASTER_DATA_STATUS.md`), so no normal-UI sentence mentions it.
+    // Neither the provisional Lottery Master nor the disabled cost Master is a
+    // Search readiness input (`docs/MASTER_DATA_STATUS.md`), so no normal-UI
+    // sentence mentions either.
     expect(screen.queryByText(/抽選マスターデータ/)).not.toBeInTheDocument()
     expect(screen.queryByText(/通常アーティア経由の検索は利用できません/)).not.toBeInTheDocument()
     expect(screen.queryByText(/検索は利用できません/)).not.toBeInTheDocument()
-    // The unverified material cost is an advisory that says Search still works.
-    const advisory = screen.getByText(/素材コストは未検証です。/)
-    expect(advisory).toHaveTextContent('候補検索は利用できますが')
+    expect(screen.queryByText(/素材コストは未検証/)).not.toBeInTheDocument()
     expect(button).toBeEnabled()
 
     await user.click(button)
     expect(client.input?.targetWeaponId).toBe(target.id)
     expect(client.input?.master).not.toHaveProperty('lotteries')
 
+    // An empty Master-priced `requiredMaterials` hides nothing: the card shows
+    // the estimate derived from the Route (`docs/UI_FLOW.md` 9).
     const candidate = { ...createValidBuildCandidate(), requiredMaterials: [] }
     client.resolve(resultFor(target, candidate))
     expect(await screen.findByText('理想候補')).toBeInTheDocument()
     await user.click(screen.getByText('候補詳細・作成ルート'))
-    const materials = screen.getByRole('heading', { name: '必要素材（アイテム）' })
+    const estimate = screen.getByRole('heading', { name: '必要素材・費用の目安' })
       .parentElement as HTMLElement
-    expect(
-      within(materials).getByText('素材コストは未検証のため表示できません。'),
-    ).toBeInTheDocument()
-    expect(within(materials).queryByText('なし')).not.toBeInTheDocument()
+    expect(within(estimate).getByRole('list', { name: '必要ゼニー' })).toHaveTextContent('約 59,000z')
+    expect(screen.queryByText('素材コストは未検証のため表示できません。')).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '必要素材（アイテム）' })).not.toBeInTheDocument()
   })
 
-  it('shows no Master advisory at all when a material cost is usable', async () => {
+  it('shows no Master advisory with the default fixture Master either', async () => {
     render(<SearchPage dependencies={dependencies(new ControlledClient())} />, { wrapper: MemoryRouter })
     await screen.findByRole('button', { name: '検索開始' })
     expect(screen.queryByText(/素材コストは未検証/)).not.toBeInTheDocument()

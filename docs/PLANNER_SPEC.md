@@ -1398,6 +1398,26 @@ operation可否、Target Satisfaction、semantic hashを決めない。Material�
 - 初期版ではアイテム素材の所持数不足をPlan不可理由にしない
 - 必要数を表示するだけで、所持数管理や不足判定を行わない
 - protected武器へのReset Bonuses・Keep Bonuses・Reset Skillsが必要な探索展開は生成せず、該当BuildListEntryを不採用として理由を残す
+
+生産計画詳細画面の「必要素材・費用の目安」（[REQUIREMENTS.md](./REQUIREMENTS.md) 22.1、
+[UI_FLOW.md](./UI_FLOW.md) 11.0）は、`ProductionPlan.steps` の物理Step列から表示時に導出する
+表示専用の値であり、Plannerの計算にもPlanのpersisted shapeにも入らない。
+
+- 単価・換算規則はCandidate Search（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 4.3）と完全に共通で、
+  1操作のCost定義を共有し、Candidate RouteとProductionPlan Stepsのそれぞれから操作を集計する
+  adapterだけを分ける
+- 集計authorityはPlannerが生成した物理Step列であり、Build List EntryやCandidateの目安を単純加算
+  しない。複数Targetに帰属するshared physical Stepは、Plan上で1回だけ実行する操作なので1回だけ
+  加算する
+- `create_normal_artian` Stepは `executionEffects.normalCreationRole` により区別し、
+  `production_target` の作成対象Normalだけに完全復元を加算する。`executionEffects` を持たない
+  legacy Planでは役割を推測せず「算出できない」とする
+- `confirm_owned_ideal`、legacyの `reserve_weapon` / `confirm_result`、presentation-onlyの
+  武器切替案内はゲーム内消費を伴わないため加算しない
+- 既所持武器について既に支払済みのsunk costは再加算しない。所持通常の巨戟化Routeは変換から、
+  既存巨戟のRouteはamendmentから計上する
+- Planner optimization、Plan生成結果、Step ordering、Target ordering、conflict resolution、
+  Plan validity、素材不足判定、Execution semanticsのいずれにも影響させない
 - Search後に起点武器がprotectedへ変わった場合、Bonus / Skill amendmentを必要とするEntryはPlanner入力validationで実行不能とする
 - PlannerはCandidate Route内の具体的な起点OwnedWeapon IDを別武器へ差し替えず、reserveはBuildRouteを書き換えない。reserveは探索内部actionであり、current ProductionPlanでは独立Stepではなく最後の物理Stepのtarget completion effectになる（16.3）
 
@@ -3701,7 +3721,9 @@ rejectionだけをEntry IDごとに1件作る。理由は証明できる順に
 materialIdごとに合算し、materialId辞書順で返す。master materialCostsからの再推測はしない。
 shared physical actionとCandidate別requiredMaterialsの二重計上は既知の未解決境界である。Candidate単位の
 total requiredMaterialsをphysical action単位へ安全に分解する契約がないため、第9C-Bではmasterからの
-再計算、Entry数での除算、補正式の追加を行わない。
+再計算、Entry数での除算、補正式の追加を行わない。ユーザー向けの「必要素材・費用の目安」はこの
+`requiredMaterials` ではなく、8.2のとおり物理Step列から表示時に導出するため、shared physical actionを
+二重計上しない。
 
 上限到達時でもtraceが1件以上あるbest partial Stateは、その到達点までのDraft Planとして返して
 既存warningを維持する。Execution、Invalidation、Undo、Worker契約追加、Dexie保存は

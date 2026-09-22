@@ -84,14 +84,17 @@ structureとしてrootに残るが、Production RNGのeligibility、input suppor
 readinessの判定要素でもなく、それだけを理由にProduction Routeをskipしたり検索を
 利用不可にしたりしない。
 
-`materialCosts` はRouteのアイテム素材（`requiredMaterials`）を積算するためだけに使う。
-Search可否の判定要素ではない。usableなenabled `MaterialCostMaster` entryがない場合でも
+`materialCosts` はRouteのMaster価格付きアイテム素材（`requiredMaterials`）を積算するためだけに
+使う。Search可否の判定要素ではない。usableなenabled `MaterialCostMaster` entryがない場合でも
 Searchは実行でき、Route eligibilityは変わらない。その場合 `requiredMaterials` は空配列に
-なるが、これは「素材が0」ではなく「素材コスト情報を利用できない（unknown）」を意味する。
-UIは空配列を「なし」と表示せず、未検証のため表示できない旨を示す。5.5.3 / 8章の
-アイテム素材量によるtie-breakは、未検証（disabled）コストを一切読まないため、現在の
-all-disabled状態では候補間に有意な差を生じず、後続のdeterministic keyへ進む。未検証の
-素材コストを根拠に「素材が少ない候補」と主張しない。
+なるが、これは「素材が0」ではなく「Master価格付きコスト情報を利用できない（unknown）」を
+意味する。5.5.3 / 8章のアイテム素材量によるtie-breakは、未検証（disabled）コストを一切
+読まないため、現在のall-disabled状態では候補間に有意な差を生じず、後続のdeterministic keyへ
+進む。未検証の素材コストを根拠に「素材が少ない候補」と主張しない。
+
+ユーザーへ表示する必要素材・費用は `requiredMaterials` ではなく、4.3の表示専用Cost Estimate
+である。Cost EstimateはRouteから表示時に導出し、`requiredMaterials`、Search ordering、
+Candidate identityのいずれにも入らない。
 
 `BuildCandidate.finalBonusScope` と `finalBonuses` はRoute完了時の巨戟アーティアが実際に保持するscopeと5枠である。巨戟化だけなら `normal_artian` scopeの通常5枠をslot順のまま継承し、Reset / Keepを実行した後はRNG Engineが返した `gogma_artian` scopeの5枠を使う。SearchはBonus Type Mappingから巨戟Rankや完成5枠を推測しない。MappingはKeep family解決（5.9）にだけ使う。
 
@@ -289,6 +292,52 @@ errorにはせず、UIは理由を表示する。
 `relaxationSuggestions` も返さない。Idealが見つからなかった場合は
 「現在の探索範囲ではIdealが見つからなかった」であり、
 「このTargetにIdealが存在しない」ではない。
+
+### 4.3 必要素材・費用の目安（表示専用Cost Estimate）
+
+各Candidateには、ゲーム内在庫と見比べるための「必要素材・費用の目安」を表示する
+（[REQUIREMENTS.md](./REQUIREMENTS.md) 22.1）。これはCandidateのpersisted fieldではなく、
+`BuildCandidate.route`（`RouteOperation[]` と `create_normal_artian.count`、`weaponTypeId`）から
+表示時にpure function（`src/domain/cost`）で導出する表示専用の値である。
+
+authority。
+
+- 単価・換算規則は次のとおりで、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 8.2の生産計画全体の目安と完全に共通である
+
+```text
+create_normal_artian     forge 1本ごと: 武器種別RARE8アーティアパーツ ×3 / 10,000z
+                         count = N なら N本分。最後の1本（作成対象Normal）だけ完全復元
+                         ナナイロカネ ×50 / 10,000z を加算する。Counter進行用のNormalには加算しない
+                         blind variant（6.1.1）も1本のforgeとして同じ単価で計上する
+convert_normal_to_gogma  同一激化タイプの油濁した遺装置 ×3 / 30,000z
+reset_bonuses            ナナイロカネ ×20 または 歴戦錬磨の証 ×2 / 5,000z
+keep_bonuses             同上（表示上は「巨戟復元 N回」としてまとめてよい）
+reset_skills             油濁した遺装置 ×6（巨戟化時と異なる激化タイプ換算）、同じタイプなら ×3 / 9,000z
+操作なし                 0（既所持Idealの `existing_gogma_current` は「追加の素材・ゼニーは不要」）
+```
+
+- RARE8アーティアパーツの武器種別構成は14武器種の固定表であり、1 forgeにつき必ず3パーツになる。
+  構成が定義されていない武器種のforgeは推測せず「パーツ構成が未定義」として本数だけ示す
+- ナナイロカネと歴戦錬磨の証はalternativeであり合算しない。歴戦錬磨の証はReset / Keepにだけ
+  表示し、錬金による間接換算は扱わない
+- `owned_normal_artian_to_gogma` と `existing_gogma_*` では、所持武器について過去に支払った
+  作成・完全復元コスト（sunk cost）を再計上しない。Routeの最初の操作から計上する
+- 必要ゼニーは上記の合計の概算である
+
+制約。
+
+- Cost EstimateはCandidate Search availability、Route eligibility、canonical Ideal選択
+  （5.6.3）、Candidate ordering（8章）、重複排除（7章）、`candidateStableKey`、
+  `candidateDeduplicationKey`、Candidate ID / semantic hash、stream解集合の順序（5.5.2 / 5.5.3）、
+  constrained enumeration（5.6.7）、Search Workerの結果のいずれにも入らない。
+  「素材が安いRoute」を新たに選ぶ根拠にしない
+- persistしない。`BuildCandidate`、`BuildListEntry`、Worker protocol、Export / Importへ追加しない
+- 所持素材数・所持ゼニーを管理せず、素材不足の判定を行わない
+- `MaterialMaster` / `MaterialCostMaster` はこの目安のauthorityではない
+  （[MASTER_DATA.md](./MASTER_DATA.md) 13.1）。加算モデルのMasterでは、alternative cost、
+  スキル再付与の2つの個数、作成対象Normalだけに掛かる完全復元を誤解なく表現できないためである
+- 数値の出典（プロジェクトオーナー実機観測 / このタスクで採用した参照情報）はREQUIREMENTS 22.1が
+  正本であり、Production RNGの `game-verified` / `reference-verified` と混同しない
 
 ---
 
@@ -1565,7 +1614,7 @@ reset_bonuses                 <- 必須。最初のBonus amendmentは必ずReset
 - `BuildRoute.sourceOwnedWeaponId = null`、変換後のReset / Keep / Reset Skillsも `sourceOwnedWeaponId = null` とする。`referencedOwnedWeaponsHash = null` である
 - `searchStateHash` はBase Seed、Skill Counter、Gogma Counterに依存し、NormalArtianCounterに依存しない。後からNormal Counterを確定しても、またその値が変わっても、このCandidateの予測結果semanticsは変わらないためstaleにならない。これはPlan実行後に現在Counterを更新しなくてよいという意味ではない(`docs/PLANNER_SPEC.md` 7.0.3)
 - `estimatedNormalAdvance = null` も同じ理由による。Candidate SearchがNormal Counter進行量をabsolute route dependencyとして表現しないことを示すだけで、実行時の物理的なCounter進行とは別概念である
-- アイテム素材コストは通常どおり計上する。通常アーティア作成1本分、変換1回分、Reset等の分をそれぞれ含める
+- アイテム素材コストは通常どおり計上する。通常アーティア作成1本分、変換1回分、Reset等の分をそれぞれ含める。4.3の表示専用Cost Estimateでも、blind variantは1本のforge（パーツ ×3 / 10,000z）と作成対象Normalの完全復元1回として、predicted variantの `count = 1` と同じ単価で計上する
 - Candidateの保持、順序、Ideal判定、checkpoint抽出は既存規則をそのまま適用し、blind variantを優遇も冷遇もしない
 
 報告。
@@ -2303,6 +2352,15 @@ Skill stream側はB1で実装済み、Bonus stream側はB2で実装済みであ�
 - Route参照OwnedWeaponのボーナス、スキル、status、isProtected変更でBuildListEntryが `owned_weapon_changed` になる
 - Routeに無関係なOwnedWeapon変更と、参照武器のname、memo、日時変更ではBuildListEntryがstaleにならない
 - OwnedWeaponを参照しないRouteではreferencedOwnedWeaponsHashが `null` のままになる
+- 表示専用Cost Estimate（4.3）: 既所持Ideal（操作0）が0素材 / 0z、既所持巨戟がReset / Keep / Reset
+  Skillsだけを積算、所持通常が巨戟化以降だけを積算して作成・完全復元を再加算しない、新規Normal
+  `count = 1` がパーツ3個 / 生産10,000z / 完全復元1回 / 巨戟化1回、`count > 1` がパーツと生産費だけ
+  count倍で完全復元は1回、Reset + Keep複数回がナナイロカネ20×回数 または 歴戦錬磨の証2×回数の
+  alternative、Skill複数回が異タイプ6×回数 / 同タイプ3×回数 / 9,000z×回数、14武器種のパーツ構成が
+  正しく1 forgeにつき3パーツ
+- Cost Estimateの導入前後で、同一のRNG / Target / Owned Weapon入力に対するcanonical CandidateのRoute、
+  `candidateStableKey`、推定量、searched / skipped Routeが変わらない。Search / Planner / Worker層が
+  Cost Estimate moduleをimportしない
 
 ## 13.4 途中採用状態選択Test
 
