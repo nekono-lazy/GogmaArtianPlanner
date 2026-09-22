@@ -176,6 +176,7 @@ function dependencies(options: {
       if (options.running instanceof Error) throw options.running
       return options.running === 'none' ? undefined : plan
     }),
+    getDraftProductionPlan: vi.fn(async () => undefined),
     replan,
   }
   return { deps, plan, request, client, replan }

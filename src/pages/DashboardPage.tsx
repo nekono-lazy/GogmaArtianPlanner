@@ -477,6 +477,7 @@ function DashboardContent({ summary }: { summary: DashboardSummary }) {
               計画・実行
             </Typography>
             <ActionLink label="候補検索を開始する" to="/search" />
+            <ActionLink label="生産計画一覧を見る" to="/plans" />
             {activePlan ? (
               <ActionLink label="作成プランを見る" to={`/plans/${activePlan.id}`} />
             ) : (

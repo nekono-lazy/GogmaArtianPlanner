@@ -1474,6 +1474,14 @@ statusの意味（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.2）。
   TargetWeaponをcascade deleteしない（「このEntryは特定Draftだけが所有する」というauthorityが
   persisted shapeに無いため）。`active` / `stale` / `completed` / `abandoned` のPlanは新Draft保存で
   削除しない
+- ユーザーによる現在Draftの削除（[UI_FLOW.md](./UI_FLOW.md) 11.5）は
+  `ProductionPlanRepository.deleteDraftProductionPlan(id)` のguarded deleteだけが行う。同一Dexie
+  transaction内でexact persisted Planを読み直し、Planが無ければ `not_found`、storedの `status` が
+  `draft` 以外なら `draft_plan_delete_not_allowed` で拒否して何も書かない（表示後にDraftが開始されていた
+  race対策）。Draftが2件以上あるinvariant violationは `draft_plan_conflict` でfail closedする。削除する
+  のはそのProductionPlan recordだけであり、BuildListEntry / BuildCandidate / TargetWeapon / OwnedWeapon /
+  ExecutionHistory / ExecutionSavePointへcascadeしない。汎用の `deleteProductionPlan(id)` はUIから
+  直接呼ばない。Persisted shapeもschema versionも変えない
 - `abandonmentReason` / `abandonedAt` は `status = "abandoned"` のときだけ非null。`completedAt` は
   `status = "completed"` のときだけ非null
 - `stale` はPlanが壊れたことの検出、`abandoned` はユーザーの意図した終了であり、互いに読み替えない。

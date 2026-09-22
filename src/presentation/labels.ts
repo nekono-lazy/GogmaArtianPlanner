@@ -1,5 +1,6 @@
 import type {
   BuildListEntryStaleReason,
+  RecalculationReason,
   CompromiseConditionMatch,
   ConflictKind,
   ImprovementPreference,
@@ -115,12 +116,37 @@ export const routeKindLabels: Record<RouteKind, string> = {
   existing_gogma_mixed: '所持巨戟の複合ルート',
 }
 
+/**
+ * `abandoned` reads as 終了, not 破棄済み: it covers the user's own abandonment
+ * as well as replan adoption, finishing as a compromise and an approved
+ * breaking change (`docs/PLANNER_SPEC.md` 16.2), so the reason label beside it
+ * says which.
+ */
 export const productionPlanStatusLabels: Record<ProductionPlanStatus, string> = {
   draft: '下書き',
   active: '実行中',
   completed: '完了',
   stale: '再計算が必要',
-  abandoned: '破棄済み',
+  abandoned: '終了',
+}
+
+/**
+ * Why a `stale` Plan needs recalculation (`docs/DATA_MODEL.md` 11.1,
+ * `docs/PLANNER_SPEC.md` 16.6). Every `RecalculationReason` is named here, the
+ * legacy ones included, so a persisted reason is never shown as a raw enum.
+ */
+export const productionPlanRecalculationReasonLabels: Record<RecalculationReason, string> = {
+  rng_state_changed: 'RNG状態が変更されています',
+  normal_counter_changed: '通常アーティアカウンターが変更されています',
+  target_changed: '目標武器が変更されています',
+  build_list_changed: 'ビルドリストが変更されています',
+  owned_weapon_changed: '所持武器が変更されています',
+  calculation_context_changed: 'ゲーム・マスターデータ・予測エンジンのバージョンに互換性がありません',
+  unexpected_result: '想定外の結果が記録されています',
+  execution_operation_uncertain: '操作内容が不明と記録されています',
+  planned_candidate_not_secured: '計画した候補を確保できませんでした',
+  different_candidate_secured: '別の候補を確保しました',
+  manual_recalculate: '手動で再計算が要求されています',
 }
 
 /** Why an `abandoned` Plan ended (`docs/PLANNER_SPEC.md` 16.2). */

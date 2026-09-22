@@ -92,6 +92,7 @@ function realDependencies(database: AppDatabase, fixture: ExecutionFixture): Bui
     inspectIntermediateStateSelectionUpdate: (id, selection) =>
       buildList.inspectIntermediateStateSelectionUpdate(id, selection),
     getRunningProductionPlan: () => plans.getRunningProductionPlan(),
+    getDraftProductionPlan: () => plans.getDraftProductionPlan(),
     replan: unusedReplan(),
   }
 }

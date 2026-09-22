@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
@@ -29,6 +29,7 @@ describe('App', () => {
     ['#/target-weapons', '目標武器'],
     ['#/search', '候補検索'],
     ['#/build-list', 'ビルドリスト'],
+    ['#/plans', '生産計画'],
     ['#/plans/plan-1', '生産計画'],
     ['#/plans/plan-1/run', '実行ナビゲーション'],
     ['#/settings', '設定'],
@@ -61,12 +62,21 @@ describe('App', () => {
     window.location.hash = '#/settings'
     render(<App />)
     const debugSwitch = screen.getByRole('switch', { name: 'デバッグモード' })
+    // The store is hydrated from persistence after mount; a click before that
+    // would be overwritten by the hydration, so wait for it first.
+    await waitFor(() => expect(useSettingsStore.getState().isHydrated).toBe(true))
 
     expect(debugSwitch).not.toBeChecked()
     await user.click(debugSwitch)
     expect(debugSwitch).toBeChecked()
     await user.click(debugSwitch)
     expect(debugSwitch).not.toBeChecked()
+    // Both persistence saves settle inside the test: the data management
+    // controls are disabled while a settings save is pending, so waiting for
+    // them keeps the save's state update from landing after teardown.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'データをエクスポート' })).toBeEnabled(),
+    )
   })
 
   it('shows the active Production RNG provenance in Settings as a key / value list', () => {
@@ -116,6 +126,7 @@ describe('App', () => {
     window.location.hash = '#/settings'
     render(<App />)
     const debugSwitch = screen.getByRole('switch', { name: 'デバッグモード' })
+    await waitFor(() => expect(useSettingsStore.getState().isHydrated).toBe(true))
 
     await user.click(debugSwitch)
     const warning = await screen.findByText(/設定を保存できませんでした/)
@@ -131,6 +142,9 @@ describe('App', () => {
     await user.click(debugSwitch)
     expect(debugSwitch).not.toBeChecked()
     expect(await screen.findByText(/設定を保存できませんでした/)).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'データをエクスポート' })).toBeEnabled(),
+    )
   })
 
   it('heads the Debug Mode switch with its own settings section', () => {

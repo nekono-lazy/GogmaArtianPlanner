@@ -691,7 +691,39 @@ root keeps its one Draft. This moved `DATABASE_SCHEMA_VERSION` to **8** and
 `RngState.schemaVersion` 2, `AppSettings.schemaVersion` 1, `PRODUCTION_RNG_ENGINE_VERSION`
 and Master `dataVersion` unchanged, because no Planner, RNG or build-result calculation
 semantics changed. The `/plans` list UI, Draft deletion UI and the Build List / Dashboard
-notices about the current Draft are the next PR's work and were not implemented.
+notices about the current Draft were left to the eighteenth PR.
+The eighteenth PR (the Production Plan list UI and the current-Draft entry points)
+added the `/plans` route (`src/pages/ProductionPlansPage.tsx`) and the 「生産計画」 entry of
+the 計画 navigation group (`docs/UI_FLOW.md` 2.1 / 11.5, `docs/REQUIREMENTS.md` 24). The
+list is a read-only projection of `ProductionPlanRepository.getAllProductionPlans()`
+(`src/components/planner/productionPlanListPresentation.ts`: `updatedAt` desc,
+`createdAt` desc, ID tie-break; status label / tone; the `stale` recalculation reasons
+through the new `productionPlanRecalculationReasonLabels`, which names every
+`RecalculationReason`; the `abandoned` reason through
+`productionPlanAbandonmentReasonLabels`; completed / total Step counts from
+`steps[].isCompleted`; the Target count from `createProductionPlanSummary()`), and it
+never reconstructs a Plan from a Candidate or an Entry, re-runs the Planner or predicts
+RNG. Every status sits in one list; `productionPlanStatusLabels.abandoned` became 終了
+(never 破棄済み) because replan adoption and a compromise finish are not a user abandonment.
+「詳細を見る」 leads to `/plans/:planId` for every status, 「実行ナビを再開」 only for `active`,
+and 「下書きを削除」 only for `draft`, behind a confirmation dialog, through the new guarded
+`ProductionPlanRepository.deleteDraftProductionPlan(id)` (`docs/DATA_MODEL.md` 11.1): one
+transaction re-reads the exact persisted Plan, refuses a missing Plan with `not_found`, a
+stored status other than `draft` with the new `RepositoryError` code
+`draft_plan_delete_not_allowed`, two or more Drafts with `draft_plan_conflict`, and deletes
+only that ProductionPlan record, never cascading to any Entry, Candidate, Target, weapon,
+ExecutionHistory or save point; the UI never calls the generic `deleteProductionPlan()`.
+The Build List gained `getDraftProductionPlan()` as a display-only dependency
+(`docs/UI_FLOW.md` 10.3): a current Draft is announced with 「下書きを開く」 /
+「生産計画一覧を見る」 (beside a running Plan too, as 「未開始の下書きも保存されています。」 with
+no second Draft creation), the ordinary 「生産計画の作成」 says the next save replaces it
+(an explanation of the existing atomic replacement, no new persistence semantics), and a
+failed Draft read is reported and withholds the ordinary creation exactly as a failed
+running-Plan read does, never read as "no Draft". The Dashboard's 主要アクション and the
+Production Plan page's header link to `/plans`; the Execution Navigator is unchanged. It
+added no persisted field, no Domain status and no calculation semantics, so the versions
+stay 13 / 8 / 11 (`RngState.schemaVersion` 2, `AppSettings.schemaVersion` 1,
+`PRODUCTION_RNG_ENGINE_VERSION` and Master `dataVersion` unchanged).
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation

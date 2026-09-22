@@ -218,6 +218,50 @@ export class ProductionPlanRepository {
     return this.database.productionPlans.delete(id)
   }
 
+  /**
+   * Deletes the one not-yet-started Draft the user chose in the Production
+   * Plan list (`docs/UI_FLOW.md` 11.5, `docs/DATA_MODEL.md` 11.1).
+   *
+   * The exact persisted Plan is re-read inside the transaction, so a Plan that
+   * was a Draft when the list was drawn and has since been started is never
+   * deleted: a missing Plan is `not_found`, a stored status other than `draft`
+   * is refused with `draft_plan_delete_not_allowed`, and a collection holding
+   * two or more Drafts (the invariant 11.1 rules out) fails closed with
+   * `draft_plan_conflict` before anything is read by ID. Only the ProductionPlan
+   * record is deleted: a Draft owns no BuildListEntry, BuildCandidate,
+   * TargetWeapon, OwnedWeapon, ExecutionHistory or ExecutionSavePoint, so
+   * nothing cascades. A refusal writes nothing.
+   */
+  deleteDraftProductionPlan(id: ProductionPlanId): Promise<void> {
+    return runInRepositoryTransaction(
+      this.database,
+      [this.database.productionPlans],
+      async () => {
+        const drafts = await this.readDraftPlans()
+        if (drafts.length > 1) {
+          throw new RepositoryError(
+            'draft_plan_conflict',
+            'Persistence contains more than one draft ProductionPlan.',
+          )
+        }
+        const stored = await this.database.productionPlans.get(id)
+        if (!stored) {
+          throw new RepositoryError(
+            'not_found',
+            `ProductionPlan '${id}' was not found.`,
+          )
+        }
+        if (stored.status !== DRAFT_PLAN_STATUS) {
+          throw new RepositoryError(
+            'draft_plan_delete_not_allowed',
+            `ProductionPlan '${id}' is ${stored.status}, not a draft, and is never deleted by the Draft delete.`,
+          )
+        }
+        await this.database.productionPlans.delete(id)
+      },
+    )
+  }
+
   activateProductionPlan(
     planId: ProductionPlanId,
     previousActivePlanReplacement?: ProductionPlan,

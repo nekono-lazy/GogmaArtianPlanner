@@ -589,3 +589,93 @@ describe('ProductionPlanRepository Draft invariant (DATA_MODEL 11.1)', () => {
       expect(await repository.deleteDraftProductionPlans()).toEqual([])
     }))
 })
+
+describe('ProductionPlanRepository.deleteDraftProductionPlan (guarded Draft delete)', () => {
+  it('deletes the stored Draft and nothing else', () =>
+    withDatabase(async (database) => {
+      const repository = new ProductionPlanRepository(database)
+      const draft = planWithIdentity('plan.delete.draft', 'step.delete.draft')
+      const entry = createValidBuildListEntry()
+      entry.id = draft.selectedBuildListEntryIds[0]
+      const history = createValidExecutionHistory()
+      await database.buildListEntries.put(entry)
+      await database.buildCandidates.put(createValidBuildCandidate())
+      await database.targetWeapons.put(createValidTargetWeapon())
+      await database.ownedWeapons.put(createValidOwnedWeapon())
+      await database.executionHistory.put(history)
+      await repository.addProductionPlan(draft)
+
+      await repository.deleteDraftProductionPlan(draft.id)
+
+      expect(await database.productionPlans.get(draft.id)).toBeUndefined()
+      expect(await repository.getDraftProductionPlan()).toBeUndefined()
+      // A Draft owns no other entity: nothing cascades.
+      expect(await database.buildListEntries.get(entry.id)).toEqual(entry)
+      expect(await database.buildCandidates.count()).toBe(1)
+      expect(await database.targetWeapons.count()).toBe(1)
+      expect(await database.ownedWeapons.count()).toBe(1)
+      expect(await database.executionHistory.get(history.id)).toEqual(history)
+    }))
+
+  it('reports a missing Plan as not_found', () =>
+    withDatabase(async (database) => {
+      const repository = new ProductionPlanRepository(database)
+      await expect(repository.deleteDraftProductionPlan(productionPlanId('plan.delete.missing')))
+        .rejects.toMatchObject({ code: 'not_found' })
+    }))
+
+  it.each([
+    ['active', (plan: ProductionPlan) => ({ ...plan, status: 'active' as const })],
+    ['stale', (plan: ProductionPlan) => ({ ...plan, status: 'stale' as const, recalculationReasons: ['unexpected_result' as const] })],
+    ['completed', (plan: ProductionPlan) => ({
+      ...plan,
+      status: 'completed' as const,
+      completedAt: DOMAIN_FIXTURE_TIME,
+      currentStepId: null,
+      steps: plan.steps.map((step) => ({ ...step, isCompleted: true, completedAt: DOMAIN_FIXTURE_TIME })),
+    })],
+    ['abandoned', (plan: ProductionPlan) => ({
+      ...plan,
+      status: 'abandoned' as const,
+      abandonmentReason: 'user_abandoned' as const,
+      abandonedAt: DOMAIN_FIXTURE_TIME,
+    })],
+  ])('refuses to delete a %s Plan and leaves its body unchanged', async (_, transform) => {
+    await withDatabase(async (database) => {
+      const repository = new ProductionPlanRepository(database)
+      const plan = transform(planWithIdentity('plan.delete.kept', 'step.delete.kept'))
+      await repository.putProductionPlan(plan)
+
+      await expect(repository.deleteDraftProductionPlan(plan.id))
+        .rejects.toMatchObject({ code: 'draft_plan_delete_not_allowed' })
+      expect(await database.productionPlans.get(plan.id)).toEqual(plan)
+      expect(await database.productionPlans.count()).toBe(1)
+    })
+  })
+
+  it('refuses the Plan that was a Draft when shown but has been started since', () =>
+    withDatabase(async (database) => {
+      const repository = new ProductionPlanRepository(database)
+      const draft = planWithIdentity('plan.delete.raced', 'step.delete.raced')
+      await repository.addProductionPlan(draft)
+      const started = await repository.activateProductionPlan(draft.id)
+
+      await expect(repository.deleteDraftProductionPlan(draft.id))
+        .rejects.toMatchObject({ code: 'draft_plan_delete_not_allowed' })
+      expect(await database.productionPlans.get(draft.id)).toEqual(started)
+    }))
+
+  it('fails closed without deleting when the collection holds two Drafts', () =>
+    withDatabase(async (database) => {
+      const repository = new ProductionPlanRepository(database)
+      const first = planWithIdentity('plan.delete.legacy.a', 'step.delete.legacy.a')
+      const second = planWithIdentity('plan.delete.legacy.b', 'step.delete.legacy.b')
+      // Written around the repository: the state the v8 upgrade removes.
+      await database.productionPlans.bulkPut([first, second])
+
+      await expect(repository.deleteDraftProductionPlan(first.id))
+        .rejects.toMatchObject({ code: 'draft_plan_conflict' })
+      expect((await database.productionPlans.toArray()).map(({ id }) => id).sort())
+        .toEqual([first.id, second.id])
+    }))
+})

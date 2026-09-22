@@ -92,6 +92,7 @@ function harness() {
     ),
     inspectIntermediateStateSelectionUpdate: vi.fn<() => Promise<PlanBreakingChangeInspection>>(async () => ({ approvalRequired: false })),
     getRunningProductionPlan: vi.fn(async () => plan),
+    getDraftProductionPlan: vi.fn(async () => undefined),
     replan: unusedReplan(),
   } satisfies BuildListPageDependencies
   return {

@@ -268,6 +268,7 @@ function renderPage(
       element: <ProductionPlanPage dependencies={deps} />,
     },
     { path: '/build-list', element: <div>Build list destination</div> },
+    { path: '/plans', element: <div>Production plan list destination</div> },
     { path: '/plans/:planId/run', element: <div>Execution navigator destination</div> },
   ], { initialEntries: [`/plans/${planId}`] })
   return { router, ...render(<RouterProvider router={router} />) }
@@ -282,6 +283,23 @@ function summaryValue(label: string): string | null | undefined {
 }
 
 describe('ProductionPlanPage', () => {
+  it('offers a way back to the Production Plan list without touching the Plan state', async () => {
+    const user = userEvent.setup()
+    const fixture = pageFixture()
+    const client = plannerClient(async () => fixture.preparation)
+    const deps = dependencies(fixture, client)
+    const { router } = renderPage(deps, fixture.plan.id)
+
+    expect(await screen.findByText(fixture.target.name)).toBeInTheDocument()
+    const link = screen.getByRole('link', { name: '生産計画一覧へ' })
+    expect(link).toHaveAttribute('href', '/plans')
+    await user.click(link)
+    expect(router.state.location.pathname).toBe('/plans')
+    expect(await screen.findByText('Production plan list destination')).toBeInTheDocument()
+    expect(deps.savePlannerResult).not.toHaveBeenCalled()
+    expect(deps.startProductionPlan).not.toHaveBeenCalled()
+  })
+
   it('loads only the route Plan and prepares a fresh input with explicit selections', async () => {
     const fixture = pageFixture()
     const client = plannerClient(async () => fixture.preparation)

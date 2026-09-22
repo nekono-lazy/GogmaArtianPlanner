@@ -43,6 +43,7 @@ PCブラウザとスマートフォンブラウザの双方を主要利用環境
 計画
   候補検索
   ビルドリスト
+  生産計画
 
 ----------------
 
@@ -54,9 +55,11 @@ PCブラウザとスマートフォンブラウザの双方を主要利用環境
 デバッグ          ※ Debug Mode ON時のみ
 ```
 
-- Production PlanとExecution Navigatorは固定ナビゲーションへ追加しない。Planが存在するときに
-  Build List / Dashboard等から遷移する画面であり、17のRouter pathとcurrent page表示（AppBar）は
-  維持する
+- 「生産計画」は生産計画一覧（`/plans`、11.5）へ遷移する。個別Plan（`/plans/:planId`）と
+  Execution Navigator（`/plans/:planId/run`）でも「生産計画」をactiveにし、Execution Navigator専用の
+  固定ナビゲーション項目は追加しない。AppBarのcurrent page表示は `/plans` と `/plans/:planId` を
+  「生産計画」、`/plans/:planId/run` を「実行ナビゲーション」とし、より具体的なpathを `/plans` より
+  先に判定する
 - デバッグはDebug Mode ON時のみ表示する
 - PC（permanent Drawer）とスマートフォン（temporary Drawer）で到達可能な主要機能は同じとする
 - Drawerは縦スクロールを許容するが、縦スクロールバーの有無にかかわらず不要な横スクロールを
@@ -173,6 +176,7 @@ gogma_artian  -> 巨戟アーティア系
 - 所持武器を登録する
 - 目標武器を登録する
 - 候補検索を開始する
+- 生産計画一覧を見る（`/plans`。Active Planの有無にかかわらず常に到達できる）
 - 作成プランを見る
 - 実行ナビを再開する
 
@@ -870,6 +874,7 @@ Plannerに検討させる候補集合を確認・調整する。
 - Planner探索上限の詳細設定
 - Planner実行（実行中の生産計画が無い場合）
 - 現在地点から再計画を試算（実行中の生産計画がある場合、16.4）
+- 現在の下書き（未開始の生産計画）を開く、生産計画一覧を見る（10.3）
 
 制約。
 
@@ -1001,6 +1006,29 @@ Active Plan
 遷移せず、Plan未生成のnoticeをBuild Listに表示する。保存失敗、cancel、
 `invalid_conflict_resolution` によるfail closedでも遷移しない。
 
+### 10.3 現在の下書きへの導線
+
+Build Listは `ProductionPlanRepository.getDraftProductionPlan()` で現在の下書き（未開始の
+生産計画、[DATA_MODEL.md](./DATA_MODEL.md) 11.1）を読み、存在する場合は読み取り専用の案内を表示する。
+
+```text
+未開始の生産計画があります。
+[下書きを開く]          -> /plans/:draftPlanId
+[生産計画一覧を見る]    -> /plans
+```
+
+- 実行中の生産計画が無く通常のPlanner実行を提供する状態で下書きが既にある場合、「生産計画の作成」に
+  「新しい生産計画を保存すると、現在の未開始の生産計画は置き換えられます。」を明示する。これは
+  既存のatomic replacement（`savePlannerOrchestrationResult()`、PLANNER_SPEC 9.2.15）の説明であり、
+  UIが新しいPersistence semanticsを持つわけではない
+- 下書きと実行中Planの同時存在は禁止されていないため、実行中Planがあるからといって下書きを
+  読み捨てない。実行中PlanがあるときのPlanner操作は従来どおり16.4の再計画試算だけとし、下書きは
+  「未開始の下書きも保存されています。」の読み取り専用案内として確認できる。実行中Plan中に通常の
+  下書き作成ボタンを追加しない
+- `getDraftProductionPlan()` が失敗した場合（Persistence invariant violationを含む）は「下書きなし」と
+  推測せず、エラーとして表示し、実行中Planを確認できない場合と同じく通常の生産計画の作成を提供しない。
+  複数の下書きをUI側で選ばない。再計画の試算は影響を受けない
+
 ---
 
 ## 11. Production Plan
@@ -1028,6 +1056,8 @@ Plannerが生成した作成計画を確認する。
 - 現在地点から再計画を試算（active / stale、16.4）
 - 再計算（draft / stale）
 - Plan破棄（確認必須、16.2）
+- 生産計画一覧へ（11.5。presentationだけの導線であり、Plan表示・what-if・作成開始・再計画の
+  state machineには影響しない）
 - Debug詳細表示
 - 生成時CalculationContext
 
@@ -1344,6 +1374,49 @@ PlanStep表示。
 - stale Planでは作成開始不可。再計算または現在地点からの再計画試算を促す
 - 現在CalculationContextと非互換なPlanはstaleとする
 - Debug Mode OFFではSeed / Counterを表示しない
+
+### 11.5 生産計画一覧（/plans）
+
+目的。
+
+保存済みのProductionPlan全体を1つの一覧で確認し、現在の下書きを削除する。
+
+- Draft専用一覧や履歴専用一覧へ分けず、`draft` / `active` / `stale` / `completed` / `abandoned` の
+  すべてを同じ「生産計画一覧」に表示する。status別sectionへ分割しない
+- 一覧のauthorityは `ProductionPlanRepository.getAllProductionPlans()` が返すexact persisted
+  ProductionPlanである。BuildCandidate / BuildListEntryからの再構成、Plannerの再実行、RNG Predictionを
+  行わない。一覧はread-only projectionであり、下書きの削除だけがwrite操作である
+- 表示順は `updatedAt` 降順、次に `createdAt` 降順、最後にIDの安定tie-breakとし、最近変更されたPlanを
+  上に表示する。Repositoryの既存orderingは変えず、presentation側で安定sortする
+- statusは既存 `ProductionPlanStatus` をauthorityとし、`StatusChip` の文字列ラベルで識別する
+  （draft 下書き / active 実行中 / stale 再計算が必要 / completed 完了 / abandoned 終了）。色だけで
+  区別しない。`abandoned` は再計画採用や妥協品終了を含むため「破棄済み」ではなく「終了」と表示し、
+  `abandonmentReason` のtyped label（ユーザーが破棄 / 再計画を採用 / 妥協品で終了 / 前提を壊す変更を
+  承認）を併記する。`stale` は `recalculationReasons` を `RecalculationReason` 全kindに対応する
+  ユーザー向け文言で表示する。message文字列の解析やraw enumの表示は行わない
+- 各Planに最低限、status、stale理由または終了理由、作成日時、最終更新日時、Step進捗
+  （完了Step数 / 全Step数。`steps[].isCompleted` と `steps.length` から数える）、目標武器数
+  （`createProductionPlanSummary()`。`selectedBuildListEntryIds.length` から推測しない）、
+  詳細への導線を表示する。technical Plan IDは通常表示の主情報にせず、Debug Mode ON時だけ補助表示する
+- 操作: 全statusに「詳細を見る」（`/plans/:planId`）。`active` にだけ「実行ナビを再開」
+  （`/plans/:planId/run`）。`draft` にだけ「下書きを削除」。`stale` / `completed` / `abandoned` に
+  削除ボタンを出さない
+- 「下書きを削除」は確認Dialog（title / description付き）を必須とする。「まだ開始していない生産計画だけを
+  削除します。ビルドリスト、候補、目標武器、所持武器は削除されません。」を示し、破壊的ボタンは
+  「キャンセル」と区別して誤タップしにくい位置に置く。削除の実体は
+  `ProductionPlanRepository.deleteDraftProductionPlan(id)`（[DATA_MODEL.md](./DATA_MODEL.md) 11.1）で
+  あり、汎用の `deleteProductionPlan(id)` をUIから直接呼ばない。表示後にstatusが変わっていた場合も
+  `draft` 以外のPlanは削除されない。削除はBuildListEntry / BuildCandidate / TargetWeapon / OwnedWeapon /
+  ExecutionHistory / ExecutionSavePointへcascadeしない
+- 削除成功後は一覧からその下書きだけを消す（ページreloadを要求しない）。削除失敗時は既存の一覧を
+  維持してerror Alertを表示し、typed codeで文言を選ぶ
+- 0件なら「生産計画はまだありません。ビルドリストから生産計画を作成できます。」と
+  「ビルドリストを開く」を表示する。Persistenceの読み込み失敗は0件として扱わず、error Alertを表示して
+  空状態を出さない。loading / loaded / errorを区別し、loading中はLinearProgress等を表示する
+- PCとスマートフォンを同等に扱う。375px程度でもstatus・理由・日時・進捗・操作が横にはみ出さない
+  カードlayoutとし、操作はxsで縦並び、sm以上で横並び、ボタンのminHeightは44pxとする
+- 到達経路: 固定ナビゲーションの「生産計画」（2.1）、Dashboardの「生産計画一覧を見る」（4）、
+  Build Listの「生産計画一覧を見る」（10.3）、Production Plan詳細の「生産計画一覧へ」（11）
 
 ---
 
@@ -1918,6 +1991,7 @@ React Routerを使う場合の推奨path。
 /target-weapons
 /search
 /build-list
+/plans
 /plans/:planId
 /plans/:planId/run
 /settings

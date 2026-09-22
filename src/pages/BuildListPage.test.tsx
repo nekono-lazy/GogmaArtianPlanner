@@ -138,6 +138,7 @@ function dependencies(
     deleteEntry: vi.fn(async () => undefined),
     inspectEntryDelete: vi.fn(async () => ({ approvalRequired: false as const })),
     getRunningProductionPlan: vi.fn(async () => undefined),
+    getDraftProductionPlan: vi.fn(async () => undefined),
     replan: unusedReplanDependencies(),
   }
 }

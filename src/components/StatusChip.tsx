@@ -19,12 +19,18 @@ const chipColors = {
 interface StatusChipProps {
   label: string
   tone: StatusTone
+  /**
+   * The root element. `span` lets the chip sit inside phrasing content such
+   * as a heading without nesting a block element there.
+   */
+  component?: 'div' | 'span'
 }
 
-export function StatusChip({ label, tone }: StatusChipProps) {
+export function StatusChip({ label, tone, component = 'div' }: StatusChipProps) {
   if (tone === 'neutral') {
     return (
       <Chip
+        component={component}
         label={label}
         size="small"
         variant="outlined"
@@ -35,6 +41,7 @@ export function StatusChip({ label, tone }: StatusChipProps) {
   const color = chipColors[tone]
   return (
     <Chip
+      component={component}
       label={label}
       size="small"
       variant="outlined"

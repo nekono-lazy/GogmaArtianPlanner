@@ -161,9 +161,20 @@ describe('DashboardPage', () => {
     const actions = screen.getByRole('region', { name: '主要アクション' })
     expect(within(actions).getByRole('button', { name: '作成プランを見る' })).toBeDisabled()
     expect(within(actions).getByRole('button', { name: '実行ナビを再開する' })).toBeDisabled()
+    // The Production Plan list is always reachable, Active Plan or not.
+    expect(within(actions).getByRole('link', { name: '生産計画一覧を見る' })).toHaveAttribute('href', '/plans')
 
     await user.click(within(next).getByRole('link', { name: 'RNGを設定する' }))
     expect(router.state.location.pathname).toBe('/rng')
+  })
+
+  it('leads to the Production Plan list from the primary actions', async () => {
+    const user = userEvent.setup()
+    const router = renderDashboard(dependencies())
+
+    const actions = await findRegion('主要アクション')
+    await user.click(within(actions).getByRole('link', { name: '生産計画一覧を見る' }))
+    expect(router.state.location.pathname).toBe('/plans')
   })
 
   it('leads to Target Weapons when no enabled Target exists', async () => {
