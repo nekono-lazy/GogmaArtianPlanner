@@ -261,6 +261,16 @@ PR #67（`test/v1-browser-pages-smoke`）で、実GitHub Pages配信URL
 | 36 スマートフォン幅で主要操作が行える | 実375x812 viewportで全11画面 + Execution Navigator + Debug Detailsの登録・編集・検索・比較・保存・cancel・Dialog操作を、長い名称を含めて手動確認。横scrollなし、主要button・Dialog footerの欠落なし | partially_covered → covered |
 | 37 GitHub Pages配信パスでの起動・画面遷移、レスポンシブ表示 | 実Pages URLでのDashboard起動、JS/CSS/Worker asset取得（404なし）、Hash route（`#/rng` 等9画面）とProductionPlan動的route（`#/plans/<id>`、`#/plans/<id>/run`）の直接reload、Search Worker / Planner Worker起動、Export/Import往復、IndexedDB永続化をすべて確認 | partially_covered → covered |
 
+PR #64監査（38.4節の元の監査基準・上表）はREQUIREMENTS 36 / 37の受入条件として
+「検索／Plannerの開始・cancelが動くこと」を挙げていたが、当初のPR #67 smokeはSearch Worker /
+Planner Workerの起動・結果取得までを確認し、cancel実施の記録が不足していた。PR #67のレビュー
+指摘を受け、**ユーザーが実際のGitHub Pages環境で追加のmanual smokeを実施し**、Candidate Search
+（開始→処理中Cancel→停止→キャンセル済みrequestの旧結果が後から表示されない→再検索成功）と
+Planner（「生産計画を作成」→処理中Cancel→停止→再度「生産計画を作成」→正常実行）の両方で
+問題がないことを確認した（Claude Code自身による確認ではない）。詳細は `docs/V1_BROWSER_SMOKE.md`
+の「Worker cancel / retry」節を参照。これにより、PR #64監査が挙げていた検索／Plannerの
+開始・cancel条件を実Pages環境で満たしたことを確認し、上表の36 / 37 covered判定を維持する。
+
 本follow-upはブラウザ操作記録の追加のみであり、Production code・Domain semantics・
 persisted shapeは変更していない。バージョンは不変（`DATABASE_SCHEMA_VERSION = 8`、
 `EXPORT_SCHEMA_VERSION = 11`、`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 13`、

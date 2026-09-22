@@ -49,8 +49,8 @@ Upload artifact / Deploy to GitHub Pages）が成功している。
 | Normal Counter | pass | 「観測・検索」ダイアログがフルスクリーンで開き、属性区分ラジオボタン・削除・閉じるが操作可能 |
 | Owned Weapons | pass | 新規登録ダイアログで長い武器名（36文字の日本語）を入力しても横overflowなし、保存後カード内でwrap表示 |
 | Target Weapons | pass | 長い目標名で新規登録、既所持Ideal通知（`isOwnedIdealForTarget`）が即座に表示、「この武器で目標を完了にする」確認ダイアログが375pxで完全表示、キャンセル動作を確認 |
-| Candidate Search | pass | 検索開始でSearch Worker起動、`existing_gogma_current` 零操作Candidateを表示、intermediate state（スキル候補／復元ボーナス候補）表示、改善優先ラジオボタン操作、ビルドリストへ追加成功 |
-| Build List | pass | 登録候補・目標武器件数の概要カード、「生産計画を作成」でPlanner Worker起動・Draft Plan生成・自動遷移を確認 |
+| Candidate Search | pass | 検索開始でSearch Worker起動、`existing_gogma_current` 零操作Candidateを表示、intermediate state（スキル候補／復元ボーナス候補）表示、改善優先ラジオボタン操作、ビルドリストへ追加成功。処理中Cancelでの停止・旧requestの結果抑止・再検索成功は、PRレビュー後の追加manual smoke（下記「Worker cancel / retry」参照）で確認済み |
+| Build List | pass | 登録候補・目標武器件数の概要カード、「生産計画を作成」（Planner Worker起動）でDraft Plan生成・自動遷移を確認。処理中Cancelでの停止・再実行成功は、PRレビュー後の追加manual smoke（下記「Worker cancel / retry」参照）で確認済み |
 | ProductionPlan一覧 | pass | 完了ステータスのcard表示、「詳細を見る」リンクが横overflowなく操作可能 |
 | ProductionPlan詳細 | pass | 概要カード、長いPlan ID / 目標武器名のwrap、アコーディオン展開でPlanStep詳細を表示 |
 | Execution Navigator | pass | Step確定（`confirm_owned_ideal`）、Plan完了、Undo（確認ダイアログ→実行→Step 1へ復帰）、ゲーム内セーブ記録ダイアログ、現在Plan破棄ダイアログをすべて375pxで確認（後者2つはキャンセルして状態を保持） |
@@ -84,6 +84,30 @@ Upload artifact / Deploy to GitHub Pages）が成功している。
 Dialogを開いた直後にaction領域（キャンセル/確定ボタン）が画面内に収まり、スクロールなしで
 到達できることを確認した。個別のTab順によるfocus trap検証は今回未実施（follow-up参照）。
 
+### Worker cancel / retry
+
+Draft PRレビュー（PR #67、レビュー時latest head `b3d9c2b6ccf32f36557a3a5f911601fb3489b516`）で、
+上記smokeがCandidate Search Worker / Planner Workerの起動・結果取得までしか確認しておらず、
+PR #64監査の受入条件「検索／Plannerの開始・cancelが動くこと」のうちcancel実施記録が不足している
+との指摘を受けた。これを受けて、**ユーザーが実際のGitHub Pages環境で追加のmanual smokeを実施し、
+以下を確認した（Claude Code自身による確認ではない）**。
+
+- Candidate Search
+  - Candidate Search開始
+  - 処理中にCancel → 処理停止
+  - キャンセル済みrequestの旧検索結果が後から表示されないことを確認
+  - 再度Search開始 → 正常実行
+  - 結果: 問題なし
+- Planner（「生産計画を作成」がPlanner Workerの処理）
+  - 生産計画作成開始（「生産計画を作成」ボタン、Planner Worker起動）
+  - 処理中にCancel → 処理停止
+  - 再度「生産計画を作成」 → 正常実行
+  - 結果: 問題なし
+
+いずれも問題は見つからず、コード修正は行っていない。この追加確認により、PR #64監査が
+REQUIREMENTS 36 / 37の受入条件として挙げていた「検索／Plannerの開始・cancelが動くこと」を
+実Pages環境で満たしたことを確認した。
+
 ## 発見事項
 
 調査の過程で以下の観察があったが、いずれも**実装の不具合ではない**ことをground truthの
@@ -109,8 +133,11 @@ Dialogを開いた直後にaction領域（キャンセル/確定ボタン）が�
 
 - Dialogの厳密なfocus trap（open時のinitial focus位置、Tab順、Escapeでの確実な復帰）の
   自動化検証は未実施。必要であれば別PRでアクセシビリティ監査として分離する。
-- Candidate Searchの「長い第2Targetへ切替→検索→cancel」パターンは今回の登録済みTarget数
-  （1件）の都合で実施していない。複数Target環境での確認は別smokeで補完可能。
+- Search Worker自体の処理中Cancel、キャンセル済みrequestの旧結果抑止、再検索成功は
+  上記「Worker cancel / retry」で確認済み。未実施なのは、複数Target環境で「長い第2Targetへ
+  切替→検索→cancel」という特定のUI組み合わせのみであり、今回の登録済みTarget数（1件）の
+  都合で実施していない。このパターン固有の確認は別smokeで補完可能で、REQUIREMENTS 36 / 37の
+  covered判定を妨げるものではない。
 - Production RNGの実機能（Reset/Keep結果の実ゲーム一致）は本smokeの対象外（`AGENTS.md`
   のRNG検証区分に従い、対象外のまま）。
 
@@ -123,8 +150,10 @@ Dialogを開いた直後にaction領域（キャンセル/確定ボタン）が�
 
 REQUIREMENTS 36（スマートフォン幅で主要操作が行える）、37（レスポンシブ表示と統合テスト、
 GitHub Pages配信パスでの起動・画面遷移）は、実ブラウザ375px操作と実GitHub Pages配信URLでの
-確認により **covered** とする。`docs/V1_ACCEPTANCE_AUDIT.md` の当該記録を本文書へ差分追記した
-（下記PR #67 follow-up節）。
+確認、および上記「Worker cancel / retry」で確認したSearch Worker / Planner Workerの
+処理中Cancel・旧結果抑止・再実行成功（PR #64監査が挙げていた「検索／Plannerの開始・cancelが
+動くこと」の受入条件）により **covered** とする。`docs/V1_ACCEPTANCE_AUDIT.md` の当該記録を
+本文書へ差分追記した（下記PR #67 follow-up節）。
 
 バージョン不変: `DATABASE_SCHEMA_VERSION = 8`、`EXPORT_SCHEMA_VERSION = 11`、
 `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 13`、`RngState.schemaVersion = 2`、
