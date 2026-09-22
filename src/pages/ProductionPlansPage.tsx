@@ -283,7 +283,14 @@ export function ProductionPlansPage({
     }
   }, [dependencies, loadSequence])
 
+  /**
+   * The explicit re-read, reached from the read-failure Alert and from the
+   * delete-failure Alert alike. A delete failure is stale once the list is
+   * re-read: the fresh list (or the fresh read error, which `state` carries)
+   * is the only thing shown afterwards, never both.
+   */
   const reload = () => {
+    setDeleteError(null)
     setState({ status: 'loading' })
     setLoadSequence((sequence) => sequence + 1)
   }

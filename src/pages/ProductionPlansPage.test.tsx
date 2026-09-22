@@ -353,11 +353,69 @@ describe('ProductionPlansPage', () => {
     expect(screen.getByRole('button', { name: '下書きを削除' })).toBeEnabled()
   })
 
-  it('re-reads the list from the 再読み込み control after a delete failure', async () => {
+  it('clears the delete error on 再読み込み and shows only the freshly read list', async () => {
     const user = userEvent.setup()
-    const deps = dependencies(everyStatus(), {
+    const initial = everyStatus()
+    // The second read returns the state after the Draft was started elsewhere:
+    // the former Draft is active now, so the refused delete was right.
+    const latest = everyStatus()
+      .filter((plan) => plan.id !== 'plan.page.active')
+      .map((plan) => (plan.id === 'plan.page.draft' ? { ...plan, status: 'active' as const } : plan))
+    // The second read is held open so the loading state is observable.
+    let resolveSecondRead!: (plans: ProductionPlan[]) => void
+    const secondRead = new Promise<ProductionPlan[]>((resolve) => {
+      resolveSecondRead = resolve
+    })
+    const deps = dependencies(initial, {
+      getAllProductionPlans: vi.fn()
+        .mockResolvedValueOnce(structuredClone(initial))
+        .mockReturnValueOnce(secondRead),
       deleteDraftProductionPlan: vi.fn(async () => {
         throw new RepositoryError('not_found', 'gone')
+      }),
+    })
+    renderPage(deps)
+
+    // A. the typed delete failure is shown and the list is kept.
+    const items = await findListItems()
+    await user.click(within(itemOf(items, '下書き')).getByRole('button', { name: '下書きを削除' }))
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '下書きを削除' }))
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('この下書きはすでに存在しません。一覧を再読み込みしてください。')
+    expect(await findListItems()).toHaveLength(5)
+
+    // B. the reload drops the delete error at once and shows the list loading.
+    await user.click(within(alert).getByRole('button', { name: '再読み込み' }))
+    expect(screen.queryByText('この下書きはすでに存在しません。一覧を再読み込みしてください。')).not.toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('生産計画一覧を読み込み中')).toBeInTheDocument()
+
+    // C. the fresh list alone is shown afterwards.
+    expect(deps.getAllProductionPlans).toHaveBeenCalledTimes(2)
+    resolveSecondRead(structuredClone(latest))
+    const reloaded = await findListItems()
+    expect(reloaded).toHaveLength(4)
+    expect(reloaded.map((item) => within(item).getByRole('heading', { level: 3 }).textContent)).toEqual([
+      '実行中',
+      '再計算が必要',
+      '完了',
+      '終了',
+    ])
+    expect(screen.queryByRole('heading', { level: 3, name: /^下書き/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('生産計画一覧を読み込み中')).not.toBeInTheDocument()
+    expect(deps.deleteDraftProductionPlan).toHaveBeenCalledOnce()
+  })
+
+  it('shows only the load error when the 再読み込み after a delete failure fails itself', async () => {
+    const user = userEvent.setup()
+    const initial = everyStatus()
+    const deps = dependencies(initial, {
+      getAllProductionPlans: vi.fn()
+        .mockResolvedValueOnce(structuredClone(initial))
+        .mockRejectedValueOnce(new Error('IndexedDB is unavailable')),
+      deleteDraftProductionPlan: vi.fn(async () => {
+        throw new RepositoryError('draft_plan_delete_not_allowed', 'not a draft any more')
       }),
     })
     renderPage(deps)
@@ -365,10 +423,18 @@ describe('ProductionPlansPage', () => {
     const items = await findListItems()
     await user.click(within(itemOf(items, '下書き')).getByRole('button', { name: '下書きを削除' }))
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '下書きを削除' }))
-    const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent('この下書きはすでに存在しません。')
-    await user.click(within(alert).getByRole('button', { name: '再読み込み' }))
-    await waitFor(() => expect(deps.getAllProductionPlans).toHaveBeenCalledTimes(2))
+    const deleteAlert = await screen.findByRole('alert')
+    expect(deleteAlert).toHaveTextContent('この生産計画はすでに開始または終了しているため、下書きとして削除できませんでした。')
+
+    await user.click(within(deleteAlert).getByRole('button', { name: '再読み込み' }))
+    const loadAlert = await screen.findByText('生産計画一覧を読み込めませんでした: IndexedDB is unavailable')
+    expect(loadAlert).toBeInTheDocument()
+    // One Alert only: the stale delete error is gone, and no empty state or list is shown.
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
+    expect(screen.queryByText(/下書きとして削除できませんでした/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: '生産計画一覧' })).not.toBeInTheDocument()
+    expect(screen.queryByText('生産計画はまだありません。')).not.toBeInTheDocument()
+    expect(deps.getAllProductionPlans).toHaveBeenCalledTimes(2)
   })
 
   it('hides the Plan ID unless Debug Mode is on', async () => {
