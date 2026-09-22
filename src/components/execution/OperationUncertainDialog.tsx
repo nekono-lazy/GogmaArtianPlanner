@@ -46,7 +46,10 @@ export function OperationUncertainDialog({
             何を何回操作したかを推測せず、この生産計画を続行できない状態（再計算が必要）にします。
           </Typography>
           <Typography component="p" variant="body2" sx={{ mt: 1 }}>
-            記録後はRNG状態の再同定が必要です。
+            記録すると生産計画をいったん停止し、この画面で現在位置の確認やゲーム内セーブ地点への復元など、回復方法を選びます。
+          </Typography>
+          <Typography component="p" variant="body2" sx={{ mt: 1 }}>
+            誤って記録した場合は、記録後に「実行状態の管理」からこの記録を取り消して元の操作へ戻せます。
           </Typography>
         </DialogContentText>
       </DialogContent>

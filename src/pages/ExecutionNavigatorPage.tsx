@@ -759,6 +759,7 @@ function LoadedNavigator({
             plan={plan}
             availability={snapshot.operationCountRecovery}
             savePoint={snapshot.executionSavePoint}
+            undoAvailable={snapshot.undo.kind === 'available'}
             master={dependencies.master}
             weaponTypeId={presentation.weaponTypeId}
             elementId={presentation.elementId}

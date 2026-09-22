@@ -22,9 +22,11 @@ import type {
 import type { ExecutionHistoryId, ExecutionSavePoint, ProductionPlan } from '../../domain/models/publicTypes'
 import { ExecutionSavePointRestoreDialog } from './ExecutionSavePointRestoreDialog'
 import {
+  executionUndoControlPresentation,
   executionUndoTargetLabel,
   SAVE_POINT_UNSAFE_MESSAGE,
   savePointPositionLabel,
+  type ExecutionUndoControlPresentation,
 } from './executionStepPresentation'
 import { ProductionPlanAbandonDialog } from './ProductionPlanAbandonDialog'
 
@@ -90,9 +92,16 @@ function RecordSavePointDialog({
   )
 }
 
-/** Undo of the latest ExecutionHistory (UI_FLOW 12.7, PLANNER_SPEC 16.16). */
+/**
+ * Undo of the latest ExecutionHistory (UI_FLOW 12.7, PLANNER_SPEC 16.16).
+ *
+ * The title, the confirm label and the record-specific notes come from the
+ * shared presentation, so an `operation_uncertain` record is confirmed in its
+ * own words. The runtime call is the same one every other record uses.
+ */
 function UndoDialog({
   open,
+  presentation,
   targetLabel,
   deletesSavePoint,
   terminal,
@@ -101,6 +110,7 @@ function UndoDialog({
   onConfirm,
 }: {
   open: boolean
+  presentation: ExecutionUndoControlPresentation
   targetLabel: string
   deletesSavePoint: boolean
   terminal: boolean
@@ -119,7 +129,7 @@ function UndoDialog({
       aria-labelledby={titleId}
       aria-describedby={descriptionId}
     >
-      <DialogTitle id={titleId}>最後のツール上の操作を元に戻します</DialogTitle>
+      <DialogTitle id={titleId}>{presentation.dialogTitle}</DialogTitle>
       <DialogContent>
         <DialogContentText id={descriptionId} component="div">
           <Typography component="p" variant="body2" sx={{ fontWeight: 700 }}>
@@ -128,6 +138,11 @@ function UndoDialog({
           <Typography component="p" variant="body2" sx={{ mt: 1, overflowWrap: 'anywhere' }}>
             戻す操作: {targetLabel}
           </Typography>
+          {presentation.notes.map((note) => (
+            <Typography key={note} component="p" variant="body2" sx={{ mt: 1 }}>
+              {note}
+            </Typography>
+          ))}
           {terminal && (
             <Typography component="p" variant="body2" sx={{ mt: 1 }}>
               終了した生産計画は、この操作の前の状態に戻ります。
@@ -145,7 +160,7 @@ function UndoDialog({
           キャンセル
         </Button>
         <Button variant="contained" color="warning" disabled={submitting} onClick={onConfirm} sx={{ minHeight: 44 }}>
-          Undoする
+          {presentation.confirmLabel}
         </Button>
       </DialogActions>
     </Dialog>
@@ -210,6 +225,11 @@ export function ExecutionStateControls({
     ? savePointPositionLabel(plan, abandonOptions.savePointCurrentStepId)
     : null
   const showsUndo = undo.kind === 'available'
+  // The record itself decides how the control introduces itself; every other
+  // record keeps the generic wording.
+  const undoPresentation = undo.kind === 'available'
+    ? executionUndoControlPresentation(undo.history)
+    : null
   if (!showsSavePoint && !showsUndo && !showsAbandon) return null
 
   return (
@@ -277,13 +297,13 @@ export function ExecutionStateControls({
           </Box>
         )}
 
-        {showsUndo && (
+        {showsUndo && undoPresentation !== null && (
           <>
             {showsSavePoint && <Divider />}
             <Box role="group" aria-label="Undo">
               <Stack spacing={1}>
                 <Typography variant="body2" color="text.secondary">
-                  最後に確定した記録をツール上だけ取り消します。ゲーム内の操作は戻りません。
+                  {undoPresentation.description}
                 </Typography>
                 <Button
                   variant="outlined"
@@ -292,7 +312,7 @@ export function ExecutionStateControls({
                   onClick={() => setUndoOpen(true)}
                   sx={{ ...buttonSx, alignSelf: { sm: 'flex-start' } }}
                 >
-                  最後の操作をUndo
+                  {undoPresentation.buttonLabel}
                 </Button>
               </Stack>
             </Box>
@@ -343,9 +363,10 @@ export function ExecutionStateControls({
           if (savePointRestore.kind === 'available') onRestoreSavePoint(savePointRestore.savePoint.recordedAt)
         }}
       />
-      {undo.kind === 'available' && (
+      {undo.kind === 'available' && undoPresentation !== null && (
         <UndoDialog
           open={undoOpen}
+          presentation={undoPresentation}
           targetLabel={executionUndoTargetLabel(plan, undo.history)}
           deletesSavePoint={undo.deletesExecutionSavePoint}
           terminal={undo.terminal}
