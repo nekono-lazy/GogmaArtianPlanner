@@ -2264,7 +2264,10 @@ Planを壊す変更の承認はRuntimeとして実装済みである（[PLANNER_
 通常保存は、`active` Planの有無にかかわらず同じguard transactionを通り、永続状態との差分だけを書き込む。
 「最後のゲーム内セーブ地点へ戻す」を選んだ場合は、セーブ地点の復元、変更の保存、Planの `abandoned` 化、
 セーブ地点後のExecutionHistoryと登録武器の削除、セーブ地点の削除を同じtransactionで行う。新しい永続fieldは
-追加しない。警告・確認ダイアログのUIは未実装である。
+追加しない。警告・確認ダイアログのUIは `PlanBreakingChangeDialog` /
+`usePlanBreakingChangeApproval`（`src/components/execution/`）として接続済みである。
+通常保存前のinspectionと承認付き再保存を同じApplication Serviceへ委譲し、
+セーブ地点の選択が必要な場合だけ16.10の選択肢を表示する。
 
 ## 14.5 Planner Save Transaction
 

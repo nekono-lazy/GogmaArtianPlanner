@@ -44,6 +44,7 @@ import {
   existingResetFixture,
   expectRefusal,
   newNormalFixture,
+  newNormalRoute,
   ownedNormalFixture,
   planFor,
   recordDifferent,
@@ -55,6 +56,7 @@ import {
   checkpointBonusEntry,
   checkpointBonusResultAt,
   orchestrationEntry,
+  orchestrationNormalCounters,
   orchestrationScenario,
   orchestrationSource,
   orchestrationTarget,
@@ -286,6 +288,54 @@ describe('confirmed_expected Step confirmation', () => {
       expect((await database.rngState.get('current'))?.gogmaCounter.value).toBe(CONSTRAINED_START_GOGMA_COUNTER + 1)
       expect(await database.executionHistory.count()).toBe(5)
       await expectRefusal(() => confirm(), database, 'plan_not_active')
+    }))
+
+  it('38.5-A: completes new Normal production only after both bonus and post-conversion skill operations', () =>
+    withDatabase(async (database) => {
+      const goal = orchestrationTarget('target.acceptance.normal')
+      const route = newNormalRoute(3)
+      route.operations.push({ type: 'reset_skills', sourceOwnedWeaponId: null,
+        skillCounterBefore: CONSTRAINED_START_SKILL_COUNTER + 1,
+        skillCounterAfter: CONSTRAINED_START_SKILL_COUNTER + 2 })
+      const entry = orchestrationEntry('entry.acceptance.normal', goal, route)
+      const fixture = await planFor(orchestrationScenario({
+        targets: [goal], entries: [entry], normalCounters: orchestrationNormalCounters(),
+        engine: { skillResultAt: (counter) => ({
+          seriesSkillId: counter === CONSTRAINED_START_SKILL_COUNTER ? 'series_skill.fixture.z' : IDEAL_SERIES_SKILL_ID,
+          groupSkillId: null,
+        }) },
+      }))
+      expect(fixture.plan.steps.map(({ operationType }) => operationType)).toEqual([
+        'create_normal_artian', 'create_normal_artian', 'create_normal_artian',
+        'convert_normal_to_gogma', 'reset_bonuses', 'reset_skills',
+      ])
+      await seed(database, fixture)
+      const service = executionService(database, fixture.built)
+      await service.startProductionPlan(fixture.plan.id)
+      await confirmCurrent(service, database, fixture.plan)
+      await confirmCurrent(service, database, fixture.plan)
+      expect(await database.ownedWeapons.count()).toBe(0)
+      await confirmCurrent(service, database, fixture.plan)
+      const [normal] = await database.ownedWeapons.toArray()
+      expect(normal.kind).toBe('normal')
+      await confirmCurrent(service, database, fixture.plan)
+      expect(await database.ownedWeapons.get(normal.id)).toMatchObject({ kind: 'gogma', status: 'unclassified' })
+      await confirmCurrent(service, database, fixture.plan)
+      expect(await database.targetWeapons.get(goal.id)).toMatchObject({ lifecycleStatus: 'active' })
+      expect((await currentPlan(database, fixture.plan)).status).toBe('active')
+      const completion = await confirmCurrent(service, database, fixture.plan)
+      expect(completion.plan.status).toBe('completed')
+      expect(await database.ownedWeapons.toArray()).toEqual([expect.objectContaining({
+        id: normal.id, status: 'ideal', isProtected: true, executionInProgress: null,
+        restorationBonuses: idealBonuses(), seriesSkillId: IDEAL_SERIES_SKILL_ID,
+      })])
+      expect(await database.targetWeapons.get(goal.id)).toMatchObject({ lifecycleStatus: 'completed', preferredOwnedWeaponId: null })
+      expect(await database.rngState.get('current')).toMatchObject({
+        skillCounter: { value: CONSTRAINED_START_SKILL_COUNTER + 2 },
+        gogmaCounter: { value: CONSTRAINED_START_GOGMA_COUNTER + 1 },
+      })
+      expect((await database.normalArtianCounters.toArray())[0].counter).toBe(CONSTRAINED_START_NORMAL_COUNTER + 3)
+      expect(await database.executionHistory.count()).toBe(6)
     }))
 
   it('requires and records the observed five slots of a blind production-target Normal', () =>

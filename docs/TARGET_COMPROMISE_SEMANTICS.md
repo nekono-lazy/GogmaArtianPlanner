@@ -58,16 +58,20 @@ Dexie schemaを1から2に上げる。旧Practical / OR条件は新条件へ推�
 再設定を促す情報を残す。Candidate、BuildListEntry、Plan、履歴の内容は変更・削除しない。
 
 CalculationContext.appSchemaVersionは、妥協条件導入時に5から6へ上げた。
-現行は11（lane別intermediate stateと改善優先）であり、旧version 1..10のCandidate /
-BuildListEntry / Planはすべて非互換。
+現行は13（既存武器のTarget紐付けをPlan開始effectへ移動）である。
+version 12のCandidate / BuildListEntryだけは明示的な互換例外を持つ（他の3 versionと
+通常のstaleness検証は必要）。version 1..11のbuild resultとversion 1..12のPlanは非互換
+（[DATA_MODEL.md](./DATA_MODEL.md) 3.5）。
 既存のcalculation_context_changedによるfail closedを使う。RNG version、Master version、
 AppSettings.schemaVersion、RngState.schemaVersionは変更しない。
 searchStateHashと参照武器hashはRNG・武器依存の既存定義を維持する。
 Target definition hashは新Rule構造を含める。
 
 Import/Exportの全置換Persistence / Application Service基盤（JSON parser、full validation、
-保存service）は実装済みであり、Settings画面のUIは未接続である（[DATA_MODEL.md](./DATA_MODEL.md) 15.3）。
-この文書の執筆時点のExportRootはschemaVersion 6であった（現行は10）。将来のimportでも旧条件の推測変換を禁止し、
+保存service）とSettings画面のUI（`src/pages/SettingsPage.tsx`）は接続済みである。
+Export、検証・確認後の全置換Import、確認後の全データクリアを既存Serviceへ委譲する
+（[DATA_MODEL.md](./DATA_MODEL.md) 15.3、[UI_FLOW.md](./UI_FLOW.md) 14）。
+この文書の執筆時点のExportRootはschemaVersion 6であった（現行は11）。将来のimportでも旧条件の推測変換を禁止し、
 旧versionを新Targetとして直接受理しない。同じfail-closed Target移行を使用する。
 履歴artifactを新評価で再分類しない。
 

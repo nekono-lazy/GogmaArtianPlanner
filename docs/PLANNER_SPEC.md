@@ -4518,10 +4518,11 @@ active / staleのPlanだけであり、Preview入力はRuntimeの `prepareProduc
 「最後のゲーム内セーブ地点へ戻す」ではゲーム側復元の明示確認の後に復元だけを行い、同じPreviewは採用せず
 再試算を求める。採用成功時は新PlanのExecution Navigatorへ遷移し、`replan_state_changed` ではPreviewを破棄して
 再試算を案内する（自動再試算・自動採用はしない）。
-Planを壊す変更の警告、
-16.15のDashboard / RNG Setup / Candidate Searchでの
-RNG再同定の継続表示などは後続の実装PRが
-本章をauthorityとして実装する。本章と矛盾する旧記述（Execution上の独立した「確保」操作、
+Planを壊す変更の警告UIは `PlanBreakingChangeDialog` /
+`usePlanBreakingChangeApproval` として接続済みである（UI_FLOW 16.3）。
+16.15のDashboard / RNG Setup / Candidate SearchでのRNG再同定の継続表示も、
+`persistentReidentificationReminderService` と `PersistentReidentificationReminderAlert`
+を通して接続済みであり、同章の解決authorityを共有する。本章と矛盾する旧記述（Execution上の独立した「確保」操作、
 Target / Build List変更による一律stale、reserve時の既存保護維持など）は本改訂で
 本書・[REQUIREMENTS.md](./REQUIREMENTS.md)・[DATA_MODEL.md](./DATA_MODEL.md)・
 [SEARCH_SPEC.md](./SEARCH_SPEC.md)・[UI_FLOW.md](./UI_FLOW.md)から書き換えた。

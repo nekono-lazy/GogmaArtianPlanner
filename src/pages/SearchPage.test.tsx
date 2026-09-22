@@ -25,6 +25,7 @@ import { createValidMasterDataFixture } from '../test/fixtures/masterData'
 import {
   createValidBuildCandidate,
   createValidTargetWeapon,
+  targetWeaponId,
 } from '../test/fixtures/domainData'
 import { createCandidateSearchInput as createFixtureInput } from '../test/fixtures/candidateSearch'
 import {
@@ -32,6 +33,7 @@ import {
   type SearchWorkerClient,
   type SearchWorkerClientCallbacks,
 } from '../services/search/searchWorkerClient'
+import { hasStyleRule } from '../test/cssRuleAssertions'
 import { SearchPage, type SearchPageDependencies } from './SearchPage'
 
 class ControlledClient implements SearchWorkerClient {
@@ -141,6 +143,30 @@ describe('SearchPage', () => {
     client.resolve(resultFor(target, candidate))
     expect(await screen.findByText('理想候補')).toBeInTheDocument()
     expect(deps.saveCandidates).toHaveBeenCalledWith(target.id, [candidate])
+  })
+
+  it('keeps a long Target selectable and search cancellable with the small-screen control contracts', async () => {
+    const user = userEvent.setup()
+    const client = new ControlledClient()
+    const first = createValidTargetWeapon()
+    const second = { ...first, id: targetWeaponId('target.acceptance.long'), name: '長い目標武器名'.repeat(12) }
+    render(<SearchPage dependencies={dependencies(client, [first, second])} />, { wrapper: MemoryRouter })
+    const selector = await screen.findByRole('combobox', { name: '検索対象の目標武器' })
+    expect(hasStyleRule(selector, 'white-space', 'normal')).toBe(true)
+    expect(hasStyleRule(selector, 'overflow-wrap', 'anywhere')).toBe(true)
+    await user.click(selector)
+    await user.click(await screen.findByRole('option', { name: second.name }))
+    expect(selector).toHaveTextContent(second.name)
+    const start = screen.getByRole('button', { name: '検索開始' })
+    expect(getComputedStyle(start).minHeight).toBe('44px')
+    await user.click(start)
+    expect(client.input?.targetWeaponId).toBe(second.id)
+    const cancel = screen.getByRole('button', { name: 'キャンセル' })
+    expect(getComputedStyle(cancel).minHeight).toBe('44px')
+    await user.click(cancel)
+    expect(client.cancelSearch).toHaveBeenCalledTimes(1)
+    client.resolve(resultFor(second, null))
+    await waitFor(() => expect(screen.getByRole('button', { name: '検索開始' })).toBeEnabled())
   })
 
   it('offers no result filter and no output-cap settings at all', async () => {

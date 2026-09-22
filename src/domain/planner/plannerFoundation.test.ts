@@ -299,13 +299,13 @@ describe('Planner current-state entry validation', () => {
     expect(result.warnings.some(({ kind }) => kind === 'rng_state_missing')).toBe(true)
   })
 
-  it('rejects protected Bonus and Skill amendment routes', () => {
+  it.each(['reset_bonuses', 'keep_bonuses'] as const)('rejects protected %s and Skill amendment routes', (operation) => {
     const destructive = fixture()
     const source = destructive.input.ownedWeapons[0]
     const entry = resetSkillsEntry(destructive.input)
     entry.candidateSnapshot.route = {
-      kind: 'existing_gogma_reset_bonuses', sourceOwnedWeaponId: source.id,
-      operations: [{ type: 'reset_bonuses', sourceOwnedWeaponId: source.id, gogmaCounterBefore: 10, gogmaCounterAfter: 11 }],
+      kind: operation === 'reset_bonuses' ? 'existing_gogma_reset_bonuses' : 'existing_gogma_keep_bonuses', sourceOwnedWeaponId: source.id,
+      operations: [{ type: operation, sourceOwnedWeaponId: source.id, gogmaCounterBefore: 10, gogmaCounterAfter: 11 }],
     }
     synchronizeEntry(entry, destructive.input)
     destructive.input.buildListEntries = [entry]
