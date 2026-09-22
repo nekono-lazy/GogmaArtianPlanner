@@ -834,13 +834,20 @@ function LoadedNavigator({
       ({ buildListEntryId }) => !dismissedCheckpointEntryIds.includes(buildListEntryId),
     ) ?? null
   const switchWeaponId = weaponSwitchTarget(plan, step)
+  /**
+   * The weapon switch guidance is an interstitial placed *before* the current
+   * Step is shown (`docs/PLANNER_SPEC.md` 16.14, `docs/UI_FLOW.md` 12.6), so
+   * the Step card itself is not rendered until 「武器を切り替えました」:
+   * the operation name, instruction, expected result and every action stay
+   * absent from the DOM and the accessibility tree, not merely hidden.
+   */
   const showsSwitchPrompt = checkpoint === null && switchWeaponId !== null && acknowledgedSwitchStepId !== step.id
-  const showsActions = checkpoint === null && !showsSwitchPrompt
+  const showsActions = checkpoint === null
   const target = step.targetWeaponId === null
     ? null
     : targetWeapons.find(({ id }) => id === step.targetWeaponId) ?? null
 
-  return (
+  const header = (
     <>
       <ExecutionProgress progress={progress} />
       {submitting && (
@@ -849,6 +856,28 @@ function LoadedNavigator({
           <Typography variant="body2">操作を保存しています。</Typography>
         </Stack>
       )}
+    </>
+  )
+
+  if (showsSwitchPrompt && switchWeaponId !== null) {
+    // Presentation-only: the acknowledgement confirms no Step and is never
+    // persisted, so the state controls stay exactly as available as they are
+    // on the current Step, and a reload shows this interstitial again.
+    return (
+      <>
+        {header}
+        <WeaponSwitchPrompt
+          weaponLabel={ownedWeaponLabel(switchWeaponId, ownedWeapons)}
+          onAcknowledge={() => onAcknowledgeSwitch(step.id)}
+        />
+        {stateControls({ running: true, canRecordSavePoint: true, showsSavePointRestore: true })}
+      </>
+    )
+  }
+
+  return (
+    <>
+      {header}
       {checkpoint !== null && (
         <CompromiseCheckpointPanel
           weaponLabel={ownedWeaponLabel(checkpoint.ownedWeaponId, ownedWeapons)}
@@ -857,12 +886,6 @@ function LoadedNavigator({
           finishing={submitting}
           onContinue={() => onDismissCheckpoint(checkpoint.buildListEntryId)}
           onFinish={() => onFinish(checkpoint)}
-        />
-      )}
-      {showsSwitchPrompt && switchWeaponId !== null && (
-        <WeaponSwitchPrompt
-          weaponLabel={ownedWeaponLabel(switchWeaponId, ownedWeapons)}
-          onAcknowledge={() => onAcknowledgeSwitch(step.id)}
         />
       )}
       <ExecutionStepCard presentation={presentation} master={dependencies.master}>
