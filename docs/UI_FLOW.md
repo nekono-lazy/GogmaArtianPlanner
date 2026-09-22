@@ -147,6 +147,33 @@ gogma_artian  -> 巨戟アーティア系
 - `scope`、`normal_artian`、`gogma_artian`、`amendment` 等の内部用語を通常ユーザー向け表示へ
   漏らさない。Debug Modeの内部表示はこの制約の対象外とする
 
+### 3.4 復元ボーナスの種類別カラー表示
+
+復元ボーナス5枠の読み取り専用表示（Candidate Search、途中採用する状態、Production Plan、
+Execution Navigator等が共用する `RestorationBonusSlots`）は、Bonus Typeごとに文字色と枠線色で
+種類を判別しやすくする。これはPresentationのみの補助表現であり、Bonusの意味、RNG、Search、
+Planner、Target評価、Master、persisted schema、calculation semanticsを変更しない。
+
+```text
+基礎攻撃力強化                              -> 赤系
+会心率強化                                  -> 紫系
+属性強化                                    -> 青・水色系
+斬れ味強化 / 装填数強化 / 斬れ味・装填強化  -> 黄色系（同じ系統として同色）
+```
+
+- 色分けはstableな `bonusTypeId` から解決し、表示名の文字列から判定しない
+- 通常アーティア側とGogma側で同じ意味の系統（斬れ味 / 装填）は同じ色系統として扱う
+- 色は補助表現に留め、現在の文字ラベル（種類名とRank）はそのまま維持する。色だけが種類やRankを
+  伝える唯一の手段になってはならない
+- EX Rankは `BonusRankMaster.isEx` で判定し、同じ色系統のまま、文字の太さと枠線の強さなど
+  色以外の差でも通常Rankより明確に強調する。ラベル中の `EX` 表示は維持する
+- 既知の系統に属さない `bonusTypeId` には推測で色を付けず、標準のChip表示へfallbackする
+- 既存の `filled` / `outlined` の違いは維持し、色分けやEX強調でChipの寸法やwrap挙動を変えない
+- 文字色は白背景およびtint背景に対して通常テキストのコントラスト基準（4.5:1）を、枠線色は
+  ページ背景に対して非テキストの基準（3:1）を満たす。黄色系は明るい黄色文字を避け、文字は
+  濃いamber系、枠線を黄色系とする
+- 具体的な色値はPresentation実装の詳細であり、この文書では固定しない
+
 ---
 
 ## 4. Home / Dashboard
