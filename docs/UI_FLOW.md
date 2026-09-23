@@ -25,6 +25,7 @@ Production Plan
 Execution Navigator
 Settings / Import Export
 Debug Details
+Guide / 使い方
 ```
 
 PCブラウザとスマートフォンブラウザの双方を主要利用環境として想定する。端末ごとの適応方針は3.1で定義する。
@@ -51,6 +52,7 @@ PCブラウザとスマートフォンブラウザの双方を主要利用環境
   RNG状態設定
   通常アーティアカウンター
 
+使い方
 設定
 デバッグ          ※ Debug Mode ON時のみ
 ```
@@ -61,10 +63,33 @@ PCブラウザとスマートフォンブラウザの双方を主要利用環境
   「生産計画」、`/plans/:planId/run` を「実行ナビゲーション」とし、より具体的なpathを `/plans` より
   先に判定する
 - デバッグはDebug Mode ON時のみ表示する
+- 「使い方」（`/guide`、2.2）は日常のDomain操作ではないため管理・計画・初期設定のいずれのグループにも
+  入れず、区切り線の下で「設定」の直前に置く。AppBarのcurrent page表示は「使い方」とする。Debug Modeに
+  よって表示の有無を変えない
 - PC（permanent Drawer）とスマートフォン（temporary Drawer）で到達可能な主要機能は同じとする
 - Drawerは縦スクロールを許容するが、縦スクロールバーの有無にかかわらず不要な横スクロールを
   発生させない。ナビゲーション内容はDrawer paperの利用可能幅へ収め、固定幅で溢れさせない。
   横overflowを `overflow-x: hidden` で隠すだけの対応は行わない
+
+### 2.2 Guide / 使い方
+
+目的。
+
+GitHub Pages上でアプリを開いたユーザーが、Repositoryの仕様書を読まずに、準備、目標武器の登録、候補検索、
+ビルドリスト、生産計画、実行ナビ、バックアップ / 復元までの代表的な流れを理解できるようにする。
+
+- route は `/guide`（HashRouterでは `#/guide`）、ページタイトルは「使い方」とする
+- 実アプリのスクリーンショットと本文で、代表的な利用フローを手順ごとに説明する。スクリーンショットは
+  架空のガイド用データで実Browserから取得したものとし、開発者やユーザーの実データ、Debug Modeの内部値を
+  写さない。画像はGitHub Pagesのbase pathで壊れないようbundleへimportし、横overflowを起こさずに
+  端末幅へ縮小する。画像には意味のある代替テキストを付け、同じ内容を本文でも説明する
+- Guideはユーザー向けの説明であり、仕様書ではない。Domain / RNG / Search / Planner / Persistenceの
+  authorityはこの文書を含む正式仕様のままであり、Guideの文言は正式仕様と現在の画面を言い換えるだけで、
+  semanticsを追加・変更しない。必須でない準備（通常アーティアCounter、所持武器の登録など）を
+  一本道の必須手順として説明しない
+- 該当する画面（RNG状態設定、通常アーティアカウンター、所持武器、目標武器、候補検索、ビルドリスト、
+  生産計画、設定）への補助リンクを置いてよい
+- 永続データを読み書きせず、Debug Modeによって内容を変えない
 
 ---
 
@@ -2222,6 +2247,7 @@ React Routerを使う場合の推奨path。
 /plans
 /plans/:planId
 /plans/:planId/run
+/guide
 /settings
 /debug
 ```

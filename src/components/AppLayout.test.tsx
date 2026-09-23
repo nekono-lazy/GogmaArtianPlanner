@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -54,6 +54,7 @@ function renderAppLayout(initialPath: string) {
             <Route path="plans" element={<div>生産計画一覧画面</div>} />
             <Route path="plans/:planId" element={<div>生産計画画面</div>} />
             <Route path="plans/:planId/run" element={<div>実行ナビゲーション画面</div>} />
+            <Route path="guide" element={<div>使い方画面</div>} />
             <Route path="settings" element={<div>設定画面</div>} />
             <Route path="debug" element={<div>デバッグ画面</div>} />
           </Route>
@@ -73,6 +74,7 @@ const primaryScreens = [
   '生産計画',
   'RNG状態設定',
   '通常アーティアカウンター',
+  '使い方',
   '設定',
 ]
 
@@ -98,6 +100,7 @@ const expectedSequence = [
   '初期設定',
   'RNG状態設定',
   '通常アーティアカウンター',
+  '使い方',
   '設定',
 ]
 
@@ -123,7 +126,7 @@ describe('AppLayout', () => {
     expect(within(nav).queryByRole('link', { name: 'デバッグ' })).not.toBeInTheDocument()
   })
 
-  it('groups and orders the navigation as 管理 / 計画, then 初期設定 and 設定', () => {
+  it('groups and orders the navigation as 管理 / 計画, then 初期設定, 使い方 and 設定', () => {
     mockDesktopViewport()
     renderAppLayout('/')
 
@@ -220,6 +223,7 @@ describe('AppLayout', () => {
     ['/build-list', 'ビルドリスト'],
     ['/normal-counters', '通常アーティアカウンター'],
     ['/settings', '設定'],
+    ['/guide', '使い方'],
   ])('keeps the active indicator on %s after the regrouping', (path, label) => {
     mockDesktopViewport()
     renderAppLayout(path)
@@ -227,6 +231,52 @@ describe('AppLayout', () => {
     const nav = screen.getByRole('navigation', { name: 'メインナビゲーション' })
     expect(within(nav).getByRole('link', { name: label })).toHaveAttribute('aria-current', 'page')
     expect(within(nav).getAllByRole('link', { current: 'page' })).toHaveLength(1)
+  })
+
+  it('offers 使い方 outside every group, directly above 設定, leading to /guide', () => {
+    mockDesktopViewport()
+    renderAppLayout('/guide')
+
+    const nav = screen.getByRole('navigation', { name: 'メインナビゲーション' })
+    const link = within(nav).getByRole('link', { name: '使い方' })
+    expect(link).toHaveAttribute('href', '/guide')
+    expect(link).toHaveAttribute('aria-current', 'page')
+    expect(within(nav).getAllByRole('link', { current: 'page' })).toHaveLength(1)
+    // Not placed under any group heading: it follows the 初期設定 group's last
+    // entry and precedes 設定 in the ungrouped list.
+    const sequence = navigationSequence(nav)
+    expect(sequence.indexOf('使い方')).toBe(sequence.indexOf('設定') - 1)
+    expect(link.closest('ul')).toBe(within(nav).getByRole('link', { name: '設定' }).closest('ul'))
+    expect(link.closest('ul')?.querySelector('.MuiListSubheader-root')).toBeNull()
+    expect(screen.getByText('使い方画面')).toBeInTheDocument()
+    expect(within(screen.getByRole('banner')).getByText('使い方')).toBeInTheDocument()
+  })
+
+  it('keeps 使い方 in the navigation whether Debug Mode is on or off', () => {
+    mockDesktopViewport()
+    renderAppLayout('/')
+    let nav = screen.getByRole('navigation', { name: 'メインナビゲーション' })
+    expect(within(nav).getByRole('link', { name: '使い方' })).toBeInTheDocument()
+    cleanup()
+
+    useSettingsStore.setState({ debugMode: true })
+    renderAppLayout('/')
+    nav = screen.getByRole('navigation', { name: 'メインナビゲーション' })
+    expect(within(nav).getByRole('link', { name: '使い方' })).toBeInTheDocument()
+  })
+
+  it('navigates from the mobile Drawer to 使い方', async () => {
+    const user = userEvent.setup()
+    renderAppLayout('/')
+
+    await user.click(screen.getByRole('button', { name: 'ナビゲーションを開く' }))
+    const nav = screen.getByRole('navigation', { name: 'メインナビゲーション' })
+    await user.click(within(nav).getByRole('link', { name: '使い方' }))
+
+    expect(screen.getByText('使い方画面')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(within(screen.getByRole('banner')).getByText('使い方')).toBeInTheDocument(),
+    )
   })
 
   it('marks the Dashboard link active only at the root path, not at a nested one', () => {

@@ -78,6 +78,7 @@ Production v1のSkill / Gogma PredictionとIdentification Wizardは、通常ア�
   - 唯一の例外として、通常アーティアカウンター画面（Normal Counter Setup）では、ユーザーが管理している確定済み通常アーティアCounter（`isConfirmed = true` かつ値あり）の現在値を、状態確認のため通常UIへ表示してよい。未確定の保持値（確定解除後の値を含む）は現在値として通常UIに表示しない（[UI_FLOW.md](./UI_FLOW.md) 6）
   - この例外はBase Seed、Skill Counter、Gogma Counter、Counter Gateその他のRNG内部値、および他画面へ拡張しない
 - RNGやPlannerの専門知識がなくても主要操作を完了できるUIにする
+  - アプリ内に、代表的な利用フローをスクリーンショット付きで説明する「使い方」ページを置く（[UI_FLOW.md](./UI_FLOW.md) 2.2）。これはユーザー向けの説明であり、仕様のauthorityではない
 - 仕様にない機能を独断で追加しない
 
 ---

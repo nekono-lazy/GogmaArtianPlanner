@@ -32,6 +32,7 @@ describe('App', () => {
     ['#/plans', '生産計画'],
     ['#/plans/plan-1', '生産計画'],
     ['#/plans/plan-1/run', '実行ナビゲーション'],
+    ['#/guide', '使い方'],
     ['#/settings', '設定'],
   ])('navigates %s to %s', (hash, heading) => {
     window.location.hash = hash
