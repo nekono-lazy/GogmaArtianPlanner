@@ -212,6 +212,12 @@ Planner、Target評価、Master、persisted schema、calculation semanticsを変
   Darkのpaper背景およびtint背景に対して4.5:1を、枠線色はDarkのページ背景・paper背景に対して3:1を
   満たす。Light用の色値をDark背景へそのまま流用しない。Light / Darkの色値の選択も同じPresentation
   authorityが行い、`RestorationBonusSlots` と `BonusSlotList` が別々のDark配色を持ってはならない
+- Dark面では同じtint段差でも通常RankとEXの背景差が小さく見えるため、Dark themeではLightより
+  通常RankとEXの背景tintの差を明確にしてよい（通常Rankのtintは維持し、EXのtintだけを強める）。
+  5枠を並べたとき、ラベルを読む前でもEXの枠が分かる程度の差とし、発光的・蛍光的な強さにはしない。
+  このときもEXの文字色・枠線色・文字weight・枠線幅は通常Rankと同じとし、EXの文字色はEXのtint背景に
+  対して4.5:1を満たす。Light themeのtintはこれによって変えない。mode別のtintの選択も同じ
+  Presentation authorityが行い、画面ごとにDark用のEX強調を持たない
 - 具体的な色値はPresentation実装の詳細であり、この文書では固定しない
 
 ### 3.5 Light / Dark theme

@@ -11,7 +11,8 @@ import type { BonusRankId, BonusTypeId } from '../domain/models/publicTypes'
  * easier to tell apart at a glance and carries no Domain meaning. The text
  * label stays the authority - `RestorationBonusSlots` never changes it - so
  * colour is only a secondary cue, and an EX rank - already named by the `EX`
- * text of its label - is set apart only by a slightly stronger tint.
+ * text of its label - is set apart only by a stronger tint of its family
+ * colour.
  *
  * The family is resolved from the stable `bonusTypeId`, never from a display
  * name. Normal-side and Gogma-side types of one meaning share a family, so a
@@ -83,7 +84,7 @@ export const RESTORATION_BONUS_TONE_COLORS: Readonly<
  * The same four hue families as the Light table, lifted to light pastel
  * labels for the dark surface: `text` keeps at least 4.5:1 against the dark
  * `background.paper` (`#1a1f1c`) and against the strongest EX tint over it
- * (about 6:1 or more), and `border` - a mid shade of the same hue, darker
+ * (about 5:1 or more), and `border` - a mid shade of the same hue, darker
  * than the label - keeps at least 3:1 against both dark surfaces. Here the
  * amber family can use a yellow label, because a light yellow is readable on
  * a dark surface.
@@ -114,24 +115,56 @@ export interface RestorationBonusChipStyle {
   boxShadow: string
 }
 
+/** Background tint alpha of one variant: a normal rank and an EX rank. */
+export interface RestorationBonusTintRule {
+  normal: number
+  ex: number
+}
+
+/**
+ * Background tint strengths of one theme mode (`docs/UI_FLOW.md` 3.4 / 3.5).
+ *
+ * `outlined` keeps a transparent normal rank and `filled` keeps its light
+ * normal-rank tint; EX is set apart only by a stronger tint of the same family
+ * colour. On Light, one Material state-layer step is enough (0 -> 8% on
+ * `outlined`, 10% -> 16% on `filled`). On Dark the same step barely shows,
+ * because a pastel label tinted over a near-black surface moves the
+ * background luminance very little, so Dark keeps the normal-rank tints and
+ * widens only the EX step until an EX slot stands out among five before its
+ * label is read. The Dark EX tints stay low enough that every Dark label keeps
+ * at least 4.5:1 against its EX background on both Dark surfaces (about 5:1 at
+ * worst), so the emphasis stays a quiet surface change, never a glow.
+ */
+export const RESTORATION_BONUS_TINT_RULES: Readonly<
+  Record<PaletteMode, Readonly<Record<RestorationBonusChipVariant, RestorationBonusTintRule>>>
+> = {
+  light: {
+    outlined: { normal: 0, ex: 0.08 },
+    filled: { normal: 0.1, ex: 0.16 },
+  },
+  dark: {
+    outlined: { normal: 0, ex: 0.18 },
+    filled: { normal: 0.1, ex: 0.24 },
+  },
+}
+
 /**
  * Chip `sx` for one slot.
  *
  * The two variants keep their existing contrast: `outlined` stays a
  * transparent chip with a coloured 1px border, `filled` stays a tinted chip
  * and draws its border as an inset ring so no Chip dimension changes. EX is
- * emphasised only by a slightly stronger background tint of the same family
- * colour (one Material state-layer step: 8% on `outlined`, 10% -> 16% on
- * `filled`); the label weight and the border / ring strength are the same as
- * a normal rank, because the `EX` text already names the rank and the tint
- * is a secondary cue. Nothing changes the Chip's fixed box, so an EX slot is
- * exactly as tall and wide as a normal one and the five slots wrap the same
- * way as before.
+ * emphasised only by a stronger background tint of the same family colour
+ * (`RESTORATION_BONUS_TINT_RULES`); the label colour, the label weight and the
+ * border / ring strength are the same as a normal rank, because the `EX` text
+ * already names the rank and the tint is a secondary cue. Nothing changes the
+ * Chip's fixed box, so an EX slot is exactly as tall and wide as a normal one
+ * and the five slots wrap the same way as before.
  *
- * `mode` selects the Light or Dark tone table and nothing else: the tint
- * strengths and the ring are the same in both modes, so the one function
- * stays the authority for every slot display in either theme. Callers pass
- * `theme.palette.mode`; omitting it keeps the Light table.
+ * `mode` selects the Light or Dark tone table and tint rule; the ring is the
+ * same in both modes, so the one function stays the authority for every slot
+ * display in either theme. Callers pass `theme.palette.mode`; omitting it
+ * keeps the Light table and rule.
  */
 export function restorationBonusChipSx(
   tone: RestorationBonusTone,
@@ -141,7 +174,8 @@ export function restorationBonusChipSx(
 ): RestorationBonusChipStyle {
   const { text, border } = restorationBonusToneColors(mode)[tone]
   const ringWidth = variant === 'outlined' ? 0 : 1
-  const tint = variant === 'outlined' ? (isEx ? 0.08 : 0) : isEx ? 0.16 : 0.1
+  const rule = RESTORATION_BONUS_TINT_RULES[mode][variant]
+  const tint = isEx ? rule.ex : rule.normal
   return {
     color: text,
     borderColor: border,
