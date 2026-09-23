@@ -1,5 +1,5 @@
 import { render, screen, within } from '@testing-library/react'
-import { ThemeProvider } from '@mui/material/styles'
+import { alpha, ThemeProvider } from '@mui/material/styles'
 import { describe, expect, it } from 'vitest'
 import { appTheme, createAppTheme } from '../app/theme'
 import { loadMasterData } from '../domain/master/loadMasterData'
@@ -10,6 +10,7 @@ import { BonusSlotList } from './ManagementListItem'
 import { RestorationBonusSlots } from './RestorationBonusSlots'
 import {
   RESTORATION_BONUS_DARK_TONE_COLORS,
+  RESTORATION_BONUS_TINT_RULES,
   RESTORATION_BONUS_TONE_COLORS,
   isRestorationBonusExRank,
   resolveRestorationBonusTone,
@@ -97,10 +98,10 @@ describe('isRestorationBonusExRank', () => {
 })
 
 describe('restorationBonusChipSx', () => {
-  it('sets EX apart from a normal rank only by a slightly stronger tint', () => {
+  it('sets EX apart from a normal rank only by a slightly stronger tint on Light', () => {
     for (const variant of ['filled', 'outlined'] as const) {
-      const normal = restorationBonusChipSx('attack', false, variant)
-      const ex = restorationBonusChipSx('attack', true, variant)
+      const normal = restorationBonusChipSx('attack', false, variant, 'light')
+      const ex = restorationBonusChipSx('attack', true, variant, 'light')
       // Same family colours - EX is not a different colour.
       expect(ex.color).toBe(normal.color)
       expect(ex.borderColor).toBe(normal.borderColor)
@@ -113,6 +114,18 @@ describe('restorationBonusChipSx', () => {
       expect(ex.bgcolor).not.toBe(normal.bgcolor)
       expect(tintAlpha(ex.bgcolor)).toBeGreaterThan(tintAlpha(normal.bgcolor))
       expect(tintAlpha(ex.bgcolor) - tintAlpha(normal.bgcolor)).toBeLessThanOrEqual(0.1)
+    }
+  })
+
+  it('keeps the Light tint rule unchanged by the Dark EX adjustment (Issue #98)', () => {
+    // Light keeps its one-state-layer EX step: 0 -> 8% outlined, 10% -> 16% filled.
+    const families = ['attack', 'affinity', 'element', 'sharpness_capacity'] as const
+    for (const family of families) {
+      const text = RESTORATION_BONUS_TONE_COLORS[family].text
+      expect(restorationBonusChipSx(family, false, 'outlined', 'light').bgcolor).toBe('transparent')
+      expect(restorationBonusChipSx(family, true, 'outlined', 'light').bgcolor).toBe(alpha(text, 0.08))
+      expect(restorationBonusChipSx(family, false, 'filled', 'light').bgcolor).toBe(alpha(text, 0.1))
+      expect(restorationBonusChipSx(family, true, 'filled', 'light').bgcolor).toBe(alpha(text, 0.16))
     }
   })
 
@@ -288,9 +301,15 @@ describe('restoration bonus colours on the dark theme', () => {
     for (const family of families) {
       const { text, border } = RESTORATION_BONUS_DARK_TONE_COLORS[family]
       for (const surface of [paper, page]) {
-        // The label against the plain surface and against the strongest (EX filled) tint.
+        // The label against the plain surface and against every Dark tint,
+        // the EX tints - the strongest ones - included.
         expect(contrast(text, surface)).toBeGreaterThanOrEqual(4.5)
-        expect(contrast(text, blend(text, surface, 0.16))).toBeGreaterThanOrEqual(4.5)
+        for (const variant of ['filled', 'outlined'] as const) {
+          for (const isEx of [false, true]) {
+            const tint = tintAlpha(restorationBonusChipSx(family, isEx, variant, 'dark').bgcolor)
+            expect(contrast(text, blend(text, surface, tint)), `${family} ${variant} ${isEx}`).toBeGreaterThanOrEqual(4.5)
+          }
+        }
         // The outline, a non-text cue, against the surface.
         expect(contrast(border, surface)).toBeGreaterThanOrEqual(3)
       }
@@ -308,6 +327,39 @@ describe('restoration bonus colours on the dark theme', () => {
         expect(ex.borderColor).toBe(normal.borderColor)
         expect(ex.boxShadow).toBe(normal.boxShadow)
         expect(tintAlpha(ex.bgcolor)).toBeGreaterThan(tintAlpha(normal.bgcolor))
+      }
+    }
+  })
+
+  it('sets EX apart more clearly on Dark than on Light, by the tint alone (Issue #98)', () => {
+    const { paper } = darkTheme.palette.background
+    const lightPaper = appTheme.palette.background.paper
+    for (const variant of ['filled', 'outlined'] as const) {
+      const light = RESTORATION_BONUS_TINT_RULES.light[variant]
+      const dark = RESTORATION_BONUS_TINT_RULES.dark[variant]
+      // A normal rank keeps the Light tint; only the EX step widens.
+      expect(dark.normal).toBe(light.normal)
+      expect(dark.ex).toBeGreaterThan(dark.normal)
+      expect(dark.ex - dark.normal).toBeGreaterThan(light.ex - light.normal)
+      for (const family of families) {
+        const normal = restorationBonusChipSx(family, false, variant, 'dark')
+        const ex = restorationBonusChipSx(family, true, variant, 'dark')
+        expect(tintAlpha(ex.bgcolor) - tintAlpha(normal.bgcolor)).toBeGreaterThan(
+          tintAlpha(restorationBonusChipSx(family, true, variant, 'light').bgcolor) -
+            tintAlpha(restorationBonusChipSx(family, false, variant, 'light').bgcolor),
+        )
+        // The composed backgrounds differ more on Dark than on Light too, so
+        // the wider step is a visible one and not only a bigger number.
+        const { text } = RESTORATION_BONUS_DARK_TONE_COLORS[family]
+        const lightText = RESTORATION_BONUS_TONE_COLORS[family].text
+        expect(contrast(blend(text, paper, dark.ex), blend(text, paper, dark.normal))).toBeGreaterThan(
+          contrast(blend(lightText, lightPaper, light.ex), blend(lightText, lightPaper, light.normal)),
+        )
+        // Same label colour, border colour and border / ring strength as a normal rank.
+        expect(ex.color).toBe(normal.color)
+        expect(ex.borderColor).toBe(normal.borderColor)
+        expect(ex.boxShadow).toBe(normal.boxShadow)
+        expect(ex).not.toHaveProperty('& .MuiChip-label')
       }
     }
   })
