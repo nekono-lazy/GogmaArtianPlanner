@@ -3,7 +3,7 @@ import { createCandidateSearchEngine, createCandidateSearchInput, belowPractical
 import { measureNormalRouteSearch } from '../../test/fixtures/normalRouteReduction'
 import { candidateStableKey, compareCanonicalIdeals } from './candidateProcessing'
 import { searchCandidates } from './candidateSearch'
-import { keepFamilyLayoutKey } from '../rng/gogmaBonusFamily'
+import { keepFamilyLayoutKey, keepFamilyOfBonus } from '../rng/gogmaBonusFamily'
 import type { RestorationBonusSet } from '../models/publicTypes'
 
 function fixture(kind: 'reset' | 'keep' | 'mixed' | 'none', skillDepth = 0, normalBound = 20) {
@@ -53,6 +53,57 @@ describe('#104 Normal base dominance against pre-reduction registration', () => 
     }
     if (kind === 'mixed') expect(after.candidate!.route.operations.slice(2, 4).map(op => op.type)).toEqual(['reset_bonuses', 'keep_bonuses'])
     if (kind === 'keep') expect(after.candidate!.route.operations.slice(2, 4).map(op => op.type)).toEqual(['keep_bonuses', 'keep_bonuses'])
+  })
+
+  it.each(['reset', 'mixed', 'none'] as const)('filters incompatible later families but preserves offset zero: %s', async kind => {
+    const { input, engine, ideal, lower, other } = fixture(kind, 12, 100)
+    vi.mocked(engine.predictNormalArtian).mockImplementation(({ normalCounter }) => {
+      const slots = structuredClone(other)
+      slots[normalCounter % 5] = ideal[0]
+      return slots
+    })
+    vi.mocked(engine.predictGogmaBonus).mockImplementation(({ operation }) => {
+      if (operation.type === 'reset_bonuses') return structuredClone(kind === 'reset' ? ideal : kind === 'mixed' ? lower : other)
+      return structuredClone(kind === 'mixed' && keepFamilyLayoutKey(operation.currentBonuses, input.master) === keepFamilyLayoutKey(ideal, input.master)
+        ? ideal : operation.currentBonuses)
+    })
+    const before = await measureNormalRouteSearch(input, engine, false, true)
+    const after = await measureNormalRouteSearch(input, engine, true, true)
+    expect(after.candidate).toEqual(before.candidate)
+    expect(after.metrics).toMatchObject({ normalPredictions: 100, familyCompatibleNormals: 0,
+      compatibleUniqueLayouts: 0, uniqueLayouts: 5, normalBases: 1, bonusChannels: 1 })
+    expect(before.metrics.normalBases).toBe(100)
+    expect(after.metrics.bonusStates).toBeLessThan(before.metrics.bonusStates)
+    expect(after.metrics.settledWork).toBeLessThan(before.metrics.settledWork)
+    if (kind === 'none') expect(after.candidate).toBeNull()
+    else {
+      expect(after.candidate!.estimatedNormalAdvance).toBe(1)
+      expect(after.candidate!.route.operations[2].type).toBe('reset_bonuses')
+      expect(after.candidate!.route.operations.some(op => op.type === 'reset_skills')).toBe(true)
+      if (kind === 'mixed') expect(after.candidate!.route.operations[3].type).toBe('keep_bonuses')
+    }
+  })
+
+  it('keeps both A A A S S and S A S A A while folding tier and mapped-type duplicates', async () => {
+    const { input, engine, ideal, other } = fixture('keep', 12, 30)
+    const goal: RestorationBonusSet = [ideal[0], ideal[0], ideal[0], ideal[4], ideal[4]]
+    input.targetWeapons[0].idealBonuses = goal
+    const first: RestorationBonusSet = [goal[0], goal[1], goal[2], goal[3], { ...goal[4], bonusRankId: 'bonus_rank.fixture.low' }]
+    const second: RestorationBonusSet = [first[3], first[0], first[4], first[1], first[2]]
+    const mapped = structuredClone(first)
+    mapped[3].bonusTypeId = 'bonus_type.fixture.normal_sharpness'
+    mapped[4].bonusTypeId = 'bonus_type.fixture.normal_sharpness'
+    const values = [other, first, mapped, second, goal]
+    vi.mocked(engine.predictNormalArtian).mockImplementation(({ normalCounter }) => values[(normalCounter - 4) % values.length])
+    vi.mocked(engine.predictGogmaBonus).mockImplementation(({ operation }) => operation.type === 'reset_bonuses' ? other
+      : operation.currentBonuses.map(slot => goal.find(g => g.bonusTypeId === keepFamilyOfBonus(slot, input.master)) ?? slot) as RestorationBonusSet)
+    const before = await measureNormalRouteSearch(input, engine, false, true)
+    const after = await measureNormalRouteSearch(input, engine, true, true)
+    expect(after.candidate).toEqual(before.candidate)
+    expect(after.candidate).not.toBeNull()
+    expect(after.metrics).toMatchObject({ normalPredictions: 30, familyCompatibleNormals: 24,
+      compatibleUniqueLayouts: 2, normalBases: 3, bonusChannels: 3 })
+    expect(after.candidate!.estimatedNormalAdvance).toBe(2)
   })
 
   it('keeps the lowest forgeCount Reset route even when every offset could Reset', async () => {

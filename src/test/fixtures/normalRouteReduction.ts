@@ -1,6 +1,6 @@
 import type { BuildCandidate, RestorationBonusSet } from '../../domain/models/publicTypes'
 import type { RngEngine } from '../../domain/rng/rngEngine'
-import { keepFamilyLayoutKey } from '../../domain/rng/gogmaBonusFamily'
+import { keepFamilyLayoutKey, keepFamilyMultisetKey } from '../../domain/rng/gogmaBonusFamily'
 import { bonusStreamBaseKey, createTargetBonusStream } from '../../domain/search/bonusStream'
 import { createTargetSkillStream } from '../../domain/search/skillStream'
 import { createSearchExecutionContext } from '../../domain/search/searchExecution'
@@ -59,9 +59,10 @@ function registerUnreducedNormals(context: RouteSearchContext, scheduler: Target
 /** Test/measurement-only counters; no runtime diagnostics or Worker protocol fields. */
 export async function measureNormalRouteSearch(input: CandidateSearchInput, engine: RngEngine,
   reduced: boolean, exhaustive = false) {
-  const metrics = { normalPredictions: 0, normalBases: 0, uniqueLayouts: 0, bonusChannels: 0,
+  const metrics = { normalPredictions: 0, familyCompatibleNormals: 0, compatibleUniqueLayouts: 0, normalBases: 0, uniqueLayouts: 0, bonusChannels: 0,
     skillChannels: 0, settledWork: 0, compositions: 0, idealCost: null as number | null,
     tieDrainWork: 0, bonusStates: 0, checkpoints: 0 }
+  const compatibleLayouts = new Set<string>()
   const layouts = new Set<string>(), bonusChannels = new Set<string>(), skillChannels = new Set<number>()
   const execution = createSearchExecutionContext({ now: () => '2026-09-24T00:00:00.000Z' })
   const checkpoint = execution.checkpoint
@@ -110,7 +111,16 @@ export async function measureNormalRouteSearch(input: CandidateSearchInput, engi
   await scheduler.run(!exhaustive)
   const elapsedMs = performance.now() - started
   candidates.push(...oracle, ...results.flatMap(result => result.candidates))
-  for (const bonuses of normalPredictions.values()) layouts.add(keepFamilyLayoutKey(bonuses, input.master))
+  const idealFamilies = keepFamilyMultisetKey(target.idealBonuses, input.master)
+  for (const bonuses of normalPredictions.values()) {
+    const layout = keepFamilyLayoutKey(bonuses, input.master)
+    layouts.add(layout)
+    if (keepFamilyMultisetKey(bonuses, input.master) === idealFamilies) {
+      metrics.familyCompatibleNormals++
+      compatibleLayouts.add(layout)
+    }
+  }
+  metrics.compatibleUniqueLayouts = compatibleLayouts.size
   metrics.normalPredictions = normalPredictions.size
   metrics.uniqueLayouts = layouts.size
   metrics.bonusChannels = bonusChannels.size

@@ -1649,7 +1649,12 @@ baseの登録・購読・状態評価を省略する。Planner constrained enume
 - 同一Normal Counter / Search originの最小forgeCount（offset 0）のbaseは従来のReset / Keep
   streamとcanonical frontier代表選択をそのまま使う。Reset-only、Reset→Keepを含むすべての
   Reset由来の結果はここで評価する
-- 後続offsetは、既存 `keepFamilyLayoutKey()` のordered family layoutが初出のときだけ
+- 後続offsetはまず `keepFamilyMultisetKey()` でIdeal Bonusのfamily multisetとの互換性を
+  判定する。両方の5枠を既存Master mappingでKeep familyへ正規化し、slot順を無視した
+  familyの個数が一致するものだけを残す。Keepはfamilyを変えないので、不一致のbaseは
+  KeepだけではIdealへ到達しない。そのReset由来Routeはoffset 0が代表する。
+  offset 0にはこのfilterを適用しない
+- 互換な後続offsetだけ、既存 `keepFamilyLayoutKey()` のordered family layoutが初出のときに
   Keep-only streamへ登録する。同一layoutの後方offsetは登録しない。tierはlayout keyに含めず、
   Normal側typeは既存Master mappingで正規化し、slot順は維持する
 - normal scopeの初期5枠は、同名ラベルが5/5一致しても5.1のIdealではないため、
@@ -1671,7 +1676,8 @@ Normal forgeはGogma / Skill Counterを進めず、最後の1本のconversionだ
 後続Normal側が総操作数で厳密に劣後する。最初のbaseのfull frontierは変えないので、
 同costでのReset / Keep履歴のcanonical選択は変わらない。
 
-削除対象は比較の第1キーで劣後し、Gogma / Skill / Normal advance、preferred source、
+family互換filterで除外したbaseはKeep-onlyのIdealを持たず、Reset経由は上記のとおり劣後する。
+同一未来を理由に削除した対象は比較の第1キーで劣後し、Gogma / Skill / Normal advance、preferred source、
 stable keyの後続tie-breakへ進まない。異なるlayoutの後続Normalが少ないGogma操作で
 総操作数同点以下になる場合は残す。最終CandidateのRoute、Counter、scope、予測traceが
 同じなので、そのRouteから抽出するlane別intermediate stateも同じである。

@@ -27,11 +27,20 @@ describe('Issue #104 benchmark fixtures', () => {
     input.settings.maxSkillAdvance=1500
     expect((await searchCandidates(input, engine)).targetResult.candidate).toMatchObject({estimatedOperationCount:1087,estimatedSkillAdvance:1085})
   })
-  it.each(['no_ideal', 'near_ideal', 'deep_skill'] as const)('Production parity with the old per-offset oracle: %s', async scenario => {
-    const input=createNormalRouteReductionBenchmarkInput(scenario,{maxNormalAdvance:100,maxGogmaAdvance:8,maxSkillAdvance:1500})
+  it.each((['no_ideal', 'near_ideal', 'deep_skill'] as const).flatMap(scenario => [100, 500].map(n => [scenario, n] as const)))('Production parity with the old per-offset oracle: %s, Normal %i', async (scenario, n) => {
+    const input=createNormalRouteReductionBenchmarkInput(scenario,{maxNormalAdvance:n,maxGogmaAdvance:8,maxSkillAdvance:1500})
     const before=await measureNormalRouteSearch(input,new ProductionRngEngine(),false)
     const after=await measureNormalRouteSearch(input,new ProductionRngEngine(),true)
     expect(after.candidate).toEqual(before.candidate)
-    expect(after.metrics.normalBases).toBeLessThanOrEqual(after.metrics.uniqueLayouts)
+    expect(after.metrics.normalBases).toBeLessThanOrEqual(after.metrics.compatibleUniqueLayouts + 1)
+    if (scenario !== 'near_ideal') {
+      expect(after.metrics).toMatchObject(n === 500
+        ? { normalPredictions: 500, familyCompatibleNormals: 52, compatibleUniqueLayouts: 19, uniqueLayouts: 202, normalBases: 20, bonusChannels: 20 }
+        : { normalPredictions: 100, familyCompatibleNormals: 11, compatibleUniqueLayouts: 9, uniqueLayouts: 76, normalBases: 10, bonusChannels: 10 })
+      expect(after.metrics.familyCompatibleNormals).toBeLessThan(after.metrics.normalPredictions)
+      expect(after.metrics.normalBases).toBeLessThan(before.metrics.normalBases)
+      expect(after.metrics.bonusStates).toBeLessThan(before.metrics.bonusStates)
+      expect(after.metrics.settledWork).toBeLessThan(before.metrics.settledWork)
+    }
   }, 20000)
 })

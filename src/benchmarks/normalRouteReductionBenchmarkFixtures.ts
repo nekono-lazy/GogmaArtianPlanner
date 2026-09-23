@@ -45,14 +45,14 @@ export const normalRouteReductionBenchmarkWorkloads = [
     settings: { maxNormalAdvance: n, maxGogmaAdvance: 200, maxSkillAdvance: 1500 },
     expectedIdealOperationCount: 1087,
   })),
-  ...[200, 350, 500].map(g => ({
-    id: `issue104_no_ideal_gogma_${g}`, label: `#104 No Ideal, Gogma ${g}`,
-    scenario: 'no_ideal' as const,
+  ...(['no_ideal', 'deep_skill', 'near_ideal'] as const).flatMap(scenario => [200, 350, 500].map(g => ({
+    id: `issue104_${scenario}_gogma_${g}`, label: `#104 ${scenario}, Gogma ${g}`,
+    scenario,
     settings: { maxNormalAdvance: 500, maxGogmaAdvance: g, maxSkillAdvance: 1500 },
-    expectedIdealOperationCount: null,
-  })),
+    expectedIdealOperationCount: scenario === 'no_ideal' ? null : scenario === 'near_ideal' ? 3 : 1087,
+  }))),
   ...(['near_ideal', 'deep_skill'] as const).map(scenario => ({
-    id: `issue104_${scenario}_default`, label: `#104 ${scenario}, proposed defaults`, scenario,
+    id: `issue104_${scenario}_default`, label: `#104 ${scenario}, current defaults`, scenario,
     settings: { ...NORMAL_ROUTE_REDUCTION_MEASUREMENT_SETTINGS },
     expectedIdealOperationCount: scenario === 'near_ideal' ? 3 : 1087,
   })),

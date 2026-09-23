@@ -3,7 +3,10 @@
 実施日: 2026-09-24。基準main: `2a560304f1b02af2310831e058cdd07c0c98f2a2`。
 この文書は測定記録。意味論の正本は SEARCH_SPEC 6.1.2 / RNG_SPEC 6・7。
 
-## 実装と同値性
+> 以下の既存測定節は **first reduction**（PR #105 head `f9b2189`）のhistorical record。
+> 最新の挙動・追加測定・default判断は末尾「family compatibility filter追加後」を参照。
+
+## 実装と同値性（first reduction）
 
 新規predicted Normalのoffset 0だけが従来のfull Reset/Keep streamを使う。
 後続offsetはordered family layoutの初出だけをKeep-only streamへ登録する。
@@ -177,3 +180,114 @@ await b5Benchmark.run({
 G20比較には `createNormalRouteReductionBenchmarkInput('deep_skill',
 {maxNormalAdvance:N,maxGogmaAdvance:20,maxSkillAdvance:1500})` を渡す。
 本番UI、Worker protocol、計算結果にdiagnostic fieldやdebug switchは追加していない。
+
+## family compatibility filter追加後（2026-09-24）
+
+### 変更と同値性
+
+後続Normal（offset > 0）は、まずTarget Idealと同じ**unordered Keep-family multiset**を
+持つか判定する。互換なものだけをordered layoutで重複排除し、最初の1本をKeep-only
+baseへ登録する。`keepFamilyMultisetKey()` は既存 `keepFamilyLayout()` の結果をsortする
+だけで、Normal / Gogma typeおよびSharpness / Capacityのmany-to-one mappingは同じ
+Master authorityを使う。familyの個数が同じでもslot順が違えば別channelとして残す。
+
+Keepは各slotのfamilyを変えないため、不互換baseのKeep-only結果はどのSkill位置でも
+Idealにならない。Reset経由の結果はoffset 0が既に厳密に安く代表する。offset 0には
+互換filterを適用せず、full Reset/Keep frontierを維持する。既存のcanonical比較、
+normal scope、RNG algorithm/version、schema、Planner constrained enumerationは変更しない。
+
+pre-#104のper-offset full-registration oracleは変更していない。追加テストは不互換Normal
+100本でもReset-only / Reset→Keep / 深いSkillのCandidate全体が一致すること、no-Ideal、
+A A A S S と S A S A A の両layout保持、tier / mapped-type重複の最小forge代表を固定する。
+従来の後方Normalが同操作数からGogma advanceで勝つテストも維持。
+Production fixtureはNormal100 / 500（Gogma8 / Skill1500）の3シナリオで旧oracleと完全一致。
+
+### 実Browser Worker再測定
+
+同じWindows / Ryzen 7 9700X / 16 logical processors、Chrome **153.0.8010.49**。
+専用headless ChromeをCDPで操作し、production buildの実Workerを実行。
+production Worker bundleは `search.worker.entry-Cvu7bVvD.js`。
+各caseはwarm-up 1回 + measurement 3回、15秒watchdog。全48 run完走。
+NodeはCDP制御と構造回数の計測にだけ使い、Node時間を以下のBrowser時間に含めない。
+first reduction列は上記historical測定であり、同時刻に取り直した対照群ではない。
+
+Normal500 / Skill1500、Browser elapsed中央値（ms）:
+
+| scenario | Gogma | first reduction | family filter後 | settled work（filter後） |
+| --- | ---: | ---: | ---: | ---: |
+| deep Skill | 200 | 3582.1 | 1388.5 | 5586 |
+| deep Skill | 350 | 9090.9 | 3758.5 | 8586 |
+| deep Skill | 500 | 未測定 | 6898.9 | 11586 |
+| no-Ideal | 200 | 3709.2 | 1769.4 | 6000 |
+| no-Ideal | 350 | 9109.9 | 3820.4 | 9000 |
+| no-Ideal | 500 | 13515.9 / 13573.7 / 15秒中止 | 7217.9 | 12000 |
+| near Ideal | 200 | 未測定 | 14.8 | 4 |
+| near Ideal | 350 | 15.4 | 15.6 | 4 |
+| near Ideal | 500 | 未測定 | 14.6 | 4 |
+
+すべてのdeep Skillはcost1087、near Idealはcost3、no-IdealはCandidate=null。
+対応するhistorical first-reduction完走結果がある24 runで、createdAtを除くCandidate bodyが
+一致。今回の大範囲Browser比較はfirst reductionとの比較であり、旧pre-#104 oracleとの
+同値性は前述のFake / Productionテストで別に固定する。
+
+### 構造回数（Production fixture）
+
+Gogma350 / Skill1500、deep Skill。回数はテストhelperのinstrumentation、時間は上記と
+同じBrowser計測。family互換本数は実際に予測したNormal内の本数で、offset 0も含めて数える。
+unique layoutは全予測内 / 互換予測内を区別する。offset 0はこのfixtureでは不互換なので、
+登録base数は互換unique layout + 1。
+
+| Normal上限 | 予測本数 | family互換本数 | 全unique layout | 互換unique layout | 登録base / Bonus channel | Bonus状態評価 | settled work | Browser ms |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 1 | 0 | 1 | 0 | 1 | 38289 | 1437 | 3208.2 |
+| 100 | 100 | 11 | 76 | 9 | 10 | 41439 | 4686 | 3584.6 |
+| 500 | 500 | 52 | 202 | 19 | 20 | 44939 | 8586 | 3758.5 |
+| 1000 | 1000 | 102 | 227 | 19 | 20 | 44939 | 9086 | 3834.0 |
+
+Normal500 / Gogma350 / Skill1500について、`f9b2189`のNormal登録処理を同じ測定helperへ
+差し替えて構造回数も再取得した（本番debug switchなし）。
+
+| metric | first reduction | family filter後 |
+| --- | ---: | ---: |
+| Normal予測本数 | 500 | 500 |
+| family互換本数 / 互換unique layout | 52 / 19 | 52 / 19 |
+| 全unique layout | 202 | 202 |
+| Normal base / Bonus channel | 202 / 202 | 20 / 20 |
+| Bonus状態評価（deep / no-Ideal共通） | 108639 | 44939 |
+| settled work（deep Skill） | 72286 | 8586 |
+| settled work（no-Ideal） | 72700 | 9000 |
+| Skill channel | 1 | 1 |
+| composition（deep / no-Ideal） | 1 / 0 | 1 / 0 |
+| Ideal cost / tie drain（deep） | 1087 / 1 | 1087 / 1 |
+
+base / channelは90.1%、Bonus状態評価は58.6%、deepのsettled workは88.1%削減。
+near Idealは前後ともNormal予測2、family互換0、全unique2、Bonus状態評価2、settled4。
+登録baseだけ2→1となり、初回baseのResetで完了する。500本の先読みはしない。
+
+### cancel / responsiveness再確認
+
+benchmark_seam、50msごとping。主スレッドでcancel送信から観測message受信までを計測し、
+cancel後150msのprogressも確認した。各セルは no-Ideal / deep Skill の順。
+
+| Gogma / cancel時点 | Promise拒否 ms | Worker cancel受信 ms | Worker停止 ms | ping最大 ms | cancel後progress |
+| --- | --- | --- | --- | --- | --- |
+| 350 / 100ms | 0.1 / 0.1 | 1.4 / 1.9 | 1.5 / 2.1 | 1.3 / 0.2 | 0 / 0 |
+| 500 / 100ms | 0.0 / 0.1 | 0.3 / 1.4 | 0.6 / 1.6 | 0.7 / 0.7 | 0 / 0 |
+| 350 / 2000ms | 0.1 / 0.1 | 1.7 / 2.4 | 2.0 / 2.6 | 5.5 / 6.4 | 0 / 0 |
+| 500 / 2000ms | 0.1 / 0.0 | 0.9 / 2.5 | 0.9 / 2.9 | 10.3 / 5.1 | 0 / 0 |
+
+2秒試行は3400〜3500 workまで進み、各39 pingに応答。Worker応答不能やcancel後のprogressを
+観測しなかった。全探索中の最大pauseやUI frame latencyを保証する数値ではない。
+
+### 最終defaultと再実行
+
+**Normal500 / Gogma350 / Skill1500を維持する。** 350の重いfixtureは約3.8秒まで改善。
+500も全試行完走し、cancelも応答するため選択肢になるが、約6.9〜7.2秒と350の約1.8倍で、
+低性能端末は未測定。既定値を500へ自動的に増やさず、350を採用する。
+最初のfull Reset/Keep frontierの深さ依存コストは残る（Normal1でもGogma350は約3.2秒）。
+
+上記の再実行方法を使い、`issue104_{deep_skill,no_ideal,near_ideal}_gogma_{200,350,500}`
+を選択する。historical B5 presetは変更しない。Normal sweepのGogma350はfactoryに
+`{maxNormalAdvance:N,maxGogmaAdvance:350,maxSkillAdvance:1500}`を渡して実行した。
+構造計測helperは `familyCompatibleNormals` / `compatibleUniqueLayouts` を追加済み。
+未測定範囲（モバイル / 低性能端末、Firefox / Safari、memory peak、UI frame応答）は従来どおり。

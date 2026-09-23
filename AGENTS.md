@@ -2391,7 +2391,10 @@ or the `BuildCandidate` ID generation rule as a side effect.
 ### Issue #104 Normal Route base reduction
 
 Initial Candidate Search incrementally retains the first Normal offset's full Reset/Keep
-stream and only the earliest Normal per ordered family layout for later Keep-only streams
+stream. Later Normals first require the same unordered Keep-family multiset as the Target
+Ideal, then only the earliest Normal per ordered family layout enters a Keep-only stream.
+Both keys use gogmaBonusFamily's Master mapping authority; multiset equality ignores order,
+while stream dedup preserves it. An incompatible offset zero still keeps its full stream
 (SEARCH_SPEC 6.1.2). Reset-derived futures depend on no Normal initial slots; equivalent
 Keep futures depend only on ordered families. A later equivalent Normal costs strictly
 more for identical Bonus/Skill results. Never apply this pruning to constrained enumeration,
