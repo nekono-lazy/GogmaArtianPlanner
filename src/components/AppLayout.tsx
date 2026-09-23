@@ -66,7 +66,9 @@ const primaryNavigationGroups: NavigationGroup[] = [
 
 /**
  * One-time setup screens (`docs/UI_FLOW.md` 2.1), rendered below the Drawer
- * divider so daily work sits above them.
+ * divider so daily work sits above them. 使い方 (`/guide`, `docs/UI_FLOW.md`
+ * 2.2) is not a Domain operation, so it joins no group and sits directly
+ * above 設定.
  */
 const setupNavigationGroups: NavigationGroup[] = [
   {
@@ -106,6 +108,7 @@ const routeTitles: RouteTitle[] = [
   { pattern: '/plans/:planId/run', label: '実行ナビゲーション' },
   { pattern: '/plans/:planId', label: '生産計画' },
   { pattern: '/plans', label: '生産計画' },
+  { pattern: '/guide', label: '使い方' },
   { pattern: '/settings', label: '設定' },
   { pattern: '/debug', label: 'デバッグ' },
 ]
@@ -218,6 +221,7 @@ export function AppLayout() {
       <Divider />
       {setupNavigationGroups.map(renderNavigationGroup)}
       <List>
+        {renderNavigationItem({ label: '使い方', to: '/guide' })}
         {renderNavigationItem({ label: '設定', to: '/settings' })}
         {debugMode && renderNavigationItem({ label: 'デバッグ', to: '/debug' })}
       </List>

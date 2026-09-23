@@ -20,6 +20,7 @@ import { TargetWeaponsPage } from './pages/TargetWeaponsPage'
 import { ExecutionNavigatorPage } from './pages/ExecutionNavigatorPage'
 import { ProductionPlanPage } from './pages/ProductionPlanPage'
 import { ProductionPlansPage } from './pages/ProductionPlansPage'
+import { GuidePage } from './pages/GuidePage'
 
 const masterData = loadMasterData()
 
@@ -57,6 +58,7 @@ function ApplicationRoutes() {
           <Route path="plans" element={<ProductionPlansPage />} />
           <Route path="plans/:planId" element={<ProductionPlanPage />} />
           <Route path="plans/:planId/run" element={<ExecutionNavigatorPage />} />
+          <Route path="guide" element={<GuidePage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="debug" element={<DebugPage />} />
           <Route path="*" element={<NotFoundPage />} />
