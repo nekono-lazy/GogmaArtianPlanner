@@ -1,5 +1,6 @@
 import Dexie from 'dexie'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { THEME_MODE_STORAGE_KEY } from '../../app/themeModePreference'
 import { AppDatabase } from '../../db/AppDatabase'
 import type {
   ExportRoot,
@@ -733,5 +734,39 @@ describe('ImportExportService Draft lifecycle (schema 11)', () => {
     expect(exported.schemaVersion).toBe(11)
     expect(exported.productionPlans.map(({ id }) => id)).toEqual(['plan.fixture.a', 'plan.fixture.abandoned'])
     expect(await database.productionPlans.where('status').equals('draft').count()).toBe(0)
+  }))
+})
+
+/*
+ * The Light / Dark choice is a device-local Presentation preference in
+ * localStorage (`docs/UI_FLOW.md` 3.5), never user data: an Export does not
+ * carry it and neither an Import nor clearing all data touches it.
+ */
+describe('ImportExportService and the device-local theme preference', () => {
+  afterEach(() => window.localStorage.clear())
+
+  it('exports no theme field while Dark is chosen, and AppSettings keeps its own fields only', () => withDatabase(async (database) => {
+    window.localStorage.setItem(THEME_MODE_STORAGE_KEY, 'dark')
+    await seedRoot(database, dataTransferRoot())
+
+    const json = await service(database).serializeExport()
+
+    expect(json).not.toMatch(/theme/i)
+    expect(json).not.toContain(THEME_MODE_STORAGE_KEY)
+    const root = JSON.parse(json) as ExportRoot
+    expect(Object.keys(root.settings).sort()).toEqual(Object.keys(createDefaultAppSettings(NOW)).sort())
+    expect(root.schemaVersion).toBe(11)
+  }))
+
+  it('leaves the stored theme untouched by an Import and by clearing all data', () => withDatabase(async (database) => {
+    window.localStorage.setItem(THEME_MODE_STORAGE_KEY, 'dark')
+    const s = service(database)
+
+    await s.applyImport(dataTransferRoot())
+    expect(window.localStorage.getItem(THEME_MODE_STORAGE_KEY)).toBe('dark')
+
+    await s.clearAllData()
+    expect(window.localStorage.getItem(THEME_MODE_STORAGE_KEY)).toBe('dark')
+    expect(await database.settings.get('settings')).toEqual(createDefaultAppSettings(NOW))
   }))
 })

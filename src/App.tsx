@@ -1,11 +1,12 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Alert, Box, CssBaseline, Typography } from '@mui/material'
 import { ThemeProvider } from '@mui/material/styles'
 import { HashRouter, Route, Routes } from 'react-router-dom'
 import { AppLayout } from './components/AppLayout'
-import { appTheme } from './app/theme'
+import { createAppTheme } from './app/theme'
 import { loadMasterData } from './domain/master/loadMasterData'
 import { settingsRepository } from './db/settingsRepository'
+import { useAppearanceStore } from './stores/appearanceStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { DashboardPage } from './pages/DashboardPage'
 import { DebugPage } from './pages/DebugPage'
@@ -69,9 +70,16 @@ function ApplicationRoutes() {
 }
 
 function App() {
+  // The theme follows the device-local mode (`docs/UI_FLOW.md` 3.5). It is
+  // rebuilt only when the mode changes, and only the ThemeProvider value
+  // changes: the routes below keep their tree, so a switch loses no page state.
+  const themeMode = useAppearanceStore((state) => state.themeMode)
+  const theme = useMemo(() => createAppTheme(themeMode), [themeMode])
   return (
-    <ThemeProvider theme={appTheme}>
-      <CssBaseline />
+    <ThemeProvider theme={theme}>
+      {/* `enableColorScheme` sets the CSS `color-scheme` from the palette mode,
+          so native controls and scrollbars follow Light / Dark as well. */}
+      <CssBaseline enableColorScheme />
       {masterData.ok ? (
         <>
           <SettingsBootstrap />
