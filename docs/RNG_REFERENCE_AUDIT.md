@@ -1060,6 +1060,34 @@ Keep（Dual Blades / 龍、current family layout Element / Element / Element / E
 - current implementation（PR-B）: `production-rng:c5-e7`（Gogma Reset Prediction outputが変わるobservable Production RNG semantics change）
 - 変更しないもの: `CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、`ExportRoot.schemaVersion`、`RngState.schemaVersion`、`supportsSeedSearch = false`、PRNG、seed derivation、10-step block、Counter semantics、reference candidate table、reference weighted draw、Keepアルゴリズム、Search algorithm、Planner algorithm、Worker protocol。Master JSON / `allowsElementBonus` / Master dataVersionはPR-Aで変更していない
 
+
+### 14.18 巨戟化時のSkill付与とReset Skillsの同一抽選（2026-09-23）
+
+Issue #72への対応で、プロジェクトオーナーから次の実機観測の報告を受けた。provenanceはdirect game observation（プロジェクトオーナーの実ゲーム観測報告）であり、観測時の武器種・属性・Skill Counter位置を列挙したfixtureは本節に含まない。
+
+**direct game observation**
+
+- `convert_normal_to_gogma`（通常アーティア→巨戟アーティア）時にSkillが自動付与され、Skill Counterは+1される
+- `reset_skills` でもSkill Counterは+1される
+- 同じSkill Counter位置・同じ武器種・同じ属性では、巨戟化時の自動Skill付与とReset Skillsは同じSkill結果になる
+
+**既存契約との整合**
+
+- 6.1 / 6.2（reference-verified）: 巨戟化時の初回付与とReset Skillsはいずれも1 blockを消費し、同じ `skillCounter` blockから結果を得る
+- Domain counter契約: conversion Skill +1（game-verified）、Reset Skills Skill +1（reference-verified）。`src/domain/search/skillStream.ts` は巨戟化時の初回SkillとReset SkillsがSkill Counter位置を共有する
+- Skill Identification kernel（14.4、`identifySkillSeedAndCounter()`）は観測ごとのoperation種別を入力に持たず、同じ武器種・属性の連続したSeries / Group観測列だけを照合する。14.4の「conversion時の初回Skillと、それに続くReset Skills」はC5-E2B1時点の観測手順の記述であり、kernel入力の制約ではない
+- C5-E2C9のgame-verified fixture（[C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md](./C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md)）は巨戟化開始（観測1 = conversion割当Skill、観測2-4 = Reset Skills）のケースを検証したものであり、その記録は変更しない
+
+**契約への反映**
+
+- Identification Wizard STEP 1は、同じ武器種・属性に対する連続したSkill抽選結果を観測する契約へ修正した（[REQUIREMENTS.md](./REQUIREMENTS.md) 6、[UI_FLOW.md](./UI_FLOW.md) 5.4、[RNG_SPEC.md](./RNG_SPEC.md) 9.7）。最初の観測は巨戟化時の自動Skill、既存巨戟アーティアへのReset Skillsのどちらでもよく、starting Skill Counterは観測1を生成する直前のSkill Counterである
+- kernel、Worker protocol、Coordinator、Production Skill Prediction、Counter semantics、`PRODUCTION_RNG_ENGINE_VERSION` は変更しない
+
+**推測しない事項**
+
+- 観測列の途中で武器種・属性を変えた場合の結果、途中に別のSkill Counter消費操作を挟んだ場合の扱いは契約に含めない。Wizardは同じ武器種・属性の連続観測を要求する
+- 本観測は全武器種・全属性・全ゲームバージョンでの検証を意味しない
+
 ---
 
 ## 15. 現在契約との仕様衝突

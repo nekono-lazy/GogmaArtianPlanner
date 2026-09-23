@@ -638,7 +638,7 @@ Setup shows it at the top, names this screen's Identification Wizard (no self-li
 successful direct save and after an Identification adoption; Candidate Search shows it above the
 search conditions with 「この検索に使われる予測位置が、ゲーム側と一致していない可能性があります」 and
 adds no hard gate - the search stays available and the warning stays after a search. A failed read
-is shown as 「再同定状態を確認できませんでした」, never as "nothing to re-identify". `operation_uncertain`
+is shown as 「再特定の状態を確認できませんでした」 (formerly 「再同定状態を確認できませんでした」; Issue #90 replaced 同定 with 特定 in the ordinary UI), never as "nothing to re-identify". `operation_uncertain`
 stays the Navigator's recovery and enters no persistent reminder. It added no persisted field, no
 writer of `lastIdentifiedAt` and no calculation semantics, so the versions stay 13 / 7 / 10
 (`RngState.schemaVersion` 2).
@@ -1334,8 +1334,17 @@ The Production v1 RNG-identification path is the dedicated Skill-first Wizard.
 There is no generic Seed Search contract: `RngEngineCapabilities` describes
 prediction support only, and no capability flag stands for Identification.
 
-- Step 1 identifies canonical Base Seed and starting Skill Counter from the
-  conversion-assigned Skill followed by consecutive Reset Skills observations.
+- Step 1 identifies canonical Base Seed and starting Skill Counter from
+  consecutive ordered Skill draws (Series and Group) of one weapon type and
+  element. The first observation may be the conversion-assigned Skill or a
+  Reset Skills result on an already owned Gogma; every later one is the next
+  consecutive Reset Skills result, with no other Skill Counter consuming
+  operation in between. The starting Skill Counter is the one immediately
+  before observation 1. Conversion and Reset Skills each advance the Skill
+  Counter by one and draw the same Skills at the same Skill Counter, weapon
+  type, and element (direct game observation, `docs/RNG_REFERENCE_AUDIT.md`
+  14.18), so the operation type is never an Identification input and the
+  Wizard asks for no start method.
 - Step 2 uses the unique Step 1 Seed and consecutive ordered Reset Bonuses
   observations to identify the starting Gogma Counter.
 - Counter Gate is never a Wizard input, observation, search dimension, result,

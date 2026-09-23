@@ -27,31 +27,31 @@ export interface PersistentReidentificationReminderView {
   links: readonly { label: string; to: string }[]
 }
 
-export const PERSISTENT_REIDENTIFICATION_REMINDER_TITLE = '予測と異なる結果の再同定が必要です'
+export const PERSISTENT_REIDENTIFICATION_REMINDER_TITLE = '予測と異なる結果が出たため、再特定が必要です'
 
 export const PERSISTENT_REIDENTIFICATION_REMINDER_DESCRIPTION =
-  '予測と異なる結果が記録されています。現在のゲーム状態に合わせて必要なRNG状態または通常アーティアCounterを再同定してから、候補検索・再計画を行ってください。'
+  '予測と異なる結果が記録されています。現在のゲーム状態に合わせて必要なRNG状態または通常アーティアCounterを特定し直してから、候補検索・再計画を行ってください。'
 
 /** Candidate Search reads its prediction positions from the diverged state. */
 export const PERSISTENT_REIDENTIFICATION_SEARCH_NOTE =
   'この検索に使われる予測位置が、ゲーム側と一致していない可能性があります。'
 
 export const PERSISTENT_REIDENTIFICATION_RNG_TEXT =
-  '予測と異なる結果が記録された後、RNG状態の再同定がまだ完了していません。'
+  '予測と異なる結果が記録された後、RNG状態の再特定がまだ完了していません。'
 
 export const PERSISTENT_REIDENTIFICATION_NORMAL_TEXT =
-  '予測と異なる結果が記録された後、通常アーティアCounterの再同定がまだ完了していません。'
+  '予測と異なる結果が記録された後、通常アーティアCounterの再特定がまだ完了していません。'
 
 /** A manual save is never an Identification adoption (16.15 R2 / R5). */
 export const PERSISTENT_REIDENTIFICATION_MANUAL_NOTE =
-  '手動入力だけではこの再同定要求は解消されません。Identification Wizardの結果を採用してください。'
+  '手動入力だけではこの再特定の要求は解消されません。「RNG状態の特定」の結果を採用してください。'
 
 export const PERSISTENT_REIDENTIFICATION_UNRESOLVABLE_TEXT =
   '予測と異なる結果が記録されていますが、対象の通常アーティアCounterを安全に特定できません。通常アーティアCounter設定を確認してください。'
 
 /** The read failure is never shown as "nothing to re-identify". */
 export const PERSISTENT_REIDENTIFICATION_LOAD_ERROR =
-  '再同定状態を確認できませんでした。予測と異なる結果が記録されている場合、再同定が必要な可能性があります。'
+  '再特定の状態を確認できませんでした。予測と異なる結果が記録されている場合、再特定が必要な可能性があります。'
 
 export const RNG_SETUP_LINK = { label: 'RNG状態設定へ', to: '/rng' } as const
 export const NORMAL_COUNTERS_LINK = { label: '通常アーティアCounterへ', to: '/normal-counters' } as const
@@ -67,8 +67,8 @@ function normalCounterSentence(
 ): string {
   const weaponType = weaponTypeId === null || master === null ? undefined : master.weaponTypes.find(({ id }) => id === weaponTypeId)
   return weaponType === undefined
-    ? '対象の通常アーティアCounterを再同定してください。'
-    : `${weaponType.displayNameJa}の通常アーティアCounterを再同定してください。`
+    ? '対象の通常アーティアCounterを特定し直してください。'
+    : `${weaponType.displayNameJa}の通常アーティアCounterを特定し直してください。`
 }
 
 export function presentPersistentReidentificationReminder(
@@ -84,8 +84,8 @@ export function presentPersistentReidentificationReminder(
       key: 'rng',
       text: PERSISTENT_REIDENTIFICATION_RNG_TEXT,
       guidance: surface === 'rng_setup'
-        ? ['この画面のIdentification Wizardで現在のゲーム状態に合わせて再同定してください。', PERSISTENT_REIDENTIFICATION_MANUAL_NOTE]
-        : ['Identification Wizardで現在のゲーム状態に合わせて再同定してください。', PERSISTENT_REIDENTIFICATION_MANUAL_NOTE],
+        ? ['この画面の「RNG状態の特定」で、現在のゲーム状態に合わせて特定し直してください。', PERSISTENT_REIDENTIFICATION_MANUAL_NOTE]
+        : ['RNG状態設定の「RNG状態の特定」で、現在のゲーム状態に合わせて特定し直してください。', PERSISTENT_REIDENTIFICATION_MANUAL_NOTE],
     })
     // RNG Setup is the destination itself: no self-link.
     if (surface !== 'rng_setup') links.push(RNG_SETUP_LINK)

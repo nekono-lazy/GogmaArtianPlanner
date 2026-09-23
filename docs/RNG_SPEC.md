@@ -668,7 +668,7 @@ export interface CounterMatch {
 Production Identification WizardのSkill-first経路は次の専用契約を使用する。
 
 - 入力は武器種、属性、Series SkillとGroup Skillをともに持つ連続観測列、bounded inclusive Skill Counter rangeである
-- 観測1はNormal ArtianからGogma Artianへのconversion時に自動付与されたSkill、以後は連続するReset Skills結果である
+- 観測列は同じ武器種・属性に対する連続したSkill抽選結果である。観測1は巨戟化（conversion）時に自動付与されたSkill、既存巨戟アーティアへのReset Skills結果のどちらでもよく、以後は連続するReset Skills結果である。conversionとReset SkillsはいずれもSkill Counterを1進め、同じSkill Counter位置・武器種・属性で同じSkill結果になる（direct game observation、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.18）ため、kernel入力は観測ごとのoperation種別を持たない
 - 開始Skill Counterを`S`とすると、観測`i`は`S + i`（観測1を`i = 0`とする）に対応する
 - Base Seed探索domainはcanonical `0..99,999,999` inclusiveである。テストとbenchmarkでは、このdomain内のbounded inclusive Seed rangeを指定できる。Wizard UIのSeed range初期値はこのcanonical全域であり、ユーザーが狭いbounded rangeへ変更できる（[UI_FLOW.md](./UI_FLOW.md) 5.4）。Seed range入力はcanonical 10進8桁の数字入力であり、RNG Setupの手動Base Seed入力（raw 10進 / 16進を `normalizeSeed()` で正規化）とは別契約である
 - Skill Counterのformal domainと1回の検索coverageは分離する。C5-E2B1時点の初期UX推奨幅は11候補だが、永久上限ではない
@@ -681,7 +681,7 @@ Production Identification WizardのSkill-first経路は次の専用契約を使�
 - Skill Identification kernelとProduction Worker foundationはimplementedであり、C5-E2C7でWizard UIはRNG Setupへ接続済みである。C5-E2C10 Production Identification activationは完了した（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）。`production-rng:c5-e2`を維持する
 - Worker requestIdはactive中の再利用を禁止し、新requestを明示的に拒否する。cancel状態はrequest-scoped tokenに保持し、旧処理のterminal completionまで解除せず、その後に破棄する
 - bounded goldenに加えて、C5-E2C9で独立したgame-verified fixture `src/test/fixtures/gameVerifiedSkillVectors.ts` を追加した（[C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md](./C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md)）。live verificationは完了しており、Production UI activationもC5-E2C10で完了した（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）
-- STEP 1は完全な探索で候補がexactly oneかつnon-truncatedの場合だけ一意とする。候補が複数なら候補をユーザーに選ばせず、次のReset Skills観測を追加して同じ検索を再実行する。候補0件では観測入力、Counter range、操作順を確認し、範囲を自動拡張しない
+- STEP 1は完全な探索で候補がexactly oneかつnon-truncatedの場合だけ一意とする。候補が複数なら候補をユーザーに選ばせず、次の連続したSkill抽選結果（Reset Skills）の観測を追加して同じ検索を再実行する。候補0件では観測入力、Counter range、操作順を確認し、範囲を自動拡張しない
 - Skill live verificationはC5-E2C9で完了した。known Base Seed `51231782` / starting Skill Counter `341` / `weapon.insect_glaive` / `element.ice` と、conversion自動SkillおよびReset Skills 3回のSeries / Group両方をSkill Counter 341-344として記録したgame-verified fixtureを保持する。state sourceは独立したGARP live RNG state readであり、観測後にゲーム状態を復元済みのため、starting Counterへ観測回数を加算しない
 - 実Browser Worker benchmarkはC5-E2C8で完了した（[C5_E2C8_BROWSER_WORKER_BENCHMARK.md](./C5_E2C8_BROWSER_WORKER_BENCHMARK.md)）。Skill live-game verificationはC5-E2C9で完了した（[C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md](./C5_E2C9_SKILL_LIVE_GAME_VERIFICATION.md)）。Node benchmarkをBrowser benchmarkとして扱わない。C9完了自体はProduction Identification activationの完了ではなく、activationはC5-E2C10で別途判断した（[C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md](./C5_E2C10_PRODUCTION_IDENTIFICATION_ACTIVATION.md)）
 - Seed rangeをcontiguous / non-overlapping chunkへ分割するmulti-worker orchestrationはC5-E2C6で実装済みである。chunk結果はSeed range順にdeterministic mergeし、global progress、全Workerへのcancel propagation、Worker failureの明示errorを提供する。この契約を維持する

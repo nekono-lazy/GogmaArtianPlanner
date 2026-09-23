@@ -39,5 +39,5 @@ export const productionIdentificationUnavailableReasonLabels: Record<
   ProductionIdentificationUnavailableReason,
   string
 > = {
-  worker_unavailable: 'このブラウザではWeb Workerを利用できないため、RNG同定を実行できません',
+  worker_unavailable: 'このブラウザではWeb Workerを利用できないため、RNG状態の特定を実行できません',
 }

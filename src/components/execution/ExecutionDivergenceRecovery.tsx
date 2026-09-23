@@ -21,8 +21,8 @@ export function ExecutionDivergenceRecovery({
 }) {
   const reidentify =
     divergence.destination === 'normal_counters'
-      ? { label: '通常アーティアCounterを再同定する', to: '/normal-counters' }
-      : { label: 'RNG状態を再同定する', to: '/rng' }
+      ? { label: '通常アーティアCounterを特定し直す', to: '/normal-counters' }
+      : { label: 'RNG状態を特定し直す', to: '/rng' }
   const links = [
     { label: '作成プランを見る', to: `/plans/${planId}` },
     { label: 'ビルドリストへ', to: '/build-list' },
@@ -38,7 +38,7 @@ export function ExecutionDivergenceRecovery({
           実行した操作と実際の結果は保存しました。この操作で消費したCounterは反映済みです。
         </Typography>
         <Typography variant="body2">
-          以降の予測は使用できないため、生産計画を停止しています。RNG状態を再同定してください。
+          以降の予測は使用できないため、生産計画を停止しています。RNG状態を特定し直してください。
         </Typography>
         <Button component={RouterLink} to={reidentify.to} variant="contained" color="warning" sx={linkSx}>
           {reidentify.label}

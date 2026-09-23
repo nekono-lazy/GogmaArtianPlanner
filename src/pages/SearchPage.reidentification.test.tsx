@@ -22,7 +22,7 @@ import { SearchPage, type SearchPageDependencies } from './SearchPage'
  * search changes no provenance, so the reminder stays.
  */
 
-const TITLE = '予測と異なる結果の再同定が必要です'
+const TITLE = '予測と異なる結果が出たため、再特定が必要です'
 
 class ImmediateClient implements SearchWorkerClient {
   readonly engineVersion = 'fake-fixture:candidate-search-v1'
@@ -90,8 +90,8 @@ describe('SearchPage persistent re-identification reminder', () => {
     renderSearch(dependencies(new ImmediateClient(null), async () => both))
     const alert = (await screen.findByText(TITLE)).closest('[role="alert"]') as HTMLElement
     expect(within(alert).getByText('この検索に使われる予測位置が、ゲーム側と一致していない可能性があります。')).toBeInTheDocument()
-    expect(within(alert).getByText('予測と異なる結果が記録された後、RNG状態の再同定がまだ完了していません。')).toBeInTheDocument()
-    expect(within(alert).getByText('予測と異なる結果が記録された後、通常アーティアCounterの再同定がまだ完了していません。')).toBeInTheDocument()
+    expect(within(alert).getByText('予測と異なる結果が記録された後、RNG状態の再特定がまだ完了していません。')).toBeInTheDocument()
+    expect(within(alert).getByText('予測と異なる結果が記録された後、通常アーティアCounterの再特定がまだ完了していません。')).toBeInTheDocument()
     const conditions = await screen.findByRole('region', { name: '検索条件' })
     expect(alert.compareDocumentPosition(conditions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
@@ -127,7 +127,7 @@ describe('SearchPage persistent re-identification reminder', () => {
 
   it('shows a read failure as such, never as "nothing to re-identify", and keeps the search usable', async () => {
     renderSearch(dependencies(new ImmediateClient(null), async () => { throw new Error('IndexedDB unavailable') }))
-    expect(await screen.findByText('再同定状態を確認できませんでした。予測と異なる結果が記録されている場合、再同定が必要な可能性があります。')).toBeInTheDocument()
+    expect(await screen.findByText('再特定の状態を確認できませんでした。予測と異なる結果が記録されている場合、再特定が必要な可能性があります。')).toBeInTheDocument()
     expect(await screen.findByRole('button', { name: '検索開始' })).toBeEnabled()
     expect(screen.queryByText(TITLE)).not.toBeInTheDocument()
   })

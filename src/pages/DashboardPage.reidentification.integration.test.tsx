@@ -35,9 +35,9 @@ import { DashboardPage, type DashboardPageDependencies } from './DashboardPage'
  * reading it all back through the persistent reminder loader.
  */
 
-const TITLE = '予測と異なる結果の再同定が必要です'
-const RNG_TEXT = '予測と異なる結果が記録された後、RNG状態の再同定がまだ完了していません。'
-const NORMAL_TEXT = '予測と異なる結果が記録された後、通常アーティアCounterの再同定がまだ完了していません。'
+const TITLE = '予測と異なる結果が出たため、再特定が必要です'
+const RNG_TEXT = '予測と異なる結果が記録された後、RNG状態の再特定がまだ完了していません。'
+const NORMAL_TEXT = '予測と異なる結果が記録された後、通常アーティアCounterの再特定がまだ完了していません。'
 const IDENTIFICATION_CLOCK = '2026-09-18T00:00:00.000Z'
 const NORMAL_COUNTER_ID = 'weapon.fixture.a:8'
 const master = createValidMasterDataFixture()
@@ -157,7 +157,7 @@ describe('DashboardPage persistent re-identification reminder (real persistence)
       const first = renderDashboard(database)
       const alert = (await screen.findByText(TITLE)).closest('[role="alert"]') as HTMLElement
       expect(within(alert).getByText(NORMAL_TEXT)).toBeInTheDocument()
-      expect(within(alert).getByText(`${weaponTypeName}の通常アーティアCounterを再同定してください。`)).toBeInTheDocument()
+      expect(within(alert).getByText(`${weaponTypeName}の通常アーティアCounterを特定し直してください。`)).toBeInTheDocument()
       expect(within(alert).getByRole('link', { name: '通常アーティアCounterへ' })).toHaveAttribute('href', '/normal-counters')
       expect(within(alert).queryByText(RNG_TEXT)).not.toBeInTheDocument()
       expect(alert.textContent).not.toContain(NORMAL_COUNTER_ID)

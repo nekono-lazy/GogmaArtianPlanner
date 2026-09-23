@@ -417,7 +417,7 @@ export function SettingsPage({ dependencies }: { dependencies?: SettingsPageDepe
                 application level and never by an RngEngine capability flag
                 (`docs/UI_FLOW.md` 5 / 14). */}
             <VersionRow
-              label="RNG同定"
+              label="RNG状態の特定"
               value={identificationAvailability.isAvailable ? '利用可能' : `利用不可（${productionIdentificationUnavailableReasonLabels[identificationAvailability.reason]}）`}
             />
           </Box>

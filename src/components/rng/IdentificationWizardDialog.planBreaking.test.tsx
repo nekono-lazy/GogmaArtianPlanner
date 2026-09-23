@@ -116,7 +116,7 @@ function renderWizard() {
   return { coordinator, onAdopted }
 }
 
-const adoptButton = () => screen.getByRole('button', { name: 'Adopt starting values' })
+const adoptButton = () => screen.getByRole('button', { name: '開始値を採用' })
 const restoredCheckbox = () => screen.getByRole('checkbox', { name: '調査前のゲーム状態へ戻した' })
 
 describe('IdentificationWizardDialog breaking-change warning', () => {
@@ -128,10 +128,10 @@ describe('IdentificationWizardDialog breaking-change warning', () => {
     await user.click(adoptButton())
 
     const warning = within(await screen.findByRole('dialog', WARNING))
-    expect(warning.getByText('Identification結果を採用すると、現在の生産計画で使用している予測位置と一致しなくなります。')).toBeInTheDocument()
+    expect(warning.getByText('特定結果を採用すると、現在の生産計画で使用している予測位置と一致しなくなります。')).toBeInTheDocument()
     expect(warning.getByText('RNG状態が変わります')).toBeInTheDocument()
     // Both dialogs exist; the Wizard stays mounted underneath.
-    expect(screen.getByRole('dialog', { name: 'RNG Identification Wizard', hidden: true })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'RNG状態の特定', hidden: true })).toBeInTheDocument()
     await user.click(warning.getByRole('button', { name: 'キャンセル' }))
 
     await waitFor(() => expect(screen.queryByRole('dialog', WARNING)).toBeNull())
@@ -155,7 +155,7 @@ describe('IdentificationWizardDialog breaking-change warning', () => {
     await waitFor(() => expect(onAdopted).toHaveBeenCalledTimes(1))
     expect(coordinator.adopt).toHaveBeenCalledWith(planBreakingApproval(inspection))
     expect(onAdopted).toHaveBeenCalledWith(expect.objectContaining({ lastIdentifiedAt: '2026-09-18T00:00:00.000Z' }), { planAbandoned: true })
-    expect(await screen.findByText('Identification結果をRNG状態へ採用しました。')).toBeInTheDocument()
+    expect(await screen.findByText('特定結果をRNG状態へ採用しました。')).toBeInTheDocument()
   })
 
   it('promotes an adoption refused for a missing approval to the warning and retries with it', async () => {
@@ -172,7 +172,7 @@ describe('IdentificationWizardDialog breaking-change warning', () => {
     await user.click(adoptButton())
 
     const warning = within(await screen.findByRole('dialog', WARNING))
-    expect(screen.queryByText(/Adoption failure/)).toBeNull()
+    expect(screen.queryByText(/採用に失敗しました/)).toBeNull()
     await user.click(warning.getByRole('button', { name: '生産計画を破棄して保存' }))
     await waitFor(() => expect(onAdopted).toHaveBeenCalledWith(expect.anything(), { planAbandoned: true }))
     expect(calls).toBe(2)

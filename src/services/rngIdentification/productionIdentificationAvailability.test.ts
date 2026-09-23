@@ -15,7 +15,7 @@ describe('getProductionIdentificationAvailability', () => {
     const availability = getProductionIdentificationAvailability({ hasWorker: false })
     expect(availability).toEqual({ isAvailable: false, reason: 'worker_unavailable' })
     if (availability.isAvailable) throw new Error('unreachable')
-    expect(productionIdentificationUnavailableReasonLabels[availability.reason]).toContain('RNG同定')
+    expect(productionIdentificationUnavailableReasonLabels[availability.reason]).toContain('RNG状態の特定')
   })
 
   it('is decided at the application level, not by any RngEngine capability flag', () => {

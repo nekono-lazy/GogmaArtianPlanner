@@ -191,8 +191,8 @@ describe('RngSetupPage', () => {
     // The Engine section lists prediction support only; Identification
     // availability is the application-level row of its own section.
     expect(within(engine).queryByText(/Seed Search/, { selector: 'dt' })).not.toBeInTheDocument()
-    expect(within(engine).queryByText('RNG同定', { selector: 'dt' })).not.toBeInTheDocument()
-    expect(screen.getByText(/RNG同定（Identification Wizard）の利用可否はEngine capabilityではなくアプリ側で判定します/)).toBeInTheDocument()
+    expect(within(engine).queryByText('RNG状態の特定', { selector: 'dt' })).not.toBeInTheDocument()
+    expect(screen.getByText(/RNG状態の特定を利用できるかどうかは、上の予測機能の対応状況ではなくアプリ側で判定します/)).toBeInTheDocument()
     expect(screen.queryByText(/本番RNG予測エンジンが未実装/)).not.toBeInTheDocument()
   })
 
@@ -200,9 +200,9 @@ describe('RngSetupPage', () => {
     // The shared beforeEach stubs `Worker`, as a Browser provides it.
     render(<RngSetupPage dependencies={dependencies().deps} />, { wrapper: MemoryRouter })
     const wizard = await screen.findByRole('region', { name: '値が分からない場合' })
-    expect(definitionRow(wizard, 'RNG同定').textContent).toBe('RNG同定利用可能')
+    expect(definitionRow(wizard, 'RNG状態の特定').textContent).toBe('RNG状態の特定利用可能')
     expect(within(wizard).queryByText(/Web Worker/)).not.toBeInTheDocument()
-    expect(within(wizard).getByRole('button', { name: 'Identification Wizardを開始' })).toBeEnabled()
+    expect(within(wizard).getByRole('button', { name: 'RNG状態の特定を開始' })).toBeEnabled()
   })
 
   it('shows RNG identification as unavailable, with its reason, and disables the Wizard start when the runtime has no Worker', async () => {
@@ -212,10 +212,10 @@ describe('RngSetupPage', () => {
     const createIdentificationCoordinator = vi.fn()
     render(<RngSetupPage dependencies={{ ...fixture.deps, createIdentificationCoordinator }} />, { wrapper: MemoryRouter })
     const wizard = await screen.findByRole('region', { name: '値が分からない場合' })
-    expect(definitionRow(wizard, 'RNG同定').textContent).toBe('RNG同定利用不可')
-    expect(within(wizard).getByText(/Web Workerを利用できないため、RNG同定を実行できません/)).toBeInTheDocument()
+    expect(definitionRow(wizard, 'RNG状態の特定').textContent).toBe('RNG状態の特定利用不可')
+    expect(within(wizard).getByText(/Web Workerを利用できないため、RNG状態の特定を実行できません/)).toBeInTheDocument()
     // The status and the start control never contradict each other.
-    const startWizard = within(wizard).getByRole('button', { name: 'Identification Wizardを開始' })
+    const startWizard = within(wizard).getByRole('button', { name: 'RNG状態の特定を開始' })
     expect(startWizard).toBeDisabled()
     // user-event refuses to click a disabled control; a raw DOM click on it
     // is inert too, so nothing starts.
@@ -224,17 +224,27 @@ describe('RngSetupPage', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
+  it('names RNG identification with 特定 and never 同定 / Identification in the ordinary UI (Issue #90)', async () => {
+    render(<RngSetupPage dependencies={dependencies().deps} />, { wrapper: MemoryRouter })
+    const wizard = await screen.findByRole('region', { name: '値が分からない場合' })
+    expect(within(wizard).getByRole('button', { name: 'RNG状態の特定を開始' })).toBeInTheDocument()
+    const text = document.body.textContent ?? ''
+    for (const term of ['同定', 'Identification', 'Wizard', 'ウィザード']) {
+      expect(text).not.toContain(term)
+    }
+  })
+
   it('keeps the Wizard start disabled by unsaved changes even when identification is available', async () => {
     const user = userEvent.setup()
     render(<RngSetupPage dependencies={dependencies().deps} />, { wrapper: MemoryRouter })
     const wizard = await screen.findByRole('region', { name: '値が分からない場合' })
-    expect(definitionRow(wizard, 'RNG同定').textContent).toBe('RNG同定利用可能')
-    expect(within(wizard).getByRole('button', { name: 'Identification Wizardを開始' })).toBeEnabled()
+    expect(definitionRow(wizard, 'RNG状態の特定').textContent).toBe('RNG状態の特定利用可能')
+    expect(within(wizard).getByRole('button', { name: 'RNG状態の特定を開始' })).toBeEnabled()
 
     await user.type(screen.getByLabelText('巨戟カウンター'), '5')
-    expect(within(wizard).getByRole('button', { name: 'Identification Wizardを開始' })).toBeDisabled()
+    expect(within(wizard).getByRole('button', { name: 'RNG状態の特定を開始' })).toBeDisabled()
     // The availability status itself is unchanged by the unsaved edit.
-    expect(definitionRow(wizard, 'RNG同定').textContent).toBe('RNG同定利用可能')
+    expect(definitionRow(wizard, 'RNG状態の特定').textContent).toBe('RNG状態の特定利用可能')
   })
 
   it('keeps current availability separate from what the Engine itself supports', async () => {
@@ -272,7 +282,7 @@ describe('RngSetupPage', () => {
     await user.type(counter, '-1')
 
     // Unsaved, and the draft cannot be turned into an RngState.
-    expect(screen.getByRole('button', { name: 'Identification Wizardを開始' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'RNG状態の特定を開始' })).toBeDisabled()
     const current = screen.getByRole('region', { name: '現在の入力内容で利用可能な機能' })
     expect(within(current).getByText(/現在の入力内容にエラーがあるため、利用可能な機能を判定できません。/)).toBeInTheDocument()
     expect(within(current).queryByText('利用可能')).not.toBeInTheDocument()
@@ -424,7 +434,7 @@ describe('RngSetupPage', () => {
     expect(screen.queryByRole('region', { name: '保存済みのRNG状態' })).not.toBeInTheDocument()
     expect(screen.queryByRole('region', { name: '現在の入力内容で利用可能な機能' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '保存' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Identification Wizardを開始' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'RNG状態の特定を開始' })).not.toBeInTheDocument()
     expect(screen.queryByLabelText('RNG状態を読み込み中')).not.toBeInTheDocument()
   })
 
@@ -445,7 +455,7 @@ describe('RngSetupPage', () => {
     const cta = await screen.findByRole('region', { name: '値が分からない場合' })
     expect(within(cta).getByText('調査開始前のスキルカウンター')).toBeInTheDocument()
     expect(within(cta).getByText('調査開始前の巨戟カウンター')).toBeInTheDocument()
-    expect(within(cta).getByRole('button', { name: 'Identification Wizardを開始' })).toBeEnabled()
+    expect(within(cta).getByRole('button', { name: 'RNG状態の特定を開始' })).toBeEnabled()
   })
 
   it('opens the dedicated Identification Wizard without replacing the manual workflow', async () => {
@@ -455,14 +465,14 @@ describe('RngSetupPage', () => {
 
     await screen.findByLabelText('Base Seed（基準シード）')
     expect(screen.getByRole('button', { name: '保存' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Identification Wizardを開始' }))
+    await user.click(screen.getByRole('button', { name: 'RNG状態の特定を開始' }))
 
-    expect(screen.getByRole('dialog', { name: 'RNG Identification Wizard' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'RNG状態の特定' })).toBeInTheDocument()
     expect(screen.getByLabelText('Base Seed（基準シード）')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Close' }))
-    expect(screen.queryByRole('dialog', { name: 'RNG Identification Wizard' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '閉じる' }))
+    expect(screen.queryByRole('dialog', { name: 'RNG状態の特定' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '保存' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Identification Wizardを開始' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'RNG状態の特定を開始' })).toBeEnabled()
   })
 
   it('blocks Wizard start while a KnownField has an unsaved manual draft', async () => {
@@ -472,12 +482,12 @@ describe('RngSetupPage', () => {
 
     await user.type(await screen.findByLabelText('Base Seed（基準シード）'), '42')
 
-    expect(screen.getByRole('button', { name: 'Identification Wizardを開始' }))
+    expect(screen.getByRole('button', { name: 'RNG状態の特定を開始' }))
       .toBeDisabled()
     expect(screen.getByText(
-      'Identification Wizardを開始する前に、RNG状態設定の変更を保存するか元に戻してください。',
+      'RNG状態の特定を開始する前に、RNG状態設定の変更を保存するか元に戻してください。',
     )).toBeInTheDocument()
-    expect(screen.queryByRole('dialog', { name: 'RNG Identification Wizard' }))
+    expect(screen.queryByRole('dialog', { name: 'RNG状態の特定' }))
       .not.toBeInTheDocument()
   })
 
@@ -488,10 +498,10 @@ describe('RngSetupPage', () => {
 
     await user.type(await screen.findByLabelText('メモ'), '未保存メモ')
 
-    expect(screen.getByRole('button', { name: 'Identification Wizardを開始' }))
+    expect(screen.getByRole('button', { name: 'RNG状態の特定を開始' }))
       .toBeDisabled()
     expect(screen.getByText(
-      'Identification Wizardを開始する前に、RNG状態設定の変更を保存するか元に戻してください。',
+      'RNG状態の特定を開始する前に、RNG状態設定の変更を保存するか元に戻してください。',
     )).toBeInTheDocument()
   })
 
@@ -501,16 +511,16 @@ describe('RngSetupPage', () => {
     render(<RngSetupPage dependencies={fixture.deps} />, { wrapper: MemoryRouter })
 
     await user.type(await screen.findByLabelText('メモ'), '保存済みメモ')
-    expect(screen.getByRole('button', { name: 'Identification Wizardを開始' }))
+    expect(screen.getByRole('button', { name: 'RNG状態の特定を開始' }))
       .toBeDisabled()
     await user.click(screen.getByRole('button', { name: '保存' }))
 
     expect(await screen.findByText('RNG状態を保存しました。')).toBeInTheDocument()
     expect(fixture.getStored().notes).toBe('保存済みメモ')
-    const startWizard = screen.getByRole('button', { name: 'Identification Wizardを開始' })
+    const startWizard = screen.getByRole('button', { name: 'RNG状態の特定を開始' })
     expect(startWizard).toBeEnabled()
     await user.click(startWizard)
-    expect(screen.getByRole('dialog', { name: 'RNG Identification Wizard' }))
+    expect(screen.getByRole('dialog', { name: 'RNG状態の特定' }))
       .toBeInTheDocument()
   })
 })
