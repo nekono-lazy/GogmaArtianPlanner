@@ -31,7 +31,7 @@ import { RngSetupPage, type RngSetupPageDependencies } from './RngSetupPage'
 // these lifecycle tests run as in a Browser (the Coordinator itself is injected).
 vi.stubGlobal('Worker', class {})
 
-const WIZARD_DIALOG = { name: 'RNG Identification Wizard' } as const
+const WIZARD_DIALOG = { name: 'RNG同定ウィザード' } as const
 
 class ControllableSkillClient implements SkillIdentificationWorkerClient {
   readonly engineVersion = 'test-skill-client'
@@ -150,7 +150,7 @@ describe('RngSetupPage Identification Wizard lifecycle', () => {
     await user.click(screen.getByRole('button', { name: 'Identification Wizardを開始' }))
 
     const { coordinator, skillClient } = created[0]
-    const cancelStep1 = screen.getByRole('button', { name: 'STEP 1 Cancel' })
+    const cancelStep1 = screen.getByRole('button', { name: 'STEP 1の検索をキャンセル' })
     expect(cancelStep1).toBeDisabled()
 
     // A Coordinator publish must still reach the Dialog after the StrictMode effect replay.
@@ -161,7 +161,7 @@ describe('RngSetupPage Identification Wizard lifecycle', () => {
     // Cancel propagation through the live subscription remains intact.
     await user.click(cancelStep1)
     expect(skillClient.cancelledRequestIds).toHaveLength(1)
-    expect(screen.getByRole('button', { name: 'STEP 1 Cancel' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'STEP 1の検索をキャンセル' })).toBeDisabled()
     expect(coordinator.getState().disposed).toBe(false)
   })
 
@@ -172,7 +172,7 @@ describe('RngSetupPage Identification Wizard lifecycle', () => {
 
     await screen.findByLabelText('Base Seed（基準シード）')
     await user.click(screen.getByRole('button', { name: 'Identification Wizardを開始' }))
-    await user.click(screen.getByRole('button', { name: 'Close' }))
+    await user.click(screen.getByRole('button', { name: '閉じる' }))
 
     expect(screen.queryByRole('dialog', WIZARD_DIALOG)).not.toBeInTheDocument()
     expect(created[0].coordinator.getState().disposed).toBe(true)
@@ -187,7 +187,7 @@ describe('RngSetupPage Identification Wizard lifecycle', () => {
 
     await screen.findByLabelText('Base Seed（基準シード）')
     await user.click(screen.getByRole('button', { name: 'Identification Wizardを開始' }))
-    await user.click(screen.getByRole('button', { name: 'Close' }))
+    await user.click(screen.getByRole('button', { name: '閉じる' }))
     await user.click(screen.getByRole('button', { name: 'Identification Wizardを開始' }))
 
     expect(screen.getByRole('dialog', WIZARD_DIALOG)).toBeInTheDocument()

@@ -336,7 +336,7 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
               <DefinitionRow label="RNG同定"><StatusChip label={identificationAvailability.isAvailable ? '利用可能' : '利用不可'} tone={identificationAvailability.isAvailable ? 'positive' : 'caution'} /></DefinitionRow>
             </Box>
             {!identificationAvailability.isAvailable && <Alert severity="warning">{productionIdentificationUnavailableReasonLabels[identificationAvailability.reason]}</Alert>}
-            <Typography>Normal → Gogma conversionと連続Resetの観測から、専用Wizardで次の値を特定します。</Typography>
+            <Typography>連続したスキル抽選結果と復元ボーナスのリセット結果を観測し、専用ウィザードで次の値を特定します。</Typography>
             <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
               <Typography component="li" variant="body2">Base Seed（基準シード）</Typography>
               <Typography component="li" variant="body2">調査開始前のスキルカウンター</Typography>

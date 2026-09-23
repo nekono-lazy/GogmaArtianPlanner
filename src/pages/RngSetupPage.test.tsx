@@ -457,10 +457,10 @@ describe('RngSetupPage', () => {
     expect(screen.getByRole('button', { name: '保存' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Identification Wizardを開始' }))
 
-    expect(screen.getByRole('dialog', { name: 'RNG Identification Wizard' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'RNG同定ウィザード' })).toBeInTheDocument()
     expect(screen.getByLabelText('Base Seed（基準シード）')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Close' }))
-    expect(screen.queryByRole('dialog', { name: 'RNG Identification Wizard' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '閉じる' }))
+    expect(screen.queryByRole('dialog', { name: 'RNG同定ウィザード' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '保存' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Identification Wizardを開始' })).toBeEnabled()
   })
@@ -477,7 +477,7 @@ describe('RngSetupPage', () => {
     expect(screen.getByText(
       'Identification Wizardを開始する前に、RNG状態設定の変更を保存するか元に戻してください。',
     )).toBeInTheDocument()
-    expect(screen.queryByRole('dialog', { name: 'RNG Identification Wizard' }))
+    expect(screen.queryByRole('dialog', { name: 'RNG同定ウィザード' }))
       .not.toBeInTheDocument()
   })
 
@@ -510,7 +510,7 @@ describe('RngSetupPage', () => {
     const startWizard = screen.getByRole('button', { name: 'Identification Wizardを開始' })
     expect(startWizard).toBeEnabled()
     await user.click(startWizard)
-    expect(screen.getByRole('dialog', { name: 'RNG Identification Wizard' }))
+    expect(screen.getByRole('dialog', { name: 'RNG同定ウィザード' }))
       .toBeInTheDocument()
   })
 })

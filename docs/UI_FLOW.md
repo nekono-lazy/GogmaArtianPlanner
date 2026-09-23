@@ -300,14 +300,17 @@ RNG Setupから専用Wizardを開始し、完了後のreview / adoption結果を
 
 検証状態の表示。
 
-- 通常ユーザー向けWizardは、repositoryに存在するgame-verified evidenceを根拠に「Production Identificationは実機確認済みです。ただし確認条件は限定されており、全武器種・全属性・全ゲームバージョンを保証するものではありません。」と表示し、採用後の予測結果をゲーム側でも確認するよう促す
+- 通常ユーザー向けWizardは、repositoryに存在するgame-verified evidenceを根拠に「RNG同定は実機で動作を確認済みです。ただし確認条件は限定されており、全武器種・全属性・全ゲームバージョンを保証するものではありません。」と表示し、採用後の予測結果をゲーム側でも確認するよう促す
 - 全武器種・全属性・全game versionが確認済みであるとは表現しない
 - 個別fixture（武器種 / 属性 / Counter位置）の列挙は [RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) の責務であり、通常Wizardへ固定表示しない
 
 STEP 1。
 
-1. Normal ArtianをGogma Artianへconversionし、自動付与されたSeries / Group SkillをObservation 1として記録する
-2. Reset Skillsを連続して行い、Observation 2以降へSeries / Groupの両方を記録する
+1. 同じ武器種・属性で、連続したSkill抽選結果（Series / Groupの両方）を観測1以降へ実際の順番どおり記録する。開始操作は次のどちらでもよい
+   - 通常アーティアから開始: 巨戟化（conversion）時に自動付与されたSkillを観測1とし、以後のReset Skills結果を観測2以降とする
+   - 既存巨戟アーティアから開始: Reset Skillsの結果を観測1とし、以後のReset Skills結果を観測2以降とする
+   - どちらもstarting Skill Counterは観測1を生成する直前のSkill Counterである。途中で別のSkill Counter消費操作を挟まない。conversionとReset Skillsは同じSkill Counter位置・武器種・属性で同じ結果になる（[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.18）ため、開始操作の種別は入力させず（開始方法の選択UIを置かない）、各観測は「N回目のスキル抽選結果」のように操作種別を固定しない表示とする
+2. 観測は追加・削除でき、観測1からの順序を保持する
 3. approximate Skill Counterはcenter + ±Nを基本入力とし、計算後のinclusive start / endを併記する。初期推奨幅は11候補である
 4. Base Seed rangeの初期値はcanonical全域 `0..99,999,999`（`CANONICAL_BASE_SEED_MIN` / `CANONICAL_BASE_SEED_MAX`）とし、Restart後も同じ初期値へ戻す。ユーザーは従来どおり狭いbounded rangeへ変更でき、自動range拡張は行わない
 5. Seed range入力は数字専用8桁（`type="text"` / `inputMode="numeric"` / `maxLength=8` 相当）とし、空文字と0-9最大8桁だけをdraftへ採用する。`-` / `+` / `.` / `e` / 空白 / 英字 / 9桁以上はpaste・programmatic changeでもdraftへ入れない。検索実行時はDomain validationで `0 <= start <= end <= 99,999,999` を確認し、空欄・逆順・domain外はerrorとしてCoordinatorへ渡さない。RNG Setupの手動Base Seed入力（raw 10進 / 16進をnormalize）とは別契約である
@@ -325,7 +328,7 @@ STEP 2。
 結果別UI。
 
 - `unique`: 次STEPまたはreviewへ進む
-- `multiple`: 候補をユーザーに選ばせず、追加のReset Skills / Reset Bonuses観測を要求して同じ検索を再実行する
+- `multiple`: 候補をユーザーに選ばせず、次の連続したSkill抽選結果（STEP 1）/ Reset Bonuses結果（STEP 2）の追加観測を要求して同じ検索を再実行する
 - `zero`: 観測入力、Counter範囲、操作順を確認させ、自動で範囲を拡張しない
 - `cancelled`: 入力を保持して観測画面へ戻し、新requestIdで再実行できる
 - `invalid_input` / `unsupported_input`: 該当入力またはsupport理由を表示する

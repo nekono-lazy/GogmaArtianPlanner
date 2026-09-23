@@ -114,11 +114,11 @@ async function saveGogmaCounter(user: ReturnType<typeof userEvent.setup>, value:
 
 async function adoptThroughWizard(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await screen.findByRole('button', { name: 'Identification Wizardを開始' }))
-  const dialog = await screen.findByRole('dialog', { name: 'RNG Identification Wizard' })
+  const dialog = await screen.findByRole('dialog', { name: 'RNG同定ウィザード' })
   await user.click(within(dialog).getByRole('checkbox', { name: '調査前のゲーム状態へ戻した' }))
-  await user.click(within(dialog).getByRole('button', { name: 'Adopt starting values' }))
-  await within(dialog).findByText('Identification結果をRNG状態へ採用しました。')
-  await user.click(within(dialog).getByRole('button', { name: 'Close' }))
+  await user.click(within(dialog).getByRole('button', { name: '開始値を採用' }))
+  await within(dialog).findByText('同定結果をRNG状態へ採用しました。')
+  await user.click(within(dialog).getByRole('button', { name: '閉じる' }))
   await screen.findByText('Identification結果をRNG状態へ採用しました。')
 }
 

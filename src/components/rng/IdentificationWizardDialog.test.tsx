@@ -446,9 +446,9 @@ function setMuiSelectValue(control: HTMLElement, value: string) {
 
 function fillSkillObservations(count = 4) {
   for (let index = 1; index <= count; index += 1) {
-    const series = screen.getByLabelText(`Observation ${index} Series Skill`)
+    const series = screen.getByLabelText(`観測${index} シリーズスキル`)
     if (series.textContent?.includes('未入力')) setMuiSelectValue(series, fixtureSeriesSkillId)
-    const group = screen.getByLabelText(`Observation ${index} Group Skill`)
+    const group = screen.getByLabelText(`観測${index} グループスキル`)
     if (group.textContent?.includes('未入力')) setMuiSelectValue(group, fixtureGroupSkillId)
   }
 }
@@ -459,8 +459,8 @@ function fillSkillObservations(count = 4) {
  * default-range journey is asserted separately without calling this.
  */
 function fillSeedRange(start = '100', end = '200') {
-  fireEvent.change(screen.getByLabelText('Base Seed range start'), { target: { value: start } })
-  fireEvent.change(screen.getByLabelText('Base Seed range end'), { target: { value: end } })
+  fireEvent.change(screen.getByLabelText('Base Seed 検索範囲の開始'), { target: { value: start } })
+  fireEvent.change(screen.getByLabelText('Base Seed 検索範囲の終了'), { target: { value: end } })
 }
 
 const CANONICAL_SEED_START = String(CANONICAL_BASE_SEED_MIN)
@@ -468,8 +468,8 @@ const CANONICAL_SEED_END = String(CANONICAL_BASE_SEED_MAX)
 
 function seedRangeFields(): { start: HTMLInputElement; end: HTMLInputElement } {
   return {
-    start: screen.getByLabelText('Base Seed range start') as HTMLInputElement,
-    end: screen.getByLabelText('Base Seed range end') as HTMLInputElement,
+    start: screen.getByLabelText('Base Seed 検索範囲の開始') as HTMLInputElement,
+    end: screen.getByLabelText('Base Seed 検索範囲の終了') as HTMLInputElement,
   }
 }
 
@@ -480,21 +480,21 @@ function fillStep1() {
 
 async function startSkillSearch(user: ReturnType<typeof userEvent.setup>) {
   fillStep1()
-  await user.click(screen.getByRole('button', { name: 'STEP 1 Search' }))
+  await user.click(screen.getByRole('button', { name: 'STEP 1を検索' }))
 }
 
 function resetObservationEditor(observationIndex: number): HTMLElement {
-  return screen.getByText(`Reset Observation ${observationIndex}`)
+  return screen.getByText(`復元ボーナス観測${observationIndex}`)
     .closest('[data-reset-observation]') as HTMLElement
 }
 
 function skillObservationCard(observationIndex: number): HTMLElement {
-  return screen.getByText(`Observation ${observationIndex}`)
+  return screen.getByText(`観測${observationIndex}`)
     .closest('[data-skill-observation]') as HTMLElement
 }
 
 function stepPositions(): string[] {
-  const nav = screen.getByRole('navigation', { name: 'Identificationの進行状況' })
+  const nav = screen.getByRole('navigation', { name: 'RNG同定の進行状況' })
   return within(nav).getAllByRole('listitem').map((item) => item.textContent ?? '')
 }
 
@@ -534,15 +534,15 @@ function fillGogmaObservations(
 async function reachStep2(coordinator: FakeCoordinator, user: ReturnType<typeof userEvent.setup>) {
   await startSkillSearch(user)
   act(() => coordinator.completeSkill('unique'))
-  await screen.findByText('STEP 2 — Starting Gogma Counter')
+  await screen.findByText('STEP 2 — 開始巨戟カウンターの特定')
 }
 
 async function reachReview(coordinator: FakeCoordinator, user: ReturnType<typeof userEvent.setup>) {
   await reachStep2(coordinator, user)
   fillGogmaObservations(coordinator)
-  await user.click(screen.getByRole('button', { name: 'STEP 2 Search' }))
+  await user.click(screen.getByRole('button', { name: 'STEP 2を検索' }))
   act(() => coordinator.completeGogma('unique'))
-  await screen.findByText('Review')
+  await screen.findByText('確認・採用', { selector: 'h3' })
 }
 
 async function seedStep2(
@@ -551,12 +551,12 @@ async function seedStep2(
   elementId: ElementId = authoritativeElementId,
 ) {
   act(() => { coordinator.seedUniqueSkillResult(weaponTypeId, elementId) })
-  await screen.findByText('STEP 2 — Starting Gogma Counter')
+  await screen.findByText('STEP 2 — 開始巨戟カウンターの特定')
 }
 
 async function seedReview(coordinator: FakeCoordinator) {
   act(() => { coordinator.seedUniqueGogmaResult() })
-  await screen.findByText('Review')
+  await screen.findByText('確認・採用', { selector: 'h3' })
 }
 
 describe('IdentificationWizardDialog STEP 1', () => {
@@ -572,9 +572,9 @@ describe('IdentificationWizardDialog STEP 1', () => {
     expect(screen.getByText(/初期値はBase Seed全域（0 ～ 99,999,999）です/)).toBeInTheDocument()
     expect(screen.queryByText(/Production defaultは設定しません/)).not.toBeInTheDocument()
     for (let index = 1; index <= 4; index += 1) {
-      expect(screen.getByLabelText(`Observation ${index} Series Skill`))
+      expect(screen.getByLabelText(`観測${index} シリーズスキル`))
         .toHaveTextContent('未入力')
-      expect(screen.getByLabelText(`Observation ${index} Group Skill`))
+      expect(screen.getByLabelText(`観測${index} グループスキル`))
         .toHaveTextContent('未入力')
     }
   })
@@ -625,14 +625,14 @@ describe('IdentificationWizardDialog STEP 1', () => {
     fillSkillObservations()
     fillSeedRange('', '')
 
-    await user.click(screen.getByRole('button', { name: 'STEP 1 Search' }))
+    await user.click(screen.getByRole('button', { name: 'STEP 1を検索' }))
 
-    expect(await screen.findByText(/Base Seed rangeの開始を入力してください/)).toBeInTheDocument()
+    expect(await screen.findByText(/Base Seedの検索範囲の開始を入力してください/)).toBeInTheDocument()
     expect(coordinator.skillInputs).toHaveLength(0)
 
     fillSeedRange('100', '')
-    await user.click(screen.getByRole('button', { name: 'STEP 1 Search' }))
-    expect(await screen.findByText(/Base Seed rangeの終了を入力してください/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'STEP 1を検索' }))
+    expect(await screen.findByText(/Base Seedの検索範囲の終了を入力してください/)).toBeInTheDocument()
     expect(coordinator.skillInputs).toHaveLength(0)
   })
 
@@ -642,9 +642,9 @@ describe('IdentificationWizardDialog STEP 1', () => {
     fillSkillObservations()
     fillSeedRange('200', '100')
 
-    await user.click(screen.getByRole('button', { name: 'STEP 1 Search' }))
+    await user.click(screen.getByRole('button', { name: 'STEP 1を検索' }))
 
-    expect(await screen.findByText(/Base Seed rangeは0から99999999までの昇順inclusive rangeで入力してください/)).toBeInTheDocument()
+    expect(await screen.findByText(/Base Seedの検索範囲は0から99999999までの範囲で、開始が終了以下になるように入力してください/)).toBeInTheDocument()
     expect(coordinator.skillInputs).toHaveLength(0)
   })
 
@@ -653,7 +653,7 @@ describe('IdentificationWizardDialog STEP 1', () => {
     const { coordinator } = renderWizard()
     fillSkillObservations()
 
-    await user.click(screen.getByRole('button', { name: 'STEP 1 Search' }))
+    await user.click(screen.getByRole('button', { name: 'STEP 1を検索' }))
 
     await waitFor(() => expect(coordinator.skillInputs).toHaveLength(1))
     expect(coordinator.skillInputs[0]?.seedRange).toEqual({
@@ -669,9 +669,9 @@ describe('IdentificationWizardDialog STEP 1', () => {
     fillSeedRange()
     fillSkillObservations(3)
 
-    await user.click(screen.getByRole('button', { name: 'STEP 1 Search' }))
+    await user.click(screen.getByRole('button', { name: 'STEP 1を検索' }))
 
-    expect(await screen.findByText(/Skill Observation 4のSeries SkillとGroup Skillを入力してください/)).toBeInTheDocument()
+    expect(await screen.findByText(/観測4のシリーズスキルとグループスキルを入力してください/)).toBeInTheDocument()
     expect(coordinator.skillInputs).toHaveLength(0)
   })
 
@@ -682,17 +682,17 @@ describe('IdentificationWizardDialog STEP 1', () => {
   it('passes ordered observations, semantic weapon/element, and explicit ranges to the Coordinator', async () => {
     const user = userEvent.setup()
     const { coordinator } = renderWizard()
-    await user.clear(screen.getByLabelText('Base Seed range start'))
-    await user.type(screen.getByLabelText('Base Seed range start'), '100')
-    await user.clear(screen.getByLabelText('Base Seed range end'))
-    await user.type(screen.getByLabelText('Base Seed range end'), '200')
-    await user.clear(screen.getByLabelText('概算Skill Counter'))
-    await user.type(screen.getByLabelText('概算Skill Counter'), '50')
-    await user.clear(screen.getByLabelText('Skill Counterの±幅'))
-    await user.type(screen.getByLabelText('Skill Counterの±幅'), '3')
-    await user.click(screen.getByLabelText('Observation 2 Series Skill'))
+    await user.clear(screen.getByLabelText('Base Seed 検索範囲の開始'))
+    await user.type(screen.getByLabelText('Base Seed 検索範囲の開始'), '100')
+    await user.clear(screen.getByLabelText('Base Seed 検索範囲の終了'))
+    await user.type(screen.getByLabelText('Base Seed 検索範囲の終了'), '200')
+    await user.clear(screen.getByLabelText('概算スキルカウンター'))
+    await user.type(screen.getByLabelText('概算スキルカウンター'), '50')
+    await user.clear(screen.getByLabelText('スキルカウンターの±幅'))
+    await user.type(screen.getByLabelText('スキルカウンターの±幅'), '3')
+    await user.click(screen.getByLabelText('観測2 シリーズスキル'))
     await user.click(within(await screen.findByRole('listbox')).getAllByRole('option')[2]!)
-    await user.click(screen.getByLabelText('Observation 2 Group Skill'))
+    await user.click(screen.getByLabelText('観測2 グループスキル'))
     await user.click(within(await screen.findByRole('listbox')).getAllByRole('option')[2]!)
 
     await startSkillSearch(user)
@@ -717,13 +717,13 @@ describe('IdentificationWizardDialog STEP 1', () => {
     act(() => coordinator.progressSkill(25, 100, 2))
 
     expect(screen.getByLabelText('検索進捗')).toHaveTextContent('25 / 100')
-    const cancel = screen.getByRole('button', { name: 'STEP 1 Cancel' })
+    const cancel = screen.getByRole('button', { name: 'STEP 1の検索をキャンセル' })
     expect(cancel).toBeEnabled()
     await user.click(cancel)
 
     expect(coordinator.cancelSkillCalls).toBe(1)
     expect(await screen.findByText(/検索をキャンセルしました/)).toBeInTheDocument()
-    expect(screen.queryByText('STEP 2 — Starting Gogma Counter')).not.toBeInTheDocument()
+    expect(screen.queryByText('STEP 2 — 開始巨戟カウンターの特定')).not.toBeInTheDocument()
   })
 
   it.each([
@@ -737,7 +737,7 @@ describe('IdentificationWizardDialog STEP 1', () => {
     act(() => coordinator.completeSkill(classification))
 
     expect(await screen.findByText(message)).toBeInTheDocument()
-    expect(screen.queryByText('STEP 2 — Starting Gogma Counter')).not.toBeInTheDocument()
+    expect(screen.queryByText('STEP 2 — 開始巨戟カウンターの特定')).not.toBeInTheDocument()
     expect(screen.queryByRole('listbox', { name: /candidate/i })).not.toBeInTheDocument()
   })
 
@@ -746,25 +746,25 @@ describe('IdentificationWizardDialog STEP 1', () => {
     const { coordinator } = renderWizard()
     await startSkillSearch(user)
     act(() => coordinator.completeSkill('multiple'))
-    await user.click(screen.getByRole('button', { name: 'Skill Observationを追加' }))
-    expect(screen.getByLabelText('Observation 5 Series Skill')).toHaveTextContent('未入力')
-    expect(screen.getByLabelText('Observation 5 Group Skill')).toHaveTextContent('未入力')
+    await user.click(screen.getByRole('button', { name: 'スキル観測を追加' }))
+    expect(screen.getByLabelText('観測5 シリーズスキル')).toHaveTextContent('未入力')
+    expect(screen.getByLabelText('観測5 グループスキル')).toHaveTextContent('未入力')
   })
 
   it('restart returns a narrowed Seed range to the canonical full domain and clears observations', async () => {
     const user = userEvent.setup()
     const { coordinator } = renderWizard()
     fillStep1()
-    expect(screen.getByLabelText('Base Seed range start')).toHaveValue('100')
-    expect(screen.getByLabelText('Base Seed range end')).toHaveValue('200')
+    expect(screen.getByLabelText('Base Seed 検索範囲の開始')).toHaveValue('100')
+    expect(screen.getByLabelText('Base Seed 検索範囲の終了')).toHaveValue('200')
 
-    await user.click(screen.getByRole('button', { name: 'Restart' }))
+    await user.click(screen.getByRole('button', { name: '最初からやり直す' }))
 
     expect(coordinator.restartCalls).toBe(1)
-    expect(screen.getByLabelText('Base Seed range start')).toHaveValue(CANONICAL_SEED_START)
-    expect(screen.getByLabelText('Base Seed range end')).toHaveValue(CANONICAL_SEED_END)
-    expect(screen.getByLabelText('Observation 1 Series Skill')).toHaveTextContent('未入力')
-    expect(screen.getByLabelText('Observation 1 Group Skill')).toHaveTextContent('未入力')
+    expect(screen.getByLabelText('Base Seed 検索範囲の開始')).toHaveValue(CANONICAL_SEED_START)
+    expect(screen.getByLabelText('Base Seed 検索範囲の終了')).toHaveValue(CANONICAL_SEED_END)
+    expect(screen.getByLabelText('観測1 シリーズスキル')).toHaveTextContent('未入力')
+    expect(screen.getByLabelText('観測1 グループスキル')).toHaveTextContent('未入力')
   })
 
   it('shows a Worker failure as an error instead of no-match', async () => {
@@ -786,7 +786,7 @@ describe('IdentificationWizardDialog STEP 1', () => {
 
   it('keeps every safety item and the verification scope visible', () => {
     renderWizard()
-    const dialog = within(screen.getByRole('dialog', { name: 'RNG Identification Wizard' }))
+    const dialog = within(screen.getByRole('dialog', { name: 'RNG同定ウィザード' }))
     for (const item of [
       '観測結果の記録が終わるまでゲーム状態を保存しないでください。',
       '開始前にバックアップ方法と自動保存の設定・挙動を確認してください。',
@@ -800,7 +800,7 @@ describe('IdentificationWizardDialog STEP 1', () => {
     // The verification level is stated generically from the repository's
     // game-verified evidence; fixture enumeration belongs to
     // `docs/RNG_REFERENCE_AUDIT.md`, and no blanket coverage claim is made.
-    expect(dialog.getByText(/Production Identificationは実機確認済みです。ただし確認条件は限定されており、全武器種・全属性・全ゲームバージョンを保証するものではありません。/)).toBeInTheDocument()
+    expect(dialog.getByText(/RNG同定は実機で動作を確認済みです。ただし確認条件は限定されており、全武器種・全属性・全ゲームバージョンを保証するものではありません。/)).toBeInTheDocument()
     expect(dialog.getByText(/採用後の予測結果はゲーム側でも確認してください。/)).toBeInTheDocument()
     expect(dialog.queryByText(/操虫棍/)).not.toBeInTheDocument()
     expect(dialog.queryByText(/ヘヴィボウガン/)).not.toBeInTheDocument()
@@ -811,35 +811,98 @@ describe('IdentificationWizardDialog STEP 1', () => {
     const user = userEvent.setup()
     renderWizard()
 
-    expect(within(skillObservationCard(1)).getByText('conversion自動Skill')).toBeInTheDocument()
-    expect(within(skillObservationCard(2)).getByText('連続Skill Reset 1')).toBeInTheDocument()
+    expect(within(skillObservationCard(1)).getByText('1回目のスキル抽選結果')).toBeInTheDocument()
+    expect(within(skillObservationCard(2)).getByText('2回目のスキル抽選結果')).toBeInTheDocument()
     expect(within(skillObservationCard(1)).getByText('未入力あり')).toBeInTheDocument()
     fillSkillObservations(1)
     expect(within(skillObservationCard(1)).getByText('入力済み')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Observation 2を削除' }))
-    expect(screen.queryByLabelText('Observation 4 Series Skill')).not.toBeInTheDocument()
-    expect(screen.getByLabelText('Observation 3 Series Skill')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '観測2を削除' }))
+    expect(screen.queryByLabelText('観測4 シリーズスキル')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('観測3 シリーズスキル')).toBeInTheDocument()
     // Observation 1 keeps its entered values after a later row is removed.
     expect(within(skillObservationCard(1)).getByText('入力済み')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Observation 3を削除' }))
-    await user.click(screen.getByRole('button', { name: 'Observation 2を削除' }))
-    expect(screen.getByRole('button', { name: 'Observation 1を削除' })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: '観測3を削除' }))
+    await user.click(screen.getByRole('button', { name: '観測2を削除' }))
+    expect(screen.getByRole('button', { name: '観測1を削除' })).toBeDisabled()
+  })
+
+  it('labels every Skill observation by its draw order, never by a fixed operation', () => {
+    renderWizard()
+    for (const index of [1, 2, 3, 4]) {
+      const card = skillObservationCard(index)
+      expect(within(card).getByText(`${index}回目のスキル抽選結果`)).toBeInTheDocument()
+      // Observation 1 is not fixed to a conversion, and later ones are not
+      // fixed to Reset Skills (`docs/UI_FLOW.md` 5.4).
+      expect(card.textContent).not.toMatch(/conversion|巨戟化|Reset|リセット|再抽選/)
+    }
+  })
+
+  it('explains both ways of starting the consecutive Skill observations', () => {
+    renderWizard()
+    const step1 = within(screen.getByRole('region', { name: 'STEP 1 — Base Seedと開始スキルカウンターの特定' }))
+    expect(step1.getByText('同じ武器種・属性で、スキルの抽選結果を連続して記録します。')).toBeInTheDocument()
+    expect(step1.getByText(/通常アーティアから始める場合は、巨戟化したときに自動で付いたスキルを観測1として記録し/)).toBeInTheDocument()
+    expect(step1.getByText('すでに巨戟アーティアを持っている場合は、スキル再抽選の結果から観測1を始められます。')).toBeInTheDocument()
+    expect(step1.getByText('途中でスキルが抽選される別の操作を挟まず、実際に出た順番どおりに記録してください。')).toBeInTheDocument()
+  })
+
+  it('asks for no start method, so the observation inputs are the only STEP 1 observation input', () => {
+    renderWizard()
+    const dialog = within(screen.getByRole('dialog', { name: 'RNG同定ウィザード' }))
+    expect(dialog.queryByRole('radiogroup')).not.toBeInTheDocument()
+    expect(dialog.queryByRole('radio')).not.toBeInTheDocument()
+    expect(dialog.queryByText(/開始方法/)).not.toBeInTheDocument()
+    // STEP 1 offers only the weapon / element and the per-observation Skill Selects.
+    const step1 = within(screen.getByRole('region', { name: 'STEP 1 — Base Seedと開始スキルカウンターの特定' }))
+    expect(step1.getAllByRole('combobox')).toHaveLength(2 + 4 * 2)
+  })
+
+  it('sends the unchanged Skill observation shape with no operation field', async () => {
+    const user = userEvent.setup()
+    const { coordinator } = renderWizard()
+    await startSkillSearch(user)
+
+    const input = coordinator.skillInputs[0]
+    expect(Object.keys(input ?? {}).sort()).toEqual(
+      ['elementId', 'observations', 'seedRange', 'skillCounterRange', 'weaponTypeId'],
+    )
+    expect(input?.observations).toHaveLength(4)
+    for (const observation of input?.observations ?? []) {
+      expect(Object.keys(observation).sort()).toEqual(['groupSkillId', 'seriesSkillId'])
+    }
+  })
+
+  it('shows no English-only ordinary labels in any STEP', async () => {
+    const coordinator = new FakeCoordinator()
+    renderWizard(coordinator)
+    await seedReview(coordinator)
+    const text = screen.getByRole('dialog', { name: 'RNG同定ウィザード' }).textContent ?? ''
+    for (const english of [
+      'Weapon Type', 'Element', 'Observation', 'Series Skill', 'Group Skill', 'Search',
+      'Cancel', 'Restart', 'Close', 'Review', 'Adopt', 'Starting', 'range', 'inclusive',
+      'Reset Bonuses', 'Keep Bonuses', 'Skill Reset', 'conversion', 'Production Identification',
+      'Identification', 'Wizard', 'Skill Counter', 'Gogma Counter',
+    ]) {
+      expect(text).not.toContain(english)
+    }
+    // Base Seed stays the app's formal term (RNG Setup: 「Base Seed（基準シード）」).
+    expect(text).toContain('Base Seed')
   })
 
   it('previews the approximate Skill Counter as an inclusive range from center ± 5', () => {
     renderWizard()
-    expect(screen.getByText('検索範囲: 37 ～ 47（inclusive・11候補）')).toBeInTheDocument()
+    expect(screen.getByText('検索範囲: 37 ～ 47（両端を含む・11候補）')).toBeInTheDocument()
   })
 
   it('names the search state in words while searching and after cancel', async () => {
     const user = userEvent.setup()
     const { coordinator } = renderWizard()
-    const step1 = screen.getByRole('region', { name: 'STEP 1 — Base Seed / Starting Skill Counter' })
+    const step1 = screen.getByRole('region', { name: 'STEP 1 — Base Seedと開始スキルカウンターの特定' })
     expect(within(step1).getByRole('status')).toHaveTextContent('未検索')
     await startSkillSearch(user)
     expect(within(step1).getByRole('status')).toHaveTextContent('検索中')
-    await user.click(screen.getByRole('button', { name: 'STEP 1 Cancel' }))
+    await user.click(screen.getByRole('button', { name: 'STEP 1の検索をキャンセル' }))
     expect(within(step1).getByRole('status')).toHaveTextContent('キャンセル済み')
     expect(coordinator.cancelSkillCalls).toBe(1)
   })
@@ -855,7 +918,7 @@ describe('IdentificationWizardDialog STEP 1', () => {
 
     expect(await screen.findByText(message)).toBeInTheDocument()
     expect(screen.queryByText(/一致する結果がありません/)).not.toBeInTheDocument()
-    expect(within(screen.getByRole('region', { name: 'STEP 1 — Base Seed / Starting Skill Counter' })).getByRole('status')).toHaveTextContent('エラー')
+    expect(within(screen.getByRole('region', { name: 'STEP 1 — Base Seedと開始スキルカウンターの特定' })).getByRole('status')).toHaveTextContent('エラー')
   })
 })
 
@@ -875,7 +938,7 @@ describe('IdentificationWizardDialog STEP 2', { timeout: 15_000 }, () => {
       }
     }
 
-    await user.click(screen.getByRole('button', { name: 'Reset Observationを追加' }))
+    await user.click(screen.getByRole('button', { name: '復元ボーナス観測を追加' }))
     const addedEditor = resetObservationEditor(5)
     expect(within(addedEditor).getByLabelText('枠1 ボーナス種別'))
       .toHaveTextContent('未入力')
@@ -895,9 +958,9 @@ describe('IdentificationWizardDialog STEP 2', { timeout: 15_000 }, () => {
       setBonusSlot(fourthEditor, slotIndex, choice)
     }
 
-    await user.click(screen.getByRole('button', { name: 'STEP 2 Search' }))
+    await user.click(screen.getByRole('button', { name: 'STEP 2を検索' }))
 
-    expect(await screen.findByText(/Reset Observation 4の枠5を完成させてください/)).toBeInTheDocument()
+    expect(await screen.findByText(/復元ボーナス観測4の枠5を完成させてください/)).toBeInTheDocument()
     expect(coordinator.gogmaInputs).toHaveLength(0)
   })
 
@@ -914,7 +977,7 @@ describe('IdentificationWizardDialog STEP 2', { timeout: 15_000 }, () => {
     await user.click(within(await screen.findByRole('listbox')).getAllByRole('option')[2]!)
     await user.click(within(secondResetPanel).getAllByRole('combobox')[1]!)
     await user.click(within(await screen.findByRole('listbox')).getAllByRole('option')[1]!)
-    await user.click(screen.getByRole('button', { name: 'STEP 2 Search' }))
+    await user.click(screen.getByRole('button', { name: 'STEP 2を検索' }))
 
     const input = coordinator.gogmaInputs[0]
     expect(input).not.toHaveProperty('baseSeed')
@@ -952,7 +1015,7 @@ describe('IdentificationWizardDialog STEP 2', { timeout: 15_000 }, () => {
       const editor = resetObservationEditor(observationIndex)
       for (let slotIndex = 1; slotIndex <= 5; slotIndex += 1) setBonusSlot(editor, slotIndex, choice)
     }
-    await user.click(screen.getByRole('button', { name: 'STEP 2 Search' }))
+    await user.click(screen.getByRole('button', { name: 'STEP 2を検索' }))
 
     expect(screen.queryByText(/を完成させてください/)).not.toBeInTheDocument()
     expect(coordinator.gogmaInputs).toHaveLength(1)
@@ -976,19 +1039,19 @@ describe('IdentificationWizardDialog STEP 2', { timeout: 15_000 }, () => {
   it('summarizes the STEP 1 authority and counts filled slots per Reset observation', async () => {
     const { coordinator } = renderWizard()
     await seedStep2(coordinator)
-    const step2 = within(screen.getByRole('region', { name: 'STEP 2 — Starting Gogma Counter' }))
+    const step2 = within(screen.getByRole('region', { name: 'STEP 2 — 開始巨戟カウンターの特定' }))
     const input = coordinator.getState().skill.input!
     expect(step2.getByText(master.weaponTypes.find(({ id }) => id === input.weaponTypeId)!.displayNameJa)).toBeInTheDocument()
     expect(step2.getByText(master.elements.find(({ id }) => id === input.elementId)!.displayNameJa)).toBeInTheDocument()
     expect(step2.getByText('完了（一意に特定）')).toBeInTheDocument()
     expect(step2.queryByRole('textbox', { name: /Base Seed/ })).not.toBeInTheDocument()
-    expect(step2.getByText('検索範囲: 79 ～ 89（inclusive・11候補）')).toBeInTheDocument()
+    expect(step2.getByText('検索範囲: 79 ～ 89（両端を含む・11候補）')).toBeInTheDocument()
 
     expect(within(resetObservationEditor(1)).getByText('入力 0/5枠')).toBeInTheDocument()
     fillGogmaObservations(coordinator, 1)
     expect(within(resetObservationEditor(1)).getByText('入力 5/5枠')).toBeInTheDocument()
-    expect(within(resetObservationEditor(1)).getByRole('list', { name: 'Reset Observation 1の5枠' })).toBeInTheDocument()
-    expect(within(resetObservationEditor(2)).getByRole('button', { name: 'Reset Observation 2を削除' })).toBeEnabled()
+    expect(within(resetObservationEditor(1)).getByRole('list', { name: '復元ボーナス観測1の5枠' })).toBeInTheDocument()
+    expect(within(resetObservationEditor(2)).getByRole('button', { name: '復元ボーナス観測2を削除' })).toBeEnabled()
   })
 
   it.each([
@@ -1000,11 +1063,11 @@ describe('IdentificationWizardDialog STEP 2', { timeout: 15_000 }, () => {
     const { coordinator } = renderWizard()
     await seedStep2(coordinator)
     fillGogmaObservations(coordinator)
-    await user.click(screen.getByRole('button', { name: 'STEP 2 Search' }))
+    await user.click(screen.getByRole('button', { name: 'STEP 2を検索' }))
     act(() => coordinator.completeGogma(classification))
 
     expect(await screen.findByText(message)).toBeInTheDocument()
-    expect(screen.queryByText('Review')).not.toBeInTheDocument()
+    expect(screen.queryByText('確認・採用', { selector: 'h3' })).not.toBeInTheDocument()
     expect(screen.queryByRole('listbox', { name: /candidate/i })).not.toBeInTheDocument()
   })
 
@@ -1013,14 +1076,14 @@ describe('IdentificationWizardDialog STEP 2', { timeout: 15_000 }, () => {
     const { coordinator } = renderWizard()
     await seedStep2(coordinator)
     fillGogmaObservations(coordinator)
-    await user.click(screen.getByRole('button', { name: 'STEP 2 Search' }))
+    await user.click(screen.getByRole('button', { name: 'STEP 2を検索' }))
     act(() => coordinator.progressGogma())
     expect(screen.getByLabelText('検索進捗')).toHaveTextContent('5 / 11')
-    await user.click(screen.getByRole('button', { name: 'STEP 2 Cancel' }))
+    await user.click(screen.getByRole('button', { name: 'STEP 2の検索をキャンセル' }))
     expect(coordinator.cancelGogmaCalls).toBe(1)
     expect(await screen.findByText(/検索をキャンセルしました/)).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'STEP 2 Search' }))
+    await user.click(screen.getByRole('button', { name: 'STEP 2を検索' }))
     act(() => coordinator.failGogma())
     expect(await screen.findByText(/検索処理エラー: gogma worker exploded/)).toBeInTheDocument()
     expect(screen.queryByText(/一致する結果がありません/)).not.toBeInTheDocument()
@@ -1034,13 +1097,13 @@ describe('IdentificationWizardDialog Review and lifecycle', { timeout: 15_000 },
     await seedReview(coordinator)
 
     expect(screen.getByText('Base Seed: 86315169')).toBeInTheDocument()
-    expect(screen.getByText('Starting Skill Counter: 42')).toBeInTheDocument()
-    expect(screen.getByText('Starting Gogma Counter: 84')).toBeInTheDocument()
+    expect(screen.getByText('開始スキルカウンター: 42')).toBeInTheDocument()
+    expect(screen.getByText('開始巨戟カウンター: 84')).toBeInTheDocument()
     expect(screen.queryByText(/Current Skill Counter/)).not.toBeInTheDocument()
     expect(screen.queryByText(/Current Gogma Counter/)).not.toBeInTheDocument()
-    expect(screen.queryByText('Starting Skill Counter: 46')).not.toBeInTheDocument()
+    expect(screen.queryByText('開始スキルカウンター: 46')).not.toBeInTheDocument()
 
-    const adopt = screen.getByRole('button', { name: 'Adopt starting values' })
+    const adopt = screen.getByRole('button', { name: '開始値を採用' })
     expect(adopt).toBeDisabled()
     await user.click(screen.getByRole('checkbox', { name: '調査前のゲーム状態へ戻した' }))
     expect(adopt).toBeEnabled()
@@ -1061,13 +1124,13 @@ describe('IdentificationWizardDialog Review and lifecycle', { timeout: 15_000 },
     await user.click(screen.getByRole('checkbox', { name: '調査前のゲーム状態へ戻した' }))
     coordinator.adoptionFailure = new Error('put failed')
 
-    await user.click(screen.getByRole('button', { name: 'Adopt starting values' }))
-    expect(await screen.findByText(/Adoption failure: put failed/)).toBeInTheDocument()
-    expect(screen.getByText('Review')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '開始値を採用' }))
+    expect(await screen.findByText(/採用に失敗しました: put failed/)).toBeInTheDocument()
+    expect(screen.getByText('確認・採用', { selector: 'h3' })).toBeInTheDocument()
     expect(screen.getByRole('checkbox', { name: '調査前のゲーム状態へ戻した' })).toBeChecked()
-    expect(screen.getByRole('button', { name: 'Adopt starting values' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '開始値を採用' })).toBeEnabled()
 
-    await user.click(screen.getByRole('button', { name: 'Adopt starting values' }))
+    await user.click(screen.getByRole('button', { name: '開始値を採用' }))
     await waitFor(() => expect(coordinator.adoptCalls).toBe(2))
   })
 
@@ -1077,10 +1140,10 @@ describe('IdentificationWizardDialog Review and lifecycle', { timeout: 15_000 },
     await reachReview(coordinator, user)
     await user.click(screen.getByRole('checkbox', { name: '調査前のゲーム状態へ戻した' }))
 
-    await user.click(screen.getByRole('button', { name: 'STEP 1 Search' }))
+    await user.click(screen.getByRole('button', { name: 'STEP 1を検索' }))
 
-    expect(screen.queryByText('STEP 2 — Starting Gogma Counter')).not.toBeInTheDocument()
-    expect(screen.queryByText('Review')).not.toBeInTheDocument()
+    expect(screen.queryByText('STEP 2 — 開始巨戟カウンターの特定')).not.toBeInTheDocument()
+    expect(screen.queryByText('確認・採用', { selector: 'h3' })).not.toBeInTheDocument()
     expect(coordinator.getState().gameRestoredConfirmed).toBe(false)
   })
 
@@ -1090,10 +1153,10 @@ describe('IdentificationWizardDialog Review and lifecycle', { timeout: 15_000 },
     await reachReview(coordinator, user)
     await user.click(screen.getByRole('checkbox', { name: '調査前のゲーム状態へ戻した' }))
 
-    await user.click(screen.getByRole('button', { name: 'STEP 2 Search' }))
+    await user.click(screen.getByRole('button', { name: 'STEP 2を検索' }))
 
-    expect(screen.getByText('STEP 2 — Starting Gogma Counter')).toBeInTheDocument()
-    expect(screen.queryByText('Review')).not.toBeInTheDocument()
+    expect(screen.getByText('STEP 2 — 開始巨戟カウンターの特定')).toBeInTheDocument()
+    expect(screen.queryByText('確認・採用', { selector: 'h3' })).not.toBeInTheDocument()
     expect(coordinator.getState().skill.classification).toBe('unique')
     expect(coordinator.getState().gameRestoredConfirmed).toBe(false)
   })
@@ -1102,12 +1165,12 @@ describe('IdentificationWizardDialog Review and lifecycle', { timeout: 15_000 },
     const user = userEvent.setup()
     const { coordinator } = renderWizard()
     await seedReview(coordinator)
-    await user.click(screen.getByRole('button', { name: 'Restart' }))
+    await user.click(screen.getByRole('button', { name: '最初からやり直す' }))
 
     expect(coordinator.restartCalls).toBe(1)
     expect(screen.getByRole('listitem', { current: 'step' })).toHaveTextContent('STEP 1')
-    expect(screen.queryByText('STEP 2 — Starting Gogma Counter')).not.toBeInTheDocument()
-    expect(screen.queryByText('Review')).not.toBeInTheDocument()
+    expect(screen.queryByText('STEP 2 — 開始巨戟カウンターの特定')).not.toBeInTheDocument()
+    expect(screen.queryByText('確認・採用', { selector: 'h3' })).not.toBeInTheDocument()
   })
 
   it('ignores a late completion after cancel and does not advance', async () => {
@@ -1115,37 +1178,37 @@ describe('IdentificationWizardDialog Review and lifecycle', { timeout: 15_000 },
     const { coordinator } = renderWizard()
     await startSkillSearch(user)
     const oldRequest = 1
-    await user.click(screen.getByRole('button', { name: 'STEP 1 Cancel' }))
+    await user.click(screen.getByRole('button', { name: 'STEP 1の検索をキャンセル' }))
     act(() => coordinator.completeSkill('unique', oldRequest))
 
-    expect(screen.queryByText('STEP 2 — Starting Gogma Counter')).not.toBeInTheDocument()
+    expect(screen.queryByText('STEP 2 — 開始巨戟カウンターの特定')).not.toBeInTheDocument()
     expect(coordinator.getState().skill.status).toBe('cancelled')
   })
 
   it('moves the step indicator only with Coordinator state and marks adoption in words', async () => {
     const user = userEvent.setup()
     const { coordinator } = renderWizard()
-    expect(stepPositions()).toEqual(['STEP 1現在', 'STEP 2未到達', 'Review / 採用未到達'])
+    expect(stepPositions()).toEqual(['STEP 1現在', 'STEP 2未到達', '確認・採用未到達'])
     await seedStep2(coordinator)
-    expect(stepPositions()).toEqual(['STEP 1完了', 'STEP 2現在', 'Review / 採用未到達'])
+    expect(stepPositions()).toEqual(['STEP 1完了', 'STEP 2現在', '確認・採用未到達'])
     await seedReview(coordinator)
-    expect(stepPositions()).toEqual(['STEP 1完了', 'STEP 2完了', 'Review / 採用現在'])
-    expect(screen.getByRole('listitem', { current: 'step' })).toHaveTextContent('Review / 採用')
+    expect(stepPositions()).toEqual(['STEP 1完了', 'STEP 2完了', '確認・採用現在'])
+    expect(screen.getByRole('listitem', { current: 'step' })).toHaveTextContent('確認・採用')
 
     expect(screen.getByText('「調査前のゲーム状態へ戻した」を確認すると採用できます。')).toBeInTheDocument()
     await user.click(screen.getByRole('checkbox', { name: '調査前のゲーム状態へ戻した' }))
-    await user.click(screen.getByRole('button', { name: 'Adopt starting values' }))
+    await user.click(screen.getByRole('button', { name: '開始値を採用' }))
 
-    expect(await screen.findByText('Identification結果をRNG状態へ採用しました。')).toBeInTheDocument()
-    expect(stepPositions()).toEqual(['STEP 1完了', 'STEP 2完了', 'Review / 採用採用済み'])
-    expect(screen.getByRole('button', { name: 'Adopt starting values' })).toBeDisabled()
+    expect(await screen.findByText('同定結果をRNG状態へ採用しました。')).toBeInTheDocument()
+    expect(stepPositions()).toEqual(['STEP 1完了', 'STEP 2完了', '確認・採用採用済み'])
+    expect(screen.getByRole('button', { name: '開始値を採用' })).toBeDisabled()
     expect(screen.getByRole('checkbox', { name: '調査前のゲーム状態へ戻した' })).toBeDisabled()
   })
 
   it('Close only asks the owner to close and never disposes the Coordinator', async () => {
     const user = userEvent.setup()
     const { coordinator, onClose } = renderWizard()
-    await user.click(screen.getByRole('button', { name: 'Close' }))
+    await user.click(screen.getByRole('button', { name: '閉じる' }))
     expect(onClose).toHaveBeenCalledTimes(1)
     expect(coordinator.disposeCalls).toBe(0)
     expect(coordinator.restartCalls).toBe(0)

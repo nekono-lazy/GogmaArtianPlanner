@@ -1334,8 +1334,17 @@ The Production v1 RNG-identification path is the dedicated Skill-first Wizard.
 There is no generic Seed Search contract: `RngEngineCapabilities` describes
 prediction support only, and no capability flag stands for Identification.
 
-- Step 1 identifies canonical Base Seed and starting Skill Counter from the
-  conversion-assigned Skill followed by consecutive Reset Skills observations.
+- Step 1 identifies canonical Base Seed and starting Skill Counter from
+  consecutive ordered Skill draws (Series and Group) of one weapon type and
+  element. The first observation may be the conversion-assigned Skill or a
+  Reset Skills result on an already owned Gogma; every later one is the next
+  consecutive Reset Skills result, with no other Skill Counter consuming
+  operation in between. The starting Skill Counter is the one immediately
+  before observation 1. Conversion and Reset Skills each advance the Skill
+  Counter by one and draw the same Skills at the same Skill Counter, weapon
+  type, and element (direct game observation, `docs/RNG_REFERENCE_AUDIT.md`
+  14.18), so the operation type is never an Identification input and the
+  Wizard asks for no start method.
 - Step 2 uses the unique Step 1 Seed and consecutive ordered Reset Bonuses
   observations to identify the starting Gogma Counter.
 - Counter Gate is never a Wizard input, observation, search dimension, result,

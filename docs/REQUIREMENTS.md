@@ -163,7 +163,7 @@ Counter Gateは `RngState` に互換・diagnostic目的で残るが、通常ユ�
 
 Seed検索とCounter検索は別の入力・結果型として扱う。Production v1のRNG特定にはSkill-first Identification Wizardの専用kernelを使用する。Identification availabilityはWorker / application levelで判定し、RngEngine capability flagで表さない。
 
-Identification WizardはCounter Gateを入力、探索、観測、特定、結果化しない。STEP 1はNormalからGogmaへのconversion時の自動Skillと連続Reset Skills観測からcanonical Base Seedとstarting Skill Counter `S`を特定し、STEP 2はそのBase Seedと連続ordered Reset Bonuses観測からstarting Gogma Counter `G`を特定する。STEP 1が完全な探索で一意になるまでSTEP 2へ進めず、複数候補では候補選択ではなく追加観測を要求する。
+Identification WizardはCounter Gateを入力、探索、観測、特定、結果化しない。STEP 1は同じ武器種・属性に対する連続したSkill抽選結果（Series / Group）の観測列からcanonical Base Seedとstarting Skill Counter `S`を特定する。最初の観測は巨戟化（conversion）時の自動Skill付与、既存巨戟アーティアへのReset Skillsのどちらから開始してもよく、観測列は途中で別のSkill Counter消費操作を挟まず、実際の順番どおりに記録する。`S`は観測1を生成する直前のSkill Counterであり、観測`i`（観測1を`i = 0`）はSkill Counter `S + i`に対応する。conversionとReset SkillsはいずれもSkill Counterを1進め、同じSkill Counter位置・武器種・属性では同じSkill結果になる（direct game observation、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.18）ため、開始操作の種別はIdentification入力に含めない。STEP 2はそのBase Seedと連続ordered Reset Bonuses観測からstarting Gogma Counter `G`を特定する。STEP 1が完全な探索で一意になるまでSTEP 2へ進めず、複数候補では候補選択ではなく追加観測を要求する。
 
 Wizardの調査中に実行したSkill / Gogma操作でCounterが進んでも、調査中のゲーム状態は保存せず、調査前状態へ戻してから結果を採用する。採用値はstarting Counter `S` / `G`であり、観測数を加えた値ではない。Base Seed、Skill Counter、Gogma Counterのsourceにはv1で既存の `observation` を使用し、Counter Gateは変更しない。
 

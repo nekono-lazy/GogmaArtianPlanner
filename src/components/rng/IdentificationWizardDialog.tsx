@@ -32,7 +32,7 @@ import { usePlanBreakingChangeApproval } from '../execution/usePlanBreakingChang
 
 /** The operation-specific line under the breaking-change warning (`docs/UI_FLOW.md` 16.3). */
 const IDENTIFICATION_PLAN_BREAKING_NOTE =
-  'Identification結果を採用すると、現在の生産計画で使用している予測位置と一致しなくなります。'
+  '同定結果を採用すると、現在の生産計画で使用している予測位置と一致しなくなります。'
 
 const INITIAL_OBSERVATION_COUNT = 4
 const DEFAULT_COUNTER_RADIUS = 5
@@ -102,6 +102,11 @@ function emptySkillObservations(): SkillObservationDraft[] {
   return Array.from({ length: INITIAL_OBSERVATION_COUNT }, emptySkillObservation)
 }
 
+/** The STEP 2 observation name, kept apart from the STEP 1 「観測N」 cards. */
+function bonusObservationTitle(index: number): string {
+  return `復元ボーナス観測${index + 1}`
+}
+
 function emptyBonusObservation(): BonusObservationDraft {
   return Array.from(
     { length: 5 },
@@ -124,7 +129,7 @@ function completeSkillObservations(
       !validSeriesSkillIds.has(draft.seriesSkillId) ||
       !validGroupSkillIds.has(draft.groupSkillId)
     ) {
-      throw new Error(`Skill Observation ${index + 1}のSeries SkillとGroup Skillを入力してください。`)
+      throw new Error(`観測${index + 1}のシリーズスキルとグループスキルを入力してください。`)
     }
     return {
       seriesSkillId: draft.seriesSkillId,
@@ -166,7 +171,7 @@ function completeBonusObservations(
       slot.bonusTypeId === null || slot.bonusRankId === null ||
       !validPairs.has(`${slot.bonusTypeId}\u0000${slot.bonusRankId}`)
     ) {
-      throw new Error(`Reset Observation ${observationIndex + 1}の枠${slotIndex + 1}を完成させてください。`)
+      throw new Error(`${bonusObservationTitle(observationIndex)}の枠${slotIndex + 1}を完成させてください。`)
     }
     return { bonusTypeId: slot.bonusTypeId, bonusRankId: slot.bonusRankId }
   }) as RestorationBonusSet)
@@ -183,7 +188,7 @@ function parseInclusiveRange(start: string, end: string, label: string, maximum:
   const startInclusive = parseNonNegativeInteger(start, `${label}の開始`)
   const endInclusive = parseNonNegativeInteger(end, `${label}の終了`)
   if (endInclusive < startInclusive || endInclusive > maximum) {
-    throw new Error(`${label}は0から${maximum}までの昇順inclusive rangeで入力してください。`)
+    throw new Error(`${label}は0から${maximum}までの範囲で、開始が終了以下になるように入力してください。`)
   }
   return { startInclusive, endInclusive }
 }
@@ -197,9 +202,9 @@ function parseApproximateRange(draft: ApproximateCounterDraft, label: string, ma
 
 function previewApproximateRange(draft: ApproximateCounterDraft, maximum: number): string {
   try {
-    const range = parseApproximateRange(draft, 'Counter', maximum)
+    const range = parseApproximateRange(draft, 'カウンター', maximum)
     const count = range.endInclusive - range.startInclusive + 1
-    return `${range.startInclusive} ～ ${range.endInclusive}（inclusive・${count.toLocaleString()}候補）`
+    return `${range.startInclusive} ～ ${range.endInclusive}（両端を含む・${count.toLocaleString()}候補）`
   } catch { return '中心値を入力すると検索範囲を表示します。' }
 }
 
@@ -215,9 +220,9 @@ function adoptionErrorMessage(error: unknown): string {
 function classificationAlert(classification: IdentificationResultClassification | null, step: 'skill' | 'gogma') {
   if (classification === null) return null
   if (classification === 'unique') return <Alert severity="success">完全な探索で一意に特定できました。</Alert>
-  if (classification === 'multiple') return <Alert severity="warning">候補が複数あります。候補は選択せず、連続する次の{step === 'skill' ? 'Skill Reset' : 'Reset Bonuses'}結果をObservationへ追加して再検索してください。</Alert>
+  if (classification === 'multiple') return <Alert severity="warning">候補が複数あります。候補は選択せず、{step === 'skill' ? '次の連続したスキル抽選結果' : '次の連続した復元ボーナスのリセット結果'}を観測へ追加して再検索してください。</Alert>
   if (classification === 'incomplete') return <Alert severity="warning">探索が完全ではないため一意と判定できません。入力と診断情報を確認して同じ範囲を再検索してください。</Alert>
-  return <Alert severity="warning">一致する結果がありません。Observationの入力内容、Counter range、実ゲームで行った操作順序を確認してください。範囲は自動拡張されません。</Alert>
+  return <Alert severity="warning">一致する結果がありません。観測の入力内容、カウンターの検索範囲、実ゲームで行った操作の順番を確認してください。範囲は自動拡張されません。</Alert>
 }
 
 function errorAlert(error: IdentificationWizardErrorState | null) {
@@ -225,7 +230,7 @@ function errorAlert(error: IdentificationWizardErrorState | null) {
   if (error.kind === 'cancelled') return <Alert severity="info">検索をキャンセルしました。入力を保持したまま再検索できます。</Alert>
   const prefix = error.kind === 'invalid_input' ? '入力エラー'
     : error.kind === 'unsupported_input' ? '未対応の入力'
-      : error.kind === 'worker_unavailable' ? 'Workerを利用できません'
+      : error.kind === 'worker_unavailable' ? 'バックグラウンド検索を利用できません'
         : error.kind === 'incomplete_parallel_chunk' ? '並列探索を完全に統合できません'
           : '検索処理エラー'
   return <Alert severity="error">{prefix}: {errorMessage(error.error)}</Alert>
@@ -265,9 +270,9 @@ const stepProgressLabels: Record<StepProgress, string> = {
 
 function StepIndicator({ state }: { state: IdentificationWizardState }) {
   const progress = wizardStepProgress(state)
-  const steps = ['STEP 1', 'STEP 2', 'Review / 採用']
+  const steps = ['STEP 1', 'STEP 2', '確認・採用']
   return (
-    <Box component="nav" aria-label="Identificationの進行状況" sx={{ px: { xs: 2, sm: 3 }, pb: 1.5 }}>
+    <Box component="nav" aria-label="RNG同定の進行状況" sx={{ px: { xs: 2, sm: 3 }, pb: 1.5 }}>
       <Box component="ol" sx={{ m: 0, p: 0, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 0.75 }}>
         {steps.map((label, index) => {
           const status = progress[index]!
@@ -521,9 +526,9 @@ export function IdentificationWizardDialog({
   const identifySkill = async () => {
     setStep1FormError(null)
     try {
-      const seedRange = parseInclusiveRange(seedStart, seedEnd, 'Base Seed range', CANONICAL_BASE_SEED_MAX)
+      const seedRange = parseInclusiveRange(seedStart, seedEnd, 'Base Seedの検索範囲', CANONICAL_BASE_SEED_MAX)
       const skillCounterRange = parseApproximateRange(
-        skillRange, 'Skill Counter', Math.floor((Number.MAX_SAFE_INTEGER - 1) / 10),
+        skillRange, 'スキルカウンター', Math.floor((Number.MAX_SAFE_INTEGER - 1) / 10),
       )
       const observations = completeSkillObservations(
         skillObservations,
@@ -547,7 +552,7 @@ export function IdentificationWizardDialog({
     setStep2FormError(null)
     try {
       const gogmaCounterRange = parseApproximateRange(
-        gogmaRange, 'Gogma Counter', MAX_GOGMA_IDENTIFICATION_COUNTER,
+        gogmaRange, '巨戟カウンター', MAX_GOGMA_IDENTIFICATION_COUNTER,
       )
       const observations = completeBonusObservations(
         gogmaObservations, master, step2WeaponTypeId, step2ElementId,
@@ -629,7 +634,7 @@ export function IdentificationWizardDialog({
         if (!adopting && reason !== 'backdropClick') onClose()
       }}
     >
-      <DialogTitle sx={{ px: { xs: 2, sm: 3 }, pb: 1 }}>RNG Identification Wizard</DialogTitle>
+      <DialogTitle sx={{ px: { xs: 2, sm: 3 }, pb: 1 }}>RNG同定ウィザード</DialogTitle>
       <StepIndicator state={wizardState} />
       <DialogContent dividers sx={{ px: { xs: 2, sm: 3 } }}>
         <Stack spacing={{ xs: 2, sm: 3 }}>
@@ -645,32 +650,51 @@ export function IdentificationWizardDialog({
           </Alert>
           <Alert severity="info">
             <AlertTitle>検証範囲</AlertTitle>
-            Production Identificationは実機確認済みです。ただし確認条件は限定されており、全武器種・全属性・全ゲームバージョンを保証するものではありません。採用後の予測結果はゲーム側でも確認してください。
+            RNG同定は実機で動作を確認済みです。ただし確認条件は限定されており、全武器種・全属性・全ゲームバージョンを保証するものではありません。採用後の予測結果はゲーム側でも確認してください。
           </Alert>
 
-          <StepSection title="STEP 1 — Base Seed / Starting Skill Counter" status={searchStatus(wizardState.skill)}>
-            <Typography>
-              Normal → Gogma conversionで自動付与されたSkillをObservation 1へ記録し、その後の連続したSkill Reset結果をObservation 2以降へ順番どおり記録します。
-            </Typography>
+          <StepSection title="STEP 1 — Base Seedと開始スキルカウンターの特定" status={searchStatus(wizardState.skill)}>
+            {/*
+              The observations are operation-neutral (`docs/UI_FLOW.md` 5.4): a
+              conversion's assigned Skills and a Reset Skills result at one Skill
+              Counter position are the same draw, so the user never picks how the
+              sequence started and the Coordinator input carries no operation.
+            */}
+            <Stack spacing={1}>
+              <Typography>
+                同じ武器種・属性で、スキルの抽選結果を連続して記録します。
+              </Typography>
+              <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+                <Typography component="li" variant="body2">
+                  通常アーティアから始める場合は、巨戟化したときに自動で付いたスキルを観測1として記録し、その後はスキル再抽選の結果を続けて記録します。
+                </Typography>
+                <Typography component="li" variant="body2">
+                  すでに巨戟アーティアを持っている場合は、スキル再抽選の結果から観測1を始められます。
+                </Typography>
+                <Typography component="li" variant="body2">
+                  途中でスキルが抽選される別の操作を挟まず、実際に出た順番どおりに記録してください。
+                </Typography>
+              </Box>
+            </Stack>
             <Stack spacing={1}>
               <SubHeading>観測する武器</SubHeading>
               <Box sx={fieldPairSx}>
                 <FormControl fullWidth disabled={skillSearching}>
-                  <InputLabel id="identification-weapon-type-label">Weapon Type</InputLabel>
-                  <Select labelId="identification-weapon-type-label" label="Weapon Type" value={weaponTypeId} onChange={(event) => setWeaponTypeId(event.target.value)}>
+                  <InputLabel id="identification-weapon-type-label">武器種</InputLabel>
+                  <Select labelId="identification-weapon-type-label" label="武器種" value={weaponTypeId} onChange={(event) => setWeaponTypeId(event.target.value)}>
                     {weaponTypes.map((weaponType) => <MenuItem key={weaponType.id} value={weaponType.id}>{weaponType.displayNameJa}</MenuItem>)}
                   </Select>
                 </FormControl>
                 <FormControl fullWidth disabled={skillSearching}>
-                  <InputLabel id="identification-element-label">Element</InputLabel>
-                  <Select labelId="identification-element-label" label="Element" value={elementId} onChange={(event) => setElementId(event.target.value)}>
+                  <InputLabel id="identification-element-label">属性</InputLabel>
+                  <Select labelId="identification-element-label" label="属性" value={elementId} onChange={(event) => setElementId(event.target.value)}>
                     {elements.map((element) => <MenuItem key={element.id} value={element.id}>{element.displayNameJa}</MenuItem>)}
                   </Select>
                 </FormControl>
               </Box>
             </Stack>
             <Stack spacing={1}>
-              <SubHeading>ordered Skill observations（記録順）</SubHeading>
+              <SubHeading>スキル抽選結果（記録順）</SubHeading>
               <Box component="ol" sx={{ m: 0, p: 0, display: 'grid', gap: 1.25 }}>
                 {skillObservations.map((observation, index) => {
                   const complete = observation.seriesSkillId !== null && observation.groupSkillId !== null
@@ -678,20 +702,20 @@ export function IdentificationWizardDialog({
                     <ObservationCard
                       key={index}
                       dataAttribute={{ 'data-skill-observation': index + 1 }}
-                      title={`Observation ${index + 1}`}
-                      subtitle={index === 0 ? 'conversion自動Skill' : `連続Skill Reset ${index}`}
+                      title={`観測${index + 1}`}
+                      subtitle={`${index + 1}回目のスキル抽選結果`}
                       completion={complete ? { label: '入力済み', tone: 'positive' } : { label: '未入力あり', tone: 'neutral' }}
-                      deleteLabel={`Observation ${index + 1}を削除`}
+                      deleteLabel={`観測${index + 1}を削除`}
                       deleteDisabled={skillSearching || skillObservations.length === 1}
                       onDelete={() => setSkillObservations((current) => current.filter((_, itemIndex) => itemIndex !== index))}
                     >
                       <Box sx={fieldPairSx}>
                         <FormControl fullWidth disabled={skillSearching}>
-                          <InputLabel shrink id={`skill-observation-${index}-series-label`}>Observation {index + 1} Series Skill</InputLabel>
+                          <InputLabel shrink id={`skill-observation-${index}-series-label`}>観測{index + 1} シリーズスキル</InputLabel>
                           <Select
                             displayEmpty
                             labelId={`skill-observation-${index}-series-label`}
-                            label={`Observation ${index + 1} Series Skill`}
+                            label={`観測${index + 1} シリーズスキル`}
                             value={observation.seriesSkillId ?? ''}
                             onChange={(event) => {
                               const next = [...skillObservations]
@@ -707,11 +731,11 @@ export function IdentificationWizardDialog({
                           </Select>
                         </FormControl>
                         <FormControl fullWidth disabled={skillSearching}>
-                          <InputLabel shrink id={`skill-observation-${index}-group-label`}>Observation {index + 1} Group Skill</InputLabel>
+                          <InputLabel shrink id={`skill-observation-${index}-group-label`}>観測{index + 1} グループスキル</InputLabel>
                           <Select
                             displayEmpty
                             labelId={`skill-observation-${index}-group-label`}
-                            label={`Observation ${index + 1} Group Skill`}
+                            label={`観測${index + 1} グループスキル`}
                             value={observation.groupSkillId ?? ''}
                             onChange={(event) => {
                               const next = [...skillObservations]
@@ -738,7 +762,7 @@ export function IdentificationWizardDialog({
                   disabled={skillSearching}
                   onClick={() => setSkillObservations((current) => [...current, emptySkillObservation()])}
                 >
-                  Skill Observationを追加
+                  スキル観測を追加
                 </Button>
               </Box>
             </Stack>
@@ -746,23 +770,23 @@ export function IdentificationWizardDialog({
               <SubHeading>検索範囲</SubHeading>
               <Box sx={fieldPairSx}>
                 <TextField
-                  fullWidth label="Base Seed range start" type="text" value={seedStart}
+                  fullWidth label="Base Seed 検索範囲の開始" type="text" value={seedStart}
                   disabled={skillSearching}
                   slotProps={{ htmlInput: { inputMode: 'numeric', pattern: '[0-9]*', maxLength: SEED_RANGE_MAX_LENGTH, className: 'tabular-nums' } }}
                   onChange={(event) => { if (isSeedRangeDraft(event.target.value)) setSeedStart(event.target.value) }}
                 />
                 <TextField
-                  fullWidth label="Base Seed range end" type="text" value={seedEnd}
+                  fullWidth label="Base Seed 検索範囲の終了" type="text" value={seedEnd}
                   disabled={skillSearching}
                   slotProps={{ htmlInput: { inputMode: 'numeric', pattern: '[0-9]*', maxLength: SEED_RANGE_MAX_LENGTH, className: 'tabular-nums' } }}
                   onChange={(event) => { if (isSeedRangeDraft(event.target.value)) setSeedEnd(event.target.value) }}
                 />
               </Box>
               <Typography variant="body2" color="text.secondary">
-                初期値はBase Seed全域（{CANONICAL_BASE_SEED_MIN.toLocaleString()} ～ {CANONICAL_BASE_SEED_MAX.toLocaleString()}）です。数字のみ最大8桁で、必要なら狭い範囲へ変更できます。自動拡張やbackground wideningは行いません。
+                初期値はBase Seed全域（{CANONICAL_BASE_SEED_MIN.toLocaleString()} ～ {CANONICAL_BASE_SEED_MAX.toLocaleString()}）です。数字のみ最大8桁で、必要なら狭い範囲へ変更できます。範囲の自動拡張は行いません。
               </Typography>
               <ApproximateCounterFields
-                label="Skill Counter"
+                label="スキルカウンター"
                 draft={skillRange}
                 maximum={Math.floor((Number.MAX_SAFE_INTEGER - 1) / 10)}
                 disabled={skillSearching}
@@ -781,23 +805,23 @@ export function IdentificationWizardDialog({
             {errorAlert(wizardState.skill.error)}
             <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
               <Button variant="contained" sx={buttonSx} disabled={skillSearching || adopting} onClick={() => void identifySkill()}>
-                STEP 1 Search
+                STEP 1を検索
               </Button>
               <Button variant="outlined" sx={buttonSx} disabled={!skillSearching} onClick={() => coordinator.cancelSkill()}>
-                STEP 1 Cancel
+                STEP 1の検索をキャンセル
               </Button>
             </Stack>
           </StepSection>
 
           {wizardState.skill.classification === 'unique' && (
-            <StepSection title="STEP 2 — Starting Gogma Counter" status={searchStatus(wizardState.gogma)}>
+            <StepSection title="STEP 2 — 開始巨戟カウンターの特定" status={searchStatus(wizardState.gogma)}>
               <Box component="dl" sx={{ m: 0, display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(3, minmax(0, 1fr))' }, gap: 1, p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1, bgcolor: 'background.default' }}>
                 <Box sx={{ minWidth: 0 }}>
-                  <Typography component="dt" variant="caption" color="text.secondary">Weapon Type</Typography>
+                  <Typography component="dt" variant="caption" color="text.secondary">武器種</Typography>
                   <Typography component="dd" variant="body2" sx={{ m: 0, fontWeight: 500, overflowWrap: 'anywhere' }}>{nameOf(weaponTypes, step2WeaponTypeId)}</Typography>
                 </Box>
                 <Box sx={{ minWidth: 0 }}>
-                  <Typography component="dt" variant="caption" color="text.secondary">Element</Typography>
+                  <Typography component="dt" variant="caption" color="text.secondary">属性</Typography>
                   <Typography component="dd" variant="body2" sx={{ m: 0, fontWeight: 500, overflowWrap: 'anywhere' }}>{nameOf(elements, step2ElementId)}</Typography>
                 </Box>
                 <Box sx={{ minWidth: 0 }}>
@@ -806,10 +830,10 @@ export function IdentificationWizardDialog({
                 </Box>
               </Box>
               <Typography>
-                STEP 1で一意に特定したBase Seedを内部利用します。Base Seedの再入力は不要です。同じ武器でReset Bonusesだけを連続して行い、各5枠を枠順どおり記録してください。Keep Bonusesは使用しません。
+                STEP 1で一意に特定したBase Seedをそのまま使います。Base Seedの再入力は不要です。同じ武器で「復元ボーナスをリセット」だけを連続して行い、各結果の5枠を枠の順番どおり記録してください。「復元ボーナスを保持して再抽選」は使用しません。
               </Typography>
               <Stack spacing={1}>
-                <SubHeading>ordered Gogma Reset observations（記録順）</SubHeading>
+                <SubHeading>復元ボーナスのリセット結果（記録順）</SubHeading>
                 <Box component="ol" sx={{ m: 0, p: 0, display: 'grid', gap: 1.25 }}>
                   {gogmaObservations.map((observation, index) => {
                     const filled = observation.filter((slot) => slot.bonusTypeId !== null && slot.bonusRankId !== null).length
@@ -817,14 +841,14 @@ export function IdentificationWizardDialog({
                       <ObservationCard
                         key={index}
                         dataAttribute={{ 'data-reset-observation': index + 1 }}
-                        title={`Reset Observation ${index + 1}`}
+                        title={bonusObservationTitle(index)}
                         completion={{ label: `入力 ${filled}/5枠`, tone: filled === 5 ? 'positive' : 'neutral' }}
-                        deleteLabel={`Reset Observation ${index + 1}を削除`}
+                        deleteLabel={`${bonusObservationTitle(index)}を削除`}
                         deleteDisabled={gogmaSearching || gogmaObservations.length === 1}
                         onDelete={() => setGogmaObservations((current) => current.filter((_, itemIndex) => itemIndex !== index))}
                       >
                         <BonusObservationEditor
-                          label={`Reset Observation ${index + 1}`}
+                          label={bonusObservationTitle(index)}
                           master={master}
                           weaponTypeId={step2WeaponTypeId}
                           elementId={step2ElementId}
@@ -847,14 +871,14 @@ export function IdentificationWizardDialog({
                     disabled={gogmaSearching}
                     onClick={() => setGogmaObservations((current) => [...current, emptyBonusObservation()])}
                   >
-                    Reset Observationを追加
+                    復元ボーナス観測を追加
                   </Button>
                 </Box>
               </Stack>
               <Stack spacing={1.5}>
                 <SubHeading>検索範囲</SubHeading>
                 <ApproximateCounterFields
-                  label="Gogma Counter"
+                  label="巨戟カウンター"
                   draft={gogmaRange}
                   maximum={MAX_GOGMA_IDENTIFICATION_COUNTER}
                   disabled={gogmaSearching}
@@ -873,26 +897,26 @@ export function IdentificationWizardDialog({
               {errorAlert(wizardState.gogma.error)}
               <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
                 <Button variant="contained" sx={buttonSx} disabled={gogmaSearching || adopting} onClick={() => void identifyGogma()}>
-                  STEP 2 Search
+                  STEP 2を検索
                 </Button>
                 <Button variant="outlined" sx={buttonSx} disabled={!gogmaSearching} onClick={() => coordinator.cancelGogma()}>
-                  STEP 2 Cancel
+                  STEP 2の検索をキャンセル
                 </Button>
               </Stack>
             </StepSection>
           )}
 
           {wizardState.review && (
-            <StepSection title="Review">
+            <StepSection title="確認・採用">
               <Box sx={{ p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1, bgcolor: 'background.default' }}>
                 <Stack spacing={0.5} className="tabular-nums">
                   <Typography sx={{ overflowWrap: 'anywhere' }}>Base Seed: {wizardState.review.baseSeed}</Typography>
-                  <Typography>Starting Skill Counter: {wizardState.review.startingSkillCounter}</Typography>
-                  <Typography>Starting Gogma Counter: {wizardState.review.startingGogmaCounter}</Typography>
+                  <Typography>開始スキルカウンター: {wizardState.review.startingSkillCounter}</Typography>
+                  <Typography>開始巨戟カウンター: {wizardState.review.startingGogmaCounter}</Typography>
                 </Stack>
               </Box>
               <Alert severity="warning">
-                表示値は調査開始前のstarting valuesです。Observation数は加算されません。ゲーム状態を調査前へ戻した後に採用してください。
+                表示値は調査開始前の値です。観測した回数はカウンターへ加算されません。ゲーム状態を調査前へ戻した後に採用してください。
               </Alert>
               <FormControlLabel
                 sx={{ m: 0, minHeight: 44 }}
@@ -910,14 +934,14 @@ export function IdentificationWizardDialog({
               )}
               {wizardState.adoption.error && (
                 <Alert severity="error">
-                  Adoption failure: {adoptionErrorMessage(wizardState.adoption.error.error)}。Reviewと復元確認を保持しています。再試行できます。
+                  採用に失敗しました: {adoptionErrorMessage(wizardState.adoption.error.error)}。確認内容と復元確認を保持しています。再試行できます。
                 </Alert>
               )}
               {adoptionRefusal !== null && wizardState.adoption.error === null && (
-                <Alert severity="error">{adoptionRefusal} Reviewと復元確認を保持しています。</Alert>
+                <Alert severity="error">{adoptionRefusal} 確認内容と復元確認を保持しています。</Alert>
               )}
               {wizardState.adoption.status === 'adopted' && (
-                <Alert severity="success">Identification結果をRNG状態へ採用しました。</Alert>
+                <Alert severity="success">同定結果をRNG状態へ採用しました。</Alert>
               )}
               <Box>
                 <Button
@@ -926,7 +950,7 @@ export function IdentificationWizardDialog({
                   disabled={!wizardState.gameRestoredConfirmed || adopting || wizardState.adoption.status === 'adopted'}
                   onClick={() => void adopt()}
                 >
-                  {adopting ? 'Adopting…' : 'Adopt starting values'}
+                  {adopting ? '採用中…' : '開始値を採用'}
                 </Button>
               </Box>
             </StepSection>
@@ -934,8 +958,8 @@ export function IdentificationWizardDialog({
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: 1.5, gap: 1, justifyContent: 'space-between' }}>
-        <Button variant="outlined" sx={buttonSx} disabled={adopting} onClick={restart}>Restart</Button>
-        <Button sx={buttonSx} disabled={adopting} onClick={onClose}>Close</Button>
+        <Button variant="outlined" sx={buttonSx} disabled={adopting} onClick={restart}>最初からやり直す</Button>
+        <Button sx={buttonSx} disabled={adopting} onClick={onClose}>閉じる</Button>
       </DialogActions>
       {/* Above this Dialog while it decides; a cancel returns to the review untouched. */}
       <PlanBreakingChangeDialog controller={planGuard} />
