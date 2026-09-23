@@ -16,25 +16,29 @@ import {
   useRef,
   useState,
   type ChangeEvent,
-  type CSSProperties,
   type ReactNode,
 } from 'react'
 import { PageShell } from '../components/PageShell'
 import { ClearAllDataDialog } from '../components/settings/ClearAllDataDialog'
+import { DataTransferFeedbackAlert } from '../components/settings/DataTransferFeedbackAlert'
+import { ExportDataDialog, type ExportSnapshot } from '../components/settings/ExportDataDialog'
 import { ImportConfirmDialog } from '../components/settings/ImportConfirmDialog'
+import { ImportDataDialog } from '../components/settings/ImportDataDialog'
 import {
+  backupFilename,
   clearFailedFeedback,
   clearSucceededFeedback,
-  downloadJsonFile,
-  EXPORT_DOWNLOAD_FILENAME,
+  defaultDataTransferBrowserAdapter,
   exportFailedFeedback,
-  exportSucceededFeedback,
   importApplyFailedFeedback,
   importFileReadFailedFeedback,
   importPreparationFailedFeedback,
+  importPreparationThrewFeedback,
   importSucceededFeedback,
+  type DataTransferBrowserAdapter,
   type DataTransferFeedback,
   type DataTransferOperation,
+  type ImportTextSource,
 } from '../components/settings/dataTransferPresentation'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import type { AppSettings, ExportRoot } from '../domain/models/publicTypes'
@@ -126,50 +130,16 @@ function VersionRow({ label, value }: { label: string; value: string }) {
   )
 }
 
-/**
- * The one outcome of the last data management operation. Success and failure
- * never show at once. A long validation issue list scrolls inside a bounded
- * region so the buttons below stay reachable (`docs/UI_FLOW.md` 3.1); nothing
- * is truncated.
- */
-function DataTransferFeedbackAlert({ feedback }: { feedback: DataTransferFeedback }) {
-  return (
-    <Alert severity={feedback.severity} sx={{ '& .MuiAlert-message': { minWidth: 0, overflowWrap: 'anywhere' } }}>
-      {feedback.message}
-      {feedback.issues.length > 0 && (
-        <Box
-          component="ul"
-          aria-label="検出された問題"
-          tabIndex={0}
-          sx={{ m: 0, mt: 1, pl: 2.5, maxHeight: { xs: 'min(24vh, 160px)', sm: 'min(28vh, 220px)' }, overflowY: 'auto' }}
-        >
-          {feedback.issues.map((issue, index) => (
-            <Typography component="li" variant="body2" key={`${index}-${issue}`}>
-              {issue}
-            </Typography>
-          ))}
-        </Box>
-      )}
-    </Alert>
-  )
-}
-
-/** The file input stays in the accessibility tree; the button beside it is its visible control. */
-const visuallyHiddenInputStyle: CSSProperties = {
-  position: 'absolute',
-  width: 1,
-  height: 1,
-  margin: -1,
-  padding: 0,
-  overflow: 'hidden',
-  clip: 'rect(0 0 0 0)',
-  whiteSpace: 'nowrap',
-  border: 0,
-}
-
 const actionButtonSx = { minHeight: 44, width: { xs: '100%', sm: 'auto' } } as const
 
-export function SettingsPage({ dependencies }: { dependencies?: SettingsPageDependencies }) {
+export function SettingsPage({
+  dependencies,
+  browser = defaultDataTransferBrowserAdapter,
+}: {
+  dependencies?: SettingsPageDependencies
+  /** The clipboard and clock of the Export Dialog; injectable for tests. */
+  browser?: DataTransferBrowserAdapter
+}) {
   const debugMode = useSettingsStore((state) => state.debugMode)
   const setDebugMode = useSettingsStore((state) => state.setDebugMode)
   const hydrate = useSettingsStore((state) => state.hydrate)
@@ -200,7 +170,14 @@ export function SettingsPage({ dependencies }: { dependencies?: SettingsPageDepe
   const [pendingImport, setPendingImport] = useState<ExportRoot | null>(null)
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
   const [feedback, setFeedback] = useState<DataTransferFeedback | null>(null)
-  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  // The Export Dialog keeps the one snapshot it was opened with; `serial`
+  // remounts it for the next Export so its feedback starts empty.
+  const [exportSnapshot, setExportSnapshot] = useState<(ExportSnapshot & { serial: number }) | null>(null)
+  const [exportDialogOpen, setExportDialogOpen] = useState(false)
+  const exportSerialRef = useRef(0)
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
+  const [importDraft, setImportDraft] = useState('')
+  const [importFeedback, setImportFeedback] = useState<DataTransferFeedback | null>(null)
   const debugHelpId = useId()
   const exportHelpId = useId()
   const importHelpId = useId()
@@ -238,14 +215,66 @@ export function SettingsPage({ dependencies }: { dependencies?: SettingsPageDepe
       })
   }
 
+  // Export serializes exactly once, here. The Dialog's copy and file output
+  // reuse this string and never call the Service again.
   const handleExport = async () => {
     if (api === null || !beginOperation('export')) return
     try {
       const json = await api.serializeExport()
-      downloadJsonFile(json, EXPORT_DOWNLOAD_FILENAME)
-      setFeedback(exportSucceededFeedback())
+      exportSerialRef.current += 1
+      setExportSnapshot({ serial: exportSerialRef.current, json, filename: backupFilename(browser.now()) })
+      setExportDialogOpen(true)
     } catch (error: unknown) {
       setFeedback(exportFailedFeedback(error))
+    } finally {
+      endOperation()
+    }
+  }
+
+  const openImportDialog = () => {
+    if (dataManagementDisabled) return
+    setFeedback(null)
+    setImportFeedback(null)
+    setImportDraft('')
+    setImportDialogOpen(true)
+  }
+
+  const closeImportDialog = () => {
+    if (operationRef.current === 'import_prepare') return
+    setImportDialogOpen(false)
+    setImportDraft('')
+    setImportFeedback(null)
+  }
+
+  /**
+   * The one Import preparation path for pasted and file text alike. The text
+   * goes to `prepareImportJson()` exactly as given; only an accepted root
+   * reaches the full-replacement confirmation, and a refusal stays in the
+   * Import Dialog with the draft kept. Runs inside an `import_prepare`
+   * operation the caller began.
+   */
+  const prepareImportText = (json: string, source: ImportTextSource) => {
+    if (api === null) return
+    try {
+      const prepared = api.prepareImportJson(json)
+      if (prepared.ok) {
+        setImportDialogOpen(false)
+        setImportDraft('')
+        setImportFeedback(null)
+        setPendingImport(prepared.root)
+      } else {
+        setImportFeedback(importPreparationFailedFeedback(prepared, source))
+      }
+    } catch {
+      setImportFeedback(importPreparationThrewFeedback(source))
+    }
+  }
+
+  const handleImportDraftRead = () => {
+    if (api === null || importDraft.trim() === '' || !beginOperation('import_prepare')) return
+    setImportFeedback(null)
+    try {
+      prepareImportText(importDraft, 'paste')
     } finally {
       endOperation()
     }
@@ -257,23 +286,17 @@ export function SettingsPage({ dependencies }: { dependencies?: SettingsPageDepe
     // Reset first, so the same file can be selected again for a retry.
     input.value = ''
     if (file === null || api === null || !beginOperation('import_prepare')) return
-    let text: string
+    setImportFeedback(null)
     try {
-      text = await file.text()
-    } catch {
-      setFeedback(importFileReadFailedFeedback())
-      endOperation()
-      return
-    }
-    try {
-      const prepared = api.prepareImportJson(text)
-      if (prepared.ok) {
-        setPendingImport(prepared.root)
-      } else {
-        setFeedback(importPreparationFailedFeedback(prepared))
+      let text: string
+      try {
+        text = await file.text()
+      } catch {
+        // A pasted draft, if any, stays as it was.
+        setImportFeedback(importFileReadFailedFeedback())
+        return
       }
-    } catch {
-      setFeedback(importFileReadFailedFeedback())
+      prepareImportText(text, 'file')
     } finally {
       endOperation()
     }
@@ -344,7 +367,7 @@ export function SettingsPage({ dependencies }: { dependencies?: SettingsPageDepe
             {feedback !== null && <DataTransferFeedbackAlert feedback={feedback} />}
             <DataManagementGroup title="バックアップ">
               <Typography id={exportHelpId} variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                RNG状態、通常アーティアCounter、所持武器、目標武器、候補と作成リスト、生産計画、実行履歴、ゲーム内セーブ地点、設定を含む全ユーザーデータを1つのJSONファイルとして保存します。別の端末へ移行するときや、インポート・全削除の前の控えとして使用します。
+                RNG状態、通常アーティアCounter、所持武器、目標武器、候補と作成リスト、生産計画、実行履歴、ゲーム内セーブ地点、設定を含む全ユーザーデータを1つのJSONとして表示し、クリップボードへのコピーまたはJSONファイルとして保存します。別の端末へ移行するときや、インポート・全削除の前の控えとして使用します。
               </Typography>
               <Button
                 variant="contained"
@@ -358,26 +381,17 @@ export function SettingsPage({ dependencies }: { dependencies?: SettingsPageDepe
             </DataManagementGroup>
             <DataManagementGroup title="復元">
               <Typography id={importHelpId} variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                エクスポートしたJSONファイルを選択して復元します。インポートは全置換で、現在保存されているデータはすべてバックアップの内容に置き換わります。必要な場合は先に現在のデータをエクスポートしてください。内容は実行前に検証し、確認後にだけ置き換えます。
+                エクスポートしたJSONを貼り付けるか、JSONファイルを選択して復元します。インポートは全置換で、現在保存されているデータはすべてバックアップの内容に置き換わります。必要な場合は先に現在のデータをエクスポートしてください。内容は実行前に検証し、確認後にだけ置き換えます。
               </Typography>
               <Button
                 variant="outlined"
                 disabled={dataManagementDisabled}
-                onClick={() => fileInputRef.current?.click()}
+                onClick={openImportDialog}
                 aria-describedby={importHelpId}
                 sx={actionButtonSx}
               >
-                {operation === 'import_prepare' ? 'ファイルを確認中…' : operation === 'import_apply' ? 'インポート中…' : 'データをインポート'}
+                {operation === 'import_apply' ? 'インポート中…' : 'データをインポート'}
               </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".json,application/json"
-                aria-label="バックアップファイルを選択"
-                disabled={dataManagementDisabled}
-                onChange={(event) => void handleImportFileSelected(event)}
-                style={visuallyHiddenInputStyle}
-              />
             </DataManagementGroup>
             <DataManagementGroup title="初期化">
               <Typography id={clearHelpId} variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
@@ -423,6 +437,24 @@ export function SettingsPage({ dependencies }: { dependencies?: SettingsPageDepe
           </Box>
         </SettingsSection>
       </Stack>
+      <ExportDataDialog
+        key={exportSnapshot?.serial ?? 0}
+        open={exportDialogOpen}
+        snapshot={exportSnapshot}
+        writeClipboardText={browser.writeClipboardText}
+        onClose={() => setExportDialogOpen(false)}
+      />
+      <ImportDataDialog
+        open={importDialogOpen}
+        draft={importDraft}
+        feedback={importFeedback}
+        preparing={operation === 'import_prepare'}
+        disabled={api === null || (dataTransferBusy && operation !== 'import_prepare') || settingsSaving}
+        onDraftChange={setImportDraft}
+        onReadDraft={handleImportDraftRead}
+        onFileSelected={(event) => void handleImportFileSelected(event)}
+        onClose={closeImportDialog}
+      />
       <ImportConfirmDialog
         root={pendingImport}
         submitting={operation === 'import_apply'}

@@ -3948,7 +3948,10 @@ Export must include the specified schema version and user entities. The Executio
 lifecycle state - Target lifecycle, `OwnedWeapon.executionInProgress`, ProductionPlan
 abandonment, PlanStep `executionEffects`, the extended ExecutionHistory / Undo
 snapshot, and `ExecutionSavePoint` - is user data and belongs to Export / Import.
-Device-to-device sync is not added; full-replacement Export / Import covers it.
+Device-to-device sync is not added; full-replacement Export / Import covers it,
+through a JSON file or through the clipboard (copy on Export, paste on Import). The
+clipboard / paste entry points changed no ExportRoot shape, schema version, Import
+validation, migration, or `applyImport()` / `clearAllData()` transaction semantics.
 
 Master Data itself is not copied into the user export.
 
@@ -3956,11 +3959,21 @@ The full-replacement Import / Export / clear-all-data Persistence / Application
 Service foundation is implemented (`src/services/dataTransfer/importExportService.ts`,
 `importExportValidation.ts`, `docs/DATA_MODEL.md` 15.3), and so is the Settings
 screen connection (`src/pages/SettingsPage.tsx`, `src/components/settings/`,
-`docs/UI_FLOW.md` 14): the Export download (a browser-side JSON Blob of
-`serializeExport()`), the Import file picker whose file text goes to
-`prepareImportJson()` as the only importability authority (a refused preparation
-opens no dialog, calls no `applyImport()` and changes nothing), the
-full-replacement Import confirmation dialog that asks for an Export of the current
+`docs/UI_FLOW.md` 14): the Export Dialog (`src/components/settings/ExportDataDialog.tsx`),
+which `serializeExport()` opens once and which shows that exact string read-only and
+never re-formatted, then copies it (the asynchronous Clipboard API behind the
+Presentation `DataTransferBrowserAdapter`, never in the Domain or the Service, with a
+Dialog-local 「クリップボードにコピーしました。」 or a manual-copy failure and no
+browser error text) or saves it as a browser-side JSON Blob named
+`gogma-artian-planner-backup_yyyyMMddHHmmss.json` (local time of the Export, a
+filename rule only - not `exportedAt`), neither calling `serializeExport()` again;
+the Import Dialog (`src/components/settings/ImportDataDialog.tsx`), whose pasted text
+(read disabled while blank, never trimmed or re-formatted) and whose picked file's text
+(read at once, same file re-selectable) both go unchanged through one preparation path
+to `prepareImportJson()` as the only importability authority (a refused preparation
+keeps the Dialog and its draft, shows the issues inside it, opens no confirmation,
+calls no `applyImport()` and changes nothing; the app never reads the clipboard), the
+full-replacement Import confirmation dialog, opened only after the Import Dialog closed, that asks for an Export of the current
 data first without running one, the clear confirmation dialog, and the Settings
 Store rehydrate from the imported `root.settings` / the `clearAllData()` return
 value (never from `getOrCreateDefault()`). The UI re-implements no validation,

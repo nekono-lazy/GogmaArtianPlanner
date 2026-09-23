@@ -2429,11 +2429,15 @@ Dexie `DATABASE_SCHEMA_VERSION = 8` とは独立して更新する。
 
 全置換Import / Export / 全データクリアのPersistence / Application Service基盤は実装済みである
 （`src/services/dataTransfer/importExportService.ts`、`importExportValidation.ts`）。Settings画面への接続
-（Export download、Import file picker、Import確認Dialog、全データクリア確認Dialog、Settings Storeの
-rehydrate）も実装済みである（`src/pages/SettingsPage.tsx`、`src/components/settings/`、
-[UI_FLOW.md](./UI_FLOW.md) 14）。UI側はvalidation / migration / writeを再実装せず、`prepareImportJson()` の
-typed resultだけをImport可否のauthorityとし、確認後にだけ `applyImport()` を、確認後にだけ `clearAllData()` を
-呼ぶ。Import / Clear成功後はServiceが返した（Importでは `root.settings` の）AppSettingsをそのままSettings Storeへ
+（`serializeExport()` の結果を表示しクリップボードへのコピーまたはJSONファイル保存を選べるExport Dialog、JSONの
+貼り付けまたはJSONファイル選択を受け付けるImport Dialog、Import確認Dialog、全データクリア確認Dialog、
+Settings Storeのrehydrate）も実装済みである（`src/pages/SettingsPage.tsx`、`src/components/settings/`、
+[UI_FLOW.md](./UI_FLOW.md) 14）。UI側はvalidation / migration / writeを再実装せず、Exportでは
+`serializeExport()` を1回だけ呼んでその文字列を表示・コピー・保存に共用し、Importでは貼り付けとファイルの
+どちらの本文も同じく `prepareImportJson()` へそのまま渡してそのtyped resultだけをImport可否のauthorityとし、
+確認後にだけ `applyImport()` を、確認後にだけ `clearAllData()` を呼ぶ。クリップボードへの書込みとファイル名の
+timestampはPresentationの責務であり、ExportRootの形状、`exportedAt`、Import validation / migration、
+`applyImport()` / `clearAllData()` のtransaction semanticsは変更しない。Import / Clear成功後はServiceが返した（Importでは `root.settings` の）AppSettingsをそのままSettings Storeへ
 hydrateし、`getOrCreateDefault()` で上書きしない。
 
 - Export（`exportRoot()` / `serializeExport()`）は全user tableを1つのread-only Dexie transactionで読み、
