@@ -212,10 +212,10 @@ function EndedPlanView({
           {destinations.map((destination) => (
             <Stack key={destination} spacing={0.5}>
               <Typography variant="body2">
-                予測と異なる結果が記録された後、{subject(destination)}の再同定がまだ完了していません。
+                予測と異なる結果が記録された後、{subject(destination)}の再特定がまだ完了していません。
               </Typography>
               <Typography variant="body2">
-                現在のゲーム状態に合わせて{subject(destination)}を再同定してから、候補検索・再計画を行ってください。
+                現在のゲーム状態に合わせて{subject(destination)}を特定し直してから、候補検索・再計画を行ってください。
               </Typography>
             </Stack>
           ))}

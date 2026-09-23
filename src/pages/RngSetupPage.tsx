@@ -48,15 +48,15 @@ type RngForm = Record<KnownKey, FormKnown> & { notes: string }
 const knownKeys: readonly KnownKey[] = ['baseSeed', 'gogmaCounter', 'skillCounter']
 
 const UNSAVED_WIZARD_MESSAGE =
-  'Identification Wizardを開始する前に、RNG状態設定の変更を保存するか元に戻してください。'
+  'RNG状態の特定を開始する前に、RNG状態設定の変更を保存するか元に戻してください。'
 /** The operation-specific line under the breaking-change warning (`docs/UI_FLOW.md` 16.3). */
 const RNG_SETUP_PLAN_BREAKING_NOTE =
   'RNG状態を変更すると、現在の生産計画で使用している予測位置と一致しなくなります。'
 const RNG_SAVED_MESSAGE = 'RNG状態を保存しました。'
 const RNG_SAVED_PLAN_ABANDONED_MESSAGE = 'RNG状態を保存し、実行中の生産計画を破棄しました。'
-const IDENTIFICATION_ADOPTED_MESSAGE = 'Identification結果をRNG状態へ採用しました。'
+const IDENTIFICATION_ADOPTED_MESSAGE = '特定結果をRNG状態へ採用しました。'
 const IDENTIFICATION_ADOPTED_PLAN_ABANDONED_MESSAGE =
-  'Identification結果をRNG状態へ採用し、実行中の生産計画を破棄しました。'
+  '特定結果をRNG状態へ採用し、実行中の生産計画を破棄しました。'
 
 const knownLabels: Record<KnownKey, string> = {
   baseSeed: 'Base Seed（基準シード）',
@@ -297,7 +297,7 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
           createProductionIdentificationWizardCoordinator)(),
       )
     } catch (caught: unknown) {
-      setWizardError(caught instanceof Error ? caught.message : 'Identification Wizardを開始できません。')
+      setWizardError(caught instanceof Error ? caught.message : 'RNG状態の特定を開始できません。')
     }
   }
 
@@ -333,10 +333,10 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
         <SectionCard title="値が分からない場合" sx={{ borderLeftWidth: 4, borderLeftColor: 'primary.main' }}>
           <Stack spacing={1.5}>
             <Box component="dl" sx={{ m: 0 }}>
-              <DefinitionRow label="RNG同定"><StatusChip label={identificationAvailability.isAvailable ? '利用可能' : '利用不可'} tone={identificationAvailability.isAvailable ? 'positive' : 'caution'} /></DefinitionRow>
+              <DefinitionRow label="RNG状態の特定"><StatusChip label={identificationAvailability.isAvailable ? '利用可能' : '利用不可'} tone={identificationAvailability.isAvailable ? 'positive' : 'caution'} /></DefinitionRow>
             </Box>
             {!identificationAvailability.isAvailable && <Alert severity="warning">{productionIdentificationUnavailableReasonLabels[identificationAvailability.reason]}</Alert>}
-            <Typography>連続したスキル抽選結果と復元ボーナスのリセット結果を観測し、専用ウィザードで次の値を特定します。</Typography>
+            <Typography>連続したスキル抽選結果と復元ボーナスのリセット結果を観測し、次の値を特定します。</Typography>
             <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
               <Typography component="li" variant="body2">Base Seed（基準シード）</Typography>
               <Typography component="li" variant="body2">調査開始前のスキルカウンター</Typography>
@@ -344,11 +344,11 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
             </Box>
             <Typography variant="body2" color="text.secondary">開始条件: RNG状態設定に未保存の変更がなく、マスターデータを利用できること。手動入力は引き続き利用できます。</Typography>
             {hasUnsavedChanges && <Alert severity="warning">{UNSAVED_WIZARD_MESSAGE}</Alert>}
-            {!masterResult.ok && <Alert severity="error">マスターデータが利用できないためWizardを開始できません。</Alert>}
+            {!masterResult.ok && <Alert severity="error">マスターデータが利用できないため、RNG状態の特定を開始できません。</Alert>}
             {wizardError && wizardError !== UNSAVED_WIZARD_MESSAGE && <Alert severity="error">{wizardError}</Alert>}
             {adoptionNotice && <Alert severity="success" onClose={() => setAdoptionNotice(null)}>{adoptionNotice}</Alert>}
             <Box>
-              <Button variant="contained" sx={{ minHeight: 44 }} disabled={!masterResult.ok || !identificationAvailability.isAvailable || identificationCoordinator !== null || hasUnsavedChanges} onClick={startIdentification}>Identification Wizardを開始</Button>
+              <Button variant="contained" sx={{ minHeight: 44 }} disabled={!masterResult.ok || !identificationAvailability.isAvailable || identificationCoordinator !== null || hasUnsavedChanges} onClick={startIdentification}>RNG状態の特定を開始</Button>
             </Box>
           </Stack>
         </SectionCard>
@@ -401,7 +401,7 @@ export function RngSetupPage({ dependencies = defaultDependencies }: { dependenc
         <DefinitionRow label="巨戟アーティア予測"><StatusChip label={engineCapabilities.supportsGogmaPrediction ? '対応' : '未対応'} tone={engineCapabilities.supportsGogmaPrediction ? 'positive' : 'neutral'} /></DefinitionRow>
         <DefinitionRow label="Keep Bonuses予測"><StatusChip label={engineCapabilities.supportsKeepBonusesPrediction ? '対応' : '未対応'} tone={engineCapabilities.supportsKeepBonusesPrediction ? 'positive' : 'neutral'} /></DefinitionRow>
       </Box>
-      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>RNG同定（Identification Wizard）の利用可否はEngine capabilityではなくアプリ側で判定します。現在の状態は「値が分からない場合」の表示を確認してください。</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>RNG状態の特定を利用できるかどうかは、上の予測機能の対応状況ではなくアプリ側で判定します。現在の状態は「値が分からない場合」の表示を確認してください。</Typography>
     </DisclosureAccordion>
 
     <PlanBreakingChangeDialog controller={planGuard} />

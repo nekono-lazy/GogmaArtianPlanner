@@ -32,7 +32,7 @@ import { usePlanBreakingChangeApproval } from '../execution/usePlanBreakingChang
 
 /** The operation-specific line under the breaking-change warning (`docs/UI_FLOW.md` 16.3). */
 const IDENTIFICATION_PLAN_BREAKING_NOTE =
-  '同定結果を採用すると、現在の生産計画で使用している予測位置と一致しなくなります。'
+  '特定結果を採用すると、現在の生産計画で使用している予測位置と一致しなくなります。'
 
 const INITIAL_OBSERVATION_COUNT = 4
 const DEFAULT_COUNTER_RADIUS = 5
@@ -272,7 +272,7 @@ function StepIndicator({ state }: { state: IdentificationWizardState }) {
   const progress = wizardStepProgress(state)
   const steps = ['STEP 1', 'STEP 2', '確認・採用']
   return (
-    <Box component="nav" aria-label="RNG同定の進行状況" sx={{ px: { xs: 2, sm: 3 }, pb: 1.5 }}>
+    <Box component="nav" aria-label="特定の進行状況" sx={{ px: { xs: 2, sm: 3 }, pb: 1.5 }}>
       <Box component="ol" sx={{ m: 0, p: 0, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 0.75 }}>
         {steps.map((label, index) => {
           const status = progress[index]!
@@ -634,7 +634,7 @@ export function IdentificationWizardDialog({
         if (!adopting && reason !== 'backdropClick') onClose()
       }}
     >
-      <DialogTitle sx={{ px: { xs: 2, sm: 3 }, pb: 1 }}>RNG同定ウィザード</DialogTitle>
+      <DialogTitle sx={{ px: { xs: 2, sm: 3 }, pb: 1 }}>RNG状態の特定</DialogTitle>
       <StepIndicator state={wizardState} />
       <DialogContent dividers sx={{ px: { xs: 2, sm: 3 } }}>
         <Stack spacing={{ xs: 2, sm: 3 }}>
@@ -650,7 +650,7 @@ export function IdentificationWizardDialog({
           </Alert>
           <Alert severity="info">
             <AlertTitle>検証範囲</AlertTitle>
-            RNG同定は実機で動作を確認済みです。ただし確認条件は限定されており、全武器種・全属性・全ゲームバージョンを保証するものではありません。採用後の予測結果はゲーム側でも確認してください。
+            RNG状態の特定は実機で動作を確認済みです。ただし確認条件は限定されており、全武器種・全属性・全ゲームバージョンを保証するものではありません。採用後の予測結果はゲーム側でも確認してください。
           </Alert>
 
           <StepSection title="STEP 1 — Base Seedと開始スキルカウンターの特定" status={searchStatus(wizardState.skill)}>
@@ -941,7 +941,7 @@ export function IdentificationWizardDialog({
                 <Alert severity="error">{adoptionRefusal} 確認内容と復元確認を保持しています。</Alert>
               )}
               {wizardState.adoption.status === 'adopted' && (
-                <Alert severity="success">同定結果をRNG状態へ採用しました。</Alert>
+                <Alert severity="success">特定結果をRNG状態へ採用しました。</Alert>
               )}
               <Box>
                 <Button

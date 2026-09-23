@@ -113,7 +113,7 @@ describe('App', () => {
       const versions = screen.getByRole('region', { name: 'バージョン情報' })
       const row = (label: string) =>
         within(versions).getByText(label, { selector: 'dt' }).parentElement as HTMLElement
-      expect(within(row('RNG同定')).getByText('利用可能', { selector: 'dd' })).toBeInTheDocument()
+      expect(within(row('RNG状態の特定')).getByText('利用可能', { selector: 'dd' })).toBeInTheDocument()
     } finally {
       vi.unstubAllGlobals()
     }
@@ -123,7 +123,7 @@ describe('App', () => {
     window.location.hash = '#/settings'
     render(<App />)
     const versions = screen.getByRole('region', { name: 'バージョン情報' })
-    const row = within(versions).getByText('RNG同定', { selector: 'dt' }).parentElement as HTMLElement
+    const row = within(versions).getByText('RNG状態の特定', { selector: 'dt' }).parentElement as HTMLElement
     expect(within(row).getByText(/利用不可（.*Web Worker.*）/, { selector: 'dd' })).toBeInTheDocument()
   })
 

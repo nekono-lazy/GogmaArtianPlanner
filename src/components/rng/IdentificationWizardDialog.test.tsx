@@ -494,7 +494,7 @@ function skillObservationCard(observationIndex: number): HTMLElement {
 }
 
 function stepPositions(): string[] {
-  const nav = screen.getByRole('navigation', { name: 'RNG同定の進行状況' })
+  const nav = screen.getByRole('navigation', { name: '特定の進行状況' })
   return within(nav).getAllByRole('listitem').map((item) => item.textContent ?? '')
 }
 
@@ -786,7 +786,7 @@ describe('IdentificationWizardDialog STEP 1', () => {
 
   it('keeps every safety item and the verification scope visible', () => {
     renderWizard()
-    const dialog = within(screen.getByRole('dialog', { name: 'RNG同定ウィザード' }))
+    const dialog = within(screen.getByRole('dialog', { name: 'RNG状態の特定' }))
     for (const item of [
       '観測結果の記録が終わるまでゲーム状態を保存しないでください。',
       '開始前にバックアップ方法と自動保存の設定・挙動を確認してください。',
@@ -800,7 +800,7 @@ describe('IdentificationWizardDialog STEP 1', () => {
     // The verification level is stated generically from the repository's
     // game-verified evidence; fixture enumeration belongs to
     // `docs/RNG_REFERENCE_AUDIT.md`, and no blanket coverage claim is made.
-    expect(dialog.getByText(/RNG同定は実機で動作を確認済みです。ただし確認条件は限定されており、全武器種・全属性・全ゲームバージョンを保証するものではありません。/)).toBeInTheDocument()
+    expect(dialog.getByText(/RNG状態の特定は実機で動作を確認済みです。ただし確認条件は限定されており、全武器種・全属性・全ゲームバージョンを保証するものではありません。/)).toBeInTheDocument()
     expect(dialog.getByText(/採用後の予測結果はゲーム側でも確認してください。/)).toBeInTheDocument()
     expect(dialog.queryByText(/操虫棍/)).not.toBeInTheDocument()
     expect(dialog.queryByText(/ヘヴィボウガン/)).not.toBeInTheDocument()
@@ -849,7 +849,7 @@ describe('IdentificationWizardDialog STEP 1', () => {
 
   it('asks for no start method, so the observation inputs are the only STEP 1 observation input', () => {
     renderWizard()
-    const dialog = within(screen.getByRole('dialog', { name: 'RNG同定ウィザード' }))
+    const dialog = within(screen.getByRole('dialog', { name: 'RNG状態の特定' }))
     expect(dialog.queryByRole('radiogroup')).not.toBeInTheDocument()
     expect(dialog.queryByRole('radio')).not.toBeInTheDocument()
     expect(dialog.queryByText(/開始方法/)).not.toBeInTheDocument()
@@ -877,12 +877,12 @@ describe('IdentificationWizardDialog STEP 1', () => {
     const coordinator = new FakeCoordinator()
     renderWizard(coordinator)
     await seedReview(coordinator)
-    const text = screen.getByRole('dialog', { name: 'RNG同定ウィザード' }).textContent ?? ''
+    const text = screen.getByRole('dialog', { name: 'RNG状態の特定' }).textContent ?? ''
     for (const english of [
       'Weapon Type', 'Element', 'Observation', 'Series Skill', 'Group Skill', 'Search',
       'Cancel', 'Restart', 'Close', 'Review', 'Adopt', 'Starting', 'range', 'inclusive',
       'Reset Bonuses', 'Keep Bonuses', 'Skill Reset', 'conversion', 'Production Identification',
-      'Identification', 'Wizard', 'Skill Counter', 'Gogma Counter',
+      'Identification', 'Wizard', 'Skill Counter', 'Gogma Counter', '同定',
     ]) {
       expect(text).not.toContain(english)
     }
@@ -1199,7 +1199,7 @@ describe('IdentificationWizardDialog Review and lifecycle', { timeout: 15_000 },
     await user.click(screen.getByRole('checkbox', { name: '調査前のゲーム状態へ戻した' }))
     await user.click(screen.getByRole('button', { name: '開始値を採用' }))
 
-    expect(await screen.findByText('同定結果をRNG状態へ採用しました。')).toBeInTheDocument()
+    expect(await screen.findByText('特定結果をRNG状態へ採用しました。')).toBeInTheDocument()
     expect(stepPositions()).toEqual(['STEP 1完了', 'STEP 2完了', '確認・採用採用済み'])
     expect(screen.getByRole('button', { name: '開始値を採用' })).toBeDisabled()
     expect(screen.getByRole('checkbox', { name: '調査前のゲーム状態へ戻した' })).toBeDisabled()

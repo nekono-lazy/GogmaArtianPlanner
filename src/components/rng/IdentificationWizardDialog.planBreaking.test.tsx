@@ -128,10 +128,10 @@ describe('IdentificationWizardDialog breaking-change warning', () => {
     await user.click(adoptButton())
 
     const warning = within(await screen.findByRole('dialog', WARNING))
-    expect(warning.getByText('同定結果を採用すると、現在の生産計画で使用している予測位置と一致しなくなります。')).toBeInTheDocument()
+    expect(warning.getByText('特定結果を採用すると、現在の生産計画で使用している予測位置と一致しなくなります。')).toBeInTheDocument()
     expect(warning.getByText('RNG状態が変わります')).toBeInTheDocument()
     // Both dialogs exist; the Wizard stays mounted underneath.
-    expect(screen.getByRole('dialog', { name: 'RNG同定ウィザード', hidden: true })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'RNG状態の特定', hidden: true })).toBeInTheDocument()
     await user.click(warning.getByRole('button', { name: 'キャンセル' }))
 
     await waitFor(() => expect(screen.queryByRole('dialog', WARNING)).toBeNull())
@@ -155,7 +155,7 @@ describe('IdentificationWizardDialog breaking-change warning', () => {
     await waitFor(() => expect(onAdopted).toHaveBeenCalledTimes(1))
     expect(coordinator.adopt).toHaveBeenCalledWith(planBreakingApproval(inspection))
     expect(onAdopted).toHaveBeenCalledWith(expect.objectContaining({ lastIdentifiedAt: '2026-09-18T00:00:00.000Z' }), { planAbandoned: true })
-    expect(await screen.findByText('同定結果をRNG状態へ採用しました。')).toBeInTheDocument()
+    expect(await screen.findByText('特定結果をRNG状態へ採用しました。')).toBeInTheDocument()
   })
 
   it('promotes an adoption refused for a missing approval to the warning and retries with it', async () => {

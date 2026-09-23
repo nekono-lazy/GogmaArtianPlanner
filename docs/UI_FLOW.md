@@ -240,20 +240,23 @@ Base Seed、Gogma Counter、Skill CounterをProduction Prediction用に項目ご
 画面構成。
 
 1. 保存済みのRNG状態: Base Seed / Gogma Counter / Skill Counterの確定状態だけを表示する。未保存の変更がある場合はその旨を示す
-2. 値が分からない場合: RNG同定の利用可否と、Wizardが特定する3値（Base Seed、調査開始前のSkill Counter、調査開始前のGogma Counter）、開始条件を示し、Wizard開始導線を置く
+2. 値が分からない場合: RNG状態の特定（Identification Wizard）の利用可否と、Wizardが特定する3値（Base Seed、調査開始前のSkill Counter、調査開始前のGogma Counter）、開始条件を示し、Wizard開始導線を置く
 3. 手動入力: Base Seed / Gogma Counter / Skill Counterとメモを編集し保存する
 4. 現在の入力内容で利用可能な機能: 現在値から導出したCapabilityと不足項目を表示する
 5. Production RNG Engine（技術情報）: 既定で折りたたみ、Engine mode / version とPrediction operationのsupportだけを表示する
 
-RNG同定の利用可否表示。
+RNG状態の特定の利用可否表示。
 
 - 通常ユーザー向けには、5.4 Identification Wizard（Production Identification）の
-  Worker / application levelのavailabilityに基づいて「RNG同定: 利用可能」（利用不可なら
+  Worker / application levelのavailabilityに基づいて「RNG状態の特定: 利用可能」（利用不可なら
   「利用不可」と理由）と表示する
 - この表示をRngEngine capability flagへ接続しない。Engineの技術情報セクションが表すのは
-  Prediction operationのsupportだけであり、RNG同定機能の可否ではない
+  Prediction operationのsupportだけであり、RNG状態の特定（Identification）機能の可否ではない
 - 技術情報セクションにも、Identificationの可否がEngine capabilityではなくアプリ側で
   判定される旨を明記する
+- 通常UIの表示文言では「同定」を使わず「特定」を使う（Issue #90）。Dialog名・開始ボタン・採用結果は
+  「RNG状態の特定」「RNG状態の特定を開始」「特定結果をRNG状態へ採用しました。」とし、想定外結果の後の
+  再Identificationは「再特定」「特定し直す」と表示する。型名・Domain名・内部契約の `Identification` は変更しない
 
 5.1と5.3は欠番であり、5.2 / 5.4の番号はsrcコメントおよび他文書からの参照安定性のため
 そのまま維持する。
@@ -300,7 +303,7 @@ RNG Setupから専用Wizardを開始し、完了後のreview / adoption結果を
 
 検証状態の表示。
 
-- 通常ユーザー向けWizardは、repositoryに存在するgame-verified evidenceを根拠に「RNG同定は実機で動作を確認済みです。ただし確認条件は限定されており、全武器種・全属性・全ゲームバージョンを保証するものではありません。」と表示し、採用後の予測結果をゲーム側でも確認するよう促す
+- 通常ユーザー向けWizardは、repositoryに存在するgame-verified evidenceを根拠に「RNG状態の特定は実機で動作を確認済みです。ただし確認条件は限定されており、全武器種・全属性・全ゲームバージョンを保証するものではありません。」と表示し、採用後の予測結果をゲーム側でも確認するよう促す
 - 全武器種・全属性・全game versionが確認済みであるとは表現しない
 - 個別fixture（武器種 / 属性 / Counter位置）の列挙は [RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) の責務であり、通常Wizardへ固定表示しない
 
@@ -1890,7 +1893,7 @@ Undoの表示文言は取り消す記録に合わせる。通常は「最後の�
 - Master Data gameVersion
 - Master Data dataVersion
 - RNG Engine version
-- RNG同定の利用可否（5の表示ルールに従う。Identification Wizardのavailabilityに基づき、
+- RNG状態の特定の利用可否（5の表示ルールに従う。Identification Wizardのavailabilityに基づき、
   RngEngine capability flagへ接続しない）
 - App schemaVersion
 - Export

@@ -37,7 +37,7 @@ describe('presentPersistentReidentificationReminder', () => {
     expect(view).toMatchObject({
       title: PERSISTENT_REIDENTIFICATION_REMINDER_TITLE,
       description: [PERSISTENT_REIDENTIFICATION_REMINDER_DESCRIPTION],
-      items: [{ key: 'rng', text: PERSISTENT_REIDENTIFICATION_RNG_TEXT, guidance: ['Identification Wizardで現在のゲーム状態に合わせて再同定してください。', PERSISTENT_REIDENTIFICATION_MANUAL_NOTE] }],
+      items: [{ key: 'rng', text: PERSISTENT_REIDENTIFICATION_RNG_TEXT, guidance: ['RNG状態設定の「RNG状態の特定」で、現在のゲーム状態に合わせて特定し直してください。', PERSISTENT_REIDENTIFICATION_MANUAL_NOTE] }],
       links: [RNG_SETUP_LINK],
     })
   })
@@ -45,14 +45,14 @@ describe('presentPersistentReidentificationReminder', () => {
   it('names the Counter through the Master weapon type, never through the ID, and links the Normal Counters', () => {
     const view = presentPersistentReidentificationReminder({ ...both, rngRequired: false }, master, 'dashboard')
     expect(view).toMatchObject({
-      items: [{ key: 'normal_counters', text: PERSISTENT_REIDENTIFICATION_NORMAL_TEXT, guidance: [`${dualBlades.displayNameJa}の通常アーティアCounterを再同定してください。`] }],
+      items: [{ key: 'normal_counters', text: PERSISTENT_REIDENTIFICATION_NORMAL_TEXT, guidance: [`${dualBlades.displayNameJa}の通常アーティアCounterを特定し直してください。`] }],
       links: [NORMAL_COUNTERS_LINK],
     })
     expect(JSON.stringify(view)).not.toContain('weapon.dual_blades')
   })
 
   it('falls back to the generic sentence for a Counter without a record, an unknown weapon type or no Master', () => {
-    const generic = '対象の通常アーティアCounterを再同定してください。'
+    const generic = '対象の通常アーティアCounterを特定し直してください。'
     const noRecord = { ...both, rngRequired: false, normalCounters: [{ normalCounterId: 'weapon.dual_blades:8', weaponTypeId: null }] }
     expect(presentPersistentReidentificationReminder(noRecord, master, 'dashboard')?.items[0].guidance).toEqual([generic])
     const unknownType = { ...both, rngRequired: false, normalCounters: [{ normalCounterId: 'x:8', weaponTypeId: 'weapon.unknown' }] }
@@ -80,7 +80,7 @@ describe('presentPersistentReidentificationReminder', () => {
 
   it('on RNG Setup, points at this screen Wizard and omits the self-link while keeping the Normal Counters link', () => {
     const view = presentPersistentReidentificationReminder(both, master, 'rng_setup')
-    expect(view?.items[0].guidance).toEqual(['この画面のIdentification Wizardで現在のゲーム状態に合わせて再同定してください。', PERSISTENT_REIDENTIFICATION_MANUAL_NOTE])
+    expect(view?.items[0].guidance).toEqual(['この画面の「RNG状態の特定」で、現在のゲーム状態に合わせて特定し直してください。', PERSISTENT_REIDENTIFICATION_MANUAL_NOTE])
     expect(view?.links).toEqual([NORMAL_COUNTERS_LINK])
   })
 

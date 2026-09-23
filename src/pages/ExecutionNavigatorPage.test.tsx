@@ -1220,7 +1220,7 @@ describe('ExecutionNavigatorPage actual result different', () => {
     expect(deps.loadSnapshot).toHaveBeenCalledTimes(2)
     expect(recovery).toHaveTextContent('予測と異なる結果を記録しました')
     expect(recovery).toHaveTextContent('この操作で消費したCounterは反映済みです。')
-    expect(within(recovery).getByRole('link', { name: '通常アーティアCounterを再同定する' })).toHaveAttribute('href', '/normal-counters')
+    expect(within(recovery).getByRole('link', { name: '通常アーティアCounterを特定し直す' })).toHaveAttribute('href', '/normal-counters')
     expect(within(recovery).queryByRole('link', { name: '所持武器を確認する' })).not.toBeInTheDocument()
   })
 
@@ -1316,7 +1316,7 @@ describe('ExecutionNavigatorPage operation uncertain', () => {
     // The record leads to the Navigator's own recovery, never straight to the
     // ordinary RNG Identification (UI_FLOW 12.5).
     expect(dialog).toHaveTextContent('この画面で現在位置の確認やゲーム内セーブ地点への復元など、回復方法を選びます。')
-    expect(dialog).not.toHaveTextContent('RNG状態の再同定が必要です。')
+    expect(dialog).not.toHaveTextContent('RNG状態の再特定が必要です。')
     expect(dialog).toHaveTextContent('誤って記録した場合は、記録後に「実行状態の管理」からこの記録を取り消して元の操作へ戻せます。')
     await user.click(within(dialog).getByRole('button', { name: 'キャンセル' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
@@ -1341,15 +1341,15 @@ describe('ExecutionNavigatorPage operation uncertain', () => {
     expect(recovery).toHaveTextContent('操作状況を確認できなくなりました')
     expect(recovery).toHaveTextContent('Counterや武器の状態は推測して変更していません。')
     // Never straight to the ordinary Identification.
-    expect(screen.queryByRole('link', { name: /再同定/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /特定し直す|再特定/ })).not.toBeInTheDocument()
     expect(deps.recordOperationUncertain).toHaveBeenCalledOnce()
   })
 })
 
 describe('ExecutionNavigatorPage stale recovery', () => {
   it.each([
-    ['actual_result_different', 0, '/normal-counters', '通常アーティアCounterを再同定する'],
-    ['actual_result_different', 3, '/rng', 'RNG状態を再同定する'],
+    ['actual_result_different', 0, '/normal-counters', '通常アーティアCounterを特定し直す'],
+    ['actual_result_different', 3, '/rng', 'RNG状態を特定し直す'],
   ] as const)('guides %s of Step %i to %s', async (action, index, href, label) => {
     const fixture = await newNormalFixture()
     const snapshot = await snapshotOf(fixture)
@@ -1368,7 +1368,7 @@ describe('ExecutionNavigatorPage stale recovery', () => {
     const recovery = await screen.findByRole('region', { name: '操作状況の回復' })
     expect(within(recovery).getByRole('button', { name: '同じ操作を何回行ったか分からない' })).toBeInTheDocument()
     expect(within(recovery).getByRole('button', { name: '別の操作・別の武器を操作してしまった' })).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /再同定/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /特定し直す|再特定/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'RNG状態設定へ' })).not.toBeInTheDocument()
     expect(screen.queryByRole('region', { name: '生産計画の停止' })).not.toBeInTheDocument()
   })
@@ -1393,7 +1393,7 @@ describe('ExecutionNavigatorPage stale recovery', () => {
     renderNavigator(mockedRuntime(snapshot), fixture.plan.id)
     expect(await screen.findByText('この計画は再計算が必要です')).toBeInTheDocument()
     expect(screen.queryByText('予測と異なる結果を記録しました')).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /再同定する/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /特定し直す/ })).not.toBeInTheDocument()
   })
 })
 
@@ -1414,7 +1414,7 @@ describe('ExecutionNavigatorPage divergence records with the real runtime', () =
 
       const recovery = await screen.findByRole('region', { name: '生産計画の停止' }, { timeout: 5000 })
       expect(recovery).toHaveTextContent('予測と異なる結果を記録しました')
-      expect(within(recovery).getByRole('link', { name: 'RNG状態を再同定する' })).toHaveAttribute('href', '/rng')
+      expect(within(recovery).getByRole('link', { name: 'RNG状態を特定し直す' })).toHaveAttribute('href', '/rng')
       expect(deps.recordActualResultDifferent).toHaveBeenCalledOnce()
       const stored = await database.productionPlans.get(fixture.plan.id)
       expect(stored).toMatchObject({ status: 'stale', recalculationReasons: ['unexpected_result'] })
@@ -1436,7 +1436,7 @@ describe('ExecutionNavigatorPage divergence records with the real runtime', () =
 
       const recovery = await screen.findByRole('region', { name: '操作状況の回復' }, { timeout: 5000 })
       expect(within(recovery).getByRole('button', { name: '同じ操作を何回行ったか分からない' })).toBeInTheDocument()
-      expect(screen.queryByRole('link', { name: /再同定/ })).not.toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: /特定し直す|再特定/ })).not.toBeInTheDocument()
       const after = await dump(database)
       expect(after.rngState).toEqual(before.rngState)
       expect(after.normalCounters).toEqual(before.normalCounters)
@@ -1513,7 +1513,7 @@ describe('ExecutionNavigatorPage operation_uncertain recovery', () => {
     expect(within(recovery).getByRole('button', { name: '同じ操作を何回行ったか分からない' })).toBeInTheDocument()
     expect(within(recovery).getByRole('button', { name: '別の操作・別の武器を操作してしまった' })).toBeInTheDocument()
     expect(within(recovery).getByRole('button', { name: '最後のゲーム内セーブ地点へ戻す' })).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /再同定/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /特定し直す|再特定/ })).not.toBeInTheDocument()
   })
 
   it('follows a unique position only after the user confirms it, once', async () => {
@@ -1607,7 +1607,7 @@ describe('ExecutionNavigatorPage operation_uncertain recovery', () => {
     expect(unsafe).toHaveTextContent('推測で続けることはできません')
     expect(screen.queryByRole('button', { name: 'この位置に合わせて続ける' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '作成プランを破棄する' })).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /再同定/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /特定し直す|再特定/ })).not.toBeInTheDocument()
     // The input can be corrected.
     await user.click(screen.getByRole('button', { name: '入力をやり直す' }))
     expect(screen.getByRole('button', { name: '作成プランと照合する' })).toBeDisabled()

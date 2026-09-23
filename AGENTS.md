@@ -638,7 +638,7 @@ Setup shows it at the top, names this screen's Identification Wizard (no self-li
 successful direct save and after an Identification adoption; Candidate Search shows it above the
 search conditions with 「この検索に使われる予測位置が、ゲーム側と一致していない可能性があります」 and
 adds no hard gate - the search stays available and the warning stays after a search. A failed read
-is shown as 「再同定状態を確認できませんでした」, never as "nothing to re-identify". `operation_uncertain`
+is shown as 「再特定の状態を確認できませんでした」 (formerly 「再同定状態を確認できませんでした」; Issue #90 replaced 同定 with 特定 in the ordinary UI), never as "nothing to re-identify". `operation_uncertain`
 stays the Navigator's recovery and enters no persistent reminder. It added no persisted field, no
 writer of `lastIdentifiedAt` and no calculation semantics, so the versions stay 13 / 7 / 10
 (`RngState.schemaVersion` 2).

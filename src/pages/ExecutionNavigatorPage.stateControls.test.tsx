@@ -587,8 +587,8 @@ describe('ExecutionNavigatorPage Plan abandonment with the real runtime', () => 
  * the ended view still asks for re-identification at that destination.
  */
 describe('ExecutionNavigatorPage abandonment after an unresolved actual result', () => {
-  const reidentifyText = '予測と異なる結果が記録された後、RNG状態の再同定がまだ完了していません。'
-  const reidentifyNormalText = '予測と異なる結果が記録された後、通常アーティアCounterの再同定がまだ完了していません。'
+  const reidentifyText = '予測と異なる結果が記録された後、RNG状態の再特定がまだ完了していません。'
+  const reidentifyNormalText = '予測と異なる結果が記録された後、通常アーティアCounterの再特定がまだ完了していません。'
   const NORMAL_COUNTER_ID = 'weapon.fixture.a:8'
   const IDENTIFICATION_CLOCK = '2026-09-18T00:00:00.000Z'
 
@@ -640,7 +640,7 @@ describe('ExecutionNavigatorPage abandonment after an unresolved actual result',
       await abandonThroughDialog(user, 'plain')
 
       expect(screen.getByText(reidentifyText)).toBeInTheDocument()
-      expect(screen.getByText('現在のゲーム状態に合わせてRNG状態を再同定してから、候補検索・再計画を行ってください。')).toBeInTheDocument()
+      expect(screen.getByText('現在のゲーム状態に合わせてRNG状態を特定し直してから、候補検索・再計画を行ってください。')).toBeInTheDocument()
       expect(screen.getByRole('link', { name: 'RNG状態設定へ' })).toHaveAttribute('href', '/rng')
       expect(screen.queryByRole('link', { name: '通常アーティアCounterへ' })).not.toBeInTheDocument()
       expect(screen.getByRole('link', { name: 'ビルドリストへ' })).toHaveAttribute('href', '/build-list')
@@ -753,7 +753,7 @@ describe('ExecutionNavigatorPage abandonment after an unresolved actual result',
 
       expect(screen.getByText(reidentifyNormalText)).toBeInTheDocument()
       expect(screen.queryByText(reidentifyText)).not.toBeInTheDocument()
-      expect(screen.getByText('現在のゲーム状態に合わせて通常アーティアCounterを再同定してから、候補検索・再計画を行ってください。')).toBeInTheDocument()
+      expect(screen.getByText('現在のゲーム状態に合わせて通常アーティアCounterを特定し直してから、候補検索・再計画を行ってください。')).toBeInTheDocument()
       expect(screen.getByRole('link', { name: '通常アーティアCounterへ' })).toHaveAttribute('href', '/normal-counters')
       expect(screen.queryByRole('link', { name: 'RNG状態設定へ' })).not.toBeInTheDocument()
     }), 20_000)

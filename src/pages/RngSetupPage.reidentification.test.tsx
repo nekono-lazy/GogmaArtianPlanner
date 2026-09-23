@@ -23,11 +23,11 @@ import { RngSetupPage, type RngSetupPageDependencies } from './RngSetupPage'
  * reminder's (the Domain helper's); the page only re-reads it.
  */
 
-const TITLE = '予測と異なる結果の再同定が必要です'
-const RNG_TEXT = '予測と異なる結果が記録された後、RNG状態の再同定がまだ完了していません。'
-const NORMAL_TEXT = '予測と異なる結果が記録された後、通常アーティアCounterの再同定がまだ完了していません。'
-const WIZARD_GUIDANCE = 'この画面のIdentification Wizardで現在のゲーム状態に合わせて再同定してください。'
-const MANUAL_NOTE = '手動入力だけではこの再同定要求は解消されません。Identification Wizardの結果を採用してください。'
+const TITLE = '予測と異なる結果が出たため、再特定が必要です'
+const RNG_TEXT = '予測と異なる結果が記録された後、RNG状態の再特定がまだ完了していません。'
+const NORMAL_TEXT = '予測と異なる結果が記録された後、通常アーティアCounterの再特定がまだ完了していません。'
+const WIZARD_GUIDANCE = 'この画面の「RNG状態の特定」で、現在のゲーム状態に合わせて特定し直してください。'
+const MANUAL_NOTE = '手動入力だけではこの再特定の要求は解消されません。「RNG状態の特定」の結果を採用してください。'
 
 const rngOnly: PersistentReidentificationReminder = {
   kind: 'actual_result_different', rngRequired: true, normalCounters: [], hasUnresolvableNormalCounter: false,
@@ -112,14 +112,23 @@ async function saveGogmaCounter(user: ReturnType<typeof userEvent.setup>, value:
   await screen.findByText('RNG状態を保存しました。')
 }
 
+/** Issue #90: the ordinary UI of the whole flow says 特定, never 同定 / Identification. */
+function expectNoIdentificationWording(element: HTMLElement) {
+  const text = element.textContent ?? ''
+  for (const term of ['同定', 'Identification']) expect(text).not.toContain(term)
+}
+
 async function adoptThroughWizard(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(await screen.findByRole('button', { name: 'Identification Wizardを開始' }))
-  const dialog = await screen.findByRole('dialog', { name: 'RNG同定ウィザード' })
+  await user.click(await screen.findByRole('button', { name: 'RNG状態の特定を開始' }))
+  expectNoIdentificationWording(document.body)
+  const dialog = await screen.findByRole('dialog', { name: 'RNG状態の特定' })
   await user.click(within(dialog).getByRole('checkbox', { name: '調査前のゲーム状態へ戻した' }))
   await user.click(within(dialog).getByRole('button', { name: '開始値を採用' }))
-  await within(dialog).findByText('同定結果をRNG状態へ採用しました。')
+  await within(dialog).findByText('特定結果をRNG状態へ採用しました。')
+  expectNoIdentificationWording(dialog)
   await user.click(within(dialog).getByRole('button', { name: '閉じる' }))
-  await screen.findByText('Identification結果をRNG状態へ採用しました。')
+  await screen.findByText('特定結果をRNG状態へ採用しました。')
+  expectNoIdentificationWording(document.body)
 }
 
 describe('RngSetupPage persistent re-identification reminder', () => {
@@ -202,7 +211,7 @@ describe('RngSetupPage persistent re-identification reminder', () => {
     const { deps } = fixture(none)
     deps.getReidentificationReminder = vi.fn(async () => { throw new Error('IndexedDB unavailable') })
     renderPage(deps)
-    expect(await screen.findByText('再同定状態を確認できませんでした。予測と異なる結果が記録されている場合、再同定が必要な可能性があります。')).toBeInTheDocument()
+    expect(await screen.findByText('再特定の状態を確認できませんでした。予測と異なる結果が記録されている場合、再特定が必要な可能性があります。')).toBeInTheDocument()
     expect(await screen.findByLabelText('巨戟カウンター')).toBeInTheDocument()
     expect(screen.queryByText(TITLE)).not.toBeInTheDocument()
   })
