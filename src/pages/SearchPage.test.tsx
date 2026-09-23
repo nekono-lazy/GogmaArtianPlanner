@@ -1,3 +1,4 @@
+import { defaultCandidateSearchSettings } from '../domain/search'
 import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../domain/models/publicTypes'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -357,9 +358,9 @@ describe('SearchPage', () => {
     expect(screen.getByRole('heading', { level: 3, name: '詳細設定（探索量の上限）' })).toContainElement(toggle)
     expect(within(toggle).queryByRole('heading')).not.toBeInTheDocument()
     await user.click(toggle)
-    expect(await screen.findByLabelText('通常アーティア最大進行量')).toBeInTheDocument()
-    expect(screen.getByLabelText('巨戟最大進行量')).toBeInTheDocument()
-    expect(screen.getByLabelText('スキル最大進行量')).toBeInTheDocument()
+    expect(await screen.findByLabelText('通常アーティア最大進行量')).toHaveValue(defaultCandidateSearchSettings.maxNormalAdvance)
+    expect(screen.getByLabelText('巨戟最大進行量')).toHaveValue(defaultCandidateSearchSettings.maxGogmaAdvance)
+    expect(screen.getByLabelText('スキル最大進行量')).toHaveValue(defaultCandidateSearchSettings.maxSkillAdvance)
   })
 
   it('shows an add failure and the duplicate notice next to the Candidate', async () => {

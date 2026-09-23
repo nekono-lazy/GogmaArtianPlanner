@@ -2388,6 +2388,24 @@ defaults, progress and Worker error handling, `CalculationContext.appSchemaVersi
 = 2`, and Production RNG semantics and version. Do not change `candidateStableKey`
 or the `BuildCandidate` ID generation rule as a side effect.
 
+### Issue #104 Normal Route base reduction
+
+Initial Candidate Search incrementally retains the first Normal offset's full Reset/Keep
+stream. Later Normals first require the same unordered Keep-family multiset as the Target
+Ideal, then only the earliest Normal per ordered family layout enters a Keep-only stream.
+Both keys use gogmaBonusFamily's Master mapping authority; multiset equality ignores order,
+while stream dedup preserves it. An incompatible offset zero still keeps its full stream
+(SEARCH_SPEC 6.1.2). Reset-derived futures depend on no Normal initial slots; equivalent
+Keep futures depend only on ordered families. A later equivalent Normal costs strictly
+more for identical Bonus/Skill results. Never apply this pruning to constrained enumeration,
+owned sources or blind creation. Preserve the first base's canonical frontier and the
+lower-bound tie drain; never eagerly predict every Normal offset for classification.
+
+Current defaults are Normal 500 / Gogma 350 / Skill 1500. See
+`docs/ISSUE_104_NORMAL_ROUTE_REDUCTION_BENCHMARK.md` for the Browser measurements,
+350/500 comparison and limits. B5 measurements/presets stay historical and unchanged.
+No RNG algorithm/version, calculation version, persistence or Candidate shape changes.
+
 ### Candidate Search Notices and Observational Traces
 
 A `CandidateSearchWarning` carries an explicit `severity` of `info` or
@@ -4543,7 +4561,7 @@ Relevant test areas include:
 - Atomic Execution transactions
 - Undo snapshot restoration
 - Worker request/response/cancellation behavior
-- `defaultCandidateSearchSettings` is `1000 / 200 / 1000 / 200 / 0.6`
+- `defaultCandidateSearchSettings` is `500 / 350 / 1500`; the Search page uses the same values
 - A Target reports progress at its start, reports activity before it completes,
   restarts `processedWorkItems` per Target, and ends at
   `completedTargets === totalTargets`

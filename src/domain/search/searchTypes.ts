@@ -35,15 +35,14 @@ export interface CandidateSearchSettings {
 }
 
 /**
- * B6 defaults, chosen from the real Browser Worker measurements recorded in
- * `docs/B5_CANDIDATE_SEARCH_BROWSER_WORKER_BENCHMARK.md`: Normal 1000 ~ 256 ms,
- * Skill 1000 ~ 325 ms, Gogma 200 ~ 1961 ms. These are defaults, not caps: the
- * Search UI still lets the user raise every bound.
+ * Issue #104 defaults, measured with the real Browser Worker after Normal base
+ * reduction. See docs/ISSUE_104_NORMAL_ROUTE_REDUCTION_BENCHMARK.md.
+ * These are defaults, not caps; the Search UI can raise every bound.
  */
 export const defaultCandidateSearchSettings: CandidateSearchSettings = {
-  maxNormalAdvance: 1000,
-  maxGogmaAdvance: 200,
-  maxSkillAdvance: 1000,
+  maxNormalAdvance: 500,
+  maxGogmaAdvance: 350,
+  maxSkillAdvance: 1500,
 }
 
 /**

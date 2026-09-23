@@ -80,7 +80,8 @@ export interface RouteSearchContext {
  * The Bonus and Skill stream predictions are shared across Route bases, but the
  * base itself is not: a different source OwnedWeapon, a different forge count,
  * or different inherited five slots stay separate Route bases even when they
- * reach the same completed result.
+ * reach the same completed result. Initial Search may omit strictly dominated new
+ * Normal registrations (SEARCH_SPEC 6.1.2), without changing that identity.
  */
 export interface RouteCompositionBase {
   /**

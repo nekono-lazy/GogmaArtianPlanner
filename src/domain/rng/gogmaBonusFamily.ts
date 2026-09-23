@@ -71,3 +71,11 @@ export function keepFamilyLayoutKey(
 ): string {
   return keepFamilyLayout(bonuses, master).join('\u0000')
 }
+
+/** Unordered family counts for Keep reachability, NOT a Keep stream identity. */
+export function keepFamilyMultisetKey(
+  bonuses: RestorationBonusSet,
+  master: KeepFamilyMasterSubset,
+): string {
+  return keepFamilyLayout(bonuses, master).sort().join('\u0000')
+}

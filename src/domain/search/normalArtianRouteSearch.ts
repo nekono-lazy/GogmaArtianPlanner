@@ -1,3 +1,4 @@
+import { keepFamilyLayoutKey, keepFamilyMultisetKey } from '../rng/gogmaBonusFamily'
 import type { TargetSearchScheduler } from './targetSearchScheduler'
 import type { RouteOperation, SkillAmendmentResult } from '../models/publicTypes'
 import { V1_NORMAL_ARTIAN_RARITY } from '../models/publicTypes'
@@ -317,7 +318,14 @@ function searchBlindResetNormalRoute(
   })
 }
 
-/** The predicted Normal Artian route of SEARCH_SPEC 6.1, unchanged. */
+/**
+ * Incremental initial-Search dominance (SEARCH_SPEC 6.1.2).
+ * Reset erases the initial slots, so only offset zero needs its full stream.
+ * Other offsets first require Ideal-compatible unordered families, then only
+ * the first representative of each ordered Keep layout.
+ * A later equivalent base costs strictly more for identical Bonus/Skill futures;
+ * no later canonical tie-break can rescue it. This is NOT Planner pruning.
+ */
 function searchPredictedNormalRoutes(
   context: RouteSearchContext,
   scheduler: TargetSearchScheduler,
@@ -342,10 +350,12 @@ function searchPredictedNormalRoutes(
       canSearchAmendments = false
     }
   }
+  const idealFamilyMultiset = keepFamilyMultisetKey(target.idealBonuses, input.master)
   result.searchedRoutes.push('normal_artian_to_gogma')
   for (const counter of counters) {
     if (counter.counter === null) continue
     const start = counter.counter
+    const keepLayouts = new Set<string>()
     const scheduleOffset = (offset: number): void => {
       if (offset >= input.settings.maxNormalAdvance) return
       const forgeCount = offset + 1
@@ -359,6 +369,24 @@ function searchPredictedNormalRoutes(
             rarity: counter.rarity, normalCounter: candidateCounter, master: input.master,
           })
           context.normalPredictions?.set(candidateCounter, bonuses)
+          // Keep preserves family counts. Later Reset routes are already
+          // represented by offset zero; an incompatible Keep-only base cannot
+          // reach the unordered Ideal bonus multiset, at any Skill position.
+          if (offset > 0 && keepFamilyMultisetKey(bonuses, input.master) !== idealFamilyMultiset) {
+            scheduleOffset(offset + 1)
+            return
+          }
+          const layout = keepFamilyLayoutKey(bonuses, input.master)
+          const firstLayout = !keepLayouts.has(layout)
+          keepLayouts.add(layout)
+          // Normal-scope slots can never be Ideal (even identical labels).
+          // No amendment-free Candidate is lost here. Keep the first base's
+          // ordinary scope validation, notices and full canonical frontier.
+          if (offset > 0 && (!canSearchAmendments || !firstLayout ||
+            !engine.capabilities.supportsKeepBonusesPrediction)) {
+            scheduleOffset(offset + 1)
+            return
+          }
           const normalCounterAfter = engine.advanceNormalCounter(start, { type: 'create_normal_artian', count: forgeCount })
           const operations: RouteOperation[] = [
             { type: 'create_normal_artian', weaponTypeId: target.weaponTypeId, rarity: counter.rarity, count: forgeCount, normalCounterBefore: start, normalCounterAfter },
@@ -372,7 +400,7 @@ function searchPredictedNormalRoutes(
             zeroBonus: { gogmaAdvance: 0, lastResetDepth: 0, finalBonuses: bonuses, restorationBonusScope: 'normal_artian', operations: [], amendmentResults: [] },
             zeroSkill: converted.zeroSkill,
             startSkillCounter: converted.skillCounterAfter,
-            bonusBase: canSearchAmendments ? { startGogmaCounter: input.rngState.gogmaCounter.value as number, bonuses, restorationBonusScope: 'normal_artian' } : null,
+            bonusBase: canSearchAmendments ? { startGogmaCounter: input.rngState.gogmaCounter.value as number, bonuses, restorationBonusScope: 'normal_artian', amendmentPolicy: offset === 0 ? 'all' : 'keep_only' } : null,
             onCandidate: (candidate) => result.candidates.push(candidate),
             onBonusNotice,
           })

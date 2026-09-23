@@ -44,12 +44,12 @@ const options = { now: () => SEARCH_FIXTURE_TIME, nowMs: () => 0 }
 
 afterEach(() => vi.restoreAllMocks())
 
-describe('B6 Candidate Search defaults', () => {
-  it('ships the B6 defaults chosen from the B5 measurements', () => {
+describe('Issue #104 Candidate Search defaults', () => {
+  it('ships the measured Issue #104 defaults', () => {
     expect(defaultCandidateSearchSettings).toEqual({
-      maxNormalAdvance: 1000,
-      maxGogmaAdvance: 200,
-      maxSkillAdvance: 1000,
+      maxNormalAdvance: 500,
+      maxGogmaAdvance: 350,
+      maxSkillAdvance: 1500,
     })
   })
 })

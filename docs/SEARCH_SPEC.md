@@ -102,13 +102,13 @@ Candidate identityのいずれにも入らない。
 
 ```ts
 const defaultCandidateSearchSettings = {
-  maxNormalAdvance: 1000,
-  maxGogmaAdvance: 200,
-  maxSkillAdvance: 1000,
+  maxNormalAdvance: 500,
+  maxGogmaAdvance: 350,
+  maxSkillAdvance: 1500,
 };
 ```
 
-この初期値はB6で `5000 / 5000 / 5000` から変更した。根拠は
+B6当時は `5000 / 5000 / 5000` から `1000 / 200 / 1000` へ変更した。根拠は
 `docs/B5_CANDIDATE_SEARCH_BROWSER_WORKER_BENCHMARK.md` の実Browser Worker実測である。
 
 ```text
@@ -120,6 +120,12 @@ Gogma   200 ≈ 1961 ms
 `5000 / 5000 / 5000` は近傍にIdealがあれば数ms〜数十msで終わるが、Idealが無い場合は
 60秒でも完了しなかった。これは上限機能の削除ではなく初期値の変更であり、
 ユーザーは詳細設定で各上限を引き上げられる。
+
+#104では6.1.2の初回Normal Route base削減後、初期値を `500 / 350 / 1500` とした。
+Gogma 200とSkill 1000で届かない実使用例を踏まえ、探索範囲を拡大した。
+350 / 500比較と深いIdeal・no-Ideal・cancelの実Browser Worker測定、負荷の限界は
+[ISSUE_104_NORMAL_ROUTE_REDUCTION_BENCHMARK.md](./ISSUE_104_NORMAL_ROUTE_REDUCTION_BENCHMARK.md) に記録する。
+historical `B5_MEASUREMENT_SETTINGS` と過去の実測値は変更しない。
 
 制約。
 
@@ -859,10 +865,11 @@ canonical Ideal = 全Route base・全RouteKindを通じたIdeal候補のうち�
 2. estimatedGogmaAdvance   昇順
 3. estimatedSkillAdvance   昇順
 4. estimatedNormalAdvance  昇順。null は最後
-5. candidateStableKey 昇順
+5. preferred source（8.1）優先
+6. candidateStableKey 昇順
 ```
 
-Candidateは常に理想品なので、品質を測る追加キーは存在せず、順位はこの5キーで決まる。
+Candidateは常に理想品なので、品質を測る追加キーは存在せず、順位はこの6キーで決まる。
 
 #### canonical Idealのstable tie-break
 
@@ -1633,6 +1640,51 @@ reset_bonuses                 <- 必須。最初のBonus amendmentは必ずReset
 Normal復元ボーナス予測が拡張されても、このvariantは削除しない。
 「1本作成 → 即Reset」はpredicted variantより短い有効なCandidateになり得るため、
 独立した合法Routeとして残す。
+
+## 6.1.2 初回検索のNormal Route base削減（#104）
+
+6.1の意味上のRoute baseを変更せず、canonical Idealにならないことを証明できる新規Normal
+baseの登録・購読・状態評価を省略する。Planner constrained enumerationには適用しない。
+
+- 同一Normal Counter / Search originの最小forgeCount（offset 0）のbaseは従来のReset / Keep
+  streamとcanonical frontier代表選択をそのまま使う。Reset-only、Reset→Keepを含むすべての
+  Reset由来の結果はここで評価する
+- 後続offsetはまず `keepFamilyMultisetKey()` でIdeal Bonusのfamily multisetとの互換性を
+  判定する。両方の5枠を既存Master mappingでKeep familyへ正規化し、slot順を無視した
+  familyの個数が一致するものだけを残す。Keepはfamilyを変えないので、不一致のbaseは
+  KeepだけではIdealへ到達しない。そのReset由来Routeはoffset 0が代表する。
+  offset 0にはこのfilterを適用しない
+- 互換な後続offsetだけ、既存 `keepFamilyLayoutKey()` のordered family layoutが初出のときに
+  Keep-only streamへ登録する。同一layoutの後方offsetは登録しない。tierはlayout keyに含めず、
+  Normal側typeは既存Master mappingで正規化し、slot順は維持する
+- normal scopeの初期5枠は、同名ラベルが5/5一致しても5.1のIdealではないため、
+  amendmentなしのIdealを削減で失わない。最初のbaseの通常のscope判定は維持する。
+  所持通常 / 所持巨戟のbase、blind variant、Skill-only Routeにはこの削減を適用しない
+- 予測は従来の `forgeCount + 1` lowerBoundでoffsetごとに遅延実行する。分類のために
+  上限まで一括予測しない。canonical Ideal発見後も既存の同cost drainを維持する
+
+同値性の根拠。
+
+Normal forgeはGogma / Skill Counterを進めず、最後の1本のconversionだけが同じ起点Skillを
+1回進める。後方offsetからのReset結果とその後のKeep未来は初期5枠に依存しないので、
+最小forgeCountのbaseで同じBonus結果とSkill結果へ到達できる。後方offsetはforge差だけ
+`estimatedOperationCount` が大きい。Keep-onlyも、同じordered family layoutの先行baseで
+同一Counterの同一結果へ到達するため同様に厳密に劣後する。
+
+後続NormalのKeep-only streamが、従来full frontierではReset代表に合流していたKeep履歴を
+余分に辿る場合でも、その合流後の結果はoffset 0のReset由来の履歴で同depthに到達でき、
+後続Normal側が総操作数で厳密に劣後する。最初のbaseのfull frontierは変えないので、
+同costでのReset / Keep履歴のcanonical選択は変わらない。
+
+family互換filterで除外したbaseはKeep-onlyのIdealを持たず、Reset経由は上記のとおり劣後する。
+同一未来を理由に削除した対象は比較の第1キーで劣後し、Gogma / Skill / Normal advance、preferred source、
+stable keyの後続tie-breakへ進まない。異なるlayoutの後続Normalが少ないGogma操作で
+総操作数同点以下になる場合は残す。最終CandidateのRoute、Counter、scope、予測traceが
+同じなので、そのRouteから抽出するlane別intermediate stateも同じである。
+
+これは初回canonical Idealの選択を維持する最適化であり、後方Normalをゲーム上不可能、
+またはPlannerでも永久に不要とするDomain dominanceではない。Production RNG prediction、
+各schema、CalculationContext、RNG Engine versionは変更しない。
 
 ## 6.2 所持通常アーティア経由
 

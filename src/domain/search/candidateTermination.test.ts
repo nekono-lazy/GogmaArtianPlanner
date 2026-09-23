@@ -251,7 +251,7 @@ describe('B4 actual Target-wide termination', () => {
 })
 
 describe('B4 delta scheduler: semantic work, not Prediction memo counts', () => {
-  it('registers Normal offsets 0..3 once and evaluates only new stream depths and Cross pairs', async () => {
+  it('predicts Normal offsets 0..3 but registers only their first equivalent base', async () => {
     const { input, engine } = fixture(false, 4)
     input.routeFilter = 'normal_artian'
     input.ownedWeapons = []
@@ -263,10 +263,11 @@ describe('B4 delta scheduler: semantic work, not Prediction memo counts', () => 
     await searchCandidates(input, engine, options)
 
     expect(bases.mock.calls.map(([base]) => base.baseOperations[0]))
-      .toEqual([1, 2, 3, 4].map((count) => expect.objectContaining({ type: 'create_normal_artian', count })))
+      .toEqual([1].map((count) => expect.objectContaining({ type: 'create_normal_artian', count })))
     const skillDepths = skillSets.mock.calls.map(([, solutions]) => solutions.map((s) => s.resetCount))
     expect(skillDepths.filter((depths) => depths[0] > 0)).toEqual([[1], [2], [3], [4]])
-    expect(skillDepths.filter((depths) => depths[0] === 0)).toHaveLength(4)
+    expect(skillDepths.filter((depths) => depths[0] === 0)).toHaveLength(1)
+    expect(engine.predictNormalArtian).toHaveBeenCalledTimes(4)
     const bonusDepths = bonusSets.mock.calls.map(([, , solutions]) => solutions.map((s) => s.gogmaAdvance))
       .filter((depths) => depths[0] > 0)
     expect(bonusDepths.map((depths) => [...new Set(depths)])).toEqual([[1], [2], [3], [4]])
@@ -276,7 +277,7 @@ describe('B4 delta scheduler: semantic work, not Prediction memo counts', () => 
     expect(new Set(evaluated).size).toBe(evaluated.length)
     // This fixture reaches no Ideal Skill, so the Ideal Skill axis is empty and
     // the Cross rule composes nothing at all. The delta scheduling above still
-    // registered every base once and read every new stream depth exactly once:
+    // registered one equivalent base and read every new stream depth exactly once:
     // composition work is what an unreachable Ideal removes, not stream work.
     expect(evaluated).toEqual([])
     expect((steps.mock.contexts[0] as SearchWorkQueue).pendingCount).toBe(0)

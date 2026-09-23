@@ -5,6 +5,7 @@ import {
   keepFamilyBonusTypeId,
   keepFamilyLayout,
   keepFamilyLayoutKey,
+  keepFamilyMultisetKey,
   keepFamilyOfBonus,
   type KeepFamilyMasterSubset,
 } from './gogmaBonusFamily'
@@ -82,6 +83,21 @@ describe('Keep family resolution', () => {
       .not.toBe(keepFamilyLayoutKey(bonuses('b', 'a', 'a', 'b', 'a'), fixtureMaster))
     expect(keepFamilyLayoutKey(bonuses('n', 'a', 'a', 'b', 'a'), fixtureMaster))
       .not.toBe(keepFamilyLayoutKey(bonuses('a', 'n', 'a', 'b', 'a'), fixtureMaster))
+  })
+
+  it('compares unordered family multiplicities while preserving ordered stream identities', () => {
+    const first = bonuses('a', 'a', 'a', 'b', 'b')
+    const second = bonuses('n', 'a', 'b', 'a', 'a')
+    expect(keepFamilyMultisetKey(first, fixtureMaster)).toBe(keepFamilyMultisetKey(second, fixtureMaster))
+    expect(keepFamilyLayoutKey(first, fixtureMaster)).not.toBe(keepFamilyLayoutKey(second, fixtureMaster))
+    expect(keepFamilyMultisetKey(first, fixtureMaster)).not.toBe(keepFamilyMultisetKey(bonuses('a', 'a', 'b', 'b', 'b'), fixtureMaster))
+    expect(first.map(slot => slot.bonusTypeId)).toEqual(['a', 'a', 'a', 'b', 'b'])
+  })
+
+  it('normalizes both Sharpness and Capacity to the same multiset through Master', () => {
+    const normal = bonuses('bonus_type.attack', 'bonus_type.normal_sharpness', 'bonus_type.attack', 'bonus_type.normal_capacity', 'bonus_type.attack')
+    const gogma = bonuses('bonus_type.gogma_sharpness_capacity', 'bonus_type.attack', 'bonus_type.attack', 'bonus_type.attack', 'bonus_type.gogma_sharpness_capacity')
+    expect(keepFamilyMultisetKey(normal, master())).toBe(keepFamilyMultisetKey(gogma, master()))
   })
 
   it('matches the pinned reference Keep family grouping for Gogma-tier bonuses', () => {
