@@ -1,5 +1,4 @@
-import { isTargetWeaponPlanningEligible } from '../models/domainRules'
-import type { TargetWeapon, TargetWeaponId } from '../models/publicTypes'
+import type { TargetWeaponId } from '../models/publicTypes'
 import type { PlannerCheckpointRequirements } from './plannerCheckpoints'
 import { isPlannerTargetComplete } from './plannerEntryRelevance'
 import type {
@@ -29,20 +28,24 @@ export function isPlannerSearchResultUsable(
 
 function countCompletedTargets(
   bestState: PlannerSearchState | null,
-  enabledTargetIds: readonly TargetWeaponId[],
+  planningTargetIds: readonly TargetWeaponId[],
   checkpointRequirements: PlannerCheckpointRequirements,
 ): number {
   if (bestState === null) return 0
   // The same authority the Beam Search uses: a Target with a required
   // checkpoint Entry counts only once that Entry itself was secured.
-  return enabledTargetIds.filter((targetId) =>
+  return planningTargetIds.filter((targetId) =>
     isPlannerTargetComplete(bestState, targetId, checkpointRequirements),
   ).length
 }
 
 export interface PlannerSearchTerminationInput {
   options: PlannerOptions
-  enabledTargetIds: readonly TargetWeaponId[]
+  /**
+   * The planning Targets of the run (`PlannerInitialContext.planningTargetIds`):
+   * only Targets with a valid BuildListEntry, never every active Target.
+   */
+  planningTargetIds: readonly TargetWeaponId[]
   checkpointRequirements: PlannerCheckpointRequirements
   bestState: PlannerSearchState | null
   expandedStates: number
@@ -59,7 +62,7 @@ export interface PlannerSearchTerminationInput {
  * - `cancelled`  the user stopped the search; nothing about the result is a
  *   statement on feasibility, and the ordinary Planner already returns a safe
  *   `plan: null` for it.
- * - `completed`  every enabled Target is complete: Ideal, and its required
+ * - `completed`  every planning Target is complete: Ideal, and its required
  *   checkpoint Entry secured (PLANNER_SPEC 7.5.6). A bound that was touched
  *   on the way stays in `reachedLimits` as a diagnostic and changes nothing.
  * - `incomplete` a `PlannerOptions` bound truncated the search before that, so
@@ -75,10 +78,10 @@ export function createPlannerSearchTermination(
     ...(input.reachedExpandedLimit ? (['max_expanded_states'] as const) : []),
     ...(input.reachedStepLimit ? (['max_plan_steps'] as const) : []),
   ]
-  const totalTargetCount = input.enabledTargetIds.length
+  const totalTargetCount = input.planningTargetIds.length
   const completedTargetCount = countCompletedTargets(
     input.bestState,
-    input.enabledTargetIds,
+    input.planningTargetIds,
     input.checkpointRequirements,
   )
   const isComplete =
@@ -106,10 +109,12 @@ export function createPlannerSearchTermination(
  * The termination of a Planner run that never reached its Beam Search, so no
  * `PlannerOptions` bound was touched. The reason it stopped - an invalid input,
  * or an orchestration bound - is reported by its own warning, never here.
+ * `planningTargetIds` is the same planning Target authority a searched run
+ * counts (`preparePlannerInitialContext()`), never every active Target.
  */
 export function createUnsearchedPlannerTermination(
   options: PlannerOptions,
-  targetWeapons: readonly TargetWeapon[],
+  planningTargetIds: readonly TargetWeaponId[],
 ): PlannerSearchTermination {
   return {
     status: 'exhausted',
@@ -117,6 +122,6 @@ export function createUnsearchedPlannerTermination(
     limits: { ...options },
     expandedStates: 0,
     completedTargetCount: 0,
-    totalTargetCount: targetWeapons.filter(isTargetWeaponPlanningEligible).length,
+    totalTargetCount: planningTargetIds.length,
   }
 }

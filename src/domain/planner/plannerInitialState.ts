@@ -1,4 +1,4 @@
-import type { DomainValidationIssue } from '../models/publicTypes'
+import type { DomainValidationIssue, TargetWeapon } from '../models/publicTypes'
 import type {
   PlannerInput,
   PlannerSearchState,
@@ -9,10 +9,11 @@ import {
   derivePlannerCheckpointRequirements,
   isIntermediatePinHeldAtRouteStart,
 } from './plannerCheckpoints'
+import { derivePlannerPlanningTargets } from './plannerPlanningTargets'
 import { initialPlannerLaneProgress, type PlannerLaneProgress } from './plannerRouteLanes'
 import { createSimulatedInventory } from './simulatedInventory'
 import {
-  areAllEnabledTargetsAlreadySatisfied,
+  areAllPlanningTargetsAlreadySatisfied,
   deriveTargetSatisfaction,
 } from './targetSatisfaction'
 
@@ -21,13 +22,21 @@ export interface InitialPlannerSearchStateResult {
   state: PlannerSearchState | null
   issues: DomainValidationIssue[]
   warnings: PlannerWarning[]
+  /**
+   * The planning Targets of this run (`derivePlannerPlanningTargets()`), in
+   * stable ID order. The state tracks satisfaction for exactly these Targets,
+   * and `preparePlannerInitialContext()` hands this same list on as the run's
+   * one planning Target authority.
+   */
+  planningTargets: TargetWeapon[]
 }
 
 /** Creates a Beam Search start state without applying any route or RNG operation. */
 export function createInitialPlannerSearchState(input: PlannerInput, validEntries: readonly ValidatedBuildListEntry[]): InitialPlannerSearchStateResult {
+  const planningTargets = derivePlannerPlanningTargets(input.targetWeapons, validEntries)
   const inventory = createSimulatedInventory(input.ownedWeapons)
   if (!inventory.isValid || inventory.inventory === null) {
-    return { isValid: false, state: null, issues: inventory.issues, warnings: [] }
+    return { isValid: false, state: null, issues: inventory.issues, warnings: [], planningTargets }
   }
   const routeProgressByEntryId: Record<string, PlannerLaneProgress> = {}
   const routeRuntimeByEntryId: PlannerSearchState['routeRuntimeByEntryId'] = {}
@@ -47,8 +56,11 @@ export function createInitialPlannerSearchState(input: PlannerInput, validEntrie
       routeSourceVersionByEntryId[entry.id] = 0
     }
   })
+  // Only the planning Targets of this run are tracked: an active Target with no
+  // valid BuildListEntry is not a goal of this Plan, so its satisfaction must
+  // not reach completion, scoring or the semantic state key.
   const targetSatisfaction = deriveTargetSatisfaction(
-    input.targetWeapons,
+    planningTargets,
     input.ownedWeapons,
     input.master,
   )
@@ -73,15 +85,15 @@ export function createInitialPlannerSearchState(input: PlannerInput, validEntrie
       alreadyIdealWarnings.push({ kind: 'selected_checkpoint_target_already_ideal', message })
     })
   if (alreadyIdealIssues.length > 0) {
-    return { isValid: false, state: null, issues: alreadyIdealIssues, warnings: alreadyIdealWarnings }
+    return { isValid: false, state: null, issues: alreadyIdealIssues, warnings: alreadyIdealWarnings, planningTargets }
   }
-  const warnings: PlannerWarning[] = areAllEnabledTargetsAlreadySatisfied(targetSatisfaction)
+  const warnings: PlannerWarning[] = areAllPlanningTargetsAlreadySatisfied(targetSatisfaction)
     ? [{
         kind: 'all_targets_already_satisfied',
-        message: 'Every enabled TargetWeapon already has an Ideal Gogma weapon.',
+        message: 'Every planning TargetWeapon (a Target with a valid BuildListEntry) already has an Ideal Gogma weapon.',
       }]
     : []
-  return { isValid: true, issues: [], warnings, state: {
+  return { isValid: true, issues: [], warnings, planningTargets, state: {
     currentRngState: structuredClone(input.rngState),
     currentNormalCounters: structuredClone(input.normalCounters),
     simulatedInventory: inventory.inventory,

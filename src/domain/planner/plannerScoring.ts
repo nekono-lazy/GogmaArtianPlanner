@@ -107,6 +107,10 @@ function progressPotentialScore(
 
 export interface StateScoreContext {
   entries: readonly BuildListEntry[]
+  /**
+   * The run's planning Targets (`PlannerInitialContext.planningTargetsById`),
+   * so a Target with no valid BuildListEntry never adds to the achieved term.
+   */
   targetsById: ReadonlyMap<TargetWeaponId, TargetWeapon>
   routeUnitCountByEntryId: ReadonlyMap<BuildListEntryId, number>
   conflictCountByEntryId: ReadonlyMap<BuildListEntryId, number>

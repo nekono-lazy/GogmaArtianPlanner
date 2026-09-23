@@ -1,4 +1,3 @@
-import { isTargetWeaponPlanningEligible } from '../models/domainRules'
 import type {
   BuildListEntry,
   BuildListEntryId,
@@ -22,6 +21,7 @@ import {
 } from './plannerRouteLanes'
 import { entryIsRelevantForState } from './plannerEntryRelevance'
 import { createInitialPlannerSearchState } from './plannerInitialState'
+import { derivePlannerPlanningTargets } from './plannerPlanningTargets'
 import {
   createPlannerRouteUnitPlans,
   fastForwardPlannerRouteProgress,
@@ -69,8 +69,18 @@ export interface PlannerInitialContext {
    */
   allLanePlans: ReadonlyMap<BuildListEntryId, PlannerEntryLanes>
   routeUnitCountByEntryId: ReadonlyMap<BuildListEntryId, number>
-  targets: readonly TargetWeapon[]
-  targetsById: ReadonlyMap<TargetWeaponId, TargetWeapon>
+  /**
+   * The planning Targets of this run (`derivePlannerPlanningTargets()`): the
+   * unique planning-eligible Targets of the valid BuildListEntries, in stable
+   * ID order. This is the run's one Target authority - completion, typed
+   * termination, scoring, Target satisfaction, conflict detection, checkpoint
+   * requirements, constrained re-search and what-if all read it. It is never
+   * every active Target of `PlannerInput.targetWeapons`: a Target with no valid
+   * Entry is not a goal of this run (`docs/PLANNER_SPEC.md` 4 / 7.2.1).
+   */
+  planningTargets: readonly TargetWeapon[]
+  planningTargetIds: readonly TargetWeaponId[]
+  planningTargetsById: ReadonlyMap<TargetWeaponId, TargetWeapon>
   initialRelevantEntries: readonly BuildListEntry[]
   initialRelevantUnitPlans: ReadonlyMap<BuildListEntryId, readonly PlannerRouteUnit[]>
   initialConflictDetection: PlannerConflictDetectionResult
@@ -90,6 +100,8 @@ export type PlannerInitialContextResult =
       warnings: PlannerWarning[]
       issues: DomainValidationIssue[]
       excludedBuildListEntries: ExcludedBuildListEntry[]
+      /** The same planning Target authority, for the unsearched termination. */
+      planningTargetIds: TargetWeaponId[]
     }
 
 /**
@@ -112,6 +124,10 @@ export function preparePlannerInitialContext(
       warnings,
       issues: validation.issues,
       excludedBuildListEntries: validation.excludedBuildListEntries,
+      planningTargetIds: derivePlannerPlanningTargets(
+        input.targetWeapons,
+        validation.validBuildListEntries,
+      ).map(({ id }) => id),
     }
   }
   const initial = createInitialPlannerSearchState(
@@ -119,12 +135,15 @@ export function preparePlannerInitialContext(
     validation.validBuildListEntries,
   )
   warnings.push(...initial.warnings)
+  const planningTargets = initial.planningTargets
+  const planningTargetIds = planningTargets.map(({ id }) => id)
   if (!initial.isValid || initial.state === null) {
     return {
       status: 'invalid',
       warnings,
       issues: initial.issues,
       excludedBuildListEntries: validation.excludedBuildListEntries,
+      planningTargetIds,
     }
   }
   const initialSearchState = initial.state
@@ -136,10 +155,9 @@ export function preparePlannerInitialContext(
     .map(({ entry }) => entry)
     .filter((entry) => routePlans.unitPlans.has(entry.id))
     .sort((left, right) => compareStableStrings(left.id, right.id))
-  const targets = input.targetWeapons
-    .filter(isTargetWeaponPlanningEligible)
-    .sort((left, right) => compareStableStrings(left.id, right.id))
-  const targetsById = new Map(targets.map((target) => [target.id, target]))
+  const planningTargetsById = new Map(
+    planningTargets.map((target) => [target.id, target]),
+  )
   // Violations already failed the input closed in validation, so only the
   // one-Entry-per-Target map remains here.
   const checkpointRequirements = derivePlannerCheckpointRequirements(
@@ -204,7 +222,7 @@ export function preparePlannerInitialContext(
   const initialConflictDetection = detectPlannerConflicts(
     initialRelevantEntries,
     initialRelevantUnitPlans,
-    targets,
+    planningTargets,
     validation.validConflictResolutions,
     false,
   )
@@ -222,8 +240,9 @@ export function preparePlannerInitialContext(
       allUnitPlans,
       allLanePlans,
       routeUnitCountByEntryId,
-      targets,
-      targetsById,
+      planningTargets,
+      planningTargetIds,
+      planningTargetsById,
       initialRelevantEntries,
       initialRelevantUnitPlans,
       initialConflictDetection,

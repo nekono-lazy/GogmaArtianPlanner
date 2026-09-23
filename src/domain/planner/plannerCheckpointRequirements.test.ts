@@ -248,6 +248,44 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
     expect(result.bestState?.selectedBuildListEntryIds ?? []).not.toContain(ENTRY_A)
   })
 
+  it('#102: counts the required-Entry Target as a planning Target and never an unlisted one', async () => {
+    const built = scenario({ selectA: true, withB: false })
+    // An active Target the Build List gives no Route is not a goal of the run.
+    built.input.targetWeapons.push(orchestrationTarget('target.required.unlisted', {
+      elementId: 'element.fixture.b',
+    }))
+
+    const context = readyContext(built)
+    expect(context.planningTargetIds).toEqual([TARGET_T])
+    expect([...context.checkpointRequirements.requiredEntryIdByTargetId])
+      .toEqual([[TARGET_T, ENTRY_A]])
+
+    const result = await createProductionPlan(built.input, built.dependencies)
+    expect(result.termination).toMatchObject({
+      status: 'completed',
+      completedTargetCount: 1,
+      totalTargetCount: 1,
+    })
+    expect(result.plan?.steps.flatMap(({ checkpointMilestones }) => checkpointMilestones ?? []))
+      .toEqual([expect.objectContaining({ buildListEntryId: ENTRY_A })])
+
+    // Stopped before its required Entry is secured, the planning Target is
+    // not complete, whatever the unlisted Target does.
+    const starved = scenario({ selectA: true, withB: false })
+    starved.input.targetWeapons.push(orchestrationTarget('target.required.unlisted', {
+      elementId: 'element.fixture.b',
+    }))
+    starved.input.options = { ...starved.input.options, maxPlanSteps: 2 }
+    const partial = await runPlannerBeamSearch(starved.input, starved.dependencies)
+    expect(partial.termination).toMatchObject({
+      status: 'incomplete',
+      reachedLimits: ['max_plan_steps'],
+      completedTargetCount: 0,
+      totalTargetCount: 1,
+    })
+    expect(partial.bestState?.selectedBuildListEntryIds ?? []).not.toContain(ENTRY_A)
+  })
+
   it('D: fails closed when one Target has two checkpoint-selected Entries', async () => {
     const built = scenario({ selectA: true, withB: true, withSecondSelected: true })
 

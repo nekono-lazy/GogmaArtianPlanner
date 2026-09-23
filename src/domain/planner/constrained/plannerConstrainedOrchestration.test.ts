@@ -262,6 +262,15 @@ function options(
   }
 }
 
+function readyPlanningTargetIds(
+  input: OrchestrationScenario['input'],
+  dependencies: OrchestrationScenario['dependencies'],
+): readonly string[] {
+  const prepared = preparePlannerInitialContext(input, dependencies)
+  if (prepared.status !== 'ready') throw new Error('Expected a ready context.')
+  return prepared.context.planningTargetIds
+}
+
 function warningKinds(warnings: readonly { kind: string }[]): string[] {
   return warnings.map(({ kind }) => kind)
 }
@@ -560,6 +569,44 @@ describe('B8-C4b Candidate trial and adoption', () => {
       [generated.id, entryId(ENTRY_A)].sort(),
     )
     expect(result.warnings).toEqual([])
+  })
+
+  it('completes over the Build List Targets only, generated Entry included (#102)', async () => {
+    const parts = twoTargetParts()
+    // An active Target the Build List gives no Route, whose element no Route of
+    // the run can satisfy.
+    parts.targets.push(orchestrationTarget('target.orchestration.unlisted', {
+      elementId: 'element.fixture.b',
+    }))
+    const built = fixedScenario(parts)
+    expect(readyPlanningTargetIds(built.input, built.dependencies))
+      .toEqual([TARGET_A, TARGET_B])
+
+    const result = await createProductionPlanWithConstrainedSearch(
+      built.input,
+      built.dependencies,
+      options(),
+    )
+
+    expect(result.plan).not.toBeNull()
+    expect(result.generatedBuildListEntries).toHaveLength(1)
+    expect(result.termination).toMatchObject({
+      status: 'completed',
+      completedTargetCount: 2,
+      totalTargetCount: 2,
+    })
+    // The augmented input's planning Targets are those of its valid Entries:
+    // the generated Entry's Target was already one, the unlisted one never is.
+    const augmented = {
+      ...built.input,
+      buildListEntries: [
+        ...built.input.buildListEntries,
+        ...result.generatedBuildListEntries,
+      ],
+      conflictResolutions: [],
+    }
+    expect(readyPlanningTargetIds(augmented, built.dependencies))
+      .toEqual([TARGET_A, TARGET_B])
   })
 
   it('leaves the caller PlannerInput untouched', async () => {

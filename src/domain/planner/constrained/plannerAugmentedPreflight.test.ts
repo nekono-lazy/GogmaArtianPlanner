@@ -95,6 +95,37 @@ function originalConstraints(
   }
 }
 
+describe('augmented preflight planning Targets (#102)', () => {
+  it('derives the planning Targets from the augmented valid Entries only', () => {
+    const scenarioParts = gogmaScenario('scope', ['first', 'second'])
+    const unlisted = {
+      ...target('target.pf.scope.unlisted'),
+      elementId: 'element.fixture.b',
+    }
+    const extraSource = sourceWeapon('owned.pf.scope.extra')
+    // A later Entry of an existing planning Target joins the augmented input.
+    const extra = routeEntry(
+      'entry.pf.scope.extra',
+      scenarioParts.targets[0],
+      resetRoute(extraSource.id, 12),
+    )
+    const built = scenario(
+      [...scenarioParts.targets, unlisted],
+      [...scenarioParts.entries, extra],
+      [...scenarioParts.sources, extraSource],
+    )
+    const preflight = preparePlannerAugmentedConflictPreflight(
+      built.input,
+      [],
+      built.dependencies,
+    )
+    expect(preflight.status).toBe('ready')
+    if (preflight.status !== 'ready') return
+    expect(preflight.preflightContext.planningTargetIds)
+      .toEqual(scenarioParts.targets.map(({ id }) => id).sort())
+  })
+})
+
 function gogmaScenario(suffix: string, ids: readonly string[], counter = 10) {
   const targets = ids.map((id, index) =>
     target(`target.pf.${suffix}.${id}`, index === 0 ? 5 : 1),

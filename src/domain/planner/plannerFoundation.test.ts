@@ -22,7 +22,7 @@ import {
 } from '../../test/fixtures/candidateSearch'
 import {
   addRegisteredWeapon,
-  areAllEnabledTargetsAlreadySatisfied,
+  areAllPlanningTargetsAlreadySatisfied,
   canUseAsDestructiveGogmaSource,
   canUseAsResetSkillsSource,
   consumeOwnedNormalForConversion,
@@ -194,8 +194,13 @@ describe('Planner current-state entry validation', () => {
     expect(result.excludedBuildListEntries).toEqual([
       expect.objectContaining({ reason: 'references a completed TargetWeapon.' }),
     ])
-    // Its own diagnostic kind, never the re-search (stale) warning.
-    expect(result.warnings.map(({ kind }) => kind)).toEqual(['completed_target_excluded'])
+    // Its own diagnostic kind, never the re-search (stale) warning. With its
+    // only Entry excluded the run has no valid BuildListEntry, which is
+    // reported once by `no_build_list_entries` (PLANNER_SPEC 4).
+    expect(result.warnings.map(({ kind }) => kind)).toEqual([
+      'completed_target_excluded',
+      'no_build_list_entries',
+    ])
     // Completion is an input exclusion, never a staleness judgment: the Entry
     // is not target_definition_changed and its persisted flags are untouched.
     const staleness = evaluateBuildListEntryStaleness(input.buildListEntries[0], {
@@ -220,7 +225,10 @@ describe('Planner current-state entry validation', () => {
     expect(disabledResult.excludedBuildListEntries).toEqual([
       expect.objectContaining({ reason: 'references a disabled TargetWeapon.' }),
     ])
-    expect(disabledResult.warnings.map(({ kind }) => kind)).toEqual(['build_list_entry_stale'])
+    expect(disabledResult.warnings.map(({ kind }) => kind)).toEqual([
+      'build_list_entry_stale',
+      'no_build_list_entries',
+    ])
 
     const missing = fixture()
     missing.input.targetWeapons = []
@@ -400,7 +408,7 @@ describe('Planner Target Satisfaction', () => {
     const second = { ...input.ownedWeapons[0], id: ownedWeaponId('owned.foundation.a'), groupSkillId: null }
     const satisfaction = deriveTargetSatisfaction(input.targetWeapons, [first, second], input.master)
     expect(satisfaction[0].practicalOwnedWeaponIds).toEqual([second.id, first.id])
-    expect(areAllEnabledTargetsAlreadySatisfied(satisfaction)).toBe(true)
+    expect(areAllPlanningTargetsAlreadySatisfied(satisfaction)).toBe(true)
     input.targetWeapons[0].isEnabled = false
     expect(deriveTargetSatisfaction(input.targetWeapons, [first], input.master)).toEqual([])
   })

@@ -888,7 +888,8 @@ TargetWeapon fieldごとのhash / validation / planning inputの責務表は
 collection validation。TargetWeapon単体validationは構造だけを検証できるため、以下は
 OwnedWeapon collectionと他Targetを参照する専用のvalidation authorityでfail closedにする。
 保存Service、Candidate Search入力、Planner入力の各境界で同じ契約を再利用し、UIだけを
-authorityにしない。
+authorityにしない。Planner入力では、そのrunの計画対象Target（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 4.1）
+だけでなく `PlannerInput.targetWeapons` 全体へ適用する。
 
 - `preferredOwnedWeaponId` の参照先OwnedWeaponが存在しない
 - 参照先の武器種がTargetと一致しない
@@ -1522,7 +1523,9 @@ export interface PlanningInputSnapshot {
 }
 ```
 
-- `targetWeaponsHash` / `buildListEntriesHash` はPlanner入力全体の監査用hashである
+- `targetWeaponsHash` / `buildListEntriesHash` はPlanner入力全体の監査用hashである。
+  `targetWeaponsHash` はPlanner runの計画対象Target（valid BuildListEntryが属するTarget、
+  [PLANNER_SPEC.md](./PLANNER_SPEC.md) 4.1）ではなく、`PlannerInput.targetWeapons` の全Targetを対象とする
 - `targetWeaponsHash` は `createTargetDefinitionHash()` の単純再利用ではないplanning-input用の独立契約である。
   `PlannerInput.targetWeapons` の全TargetをID順に、次の構造へ正規化してhash化する
   （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 11.0-B）
@@ -1580,6 +1583,10 @@ export interface PlannerDependencies {
   clock: PlannerClock;
 }
 ```
+
+`PlannerInput.targetWeapons` はplanning inputのTarget集合（validation、`targetWeaponsHash`）であり、
+Planner runの完成対象はそのうちvalid BuildListEntryが属するTargetだけである
+（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 4.1）。計画対象Targetはruntime導出であり永続化しない。
 
 `PlannerInput` はstructured clone可能なデータだけを持ち、Engine instance、
 engineCapabilities、existingActivePlanを含めない。`PlannerDependencies` は永続Domainではなく、

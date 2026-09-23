@@ -31,7 +31,7 @@ export function entryIsRelevantForState(
 }
 
 /**
- * Whether one enabled Target is finished in this state.
+ * Whether one planning Target is finished in this state.
  *
  * `hasIdeal` alone is not enough: a Target with a required checkpoint Entry is
  * finished only once that Entry was secured, which the Beam Search allows only
@@ -47,15 +47,20 @@ export function isPlannerTargetComplete(
   return required === undefined || state.selectedBuildListEntryIds.includes(required)
 }
 
-/** The single completion authority of the Beam Search and its termination. */
+/**
+ * The single completion authority of the Beam Search and its termination.
+ * `planningTargetIds` is the run's planning Target set
+ * (`PlannerInitialContext.planningTargetIds`): the Targets of the valid
+ * BuildListEntries, never every active Target. An empty set is never complete.
+ */
 export function isPlannerSearchStateComplete(
   state: PlannerSearchState,
-  enabledTargetIds: readonly TargetWeaponId[],
+  planningTargetIds: readonly TargetWeaponId[],
   requirements: PlannerCheckpointRequirements,
 ): boolean {
   return (
-    enabledTargetIds.length > 0 &&
-    enabledTargetIds.every((targetId) =>
+    planningTargetIds.length > 0 &&
+    planningTargetIds.every((targetId) =>
       isPlannerTargetComplete(state, targetId, requirements),
     )
   )

@@ -2780,6 +2780,20 @@ The Planner accounts for:
 - Operation count
 - Conflicts
 
+The goal set of one Planner run is its **planning Targets** (`docs/PLANNER_SPEC.md`
+4.1): the unique planning-eligible Targets of `validatePlannerInput().validBuildListEntries`,
+derived once by `derivePlannerPlanningTargets()` in `createInitialPlannerSearchState()` and
+held by `preparePlannerInitialContext()` as `planningTargets` / `planningTargetIds` /
+`planningTargetsById`. Completion, typed termination (`completedTargetCount` /
+`totalTargetCount`), TargetSatisfaction tracking, scoring, conflict detection,
+`all_targets_already_satisfied`, constrained re-search, what-if and the augmented preflight
+all read that one set. An active Target with no valid BuildListEntry is never a goal of the
+run, is never counted, and is never substituted: zero valid Entries means zero planning
+Targets, `no_build_list_entries`, no Beam Search, and an `exhausted` 0 / 0 termination. Never
+derive it from the raw `buildListEntries`, and never narrow `PlannerInput.targetWeapons`,
+`PlanningInputSnapshot.targetWeaponsHash` or `createPlanningTargetWeaponsHash()` to it. The
+`preferredOwnedWeaponId` collection validation stays over the whole `PlannerInput.targetWeapons`.
+
 The Planner is a pure calculation module.
 
 Do not mutate IndexedDB while searching for a plan.

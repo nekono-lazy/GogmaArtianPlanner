@@ -419,7 +419,10 @@ export function validatePlannerInput(
       input.ownedWeapons,
     ).issues,
   )
-  if (input.buildListEntries.length === 0) {
+  // The authority is the valid Entry set, not the raw input: Entries that were
+  // all excluded above leave the run with no planning Target, exactly as an
+  // empty Build List does (`docs/PLANNER_SPEC.md` 4 / 7.2.1).
+  if (validBuildListEntries.length === 0) {
     warnings.push({ kind: 'no_build_list_entries', message: 'No BuildListEntry is available for Planner input.' })
   }
   const conflictKeys = new Set<string>()

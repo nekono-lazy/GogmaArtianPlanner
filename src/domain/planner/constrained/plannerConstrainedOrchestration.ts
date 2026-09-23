@@ -269,6 +269,21 @@ export function isConstrainedTrialAdoptable(
   )
 }
 
+/**
+ * The planning Targets of an input whose Beam Search never ran, read from the
+ * same `preparePlannerInitialContext()` authority a searched run counts, so an
+ * unsearched termination never falls back to every active Target.
+ */
+function unsearchedPlanningTargetIds(
+  input: PlannerInput,
+  dependencies: PlannerDependencies,
+): readonly TargetWeaponId[] {
+  const prepared = preparePlannerInitialContext(input, dependencies)
+  return prepared.status === 'ready'
+    ? prepared.context.planningTargetIds
+    : prepared.planningTargetIds
+}
+
 function fixedConstraintFailureWarning(
   failure: PlannerFixedConstraintFailure,
 ): PlannerWarning {
@@ -427,7 +442,7 @@ export async function createProductionPlanWithConstrainedSearch(
           beam === null
             ? createUnsearchedPlannerTermination(
                 input.options,
-                input.targetWeapons,
+                unsearchedPlanningTargetIds(input, dependencies),
               )
             : structuredClone(beam.termination),
       },

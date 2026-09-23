@@ -275,7 +275,36 @@ describe('Planner search termination', () => {
     expect(result.termination.reachedLimits).toEqual([])
     expect(result.termination.expandedStates).toBe(0)
     expect(result.termination.completedTargetCount).toBe(0)
-    expect(result.termination.totalTargetCount).toBe(2)
+    // No valid BuildListEntry means no planning Target: the two active Targets
+    // are never counted when the Build List gives them no Route (#102).
+    expect(result.termination.totalTargetCount).toBe(0)
+  })
+
+  it('counts only the Build List Targets and stays consistent with its status (#102)', async () => {
+    // Two active Targets the Build List gives no Route. Their element matches
+    // no Route of the run, so under the old "every active Target" contract
+    // this search could never complete.
+    const unlisted = ['c', 'd'].map((suffix) => ({
+      ...scenarioTarget(`target.termination.unlisted.${suffix}`, 'element.fixture.c', FAMILY_A),
+    }))
+    const full = scenario()
+    full.input.targetWeapons.push(...unlisted)
+    const completed = await runPlannerBeamSearch(full.input, full.dependencies)
+    expect(completed.termination).toMatchObject({
+      status: 'completed',
+      completedTargetCount: 2,
+      totalTargetCount: 2,
+    })
+    expect(completed.completed).toBe(true)
+
+    const truncated = scenario()
+    truncated.input.targetWeapons.push(...structuredClone(unlisted))
+    truncated.input.options = { maxPlanSteps: 300, beamWidth: 50, maxExpandedStates: 2 }
+    const partial = await runPlannerBeamSearch(truncated.input, truncated.dependencies)
+    expect(partial.termination.status).toBe('incomplete')
+    expect(partial.termination.reachedLimits).toEqual(['max_expanded_states'])
+    expect(partial.termination.totalTargetCount).toBe(2)
+    expect(partial.termination.completedTargetCount).toBeLessThan(2)
   })
 
   it('carries the Beam Search termination out through Production Plan generation', async () => {
