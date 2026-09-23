@@ -46,7 +46,7 @@ export function ImportConfirmDialog({
       <DialogContent>
         <DialogContentText id={descriptionId} component="div">
           <Typography component="p" variant="body2">
-            このインポートは全置換です。現在保存されているデータは、選択したバックアップの内容に置き換わります。
+            このインポートは全置換です。現在保存されているデータは、読み込んだバックアップの内容に置き換わります。
           </Typography>
           <Typography component="p" variant="body2" sx={{ mt: 1 }}>
             必要な場合は、実行前に現在のデータをエクスポートしてください。キャンセルすると何も変更されません。
@@ -63,7 +63,8 @@ export function ImportConfirmDialog({
           )}
         </DialogContentText>
       </DialogContent>
-      <DialogActions sx={{ flexWrap: 'wrap', gap: 1 }}>
+      {/* `disableSpacing`: the MUI sibling margin would offset the second full-width button on a phone. */}
+      <DialogActions disableSpacing sx={{ flexWrap: 'wrap', gap: 1 }}>
         <Button onClick={onCancel} disabled={submitting} sx={actionSx}>
           キャンセル
         </Button>

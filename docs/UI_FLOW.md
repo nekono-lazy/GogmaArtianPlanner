@@ -1941,23 +1941,67 @@ Import制約。
 
 - Settings画面の「データ管理」sectionにバックアップ（データをエクスポート）、復元（データをインポート）、
   初期化（全データを削除）を置く。既存の表示設定（Debug Mode）とバージョン情報は維持する
-- Exportは `ImportExportService.serializeExport()` の結果をブラウザ側でJSON Blobとしてdownloadする
-  （object URLは使用後にrelease）。失敗（`export_state_invalid` / `transaction_failed` / 予期しない失敗）は
-  日本語で表示し、validation issueは有界のscroll領域に列挙する。Exportはデータを変更しない
-- Importはfile input（`.json` / `application/json` を補助的に受け付ける）で選んだファイル本文を
-  `prepareImportJson()` へ渡し、その結果だけをauthorityとする。`invalid_json` / `invalid_import` は
-  確認Dialogを開かず、`applyImport()` を呼ばず、現在データを変更しない。成功したrootは全置換の確認Dialog
-  （現在データが置き換わること、必要なら実行前にExportすること）を経てから `applyImport()` へ渡す。
-  Import自体はbackup Exportを自動実行しない
+- 「データをエクスポート」は `ImportExportService.serializeExport()` を1回だけ呼ぶ。失敗
+  （`export_state_invalid` / `transaction_failed` / 予期しない失敗）はDialogを開かず、Settings画面に日本語で
+  表示し、validation issueは有界のscroll領域に列挙する。成功時はdownloadせずに「バックアップデータ」Dialogを開く。
+  Exportはデータを変更しない
+- 「バックアップデータ」Dialogは、説明（このJSONにアプリのユーザーデータが含まれること、コピーまたはJSON
+  ファイルとして保存できること）、Serviceが返したJSON文字列をそのまま表示するread-onlyのmultiline欄
+  （monospace、固定高さで内部scroll、長いtokenは折り返し、truncateも再整形もしない、全文選択できる）、
+  actions「閉じる」「ファイル出力」「コピー」を持つ。表示・コピー・ファイル出力するJSONはDialogを開いたときの
+  同一snapshotであり、コピーやファイル出力は `serializeExport()` を再度呼ばない
+  - 「コピー」は表示中の文字列と同一の文字列を非同期Clipboard API（`navigator.clipboard.writeText()`）で
+    書き込む。Clipboard APIへのアクセスはPresentationのbrowser adapterに隔離し、Domain / Serviceへ入れない。
+    書込み中はボタンを無効化して二重実行を防ぐ。成功は「クリップボードにコピーしました。」、失敗（API不在、
+    権限拒否等）は「クリップボードにコピーできませんでした。JSON欄から手動でコピーしてください。」をDialog内に
+    表示し、Dialogを閉じない。browserのerror文言やstack traceは表示しない。`document.execCommand('copy')`
+    のfallbackは設けない
+  - 「ファイル出力」は同じ文字列をUTF-8のJSON Blobとしてdownloadし（object URLは使用後にrelease）、
+    「バックアップファイルを出力しました。」をDialog内に表示する。ファイル名は
+    `gogma-artian-planner-backup_yyyyMMddHHmmss.json`（browserのlocal time、年4桁、月日時分秒は2桁
+    zero padding、`:` や `/` を含まない）とし、時刻はDialogを開いたExport生成時点のものを使う。同じDialog
+    から何度出力しても同じファイル名でよい。このtimestampはファイル名だけのPresentation規則であり、
+    ExportRootの `exportedAt` とは無関係である
+  - JSON生成の成功だけでは「出力した」「コピーした」とは表示しない。Dialog内のfeedbackは次のExportで
+    開いたDialogへ持ち越さない
+- 「データをインポート」は「バックアップデータを読み込む」Dialogを開く。Dialogは説明、JSONを貼り付ける
+  編集可能なmultiline欄（monospace、固定高さで内部scroll、スマートフォンでは入力時の自動zoomを避けるため
+  16px、入力内容を自動整形・書換えしない）、actions「閉じる」「ファイルから読み込む」「貼り付けた内容を読み込む」
+  を持つ。アプリがクリップボードを読み取る機能（`navigator.clipboard.readText()`）は設けず、ユーザーが
+  OS / browserの貼り付け操作で入力する
+  - 「貼り付けた内容を読み込む」は入力欄の文字列を一切加工せず `prepareImportJson()` へ渡す。空または
+    空白だけの間はボタンを無効にし、Serviceを呼ばない
+  - 「ファイルから読み込む」はfile input（`.json` / `application/json` を補助的に受け付ける）を開き、選択した
+    ファイルの本文を同じ準備処理で `prepareImportJson()` へ渡す。ファイル選択後に追加の操作は求めず、
+    検証から全置換確認まで進む。同じファイルを選び直して再試行できる
+  - 貼り付けとファイルは同一の準備処理へ収束し、`prepareImportJson()` のtyped resultだけをImport可否の
+    authorityとする。UI側でJSON parse、migration、schema / reference / full replacement validationを
+    再実装しない
+  - `invalid_json` / `invalid_import`（および準備処理の予期しない失敗、ファイルの読取り失敗）はDialog内に
+    日本語で表示し（validation issueは有界のscroll領域）、Dialogを閉じず、入力欄の内容を保持し、全置換の
+    確認Dialogを開かず、`applyImport()` を呼ばず、現在データを変更しない。ファイルの読取り失敗は
+    「選択したファイルを読み取れませんでした。」とし、貼り付け済みの入力を消さない。ユーザーはその場で
+    修正して再度読み込める
+  - 成功したrootは、入力Dialogを閉じてから既存の全置換の確認Dialog（現在データが置き換わること、必要なら
+    実行前にExportすること、バックアップ作成日時と件数）へ渡し、「現在のデータを置き換えてインポート」を
+    押したときにだけ `applyImport()` を呼ぶ。二つのDialogを重ねて表示しない。Import自体はbackup Exportを
+    自動実行しない
+  - 「閉じる」（およびEscape）はImport処理を開始せず、保存データを変更せず、入力内容を破棄する。背景の
+    タップでは閉じず、貼り付けた入力を失わない。準備処理の実行中は閉じられない
 - 全データクリアは確認Dialog（元に戻せないこと、必要なら先にExportすること）を経てから
   `clearAllData()` を呼ぶ。追加の文字入力確認は設けない
 - Import / Clear成功後は、Importでは `root.settings`、ClearではServiceが返したdefault AppSettingsを
   そのままSettings Storeへhydrateし、Debug Modeの表示とnavigationを即時に同期する。失敗時はStoreを変更せず、
   保存済みデータが変更されていないことを日本語で表示する
-- Export / Import準備 / Import適用 / Clearは同時に1つだけ実行でき、確認Dialogの二重submitも防ぐ。
-  Debug Mode保存中はData Transferを開始せず、Data Transfer中はDebug Mode toggleを変更できない
-- 成功表示と失敗表示は同時に残らない。Dialogは `aria-labelledby` / `aria-describedby` を持ち、
-  actionsは小画面でwrapする。PC / スマートフォン双方で主要操作を完結できる
+- Export（`serializeExport()` の実行中）/ Import準備（貼り付け・ファイルどちらの `prepareImportJson()` も
+  `import_prepare`）/ Import適用 / Clearは同時に1つだけ実行でき、確認Dialogの二重submitも防ぐ。
+  Debug Mode保存中はData Transferを開始せず、Data Transfer中はDebug Mode toggleを変更できない。
+  Export Dialogを開いた後のコピー・ファイル出力は保存データを読まないPresentation操作であり、Data Transfer
+  operationとして扱わない
+- 成功表示と失敗表示は同時に残らない。Dialogが開いている間のfeedbackはそのDialog内に表示し、背後の
+  Settings画面だけに出さない。Dialogは `aria-labelledby` / `aria-describedby` を持つ。Export / Import Dialogは
+  小画面で左右の余白を詰めて幅を確保し、JSON欄とactionsがDialogやページを横にはみ出さない。actionsは小画面で
+  全幅の縦並び（各44px以上）、`sm` 以上で横並びとする。PC / スマートフォン双方で主要操作を完結できる
 
 ---
 
