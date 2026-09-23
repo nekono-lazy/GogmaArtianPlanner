@@ -82,12 +82,25 @@ export interface ExecutionStepPresentation {
    * production-target Normal, which does not exist yet.
    */
   weaponLabel: string | null
+  /**
+   * The exact persisted OwnedWeapon `weaponLabel` names, for the read-only
+   * lookup beside it (Issue #76). `null` whenever no name is shown and
+   * whenever the tracked ID cannot be resolved in the current snapshot, so the
+   * ID fallback label is never backed by a guessed weapon.
+   */
+  weapon: OwnedWeapon | null
   /** The weapon type whose bonus names the expected result uses. */
   weaponTypeId: string
   /** The element the actual result input offers bonuses for (tracked weapon, else the Target). */
   elementId: string
   /** The Step's primary Target name, or its ID when it cannot be resolved. */
   targetLabel: string | null
+  /**
+   * The exact persisted TargetWeapon `targetLabel` names, for the read-only
+   * lookup beside it (Issue #76). `null` when the Step names no Target or the
+   * Target is not in the current snapshot.
+   */
+  target: TargetWeapon | null
   expected: ExecutionExpectedView
   /** Target names from `executionEffects.targetCompletions` only. */
   completionTargetLabels: string[]
@@ -159,10 +172,12 @@ export function createExecutionStepPresentation(
     actionKind,
     normalCreationRole: effects?.normalCreationRole ?? null,
     weaponLabel,
+    weapon: weaponLabel === null ? null : existingTracked,
     weaponTypeId: tracked?.weaponTypeId ?? target?.weaponTypeId ?? '',
     elementId: existingTracked?.elementId ?? target?.elementId ?? '',
     targetLabel:
       step.targetWeaponId === null ? null : targetWeaponLabel(step.targetWeaponId, targetWeapons),
+    target,
     expected,
     completionTargetLabels: (effects?.targetCompletions ?? []).map(({ targetWeaponId }) =>
       targetWeaponLabel(targetWeaponId, targetWeapons),

@@ -844,9 +844,6 @@ function LoadedNavigator({
    */
   const showsSwitchPrompt = checkpoint === null && switchWeaponId !== null && acknowledgedSwitchStepId !== step.id
   const showsActions = checkpoint === null
-  const target = step.targetWeaponId === null
-    ? null
-    : targetWeapons.find(({ id }) => id === step.targetWeaponId) ?? null
 
   const header = (
     <>
@@ -869,6 +866,8 @@ function LoadedNavigator({
         {header}
         <WeaponSwitchPrompt
           weaponLabel={ownedWeaponLabel(switchWeaponId, ownedWeapons)}
+          weapon={ownedWeapons.find(({ id }) => id === switchWeaponId) ?? null}
+          master={dependencies.master}
           onAcknowledge={() => onAcknowledgeSwitch(step.id)}
         />
         {stateControls({ running: true, canRecordSavePoint: true, showsSavePointRestore: true })}
@@ -900,7 +899,7 @@ function LoadedNavigator({
               key={step.id}
               presentation={presentation}
               dependencies={dependencies}
-              targetFound={target !== null}
+              targetFound={presentation.target !== null}
               submitting={submitting}
               onConfirm={(observation) => onConfirm(step, observation)}
               onRecordActualResult={(actualResult) => onRecordActualResult(step, actualResult)}

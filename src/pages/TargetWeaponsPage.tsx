@@ -50,9 +50,9 @@ import {
   isEligiblePreferredOwnedWeapon,
 } from '../domain/target'
 import { SkillConditionEditor } from '../components/forms/SkillConditionEditor'
+import { skillConditionSummary } from '../components/search/searchPresentation'
 import { MasterDataStatusAlert } from '../components/MasterDataStatusAlert'
 import { loadMasterData } from '../domain/master/loadMasterData'
-import type { MasterDataRoot } from '../domain/master/masterTypes'
 import {
   getEnabledElements,
   getEnabledWeaponTypes,
@@ -65,15 +65,10 @@ import {
 import type {
   OwnedGogmaArtianWeapon,
   OwnedWeapon,
-  SkillCondition,
   TargetWeapon,
 } from '../domain/models/publicTypes'
 import { ownedWeaponRepository } from '../db/repositories'
-import {
-  artianWeaponKindLabels,
-  ownedWeaponStatusLabels,
-  skillMatchModeLabels,
-} from '../presentation/labels'
+import { artianWeaponKindLabels, ownedWeaponStatusLabels } from '../presentation/labels'
 import { upsertPreservingOrder } from '../presentation/managementListOrder'
 import {
   EntityFormValidationError,
@@ -120,22 +115,6 @@ function preferredOptionGroup(
   if (weapon.id === currentPreferredId) return 0
   if (weapon.isProtected) return 3
   return claimedByOtherTarget ? 2 : 1
-}
-
-/** A read-only summary of one stored SkillCondition, for the list. */
-function skillConditionSummary(condition: SkillCondition, master: MasterDataRoot): string {
-  const parts = [
-    condition.seriesSkillId === null
-      ? null
-      : `シリーズ ${master.seriesSkills.find(({ id }) => id === condition.seriesSkillId)?.displayNameJa ?? condition.seriesSkillId}`,
-    condition.groupSkillId === null
-      ? null
-      : `グループ ${master.groupSkills.find(({ id }) => id === condition.groupSkillId)?.displayNameJa ?? condition.groupSkillId}`,
-  ].filter((part): part is string => part !== null)
-  if (parts.length === 0) return '指定なし'
-  return parts.length > 1
-    ? `${parts.join(' ／ ')}（${skillMatchModeLabels[condition.matchMode]}）`
-    : parts[0]
 }
 
 /** The confirmation 「未完了に戻す」 needs (`docs/UI_FLOW.md` 8.3). */

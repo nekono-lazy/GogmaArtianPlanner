@@ -50,7 +50,7 @@ import {
 } from '../test/fixtures/executionRuntime'
 import { orchestrationEntry, orchestrationScenario, orchestrationSource, orchestrationTarget, resetRoute } from '../test/fixtures/plannerConstrainedOrchestration'
 import { hasStyleRule } from '../test/cssRuleAssertions'
-import { planStepOperationLabels } from '../presentation/labels'
+import { planStepOperationLabels, restorationBonusScopeFieldLabel } from '../presentation/labels'
 import { useSettingsStore } from '../stores/settingsStore'
 import { ExecutionNavigatorPage } from './ExecutionNavigatorPage'
 import {
@@ -522,7 +522,9 @@ describe('ExecutionNavigatorPage weapon switching and checkpoints with the real 
         await user.click(primary())
         await screen.findByText(`Step ${index + 2} / 3`)
         const next = fixture.plan.steps[index + 1]
-        expect(screen.getByText(`作業する武器を「${weapon.name}」へ切り替えてください`)).toBeInTheDocument()
+        expect(screen.getByRole('region', { name: '武器切替案内' })).toHaveTextContent(
+          `作業する武器を「${weapon.name}」へ切り替えてください`,
+        )
         // Issue #77: the guidance is an interstitial, so the current Step card
         // itself is absent from the DOM - not merely stripped of its actions.
         expectCurrentStepHidden(next)
@@ -570,7 +572,9 @@ describe('ExecutionNavigatorPage weapon switching and checkpoints with the real 
       const historyBefore = await database.executionHistory.toArray()
       const planBefore = await database.productionPlans.get(fixture.plan.id)
       const second = fixture.plan.steps[1]
-      expect(screen.getByText('作業する武器を「Constrained fixture owned.execution.checkpoint」へ切り替えてください')).toBeInTheDocument()
+      expect(screen.getByRole('region', { name: '武器切替案内' })).toHaveTextContent(
+        '作業する武器を「Constrained fixture owned.execution.checkpoint」へ切り替えてください',
+      )
       expectCurrentStepHidden(second)
       await user.click(screen.getByRole('button', { name: '武器を切り替えました' }))
       expectCurrentStepShown(second)
@@ -585,7 +589,9 @@ describe('ExecutionNavigatorPage weapon switching and checkpoints with the real 
       renderNavigator(deps, fixture.plan.id)
       const panel2 = await screen.findByRole('region', { name: '途中採用状態への到達' })
       await user.click(within(panel2).getByRole('button', { name: '次の操作へ進む' }))
-      expect(screen.getByText('作業する武器を「Constrained fixture owned.execution.checkpoint」へ切り替えてください')).toBeInTheDocument()
+      expect(screen.getByRole('region', { name: '武器切替案内' })).toHaveTextContent(
+        '作業する武器を「Constrained fixture owned.execution.checkpoint」へ切り替えてください',
+      )
       expectCurrentStepHidden(second)
       expect(OTHER_WEAPON_ID).not.toBe(fixture.source.id)
     }))
@@ -811,6 +817,286 @@ async function chooseOption(user: ReturnType<typeof userEvent.setup>, label: str
     : within(listbox).getAllByRole('option').filter((element) => element.getAttribute('aria-disabled') !== 'true')[option]
   await user.click(target)
 }
+
+/**
+ * Issue #76: the Execution Navigator shows a weapon and a Target by name only,
+ * which is not enough to tell two similarly named registrations apart. Both
+ * names are therefore the read-only lookup of the entity they name.
+ *
+ * Every assertion below reads the exact persisted entity of the Navigator's
+ * own snapshot: nothing is reconstructed from `PlanStep.expectedResult`, which
+ * describes the state *after* the operation, and nothing from a Candidate, an
+ * Entry, a Planner result or an RNG prediction.
+ */
+describe('ExecutionNavigatorPage weapon and Target detail lookups', () => {
+  const attackHigh = { bonusTypeId: 'bonus_type.fixture.attack', bonusRankId: 'bonus_rank.fixture.high' }
+  const attackSpecial = { bonusTypeId: 'bonus_type.fixture.attack', bonusRankId: 'bonus_rank.fixture.special' }
+  /** Duplicates in two ranks, in an order no sort would reproduce. */
+  const mixedSlots = (): RestorationBonusSet => [
+    { ...attackHigh },
+    { ...attackHigh },
+    { ...attackSpecial },
+    { ...attackSpecial },
+    { ...attackHigh },
+  ]
+  const mixedSlotLabels = [
+    '1攻撃High fixture',
+    '2攻撃High fixture',
+    '3攻撃Special fixture',
+    '4攻撃Special fixture',
+    '5攻撃High fixture',
+  ]
+
+  const lookup = (name: string) => screen.getByRole('button', { name: `${name}の内容を確認` })
+
+  /**
+   * The lookup control of one 「使用する武器」 / 「目標武器」 row, queried
+   * through its own field, because a weapon and its Target may share a name.
+   */
+  function lookupFor(term: string): HTMLElement {
+    const value = screen.getByText(term).nextElementSibling
+    return within(value as HTMLElement).getByRole('button')
+  }
+
+  function hasLookupFor(term: string): boolean {
+    const value = screen.queryByText(term)?.nextElementSibling ?? null
+    return value !== null && within(value as HTMLElement).queryByRole('button') !== null
+  }
+
+  function slotLabelsOf(dialog: HTMLElement, listName: string): string[] {
+    const list = within(dialog).getByRole('list', { name: listName })
+    return within(list).getAllByRole('listitem').map((slot) => slot.textContent ?? '')
+  }
+
+  it('shows the tracked Gogma weapon as it is persisted now', async () => {
+    const fixture = await existingGogmaFixture()
+    const snapshot = await snapshotOf(fixture)
+    const tracked = snapshot.ownedWeapons[0]
+    tracked.restorationBonuses = mixedSlots()
+    const user = userEvent.setup()
+    renderNavigator(mockedRuntime(snapshot), fixture.plan.id)
+
+    expect(await screen.findByText('Step 1 / 2')).toBeInTheDocument()
+    await user.click(lookup(tracked.name))
+
+    const dialog = screen.getByRole('dialog', { name: tracked.name })
+    expect(within(dialog).getByText('現在の登録内容')).toBeInTheDocument()
+    expect(dialog).toHaveTextContent('種類巨戟アーティア')
+    expect(dialog).toHaveTextContent('武器種A fixture')
+    expect(dialog).toHaveTextContent('属性属性A fixture')
+    expect(dialog).toHaveTextContent(`${restorationBonusScopeFieldLabel}巨戟アーティア系`)
+    // Stored slot order and duplicate counts, never sorted or grouped.
+    expect(slotLabelsOf(dialog, '復元ボーナス')).toEqual(mixedSlotLabels)
+    expect(dialog).toHaveTextContent('シリーズスキル')
+    expect(dialog).toHaveTextContent('グループスキル')
+
+    // The lookup manages nothing: no organisation label, protection, memo,
+    // preferring Target, 作成中 state, timestamp or technical ID.
+    for (const absent of ['状態', '保護', 'メモ', '優先起点', '作成中', '登録日']) {
+      expect(dialog).not.toHaveTextContent(absent)
+    }
+
+    await user.click(within(dialog).getByRole('button', { name: '閉じる' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    // Closing the lookup leaves the Step exactly where it was.
+    expect(screen.getByText('Step 1 / 2')).toBeInTheDocument()
+    expect(primary()).toBeEnabled()
+  })
+
+  it('shows a normal Artian weapon without inventing Series or Group Skills', async () => {
+    const fixture = await ownedNormalFixture()
+    const snapshot = await snapshotOf(fixture)
+    const tracked = snapshot.ownedWeapons[0]
+    expect(tracked.kind).toBe('normal')
+    tracked.restorationBonuses = [
+      { ...attackHigh },
+      { ...attackHigh },
+      { ...attackHigh },
+      { ...attackHigh },
+      { ...attackHigh },
+    ]
+    const user = userEvent.setup()
+    renderNavigator(mockedRuntime(snapshot), fixture.plan.id)
+
+    expect(await screen.findByText('Step 1 / 2')).toBeInTheDocument()
+    await user.click(lookup(tracked.name))
+
+    const dialog = screen.getByRole('dialog', { name: tracked.name })
+    expect(dialog).toHaveTextContent('種類通常アーティア')
+    expect(dialog).toHaveTextContent(`${restorationBonusScopeFieldLabel}通常アーティア系`)
+    expect(slotLabelsOf(dialog, '復元ボーナス')).toEqual([
+      '1通常攻撃fixture',
+      '2通常攻撃fixture',
+      '3通常攻撃fixture',
+      '4通常攻撃fixture',
+      '5通常攻撃fixture',
+    ])
+    expect(dialog).not.toHaveTextContent('シリーズスキル')
+    expect(dialog).not.toHaveTextContent('グループスキル')
+  })
+
+  it('shows the Target Ideal condition only, never its compromise definition', async () => {
+    const fixture = await existingGogmaFixture()
+    const snapshot = await snapshotOf(fixture)
+    const step = snapshot.plan.steps[0]
+    const target = snapshot.targetWeapons.find(({ id }) => id === step.targetWeaponId)
+    if (target === undefined) throw new Error('the fixture Step names a Target')
+    target.idealBonuses = mixedSlots()
+    const user = userEvent.setup()
+    renderNavigator(mockedRuntime(snapshot), fixture.plan.id)
+
+    expect(await screen.findByText('Step 1 / 2')).toBeInTheDocument()
+    await user.click(lookup(target.name))
+
+    const dialog = screen.getByRole('dialog', { name: target.name })
+    expect(within(dialog).getByText('理想条件')).toBeInTheDocument()
+    expect(dialog).toHaveTextContent('武器種A fixture')
+    expect(dialog).toHaveTextContent('属性属性A fixture')
+    expect(slotLabelsOf(dialog, '理想ボーナス')).toEqual(mixedSlotLabels)
+    expect(dialog).toHaveTextContent(`理想スキル: シリーズ ${target.idealSkillCondition.seriesSkillId}`)
+    for (const absent of ['優先度', '実用', '代替', '優先起点', '完了']) {
+      expect(dialog).not.toHaveTextContent(absent)
+    }
+  })
+
+  it('offers no weapon lookup for a Counter-advance Normal creation', async () => {
+    const fixture = await newNormalFixture()
+    renderNavigator(mockedRuntime(await snapshotOf(fixture)), fixture.plan.id)
+    expect(await screen.findByText('Step 1 / 5')).toBeInTheDocument()
+    expect(screen.getByText('Counter進行用の作成です。この武器は所持武器として登録しません。')).toBeInTheDocument()
+    expect(screen.queryByText('使用する武器')).not.toBeInTheDocument()
+    expect(hasLookupFor('使用する武器')).toBe(false)
+    // The Target this Counter advance serves is still named and still looked up.
+    expect(hasLookupFor('目標武器')).toBe(true)
+  })
+
+  it('offers no weapon lookup before the production-target Normal is registered, but keeps the Target one', () =>
+    withDatabase(async (database) => {
+      const fixture = await newNormalFixture()
+      const { deps } = await realRuntime(database, fixture)
+      const user = userEvent.setup()
+      renderNavigator(deps, fixture.plan.id)
+
+      expect(await screen.findByText('Step 1 / 5')).toBeInTheDocument()
+      await user.click(primary())
+      expect(await screen.findByText('Step 2 / 5')).toBeInTheDocument()
+      await user.click(primary())
+
+      // Step 3 registers the weapon; it does not exist yet, so nothing is shown
+      // for it and no lookup pretends otherwise.
+      expect(await screen.findByText('Step 3 / 5')).toBeInTheDocument()
+      expect(screen.getByText('この後巨戟化する作成対象です。')).toBeInTheDocument()
+      expect(screen.queryByText('使用する武器')).not.toBeInTheDocument()
+      expect(hasLookupFor('使用する武器')).toBe(false)
+      expect(hasLookupFor('目標武器')).toBe(true)
+
+      // Step 4 names the registered weapon, and the lookup shows the weapon the
+      // Execution runtime really registered.
+      await user.click(primary())
+      expect(await screen.findByText('Step 4 / 5')).toBeInTheDocument()
+      const registered = await database.ownedWeapons.get('owned.orchestration.created.1' as OwnedWeaponId)
+      expect(registered).toBeDefined()
+      await user.click(lookupFor('使用する武器'))
+      expect(screen.getByRole('dialog', { name: registered?.name ?? '' })).toHaveTextContent('現在の登録内容')
+    }))
+
+  it('keeps the ID fallback label as plain text when the entity cannot be resolved', async () => {
+    const fixture = await existingGogmaFixture()
+    const snapshot = await snapshotOf(fixture)
+    const weaponId = snapshot.plan.steps[0].executionEffects?.trackedOwnedWeaponId
+    const targetId = snapshot.plan.steps[0].targetWeaponId
+    snapshot.ownedWeapons = []
+    snapshot.targetWeapons = []
+    renderNavigator(mockedRuntime(snapshot), fixture.plan.id)
+
+    expect(await screen.findByText('Step 1 / 2')).toBeInTheDocument()
+    expect(screen.getByText(`所持武器（${weaponId}）`)).toBeInTheDocument()
+    expect(screen.getByText(`目標武器（${targetId}）`)).toBeInTheDocument()
+    // Nothing is guessed from the Plan or the ID: no lookup is offered at all.
+    expect(hasLookupFor('使用する武器')).toBe(false)
+    expect(hasLookupFor('目標武器')).toBe(false)
+    expect(screen.queryByRole('button', { name: /の内容を確認$/ })).not.toBeInTheDocument()
+  })
+
+  it('lets the weapon switch guidance identify its weapon without revealing the next Step', () =>
+    withDatabase(async (database) => {
+      const fixture = await otherWeaponCheckpointFixture()
+      const { deps } = await realRuntime(database, fixture)
+      const user = userEvent.setup()
+      renderNavigator(deps, fixture.plan.id)
+
+      const panel = await screen.findByRole('region', { name: '途中採用状態への到達' })
+      await user.click(within(panel).getByRole('button', { name: '次の操作へ進む' }))
+      await user.click(primary())
+      expect(await screen.findByText('Step 2 / 2')).toBeInTheDocument()
+
+      const second = fixture.plan.steps[1]
+      const switchWeapon = fixture.source
+      expectCurrentStepHidden(second)
+      const before = await dump(database)
+
+      await user.click(lookup(switchWeapon.name))
+      const dialog = screen.getByRole('dialog', { name: switchWeapon.name })
+      expect(dialog).toHaveTextContent('現在の登録内容')
+      expect(dialog).toHaveTextContent('武器種A fixture')
+      expect(slotLabelsOf(dialog, '復元ボーナス')).toHaveLength(5)
+      // Only the weapon to switch to is identified: the Target this Plan aims
+      // at, its conditions and the current Step stay out of the DOM.
+      const targetName = fixture.goal.name
+      expect(screen.queryByText(targetName)).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: `${targetName}の内容を確認` })).not.toBeInTheDocument()
+      expectCurrentStepHidden(second)
+
+      await user.click(within(dialog).getByRole('button', { name: '閉じる' }))
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      // Opening and closing the lookup is not the acknowledgement, and it
+      // persists nothing at all.
+      expectCurrentStepHidden(second)
+      expect(screen.getByRole('button', { name: '武器を切り替えました' })).toBeInTheDocument()
+      expect(await dump(database)).toEqual(before)
+
+      await user.click(screen.getByRole('button', { name: '武器を切り替えました' }))
+      expectCurrentStepShown(second)
+      // Both lookups become available only now.
+      expect(lookup(switchWeapon.name)).toBeInTheDocument()
+      expect(lookup(targetName)).toBeInTheDocument()
+      expect(await dump(database)).toEqual(before)
+      expect(deps.confirmExpectedPlanStep).toHaveBeenCalledTimes(1)
+    }))
+
+  it('changes no persisted state by opening and closing a lookup', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      const { deps } = await realRuntime(database, fixture)
+      const user = userEvent.setup()
+      renderNavigator(deps, fixture.plan.id)
+
+      expect(await screen.findByText('Step 1 / 2')).toBeInTheDocument()
+      const before = await dump(database)
+      const weaponName = fixture.built.input.ownedWeapons[0].name
+      const targetName = fixture.built.input.targetWeapons[0].name
+
+      for (const name of [weaponName, targetName]) {
+        await user.click(lookup(name))
+        const dialog = await screen.findByRole('dialog', { name })
+        await user.click(within(dialog).getByRole('button', { name: '閉じる' }))
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      }
+
+      expect(await dump(database)).toEqual(before)
+      for (const call of [
+        deps.confirmExpectedPlanStep,
+        deps.recordActualResultDifferent,
+        deps.recordOperationUncertain,
+        deps.undoLatestExecution,
+        deps.recordExecutionSavePoint,
+        deps.restoreExecutionSavePoint,
+        deps.abandonProductionPlan,
+      ]) {
+        expect(call).not.toHaveBeenCalled()
+      }
+    }))
+})
 
 describe('ExecutionNavigatorPage divergence actions per Step', () => {
   it('offers both records on a predicted Normal creation, with normal-scope five slots', async () => {
