@@ -144,6 +144,19 @@ describe('GuidePage', () => {
     )
   })
 
+  it('explains that Candidate Search always looks for the Ideal and compromise conditions only offer states on its Route', () => {
+    renderGuide()
+
+    const target = screen.getByRole('region', { name: '2. 目標武器を登録する' })
+    expect(target).toHaveTextContent('常に理想品への作成ルートを探し')
+    expect(target).toHaveTextContent('妥協品を別の候補として探すことはありません')
+    expect(target).toHaveTextContent('そのルートの途中で使える状態')
+    expect(target).not.toHaveTextContent('指定しなければ理想品だけを探します')
+
+    const search = screen.getByRole('region', { name: '3. 候補を検索する' })
+    expect(search).toHaveTextContent('理想候補の作成ルートの途中で使える状態')
+  })
+
   it('explains that Import replaces every saved record', () => {
     renderGuide()
 
