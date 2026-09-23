@@ -1,4 +1,4 @@
-import { alpha } from '@mui/material/styles'
+import { alpha, type PaletteMode } from '@mui/material/styles'
 import type { BonusRankMasterLookup } from '../domain/master/masterSelectors'
 import { isExRank } from '../domain/master/masterSelectors'
 import type { BonusRankId, BonusTypeId } from '../domain/models/publicTypes'
@@ -51,6 +51,12 @@ export function isRestorationBonusExRank(
   return isExRank(master, bonusRankId)
 }
 
+/** Label and outline colours of one tone. */
+export interface RestorationBonusToneColor {
+  text: string
+  border: string
+}
+
 /**
  * Tone colours on the light theme.
  *
@@ -63,12 +69,39 @@ export function isRestorationBonusExRank(
  * readable on a white surface.
  */
 export const RESTORATION_BONUS_TONE_COLORS: Readonly<
-  Record<RestorationBonusTone, { text: string; border: string }>
+  Record<RestorationBonusTone, RestorationBonusToneColor>
 > = {
   attack: { text: '#9c2a21', border: '#c2554d' },
   affinity: { text: '#5f3d9e', border: '#8f73c4' },
   element: { text: '#1b6a8f', border: '#3f8db3' },
   sharpness_capacity: { text: '#7a5200', border: '#ad7f16' },
+}
+
+/**
+ * Tone colours on the dark theme (`docs/UI_FLOW.md` 3.4 / 3.5).
+ *
+ * The same four hue families as the Light table, lifted to light pastel
+ * labels for the dark surface: `text` keeps at least 4.5:1 against the dark
+ * `background.paper` (`#1a1f1c`) and against the strongest EX tint over it
+ * (about 6:1 or more), and `border` - a mid shade of the same hue, darker
+ * than the label - keeps at least 3:1 against both dark surfaces. Here the
+ * amber family can use a yellow label, because a light yellow is readable on
+ * a dark surface.
+ */
+export const RESTORATION_BONUS_DARK_TONE_COLORS: Readonly<
+  Record<RestorationBonusTone, RestorationBonusToneColor>
+> = {
+  attack: { text: '#f2a59e', border: '#d16a61' },
+  affinity: { text: '#c9b5ef', border: '#9c85d0' },
+  element: { text: '#8fcde9', border: '#4d9dc4' },
+  sharpness_capacity: { text: '#e8c56e', border: '#b58d26' },
+}
+
+/** The tone table of one theme mode. */
+export function restorationBonusToneColors(
+  mode: PaletteMode,
+): Readonly<Record<RestorationBonusTone, RestorationBonusToneColor>> {
+  return mode === 'dark' ? RESTORATION_BONUS_DARK_TONE_COLORS : RESTORATION_BONUS_TONE_COLORS
 }
 
 export type RestorationBonusChipVariant = 'filled' | 'outlined'
@@ -94,13 +127,19 @@ export interface RestorationBonusChipStyle {
  * is a secondary cue. Nothing changes the Chip's fixed box, so an EX slot is
  * exactly as tall and wide as a normal one and the five slots wrap the same
  * way as before.
+ *
+ * `mode` selects the Light or Dark tone table and nothing else: the tint
+ * strengths and the ring are the same in both modes, so the one function
+ * stays the authority for every slot display in either theme. Callers pass
+ * `theme.palette.mode`; omitting it keeps the Light table.
  */
 export function restorationBonusChipSx(
   tone: RestorationBonusTone,
   isEx: boolean,
   variant: RestorationBonusChipVariant,
+  mode: PaletteMode = 'light',
 ): RestorationBonusChipStyle {
-  const { text, border } = RESTORATION_BONUS_TONE_COLORS[tone]
+  const { text, border } = restorationBonusToneColors(mode)[tone]
   const ringWidth = variant === 'outlined' ? 0 : 1
   const tint = variant === 'outlined' ? (isEx ? 0.08 : 0) : isEx ? 0.16 : 0.1
   return {

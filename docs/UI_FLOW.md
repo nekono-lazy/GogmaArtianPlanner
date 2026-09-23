@@ -208,7 +208,44 @@ Planner、Target評価、Master、persisted schema、calculation semanticsを変
 - 文字色は白背景およびtint背景に対して通常テキストのコントラスト基準（4.5:1）を、枠線色は
   ページ背景に対して非テキストの基準（3:1）を満たす。黄色系は明るい黄色文字を避け、文字は
   濃いamber系、枠線を黄色系とする
+- Dark theme（3.5）では同じ4系統・同じEX規則・同じfallbackのまま、Dark用の色値を使う。文字色は
+  Darkのpaper背景およびtint背景に対して4.5:1を、枠線色はDarkのページ背景・paper背景に対して3:1を
+  満たす。Light用の色値をDark背景へそのまま流用しない。Light / Darkの色値の選択も同じPresentation
+  authorityが行い、`RestorationBonusSlots` と `BonusSlotList` が別々のDark配色を持ってはならない
 - 具体的な色値はPresentation実装の詳細であり、この文書では固定しない
+
+### 3.5 Light / Dark theme
+
+画面の配色はLight themeとDark themeから選択できる。
+
+- 選択肢は「ライト」「ダーク」の2つとし、既定はライトとする。保存値がない場合、未知の値の場合、
+  読込に失敗した場合もライトとして扱う
+- OS / browserの `prefers-color-scheme` へ自動追従しない。ユーザーが設定画面で選択したthemeだけを
+  authorityとする（OSに追従する選択肢は追加していない）
+- themeは端末・browser固有のlocal Presentation preferenceであり、ユーザーデータではない。
+  browserのlocalStorageへ保存し、`AppSettings`、Dexieのsettings table、`ExportRoot` には含めない
+- したがってExport JSONにtheme情報は含まれず、Importしてもthemeは変わらず、全データ削除（14）でも
+  themeは変わらない。Import / Clear後のSettings Storeのhydrateはthemeへ影響しない
+- 選択は再読込なしで即時に反映し、現在のroute、入力中の内容、開いているDialog、検索結果、Plan表示を
+  失わせない（theme変更で画面treeをremountしない）。保存済みの選択は初回描画から適用し、
+  Lightを描画してからDarkへ切り替える表示のちらつきを避ける
+- 保存（localStorageへの書込み）に失敗しても表示中のthemeは切り替え、設定画面に保存できなかったこと
+  （再読込後は以前のthemeに戻る場合があること）を簡潔に表示する。browserのerror文言やstack traceは
+  通常UIへ表示しない
+- Dark themeはLightの色を反転したものではなく、同じブランド系統（落ち着いたdark-greenのprimary、
+  brownのsecondary、境界線ベースの面構成）をDark面で読める明るさへ調整した専用paletteとする。
+  本文・補助テキスト・semantic color（success / warning / error / info）はDarkの面に対して4.5:1以上を
+  保つ。各画面はtheme token（`background.paper`、`text.secondary`、`divider` 等）を通して配色し、
+  画面ごとにDark用styleを重複実装しない
+- Dark themeではDialog、Menu、スマートフォンのDrawer等の浮き上がった面を白いoverlayで明るくせず、
+  `background.paper` のまま境界線（`divider`）で区別する。浮き上がった面の上でも補助テキストのコントラストを
+  4.5:1以上に保つためである。Light themeの面の描画は変更しない
+- native control等にもthemeのcolor schemeを伝える（CSS `color-scheme`）
+- 使い方ガイド（Guide）のスクリーンショットは操作例の静的画像であり、Dark用に撮り直したり二重に
+  保持したりしない
+- themeはPresentationだけの設定であり、Domain、RNG、Search、Planner、Worker、Persistence semantics、
+  `DATABASE_SCHEMA_VERSION`、`ExportRoot.schemaVersion`、`AppSettings.schemaVersion`、
+  calculation schema、RNG Engine versionを変更しない
 
 ---
 
@@ -1933,6 +1970,8 @@ Undoの表示文言は取り消す記録に合わせる。通常は「最後の�
 
 表示。
 
+- テーマ（ライト / ダーク、3.5）。この端末・browserの表示設定として保存され、データの
+  Export / Importや全データ削除の対象にならないことを簡潔に示す
 - Debug Mode ON/OFF
 - Master Data gameVersion
 - Master Data dataVersion
@@ -1965,7 +2004,10 @@ Import制約。
 実装状況（Settings UI接続済み、[DATA_MODEL.md](./DATA_MODEL.md) 15.3）。
 
 - Settings画面の「データ管理」sectionにバックアップ（データをエクスポート）、復元（データをインポート）、
-  初期化（全データを削除）を置く。既存の表示設定（Debug Mode）とバージョン情報は維持する
+  初期化（全データを削除）を置く。既存の表示設定（テーマ、Debug Mode）とバージョン情報は維持する
+- 「表示設定」のテーマは「ライト」「ダーク」をラベル付きの選択肢として並べ、選択状態を文字とcontrolの
+  状態でも判別できるようにする（各選択肢のタッチ領域は44px程度、375px幅でも横にはみ出さない）。
+  テーマはData Transfer operationではなく、Export / Import / Clearの実行状態に関係なく変更できる
 - 「データをエクスポート」は `ImportExportService.serializeExport()` を1回だけ呼ぶ。失敗
   （`export_state_invalid` / `transaction_failed` / 予期しない失敗）はDialogを開かず、Settings画面に日本語で
   表示し、validation issueは有界のscroll領域に列挙する。成功時はdownloadせずに「バックアップデータ」Dialogを開く。

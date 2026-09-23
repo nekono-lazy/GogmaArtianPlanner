@@ -1,17 +1,20 @@
 import { render, screen, within } from '@testing-library/react'
 import { ThemeProvider } from '@mui/material/styles'
 import { describe, expect, it } from 'vitest'
-import { appTheme } from '../app/theme'
+import { appTheme, createAppTheme } from '../app/theme'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import type { MasterDataRoot } from '../domain/master/masterTypes'
 import type { RestorationBonusSet } from '../domain/models/publicTypes'
 import { createValidMasterDataFixture } from '../test/fixtures/masterData'
+import { BonusSlotList } from './ManagementListItem'
 import { RestorationBonusSlots } from './RestorationBonusSlots'
 import {
+  RESTORATION_BONUS_DARK_TONE_COLORS,
   RESTORATION_BONUS_TONE_COLORS,
   isRestorationBonusExRank,
   resolveRestorationBonusTone,
   restorationBonusChipSx,
+  restorationBonusToneColors,
 } from './restorationBonusPresentation'
 import { bonusLabel } from './search/searchPresentation'
 
@@ -226,6 +229,172 @@ describe('RestorationBonusSlots', () => {
     for (const chip of chips) {
       expect(chip).not.toHaveAttribute('data-bonus-tone')
       expect(chip).not.toHaveAttribute('data-bonus-ex')
+    }
+  })
+})
+
+/** WCAG contrast of two opaque `#rrggbb` colours. */
+function contrast(foreground: string, background: string): number {
+  const luminance = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map((offset) => {
+      const channel = parseInt(hex.slice(offset, offset + 2), 16) / 255
+      return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
+    })
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+  }
+  const [lighter, darker] = [luminance(foreground), luminance(background)].sort((a, b) => b - a)
+  return (lighter + 0.05) / (darker + 0.05)
+}
+
+/** `foreground` at `opacity` over an opaque `background`, as `#rrggbb`. */
+function blend(foreground: string, background: string, opacity: number): string {
+  const channels = [1, 3, 5].map((offset) => {
+    const fg = parseInt(foreground.slice(offset, offset + 2), 16)
+    const bg = parseInt(background.slice(offset, offset + 2), 16)
+    return Math.round(fg * opacity + bg * (1 - opacity)).toString(16).padStart(2, '0')
+  })
+  return '#' + channels.join('')
+}
+
+describe('restoration bonus colours on the dark theme', () => {
+  const master = loadProductionMaster()
+  const darkTheme = createAppTheme('dark')
+  const families = ['attack', 'affinity', 'element', 'sharpness_capacity'] as const
+  const rankIi = 'bonus_rank.ii'
+  const rankEx = 'bonus_rank.ex'
+  const familyBonuses: RestorationBonusSet = [
+    bonus('bonus_type.attack', rankIi),
+    bonus('bonus_type.affinity', rankIi),
+    bonus('bonus_type.element', rankIi),
+    bonus('bonus_type.gogma_sharpness_capacity', rankIi),
+    bonus('bonus_type.attack', rankEx),
+  ]
+
+  it('selects the table by mode and keeps Light as the default', () => {
+    expect(restorationBonusToneColors('light')).toBe(RESTORATION_BONUS_TONE_COLORS)
+    expect(restorationBonusToneColors('dark')).toBe(RESTORATION_BONUS_DARK_TONE_COLORS)
+    expect(restorationBonusChipSx('attack', false, 'filled')).toEqual(
+      restorationBonusChipSx('attack', false, 'filled', 'light'),
+    )
+    for (const family of families) {
+      expect(RESTORATION_BONUS_DARK_TONE_COLORS[family].text).not.toBe(RESTORATION_BONUS_TONE_COLORS[family].text)
+    }
+  })
+
+  it('keeps four distinct families readable on the dark surfaces', () => {
+    const { paper, default: page } = darkTheme.palette.background
+    expect(new Set(families.map((family) => RESTORATION_BONUS_DARK_TONE_COLORS[family].text)).size).toBe(4)
+    expect(new Set(families.map((family) => RESTORATION_BONUS_DARK_TONE_COLORS[family].border)).size).toBe(4)
+    for (const family of families) {
+      const { text, border } = RESTORATION_BONUS_DARK_TONE_COLORS[family]
+      for (const surface of [paper, page]) {
+        // The label against the plain surface and against the strongest (EX filled) tint.
+        expect(contrast(text, surface)).toBeGreaterThanOrEqual(4.5)
+        expect(contrast(text, blend(text, surface, 0.16))).toBeGreaterThanOrEqual(4.5)
+        // The outline, a non-text cue, against the surface.
+        expect(contrast(border, surface)).toBeGreaterThanOrEqual(3)
+      }
+    }
+  })
+
+  it('keeps the EX rule in Dark: the same family colours and only a stronger tint', () => {
+    for (const variant of ['filled', 'outlined'] as const) {
+      for (const family of families) {
+        const normal = restorationBonusChipSx(family, false, variant, 'dark')
+        const ex = restorationBonusChipSx(family, true, variant, 'dark')
+        expect(normal.color).toBe(RESTORATION_BONUS_DARK_TONE_COLORS[family].text)
+        expect(normal.borderColor).toBe(RESTORATION_BONUS_DARK_TONE_COLORS[family].border)
+        expect(ex.color).toBe(normal.color)
+        expect(ex.borderColor).toBe(normal.borderColor)
+        expect(ex.boxShadow).toBe(normal.boxShadow)
+        expect(tintAlpha(ex.bgcolor)).toBeGreaterThan(tintAlpha(normal.bgcolor))
+      }
+    }
+  })
+
+  it('colours RestorationBonusSlots from the dark table under the dark theme', () => {
+    render(
+      <ThemeProvider theme={darkTheme}>
+        <RestorationBonusSlots
+          bonuses={familyBonuses}
+          weaponTypeId={master.weaponTypes[0].id}
+          master={master}
+          scope="gogma_artian"
+        />
+      </ThemeProvider>,
+    )
+    const chips = screen
+      .getAllByRole('listitem')
+      .map((item) => item.querySelector<HTMLElement>('.MuiChip-root')!)
+    families.forEach((family, index) => {
+      expect(chips[index]).toHaveStyle({ color: rgb(RESTORATION_BONUS_DARK_TONE_COLORS[family].text) })
+    })
+    expect(chips[4]).toHaveStyle({ color: rgb(RESTORATION_BONUS_DARK_TONE_COLORS.attack.text) })
+    expect(chips[4]).toHaveTextContent('EX')
+    expect(tintAlpha(getComputedStyle(chips[4]).backgroundColor)).toBeGreaterThan(
+      tintAlpha(getComputedStyle(chips[0]).backgroundColor),
+    )
+  })
+
+  it('gives BonusSlotList exactly the colours RestorationBonusSlots uses under the dark theme', () => {
+    render(
+      <ThemeProvider theme={darkTheme}>
+        <RestorationBonusSlots
+          bonuses={familyBonuses}
+          weaponTypeId={master.weaponTypes[0].id}
+          master={master}
+          scope="gogma_artian"
+          variant="outlined"
+        />
+        <BonusSlotList
+          heading="番号付き5枠"
+          bonuses={familyBonuses}
+          weaponTypeId={master.weaponTypes[0].id}
+          master={master}
+          scope="gogma_artian"
+        />
+      </ThemeProvider>,
+    )
+    const chips = within(screen.getByRole('list', { name: '復元ボーナス5枠' }))
+      .getAllByRole('listitem')
+      .map((item) => item.querySelector<HTMLElement>('.MuiChip-root')!)
+    const items = within(screen.getByRole('list', { name: '番号付き5枠' })).getAllByRole('listitem')
+    items.forEach((item, index) => {
+      const chip = getComputedStyle(chips[index])
+      const slot = getComputedStyle(item)
+      expect([index, slot.color, slot.borderColor, slot.backgroundColor]).toEqual([
+        index,
+        chip.color,
+        chip.borderColor,
+        chip.backgroundColor,
+      ])
+    })
+    expect(items[0]).toHaveStyle({ color: rgb(RESTORATION_BONUS_DARK_TONE_COLORS.attack.text) })
+  })
+
+  it('keeps the standard chip for an unknown family under the dark theme', () => {
+    const fixture = createValidMasterDataFixture()
+    render(
+      <ThemeProvider theme={darkTheme}>
+        <RestorationBonusSlots
+          bonuses={[
+            bonus('bonus_type.fixture.attack', 'bonus_rank.fixture.special'),
+            bonus('bonus_type.fixture.attack', 'bonus_rank.fixture.high'),
+            bonus('bonus_type.fixture.unused', 'bonus_rank.fixture.high'),
+            bonus('bonus_type.fixture.unused', 'bonus_rank.fixture.high'),
+            bonus('bonus_type.fixture.attack', 'bonus_rank.fixture.high'),
+          ]}
+          weaponTypeId="weapon.fixture.a"
+          master={fixture}
+          scope="gogma_artian"
+        />
+      </ThemeProvider>,
+    )
+    const darkTexts = new Set(families.map((family) => rgb(RESTORATION_BONUS_DARK_TONE_COLORS[family].text)))
+    for (const item of screen.getAllByRole('listitem')) {
+      const chip = item.querySelector<HTMLElement>('.MuiChip-root')!
+      expect(chip).not.toHaveAttribute('data-bonus-tone')
+      expect(darkTexts.has(getComputedStyle(chip).color)).toBe(false)
     }
   })
 })

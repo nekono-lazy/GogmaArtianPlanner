@@ -1,5 +1,6 @@
 import { useId, type ReactNode } from 'react'
 import { Box, Button, Stack, Typography } from '@mui/material'
+import { useTheme } from '@mui/material/styles'
 import type { ArtianBonusScope, MasterDataRoot } from '../domain/master/masterTypes'
 import type { RestorationBonusSet } from '../domain/models/publicTypes'
 import {
@@ -146,6 +147,7 @@ export function BonusSlotList({
   scope: ArtianBonusScope
 }) {
   const headingId = useId()
+  const theme = useTheme()
   return (
     <Stack spacing={0.5}>
       <Typography id={headingId} variant="caption" color="text.secondary">
@@ -177,7 +179,7 @@ export function BonusSlotList({
                 border: 1,
                 borderColor: 'divider',
                 borderRadius: 1,
-                ...(tone === null ? {} : restorationBonusChipSx(tone, isEx, 'outlined')),
+                ...(tone === null ? {} : restorationBonusChipSx(tone, isEx, 'outlined', theme.palette.mode)),
               }}
             >
               <Typography

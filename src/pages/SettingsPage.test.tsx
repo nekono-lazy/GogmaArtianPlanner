@@ -5,6 +5,8 @@ import type { AppSettings, ExportRoot } from '../domain/models/publicTypes'
 import { createDefaultAppSettings, EXPORT_APP_NAME, EXPORT_SCHEMA_VERSION } from '../domain/models/publicTypes'
 import type { DataTransferBrowserAdapter } from '../components/settings/dataTransferPresentation'
 import { DataTransferError, type ImportPreparationResult } from '../services/dataTransfer/importExportService'
+import { THEME_MODE_STORAGE_KEY } from '../app/themeModePreference'
+import { useAppearanceStore } from '../stores/appearanceStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { hasMaxHeightRule } from '../test/cssRuleAssertions'
 import { SettingsPage, type SettingsPageDependencies } from './SettingsPage'
@@ -853,5 +855,115 @@ describe('SettingsPage data management', () => {
       await screen.findByText(/設定を保存できませんでした。/)
       expect(useSettingsStore.getState().debugMode).toBe(true)
     })
+  })
+})
+
+/*
+ * The Light / Dark choice (`docs/UI_FLOW.md` 3.5): a device-local Presentation
+ * preference in localStorage, never AppSettings, so the Data Transfer
+ * operations neither carry nor change it.
+ */
+describe('SettingsPage theme', () => {
+  const themeRadio = (name: 'ライト' | 'ダーク', hidden = false) => screen.getByRole('radio', { name, hidden })
+
+  beforeEach(() => {
+    useSettingsStore.getState().reset()
+    window.localStorage.clear()
+    useAppearanceStore.getState().reloadFromStorage()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    window.localStorage.clear()
+    useAppearanceStore.getState().reloadFromStorage()
+  })
+
+  it('offers ライト and ダーク as a labelled radio group with Light selected by default', () => {
+    render(<SettingsPage dependencies={dependencies()} />)
+    const group = screen.getByRole('radiogroup', { name: 'テーマ' })
+    expect(within(group).getAllByRole('radio')).toHaveLength(2)
+    expect(themeRadio('ライト')).toBeChecked()
+    expect(themeRadio('ダーク')).not.toBeChecked()
+    expect(group).toHaveAccessibleDescription(/この端末・ブラウザの表示設定として保存され、データのエクスポート \/ インポートや全データ削除の対象にはなりません/)
+  })
+
+  it('applies Dark at once and saves it for this browser only', async () => {
+    const user = setupUser()
+    const deps = dependencies()
+    render(<SettingsPage dependencies={deps} />)
+    await user.click(themeRadio('ダーク'))
+    expect(themeRadio('ダーク')).toBeChecked()
+    expect(themeRadio('ライト')).not.toBeChecked()
+    expect(useAppearanceStore.getState().themeMode).toBe('dark')
+    expect(window.localStorage.getItem(THEME_MODE_STORAGE_KEY)).toBe('dark')
+    // The choice is not an AppSettings save.
+    expect(deps.saveDebugMode).not.toHaveBeenCalled()
+    expect(useSettingsStore.getState().isHydrated).toBe(false)
+    expect(screen.queryByRole('alert')).toBeNull()
+
+    await user.click(themeRadio('ライト'))
+    expect(useAppearanceStore.getState().themeMode).toBe('light')
+    expect(window.localStorage.getItem(THEME_MODE_STORAGE_KEY)).toBe('light')
+  })
+
+  it('shows the stored Dark choice after a reload', () => {
+    window.localStorage.setItem(THEME_MODE_STORAGE_KEY, 'dark')
+    useAppearanceStore.getState().reloadFromStorage()
+    render(<SettingsPage dependencies={dependencies()} />)
+    expect(themeRadio('ダーク')).toBeChecked()
+  })
+
+  it('keeps the session choice and warns briefly when the preference cannot be saved', async () => {
+    const user = setupUser()
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('quota', 'QuotaExceededError')
+    })
+    render(<SettingsPage dependencies={dependencies()} />)
+    await user.click(themeRadio('ダーク'))
+    expect(themeRadio('ダーク')).toBeChecked()
+    expect(useAppearanceStore.getState().themeMode).toBe('dark')
+    expect(screen.getByText(/テーマ設定を保存できませんでした。/)).toBeInTheDocument()
+    expect(screen.queryByText(/QuotaExceededError|quota/)).toBeNull()
+  })
+
+  it('keeps Dark through an Import that hydrates other settings', async () => {
+    const user = setupUser()
+    const deps = dependencies()
+    render(<SettingsPage dependencies={deps} />)
+    await user.click(themeRadio('ダーク'))
+    await selectBackup(user, JSON.stringify(exportRootWith(true)))
+    await user.click(await screen.findByRole('button', { name: '現在のデータを置き換えてインポート' }))
+    await screen.findByText('データをインポートしました。')
+    await noDialog()
+    expect(useSettingsStore.getState()).toMatchObject({ debugMode: true, isHydrated: true })
+    expect(useAppearanceStore.getState().themeMode).toBe('dark')
+    expect(window.localStorage.getItem(THEME_MODE_STORAGE_KEY)).toBe('dark')
+    expect(themeRadio('ダーク')).toBeChecked()
+  })
+
+  it('keeps Light through an Import too', async () => {
+    const user = setupUser()
+    render(<SettingsPage dependencies={dependencies()} />)
+    await selectBackup(user, JSON.stringify(exportRootWith(true)))
+    await user.click(await screen.findByRole('button', { name: '現在のデータを置き換えてインポート' }))
+    await screen.findByText('データをインポートしました。')
+    await noDialog()
+    expect(useAppearanceStore.getState().themeMode).toBe('light')
+    expect(themeRadio('ライト')).toBeChecked()
+  })
+
+  it('keeps Dark through clearing all data', async () => {
+    const user = setupUser()
+    useSettingsStore.getState().hydrate(settingsWith(true))
+    render(<SettingsPage dependencies={dependencies()} />)
+    await user.click(themeRadio('ダーク'))
+    await user.click(clearButton())
+    await user.click(await screen.findByRole('button', { name: 'すべてのデータを削除' }))
+    await screen.findByText('すべてのデータを削除し、初期状態に戻しました。')
+    await noDialog()
+    expect(useSettingsStore.getState().debugMode).toBe(false)
+    expect(useAppearanceStore.getState().themeMode).toBe('dark')
+    expect(window.localStorage.getItem(THEME_MODE_STORAGE_KEY)).toBe('dark')
+    expect(themeRadio('ダーク')).toBeChecked()
   })
 })

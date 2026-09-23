@@ -1,4 +1,5 @@
 import { Box, Chip } from '@mui/material'
+import { useTheme } from '@mui/material/styles'
 import type { ArtianBonusScope, MasterDataRoot } from '../domain/master/masterTypes'
 import type { RestorationBonusSet } from '../domain/models/publicTypes'
 import {
@@ -30,7 +31,8 @@ import { bonusLabel } from './search/searchPresentation'
  * Each chip is colour-coded by its Bonus Type family and emphasised when its
  * rank is EX (`restorationBonusPresentation.ts`). That is a secondary cue on
  * top of the unchanged text label; a Bonus Type without a known family keeps
- * the standard Chip style. The family and the EX flag are also exposed as
+ * the standard Chip style. The tone table follows the current theme mode, so
+ * Light and Dark share this one authority. The family and the EX flag are also exposed as
  * `data-bonus-tone` / `data-bonus-ex`, so tests can read the applied category
  * without depending on colour values.
  */
@@ -50,6 +52,7 @@ export function RestorationBonusSlots({
   /** Accessible name of the slot list. */
   label?: string
 }) {
+  const theme = useTheme()
   return (
     <Box
       role="list"
@@ -69,7 +72,7 @@ export function RestorationBonusSlots({
               data-bonus-ex={tone === null ? undefined : String(isEx)}
               sx={{
                 maxWidth: '100%',
-                ...(tone === null ? {} : restorationBonusChipSx(tone, isEx, variant)),
+                ...(tone === null ? {} : restorationBonusChipSx(tone, isEx, variant, theme.palette.mode)),
               }}
             />
           </Box>

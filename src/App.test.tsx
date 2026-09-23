@@ -1,9 +1,11 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { settingsRepository } from './db/settingsRepository'
 import { PRODUCTION_RNG_ENGINE_VERSION } from './domain/rng/production/productionRngEngine'
+import { THEME_MODE_STORAGE_KEY } from './app/themeModePreference'
+import { useAppearanceStore } from './stores/appearanceStore'
 import { useSettingsStore } from './stores/settingsStore'
 
 describe('App', () => {
@@ -248,5 +250,75 @@ describe('App', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'ページが見つかりません' })).toBeInTheDocument()
     expect(screen.getByText(/ダッシュボードから目的の画面へ移動/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'ダッシュボードへ戻る' })).toHaveAttribute('href', '#/')
+  })
+})
+
+describe('App theme mode', () => {
+  const lightBackground = 'rgb(245, 245, 241)'
+  const darkBackground = 'rgb(18, 22, 20)'
+  const bodyBackground = () => getComputedStyle(document.body).backgroundColor
+
+  beforeEach(() => {
+    window.location.hash = '#/'
+    useSettingsStore.getState().reset()
+    window.localStorage.clear()
+    useAppearanceStore.getState().reloadFromStorage()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    window.localStorage.clear()
+    useAppearanceStore.getState().reloadFromStorage()
+  })
+
+  it('starts in Light when nothing is stored', () => {
+    render(<App />)
+    expect(bodyBackground()).toBe(lightBackground)
+  })
+
+  it('paints a stored Dark choice on the first render', () => {
+    window.localStorage.setItem(THEME_MODE_STORAGE_KEY, 'dark')
+    useAppearanceStore.getState().reloadFromStorage()
+    render(<App />)
+    // No effect or wait is needed: the mode was read before the first render.
+    expect(bodyBackground()).toBe(darkBackground)
+  })
+
+  it('switches the ThemeProvider at once from Settings without remounting the page', async () => {
+    const user = userEvent.setup()
+    window.location.hash = '#/settings'
+    render(<App />)
+    await waitFor(() => expect(useSettingsStore.getState().isHydrated).toBe(true))
+    const heading = screen.getByRole('heading', { level: 1, name: '設定' })
+    const debugSwitch = screen.getByRole('switch', { name: 'デバッグモード' })
+
+    await user.click(screen.getByRole('radio', { name: 'ダーク' }))
+    expect(bodyBackground()).toBe(darkBackground)
+    // The same DOM nodes stay: only the theme changed, not the route tree.
+    expect(screen.getByRole('heading', { level: 1, name: '設定' })).toBe(heading)
+    expect(screen.getByRole('switch', { name: 'デバッグモード' })).toBe(debugSwitch)
+    expect(window.location.hash).toBe('#/settings')
+
+    await user.click(screen.getByRole('radio', { name: 'ライト' }))
+    expect(bodyBackground()).toBe(lightBackground)
+    expect(screen.getByRole('heading', { level: 1, name: '設定' })).toBe(heading)
+  })
+
+  it('keeps an open Dialog and its typed draft across a theme change', async () => {
+    const user = userEvent.setup()
+    window.location.hash = '#/settings'
+    render(<App />)
+    await waitFor(() => expect(useSettingsStore.getState().isHydrated).toBe(true))
+    await user.click(screen.getByRole('button', { name: 'データをインポート' }))
+    const dialog = await screen.findByRole('dialog', { name: 'バックアップデータを読み込む' })
+    const field = within(dialog).getByRole('textbox', { name: 'バックアップJSON' })
+    await user.click(field)
+    await user.paste('{"draft": true}')
+
+    act(() => useAppearanceStore.getState().setThemeMode('dark'))
+
+    expect(bodyBackground()).toBe(darkBackground)
+    expect(screen.getByRole('dialog', { name: 'バックアップデータを読み込む' })).toBe(dialog)
+    expect(within(dialog).getByRole('textbox', { name: 'バックアップJSON' })).toHaveValue('{"draft": true}')
   })
 })

@@ -3,8 +3,12 @@ import {
   Box,
   Button,
   Divider,
+  FormControl,
   FormControlLabel,
+  FormLabel,
   Paper,
+  Radio,
+  RadioGroup,
   Stack,
   Switch,
   Typography,
@@ -52,6 +56,8 @@ import {
   productionIdentificationUnavailableReasonLabels,
 } from '../services/rngIdentification/productionIdentificationAvailability'
 import { settingsRepository } from '../db/settingsRepository'
+import { isThemeMode } from '../app/themeModePreference'
+import { useAppearanceStore } from '../stores/appearanceStore'
 import { useSettingsStore } from '../stores/settingsStore'
 
 const masterData = loadMasterData()
@@ -131,6 +137,49 @@ function VersionRow({ label, value }: { label: string; value: string }) {
 }
 
 const actionButtonSx = { minHeight: 44, width: { xs: '100%', sm: 'auto' } } as const
+
+/**
+ * The Light / Dark choice (`docs/UI_FLOW.md` 3.5). It is a device-local
+ * Presentation preference held by `useAppearanceStore`, never an
+ * `AppSettings` field: it applies at once without a reload, and the Data
+ * Transfer operations below neither read nor change it.
+ */
+function ThemeModeSetting() {
+  const themeMode = useAppearanceStore((state) => state.themeMode)
+  const persistFailed = useAppearanceStore((state) => state.themeModePersistFailed)
+  const setThemeMode = useAppearanceStore((state) => state.setThemeMode)
+  const labelId = useId()
+  const helpId = useId()
+  return (
+    <FormControl component="fieldset" sx={{ display: 'block', minWidth: 0 }}>
+      <FormLabel id={labelId} component="legend" sx={{ fontWeight: 500, color: 'text.primary', '&.Mui-focused': { color: 'text.primary' } }}>
+        テーマ
+      </FormLabel>
+      <RadioGroup
+        row
+        aria-labelledby={labelId}
+        aria-describedby={helpId}
+        name="theme-mode"
+        value={themeMode}
+        onChange={(_, value) => {
+          if (isThemeMode(value)) setThemeMode(value)
+        }}
+        sx={{ columnGap: 2 }}
+      >
+        <FormControlLabel value="light" control={<Radio />} label="ライト" sx={{ m: 0, minHeight: 44, pr: 1 }} />
+        <FormControlLabel value="dark" control={<Radio />} label="ダーク" sx={{ m: 0, minHeight: 44, pr: 1 }} />
+      </RadioGroup>
+      <Typography id={helpId} variant="body2" sx={{ color: 'text.secondary' }}>
+        テーマはこの端末・ブラウザの表示設定として保存され、データのエクスポート / インポートや全データ削除の対象にはなりません。
+      </Typography>
+      {persistFailed && (
+        <Alert severity="warning" sx={{ mt: 1.5 }}>
+          テーマ設定を保存できませんでした。選択したテーマは今の表示にだけ反映され、再読み込み後は以前のテーマ（保存がない場合はライト）に戻る場合があります。
+        </Alert>
+      )}
+    </FormControl>
+  )
+}
 
 export function SettingsPage({
   dependencies,
@@ -340,6 +389,8 @@ export function SettingsPage({
     <PageShell title="設定" description="アプリの表示設定、データのバックアップと復元、バージョン情報を管理します。">
       <Stack spacing={{ xs: 2, md: 3 }}>
         <SettingsSection title="表示設定">
+          <ThemeModeSetting />
+          <Divider sx={{ my: 2 }} />
           <FormControlLabel
             sx={{ m: 0, minHeight: 44 }}
             control={(
