@@ -105,7 +105,10 @@ export interface BonusStreamSolutionSet {
  * no five slots at all (`docs/SEARCH_SPEC.md` 6.1.1 / 5.9). No fabricated
  * bonus set is ever substituted.
  */
-export type BonusStreamBase =
+export type BonusStreamBase = {
+  /** Initial Search only: later Normal representatives need no Reset branches. */
+  amendmentPolicy?: 'all' | 'keep_only'
+} & (
   | {
       startGogmaCounter: number
       bonuses: RestorationBonusSet
@@ -116,6 +119,7 @@ export type BonusStreamBase =
       bonuses: RestorationBonusSet | null
       restorationBonusScope: 'normal_artian'
     }
+)
 
 /**
  * The Bonus stream of one TargetWeapon.
@@ -378,7 +382,7 @@ export function createTargetBonusStream(
       let gogmaCounterAfter: number | null = null
 
       const resetSupport = predictionSupport.gogmaReset()
-      if (resetSupport.supported) {
+      if (resetSupport.supported && base.amendmentPolicy !== 'keep_only') {
         await execution.checkpoint()
         const reset = toState(depth, depth, predictReset(gogmaCounterBefore), lastResetNode)
         generated.push(reset)
@@ -386,7 +390,7 @@ export function createTargetBonusStream(
         gogmaCounterAfter = engine.advanceGogmaCounter(gogmaCounterBefore, {
           type: 'reset_bonuses',
         })
-      } else {
+      } else if (!resetSupport.supported) {
         recordUnsupported('reset_bonuses', resetSupport.reason)
       }
 
@@ -502,7 +506,8 @@ export function createTargetBonusStream(
  * that layout: every offset and source sharing a layout at one Gogma position
  * shares one stream, whichever scope or tiers it holds. A blind base has no
  * layout and shares the single unknown stream, whose axis starts at the first
- * Reset.
+ * Reset. The initial-Search Keep-only policy has a distinct key so it never
+ * aliases a full stream used by an owned source or constrained enumeration.
  */
 export function bonusStreamBaseKey(
   base: BonusStreamBase,
@@ -510,6 +515,7 @@ export function bonusStreamBaseKey(
 ): string {
   return stableStringify([
     base.startGogmaCounter,
+    base.amendmentPolicy ?? 'all',
     base.bonuses === null ? null : keepFamilyLayoutKey(base.bonuses, master),
   ])
 }

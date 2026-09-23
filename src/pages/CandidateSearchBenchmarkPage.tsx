@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createNormalRouteReductionBenchmarkInput, normalRouteReductionBenchmarkWorkloads } from '../benchmarks/normalRouteReductionBenchmarkFixtures'
 import {
   Alert, Box, Button, Chip, FormControl, InputLabel, LinearProgress, MenuItem,
   Paper, Select, Stack, Table, TableBody, TableCell, TableHead, TableRow,
@@ -19,6 +20,8 @@ import { stableStringify } from '../domain/models/publicTypes'
 import type { CandidateSearchProgress, CandidateSearchResult } from '../domain/search'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../domain/rng/production/productionRngEngine'
 import { SearchCancelledError } from '../services/search/searchWorkerClient'
+
+const benchmarkWorkloads = [...candidateSearchBenchmarkWorkloads, ...normalRouteReductionBenchmarkWorkloads]
 
 type RunPhase = 'warm-up' | 'measurement' | 'cancel'
 type RunStatus = 'completed' | 'cancelled' | 'error'
@@ -131,7 +134,7 @@ export interface CandidateSearchBenchmarkRunOptions {
 }
 
 export function CandidateSearchBenchmarkPage() {
-  const [workloadId, setWorkloadId] = useState(candidateSearchBenchmarkWorkloads[0].id)
+  const [workloadId, setWorkloadId] = useState(benchmarkWorkloads[0].id)
   const [mode, setMode] = useState<CandidateSearchBenchmarkMode>('production')
   const [measurements, setMeasurements] = useState(3)
   const [cancelAfterMs, setCancelAfterMs] = useState(500)
@@ -152,7 +155,10 @@ export function CandidateSearchBenchmarkPage() {
     runningRef.current = true
     setRunning(true)
     const requestId = `b5-${options.phase}-${options.workloadId}-${crypto.randomUUID()}`
-    const { input } = createCandidateSearchBenchmarkInput(options.workloadId, requestId)
+    const issue104 = normalRouteReductionBenchmarkWorkloads.find(workload => workload.id === options.workloadId)
+    const input = issue104
+      ? { ...createNormalRouteReductionBenchmarkInput(issue104.scenario, issue104.settings), searchRunId: requestId }
+      : createCandidateSearchBenchmarkInput(options.workloadId, requestId).input
     const harness = createCandidateSearchBenchmarkHarness(options.mode)
 
     const before = readMemory()
@@ -317,7 +323,7 @@ export function CandidateSearchBenchmarkPage() {
 
   useEffect(() => {
     const api = {
-      workloads: candidateSearchBenchmarkWorkloads.map(({ id, label, settings, expectedIdealOperationCount }) => ({
+      workloads: benchmarkWorkloads.map(({ id, label, settings, expectedIdealOperationCount }) => ({
         id, label, settings, expectedIdealOperationCount,
       })),
       run: (options: CandidateSearchBenchmarkRunOptions) => run(options),
@@ -358,7 +364,7 @@ export function CandidateSearchBenchmarkPage() {
                   labelId="b5-workload-label" label="Workload" value={workloadId} disabled={running}
                   onChange={(event) => setWorkloadId(event.target.value)}
                 >
-                  {candidateSearchBenchmarkWorkloads.map((workload) => (
+                  {benchmarkWorkloads.map((workload) => (
                     <MenuItem key={workload.id} value={workload.id}>
                       {workload.label} · {workload.settings.maxNormalAdvance}/{workload.settings.maxGogmaAdvance}/
                       {workload.settings.maxSkillAdvance}

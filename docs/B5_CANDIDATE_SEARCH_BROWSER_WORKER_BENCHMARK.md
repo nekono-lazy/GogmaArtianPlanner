@@ -654,3 +654,11 @@ Worker自動再生成とページ自動reloadはv1では実装しない。
   「Worker性能に関わる実装を一切変更していない」とは言えない。変更していないのは
   checkpoint / yield機構であり、progress message trafficは増えている。
   B6時点で再測定は要求されていないが、11章の測定値は追加traffic以前のものである
+
+
+## #104での後続計測（2026-09-24）
+
+この文書の過去の実測値と `B5_MEASUREMENT_SETTINGS` は変更していない。
+Normal Route base削減後に新しい独立presetで測定し、現在の初期値は
+`500 / 350 / 1500` へ変更した。Gogma 350 / 500、深いSkill Ideal、no-Ideal、
+cancelと計測制約は [#104計測記録](./ISSUE_104_NORMAL_ROUTE_REDUCTION_BENCHMARK.md) を参照。
