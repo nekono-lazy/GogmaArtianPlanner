@@ -4082,6 +4082,13 @@ Normal UI hides internal RNG values:
 
 Debug Mode may show them.
 
+The one exception is the Normal Counter Setup list (`docs/REQUIREMENTS.md` 4,
+`docs/UI_FLOW.md` 3 / 6): its カウンター値 column shows a Normal Artian Counter
+only when `isConfirmed === true` and `counter !== null`, and 「—」 otherwise. An
+unconfirmed retained value (after 確定解除 or a Debug save) is never shown there
+as the current Counter. The exception does not extend to any other RNG value,
+any other screen, or the Identification Dialog's unique result.
+
 Debug Mode must not change calculation semantics.
 
 Normal UI must not expose out-of-scope v1 controls.

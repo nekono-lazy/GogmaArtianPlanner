@@ -88,6 +88,14 @@ async function rowFor(name: string, options: { hidden?: boolean } = {}): Promise
   return row
 }
 
+/** The row's カウンター値 cell text without its inline label. */
+function counterValueText(row: HTMLElement): string {
+  const label = within(row).getByText('カウンター値')
+  const cell = label.parentElement
+  if (!cell) throw new Error('カウンター値 cell was not rendered')
+  return (cell.textContent ?? '').replace('カウンター値', '').trim()
+}
+
 async function openIdentification(user: ReturnType<typeof userEvent.setup>, weaponName: string): Promise<HTMLElement> {
   await user.click(within(await rowFor(weaponName)).getByRole('button', { name: '観測・検索' }))
   return screen.findByRole('dialog', { name: `通常アーティアCounter検索: ${weaponName}` })
@@ -116,7 +124,7 @@ describe('NormalCountersPage', () => {
     expect(screen.queryByText(/観測検索は未実装/)).not.toBeInTheDocument()
   })
 
-  it('lists the 14 rarity-8 weapon types once each, with status, counts and last observation', async () => {
+  it('lists the 14 rarity-8 weapon types once each, with status and the confirmed Counter value only', async () => {
     render(<NormalCountersPage dependencies={dependencies([fixture, confirmedFixture, unconfirmedFixture, multipleFixture])} />)
     const list = (await screen.findByRole('heading', { name: '双剣' })).closest<HTMLElement>('ul')
     if (!list) throw new Error('Counter list was not rendered')
@@ -125,14 +133,32 @@ describe('NormalCountersPage', () => {
     expect(within(list).getAllByRole('listitem')).toHaveLength(14)
     expect(screen.getAllByRole('heading', { name: '大剣' })).toHaveLength(1)
 
+    // `docs/UI_FLOW.md` 6: 武器種 / 状態 / カウンター値 / 操作.
     const confirmed = within(await rowFor('大剣'))
     expect(confirmed.getByText('確定・検索に使用')).toBeInTheDocument()
-    expect(confirmed.getByText('観測数')).toBeInTheDocument()
-    expect(confirmed.getByText('候補数')).toBeInTheDocument()
-    expect(confirmed.getByText('最終観測')).toBeInTheDocument()
+    expect(counterValueText(await rowFor('大剣'))).toBe('98765')
+
+    // An unconfirmed retained value is never shown as the current Counter.
     expect(within(await rowFor('太刀')).getByText('未確定・検索に未使用')).toBeInTheDocument()
+    expect(counterValueText(await rowFor('太刀'))).toBe('—')
+    expect(screen.queryByText(/43210/)).not.toBeInTheDocument()
+
     expect(within(await rowFor('双剣')).getByText('未設定・検索に未使用')).toBeInTheDocument()
-    expect(within(await rowFor('ハンマー')).getByText('候補複数・検索に未使用')).toBeInTheDocument()
+    expect(counterValueText(await rowFor('双剣'))).toBe('—')
+
+    // Several candidates: the status says so, but the count itself is not listed.
+    const multiple = within(await rowFor('ハンマー'))
+    expect(multiple.getByText('候補複数・検索に未使用')).toBeInTheDocument()
+    expect(counterValueText(await rowFor('ハンマー'))).toBe('—')
+    expect(multiple.queryByText('19')).not.toBeInTheDocument()
+
+    // Every row carries the one カウンター値 cell, and none of the removed diagnostics.
+    expect(within(list).getAllByText('カウンター値')).toHaveLength(14)
+    for (const removed of ['観測数', '候補数', '最終観測']) {
+      expect(screen.queryByText(removed)).not.toBeInTheDocument()
+    }
+    expect(screen.queryByText(/2026-08-30/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Counter raw値')).not.toBeInTheDocument()
     expect(screen.getByText('確定 1 / 14')).toBeInTheDocument()
   })
 
@@ -147,13 +173,25 @@ describe('NormalCountersPage', () => {
     expect(screen.queryByText(/未設定・検索に未使用/)).toBeNull()
   })
 
-  it('never shows raw Counter values in the normal UI', async () => {
-    // `docs/UI_FLOW.md` 3: Seed / Counter values are Debug Mode only.
+  it('shows only a confirmed Counter value in the normal UI, never an unconfirmed retained one or the Seed', async () => {
+    // `docs/UI_FLOW.md` 3 / 6: the list's カウンター値 is the one exception to
+    // "no Seed / Counter values", limited to a confirmed Counter.
     render(<NormalCountersPage dependencies={dependencies([confirmedFixture, unconfirmedFixture])} />)
     await screen.findByRole('heading', { name: '大剣' })
-    expect(screen.queryByText(/98765/)).not.toBeInTheDocument()
+    expect(within(await rowFor('大剣')).getByText('98765')).toBeInTheDocument()
     expect(screen.queryByText(/43210/)).not.toBeInTheDocument()
+    expect(counterValueText(await rowFor('太刀'))).toBe('—')
     expect(screen.queryByText(/51231782/)).not.toBeInTheDocument()
+  })
+
+  it('shows a retained unconfirmed Counter value inside the Debug Mode editor only', async () => {
+    useSettingsStore.getState().setDebugMode(true)
+    render(<NormalCountersPage dependencies={dependencies([unconfirmedFixture])} />)
+    const row = await rowFor('太刀')
+    expect(within(row).getByLabelText('Counter raw値')).toHaveValue(43210)
+    expect(within(row).getByRole('checkbox', { name: '確定済み' })).not.toBeChecked()
+    expect(counterValueText(row)).toBe('—')
+    expect(within(row).queryByText('43210')).not.toBeInTheDocument()
   })
 
   it('shows raw Counter values only inside the Debug Mode editor', async () => {
@@ -324,6 +362,8 @@ describe('NormalCountersPage', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(client.dispose).toHaveBeenCalledTimes(1)
     expect(within(await rowFor('双剣')).getByText('確定・検索に使用')).toBeInTheDocument()
+    // The confirmed value reaches the list only after the Dialog closed.
+    expect(counterValueText(await rowFor('双剣'))).toBe('777')
     expect(screen.getByText('確定 1 / 14')).toBeInTheDocument()
     // The persisted history stays the Counter row alone: no observation is stored.
     expect(adoption).not.toHaveProperty('observations')
@@ -384,6 +424,7 @@ describe('NormalCountersPage', () => {
     const deps = dependencies([confirmedFixture, fixture])
     render(<NormalCountersPage dependencies={deps} />)
     expect(within(await rowFor('双剣')).queryByRole('button', { name: '確定解除' })).not.toBeInTheDocument()
+    expect(counterValueText(await rowFor('大剣'))).toBe('98765')
     await user.click(within(await rowFor('大剣')).getByRole('button', { name: '確定解除' }))
     await waitFor(() => expect(deps.save).toHaveBeenCalledTimes(1))
     expect(deps.save.mock.calls[0]![0]).toEqual({
@@ -396,6 +437,8 @@ describe('NormalCountersPage', () => {
     expect(row.getByText('未確定・検索に未使用')).toBeInTheDocument()
     expect(row.queryByRole('button', { name: '確定解除' })).not.toBeInTheDocument()
     expect(screen.getByText('確定 0 / 14')).toBeInTheDocument()
+    // The stored value is kept (above), but the list no longer shows it as current.
+    expect(counterValueText(await rowFor('大剣'))).toBe('—')
     expect(screen.queryByText(/98765/)).not.toBeInTheDocument()
   }, 15_000)
 
