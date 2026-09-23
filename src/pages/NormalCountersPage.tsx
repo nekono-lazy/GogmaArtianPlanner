@@ -92,7 +92,7 @@ function emptyCounter(weaponTypeId: string, now: string): NormalArtianCounter {
 /**
  * Status shown per row (`docs/UI_FLOW.md` 6: 未設定 / 候補複数 / 確定). It only
  * restates `isConfirmed`, whether a value is held, and the persisted candidate
- * count; the raw Counter value itself is Debug Mode only (`docs/UI_FLOW.md` 3).
+ * count.
  */
 function counterStatus(row: NormalArtianCounter): { label: string; tone: StatusTone } {
   if (row.isConfirmed) return { label: '確定・検索に使用', tone: 'positive' }
@@ -120,6 +120,16 @@ function identificationBaseSeed(state: RngState | null): { seed: NormalizedSeed;
   return { seed: state.baseSeed.value, issue: null }
 }
 
+/**
+ * The カウンター値 cell (`docs/UI_FLOW.md` 6): the one normal-UI exception to
+ * "no Counter values" (`docs/UI_FLOW.md` 3), limited to a confirmed Counter.
+ * A value merely retained while unconfirmed (after 確定解除 or a Debug save)
+ * is never shown as if it were current; Debug Mode shows it in its editor.
+ */
+function displayedCounterValue(row: NormalArtianCounter): string {
+  return row.isConfirmed && row.counter !== null ? String(row.counter) : '—'
+}
+
 /** Visually hidden from `md` up, where the column header row names the cell. */
 const inlineCellLabelSx = (theme: Theme) => ({
   color: 'text.secondary',
@@ -135,13 +145,18 @@ const inlineCellLabelSx = (theme: Theme) => ({
   },
 })
 
-/** PC: one table-like row per weapon type. Smartphone: the same row stacked as a card. */
+/**
+ * PC: one table-like row per weapon type. Smartphone: the same row stacked as a card.
+ * The status and action columns' fixed minimums keep the longest status chip
+ * and 観測・検索 + 確定解除 on one line, and every row's columns aligned
+ * whichever chip and buttons the row has.
+ */
 const rowGridSx = {
   display: 'grid',
-  gridTemplateColumns: { xs: 'minmax(0, 1fr) auto', md: 'minmax(0, 1.2fr) minmax(0, 1.4fr) repeat(3, minmax(0, 0.7fr)) auto' },
+  gridTemplateColumns: { xs: 'minmax(0, 1fr) auto', md: 'minmax(0, 1fr) minmax(11rem, 1.3fr) minmax(0, 0.8fr) minmax(10.5rem, 1fr)' },
   gridTemplateAreas: {
-    xs: '"name status" "metrics metrics" "actions actions"',
-    md: '"name status observations candidates observed actions"',
+    xs: '"name status" "counter counter" "actions actions"',
+    md: '"name status counter actions"',
   },
   columnGap: 2,
   rowGap: 0.75,
@@ -179,11 +194,9 @@ function CounterRow({ row, weaponName, debugMode, identification, disabled, onCh
       <Box sx={rowGridSx}>
         <Typography id={headingId} component="h3" variant="h3" sx={{ gridArea: 'name', minWidth: 0 }}>{weaponName}</Typography>
         <Box sx={{ gridArea: 'status', justifySelf: { xs: 'end', md: 'start' } }}><StatusChip label={status.label} tone={status.tone} /></Box>
-        <Box sx={{ gridArea: { xs: 'metrics', md: 'auto' }, display: { xs: 'flex', md: 'contents' }, flexWrap: 'wrap', columnGap: 2, rowGap: 0.25 }}>
-          <Typography variant="body2" className="tabular-nums" sx={{ gridArea: { md: 'observations' } }}><Box component="span" sx={inlineCellLabelSx}>観測数</Box>{row.observationCount}</Typography>
-          <Typography variant="body2" className="tabular-nums" sx={{ gridArea: { md: 'candidates' } }}><Box component="span" sx={inlineCellLabelSx}>候補数</Box>{row.candidateCount ?? '—'}</Typography>
-          <Typography variant="body2" className="tabular-nums" sx={{ gridArea: { md: 'observed' }, overflowWrap: 'anywhere' }}><Box component="span" sx={inlineCellLabelSx}>最終観測</Box>{row.lastObservedAt ?? '—'}</Typography>
-        </Box>
+        <Typography variant="body2" className="tabular-nums" sx={{ gridArea: 'counter', overflowWrap: 'anywhere' }}>
+          <Box component="span" sx={inlineCellLabelSx}>カウンター値</Box>{displayedCounterValue(row)}
+        </Typography>
         <Stack direction="row" spacing={1} useFlexGap sx={{ gridArea: 'actions', flexWrap: 'wrap', justifyContent: { xs: 'flex-end', md: 'flex-start' } }}>
           <Button
             variant="outlined"
@@ -304,7 +317,8 @@ export function NormalCountersPage({ dependencies = defaultDependencies }: { dep
   }
   // Unconfirming keeps counter / observationCount / candidateCount /
   // lastObservedAt as they are; only `isConfirmed` changes, so Candidate Search
-  // stops using the Counter while nothing observed is lost.
+  // stops using the Counter while nothing observed is lost. The list then
+  // shows カウンター値 — for the row: the retained value is not current.
   const unconfirm = async (row: NormalArtianCounter) => {
     try { await persist({ ...row, isConfirmed: false }, `${weaponName(row.weaponTypeId)}のカウンターの確定を解除しました。`) } catch (caught: unknown) { setError(caught instanceof Error ? caught.message : '確定を解除できません。') }
   }
@@ -378,7 +392,7 @@ export function NormalCountersPage({ dependencies = defaultDependencies }: { dep
           ) : (
             <>
               <Box aria-hidden="true" sx={{ ...rowGridSx, display: { xs: 'none', md: 'grid' }, gridTemplateAreas: undefined, px: 2.5, py: 1, bgcolor: 'background.default', borderTop: 1, borderColor: 'divider' }}>
-                {['武器種', '状態', '観測数', '候補数', '最終観測', '操作'].map((label) => <Typography key={label} variant="subtitle2" color="text.secondary">{label}</Typography>)}
+                {['武器種', '状態', 'カウンター値', '操作'].map((label) => <Typography key={label} variant="subtitle2" color="text.secondary">{label}</Typography>)}
               </Box>
               <Box component="ul" sx={{ m: 0, p: 0 }}>
                 {rows.map((row) => (

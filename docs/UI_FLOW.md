@@ -72,6 +72,9 @@ PCブラウザとスマートフォンブラウザの双方を主要利用環境
 
 - 通常画面ではSeed / Counterを表示しない
 - Debug Mode ONの場合のみ内部RNG情報を表示する
+- 例外として、Normal Counter Setup（6）の一覧だけは、確定済み通常アーティアCounterの現在値を「カウンター値」として
+  通常UIへ表示してよい。未確定の保持値は表示しない。この例外は他のRNG内部値（Base Seed / Skill Counter /
+  Gogma Counter / Counter Gate）、他画面、Identification Dialogへ拡張しない
 - 重要な操作は1画面1目的にする
 - 復元ボーナス5枠は常に5つの固定スロットとして表示する
 - slot順の意味は用途ごとのDomain契約に従い、共通UI方針として「常に順不同」とは扱わない
@@ -366,9 +369,25 @@ activation条件。
 
 - 武器種
 - レア度は8固定のため通常UIでは列を表示しない
-- 状態: 未設定 / 候補複数 / 確定
-- 観測数
-- 最終観測日時
+- 状態: 未設定 / 候補複数 / 確定 / 未確定（「未設定・検索に未使用」「候補複数・検索に未使用」「確定・検索に使用」「未確定・検索に未使用」）
+- カウンター値
+- 操作
+
+カウンター値の表示。
+
+- `isConfirmed = true` かつ `counter !== null` の行だけ、保存済み `counter` を「カウンター値」として表示する。
+  これは3章の「通常画面ではSeed / Counterを表示しない」に対する、本画面だけの限定的な例外である
+  （[REQUIREMENTS.md](./REQUIREMENTS.md) 4）
+- それ以外（未設定、候補複数、未確定、確定解除後）は「—」を表示する。`counter` に値が保持されていても、
+  未確定の値は現在有効なCounterと誤認させないため通常UIに表示しない
+- 確定解除は `isConfirmed = false` へ戻すだけで `counter` などの保持値は変えない（後述のUI接続状態）。
+  したがって確定解除前に表示されていた値は、確定解除後の通常一覧では「—」になる。保持値はDebug Modeで確認できる
+- 通常UIのラベルは「カウンター値」とし、「Counter raw値」「内部Counter」などのDebug用語を使わない
+- 観測数、候補数、最終観測日時は通常一覧に表示しない。`observationCount` / `candidateCount` /
+  `lastObservedAt` / `lastIdentifiedAt` はpersisted dataとして削除せず、状態判定（候補複数など）、
+  Identification provenance、Debug Modeの表示・編集のため引き続き保持する
+- PCではtable-likeな4カラム（武器種 / 状態 / カウンター値 / 操作）、スマートフォンでは横スクロールさせず
+  同じ情報を縦積みのcardとして表示する（3.1）
 
 操作。
 
@@ -430,7 +449,7 @@ Base Seed / Skill Counter / Gogma CounterのIdentification Wizard（5.4）と同
 - 一致が1件なら確定
 - 複数一致なら追加観測を促す
 - 未確定の武器種のレア8 Counterは通常アーティア経由検索に使わない
-- Counterの直接修正は通常UIに表示しない
+- Counterの直接修正は通常UIに表示しない（確定済みCounterの値の表示は上記の例外であり、編集ではない）
 - Debug Mode ONの場合のみ、警告と確認を伴う手動修正を許可してよい
 - 実行中（active）の生産計画がある場合、Counterの確定、確定解除、Debug修正の保存前に16.3の警告を出し、
   承認時だけ生産計画を破棄して保存する
@@ -441,7 +460,7 @@ UI接続状態。
 - 本画面への接続は完了している。各武器種行の「観測・検索」が `NormalCounterIdentificationDialog` を開き、観測入力（属性区分 + ordered 5枠）、`AppSettings.defaultSearchLimit` を終了値とする初期検索範囲、Worker Clientによる検索、進捗、キャンセル、unique / multiple / zero / truncatedの候補表示、追加観測、復元確認後のCounter確定（`counter = startNormalCounter`）までを通常UIから行える。確定済み行には「確定解除」を提供し、`isConfirmed = false` へ戻す際に `counter` / `observationCount` / `candidateCount` / `lastObservedAt` / `lastIdentifiedAt` は保持する
 - 観測履歴はDialog内のin-memory stateだけに保持し、Observation履歴の永続化schemaは追加していない。Worker Clientはページが所有し、Dialogを閉じたとき・確定したとき・ページunmount時に `dispose()` する
 - 検索可能条件は確定済みBase Seed（Production canonical decimal form）だけである。Skill Counter / Gogma Counter / 旧Counter Gateは要求しない。Switch AxeはSwitch Axe Normal Production activation（[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.16）以降、他の武器種と同様に「観測・検索」を利用できる。Production poolを持たない武器種を「Production検証対象外」として検索開始できなくする表示と、Domain / Worker側の `normal_pool_unverified` fail closedは契約として維持する（現時点で該当する武器種はない）
-- unique結果でも通常UIは「候補が1件に絞り込まれました」とだけ表示し、`startNormalCounter` の数値はDebug Mode ONの診断表示に限る
+- unique結果でも通常UIは「候補が1件に絞り込まれました」とだけ表示し、`startNormalCounter` の数値はDebug Mode ONの診断表示に限る。Dialog内でこの数値を通常表示しない契約は一覧の「カウンター値」表示の例外によって変わらず、確定・保存してDialogを閉じた後に一覧で初めて確定値を表示する
 - Bow Table A / B修正（[RNG_SPEC.md](./RNG_SPEC.md) 6.3.1、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.15）後、Dialogの区分入力は `tableClass` を送る。弓では「テーブルA（火・水・雷・氷・龍・爆破）/ テーブルB（無属性・毒・麻痺・睡眠）」の2択、その他の武器種では「属性あり / 無属性」の2択であり、exact ElementIdのdropdownは追加していない。選択可能Bonusは引き続き `normalArtianCounterObservationBonusOptions(weaponTypeId, tableClass)` がProduction poolから導出し、弓のテーブルAは基礎攻撃力強化 / 属性強化 / 会心率強化、テーブルBは基礎攻撃力強化 / 会心率強化である。unique / multiple / zero / truncated、progress / cancel、復元確認、`counter = startNormalCounter` の確定、raw CounterのDebug限定表示は変更していない
 - Switch Axe Normal Production activation（[RNG_SPEC.md](./RNG_SPEC.md) 6.3.1、[RNG_REFERENCE_AUDIT.md](./RNG_REFERENCE_AUDIT.md) 14.16）後、スラッシュアックス行の「観測・検索」が有効になった。Dialogは弓ではないためgeneric表示「属性あり / 無属性」のままで、exact ElementIdのdropdownは追加していない。両区分の選択可能Bonusは `normalArtianCounterObservationBonusOptions('weapon.switch_axe', tableClass)` からの導出でどちらも基礎攻撃力強化 / 属性強化 / 斬れ味強化 / 会心率強化となり、区分を切り替えても属性強化のslotは未入力へ戻さない。Worker inputは従来どおり `table_a` / `table_b` を送り、Counterは `weapon.switch_axe:8` の1本を両区分で共有する。unique確認 / 復元確認 / `counter = startNormalCounter`（観測数を加算しない）の流れは変更していない
 
@@ -2204,7 +2223,8 @@ export interface SearchUiState {
 - 復元ボーナス5枠入力が5枠未満で保存できない
 - 武器種変更時に無効なボーナス選択が解除される
 - TargetWeapon優先度のデフォルトが3になる
-- Debug Mode OFFでSeed / Counterが表示されない
+- Debug Mode OFFでSeed / Counterが表示されない（Normal Counter Setup一覧の確定済みCounter値だけは例外、6）
+- Normal Counter Setup一覧が未確定・未設定・候補複数・確定解除後の行でカウンター値を「—」と表示し、保持値を表示しない
 - Debug Mode ONで内部情報が表示される
 - Normal Counterの手動修正がDebug Mode OFFで表示されない
 - Normal Counter画面が14武器種のレア8だけを表示し、Debug Modeでもレア6・7を扱わない
