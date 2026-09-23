@@ -338,7 +338,7 @@ function ObservationCard({
             ))}
           </RadioGroup>
         </FormControl>
-        <Box component="ol" aria-label={`観測${number}の復元ボーナス5枠`} sx={{ m: 0, p: 0, display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 1.25 }}>
+        <Box component="ol" aria-label={`観測${number}の復元ボーナス5枠`} sx={{ m: 0, p: 0, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 1.25 }}>
           {draft.slots.map((slot, slotIndex) => {
             const labelId = `${fieldIdPrefix}-slot-${slotIndex}`
             const label = `観測${number} 復元ボーナス${slotIndex + 1}`
