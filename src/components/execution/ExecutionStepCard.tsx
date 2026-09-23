@@ -7,6 +7,7 @@ import {
   restorationBonusScopeLabels,
 } from '../../presentation/labels'
 import { RestorationBonusSlots } from '../RestorationBonusSlots'
+import { ExecutionEntityName } from './ExecutionWeaponDetailDialog'
 import { StatusChip } from '../StatusChip'
 import { groupSkillLabel, seriesSkillLabel } from '../search/searchPresentation'
 import type { ExecutionStepPresentation } from './executionStepPresentation'
@@ -82,6 +83,8 @@ export function ExecutionStepCard({
   children?: ReactNode
 }) {
   const headingId = useId()
+  const weaponTermId = useId()
+  const targetTermId = useId()
   const { step, normalCreationRole } = presentation
   const isOwnedIdeal = presentation.actionKind === 'confirm_owned_ideal'
   return (
@@ -125,21 +128,39 @@ export function ExecutionStepCard({
           <Typography variant="body2">この後巨戟化する作成対象です。</Typography>
         )}
 
-        <Box component="dl" sx={{ m: 0, display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr)', columnGap: 1.5, rowGap: 0.5 }}>
+        {/*
+          * Issue #76: both names are the lookup control for the entity they
+          * name, so the user can check which weapon to pick up and what the
+          * Target really asks for without leaving the Navigator. The lookup is
+          * read-only and reads the persisted entity of the Navigator's own
+          * snapshot; a name that resolves to no entity stays plain text.
+          */}
+        <Box component="dl" sx={{ m: 0, display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr)', columnGap: 1.5, rowGap: 0.5, alignItems: 'center' }}>
           {presentation.weaponLabel !== null && (
             <>
-              <Typography component="dt" variant="body2" color="text.secondary">使用する武器</Typography>
-              <Typography component="dd" variant="body2" sx={{ m: 0, overflowWrap: 'anywhere', fontWeight: 600 }}>
-                {presentation.weaponLabel}
-              </Typography>
+              <Typography id={weaponTermId} component="dt" variant="body2" color="text.secondary">使用する武器</Typography>
+              <Box component="dd" sx={{ m: 0, minWidth: 0 }}>
+                <ExecutionEntityName
+                  label={presentation.weaponLabel}
+                  detail={presentation.weapon === null ? null : { kind: 'owned_weapon', weapon: presentation.weapon }}
+                  master={master}
+                  bold
+                  describedById={weaponTermId}
+                />
+              </Box>
             </>
           )}
           {presentation.targetLabel !== null && (
             <>
-              <Typography component="dt" variant="body2" color="text.secondary">目標武器</Typography>
-              <Typography component="dd" variant="body2" sx={{ m: 0, overflowWrap: 'anywhere' }}>
-                {presentation.targetLabel}
-              </Typography>
+              <Typography id={targetTermId} component="dt" variant="body2" color="text.secondary">目標武器</Typography>
+              <Box component="dd" sx={{ m: 0, minWidth: 0 }}>
+                <ExecutionEntityName
+                  label={presentation.targetLabel}
+                  detail={presentation.target === null ? null : { kind: 'target_weapon', target: presentation.target }}
+                  master={master}
+                  describedById={targetTermId}
+                />
+              </Box>
             </>
           )}
         </Box>

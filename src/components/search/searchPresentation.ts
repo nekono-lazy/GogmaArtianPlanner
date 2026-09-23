@@ -3,7 +3,9 @@ import type {
   BuildCandidate,
   IntermediateStateOpportunity,
   RestorationBonus,
+  SkillCondition,
 } from '../../domain/models/publicTypes'
+import { skillMatchModeLabels } from '../../presentation/labels'
 export {
   compromiseCheckpointBadgeLabel,
   getRouteOperationLabel as operationLabel,
@@ -63,6 +65,34 @@ export function seriesSkillLabel(id: string | null, master: MasterDataRoot): str
 export function groupSkillLabel(id: string | null, master: MasterDataRoot): string {
   if (id === null) return 'なし'
   return master.groupSkills.find((skill) => skill.id === id)?.displayNameJa ?? '不明なグループスキル'
+}
+
+/**
+ * A read-only summary of one stored `SkillCondition`, in the words of the
+ * Target Weapons list (`docs/UI_FLOW.md` 8).
+ *
+ * Presentation only: the stored IDs are looked up in the Master and an unknown
+ * ID falls back to the stored ID itself rather than being dropped, so a
+ * condition is never shown as weaker than it is. Both IDs `null` reads
+ * 「指定なし」; the match mode is named only when both skills are set, because
+ * it decides nothing with a single skill.
+ */
+export function skillConditionSummary(
+  condition: SkillCondition,
+  master: MasterDataRoot,
+): string {
+  const parts = [
+    condition.seriesSkillId === null
+      ? null
+      : `シリーズ ${master.seriesSkills.find(({ id }) => id === condition.seriesSkillId)?.displayNameJa ?? condition.seriesSkillId}`,
+    condition.groupSkillId === null
+      ? null
+      : `グループ ${master.groupSkills.find(({ id }) => id === condition.groupSkillId)?.displayNameJa ?? condition.groupSkillId}`,
+  ].filter((part): part is string => part !== null)
+  if (parts.length === 0) return '指定なし'
+  return parts.length > 1
+    ? `${parts.join(' ／ ')}（${skillMatchModeLabels[condition.matchMode]}）`
+    : parts[0]
 }
 
 const bonusOperationLabels = {
