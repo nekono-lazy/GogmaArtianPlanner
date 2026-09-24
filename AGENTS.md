@@ -2030,6 +2030,20 @@ Deleting/replacing an old `BuildCandidate` during a later search must not automa
 
 The originating Candidate ID is traceability information, not the source of truth for an existing Build List entry.
 
+Next contract (not implemented yet; Issue #103 Phase 0, `docs/DATA_MODEL.md` 9.4.1,
+`docs/PLANNER_SPEC.md` 9.2.18): the persisted Build List holds at most one
+`BuildListEntry` per `targetWeaponId`. Adding a different Candidate for a Target
+that already has an Entry is one confirmed, atomic, Plan-breaking-guarded
+replacement, never a second Entry; the old Entry's intermediate state selection
+and improvement preference are never carried over. A constrained re-search trial
+may hold the original Entry and a temporary generated Entry together, but an
+adopted generated Entry replaces the original Entry in the same transaction as
+the Plan save, and a Plan is calculated and recorded over the replaced Entry
+set. Legacy duplicates are never resolved automatically: the ordinary Planner
+input fails closed and the user keeps one Entry. No provenance field and no
+version change are added. Until Phase 0 lands, current Production still allows
+several Entries per Target.
+
 ---
 
 ## Build List Stale Rules
@@ -3157,7 +3171,11 @@ current semantic content matches, including `targetDefinitionHash`,
 `searchStateHash`, `referencedOwnedWeaponsHash`, `CalculationContext`, and
 current staleness; an ID match with different content fails closed. Never
 overwrite a stale Entry — keep it as history and create a new Entry, because
-older ProductionPlans reference its ID and Snapshot.
+older ProductionPlans reference its ID and Snapshot. (Under the next Build List
+cardinality contract, `docs/DATA_MODEL.md` 9.4.1, an ID is still never
+overwritten with different content, but the adopted generated Entry replaces
+the Target's original Entry instead of sitting beside it; see
+`docs/PLANNER_SPEC.md` 9.2.18.)
 
 The constrained enumerator is a separate Search-domain API from
 `searchCandidates()`, and it never receives the Planner conflict DTO. It must

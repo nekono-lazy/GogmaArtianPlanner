@@ -9,26 +9,42 @@
 （[ISSUE_103_PLANNER_SEARCH_INSTRUMENTATION.md](./ISSUE_103_PLANNER_SEARCH_INSTRUMENTATION.md)）
 を入力とし、次の実装フェーズで採用する通常Plannerの契約を定義する。
 
+中心契約は次の1文である。
+
+> 同じTargetに複数Routeを永続保持してPlannerが選ぶのではなく、ユーザーが現在採用したRouteを
+> Build Listに1件だけ保持し、PlannerはそのRouteをscheduleする。
+
 ```text
 Current（現行Production）
-  REQUIREMENTS 19 / PLANNER_SPEC 7 のとおり、通常Plannerは上限付きBeam Search
+  - 通常Plannerは上限付きBeam Search（REQUIREMENTS 19 / PLANNER_SPEC 7）
+  - 永続Build Listは同一Targetに複数Entryを保持し得る
 
-Target design（本書、未実装）
-  #103実装後、通常Plannerは「Route commitment + 決定的scheduling」へ移行する
+Target design（未実装）
+  - 永続Build Listは1 Targetにつき最大1 Entry（Build List cardinality契約）
+  - 通常Plannerは「Route commitment + 決定的scheduling」
 ```
 
-- 本書は現行Production semanticsを変更しない。本書の追加時点で `src/**`、テスト、
-  schema version、Worker protocol、UIは一切変更していない
-- [REQUIREMENTS.md](./REQUIREMENTS.md) 19 / 20、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7 / 7.2 /
-  7.2.1 / 10 / 14 / 15.3、[UI_FLOW.md](./UI_FLOW.md) 10.0 / 10.1、`AGENTS.md` の
-  「Planner Search Strategy」は、Production routingを切り替える実装PR（17章のPhase C）で
-  本書に合わせて同時に改訂する。それまでは現行文書が現行Productionのauthorityである
-- 仕様階層（`AGENTS.md`）上、REQUIREMENTSは本書より上位である。本書はREQUIREMENTS 19の
-  「初期版の探索方式は上限付きBeam Search」を置き換える **提案** を含むため、
-  Phase CでREQUIREMENTSを先に改訂してから挙動を切り替える。改訂前に挙動だけを変えない
+authorityの配置:
+
+| 契約 | authority | 状態 |
+| --- | --- | --- |
+| 永続Build Listの1 Target = 最大1 Entry、Candidate追加時の置換、legacy duplicateのfail closed | [REQUIREMENTS.md](./REQUIREMENTS.md) 18、[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1 | 正式仕様へ記載済みの **次期契約**（未実装、17章のPhase 0で実装） |
+| Search画面からの追加 / 置換 | [SEARCH_SPEC.md](./SEARCH_SPEC.md) 10.1、[UI_FLOW.md](./UI_FLOW.md) 9 / 10 | 同上 |
+| constrained re-search / what-if / 再計画とBuild List cardinality | [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18 | 同上 |
+| 決定的scheduler（Route commitment、scheduling、termination、schema境界） | 本書 | target design。Phase CでREQUIREMENTS 19 / 20、PLANNER_SPEC 7等を改訂して正式化 |
+
+- 本書の追加時点で `src/**`、テスト、schema version、Worker protocol、UIは一切変更していない
+- Build List cardinalityは **Build List自体の契約** であり、Plannerの都合ではない。したがって
+  REQUIREMENTS / DATA_MODELを正式authorityとし、実装状態を明示した次期契約として先に記載した
+  （Execution lifecycle改訂、B8-A、B9-A2と同じ「仕様先行・実装後続」の手順）。現行Productionは
+  各節の「現行Production」注記どおりに動作し、Phase 0の実装PRで注記を外す
+- 決定的scheduler自体は、Production routingを切り替える実装PR（Phase C）で
+  REQUIREMENTS 19 / 20、PLANNER_SPEC 7 / 7.2 / 7.2.1 / 7.4 / 10 / 14 / 15.3、UI_FLOW 10.0 / 10.1、
+  `AGENTS.md` の「Planner Search Strategy」を改訂して正式化する。それまでは現行文書が
+  現行Productionのauthorityである
 - 本書が変更しない既存契約（Candidate Search、Trace Replay、PlanStep / Execution、
   constrained re-searchの固定authority、checkpoint hard constraint等）は、該当する正式仕様を
-  そのままauthorityとする。本書はそれらを「どう再利用するか」だけを定める
+  そのままauthorityとする
 
 ---
 
@@ -78,16 +94,16 @@ Target design（本書、未実装）
 | 案 | 判断 |
 | --- | --- |
 | beamWidth / maxExpandedStates を上げる | 観測上、状態数はdepthに比例して線形に消費され、完成数もdepthにほぼ比例する。予算を増やしても1 stepあたり約1,000 successorの浪費は変わらない。不採用 |
-| semantic keyからtraceを外す | 1.2のとおり安全性の証明が無い。weapon switch / preferred source / improvement preferenceの値がtraceの純関数であるという現行dedupの前提（PLANNER_SPEC 7.3 / 7.4 / 7.6）も崩れる。単独では不採用（21章） |
+| semantic keyからtraceを外す | 1.2のとおり安全性の証明が無い。weapon switch / preferred source / improvement preferenceの値がtraceの純関数であるという現行dedupの前提（PLANNER_SPEC 7.3 / 7.4 / 7.6）も崩れる。単独では不採用（11章） |
 | scoring / tie-break調整 | trimで完成数の多いstateが落ちたdepthは0。scoringは原因ではない。不採用 |
 | dedup / sortの高速化（計測の候補G） | 定数倍の改善にとどまり、branch数自体は減らない。本設計採用後は通常経路で不要になる |
-| **Route commitment + 決定的scheduling** | Candidate Routeは既に具体的なCounter位置まで確定しており、残る自由度の大半は「交換可能な操作順」である。これを探索せずcanonicalに決める。**採用** |
+| **Build List cardinality + Route commitment + 決定的scheduling** | Candidate Routeは既に具体的なCounter位置まで確定しており、Build Listが1 Targetにつき1 Routeなら、残る自由度の大半は「交換可能な操作順」である。これを探索せずcanonicalに決める。**採用** |
 
 ---
 
 ## 2. 責務分離
 
-### 2.1 Candidate Search
+### 2.1 Candidate SearchとBuild List
 
 Candidate Searchは「1 Targetを現在状態から作るcanonical Ideal Route」を求める
 （[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6 / 5.7）。BuildListEntryへ追加された時点で次が確定している。
@@ -100,43 +116,50 @@ Candidate Searchは「1 Targetを現在状態から作るcanonical Ideal Route�
 - selected compromise checkpoint（`intermediateStateSelection`）
 - final Ideal（Candidate Snapshotの最終結果）
 
-**Plannerは通常ケースでこのRoute自体を再探索しない。** これは現行契約
-（Candidate Snapshotの `BuildRoute.operations` を変更しない、REQUIREMENTS 19）と同じである。
+**Build Listは、Targetごとに「ユーザーが現在採用したRoute」を最大1件だけ保持する**
+（DATA_MODEL 9.4.1）。別Candidateを採用したい場合は、Entryを並べて保持するのではなく、
+確認のうえ既存Entryを新Candidateで置換する（SEARCH_SPEC 10.1）。どのRouteを使うかは
+ユーザーの選択であり、Plannerの選択ではない。
 
 ### 2.2 Planner
 
 Plannerの主責務を次とする。
 
 ```text
-複数の選択済みBuildRouteを、
+複数TargetのBuildRoute（各Target 1本）を、
 共有Counter / Inventory / physical weapon制約のもとで
 同時に成立させる実行順を作る
 ```
 
-通常Plannerは **Route探索ではなくRoute scheduling** を中心責務とする。ただし「どのEntryを
-採用するか（同一Targetの複数Entry、競合の暫定帰結）」だけは決める必要があり、これを
-**Route commitment**（6章）として、実行順の決定（**scheduling**、7章）と分離する。
+通常Plannerは **Route探索でもRoute選択でもなく、Route scheduling** を中心責務とする。
+Plannerが決めるのは次の2つだけである。
+
+- **Route commitment**（6章）: 真に両立しないRoute同士（競合）について、そのrunでどれを実行し
+  どれを実行しないか。同一Targetの複数Entryから選ぶ処理は通常経路に存在しない
+- **scheduling**（7章）: commitしたRouteの操作をどの順に実行するか
 
 ### 2.3 constrained re-search / what-if
 
 選択済みRoute同士が真に両立せず、ユーザーが競合の優先側を明示選択した場合だけ、失う側Targetの
 代替Ideal Routeを探す責務を既存constrained re-search（PLANNER_SPEC 9.2）へ残す。what-if（9.2.4）も
-同じである。通常Plannerは代替Route探索を内包しない。#101（constrained searchの探索範囲）は
-本書で変更しない。
+同じである。通常Plannerは代替Route探索を内包しない。代替Routeが採用された場合、失う側Targetの
+永続Entryはその生成Entryで置換され、Build Listは再び1 Targetにつき1件になる（PLANNER_SPEC 9.2.18）。
+#101（constrained searchの探索範囲）は本書で変更しない。
 
 ---
 
 ## 3. 構造的前提
 
-本設計は、既存仕様から導かれる次の構造に依拠する。いずれも本書で新しく定めるものではない。
+本設計は、既存仕様から導かれる次の構造に依拠する。3.1〜3.3は本書で新しく定めるものではない。
 
 ### 3.1 Route unitの位置は絶対値である
 
 `PlannerRouteUnit` は保存済み `RouteOperation` から `counterStream`、`counterBefore`、
 `counterAfter` を持ち（`createPlannerRouteUnitPlans()`）、counter preconditionは
 `current === counterBefore` の完全一致である（`counter_before_current` / `counter_unavailable`）。
-Counterは単調増加しかしない。blind forgeだけがCounter位置を持たない（PLANNER_SPEC 7.0.2「Counter位置を持たないRoute unit」）。
-設計記録 [CANDIDATE_SEARCH_REDESIGN.md](./CANDIDATE_SEARCH_REDESIGN.md) 1.5 も
+Counterは単調増加しかしない。blind forgeだけがCounter位置を持たない（PLANNER_SPEC 7.0.2
+「Counter位置を持たないRoute unit」）。設計記録
+[CANDIDATE_SEARCH_REDESIGN.md](./CANDIDATE_SEARCH_REDESIGN.md) 1.5 も
 「BuildRouteは位置固定であり、Plannerが再タイミングすることはできない」と記録している。
 
 ### 3.2 Routeは各streamで起点から連続する
@@ -163,47 +186,62 @@ Counterは単調増加しかしない。blind forgeだけがCounter位置を持�
 1. skip可能unitしかない位置で、**どのEntryの武器でその位置を消費するか**（executor選択）
 2. **stream間のinterleave**（Gogma / Skill / 武器種別Normal / blind forge）
 
-どちらも、採用Entry集合が同じならCounter進行、各RouteのCandidate結果、Target完成集合、
+どちらも、commitしたEntry集合が同じならCounter進行、各RouteのCandidate結果、Target完成集合、
 物理操作数を変えない（7.9）。変わるのはStep順、weapon switch、improvement preference違反数、
 in-flight期間だけである。現行Beam Searchが大量に生成していたのは主にこの2種類のbranchである。
 
-### 3.4 前提が崩れた場合
+### 3.4 Build List cardinality（次期契約）
+
+通常Planner入力は永続Build Listをそのまま継承するため、**1 planning Targetにつきvalid Entryは
+0..1件** である（DATA_MODEL 9.4.1）。同一Targetの複数Entryはconstrained re-search / what-ifの
+temporary augmented inputにだけ現れ、その扱いは6.4で別に定める。
+
+### 3.5 前提が崩れた場合
 
 3.2は仕様から導かれるが、schedulerはそれを **正しさの前提にしない**。frontierは常に実際の
 `counterBefore` で判定し、あるstreamの現在位置にcommit済みunitが1つも無いのに後方位置の
 unitが残る（gap）場合は7.8のstall処理でfail closedする。3.2は性能見積もり（静的操作数）と
-説明にだけ使う。
+説明にだけ使う。3.4は通常Planner入力validationで検証し（6.2）、違反はfail closedする。
 
 ---
 
 ## 4. 新しい全体フロー
 
 ```text
-PlannerInput
-  ↓
-preparePlannerInitialContext()                     既存（validation、planning Target、
-  validBuildListEntries / planningTargets           route unit / lane、checkpoint requirements、
-  initialState / initialConflictDetection           initial conflict detection）。変更しない
-  ↓
-zero-operation confirm（confirm_owned_ideal）        既存の開始時適用。変更しない
-  ↓
-Route commitment（6章）                              Targetごとに採用Entryを1件（または無し）決める
-  - Entry優先順
+Persisted Build List
+  1 Target = 最大1 Entry（DATA_MODEL 9.4.1）
+        ↓
+ordinary Planner
+  preparePlannerInitialContext()        既存（validation、planning Target、route unit / lane、
+                                        checkpoint requirements、initial conflict detection）
+                                        + Build List cardinalityのfail-closed検証（Phase 0）
+  zero-operation confirm                既存の開始時適用（confirm_owned_ideal）
+        ↓
+TargetごとのRouteは既に確定（各Target 0..1本）
+        ↓
+Conflict / dependency解析（Route commitment、6章）
   - explicit ConflictResolutionの適用
   - 未解決競合の暫定帰結
-  ↓
-決定的scheduling（7章）                              1 schedule state → canonicalな次操作1つ
+        ↓
+deterministic scheduling（7章）
+  1 schedule state → canonicalな次操作1つ
   loop:
-    frontier算出
-    required / skippable / holding判定
-    安全な候補actionの列挙
-    canonical順で1つ選択して適用（共有progression、fast-forward）
+    frontier算出 → required / skippable / holding判定 → safe actionの列挙
+    canonical順で1つ適用（共有progression、fast-forward）
     完成したEntryのreserve（即時・必須）
     relevance / commitment更新（動的イベント）
-  ↓
-PlannerBeamSearchResult互換の結果（bestState = schedule state）
-  ↓
+        ↓
 既存Trace Replay → execution projection → ProductionPlan生成（変更しない）
+        ↓
+競合なし
+  → Plan完成（completed）
+競合あり
+  → Conflict提示（暫定帰結つきDraft、exhausted）
+  → ユーザーが優先側を選択（PlannerConflictResolution）
+  → losing Targetだけconstrained re-search（既存B8）
+  → temporary generated Entryで再計画（元Entry + generated Entryを一時的に保持、6.4）
+  → 成立すればold Entryをgenerated Entryで置換して保存（PLANNER_SPEC 9.2.18）
+  → 以後の再計画は再び1 Target = 1 Entryでdeterministic scheduling
 ```
 
 原則は「1 state → 多数successor → beamWidth件保持」ではなく
@@ -216,13 +254,14 @@ PlannerBeamSearchResult互換の結果（bestState = schedule state）
 | 用語 | 定義 |
 | --- | --- |
 | stream | `gogma`、`skill`、`normal:<NormalArtianCounter ID>`。blind forgeはstreamを持たない |
-| committed Entry | Route commitmentがTargetの採用Entryとして選んだEntry。scheduleが操作を実行するのはcommitted Entryだけ |
+| committed Entry | Route commitmentがそのrunで実行すると決めたEntry。scheduleが操作を実行するのはcommitted Entryだけ |
 | pending unit | committed Entryのunitのうち未実行かつ未通過のもの |
 | frontier `F(σ)` | stream `σ` の現在位置 `c_σ` を `counterBefore` にもつpending unitの集合 |
 | ready | そのunitが `nextPlannerLaneUnits()` に含まれ（lane順・base先行・pin gating）、`routeUnitPreconditionRejection()` が無く、ConflictResolutionでblockされていない |
 | passable | `canSkipWhenCounterPassed === true` かつ、通過時点でpinにblockされない（`isPlannerLaneUnitBlockedByPin()` がfalse）。fast-forwardで安全に通過できる |
 | holding | passableでないpending unit（skip不可unit、またはpin-blockedのskip可能unit）。その位置を他の操作に消費させてはならない |
 | safe action | 実行してもcommitted Entryのholding unitを1つも失わせないaction（7.3） |
+| temporary Entry | constrained re-search / what-ifがmaterializeした、まだ永続化されていないgenerated Entry（6.4） |
 
 holdingは既存7.0.2の「必須unit」を一般化したものである。pin-blockedのskip可能unitは、他Entryが
 その位置を消費すると `fastForwardPlannerRouteProgress()` がpinで止まり、次回 `counter_before_current`
@@ -235,8 +274,8 @@ holdingは既存7.0.2の「必須unit」を一般化したものである。pin-
 
 ### 6.1 目的と境界
 
-Route commitmentは、各planning Target（PLANNER_SPEC 4.1）について、そのrunで実行する
-BuildListEntryを **最大1件** 決める。Route（RouteOperation列）は一切変更しない。
+Route commitmentは、各planning Target（PLANNER_SPEC 4.1）について、そのrunでRouteを実行するか
+どうかを決める。Route（RouteOperation列）は一切変更しない。
 
 - 対象は開始時点で未完了のplanning Targetだけである（`isPlannerTargetComplete()`）。
   開始時点でIdealを持つTarget（required checkpoint Entryがある場合を除く）は従来どおり完了扱い
@@ -245,131 +284,166 @@ BuildListEntryを **最大1件** 決める。Route（RouteOperation列）は一�
   `same_owned_weapon_consumed`、shareable除外、skip可能unit除外）だけである。
   `usedCounters.has(counter)` のような簡易判定を追加しない（PLANNER_SPEC 9.2.2 / 9.2.11）
 
-### 6.2 同一Targetの複数Entry
+### 6.2 ordinary persisted PlannerInput: 各Targetの候補は0..1件
 
-現行の正式semantics:
-
-- 同一TargetのEntryが複数あっても計画対象Targetは1件（PLANNER_SPEC 4.1）。どのEntryを
-  採用するかは「従来のRoute選択semantics」、すなわちBeam Searchのscoringに委ねられていた
-- 複数Entryが生じる経路は、所持武器の追加後の再検索（参照武器Hashが無関係な旧Entryは
-  staleにならない）、routeFilter付き検索、そして **constrained re-searchの生成Entry**
-  （競合の敗者Targetへ代替Routeを追加する。B8のadoptionは生成Entryと固定Entryが同時に
-  selectedであることを要求する、9.2.14）である
-- 現行scoringは `distancePenalty = estimatedOperationCount * 100` と `conflictPenalty` で
-  短いRouteを優先し、不採用理由 `longer_route` もこの意味である
-- selected checkpointを持つEntryはTargetのrequired Entryであり、他Entryは候補から外れる
-  （7.5.6）。選択を持つEntryが同一Targetに2件以上ならPlanner入力はfail closed（7.5.7）
-- preferred sourceは同評価時だけのsoft preference（7.4）
-
-これらから、Target `T` の **Entry優先順 `L(T)`** を次で確定する。「Candidate Searchの
-canonicalだから常に最初のEntry」とはしない。
+旧版の本書は、同一Targetの複数Entryを
+`required checkpoint → explicit resolution → estimatedOperationCount → preferred source → stable ID`
+の順で比較する一般規則 `L(T)` を持っていた。Build List cardinality契約（DATA_MODEL 9.4.1）により
+通常Planner入力には同一Targetの複数Entryが存在しないため、**この一般規則を廃止する**。
 
 ```text
-L(T):
-  1. required checkpoint Entry があれば、それだけ（7.5.6、他Entryは候補外のまま）
-  2. 有効なexplicit ConflictResolutionで選択されたEntryを先に
-  3. Candidate Snapshot の estimatedOperationCount 昇順
-  4. preferred source一致（entry.candidateSnapshot.route.sourceOwnedWeaponId
-     === target.preferredOwnedWeaponId、7.4の判定）を先に
-  5. BuildListEntry ID 昇順（stable）
-除外:
-  - 有効なConflictResolutionにより、holding unit（skip不可unit）が1つでもblockされるEntry
-    （isUnitBlockedByConflictResolution() の既存semantics。そのEntryは完成できない）
-  - 開始時点で既にholding unitが通過済みのEntry（counter_before_current）
+ordinary PlannerInput:
+  L(T) = T のvalid persisted Entry（0..1件）
+  除外:
+    - 有効なConflictResolutionにより、holding unit（skip不可unit）が1つでもblockされるEntry
+      （isUnitBlockedByConflictResolution() の既存semantics。そのEntryは完成できない）
+    - 開始時点で既にholding unitが通過済みのEntry（counter_before_current）
+  除外された場合、Tはこのrunで完成しない（別Routeを探さない）
 ```
 
-- 2はユーザーの明示選択を採用Entryとして尊重するためである。explicit resolutionは局所競合の
-  解決だが、B8のadoption / B9のfeasibilityは固定Entryがselectedであることを要求する
-  （9.2.14 / 9.2.4.7）。現行Beam Searchでは、固定Entryと同じTargetの別Entryが安ければ固定Entryが
-  selectedにならずtrialが採用できない場合があり得た。本規則でこれを解消する
-- 4がcostより下位であることは7.4（1操作以上遠いRouteをpreferredだけで逆転させない）に従う
-- `recommendedBuildListEntryId` はこの順序に使わない
+- Plannerは `estimatedOperationCount`、preferred source、Entry IDを理由に同一Targetの別Routeへ
+  差し替えない。そもそも比較対象が無い
+- required checkpoint Entry（7.5.6）は、そのTargetの唯一のEntryそのものである。
+  「同じTargetの他のEntryを候補から外す」処理と `selected_checkpoint_fixes_target_entry` は
+  通常入力では発生しない。1 Targetにつき選択Entry最大1件（7.5.7）も通常入力では自明に満たされる。
+  どちらもlegacy / malformed入力への防御として残す
 
-### 6.3 静的競合と暫定帰結
+**fail-closed防御（「あり得ないからvalidation不要」としない）。** ordinary PlannerInputで同一
+planning Targetのvalid Entryが2件以上ある場合（Phase 0導入前のlegacy duplicate、Import、別タブ、
+malformed入力）は、Planner入力validationがPlanner入力全体をfail closedする（validation issue +
+専用warning。kind名はPhase 0で確定する）。どれかを選んで続行しない。これはDATA_MODEL 9.4.1の
+legacy duplicate方針と同じである。
 
-採用候補集合 `{ tentative[T] }` の中で `detectPlannerConflicts()` が競合を検出した場合を
-**collision** と呼ぶ。collisionは位置が絶対値なので静的に決まる（3.1）。
+### 6.3 ConflictResolutionとの関係
 
-**explicit resolutionがある競合**（`PlanConflict.selectedBuildListEntryId` が既存規則で
-適用された初期競合）は6.2の除外で処理済みである。非選択participantはholding unitがblockされ
-`L(T)` から外れる。選択Entryは `L(T)` の先頭に来る。
+- **explicit resolutionがある競合**（`PlanConflict.selectedBuildListEntryId` が既存規則で
+  適用された初期競合）では、非選択participantのholding unitがblockされ、そのEntryは6.2の除外に
+  より実行されない。選択Entryはそれ自身のTargetの唯一のEntryなので、特別な優先規則を持たない
+- **同一Targetの異なるEntryを選択するresolution集合は、ordinary persisted PlannerInputでは
+  collection invariant上成立しない**。1 Targetに1 Entryしか無いためである。旧版で指摘された
+  「Conflict X → A1、Conflict Y → A2」の矛盾はBuild Listの上位契約で防止される
+- それでもmalformed入力（legacy duplicate、Import、temporary augmented input）への防御として、
+  有効なresolution集合が同一Targetの異なるEntryを選択している場合はPlanner入力をfail closedする
+  （どちらかを推測して採らない）。ordinary入力では6.2のduplicate検証が先に失敗させる
+- generated Entryはfixed側へ昇格しない（PLANNER_SPEC 9.2.3.1）ため、resolutionが選択するのは
+  常にpersisted Entryである
+
+### 6.4 temporary augmented input（constrained re-search / what-if）
+
+constrained re-search / what-ifは、失う側Target `B` について元Entry `B1`（persisted）と
+temporary Entry `B2`（generated trial）を同時に持つaugmented PlannerInputを作る。
+これはBuild List cardinalityの **唯一の例外** であり、永続化されない（PLANNER_SPEC 9.2.18）。
+
+```text
+augmented input（1 Targetあたり）:
+  persisted Entry 0..1件 + temporary Entry 0..1件
+  それ以外（temporary 2件以上、persisted 2件以上）はfail closed
+
+Targetの実行候補:
+  temporary Entryがあれば、それだけ（B2）
+  無ければ persisted Entry（通常どおり）
+```
+
+- どのEntryがtemporaryかは、orchestration（B8 / B9）がPlanner内部の非永続情報として渡す。
+  BuildListEntryにprovenance fieldを追加せず、Worker public requestやUIから渡さない
+- `B1` はpreflightでユーザーのfixed constraintを再対応付けするためだけに存在する
+  （PLANNER_SPEC 9.2.3.1）。B8の作業は `B1` が明示resolutionで非選択になった競合からだけ生じる
+  ため、`B1` は実行・progress・secureの候補にならない
+- Planの計算と記録は **置換後のEntry集合**（`B1` を `B2` で置き換えた集合）に対して行う
+  （PLANNER_SPEC 9.2.18）。commitment、scheduling、返す `conflicts`、`rejectedBuildListEntries`、
+  `PlanningInputSnapshot` は `B1` を含まない。これにより、採用時に `B1` を削除しても保存された
+  Planが削除済みEntryを参照しない
+- 置換後集合での競合は通常どおり6.5で扱う。`B2` が別の競合で暫定敗者になれば `B2` はselected
+  にならず、B8のadoption条件（9.2.14）を満たさないのでtrialは不採用になる
+- **通常Planner用の一般的なcost rankingと、constrained trialの選択を混同しない。** trialで
+  `B2` を検証対象にする根拠は「B8 orchestrationがこのTargetの代替として `B2` をmaterializeした」
+  ことだけであり、`B1` との操作数比較やpreferred sourceではない
+
+### 6.5 静的競合と暫定帰結
+
+commit候補集合（各Targetの実行候補Entry）の中で `detectPlannerConflicts()` が競合を検出した
+場合を **collision** と呼ぶ。collisionは位置が絶対値なので静的に決まる（3.1）。
 
 **explicit resolutionが無い競合**は、ユーザー判断待ちの競合として `PlanConflict` で返しつつ、
-Draftを作るために **暫定帰結（provisional outcome）** を決める（8章で理由を述べる）。
-暫定帰結は次の決定的なfixed-point手続きで決める。
+Draftを作るために **暫定帰結（provisional outcome）** を決める（8.3で理由を述べる）。各Targetの
+候補が1件なので、暫定帰結は「どのTargetのRouteをこのrunで実行しないか」の決定だけになる。
 
 ```text
 順位関数 R: 既存 recommendEntry() のcomparatorを共有helperへ抽出したもの
   Target priority 降順
   → nextCandidateDistance(entry, initialRelevantEntries) 降順
-     （既存の初期競合検出が recommendEntry() へ渡すEntry集合と同じ）
+     （既存の初期競合検出が recommendEntry() へ渡すEntry集合と同じ。
+      通常入力では同一Targetの別Entryが無いので常に0になり、実質的に効かない）
   → estimatedOperationCount 昇順
   → BuildListEntry ID 昇順
   （各Entryのkeyはparticipant集合に依存しない。したがって暫定勝者は、
-   返す競合（8.5）の推奨participantがcommit候補である限りそれと一致する）
+   返す競合（8.5）の推奨participantと一致する）
 
-tentative[T] = L(T)[0]      （L(T) が空なら T は未commit）
+candidates = 各Targetの実行候補Entry（6.2 / 6.4）
 decided = ∅
 loop:
-  C = tentative集合でのcollision（detectPlannerConflicts）
+  C = candidatesでのcollision（detectPlannerConflicts）
   C が空なら終了
   E* = C のparticipantのうち、未decidedで R が最良のEntry
-  # 損失回避（1段lookahead）
-  V = E* とcollisionし、E* とdecided集合のどちらともcollisionしない代替Entryを
-      L(U) 内に持たない未decided Target U の集合
-  if V ≠ ∅ かつ T(E*) の L 内に、decided集合とも V の各 tentative とも
-     collisionしない後続Entry E' がある:
-       tentative[T(E*)] = 最初のそのような E'   （T(E*) はまだdecidedにしない）
-       continue
-  decided に E* を加える（T(E*) は E* で確定）
-  E* とcollisionする各未decided Target U:
-       tentative[U] = L(U) 内で現在より後の、decided集合のどれともcollisionしない最初のEntry
-       無ければ U は未commit（そのTargetはこのrunで完成しない）
-committed = decided ∪ （collisionの無い残りtentative）
+  decided に E* を加える
+  E* とcollisionする各未decided Entry F を candidates から外す
+    （Fのtargetはこのrunで完成しない。rejectionは8.4）
+committed = candidates
 ```
 
-- 停止性: 各反復は、あるTargetの `tentative` を `L` の後方へ進めるか、Targetを1件decidedにする。
-  どちらも有限回である
-- decidedになったEntryは以後置き換えない
-- 損失回避は「暫定勝者側に衝突しない代替Routeがあり、敗者側に無い」場合だけ勝者側を代替へ
-  移す。完成Target数を減らさない方向の局所改善であり、現行scoring（完成Target 1件あたり
-  `1_200_000 + priority * 120_000`、操作1件あたり `100`）がTarget数を操作数より強く重視する
-  ことと整合する。全体最適（conflict componentの厳密解）は保証せず、Can deferとする（19.2）
+- 停止性: 各反復でEntryを1件decidedにするか、candidatesから外す。有限である
+- decidedになったEntryは以後外さない
+- 同一Targetの代替Routeが無いので、旧版にあった「勝者側を代替Routeへ移す損失回避」は不要になった
+- 優先度の高いTargetが先に資源を確保する。これはREQUIREMENTS 20の1「理想品未所持の目標武器の
+  理想品を、優先度順に早く揃える」と、既存recommendationの第1 keyに一致する。完成Target数を
+  最大化する厳密解（conflict graphの最大重み独立集合）は保証せず、Can defer（19.2）とする
 - `same_owned_weapon_consumed` も同じ手続きで扱う。同じ武器を破壊的に使う2 Entryは、
   全unitが1つのshareable actionである退化ケースを除きcollisionである（既存
   `consumedWeaponGroups()`）
 
-### 6.4 checkpointとの関係
+### 6.6 checkpointとの関係
 
-- required checkpoint Entryを持つTargetの `L(T)` はそのEntryだけであり、collisionで敗者に
-  なればTargetはこのrunで完成しない。別Entryへ自動差し替えしない（7.5.6 / 9.5.2）
+- required checkpoint EntryはそのTargetの唯一のEntryであり、collisionで敗者になればTargetは
+  このrunで完成しない。別Routeへ自動差し替えしない（7.5.6 / 9.5.2）。constrained re-searchも
+  そのTargetを再検索しないので、temporary Entryも生じない
 - checkpoint participantを含む競合は、既存どおりexplicit resolutionを拒否する
-  （`conflictResolutionRefusalReason()`、9.5.1）。暫定帰結は6.3の手続きで決まるが、
+  （`conflictResolutionRefusalReason()`、9.5.1）。暫定帰結は6.5の手続きで決まるが、
   それは永続的な解決ではなく、解決手段はBuild Listでの選択変更だけという契約は変わらない
 - checkpointを `hasIdeal` だけで完了扱いにしない（`isPlannerTargetComplete()` を使う）
 
-### 6.5 preferred sourceの反映位置
+### 6.7 preferred sourceの扱い
 
-preferred sourceは **Route（Entry）選択のpreference** としてだけ反映する（6.2の4）。
-現行Beam Searchは `preferredSourceProgressCount` を物理actionごとに数えており、skip可能位置を
-preferred Entryの武器で消費したbranchが残りやすいという副作用があった。これはRoute選択とは
-無関係なBeam固有のartifactであり、schedulerの実行順（7章）には使わない。
+`TargetWeapon.preferredOwnedWeaponId` の既存正式semanticsと、各層に残す責務:
 
-### 6.6 動的なcommitment更新
+| 層 | 既存semantics | Target design |
+| --- | --- | --- |
+| Candidate Search | canonical Idealのtie-break（SEARCH_SPEC 8.1）。同等のIdealでpreferred起点を選ぶ | **維持**。ユーザーが採用するRouteはここで決まる |
+| constrained enumeration | streaming delivery順のtie-break（SEARCH_SPEC 8.1） | **維持**。B8が生成する代替Routeの選び方として残る |
+| Candidate表示 / Target画面 | 優先起点の表示・選択UI | **維持** |
+| Build List登録 | 使わない | 使わない。どのCandidateを採用するかはユーザーが置換確認で決める |
+| 通常Planner | Beam Searchのplan preference（PLANNER_SPEC 7.4、`preferredSourceProgressCount`）。同評価のbranchでpreferred起点のRouteを進めたものを優先 | **撤去**。各Targetに1 Routeしか無いため、preferredを理由に選べるRouteが存在しない。schedulerの実行順にも使わない |
+| Planning input hash / Execution | `targetWeaponsHash`、Plan start effect（16.11）、完成時の解除 | **維持**（Plannerの判断とは無関係） |
+
+- PLANNER_SPEC 7.4の「Planner側のPlan preference」を通常Plannerから撤去することは、**既存正式仕様の
+  変更** である。Phase C（scheduler切替）でPLANNER_SPEC 7.4とREQUIREMENTS 18の「優先起点はPlanner実行時の
+  計画入力」の記述を「Candidate Search / constrained enumerationの入力、およびplanning input hash」へ
+  改訂する。それまでは現行Beam Searchが7.4どおりに動作する
+- 現行Beam Searchの `preferredSourceProgressCount` は、同一TargetのRoute選択に加えて「skip可能位置を
+  preferred Entryの武器で消費したbranch」を残す副作用も持っていた。これはBeam固有のartifactであり、
+  引き継がない
+- Plannerは `preferredOwnedWeaponId` を理由に別Routeへ勝手に差し替えない（従来どおり、Planner計算は
+  preferredを変更もしない）
+
+### 6.8 動的なcommitment更新
 
 schedule中に次が起きた場合だけ、影響Targetについてcommitmentを更新する。
 
 | イベント | 処理 |
 | --- | --- |
 | committed EntryのTargetが別Entryのreserveで `hasIdeal` になった（required Entryを除く） | そのEntryを解放する（以後そのunitはholdingしない）。現行relevance（`entryIsRelevantForState()`）と同じ |
-| committed Entryの実行前提が崩れた（inventory、source version、protection） | そのEntryを失敗とし、既存rejection reasonを記録してTargetを再commit |
-| in-flight化によりplanning Targetの `hasIdeal` がfalseへ戻った | 未commitならTargetを再commit |
-| 7.8のdeadlock / stallでEntryを落とした | Targetを再commit |
-
-再commitは6.2の `L(T)` を先頭から走査し、現在状態で実行可能（未実行のholding unitがすべて
-現在位置以降、source / version / protectionが成立）かつ、現在のcommitted集合と
-`detectPlannerConflicts()` でcollisionしない最初のEntryを採る。既存のcommitted Entryを
-押し出さない。見つからなければTargetはこのrunで完成しない。
+| committed Entryの実行前提が崩れた（inventory、source version、protection） | そのEntryを失敗とし、既存rejection reasonを記録する。代替Routeは無いのでTargetはこのrunで完成しない |
+| in-flight化によりplanning Targetの `hasIdeal` がfalseへ戻った | そのTargetのEntryが未commitで、現在状態で実行可能（未実行のholding unitがすべて現在位置以降、source / version / protectionが成立）かつ現在のcommitted集合とcollisionしないならcommitする。既存のcommitted Entryを押し出さない |
+| 7.8のdeadlock / stallでEntryを落とした | そのTargetはこのrunで完成しない |
 
 ---
 
@@ -377,7 +451,7 @@ schedule中に次が起きた場合だけ、影響Targetについてcommitment�
 
 ### 7.1 State
 
-stateは既存 `PlannerSearchState` をそのまま使う（20章）。schedulerは単一stateを前進させる
+stateは既存 `PlannerSearchState` をそのまま使う（10章）。schedulerは単一stateを前進させる
 ため、Beam Searchのようにactionごとにstate全体を `structuredClone()` する必要は無い。
 状態遷移は既存関数（`applyRouteAction()` / `applyReserveAction()` /
 `fastForwardPlannerRouteProgress()` / precondition群）を共有helperへ抽出して再利用し、
@@ -417,7 +491,8 @@ safeの条件は「実行後、`F(σ)` のうちそのactionで進まなかっ�
 1ではholding unitが2つ以上のphysical actionに分かれることはない（6章のcommitmentがcollisionを
 排除している）。holding unitがreadyでない場合、その位置は **待つ**。
 blind forgeの条件は、確定Normal Counterを1進めることでpredicted forgeのholding位置を失わせない
-ためである（PLANNER_SPEC 7.0.2「Counter位置を持たないRoute unit」の「この実行順はBeam Searchの探索が決める」を、決定的な待機規則へ置き換える）。
+ためである（PLANNER_SPEC 7.0.2「Counter位置を持たないRoute unit」の「この実行順はBeam Searchの
+探索が決める」を、決定的な待機規則へ置き換える）。
 
 ### 7.4 required unitとskippable unit
 
@@ -480,9 +555,12 @@ safe actionが複数あるとき、次のkeyの辞書式順で1つだけ選ぶ�
 | 5 | actionが進めるEntryの残りpending unit数（少ない方） | 完成に近いRouteを先に終える |
 | 6 | stable: stream順（base / `normal:*` → skill → gogma）、Counter位置、primary Entry ID | 決定性 |
 
+- Target priority、improvement preference、weapon switchはいずれも **1 Target = 1 Entryでも意味を
+  持つ** soft preferenceとして残す。Target priorityは複数Targetのsafe action間、improvement preference
+  は1つのEntry内のBonus lane / Skill lane間、weapon switchは複数Targetのsafe action間の選択に働く。
+  いずれも同一Target内の複数Entry選択とは無関係である
 - 1〜3の順はPLANNER_SPEC 7.3 / 7.6の優先順位（Target / 評価 → improvement preference →
-  weapon switch → stable）と同じ並びである。preferred sourceはRoute選択で反映済み（6.5）なので
-  ここには入らない
+  weapon switch → stable）と同じ並びである。preferred sourceは通常Plannerで使わない（6.7）
 - **同じ意味のA→B / B→Aを両方探索しない**。7.9のとおり、safe actionの順序はcommitted集合の
   完成可否を変えないので、canonical順で1つ選べば十分である
 - 1つのEntryでBonus laneとSkill laneの両方がsafeな場合（シナリオG）、`skill_first` /
@@ -502,10 +580,10 @@ safe actionが無いのにpending unitが残る場合:
 - **deadlock**: 各holding unitがreadyでなく、その前提（base、lane順、pin）が別streamの進行を
   待ち、それが循環している。例: Entry XのGogma C5（required）がX自身のconversion（Skill S10）を待ち、
   Skill S9はEntry Yのpin解除（Y自身のGogma C7）を待つ。どの順でも両方は成立しない
-- **stall**: あるstreamの現在位置にcommitted unitが無いのに後方位置のpending unitがある（3.4）
+- **stall**: あるstreamの現在位置にcommitted unitが無いのに後方位置のpending unitがある（3.5）
 
-どちらも、関与するcommitted Entryのうち6.3の順位関数 `R` が最下位のものを1件落とし
-（rejectionを記録、8.4）、そのTargetを再commit（6.6）して継続する。決定的である。
+どちらも、関与するcommitted Entryのうち6.5の順位関数 `R` が最下位のものを1件落とし
+（rejectionを記録、8.4）、継続する。落としたTargetはこのrunで完成しない。決定的である。
 現行Beam Searchでは同じ状況で一方のRouteが `counter_before_current` で失われ、conflictとしては
 報告されなかった。これを新しい `ConflictKind` として報告するかはCan defer（19.2）とする
 （`ConflictKind` 追加は永続shapeとUIの変更を伴うため）。
@@ -524,7 +602,7 @@ safe actionについて次が成り立つ。
 
 よってsafe actionだけを実行する限り、どの順でもcommitted集合の完成可否は同じであり、
 safe actionが尽きてpendingが残る状態はどの順でも到達する真のdeadlockである。
-例外はin-flight化による他Targetの充足喪失（6.6）で、再commitがholdingを増やし得る。
+例外はin-flight化による他Targetの充足喪失（6.8）で、追加commitがholdingを増やし得る。
 これは所持Idealを保護せず別TargetのRoute起点にしている稀なケースであり（多くは
 `confirm_owned_ideal` が開始時に保護する）、parity fixtureで挙動を固定する（16章）。
 
@@ -543,7 +621,8 @@ Route B: Gogma C100、Weapon BへReset（required）
 できないので、commitmentの時点で `same_gogma_counter` のcollisionとして扱う。
 `A→...` / `B→...` のbranchを生成しない。Skill（`same_skill_counter`、conversionを含む）、
 Normal（`same_normal_counter`、predicted forge）も同じである。blind forgeはCounter位置を
-持たないためparticipantにならず、7.3の待機規則で順序だけを決める（現行PLANNER_SPEC 7.0.2「Counter位置を持たないRoute unit」と同じ区別）。
+持たないためparticipantにならず、7.3の待機規則で順序だけを決める（現行PLANNER_SPEC 7.0.2
+「Counter位置を持たないRoute unit」と同じ区別）。
 
 ### 8.2 ConflictResolution
 
@@ -552,18 +631,20 @@ Normal（`same_normal_counter`、predicted forge）も同じである。blind fo
 
 ```text
 ConflictResolutionで選択Entryがある
-  → その競合では選択Entryを採用（6.2の2で当該TargetのL先頭）
-  → 非選択participantはholding unitがblockされ、そのTargetのLから外れる（6.2）
+  → その競合では選択Entryを採用（そのTargetの唯一のEntry）
+  → 非選択participantはholding unitがblockされ、実行しない（6.2）
   → schedulerは継続
 ```
 
 - `recommendedBuildListEntryId`、Planner bestState、Target priority、scoreを固定authorityに
-  しない（9.2.7）。暫定帰結（6.3）は固定制約ではなく、ConflictResolutionを生成せず、
+  しない（9.2.7）。暫定帰結（6.5）は固定制約ではなく、ConflictResolutionを生成せず、
   `PlanConflict.selectedBuildListEntryId` は `null` のままである
 - 選択が無効な場合（削除済み、stale、非participant、checkpoint競合）は既存どおり
   `invalid_conflict_resolution` を返す
+- 同一Targetの異なるEntryを選択するresolution集合はfail closed（6.3）
 - **ConflictResolutionがあっても、失ったRouteを自動で別Routeへ書き換えない。** 代替Routeが
-  必要なら、ユーザーの明示選択を経て既存constrained re-search（12章）へ渡す
+  必要なら、ユーザーの明示選択を経て既存constrained re-search（12章）へ渡し、採用された場合だけ
+  Build Listの元Entryが生成Entryで置換される（PLANNER_SPEC 9.2.18）
 
 ### 8.3 未解決Conflictに到達した場合
 
@@ -573,13 +654,13 @@ ConflictResolutionで選択Entryがある
 | --- | --- | --- |
 | A | その時点でrunを停止し、partial Plan + Conflictを返す | 不採用。複数の未解決競合があると、固定Entry / trial Entryが後方でreserveされる前に止まり、B8のadoption（9.2.14）とB9のfeasibility（9.2.4.7）が成立しない。Draftは競合より後ろの独立Targetを失う |
 | B | participant以外だけ進め、両participantを止める | 不採用。3.3により、holding位置を誰も消費しないとそのstreamが止まり、後方の全Entryが止まる。止めずに第三者が消費すれば両participantを失う。現行より完成Targetが減る |
-| **C** | **暫定帰結（6.3）で勝者をcommitし、全体を最後までscheduleし、競合は `PlanConflict` として返す** | **採用**。現行Beam Searchも競合の一方を（scoreにより）実行して最後まで探索し、競合を返している。挙動の意味が近く、B8 / B9 / B10の既存契約をそのまま満たす |
+| **C** | **暫定帰結（6.5）で勝者をcommitし、全体を最後までscheduleし、競合は `PlanConflict` として返す** | **採用**。現行Beam Searchも競合の一方を（scoreにより）実行して最後まで探索し、競合を返している。挙動の意味が近く、B8 / B9 / B10の既存契約をそのまま満たす |
 
 接続:
 
 - **conflict UI（UI_FLOW 11.1）**: 表示する競合は8.5のとおり既存と同じIDの集合である。
-  暫定勝者は6.3の順位関数が既存 `recommendEntry()` と同じcomparatorなので、full-set推奨
-  participantがcommit候補である限り「Planner推奨」badgeとDraftで実際に進むparticipantが一致する
+  暫定勝者は6.5の順位関数が既存 `recommendEntry()` と同じcomparatorなので、
+  「Planner推奨」badgeとDraftで実際に進むparticipantが一致する
 - **recommendedBuildListEntryId**: 生成規則を変えない。暫定帰結はこのfieldを読まず、同じ
   comparatorを共有するだけである（固定authorityにはしない）
 - **what-if / constrained orchestration**: 12章。Draftの暫定帰結はresolutionではないため、
@@ -594,20 +675,22 @@ ConflictResolutionで選択Entryがある
 | --- | --- | --- |
 | explicit resolutionで非選択 | 既存 `conflict_resolution_not_selected` | `resource_conflict` |
 | 暫定帰結・deadlock・stallで敗者 | 新しい内部reason（名称はPhase Aで確定。例: `conflict_not_committed`） | `resource_conflict`（変更点） |
-| 同一Targetの別Entryを採用 | 記録なし（従来どおり） | `longer_route` / `dominated_by_better_candidate`（従来どおり） |
 | Targetが他の武器で充足 | 既存 `candidate_already_satisfied` | `already_satisfied` |
 | 前提崩れ・保護 | 既存reason | 既存mapping |
+| augmented inputでtemporary Entryに置換される元Entry | 記録しない（置換後集合に含まれない、6.4） | 記録しない |
 
 現行 `createRejectedBuildListEntries()` は `resource_conflict` をexplicit選択がある場合だけに
 付けていた。暫定帰結の敗者も `resource_conflict`（「他の候補と資源が競合しました」）として
 表示するのが実態に合うため、mappingをPhase Aで変更する。これはProductionPlanの計算結果の
-変更であり、14章のschema境界に含まれる。
+変更であり、15章のschema境界に含まれる。旧版にあった「同一Targetの別Entryを採用」
+（`longer_route` / `dominated_by_better_candidate`）は、通常入力では生じなくなる。
 
 ### 8.5 返す `conflicts`
 
 - 既存 `preparePlannerInitialContext().initialConflictDetection` の競合（初期relevant集合全体、
-  IDは既存規則）を返す。UIのavailability判定（UI_FLOW 11.1）が同じ経路で再現するIDである
-- 加えて、動的commitment更新（6.6）の時点で `detectCurrentPlannerConflicts()` と同じ関数で
+  IDは既存規則）を返す。UIのavailability判定（UI_FLOW 11.1）が同じ経路で再現するIDである。
+  augmented inputでは置換後集合（6.4）で検出する
+- 加えて、動的commitment更新（6.8）の時点で `detectCurrentPlannerConflicts()` と同じ関数で
   検出した競合を、IDでdedupして加える
 - 現行Beam Searchは破棄されたbranchを含む全展開stateの競合を集めていた（`discoveredConflictsById`）。
   schedulerはbranchを持たないため、探索上だけ現れた競合は返さない。これにより「現在のPlanner
@@ -615,18 +698,21 @@ ConflictResolutionで選択Entryがある
 
 ---
 
-## 9. 同一Target複数Entry・checkpoint・preferencesのまとめ
+## 9. 契約の反映場所まとめ
 
 | 契約 | 反映場所 | 強度 |
 | --- | --- | --- |
-| required checkpoint Entry（7.5.6） | commitmentの `L(T)`（唯一の候補）、完了判定 | hard |
+| Build List cardinality（DATA_MODEL 9.4.1） | 永続化境界、ordinary Planner入力validation（6.2） | hard（違反はfail closed） |
+| temporary augmented inputの例外（PLANNER_SPEC 9.2.18） | B8 / B9 orchestration、6.4 | 非永続の例外 |
+| required checkpoint Entry（7.5.6） | 唯一のEntry、完了判定 | hard |
 | 1 Targetにつき選択Entry最大1件（7.5.7）、既Ideal Targetの選択（7.5.8）、壊れた選択（7.5.9） | 既存Planner入力validation（変更しない） | hard（fail closed） |
 | pin gating / pin終端skip不可（7.5.1 / 7.5.2） | ready判定、holding判定 | hard |
 | checkpoint未到達のreserve拒否（7.5.3） | 既存 `applyReserveAction()` | hard |
 | milestone / `checkpoint_state_mismatch`（7.5.4） | 既存Trace Replay（変更しない） | hard |
-| explicit ConflictResolution | commitmentの除外と `L(T)` 先頭 | 局所hard |
-| 暫定帰結 | commitmentのfixed point | Draft用の暫定 |
-| preferred source（7.4） | commitmentの `L(T)`（cost下位） | soft |
+| explicit ConflictResolution | commitmentの除外 | 局所hard |
+| 暫定帰結 | commitment（6.5） | Draft用の暫定 |
+| preferred source（7.4） | Candidate Search / constrained enumerationだけ（6.7）。通常Plannerから撤去 | soft |
+| Target priority | 暫定帰結の順位関数、canonical順key 1 | soft |
 | improvement preference（7.6） | canonical順key 2 | soft |
 | weapon switch（7.3） | canonical順key 3 | soft |
 
@@ -651,7 +737,7 @@ ConflictResolutionで選択Entryがある
 | `trace` | 必要 | 出力そのもの（Trace Replay / ProductionPlanの入力） |
 | `lastWeaponOperationSubjectKey` | 必要 | canonical順key 3 |
 | `weaponSwitchCount` / `improvementPreferenceViolationCount` | 診断 | 決定には使わないが、parity比較とinstrumentationに使う。incrementalに維持 |
-| `preferredSourceProgressCount` | 不要（Beam専用） | 6.5。Phase Cでは型互換のため0以外でも可、Phase Dで削除を判断 |
+| `preferredSourceProgressCount` | 不要（Beam専用） | 6.7。Phase Cでは型互換のため残してよく、Phase Dで削除を判断 |
 | `totalCost` | 不要（Beam専用） | `trace.length` と同値。Phase Dで削除を判断 |
 | `evaluationScore` | 不要（Beam専用） | 11章 |
 
@@ -659,8 +745,9 @@ Execution / Trace Replay / conflict correctnessに必要なfieldは1つも削ら
 
 ### 10.2 scheduler専用のruntime情報
 
-committed Entry集合、`L(T)` の位置、commitment結果、非commit理由は **scheduler内部のruntime情報**
-であり、`PlannerSearchState`、`ProductionPlan`、`PlanStep`、DB schemaへ追加しない。
+committed Entry集合、commitment結果、非commit理由、temporary Entry集合は
+**scheduler / orchestration内部のruntime情報** であり、`PlannerSearchState`、`ProductionPlan`、
+`PlanStep`、`BuildListEntry`、DB schemaへ追加しない。
 
 ---
 
@@ -670,9 +757,9 @@ committed Entry集合、`L(T)` の位置、commitment結果、非commit理由は
   `createPlannerSearchStateSemanticKey()` は変更せず、Beam Search oracleとinstrumentationのために
   残す。「traceをsemantic keyから削るだけ」の変更は行わない（1.3）
 - `evaluationScore` / `comparePlannerSearchStates()` / `scoreCandidate()` / progress potentialは
-  通常schedulerの決定に使わない。commitmentの判断は6章の `L(T)` と順位関数 `R`、実行順は7.7で決まる。
-  Phase Cでは `evaluationScore` を最終stateに対して既存 `evaluatePlannerSearchState()` で1回だけ
-  計算して診断用に保持してよい（どの判断も読まない）。削除はPhase Dで判断する
+  通常schedulerの決定に使わない。commitmentは6章、実行順は7.7で決まる。Phase Cでは
+  `evaluationScore` を最終stateに対して既存 `evaluatePlannerSearchState()` で1回だけ計算して
+  診断用に保持してよい（どの判断も読まない）。削除はPhase Dで判断する
 - `CandidateScore` の推奨重みは、Beam oracleが残る間は変更しない
 
 ---
@@ -689,7 +776,7 @@ Plannerを完全再実行する。通常Plannerの実装を差し替えると両
 別契約は残さない。
 
 ```text
-deterministic scheduling
+deterministic scheduling（persisted Build List、1 Target = 1 Entry）
   ↓
 Conflict（PlanConflict、暫定帰結つきDraft）
   ↓
@@ -697,11 +784,14 @@ Conflict（PlanConflict、暫定帰結つきDraft）
   ↓
 失うTargetだけ constrained re-search（既存B8、enumeratorは変更しない）
   ↓
-代替Ideal Candidate → temporary / generated BuildListEntry
+代替Ideal Candidate → temporary generated Entry（元Entryと一時的に共存）
   ↓
-initial conflict preflight（既存9.2.3.1、shared helperのまま）
+initial conflict preflight（既存9.2.3.1、置換後集合での再対応付け。PLANNER_SPEC 9.2.18）
   ↓
-deterministic scheduling再実行（初期stateから）
+deterministic scheduling再実行（初期stateから、置換後集合で計算）
+  ↓
+採用 → 元Entryを生成Entryで置換してPlanと同一transactionで保存（PLANNER_SPEC 9.2.18）
+不採用 → 何も永続化しない
 ```
 
 ### 12.2 維持する契約
@@ -711,19 +801,31 @@ deterministic scheduling再実行（初期stateから）
   この制約はむしろ容易になる
 - 共存可能性の最終authorityは完全再実行 + Trace Replay（9.2.11）。preflightは判定しない
 - adoption条件（9.2.14）とfeasibility（9.2.4.7）は `plan.selectedBuildListEntryIds` を読むだけで
-  あり変更しない。6.2の2により固定Entryは固定Targetの採用Entryになる
-- 生成Entryは敗者Targetの `L(T)` に入る。元Entryはresolutionでblockされ除外される（6.2）
+  あり変更しない
 - `maxPlannerReruns` は「full Planner runの回数」を数える。意味（1回の `createProductionPlanWithObserver()`
   内のruntime-unsupported retryを含む）は変えず、observer hookの名称（`beforeBeamSearch` 等）は
   Phase Cで意味を保ったまま改名してよい
 - orchestration bounds（2 / 1 / 4）とenumeration boundsの値は本書で変更しない。Beam runが
   高価だったために小さくした経緯があるので、再測定はCan defer（#101と合わせて扱う）
 
-### 12.3 what-if
+### 12.3 Build List cardinalityとの接続（Phase 0）
+
+PLANNER_SPEC 9.2.18に正式契約を置いた。要点:
+
+- trial中は元Entry `B1` とtemporary Entry `B2` の共存を許可する（永続化しない）
+- Planの計算と記録は置換後集合で行い、置換で消える競合に対応するfixed constraintは
+  「置換で充足済み」として扱う。それ以外のfixed constraintは従来どおり一意に再対応付けできなければ
+  fail closedする
+- 採用時は `B1` を `B2` で置換し、Planと同一transactionで保存する。trial不採用なら何も永続化しない
+- 置換が `active` Planを壊す場合は既存Plan-breaking guardを迂回しない
+- これらは通常Plannerの実装（Beam / scheduler）に依存しないため、scheduler切替より前のPhase 0で
+  実装できる
+
+### 12.4 what-if
 
 what-ifのUI / Domain semantics（`scenarioResolution`、`defaultPlannerWhatIfBounds`、
-`blocked_by_selected_checkpoint` 等）は変更しない。ConflictResolution + trial Entry + Planner rerunの
-構造はそのまま動作する。
+`blocked_by_selected_checkpoint` 等）は変更しない。trial Entryはtemporary Entryとして
+置換後集合で評価し、永続化しない。
 
 ---
 
@@ -795,20 +897,41 @@ statusと決定順序（PLANNER_SPEC 7.2.1）を変更しない。新しいstatu
 （7.2.1）そのものなので、新status（例: `conflict`）は不要である。UIの `exhausted` 表示
 （UI_FLOW 10.1「現在の入力から作成できる生産計画はありませんでした。」）は `plan === null` の
 場合の表示であり、`plan != null` のexhausted resultは従来どおりDraftとして保存・表示される。
+Build List cardinality違反（legacy duplicate）は探索前のvalidation失敗であり、既存の
+Beam Searchへ到達しなかったrunと同じく `exhausted` / `plan = null` / 専用warningで返す。
 
 ---
 
-## 15. Calculation schema境界
+## 15. Version境界
 
-### 15.1 ProductionPlan
+### 15.1 Phase 0（Build List cardinality）
+
+既存version policyに照らして、**どのversionも変更しない**。
+
+| version | 判断 |
+| --- | --- |
+| `DATABASE_SCHEMA_VERSION`（8） | table / index / 永続shapeが変わらない。legacy duplicateを自動削除・自動選択しない（DATA_MODEL 9.4.1）ためmigrationも無い |
+| `ExportRoot.schemaVersion`（11） | Export shapeが変わらない。Importはlegacy duplicateを含むrootを拒否せずそのまま復元する（backupを取り戻せなくしない）。v10→v11のDraft削除のようなmigrationを伴わない |
+| `CURRENT_CALCULATION_APP_SCHEMA_VERSION`（13） | 有効な（1 Target 1 Entryの）入力に対する計算semanticsは変わらない。duplicateを持つ入力はfail closedへ変わるが、既存のProductionPlan / BuildCandidate / BuildListEntryは自身の記録のまま有効であり、current runtimeが誤読する永続artifactは生じない |
+| `RngState.schemaVersion`、`AppSettings.schemaVersion`、`PRODUCTION_RNG_ENGINE_VERSION`、Master `dataVersion` | 無関係 |
+
+- B8採用時の置換後集合での計算（PLANNER_SPEC 9.2.18）は、新しく保存するPlanの `conflicts` /
+  `rejectedBuildListEntries` / `buildListEntriesHash`（監査用）の内容を変えるが、既存Planの互換性を
+  壊さない。既存version 13 Draftの `conflicts` が既に存在しない元Entryを参照していても、Draftは
+  lifecycle-aware reference integrity（DATA_MODEL 15.2）の対象外であり、B10でその競合を再現できない
+  場合は既存の `invalid_conflict_resolution` fail closedと再計算導線で扱われる
+- Build List collection invariantはCalculationContextに入らない。永続collectionの契約変更を
+  CalculationContextのversion境界で代用しない（CalculationContextは計算artifactの互換性だけを表す）
+
+### 15.2 Phase C（scheduler切替）: ProductionPlan
 
 Phase Cで `CURRENT_CALCULATION_APP_SCHEMA_VERSION` を **13 → 14** へ上げる（本書では値を変更しない）。
 
 理由:
 
-- 同じ `PlannerInput` に対して、採用Entry（6.2）、未解決競合の帰結（6.3）、返す `conflicts`（8.5）、
+- 同じ `PlannerInput` に対して、未解決競合の帰結（6.5）、返す `conflicts`（8.5）、
   `rejectedBuildListEntries` のmapping（8.4）、Step順が変わる。explicit resolutionの非選択側が
-  共有actionで完成するケース（7.6）も変わる
+  共有actionで完成するケース（7.6）も変わり、preferred sourceのPlanner側preferenceも撤去される（6.7）
 - 永続 `ProductionPlan` は生成戦略を記録しないため、version 13のDraftの `conflicts` /
   `rejectedBuildListEntries` がBeam由来かscheduler由来かを判別できない（version 5境界と同じ論理）
 - PLANNER_SPEC 7.3の武器切替preferenceは「同等にcorrectなPlanのうちどれを選ぶか」だけの変更として
@@ -823,7 +946,7 @@ Phase Cで `CURRENT_CALCULATION_APP_SCHEMA_VERSION` を **13 → 14** へ上げ�
   version 13境界でも同じ扱いをした先例がある。Step / ExpectedPlanStateの契約自体は変わらないため
   実行上の危険は無いが、fail-closedを優先する
 
-### 15.2 BuildCandidate / BuildListEntry
+### 15.3 Phase C: BuildCandidate / BuildListEntry
 
 Candidate Search semantics、Candidate Snapshot、BuildListEntry shape、staleness、constrained
 enumeratorは変わらない。したがって明示的なbuild-result例外を `14 -> [12, 13]` とし、
@@ -831,52 +954,93 @@ gameVersion / masterDataVersion / rngEngineVersionが一致し通常のstale判�
 version 12 / 13のBuildCandidate / BuildListEntryをversion 14で再利用可能とする。
 version 1〜11は従来どおり非互換、例外をProductionPlanへ適用しない。
 
-### 15.3 変更しないversion
+### 15.4 変更しないversion
 
-`DATABASE_SCHEMA_VERSION`（8）、`ExportRoot.schemaVersion`（11）、`RngState.schemaVersion`（2）、
-`AppSettings.schemaVersion`（1）、`PRODUCTION_RNG_ENGINE_VERSION`、Master `dataVersion` は変更しない
-（永続shape、RNG、Masterのいずれも変わらないため）。
+Phase Cでも `DATABASE_SCHEMA_VERSION`（8）、`ExportRoot.schemaVersion`（11）、
+`RngState.schemaVersion`（2）、`AppSettings.schemaVersion`（1）、`PRODUCTION_RNG_ENGINE_VERSION`、
+Master `dataVersion` は変更しない（永続shape、RNG、Masterのいずれも変わらないため）。
 
 ---
 
 ## 16. 必須acceptance scenarios
 
-各scenarioはPhase AのDomain testとPhase Bのparity fixtureに入れる。「branchを作らない」は、
+各scenarioはPhase 0 / AのDomain / Service testとPhase Bのparity fixtureに入れる。「branchを作らない」は、
 1 stepあたり構築するstateが1つであること（`expandedStates` 増分が1）と、候補actionを
 canonical順で1つだけ適用したことを検証する。
+
+### 16.1 scheduler
 
 | # | 入力 | 期待動作 |
 | --- | --- | --- |
 | A | Target A: Gogma laneだけ（C50で完成）、Target B: Skill laneだけ（C100で完成） | 競合なし。Gogma C0〜C50はAの武器、Skill C0〜C100はBの武器が消費する。canonical順（priority → switch）で一方のrunをまとめて行い、両方完成（`completed`）。branchなし |
 | B | A / B / Cの最終unit（required）の `counterBefore` がそれぞれGogma C50 / C80 / C120（全Route起点C0） | Gogma streamはC0から昇順に消費。C50でA、C80でB、C120でCのrequired unitが実行され、各直後にreserve。他の位置はpassableで、executorは7.7で決まる。物理Gogma操作数は121 |
 | C | A: C50 required、B: C50 skippable | 候補は「Aを実行」だけ。Bはfast-forward。Bを実行するbranchもrejectionも作らない |
-| D | A: C50 Weapon A Keep required、B: C50 Weapon B Reset required | commitmentで `same_gogma_counter` のcollision。resolutionが無ければ6.3の暫定帰結で一方だけcommitし、競合を `PlanConflict` で返す（`selectedBuildListEntryId = null`）。順序探索をしない。敗者は `resource_conflict` |
+| D | A: C50 Weapon A Keep required、B: C50 Weapon B Reset required | commitmentで `same_gogma_counter` のcollision。resolutionが無ければ6.5の暫定帰結で一方だけcommitし、競合を `PlanConflict` で返す（`selectedBuildListEntryId = null`）。順序探索をしない。敗者は `resource_conflict` |
 | E | 2 Entryが同じconcrete source weaponの同じphysical action（同type・同Counter遷移）を次unitにもつ（両者の全unitが1 actionの退化ケース） | 1 actionで両Entryをprogressし、`progressedBuildListEntryIds` に両方を記録。version共有も既存どおり。Trace Replayがidentityを再検証 |
 | F | 別EntryのEntry-local transient Gogma（null source）が同じGogma位置 | shareableでない。両方requiredならcollision、両方skip可能なら一方がexecutorで他方fast-forward。1 actionで両Entryを進めない |
 | G | 1 TargetのBonus laneとSkill laneが同時にsafe | `bonus_first` / `skill_first` は優先laneを選ぶ。優先laneが待ちなら反対laneを進めviolationを記録。`planner` はweapon switch → 残り数 → stable順。両branchを保持しない |
-| H | selected checkpointを持つEntry | そのEntryだけが `L(T)`。pin gatingで片laneがpinを越えない。checkpoint到達前にreserveしない（`selected_checkpoint_not_reached`）。milestoneはpin終端Stepに載り、Trace Replayが検証。`hasIdeal` だけでcompleteにしない |
-| I | 同一Targetに2 Entry（costが同じで片方がpreferred source / preferredが1操作遠い） | 同costならpreferredをcommit。preferredが遠ければ短い方をcommit（逆転しない） |
+| H | selected checkpointを持つEntry | そのEntryがTargetの唯一の候補。pin gatingで片laneがpinを越えない。checkpoint到達前にreserveしない（`selected_checkpoint_not_reached`）。milestoneはpin終端Stepに載り、Trace Replayが検証。`hasIdeal` だけでcompleteにしない |
+| I | TargetのEntryがpreferred起点ではない（別のpreferred起点の所持武器がある） | Plannerはpreferredを理由にRouteを差し替えず、そのEntryのRouteをscheduleする（6.7）。preferredはCandidate Searchのtie-breakとしてだけ働く |
 | J | 2 Routeが同じOwnedWeaponを破壊的に使用 | `same_owned_weapon_consumed` のcollision。片方だけcommit。source version / in-flight / 保護の既存semanticsを維持 |
 | K | 新規Normal（predicted forge 2本）→ conversion → Reset / Reset Skills | Normal Counter位置でforge（required）、Skill起点でconversion（required、Skill +1、Gogma +0）、base完了までGogma laneのholding位置は待つ。transient subjectはEntry-local。blind variantではforgeがCounter位置を持たず、確定Counterなら同武器種のpredicted forgeが残る間は待ってから1進める |
-| L | ConflictResolutionで一方を選択 | 選択EntryがそのTargetの採用Entry、非選択participantは除外（`conflict_resolution_not_selected`）。scheduleを継続。非選択Routeを別Routeへ変換しない。resolution以外の競合は暫定帰結 |
-| M | constrained re-searchで敗者Targetへ生成Entryを追加 | preflightでresolutionを再対応付け後、初期stateから再実行。生成Entryは敗者Targetの `L(T)` に入り、元Entryはblockされ除外。adoptionは既存条件で判定 |
+| L | ConflictResolutionで一方を選択 | 選択EntryをTargetのRouteとして実行、非選択participantは実行しない（`conflict_resolution_not_selected`）。scheduleを継続。非選択Routeを別Routeへ変換しない。resolution以外の競合は暫定帰結 |
+| M | constrained re-searchで敗者Target `B` に生成Entry `B2` を追加 | trial入力では元Entry `B1` と `B2` が共存し、preflightで再対応付けした後、置換後集合（`B1` → `B2`）で初期stateから再実行する。`B1` は実行・記録されない。adoptionは既存条件で判定 |
 
-追加で固定するscenario:
+### 16.2 Build List cardinality
+
+| # | 入力 | 期待動作 |
+| --- | --- | --- |
+| N | Target A → Entry A1が既存。Search結果の別Candidate A2を追加 | A1 / A2を並存させない。現在の候補と新しい候補、旧候補の途中採用設定・改善優先が引き継がれないことを示す確認を経て、承認時だけA1をA2へatomicに置換する。A2の選択状態はSearch画面で指定したものだけ |
+| O | 既存Entry A1と同一semanticのCandidateを再追加 | duplicate扱い。何も書かず、A1の途中採用設定・改善優先を上書きしない（既存の再追加規則） |
+| P | Nの置換確認をキャンセル | A1を維持し、A2を保存しない。Planにも影響しない |
+| Q | 置換されるA1がactive PlanのPlan依存Entry | 置換全体を1つのguarded mutationとして既存Plan-breaking guardで判定し、`build_list_changed` の警告と16.10の選択を経る。未承認なら何も変更しない。承認時はA1→A2置換とPlanの `abandoned`（`breaking_change_approved`）を同一transactionで行う。A1がDraftだけの参照ならguard対象外（既存のEntry削除と同じ） |
+| R | Target B → B1。constrained re-searchのtrial generated B2 | trial中はtemporary augmented inputとしてB1 / B2共存可。不採用なら何も永続化しない。採用ならB1をB2へ置換し、Planと同一transactionで保存。永続Build ListのTarget Bは最終的に1件 |
+| S | legacy duplicate: 永続Target Aに A1 / A2 | 自動選択・自動削除しない。ordinary Planner入力はfail closed（専用warning）。Build ListはTarget Aに「使用する候補を1件にしてください」相当の案内を出し、ユーザーが既存の削除操作（guarded）で整理する。Search画面からの追加 / 置換は、どちらを置換するか推測できないため拒否して整理を案内する。Import / Exportはそのまま保持する |
+
+### 16.3 追加で固定するscenario
 
 - zero-operation `existing_gogma_current` の `confirm_owned_ideal` が開始時に適用され、その武器を
   起点にする他Routeが保護で実行不能になる
-- deadlock（7.8の例）で `R` 最下位のEntryが落ち、代替があれば再commitされる
+- deadlock（7.8の例）で `R` 最下位のEntryが落ち、そのTargetは完成しない
 - reserveした武器が別planning TargetのIdealも満たし、そのTargetのcommitted Entryが解放される
 - `maxPlanSteps` 到達で `incomplete`、partial Planは保存されない
 - cancelで `cancelled`
 - 同じ入力・同じEngine fixture・同じID factory / clockで結果が完全一致する（決定性）
+- ordinary入力で同一Targetの異なるEntryを選択する2つのresolutionを与えたmalformed入力がfail closedする
 
 ---
 
 ## 17. 実装フェーズ
 
-依存関係: 状態遷移の共有化 → scheduler Domain → parity / benchmark → Production切替
-（B8 / B9も同時に切り替わる）→ UI / legacy整理。
+依存関係:
+
+```text
+Phase 0（Build List cardinality）──────────────┐
+Phase A0 → Phase A → Phase B ──────────────────┴→ Phase C → Phase D
+```
+
+Phase 0はPlanner schedulerとは独立に実装でき、Phase A0 / A / Bと並行してよい。
+**Phase C（Production切替）の前にPhase 0がmerge済みであること** を必須とする。schedulerの通常経路は
+1 Target = 1 Entryを前提にし、違反をfail closedするためである。
+
+### Phase 0: 永続Build Listを1 Target = 1 Entryへ整理（#103とは別PR群）
+
+仕様は本PR（#108）でDATA_MODEL 9.4.1 / SEARCH_SPEC 10.1 / UI_FLOW 9 / 10 / PLANNER_SPEC 9.2.18 /
+REQUIREMENTS 18へ記載済み。実装は次の順で小さく分ける。
+
+- **0-1 Domain / Service**: collection invariant判定helper、ordinary Planner入力validationの
+  duplicate fail closed（warning kindとlabel）、`replace BuildListEntry for Target` のguarded mutation
+  （旧Entryの確認付き削除 + 新Entry追加を1 transaction、置換後集合のcollection invariant検証）、
+  Search追加APIの結果型（追加 / duplicate / 置換確認が必要 / legacy duplicateのため不可）、
+  Import / Exportがlegacy duplicateを保持することのtest。UIは変えない
+- **0-2 UI**: Search画面の置換確認Dialog（`ui-ux-pro-max` でPresentationを確定し、UI_FLOWを同じPRで
+  具体化）、Build Listのlegacy duplicate案内、既存Plan-breaking警告Dialogとの接続
+- **0-3 Planner / Persistence**: temporary augmented inputの扱い（置換後集合での計算と記録、
+  置換で充足したfixed constraintの扱い、temporary 2件以上のfail closed）、
+  `savePlannerOrchestrationResult()` と再計画採用での元Entry置換、active Planを壊す置換の
+  guard接続。現行Beam Searchのまま実装する
+
+0-1が先行し、0-2と0-3は並行してよい。いずれもversionを変更しない（15.1）。
 
 ### Phase A0: 状態遷移helperの抽出（純リファクタ）
 
@@ -891,6 +1055,8 @@ canonical順で1つだけ適用したことを検証する。
 - `src/domain/planner/` にcommitment（6章）とscheduler（7章）を追加。React / IndexedDB / Workerに依存しない
 - `runPlannerDeterministicSchedule(input, dependencies, executionOptions)` が
   `PlannerBeamSearchResult` 互換の結果を返す。`recommendEntry()` のcomparatorを共有helperへ抽出
+- 通常入力は1 Target = 1 Entryを前提とし、違反はfail closed（6.2）。temporary augmented inputは
+  6.4のとおり置換後集合で扱う
 - 内部rejection reasonの追加、`createRejectedBuildListEntries()` の暫定敗者mapping（8.4）は
   schedulerの結果にだけ効くよう準備し、Production経路は変えない
 - 16章のscenario A〜M + 追加scenarioをDomain testで固定。scheduler出力が既存Trace Replayを通ることを検証
@@ -899,13 +1065,15 @@ canonical順で1つだけ適用したことを検証する。
 ### Phase B: parityとbenchmark
 
 - parity harness: 既存Planner testの入力、PR #107の `sanity-3` / `representative-12` /
-  `representative-35`、16章のscenarioでBeamとschedulerを比較する
+  `representative-35`、16章のscenarioでBeamとschedulerを比較する。Build List cardinality導入後の
+  入力（1 Target 1 Entry）で比較する
   - 必ず一致: Trace Replay有効、完了判定の意味、checkpoint milestone、PlanStep / executionEffectsの契約
-  - 劣化として扱う: 完成Target数がBeamより少ない（理由を分類し、6.3の損失回避で直すか、
-    意図した差（暫定帰結がpriority優先）として記録）
+  - 劣化として扱う: 完成Target数がBeamより少ない（理由を分類し、意図した差（暫定帰結がpriority優先）
+    として記録するか、19.2の厳密最適化を検討する）
   - 許容する差: Step順、skip可能位置のexecutor、weapon switch数、violation数、返す `conflicts` から
-    探索上だけの競合が消えること、`rejectedBuildListEntries` のmapping
-- scheduler用instrumentation（commitment反復、collision、暫定帰結、再commit、deadlock、step数、
+    探索上だけの競合が消えること、`rejectedBuildListEntries` のmapping、preferred sourceのPlanner側
+    preference撤去
+- scheduler用instrumentation（commitment反復、collision、暫定帰結、動的commit、deadlock、step数、
   safe候補数、待機回数）を追加し、PR #107と同じ実Browser Workerでrepresentative-35を計測して
   記録文書を追加する
 - 本Phaseでも、B8 / B9のtestをtest専用の戦略注入でschedulerに対して実行し、adoption / feasibility契約が
@@ -913,12 +1081,14 @@ canonical順で1つだけ適用したことを検証する。
 
 ### Phase C: Production routing切替
 
+- 前提: Phase 0がmerge済み
 - `createProductionPlanWithObserver()` をschedulerへ切り替える。通常Planner、B8 orchestration、
   B9 what-if、再計画Previewが同時に切り替わる（12.1）。Productionに戦略切替flagは置かない
 - `CURRENT_CALCULATION_APP_SCHEMA_VERSION` 14、build-result例外 `14 -> [12, 13]`、旧Planのfail-closed test
 - termination / progressは14章のとおり型を変えずに意味を定義。Worker protocolは変更しない
-- 仕様改訂を同じPRで行う: REQUIREMENTS 19 / 20、PLANNER_SPEC 7 / 7.2 / 7.2.1 / 10 / 14 / 15.3、
-  UI_FLOW 10.0の説明文、DATA_MODEL（version記述）、AGENTS.md（Calculation Context、Planner Search Strategy）
+- 仕様改訂を同じPRで行う: REQUIREMENTS 18（優先起点の記述）/ 19 / 20、PLANNER_SPEC 7 / 7.2 / 7.2.1 /
+  7.4 / 10 / 14 / 15.3、UI_FLOW 10.0の説明文、DATA_MODEL（version記述）、AGENTS.md（Calculation Context、
+  Planner Search Strategy）
 - Beam Searchはtest / benchmark用oracleとしてだけ残す
 
 ### Phase D: UI / legacy整理
@@ -938,14 +1108,15 @@ canonical順で1つだけ適用したことを検証する。
 
 ```text
 src/**、テスト、package.json
+DB migration
 schema version（数値）
 RNG semantics、Production RNG Engine
-Candidate Search、constrained enumerator
-Planner Beam Search実装
+Candidate Search algorithm、constrained enumerator
+Planner Beam Search実装、Planner実装
 Worker protocol
 ProductionPlan / PlanStep / Execution
-Persistence / Export / Import
-UI
+Persistence / Export / Import の実装
+UI実装
 #101 constrained search bounds
 #100 multiple Ideal
 ```
@@ -956,32 +1127,40 @@ UI
 
 ### 19.1 Blocking before implementation
 
-**なし。** Phase A（およびA0、B）の着手を妨げる未決事項は無い。調査中に挙がった次の論点は本書で確定した。
+**なし。** Phase 0 / A0 / A / B の着手を妨げる未決事項は無い。調査中に挙がった論点は次のとおり確定した。
 
 | 論点 | 確定内容 |
 | --- | --- |
+| 通常の永続Build Listで同一Targetの複数EntryをPlannerがどう選ぶか | **選ばない。** 永続Build Listで1 Target = 1 Entryにする（DATA_MODEL 9.4.1）。違反はfail closed（6.2） |
+| 同Targetの別Candidateの登録 | 確認のうえatomicに置換。途中採用設定・改善優先は引き継がない（DATA_MODEL 9.4.1、SEARCH_SPEC 10.1） |
+| 置換とPlan | 置換全体を1つのguarded mutationとして既存Plan-breaking guardで判定（DATA_MODEL 9.4.1） |
+| constrained re-searchの複数Entry | temporary augmented inputだけの例外。採用時に元Entryを置換（PLANNER_SPEC 9.2.18） |
+| 採用後に保存Planが削除済みEntryを参照する問題 | 置換後集合で計算・記録する（PLANNER_SPEC 9.2.18、6.4） |
+| legacy duplicate | 自動選択・自動削除しない。Planner入力はfail closed、ユーザーが整理（DATA_MODEL 9.4.1） |
+| Phase 0のversion | 変更しない（15.1） |
+| 同一Targetの複数ConflictResolution | ordinary入力では成立しない。malformed / legacy / augmentedはfail closed（6.3） |
+| preferred sourceの責務 | Candidate Search / constrained enumerationに残し、通常Plannerから撤去（6.7、Phase Cで正式改訂） |
 | 未解決Conflictの扱い（A / B） | どちらでもなく案C（8.3） |
-| 同一Target複数Entryの選択規則 | 6.2の `L(T)` |
-| preferred sourceの反映位置 | Route選択のみ（6.5） |
 | `expandedStates` の意味 | 既存定義のまま「構築したstate数」（14.2） |
 | 新terminationの要否 | 不要（14.3） |
 | constrained re-search内部の別Beam | 持たない（12.1） |
-| schema境界 | ProductionPlanは14でfail closed、build resultは `14 -> [12, 13]`（15章） |
+| schedulerのschema境界 | ProductionPlanは14でfail closed、build resultは `14 -> [12, 13]`（15.2 / 15.3） |
 | reserveを分岐にするか | しない（7.6） |
 
-Phase CのPull Requestでは、15.1の影響（実行中のversion 13 Planがstaleになり再計画が必要になること）を
-プロジェクトオーナーへ明示する。これは決定済み事項の周知であり、Phase A / Bを止めない。
+Phase CのPull Requestでは、15.2の影響（実行中のversion 13 Planがstaleになり再計画が必要になること）を
+プロジェクトオーナーへ明示する。これは決定済み事項の周知であり、Phase 0 / A / Bを止めない。
 
 ### 19.2 Can defer
 
 | 論点 | 判断時期 | 暫定 |
 | --- | --- | --- |
-| conflict componentの厳密最適化（6.3の損失回避を超える） | Phase Bのparityで完成数劣化が出た場合 | 1段lookahead付きgreedy |
-| 静的なcross-satisfaction省略（あるTargetの確保武器が別TargetのIdealも満たすと事前に分かる場合、後者のEntryをcommitしない） | Phase B以降 | 動的解放（6.6）だけ |
+| 暫定帰結の厳密最適化（完成Target数を最大化するconflict graphの独立集合） | Phase Bのparityで完成数劣化が出た場合 | priority優先のgreedy（6.5） |
+| 静的なcross-satisfaction省略（あるTargetの確保武器が別TargetのIdealも満たすと事前に分かる場合、後者のEntryをcommitしない） | Phase B以降 | 動的解放（6.8）だけ |
 | deadlock / stallを新しい `ConflictKind` などでユーザーへ示すか | Phase B以降（schema / UI変更を伴う） | rejectionを `resource_conflict` として記録 |
-| 同一Targetの別Entry同士の「競合」を `conflicts` から除くか | UI改善として別途 | 既存detectionのまま返す |
 | canonical順でweapon switchと完成の早さのどちらを上位にするか | Phase Bの実データ計測後 | 7.7（priority → violation → switch → 完成近さ） |
-| in-flight化による他Targetの充足喪失（7.9の例外）の扱いの強化 | Phase Bのfixture結果次第 | 動的再commit |
+| in-flight化による他Targetの充足喪失（7.9の例外）の扱いの強化 | Phase Bのfixture結果次第 | 動的commit（6.8） |
+| 置換確認Dialog / legacy duplicate案内の具体的なPresentationと文言 | Phase 0-2（`ui-ux-pro-max`） | UI_FLOW 9 / 10の意味論だけ確定 |
+| Phase 0のPlanner warning kind名、Search追加APIの結果型名 | Phase 0-1 | 意味論だけ確定 |
 | Build List詳細設定、`PlannerOptions` / `PlannerProgress` の型移行、`maxPlanSteps` 既定値 | Phase D | Phase Cは型不変 |
 | B8 orchestration bounds / what-if boundsの再測定 | #101と合わせて | 現行値のまま |
 | Beam oracleとBeam専用stateの削除時期 | Phase D | test / benchmark用に残す |
