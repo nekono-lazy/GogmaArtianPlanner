@@ -336,6 +336,16 @@ export type PlannerSearchRejectionReason =
    * past its pinned state before the other lane arrived (PLANNER_SPEC 7.5.3).
    */
   | 'selected_checkpoint_not_reached'
+  /**
+   * The deterministic scheduler did not commit this BuildListEntry, or dropped
+   * it from its commitment, because of a resource conflict it had to settle
+   * without an explicit `PlannerConflictResolution`: the provisional outcome of
+   * an unresolved conflict, or a deadlock / stall
+   * (`docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md` 6.5 / 7.8 / 8.4).
+   * Runtime-only; the Beam Search never produces it, and the persisted
+   * `RejectedBuildListEntry` reports it as `resource_conflict`.
+   */
+  | 'conflict_not_committed'
 
 export interface PlannerSearchRejection {
   buildListEntryId: BuildListEntryId

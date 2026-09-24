@@ -42,6 +42,7 @@ import {
   isPlannerLaneRouteComplete,
   nextPlannerLaneUnits,
   type PlannerEntryLanes,
+  type PlannerLaneProgress,
 } from './plannerRouteLanes'
 import { advancePlannerPreferredSourceMetric } from './plannerPreferredSource'
 import type {
@@ -95,6 +96,13 @@ export interface PlannerRouteActionContext {
   readonly engine: RngEngine
   readonly preferredSourceEntryIds: ReadonlySet<BuildListEntryId>
   readonly requirements: PlannerCheckpointRequirements
+  /**
+   * Which other Entries a shareable physical action may progress besides its
+   * primary unit. Omitted, every relevant Entry may share it, which is the
+   * Beam Search contract. The deterministic scheduler limits sharing to its
+   * committed Entries (`docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md` 7.5).
+   */
+  readonly canShareWithEntry?: (entryId: BuildListEntryId) => boolean
 }
 
 /** Everything an internal reserve reads besides the state it is applied to. */
@@ -547,6 +555,62 @@ export function plannerRouteUnitPreconditionRejection(
   return inventoryPreconditionRejection(state, entry, unit)
 }
 
+/**
+ * The source weapon preconditions of a route unit that do not depend on the
+ * Counter position or on an Entry-local route output: the existing-source
+ * version, and - for a unit that operates a concrete OwnedWeapon - that weapon's
+ * availability and protection. `null` for a unit on a transient route output
+ * or with no source weapon.
+ *
+ * The same authority `plannerRouteUnitPreconditionRejection()` applies, so a
+ * caller that judges a not-yet-reachable unit (the deterministic scheduler's
+ * Route commitment) never disagrees with the moment the unit actually runs.
+ */
+export function plannerRouteUnitSourceRejection(
+  state: PlannerSearchState,
+  entry: BuildListEntry,
+  unit: PlannerRouteUnit,
+): PlannerSearchRejection | null {
+  if (!entryUsesCurrentSourceVersion(state, entry)) {
+    return sourceVersionRejection(entry, unit)
+  }
+  if (routeUnitOwnedWeaponId(entry, unit) === null) return null
+  return inventoryPreconditionRejection(state, entry, unit)
+}
+
+/**
+ * Whether executing `unit` counts against its Entry's improvement preference
+ * (`docs/PLANNER_SPEC.md` 7.6): once the Entry's checkpoint is reached - or
+ * from the start when it selected none - a stream-lane operation executed
+ * while the lane the user wanted first still has units left.
+ *
+ * `previousProgress` is the Entry's lane progress before the unit runs.
+ */
+export function isPlannerImprovementPreferenceViolation(
+  state: PlannerSearchState,
+  entry: BuildListEntry,
+  lanes: PlannerEntryLanes,
+  previousProgress: PlannerLaneProgress,
+  unit: PlannerRouteUnit,
+): boolean {
+  const preference = entryImprovementPreference(entry)
+  const improving =
+    lanes.pin === null || state.reachedCheckpointByEntryId[entry.id] === true
+  if (
+    preference === 'planner' ||
+    !improving ||
+    unit.position.unitIndex !== unit.position.unitCount - 1 ||
+    unit.lane === 'base'
+  ) {
+    return false
+  }
+  const preferredLane = preference === 'skill_first' ? 'skill' : 'bonus'
+  return (
+    unit.lane !== preferredLane &&
+    previousProgress[preferredLane] < lanes[preferredLane].length
+  )
+}
+
 /** One shared Counter stream position, the resource a unit occupies. */
 function counterPositionKey(unit: PlannerRouteUnit): string | null {
   if (unit.counterStream === null || unit.counterBefore === null) return null
@@ -631,6 +695,7 @@ export function mergedPlannerProgressedEntries(
   if (!primary.shareable) return shared
   lanePlans.forEach((lanes, entryId) => {
     if (entryId === primary.entryId) return
+    if (context.canShareWithEntry !== undefined && !context.canShareWithEntry(entryId)) return
     if (state.selectedBuildListEntryIds.includes(entryId)) return
     const entry = entriesById.get(entryId)
     if (!entry) return
@@ -746,22 +811,10 @@ export function applyPlannerRouteAction(
       // none - a stream-lane unit executed while the lane the user wanted first
       // still has units left counts against the branch. A ranking preference
       // only: the unit is executed all the same.
-      const preference = entryImprovementPreference(entry)
-      const improving =
-        lanes.pin === null || state.reachedCheckpointByEntryId[entry.id] === true
       if (
-        preference !== 'planner' &&
-        improving &&
-        unit.position.unitIndex === unit.position.unitCount - 1 &&
-        unit.lane !== 'base'
+        isPlannerImprovementPreferenceViolation(state, entry, lanes, previousProgress, unit)
       ) {
-        const preferredLane = preference === 'skill_first' ? 'skill' : 'bonus'
-        if (
-          unit.lane !== preferredLane &&
-          previousProgress[preferredLane] < lanes[preferredLane].length
-        ) {
-          state.improvementPreferenceViolationCount += 1
-        }
+        state.improvementPreferenceViolationCount += 1
       }
       // The compromise checkpoint is reached the moment both lanes hold their
       // pinned state. A pinned endpoint is never skippable, so this can only

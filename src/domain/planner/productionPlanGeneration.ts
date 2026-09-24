@@ -368,6 +368,12 @@ function rejectedReason(
   )) {
     return 'resource_conflict'
   }
+  // A deterministic scheduler result only: the Beam Search never produces this
+  // reason, so the Beam Search mapping above and below is unchanged
+  // (`docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md` 8.4).
+  if (rejections.some(({ reason }) => reason === 'conflict_not_committed')) {
+    return 'resource_conflict'
+  }
   if (rejections.some(({ reason }) => reason === 'candidate_already_satisfied')) {
     return 'already_satisfied'
   }
@@ -388,6 +394,9 @@ function hasOnlyNonSearchRejections(rejections: readonly PlannerSearchRejection[
   )
 }
 
+const NOT_COMMITTED_DETAIL =
+  'Plannerが資源競合を解決するため、このBuildListEntryを今回の計画では実行しませんでした。'
+
 export function createRejectedBuildListEntries(
   input: PlannerInput,
   beamResult: PlannerBeamSearchResult,
@@ -401,6 +410,13 @@ export function createRejectedBuildListEntries(
     entries.push(rejection)
     rejectionsByEntryId.set(rejection.buildListEntryId, entries)
   })
+  // Deterministic scheduler results only (`conflict_not_committed`); empty for
+  // every Beam Search result, whose mapping and detail are therefore unchanged.
+  const notCommittedIds = new Set<BuildListEntryId>(
+    beamResult.rejections
+      .filter(({ reason }) => reason === 'conflict_not_committed')
+      .map(({ buildListEntryId }) => buildListEntryId),
+  )
   const traceEntryIds = new Set<BuildListEntryId>(
     beamResult.bestState?.trace.flatMap((action) => [
       action.primaryBuildListEntryId,
@@ -419,7 +435,9 @@ export function createRejectedBuildListEntries(
 
   if (!beamResult.completed) {
     return baseRejectedEntries
-      .filter((entry) => !traceEntryIds.has(entry.id))
+      // An Entry the deterministic scheduler dropped from its commitment may
+      // already have progressed; the Beam Search never produces that reason.
+      .filter((entry) => !traceEntryIds.has(entry.id) || notCommittedIds.has(entry.id))
       .map((entry) => ({
         entry,
         reason: rejectedReason(entry, selected, input, beamResult),
@@ -430,7 +448,9 @@ export function createRejectedBuildListEntries(
       .map(({ entry, reason }) => ({
         buildListEntryId: entry.id,
         reason,
-        detail: 'Beam Searchの途中結果で、このBuildListEntryは実行不能と確定しました。',
+        detail: notCommittedIds.has(entry.id)
+          ? NOT_COMMITTED_DETAIL
+          : 'Beam Searchの途中結果で、このBuildListEntryは実行不能と確定しました。',
       }))
       .sort((left, right) => compareStableStrings(left.buildListEntryId, right.buildListEntryId))
   }
@@ -439,7 +459,9 @@ export function createRejectedBuildListEntries(
     .map((entry) => ({
       buildListEntryId: entry.id,
       reason: rejectedReason(entry, selected, input, beamResult),
-      detail: 'Beam Searchの最終StateでこのBuildListEntryは採用されませんでした。',
+      detail: notCommittedIds.has(entry.id)
+        ? NOT_COMMITTED_DETAIL
+        : 'Beam Searchの最終StateでこのBuildListEntryは採用されませんでした。',
     }))
     .sort((left, right) => compareStableStrings(left.buildListEntryId, right.buildListEntryId))
 }
