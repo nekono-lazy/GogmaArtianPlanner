@@ -353,6 +353,11 @@ export interface PlannerTargetSatisfaction {
 
 初期版Plannerは上限付きBeam Searchを使用する。Candidate Scoreだけの単純ソートでは採用順を確定しない。
 
+Issue #103の次期Planner設計（Route commitment + 決定的scheduling）は
+[ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md) を参照する。
+同文書は未実装のtarget designであり、Production routingを切り替える実装PRで本章を改訂するまで、
+本章のBeam Searchが現行Productionの契約である。
+
 ```ts
 export interface PlannerSearchState {
   currentRngState: RngState;

@@ -3218,6 +3218,12 @@ defined in the Calculation Context section above.
 
 v1 uses bounded Beam Search.
 
+The Issue #103 next-phase Planner design (Route commitment plus deterministic
+scheduling) is `docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md`. It is an
+unimplemented target design: current Production stays the Beam Search below
+until the implementation PR that switches Production routing updates
+`docs/REQUIREMENTS.md` 19 / 20, `docs/PLANNER_SPEC.md` 7, and this section.
+
 Default constants:
 
 ```text
