@@ -29,6 +29,9 @@ import {
   sourceWeapon,
   target,
 } from '../test/fixtures/plannerBeam'
+import { plannerSchedulerCatalogue } from '../test/fixtures/plannerSchedulerScenarios'
+import { runPlannerDeterministicSchedule } from '../domain/planner/plannerDeterministicScheduler'
+import { createProductionPlanWithSearchRunner } from '../domain/planner/productionPlanGeneration'
 import { createPlannerWorkerController } from './planner.worker'
 import type {
   PlannerWorkerProtocolRequest,
@@ -207,6 +210,58 @@ describe('Production Planner Worker composition', () => {
         expect.objectContaining({ operationType: 'convert_normal_to_gogma' }),
       ]),
     }))
+  })
+})
+
+describe('Production Planner Worker runs the deterministic scheduler (Issue #103 Phase C)', () => {
+  it('answers create_plan with the scheduler result, with no strategy in the request', async () => {
+    const found = plannerSchedulerCatalogue().find(({ id }) => id === 'J-same-owned-weapon')
+    if (!found) throw new Error('Missing catalogue scenario.')
+    const built = found.scenario
+    const responses: PlannerWorkerProtocolResponse[] = []
+    const controller = createPlannerWorkerController(
+      built.dependencies,
+      createProductionPlannerWorkerCalculations(),
+      (response) => responses.push(response),
+    )
+    const request: PlannerWorkerProtocolRequest = {
+      type: 'create_plan',
+      requestId: 'planner.production.scheduler',
+      generation: 1,
+      input: built.input,
+    }
+    expect(request).not.toHaveProperty('strategy')
+    expect(built.input).not.toHaveProperty('strategy')
+    await controller.handleMessage(structuredClone(request))
+
+    expect(responses.some(({ type }) => type === 'error')).toBe(false)
+    const result = responses.find(
+      (response): response is Extract<PlannerWorkerProtocolResponse, { type: 'create_plan_result' }> =>
+        response.type === 'create_plan_result',
+    )?.result
+    const direct = plannerSchedulerCatalogue().find(({ id }) => id === 'J-same-owned-weapon')!.scenario
+    const expected = await createProductionPlanWithSearchRunner(
+      runPlannerDeterministicSchedule,
+      direct.input,
+      direct.dependencies,
+      undefined,
+    )
+    // The Worker DTO carries the unchanged PlannerResult shape.
+    expect(Object.keys(result ?? {}).sort()).toEqual(['conflicts', 'plan', 'termination', 'warnings'])
+    expect(result).toEqual(expected)
+    // The scheduler-only provisional outcome reached the Worker response.
+    expect(result?.plan?.rejectedBuildListEntries).toEqual([
+      expect.objectContaining({ buildListEntryId: 'entry.b', reason: 'resource_conflict' }),
+    ])
+    // Progress keeps its shape: applied actions over maxExpandedStates.
+    const progress = responses.filter(
+      (response): response is Extract<PlannerWorkerProtocolResponse, { type: 'progress' }> =>
+        response.type === 'progress',
+    )
+    progress.forEach(({ progress: { expandedStates, maxExpandedStates } }) => {
+      expect(maxExpandedStates).toBe(built.input.options.maxExpandedStates)
+      expect(expandedStates).toBeLessThanOrEqual(result?.termination.expandedStates ?? 0)
+    })
   })
 })
 

@@ -336,7 +336,7 @@ export function PlannerSearchInstrumentationBenchmarkPage() {
       <Stack spacing={2}>
         <Alert severity="info">
           Beam Search、決定的scheduler、またはその両方を実Browser Workerで実行し、計測値を表示します。
-          ここでの選択は計測用であり、通常のPlannerは引き続きBeam Searchを使います。
+          ここでの選択は計測用であり、通常のPlannerは決定的schedulerを使います（Beam Searchはoracleとしてだけ残っています）。
           Export JSON は貼り付けたこのページのメモリ上でだけ検証・変換され、IndexedDBへは保存されません。
         </Alert>
         <Paper sx={{ p: 2 }}>

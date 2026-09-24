@@ -117,21 +117,23 @@ function completionsOf(step: PlanStep | undefined) {
 }
 
 describe('calculation schema version boundaries', () => {
-  it('moves the calculation schema to 13 for the Plan start effect; Export and Dexie move only with persisted shapes', () => {
+  it('moves the calculation schema to 14 for the deterministic scheduler; Export and Dexie move only with persisted shapes', () => {
     // The Execution Plan contract moved the calculation schema to 12 and Export
     // to 8 without a Dexie upgrade; the Execution runtime lifecycle metadata then
     // moved Export to 9 and Dexie to 6 without touching calculation semantics.
     // The Plan start effect moved the Target link of existing weapons from the
     // first physical Step to the Plan start: a calculation change only. The
     // Identification provenance later moved Export to 10 and Dexie to 7, again
-    // without touching calculation semantics.
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(13)
+    // without touching calculation semantics. Issue #103 Phase C moved the
+    // Production Planner to the deterministic scheduler: a calculation change
+    // only (14), with no persisted shape change.
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(14)
     expect(EXPORT_SCHEMA_VERSION).toBe(11)
     expect(DATABASE_SCHEMA_VERSION).toBe(8)
   })
 
-  it.each([11, 12])('fails a version %i Plan closed instead of reusing it as a current Plan', (version) => {
-    const current = { ...createValidProductionPlan().calculationContext, appSchemaVersion: 13 }
+  it.each([11, 12, 13])('fails a version %i Plan closed instead of reusing it as a current Plan', (version) => {
+    const current = { ...createValidProductionPlan().calculationContext, appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION }
     expect(isCalculationContextCompatible({ ...current, appSchemaVersion: version }, current)).toBe(false)
   })
 

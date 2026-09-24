@@ -23,9 +23,10 @@ import { benchmarkWorkerYield } from './constrainedEnumeration.worker.benchmark'
 /**
  * Issue #103 benchmark-only Worker controller.
  *
- * It runs, inside a real Browser Worker, either the ordinary
+ * It runs, inside a real Browser Worker, either the Beam Search oracle
  * `runPlannerBeamSearch()` through the PR #107 instrumentation harness, or -
- * Issue #103 Phase B - the deterministic scheduler through its own harness.
+ * Issue #103 Phase B - the deterministic scheduler (the Production Planner
+ * since Phase C) through its own harness.
  * The strategy is a field of this benchmark request only: no Production Worker
  * protocol, Planner Worker controller, `PlannerInput` or persistence carries
  * it, and the normal application never loads this Worker. The source is either

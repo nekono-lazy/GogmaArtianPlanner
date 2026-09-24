@@ -37,13 +37,15 @@ import type {
 } from './plannerWhatIfTypes'
 
 /**
- * Issue #103 Phase B: B9 what-if with the deterministic scheduler injected as
- * the full Planner search (`docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md`
- * 12.4 / 17 Phase B).
+ * B9 what-if on the Production path, whose full Planner run is the
+ * deterministic scheduler (Issue #103 Phase C,
+ * `docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md` 12.4 / 17).
  *
- * Only this test module routes `createProductionPlanWithObserver()` through
- * `createProductionPlanWithSearchRunner()` over the scheduler; Production still
- * runs the Beam Search. Feasibility is the unchanged authority
+ * Phase B ran this module with the scheduler injected through a test-only
+ * mock of `createProductionPlanWithObserver()`. Since Phase C nothing is
+ * injected: the ordinary `createProductionPlanWithObserver()` reaches the
+ * scheduler, and the mocks below only count the full runs (and prove the Beam
+ * Search oracle never runs). Feasibility is the unchanged authority
  * (`plan.selectedBuildListEntryIds` holds the trial Entry and every fixed
  * Entry), and the bounds keep their meaning. The fixtures and the expected
  * outcomes are those of the Beam Search what-if test
@@ -58,25 +60,19 @@ const observed = vi.hoisted(() => ({
   runs: [] as Array<{ context: string; entryIds: string[] }>,
 }))
 
-vi.mock('../productionPlanGeneration', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../productionPlanGeneration')>()
-  const scheduler = await import('../plannerDeterministicScheduler')
+vi.mock('../plannerDeterministicScheduler', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../plannerDeterministicScheduler')>()
   return {
     ...actual,
-    createProductionPlanWithObserver: (
-      ...args: Parameters<typeof actual.createProductionPlanWithObserver>
+    runPlannerDeterministicSchedule: (
+      ...args: Parameters<typeof actual.runPlannerDeterministicSchedule>
     ) => {
+      observed.schedulerRuns += 1
       observed.runs.push({
-        context: args[4]?.kind ?? 'persisted',
+        context: args[3]?.kind ?? 'persisted',
         entryIds: args[0].buildListEntries.map(({ id }) => id),
       })
-      return actual.createProductionPlanWithSearchRunner(
-        async (input, dependencies, options, buildListContext) => {
-          observed.schedulerRuns += 1
-          return scheduler.runPlannerDeterministicSchedule(input, dependencies, options, buildListContext)
-        },
-        ...args,
-      )
+      return actual.runPlannerDeterministicSchedule(...args)
     },
   }
 })
@@ -219,7 +215,7 @@ const IDEAL_DISTANCE = {
   estimatedNormalAdvance: null,
 }
 
-describe('B9 what-if with the scheduler injected: found / not found', () => {
+describe('B9 what-if on the Production path (scheduler): found / not found', () => {
   it('finds the same Ideal alternative the Beam Search finds, through scheduler full runs only', async () => {
     const comparison = only(await compare(whatIfScenario(), bounds(99, 99)))
     expect(comparison.targetWeaponId).toBe(TARGET_B)
@@ -250,7 +246,7 @@ describe('B9 what-if with the scheduler injected: found / not found', () => {
   })
 })
 
-describe('B9 what-if with the scheduler injected: the bounds keep their meaning', () => {
+describe('B9 what-if on the Production path (scheduler): the bounds keep their meaning', () => {
   it('stops at the Candidate trial bound before reaching a feasible Candidate', async () => {
     const comparison = only(await compare(whatIfScenario(), bounds(1, 99)))
     expect(comparison.outcome.status).not.toBe('found')
@@ -271,9 +267,9 @@ describe('B9 what-if with the scheduler injected: the bounds keep their meaning'
   it('reports a rerun bound when the budget blocks the next full run', async () => {
     const comparison = only(await compare(whatIfScenario(), bounds(99, 1)))
     expect(comparison.outcome).toEqual<PlannerWhatIfOutcome>({ status: 'stopped_by_planner_rerun_bound' })
-    // Two Production Plan generations were entered; the budget refused the
-    // second one's full search before it started.
-    expect(observed.runs).toHaveLength(2)
+    // The budget refused the second Production Plan generation's full run
+    // before it started, so only the first full run reached the scheduler.
+    expect(observed.runs).toHaveLength(1)
     expect(observed.schedulerRuns).toBe(1)
   })
 
@@ -288,7 +284,7 @@ describe('B9 what-if with the scheduler injected: the bounds keep their meaning'
   })
 })
 
-describe('B9 what-if with the scheduler injected: selected checkpoint', () => {
+describe('B9 what-if on the Production path (scheduler): selected checkpoint', () => {
   it('answers blocked_by_selected_checkpoint and runs nothing for that Target', async () => {
     const a = orchestrationTarget(TARGET_A, {
       priority: 3,

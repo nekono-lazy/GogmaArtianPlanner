@@ -66,7 +66,7 @@ export interface ProductionPlanReplanPreviewController {
   /**
    * 「現在地点から再計画を試算」. The runtime reads the running Plan token and
    * the current-state PlannerInput; `plannerOptions` are the caller's reviewed
-   * Beam Search bounds when the screen offers them, never a Preview-only bound.
+   * Planner bounds when the screen offers them, never a Preview-only bound.
    */
   start(runningPlanId: ProductionPlanId, plannerOptions?: PlannerOptions): void
   /** Cancels a running Preview calculation. Nothing was written, so nothing is undone. */

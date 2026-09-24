@@ -262,15 +262,16 @@ Execution Navigatorは、巨戟化したStepで `unclassified`、作成リスト
 
 優先度は1から5、デフォルトは3とする。未変更の場合は3として扱う。
 
-目標武器には、その目標を作る際に候補検索とPlannerが起点として優先したい所持武器を任意で
+目標武器には、その目標を作る際に候補検索（および制約付き再検索）が起点として優先したい所持武器を任意で
 1本だけ設定できる。通常の設定は目標武器画面からのユーザー操作で行い、所持武器側は目標武器を
 参照しない。例外として、作成計画が既存の所持武器を起点に使う目標武器は「作成開始」の時点で、計画内で
 新規作成する武器はその登録を確定した時点で、その目標武器へ自動で紐付け（別の目標武器の紐付けは同時に
 解除）、理想品完成時に解除する。Plannerの計算、作成計画の生成・表示とCandidate Searchは優先起点を
 変更しない（25章）。
 
-優先起点はPlannerが起点武器を選ぶ計画入力であり、Candidateの性能定義ではない。優先起点だけの変更では
-作成リスト項目をstaleにしない（18章）。
+優先起点は候補検索と制約付き再検索が同等の候補から起点武器を選ぶための入力（計画入力Hashの一部）であり、
+Candidateの性能定義ではない。通常Plannerは目標武器ごとに1件の作成ルートを実行順へ並べるだけなので、
+優先起点を実行順の判断に使わない（19章 / 20章）。優先起点だけの変更では作成リスト項目をstaleにしない（18章）。
 
 目標武器は `active`（未完了）/ `completed`（完了）のlifecycleを持つ。理想品が完成すると `completed` に
 なり、通常の目標武器一覧、候補検索、Plannerの対象から外れるが、履歴と生産計画の参照のため削除しない。
@@ -521,7 +522,7 @@ Phase 0-3以前の制約付き再検索で元の項目の横に保存された�
 ユーザーはその時点で「妥協品として確定して終了」を明示選択できる（25章）。checkpoint到達後にどちらの軸を先に理想へ近づけるかは検索時に
 固定せず、改善優先はPlannerのsoft preferenceとして扱う。
 
-再検索でBuildCandidateが置き換わってもBuildListEntryのSnapshotは失われない。ただしTarget条件（性能定義）、Candidate Route成立に使用したRNG状態、Routeが参照する起点武器の状態、または計算バージョンとの互換性が失われたEntryはstaleとし、Planner入力に使用しない。目標武器の優先度、検索対象ON/OFF、優先起点、完了状態はTarget性能定義に含めず、それだけの変更（実行ナビによる自動紐付けを含む）ではEntryをstaleにしない。優先度と優先起点はPlanner実行時の計画入力、検索対象OFFと完了状態は検索・Planner入力からの除外条件として扱う。実行中または作成済みの計画が依存する目標武器の優先度・検索対象ON/OFF・優先起点の変更は、計画の前提変更として扱う（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.11）。完了済み目標武器のEntryはstaleではなく、Planner入力から除外する。stale理由はそれぞれ `target_definition_changed`、`rng_state_changed`、`owned_weapon_changed`、`calculation_context_changed` とする。初期版では計算に使用したRNG状態Hashが変わった場合、安全側に倒してstaleとしてよい。Routeと無関係なOwnedWeaponの変更は参照武器Hashへ含めず、Entryをstaleにしない。
+再検索でBuildCandidateが置き換わってもBuildListEntryのSnapshotは失われない。ただしTarget条件（性能定義）、Candidate Route成立に使用したRNG状態、Routeが参照する起点武器の状態、または計算バージョンとの互換性が失われたEntryはstaleとし、Planner入力に使用しない。目標武器の優先度、検索対象ON/OFF、優先起点、完了状態はTarget性能定義に含めず、それだけの変更（実行ナビによる自動紐付けを含む）ではEntryをstaleにしない。優先度はPlanner実行時の計画入力、優先起点は候補検索と制約付き再検索で同等の候補からどれを選ぶかの入力（および計画入力Hashの一部）、検索対象OFFと完了状態は検索・Planner入力からの除外条件として扱う。通常のPlannerは各目標武器に作成ルートを1件しか持たないため、優先起点を理由に別ルートを選ぶことはなく、実行順の判断にも優先起点を使わない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7.4）。実行中または作成済みの計画が依存する目標武器の優先度・検索対象ON/OFF・優先起点の変更は、計画の前提変更として扱う（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.11）。完了済み目標武器のEntryはstaleではなく、Planner入力から除外する。stale理由はそれぞれ `target_definition_changed`、`rng_state_changed`、`owned_weapon_changed`、`calculation_context_changed` とする。初期版では計算に使用したRNG状態Hashが変わった場合、安全側に倒してstaleとしてよい。Routeと無関係なOwnedWeaponの変更は参照武器Hashへ含めず、Entryをstaleにしない。
 
 作成リストに追加された候補がすべて採用されるとは限らない。PlannerはBuildListEntryを入力とし、目標の充足と全体効率を考慮して採用候補を決定する。
 
@@ -570,7 +571,25 @@ Plannerが自動判断できない局所競合では、ユーザーがBuildListE
 競合解決入力として再計算できる。この入力は競合箇所だけへ適用し、手動作成順固定には
 使用しない。削除済み、stale、無効または実行不能な選択はwarningとして再選択を促す。
 
-初期版の探索方式は上限付きBeam Searchとする。共有RNG状態、シミュレーション中の武器在庫、目標ごとの実用品・理想品充足状態、採用候補、操作列、累積コストを探索状態として持ち、実行可能な次操作へ展開する。完全最適解の保証より、実用的な時間内で十分良い計画を返すことを優先する。
+通常Plannerの計算方式は「ルート確定（Route commitment）+ 決定的scheduling」とする
+（Issue #103 Phase C。詳細は[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7と
+[ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md)）。
+
+- 作成リストは目標武器ごとに1件だけ候補を持つ（18章）。Plannerは同じ目標武器の複数ルートから
+  選ぶのではなく、ユーザーが採用したルートを実行順へ並べる
+- まず、今回実行するルートを確定する。同じCounter位置を必要とするなど両立できないルート同士の
+  競合があり、ユーザーの競合解決入力が無い場合は、優先度の高い目標武器を暫定的に優先して計画を
+  作り（暫定帰結）、その競合をユーザー判断待ちの競合として計画と一緒に返す。暫定的に外した
+  目標武器はその計画では完成しない
+- 次に、共有RNG状態とシミュレーション中の武器在庫を1つの状態として進め、各時点で安全に実行できる
+  操作のうち、決められた順序（目標武器の優先度、改善優先、武器の持ち替え回数、次に位置を保持する
+  操作までの近さ、残り操作数、安定順）で1つを選んで実行する。同じ意味の実行順を枝分かれで
+  探索しない
+- 同じ入力からは常に同じ計画を返す。完全最適解（完成する目標武器数の厳密な最大化など）は保証しない
+- 旧版（Phase C以前）の上限付きBeam Searchは通常Plannerでは使わない。比較検証とbenchmark用の
+  基準実装としてだけ残す
+- 通常Planner、競合解決のための制約付き再検索、比較（what-if）、実行中計画の再計画試算は、
+  同じ計算方式を使う。機能ごとに別の探索方式を持たない
 
 探索中はTargetごとに「理想品所持」を区別する。Ideal候補の確保で実用品所持かつ
 理想品所持へ更新する。実用品を先に確保する優先評価（practical-first）は行わない。
@@ -586,14 +605,18 @@ BuildCandidateのRouteには、通常アーティア作成、巨戟化、Reset B
 
 基本優先順位は次のとおりとする。
 
-1. 理想品未所持の目標武器の理想品を、優先度順に早く揃える
-2. 共有RNGの進行中に他の目標武器も効率よく取得する
+1. 理想品未所持の目標武器の理想品を、優先度順に早く揃える。両立できない競合で
+   ユーザーの選択が無い場合は、優先度の高い目標武器のルートを暫定的に優先する
+2. 共有RNGの進行中に他の目標武器も効率よく取得する（同じCounter位置で済む操作は
+   1回の物理操作として共有し、飛ばしてよい位置は他の目標武器の操作で消費する）
 3. 作成リストで選択した途中採用状態（妥協checkpoint）は必ず経由する
-4. 同程度なら武器消費と操作量を抑え、さらに同程度なら作成リストの改善優先を反映する
+4. 実行順が選べる場合は、目標武器の優先度、作成リストの改善優先、武器の持ち替え回数の
+   少なさの順に反映する
 
 実用品を先に確保する優先評価は行わない。途中採用状態は評価点ではなく必須条件であり、
 同じ目標武器の別候補で迂回できない。改善優先は必須条件ではなく、全体の計画が成立する
-範囲での希望である。
+範囲での希望である。所持武器の優先起点は通常Plannerの実行順の判断に使わない
+（候補検索と制約付き再検索での候補の選び方に使う）。
 
 ユーザーによる作成順の完全固定機能は初期版では実装しない。競合など判断が必要な箇所のみユーザーに選択を求める。
 
@@ -1064,6 +1087,8 @@ Production v1 adapterがpersisted exact Gateを要求せずactive representative
 ---
 
 実行ナビのライフサイクル改訂（25章、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16章）は、目標武器のlifecycle、所持武器の実行時lifecycle、優先起点のstaleness semantics、PlanStepと確保（reserve）のsemantics、実行時の期待状態、Undo対象範囲を変更する。後続の実装PRではCalculationContextの `appSchemaVersion` 更新が必要になる可能性が高く、目標武器・所持武器・ゲーム内セーブ地点などの永続形状の変更によってはDexie `DATABASE_SCHEMA_VERSION` と `ExportRoot.schemaVersion` の更新も必要になる。本改訂は仕様PRであり実コードのversionを変更しない。実装PRで現行schemaとImport互換を監査し、必要なversion境界を確定する。既存データを推測migrationして意味を変えてはならない（所持している理想品から目標武器を完了済みと推測する、既存の所持武器を作成中と推測する、など）。最初の実装PR（永続Entity基盤）では目標武器lifecycle、所持武器の作成中状態、ゲーム内セーブ地点の永続形状を追加し、Dexie `DATABASE_SCHEMA_VERSION` を5、`ExportRoot.schemaVersion` を7へ更新した。計算意味はまだ切り替えないため `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は11のままとした。2番目の実装PR（Execution Plan契約）で目標定義hashの正規化、計画入力hash、Plan依存hash、実行時の期待状態、PlanStepのexecution effect、確保（reserve）の扱いを切り替え、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を12、`ExportRoot.schemaVersion` を8へ更新した（Dexieは5のまま）。3番目の実装PR（Execution runtime core）で生産計画のlifecycle metadataとUndo Snapshotの拡張を永続形状へ加え、Dexie `DATABASE_SCHEMA_VERSION` を6、`ExportRoot.schemaVersion` を9へ更新した（計算意味は変えないため `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は12のまま）。後続の実装PRで、既存の所持武器と目標武器の紐付けを作成開始時へ移し（計画内で新規作成する武器は登録時のまま）、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を13へ更新した。version 12以前の作成計画は実行できない（再計算が必要）が、候補検索と作成リストの意味は変えていないため、version 12の候補と作成リスト項目は明示的な互換例外によりそのまま利用できる（version 11以前は非互換のまま）。永続形状は変えないためDexieは6、`ExportRoot.schemaVersion` は9のままである。
+
+通常Plannerの計算方式を上限付きBeam Searchから「ルート確定 + 決定的scheduling」へ切り替えた変更（Issue #103 Phase C、19章 / 20章）では、同じ入力に対して未解決競合の暫定帰結、返す競合、不採用記録、操作順などが変わり、保存済みの作成プランは生成方式を記録しないため、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を14へ更新した。version 13以前の作成プランは下書き・実行中を問わず実行・比較・競合操作ができず（`calculation_context_changed`）、実行中のプランは現在地点からの再計画が必要になる。保存内容は削除・変換せず、そのまま表示できる。候補検索と作成リストの意味は変えていないため、version 12 / 13の候補と作成リスト項目は明示的な互換例外によりそのまま利用できる（version 11以前は非互換のまま）。永続形状、RNG、Masterは変えないため、Dexie `DATABASE_SCHEMA_VERSION`（8）、`ExportRoot.schemaVersion`（11）、`RngState.schemaVersion`（2）、`AppSettings.schemaVersion`（1）、`PRODUCTION_RNG_ENGINE_VERSION`、Master dataVersionは変更しない。
 
 ---
 

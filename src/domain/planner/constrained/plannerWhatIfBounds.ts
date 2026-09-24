@@ -27,13 +27,14 @@ export interface PlannerWhatIfBounds {
    */
   maxCandidateTrialsPerTarget: number
   /**
-   * Full Beam Searches one whole what-if request may start.
+   * Full Planner runs (the Production deterministic scheduler since Issue #103
+   * Phase C) one whole what-if request may start.
    *
-   * It counts every Candidate trial's full Beam Search and every
-   * runtime-unsupported retry Beam Search started inside Production Plan
-   * generation. It does not count the initial conflict preflight, validation,
-   * conflict context construction, Candidate enumeration, or materialization,
-   * none of which run a Beam Search.
+   * It counts every Candidate trial's full Planner run and every
+   * runtime-unsupported retry run started inside Production Plan generation.
+   * It does not count the initial conflict preflight, validation, conflict
+   * context construction, Candidate enumeration, or materialization, none of
+   * which is a full Planner run.
    */
   maxPlannerReruns: number
 }

@@ -36,13 +36,13 @@ describe('B9 what-if full Beam budget', () => {
       used: 0,
       exhausted: false,
     })
-    budget.beforeBeamSearch()
+    budget.beforePlannerRun()
     expect({ used: budget.used, exhausted: budget.exhausted }).toEqual({
       used: 1,
       exhausted: false,
     })
     // Reaching the limit is not itself a stop: the limit-th execution runs.
-    budget.beforeBeamSearch()
+    budget.beforePlannerRun()
     expect({ used: budget.used, exhausted: budget.exhausted }).toEqual({
       used: 2,
       exhausted: true,
@@ -54,13 +54,13 @@ describe('B9 what-if full Beam budget', () => {
       maxCandidateTrialsPerTarget: 1,
       maxPlannerReruns: 1,
     })
-    budget.beforeBeamSearch()
+    budget.beforePlannerRun()
 
-    expect(() => budget.beforeBeamSearch()).toThrow(PlannerWhatIfRerunLimitError)
+    expect(() => budget.beforePlannerRun()).toThrow(PlannerWhatIfRerunLimitError)
     // The refused execution never started, so it is not counted.
     expect(budget.used).toBe(1)
     try {
-      budget.beforeBeamSearch()
+      budget.beforePlannerRun()
     } catch (error) {
       expect(error).toBeInstanceOf(PlannerWhatIfRerunLimitError)
       if (!(error instanceof PlannerWhatIfRerunLimitError)) return

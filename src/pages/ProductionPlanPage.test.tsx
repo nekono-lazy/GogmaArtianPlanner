@@ -2369,6 +2369,49 @@ describe('ProductionPlanPage Execution entry', () => {
     expect(deps.startProductionPlan).not.toHaveBeenCalled()
   })
 
+  it.each(['draft', 'active'] as const)(
+    'fails a schema 13 %s Plan closed under schema 14, keeping its persisted content readable',
+    async (status) => {
+      // Issue #103 Phase C: a version 13 Plan was calculated by the Beam Search,
+      // which a persisted Plan does not record, so it is never prepared,
+      // started, compared or executed under the scheduler runtime.
+      const fixture = withStatus({ status })
+      fixture.plan.calculationContext = { ...fixture.plan.calculationContext, appSchemaVersion: 13 }
+      fixture.plan.baseSnapshot = {
+        ...fixture.plan.baseSnapshot,
+        calculationContext: { ...fixture.plan.baseSnapshot.calculationContext, appSchemaVersion: 13 },
+      }
+      const deps = dependencies(fixture)
+      deps.currentCalculationContext = {
+        ...fixture.plan.calculationContext,
+        appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
+      }
+      expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(14)
+      renderPage(deps, fixture.plan.id)
+
+      expect(await screen.findByText(
+        'この生産計画は現在の計算契約と互換性がありません。ビルドリストから再計算してください。',
+      )).toBeInTheDocument()
+      // The exact persisted content stays readable.
+      expect(screen.getByText('計画の概要')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: '作成開始' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: '実行ナビを再開する' })).not.toBeInTheDocument()
+      // Conflict / what-if controls stay disabled: no preparation ever runs.
+      screen.queryAllByRole('button', { name: '比較する' }).forEach((button) => {
+        expect(button).toBeDisabled()
+      })
+      expect(deps.createWorkerClient).not.toHaveBeenCalled()
+      expect(deps.startProductionPlan).not.toHaveBeenCalled()
+      // A running schema 13 Plan is replanned from the current state; a Draft
+      // is simply recalculated from the Build List.
+      if (status === 'active') {
+        expect(screen.getByRole('heading', { name: '現在地点からの再計画' })).toBeInTheDocument()
+      } else {
+        expect(screen.queryByRole('heading', { name: '現在地点からの再計画' })).not.toBeInTheDocument()
+      }
+    },
+  )
+
   it('starts through the runtime and then opens the Execution Navigator', async () => {
     const fixture = withStatus({ status: 'draft' })
     const deps = dependencies(fixture)

@@ -64,7 +64,7 @@ export interface ProductionPlanExecutionProjectionRequest {
   input: PlannerInput
   drafts: readonly PlannerPlanStepDraft[]
   selectedBuildListEntryIds: readonly BuildListEntryId[]
-  /** The settled Beam Search inventory the projection must agree with. */
+  /** The settled full Planner run inventory the projection must agree with. */
   searchFinalOwnedWeapons: readonly OwnedWeapon[]
   dependencies: PlannerDependencies
   productionPlanId: ProductionPlanId

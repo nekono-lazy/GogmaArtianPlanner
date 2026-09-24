@@ -15,13 +15,14 @@
 > Build Listに1件だけ保持し、PlannerはそのRouteをscheduleする。
 
 ```text
-Current（現行Production）
-  - 通常Plannerは上限付きBeam Search（REQUIREMENTS 19 / PLANNER_SPEC 7）
-  - 永続Build Listは同一Targetに複数Entryを保持し得る
+Phase C以前（旧Production）
+  - 通常Plannerは上限付きBeam Search
+  - 永続Build Listは同一Targetに複数Entryを保持し得た
 
-Target design（未実装）
+現行Production（Phase 0 / Phase C実装済み）
   - 永続Build Listは1 Targetにつき最大1 Entry（Build List cardinality契約）
-  - 通常Plannerは「Route commitment + 決定的scheduling」
+  - 通常Plannerは「Route commitment + 決定的scheduling」（REQUIREMENTS 19 / 20、PLANNER_SPEC 7）
+  - Beam Searchはtest / benchmark / parity oracleとしてだけ残す（Phase Dで整理）
 ```
 
 authorityの配置:
@@ -31,17 +32,17 @@ authorityの配置:
 | 永続Build Listの1 Target = 最大1 Entry、Candidate追加時の置換、legacy duplicateのfail closed | [REQUIREMENTS.md](./REQUIREMENTS.md) 18、[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1 | **実装済み**（Phase 0-1: Domain / Service基盤、通常Planner入力のfail closed、Import / Exportの保持。Phase 0-2: Search画面の置換確認、Build Listのlegacy duplicate案内。Phase 0-3: constrained re-search / what-if / 再計画の置換） |
 | Search画面からの追加 / 置換 | [SEARCH_SPEC.md](./SEARCH_SPEC.md) 10.1、[UI_FLOW.md](./UI_FLOW.md) 9 / 10 | **実装済み**（Phase 0-1: Service結果型と置換API、Phase 0-2: 画面の置換確認Dialog / 案内） |
 | constrained re-search / what-if / 再計画とBuild List cardinality | [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18 | **実装済み**（Phase 0-3） |
-| 決定的scheduler（Route commitment、scheduling、termination、schema境界） | 本書 | target design（Phase A: Domain実装済み・Production未接続。Phase B: parity / instrumentation / 実Browser計測済み、Phase C readiness NOT READY）。Phase CでREQUIREMENTS 19 / 20、PLANNER_SPEC 7等を改訂して正式化 |
+| 決定的scheduler（Route commitment、scheduling、termination、schema境界） | 本書、[REQUIREMENTS.md](./REQUIREMENTS.md) 19 / 20、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7 | **Production実装済み**（Phase A: Domain、Phase B: parity / instrumentation / 実Browser計測・semantic fix、Phase C: Production routing切替・Calculation schema 14・正式仕様改訂）。次はPhase D（UI / legacy / Beam oracle整理） |
 
 - 本書の追加時点で `src/**`、テスト、schema version、Worker protocol、UIは一切変更していない
 - Build List cardinalityは **Build List自体の契約** であり、Plannerの都合ではない。したがって
   REQUIREMENTS / DATA_MODELを正式authorityとし、実装状態を明示した次期契約として先に記載した
   （Execution lifecycle改訂、B8-A、B9-A2と同じ「仕様先行・実装後続」の手順）。現行Productionは
   各節の「現行Production」注記どおりに動作し、Phase 0の実装PRで注記を外す
-- 決定的scheduler自体は、Production routingを切り替える実装PR（Phase C）で
-  REQUIREMENTS 19 / 20、PLANNER_SPEC 7 / 7.2 / 7.2.1 / 7.4 / 10 / 14 / 15.3、UI_FLOW 10.0 / 10.1、
-  `AGENTS.md` の「Planner Search Strategy」を改訂して正式化する。それまでは現行文書が
-  現行Productionのauthorityである
+- 決定的scheduler自体は、Production routingを切り替えた実装PR（Phase C）で
+  REQUIREMENTS 18 / 19 / 20、PLANNER_SPEC 7 / 7.2 / 7.2.1 / 7.3 / 7.4 / 7.6 / 10 / 14 / 15.3、UI_FLOW 10.0、
+  DATA_MODEL 3.5、`AGENTS.md` の「Calculation Context」「Planner Search Strategy」を改訂して正式化した
+  （本節冒頭の「本書の追加時点」の記述は、本書を追加したPR #108時点の記録である）
 - 本書が変更しない既存契約（Candidate Search、Trace Replay、PlanStep / Execution、
   constrained re-searchの固定authority、checkpoint hard constraint等）は、該当する正式仕様を
   そのままauthorityとする
@@ -458,9 +459,10 @@ committed = candidates
 | Planning input hash / Execution | `targetWeaponsHash`、Plan start effect（16.11）、完成時の解除 | **維持**（Plannerの判断とは無関係） |
 
 - PLANNER_SPEC 7.4の「Planner側のPlan preference」を通常Plannerから撤去することは、**既存正式仕様の
-  変更** である。Phase C（scheduler切替）でPLANNER_SPEC 7.4とREQUIREMENTS 18の「優先起点はPlanner実行時の
+  変更** である。Phase C（scheduler切替）でPLANNER_SPEC 7.4とREQUIREMENTS 9 / 18の「優先起点はPlanner実行時の
   計画入力」の記述を「Candidate Search / constrained enumerationの入力、およびplanning input hash」へ
-  改訂する。それまでは現行Beam Searchが7.4どおりに動作する
+  改訂した（**実装済み**）。Beam Search oracleの内部には `preferredSourceProgressCount` がPhase Dまで残るが、
+  Production Planの決定には使われない
 - 現行Beam Searchの `preferredSourceProgressCount` は、同一TargetのRoute選択に加えて「skip可能位置を
   preferred Entryの武器で消費したbranch」を残す副作用も持っていた。これはBeam固有のartifactであり、
   引き継がない
@@ -875,8 +877,9 @@ deterministic scheduling再実行（初期stateから、置換後集合で計算
 - adoption条件（9.2.14）とfeasibility（9.2.4.7）は `plan.selectedBuildListEntryIds` を読むだけで
   あり変更しない
 - `maxPlannerReruns` は「full Planner runの回数」を数える。意味（1回の `createProductionPlanWithObserver()`
-  内のruntime-unsupported retryを含む）は変えず、observer hookの名称（`beforeBeamSearch` 等）は
-  Phase Cで意味を保ったまま改名してよい
+  内のruntime-unsupported retryを含む）は変えず、observer hookの名称はPhase Cで意味を保ったまま
+  `beforeBeamSearch` / `afterBeamSearch` から `beforePlannerRun` / `afterPlannerRun` へ改名した
+  （Worker protocolには露出しない）
 - orchestration bounds（2 / 1 / 4）とenumeration boundsの値は本書で変更しない。Beam runが
   高価だったために小さくした経緯があるので、再測定はCan defer（#101と合わせて扱う）
 
@@ -997,7 +1000,8 @@ Beam Searchへ到達しなかったrunと同じく `exhausted` / `plan = null` /
 
 ### 15.2 Phase C（scheduler切替）: ProductionPlan
 
-Phase Cで `CURRENT_CALCULATION_APP_SCHEMA_VERSION` を **13 → 14** へ上げる（本書では値を変更しない）。
+Phase Cで `CURRENT_CALCULATION_APP_SCHEMA_VERSION` を **13 → 14** へ上げた（**実装済み**。本書を追加した
+PR #108では値を変更していない）。
 
 理由:
 
@@ -1270,6 +1274,22 @@ REQUIREMENTS 18へ記載済み。実装は次の順で小さく分ける。
   7.4 / 10 / 14 / 15.3、UI_FLOW 10.0の説明文、DATA_MODEL（version記述）、AGENTS.md（Calculation Context、
   Planner Search Strategy）
 - Beam Searchはtest / benchmark用oracleとしてだけ残す
+- **実装済み（Production switched、Calculation schema 14）**
+  - `createProductionPlanWithObserver()` は `createProductionPlanWithSearchRunner(runPlannerDeterministicSchedule, ...)`
+    を呼ぶ。後段（runtime-unsupported retry、Trace Replay、projection、snapshot、checkpoint defence、rejected /
+    materials、termination）は変更していない。Beam Searchは `createProductionPlanWithSearchRunner()` への注入か
+    直接呼び出しでだけ到達する（parity harness、Issue #103 benchmark Workerの `strategy`、oracle test）
+  - observer hookを `beforePlannerRun` / `afterPlannerRun` へ改名した（12.2、rerun budgetの数え方は不変）
+  - `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 14`、`COMPATIBLE_BUILD_RESULT_APP_SCHEMA_VERSIONS` に `14 -> [12, 13]`。
+    ProductionPlanは従来どおり4項目完全一致で、version 1〜13のPlan（draft / activeとも）は
+    `calculation_context_changed` でfail closedする（read migrationなし、exact persisted表示は維持、active Planは
+    現在地点からの再計画）
+  - `PlannerOptions`（`beamWidth` を含む）、`defaultPlannerOptions`、`PlannerProgress`、`PlannerSearchTermination`、
+    Worker protocolは不変。Build List詳細設定は説明文だけを改めた（UI_FLOW 10.0）
+  - `rejectedBuildListEntries` のdetail文言のうちBeam Searchを名指ししていた2つを中立化した（reason / mappingは不変）
+  - Phase B semantic fix後のscheduler semanticsは変更していない（acceptance catalogue、sanity-3、representative-12の
+    parity testを維持）
+- 次はPhase D
 
 ### Phase D: UI / legacy整理
 
@@ -1328,7 +1348,8 @@ UI実装
 | reserveを分岐にするか | しない（7.6） |
 
 Phase CのPull Requestでは、15.2の影響（実行中のversion 13 Planがstaleになり再計画が必要になること）を
-プロジェクトオーナーへ明示する。これは決定済み事項の周知であり、Phase 0 / A / Bを止めない。
+プロジェクトオーナーへ明示する。これは決定済み事項の周知であり、Phase 0 / A / Bを止めない
+（Phase CのPRで周知済み）。
 
 **Phase Bで判明したPhase C前の判断事項（決定済み）。** pin-blockedのskip可能unitをholdingとして扱う
 旧5章 / 7.4の規則と、それに基づく6.8のlane-head判定・commitment判定・7.8のdeadlock判定は、Phase Bのparityで

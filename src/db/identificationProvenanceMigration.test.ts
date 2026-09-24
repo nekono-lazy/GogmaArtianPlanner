@@ -67,7 +67,7 @@ describe('Identification provenance persistence migration (Dexie v6 -> v7)', () 
   it('uses DATABASE_SCHEMA_VERSION 8 and RngState record schema 2 independently of the calculation schema', () => {
     expect(DATABASE_SCHEMA_VERSION).toBe(8)
     expect(RNG_STATE_SCHEMA_VERSION).toBe(2)
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(13)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(14)
   })
 
   it('fills every RngState / Normal Counter body with null provenance and infers nothing', async () => {

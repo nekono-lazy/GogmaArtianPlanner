@@ -270,7 +270,25 @@ export interface KnownValue<T> {
 // Candidates and Build List Entries usable under 13; version 1..11 stay
 // incompatible. No persisted shape changes,
 // so `DATABASE_SCHEMA_VERSION` stays 6 and `ExportRoot.schemaVersion` stays 9.
-export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 13
+//
+// Version 14 switches the Production Planner strategy from the bounded Beam
+// Search to Route commitment plus the deterministic scheduler (Issue #103
+// Phase C, `docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md` 15.2). For the same
+// PlannerInput the provisional outcome of an unresolved conflict, the returned
+// `conflicts`, `rejectedBuildListEntries`, the Step order, which Entries a
+// shared physical action carries, and the Planner-side preferred source
+// preference (now removed) can all differ, and a persisted ProductionPlan
+// records no generation strategy, so every version 1..13 Plan - Draft or
+// active - fails closed with `calculation_context_changed`; none is migrated or
+// rewritten. Candidate Search, the constrained enumerator and the BuildCandidate
+// / BuildListEntry snapshot semantics do not change, so the explicit
+// build-result exception `14 -> [12, 13]`
+// (`isBuildResultCalculationContextCompatible()`) keeps version 12 and 13
+// Candidates and Build List Entries usable under 14; version 1..11 stay
+// incompatible. No persisted shape changes, so `DATABASE_SCHEMA_VERSION` stays
+// 8, `ExportRoot.schemaVersion` stays 11 and `PRODUCTION_RNG_ENGINE_VERSION`
+// is unchanged.
+export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 14
 
 export interface CalculationContext {
   gameVersion: string

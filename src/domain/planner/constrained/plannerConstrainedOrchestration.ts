@@ -62,7 +62,7 @@ import {
  * ```
  *
  * It adds no conflict logic of its own. Coexistence is decided only by the full
- * Beam Search plus Trace Replay of `createProductionPlanWithObserver()` over the
+ * full Planner run plus Trace Replay of `createProductionPlanWithObserver()` over the
  * trial's **replacement set** (PLANNER_SPEC 9.2.11 / 9.2.18): `O` stays only in
  * the preflight that re-associates the user's fixed constraints, so the Plan a
  * trial produces - its Steps, conflicts, rejections and PlanningInputSnapshot -
@@ -155,8 +155,8 @@ function dedupeWarnings(warnings: readonly PlannerWarning[]): PlannerWarning[] {
  * The Planner-start Search / RNG snapshot (PLANNER_SPEC 9.2.1, 9.2.9).
  *
  * It is built once, from the *original* Planner input, and reused by every
- * enumeration. It is never rebuilt from an adopted Planner state, from a Beam
- * Search bestState, or from `conflictingCounter + 1`, and it needs no
+ * enumeration. It is never rebuilt from an adopted Planner state, from a full
+ * Planner run bestState, or from `conflictingCounter + 1`, and it needs no
  * historical UI Candidate Search request: it carries no `searchRunId`,
  * `routeFilter`, or `settings`.
  */
@@ -287,7 +287,7 @@ export function isConstrainedTrialAdoptable(
 }
 
 /**
- * The planning Targets of an input whose Beam Search never ran, read from the
+ * The planning Targets of an input whose full Planner run never ran, read from the
  * same `preparePlannerInitialContext()` authority a searched run counts, so an
  * unsearched termination never falls back to every active Target.
  */
@@ -314,7 +314,7 @@ function fixedConstraintFailureWarning(
  * How one full Production Plan generation ended.
  *
  * `cancelled` is a normal ordinary-Planner outcome, not an error: a cancelled
- * Beam Search already returns a safe `PlannerResult` with `plan: null`. It is
+ * full Planner run already returns a safe `PlannerResult` with `plan: null`. It is
  * kept as its own status so orchestration stops right there instead of walking
  * on into the Search Domain, where the very same `shouldCancel` would raise a
  * `CandidateSearchError('cancelled')` and turn a handled cancellation into a
@@ -339,7 +339,7 @@ type CandidateOutcome = 'adopted' | 'rejected' | 'stop'
  * The Search Domain never learns anything about the Planner side: the
  * enumerator receives only the origin, a TargetWeapon ID, and
  * `ConstrainedEnumerationBounds`. No conflict DTO, fixed constraint,
- * orchestration bound, conflict resolution, or Beam state crosses that
+ * orchestration bound, conflict resolution, or Planner state crosses that
  * boundary.
  */
 export async function createProductionPlanWithConstrainedSearch(
@@ -348,17 +348,17 @@ export async function createProductionPlanWithConstrainedSearch(
   options: PlannerConstrainedOrchestrationOptions,
 ): Promise<PlannerOrchestrationResult> {
   const { enumerationBounds, orchestrationBounds, executionOptions } = options
-  // One shared budget for every full Beam Search this orchestration starts:
+  // One shared budget for every full Planner run this orchestration starts:
   // the initial ordinary one, every Candidate trial, and every
   // runtime-unsupported retry inside Production Plan generation.
   const budget = createPlannerFullBeamBudget(orchestrationBounds)
   const orchestrationWarnings: PlannerWarning[] = []
   // Scoped to one `runFullPlanner()` call and reset at its start, so a later
-  // run can never read a previous run's Beam Search result.
+  // run can never read a previous run's full Planner run result.
   let lastCompletedBeam: PlannerBeamSearchResult | null = null
   const observer: ProductionPlanGenerationObserver = {
-    beforeBeamSearch: () => budget.beforeBeamSearch(),
-    afterBeamSearch: (beamResult) => {
+    beforePlannerRun: () => budget.beforePlannerRun(),
+    afterPlannerRun: (beamResult) => {
       lastCompletedBeam = beamResult
     },
   }
@@ -370,11 +370,11 @@ export async function createProductionPlanWithConstrainedSearch(
     lastCompletedBeam
 
   /**
-   * Whether every affordable full Beam Search has already been started.
+   * Whether every affordable full Planner run has already been started.
    *
    * Checked before any further orchestration work, because reaching
    * `maxPlannerReruns` must stop enumeration, materialization and preflight
-   * too - not merely fail the next `beforeBeamSearch()` (PLANNER_SPEC 9.2.16).
+   * too - not merely fail the next `beforePlannerRun()` (PLANNER_SPEC 9.2.16).
    */
   const isRerunBudgetExhausted = (): boolean => budget.used >= budget.limit
 
@@ -385,7 +385,7 @@ export async function createProductionPlanWithConstrainedSearch(
   function rerunBudgetWarning(): void {
     warn(
       'max_planner_reruns_reached',
-      `Planner constrained re-search stopped: maxPlannerReruns (${budget.limit}) full Beam Search executions were used.`,
+      `Planner constrained re-search stopped: maxPlannerReruns (${budget.limit}) full Planner run executions were used.`,
     )
   }
 
@@ -402,7 +402,7 @@ export async function createProductionPlanWithConstrainedSearch(
         observer,
         buildListContext,
       )
-      // This run's own last Beam Search, never a previous run's.
+      // This run's own last full Planner run, never a previous run's.
       return readLastCompletedBeam()?.cancelled === true
         ? { status: 'cancelled', result }
         : { status: 'completed', result }
@@ -448,7 +448,7 @@ export async function createProductionPlanWithConstrainedSearch(
 
   // --- the initial ordinary Planner run ---------------------------------
   // It uses the same shared Production path and the same shared budget, so the
-  // first full Beam Search already consumes `maxPlannerReruns`.
+  // first full Planner run already consumes `maxPlannerReruns`.
   // The caller's input is the ordinary persisted one, so the Build List
   // cardinality check applies (`docs/PLANNER_SPEC.md` 4.1); only a Candidate
   // trial below is a temporary augmented input (9.2.18).
@@ -456,7 +456,7 @@ export async function createProductionPlanWithConstrainedSearch(
   if (initialRun.status === 'rerun_budget_reached') {
     rerunBudgetWarning()
     // The budget refused a retry inside the very first Production Plan
-    // generation. Its last completed Beam Search never passed Trace Replay, so
+    // generation. Its last completed full Planner run never passed Trace Replay, so
     // no Plan may be assembled from it; only its conflicts and warnings are
     // reported, with `plan: null`.
     const beam = readLastCompletedBeam()
@@ -466,8 +466,8 @@ export async function createProductionPlanWithConstrainedSearch(
         conflicts: beam === null ? [] : structuredClone(beam.conflicts),
         warnings: beam === null ? [] : structuredClone(beam.warnings),
         // `maxPlannerReruns` is an orchestration bound, not a `PlannerOptions`
-        // bound, so it is reported by its own warning above. When no Beam
-        // Search ran at all, no `PlannerOptions` bound was touched either.
+        // bound, so it is reported by its own warning above. When no full
+        // Planner run ran at all, no `PlannerOptions` bound was touched either.
         termination:
           beam === null
             ? createUnsearchedPlannerTermination(
@@ -551,7 +551,7 @@ export async function createProductionPlanWithConstrainedSearch(
     }
     // Re-checked before every work item: one generated Candidate can settle
     // several conflicts at once (PLANNER_SPEC 9.2.10). An adoption that spent
-    // the last affordable Beam Search is therefore a normal completion when it
+    // the last affordable full Planner run is therefore a normal completion when it
     // leaves no unresolved work behind.
     if (
       isPlannerConflictWorkSatisfied(
@@ -563,7 +563,7 @@ export async function createProductionPlanWithConstrainedSearch(
       continue
     }
     if (isRerunBudgetExhausted()) {
-      // This work is genuinely unresolved and no Beam Search is left to judge
+      // This work is genuinely unresolved and no full Planner run is left to judge
       // a Candidate for it, so nothing is enumerated, materialized or
       // preflighted: the bound is reported here instead. The loop ends right
       // away, so `rerunBudgetReached` - which only guards later iterations -
@@ -590,7 +590,7 @@ export async function createProductionPlanWithConstrainedSearch(
       )
       // The current input already carries this exact semantic Entry, so a
       // rerun would repeat an identical input. The trial is spent, but no
-      // duplicate Entry and no Beam Search follow.
+      // duplicate Entry and no full Planner run follow.
       if (reusedExisting) return 'rejected'
 
       if (adoptedEntries.length >= orchestrationBounds.maxGeneratedBuildListEntries) {
@@ -632,7 +632,7 @@ export async function createProductionPlanWithConstrainedSearch(
         ...input,
         buildListEntries: [...input.buildListEntries, ...adoptedEntries, entry],
       }
-      // Every explicit resolution is re-mapped here, before any Beam Search.
+      // Every explicit resolution is re-mapped here, before any full Planner run.
       const preflight = preparePlannerReplacementConflictPreflight(
         trialInput,
         trialReplacements,
@@ -705,7 +705,7 @@ export async function createProductionPlanWithConstrainedSearch(
         }
         if (outcome === 'stop') return 'stop'
         if (isRerunBudgetExhausted()) {
-          // The rejected trial spent the last affordable Beam Search while this
+          // The rejected trial spent the last affordable full Planner run while this
           // work stayed unresolved, so the next Candidate is never requested,
           // delivered or materialized.
           rerunBudgetReached = true

@@ -71,7 +71,7 @@ describe('Target semantics calculation boundary', () => {
   it.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])('fails closed for every schema-%i calculation artifact', (version) => {
     const stored = { ...createValidBuildCandidate().calculationContext, appSchemaVersion: version }
     const current = { ...stored, appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION }
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(13)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(14)
     expect(isBuildResultCalculationContextCompatible(stored, current)).toBe(false)
     expect(isCalculationContextCompatible(stored, current)).toBe(false)
     expect(isBuildResultCalculationContextCompatible(current, current)).toBe(true)

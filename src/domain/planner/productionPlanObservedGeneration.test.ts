@@ -25,7 +25,7 @@ import {
   type PlannerInput,
 } from './plannerTypes'
 
-/** The ordinary single-Beam fixture: one Entry, one full Beam Search. */
+/** The ordinary single-run fixture: one Entry, one full Planner run. */
 function singleBeamFixture(): {
   input: PlannerInput
   dependencies: PlannerDependencies
@@ -81,7 +81,7 @@ function countingObserver() {
   return {
     state,
     observer: {
-      beforeBeamSearch() {
+      beforePlannerRun() {
         state.calls += 1
       },
     },
@@ -97,7 +97,7 @@ function bounds(maxPlannerReruns: number): PlannerOrchestrationBounds {
 }
 
 describe('Observed Production plan generation boundary', () => {
-  it('observes exactly one full Beam Search for an ordinary single-run Plan', async () => {
+  it('observes exactly one full Planner run for an ordinary single-run Plan', async () => {
     const { input, dependencies } = singleBeamFixture()
     const { state, observer } = countingObserver()
 
@@ -112,7 +112,7 @@ describe('Observed Production plan generation boundary', () => {
     expect(result.plan).not.toBeNull()
   })
 
-  it('observes every runtime-unsupported retry Beam Search', async () => {
+  it('observes every runtime-unsupported retry full Planner run', async () => {
     const { input, dependencies } = runtimeUnsupportedFixture()
     const { state, observer } = countingObserver()
 
@@ -159,11 +159,11 @@ describe('Observed Production plan generation boundary', () => {
 
   it('propagates a throw from the first observation without returning a PlannerResult', async () => {
     const { input, dependencies } = singleBeamFixture()
-    const failure = new Error('observer refused the first Beam Search')
+    const failure = new Error('observer refused the first full Planner run')
 
     await expect(
       createProductionPlanWithObserver(input, dependencies, undefined, {
-        beforeBeamSearch() {
+        beforePlannerRun() {
           throw failure
         },
       }),
@@ -172,12 +172,12 @@ describe('Observed Production plan generation boundary', () => {
 
   it('propagates a throw from the retry observation without returning a partial PlannerResult', async () => {
     const { input, dependencies } = runtimeUnsupportedFixture()
-    const failure = new Error('observer refused the retry Beam Search')
+    const failure = new Error('observer refused the retry full Planner run')
     let calls = 0
 
     await expect(
       createProductionPlanWithObserver(input, dependencies, undefined, {
-        beforeBeamSearch() {
+        beforePlannerRun() {
           calls += 1
           if (calls > 1) throw failure
         },
@@ -187,8 +187,8 @@ describe('Observed Production plan generation boundary', () => {
   })
 })
 
-describe('maxPlannerReruns full Beam budget', () => {
-  it('allows the initial ordinary Beam Search under a limit of 1', async () => {
+describe('maxPlannerReruns full Planner run budget', () => {
+  it('allows the initial ordinary full Planner run under a limit of 1', async () => {
     const { input, dependencies } = singleBeamFixture()
     const budget = createPlannerFullBeamBudget(bounds(1))
 
@@ -204,7 +204,7 @@ describe('maxPlannerReruns full Beam budget', () => {
     expect(budget.limit).toBe(1)
   })
 
-  it('rejects the retry Beam Search with a typed signal when the limit is 1', async () => {
+  it('rejects the retry full Planner run with a typed signal when the limit is 1', async () => {
     const { input, dependencies } = runtimeUnsupportedFixture()
     const budget = createPlannerFullBeamBudget(bounds(1))
 
@@ -243,15 +243,15 @@ describe('maxPlannerReruns full Beam budget', () => {
     expect(budget.used).toBe(2)
   })
 
-  it('counts the initial ordinary Beam Search, so a later run is rejected in isolation', () => {
+  it('counts the initial ordinary full Planner run, so a later run is rejected in isolation', () => {
     const budget = createPlannerFullBeamBudget(bounds(2))
 
     expect(budget.used).toBe(0)
-    budget.beforeBeamSearch()
+    budget.beforePlannerRun()
     expect(budget.used).toBe(1)
-    budget.beforeBeamSearch()
+    budget.beforePlannerRun()
     expect(budget.used).toBe(2)
-    expect(() => budget.beforeBeamSearch()).toThrow(PlannerOrchestrationLimitError)
+    expect(() => budget.beforePlannerRun()).toThrow(PlannerOrchestrationLimitError)
     expect(budget.used).toBe(2)
   })
 

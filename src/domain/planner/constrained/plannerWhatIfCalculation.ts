@@ -56,7 +56,7 @@ import type {
  *   -> temporary trial Entry G, replacing the Target's baseline Entry O
  *   -> conflict preflight            B8-C3, every fixed constraint, over O + G
  *                                    and then over the replacement set -O + G
- *   -> full Production Plan run      Beam Search + Trace Replay, over -O + G
+ *   -> full Production Plan run      Planner run + Trace Replay, over -O + G
  *   -> found, or the next Candidate
  * ```
  *
@@ -101,7 +101,7 @@ function distanceOf(candidate: ConstrainedCandidate): PlannerWhatIfDistance {
  *
  * The trial Entry and every fixed Entry must all be selected by the rerun's
  * Plan. Nothing else is consulted: not `completed`, not
- * `recommendedBuildListEntryId`, not a Beam Search bestState participant, not
+ * `recommendedBuildListEntryId`, not a full Planner run bestState participant, not
  * Target priority, and not the Candidate's score or category. B9 adopts
  * nothing, so B8's extra "every previously adopted generated Entry is still
  * selected" condition has no counterpart here.
@@ -164,13 +164,13 @@ export async function createPlannerWhatIfComparison(
   const maxTrials = request.bounds.maxCandidateTrialsPerTarget
   const executionOptions = options.executionOptions
 
-  // Reset before every run, so one run can never read another run's Beam.
+  // Reset before every run, so one run can never read another run's result.
   let cancelledBeam = false
   /** Declared return type: the assignment below happens inside a callback. */
   const readCancelledBeam = (): boolean => cancelledBeam
   const observer: ProductionPlanGenerationObserver = {
-    beforeBeamSearch: () => budget.beforeBeamSearch(),
-    afterBeamSearch: (beamResult) => {
+    beforePlannerRun: () => budget.beforePlannerRun(),
+    afterPlannerRun: (beamResult) => {
       if (beamResult.cancelled) cancelledBeam = true
     },
   }
@@ -188,7 +188,7 @@ export async function createPlannerWhatIfComparison(
       continue
     }
     if (budget.exhausted) {
-      // No Beam Search is left to judge anything for this Target, so no
+      // No full Planner run is left to judge anything for this Target, so no
       // enumeration, materialization or preflight is started for it at all
       // (PLANNER_SPEC 9.2.4.9).
       alternatives.push({
@@ -270,7 +270,7 @@ export async function createPlannerWhatIfComparison(
     materializer: ConstrainedMaterializer,
     beamBudget: PlannerWhatIfFullBeamBudget,
   ): Promise<PlannerWhatIfOutcome> {
-    // No Candidate at all needs no Beam Search, so the enumeration itself
+    // No Candidate at all needs no full Planner run, so the enumeration itself
     // already decides this slot even when the rerun budget is spent.
     if (candidates.length === 0) return plannerWhatIfEnumerationOutcome(summary)
     if (beamBudget.exhausted) return rerunBoundOutcome()
@@ -340,7 +340,7 @@ export async function createPlannerWhatIfComparison(
    *
    * Every valid explicit resolution, not only the scenario's own, stays a
    * feasibility constraint and is re-mapped onto the currently detected
-   * conflicts before any Beam Search runs (PLANNER_SPEC 9.2.3.1, 9.2.4.7).
+   * conflicts before any full Planner run starts (PLANNER_SPEC 9.2.3.1, 9.2.4.7).
    *
    * - a `reusedExisting` Candidate adds no Entry: the baseline itself is judged,
    *   as an ordinary persisted input, exactly as before
@@ -406,7 +406,7 @@ export async function createPlannerWhatIfComparison(
         buildListContext,
       )
     } catch (error) {
-      // A blocked Beam Search is a normal, typed stop. Every other failure -
+      // A blocked full Planner run is a normal, typed stop. Every other failure -
       // materialization, prediction, Planner or Search invariant - propagates
       // unchanged and is never converted into a rejection.
       if (error instanceof PlannerWhatIfRerunLimitError) {
@@ -414,7 +414,7 @@ export async function createPlannerWhatIfComparison(
       }
       throw error
     }
-    // A cancelled Beam Search returns a safe `plan: null` result, which must
+    // A cancelled full Planner run returns a safe `plan: null` result, which must
     // not be read as "this Candidate is infeasible". The whole request ends
     // instead, and no partial comparison is returned (PLANNER_SPEC 9.2.4.12).
     if (readCancelledBeam()) throw new PlannerWhatIfCancelledError()

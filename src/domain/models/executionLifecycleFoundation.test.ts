@@ -137,7 +137,7 @@ describe('Execution lifecycle version boundaries', () => {
     // start effect moved the calculation schema to 13 with no persisted shape
     // change. The Identification provenance moved Export to 10.
     expect(EXPORT_SCHEMA_VERSION).toBe(11)
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(13)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(14)
   })
 })
 

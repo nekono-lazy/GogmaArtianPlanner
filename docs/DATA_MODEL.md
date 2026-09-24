@@ -189,12 +189,14 @@ PlanStep milestone / PlanConflict participantの形状をすべて変更する�
 1本の操作列のindexで表現されており、lane pinへ変換できない。選択を「なし」と読めばhard
 constraintを黙って捨てることになるため、旧1..10の全計算artifactは非互換とする。
 以下の2..5互換例外は歴史的契約でありversion 6以降には適用しない。Plan開始effect（version 13）は
-ProductionPlanの実行意味だけを変えたため、build結果に限りversion 12 -> 13の明示的互換例外を持つ
-（本節末尾、ProductionPlanには適用しない）。
+ProductionPlanの実行意味だけを変えたため、build結果に限りversion 12 -> 13の明示的互換例外を持つ。
+Production Plannerの決定的scheduler切替（version 14）もProductionPlanの計算意味だけを変えたため、
+build結果に限りversion 12 / 13 -> 14の明示的互換例外を持つ（本節末尾、いずれもProductionPlanには
+適用しない）。
 現行versionの単一authorityは `src/domain/models/common.ts` の
-`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 13` とし、Search、BuildList、Plannerと
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 14` とし、Search、BuildList、Plannerと
 benchmark入力のruntime creatorで共用する。永続モデル移行は独立してDexie
-`DATABASE_SCHEMA_VERSION`（現行7。14.2）で管理し、AppSettingsは `schemaVersion = 1` のままとする。Calculation semantics / artifact
+`DATABASE_SCHEMA_VERSION`（現行8。14.2）で管理し、AppSettingsは `schemaVersion = 1` のままとする。Calculation semantics / artifact
 validity境界とDexie schemaは別の概念であり、片方の更新はもう片方の更新を意味しない。
 gameVersion、Master Data versionは維持する。
 `PRODUCTION_RNG_ENGINE_VERSION` はこのcheckpoint境界では `production-rng:c5-e2` のまま維持し、
@@ -317,6 +319,25 @@ version 12のPlanはStepでの紐付けを前提とした期待状態を持ち�
 （gameVersion、masterDataVersion、rngEngineVersionの一致と通常のstaleness判定は引き続き必要）。
 version 1..11のbuild結果は従来どおり非互換である。Plan開始effectは選択Entryから導出し永続fieldを追加しないため、Dexie
 `DATABASE_SCHEMA_VERSION` は6、`ExportRoot.schemaVersion` は9のままである。
+
+現行の `CURRENT_CALCULATION_APP_SCHEMA_VERSION` **14** は、通常Plannerの計算方式を上限付きBeam Searchから
+Route commitment + 決定的schedulerへ切り替えた（Issue #103 Phase C、
+[ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md) 15.2 / 15.3、
+PLANNER_SPEC 7）。同じPlannerInputに対して、未解決競合の暫定帰結、返す `conflicts`、
+`rejectedBuildListEntries`、Step順、共有physical actionで進むEntry、Planner側の優先起点preference（撤去）が
+変わり得る。永続ProductionPlanは生成方式を記録しないため、version 13のPlanの内容がBeam Search由来か
+scheduler由来かを判別できない。
+
+| artifact | version 14 runtimeでの扱い |
+| --- | --- |
+| ProductionPlan version 1..13（draft / activeを問わない） | 非互換。`calculation_context_changed` でfail closedし、Worker準備、競合操作、what-if、作成開始、実行準備、実行へ進めない。exact persisted内容の表示は維持し、read migrationやversion書き換えはしない。実行中（`active`）のPlanは現在地点からの再計画（PLANNER_SPEC 16.8）が必要。Planの互換判定は従来どおり4 field完全一致で、Plan向けの例外は無い |
+| BuildCandidate / BuildListEntry version 12 / 13 | 明示的なbuild-result例外 `14 -> [12, 13]` により互換。gameVersion、masterDataVersion、rngEngineVersionの一致と通常のstaleness判定は引き続き必要 |
+| BuildCandidate / BuildListEntry version 1..11 | 従来どおり非互換 |
+
+例外は明示mapだけで表し、「12以上なら互換」のような範囲判定や将来versionへの推移的適用はしない。
+永続形状は変えないため、Dexie `DATABASE_SCHEMA_VERSION` は8、`ExportRoot.schemaVersion` は11、
+`RngState.schemaVersion` は2、`AppSettings.schemaVersion` は1、`PRODUCTION_RNG_ENGINE_VERSION`
+（`production-rng:c5-e7`）とMaster dataVersionも変更しない。migrationは追加しない。
 
 ---
 
@@ -847,8 +868,9 @@ soft preferenceである。
 - 必須Route指定ではない。Searchは従来どおり新規Normal / 所持Normal / 所持Gogmaの実行可能Route
   をすべて探索し、preferred以外のRouteを除外しない
 - より短い、より低コスト、または既存評価で明確に優れたRouteがある場合はそちらを優先する
-- Search / Plannerでの位置づけは[SEARCH_SPEC.md](./SEARCH_SPEC.md) 8.1と
-  [PLANNER_SPEC.md](./PLANNER_SPEC.md) 7.4に従う
+- Search / constrained enumerationでの位置づけは[SEARCH_SPEC.md](./SEARCH_SPEC.md) 8.1に従う。
+  通常Planner（決定的scheduler）は優先起点を判断に使わない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7.4、
+  Issue #103 Phase C）
 - Target Satisfactionを制限しない。あるTargetがWeapon Xを優先起点にしていても、性能を満たす
   別のWeapon YがそのTargetを満たしてよい。1対1制約は優先起点の関係にだけ適用する
 - Planner計算（Beam Search、Trace Replay、constrained re-search、what-if）、Candidate Search、

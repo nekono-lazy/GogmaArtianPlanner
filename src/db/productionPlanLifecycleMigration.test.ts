@@ -59,7 +59,7 @@ function schema5Plan(id: string, status: ProductionPlan['status']): Record<strin
 describe('ProductionPlan lifecycle persistence migration (Dexie v5 -> v6)', () => {
   it('uses DATABASE_SCHEMA_VERSION 6 independently of the calculation schema', () => {
     expect(DATABASE_SCHEMA_VERSION).toBe(8)
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(13)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(14)
   })
 
   it('fills only non-terminal Plans and leaves terminal Plans and history exactly as persisted', async () => {

@@ -1104,7 +1104,10 @@ Plannerに検討させる候補集合を確認・調整する。
 
 ### 10.0 Planner詳細設定
 
-Search Resultsと同じ「詳細設定」Accordionを置き、Beam Searchの探索上限を変更できる。
+Search Resultsと同じ「詳細設定」Accordionを置き、Plannerの実行上限を変更できる。
+通常Plannerは決定的scheduler（PLANNER_SPEC 7）であり、「最大計画ステップ数」と「最大探索状態数」を使う。
+「Beam幅」は現在の通常Plannerでは使用しないが、Issue #103 Phase Dで除去を判断するまで互換のため
+項目・既定値・入力検証を残す（入力は可能で、値によって計画は変わらない）。
 
 | 表示名 | `PlannerOptions` |
 | --- | --- |
@@ -1120,14 +1123,16 @@ Search Resultsと同じ「詳細設定」Accordionを置き、Beam Searchの探�
 長いルートで上限に達した場合は増やしてください。
 
 最大探索状態数
-Plannerが評価する状態数の上限です。
-探索未完了になった場合は、この値を増やして再実行してください。
+Plannerが構築する状態数の上限です。
+計画が上限に達した場合は、この値を増やして再実行してください。
 
 Beam幅
-各探索段階で残す候補状態数です。
-通常は変更不要な高度な設定で、大きくすると探索品質が上がる可能性がありますが、
-処理量も増えます。
+現在の通常Plannerでは使用しません。
+互換性のため設定項目を残しています。
 ```
+
+Accordion冒頭の説明文は「Plannerの実行上限です。3項目とも1以上の整数だけが有効で、この画面を
+再読み込みすると既定値へ戻ります。」とする。
 
 制約。
 
@@ -1137,7 +1142,8 @@ Beam幅
   「生産計画を作成」をdisabledにする
 - 無効な値をPlannerへ渡さない
 - 推測による固定最大値は設けない。長時間化は既存のWorker実行とキャンセルで扱う
-- 選択した `maxExpandedStates` が実行中progressの分母になる
+- 選択した `maxExpandedStates` が実行中progressの分母になる。決定的schedulerでは分子
+  （探索状態数）は適用した操作数である（PLANNER_SPEC 7.2）。表示名称と分母の見直しはPhase Dで行う
 - 設定はBuildList画面のruntime UI stateであり、再読み込みで既定値へ戻る
 - B8 orchestration boundsとB9 what-if boundsはこの詳細設定に出さない
 

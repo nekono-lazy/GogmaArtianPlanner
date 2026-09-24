@@ -432,7 +432,7 @@ describe('BuildListPage', () => {
     await user.click(screen.getByRole('button', { name: '生産計画を作成' }))
     await screen.findByText(/^Plan destination:/)
 
-    // `PlannerInput.options` is the single Beam Search bound authority, so the
+    // `PlannerInput.options` is the single Planner bound authority, so the
     // reviewed values reach the Worker exactly (PLANNER_SPEC 7.2.1).
     expect(vi.mocked(client.createConstrainedPlan).mock.calls[0][1].options).toEqual({
       maxPlanSteps: 400,
@@ -486,6 +486,44 @@ describe('BuildListPage', () => {
     await user.click(await screen.findByRole('button', { name: '詳細設定' }))
     await user.clear(await screen.findByLabelText('最大探索状態数'))
     if (raw !== '') await user.type(screen.getByLabelText('最大探索状態数'), raw)
+
+    expect(await screen.findByText('1以上の整数を入力してください。')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '生産計画を作成' })).toBeDisabled()
+    expect(client.createConstrainedPlan).not.toHaveBeenCalled()
+  })
+
+  it('describes the bounds of the deterministic scheduler and keeps Beam幅 as an unused compatibility field', async () => {
+    const user = userEvent.setup()
+    renderPage(dependencies())
+    await user.click(await screen.findByRole('button', { name: '詳細設定' }))
+
+    expect(await screen.findByText(/^Plannerの実行上限です。/)).toBeInTheDocument()
+    expect(screen.getByLabelText('最大計画ステップ数')).toBeInTheDocument()
+    expect(screen.getByLabelText('最大探索状態数')).toHaveAccessibleDescription(
+      'Plannerが構築する状態数の上限です。計画が上限に達した場合は、この値を増やして再実行してください。',
+    )
+    // Still an editable field (Issue #103 Phase D decides its removal), but the
+    // Production Planner never reads it.
+    expect(screen.getByLabelText('Beam幅')).toBeEnabled()
+    expect(screen.getByLabelText('Beam幅')).toHaveAccessibleDescription(
+      '現在の通常Plannerでは使用しません。互換性のため設定項目を残しています。',
+    )
+    expect(screen.queryByText(/Beam Search/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/探索品質/)).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ['zero', '0'],
+    ['a negative number', '-5'],
+    ['a fraction', '1.5'],
+    ['an empty field', ''],
+  ])('still refuses %s as Beam幅', async (_label, raw) => {
+    const user = userEvent.setup()
+    const client = createPlannerClient()
+    renderPage(dependencies([], client))
+    await user.click(await screen.findByRole('button', { name: '詳細設定' }))
+    await user.clear(await screen.findByLabelText('Beam幅'))
+    if (raw !== '') await user.type(screen.getByLabelText('Beam幅'), raw)
 
     expect(await screen.findByText('1以上の整数を入力してください。')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '生産計画を作成' })).toBeDisabled()

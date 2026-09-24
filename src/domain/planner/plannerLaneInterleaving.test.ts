@@ -688,7 +688,10 @@ describe('Existing Gogma lane starts held at Planner start', () => {
 
   it('E: Practical + Practical holds both lane starts and continues to the Ideal', async () => {
     const built = heldStartScenario({ id: 'e', skill: 'practical', bonus: 'practical', operations: ['reset_bonuses', 'reset_skills'], select: { skill: true, bonus: true } })
-    await expectHeldAtStart(built, ['reset_bonuses', 'reset_skills'])
+    // Both lanes are safe from the start and the preference is `planner`, so the
+    // deterministic scheduler's stable stream order (Skill before Gogma,
+    // PLANNER_SPEC 7.3 key 6) decides; either order completes the Target.
+    await expectHeldAtStart(built, ['reset_skills', 'reset_bonuses'])
   })
 
   it('F: a conversion-assigned Skill at lane position 0 is not held before the conversion ran', async () => {

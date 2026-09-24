@@ -106,7 +106,7 @@ describe('BuildListService', () => {
     memory.entries.push(original)
 
     const refreshed = await new BuildListService(memory.repositories).refreshStaleness(current)
-    expect(current.appSchemaVersion).toBe(13)
+    expect(current.appSchemaVersion).toBe(14)
     expect(refreshed.entries[0].isStale).toBe(true)
     expect(refreshed.entries[0].staleReasons).toEqual(['calculation_context_changed'])
     expect(refreshed.entries[0].candidateSnapshot).toEqual(snapshot)
@@ -142,23 +142,38 @@ describe('BuildListService', () => {
     },
   )
 
-  it('keeps a schema 12 BuildListEntry usable under schema 13 when nothing else changed', async () => {
+  it.each([12, 13])('keeps a schema %i BuildListEntry usable under schema 14 when nothing else changed', async (appSchemaVersion) => {
     const memory = memoryRepositories()
     const current = createBuildListCalculationContext(createValidMasterDataFixture())
-    expect(current.appSchemaVersion).toBe(13)
+    expect(current.appSchemaVersion).toBe(14)
     const candidate = createValidBuildCandidate()
-    candidate.calculationContext = { ...current, appSchemaVersion: 12 }
+    candidate.calculationContext = { ...current, appSchemaVersion }
     candidate.searchStateHash = createSearchStateHash(candidate.route, memory.rngState, memory.normalCounters)
     const original = createBuildListEntry(candidate, memory.target, { createdAt: '2026-08-29T04:00:00.000Z' })
     memory.entries.push(original)
 
     const refreshed = await new BuildListService(memory.repositories).refreshStaleness(current)
 
-    // The schema 13 change is ProductionPlan execution only (PLANNER_SPEC 16.11),
-    // so the version 12 Entry is not stale for its calculation context.
+    // The schema 13 change is ProductionPlan execution only (PLANNER_SPEC 16.11)
+    // and the schema 14 change is the Production Planner strategy only (Issue
+    // #103 Phase C), so a version 12 / 13 Entry is not stale for its
+    // calculation context.
     expect(refreshed.entries[0]).toMatchObject({ isStale: false, staleReasons: [] })
     expect(refreshed.entries[0].candidateSnapshot).toEqual(original.candidateSnapshot)
-    expect(refreshed.entries[0].calculationContext.appSchemaVersion).toBe(12)
+    expect(refreshed.entries[0].calculationContext.appSchemaVersion).toBe(appSchemaVersion)
+  })
+
+  it('still marks a schema 13 BuildListEntry stale when another CalculationContext field differs', async () => {
+    const memory = memoryRepositories()
+    const current = createBuildListCalculationContext(createValidMasterDataFixture())
+    const candidate = createValidBuildCandidate()
+    candidate.calculationContext = { ...current, appSchemaVersion: 13, rngEngineVersion: 'production-rng:other' }
+    candidate.searchStateHash = createSearchStateHash(candidate.route, memory.rngState, memory.normalCounters)
+    memory.entries.push(createBuildListEntry(candidate, memory.target, { createdAt: '2026-08-29T04:00:00.000Z' }))
+
+    const refreshed = await new BuildListService(memory.repositories).refreshStaleness(current)
+
+    expect(refreshed.entries[0]).toMatchObject({ isStale: true, staleReasons: ['calculation_context_changed'] })
   })
 
   it('still stales a schema 12 BuildListEntry for its real reasons, not for the schema', async () => {

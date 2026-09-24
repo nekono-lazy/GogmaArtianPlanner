@@ -103,8 +103,10 @@ import { PERSISTED_PLANNER_BUILD_LIST_CONTEXT } from './plannerTypes'
  * (`plannerStateTransitions.ts`), so its trace is an ordinary Planner trace
  * that `replayPlannerSearchTrace()` verifies unchanged.
  *
- * Phase A: this is Domain only. Production Plan generation, the Planner Worker,
- * B8 / B9 and the replan Preview still run the Beam Search.
+ * Since Issue #103 Phase C this is the Production full Planner run:
+ * `createProductionPlanWithObserver()` runs it for the ordinary Planner, the
+ * Planner Worker, B8 / B9 and the replan Preview. The Beam Search stays a
+ * test / benchmark oracle only.
  */
 
 /** How many applied actions pass between two `yieldControl()` calls. */
@@ -1050,12 +1052,12 @@ export function createPlannerDeterministicScheduleRun(
 }
 
 /**
- * Runs the deterministic scheduler to the end (Issue #103 Phase A).
+ * Runs the deterministic scheduler to the end (Issue #103 Phase A / C).
  *
  * The result is `PlannerBeamSearchResult`-compatible, so the existing Trace
- * Replay, execution projection and Plan generation can consume it unchanged.
- * It is not connected to Production: `createProductionPlanWithObserver()`
- * still runs `runPlannerBeamSearch()`.
+ * Replay, execution projection and Plan generation consume it unchanged. It is
+ * the Production full Planner run: `createProductionPlanWithObserver()` runs it
+ * (Phase C). `PlannerOptions.beamWidth` is never read.
  *
  * `buildListContext` follows the full-run contract: `persisted`, or
  * `temporary_replacement` for the replacement set of a B8 / what-if trial.

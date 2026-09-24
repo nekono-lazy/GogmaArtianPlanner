@@ -70,7 +70,7 @@ describe('Draft ProductionPlan persistence migration (Dexie v7 -> v8)', () => {
   it('uses DATABASE_SCHEMA_VERSION 8 and Export schema 11 without moving any calculation authority', () => {
     expect(DATABASE_SCHEMA_VERSION).toBe(8)
     expect(EXPORT_SCHEMA_VERSION).toBe(11)
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(13)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(14)
     expect(RNG_STATE_SCHEMA_VERSION).toBe(2)
     expect(PRODUCTION_RNG_ENGINE_VERSION).toBe('production-rng:c5-e7')
   })

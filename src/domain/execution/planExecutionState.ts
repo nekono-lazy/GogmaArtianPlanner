@@ -61,7 +61,7 @@ function sameExpectedPlanState(left: ExpectedPlanState, right: ExpectedPlanState
 }
 
 /**
- * The Plan is an executable calculation schema 12 Plan under the current
+ * The Plan is an executable Plan of the current calculation schema under the current
  * CalculationContext. A legacy Plan keeps its exact persisted contents and is
  * refused here; it is never executed as a current Plan.
  */

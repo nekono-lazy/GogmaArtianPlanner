@@ -33,18 +33,26 @@ import type { PlannerSchedulerInstrumentation } from './plannerSchedulerInstrume
 
 export interface PlannerOptions {
   maxPlanSteps: number
+  /**
+   * Read by the Beam Search oracle only (test / benchmark). The Production
+   * deterministic scheduler never reads it, so its value never changes a
+   * Production Plan; it stays in the shape and in validation (a positive
+   * integer) until Issue #103 Phase D decides its removal.
+   */
   beamWidth: number
   maxExpandedStates: number
 }
 
 /**
- * The initial values of the three Beam Search bounds (PLANNER_SPEC 7.2).
+ * The initial values of the three Planner bounds (PLANNER_SPEC 7.2).
  *
  * They are the *default* the Application caller starts from, not a floor or a
  * ceiling: the Build List detail settings let the user raise any of them for
- * one calculation. `PlannerInput.options` remains the single Beam Search bound
+ * one calculation. `PlannerInput.options` remains the single Planner bound
  * authority, and no Worker or Domain module substitutes these values for a
- * caller-supplied one.
+ * caller-supplied one. The Production deterministic scheduler reads
+ * `maxPlanSteps` and `maxExpandedStates`; `beamWidth` is read by the Beam
+ * Search oracle only.
  */
 export const defaultPlannerOptions: Readonly<PlannerOptions> = {
   maxPlanSteps: 300,
@@ -52,7 +60,7 @@ export const defaultPlannerOptions: Readonly<PlannerOptions> = {
   maxExpandedStates: 10_000,
 }
 
-/** Which `PlannerOptions` bound the Beam Search touched. */
+/** Which `PlannerOptions` bound the full Planner run touched. */
 export type PlannerSearchLimitKind = 'max_expanded_states' | 'max_plan_steps'
 
 export const plannerSearchLimitKinds: readonly PlannerSearchLimitKind[] = [
@@ -73,13 +81,15 @@ export type PlannerSearchTerminationStatus =
   | 'cancelled'
 
 /**
- * Typed Beam Search termination (PLANNER_SPEC 7.2.1).
+ * Typed full Planner run termination (PLANNER_SPEC 7.2.1). The Production
+ * deterministic scheduler and the Beam Search oracle report it with the same
+ * meaning.
  *
  * It is the UI, Application and Persistence control authority for whether a
  * calculation produced a usable Plan. `PlannerWarning` stays diagnostics: no
  * consumer may parse a warning message, and `reachedLimits` is not a copy of
  * the warning list either - a `completed` search can carry a reached bound, and
- * a run that never reached its Beam Search carries none.
+ * a run that never reached its search carries none.
  *
  * Every field is plain structured-clone data, so it crosses the Worker boundary
  * unchanged and is never rebuilt on the other side. It is runtime result
@@ -472,12 +482,12 @@ export interface PlannerResult {
   conflicts: PlanConflict[]
   warnings: PlannerWarning[]
   /**
-   * How the Beam Search behind this result ended (PLANNER_SPEC 7.2.1).
+   * How the full Planner run behind this result ended (PLANNER_SPEC 7.2.1).
    *
    * `plan` alone cannot answer that: a `plan` calculated from a truncated
-   * search is a partial Beam Search artifact, not a finished production plan,
+   * search is a partial Planner artifact, not a finished production plan,
    * and Persistence and UI must be able to tell the two apart without reading
-   * a warning message. When several full Beam Searches ran - a
+   * a warning message. When several full Planner runs ran - a
    * runtime-unsupported retry, or a B8 Candidate trial - this is the one whose
    * result was actually used.
    */
@@ -542,7 +552,7 @@ export type PlannerBuildListContext =
       replacements: readonly BuildListEntryReplacement[]
     }
 
-/** The contexts a full Planner run (Beam Search, Production Plan generation) accepts. */
+/** The contexts a full Planner run (the scheduler or the Beam Search oracle, Production Plan generation) accepts. */
 export type PlannerRunBuildListContext = Exclude<
   PlannerBuildListContext,
   { kind: 'temporary_augmented' }
@@ -583,11 +593,12 @@ export type CreateProductionPlanCalculation = (
 /**
  * Runtime-only observation of Production Plan generation (PLANNER_SPEC 9.2.16).
  *
- * `beforeBeamSearch()` is called exactly once immediately before each full
- * `runPlannerBeamSearch()` execution that actually starts, including the first
- * one and every runtime-unsupported retry. B8 orchestration counts those calls
- * against `maxPlannerReruns`; the initial conflict preflight runs no Beam
- * Search and therefore never reaches this observer.
+ * `beforePlannerRun()` is called exactly once immediately before each full
+ * Planner run that actually starts (the Production deterministic scheduler, or
+ * the runner a test / benchmark injected), including the first one and every
+ * runtime-unsupported retry. B8 orchestration counts those calls against
+ * `maxPlannerReruns`; the initial conflict preflight is no full Planner run and
+ * therefore never reaches this observer.
  *
  * It is semantics-neutral: it must not change Plan generation behaviour. A
  * throw from it propagates unchanged to the caller and is never converted into
@@ -595,19 +606,19 @@ export type CreateProductionPlanCalculation = (
  * therefore never part of `PlannerInput`, a Worker DTO, or persistence.
  */
 export interface ProductionPlanGenerationObserver {
-  beforeBeamSearch(): void
+  beforePlannerRun(): void
   /**
-   * Called exactly once immediately after each full `runPlannerBeamSearch()`
-   * execution returns, before Trace Replay inspects its result.
+   * Called exactly once immediately after each full Planner run returns,
+   * before Trace Replay inspects its result.
    *
    * It is pure observation: nothing in Plan generation branches on it, and it
-   * cannot change which Beam Search runs next. B8 orchestration uses it so
-   * that, when a runtime-unsupported retry is refused by the
-   * `maxPlannerReruns` budget, it can still report the last completed Beam
-   * Search's conflicts and warnings with `plan: null` instead of assembling a
-   * ProductionPlan from a Beam whose Trace Replay never succeeded.
+   * cannot change which full Planner run starts next. B8 orchestration uses it
+   * so that, when a runtime-unsupported retry is refused by the
+   * `maxPlannerReruns` budget, it can still report the last completed run's
+   * conflicts and warnings with `plan: null` instead of assembling a
+   * ProductionPlan from a run whose Trace Replay never succeeded.
    */
-  afterBeamSearch?(result: PlannerBeamSearchResult): void
+  afterPlannerRun?(result: PlannerBeamSearchResult): void
 }
 
 export type PlannerWorkerRequest =

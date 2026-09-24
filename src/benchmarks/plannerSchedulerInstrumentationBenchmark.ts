@@ -15,8 +15,8 @@ import {
 /**
  * Issue #103 Phase B deterministic scheduler instrumentation harness.
  *
- * It runs `runPlannerDeterministicSchedule()` once - never through the
- * Production Planner Worker, which still runs the Beam Search - optionally with
+ * It runs `runPlannerDeterministicSchedule()` once - directly, not through the
+ * Production Planner Worker (which runs the same scheduler since Phase C) - optionally with
  * the semantics-neutral `schedulerInstrumentation`, and returns plain
  * structured-clone data. The digest is the Beam harness digest, so the two
  * strategies share one comparable shape; the metrics are the scheduler's own
