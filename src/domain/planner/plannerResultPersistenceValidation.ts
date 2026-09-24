@@ -1,4 +1,12 @@
-import { evaluateBuildListEntryStaleness } from '../buildList'
+import {
+  applyBuildListEntryReplacements,
+  buildListEntriesForTarget,
+  evaluateBuildListEntryStaleness,
+  validateBuildListEntryReplacements,
+  validateGeneratedBuildListEntryReplacements,
+  validateReplacedBuildListCardinality,
+  type BuildListEntryReplacement,
+} from '../buildList'
 import type {
   BuildListEntry,
   BuildListEntryId,
@@ -43,13 +51,17 @@ function resultInvalid(message: string): PlannerResultPersistenceIssue {
 
 /**
  * The result-shape invariants that do not depend on current persisted state:
- * a completed / exhausted search, a draft Plan, unique generated Entry IDs, and
- * Domain-valid Plan and Entries.
+ * a completed / exhausted search, a draft Plan, unique generated Entry IDs,
+ * exactly one replacement per generated Entry naming its own Target
+ * (`docs/PLANNER_SPEC.md` 9.2.18), and Domain-valid Plan and Entries. A
+ * malformed Worker result - replacement metadata missing, extra, duplicated or
+ * for another Target - is never persisted.
  */
 export function checkPersistablePlannerResultShape(
   plan: ProductionPlan,
   generatedEntries: readonly BuildListEntry[],
   termination: PlannerSearchTermination,
+  replacements: readonly BuildListEntryReplacement[] | undefined,
 ): PlannerResultPersistenceIssue | null {
   // PLANNER_SPEC 7.2.1: a Plan calculated from a Beam Search that a
   // `PlannerOptions` bound truncated is a partial search artifact, not a
@@ -73,6 +85,12 @@ export function checkPersistablePlannerResultShape(
   if (duplicated.length > 0) {
     return resultInvalid(
       `Generated BuildListEntry IDs must be unique: '${duplicated[0]}' appears more than once.`,
+    )
+  }
+  const pairing = validateGeneratedBuildListEntryReplacements(generatedEntries, replacements)
+  if (!pairing.isValid) {
+    return resultInvalid(
+      `The generated BuildListEntry replacements are malformed: ${pairing.issues.map(({ message }) => message).join(' ')}`,
     )
   }
   const planValidation = validateProductionPlan(plan)
@@ -105,6 +123,68 @@ export function findPersistedGeneratedBuildListEntryCollision(
         message: `Generated BuildListEntry '${collided.id}' already exists in persistence; current state changed after the Planner ran.`,
       }
     : null
+}
+
+/**
+ * The save-time half of the replacement contract (`docs/PLANNER_SPEC.md`
+ * 9.2.18): for every replacement, the Target's persisted Entries are *still*
+ * exactly the `O` the calculation replaced. A Target that meanwhile lost `O`,
+ * holds another Entry instead or beside it, or now holds two Entries is a state
+ * change: nothing is deleted on a guess, so a `B3` that replaced `B1` after the
+ * Planner ran is never removed by an older result.
+ */
+export function checkBuildListEntryReplacementsCurrent(
+  replacements: readonly BuildListEntryReplacement[],
+  persistedEntries: readonly BuildListEntry[],
+): PlannerResultPersistenceIssue | null {
+  for (const { targetWeaponId, replacedBuildListEntryId } of replacements) {
+    const current = buildListEntriesForTarget(persistedEntries, targetWeaponId).map(({ id }) => id)
+    if (current.length !== 1 || current[0] !== replacedBuildListEntryId) {
+      return {
+        kind: 'state_changed',
+        message: `TargetWeapon '${targetWeaponId}' now holds [${current.join(', ')}] instead of the BuildListEntry '${replacedBuildListEntryId}' the Planner result replaces; current state changed after the Planner ran.`,
+      }
+    }
+  }
+  return null
+}
+
+export type FinalReplacementBuildListResult =
+  | { issue: null; finalEntries: BuildListEntry[] }
+  | { issue: PlannerResultPersistenceIssue; finalEntries: null }
+
+/**
+ * The **final replacement set** a Planner result is persisted into
+ * (`docs/PLANNER_SPEC.md` 9.2.15 / 9.2.18): the current persisted Entries,
+ * minus each replaced `O`, plus each generated `G`. Shared by the ordinary
+ * Draft save and the replan adoption, it refuses - before any write - a
+ * generated ID that is already persisted (never overwritten), a Target whose
+ * persisted Entry is no longer exactly the expected `O`, and a final set in
+ * which a replaced Target does not hold exactly its `G`
+ * (`validateBuildListCardinality()`).
+ */
+export function prepareFinalReplacementBuildList(
+  persistedEntries: readonly BuildListEntry[],
+  generatedEntries: readonly BuildListEntry[],
+  replacements: readonly BuildListEntryReplacement[],
+): FinalReplacementBuildListResult {
+  const collision = findPersistedGeneratedBuildListEntryCollision(generatedEntries, persistedEntries)
+  if (collision !== null) return { issue: collision, finalEntries: null }
+  const current = checkBuildListEntryReplacementsCurrent(replacements, persistedEntries)
+  if (current !== null) return { issue: current, finalEntries: null }
+  const finalEntries = applyBuildListEntryReplacements(persistedEntries, replacements, generatedEntries)
+  const structure = validateBuildListEntryReplacements(finalEntries, replacements, 'replaced')
+  const cardinality = validateReplacedBuildListCardinality(finalEntries, replacements)
+  const issues = [...structure.issues, ...cardinality.issues]
+  if (issues.length > 0) {
+    return {
+      issue: resultInvalid(
+        `The final Build List after the replacements violates the Build List cardinality contract: ${issues.map(({ message }) => message).join(' ')}`,
+      ),
+      finalEntries: null,
+    }
+  }
+  return { issue: null, finalEntries }
 }
 
 export interface GeneratedBuildListEntryStalenessState {
@@ -143,22 +223,25 @@ export function checkGeneratedBuildListEntriesFresh(
 }
 
 /**
- * Every BuildListEntry the Plan references exists in the final augmented Build
- * List, each Candidate-derived Step carries its Entry Snapshot's Candidate ID,
- * and every generated Entry is selected by the final Plan (PLANNER_SPEC
- * 9.2.14).
+ * Every BuildListEntry the Plan references exists in the final replacement set
+ * (`prepareFinalReplacementBuildList()`), each Candidate-derived Step carries
+ * its Entry Snapshot's Candidate ID, and every generated Entry is selected by
+ * the final Plan (PLANNER_SPEC 9.2.14 / 9.2.18). A replaced Entry `O` is not
+ * part of that set, so a Plan still naming it anywhere - a selected Entry, a
+ * Step, a conflict participant, recommendation or selection, a rejection - is
+ * refused.
  */
 export function checkProductionPlanBuildListReferences(
   plan: ProductionPlan,
   generatedEntries: readonly BuildListEntry[],
-  augmentedEntries: readonly BuildListEntry[],
+  finalEntries: readonly BuildListEntry[],
 ): PlannerResultPersistenceIssue | null {
-  const entryById = new Map(augmentedEntries.map((entry) => [entry.id, entry]))
+  const entryById = new Map(finalEntries.map((entry) => [entry.id, entry]))
   const missing = (id: BuildListEntryId, path: string) =>
     entryById.has(id)
       ? null
       : resultInvalid(
-          `${path} references BuildListEntry '${id}', which is not part of the final augmented Build List.`,
+          `${path} references BuildListEntry '${id}', which is not part of the final replacement Build List.`,
         )
 
   for (const [index, id] of plan.selectedBuildListEntryIds.entries()) {

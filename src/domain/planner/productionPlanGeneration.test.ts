@@ -32,7 +32,6 @@ import {
   createPlanningInputSnapshot,
   createPlanningTargetWeaponsHash,
   createProductionPlan,
-  createProductionPlanWithObserver,
   createRejectedBuildListEntries,
 } from './productionPlanGeneration'
 import { PlannerPlanGenerationError } from './plannerPlanGenerationError'
@@ -421,20 +420,21 @@ describe('Production plan generation', () => {
   })
   it('does not reject in-progress or undecided Entries in a partial Plan', async () => {
     const { input, dependencies } = fixture()
+    // The undecided Entry belongs to a second, identical Target: one Target
+    // never holds two Entries in a full Planner run (`docs/PLANNER_SPEC.md`
+    // 4.1 / 9.2.18).
+    const secondTarget = {
+      ...structuredClone(input.targetWeapons[0]),
+      id: 'target.fixture.undecided' as never,
+    }
+    input.targetWeapons.push(secondTarget)
     const undecided = structuredClone(input.buildListEntries[0])
     undecided.id = buildListEntryId('build-list.fixture.undecided')
+    undecided.targetWeaponId = secondTarget.id
+    undecided.candidateSnapshot.targetWeaponId = secondTarget.id
     input.buildListEntries.push(undecided)
     input.options.maxPlanSteps = 1
-    // Two Entries of one Target are a trial input: an ordinary persisted
-    // input holding them fails closed (`docs/PLANNER_SPEC.md` 4.1 / 9.2.18).
-    expect((await createProductionPlan(input, dependencies)).plan).toBeNull()
-    const result = await createProductionPlanWithObserver(
-      input,
-      dependencies,
-      undefined,
-      undefined,
-      'temporary_augmented',
-    )
+    const result = await createProductionPlan(input, dependencies)
     const plan = result.plan
     expect(plan?.steps).toHaveLength(1)
     expect(plan?.steps[0].operationType).toBe('create_normal_artian')

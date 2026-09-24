@@ -74,6 +74,7 @@ function createOrchestrationResult(
     warnings: [],
     termination: completedPlannerTermination(),
     generatedBuildListEntries: [],
+    generatedBuildListEntryReplacements: [],
     ...overrides,
   }
 }
@@ -217,6 +218,7 @@ describe('BuildListPage', () => {
     const generatedEntry = createValidBuildListEntry()
     const result = createOrchestrationResult({
       generatedBuildListEntries: [generatedEntry],
+      generatedBuildListEntryReplacements: [],
     })
     const client = createPlannerClient(result)
     const deps = dependencies([], client)
@@ -259,6 +261,7 @@ describe('BuildListPage', () => {
         plan: null,
         termination: exhaustedPlannerTermination(),
         generatedBuildListEntries: [],
+        generatedBuildListEntryReplacements: [],
       }),
     )
     const deps = dependencies([], client)
@@ -333,6 +336,7 @@ describe('BuildListPage', () => {
         plan: null,
         termination: exhaustedPlannerTermination(),
         generatedBuildListEntries: [],
+        generatedBuildListEntryReplacements: [],
       }),
     ))
     deps.savePlannerResult = vi.fn(async () => null)

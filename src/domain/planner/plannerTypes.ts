@@ -26,6 +26,7 @@ import type {
   WeaponTypeMaster,
 } from '../master/masterTypes'
 import type { RngEngine } from '../rng/rngEngine'
+import type { BuildListEntryReplacement } from '../buildList/buildListEntryReplacement'
 import type { PlannerLaneProgress } from './plannerRouteLanes'
 import type { PlannerSearchInstrumentation } from './plannerSearchInstrumentation'
 
@@ -502,14 +503,44 @@ export interface PlannerProgress {
  *   List - the Planner run, the replan Preview, the B10 interaction and the
  *   original input of a B8 / what-if request. At most one BuildListEntry per
  *   planning Target; a legacy duplicate fails the whole input closed.
- * - `temporary_augmented`: a B8 constrained re-search or what-if trial input,
- *   where the original Entry and the temporary generated Entries of one Target
- *   may coexist. It is never persisted, and only the constrained Domain
- *   orchestration passes it: no Worker request, UI or persisted record selects it.
+ * - `temporary_augmented`: the preflight input of a B8 constrained re-search
+ *   or what-if trial. Each Target of `replacements` holds exactly its persisted
+ *   Entry `O` and its temporary Entry `G` (persisted 0..1 + temporary 0..1);
+ *   every other Target follows the persisted contract. `O` is there only so
+ *   that the user's fixed constraints are re-associated against the conflicts
+ *   it takes part in. It is never a Beam Search input: `O` is no execution
+ *   candidate of its Target, so the type of every full Planner run excludes it.
+ * - `temporary_replacement`: the **replacement set** of that trial - every `O`
+ *   removed, every `G` in its place. Every full Planner run of a trial (Beam
+ *   Search, Trace Replay, PlanConflict, rejections, PlanningInputSnapshot)
+ *   runs over it, so a Plan never records an Entry the adoption deletes.
  *
- * It is a Domain calling-context parameter, never a `PlannerInput` field.
+ * Which Entry is temporary is named only by `replacements`, runtime-only
+ * metadata the constrained Domain orchestration creates. It is a Domain
+ * calling-context parameter, never a `PlannerInput` field, never a
+ * `BuildListEntry` field, never a Worker request field, and never persisted.
  */
-export type PlannerBuildListCardinality = 'persisted' | 'temporary_augmented'
+export type PlannerBuildListContext =
+  | { kind: 'persisted' }
+  | {
+      kind: 'temporary_augmented'
+      replacements: readonly BuildListEntryReplacement[]
+    }
+  | {
+      kind: 'temporary_replacement'
+      replacements: readonly BuildListEntryReplacement[]
+    }
+
+/** The contexts a full Planner run (Beam Search, Production Plan generation) accepts. */
+export type PlannerRunBuildListContext = Exclude<
+  PlannerBuildListContext,
+  { kind: 'temporary_augmented' }
+>
+
+/** The ordinary persisted Build List contract, the default of every Planner entry point. */
+export const PERSISTED_PLANNER_BUILD_LIST_CONTEXT: { readonly kind: 'persisted' } = Object.freeze({
+  kind: 'persisted' as const,
+})
 
 export interface PlannerExecutionOptions {
   shouldCancel?: () => boolean

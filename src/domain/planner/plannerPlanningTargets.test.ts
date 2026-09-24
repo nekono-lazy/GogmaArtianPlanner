@@ -19,7 +19,7 @@ import { preparePlannerInitialContext } from './plannerInitialContext'
 import { derivePlannerPlanningTargets } from './plannerPlanningTargets'
 import { validatePlannerInput } from './plannerValidation'
 import { createProductionPlan } from './productionPlanGeneration'
-import type { PlannerBuildListCardinality, PlannerDependencies, PlannerInput } from './plannerTypes'
+import type { PlannerBuildListContext, PlannerDependencies, PlannerInput } from './plannerTypes'
 
 /**
  * Issue #102: the goal set of one Planner run is the planning Targets - the
@@ -40,7 +40,7 @@ function unlistedTarget(id: string): TargetWeapon {
 function readyContext(
   input: PlannerInput,
   dependencies: PlannerDependencies,
-  cardinality: PlannerBuildListCardinality = 'persisted',
+  cardinality: PlannerBuildListContext = { kind: 'persisted' },
 ) {
   const prepared = preparePlannerInitialContext(input, dependencies, cardinality)
   if (prepared.status !== 'ready') {
@@ -137,9 +137,9 @@ describe('Planner planning Target scope (#102)', () => {
     const b = target('target.scope.multi.b')
     const sources = ['a1', 'a2', 'b1'].map((suffix) => sourceWeapon(`owned.scope.multi.${suffix}`))
     const entries = [
-      routeEntry('entry.scope.multi.a1', a, resetRoute(sources[0].id)),
-      routeEntry('entry.scope.multi.a2', a, resetRoute(sources[1].id, 11)),
-      routeEntry('entry.scope.multi.b1', b, resetRoute(sources[2].id, 12)),
+      routeEntry('entry.scope.multi.a1', a, resetRoute(sources[0].id, 12)),
+      routeEntry('entry.scope.multi.a2', a, resetRoute(sources[1].id, 10)),
+      routeEntry('entry.scope.multi.b1', b, resetRoute(sources[2].id, 11)),
     ]
     const { input, dependencies } = fixture(
       [a, b, unlistedTarget('target.scope.multi.unlisted')],
@@ -147,13 +147,25 @@ describe('Planner planning Target scope (#102)', () => {
       sources,
     )
 
-    // Only a B8 / what-if trial input may hold several Entries of one Target
-    // (`docs/PLANNER_SPEC.md` 9.2.18).
-    const context = readyContext(input, dependencies, 'temporary_augmented')
+    // Only a B8 / what-if trial input may hold two Entries of one Target: its
+    // persisted Entry and the temporary Entry replacing it
+    // (`docs/PLANNER_SPEC.md` 9.2.18). The augmented preflight input counts
+    // Target A once; the full run gets the replacement set.
+    const replacements = [{
+      targetWeaponId: a.id,
+      replacedBuildListEntryId: entries[0].id,
+      generatedBuildListEntryId: entries[1].id,
+    }]
+    const context = readyContext(input, dependencies, { kind: 'temporary_augmented', replacements })
     expect(context.validBuildListEntries).toHaveLength(3)
     expect(context.planningTargetIds).toEqual([a.id, b.id])
 
-    const result = await runPlannerBeamSearch(input, dependencies, {}, 'temporary_augmented')
+    const result = await runPlannerBeamSearch(
+      { ...input, buildListEntries: input.buildListEntries.filter(({ id }) => id !== entries[0].id) },
+      dependencies,
+      {},
+      { kind: 'temporary_replacement', replacements },
+    )
     expect(result.termination.totalTargetCount).toBe(2)
     expect(result.termination.status).toBe('completed')
     expect(result.termination.completedTargetCount).toBe(2)

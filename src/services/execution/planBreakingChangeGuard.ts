@@ -31,6 +31,18 @@ export interface PlanGuardedMutationOutcome<R> {
 }
 
 /**
+ * Extra writes one guarded save performs inside the same transaction, after the
+ * guard wrote the decided state and any Plan termination. The Planner result
+ * save uses it for its Draft replacement (`docs/PLANNER_SPEC.md` 9.2.15), which
+ * lives outside the mutable collections a guarded mutation decides. It judges
+ * nothing: every Plan-breaking decision was already made on the mutation's
+ * post-state. A failure it throws rolls the whole save back.
+ */
+export interface PlanGuardedApplyOptions<R> {
+  afterWrite?: (outcome: PlanGuardedMutationOutcome<R>) => Promise<void>
+}
+
+/**
  * The persistence boundary every user save that can break an `active`
  * ProductionPlan goes through (`docs/PLANNER_SPEC.md` 16.6, `docs/UI_FLOW.md`
  * 16.3): RNG Setup, Identification adoption, Normal Counter, OwnedWeapon and
@@ -45,6 +57,7 @@ export interface PlanGuardedPersistence {
   apply<R>(
     mutation: PlanGuardedMutation<R>,
     approval?: PlanBreakingChangeApproval | null,
+    options?: PlanGuardedApplyOptions<R>,
   ): Promise<PlanGuardedMutationOutcome<R>>
 }
 
@@ -96,6 +109,7 @@ export class PlanBreakingChangeGuard implements PlanGuardedPersistence {
   apply<R>(
     mutation: PlanGuardedMutation<R>,
     approval: PlanBreakingChangeApproval | null = null,
+    options: PlanGuardedApplyOptions<R> = {},
   ): Promise<PlanGuardedMutationOutcome<R>> {
     return this.run('rw', async () => {
       const state = await this.readState()
@@ -107,7 +121,9 @@ export class PlanBreakingChangeGuard implements PlanGuardedPersistence {
         now: this.dependencies.clock.now(),
       }))
       await this.write(state, write)
-      return { result: write.result, state: write.state, planTermination: write.planTermination }
+      const outcome = { result: write.result, state: write.state, planTermination: write.planTermination }
+      await options.afterWrite?.(outcome)
+      return outcome
     })
   }
 
@@ -170,9 +186,16 @@ export class PlanBreakingChangeGuard implements PlanGuardedPersistence {
     const nextIds = new Set(next.map(({ id }) => id))
     const persistedById = new Map(persisted.map((record) => [record.id, record]))
     const deleted = persisted.filter(({ id }) => !nextIds.has(id)).map(({ id }) => id)
-    const changed = next.filter((record) => !sameBody(persistedById.get(record.id), record))
+    // A record the persisted state did not hold is added, never put: its ID was
+    // free when this transaction read the state, so a record another writer
+    // stored under it can never be silently overwritten.
+    const added = next.filter(({ id }) => !persistedById.has(id))
+    const changed = next.filter(
+      (record) => persistedById.has(record.id) && !sameBody(persistedById.get(record.id), record),
+    )
     if (deleted.length > 0) await table.bulkDelete(deleted)
     if (changed.length > 0) await table.bulkPut(changed)
+    if (added.length > 0) await table.bulkAdd(added)
   }
 
   private async run<T>(mode: 'r' | 'rw', operation: () => Promise<T>): Promise<T> {
@@ -233,5 +256,5 @@ function productionGuard(): PlanBreakingChangeGuard {
  */
 export const defaultPlanGuardedPersistence: PlanGuardedPersistence = {
   inspect: (mutation) => productionGuard().inspect(mutation),
-  apply: (mutation, approval) => productionGuard().apply(mutation, approval),
+  apply: (mutation, approval, options) => productionGuard().apply(mutation, approval, options),
 }

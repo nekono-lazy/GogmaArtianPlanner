@@ -80,6 +80,7 @@ function emptyResult(): PlannerOrchestrationResult {
     warnings: [],
     termination: exhaustedPlannerTermination(),
     generatedBuildListEntries: [],
+    generatedBuildListEntryReplacements: [],
   }
 }
 

@@ -1,4 +1,5 @@
 import type { BuildListEntryId } from '../../models/publicTypes'
+import { resolveBuildListEntryReplacement } from '../../buildList'
 import { CandidateSearchError, enumerateConstrainedCandidates } from '../../search'
 import type {
   ConstrainedCandidate,
@@ -9,13 +10,17 @@ import type {
   PlannerDependencies,
   PlannerInput,
   PlannerResult,
+  PlannerRunBuildListContext,
   ProductionPlanGenerationObserver,
 } from '../plannerTypes'
 import {
   createConstrainedMaterializer,
   type ConstrainedMaterializer,
 } from './constrainedMaterializer'
-import { preparePlannerAugmentedConflictPreflight } from './plannerAugmentedPreflight'
+import {
+  preparePlannerAugmentedConflictPreflight,
+  preparePlannerReplacementConflictPreflight,
+} from './plannerAugmentedPreflight'
 import type { PlannerFixedConflictConstraint } from './plannerConflictContext'
 import type { PlannerConflictWork } from './plannerConstrainedOrchestration'
 import {
@@ -48,16 +53,19 @@ import type {
  * ```text
  * enumerateConstrainedCandidates()   Search Domain, final sorted order
  *   -> deterministic materializer    B8-C2
- *   -> temporary trial Entry
- *   -> augmented conflict preflight  B8-C3, every fixed constraint
- *   -> full Production Plan run      Beam Search + Trace Replay
+ *   -> temporary trial Entry G, replacing the Target's baseline Entry O
+ *   -> conflict preflight            B8-C3, every fixed constraint, over O + G
+ *                                    and then over the replacement set -O + G
+ *   -> full Production Plan run      Beam Search + Trace Replay, over -O + G
  *   -> found, or the next Candidate
  * ```
  *
  * It adds no conflict logic of its own: feasibility is decided only by the full
- * rerun plus Trace Replay over the augmented input (9.2.4.7 / 9.2.11), never by
- * a Counter comparison, a `usedCounters` shortcut, a Candidate score, a
- * Candidate category, or `recommendedBuildListEntryId`.
+ * rerun plus Trace Replay over the trial's replacement set (9.2.4.7 / 9.2.11 /
+ * 9.2.18) - the same replacement semantics a B8 adoption is calculated with -
+ * never by a Counter comparison, a `usedCounters` shortcut, a Candidate score,
+ * a Candidate category, or `recommendedBuildListEntryId`. It persists nothing
+ * and returns no replacement metadata.
  */
 
 /** A cancelled what-if request. It is never a `PlannerWhatIfOutcome` member. */
@@ -305,27 +313,13 @@ export async function createPlannerWhatIfComparison(
       candidate,
       scenario.mergedInput.buildListEntries,
     )
-    const trialInput: PlannerInput = reusedExisting
-      ? scenario.mergedInput
-      : {
-          ...scenario.mergedInput,
-          buildListEntries: [...scenario.mergedInput.buildListEntries, entry],
-        }
-    // Every valid explicit resolution, not only the scenario's own: the other
-    // fixed choices stay feasibility constraints, and all of them are re-mapped
-    // onto the currently detected conflicts before any Beam Search runs
-    // (PLANNER_SPEC 9.2.3.1, 9.2.4.7).
-    const preflight = preparePlannerAugmentedConflictPreflight(
-      trialInput,
-      scenario.fixedConstraints,
-      dependencies,
-    )
+    const trial = prepareTrial(entry, reusedExisting)
     // A trial-input preflight failure rejects this Candidate only. The scenario
     // fixed constraints themselves were already built safely, so it is never
     // promoted to an `invalid_fixed_resolution` comparison failure.
-    if (preflight.status !== 'ready') return 'rejected'
+    if (trial === null) return 'rejected'
 
-    const run = await runFullPlanner(preflight.resolvedInput)
+    const run = await runFullPlanner(trial.input, trial.buildListContext)
     if (run.status === 'rerun_budget_reached') return 'rerun_bound'
     const plan = run.result.plan
     if (plan === null) return 'rejected'
@@ -340,8 +334,60 @@ export async function createPlannerWhatIfComparison(
       : 'rejected'
   }
 
+  /**
+   * The trial's preflight and full-run input, always from the baseline
+   * (PLANNER_SPEC 9.2.4.4); `null` rejects the Candidate.
+   *
+   * Every valid explicit resolution, not only the scenario's own, stays a
+   * feasibility constraint and is re-mapped onto the currently detected
+   * conflicts before any Beam Search runs (PLANNER_SPEC 9.2.3.1, 9.2.4.7).
+   *
+   * - a `reusedExisting` Candidate adds no Entry: the baseline itself is judged,
+   *   as an ordinary persisted input, exactly as before
+   * - otherwise the trial Entry `G` replaces its Target's baseline Entry `O`
+   *   (9.2.18): the preflight re-associates over `O` + `G` and again over the
+   *   replacement set, and the full run gets the replacement set only
+   */
+  function prepareTrial(
+    entry: ReturnType<ConstrainedMaterializer['materializeBuildListEntry']>['entry'],
+    reusedExisting: boolean,
+  ): { input: PlannerInput; buildListContext: PlannerRunBuildListContext } | null {
+    if (reusedExisting) {
+      const preflight = preparePlannerAugmentedConflictPreflight(
+        scenario.mergedInput,
+        scenario.fixedConstraints,
+        dependencies,
+      )
+      return preflight.status === 'ready'
+        ? { input: preflight.resolvedInput, buildListContext: { kind: 'persisted' } }
+        : null
+    }
+    const resolved = resolveBuildListEntryReplacement(scenario.mergedInput.buildListEntries, entry)
+    if (resolved.status !== 'ready') {
+      throw new Error(`Planner what-if invariant violated: ${resolved.detail}`)
+    }
+    const replacements = [resolved.replacement]
+    const preflight = preparePlannerReplacementConflictPreflight(
+      {
+        ...scenario.mergedInput,
+        buildListEntries: [...scenario.mergedInput.buildListEntries, entry],
+      },
+      replacements,
+      scenario.fixedConstraints,
+      scenario.conflictContexts,
+      dependencies,
+    )
+    return preflight.status === 'ready'
+      ? {
+          input: preflight.resolvedInput,
+          buildListContext: { kind: 'temporary_replacement', replacements },
+        }
+      : null
+  }
+
   async function runFullPlanner(
     planInput: PlannerInput,
+    buildListContext: PlannerRunBuildListContext,
   ): Promise<
     | { status: 'completed'; result: PlannerResult }
     | { status: 'rerun_budget_reached' }
@@ -349,15 +395,15 @@ export async function createPlannerWhatIfComparison(
     cancelledBeam = false
     let result: PlannerResult
     try {
-      // Every what-if run is a Candidate trial over a temporary augmented
-      // input (`docs/PLANNER_SPEC.md` 9.2.18); the ordinary request input was
-      // already checked by `preparePlannerWhatIfScenario()`.
+      // A Candidate trial runs over its replacement set
+      // (`docs/PLANNER_SPEC.md` 9.2.18), a reused existing Entry over the
+      // baseline as an ordinary persisted input.
       result = await createProductionPlanWithObserver(
         planInput,
         dependencies,
         executionOptions,
         observer,
-        'temporary_augmented',
+        buildListContext,
       )
     } catch (error) {
       // A blocked Beam Search is a normal, typed stop. Every other failure -

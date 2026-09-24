@@ -1,5 +1,6 @@
 import type {
   BuildListEntry,
+  BuildListEntryId,
   CalculationContext,
   ISODateTimeString,
   OwnedWeapon,
@@ -21,7 +22,7 @@ import {
   checkGeneratedBuildListEntriesFresh,
   checkPersistablePlannerResultShape,
   checkProductionPlanBuildListReferences,
-  findPersistedGeneratedBuildListEntryCollision,
+  prepareFinalReplacementBuildList,
   type PlannerResultPersistenceIssue,
 } from '../planner/plannerResultPersistenceValidation'
 import {
@@ -137,7 +138,7 @@ function issueMessage(issue: PlannerResultPersistenceIssue): string {
 export function describeReplanPreviewAdoptability(
   preview: ProductionPlanReplanPreview,
 ): ProductionPlanReplanPreviewAdoptability {
-  const { plan, generatedBuildListEntries, termination } = preview.result
+  const { plan, generatedBuildListEntries, generatedBuildListEntryReplacements, termination } = preview.result
   if (termination.status === 'incomplete') {
     return {
       adoptable: false,
@@ -146,17 +147,25 @@ export function describeReplanPreviewAdoptability(
     }
   }
   if (plan === null) {
-    return generatedBuildListEntries.length > 0
+    const replacementCount = Array.isArray(generatedBuildListEntryReplacements)
+      ? generatedBuildListEntryReplacements.length
+      : 0
+    return generatedBuildListEntries.length > 0 || replacementCount > 0
       ? {
           adoptable: false,
           reason: 'invalid_result',
-          message: `The Planner returned no Plan but ${generatedBuildListEntries.length} generated BuildListEntries. No Entry may be persisted without its Plan.`,
+          message: `The Planner returned no Plan but ${generatedBuildListEntries.length} generated BuildListEntries and ${replacementCount} BuildListEntry replacements. No Entry may be persisted without its Plan.`,
         }
       : { adoptable: false, reason: 'no_plan', message: 'The replan Preview has no ProductionPlan to adopt.' }
   }
   // `incomplete` was classified above, so every remaining shape or Domain
   // validation issue is an invalid result.
-  const issue = checkPersistablePlannerResultShape(plan, generatedBuildListEntries, termination)
+  const issue = checkPersistablePlannerResultShape(
+    plan,
+    generatedBuildListEntries,
+    termination,
+    generatedBuildListEntryReplacements,
+  )
   if (issue !== null) {
     return { adoptable: false, reason: 'invalid_result', message: issueMessage(issue) }
   }
@@ -166,8 +175,15 @@ export function describeReplanPreviewAdoptability(
 function requireAdoptablePlan(preview: ProductionPlanReplanPreview): ProductionPlan {
   const adoptability = describeReplanPreviewAdoptability(preview)
   if (adoptability.adoptable) return adoptability.plan
-  const { plan, generatedBuildListEntries, termination } = preview.result
-  const issue = plan === null ? null : checkPersistablePlannerResultShape(plan, generatedBuildListEntries, termination)
+  const { plan, generatedBuildListEntries, generatedBuildListEntryReplacements, termination } = preview.result
+  const issue = plan === null
+    ? null
+    : checkPersistablePlannerResultShape(
+        plan,
+        generatedBuildListEntries,
+        termination,
+        generatedBuildListEntryReplacements,
+      )
   executionFailure(
     'replan_result_invalid',
     adoptability.message,
@@ -276,8 +292,11 @@ export interface ProductionPlanReplanAdoptionInput {
  *   running Plan is not abandoned, nothing of the Preview is persisted, and a
  *   new Preview from the restored state is required (16.8 / 16.10).
  * - `adopted`: the running Plan becomes `abandoned` (`replan_adopted`), the new
- *   Plan becomes `active`, the generated Entries are added, in-progress marks
- *   are moved or cleared, and the running Plan's save point is deleted.
+ *   Plan becomes `active`, each generated Entry replaces the persisted Entry it
+ *   was calculated to replace (`docs/PLANNER_SPEC.md` 9.2.18), in-progress
+ *   marks are moved or cleared, and the running Plan's save point is deleted.
+ *   The replaced Entries are deleted without a further breaking-change
+ *   warning: adopting the Preview already ends the running Plan.
  */
 export type ProductionPlanReplanAdoptionWrite =
   | { kind: 'save_point_restored'; restore: ExecutionSavePointRestoreWrite }
@@ -290,6 +309,11 @@ export type ProductionPlanReplanAdoptionWrite =
       newPlan: ProductionPlan
       /** Added, never put over an existing Entry. */
       generatedBuildListEntries: BuildListEntry[]
+      /**
+       * The persisted Entries the generated ones replace, confirmed in the same
+       * transaction to be each Target's one persisted Entry; deleted.
+       */
+      replacedBuildListEntryIds: BuildListEntryId[]
       /** Weapons whose in-progress mark moved to the new Plan or was cleared. */
       ownedWeapons: OwnedWeapon[]
       /** Targets the new Plan's start effect changed (16.11). */
@@ -356,8 +380,8 @@ export function prepareProductionPlanReplanAdoption(
   }
 
   const generatedEntries = preview.result.generatedBuildListEntries
-  assertPreviewStateHolds(input, newPlan, generatedEntries)
-  const augmentedEntries = [...state.buildListEntries, ...generatedEntries]
+  const replacements = preview.result.generatedBuildListEntryReplacements
+  const finalEntries = assertPreviewStateHolds(input, newPlan, generatedEntries)
 
   // The ordinary Plan start authority, over the post-state in which the
   // running Plan is already abandoned: any other running Plan still refuses.
@@ -370,7 +394,7 @@ export function prepareProductionPlanReplanAdoption(
       normalCounters: state.normalCounters,
       ownedWeapons: state.ownedWeapons,
       targetWeapons: state.targetWeapons,
-      buildListEntries: augmentedEntries,
+      buildListEntries: finalEntries,
       // The new Plan has not executed anything, so no observation binding applies.
       planExecutionHistory: [],
       executionSavePoint: null,
@@ -391,7 +415,7 @@ export function prepareProductionPlanReplanAdoption(
     updatedAt: now,
   }
 
-  const trackedByNewPlan = collectNewPlanTrackedOwnedWeaponIds(startedPlan, augmentedEntries, state.ownedWeapons)
+  const trackedByNewPlan = collectNewPlanTrackedOwnedWeaponIds(startedPlan, finalEntries, state.ownedWeapons)
   const ownedWeapons = state.ownedWeapons.flatMap((weapon): OwnedWeapon[] => {
     const inProgress = weapon.executionInProgress
     if (inProgress?.productionPlanId !== runningPlan.id) return []
@@ -413,6 +437,7 @@ export function prepareProductionPlanReplanAdoption(
     oldPlan,
     newPlan: startedPlan,
     generatedBuildListEntries: structuredClone(generatedEntries),
+    replacedBuildListEntryIds: replacements.map(({ replacedBuildListEntryId }) => replacedBuildListEntryId),
     ownedWeapons,
     targetWeapons: start.targetWeapons,
     deletesExecutionSavePoint: state.executionSavePoint !== null,
@@ -423,12 +448,19 @@ export function prepareProductionPlanReplanAdoption(
  * 16.8 adoption re-verification of what the Preview calculated from. Every
  * difference refuses with `replan_state_changed`, except an ID collision of the
  * new Plan and broken references of the result itself.
+ *
+ * Every check reads the **final replacement set** (`docs/PLANNER_SPEC.md`
+ * 9.2.18): the current Entries with each replaced `O` removed and each
+ * generated `G` added - the Build List the new Plan will run against. A Target
+ * whose persisted Entry is no longer exactly the `O` the Preview replaced
+ * refuses with `replan_state_changed`, and nothing is deleted on a guess.
+ * Returns that set.
  */
 function assertPreviewStateHolds(
   input: ProductionPlanReplanAdoptionInput,
   newPlan: ProductionPlan,
   generatedEntries: readonly BuildListEntry[],
-): void {
+): BuildListEntry[] {
   const { preview, runningPlan, state, currentCalculationContext } = input
   if (
     !isCalculationContextCompatible(currentCalculationContext, preview.calculationContext) ||
@@ -443,22 +475,26 @@ function assertPreviewStateHolds(
       `ProductionPlan '${newPlan.id}' already exists; a replan Preview never overwrites a persisted Plan.`,
     )
   }
-  throwAdoptionIssue(findPersistedGeneratedBuildListEntryCollision(generatedEntries, state.buildListEntries))
-
-  const augmentedEntries = [...state.buildListEntries, ...generatedEntries]
+  const finalBuildList = prepareFinalReplacementBuildList(
+    state.buildListEntries,
+    generatedEntries,
+    preview.result.generatedBuildListEntryReplacements,
+  )
+  throwAdoptionIssue(finalBuildList.issue)
+  const finalEntries = finalBuildList.finalEntries as BuildListEntry[]
   const missingEntry = newPlan.selectedBuildListEntryIds.find(
-    (id) => !augmentedEntries.some((entry) => entry.id === id),
+    (id) => !finalEntries.some((entry) => entry.id === id),
   )
   if (missingEntry !== undefined) {
     replanStateChanged(`BuildListEntry '${missingEntry}' the new Plan depends on no longer exists.`)
   }
   if (
-    createDependentBuildListEntriesHash(augmentedEntries, newPlan.selectedBuildListEntryIds) !==
+    createDependentBuildListEntriesHash(finalEntries, newPlan.selectedBuildListEntryIds) !==
     newPlan.baseSnapshot.dependentBuildListEntriesHash
   ) {
     replanStateChanged('A BuildListEntry the new Plan depends on changed after the replan Preview.')
   }
-  const dependentTargetIds = collectProductionPlanDependentTargetWeaponIds(newPlan, augmentedEntries)
+  const dependentTargetIds = collectProductionPlanDependentTargetWeaponIds(newPlan, finalEntries)
   if (
     createDependentTargetDefinitionsHash([...state.targetWeapons], dependentTargetIds) !==
     newPlan.baseSnapshot.dependentTargetDefinitionsHash
@@ -467,7 +503,7 @@ function assertPreviewStateHolds(
   }
   const actual = createActualExecutionState(
     newPlan,
-    { ...state, buildListEntries: augmentedEntries },
+    { ...state, buildListEntries: finalEntries },
     [],
   )
   if (!executionStateMatches(actual, newPlan.baseSnapshot.initialExecutionState)) {
@@ -476,7 +512,8 @@ function assertPreviewStateHolds(
     )
   }
   throwAdoptionIssue(checkGeneratedBuildListEntriesFresh(generatedEntries, state, currentCalculationContext))
-  throwAdoptionIssue(checkProductionPlanBuildListReferences(newPlan, generatedEntries, augmentedEntries))
+  throwAdoptionIssue(checkProductionPlanBuildListReferences(newPlan, generatedEntries, finalEntries))
+  return finalEntries
 }
 
 /**
@@ -487,13 +524,13 @@ function assertPreviewStateHolds(
  */
 function collectNewPlanTrackedOwnedWeaponIds(
   newPlan: ProductionPlan,
-  augmentedEntries: readonly BuildListEntry[],
+  finalEntries: readonly BuildListEntry[],
   ownedWeapons: readonly OwnedWeapon[],
 ): Set<OwnedWeaponId> {
   const existing = new Set(ownedWeapons.map(({ id }) => id))
   const selected = new Set(newPlan.selectedBuildListEntryIds)
   return new Set(
-    augmentedEntries
+    finalEntries
       .filter(({ id }) => selected.has(id))
       .flatMap((entry) => collectReferencedOwnedWeaponIds(entry.candidateSnapshot.route))
       .filter((id) => existing.has(id)),

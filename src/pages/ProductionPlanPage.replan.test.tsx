@@ -139,6 +139,7 @@ function orchestrationResult(overrides: Partial<PlannerOrchestrationResult> = {}
     warnings: [],
     termination: completedPlannerTermination(),
     generatedBuildListEntries: [],
+    generatedBuildListEntryReplacements: [],
     ...overrides,
   }
 }
@@ -226,6 +227,7 @@ function dependencies(
     getTargetWeapons: vi.fn(async () => [target]),
     createInput: vi.fn(async () => fixtureInput(target, entry)),
     createWorkerClient: vi.fn(() => client),
+    inspectPlannerResultSave: vi.fn(async () => ({ approvalRequired: false as const })),
     savePlannerResult: vi.fn(async () => null),
     inspectProductionPlanStart: vi.fn(async (planId) => ({ planId, changes: [], ownedWeapons: [], targetWeapons: [] })),
     startProductionPlan: vi.fn(async () => {

@@ -17,7 +17,11 @@ import {
   validateBuildRoute,
   validateOwnedWeapon,
 } from '../models/publicTypes'
-import { evaluateBuildListEntryStaleness, findBuildListTargetDuplicates } from '../buildList'
+import {
+  evaluateBuildListEntryStaleness,
+  findBuildListTargetDuplicates,
+  validateBuildListEntryReplacements,
+} from '../buildList'
 import { validateTargetPreferredOwnedWeapons } from '../target'
 import { derivePlannerCheckpointRequirements } from './plannerCheckpoints'
 import { derivePlannerPlanningTargets } from './plannerPlanningTargets'
@@ -30,7 +34,7 @@ import {
 } from './plannerPredictionSupport'
 import type {
   ExcludedBuildListEntry,
-  PlannerBuildListCardinality,
+  PlannerBuildListContext,
   PlannerConflictResolution,
   PlannerDependencies,
   PlannerInput,
@@ -38,7 +42,7 @@ import type {
   PlannerWarning,
   ValidatedBuildListEntry,
 } from './plannerTypes'
-import { plannerWarningKinds } from './plannerTypes'
+import { PERSISTED_PLANNER_BUILD_LIST_CONTEXT, plannerWarningKinds } from './plannerTypes'
 
 export interface PlannerInputValidationResult extends DomainValidationResult {
   validConflictResolutions: PlannerConflictResolution[]
@@ -355,14 +359,16 @@ function currentEntryEligibility(
 /**
  * Validates one Planner input against the current state.
  *
- * `cardinality` defaults to the ordinary `persisted` contract, so every caller
- * that does not explicitly declare a temporary augmented trial input gets the
- * Build List cardinality fail-closed check (`docs/PLANNER_SPEC.md` 4.1).
+ * `buildListContext` defaults to the ordinary `persisted` contract, so every
+ * caller that does not explicitly declare a B8 / what-if trial input gets the
+ * Build List cardinality fail-closed check (`docs/PLANNER_SPEC.md` 4.1). A
+ * trial input gets the same check on its persisted side plus the temporary
+ * contract of its replacements (9.2.18).
  */
 export function validatePlannerInput(
   input: PlannerInput,
   dependencies: PlannerDependencies,
-  cardinality: PlannerBuildListCardinality = 'persisted',
+  buildListContext: PlannerBuildListContext = PERSISTED_PLANNER_BUILD_LIST_CONTEXT,
 ): PlannerInputValidationResult {
   const options = validatePlannerOptions(input.options)
   const issues = [...options.issues]
@@ -414,20 +420,42 @@ export function validatePlannerInput(
   // stale ones included - counting only the valid Entries would silently run
   // the non-stale one. A Target that is no planning Target (every Entry
   // excluded) is not planned, so its duplicate chooses nothing here and is left
-  // to the Build List. Only a B8 / what-if trial input may hold several Entries
-  // of one Target (`docs/PLANNER_SPEC.md` 9.2.18).
-  if (cardinality === 'persisted') {
-    const planningTargetIds = new Set(
-      derivePlannerPlanningTargets(input.targetWeapons, validBuildListEntries).map(({ id }) => id),
+  // to the Build List.
+  //
+  // A B8 / what-if trial input (`docs/PLANNER_SPEC.md` 9.2.18) is checked the
+  // same way on its persisted side - its temporary Entries set aside - and each
+  // Target of its replacements must hold exactly `O` + `G` (the preflight's
+  // augmented input) or exactly `G` (the replacement set). Temporary 2+,
+  // persisted 2+, a temporary Entry of an unknown Target and a replaced Entry
+  // that is not unique all fail the whole trial input closed.
+  const temporaryIds = new Set(
+    buildListContext.kind === 'persisted'
+      ? []
+      : buildListContext.replacements.map(({ generatedBuildListEntryId }) => generatedBuildListEntryId),
+  )
+  const planningTargetIds = new Set(
+    derivePlannerPlanningTargets(input.targetWeapons, validBuildListEntries).map(({ id }) => id),
+  )
+  findBuildListTargetDuplicates(
+    buildListContext.kind === 'temporary_augmented'
+      ? input.buildListEntries.filter(({ id }) => !temporaryIds.has(id))
+      : input.buildListEntries,
+  )
+    .filter(({ targetWeaponId }) => planningTargetIds.has(targetWeaponId))
+    .forEach(({ targetWeaponId, buildListEntryIds }) => {
+      const message =
+        `TargetWeapon '${targetWeaponId}' has ${buildListEntryIds.length} BuildListEntries (${buildListEntryIds.join(', ')}); the Build List holds at most one Entry per Target. Keep one of them in the Build List before planning.`
+      issues.push(issue('buildListEntries', 'invalid_structure', message))
+      warnings.push({ kind: 'duplicate_build_list_entries_for_target', message })
+    })
+  if (buildListContext.kind !== 'persisted') {
+    issues.push(
+      ...validateBuildListEntryReplacements(
+        input.buildListEntries,
+        buildListContext.replacements,
+        buildListContext.kind === 'temporary_augmented' ? 'augmented' : 'replaced',
+      ).issues,
     )
-    findBuildListTargetDuplicates(input.buildListEntries)
-      .filter(({ targetWeaponId }) => planningTargetIds.has(targetWeaponId))
-      .forEach(({ targetWeaponId, buildListEntryIds }) => {
-        const message =
-          `TargetWeapon '${targetWeaponId}' has ${buildListEntryIds.length} BuildListEntries (${buildListEntryIds.join(', ')}); the Build List holds at most one Entry per Target. Keep one of them in the Build List before planning.`
-        issues.push(issue('buildListEntries', 'invalid_structure', message))
-        warnings.push({ kind: 'duplicate_build_list_entries_for_target', message })
-      })
   }
 
   // Collection-level checkpoint invariant (`docs/DATA_MODEL.md` 9.4,

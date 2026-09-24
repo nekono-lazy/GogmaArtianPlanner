@@ -298,6 +298,7 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
           warnings: [],
           termination: completedPlannerTermination(),
           generatedBuildListEntries: [generatedEntry],
+          generatedBuildListEntryReplacements: [],
         }
       },
     )
@@ -334,15 +335,23 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
       generation: 1,
       result: expect.objectContaining({
         generatedBuildListEntries: [generatedEntry],
+        generatedBuildListEntryReplacements: [],
       }),
     })
     expect(responses).toHaveLength(2)
   })
 
-  it('keeps generatedBuildListEntries in the structured-cloneable response', async () => {
+  it('keeps generatedBuildListEntries and their replacements in the structured-cloneable response', async () => {
     const { input, dependencies } = fixture()
     const responses: PlannerWorkerProtocolResponse[] = []
     const generatedEntry = createValidBuildListEntry()
+    // The runtime-only `G -> O` pairing the save-time transaction needs
+    // (`docs/PLANNER_SPEC.md` 9.2.18): plain data, forwarded unchanged.
+    const replacement = {
+      targetWeaponId: generatedEntry.targetWeaponId,
+      replacedBuildListEntryId: 'build-list.original' as typeof generatedEntry.id,
+      generatedBuildListEntryId: generatedEntry.id,
+    }
     const controller = attach(
       {
         createPlan: failingOrdinaryCalculation(),
@@ -352,6 +361,7 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
           warnings: [],
           termination: completedPlannerTermination(),
           generatedBuildListEntries: [generatedEntry],
+          generatedBuildListEntryReplacements: [replacement],
         }),
         prepareInteraction: failingPreparationCalculation(),
         createWhatIfComparison: failingWhatIfCalculation(),
@@ -375,6 +385,11 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
         ? response.result.generatedBuildListEntries
         : null,
     ).toEqual([generatedEntry])
+    expect(
+      response.type === 'create_constrained_plan_result'
+        ? response.result.generatedBuildListEntryReplacements
+        : null,
+    ).toEqual([replacement])
   })
 
   it('carries the typed termination across the Worker boundary as plain data', async () => {
@@ -401,6 +416,7 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
           }],
           termination,
           generatedBuildListEntries: [],
+          generatedBuildListEntryReplacements: [],
         }),
         prepareInteraction: failingPreparationCalculation(),
         createWhatIfComparison: failingWhatIfCalculation(),
@@ -631,6 +647,7 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
       warnings: [],
       termination: completedPlannerTermination(),
       generatedBuildListEntries: [],
+      generatedBuildListEntryReplacements: [],
     }
     const controller = attach(
       {
@@ -818,6 +835,7 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
     warnings: [],
     termination: exhaustedPlannerTermination(),
     generatedBuildListEntries: [],
+    generatedBuildListEntryReplacements: [],
   }
         },
         prepareInteraction: failingPreparationCalculation(),

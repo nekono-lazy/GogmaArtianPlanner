@@ -20,7 +20,7 @@ import {
   preparePlannerInitialContext,
   type PlannerInitialContext,
 } from '../plannerInitialContext'
-import type { PlannerBuildListCardinality, PlannerConflictResolution } from '../plannerTypes'
+import type { PlannerBuildListContext, PlannerConflictResolution } from '../plannerTypes'
 import {
   createPlannerConstrainedConflictContexts,
   plannerConflictResourceKey,
@@ -33,7 +33,7 @@ function readyContext(
   entries: BuildListEntry[],
   ownedWeapons: OwnedWeapon[] = [],
   resolutions: PlannerConflictResolution[] = [],
-  cardinality: PlannerBuildListCardinality = 'persisted',
+  cardinality: PlannerBuildListContext = { kind: 'persisted' },
 ): PlannerInitialContext {
   const { input, dependencies } = fixture(targets, entries, ownedWeapons)
   input.conflictResolutions = resolutions
@@ -715,15 +715,11 @@ describe('B8-C3a duplicate BuildListEntry ID identity', () => {
       [built.first, built.other],
       built.sources,
     )
-    // Two Entries of one Target are a legacy duplicate an ordinary persisted
-    // input fails closed on (`docs/PLANNER_SPEC.md` 4.1), so the same-Target
-    // variant exercises this defence as a trial input (9.2.18).
     const context = readyContext(
       built.targets,
       [...duplicates, built.other].map((entry) => structuredClone(entry)),
       built.sources,
       [{ conflictKey, selectedBuildListEntryId: built.first.id }],
-      variant === 'same_target' ? 'temporary_augmented' : 'persisted',
     )
     const contexts = createPlannerConstrainedConflictContexts(context)
     return {
@@ -787,22 +783,36 @@ describe('B8-C3a duplicate BuildListEntry ID identity', () => {
       .toMatchObject([{ reason: 'selected_entry_ambiguous' }])
   })
 
-  it('fails closed for one Target with two Candidate meanings too', () => {
-    const forward = prepareDuplicate('same', 'same_target', 'first_then_second')
-    const reversed = prepareDuplicate('same', 'same_target', 'second_then_first')
-    expect(
-      forward.context.validBuildListEntries.filter(
-        ({ entry }) => entry.id === forward.built.sharedId,
-      ),
-    ).toHaveLength(2)
-    expect(forward.built.second.targetWeaponId)
-      .toBe(forward.built.first.targetWeaponId)
-    expect(createBuildCandidateMeaningFingerprint(forward.built.second.candidateSnapshot))
-      .not.toBe(createBuildCandidateMeaningFingerprint(forward.built.first.candidateSnapshot))
-    expect(forward.result.status).toBe('unresolved')
-    expect(forward.result.constraints).toEqual([])
-    expect(forward.result.status === 'unresolved' && forward.result.failures)
-      .toMatchObject([{ reason: 'selected_entry_ambiguous' }])
-    expect(reversed.result).toEqual(forward.result)
+  it('fails closed for one Target with two Candidate meanings too, before any constraint is prepared', () => {
+    // Two Entries of one Target sharing one ID are a legacy duplicate of the
+    // Build List cardinality contract (`docs/DATA_MODEL.md` 9.4.1). Neither an
+    // ordinary persisted input nor a trial input can hold them: a trial may
+    // only name a temporary Entry that replaces a different persisted Entry
+    // (`docs/PLANNER_SPEC.md` 9.2.18), so the fixed-constraint defence above is
+    // never even reached.
+    const built = duplicateFixture('same', 'same_target')
+    expect(built.second.targetWeaponId).toBe(built.first.targetWeaponId)
+    expect(createBuildCandidateMeaningFingerprint(built.second.candidateSnapshot))
+      .not.toBe(createBuildCandidateMeaningFingerprint(built.first.candidateSnapshot))
+    const contexts: PlannerBuildListContext[] = [
+      { kind: 'persisted' },
+      {
+        kind: 'temporary_augmented',
+        replacements: [{
+          targetWeaponId: built.first.targetWeaponId,
+          replacedBuildListEntryId: built.first.id,
+          generatedBuildListEntryId: built.second.id,
+        }],
+      },
+    ]
+    contexts.forEach((buildListContext) => {
+      const { input, dependencies } = fixture(
+        built.targets,
+        [built.first, built.second, built.other].map((entry) => structuredClone(entry)),
+        built.sources,
+      )
+      expect(preparePlannerInitialContext(input, dependencies, buildListContext).status)
+        .toBe('invalid')
+    })
   })
 })

@@ -44,6 +44,7 @@ function previewOf(result: Partial<PlannerOrchestrationResult>): ProductionPlanR
       warnings: [],
       termination: completedPlannerTermination(),
       generatedBuildListEntries: [],
+      generatedBuildListEntryReplacements: [],
       ...result,
     },
     calculationContext: { ...plan.calculationContext },

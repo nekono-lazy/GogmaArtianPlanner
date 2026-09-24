@@ -32,7 +32,7 @@ import type {
   CreateProductionPlanCalculation,
   PlannerBeamSearchResult,
   PlannerDependencies,
-  PlannerBuildListCardinality,
+  PlannerRunBuildListContext,
   PlannerExecutionOptions,
   PlannerInput,
   PlannerResult,
@@ -40,6 +40,7 @@ import type {
   PlannerWarning,
   ProductionPlanGenerationObserver,
 } from './plannerTypes'
+import { PERSISTED_PLANNER_BUILD_LIST_CONTEXT } from './plannerTypes'
 
 function compareStableStrings(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
@@ -480,16 +481,18 @@ export function collectRequiredMaterials(
  * and an exception it throws propagates unchanged instead of becoming a
  * `PlannerResult`.
  *
- * `cardinality` is the Build List cardinality contract of `input`
- * (`PlannerBuildListCardinality`): the ordinary `persisted` default, or
- * `temporary_augmented` for a B8 / what-if trial input only.
+ * `buildListContext` is the Build List cardinality contract of `input`
+ * (`PlannerBuildListContext`): the ordinary `persisted` default, or
+ * `temporary_replacement` for the replacement set of a B8 / what-if trial
+ * (`docs/PLANNER_SPEC.md` 9.2.18). A trial's augmented preflight input is
+ * never a full Planner run, so its context is not accepted here.
  */
 export async function createProductionPlanWithObserver(
   input: PlannerInput,
   dependencies: PlannerDependencies,
   options: PlannerExecutionOptions | undefined,
   observer?: ProductionPlanGenerationObserver,
-  cardinality: PlannerBuildListCardinality = 'persisted',
+  buildListContext: PlannerRunBuildListContext = PERSISTED_PLANNER_BUILD_LIST_CONTEXT,
 ): Promise<PlannerResult> {
   const runtimeUnsupported = new Map<BuildListEntryId, string>()
   let beamResult: PlannerBeamSearchResult | null = null
@@ -504,8 +507,19 @@ export async function createProductionPlanWithObserver(
             ({ id }) => !runtimeUnsupported.has(id),
           ),
         }
+    // A temporary Entry the runtime found unsupported leaves the retry input
+    // together with its replacement, so its Target then holds neither Entry.
+    const beamContext: PlannerRunBuildListContext =
+      buildListContext.kind === 'persisted' || runtimeUnsupported.size === 0
+        ? buildListContext
+        : {
+            kind: 'temporary_replacement',
+            replacements: buildListContext.replacements.filter(
+              ({ generatedBuildListEntryId }) => !runtimeUnsupported.has(generatedBuildListEntryId),
+            ),
+          }
     observer?.beforeBeamSearch()
-    beamResult = await runPlannerBeamSearch(beamInput, dependencies, options, cardinality)
+    beamResult = await runPlannerBeamSearch(beamInput, dependencies, options, beamContext)
     observer?.afterBeamSearch?.(beamResult)
     if (
       beamResult.cancelled ||

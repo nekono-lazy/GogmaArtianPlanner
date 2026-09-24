@@ -33,13 +33,17 @@ import {
 } from '../../../test/fixtures/plannerConstrainedOrchestration'
 import { preparePlannerInitialContext } from '../plannerInitialContext'
 import { createPlanningBuildListEntriesHash, createProductionPlan } from '../productionPlanGeneration'
-import type { PlannerBuildListCardinality, PlannerConflictResolution } from '../plannerTypes'
+import type { PlannerBuildListContext, PlannerConflictResolution } from '../plannerTypes'
 import {
   derivePlannerCheckpointRequirements,
   type PlannerCheckpointRequirements,
 } from '../plannerCheckpoints'
 import { createConstrainedMaterializer } from './constrainedMaterializer'
-import { preparePlannerAugmentedConflictPreflight } from './plannerAugmentedPreflight'
+import {
+  preparePlannerAugmentedConflictPreflight,
+  preparePlannerReplacementConflictPreflight,
+} from './plannerAugmentedPreflight'
+import { applyBuildListEntryReplacements } from '../../buildList'
 import {
   createPlannerConstrainedConflictContexts,
   preparePlannerFixedConflictConstraints,
@@ -53,6 +57,7 @@ import {
   isConstrainedTrialAdoptable,
   isPlannerConflictWorkSatisfied,
   type PlannerConflictWork,
+  type PlannerOrchestrationResult,
 } from './plannerConstrainedOrchestration'
 
 /**
@@ -238,6 +243,15 @@ function fixedScenario(
   })
 }
 
+/** The conflicts of the original validated input the fixed constraints come from. */
+function originalConflictContextsOf(
+  built: OrchestrationScenario,
+): PlannerConstrainedConflictContext[] {
+  const prepared = preparePlannerInitialContext(built.input, built.dependencies)
+  if (prepared.status !== 'ready') throw new Error('Expected a ready context.')
+  return createPlannerConstrainedConflictContexts(prepared.context)
+}
+
 function fixedConstraintsOf(
   built: OrchestrationScenario,
 ): PlannerFixedConflictConstraint[] {
@@ -265,7 +279,7 @@ function options(
 function readyPlanningTargetIds(
   input: OrchestrationScenario['input'],
   dependencies: OrchestrationScenario['dependencies'],
-  cardinality: PlannerBuildListCardinality = 'persisted',
+  cardinality: PlannerBuildListContext = { kind: 'persisted' },
 ): readonly string[] {
   const prepared = preparePlannerInitialContext(input, dependencies, cardinality)
   if (prepared.status !== 'ready') throw new Error('Expected a ready context.')
@@ -608,7 +622,10 @@ describe('B8-C4b Candidate trial and adoption', () => {
       ],
       conflictResolutions: [],
     }
-    expect(readyPlanningTargetIds(augmented, built.dependencies, 'temporary_augmented'))
+    expect(readyPlanningTargetIds(augmented, built.dependencies, {
+      kind: 'temporary_augmented',
+      replacements: result.generatedBuildListEntryReplacements,
+    }))
       .toEqual([TARGET_A, TARGET_B])
   })
 
@@ -625,7 +642,7 @@ describe('B8-C4b Candidate trial and adoption', () => {
     expect(built.input).toEqual(before)
   })
 
-  it('keeps the final Plan snapshot hash over the original plus adopted Entries', async () => {
+  it('keeps the final Plan snapshot hash over the replacement set, never the replaced Entry', async () => {
     const built = fixedScenario()
     const originalEntries = structuredClone(built.input.buildListEntries)
 
@@ -636,15 +653,32 @@ describe('B8-C4b Candidate trial and adoption', () => {
     )
 
     expect(result.plan).not.toBeNull()
+    // The generated Entry replaces Target B's original Entry
+    // (`docs/PLANNER_SPEC.md` 9.2.18), and the result names that pairing.
+    expect(result.generatedBuildListEntryReplacements).toEqual([{
+      targetWeaponId: TARGET_B,
+      replacedBuildListEntryId: entryId(ENTRY_B),
+      generatedBuildListEntryId: result.generatedBuildListEntries[0].id,
+    }])
+    const replacementSet = applyBuildListEntryReplacements(
+      originalEntries,
+      result.generatedBuildListEntryReplacements,
+      result.generatedBuildListEntries,
+    )
+    expect(replacementSet.map(({ id }) => id)).not.toContain(entryId(ENTRY_B))
     expect(result.plan?.baseSnapshot.buildListEntriesHash).toBe(
+      createPlanningBuildListEntriesHash(replacementSet),
+    )
+    // Neither the original set nor the augmented set (the replaced Entry
+    // beside the generated one) is what the Plan records.
+    expect(result.plan?.baseSnapshot.buildListEntriesHash).not.toBe(
+      createPlanningBuildListEntriesHash(originalEntries),
+    )
+    expect(result.plan?.baseSnapshot.buildListEntriesHash).not.toBe(
       createPlanningBuildListEntriesHash([
         ...originalEntries,
         ...result.generatedBuildListEntries,
       ]),
-    )
-    // A rejected trial Entry would change that hash, so none survived.
-    expect(result.plan?.baseSnapshot.buildListEntriesHash).not.toBe(
-      createPlanningBuildListEntriesHash(originalEntries),
     )
   })
 
@@ -728,16 +762,23 @@ describe('B8-C4b Candidate trial and adoption', () => {
     }).materializeBuildListEntry(candidate, built.input.buildListEntries)
     expect(materialized.reusedExisting).toBe(false)
 
+    const replacements = [{
+      targetWeaponId: TARGET_B as never,
+      replacedBuildListEntryId: entryId(ENTRY_B),
+      generatedBuildListEntryId: materialized.entry.id,
+    }]
+    const augmentedInput = {
+      ...built.input,
+      buildListEntries: [
+        ...built.input.buildListEntries,
+        materialized.entry,
+      ],
+    }
     const preflight = preparePlannerAugmentedConflictPreflight(
-      {
-        ...built.input,
-        buildListEntries: [
-          ...built.input.buildListEntries,
-          materialized.entry,
-        ],
-      },
+      augmentedInput,
       constraints,
       built.dependencies,
+      replacements,
     )
 
     expect(preflight.status).toBe('ready')
@@ -756,6 +797,29 @@ describe('B8-C4b Candidate trial and adoption', () => {
       conflictKey: current?.conflictId ?? '',
       selectedBuildListEntryId: entryId(ENTRY_A),
     })
+
+    // The full run's replacement set drops Target B's original Entry. This
+    // Candidate's contested Reset is the very physical action Entry A runs on
+    // the same weapon, so without Entry B no conflict is left at that
+    // position: the user's choice of A is fulfilled by the replacement itself
+    // (`docs/PLANNER_SPEC.md` 9.2.18). No resolution is rebuilt for it, and
+    // the augmented step's conflict id is never carried into the full run.
+    const replacement = preparePlannerReplacementConflictPreflight(
+      augmentedInput,
+      replacements,
+      constraints,
+      originalConflictContextsOf(built),
+      built.dependencies,
+    )
+    expect(replacement.status).toBe('ready')
+    if (replacement.status !== 'ready') return
+    expect(replacement.resolvedInput.buildListEntries.map(({ id }) => id)).not.toContain(entryId(ENTRY_B))
+    expect(replacement.replacementPreflight.conflictContexts.some(
+      ({ kind, counterBefore }) =>
+        kind === 'same_gogma_counter' && counterBefore === CONFLICT_GOGMA_COUNTER,
+    )).toBe(false)
+    expect(replacement.replacementPreflight.replacementSatisfiedConstraints).toEqual(constraints)
+    expect(replacement.resolvedInput.conflictResolutions).toEqual([])
   })
 
   it('fails closed when the persisted Build List already holds an adopted Entry beside the original', async () => {
@@ -1438,6 +1502,149 @@ describe('B8-C4b cancellation stays an ordinary Planner outcome', () => {
       expect(warningKinds(result.warnings)).toContain('duplicate_build_list_entries_for_target')
       expect(warningKinds(result.warnings)).not.toContain('selected_checkpoint_fixes_target_entry')
       expect(entryA.intermediateStateSelection?.bonusOpportunityId).not.toBeNull()
+    })
+  })
+})
+
+/**
+ * Issue #103 Phase 0-3 (`docs/PLANNER_SPEC.md` 9.2.18): a generated Entry `G`
+ * replaces its Target's persisted Entry `O`. `O` stays only in the preflight
+ * that re-associates the user's fixed constraints; the full Planner run, and
+ * everything the Plan records, is the replacement set.
+ */
+describe('B8 generated Entry replacement (Phase 0-3)', () => {
+  function planEntryReferences(result: PlannerOrchestrationResult): string[] {
+    const plan = result.plan
+    if (plan === null) return []
+    return [
+      ...plan.selectedBuildListEntryIds,
+      ...plan.steps.flatMap(({ buildListEntryId }) => (buildListEntryId === null ? [] : [buildListEntryId])),
+      ...plan.conflicts.flatMap((conflict) => [
+        ...conflict.buildListEntryIds,
+        ...(conflict.recommendedBuildListEntryId === null ? [] : [conflict.recommendedBuildListEntryId]),
+        ...(conflict.selectedBuildListEntryId === null ? [] : [conflict.selectedBuildListEntryId]),
+      ]),
+      ...plan.rejectedBuildListEntries.map(({ buildListEntryId }) => buildListEntryId),
+    ]
+  }
+
+  it('records only the replacement set: the replaced Entry appears nowhere in the Plan', async () => {
+    const built = fixedScenario()
+    const result = await createProductionPlanWithConstrainedSearch(
+      built.input,
+      built.dependencies,
+      options(),
+    )
+
+    expect(result.plan).not.toBeNull()
+    const generated = result.generatedBuildListEntries[0]
+    expect(result.generatedBuildListEntryReplacements).toEqual([{
+      targetWeaponId: TARGET_B,
+      replacedBuildListEntryId: entryId(ENTRY_B),
+      generatedBuildListEntryId: generated.id,
+    }])
+    expect(result.plan?.selectedBuildListEntryIds).toEqual([generated.id, entryId(ENTRY_A)].sort())
+    const references = planEntryReferences(result)
+    expect(references).toContain(generated.id)
+    expect(references).not.toContain(entryId(ENTRY_B))
+    expect(result.plan?.steps.some(({ buildListEntryId }) => buildListEntryId === generated.id)).toBe(true)
+    // The replacement removed the very conflict the user resolved, so the
+    // fixed choice of Entry A is fulfilled, not re-mapped and not lost.
+    expect(result.plan?.conflicts).toEqual([])
+    expect(result.warnings.map(({ kind }) => kind)).not.toContain('invalid_conflict_resolution')
+  })
+
+  it('adopts one replacement per Target and never runs an original Entry beside it', async () => {
+    // Targets B and C both lose the contested Gogma position to the fixed
+    // Entry A, and each has its own way out: B through a Reset Skills on a
+    // spare weapon that already holds the Ideal five slots, C through later
+    // Resets of its own weapon, whose Series Skill C already accepts.
+    const two = twoTargetParts()
+    const c = orchestrationTarget(TARGET_C, {
+      priority: 1,
+      idealSkillCondition: { seriesSkillId: SOURCE_B_SERIES_SKILL_ID, groupSkillId: null, matchMode: 'all' },
+      practicalSkillCondition: { seriesSkillId: SOURCE_B_SERIES_SKILL_ID, groupSkillId: null, matchMode: 'all' },
+    })
+    const parts: TwoTargetParts = {
+      targets: [...two.targets, c],
+      ownedWeapons: [
+        ...two.ownedWeapons,
+        orchestrationSource(SOURCE_C, {
+          restorationBonuses: belowPracticalBonuses(),
+          seriesSkillId: SOURCE_B_SERIES_SKILL_ID,
+        }),
+        orchestrationSource('owned.orchestration.spare', {
+          restorationBonuses: idealBonuses(),
+          seriesSkillId: 'series_skill.fixture.spare',
+        }),
+      ],
+      entries: [
+        ...two.entries,
+        orchestrationEntry(ENTRY_C, c, resetRoute(SOURCE_C), {
+          finalBonuses: idealBonuses(),
+          seriesSkillId: SOURCE_B_SERIES_SKILL_ID,
+        }),
+      ],
+    }
+    const built = fixedScenario(parts)
+    expect(contextsOf(built).find(({ conflictId }) => conflictId === gogmaConflictId(parts))
+      ?.participants.map(({ buildListEntryId }) => buildListEntryId).sort())
+      .toEqual([entryId(ENTRY_A), entryId(ENTRY_B), entryId(ENTRY_C)])
+    const result = await createProductionPlanWithConstrainedSearch(
+      built.input,
+      built.dependencies,
+      options(),
+    )
+
+    expect(result.plan).not.toBeNull()
+    expect(result.generatedBuildListEntries.map(({ targetWeaponId }) => targetWeaponId).sort())
+      .toEqual([TARGET_B, TARGET_C])
+    expect(result.generatedBuildListEntryReplacements.map(({ targetWeaponId, replacedBuildListEntryId }) => [
+      targetWeaponId,
+      replacedBuildListEntryId,
+    ])).toEqual([[TARGET_B, entryId(ENTRY_B)], [TARGET_C, entryId(ENTRY_C)]])
+    // A2 / B2 style: the final Plan runs A, B2 and C2, never B or C.
+    expect(result.plan?.selectedBuildListEntryIds).toEqual(
+      [entryId(ENTRY_A), ...result.generatedBuildListEntries.map(({ id }) => id)].sort(),
+    )
+    const references = planEntryReferences(result)
+    expect(references).not.toContain(entryId(ENTRY_B))
+    expect(references).not.toContain(entryId(ENTRY_C))
+    const replacementSet = applyBuildListEntryReplacements(
+      built.input.buildListEntries,
+      result.generatedBuildListEntryReplacements,
+      result.generatedBuildListEntries,
+    )
+    expect(replacementSet).toHaveLength(3)
+    expect(result.plan?.baseSnapshot.buildListEntriesHash)
+      .toBe(createPlanningBuildListEntriesHash(replacementSet))
+  })
+
+  it('never needs a second temporary Entry for a Target: an adopted one satisfies every later work on it', () => {
+    // Adoption requires every fixed Entry and every adopted Entry to stay
+    // selected (`isConstrainedTrialAdoptable()`), so any later work on a Target
+    // that already holds an adopted Entry is satisfied before it enumerates.
+    const parts = threeTargetParts()
+    const built = fixedScenario(parts)
+    const works = createPlannerConflictWorks(
+      [...fixedConstraintsOf(built), { ...fixedConstraintsOf(built)[0], originalConflictId: 'plan-conflict:other' }],
+      [
+        ...contextsOf(built),
+        ...contextsOf(built).map((context) => ({ ...context, conflictId: 'plan-conflict:other' })),
+      ],
+      requirementsOf(built),
+    )
+    const onB = works.filter(({ targetWeaponId }) => targetWeaponId === TARGET_B)
+    expect(onB).toHaveLength(2)
+    const adoptedB = { id: entryId('build-list.generated.b'), targetWeaponId: TARGET_B } as unknown as BuildListEntry
+    const current = [
+      { id: entryId(ENTRY_A), targetWeaponId: TARGET_A },
+      { id: entryId(ENTRY_C), targetWeaponId: TARGET_C },
+    ] as unknown as BuildListEntry[]
+    const selected = [entryId(ENTRY_A), adoptedB.id]
+    expect(isConstrainedTrialAdoptable(selected, adoptedB.id, fixedConstraintsOf(built), [])).toBe(true)
+    onB.forEach((work) => {
+      expect(isPlannerConflictWorkSatisfied(work, selected, [...current, adoptedB])).toBe(true)
     })
   })
 })

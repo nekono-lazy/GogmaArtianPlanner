@@ -321,6 +321,7 @@ describe('PlannerWorkerClient what-if comparison (B9-C)', () => {
         warnings: [],
         termination: completedPlannerTermination(),
         generatedBuildListEntries: [],
+        generatedBuildListEntryReplacements: [],
       },
     })
     await expect(second).rejects.toBeInstanceOf(PlannerWorkerProtocolError)
@@ -352,6 +353,7 @@ describe('PlannerWorkerClient what-if comparison (B9-C)', () => {
       warnings: [],
       termination: completedPlannerTermination(),
       generatedBuildListEntries: [],
+      generatedBuildListEntryReplacements: [],
     }
     worker.emit({
       type: 'create_constrained_plan_result',
@@ -422,6 +424,7 @@ describe('PlannerWorkerClient constrained plan (B8-D1)', () => {
       warnings: [],
       termination: completedPlannerTermination(),
       generatedBuildListEntries: [createValidBuildListEntry()],
+      generatedBuildListEntryReplacements: [],
     }
     worker.emit({
       type: 'create_constrained_plan_result',
@@ -462,6 +465,7 @@ describe('PlannerWorkerClient constrained plan (B8-D1)', () => {
         }],
         termination,
         generatedBuildListEntries: [],
+        generatedBuildListEntryReplacements: [],
       },
     })
     await expect(promise).resolves.toMatchObject({ termination })
@@ -543,6 +547,7 @@ describe('PlannerWorkerClient constrained plan (B8-D1)', () => {
       warnings: [],
       termination: completedPlannerTermination(),
       generatedBuildListEntries: [],
+      generatedBuildListEntryReplacements: [],
     }
     worker.emit({
       type: 'create_constrained_plan_result',
@@ -588,6 +593,7 @@ describe('PlannerWorkerClient constrained plan (B8-D1)', () => {
         warnings: [],
         termination: completedPlannerTermination(),
         generatedBuildListEntries: [createValidBuildListEntry()],
+        generatedBuildListEntryReplacements: [],
       },
     })
     await expect(ordinary).rejects.toBeInstanceOf(PlannerWorkerProtocolError)
@@ -623,6 +629,7 @@ describe('PlannerWorkerClient constrained plan (B8-D1)', () => {
       warnings: [],
       termination: completedPlannerTermination(),
       generatedBuildListEntries: [],
+      generatedBuildListEntryReplacements: [],
     }
     worker.emit({
       type: 'create_constrained_plan_result',
@@ -776,6 +783,7 @@ const constrainedResult: PlannerOrchestrationResult = {
   warnings: [],
   termination: completedPlannerTermination(),
   generatedBuildListEntries: [],
+  generatedBuildListEntryReplacements: [],
 }
 
 describe('Planner Worker / Client task generation across an asynchronous boundary (B8-D1)', () => {

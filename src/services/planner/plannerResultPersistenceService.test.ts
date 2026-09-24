@@ -19,7 +19,13 @@ import type {
   PlannerInput,
   PlannerOrchestrationResult,
 } from '../../domain/planner'
-import { createPlanningInputSnapshot } from '../../domain/planner'
+import type { BuildListEntryReplacement } from '../../domain/buildList'
+import {
+  createPlanningBuildListEntriesHash,
+  createPlanningInputSnapshot,
+  prepareFinalReplacementBuildList,
+} from '../../domain/planner'
+import { RepositoryError } from '../../db/repositoryError'
 import { createExpectedPlanState } from '../../domain/models/publicTypes'
 import {
   DOMAIN_FIXTURE_TIME,
@@ -84,6 +90,7 @@ interface Scenario {
   context: CalculationContext
   persisted: BuildListEntry[]
   generated: BuildListEntry[]
+  replacements: BuildListEntryReplacement[]
   plan: ProductionPlan
   result: PlannerOrchestrationResult
   storedEntryIds(): Promise<string[]>
@@ -98,6 +105,8 @@ interface ScenarioOptions {
   createRepositories?: (
     database: AppDatabase,
   ) => PlannerResultPersistenceRepositories
+  /** Makes the Dexie write of this BuildListEntry ID fail inside the save. */
+  failEntryWriteId?: string
 }
 
 let databaseSequence = 0
@@ -117,15 +126,28 @@ async function withScenario(
       routeEntry('build-list.persisted.a', targetA, normalRoute()),
       routeEntry('build-list.persisted.b', targetB, normalRoute(), 'practical'),
     ]
+    // Generated Entry i replaces persisted Entry i of the same Target
+    // (`docs/PLANNER_SPEC.md` 9.2.18): generated.0 replaces persisted.a, and
+    // generated.1 replaces persisted.b.
     const generated = Array.from(
       { length: options.generatedCount ?? 1 },
       (_unused, index) =>
-        routeEntry(`build-list.generated.${index}`, targetA, normalRoute()),
+        routeEntry(`build-list.generated.${index}`, index === 0 ? targetA : targetB, normalRoute()),
     )
+    const replacements: BuildListEntryReplacement[] = generated.map((entry, index) => ({
+      targetWeaponId: entry.targetWeaponId,
+      replacedBuildListEntryId: persisted[index].id,
+      generatedBuildListEntryId: entry.id,
+    }))
     const owned = [sourceWeapon('owned.fixture.a'), sourceWeapon('owned.fixture.b')]
     const { input } = fixture([targetA, targetB], [...persisted, ...generated], owned)
     options.adjustGenerated?.(generated)
-    const selected = [...persisted, ...generated]
+    // The Plan is calculated and recorded over the replacement set.
+    const selected = [
+      ...persisted.filter((_entry, index) => index >= generated.length),
+      ...generated,
+    ]
+    input.buildListEntries = selected
     const snapshot = createPlanningInputSnapshot(
       input,
       {
@@ -143,10 +165,7 @@ async function withScenario(
       },
       DOMAIN_FIXTURE_TIME,
     )
-    const plan = buildPlan(snapshot, input.calculationContext, [
-      ...persisted,
-      ...generated,
-    ])
+    const plan = buildPlan(snapshot, input.calculationContext, selected)
 
     const seed = createPlannerResultPersistenceRepositories(database)
     await seed.rngState.putRngState(input.rngState)
@@ -163,6 +182,12 @@ async function withScenario(
       await seed.buildListEntries.putBuildListEntry(entry)
     }
 
+    if (options.failEntryWriteId !== undefined) {
+      const failing = options.failEntryWriteId
+      database.buildListEntries.hook('creating', (_key, record) => {
+        if (record.id === failing) throw new Error('fixture Entry write failure')
+      })
+    }
     const repositories = options.createRepositories
       ? options.createRepositories(database)
       : createPlannerResultPersistenceRepositories(database)
@@ -175,6 +200,7 @@ async function withScenario(
       context: input.calculationContext,
       persisted,
       generated,
+      replacements,
       plan,
       result: {
         plan,
@@ -182,6 +208,7 @@ async function withScenario(
         warnings: [],
         termination: completedPlannerTermination(),
         generatedBuildListEntries: generated,
+        generatedBuildListEntryReplacements: replacements,
       },
       storedEntryIds: async () =>
         (await database.buildListEntries.toArray()).map(({ id }) => id).sort(),
@@ -204,6 +231,7 @@ describe('PlannerResultPersistenceService', () => {
           warnings: [],
           termination: exhaustedPlannerTermination(),
           generatedBuildListEntries: [],
+          generatedBuildListEntryReplacements: [],
         },
         context,
       )
@@ -310,6 +338,7 @@ describe('PlannerResultPersistenceService', () => {
               warnings: [],
               termination: completedPlannerTermination(),
               generatedBuildListEntries: generated,
+              generatedBuildListEntryReplacements: [],
             },
             context,
           ),
@@ -322,16 +351,19 @@ describe('PlannerResultPersistenceService', () => {
       },
     ))
 
-  it('saves the generated Entries and the Plan together', () =>
+  it('replaces the persisted Entry with the generated Entry and saves the Plan together', () =>
     withScenario(
       async ({ service, result, context, plan, storedEntryIds, storedPlanIds }) => {
         const saved = await service.savePlannerOrchestrationResult(result, context)
         expect(saved?.id).toBe(plan.id)
+        // generated.0 replaced persisted.a (`docs/PLANNER_SPEC.md` 9.2.18):
+        // the Build List holds one Entry per Target, and the Plan references
+        // no deleted Entry.
         expect(await storedEntryIds()).toEqual([
           'build-list.generated.0',
-          'build-list.persisted.a',
           'build-list.persisted.b',
         ])
+        expect(saved?.selectedBuildListEntryIds).not.toContain('build-list.persisted.a')
         expect(await storedPlanIds()).toEqual(['plan.b8d2a.a'])
       },
     ))
@@ -528,6 +560,9 @@ describe('PlannerResultPersistenceService', () => {
 
   it('rejects a generated Entry the final Plan does not select', () =>
     withScenario(
+      // The Domain check itself is `checkProductionPlanBuildListReferences()`;
+      // here a Plan that dropped its generated Entry no longer matches its own
+      // snapshot either, and nothing is written either way.
       async ({ service, result, context, plan, generated, storedEntryIds, storedPlanIds }) => {
         const generatedIds = new Set(generated.map(({ id }) => id))
         await expect(
@@ -548,7 +583,7 @@ describe('PlannerResultPersistenceService', () => {
             },
             context,
           ),
-        ).rejects.toMatchObject({ code: 'planner_result_invalid' })
+        ).rejects.toBeInstanceOf(RepositoryError)
         expect(await storedEntryIds()).toEqual([
           'build-list.persisted.a',
           'build-list.persisted.b',
@@ -628,21 +663,7 @@ describe('PlannerResultPersistenceService', () => {
       },
       {
         generatedCount: 2,
-        createRepositories: (database) => {
-          const repositories = createPlannerResultPersistenceRepositories(database)
-          class FailingSecondWriteRepository extends BuildListEntryRepository {
-            async addBuildListEntry(entry: BuildListEntry) {
-              if (entry.id === buildListEntryId('build-list.generated.1')) {
-                throw new Error('fixture Entry write failure')
-              }
-              return super.addBuildListEntry(entry)
-            }
-          }
-          return {
-            ...repositories,
-            buildListEntries: new FailingSecondWriteRepository(database),
-          }
-        },
+        failEntryWriteId: 'build-list.generated.1',
       },
     ))
 
@@ -680,12 +701,18 @@ describe('PlannerResultPersistenceService', () => {
 
   it('does not treat a different current array order as a state change', () =>
     withScenario(
-      async ({ service, result, context, storedEntryIds, storedPlanIds }) => {
+      async ({ service, result, context, persisted, generated, replacements, plan, storedEntryIds, storedPlanIds }) => {
+        // The final replacement set the save compares is order independent.
+        const forward = prepareFinalReplacementBuildList(persisted, generated, replacements)
+        const reversed = prepareFinalReplacementBuildList([...persisted].reverse(), generated, replacements)
+        expect(createPlanningBuildListEntriesHash(reversed.finalEntries ?? []))
+          .toBe(createPlanningBuildListEntriesHash(forward.finalEntries ?? []))
+        expect(createPlanningBuildListEntriesHash(forward.finalEntries ?? []))
+          .toBe(plan.baseSnapshot.buildListEntriesHash)
         const saved = await service.savePlannerOrchestrationResult(result, context)
         expect(saved).not.toBeNull()
         expect(await storedEntryIds()).toEqual([
           'build-list.generated.0',
-          'build-list.persisted.a',
           'build-list.persisted.b',
         ])
         expect(await storedPlanIds()).toEqual(['plan.b8d2a.a'])
@@ -759,7 +786,7 @@ describe('PlannerResultPersistenceService Draft replacement (DATA_MODEL 11.1 / P
       expect(saved?.status).toBe('draft')
       expect(await storedPlanIds()).toEqual(['plan.b8d2a.a'])
       expect(await database.productionPlans.get(previous.id)).toBeUndefined()
-      expect(await storedEntryIds()).toEqual(['build-list.generated.0', ...PERSISTED_ENTRY_IDS])
+      expect(await storedEntryIds()).toEqual(['build-list.generated.0', 'build-list.persisted.b'])
     }))
 
   it('B: replaces every accumulated legacy Draft inside the one transaction', () =>
@@ -802,18 +829,7 @@ describe('PlannerResultPersistenceService Draft replacement (DATA_MODEL 11.1 / P
       },
       {
         generatedCount: 2,
-        createRepositories: (database) => {
-          const repositories = createPlannerResultPersistenceRepositories(database)
-          class FailingSecondWriteRepository extends BuildListEntryRepository {
-            async addBuildListEntry(entry: BuildListEntry) {
-              if (entry.id === buildListEntryId('build-list.generated.1')) {
-                throw new Error('fixture Entry write failure')
-              }
-              return super.addBuildListEntry(entry)
-            }
-          }
-          return { ...repositories, buildListEntries: new FailingSecondWriteRepository(database) }
-        },
+        failEntryWriteId: 'build-list.generated.1',
       },
     ))
 
@@ -917,7 +933,7 @@ describe('PlannerResultPersistenceService Draft replacement (DATA_MODEL 11.1 / P
       const previous = oldDraft('plan.draft.previous')
       await database.productionPlans.put(previous)
       const saved = await service.savePlannerOrchestrationResult(
-        { plan: null, conflicts: [], warnings: [], termination: exhaustedPlannerTermination(), generatedBuildListEntries: [] },
+        { plan: null, conflicts: [], warnings: [], termination: exhaustedPlannerTermination(), generatedBuildListEntries: [], generatedBuildListEntryReplacements: [] },
         context,
       )
       expect(saved).toBeNull()
@@ -928,16 +944,197 @@ describe('PlannerResultPersistenceService Draft replacement (DATA_MODEL 11.1 / P
     withScenario(async ({ service, result, context, database, storedEntryIds, persisted }) => {
       // The previous Draft names a persisted Entry of the scenario; the
       // replacement deletes the Draft record only.
+      // persisted.b is not replaced by this save, so only the Draft deletion
+      // could remove it.
       const previous = {
         ...oldDraft('plan.draft.previous'),
-        selectedBuildListEntryIds: [persisted[0].id],
-        steps: createValidProductionPlan().steps.map((step) => ({ ...step, buildListEntryId: persisted[0].id, targetWeaponId: persisted[0].targetWeaponId })),
+        selectedBuildListEntryIds: [persisted[1].id],
+        steps: createValidProductionPlan().steps.map((step) => ({ ...step, buildListEntryId: persisted[1].id, targetWeaponId: persisted[1].targetWeaponId })),
       }
       await database.productionPlans.put(previous)
 
       await service.savePlannerOrchestrationResult(result, context)
 
-      expect(await storedEntryIds()).toEqual(['build-list.generated.0', ...PERSISTED_ENTRY_IDS])
-      expect(await database.buildListEntries.get(persisted[0].id)).toEqual(persisted[0])
+      expect(await storedEntryIds()).toEqual(['build-list.generated.0', 'build-list.persisted.b'])
+      expect(await database.buildListEntries.get(persisted[1].id)).toEqual(persisted[1])
+    }))
+})
+
+/**
+ * Issue #103 Phase 0-3 (`docs/PLANNER_SPEC.md` 9.2.18): a generated Entry `G`
+ * replaces the persisted Entry `O` it was calculated to replace, in the same
+ * transaction as the Draft replacement, and only while `O` is still its
+ * Target's one persisted Entry. Deleting `O` is a Build List change the
+ * existing Plan-breaking guard judges.
+ */
+describe('PlannerResultPersistenceService generated Entry replacement (Phase 0-3)', () => {
+  function runningPlanOver(
+    plan: ProductionPlan,
+    entries: readonly BuildListEntry[],
+    status: 'active' | 'stale' | 'completed' | 'abandoned',
+  ): ProductionPlan {
+    const base = buildPlan(plan.baseSnapshot, plan.calculationContext, entries)
+    return {
+      ...base,
+      id: productionPlanId('plan.running.p1'),
+      status,
+      recalculationReasons: status === 'stale' ? ['build_list_changed'] : [],
+      abandonmentReason: status === 'abandoned' ? 'user_abandoned' : null,
+      abandonedAt: status === 'abandoned' ? DOMAIN_FIXTURE_TIME : null,
+      completedAt: status === 'completed' ? DOMAIN_FIXTURE_TIME : null,
+      currentStepId: status === 'completed' ? null : base.currentStepId,
+      steps: status === 'completed'
+        ? base.steps.map((step) => ({ ...step, isCompleted: true, completedAt: DOMAIN_FIXTURE_TIME }))
+        : base.steps,
+    }
+  }
+
+  it('refuses when the Target meanwhile holds another Entry, deleting nothing on a guess', () =>
+    withScenario(async ({ service, result, context, database, persisted, repositories, storedEntryIds, storedPlanIds }) => {
+      const previous = { ...createValidProductionPlan(), id: productionPlanId('plan.draft.previous') }
+      await database.productionPlans.put(previous)
+      // After the Planner ran, persisted.a (B1) was replaced by B3 elsewhere.
+      await repositories.buildListEntries.deleteBuildListEntry(persisted[0].id)
+      const b3 = { ...structuredClone(persisted[0]), id: buildListEntryId('build-list.persisted.a3') }
+      await repositories.buildListEntries.putBuildListEntry(b3)
+
+      await expect(service.savePlannerOrchestrationResult(result, context)).rejects.toMatchObject({
+        code: 'planner_state_changed',
+        message: expect.stringContaining("instead of the BuildListEntry 'build-list.persisted.a'"),
+      })
+      expect(await storedEntryIds()).toEqual(['build-list.persisted.a3', 'build-list.persisted.b'])
+      expect(await storedPlanIds()).toEqual(['plan.draft.previous'])
+    }))
+
+  it('refuses a result whose replacement metadata is malformed, writing nothing', () =>
+    withScenario(async ({ service, result, context, storedEntryIds, storedPlanIds }) => {
+      for (const generatedBuildListEntryReplacements of [
+        [],
+        [{ ...result.generatedBuildListEntryReplacements[0], targetWeaponId: 'target.fixture.b' as never }],
+        undefined as never,
+      ]) {
+        await expect(
+          service.savePlannerOrchestrationResult({ ...result, generatedBuildListEntryReplacements }, context),
+        ).rejects.toMatchObject({ code: 'planner_result_invalid' })
+      }
+      expect(await storedEntryIds()).toEqual(['build-list.persisted.a', 'build-list.persisted.b'])
+      expect(await storedPlanIds()).toEqual([])
+    }))
+
+  it('refuses a Plan that still references the replaced Entry', () =>
+    withScenario(async ({ service, result, context, plan, persisted, storedPlanIds }) => {
+      await expect(
+        service.savePlannerOrchestrationResult(
+          {
+            ...result,
+            plan: {
+              ...plan,
+              rejectedBuildListEntries: [{
+                buildListEntryId: persisted[0].id,
+                reason: 'resource_conflict',
+                detail: 'fixture',
+              }],
+            },
+          },
+          context,
+        ),
+      ).rejects.toMatchObject({ code: 'planner_result_invalid' })
+      expect(await storedPlanIds()).toEqual([])
+    }))
+
+  it('requires the breaking-change approval when the replaced Entry is an active Plan dependency, and ends that Plan with it', () =>
+    withScenario(async ({ service, result, context, database, plan, persisted, storedEntryIds, storedPlanIds }) => {
+      const active = runningPlanOver(plan, persisted, 'active')
+      await database.productionPlans.put(active)
+      const previous = { ...createValidProductionPlan(), id: productionPlanId('plan.draft.previous') }
+      await database.productionPlans.put(previous)
+
+      const inspection = await service.inspectPlannerOrchestrationResultSave(result, context)
+      expect(inspection).toMatchObject({
+        approvalRequired: true,
+        reasons: ['build_list_changed'],
+        observedPlan: { planId: active.id, status: 'active' },
+        savePointChoiceRequired: false,
+      })
+
+      // Unapproved: refused, nothing changes.
+      await expect(service.savePlannerOrchestrationResult(result, context)).rejects.toMatchObject({
+        code: 'plan_breaking_change_approval_required',
+      })
+      expect(await storedEntryIds()).toEqual(['build-list.persisted.a', 'build-list.persisted.b'])
+      expect(await storedPlanIds()).toEqual(['plan.draft.previous', 'plan.running.p1'])
+      expect(await database.productionPlans.get(active.id)).toEqual(active)
+
+      // Approved: the Entry replacement, the Draft replacement and the
+      // abandonment happen together.
+      if (!inspection.approvalRequired) throw new Error('Expected an approval.')
+      const saved = await service.savePlannerOrchestrationResult(result, context, {
+        observedPlan: inspection.observedPlan,
+        savePointDecision: null,
+      })
+      expect(saved?.id).toBe(plan.id)
+      expect(await storedEntryIds()).toEqual(['build-list.generated.0', 'build-list.persisted.b'])
+      expect(await storedPlanIds()).toEqual(['plan.b8d2a.a', 'plan.running.p1'])
+      expect(await database.productionPlans.get(active.id)).toMatchObject({
+        status: 'abandoned',
+        abandonmentReason: 'breaking_change_approved',
+      })
+    }))
+
+  it('rolls the abandonment and the replacement back together when a later write fails', () =>
+    withScenario(async ({ service, result, context, database, plan, persisted, storedEntryIds }) => {
+      const active = runningPlanOver(plan, persisted, 'active')
+      await database.productionPlans.put(active)
+      const inspection = await service.inspectPlannerOrchestrationResultSave(result, context)
+      if (!inspection.approvalRequired) throw new Error('Expected an approval.')
+      // The new Plan's ID is taken after the inspection, which fails the last
+      // write of the approved save.
+      const taken = {
+        ...runningPlanOver(plan, persisted, 'completed'),
+        id: plan.id,
+      }
+      await database.productionPlans.put(taken)
+
+      await expect(service.savePlannerOrchestrationResult(result, context, {
+        observedPlan: inspection.observedPlan,
+        savePointDecision: null,
+      })).rejects.toMatchObject({ code: 'production_plan_id_conflict' })
+      expect(await storedEntryIds()).toEqual(['build-list.persisted.a', 'build-list.persisted.b'])
+      expect(await database.productionPlans.get(active.id)).toEqual(active)
+      expect(await database.productionPlans.get(plan.id)).toEqual(taken)
+    }))
+
+  it.each(['stale', 'completed', 'abandoned'] as const)(
+    'needs no approval when only a %s Plan references the replaced Entry',
+    (status) =>
+      withScenario(async ({ service, result, context, database, plan, persisted, storedEntryIds }) => {
+        const historical = runningPlanOver(plan, persisted, status)
+        await database.productionPlans.put(historical)
+
+        expect(await service.inspectPlannerOrchestrationResultSave(result, context))
+          .toEqual({ approvalRequired: false })
+        const saved = await service.savePlannerOrchestrationResult(result, context)
+        expect(saved?.id).toBe(plan.id)
+        expect(await storedEntryIds()).toEqual(['build-list.generated.0', 'build-list.persisted.b'])
+        // The historical Plan keeps its now-deleted reference as persisted.
+        expect(await database.productionPlans.get(historical.id)).toEqual(historical)
+      }),
+  )
+
+  it('needs no approval for a result without a Plan', () =>
+    withScenario(async ({ service, context, database, plan, persisted }) => {
+      const active = runningPlanOver(plan, persisted, 'active')
+      await database.productionPlans.put(active)
+      expect(await service.inspectPlannerOrchestrationResultSave(
+        {
+          plan: null,
+          conflicts: [],
+          warnings: [],
+          termination: exhaustedPlannerTermination(),
+          generatedBuildListEntries: [],
+          generatedBuildListEntryReplacements: [],
+        },
+        context,
+      )).toEqual({ approvalRequired: false })
     }))
 })

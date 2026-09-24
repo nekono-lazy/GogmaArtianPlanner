@@ -28,9 +28,9 @@ authorityの配置:
 
 | 契約 | authority | 状態 |
 | --- | --- | --- |
-| 永続Build Listの1 Target = 最大1 Entry、Candidate追加時の置換、legacy duplicateのfail closed | [REQUIREMENTS.md](./REQUIREMENTS.md) 18、[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1 | **一部実装**（Phase 0-1: Domain / Service基盤、通常Planner入力のfail closed、Import / Exportの保持。Phase 0-2: Search画面の置換確認、Build Listのlegacy duplicate案内） |
+| 永続Build Listの1 Target = 最大1 Entry、Candidate追加時の置換、legacy duplicateのfail closed | [REQUIREMENTS.md](./REQUIREMENTS.md) 18、[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1 | **実装済み**（Phase 0-1: Domain / Service基盤、通常Planner入力のfail closed、Import / Exportの保持。Phase 0-2: Search画面の置換確認、Build Listのlegacy duplicate案内。Phase 0-3: constrained re-search / what-if / 再計画の置換） |
 | Search画面からの追加 / 置換 | [SEARCH_SPEC.md](./SEARCH_SPEC.md) 10.1、[UI_FLOW.md](./UI_FLOW.md) 9 / 10 | **実装済み**（Phase 0-1: Service結果型と置換API、Phase 0-2: 画面の置換確認Dialog / 案内） |
-| constrained re-search / what-if / 再計画とBuild List cardinality | [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18 | 次期契約（未実装、Phase 0-3） |
+| constrained re-search / what-if / 再計画とBuild List cardinality | [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18 | **実装済み**（Phase 0-3） |
 | 決定的scheduler（Route commitment、scheduling、termination、schema境界） | 本書 | target design。Phase CでREQUIREMENTS 19 / 20、PLANNER_SPEC 7等を改訂して正式化 |
 
 - 本書の追加時点で `src/**`、テスト、schema version、Worker protocol、UIは一切変更していない
@@ -1048,17 +1048,17 @@ REQUIREMENTS 18へ記載済み。実装は次の順で小さく分ける。
   `classifyBuildListCandidateAddition()`（`src/domain/buildList/buildListCardinality.ts`）
 - 通常Planner入力のwarning kindは `duplicate_build_list_entries_for_target`。planning Target（valid Entryを
   1件以上持つTarget）のEntryを、stale等で除外されたものも含めて数える（PLANNER_SPEC 4.1）
-- 通常入力とtrial入力の区別はDomainの呼び出し文脈 `PlannerBuildListCardinality`（`persisted` が既定、
-  `temporary_augmented`）で表す。B8 / what-ifのaugmented preflightとtrialのfull Planner runだけが
-  `temporary_augmented` を渡し、Phase 0-1ではtrial入力にcardinality検証を行わない（6.4のtemporary件数検証は0-3）
+- 通常入力とtrial入力の区別はDomainの呼び出し文脈で表す（Phase 0-1時点では `PlannerBuildListCardinality`
+  = `persisted` / `temporary_augmented` で、trial入力にcardinality検証を行わなかった。0-3で
+  `PlannerBuildListContext` へ置き換えた、下記）
 - Search追加APIの結果型は `AddBuildListCandidateResult`（`added` / `duplicate` / `replacement_required` /
   `legacy_duplicate`）。置換は `BuildListService.replaceCandidate()` / `inspectCandidateReplacement()`
   （`buildListEntryReplacementMutation()` を1つの `PlanGuardedMutation` として `PlanBreakingChangeGuard` で判定）
 - 0-2までの暫定（0-2で解消）: Search画面は `toSearchScreenAddition()` で既存の `{ entry, added }` 契約を保ち、
   `replacement_required` / `legacy_duplicate` を何も書かずに追加失敗として報告していた。0-2でこのadapterと
   error code `replacement_confirmation_unavailable` を削除した
-- 0-3までの暫定: constrained re-searchの採用は従来どおりgenerated Entryを元Entryに追加して保存するため、
-  永続Build Listにlegacy duplicateが生じ、以後の通常Planner入力はfail closedする
+- 0-3までの暫定（0-3で解消）: constrained re-searchの採用はgenerated Entryを元Entryに追加して保存していたため、
+  永続Build Listにlegacy duplicateが生じ、以後の通常Planner入力はfail closedしていた
 
 0-2の実装状態（実装済み）:
 
@@ -1072,6 +1072,31 @@ REQUIREMENTS 18へ記載済み。実装は次の順で小さく分ける。
   既存のguarded Entry削除（`inspectEntryDelete()` / `deleteEntry()`）で整理させる。Planner操作は無効化せず、
   通常Planner入力のfail closedに委ねる
 - 具体的なPresentationと文言はUI_FLOW 9 / 10に記載した。versionは変更しない
+
+0-3の実装状態（実装済み）:
+
+- 置換の共通Domain authorityは `src/domain/buildList/buildListEntryReplacement.ts`（`BuildListEntryReplacement`、
+  元Entryの特定 `resolveBuildListEntryReplacement()`、置換後集合 `applyBuildListEntryReplacements()`、
+  temporary cardinality `validateBuildListEntryReplacements()`、結果のpairing
+  `validateGeneratedBuildListEntryReplacements()`、保存後集合 `validateReplacedBuildListCardinality()`）
+- 呼び出し文脈は `PlannerBuildListContext`（`persisted` / `temporary_augmented` / `temporary_replacement`、
+  後2者はruntime-onlyの `replacements` を持つ）。temporary側は6.4の「persisted 0..1 + temporary 0..1」を
+  検証し、temporary 2件以上、persisted 2件以上、Target不一致、置換対象が一意でない場合はfail closedする。
+  full Planner runは型の上で `temporary_augmented` を受け付けない
+- B8 / B9のtrialは `preparePlannerReplacementConflictPreflight()` で、`O + G` のaugmented inputに対する
+  preflight（9.2.3.1の再対応付け）と、置換後集合 `-O + G` に対する再対応付け（「置換で充足済み」を含む、
+  PLANNER_SPEC 9.2.18）の2段階を行い、full Planner runは置換後集合だけで行う。B8の
+  `currentAugmentedInput` は採用済みの置換を適用した置換後集合を保持し、同じTargetにtemporary Entryを
+  重ねない（採用済みTargetのworkは `isPlannerConflictWorkSatisfied()` で先に充足済みになる）
+- 採用結果は `PlannerOrchestrationResult.generatedBuildListEntryReplacements` で「generated Entry → 置換対象の
+  元Entry」をWorker境界越しに保存まで運ぶ（serializableなplain data、Worker protocolの型のみ追加）
+- 通常Draft保存（`PlannerResultPersistenceService`）と再計画採用は、transaction内で元Entryが今もその
+  Targetの唯一の永続Entryであることを確認してから、元Entry削除 + generated Entry追加を行う。通常Draft保存は
+  保存全体を1つのguarded mutationとして既存 `PlanBreakingChangeGuard` に通し
+  （`inspectPlannerOrchestrationResultSave()` / `savePlannerOrchestrationResult(..., approval?)`）、
+  B10の再計算保存を既存の警告Dialogへ接続した。再計画採用は旧実行中Planを `replan_adopted` で終了するため
+  追加の警告を出さない
+- versionは変更しない（15.1）
 
 ### Phase A0: 状態遷移helperの抽出（純リファクタ）
 
