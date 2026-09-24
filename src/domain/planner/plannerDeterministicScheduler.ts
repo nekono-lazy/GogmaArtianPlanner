@@ -31,6 +31,8 @@ import {
   nextPlannerLaneUnits,
   remainingPlannerLaneUnits,
   type PlannerEntryLanes,
+  type PlannerLaneProgress,
+  type PlannerRouteLane,
 } from './plannerRouteLanes'
 import {
   currentPlannerCounterValue,
@@ -116,7 +118,10 @@ function compareStableStrings(left: string, right: string): number {
 interface FrontierUnit {
   readonly entry: BuildListEntry
   readonly unit: PlannerRouteUnit
-  /** Not passable: another Entry may not consume this position (5). */
+  /**
+   * `isPlannerLaneUnitHolding()`: never skippable, so another Entry may not
+   * consume this position (5). A pin-blocked skippable unit is not holding.
+   */
   readonly holding: boolean
   /** Runnable now: next lane unit, preconditions met, not resolution-blocked. */
   readonly ready: boolean
@@ -378,14 +383,43 @@ export class PlannerDeterministicScheduleRun {
   }
 
   /**
+   * The unit of `lane` that stands at or ahead of the lane's current Counter
+   * position: the lane head, or - past the skippable units whose position
+   * another Entry already consumed - the first unit the Counter has not
+   * passed yet (or a passed holding unit, which is lost).
+   *
+   * They differ only while the checkpoint pin blocks a skippable head: its
+   * position may be consumed (5 "holding"), but its progress waits at the pin
+   * and `fastForwardPlannerRouteProgress()` passes it only once the pin is
+   * released (`docs/PLANNER_SPEC.md` 7.5.2). Every other passed skippable head
+   * was already fast-forwarded. The units behind such a head keep their own
+   * holding: a holding unit here still makes its position wait, and a passed
+   * one still fails the Route closed.
+   */
+  private laneFrontierUnit(
+    lanes: PlannerEntryLanes,
+    progress: PlannerLaneProgress,
+    lane: PlannerRouteLane,
+  ): PlannerRouteUnit | undefined {
+    for (let index = progress[lane]; index < lanes[lane].length; index += 1) {
+      const unit = lanes[lane][index]
+      if (isPlannerLaneUnitHolding(unit) || unit.counterBefore === null) return unit
+      const current = currentPlannerCounterValue(this.state, unit)
+      if (current === null || current <= unit.counterBefore) return unit
+    }
+    return undefined
+  }
+
+  /**
    * Why a committed Entry's Route can no longer run (6.8), judged at its lane
-   * heads - a lane is sequential, so a unit behind the current Counter is
-   * always a lane head, and every unit of one Route operates the same source
-   * weapon: a head whose position the Counter already passed (passable units
-   * were fast-forwarded, so it is a holding unit), or a head whose source
-   * weapon is gone, protected, or superseded
-   * (`plannerRouteUnitSourceRejection()`, the precondition the unit meets when
-   * it actually runs).
+   * frontier units (`laneFrontierUnit()`) - a lane is sequential, so a holding
+   * unit behind the current Counter is always one of them, and every unit of
+   * one Route operates the same source weapon: a holding unit whose position
+   * the Counter already passed, or a lane head whose source weapon is gone,
+   * protected, or superseded (`plannerRouteUnitSourceRejection()`, the
+   * precondition the unit meets when it actually runs). A passed skippable
+   * unit is never a reason, pin-blocked or not: it is fast-forwarded once its
+   * progress may move.
    */
   private laneHeadRejection(entry: BuildListEntry): PlannerSearchRejection | null {
     const lanes = this.lanesOf(entry)
@@ -395,7 +429,12 @@ export class PlannerDeterministicScheduleRun {
       const head = lanes[lane][progress[lane]]
       return head === undefined ? [] : [head]
     })
-    for (const unit of heads) {
+    const frontierUnits = (['base', 'bonus', 'skill'] as const).flatMap((lane) => {
+      const unit = this.laneFrontierUnit(lanes, progress, lane)
+      return unit === undefined ? [] : [unit]
+    })
+    for (const unit of frontierUnits) {
+      if (!isPlannerLaneUnitHolding(unit)) continue
       if (unit.counterStream === null || unit.counterBefore === null) continue
       const current = currentPlannerCounterValue(this.state, unit)
       if (current !== null && current > unit.counterBefore) {
@@ -469,9 +508,12 @@ export class PlannerDeterministicScheduleRun {
           pendingNormalCounterIds.add(unit.counterId)
         }
       })
+      // Each lane's unit at or ahead of the current Counter: a pin-blocked
+      // skippable head the Counter passed does not hide the holding unit
+      // behind it (`laneFrontierUnit()`).
       const heads = (['base', 'bonus', 'skill'] as const).flatMap((lane) => {
-        const head = lanes[lane][progress[lane]]
-        return head === undefined ? [] : [head]
+        const unit = this.laneFrontierUnit(lanes, progress, lane)
+        return unit === undefined ? [] : [unit]
       })
       for (const unit of heads) {
         const streamKey = plannerScheduleStreamKey(unit)
@@ -481,7 +523,10 @@ export class PlannerDeterministicScheduleRun {
           continue
         }
         if (currentPlannerCounterValue(this.state, unit) !== unit.counterBefore) continue
-        const holding = isPlannerLaneUnitHolding(unit, progress, lanes.pin)
+        // A pin-blocked skippable unit is neither holding nor ready: another
+        // Entry's ready unit may consume this position, and the Entry's own
+        // progress waits at the pin (5, 7.3).
+        const holding = isPlannerLaneUnitHolding(unit)
         const frontier = frontiers.get(streamKey) ?? []
         frontier.push({ entry, unit, holding, ready: this.isReady(entry, unit, next) })
         frontiers.set(streamKey, frontier)
@@ -577,16 +622,16 @@ export class PlannerDeterministicScheduleRun {
     const last = this.state.lastWeaponOperationSubjectKey
     const addsWeaponSwitch = subject !== null && last !== null && last !== subject
     const current = currentPlannerCounterValue(this.state, primary.unit)
-    const executorLanes = this.lanesOf(primary.entry)
-    const executorProgress = this.progressOf(primary.entry)
+    // The executor Entry's next holding unit on this stream; whether a pin
+    // blocks it now is not part of the distance (7.7 key 4).
     const nextHolding =
-      kind === 'executor' && executorLanes !== undefined
+      kind === 'executor'
         ? this.remainingUnitsOf(primary.entry).find(
             (unit) =>
               unit !== primary.unit &&
               unit.counterStream === primary.unit.counterStream &&
               unit.counterId === primary.unit.counterId &&
-              isPlannerLaneUnitHolding(unit, executorProgress, executorLanes.pin),
+              isPlannerLaneUnitHolding(unit),
           )
         : undefined
     const executorHoldingDistance =

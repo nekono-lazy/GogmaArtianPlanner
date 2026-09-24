@@ -326,6 +326,13 @@ function zeroOperation() {
   return builder.build()
 }
 
+/**
+ * The former design 7.8 deadlock example. Y's Reset Skills at S0 is skippable
+ * and pin-blocked (its Skill lane start is selected), and X converts at S0.
+ * Phase B showed it is no deadlock: X's conversion may consume S0, Y's Skill
+ * progress waits at the pin, and Y's S0 unit is fast-forwarded once Y's Bonus
+ * lane reaches its pin (`docs/PLANNER_SPEC.md` 7.5.2).
+ */
 function deadlock() {
   const builder = new SchedulerScenarioBuilder()
   builder.skillAt.set(S0, IDEAL_SKILL)
@@ -343,6 +350,47 @@ function deadlock() {
     builder.target('target.y', 25, { priority: 2 }),
     builder.gogma('owned.y', { seriesSkillId: 'series_skill.fixture.z', groupSkillId: 'group_skill.fixture.a' }),
     { bonus: { from: G0, resets: 8 }, skill: { from: S0, resets: 3 }, select: { axis: 'skill', lanePosition: 0 } },
+  )
+  return builder.build()
+}
+
+/**
+ * A true deadlock (design 7.8): the committed Routes wait on each other through
+ * holding units only. Y's only Reset Skills at S0 is its Route's last unit
+ * (holding) and waits at its pin for Y's Bonus Reset at G0 + 1; the Gogma
+ * Counter first needs X's holding Reset at G0, which waits for X's conversion
+ * at S0 + 1, behind Y's S0. Z's skippable Reset Skills at S0 may not consume
+ * Y's holding position. Dropping Y (priority 1, ranked last by R) frees S0 for
+ * Z, and X and Z complete - as they do in the Beam Search.
+ */
+function trueDeadlock() {
+  const builder = new SchedulerScenarioBuilder()
+  builder.skillAt.set(S0, IDEAL_SKILL)
+  builder.skillAt.set(S0 + 1, IDEAL_SKILL)
+  builder.skillAt.set(S0 + 2, IDEAL_SKILL)
+  builder.resetAt.set(G0, schedulerIdeal(42))
+  builder.resetAt.set(G0 + 1, schedulerIdeal(43))
+  builder.conversionEntry(
+    'entry.x',
+    builder.target('target.x', 42),
+    { kind: 'owned', source: builder.normal('owned.normal.x'), convertAt: S0 + 1 },
+    { bonus: { from: G0, resets: 1 } },
+  )
+  builder.existingEntry(
+    'entry.y',
+    builder.target('target.y', 43, { priority: 1 }),
+    builder.gogma('owned.y', { seriesSkillId: 'series_skill.fixture.z', groupSkillId: 'group_skill.fixture.a' }),
+    { bonus: { from: G0 + 1, resets: 1 }, skill: { from: S0, resets: 1 }, select: { axis: 'skill', lanePosition: 0 } },
+  )
+  builder.existingEntry(
+    'entry.z',
+    builder.target('target.z', 44),
+    builder.gogma('owned.z', {
+      restorationBonuses: schedulerIdeal(44),
+      seriesSkillId: 'series_skill.fixture.z',
+      groupSkillId: 'group_skill.fixture.a',
+    }),
+    { skill: { from: S0, resets: 3 } },
   )
   return builder.build()
 }
@@ -382,7 +430,14 @@ function committedOnlySharing() {
   return builder.build()
 }
 
-function pinnedPast() {
+/**
+ * P's Skill lane start is selected, so its skippable Reset Skills at S0 is
+ * pin-blocked until P's Bonus lane ends, while the Skill Counter already
+ * stands at `skillCounter`. At S0 + 1 only that skippable unit was passed: P
+ * stays executable and fast-forwards it once its pin is released. At S0 + 2
+ * P's holding (last) Reset Skills at S0 + 1 is lost too, so P fails closed.
+ */
+function pinnedPast(skillCounter: number = S0 + 1) {
   const builder = new SchedulerScenarioBuilder()
   builder.keepAt.set(G0 + 1, schedulerIdeal(40))
   builder.resetAt.set(G0 + 1, schedulerIdeal(41))
@@ -397,7 +452,7 @@ function pinnedPast() {
     bonus: { from: G0, resets: 2 },
   })
   const scenario = builder.build()
-  scenario.input.rngState.skillCounter.value = S0 + 1
+  scenario.input.rngState.skillCounter.value = skillCounter
   scenario.input.buildListEntries.forEach((entry) => synchronizeOrchestrationEntry(scenario.input, entry))
   return scenario
 }
@@ -450,10 +505,12 @@ export function plannerSchedulerCatalogue(): PlannerSchedulerCatalogueScenario[]
     scenarioM(),
     plain('zero-operation', zeroOperation()),
     plain('deadlock', deadlock()),
+    plain('true-deadlock', trueDeadlock()),
     plain('cross-satisfaction', crossSatisfaction()),
     plain('dynamic-commitment', dynamicCommitment()),
     plain('committed-only-sharing', committedOnlySharing()),
     plain('pinned-past', pinnedPast()),
+    plain('pinned-past-lost-holding', pinnedPast(S0 + 2)),
     plain('exact-bounds-expanded', scenarioA({ maxExpandedStates: 154 })),
     plain('exact-bounds-steps', scenarioA({ maxPlanSteps: 154 })),
     plain('bounded-max-plan-steps', scenarioB({ maxPlanSteps: 20 })),

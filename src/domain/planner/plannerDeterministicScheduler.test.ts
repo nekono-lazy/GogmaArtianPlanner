@@ -21,7 +21,13 @@ import {
   runPlannerDeterministicSchedule,
   type PlannerDeterministicScheduleRun,
 } from './plannerDeterministicScheduler'
+import { plannerSchedulerCatalogue } from '../../test/fixtures/plannerSchedulerScenarios'
 import { createPlannerRouteCommitment } from './plannerRouteCommitment'
+import {
+  isPlannerLaneUnitBlockedByPin,
+  isPlannerLaneUnitFastForwardable,
+  isPlannerLaneUnitHolding,
+} from './plannerRouteLanes'
 import { mergedPlannerProgressedEntries } from './plannerStateTransitions'
 import { replayPlannerSearchTrace } from './plannerTraceReplay'
 import { projectProductionPlanExecution } from './productionPlanExecutionProjection'
@@ -804,8 +810,14 @@ describe('16.3: zero-operation confirmation before commitment', () => {
   })
 })
 
-/** 7.8: X's Gogma holding waits for X's conversion, whose Skill position waits on Y's pin. */
-function deadlockScenario() {
+/**
+ * The former design 7.8 deadlock example. Y's Reset Skills at S0 is skippable
+ * and pin-blocked (Y's Skill lane start is its selected checkpoint), and X
+ * converts at S0. Phase B showed it is not a deadlock: the pin gates Y's own
+ * Skill progress, not the Counter position of its skippable unit
+ * (`docs/PLANNER_SPEC.md` 7.5.2, design 5).
+ */
+function pinBlockedSkippableScenario() {
   const builder = new SchedulerScenarioBuilder()
   builder.skillAt.set(S0, IDEAL_SKILL)
   builder.skillAt.set(S0 + 2, IDEAL_SKILL)
@@ -830,28 +842,191 @@ function deadlockScenario() {
   return { builder, entryX, entryY }
 }
 
-describe('16.3: deadlock', () => {
-  it('drops the Entry ranked last by R and keeps scheduling the rest', async () => {
-    const { builder, entryX, entryY } = deadlockScenario()
+function skillCounterBefore(action: PlannerSearchAction): number | null {
+  const operation = action.routeOperation
+  return operation?.type === 'reset_skills' || operation?.type === 'convert_normal_to_gogma'
+    ? operation.skillCounterBefore
+    : null
+}
+
+describe('A pin-blocked skippable unit does not hold its Counter position', () => {
+  it('separates holding from fast-forwardable now', () => {
+    const { builder, entryY } = pinBlockedSkippableScenario()
+    const run = readyRun(builder.build())
+    const lanes = run.context.allLanePlans.get(entryY.id)!
+    const skillS0 = lanes.skill[0]
+    expect(skillS0.canSkipWhenCounterPassed).toBe(true)
+    const beforePin = { base: 0, bonus: 0, skill: 0 }
+    const atPin = { base: 0, bonus: lanes.bonus.length, skill: 0 }
+    expect(isPlannerLaneUnitBlockedByPin(skillS0, beforePin, lanes.pin)).toBe(true)
+    // Holding is decided by canSkipWhenCounterPassed alone: pin-blocked or not.
+    expect(isPlannerLaneUnitHolding(skillS0)).toBe(false)
+    expect(isPlannerLaneUnitFastForwardable(skillS0, beforePin, lanes.pin)).toBe(false)
+    expect(isPlannerLaneUnitFastForwardable(skillS0, atPin, lanes.pin)).toBe(true)
+    // The Route's last unit is never skippable, so it always holds.
+    const last = lanes.skill.at(-1)!
+    expect(last.canSkipWhenCounterPassed).toBe(false)
+    expect(isPlannerLaneUnitHolding(last)).toBe(true)
+  })
+
+  it('lets another Entry consume the position, keeps the progress at the pin, and fast-forwards once the pin is released', async () => {
+    const { builder, entryX, entryY } = pinBlockedSkippableScenario()
+    const scenario = builder.build()
+    const run = readyRun(scenario)
+    // Both Routes are committed: the passed-over position drops nobody.
+    expect(run.statusOf(entryX.id)).toBe('committed')
+    expect(run.statusOf(entryY.id)).toBe('committed')
+
+    // 1. X's conversion consumes S0, the position of Y's pin-blocked skippable unit.
+    while (!run.state.trace.some(({ actionType }) => actionType === 'convert_normal_to_gogma')) {
+      expect(run.step()).toBe('applied')
+    }
+    const conversion = run.state.trace.at(-1)!
+    expect(conversion).toMatchObject({
+      primaryBuildListEntryId: entryX.id,
+      progressedBuildListEntryIds: [entryX.id],
+    })
+    expect(skillCounterBefore(conversion)).toBe(S0)
+    // 2. Right after it the Counter is past S0, Y's Skill progress has not
+    // crossed its pin and Y's checkpoint is not reached.
+    expect(run.state.currentRngState.skillCounter.value).toBe(S0 + 1)
+    expect(run.state.routeProgressByEntryId[entryY.id].skill).toBe(0)
+    expect(run.state.reachedCheckpointByEntryId[entryY.id]).toBeUndefined()
+    expect(run.statusOf(entryY.id)).toBe('committed')
+
+    // 3. Once Y's Bonus lane reaches its pin (the lane end), S0 is passed
+    // silently in that same action: Skill progress 1, S0 + 1 still ahead.
+    const lanes = run.context.allLanePlans.get(entryY.id)!
+    while (run.state.routeProgressByEntryId[entryY.id].bonus < lanes.bonus.length) {
+      expect(run.state.routeProgressByEntryId[entryY.id].skill).toBe(0)
+      expect(run.step()).toBe('applied')
+    }
+    expect(run.state.reachedCheckpointByEntryId[entryY.id]).toBe(true)
+    expect(run.state.routeProgressByEntryId[entryY.id].skill).toBe(1)
+    expect(run.state.trace.some(
+      (action) => action.progressedBuildListEntryIds.includes(entryY.id) && action.actionType === 'reset_skills',
+    )).toBe(false)
+  })
+
+  it('completes both Targets with the Beam Search trace semantics', async () => {
+    const { builder, entryX, entryY } = pinBlockedSkippableScenario()
     const scenario = builder.build()
     const result = await schedule(scenario)
+    expect(result.termination.status).toBe('completed')
     expect(result.conflicts).toEqual([])
-    expect(result.bestState!.selectedBuildListEntryIds).toEqual([entryX.id])
+    expect(result.rejections).toEqual([])
+    expect([...result.bestState!.selectedBuildListEntryIds].sort()).toEqual([entryX.id, entryY.id])
+
+    const trace = result.bestState!.trace
+    const conversionIndex = trace.findIndex(({ actionType }) => actionType === 'convert_normal_to_gogma')
+    const yBonusIndexes = trace.flatMap((action, index) =>
+      action.progressedBuildListEntryIds.includes(entryY.id) && gogmaCounterBefore(action) !== null ? [index] : [],
+    )
+    const ySkillActions = trace.filter(
+      (action) => action.progressedBuildListEntryIds.includes(entryY.id) && action.actionType === 'reset_skills',
+    )
+    const ySkillIndexes = trace.flatMap((action, index) =>
+      action.progressedBuildListEntryIds.includes(entryY.id) && action.actionType === 'reset_skills' ? [index] : [],
+    )
+    // X's conversion consumed Y's pin-blocked Skill position S0 before Y's pin.
+    expect(skillCounterBefore(trace[conversionIndex])).toBe(S0)
+    expect(conversionIndex).toBeLessThan(yBonusIndexes.at(-1)!)
+    // Y's Skill lane never runs before its Bonus lane reached the pin, S0 was
+    // fast-forwarded (no action), and the later Skill units ran.
+    expect(Math.min(...ySkillIndexes)).toBeGreaterThan(yBonusIndexes.at(-1)!)
+    expect(ySkillActions.map(skillCounterBefore)).toEqual([S0 + 1, S0 + 2])
+    // Both Entries are reserved after their last physical action.
+    expect(reserveIndexOf(result, entryX.id)).toBeGreaterThan(lastRouteIndexOf(result, entryX.id))
+    expect(reserveIndexOf(result, entryY.id)).toBeGreaterThan(lastRouteIndexOf(result, entryY.id))
+
+    const replay = expectReplayValid(scenario, result)
+    const milestones = replay.drafts.filter(({ checkpointMilestones }) => checkpointMilestones.length > 0)
+    expect(milestones).toHaveLength(1)
+    expect(milestones[0].checkpointMilestones[0].buildListEntryId).toBe(entryY.id)
+    expect(milestones[0].routeOperation).toMatchObject({ gogmaCounterBefore: G0 + 7 })
+    const projection = projectProductionPlanExecution({
+      input: scenario.input,
+      drafts: replay.drafts,
+      selectedBuildListEntryIds: result.bestState!.selectedBuildListEntryIds,
+      searchFinalOwnedWeapons: result.bestState!.simulatedInventory.ownedWeapons,
+      dependencies: scenario.dependencies,
+      productionPlanId: 'plan.scheduler.pin' as never,
+      now: '2026-09-25T00:00:00.000Z',
+    })
+    expect(projection.steps).toHaveLength(routeActions(result).length)
+  })
+
+  it('is deterministic', async () => {
+    const first = await schedule(pinBlockedSkippableScenario().builder.build())
+    const second = await schedule(pinBlockedSkippableScenario().builder.build())
+    expect(second).toEqual(first)
+  })
+})
+
+describe('Scenario H: a selected checkpoint endpoint still holds its position', () => {
+  it('never lets another Entry consume the position of the unit producing the selected state', async () => {
+    const builder = new SchedulerScenarioBuilder()
+    builder.resetAt.set(G0, practicalCompromise(45))
+    builder.resetAt.set(G0 + 1, schedulerIdeal(45))
+    builder.resetAt.set(G0 + 2, schedulerIdeal(46))
+    // P's first Reset produces its selected Bonus state; Q's Reset there is
+    // skippable, so only P may consume G0.
+    const entryP = builder.existingEntry('entry.p', builder.target('target.p', 45), builder.gogma('owned.p'), {
+      bonus: { from: G0, resets: 2 },
+      select: { axis: 'bonus', lanePosition: 1 },
+    })
+    const entryQ = builder.existingEntry('entry.q', builder.target('target.q', 46, { priority: 5 }), builder.gogma('owned.q'), {
+      bonus: { from: G0, resets: 3 },
+    })
+    const scenario = builder.build()
+    const run = readyRun(scenario)
+    const endpoint = run.context.allLanePlans.get(entryP.id)!.bonus[0]
+    expect(endpoint.canSkipWhenCounterPassed).toBe(false)
+    expect(isPlannerLaneUnitHolding(endpoint)).toBe(true)
+    const result = await schedule(scenario)
+    expect(result.termination.status).toBe('completed')
+    expect([...result.bestState!.selectedBuildListEntryIds].sort()).toEqual([entryP.id, entryQ.id])
+    const atG0 = result.bestState!.trace.filter((action) => gogmaCounterBefore(action) === G0)
+    expect(atG0).toHaveLength(1)
+    expect(atG0[0].primaryBuildListEntryId).toBe(entryP.id)
+    const replay = expectReplayValid(scenario, result)
+    const milestone = replay.drafts.find(({ checkpointMilestones }) => checkpointMilestones.length > 0)
+    expect(milestone?.routeOperation).toMatchObject({ gogmaCounterBefore: G0 })
+  })
+})
+
+function trueDeadlockScenario(): OrchestrationScenario {
+  const found = plannerSchedulerCatalogue().find(({ id }) => id === 'true-deadlock')
+  if (!found) throw new Error('The catalogue has no true-deadlock scenario.')
+  return found.scenario
+}
+
+describe('7.8: a true deadlock', () => {
+  it('drops the Entry ranked last by R and keeps scheduling the rest', async () => {
+    const scenario = trueDeadlockScenario()
+    const run = readyRun(scenario)
+    // Every Route is committed, and at the start no action is safe: Y's
+    // holding Reset Skills at S0 waits at its pin, X's holding Reset at G0
+    // waits for X's conversion, and Z's skippable unit may not take S0.
+    expect(run.commitmentRecords().map(({ status }) => status)).toEqual(['committed', 'committed', 'committed'])
+    expect(run.safeActions()).toEqual([])
+    const result = await schedule(scenario)
+    expect(result.conflicts).toEqual([])
+    expect(result.bestState!.selectedBuildListEntryIds).toEqual(['entry.x', 'entry.z'])
     expect(result.rejections).toEqual([
-      expect.objectContaining({ buildListEntryId: entryY.id, reason: 'conflict_not_committed' }),
+      expect.objectContaining({ buildListEntryId: 'entry.y', reason: 'conflict_not_committed' }),
     ])
     expect(result.rejections[0].detail).toContain('deadlock')
     expect(result.termination.status).toBe('exhausted')
     expectReplayValid(scenario, result)
-    // Y had already progressed before the drop; it is still reported.
-    expect(progressedIn(result, entryY.id)).toBe(true)
+    expect(progressedIn(result, 'entry.y' as BuildListEntryId)).toBe(false)
     expect(createRejectedBuildListEntries(scenario.input, result, result.bestState!.selectedBuildListEntryIds))
-      .toEqual([expect.objectContaining({ buildListEntryId: entryY.id, reason: 'resource_conflict' })])
+      .toEqual([expect.objectContaining({ buildListEntryId: 'entry.y', reason: 'resource_conflict' })])
   })
 
   it('is deterministic', async () => {
-    const first = await schedule(deadlockScenario().builder.build())
-    const second = await schedule(deadlockScenario().builder.build())
+    const first = await schedule(trueDeadlockScenario())
+    const second = await schedule(trueDeadlockScenario())
     expect(second).toEqual(first)
   })
 })
@@ -1180,14 +1355,14 @@ describe('Issue #103 instrumentation workloads', () => {
   )
 })
 
-describe('Route commitment: pin-blocked skippable units hold their position', () => {
+describe('Route commitment: a passed pin-blocked skippable unit', () => {
   /**
    * P's Skill lane start is its selected checkpoint, so its skippable Skill
    * unit at S is pin-blocked until P's Bonus lane ends - and the Skill Counter
-   * already stands at S + 1. P also conflicts with Q at Gogma C + 1 (P Keeps,
-   * Q Resets there), and P has the higher priority.
+   * already stands at `skillCounter`. P also conflicts with Q at Gogma C + 1
+   * (P Keeps, Q Resets there), and P has the higher priority.
    */
-  function pinnedPastScenario() {
+  function pinnedPastScenario(skillCounter: number) {
     const builder = new SchedulerScenarioBuilder()
     builder.keepAt.set(G0 + 1, schedulerIdeal(40))
     builder.resetAt.set(G0 + 1, schedulerIdeal(41))
@@ -1209,21 +1384,12 @@ describe('Route commitment: pin-blocked skippable units hold their position', ()
       { bonus: { from: G0, resets: 2 } },
     )
     const scenario = builder.build()
-    scenario.input.rngState.skillCounter.value = S0 + 1
+    scenario.input.rngState.skillCounter.value = skillCounter
     scenario.input.buildListEntries.forEach((entry) => synchronizeOrchestrationEntry(scenario.input, entry))
     return { scenario, entryP, entryQ }
   }
 
-  it('never commits an Entry whose pin-blocked skippable unit was already passed', () => {
-    const { scenario, entryP, entryQ } = pinnedPastScenario()
-    const run = readyRun(scenario)
-    // The conflict is real: both are initial conflict participants.
-    expect(run.context.initialConflictDetection.conflicts.map(({ buildListEntryIds }) => buildListEntryIds))
-      .toEqual([[entryP.id, entryQ.id]])
-    const lanes = run.context.allLanePlans.get(entryP.id)!
-    expect(lanes.skill[0].canSkipWhenCounterPassed).toBe(true)
-    // The prepared start state could not fast-forward past the pin.
-    expect(run.state.routeProgressByEntryId[entryP.id].skill).toBe(0)
+  function commitmentOf(run: PlannerDeterministicScheduleRun) {
     const commitment = createPlannerRouteCommitment(run.state, {
       allSearchEntries: run.context.allSearchEntries,
       allLanePlans: run.context.allLanePlans,
@@ -1235,6 +1401,45 @@ describe('Route commitment: pin-blocked skippable units hold their position', ()
       initialRelevantEntries: run.context.initialRelevantEntries,
     })
     if (commitment.status !== 'ready') throw new Error('Commitment refused the input.')
+    return commitment
+  }
+
+  it('does not drop an Entry only because its pin-blocked skippable unit was passed', () => {
+    const { scenario, entryP, entryQ } = pinnedPastScenario(S0 + 1)
+    const run = readyRun(scenario)
+    expect(run.context.initialConflictDetection.conflicts.map(({ buildListEntryIds }) => buildListEntryIds))
+      .toEqual([[entryP.id, entryQ.id]])
+    const lanes = run.context.allLanePlans.get(entryP.id)!
+    expect(lanes.skill[0].canSkipWhenCounterPassed).toBe(true)
+    // The prepared start state could not fast-forward past the pin.
+    expect(run.state.routeProgressByEntryId[entryP.id].skill).toBe(0)
+    const commitment = commitmentOf(run)
+    // P is executable, so the conflict is settled by R (P has priority 5).
+    expect(commitment.records.get(entryP.id)?.status).toBe('committed')
+    expect(commitment.records.get(entryQ.id)).toMatchObject({
+      status: 'dropped',
+      rejection: { reason: 'conflict_not_committed' },
+    })
+    expect(commitment.rejections.map(({ buildListEntryId, reason }) => [buildListEntryId, reason]))
+      .toEqual([[entryQ.id, 'conflict_not_committed']])
+  })
+
+  it('fast-forwards the passed unit after the pin and completes the Entry', async () => {
+    const { scenario, entryP } = pinnedPastScenario(S0 + 1)
+    const result = await schedule(scenario)
+    expect(result.bestState!.selectedBuildListEntryIds).toEqual([entryP.id])
+    expect(result.rejections.some(({ reason }) => reason === 'counter_before_current')).toBe(false)
+    const pSkills = routeActions(result).filter(
+      (action) => action.progressedBuildListEntryIds.includes(entryP.id) && action.actionType === 'reset_skills',
+    )
+    expect(pSkills.map(skillCounterBefore)).toEqual([S0 + 1])
+    expect(result.termination.status).toBe('exhausted')
+    expectReplayValid(scenario, result)
+  })
+
+  it('still fails closed when a holding unit behind it was lost', () => {
+    const { scenario, entryP, entryQ } = pinnedPastScenario(S0 + 2)
+    const commitment = commitmentOf(readyRun(scenario))
     expect(commitment.records.get(entryP.id)).toMatchObject({
       status: 'dropped',
       rejection: { reason: 'counter_before_current', actionType: 'reset_skills' },
@@ -1245,7 +1450,7 @@ describe('Route commitment: pin-blocked skippable units hold their position', ()
   })
 
   it('does not let the unexecutable Entry push an executable one out of a conflict', async () => {
-    const { scenario, entryP, entryQ } = pinnedPastScenario()
+    const { scenario, entryP, entryQ } = pinnedPastScenario(S0 + 2)
     const result = await schedule(scenario)
     expect(result.bestState!.selectedBuildListEntryIds).toEqual([entryQ.id])
     expect(result.rejections).toEqual([

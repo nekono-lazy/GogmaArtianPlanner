@@ -227,7 +227,7 @@ describe('parity classification', () => {
     expect(report.completion.regressionAcceptable).toBe(false)
   })
 
-  it('classifies a combination the Beam Search found as a known limitation (A)', () => {
+  it('assesses a combination the Beam Search found (A) as an unexpected regression when the Beam completed a superset', () => {
     const report = comparePlannerStrategyRuns(
       completedSummary('beam', ['t1', 't2', 't3']),
       completedSummary('scheduler', ['t2', 't3'], { schedulerDrops: [provisionalDrop('e1', 'e2')] }),
@@ -240,6 +240,27 @@ describe('parity classification', () => {
       }),
     ])
     expect(report.completion.beamCompletedSuperset).toBe(true)
+  })
+
+  it('assesses a combination the Beam Search found (A) as a known limitation when the scheduler completed another Target', () => {
+    const report = comparePlannerStrategyRuns(
+      completedSummary('beam', ['t1', 't2']),
+      completedSummary('scheduler', ['t2', 't3'], { schedulerDrops: [provisionalDrop('e1', 'e2')] }),
+    )
+    // Equal counts are no regression; one more Beam-only Target is.
+    expect(report.completion.regression).toBe(false)
+    const regression = comparePlannerStrategyRuns(
+      completedSummary('beam', ['t1', 't2', 't4']),
+      completedSummary('scheduler', ['t2', 't3'], { schedulerDrops: [provisionalDrop('e1', 'e2')] }),
+    )
+    expect(regression.completion.beamCompletedSuperset).toBe(false)
+    expect(regression.completion.losses).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        targetWeaponId: 't1',
+        suspectedCategory: 'beam_branch_combination',
+        assessment: 'known_limitation',
+      }),
+    ]))
   })
 
   it('reports a deadlock drop the Beam Search avoided as an unexpected regression (C)', () => {
@@ -295,10 +316,12 @@ const FAST_SCENARIOS = new Set([
   'M-temporary-replacement',
   'zero-operation',
   'deadlock',
+  'true-deadlock',
   'cross-satisfaction',
   'dynamic-commitment',
   'committed-only-sharing',
   'pinned-past',
+  'pinned-past-lost-holding',
   'exact-bounds-expanded',
   'bounded-max-plan-steps',
   'bounded-max-expanded-states',
@@ -321,7 +344,7 @@ describe('acceptance scenarios: fast Beam / scheduler parity', { timeout: 60_000
     ])
   })
 
-  it.each([...FAST_SCENARIOS].filter((id) => id !== 'deadlock'))(
+  it.each([...FAST_SCENARIOS])(
     '%s keeps every mandatory contract without a completion regression',
     async (id) => {
       const run = await runCatalogueParity(id)
@@ -360,34 +383,39 @@ describe('acceptance scenarios: fast Beam / scheduler parity', { timeout: 60_000
 
   /**
    * Phase B finding (`docs/ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md`): the
-   * design 7.8 deadlock example is not a true deadlock. The Beam Search
-   * converts X at the Skill position Y's pin-blocked, skippable Reset Skills
-   * holds, and later fast-forwards that unit once Y's pin is released, so it
-   * completes both Targets with a valid Trace Replay. The scheduler treats the
-   * pin-blocked unit as holding (design 5) and drops Y. This test pins the
-   * difference as found; it is not an accepted semantic difference.
+   * former design 7.8 deadlock example is not a deadlock. X converts at the
+   * Skill position of Y's pin-blocked, skippable Reset Skills, Y's Skill
+   * progress waits at its pin, and that unit is fast-forwarded once the pin is
+   * released. Since the semantic fix (holding = `canSkipWhenCounterPassed`
+   * false only) the scheduler does exactly what the Beam Search does.
    */
-  it('deadlock: records the completion regression the Beam Search disproves', async () => {
+  it('deadlock (former 7.8 example): the scheduler completes both Targets like the Beam Search', async () => {
     const run = await runCatalogueParity('deadlock')
     expect(mandatoryParityProblems(run)).toEqual([])
-    expect(run.report.verdict).toBe('completion_regression')
+    expect(run.report.verdict).toBe('parity')
     expect(run.report.completion).toMatchObject({
       beamCompletedTargetIds: ['target.x', 'target.y'],
-      schedulerCompletedTargetIds: ['target.x'],
-      beamCompletedSuperset: true,
-      regressionExplained: true,
-      regressionAcceptable: false,
+      schedulerCompletedTargetIds: ['target.x', 'target.y'],
+      regression: false,
     })
-    expect(run.report.completion.losses).toEqual([
-      expect.objectContaining({
-        targetWeaponId: 'target.y',
-        suspectedCategory: 'deadlock_or_stall',
-        assessment: 'unexpected_regression',
-        deadlockOrStall: true,
-      }),
-    ])
+    expect(run.scheduler.schedulerDrops).toEqual([])
     expect(run.beam.replay?.isValid).toBe(true)
+    expect(run.scheduler.replay?.isValid).toBe(true)
     expect(run.beam.projection.status).toBe('valid')
+    expect(run.scheduler.projection.status).toBe('valid')
+  })
+
+  it('true-deadlock: both searches lose the same Target and the scheduler drops it as a deadlock', async () => {
+    const run = await runCatalogueParity('true-deadlock')
+    expect(mandatoryParityProblems(run)).toEqual([])
+    expect(run.report.completion).toMatchObject({
+      beamCompletedTargetIds: ['target.x', 'target.z'],
+      schedulerCompletedTargetIds: ['target.x', 'target.z'],
+      regression: false,
+    })
+    expect(run.scheduler.schedulerDrops).toEqual([
+      expect.objectContaining({ buildListEntryId: 'entry.y', cause: 'deadlock' }),
+    ])
   })
 })
 

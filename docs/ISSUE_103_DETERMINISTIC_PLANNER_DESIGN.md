@@ -258,15 +258,31 @@ deterministic scheduling（7章）
 | pending unit | committed Entryのunitのうち未実行かつ未通過のもの |
 | frontier `F(σ)` | stream `σ` の現在位置 `c_σ` を `counterBefore` にもつpending unitの集合 |
 | ready | そのunitが `nextPlannerLaneUnits()` に含まれ（lane順・base先行・pin gating）、`routeUnitPreconditionRejection()` が無く、ConflictResolutionでblockされていない |
-| passable | `canSkipWhenCounterPassed === true` かつ、通過時点でpinにblockされない（`isPlannerLaneUnitBlockedByPin()` がfalse）。fast-forwardで安全に通過できる |
-| holding | passableでないpending unit（skip不可unit、またはpin-blockedのskip可能unit）。その位置を他の操作に消費させてはならない |
+| skippable（position-passable） | `canSkipWhenCounterPassed === true`。そのCounter位置を他Entryの操作が消費してよい。pinにblockされているかどうかは問わない |
+| holding | `canSkipWhenCounterPassed === false` のpending unit（`isPlannerLaneUnitHolding()`）。その位置を他の操作に消費させてはならない。選択checkpointの終端unitは常にskip不可なので（PLANNER_SPEC 7.5.1）常にholding |
+| fast-forwardable now | skippableかつ、現在のlane progressでpinにblockされない（`isPlannerLaneUnitFastForwardable()`、`isPlannerLaneUnitBlockedByPin()` がfalse）。`fastForwardPlannerRouteProgress()` が通過させるのはこのunitだけ |
 | safe action | 実行してもcommitted Entryのholding unitを1つも失わせないaction（7.3） |
 | temporary Entry | constrained re-search / what-ifがmaterializeした、まだ永続化されていないgenerated Entry（6.4） |
 
-holdingは既存7.0.2の「必須unit」を一般化したものである。pin-blockedのskip可能unitは、他Entryが
-その位置を消費すると `fastForwardPlannerRouteProgress()` がpinで止まり、次回 `counter_before_current`
-でRouteが失われるため、安全性の判定では必須unitと同じに扱う（7.5.1 / 7.5.2の契約を具体化する
-だけで、pinの意味は変えない）。
+holdingは既存7.0.2の「必須unit」そのものであり、**`canSkipWhenCounterPassed` だけで決まる**。
+checkpoint pinの現在状態はholding判定に使わない。
+
+pinとCounter位置の保持は別の概念である（PLANNER_SPEC 7.5.2）。
+
+- pinはEntry自身のlane progressを制約するhard constraintである。pin-blockedのunitは実行されず、
+  silent fast-forwardでもその時点ではpinを越えない
+- pin-blockedのskippable unitのCounter位置は、別Entryが物理的に消費してよい。その時点ではEntry自身の
+  progressはpinで止まったままで、checkpoint到達も前倒しされない
+- 後でpinが解除されたとき（もう片方のlaneがpinへ到達したとき）、既に通過済みのCounter位置にある
+  skippable unitは `fastForwardPlannerRouteProgress()` が過去位置としてsilent fast-forwardする
+- Routeが失われるのは、そのskippable unitの後ろにあるholding unitの位置まで通過された場合だけである。
+  それはholding unit自身が位置を保持して防ぐ
+
+旧版の本書はpin-blockedのskippable unitもholdingとして扱っていた（「他Entryが位置を消費すると次回
+`counter_before_current` でRouteが失われる」）。Phase Bのparity計測で、Beam Searchがその位置を他Entryの
+conversionに消費させ、pin解除後にfast-forwardして両Targetを完成させる（Trace Replay有効）ことが示され、
+この根拠は成り立たなかった（[Phase B記録](./ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md) 3.2）。
+本版は既存Beam / Trace Replayの意味に合わせて定義を改めた。
 
 ---
 
@@ -298,8 +314,25 @@ ordinary PlannerInput:
     - 有効なConflictResolutionにより、holding unit（skip不可unit）が1つでもblockされるEntry
       （isUnitBlockedByConflictResolution() の既存semantics。そのEntryは完成できない）
     - 開始時点で既にholding unitが通過済みのEntry（counter_before_current）
+    - holding unitのsource weaponが無い・保護・version不一致のEntry（既存reason）
   除外された場合、Tはこのrunで完成しない（別Routeを探さない）
 ```
+
+判定対象はholding unit（`canSkipWhenCounterPassed === false`）だけである。skippable unitは、pin-blocked
+かどうかにかかわらず、Counterが通過済みでも、resolutionで非選択側participantになる競合に属していても、
+それだけでEntryを除外する理由にならない（`detectPlannerConflicts()` もskippable unitをCounter conflictの
+participantにしない）。例えば開始時点で
+
+```text
+pin-blocked
+canSkipWhenCounterPassed = true
+counterBefore < currentCounter
+```
+
+のunitを持つEntryは、そのunitを理由に `counter_before_current` でも `conflict_resolution_not_selected`
+でも落とさない。そのunitはpin解除後にfast-forwardされる。後ろのholding unitまで通過済みなら、そのholding
+unitを理由にfail closedする。Routeの最後のunitは常にholdingで、同じRouteのunitは同じsource weaponを
+操作するため、source / version / protectionの検査はholding unitだけでRoute全体を覆う。
 
 - Plannerは `estimatedOperationCount`、preferred source、Entry IDを理由に同一Targetの別Routeへ
   差し替えない。そもそも比較対象が無い
@@ -441,9 +474,15 @@ schedule中に次が起きた場合だけ、影響Targetについてcommitment�
 | イベント | 処理 |
 | --- | --- |
 | committed EntryのTargetが別Entryのreserveで `hasIdeal` になった（required Entryを除く） | そのEntryを解放する（以後そのunitはholdingしない）。現行relevance（`entryIsRelevantForState()`）と同じ |
-| committed Entryの実行前提が崩れた（inventory、source version、protection） | そのEntryを失敗とし、既存rejection reasonを記録する。代替Routeは無いのでTargetはこのrunで完成しない |
+| committed Entryの実行前提が崩れた（inventory、source version、protection、holding unitの位置が通過済み） | そのEntryを失敗とし、既存rejection reasonを記録する。代替Routeは無いのでTargetはこのrunで完成しない |
 | in-flight化によりplanning Targetの `hasIdeal` がfalseへ戻った | そのTargetのEntryが未commitで、現在状態で実行可能（未実行のholding unitがすべて現在位置以降、source / version / protectionが成立）かつ現在のcommitted集合とcollisionしないならcommitする。既存のcommitted Entryを押し出さない |
 | 7.8のdeadlock / stallでEntryを落とした | そのTargetはこのrunで完成しない |
+
+「holding unitの位置が通過済み」は、各laneの **frontier unit**（lane先頭から、Counterが既に通過した
+skippable unitを飛ばした最初のunit）で判定する。lane先頭が過去位置のskippable unitであっても、それ自体は
+失敗理由にしない。そのunitがpin-blockedでまだfast-forwardされていない間も、後ろのholding unitは
+frontier unitとして見えるので、そのholding unitの位置が通過されていれば失敗とする。pin-blockedでない過去位置の
+skippable unitは、既に `fastForwardPlannerRouteProgress()` が通過させている。
 
 ---
 
@@ -461,6 +500,10 @@ stateは既存 `PlannerSearchState` をそのまま使う（10章）。scheduler
 
 各stream `σ` について `F(σ) = { committed Entryのpending unit u | u.counterBefore === c_σ }`。
 blind forgeは、そのEntryのbase lane先頭がblind `create_normal_artian` であるときfrontierに入る。
+
+laneは連続するので、各laneで `c_σ` にあるpending unitはlaneのfrontier unit（5章、6.8）である。通常は
+lane先頭だが、lane先頭がpin-blockedのskippable unitで、その位置を他Entryが既に消費した場合は、その後ろの
+最初の未通過unitになる。pin-blockedのunitの後ろに隠れたholding unitも、こうしてfrontierに入り位置を保持する。
 
 現行契約との対応:
 
@@ -482,14 +525,22 @@ Route lane semantics（PLANNER_SPEC 7.0.4）はそのまま再利用する。lan
 1. **holding unitの実行**: `F(σ)` にholding unitがあり、それがreadyな1つのphysical action
    （`arePlannerRouteUnitsShareable()` で共有される集合を含む）であるとき、それだけが
    `σ` の候補である
-2. **executor選択**: `F(σ)` にholding unitが無いとき、`F(σ)` のreadyなpassable unitを1つ
+2. **executor選択**: `F(σ)` にholding unitが無いとき、`F(σ)` のreadyなskippable unitを1つ
    executorとして実行する候補が、executorごとに1つずつある
 3. **blind forge**: readyかつ、そのNormal Counterが確定（`isConfirmed && counter !== null`）なら
    `normal:<その武器種>` にpending unitが1つも無いとき（未確定なら常に）
 
-safeの条件は「実行後、`F(σ)` のうちそのactionで進まなかったunitがすべてpassable」である。
+safeの条件は「実行後、`F(σ)` のうちそのactionで進まなかったunitがすべてskippable」である。
 1ではholding unitが2つ以上のphysical actionに分かれることはない（6章のcommitmentがcollisionを
 排除している）。holding unitがreadyでない場合、その位置は **待つ**。
+
+pin-blockedのskippable unitは `holding = false`、`ready = false` である。
+
+- 同じstream・同じ位置に別のready unitがあれば、それが位置を消費できる（holding unitがあれば1、無ければ2）。
+  pin-blocked側のRoute progressはその時点では進まない
+- その位置にpin-blockedのskippable unitしか無ければ、それ自身はreadyでないので実行しない。holdingでも
+  ないが、そのstreamは一旦進まず、他streamのsafe actionを進めてpin解除を待つ。pin解除後、Counterが
+  まだその位置ならunitを通常どおり実行でき、既に通過していればsilent fast-forwardされる
 blind forgeの条件は、確定Normal Counterを1進めることでpredicted forgeのholding位置を失わせない
 ためである（PLANNER_SPEC 7.0.2「Counter位置を持たないRoute unit」の「この実行順はBeam Searchの
 探索が決める」を、決定的な待機規則へ置き換える）。
@@ -512,6 +563,10 @@ Target C: Gogma C50 skippable
 点だけを強める。現行の支配判定はreadyなrequired unitだけを対象にしていたが、それは
 Beam Searchが「待つbranch」を別に保持していたから成立していた。決定的schedulerは待つ規則として
 これを明示する。
+
+Bがpin-blockedでも、Counter位置の保持という意味では同じである（Bはholdingでない）。違いは、Aの実行で
+CounterがC51へ進んだその瞬間にはBのprogressをfast-forwardせず、pin解除後に過去位置として通過させる
+ことだけである。
 
 ### 7.5 physical action sharing
 
@@ -551,7 +606,7 @@ safe actionが複数あるとき、次のkeyの辞書式順で1つだけ選ぶ�
 | 1 | そのactionが進めるcommitted EntryのTarget priorityの最大値（降順） | REQUIREMENTS 20の1「理想品を優先度順に早く揃える」 |
 | 2 | improvement preference違反を新たに生じるか（生じない方） | PLANNER_SPEC 7.6。違反の定義は現行 `improvementPreferenceViolationCount` と同じ |
 | 3 | weapon switchを新たに生じるか（生じない方） | PLANNER_SPEC 7.3。subjectは `plannerWeaponOperationSubjectKey()`、null subjectは切替に数えない |
-| 4 | executor選択時: executor Entryの次のholding unitが同じstream上で近い方 | 近くその武器を操作する必要があるEntryで位置を消費し、後続の切替を減らす |
+| 4 | executor選択時: executor Entryの次のholding unit（`canSkipWhenCounterPassed === false`。pinの現在状態は距離に含めない）が同じstream上で近い方 | 近くその武器を操作する必要があるEntryで位置を消費し、後続の切替を減らす |
 | 5 | actionが進めるEntryの残りpending unit数（少ない方） | 完成に近いRouteを先に終える |
 | 6 | stable: stream順（Normal（`normal:*`）/ blind forge → Skill → Gogma）、Counter位置、primary Entry ID | 決定性 |
 
@@ -578,9 +633,25 @@ safe actionが複数あるとき、次のkeyの辞書式順で1つだけ選ぶ�
 safe actionが無いのにpending unitが残る場合:
 
 - **deadlock**: 各holding unitがreadyでなく、その前提（base、lane順、pin）が別streamの進行を
-  待ち、それが循環している。例: Entry XのGogma C5（required）がX自身のconversion（Skill S10）を待ち、
-  Skill S9はEntry Yのpin解除（Y自身のGogma C7）を待つ。どの順でも両方は成立しない
+  待ち、それが循環している。例（acceptance fixture `true-deadlock`、testで確認済み）:
+  - Entry X: 所持NormalをSkill S1でconversion → Gogma C0をReset（C0はRouteの最後のunitでholding）
+  - Entry Y: 所持Gogma、Bonus C1をReset、Skill S0をReset Skills（Routeの最後のunitでholding）、
+    Skill lane開始状態を選択checkpoint（Skill S0はBonus laneがpinへ届くまでpin-blocked）
+  - Entry Z: 所持Gogma、Skill S0〜S2をReset Skills（S0 / S1はskippable、S2がholding）
+
+  Skill S0はYのholding unitが保持し、YはBonus C1を待ち、C1の前のC0はXのholding unitが保持し、XのC0は
+  X自身のconversion（S1）を待ち、S1の前のS0はYが保持する。ZのS0はskippableなのでholding位置を消費できない。
+  どの順でもX / Yの両方は成立しない（Beam Searchも完成2 / 3でYを完成させない）。順位関数 `R` で最下位の
+  Y（priority 1）を落とすと、ZがS0を消費し、Xのconversion、XのC0、ZのS2が進み、X / Zが完成する
 - **stall**: あるstreamの現在位置にcommitted unitが無いのに後方位置のpending unitがある（3.5）
+
+**旧版の例はdeadlockではなかった（Phase Bで判明）。** 旧版はここに「Entry XのGogma C5（required）が
+X自身のconversion（Skill S10）を待ち、Skill S9はEntry Yのpin解除（Y自身のGogma C7）を待つ。どの順でも
+両方は成立しない」という例（acceptance fixture `deadlock`）を挙げていた。そこでYが保持しているとされた
+Skill位置のunitはpin-blockedのskippable unitであり、holdingではない（5章）。Xのconversionがその位置を
+消費し、Yのprogressはpinで止まり、YのBonus laneがpinへ届いた時点でそのunitはfast-forwardされ、X / Yとも
+完成する。Beam SearchはPhase Bでこれを示し、本版のschedulerも同じ結果になる
+（[Phase B記録](./ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md) 3.2 / 3.3）。
 
 どちらも、関与するcommitted Entryのうち6.5の順位関数 `R` が最下位のものを1件落とし
 （rejectionを記録、8.4）、継続する。落としたTargetはこのrunで完成しない。決定的である。
@@ -596,6 +667,7 @@ safe actionについて次が成り立つ。
   Entryごとに独立し、commitment後のcommitted Entryは互いに別の武器を破壊的に使う（7.5）
 - readinessは単調である。actionはlane progressを増やすだけであり、pin gatingはもう片方のlaneの
   progressが増えるほど解除される。reserveによるrelevance解放はholdingを減らすだけである
+- holding性はunitの静的な属性（`canSkipWhenCounterPassed`）であり、pin解除やprogressで変わらない
 - したがって `a` の実行は `b` のsafetyを壊さない（`b` のstreamの `F` もholding性も変えない）
 - 同じ位置のexecutor選択の違いは、Counter・lane progress・Route結果を変えず、どの武器を
   中間操作したか（source version、in-flight、trace）だけを変える
@@ -706,7 +778,7 @@ ConflictResolutionで選択Entryがある
 | temporary augmented inputの例外（PLANNER_SPEC 9.2.18） | B8 / B9 orchestration、6.4 | 非永続の例外 |
 | required checkpoint Entry（7.5.6） | 唯一のEntry、完了判定 | hard |
 | 1 Targetにつき選択Entry最大1件（7.5.7）、既Ideal Targetの選択（7.5.8）、壊れた選択（7.5.9） | 既存Planner入力validation（変更しない） | hard（fail closed） |
-| pin gating / pin終端skip不可（7.5.1 / 7.5.2） | ready判定、holding判定 | hard |
+| pin gating / pin終端skip不可（7.5.1 / 7.5.2） | ready判定（pin gating）、fast-forward判定（pin gating）、holding判定（pin終端はskip不可なので常にholding。pinの現在状態はholding判定に使わない） | hard |
 | checkpoint未到達のreserve拒否（7.5.3） | 既存 `applyReserveAction()` | hard |
 | milestone / `checkpoint_state_mismatch`（7.5.4） | 既存Trace Replay（変更しない） | hard |
 | explicit ConflictResolution | commitmentの除外 | 局所hard |
@@ -973,13 +1045,14 @@ canonical順で1つだけ適用したことを検証する。
 | # | 入力 | 期待動作 |
 | --- | --- | --- |
 | A | Target A: Gogma laneだけ（C50で完成）、Target B: Skill laneだけ（C100で完成） | 競合なし。Gogma C0〜C50はAの武器、Skill C0〜C100はBの武器が消費する。canonical順（priority → switch）で一方のrunをまとめて行い、両方完成（`completed`）。branchなし |
-| B | A / B / Cの最終unit（required）の `counterBefore` がそれぞれGogma C50 / C80 / C120（全Route起点C0） | Gogma streamはC0から昇順に消費。C50でA、C80でB、C120でCのrequired unitが実行され、各直後にreserve。他の位置はpassableで、executorは7.7で決まる。物理Gogma操作数は121 |
+| B | A / B / Cの最終unit（required）の `counterBefore` がそれぞれGogma C50 / C80 / C120（全Route起点C0） | Gogma streamはC0から昇順に消費。C50でA、C80でB、C120でCのrequired unitが実行され、各直後にreserve。他の位置はskippableで、executorは7.7で決まる。物理Gogma操作数は121 |
 | C | A: C50 required、B: C50 skippable | 候補は「Aを実行」だけ。Bはfast-forward。Bを実行するbranchもrejectionも作らない |
 | D | A: C50 Weapon A Keep required、B: C50 Weapon B Reset required | commitmentで `same_gogma_counter` のcollision。resolutionが無ければ6.5の暫定帰結で一方だけcommitし、競合を `PlanConflict` で返す（`selectedBuildListEntryId = null`）。順序探索をしない。敗者は `resource_conflict` |
 | E | 2 Entryが同じconcrete source weaponの同じphysical action（同type・同Counter遷移）を次unitにもつ（両者の全unitが1 actionの退化ケース） | 1 actionで両Entryをprogressし、`progressedBuildListEntryIds` に両方を記録。version共有も既存どおり。Trace Replayがidentityを再検証 |
 | F | 別EntryのEntry-local transient Gogma（null source）が同じGogma位置 | shareableでない。両方requiredならcollision、両方skip可能なら一方がexecutorで他方fast-forward。1 actionで両Entryを進めない |
 | G | 1 TargetのBonus laneとSkill laneが同時にsafe | `bonus_first` / `skill_first` は優先laneを選ぶ。優先laneが待ちなら反対laneを進めviolationを記録。`planner` はweapon switch → 残り数 → stable順。両branchを保持しない |
-| H | selected checkpointを持つEntry | そのEntryがTargetの唯一の候補。pin gatingで片laneがpinを越えない。checkpoint到達前にreserveしない（`selected_checkpoint_not_reached`）。milestoneはpin終端Stepに載り、Trace Replayが検証。`hasIdeal` だけでcompleteにしない |
+| H | selected checkpointを持つEntry | そのEntryがTargetの唯一の候補。pin gatingで片laneがpinを越えない。checkpoint到達前にreserveしない（`selected_checkpoint_not_reached`）。milestoneはpin終端Stepに載り、Trace Replayが検証。`hasIdeal` だけでcompleteにしない。pin終端unitはholdingで、別Entryにその位置を消費させない |
+| H2 | Entry YのSkill unit S7がskippableでpin-blocked、別Entry XがS7をrequired action（conversion）で消費する | Xの実行は許される（Yのunitはholdingでない）。X適用直後はSkill Counter S8、YのSkill progressはpinを越えず、checkpoint未到達。YのBonus laneがpinへ届いたactionの中で、S7は過去位置としてfast-forwardされ、Yは後続のSkill unitを実行し、X / Yとも完成する（Trace Replay / projection有効） |
 | I | TargetのEntryがpreferred起点ではない（別のpreferred起点の所持武器がある） | Plannerはpreferredを理由にRouteを差し替えず、そのEntryのRouteをscheduleする（6.7）。preferredはCandidate Searchのtie-breakとしてだけ働く |
 | J | 2 Routeが同じOwnedWeaponを破壊的に使用 | `same_owned_weapon_consumed` のcollision。片方だけcommit。source version / in-flight / 保護の既存semanticsを維持 |
 | K | 新規Normal（predicted forge 2本）→ conversion → Reset / Reset Skills | Normal Counter位置でforge（required）、Skill起点でconversion（required、Skill +1、Gogma +0）、base完了までGogma laneのholding位置は待つ。transient subjectはEntry-local。blind variantではforgeがCounter位置を持たず、確定Counterなら同武器種のpredicted forgeが残る間は待ってから1進める |
@@ -1001,7 +1074,12 @@ canonical順で1つだけ適用したことを検証する。
 
 - zero-operation `existing_gogma_current` の `confirm_owned_ideal` が開始時に適用され、その武器を
   起点にする他Routeが保護で実行不能になる
-- deadlock（7.8の例）で `R` 最下位のEntryが落ち、そのTargetは完成しない
+- deadlock（7.8の例、fixture `true-deadlock`）で `R` 最下位のEntryが落ち、そのTargetは完成しない。
+  残りのEntryは継続して完成する
+- 旧7.8の例（fixture `deadlock`）はdeadlockではなく、16.1 H2のとおり両Targetが完成する
+- pin-blockedのskippable unitの位置が開始時点で通過済みでも、それだけではEntryを落とさない（fixture
+  `pinned-past`）。その後ろのholding unitまで通過済みなら `counter_before_current` で落とす
+  （fixture `pinned-past-lost-holding`）
 - reserveした武器が別planning TargetのIdealも満たし、そのTargetのcommitted Entryが解放される
 - `maxPlanSteps` 到達で `incomplete`、partial Planは保存されない
 - cancelで `cancelled`
@@ -1165,12 +1243,21 @@ REQUIREMENTS 18へ記載済み。実装は次の順で小さく分ける。
     test moduleの差し替えでだけこれを使う
   - Browser Workerは既存Issue #103 benchmark Workerを拡張した（benchmark requestだけの `strategy`、
     `issue103Benchmark.run({ strategy })` / `issue103Benchmark.compare()`）
-  - **Phase C readiness: NOT READY**。acceptance fixture「deadlock」（7.8の例）でBeam Searchが両Targetを
-    完成させ（Trace Replay有効）、schedulerはdeadlockとして1件落とす。Beamは、pin-blockedのskip可能unitが
-    通過されてもpin解除後に `fastForwardPlannerRouteProgress()` で通過できることを示しており、5章の
-    「pin-blockedのskip可能unitはholding」と7.8「どの順でも両方は成立しない」がこの例では成り立たない。
-    schedulerのsemantics変更（holding判定・lane-head判定・commitment判定）を伴うため本Phaseでは直さず、
-    Phase C前の仕様判断事項とする（記録文書の「Phase C readiness」）
+  - Phase B初回（PR #114）の判定は **Phase C readiness: NOT READY** だった。acceptance fixture「deadlock」
+    （旧7.8の例）でBeam Searchが両Targetを完成させ（Trace Replay有効）、schedulerはdeadlockとして1件落とした。
+    Beamは、pin-blockedのskip可能unitが通過されてもpin解除後に `fastForwardPlannerRouteProgress()` で
+    通過できることを示しており、旧5章の「pin-blockedのskip可能unitはholding」と旧7.8「どの順でも両方は
+    成立しない」がこの例では成り立たなかった
+- **Phase B semantic fix（Phase C前、Production未接続）**。holdingを `canSkipWhenCounterPassed === false`
+  だけで決め、pin gatingとCounter位置保持を分離した（5章、PLANNER_SPEC 7.5.2）
+  - helper: `isPlannerLaneUnitHolding(unit)`（holding）と `isPlannerLaneUnitFastForwardable(unit, progress, pin)`
+    （fast-forwardable now）に分けた。旧 `isPlannerLaneUnitPassable()` は廃止し、
+    `fastForwardPlannerRouteProgress()` の判定（pin-blocked中は通過しない）は名前だけ変えて維持した
+  - Route commitment（6.2）、動的commitmentのlane frontier判定（6.8）、scheduler frontier（7.2 / 7.3）、
+    canonical順のnext-holding距離（7.7 key 4）が新しいholding定義を使う。deadlock / stallの規則と順位、
+    canonical順のkey、Beam Search、Trace Replayは変えていない
+  - 旧7.8の例は両Target完成、真のdeadlock（fixture `true-deadlock`）は従来どおりdropされる（7.8、16.3）
+  - 再検証とPhase C readinessの再判定は [ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md](./ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md) 11章
 
 ### Phase C: Production routing切替
 
@@ -1243,11 +1330,13 @@ UI実装
 Phase CのPull Requestでは、15.2の影響（実行中のversion 13 Planがstaleになり再計画が必要になること）を
 プロジェクトオーナーへ明示する。これは決定済み事項の周知であり、Phase 0 / A / Bを止めない。
 
-**Phase Bで判明したPhase C前の判断事項（未決）。** pin-blockedのskip可能unitをholdingとして扱う5章 / 7.4の
-規則と、それに基づく6.8のlane-head判定・commitment判定・7.8のdeadlock判定は、Phase Bのparityで
+**Phase Bで判明したPhase C前の判断事項（決定済み）。** pin-blockedのskip可能unitをholdingとして扱う
+旧5章 / 7.4の規則と、それに基づく6.8のlane-head判定・commitment判定・7.8のdeadlock判定は、Phase Bのparityで
 Beam Searchに反証された（acceptance fixture「deadlock」でBeamが両Targetを完成、Trace Replay有効）。
-規則を維持してこの差を意図した差として正式に受け入れるか、規則を改めてschedulerのsemanticsを変えるかを
-Phase Cの前に決める（[ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md](./ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md)）。
+プロジェクトオーナーの決定により **規則を改めた**: holdingは `canSkipWhenCounterPassed === false` だけで
+決まり、checkpoint pinはEntry自身のlane progressを止めるがskippable unitのCounter位置を予約しない
+（5章、PLANNER_SPEC 7.5.2）。schedulerは既存Beam / Trace Replayの意味に合わせて修正した（17章 Phase B、
+[ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md](./ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md) 11章）。
 
 ### 19.2 Can defer
 

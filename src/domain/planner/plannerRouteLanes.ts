@@ -96,34 +96,39 @@ export function isPlannerLaneUnitBlockedByPin(
 }
 
 /**
- * Whether another Entry's real operation may consume this unit's Counter
- * position while the unit silently fast-forwards: it is
- * `canSkipWhenCounterPassed` and, at the Entry's current lane progress, not
- * blocked by its checkpoint pin (`docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md`
- * 5 "passable"). `fastForwardPlannerRouteProgress()` passes exactly these units.
+ * Whether this pending unit holds its Counter position: no other Entry may
+ * consume that position before the unit itself runs
+ * (`docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md` 5 "holding"). It is decided
+ * by `canSkipWhenCounterPassed` alone - every selected checkpoint endpoint is
+ * among the holding units, because the unit that produces a pinned state is
+ * never skippable (`docs/PLANNER_SPEC.md` 7.5.1).
+ *
+ * The checkpoint pin is deliberately not read here. A pin gates the Entry's
+ * own lane progress, not the Counter position of a skippable unit: another
+ * Entry may consume that position while the pin blocks the unit, the Entry's
+ * progress stays at the pin, and once the pin is released the unit is passed
+ * silently as a historical position (`isPlannerLaneUnitFastForwardable()`,
+ * PLANNER_SPEC 7.5.2). The deterministic scheduler's Route commitment, its
+ * frontier and its canonical next-holding distance all judge holding through
+ * this one predicate.
  */
-export function isPlannerLaneUnitPassable(
+export function isPlannerLaneUnitHolding(unit: PlannerRouteUnit): boolean {
+  return !unit.canSkipWhenCounterPassed
+}
+
+/**
+ * Whether `fastForwardPlannerRouteProgress()` may pass this unit at the
+ * Entry's current lane progress once the Counter is past its position: it is
+ * `canSkipWhenCounterPassed` and its checkpoint pin does not block it now
+ * (design 5 "fast-forwardable now"). A pin-blocked skippable unit is not
+ * holding, but its progress waits at the pin until the other lane arrives.
+ */
+export function isPlannerLaneUnitFastForwardable(
   unit: PlannerRouteUnit,
   progress: PlannerLaneProgress,
   pin: IntermediatePin | null,
 ): boolean {
   return unit.canSkipWhenCounterPassed && !isPlannerLaneUnitBlockedByPin(unit, progress, pin)
-}
-
-/**
- * Whether this pending unit holds its Counter position: it is not passable, so
- * no other Entry may consume that position before it runs - a unit that is
- * never skippable, or a skippable unit its checkpoint pin blocks at the
- * current lane progress (design 5 "holding"). The deterministic scheduler's
- * Route commitment and its frontier both judge holding through this one
- * predicate.
- */
-export function isPlannerLaneUnitHolding(
-  unit: PlannerRouteUnit,
-  progress: PlannerLaneProgress,
-  pin: IntermediatePin | null,
-): boolean {
-  return !isPlannerLaneUnitPassable(unit, progress, pin)
 }
 
 /**
