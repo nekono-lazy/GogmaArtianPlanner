@@ -116,6 +116,25 @@ export async function runPlannerSearchInstrumentation(
   engine: RngEngine,
   options: PlannerSearchInstrumentationRunOptions,
 ): Promise<PlannerSearchInstrumentationRunResult> {
+  return (await executePlannerSearchInstrumentation(input, engine, options)).run
+}
+
+/**
+ * unPlannerSearchInstrumentation() that also returns the raw search result
+ * and the dependencies it ran with, so a caller can continue with Trace Replay
+ * and the Production projection (Issue #103 Phase B parity). Measured time is
+ * the search alone.
+ */
+export async function executePlannerSearchInstrumentation(
+  input: PlannerInput,
+  engine: RngEngine,
+  options: PlannerSearchInstrumentationRunOptions,
+): Promise<{
+  run: PlannerSearchInstrumentationRunResult
+  result: PlannerBeamSearchResult
+  dependencies: PlannerDependencies
+}> {
+  const dependencies = createDeterministicPlannerDependencies(engine)
   const now = options.now ?? (() => performance.now())
   const depths: PlannerSearchDepthMetrics[] = []
   const depthElapsedMs: number[] = []
@@ -125,7 +144,7 @@ export async function runPlannerSearchInstrumentation(
   let depthStartedAt = startedAt
   const result = await runPlannerBeamSearch(
     input,
-    createDeterministicPlannerDependencies(engine),
+    dependencies,
     {
       shouldCancel: options.shouldCancel,
       yieldControl: options.yieldControl,
@@ -149,13 +168,17 @@ export async function runPlannerSearchInstrumentation(
   )
   const elapsedMs = now() - startedAt
   return {
-    instrumented: options.instrumented,
-    collectDiagnosticProjections: options.instrumented && collectDiagnosticProjections,
-    options: { ...input.options },
-    elapsedMs,
-    depthElapsedMs,
-    depths,
-    run,
-    digest: digestPlannerBeamSearchResult(result),
+    run: {
+      instrumented: options.instrumented,
+      collectDiagnosticProjections: options.instrumented && collectDiagnosticProjections,
+      options: { ...input.options },
+      elapsedMs,
+      depthElapsedMs,
+      depths,
+      run,
+      digest: digestPlannerBeamSearchResult(result),
+    },
+    result,
+    dependencies,
   }
 }
