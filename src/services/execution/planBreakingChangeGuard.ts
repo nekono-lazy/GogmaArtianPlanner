@@ -5,6 +5,8 @@ import {
   ExecutionRuntimeError,
   inspectPlanGuardedMutation,
   preparePlanGuardedMutation,
+  preparePlanGuardedSavePointRestoreInsteadOfChange,
+  type ExecutionSavePointRestoreWrite,
   type PlanBreakingChangeApproval,
   type PlanBreakingChangeInspection,
   type PlanBreakingChangeTermination,
@@ -16,6 +18,7 @@ import {
 import { loadMasterData } from '../../domain/master/loadMasterData'
 import type { CalculationContext, ISODateTimeString } from '../../domain/models/publicTypes'
 import { createBuildListCalculationContext } from '../buildList/createBuildListCalculationContext'
+import { writeExecutionSavePointRestore } from './executionSavePointRestoreWrite'
 
 /** The outcome of one guarded save: the mutation's own result, and how it ended the Plan if it did. */
 export interface PlanGuardedMutationOutcome<R> {
@@ -124,6 +127,34 @@ export class PlanBreakingChangeGuard implements PlanGuardedPersistence {
       const outcome = { result: write.result, state: write.state, planTermination: write.planTermination }
       await options.afterWrite?.(outcome)
       return outcome
+    })
+  }
+
+  /**
+   * The approved 「最後のゲーム内セーブ地点へ戻す」 of a change that is dropped
+   * instead of being applied to the restored state
+   * (`preparePlanGuardedSavePointRestoreInsteadOfChange()`, `docs/PLANNER_SPEC.md`
+   * 9.2.18 / 16.10): only a Planner result save uses it, because that result was
+   * calculated before the restore. The approval and the 16.10 choice are
+   * re-derived exactly as `apply()` does, and in one transaction only the save
+   * point restore is written - nothing of the change, no Plan termination, the
+   * save point kept. Every other guarded change goes through `apply()`.
+   */
+  restoreSavePointInsteadOfChange<R>(
+    mutation: PlanGuardedMutation<R>,
+    approval: PlanBreakingChangeApproval,
+  ): Promise<ExecutionSavePointRestoreWrite> {
+    return this.run('rw', async () => {
+      const state = await this.readState()
+      const restore = this.prepare(() => preparePlanGuardedSavePointRestoreInsteadOfChange({
+        state,
+        mutation,
+        approval,
+        currentCalculationContext: this.dependencies.currentCalculationContext,
+        now: this.dependencies.clock.now(),
+      }))
+      await writeExecutionSavePointRestore(this.dependencies.database, restore)
+      return restore
     })
   }
 

@@ -46,6 +46,14 @@ export const PLAN_BREAKING_SAVE_POINT_CHOICE_EXPLANATION =
   '「現在地点を維持」は現在のアプリ状態へ変更を保存します。「最後のゲーム内セーブ地点へ戻す」はアプリ側をセーブ地点へ戻してから変更を保存します。どちらも生産計画は破棄されます。'
 export const PLAN_BREAKING_RESTORE_NOTE =
   'セーブ地点へ戻した後、この変更を保存し、生産計画を破棄します。復元・保存・破棄は一度に行われ、途中で止まることはありません。'
+/**
+ * The same choice for a change calculated before the restore - a Planner
+ * result save (`docs/PLANNER_SPEC.md` 9.2.18 / 16.10): restoring drops it.
+ */
+export const PLAN_BREAKING_SAVE_POINT_CHOICE_EXPLANATION_DROPS_CHANGE =
+  '「現在地点を維持」は現在のアプリ状態へ変更を保存し、生産計画を破棄します。「最後のゲーム内セーブ地点へ戻す」はアプリ側をセーブ地点へ戻すだけで、この変更は保存しません。生産計画は破棄されず、戻した後の状態からもう一度計算できます。'
+export const PLAN_BREAKING_RESTORE_DROPS_CHANGE_NOTE =
+  'セーブ地点へ戻すだけで、この変更（戻す前の状態で計算した結果）は保存しません。生産計画は破棄しません。戻した後の状態から、もう一度計算してください。'
 
 /** Where the save point sits when the exact Step cannot be resolved on this screen. */
 export const PLAN_BREAKING_SAVE_POINT_FALLBACK_LABEL = '最後のゲーム内セーブ地点'

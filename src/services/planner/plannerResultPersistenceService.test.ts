@@ -39,6 +39,7 @@ import { fixture, routeEntry, sourceWeapon, target } from '../../test/fixtures/p
 import {
   PlannerResultPersistenceService,
   createPlannerResultPersistenceRepositories,
+  type PlannerOrchestrationResultSaveOutcome,
   type PlannerResultPersistenceRepositories,
 } from './plannerResultPersistenceService'
 import {
@@ -107,6 +108,11 @@ interface ScenarioOptions {
   ) => PlannerResultPersistenceRepositories
   /** Makes the Dexie write of this BuildListEntry ID fail inside the save. */
   failEntryWriteId?: string
+}
+
+/** The stored Plan of a `saved` outcome, `null` for every other outcome. */
+function savedPlanOf(outcome: PlannerOrchestrationResultSaveOutcome): ProductionPlan | null {
+  return outcome.kind === 'saved' ? outcome.plan : null
 }
 
 let databaseSequence = 0
@@ -235,7 +241,7 @@ describe('PlannerResultPersistenceService', () => {
         },
         context,
       )
-      expect(saved).toBeNull()
+      expect(saved).toEqual({ kind: 'no_plan' })
       expect(await storedEntryIds()).toEqual([
         'build-list.persisted.a',
         'build-list.persisted.b',
@@ -305,7 +311,7 @@ describe('PlannerResultPersistenceService', () => {
         },
         context,
       )
-      expect(saved?.id).toBe(plan.id)
+      expect(savedPlanOf(saved)?.id).toBe(plan.id)
       expect(await storedPlanIds()).toEqual([plan.id])
     }))
 
@@ -323,7 +329,7 @@ describe('PlannerResultPersistenceService', () => {
         },
         context,
       )
-      expect(saved?.id).toBe(plan.id)
+      expect(savedPlanOf(saved)?.id).toBe(plan.id)
       expect(await storedPlanIds()).toEqual([plan.id])
     }))
 
@@ -355,7 +361,7 @@ describe('PlannerResultPersistenceService', () => {
     withScenario(
       async ({ service, result, context, plan, storedEntryIds, storedPlanIds }) => {
         const saved = await service.savePlannerOrchestrationResult(result, context)
-        expect(saved?.id).toBe(plan.id)
+        expect(savedPlanOf(saved)?.id).toBe(plan.id)
         // generated.0 replaced persisted.a (`docs/PLANNER_SPEC.md` 9.2.18):
         // the Build List holds one Entry per Target, and the Plan references
         // no deleted Entry.
@@ -363,7 +369,7 @@ describe('PlannerResultPersistenceService', () => {
           'build-list.generated.0',
           'build-list.persisted.b',
         ])
-        expect(saved?.selectedBuildListEntryIds).not.toContain('build-list.persisted.a')
+        expect(savedPlanOf(saved)?.selectedBuildListEntryIds).not.toContain('build-list.persisted.a')
         expect(await storedPlanIds()).toEqual(['plan.b8d2a.a'])
       },
     ))
@@ -388,7 +394,7 @@ describe('PlannerResultPersistenceService', () => {
         },
         context,
       )
-      expect(saved).not.toBeNull()
+      expect(saved.kind).toBe('saved')
       expect(await storedPlanIds()).toEqual(['plan.b8d2a.a'])
     }))
 
@@ -677,7 +683,7 @@ describe('PlannerResultPersistenceService', () => {
         }
         await repositories.productionPlans.putProductionPlan(active)
         const saved = await service.savePlannerOrchestrationResult(result, context)
-        expect(saved?.status).toBe('draft')
+        expect(savedPlanOf(saved)?.status).toBe('draft')
         expect(await storedPlanIds()).toEqual(['plan.active.a', 'plan.b8d2a.a'])
         expect(await database.productionPlans.get(active.id)).toEqual(active)
       },
@@ -710,7 +716,7 @@ describe('PlannerResultPersistenceService', () => {
         expect(createPlanningBuildListEntriesHash(forward.finalEntries ?? []))
           .toBe(plan.baseSnapshot.buildListEntriesHash)
         const saved = await service.savePlannerOrchestrationResult(result, context)
-        expect(saved).not.toBeNull()
+        expect(saved.kind).toBe('saved')
         expect(await storedEntryIds()).toEqual([
           'build-list.generated.0',
           'build-list.persisted.b',
@@ -782,8 +788,8 @@ describe('PlannerResultPersistenceService Draft replacement (DATA_MODEL 11.1 / P
 
       const saved = await service.savePlannerOrchestrationResult(result, context)
 
-      expect(saved?.id).toBe(plan.id)
-      expect(saved?.status).toBe('draft')
+      expect(savedPlanOf(saved)?.id).toBe(plan.id)
+      expect(savedPlanOf(saved)?.status).toBe('draft')
       expect(await storedPlanIds()).toEqual(['plan.b8d2a.a'])
       expect(await database.productionPlans.get(previous.id)).toBeUndefined()
       expect(await storedEntryIds()).toEqual(['build-list.generated.0', 'build-list.persisted.b'])
@@ -936,7 +942,7 @@ describe('PlannerResultPersistenceService Draft replacement (DATA_MODEL 11.1 / P
         { plan: null, conflicts: [], warnings: [], termination: exhaustedPlannerTermination(), generatedBuildListEntries: [], generatedBuildListEntryReplacements: [] },
         context,
       )
-      expect(saved).toBeNull()
+      expect(saved).toEqual({ kind: 'no_plan' })
       expect(await storedPlanIds()).toEqual(['plan.draft.previous'])
     }))
 
@@ -1072,7 +1078,7 @@ describe('PlannerResultPersistenceService generated Entry replacement (Phase 0-3
         observedPlan: inspection.observedPlan,
         savePointDecision: null,
       })
-      expect(saved?.id).toBe(plan.id)
+      expect(savedPlanOf(saved)?.id).toBe(plan.id)
       expect(await storedEntryIds()).toEqual(['build-list.generated.0', 'build-list.persisted.b'])
       expect(await storedPlanIds()).toEqual(['plan.b8d2a.a', 'plan.running.p1'])
       expect(await database.productionPlans.get(active.id)).toMatchObject({
@@ -1114,7 +1120,7 @@ describe('PlannerResultPersistenceService generated Entry replacement (Phase 0-3
         expect(await service.inspectPlannerOrchestrationResultSave(result, context))
           .toEqual({ approvalRequired: false })
         const saved = await service.savePlannerOrchestrationResult(result, context)
-        expect(saved?.id).toBe(plan.id)
+        expect(savedPlanOf(saved)?.id).toBe(plan.id)
         expect(await storedEntryIds()).toEqual(['build-list.generated.0', 'build-list.persisted.b'])
         // The historical Plan keeps its now-deleted reference as persisted.
         expect(await database.productionPlans.get(historical.id)).toEqual(historical)

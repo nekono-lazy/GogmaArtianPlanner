@@ -68,7 +68,10 @@ import {
   PlannerCancelledError,
   type PlannerWorkerClient,
 } from '../services/planner/plannerWorkerClient'
-import { plannerResultPersistenceService } from '../services/planner/plannerResultPersistenceService'
+import {
+  plannerResultPersistenceService,
+  type PlannerOrchestrationResultSaveOutcome,
+} from '../services/planner/plannerResultPersistenceService'
 import {
   createProductionPlanExecutionService,
   type ProductionPlanStartInspection,
@@ -106,11 +109,17 @@ export interface ProductionPlanPageDependencies {
     result: PlannerOrchestrationResult,
     currentCalculationContext: CalculationContext,
   ): Promise<PlanBreakingChangeInspection>
+  /**
+   * Saves a recalculated Draft. With an approval whose 16.10 decision restores
+   * the game save point, only the restore happens and the result is dropped
+   * (`docs/PLANNER_SPEC.md` 9.2.18): the outcome then asks for a new
+   * calculation from the restored state.
+   */
   savePlannerResult(
     result: PlannerOrchestrationResult,
     currentCalculationContext: CalculationContext,
     approval?: PlanBreakingChangeApproval | null,
-  ): Promise<ProductionPlan | null>
+  ): Promise<PlannerOrchestrationResultSaveOutcome>
   /**
    * The read-only preview of the Target links a draft's start makes
    * (`docs/UI_FLOW.md` 11). Never write authority: the start re-verifies.
@@ -189,6 +198,9 @@ type ProductionPlanPageState =
       viewModel: ProductionPlanInteractionViewModel
     }
   | { status: 'error'; message: string; plan: ProductionPlan | null }
+
+const SAVE_POINT_RESTORED_RECALCULATION_MESSAGE =
+  '最後のゲーム内セーブ地点へ戻しました。復元前の計算結果は保存していません。復元後の状態から、もう一度再計算してください。'
 
 interface WhatIfTargetIdentity {
   conflictId: string
@@ -1040,6 +1052,9 @@ export function ProductionPlanPage({
         apply: (approval) =>
           dependencies.savePlannerResult(result, saveCalculationContext, approval),
         note: 'この再計算では作成リストの候補が置き換わり、実行中の生産計画が参照している候補が削除されます。',
+        // This result was calculated before any restore, so restoring drops it
+        // instead of saving it over the restored state (PLANNER_SPEC 9.2.18).
+        savePointRestore: 'drop_change',
       })
       if (!isCurrentAction()) return
       if (saved.status === 'cancelled') {
@@ -1050,7 +1065,14 @@ export function ProductionPlanPage({
         setReplanState({ status: 'failure', message: saved.message })
         return
       }
-      const savedPlan = saved.result
+      if (saved.result.kind === 'save_point_restored_recalculation_required') {
+        // The restore succeeded and the pre-restore result was dropped, never
+        // saved over the restored state: no Draft to open, a new calculation is
+        // required (`docs/PLANNER_SPEC.md` 9.2.18).
+        setReplanState({ status: 'notice', message: SAVE_POINT_RESTORED_RECALCULATION_MESSAGE })
+        return
+      }
+      const savedPlan = saved.result.kind === 'saved' ? saved.result.plan : null
       if (savedPlan === null) {
         setReplanState({
           status: 'notice',

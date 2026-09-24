@@ -2436,8 +2436,10 @@ Planner constrained re-searchを経たPlan保存も原子的に行う。契約�
   削除しない）。置換後の永続予定集合は `validateBuildListCardinality()` で検証する。元Entryが `active` Planの
   Plan依存Entryなら、保存全体を1つのguarded mutationとして既存Plan-breaking guardで判定し、承認が無ければ
   `plan_breaking_change_approval_required` で何も保存しない（事前確認は
-  `inspectPlannerOrchestrationResultSave()`）。承認時はEntry置換・旧Draft削除・新Draft追加・active Planの
-  `abandoned`（`breaking_change_approved`）を同一transactionで行う。元Entryを参照するのがDraft / stale /
+  `inspectPlannerOrchestrationResultSave()`）。承認時（「現在地点を維持」または選択なし）はEntry置換・旧Draft削除・
+  新Draft追加・active Planの `abandoned`（`breaking_change_approved`）を同一transactionで行う。承認で
+  「最後のゲーム内セーブ地点へ戻す」を選んだ場合はセーブ地点復元だけを行い、復元前に計算したPlanner resultは
+  保存しない（Entry・Draft・Planを変更せず、復元後の状態からの再計算を求める。[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.10）。元Entryを参照するのがDraft / stale /
   終了済みPlanだけならguard対象にしない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18）
 
 新しいtableもDexie schema versionの変更も伴わない。`buildListEntries` と

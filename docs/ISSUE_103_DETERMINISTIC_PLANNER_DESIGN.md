@@ -1096,6 +1096,10 @@ REQUIREMENTS 18へ記載済み。実装は次の順で小さく分ける。
   （`inspectPlannerOrchestrationResultSave()` / `savePlannerOrchestrationResult(..., approval?)`）、
   B10の再計算保存を既存の警告Dialogへ接続した。再計画採用は旧実行中Planを `replan_adopted` で終了するため
   追加の警告を出さない
+- 通常Draft保存の承認で「最後のゲーム内セーブ地点へ戻す」を選んだ場合は、セーブ地点復元だけを行い、復元前に計算した
+  Planner resultは保存しない（generated Entry / Entry置換 / Draft置換なし、Planは破棄しない）。結果は
+  `save_point_restored_recalculation_required` のtyped outcomeで返し、B10画面は復元完了と再計算の必要を示す
+  （PLANNER_SPEC 9.2.18 / 16.10）。snapshot検証は弱めず、通常のPlan-breaking変更の 復元 -> 変更 -> Plan破棄 は変えない
 - versionは変更しない（15.1）
 
 ### Phase A0: 状態遷移helperの抽出（純リファクタ）

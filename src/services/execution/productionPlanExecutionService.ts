@@ -58,6 +58,7 @@ import type {
 import { executionSavePointIdForPlan } from '../../domain/models/publicTypes'
 import { productionRngEngine } from '../../domain/rng/production/productionRngRuntime'
 import { createBuildListCalculationContext } from '../buildList/createBuildListCalculationContext'
+import { writeExecutionSavePointRestore } from './executionSavePointRestoreWrite'
 
 /** Runtime ID source of ExecutionHistory records. */
 export interface ExecutionIdFactory {
@@ -743,19 +744,7 @@ export class ProductionPlanExecutionService {
   }
 
   private async writeSavePointRestore(restore: ExecutionSavePointRestoreWrite): Promise<void> {
-    const { database } = this.dependencies
-    await database.rngState.put(restore.rngState)
-    // The save point holds the whole collection: a Counter record absent from
-    // it must not survive the restore.
-    await database.normalArtianCounters.clear()
-    if (restore.normalCounters.length > 0) await database.normalArtianCounters.bulkPut(restore.normalCounters)
-    if (restore.deletedOwnedWeaponIds.length > 0) await database.ownedWeapons.bulkDelete(restore.deletedOwnedWeaponIds)
-    if (restore.restoredOwnedWeapons.length > 0) await database.ownedWeapons.bulkPut(restore.restoredOwnedWeapons)
-    if (restore.restoredTargetWeapons.length > 0) await database.targetWeapons.bulkPut(restore.restoredTargetWeapons)
-    await database.productionPlans.put(restore.plan)
-    if (restore.deletedExecutionHistoryIds.length > 0) {
-      await database.executionHistory.bulkDelete(restore.deletedExecutionHistoryIds)
-    }
+    await writeExecutionSavePointRestore(this.dependencies.database, restore)
   }
 
   private async writeUndo(undo: ExecutionUndoWrite): Promise<void> {

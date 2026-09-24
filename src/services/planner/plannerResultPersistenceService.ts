@@ -22,6 +22,8 @@ import {
 import type {
   BuildListEntry,
   CalculationContext,
+  ExecutionHistoryId,
+  ExecutionSavePoint,
   ExpectedPlanState,
   ISODateTimeString,
   NormalArtianCounter,
@@ -72,6 +74,14 @@ import { PlanBreakingChangeGuard } from '../execution/planBreakingChangeGuard'
  * transaction. A Draft, stale or ended Plan referencing `O` never needs one.
  * Without any replacement the save never breaks a Plan, exactly as before.
  *
+ * The result was calculated from the state before any save point restore, so
+ * choosing 「最後のゲーム内セーブ地点へ戻す」 in that approval never saves it over
+ * the restored state (`docs/PLANNER_SPEC.md` 9.2.18 / 16.10): the restore alone
+ * is written, the result is dropped with its generated Entries, replacements and
+ * Draft, the running Plan is not abandoned, and the outcome asks for a new
+ * calculation from the restored state. The snapshot checks are never weakened to
+ * fit the old result onto it.
+ *
  * The Draft replacement (`docs/DATA_MODEL.md` 11.1, `docs/PLANNER_SPEC.md`
  * 9.2.15) deletes only `draft` ProductionPlan records - never an `active` /
  * `stale` / `completed` / `abandoned` Plan, and never the BuildListEntries,
@@ -117,6 +127,32 @@ export interface PlannerResultPersistenceOptions {
 }
 
 const systemClock = { now: (): ISODateTimeString => new Date().toISOString() }
+
+/**
+ * How one Planner result save ended (`docs/PLANNER_SPEC.md` 9.2.15 / 9.2.18).
+ *
+ * - `saved`: the new Draft, its generated Entries and their replacements are
+ *   stored, and any running Plan the user approved breaking is abandoned
+ * - `no_plan`: the calculation produced no Plan; nothing was written and the
+ *   previous Draft is kept
+ * - `save_point_restored_recalculation_required`: the user approved breaking
+ *   the `active` Plan and chose 「最後のゲーム内セーブ地点へ戻す」. Only the save
+ *   point restore was written; this result - calculated before the restore - was
+ *   dropped with its generated Entries, replacements and Draft, the previous
+ *   Draft and Build List are untouched, the running Plan is the restored one
+ *   (not abandoned), and a new calculation from the restored state is required
+ */
+export type PlannerOrchestrationResultSaveOutcome =
+  | { kind: 'saved'; plan: ProductionPlan }
+  | { kind: 'no_plan' }
+  | {
+      kind: 'save_point_restored_recalculation_required'
+      /** The running Plan as the save point restored it. */
+      restoredPlan: ProductionPlan
+      /** The save point that was restored; it is kept. */
+      savePoint: ExecutionSavePoint
+      deletedExecutionHistoryIds: ExecutionHistoryId[]
+    }
 
 /**
  * Current persisted state diverged from the Plan's own snapshot. Nothing was
@@ -220,8 +256,11 @@ export class PlannerResultPersistenceService {
    * it was calculated to replace - and the ProductionPlan atomically,
    * replacing the previous Draft in the same transaction.
    *
-   * Returns the stored Plan, or `null` when the calculation produced no Plan
-   * (the previous Draft is then kept). Every failure throws and writes nothing
+   * Returns `saved` with the stored Plan, or `no_plan` when the calculation
+   * produced no Plan (the previous Draft is then kept). An approval whose 16.10
+   * decision restores the save point returns
+   * `save_point_restored_recalculation_required`: the restore, and nothing of
+   * this result, is written in one transaction. Every failure throws and writes nothing
    * - the previous Draft, the Build List, the running Plan and every other
    * table stay as they were: `planner_state_changed` means the current state
    * moved under the calculation (a replaced Entry that is no longer its
@@ -235,12 +274,26 @@ export class PlannerResultPersistenceService {
     result: PlannerOrchestrationResult,
     currentCalculationContext: CalculationContext,
     approval: PlanBreakingChangeApproval | null = null,
-  ): Promise<ProductionPlan | null> {
+  ): Promise<PlannerOrchestrationResultSaveOutcome> {
     const persistable = this.persistableResult(result)
-    if (persistable === null) return null
+    if (persistable === null) return { kind: 'no_plan' }
     const { plan } = persistable
-    const outcome = await this.guard(currentCalculationContext).apply(
-      this.saveMutation(persistable, currentCalculationContext),
+    const guard = this.guard(currentCalculationContext)
+    const mutation = this.saveMutation(persistable, currentCalculationContext)
+    if (approval?.savePointDecision?.kind === 'restore_save_point') {
+      // The restore makes this pre-restore result stale by construction: the
+      // guard re-derives the approval and the 16.10 choice, restores, and
+      // writes nothing of the result (`docs/PLANNER_SPEC.md` 9.2.18).
+      const restore = await guard.restoreSavePointInsteadOfChange(mutation, approval)
+      return {
+        kind: 'save_point_restored_recalculation_required',
+        restoredPlan: restore.plan,
+        savePoint: restore.savePoint,
+        deletedExecutionHistoryIds: restore.deletedExecutionHistoryIds,
+      }
+    }
+    const outcome = await guard.apply(
+      mutation,
       approval,
       {
         afterWrite: async () => {
@@ -260,7 +313,7 @@ export class PlannerResultPersistenceService {
         },
       },
     )
-    return outcome.result
+    return { kind: 'saved', plan: outcome.result }
   }
 
   /**

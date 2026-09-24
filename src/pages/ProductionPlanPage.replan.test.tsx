@@ -228,7 +228,7 @@ function dependencies(
     createInput: vi.fn(async () => fixtureInput(target, entry)),
     createWorkerClient: vi.fn(() => client),
     inspectPlannerResultSave: vi.fn(async () => ({ approvalRequired: false as const })),
-    savePlannerResult: vi.fn(async () => null),
+    savePlannerResult: vi.fn(async () => ({ kind: 'no_plan' as const })),
     inspectProductionPlanStart: vi.fn(async (planId) => ({ planId, changes: [], ownedWeapons: [], targetWeapons: [] })),
     startProductionPlan: vi.fn(async () => {
       throw new Error('startProductionPlan is not expected in this test')

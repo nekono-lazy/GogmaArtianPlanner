@@ -2130,7 +2130,20 @@ context, approval?)`: the whole save is one `PlanGuardedMutation` through the ex
 the new Draft in the same transaction; its collection write now adds a record the
 read state did not hold instead of putting it), so replacing an Entry the `active`
 Plan depends on needs the approval and ends that Plan (`breaking_change_approved`)
-atomically, while a Draft / stale / ended Plan referencing `O` needs none. The B10
+atomically, while a Draft / stale / ended Plan referencing `O` needs none. Choosing
+「最後のゲーム内セーブ地点へ戻す」 in that approval is the one exception to the generic
+restore -> change -> abandonment of a guarded change (`docs/PLANNER_SPEC.md` 9.2.18 /
+16.10): the Planner result was calculated before the restore and is no authority over
+the restored state, so only the save point restore is written
+(`preparePlanGuardedSavePointRestoreInsteadOfChange()` sharing the approval / choice checks
+with `preparePlanGuardedMutation()`, `prepareExecutionSavePointRestore()` unchanged,
+`PlanBreakingChangeGuard.restoreSavePointInsteadOfChange()`, and the same
+`writeExecutionSavePointRestore()` the ordinary restore uses), nothing of the result -
+no `G`, no `O` removal, no Draft change, no `breaking_change_approved` - and
+`savePlannerOrchestrationResult()` returns the typed
+`save_point_restored_recalculation_required` outcome (`saved` / `no_plan` otherwise) so the
+screen asks for a new calculation; the snapshot checks are never weakened to fit the old
+result, and every other guarded change keeps restore -> change -> abandonment. The B10
 recalculation save on the Production Plan page goes through
 `usePlanBreakingChangeApproval()` / `PlanBreakingChangeDialog`; the Build List page's
 ordinary input carries no conflict resolution, so B8 never runs there and it needs no

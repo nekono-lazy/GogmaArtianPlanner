@@ -3720,9 +3720,25 @@ Stepが削除済みEntryを参照しない。表示中Planから復元するexpl
   `planner_state_changed` 相当で何も書かない
 - `O` が `active` PlanのPlan依存Entryである場合、置換は既存Plan-breaking guard（16.6）の判定対象である。
   guardを迂回せず、承認が無ければ何も保存しない（`plan_breaking_change_approval_required` とinspection）。
-  承認時は16.10の選択を経て、Draft保存・Entry置換・active Planの `abandoned`
-  （`breaking_change_approved`）を同一transactionで行う。`O` を参照するのがDraft / stale / 終了済みPlanだけ
+  承認時は16.10の選択を経て、「現在地点を維持」（選択が出ない承認を含む）ではDraft保存・Entry置換・active Planの
+  `abandoned`（`breaking_change_approved`）を同一transactionで行う。`O` を参照するのがDraft / stale / 終了済みPlanだけ
   なら、既存のEntry削除と同じくguard対象にしない
+- この承認で「最後のゲーム内セーブ地点へ戻す」を選んだ場合は、16.9のセーブ地点復元 **だけ** を行い、Planner resultの
+  保存は中止する（16.10）。Planner resultは復元前のRNG・Counter・OwnedWeapon・Target実行状態・Build Listから
+  計算したprecomputed artifactであり、その `PlanningInputSnapshot` は復元後の状態のauthorityではないためである。
+  generated Entryの追加、`O` の削除、旧Draftの削除、新Draftの追加、Planner resultのPlanはいずれも書かず、
+  実行中Planは既存の復元authorityどおり復元されたPlanのまま（`breaking_change_approved` にしない）とし、結果を
+  `save_point_restored_recalculation_required` として返して復元後の状態からの再計算を求める。これはsnapshot検証
+  （`initialExecutionState`、`targetWeaponsHash`、`buildListEntriesHash`、generated Entryのfreshness等）を
+  弱めるものではなく、snapshot authorityを守るために旧resultを捨てる規則である。再計画採用が復元で採用を中止する
+  （16.8）のと同じ理由による。承認・Planの一致・16.10の選択・セーブ地点の `recordedAt` の検証と復元自体の
+  fail-closed条件は通常の承認と同じで、失敗時は何も変更しない
+- 実装: `PlannerResultPersistenceService.savePlannerOrchestrationResult()` は `saved` / `no_plan` /
+  `save_point_restored_recalculation_required` のtyped outcomeを返す。復元の判定と書き込みは
+  `preparePlanGuardedSavePointRestoreInsteadOfChange()`（承認と選択の検証は `preparePlanGuardedMutation()` と共有、
+  復元は `prepareExecutionSavePointRestore()`）と `PlanBreakingChangeGuard.restoreSavePointInsteadOfChange()`
+  （書き込みは `restoreExecutionSavePoint()` と共通の `writeExecutionSavePointRestore()`）であり、復元を独自に
+  書き換える処理を持たない。通常のPlan-breaking変更（`PlanBreakingChangeGuard.apply()`）の意味は変えない
 - 再計画採用（16.8）では、旧実行中Planを `abandoned`（`replan_adopted`）にするのと同じtransactionで
   置換する。旧実行中Planは採用で終了するため、`O` がそのPlan依存Entryであっても別の警告を追加しない。
   他の実行中Planは存在し得ない（16.8の既存検証）
@@ -5422,6 +5438,12 @@ Planを壊す変更の承認）を行う場合、ゲーム側でユーザーが�
 - 「最後のゲーム内セーブ地点へ戻す」は16.9の復元を行ってから破棄操作を続ける。
   Planを壊す変更の承認では、復元 -> Plan破棄 -> 変更保存の順とする。
   再計画採用だけは16.8のとおり採用を中止する
+- 例外として、Planを壊す変更が **Planner result（`PlannerOrchestrationResult`）の保存** である場合
+  （9.2.18、generated Entryによる作成リスト置換）は、復元だけを行い変更を保存しない。Planner resultは復元前の
+  状態から計算したartifactであり、復元後の状態に対するauthorityではないため、変更を復元後の状態へ再適用しない。
+  generated Entry / Entry置換 / Draft置換を書かず、Planも破棄せず（復元されたPlanのまま）、復元後の状態からの
+  再計算を求める。snapshot検証は弱めない。RNG編集、Counter編集、所持武器・目標武器の編集、作成リストの手動変更
+  など通常の変更は従来どおり 復元 -> 変更 -> Plan破棄 である
 - セーブ地点が存在しない場合、またはセーブ地点の後にこのPlanのExecutionHistoryが無い
   （現在位置と同じ）場合は選択を出さない
 - 妥協品として確定して終了（16.12）は、現在の武器状態を確定する操作なので選択を出さない
