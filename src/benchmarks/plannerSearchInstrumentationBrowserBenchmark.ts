@@ -6,8 +6,9 @@ import {
   createPlannerInput,
 } from '../services/planner/createPlannerInput'
 import { validateExportRootForFullReplacement } from '../services/dataTransfer/importExportValidation'
-import type { PlannerSearchInstrumentationRunResult } from './plannerSearchInstrumentationBenchmark'
+import type { PlannerBenchmarkStrategy } from './plannerSchedulerParity'
 import type {
+  PlannerBenchmarkRunResult,
   PlannerSearchInstrumentationBenchmarkRequest,
   PlannerSearchInstrumentationBenchmarkResponse,
   PlannerSearchInstrumentationBenchmarkSource,
@@ -18,16 +19,24 @@ import type {
  * benchmark Worker, terminated when the run settles. Nothing is persisted.
  */
 
-export interface PlannerSearchInstrumentationBrowserRun {
+/**
+ * One settled Browser run. The Beam Search variant keeps the PR #107
+ * `result` field, so an existing caller reading `run.result` is unchanged.
+ */
+export type PlannerSearchInstrumentationBrowserRun = PlannerBenchmarkRunResult & {
   readonly entryCount: number
   readonly roundTripMs: number
-  readonly result: PlannerSearchInstrumentationRunResult
 }
 
 export interface PlannerSearchInstrumentationBrowserRunHandle {
   readonly promise: Promise<PlannerSearchInstrumentationBrowserRun>
   cancel(): void
 }
+
+/** Live progress: a Beam Search depth, or the scheduler's applied action count. */
+export type PlannerBenchmarkLiveProgress =
+  | { kind: 'depth'; depth: PlannerSearchDepthMetrics; elapsedMs: number }
+  | { kind: 'progress'; expandedStates: number; elapsedMs: number }
 
 export function createPlannerSearchInstrumentationBenchmarkWorker(): Worker {
   return new Worker(
@@ -42,8 +51,10 @@ export function startPlannerSearchInstrumentationBrowserRun(
     options: PlannerOptions
     instrumented: boolean
     collectDiagnosticProjections: boolean
+    strategy?: PlannerBenchmarkStrategy
+    summarize?: boolean
   },
-  onDepth: (depth: PlannerSearchDepthMetrics, elapsedMs: number) => void,
+  onProgress: (progress: PlannerBenchmarkLiveProgress) => void,
   createWorker: () => Worker = createPlannerSearchInstrumentationBenchmarkWorker,
   now: () => number = () => performance.now(),
 ): PlannerSearchInstrumentationBrowserRunHandle {
@@ -57,7 +68,15 @@ export function startPlannerSearchInstrumentationBrowserRun(
         const response = event.data
         if (response.requestId !== requestId) return
         if (response.type === 'issue103_depth') {
-          onDepth(response.depth, response.elapsedMs)
+          onProgress({ kind: 'depth', depth: response.depth, elapsedMs: response.elapsedMs })
+          return
+        }
+        if (response.type === 'issue103_progress') {
+          onProgress({
+            kind: 'progress',
+            expandedStates: response.expandedStates,
+            elapsedMs: response.elapsedMs,
+          })
           return
         }
         worker.terminate()
@@ -66,9 +85,9 @@ export function startPlannerSearchInstrumentationBrowserRun(
           return
         }
         resolve({
+          ...response.run,
           entryCount: response.entryCount,
           roundTripMs: now() - startedAt,
-          result: response.result,
         })
       },
     )

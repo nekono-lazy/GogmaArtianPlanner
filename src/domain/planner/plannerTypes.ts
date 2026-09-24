@@ -29,6 +29,7 @@ import type { RngEngine } from '../rng/rngEngine'
 import type { BuildListEntryReplacement } from '../buildList/buildListEntryReplacement'
 import type { PlannerLaneProgress } from './plannerRouteLanes'
 import type { PlannerSearchInstrumentation } from './plannerSearchInstrumentation'
+import type { PlannerSchedulerInstrumentation } from './plannerSchedulerInstrumentation'
 
 export interface PlannerOptions {
   maxPlanSteps: number
@@ -563,6 +564,14 @@ export interface PlannerExecutionOptions {
    * (`plannerSearchInstrumentation.ts`).
    */
   searchInstrumentation?: PlannerSearchInstrumentation
+  /**
+   * Benchmark / test-only observation of each deterministic scheduler run
+   * (Issue #103 Phase B). Semantics-neutral like `searchInstrumentation`;
+   * `undefined` runs exactly the ordinary scheduler, and no Worker protocol,
+   * `PlannerResult`, or persistence carries it
+   * (`plannerSchedulerInstrumentation.ts`).
+   */
+  schedulerInstrumentation?: PlannerSchedulerInstrumentation
 }
 
 export type CreateProductionPlanCalculation = (

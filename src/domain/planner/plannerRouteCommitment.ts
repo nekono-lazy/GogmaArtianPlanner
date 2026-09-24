@@ -87,11 +87,32 @@ export interface PlannerRouteCommitmentContext {
   readonly initialRelevantEntries: readonly BuildListEntry[]
 }
 
+/**
+ * Read-only callbacks for `PlannerSchedulerInstrumentation`
+ * (`plannerSchedulerInstrumentation.ts`). They are told what commitment already
+ * decided and never influence it; `undefined` does no extra work.
+ */
+export interface PlannerRouteCommitmentObserver {
+  /** One `createPlannerRouteCommitment()` or `canCommitPlannerRoute()` call. */
+  commitmentRun(): void
+  /** One `detectPlannerConflicts()` call made by commitment. */
+  collisionDetection(detectedConflicts: number): void
+  /** One iteration of the provisional outcome loop that found a collision. */
+  commitmentIteration(): void
+  /** The decided winner of one iteration and the Entries it pushed out. */
+  provisionalOutcome(
+    winner: BuildListEntry,
+    losers: readonly { entry: BuildListEntry; conflict: PlanConflict }[],
+  ): void
+}
+
 export type PlannerRouteCommitmentResult =
   | {
       status: 'ready'
       records: Map<BuildListEntryId, PlannerRouteCommitmentRecord>
       rejections: PlannerSearchRejection[]
+      /** Entries that entered the provisional outcome loop (6.5). */
+      candidateCount: number
     }
   | {
       /**
@@ -271,6 +292,7 @@ function detectCollisions(
   state: PlannerSearchState,
   entries: readonly BuildListEntry[],
   context: PlannerRouteCommitmentContext,
+  observer: PlannerRouteCommitmentObserver | undefined,
 ) {
   const unitPlans = new Map(
     entries.map((entry) => [entry.id, remainingUnits(state, entry, context.allLanePlans)] as const),
@@ -284,6 +306,7 @@ function detectCollisions(
     [],
     false,
   )
+  observer?.collisionDetection(detection.conflicts.length)
   return { detection, actionKeys: conflictActionKeysByEntry(detection, unitPlans) }
 }
 
@@ -316,7 +339,9 @@ function notCommittedRejection(
 export function createPlannerRouteCommitment(
   state: PlannerSearchState,
   context: PlannerRouteCommitmentContext,
+  observer?: PlannerRouteCommitmentObserver,
 ): PlannerRouteCommitmentResult {
+  observer?.commitmentRun()
   const selectedByTarget = new Map<TargetWeaponId, Set<BuildListEntryId>>()
   context.initialConflictDetection.conflicts.forEach((conflict) => {
     const selected = conflict.selectedBuildListEntryId
@@ -371,8 +396,9 @@ export function createPlannerRouteCommitment(
   const decided = new Set<BuildListEntryId>()
   let remaining = [...candidates]
   for (;;) {
-    const { detection, actionKeys } = detectCollisions(state, remaining, context)
+    const { detection, actionKeys } = detectCollisions(state, remaining, context, observer)
     if (detection.conflicts.length === 0) break
+    observer?.commitmentIteration()
     const undecided = [...new Set(detection.conflicts.flatMap(({ buildListEntryIds }) => buildListEntryIds))]
       .filter((entryId) => !decided.has(entryId))
       .flatMap((entryId) => {
@@ -392,13 +418,17 @@ export function createPlannerRouteCommitment(
     losers.forEach(({ entry, collision }) =>
       drop(entry.id, notCommittedRejection(entry.id, winner.id, collision)),
     )
+    observer?.provisionalOutcome(
+      winner,
+      losers.map(({ entry, collision }) => ({ entry, conflict: collision.conflict })),
+    )
     const loserIds = new Set(losers.map(({ entry }) => entry.id))
     remaining = remaining.filter((entry) => !loserIds.has(entry.id))
   }
   remaining.forEach((entry) =>
     records.set(entry.id, { buildListEntryId: entry.id, status: 'committed', rejection: null }),
   )
-  return { status: 'ready', records, rejections }
+  return { status: 'ready', records, rejections, candidateCount: candidates.length }
 }
 
 /**
@@ -411,9 +441,11 @@ export function canCommitPlannerRoute(
   entry: BuildListEntry,
   committed: readonly BuildListEntry[],
   context: PlannerRouteCommitmentContext,
+  observer?: PlannerRouteCommitmentObserver,
 ): boolean {
+  observer?.commitmentRun()
   if (plannerRouteCommitmentRejection(state, entry, context) !== null) return false
-  const { detection, actionKeys } = detectCollisions(state, [...committed, entry], context)
+  const { detection, actionKeys } = detectCollisions(state, [...committed, entry], context, observer)
   return committed.every(
     (other) => findCollision(other.id, entry.id, detection, actionKeys) === null,
   )

@@ -39,6 +39,11 @@ import {
 } from './plannerRouteProgress'
 import { evaluatePlannerSearchState } from './plannerScoring'
 import {
+  createPlannerSchedulerMetricsCollector,
+  reportUnscheduledPlannerRun,
+  type PlannerSchedulerMetricsCollector,
+} from './plannerSchedulerInstrumentation'
+import {
   comparePlannerScheduleActions,
   plannerScheduleStreamKey,
   plannerScheduleStreamRank,
@@ -151,6 +156,8 @@ export class PlannerDeterministicScheduleRun {
   private readonly routeActionContext: PlannerRouteActionContext
   private readonly reserveActionContext: PlannerReserveActionContext
   private readonly executionOptions: PlannerExecutionOptions
+  /** `null` unless `executionOptions.schedulerInstrumentation` was given. */
+  private readonly metrics: PlannerSchedulerMetricsCollector | null
 
   constructor(
     input: PlannerInput,
@@ -162,6 +169,18 @@ export class PlannerDeterministicScheduleRun {
     this.context = context
     this.executionOptions = executionOptions
     this.state = context.initialState
+    this.metrics = createPlannerSchedulerMetricsCollector(
+      executionOptions.schedulerInstrumentation,
+      () => ({
+        entriesById: context.entriesById,
+        planningTargetCount: context.planningTargetIds.length,
+        searchEntryCount: context.allSearchEntries.length,
+        options: {
+          maxExpandedStates: input.options.maxExpandedStates,
+          maxPlanSteps: input.options.maxPlanSteps,
+        },
+      }),
+    )
     this.rejections = [...context.routePlanRejections]
     this.rejectionKeys = new Set(this.rejections.map(plannerRejectionKey))
     context.initialConflictDetection.conflicts.forEach((conflict) =>
@@ -209,6 +228,7 @@ export class PlannerDeterministicScheduleRun {
    * Returns the refusal message of a malformed resolution set, or `null`.
    */
   initialize(): string | null {
+    const startedAt = this.metrics?.mark()
     const context = this.context
     applyPlannerZeroOperationConfirms(
       this.state,
@@ -222,10 +242,19 @@ export class PlannerDeterministicScheduleRun {
       'in_place',
       (rejection) => this.recordRejection(rejection),
     )
-    const commitment = createPlannerRouteCommitment(this.state, this.commitmentContext)
-    if (commitment.status === 'invalid') return commitment.message
+    const commitment = createPlannerRouteCommitment(
+      this.state,
+      this.commitmentContext,
+      this.metrics ?? undefined,
+    )
+    if (commitment.status === 'invalid') {
+      this.metrics?.addPhaseTime('initialize', startedAt)
+      return commitment.message
+    }
     commitment.records.forEach((record, entryId) => this.records.set(entryId, record))
     commitment.rejections.forEach((rejection) => this.recordRejection(rejection))
+    this.metrics?.initialCommitment([...commitment.records.values()], commitment.candidateCount)
+    this.metrics?.addPhaseTime('initialize', startedAt)
     return null
   }
 
@@ -257,6 +286,7 @@ export class PlannerDeterministicScheduleRun {
     status: PlannerRouteCommitmentStatus,
     rejection: PlannerSearchRejection | null = null,
   ) {
+    this.metrics?.statusChange(entryId, this.statusOf(entryId), status, rejection)
     this.records.set(entryId, { buildListEntryId: entryId, status, rejection })
     if (rejection !== null) this.recordRejection(rejection)
   }
@@ -331,7 +361,15 @@ export class PlannerDeterministicScheduleRun {
       if (!entryIsRelevantForState(this.state, entry, this.context.checkpointRequirements)) continue
       const committed = this.committedEntries()
       if (committed.some(({ targetWeaponId }) => targetWeaponId === entry.targetWeaponId)) continue
-      if (canCommitPlannerRoute(this.state, entry, committed, this.commitmentContext)) {
+      if (
+        canCommitPlannerRoute(
+          this.state,
+          entry,
+          committed,
+          this.commitmentContext,
+          this.metrics ?? undefined,
+        )
+      ) {
         this.setStatus(entry.id, 'committed')
         changed = true
       }
@@ -406,6 +444,17 @@ export class PlannerDeterministicScheduleRun {
    * Evaluating them builds no state: only the one returned first is applied.
    */
   safeActions(): PlannerScheduleAction[] {
+    return this.listSafeActions().actions
+  }
+
+  /**
+   * `safeActions()` plus how many stream positions (and blind forges) wait:
+   * a holding unit that is not ready, holding units that are not one physical
+   * action, or a blind forge held back by a predicted forge (7.3). The count is
+   * reported to the instrumentation only; nothing reads it to decide.
+   */
+  private listSafeActions(): { actions: PlannerScheduleAction[]; waitingStreams: number } {
+    let waitingStreams = 0
     const committed = this.committedEntries()
     const frontiers = new Map<string, FrontierUnit[]>()
     const blindUnits: FrontierUnit[] = []
@@ -446,7 +495,10 @@ export class PlannerDeterministicScheduleRun {
         // Only the one physical action that runs every holding unit here is
         // safe; a holding unit that is not ready makes the position wait.
         const primary = holdings.find(({ ready }) => ready)
-        if (!primary) continue
+        if (!primary) {
+          waitingStreams += 1
+          continue
+        }
         const progressed = mergedPlannerProgressedEntries(
           this.state,
           primary.unit,
@@ -455,6 +507,8 @@ export class PlannerDeterministicScheduleRun {
         const progressedKeys = new Set(progressed.map(plannerRouteUnitKey))
         if (holdings.every(({ unit }) => progressedKeys.has(plannerRouteUnitKey(unit)))) {
           actions.push(this.createAction('holding', streamKey, primary, progressed))
+        } else {
+          waitingStreams += 1
         }
         continue
       }
@@ -482,10 +536,13 @@ export class PlannerDeterministicScheduleRun {
       const counterId = `${operation.weaponTypeId}:${operation.rarity}`
       const counter = this.state.currentNormalCounters.find(({ id }) => id === counterId)
       const confirmed = counter !== undefined && counter.isConfirmed && counter.counter !== null
-      if (confirmed && pendingNormalCounterIds.has(counterId)) continue
+      if (confirmed && pendingNormalCounterIds.has(counterId)) {
+        waitingStreams += 1
+        continue
+      }
       actions.push(this.createAction('blind_forge', null, blind, [blind.unit]))
     }
-    return actions.sort(comparePlannerScheduleActions)
+    return { actions: actions.sort(comparePlannerScheduleActions), waitingStreams }
   }
 
   private createAction(
@@ -637,6 +694,7 @@ export class PlannerDeterministicScheduleRun {
   private reserve(entry: BuildListEntry): boolean {
     const target = this.targetOf(entry)
     if (target === undefined) {
+      this.metrics?.expectDrop('reserve_rejected')
       this.setStatus(entry.id, 'dropped', createPlannerSearchRejection(
         entry.id,
         'reserve_weapon',
@@ -654,11 +712,13 @@ export class PlannerDeterministicScheduleRun {
       { mode: 'in_place' },
     )
     if (applied.rejection !== null) {
+      this.metrics?.expectDrop('reserve_rejected')
       this.setStatus(entry.id, 'dropped', applied.rejection)
       return true
     }
     this.setStatus(entry.id, 'secured')
     this.actionApplied()
+    this.metrics?.reserveApplied()
     return true
   }
 
@@ -678,6 +738,7 @@ export class PlannerDeterministicScheduleRun {
     if (loser === undefined) return
     const stalled = this.hasStalledStream(pending)
     const unit = this.remainingUnitsOf(loser)[0]
+    this.metrics?.expectDrop(stalled ? 'stall' : 'deadlock')
     this.setStatus(loser.id, 'dropped', createPlannerSearchRejection(
       loser.id,
       unit?.operation.type ?? 'reserve_weapon',
@@ -708,34 +769,63 @@ export class PlannerDeterministicScheduleRun {
    * action (with the reserves it makes due), or one deadlock / stall drop.
    */
   step(): PlannerScheduleStepOutcome {
+    const metrics = this.metrics
+    metrics?.beginIteration()
+    let startedAt = metrics?.mark()
     this.refreshCommitment()
-    if (!this.reserveUnitlessEntries()) return 'bounded'
+    metrics?.addPhaseTime('refreshCommitment', startedAt)
+    startedAt = metrics?.mark()
+    const reservedUnitless = this.reserveUnitlessEntries()
+    metrics?.addPhaseTime('reserve', startedAt)
+    if (!reservedUnitless) return 'bounded'
+    startedAt = metrics?.mark()
     this.refreshCommitment()
+    metrics?.addPhaseTime('refreshCommitment', startedAt)
     const pending = this.committedEntries().filter(
       (entry) => this.remainingUnitsOf(entry).length > 0,
     )
     if (this.isComplete() || pending.length === 0) return 'finished'
-    const action = this.safeActions()[0]
+    startedAt = metrics?.mark()
+    const listed = this.listSafeActions()
+    metrics?.addPhaseTime('safeActions', startedAt)
+    metrics?.safeActionsListed(listed.actions.length, listed.waitingStreams)
+    const action = listed.actions[0]
     if (action === undefined) {
       this.dropStuckEntry(pending)
       return 'dropped'
     }
     if (!this.canApplyAction()) return 'bounded'
+    startedAt = metrics?.mark()
+    // Instrumentation only: progress objects are replaced, never mutated, so a
+    // shallow copy keeps the values before the action.
+    const progressBefore = metrics === null ? null : { ...this.state.routeProgressByEntryId }
     const applied = applyPlannerRouteAction(
       this.state,
       action.primary,
       this.routeActionContext,
       { mode: 'in_place' },
     )
+    metrics?.addPhaseTime('applyAction', startedAt)
     if (applied.rejection !== null) {
       // The state was not written (Phase A0 contract); the Entry is dropped
       // and the schedule continues without it (6.8).
+      metrics?.expectDrop('action_rejected')
       this.setStatus(action.primary.entryId, 'dropped', applied.rejection)
       this.collectDynamicConflicts()
       return 'dropped'
     }
     this.actionApplied()
-    if (!this.reserveCompletedEntries()) return 'bounded'
+    if (progressBefore !== null) {
+      metrics?.routeActionApplied(
+        this.state.trace.at(-1),
+        progressBefore,
+        this.state.routeProgressByEntryId,
+      )
+    }
+    startedAt = metrics?.mark()
+    const reserved = this.reserveCompletedEntries()
+    metrics?.addPhaseTime('reserve', startedAt)
+    if (!reserved) return 'bounded'
     return 'applied'
   }
 
@@ -768,6 +858,14 @@ export class PlannerDeterministicScheduleRun {
 
   /** The `PlannerBeamSearchResult`-compatible result of the schedule so far. */
   finish(cancelled: boolean): PlannerBeamSearchResult {
+    const startedAt = this.metrics?.mark()
+    const result = this.buildResult(cancelled)
+    this.metrics?.addPhaseTime('finish', startedAt)
+    this.metrics?.finish(result, this.commitmentRecords())
+    return result
+  }
+
+  private buildResult(cancelled: boolean): PlannerBeamSearchResult {
     const warnings = this.context.warnings
     if (this.reachedStepLimit) {
       addPlannerWarning(
@@ -929,7 +1027,18 @@ export async function runPlannerDeterministicSchedule(
     executionOptions,
     buildListContext,
   )
-  if (created.status === 'finished') return created.result
+  if (created.status === 'finished') {
+    reportUnscheduledPlannerRun(
+      executionOptions.schedulerInstrumentation,
+      {
+        maxExpandedStates: input.options.maxExpandedStates,
+        maxPlanSteps: input.options.maxPlanSteps,
+        searchEntryCount: input.buildListEntries.length,
+      },
+      created.result,
+    )
+    return created.result
+  }
   const run = created.run
   let cancelled = false
   let appliedSinceYield = 0

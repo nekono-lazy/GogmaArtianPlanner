@@ -516,6 +516,56 @@ export async function createProductionPlanWithObserver(
   observer?: ProductionPlanGenerationObserver,
   buildListContext: PlannerRunBuildListContext = PERSISTED_PLANNER_BUILD_LIST_CONTEXT,
 ): Promise<PlannerResult> {
+  // Production is fixed to the Beam Search (Issue #103 Phase B): no caller,
+  // Worker message or setting chooses the full search.
+  return createProductionPlanWithSearchRunner(
+    runPlannerBeamSearch,
+    input,
+    dependencies,
+    options,
+    observer,
+    buildListContext,
+  )
+}
+
+/**
+ * One full Planner search over one input: the Beam Search, or - in tests and
+ * benchmarks only - the deterministic scheduler, whose result has the same
+ * shape (`docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md` 13).
+ */
+export type PlannerFullSearchRunner = (
+  input: PlannerInput,
+  dependencies: PlannerDependencies,
+  options: PlannerExecutionOptions | undefined,
+  buildListContext: PlannerRunBuildListContext,
+) => Promise<PlannerBeamSearchResult>
+
+/**
+ * `createProductionPlanWithObserver()` with the full search passed in
+ * (Issue #103 Phase B).
+ *
+ * Only the full search is replaced; everything after it - the
+ * runtime-unsupported retry, Trace Replay, the execution projection, the
+ * `PlanningInputSnapshot`, the checkpoint requirement defence, the rejected
+ * Build List record and the required materials - is this one shared
+ * implementation. `observer.beforeBeamSearch()` / `afterBeamSearch()` wrap
+ * every full search exactly as before, so the B8 / what-if rerun budgets keep
+ * counting full Planner runs whichever search runs.
+ *
+ * Production never calls this with anything but `runPlannerBeamSearch`
+ * (through `createProductionPlanWithObserver()`); the parity harness, the
+ * Issue #103 benchmark and the B8 / B9 scheduler tests inject the scheduler.
+ * It is a Domain function value, never a Worker message, a `PlannerInput`
+ * field, a setting or a persisted value.
+ */
+export async function createProductionPlanWithSearchRunner(
+  searchRunner: PlannerFullSearchRunner,
+  input: PlannerInput,
+  dependencies: PlannerDependencies,
+  options: PlannerExecutionOptions | undefined,
+  observer?: ProductionPlanGenerationObserver,
+  buildListContext: PlannerRunBuildListContext = PERSISTED_PLANNER_BUILD_LIST_CONTEXT,
+): Promise<PlannerResult> {
   const runtimeUnsupported = new Map<BuildListEntryId, string>()
   let beamResult: PlannerBeamSearchResult | null = null
   let replay: PlannerTraceReplayResult | null = null
@@ -541,7 +591,7 @@ export async function createProductionPlanWithObserver(
             ),
           }
     observer?.beforeBeamSearch()
-    beamResult = await runPlannerBeamSearch(beamInput, dependencies, options, beamContext)
+    beamResult = await searchRunner(beamInput, dependencies, options, beamContext)
     observer?.afterBeamSearch?.(beamResult)
     if (
       beamResult.cancelled ||

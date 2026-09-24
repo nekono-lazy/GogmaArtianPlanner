@@ -31,7 +31,7 @@ authorityの配置:
 | 永続Build Listの1 Target = 最大1 Entry、Candidate追加時の置換、legacy duplicateのfail closed | [REQUIREMENTS.md](./REQUIREMENTS.md) 18、[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1 | **実装済み**（Phase 0-1: Domain / Service基盤、通常Planner入力のfail closed、Import / Exportの保持。Phase 0-2: Search画面の置換確認、Build Listのlegacy duplicate案内。Phase 0-3: constrained re-search / what-if / 再計画の置換） |
 | Search画面からの追加 / 置換 | [SEARCH_SPEC.md](./SEARCH_SPEC.md) 10.1、[UI_FLOW.md](./UI_FLOW.md) 9 / 10 | **実装済み**（Phase 0-1: Service結果型と置換API、Phase 0-2: 画面の置換確認Dialog / 案内） |
 | constrained re-search / what-if / 再計画とBuild List cardinality | [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18 | **実装済み**（Phase 0-3） |
-| 決定的scheduler（Route commitment、scheduling、termination、schema境界） | 本書 | target design（Phase A: Domain実装済み・Production未接続）。Phase CでREQUIREMENTS 19 / 20、PLANNER_SPEC 7等を改訂して正式化 |
+| 決定的scheduler（Route commitment、scheduling、termination、schema境界） | 本書 | target design（Phase A: Domain実装済み・Production未接続。Phase B: parity / instrumentation / 実Browser計測済み、Phase C readiness NOT READY）。Phase CでREQUIREMENTS 19 / 20、PLANNER_SPEC 7等を改訂して正式化 |
 
 - 本書の追加時点で `src/**`、テスト、schema version、Worker protocol、UIは一切変更していない
 - Build List cardinalityは **Build List自体の契約** であり、Plannerの都合ではない。したがって
@@ -1150,6 +1150,27 @@ REQUIREMENTS 18へ記載済み。実装は次の順で小さく分ける。
   記録文書を追加する
 - 本Phaseでも、B8 / B9のtestをtest専用の戦略注入でschedulerに対して実行し、adoption / feasibility契約が
   成立することを確認する（Production経路は変えない）
+- **実装済み（Production未接続）**。実Browser Worker計測は2026-09-25（UTC 2026-09-24）。記録は
+  [ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md](./ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md)
+  - parity harnessは `src/benchmarks/plannerSchedulerParity.ts`（`runPlannerSchedulerParity()`、
+    `summarizePlannerStrategyRun()`、`comparePlannerStrategyRuns()`）。必ず一致（Trace Replay、planning Target、
+    完了 / terminationの意味、required checkpoint、milestone、Production projection、fail-closed入力validation）、
+    completion regression（原因分類つき、自動で許容しない）、許容差（記録のみ）の3分類で比較する
+  - scheduler instrumentationは `src/domain/planner/plannerSchedulerInstrumentation.ts`
+    （`PlannerExecutionOptions.schedulerInstrumentation`、semantics-neutral、Beam depth modelを流用しない）
+  - 戦略注入は `createProductionPlanWithSearchRunner()`（`productionPlanGeneration.ts`）。full searchだけを
+    差し替え、後段（runtime-unsupported retry、Trace Replay、projection、snapshot、checkpoint defence、
+    rejected / materials、observer）は共有する。Productionの `createProductionPlanWithObserver()` は
+    `runPlannerBeamSearch` 固定で、Worker / `PlannerInput` / UI / 設定に戦略は無い。B8 / B9のscheduler testは
+    test moduleの差し替えでだけこれを使う
+  - Browser Workerは既存Issue #103 benchmark Workerを拡張した（benchmark requestだけの `strategy`、
+    `issue103Benchmark.run({ strategy })` / `issue103Benchmark.compare()`）
+  - **Phase C readiness: NOT READY**。acceptance fixture「deadlock」（7.8の例）でBeam Searchが両Targetを
+    完成させ（Trace Replay有効）、schedulerはdeadlockとして1件落とす。Beamは、pin-blockedのskip可能unitが
+    通過されてもpin解除後に `fastForwardPlannerRouteProgress()` で通過できることを示しており、5章の
+    「pin-blockedのskip可能unitはholding」と7.8「どの順でも両方は成立しない」がこの例では成り立たない。
+    schedulerのsemantics変更（holding判定・lane-head判定・commitment判定）を伴うため本Phaseでは直さず、
+    Phase C前の仕様判断事項とする（記録文書の「Phase C readiness」）
 
 ### Phase C: Production routing切替
 
@@ -1221,6 +1242,12 @@ UI実装
 
 Phase CのPull Requestでは、15.2の影響（実行中のversion 13 Planがstaleになり再計画が必要になること）を
 プロジェクトオーナーへ明示する。これは決定済み事項の周知であり、Phase 0 / A / Bを止めない。
+
+**Phase Bで判明したPhase C前の判断事項（未決）。** pin-blockedのskip可能unitをholdingとして扱う5章 / 7.4の
+規則と、それに基づく6.8のlane-head判定・commitment判定・7.8のdeadlock判定は、Phase Bのparityで
+Beam Searchに反証された（acceptance fixture「deadlock」でBeamが両Targetを完成、Trace Replay有効）。
+規則を維持してこの差を意図した差として正式に受け入れるか、規則を改めてschedulerのsemanticsを変えるかを
+Phase Cの前に決める（[ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md](./ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md)）。
 
 ### 19.2 Can defer
 
