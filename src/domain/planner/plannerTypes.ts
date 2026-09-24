@@ -410,6 +410,14 @@ export type PlannerWarningKind =
    */
   | 'invalid_checkpoint_selection'
   /**
+   * A planning Target holds two or more BuildListEntries in an ordinary
+   * persisted Planner input - a legacy duplicate of the Build List cardinality
+   * contract (`docs/DATA_MODEL.md` 9.4.1, `docs/PLANNER_SPEC.md` 4.1). The whole
+   * input fails closed with a validation issue: the Planner never picks one
+   * Entry by Route length, `createdAt`, staleness or ID.
+   */
+  | 'duplicate_build_list_entries_for_target'
+  /**
    * A BuildListEntry of a `completed` Target was left out of Planner input.
    * The Entry is not stale and needs no re-search: its Target already has its
    * Ideal weapon (`docs/DATA_MODEL.md` 8.1).
@@ -438,6 +446,7 @@ export const plannerWarningKinds: readonly PlannerWarningKind[] = [
   'selected_checkpoint_target_already_ideal',
   'selected_checkpoint_fixes_target_entry',
   'invalid_checkpoint_selection',
+  'duplicate_build_list_entries_for_target',
   'completed_target_excluded',
 ]
 
@@ -484,6 +493,23 @@ export interface PlannerProgress {
   expandedStates: number
   maxExpandedStates: number
 }
+
+/**
+ * Which Build List cardinality contract one Planner input carries
+ * (`docs/DATA_MODEL.md` 9.4.1, `docs/PLANNER_SPEC.md` 4.1 / 9.2.18).
+ *
+ * - `persisted`: an ordinary Planner input built from the persisted Build
+ *   List - the Planner run, the replan Preview, the B10 interaction and the
+ *   original input of a B8 / what-if request. At most one BuildListEntry per
+ *   planning Target; a legacy duplicate fails the whole input closed.
+ * - `temporary_augmented`: a B8 constrained re-search or what-if trial input,
+ *   where the original Entry and the temporary generated Entries of one Target
+ *   may coexist. It is never persisted, and only the constrained Domain
+ *   orchestration passes it: no Worker request, UI or persisted record selects it.
+ *
+ * It is a Domain calling-context parameter, never a `PlannerInput` field.
+ */
+export type PlannerBuildListCardinality = 'persisted' | 'temporary_augmented'
 
 export interface PlannerExecutionOptions {
   shouldCancel?: () => boolean

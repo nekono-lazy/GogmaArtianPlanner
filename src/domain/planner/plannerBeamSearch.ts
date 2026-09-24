@@ -72,6 +72,7 @@ import type {
   ExcludedBuildListEntry,
   PlannerBeamSearchResult,
   PlannerDependencies,
+  PlannerBuildListCardinality,
   PlannerExecutionOptions,
   PlannerInput,
   PlannerSearchAction,
@@ -1145,8 +1146,9 @@ export async function runPlannerBeamSearch(
   input: PlannerInput,
   dependencies: PlannerDependencies,
   executionOptions: PlannerExecutionOptions = {},
+  cardinality: PlannerBuildListCardinality = 'persisted',
 ): Promise<PlannerBeamSearchResult> {
-  const prepared = preparePlannerInitialContext(input, dependencies)
+  const prepared = preparePlannerInitialContext(input, dependencies, cardinality)
   if (prepared.status === 'invalid') {
     const failure = initialFailureResult(
       input,

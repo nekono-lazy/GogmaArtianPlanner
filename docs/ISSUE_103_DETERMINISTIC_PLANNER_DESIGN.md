@@ -28,9 +28,9 @@ authorityの配置:
 
 | 契約 | authority | 状態 |
 | --- | --- | --- |
-| 永続Build Listの1 Target = 最大1 Entry、Candidate追加時の置換、legacy duplicateのfail closed | [REQUIREMENTS.md](./REQUIREMENTS.md) 18、[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1 | 正式仕様へ記載済みの **次期契約**（未実装、17章のPhase 0で実装） |
-| Search画面からの追加 / 置換 | [SEARCH_SPEC.md](./SEARCH_SPEC.md) 10.1、[UI_FLOW.md](./UI_FLOW.md) 9 / 10 | 同上 |
-| constrained re-search / what-if / 再計画とBuild List cardinality | [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18 | 同上 |
+| 永続Build Listの1 Target = 最大1 Entry、Candidate追加時の置換、legacy duplicateのfail closed | [REQUIREMENTS.md](./REQUIREMENTS.md) 18、[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1 | **一部実装**（Phase 0-1: Domain / Service基盤、通常Planner入力のfail closed、Import / Exportの保持） |
+| Search画面からの追加 / 置換 | [SEARCH_SPEC.md](./SEARCH_SPEC.md) 10.1、[UI_FLOW.md](./UI_FLOW.md) 9 / 10 | Service結果型と置換APIは実装済み、画面の置換確認Dialog / 案内は未実装（Phase 0-2） |
+| constrained re-search / what-if / 再計画とBuild List cardinality | [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18 | 次期契約（未実装、Phase 0-3） |
 | 決定的scheduler（Route commitment、scheduling、termination、schema境界） | 本書 | target design。Phase CでREQUIREMENTS 19 / 20、PLANNER_SPEC 7等を改訂して正式化 |
 
 - 本書の追加時点で `src/**`、テスト、schema version、Worker protocol、UIは一切変更していない
@@ -1041,6 +1041,23 @@ REQUIREMENTS 18へ記載済み。実装は次の順で小さく分ける。
   guard接続。現行Beam Searchのまま実装する
 
 0-1が先行し、0-2と0-3は並行してよい。いずれもversionを変更しない（15.1）。
+
+0-1の実装状態（実装済み）:
+
+- collection invariantの判定authorityは `findBuildListTargetDuplicates()` / `validateBuildListCardinality()` /
+  `classifyBuildListCandidateAddition()`（`src/domain/buildList/buildListCardinality.ts`）
+- 通常Planner入力のwarning kindは `duplicate_build_list_entries_for_target`。planning Target（valid Entryを
+  1件以上持つTarget）のEntryを、stale等で除外されたものも含めて数える（PLANNER_SPEC 4.1）
+- 通常入力とtrial入力の区別はDomainの呼び出し文脈 `PlannerBuildListCardinality`（`persisted` が既定、
+  `temporary_augmented`）で表す。B8 / what-ifのaugmented preflightとtrialのfull Planner runだけが
+  `temporary_augmented` を渡し、Phase 0-1ではtrial入力にcardinality検証を行わない（6.4のtemporary件数検証は0-3）
+- Search追加APIの結果型は `AddBuildListCandidateResult`（`added` / `duplicate` / `replacement_required` /
+  `legacy_duplicate`）。置換は `BuildListService.replaceCandidate()` / `inspectCandidateReplacement()`
+  （`buildListEntryReplacementMutation()` を1つの `PlanGuardedMutation` として `PlanBreakingChangeGuard` で判定）
+- 0-2までの暫定: Search画面は `toSearchScreenAddition()` で既存の `{ entry, added }` 契約を保ち、
+  `replacement_required` / `legacy_duplicate` を何も書かずに追加失敗として報告する
+- 0-3までの暫定: constrained re-searchの採用は従来どおりgenerated Entryを元Entryに追加して保存するため、
+  永続Build Listにlegacy duplicateが生じ、以後の通常Planner入力はfail closedする
 
 ### Phase A0: 状態遷移helperの抽出（純リファクタ）
 

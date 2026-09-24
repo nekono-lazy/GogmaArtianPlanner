@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import type { AppDatabase } from '../db/AppDatabase'
+import { BuildListEntryRepository } from '../db/repositories/buildListEntryRepository'
 import { ProductionPlanRepository } from '../db/repositories/productionPlanRepository'
 import type { BuildListEntry, OwnedWeapon, ProductionPlan, RngState } from '../domain/models/publicTypes'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../domain/rng/production/productionRngEngine'
@@ -72,6 +73,7 @@ function realDependencies(database: AppDatabase, fixture: ExecutionFixture): Bui
       await database.buildListEntries.put(entry)
       return entry
     },
+    decideAndAddEntry: (decide) => new BuildListEntryRepository(database).decideAndAddBuildListEntry(decide),
     ensureRngState: async () => (await database.rngState.get('current')) as RngState,
     getNormalCounters: () => database.normalArtianCounters.toArray(),
     getOwnedWeapons: () => database.ownedWeapons.toArray(),

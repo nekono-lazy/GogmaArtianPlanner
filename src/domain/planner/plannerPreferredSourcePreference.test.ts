@@ -201,15 +201,22 @@ function equalCostScenario(preferredWeaponIndex: 0 | 1) {
   }
 }
 
+/**
+ * Two Entries of one Target are a legacy duplicate of the Build List
+ * cardinality contract (`docs/DATA_MODEL.md` 9.4.1): an ordinary persisted input
+ * holding them fails closed before any Route is compared (see the last case
+ * below). The Planner-side preferred source comparison between them is reachable
+ * only through a B8 / what-if trial input (`docs/PLANNER_SPEC.md` 9.2.18), so
+ * these scenarios run as one.
+ */
+const TRIAL = 'temporary_augmented' as const
+
 describe('Planner preferred source in Beam Search', () => {
   it.each([0, 1] as const)(
     'selects the preferred source Entry (%i) when the two are otherwise equal',
     async (preferredWeaponIndex) => {
       const scenario = equalCostScenario(preferredWeaponIndex)
-      const result = await runPlannerBeamSearch(
-        scenario.input,
-        scenario.dependencies,
-      )
+      const result = await runPlannerBeamSearch(scenario.input, scenario.dependencies, {}, TRIAL)
       // Both Entries are equally valid and equally cheap, so without the
       // preference the stable tie-break alone would decide. Flipping which
       // weapon is preferred flips the selection, which the stable key could
@@ -263,7 +270,7 @@ describe('Planner preferred source in Beam Search', () => {
       [nearEntry, farEntry],
       [near, far],
     )
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearch(input, dependencies, {}, TRIAL)
     // The preference sits below every cost term, so the one-operation Route
     // wins even though the three-operation one starts from the preferred
     // weapon (`docs/PLANNER_SPEC.md` 7.4).
@@ -275,10 +282,7 @@ describe('Planner preferred source in Beam Search', () => {
     const preferenceBefore = scenario.input.targetWeapons.map(
       ({ id, preferredOwnedWeaponId }) => [id, preferredOwnedWeaponId],
     )
-    const result = await runPlannerBeamSearch(
-      scenario.input,
-      scenario.dependencies,
-    )
+    const result = await runPlannerBeamSearch(scenario.input, scenario.dependencies, {}, TRIAL)
     // reserve_weapon secures a Candidate result; it is never a licence to
     // rewrite the user's planning input (`docs/PLANNER_SPEC.md` 7.4).
     expect(
@@ -290,5 +294,15 @@ describe('Planner preferred source in Beam Search', () => {
     result.bestState?.simulatedInventory.ownedWeapons.forEach((weapon) => {
       expect(weapon).not.toHaveProperty('relatedTargetWeaponIds')
     })
+  })
+
+  it('fails an ordinary persisted input holding both Entries closed instead of choosing one', async () => {
+    const scenario = equalCostScenario(0)
+    const result = await runPlannerBeamSearch(scenario.input, scenario.dependencies)
+    expect(result.bestState).toBeNull()
+    expect(result.expandedStates).toBe(0)
+    expect(result.warnings.map(({ kind }) => kind)).toContain(
+      'duplicate_build_list_entries_for_target',
+    )
   })
 })

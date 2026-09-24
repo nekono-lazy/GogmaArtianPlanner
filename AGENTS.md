@@ -2030,8 +2030,8 @@ Deleting/replacing an old `BuildCandidate` during a later search must not automa
 
 The originating Candidate ID is traceability information, not the source of truth for an existing Build List entry.
 
-Next contract (not implemented yet; Issue #103 Phase 0, `docs/DATA_MODEL.md` 9.4.1,
-`docs/PLANNER_SPEC.md` 9.2.18): the persisted Build List holds at most one
+Build List cardinality (partially implemented; Issue #103 Phase 0, `docs/DATA_MODEL.md` 9.4.1,
+`docs/PLANNER_SPEC.md` 4.1 / 9.2.18): the persisted Build List holds at most one
 `BuildListEntry` per `targetWeaponId`. Adding a different Candidate for a Target
 that already has an Entry is one confirmed, atomic, Plan-breaking-guarded
 replacement, never a second Entry; the old Entry's intermediate state selection
@@ -2041,8 +2041,33 @@ adopted generated Entry replaces the original Entry in the same transaction as
 the Plan save, and a Plan is calculated and recorded over the replaced Entry
 set. Legacy duplicates are never resolved automatically: the ordinary Planner
 input fails closed and the user keeps one Entry. No provenance field and no
-version change are added. Until Phase 0 lands, current Production still allows
-several Entries per Target.
+version change are added.
+
+Phase 0-1 (the Domain / Service foundation) implemented: the one collection
+authority `findBuildListTargetDuplicates()` / `validateBuildListCardinality()` /
+`classifyBuildListCandidateAddition()` (`src/domain/buildList/buildListCardinality.ts`);
+the ordinary Planner input fail-closed with the warning
+`duplicate_build_list_entries_for_target`, counting every Entry of a planning
+Target, stale ones included, so the non-stale one is never picked silently (no
+Beam Search, `plan = null`, `exhausted`); the Domain calling-context parameter
+`PlannerBuildListCardinality` (`persisted` by default) that only the B8 / what-if
+trial inputs (augmented preflight and trial full Planner runs) set to
+`temporary_augmented` - never a `PlannerInput` field or a Worker request;
+`BuildListService.addCandidate()` returning `added` / `duplicate` /
+`replacement_required` / `legacy_duplicate` with the decision and the addition in
+one transaction (`BuildListEntryRepository.decideAndAddBuildListEntry()`); and
+`BuildListService.replaceCandidate()` / `inspectCandidateReplacement()`, one
+`PlanGuardedMutation` (`buildListEntryReplacementMutation()`) that re-reads the
+Target's Entries, refuses unless the confirmed `expectedExistingEntryId` is still
+its only Entry, never carries the old selection or preference over, and goes
+through the existing `PlanBreakingChangeGuard`. Import / Export keeps a legacy
+duplicate as it is. Still open: the Search replacement Dialog and the Build List
+legacy duplicate guidance (Phase 0-2; until then the Search screen reports a
+needed replacement or a legacy duplicate as an add failure through
+`toSearchScreenAddition()` and writes nothing), and the constrained re-search /
+what-if / replan replacement (Phase 0-3; until then an adopted generated Entry is
+still added beside the original, which leaves a legacy duplicate the next
+ordinary Planner run fails closed on). No version moved.
 
 ---
 

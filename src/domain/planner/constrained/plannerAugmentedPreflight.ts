@@ -383,7 +383,10 @@ export function preparePlannerAugmentedConflictPreflight(
     ...augmentedInput,
     conflictResolutions: [],
   }
-  const prepared = preparePlannerInitialContext(preflightInput, dependencies)
+  // A trial input may hold the original Entry and temporary generated Entries
+  // of one Target together (`docs/PLANNER_SPEC.md` 9.2.18), so the ordinary
+  // persisted Build List cardinality check does not apply here.
+  const prepared = preparePlannerInitialContext(preflightInput, dependencies, 'temporary_augmented')
   if (prepared.status !== 'ready') {
     return {
       status: 'invalid',

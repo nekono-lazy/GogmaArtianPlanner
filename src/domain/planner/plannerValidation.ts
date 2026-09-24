@@ -17,9 +17,10 @@ import {
   validateBuildRoute,
   validateOwnedWeapon,
 } from '../models/publicTypes'
-import { evaluateBuildListEntryStaleness } from '../buildList'
+import { evaluateBuildListEntryStaleness, findBuildListTargetDuplicates } from '../buildList'
 import { validateTargetPreferredOwnedWeapons } from '../target'
 import { derivePlannerCheckpointRequirements } from './plannerCheckpoints'
+import { derivePlannerPlanningTargets } from './plannerPlanningTargets'
 import { collectReferencedOwnedWeaponIds } from '../models/hashing'
 import { deriveRngCapabilities } from '../rng/capabilities'
 import type { RngPredictionUnsupportedReason } from '../rng/rngEngine'
@@ -29,6 +30,7 @@ import {
 } from './plannerPredictionSupport'
 import type {
   ExcludedBuildListEntry,
+  PlannerBuildListCardinality,
   PlannerConflictResolution,
   PlannerDependencies,
   PlannerInput,
@@ -350,9 +352,17 @@ function currentEntryEligibility(
   return { valid: { entry, missingRngRequirements: [...capabilities.missingRequirements] }, reason: '', warningKind: 'build_list_entry_stale' }
 }
 
+/**
+ * Validates one Planner input against the current state.
+ *
+ * `cardinality` defaults to the ordinary `persisted` contract, so every caller
+ * that does not explicitly declare a temporary augmented trial input gets the
+ * Build List cardinality fail-closed check (`docs/PLANNER_SPEC.md` 4.1).
+ */
 export function validatePlannerInput(
   input: PlannerInput,
   dependencies: PlannerDependencies,
+  cardinality: PlannerBuildListCardinality = 'persisted',
 ): PlannerInputValidationResult {
   const options = validatePlannerOptions(input.options)
   const issues = [...options.issues]
@@ -395,6 +405,30 @@ export function validatePlannerInput(
       excludedBuildListEntries.push({ entry, reason: eligibility.reason })
       appendUniqueEntryWarning(warnings, warningKeys, entry, eligibility.warningKind, eligibility.reason)
     })
+
+  // Build List cardinality (`docs/DATA_MODEL.md` 9.4.1, `docs/PLANNER_SPEC.md`
+  // 4.1): an ordinary persisted input holds at most one Entry per planning
+  // Target. A legacy duplicate leaves the user's Route unknown, so the whole
+  // input fails closed; the Planner never picks one by Route length,
+  // `createdAt`, staleness or ID. Every Entry of a planning Target counts,
+  // stale ones included - counting only the valid Entries would silently run
+  // the non-stale one. A Target that is no planning Target (every Entry
+  // excluded) is not planned, so its duplicate chooses nothing here and is left
+  // to the Build List. Only a B8 / what-if trial input may hold several Entries
+  // of one Target (`docs/PLANNER_SPEC.md` 9.2.18).
+  if (cardinality === 'persisted') {
+    const planningTargetIds = new Set(
+      derivePlannerPlanningTargets(input.targetWeapons, validBuildListEntries).map(({ id }) => id),
+    )
+    findBuildListTargetDuplicates(input.buildListEntries)
+      .filter(({ targetWeaponId }) => planningTargetIds.has(targetWeaponId))
+      .forEach(({ targetWeaponId, buildListEntryIds }) => {
+        const message =
+          `TargetWeapon '${targetWeaponId}' has ${buildListEntryIds.length} BuildListEntries (${buildListEntryIds.join(', ')}); the Build List holds at most one Entry per Target. Keep one of them in the Build List before planning.`
+        issues.push(issue('buildListEntries', 'invalid_structure', message))
+        warnings.push({ kind: 'duplicate_build_list_entries_for_target', message })
+      })
+  }
 
   // Collection-level checkpoint invariant (`docs/DATA_MODEL.md` 9.4,
   // `docs/PLANNER_SPEC.md` 7.5.7): two checkpoint-selected Entries of one

@@ -19,7 +19,7 @@ import { preparePlannerInitialContext } from './plannerInitialContext'
 import { derivePlannerPlanningTargets } from './plannerPlanningTargets'
 import { validatePlannerInput } from './plannerValidation'
 import { createProductionPlan } from './productionPlanGeneration'
-import type { PlannerDependencies, PlannerInput } from './plannerTypes'
+import type { PlannerBuildListCardinality, PlannerDependencies, PlannerInput } from './plannerTypes'
 
 /**
  * Issue #102: the goal set of one Planner run is the planning Targets - the
@@ -37,8 +37,12 @@ function unlistedTarget(id: string): TargetWeapon {
   return { ...target(id), elementId: 'element.fixture.b' }
 }
 
-function readyContext(input: PlannerInput, dependencies: PlannerDependencies) {
-  const prepared = preparePlannerInitialContext(input, dependencies)
+function readyContext(
+  input: PlannerInput,
+  dependencies: PlannerDependencies,
+  cardinality: PlannerBuildListCardinality = 'persisted',
+) {
+  const prepared = preparePlannerInitialContext(input, dependencies, cardinality)
   if (prepared.status !== 'ready') {
     throw new Error(`Expected a ready Planner initial context: ${prepared.status}`)
   }
@@ -128,7 +132,7 @@ describe('Planner planning Target scope (#102)', () => {
     expect(result.termination.completedTargetCount).toBe(5)
   })
 
-  it('21.3: counts a Target with several valid Entries once', async () => {
+  it('21.3: counts a Target with several valid Entries of a trial input once', async () => {
     const a = target('target.scope.multi.a')
     const b = target('target.scope.multi.b')
     const sources = ['a1', 'a2', 'b1'].map((suffix) => sourceWeapon(`owned.scope.multi.${suffix}`))
@@ -143,14 +147,31 @@ describe('Planner planning Target scope (#102)', () => {
       sources,
     )
 
-    const context = readyContext(input, dependencies)
+    // Only a B8 / what-if trial input may hold several Entries of one Target
+    // (`docs/PLANNER_SPEC.md` 9.2.18).
+    const context = readyContext(input, dependencies, 'temporary_augmented')
     expect(context.validBuildListEntries).toHaveLength(3)
     expect(context.planningTargetIds).toEqual([a.id, b.id])
 
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearch(input, dependencies, {}, 'temporary_augmented')
     expect(result.termination.totalTargetCount).toBe(2)
     expect(result.termination.status).toBe('completed')
     expect(result.termination.completedTargetCount).toBe(2)
+
+    // The ordinary persisted input fails closed on the same legacy duplicate
+    // (`docs/PLANNER_SPEC.md` 4.1), still counting each planning Target once
+    // in its unsearched termination.
+    const ordinary = await runPlannerBeamSearch(input, dependencies)
+    expect(ordinary.bestState).toBeNull()
+    expect(ordinary.warnings.map(({ kind }) => kind)).toContain(
+      'duplicate_build_list_entries_for_target',
+    )
+    expect(ordinary.termination).toMatchObject({
+      status: 'exhausted',
+      expandedStates: 0,
+      completedTargetCount: 0,
+      totalTargetCount: 2,
+    })
   })
 
   it('21.4: never makes a Target whose only Entry is excluded a planning Target', async () => {

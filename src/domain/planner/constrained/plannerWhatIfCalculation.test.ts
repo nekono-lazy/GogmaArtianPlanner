@@ -32,6 +32,7 @@ import { preparePlannerInitialContext } from '../plannerInitialContext'
 import { checkpointMixedEntry } from '../../../test/fixtures/plannerConstrainedOrchestration'
 import type { RngEngine } from '../../rng/rngEngine'
 import type {
+  PlannerBuildListCardinality,
   PlannerConflictResolution,
   PlannerDependencies,
   PlannerInput,
@@ -295,13 +296,16 @@ function whatIfParts(options: WhatIfPartsOptions = {}): WhatIfParts {
 }
 
 /** The `PlanConflict.id`s the ordinary Planner authority detects, by kind. */
-function detectedConflictIds(parts: WhatIfParts): Record<string, string> {
+function detectedConflictIds(
+  parts: WhatIfParts,
+  cardinality: PlannerBuildListCardinality = 'persisted',
+): Record<string, string> {
   const probe = orchestrationScenario({
     targets: parts.targets,
     entries: parts.entries.map((entry) => structuredClone(entry)),
     ownedWeapons: parts.ownedWeapons,
   })
-  const prepared = preparePlannerInitialContext(probe.input, probe.dependencies)
+  const prepared = preparePlannerInitialContext(probe.input, probe.dependencies, cardinality)
   if (prepared.status !== 'ready') {
     throw new Error(`Expected a ready Planner initial context: ${prepared.status}`)
   }
@@ -893,19 +897,23 @@ describe('B9-B1b semantic determinism', () => {
 })
 
 describe('B9-B1b empty work set', () => {
-  it('completes with no alternatives when the conflict has no other Target', async () => {
+  it('refuses a conflict whose participants all belong to the fixed Target', async () => {
     const parts = whatIfParts()
     // Both participants of the Skill conflict belong to the fixed Target, so
-    // there is nothing to compare against and nothing is invented.
+    // there is nothing to compare against and nothing is invented. Two Entries
+    // of one Target are a legacy duplicate of the Build List cardinality
+    // contract (`docs/DATA_MODEL.md` 9.4.1), so the ordinary request input now
+    // fails closed before any work set is built (`docs/PLANNER_SPEC.md` 4.1).
     const merged: PlannerInput['buildListEntries'] = parts.entries.map((entry) =>
       entry.id === ENTRY_B
         ? { ...structuredClone(entry), targetWeaponId: TARGET_A as never }
         : entry,
     )
+    // Probed as a trial input only to learn the conflict id the request names.
     const conflictIds = detectedConflictIds({
       ...parts,
       entries: merged.map((entry) => structuredClone(entry)),
-    })
+    }, 'temporary_augmented')
     const built = orchestrationScenario({
       targets: parts.targets,
       entries: merged,
@@ -925,9 +933,11 @@ describe('B9-B1b empty work set', () => {
       { enumerationBounds: orchestrationEnumerationBounds() },
     )
 
-    expect(result.status).toBe('completed')
-    if (result.status !== 'completed') return
-    expect(result.comparison.alternatives).toEqual([])
+    expect(result.status).toBe('planner_input_not_ready')
+    if (result.status !== 'planner_input_not_ready') return
+    expect(result.warnings.map(({ kind }) => kind)).toContain(
+      'duplicate_build_list_entries_for_target',
+    )
     expect(observed.plannerInputs).toEqual([])
   })
 

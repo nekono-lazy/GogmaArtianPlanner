@@ -1304,9 +1304,9 @@ export type BuildListEntryStaleReason =
   ([PLANNER_SPEC.md](./PLANNER_SPEC.md) 7.5.6)
 - Planner入力のcollection-level invariantとして、1 Targetにつき選択を持つvalid Entryは
   最大1件とする。2件以上はPlanner入力をfail closedし、Build Listで片方の選択解除を求める。
-  現行Productionでは永続データとして複数Entryが共存すること自体は禁止しない(同 7.5.7)。
-  次期契約では永続Build List自体が1 Targetにつき最大1 Entryになる(9.4.1)。この規則は
-  legacy / malformed入力への防御として残る
+  永続Build List自体が1 Targetにつき最大1 Entryであり(9.4.1)、通常のPlanner入力では
+  legacy duplicateのfail closedが先に働くため、この規則は自明に満たされる(同 7.5.7)。
+  この規則はtemporary augmented inputとlegacy / malformed入力への防御として残る
 - 上記の選択構造validationは `validateBuildListEntryIntermediateStateSelection()`
   として共有され、`validateBuildListEntry()` とPlanner入力validationの両方が呼ぶ。
   Plannerは壊れた選択を「選択なし」と解釈せず、入力をfail closedする(同 7.5.9)
@@ -1347,13 +1347,28 @@ deriveBuildListEntryStaleReasons(
 
 `isStale` はこの戻り値が1件以上かどうかと一致させる。
 
-### 9.4.1 Build List cardinality（1 Target = 最大1 Entry、次期契約）
+### 9.4.1 Build List cardinality（1 Target = 最大1 Entry）
 
-実装状態: **未実装（次期契約）**。Issue #103のPhase 0（Build List cardinalityの実装PR群、
-[ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md) 17章）で実装する。
-現行Productionは同一TargetWeaponに複数のBuildListEntryを永続化でき、Plannerはそれらを
-現行のRoute選択semantics（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 4.1）で扱う。本節は実装PRで
-この注記を外すまで、現行Productionの挙動説明ではなく次期契約の定義である。
+実装状態: **一部実装**。Issue #103のPhase 0（Build List cardinalityの実装PR群、
+[ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md) 17章）で段階的に実装する。
+本節の未実装部分は、実装PRで注記を外すまで次期契約の定義である。
+
+- 実装済み（Phase 0-1、Domain / Service基盤）: collection invariantの判定authority
+  （`findBuildListTargetDuplicates()` / `validateBuildListCardinality()` /
+  `classifyBuildListCandidateAddition()`、`src/domain/buildList/buildListCardinality.ts`）、
+  通常Planner入力のlegacy duplicate fail closed（warning `duplicate_build_list_entries_for_target`、
+  [PLANNER_SPEC.md](./PLANNER_SPEC.md) 4.1）、Search追加Serviceの結果型
+  （`BuildListService.addCandidate()` の `added` / `duplicate` / `replacement_required` /
+  `legacy_duplicate`。判定と追加は1つのtransaction）、`replace BuildListEntry for Target` の
+  guarded mutationと事前inspect（`BuildListService.replaceCandidate()` /
+  `inspectCandidateReplacement()`）、Import / Exportのlegacy duplicate保持
+- 未実装（Phase 0-2）: Search画面の置換確認Dialogと、Build Listのlegacy duplicate案内。
+  それまでSearch画面は、置換が必要な追加とlegacy duplicateを持つTargetへの追加を、何も書かずに
+  追加失敗として報告する（置換も並存追加もしない）
+- 未実装（Phase 0-3）: constrained re-search / what-if / 再計画採用とcardinalityの接続
+  （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18）。それまでconstrained re-searchの採用はgenerated Entryを
+  元Entryに **追加** して保存するため、永続Build Listにlegacy duplicateが生じる。以後の通常Planner入力は
+  下記のとおりfail closedし、ユーザーが既存のEntry削除で1件に整理する
 
 #### collection invariant
 
@@ -1415,15 +1430,16 @@ deriveBuildListEntryStaleReasons(
 
 #### legacy duplicate（既存データ）
 
-次期契約の導入時点で、既存ユーザーデータには同一Targetの複数Entryが存在し得る（現行Productionの
-通常操作と、constrained re-searchの採用で生じる）。
+本契約の導入前のユーザーデータには同一Targetの複数Entryが存在し得る（導入前の通常操作と、
+constrained re-searchの採用で生じる。後者はPhase 0-3まで引き続き生じる）。
 
 - 自動で残すEntryを選ばない。最短Route、最新 `createdAt`、ID順、stale状態などで推測して削除・
   選択しない。Dexie migrationで整理しない
 - 読込は非破壊とする。Build Listは該当Targetに「複数の候補が登録されています。使用する候補を
   1件にしてください。」相当の案内を表示し、ユーザーが既存のEntry削除（guarded）で整理する
 - ordinary Planner入力は、同一planning TargetのEntryが2件以上あればfail closedする
-  （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 4.1）。Planner実行、再計画Preview、B10の再計算も同じ
+  （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 4.1）。staleなどで除外されたEntryも数え、除外されていない方を
+  暗黙に採用しない。Planner実行、再計画Preview、B10の再計算、what-ifの元入力も同じ
 - Search画面からの追加 / 置換は上表のとおり拒否する
 - Export / Importはlegacy duplicateを含むrootをそのまま保存・復元する。Importはこれを理由に
   拒否しない（backupを復元できなくしない）。Import後も上記のfail closedと案内が働く
@@ -2521,8 +2537,8 @@ Import時は以下の順序で検証する。
    ExecutionSavePoint snapshotのrestore必須参照（12.1、15.3）はこの規則で緩めない
 8. CalculationContextの形式が正しい
 
-同一TargetWeaponに複数のBuildListEntryを持つroot（legacy duplicate、9.4.1）は、次期契約の導入後も
-Importで拒否しない。自動整理もせずそのまま復元し、Planner入力のfail closedとBuild Listの案内に委ねる。
+同一TargetWeaponに複数のBuildListEntryを持つroot（legacy duplicate、9.4.1）は、Build List cardinality
+契約の下でもImportで拒否しない。自動整理もせずそのまま復元し、Planner入力のfail closedとBuild Listの案内に委ねる。
 
 Import方式。
 
@@ -2636,7 +2652,7 @@ Production RNG契約切替時の互換性は次のとおりとする。
 - 復元ボーナス比較は順不同
 - 検索候補はTargetWeaponに紐づく
 - BuildCandidateとBuildListEntryは別Entity
-- 次期契約（9.4.1、未実装）: 同一TargetWeaponの永続BuildListEntryは最大1件。別Candidateの採用は
+- 同一TargetWeaponの永続BuildListEntryは最大1件（9.4.1、一部実装）。別Candidateの採用は
   確認付きのatomicな置換で行い、legacy duplicateは自動整理せずfail closedする
 - Planner対象はstaleでないBuildListEntryのみ
 - 実行中Plan（active / stale）は同時に1件まで。一時中断用statusは持たない

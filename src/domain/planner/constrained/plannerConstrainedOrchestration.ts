@@ -16,6 +16,7 @@ import { createUnsearchedPlannerTermination } from '../plannerTermination'
 import type { PlannerCheckpointRequirements } from '../plannerCheckpoints'
 import type {
   PlannerBeamSearchResult,
+  PlannerBuildListCardinality,
   PlannerDependencies,
   PlannerExecutionOptions,
   PlannerInput,
@@ -372,7 +373,10 @@ export async function createProductionPlanWithConstrainedSearch(
     )
   }
 
-  async function runFullPlanner(planInput: PlannerInput): Promise<FullPlannerRun> {
+  async function runFullPlanner(
+    planInput: PlannerInput,
+    cardinality: PlannerBuildListCardinality,
+  ): Promise<FullPlannerRun> {
     lastCompletedBeam = null
     try {
       const result = await createProductionPlanWithObserver(
@@ -380,6 +384,7 @@ export async function createProductionPlanWithConstrainedSearch(
         dependencies,
         executionOptions,
         observer,
+        cardinality,
       )
       // This run's own last Beam Search, never a previous run's.
       return readLastCompletedBeam()?.cancelled === true
@@ -422,7 +427,10 @@ export async function createProductionPlanWithConstrainedSearch(
   // --- the initial ordinary Planner run ---------------------------------
   // It uses the same shared Production path and the same shared budget, so the
   // first full Beam Search already consumes `maxPlannerReruns`.
-  const initialRun = await runFullPlanner(input)
+  // The caller's input is the ordinary persisted one, so the Build List
+  // cardinality check applies (`docs/PLANNER_SPEC.md` 4.1); only a Candidate
+  // trial below is a temporary augmented input (9.2.18).
+  const initialRun = await runFullPlanner(input, 'persisted')
   if (initialRun.status === 'rerun_budget_reached') {
     rerunBudgetWarning()
     // The budget refused a retry inside the very first Production Plan
@@ -581,7 +589,7 @@ export async function createProductionPlanWithConstrainedSearch(
       )
       if (preflight.status !== 'ready') return 'rejected'
 
-      const trialRun = await runFullPlanner(preflight.resolvedInput)
+      const trialRun = await runFullPlanner(preflight.resolvedInput, 'temporary_augmented')
       if (trialRun.status === 'rerun_budget_reached') {
         rerunBudgetReached = true
         rerunBudgetWarning()

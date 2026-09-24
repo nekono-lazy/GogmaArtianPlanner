@@ -289,6 +289,37 @@ describe('BuildListEntryRepository', () => {
       expect(await database.buildCandidates.count()).toBe(0)
       expect(await repository.getBuildListEntry(entry.id)).toEqual(entry)
     }))
+
+  it('decides an addition over the stored Entries and adds only what the decision returns', () =>
+    withDatabase(async (database) => {
+      const repository = new BuildListEntryRepository(database)
+      const first = createValidBuildListEntry()
+      const seen: string[][] = []
+
+      expect(await repository.decideAndAddBuildListEntry((entries) => {
+        seen.push(entries.map(({ id }) => id))
+        return { entry: first, result: 'added' }
+      })).toBe('added')
+      expect(await repository.decideAndAddBuildListEntry((entries) => {
+        seen.push(entries.map(({ id }) => id))
+        return { entry: null, result: 'nothing' }
+      })).toBe('nothing')
+
+      expect(seen).toEqual([[], [first.id]])
+      expect(await repository.getAllBuildListEntries()).toEqual([first])
+    }))
+
+  it('refuses a colliding ID instead of overwriting the stored Entry', () =>
+    withDatabase(async (database) => {
+      const repository = new BuildListEntryRepository(database)
+      const stored = createValidBuildListEntry()
+      await repository.putBuildListEntry(stored)
+      const colliding = { ...structuredClone(stored), createdAt: '2026-09-24T00:00:00.000Z' }
+
+      await expect(repository.decideAndAddBuildListEntry(() => ({ entry: colliding, result: null })))
+        .rejects.toMatchObject({ name: 'RepositoryError', code: 'transaction_failed' })
+      expect(await repository.getAllBuildListEntries()).toEqual([stored])
+    }))
 })
 
 describe('ProductionPlanRepository', () => {

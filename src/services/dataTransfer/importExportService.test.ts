@@ -621,6 +621,40 @@ describe('ImportExportService round-trip', () => {
   })))
 })
 
+describe('ImportExportService and a legacy Build List duplicate (docs/DATA_MODEL.md 9.4.1)', () => {
+  /** A backup whose one Target holds two Build List Entries, the older one stale. */
+  function legacyDuplicateRoot(): ExportRoot {
+    const root = dataTransferRoot()
+    const [entry] = root.buildListEntries
+    const second = {
+      ...structuredClone(entry),
+      id: buildListEntryId('build-list.fixture.legacy-second'),
+      isStale: true,
+      staleReasons: ['rng_state_changed' as const],
+    }
+    return { ...root, buildListEntries: [entry, second] }
+  }
+
+  it('exports, imports and round-trips both Entries, choosing and deleting neither', () => withDatabase(async (source) => withDatabase(async (destination) => {
+    const root = legacyDuplicateRoot()
+    expect(new Set(root.buildListEntries.map(({ targetWeaponId }) => targetWeaponId)).size).toBe(1)
+    await seedRoot(source, root)
+    const before = await fullDump(source)
+
+    const exported = await service(source).exportRoot()
+    expect(exported.buildListEntries.map(({ id }) => id)).toEqual(
+      root.buildListEntries.map(({ id }) => id).sort(),
+    )
+    const prepared = service(destination).prepareImportJson(await service(source).serializeExport())
+    expect(prepared.ok, JSON.stringify(prepared)).toBe(true)
+    if (!prepared.ok) return
+    await service(destination).applyImport(prepared.root)
+
+    expect(await fullDump(destination)).toEqual(before)
+    expect(await destination.buildListEntries.count()).toBe(2)
+  })))
+})
+
 describe('ImportExportService Draft lifecycle (schema 11)', () => {
   /** The Entry ID of the reported Export failure: an ordinary `createBuildListEntry()` ID. */
   const MISSING_ENTRY = buildListEntryId('build-list.fnv1a32-7ab0e079')

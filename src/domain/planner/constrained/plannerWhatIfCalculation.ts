@@ -349,11 +349,15 @@ export async function createPlannerWhatIfComparison(
     cancelledBeam = false
     let result: PlannerResult
     try {
+      // Every what-if run is a Candidate trial over a temporary augmented
+      // input (`docs/PLANNER_SPEC.md` 9.2.18); the ordinary request input was
+      // already checked by `preparePlannerWhatIfScenario()`.
       result = await createProductionPlanWithObserver(
         planInput,
         dependencies,
         executionOptions,
         observer,
+        'temporary_augmented',
       )
     } catch (error) {
       // A blocked Beam Search is a normal, typed stop. Every other failure -

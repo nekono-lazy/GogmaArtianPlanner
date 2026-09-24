@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DATABASE_SCHEMA_VERSION, type AppDatabase } from '../../db/AppDatabase'
 import { RepositoryError } from '../../db/repositoryError'
+import { BuildListEntryRepository } from '../../db/repositories/buildListEntryRepository'
 import { RngStateRepository } from '../../db/repositories/rngStateRepository'
 import {
   ExecutionRuntimeError,
@@ -39,7 +40,7 @@ import { orchestrationSource, orchestrationTarget } from '../../test/fixtures/pl
 import { searchCandidates } from '../../domain/search/candidateSearch'
 import { createCandidateSearchInput } from '../search/createCandidateSearchInput'
 import { createDefaultAppSettings } from '../../domain/models/publicTypes'
-import { BuildListService } from '../buildList/buildListService'
+import { BuildListService, type BuildListCandidateReplacementRequest } from '../buildList/buildListService'
 import {
   EntityFormValidationError,
   OwnedWeaponCrudService,
@@ -97,6 +98,7 @@ function servicesFor(database: AppDatabase, fixture: ExecutionFixture) {
         await database.buildListEntries.put(entry)
         return entry
       },
+      decideAndAddEntry: (decide) => new BuildListEntryRepository(database).decideAndAddBuildListEntry(decide),
       ensureRngState: async () => (await database.rngState.get('current')) as RngState,
       getNormalCounters: () => database.normalArtianCounters.toArray(),
       getOwnedWeapons: () => database.ownedWeapons.toArray(),
@@ -883,5 +885,104 @@ describe('NormalArtianCounter basis', () => {
       const saved = await services.rng.saveNormalArtianCounter({ ...shown, isConfirmed: false }, shown)
 
       expect(saved).toMatchObject({ isConfirmed: false, observationCount: 7, counter: counter.counter, updatedAt: GUARD_NOW })
+    }))
+})
+
+describe('Build List Entry replacement (docs/DATA_MODEL.md 9.4.1)', () => {
+  /** Another Candidate of the Plan-dependent Target, replacing its one Entry. */
+  async function replacementOf(database: AppDatabase): Promise<{
+    entry: BuildListEntry
+    request: BuildListCandidateReplacementRequest
+  }> {
+    const entry = await stored<BuildListEntry>(database.buildListEntries, GOGMA_ENTRY_ID)
+    const target = await stored<TargetWeapon>(database.targetWeapons, GOAL_ID)
+    const candidate = structuredClone(entry.candidateSnapshot)
+    candidate.id = 'candidate.guard.replacement' as typeof candidate.id
+    candidate.searchRunId = 'search-run.guard.replacement'
+    candidate.groupSkillId = candidate.groupSkillId === null
+      ? 'group_skill.guard.replacement' as NonNullable<BuildListEntry['candidateSnapshot']['groupSkillId']>
+      : null
+    return {
+      entry,
+      request: {
+        candidate,
+        target,
+        intermediateStateSelection: { skillOpportunityId: null, bonusOpportunityId: null, improvementPreference: 'planner' },
+        expectedExistingEntryId: entry.id,
+      },
+    }
+  }
+
+  it('needs approval when the replaced Entry is the active Plan\'s, and refuses without it', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      const { execution, services } = await started(database, fixture)
+      await confirmCurrent(execution, database, fixture.plan)
+      const plan = await currentPlan(database, fixture.plan)
+      const { request } = await replacementOf(database)
+      const before = await dump(database)
+
+      const inspection = await services.buildList.inspectCandidateReplacement(request)
+      expect(inspection).toMatchObject({ approvalRequired: true, reasons: ['build_list_changed'] })
+      expect(await dump(database)).toEqual(before)
+      await expectRefusal(
+        () => services.buildList.replaceCandidate(request),
+        database,
+        'plan_breaking_change_approval_required',
+      )
+      expect(await currentPlan(database, fixture.plan)).toEqual(plan)
+    }))
+
+  it('replaces the Entry and abandons the Plan together once approved', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      const { execution, services } = await started(database, fixture)
+      await confirmCurrent(execution, database, fixture.plan)
+      const plan = await currentPlan(database, fixture.plan)
+      const { entry, request } = await replacementOf(database)
+      const inspection = await services.buildList.inspectCandidateReplacement(request)
+
+      const replaced = await services.buildList.replaceCandidate(request, approvalOf(inspection))
+
+      expect(await database.buildListEntries.get(entry.id)).toBeUndefined()
+      expect(await stored<BuildListEntry>(database.buildListEntries, replaced.id)).toEqual(replaced)
+      expect((await database.buildListEntries.toArray()).filter(({ targetWeaponId }) => targetWeaponId === GOAL_ID))
+        .toEqual([replaced])
+      expect(await currentPlan(database, fixture.plan)).toEqual(abandonedBreaking(plan))
+      expect(await database.executionHistory.count()).toBe(1)
+    }))
+
+  it('replaces an Entry only a Draft Plan references without approval, leaving the Draft as it is', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      await seed(database, fixture)
+      const draft = await currentPlan(database, fixture.plan)
+      expect(draft.status).toBe('draft')
+      const services = servicesFor(database, fixture)
+      const { entry, request } = await replacementOf(database)
+
+      expect(await services.buildList.inspectCandidateReplacement(request)).toEqual({ approvalRequired: false })
+      const replaced = await services.buildList.replaceCandidate(request)
+
+      expect(await database.buildListEntries.get(entry.id)).toBeUndefined()
+      expect(await stored<BuildListEntry>(database.buildListEntries, replaced.id)).toEqual(replaced)
+      expect(await currentPlan(database, fixture.plan)).toEqual(draft)
+    }))
+
+  it('leaves no intermediate state when the new Entry write fails', () =>
+    withDatabase(async (database) => {
+      const fixture = await existingGogmaFixture()
+      await seed(database, fixture)
+      const services = servicesFor(database, fixture)
+      const { request } = await replacementOf(database)
+      const before = await dump(database)
+      database.buildListEntries.hook('creating', () => { throw new Error('storage failure') })
+
+      const failure = await services.buildList.replaceCandidate(request).catch((error: unknown) => error)
+
+      expect(failure).toBeInstanceOf(RepositoryError)
+      expect(failure).toMatchObject({ code: 'transaction_failed' })
+      // The old Entry's delete ran first inside the transaction and was rolled back.
+      expect(await dump(database)).toEqual(before)
     }))
 })

@@ -28,7 +28,13 @@ import {
   type PlanGuardedMutation,
 } from '../../domain/execution'
 import type { PlanGuardedPersistence } from '../execution/planBreakingChangeGuard'
-import { BuildListService, type BuildListServiceRepositories } from './buildListService'
+import {
+  BuildListCardinalityError,
+  BuildListService,
+  toSearchScreenAddition,
+  type BuildListCandidateReplacementRequest,
+  type BuildListServiceRepositories,
+} from './buildListService'
 
 function memoryRepositories(initial: BuildListEntry[] = []) {
   const entries = [...initial]
@@ -44,6 +50,15 @@ function memoryRepositories(initial: BuildListEntry[] = []) {
       else entries.push(entry)
       return entry
     }),
+    // One decision over the stored Entries, then the addition it asked for.
+    decideAndAddEntry: vi.fn(async (decide) => {
+      const decision = decide([...entries])
+      if (decision.entry !== null) {
+        if (entries.some(({ id }) => id === decision.entry?.id)) throw new Error('duplicate key')
+        entries.push(decision.entry)
+      }
+      return decision.result
+    }) as BuildListServiceRepositories['decideAndAddEntry'],
     ensureRngState: async () => rngState,
     getNormalCounters: async () => normalCounters,
     getOwnedWeapons: async () => [],
@@ -190,7 +205,7 @@ describe('BuildListService', () => {
 
     const result = await new BuildListService(memory.repositories).addCandidate(candidate, memory.target)
 
-    expect(result.added).toBe(false)
+    expect(result.status).toBe('duplicate')
     expect(memory.entries).toHaveLength(1)
   })
 
@@ -202,12 +217,15 @@ describe('BuildListService', () => {
     const first = await service.addCandidate(candidate, memory.target)
     const repeated = { ...candidate, id: 'candidate.another-run' as typeof candidate.id, searchRunId: 'another-run' }
     const second = await service.addCandidate(repeated, memory.target)
-    expect(first.added).toBe(true)
-    expect(second.added).toBe(false)
+    expect(first.status).toBe('added')
+    expect(second).toEqual({ status: 'duplicate', entry: memory.entries[0] })
     expect(memory.entries).toHaveLength(1)
   })
 
-  it.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])('adds a current Candidate beside an unchanged schema %i snapshot', async (appSchemaVersion) => {
+  it.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])('never adds a current Candidate beside an unchanged schema %i snapshot of its Target', async (appSchemaVersion) => {
+    // The historical Entry is stale, yet it is still the Target's one Entry
+    // (`docs/DATA_MODEL.md` 9.4.1): the current Candidate needs a confirmed
+    // replacement, and nothing is written until then.
     const memory = memoryRepositories()
     const candidate = createValidBuildCandidate()
     candidate.calculationContext = createBuildListCalculationContext(createValidMasterDataFixture())
@@ -217,10 +235,8 @@ describe('BuildListService', () => {
     const before = structuredClone(oldEntry)
     memory.entries.push(oldEntry)
     const result = await new BuildListService(memory.repositories).addCandidate(candidate, memory.target)
-    expect(result.added).toBe(true)
-    expect(memory.entries).toHaveLength(2)
-    expect(memory.entries[0]).toEqual(before)
-    expect(result.entry.calculationContext.appSchemaVersion).toBe(13)
+    expect(result).toEqual({ status: 'replacement_required', existingEntry: before })
+    expect(memory.entries).toEqual([before])
     expect(memory.repositories.persistence.apply).not.toHaveBeenCalled()
   })
 
@@ -255,6 +271,7 @@ describe('BuildListService', () => {
     }
 
     const first = await service.addCandidate(candidate, target, selection)
+    if (first.status !== 'added') throw new Error('Expected an addition.')
     expect(first.entry.intermediateStateSelection).toEqual(selection)
     // A second Search finds the same Candidate again under a new run id.
     const repeated = structuredClone(candidate)
@@ -262,8 +279,8 @@ describe('BuildListService', () => {
     repeated.searchRunId = 'search-run.checkpoint.another'
     const second = await service.addCandidate(repeated, target, defaultIntermediateStateSelection())
 
-    expect(first.added).toBe(true)
-    expect(second.added).toBe(false)
+    expect(second.status).toBe('duplicate')
+    if (second.status !== 'duplicate') return
     expect(memory.entries).toHaveLength(1)
     // The user's selection survives: it is edited in the Build List, never by
     // adding the same Candidate again.
@@ -282,6 +299,7 @@ describe('BuildListService', () => {
     memory.repositories.getTargets = async () => [target]
     const later = intermediateOpportunityAt(candidate, 'bonus', 2).opportunity
     const added = await service.addCandidate(candidate, target)
+    if (added.status !== 'added') throw new Error('Expected an addition.')
 
     const updated = await service.updateIntermediateStateSelection(added.entry.id, {
       ...defaultIntermediateStateSelection(),
@@ -309,5 +327,217 @@ describe('BuildListService', () => {
     ).rejects.toThrow(/candidate snapshot/)
     expect(memory.entries[0].intermediateStateSelection?.bonusOpportunityId).toBe(later.id)
     expect(memory.entries[0].intermediateStateSelection?.improvementPreference).toBe('bonus_first')
+  })
+})
+
+/** Two different Candidates (Routes) of the one fixture Target. */
+function twoCandidates() {
+  const first = checkpointCandidate([checkpointPracticalBonuses(), checkpointIdealBonuses()])
+  const second = checkpointCandidate([
+    checkpointPracticalBonuses(),
+    checkpointPracticalBonusesReordered(),
+    checkpointIdealBonuses(),
+  ])
+  second.id = 'candidate.checkpoint.second' as typeof second.id
+  second.searchRunId = 'search-run.checkpoint.second'
+  return { first, second, target: checkpointTarget() }
+}
+
+const REPLACED_AT = '2026-09-24T00:00:00.000Z'
+
+describe('Build List cardinality (docs/DATA_MODEL.md 9.4.1)', () => {
+  it('adds a Candidate to a Target with no Entry', async () => {
+    const memory = memoryRepositories()
+    const { first, target } = twoCandidates()
+
+    const result = await new BuildListService(memory.repositories).addCandidate(first, target)
+
+    expect(result.status).toBe('added')
+    expect(memory.entries).toHaveLength(1)
+    expect(memory.repositories.decideAndAddEntry).toHaveBeenCalledOnce()
+    expect(memory.repositories.persistence.apply).not.toHaveBeenCalled()
+  })
+
+  it('reports replacement_required for another Candidate of the Target and writes nothing', async () => {
+    const memory = memoryRepositories()
+    const service = new BuildListService(memory.repositories)
+    const { first, second, target } = twoCandidates()
+    await service.addCandidate(first, target)
+    const before = structuredClone(memory.entries)
+
+    const result = await service.addCandidate(second, target)
+
+    expect(result).toEqual({ status: 'replacement_required', existingEntry: before[0] })
+    expect(memory.entries).toEqual(before)
+    expect(memory.repositories.persistence.apply).not.toHaveBeenCalled()
+  })
+
+  it('refuses an addition to a Target holding a legacy duplicate, stale Entries included, and writes nothing', async () => {
+    const memory = memoryRepositories()
+    const { first, second, target } = twoCandidates()
+    const third = checkpointCandidate([checkpointIdealBonuses()])
+    const a1 = createBuildListEntry(first, target, { createdAt: '2026-08-29T04:00:00.000Z' })
+    const a2 = { ...createBuildListEntry(second, target, { createdAt: '2026-08-29T05:00:00.000Z' }), isStale: true, staleReasons: ['rng_state_changed' as const] }
+    memory.entries.push(a1, a2)
+    const before = structuredClone(memory.entries)
+
+    const result = await new BuildListService(memory.repositories).addCandidate(third, target)
+
+    expect(result.status).toBe('legacy_duplicate')
+    if (result.status !== 'legacy_duplicate') return
+    expect(result.entries.map(({ id }) => id)).toEqual([a1.id, a2.id].sort())
+    expect(memory.entries).toEqual(before)
+    // A semantic duplicate of one of them stays a write-free duplicate.
+    expect(await new BuildListService(memory.repositories).addCandidate(first, target))
+      .toEqual({ status: 'duplicate', entry: a1 })
+    expect(memory.entries).toEqual(before)
+  })
+
+  it('keeps the Search screen contract until the replacement confirmation exists', async () => {
+    const memory = memoryRepositories()
+    const service = new BuildListService(memory.repositories)
+    const { first, second, target } = twoCandidates()
+
+    expect(toSearchScreenAddition(await service.addCandidate(first, target)).added).toBe(true)
+    expect(toSearchScreenAddition(await service.addCandidate(first, target)).added).toBe(false)
+    const refused = await service.addCandidate(second, target)
+      .then(toSearchScreenAddition)
+      .catch((caught: unknown) => caught)
+    expect(refused).toBeInstanceOf(BuildListCardinalityError)
+    expect((refused as BuildListCardinalityError).code).toBe('replacement_confirmation_unavailable')
+    expect(memory.entries).toHaveLength(1)
+    expect(() => toSearchScreenAddition({ status: 'legacy_duplicate', entries: [] }))
+      .toThrow(BuildListCardinalityError)
+  })
+
+  describe('replaceCandidate', () => {
+    async function withFirstAdded(selection = defaultIntermediateStateSelection()) {
+      const memory = memoryRepositories()
+      memory.repositories.clock = { now: () => REPLACED_AT }
+      const service = new BuildListService(memory.repositories)
+      const candidates = twoCandidates()
+      const added = await service.addCandidate(candidates.first, candidates.target, selection)
+      if (added.status !== 'added') throw new Error('Expected an addition.')
+      return { memory, service, ...candidates, a1: added.entry }
+    }
+
+    function request(
+      candidate: BuildListCandidateReplacementRequest['candidate'],
+      target: BuildListCandidateReplacementRequest['target'],
+      expectedExistingEntryId: BuildListCandidateReplacementRequest['expectedExistingEntryId'],
+      intermediateStateSelection = defaultIntermediateStateSelection(),
+    ): BuildListCandidateReplacementRequest {
+      return { candidate, target, intermediateStateSelection, expectedExistingEntryId }
+    }
+
+    it('replaces A1 with A2 so that only A2 remains', async () => {
+      const { memory, service, second, target, a1 } = await withFirstAdded()
+
+      const inspection = await service.inspectCandidateReplacement(request(second, target, a1.id))
+      expect(inspection).toEqual({ approvalRequired: false })
+      const a2 = await service.replaceCandidate(request(second, target, a1.id))
+
+      expect(memory.entries).toEqual([a2])
+      expect(a2.id).not.toBe(a1.id)
+      expect(a2.candidateId).toBe(second.id)
+      expect(a2.targetWeaponId).toBe(target.id)
+      expect(a2.createdAt).toBe(REPLACED_AT)
+      expect(memory.repositories.persistence.apply).toHaveBeenCalledOnce()
+    })
+
+    it('never carries the replaced Entry\'s checkpoint selection or improvement preference over', async () => {
+      const candidates = twoCandidates()
+      const selected = {
+        skillOpportunityId: null,
+        bonusOpportunityId: intermediateOpportunityAt(candidates.first, 'bonus', 1).opportunity.id,
+        improvementPreference: 'skill_first' as const,
+      }
+      const { memory, service, second, target, a1 } = await withFirstAdded(selected)
+      expect(a1.intermediateStateSelection).toEqual(selected)
+
+      const a2 = await service.replaceCandidate(request(second, target, a1.id))
+
+      expect(a2.intermediateStateSelection).toEqual(defaultIntermediateStateSelection())
+      expect(memory.entries).toEqual([a2])
+
+      // Only the selection the Search screen sends for the new Candidate is used.
+      const own = {
+        skillOpportunityId: null,
+        bonusOpportunityId: intermediateOpportunityAt(candidates.first, 'bonus', 1).opportunity.id,
+        improvementPreference: 'bonus_first' as const,
+      }
+      const again = await withFirstAdded(selected)
+      const withOwn = await again.service.replaceCandidate(
+        request(again.second, again.target, again.a1.id, {
+          ...own,
+          bonusOpportunityId: intermediateOpportunityAt(again.second, 'bonus', 2).opportunity.id,
+        }),
+      )
+      expect(withOwn.intermediateStateSelection).toEqual({
+        ...own,
+        bonusOpportunityId: intermediateOpportunityAt(again.second, 'bonus', 2).opportunity.id,
+      })
+    })
+
+    it('keeps A1 when the new Entry fails validation', async () => {
+      const { memory, service, second, target, a1 } = await withFirstAdded()
+      const before = structuredClone(memory.entries)
+
+      await expect(service.replaceCandidate(request(second, target, a1.id, {
+        ...defaultIntermediateStateSelection(),
+        bonusOpportunityId: 'intermediate-opportunity:unknown' as IntermediateStateOpportunityId,
+      }))).rejects.toThrow(/candidate snapshot/)
+
+      expect(memory.entries).toEqual(before)
+    })
+
+    it('changes nothing when the expected Entry is no longer the Target\'s only Entry', async () => {
+      const { memory, service, second, target, a1 } = await withFirstAdded()
+      const before = structuredClone(memory.entries)
+
+      const stale = await service
+        .replaceCandidate(request(second, target, 'build-list.somewhere-else' as typeof a1.id))
+        .catch((caught: unknown) => caught)
+      expect(stale).toBeInstanceOf(BuildListCardinalityError)
+      expect((stale as BuildListCardinalityError).code).toBe('replacement_target_changed')
+      expect(memory.entries).toEqual(before)
+
+      // Deleted in another tab: nothing is left to replace.
+      memory.entries.splice(0)
+      await expect(service.replaceCandidate(request(second, target, a1.id)))
+        .rejects.toMatchObject({ code: 'replacement_target_changed' })
+      expect(memory.entries).toEqual([])
+    })
+
+    it('refuses a legacy duplicate, the Candidate already added and a missing Target', async () => {
+      const { memory, service, first, second, target, a1 } = await withFirstAdded()
+      await expect(service.replaceCandidate(request(first, target, a1.id)))
+        .rejects.toMatchObject({ code: 'candidate_already_added' })
+
+      const third = checkpointCandidate([checkpointIdealBonuses()])
+      const legacy = createBuildListEntry(third, target, { createdAt: '2026-08-29T05:00:00.000Z' })
+      memory.entries.push(legacy)
+      const before = structuredClone(memory.entries)
+      await expect(service.replaceCandidate(request(second, target, a1.id)))
+        .rejects.toMatchObject({ code: 'legacy_duplicate_entries' })
+      expect(memory.entries).toEqual(before)
+
+      const missing = { ...target, id: 'target.missing' as typeof target.id }
+      await expect(service.replaceCandidate(request({ ...second, targetWeaponId: missing.id }, missing, a1.id)))
+        .rejects.toMatchObject({ code: 'target_not_found' })
+      expect(memory.entries).toEqual(before)
+    })
+
+    it('lets the user delete one Entry of a legacy duplicate as before', async () => {
+      const memory = memoryRepositories()
+      const { first, second, target } = twoCandidates()
+      const a1 = createBuildListEntry(first, target, { createdAt: '2026-08-29T04:00:00.000Z' })
+      const a2 = createBuildListEntry(second, target, { createdAt: '2026-08-29T05:00:00.000Z' })
+      memory.entries.push(a1, a2)
+
+      await new BuildListService(memory.repositories).deleteEntry(a1.id)
+
+      expect(memory.entries).toEqual([a2])
+    })
   })
 })

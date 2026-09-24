@@ -6,6 +6,16 @@ import type {
 import { validateBuildListEntry } from '../../domain/models/validation'
 import { appDatabase, type AppDatabase } from '../AppDatabase'
 import { assertRepositoryValidation } from '../repositoryError'
+import { runInRepositoryTransaction } from '../transaction'
+
+/**
+ * One Build List addition decided over the persisted Build List: the Entry to
+ * add (`null` adds nothing) and the caller's own result.
+ */
+export interface BuildListEntryAdditionDecision<R> {
+  entry: BuildListEntry | null
+  result: R
+}
 
 function sortEntries(entries: BuildListEntry[]): BuildListEntry[] {
   return entries.sort((left, right) => left.id.localeCompare(right.id))
@@ -62,6 +72,24 @@ export class BuildListEntryRepository {
     )
     await this.database.buildListEntries.add(entry)
     return entry
+  }
+
+  /**
+   * Reads the whole Build List and adds the Entry `decide` returns, in one
+   * read-write transaction, so no concurrent save can slip another Entry of the
+   * same Target in between the decision and the write (`docs/DATA_MODEL.md`
+   * 9.4.1). `decide` is a pure decision over the Entries in stable ID order; the
+   * add uses `add`, so a colliding ID is refused rather than overwritten. Any
+   * failure rolls the whole transaction back.
+   */
+  decideAndAddBuildListEntry<R>(
+    decide: (entries: BuildListEntry[]) => BuildListEntryAdditionDecision<R>,
+  ): Promise<R> {
+    return runInRepositoryTransaction(this.database, [this.database.buildListEntries], async () => {
+      const decision = decide(sortEntries(await this.database.buildListEntries.toArray()))
+      if (decision.entry !== null) await this.addBuildListEntry(decision.entry)
+      return decision.result
+    })
   }
 
   async putBuildListEntry(entry: BuildListEntry): Promise<BuildListEntry> {
