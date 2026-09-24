@@ -27,7 +27,7 @@ import {
 } from './plannerRouteCommitment'
 import {
   initialPlannerLaneProgress,
-  isPlannerLaneUnitBlockedByPin,
+  isPlannerLaneUnitHolding,
   nextPlannerLaneUnits,
   remainingPlannerLaneUnits,
   type PlannerEntryLanes,
@@ -432,9 +432,7 @@ export class PlannerDeterministicScheduleRun {
           continue
         }
         if (currentPlannerCounterValue(this.state, unit) !== unit.counterBefore) continue
-        const holding =
-          !unit.canSkipWhenCounterPassed ||
-          isPlannerLaneUnitBlockedByPin(unit, progress, lanes.pin)
+        const holding = isPlannerLaneUnitHolding(unit, progress, lanes.pin)
         const frontier = frontiers.get(streamKey) ?? []
         frontier.push({ entry, unit, holding, ready: this.isReady(entry, unit, next) })
         frontiers.set(streamKey, frontier)
@@ -522,14 +520,16 @@ export class PlannerDeterministicScheduleRun {
     const last = this.state.lastWeaponOperationSubjectKey
     const addsWeaponSwitch = subject !== null && last !== null && last !== subject
     const current = currentPlannerCounterValue(this.state, primary.unit)
+    const executorLanes = this.lanesOf(primary.entry)
+    const executorProgress = this.progressOf(primary.entry)
     const nextHolding =
-      kind === 'executor'
+      kind === 'executor' && executorLanes !== undefined
         ? this.remainingUnitsOf(primary.entry).find(
             (unit) =>
               unit !== primary.unit &&
               unit.counterStream === primary.unit.counterStream &&
               unit.counterId === primary.unit.counterId &&
-              !unit.canSkipWhenCounterPassed,
+              isPlannerLaneUnitHolding(unit, executorProgress, executorLanes.pin),
           )
         : undefined
     const executorHoldingDistance =
@@ -578,10 +578,23 @@ export class PlannerDeterministicScheduleRun {
     return true
   }
 
+  /**
+   * One applied route action or reserve (the start confirmations are not
+   * counted). Besides the count, it records that a bound was reached: a
+   * schedule that completes on exactly its last affordable action still
+   * reports the bound in `reachedLimits`, and `createPlannerSearchTermination()`
+   * alone decides the status (`docs/PLANNER_SPEC.md` 7.2.1).
+   */
   private actionApplied() {
     // One constructed state per applied action (14.2): the state itself,
     // updated in place.
     this.expandedStates += 1
+    if (this.state.trace.length >= this.input.options.maxPlanSteps) {
+      this.reachedStepLimit = true
+    }
+    if (this.expandedStates >= this.input.options.maxExpandedStates) {
+      this.reachedExpandedLimit = true
+    }
     this.executionOptions.onProgress?.({
       expandedStates: this.expandedStates,
       maxExpandedStates: this.input.options.maxExpandedStates,
@@ -726,6 +739,33 @@ export class PlannerDeterministicScheduleRun {
     return 'applied'
   }
 
+  /**
+   * The rejections this schedule reports: every recorded one, plus
+   * `candidate_already_satisfied` for each Entry that is still `released`
+   * now - its Target was satisfied by another Entry (8.4). The released state
+   * is projected only here, from the final commitment, so an Entry that was
+   * released and later committed again carries no stale rejection.
+   */
+  private finalRejections(): PlannerSearchRejection[] {
+    const rejections = [...this.rejections]
+    const keys = new Set(this.rejectionKeys)
+    this.commitmentRecords()
+      .filter(({ status }) => status === 'released')
+      .forEach(({ buildListEntryId }) =>
+        appendUniquePlannerRejection(
+          rejections,
+          keys,
+          createPlannerSearchRejection(
+            buildListEntryId,
+            'reserve_weapon',
+            'candidate_already_satisfied',
+            'The Target already holds an Ideal weapon.',
+          ),
+        ),
+      )
+    return sortPlannerRejections(rejections)
+  }
+
   /** The `PlannerBeamSearchResult`-compatible result of the schedule so far. */
   finish(cancelled: boolean): PlannerBeamSearchResult {
     const warnings = this.context.warnings
@@ -771,7 +811,7 @@ export class PlannerDeterministicScheduleRun {
       warnings,
       validationIssues: [],
       excludedBuildListEntries: this.context.excludedBuildListEntries,
-      rejections: sortPlannerRejections([...this.rejections]),
+      rejections: this.finalRejections(),
       expandedStates: this.expandedStates,
       completed: this.isComplete(),
       cancelled,

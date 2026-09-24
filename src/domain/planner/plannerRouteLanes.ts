@@ -96,6 +96,37 @@ export function isPlannerLaneUnitBlockedByPin(
 }
 
 /**
+ * Whether another Entry's real operation may consume this unit's Counter
+ * position while the unit silently fast-forwards: it is
+ * `canSkipWhenCounterPassed` and, at the Entry's current lane progress, not
+ * blocked by its checkpoint pin (`docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md`
+ * 5 "passable"). `fastForwardPlannerRouteProgress()` passes exactly these units.
+ */
+export function isPlannerLaneUnitPassable(
+  unit: PlannerRouteUnit,
+  progress: PlannerLaneProgress,
+  pin: IntermediatePin | null,
+): boolean {
+  return unit.canSkipWhenCounterPassed && !isPlannerLaneUnitBlockedByPin(unit, progress, pin)
+}
+
+/**
+ * Whether this pending unit holds its Counter position: it is not passable, so
+ * no other Entry may consume that position before it runs - a unit that is
+ * never skippable, or a skippable unit its checkpoint pin blocks at the
+ * current lane progress (design 5 "holding"). The deterministic scheduler's
+ * Route commitment and its frontier both judge holding through this one
+ * predicate.
+ */
+export function isPlannerLaneUnitHolding(
+  unit: PlannerRouteUnit,
+  progress: PlannerLaneProgress,
+  pin: IntermediatePin | null,
+): boolean {
+  return !isPlannerLaneUnitPassable(unit, progress, pin)
+}
+
+/**
  * Whether the Entry's weapon holds both pinned lane states (`false` without a
  * pin). The base lane must be finished too: a conversion Route's lane starts
  * describe the converted weapon, which does not exist before the conversion

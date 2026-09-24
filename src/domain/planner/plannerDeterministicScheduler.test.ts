@@ -10,7 +10,10 @@ import {
   SchedulerScenarioBuilder,
   schedulerIdeal,
 } from '../../test/fixtures/plannerScheduler'
-import type { OrchestrationScenario } from '../../test/fixtures/plannerConstrainedOrchestration'
+import {
+  synchronizeOrchestrationEntry,
+  type OrchestrationScenario,
+} from '../../test/fixtures/plannerConstrainedOrchestration'
 import { createPlannerSearchInstrumentationInput } from '../../benchmarks/plannerSearchInstrumentationFixtures'
 import { createDeterministicPlannerDependencies } from '../../benchmarks/plannerSearchInstrumentationBenchmark'
 import {
@@ -854,17 +857,23 @@ describe('16.3: deadlock', () => {
 })
 
 describe('16.3: cross satisfaction', () => {
-  it('releases a committed Entry whose Target another reserve satisfied', async () => {
+  function crossSatisfactionScenario() {
     const builder = new SchedulerScenarioBuilder()
     builder.resetAt.set(G0 + 2, schedulerIdeal(26))
     builder.resetAt.set(G0 + 10, schedulerIdeal(26))
-    const entryA = builder.existingEntry('entry.a', builder.target('target.a', 26), builder.gogma('owned.a'), {
+    const targetA = builder.target('target.a', 26)
+    const targetB = builder.target('target.b', 26)
+    const entryA = builder.existingEntry('entry.a', targetA, builder.gogma('owned.a'), {
       bonus: { from: G0, resets: 3 },
     })
-    const entryB = builder.existingEntry('entry.b', builder.target('target.b', 26), builder.gogma('owned.b'), {
+    const entryB = builder.existingEntry('entry.b', targetB, builder.gogma('owned.b'), {
       bonus: { from: G0, resets: 11 },
     })
-    const scenario = builder.build()
+    return { scenario: builder.build(), targetA, targetB, entryA, entryB }
+  }
+
+  it('releases a committed Entry whose Target another reserve satisfied, as already_satisfied', () => {
+    const { scenario, entryA, entryB } = crossSatisfactionScenario()
     const run = readyRun(scenario)
     const result = runToEnd(run)
     expect(result.termination.status).toBe('completed')
@@ -872,7 +881,37 @@ describe('16.3: cross satisfaction', () => {
     expect(run.statusOf(entryB.id)).toBe('released')
     expect(progressedIn(result, entryB.id)).toBe(false)
     expect(result.bestState!.currentRngState.gogmaCounter.value).toBe(G0 + 3)
+    // The final released state is projected as the existing rejection reason.
+    expect(result.rejections).toEqual([
+      expect.objectContaining({
+        buildListEntryId: entryB.id,
+        actionType: 'reserve_weapon',
+        reason: 'candidate_already_satisfied',
+      }),
+    ])
+    expect(createRejectedBuildListEntries(scenario.input, result, result.bestState!.selectedBuildListEntryIds))
+      .toEqual([expect.objectContaining({ buildListEntryId: entryB.id, reason: 'already_satisfied' })])
     expectReplayValid(scenario, result)
+  })
+
+  it('keeps no stale already-satisfied rejection for an Entry committed again after its release', () => {
+    const { scenario, targetA, targetB, entryB } = crossSatisfactionScenario()
+    const run = readyRun(scenario)
+    for (let guard = 0; run.statusOf(entryB.id) !== 'released'; guard += 1) {
+      if (guard > 100) throw new Error('B was never released.')
+      run.step()
+    }
+    // Simulate the Target losing its Ideal again: the weapon that satisfied it
+    // is in flight, so satisfaction no longer counts it (6.8).
+    run.state.inFlightExistingSourceByOwnedWeaponId['owned.a'] = true
+    run.state.targetSatisfaction[targetA.id] = { hasPractical: false, hasIdeal: false }
+    run.state.targetSatisfaction[targetB.id] = { hasPractical: false, hasIdeal: false }
+    run.refreshCommitment()
+    expect(run.statusOf(entryB.id)).toBe('committed')
+    const result = runToEnd(run)
+    expect(run.statusOf(entryB.id)).toBe('secured')
+    expect(result.bestState!.selectedBuildListEntryIds).toContain(entryB.id)
+    expect(result.rejections.filter(({ buildListEntryId }) => buildListEntryId === entryB.id)).toEqual([])
   })
 })
 
@@ -981,6 +1020,39 @@ describe('14: bounds, cancellation and determinism', () => {
       expandedStates: 20,
     })
     expect(result.warnings.map(({ kind }) => kind)).toContain('max_expanded_states_reached')
+  })
+
+  it('completes on exactly maxExpandedStates and still reports the bound', async () => {
+    const scenario = scenarioA().builder.build({ maxExpandedStates: 154 })
+    const result = await schedule(scenario)
+    expect(result.completed).toBe(true)
+    expect(result.expandedStates).toBe(154)
+    expect(result.termination.status).toBe('completed')
+    expect(result.termination.reachedLimits).toEqual(['max_expanded_states'])
+    expect(result.warnings.map(({ kind }) => kind)).toContain('max_expanded_states_reached')
+  })
+
+  it('completes on exactly maxPlanSteps and still reports the bound', async () => {
+    const scenario = scenarioA().builder.build({ maxPlanSteps: 154 })
+    const result = await schedule(scenario)
+    expect(result.completed).toBe(true)
+    expect(result.bestState!.trace).toHaveLength(154)
+    expect(result.termination.status).toBe('completed')
+    expect(result.termination.reachedLimits).toEqual(['max_plan_steps'])
+    expect(result.warnings.map(({ kind }) => kind)).toContain('max_steps_reached')
+  })
+
+  it('reports both bounds when a completion reaches both exactly', async () => {
+    const scenario = scenarioA().builder.build({ maxPlanSteps: 154, maxExpandedStates: 154 })
+    const result = await schedule(scenario)
+    expect(result.termination.status).toBe('completed')
+    expect([...result.termination.reachedLimits].sort()).toEqual(['max_expanded_states', 'max_plan_steps'])
+  })
+
+  it('reports no bound when the completion stays below both', async () => {
+    const scenario = scenarioA().builder.build({ maxPlanSteps: 155, maxExpandedStates: 155 })
+    const result = await schedule(scenario)
+    expect(result.termination).toMatchObject({ status: 'completed', reachedLimits: [] })
   })
 
   it('reports a cancellation as cancelled', async () => {
@@ -1106,4 +1178,82 @@ describe('Issue #103 instrumentation workloads', () => {
     },
     60_000,
   )
+})
+
+describe('Route commitment: pin-blocked skippable units hold their position', () => {
+  /**
+   * P's Skill lane start is its selected checkpoint, so its skippable Skill
+   * unit at S is pin-blocked until P's Bonus lane ends - and the Skill Counter
+   * already stands at S + 1. P also conflicts with Q at Gogma C + 1 (P Keeps,
+   * Q Resets there), and P has the higher priority.
+   */
+  function pinnedPastScenario() {
+    const builder = new SchedulerScenarioBuilder()
+    builder.keepAt.set(G0 + 1, schedulerIdeal(40))
+    builder.resetAt.set(G0 + 1, schedulerIdeal(41))
+    builder.skillAt.set(S0 + 1, IDEAL_SKILL)
+    const entryP = builder.existingEntry(
+      'entry.p',
+      builder.target('target.p', 40, { priority: 5 }),
+      builder.gogma('owned.p', { seriesSkillId: 'series_skill.fixture.z', groupSkillId: 'group_skill.fixture.a' }),
+      {
+        bonus: { from: G0, resets: 1, keeps: 1 },
+        skill: { from: S0, resets: 2 },
+        select: { axis: 'skill', lanePosition: 0 },
+      },
+    )
+    const entryQ = builder.existingEntry(
+      'entry.q',
+      builder.target('target.q', 41, { priority: 1 }),
+      builder.gogma('owned.q'),
+      { bonus: { from: G0, resets: 2 } },
+    )
+    const scenario = builder.build()
+    scenario.input.rngState.skillCounter.value = S0 + 1
+    scenario.input.buildListEntries.forEach((entry) => synchronizeOrchestrationEntry(scenario.input, entry))
+    return { scenario, entryP, entryQ }
+  }
+
+  it('never commits an Entry whose pin-blocked skippable unit was already passed', () => {
+    const { scenario, entryP, entryQ } = pinnedPastScenario()
+    const run = readyRun(scenario)
+    // The conflict is real: both are initial conflict participants.
+    expect(run.context.initialConflictDetection.conflicts.map(({ buildListEntryIds }) => buildListEntryIds))
+      .toEqual([[entryP.id, entryQ.id]])
+    const lanes = run.context.allLanePlans.get(entryP.id)!
+    expect(lanes.skill[0].canSkipWhenCounterPassed).toBe(true)
+    // The prepared start state could not fast-forward past the pin.
+    expect(run.state.routeProgressByEntryId[entryP.id].skill).toBe(0)
+    const commitment = createPlannerRouteCommitment(run.state, {
+      allSearchEntries: run.context.allSearchEntries,
+      allLanePlans: run.context.allLanePlans,
+      entriesById: run.context.entriesById,
+      planningTargets: run.context.planningTargets,
+      planningTargetsById: run.context.planningTargetsById,
+      checkpointRequirements: run.context.checkpointRequirements,
+      initialConflictDetection: run.context.initialConflictDetection,
+      initialRelevantEntries: run.context.initialRelevantEntries,
+    })
+    if (commitment.status !== 'ready') throw new Error('Commitment refused the input.')
+    expect(commitment.records.get(entryP.id)).toMatchObject({
+      status: 'dropped',
+      rejection: { reason: 'counter_before_current', actionType: 'reset_skills' },
+    })
+    expect(commitment.records.get(entryQ.id)?.status).toBe('committed')
+    expect(commitment.rejections.map(({ buildListEntryId, reason }) => [buildListEntryId, reason]))
+      .toEqual([[entryP.id, 'counter_before_current']])
+  })
+
+  it('does not let the unexecutable Entry push an executable one out of a conflict', async () => {
+    const { scenario, entryP, entryQ } = pinnedPastScenario()
+    const result = await schedule(scenario)
+    expect(result.bestState!.selectedBuildListEntryIds).toEqual([entryQ.id])
+    expect(result.rejections).toEqual([
+      expect.objectContaining({ buildListEntryId: entryP.id, reason: 'counter_before_current' }),
+    ])
+    expect(result.rejections.some(({ reason }) => reason === 'conflict_not_committed')).toBe(false)
+    expect(progressedIn(result, entryP.id)).toBe(false)
+    expect(result.termination.status).toBe('exhausted')
+    expectReplayValid(scenario, result)
+  })
 })

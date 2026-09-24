@@ -553,7 +553,7 @@ safe actionが複数あるとき、次のkeyの辞書式順で1つだけ選ぶ�
 | 3 | weapon switchを新たに生じるか（生じない方） | PLANNER_SPEC 7.3。subjectは `plannerWeaponOperationSubjectKey()`、null subjectは切替に数えない |
 | 4 | executor選択時: executor Entryの次のholding unitが同じstream上で近い方 | 近くその武器を操作する必要があるEntryで位置を消費し、後続の切替を減らす |
 | 5 | actionが進めるEntryの残りpending unit数（少ない方） | 完成に近いRouteを先に終える |
-| 6 | stable: stream順（base / `normal:*` → skill → gogma）、Counter位置、primary Entry ID | 決定性 |
+| 6 | stable: stream順（Normal（`normal:*`）/ blind forge → Skill → Gogma）、Counter位置、primary Entry ID | 決定性 |
 
 - Target priority、improvement preference、weapon switchはいずれも **1 Target = 1 Entryでも意味を
   持つ** soft preferenceとして残す。Target priorityは複数Targetのsafe action間、improvement preference
@@ -566,10 +566,10 @@ safe actionが複数あるとき、次のkeyの辞書式順で1つだけ選ぶ�
 - 1つのEntryでBonus laneとSkill laneの両方がsafeな場合（シナリオG）、`skill_first` /
   `bonus_first` は2のkeyで優先laneを選ぶ。優先laneがsafeでない（他Entryのholdingや
   pinで待つ）場合は、反対laneを進めてviolationを記録する（soft preferenceであり、hard constraint
-  より上位にしない）。`planner` は2で差が付かず、3〜6で決まる。6のstream順（Bonus先）は決定性
-  のためのtie-breakであり、7.9によりfeasibilityへ影響しないので、PLANNER_SPEC 7.6の
-  「`planner` はBonusを先に試す意味ではない」（branchを片側に固定してPlanを破綻させない）
-  という趣旨と矛盾しない
+  より上位にしない）。`planner` は2で差が付かず、3〜6で決まる。6のstream順（Normal / blind forge →
+  Skill → Gogma。したがって同じ条件ならSkill laneがBonus laneより先）は決定性のためのtie-breakであり、
+  7.9によりfeasibilityへ影響しないので、PLANNER_SPEC 7.6の「`planner` はBonusを先に試す意味ではない」
+  （branchを片側に固定してPlanを破綻させない）という趣旨と矛盾しない
 - 上限付きではないが局所的な規則であるため、weapon switch数・violation数の絶対最小は保証しない
   （現行契約と同じ）
 

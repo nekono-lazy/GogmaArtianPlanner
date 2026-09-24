@@ -16,6 +16,7 @@ import { entryIsRelevantForState } from './plannerEntryRelevance'
 import { comparePlannerEntryPriority } from './plannerEntryPriority'
 import {
   initialPlannerLaneProgress,
+  isPlannerLaneUnitHolding,
   remainingPlannerLaneUnits,
   type PlannerEntryLanes,
 } from './plannerRouteLanes'
@@ -120,11 +121,30 @@ function remainingUnits(
 }
 
 /**
+ * The remaining units that hold their Counter position in `state`, judged by
+ * the one holding predicate at the Entry's current lane progress: a unit that
+ * is never skippable, or a skippable unit its checkpoint pin blocks now.
+ */
+function remainingHoldingUnits(
+  state: PlannerSearchState,
+  entry: BuildListEntry,
+  lanePlans: ReadonlyMap<BuildListEntryId, PlannerEntryLanes>,
+): PlannerRouteUnit[] {
+  const lanes = lanePlans.get(entry.id)
+  if (!lanes) return []
+  const progress = state.routeProgressByEntryId[entry.id] ?? initialPlannerLaneProgress()
+  return remainingPlannerLaneUnits(lanes, progress).filter((unit) =>
+    isPlannerLaneUnitHolding(unit, progress, lanes.pin),
+  )
+}
+
+/**
  * Why an Entry cannot be committed in `state`, or `null`.
  *
- * Judged over its remaining holding units - the units no other Entry may pass
- * (`canSkipWhenCounterPassed === false`), which include every selected
- * checkpoint endpoint:
+ * Judged over its remaining holding units (`isPlannerLaneUnitHolding()` at the
+ * Entry's current lane progress) - the units no other Entry may pass: never
+ * skippable units, every selected checkpoint endpoint among them, and
+ * skippable units the checkpoint pin blocks now:
  *
  * - an applied explicit resolution blocks one of them
  *   (`isUnitBlockedByConflictResolution()`, the existing semantics)
@@ -140,9 +160,7 @@ export function plannerRouteCommitmentRejection(
 ): PlannerSearchRejection | null {
   const detection = context.initialConflictDetection
   const conflictsById = new Map(detection.conflicts.map((conflict) => [conflict.id, conflict]))
-  const holdingUnits = remainingUnits(state, entry, context.allLanePlans).filter(
-    (unit) => !unit.canSkipWhenCounterPassed,
-  )
+  const holdingUnits = remainingHoldingUnits(state, entry, context.allLanePlans)
   for (const unit of holdingUnits) {
     if (
       isUnitBlockedByConflictResolution(
