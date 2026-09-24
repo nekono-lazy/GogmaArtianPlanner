@@ -42,6 +42,7 @@ import {
 import {
   entryIsRelevantForState,
   isPlannerSearchStateComplete,
+  isPlannerTargetComplete,
 } from './plannerEntryRelevance'
 import {
   entryImprovementPreference,
@@ -62,6 +63,7 @@ import {
   collectPreferredSourceEntryIds,
 } from './plannerPreferredSource'
 import { preparePlannerInitialContext } from './plannerInitialContext'
+import { createPlannerSearchMetricsCollector } from './plannerSearchInstrumentation'
 import {
   createPlannerSearchTermination,
   createUnsearchedPlannerTermination,
@@ -1146,13 +1148,27 @@ export async function runPlannerBeamSearch(
 ): Promise<PlannerBeamSearchResult> {
   const prepared = preparePlannerInitialContext(input, dependencies)
   if (prepared.status === 'invalid') {
-    return initialFailureResult(
+    const failure = initialFailureResult(
       input,
       prepared.warnings,
       prepared.issues,
       prepared.excludedBuildListEntries,
       prepared.planningTargetIds,
     )
+    createPlannerSearchMetricsCollector(executionOptions.searchInstrumentation, () => ({
+      entries: [],
+      unitCountsByEntryId: new Map(),
+      planningTargetCount: prepared.planningTargetIds.length,
+      options: input.options,
+      countCompletedTargets: () => 0,
+    }))?.finish({
+      reachedBeamSearch: false,
+      expandedStates: 0,
+      terminationStatus: failure.termination.status,
+      completedTargetCount: failure.termination.completedTargetCount,
+      conflicts: [],
+    })
+    return failure
   }
   const {
     allSearchEntries,
@@ -1174,12 +1190,41 @@ export async function runPlannerBeamSearch(
   // checkpoint Entry secured (PLANNER_SPEC 7.2.1 / 7.5.6).
   const isComplete = (state: PlannerSearchState) =>
     isPlannerSearchStateComplete(state, planningTargetIds, checkpointRequirements)
+  // Issue #103 measurement only: `null` unless the caller supplied an
+  // instrumentation, and every hook below is then a no-op optional call. The
+  // collector reads states the search already built and decides nothing.
+  const metrics = createPlannerSearchMetricsCollector(executionOptions.searchInstrumentation, () => ({
+    entries: allSearchEntries,
+    unitCountsByEntryId: new Map(
+      [...allLanePlans].map(([entryId, lanes]) => [
+        entryId,
+        {
+          base: lanes.base.length,
+          bonus: lanes.bonus.length,
+          skill: lanes.skill.length,
+        },
+      ]),
+    ),
+    planningTargetCount: planningTargetIds.length,
+    options: input.options,
+    countCompletedTargets: (state) =>
+      planningTargetIds.filter((targetId) =>
+        isPlannerTargetComplete(state, targetId, checkpointRequirements),
+      ).length,
+  }))
   if (planningTargetIds.length === 0) {
     // No valid BuildListEntry, so this run has no goal: the Build List is the
     // Planner input (REQUIREMENTS 18 / 19), and no active Target outside it is
     // ever substituted. Nothing can be expanded, so no Beam Search starts. The
     // validation already reported `no_build_list_entries` and each excluded
     // Entry; the termination is an ordinary `exhausted` over zero Targets.
+    metrics?.finish({
+      reachedBeamSearch: false,
+      expandedStates: 0,
+      terminationStatus: 'exhausted',
+      completedTargetCount: 0,
+      conflicts: [],
+    })
     return {
       bestState: preparedInitialState,
       conflicts: [],
@@ -1279,6 +1324,13 @@ export async function runPlannerBeamSearch(
       validConflictResolutions,
       discoveredConflictsById,
     ).forEach(({ kind, message }) => addWarning(warnings, kind, message))
+    metrics?.finish({
+      reachedBeamSearch: false,
+      expandedStates: 0,
+      terminationStatus: 'completed',
+      completedTargetCount: planningTargetIds.length,
+      conflicts: [...discoveredConflictsById.values()],
+    })
     return {
       bestState: initialState,
       conflicts: [...discoveredConflictsById.values()].sort((left, right) =>
@@ -1315,20 +1367,25 @@ export async function runPlannerBeamSearch(
 
   while (beam.length > 0 && !stop) {
     const successors: PlannerSearchState[] = []
+    metrics?.beginDepth(beam.length)
     for (const state of beam.sort(comparePlannerSearchStates)) {
       if (executionOptions.shouldCancel?.()) {
         cancelled = true
         stop = true
         break
       }
+      metrics?.visitBeamState()
       if (isComplete(state)) {
+        metrics?.completeBeamState()
         bestComplete = betterState(bestComplete, state)
         continue
       }
       if (state.trace.length >= input.options.maxPlanSteps) {
+        metrics?.stepLimitBeamState()
         reachedStepLimit = true
         continue
       }
+      const setupStartedAt = metrics?.mark()
       const stateConflictDetection = detectCurrentPlannerConflicts(
         state,
         allSearchEntries,
@@ -1338,6 +1395,7 @@ export async function runPlannerBeamSearch(
         checkpointRequirements,
       )
       recordDetectedConflicts(stateConflictDetection)
+      metrics?.expandBeamState(stateConflictDetection.conflicts)
       const conflictsById = new Map(
         stateConflictDetection.conflicts.map((conflict) => [conflict.id, conflict]),
       )
@@ -1375,6 +1433,7 @@ export async function runPlannerBeamSearch(
         checkpointRequirements,
       ).flatMap((entry) => {
         const target = planningTargetsById.get(entry.targetWeaponId)
+        if (target) metrics?.reserveAttempt(entry.id)
         return target
           ? [{
               entry,
@@ -1391,6 +1450,7 @@ export async function runPlannerBeamSearch(
             }]
           : []
       })
+      metrics?.addPhaseTime('beamStateSetup', setupStartedAt)
       const expansionSources: { entry: BuildListEntry; reserveAttempt: AppliedActionResult | null }[] = [
         ...pendingReserveAttempts.map(({ entry, applied }) => ({ entry, reserveAttempt: applied })),
         ...allSearchEntries.map((entry) => ({ entry, reserveAttempt: null })),
@@ -1416,6 +1476,7 @@ export async function runPlannerBeamSearch(
           // soft ranking term of the comparator (7.6), never a branch filter.
           for (const unit of nextPlannerLaneUnits(lanes, progress)) {
             if (isBlockedByConflictResolution(unit)) {
+              metrics?.conflictBlockedUnit()
               appendUniqueRejection(
                 rejections,
                 rejectionKeys,
@@ -1439,8 +1500,11 @@ export async function runPlannerBeamSearch(
                 requiredUnitsByCounterPosition,
               )
             ) {
+              metrics?.prunedDominatedSkippableUnit()
               continue
             }
+            metrics?.routeAttempt(unit)
+            const applyStartedAt = metrics?.mark()
             attempts.push(applyRouteAction(
               state,
               unit,
@@ -1455,6 +1519,7 @@ export async function runPlannerBeamSearch(
               preferredSourceEntryIds,
               checkpointRequirements,
             ))
+            metrics?.addPhaseTime('applyAction', applyStartedAt)
           }
         } else if (lanes.unitCount === 0) {
           // A Route with physical units is secured only right after its last
@@ -1462,6 +1527,7 @@ export async function runPlannerBeamSearch(
           // its reserve here.
           const target = planningTargetsById.get(entry.targetWeaponId)
           if (!target) continue
+          metrics?.reserveAttempt(entry.id)
           attempts.push(applyReserveAction(
             state,
             entry,
@@ -1475,6 +1541,7 @@ export async function runPlannerBeamSearch(
         }
         for (const applied of attempts) {
           if (applied.rejection) {
+            metrics?.rejectedAttempt(applied.rejection)
             appendUniqueRejection(
               rejections,
               rejectionKeys,
@@ -1488,6 +1555,7 @@ export async function runPlannerBeamSearch(
             stop = true
             break
           }
+          const evaluationStartedAt = metrics?.mark()
           const successorConflictDetection = detectCurrentPlannerConflicts(
             applied.state,
             allSearchEntries,
@@ -1503,11 +1571,13 @@ export async function runPlannerBeamSearch(
               successorConflictDetection.conflicts,
             ),
           })
+          metrics?.addPhaseTime('successorEvaluation', evaluationStartedAt)
           if (applied.state.trace.length >= input.options.maxPlanSteps) {
             reachedStepLimit = true
           }
           successors.push(applied.state)
           expandedStates += 1
+          metrics?.successor(state, applied.state)
           executionOptions.onProgress?.({
             expandedStates,
             maxExpandedStates: input.options.maxExpandedStates,
@@ -1531,6 +1601,7 @@ export async function runPlannerBeamSearch(
       }
       if (stop) break
     }
+    const dedupStartedAt = metrics?.mark()
     const deduplicated = new Map<string, PlannerSearchState>()
     successors.forEach((state) => {
       const key = createPlannerSearchStateSemanticKey(state)
@@ -1539,9 +1610,23 @@ export async function runPlannerBeamSearch(
         deduplicated.set(key, state)
       }
     })
-    beam = [...deduplicated.values()]
-      .sort(comparePlannerSearchStates)
-      .slice(0, input.options.beamWidth)
+    const ranked = [...deduplicated.values()].sort(comparePlannerSearchStates)
+    beam = ranked.slice(0, input.options.beamWidth)
+    metrics?.addPhaseTime('dedupAndTrim', dedupStartedAt)
+    // Read after the trim, over the same ranked array the trim sliced.
+    metrics?.endDepth({
+      successorsBeforeDedup: successors,
+      deduplicated: ranked,
+      keptBeam: beam,
+      stoppedBy: !stop
+        ? null
+        : cancelled
+          ? 'cancelled'
+          : reachedExpandedLimit
+            ? 'max_expanded_states'
+            : null,
+      cumulativeExpandedStates: expandedStates,
+    })
     if (beam.length === 0) break
     await executionOptions.yieldControl?.()
     if (executionOptions.shouldCancel?.()) {
@@ -1578,6 +1663,23 @@ export async function runPlannerBeamSearch(
     validConflictResolutions,
     discoveredConflictsById,
   ).forEach(({ kind, message }) => addWarning(warnings, kind, message))
+  const termination = createPlannerSearchTermination({
+    options: input.options,
+    planningTargetIds,
+    checkpointRequirements,
+    bestState,
+    expandedStates,
+    cancelled,
+    reachedStepLimit,
+    reachedExpandedLimit,
+  })
+  metrics?.finish({
+    reachedBeamSearch: true,
+    expandedStates,
+    terminationStatus: termination.status,
+    completedTargetCount: termination.completedTargetCount,
+    conflicts: [...discoveredConflictsById.values()],
+  })
   return {
     bestState,
     conflicts: [...discoveredConflictsById.values()].sort((left, right) =>
@@ -1592,15 +1694,6 @@ export async function runPlannerBeamSearch(
     expandedStates,
     completed: bestState !== null && isComplete(bestState),
     cancelled,
-    termination: createPlannerSearchTermination({
-      options: input.options,
-      planningTargetIds,
-      checkpointRequirements,
-      bestState,
-      expandedStates,
-      cancelled,
-      reachedStepLimit,
-      reachedExpandedLimit,
-    }),
+    termination,
   }
 }

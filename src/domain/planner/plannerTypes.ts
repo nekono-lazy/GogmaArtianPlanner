@@ -27,6 +27,7 @@ import type {
 } from '../master/masterTypes'
 import type { RngEngine } from '../rng/rngEngine'
 import type { PlannerLaneProgress } from './plannerRouteLanes'
+import type { PlannerSearchInstrumentation } from './plannerSearchInstrumentation'
 
 export interface PlannerOptions {
   maxPlanSteps: number
@@ -488,6 +489,13 @@ export interface PlannerExecutionOptions {
   shouldCancel?: () => boolean
   onProgress?: (progress: PlannerProgress) => void
   yieldControl?: () => Promise<void>
+  /**
+   * Benchmark / test-only observation of each Beam Search (Issue #103). It is
+   * semantics-neutral, `undefined` runs exactly the previous search, and no
+   * Worker protocol, `PlannerResult`, or persistence carries it
+   * (`plannerSearchInstrumentation.ts`).
+   */
+  searchInstrumentation?: PlannerSearchInstrumentation
 }
 
 export type CreateProductionPlanCalculation = (
