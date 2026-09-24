@@ -2,38 +2,17 @@ import type {
   BuildListEntry,
   BuildListEntryId,
   DomainValidationIssue,
-  OwnedGogmaArtianWeapon,
-  OwnedWeaponId,
   PlanConflict,
   TargetWeapon,
   TargetWeaponId,
 } from '../models/publicTypes'
 import { stableStringify } from '../models/publicTypes'
-import type { RngEngine } from '../rng/rngEngine'
-import {
-  addRegisteredWeapon,
-  canUseAsDestructiveGogmaSource,
-  canUseAsResetSkillsSource,
-  consumeOwnedNormalForConversion,
-  findOwnedWeapon,
-  reserveWeaponId,
-  updateOwnedWeapon,
-} from './simulatedInventory'
 import {
   conflictResolutionRefusalReason,
   detectPlannerConflicts,
   isUnitBlockedByConflictResolution,
 } from './plannerConflictDetection'
-import {
-  advanceBlindNormalCreationCounters,
-  advancePlannerWeaponSwitchMetric,
-  arePlannerRouteUnitsShareable,
-  currentPlannerCounterValue,
-  fastForwardPlannerRouteProgress,
-  plannerWeaponOperationSubjectKey,
-  routeUnitOwnedWeaponId,
-  type PlannerRouteUnit,
-} from './plannerRouteProgress'
+import type { PlannerRouteUnit } from './plannerRouteProgress'
 import {
   comparePlannerSearchStates,
   createPlannerSearchStateSemanticKey,
@@ -44,30 +23,31 @@ import {
   isPlannerSearchStateComplete,
   isPlannerTargetComplete,
 } from './plannerEntryRelevance'
+import type { PlannerCheckpointRequirements } from './plannerCheckpoints'
 import {
-  entryImprovementPreference,
-  hasIntermediateStateSelection,
-  type PlannerCheckpointRequirements,
-} from './plannerCheckpoints'
-import {
-  advancePlannerLaneProgress,
-  hasReachedIntermediatePin,
   initialPlannerLaneProgress,
   isPlannerLaneRouteComplete,
   nextPlannerLaneUnits,
   remainingPlannerLaneUnits,
   type PlannerEntryLanes,
 } from './plannerRouteLanes'
-import {
-  advancePlannerPreferredSourceMetric,
-  collectPreferredSourceEntryIds,
-} from './plannerPreferredSource'
+import { collectPreferredSourceEntryIds } from './plannerPreferredSource'
 import { preparePlannerInitialContext } from './plannerInitialContext'
 import { createPlannerSearchMetricsCollector } from './plannerSearchInstrumentation'
 import {
   createPlannerSearchTermination,
   createUnsearchedPlannerTermination,
 } from './plannerTermination'
+import {
+  applyPlannerReserveAction,
+  applyPlannerRouteAction,
+  createPlannerSearchRejection,
+  executablePlannerRequiredUnitsByCounterPosition,
+  isSkippablePlannerUnitDominatedByRequiredUnit,
+  type PlannerAppliedActionResult,
+  type PlannerReserveActionContext,
+  type PlannerRouteActionContext,
+} from './plannerStateTransitions'
 import type {
   ExcludedBuildListEntry,
   PlannerBeamSearchResult,
@@ -75,138 +55,15 @@ import type {
   PlannerRunBuildListContext,
   PlannerExecutionOptions,
   PlannerInput,
-  PlannerSearchAction,
-  PlannerSearchInventoryEffect,
   PlannerSearchRejection,
-  PlannerSearchRngSnapshot,
   PlannerSearchState,
   PlannerWarning,
   PlannerConflictResolution,
 } from './plannerTypes'
 import { PERSISTED_PLANNER_BUILD_LIST_CONTEXT } from './plannerTypes'
-import { deriveTargetSatisfaction } from './targetSatisfaction'
 
 function compareStableStrings(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
-}
-
-function emptyInventoryEffect(): PlannerSearchInventoryEffect {
-  return {
-    addedOwnedWeaponIds: [],
-    removedOwnedWeaponIds: [],
-    updatedOwnedWeaponIds: [],
-    reservedOwnedWeaponIds: [],
-    routeOutputChangedForEntryIds: [],
-  }
-}
-
-function rngSnapshot(state: PlannerSearchState): PlannerSearchRngSnapshot {
-  return {
-    gogmaCounter: state.currentRngState.gogmaCounter.value,
-    skillCounter: state.currentRngState.skillCounter.value,
-    normalCounters: state.currentNormalCounters
-      .map(({ id, counter }) => ({ id, counter }))
-      .sort((left, right) => compareStableStrings(left.id, right.id)),
-  }
-}
-
-function cloneState(state: PlannerSearchState): PlannerSearchState {
-  return structuredClone(state)
-}
-
-function isExistingGogmaRoute(entry: BuildListEntry): boolean {
-  return entry.candidateSnapshot.route.kind.startsWith('existing_gogma')
-}
-
-function existingRouteSourceId(entry: BuildListEntry): OwnedWeaponId | null {
-  return isExistingGogmaRoute(entry)
-    ? entry.candidateSnapshot.route.sourceOwnedWeaponId
-    : null
-}
-
-function entryUsesCurrentSourceVersion(
-  state: PlannerSearchState,
-  entry: BuildListEntry,
-): boolean {
-  const sourceId = existingRouteSourceId(entry)
-  if (sourceId === null) return true
-  return (
-    (state.routeSourceVersionByEntryId[entry.id] ?? 0) ===
-    (state.sourceMutationVersionByOwnedWeaponId[sourceId] ?? 0)
-  )
-}
-
-function sourceVersionRejection(
-  entry: BuildListEntry,
-  unit: PlannerRouteUnit,
-): PlannerSearchRejection {
-  return rejection(
-    entry.id,
-    unit.operation.type,
-    'inventory_precondition_failed',
-    'The existing Gogma Route was superseded by a later source mutation.',
-  )
-}
-
-function sourceMutatedByOperation(
-  operation: PlannerRouteUnit['operation'],
-): OwnedWeaponId | null {
-  if (
-    operation.type === 'reset_bonuses' ||
-    operation.type === 'keep_bonuses'
-  ) return operation.sourceOwnedWeaponId
-  if (
-    operation.type === 'reset_skills' &&
-    operation.sourceOwnedWeaponId !== null
-  ) return operation.sourceOwnedWeaponId
-  return null
-}
-
-function refreshTargetSatisfaction(
-  state: PlannerSearchState,
-  targets: readonly TargetWeapon[],
-  master: PlannerInput['master'],
-): PlannerSearchAction['satisfactionChanges'] {
-  const before = structuredClone(state.targetSatisfaction)
-  const derived = deriveTargetSatisfaction(
-    targets,
-    state.simulatedInventory.ownedWeapons.filter(
-      ({ id }) => state.inFlightExistingSourceByOwnedWeaponId[id] === undefined,
-    ),
-    master,
-  )
-  const next = Object.fromEntries(
-    derived.map(({ targetWeaponId, hasPractical, hasIdeal }) => [
-      targetWeaponId,
-      { hasPractical, hasIdeal },
-    ]),
-  ) as PlannerSearchState['targetSatisfaction']
-  state.targetSatisfaction = next
-  return [...new Set([...Object.keys(before), ...Object.keys(next)])]
-    .sort(compareStableStrings)
-    .flatMap((targetWeaponId) => {
-      const previous = before[targetWeaponId as TargetWeaponId] ?? {
-        hasPractical: false,
-        hasIdeal: false,
-      }
-      const current = next[targetWeaponId as TargetWeaponId] ?? {
-        hasPractical: false,
-        hasIdeal: false,
-      }
-      return previous.hasPractical === current.hasPractical &&
-        previous.hasIdeal === current.hasIdeal
-        ? []
-        : [{ targetWeaponId: targetWeaponId as TargetWeaponId, before: previous, after: current }]
-    })
-}
-
-function rejection(
-  entryId: BuildListEntryId,
-  actionType: PlannerSearchRejection['actionType'],
-  reason: PlannerSearchRejection['reason'],
-  detail: string,
-): PlannerSearchRejection {
-  return { buildListEntryId: entryId, actionType, reason, detail }
 }
 
 function rejectionKey(value: PlannerSearchRejection): string {
@@ -224,791 +81,12 @@ function appendUniqueRejection(
   rejections.push(value)
 }
 
-function setCurrentCounter(
-  state: PlannerSearchState,
-  unit: PlannerRouteUnit,
-) {
-  if (unit.counterStream === 'gogma') {
-    state.currentRngState.gogmaCounter.value = unit.counterAfter
-    return
-  }
-  if (unit.counterStream === 'skill') {
-    state.currentRngState.skillCounter.value = unit.counterAfter
-    return
-  }
-  if (unit.counterStream === 'normal') {
-    state.currentNormalCounters = state.currentNormalCounters.map((counter) =>
-      counter.id === unit.counterId
-        ? { ...counter, counter: unit.counterAfter }
-        : counter,
-    )
-  }
-}
-
-function counterPreconditionRejection(
-  state: PlannerSearchState,
-  unit: PlannerRouteUnit,
-): PlannerSearchRejection | null {
-  if (unit.counterStream === null) return null
-  const current = currentPlannerCounterValue(state, unit)
-  if (current === null || unit.counterBefore === null || unit.counterAfter === null) {
-    return rejection(
-      unit.entryId,
-      unit.operation.type,
-      'counter_unavailable',
-      'The required confirmed counter is unavailable.',
-    )
-  }
-  if (unit.counterAfter < unit.counterBefore) {
-    return rejection(
-      unit.entryId,
-      unit.operation.type,
-      'counter_after_mismatch',
-      'A saved RouteOperation that rewinds its counter is not executable.',
-    )
-  }
-  if (current > unit.counterBefore) {
-    return rejection(
-      unit.entryId,
-      unit.operation.type,
-      'counter_before_current',
-      `The current counter ${current} has already passed required position ${unit.counterBefore}, and this operation cannot be skipped.`,
-    )
-  }
-  if (current < unit.counterBefore) {
-    return rejection(
-      unit.entryId,
-      unit.operation.type,
-      'counter_unavailable',
-      `The required counter position ${unit.counterBefore} has not been reached.`,
-    )
-  }
-  return null
-}
-
-function protectedRejection(
-  unit: PlannerRouteUnit,
-  detail: string,
-): PlannerSearchRejection {
-  return rejection(
-    unit.entryId,
-    unit.operation.type,
-    'protected_destructive_use',
-    detail,
-  )
-}
-
-function inventoryPreconditionRejection(
-  state: PlannerSearchState,
-  entry: BuildListEntry,
-  unit: PlannerRouteUnit,
-): PlannerSearchRejection | null {
-  const operation = unit.operation
-  if (operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses') {
-    if (operation.sourceOwnedWeaponId === null) {
-      // A transient Gogma of either scope may be Reset or Kept: its inherited
-      // slots are known whenever the Route knows them, and the blind variant's
-      // Keep-before-Reset is already refused by Route validation and fails
-      // closed in Trace Replay (`unknown_restoration_bonuses`).
-      return state.routeRuntimeByEntryId[entry.id]?.hasUnregisteredGogmaOutput
-        ? null
-        : rejection(
-            entry.id,
-            operation.type,
-            'inventory_precondition_failed',
-            'The unregistered converted Gogma route output does not exist.',
-          )
-    }
-    const source = findOwnedWeapon(state.simulatedInventory, operation.sourceOwnedWeaponId)
-    if (!source) {
-      return rejection(entry.id, operation.type, 'inventory_precondition_failed', `OwnedWeapon '${operation.sourceOwnedWeaponId}' is unavailable.`)
-    }
-    return canUseAsDestructiveGogmaSource(source)
-      ? null
-      : protectedRejection(unit, `OwnedWeapon '${operation.sourceOwnedWeaponId}' is protected or is not a Gogma source.`)
-  }
-  if (operation.type === 'reset_skills') {
-    if (operation.sourceOwnedWeaponId === null) {
-      return state.routeRuntimeByEntryId[entry.id]
-        ?.hasUnregisteredGogmaOutput
-        ? null
-        : rejection(
-            entry.id,
-            operation.type,
-            'inventory_precondition_failed',
-            'The unregistered converted Gogma route output does not exist.',
-          )
-    }
-    const source = findOwnedWeapon(
-      state.simulatedInventory,
-      operation.sourceOwnedWeaponId,
-    )
-    if (canUseAsResetSkillsSource(source)) return null
-    return source?.kind === 'gogma' && source.isProtected
-      ? protectedRejection(
-          unit,
-          `OwnedWeapon '${operation.sourceOwnedWeaponId}' is protected and cannot be used for Reset Skills.`,
-        )
-      : rejection(
-          entry.id,
-          operation.type,
-          'inventory_precondition_failed',
-          `OwnedWeapon '${operation.sourceOwnedWeaponId}' is not an available Gogma source.`,
-        )
-  }
-  if (
-    operation.type === 'convert_normal_to_gogma' &&
-    entry.candidateSnapshot.route.kind === 'owned_normal_artian_to_gogma'
-  ) {
-    const sourceId = entry.candidateSnapshot.route.sourceOwnedWeaponId
-    const source =
-      sourceId === null
-        ? null
-        : findOwnedWeapon(state.simulatedInventory, sourceId)
-    if (!source) {
-      return rejection(
-        entry.id,
-        operation.type,
-        'inventory_precondition_failed',
-        'The owned Normal conversion source is unavailable.',
-      )
-    }
-    return source.isProtected
-      ? protectedRejection(
-          unit,
-          `Protected Normal Artian '${source.id}' cannot be converted.`,
-        )
-      : null
-  }
-  return null
-}
-
-function applyRouteInventoryEffect(
-  state: PlannerSearchState,
-  entry: BuildListEntry,
-  unit: PlannerRouteUnit,
-): { rejection: PlannerSearchRejection | null; effect: PlannerSearchInventoryEffect } {
-  const effect = emptyInventoryEffect()
-  const operation = unit.operation
-  if (
-    operation.type === 'convert_normal_to_gogma' &&
-    entry.candidateSnapshot.route.kind === 'owned_normal_artian_to_gogma'
-  ) {
-    const sourceId = entry.candidateSnapshot.route.sourceOwnedWeaponId
-    if (sourceId === null) {
-      return {
-        rejection: rejection(
-          entry.id,
-          operation.type,
-          'inventory_precondition_failed',
-          'Owned Normal conversion route has no source OwnedWeapon ID.',
-        ),
-        effect,
-      }
-    }
-    const consumed = consumeOwnedNormalForConversion(
-      state.simulatedInventory,
-      sourceId,
-    )
-    if (!consumed.isValid || consumed.inventory === null) {
-      return {
-        rejection: rejection(
-          entry.id,
-          operation.type,
-          'inventory_precondition_failed',
-          consumed.issues[0]?.message ?? 'Owned Normal conversion failed.',
-        ),
-        effect,
-      }
-    }
-    state.simulatedInventory = consumed.inventory
-    effect.removedOwnedWeaponIds.push(sourceId)
-    return { rejection: null, effect }
-  }
-  return { rejection: null, effect }
-}
-
-function routeOutputChanges(
-  entry: BuildListEntry,
-  unit: PlannerRouteUnit,
-): boolean {
-  if (unit.operation.type === 'convert_normal_to_gogma') {
-    return (
-      entry.candidateSnapshot.route.kind === 'normal_artian_to_gogma' ||
-      entry.candidateSnapshot.route.kind ===
-        'owned_normal_artian_to_gogma'
-    )
-  }
-  return (
-    (unit.operation.type === 'reset_bonuses' ||
-      unit.operation.type === 'keep_bonuses' ||
-      unit.operation.type === 'reset_skills') &&
-    unit.operation.sourceOwnedWeaponId === null
-  )
-}
-
-function nextTransientRestorationBonusScope(
-  current: PlannerSearchState['routeRuntimeByEntryId'][BuildListEntryId],
-  operation: PlannerRouteUnit['operation'],
-): PlannerSearchState['routeRuntimeByEntryId'][BuildListEntryId]['transientRestorationBonusScope'] {
-  if (operation.type === 'convert_normal_to_gogma') return 'normal_artian'
-  // Either amendment rewrites all five slots as `gogma_artian` scope
-  // (`docs/DATA_MODEL.md` 7.1): Reset redraws them, Keep rerolls each tier.
-  if (
-    (operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses') &&
-    operation.sourceOwnedWeaponId === null
-  ) {
-    return 'gogma_artian'
-  }
-  return current?.transientRestorationBonusScope ?? null
-}
-
-/**
- * Every executable precondition the Beam Search checks before it builds a
- * successor. Expansion and the required-unit eligibility scan below must use
- * exactly the same authority, so they never disagree about whether a unit can
- * run in this state.
- */
-function routeUnitPreconditionRejection(
-  state: PlannerSearchState,
-  entry: BuildListEntry,
-  unit: PlannerRouteUnit,
-): PlannerSearchRejection | null {
-  if (!entryUsesCurrentSourceVersion(state, entry)) {
-    return sourceVersionRejection(entry, unit)
-  }
-  const counterIssue = counterPreconditionRejection(state, unit)
-  if (counterIssue) return counterIssue
-  return inventoryPreconditionRejection(state, entry, unit)
-}
-
-/** One shared Counter stream position, the resource a unit occupies. */
-function counterPositionKey(unit: PlannerRouteUnit): string | null {
-  if (unit.counterStream === null || unit.counterBefore === null) return null
-  return `${unit.counterStream}\u0000${unit.counterId ?? ''}\u0000${unit.counterBefore}`
-}
-
-/**
- * Required next units that can run in this state, indexed by Counter position.
- *
- * A `canSkipWhenCounterPassed` unit and a required unit at the same position do
- * not conflict, but they are not interchangeable either: running the required
- * one first lets the skippable one fast-forward, while running the skippable
- * one first pushes the Counter past the required unit and kills that Route with
- * `counter_before_current`. The order is therefore decided by the Planner
- * itself, never by the user (`docs/PLANNER_SPEC.md` 7.0.2).
- */
-function executableRequiredUnitsByCounterPosition(
-  state: PlannerSearchState,
-  entries: readonly BuildListEntry[],
-  lanePlans: ReadonlyMap<BuildListEntryId, PlannerEntryLanes>,
-  isUnitBlocked: (unit: PlannerRouteUnit) => boolean,
-  requirements: PlannerCheckpointRequirements,
-): Map<string, PlannerRouteUnit[]> {
-  const required = new Map<string, PlannerRouteUnit[]>()
-  entries.forEach((entry) => {
-    if (state.selectedBuildListEntryIds.includes(entry.id)) return
-    if (!entryIsRelevantForState(state, entry, requirements)) return
-    const lanes = lanePlans.get(entry.id)
-    if (!lanes) return
-    const progress = state.routeProgressByEntryId[entry.id] ?? initialPlannerLaneProgress()
-    for (const unit of nextPlannerLaneUnits(lanes, progress)) {
-      if (unit.canSkipWhenCounterPassed) continue
-      const key = counterPositionKey(unit)
-      if (key === null) continue
-      if (isUnitBlocked(unit)) continue
-      if (routeUnitPreconditionRejection(state, entry, unit) !== null) continue
-      required.set(key, [...(required.get(key) ?? []), unit])
-    }
-  })
-  return required
-}
-
-/**
- * Whether running this skippable unit now would irreversibly lose a required
- * unit that occupies the same Counter position.
- *
- * A skippable unit that is the same physical action as one of those required
- * units is not an alternative to it: the PR #4 sharing contract already runs
- * both Entries with one operation, so that case keeps its existing semantics.
- */
-function isSkippableUnitDominatedByRequiredUnit(
-  unit: PlannerRouteUnit,
-  requiredByCounterPosition: ReadonlyMap<string, readonly PlannerRouteUnit[]>,
-): boolean {
-  if (!unit.canSkipWhenCounterPassed) return false
-  const key = counterPositionKey(unit)
-  if (key === null) return false
-  const required = requiredByCounterPosition.get(key)
-  if (required === undefined || required.length === 0) return false
-  return !required.some((other) => arePlannerRouteUnitsShareable(other, unit))
-}
-
-function mergedProgressedEntries(
-  state: PlannerSearchState,
-  primary: PlannerRouteUnit,
-  entriesById: ReadonlyMap<BuildListEntryId, BuildListEntry>,
-  lanePlans: ReadonlyMap<BuildListEntryId, PlannerEntryLanes>,
-  conflictsById: ReadonlyMap<string, PlanConflict>,
-  conflictIdsByUnitKey: ReadonlyMap<string, readonly string[]>,
-  selectedPhysicalActionKeysByConflictId: ReadonlyMap<string, readonly string[]>,
-  requirements: PlannerCheckpointRequirements,
-): PlannerRouteUnit[] {
-  const shared = [primary]
-  if (!primary.shareable) return shared
-  lanePlans.forEach((lanes, entryId) => {
-    if (entryId === primary.entryId) return
-    if (state.selectedBuildListEntryIds.includes(entryId)) return
-    const entry = entriesById.get(entryId)
-    if (!entry) return
-    if (!entryUsesCurrentSourceVersion(state, entry)) return
-    if (!entryIsRelevantForState(state, entry, requirements)) return
-    const progress = state.routeProgressByEntryId[entryId] ?? initialPlannerLaneProgress()
-    // The pin gating applies to a shared progression too: an Entry whose lane
-    // may not advance yet is simply not progressed, and its Route is then
-    // superseded by the source mutation like any other unshared action.
-    const next = nextPlannerLaneUnits(lanes, progress).find((unit) =>
-      arePlannerRouteUnitsShareable(primary, unit),
-    )
-    if (
-      next &&
-      !isUnitBlockedByConflictResolution(
-        next,
-        conflictsById,
-        conflictIdsByUnitKey,
-        selectedPhysicalActionKeysByConflictId,
-        (entryId) => {
-          const selected = entriesById.get(entryId)
-          return (
-            selected !== undefined &&
-            entryIsRelevantForState(state, selected, requirements)
-          )
-        },
-      )
-    ) {
-      shared.push(next)
-    }
-  })
-  return shared.sort((left, right) =>
-    compareStableStrings(left.entryId, right.entryId),
-  )
-}
-
-interface AppliedActionResult {
-  state: PlannerSearchState | null
-  rejection: PlannerSearchRejection | null
-}
-
-function applyRouteAction(
-  sourceState: PlannerSearchState,
-  primary: PlannerRouteUnit,
-  entriesById: ReadonlyMap<BuildListEntryId, BuildListEntry>,
-  lanePlans: ReadonlyMap<BuildListEntryId, PlannerEntryLanes>,
-  conflictsById: ReadonlyMap<string, PlanConflict>,
-  conflictIdsByUnitKey: ReadonlyMap<string, readonly string[]>,
-  selectedPhysicalActionKeysByConflictId: ReadonlyMap<string, readonly string[]>,
-  targets: readonly TargetWeapon[],
-  master: PlannerInput['master'],
-  engine: RngEngine,
-  preferredSourceEntryIds: ReadonlySet<BuildListEntryId>,
-  requirements: PlannerCheckpointRequirements,
-): AppliedActionResult {
-  const primaryEntry = entriesById.get(primary.entryId)
-  if (!primaryEntry) {
-    return {
-      state: null,
-      rejection: rejection(
-        primary.entryId,
-        primary.operation.type,
-        'inventory_precondition_failed',
-        'BuildListEntry disappeared from the validated search set.',
-      ),
-    }
-  }
-  const preconditionIssue = routeUnitPreconditionRejection(
-    sourceState,
-    primaryEntry,
-    primary,
-  )
-  if (preconditionIssue) return { state: null, rejection: preconditionIssue }
-  const state = cloneState(sourceState)
-  const before = rngSnapshot(state)
-  const appliedInventory = applyRouteInventoryEffect(
-    state,
-    primaryEntry,
-    primary,
-  )
-  if (appliedInventory.rejection) {
-    return { state: null, rejection: appliedInventory.rejection }
-  }
-  if (primary.counterStream !== null) setCurrentCounter(state, primary)
-  // Having no Counter stream position is a Route property, not a runtime one: a
-  // blind creation still forges a real weapon, so a confirmed Normal Counter
-  // advances here (`docs/PLANNER_SPEC.md` 7.0.3).
-  const blindAdvanced = advanceBlindNormalCreationCounters(
-    state.currentNormalCounters,
-    primary.operation,
-    engine,
-  )
-  if (blindAdvanced !== null) state.currentNormalCounters = blindAdvanced
-  const mutatedSourceId = sourceMutatedByOperation(primary.operation)
-  if (mutatedSourceId !== null) {
-    state.sourceMutationVersionByOwnedWeaponId[mutatedSourceId] =
-      (state.sourceMutationVersionByOwnedWeaponId[mutatedSourceId] ?? 0) + 1
-    state.inFlightExistingSourceByOwnedWeaponId[mutatedSourceId] = true
-  }
-  const progressedUnits = mergedProgressedEntries(
-    sourceState,
-    primary,
-    entriesById,
-    lanePlans,
-    conflictsById,
-    conflictIdsByUnitKey,
-    selectedPhysicalActionKeysByConflictId,
-    requirements,
-  )
-  const progressedRoutePositions: PlannerSearchAction['progressedRoutePositions'] =
-    {}
-  progressedUnits.forEach((unit) => {
-    const lanes = lanePlans.get(unit.entryId)
-    const previousProgress =
-      state.routeProgressByEntryId[unit.entryId] ?? initialPlannerLaneProgress()
-    const nextProgress = advancePlannerLaneProgress(previousProgress, unit)
-    state.routeProgressByEntryId[unit.entryId] = nextProgress
-    progressedRoutePositions[unit.entryId] = unit.position
-    const entry = entriesById.get(unit.entryId)
-    if (entry && lanes) {
-      // The user's improvement preference (docs/PLANNER_SPEC.md 7.6): once
-      // this Entry's checkpoint is reached - or from the start when it selected
-      // none - a stream-lane unit executed while the lane the user wanted first
-      // still has units left counts against the branch. A ranking preference
-      // only: the unit is executed all the same.
-      const preference = entryImprovementPreference(entry)
-      const improving =
-        lanes.pin === null || state.reachedCheckpointByEntryId[entry.id] === true
-      if (
-        preference !== 'planner' &&
-        improving &&
-        unit.position.unitIndex === unit.position.unitCount - 1 &&
-        unit.lane !== 'base'
-      ) {
-        const preferredLane = preference === 'skill_first' ? 'skill' : 'bonus'
-        if (
-          unit.lane !== preferredLane &&
-          previousProgress[preferredLane] < lanes[preferredLane].length
-        ) {
-          state.improvementPreferenceViolationCount += 1
-        }
-      }
-      // The compromise checkpoint is reached the moment both lanes hold their
-      // pinned state. A pinned endpoint is never skippable, so this can only
-      // arrive through a real executed action - or be held from the start by
-      // an existing Gogma's lane starts (docs/PLANNER_SPEC.md 7.5.2 / 7.5.3).
-      if (
-        lanes.pin !== null &&
-        state.reachedCheckpointByEntryId[entry.id] !== true &&
-        hasReachedIntermediatePin(lanes, nextProgress)
-      ) {
-        state.reachedCheckpointByEntryId[entry.id] = true
-      }
-    }
-    if (entry && routeOutputChanges(entry, unit)) {
-      const currentRuntime = state.routeRuntimeByEntryId[entry.id]
-      state.routeRuntimeByEntryId[entry.id] = {
-        hasUnregisteredGogmaOutput: true,
-        transientRestorationBonusScope: nextTransientRestorationBonusScope(
-          currentRuntime,
-          unit.operation,
-        ),
-      }
-      appliedInventory.effect.routeOutputChangedForEntryIds.push(entry.id)
-    }
-    const sourceId = entry ? existingRouteSourceId(entry) : null
-    if (entry && sourceId !== null) {
-      state.routeSourceVersionByEntryId[entry.id] =
-        state.sourceMutationVersionByOwnedWeaponId[sourceId] ?? 0
-    }
-    if (
-      entry &&
-      lanes !== undefined &&
-      isExistingGogmaRoute(entry) &&
-      isPlannerLaneRouteComplete(lanes, nextProgress) &&
-      sourceId !== null
-    ) {
-      state.candidateReadySourceVersionByEntryId[entry.id] =
-        state.routeSourceVersionByEntryId[entry.id]
-    }
-  })
-  // Counter stream progression only: a Route prefix another Entry's real
-  // operation already passed advances silently here. It creates no Search
-  // Action, no trace entry, no progressed Entry / Target record, no inventory
-  // effect, and no route runtime output (docs/PLANNER_SPEC.md 7.0.2).
-  fastForwardPlannerRouteProgress(state, lanePlans)
-  const progressedBuildListEntryIds = progressedUnits.map(
-    ({ entryId }) => entryId,
-  )
-  appliedInventory.effect.routeOutputChangedForEntryIds.sort(
-    compareStableStrings,
-  )
-  const action: PlannerSearchAction = {
-    kind: 'route_operation',
-    actionType: primary.operation.type,
-    primaryBuildListEntryId: primary.entryId,
-    progressedBuildListEntryIds,
-    progressedRoutePositions,
-    routeOperation: structuredClone(primary.operation),
-    ownedWeaponId: routeUnitOwnedWeaponId(primaryEntry, primary),
-    plannerOnly: false,
-    rngBefore: before,
-    rngAfter: rngSnapshot(state),
-    inventoryEffect: appliedInventory.effect,
-    satisfactionChanges:
-      mutatedSourceId !== null
-        ? refreshTargetSatisfaction(state, targets, master)
-        : [],
-  }
-  state.trace.push(action)
-  // One physical action, so the switch is judged once. Sharing this action with
-  // other Entries and fast-forwarding other Entries' passed Route prefixes both
-  // stay invisible here: neither is an operation the player performs
-  // (docs/PLANNER_SPEC.md 7.3).
-  advancePlannerWeaponSwitchMetric(
-    state,
-    plannerWeaponOperationSubjectKey(primary.entryId, primary.operation),
-  )
-  // A silently fast-forwarded prefix is not counted: it progresses no Entry
-  // here, so it never appears in `progressedBuildListEntryIds`
-  // (docs/PLANNER_SPEC.md 7.0.2 / 7.4).
-  advancePlannerPreferredSourceMetric(
-    state,
-    progressedBuildListEntryIds,
-    preferredSourceEntryIds,
-  )
-  state.totalCost = state.trace.length
-  return { state, rejection: null }
-}
-
 function targetCanUseEntry(
   state: PlannerSearchState,
   entry: BuildListEntry,
   requirements: PlannerCheckpointRequirements,
 ): boolean {
   return entryIsRelevantForState(state, entry, requirements)
-}
-
-function createReservedWeapon(
-  entry: BuildListEntry,
-  target: TargetWeapon,
-  id: OwnedWeaponId,
-): OwnedGogmaArtianWeapon {
-  const candidate = entry.candidateSnapshot
-  return {
-    id,
-    kind: 'gogma',
-    name: '',
-    weaponTypeId: target.weaponTypeId,
-    elementId: target.elementId,
-    restorationBonuses: structuredClone(candidate.finalBonuses),
-    restorationBonusScope: candidate.restorationBonusScope,
-    seriesSkillId: candidate.seriesSkillId,
-    groupSkillId: candidate.groupSkillId,
-    // Every Candidate is a canonical Ideal Candidate, so a newly generated
-    // weapon is labelled Ideal and protected by default, exactly as the
-    // existing Ideal contract requires (`docs/DATA_MODEL.md` 3.2).
-    status: 'ideal',
-    isProtected: true,
-    // Non-semantic Execution state; Planner calculation never sets it.
-    executionInProgress: null,
-    memo: null,
-    createdAt: candidate.createdAt,
-    updatedAt: candidate.createdAt,
-  }
-}
-
-function applyReserveAction(
-  sourceState: PlannerSearchState,
-  entry: BuildListEntry,
-  target: TargetWeapon,
-  dependencies: PlannerDependencies,
-  targets: readonly TargetWeapon[],
-  master: PlannerInput['master'],
-  preferredSourceEntryIds: ReadonlySet<BuildListEntryId>,
-  requirements: PlannerCheckpointRequirements,
-  zeroOperationConfirm = false,
-): AppliedActionResult {
-  // A zero-operation Candidate confirms a weapon that already satisfies its
-  // Target, so the Target is Ideal by definition; it is the one reserve that
-  // does not require an unsatisfied Target (`docs/PLANNER_SPEC.md` 16.3).
-  if (!zeroOperationConfirm && !targetCanUseEntry(sourceState, entry, requirements)) {
-    return {
-      state: null,
-      rejection: rejection(
-        entry.id,
-        'reserve_weapon',
-        'candidate_already_satisfied',
-        'The Target already holds an Ideal weapon.',
-      ),
-    }
-  }
-  // The user's selected intermediate states are a hard constraint: a branch
-  // that did not actually reach the compromise checkpoint they pin may not
-  // finish this Entry, and the Planner never resolves that by dropping or
-  // moving the selection (`docs/PLANNER_SPEC.md` 7.5.3).
-  if (
-    hasIntermediateStateSelection(entry) &&
-    sourceState.reachedCheckpointByEntryId[entry.id] !== true
-  ) {
-    return {
-      state: null,
-      rejection: rejection(
-        entry.id,
-        'reserve_weapon',
-        'selected_checkpoint_not_reached',
-        'The compromise checkpoint selected for this BuildListEntry was not reached.',
-      ),
-    }
-  }
-  const route = entry.candidateSnapshot.route
-  const state = cloneState(sourceState)
-  const before = rngSnapshot(state)
-  const effect = emptyInventoryEffect()
-  let ownedWeaponId: OwnedWeaponId
-
-  if (
-    route.kind === 'normal_artian_to_gogma' ||
-    route.kind === 'owned_normal_artian_to_gogma'
-  ) {
-    if (!state.routeRuntimeByEntryId[entry.id]?.hasUnregisteredGogmaOutput) {
-      return {
-        state: null,
-        rejection: rejection(
-          entry.id,
-          'reserve_weapon',
-          'inventory_precondition_failed',
-          'The route has no unregistered Gogma output to secure.',
-        ),
-      }
-    }
-    ownedWeaponId = dependencies.idFactory.ownedWeaponId()
-    const reserved = reserveWeaponId(state.simulatedInventory, ownedWeaponId)
-    if (!reserved.isValid || reserved.inventory === null) {
-      return {
-        state: null,
-        rejection: rejection(
-          entry.id,
-          'reserve_weapon',
-          'inventory_precondition_failed',
-          reserved.issues[0]?.message ?? 'OwnedWeapon ID reservation failed.',
-        ),
-      }
-    }
-    state.simulatedInventory = reserved.inventory
-    effect.reservedOwnedWeaponIds.push(ownedWeaponId)
-    const weapon = createReservedWeapon(entry, target, ownedWeaponId)
-    const registered = addRegisteredWeapon(state.simulatedInventory, weapon)
-    if (!registered.isValid || registered.inventory === null) {
-      return {
-        state: null,
-        rejection: rejection(
-          entry.id,
-          'reserve_weapon',
-          'inventory_precondition_failed',
-          registered.issues[0]?.message ?? 'Candidate registration failed.',
-        ),
-      }
-    }
-    state.simulatedInventory = registered.inventory
-    effect.addedOwnedWeaponIds.push(ownedWeaponId)
-    state.securedOwnedWeaponIdByEntryId[entry.id] = ownedWeaponId
-  } else {
-    const sourceId = route.sourceOwnedWeaponId
-    const source =
-      sourceId === null
-        ? null
-        : findOwnedWeapon(state.simulatedInventory, sourceId)
-    if (!source || source.kind !== 'gogma' || sourceId === null) {
-      return {
-        state: null,
-        rejection: rejection(
-          entry.id,
-          'reserve_weapon',
-          'inventory_precondition_failed',
-          'The existing Gogma source is unavailable for Candidate reserve.',
-        ),
-      }
-    }
-    const readyVersion = zeroOperationConfirm
-      ? 0
-      : state.candidateReadySourceVersionByEntryId[entry.id]
-    const currentVersion = state.sourceMutationVersionByOwnedWeaponId[sourceId] ?? 0
-    if (readyVersion === undefined || readyVersion !== currentVersion) {
-      return {
-        state: null,
-        rejection: rejection(
-          entry.id,
-          'reserve_weapon',
-          'inventory_precondition_failed',
-          'The existing Gogma Candidate was superseded by a later source mutation.',
-        ),
-      }
-    }
-    ownedWeaponId = sourceId
-    const updated: OwnedGogmaArtianWeapon = {
-      ...source,
-      restorationBonuses: structuredClone(entry.candidateSnapshot.finalBonuses),
-      restorationBonusScope: entry.candidateSnapshot.restorationBonusScope,
-      seriesSkillId: entry.candidateSnapshot.seriesSkillId,
-      groupSkillId: entry.candidateSnapshot.groupSkillId,
-      // Ideal completion protects an existing weapon exactly like a newly
-      // created one, so a completed weapon is never the amendment source of a
-      // later unit of the same Plan (`docs/PLANNER_SPEC.md` 16.3 / 16.13).
-      status: 'ideal',
-      isProtected: true,
-    }
-    const result = updateOwnedWeapon(state.simulatedInventory, updated)
-    if (!result.isValid || result.inventory === null) {
-      return {
-        state: null,
-        rejection: rejection(
-          entry.id,
-          'reserve_weapon',
-          'inventory_precondition_failed',
-          result.issues[0]?.message ?? 'Existing Gogma update failed.',
-        ),
-      }
-    }
-    state.simulatedInventory = result.inventory
-    effect.updatedOwnedWeaponIds.push(ownedWeaponId)
-    delete state.inFlightExistingSourceByOwnedWeaponId[ownedWeaponId]
-    state.securedOwnedWeaponIdByEntryId[entry.id] = ownedWeaponId
-  }
-  const satisfactionChanges = refreshTargetSatisfaction(state, targets, master)
-  state.selectedBuildListEntryIds = [
-    ...state.selectedBuildListEntryIds,
-    entry.id,
-  ].sort(compareStableStrings)
-  const action: PlannerSearchAction = {
-    kind: 'reserve_candidate',
-    actionType: 'reserve_weapon',
-    primaryBuildListEntryId: entry.id,
-    progressedBuildListEntryIds: [entry.id],
-    progressedRoutePositions: {},
-    routeOperation: null,
-    ownedWeaponId,
-    plannerOnly: true,
-    rngBefore: before,
-    rngAfter: rngSnapshot(state),
-    inventoryEffect: effect,
-    satisfactionChanges,
-  }
-  state.trace.push(action)
-  advancePlannerPreferredSourceMetric(
-    state,
-    [entry.id],
-    preferredSourceEntryIds,
-  )
-  state.totalCost = state.trace.length
-  return { state, rejection: null }
 }
 
 /**
@@ -1257,6 +335,15 @@ export async function runPlannerBeamSearch(
     allSearchEntries,
     planningTargetsById,
   )
+  // Every Beam successor is built on a clone of its source state; the shared
+  // transition authority never decides which actions are tried.
+  const reserveActionContext: PlannerReserveActionContext = {
+    dependencies,
+    targets: planningTargets,
+    master: input.master,
+    preferredSourceEntryIds,
+    requirements: checkpointRequirements,
+  }
   const scoreContext = {
     entries: allSearchEntries,
     targetsById: planningTargetsById,
@@ -1294,16 +381,12 @@ export async function runPlannerBeamSearch(
     const target = planningTargetsById.get(entry.targetWeaponId)
     if (!target || confirmedZeroOperationTargetIds.has(target.id)) continue
     if (initialState.targetSatisfaction[target.id]?.hasIdeal !== true) continue
-    const confirmed = applyReserveAction(
+    const confirmed = applyPlannerReserveAction(
       initialState,
       entry,
       target,
-      dependencies,
-      planningTargets,
-      input.master,
-      preferredSourceEntryIds,
-      checkpointRequirements,
-      true,
+      reserveActionContext,
+      { mode: 'clone', zeroOperationConfirm: true },
     )
     if (confirmed.rejection) {
       appendUniqueRejection(rejections, rejectionKeys, confirmed.rejection)
@@ -1402,6 +485,19 @@ export async function runPlannerBeamSearch(
       const conflictsById = new Map(
         stateConflictDetection.conflicts.map((conflict) => [conflict.id, conflict]),
       )
+      const routeActionContext: PlannerRouteActionContext = {
+        entriesById,
+        lanePlans: allLanePlans,
+        conflictsById,
+        conflictIdsByUnitKey: stateConflictDetection.conflictIdsByUnitKey,
+        selectedPhysicalActionKeysByConflictId:
+          stateConflictDetection.selectedPhysicalActionKeysByConflictId,
+        targets: planningTargets,
+        master: input.master,
+        engine: dependencies.rngEngine,
+        preferredSourceEntryIds,
+        requirements: checkpointRequirements,
+      }
       const isBlockedByConflictResolution = (unit: PlannerRouteUnit) =>
         isUnitBlockedByConflictResolution(
           unit,
@@ -1417,7 +513,7 @@ export async function runPlannerBeamSearch(
           },
         )
       const requiredUnitsByCounterPosition =
-        executableRequiredUnitsByCounterPosition(
+        executablePlannerRequiredUnitsByCounterPosition(
           state,
           allSearchEntries,
           allLanePlans,
@@ -1440,26 +536,23 @@ export async function runPlannerBeamSearch(
         return target
           ? [{
               entry,
-              applied: applyReserveAction(
+              applied: applyPlannerReserveAction(
                 state,
                 entry,
                 target,
-                dependencies,
-                planningTargets,
-                input.master,
-                preferredSourceEntryIds,
-                checkpointRequirements,
+                reserveActionContext,
+                { mode: 'clone' },
               ),
             }]
           : []
       })
       metrics?.addPhaseTime('beamStateSetup', setupStartedAt)
-      const expansionSources: { entry: BuildListEntry; reserveAttempt: AppliedActionResult | null }[] = [
+      const expansionSources: { entry: BuildListEntry; reserveAttempt: PlannerAppliedActionResult | null }[] = [
         ...pendingReserveAttempts.map(({ entry, applied }) => ({ entry, reserveAttempt: applied })),
         ...allSearchEntries.map((entry) => ({ entry, reserveAttempt: null })),
       ]
       for (const { entry, reserveAttempt } of expansionSources) {
-        const attempts: AppliedActionResult[] = []
+        const attempts: PlannerAppliedActionResult[] = []
         const lanes = allLanePlans.get(entry.id)
         const progress = state.routeProgressByEntryId[entry.id] ?? initialPlannerLaneProgress()
         if (reserveAttempt !== null) {
@@ -1483,7 +576,7 @@ export async function runPlannerBeamSearch(
               appendUniqueRejection(
                 rejections,
                 rejectionKeys,
-                rejection(
+                createPlannerSearchRejection(
                   entry.id,
                   unit.operation.type,
                   'conflict_resolution_not_selected',
@@ -1498,7 +591,7 @@ export async function runPlannerBeamSearch(
             // this one first would only push the Counter past a required unit,
             // so the branch is never generated and no rejection is recorded.
             if (
-              isSkippableUnitDominatedByRequiredUnit(
+              isSkippablePlannerUnitDominatedByRequiredUnit(
                 unit,
                 requiredUnitsByCounterPosition,
               )
@@ -1508,19 +601,11 @@ export async function runPlannerBeamSearch(
             }
             metrics?.routeAttempt(unit)
             const applyStartedAt = metrics?.mark()
-            attempts.push(applyRouteAction(
+            attempts.push(applyPlannerRouteAction(
               state,
               unit,
-              entriesById,
-              allLanePlans,
-              conflictsById,
-              stateConflictDetection.conflictIdsByUnitKey,
-              stateConflictDetection.selectedPhysicalActionKeysByConflictId,
-              planningTargets,
-              input.master,
-              dependencies.rngEngine,
-              preferredSourceEntryIds,
-              checkpointRequirements,
+              routeActionContext,
+              { mode: 'clone' },
             ))
             metrics?.addPhaseTime('applyAction', applyStartedAt)
           }
@@ -1531,15 +616,12 @@ export async function runPlannerBeamSearch(
           const target = planningTargetsById.get(entry.targetWeaponId)
           if (!target) continue
           metrics?.reserveAttempt(entry.id)
-          attempts.push(applyReserveAction(
+          attempts.push(applyPlannerReserveAction(
             state,
             entry,
             target,
-            dependencies,
-            planningTargets,
-            input.master,
-            preferredSourceEntryIds,
-            checkpointRequirements,
+            reserveActionContext,
+            { mode: 'clone' },
           ))
         }
         for (const applied of attempts) {

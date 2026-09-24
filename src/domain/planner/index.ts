@@ -15,6 +15,21 @@ export * from './plannerConflictDetection'
 export * from './plannerEntryRelevance'
 export * from './plannerInitialContext'
 export * from './plannerBeamSearch'
+export {
+  applyPlannerReserveAction,
+  applyPlannerRouteAction,
+  clonePlannerSearchState,
+  executablePlannerRequiredUnitsByCounterPosition,
+  isSkippablePlannerUnitDominatedByRequiredUnit,
+  mergedPlannerProgressedEntries,
+  plannerRouteUnitPreconditionRejection,
+  type PlannerAppliedActionResult,
+  type PlannerReserveActionContext,
+  type PlannerReserveActionOptions,
+  type PlannerRouteActionContext,
+  type PlannerRouteActionOptions,
+  type PlannerStateMutationMode,
+} from './plannerStateTransitions'
 export * from './plannerTraceReplay'
 export * from './plannerPlanGenerationError'
 export * from './planStepPresentation'

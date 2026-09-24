@@ -1109,6 +1109,9 @@ REQUIREMENTS 18へ記載済み。実装は次の順で小さく分ける。
   選べるようにする（Beamはclone、schedulerはin-place）
 - Beam Searchの結果は完全一致（既存test、PR #107 instrumentationのdigest）。semantics変更なし、
   schema変更なし
+- **実装済み**: 共有moduleは `src/domain/planner/plannerStateTransitions.ts`。
+  `applyPlannerRouteAction()` / `applyPlannerReserveAction()` は呼出側が
+  `mode: 'clone' | 'in_place'` を明示し、Beam Searchは `clone` だけを使う
 
 ### Phase A: 決定的scheduler Domain（Production未接続）
 
