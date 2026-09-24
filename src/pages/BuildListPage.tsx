@@ -53,7 +53,7 @@ import {
   defaultPlannerOptions,
   defaultPlannerOrchestrationBounds,
 } from '../domain/planner'
-import { defaultIntermediateStateSelection } from '../domain/buildList'
+import { defaultIntermediateStateSelection, findBuildListTargetDuplicates } from '../domain/buildList'
 import { plannerWarningLabels, productionPlanStatusLabels, staleReasonLabels } from '../presentation/labels'
 import { productionPlanRepository } from '../db/repositories/productionPlanRepository'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -246,6 +246,18 @@ const SELECTION_UPDATED_PLAN_ABANDONED_MESSAGE =
   '途中採用する状態と改善優先を更新し、実行中の生産計画を破棄しました。生産計画を再作成してください。'
 const SELECTION_CANCELLED_MESSAGE = '途中採用する状態の変更を保存しませんでした。生産計画は変更されていません。'
 const ENTRY_DELETED_PLAN_ABANDONED_MESSAGE = 'ビルドリストから削除し、実行中の生産計画を破棄しました。'
+/**
+ * A Target holding two or more Entries - a legacy duplicate of the Build List
+ * cardinality (`docs/DATA_MODEL.md` 9.4.1, `docs/UI_FLOW.md` 10). The guidance
+ * names no Entry to keep: the user decides and deletes the others with the
+ * ordinary guarded delete.
+ */
+const LEGACY_DUPLICATE_CHIP_LABEL = '要整理'
+const LEGACY_DUPLICATE_TITLE = '候補が複数登録されています'
+const LEGACY_DUPLICATE_LINES: readonly string[] = [
+  'この目標武器には作成リストの候補が複数登録されています。生産計画の作成と再計画の試算には、使用する候補を1件にする必要があります。',
+  '残す候補を確認し、不要な候補を「ビルドリストから削除」で削除してください。どの候補を残すかは自動では決めません。',
+]
 
 /**
  * Whether a Plan is running now. `error` means the read failed or the running
@@ -389,9 +401,12 @@ function PageSection({
  */
 function TargetGroupSection({
   group,
+  legacyDuplicate,
   children,
 }: {
   group: BuildListTargetGroup
+  /** The Target holds two or more Entries, as `findBuildListTargetDuplicates()` decided. */
+  legacyDuplicate: boolean
   children: ReactNode
 }) {
   const headingId = useId()
@@ -424,10 +439,23 @@ function TargetGroupSection({
           <Typography variant="body2" color="text.secondary" className="tabular-nums">
             候補 {group.entries.length}件
           </Typography>
+          {legacyDuplicate && <StatusChip label={LEGACY_DUPLICATE_CHIP_LABEL} tone="caution" />}
           {staleCount > 0 && (
             <StatusChip label={`再検索が必要 ${staleCount}件`} tone="caution" />
           )}
         </Stack>
+        {legacyDuplicate && (
+          <Alert severity="warning">
+            <AlertTitle>{LEGACY_DUPLICATE_TITLE}</AlertTitle>
+            <Stack spacing={0.5}>
+              {LEGACY_DUPLICATE_LINES.map((line) => (
+                <Typography variant="body2" key={line}>
+                  {line}
+                </Typography>
+              ))}
+            </Stack>
+          </Alert>
+        )}
         <Stack component="ul" spacing={2} sx={{ m: 0, p: 0, listStyle: 'none' }}>
           {children}
         </Stack>
@@ -508,6 +536,12 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
     [optionInputs],
   )
   const groups = useMemo(() => groupEntriesByTarget(entries, targets), [entries, targets])
+  // The Build List cardinality authority decides which Targets hold a legacy
+  // duplicate; the page only turns its answer into a lookup for display.
+  const legacyDuplicateTargetIds = useMemo(
+    () => new Set(findBuildListTargetDuplicates(entries).map(({ targetWeaponId }) => targetWeaponId)),
+    [entries],
+  )
   // Display-only counts over the loaded data. None of them decides whether the
   // Planner may run: that stays with the Planner's own input validation.
   const staleCount = entries.filter(({ isStale }) => isStale).length
@@ -1115,7 +1149,11 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
               <Alert severity={checkpointFeedback.severity}>{checkpointFeedback.message}</Alert>
             )}
             {groups.map((group) => (
-              <TargetGroupSection key={group.targetWeaponId} group={group}>
+              <TargetGroupSection
+                key={group.targetWeaponId}
+                group={group}
+                legacyDuplicate={legacyDuplicateTargetIds.has(group.targetWeaponId)}
+              >
                 {group.entries.map((entry) => (
                   <Box
                     component="li"

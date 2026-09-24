@@ -112,9 +112,14 @@ function dependencies(
     },
     saveCandidates: vi.fn(async () => undefined),
     addCandidate: vi.fn(async (candidate, target, intermediateStateSelection) => ({
+      status: 'added' as const,
       entry: createBuildListEntry(candidate, target, { intermediateStateSelection }),
-      added: true,
     })),
+    inspectCandidateReplacement: vi.fn(async () => ({ approvalRequired: false as const })),
+    replaceCandidate: vi.fn(async (request) =>
+      createBuildListEntry(request.candidate, request.target, {
+        intermediateStateSelection: request.intermediateStateSelection,
+      })),
     inspectCompleteWithOwnedIdeal: vi.fn(async () => ({ approvalRequired: false as const })),
     completeWithOwnedIdeal: vi.fn(async () => { throw new Error('not used in this test') }),
   }
@@ -372,7 +377,7 @@ describe('SearchPage', () => {
     deps.addCandidate = vi.fn(async (candidate, target) => {
       attempt += 1
       if (attempt === 1) throw new Error('追加fixture失敗')
-      return { entry: createBuildListEntry(candidate, target), added: false }
+      return { status: 'duplicate' as const, entry: createBuildListEntry(candidate, target) }
     })
     render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
     await user.click(await screen.findByRole('button', { name: '検索開始' }))

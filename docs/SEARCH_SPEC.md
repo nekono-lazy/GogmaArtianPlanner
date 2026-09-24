@@ -2121,11 +2121,11 @@ Search側は「この候補は作成リストに追加済みです。途中採�
 
 ### 10.1 同じTargetの別Candidateの追加
 
-実装状態: **一部実装**。契約本文は[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1（永続Build Listは1 Targetにつき
+実装状態: **実装済み**。契約本文は[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1（永続Build Listは1 Targetにつき
 最大1 Entry）。Phase 0-1で下表の判定（`BuildListService.addCandidate()` の結果型）と置換の
-guarded mutation（`replaceCandidate()` / `inspectCandidateReplacement()`）を実装した。Search画面の
-置換確認Dialogと案内はPhase 0-2で実装する。それまでSearch画面は「置換の確認が必要」と
-「legacy duplicate」を何も書かずに追加失敗として報告し、別Candidateを別Entryとして並べて追加しない。
+guarded mutation（`replaceCandidate()` / `inspectCandidateReplacement()`）を、Phase 0-2でSearch画面の
+置換確認Dialogとlegacy duplicateの案内を実装した（表示は[UI_FLOW.md](./UI_FLOW.md) 9）。Search画面は
+Service結果をそのまま扱い、同じ判定を画面側で再実装しない。
 
 「作成リストに追加」の結果は次のいずれかになる。
 

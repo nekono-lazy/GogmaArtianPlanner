@@ -129,11 +129,6 @@ export type BuildListCardinalityErrorCode =
   | 'replacement_target_changed'
   | 'legacy_duplicate_entries'
   | 'candidate_already_added'
-  /**
-   * The Search screen has no replacement confirmation yet (Issue #103 Phase
-   * 0-2), so an addition that would need one adds nothing.
-   */
-  | 'replacement_confirmation_unavailable'
 
 const cardinalityErrorMessages: Record<BuildListCardinalityErrorCode, string> = {
   target_not_found: 'この目標武器はすでに存在しません。一覧を更新してください。',
@@ -143,8 +138,6 @@ const cardinalityErrorMessages: Record<BuildListCardinalityErrorCode, string> = 
     'この目標武器には作成リストに複数の候補が登録されています。作成リストで使用する候補を1件にしてから、もう一度操作してください。',
   candidate_already_added:
     'この候補は作成リストに追加済みです。途中採用する状態と改善優先は作成リストで変更してください。',
-  replacement_confirmation_unavailable:
-    'この目標武器には別の候補が作成リストに登録されているため、追加していません。作成リストは目標武器ごとに候補を1件だけ持ちます。この候補に置き換える場合は、作成リストで現在の候補を削除してから追加してください。',
 }
 
 export class BuildListCardinalityError extends Error {
@@ -154,29 +147,6 @@ export class BuildListCardinalityError extends Error {
     super(cardinalityErrorMessages[code])
     this.name = 'BuildListCardinalityError'
     this.code = code
-  }
-}
-
-/**
- * The Search screen's addition until its replacement confirmation exists
- * (Issue #103 Phase 0-2): an addition or a duplicate keeps the screen's
- * existing `{ entry, added }` contract, while an addition that would need a
- * replacement, or a Target with a legacy duplicate, is refused with a typed
- * error the screen reports as it reports any add failure. Nothing was written
- * in either refusal, and nothing is ever replaced from here.
- */
-export function toSearchScreenAddition(
-  result: AddBuildListCandidateResult,
-): { entry: BuildListEntry; added: boolean } {
-  switch (result.status) {
-    case 'added':
-      return { entry: result.entry, added: true }
-    case 'duplicate':
-      return { entry: result.entry, added: false }
-    case 'replacement_required':
-      throw new BuildListCardinalityError('replacement_confirmation_unavailable')
-    case 'legacy_duplicate':
-      throw new BuildListCardinalityError('legacy_duplicate_entries')
   }
 }
 

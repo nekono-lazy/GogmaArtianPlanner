@@ -2061,13 +2061,29 @@ one transaction (`BuildListEntryRepository.decideAndAddBuildListEntry()`); and
 Target's Entries, refuses unless the confirmed `expectedExistingEntryId` is still
 its only Entry, never carries the old selection or preference over, and goes
 through the existing `PlanBreakingChangeGuard`. Import / Export keeps a legacy
-duplicate as it is. Still open: the Search replacement Dialog and the Build List
-legacy duplicate guidance (Phase 0-2; until then the Search screen reports a
-needed replacement or a legacy duplicate as an add failure through
-`toSearchScreenAddition()` and writes nothing), and the constrained re-search /
-what-if / replan replacement (Phase 0-3; until then an adopted generated Entry is
-still added beside the original, which leaves a legacy duplicate the next
-ordinary Planner run fails closed on). No version moved.
+duplicate as it is.
+
+Phase 0-2 (the UI) connected it (`docs/UI_FLOW.md` 9 / 10): the Search screen
+takes `AddBuildListCandidateResult` as it is (the Phase 0-1 adapter
+`toSearchScreenAddition()` and the `replacement_confirmation_unavailable` code are
+gone). `replacement_required` opens `BuildListReplacementDialog`
+(「作成リストの候補を置き換えますか？」: the Target, 「現在の候補」 and 「新しい候補」
+from their recorded Candidate data, and that the old selection and preference are
+not carried over; nothing is written before 「置き換える」). Only then does
+`useBuildListCandidateReplacement()` run `inspectCandidateReplacement()` /
+`replaceCandidate()` through the shared `usePlanBreakingChangeApproval()`, so the
+`PlanBreakingChangeDialog` follows the replacement confirmation and never stands
+in for it; a success removes the old Entry and adds the new one in the screen's
+mirror at once, and a typed `BuildListCardinalityError` closes the dialog,
+reports it and re-reads the Build List without retrying. `legacy_duplicate` opens
+no dialog and points to the Build List. The Build List marks each Target that
+`findBuildListTargetDuplicates()` reports with a 「要整理」 chip and a warning,
+recommends no Entry, and leaves the tidying to the ordinary guarded Entry delete;
+it disables no Planner control, leaving that to the Planner fail-closed. Still
+open: the constrained re-search / what-if / replan replacement (Phase 0-3; until
+then an adopted generated Entry is still added beside the original, which leaves
+a legacy duplicate the next ordinary Planner run fails closed on and the Build
+List guidance shows). No version moved.
 
 ---
 

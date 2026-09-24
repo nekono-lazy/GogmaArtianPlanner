@@ -1362,9 +1362,12 @@ deriveBuildListEntryStaleReasons(
   `legacy_duplicate`。判定と追加は1つのtransaction）、`replace BuildListEntry for Target` の
   guarded mutationと事前inspect（`BuildListService.replaceCandidate()` /
   `inspectCandidateReplacement()`）、Import / Exportのlegacy duplicate保持
-- 未実装（Phase 0-2）: Search画面の置換確認Dialogと、Build Listのlegacy duplicate案内。
-  それまでSearch画面は、置換が必要な追加とlegacy duplicateを持つTargetへの追加を、何も書かずに
-  追加失敗として報告する（置換も並存追加もしない）
+- 実装済み（Phase 0-2、UI）: Search画面は `AddBuildListCandidateResult` を直接扱い、
+  `replacement_required` で置換確認Dialogを出し、承認後に `inspectCandidateReplacement()` →
+  （必要なら既存のPlan-breaking警告）→ `replaceCandidate()` を1つのguarded操作として実行する。
+  `legacy_duplicate` では追加も置換もせず作成リストでの整理を案内する。Build Listは
+  `findBuildListTargetDuplicates()` の結果でlegacy duplicateのTargetに案内を出し、既存のEntry削除で
+  整理させる（[UI_FLOW.md](./UI_FLOW.md) 9 / 10）。Phase 0-1の暫定adapter `toSearchScreenAddition()` は削除した
 - 未実装（Phase 0-3）: constrained re-search / what-if / 再計画採用とcardinalityの接続
   （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18）。それまでconstrained re-searchの採用はgenerated Entryを
   元Entryに **追加** して保存するため、永続Build Listにlegacy duplicateが生じる。以後の通常Planner入力は
@@ -1440,7 +1443,7 @@ constrained re-searchの採用で生じる。後者はPhase 0-3まで引き続�
 - ordinary Planner入力は、同一planning TargetのEntryが2件以上あればfail closedする
   （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 4.1）。staleなどで除外されたEntryも数え、除外されていない方を
   暗黙に採用しない。Planner実行、再計画Preview、B10の再計算、what-ifの元入力も同じ
-- Search画面からの追加 / 置換は上表のとおり拒否する
+- Search画面からの追加 / 置換は上表のとおり拒否し、作成リストで1件に整理するよう案内する（Phase 0-2で実装済み）
 - Export / Importはlegacy duplicateを含むrootをそのまま保存・復元する。Importはこれを理由に
   拒否しない（backupを復元できなくしない）。Import後も上記のfail closedと案内が働く
 

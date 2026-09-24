@@ -28,8 +28,8 @@ authorityの配置:
 
 | 契約 | authority | 状態 |
 | --- | --- | --- |
-| 永続Build Listの1 Target = 最大1 Entry、Candidate追加時の置換、legacy duplicateのfail closed | [REQUIREMENTS.md](./REQUIREMENTS.md) 18、[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1 | **一部実装**（Phase 0-1: Domain / Service基盤、通常Planner入力のfail closed、Import / Exportの保持） |
-| Search画面からの追加 / 置換 | [SEARCH_SPEC.md](./SEARCH_SPEC.md) 10.1、[UI_FLOW.md](./UI_FLOW.md) 9 / 10 | Service結果型と置換APIは実装済み、画面の置換確認Dialog / 案内は未実装（Phase 0-2） |
+| 永続Build Listの1 Target = 最大1 Entry、Candidate追加時の置換、legacy duplicateのfail closed | [REQUIREMENTS.md](./REQUIREMENTS.md) 18、[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1 | **一部実装**（Phase 0-1: Domain / Service基盤、通常Planner入力のfail closed、Import / Exportの保持。Phase 0-2: Search画面の置換確認、Build Listのlegacy duplicate案内） |
+| Search画面からの追加 / 置換 | [SEARCH_SPEC.md](./SEARCH_SPEC.md) 10.1、[UI_FLOW.md](./UI_FLOW.md) 9 / 10 | **実装済み**（Phase 0-1: Service結果型と置換API、Phase 0-2: 画面の置換確認Dialog / 案内） |
 | constrained re-search / what-if / 再計画とBuild List cardinality | [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18 | 次期契約（未実装、Phase 0-3） |
 | 決定的scheduler（Route commitment、scheduling、termination、schema境界） | 本書 | target design。Phase CでREQUIREMENTS 19 / 20、PLANNER_SPEC 7等を改訂して正式化 |
 
@@ -1054,10 +1054,24 @@ REQUIREMENTS 18へ記載済み。実装は次の順で小さく分ける。
 - Search追加APIの結果型は `AddBuildListCandidateResult`（`added` / `duplicate` / `replacement_required` /
   `legacy_duplicate`）。置換は `BuildListService.replaceCandidate()` / `inspectCandidateReplacement()`
   （`buildListEntryReplacementMutation()` を1つの `PlanGuardedMutation` として `PlanBreakingChangeGuard` で判定）
-- 0-2までの暫定: Search画面は `toSearchScreenAddition()` で既存の `{ entry, added }` 契約を保ち、
-  `replacement_required` / `legacy_duplicate` を何も書かずに追加失敗として報告する
+- 0-2までの暫定（0-2で解消）: Search画面は `toSearchScreenAddition()` で既存の `{ entry, added }` 契約を保ち、
+  `replacement_required` / `legacy_duplicate` を何も書かずに追加失敗として報告していた。0-2でこのadapterと
+  error code `replacement_confirmation_unavailable` を削除した
 - 0-3までの暫定: constrained re-searchの採用は従来どおりgenerated Entryを元Entryに追加して保存するため、
   永続Build Listにlegacy duplicateが生じ、以後の通常Planner入力はfail closedする
+
+0-2の実装状態（実装済み）:
+
+- Search画面の依存は `addCandidate()`（`AddBuildListCandidateResult` をそのまま返す）、
+  `inspectCandidateReplacement()`、`replaceCandidate()`。`replacement_required` で置換確認Dialog
+  （`BuildListReplacementDialog`）を出し、承認後に共通の `usePlanBreakingChangeApproval()` へ
+  inspect / applyとして渡す（`useBuildListCandidateReplacement()`）。独自のPlan-breaking state machineは持たない
+- 置換成功後は画面内の作成リスト状態から旧Entryを除き新Entryを加える。Serviceの型付き拒否は推測で再試行せず、
+  作成リスト状態を読み直して案内する
+- Build Listは `findBuildListTargetDuplicates()` の結果でlegacy duplicateのTargetに「要整理」chipとwarningを出し、
+  既存のguarded Entry削除（`inspectEntryDelete()` / `deleteEntry()`）で整理させる。Planner操作は無効化せず、
+  通常Planner入力のfail closedに委ねる
+- 具体的なPresentationと文言はUI_FLOW 9 / 10に記載した。versionは変更しない
 
 ### Phase A0: 状態遷移helperの抽出（純リファクタ）
 
@@ -1176,7 +1190,7 @@ Phase CのPull Requestでは、15.2の影響（実行中のversion 13 Planがsta
 | deadlock / stallを新しい `ConflictKind` などでユーザーへ示すか | Phase B以降（schema / UI変更を伴う） | rejectionを `resource_conflict` として記録 |
 | canonical順でweapon switchと完成の早さのどちらを上位にするか | Phase Bの実データ計測後 | 7.7（priority → violation → switch → 完成近さ） |
 | in-flight化による他Targetの充足喪失（7.9の例外）の扱いの強化 | Phase Bのfixture結果次第 | 動的commit（6.8） |
-| 置換確認Dialog / legacy duplicate案内の具体的なPresentationと文言 | Phase 0-2（`ui-ux-pro-max`） | UI_FLOW 9 / 10の意味論だけ確定 |
+| 置換確認Dialog / legacy duplicate案内の具体的なPresentationと文言 | Phase 0-2（`ui-ux-pro-max`） | **確定済み**（UI_FLOW 9 / 10） |
 | Phase 0のPlanner warning kind名、Search追加APIの結果型名 | Phase 0-1 | 意味論だけ確定 |
 | Build List詳細設定、`PlannerOptions` / `PlannerProgress` の型移行、`maxPlanSteps` 既定値 | Phase D | Phase Cは型不変 |
 | B8 orchestration bounds / what-if boundsの再測定 | #101と合わせて | 現行値のまま |

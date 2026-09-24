@@ -96,9 +96,11 @@ function dependencies(client: ControlledClient, targets: TargetWeapon[], ownedWe
     }),
     saveCandidates: vi.fn(async () => undefined),
     addCandidate: vi.fn(async (candidate: BuildCandidate, target: TargetWeapon, intermediateStateSelection: Parameters<SearchPageDependencies['addCandidate']>[2]) => ({
+      status: 'added' as const,
       entry: createBuildListEntry(candidate, target, { intermediateStateSelection }),
-      added: true,
     })),
+    inspectCandidateReplacement: vi.fn(async () => { throw new Error('not expected') }),
+    replaceCandidate: vi.fn(async () => { throw new Error('not expected') }),
     inspectCompleteWithOwnedIdeal: vi.fn<() => Promise<PlanBreakingChangeInspection>>(async () => ({ approvalRequired: false })),
     completeWithOwnedIdeal: vi.fn(async (targetId: TargetWeapon['id'], weaponId: OwnedWeapon['id'], _approval?: PlanBreakingChangeApproval | null): Promise<TargetOwnedIdealCompletion> => {
       void _approval

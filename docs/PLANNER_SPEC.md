@@ -5103,7 +5103,7 @@ ProductionPlanには適用しない）。
   staleness再評価（`isStale` / `staleReasons` のderived metadata）はPlanを壊さないためguardを通さない。
   「同じTargetのEntryの置換」（[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1）は旧Entryの削除を伴うため新規追加とは
   扱わず、旧Entry削除と新Entry追加の全体を1つのguarded mutation（`buildListEntryReplacementMutation()`）として
-  このguardで判定する（Phase 0-1で実装済み。UIからの呼び出しはPhase 0-2）。constrained re-searchの採用時の
+  このguardで判定する（Phase 0-1で実装済み。Search画面の置換確認後の呼び出しはPhase 0-2で実装済み）。constrained re-searchの採用時の
   置換も同様にguardを迂回しない（9.2.18、Phase 0-3）
 - 判定対象は `active` Planだけである。`active` / `stale` のPlanが2件以上ある場合は推測で選ばず拒否する
   （`running_plan_invariant_violated`）。`stale` Planや実行中Planが無い場合は警告せず通常保存し、Plan、
