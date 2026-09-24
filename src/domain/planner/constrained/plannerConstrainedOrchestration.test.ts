@@ -33,7 +33,7 @@ import {
 } from '../../../test/fixtures/plannerConstrainedOrchestration'
 import { preparePlannerInitialContext } from '../plannerInitialContext'
 import { createPlanningBuildListEntriesHash, createProductionPlan } from '../productionPlanGeneration'
-import type { PlannerConflictResolution } from '../plannerTypes'
+import type { PlannerBuildListCardinality, PlannerConflictResolution } from '../plannerTypes'
 import {
   derivePlannerCheckpointRequirements,
   type PlannerCheckpointRequirements,
@@ -265,8 +265,9 @@ function options(
 function readyPlanningTargetIds(
   input: OrchestrationScenario['input'],
   dependencies: OrchestrationScenario['dependencies'],
+  cardinality: PlannerBuildListCardinality = 'persisted',
 ): readonly string[] {
-  const prepared = preparePlannerInitialContext(input, dependencies)
+  const prepared = preparePlannerInitialContext(input, dependencies, cardinality)
   if (prepared.status !== 'ready') throw new Error('Expected a ready context.')
   return prepared.context.planningTargetIds
 }
@@ -597,6 +598,8 @@ describe('B8-C4b Candidate trial and adoption', () => {
     })
     // The augmented input's planning Targets are those of its valid Entries:
     // the generated Entry's Target was already one, the unlisted one never is.
+    // It is a trial input, the only input that may hold the original and the
+    // generated Entry of one Target together (`docs/PLANNER_SPEC.md` 9.2.18).
     const augmented = {
       ...built.input,
       buildListEntries: [
@@ -605,7 +608,7 @@ describe('B8-C4b Candidate trial and adoption', () => {
       ],
       conflictResolutions: [],
     }
-    expect(readyPlanningTargetIds(augmented, built.dependencies))
+    expect(readyPlanningTargetIds(augmented, built.dependencies, 'temporary_augmented'))
       .toEqual([TARGET_A, TARGET_B])
   })
 
@@ -755,7 +758,7 @@ describe('B8-C4b Candidate trial and adoption', () => {
     })
   })
 
-  it('reuses an existing semantically identical Entry without a duplicate or a rerun', async () => {
+  it('fails closed when the persisted Build List already holds an adopted Entry beside the original', async () => {
     const source = fixedScenario()
     const first = await createProductionPlanWithConstrainedSearch(
       source.input,
@@ -766,27 +769,29 @@ describe('B8-C4b Candidate trial and adoption', () => {
     expect(generated).toBeDefined()
 
     const parts = twoTargetParts()
-    const built = fixedScenario({
-      ...parts,
-      entries: [...parts.entries, structuredClone(generated)],
-    })
+    const built = fixedScenario(
+      { ...parts, entries: [...parts.entries, structuredClone(generated)] },
+      // The persisted resolution names the conflict the user saw before the
+      // adoption; the duplicate input never gets far enough to apply it.
+      gogmaConflictId(parts),
+    )
 
+    // Target B's original Entry and the generated one side by side are a
+    // legacy duplicate of the Build List cardinality contract
+    // (`docs/DATA_MODEL.md` 9.4.1): the ordinary input fails closed instead of
+    // choosing one, and no constrained re-search starts from it.
     const result = await createProductionPlanWithConstrainedSearch(
       built.input,
       built.dependencies,
-      // Only the initial ordinary Beam Search is affordable, so any Candidate
-      // trial rerun would surface as a max_planner_reruns_reached warning.
       options({ maxPlannerReruns: 1 }),
     )
 
-    expect(result.plan?.selectedBuildListEntryIds).toContain(generated.id)
+    expect(result.plan).toBeNull()
     expect(result.generatedBuildListEntries).toEqual([])
-    expect(warningKinds(result.warnings)).not.toContain(
-      'max_planner_reruns_reached',
+    expect(warningKinds(result.warnings)).toContain(
+      'duplicate_build_list_entries_for_target',
     )
-    expect(
-      result.plan?.selectedBuildListEntryIds.filter((id) => id === generated.id),
-    ).toHaveLength(1)
+    expect(result.termination).toMatchObject({ status: 'exhausted', expandedStates: 0 })
   })
 })
 
@@ -1407,9 +1412,11 @@ describe('B8-C4b cancellation stays an ordinary Planner outcome', () => {
     })
 
     it('never lets the selection-free Entry stand in for the required one end to end', async () => {
-      // With Entry A in the run, Entry B is not this Target's Route at all: it
-      // takes part in no conflict, so the persisted resolution built on the
-      // B-vs-C conflict finds nothing to apply to and no re-search starts.
+      // Target T's Entries A and B side by side are a legacy duplicate of the
+      // Build List cardinality contract (`docs/DATA_MODEL.md` 9.4.1): the
+      // ordinary input fails closed before any Entry is chosen, so B never
+      // stands in for A and no re-search starts. (Inside a trial input the
+      // Target-wide block itself is covered above.)
       const { t, u, sourceA, sourceB, sourceC, entryA, entryB, entryC } = parts()
       const viaB = conflictViaB()
       const built = orchestrationScenario({
@@ -1427,10 +1434,9 @@ describe('B8-C4b cancellation stays an ordinary Planner outcome', () => {
       )
 
       expect(result.generatedBuildListEntries).toEqual([])
-      expect(warningKinds(result.warnings)).toContain('invalid_conflict_resolution')
-      expect(warningKinds(result.warnings)).toContain('selected_checkpoint_fixes_target_entry')
-      expect(result.plan?.selectedBuildListEntryIds ?? []).not.toContain(ENTRY_T_SKILL)
-      expect(result.plan?.selectedBuildListEntryIds ?? []).toContain(ENTRY_T_BONUS)
+      expect(result.plan).toBeNull()
+      expect(warningKinds(result.warnings)).toContain('duplicate_build_list_entries_for_target')
+      expect(warningKinds(result.warnings)).not.toContain('selected_checkpoint_fixes_target_entry')
       expect(entryA.intermediateStateSelection?.bonusOpportunityId).not.toBeNull()
     })
   })

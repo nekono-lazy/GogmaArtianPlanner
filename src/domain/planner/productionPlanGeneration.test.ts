@@ -32,6 +32,7 @@ import {
   createPlanningInputSnapshot,
   createPlanningTargetWeaponsHash,
   createProductionPlan,
+  createProductionPlanWithObserver,
   createRejectedBuildListEntries,
 } from './productionPlanGeneration'
 import { PlannerPlanGenerationError } from './plannerPlanGenerationError'
@@ -424,7 +425,16 @@ describe('Production plan generation', () => {
     undecided.id = buildListEntryId('build-list.fixture.undecided')
     input.buildListEntries.push(undecided)
     input.options.maxPlanSteps = 1
-    const result = await createProductionPlan(input, dependencies)
+    // Two Entries of one Target are a trial input: an ordinary persisted
+    // input holding them fails closed (`docs/PLANNER_SPEC.md` 4.1 / 9.2.18).
+    expect((await createProductionPlan(input, dependencies)).plan).toBeNull()
+    const result = await createProductionPlanWithObserver(
+      input,
+      dependencies,
+      undefined,
+      undefined,
+      'temporary_augmented',
+    )
     const plan = result.plan
     expect(plan?.steps).toHaveLength(1)
     expect(plan?.steps[0].operationType).toBe('create_normal_artian')

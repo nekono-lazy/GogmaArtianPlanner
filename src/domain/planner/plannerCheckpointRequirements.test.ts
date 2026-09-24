@@ -24,7 +24,7 @@ import { preparePlannerInitialContext } from './plannerInitialContext'
 import { runPlannerBeamSearch } from './plannerBeamSearch'
 import { scoreCandidate } from './plannerScoring'
 import { validatePlannerInput } from './plannerValidation'
-import { createProductionPlan } from './productionPlanGeneration'
+import { createProductionPlanWithObserver } from './productionPlanGeneration'
 
 const TARGET_T = 'target.required.t'
 const TARGET_U = 'target.required.u'
@@ -147,8 +147,35 @@ function selectedOpportunityId(entry: BuildListEntry): string {
   return id
 }
 
+/**
+ * Target T's two Routes (Entries A and B) are a legacy duplicate of the Build
+ * List cardinality contract (`docs/DATA_MODEL.md` 9.4.1): an ordinary persisted
+ * input holding them fails closed before any checkpoint rule runs (see "the
+ * ordinary persisted input" below). The required-Entry rules stay as the
+ * defence of a B8 / what-if trial input, the only input that may hold several
+ * Entries of one Target (`docs/PLANNER_SPEC.md` 9.2.18), so these scenarios run
+ * as one. A one-Entry scenario behaves identically under either contract.
+ */
+const TRIAL = 'temporary_augmented' as const
+
+function trialPlan(built: OrchestrationScenario) {
+  return createProductionPlanWithObserver(built.input, built.dependencies, undefined, undefined, TRIAL)
+}
+
+function trialBeamSearch(built: OrchestrationScenario) {
+  return runPlannerBeamSearch(built.input, built.dependencies, {}, TRIAL)
+}
+
+function trialValidation(built: OrchestrationScenario) {
+  return validatePlannerInput(built.input, built.dependencies, TRIAL)
+}
+
+function trialContext(built: OrchestrationScenario) {
+  return preparePlannerInitialContext(built.input, built.dependencies, TRIAL)
+}
+
 function readyContext(built: OrchestrationScenario) {
-  const prepared = preparePlannerInitialContext(built.input, built.dependencies)
+  const prepared = trialContext(built)
   if (prepared.status !== 'ready') {
     throw new Error(`Expected a ready Planner initial context: ${prepared.status}`)
   }
@@ -160,7 +187,7 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
     const built = scenario({ selectA: true, withB: true })
     const a = built.entries.a
 
-    const result = await createProductionPlan(built.input, built.dependencies)
+    const result = await trialPlan(built)
 
     // Entry B alone would have finished the Target in one operation, but it is
     // not this Target's Route while A carries a selection.
@@ -222,7 +249,7 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
     // its checkpoint and its Ideal before the Plan is complete.
     const built = scenario({ selectA: true, withB: false, withU: true })
 
-    const result = await createProductionPlan(built.input, built.dependencies)
+    const result = await trialPlan(built)
 
     expect(result.termination.status).toBe('completed')
     expect(result.plan?.selectedBuildListEntryIds).toEqual([ENTRY_A, ENTRY_C])
@@ -240,7 +267,7 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
     // already be Ideal through Entry C's weapon, but it is not complete.
     built.input.options = { ...built.input.options, maxPlanSteps: 2 }
 
-    const result = await runPlannerBeamSearch(built.input, built.dependencies)
+    const result = await trialBeamSearch(built)
 
     expect(result.completed).toBe(false)
     expect(result.termination.status).not.toBe('completed')
@@ -260,7 +287,7 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
     expect([...context.checkpointRequirements.requiredEntryIdByTargetId])
       .toEqual([[TARGET_T, ENTRY_A]])
 
-    const result = await createProductionPlan(built.input, built.dependencies)
+    const result = await trialPlan(built)
     expect(result.termination).toMatchObject({
       status: 'completed',
       completedTargetCount: 1,
@@ -276,7 +303,7 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
       elementId: 'element.fixture.b',
     }))
     starved.input.options = { ...starved.input.options, maxPlanSteps: 2 }
-    const partial = await runPlannerBeamSearch(starved.input, starved.dependencies)
+    const partial = await trialBeamSearch(starved)
     expect(partial.termination).toMatchObject({
       status: 'incomplete',
       reachedLimits: ['max_plan_steps'],
@@ -289,7 +316,7 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
   it('D: fails closed when one Target has two checkpoint-selected Entries', async () => {
     const built = scenario({ selectA: true, withB: true, withSecondSelected: true })
 
-    const validation = validatePlannerInput(built.input, built.dependencies)
+    const validation = trialValidation(built)
     expect(validation.isValid).toBe(false)
     expect(validation.issues).toContainEqual(
       expect.objectContaining({
@@ -303,8 +330,8 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
       expect.objectContaining({ kind: 'multiple_selected_checkpoint_entries' }),
     )
     // Neither Entry is picked, scored, or tried: no Plan at all.
-    expect(preparePlannerInitialContext(built.input, built.dependencies).status).toBe('invalid')
-    const result = await createProductionPlan(built.input, built.dependencies)
+    expect(trialContext(built).status).toBe('invalid')
+    const result = await trialPlan(built)
     expect(result.plan).toBeNull()
     expect(result.warnings).toContainEqual(
       expect.objectContaining({ kind: 'multiple_selected_checkpoint_entries' }),
@@ -318,7 +345,7 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
   it('F: keeps the ordinary candidate selection for a Target whose Entries select nothing', async () => {
     const built = scenario({ selectA: false, withB: true })
 
-    const result = await createProductionPlan(built.input, built.dependencies)
+    const result = await trialPlan(built)
 
     expect(result.termination.status).toBe('completed')
     expect(result.plan?.selectedBuildListEntryIds).toEqual([ENTRY_B])
@@ -334,7 +361,7 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
   it('G: fails closed when the Target already holds an Ideal weapon', async () => {
     const built = scenario({ selectA: true, withB: true, alreadyIdeal: true })
 
-    const validation = validatePlannerInput(built.input, built.dependencies)
+    const validation = trialValidation(built)
     expect(validation.isValid).toBe(true)
     const initial = createInitialPlannerSearchState(built.input, validation.validBuildListEntries)
     expect(initial.isValid).toBe(false)
@@ -346,9 +373,9 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
         message: expect.stringContaining(ENTRY_A) as string,
       }),
     ])
-    expect(preparePlannerInitialContext(built.input, built.dependencies).status).toBe('invalid')
+    expect(trialContext(built).status).toBe('invalid')
 
-    const result = await createProductionPlan(built.input, built.dependencies)
+    const result = await trialPlan(built)
     expect(result.plan).toBeNull()
     expect(result.warnings).toContainEqual(
       expect.objectContaining({ kind: 'selected_checkpoint_target_already_ideal' }),
@@ -360,7 +387,7 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
   it('G: an already-Ideal Target without a selection keeps its ordinary outcome', async () => {
     const built = scenario({ selectA: false, withB: true, alreadyIdeal: true })
 
-    const result = await createProductionPlan(built.input, built.dependencies)
+    const result = await trialPlan(built)
 
     expect(result.plan).toBeNull()
     expect(result.warnings).toContainEqual(
@@ -405,7 +432,7 @@ describe('A malformed checkpoint selection fails the Planner input closed', () =
   }
 
   function expectFailClosed(built: ReturnType<typeof scenario>, detail: string) {
-    const validation = validatePlannerInput(built.input, built.dependencies)
+    const validation = trialValidation(built)
     expect(validation.isValid).toBe(false)
     expect(validation.issues).toContainEqual(
       expect.objectContaining({
@@ -417,7 +444,7 @@ describe('A malformed checkpoint selection fails the Planner input closed', () =
     expect(validation.warnings).toContainEqual(
       expect.objectContaining({ kind: 'invalid_checkpoint_selection' }),
     )
-    expect(preparePlannerInitialContext(built.input, built.dependencies).status).toBe('invalid')
+    expect(trialContext(built).status).toBe('invalid')
   }
 
   it('A: rejects an unknown opportunity id and never starts the Beam Search', async () => {
@@ -429,7 +456,7 @@ describe('A malformed checkpoint selection fails the Planner input closed', () =
     })
     expectFailClosed(built, 'must exist on its own lane in the candidate snapshot')
 
-    const result = await runPlannerBeamSearch(built.input, built.dependencies)
+    const result = await trialBeamSearch(built)
     expect(result.bestState).toBeNull()
     expect(result.expandedStates).toBe(0)
     expect(result.validationIssues).not.toEqual([])
@@ -467,7 +494,7 @@ describe('A malformed checkpoint selection fails the Planner input closed', () =
       }
     })
 
-    const result = await createProductionPlan(built.input, built.dependencies)
+    const result = await trialPlan(built)
 
     // Neither Entry A read as selection-free nor Entry B standing in: no Plan.
     expect(result.plan).toBeNull()
@@ -484,10 +511,33 @@ describe('A malformed checkpoint selection fails the Planner input closed', () =
   it('keeps a well-formed selection and a selection-free Entry working as before', () => {
     const selected = scenario({ selectA: true, withB: true })
     const unselected = scenario({ selectA: false, withB: true })
-    expect(validatePlannerInput(selected.input, selected.dependencies).isValid).toBe(true)
-    expect(validatePlannerInput(unselected.input, unselected.dependencies).isValid).toBe(true)
+    expect(trialValidation(selected).isValid).toBe(true)
+    expect(trialValidation(unselected).isValid).toBe(true)
     expect(
-      validatePlannerInput(selected.input, selected.dependencies).warnings.map(({ kind }) => kind),
+      trialValidation(selected).warnings.map(({ kind }) => kind),
     ).not.toContain('invalid_checkpoint_selection')
+  })
+})
+
+describe('the ordinary persisted input', () => {
+  it('fails closed on the two Entries of Target T before any checkpoint rule picks one', async () => {
+    const built = scenario({ selectA: true, withB: true })
+
+    const validation = validatePlannerInput(built.input, built.dependencies)
+    expect(validation.isValid).toBe(false)
+    expect(validation.warnings.map(({ kind }) => kind)).toContain(
+      'duplicate_build_list_entries_for_target',
+    )
+    expect(validation.warnings.find(({ kind }) => kind === 'duplicate_build_list_entries_for_target')?.message)
+      .toContain(`${ENTRY_A}, ${ENTRY_B}`)
+    expect(preparePlannerInitialContext(built.input, built.dependencies).status).toBe('invalid')
+
+    const result = await createProductionPlanWithObserver(built.input, built.dependencies, undefined)
+    expect(result.plan).toBeNull()
+    expect(result.termination).toMatchObject({ status: 'exhausted', expandedStates: 0 })
+    // The required Entry is never used to choose A over B either.
+    expect(result.warnings.map(({ kind }) => kind)).not.toContain(
+      'selected_checkpoint_fixes_target_entry',
+    )
   })
 })

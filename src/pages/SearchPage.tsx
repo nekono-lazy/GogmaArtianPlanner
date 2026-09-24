@@ -57,7 +57,7 @@ import {
   targetWeaponRepository,
 } from '../db/repositories'
 import { useSettingsStore } from '../stores/settingsStore'
-import { buildListService } from '../services/buildList/buildListService'
+import { buildListService, toSearchScreenAddition } from '../services/buildList/buildListService'
 import {
   TargetWeaponLifecycleService,
   type TargetOwnedIdealCompletion,
@@ -139,10 +139,14 @@ const defaultDependencies: SearchPageDependencies | null = defaultMaster && defa
       saveCandidates: (targetId, candidates) =>
         buildCandidateRepository.replaceBuildCandidatesForTarget(targetId, candidates),
       // The Service result (existing or new Entry, plus whether it was added)
-      // is passed through unchanged; its duplicate protection stays the
-      // Domain authority.
+      // is passed through; its duplicate protection stays the Domain
+      // authority. Until this screen offers the replacement confirmation
+      // (Issue #103 Phase 0-2), a Target that already holds another Entry is
+      // reported as an add failure and nothing is written or replaced.
       addCandidate: (candidate, target, intermediateStateSelection) =>
-        buildListService.addCandidate(candidate, target, intermediateStateSelection),
+        buildListService
+          .addCandidate(candidate, target, intermediateStateSelection)
+          .then(toSearchScreenAddition),
     }
   : null
 

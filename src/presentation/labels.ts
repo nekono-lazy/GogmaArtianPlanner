@@ -220,6 +220,8 @@ export const plannerWarningLabels: Record<PlannerWarningKind, string> = {
   selected_checkpoint_fixes_target_entry:
     '途中採用する状態を選択した候補がある目標武器では、その候補だけを作成ルートとして扱い、同じ目標武器の他の候補は使用しません',
   completed_target_excluded: '完了済みの目標武器は生産計画の対象外です',
+  duplicate_build_list_entries_for_target:
+    '同じ目標武器に複数の作成リスト候補が登録されています。使用する候補を1件にしてください',
   invalid_checkpoint_selection:
     '途中採用する状態の選択内容が候補の内容と一致しません。作成リストでその候補の選択を解除し、必要なら候補を追加し直してください',
 }

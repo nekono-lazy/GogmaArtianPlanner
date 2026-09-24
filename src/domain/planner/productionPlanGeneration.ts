@@ -32,6 +32,7 @@ import type {
   CreateProductionPlanCalculation,
   PlannerBeamSearchResult,
   PlannerDependencies,
+  PlannerBuildListCardinality,
   PlannerExecutionOptions,
   PlannerInput,
   PlannerResult,
@@ -478,12 +479,17 @@ export function collectRequiredMaterials(
  * The observer is semantics-neutral, so nothing below branches on its presence,
  * and an exception it throws propagates unchanged instead of becoming a
  * `PlannerResult`.
+ *
+ * `cardinality` is the Build List cardinality contract of `input`
+ * (`PlannerBuildListCardinality`): the ordinary `persisted` default, or
+ * `temporary_augmented` for a B8 / what-if trial input only.
  */
 export async function createProductionPlanWithObserver(
   input: PlannerInput,
   dependencies: PlannerDependencies,
   options: PlannerExecutionOptions | undefined,
   observer?: ProductionPlanGenerationObserver,
+  cardinality: PlannerBuildListCardinality = 'persisted',
 ): Promise<PlannerResult> {
   const runtimeUnsupported = new Map<BuildListEntryId, string>()
   let beamResult: PlannerBeamSearchResult | null = null
@@ -499,7 +505,7 @@ export async function createProductionPlanWithObserver(
           ),
         }
     observer?.beforeBeamSearch()
-    beamResult = await runPlannerBeamSearch(beamInput, dependencies, options)
+    beamResult = await runPlannerBeamSearch(beamInput, dependencies, options, cardinality)
     observer?.afterBeamSearch?.(beamResult)
     if (
       beamResult.cancelled ||

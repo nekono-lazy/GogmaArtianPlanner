@@ -187,13 +187,22 @@ validatePlannerInput()
   `validBuildListEntries` である。stale、completed、disabled、RNG不足、unsupportedなどで
   除外されたEntryは計画対象Targetを作らない
 - valid BuildListEntryが1件もないTargetは、Build List上にEntryがあってもそのrunの計画対象外である
-- 同一Targetに複数のvalid Entryがあっても計画対象Targetは1件として数える。どのEntryのRouteを
-  採用するかは従来のRoute選択semanticsのままである（現行Production）
-- 次期契約（未実装、[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1）: 永続Build Listは1 Targetにつき最大1 Entry
-  であり、通常のPlannerInputはそれを継承する。Plannerは同一Targetの複数Entryから選ばない。
-  通常のPlannerInputで同一planning Targetのvalid Entryが2件以上ある場合（legacy duplicate、malformed入力）は、
-  どれかを選んで続行せず、validation issueと専用warningでPlanner入力全体をfail closedする。
-  例外はconstrained re-search / what-ifのtemporary augmented inputだけである（9.2.18）
+- 同一Targetに複数のvalid Entryがあっても計画対象Targetは1件として数える（temporary augmented inputの場合。
+  通常入力では次項のとおりfail closedし、unsearched terminationの分母でも1件として数える）
+- 永続Build Listは1 Targetにつき最大1 Entryであり（[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1）、通常の
+  PlannerInputはそれを継承する（Phase 0-1で実装済み）。Plannerは同一Targetの複数Entryから選ばない。
+  通常のPlannerInputで同一planning TargetのEntryが2件以上ある場合（legacy duplicate、malformed入力）は、
+  どれかを選んで続行せず、validation issue（`buildListEntries` / `invalid_structure`）と専用warning
+  `duplicate_build_list_entries_for_target` でPlanner入力全体をfail closedし、Beam Searchへ到達しない
+  （`plan = null`、`exhausted`）。stale等で除外されたEntryも数える: valid Entryだけを数えると、除外されて
+  いない方を暗黙に採用することになるためである。Entryがすべて除外されたTargetは計画対象Targetでは
+  ないため、このrunは何も選ばず、その整理はBuild Listに委ねる。判定は
+  `findBuildListTargetDuplicates()`（`src/domain/buildList/buildListCardinality.ts`）だけをauthorityとする
+- 例外はconstrained re-search / what-ifのtemporary augmented inputだけである（9.2.18）。どの入力が
+  temporaryかはDomainの呼び出し文脈（`PlannerBuildListCardinality`、既定は `persisted`）で表し、
+  `PlannerInput` のfield、Worker request、UIでは表さない。Phase 0-1ではB8 / what-ifのtrial入力
+  （augmented preflightとtrialのfull Planner run）だけが `temporary_augmented` を渡し、通常の検証を
+  行わない（9.2.18の「temporary 2件以上のfail closed」等はPhase 0-3で実装する）
 - 作成リストに有効な候補が無い有効・未完了Targetは、所持武器ですでにIdealかどうかにかかわらず、
   そのrunの完了条件、typed terminationの分母、TargetSatisfactionの追跡、score、conflict
   detectionのいずれにも入らない。計画中に確保した武器がそのTargetの条件を偶然満たしても達成と
@@ -1298,9 +1307,10 @@ Beam Searchの結果がrequired Entryをsecureしていない場合、またはs
 
 #### 7.5.7 1 Targetにつき選択を持つEntryは最大1件
 
-注記: 次の「同一TargetにBuildListEntryが複数存在すること自体は許可する」は現行Productionの記述である。
-次期契約（未実装）では永続Build List自体が1 Targetにつき最大1 Entryになり（[DATA_MODEL.md](./DATA_MODEL.md)
-9.4.1）、本節は通常入力では自明に満たされる。本節の検証はlegacy / malformed入力への防御として残す。
+注記: 次の「同一TargetにBuildListEntryが複数存在すること自体は許可する」はtemporary augmented input
+（9.2.18）についての記述である。永続Build List自体は1 Targetにつき最大1 Entryであり（[DATA_MODEL.md](./DATA_MODEL.md)
+9.4.1）、通常入力では4.1のlegacy duplicate fail closedが先に働くため、本節は自明に満たされる。本節の検証は
+temporary augmented inputとlegacy / malformed入力への防御として残す。
 
 同一TargetにBuildListEntryが複数存在すること自体は許可する。ただし選択を持つEntryが
 同一Targetに2件以上ある場合、ユーザーが2本のRouteを両方必須にしたのか代替として
@@ -3609,10 +3619,13 @@ prefixのsilent fast-forward修正で4へ更新されており、7.0.1のPlan失
 
 ### 9.2.18 Build List cardinalityとの関係（次期契約）
 
-実装状態: **未実装（次期契約）**。Issue #103のPhase 0で実装する
+実装状態: **未実装（次期契約）**。Issue #103のPhase 0-3で実装する
 （[ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md) 17章）。
 現行Productionでは、正式採用したgenerated Entryを元Entryに **追加** して保存し（9.2.15）、trialは元Entryと
-generated Entryを含むaugmented inputそのものでPlanを計算する。
+generated Entryを含むaugmented inputそのものでPlanを計算する。Phase 0-1で実装済みなのは、通常入力の
+legacy duplicate fail closed（4.1）と、trial入力をDomainの呼び出し文脈 `temporary_augmented` で区別して
+その検証から外すことだけである。そのため採用後の永続Build Listはlegacy duplicateになり、以後の通常
+Planner入力はfail closedする（ユーザーが既存のEntry削除で整理する）。
 
 永続Build Listは1 Targetにつき最大1 Entryである（[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1）。本節は
 constrained re-search（B8）、what-if（B9）、再計画Preview / 採用（16.8）がこのinvariantとどう
@@ -5054,7 +5067,7 @@ ProductionPlanには適用しない）。
 - Plan非依存Targetを変更・無効化・削除する
 - Candidate Searchを実行する（16.7）
 - Build Listへ新規Entryを追加する（同じTargetのEntryが無い場合）
-- Plan非依存EntryのBuild List操作（途中採用状態の変更、削除、次期契約の置換など）
+- Plan非依存EntryのBuild List操作（途中採用状態の変更、削除、Target単位の置換など）
 - 所持武器のstatusだけを変更する
 - 名称、memoなど非semanticな項目だけを変更する
 - ゲーム内でセーブして中断する
@@ -5064,7 +5077,7 @@ ProductionPlanには適用しない）。
 - Plan依存Targetの性能定義（`createTargetDefinitionHash()` の対象、16.11）、`priority`、
   検索対象ON/OFF（`isEnabled`）、`lifecycleStatus`、`preferredOwnedWeaponId` を変更する
 - Plan依存Entry（`selectedBuildListEntryIds`）の削除、途中採用状態・改善優先の変更、
-  次期契約（[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1、未実装）の置換で旧Entryとして消えること
+  Target単位の置換（[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1）で旧Entryとして消えること
 - Planが追跡するOwnedWeapon（execution scope、16.9）のsemantic項目（保護、5枠、Skill、
   武器種、属性など）を計画外で変更、または削除する
 - RngState、NormalArtianCounterを手動変更する（RNG Setupの直接入力、Identification Wizardの
@@ -5088,9 +5101,10 @@ ProductionPlanには適用しない）。
   各変更は「保存時の永続状態 -> 変更後状態」の純関数（変更自身のvalidationと既存の参照保護を含む）として
   表し、guardは変更を先に適用・検証してからPlanの扱いを判定する。Build Listへの新規追加と
   staleness再評価（`isStale` / `staleReasons` のderived metadata）はPlanを壊さないためguardを通さない。
-  次期契約（[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1、未実装）の「同じTargetのEntryの置換」は旧Entryの削除を
-  伴うため新規追加とは扱わず、旧Entry削除と新Entry追加の全体を1つのguarded mutationとしてこのguardで判定する。
-  constrained re-searchの採用時の置換も同様にguardを迂回しない（9.2.18）
+  「同じTargetのEntryの置換」（[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1）は旧Entryの削除を伴うため新規追加とは
+  扱わず、旧Entry削除と新Entry追加の全体を1つのguarded mutation（`buildListEntryReplacementMutation()`）として
+  このguardで判定する（Phase 0-1で実装済み。UIからの呼び出しはPhase 0-2）。constrained re-searchの採用時の
+  置換も同様にguardを迂回しない（9.2.18、Phase 0-3）
 - 判定対象は `active` Planだけである。`active` / `stale` のPlanが2件以上ある場合は推測で選ばず拒否する
   （`running_plan_invariant_violated`）。`stale` Planや実行中Planが無い場合は警告せず通常保存し、Plan、
   セーブ地点、ExecutionHistory、作成中状態を変更しない

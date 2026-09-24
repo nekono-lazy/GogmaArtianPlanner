@@ -1,9 +1,12 @@
 import {
   applyBuildListEntryStaleness,
+  buildListEntriesForTarget,
+  classifyBuildListCandidateAddition,
   createBuildListEntry,
   defaultIntermediateStateSelection,
   evaluateBuildListEntryStaleness,
   isSameBuildListCandidate,
+  validateBuildListCardinality,
   withIntermediateStateSelection,
 } from '../../domain/buildList'
 import {
@@ -19,6 +22,7 @@ import type {
   BuildListEntryId,
   CalculationContext,
   IntermediateStateSelection,
+  ISODateTimeString,
   NormalArtianCounter,
   OwnedWeapon,
   RngState,
@@ -30,6 +34,7 @@ import {
   ownedWeaponRepository,
   rngStateRepository,
   targetWeaponRepository,
+  type BuildListEntryAdditionDecision,
 } from '../../db/repositories'
 import {
   defaultPlanGuardedPersistence,
@@ -39,30 +44,205 @@ import {
 export interface BuildListServiceRepositories {
   getAllEntries(): Promise<BuildListEntry[]>
   /**
-   * Adds an Entry or refreshes its derived staleness flags. Neither can break
-   * a ProductionPlan (`docs/PLANNER_SPEC.md` 16.6), so neither is guarded.
+   * Refreshes an Entry's derived staleness flags. That cannot break a
+   * ProductionPlan (`docs/PLANNER_SPEC.md` 16.6), so it is not guarded.
    */
   putEntry(entry: BuildListEntry): Promise<BuildListEntry>
+  /**
+   * Decides one Candidate addition over the persisted Build List and adds the
+   * Entry the decision returns, in one read-write transaction
+   * (`BuildListEntryRepository.decideAndAddBuildListEntry()`). An addition to a
+   * Target with no Entry cannot break a ProductionPlan, so it is not guarded
+   * (`docs/DATA_MODEL.md` 9.4.1).
+   */
+  decideAndAddEntry<R>(
+    decide: (entries: BuildListEntry[]) => BuildListEntryAdditionDecision<R>,
+  ): Promise<R>
   ensureRngState(): Promise<RngState>
   getNormalCounters(): Promise<NormalArtianCounter[]>
   getOwnedWeapons(): Promise<OwnedWeapon[]>
   getTargets(): Promise<TargetWeapon[]>
   /**
-   * The breaking-change guard of the two Build List operations that can break
-   * the `active` Plan: changing a selected Entry's intermediate state selection
-   * or improvement preference, and deleting a selected Entry.
+   * The breaking-change guard of the Build List operations that can break the
+   * `active` Plan: changing a selected Entry's intermediate state selection or
+   * improvement preference, deleting a selected Entry, and replacing the Entry
+   * of a Target.
    */
   persistence: PlanGuardedPersistence
+  /** The `createdAt` of a replacing Entry. Defaults to the system clock. */
+  clock?: { now(): ISODateTimeString }
 }
 
 export const defaultBuildListRepositories: BuildListServiceRepositories = {
   getAllEntries: () => buildListEntryRepository.getAllBuildListEntries(),
   putEntry: (entry) => buildListEntryRepository.putBuildListEntry(entry),
+  decideAndAddEntry: (decide) => buildListEntryRepository.decideAndAddBuildListEntry(decide),
   ensureRngState: () => rngStateRepository.ensureInitialRngState(),
   getNormalCounters: () => normalArtianCounterRepository.getAllNormalArtianCounters(),
   getOwnedWeapons: () => ownedWeaponRepository.getAllOwnedWeapons(),
   getTargets: () => targetWeaponRepository.getAllTargetWeapons(),
   persistence: defaultPlanGuardedPersistence,
+}
+
+/**
+ * The outcome of adding one Search Candidate to the persisted Build List
+ * (`docs/DATA_MODEL.md` 9.4.1 「Candidate Searchからの追加と置換」). Only `added`
+ * wrote anything.
+ *
+ * - `added`: the Target had no Entry, and the new Entry was added
+ * - `duplicate`: the Target's one Entry is of the same semantic Candidate and
+ *   is returned untouched - its selection and improvement preference are never
+ *   overwritten by a re-add
+ * - `replacement_required`: the Target holds one Entry of another Candidate.
+ *   Nothing was written; that Entry may only be replaced through
+ *   `replaceCandidate()` after the user confirmed it
+ * - `legacy_duplicate`: the Target already holds two or more Entries, so
+ *   neither an addition nor a replacement is possible until the user kept one,
+ *   even when the Candidate is the same as one of them
+ */
+export type AddBuildListCandidateResult =
+  | { status: 'added'; entry: BuildListEntry }
+  | { status: 'duplicate'; entry: BuildListEntry }
+  | { status: 'replacement_required'; existingEntry: BuildListEntry }
+  | { status: 'legacy_duplicate'; entries: BuildListEntry[] }
+
+/**
+ * One confirmed `replace BuildListEntry for Target` (`docs/DATA_MODEL.md` 9.4.1).
+ *
+ * `target` is the Target the Candidate was searched for, exactly as for an
+ * addition, so the new Entry's Target definition hash describes the Candidate.
+ * `expectedExistingEntryId` is the Entry the user saw and confirmed replacing:
+ * the replacement is refused unless it is still that Target's only Entry.
+ * `intermediateStateSelection` is the Search screen's own selection; nothing of
+ * the replaced Entry is carried over.
+ */
+export interface BuildListCandidateReplacementRequest {
+  candidate: BuildCandidate
+  target: TargetWeapon
+  intermediateStateSelection: IntermediateStateSelection
+  expectedExistingEntryId: BuildListEntryId
+}
+
+/** Why a Build List addition or replacement was refused with nothing written. */
+export type BuildListCardinalityErrorCode =
+  | 'target_not_found'
+  | 'replacement_target_changed'
+  | 'legacy_duplicate_entries'
+  | 'candidate_already_added'
+  /**
+   * The Search screen has no replacement confirmation yet (Issue #103 Phase
+   * 0-2), so an addition that would need one adds nothing.
+   */
+  | 'replacement_confirmation_unavailable'
+
+const cardinalityErrorMessages: Record<BuildListCardinalityErrorCode, string> = {
+  target_not_found: 'この目標武器はすでに存在しません。一覧を更新してください。',
+  replacement_target_changed:
+    '置き換える作成リストの候補が変更されました。作成リストを確認してから、もう一度操作してください。',
+  legacy_duplicate_entries:
+    'この目標武器には作成リストに複数の候補が登録されています。作成リストで使用する候補を1件にしてから、もう一度操作してください。',
+  candidate_already_added:
+    'この候補は作成リストに追加済みです。途中採用する状態と改善優先は作成リストで変更してください。',
+  replacement_confirmation_unavailable:
+    'この目標武器には別の候補が作成リストに登録されているため、追加していません。作成リストは目標武器ごとに候補を1件だけ持ちます。この候補に置き換える場合は、作成リストで現在の候補を削除してから追加してください。',
+}
+
+export class BuildListCardinalityError extends Error {
+  readonly code: BuildListCardinalityErrorCode
+
+  constructor(code: BuildListCardinalityErrorCode) {
+    super(cardinalityErrorMessages[code])
+    this.name = 'BuildListCardinalityError'
+    this.code = code
+  }
+}
+
+/**
+ * The Search screen's addition until its replacement confirmation exists
+ * (Issue #103 Phase 0-2): an addition or a duplicate keeps the screen's
+ * existing `{ entry, added }` contract, while an addition that would need a
+ * replacement, or a Target with a legacy duplicate, is refused with a typed
+ * error the screen reports as it reports any add failure. Nothing was written
+ * in either refusal, and nothing is ever replaced from here.
+ */
+export function toSearchScreenAddition(
+  result: AddBuildListCandidateResult,
+): { entry: BuildListEntry; added: boolean } {
+  switch (result.status) {
+    case 'added':
+      return { entry: result.entry, added: true }
+    case 'duplicate':
+      return { entry: result.entry, added: false }
+    case 'replacement_required':
+      throw new BuildListCardinalityError('replacement_confirmation_unavailable')
+    case 'legacy_duplicate':
+      throw new BuildListCardinalityError('legacy_duplicate_entries')
+  }
+}
+
+function assertValidEntry(entry: BuildListEntry): void {
+  const valid = validateBuildListEntry(entry)
+  if (!valid.isValid) {
+    throw new Error(
+      valid.issues.map(({ path, message }) => `${path}: ${message}`).join('\n'),
+    )
+  }
+}
+
+/**
+ * One confirmed `replace BuildListEntry for Target` as a guarded mutation
+ * (`docs/DATA_MODEL.md` 9.4.1): the replaced Entry's removal and the new
+ * Entry's addition are one change, so the breaking-change guard judges them
+ * together and the persistence writes them in one transaction.
+ *
+ * Every premise is re-read from the state the mutation runs on, never trusted
+ * from the screen: the Target must still exist and hold exactly the Entry the
+ * user confirmed replacing (another tab may have changed it), and the Candidate
+ * must not be that Entry's own - a re-add never overwrites a selection. The new
+ * Entry comes from the Candidate and the request's own selection alone, with a
+ * fresh ID; the replaced Entry's selection and improvement preference are not
+ * carried over, and no record referring to it is touched. The replaced Target
+ * must satisfy the Build List cardinality contract afterwards. Any refusal
+ * throws before anything is written.
+ */
+export function buildListEntryReplacementMutation(
+  request: BuildListCandidateReplacementRequest,
+  createdAt: ISODateTimeString,
+): PlanGuardedMutation<BuildListEntry> {
+  return (base) => {
+    const { candidate, target, intermediateStateSelection, expectedExistingEntryId } = request
+    if (!base.targetWeapons.some(({ id }) => id === target.id)) {
+      throw new BuildListCardinalityError('target_not_found')
+    }
+    const current = buildListEntriesForTarget(base.buildListEntries, target.id)
+    if (current.length >= 2) throw new BuildListCardinalityError('legacy_duplicate_entries')
+    const [existing] = current
+    if (existing === undefined || existing.id !== expectedExistingEntryId) {
+      throw new BuildListCardinalityError('replacement_target_changed')
+    }
+    if (isSameBuildListCandidate(existing, candidate)) {
+      throw new BuildListCardinalityError('candidate_already_added')
+    }
+    const entry = createBuildListEntry(candidate, target, { intermediateStateSelection, createdAt })
+    assertValidEntry(entry)
+    if (base.buildListEntries.some(({ id }) => id === entry.id)) {
+      throw new Error(`BuildListEntry '${entry.id}' already exists and is never overwritten.`)
+    }
+    const buildListEntries = [
+      ...base.buildListEntries.filter(({ id }) => id !== existing.id),
+      entry,
+    ]
+    const cardinality = validateBuildListCardinality(
+      buildListEntriesForTarget(buildListEntries, target.id),
+    )
+    if (!cardinality.isValid) {
+      throw new Error(cardinality.issues.map(({ message }) => message).join('\n'))
+    }
+    return {
+      result: entry,
+      state: { ...unchangedMutableState(base), buildListEntries },
+    }
+  }
 }
 
 /**
@@ -81,12 +261,7 @@ export function intermediateStateSelectionMutation(
       throw new Error(`BuildListEntry '${id}' does not exist.`)
     }
     const updated = withIntermediateStateSelection(existing, intermediateStateSelection)
-    const valid = validateBuildListEntry(updated)
-    if (!valid.isValid) {
-      throw new Error(
-        valid.issues.map(({ path, message }) => `${path}: ${message}`).join('\n'),
-      )
-    }
+    assertValidEntry(updated)
     return {
       result: updated,
       state: {
@@ -116,33 +291,68 @@ export class BuildListService {
   }
 
   /**
-   * Adds one Candidate, or reports that an equivalent Entry already exists.
+   * Adds one Candidate to a Target that has no Entry, and otherwise reports
+   * what the addition would mean without writing anything
+   * (`AddBuildListCandidateResult`, `docs/DATA_MODEL.md` 9.4.1).
    *
-   * An existing Entry is returned untouched: its intermediate state selection
-   * and improvement preference are the user's Build List input, and the
-   * Search screen's current selection must never silently overwrite them
-   * (`docs/UI_FLOW.md` 9).
+   * The Build List holds at most one Entry per Target, so another Candidate of
+   * a Target that already has an Entry is never added beside it: it needs the
+   * user's confirmed `replaceCandidate()`. An existing equivalent Entry is
+   * returned untouched: its intermediate state selection and improvement
+   * preference are the user's Build List input, and the Search screen's current
+   * selection must never silently overwrite them (`docs/UI_FLOW.md` 9). The
+   * decision and the addition run in one transaction.
    */
   async addCandidate(
     candidate: BuildCandidate,
     target: TargetWeapon,
     intermediateStateSelection: IntermediateStateSelection = defaultIntermediateStateSelection(),
-  ): Promise<{ entry: BuildListEntry; added: boolean }> {
-    const existing = (await this.repositories.getAllEntries()).find((entry) =>
-      isSameBuildListCandidate(entry, candidate),
-    )
-    if (existing) return { entry: existing, added: false }
+  ): Promise<AddBuildListCandidateResult> {
     const entry = createBuildListEntry(candidate, target, {
       intermediateStateSelection,
     })
-    const valid = validateBuildListEntry(entry)
-    if (!valid.isValid) {
-      throw new Error(
-        valid.issues.map(({ path, message }) => `${path}: ${message}`).join('\n'),
-      )
-    }
-    await this.repositories.putEntry(entry)
-    return { entry, added: true }
+    assertValidEntry(entry)
+    return this.repositories.decideAndAddEntry<AddBuildListCandidateResult>((entries) => {
+      const state = classifyBuildListCandidateAddition(entries, candidate)
+      switch (state.status) {
+        case 'target_empty':
+          return { entry, result: { status: 'added', entry } }
+        case 'duplicate':
+          return { entry: null, result: { status: 'duplicate', entry: state.entry } }
+        case 'replacement_required':
+          return {
+            entry: null,
+            result: { status: 'replacement_required', existingEntry: state.existingEntry },
+          }
+        case 'legacy_duplicate':
+          return { entry: null, result: { status: 'legacy_duplicate', entries: state.entries } }
+      }
+    })
+  }
+
+  /**
+   * Replaces the Target's one Entry with a new Entry of `request.candidate`,
+   * after the user confirmed it (`docs/DATA_MODEL.md` 9.4.1). The replaced Entry
+   * is removed and the new one added in one guarded transaction: when the
+   * replaced Entry is a Plan-dependent Entry of the `active` Plan, the change
+   * needs the breaking-change approval and, approved, ends that Plan in the same
+   * transaction (`docs/PLANNER_SPEC.md` 16.6). A refusal writes nothing.
+   */
+  async replaceCandidate(
+    request: BuildListCandidateReplacementRequest,
+    approval: PlanBreakingChangeApproval | null = null,
+  ): Promise<BuildListEntry> {
+    const mutation = buildListEntryReplacementMutation(request, this.now())
+    return (await this.repositories.persistence.apply(mutation, approval)).result
+  }
+
+  /** Whether the replacement needs the breaking-change approval (`docs/UI_FLOW.md` 16.3). Writes nothing. */
+  inspectCandidateReplacement(
+    request: BuildListCandidateReplacementRequest,
+  ): Promise<PlanBreakingChangeInspection> {
+    return this.repositories.persistence.inspect(
+      buildListEntryReplacementMutation(request, this.now()),
+    )
   }
 
   /**
@@ -214,6 +424,12 @@ export class BuildListService {
     return { entries: refreshed, targets, ownedWeapons }
   }
 
+  /**
+   * Deletes one Entry through the breaking-change guard. It is also how the
+   * user tidies a legacy duplicate (`docs/DATA_MODEL.md` 9.4.1): deleting one
+   * Entry of a Target that holds several is an ordinary delete, never refused
+   * for the Target's other Entries.
+   */
   async deleteEntry(id: BuildListEntryId, approval: PlanBreakingChangeApproval | null = null): Promise<void> {
     await this.repositories.persistence.apply(buildListEntryDeleteMutation(id), approval)
   }
@@ -221,6 +437,10 @@ export class BuildListService {
   /** Whether deleting the Entry needs the breaking-change approval (`docs/UI_FLOW.md` 16.3). Writes nothing. */
   inspectEntryDelete(id: BuildListEntryId): Promise<PlanBreakingChangeInspection> {
     return this.repositories.persistence.inspect(buildListEntryDeleteMutation(id))
+  }
+
+  private now(): ISODateTimeString {
+    return this.repositories.clock?.now() ?? new Date().toISOString()
   }
 }
 

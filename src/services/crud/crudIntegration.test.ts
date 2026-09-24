@@ -15,6 +15,11 @@ function buildListMemory(entry: BuildListEntry, target: TargetWeapon, owned: Own
   const refs: BuildListServiceRepositories = {
     getAllEntries: async () => entries,
     putEntry: vi.fn(async (next) => { entries[0] = next; return next }),
+    decideAndAddEntry: async (decide) => {
+      const decision = decide([...entries])
+      if (decision.entry) entries.push(decision.entry)
+      return decision.result
+    },
     ensureRngState: async () => rngState,
     getNormalCounters: async () => counters,
     getOwnedWeapons: async () => owned,

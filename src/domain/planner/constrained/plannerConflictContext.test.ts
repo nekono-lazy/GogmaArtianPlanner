@@ -20,7 +20,7 @@ import {
   preparePlannerInitialContext,
   type PlannerInitialContext,
 } from '../plannerInitialContext'
-import type { PlannerConflictResolution } from '../plannerTypes'
+import type { PlannerBuildListCardinality, PlannerConflictResolution } from '../plannerTypes'
 import {
   createPlannerConstrainedConflictContexts,
   plannerConflictResourceKey,
@@ -33,10 +33,11 @@ function readyContext(
   entries: BuildListEntry[],
   ownedWeapons: OwnedWeapon[] = [],
   resolutions: PlannerConflictResolution[] = [],
+  cardinality: PlannerBuildListCardinality = 'persisted',
 ): PlannerInitialContext {
   const { input, dependencies } = fixture(targets, entries, ownedWeapons)
   input.conflictResolutions = resolutions
-  const prepared = preparePlannerInitialContext(input, dependencies)
+  const prepared = preparePlannerInitialContext(input, dependencies, cardinality)
   if (prepared.status !== 'ready') {
     throw new Error(`Expected a ready Planner initial context: ${prepared.status}`)
   }
@@ -714,11 +715,15 @@ describe('B8-C3a duplicate BuildListEntry ID identity', () => {
       [built.first, built.other],
       built.sources,
     )
+    // Two Entries of one Target are a legacy duplicate an ordinary persisted
+    // input fails closed on (`docs/PLANNER_SPEC.md` 4.1), so the same-Target
+    // variant exercises this defence as a trial input (9.2.18).
     const context = readyContext(
       built.targets,
       [...duplicates, built.other].map((entry) => structuredClone(entry)),
       built.sources,
       [{ conflictKey, selectedBuildListEntryId: built.first.id }],
+      variant === 'same_target' ? 'temporary_augmented' : 'persisted',
     )
     const contexts = createPlannerConstrainedConflictContexts(context)
     return {
