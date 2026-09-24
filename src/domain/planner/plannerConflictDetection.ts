@@ -4,10 +4,10 @@ import type {
   PlanConflict,
   PlanConflictCheckpointParticipant,
   TargetWeapon,
-  TargetWeaponId,
 } from '../models/publicTypes'
 import { createPlanConflictId } from './conflictKey'
 import { selectedIntermediateStateAtOperationIndex } from './plannerCheckpoints'
+import { recommendPlannerEntry } from './plannerEntryPriority'
 import type { PlannerRouteUnit } from './plannerRouteProgress'
 import type {
   PlannerConflictResolution,
@@ -82,55 +82,6 @@ function allOneShareablePhysicalAction(
     units.every(({ shareable }) => shareable) &&
     new Set(units.map(({ physicalActionKey }) => physicalActionKey)).size === 1
   )
-}
-
-function nextCandidateDistance(
-  entry: BuildListEntry,
-  entries: readonly BuildListEntry[],
-): number {
-  const laterDistances = entries
-    .filter(
-      (candidate) =>
-        candidate.id !== entry.id &&
-        candidate.targetWeaponId === entry.targetWeaponId &&
-        candidate.candidateSnapshot.estimatedOperationCount >=
-          entry.candidateSnapshot.estimatedOperationCount,
-    )
-    .map(
-      (candidate) =>
-        candidate.candidateSnapshot.estimatedOperationCount -
-        entry.candidateSnapshot.estimatedOperationCount,
-    )
-  return laterDistances.length === 0 ? 0 : Math.min(...laterDistances)
-}
-
-function recommendEntry(
-  entryIds: readonly BuildListEntryId[],
-  entriesById: ReadonlyMap<BuildListEntryId, BuildListEntry>,
-  targetsById: ReadonlyMap<TargetWeaponId, TargetWeapon>,
-  allEntries: readonly BuildListEntry[],
-): BuildListEntryId | null {
-  const entries = entryIds.flatMap((id) => {
-    const entry = entriesById.get(id)
-    return entry ? [entry] : []
-  })
-  // Target priority, then how far the next Candidate of that Target is, then
-  // the cheaper Route. Whether a Target already holds a compromise weapon is
-  // deliberately not a factor: the Planner has no Practical-first priority
-  // (`docs/PLANNER_SPEC.md` 7).
-  entries.sort((left, right) => {
-    const leftTarget = targetsById.get(left.targetWeaponId)
-    const rightTarget = targetsById.get(right.targetWeaponId)
-    return (
-      (rightTarget?.priority ?? 0) - (leftTarget?.priority ?? 0) ||
-      nextCandidateDistance(right, allEntries) -
-        nextCandidateDistance(left, allEntries) ||
-      left.candidateSnapshot.estimatedOperationCount -
-        right.candidateSnapshot.estimatedOperationCount ||
-      compareStableStrings(left.id, right.id)
-    )
-  })
-  return entries[0]?.id ?? null
 }
 
 function appendUnitConflict(
@@ -344,7 +295,7 @@ export function detectPlannerConflicts(
         kind: group.kind,
         buildListEntryIds,
         reason: conflictReason(group),
-        recommendedBuildListEntryId: recommendEntry(
+        recommendedBuildListEntryId: recommendPlannerEntry(
           buildListEntryIds,
           entriesById,
           targetsById,

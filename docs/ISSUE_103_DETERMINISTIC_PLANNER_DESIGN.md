@@ -31,7 +31,7 @@ authorityの配置:
 | 永続Build Listの1 Target = 最大1 Entry、Candidate追加時の置換、legacy duplicateのfail closed | [REQUIREMENTS.md](./REQUIREMENTS.md) 18、[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1 | **実装済み**（Phase 0-1: Domain / Service基盤、通常Planner入力のfail closed、Import / Exportの保持。Phase 0-2: Search画面の置換確認、Build Listのlegacy duplicate案内。Phase 0-3: constrained re-search / what-if / 再計画の置換） |
 | Search画面からの追加 / 置換 | [SEARCH_SPEC.md](./SEARCH_SPEC.md) 10.1、[UI_FLOW.md](./UI_FLOW.md) 9 / 10 | **実装済み**（Phase 0-1: Service結果型と置換API、Phase 0-2: 画面の置換確認Dialog / 案内） |
 | constrained re-search / what-if / 再計画とBuild List cardinality | [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18 | **実装済み**（Phase 0-3） |
-| 決定的scheduler（Route commitment、scheduling、termination、schema境界） | 本書 | target design。Phase CでREQUIREMENTS 19 / 20、PLANNER_SPEC 7等を改訂して正式化 |
+| 決定的scheduler（Route commitment、scheduling、termination、schema境界） | 本書 | target design（Phase A: Domain実装済み・Production未接続）。Phase CでREQUIREMENTS 19 / 20、PLANNER_SPEC 7等を改訂して正式化 |
 
 - 本書の追加時点で `src/**`、テスト、schema version、Worker protocol、UIは一切変更していない
 - Build List cardinalityは **Build List自体の契約** であり、Plannerの都合ではない。したがって
@@ -553,7 +553,7 @@ safe actionが複数あるとき、次のkeyの辞書式順で1つだけ選ぶ�
 | 3 | weapon switchを新たに生じるか（生じない方） | PLANNER_SPEC 7.3。subjectは `plannerWeaponOperationSubjectKey()`、null subjectは切替に数えない |
 | 4 | executor選択時: executor Entryの次のholding unitが同じstream上で近い方 | 近くその武器を操作する必要があるEntryで位置を消費し、後続の切替を減らす |
 | 5 | actionが進めるEntryの残りpending unit数（少ない方） | 完成に近いRouteを先に終える |
-| 6 | stable: stream順（base / `normal:*` → skill → gogma）、Counter位置、primary Entry ID | 決定性 |
+| 6 | stable: stream順（Normal（`normal:*`）/ blind forge → Skill → Gogma）、Counter位置、primary Entry ID | 決定性 |
 
 - Target priority、improvement preference、weapon switchはいずれも **1 Target = 1 Entryでも意味を
   持つ** soft preferenceとして残す。Target priorityは複数Targetのsafe action間、improvement preference
@@ -566,10 +566,10 @@ safe actionが複数あるとき、次のkeyの辞書式順で1つだけ選ぶ�
 - 1つのEntryでBonus laneとSkill laneの両方がsafeな場合（シナリオG）、`skill_first` /
   `bonus_first` は2のkeyで優先laneを選ぶ。優先laneがsafeでない（他Entryのholdingや
   pinで待つ）場合は、反対laneを進めてviolationを記録する（soft preferenceであり、hard constraint
-  より上位にしない）。`planner` は2で差が付かず、3〜6で決まる。6のstream順（Bonus先）は決定性
-  のためのtie-breakであり、7.9によりfeasibilityへ影響しないので、PLANNER_SPEC 7.6の
-  「`planner` はBonusを先に試す意味ではない」（branchを片側に固定してPlanを破綻させない）
-  という趣旨と矛盾しない
+  より上位にしない）。`planner` は2で差が付かず、3〜6で決まる。6のstream順（Normal / blind forge →
+  Skill → Gogma。したがって同じ条件ならSkill laneがBonus laneより先）は決定性のためのtie-breakであり、
+  7.9によりfeasibilityへ影響しないので、PLANNER_SPEC 7.6の「`planner` はBonusを先に試す意味ではない」
+  （branchを片側に固定してPlanを破綻させない）という趣旨と矛盾しない
 - 上限付きではないが局所的な規則であるため、weapon switch数・violation数の絶対最小は保証しない
   （現行契約と同じ）
 
@@ -1124,6 +1124,15 @@ REQUIREMENTS 18へ記載済み。実装は次の順で小さく分ける。
   schedulerの結果にだけ効くよう準備し、Production経路は変えない
 - 16章のscenario A〜M + 追加scenarioをDomain testで固定。scheduler出力が既存Trace Replayを通ることを検証
 - Production UI / Worker / schema version は変更しない
+- **実装済み（Production未接続）**: 入口は `runPlannerDeterministicSchedule()`
+  （`src/domain/planner/plannerDeterministicScheduler.ts`、段階実行用の `createPlannerDeterministicScheduleRun()`）。
+  Route commitmentは `plannerRouteCommitment.ts`、canonical順は `plannerSchedulerOrdering.ts`、
+  順位関数 `R` は `detectPlannerConflicts()` と共有する `plannerEntryPriority.ts`、
+  Beam Searchと共有する探索補助（`detectCurrentPlannerConflicts()`、即時reserve対象、開始時zero-operation confirm等）は
+  `plannerSearchShared.ts` へ抽出した。暫定帰結・deadlock / stallの内部rejection reasonは
+  `conflict_not_committed`（`createRejectedBuildListEntries()` で `resource_conflict`）。
+  `createProductionPlanWithObserver()`、Planner Worker、B8 / B9、再計画Previewは引き続きBeam Searchを使う。
+  acceptance testは `plannerDeterministicScheduler.test.ts`
 
 ### Phase B: parityとbenchmark
 

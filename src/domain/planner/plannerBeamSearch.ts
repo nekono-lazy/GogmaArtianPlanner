@@ -1,14 +1,9 @@
 import type {
   BuildListEntry,
   BuildListEntryId,
-  DomainValidationIssue,
   PlanConflict,
-  TargetWeapon,
-  TargetWeaponId,
 } from '../models/publicTypes'
-import { stableStringify } from '../models/publicTypes'
 import {
-  conflictResolutionRefusalReason,
   detectPlannerConflicts,
   isUnitBlockedByConflictResolution,
 } from './plannerConflictDetection'
@@ -28,16 +23,23 @@ import {
   initialPlannerLaneProgress,
   isPlannerLaneRouteComplete,
   nextPlannerLaneUnits,
-  remainingPlannerLaneUnits,
-  type PlannerEntryLanes,
 } from './plannerRouteLanes'
 import { collectPreferredSourceEntryIds } from './plannerPreferredSource'
 import { preparePlannerInitialContext } from './plannerInitialContext'
 import { createPlannerSearchMetricsCollector } from './plannerSearchInstrumentation'
+import { createPlannerSearchTermination } from './plannerTermination'
 import {
-  createPlannerSearchTermination,
-  createUnsearchedPlannerTermination,
-} from './plannerTermination'
+  addPlannerWarning,
+  appendUniquePlannerRejection as appendUniqueRejection,
+  applyPlannerZeroOperationConfirms,
+  createPlannerInitialFailureResult,
+  detectCurrentPlannerConflicts,
+  pendingPlannerReserveEntries,
+  plannerConflictCountByEntryId,
+  plannerConflictResolutionWarnings,
+  plannerRejectionKey,
+  sortPlannerRejections,
+} from './plannerSearchShared'
 import {
   applyPlannerReserveAction,
   applyPlannerRouteAction,
@@ -49,36 +51,17 @@ import {
   type PlannerRouteActionContext,
 } from './plannerStateTransitions'
 import type {
-  ExcludedBuildListEntry,
   PlannerBeamSearchResult,
   PlannerDependencies,
   PlannerRunBuildListContext,
   PlannerExecutionOptions,
   PlannerInput,
-  PlannerSearchRejection,
   PlannerSearchState,
-  PlannerWarning,
-  PlannerConflictResolution,
 } from './plannerTypes'
 import { PERSISTED_PLANNER_BUILD_LIST_CONTEXT } from './plannerTypes'
 
 function compareStableStrings(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
-}
-
-function rejectionKey(value: PlannerSearchRejection): string {
-  return stableStringify(value)
-}
-
-function appendUniqueRejection(
-  rejections: PlannerSearchRejection[],
-  rejectionKeys: Set<string>,
-  value: PlannerSearchRejection,
-) {
-  const key = rejectionKey(value)
-  if (rejectionKeys.has(key)) return
-  rejectionKeys.add(key)
-  rejections.push(value)
 }
 
 function targetCanUseEntry(
@@ -87,40 +70,6 @@ function targetCanUseEntry(
   requirements: PlannerCheckpointRequirements,
 ): boolean {
   return entryIsRelevantForState(state, entry, requirements)
-}
-
-/**
- * The Entries whose internal reserve must be applied before any other action
- * (`docs/PLANNER_SPEC.md` 16.3).
- *
- * The execution projection completes a Target on the Entry's last physical
- * Step, so the search secures a Candidate right after that unit, with nothing
- * but other such reserves in between: these are the Entries the most recent
- * physical action progressed, provided only reserves followed it, whose Route
- * is now complete and whose Target can still use them. An Entry that misses
- * this moment is never reserved later.
- */
-function pendingReserveEntries(
-  state: PlannerSearchState,
-  entriesById: ReadonlyMap<BuildListEntryId, BuildListEntry>,
-  lanePlans: ReadonlyMap<BuildListEntryId, PlannerEntryLanes>,
-  requirements: PlannerCheckpointRequirements,
-): BuildListEntry[] {
-  let index = state.trace.length - 1
-  while (index >= 0 && state.trace[index].kind === 'reserve_candidate') index -= 1
-  const physical = index >= 0 ? state.trace[index] : undefined
-  if (physical?.kind !== 'route_operation') return []
-  return [...physical.progressedBuildListEntryIds]
-    .sort(compareStableStrings)
-    .flatMap((entryId) => {
-      const entry = entriesById.get(entryId)
-      const lanes = lanePlans.get(entryId)
-      if (!entry || !lanes) return []
-      if (state.selectedBuildListEntryIds.includes(entryId)) return []
-      const progress = state.routeProgressByEntryId[entryId] ?? initialPlannerLaneProgress()
-      if (!isPlannerLaneRouteComplete(lanes, progress)) return []
-      return targetCanUseEntry(state, entry, requirements) ? [entry] : []
-    })
 }
 
 function betterState(
@@ -133,94 +82,6 @@ function betterState(
     : current
 }
 
-function addWarning(
-  warnings: PlannerWarning[],
-  kind: PlannerWarning['kind'],
-  message: string,
-) {
-  if (warnings.some((warning) => warning.kind === kind && warning.message === message)) {
-    return
-  }
-  warnings.push({ kind, message })
-}
-
-function detectCurrentPlannerConflicts(
-  state: PlannerSearchState,
-  allSearchEntries: readonly BuildListEntry[],
-  allLanePlans: ReadonlyMap<BuildListEntryId, PlannerEntryLanes>,
-  targets: readonly TargetWeapon[],
-  resolutions: readonly PlannerConflictResolution[],
-  requirements: PlannerCheckpointRequirements,
-) {
-  const entries = allSearchEntries.filter((entry) =>
-    entryIsRelevantForState(state, entry, requirements),
-  )
-  const unitPlans = new Map(
-    entries.flatMap((entry) => {
-      const lanes = allLanePlans.get(entry.id)
-      if (!lanes) return []
-      const progress = state.routeProgressByEntryId[entry.id] ?? initialPlannerLaneProgress()
-      return [[entry.id, remainingPlannerLaneUnits(lanes, progress)] as const]
-    }),
-  )
-  return detectPlannerConflicts(entries, unitPlans, targets, resolutions, false)
-}
-
-function conflictCountByEntryId(
-  conflicts: readonly PlanConflict[],
-): Map<BuildListEntryId, number> {
-  const counts = new Map<BuildListEntryId, number>()
-  conflicts.forEach((conflict) => {
-    conflict.buildListEntryIds.forEach((entryId) => {
-      counts.set(entryId, (counts.get(entryId) ?? 0) + 1)
-    })
-  })
-  return counts
-}
-
-function conflictResolutionWarnings(
-  resolutions: readonly PlannerConflictResolution[],
-  conflictsById: ReadonlyMap<string, PlanConflict>,
-): PlannerWarning[] {
-  return resolutions.flatMap((resolution) => {
-    // The same refusal authority the detection applied, so a resolution that
-    // targets a selected-checkpoint conflict is reported here too.
-    const reason = conflictResolutionRefusalReason(
-      resolution,
-      conflictsById.get(resolution.conflictKey),
-    )
-    return reason === null
-      ? []
-      : [{ kind: 'invalid_conflict_resolution' as const, message: reason }]
-  })
-}
-
-function initialFailureResult(
-  input: PlannerInput,
-  warnings: PlannerWarning[],
-  issues: DomainValidationIssue[],
-  excludedBuildListEntries: ExcludedBuildListEntry[],
-  planningTargetIds: readonly TargetWeaponId[],
-): PlannerBeamSearchResult {
-  return {
-    bestState: null,
-    conflicts: [],
-    warnings,
-    validationIssues: issues,
-    excludedBuildListEntries,
-    rejections: [],
-    expandedStates: 0,
-    completed: false,
-    cancelled: false,
-    // No expansion ran, so no `PlannerOptions` bound was touched. The reason
-    // the input was rejected is reported by its own validation warnings.
-    termination: createUnsearchedPlannerTermination(
-      input.options,
-      planningTargetIds,
-    ),
-  }
-}
-
 export async function runPlannerBeamSearch(
   input: PlannerInput,
   dependencies: PlannerDependencies,
@@ -229,7 +90,7 @@ export async function runPlannerBeamSearch(
 ): Promise<PlannerBeamSearchResult> {
   const prepared = preparePlannerInitialContext(input, dependencies, buildListContext)
   if (prepared.status === 'invalid') {
-    const failure = initialFailureResult(
+    const failure = createPlannerInitialFailureResult(
       input,
       prepared.warnings,
       prepared.issues,
@@ -329,7 +190,7 @@ export async function runPlannerBeamSearch(
     }
   }
   const rejections = [...prepared.context.routePlanRejections]
-  const rejectionKeys = new Set(rejections.map(rejectionKey))
+  const rejectionKeys = new Set(rejections.map(plannerRejectionKey))
   // Static Planner input, so it is derived once instead of per expansion.
   const preferredSourceEntryIds = collectPreferredSourceEntryIds(
     allSearchEntries,
@@ -362,54 +223,34 @@ export async function runPlannerBeamSearch(
     })
   }
   recordDetectedConflicts(initialConflictDetection)
-  // A zero-operation Candidate whose owned Gogma already satisfies its active
-  // Target is confirmed, not silently dropped as already satisfied: it becomes
-  // one `confirm_owned_ideal` Step that advances no Counter and completes the
-  // Target (`docs/PLANNER_SPEC.md` 16.3). It changes no RNG state, so it is
-  // applied before any expansion, one Entry per Target in stable ID order.
-  let initialState = preparedInitialState
-  const confirmedZeroOperationTargetIds = new Set<TargetWeaponId>()
-  for (const entry of allSearchEntries) {
-    const lanes = allLanePlans.get(entry.id)
-    if (
-      lanes === undefined ||
-      lanes.unitCount !== 0 ||
-      entry.candidateSnapshot.route.kind !== 'existing_gogma_current'
-    ) continue
-    const required = checkpointRequirements.requiredEntryIdByTargetId.get(entry.targetWeaponId)
-    if (required !== undefined && required !== entry.id) continue
-    const target = planningTargetsById.get(entry.targetWeaponId)
-    if (!target || confirmedZeroOperationTargetIds.has(target.id)) continue
-    if (initialState.targetSatisfaction[target.id]?.hasIdeal !== true) continue
-    const confirmed = applyPlannerReserveAction(
-      initialState,
-      entry,
-      target,
-      reserveActionContext,
-      { mode: 'clone', zeroOperationConfirm: true },
-    )
-    if (confirmed.rejection) {
-      appendUniqueRejection(rejections, rejectionKeys, confirmed.rejection)
-    }
-    if (confirmed.state) {
-      initialState = confirmed.state
-      confirmedZeroOperationTargetIds.add(target.id)
-    }
-  }
+  // Zero-operation `confirm_owned_ideal` confirmations change no RNG state, so
+  // they are applied before any expansion (`docs/PLANNER_SPEC.md` 16.3).
+  const initialState = applyPlannerZeroOperationConfirms(
+    preparedInitialState,
+    {
+      allSearchEntries,
+      allLanePlans,
+      planningTargetsById,
+      checkpointRequirements,
+      reserveContext: reserveActionContext,
+    },
+    'clone',
+    (rejection) => appendUniqueRejection(rejections, rejectionKeys, rejection),
+  )
   initialState.evaluationScore = evaluatePlannerSearchState(
     initialState,
     {
       ...scoreContext,
-      conflictCountByEntryId: conflictCountByEntryId(
+      conflictCountByEntryId: plannerConflictCountByEntryId(
         initialConflictDetection.conflicts,
       ),
     },
   )
   if (isComplete(initialState)) {
-    conflictResolutionWarnings(
+    plannerConflictResolutionWarnings(
       validConflictResolutions,
       discoveredConflictsById,
-    ).forEach(({ kind, message }) => addWarning(warnings, kind, message))
+    ).forEach(({ kind, message }) => addPlannerWarning(warnings, kind, message))
     metrics?.finish({
       reachedBeamSearch: false,
       expandedStates: 0,
@@ -525,7 +366,7 @@ export async function runPlannerBeamSearch(
       // ordinary successors below leave that Entry unsecured for good, which is
       // how a shared physical action serves another Entry that keeps operating
       // on the same weapon.
-      const pendingReserveAttempts = pendingReserveEntries(
+      const pendingReserveAttempts = pendingPlannerReserveEntries(
         state,
         entriesById,
         allLanePlans,
@@ -652,7 +493,7 @@ export async function runPlannerBeamSearch(
           recordDetectedConflicts(successorConflictDetection)
           applied.state.evaluationScore = evaluatePlannerSearchState(applied.state, {
             ...scoreContext,
-            conflictCountByEntryId: conflictCountByEntryId(
+            conflictCountByEntryId: plannerConflictCountByEntryId(
               successorConflictDetection.conflicts,
             ),
           })
@@ -721,14 +562,14 @@ export async function runPlannerBeamSearch(
   }
 
   if (reachedStepLimit) {
-    addWarning(
+    addPlannerWarning(
       warnings,
       'max_steps_reached',
       `Planner reached maxPlanSteps (${input.options.maxPlanSteps}).`,
     )
   }
   if (reachedExpandedLimit) {
-    addWarning(
+    addPlannerWarning(
       warnings,
       'max_expanded_states_reached',
       `Planner reached maxExpandedStates (${input.options.maxExpandedStates}).`,
@@ -737,17 +578,17 @@ export async function runPlannerBeamSearch(
   if (
     rejections.some(({ reason }) => reason === 'protected_destructive_use')
   ) {
-    addWarning(
+    addPlannerWarning(
       warnings,
       'protected_weapon_required',
       'One or more destructive branches require a protected weapon and were not generated.',
     )
   }
   const bestState = bestComplete ?? bestPartial
-  conflictResolutionWarnings(
+  plannerConflictResolutionWarnings(
     validConflictResolutions,
     discoveredConflictsById,
-  ).forEach(({ kind, message }) => addWarning(warnings, kind, message))
+  ).forEach(({ kind, message }) => addPlannerWarning(warnings, kind, message))
   const termination = createPlannerSearchTermination({
     options: input.options,
     planningTargetIds,
@@ -773,9 +614,7 @@ export async function runPlannerBeamSearch(
     warnings,
     validationIssues: [],
     excludedBuildListEntries,
-    rejections: rejections.sort((left, right) =>
-      compareStableStrings(rejectionKey(left), rejectionKey(right)),
-    ),
+    rejections: sortPlannerRejections(rejections),
     expandedStates,
     completed: bestState !== null && isComplete(bestState),
     cancelled,

@@ -15,6 +15,10 @@ export * from './plannerConflictDetection'
 export * from './plannerEntryRelevance'
 export * from './plannerInitialContext'
 export * from './plannerBeamSearch'
+export * from './plannerEntryPriority'
+export * from './plannerRouteCommitment'
+export * from './plannerSchedulerOrdering'
+export * from './plannerDeterministicScheduler'
 export {
   applyPlannerReserveAction,
   applyPlannerRouteAction,
