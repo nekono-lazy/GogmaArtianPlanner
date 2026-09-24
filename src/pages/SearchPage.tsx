@@ -1,6 +1,7 @@
 import { isTargetWeaponPlanningEligible } from '../domain/models/domainRules'
 import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../domain/models/publicTypes'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { Link as RouterLink } from 'react-router-dom'
 import {
   Alert,
   AlertTitle,
@@ -27,12 +28,25 @@ import { OwnedIdealWeaponNotice } from '../components/target/OwnedIdealWeaponNot
 import { useOwnedIdealCompletion, type OwnedIdealCompletionApi } from '../components/target/useOwnedIdealCompletion'
 import { StatusChip } from '../components/StatusChip'
 import { CandidateCard } from '../components/search/CandidateCard'
+import { BuildListReplacementDialog } from '../components/search/BuildListReplacementDialog'
+import {
+  BUILD_LIST_CHECK_LINK_LABEL,
+  BUILD_LIST_LEGACY_DUPLICATE_LINK_LABEL,
+  BUILD_LIST_LEGACY_DUPLICATE_MESSAGE,
+  BUILD_LIST_REPLACED_MESSAGE,
+  BUILD_LIST_REPLACED_PLAN_ABANDONED_MESSAGE,
+} from '../components/search/buildListReplacementPresentation'
+import {
+  useBuildListCandidateReplacement,
+  type BuildListCandidateReplacementApi,
+} from '../components/search/useBuildListCandidateReplacement'
 import { MasterDataStatusAlert } from '../components/MasterDataStatusAlert'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import type { MasterDataRoot } from '../domain/master/masterTypes'
 import type {
   BuildCandidate,
   BuildListEntry,
+  BuildListEntryId,
   CalculationContext,
   IntermediateStateSelection,
   OwnedGogmaArtianWeapon,
@@ -57,7 +71,10 @@ import {
   targetWeaponRepository,
 } from '../db/repositories'
 import { useSettingsStore } from '../stores/settingsStore'
-import { buildListService, toSearchScreenAddition } from '../services/buildList/buildListService'
+import {
+  buildListService,
+  type AddBuildListCandidateResult,
+} from '../services/buildList/buildListService'
 import {
   TargetWeaponLifecycleService,
   type TargetOwnedIdealCompletion,
@@ -90,7 +107,7 @@ function createSearchRunId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `search-${Date.now()}`
 }
 
-export interface SearchPageDependencies extends OwnedIdealCompletionApi {
+export interface SearchPageDependencies extends OwnedIdealCompletionApi, BuildListCandidateReplacementApi {
   master: MasterDataRoot
   getTargets(): Promise<TargetWeapon[]>
   getOwnedWeapons(): Promise<OwnedWeapon[]>
@@ -115,11 +132,18 @@ export interface SearchPageDependencies extends OwnedIdealCompletionApi {
     calculationContext: CalculationContext
   }): Promise<CandidateSearchInput>
   saveCandidates(targetId: TargetWeapon['id'], candidates: BuildCandidate[]): Promise<unknown>
+  /**
+   * 「作成リストに追加」 (`docs/DATA_MODEL.md` 9.4.1): only `added` wrote
+   * anything. `replacement_required` opens the replacement confirmation, whose
+   * confirmed save is `replaceCandidate()` after `inspectCandidateReplacement()`
+   * (`BuildListCandidateReplacementApi`); `legacy_duplicate` asks the user to
+   * tidy the Build List and never picks an Entry.
+   */
   addCandidate(
     candidate: BuildCandidate,
     target: TargetWeapon,
     intermediateStateSelection: IntermediateStateSelection,
-  ): Promise<{ entry: BuildListEntry; added: boolean }>
+  ): Promise<AddBuildListCandidateResult>
 }
 
 const defaultDependencies: SearchPageDependencies | null = defaultMaster && defaultLifecycleService
@@ -138,15 +162,12 @@ const defaultDependencies: SearchPageDependencies | null = defaultMaster && defa
       createInput: (options) => createCandidateSearchInput(options),
       saveCandidates: (targetId, candidates) =>
         buildCandidateRepository.replaceBuildCandidatesForTarget(targetId, candidates),
-      // The Service result (existing or new Entry, plus whether it was added)
-      // is passed through; its duplicate protection stays the Domain
-      // authority. Until this screen offers the replacement confirmation
-      // (Issue #103 Phase 0-2), a Target that already holds another Entry is
-      // reported as an add failure and nothing is written or replaced.
+      // The Service result is passed through unchanged: the Build List
+      // cardinality and duplicate decisions stay its authority.
       addCandidate: (candidate, target, intermediateStateSelection) =>
-        buildListService
-          .addCandidate(candidate, target, intermediateStateSelection)
-          .then(toSearchScreenAddition),
+        buildListService.addCandidate(candidate, target, intermediateStateSelection),
+      inspectCandidateReplacement: (request) => buildListService.inspectCandidateReplacement(request),
+      replaceCandidate: (request, approval) => buildListService.replaceCandidate(request, approval ?? null),
     }
   : null
 
@@ -154,10 +175,15 @@ interface SearchPageProps {
   dependencies?: SearchPageDependencies
 }
 
-/** Feedback about the last Build List addition, shown beside the Candidate. */
+/**
+ * Feedback about the last Build List addition or replacement, shown beside the
+ * Candidate. `buildListLinkLabel` offers the Build List, where a legacy duplicate is
+ * tidied or a changed Entry is checked.
+ */
 interface AddFeedback {
-  severity: 'info' | 'error'
+  severity: 'info' | 'warning' | 'error'
   message: string
+  buildListLinkLabel?: string
 }
 
 /** The three user-adjustable search bounds (`docs/SEARCH_SPEC.md` 3.1). */
@@ -269,6 +295,46 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
     planGuard,
     targets,
     onApplied: onCompletionApplied,
+  })
+  // An addition in flight: the add button waits, so one click is one decision.
+  const [adding, setAdding] = useState(false)
+  // Re-reads the Build List mirror after the Service refused a replacement:
+  // the Entry the screen showed is no longer the Target's one Entry, so the
+  // add state is taken from the persisted Build List again, never guessed.
+  const reloadBuildListEntries = useCallback(() => {
+    if (!dependencies) return
+    void dependencies.getBuildListEntries()
+      .then(setBuildListEntries)
+      .catch((caught: unknown) => {
+        setLoadError(caught instanceof Error ? caught.message : '作成リストの読み込みに失敗しました。')
+      })
+  }, [dependencies])
+  const onReplacementApplied = useCallback(
+    (entry: BuildListEntry, replacedEntryId: BuildListEntryId, planAbandoned: boolean) => {
+      // The replaced Entry leaves the mirror in the same update the new one
+      // joins it, so the two are never shown side by side.
+      setBuildListEntries((current) => [
+        ...current.filter(({ id }) => id !== replacedEntryId && id !== entry.id),
+        entry,
+      ])
+      setAddFeedback({
+        severity: 'info',
+        message: planAbandoned ? BUILD_LIST_REPLACED_PLAN_ABANDONED_MESSAGE : BUILD_LIST_REPLACED_MESSAGE,
+      })
+    },
+    [],
+  )
+  const onReplacementRefused = useCallback((message: string) => {
+    setAddFeedback({ severity: 'error', message, buildListLinkLabel: BUILD_LIST_CHECK_LINK_LABEL })
+    reloadBuildListEntries()
+  }, [reloadBuildListEntries])
+  // 「作成リストの候補を置き換えますか？」 (`docs/UI_FLOW.md` 9): confirmed on its
+  // own first, then saved through the same breaking-change controller.
+  const replacement = useBuildListCandidateReplacement({
+    api: dependencies ?? null,
+    planGuard,
+    onApplied: onReplacementApplied,
+    onRefused: onReplacementRefused,
   })
 
   useEffect(() => {
@@ -398,27 +464,61 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
       setAddFeedback({ severity: 'error', message: '候補に対応する目標武器が見つかりません。' })
       return
     }
+    if (adding || replacement.pending !== null || planGuard.busy) return
+    // The selection this click registers; a replacement sends exactly it.
+    const intermediateStateSelection = intermediateSelection
+    setAdding(true)
+    setAddFeedback(null)
     try {
-      const added = await dependencies.addCandidate(candidate, target, intermediateSelection)
-      // The Entry the Service returned (new or already existing) is mirrored
-      // so the add state updates at once; the Entry's own selection is never
-      // copied back into this screen's draft.
-      setBuildListEntries((current) =>
-        current.some((entry) => entry.id === added.entry.id) ? current : [...current, added.entry],
-      )
-      // An equivalent Candidate already in the Build List keeps its own
-      // selection: the Search screen never silently overwrites it
-      // (`docs/UI_FLOW.md` 9). The mirrored Entry turns the Candidate's state
-      // to "added", whose permanent guidance already carries the duplicate
-      // sentence, so no second copy of it is shown as feedback.
-      setAddFeedback(
-        added.added ? { severity: 'info', message: 'ビルドリストへ追加しました。' } : null,
-      )
+      const result = await dependencies.addCandidate(candidate, target, intermediateStateSelection)
+      switch (result.status) {
+        case 'added':
+          setBuildListEntries((current) =>
+            current.some(({ id }) => id === result.entry.id) ? current : [...current, result.entry],
+          )
+          setAddFeedback({ severity: 'info', message: 'ビルドリストへ追加しました。' })
+          return
+        case 'duplicate':
+          // An equivalent Candidate already in the Build List keeps its own
+          // selection: nothing was written (`docs/UI_FLOW.md` 9). The mirrored
+          // Entry turns the Candidate's state to "added", whose permanent
+          // guidance already carries the duplicate sentence, so no second copy
+          // of it is shown as feedback. The Entry's own selection is never
+          // copied back into this screen's draft.
+          setBuildListEntries((current) =>
+            current.some(({ id }) => id === result.entry.id) ? current : [...current, result.entry],
+          )
+          return
+        case 'replacement_required':
+          // Nothing was written: the user confirms the replacement first.
+          replacement.begin({
+            request: {
+              candidate,
+              target,
+              intermediateStateSelection,
+              expectedExistingEntryId: result.existingEntry.id,
+            },
+            existingEntry: result.existingEntry,
+          })
+          return
+        case 'legacy_duplicate':
+          // Which Entry is the Target's current one is unknown, so the screen
+          // neither adds nor replaces and never picks one: the user keeps one
+          // in the Build List (`docs/DATA_MODEL.md` 9.4.1).
+          setAddFeedback({
+            severity: 'warning',
+            message: BUILD_LIST_LEGACY_DUPLICATE_MESSAGE,
+            buildListLinkLabel: BUILD_LIST_LEGACY_DUPLICATE_LINK_LABEL,
+          })
+          return
+      }
     } catch (caught: unknown) {
       setAddFeedback({
         severity: 'error',
         message: caught instanceof Error ? caught.message : 'ビルドリストへの追加に失敗しました。',
       })
+    } finally {
+      setAdding(false)
     }
   }
 
@@ -666,8 +766,28 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
                   intermediateStateSelection={intermediateSelection}
                   onIntermediateStateSelectionChange={setIntermediateSelection}
                   onAdd={(selected) => void addToBuildList(selected)}
+                  addDisabled={adding || replacement.pending !== null || planGuard.busy}
                   addFeedback={
-                    addFeedback && <Alert severity={addFeedback.severity}>{addFeedback.message}</Alert>
+                    addFeedback && (
+                      <Alert severity={addFeedback.severity}>
+                        <Stack spacing={1.5} sx={{ alignItems: 'flex-start' }}>
+                          <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                            {addFeedback.message}
+                          </Typography>
+                          {addFeedback.buildListLinkLabel && (
+                            <Button
+                              component={RouterLink}
+                              to="/build-list"
+                              variant="outlined"
+                              color="inherit"
+                              sx={{ minHeight: 44 }}
+                            >
+                              {addFeedback.buildListLinkLabel}
+                            </Button>
+                          )}
+                        </Stack>
+                      </Alert>
+                    )
                   }
                 />
               )}
@@ -713,6 +833,17 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
           onCancel={completion.cancel}
           onConfirm={() => void completion.confirm()}
         />
+        {masterForDisplay && (
+          <BuildListReplacementDialog
+            pending={replacement.pending}
+            master={masterForDisplay}
+            ownedWeapons={ownedWeapons}
+            submitting={replacement.submitting}
+            error={replacement.error}
+            onCancel={replacement.cancel}
+            onConfirm={() => void replacement.confirm()}
+          />
+        )}
         <PlanBreakingChangeDialog controller={planGuard} />
       </Stack>
     </PageShell>

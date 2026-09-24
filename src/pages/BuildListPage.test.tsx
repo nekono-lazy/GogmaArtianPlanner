@@ -687,6 +687,69 @@ describe('BuildListPage presentation', () => {
     ])
   })
 
+  describe('legacy duplicate guidance (docs/DATA_MODEL.md 9.4.1)', () => {
+    const DUPLICATE_TITLE = '候補が複数登録されています'
+    const DUPLICATE_LINE =
+      'この目標武器には作成リストの候補が複数登録されています。生産計画の作成と再計画の試算には、使用する候補を1件にする必要があります。'
+
+    function duplicateFixture(staleSecond: boolean) {
+      const target = createValidTargetWeapon()
+      const other = { ...createValidTargetWeapon(), id: 'target.fixture.other' as typeof target.id, name: 'Other fixture target' }
+      const a1 = createBuildListEntry(createValidBuildCandidate(), target, {
+        id: buildListEntryId('build-list.dup.a1'),
+        createdAt: '2026-09-01T00:00:00.000Z',
+      })
+      const a2 = createBuildListEntry(
+        { ...createValidBuildCandidate(), id: candidateId('candidate.fixture.dup.second') },
+        target,
+        { id: buildListEntryId('build-list.dup.a2'), createdAt: '2026-09-02T00:00:00.000Z' },
+      )
+      if (staleSecond) {
+        a2.isStale = true
+        a2.staleReasons = ['rng_state_changed']
+      }
+      const b1 = createBuildListEntry(
+        { ...createValidBuildCandidate(), id: candidateId('candidate.fixture.other'), targetWeaponId: other.id },
+        other,
+        { id: buildListEntryId('build-list.other.b1'), createdAt: '2026-09-03T00:00:00.000Z' },
+      )
+      const deps = dependencies()
+      deps.refresh = vi.fn(async () => ({ entries: [a1, a2, b1], targets: [target, other], ownedWeapons: [] }))
+      return { deps, a1, a2 }
+    }
+
+    it.each([
+      ['two current Entries', false],
+      ['a stale and a current Entry', true],
+    ])('marks the Target holding %s, recommends neither, and clears the guidance once one is left', async (_label, staleSecond) => {
+      const user = userEvent.setup()
+      const { deps, a1 } = duplicateFixture(staleSecond)
+      renderPage(deps)
+
+      const group = await screen.findByRole('region', { name: /Domain fixture target/ })
+      expect(within(group).getByText('要整理')).toBeInTheDocument()
+      expect(within(group).getByText(DUPLICATE_TITLE)).toBeInTheDocument()
+      expect(within(group).getByText(DUPLICATE_LINE)).toBeInTheDocument()
+      // Both Entries stay listed and deletable; nothing is picked for the user.
+      expect(within(group).getAllByRole('heading', { level: 4, name: '理想候補' })).toHaveLength(2)
+      expect(within(group).getAllByRole('button', { name: 'ビルドリストから削除' })).toHaveLength(2)
+      expect(within(group).queryByText(/おすすめ|推奨/)).toBeNull()
+      // A Target with one Entry carries no guidance.
+      const otherGroup = screen.getByRole('region', { name: /Other fixture target/ })
+      expect(within(otherGroup).queryByText('要整理')).toBeNull()
+      expect(within(otherGroup).queryByText(DUPLICATE_TITLE)).toBeNull()
+
+      // The ordinary guarded delete tidies it.
+      await user.click(within(group).getAllByRole('button', { name: 'ビルドリストから削除' })[0]!)
+      expect(deps.inspectEntryDelete).toHaveBeenCalledWith(a1.id)
+      expect(deps.deleteEntry).toHaveBeenCalledWith(a1.id, null)
+      await waitFor(() => expect(within(group).queryByText(DUPLICATE_TITLE)).toBeNull())
+      expect(within(group).queryByText('要整理')).toBeNull()
+      expect(within(group).getAllByRole('heading', { level: 4, name: '理想候補' })).toHaveLength(1)
+      expect(within(group).getByText('候補 1件')).toBeInTheDocument()
+    })
+  })
+
   it('shows a load failure as an error, not as an empty Build List', async () => {
     const deps = dependencies()
     deps.refresh = vi.fn(async () => {

@@ -31,7 +31,6 @@ import type { PlanGuardedPersistence } from '../execution/planBreakingChangeGuar
 import {
   BuildListCardinalityError,
   BuildListService,
-  toSearchScreenAddition,
   type BuildListCandidateReplacementRequest,
   type BuildListServiceRepositories,
 } from './buildListService'
@@ -392,34 +391,6 @@ describe('Build List cardinality (docs/DATA_MODEL.md 9.4.1)', () => {
     const reAdded = await new BuildListService(memory.repositories).addCandidate(first, target)
     expect(reAdded.status).toBe('legacy_duplicate')
     expect(memory.entries).toEqual(before)
-    const refused = (() => {
-      try {
-        toSearchScreenAddition(reAdded)
-        return null
-      } catch (caught: unknown) {
-        return caught
-      }
-    })()
-    expect(refused).toBeInstanceOf(BuildListCardinalityError)
-    expect((refused as BuildListCardinalityError).code).toBe('legacy_duplicate_entries')
-    expect(memory.entries).toEqual(before)
-  })
-
-  it('keeps the Search screen contract until the replacement confirmation exists', async () => {
-    const memory = memoryRepositories()
-    const service = new BuildListService(memory.repositories)
-    const { first, second, target } = twoCandidates()
-
-    expect(toSearchScreenAddition(await service.addCandidate(first, target)).added).toBe(true)
-    expect(toSearchScreenAddition(await service.addCandidate(first, target)).added).toBe(false)
-    const refused = await service.addCandidate(second, target)
-      .then(toSearchScreenAddition)
-      .catch((caught: unknown) => caught)
-    expect(refused).toBeInstanceOf(BuildListCardinalityError)
-    expect((refused as BuildListCardinalityError).code).toBe('replacement_confirmation_unavailable')
-    expect(memory.entries).toHaveLength(1)
-    expect(() => toSearchScreenAddition({ status: 'legacy_duplicate', entries: [] }))
-      .toThrow(BuildListCardinalityError)
   })
 
   describe('replaceCandidate', () => {
