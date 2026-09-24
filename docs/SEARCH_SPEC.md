@@ -2119,6 +2119,29 @@ Search側は「この候補は作成リストに追加済みです。途中採�
 - 初期版ではRoute成立に使用したRNG状態が変わった場合、安全側に倒してstaleにする
 - staleなBuildListEntryはPlannerへ渡さない
 
+### 10.1 同じTargetの別Candidateの追加（次期契約）
+
+実装状態: **未実装（次期契約）**。Issue #103のPhase 0で実装する。契約本文は
+[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1（永続Build Listは1 Targetにつき最大1 Entry）。現行Productionは
+同じTargetの別Candidateを別Entryとして追加する。
+
+「作成リストに追加」の結果は次のいずれかになる。
+
+| 状態 | 結果 |
+| --- | --- |
+| 同じTargetのEntryが無い | 追加する（上記のとおり） |
+| 同一semanticのCandidateのEntryがある | duplicate。何も書かず、既存Entryの選択・改善優先を上書きしない。上記の追加済み案内を出す |
+| 同じTargetに別CandidateのEntryが1件ある | 置換の確認が必要。承認時だけ、既存Entryを新Candidateと今回の選択から作ったEntryでatomicに置換する。キャンセル時は何も書かない |
+| 同じTargetにEntryが2件以上ある（legacy duplicate） | 追加も置換もしない。作成リストで1件に整理するよう案内する |
+
+- 置換は1つの意味的操作であり、Search画面が旧Entry削除と新Entry追加を別々に呼ばない
+- 旧Entryの途中採用状態・改善優先は引き継がない。旧Routeのcheckpointを新Routeの似た位置へ
+  自動変換しない
+- 置換が `active` PlanのPlan依存Entryを消す場合は、既存のPlan-breaking警告を経る
+  （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.6）
+- Candidate Search自体（canonical Idealの決定、preferred sourceのtie-break、8.1）は変更しない。
+  どのCandidateを採用するかは、置換確認でユーザーが決める
+
 ---
 
 ## 11. Worker

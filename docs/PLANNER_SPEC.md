@@ -188,7 +188,12 @@ validatePlannerInput()
   除外されたEntryは計画対象Targetを作らない
 - valid BuildListEntryが1件もないTargetは、Build List上にEntryがあってもそのrunの計画対象外である
 - 同一Targetに複数のvalid Entryがあっても計画対象Targetは1件として数える。どのEntryのRouteを
-  採用するかは従来のRoute選択semanticsのままである
+  採用するかは従来のRoute選択semanticsのままである（現行Production）
+- 次期契約（未実装、[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1）: 永続Build Listは1 Targetにつき最大1 Entry
+  であり、通常のPlannerInputはそれを継承する。Plannerは同一Targetの複数Entryから選ばない。
+  通常のPlannerInputで同一planning Targetのvalid Entryが2件以上ある場合（legacy duplicate、malformed入力）は、
+  どれかを選んで続行せず、validation issueと専用warningでPlanner入力全体をfail closedする。
+  例外はconstrained re-search / what-ifのtemporary augmented inputだけである（9.2.18）
 - 作成リストに有効な候補が無い有効・未完了Targetは、所持武器ですでにIdealかどうかにかかわらず、
   そのrunの完了条件、typed terminationの分母、TargetSatisfactionの追跡、score、conflict
   detectionのいずれにも入らない。計画中に確保した武器がそのTargetの条件を偶然満たしても達成と
@@ -352,6 +357,11 @@ export interface PlannerTargetSatisfaction {
 ## 7. Beam Searchと評価関数
 
 初期版Plannerは上限付きBeam Searchを使用する。Candidate Scoreだけの単純ソートでは採用順を確定しない。
+
+Issue #103の次期Planner設計（Route commitment + 決定的scheduling）は
+[ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md) を参照する。
+同文書は未実装のtarget designであり、Production routingを切り替える実装PRで本章を改訂するまで、
+本章のBeam Searchが現行Productionの契約である。
 
 ```ts
 export interface PlannerSearchState {
@@ -1021,6 +1031,12 @@ semantic pruningではない。
 
 ### 7.4 Plan preference: Targetの優先起点
 
+（現行Production。Issue #103の次期Planner設計では、Build Listが1 Targetにつき1 Routeになるため
+通常Plannerにpreferredを理由に選べるRouteが無くなり、本節のPlanner側preferenceは撤去する。
+preferredはCandidate Search / constrained enumerationのtie-break（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 8.1）と
+planning input hashに残る。撤去はscheduler切替PRで本節を改訂して行う。
+[ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md) 6.7）
+
 `TargetWeapon.preferredOwnedWeaponId`（[DATA_MODEL.md](./DATA_MODEL.md) 8.5）は、Plannerでも
 hard constraintにしない。correctness、選択済みcheckpointの充足、Target satisfaction、
 Target priority、operation / resource / conflict cost、実行可能性はすべてpreferredより上位
@@ -1281,6 +1297,10 @@ Beam Searchの結果がrequired Entryをsecureしていない場合、またはs
 失敗し、Draft Planを作らない。
 
 #### 7.5.7 1 Targetにつき選択を持つEntryは最大1件
+
+注記: 次の「同一TargetにBuildListEntryが複数存在すること自体は許可する」は現行Productionの記述である。
+次期契約（未実装）では永続Build List自体が1 Targetにつき最大1 Entryになり（[DATA_MODEL.md](./DATA_MODEL.md)
+9.4.1）、本節は通常入力では自明に満たされる。本節の検証はlegacy / malformed入力への防御として残す。
 
 同一TargetにBuildListEntryが複数存在すること自体は許可する。ただし選択を持つEntryが
 同一Targetに2件以上ある場合、ユーザーが2本のRouteを両方必須にしたのか代替として
@@ -3307,6 +3327,8 @@ PlanStepのcandidateIdとEntry Snapshot
 - 削除するのはDraft recordだけである。旧Draftが参照していたBuildListEntry / BuildCandidate /
   TargetWeaponをcascade deleteしない（Entry ownershipのauthorityが無く、generated Entryも既存
   Entryとreuseされ得るため）。`active` / `stale` / `completed` / `abandoned` のPlanも削除しない
+- 次期契約（未実装、9.2.18）: 正式採用したgenerated Entryは失う側Targetの元Entryを置換する。
+  これはDraft置換のcascade deleteではなく、Build List cardinalityの置換である
 - `plan === null` の結果は何も書かず、旧Draftを維持する
 
 Active Plan単一制約、置換、破棄、再計算は従来どおりApplication / Persistence層の
@@ -3584,6 +3606,105 @@ prefixのsilent fast-forward修正で4へ更新されており、7.0.1のPlan失
 - 既存Plan実行の意味を変更しない
 
 実装時にこれらの前提を破る必要が判明した場合、勝手にversionを変更せず設計チャットへ戻す。
+
+### 9.2.18 Build List cardinalityとの関係（次期契約）
+
+実装状態: **未実装（次期契約）**。Issue #103のPhase 0で実装する
+（[ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md) 17章）。
+現行Productionでは、正式採用したgenerated Entryを元Entryに **追加** して保存し（9.2.15）、trialは元Entryと
+generated Entryを含むaugmented inputそのものでPlanを計算する。
+
+永続Build Listは1 Targetにつき最大1 Entryである（[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1）。本節は
+constrained re-search（B8）、what-if（B9）、再計画Preview / 採用（16.8）がこのinvariantとどう
+接続するかを定める。9.2.1〜9.2.17の固定authority、preflight、再対応付け、monotonic adoption、
+bounds、決定的IDの契約は、本節で明示した点を除いて変更しない。
+
+#### 永続invariantとtemporary augmented input
+
+```text
+Persisted Build List
+    1 Target = 最大1 Entry
+
+ordinary PlannerInput
+    persisted invariantをそのまま継承（違反はfail closed、4.1）
+
+constrained re-search / what-if trial
+    元Entry + temporary generated Entry を temporary augmented input として許可
+
+trial不採用
+    generated Entryは永続化しない（従来どおり）
+
+trial採用
+    generated Entryで元Entryを置換して永続化
+```
+
+- augmented inputで許すのは「1 Targetにつきpersisted Entry 0..1件 + temporary Entry 0..1件」だけである。
+  temporary Entryが同一Targetに2件以上、persisted Entryが同一Targetに2件以上のいずれかはfail closedする
+- どのEntryがtemporaryかは、orchestrationがPlanner内部の非永続情報として渡す。`BuildListEntry` に
+  provenance fieldを追加せず、Worker public requestやUIから受け取らない。生成元をPlanner
+  scheduling semanticsへ持ち込まない
+- temporary Entryを持つTargetでは、temporary Entryだけがそのrunの実行候補であり、元Entryは実行・
+  progress・secureの候補にならない。B8の作業は元Entryが明示resolutionで非選択になった競合からだけ
+  生じるためである。通常Planner用のcost ranking（操作数、preferred source、ID）で両者を比較しない
+- generated Entryはfixed側へ昇格しない（9.2.3.1、既存）。resolutionが選択するのは常にpersisted Entryである。
+  resolution集合が同一Targetの異なるEntryを選択している場合はfail closedする
+
+#### 置換後集合での計算と記録
+
+元Entry `O` をtemporary Entry `G` で置き換えたEntry集合を **置換後集合** と呼ぶ。
+
+- `O` はpreflightでユーザーのfixed constraintを再対応付けするためにaugmented contextへ残す
+  （どの永続Entryを置換するか、どのfixed constraintがこの置換で充足されるかの同定）
+- preflight以後のPlanner run（初期conflict detection、Beam Search / scheduler、Trace Replay、
+  `PlanConflict`、`rejectedBuildListEntries`、`PlanningInputSnapshot`）は置換後集合で行う。
+  `O` は実行されないので、`O` を含めても含めなくても実行内容は変わらず、置換後集合で計算すると
+  保存されるPlanが「採用後の永続Build List」だけを参照する
+- 置換後集合でのfixed constraint再対応付けは9.2.3.1の規則に従う。ただし次の1点だけを追加する:
+  あるfixed constraintが置換後集合で一致0件であり、かつ元の競合のfixed Entry以外のparticipantが
+  すべてこのaugmentationで置換されたEntryである場合、そのfixed constraintは **置換で充足済み** とし、
+  resolutionを再構築しない（ユーザーの選択は、失う側を代替Routeへ置き換えることで実現されている）。
+  それ以外の一致0件、一致複数、fingerprint不一致、fixed Entryのvalidation除外は従来どおり
+  推測せずfail closedする。他のユーザー明示resolutionを黙って捨てない規則は変わらない
+- 置換後集合で `G` が別の競合に参加すれば、それは通常の競合として扱う。monotonic adoption条件
+  （9.2.14）を満たさなければtrialは不採用である
+
+これにより、採用後に `O` を削除しても、保存されたPlanの `conflicts`、`rejectedBuildListEntries`、
+Stepが削除済みEntryを参照しない。表示中Planから復元するexplicit resolution（9.2.4.14）の
+`conflictKey` も採用後のBuild Listで再検出されるIDになる。
+
+#### 採用時の永続化（9.2.15の置換）
+
+```text
+既存Draft全削除
++ 元Entry O の削除 と generated Entry G の追加（Targetごとの置換）
++ 新Draft追加
+```
+
+を1つのDexie read-write transactionで行う。
+
+- 置換は既存の保存直前再読込・再validationの一部として行う。transaction内で、各generated Entryの
+  Targetの永続Entryが、計算時に置換対象とした `O` 1件であることを確認し、異なれば
+  `planner_state_changed` 相当で何も書かない
+- `O` が `active` PlanのPlan依存Entryである場合、置換は既存Plan-breaking guard（16.6）の判定対象である。
+  guardを迂回せず、承認が無ければ何も保存しない（`plan_breaking_change_approval_required` とinspection）。
+  承認時は16.10の選択を経て、Draft保存・Entry置換・active Planの `abandoned`
+  （`breaking_change_approved`）を同一transactionで行う。`O` を参照するのがDraft / stale / 終了済みPlanだけ
+  なら、既存のEntry削除と同じくguard対象にしない
+- 再計画採用（16.8）では、旧実行中Planを `abandoned`（`replan_adopted`）にするのと同じtransactionで
+  置換する。旧実行中Planは採用で終了するため、`O` がそのPlan依存Entryであっても別の警告を追加しない。
+  他の実行中Planは存在し得ない（16.8の既存検証）
+- `O` を参照するBuildCandidate / TargetWeapon / OwnedWeaponをcascade deleteしない
+- generated Entryの `intermediateStateSelection` はmaterializerの既定値（両laneとも未選択、`planner`）
+  である。`O` の途中採用状態・改善優先を引き継がない（checkpointを持つTargetはそもそも再検索しない、9.5.2）
+- `plan === null` や採用不可のresultでは何も永続化しない（従来どおり）
+
+#### version
+
+本節はversionを変更しない（[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1）。新しく保存するPlanの
+`conflicts` / `rejectedBuildListEntries` / `buildListEntriesHash`（監査用）が置換後集合を表すように
+なるが、既存Planの互換性は壊さない。既存version 13 Draftの `conflicts` が、その後に整理された
+元Entryを参照していてB10で再現できない場合は、既存の `invalid_conflict_resolution` fail closedと
+再計算導線で扱う。
 
 ---
 
@@ -4932,8 +5053,8 @@ ProductionPlanには適用しない）。
 - 新しいTargetWeaponを追加する
 - Plan非依存Targetを変更・無効化・削除する
 - Candidate Searchを実行する（16.7）
-- Build Listへ新規Entryを追加する
-- Plan非依存EntryのBuild List操作（途中採用状態の変更、削除など）
+- Build Listへ新規Entryを追加する（同じTargetのEntryが無い場合）
+- Plan非依存EntryのBuild List操作（途中採用状態の変更、削除、次期契約の置換など）
 - 所持武器のstatusだけを変更する
 - 名称、memoなど非semanticな項目だけを変更する
 - ゲーム内でセーブして中断する
@@ -4942,7 +5063,8 @@ ProductionPlanには適用しない）。
 
 - Plan依存Targetの性能定義（`createTargetDefinitionHash()` の対象、16.11）、`priority`、
   検索対象ON/OFF（`isEnabled`）、`lifecycleStatus`、`preferredOwnedWeaponId` を変更する
-- Plan依存Entry（`selectedBuildListEntryIds`）の削除、途中採用状態・改善優先の変更
+- Plan依存Entry（`selectedBuildListEntryIds`）の削除、途中採用状態・改善優先の変更、
+  次期契約（[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1、未実装）の置換で旧Entryとして消えること
 - Planが追跡するOwnedWeapon（execution scope、16.9）のsemantic項目（保護、5枠、Skill、
   武器種、属性など）を計画外で変更、または削除する
 - RngState、NormalArtianCounterを手動変更する（RNG Setupの直接入力、Identification Wizardの
@@ -4965,7 +5087,10 @@ ProductionPlanには適用しない）。
   Entry削除は、すべて同じguard（`PlanBreakingChangeGuard`）を通る1つのDexie transactionで保存する。
   各変更は「保存時の永続状態 -> 変更後状態」の純関数（変更自身のvalidationと既存の参照保護を含む）として
   表し、guardは変更を先に適用・検証してからPlanの扱いを判定する。Build Listへの新規追加と
-  staleness再評価（`isStale` / `staleReasons` のderived metadata）はPlanを壊さないためguardを通さない
+  staleness再評価（`isStale` / `staleReasons` のderived metadata）はPlanを壊さないためguardを通さない。
+  次期契約（[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1、未実装）の「同じTargetのEntryの置換」は旧Entryの削除を
+  伴うため新規追加とは扱わず、旧Entry削除と新Entry追加の全体を1つのguarded mutationとしてこのguardで判定する。
+  constrained re-searchの採用時の置換も同様にguardを迂回しない（9.2.18）
 - 判定対象は `active` Planだけである。`active` / `stale` のPlanが2件以上ある場合は推測で選ばず拒否する
   （`running_plan_invariant_violated`）。`stale` Planや実行中Planが無い場合は警告せず通常保存し、Plan、
   セーブ地点、ExecutionHistory、作成中状態を変更しない

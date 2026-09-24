@@ -1304,7 +1304,9 @@ export type BuildListEntryStaleReason =
   ([PLANNER_SPEC.md](./PLANNER_SPEC.md) 7.5.6)
 - Planner入力のcollection-level invariantとして、1 Targetにつき選択を持つvalid Entryは
   最大1件とする。2件以上はPlanner入力をfail closedし、Build Listで片方の選択解除を求める。
-  永続データとして複数Entryが共存すること自体は禁止しない(同 7.5.7)
+  現行Productionでは永続データとして複数Entryが共存すること自体は禁止しない(同 7.5.7)。
+  次期契約では永続Build List自体が1 Targetにつき最大1 Entryになる(9.4.1)。この規則は
+  legacy / malformed入力への防御として残る
 - 上記の選択構造validationは `validateBuildListEntryIntermediateStateSelection()`
   として共有され、`validateBuildListEntry()` とPlanner入力validationの両方が呼ぶ。
   Plannerは壊れた選択を「選択なし」と解釈せず、入力をfail closedする(同 7.5.9)
@@ -1345,6 +1347,95 @@ deriveBuildListEntryStaleReasons(
 
 `isStale` はこの戻り値が1件以上かどうかと一致させる。
 
+### 9.4.1 Build List cardinality（1 Target = 最大1 Entry、次期契約）
+
+実装状態: **未実装（次期契約）**。Issue #103のPhase 0（Build List cardinalityの実装PR群、
+[ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md) 17章）で実装する。
+現行Productionは同一TargetWeaponに複数のBuildListEntryを永続化でき、Plannerはそれらを
+現行のRoute選択semantics（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 4.1）で扱う。本節は実装PRで
+この注記を外すまで、現行Productionの挙動説明ではなく次期契約の定義である。
+
+#### collection invariant
+
+```text
+同一 targetWeaponId を持つ永続BuildListEntryは最大1件
+```
+
+- これはBuild List自体の契約である。Plannerの都合ではなく、「作成リストは目標武器ごとに、
+  ユーザーが現在採用した作成ルートを1件だけ持つ」ことを表す
+- staleなEntryも数える。stale Entryは同じTargetの新しいEntryと並べて残さず、置換で入れ替える
+- 生成主体（ユーザー追加 / Planner constrained re-searchの採用）を区別する永続provenance fieldは
+  追加しない。正式採用後はどちらも「そのTargetの現在のBuildListEntry」である
+- 通常のPlannerInputはこのinvariantをそのまま継承する。constrained re-search / what-ifの
+  temporary augmented inputだけが、元Entryとtemporary generated Entryの一時的な共存を許される
+  例外であり、永続化されない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18）
+
+#### Candidate Searchからの追加と置換
+
+ユーザーがCandidate Search結果を作成リストへ追加するときの意味論は次のとおりとする
+（画面上の流れは[SEARCH_SPEC.md](./SEARCH_SPEC.md) 10.1 / [UI_FLOW.md](./UI_FLOW.md) 9）。
+
+| 永続Build Listの状態 | 結果 |
+| --- | --- |
+| 同じTargetのEntryが無い | 従来どおり新Entryを追加する |
+| 同一semanticのCandidateのEntryが既にある | duplicate。何も書かず、既存Entryの途中採用状態・改善優先を上書きしない（9.4の既存規則） |
+| 同じTargetに別CandidateのEntryが1件ある | ユーザーの確認を経て、承認時だけ既存Entryを新CandidateのEntryで **置換** する。キャンセル時は何も変更しない |
+| 同じTargetにEntryが2件以上ある（legacy duplicate） | どれを置換するか推測できないため追加も置換も拒否し、先に1件へ整理するよう案内する |
+
+置換の規則。
+
+- 置換は `replace BuildListEntry for Target` という1つの意味的操作であり、UIから「旧Entry削除」と
+  「新Entry追加」を別々に実行しない。旧Entryの削除と新Entryの追加は1つのDexie read-write
+  transactionで行い、「旧Entryだけ消えた」「新Entryだけ増えた」中間状態を作らない
+- 要求はユーザーが確認画面で見た置換対象の旧Entry IDを持つ。transaction内で永続状態を読み直し、
+  そのTargetのEntryがその旧Entry 1件でない場合（別タブで変更された等）は何も書かずに拒否する
+- 新Entryは新Candidateと、今回のSearch画面でユーザーが指定した途中採用状態・改善優先だけから
+  `createBuildListEntry()` で作る。旧Entryの `intermediateStateSelection`（Skill / Bonusの途中採用状態、
+  改善優先）は旧Route固有の入力であり、引き継がない。旧Routeのcheckpointを新Routeの似た位置へ
+  自動変換することを禁止する
+- 新EntryのIDは既存どおり新Candidateから生成し、旧Entry IDを再利用しない。旧IDのレコードを別内容で
+  上書きしない
+- 置換後の状態に対してcollection invariantと新Entryのentity validationを検証し、失敗したら
+  何も書かない
+- 置換対象の旧Entryを参照するBuildCandidate / TargetWeapon / OwnedWeaponをcascade deleteしない
+
+#### 実行中PlanとDraft Planとの関係
+
+置換は旧Entryの削除を伴うため、「新規追加だけだから安全」とは扱わない。
+
+- 置換全体を1つのguarded mutation（`PlanGuardedMutation`）として既存 `PlanBreakingChangeGuard` で
+  判定する（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.6）。旧Entryが `active` PlanのPlan依存Entry
+  （`selectedBuildListEntryIds`）であれば `build_list_changed` の警告になり、16.10のセーブ地点選択を
+  経て承認された場合だけ、置換とPlanの `abandoned`（`breaking_change_approved`）を同一transactionで
+  行う。承認が無ければ何も変更しない
+- 旧Entryを参照するのが `draft` / `stale` / `completed` / `abandoned` Planだけの場合は、既存の
+  Build List Entry削除と同じくguardの警告対象にしない。Draftの開始可否は
+  `prepareProductionPlanStart()` の既存検証が判断する
+- 同じTargetにEntryが無い場合の新規追加は、従来どおりPlanを壊さないためguardを通さない
+
+#### legacy duplicate（既存データ）
+
+次期契約の導入時点で、既存ユーザーデータには同一Targetの複数Entryが存在し得る（現行Productionの
+通常操作と、constrained re-searchの採用で生じる）。
+
+- 自動で残すEntryを選ばない。最短Route、最新 `createdAt`、ID順、stale状態などで推測して削除・
+  選択しない。Dexie migrationで整理しない
+- 読込は非破壊とする。Build Listは該当Targetに「複数の候補が登録されています。使用する候補を
+  1件にしてください。」相当の案内を表示し、ユーザーが既存のEntry削除（guarded）で整理する
+- ordinary Planner入力は、同一planning TargetのEntryが2件以上あればfail closedする
+  （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 4.1）。Planner実行、再計画Preview、B10の再計算も同じ
+- Search画面からの追加 / 置換は上表のとおり拒否する
+- Export / Importはlegacy duplicateを含むrootをそのまま保存・復元する。Importはこれを理由に
+  拒否しない（backupを復元できなくしない）。Import後も上記のfail closedと案内が働く
+
+#### version
+
+`DATABASE_SCHEMA_VERSION`、`ExportRoot.schemaVersion`、`CURRENT_CALCULATION_APP_SCHEMA_VERSION`、
+`RngState.schemaVersion`、`AppSettings.schemaVersion` のいずれも変更しない。永続shapeとExport shapeは
+変わらず、legacy duplicateを整理するmigrationも持たない。有効な入力に対する計算semanticsも変わらず、
+既存のBuildCandidate / BuildListEntry / ProductionPlanは自身の記録のまま有効である
+（[ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md) 15.1）。
+
 ### Planner-generated BuildListEntry
 
 B8-Aで、BuildListEntryの生成主体を次の2つへ拡張した。契約本文は
@@ -1365,6 +1456,9 @@ B8-Aで、BuildListEntryの生成主体を次の2つへ拡張した。契約本�
   PlannerInputへ正式採用したEntryだけを、生成された `ProductionPlan` と同一
   Dexie transactionで保存する
 - ProductionPlanが生成されない場合、generated Entryを永続化しない
+- 次期契約（9.4.1、未実装）: 正式採用したgenerated Entryは、失う側Targetの元Entryに追加せず、
+  元Entryを **置換** して同一transactionで保存する。永続Build Listは採用後も1 Targetにつき1件である
+  （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18）
 
 generated BuildListEntry IDは、少なくとも次から安定生成する。
 
@@ -1385,6 +1479,9 @@ ID一致で内容が異なる場合はfail closedとし、上書きしない。T
 OwnedWeapon参照状態、CalculationContextのいずれかが現在値と異なるstale Entryは、
 再利用も上書きもせず履歴としてそのまま残し、現在のCandidateには新しいEntryを作成する。
 過去のProductionPlanが旧Entry IDとSnapshotを参照しているためである。
+次期契約（9.4.1）でも「既存IDを別内容で上書きしない」規則は変わらない。ただし同じTargetの
+Entryを2件並べて残すことはせず、置換（新IDの追加と旧IDの削除を1 transaction）で入れ替える。
+旧IDを参照する終了済みPlanは履歴であり、current foreign keyとして扱わない（15.2）。
 
 Candidate semantic identityにはrestoration bonus scopeを含める。現行の
 `createBuildCandidateMeaningFingerprint()` はscopeを含まないため、B8実装時に
@@ -2303,6 +2400,10 @@ Planner constrained re-searchを経たPlan保存も原子的に行う。契約�
 - 削除するのはDraft recordだけであり、旧Draftが参照していたBuildListEntry / BuildCandidate /
   TargetWeaponをcascade deleteしない。`active` / `stale` / `completed` / `abandoned` のPlanも
   削除しない
+- 次期契約（9.4.1、未実装）: 同じtransactionで、正式採用したgenerated Entryが失う側Targetの
+  元Entryを置換する（元Entryの削除 + generated Entryの追加）。これはDraft置換に伴うcascade deleteでは
+  なく、Build List cardinalityの置換である。元Entryが `active` PlanのPlan依存Entryなら、既存
+  Plan-breaking guardを迂回しない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18）
 
 新しいtableもDexie schema versionの変更も伴わない。`buildListEntries` と
 `productionPlans` の既存tableをそのまま使う（Draft最大1件契約自体はDexie v8で既存Draftを
@@ -2420,6 +2521,9 @@ Import時は以下の順序で検証する。
    ExecutionSavePoint snapshotのrestore必須参照（12.1、15.3）はこの規則で緩めない
 8. CalculationContextの形式が正しい
 
+同一TargetWeaponに複数のBuildListEntryを持つroot（legacy duplicate、9.4.1）は、次期契約の導入後も
+Importで拒否しない。自動整理もせずそのまま復元し、Planner入力のfail closedとBuild Listの案内に委ねる。
+
 Import方式。
 
 - 初期版は全置換Importのみ
@@ -2532,6 +2636,8 @@ Production RNG契約切替時の互換性は次のとおりとする。
 - 復元ボーナス比較は順不同
 - 検索候補はTargetWeaponに紐づく
 - BuildCandidateとBuildListEntryは別Entity
+- 次期契約（9.4.1、未実装）: 同一TargetWeaponの永続BuildListEntryは最大1件。別Candidateの採用は
+  確認付きのatomicな置換で行い、legacy duplicateは自動整理せずfail closedする
 - Planner対象はstaleでないBuildListEntryのみ
 - 実行中Plan（active / stale）は同時に1件まで。一時中断用statusは持たない
 - 未開始Plan（draft）はtop-level collectionに同時に1件まで。新Draftの保存成功時だけ旧Draftを同一transactionで
