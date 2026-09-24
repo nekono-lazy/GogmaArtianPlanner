@@ -1118,6 +1118,7 @@ function initialFailureResult(
   warnings: PlannerWarning[],
   issues: DomainValidationIssue[],
   excludedBuildListEntries: ExcludedBuildListEntry[],
+  planningTargetIds: readonly TargetWeaponId[],
 ): PlannerBeamSearchResult {
   return {
     bestState: null,
@@ -1133,7 +1134,7 @@ function initialFailureResult(
     // the input was rejected is reported by its own validation warnings.
     termination: createUnsearchedPlannerTermination(
       input.options,
-      input.targetWeapons,
+      planningTargetIds,
     ),
   }
 }
@@ -1150,6 +1151,7 @@ export async function runPlannerBeamSearch(
       prepared.warnings,
       prepared.issues,
       prepared.excludedBuildListEntries,
+      prepared.planningTargetIds,
     )
   }
   const {
@@ -1160,27 +1162,56 @@ export async function runPlannerBeamSearch(
     initialConflictDetection,
     initialState: preparedInitialState,
     routeUnitCountByEntryId,
-    targets,
-    targetsById,
+    planningTargets,
+    planningTargetIds,
+    planningTargetsById,
     validConflictResolutions,
     warnings,
     checkpointRequirements,
   } = prepared.context
-  const enabledTargetIds = targets.map(({ id }) => id)
-  // Completion is one authority: every enabled Target Ideal *and* every
-  // required checkpoint Entry secured (PLANNER_SPEC 7.5.6).
+  // Completion is one authority: every planning Target (a Target with a valid
+  // BuildListEntry, never every active Target) Ideal *and* every required
+  // checkpoint Entry secured (PLANNER_SPEC 7.2.1 / 7.5.6).
   const isComplete = (state: PlannerSearchState) =>
-    isPlannerSearchStateComplete(state, enabledTargetIds, checkpointRequirements)
+    isPlannerSearchStateComplete(state, planningTargetIds, checkpointRequirements)
+  if (planningTargetIds.length === 0) {
+    // No valid BuildListEntry, so this run has no goal: the Build List is the
+    // Planner input (REQUIREMENTS 18 / 19), and no active Target outside it is
+    // ever substituted. Nothing can be expanded, so no Beam Search starts. The
+    // validation already reported `no_build_list_entries` and each excluded
+    // Entry; the termination is an ordinary `exhausted` over zero Targets.
+    return {
+      bestState: preparedInitialState,
+      conflicts: [],
+      warnings,
+      validationIssues: [],
+      excludedBuildListEntries,
+      rejections: [...prepared.context.routePlanRejections],
+      expandedStates: 0,
+      completed: false,
+      cancelled: false,
+      termination: createPlannerSearchTermination({
+        options: input.options,
+        planningTargetIds,
+        checkpointRequirements,
+        bestState: preparedInitialState,
+        expandedStates: 0,
+        cancelled: false,
+        reachedStepLimit: false,
+        reachedExpandedLimit: false,
+      }),
+    }
+  }
   const rejections = [...prepared.context.routePlanRejections]
   const rejectionKeys = new Set(rejections.map(rejectionKey))
   // Static Planner input, so it is derived once instead of per expansion.
   const preferredSourceEntryIds = collectPreferredSourceEntryIds(
     allSearchEntries,
-    targetsById,
+    planningTargetsById,
   )
   const scoreContext = {
     entries: allSearchEntries,
-    targetsById,
+    targetsById: planningTargetsById,
     routeUnitCountByEntryId,
     conflictCountByEntryId: new Map<BuildListEntryId, number>(),
     checkpointRequirements,
@@ -1212,7 +1243,7 @@ export async function runPlannerBeamSearch(
     ) continue
     const required = checkpointRequirements.requiredEntryIdByTargetId.get(entry.targetWeaponId)
     if (required !== undefined && required !== entry.id) continue
-    const target = targetsById.get(entry.targetWeaponId)
+    const target = planningTargetsById.get(entry.targetWeaponId)
     if (!target || confirmedZeroOperationTargetIds.has(target.id)) continue
     if (initialState.targetSatisfaction[target.id]?.hasIdeal !== true) continue
     const confirmed = applyReserveAction(
@@ -1220,7 +1251,7 @@ export async function runPlannerBeamSearch(
       entry,
       target,
       dependencies,
-      targets,
+      planningTargets,
       input.master,
       preferredSourceEntryIds,
       checkpointRequirements,
@@ -1262,7 +1293,7 @@ export async function runPlannerBeamSearch(
       cancelled: false,
       termination: createPlannerSearchTermination({
         options: input.options,
-        enabledTargetIds,
+        planningTargetIds,
         checkpointRequirements,
         bestState: initialState,
         expandedStates: 0,
@@ -1302,7 +1333,7 @@ export async function runPlannerBeamSearch(
         state,
         allSearchEntries,
         allLanePlans,
-        targets,
+        planningTargets,
         validConflictResolutions,
         checkpointRequirements,
       )
@@ -1343,7 +1374,7 @@ export async function runPlannerBeamSearch(
         allLanePlans,
         checkpointRequirements,
       ).flatMap((entry) => {
-        const target = targetsById.get(entry.targetWeaponId)
+        const target = planningTargetsById.get(entry.targetWeaponId)
         return target
           ? [{
               entry,
@@ -1352,7 +1383,7 @@ export async function runPlannerBeamSearch(
                 entry,
                 target,
                 dependencies,
-                targets,
+                planningTargets,
                 input.master,
                 preferredSourceEntryIds,
                 checkpointRequirements,
@@ -1418,7 +1449,7 @@ export async function runPlannerBeamSearch(
               conflictsById,
               stateConflictDetection.conflictIdsByUnitKey,
               stateConflictDetection.selectedPhysicalActionKeysByConflictId,
-              targets,
+              planningTargets,
               input.master,
               dependencies.rngEngine,
               preferredSourceEntryIds,
@@ -1429,14 +1460,14 @@ export async function runPlannerBeamSearch(
           // A Route with physical units is secured only right after its last
           // unit (pendingReserveEntries); only a Route without any unit reaches
           // its reserve here.
-          const target = targetsById.get(entry.targetWeaponId)
+          const target = planningTargetsById.get(entry.targetWeaponId)
           if (!target) continue
           attempts.push(applyReserveAction(
             state,
             entry,
             target,
             dependencies,
-            targets,
+            planningTargets,
             input.master,
             preferredSourceEntryIds,
             checkpointRequirements,
@@ -1461,7 +1492,7 @@ export async function runPlannerBeamSearch(
             applied.state,
             allSearchEntries,
             allLanePlans,
-            targets,
+            planningTargets,
             validConflictResolutions,
             checkpointRequirements,
           )
@@ -1563,7 +1594,7 @@ export async function runPlannerBeamSearch(
     cancelled,
     termination: createPlannerSearchTermination({
       options: input.options,
-      enabledTargetIds,
+      planningTargetIds,
       checkpointRequirements,
       bestState,
       expandedStates,

@@ -535,6 +535,9 @@ Plannerは複数目標を横断して作成計画を生成する。
 - 操作回数
 
 Plannerは候補検索と分離し、作成リストに追加された候補を入力として計画を生成する。
+1回の計画で完成を目指す目標武器は、作成リストに有効な候補（staleや完了済みなどで除外されない
+候補）がある目標武器だけである。作成リストに有効な候補の無い目標武器は、その計画の完成条件にも
+完成数の分母にも含めない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 4.1）。
 
 PlannerはCandidate SnapshotのBuildRouteと具体的なRouteOperationを変更しない。
 Planner内部のTarget武器確保（reserve）は、実行ナビ上の独立した操作Stepにせず、そのRouteの最後の物理操作

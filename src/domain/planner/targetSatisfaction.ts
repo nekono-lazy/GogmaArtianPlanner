@@ -8,7 +8,11 @@ function compareStableStrings(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
 }
 
-/** Derives enabled active Target satisfaction from Gogma inventory, never weapon status. */
+/**
+ * Derives Target satisfaction from Gogma inventory, never weapon status, for
+ * the given planning-eligible Targets. The Planner passes the planning Targets
+ * of its run (`derivePlannerPlanningTargets()`), never every active Target.
+ */
 export function deriveTargetSatisfaction(
   targetWeapons: readonly TargetWeapon[], ownedWeapons: readonly OwnedWeapon[], master: TargetEvaluationMasterSubset,
 ): TargetSatisfaction[] {
@@ -28,6 +32,7 @@ export function deriveTargetSatisfaction(
   })
 }
 
-export function areAllEnabledTargetsAlreadySatisfied(satisfaction: readonly TargetSatisfaction[]): boolean {
+/** True when every planning Target of the run already holds an Ideal weapon. */
+export function areAllPlanningTargetsAlreadySatisfied(satisfaction: readonly TargetSatisfaction[]): boolean {
   return satisfaction.length > 0 && satisfaction.every(({ hasIdeal }) => hasIdeal)
 }

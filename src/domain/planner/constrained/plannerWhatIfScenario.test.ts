@@ -252,6 +252,29 @@ describe('B9-B1a scenario preparation', () => {
     ])
   })
 
+  it('prepares its initial context over the Build List Targets only (#102)', () => {
+    const scenario = gogmaScenario('scope', ['first', 'second'])
+    const unlisted = {
+      ...target('target.whatif.scope.unlisted'),
+      elementId: 'element.fixture.b',
+    }
+    const targets = [...scenario.targets, unlisted]
+    const { contexts } = detectedConflicts(targets, scenario.entries, scenario.sources)
+    const { result } = prepare(
+      targets,
+      scenario.entries,
+      scenario.sources,
+      resolution(contexts[0].conflictId, scenario.entries[1].id),
+    )
+    expect(result.status).toBe('ready')
+    if (result.status !== 'ready') return
+    expect(result.scenario.initialContext.planningTargetIds)
+      .toEqual(scenario.targets.map(({ id }) => id).sort())
+    // The planning input itself keeps every Target.
+    expect(result.scenario.mergedInput.targetWeapons.map(({ id }) => id))
+      .toContain(unlisted.id)
+  })
+
   it('builds the origin from the Planner-start snapshot with no UI request field', () => {
     const scenario = gogmaScenario('origin', ['first', 'second'])
     const { contexts } = detectedConflicts(

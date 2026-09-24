@@ -1122,6 +1122,9 @@ Beam幅
 - incompleteの場合はPersistenceを呼ばず、`/plans/:planId` へ遷移しない
 - partial Planの全Stepを表示する必要はない
 - 到達したbound、設定値、探索状態数、完成Target数、設定見直し案内を表示する
+- 「完成した目標武器」の分母は `termination.totalTargetCount`（今回の計画対象Target数。作成リストに
+  有効な候補がある目標武器の数であり、有効な目標武器全体の数ではない。PLANNER_SPEC 4.1）をそのまま
+  表示し、UI側で再計算しない
 - `status === "exhausted"` は探索未完了ではない。従来どおり
   「現在の入力から作成できる生産計画はありませんでした。」を表示する
 - `status === "cancelled"` は従来どおりキャンセルのnoticeを表示する

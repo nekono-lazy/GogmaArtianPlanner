@@ -156,13 +156,79 @@ export interface PlannerClock {
 - concrete inputがsupported:falseの場合のwarningは、RNG状態不足を表す
   rng_state_missingではなくrng_prediction_unsupportedを使用する
 - RNG値不足とEngine capability不足を別warning reasonとして扱う。該当BuildListEntryだけを除外し、無関係なEntryを一括無効化しない
-- `targetWeapons` は `isEnabled = true` かつ `lifecycleStatus = "active"` のみ対象。
-  `completed` Target（16.13）のEntryは入力validationで除外し、理由を返す
+- `targetWeapons` はPlannerへ渡すplanning inputのTarget集合である。Entryの参照先解決、
+  `preferredOwnedWeaponId` のcollection validation、`PlanningInputSnapshot.targetWeaponsHash`
+  の対象であり、Planner runの完成対象（計画対象Target、4.1）そのものではない。
+  `isEnabled = false` または `completed` Target（16.13）のEntryは入力validationで除外し、
+  理由を返す
 - `maxPlanSteps`、`beamWidth`、`maxExpandedStates` は1以上
 - `preferPracticalBeforeIdeal` は旧Planner契約のOptionであり、現在はサポートしない。
   Plannerに実用品優先の評価は存在せず、この項目を含む `PlannerOptions` は
   validation issueとして拒否する
 - Active Planの有無はPlanner pure calculationの入力に含めない。PlannerはDraft Planを計算し、Active Plan単一制約、置換、破棄、再計算の制御はApplication / Persistence層で行う
+
+### 4.1 計画対象Target（planning Target）
+
+作成リストはユーザーがPlannerへ渡す候補を選択した状態であり、Plannerは作成リストに追加された
+候補を入力として計画を生成する（[REQUIREMENTS.md](./REQUIREMENTS.md) 18 / 19）。したがって
+1回のPlanner runが完成を目指すTargetは、`PlannerInput.targetWeapons` の有効・未完了Target
+全体ではなく、次の **計画対象Target（planning Target）** である。
+
+```text
+validatePlannerInput()
+  -> validBuildListEntries
+  -> entry.targetWeaponId
+  -> unique
+  -> isEnabled = true かつ lifecycleStatus = "active" のTargetだけ（fail-closed defence）
+  -> Target ID安定順
+```
+
+- 導出元はraw `PlannerInput.buildListEntries` ではなく、current-state validationを通過した
+  `validBuildListEntries` である。stale、completed、disabled、RNG不足、unsupportedなどで
+  除外されたEntryは計画対象Targetを作らない
+- valid BuildListEntryが1件もないTargetは、Build List上にEntryがあってもそのrunの計画対象外である
+- 同一Targetに複数のvalid Entryがあっても計画対象Targetは1件として数える。どのEntryのRouteを
+  採用するかは従来のRoute選択semanticsのままである
+- 作成リストに有効な候補が無い有効・未完了Targetは、所持武器ですでにIdealかどうかにかかわらず、
+  そのrunの完了条件、typed terminationの分母、TargetSatisfactionの追跡、score、conflict
+  detectionのいずれにも入らない。計画中に確保した武器がそのTargetの条件を偶然満たしても達成と
+  して数えない
+- selected intermediate stateを持つEntryのTarget（7.5.6）はそのEntry自身がvalidなので
+  計画対象Targetであり、required Entryのsecureを要する完了条件はそのまま適用する
+- constrained re-search（9.2）とwhat-if（9.2.4）のaugmented inputでは、生成Entryを含むvalid
+  Entryから同じ規則で導出する
+
+authority。
+
+- 導出は `derivePlannerPlanningTargets()` 1つであり、`createInitialPlannerSearchState()` が
+  1回だけ適用する。`preparePlannerInitialContext()` がその結果を `planningTargets` /
+  `planningTargetIds` / `planningTargetsById` として保持する
+- 完了判定（`isPlannerSearchStateComplete()`）、typed terminationの
+  `completedTargetCount` / `totalTargetCount`（7.2.1）、TargetSatisfactionの初期導出と再導出（7）、
+  state score、preferred source、conflict detection、`all_targets_already_satisfied`、
+  constrained re-search、what-if、augmented preflightはすべてこの1つを読み、別の場所で
+  「有効・未完了Target全体」から再導出しない
+- Beam Searchへ到達しなかったrun（入力invalid、orchestration bound）の
+  `totalTargetCount` も同じauthorityから数える
+
+valid BuildListEntryが0件の場合（raw inputが0件、または全件が除外された場合）。
+
+- 計画対象Targetは0件であり、有効・未完了Target全体へフォールバックしない
+- `no_build_list_entries` warningを1件返す（raw 0件と全件除外で同じ意味、重複させない）。
+  除外された各Entryは従来どおりそれぞれの除外warningで報告する
+- Beam Searchを開始せず、`expandedStates = 0`、terminationは `exhausted`、
+  `completedTargetCount = totalTargetCount = 0`、`plan = null` とする
+
+境界。
+
+- `PlannerInput.targetWeapons`、`PlanningInputSnapshot.targetWeaponsHash`
+  （PlannerInputの全Targetをhashする）、`createPlanningTargetWeaponsHash()` は変更しない。
+  計画対象Targetはruntime導出であり、永続化もCalculationContextの変更もしない
+- `preferredOwnedWeaponId` のcollection validation（[DATA_MODEL.md](./DATA_MODEL.md) 8.5）は
+  `PlannerInput.targetWeapons` 全体へ適用したままとする。これは永続状態の整合性検証であり、
+  同じ武器を複数Targetが優先起点にする違反は計画対象Targetと計画対象外Targetの間でも成立する
+  ため、計画対象Targetだけへ限定しない。保存Service・Candidate Search入力と同じ境界の再利用
+  契約も維持する
 
 ---
 
@@ -227,6 +293,10 @@ export interface PlannerWarning {
   Planner入力はfail closedされる
 - `selected_checkpoint_fixes_target_entry` は、required checkpoint Entryを持つ
   Targetの他のEntryをそのrunの候補選択から外したことを伝える情報warning（7.5.6）
+- `no_build_list_entries` はvalid BuildListEntryが0件であること（raw inputが0件、または
+  全件が除外されたこと）を表し、計画対象Targetも0件になる（4.1）
+- `all_targets_already_satisfied` は、計画対象Target（4.1）がすべてPlanner開始時点で
+  Idealを所持していることを表す。作成リストに有効な候補が無いTargetは判定に含めない
 
 `max_steps_reached` は `maxPlanSteps`、`max_expanded_states_reached` は
 `maxExpandedStates` に到達した場合だけ使用する。両方へ到達した場合は両方を返してよい。
@@ -241,7 +311,8 @@ export interface PlannerWarning {
 
 ## 6. 目標充足判定
 
-Planner実行前に、OwnedWeaponで各TargetWeaponが満たされているか判定する。
+Planner実行前に、OwnedWeaponで各計画対象Target（4.1）が満たされているか判定する。
+作成リストに有効な候補が無いTargetの充足はPlanner runでは追跡しない。
 
 ```ts
 export interface TargetSatisfaction {
@@ -599,7 +670,7 @@ scoreだけではbeamWidthやtie-break次第で無効branchが残り、無効な
 候補確保時の状態遷移。
 
 - Candidate reserveや所持通常アーティアの変換消費など、SimulatedInventoryの意味的変更後は、
-  enabled Target全体のTargetSatisfactionを現在InventoryのOwnedGogmaだけから再導出する。
+  計画対象Target（4.1）全体のTargetSatisfactionを現在InventoryのOwnedGogmaだけから再導出する。
   statusだけで判定せず、Idealは常にPracticalも満たす。1武器が複数Targetを満たす場合は
   すべてへ反映し、削除・更新で満たさなくなったTargetはtrueを保持しない。
 - 既存Gogmaのreset_bonuses、keep_bonuses、またはsourceを持つreset_skillsを実行したら、
@@ -694,9 +765,10 @@ export interface PlannerSearchTermination {
 statusの決定順序は次のとおりとする。
 
 1. `cancelled`: ユーザーが探索をキャンセルした
-2. `completed`: 全enabled Targetが完了した。完了とは `hasIdeal = true` であり、かつ
+2. `completed`: 全計画対象Target（4.1）が完了した。完了とは `hasIdeal = true` であり、かつ
    そのTargetにrequired checkpoint Entry（7.5.6）があればそのEntry自身をsecure済み
-   であること。`completedTargetCount` も同じ判定で数える
+   であること。`completedTargetCount` も同じ判定で数え、`totalTargetCount` は計画対象
+   Target数である。作成リストに有効な候補が無い有効・未完了Targetは分母に入れない
 3. `incomplete`: それ以前に `PlannerOptions` boundが探索を打ち切った
 4. `exhausted`: boundに到達せず探索が自然終了し、全Target完成Planが無かった
 
@@ -1186,6 +1258,7 @@ required Entryを持つTargetについて、Plannerは次を保証する。
   Targetを完了扱いにしない
 - required EntryはsecureされるまでrelevanceをPlannerに保つ。`hasIdeal` だけで
   irrelevantにしない
+- required EntryはvalidなEntryなので、そのTargetは計画対象Target（4.1）である
 - 同じTargetの他のBuildListEntryは、そのrunのcandidate selectionから外す。代替
   完成Routeとして採用せず、競合検出・共有physical action・scoreにも参加させない。
   永続データを削除・stale化する必要はなく、authorityをrequired Entryへ固定する
@@ -3607,7 +3680,7 @@ PlanStep変換用 `PlannerPlanStepDraft` を生成する。
 
 1. `runPlannerBeamSearch` を実行する。
 2. `bestState` がnullならPlanを作らず、Beam Searchのconflicts / warningsをそのまま返す。
-3. `bestState.trace` が空なら（初期状態ですべての有効TargetがIdealを満たす場合を含む）空Planを作らず `plan = null` とする。
+3. `bestState.trace` が空なら（初期状態ですべての計画対象Target（4.1）がIdealを満たす場合、計画対象Targetが0件の場合を含む）空Planを作らず `plan = null` とする。
 4. `replayPlannerSearchTrace(input, bestState, dependencies.rngEngine)` を実行する。Replay failureはwarningへ変換せず、issue code / message / actionIndexを含むPlanner内部エラーとして失敗させる。
 5. Replayが成功したDraftを順序を変えずにPlanStepへ変換する。物理操作Draftは1対1でPlanStepになる。
    探索内部の `reserve_weapon` DraftはPlanStepにせず、そのEntryの最後の物理StepのDraftへ

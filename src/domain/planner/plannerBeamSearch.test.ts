@@ -1032,19 +1032,49 @@ describe('Planner Beam Search', () => {
     expect(result.bestState?.routeProgressByEntryId[entry.id]).toEqual({ base: 0, bonus: 1, skill: 0 })
   })
 
-  it('does no exploration when every enabled Target is already Ideal', async () => {
+  it('does no exploration when every planning Target is already Ideal', async () => {
     const goal = target('target.already.ideal')
     const ideal = {
       ...createValidOwnedWeapon(ownedWeaponId('owned.already.ideal')),
     }
-    const { input, dependencies } = fixture([goal], [], [ideal])
+    const source = sourceWeapon('owned.already.ideal.source')
+    const entry = routeEntry('entry.already.ideal', goal, resetRoute(source.id))
+    const { input, dependencies } = fixture([goal], [entry], [ideal, source])
     const result = await runPlannerBeamSearch(input, dependencies)
     expect(result.expandedStates).toBe(0)
     expect(result.completed).toBe(true)
     expect(result.bestState?.trace).toEqual([])
+    expect(result.termination).toMatchObject({
+      status: 'completed',
+      completedTargetCount: 1,
+      totalTargetCount: 1,
+    })
     expect(result.warnings.some(({ kind }) =>
       kind === 'all_targets_already_satisfied',
     )).toBe(true)
+  })
+
+  it('never treats an already Ideal Target outside the Build List as a planning goal', async () => {
+    // An active Target that already holds its Ideal but has no BuildListEntry
+    // is not a goal of the run: it is neither counted for completion nor
+    // reported by the all-satisfied warning (#102).
+    const goal = target('target.already.ideal.unlisted')
+    const ideal = {
+      ...createValidOwnedWeapon(ownedWeaponId('owned.already.ideal.unlisted')),
+    }
+    const { input, dependencies } = fixture([goal], [], [ideal])
+    const result = await runPlannerBeamSearch(input, dependencies)
+    expect(result.expandedStates).toBe(0)
+    expect(result.completed).toBe(false)
+    expect(result.bestState?.targetSatisfaction).toEqual({})
+    expect(result.termination).toMatchObject({
+      status: 'exhausted',
+      completedTargetCount: 0,
+      totalTargetCount: 0,
+    })
+    const kinds = result.warnings.map(({ kind }) => kind)
+    expect(kinds).toContain('no_build_list_entries')
+    expect(kinds).not.toContain('all_targets_already_satisfied')
   })
 
   it('cancels safely after monotonic progress without mutating input', async () => {
@@ -1532,19 +1562,29 @@ describe('Planner Beam Search', () => {
     )
   })
 
-  it('rederives every Target satisfied by one reserved Gogma weapon', async () => {
+  it('rederives every planning Target satisfied by one reserved Gogma weapon', async () => {
     const firstTarget = target('target.rederive.first')
     const secondTarget = target('target.rederive.second')
+    const unlistedTarget = target('target.rederive.unlisted')
     const source = sourceWeapon('owned.rederive.shared')
+    const otherSource = sourceWeapon('owned.rederive.other')
     const entry = routeEntry(
       'entry.rederive.shared',
       firstTarget,
       resetRoute(source.id),
     )
+    // The second Target is a planning Target through its own valid Entry,
+    // whose Route sits at a Gogma Counter the run never reaches. The third one
+    // has no Entry, so the run never tracks it (#102).
+    const secondEntry = routeEntry(
+      'entry.rederive.second',
+      secondTarget,
+      resetRoute(otherSource.id, 25),
+    )
     const { input, dependencies } = fixture(
-      [firstTarget, secondTarget],
-      [entry],
-      [source],
+      [firstTarget, secondTarget, unlistedTarget],
+      [entry, secondEntry],
+      [source, otherSource],
     )
     const result = await runPlannerBeamSearch(input, dependencies)
     const reserve = result.bestState?.trace.find(
@@ -1559,6 +1599,12 @@ describe('Planner Beam Search', () => {
     expect(result.bestState?.targetSatisfaction[secondTarget.id]).toEqual({
       hasPractical: true,
       hasIdeal: true,
+    })
+    expect(result.bestState?.targetSatisfaction[unlistedTarget.id]).toBeUndefined()
+    expect(result.termination).toMatchObject({
+      status: 'completed',
+      completedTargetCount: 2,
+      totalTargetCount: 2,
     })
   })
 
@@ -1596,10 +1642,18 @@ describe('Planner Beam Search', () => {
       nextTarget,
       resetRoute(source.id),
     )
+    // The previous Target is a planning Target through its own valid Entry,
+    // whose Route sits at a Gogma Counter the run never reaches (#102).
+    const otherSource = sourceWeapon('owned.in-flight.other')
+    const previousEntry = routeEntry(
+      'entry.in-flight.previous',
+      previousTarget,
+      resetRoute(otherSource.id, 25),
+    )
     const { input, dependencies } = fixture(
       [previousTarget, nextTarget],
-      [entry],
-      [source],
+      [entry, previousEntry],
+      [source, otherSource],
     )
     const result = await runPlannerBeamSearch(input, dependencies)
     expect(result.bestState?.targetSatisfaction[previousTarget.id]).toEqual({
@@ -2077,10 +2131,18 @@ describe('Planner Beam Search', () => {
       resetRoute(candidateSource.id),
     )
     entry.candidateSnapshot.finalBonuses = candidateBonuses
+    // The second Target is a planning Target through its own valid Entry,
+    // whose Route sits at a Gogma Counter the run never reaches (#102).
+    const otherSource = sourceWeapon('owned.cross-tier.other')
+    const secondEntry = routeEntry(
+      'entry.cross-tier.second',
+      secondTarget,
+      resetRoute(otherSource.id, 25),
+    )
     const { input, dependencies } = fixture(
       [firstTarget, secondTarget],
-      [entry],
-      [initiallyPractical, candidateSource],
+      [entry, secondEntry],
+      [initiallyPractical, candidateSource, otherSource],
     )
     const result = await runPlannerBeamSearch(input, dependencies)
     expect(result.bestState?.targetSatisfaction[secondTarget.id].hasPractical)
