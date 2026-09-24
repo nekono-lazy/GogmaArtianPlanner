@@ -41,6 +41,7 @@ import {
 import {
   hasReachedIntermediatePin,
   isPlannerLaneUnitBlockedByPin,
+  isPlannerLaneUnitHolding,
   splitPlannerRouteUnitsByLane,
 } from './plannerRouteLanes'
 import type { PlannerSearchState } from './plannerTypes'
@@ -152,6 +153,10 @@ describe('Selected intermediate states as Planner constraints', () => {
     expect(isPlannerLaneUnitBlockedByPin(lanes.skill[1], { base: 0, bonus: 2, skill: 1 }, lanes.pin)).toBe(true)
     expect(isPlannerLaneUnitBlockedByPin(lanes.skill[1], { base: 0, bonus: 3, skill: 1 }, lanes.pin)).toBe(false)
     expect(isPlannerLaneUnitBlockedByPin(lanes.bonus[2], { base: 0, bonus: 2, skill: 0 }, lanes.pin)).toBe(false)
+    // The unit producing the selected Skill state is never skippable, so it
+    // holds its Counter position whatever the pin state (design 5).
+    expect(lanes.skill[0].canSkipWhenCounterPassed).toBe(false)
+    expect(isPlannerLaneUnitHolding(lanes.skill[0])).toBe(true)
     expect(hasReachedIntermediatePin(lanes, { base: 0, bonus: 3, skill: 1 })).toBe(true)
     expect(hasReachedIntermediatePin(lanes, { base: 0, bonus: 2, skill: 1 })).toBe(false)
     expect(hasReachedIntermediatePin({ ...lanes, pin: null }, { base: 0, bonus: 3, skill: 1 })).toBe(false)

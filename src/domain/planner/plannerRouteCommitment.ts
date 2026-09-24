@@ -142,30 +142,32 @@ function remainingUnits(
 }
 
 /**
- * The remaining units that hold their Counter position in `state`, judged by
- * the one holding predicate at the Entry's current lane progress: a unit that
- * is never skippable, or a skippable unit its checkpoint pin blocks now.
+ * The remaining units that hold their Counter position, judged by the one
+ * holding predicate: the units that are never `canSkipWhenCounterPassed`. A
+ * skippable unit its checkpoint pin blocks now is not among them - its position
+ * may be consumed by another Entry and it is fast-forwarded once the pin is
+ * released (design 5, `docs/PLANNER_SPEC.md` 7.5.2).
  */
 function remainingHoldingUnits(
   state: PlannerSearchState,
   entry: BuildListEntry,
   lanePlans: ReadonlyMap<BuildListEntryId, PlannerEntryLanes>,
 ): PlannerRouteUnit[] {
-  const lanes = lanePlans.get(entry.id)
-  if (!lanes) return []
-  const progress = state.routeProgressByEntryId[entry.id] ?? initialPlannerLaneProgress()
-  return remainingPlannerLaneUnits(lanes, progress).filter((unit) =>
-    isPlannerLaneUnitHolding(unit, progress, lanes.pin),
-  )
+  return remainingUnits(state, entry, lanePlans).filter(isPlannerLaneUnitHolding)
 }
 
 /**
  * Why an Entry cannot be committed in `state`, or `null`.
  *
- * Judged over its remaining holding units (`isPlannerLaneUnitHolding()` at the
- * Entry's current lane progress) - the units no other Entry may pass: never
- * skippable units, every selected checkpoint endpoint among them, and
- * skippable units the checkpoint pin blocks now:
+ * Judged over its remaining holding units (`isPlannerLaneUnitHolding()`) - the
+ * units no other Entry may pass: never skippable units, every selected
+ * checkpoint endpoint among them. A skippable unit is never a reason on its
+ * own, pin-blocked or not: the Counter having passed it, or a resolution
+ * selecting another participant of a conflict it is part of, only means its
+ * position is consumed and it is fast-forwarded when its progress may move
+ * (`detectPlannerConflicts()` never lists it as a Counter conflict
+ * participant either). Every Route's last unit is holding and operates the
+ * same source weapon, so the source check still covers the whole Route:
  *
  * - an applied explicit resolution blocks one of them
  *   (`isUnitBlockedByConflictResolution()`, the existing semantics)

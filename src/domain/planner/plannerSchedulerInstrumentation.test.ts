@@ -212,14 +212,23 @@ describe('scheduler instrumentation counts', { timeout: 60_000 }, () => {
   })
 
   it('records a deadlock drop', async () => {
-    const { metrics } = await measured(byId('deadlock'))
+    const { metrics } = await measured(byId('true-deadlock'))
     expect(metrics.counts.deadlockDropCount).toBe(1)
     expect(metrics.counts.stallDropCount).toBe(0)
     expect(metrics.counts.waitingIterationCount).toBeGreaterThan(0)
     expect(metrics.drops).toEqual([
       expect.objectContaining({ buildListEntryId: 'entry.y', cause: 'deadlock', reason: 'conflict_not_committed' }),
     ])
-    expect(metrics.drops[0].iteration).toBeGreaterThan(0)
+  })
+
+  it('records no drop where a pin-blocked skippable position is consumed (former 7.8 example)', async () => {
+    const { result, metrics } = await measured(byId('deadlock'))
+    expect(metrics.counts.deadlockDropCount).toBe(0)
+    expect(metrics.counts.stallDropCount).toBe(0)
+    expect(metrics.drops).toEqual([])
+    // Y's Reset Skills at S0 was passed silently once its pin was released.
+    expect(metrics.counts.fastForwardedSkillUnitCount).toBe(1)
+    expect(result.termination.status).toBe('completed')
   })
 
   it('records a release through cross satisfaction', async () => {
@@ -265,9 +274,15 @@ describe('scheduler instrumentation counts', { timeout: 60_000 }, () => {
     expect(zero.metrics.drops).toEqual([
       expect.objectContaining({ buildListEntryId: 'entry.y', cause: 'initial_precondition', reason: 'protected_destructive_use' }),
     ])
+    const lost = await measured(byId('pinned-past-lost-holding'))
+    expect(lost.metrics.drops).toEqual([
+      expect.objectContaining({ buildListEntryId: 'entry.p', cause: 'initial_precondition', reason: 'counter_before_current' }),
+    ])
+    // A passed pin-blocked skippable unit alone drops nobody: P wins the
+    // conflict by R instead.
     const pinned = await measured(byId('pinned-past'))
     expect(pinned.metrics.drops).toEqual([
-      expect.objectContaining({ buildListEntryId: 'entry.p', cause: 'initial_precondition', reason: 'counter_before_current' }),
+      expect.objectContaining({ buildListEntryId: 'entry.q', cause: 'provisional_outcome', winnerBuildListEntryId: 'entry.p' }),
     ])
   })
 

@@ -12,7 +12,7 @@ import {
 import type { RngEngine } from '../rng/rngEngine'
 import { entryIntermediateSelection } from './plannerCheckpoints'
 import {
-  isPlannerLaneUnitPassable,
+  isPlannerLaneUnitFastForwardable,
   routeOperationLane,
   type PlannerEntryLanes,
   type PlannerRouteLane,
@@ -616,7 +616,7 @@ export function fastForwardPlannerRouteProgress(
       while (progress[lane] < lanes[lane].length) {
         const unit = lanes[lane][progress[lane]]
         if (unit.counterBefore === null) break
-        if (!isPlannerLaneUnitPassable(unit, progress, lanes.pin)) break
+        if (!isPlannerLaneUnitFastForwardable(unit, progress, lanes.pin)) break
         const current = currentPlannerCounterValue(state, unit)
         if (current === null || current <= unit.counterBefore) break
         progress = { ...progress, [lane]: progress[lane] + 1 }

@@ -1166,6 +1166,25 @@ silent fast-forwardも同じ条件でpinを越えない
 瞬間を `PlannerSearchState.reachedCheckpointByEntryId` に記録する。pin終端unitはskip不可なので、
 到達は必ず実物理actionで起こる。選択がまったく無いEntryにpinは無く、そのままIdealへ進む。
 
+**pin gatingはEntry自身のlane progressを制約する。Counter位置を予約しない。** pin-blockedなunitが
+`canSkipWhenCounterPassed = true` の場合、そのunitのCounter位置を別Entryが物理的に消費することまでは
+禁止しない。
+
+```text
+pin-blocked、canSkipWhenCounterPassed = true のunit u（counterBefore = p）
+  別Entryの実操作がCounterを p から先へ進めてよい
+  その時点ではEntry自身のprogressはpinで止まる（uを実行も通過もしない）
+  checkpoint到達も前倒ししない
+後にもう片laneがpinへ到達してpinが解除されたとき
+  current > p かつ canSkipWhenCounterPassed なら、uを過去位置としてsilent fast-forwardする（7.0.2）
+```
+
+これはcheckpointのhard constraintを弱める変更ではない。laneはpinを越えず、pin終端unit（7.5.1で
+skip不可）の位置は必須unitとして保持され、required checkpoint Entryは自身をsecureしなければTargetを
+completeにしない（7.5.6）。Routeが失われるのは、pin-blockedなskip可能unitの後ろにある必須unitの位置まで
+通過された場合だけであり、それは7.0.2の通常の `counter_before_current` である。既存のBeam Search、
+`fastForwardPlannerRouteProgress()`、Trace Replayはこの意味で動作している。
+
 **開始時点で既に到達しているcheckpoint。** 既存巨戟のRouteで両pinがlane位置0になる場合
 （両laneでlane開始状態を選択した場合、または片laneの開始状態を選択しもう片laneが操作を
 持たない＝既にIdealである場合）、pin状態はユーザーが今持っている武器そのものである。

@@ -8,9 +8,14 @@ branch: `test/planner-scheduler-parity-benchmark`（計測はこのbranchの作�
 17章 Phase B の記録である。**仕様authorityではない**。Production Plannerは引き続き Beam Search であり、
 本Phaseで Production routing、Worker protocol、UI、schema / version は変更していない。
 
+> **履歴の読み方。** 1〜10章はPhase B初回（PR #114）の記録で、そのまま残している。初回はacceptance
+> fixture `deadlock` のcompletion regressionを発見し、Phase C readinessを NOT READY とした（3.2 / 8章）。
+> その後のsemantic fix（pin-blockedのskip可能unitをholdingとして扱わない）と再検証・readiness再判定は
+> **11章** に記録した。現在の結論は11章である。
+
 ---
 
-## 1. 結論
+## 1. 結論（Phase B初回、PR #114。現在の結論は11章）
 
 | 問い | 答え |
 | --- | --- |
@@ -52,8 +57,10 @@ completion regressionの分類（`PlannerCompletionLoss`）:
 
 評価（`assessment`）は、Bでかつ「Beamの完成集合がschedulerの完成集合を含まない」ときだけ
 `expected_semantic_difference`（設計6.5の意図したpriority選択）。Beamの完成集合がschedulerの完成集合を
-含む（schedulerは何も得ずに失った）ときは `unexpected_regression`、Aは `known_limitation`（19.2）、
+含む（schedulerは何も得ずに失った）ときは、分類（Eを除く）にかかわらず `unexpected_regression`。
+Aは、Beamの完成集合がschedulerの完成集合を含まないときだけ `known_limitation`（19.2）。
 それ以外は `undetermined`。判断できないものを許容扱いにしない。
+（semantic fix PRで、実装どおりのこの規則にコメントとtest名を揃えた。分類の意味は変えていない。）
 
 ### 2.2 scheduler instrumentation（`src/domain/planner/plannerSchedulerInstrumentation.ts`）
 
@@ -171,7 +178,7 @@ Phase A testはそのまま残し、step単位のassertionはそちらが持つ�
 
 全件でmandatory違反なし、scheduler側だけのConflictなし、scheduler Trace Replay有効、Production projection成立。
 
-### 3.2 completion regression: `deadlock`
+### 3.2 completion regression: `deadlock`（初回。semantic fixで解消、11章）
 
 | 項目 | 値 |
 | --- | --- |
@@ -420,9 +427,9 @@ PR #107と同じBeam runである（`run.result` の形も同じ）。raw JSON�
 
 ---
 
-## 8. Phase C readiness
+## 8. Phase C readiness（初回判定。11.6で再判定）
 
-**Phase C readiness: NOT READY**
+**Phase C readiness（PR #114時点）: NOT READY**
 
 | READY条件 | 状態 |
 | --- | --- |
@@ -450,7 +457,7 @@ NOT READYの理由は性能ではなく意味論である。Phase Cへ進む前�
 
 ## 9. 残課題
 
-- 上記8の仕様判断（Phase C blocker）
+- 上記8の仕様判断（Phase C blocker）: **解決済み**（11章）
 - 実ユーザーの35件Export（Issue #103コメント、Beam 8 / 35）では未計測。ページのExport JSON貼り付け
   （Strategy: Compare both）で同じ手順を実行できる
 - 暫定帰結の厳密最適化（19.2）: 本計測では劣化の実例なし（`representative-35` は上限25に到達）。
@@ -475,3 +482,149 @@ NOT READYの理由は性能ではなく意味論である。Phase Cへ進む前�
 - scheduler algorithm、canonical ordering、暫定帰結、deadlock heuristic（計測hookと、計測専用の待機数の集計だけを追加）
 - Beam Search、PR #107 instrumentation、Candidate Search、constrained enumeration、orchestration / what-if bounds
 - 正式仕様（REQUIREMENTS / PLANNER_SPEC / UI_FLOW / DATA_MODEL / AGENTS）
+
+---
+
+## 11. semantic fix後の再検証（pin-blockedのskip可能unit）
+
+実施日: 2026-09-25（JST。Browser計測はUTC 2026-09-24T22:16Z〜22:34Z）。
+基準main: `6ad4f742291aa7ee5f1ed486cf68f799656f881b`（PR #114 merge後）。
+branch: `fix/planner-pin-blocked-skippable`（計測はこのbranchの作業ツリーをbuildしたbundle）。
+
+### 11.1 修正した契約
+
+3.2で見つかった差の原因（schedulerがpin-blockedのskip可能unitをholdingとして扱っていたこと）を、
+既存Beam / Trace Replayの意味に合わせて修正した。仕様は設計書5章 / 6.2 / 6.8 / 7.2〜7.4 / 7.7 / 7.8と
+PLANNER_SPEC 7.5.2に記載した。
+
+| 概念 | 定義 | helper |
+| --- | --- | --- |
+| holding | `canSkipWhenCounterPassed === false`。pinの現在状態は使わない。選択checkpoint終端は常にholding | `isPlannerLaneUnitHolding(unit)` |
+| skippable（position-passable） | `canSkipWhenCounterPassed === true`。他EntryがそのCounter位置を消費してよい | （holdingの否定） |
+| pin gating | Entry自身のlane progressを止める（実行もfast-forwardもpinを越えない） | `isPlannerLaneUnitBlockedByPin()`（不変） |
+| fast-forwardable now | skippableかつ現在pinにblockされない | `isPlannerLaneUnitFastForwardable()`（旧 `isPlannerLaneUnitPassable()`。意味は同じ） |
+
+- `fastForwardPlannerRouteProgress()` / `nextPlannerLaneUnits()` / Trace Replay / Beam Searchの意味は変えていない
+- Route commitment: 判定対象はholding unitだけ。pin-blockedのskip可能unitが通過済みでも、それだけでは
+  `counter_before_current` / `conflict_resolution_not_selected` にしない
+- scheduler: frontier・6.8のlane判定は各laneのfrontier unit（通過済みのskip可能unitを飛ばした最初のunit）で
+  行う。pin-blockedのskip可能unitは `holding = false` / `ready = false`。後ろに隠れたholding unitは
+  frontierで位置を保持し、通過済みなら従来どおり `counter_before_current`
+- canonical順のnext-holding距離はholding（skip不可）だけを数える。key順は不変
+- deadlock / stallの判定規則・順位・drop規則は不変
+
+### 11.2 acceptance catalogue（Node / Vitest、Fake Engine fixture、35件）
+
+catalogueに2件を追加した（計35件）。
+
+- `true-deadlock`: 7.8の新しい説明例。holding unit同士が循環して待つ真のdeadlock（設計7.8）
+- `pinned-past-lost-holding`: `pinned-past` のSkill Counterを1つ先へ進め、pin-blockedのskip可能unitの後ろの
+  holding unitまで通過済みにした入力
+
+初回（3.1）から変わった行と追加した行:
+
+| scenario | Beam完成 | scheduler完成 | Beam status | scheduler status | verdict | 初回との差 |
+| --- | ---: | ---: | --- | --- | --- | --- |
+| **deadlock（旧7.8の例）** | 2/2 | **2/2** | completed | **completed** | **parity** | 初回はscheduler 1/2（`completion_regression`）。drop 0件、trace 13（Beamと同じ長さ）、Trace Replay / projection有効 |
+| true-deadlock（新） | 2/3 | 2/3 | exhausted | exhausted | parity | 両者とも `target.x` / `target.z` を完成。schedulerは `entry.y` をdeadlockとしてdrop（`R` 最下位、priority 1） |
+| pinned-past | 1/2 | 1/2 | exhausted | exhausted | parity | 完成数は同じだが、選んだEntryが変わった。初回のschedulerは `entry.p` を `counter_before_current` で落として `entry.q` を完成させ、Beamは `entry.p` を完成させていた。修正後は両者とも `entry.p`（schedulerは `entry.q` を暫定帰結で落とす） |
+| pinned-past-lost-holding（新） | 1/2 | 1/2 | exhausted | exhausted | parity | 両者とも `entry.q`。schedulerは `entry.p` を初期commitmentで `counter_before_current` |
+
+それ以外の31件は初回と同じ結果（完成数・status・verdict）。全35件でmandatory違反0、completion regression 0、
+scheduler側だけのConflict 0、scheduler Trace Replay有効、Production projection成立（fail-closedの2件はno_plan）。
+
+`deadlock` のscheduler trace（testで固定した意味上の順序。Step indexは固定しない）:
+
+```text
+X conversion（Skill S0 -> S1）         YのSkill S0はskippableでpin-blocked。holdingではないのでXが消費できる
+  直後: Skill Counter S1、YのSkill progress 0（pinを越えない）、Y checkpoint未到達
+X / Y Bonus Reset                     Xのholding（C5）を守り、Yのskip可能unitはexecutor / fast-forward
+Y Bonus C7（Bonus laneのIdeal終端）    pin解除、milestone。同じactionの中でYのSkill S0をfast-forward
+Y Reset Skills S1、S2                  後続Skill unitを実行
+X / Y reserve
+```
+
+### 11.3 小規模workload（Node / Vitest、ProductionRngEngine）
+
+| workload | Beam | scheduler | verdict |
+| --- | --- | --- | --- |
+| `sanity-3`（`300 / 10000 / 50`） | completed 3/3、expanded 604、trace 10 | completed 3/3、expanded 10、trace 10 | parity（初回と同じ） |
+| `representative-12`（`1000 / 20000 / 50`） | incomplete 2/12、trace 30 | exhausted 10/12、trace 330 | parity（初回と同じ。Conflict 2件同一、未完成2件は暫定帰結の敗者） |
+
+どちらも選択checkpointを持たないため、今回の修正は結果に影響しない（完成数・trace・conflict・rejectionが初回と一致）。
+
+### 11.4 representative-35（実Browser Worker）
+
+環境は5.1と同じ（実Chrome 153 `--headless=new`、専用profile、`visibilityState = visible`、
+`hardwareConcurrency` 16、`vite.benchmark.config.ts` のproduction bundle、unmodified `ProductionRngEngine`
+`production-rng:c5-e7`、`1000 / 200000 / 50`）。実施順は `sanity-3` compare → scheduler plain / instrumented
+交互 ×3 → `representative-35` compare（Beam → scheduler）。どのrunも1つの新しいWorkerで単独実行し、
+Beam計測中はNode test等を走らせていない。
+
+| 項目 | Beam Search | deterministic scheduler | PR #114との比較 |
+| --- | --- | --- | --- |
+| Worker elapsed | 1,010,700 ms（約16.8分、instrumentation ON） | 764.2 ms（compare内、instrumentation ON） | 初回はBeam 874,299 ms、scheduler 830.0 ms。Beamの構造値は同一なので差は実行時の負荷差 |
+| termination | `incomplete`（`max_expanded_states`） | `exhausted`（boundなし） | 同じ |
+| completed Targets | 13 / 35 | 25 / 35 | 同じ |
+| Beam-only / scheduler-only完成 | 0件 / 12件（t07、t12、t14〜t16、t19、t27、t30〜t34） | | 同じ |
+| expandedStates | 200,000 | 398 | 同じ |
+| trace長 | 138 | 398 | 同じ |
+| conflicts | 12 | 4（すべてBeamと共通） | 同じ（conflict ID同一） |
+| rejection | runtime `counter_before_current` 385、rejected Build List record 0 | runtime `conflict_not_committed` 10、record 10（`resource_conflict`） | 同じ |
+| deadlock / stall drop | ― | 0 / 0 | 同じ |
+| weaponSwitchCount | 30 | 40 | 同じ |
+| Trace Replay | 有効 | 有効 | 同じ |
+| Production projection | 有効（125 Step、chain閉じる） | 有効（373 Step、chain閉じる） | 同じ |
+| parity | verdict `parity`、mandatory違反なし、completion regressionなし | | 同じ |
+
+Beamの時間内訳は `dedupAndTrim` 70.9%、`applyAction` 25.0%、`successorEvaluation` 3.9%、`beamStateSetup` 0.2%で、
+depth 159、successor / expanded state 25.52、beam trim 96.0%、`counter_before_current` 試行38,488回も初回と同一。
+
+scheduler単独run（Worker elapsed）:
+
+| 系列 | run | median |
+| --- | --- | ---: |
+| plain | 1,303.2 / 1,391.8 / 1,434.0 ms | 1,391.8 ms |
+| instrumented | 1,360.2 / 1,359.3 / 1,490.9 ms | 1,360.2 ms |
+
+digest（`bestStateSemanticKeyHash` `fnv1a32:bbdb0e4f`）は全7回のscheduler runで同一。instrumented metricsは3回とも
+初回（5.4）と同じ値（commitment runs 1 / iterations 3、35 → committed 25 / dropped 10、provisional winners 3 /
+losers 10、iterations 374、route actions 373 / reserves 25、safe candidates 4,421 / max 36、waiting 0、
+fast-forwarded 3,098（bonus 2,213 / skill 885）、deadlock / stall / precondition drop 0）。
+本系列はBeam runの前に実施したため、水準は5.5の系列A（約1.4 s）に近い。
+
+`representative-35` は選択checkpointを持たない（`requiredCheckpointEntryIds = []`）ため、pin-blockedのunitが
+存在せず、今回の修正でscheduler結果が変わらないのは想定どおりである。完成数25 / 35は5.3で示したこの入力の上限のまま。
+
+### 11.5 B8 / B9
+
+`plannerConstrainedOrchestration.scheduler.test.ts` / `plannerWhatIfCalculation.scheduler.test.ts` を再実行し、
+6.1 / 6.2と同じ期待値（adoption、trial数4、rerun / trial / generated boundsの意味、what-ifの各outcome）で
+すべて通過した。bounds・adoption条件・feasibility判定は変更していない。
+
+### 11.6 Phase C readiness（再判定）
+
+**Phase C readiness: READY**
+
+| READY条件 | 状態 |
+| --- | --- |
+| scheduler Trace Replay valid | 満たす（catalogue 35件、`sanity-3`、`representative-12`、`representative-35` 実Browser） |
+| Production projection valid | 満たす |
+| B8 scheduler injection成立 | 満たす（11.5） |
+| B9 scheduler injection成立 | 満たす（11.5） |
+| 代表fixtureで未説明のcompletion regressionなし | 満たす。completion regressionは0件（初回の `deadlock` は解消） |
+| representative-35で重大な正当性問題なし | 満たす（mandatory違反なし、Beam-only完成なし、25 / 35は上限） |
+
+9章の「上記8の仕様判断（Phase C blocker）」は本章で解決した。9章のその他の残課題（実ユーザーExportでの計測、
+暫定帰結の厳密最適化、deadlock / stallの表示、weapon switch数、`maxPlanSteps` 既定値）は引き続きPhase C / D以降の
+判断事項である。
+
+### 11.7 変更していないもの
+
+- Production routing（`createProductionPlanWithObserver()` は `runPlannerBeamSearch` のまま）、Production Worker
+  protocol、UI、Persistence、Calculation Context schema
+- `CURRENT_CALCULATION_APP_SCHEMA_VERSION` 13、`DATABASE_SCHEMA_VERSION` 8、`ExportRoot.schemaVersion` 11、
+  `RngState.schemaVersion` 2、`AppSettings.schemaVersion` 1、`PRODUCTION_RNG_ENGINE_VERSION`
+  `production-rng:c5-e7`、Master `dataVersion`
+- Beam Search、`fastForwardPlannerRouteProgress()` / `nextPlannerLaneUnits()` / Trace Replayの意味、canonical orderingの
+  key順、weapon switch key、暫定帰結、deadlock / stall heuristic、`PlannerOptions` 既定値、Candidate Search、RNG

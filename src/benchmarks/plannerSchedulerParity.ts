@@ -495,12 +495,14 @@ export type PlannerCompletionLossCategory =
  *
  * - `expected_semantic_difference`: the intended provisional outcome (6.5):
  *   the scheduler completed a higher-ranked Target the Beam Search did not
- * - `known_limitation`: the greedy provisional outcome is not a maximum
- *   independent set (19.2 Can defer); the Beam Search found a combination
+ * - `known_limitation`: a `beam_branch_combination` loss while the scheduler
+ *   also completed a Target the Beam Search did not: the greedy provisional
+ *   outcome is not a maximum independent set (19.2 Can defer)
  * - `unexpected_regression`: the Beam Search completed every Target the
  *   scheduler completed and more, so the scheduler traded nothing for this
- *   loss - for a deadlock / stall drop, the Beam Search proved the wait was not
- *   a true deadlock
+ *   loss - whatever the category (fixture cardinality aside), including a
+ *   `beam_branch_combination` one; for a deadlock / stall drop, the Beam
+ *   Search proved the wait was not a true deadlock
  * - `undetermined`: nothing above applies; needs investigation, never allowed
  *   by default
  */
