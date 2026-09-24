@@ -171,118 +171,65 @@ describe('comparePlannerSearchStates preferred-source position', () => {
 })
 
 /**
- * Two equally rated ways to reach the same Target: one from the weapon the
- * Target prefers, one from an identical weapon it does not.
+ * Two equally rated Targets whose one-operation Routes need the same Gogma
+ * Counter position on different weapons, so only one of them can run: a
+ * `same_gogma_counter` conflict with no explicit resolution. One Target
+ * prefers its Route's source weapon, the other prefers nothing.
+ *
+ * Each Target holds exactly one BuildListEntry, as every full Planner run does
+ * (`docs/DATA_MODEL.md` 9.4.1, `docs/PLANNER_SPEC.md` 4.1 / 9.2.18).
  */
 function equalCostScenario(preferredWeaponIndex: 0 | 1) {
   const first = sourceWeapon('owned.preferred.route.first')
   const second = sourceWeapon('owned.preferred.route.second')
   const weapons: OwnedWeapon[] = [first, second]
-  const goal: TargetWeapon = {
-    ...target('target.preferred.route'),
-    preferredOwnedWeaponId: weapons[preferredWeaponIndex].id,
-  }
+  const goals: TargetWeapon[] = [
+    {
+      ...target('target.preferred.route.first'),
+      preferredOwnedWeaponId: preferredWeaponIndex === 0 ? first.id : null,
+    },
+    {
+      ...target('target.preferred.route.second'),
+      preferredOwnedWeaponId: preferredWeaponIndex === 1 ? second.id : null,
+    },
+  ]
   const route = (source: OwnedWeapon): BuildRoute => resetRoute(source.id, 10)
-  const firstEntry = routeEntry(
-    'entry.preferred.route.first',
-    goal,
-    route(first),
-  )
-  const secondEntry = routeEntry(
-    'entry.preferred.route.second',
-    goal,
-    route(second),
-  )
+  const firstEntry = routeEntry('entry.preferred.route.first', goals[0], route(first))
+  const secondEntry = routeEntry('entry.preferred.route.second', goals[1], route(second))
   return {
-    ...fixture([goal], [firstEntry, secondEntry], weapons),
+    ...fixture(goals, [firstEntry, secondEntry], weapons),
     firstEntry,
     secondEntry,
     preferredEntryId: preferredWeaponIndex === 0 ? firstEntry.id : secondEntry.id,
   }
 }
 
-/**
- * Two Entries of one Target are a legacy duplicate of the Build List
- * cardinality contract (`docs/DATA_MODEL.md` 9.4.1): an ordinary persisted input
- * holding them fails closed before any Route is compared (see the last case
- * below). The Planner-side preferred source comparison between them is reachable
- * only through a B8 / what-if trial input (`docs/PLANNER_SPEC.md` 9.2.18), so
- * these scenarios run as one.
- */
-const TRIAL = 'temporary_augmented' as const
-
 describe('Planner preferred source in Beam Search', () => {
   it.each([0, 1] as const)(
     'selects the preferred source Entry (%i) when the two are otherwise equal',
     async (preferredWeaponIndex) => {
       const scenario = equalCostScenario(preferredWeaponIndex)
-      const result = await runPlannerBeamSearch(scenario.input, scenario.dependencies, {}, TRIAL)
-      // Both Entries are equally valid and equally cheap, so without the
-      // preference the stable tie-break alone would decide. Flipping which
-      // weapon is preferred flips the selection, which the stable key could
-      // never do.
-      // Exactly one Entry is selected, so this is a genuine choice between the
-      // two rather than both being taken.
+      const result = await runPlannerBeamSearch(scenario.input, scenario.dependencies, {})
+      // Both Entries are equally valid and equally cheap, and only one can
+      // take Gogma Counter position 10, so without the preference the stable
+      // tie-break alone would decide. Flipping which Target prefers its
+      // source flips the selection, which the stable key could never do.
       expect(result.bestState?.selectedBuildListEntryIds).toEqual([
         scenario.preferredEntryId,
       ])
     },
   )
 
-  it('keeps the cheaper non-preferred Route when the preferred one costs more', async () => {
-    const near = sourceWeapon('owned.preferred.cost.near')
-    const far = sourceWeapon('owned.preferred.cost.far')
-    const goal: TargetWeapon = {
-      ...target('target.preferred.cost'),
-      preferredOwnedWeaponId: far.id,
-    }
-    const nearEntry = routeEntry(
-      'entry.preferred.cost.near',
-      goal,
-      resetRoute(near.id, 10),
-    )
-    const farEntry = routeEntry('entry.preferred.cost.far', goal, {
-      kind: 'existing_gogma_reset_bonuses',
-      sourceOwnedWeaponId: far.id,
-      operations: [
-        {
-          type: 'reset_bonuses',
-          sourceOwnedWeaponId: far.id,
-          gogmaCounterBefore: 10,
-          gogmaCounterAfter: 11,
-        },
-        {
-          type: 'reset_bonuses',
-          sourceOwnedWeaponId: far.id,
-          gogmaCounterBefore: 11,
-          gogmaCounterAfter: 12,
-        },
-        {
-          type: 'reset_bonuses',
-          sourceOwnedWeaponId: far.id,
-          gogmaCounterBefore: 12,
-          gogmaCounterAfter: 13,
-        },
-      ],
-    })
-    const { input, dependencies } = fixture(
-      [goal],
-      [nearEntry, farEntry],
-      [near, far],
-    )
-    const result = await runPlannerBeamSearch(input, dependencies, {}, TRIAL)
-    // The preference sits below every cost term, so the one-operation Route
-    // wins even though the three-operation one starts from the preferred
-    // weapon (`docs/PLANNER_SPEC.md` 7.4).
-    expect(result.bestState?.selectedBuildListEntryIds).toEqual([nearEntry.id])
-  })
+  // That the preference never overrules a cheaper Route is the comparator
+  // contract above ('never overrules the existing evaluationScore'): a Beam
+  // Search can no longer hold two Routes of one Target to compare them.
 
   it('never changes a reserved weapon or a Target preference', async () => {
     const scenario = equalCostScenario(0)
     const preferenceBefore = scenario.input.targetWeapons.map(
       ({ id, preferredOwnedWeaponId }) => [id, preferredOwnedWeaponId],
     )
-    const result = await runPlannerBeamSearch(scenario.input, scenario.dependencies, {}, TRIAL)
+    const result = await runPlannerBeamSearch(scenario.input, scenario.dependencies, {})
     // reserve_weapon secures a Candidate result; it is never a licence to
     // rewrite the user's planning input (`docs/PLANNER_SPEC.md` 7.4).
     expect(
@@ -296,13 +243,35 @@ describe('Planner preferred source in Beam Search', () => {
     })
   })
 
-  it('fails an ordinary persisted input holding both Entries closed instead of choosing one', async () => {
-    const scenario = equalCostScenario(0)
-    const result = await runPlannerBeamSearch(scenario.input, scenario.dependencies)
-    expect(result.bestState).toBeNull()
-    expect(result.expandedStates).toBe(0)
-    expect(result.warnings.map(({ kind }) => kind)).toContain(
+  it('never compares two Routes of one Target: every full Planner run refuses them', async () => {
+    const first = sourceWeapon('owned.preferred.pair.first')
+    const second = sourceWeapon('owned.preferred.pair.second')
+    const goal: TargetWeapon = {
+      ...target('target.preferred.pair'),
+      preferredOwnedWeaponId: first.id,
+    }
+    const firstEntry = routeEntry('entry.preferred.pair.first', goal, resetRoute(first.id, 10))
+    const secondEntry = routeEntry('entry.preferred.pair.second', goal, resetRoute(second.id, 10))
+    const { input, dependencies } = fixture([goal], [firstEntry, secondEntry], [first, second])
+
+    // The ordinary persisted input fails closed on the legacy duplicate.
+    const ordinary = await runPlannerBeamSearch(input, dependencies)
+    expect(ordinary.bestState).toBeNull()
+    expect(ordinary.expandedStates).toBe(0)
+    expect(ordinary.warnings.map(({ kind }) => kind)).toContain(
       'duplicate_build_list_entries_for_target',
     )
+    // A trial's full run is the replacement set: the replaced Entry left
+    // beside its temporary Entry is refused too (`docs/PLANNER_SPEC.md` 9.2.18).
+    const trial = await runPlannerBeamSearch(input, dependencies, {}, {
+      kind: 'temporary_replacement',
+      replacements: [{
+        targetWeaponId: goal.id,
+        replacedBuildListEntryId: firstEntry.id,
+        generatedBuildListEntryId: secondEntry.id,
+      }],
+    })
+    expect(trial.bestState).toBeNull()
+    expect(trial.expandedStates).toBe(0)
   })
 })

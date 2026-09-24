@@ -22,10 +22,24 @@ export interface PlanGuardedAction<R> {
   apply(approval: PlanBreakingChangeApproval | null): Promise<R>
   /** A short operation-specific sentence under the warning. Never a judgement. */
   note?: string
+  /**
+   * What 「最後のゲーム内セーブ地点へ戻す」 does with this change. `save_change`
+   * (the default, every ordinary guarded change) restores, saves the change
+   * over the restored state and abandons the Plan. `drop_change` is a Planner
+   * result save (`docs/PLANNER_SPEC.md` 9.2.18 / 16.10): the result was
+   * calculated before the restore, so only the restore happens, the change is
+   * dropped and the Plan is not abandoned. It only chooses the explanation the
+   * dialog shows; the runtime decides what is written.
+   */
+  savePointRestore?: 'save_change' | 'drop_change'
 }
 
 export type PlanGuardedActionOutcome<R> =
-  /** Saved. `planAbandoned` is true when the save ended the `active` Plan with the user's approval. */
+  /**
+   * Saved. `planAbandoned` is true when the save ended the `active` Plan with the
+   * user's approval; a `drop_change` save whose approval restored the save point
+   * ended none (only the restore was written).
+   */
   | { status: 'applied'; result: R; planAbandoned: boolean }
   /** The user cancelled the warning or the save point choice: nothing was saved. */
   | { status: 'cancelled' }
@@ -41,13 +55,14 @@ export type PlanBreakingChangePhase = 'warning' | 'choosing_save_point' | 'confi
  */
 export type PlanBreakingChangeApprovalState =
   | { status: 'idle' }
-  | { status: 'warning'; inspection: PlanBreakingChangeRequiredInspection; note: string | null }
-  | { status: 'choosing_save_point'; inspection: PlanBreakingChangeRequiredInspection; note: string | null }
-  | { status: 'confirming_restore'; inspection: PlanBreakingChangeRequiredInspection; note: string | null }
+  | { status: 'warning'; inspection: PlanBreakingChangeRequiredInspection; note: string | null; restoreDropsChange: boolean }
+  | { status: 'choosing_save_point'; inspection: PlanBreakingChangeRequiredInspection; note: string | null; restoreDropsChange: boolean }
+  | { status: 'confirming_restore'; inspection: PlanBreakingChangeRequiredInspection; note: string | null; restoreDropsChange: boolean }
   | {
       status: 'submitting'
       inspection: PlanBreakingChangeRequiredInspection
       note: string | null
+      restoreDropsChange: boolean
       phase: PlanBreakingChangePhase
     }
 
@@ -130,6 +145,7 @@ export function usePlanBreakingChangeApproval(): PlanBreakingChangeApprovalContr
 
   const run = useCallback(<R,>(action: PlanGuardedAction<R>): Promise<PlanGuardedActionOutcome<R>> => {
     const note = action.note ?? null
+    const restoreDropsChange = action.savePointRestore === 'drop_change'
     track(1)
     return (async (): Promise<PlanGuardedActionOutcome<R>> => {
       try {
@@ -173,7 +189,7 @@ export function usePlanBreakingChangeApproval(): PlanBreakingChangeApprovalContr
             resolve: resolve as (outcome: PlanGuardedActionOutcome<unknown>) => void,
             reject,
           }
-          setState({ status: 'warning', inspection: required, note })
+          setState({ status: 'warning', inspection: required, note, restoreDropsChange })
         })
       } finally {
         track(-1)
@@ -190,7 +206,13 @@ export function usePlanBreakingChangeApproval(): PlanBreakingChangeApprovalContr
     ) {
       return
     }
-    setState({ status: 'submitting', inspection: pending.inspection, note: current.note, phase })
+    setState({
+      status: 'submitting',
+      inspection: pending.inspection,
+      note: current.note,
+      restoreDropsChange: current.restoreDropsChange,
+      phase,
+    })
     // The approval is the inspection the user saw and their decision; the
     // Plan token is never rebuilt from a fresh read.
     const approval: PlanBreakingChangeApproval = {
@@ -201,7 +223,10 @@ export function usePlanBreakingChangeApproval(): PlanBreakingChangeApprovalContr
       try {
         const result = await pending.action.apply(approval)
         if (pendingRef.current !== pending) return
-        finish({ status: 'applied', result, planAbandoned: true })
+        // A change that restoring drops (`drop_change`) ends no Plan when the
+        // user chose the restore: only the save point restore was written.
+        const planAbandoned = !(current.restoreDropsChange && decision?.kind === 'restore_save_point')
+        finish({ status: 'applied', result, planAbandoned })
       } catch (caught: unknown) {
         if (pendingRef.current !== pending) return
         const refusal = planGuardedRefusalMessage(caught)
@@ -226,7 +251,12 @@ export function usePlanBreakingChangeApproval(): PlanBreakingChangeApprovalContr
     const current = stateRef.current
     if (current.status !== 'warning') return
     if (current.inspection.savePointChoiceRequired) {
-      setState({ status: 'choosing_save_point', inspection: current.inspection, note: current.note })
+      setState({
+        status: 'choosing_save_point',
+        inspection: current.inspection,
+        note: current.note,
+        restoreDropsChange: current.restoreDropsChange,
+      })
       return
     }
     submit(null, 'warning')
@@ -241,7 +271,12 @@ export function usePlanBreakingChangeApproval(): PlanBreakingChangeApprovalContr
   const chooseRestore = useCallback(() => {
     const current = stateRef.current
     if (current.status !== 'choosing_save_point') return
-    setState({ status: 'confirming_restore', inspection: current.inspection, note: current.note })
+    setState({
+      status: 'confirming_restore',
+      inspection: current.inspection,
+      note: current.note,
+      restoreDropsChange: current.restoreDropsChange,
+    })
   }, [setState])
 
   const confirmRestore = useCallback(() => {

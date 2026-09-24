@@ -11,11 +11,21 @@ import {
   assertRepositoryValidation,
   RepositoryError,
 } from '../../db/repositoryError'
-import { runInRepositoryTransaction } from '../../db/transaction'
+import type { BuildListEntryReplacement } from '../../domain/buildList'
+import {
+  unchangedMutableState,
+  type PlanBreakingChangeApproval,
+  type PlanBreakingChangeInspection,
+  type PlanGuardedMutation,
+  type PlanGuardedMutationBase,
+} from '../../domain/execution'
 import type {
   BuildListEntry,
   CalculationContext,
+  ExecutionHistoryId,
+  ExecutionSavePoint,
   ExpectedPlanState,
+  ISODateTimeString,
   NormalArtianCounter,
   OwnedWeapon,
   ProductionPlan,
@@ -34,23 +44,43 @@ import {
   collectProductionPlanDependentTargetWeaponIds,
   createPlanningBuildListEntriesHash,
   createPlanningTargetWeaponsHash,
-  findPersistedGeneratedBuildListEntryCollision,
+  prepareFinalReplacementBuildList,
   type PlannerOrchestrationResult,
   type PlannerResultPersistenceIssue,
   type PlannerSearchTermination,
 } from '../../domain/planner'
+import { PlanBreakingChangeGuard } from '../execution/planBreakingChangeGuard'
 
 /**
- * The B8-D2a save-time boundary of PLANNER_SPEC 9.2.15.
+ * The B8-D2a save-time boundary of PLANNER_SPEC 9.2.15 / 9.2.18.
  *
  * A `PlannerOrchestrationResult` is a pure calculation over the snapshot the
  * Planner Worker was handed. Persisting it therefore re-reads the current state
  * *inside* the same Dexie read-write transaction that writes, re-validates the
  * Plan against that state with the existing snapshot authorities, and only then
- * deletes the previous Draft, writes the generated BuildListEntries and adds the
- * new Draft together. There is no window between the check and the write, and
- * no partial save: either the previous Draft is gone and every Entry and the
+ * deletes the previous Draft, replaces each Entry the Planner replaced with its
+ * generated BuildListEntry and adds the new Draft together. There is no window
+ * between the check and the write, and no partial save: either the previous
+ * Draft is gone, every replaced Entry is gone, every generated Entry and the
  * new Plan are stored, or nothing changed and the previous Draft survives.
+ *
+ * A generated Entry replaces the persisted Entry `O` of its Target
+ * (`docs/PLANNER_SPEC.md` 9.2.18). The transaction deletes that `O` only after
+ * confirming it is still the Target's one persisted Entry, never whatever Entry
+ * the Target holds now. Deleting `O` is a Build List change, so the whole save
+ * is one guarded mutation of the existing Plan-breaking guard (16.6): when `O`
+ * is a dependency of the `active` Plan the save is refused without the user's
+ * approval, and with it ends that Plan (`breaking_change_approved`) in the same
+ * transaction. A Draft, stale or ended Plan referencing `O` never needs one.
+ * Without any replacement the save never breaks a Plan, exactly as before.
+ *
+ * The result was calculated from the state before any save point restore, so
+ * choosing 「最後のゲーム内セーブ地点へ戻す」 in that approval never saves it over
+ * the restored state (`docs/PLANNER_SPEC.md` 9.2.18 / 16.10): the restore alone
+ * is written, the result is dropped with its generated Entries, replacements and
+ * Draft, the running Plan is not abandoned, and the outcome asks for a new
+ * calculation from the restored state. The snapshot checks are never weakened to
+ * fit the old result onto it.
  *
  * The Draft replacement (`docs/DATA_MODEL.md` 11.1, `docs/PLANNER_SPEC.md`
  * 9.2.15) deletes only `draft` ProductionPlan records - never an `active` /
@@ -90,6 +120,39 @@ export function createPlannerResultPersistenceRepositories(
     productionPlans: new ProductionPlanRepository(database),
   }
 }
+
+export interface PlannerResultPersistenceOptions {
+  /** The time an approved breaking change ends the `active` Plan at. */
+  clock?: { now(): ISODateTimeString }
+}
+
+const systemClock = { now: (): ISODateTimeString => new Date().toISOString() }
+
+/**
+ * How one Planner result save ended (`docs/PLANNER_SPEC.md` 9.2.15 / 9.2.18).
+ *
+ * - `saved`: the new Draft, its generated Entries and their replacements are
+ *   stored, and any running Plan the user approved breaking is abandoned
+ * - `no_plan`: the calculation produced no Plan; nothing was written and the
+ *   previous Draft is kept
+ * - `save_point_restored_recalculation_required`: the user approved breaking
+ *   the `active` Plan and chose 「最後のゲーム内セーブ地点へ戻す」. Only the save
+ *   point restore was written; this result - calculated before the restore - was
+ *   dropped with its generated Entries, replacements and Draft, the previous
+ *   Draft and Build List are untouched, the running Plan is the restored one
+ *   (not abandoned), and a new calculation from the restored state is required
+ */
+export type PlannerOrchestrationResultSaveOutcome =
+  | { kind: 'saved'; plan: ProductionPlan }
+  | { kind: 'no_plan' }
+  | {
+      kind: 'save_point_restored_recalculation_required'
+      /** The running Plan as the save point restored it. */
+      restoredPlan: ProductionPlan
+      /** The save point that was restored; it is kept. */
+      savePoint: ExecutionSavePoint
+      deletedExecutionHistoryIds: ExecutionHistoryId[]
+    }
 
 /**
  * Current persisted state diverged from the Plan's own snapshot. Nothing was
@@ -141,95 +204,175 @@ function sameExpectedPlanState(
 
 interface PlannerSaveCurrentState {
   rngState: RngState
-  normalCounters: NormalArtianCounter[]
-  ownedWeapons: OwnedWeapon[]
-  targetWeapons: TargetWeapon[]
-  buildListEntries: BuildListEntry[]
+  normalCounters: readonly NormalArtianCounter[]
+  ownedWeapons: readonly OwnedWeapon[]
+  targetWeapons: readonly TargetWeapon[]
+  buildListEntries: readonly BuildListEntry[]
+}
+
+/** One persistable Planner result, its shape already checked. */
+interface PersistablePlannerResult {
+  plan: ProductionPlan
+  generatedEntries: readonly BuildListEntry[]
+  replacements: readonly BuildListEntryReplacement[]
 }
 
 export class PlannerResultPersistenceService {
   private readonly database: AppDatabase
   private readonly repositories: PlannerResultPersistenceRepositories
+  private readonly clock: { now(): ISODateTimeString }
 
   constructor(
     database: AppDatabase = appDatabase,
     repositories: PlannerResultPersistenceRepositories =
       createPlannerResultPersistenceRepositories(database),
+    options: PlannerResultPersistenceOptions = {},
   ) {
     this.database = database
     this.repositories = repositories
+    this.clock = options.clock ?? systemClock
   }
 
   /**
-   * Saves the generated BuildListEntries and the ProductionPlan atomically,
+   * Reads whether saving the result needs the Plan-breaking approval
+   * (`docs/PLANNER_SPEC.md` 16.6 / 9.2.18, `docs/UI_FLOW.md` 16.3) and what the
+   * warning and the 16.10 save point choice must show. It writes nothing, and
+   * refuses a result the save would refuse. A result with no Plan never needs
+   * one.
+   */
+  async inspectPlannerOrchestrationResultSave(
+    result: PlannerOrchestrationResult,
+    currentCalculationContext: CalculationContext,
+  ): Promise<PlanBreakingChangeInspection> {
+    const persistable = this.persistableResult(result)
+    if (persistable === null) return { approvalRequired: false }
+    return this.guard(currentCalculationContext).inspect(
+      this.saveMutation(persistable, currentCalculationContext),
+    )
+  }
+
+  /**
+   * Saves the generated BuildListEntries - each replacing the persisted Entry
+   * it was calculated to replace - and the ProductionPlan atomically,
    * replacing the previous Draft in the same transaction.
    *
-   * Returns the stored Plan, or `null` when the calculation produced no Plan
-   * (the previous Draft is then kept). Every failure throws a `RepositoryError`
-   * and writes nothing - the previous Draft, the Build List and every other
+   * Returns `saved` with the stored Plan, or `no_plan` when the calculation
+   * produced no Plan (the previous Draft is then kept). An approval whose 16.10
+   * decision restores the save point returns
+   * `save_point_restored_recalculation_required`: the restore, and nothing of
+   * this result, is written in one transaction. Every failure throws and writes nothing
+   * - the previous Draft, the Build List, the running Plan and every other
    * table stay as they were: `planner_state_changed` means the current state
-   * moved under the calculation, `planner_result_invalid` means the result
-   * violates an invariant it must satisfy to be persisted, and
-   * `validation_failed` means Domain validation rejected the Plan or an Entry.
+   * moved under the calculation (a replaced Entry that is no longer its
+   * Target's one persisted Entry included), `planner_result_invalid` means the
+   * result violates an invariant it must satisfy to be persisted,
+   * `validation_failed` means Domain validation rejected the Plan or an Entry,
+   * and `plan_breaking_change_approval_required` means a replacement breaks the
+   * `active` Plan and `approval` was not given.
    */
   async savePlannerOrchestrationResult(
     result: PlannerOrchestrationResult,
     currentCalculationContext: CalculationContext,
-  ): Promise<ProductionPlan | null> {
+    approval: PlanBreakingChangeApproval | null = null,
+  ): Promise<PlannerOrchestrationResultSaveOutcome> {
+    const persistable = this.persistableResult(result)
+    if (persistable === null) return { kind: 'no_plan' }
+    const { plan } = persistable
+    const guard = this.guard(currentCalculationContext)
+    const mutation = this.saveMutation(persistable, currentCalculationContext)
+    if (approval?.savePointDecision?.kind === 'restore_save_point') {
+      // The restore makes this pre-restore result stale by construction: the
+      // guard re-derives the approval and the 16.10 choice, restores, and
+      // writes nothing of the result (`docs/PLANNER_SPEC.md` 9.2.18).
+      const restore = await guard.restoreSavePointInsteadOfChange(mutation, approval)
+      return {
+        kind: 'save_point_restored_recalculation_required',
+        restoredPlan: restore.plan,
+        savePoint: restore.savePoint,
+        deletedExecutionHistoryIds: restore.deletedExecutionHistoryIds,
+      }
+    }
+    const outcome = await guard.apply(
+      mutation,
+      approval,
+      {
+        afterWrite: async () => {
+          // A newly calculated Plan carries a fresh ID: an ID the collection
+          // already holds - whatever that Plan's status, the previous Draft
+          // included - is a different Plan and is refused here, inside the
+          // transaction and before the Draft replacement, so a Draft holding
+          // the same ID is never deleted and re-added under it.
+          await this.repositories.productionPlans.assertProductionPlanIdFree(plan.id)
+          // The new Draft replaces the previous one (DATA_MODEL 11.1): only
+          // Draft records are deleted, their referenced Entries stay, and any
+          // failure below rolls this deletion back with the rest of the
+          // transaction - the Entry replacements and any Plan termination
+          // included.
+          await this.repositories.productionPlans.deleteDraftProductionPlans()
+          await this.repositories.productionPlans.addProductionPlan(plan)
+        },
+      },
+    )
+    return { kind: 'saved', plan: outcome.result }
+  }
+
+  /**
+   * The result-shape invariants that do not depend on current persisted state,
+   * or `null` for a result with no Plan.
+   */
+  private persistableResult(result: PlannerOrchestrationResult): PersistablePlannerResult | null {
     const { plan } = result
     const generatedEntries = result.generatedBuildListEntries
+    const replacements = result.generatedBuildListEntryReplacements
 
     if (plan === null) {
-      // PLANNER_SPEC 9.2.14: no Plan means no adopted Entry. A non-empty list
-      // here breaks the orchestration invariant, so nothing is written and no
-      // Entry is salvaged on its own.
-      if (generatedEntries.length > 0) {
+      // PLANNER_SPEC 9.2.14: no Plan means no adopted Entry and no
+      // replacement. A non-empty list here breaks the orchestration invariant,
+      // so nothing is written and no Entry is salvaged on its own.
+      const replacementCount = Array.isArray(replacements) ? replacements.length : 0
+      if (generatedEntries.length > 0 || replacementCount > 0) {
         throw resultInvalid(
-          `The Planner returned no Plan but ${generatedEntries.length} generated BuildListEntries. No Entry may be persisted without its Plan.`,
+          `The Planner returned no Plan but ${generatedEntries.length} generated BuildListEntries and ${replacementCount} BuildListEntry replacements. No Entry may be persisted without its Plan.`,
         )
       }
       return null
     }
+    this.assertPersistableResultShape(plan, generatedEntries, result.termination, replacements)
+    return { plan, generatedEntries, replacements }
+  }
 
-    this.assertPersistableResultShape(plan, generatedEntries, result.termination)
+  private guard(currentCalculationContext: CalculationContext): PlanBreakingChangeGuard {
+    return new PlanBreakingChangeGuard({
+      database: this.database,
+      currentCalculationContext,
+      clock: this.clock,
+    })
+  }
 
-    return runInRepositoryTransaction(
-      this.database,
-      [
-        this.database.rngState,
-        this.database.normalArtianCounters,
-        this.database.ownedWeapons,
-        this.database.targetWeapons,
-        this.database.buildListEntries,
-        this.database.productionPlans,
-      ],
-      async () => {
-        const current = await this.readCurrentState()
-        const augmentedEntries = this.assertCurrentStateMatchesPlan(
-          plan,
-          generatedEntries,
-          current,
-          currentCalculationContext,
-        )
-        this.assertPlanReferences(plan, generatedEntries, augmentedEntries)
-
-        // A newly calculated Plan carries a fresh ID: an ID the collection
-        // already holds - whatever that Plan's status, the previous Draft
-        // included - is a different Plan and is refused here, inside the
-        // transaction and before the Draft replacement, so a Draft holding the
-        // same ID is never deleted and re-added under it.
-        await this.repositories.productionPlans.assertProductionPlanIdFree(plan.id)
-
-        // The new Draft replaces the previous one (DATA_MODEL 11.1): only Draft
-        // records are deleted, their referenced Entries stay, and any failure
-        // below rolls this deletion back with the rest of the transaction.
-        await this.repositories.productionPlans.deleteDraftProductionPlans()
-        for (const entry of generatedEntries) {
-          await this.repositories.buildListEntries.addBuildListEntry(entry)
-        }
-        return this.repositories.productionPlans.addProductionPlan(plan)
-      },
-    )
+  /**
+   * The whole save as one pure guarded mutation: from the persisted state it
+   * is given - the current one, or a restored one after 「最後のゲーム内セーブ
+   * 地点へ戻す」 - it re-validates the Plan and returns the final Build List
+   * (the replacement set) as the post-state the Plan-breaking guard judges.
+   */
+  private saveMutation(
+    persistable: PersistablePlannerResult,
+    currentCalculationContext: CalculationContext,
+  ): PlanGuardedMutation<ProductionPlan> {
+    return (base: PlanGuardedMutationBase) => {
+      const { plan, generatedEntries } = persistable
+      const current = this.currentState(base)
+      const finalEntries = this.assertCurrentStateMatchesPlan(
+        persistable,
+        current,
+        currentCalculationContext,
+      )
+      this.assertPlanReferences(plan, generatedEntries, finalEntries)
+      return {
+        state: { ...unchangedMutableState(base), buildListEntries: finalEntries },
+        result: plan,
+      }
+    }
   }
 
   /** Result-shape invariants that do not depend on current persisted state. */
@@ -237,20 +380,22 @@ export class PlannerResultPersistenceService {
     plan: ProductionPlan,
     generatedEntries: readonly BuildListEntry[],
     termination: PlannerSearchTermination,
-  ) {
-    // PLANNER_SPEC 7.2.1 / 9.2.15, shared with the replan adoption (16.8):
-    // an incomplete search, a non-draft Plan, duplicated generated Entry IDs,
-    // or a Domain-invalid Plan / Entry is never persisted. B8-D2a stores a
-    // freshly calculated Draft; activation, replacement and the
-    // single-active-Plan constraint stay the existing Application concerns.
-    throwIssue(checkPersistablePlannerResultShape(plan, generatedEntries, termination))
+    replacements: readonly BuildListEntryReplacement[] | undefined,
+  ): asserts replacements is readonly BuildListEntryReplacement[] {
+    // PLANNER_SPEC 7.2.1 / 9.2.15 / 9.2.18, shared with the replan adoption
+    // (16.8): an incomplete search, a non-draft Plan, duplicated generated
+    // Entry IDs, malformed replacement metadata, or a Domain-invalid Plan /
+    // Entry is never persisted. B8-D2a stores a freshly calculated Draft;
+    // activation and the single-active-Plan constraint stay the existing
+    // Application concerns.
+    throwIssue(checkPersistablePlannerResultShape(plan, generatedEntries, termination, replacements))
   }
 
-  private async readCurrentState(): Promise<PlannerSaveCurrentState> {
+  private currentState(base: PlanGuardedMutationBase): PlannerSaveCurrentState {
     // Read inside the write transaction. A missing or invalid RngState fails
     // closed: save time never creates an initial state and never repairs one.
-    const rngState = await this.repositories.rngState.getCurrentRngState()
-    if (!rngState) {
+    const { rngState } = base
+    if (rngState === null) {
       throw stateChanged(
         'No RngState is stored, so the Planner result cannot be validated against current state.',
       )
@@ -258,26 +403,25 @@ export class PlannerResultPersistenceService {
     assertRepositoryValidation('RngState', validateRngState(rngState))
     return {
       rngState,
-      normalCounters:
-        await this.repositories.normalCounters.getAllNormalArtianCounters(),
-      ownedWeapons: await this.repositories.ownedWeapons.getAllOwnedWeapons(),
-      targetWeapons: await this.repositories.targetWeapons.getAllTargetWeapons(),
-      buildListEntries:
-        await this.repositories.buildListEntries.getAllBuildListEntries(),
+      normalCounters: base.normalCounters,
+      ownedWeapons: base.ownedWeapons,
+      targetWeapons: base.targetWeapons,
+      buildListEntries: base.buildListEntries,
     }
   }
 
   /**
    * Compares current state against the Plan's own `PlanningInputSnapshot` with
-   * the existing snapshot authorities only, and returns the final augmented
-   * BuildListEntry set the Plan was calculated over.
+   * the existing snapshot authorities only, and returns the final replacement
+   * set the Plan was calculated over: the current Entries with each replaced
+   * Entry removed and each generated Entry added.
    */
   private assertCurrentStateMatchesPlan(
-    plan: ProductionPlan,
-    generatedEntries: readonly BuildListEntry[],
+    persistable: PersistablePlannerResult,
     current: PlannerSaveCurrentState,
     currentCalculationContext: CalculationContext,
   ): BuildListEntry[] {
+    const { plan, generatedEntries, replacements } = persistable
     if (
       !isCalculationContextCompatible(
         currentCalculationContext,
@@ -293,17 +437,28 @@ export class PlannerResultPersistenceService {
       )
     }
 
+    // A generated ID already persisted, or a Target whose persisted Entry is
+    // no longer exactly the one the Planner replaced, refuses before anything
+    // is compared further: nothing is deleted or overwritten on a guess.
+    const finalBuildList = prepareFinalReplacementBuildList(
+      [...current.buildListEntries],
+      generatedEntries,
+      replacements,
+    )
+    throwIssue(finalBuildList.issue)
+    const finalEntries = finalBuildList.finalEntries as BuildListEntry[]
+
     // A freshly calculated Draft has no confirmed Step yet, so no observation
     // binding applies and the current state hashes with its real values.
     const currentExecutionState = createExpectedPlanState(
       current.rngState,
-      current.normalCounters,
-      current.ownedWeapons,
+      [...current.normalCounters],
+      [...current.ownedWeapons],
       {
-        targetWeapons: current.targetWeapons,
+        targetWeapons: [...current.targetWeapons],
         dependentTargetWeaponIds: collectProductionPlanDependentTargetWeaponIds(
           plan,
-          [...current.buildListEntries, ...generatedEntries],
+          finalEntries,
         ),
       },
     )
@@ -319,7 +474,7 @@ export class PlannerResultPersistenceService {
     }
 
     if (
-      createPlanningTargetWeaponsHash(current.targetWeapons) !==
+      createPlanningTargetWeaponsHash([...current.targetWeapons]) !==
       plan.baseSnapshot.targetWeaponsHash
     ) {
       throw stateChanged(
@@ -327,17 +482,12 @@ export class PlannerResultPersistenceService {
       )
     }
 
-    throwIssue(
-      findPersistedGeneratedBuildListEntryCollision(generatedEntries, current.buildListEntries),
-    )
-
-    const augmentedEntries = [...current.buildListEntries, ...generatedEntries]
     if (
-      createPlanningBuildListEntriesHash(augmentedEntries) !==
+      createPlanningBuildListEntriesHash(finalEntries) !==
       plan.baseSnapshot.buildListEntriesHash
     ) {
       throw stateChanged(
-        'The current BuildListEntry set plus the generated Entries differs from PlanningInputSnapshot.buildListEntriesHash.',
+        'The current BuildListEntry set with the generated replacements applied differs from PlanningInputSnapshot.buildListEntriesHash.',
       )
     }
 
@@ -345,16 +495,16 @@ export class PlannerResultPersistenceService {
       checkGeneratedBuildListEntriesFresh(generatedEntries, current, currentCalculationContext),
     )
 
-    return augmentedEntries
+    return finalEntries
   }
 
   /** Every BuildListEntry the Plan references must exist in the final set. */
   private assertPlanReferences(
     plan: ProductionPlan,
     generatedEntries: readonly BuildListEntry[],
-    augmentedEntries: readonly BuildListEntry[],
+    finalEntries: readonly BuildListEntry[],
   ) {
-    throwIssue(checkProductionPlanBuildListReferences(plan, generatedEntries, augmentedEntries))
+    throwIssue(checkProductionPlanBuildListReferences(plan, generatedEntries, finalEntries))
   }
 }
 

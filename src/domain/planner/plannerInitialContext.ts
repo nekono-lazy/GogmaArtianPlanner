@@ -29,7 +29,7 @@ import {
 } from './plannerRouteProgress'
 import type {
   ExcludedBuildListEntry,
-  PlannerBuildListCardinality,
+  PlannerBuildListContext,
   PlannerConflictResolution,
   PlannerDependencies,
   PlannerInput,
@@ -38,6 +38,7 @@ import type {
   PlannerWarning,
   ValidatedBuildListEntry,
 } from './plannerTypes'
+import { PERSISTED_PLANNER_BUILD_LIST_CONTEXT } from './plannerTypes'
 import { validatePlannerInput } from './plannerValidation'
 
 function compareStableStrings(left: string, right: string): number {
@@ -109,9 +110,10 @@ export type PlannerInitialContextResult =
  * Runs the shared Planner input validation, initial state, Route unit plan,
  * initial relevant-entry selection, and initial PlanConflict detection path.
  *
- * `cardinality` is the Build List cardinality contract of `input`
- * (`PlannerBuildListCardinality`); only a B8 / what-if trial passes
- * `temporary_augmented`.
+ * `buildListContext` is the Build List cardinality contract of `input`
+ * (`PlannerBuildListContext`); only a B8 / what-if trial passes a temporary
+ * one - `temporary_augmented` for its conflict preflight, and
+ * `temporary_replacement` for the replacement set.
  *
  * It is a pure Domain calculation: no persistence, Worker, React state, Clock,
  * or ID factory access. Only PlannerDependencies.rngEngine is used, because the
@@ -120,9 +122,9 @@ export type PlannerInitialContextResult =
 export function preparePlannerInitialContext(
   input: PlannerInput,
   dependencies: PlannerDependencies,
-  cardinality: PlannerBuildListCardinality = 'persisted',
+  buildListContext: PlannerBuildListContext = PERSISTED_PLANNER_BUILD_LIST_CONTEXT,
 ): PlannerInitialContextResult {
-  const validation = validatePlannerInput(input, dependencies, cardinality)
+  const validation = validatePlannerInput(input, dependencies, buildListContext)
   const warnings = [...validation.warnings]
   if (!validation.isValid) {
     return {

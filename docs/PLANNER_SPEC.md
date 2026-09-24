@@ -199,10 +199,13 @@ validatePlannerInput()
   ないため、このrunは何も選ばず、その整理はBuild Listに委ねる。判定は
   `findBuildListTargetDuplicates()`（`src/domain/buildList/buildListCardinality.ts`）だけをauthorityとする
 - 例外はconstrained re-search / what-ifのtemporary augmented inputだけである（9.2.18）。どの入力が
-  temporaryかはDomainの呼び出し文脈（`PlannerBuildListCardinality`、既定は `persisted`）で表し、
-  `PlannerInput` のfield、Worker request、UIでは表さない。Phase 0-1ではB8 / what-ifのtrial入力
-  （augmented preflightとtrialのfull Planner run）だけが `temporary_augmented` を渡し、通常の検証を
-  行わない（9.2.18の「temporary 2件以上のfail closed」等はPhase 0-3で実装する）
+  temporaryかはDomainの呼び出し文脈（`PlannerBuildListContext`、既定は `{ kind: 'persisted' }`）で表し、
+  `PlannerInput` のfield、Worker request、UIでは表さない。B8 / what-ifのtrialだけが、preflightの
+  augmented input（元Entry `O` + temporary Entry `G`）に `temporary_augmented`、full Planner runの置換後集合
+  （`-O + G`）に `temporary_replacement` を、どのEntryがtemporaryかを表すruntime-onlyの
+  `replacements`（`BuildListEntryReplacement[]`）と共に渡す。いずれもpersisted側に通常の
+  duplicate検証を適用し、加えてtemporary側を検証する（9.2.18、Phase 0-3で実装済み）。full Planner run
+  （`runPlannerBeamSearch()` / Production Plan生成）は型の上で `temporary_augmented` を受け付けない
 - 作成リストに有効な候補が無い有効・未完了Targetは、所持武器ですでにIdealかどうかにかかわらず、
   そのrunの完了条件、typed terminationの分母、TargetSatisfactionの追跡、score、conflict
   detectionのいずれにも入らない。計画中に確保した武器がそのTargetの条件を偶然満たしても達成と
@@ -3337,7 +3340,7 @@ PlanStepのcandidateIdとEntry Snapshot
 - 削除するのはDraft recordだけである。旧Draftが参照していたBuildListEntry / BuildCandidate /
   TargetWeaponをcascade deleteしない（Entry ownershipのauthorityが無く、generated Entryも既存
   Entryとreuseされ得るため）。`active` / `stale` / `completed` / `abandoned` のPlanも削除しない
-- 次期契約（未実装、9.2.18）: 正式採用したgenerated Entryは失う側Targetの元Entryを置換する。
+- 正式採用したgenerated Entryは失う側Targetの元Entryを置換する（9.2.18、Phase 0-3で実装済み）。
   これはDraft置換のcascade deleteではなく、Build List cardinalityの置換である
 - `plan === null` の結果は何も書かず、旧Draftを維持する
 
@@ -3617,15 +3620,32 @@ prefixのsilent fast-forward修正で4へ更新されており、7.0.1のPlan失
 
 実装時にこれらの前提を破る必要が判明した場合、勝手にversionを変更せず設計チャットへ戻す。
 
-### 9.2.18 Build List cardinalityとの関係（次期契約）
+### 9.2.18 Build List cardinalityとの関係
 
-実装状態: **未実装（次期契約）**。Issue #103のPhase 0-3で実装する
-（[ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md) 17章）。
-現行Productionでは、正式採用したgenerated Entryを元Entryに **追加** して保存し（9.2.15）、trialは元Entryと
-generated Entryを含むaugmented inputそのものでPlanを計算する。Phase 0-1で実装済みなのは、通常入力の
-legacy duplicate fail closed（4.1）と、trial入力をDomainの呼び出し文脈 `temporary_augmented` で区別して
-その検証から外すことだけである。そのため採用後の永続Build Listはlegacy duplicateになり、以後の通常
-Planner入力はfail closedする（ユーザーが既存のEntry削除で整理する）。
+実装状態: **実装済み**（Issue #103のPhase 0-3、
+[ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md) 17章）。
+Phase 0-3より前は、正式採用したgenerated Entryを元Entryに **追加** して保存し、trialは元Entryと
+generated Entryを含むaugmented inputそのものでPlanを計算していた。その時期に保存されたlegacy duplicateは
+自動整理せず、通常Planner入力のfail closed（4.1）とBuild Listの整理案内で扱う。
+
+実装の要点。
+
+- 置換の共通authorityは `src/domain/buildList/buildListEntryReplacement.ts`
+  （`BuildListEntryReplacement`、`resolveBuildListEntryReplacement()` /
+  `applyBuildListEntryReplacements()` / `validateBuildListEntryReplacements()` /
+  `validateGeneratedBuildListEntryReplacements()` / `validateReplacedBuildListCardinality()`）である。
+  B8、B9、通常Draft保存、再計画採用は独自に元Entryの特定や置換後集合の作成をしない
+- temporaryなEntryの識別はDomainの呼び出し文脈 `PlannerBuildListContext`
+  （`persisted` / `temporary_augmented` / `temporary_replacement`、4.1）だけで表す。preflightの
+  2段階は `preparePlannerReplacementConflictPreflight()` である
+- 採用結果は `PlannerOrchestrationResult.generatedBuildListEntryReplacements`
+  （generated Entryごとに1件、Target・置換対象の元Entry・generated Entryを持つserializableな
+  runtime metadata）でWorkerから保存transactionまで運ぶ。`plan === null` なら空である。永続化しない
+- 通常Draft保存の事前確認は `PlannerResultPersistenceService.inspectPlannerOrchestrationResultSave()`、
+  保存は `savePlannerOrchestrationResult(result, context, approval?)` であり、どちらも既存の
+  `PlanBreakingChangeGuard` を通る。B10の再計算保存はこの確認を既存の
+  `usePlanBreakingChangeApproval()` / `PlanBreakingChangeDialog` に接続する。通常のBuild List画面の
+  Planner入力は明示resolutionを持たずB8が動かないため置換を生じない（Serviceは単独でもfail closedする）
 
 永続Build Listは1 Targetにつき最大1 Entryである（[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1）。本節は
 constrained re-search（B8）、what-if（B9）、再計画Preview / 採用（16.8）がこのinvariantとどう
@@ -3700,9 +3720,25 @@ Stepが削除済みEntryを参照しない。表示中Planから復元するexpl
   `planner_state_changed` 相当で何も書かない
 - `O` が `active` PlanのPlan依存Entryである場合、置換は既存Plan-breaking guard（16.6）の判定対象である。
   guardを迂回せず、承認が無ければ何も保存しない（`plan_breaking_change_approval_required` とinspection）。
-  承認時は16.10の選択を経て、Draft保存・Entry置換・active Planの `abandoned`
-  （`breaking_change_approved`）を同一transactionで行う。`O` を参照するのがDraft / stale / 終了済みPlanだけ
+  承認時は16.10の選択を経て、「現在地点を維持」（選択が出ない承認を含む）ではDraft保存・Entry置換・active Planの
+  `abandoned`（`breaking_change_approved`）を同一transactionで行う。`O` を参照するのがDraft / stale / 終了済みPlanだけ
   なら、既存のEntry削除と同じくguard対象にしない
+- この承認で「最後のゲーム内セーブ地点へ戻す」を選んだ場合は、16.9のセーブ地点復元 **だけ** を行い、Planner resultの
+  保存は中止する（16.10）。Planner resultは復元前のRNG・Counter・OwnedWeapon・Target実行状態・Build Listから
+  計算したprecomputed artifactであり、その `PlanningInputSnapshot` は復元後の状態のauthorityではないためである。
+  generated Entryの追加、`O` の削除、旧Draftの削除、新Draftの追加、Planner resultのPlanはいずれも書かず、
+  実行中Planは既存の復元authorityどおり復元されたPlanのまま（`breaking_change_approved` にしない）とし、結果を
+  `save_point_restored_recalculation_required` として返して復元後の状態からの再計算を求める。これはsnapshot検証
+  （`initialExecutionState`、`targetWeaponsHash`、`buildListEntriesHash`、generated Entryのfreshness等）を
+  弱めるものではなく、snapshot authorityを守るために旧resultを捨てる規則である。再計画採用が復元で採用を中止する
+  （16.8）のと同じ理由による。承認・Planの一致・16.10の選択・セーブ地点の `recordedAt` の検証と復元自体の
+  fail-closed条件は通常の承認と同じで、失敗時は何も変更しない
+- 実装: `PlannerResultPersistenceService.savePlannerOrchestrationResult()` は `saved` / `no_plan` /
+  `save_point_restored_recalculation_required` のtyped outcomeを返す。復元の判定と書き込みは
+  `preparePlanGuardedSavePointRestoreInsteadOfChange()`（承認と選択の検証は `preparePlanGuardedMutation()` と共有、
+  復元は `prepareExecutionSavePointRestore()`）と `PlanBreakingChangeGuard.restoreSavePointInsteadOfChange()`
+  （書き込みは `restoreExecutionSavePoint()` と共通の `writeExecutionSavePointRestore()`）であり、復元を独自に
+  書き換える処理を持たない。通常のPlan-breaking変更（`PlanBreakingChangeGuard.apply()`）の意味は変えない
 - 再計画採用（16.8）では、旧実行中Planを `abandoned`（`replan_adopted`）にするのと同じtransactionで
   置換する。旧実行中Planは採用で終了するため、`O` がそのPlan依存Entryであっても別の警告を追加しない。
   他の実行中Planは存在し得ない（16.8の既存検証）
@@ -5104,7 +5140,8 @@ ProductionPlanには適用しない）。
   「同じTargetのEntryの置換」（[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1）は旧Entryの削除を伴うため新規追加とは
   扱わず、旧Entry削除と新Entry追加の全体を1つのguarded mutation（`buildListEntryReplacementMutation()`）として
   このguardで判定する（Phase 0-1で実装済み。Search画面の置換確認後の呼び出しはPhase 0-2で実装済み）。constrained re-searchの採用時の
-  置換も同様にguardを迂回しない（9.2.18、Phase 0-3）
+  置換も同様にguardを迂回しない（9.2.18、Phase 0-3で実装済み: Planner結果の保存全体を1つのguarded mutationとして
+  判定し、guardの同一transaction内で旧Draft削除と新Draft追加を行う）
 - 判定対象は `active` Planだけである。`active` / `stale` のPlanが2件以上ある場合は推測で選ばず拒否する
   （`running_plan_invariant_violated`）。`stale` Planや実行中Planが無い場合は警告せず通常保存し、Plan、
   セーブ地点、ExecutionHistory、作成中状態を変更しない
@@ -5401,6 +5438,12 @@ Planを壊す変更の承認）を行う場合、ゲーム側でユーザーが�
 - 「最後のゲーム内セーブ地点へ戻す」は16.9の復元を行ってから破棄操作を続ける。
   Planを壊す変更の承認では、復元 -> Plan破棄 -> 変更保存の順とする。
   再計画採用だけは16.8のとおり採用を中止する
+- 例外として、Planを壊す変更が **Planner result（`PlannerOrchestrationResult`）の保存** である場合
+  （9.2.18、generated Entryによる作成リスト置換）は、復元だけを行い変更を保存しない。Planner resultは復元前の
+  状態から計算したartifactであり、復元後の状態に対するauthorityではないため、変更を復元後の状態へ再適用しない。
+  generated Entry / Entry置換 / Draft置換を書かず、Planも破棄せず（復元されたPlanのまま）、復元後の状態からの
+  再計算を求める。snapshot検証は弱めない。RNG編集、Counter編集、所持武器・目標武器の編集、作成リストの手動変更
+  など通常の変更は従来どおり 復元 -> 変更 -> Plan破棄 である
 - セーブ地点が存在しない場合、またはセーブ地点の後にこのPlanのExecutionHistoryが無い
   （現在位置と同じ）場合は選択を出さない
 - 妥協品として確定して終了（16.12）は、現在の武器状態を確定する操作なので選択を出さない

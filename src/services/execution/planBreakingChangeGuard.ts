@@ -5,6 +5,8 @@ import {
   ExecutionRuntimeError,
   inspectPlanGuardedMutation,
   preparePlanGuardedMutation,
+  preparePlanGuardedSavePointRestoreInsteadOfChange,
+  type ExecutionSavePointRestoreWrite,
   type PlanBreakingChangeApproval,
   type PlanBreakingChangeInspection,
   type PlanBreakingChangeTermination,
@@ -16,6 +18,7 @@ import {
 import { loadMasterData } from '../../domain/master/loadMasterData'
 import type { CalculationContext, ISODateTimeString } from '../../domain/models/publicTypes'
 import { createBuildListCalculationContext } from '../buildList/createBuildListCalculationContext'
+import { writeExecutionSavePointRestore } from './executionSavePointRestoreWrite'
 
 /** The outcome of one guarded save: the mutation's own result, and how it ended the Plan if it did. */
 export interface PlanGuardedMutationOutcome<R> {
@@ -28,6 +31,18 @@ export interface PlanGuardedMutationOutcome<R> {
   state: PlanBreakingMutableState
   /** `null` unless an approved breaking change ended the `active` Plan. */
   planTermination: PlanBreakingChangeTermination | null
+}
+
+/**
+ * Extra writes one guarded save performs inside the same transaction, after the
+ * guard wrote the decided state and any Plan termination. The Planner result
+ * save uses it for its Draft replacement (`docs/PLANNER_SPEC.md` 9.2.15), which
+ * lives outside the mutable collections a guarded mutation decides. It judges
+ * nothing: every Plan-breaking decision was already made on the mutation's
+ * post-state. A failure it throws rolls the whole save back.
+ */
+export interface PlanGuardedApplyOptions<R> {
+  afterWrite?: (outcome: PlanGuardedMutationOutcome<R>) => Promise<void>
 }
 
 /**
@@ -45,6 +60,7 @@ export interface PlanGuardedPersistence {
   apply<R>(
     mutation: PlanGuardedMutation<R>,
     approval?: PlanBreakingChangeApproval | null,
+    options?: PlanGuardedApplyOptions<R>,
   ): Promise<PlanGuardedMutationOutcome<R>>
 }
 
@@ -96,6 +112,7 @@ export class PlanBreakingChangeGuard implements PlanGuardedPersistence {
   apply<R>(
     mutation: PlanGuardedMutation<R>,
     approval: PlanBreakingChangeApproval | null = null,
+    options: PlanGuardedApplyOptions<R> = {},
   ): Promise<PlanGuardedMutationOutcome<R>> {
     return this.run('rw', async () => {
       const state = await this.readState()
@@ -107,7 +124,37 @@ export class PlanBreakingChangeGuard implements PlanGuardedPersistence {
         now: this.dependencies.clock.now(),
       }))
       await this.write(state, write)
-      return { result: write.result, state: write.state, planTermination: write.planTermination }
+      const outcome = { result: write.result, state: write.state, planTermination: write.planTermination }
+      await options.afterWrite?.(outcome)
+      return outcome
+    })
+  }
+
+  /**
+   * The approved 「最後のゲーム内セーブ地点へ戻す」 of a change that is dropped
+   * instead of being applied to the restored state
+   * (`preparePlanGuardedSavePointRestoreInsteadOfChange()`, `docs/PLANNER_SPEC.md`
+   * 9.2.18 / 16.10): only a Planner result save uses it, because that result was
+   * calculated before the restore. The approval and the 16.10 choice are
+   * re-derived exactly as `apply()` does, and in one transaction only the save
+   * point restore is written - nothing of the change, no Plan termination, the
+   * save point kept. Every other guarded change goes through `apply()`.
+   */
+  restoreSavePointInsteadOfChange<R>(
+    mutation: PlanGuardedMutation<R>,
+    approval: PlanBreakingChangeApproval,
+  ): Promise<ExecutionSavePointRestoreWrite> {
+    return this.run('rw', async () => {
+      const state = await this.readState()
+      const restore = this.prepare(() => preparePlanGuardedSavePointRestoreInsteadOfChange({
+        state,
+        mutation,
+        approval,
+        currentCalculationContext: this.dependencies.currentCalculationContext,
+        now: this.dependencies.clock.now(),
+      }))
+      await writeExecutionSavePointRestore(this.dependencies.database, restore)
+      return restore
     })
   }
 
@@ -170,9 +217,16 @@ export class PlanBreakingChangeGuard implements PlanGuardedPersistence {
     const nextIds = new Set(next.map(({ id }) => id))
     const persistedById = new Map(persisted.map((record) => [record.id, record]))
     const deleted = persisted.filter(({ id }) => !nextIds.has(id)).map(({ id }) => id)
-    const changed = next.filter((record) => !sameBody(persistedById.get(record.id), record))
+    // A record the persisted state did not hold is added, never put: its ID was
+    // free when this transaction read the state, so a record another writer
+    // stored under it can never be silently overwritten.
+    const added = next.filter(({ id }) => !persistedById.has(id))
+    const changed = next.filter(
+      (record) => persistedById.has(record.id) && !sameBody(persistedById.get(record.id), record),
+    )
     if (deleted.length > 0) await table.bulkDelete(deleted)
     if (changed.length > 0) await table.bulkPut(changed)
+    if (added.length > 0) await table.bulkAdd(added)
   }
 
   private async run<T>(mode: 'r' | 'rw', operation: () => Promise<T>): Promise<T> {
@@ -233,5 +287,5 @@ function productionGuard(): PlanBreakingChangeGuard {
  */
 export const defaultPlanGuardedPersistence: PlanGuardedPersistence = {
   inspect: (mutation) => productionGuard().inspect(mutation),
-  apply: (mutation, approval) => productionGuard().apply(mutation, approval),
+  apply: (mutation, approval, options) => productionGuard().apply(mutation, approval, options),
 }

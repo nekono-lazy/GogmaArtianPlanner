@@ -25,6 +25,7 @@ import { runPlannerBeamSearch } from './plannerBeamSearch'
 import { scoreCandidate } from './plannerScoring'
 import { validatePlannerInput } from './plannerValidation'
 import { createProductionPlanWithObserver } from './productionPlanGeneration'
+import type { PlannerBuildListContext } from './plannerTypes'
 
 const TARGET_T = 'target.required.t'
 const TARGET_U = 'target.required.u'
@@ -148,30 +149,56 @@ function selectedOpportunityId(entry: BuildListEntry): string {
 }
 
 /**
- * Target T's two Routes (Entries A and B) are a legacy duplicate of the Build
- * List cardinality contract (`docs/DATA_MODEL.md` 9.4.1): an ordinary persisted
- * input holding them fails closed before any checkpoint rule runs (see "the
- * ordinary persisted input" below). The required-Entry rules stay as the
- * defence of a B8 / what-if trial input, the only input that may hold several
- * Entries of one Target (`docs/PLANNER_SPEC.md` 9.2.18), so these scenarios run
- * as one. A one-Entry scenario behaves identically under either contract.
+ * Target T's two Routes (Entries A and B) cannot both be persisted: that is a
+ * legacy duplicate of the Build List cardinality contract
+ * (`docs/DATA_MODEL.md` 9.4.1), and an ordinary persisted input holding them
+ * fails closed before any checkpoint rule runs (see "the ordinary persisted
+ * input" below). The only input that holds two Entries of one Target is the
+ * augmented preflight input of a B8 / what-if trial - persisted Entry A plus
+ * the temporary Entry B replacing it (`docs/PLANNER_SPEC.md` 9.2.18) - so the
+ * validation and initial-context rules run there. No full Planner run ever
+ * holds both: a trial's run gets the replacement set, so every Plan below runs
+ * over one Entry per Target.
  */
-const TRIAL = 'temporary_augmented' as const
-
-function trialPlan(built: OrchestrationScenario) {
-  return createProductionPlanWithObserver(built.input, built.dependencies, undefined, undefined, TRIAL)
+function trialBuildListContext(built: OrchestrationScenario): PlannerBuildListContext {
+  const hasB = built.input.buildListEntries.some(({ id }) => id === ENTRY_B)
+  return hasB
+    ? {
+        kind: 'temporary_augmented',
+        replacements: [{
+          targetWeaponId: TARGET_T as never,
+          replacedBuildListEntryId: ENTRY_A as never,
+          generatedBuildListEntryId: ENTRY_B as never,
+        }],
+      }
+    : { kind: 'persisted' }
 }
 
-function trialBeamSearch(built: OrchestrationScenario) {
-  return runPlannerBeamSearch(built.input, built.dependencies, {}, TRIAL)
+/** The same scenario with Entry B left out: one Entry per Target again. */
+function withoutB(built: OrchestrationScenario): OrchestrationScenario {
+  return {
+    ...built,
+    input: {
+      ...built.input,
+      buildListEntries: built.input.buildListEntries.filter(({ id }) => id !== ENTRY_B),
+    },
+  }
+}
+
+function plan(built: OrchestrationScenario) {
+  return createProductionPlanWithObserver(built.input, built.dependencies, undefined)
+}
+
+function beamSearch(built: OrchestrationScenario) {
+  return runPlannerBeamSearch(built.input, built.dependencies, {})
 }
 
 function trialValidation(built: OrchestrationScenario) {
-  return validatePlannerInput(built.input, built.dependencies, TRIAL)
+  return validatePlannerInput(built.input, built.dependencies, trialBuildListContext(built))
 }
 
 function trialContext(built: OrchestrationScenario) {
-  return preparePlannerInitialContext(built.input, built.dependencies, TRIAL)
+  return preparePlannerInitialContext(built.input, built.dependencies, trialBuildListContext(built))
 }
 
 function readyContext(built: OrchestrationScenario) {
@@ -187,10 +214,19 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
     const built = scenario({ selectA: true, withB: true })
     const a = built.entries.a
 
-    const result = await trialPlan(built)
-
     // Entry B alone would have finished the Target in one operation, but it is
-    // not this Target's Route while A carries a selection.
+    // not this Target's Route while A carries a selection. The user is told
+    // that B was left out of the candidate selection.
+    const context = readyContext(built)
+    expect([...context.checkpointRequirements.requiredEntryIdByTargetId]).toEqual([[TARGET_T, ENTRY_A]])
+    expect(context.initialRelevantEntries.map(({ id }) => id)).toEqual([ENTRY_A])
+    const warning = trialContext(built)
+    expect(warning.status === 'ready' && warning.context.warnings.find(
+      ({ kind }) => kind === 'selected_checkpoint_fixes_target_entry',
+    )?.message).toContain(ENTRY_B)
+
+    // A full run never holds B beside A; A completes through its checkpoint.
+    const result = await plan(withoutB(built))
     expect(result.termination.status).toBe('completed')
     expect(result.plan?.selectedBuildListEntryIds).toEqual([ENTRY_A])
     expect(result.plan?.steps.map(({ operationType }) => operationType)).toEqual([
@@ -214,12 +250,6 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
         }),
       ])
     expect(result.plan?.steps[0].checkpointMilestones).toHaveLength(1)
-    // The user is told that B was left out of this run's candidate selection.
-    expect(result.warnings).toContainEqual(
-      expect.objectContaining({ kind: 'selected_checkpoint_fixes_target_entry' }),
-    )
-    expect(result.warnings.find(({ kind }) => kind === 'selected_checkpoint_fixes_target_entry')?.message)
-      .toContain(ENTRY_B)
   })
 
   it('B: stays relevant after another weapon made its Target Ideal, and the state is not complete until it is secured', () => {
@@ -249,7 +279,7 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
     // its checkpoint and its Ideal before the Plan is complete.
     const built = scenario({ selectA: true, withB: false, withU: true })
 
-    const result = await trialPlan(built)
+    const result = await plan(built)
 
     expect(result.termination.status).toBe('completed')
     expect(result.plan?.selectedBuildListEntryIds).toEqual([ENTRY_A, ENTRY_C])
@@ -267,7 +297,7 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
     // already be Ideal through Entry C's weapon, but it is not complete.
     built.input.options = { ...built.input.options, maxPlanSteps: 2 }
 
-    const result = await trialBeamSearch(built)
+    const result = await beamSearch(built)
 
     expect(result.completed).toBe(false)
     expect(result.termination.status).not.toBe('completed')
@@ -287,7 +317,7 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
     expect([...context.checkpointRequirements.requiredEntryIdByTargetId])
       .toEqual([[TARGET_T, ENTRY_A]])
 
-    const result = await trialPlan(built)
+    const result = await plan(built)
     expect(result.termination).toMatchObject({
       status: 'completed',
       completedTargetCount: 1,
@@ -303,7 +333,7 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
       elementId: 'element.fixture.b',
     }))
     starved.input.options = { ...starved.input.options, maxPlanSteps: 2 }
-    const partial = await trialBeamSearch(starved)
+    const partial = await beamSearch(starved)
     expect(partial.termination).toMatchObject({
       status: 'incomplete',
       reachedLimits: ['max_plan_steps'],
@@ -329,9 +359,10 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
     expect(validation.warnings).toContainEqual(
       expect.objectContaining({ kind: 'multiple_selected_checkpoint_entries' }),
     )
-    // Neither Entry is picked, scored, or tried: no Plan at all.
+    // Neither Entry is picked, scored, or tried: no Plan at all - not in the
+    // trial preflight, and not as an ordinary input either.
     expect(trialContext(built).status).toBe('invalid')
-    const result = await trialPlan(built)
+    const result = await plan(withoutB(built))
     expect(result.plan).toBeNull()
     expect(result.warnings).toContainEqual(
       expect.objectContaining({ kind: 'multiple_selected_checkpoint_entries' }),
@@ -342,10 +373,29 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
     })
   })
 
-  it('F: keeps the ordinary candidate selection for a Target whose Entries select nothing', async () => {
+  it('F: runs a selection-free temporary Entry as its Target\'s only Route in the replacement set', async () => {
     const built = scenario({ selectA: false, withB: true })
+    // Nothing is selected, so no Entry is the Target's required Entry.
+    expect([...readyContext(built).checkpointRequirements.requiredEntryIdByTargetId]).toEqual([])
 
-    const result = await trialPlan(built)
+    // The trial's full run gets the replacement set: B in place of A.
+    const result = await createProductionPlanWithObserver(
+      {
+        ...built.input,
+        buildListEntries: built.input.buildListEntries.filter(({ id }) => id !== ENTRY_A),
+      },
+      built.dependencies,
+      undefined,
+      undefined,
+      {
+        kind: 'temporary_replacement',
+        replacements: [{
+          targetWeaponId: TARGET_T as never,
+          replacedBuildListEntryId: ENTRY_A as never,
+          generatedBuildListEntryId: ENTRY_B as never,
+        }],
+      },
+    )
 
     expect(result.termination.status).toBe('completed')
     expect(result.plan?.selectedBuildListEntryIds).toEqual([ENTRY_B])
@@ -375,7 +425,7 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
     ])
     expect(trialContext(built).status).toBe('invalid')
 
-    const result = await trialPlan(built)
+    const result = await plan(withoutB(built))
     expect(result.plan).toBeNull()
     expect(result.warnings).toContainEqual(
       expect.objectContaining({ kind: 'selected_checkpoint_target_already_ideal' }),
@@ -387,7 +437,7 @@ describe('A checkpoint-selected BuildListEntry is its Target\'s required Entry',
   it('G: an already-Ideal Target without a selection keeps its ordinary outcome', async () => {
     const built = scenario({ selectA: false, withB: true, alreadyIdeal: true })
 
-    const result = await trialPlan(built)
+    const result = await plan(withoutB(built))
 
     expect(result.plan).toBeNull()
     expect(result.warnings).toContainEqual(
@@ -456,7 +506,7 @@ describe('A malformed checkpoint selection fails the Planner input closed', () =
     })
     expectFailClosed(built, 'must exist on its own lane in the candidate snapshot')
 
-    const result = await trialBeamSearch(built)
+    const result = await beamSearch(withoutB(built))
     expect(result.bestState).toBeNull()
     expect(result.expandedStates).toBe(0)
     expect(result.validationIssues).not.toEqual([])
@@ -486,7 +536,7 @@ describe('A malformed checkpoint selection fails the Planner input closed', () =
     expectFailClosed(built, 'improvement preference')
   })
 
-  it('D: never reads the malformed selection as empty and never bypasses it through the other Entry', async () => {
+  it('D: never reads the malformed selection as empty', async () => {
     const built = malformed((entry) => {
       entry.intermediateStateSelection = {
         ...entry.intermediateStateSelection!,
@@ -494,9 +544,11 @@ describe('A malformed checkpoint selection fails the Planner input closed', () =
       }
     })
 
-    const result = await trialPlan(built)
+    // The trial preflight refuses it with Entry B beside it (above), and a run
+    // over Entry A alone never reads the selection as selection-free: no Plan.
+    expect(trialContext(built).status).toBe('invalid')
+    const result = await plan(withoutB(built))
 
-    // Neither Entry A read as selection-free nor Entry B standing in: no Plan.
     expect(result.plan).toBeNull()
     expect(result.termination.status).toBe('exhausted')
     expect(result.termination.expandedStates).toBe(0)

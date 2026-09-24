@@ -35,6 +35,7 @@ import {
 import {
   preparePlannerAugmentedConflictPreflight,
   reassociatePlannerFixedConstraints,
+  preparePlannerReplacementConflictPreflight,
 } from './plannerAugmentedPreflight'
 
 interface Scenario {
@@ -114,10 +115,17 @@ describe('augmented preflight planning Targets (#102)', () => {
       [...scenarioParts.entries, extra],
       [...scenarioParts.sources, extraSource],
     )
+    // The later Entry is the temporary Entry replacing the Target's persisted
+    // one (`docs/PLANNER_SPEC.md` 9.2.18).
     const preflight = preparePlannerAugmentedConflictPreflight(
       built.input,
       [],
       built.dependencies,
+      [{
+        targetWeaponId: scenarioParts.targets[0].id,
+        replacedBuildListEntryId: scenarioParts.entries[0].id,
+        generatedBuildListEntryId: extra.id,
+      }],
     )
     expect(preflight.status).toBe('ready')
     if (preflight.status !== 'ready') return
@@ -413,10 +421,14 @@ describe('B8-C3b fixed Entry validity', () => {
   it('fails closed when the same Entry ID now belongs to another Target', () => {
     const { result } = remapping('retargeted', (built, entries) => {
       const fixed = entries.find(({ id }) => id.endsWith('.first'))
-      const other = built.input.targetWeapons.find(({ id }) =>
+      const generated = built.input.targetWeapons.find(({ id }) =>
         id.endsWith('.generated'),
       )
-      if (!fixed || !other) throw new Error('Fixture is incomplete.')
+      if (!fixed || !generated) throw new Error('Fixture is incomplete.')
+      // A Target of its own, so the input holds one Entry per Target and the
+      // failure is the fixed identity check, not the Build List cardinality.
+      const other = { ...structuredClone(generated), id: `${generated.id}.moved` as never }
+      built.input.targetWeapons.push(other)
       fixed.targetWeaponId = other.id
       fixed.candidateSnapshot.targetWeaponId = other.id
       synchronizeEntry(built.input, fixed)
@@ -1062,5 +1074,158 @@ describe('B8-C3b invalid preflight', () => {
     )
     expect(result.excludedBuildListEntries).toEqual([])
     expect(result).not.toHaveProperty('failures')
+  })
+})
+
+/**
+ * The replacement-set step of a trial preflight (`docs/PLANNER_SPEC.md`
+ * 9.2.18): after the augmented step, every replaced Entry `O` is removed and
+ * the fixed constraints are re-mapped once more. A constraint whose original
+ * conflict consisted of the fixed Entry and replaced Entries only is fulfilled
+ * by the replacement; every other constraint is re-mapped or fails as before.
+ */
+describe('replacement-set preflight (Phase 0-3)', () => {
+  /**
+   * Conflict X: A1 vs B1 at Gogma 10, A1 fixed. Conflict Y: C1 vs D1 at
+   * Gogma 11, C1 fixed. B2 replaces B1 at Gogma 12, out of X.
+   */
+  function twoConflicts(b2Counter = 12) {
+    const targets = ['a', 'b', 'c', 'd'].map((id, index) =>
+      target(`target.pf.rs.${id}`, index % 2 === 0 ? 5 : 1),
+    )
+    const sources = ['a', 'b', 'c', 'd', 'b2'].map((id) => sourceWeapon(`owned.pf.rs.${id}`))
+    const persisted = [
+      routeEntry('entry.pf.rs.a1', targets[0], resetRoute(sources[0].id, 10)),
+      routeEntry('entry.pf.rs.b1', targets[1], resetRoute(sources[1].id, 10)),
+      routeEntry('entry.pf.rs.c1', targets[2], resetRoute(sources[2].id, 11)),
+      routeEntry('entry.pf.rs.d1', targets[3], resetRoute(sources[3].id, 11)),
+    ]
+    const original = scenario(targets, persisted, sources)
+    const originalContext = readyContext(original)
+    const originalContexts = createPlannerConstrainedConflictContexts(originalContext)
+    const conflictAt = (counter: number) => {
+      const found = originalContexts.find(({ counterBefore }) => counterBefore === counter)
+      if (!found) throw new Error(`No conflict at ${counter}.`)
+      return found.conflictId
+    }
+    const resolutions: PlannerConflictResolution[] = [
+      { conflictKey: conflictAt(10), selectedBuildListEntryId: persisted[0].id },
+      { conflictKey: conflictAt(11), selectedBuildListEntryId: persisted[2].id },
+    ]
+    const resolved = scenario(targets, persisted, sources, resolutions)
+    const resolvedContext = readyContext(resolved)
+    const constraints = preparePlannerFixedConflictConstraints(
+      resolvedContext,
+      createPlannerConstrainedConflictContexts(resolvedContext),
+    )
+    if (constraints.status !== 'ready') throw new Error('Expected ready fixed constraints.')
+    const b2 = routeEntry('entry.pf.rs.b2', targets[1], resetRoute(sources[4].id, b2Counter))
+    const augmented = scenario(targets, [...persisted, b2], sources)
+    return {
+      persisted,
+      b2,
+      augmented,
+      constraints: constraints.constraints,
+      originalContexts: createPlannerConstrainedConflictContexts(resolvedContext),
+      replacements: [{
+        targetWeaponId: targets[1].id,
+        replacedBuildListEntryId: persisted[1].id,
+        generatedBuildListEntryId: b2.id,
+      }],
+      conflictY: conflictAt(11),
+    }
+  }
+
+  it('fulfils only the constraint the replacement dissolved and re-maps the unrelated one', () => {
+    const built = twoConflicts()
+    const result = preparePlannerReplacementConflictPreflight(
+      built.augmented.input,
+      built.replacements,
+      built.constraints,
+      built.originalContexts,
+      built.augmented.dependencies,
+    )
+
+    expect(result.status).toBe('ready')
+    if (result.status !== 'ready') return
+    // The augmented step still sees X with B1 in it and re-maps both.
+    expect(result.augmentedPreflight.conflictResolutions).toHaveLength(2)
+    // The replacement set holds B2 in place of B1.
+    expect(result.resolvedInput.buildListEntries.map(({ id }) => id).sort()).toEqual(
+      ['entry.pf.rs.a1', 'entry.pf.rs.b2', 'entry.pf.rs.c1', 'entry.pf.rs.d1'],
+    )
+    // X no longer exists: its constraint (A1 fixed) is fulfilled, not failed.
+    expect(result.replacementPreflight.replacementSatisfiedConstraints.map(
+      ({ fixedBuildListEntryId }) => fixedBuildListEntryId,
+    )).toEqual([built.persisted[0].id])
+    // Y is untouched by the replacement: its resolution is kept, re-mapped
+    // against the replacement set's own conflict id.
+    expect(result.resolvedInput.conflictResolutions).toEqual([{
+      conflictKey: built.conflictY,
+      selectedBuildListEntryId: built.persisted[2].id,
+    }])
+  })
+
+  it('re-maps rather than fulfils a constraint whose conflict the temporary Entry still joins', () => {
+    const built = twoConflicts(10)
+    const result = preparePlannerReplacementConflictPreflight(
+      built.augmented.input,
+      built.replacements,
+      built.constraints,
+      built.originalContexts,
+      built.augmented.dependencies,
+    )
+
+    expect(result.status).toBe('ready')
+    if (result.status !== 'ready') return
+    expect(result.replacementPreflight.replacementSatisfiedConstraints).toEqual([])
+    const x = result.replacementPreflight.conflictContexts.find(({ counterBefore }) => counterBefore === 10)
+    expect(x?.participants.map(({ buildListEntryId }) => buildListEntryId).sort())
+      .toEqual([built.persisted[0].id, built.b2.id].sort())
+    expect(result.resolvedInput.conflictResolutions).toContainEqual({
+      conflictKey: x?.conflictId,
+      selectedBuildListEntryId: built.persisted[0].id,
+    })
+  })
+
+  it('fails closed when the replacement removes a fixed Entry, never fulfilling it', () => {
+    const built = twoConflicts()
+    // Replacing D1 is fine for X, but replacing C1 - the fixed side of Y -
+    // would drop the user's choice: a generated Entry is never fixed.
+    const c2 = routeEntry('entry.pf.rs.c2', built.augmented.input.targetWeapons[2], resetRoute('owned.pf.rs.b2', 12))
+    const augmented = scenario(
+      built.augmented.input.targetWeapons,
+      [...built.persisted, c2],
+      built.augmented.input.ownedWeapons,
+    )
+    const result = preparePlannerReplacementConflictPreflight(
+      augmented.input,
+      [{
+        targetWeaponId: built.augmented.input.targetWeapons[2].id,
+        replacedBuildListEntryId: built.persisted[2].id,
+        generatedBuildListEntryId: c2.id,
+      }],
+      built.constraints,
+      built.originalContexts,
+      augmented.dependencies,
+    )
+    expect(result.status).toBe('unresolved')
+    if (result.status !== 'unresolved') return
+    expect(result.failures).toMatchObject([{
+      fixedBuildListEntryId: built.persisted[2].id,
+      reason: 'fixed_entry_not_valid',
+    }])
+  })
+
+  it('refuses an augmented input that breaks the temporary cardinality', () => {
+    const built = twoConflicts()
+    const result = preparePlannerReplacementConflictPreflight(
+      built.augmented.input,
+      [...built.replacements, { ...built.replacements[0], replacedBuildListEntryId: built.persisted[3].id }],
+      built.constraints,
+      built.originalContexts,
+      built.augmented.dependencies,
+    )
+    expect(result.status).toBe('invalid')
   })
 })

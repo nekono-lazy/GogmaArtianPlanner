@@ -32,7 +32,7 @@ import { preparePlannerInitialContext } from '../plannerInitialContext'
 import { checkpointMixedEntry } from '../../../test/fixtures/plannerConstrainedOrchestration'
 import type { RngEngine } from '../../rng/rngEngine'
 import type {
-  PlannerBuildListCardinality,
+  PlannerBuildListContext,
   PlannerConflictResolution,
   PlannerDependencies,
   PlannerInput,
@@ -75,6 +75,10 @@ interface PreflightOverride {
 
 const observed = vi.hoisted(() => ({
   plannerInputs: [] as string[][],
+  /** The Build List context of each full run, in call order. */
+  plannerContexts: [] as string[],
+  /** The augmented input each replacement preflight received. */
+  preflightInputs: [] as string[][],
   preflightConstraints: [] as string[][],
   preflightOverride: null as PreflightOverride | null,
 }))
@@ -88,6 +92,7 @@ vi.mock('../productionPlanGeneration', async (importOriginal) => {
       ...args: Parameters<typeof actual.createProductionPlanWithObserver>
     ) => {
       observed.plannerInputs.push(args[0].buildListEntries.map(({ id }) => id))
+      observed.plannerContexts.push(args[4]?.kind ?? 'persisted')
       return actual.createProductionPlanWithObserver(...args)
     },
   }
@@ -109,11 +114,27 @@ vi.mock('./plannerAugmentedPreflight', async (importOriginal) => {
       )
       return forced ?? actual.preparePlannerAugmentedConflictPreflight(...args)
     },
+    // A trial Entry's preflight (`docs/PLANNER_SPEC.md` 9.2.18). Exactly one
+    // of the two preflights runs per Candidate, so both are observed alike.
+    preparePlannerReplacementConflictPreflight: (
+      ...args: Parameters<typeof actual.preparePlannerReplacementConflictPreflight>
+    ) => {
+      observed.preflightInputs.push(args[0].buildListEntries.map(({ id }) => id))
+      observed.preflightConstraints.push(
+        args[2].map(({ fixedBuildListEntryId }) => fixedBuildListEntryId),
+      )
+      const forced = observed.preflightOverride?.(
+        observed.preflightConstraints.length,
+      )
+      return forced ?? actual.preparePlannerReplacementConflictPreflight(...args)
+    },
   }
 })
 
 beforeEach(() => {
   observed.plannerInputs = []
+  observed.plannerContexts = []
+  observed.preflightInputs = []
   observed.preflightConstraints = []
   observed.preflightOverride = null
 })
@@ -298,7 +319,7 @@ function whatIfParts(options: WhatIfPartsOptions = {}): WhatIfParts {
 /** The `PlanConflict.id`s the ordinary Planner authority detects, by kind. */
 function detectedConflictIds(
   parts: WhatIfParts,
-  cardinality: PlannerBuildListCardinality = 'persisted',
+  cardinality: PlannerBuildListContext = { kind: 'persisted' },
 ): Record<string, string> {
   const probe = orchestrationScenario({
     targets: parts.targets,
@@ -498,15 +519,33 @@ describe('B9-B1b single Ideal outcome per Target', () => {
 })
 
 describe('B9-B1b independence', () => {
-  /** Baseline plus at most one trial Entry: nothing a trial produced survives. */
-  function assertTrialInputsAreBaselinePlusOne(baseline: readonly string[]): void {
+  /**
+   * Every full run is the baseline itself, or the baseline with exactly one
+   * work Target's Entry replaced by one trial Entry (`docs/PLANNER_SPEC.md`
+   * 9.2.4.4 / 9.2.18): nothing a trial produced survives, and the replaced
+   * baseline Entry is never run beside its trial Entry. Every preflight saw the
+   * whole baseline plus that trial Entry.
+   */
+  function assertTrialInputsAreBaselineOrOneReplacement(
+    baseline: readonly string[],
+    workEntryIds: readonly string[],
+  ): void {
     expect(observed.plannerInputs.length).toBeGreaterThan(1)
-    observed.plannerInputs.forEach((entryIds) => {
+    observed.plannerInputs.forEach((entryIds, index) => {
       const extra = entryIds.filter((id) => !baseline.includes(id))
+      const missing = baseline.filter((id) => !entryIds.includes(id))
+      expect(extra.length).toBeLessThanOrEqual(1)
+      expect(missing.length).toBe(extra.length)
+      missing.forEach((id) => expect(workEntryIds).toContain(id))
+      expect(observed.plannerContexts[index]).toBe(
+        extra.length === 0 ? 'persisted' : 'temporary_replacement',
+      )
+    })
+    observed.preflightInputs.forEach((entryIds) => {
       expect(entryIds.filter((id) => baseline.includes(id)).sort()).toEqual(
         [...baseline].sort(),
       )
-      expect(extra.length).toBeLessThanOrEqual(1)
+      expect(entryIds.filter((id) => !baseline.includes(id))).toHaveLength(1)
     })
   }
 
@@ -518,7 +557,7 @@ describe('B9-B1b independence', () => {
 
     await compare(scenario, bounds(99, 99))
 
-    assertTrialInputsAreBaselinePlusOne(baseline)
+    assertTrialInputsAreBaselineOrOneReplacement(baseline, [ENTRY_B])
     // At least one trial really did carry a generated Entry, so the check
     // above is not vacuously satisfied by baseline-only inputs. The first
     // trial reuses the existing semantic Entry and therefore adds none.
@@ -528,6 +567,34 @@ describe('B9-B1b independence', () => {
       ),
     )
     expect(generated.size).toBeGreaterThan(0)
+  })
+
+  it('preflights O + G but runs the full Planner over -O + G, leaving the baseline input untouched', async () => {
+    const scenario = whatIfScenario()
+    const before = structuredClone(scenario.built.input)
+    const baseline = scenario.built.input.buildListEntries.map(({ id }) => id as string)
+
+    await compare(scenario, bounds(99, 99))
+
+    // Every trial Entry was preflighted beside Target B's baseline Entry
+    // (`docs/PLANNER_SPEC.md` 9.2.18) ...
+    expect(observed.preflightInputs.length).toBeGreaterThan(0)
+    const trialEntryIds = observed.preflightInputs.map((ids) => {
+      expect(ids).toContain(ENTRY_B)
+      const extra = ids.filter((id) => !baseline.includes(id))
+      expect(extra).toHaveLength(1)
+      return extra[0]
+    })
+    // ... and every full run over it replaced that Entry instead.
+    const replacementRuns = observed.plannerInputs.filter((_ids, index) =>
+      observed.plannerContexts[index] === 'temporary_replacement',
+    )
+    expect(replacementRuns.length).toBeGreaterThan(0)
+    replacementRuns.forEach((ids) => {
+      expect(ids).not.toContain(ENTRY_B)
+      expect(ids.filter((id) => trialEntryIds.includes(id))).toHaveLength(1)
+    })
+    expect(scenario.built.input).toEqual(before)
   })
 
   it('never carries one Target what-if Entry into the next Target', async () => {
@@ -542,7 +609,7 @@ describe('B9-B1b independence', () => {
       TARGET_B,
       TARGET_C,
     ])
-    assertTrialInputsAreBaselinePlusOne(baseline)
+    assertTrialInputsAreBaselineOrOneReplacement(baseline, [ENTRY_B, ENTRY_C])
   })
 
   it('evaluates a Target the same way whether or not another Target precedes it', async () => {
@@ -913,7 +980,14 @@ describe('B9-B1b empty work set', () => {
     const conflictIds = detectedConflictIds({
       ...parts,
       entries: merged.map((entry) => structuredClone(entry)),
-    }, 'temporary_augmented')
+    }, {
+      kind: 'temporary_augmented',
+      replacements: [{
+        targetWeaponId: TARGET_A as never,
+        replacedBuildListEntryId: ENTRY_A as BuildListEntryId,
+        generatedBuildListEntryId: ENTRY_B as BuildListEntryId,
+      }],
+    })
     const built = orchestrationScenario({
       targets: parts.targets,
       entries: merged,

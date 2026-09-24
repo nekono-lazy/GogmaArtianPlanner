@@ -1,4 +1,8 @@
-import { createBuildCandidateMeaningFingerprint } from '../../buildList'
+import {
+  applyBuildListEntryReplacements,
+  createBuildCandidateMeaningFingerprint,
+  type BuildListEntryReplacement,
+} from '../../buildList'
 import type {
   BuildListEntry,
   BuildListEntryId,
@@ -11,6 +15,7 @@ import {
 } from '../plannerInitialContext'
 import type {
   ExcludedBuildListEntry,
+  PlannerBuildListContext,
   PlannerConflictResolution,
   PlannerDependencies,
   PlannerInput,
@@ -79,7 +84,16 @@ export interface PlannerConstraintReassociationFailure {
  * conflicts. All-or-nothing by contract, exactly like the whole preflight.
  */
 export type PlannerConstraintReassociationResult =
-  | { status: 'ready'; conflictResolutions: PlannerConflictResolution[] }
+  | {
+      status: 'ready'
+      conflictResolutions: PlannerConflictResolution[]
+      /**
+       * The fixed constraints a temporary replacement already fulfilled
+       * (`docs/PLANNER_SPEC.md` 9.2.18): each rebuilds no resolution. Always
+       * empty without a `PlannerReplacementSatisfaction`.
+       */
+      replacementSatisfiedConstraints: PlannerFixedConflictConstraint[]
+    }
   | {
       status: 'unresolved'
       conflictResolutions: []
@@ -93,6 +107,8 @@ export type PlannerAugmentedConflictPreflightResult =
       conflictContexts: PlannerConstrainedConflictContext[]
       /** Complete, and rebuilt against the current `PlanConflict.id`s. */
       conflictResolutions: PlannerConflictResolution[]
+      /** Fixed constraints a replacement fulfilled; empty outside a replacement set. */
+      replacementSatisfiedConstraints: PlannerFixedConflictConstraint[]
       /** A clone of the augmented input carrying those resolutions. */
       resolvedInput: PlannerInput
     }
@@ -152,6 +168,46 @@ interface ResolvedConstraint {
   resolution: PlannerConflictResolution
 }
 
+interface ReplacementSatisfiedConstraint {
+  constraint: PlannerFixedConflictConstraint
+  satisfiedByReplacement: true
+}
+
+/**
+ * What re-association over a **replacement set** needs to recognise a fixed
+ * constraint the replacement itself fulfilled (`docs/PLANNER_SPEC.md` 9.2.18):
+ * the persisted Entries the trial replaced, and the conflicts of the original
+ * validated Planner input the constraints were built from.
+ */
+export interface PlannerReplacementSatisfaction {
+  replacedBuildListEntryIds: readonly BuildListEntryId[]
+  originalConflictContexts: readonly PlannerConstrainedConflictContext[]
+}
+
+/**
+ * The one exception PLANNER_SPEC 9.2.18 adds to the 9.2.3.1 re-association: a
+ * fixed constraint with no current match is fulfilled - not failed - when
+ * every participant of its *original* conflict other than the fixed Entry is
+ * an Entry this augmentation replaced. The user's choice is then realised by
+ * the losing side's alternate Route. Anything else - an unknown original
+ * conflict, a participant that was not replaced, no other participant at all -
+ * stays a failure, never a guess.
+ */
+function isFulfilledByReplacement(
+  constraint: PlannerFixedConflictConstraint,
+  satisfaction: PlannerReplacementSatisfaction,
+): boolean {
+  const original = satisfaction.originalConflictContexts.filter(
+    ({ conflictId }) => conflictId === constraint.originalConflictId,
+  )
+  if (original.length !== 1) return false
+  const others = original[0].participants.filter(
+    ({ buildListEntryId }) => buildListEntryId !== constraint.fixedBuildListEntryId,
+  )
+  const replaced = new Set(satisfaction.replacedBuildListEntryIds)
+  return others.length > 0 && others.every(({ buildListEntryId }) => replaced.has(buildListEntryId))
+}
+
 type FixedEntryLookup =
   | { entry: BuildListEntry }
   | { reason: 'fixed_entry_not_valid' | 'fixed_entry_ambiguous' }
@@ -190,7 +246,8 @@ function reassociateConstraint(
   context: PlannerInitialContext,
   conflictContexts: readonly PlannerConstrainedConflictContext[],
   constraint: PlannerFixedConflictConstraint,
-): ResolvedConstraint | PlannerConstraintReassociationFailure {
+  satisfaction: PlannerReplacementSatisfaction | null,
+): ResolvedConstraint | ReplacementSatisfiedConstraint | PlannerConstraintReassociationFailure {
   const found = currentFixedEntry(context, constraint)
   if (!('entry' in found)) {
     return failure(
@@ -231,6 +288,9 @@ function reassociateConstraint(
       ),
   )
   if (matching.length === 0) {
+    if (satisfaction !== null && isFulfilledByReplacement(constraint, satisfaction)) {
+      return { constraint, satisfiedByReplacement: true }
+    }
     return failure(
       constraint,
       'current_conflict_not_found',
@@ -313,21 +373,32 @@ function keyCollisionFailures(
  *
  * `context` supplies the current fixed-Entry authority, so it must be the
  * preflight context those `conflictContexts` were built from.
+ *
+ * `satisfaction` is given only over a replacement set: each constraint is then
+ * judged on its own, so a constraint the replacement fulfilled rebuilds no
+ * resolution while every other constraint is still re-mapped - or fails - as
+ * before. An unrelated explicit resolution is never dropped with it.
  */
 export function reassociatePlannerFixedConstraints(
   context: PlannerInitialContext,
   conflictContexts: readonly PlannerConstrainedConflictContext[],
   fixedConstraints: readonly PlannerFixedConflictConstraint[],
+  satisfaction: PlannerReplacementSatisfaction | null = null,
 ): PlannerConstraintReassociationResult {
   const ordered = [...fixedConstraints].sort((left, right) =>
     compareStableStrings(constraintOrderKey(left), constraintOrderKey(right)),
   )
   const resolved: ResolvedConstraint[] = []
+  const satisfied: PlannerFixedConflictConstraint[] = []
   const failures: PlannerConstraintReassociationFailure[] = []
   ordered.forEach((constraint) => {
-    const outcome = reassociateConstraint(context, conflictContexts, constraint)
+    const outcome = reassociateConstraint(context, conflictContexts, constraint, satisfaction)
     if ('reason' in outcome) {
       failures.push(outcome)
+      return
+    }
+    if ('satisfiedByReplacement' in outcome) {
+      satisfied.push(outcome.constraint)
       return
     }
     resolved.push(outcome)
@@ -354,6 +425,7 @@ export function reassociatePlannerFixedConstraints(
             right.selectedBuildListEntryId,
           ),
       ),
+    replacementSatisfiedConstraints: satisfied,
   }
 }
 
@@ -370,23 +442,46 @@ export function reassociatePlannerFixedConstraints(
  *
  * It is all-or-nothing: one failure yields `status: 'unresolved'` with no
  * resolutions at all, so a partially rebuilt array can never reach Beam Search.
+ *
+ * `replacements` name the temporary Entries of `augmentedInput` and the
+ * persisted Entries they stand in for (`docs/PLANNER_SPEC.md` 9.2.18); the
+ * input is then checked under the temporary augmented contract. Without them
+ * the input is an ordinary persisted one. This preflight re-maps over the
+ * augmented set, `O` included; a trial's full Planner run needs the second,
+ * replacement-set step of `preparePlannerReplacementConflictPreflight()`.
  */
 export function preparePlannerAugmentedConflictPreflight(
   augmentedInput: PlannerInput,
   fixedConstraints: readonly PlannerFixedConflictConstraint[],
   dependencies: PlannerDependencies,
+  replacements: readonly BuildListEntryReplacement[] = [],
+): PlannerAugmentedConflictPreflightResult {
+  return runConflictPreflight(
+    augmentedInput,
+    fixedConstraints,
+    dependencies,
+    replacements.length === 0
+      ? { kind: 'persisted' }
+      : { kind: 'temporary_augmented', replacements },
+    null,
+  )
+}
+
+function runConflictPreflight(
+  input: PlannerInput,
+  fixedConstraints: readonly PlannerFixedConflictConstraint[],
+  dependencies: PlannerDependencies,
+  buildListContext: PlannerBuildListContext,
+  satisfaction: PlannerReplacementSatisfaction | null,
 ): PlannerAugmentedConflictPreflightResult {
   // The original `conflictKey`s no longer match once the participant set
   // changed, so applying them here would raise a false
   // `invalid_conflict_resolution` (PLANNER_SPEC 9.2.3.1).
   const preflightInput: PlannerInput = {
-    ...augmentedInput,
+    ...input,
     conflictResolutions: [],
   }
-  // A trial input may hold the original Entry and temporary generated Entries
-  // of one Target together (`docs/PLANNER_SPEC.md` 9.2.18), so the ordinary
-  // persisted Build List cardinality check does not apply here.
-  const prepared = preparePlannerInitialContext(preflightInput, dependencies, 'temporary_augmented')
+  const prepared = preparePlannerInitialContext(preflightInput, dependencies, buildListContext)
   if (prepared.status !== 'ready') {
     return {
       status: 'invalid',
@@ -401,6 +496,7 @@ export function preparePlannerAugmentedConflictPreflight(
     context,
     conflictContexts,
     fixedConstraints,
+    satisfaction,
   )
   if (reassociated.status !== 'ready') return reassociated
   const conflictResolutions = reassociated.conflictResolutions
@@ -409,6 +505,86 @@ export function preparePlannerAugmentedConflictPreflight(
     preflightContext: context,
     conflictContexts,
     conflictResolutions,
-    resolvedInput: { ...augmentedInput, conflictResolutions },
+    replacementSatisfiedConstraints: reassociated.replacementSatisfiedConstraints,
+    resolvedInput: { ...input, conflictResolutions },
+  }
+}
+
+export type PlannerReplacementConflictPreflightResult =
+  | {
+      status: 'ready'
+      /** The augmented step (`O` + `G`), kept for diagnostics and tests. */
+      augmentedPreflight: Extract<PlannerAugmentedConflictPreflightResult, { status: 'ready' }>
+      /** The replacement-set step every full Planner run of the trial uses. */
+      replacementPreflight: Extract<PlannerAugmentedConflictPreflightResult, { status: 'ready' }>
+      replacements: BuildListEntryReplacement[]
+      /**
+       * The replacement set (every `O` removed, every `G` in its place)
+       * carrying the resolutions rebuilt against its own `PlanConflict.id`s.
+       * It is the only input a trial's full Planner run may receive.
+       */
+      resolvedInput: PlannerInput
+    }
+  | Exclude<PlannerAugmentedConflictPreflightResult, { status: 'ready' }>
+
+/**
+ * The whole trial preflight of `docs/PLANNER_SPEC.md` 9.2.18, in its two fixed
+ * steps:
+ *
+ * 1. **augmented**: `augmentedInput` still holds every replaced Entry `O` next
+ *    to its temporary Entry `G`, under the temporary augmented contract
+ *    (persisted 0..1 + temporary 0..1 per Target). Every fixed constraint is
+ *    re-mapped exactly as 9.2.3.1 requires, which also proves the fixed
+ *    Entries and the temporary Entries survive the ordinary validation.
+ * 2. **replacement set**: every `O` is removed and the same fixed constraints
+ *    are re-mapped again against the conflicts detected there - the only
+ *    `conflictKey`s a full Planner run over the replacement set can match. A
+ *    constraint with no match there is fulfilled by the replacement only when
+ *    every other participant of its original conflict was replaced; every
+ *    other failure fails the trial closed.
+ *
+ * Neither step runs a Beam Search or counts against `maxPlannerReruns`, and
+ * both are all-or-nothing. `originalConflictContexts` are the conflicts of the
+ * original validated Planner input the fixed constraints were built from.
+ */
+export function preparePlannerReplacementConflictPreflight(
+  augmentedInput: PlannerInput,
+  replacements: readonly BuildListEntryReplacement[],
+  fixedConstraints: readonly PlannerFixedConflictConstraint[],
+  originalConflictContexts: readonly PlannerConstrainedConflictContext[],
+  dependencies: PlannerDependencies,
+): PlannerReplacementConflictPreflightResult {
+  const augmentedPreflight = preparePlannerAugmentedConflictPreflight(
+    augmentedInput,
+    fixedConstraints,
+    dependencies,
+    replacements,
+  )
+  if (augmentedPreflight.status !== 'ready') return augmentedPreflight
+  const replacementInput: PlannerInput = {
+    ...augmentedInput,
+    buildListEntries: applyBuildListEntryReplacements(
+      augmentedInput.buildListEntries,
+      replacements,
+      [],
+    ),
+  }
+  const replacementPreflight = runConflictPreflight(
+    replacementInput,
+    fixedConstraints,
+    dependencies,
+    { kind: 'temporary_replacement', replacements },
+    {
+      replacedBuildListEntryIds: replacements.map(({ replacedBuildListEntryId }) => replacedBuildListEntryId),
+      originalConflictContexts,
+    },
+  )
+  if (replacementPreflight.status !== 'ready') return replacementPreflight
+  return {
+    status: 'ready',
+    augmentedPreflight,
+    replacementPreflight,
+    replacements: replacements.map((replacement) => ({ ...replacement })),
+    resolvedInput: replacementPreflight.resolvedInput,
   }
 }

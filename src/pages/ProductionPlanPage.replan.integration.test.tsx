@@ -52,6 +52,8 @@ import { ProductionPlanPage, type ProductionPlanPageDependencies } from './Produ
 const EXTRA_SOURCE_ID = 'owned.replan-ui.extra'
 const EXTRA_TARGET_ID = 'target.replan-ui.extra'
 const EXTRA_ENTRY_ID = 'entry.replan-ui.extra'
+/** The added Target's persisted Entry a generated Entry replaces (PLANNER_SPEC 9.2.18). */
+const ORIGINAL_ENTRY_ID = 'entry.replan-ui.extra.original'
 const EARLIER_START = '2026-09-10T00:00:00.000Z'
 
 const START = '現在地点から再計画を試算'
@@ -90,21 +92,39 @@ function plannerMaster(fixture: ExecutionFixture): MasterDataRoot {
 /**
  * The real Planner behind the Worker Client interface: the constrained
  * orchestration over exactly the input the page hands over. A generated Entry
- * is fed the way constrained re-search adopts one and reported as generated.
+ * replaces the added Target's persisted Entry the way constrained re-search
+ * adopts one - the Planner runs over the replacement set - and is reported as
+ * generated together with that replacement.
  */
 function realPlannerClient(fixture: ExecutionFixture, generated: BuildListEntry | null): PlannerWorkerClient {
   return {
     engineVersion: PRODUCTION_RNG_ENGINE_VERSION,
     createPlan: vi.fn(),
     createConstrainedPlan: vi.fn(async (_, input) => {
-      const augmented = generated === null
+      const replacementSet = generated === null
         ? input
-        : { ...input, buildListEntries: [...input.buildListEntries, structuredClone(generated)] }
-      const result = await createProductionPlanWithConstrainedSearch(augmented, fixture.built.dependencies, {
+        : {
+            ...input,
+            buildListEntries: [
+              ...(input.buildListEntries as BuildListEntry[]).filter((entry) => entry.id !== ORIGINAL_ENTRY_ID),
+              structuredClone(generated),
+            ],
+          }
+      const result = await createProductionPlanWithConstrainedSearch(replacementSet, fixture.built.dependencies, {
         orchestrationBounds: orchestrationBounds(),
         enumerationBounds: orchestrationEnumerationBounds(),
       })
-      return generated === null ? result : { ...result, generatedBuildListEntries: [structuredClone(generated)] }
+      return generated === null
+        ? result
+        : {
+            ...result,
+            generatedBuildListEntries: [structuredClone(generated)],
+            generatedBuildListEntryReplacements: [{
+              targetWeaponId: generated.targetWeaponId,
+              replacedBuildListEntryId: ORIGINAL_ENTRY_ID as BuildListEntry['id'],
+              generatedBuildListEntryId: generated.id,
+            }],
+          }
     }),
     createWhatIfComparison: vi.fn(),
     prepareInteraction: vi.fn(async () => ({
@@ -144,7 +164,13 @@ async function running(database: AppDatabase, options: HarnessOptions = {}): Pro
     await database.targetWeapons.put(goal)
     const request = await previewService.prepareProductionPlanReplanPreview({ runningPlanId: fixture.plan.id })
     synchronizeOrchestrationEntry(request.plannerInput, entry)
-    if (!options.generatedEntry) await database.buildListEntries.put(entry)
+    if (options.generatedEntry) {
+      const original = orchestrationEntry(ORIGINAL_ENTRY_ID, goal, resetRoute(source.id))
+      synchronizeOrchestrationEntry(request.plannerInput, original)
+      await database.buildListEntries.put(original)
+    } else {
+      await database.buildListEntries.put(entry)
+    }
   }
   const client = realPlannerClient(fixture, options.generatedEntry ? entry : null)
   const deps: ProductionPlanPageDependencies = {
@@ -154,6 +180,7 @@ async function running(database: AppDatabase, options: HarnessOptions = {}): Pro
     getTargetWeapons: vi.fn(() => database.targetWeapons.toArray()),
     createInput: vi.fn(async () => structuredClone(fixture.built.input)),
     createWorkerClient: vi.fn(() => client),
+    inspectPlannerResultSave: vi.fn(async () => ({ approvalRequired: false as const })),
     savePlannerResult: vi.fn(async () => {
       throw new Error('savePlannerResult is not expected: a running Plan is replanned, never saved as a Draft')
     }),
@@ -385,7 +412,9 @@ describe('ProductionPlanPage replan Preview over the real runtime', () => {
 
       expect(await screen.findByText('Execution navigator destination', undefined, { timeout: 10_000 })).toBeInTheDocument()
       expect(router.state.location.pathname).toBe(`/plans/${newPlanId}/run`)
+      // The generated Entry replaced the added Target's original Entry.
       expect(await database.buildListEntries.get(EXTRA_ENTRY_ID)).toEqual(harness.entry)
+      expect(await database.buildListEntries.get(ORIGINAL_ENTRY_ID)).toBeUndefined()
       expect((await database.productionPlans.get(newPlanId))?.status).toBe('active')
     }))
 

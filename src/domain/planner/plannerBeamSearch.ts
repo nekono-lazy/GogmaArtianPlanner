@@ -72,7 +72,7 @@ import type {
   ExcludedBuildListEntry,
   PlannerBeamSearchResult,
   PlannerDependencies,
-  PlannerBuildListCardinality,
+  PlannerRunBuildListContext,
   PlannerExecutionOptions,
   PlannerInput,
   PlannerSearchAction,
@@ -83,6 +83,7 @@ import type {
   PlannerWarning,
   PlannerConflictResolution,
 } from './plannerTypes'
+import { PERSISTED_PLANNER_BUILD_LIST_CONTEXT } from './plannerTypes'
 import { deriveTargetSatisfaction } from './targetSatisfaction'
 
 function compareStableStrings(left: string, right: string): number {
@@ -1146,9 +1147,9 @@ export async function runPlannerBeamSearch(
   input: PlannerInput,
   dependencies: PlannerDependencies,
   executionOptions: PlannerExecutionOptions = {},
-  cardinality: PlannerBuildListCardinality = 'persisted',
+  buildListContext: PlannerRunBuildListContext = PERSISTED_PLANNER_BUILD_LIST_CONTEXT,
 ): Promise<PlannerBeamSearchResult> {
-  const prepared = preparePlannerInitialContext(input, dependencies, cardinality)
+  const prepared = preparePlannerInitialContext(input, dependencies, buildListContext)
   if (prepared.status === 'invalid') {
     const failure = initialFailureResult(
       input,

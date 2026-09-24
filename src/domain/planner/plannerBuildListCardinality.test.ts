@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { BuildListEntry } from '../models/publicTypes'
 import {
+  applyBuildListEntryReplacements,
+  type BuildListEntryReplacement,
+} from '../buildList'
+import { buildListEntryId } from '../../test/fixtures/domainData'
+import {
   fixture,
   resetRoute,
   routeEntry,
@@ -137,15 +142,186 @@ describe('Planner input Build List cardinality', () => {
     expect(Object.keys(result.bestState?.targetSatisfaction ?? {})).toEqual([b.id])
   })
 
-  it('does not apply the persisted contract to a B8 / what-if trial input', async () => {
-    const { input, dependencies } = duplicateScenario()
+})
 
-    const validation = validatePlannerInput(input, dependencies, 'temporary_augmented')
-    expect(validation.isValid).toBe(true)
-    expect(validation.warnings.map(({ kind }) => kind)).not.toContain(
+/**
+ * The temporary augmented contract of a B8 / what-if trial input
+ * (`docs/PLANNER_SPEC.md` 9.2.18): per Target, persisted 0..1 + temporary 0..1,
+ * with the temporary Entries and the persisted Entries they replace named only
+ * by runtime replacement metadata.
+ */
+describe('Planner trial input temporary Build List cardinality', () => {
+  function replacement(
+    targetWeaponId: string,
+    replaced: string,
+    generated: string,
+  ): BuildListEntryReplacement {
+    return {
+      targetWeaponId: targetWeaponId as BuildListEntryReplacement['targetWeaponId'],
+      replacedBuildListEntryId: buildListEntryId(replaced),
+      generatedBuildListEntryId: buildListEntryId(generated),
+    }
+  }
+
+  /**
+   * Target A: persisted A1 and temporary A2; Target B: persisted B1. A2 takes
+   * the first Gogma position and B1 the next, so the replacement set (A2, B1)
+   * is a complete Plan without A1.
+   */
+  function trialScenario() {
+    const built = duplicateScenario([12, 10, 11])
+    return {
+      ...built,
+      replacements: [
+        replacement(built.a.id, 'entry.cardinality.a1', 'entry.cardinality.a2'),
+      ],
+    }
+  }
+
+  function issuesOf(validation: ReturnType<typeof validatePlannerInput>): string[] {
+    return validation.issues.map(({ message }) => message)
+  }
+
+  it('accepts persisted O + temporary G as the augmented input, and runs the replacement set with G only', async () => {
+    const { input, dependencies, replacements, a } = trialScenario()
+
+    const augmented = validatePlannerInput(input, dependencies, {
+      kind: 'temporary_augmented',
+      replacements,
+    })
+    expect(augmented.isValid).toBe(true)
+    expect(augmented.warnings.map(({ kind }) => kind)).not.toContain(
       'duplicate_build_list_entries_for_target',
     )
-    const beam = await runPlannerBeamSearch(input, dependencies, {}, 'temporary_augmented')
+    // O stays in the augmented input: the preflight needs its conflicts.
+    expect(augmented.validBuildListEntries.map(({ entry }) => entry.id)).toEqual([
+      'entry.cardinality.a1',
+      'entry.cardinality.a2',
+      'entry.cardinality.b1',
+    ])
+
+    const replacementSet = {
+      ...input,
+      buildListEntries: applyBuildListEntryReplacements(input.buildListEntries, replacements, []),
+    }
+    expect(replacementSet.buildListEntries.map(({ id }) => id)).toEqual([
+      'entry.cardinality.a2',
+      'entry.cardinality.b1',
+    ])
+    const beam = await runPlannerBeamSearch(replacementSet, dependencies, {}, {
+      kind: 'temporary_replacement',
+      replacements,
+    })
     expect(beam.bestState).not.toBeNull()
+    expect(beam.termination).toMatchObject({ status: 'completed', completedTargetCount: 2 })
+    const progressed = new Set(
+      beam.bestState?.trace.flatMap(({ progressedBuildListEntryIds }) => progressedBuildListEntryIds) ?? [],
+    )
+    expect(progressed.has(buildListEntryId('entry.cardinality.a1'))).toBe(false)
+    expect(progressed.has(buildListEntryId('entry.cardinality.a2'))).toBe(true)
+    expect(a.id).toBe('target.cardinality.a')
+  })
+
+  it('fails closed on persisted O1 + persisted O2 + temporary G', () => {
+    const built = duplicateScenario()
+    const source = sourceWeapon('owned.cardinality.a3')
+    const extra = routeEntry('entry.cardinality.a3', built.a, resetRoute(source.id, 13))
+    const { input, dependencies } = fixture(
+      [built.a, built.b],
+      [...built.input.buildListEntries, extra],
+      [...built.input.ownedWeapons, source],
+    )
+    const validation = validatePlannerInput(input, dependencies, {
+      kind: 'temporary_augmented',
+      replacements: [replacement(built.a.id, 'entry.cardinality.a1', 'entry.cardinality.a3')],
+    })
+    expect(validation.isValid).toBe(false)
+    expect(issuesOf(validation)).toContainEqual(expect.stringContaining(
+      `TargetWeapon '${built.a.id}' has 2 BuildListEntries (entry.cardinality.a1, entry.cardinality.a2)`,
+    ))
+    expect(preparePlannerInitialContext(input, dependencies, {
+      kind: 'temporary_augmented',
+      replacements: [replacement(built.a.id, 'entry.cardinality.a1', 'entry.cardinality.a3')],
+    }).status).toBe('invalid')
+  })
+
+  it('fails closed on persisted O + temporary G1 + temporary G2', () => {
+    const built = duplicateScenario()
+    const source = sourceWeapon('owned.cardinality.a3')
+    const extra = routeEntry('entry.cardinality.a3', built.a, resetRoute(source.id, 13))
+    const { input, dependencies } = fixture(
+      [built.a, built.b],
+      [...built.input.buildListEntries, extra],
+      [...built.input.ownedWeapons, source],
+    )
+    const validation = validatePlannerInput(input, dependencies, {
+      kind: 'temporary_augmented',
+      replacements: [
+        replacement(built.a.id, 'entry.cardinality.a1', 'entry.cardinality.a2'),
+        replacement(built.a.id, 'entry.cardinality.a1', 'entry.cardinality.a3'),
+      ],
+    })
+    expect(validation.isValid).toBe(false)
+    expect(issuesOf(validation)).toContainEqual(expect.stringContaining(
+      `TargetWeapon '${built.a.id}' has more than one temporary BuildListEntry replacement`,
+    ))
+  })
+
+  it('fails closed on a temporary Entry of another Target and on an unnamed temporary Entry', () => {
+    const { input, dependencies, a, b } = trialScenario()
+    // The replacement names Target B, but the temporary Entry targets A.
+    const wrongTarget = validatePlannerInput(input, dependencies, {
+      kind: 'temporary_augmented',
+      replacements: [replacement(b.id, 'entry.cardinality.b1', 'entry.cardinality.a2')],
+    })
+    expect(wrongTarget.isValid).toBe(false)
+    // No replacement names A2 at all: Target A holds two persisted Entries.
+    const unnamed = validatePlannerInput(input, dependencies, {
+      kind: 'temporary_augmented',
+      replacements: [],
+    })
+    expect(unnamed.isValid).toBe(false)
+    expect(issuesOf(unnamed)).toContainEqual(expect.stringContaining(
+      `TargetWeapon '${a.id}' has 2 BuildListEntries`,
+    ))
+  })
+
+  it('refuses a replacement set that still holds the replaced Entry', async () => {
+    const { input, dependencies, replacements } = trialScenario()
+    const beam = await runPlannerBeamSearch(input, dependencies, {}, {
+      kind: 'temporary_replacement',
+      replacements,
+    })
+    expect(beam.bestState).toBeNull()
+    expect(beam.termination).toMatchObject({ status: 'exhausted', expandedStates: 0 })
+  })
+
+  it('accepts one O + G pair on each of two Targets', async () => {
+    const a = target('target.cardinality.pair.a')
+    const b = target('target.cardinality.pair.b')
+    const sources = ['a1', 'a2', 'b1', 'b2'].map((suffix) => sourceWeapon(`owned.cardinality.pair.${suffix}`))
+    const { input, dependencies } = fixture([a, b], [
+      routeEntry('entry.cardinality.pair.a1', a, resetRoute(sources[0].id, 12)),
+      routeEntry('entry.cardinality.pair.a2', a, resetRoute(sources[1].id, 10)),
+      routeEntry('entry.cardinality.pair.b1', b, resetRoute(sources[2].id, 13)),
+      routeEntry('entry.cardinality.pair.b2', b, resetRoute(sources[3].id, 11)),
+    ], sources)
+    const replacements = [
+      replacement(a.id, 'entry.cardinality.pair.a1', 'entry.cardinality.pair.a2'),
+      replacement(b.id, 'entry.cardinality.pair.b1', 'entry.cardinality.pair.b2'),
+    ]
+    expect(validatePlannerInput(input, dependencies, {
+      kind: 'temporary_augmented',
+      replacements,
+    }).isValid).toBe(true)
+    const replacementSet = {
+      ...input,
+      buildListEntries: applyBuildListEntryReplacements(input.buildListEntries, replacements, []),
+    }
+    const beam = await runPlannerBeamSearch(replacementSet, dependencies, {}, {
+      kind: 'temporary_replacement',
+      replacements,
+    })
+    expect(beam.termination).toMatchObject({ status: 'completed', completedTargetCount: 2, totalTargetCount: 2 })
   })
 })

@@ -51,6 +51,7 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { ExecutionRuntimeError } from '../domain/execution'
 import type { ProductionPlanStartInspection } from '../services/execution/productionPlanExecutionService'
 import type { ProductionPlanReplanDependencies } from '../services/execution/productionPlanReplanDependencies'
+import type { PlannerOrchestrationResultSaveOutcome } from '../services/planner/plannerResultPersistenceService'
 
 /** These cases never start a replan Preview, so the replan runtime is never reached. */
 function unusedReplanDependencies(): ProductionPlanReplanDependencies {
@@ -244,7 +245,8 @@ function dependencies(
     getTargetWeapons: vi.fn(async () => [fixture.target]),
     createInput: vi.fn(async () => fixture.input),
     createWorkerClient: vi.fn(() => client),
-    savePlannerResult: vi.fn(async () => null),
+    inspectPlannerResultSave: vi.fn(async () => ({ approvalRequired: false as const })),
+    savePlannerResult: vi.fn(async () => ({ kind: 'no_plan' as const })),
     inspectProductionPlanStart: vi.fn(async (planId) => ({
       planId,
       changes: [],
@@ -824,6 +826,7 @@ function replanResult(plan: ProductionPlan | null = null): PlannerOrchestrationR
     warnings: [],
     termination: completedPlannerTermination(),
     generatedBuildListEntries: [],
+    generatedBuildListEntryReplacements: [],
   }
 }
 
@@ -907,7 +910,7 @@ describe('ProductionPlanPage explicit selection', () => {
     vi.mocked(client.createConstrainedPlan).mockReturnValue(pending.promise)
     const deps = dependencies(fixture, client)
     vi.mocked(deps.getPlan).mockImplementation(async id => id === next.plan.id ? next.plan : fixture.plan)
-    vi.mocked(deps.savePlannerResult).mockResolvedValue(next.plan)
+    vi.mocked(deps.savePlannerResult).mockResolvedValue({ kind: 'saved', plan: next.plan })
     const view = renderPage(deps, fixture.plan.id)
     await clickSelection(user)
     await waitFor(() => expect(client.createConstrainedPlan).toHaveBeenCalledOnce())
@@ -927,6 +930,112 @@ describe('ProductionPlanPage explicit selection', () => {
     expect(saveContext.rngEngineVersion).toBe(client.engineVersion)
     expect(deps.getPlan).toHaveBeenCalledWith(next.plan.id)
     await waitFor(() => expect(summaryValue('計画ID')).toBe(next.plan.id))
+  })
+
+  it('sends a replacement that breaks the active Plan through the shared warning, saving only with the approval', async () => {
+    // A generated Entry replacing an Entry the active Plan depends on
+    // (`docs/PLANNER_SPEC.md` 9.2.18 / 16.6): the runtime's inspection alone
+    // asks for the warning, and the save is re-run with the approval it built.
+    const user = userEvent.setup()
+    const fixture = pageFixture()
+    const next = pageFixture('saved')
+    const client = plannerClient(async () => fixture.preparation)
+    const result = replanResult({ ...fixture.plan, id: productionPlanId('plan.worker-only') })
+    vi.mocked(client.createConstrainedPlan).mockResolvedValue(result)
+    const deps = dependencies(fixture, client)
+    vi.mocked(deps.getPlan).mockImplementation(async id => id === next.plan.id ? next.plan : fixture.plan)
+    const observedPlan = {
+      planId: productionPlanId('plan.active.elsewhere'),
+      status: 'active' as const,
+      currentStepId: null,
+      updatedAt: '2026-09-20T00:00:00.000Z',
+    }
+    vi.mocked(deps.inspectPlannerResultSave).mockResolvedValue({
+      approvalRequired: true,
+      reasons: ['build_list_changed'],
+      observedPlan,
+      savePointChoiceRequired: false,
+    })
+    vi.mocked(deps.savePlannerResult).mockResolvedValue({ kind: 'saved', plan: next.plan })
+    const view = renderPage(deps, fixture.plan.id)
+
+    // Cancel: nothing is saved.
+    await clickSelection(user)
+    let warning = await screen.findByRole('dialog', { name: '実行中の生産計画があります' })
+    expect(within(warning).getByText('生産計画が使用する作成リスト項目が変わります')).toBeInTheDocument()
+    await user.click(within(warning).getByRole('button', { name: 'キャンセル' }))
+    expect(await screen.findByText('保存を取り消しました。生産計画と作成リストは変更されていません。')).toBeInTheDocument()
+    expect(deps.savePlannerResult).not.toHaveBeenCalled()
+    expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)
+
+    // Approve: the same result is saved with the inspection's own token.
+    await clickSelection(user)
+    warning = await screen.findByRole('dialog', { name: '実行中の生産計画があります' })
+    await user.click(within(warning).getByRole('button', { name: '生産計画を破棄して保存' }))
+    await waitFor(() => expect(view.router.state.location.pathname).toBe('/plans/' + next.plan.id))
+    expect(deps.savePlannerResult).toHaveBeenCalledOnce()
+    const [savedResult, , approval] = vi.mocked(deps.savePlannerResult).mock.calls[0]
+    expect(savedResult).toBe(result)
+    expect(approval).toEqual({ observedPlan, savePointDecision: null })
+  })
+
+  it('restores the save point instead of saving a pre-restore result, and asks for a new calculation', async () => {
+    // 「最後のゲーム内セーブ地点へ戻す」 for a Planner result save: the runtime
+    // restores and drops the result (`docs/PLANNER_SPEC.md` 9.2.18 / 16.10).
+    // The page reports a finished restore, never an error, and opens no Draft.
+    const user = userEvent.setup()
+    const fixture = pageFixture()
+    const client = plannerClient(async () => fixture.preparation)
+    const result = replanResult({ ...fixture.plan, id: productionPlanId('plan.worker-only') })
+    vi.mocked(client.createConstrainedPlan).mockResolvedValue(result)
+    const deps = dependencies(fixture, client)
+    const observedPlan = {
+      planId: productionPlanId('plan.active.elsewhere'),
+      status: 'active' as const,
+      currentStepId: null,
+      updatedAt: '2026-09-20T00:00:00.000Z',
+    }
+    const recordedAt = '2026-09-19T00:00:00.000Z'
+    vi.mocked(deps.inspectPlannerResultSave).mockResolvedValue({
+      approvalRequired: true,
+      reasons: ['build_list_changed'],
+      observedPlan,
+      savePointChoiceRequired: true,
+      savePointRecordedAt: recordedAt,
+      savePointLastExecutionHistoryId: null,
+      savePointCurrentStepId: null,
+    })
+    vi.mocked(deps.savePlannerResult).mockResolvedValue({
+      kind: 'save_point_restored_recalculation_required',
+      restoredPlan: { ...fixture.plan, id: observedPlan.planId, status: 'active' },
+      savePoint: {} as never,
+      deletedExecutionHistoryIds: [],
+    })
+    const view = renderPage(deps, fixture.plan.id)
+
+    await clickSelection(user)
+    let warning = await screen.findByRole('dialog', { name: '実行中の生産計画があります' })
+    await user.click(within(warning).getByRole('button', { name: '生産計画を破棄して保存' }))
+    warning = await screen.findByRole('dialog', { name: '実行中の生産計画があります' })
+    // The choice tells the user a restore drops this result and ends no Plan.
+    expect(within(warning).getByText(/この変更は保存しません。生産計画は破棄されず/)).toBeInTheDocument()
+    await user.click(within(warning).getByRole('button', { name: '最後のゲーム内セーブ地点へ戻す' }))
+    const restore = await screen.findByRole('dialog', { name: '最後のゲーム内セーブ地点へ戻す' })
+    expect(within(restore).getByText(/この変更（戻す前の状態で計算した結果）は保存しません/)).toBeInTheDocument()
+    await user.click(within(restore).getByRole('checkbox', { name: 'ゲーム側を最後のゲーム内セーブ地点まで戻しました' }))
+    await user.click(within(restore).getByRole('button', { name: 'アプリ側もセーブ地点へ戻す' }))
+
+    expect(await screen.findByText(
+      '最後のゲーム内セーブ地点へ戻しました。復元前の計算結果は保存していません。復元後の状態から、もう一度再計算してください。',
+    )).toBeInTheDocument()
+    expect(deps.savePlannerResult).toHaveBeenCalledOnce()
+    const [savedResult, , approval] = vi.mocked(deps.savePlannerResult).mock.calls[0]
+    expect(savedResult).toBe(result)
+    expect(approval).toEqual({ observedPlan, savePointDecision: { kind: 'restore_save_point', recordedAt } })
+    // No Draft is opened, and nothing is reported as a failure.
+    expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)
+    expect(screen.queryByText('生産計画の再計算・保存に失敗しました。')).not.toBeInTheDocument()
+    expect(vi.mocked(deps.getPlan).mock.calls.every(([id]) => id === fixture.plan.id)).toBe(true)
   })
 
   it('passes no-Plan results whole to Persistence and keeps the old Plan when save returns null', async () => {
@@ -1121,7 +1230,7 @@ describe('ProductionPlanPage selection lifecycle races', () => {
     const inputPending = deferred<PlannerInput>()
     const preparationPending = deferred<PlannerInteractionPreparationResult>()
     const plannerPending = deferred<PlannerOrchestrationResult>()
-    const savePending = deferred<ProductionPlan | null>()
+    const savePending = deferred<PlannerOrchestrationResultSaveOutcome>()
     const client = plannerClient(async () => fixture.preparation)
     vi.mocked(client.createConstrainedPlan).mockReturnValue(phase === 'planner' ? plannerPending.promise : Promise.resolve(replanResult(createValidProductionPlan())))
     const deps = dependencies(fixture, client)
@@ -1162,7 +1271,7 @@ describe('ProductionPlanPage selection lifecycle races', () => {
       inputPending.resolve(fixture.input)
       preparationPending.resolve(fixture.preparation)
       plannerPending.resolve(replanResult(createValidProductionPlan()))
-      savePending.resolve({ ...fixture.plan, id: productionPlanId('plan.late-save') })
+      savePending.resolve({ kind: 'saved', plan: { ...fixture.plan, id: productionPlanId('plan.late-save') } })
     })
     expect(client.dispose).toHaveBeenCalledOnce()
     if (requestId !== null) expect(client.cancelPlan).toHaveBeenCalledWith(requestId)
@@ -1183,7 +1292,7 @@ describe('ProductionPlanPage atomic save phase', () => {
   it('does not allow cancellation or another action once atomic save has started', async () => {
     const user = userEvent.setup()
     const fixture = pageFixture()
-    const savePending = deferred<ProductionPlan | null>()
+    const savePending = deferred<PlannerOrchestrationResultSaveOutcome>()
     const client = plannerClient(async () => fixture.preparation)
     vi.mocked(client.createConstrainedPlan).mockResolvedValue(replanResult(createValidProductionPlan()))
     const deps = dependencies(fixture, client)
@@ -1204,7 +1313,7 @@ describe('ProductionPlanPage atomic save phase', () => {
     expect(client.createWhatIfComparison).not.toHaveBeenCalled()
     expect(deps.createInput).toHaveBeenCalledTimes(2)
     expect(client.cancelPlan).not.toHaveBeenCalled()
-    await act(async () => savePending.resolve(null))
+    await act(async () => savePending.resolve({ kind: 'no_plan' }))
     expect(await screen.findByText('現在の入力から新しい生産計画を作成できませんでした。')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'この候補を優先' })).toBeEnabled()
     expect(screen.queryByText('生産計画を保存しています。')).not.toBeInTheDocument()

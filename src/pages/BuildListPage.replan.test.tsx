@@ -99,6 +99,7 @@ function orchestrationResult(overrides: Partial<PlannerOrchestrationResult> = {}
     warnings: [],
     termination: completedPlannerTermination(),
     generatedBuildListEntries: [],
+    generatedBuildListEntryReplacements: [],
     ...overrides,
   }
 }
@@ -136,6 +137,7 @@ function replanDependencies(plan: ProductionPlan, request: ProductionPlanReplanP
       oldPlan: { ...plan, status: 'abandoned' as const, abandonmentReason: 'replan_adopted' as const },
       newPlan: currentContractPlan(PREVIEW_PLAN_ID, { status: 'active' }),
       generatedBuildListEntries: [],
+      generatedBuildListEntryReplacements: [],
     })),
   }
 }

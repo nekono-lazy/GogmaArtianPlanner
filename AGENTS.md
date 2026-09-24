@@ -2030,7 +2030,7 @@ Deleting/replacing an old `BuildCandidate` during a later search must not automa
 
 The originating Candidate ID is traceability information, not the source of truth for an existing Build List entry.
 
-Build List cardinality (partially implemented; Issue #103 Phase 0, `docs/DATA_MODEL.md` 9.4.1,
+Build List cardinality (implemented; Issue #103 Phase 0, `docs/DATA_MODEL.md` 9.4.1,
 `docs/PLANNER_SPEC.md` 4.1 / 9.2.18): the persisted Build List holds at most one
 `BuildListEntry` per `targetWeaponId`. Adding a different Candidate for a Target
 that already has an Entry is one confirmed, atomic, Plan-breaking-guarded
@@ -2049,10 +2049,10 @@ authority `findBuildListTargetDuplicates()` / `validateBuildListCardinality()` /
 the ordinary Planner input fail-closed with the warning
 `duplicate_build_list_entries_for_target`, counting every Entry of a planning
 Target, stale ones included, so the non-stale one is never picked silently (no
-Beam Search, `plan = null`, `exhausted`); the Domain calling-context parameter
-`PlannerBuildListCardinality` (`persisted` by default) that only the B8 / what-if
-trial inputs (augmented preflight and trial full Planner runs) set to
-`temporary_augmented` - never a `PlannerInput` field or a Worker request;
+Beam Search, `plan = null`, `exhausted`); a Domain calling-context parameter for
+the B8 / what-if trial inputs - never a `PlannerInput` field or a Worker request
+(Phase 0-1's `PlannerBuildListCardinality`, which skipped the trial check, was
+replaced by Phase 0-3's `PlannerBuildListContext` below);
 `BuildListService.addCandidate()` returning `added` / `duplicate` /
 `replacement_required` / `legacy_duplicate` with the decision and the addition in
 one transaction (`BuildListEntryRepository.decideAndAddBuildListEntry()`); and
@@ -2079,11 +2079,77 @@ reports it and re-reads the Build List without retrying. `legacy_duplicate` open
 no dialog and points to the Build List. The Build List marks each Target that
 `findBuildListTargetDuplicates()` reports with a 「要整理」 chip and a warning,
 recommends no Entry, and leaves the tidying to the ordinary guarded Entry delete;
-it disables no Planner control, leaving that to the Planner fail-closed. Still
-open: the constrained re-search / what-if / replan replacement (Phase 0-3; until
-then an adopted generated Entry is still added beside the original, which leaves
-a legacy duplicate the next ordinary Planner run fails closed on and the Build
-List guidance shows). No version moved.
+it disables no Planner control, leaving that to the Planner fail-closed. No
+version moved.
+
+Phase 0-3 (Planner / Persistence) connected constrained re-search, what-if, the
+ordinary Planner result save and the replan adoption (`docs/PLANNER_SPEC.md`
+9.2.18) with the current Beam Search unchanged. The one replacement authority is
+`src/domain/buildList/buildListEntryReplacement.ts`: `BuildListEntryReplacement`
+(`targetWeaponId`, `replacedBuildListEntryId` = the persisted `O`,
+`generatedBuildListEntryId` = the temporary `G`), `resolveBuildListEntryReplacement()`
+(the Target's one persisted Entry, otherwise fail closed),
+`applyBuildListEntryReplacements()` (the replacement set, `-O + G`),
+`validateBuildListEntryReplacements()` (per Target persisted 0..1 + temporary 0..1:
+`augmented` = exactly `O` + `G`, `replaced` = exactly `G`),
+`validateGeneratedBuildListEntryReplacements()` and
+`validateReplacedBuildListCardinality()`; B8, B9, the Draft save and the replan
+adoption never re-implement them. The Domain calling context is
+`PlannerBuildListContext` = `persisted` | `temporary_augmented` (preflight input
+`O + G`) | `temporary_replacement` (full run input `-O + G`), the last two carrying
+runtime-only `replacements`; the persisted side of a trial input keeps the ordinary
+duplicate check, and every full Planner run (`runPlannerBeamSearch()`, Production
+Plan generation, a runtime-unsupported retry included) accepts
+`PlannerRunBuildListContext` only, so `O` is never an execution candidate. A trial
+runs `preparePlannerReplacementConflictPreflight()`: the unchanged 9.2.3.1
+re-association over `O + G`, then again over the replacement set, where a
+constraint with no match is fulfilled by the replacement (`replacementSatisfiedConstraints`,
+no resolution rebuilt) only when every other participant of its original conflict
+was replaced; any other zero / several matches, fingerprint mismatch or excluded
+fixed Entry still fails the trial closed, and unrelated explicit resolutions are
+re-mapped, never dropped. The full run, and so the Plan's Steps, `conflicts`,
+`rejectedBuildListEntries` and `PlanningInputSnapshot`, is the replacement set; B8's
+`currentAugmentedInput` holds the adopted replacement set (never `O`, `G1`, `G2` of
+one Target: an adopted Target's later works are already satisfied, and a second
+temporary Entry for one Target throws an invariant error rather than being guessed).
+What-if trials use the same two-step preflight and run from the unchanged baseline;
+a `reusedExisting` Candidate is still judged as the ordinary baseline. The adoption
+metadata travels as `PlannerOrchestrationResult.generatedBuildListEntryReplacements`
+(one per generated Entry, empty with `plan === null`, plain serializable data, no
+Worker protocol change beyond the type), and `checkPersistablePlannerResultShape()`
+refuses a result whose metadata is missing, extra or for another Target. Saving
+(`prepareFinalReplacementBuildList()`) re-checks inside the transaction that each
+Target's persisted Entries are still exactly the replaced `O` (`planner_state_changed`
+/ `replan_state_changed` otherwise, deleting nothing on a guess), refuses an already
+persisted generated ID, builds the final replacement set and validates it with
+`validateBuildListCardinality()`, and `checkProductionPlanBuildListReferences()`
+refuses a Plan still naming `O`. `PlannerResultPersistenceService` gained
+`inspectPlannerOrchestrationResultSave()` and `savePlannerOrchestrationResult(result,
+context, approval?)`: the whole save is one `PlanGuardedMutation` through the existing
+`PlanBreakingChangeGuard` (its new `afterWrite` option deletes the old Drafts and adds
+the new Draft in the same transaction; its collection write now adds a record the
+read state did not hold instead of putting it), so replacing an Entry the `active`
+Plan depends on needs the approval and ends that Plan (`breaking_change_approved`)
+atomically, while a Draft / stale / ended Plan referencing `O` needs none. Choosing
+「最後のゲーム内セーブ地点へ戻す」 in that approval is the one exception to the generic
+restore -> change -> abandonment of a guarded change (`docs/PLANNER_SPEC.md` 9.2.18 /
+16.10): the Planner result was calculated before the restore and is no authority over
+the restored state, so only the save point restore is written
+(`preparePlanGuardedSavePointRestoreInsteadOfChange()` sharing the approval / choice checks
+with `preparePlanGuardedMutation()`, `prepareExecutionSavePointRestore()` unchanged,
+`PlanBreakingChangeGuard.restoreSavePointInsteadOfChange()`, and the same
+`writeExecutionSavePointRestore()` the ordinary restore uses), nothing of the result -
+no `G`, no `O` removal, no Draft change, no `breaking_change_approved` - and
+`savePlannerOrchestrationResult()` returns the typed
+`save_point_restored_recalculation_required` outcome (`saved` / `no_plan` otherwise) so the
+screen asks for a new calculation; the snapshot checks are never weakened to fit the old
+result, and every other guarded change keeps restore -> change -> abandonment. The B10
+recalculation save on the Production Plan page goes through
+`usePlanBreakingChangeApproval()` / `PlanBreakingChangeDialog`; the Build List page's
+ordinary input carries no conflict resolution, so B8 never runs there and it needs no
+dialog. The replan adoption deletes `O` and adds `G` in its own transaction with
+`replan_adopted` and adds no further warning; choosing the save point restore still
+adopts and replaces nothing. No version moved (13 / 8 / 11).
 
 ---
 

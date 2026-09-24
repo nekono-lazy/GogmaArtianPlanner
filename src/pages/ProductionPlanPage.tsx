@@ -18,10 +18,16 @@ import {
 } from '../components/planner/ProductionPlanContent'
 import { ProductionPlanWhatIfComparison } from '../components/planner/ProductionPlanWhatIfComparison'
 import { PlanExecutionEntry, type PlanStartPreviewState } from '../components/execution/PlanExecutionEntry'
-import { executionErrorMessage } from '../components/execution/executionStepPresentation'
+import { executionErrorMessage, savePointPositionLabel } from '../components/execution/executionStepPresentation'
+import { PlanBreakingChangeDialog } from '../components/execution/PlanBreakingChangeDialog'
+import { usePlanBreakingChangeApproval } from '../components/execution/usePlanBreakingChangeApproval'
 import { ProductionPlanReplanPreviewPanel } from '../components/execution/ProductionPlanReplanPreviewPanel'
 import { useProductionPlanReplanPreview } from '../components/execution/useProductionPlanReplanPreview'
-import { ExecutionRuntimeError } from '../domain/execution'
+import {
+  ExecutionRuntimeError,
+  type PlanBreakingChangeApproval,
+  type PlanBreakingChangeInspection,
+} from '../domain/execution'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import type { MasterDataRoot } from '../domain/master/masterTypes'
 import type {
@@ -62,7 +68,10 @@ import {
   PlannerCancelledError,
   type PlannerWorkerClient,
 } from '../services/planner/plannerWorkerClient'
-import { plannerResultPersistenceService } from '../services/planner/plannerResultPersistenceService'
+import {
+  plannerResultPersistenceService,
+  type PlannerOrchestrationResultSaveOutcome,
+} from '../services/planner/plannerResultPersistenceService'
 import {
   createProductionPlanExecutionService,
   type ProductionPlanStartInspection,
@@ -91,10 +100,26 @@ export interface ProductionPlanPageDependencies {
   getTargetWeapons(): Promise<TargetWeapon[]>
   createInput(calculationContext: CalculationContext): Promise<PlannerInput>
   createWorkerClient(): PlannerWorkerClient
+  /**
+   * Whether saving a recalculated Draft needs the Plan-breaking approval: a
+   * generated BuildListEntry replaces an Entry an `active` Plan depends on
+   * (`docs/PLANNER_SPEC.md` 9.2.18 / 16.6). Read-only; the save re-derives it.
+   */
+  inspectPlannerResultSave(
+    result: PlannerOrchestrationResult,
+    currentCalculationContext: CalculationContext,
+  ): Promise<PlanBreakingChangeInspection>
+  /**
+   * Saves a recalculated Draft. With an approval whose 16.10 decision restores
+   * the game save point, only the restore happens and the result is dropped
+   * (`docs/PLANNER_SPEC.md` 9.2.18): the outcome then asks for a new
+   * calculation from the restored state.
+   */
   savePlannerResult(
     result: PlannerOrchestrationResult,
     currentCalculationContext: CalculationContext,
-  ): Promise<ProductionPlan | null>
+    approval?: PlanBreakingChangeApproval | null,
+  ): Promise<PlannerOrchestrationResultSaveOutcome>
   /**
    * The read-only preview of the Target links a draft's start makes
    * (`docs/UI_FLOW.md` 11). Never write authority: the start re-verifies.
@@ -130,10 +155,16 @@ function createDefaultDependencies(
     createInput: (calculationContext) =>
       createPlannerInput(master, calculationContext),
     createWorkerClient: createProductionPlannerWorkerClient,
-    savePlannerResult: (result, currentCalculationContext) =>
+    inspectPlannerResultSave: (result, currentCalculationContext) =>
+      plannerResultPersistenceService.inspectPlannerOrchestrationResultSave(
+        result,
+        currentCalculationContext,
+      ),
+    savePlannerResult: (result, currentCalculationContext, approval) =>
       plannerResultPersistenceService.savePlannerOrchestrationResult(
         result,
         currentCalculationContext,
+        approval ?? null,
       ),
     inspectProductionPlanStart: (planId) => executionService.inspectProductionPlanStart(planId),
     startProductionPlan: (planId) => executionService.startProductionPlan(planId),
@@ -167,6 +198,9 @@ type ProductionPlanPageState =
       viewModel: ProductionPlanInteractionViewModel
     }
   | { status: 'error'; message: string; plan: ProductionPlan | null }
+
+const SAVE_POINT_RESTORED_RECALCULATION_MESSAGE =
+  '最後のゲーム内セーブ地点へ戻しました。復元前の計算結果は保存していません。復元後の状態から、もう一度再計算してください。'
 
 interface WhatIfTargetIdentity {
   conflictId: string
@@ -513,6 +547,10 @@ export function ProductionPlanPage({
   const [whatIfNotice, setWhatIfNotice] = useState<string | null>(null)
 
   const [replanState, setReplanState] = useState<ReplanUiState>({ status: 'idle' })
+  // A recalculated Draft whose generated Entry replaces an Entry the `active`
+  // Plan depends on goes through the shared breaking-change warning
+  // (`docs/PLANNER_SPEC.md` 9.2.18 / 16.6); every other save needs none.
+  const planGuard = usePlanBreakingChangeApproval()
   const [startState, setStartState] = useState<
     { status: 'idle' } | { status: 'starting' } | { status: 'failure'; message: string }
   >({ status: 'idle' })
@@ -1006,9 +1044,35 @@ export function ProductionPlanPage({
       )
       if (!isCurrentAction()) return
       // Pass the whole result, including no-Plan results: Persistence owns the
-      // generated-Entry invariants and the single atomic transaction.
-      const savedPlan = await dependencies.savePlannerResult(result, saveCalculationContext)
+      // generated-Entry invariants, the Entry replacement and the single atomic
+      // transaction. The runtime's inspection alone decides whether the
+      // breaking-change warning is shown; nothing is judged here.
+      const saved = await planGuard.run({
+        inspect: () => dependencies.inspectPlannerResultSave(result, saveCalculationContext),
+        apply: (approval) =>
+          dependencies.savePlannerResult(result, saveCalculationContext, approval),
+        note: 'この再計算では作成リストの候補が置き換わり、実行中の生産計画が参照している候補が削除されます。',
+        // This result was calculated before any restore, so restoring drops it
+        // instead of saving it over the restored state (PLANNER_SPEC 9.2.18).
+        savePointRestore: 'drop_change',
+      })
       if (!isCurrentAction()) return
+      if (saved.status === 'cancelled') {
+        setReplanState({ status: 'notice', message: '保存を取り消しました。生産計画と作成リストは変更されていません。' })
+        return
+      }
+      if (saved.status === 'refused') {
+        setReplanState({ status: 'failure', message: saved.message })
+        return
+      }
+      if (saved.result.kind === 'save_point_restored_recalculation_required') {
+        // The restore succeeded and the pre-restore result was dropped, never
+        // saved over the restored state: no Draft to open, a new calculation is
+        // required (`docs/PLANNER_SPEC.md` 9.2.18).
+        setReplanState({ status: 'notice', message: SAVE_POINT_RESTORED_RECALCULATION_MESSAGE })
+        return
+      }
+      const savedPlan = saved.result.kind === 'saved' ? saved.result.plan : null
       if (savedPlan === null) {
         setReplanState({
           status: 'notice',
@@ -1438,6 +1502,17 @@ export function ProductionPlanPage({
           />
         )}
       </Stack>
+      <PlanBreakingChangeDialog
+        controller={planGuard}
+        // The Plan this page shows resolves the save point's Step only when it
+        // is the running Plan the warning names; display only.
+        savePointPositionLabel={(inspection) =>
+          (state.status === 'ready' || state.status === 'stale' || state.status === 'preparing') &&
+          state.plan.id === inspection.observedPlan.planId
+            ? savePointPositionLabel(state.plan, inspection.savePointCurrentStepId)
+            : null
+        }
+      />
     </PageShell>
   )
 }

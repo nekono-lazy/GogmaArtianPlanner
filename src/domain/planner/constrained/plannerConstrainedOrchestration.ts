@@ -3,6 +3,11 @@ import type {
   BuildListEntryId,
   TargetWeaponId,
 } from '../../models/publicTypes'
+import {
+  resolveBuildListEntryReplacement,
+  sortBuildListEntryReplacements,
+  type BuildListEntryReplacement,
+} from '../../buildList'
 import { visitConstrainedCandidates } from '../../search'
 import type {
   ConstrainedEnumerationBounds,
@@ -16,15 +21,15 @@ import { createUnsearchedPlannerTermination } from '../plannerTermination'
 import type { PlannerCheckpointRequirements } from '../plannerCheckpoints'
 import type {
   PlannerBeamSearchResult,
-  PlannerBuildListCardinality,
   PlannerDependencies,
   PlannerExecutionOptions,
   PlannerInput,
   PlannerResult,
+  PlannerRunBuildListContext,
   PlannerWarning,
   ProductionPlanGenerationObserver,
 } from '../plannerTypes'
-import { preparePlannerAugmentedConflictPreflight } from './plannerAugmentedPreflight'
+import { preparePlannerReplacementConflictPreflight } from './plannerAugmentedPreflight'
 import {
   createPlannerConstrainedConflictContexts,
   plannerConflictResourceKey,
@@ -50,17 +55,19 @@ import {
  * ```text
  * visitConstrainedCandidates()      Search Domain, sequential, Target-local
  *   -> deterministic materializer   B8-C2
- *   -> temporary generated Entry
- *   -> augmented conflict preflight B8-C3
- *   -> full Production Plan run     B8-C4a observed boundary
+ *   -> temporary generated Entry G, replacing the Target's persisted Entry O
+ *   -> conflict preflight           B8-C3, over O + G, then over -O + G
+ *   -> full Production Plan run     B8-C4a observed boundary, over -O + G
  *   -> adoption, or the next Candidate
  * ```
  *
  * It adds no conflict logic of its own. Coexistence is decided only by the full
- * Beam Search plus Trace Replay of `createProductionPlanWithObserver()` over an
- * augmented input, exactly as PLANNER_SPEC 9.2.11 requires. Nothing here writes
- * to persistence, touches a Worker, or reads React state: B8-D owns all of
- * that.
+ * Beam Search plus Trace Replay of `createProductionPlanWithObserver()` over the
+ * trial's **replacement set** (PLANNER_SPEC 9.2.11 / 9.2.18): `O` stays only in
+ * the preflight that re-associates the user's fixed constraints, so the Plan a
+ * trial produces - its Steps, conflicts, rejections and PlanningInputSnapshot -
+ * never records an Entry the adoption deletes. Nothing here writes to
+ * persistence, touches a Worker, or reads React state: B8-D owns all of that.
  */
 
 export interface PlannerConstrainedOrchestrationOptions {
@@ -77,11 +84,20 @@ export interface PlannerConstrainedOrchestrationOptions {
  */
 export interface PlannerOrchestrationResult extends PlannerResult {
   /**
-   * Only Entries adopted into the final augmented PlannerInput *and* selected
-   * by the final Plan. It is empty whenever `plan === null`, and it never
-   * contains a trial-rejected Entry or a reused existing Entry.
+   * Only Entries adopted into the final replacement set *and* selected by the
+   * final Plan. It is empty whenever `plan === null`, and it never contains a
+   * trial-rejected Entry or a reused existing Entry.
    */
   generatedBuildListEntries: BuildListEntry[]
+  /**
+   * The persisted Entry each generated Entry replaces (`docs/PLANNER_SPEC.md`
+   * 9.2.18): exactly one per generated Entry, for its own Target, in stable
+   * order. It is runtime result metadata only - never a `BuildListEntry` or
+   * `ProductionPlan` field - carried through the Worker so the save-time
+   * transaction deletes that very `O`, and nothing else, once it confirmed
+   * `O` is still the Target's one persisted Entry. Empty with `plan === null`.
+   */
+  generatedBuildListEntryReplacements: BuildListEntryReplacement[]
 }
 
 /**
@@ -375,7 +391,7 @@ export async function createProductionPlanWithConstrainedSearch(
 
   async function runFullPlanner(
     planInput: PlannerInput,
-    cardinality: PlannerBuildListCardinality,
+    buildListContext: PlannerRunBuildListContext,
   ): Promise<FullPlannerRun> {
     lastCompletedBeam = null
     try {
@@ -384,7 +400,7 @@ export async function createProductionPlanWithConstrainedSearch(
         dependencies,
         executionOptions,
         observer,
-        cardinality,
+        buildListContext,
       )
       // This run's own last Beam Search, never a previous run's.
       return readLastCompletedBeam()?.cancelled === true
@@ -404,9 +420,13 @@ export async function createProductionPlanWithConstrainedSearch(
     }
   }
 
-  function finish(result: PlannerResult, adopted: readonly BuildListEntry[]) {
+  function finish(
+    result: PlannerResult,
+    adopted: readonly BuildListEntry[],
+    replacements: readonly BuildListEntryReplacement[],
+  ) {
     // A Plan is the only thing that can carry a generated Entry, so a null Plan
-    // returns none of them (PLANNER_SPEC 9.2.14).
+    // returns none of them and no replacement either (PLANNER_SPEC 9.2.14).
     const generatedBuildListEntries =
       result.plan === null
         ? []
@@ -421,6 +441,8 @@ export async function createProductionPlanWithConstrainedSearch(
       // It is never rebuilt from a warning and never merged across trials.
       termination: result.termination,
       generatedBuildListEntries,
+      generatedBuildListEntryReplacements:
+        result.plan === null ? [] : sortBuildListEntryReplacements(replacements),
     } satisfies PlannerOrchestrationResult
   }
 
@@ -430,7 +452,7 @@ export async function createProductionPlanWithConstrainedSearch(
   // The caller's input is the ordinary persisted one, so the Build List
   // cardinality check applies (`docs/PLANNER_SPEC.md` 4.1); only a Candidate
   // trial below is a temporary augmented input (9.2.18).
-  const initialRun = await runFullPlanner(input, 'persisted')
+  const initialRun = await runFullPlanner(input, { kind: 'persisted' })
   if (initialRun.status === 'rerun_budget_reached') {
     rerunBudgetWarning()
     // The budget refused a retry inside the very first Production Plan
@@ -455,6 +477,7 @@ export async function createProductionPlanWithConstrainedSearch(
             : structuredClone(beam.termination),
       },
       [],
+      [],
     )
   }
   if (initialRun.status === 'cancelled') {
@@ -463,16 +486,20 @@ export async function createProductionPlanWithConstrainedSearch(
     // the same `shouldCancel` to the Search Domain, which raises
     // `CandidateSearchError('cancelled')` instead. No new warning kind is
     // needed: this is the ordinary cancellation outcome, unchanged.
-    return finish(initialRun.result, [])
+    return finish(initialRun.result, [], [])
   }
   let currentPlannerResult = initialRun.result
+  // The adopted replacement set: the original input with every adopted
+  // replacement applied (`O` removed, `G` in its place) and the resolutions
+  // re-mapped onto it. It never accumulates `O`, `G1`, `G2` for one Target.
   let currentAugmentedInput = input
   const adoptedEntries: BuildListEntry[] = []
+  const adoptedReplacements: BuildListEntryReplacement[] = []
 
   // --- the original fixed constraints, built exactly once ---------------
   const prepared = preparePlannerInitialContext(input, dependencies)
   if (prepared.status !== 'ready') {
-    return finish(currentPlannerResult, adoptedEntries)
+    return finish(currentPlannerResult, adoptedEntries, adoptedReplacements)
   }
   const originalContexts = createPlannerConstrainedConflictContexts(prepared.context)
   const fixedPreparation = preparePlannerFixedConflictConstraints(
@@ -486,13 +513,13 @@ export async function createProductionPlanWithConstrainedSearch(
     fixedPreparation.failures.forEach((failure) => {
       orchestrationWarnings.push(fixedConstraintFailureWarning(failure))
     })
-    return finish(currentPlannerResult, adoptedEntries)
+    return finish(currentPlannerResult, adoptedEntries, adoptedReplacements)
   }
   const fixedConstraints = fixedPreparation.constraints
   if (fixedConstraints.length === 0) {
     // No explicit `PlannerConflictResolution` means no fixed side, so B8
     // constrained re-search never runs automatically.
-    return finish(currentPlannerResult, adoptedEntries)
+    return finish(currentPlannerResult, adoptedEntries, adoptedReplacements)
   }
 
   const origin = createConstrainedSearchOriginFromPlannerInput(input)
@@ -577,19 +604,48 @@ export async function createProductionPlanWithConstrainedSearch(
         return 'stop'
       }
 
+      // The persisted Entry this trial's Entry replaces: the Target's one
+      // Entry of the original input (PLANNER_SPEC 9.2.18). A work Target never
+      // holds an adopted temporary Entry already - an adopted Entry keeps its
+      // Target secured, so every later work on it is satisfied above - and a
+      // second temporary Entry of one Target is never guessed into place.
+      const resolved = resolveBuildListEntryReplacement(input.buildListEntries, entry)
+      if (resolved.status !== 'ready') {
+        throw new Error(
+          `Planner constrained re-search invariant violated: ${resolved.detail}`,
+        )
+      }
+      if (
+        adoptedReplacements.some(
+          ({ targetWeaponId }) => targetWeaponId === resolved.replacement.targetWeaponId,
+        )
+      ) {
+        throw new Error(
+          `Planner constrained re-search invariant violated: TargetWeapon '${resolved.replacement.targetWeaponId}' already holds an adopted temporary BuildListEntry.`,
+        )
+      }
+      const trialReplacements = [...adoptedReplacements, resolved.replacement]
+      // The augmented trial input keeps every replaced persisted Entry `O`
+      // beside its temporary `G`, so the preflight can re-associate the user's
+      // fixed constraints; the full Planner run then gets the replacement set.
       const trialInput: PlannerInput = {
-        ...currentAugmentedInput,
-        buildListEntries: [...currentAugmentedInput.buildListEntries, entry],
+        ...input,
+        buildListEntries: [...input.buildListEntries, ...adoptedEntries, entry],
       }
       // Every explicit resolution is re-mapped here, before any Beam Search.
-      const preflight = preparePlannerAugmentedConflictPreflight(
+      const preflight = preparePlannerReplacementConflictPreflight(
         trialInput,
+        trialReplacements,
         fixedConstraints,
+        originalContexts,
         dependencies,
       )
       if (preflight.status !== 'ready') return 'rejected'
 
-      const trialRun = await runFullPlanner(preflight.resolvedInput, 'temporary_augmented')
+      const trialRun = await runFullPlanner(preflight.resolvedInput, {
+        kind: 'temporary_replacement',
+        replacements: trialReplacements,
+      })
       if (trialRun.status === 'rerun_budget_reached') {
         rerunBudgetReached = true
         rerunBudgetWarning()
@@ -619,6 +675,7 @@ export async function createProductionPlanWithConstrainedSearch(
       currentAugmentedInput = preflight.resolvedInput
       currentPlannerResult = trialResult
       adoptedEntries.push(entry)
+      adoptedReplacements.push(resolved.replacement)
       return 'adopted'
     }
 
@@ -686,5 +743,5 @@ export async function createProductionPlanWithConstrainedSearch(
     }
   }
 
-  return finish(currentPlannerResult, adoptedEntries)
+  return finish(currentPlannerResult, adoptedEntries, adoptedReplacements)
 }

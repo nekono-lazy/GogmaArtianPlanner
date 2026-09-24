@@ -58,6 +58,8 @@ import { ProductionPlanReplanPreviewService } from './productionPlanReplanPrevie
 const EXTRA_SOURCE_ID = 'owned.replan.extra'
 const EXTRA_TARGET_ID = 'target.replan.extra'
 const EXTRA_ENTRY_ID = 'entry.replan.extra'
+/** The persisted Entry of the added Target a generated Entry replaces (PLANNER_SPEC 9.2.18). */
+const ORIGINAL_ENTRY_ID = 'entry.replan.extra.original'
 const EARLIER_START = '2026-09-10T00:00:00.000Z'
 
 function previewServiceFor(
@@ -82,6 +84,8 @@ interface ReplanHarness {
   source: OwnedGogmaArtianWeapon
   goal: TargetWeapon
   entry: BuildListEntry
+  /** The persisted Entry `entry` replaces as a generated Entry; `null` when `entry` is persisted. */
+  original: BuildListEntry | null
   savePoint: ExecutionSavePoint | null
 }
 
@@ -92,7 +96,10 @@ interface HarnessOptions {
   confirmedSteps?: number
   /** Records the current Step as `operation_uncertain`, making the Plan stale. */
   stale?: boolean
-  /** Persists the added Entry; otherwise it is only available for a generated Entry. */
+  /**
+   * Persists the added Entry; otherwise it is only available for a generated
+   * Entry, and the added Target holds the original persisted Entry it replaces.
+   */
   persistEntry?: boolean
   sourceOverrides?: Partial<OwnedGogmaArtianWeapon>
 }
@@ -122,8 +129,15 @@ async function running(database: AppDatabase, options: HarnessOptions = {}): Pro
   const request = await previewService.prepareProductionPlanReplanPreview({ runningPlanId: fixture.plan.id })
   const entry = orchestrationEntry(EXTRA_ENTRY_ID, goal, resetRoute(source.id))
   synchronizeOrchestrationEntry(request.plannerInput, entry)
-  if (options.persistEntry ?? true) await database.buildListEntries.put(entry)
-  return { database, fixture, service, previewService, source, goal, entry, savePoint }
+  let original: BuildListEntry | null = null
+  if (options.persistEntry ?? true) {
+    await database.buildListEntries.put(entry)
+  } else {
+    original = orchestrationEntry(ORIGINAL_ENTRY_ID, goal, resetRoute(source.id))
+    synchronizeOrchestrationEntry(request.plannerInput, original)
+    await database.buildListEntries.put(original)
+  }
+  return { database, fixture, service, previewService, source, goal, entry, original, savePoint }
 }
 
 /**
@@ -135,8 +149,16 @@ async function running(database: AppDatabase, options: HarnessOptions = {}): Pro
  */
 async function previewOf(harness: ReplanHarness, options: { generated?: boolean } = {}): Promise<ProductionPlanReplanPreview> {
   const request = await harness.previewService.prepareProductionPlanReplanPreview({ runningPlanId: harness.fixture.plan.id })
+  // A generated Entry replaces the added Target's persisted Entry: the Planner
+  // runs over the replacement set, exactly as a constrained trial does.
   const input = options.generated
-    ? { ...request.plannerInput, buildListEntries: [...request.plannerInput.buildListEntries, structuredClone(harness.entry)] }
+    ? {
+        ...request.plannerInput,
+        buildListEntries: [
+          ...request.plannerInput.buildListEntries.filter(({ id }) => id !== ORIGINAL_ENTRY_ID),
+          structuredClone(harness.entry),
+        ],
+      }
     : request.plannerInput
   const result = await createProductionPlanWithConstrainedSearch(input, harness.fixture.built.dependencies, {
     orchestrationBounds: orchestrationBounds(),
@@ -144,7 +166,17 @@ async function previewOf(harness: ReplanHarness, options: { generated?: boolean 
   })
   return harness.previewService.createProductionPlanReplanPreview(
     request,
-    options.generated ? { ...result, generatedBuildListEntries: [structuredClone(harness.entry)] } : result,
+    options.generated
+      ? {
+          ...result,
+          generatedBuildListEntries: [structuredClone(harness.entry)],
+          generatedBuildListEntryReplacements: [{
+            targetWeaponId: harness.goal.id,
+            replacedBuildListEntryId: ORIGINAL_ENTRY_ID as BuildListEntry['id'],
+            generatedBuildListEntryId: harness.entry.id,
+          }],
+        }
+      : result,
   )
 }
 
@@ -175,11 +207,15 @@ function adoptedDump(
   oldPlan: ProductionPlan,
   newPlan: ProductionPlan,
   now: string,
-  changes: { ownedWeapons?: OwnedWeapon[]; generatedEntries?: BuildListEntry[] } = {},
+  changes: { ownedWeapons?: OwnedWeapon[]; generatedEntries?: BuildListEntry[]; replacedEntryIds?: string[] } = {},
 ): PersistedDump {
   const byId = <T extends { id: string }>(values: T[]) => values.sort((a, b) => a.id.localeCompare(b.id))
   const changedWeapons = new Map((changes.ownedWeapons ?? []).map((weapon) => [weapon.id, weapon]))
-  const entries = byId([...before.buildListEntries, ...(changes.generatedEntries ?? [])])
+  const replaced = new Set(changes.replacedEntryIds ?? [])
+  const entries = byId([
+    ...before.buildListEntries.filter(({ id }) => !replaced.has(id)),
+    ...(changes.generatedEntries ?? []),
+  ])
   // The new Plan's start effect (PLANNER_SPEC 16.11): the Target of each Entry
   // starting from an existing weapon comes to prefer it.
   const startedTargets = applyProductionPlanStartTargetLinks(
@@ -436,11 +472,14 @@ describe('replan adoption', () => {
       expect((await currentPlan(database, harness.fixture.plan)).recalculationReasons).toEqual(['execution_operation_uncertain'])
     }))
 
-  it('adds the generated Entries in the same transaction', () =>
+  it('replaces the persisted Entry with the generated Entry in the same transaction', () =>
     withDatabase(async (database) => {
       const harness = await running(database, { persistEntry: false })
       const preview = await previewOf(harness, { generated: true })
       const before = await dump(database)
+      expect(before.buildListEntries.map(({ id }) => id)).toContain(ORIGINAL_ENTRY_ID)
+      // The new Plan never records the Entry the adoption deletes.
+      expect(previewPlan(preview).selectedBuildListEntryIds).toEqual([EXTRA_ENTRY_ID])
 
       const result = await adopt(harness, preview)
 
@@ -448,10 +487,31 @@ describe('replan adoption', () => {
       if (result.kind !== 'adopted') return
       expect(result.generatedBuildListEntries).toEqual(preview.result.generatedBuildListEntries)
       expect(await database.buildListEntries.get(EXTRA_ENTRY_ID)).toEqual(preview.result.generatedBuildListEntries[0])
+      expect(await database.buildListEntries.get(ORIGINAL_ENTRY_ID)).toBeUndefined()
+      expect((await database.buildListEntries.toArray()).filter(({ targetWeaponId }) => targetWeaponId === harness.goal.id))
+        .toHaveLength(1)
       const oldBefore = before.productionPlans.find(({ id }) => id === harness.fixture.plan.id) as ProductionPlan
       expect(await dump(database)).toEqual(adoptedDump(before, oldBefore, previewPlan(preview), result.newPlan.updatedAt, {
         generatedEntries: preview.result.generatedBuildListEntries,
+        replacedEntryIds: [ORIGINAL_ENTRY_ID],
       }))
+    }))
+
+  it('refuses when the replaced Entry was itself replaced after the Preview, deleting nothing on a guess', () =>
+    withDatabase(async (database) => {
+      const harness = await running(database, { persistEntry: false })
+      const preview = await previewOf(harness, { generated: true })
+      // B1 -> B3 after the Preview: the Target's one Entry is no longer B1.
+      await database.buildListEntries.delete(ORIGINAL_ENTRY_ID)
+      const b3 = { ...structuredClone(harness.original as BuildListEntry), id: 'entry.replan.extra.b3' as BuildListEntry['id'] }
+      await database.buildListEntries.put(b3)
+      const runningBefore = await currentPlan(database, harness.fixture.plan)
+
+      await expectRefusal(() => adopt(harness, preview), database, 'replan_state_changed')
+      expect(await database.buildListEntries.get(b3.id)).toEqual(b3)
+      expect(await database.buildListEntries.get(EXTRA_ENTRY_ID)).toBeUndefined()
+      expect(await currentPlan(database, harness.fixture.plan)).toEqual(runningBefore)
+      expect(await database.productionPlans.get(previewPlan(preview).id)).toBeUndefined()
     }))
 
   it('adds no ExecutionHistory, keeps the old records and makes them not undoable', () =>
@@ -796,9 +856,10 @@ describe('replan adoption save point choice', () => {
       expect(await database.normalArtianCounters.toArray()).toEqual(savePoint.normalCounters)
       expect(await database.executionHistory.toArray()).toEqual([])
       expect(await database.executionSavePoints.toArray()).toEqual([savePoint])
-      // Nothing of the Preview was persisted.
+      // Nothing of the Preview was persisted, and nothing was replaced.
       expect(await database.productionPlans.get(previewPlan(preview).id)).toBeUndefined()
       expect(await database.buildListEntries.get(EXTRA_ENTRY_ID)).toBeUndefined()
+      expect(await database.buildListEntries.get(ORIGINAL_ENTRY_ID)).toEqual(harness.original)
 
       // The old Preview no longer matches the restored running Plan.
       await expectRefusal(() => adopt(harness, preview, restoreSavePoint(savePoint)), database, 'replan_state_changed')
