@@ -83,13 +83,15 @@ export function buildListEntriesForTarget<T extends Pick<BuildListEntry, 'id' | 
  * (`docs/DATA_MODEL.md` 9.4.1 「Candidate Searchからの追加と置換」):
  *
  * - `target_empty`: the Target has no Entry, so the Candidate is added as before
- * - `duplicate`: an Entry of the same semantic Candidate exists; nothing is
- *   written and its selection and improvement preference are never overwritten
- * - `replacement_required`: the Target holds one Entry of another Candidate;
+ * - `duplicate`: the Target's one Entry is of the same semantic Candidate;
+ *   nothing is written and its selection and improvement preference are never
+ *   overwritten
+ * - `replacement_required`: the Target's one Entry is of another Candidate;
  *   it may only be replaced after the user confirmed it
  * - `legacy_duplicate`: the Target already holds two or more Entries, so which
- *   one a replacement would replace is unknown and both addition and
- *   replacement are refused until the user tidied the Build List
+ *   one is its current Entry is unknown and both addition and replacement are
+ *   refused until the user tidied the Build List - even when the Candidate is
+ *   one of them
  */
 export type BuildListCandidateAdditionState =
   | { status: 'target_empty' }
@@ -100,20 +102,22 @@ export type BuildListCandidateAdditionState =
 /**
  * Classifies one Candidate addition against the persisted Build List. It is a
  * pure decision: it writes nothing and never picks an Entry of a legacy
- * duplicate. The semantic duplicate rule of `docs/DATA_MODEL.md` 9.4 comes
- * first, so re-adding a Candidate that is already in the Build List stays a
- * write-free duplicate whatever else the Target holds.
+ * duplicate. Legacy duplicate detection is the first authority for a Target:
+ * a Target holding two or more Entries violates the Build List cardinality
+ * contract, so no Entry is treated as its current one. The semantic duplicate
+ * rule of `docs/DATA_MODEL.md` 9.4 is considered only when the Target has
+ * exactly one Entry.
  */
 export function classifyBuildListCandidateAddition(
   entries: readonly BuildListEntry[],
   candidate: BuildCandidate,
 ): BuildListCandidateAdditionState {
   const targetEntries = buildListEntriesForTarget(entries, candidate.targetWeaponId)
-  const same = targetEntries.find((entry) => isSameBuildListCandidate(entry, candidate))
-  if (same) return { status: 'duplicate', entry: same }
-  if (targetEntries.length === 0) return { status: 'target_empty' }
-  if (targetEntries.length === 1) {
-    return { status: 'replacement_required', existingEntry: targetEntries[0] }
+  if (targetEntries.length >= 2) return { status: 'legacy_duplicate', entries: targetEntries }
+  const [existingEntry] = targetEntries
+  if (existingEntry === undefined) return { status: 'target_empty' }
+  if (isSameBuildListCandidate(existingEntry, candidate)) {
+    return { status: 'duplicate', entry: existingEntry }
   }
-  return { status: 'legacy_duplicate', entries: targetEntries }
+  return { status: 'replacement_required', existingEntry }
 }

@@ -119,11 +119,14 @@ describe('classifyBuildListCandidateAddition', () => {
   })
 
   it('refuses a Target holding a legacy duplicate without choosing an Entry', () => {
-    expect(classifyBuildListCandidateAddition([a2, a1], third)).toEqual({
+    const legacy = {
       status: 'legacy_duplicate',
       entries: [a1, a2].sort((left, right) => (left.id < right.id ? -1 : 1)),
-    })
-    // Re-adding one of them stays a write-free duplicate.
-    expect(classifyBuildListCandidateAddition([a2, a1], first)).toEqual({ status: 'duplicate', entry: a1 })
+    }
+    expect(classifyBuildListCandidateAddition([a2, a1], third)).toEqual(legacy)
+    // The cardinality violation comes before the semantic duplicate rule: a
+    // Candidate equal to one of the Entries is no duplicate of "the" Entry.
+    expect(classifyBuildListCandidateAddition([a2, a1], first)).toEqual(legacy)
+    expect(classifyBuildListCandidateAddition([a2, a1], second)).toEqual(legacy)
   })
 })

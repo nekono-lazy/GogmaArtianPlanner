@@ -90,14 +90,15 @@ export const defaultBuildListRepositories: BuildListServiceRepositories = {
  * wrote anything.
  *
  * - `added`: the Target had no Entry, and the new Entry was added
- * - `duplicate`: an Entry of the same semantic Candidate already exists and is
- *   returned untouched - its selection and improvement preference are never
+ * - `duplicate`: the Target's one Entry is of the same semantic Candidate and
+ *   is returned untouched - its selection and improvement preference are never
  *   overwritten by a re-add
  * - `replacement_required`: the Target holds one Entry of another Candidate.
  *   Nothing was written; that Entry may only be replaced through
  *   `replaceCandidate()` after the user confirmed it
  * - `legacy_duplicate`: the Target already holds two or more Entries, so
- *   neither an addition nor a replacement is possible until the user kept one
+ *   neither an addition nor a replacement is possible until the user kept one,
+ *   even when the Candidate is the same as one of them
  */
 export type AddBuildListCandidateResult =
   | { status: 'added'; entry: BuildListEntry }

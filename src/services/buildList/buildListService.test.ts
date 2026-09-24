@@ -387,9 +387,21 @@ describe('Build List cardinality (docs/DATA_MODEL.md 9.4.1)', () => {
     if (result.status !== 'legacy_duplicate') return
     expect(result.entries.map(({ id }) => id)).toEqual([a1.id, a2.id].sort())
     expect(memory.entries).toEqual(before)
-    // A semantic duplicate of one of them stays a write-free duplicate.
-    expect(await new BuildListService(memory.repositories).addCandidate(first, target))
-      .toEqual({ status: 'duplicate', entry: a1 })
+    // Re-adding a Candidate equal to one of them is refused the same way: the
+    // cardinality violation comes before the semantic duplicate rule.
+    const reAdded = await new BuildListService(memory.repositories).addCandidate(first, target)
+    expect(reAdded.status).toBe('legacy_duplicate')
+    expect(memory.entries).toEqual(before)
+    const refused = (() => {
+      try {
+        toSearchScreenAddition(reAdded)
+        return null
+      } catch (caught: unknown) {
+        return caught
+      }
+    })()
+    expect(refused).toBeInstanceOf(BuildListCardinalityError)
+    expect((refused as BuildListCardinalityError).code).toBe('legacy_duplicate_entries')
     expect(memory.entries).toEqual(before)
   })
 
