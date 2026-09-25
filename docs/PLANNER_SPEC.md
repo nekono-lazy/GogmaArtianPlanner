@@ -813,6 +813,15 @@ schedulerは成功したactionごとに `trace.length` と `expandedStates` を�
 
 - 決定的schedulerは `maxPlanSteps` だけで停止を判定し、`maxExpandedStates` を読まない。
   `PlannerInput.options.maxExpandedStates` の値（1を含む）によって計画は変わらない
+- 開始時のzero-operation `confirm_owned_ideal`（16.3）もtrace action 1件 = PlanStep 1件であり、
+  route action / reserveと同じく `maxPlanSteps` を1消費する。schedulerはconfirmを適用する直前に
+  `trace.length >= maxPlanSteps` を確認し、上限を超えて適用しない（順序は従来どおり他actionより前・
+  Entry stable ID順で、変わるのは適用できる件数だけである）。適用済みのconfirm（保護を含む）は
+  巻き戻さない。上限で適用されなかったconfirmのTargetは、開始時点で理想品を所持していても
+  そのStepが計画に無いので完成扱いにしない（`completedTargetCount` に数えず、`status` は
+  `incomplete` / `max_plan_steps`）。confirmで上限ちょうどに全Targetが完成した場合は通常actionと
+  同じく `completed` のまま `reachedLimits` に `max_plan_steps` を記録し、`max_steps_reached` を返す。
+  Beam Search oracleの開始時confirmは変更しない
 - hidden defaultの `maxExpandedStates` をProductionのboundとして残してはいけない。
   `maxPlanSteps` を大きくした計算が、ユーザーから見えない `maxExpandedStates` で止まってはならない
 - 決定的schedulerは `max_expanded_states`（`reachedLimits`）と `max_expanded_states_reached`
@@ -883,7 +892,9 @@ statusの決定順序は次のとおりとする。
 2. `completed`: 全計画対象Target（4.1）が完了した。完了とは `hasIdeal = true` であり、かつ
    そのTargetにrequired checkpoint Entry（7.5.6）があればそのEntry自身をsecure済み
    であること。`completedTargetCount` も同じ判定で数え、`totalTargetCount` は計画対象
-   Target数である。作成リストに有効な候補が無い有効・未完了Targetは分母に入れない
+   Target数である。作成リストに有効な候補が無い有効・未完了Targetは分母に入れない。
+   決定的schedulerでは、`maxPlanSteps` により開始時の `confirm_owned_ideal` が適用されなかった
+   Targetも完了に数えない（7.2、Issue #103 Phase D-1）
 3. `incomplete`: それ以前に `PlannerOptions` boundが探索を打ち切った
 4. `exhausted`: boundに到達せず探索が自然終了し、全Target完成Planが無かった
 

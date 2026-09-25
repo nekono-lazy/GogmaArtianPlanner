@@ -813,6 +813,101 @@ describe('16.3: zero-operation confirmation before commitment', () => {
 })
 
 /**
+ * Issue #103 Phase D-1: a `confirm_owned_ideal` is one trace action and one
+ * PlanStep, so it consumes `maxPlanSteps` like any other action and is never
+ * applied past it. Two owned Gogma weapons already hold their Targets' Ideals.
+ */
+describe('16.3 / Phase D-1: zero-operation confirmations within maxPlanSteps', () => {
+  function twoConfirmations(options: { maxPlanSteps: number }) {
+    const builder = new SchedulerScenarioBuilder()
+    const ownedA = builder.gogma('owned.a', { restorationBonuses: schedulerIdeal(22) })
+    const ownedB = builder.gogma('owned.b', { restorationBonuses: schedulerIdeal(23) })
+    const entryA = builder.existingEntry('entry.a', builder.target('target.a', 22), ownedA, {})
+    const entryB = builder.existingEntry('entry.b', builder.target('target.b', 23), ownedB, {})
+    return { scenario: builder.build(options), entryA, entryB }
+  }
+
+  function confirmations(result: PlannerBeamSearchResult) {
+    return result.bestState!.trace.filter((action) => action.kind === 'reserve_candidate')
+  }
+
+  it('applies one of two confirmations at maxPlanSteps = 1 and reports an incomplete run', async () => {
+    const { scenario, entryA } = twoConfirmations({ maxPlanSteps: 1 })
+    const result = await schedule(scenario)
+
+    expect(result.bestState!.trace).toHaveLength(1)
+    // Stable Entry ID order: A is confirmed, B is left unapplied.
+    expect(confirmations(result)).toEqual([
+      expect.objectContaining({ primaryBuildListEntryId: entryA.id }),
+    ])
+    expect(result.bestState!.selectedBuildListEntryIds).toEqual([entryA.id])
+    expect(result.bestState!.targetSatisfaction[entryA.targetWeaponId]?.hasIdeal).toBe(true)
+    // A's confirmation stays applied: its weapon is protected, nothing is rolled back.
+    expect(result.bestState!.simulatedInventory.ownedWeapons.find(({ id }) => id === 'owned.a')?.isProtected).toBe(true)
+    expect(result.completed).toBe(false)
+    expect(result.termination).toMatchObject({
+      status: 'incomplete',
+      reachedLimits: ['max_plan_steps'],
+      completedTargetCount: 1,
+      totalTargetCount: 2,
+    })
+    expect(result.warnings.map(({ kind }) => kind)).toContain('max_steps_reached')
+    expect(result.bestState!.trace.length).toBeLessThanOrEqual(scenario.input.options.maxPlanSteps)
+    expectReplayValid(scenario, result)
+
+    // The Production path keeps the typed incomplete result, so Persistence refuses it.
+    const production = await createProductionPlanWithObserver(scenario.input, scenario.dependencies, undefined)
+    expect(production.termination).toMatchObject({ status: 'incomplete', reachedLimits: ['max_plan_steps'] })
+    expect(production.plan?.steps.map(({ operationType }) => operationType)).toEqual(['confirm_owned_ideal'])
+  })
+
+  it('completes on exactly maxPlanSteps = 2 and still reports the bound', async () => {
+    const { scenario, entryA, entryB } = twoConfirmations({ maxPlanSteps: 2 })
+    const result = await schedule(scenario)
+
+    expect(result.bestState!.trace).toHaveLength(2)
+    expect(confirmations(result).map(({ primaryBuildListEntryId }) => primaryBuildListEntryId))
+      .toEqual([entryA.id, entryB.id])
+    expect(result.completed).toBe(true)
+    expect(result.termination.status).toBe('completed')
+    expect(result.termination.reachedLimits).toContain('max_plan_steps')
+    expect(result.warnings.map(({ kind }) => kind)).toContain('max_steps_reached')
+    expectReplayValid(scenario, result)
+
+    const production = await createProductionPlanWithObserver(scenario.input, scenario.dependencies, undefined)
+    expect(production.termination.status).toBe('completed')
+    expect(production.plan?.steps.map(({ operationType }) => operationType))
+      .toEqual(['confirm_owned_ideal', 'confirm_owned_ideal'])
+  })
+
+  it('reports no bound when the confirmations stay below maxPlanSteps', async () => {
+    const { scenario } = twoConfirmations({ maxPlanSteps: 3 })
+    const result = await schedule(scenario)
+    expect(result.bestState!.trace).toHaveLength(2)
+    expect(result.termination).toMatchObject({ status: 'completed', reachedLimits: [] })
+    expect(result.warnings.map(({ kind }) => kind)).not.toContain('max_steps_reached')
+  })
+
+  it('completes a single confirmation on exactly maxPlanSteps = 1', async () => {
+    const builder = new SchedulerScenarioBuilder()
+    const owned = builder.gogma('owned.a', { restorationBonuses: schedulerIdeal(22) })
+    builder.existingEntry('entry.a', builder.target('target.a', 22), owned, {})
+    const scenario = builder.build({ maxPlanSteps: 1 })
+    const result = await schedule(scenario)
+    expect(result.bestState!.trace).toHaveLength(1)
+    expect(result.termination).toMatchObject({ status: 'completed', reachedLimits: ['max_plan_steps'] })
+    expectReplayValid(scenario, result)
+  })
+
+  /** The Beam Search oracle keeps its own unbounded start confirmations. */
+  it('leaves the Beam Search oracle start confirmations unchanged', async () => {
+    const { scenario } = twoConfirmations({ maxPlanSteps: 1 })
+    const beam = await runPlannerBeamSearch(scenario.input, scenario.dependencies)
+    expect(confirmations(beam)).toHaveLength(2)
+  })
+})
+
+/**
  * The former design 7.8 deadlock example. Y's Reset Skills at S0 is skippable
  * and pin-blocked (Y's Skill lane start is its selected checkpoint), and X
  * converts at S0. Phase B showed it is not a deadlock: the pin gates Y's own

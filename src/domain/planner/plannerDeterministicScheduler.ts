@@ -2,6 +2,7 @@ import type {
   BuildListEntry,
   BuildListEntryId,
   PlanConflict,
+  TargetWeaponId,
   TargetWeapon,
 } from '../models/publicTypes'
 import { isBlindCreateNormalArtianOperation } from '../models/publicTypes'
@@ -153,6 +154,11 @@ export class PlannerDeterministicScheduleRun {
   readonly state: PlannerSearchState
   expandedStates = 0
   reachedStepLimit = false
+  /**
+   * Planning Targets whose `confirm_owned_ideal` `maxPlanSteps` withheld: they
+   * hold their Ideal, but their Step is missing, so they are never complete.
+   */
+  readonly unconfirmedTargetIds = new Set<TargetWeaponId>()
 
   private readonly records = new Map<BuildListEntryId, PlannerRouteCommitmentRecord>()
   private readonly rejections: PlannerSearchRejection[]
@@ -232,6 +238,11 @@ export class PlannerDeterministicScheduleRun {
   /**
    * The zero-operation confirmations and the initial Route commitment.
    * Returns the refusal message of a malformed resolution set, or `null`.
+   *
+   * A `confirm_owned_ideal` is a PlanStep like any other action, so it goes
+   * through the same `maxPlanSteps` authority (Issue #103 Phase D-1): no
+   * confirmation is applied once the trace holds `maxPlanSteps` actions, and
+   * one that fills the trace exactly reports the bound as a diagnostic.
    */
   initialize(): string | null {
     const startedAt = this.metrics?.mark()
@@ -247,7 +258,15 @@ export class PlannerDeterministicScheduleRun {
       },
       'in_place',
       (rejection) => this.recordRejection(rejection),
+      {
+        canApply: () => this.canApplyAction(),
+        onWithheld: (targetId) => this.unconfirmedTargetIds.add(targetId),
+      },
     )
+    // Exact bound, as `actionApplied()` records it for an ordinary action.
+    if (this.state.trace.length >= this.input.options.maxPlanSteps) {
+      this.reachedStepLimit = true
+    }
     const commitment = createPlannerRouteCommitment(
       this.state,
       this.commitmentContext,
@@ -276,6 +295,7 @@ export class PlannerDeterministicScheduleRun {
   }
 
   isComplete(): boolean {
+    if (this.unconfirmedTargetIds.size > 0) return false
     return isPlannerSearchStateComplete(
       this.state,
       this.context.planningTargetIds,
@@ -962,6 +982,7 @@ export class PlannerDeterministicScheduleRun {
         reachedStepLimit: this.reachedStepLimit,
         // The scheduler never stops on `maxExpandedStates` (Phase D-1).
         reachedExpandedLimit: false,
+        unconfirmedTargetIds: this.unconfirmedTargetIds,
       }),
     }
   }

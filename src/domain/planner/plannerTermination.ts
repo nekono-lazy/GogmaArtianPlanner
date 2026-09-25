@@ -30,11 +30,13 @@ function countCompletedTargets(
   bestState: PlannerSearchState | null,
   planningTargetIds: readonly TargetWeaponId[],
   checkpointRequirements: PlannerCheckpointRequirements,
+  unconfirmedTargetIds: ReadonlySet<TargetWeaponId>,
 ): number {
   if (bestState === null) return 0
   // The same authority the Beam Search uses: a Target with a required
   // checkpoint Entry counts only once that Entry itself was secured.
   return planningTargetIds.filter((targetId) =>
+    !unconfirmedTargetIds.has(targetId) &&
     isPlannerTargetComplete(bestState, targetId, checkpointRequirements),
   ).length
 }
@@ -52,6 +54,13 @@ export interface PlannerSearchTerminationInput {
   cancelled: boolean
   reachedStepLimit: boolean
   reachedExpandedLimit: boolean
+  /**
+   * Planning Targets whose `confirm_owned_ideal` a bound withheld (the
+   * deterministic scheduler's `maxPlanSteps`, Issue #103 Phase D-1). Such a
+   * Target already holds its Ideal but its Step is missing from the trace, so
+   * it is never counted complete. Absent means none.
+   */
+  unconfirmedTargetIds?: ReadonlySet<TargetWeaponId>
 }
 
 /**
@@ -83,6 +92,7 @@ export function createPlannerSearchTermination(
     input.bestState,
     input.planningTargetIds,
     input.checkpointRequirements,
+    input.unconfirmedTargetIds ?? new Set(),
   )
   const isComplete =
     input.bestState !== null &&

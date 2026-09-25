@@ -1000,6 +1000,11 @@ Phase D-1の確定判断。
   の計算がhiddenな `maxExpandedStates` で止まってはならないからである
 - 通常schedulerは `reachedLimits` の `max_expanded_states` と `max_expanded_states_reached` warningを
   発生させない。`incomplete` は `max_plan_steps` だけで起きる。Beam oracleは従来どおり両方を使う
+- 開始時のzero-operation `confirm_owned_ideal` も1 PlanStepとして `maxPlanSteps` を消費する。
+  schedulerは共有helper `applyPlannerZeroOperationConfirms()` へ明示的なbound
+  （`canApply` / `onWithheld`）を渡し、`maxPlanSteps` を超えてconfirmを適用しない。上限で適用されなかった
+  confirmのTargetは完成扱いにせず（`incomplete` / `max_plan_steps`）、上限ちょうどで完成した場合は
+  `completed` + `max_plan_steps` の診断を維持する（PLANNER_SPEC 7.2）。boundを渡さないBeam oracleは不変
 - `maxPlanSteps` の既定値を300から1000へ変更した。Phase Bの実測でschedulerは
   `representative-12` に330 action、`representative-35` に398 actionを要し（Browser Worker約1.4秒で自然終了、
   [ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md](./ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md)）、300では不足する。
