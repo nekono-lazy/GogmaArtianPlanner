@@ -26,13 +26,15 @@ import { createPlannerConstrainedConflictContexts } from './plannerConflictConte
 import { createProductionPlanWithConstrainedSearch } from './plannerConstrainedOrchestration'
 
 /**
- * Issue #103 Phase B: B8 constrained re-search with the deterministic scheduler
- * injected as the full Planner search (`docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md`
- * 12 / 17 Phase B).
+ * B8 constrained re-search on the Production path, whose full Planner run is
+ * the deterministic scheduler (Issue #103 Phase C,
+ * `docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md` 12 / 17).
  *
- * Production is untouched: only this test module replaces
- * `createProductionPlanWithObserver()` with `createProductionPlanWithSearchRunner()`
- * over the scheduler, so the whole shared tail - the rerun budget observer,
+ * Phase B ran this module with the scheduler injected through a test-only
+ * mock of `createProductionPlanWithObserver()`. Since Phase C nothing is
+ * injected: the ordinary `createProductionPlanWithObserver()` reaches the
+ * scheduler, and the mocks below only count the full runs (and prove the Beam
+ * Search oracle never runs), so the whole shared tail - the rerun budget observer,
  * the runtime-unsupported retry, Trace Replay, the execution projection, the
  * snapshot and the checkpoint defence - is the one Production implementation.
  * The B8 adoption condition, the replacement metadata and the three
@@ -41,21 +43,16 @@ import { createProductionPlanWithConstrainedSearch } from './plannerConstrainedO
 
 const searches = vi.hoisted(() => ({ scheduler: 0, beam: 0 }))
 
-vi.mock('../productionPlanGeneration', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../productionPlanGeneration')>()
-  const scheduler = await import('../plannerDeterministicScheduler')
+vi.mock('../plannerDeterministicScheduler', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../plannerDeterministicScheduler')>()
   return {
     ...actual,
-    createProductionPlanWithObserver: (
-      ...args: Parameters<typeof actual.createProductionPlanWithObserver>
-    ) =>
-      actual.createProductionPlanWithSearchRunner(
-        async (input, dependencies, options, buildListContext) => {
-          searches.scheduler += 1
-          return scheduler.runPlannerDeterministicSchedule(input, dependencies, options, buildListContext)
-        },
-        ...args,
-      ),
+    runPlannerDeterministicSchedule: (
+      ...args: Parameters<typeof actual.runPlannerDeterministicSchedule>
+    ) => {
+      searches.scheduler += 1
+      return actual.runPlannerDeterministicSchedule(...args)
+    },
   }
 })
 
@@ -77,7 +74,7 @@ const ENTRY_B = 'build-list.orchestration.b'
 const SOURCE_A_SERIES_SKILL_ID = 'series_skill.fixture.z'
 const SOURCE_B_SERIES_SKILL_ID = 'series_skill.fixture.b-source'
 
-/** The B8 fixture: A and B Reset at one contested Gogma Counter (see the Beam test). */
+/** The B8 fixture: A and B Reset at one contested Gogma Counter (see the ordinary B8 test). */
 function parts() {
   const a: TargetWeapon = orchestrationTarget(TARGET_A, {
     priority: 5,
@@ -154,7 +151,7 @@ async function orchestrate(built: OrchestrationScenario, bounds = options()) {
 const warningKinds = (warnings: readonly { kind: string }[]) => warnings.map(({ kind }) => kind)
 const entryId = (value: string) => value as BuildListEntryId
 
-describe('B8 with the scheduler injected: no explicit resolution', () => {
+describe('B8 on the Production path (scheduler): no explicit resolution', () => {
   it('returns the ordinary scheduler Plan and runs no constrained trial', async () => {
     const { result, schedulerRuns, beamRuns } = await orchestrate(unresolvedScenario(), options({ maxPlannerReruns: 1 }))
     const direct = unresolvedScenario()
@@ -176,7 +173,7 @@ describe('B8 with the scheduler injected: no explicit resolution', () => {
   })
 })
 
-describe('B8 with the scheduler injected: Candidate trial and adoption', () => {
+describe('B8 on the Production path (scheduler): Candidate trial and adoption', () => {
   it('adopts a generated Entry for the losing Target through a scheduler full rerun', async () => {
     const { result, schedulerRuns, beamRuns } = await orchestrate(fixedScenario())
     expect(beamRuns).toBe(0)
@@ -186,7 +183,7 @@ describe('B8 with the scheduler injected: Candidate trial and adoption', () => {
     expect(result.generatedBuildListEntries).toHaveLength(1)
     const generated = result.generatedBuildListEntries[0]
     expect(generated.targetWeaponId).toBe(TARGET_B)
-    // The same Candidate the Beam Search adopts in the ordinary B8 test: the
+    // The same Candidate the Beam Search oracle adopted in Phase B: the
     // Ideal reached again two Gogma positions later, off the contested one.
     expect(generated.candidateSnapshot.route.operations.map(({ type }) => type))
       .toEqual(['reset_bonuses', 'reset_bonuses', 'reset_bonuses', 'reset_skills'])
@@ -223,7 +220,7 @@ describe('B8 with the scheduler injected: Candidate trial and adoption', () => {
   })
 })
 
-describe('B8 with the scheduler injected: the orchestration bounds keep their meaning', () => {
+describe('B8 on the Production path (scheduler): the orchestration bounds keep their meaning', () => {
   /** Full runs the adopting orchestration needs: the initial run plus every trial. */
   async function adoptingRuns() {
     const { result, schedulerRuns } = await orchestrate(fixedScenario())
@@ -252,7 +249,7 @@ describe('B8 with the scheduler injected: the orchestration bounds keep their me
       const probe = await orchestrate(fixedScenario(), options({ maxCandidateTrialsPerConflict: limit }))
       if (probe.result.generatedBuildListEntries.length === 1) trials = limit
     }
-    // The Beam Search adopts on the fourth delivered Candidate as well.
+    // The Beam Search oracle adopted on the fourth delivered Candidate as well (Phase B).
     expect(trials).toBe(4)
     const stopped = await orchestrate(fixedScenario(), options({ maxCandidateTrialsPerConflict: trials - 1 }))
     expect(stopped.result.generatedBuildListEntries).toEqual([])

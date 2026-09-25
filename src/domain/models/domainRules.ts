@@ -91,6 +91,16 @@ export function isCalculationContextCompatible(
  * BuildCandidate or BuildListEntry stays usable under version 13. Version 1..11
  * stay incompatible under 13.
  *
+ * App schema 14 changes only the Production Planner strategy: the full Planner
+ * run moves from the bounded Beam Search to Route commitment plus the
+ * deterministic scheduler (Issue #103 Phase C,
+ * `docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md` 15.2 / 15.3). Candidate
+ * Search, the constrained enumerator, BuildCandidate and BuildListEntry snapshot
+ * semantics and staleness are untouched, so a version 12 or 13 BuildCandidate
+ * or BuildListEntry stays usable under version 14. Version 1..11 stay
+ * incompatible, and the exception never reaches a ProductionPlan: every
+ * version 1..13 Plan fails closed under 14.
+ *
  * Each exception is directional and deliberately narrow: version 1 stays
  * incompatible, it is never a general forward compatibility for future
  * versions, every other CalculationContext field must still be equal, the
@@ -103,6 +113,7 @@ const COMPATIBLE_BUILD_RESULT_APP_SCHEMA_VERSIONS: ReadonlyMap<number, readonly 
     [4, [2, 3]],
     [5, [2, 3, 4]],
     [13, [12]],
+    [14, [12, 13]],
   ])
 
 export function isBuildResultCalculationContextCompatible(

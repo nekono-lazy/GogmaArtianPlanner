@@ -1309,21 +1309,26 @@ describe('6.2 / 6.3: malformed inputs fail closed', () => {
   })
 })
 
-describe('Phase A: Production stays on the Beam Search', () => {
-  it('Production Plan generation never produces the scheduler-only rejection', async () => {
+describe('Phase C: Production runs the deterministic scheduler', () => {
+  it('Production Plan generation produces the scheduler provisional outcome', async () => {
     const { builder } = scenarioD({ a: 2, b: 4 }, 2)
     const scenario = builder.build()
-    let beamRuns = 0
-    const beamResults: PlannerBeamSearchResult[] = []
+    let runs = 0
+    const runResults: PlannerBeamSearchResult[] = []
     const result = await createProductionPlanWithObserver(scenario.input, scenario.dependencies, undefined, {
-      beforeBeamSearch: () => {
-        beamRuns += 1
+      beforePlannerRun: () => {
+        runs += 1
       },
-      afterBeamSearch: (beam) => beamResults.push(beam),
+      afterPlannerRun: (run) => runResults.push(run),
     })
-    expect(beamRuns).toBe(1)
-    expect(beamResults[0].rejections.some(({ reason }) => reason === 'conflict_not_committed')).toBe(false)
-    expect(result.plan?.rejectedBuildListEntries.every(({ detail }) => detail.includes('Beam Search'))).toBe(true)
+    expect(runs).toBe(1)
+    // One successor state per applied action: the scheduler, not a beam.
+    expect(runResults[0].expandedStates).toBe(runResults[0].bestState!.trace.length)
+    expect(runResults[0].rejections.some(({ reason }) => reason === 'conflict_not_committed')).toBe(true)
+    expect(result.termination.status).toBe('exhausted')
+    expect(result.plan).not.toBeNull()
+    expect(result.plan?.rejectedBuildListEntries.some(({ reason }) => reason === 'resource_conflict')).toBe(true)
+    expect(result.plan?.rejectedBuildListEntries.some(({ detail }) => detail.includes('Beam Search'))).toBe(false)
   })
 })
 

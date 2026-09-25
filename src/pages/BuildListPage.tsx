@@ -625,7 +625,7 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
       )
       const createdInput = await dependencies.createInput(calculationContext)
       if (activeRequestRef.current !== requestId) return
-      // The Application caller is the Beam Search bound authority: the values
+      // The Application caller is the Planner bound authority: the values
       // the user reviewed in the detail settings are written into
       // `PlannerInput.options` here, and neither the Worker Client nor the
       // Worker substitutes a default of its own (PLANNER_SPEC 7.2.1).
@@ -648,7 +648,7 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
       if (activeRequestRef.current !== requestId) return
       setWarnings(result.warnings)
       // A `PlannerOptions` bound truncated the search, so its best state is a
-      // partial Beam Search artifact rather than a finished production plan.
+      // partial Planner artifact rather than a finished production plan.
       // It is never saved and never opened: the user is told which bound was
       // reached and asked to raise it (PLANNER_SPEC 7.2.1). The typed status
       // decides this, never a warning message.
@@ -811,13 +811,13 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
   }
 
   const loaded = !loading && loadError === null
-  // The Beam Search bounds the user reviews. They reach the ordinary Planner
-  // run and the replan Preview alike as `PlannerInput.options`.
+  // The Planner bounds the user reviews. They reach the ordinary Planner run
+  // and the replan Preview alike as `PlannerInput.options`.
   const plannerDetailSettings = (
     <DisclosureAccordion title="詳細設定" headingLevel="h3">
       <Stack spacing={1.5}>
         <Typography variant="body2" color="text.secondary">
-          Beam Searchの探索上限です。3項目とも1以上の整数だけが有効で、この画面を再読み込みすると既定値へ戻ります。
+          Plannerの実行上限です。3項目とも1以上の整数だけが有効で、この画面を再読み込みすると既定値へ戻ります。
         </Typography>
         <Box
           sx={{

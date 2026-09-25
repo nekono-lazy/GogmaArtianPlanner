@@ -13,7 +13,7 @@ import type {
 } from '../models/publicTypes'
 import { hashStableValue } from '../models/publicTypes'
 import { createTargetDefinitionHash } from '../buildList'
-import { runPlannerBeamSearch } from './plannerBeamSearch'
+import { runPlannerDeterministicSchedule } from './plannerDeterministicScheduler'
 import {
   derivePlannerCheckpointRequirements,
   entryIntermediateSelection,
@@ -368,7 +368,7 @@ function rejectedReason(
   )) {
     return 'resource_conflict'
   }
-  // A deterministic scheduler result only: the Beam Search never produces this
+  // A deterministic scheduler result only: the Beam Search oracle never produces this
   // reason, so the Beam Search mapping above and below is unchanged
   // (`docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md` 8.4).
   if (rejections.some(({ reason }) => reason === 'conflict_not_committed')) {
@@ -450,7 +450,7 @@ export function createRejectedBuildListEntries(
         reason,
         detail: notCommittedIds.has(entry.id)
           ? NOT_COMMITTED_DETAIL
-          : 'Beam Searchの途中結果で、このBuildListEntryは実行不能と確定しました。',
+          : 'Plannerの計算途中で、このBuildListEntryは実行不能と確定しました。',
       }))
       .sort((left, right) => compareStableStrings(left.buildListEntryId, right.buildListEntryId))
   }
@@ -461,7 +461,7 @@ export function createRejectedBuildListEntries(
       reason: rejectedReason(entry, selected, input, beamResult),
       detail: notCommittedIds.has(entry.id)
         ? NOT_COMMITTED_DETAIL
-        : 'Beam Searchの最終StateでこのBuildListEntryは採用されませんでした。',
+        : 'Plannerの最終結果でこのBuildListEntryは採用されませんでした。',
     }))
     .sort((left, right) => compareStableStrings(left.buildListEntryId, right.buildListEntryId))
 }
@@ -495,10 +495,16 @@ export function collectRequiredMaterials(
  * delegates here without an observer, and B8 constrained-search orchestration
  * delegates here with one, so the two paths can never drift apart.
  *
- * `observer.beforeBeamSearch()` is called once immediately before each full
- * `runPlannerBeamSearch()` execution that actually starts: the first one, and
+ * The full Planner run is the deterministic scheduler
+ * (`runPlannerDeterministicSchedule()`, Issue #103 Phase C): this is the one
+ * place Production chooses it, so the ordinary Planner, B8 constrained
+ * re-search, B9 what-if, the replan Preview and the runtime-unsupported retry
+ * all run the same strategy.
+ *
+ * `observer.beforePlannerRun()` is called once immediately before each full
+ * Planner run that actually starts: the first one, and
  * every runtime-unsupported retry, and the optional
- * `observer.afterBeamSearch()` once immediately after each of them returns.
+ * `observer.afterPlannerRun()` once immediately after each of them returns.
  * The observer is semantics-neutral, so nothing below branches on its presence,
  * and an exception it throws propagates unchanged instead of becoming a
  * `PlannerResult`.
@@ -516,10 +522,12 @@ export async function createProductionPlanWithObserver(
   observer?: ProductionPlanGenerationObserver,
   buildListContext: PlannerRunBuildListContext = PERSISTED_PLANNER_BUILD_LIST_CONTEXT,
 ): Promise<PlannerResult> {
-  // Production is fixed to the Beam Search (Issue #103 Phase B): no caller,
-  // Worker message or setting chooses the full search.
+  // Production is fixed to the deterministic scheduler (Issue #103 Phase C): no
+  // caller, Worker message or setting chooses the full search. The Beam Search
+  // stays a test / benchmark oracle reached only through
+  // `createProductionPlanWithSearchRunner()`.
   return createProductionPlanWithSearchRunner(
-    runPlannerBeamSearch,
+    runPlannerDeterministicSchedule,
     input,
     dependencies,
     options,
@@ -529,9 +537,9 @@ export async function createProductionPlanWithObserver(
 }
 
 /**
- * One full Planner search over one input: the Beam Search, or - in tests and
- * benchmarks only - the deterministic scheduler, whose result has the same
- * shape (`docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md` 13).
+ * One full Planner search over one input: the Production deterministic
+ * scheduler, or - in tests and benchmarks only - the Beam Search oracle, whose
+ * result has the same shape (`docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md` 13).
  */
 export type PlannerFullSearchRunner = (
   input: PlannerInput,
@@ -542,19 +550,20 @@ export type PlannerFullSearchRunner = (
 
 /**
  * `createProductionPlanWithObserver()` with the full search passed in
- * (Issue #103 Phase B).
+ * (Issue #103 Phase B / C).
  *
  * Only the full search is replaced; everything after it - the
  * runtime-unsupported retry, Trace Replay, the execution projection, the
  * `PlanningInputSnapshot`, the checkpoint requirement defence, the rejected
  * Build List record and the required materials - is this one shared
- * implementation. `observer.beforeBeamSearch()` / `afterBeamSearch()` wrap
+ * implementation. `observer.beforePlannerRun()` / `afterPlannerRun()` wrap
  * every full search exactly as before, so the B8 / what-if rerun budgets keep
  * counting full Planner runs whichever search runs.
  *
- * Production never calls this with anything but `runPlannerBeamSearch`
- * (through `createProductionPlanWithObserver()`); the parity harness, the
- * Issue #103 benchmark and the B8 / B9 scheduler tests inject the scheduler.
+ * Production never calls this with anything but
+ * `runPlannerDeterministicSchedule` (through `createProductionPlanWithObserver()`);
+ * the parity harness, the Issue #103 benchmark and oracle tests inject
+ * `runPlannerBeamSearch`.
  * It is a Domain function value, never a Worker message, a `PlannerInput`
  * field, a setting or a persisted value.
  */
@@ -590,9 +599,9 @@ export async function createProductionPlanWithSearchRunner(
               ({ generatedBuildListEntryId }) => !runtimeUnsupported.has(generatedBuildListEntryId),
             ),
           }
-    observer?.beforeBeamSearch()
+    observer?.beforePlannerRun()
     beamResult = await searchRunner(beamInput, dependencies, options, beamContext)
-    observer?.afterBeamSearch?.(beamResult)
+    observer?.afterPlannerRun?.(beamResult)
     if (
       beamResult.cancelled ||
       beamResult.bestState === null ||
@@ -620,7 +629,7 @@ export async function createProductionPlanWithSearchRunner(
   }
 
   if (beamResult === null) {
-    throw new PlannerPlanGenerationError('Planner Beam Search did not return a result.')
+    throw new PlannerPlanGenerationError('Planner full search did not return a result.')
   }
   const runtimeWarnings: PlannerWarning[] = [...runtimeUnsupported]
     .sort(([left], [right]) => compareStableStrings(left, right))
@@ -715,7 +724,7 @@ export async function createProductionPlanWithSearchRunner(
     plan,
     conflicts: structuredClone(beamResult.conflicts),
     warnings: structuredClone(warnings),
-    // The last Beam Search that actually produced this Plan, so a Plan built
+    // The last full Planner run that actually produced this Plan, so a Plan built
     // from a truncated search is identifiable without reading a warning
     // message (PLANNER_SPEC 7.2.1).
     termination: structuredClone(beamResult.termination),
@@ -737,13 +746,13 @@ function beamInputEntries(
 }
 
 /**
- * Fail-closed defence behind the Beam Search (PLANNER_SPEC 7.5.6): a Plan that
+ * Fail-closed defence behind the full Planner run (PLANNER_SPEC 7.5.6): a Plan that
  * claims completion must secure every required checkpoint Entry, and every
  * secured required Entry's compromise checkpoint must appear as a milestone
  * on the real Step that reached it - unless the checkpoint is the weapon the
  * user already holds (an existing Gogma's selected lane starts), which no
- * Step produces and Trace Replay verified at Plan start instead. The Beam
- * Search and Trace Replay already guarantee both; a Plan that violates either
+ * Step produces and Trace Replay verified at Plan start instead. The Planner
+ * run and Trace Replay already guarantee both; a Plan that violates either
  * is an internal inconsistency, never a Draft.
  */
 function assertCheckpointRequirementsSatisfied(

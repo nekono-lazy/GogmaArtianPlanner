@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   applyProductionPlanStartTargetLinks,
   deriveProductionPlanStartTargetLinks,
@@ -54,6 +54,31 @@ import {
 } from '../../test/fixtures/plannerConstrainedOrchestration'
 import type { ProductionPlanExecutionService } from './productionPlanExecutionService'
 import { ProductionPlanReplanPreviewService } from './productionPlanReplanPreviewService'
+
+/** Counts the full Planner runs, so the replan Preview is seen reaching the scheduler. */
+const fullRuns = vi.hoisted(() => ({ scheduler: 0, beam: 0 }))
+
+vi.mock('../../domain/planner/plannerDeterministicScheduler', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../domain/planner/plannerDeterministicScheduler')>()
+  return {
+    ...actual,
+    runPlannerDeterministicSchedule: (...args: Parameters<typeof actual.runPlannerDeterministicSchedule>) => {
+      fullRuns.scheduler += 1
+      return actual.runPlannerDeterministicSchedule(...args)
+    },
+  }
+})
+
+vi.mock('../../domain/planner/plannerBeamSearch', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../domain/planner/plannerBeamSearch')>()
+  return {
+    ...actual,
+    runPlannerBeamSearch: (...args: Parameters<typeof actual.runPlannerBeamSearch>) => {
+      fullRuns.beam += 1
+      return actual.runPlannerBeamSearch(...args)
+    },
+  }
+})
 
 const EXTRA_SOURCE_ID = 'owned.replan.extra'
 const EXTRA_TARGET_ID = 'target.replan.extra'
@@ -457,6 +482,48 @@ describe('replan adoption', () => {
       ].sort((a, b) => a.id.localeCompare(b.id)))
     }))
 
+  it('replans a running schema 13 Plan from the current state through the schema 14 scheduler', () =>
+    withDatabase(async (database) => {
+      // Issue #103 Phase C: the running Plan was calculated under schema 13 and
+      // is never executed under 14; the way on is a new calculation from the
+      // current persisted state, never its baseSnapshot.
+      const harness = await running(database, { confirmedSteps: 1 })
+      const persisted = await currentPlan(database, harness.fixture.plan)
+      const schema13 = structuredClone(persisted)
+      schema13.calculationContext.appSchemaVersion = 13
+      schema13.baseSnapshot.calculationContext.appSchemaVersion = 13
+      await database.productionPlans.put(schema13)
+      await expectRefusal(
+        () => harness.service.confirmExpectedPlanStep({ planId: schema13.id, planStepId: schema13.currentStepId as PlanStep['id'] }),
+        database,
+        'calculation_context_changed',
+      )
+
+      const request = await harness.previewService.prepareProductionPlanReplanPreview({ runningPlanId: schema13.id })
+      expect(request.plannerInput.calculationContext.appSchemaVersion).toBe(CURRENT_CALCULATION_APP_SCHEMA_VERSION)
+      expect(request.plannerInput.calculationContext).not.toEqual(schema13.baseSnapshot.calculationContext)
+      fullRuns.scheduler = 0
+      fullRuns.beam = 0
+      const preview = await previewOf(harness)
+      expect(fullRuns.scheduler).toBeGreaterThan(0)
+      expect(fullRuns.beam).toBe(0)
+      const draft = previewPlan(preview)
+      expect(draft.calculationContext.appSchemaVersion).toBe(14)
+
+      const result = await adopt(harness, preview)
+
+      expect(result.kind).toBe('adopted')
+      expect(await database.productionPlans.get(schema13.id)).toMatchObject({
+        status: 'abandoned',
+        abandonmentReason: 'replan_adopted',
+        calculationContext: { appSchemaVersion: 13 },
+      })
+      expect(await database.productionPlans.get(draft.id)).toMatchObject({
+        status: 'active',
+        calculationContext: { appSchemaVersion: 14 },
+      })
+    }))
+
   it('keeps a stale running Plan\'s recalculation reasons when it is abandoned', () =>
     withDatabase(async (database) => {
       const harness = await running(database, { confirmedSteps: 1, stale: true })
@@ -531,7 +598,7 @@ describe('replan adoption', () => {
     }))
 
   it('moves no version authority', () => {
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(13)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(14)
     expect(DATABASE_SCHEMA_VERSION).toBe(8)
     expect(EXPORT_SCHEMA_VERSION).toBe(11)
   })

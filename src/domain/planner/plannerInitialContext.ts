@@ -46,7 +46,8 @@ function compareStableStrings(left: string, right: string): number {
 }
 
 /**
- * Everything the ordinary Beam Search and a future B8 augmented preflight need
+ * Everything a full Planner run (the Production scheduler or the Beam Search
+ * oracle) and the B8 augmented preflight need
  * before the first expansion. It carries no B8-specific field and applies no
  * B8-specific conflict shortcut.
  */

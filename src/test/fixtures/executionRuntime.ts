@@ -214,6 +214,15 @@ export function existingGogmaFixture(extraOwnedWeapons: OwnedWeapon[] = []) {
       { type: 'reset_skills', sourceOwnedWeaponId: source.id, skillCounterBefore: CONSTRAINED_START_SKILL_COUNTER, skillCounterAfter: CONSTRAINED_START_SKILL_COUNTER + 1 },
     ],
   })
+  // The Execution tests built on this fixture run the Reset Bonuses Step first
+  // and the Reset Skills Step second. Both lanes are safe from the start, so the
+  // order is the Entry's improvement preference (PLANNER_SPEC 7.3 / 7.6): make
+  // it explicit rather than relying on a Planner tie-break.
+  entry.intermediateStateSelection = {
+    skillOpportunityId: null,
+    bonusOpportunityId: null,
+    improvementPreference: 'bonus_first',
+  }
   return planFor(orchestrationScenario({ targets: [goal, other], entries: [entry], ownedWeapons: [source, ...extraOwnedWeapons] }))
 }
 
@@ -328,9 +337,10 @@ export const OTHER_WEAPON_ID = 'owned.execution.other'
 
 /**
  * A two-weapon Plan: this Entry's start-held Skill checkpoint on one weapon,
- * and another Entry's Reset Bonuses on another weapon. The Beam Search puts the
- * other weapon's Step first, so a test can confirm it and then finish at this
- * checkpoint, which no Step has touched.
+ * and another Entry's Reset Bonuses on another weapon. The other Target has the
+ * higher priority, so the deterministic scheduler's canonical order (PLANNER_SPEC
+ * 7.3, key 1) puts the other weapon's Step first, and a test can confirm it and
+ * then finish at this checkpoint, which no Step has touched.
  */
 export function otherWeaponCheckpointFixture(): Promise<CheckpointFixture> {
   const source = orchestrationSource(CHECKPOINT_SOURCE_ID, {
@@ -343,7 +353,7 @@ export function otherWeaponCheckpointFixture(): Promise<CheckpointFixture> {
     seriesSkillId: IDEAL_SERIES_SKILL_ID,
   })
   // The two Targets must not be satisfiable by each other's weapon, or the
-  // Beam Search drops the second Entry: this one's Ideal is the five slots the
+  // Planner drops the second Entry: this one's Ideal is the five slots the
   // source already holds, the other one's is the default Ideal set.
   // Its Ideal five slots are the Practical set, so the default Bonus compromise
   // conditions (which relax that set's own types) would not be contained in it:
@@ -353,7 +363,7 @@ export function otherWeaponCheckpointFixture(): Promise<CheckpointFixture> {
     practicalBonusConditions: [],
     alternativeBonusRules: [],
   })
-  const otherGoal = orchestrationTarget('target.execution.otherweapon')
+  const otherGoal = orchestrationTarget('target.execution.otherweapon', { priority: 4 })
   const entry = startReachedSkillCheckpointEntry(CHECKPOINT_ENTRY_ID, goal, source)
   return planFor(orchestrationScenario({
     targets: [goal, otherGoal],

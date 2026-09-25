@@ -366,14 +366,72 @@ export interface PlannerTargetSatisfaction {
 
 ---
 
-## 7. Beam Searchと評価関数
+## 7. Plannerの計算方式（Route commitment + 決定的scheduling）
 
-初期版Plannerは上限付きBeam Searchを使用する。Candidate Scoreだけの単純ソートでは採用順を確定しない。
+通常Plannerのfull runは **Route commitment + 決定的scheduler**（`runPlannerDeterministicSchedule()`）
+である（Issue #103 Phase C）。Candidate Scoreだけの単純ソートでは採用順を確定しない。詳細契約は
+[ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md)
+（5〜8章、13章、14章）をtask-specific authorityとし、本章はその要点と既存契約との対応を定める。
 
-Issue #103の次期Planner設計（Route commitment + 決定的scheduling）は
-[ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md) を参照する。
-同文書は未実装のtarget designであり、Production routingを切り替える実装PRで本章を改訂するまで、
-本章のBeam Searchが現行Productionの契約である。
+#### Production routing
+
+- Production Plan生成の唯一の入口は `createProductionPlanWithObserver()` であり、そのfull runが
+  決定的schedulerである。通常Planner、B8 constrained re-search（9.2）、B9 what-if（9.2.4）、
+  B10の再計算、実行中Planの再計画Preview（16.8）、Production Plan生成内部の
+  runtime-unsupported retryはすべてここを通るので、同じ計算方式を使う。機能ごとに別の探索方式を
+  持たない（constrained re-search内部だけBeam Searchを使う、等をしない）
+- Productionに計算方式の切替手段は置かない。`PlannerInput`、Worker request、`AppSettings`、UI、
+  環境変数、feature flag、query parameterのいずれもstrategyを持たない
+- `createProductionPlanWithSearchRunner()` はfull runだけを差し替えられる共有実装であり、後段
+  （runtime-unsupported retry、Trace Replay、execution projection、`PlanningInputSnapshot`、
+  checkpoint requirement defence、`rejectedBuildListEntries`、`requiredMaterials`、termination、
+  observer）は1つである。Productionは決定的schedulerだけを渡す。test / benchmark / parity harness
+  だけがBeam Searchを注入する
+- 上限付きBeam Search（`runPlannerBeamSearch()`）はPhase C以前のProduction Plannerであり、現在は
+  **test / benchmark / parity用のoracleとしてだけ残す**。Production Planを生成しない。削除・縮退は
+  Phase Dで判断する
+
+#### 決定的schedulerの手順
+
+1. 入力validation（4章、1 Target = 1 Entryのcardinality検証を含む）と初期Stateの作成
+   （`preparePlannerInitialContext()`、開始時のzero-operation `confirm_owned_ideal` を含む）
+2. **Route commitment**: 各planning TargetのEntry（通常入力では1件）のRouteを、このrunで
+   実行する候補とする。`ConflictResolution` があればその選択を採用し、非選択participantを実行しない。
+   explicit resolutionの無い静的競合（collision）は、順位関数 `R`（Target priority降順 →
+   次候補距離 → 推定操作数 → Entry ID。`detectPlannerConflicts()` の推奨と共有）で最良の
+   Entryを暫定的に確定し、それとcollisionするEntryをこのrunでは実行しない（**暫定帰結**、
+   provisional outcome）。その競合は `PlanConflict`（`selectedBuildListEntryId = null`）として
+   返し、ユーザー判断を待つ
+3. **scheduling**: 単一の `PlannerSearchState` を前進させる。各時点で、各Counter streamの
+   frontier（現在位置にある確定済みEntryのpending unit）からsafe action（その実行後、
+   同じ位置の未実行unitがすべてskip可能になるaction。7.0.2のrequired / skippable契約）を
+   列挙し、canonical順（7.3）で **1つだけ** 適用する。同じ意味のA→B / B→Aを両方探索しない
+4. Entryの最後の物理unitを実行した直後、そのEntryが現在もrelevantなら即時にreserveする
+   （分岐にしない。16.3）
+5. safe actionが無いのにpending unitが残る（deadlock / stall）場合は、関与する確定済みEntryの
+   うち `R` が最下位のものを1件落として継続する（rejectionは `resource_conflict` として記録）
+6. 全planning Targetの完了、boundへの到達、キャンセル、または実行可能なactionの枯渇で終了する
+
+状態遷移（precondition、`applyRouteAction`、`applyReserveAction`、silent fast-forward、
+physical action sharing、source version、checkpoint pin）はBeam Search・Trace Replayと同じ
+共有authority（`plannerStateTransitions.ts` 等）を使う。schedulerが生成するtraceは既存の
+`PlannerSearchAction` 列であり、`PlannerBeamSearchResult` と同じshapeの結果を返す（型名の変更は
+Phase D）。Trace Replayを省略しない。
+
+完全最適解（完成Target数の厳密最大化、武器切替・violation数の絶対最小）は保証しない。
+同じ入力・同じEngine fixture・同じID Factory / Clockからは同じ結果を返す。
+
+#### 本章以降の「Beam Search」の読み方
+
+7.0〜7.6、8章、9章、11章には、Phase C以前のBeam Searchを主語にした記述が残る。それらのうち
+状態遷移・precondition・physical action sharing・silent fast-forward・checkpoint・競合検出・
+ConflictResolution・Trace Replay・rejection・terminationに関する契約は、共有authorityとして
+決定的schedulerにもそのまま適用する。9.2（constrained re-search / what-if）の「full Beam Search」
+「Beam Searchの完全再実行」「`runPlannerBeamSearch()` の実行開始」は、Phase C以降 **full Planner run**
+（`createProductionPlanWithObserver()` 内の決定的scheduler実行）を指す。一方、branch生成、
+`beamWidth` による枝刈り、`evaluationScore` / `comparePlannerSearchStates()` による状態比較、
+semantic keyによるdedupに関する記述は旧Beam Search（oracle）だけに適用し、Productionの判断には
+使わない。
 
 ```ts
 export interface PlannerSearchState {
@@ -407,7 +465,8 @@ export interface PlannerSearchState {
 なくなったため、Practical優先の進行記録も、それを使う評価項目も廃止した。
 ```
 
-探索手順。
+旧Beam Search（Phase C以前のProduction、現在はtest / benchmark oracle）の探索手順。
+Production（決定的scheduler）の手順は本章冒頭である。
 
 1. 現在RNG状態と在庫から初期Stateを作成する
 2. 未充足Targetに対する実行可能なBuildListEntryを列挙する
@@ -712,8 +771,9 @@ scoreだけではbeamWidthやtie-break次第で無効branchが残り、無効な
 
 ### 7.1 Planner Search Action / Trace
 
-Beam SearchはCandidate Snapshotの `BuildRoute.operations` を変更せず、実際に採用した
-操作を非永続のPlanner Search Action / Traceとして別に保持する。
+Planner（決定的scheduler、およびBeam Search oracle）はCandidate Snapshotの
+`BuildRoute.operations` を変更せず、実際に採用した操作を非永続のPlanner Search Action / Traceとして
+別に保持する。
 
 - `RouteOperation`、Planner Search Action、`PlanStep` は別の型・責務である
 - Search Actionは元RouteOperation、主対象BuildListEntry、同じ物理操作で進んだEntry、
@@ -731,19 +791,28 @@ Beam SearchはCandidate Snapshotの `BuildRoute.operations` を変更せず、�
 - 初期Stateは数えない
 - 実行前提を満たさずsuccessor生成前にrejectした展開は数えない
 - successor PlannerSearchStateを実際に構築し、評価対象にした時点で1増やす
-- beamWidthによる枝刈り前でも、構築・評価したsuccessorは数える
+- （Beam Search oracle）beamWidthによる枝刈り前でも、構築・評価したsuccessorは数える
 - `maxExpandedStates = N` の場合はN件まで許可し、N+1件目を構築しない
 - N件へ到達した場合だけ `max_expanded_states_reached` warningを返す
 
+決定的schedulerは各stepでsuccessor stateをちょうど1つ構築するので、`expandedStates` は
+**適用したaction数**（初期State、開始時のzero-operation confirmは含まない）、すなわち実際に構築した
+successor state数になる。safe判定のために評価した候補action数はstateを構築しないので数えない。
+`maxExpandedStates` は「構築したstate数の上限」としてProductionでも有効である。
+`PlannerProgress { expandedStates, maxExpandedStates }` も同じ意味で送る（型と進捗の分母の見直しは
+Phase D）。
+
 `maxPlanSteps = 300`、`beamWidth = 50`、`maxExpandedStates = 10000` は
 `defaultPlannerOptions` の初期値であり、Application callerがBuildList画面の詳細設定で
-上書きできる。完全最適解は保証せず、実用的な時間内で十分良いPlanを返す。
+上書きできる。決定的schedulerは `maxPlanSteps` と `maxExpandedStates` を使い、`beamWidth` を
+読まない（値によってProduction Planは変わらない）。`beamWidth` は型、既定値、「1以上の整数」の
+validationを互換のため維持し、Beam Search oracleだけが使う。除去はPhase Dで判断する。
 
 ### 7.2.1 探索上限設定と typed termination
 
 #### PlannerOptions authority
 
-`PlannerInput.options` はBeam Search boundの唯一のauthorityとする。
+`PlannerInput.options` はPlanner boundの唯一のauthorityとする。
 
 - 初期値authorityは `defaultPlannerOptions` だけとする
 - BuildList画面の詳細設定でユーザーが `maxPlanSteps` / `beamWidth` /
@@ -761,7 +830,8 @@ Beam SearchはCandidate Snapshotの `BuildRoute.operations` を変更せず、�
 
 #### typed termination
 
-Beam Searchの終了状態は `PlannerSearchTermination` としてtypedに返す。
+full Planner runの終了状態は `PlannerSearchTermination` としてtypedに返す。決定的schedulerと
+Beam Search oracleは同じ型・同じ決定順序で返す。
 
 ```ts
 export type PlannerSearchLimitKind =
@@ -794,9 +864,22 @@ statusの決定順序は次のとおりとする。
 3. `incomplete`: それ以前に `PlannerOptions` boundが探索を打ち切った
 4. `exhausted`: boundに到達せず探索が自然終了し、全Target完成Planが無かった
 
+決定的schedulerでの意味（[ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md) 14.3）。
+
+| status | 決定的scheduler |
+| --- | --- |
+| `cancelled` | ユーザーのキャンセル |
+| `completed` | 全planning Targetが完了（required checkpoint Entryのsecureを含む） |
+| `incomplete` | `maxPlanSteps` または `maxExpandedStates` が完成前にscheduleを打ち切った |
+| `exhausted` | boundに達せずscheduleを終えたが、一部Targetが完成しない。未解決競合の暫定敗者、explicit resolutionの非選択、deadlock / stall、source / preconditionの崩れ、保護などによる |
+
+未解決競合の暫定帰結により一部Targetが完成しない場合は `exhausted` + `plan != null` +
+`conflicts` になる。これは「入力・Conflict・resourceにより完成Planが無かった通常の結果」であり、
+`plan != null` のexhausted resultは従来どおりDraftとして保存・表示する。新しいstatusは追加しない。
+
 `PlannerBeamSearchResult.termination` と `PlannerResult.termination` が保持する。
 `PlannerOrchestrationResult` は `PlannerResult` を継承するため同じ値を引き継ぐ。
-複数回full Beam Searchが走った場合は、結果として採用したrunのterminationとする。
+複数回full Planner runが走った場合は、結果として採用したrunのterminationとする。
 
 `termination` はruntime result metadataであり、`ProductionPlan`、`PlanStep`、
 `BuildListEntry`、DB schemaへ永続化しない。structured-clone可能なplain dataとして
@@ -810,13 +893,13 @@ Worker境界をそのまま通し、Worker側でwarningから再構築しない�
 - warning messageを文字列解析して可用性を判断してはいけない
 - `reachedLimits` はwarning一覧のコピーではない。`completed` な探索でもboundへ到達した
   場合は `reachedLimits` が非空になり、warningと矛盾しない
-- Beam Searchへ到達しなかったrun（入力invalid、orchestration bound）は
+- 探索（scheduler / Beam Search）へ到達しなかったrun（入力invalid、orchestration bound）は
   `reachedLimits` を空にする。停止理由はそれぞれのwarningが報告する
 
 #### incomplete resultの扱い
 
-`status === "incomplete"` のresultは、探索途中のpartial Beam Search artifactであり、
-完成したProduction Planではない。
+`status === "incomplete"` のresultは、途中で打ち切られたpartial Planner artifactであり、
+完成したProduction Planではない（決定的schedulerでも同じ）。
 
 - `PlannerResult.plan` はnullにせず、partial Planをそのまま保持してよい
 - B8 constrained orchestration内部の `isConstrainedTrialAdoptable()` は従来どおり
@@ -830,7 +913,7 @@ Worker境界をそのまま通し、Worker側でwarningから再構築しない�
 `status === "exhausted"` は「探索未完了」ではない。入力・Conflict・resourceにより
 complete Planが無かった通常の結果として、従来どおりの意味と挙動を維持する。
 
-#### Calculation compatibility
+#### Calculation compatibility（version 5、歴史的記録）
 
 この変更はBeam Searchの展開、評価、Conflict検出、Trace Replay、PlanStep生成、
 `ProductionPlan` 永続形状のいずれも変更しない。同じ `PlannerInput` に対する計算結果は
@@ -871,7 +954,9 @@ Calculation semantics / artifact validity境界とDexie schemaは別概念であ
 `DATABASE_SCHEMA_VERSION = 1`、`AppSettings.schemaVersion = 1`、
 `PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e2` は変更しない。
 
-Planner内部ではBeam Searchの状態評価用にCandidate Scoreを計算する。
+Beam Search oracleは状態評価用にCandidate Scoreを計算する。決定的schedulerは結果shapeの
+`evaluationScore` を埋めるが、Route commitment・action選択・終了判定のいずれにもscoreを使わない
+（以下のscore契約は旧Beam Search / oracleの記述である）。
 
 ```ts
 export interface CandidateScore {
@@ -928,28 +1013,47 @@ hard constraintであり、7.5で扱う。
 
 correctness / feasibilityより下位のPlan quality preferenceを1つ定義する。
 
-同等にcorrectで、既存評価も同点のPlanner state / Planが複数ある場合、
-実際のゲーム操作で対象武器を持ち替える回数が少ない方を優先する。
+同等にcorrectな実行順が複数ある場合、実際のゲーム操作で対象武器を持ち替える回数が
+少ない方を優先する。
 
 これはcorrectness ruleではない。武器切替が多いPlanも正しく実行可能なPlanである。
 
-#### 優先順位
+#### 優先順位（Production: 決定的schedulerのcanonical action ordering）
+
+決定的schedulerは、各時点のsafe action（7章冒頭）のうち次のkeyの辞書式順で1つだけを選ぶ
+（[ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md) 7.7、
+`comparePlannerScheduleActions()`）。correctness / feasibility、選択済み途中採用状態のpin
+（hard constraint、7.5）、required / skippableのsafe判定（7.0.2）はこの順序より常に上位であり、
+順序はsafe actionの間の選び方だけを決める。
+
+```text
+1. そのactionが進める確定済みEntryのTarget priorityの最大値（降順）
+2. improvement preference違反を新たに生じるか（生じない方。7.6）
+3. weapon switchを新たに生じるか（生じない方。本節）
+4. executor選択時: executor Entryの次のholding unitが同じstream上で近い方
+5. actionが進めるEntryの残りpending unit数（少ない方）
+6. stable: stream順（Normal / blind forge -> Skill -> Gogma）、Counter位置、primary Entry ID
+```
+
+preferred sourceはこの順序に入らない（7.4）。`evaluationScore` はProductionの順序に使わない。
+local規則であるため、武器切替回数の絶対最小は保証しない。
+
+旧Beam Search（oracle）での優先順位は次であった（Productionの順位ではない）。
 
 ```text
 correctness / feasibility
   -> 選択済み途中採用状態の充足（hard constraint、7.5）
   -> Target satisfaction
   -> 既存evaluationScore（Target priority、satisfaction、resource cost、action count、conflict）
-  -> preferred source match（7.4）
+  -> preferred source match（旧7.4）
   -> improvementPreferenceViolationCount 昇順（7.6）
   -> weaponSwitchCount 昇順
   -> 既存semantic stable tie-break
   -> 既存trace stable tie-break
 ```
 
-`weaponSwitchCount` をTarget satisfactionや既存costより上位へ置かない。
-`evaluationScore` へ大きなweightとして混ぜ込まない。切替1回・操作200回のPlanが
-切替2回・操作100回のPlanより優先されてはならない。
+oracleでも `weaponSwitchCount` をTarget satisfactionや既存costより上位へ置かず、
+`evaluationScore` へ大きなweightとして混ぜ込まない。
 
 #### metric対象Operation
 
@@ -1019,10 +1123,10 @@ O(trace length)で再計算してはならない。
 一意に決める。同じsemantic keyを持つstateは常に同じ両値を持つため、dedup identity、
 以後のswitch計算、決定的tie-breakのいずれも整合する。
 
-#### Beam Searchへの影響
+#### 探索への影響
 
-これはranking preferenceであり、7.0.2のrequired / skippable execution eligibilityのような
-semantic pruningではない。
+これはsafe action間の順序（Beam Search oracleではranking preference）であり、7.0.2の
+required / skippable execution eligibilityのようなsemantic pruningではない。
 
 - 武器切替が増えるbranchを実行不能として削除しない
 - rejectionを記録しない
@@ -1030,7 +1134,7 @@ semantic pruningではない。
 - physical action sharing、silent fast-forward、conflict semantics、Trace Replay
   semanticsを変更しない
 
-上限付きBeam Searchであるため、武器切替回数の絶対最小は保証しない。
+決定的schedulerもBeam Search oracleも、武器切替回数の絶対最小は保証しない。
 同じ入力・同じEngine fixture・同じ定数に対する決定性は従来どおり維持する。
 
 #### Calculation compatibility
@@ -1041,20 +1145,33 @@ semantic pruningではない。
 `DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、
 `PRODUCTION_RNG_ENGINE_VERSION` も変更しない。
 
-### 7.4 Plan preference: Targetの優先起点
+### 7.4 Targetの優先起点とPlanner
 
-（現行Production。Issue #103の次期Planner設計では、Build Listが1 Targetにつき1 Routeになるため
-通常Plannerにpreferredを理由に選べるRouteが無くなり、本節のPlanner側preferenceは撤去する。
-preferredはCandidate Search / constrained enumerationのtie-break（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 8.1）と
-planning input hashに残る。撤去はscheduler切替PRで本節を改訂して行う。
-[ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md) 6.7）
+`TargetWeapon.preferredOwnedWeaponId`（[DATA_MODEL.md](./DATA_MODEL.md) 8.5）の
+**Planner側のPlan preferenceは撤去した**（Issue #103 Phase C、
+[ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md) 6.7）。
+永続Build Listは1 Targetにつき1 Entry（[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1）なので、通常Plannerには
+preferredを理由に選べる別Routeが存在しない。Production（決定的scheduler）は優先起点を
+Route commitment、canonical action ordering（7.3）、scheduler rankingのいずれにも使わない。
 
-`TargetWeapon.preferredOwnedWeaponId`（[DATA_MODEL.md](./DATA_MODEL.md) 8.5）は、Plannerでも
-hard constraintにしない。correctness、選択済みcheckpointの充足、Target satisfaction、
-Target priority、operation / resource / conflict cost、実行可能性はすべてpreferredより上位
-である。preferred起点は、それらが同等の場合のPlan preferenceとする。
+各層の責務:
 
-#### 優先順位
+| 層 | 優先起点の扱い |
+| --- | --- |
+| Candidate Search | canonical Idealのtie-breakとして **維持**（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 8.1）。ユーザーが採用するRouteはここで決まる |
+| constrained enumeration（B8 / B9） | streaming delivery順のtie-breakとして **維持**（SEARCH_SPEC 8.1）。生成する代替Routeの選び方に働く |
+| 通常Planner（決定的scheduler） | **使わない** |
+| Planning input hash | `targetWeaponsHash` の一部として **維持**（4章、16.11） |
+| Execution | Plan開始effectでの紐付け、作成対象Normal登録Stepでの紐付け、理想品完成時の解除を **維持**（16.2 / 16.11 / 16.13） |
+| Target Weapons UI | 表示・選択UIを **維持** |
+
+Target Satisfactionにも影響しない（本節末尾）。Plannerは優先起点を理由にRouteを差し替えない。
+
+以下の「優先順位」「preferred判定」「Planner runtime state」「Beam Searchへの影響」は、
+旧Beam Search（oracle）に残るpreferenceの記録である。Beam oracleの内部には
+`preferredSourceProgressCount` がPhase Dまで残るが、Production Planの決定には使われない。
+
+#### 優先順位（旧Beam Search / oracle）
 
 ```text
 選択済み途中採用状態の充足
@@ -1066,7 +1183,7 @@ Target priority、operation / resource / conflict cost、実行可能性はす�
   -> trace stable tie-break
 ```
 
-preferredをweighted scoreへ混ぜ込まない。1操作以上遠いRouteをpreferredという理由だけで
+oracleでもpreferredをweighted scoreへ混ぜ込まない。1操作以上遠いRouteをpreferredという理由だけで
 逆転させてはならない。同時に、同評価のbranchがstable keyだけを理由にpreferred Routeより
 先に残ることがないよう、Beam Searchの途中stateでもこのpreferenceを適用する。
 
@@ -1099,7 +1216,7 @@ preferredSourceProgressCount: number;
 へも追加しない。`weaponSwitchCount` と同様に、semantic keyが既に保持するtrace projection
 （各actionの `primaryBuildListEntryId` と `progressedBuildListEntryIds`）の純粋な関数だからである。
 
-#### Beam Searchへの影響
+#### Beam Searchへの影響（oracle）
 
 7.3と同じくranking preferenceであり、semantic pruningではない。
 
@@ -1111,8 +1228,8 @@ preferredSourceProgressCount: number;
 
 #### 自動変更の禁止
 
-Planner計算（Beam Search、Trace Replay、constrained re-search、what-if）と `reserve_weapon`
-（探索内部action）は `TargetWeapon.preferredOwnedWeaponId` を変更してはいけない。
+Planner計算（決定的scheduler、Beam Search oracle、Trace Replay、constrained re-search、what-if）と
+`reserve_weapon`（探索内部action）は `TargetWeapon.preferredOwnedWeaponId` を変更してはいけない。
 Idealを確保した、新規Gogmaを登録した、既存Gogmaを更新したという探索上の理由で優先起点を
 自動設定・付け替えしない。優先起点はユーザーがTarget Weapons画面から設定する計画入力である。
 
@@ -1389,18 +1506,20 @@ Route開始から）にSkill laneとBonus laneのどちらを先に理想へ近�
 
 #### 優先順位
 
+Production（決定的scheduler）では、改善優先はcanonical action ordering（7.3）の第2 keyである。
+
 ```text
 correctness / feasibility
-  -> 選択済み途中採用状態の充足（7.5）
-  -> Target satisfaction
-  -> Counter / source / inventory feasibility
-  -> 複数Target全体のPlan成立
-  -> 既存evaluationScore / cost / conflict評価
-  -> preferred source match（7.4）
-  -> improvementPreferenceViolationCount 昇順
-  -> weaponSwitchCount（7.3）
-  -> stable tie-break
+  -> 選択済み途中採用状態の充足（7.5、pin gating）
+  -> Counter / source / inventory feasibility（safe action）
+  -> Target priority（canonical key 1）
+  -> improvement preference違反を新たに生じないaction（canonical key 2）
+  -> weapon switch（canonical key 3、7.3）
+  -> 以下canonical key 4〜6
 ```
+
+旧Beam Search（oracle）の優先順位は `既存evaluationScore / cost / conflict評価 -> preferred source match
+-> improvementPreferenceViolationCount -> weaponSwitchCount -> stable tie-break` であった。
 
 #### metric
 
@@ -1410,7 +1529,18 @@ checkpointが到達済み（選択が無ければ常に）で、実行したunit
 に残りunitがある場合に +1 する。base laneのunit、silent fast-forward、`reserve_weapon` は
 数えない。`createPlannerSearchStateSemanticKey()` へは入れない（trace projectionの純粋関数）。
 
-#### Beam Searchへの影響
+#### 決定的schedulerへの影響
+
+1つのEntryでBonus laneとSkill laneの両方がsafeな場合、`skill_first` / `bonus_first` は優先laneの
+actionを選ぶ。優先laneがsafeでない（他Entryのholding unitやpinで待つ）場合は反対laneを進め、
+violationを記録する。soft preferenceであり、hard constraintより上位にしない。`planner` は第2 keyで
+差が付かず、以後のkeyで決まる。stream順（Skill → Gogma）は決定性のためのtie-breakであり、
+feasibilityへ影響しない（safe actionの順序は確定済みEntry集合の完成可否を変えない。
+[ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md) 7.9）。
+branchを片側に固定してPlanを破綻させないという `planner` の趣旨と矛盾しない。
+violation数の絶対最小は保証しない。
+
+#### Beam Searchへの影響（oracle）
 
 7.0.4のとおり、各展開はそのstateで実行できる両laneのunitをどちらもsuccessorとして生成する。
 改善優先はsuccessor生成に一切影響せず、`comparePlannerSearchStates()` のranking termとして
@@ -3414,8 +3544,9 @@ preflight(`createInitialPlannerSearchState` / `createPlannerRouteUnitPlans` /
 
 B8-C4aで、数える対象を次のとおり明確化する。
 
-`maxPlannerReruns` はB8 orchestrationから開始される `runPlannerBeamSearch()` の
-全実行開始を数える。
+`maxPlannerReruns` はB8 orchestrationから開始されるfull Planner run（Phase C以降は決定的scheduler。
+Phase C以前は `runPlannerBeamSearch()`）の全実行開始を数える。Phase Cでschedulerが高速になっても
+既定値は変えない。
 
 ```text
 数える
@@ -3542,7 +3673,7 @@ constrained_enumeration_bound_reached
 adoptできなかった場合だけ出す。対象workは終了するが、他Conflictのworkは継続する。
 
 `max_planner_reruns_reached` に到達した場合、新しいCandidate trialを開始しない。
-到達の検出を次の `beforeBeamSearch()` のthrowまで遅らせてはならない。full Beam Search
+到達の検出を次の `beforePlannerRun()`（旧名 `beforeBeamSearch()`）のthrowまで遅らせてはならない。full Beam Search
 の実行可能回数を使い切っており、かつ未解決workが実際に残っている時点で、新しい
 enumeration / materialization / preflightを一切開始せずwarningを出しglobal stopとする。
 
@@ -3557,7 +3688,8 @@ trial採用後  : 即warningとしない。残りworkをcurrent Planで再評価
 Replay未成功のBeamからProductionPlanを組み立てず、最後に完了したBeam Searchの
 conflicts / warningsと `plan: null` を返す。この観測のために
 `ProductionPlanGenerationObserver` へsemantics-neutralな
-`afterBeamSearch?(result)` を追加した。`beforeBeamSearch()` と同様に観測専用であり、
+`afterBeamSearch?(result)` を追加した（Phase Cで `afterPlannerRun?(result)` へ改名。
+`beforeBeamSearch()` も `beforePlannerRun()` へ改名し、数え方は変えていない）。観測専用であり、
 通常のProduction Plan生成semanticsを変更しない。
 
 #### cancellation
@@ -3580,7 +3712,7 @@ Candidate trialがcancelled
   -> orchestration全体を終了し、最後にaccepted済みのcurrent PlannerResultを返す
 ```
 
-cancellation専用のwarning kindは追加しない。`afterBeamSearch` の観測状態は
+cancellation専用のwarning kindは追加しない。`afterPlannerRun` の観測状態は
 Production Plan生成1回ごとにresetし、過去runのBeam結果を誤参照しない。
 `visitConstrainedCandidates()` 自身が検出したSearch cancellationのsemanticsは
 変更しない。
@@ -3783,12 +3915,13 @@ Stepが削除済みEntryを参照しない。表示中Planから復元するexpl
 1. 入力validation
 2. PlanningInputSnapshot作成
 3. TargetSatisfaction作成
-4. staleでないBuildListEntryをTargetごとに分類
+4. staleでないBuildListEntryをTargetごとに分類（1 Target = 1 Entry）
 5. 初期PlannerSearchStateを作成
-6. BuildRoute.operationsを使ってBeam Searchを実行
-7. 各展開で共有RNG時系列と在庫をシミュレート
-8. 競合を検出し、実行不能な展開を除外
-9. 最良Stateから採用BuildListEntryとRejectedBuildListEntryを決定
+6. Route commitment: 競合を検出し、ConflictResolutionまたは暫定帰結で今回実行するRouteを確定（7章冒頭）
+7. BuildRoute.operationsを使って決定的schedulerを実行し、共有RNG時系列と在庫を1つのStateで
+   シミュレートする（canonical順、7.3）
+8. deadlock / stallのEntryを除外して継続する
+9. 最終Stateから採用BuildListEntryとRejectedBuildListEntryを決定し、Trace Replayで検証する
 10. CandidateのBuildRoute.operationsを変更せずRouteOperation列からPlanStep列を生成し、Planner-only Stepを別に挿入する
 11. 各PlanStepの期待状態Before / Afterを計算
 12. requiredMaterials（アイテム素材）を集計
@@ -3800,7 +3933,7 @@ Stepが削除済みEntryを参照しない。表示中Planから復元するexpl
 - PlanStepは実行ナビで1つずつ確認できる粒度にする
 - 高速モード用のまとめStepは作らない
 - Plan生成時点では実際のDBを更新しない。保存は呼び出し側Repositoryが行う
-- Beam Searchの打切り時は到達した上限に応じて `max_steps_reached` / `max_expanded_states_reached` を返す
+- full Planner runの打切り時は到達した上限に応じて `max_steps_reached` / `max_expanded_states_reached` を返す
 - 併せて `PlannerResult.termination` にtypedな終了状態を返す（7.2.1）
 - `ProductionPlan.calculationContext` はPlannerInputと一致させる
 - 同じPlannerInput、RngEngine fixture、ID Factory、Clock、Planner constantsから、採用Entry、操作列、PlanStep、score、warning、予約IDが同一になる
@@ -3864,11 +3997,11 @@ PlanStep変換用 `PlannerPlanStepDraft` を生成する。
 
 ### 11.0-B 第9C-B: ProductionPlan組み立て
 
-`createProductionPlan(input, dependencies, options)` はBeam Searchと9C-A Replayを再実装せず、
+`createProductionPlan(input, dependencies, options)` はfull Planner runと9C-A Replayを再実装せず、
 次の順でDraft ProductionPlanを組み立てる。
 
-1. `runPlannerBeamSearch` を実行する。
-2. `bestState` がnullならPlanを作らず、Beam Searchのconflicts / warningsをそのまま返す。
+1. full Planner run（Phase C以降は `runPlannerDeterministicSchedule`、Phase C以前は `runPlannerBeamSearch`）を実行する。
+2. `bestState` がnullならPlanを作らず、full runのconflicts / warningsをそのまま返す。
 3. `bestState.trace` が空なら（初期状態ですべての計画対象Target（4.1）がIdealを満たす場合、計画対象Targetが0件の場合を含む）空Planを作らず `plan = null` とする。
 4. `replayPlannerSearchTrace(input, bestState, dependencies.rngEngine)` を実行する。Replay failureはwarningへ変換せず、issue code / message / actionIndexを含むPlanner内部エラーとして失敗させる。
 5. Replayが成功したDraftを順序を変えずにPlanStepへ変換する。物理操作Draftは1対1でPlanStepになる。
@@ -4334,6 +4467,14 @@ Domain calculationへ明示供給し、caller-requiredの `PlannerWhatIfBounds` 
 Worker adapter / Clientは暗黙適用しない（9.2.4.9）。この記述は実装mappingであり、
 9.2.4.1〜9.2.4.13のnormative semanticsを変更しない。
 
+Issue #103 Phase CでProductionのfull Planner runを決定的schedulerへ切り替えたが、Worker protocol
+（`PlannerWorkerRequest` / `PlannerWorkerResponse`、`PlannerProgress`、`PlannerSearchTermination`、
+`PlannerOptions`）は変更していない。Production Worker controllerは共有Production calculation
+（`createProductionPlanWithObserver()`）を呼ぶことで決定的schedulerになる。Worker requestへ
+strategyを追加しない。progressの `expandedStates` は適用したaction数（7.2）である。
+benchmark専用Worker（Issue #103 benchmark）の `strategy`（`beam` / `scheduler`）は計測用であり、
+Production strategy flagではない。
+
 Workerを利用できない環境ではClientのversionを `production-engine-unavailable` とし、
 計画実行を明示的なunavailable errorにする。これは
 `getPredictionSupport() = supported: false` のBuildListEntry単位除外とは別経路である。
@@ -4372,7 +4513,23 @@ Workerを利用できない環境ではClientのversionを `production-engine-un
 - 両者が同点の場合だけ `weaponSwitchCount` が少ないstateを優先し、それも同数なら
   従来のsemantic / trace stable tie-breakへ進む
 
-## 15.3 Beam Search Test
+## 15.3 Planner計算方式 Test
+
+Production（決定的scheduler）:
+
+- `createProductionPlanWithObserver()` / `createProductionPlan()` が決定的schedulerを実行し、
+  `createProductionPlanWithSearchRunner(runPlannerDeterministicSchedule, ...)` と同じ結果になる。
+  scheduler固有の結果（例: 未解決競合の暫定帰結による `resource_conflict`）がProduction経路で得られる
+- Production Worker、B8 constrained orchestration、B9 what-if、再計画Previewが、scheduler注入なしの
+  通常経路でscheduler full runを通り、既存のadoption / feasibility / outcome契約を維持する
+- `beamWidth` の値（1 / 50 / 999など）によってProduction Planner結果が変わらない
+- scheduler結果が必ずTrace Replayを通り、既存projectionでPlanStep / executionEffects /
+  ExpectedPlanState / checkpointMilestonesが生成される
+- ISSUE_103_DETERMINISTIC_PLANNER_DESIGN 16章のacceptance scenarioとPhase Bのparity
+  （acceptance catalogue、sanity-3、representative-12）でcompletion regressionが無い
+- typed terminationと `expandedStates`（適用action数）の意味が7.2 / 7.2.1のとおりである
+
+旧Beam Search（oracle）:
 
 - 共有Gogma / Skill Counterを進める複数候補を単独Score順より少ない操作で組み合わせられる
 - 複数Routeの共有RNG prefixを重複実行せず、各Entryのroute progressが進む
@@ -4386,7 +4543,7 @@ Workerを利用できない環境ではClientのversionを `production-engine-un
 - 完成した探索が上限へ到達していた場合は `status = "completed"` のまま
   `reachedLimits` が非空になり、保存とnavigationを妨げない
 - キャンセルは `incomplete` ではなく `cancelled` になる
-- Beam Searchへ到達しなかった入力invalid runは `exhausted` で `reachedLimits` が空になる
+- 探索へ到達しなかった入力invalid runは `exhausted` で `reachedLimits` が空になる
 - typed terminationが `PlannerBeamSearchResult` からProduction Plan生成、
   orchestration結果、Worker応答、Worker Clientまで再構築されずに届く
 - 同じ入力と同じ定数から決定的なPlanが生成される
@@ -5110,7 +5267,9 @@ calculation schema 12以前のPlanは先頭 `expectedStateBefore` = `initialExec
 BuildListEntry snapshotの意味を変えないため、version 12のBuildCandidate / BuildListEntryは
 build-result互換判定の明示的な `13 -> [12]` 例外によりschema 13でもそのまま利用できる（他の
 CalculationContext fieldの一致と通常のstaleness判定は必要。version 1..11は非互換のまま。
-ProductionPlanには適用しない）。
+ProductionPlanには適用しない）。現行のschema 14（7章、決定的scheduler）はPlan開始effectの契約を
+変えないが、schema 13以前のProductionPlanは同じ完全一致判定でfail closedし、BuildCandidate /
+BuildListEntryだけが明示的な `14 -> [12, 13]` 例外で利用できる。
 
 ### 16.6 Plan依存性とPlanを壊す変更
 
@@ -6102,7 +6261,10 @@ staleness semantics、PlanStep / reserve semantics、Expected execution state、
   検証でImport全体がfail closedになり、部分適用はしない。その後のIdentification provenance
   （16.15の解決authority、[DATA_MODEL.md](./DATA_MODEL.md) 6.1 / 6.2）の追加でDexie
   `DATABASE_SCHEMA_VERSION` を7、`ExportRoot.schemaVersion` を10、`RngState.schemaVersion` を2へ更新した
-  （現行値）。計算意味は変わらないため `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は13のままである
+  （当時）。計算意味は変わらないため `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は13のままである。
+  その後のDraft lifecycle整理でDexieを8、`ExportRoot.schemaVersion` を11へ、Issue #103 Phase C
+  （Production Plannerの決定的scheduler切替、7章）で `CURRENT_CALCULATION_APP_SCHEMA_VERSION` を
+  14へ更新した（現行値。[DATA_MODEL.md](./DATA_MODEL.md) 3.5）
 - 既存データを推測migrationして意味を変えない。所持Ideal武器の存在からTargetを
   `completed` と推測しない。既存OwnedWeaponを作成中と推測しない
 - 旧契約のProductionPlan（独立 `reserve_weapon` Step、旧expected state）はexact persisted

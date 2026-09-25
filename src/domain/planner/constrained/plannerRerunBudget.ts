@@ -42,7 +42,7 @@ export class PlannerOrchestrationLimitError extends Error {
  * A `maxPlannerReruns` budget shaped as a `ProductionPlanGenerationObserver`,
  * so it can be handed straight to `createProductionPlanWithObserver()`.
  *
- * It counts every full Beam Search that actually starts, including the first
+ * It counts every full Planner run that actually starts, including the first
  * ordinary one and every runtime-unsupported retry. A rejected execution never
  * started, so it does not consume the budget.
  */
@@ -57,8 +57,8 @@ export interface PlannerFullBeamBudget extends ProductionPlanGenerationObserver 
  *
  * The budget is deliberately unaware of the initial conflict preflight. The
  * preflight calls `preparePlannerInitialContext()` /
- * `createPlannerRouteUnitPlans()` / `detectPlannerConflicts()` and never runs a
- * Beam Search, so it never reaches this observer and cannot consume the budget.
+ * `createPlannerRouteUnitPlans()` / `detectPlannerConflicts()` and never starts a
+ * full Planner run, so it never reaches this observer and cannot consume the budget.
  */
 export function createPlannerFullBeamBudget(
   bounds: PlannerOrchestrationBounds,
@@ -73,7 +73,7 @@ export function createPlannerFullBeamBudget(
     get used() {
       return used
     },
-    beforeBeamSearch() {
+    beforePlannerRun() {
       if (used >= limit) {
         throw new PlannerOrchestrationLimitError('max_planner_reruns', limit, used)
       }

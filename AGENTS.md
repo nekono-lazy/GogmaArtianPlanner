@@ -811,6 +811,30 @@ Planner internal inspection stays limited to `PlanStep.debug.plannerReason`, the
 or PRNG dump viewer is added. It added no persisted field and no calculation semantics, so the
 versions stay 13 / 8 / 11 (`RngState.schemaVersion` 2, `AppSettings.schemaVersion` 1,
 `PRODUCTION_RNG_ENGINE_VERSION` and Master `dataVersion` unchanged).
+Issue #103 Phase C (the Production Planner strategy switch) replaced the Production full
+Planner run - the bounded Beam Search - with Route commitment plus the deterministic
+scheduler (`runPlannerDeterministicSchedule()`,
+`docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md` 12 - 15, `docs/PLANNER_SPEC.md` 7). The
+one switch is `createProductionPlanWithObserver()`, so the ordinary Planner, the Planner
+Worker, B8 constrained re-search, B9 what-if, the B10 recalculation, the replan Preview
+and the runtime-unsupported retry all run the same scheduler; no Production strategy
+flag exists anywhere (`PlannerInput`, Worker request, `AppSettings`, UI, environment,
+query). `createProductionPlanWithSearchRunner()` keeps the one shared tail and lets only
+tests, benchmarks and the parity harness inject the Beam Search, which stays as an
+oracle until Phase D. For the same PlannerInput the provisional outcome of an unresolved
+conflict, the returned `conflicts`, `rejectedBuildListEntries`, the Step order, the Entries
+a shared physical action carries and the (removed) Planner-side preferred source preference
+can differ, and a persisted ProductionPlan records no generation strategy, so this moved
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION` to **14**: every version 1..13 ProductionPlan -
+Draft or active - fails closed with `calculation_context_changed` (exact four-field
+equality, no Plan exception, no read migration; an active version 13 Plan is replanned
+from the current state). Candidate Search, the constrained enumerator and the
+BuildCandidate / BuildListEntry snapshot semantics did not change, so the explicit
+build-result exception became `14 -> [12, 13]`. The Worker protocol, `PlannerOptions`
+(`beamWidth` stays, unused by Production), `PlannerProgress` (`expandedStates` = applied
+actions) and `PlannerSearchTermination` are unchanged; the versions are 14 / 8 / 11
+(`RngState.schemaVersion` 2, `AppSettings.schemaVersion` 1,
+`PRODUCTION_RNG_ENGINE_VERSION` and Master `dataVersion` unchanged).
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -838,8 +862,10 @@ PlanStep milestone shape, and the PlanConflict participant shape, which moved it
 to version 11. The Execution Plan contract above (Target definition hash
 normalization, planning-input and Plan-dependent hashes, Target execution state,
 PlanStep `executionEffects`, reserve and zero-operation completion semantics) moved
-it to 12, and the Plan start effect (existing-weapon Target links at `draft -> active`
-instead of at the first physical Step) moved it to the current **13**, defined
+it to 12, the Plan start effect (existing-weapon Target links at `draft -> active`
+instead of at the first physical Step) moved it to 13, and the Production Planner
+strategy switch from the Beam Search to the deterministic scheduler (Issue #103 Phase C)
+moved it to the current **14**, defined
 only by `CURRENT_CALCULATION_APP_SCHEMA_VERSION` in `src/domain/models/common.ts`.
 A version 10 `checkpointGroups` / `selectedCheckpointOpportunityIds` cannot be
 mapped onto lane pins, and reading such a selection as empty would silently
@@ -883,7 +909,7 @@ current Candidates by searching again.
 Do not delete historical results or add a migration or Export/Import semantic
 validation change as a substitute for CalculationContext compatibility.
 
-All version 1..12 ProductionPlans are incompatible with version 13, and all version 1..11 Candidates and BuildListEntries are incompatible with version 13 (version 1..11 were already incompatible with version 12). Preserve their contents and fail closed with calculation_context_changed. The only build-result exception at this boundary is the explicit `13 -> [12]` one: the version 13 change is ProductionPlan execution only (the Plan start effect), so a version 12 Candidate or BuildListEntry stays usable under 13 when gameVersion, masterDataVersion and rngEngineVersion are equal and no ordinary stale reason applies. Never widen it to version 1..11, never apply it to a ProductionPlan, and never extend the historical 2..5 exception. Never execute a version 12 Plan under the Plan start effect: its first Step expects the pre-start state. Never convert a version 11 Plan into the version 12 PlanStep contract: no inferred `executionEffects`, no `reserve_weapon` merged into a physical Step, no inferred tracked OwnedWeapon or observation binding.
+All version 1..13 ProductionPlans are incompatible with version 14, Draft or active alike, while version 12 and 13 Candidates and BuildListEntries stay usable under 14 through the explicit build-result exception `14 -> [12, 13]` (the version 14 change is the Production Planner strategy only; version 1..11 stay incompatible; never a range check such as "12 or later", never a Plan exception, never a read migration or an in-place version rewrite of a version 13 Plan). Historically, all version 1..12 ProductionPlans are incompatible with version 13, and all version 1..11 Candidates and BuildListEntries are incompatible with version 13 (version 1..11 were already incompatible with version 12). Preserve their contents and fail closed with calculation_context_changed. The only build-result exception at this boundary is the explicit `13 -> [12]` one: the version 13 change is ProductionPlan execution only (the Plan start effect), so a version 12 Candidate or BuildListEntry stays usable under 13 when gameVersion, masterDataVersion and rngEngineVersion are equal and no ordinary stale reason applies. Never widen it to version 1..11, never apply it to a ProductionPlan, and never extend the historical 2..5 exception. Never execute a version 12 Plan under the Plan start effect: its first Step expects the pre-start state. Never convert a version 11 Plan into the version 12 PlanStep contract: no inferred `executionEffects`, no `reserve_weapon` merged into a physical Step, no inferred tracked OwnedWeapon or observation binding.
 
 The v3 -> v4 Dexie migration converts only `OwnedGogma.status === 'material'` to
 `'unclassified'`. `practical` and `ideal` keep their values, a Normal Artian
@@ -1750,9 +1776,11 @@ status, and never require one.
 
 It is a soft preference, never a hard Route constraint. Search still explores every
 executable Route and excludes none for not being preferred; a shorter, cheaper, or
-otherwise better Route wins. `docs/SEARCH_SPEC.md` 8.1 and `docs/PLANNER_SPEC.md` 7.4
-fix where the preference sits in each comparison: immediately before the final stable
-tie-break, never as a weight inside a score.
+otherwise better Route wins. `docs/SEARCH_SPEC.md` 8.1 fixes where the preference sits
+in the Candidate Search and constrained enumeration comparisons: immediately before the
+final stable tie-break, never as a weight inside a score. The Production Planner (the
+deterministic scheduler) does not use it at all (`docs/PLANNER_SPEC.md` 7.4, Issue #103
+Phase C): one Target holds one Build List Entry, so there is no other Route to prefer.
 
 It never restricts Target Satisfaction, which stays a judgment about actual weapon
 performance: another weapon that meets the Target's conditions still satisfies it.
@@ -1825,7 +1853,8 @@ priority                 Planner planning input (order / score). Never stales an
                          the Draft / Active Plan (target_changed, UI pre-warning)
 isEnabled                Search / Planner input exclusion. Never stales an Entry.
                          Part of targetWeaponsHash and dependentTargetDefinitionsHash
-preferredOwnedWeaponId   Search tie-break and Planner plan preference. Never stales
+preferredOwnedWeaponId   Search / constrained enumeration tie-break (no Production
+                         Planner preference since Issue #103 Phase C). Never stales
                          an Entry. Part of targetWeaponsHash; for a Plan-dependent
                          Target verified by targetExecutionStateHash
 lifecycleStatus          completed is excluded from Search / Planner input, never
@@ -3016,10 +3045,12 @@ Replay must not regenerate a skipped operation. Keep the existing design where
 the Beam Search trace alone determines the Replay state, and never introduce a
 semantic difference between Beam Search and Replay.
 
-Among Plans the existing evaluation already rates equally, prefer first the one
-whose Routes start from their Targets' preferred owned weapons
-(`docs/PLANNER_SPEC.md` 7.4), and then the one that
-makes the player swap the weapon in hand fewer times. This is Plan quality, not
+In the Beam Search oracle, among Plans the existing evaluation already rates equally,
+prefer first the one whose Routes start from their Targets' preferred owned weapons
+(the removed Production preference, `docs/PLANNER_SPEC.md` 7.4), and then the one that
+makes the player swap the weapon in hand fewer times. The Production scheduler applies
+the weapon switch preference as its canonical ordering key 3, below Target priority and
+the improvement preference, and never reads the preferred source. This is Plan quality, not
 correctness, and it sits below correctness, feasibility, Target satisfaction,
 and every existing `evaluationScore` term, and above the semantic and trace
 stable tie-breaks. Never fold it into `evaluationScore` as a large weight, and
@@ -3341,13 +3372,42 @@ defined in the Calculation Context section above.
 
 ## Planner Search Strategy
 
-v1 uses bounded Beam Search.
+The Production Planner is **Route commitment plus the deterministic scheduler**
+(`runPlannerDeterministicSchedule()`, Issue #103 Phase C;
+`docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md`, `docs/REQUIREMENTS.md` 19 / 20,
+`docs/PLANNER_SPEC.md` 7):
 
-The Issue #103 next-phase Planner design (Route commitment plus deterministic
-scheduling) is `docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md`. It is an
-unimplemented target design: current Production stays the Beam Search below
-until the implementation PR that switches Production routing updates
-`docs/REQUIREMENTS.md` 19 / 20, `docs/PLANNER_SPEC.md` 7, and this section.
+- The persisted Build List holds one Entry per Target, so the Planner schedules the
+  Route the user adopted instead of choosing among several Routes of one Target
+- Route commitment decides which Routes the run executes: an explicit
+  `PlannerConflictResolution` selects its Entry; an unresolved collision gets a
+  provisional outcome (the best Entry by the shared ranking - Target priority, next
+  Candidate distance, operation count, Entry ID - is committed, the other Entries are
+  not run, and the conflict is returned with `selectedBuildListEntryId = null`). A
+  Target left out that way does not complete: `termination.status = 'exhausted'` with
+  `plan != null`, saved as an ordinary Draft
+- The scheduler drives one `PlannerSearchState`, applying exactly one safe action at a
+  time in the canonical order (Target priority, improvement preference violation,
+  weapon switch, next-holding distance, remaining pending units, stable stream /
+  Counter / Entry order). It never explores A -> B and B -> A both; a deadlock / stall
+  drops the lowest-ranked committed Entry
+- `TargetWeapon.preferredOwnedWeaponId` is not a scheduler input (no Route commitment,
+  canonical ordering or ranking); it stays the Candidate Search and constrained
+  enumeration tie-break, part of the planning-input hash and the Execution link semantics
+- Every state transition goes through the shared authority (`plannerStateTransitions.ts`),
+  and every scheduler trace goes through Trace Replay and the unchanged projection
+- `createProductionPlanWithObserver()` is the only Production entry and fixes the
+  scheduler; the ordinary Planner, B8, B9, B10, the replan Preview and the
+  runtime-unsupported retry share it. Never add a Production strategy flag
+
+The bounded Beam Search below (`runPlannerBeamSearch()`) was the Production Planner up
+to Phase B. It stays, unchanged, as a test / benchmark / parity oracle - reached only
+through `createProductionPlanWithSearchRunner()` or a direct call - together with its
+semantic key, `comparePlannerSearchStates()`, `evaluationScore`,
+`preferredSourceProgressCount` and the PR #107 instrumentation, until Phase D decides
+their removal. The rest of this section describes that oracle where it speaks of beams,
+branches, scores or pruning; its state transition, sharing, fast-forward, checkpoint,
+conflict, Trace Replay and termination contracts are the shared ones the scheduler uses.
 
 Default constants:
 
@@ -3357,7 +3417,11 @@ maxExpandedStates = 10000
 maxPlanSteps = 300
 ```
 
-These three positive integers are the complete v1 `PlannerOptions` contract.
+These three positive integers are the complete v1 `PlannerOptions` contract. The
+Production scheduler reads `maxPlanSteps` and `maxExpandedStates` (the number of states it
+builds, i.e. applied actions) and never reads `beamWidth`, whose value therefore never
+changes a Production Plan; `beamWidth` keeps its type, default and positive-integer
+validation until Phase D.
 `preferPracticalBeforeIdeal` belongs to a legacy Planner contract and is
 unsupported: the Planner has no Practical-first priority, and an input carrying
 that option is refused as a validation issue rather than accepted or ignored.
@@ -4761,8 +4825,17 @@ Relevant test areas include:
   sets it to null for every Target, removes `relatedTargetWeaponIds` from every
   current OwnedWeapon, never infers a preference from the removed list, and
   rewrites no BuildCandidate, BuildListEntry, ProductionPlan, or ExecutionHistory
+- `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 14`, schema 1..13 ProductionPlans (Draft and
+  active) failing closed under 14 and a schema 13 active Plan never executed, rewritten or
+  stale-migrated, schema 12 / 13 Candidates / BuildListEntries staying usable under 14
+  through the explicit `14 -> [12, 13]` exception only while the other CalculationContext
+  fields match, schema 1..11 build results incompatible, and a future schema never
+  inheriting the exception
+- Production Plan generation, the Planner Worker, B8, B9 and the replan Preview running the
+  deterministic scheduler with no injection and no strategy flag, and `beamWidth` never
+  changing a Production result
 - `DATABASE_SCHEMA_VERSION = 8`, `ExportRoot.schemaVersion = 11`, `RngState.schemaVersion = 2`,
-  `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 13`, schema 1..12 ProductionPlans and
+  historically `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 13` with schema 1..12 ProductionPlans and
   schema 1..11 Candidates / BuildListEntries failing closed under version 13, schema 12
   Candidates / BuildListEntries staying usable under 13 through the explicit build-result
   exception only while the other CalculationContext fields match, a schema 7 Export migrating to 8 with its Plans untouched, a
@@ -4842,12 +4915,13 @@ Relevant test areas include:
   sources are equally adoptable, and adopts the other one when the preference
   points at it instead, proving the rule reaches the Production streaming path
   rather than only the collected result's sort
-- The Planner prefers a preferred-source Route when the existing evaluation ties,
-  prefers the non-preferred one when the existing evaluation rates it higher, ranks
+- The Beam Search oracle prefers a preferred-source Route when the existing evaluation
+  ties, prefers the non-preferred one when the existing evaluation rates it higher, ranks
   the preference above `weaponSwitchCount` and below Target priority, satisfaction,
   category, cost, and conflict, works for owned Normal and existing Gogma routes,
-  never treats a new-Normal route as preferred, and never lets `reserve_weapon` or
-  any other Planner calculation change a Target preference
+  never treats a new-Normal route as preferred; the Production scheduler never reads the
+  preferred source; and no Planner calculation or `reserve_weapon` changes a Target
+  preference
 - Changing only `preferredOwnedWeaponId`, `priority`, `isEnabled`, or lifecycle leaves
   `createTargetDefinitionHash()` and BuildListEntry staleness unchanged, while
   `targetWeaponsHash` still reflects each of them, and a Plan-dependent Target's

@@ -359,6 +359,9 @@ calculation_context_changedにより現行計算・実行から除外する。
 version 13（ProductionPlanのPlan開始effect、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.11）はCandidate
 Searchの意味を変えないため、version 12のCandidate / BuildListEntryに限りversion 13で明示的に互換とする
 （`13 -> [12]`。他のCalculationContext fieldの一致と通常のstaleness判定は必要）。
+version 14（Production Plannerの決定的scheduler切替、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7）もCandidate
+Searchとconstrained enumeratorの意味を変えないため、version 12 / 13のCandidate / BuildListEntryに限り
+version 14で明示的に互換とする（`14 -> [12, 13]`。条件は同じ。ProductionPlanには適用しない）。
 Targetの永続形状は独立してDexie DATABASE_SCHEMA_VERSIONを1→2へ更新する。
 AppSettings.schemaVersion、gameVersion、Master Data version、RNG Engine versionは
 変更しない。移行・ExportRoot契約はDATA_MODELと
@@ -2040,7 +2043,8 @@ preferred情報を入れない。preferredはCandidateそのものの意味で�
 preferredは `createTargetDefinitionHash()` の対象でもない。preferredを変更しても既存BuildListEntryを
 `target_definition_changed` にしない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.11）。変更後の再検索では
 本節のtie-breakによりcanonical Idealが変わり得るが、既存Entryは有効なIdeal Routeのままである。
-PlannerはPlanner実行時の現在Targetのpreferredをplanning inputとして読む（同 7.4）。Executionが作成開始時に
+Planner入力には現在Targetのpreferredが含まれ（`targetWeaponsHash`）、constrained enumerationの
+tie-breakに使われるが、通常Planner（決定的scheduler）の実行順の判断には使わない（PLANNER_SPEC 7.4）。Executionが作成開始時に
 preferredを自動設定しても、Build Listはstaleにならない。`createTargetDefinitionHash()` の対象field集合と、
 `priority` / `isEnabled` / lifecycleを含むTarget fieldの責務はPLANNER_SPEC 16.11の責務表を正本とする。
 

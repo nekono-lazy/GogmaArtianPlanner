@@ -82,6 +82,14 @@ function betterState(
     : current
 }
 
+/**
+ * The bounded Beam Search (the Production Planner up to Issue #103 Phase B).
+ *
+ * Since Phase C it is a test / benchmark / parity oracle only: Production
+ * (`createProductionPlanWithObserver()`) runs the deterministic scheduler, and
+ * this search is reached only by injecting it through
+ * `createProductionPlanWithSearchRunner()` or by calling it directly.
+ */
 export async function runPlannerBeamSearch(
   input: PlannerInput,
   dependencies: PlannerDependencies,

@@ -18,8 +18,9 @@ import type { RngEngine } from '../domain/rng/rngEngine'
 /**
  * Issue #103 Planner search instrumentation harness.
  *
- * It runs the ordinary `runPlannerBeamSearch()` - the same function the
- * Production Planner Worker reaches - once, optionally with the
+ * It runs the Beam Search oracle `runPlannerBeamSearch()` - the Production
+ * Planner up to Issue #103 Phase B; Production has run the deterministic
+ * scheduler since Phase C - once, optionally with the
  * `searchInstrumentation` observer, and returns plain structured-clone data so
  * a Browser Worker can post it back unchanged. It never persists anything.
  *

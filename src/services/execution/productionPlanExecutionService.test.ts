@@ -305,9 +305,12 @@ describe('confirmed_expected Step confirmation', () => {
           groupSkillId: null,
         }) },
       }))
+      // After the conversion both lanes are safe and the preference is
+      // `planner`: the deterministic scheduler's stable stream order runs the
+      // Skill lane first (PLANNER_SPEC 7.3). Completion still waits for both.
       expect(fixture.plan.steps.map(({ operationType }) => operationType)).toEqual([
         'create_normal_artian', 'create_normal_artian', 'create_normal_artian',
-        'convert_normal_to_gogma', 'reset_bonuses', 'reset_skills',
+        'convert_normal_to_gogma', 'reset_skills', 'reset_bonuses',
       ])
       await seed(database, fixture)
       const service = executionService(database, fixture.built)

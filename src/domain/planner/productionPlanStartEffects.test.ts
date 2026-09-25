@@ -98,15 +98,15 @@ describe('applyProductionPlanStartTargetLinks / inspectProductionPlanStartTarget
   })
 })
 
-describe('calculation schema 13 compatibility boundary', () => {
+describe('calculation schema 13 compatibility boundary, carried into the current schema 14', () => {
   const current = { ...createValidBuildCandidate().calculationContext, appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION }
 
-  it('keeps a schema 12 BuildCandidate / BuildListEntry result compatible under schema 13', () => {
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(13)
+  it('keeps a schema 12 BuildCandidate / BuildListEntry result compatible under the current schema', () => {
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(14)
     expect(isBuildResultCalculationContextCompatible({ ...current, appSchemaVersion: 12 }, current)).toBe(true)
   })
 
-  it.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])('keeps a schema %i build result incompatible under schema 13', (version) => {
+  it.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])('keeps a schema %i build result incompatible under the current schema', (version) => {
     expect(isBuildResultCalculationContextCompatible({ ...current, appSchemaVersion: version }, current)).toBe(false)
   })
 
@@ -114,11 +114,11 @@ describe('calculation schema 13 compatibility boundary', () => {
     ['gameVersion', { gameVersion: 'game.other' }],
     ['masterDataVersion', { masterDataVersion: 999 }],
     ['rngEngineVersion', { rngEngineVersion: 'production-rng:other' }],
-  ])('never lets the 12 -> 13 exception cover a different %s', (_, difference) => {
+  ])('never lets the schema 12 exception cover a different %s', (_, difference) => {
     expect(isBuildResultCalculationContextCompatible({ ...current, appSchemaVersion: 12, ...difference }, current)).toBe(false)
   })
 
-  it('keeps a schema 12 ProductionPlan incompatible under schema 13', () => {
+  it('keeps a schema 12 ProductionPlan incompatible under the current schema', () => {
     expect(isCalculationContextCompatible({ ...current, appSchemaVersion: 12 }, current)).toBe(false)
   })
 })

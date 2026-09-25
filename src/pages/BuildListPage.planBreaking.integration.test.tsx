@@ -37,7 +37,9 @@ const GUARD_NOW = '2026-09-18T00:00:00.000Z'
 const SOURCE_ID = 'owned.execution.gogma'
 const ENTRY_ID = 'entry.execution.gogma'
 const WARNING = { name: '実行中の生産計画があります' } as const
-const BONUS_FIRST = '復元ボーナスを優先'
+// The fixture Entry already prefers the Bonus lane (existingGogmaFixture), so the
+// user's change here is to the Skill lane.
+const SKILL_FIRST = 'スキルを優先'
 
 function unusedReplan(): ProductionPlanReplanDependencies {
   const notExpected = () => Promise.reject(new Error('replan is not expected'))
@@ -124,7 +126,7 @@ function abandonedBreaking(plan: ProductionPlan): ProductionPlan {
   return { ...plan, status: 'abandoned', abandonmentReason: 'breaking_change_approved', abandonedAt: GUARD_NOW, completedAt: null, updatedAt: GUARD_NOW }
 }
 
-const bonusFirst = () => screen.findByRole('radio', { name: BONUS_FIRST })
+const skillFirst = () => screen.findByRole('radio', { name: SKILL_FIRST })
 
 describe('BuildListPage over the real breaking-change guard', () => {
   it('saves a Plan-independent Entry change without a warning and touches no Plan state', () =>
@@ -135,7 +137,7 @@ describe('BuildListPage over the real breaking-change guard', () => {
       const other = { ...structuredClone(entry), id: 'entry.guard.independent' as BuildListEntry['id'], createdAt: '2026-09-13T00:00:00.000Z' }
       await database.buildListEntries.put(other)
       renderPage(deps)
-      const radios = await screen.findAllByRole('radio', { name: BONUS_FIRST })
+      const radios = await screen.findAllByRole('radio', { name: SKILL_FIRST })
       expect(radios).toHaveLength(2)
       const before = await dump(database)
 
@@ -144,7 +146,7 @@ describe('BuildListPage over the real breaking-change guard', () => {
 
       expect(await screen.findByText('途中採用する状態と改善優先を更新しました。生産計画を再作成してください。')).toBeInTheDocument()
       expect(screen.queryByRole('dialog')).toBeNull()
-      expect((await stored<BuildListEntry>(database.buildListEntries, other.id)).intermediateStateSelection?.improvementPreference).toBe('bonus_first')
+      expect((await stored<BuildListEntry>(database.buildListEntries, other.id)).intermediateStateSelection?.improvementPreference).toBe('skill_first')
       const after = await dump(database)
       expect(after.productionPlans).toEqual(before.productionPlans)
       expect(after.executionSavePoints).toEqual(before.executionSavePoints)
@@ -158,10 +160,10 @@ describe('BuildListPage over the real breaking-change guard', () => {
       const user = userEvent.setup()
       const { deps } = await started(database, { confirmedSteps: 1 })
       renderPage(deps)
-      await bonusFirst()
+      await skillFirst()
       const before = await dump(database)
 
-      await user.click(await bonusFirst())
+      await user.click(await skillFirst())
       const warning = within(await screen.findByRole('dialog', WARNING))
       expect(warning.getByText('生産計画が使用する作成リスト項目が変わります')).toBeInTheDocument()
       expect(await dump(database)).toEqual(before)
@@ -169,8 +171,8 @@ describe('BuildListPage over the real breaking-change guard', () => {
 
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
       expect(await dump(database)).toEqual(before)
-      expect(await bonusFirst()).not.toBeChecked()
-      expect(screen.getByRole('radio', { name: '生産計画に任せる' })).toBeChecked()
+      expect(await skillFirst()).not.toBeChecked()
+      expect(screen.getByRole('radio', { name: '復元ボーナスを優先' })).toBeChecked()
     }))
 
   it('approves without a save point choice: the change, the abandonment and the in-progress release are one save', () =>
@@ -183,13 +185,13 @@ describe('BuildListPage over the real breaking-change guard', () => {
       expect(await screen.findByRole('heading', { name: '現在地点からの再計画' })).toBeInTheDocument()
       const before = await dump(database)
 
-      await user.click(await bonusFirst())
+      await user.click(await skillFirst())
       const warning = within(await screen.findByRole('dialog', WARNING))
       expect(warning.queryByText(/最後のゲーム内セーブ地点/)).toBeNull()
       await user.click(warning.getByRole('button', { name: '生産計画を破棄して保存' }))
 
       expect(await screen.findByText('途中採用する状態と改善優先を更新し、実行中の生産計画を破棄しました。生産計画を再作成してください。')).toBeInTheDocument()
-      expect((await stored<BuildListEntry>(database.buildListEntries, ENTRY_ID)).intermediateStateSelection?.improvementPreference).toBe('bonus_first')
+      expect((await stored<BuildListEntry>(database.buildListEntries, ENTRY_ID)).intermediateStateSelection?.improvementPreference).toBe('skill_first')
       expect(await currentPlan(database, fixture.plan)).toEqual(abandonedBreaking(plan))
       expect(await stored<OwnedWeapon>(database.ownedWeapons, SOURCE_ID)).toMatchObject({ executionInProgress: null })
       expect(await database.executionHistory.toArray()).toEqual(before.executionHistory)
@@ -197,7 +199,7 @@ describe('BuildListPage over the real breaking-change guard', () => {
       // The page re-reads: no Plan runs any more, so the ordinary Planner entry returns.
       expect(await screen.findByRole('button', { name: '生産計画を作成' })).toBeInTheDocument()
       expect(screen.queryByRole('heading', { name: '現在地点からの再計画' })).toBeNull()
-      await waitFor(() => expect(screen.getByRole('radio', { name: BONUS_FIRST })).toBeChecked())
+      await waitFor(() => expect(screen.getByRole('radio', { name: SKILL_FIRST })).toBeChecked())
     }))
 
   it('asks the save point choice and keeps the current state with the recorded token', () =>
@@ -206,7 +208,7 @@ describe('BuildListPage over the real breaking-change guard', () => {
       const { fixture, deps, savePoint } = await started(database, { savePoint: true, confirmedSteps: 1 })
       const plan = await currentPlan(database, fixture.plan)
       renderPage(deps)
-      await user.click(await bonusFirst())
+      await user.click(await skillFirst())
       await user.click(within(await screen.findByRole('dialog', WARNING)).getByRole('button', { name: '生産計画を破棄して保存' }))
 
       const choice = within(await screen.findByRole('dialog', WARNING))
@@ -217,7 +219,7 @@ describe('BuildListPage over the real breaking-change guard', () => {
       expect(await screen.findByText(/実行中の生産計画を破棄しました/)).toBeInTheDocument()
       expect(await currentPlan(database, fixture.plan)).toEqual(abandonedBreaking(plan))
       expect((await currentPlan(database, fixture.plan)).currentStepId).toBe(stepOf(fixture.plan, 1).id)
-      expect((await stored<BuildListEntry>(database.buildListEntries, ENTRY_ID)).intermediateStateSelection?.improvementPreference).toBe('bonus_first')
+      expect((await stored<BuildListEntry>(database.buildListEntries, ENTRY_ID)).intermediateStateSelection?.improvementPreference).toBe('skill_first')
       expect(await database.executionSavePoints.count()).toBe(0)
       expect(await database.executionHistory.count()).toBe(1)
       expect(savePoint).not.toBeNull()
@@ -231,7 +233,7 @@ describe('BuildListPage over the real breaking-change guard', () => {
       const snapshotSource = savePoint!.ownedWeapons.find(({ id }) => id === SOURCE_ID) as OwnedWeapon
       expect(confirmedSource.restorationBonuses).not.toEqual(snapshotSource.restorationBonuses)
       renderPage(deps)
-      await user.click(await bonusFirst())
+      await user.click(await skillFirst())
       await user.click(within(await screen.findByRole('dialog', WARNING)).getByRole('button', { name: '生産計画を破棄して保存' }))
       await user.click(within(await screen.findByRole('dialog', WARNING)).getByRole('button', { name: '最後のゲーム内セーブ地点へ戻す' }))
 
@@ -246,7 +248,7 @@ describe('BuildListPage over the real breaking-change guard', () => {
       // Nothing of the weapon was in progress at the save point, so the restored body is the snapshot's.
       expect(await stored<OwnedWeapon>(database.ownedWeapons, SOURCE_ID)).toEqual(snapshotSource)
       expect(await stored<RngState>(database.rngState, 'current')).toEqual(savePoint!.rngState)
-      expect((await stored<BuildListEntry>(database.buildListEntries, ENTRY_ID)).intermediateStateSelection?.improvementPreference).toBe('bonus_first')
+      expect((await stored<BuildListEntry>(database.buildListEntries, ENTRY_ID)).intermediateStateSelection?.improvementPreference).toBe('skill_first')
       expect(await currentPlan(database, fixture.plan)).toEqual(abandonedBreaking(savePoint!.productionPlan))
       expect(await database.executionHistory.count()).toBe(0)
       expect(await database.executionSavePoints.count()).toBe(0)
@@ -263,11 +265,11 @@ describe('BuildListPage over the real breaking-change guard', () => {
       renderPage(deps)
       const before = await dump(database)
 
-      await user.click(await bonusFirst())
+      await user.click(await skillFirst())
 
       expect(await screen.findByText('途中採用する状態と改善優先を更新しました。生産計画を再作成してください。')).toBeInTheDocument()
       expect(screen.queryByRole('dialog')).toBeNull()
-      expect((await stored<BuildListEntry>(database.buildListEntries, ENTRY_ID)).intermediateStateSelection?.improvementPreference).toBe('bonus_first')
+      expect((await stored<BuildListEntry>(database.buildListEntries, ENTRY_ID)).intermediateStateSelection?.improvementPreference).toBe('skill_first')
       expect(await currentPlan(database, fixture.plan)).toEqual(plan)
       const after = await dump(database)
       expect(after.executionSavePoints).toEqual(before.executionSavePoints)
@@ -280,7 +282,7 @@ describe('BuildListPage over the real breaking-change guard', () => {
       const user = userEvent.setup()
       const { fixture, execution, deps } = await started(database)
       renderPage(deps)
-      await user.click(await bonusFirst())
+      await user.click(await skillFirst())
       await screen.findByRole('dialog', WARNING)
       // Another tab confirms a Step while the warning is open.
       await confirmCurrent(execution, database, fixture.plan)

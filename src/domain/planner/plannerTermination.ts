@@ -19,7 +19,7 @@ import type {
  * affordable expansion happened to be the one that completed it.
  */
 
-/** True when this Beam Search may become an executable ProductionPlan. */
+/** True when this full Planner run may become an executable ProductionPlan. */
 export function isPlannerSearchResultUsable(
   termination: PlannerSearchTermination,
 ): boolean {

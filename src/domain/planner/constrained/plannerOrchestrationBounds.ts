@@ -27,14 +27,15 @@ export interface PlannerOrchestrationBounds {
   /** Generated BuildListEntries adopted into the final augmented PlannerInput. */
   maxGeneratedBuildListEntries: number
   /**
-   * Full `runPlannerBeamSearch()` executions started by B8 orchestration.
+   * Full Planner runs (the Production deterministic scheduler since Issue
+   * #103 Phase C) started by B8 orchestration.
    *
-   * It counts the first ordinary Planner full Beam Search, every Candidate
-   * trial's full Beam Search, and every runtime-unsupported retry Beam Search
-   * performed inside Production Plan generation. It does not count
+   * It counts the first ordinary full Planner run, every Candidate trial's
+   * full Planner run, and every runtime-unsupported retry run performed inside
+   * Production Plan generation. It does not count
    * `preparePlannerInitialContext()`, the initial conflict preflight, conflict
    * context construction, materialization, or Candidate enumeration, none of
-   * which run a Beam Search.
+   * which is a full Planner run.
    */
   maxPlannerReruns: number
 }

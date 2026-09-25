@@ -170,12 +170,14 @@ describe('Production plan generation', () => {
     expect(plan?.id).toBe('plan.fixed.1')
     expect(plan?.status).toBe('draft')
     // The internal reserve is never a Step: completion rides on the last
-    // physical Step (PLANNER_SPEC 16.3).
+    // physical Step (PLANNER_SPEC 16.3). With both lanes safe after the
+    // conversion, the deterministic scheduler's stable stream order runs the
+    // Skill lane before the Bonus lane (PLANNER_SPEC 7.3, key 6).
     expect(plan?.steps.map(({ operationType }) => operationType)).toEqual([
       'create_normal_artian',
       'convert_normal_to_gogma',
-      'reset_bonuses',
       'reset_skills',
+      'reset_bonuses',
     ])
     expect(plan?.steps.map(({ order }) => order)).toEqual([1, 2, 3, 4])
     expect(plan?.steps.map(({ id }) => id)).toEqual([
@@ -418,11 +420,14 @@ describe('Production plan generation', () => {
       kind: 'protected_weapon_required',
     }))
   })
-  it('does not reject in-progress or undecided Entries in a partial Plan', async () => {
+  it('rejects neither the in-progress Entry nor anything but the provisional conflict loser in a partial Plan', async () => {
     const { input, dependencies } = fixture()
-    // The undecided Entry belongs to a second, identical Target: one Target
+    // The second Entry belongs to a second, identical Target: one Target
     // never holds two Entries in a full Planner run (`docs/PLANNER_SPEC.md`
-    // 4.1 / 9.2.18).
+    // 4.1 / 9.2.18). Its identical Route collides with the first one, so the
+    // deterministic scheduler's Route commitment decides it before scheduling
+    // (the provisional outcome, PLANNER_SPEC 7): it is the loser, recorded as a
+    // `resource_conflict` even though the Plan is partial.
     const secondTarget = {
       ...structuredClone(input.targetWeapons[0]),
       id: 'target.fixture.undecided' as never,
@@ -439,12 +444,21 @@ describe('Production plan generation', () => {
     expect(plan?.steps).toHaveLength(1)
     expect(plan?.steps[0].operationType).toBe('create_normal_artian')
     expect(result.warnings.map(({ kind }) => kind)).toContain('max_steps_reached')
+    expect(result.termination.status).toBe('incomplete')
     const rejectedIds = plan?.rejectedBuildListEntries.map(({ buildListEntryId }) => buildListEntryId) ?? []
     expect(rejectedIds).not.toContain(plan?.steps[0].buildListEntryId)
-    expect(rejectedIds).not.toContain(undecided.id)
+    expect(result.conflicts.length).toBeGreaterThan(0)
+    expect(result.conflicts.every(({ buildListEntryIds, selectedBuildListEntryId }) =>
+      buildListEntryIds.includes(undecided.id) && selectedBuildListEntryId === null,
+    )).toBe(true)
+    // Never already_satisfied / longer_route / dominated_by_better_candidate
+    // for a partial Plan: only the conflict outcome.
+    expect(plan?.rejectedBuildListEntries).toEqual([
+      expect.objectContaining({ buildListEntryId: undecided.id, reason: 'resource_conflict' }),
+    ])
   })
 
-  it('returns no Plan and consumes no finalization IDs or clock value when Beam Search is cancelled', async () => {
+  it('returns no Plan and consumes no finalization IDs or clock value when the Planner run is cancelled', async () => {
     const { input, dependencies } = fixture()
     let clockCalls = 0
     let planIdCalls = 0

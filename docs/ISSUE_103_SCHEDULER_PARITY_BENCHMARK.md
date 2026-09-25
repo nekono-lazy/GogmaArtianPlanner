@@ -628,3 +628,15 @@ fast-forwarded 3,098（bonus 2,213 / skill 885）、deadlock / stall / precondit
   `production-rng:c5-e7`、Master `dataVersion`
 - Beam Search、`fastForwardPlannerRouteProgress()` / `nextPlannerLaneUnits()` / Trace Replayの意味、canonical orderingの
   key順、weapon switch key、暫定帰結、deadlock / stall heuristic、`PlannerOptions` 既定値、Candidate Search、RNG
+
+## 12. Phase C: Production routing切替（追記）
+
+本章は追記であり、1〜11章の計測値・判定は当時の記録としてそのまま保持する。
+
+Phase C（2026-09-25）で `createProductionPlanWithObserver()` のfull Planner runを
+`runPlannerDeterministicSchedule()` へ切り替え、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を14へ更新した
+（[ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md) 17章 Phase C）。
+scheduler semanticsは11章の計測時点から変更していないため、representative-35の実Browser計測は再実施していない。
+parity harness、scheduler instrumentation、Browser benchmark（`strategy = beam` / `scheduler`）は維持しており、
+Beam Searchはbenchmark / parity / oracleとして引き続き直接実行できる。11.7の「変更していないもの」のうち
+Production routingとCalculation Context schemaはPhase Cで変更された。

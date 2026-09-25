@@ -1024,7 +1024,7 @@ export function ProductionPlanPage({
         return
       }
       // The same fail-closed boundary as the Build List (PLANNER_SPEC 7.2.1):
-      // a Plan calculated from a Beam Search that a `PlannerOptions` bound
+      // a Plan calculated from a full Planner run that a `PlannerOptions` bound
       // truncated is never saved and never opened. The typed termination
       // decides that, never a warning message.
       if (result.termination.status === 'incomplete') {
