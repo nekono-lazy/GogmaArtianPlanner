@@ -23,12 +23,16 @@ import { useProductionPlanReplanPreview } from '../components/execution/useProdu
 import { CandidateCard } from '../components/search/CandidateCard'
 import {
   createPlannerCompletedTargetsText,
-  createPlannerExpandedStatesText,
   createPlannerReachedLimitMessages,
   plannerIncompleteSearchTitle,
-  plannerOptionFields,
-  plannerOptionInvalidMessage,
 } from '../components/planner/plannerSearchLimitPresentation'
+import {
+  plannerOptionInvalidMessage,
+  productionPlannerDetailSettingsDescription,
+  productionPlannerMaxPlanStepsField,
+  productionPlannerRunningNote,
+  productionPlannerRunningTitles,
+} from '../components/planner/productionPlannerSettingsPresentation'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import type { MasterDataRoot } from '../domain/master/masterTypes'
 import type {
@@ -45,7 +49,6 @@ import type {
   PlannerInput,
   PlannerOptions,
   PlannerOrchestrationResult,
-  PlannerProgress,
   PlannerSearchTermination,
   PlannerWarning,
 } from '../domain/planner'
@@ -192,21 +195,23 @@ const unavailableReplanDependencies: ProductionPlanReplanDependencies = {
 }
 
 /**
- * The Build List detail settings hold raw strings, so an in-progress or invalid
- * entry stays visible instead of being silently coerced.
+ * The Build List detail settings hold the raw `maxPlanSteps` string, so an
+ * in-progress or invalid entry stays visible instead of being silently coerced.
  *
- * A `PlannerOptions` value is only produced when every field is a positive
- * integer, so `NaN`, `0`, a negative number, a fraction and an empty field can
- * never reach `PlannerInput.options` (UI_FLOW 10.0).
+ * `maxPlanSteps` is the only Production Planner bound the user edits (Issue
+ * #103 Phase D-1). A `PlannerOptions` value is only produced when it is a
+ * positive integer, so `NaN`, `0`, a negative number, a fraction and an empty
+ * field can never reach `PlannerInput.options` (UI_FLOW 10.0). `beamWidth` and
+ * `maxExpandedStates` are not user input: the legacy `PlannerOptions` shape
+ * still carries them until Phase D-2, so they come from `defaultPlannerOptions`
+ * unchanged, and the Production scheduler reads neither.
  */
-type PlannerOptionInputs = Record<keyof PlannerOptions, string>
+interface PlannerOptionInputs {
+  maxPlanSteps: string
+}
 
 function createPlannerOptionInputs(options: PlannerOptions): PlannerOptionInputs {
-  return {
-    maxPlanSteps: String(options.maxPlanSteps),
-    beamWidth: String(options.beamWidth),
-    maxExpandedStates: String(options.maxExpandedStates),
-  }
+  return { maxPlanSteps: String(options.maxPlanSteps) }
 }
 
 function parsePlannerOptionValue(raw: string): number | null {
@@ -218,11 +223,7 @@ function parsePlannerOptionValue(raw: string): number | null {
 
 function parsePlannerOptions(inputs: PlannerOptionInputs): PlannerOptions | null {
   const maxPlanSteps = parsePlannerOptionValue(inputs.maxPlanSteps)
-  const beamWidth = parsePlannerOptionValue(inputs.beamWidth)
-  const maxExpandedStates = parsePlannerOptionValue(inputs.maxExpandedStates)
-  return maxPlanSteps === null || beamWidth === null || maxExpandedStates === null
-    ? null
-    : { maxPlanSteps, beamWidth, maxExpandedStates }
+  return maxPlanSteps === null ? null : { ...defaultPlannerOptions, maxPlanSteps }
 }
 
 /**
@@ -483,7 +484,6 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
   const [ownedWeapons, setOwnedWeapons] = useState<OwnedWeapon[]>([])
   const [loading, setLoading] = useState(dependencies !== undefined)
   const [planning, setPlanning] = useState(false)
-  const [progress, setProgress] = useState<PlannerProgress | null>(null)
   const [warnings, setWarnings] = useState<PlannerWarning[]>([])
   const [optionInputs, setOptionInputs] = useState<PlannerOptionInputs>(() =>
     createPlannerOptionInputs(defaultPlannerOptions),
@@ -610,10 +610,6 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
     const requestId = globalThis.crypto?.randomUUID?.() ?? `planner-${Date.now()}`
     activeRequestRef.current = requestId
     setPlanning(true)
-    setProgress({
-      expandedStates: 0,
-      maxExpandedStates: plannerOptions.maxExpandedStates,
-    })
     setWarnings([])
     setPlannerNotice(null)
     setPlannerError(null)
@@ -635,15 +631,13 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
       }
       // B8-D2b: the Application caller is what decides to pass the Production
       // orchestration bounds. The Worker Client applies no default of its own.
+      // No progress callback: the running state is indeterminate (UI_FLOW
+      // 10.0), because `PlannerProgress.maxExpandedStates` is not a
+      // completion denominator of the Production scheduler.
       const result = await client.createConstrainedPlan(
         requestId,
         input,
         defaultPlannerOrchestrationBounds,
-        {
-          onProgress: (nextProgress) => {
-            if (activeRequestRef.current === requestId) setProgress(nextProgress)
-          },
-        },
       )
       if (activeRequestRef.current !== requestId) return
       setWarnings(result.warnings)
@@ -813,41 +807,31 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
   const loaded = !loading && loadError === null
   // The Planner bounds the user reviews. They reach the ordinary Planner run
   // and the replan Preview alike as `PlannerInput.options`.
+  const maxPlanStepsInvalid = plannerOptions === null
   const plannerDetailSettings = (
     <DisclosureAccordion title="詳細設定" headingLevel="h3">
       <Stack spacing={1.5}>
         <Typography variant="body2" color="text.secondary">
-          Plannerの実行上限です。3項目とも1以上の整数だけが有効で、この画面を再読み込みすると既定値へ戻ります。
+          {productionPlannerDetailSettingsDescription}
         </Typography>
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(3, minmax(0, 1fr))' },
-            gap: 1.5,
-          }}
-        >
-          {plannerOptionFields.map(({ key, label, helperText }) => {
-            const invalid = parsePlannerOptionValue(optionInputs[key]) === null
-            return (
-              <TextField
-                key={key}
-                fullWidth
-                label={label}
-                type="number"
-                value={optionInputs[key]}
-                error={invalid}
-                helperText={invalid ? plannerOptionInvalidMessage : helperText}
-                onChange={(event) =>
-                  setOptionInputs((current) => ({
-                    ...current,
-                    [key]: event.target.value,
-                  }))
-                }
-                slotProps={{ htmlInput: { min: 1, step: 1 } }}
-              />
-            )
-          })}
-        </Box>
+        {/* One field only (Issue #103 Phase D-1): the Production scheduler's
+            safety bound. Its width is capped on wide screens so the helper
+            text keeps a readable line length. */}
+        <TextField
+          fullWidth
+          label={productionPlannerMaxPlanStepsField.label}
+          type="number"
+          value={optionInputs.maxPlanSteps}
+          error={maxPlanStepsInvalid}
+          helperText={
+            maxPlanStepsInvalid
+              ? plannerOptionInvalidMessage
+              : productionPlannerMaxPlanStepsField.helperText
+          }
+          onChange={(event) => setOptionInputs({ maxPlanSteps: event.target.value })}
+          slotProps={{ htmlInput: { min: 1, step: 1 } }}
+          sx={{ maxWidth: { md: 560 } }}
+        />
         <Button
           variant="outlined"
           onClick={() =>
@@ -860,11 +844,6 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
       </Stack>
     </DisclosureAccordion>
   )
-  const progressRatio =
-    progress && progress.maxExpandedStates > 0
-      ? Math.min(100, (progress.expandedStates / progress.maxExpandedStates) * 100)
-      : 0
-
   return (
     <PageShell
       title="ビルドリスト"
@@ -1070,7 +1049,7 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
             )}
             {plannerDetailSettings}
 
-            {planning && progress && (
+            {planning && (
               <Paper
                 component="section"
                 variant="outlined"
@@ -1080,23 +1059,15 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
                 sx={{ p: { xs: 1.5, md: 2 }, minWidth: 0 }}
               >
                 <Stack spacing={1.5}>
-                  <Typography
-                    id={progressHeadingId}
-                    component="h3"
-                    variant="h3"
-                    className="tabular-nums"
-                  >
-                    計画中 {progress.expandedStates} / {progress.maxExpandedStates}
+                  <Typography id={progressHeadingId} component="h3" variant="h3">
+                    {productionPlannerRunningTitles.plan}
                   </Typography>
-                  {/* `maxExpandedStates` is a known bound, so the Planner
-                      progress is determinate (UI_FLOW 10.0). */}
-                  <LinearProgress
-                    aria-label="生産計画の作成の進捗"
-                    variant="determinate"
-                    value={progressRatio}
-                  />
+                  {/* Indeterminate (UI_FLOW 10.0, Issue #103 Phase D-1): no
+                      authority knows the final Step count in advance, and
+                      `maxExpandedStates` is not a Production bound. */}
+                  <LinearProgress aria-label="生産計画の作成中" variant="indeterminate" />
                   <Typography variant="caption" color="text.secondary">
-                    探索状態数 / 最大探索状態数
+                    {productionPlannerRunningNote}
                   </Typography>
                   <Button
                     variant="outlined"
@@ -1116,9 +1087,6 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
                   {createPlannerReachedLimitMessages(incompleteSearch).map((message) => (
                     <Typography variant="body2" key={message}>{message}</Typography>
                   ))}
-                  <Typography variant="body2" className="tabular-nums">
-                    {createPlannerExpandedStatesText(incompleteSearch)}
-                  </Typography>
                   <Typography variant="body2" className="tabular-nums">
                     {createPlannerCompletedTargetsText(incompleteSearch)}
                   </Typography>

@@ -307,18 +307,42 @@ describe('Planner search termination', () => {
     expect(partial.termination.completedTargetCount).toBeLessThan(2)
   })
 
-  it('carries the Beam Search termination out through Production Plan generation', async () => {
+  it('carries the scheduler termination out through Production Plan generation', async () => {
     const { input, dependencies } = scenario()
-    input.options = { maxPlanSteps: 300, beamWidth: 50, maxExpandedStates: 2 }
+    input.options = { maxPlanSteps: 1, beamWidth: 50, maxExpandedStates: 10_000 }
     const truncated = await createProductionPlan(input, dependencies)
 
     expect(truncated.termination.status).toBe('incomplete')
-    expect(truncated.termination.reachedLimits).toEqual(['max_expanded_states'])
+    expect(truncated.termination.reachedLimits).toEqual(['max_plan_steps'])
 
     const { input: fullInput, dependencies: fullDependencies } = scenario()
     const completed = await createProductionPlan(fullInput, fullDependencies)
     expect(completed.plan).not.toBeNull()
     expect(completed.termination.status).toBe('completed')
     expect(completed.termination.completedTargetCount).toBe(2)
+  })
+
+  /**
+   * Phase D-1: Production Plan generation runs the deterministic scheduler,
+   * which never stops on `maxExpandedStates`, while the Beam Search oracle
+   * still does on the very same input.
+   */
+  it('never reports max_expanded_states from Production Plan generation', async () => {
+    const { input, dependencies } = scenario()
+    input.options = { maxPlanSteps: 1000, beamWidth: 50, maxExpandedStates: 1 }
+    const production = await createProductionPlan(input, dependencies)
+    expect(production.plan).not.toBeNull()
+    expect(production.termination).toMatchObject({ status: 'completed', reachedLimits: [] })
+    expect(production.warnings.map(({ kind }) => kind)).not.toContain(
+      'max_expanded_states_reached',
+    )
+
+    const oracle = scenario()
+    oracle.input.options = { maxPlanSteps: 1000, beamWidth: 50, maxExpandedStates: 1 }
+    const beam = await runPlannerBeamSearch(oracle.input, oracle.dependencies)
+    expect(beam.termination).toMatchObject({
+      status: 'incomplete',
+      reachedLimits: ['max_expanded_states'],
+    })
   })
 })

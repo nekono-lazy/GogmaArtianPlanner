@@ -17,6 +17,7 @@ import {
   ProductionPlanContent,
 } from '../components/planner/ProductionPlanContent'
 import { ProductionPlanWhatIfComparison } from '../components/planner/ProductionPlanWhatIfComparison'
+import { productionPlannerRunningTitles } from '../components/planner/productionPlannerSettingsPresentation'
 import { PlanExecutionEntry, type PlanStartPreviewState } from '../components/execution/PlanExecutionEntry'
 import { executionErrorMessage, savePointPositionLabel } from '../components/execution/executionStepPresentation'
 import { PlanBreakingChangeDialog } from '../components/execution/PlanBreakingChangeDialog'
@@ -43,7 +44,6 @@ import {
   defaultPlannerWhatIfBounds,
   type PlannerOrchestrationResult,
   type PlannerInput,
-  type PlannerProgress,
   type PlannerWhatIfCalculationResult,
 } from '../domain/planner'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../domain/rng/production/productionRngEngine'
@@ -209,10 +209,7 @@ interface WhatIfTargetIdentity {
 
 type WhatIfUiState =
   | { status: 'idle' }
-  | (WhatIfTargetIdentity & {
-      status: 'loading'
-      progress: PlannerProgress | null
-    })
+  | (WhatIfTargetIdentity & { status: 'loading' })
   | (WhatIfTargetIdentity & {
       status: 'completed'
       result: Extract<PlannerWhatIfCalculationResult, { status: 'completed' }>
@@ -230,7 +227,7 @@ type WhatIfUiState =
 
 type ReplanUiState =
   | { status: 'idle' }
-  | { status: 'loading'; progress: PlannerProgress | null }
+  | { status: 'loading' }
   | { status: 'saving' }
   | { status: 'failure'; message: string }
   | { status: 'notice'; message: string }
@@ -806,7 +803,6 @@ export function ProductionPlanPage({
       status: 'loading',
       conflictId,
       buildListEntryId,
-      progress: null,
     })
 
     try {
@@ -870,21 +866,8 @@ export function ProductionPlanPage({
           },
           bounds: { ...defaultPlannerWhatIfBounds },
         },
-        {
-          onProgress: (progress) => {
-            if (
-              isCurrentAction() &&
-              activeWorkerRequestRef.current === whatIfRequestId
-            ) {
-              setWhatIfState({
-                status: 'loading',
-                conflictId,
-                buildListEntryId,
-                progress,
-              })
-            }
-          },
-        },
+        // No progress callback: the comparison is shown as indeterminate
+        // (UI_FLOW 10.0, Issue #103 Phase D-1).
       )
       if (
         !isCurrentAction() ||
@@ -960,7 +943,7 @@ export function ProductionPlanPage({
       selectionActionIdentityRef.current === actionIdentity &&
       lifecycleIdentityRef.current === lifecycleIdentity &&
       clientRef.current === client
-    setReplanState({ status: 'loading', progress: null })
+    setReplanState({ status: 'loading' })
 
     try {
       const calculationContext = createPlannerCalculationContext(
@@ -1003,13 +986,8 @@ export function ProductionPlanPage({
         requestId,
         mergedInput,
         defaultPlannerOrchestrationBounds,
-        {
-          onProgress: (progress) => {
-            if (isCurrentAction() && activeWorkerRequestRef.current === requestId) {
-              setReplanState({ status: 'loading', progress })
-            }
-          },
-        },
+        // No progress callback: the recalculation is shown as indeterminate
+        // (UI_FLOW 10.0, Issue #103 Phase D-1).
       )
       if (!isCurrentAction() || activeWorkerRequestRef.current !== requestId) return
       activeWorkerRequestRef.current = null
@@ -1300,20 +1278,10 @@ export function ProductionPlanPage({
                     sx={{ p: { xs: 1.5, md: 2 } }}
                   >
                     <Stack spacing={1.5}>
-                      <Typography id={replanHeadingId} component="h3" variant="h3" className="tabular-nums">
-                        {replanState.progress
-                          ? `再計算中 ${replanState.progress.expandedStates} / ${replanState.progress.maxExpandedStates}`
-                          : '再計算中'}
+                      <Typography id={replanHeadingId} component="h3" variant="h3">
+                        {productionPlannerRunningTitles.recalculation}
                       </Typography>
-                      <LinearProgress
-                        aria-label="Planner再計算の進捗"
-                        variant={replanState.progress ? 'determinate' : 'indeterminate'}
-                        value={replanState.progress
-                          ? replanState.progress.maxExpandedStates > 0
-                            ? replanState.progress.expandedStates / replanState.progress.maxExpandedStates * 100
-                            : 0
-                          : undefined}
-                      />
+                      <LinearProgress aria-label="Planner再計算中" variant="indeterminate" />
                       <Button
                         variant="outlined"
                         onClick={cancelReplanning}
@@ -1428,25 +1396,10 @@ export function ProductionPlanPage({
                               aria-live="polite"
                               sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5 }}
                             >
-                              <Typography variant="body2" className="tabular-nums" sx={{ fontWeight: 600 }}>
-                                {whatIfState.progress
-                                  ? `比較中 ${whatIfState.progress.expandedStates} / ${whatIfState.progress.maxExpandedStates}`
-                                  : '比較中'}
+                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                {productionPlannerRunningTitles.whatIf}
                               </Typography>
-                              <LinearProgress
-                                aria-label="what-if比較の進捗"
-                                variant={
-                                  whatIfState.progress
-                                    ? 'determinate'
-                                    : 'indeterminate'
-                                }
-                                value={whatIfState.progress
-                                  ? whatIfState.progress.maxExpandedStates > 0
-                                    ? whatIfState.progress.expandedStates /
-                                      whatIfState.progress.maxExpandedStates * 100
-                                    : 0
-                                  : undefined}
-                              />
+                              <LinearProgress aria-label="what-if比較中" variant="indeterminate" />
                               <Button
                                 variant="outlined"
                                 onClick={cancelWhatIfComparison}

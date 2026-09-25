@@ -249,10 +249,10 @@ describe('BuildListPage replan entry', () => {
     const user = userEvent.setup()
     const { router } = renderPage(deps)
 
-    // The reviewed detail settings are the Beam Search bounds of the Preview.
-    const maxStates = await screen.findByLabelText('最大探索状態数')
-    await user.clear(maxStates)
-    await user.type(maxStates, '123')
+    // The reviewed detail setting is the Planner bound of the Preview.
+    const maxSteps = await screen.findByLabelText('最大計画ステップ数')
+    await user.clear(maxSteps)
+    await user.type(maxSteps, '1234')
     await user.click(screen.getByRole('button', { name: START }))
 
     expect(await screen.findByRole('heading', { name: PREVIEW_TITLE })).toBeInTheDocument()
@@ -260,7 +260,7 @@ describe('BuildListPage replan entry', () => {
     expect(client.createConstrainedPlan).toHaveBeenCalledOnce()
     const [, input, bounds] = vi.mocked(client.createConstrainedPlan).mock.calls[0]
     expect(bounds).toEqual(defaultPlannerOrchestrationBounds)
-    expect(input).toEqual({ ...request.plannerInput, options: { ...defaultPlannerOptions, maxExpandedStates: 123 } })
+    expect(input).toEqual({ ...request.plannerInput, options: { ...defaultPlannerOptions, maxPlanSteps: 1234 } })
     // Only the bounds differ from the runtime's own request.
     expect(input.rngState).toBe(request.plannerInput.rngState)
     expect(input.buildListEntries).toBe(request.plannerInput.buildListEntries)
@@ -284,9 +284,9 @@ describe('BuildListPage replan entry', () => {
     const { deps, replan } = dependencies()
     const user = userEvent.setup()
     renderPage(deps)
-    const maxStates = await screen.findByLabelText('最大探索状態数')
-    await user.clear(maxStates)
-    await user.type(maxStates, '0')
+    const maxSteps = await screen.findByLabelText('最大計画ステップ数')
+    await user.clear(maxSteps)
+    await user.type(maxSteps, '0')
     expect(await screen.findByText('詳細設定に無効な値があるため、再計画を試算できません。')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: START })).toBeDisabled()
     expect(replan.prepareProductionPlanReplanPreview).not.toHaveBeenCalled()

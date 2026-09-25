@@ -835,6 +835,28 @@ build-result exception became `14 -> [12, 13]`. The Worker protocol, `PlannerOpt
 actions) and `PlannerSearchTermination` are unchanged; the versions are 14 / 8 / 11
 (`RngState.schemaVersion` 2, `AppSettings.schemaVersion` 1,
 `PRODUCTION_RNG_ENGINE_VERSION` and Master `dataVersion` unchanged).
+Issue #103 Phase D-1 (the Production Planner settings and progress Presentation) split Phase D
+into D-1 and D-2 (`docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md` 14.4). The deterministic
+scheduler now stops on `maxPlanSteps` only: it never reads `maxExpandedStates` as a bound and
+never reports `max_expanded_states` / `max_expanded_states_reached` (it still counts
+`expandedStates` as a diagnostic and still sends `onProgress`), so no hidden default can stop a
+run the user allowed more Plan steps. `defaultPlannerOptions.maxPlanSteps` moved from 300 to
+**1000** because the Phase B representative fixtures need 330 / 398 scheduler actions
+(`docs/ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md`). The Build List detail settings expose
+「最大計画ステップ数」 alone (「最大探索状態数」 and 「Beam幅」 removed; the benchmark pages keep them
+for the Beam oracle), and the Build List, the replan Preview, the B10 recalculation and what-if
+show an indeterminate running state with Cancel instead of an `expandedStates / maxExpandedStates`
+ratio; the incomplete display no longer shows 「探索状態数 x / y」. No estimated total Step count
+is shown either: physical sharing, silent fast-forward, dynamic release / recommit and deadlock /
+stall drops leave no single authority for it. `PlannerOptions` (all three fields,
+`beamWidth: 50` / `maxExpandedStates: 10_000` defaults), `PlannerSearchLimitKind`,
+`PlannerSearchTermination`, the `PlannerProgress` Worker DTO and the `PlannerBeamSearchResult` name
+are unchanged until Phase D-2, and the Beam oracle keeps both bounds. Action selection, Route
+commitment and Plan projection did not change and a `maxExpandedStates`-truncated result was never
+persisted, so no stored version 14 Plan is read differently: `CURRENT_CALCULATION_APP_SCHEMA_VERSION`
+stays 14 and the versions stay 14 / 8 / 11 (`RngState.schemaVersion` 2,
+`AppSettings.schemaVersion` 1, `PRODUCTION_RNG_ENGINE_VERSION` and Master `dataVersion`
+unchanged).
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -3414,30 +3436,43 @@ Default constants:
 ```text
 beamWidth = 50
 maxExpandedStates = 10000
-maxPlanSteps = 300
+maxPlanSteps = 1000
 ```
 
-These three positive integers are the complete v1 `PlannerOptions` contract. The
-Production scheduler reads `maxPlanSteps` and `maxExpandedStates` (the number of states it
-builds, i.e. applied actions) and never reads `beamWidth`, whose value therefore never
-changes a Production Plan; `beamWidth` keeps its type, default and positive-integer
-validation until Phase D.
+These three positive integers are the complete v1 `PlannerOptions` shape. The
+Production scheduler reads `maxPlanSteps` only - its one execution bound, 1000 by
+default since Issue #103 Phase D-1 - and never reads `beamWidth` or
+`maxExpandedStates`, whose values therefore never change a Production Plan and never
+stop one (`max_expanded_states` / `max_expanded_states_reached` never come from the
+scheduler). Both stay in the type, in `defaultPlannerOptions` and in the
+positive-integer validation only as Beam Search oracle / legacy shape until Phase D-2
+separates them; never turn the hidden `maxExpandedStates` default back into a
+Production bound.
 `preferPracticalBeforeIdeal` belongs to a legacy Planner contract and is
 unsupported: the Planner has no Practical-first priority, and an input carrying
 that option is refused as a validation issue rather than accepted or ignored.
 
 They are defaults, not fixed constants: the Build List detail settings let the
-user raise any of the three for one calculation. `defaultPlannerOptions` is the
-only initial-value authority, the Application caller writes the reviewed values
-into `PlannerInput.options`, and `PlannerInput.options` stays the single Beam
-Search bound authority — no Worker Client, Worker controller, or Domain module
-substitutes a default of its own. Only positive integers reach the Planner:
-`NaN`, `0`, a negative number, a fraction, and an empty field are refused in the
-UI. No guessed upper cap is added; a long run stays cancellable through the
-existing Worker cancellation. These three settings are Build List runtime UI
-state and are not persisted to `AppSettings` or IndexedDB. They are not the B8
-orchestration bounds, `ConstrainedEnumerationBounds`, or `PlannerWhatIfBounds`,
-and none of those is exposed in this detail settings panel.
+user change `maxPlanSteps` (「最大計画ステップ数」, the only field there) for one
+calculation; `beamWidth` and `maxExpandedStates` are not user input and are filled
+from `defaultPlannerOptions` unchanged. `defaultPlannerOptions` is the only
+initial-value authority, the Application caller writes the reviewed values into
+`PlannerInput.options`, and `PlannerInput.options` stays the single Planner bound
+authority — no Worker Client, Worker controller, or Domain module substitutes a
+default of its own. Only positive integers reach the Planner: `NaN`, `0`, a
+negative number, a fraction, and an empty field are refused in the UI. No guessed
+upper cap is added; a long run stays cancellable through the existing Worker
+cancellation. The setting is Build List runtime UI state and is not persisted to
+`AppSettings` or IndexedDB. It is not the B8 orchestration bounds,
+`ConstrainedEnumerationBounds`, or `PlannerWhatIfBounds`, and none of those is
+exposed in this detail settings panel. The benchmark pages keep `beamWidth` and
+`maxExpandedStates` for the Beam oracle.
+
+A running Production Planner (Build List, replan Preview, B10 recalculation,
+what-if) is shown as indeterminate with Cancel: `PlannerProgress.maxExpandedStates`
+is never a completion denominator, and no estimated total Step count is shown,
+because physical sharing, silent fast-forward, dynamic release / recommit and
+deadlock / stall drops leave no single authority for it (`docs/UI_FLOW.md` 10.0).
 
 ### Typed Search Termination
 
@@ -4707,13 +4742,20 @@ Relevant test areas include:
   state shape validated strictly, a historical artifact with no
   `intermediateStateGroups` field still validating and rendering, and
   `ExportRoot.schemaVersion = 6`
-- Build List detail settings starting at `defaultPlannerOptions`, sending the
-  user-selected values as `PlannerInput.options`, restoring the defaults, and
-  refusing `0`, a negative number, a fraction, and an empty field
+- Build List detail settings showing 「最大計画ステップ数」 alone (no 「最大探索状態数」, no
+  「Beam幅」), starting at `defaultPlannerOptions` (1000), sending the user-selected
+  `maxPlanSteps` as `PlannerInput.options`, restoring the default, and refusing `0`,
+  a negative number, a fraction, and an empty field
+- The Production scheduler never stopping at `maxExpandedStates` (even 1) and never
+  reporting `max_expanded_states`, stopping at `maxPlanSteps = 1` as `incomplete`,
+  and completing `representative-12` / `representative-35` (330 / 398 actions) under
+  the 1000 default while the Beam oracle still stops at `maxExpandedStates`
+- No Production running state showing an `expandedStates / maxExpandedStates` ratio
+  or 「探索状態数」, and Cancel kept
 - The real user case of one 23-operation Bonus Route plus one 148-operation
   Bonus + 82-operation Skill Route reporting `incomplete` with a 24-step partial
-  at the default bounds, and producing the 232-step complete Plan once
-  `maxExpandedStates` is raised
+  under the Beam oracle's `maxExpandedStates = 10000` bound, and producing the
+  232-step complete Plan once `maxExpandedStates` is raised
 - Silent fast-forward: a skippable past unit advances Route progress only, with
   no Search Action, trace entry, progressed Entry / Target record, inventory
   effect, or route runtime output, while a required past unit fails closed

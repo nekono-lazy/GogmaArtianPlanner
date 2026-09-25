@@ -928,19 +928,20 @@ what-ifのUI / Domain semantics（`scenarioResolution`、`defaultPlannerWhatIfBo
 
 | option | 通常scheduler | 移行方針 |
 | --- | --- | --- |
-| `maxPlanSteps` | 使う。traceの長さ（reserveを含む）の安全上限。到達で `incomplete`（`max_plan_steps`） | 維持 |
-| `maxExpandedStates` | 使う。構築したstate数（14.2）の上限。到達で `incomplete`（`max_expanded_states`）。構築state数は適用action数でありtrace長以下なので、`maxExpandedStates >= maxPlanSteps` なら `maxPlanSteps` が先に効く | Phase Cは意味を保って維持。Phase DでUIからの除去を判断 |
-| `beamWidth` | 使わない（検証の「1以上の整数」は型互換のため維持） | Phase CはUI文言だけ修正。Phase DでUIと型から除去を判断 |
+| `maxPlanSteps` | 使う。traceの長さ（reserveを含む）の安全上限。到達で `incomplete`（`max_plan_steps`）。通常schedulerの唯一のbound | 維持。**Phase D-1で既定値を300から1000へ変更**。Build List詳細設定の唯一の項目 |
+| `maxExpandedStates` | **Phase D-1以降は使わない**（Phase Cまでは構築state数の上限として停止判定に使っていた）。`expandedStates` の計測は診断として続ける | **Phase D-1でscheduler停止判定とUIから除去**。Beam oracleのboundとして型に残り、型の分離はPhase D-2 |
+| `beamWidth` | 使わない（検証の「1以上の整数」は型互換のため維持） | Phase CはUI文言だけ修正。**Phase D-1でUIから除去**。型の分離はPhase D-2 |
 
 - 3項目の型、`defaultPlannerOptions`、Worker protocol、UI入力検証はPhase Cでは変更しない
+  （Phase D-1の変更は14.4）
 - 通常schedulerの停止性は `maxPlanSteps` だけで保証される（各反復でtraceが1以上伸びるか、終了する）。
   commitmentも有限反復である
 - constrained re-search / what-ifに独自のBeam用Optionは無い（12.1）
 - Build Listの「詳細設定」（UI_FLOW 10.0）: Phase Cでは項目を残し、説明文を「最大探索状態数 =
   Plannerが構築する状態数の上限」「Beam幅 = 現在の通常Plannerでは使用しない」へ改める。
   Phase Dで「最大探索状態数」「Beam幅」の除去と、必要なら `maxPlanSteps` 既定値の見直しを行う
-  （既定値300は大量Build Listで不足しやすい。commitment後の総step数は静的に分かるので根拠を持って
-  決められる）
+  （既定値300は大量Build Listで不足しやすい）。**Phase D-1で実施済み（14.4）**。
+  当初書いた「commitment後の総step数は静的に分かる」は誤りである（14.4）
 
 ### 14.2 `expandedStates`
 
@@ -954,7 +955,7 @@ what-ifのUI / Domain semantics（`scenarioResolution`、`defaultPlannerWhatIfBo
   `PlannerSearchTermination` / `PlannerProgress` の型変更を伴うためPhase Dへ回す
 - `PlannerProgress { expandedStates, maxExpandedStates }` もPhase Cでは同じ意味で送る。
   進捗バーの分母が実態より大きく見える問題は、commitment後に分かる総step数を分母にする型変更として
-  Phase Dで扱う
+  Phase Dで扱う、としていた。**Phase D-1ではこの案を採用しない**（14.4）
 
 ### 14.3 terminationの意味
 
@@ -964,7 +965,7 @@ statusと決定順序（PLANNER_SPEC 7.2.1）を変更しない。新しいstatu
 | --- | --- |
 | `cancelled` | 従来どおり |
 | `completed` | 全planning Targetが完了（required checkpoint Entryのsecureを含む、既存判定） |
-| `incomplete` | `maxPlanSteps` または `maxExpandedStates` が完成前にscheduleを打ち切った。Persistenceは従来どおり拒否 |
+| `incomplete` | `maxPlanSteps` が完成前にscheduleを打ち切った（Phase Cまでは `maxExpandedStates` でも打ち切った。Phase D-1以降は打ち切らない）。Persistenceは従来どおり拒否 |
 | `exhausted` | boundに達せずscheduleを終え、全Target完成に至らなかった。未解決競合の暫定敗者、resolutionの非選択、前提崩れ、deadlock、保護などで完成できないTargetがある |
 
 未解決Conflictで一部Targetが完成しない場合は、現行と同じく `exhausted` + `plan != null` +
@@ -976,6 +977,61 @@ Build List cardinality違反（legacy duplicate）は探索前のvalidation失�
 Beam Searchへ到達しなかったrunと同じく `exhausted` / `plan = null` / 専用warningで返す。
 
 ---
+
+
+### 14.4 Phase D-1の確定判断（Production設定 / 進捗Presentation）
+
+Phase Dは2つのPRへ分割した。
+
+```text
+Phase D-1  Production向けPlanner設定 / 進捗Presentationの整理（本節）
+Phase D-2  Beam oracle / legacy型 / naming / instrumentationの整理
+```
+
+Phase D-1の確定判断。
+
+- Build List詳細設定から「Beam幅」を削除した。通常schedulerは `beamWidth` を一切読まないので、
+  ユーザーが変更できる設定として残す意味が無い
+- Build List詳細設定から「最大探索状態数」を削除した。schedulerは成功したactionごとに
+  `trace.length` と `expandedStates` を同じだけ進めるので、`maxExpandedStates` は `maxPlanSteps` と同じ
+  種類の停止条件を重複させるだけである。停止性は `maxPlanSteps` だけで保証される（14.1）
+- 通常schedulerは `maxExpandedStates` を停止判定に使わない（`canApplyAction()` は `maxPlanSteps` だけを
+  見る）。UIから項目を消して既定値10000をhidden boundとして残すことはしない。`maxPlanSteps = 20000`
+  の計算がhiddenな `maxExpandedStates` で止まってはならないからである
+- 通常schedulerは `reachedLimits` の `max_expanded_states` と `max_expanded_states_reached` warningを
+  発生させない。`incomplete` は `max_plan_steps` だけで起きる。Beam oracleは従来どおり両方を使う
+- `maxPlanSteps` の既定値を300から1000へ変更した。Phase Bの実測でschedulerは
+  `representative-12` に330 action、`representative-35` に398 actionを要し（Browser Worker約1.4秒で自然終了、
+  [ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md](./ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md)）、300では不足する。
+  1000はPhase Bで実際に使用・検証した値である。Node testでも既定値1000で両fixtureが上限に達しないこと、
+  300では `max_plan_steps` で `incomplete` になることを固定した
+- `maxPlanSteps` は引き続きユーザーが変更でき、「1以上の整数」validationを維持し、固定上限は設けない
+- 通常画面（Build List、再計画Preview、Production Plan画面の再計算、what-if）は
+  `expandedStates / maxExpandedStates` を完了率として表示せず、indeterminateな計算中表示と
+  キャンセルを出す（UI_FLOW 10.0）。探索未完了表示の「探索状態数 x / y」も表示しない（UI_FLOW 10.1）
+- `PlannerOptions` の3 field、`defaultPlannerOptions.beamWidth` / `maxExpandedStates`、
+  `PlannerSearchLimitKind` の `max_expanded_states`、`PlannerSearchTermination.limits`、
+  `PlannerProgress` のWorker DTO、`PlannerBeamSearchResult` の名前はPhase D-2まで維持する。
+  schedulerは `expandedStates` を診断として数え続け、progress callbackも従来どおり送る
+- benchmark専用画面は `beamWidth` / `maxExpandedStates` を残す（Beam oracleを計測する開発用surface）
+- `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は14のまま据え置く。Action選択、Route commitment、
+  Plan projectionのsemanticsは変えず、`maxExpandedStates` で打ち切られた `incomplete` resultは既存の
+  Persistence契約で保存されていないので、保存済みversion 14 Planの意味は変わらない。既定値の変更は、
+  新しい計算で以前 `incomplete` だった入力をより長く計算できるようにするだけである
+  （PLANNER_SPEC 7.2.1 Calculation compatibility（Issue #103 Phase D-1））
+
+進捗の分母（14.1 / 14.2で検討した「commitment後の総step数」）について。
+
+- **Phase D-1では採用しない**
+- 理由: physical action sharing（1 actionが複数Entryを進める）、silent fast-forward（Route unitが
+  actionにならずに消える）、cross satisfactionによる動的release / recommit、deadlock / stallによる
+  Entryのdrop、runtime-unsupported rerunがあるため、Route unit数の単純合計やCandidateの
+  `estimatedOperationCount` は実際のStep総数ではない（Trace Replayでも `estimatedOperationCount` は
+  実Step残数のauthorityではない）。「commitment後の総step数は静的に分かる」という14.1の当初の記述は誤りである
+- 正確な単一authorityを作らずに推定値をUIへ出すより、Productionが十分高速になった現状
+  （representative-35でも約1.4秒）ではindeterminate表示を採る
+- 数値progress自体をWorker DTOに残す必要があるかは、Phase D-2でWorker progress型を整理するときに
+  再判断する
 
 ## 15. Version境界
 
@@ -1293,11 +1349,33 @@ REQUIREMENTS 18へ記載済み。実装は次の順で小さく分ける。
 
 ### Phase D: UI / legacy整理
 
-- Build List詳細設定から「Beam幅」「最大探索状態数」を除去するか判断し、`PlannerOptions` /
-  `PlannerSearchTermination.limits` / `PlannerProgress` の型移行（進捗の分母をcommitment後の総step数に）
-- `maxPlanSteps` 既定値の見直し（Phase Bの計測を根拠とする）
+Phase Dは2つのPRへ分割する（14.4）。
+
+#### Phase D-1: Production設定 / 進捗Presentation（実装済み）
+
+- Build List詳細設定から「Beam幅」「最大探索状態数」を除去し、「最大計画ステップ数」だけを残した
+- 通常schedulerの停止判定から `maxExpandedStates` を外した（`maxPlanSteps` だけ）。
+  `max_expanded_states` / `max_expanded_states_reached` は通常schedulerから発生しない
+- `maxPlanSteps` 既定値を300から1000へ変更した（Phase Bの計測を根拠とする）
+- 通常画面の進捗を `expandedStates / maxExpandedStates` の比率からindeterminate表示へ変えた。
+  commitment後の総step数を分母にする案は採用しない（14.4）
+- `plannerSearchLimitPresentation.ts`（termination文言）とProduction設定 / 計算中文言
+  （`productionPlannerSettingsPresentation.ts`）を分離した
+- `CURRENT_CALCULATION_APP_SCHEMA_VERSION` 14、DB 8、Export 11、`RngState` 2、`AppSettings` 1、
+  `production-rng:c5-e7`、Master `dataVersion` はいずれも不変。Worker protocol、`PlannerOptions` /
+  `PlannerSearchTermination` / `PlannerProgress` の型、`PlannerBeamSearchResult` の名前も不変
+- 仕様改訂: REQUIREMENTS 20、PLANNER_SPEC 7 / 7.2 / 7.2.1 / 15、UI_FLOW 10.0 / 10.1 / 11.2（what-if）/ 16.4、
+  AGENTS.md（Planner Search Strategy）
+
+#### Phase D-2: Beam oracle / legacy型整理（未着手）
+
+- `PlannerOptions` / `PlannerSearchTermination.limits` / `PlannerSearchLimitKind` / `PlannerProgress` の
+  Production型とBeam oracle型の分離（`beamWidth` / `maxExpandedStates` の型レベル除去を含む）。
+  数値progressをWorker DTOに残すかの再判断
+- `PlannerBeamSearchResult` の中立名へのrename判断
 - Beam oracle、`comparePlannerSearchStates()`、semantic key、`evaluationScore` / `totalCost` /
-  `preferredSourceProgressCount`、PR #107 Beam instrumentationの削除または縮退
+  `preferredSourceProgressCount`、PR #107 Beam instrumentation、parity harness、benchmark Workerの
+  削除または縮退
 - UI変更を含む場合はUI_FLOWを同じPRで改訂する
 
 ---
@@ -1370,7 +1448,8 @@ Beam Searchに反証された（acceptance fixture「deadlock」でBeamが両Tar
 | in-flight化による他Targetの充足喪失（7.9の例外）の扱いの強化 | Phase Bのfixture結果次第 | 動的commit（6.8） |
 | 置換確認Dialog / legacy duplicate案内の具体的なPresentationと文言 | Phase 0-2（`ui-ux-pro-max`） | **確定済み**（UI_FLOW 9 / 10） |
 | Phase 0のPlanner warning kind名、Search追加APIの結果型名 | Phase 0-1 | 意味論だけ確定 |
-| Build List詳細設定、`PlannerOptions` / `PlannerProgress` の型移行、`maxPlanSteps` 既定値 | Phase D | Phase Cは型不変 |
+| Build List詳細設定、`maxPlanSteps` 既定値 | Phase D-1 | **確定済み**（14.4） |
+| `PlannerOptions` / `PlannerProgress` の型移行 | Phase D-2 | Phase D-1は型不変 |
 | B8 orchestration bounds / what-if boundsの再測定 | #101と合わせて | 現行値のまま |
-| Beam oracleとBeam専用stateの削除時期 | Phase D | test / benchmark用に残す |
-| scheduler結果型の改名（`PlannerBeamSearchResult` → 中立名） | Phase C / D | 型互換のまま |
+| Beam oracleとBeam専用stateの削除時期 | Phase D-2 | test / benchmark用に残す |
+| scheduler結果型の改名（`PlannerBeamSearchResult` → 中立名） | Phase D-2 | 型互換のまま |
