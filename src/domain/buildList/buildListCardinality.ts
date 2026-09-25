@@ -121,3 +121,16 @@ export function classifyBuildListCandidateAddition(
   }
   return { status: 'replacement_required', existingEntry }
 }
+
+/**
+ * The Targets that already hold at least one persisted BuildListEntry
+ * (`docs/UI_FLOW.md` 9 「一括検索・追加」). Registration is the existence of an
+ * Entry with that `targetWeaponId`, never a semantic Candidate match: a stale
+ * Entry and a legacy duplicate both count as registered. It decides nothing
+ * about which Entry is current; that stays `classifyBuildListCandidateAddition()`.
+ */
+export function findBuildListRegisteredTargetIds(
+  entries: readonly Pick<BuildListEntry, 'targetWeaponId'>[],
+): Set<TargetWeaponId> {
+  return new Set(entries.map(({ targetWeaponId }) => targetWeaponId))
+}

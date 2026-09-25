@@ -2083,8 +2083,10 @@ createBuildListEntry(
 
 `referencedOwnedWeaponsHash` は[DATA_MODEL.md](./DATA_MODEL.md)の正規化規則に従う。参照IDはRouteとReset Bonuses、Keep Bonuses、Reset Skills Operationから収集する。共通項目は `id`、`kind`、武器種、属性、保存中の復元ボーナス5枠順、isProtectedとし、巨戟だけシリーズスキル、グループスキルを加える。`status` はユーザー管理ラベルであり計算に影響しないため、name、memo、日時と同じく除外する。Routeに無関係なOwnedWeaponも含めない。
 
-追加方式は個別追加だけである。1 Target 1 requestが返すCandidateは
-canonical Ideal 1件以下なので、一括追加の対象がない。
+1 Target 1 requestが返すCandidateはcanonical Ideal 1件以下なので、1回の検索結果からの追加は
+個別追加である。作成リスト未登録の目標武器をまとめて検索・追加する操作（[UI_FLOW.md](./UI_FLOW.md) 9.1）は、
+この1 Target 1 requestの検索と上記の追加をTargetごとに順に繰り返すUI / Application orchestrationであり、
+Search requestの契約を変えない。
 
 追加時には、そのCandidateについてユーザーがlaneごとに選択したopportunityのIDと
 「理想品までの改善優先」を `BuildListEntry.intermediateStateSelection` として保存する。
