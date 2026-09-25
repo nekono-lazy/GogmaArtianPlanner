@@ -394,11 +394,12 @@ export interface PlannerTargetSatisfaction {
 - `createProductionPlanWithSearchRunner()` はfull runだけを差し替えられる共有実装であり、後段
   （runtime-unsupported retry、Trace Replay、execution projection、`PlanningInputSnapshot`、
   checkpoint requirement defence、`rejectedBuildListEntries`、`requiredMaterials`、termination、
-  observer）は1つである。Productionは決定的schedulerだけを渡す。test / benchmark / parity harness
-  だけがBeam Searchを注入する
+  observer）は1つである。Productionは決定的schedulerだけを渡す。test / parity harnessだけが
+  Beam Searchを注入する
 - 上限付きBeam Search（`runPlannerBeamSearch()`）はPhase C以前のProduction Plannerであり、現在は
-  **test / benchmark / parity用のoracleとしてだけ残す**。Production Planを生成しない。削除・縮退は
-  Phase Dで判断する
+  **test / parity regression用のoracleとしてだけ残す**。Production Planを生成しない。Beam / scheduler
+  parity regression（acceptance catalogue、`sanity-3`、`representative-12`）はCIで維持し、Issue #103の
+  Browser benchmark / 計測基盤はPhase D-2bで削除した（7.2.2）
 
 #### 決定的schedulerの手順
 
@@ -475,7 +476,7 @@ export interface PlannerSearchState {
 なくなったため、Practical優先の進行記録も、それを使う評価項目も廃止した。
 ```
 
-旧Beam Search（Phase C以前のProduction、現在はtest / benchmark oracle）の探索手順。
+旧Beam Search（Phase C以前のProduction、現在はtest / parity regression oracle）の探索手順。
 Production（決定的scheduler）の手順は本章冒頭である。
 
 1. 現在RNG状態と在庫から初期Stateを作成する
@@ -837,7 +838,7 @@ schedulerは成功したactionごとに `trace.length` と `expandedStates` を�
 `maxPlanSteps = 1000` は `defaultPlannerOptions` の初期値であり、Production `PlannerOptions` の
 唯一のfieldである（Issue #103 Phase D-2a）。ユーザーがBuildList画面の詳細設定で変更できるのも
 `maxPlanSteps` だけである。`beamWidth` / `maxExpandedStates` はProductionの型・既定値・validation・
-Worker request・UIのいずれにも存在せず、Beam Search oracle（test / benchmark / parity harness）
+Worker request・UIのいずれにも存在せず、Beam Search oracle（test / parity harness）
 専用contract（7.2.2）だけが持つ。
 
 ### 7.2.1 探索上限設定と typed termination
@@ -999,10 +1000,10 @@ Phase D-2a（Production型 / termination / Worker protocolの整理）も
 `AppSettings.schemaVersion`（1）、`PRODUCTION_RNG_ENGINE_VERSION`（`production-rng:c5-e7`）、
 Master `dataVersion`（4）も変更しない。
 
-### 7.2.2 Beam Search oracle contract（test / benchmark / parity専用）
+### 7.2.2 Beam Search oracle contract（test / parity regression専用）
 
 Beam Search（`runPlannerBeamSearch()`）はIssue #103 Phase C以降Productionでは使われず、
-test / benchmark / parity harnessのoracleとしてだけ残る。Phase D-2aでoracle固有の要素を
+test / parity regressionのoracleとしてだけ残る（Issue #103のBrowser benchmarkはPhase D-2bで削除済み）。Phase D-2aでoracle固有の要素を
 Production contractから分離し、`src/domain/planner/plannerBeamSearchTypes.ts` へ隔離した。
 Production codeはこのmoduleをimportしない。
 

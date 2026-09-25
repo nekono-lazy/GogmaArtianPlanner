@@ -3520,8 +3520,9 @@ upper cap is added; a long run stays cancellable through the existing Worker
 cancellation. The setting is Build List runtime UI state and is not persisted to
 `AppSettings` or IndexedDB. It is not the B8 orchestration bounds,
 `ConstrainedEnumerationBounds`, or `PlannerWhatIfBounds`, and none of those is
-exposed in this detail settings panel. The benchmark pages keep `beamWidth` and
-`maxExpandedStates` for the Beam oracle, through `PlannerBeamSearchOptions`.
+exposed in this detail settings panel. `beamWidth` and `maxExpandedStates` exist
+only in the Beam oracle's `PlannerBeamSearchOptions`, used by tests and the parity
+harness; no page exposes them (the Issue #103 benchmark page was removed in Phase D-2b).
 
 A running Production Planner (Build List, replan Preview, B10 recalculation,
 what-if) is shown as indeterminate with Cancel. The Production Planner Worker sends no

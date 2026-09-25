@@ -1107,8 +1107,8 @@ Plannerに検討させる候補集合を確認・調整する。
 Search Resultsと同じ「詳細設定」Accordionを置き、Plannerの安全上限を変更できる。
 通常Plannerは決定的scheduler（PLANNER_SPEC 7）であり、停止条件は「最大計画ステップ数」だけである
 （Issue #103 Phase D-1）。Phase D-2a以降、Production `PlannerOptions` は `maxPlanSteps` だけであり、
-「最大探索状態数」と「Beam幅」はProductionの型にも詳細設定にも存在しない（Beam Search oracleの
-benchmark画面だけが扱う。PLANNER_SPEC 7.2.2）。
+「最大探索状態数」と「Beam幅」はProductionの型にも詳細設定にも存在しない（test / parity regression用の
+Beam Search oracleの専用contractだけが扱い、それを操作する画面は無い。PLANNER_SPEC 7.2.2）。
 項目が1つでも、通常は変更不要な安全設定なので「詳細設定」Accordionの中に置き、通常画面へ常時
 露出させない。
 

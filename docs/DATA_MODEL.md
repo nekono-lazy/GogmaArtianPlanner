@@ -1748,8 +1748,8 @@ Production Planner（決定的scheduler、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7
 通常Worker request、B8 constrained re-search、B9 what-if、再計画Previewのいずれの `PlannerInput` も
 `beamWidth` / `maxExpandedStates` を持たない。
 
-Beam Search oracle（test / benchmark / parity専用、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7.2.2）の
-`beamWidth` / `maxExpandedStates` は、Production persisted / runtime modelではない別のtest / benchmark
+Beam Search oracle（test / parity regression専用、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7.2.2）の
+`beamWidth` / `maxExpandedStates` は、Production persisted / runtime modelではない別のtest / parity
 contract `PlannerBeamSearchOptions`（`PlannerOptions` + 2 field、既定値
 `defaultPlannerBeamSearchOptions = { maxPlanSteps: 1000, beamWidth: 50, maxExpandedStates: 10000 }`、
 専用validation `validatePlannerBeamSearchOptions()`）と `PlannerBeamSearchInput` だけが持つ。
