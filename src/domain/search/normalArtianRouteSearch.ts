@@ -357,7 +357,7 @@ function searchPredictedNormalRoutes(
     const start = counter.counter
     const keepLayouts = new Set<string>()
     const scheduleOffset = (offset: number): void => {
-      if (offset >= input.settings.maxNormalAdvance) return
+      if (offset >= input.maxNormalAdvance) return
       const forgeCount = offset + 1
       scheduler.queue.enqueue({
         lowerBound: forgeCount + 1,

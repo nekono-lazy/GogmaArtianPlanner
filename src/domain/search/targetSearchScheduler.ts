@@ -11,7 +11,10 @@ import {
 import { countRouteOperations } from './candidateFactory'
 import { createDeltaCross } from './deltaCross'
 import { createIncrementalBonusRetention, createIncrementalSkillRetention } from './incrementalStreamSolutions'
-import { createBaseCandidate, existingGogmaRouteKind, type RouteCompositionBase, type RouteSearchContext } from './routeSearchShared'
+import {
+  createBaseCandidate, existingGogmaRouteKind,
+  type CandidateSearchRouteContext, type RouteCompositionBase, type RouteSearchContext,
+} from './routeSearchShared'
 import { SearchWorkQueue } from './searchWorkQueue'
 import { resetSkillsOperations, skillAmendmentResults } from './skillStream'
 import {
@@ -133,9 +136,23 @@ export class TargetSearchScheduler {
   private readonly context: RouteSearchContext
   private readonly onComposition: ScheduledCompositionHandler
 
-  constructor(context: RouteSearchContext, onComposition?: ScheduledCompositionHandler) {
+  /**
+   * The ordinary Candidate Search materialization needs the ordinary request
+   * (`searchRunId`, `CalculationContext`), so only a
+   * `CandidateSearchRouteContext` may omit the handler. Any other consumer
+   * supplies its own handler and never fabricates a `CandidateSearchInput`.
+   */
+  constructor(context: CandidateSearchRouteContext)
+  constructor(context: RouteSearchContext, onComposition: ScheduledCompositionHandler)
+  constructor(context: RouteSearchContext | CandidateSearchRouteContext, onComposition?: ScheduledCompositionHandler) {
     this.context = context
-    this.onComposition = onComposition ?? ((composition) => this.materializeCandidate(composition))
+    if (onComposition) {
+      this.onComposition = onComposition
+    } else if ('searchInput' in context) {
+      this.onComposition = (composition) => this.materializeCandidate(context, composition)
+    } else {
+      throw new Error('The ordinary Candidate materialization requires a CandidateSearchRouteContext.')
+    }
   }
 
   addBase(base: ScheduledRouteBase): void {
@@ -277,9 +294,12 @@ export class TargetSearchScheduler {
   }
 
   /** The ordinary Candidate Search materialization of one composition. */
-  private materializeCandidate({ base, bonus, skill, route, cost }: ScheduledComposition): void {
+  private materializeCandidate(
+    context: CandidateSearchRouteContext,
+    { base, bonus, skill, route, cost }: ScheduledComposition,
+  ): void {
     const candidate = createBaseCandidate(
-      this.context, bonus.solution.finalBonuses, bonus.solution.restorationBonusScope,
+      context, bonus.solution.finalBonuses, bonus.solution.restorationBonusScope,
       skill.solution.seriesSkillId, skill.solution.groupSkillId,
       route,
       bonus.solution.amendmentResults,

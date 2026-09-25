@@ -3,6 +3,7 @@ import type {
   DomainValidationIssue,
   DomainValidationResult,
   TargetWeapon,
+  TargetWeaponId,
 } from '../../models/publicTypes'
 import {
   validateCalculationContext,
@@ -16,6 +17,7 @@ import {
   ConstrainedSearchError,
   type ConstrainedCandidateSearchInput,
   type ConstrainedEnumerationBounds,
+  type ConstrainedSearchOrigin,
 } from './constrainedTypes'
 
 export interface ConstrainedSearchValidationIssue {
@@ -73,8 +75,8 @@ function collect(
 }
 
 /**
- * Fails closed on an invalid Target reference, origin, bounds, or
- * CalculationContext, and returns the enumerated TargetWeapon.
+ * The origin and Target-selection issues of one Search Domain request over a
+ * `ConstrainedSearchOrigin`, plus the selected TargetWeapon when it exists.
  *
  * `origin` is documented as the Planner-start current validated snapshot, but
  * this is a public Search Domain boundary, so it re-checks the snapshot with
@@ -84,12 +86,15 @@ function collect(
  * `validateNormalArtianCounter`, `validateOwnedWeapon`, `validateTargetWeapon`,
  * `validateCalculationContext`, or `validateTargetIdealImpliesPractical`, and
  * no Master Data or persistence validation is added.
+ *
+ * Shared by the constrained enumerator (SEARCH_SPEC 5.6.7) and Planner
+ * Alternative Search (5.6.8), whose `origin` has the same meaning.
  */
-export function assertConstrainedCandidateSearchInput(
-  input: ConstrainedCandidateSearchInput,
-): TargetWeapon {
-  const issues = validateConstrainedEnumerationBounds(input.bounds)
-  const { origin } = input
+export function collectConstrainedSearchOriginIssues(
+  origin: ConstrainedSearchOrigin,
+  targetWeaponId: TargetWeaponId,
+): { issues: ConstrainedSearchValidationIssue[]; target: TargetWeapon | null } {
+  const issues: ConstrainedSearchValidationIssue[] = []
 
   const contextIssues: DomainValidationIssue[] = []
   validateCalculationContext(
@@ -113,10 +118,10 @@ export function assertConstrainedCandidateSearchInput(
       ...collect(`origin.ownedWeapons[${index}]`, validateOwnedWeapon(weapon)),
     )
   })
-  // The whole snapshot is re-checked, not just the enumerated Target, because
+  // The whole snapshot is re-checked, not just the selected Target, because
   // `ConstrainedSearchOrigin` is a public Search Domain boundary. Only the
   // structural `validateTargetWeapon()` runs for every Target; the Ideal implies
-  // Practical containment stays scoped to the enumerated Target below.
+  // Practical containment stays scoped to the selected Target below.
   origin.targetWeapons.forEach((weapon, index) => {
     issues.push(
       ...collect(`origin.targetWeapons[${index}]`, validateTargetWeapon(weapon)),
@@ -124,19 +129,19 @@ export function assertConstrainedCandidateSearchInput(
   })
 
   const target = origin.targetWeapons.find(
-    (candidate) => candidate.id === input.targetWeaponId,
+    (candidate) => candidate.id === targetWeaponId,
   )
   if (!target) {
     issues.push({
       path: 'targetWeaponId',
-      message: `TargetWeapon '${input.targetWeaponId}' is not part of the constrained search origin.`,
+      message: `TargetWeapon '${targetWeaponId}' is not part of the constrained search origin.`,
     })
   } else if (!isTargetWeaponPlanningEligible(target)) {
     issues.push({
       path: 'targetWeaponId',
       message: target.lifecycleStatus === 'active'
-        ? `TargetWeapon '${input.targetWeaponId}' is disabled.`
-        : `TargetWeapon '${input.targetWeaponId}' is completed.`,
+        ? `TargetWeapon '${targetWeaponId}' is disabled.`
+        : `TargetWeapon '${targetWeaponId}' is completed.`,
     })
   } else {
     // The structural check already ran over every Target above, so only the
@@ -147,18 +152,34 @@ export function assertConstrainedCandidateSearchInput(
     if (!containment.isValid) {
       issues.push({
         path: 'targetWeaponId',
-        message: `TargetWeapon '${input.targetWeaponId}' violates the Ideal implies Practical containment invariant: ${containment.issues
+        message: `TargetWeapon '${targetWeaponId}' violates the Ideal implies Practical containment invariant: ${containment.issues
           .map((issue) => `${issue.path}: ${issue.message}`)
           .join(' / ')}`,
       })
     }
   }
+  return { issues, target: target ?? null }
+}
 
-  if (issues.length > 0 || !target) {
+/**
+ * Fails closed on an invalid Target reference, origin, bounds, or
+ * CalculationContext, and returns the enumerated TargetWeapon.
+ */
+export function assertConstrainedCandidateSearchInput(
+  input: ConstrainedCandidateSearchInput,
+): TargetWeapon {
+  const issues = validateConstrainedEnumerationBounds(input.bounds)
+  const origin = collectConstrainedSearchOriginIssues(
+    input.origin,
+    input.targetWeaponId,
+  )
+  issues.push(...origin.issues)
+
+  if (issues.length > 0 || !origin.target) {
     throw new ConstrainedSearchError(
       'invalid_input',
       issues.map(({ path, message }) => `${path}: ${message}`).join('\n'),
     )
   }
-  return target
+  return origin.target
 }

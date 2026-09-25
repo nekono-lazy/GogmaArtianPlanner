@@ -12,10 +12,11 @@ import { createTargetSkillStream } from './skillStream'
 import { createTargetBonusStream } from './bonusStream'
 import {
   bonusStreamInputForSearch,
+  routeSearchInputForSearch,
   skillStreamInputForSearch,
 } from './searchStreamInputs'
 import { createSearchExecutionContext } from './searchExecution'
-import { createSearchPredictionSupport, type RouteSearchContext } from './routeSearchShared'
+import { createSearchPredictionSupport, type CandidateSearchRouteContext } from './routeSearchShared'
 import { searchNormalArtianRoutes } from './normalArtianRouteSearch'
 import { searchOwnedNormalArtianRoutes } from './ownedNormalArtianRouteSearch'
 import { searchExistingGogmaRoutes } from './existingGogmaRouteSearch'
@@ -206,7 +207,7 @@ describe('B4 actual Target-wide termination', () => {
       const execution = createSearchExecutionContext(options)
       const target = input.targetWeapons[0]
       const support = createSearchPredictionSupport(engine, target, input.master)
-      const context: RouteSearchContext = { target, input, engine, execution, predictionSupport: support,
+      const context: CandidateSearchRouteContext = { target, input: routeSearchInputForSearch(input), searchInput: input, engine, execution, predictionSupport: support,
         skillStream: createTargetSkillStream(target, skillStreamInputForSearch(input), engine, execution, () => true),
         bonusStream: createTargetBonusStream(target, bonusStreamInputForSearch(input), engine, execution, support),
         normalPredictions: new Map<number, RestorationBonusSet>() }
@@ -233,7 +234,7 @@ describe('B4 actual Target-wide termination', () => {
     const execution = createSearchExecutionContext(options)
     const target = full.input.targetWeapons[0]
     const support = createSearchPredictionSupport(full.engine, target, full.input.master)
-    const context: RouteSearchContext = { target, input: full.input, engine: full.engine, execution, predictionSupport: support,
+    const context: CandidateSearchRouteContext = { target, input: routeSearchInputForSearch(full.input), searchInput: full.input, engine: full.engine, execution, predictionSupport: support,
       skillStream: createTargetSkillStream(target, skillStreamInputForSearch(full.input), full.engine, execution, () => true),
       bonusStream: createTargetBonusStream(target, bonusStreamInputForSearch(full.input), full.engine, execution, support) }
     const scheduler = new TargetSearchScheduler(context)
@@ -347,7 +348,7 @@ describe('Phase 1-A composition seam (behavior-preserving)', () => {
     const execution = createSearchExecutionContext({ ...options, now, createCandidateId })
     const target = f.input.targetWeapons[0]
     const support = createSearchPredictionSupport(f.engine, target, f.input.master)
-    const context: RouteSearchContext = { target, input: f.input, engine: f.engine, execution, predictionSupport: support,
+    const context: CandidateSearchRouteContext = { target, input: routeSearchInputForSearch(f.input), searchInput: f.input, engine: f.engine, execution, predictionSupport: support,
       skillStream: createTargetSkillStream(target, skillStreamInputForSearch(f.input), f.engine, execution, () => true),
       bonusStream: createTargetBonusStream(target, bonusStreamInputForSearch(f.input), f.engine, execution, support),
       normalPredictions: new Map<number, RestorationBonusSet>() }

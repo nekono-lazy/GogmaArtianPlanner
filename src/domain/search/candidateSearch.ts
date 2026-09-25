@@ -8,10 +8,11 @@ import { searchExistingGogmaRoutes } from './existingGogmaRouteSearch'
 import { searchNormalArtianRoutes } from './normalArtianRouteSearch'
 import { searchOwnedNormalArtianRoutes } from './ownedNormalArtianRouteSearch'
 import { createTargetBonusStream } from './bonusStream'
-import { createSearchPredictionSupport } from './routeSearchShared'
+import { createSearchPredictionSupport, type CandidateSearchRouteContext } from './routeSearchShared'
 import { createTargetSkillStream } from './skillStream'
 import {
   bonusStreamInputForSearch,
+  routeSearchInputForSearch,
   skillStreamInputForSearch,
 } from './searchStreamInputs'
 import {
@@ -149,9 +150,10 @@ async function searchTarget(
   }
 
   const predictionSupport = createSearchPredictionSupport(engine, target, input.master)
-  const routeContext = {
+  const routeContext: CandidateSearchRouteContext = {
     target,
-    input,
+    input: routeSearchInputForSearch(input),
+    searchInput: input,
     engine,
     execution,
     predictionSupport,

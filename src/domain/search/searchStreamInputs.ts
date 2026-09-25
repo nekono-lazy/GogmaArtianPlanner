@@ -1,4 +1,5 @@
 import type { BonusStreamInput } from './bonusStream'
+import type { RouteSearchInput } from './routeSearchShared'
 import type { SkillStreamInput } from './skillStream'
 import type { CandidateSearchInput } from './searchTypes'
 
@@ -28,5 +29,22 @@ export function bonusStreamInputForSearch(
     rngState: input.rngState,
     master: input.master,
     maxGogmaAdvance: input.settings.maxGogmaAdvance,
+  }
+}
+
+/**
+ * The ordinary request's Route search input. `maxNormalAdvance` stays the
+ * ordinary Search's Normal Route base extent; `searchRunId`, `routeFilter` and
+ * the two stream extents do not reach the Route search primitives this way.
+ */
+export function routeSearchInputForSearch(
+  input: CandidateSearchInput,
+): RouteSearchInput {
+  return {
+    rngState: input.rngState,
+    normalCounters: input.normalCounters,
+    ownedWeapons: input.ownedWeapons,
+    master: input.master,
+    maxNormalAdvance: input.settings.maxNormalAdvance,
   }
 }

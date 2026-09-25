@@ -2080,8 +2080,8 @@ B8 architecture自体はProduction RNG semantics、RouteOperationの意味、Pro
 
 **Issue #136 / #101（9.2.19）。** 代替Ideal Routeの生成器をB8 constrained enumerationから
 Planner Alternative Search（resource-aware alternative Ideal search）へ段階的に置き換え、「この候補を
-優先」をRoute単位の決定とし、what-if / actual repairを1段に限る正式契約を9.2.19で確定した（仕様確定・
-未実装）。9.2.19.1の表に挙げた条項は新kernelで置き換わり、それ以外の9.2.1〜9.2.18の契約は維持する。
+優先」をRoute単位の決定とし、what-if / actual repairを1段に限る正式契約を9.2.19で確定した（Phase 1-Bまで
+部分実装。Planner側の契約は未実装）。9.2.19.1の表に挙げた条項は新kernelで置き換わり、それ以外の9.2.1〜9.2.18の契約は維持する。
 Production routingを切り替えるPhase 5まで、9.2.6〜9.2.17のB8実装はlegacy implementationとしてそのまま動作する。
 
 ### 9.2.1 開始位置を後方固定しない
@@ -4168,8 +4168,13 @@ Stepが削除済みEntryを参照しない。表示中Planから復元するexpl
 
 ### 9.2.19 Planner Alternative Searchと1段の競合repair（Issue #136 / #101）
 
-実装状態: **仕様確定・未実装**。本節はdocs-onlyのPRで確定した正式契約であり、runtime実装は
-9.2.19.16のPhase 1以降で行う。背景、方式選定の理由、Phase分割の根拠は
+実装状態: **Phase 1-Bまで部分実装**。本節はdocs-onlyのPRで確定した正式契約であり、runtime実装は
+9.2.19.16のPhaseに従って段階的に行う。Phase 1-A（modern Search基盤のcomposition seam）とPhase 1-B（Search Domain
+APIと空reservationでの基本consumer経路。[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8の実装状態を参照）は実装済みで
+ある。Phase 1-C（5.6.8の探索完全性）、Phase 2（fixed Route集合とreservationの導出、held位置を跨ぐ探索、排他
+OwnedWeapon、trial full rerunによるfound判定）、Phase 3〜7（benchmarkとProduction default、what-if、actual
+repair、lineage永続化、Production routing切替とversion更新、legacy pathの整理、Presentation）は未実装であり、
+Plannerは本節の契約をまだ使っていない。背景、方式選定の理由、Phase分割の根拠は
 [PLANNER_CONFLICT_REPAIR_DESIGN.md](./PLANNER_CONFLICT_REPAIR_DESIGN.md)（task-specific設計記録、
 非normative）にある。計測事実は
 [ISSUE_101_CONSTRAINED_RESEARCH_BENCHMARK.md](./ISSUE_101_CONSTRAINED_RESEARCH_BENCHMARK.md) にある。

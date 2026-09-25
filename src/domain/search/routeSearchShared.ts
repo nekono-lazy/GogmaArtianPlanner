@@ -3,9 +3,12 @@ import type {
   BuildCandidate,
   BuildRoute,
   GroupSkillId,
+  NormalArtianCounter,
+  OwnedWeapon,
   OwnedWeaponId,
   RestorationBonusScope,
   RestorationBonusSet,
+  RngState,
   RouteOperation,
   SeriesSkillId,
   SkillAmendmentResult,
@@ -27,6 +30,7 @@ import {
   CandidateSearchError,
   type CandidateSearchInput,
   type CandidateSearchWarning,
+  type SearchMasterSubset,
   type SkippedRoute,
 } from './searchTypes'
 import {
@@ -59,11 +63,34 @@ export interface RouteSearchResult {
   finalize?(): void
 }
 
+/**
+ * What the Route search primitives actually read: the semantic Search / RNG
+ * origin and the one extent the Route base registration itself needs.
+ *
+ * It is deliberately not a `CandidateSearchInput`. `searchRunId`, the
+ * `routeFilter` and the rest of `CandidateSearchSettings` are ordinary
+ * Candidate Search request data, so the same primitives can serve a consumer
+ * that has none of them - Planner Alternative Search (`docs/SEARCH_SPEC.md`
+ * 5.6.8) - without fabricating a request. The two stream extents belong to the
+ * streams (`SkillStreamInput` / `BonusStreamInput`), not here.
+ */
+export interface RouteSearchInput {
+  rngState: RngState
+  normalCounters: NormalArtianCounter[]
+  ownedWeapons: OwnedWeapon[]
+  master: SearchMasterSubset
+  /**
+   * SEARCH_SPEC 3.1 `maxNormalAdvance`: the maximum forge count of one Normal
+   * Artian Route base, never the maximum offset.
+   */
+  maxNormalAdvance: number
+}
+
 export interface RouteSearchContext {
   /** Normal predictions shared across counter records. */
   normalPredictions?: Map<number, RestorationBonusSet>
   target: TargetWeapon
-  input: CandidateSearchInput
+  input: RouteSearchInput
   engine: RngEngine
   execution: SearchExecutionContext
   predictionSupport: SearchPredictionSupport
@@ -71,6 +98,18 @@ export interface RouteSearchContext {
   skillStream: TargetSkillStream
   /** Solved once per Route base class; never re-entered from a Skill result. */
   bonusStream: TargetBonusStream
+}
+
+/**
+ * The ordinary Candidate Search's Route search context.
+ *
+ * Only the ordinary materialization (`createBaseCandidate()`) reads
+ * `searchInput`: its `searchRunId` and `CalculationContext` belong to the
+ * `BuildCandidate` it builds. The Route search primitives themselves read
+ * `input` alone.
+ */
+export interface CandidateSearchRouteContext extends RouteSearchContext {
+  searchInput: CandidateSearchInput
 }
 
 /**
@@ -226,7 +265,7 @@ export function conversionSkillPrediction(
 }
 
 export function createBaseCandidate(
-  context: RouteSearchContext,
+  context: CandidateSearchRouteContext,
   bonuses: RestorationBonusSet,
   restorationBonusScope: RestorationBonusScope,
   seriesSkillId: SeriesSkillId | null,
@@ -249,7 +288,7 @@ export function createBaseCandidate(
       skillAmendmentResults,
       ...(conversionSkillResult === undefined ? {} : { conversionSkillResult }),
     },
-    context.input,
+    context.searchInput,
     context.execution,
   )
 }
@@ -305,7 +344,7 @@ function routeKindFor(
  * canonical Ideal Route.
  */
 export async function composeRouteCandidates(
-  context: RouteSearchContext,
+  context: CandidateSearchRouteContext,
   base: RouteCompositionBase,
 ): Promise<BuildCandidate[]> {
   const bonusSet = buildBonusSolutionSet(

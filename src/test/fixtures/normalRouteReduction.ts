@@ -4,8 +4,8 @@ import { keepFamilyLayoutKey, keepFamilyMultisetKey } from '../../domain/rng/gog
 import { bonusStreamBaseKey, createTargetBonusStream } from '../../domain/search/bonusStream'
 import { createTargetSkillStream } from '../../domain/search/skillStream'
 import { createSearchExecutionContext } from '../../domain/search/searchExecution'
-import { createSearchPredictionSupport, type RouteSearchContext } from '../../domain/search/routeSearchShared'
-import { bonusStreamInputForSearch, skillStreamInputForSearch } from '../../domain/search/searchStreamInputs'
+import { createSearchPredictionSupport, type CandidateSearchRouteContext, type RouteSearchContext } from '../../domain/search/routeSearchShared'
+import { bonusStreamInputForSearch, routeSearchInputForSearch, skillStreamInputForSearch } from '../../domain/search/searchStreamInputs'
 import { TargetSearchScheduler } from '../../domain/search/targetSearchScheduler'
 import { selectCanonicalIdealCandidate } from '../../domain/search/candidateRetention'
 import { searchNormalArtianRoutes } from '../../domain/search/normalArtianRouteSearch'
@@ -23,7 +23,7 @@ function registerUnreducedNormals(context: RouteSearchContext, scheduler: Target
   const start = counter.counter!
   const skillBefore = input.rngState.skillCounter.value!
   const schedule = (offset: number) => {
-    if (offset >= input.settings.maxNormalAdvance) return
+    if (offset >= input.maxNormalAdvance) return
     scheduler.queue.enqueue({ lowerBound: offset + 2, settle: async () => {
       const skills = context.skillStream.predictAt(skillBefore)
       const skillAfter = engine.advanceSkillCounter(skillBefore, { type: 'convert_normal_to_gogma' })
@@ -81,7 +81,7 @@ export async function measureNormalRouteSearch(input: CandidateSearchInput, engi
   }
   const readSkill = skillStream.readDepth.bind(skillStream)
   skillStream.readDepth = (start, depth) => { skillChannels.add(start); return readSkill(start, depth) }
-  const context: RouteSearchContext = { input, engine, target, execution, predictionSupport: support,
+  const context: CandidateSearchRouteContext = { input: routeSearchInputForSearch(input), searchInput: input, engine, target, execution, predictionSupport: support,
     normalPredictions, bonusStream, skillStream }
   const scheduler = new TargetSearchScheduler(context)
   const addBase = scheduler.addBase.bind(scheduler)

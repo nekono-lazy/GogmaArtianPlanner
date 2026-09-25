@@ -2183,7 +2183,8 @@ initial conflict preflightで `PlannerConflictResolution.conflictKey` を現在�
 再構築し、1件でも対応付けできない場合はfail closedとする。他のユーザー明示
 resolutionを黙って捨ててはならない。
 
-Issue #136 / #101の正式仕様（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19、仕様確定・未実装）では、
+Issue #136 / #101の正式仕様（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19。Search Domain APIだけPhase 1-Bまで
+部分実装で、本段落のConflict保存規則は未実装）では、
 「この候補を優先」はRoute単位の決定になる。保存するPlanの `conflicts` は最終full runが最新状態から検出したもの
 だけであり、旧Planの一覧から解決済みを消す方式をauthorityにしない。代替を採用できなかった無効化Entryが残る場合、
 participantがfixed Entryと今回の無効化Entryだけからなる全Conflictに `selectedBuildListEntryId = fixed Entry` を
