@@ -41,8 +41,18 @@ jobs:
       - name: Test
         run: npm test
 
+      # The checked-out commit SHA is the Pages build ID: Vite embeds it in the
+      # JavaScript and writes the same value to dist/version.json, which the
+      # running app compares with to detect a stale client (Issue #131).
       - name: Build
         run: npm run build
+        env:
+          VITE_APP_BUILD_ID: ${{ github.sha }}
+
+      - name: Verify version manifest
+        run: |
+          test "$(node -p "require('./dist/version.json').buildId")" = "$GITHUB_SHA"
+          grep -rqF "$GITHUB_SHA" dist/assets
 
       - name: Setup Pages
         uses: actions/configure-pages@v6

@@ -253,6 +253,26 @@ Planner、Target評価、Master、persisted schema、calculation semanticsを変
   `DATABASE_SCHEMA_VERSION`、`ExportRoot.schemaVersion`、`AppSettings.schemaVersion`、
   calculation schema、RNG Engine versionを変更しない
 
+### 3.6 新しいバージョンの通知
+
+GitHub Pagesに実行中のbuildより新しいbuildが公開されたことを検出した場合（[REQUIREMENTS.md](./REQUIREMENTS.md) 3.3）、
+全画面共通の通知で再読み込みを案内する。
+
+- 通知はAppLayoutのmain content上部（各画面の内容の直前）に置く、閉じるボタンのないMUI `info` Alertとする。
+  一定時間で消えるSnackbarやmodal Dialogにはしない。画面の流れの中に置き、固定表示で操作を覆わないため、
+  Execution Navigatorを含む各画面の主要操作を隠さない
+- 表示内容は見出し「新しいバージョンが公開されています」、本文「最新版を使用するため、ページを再読み込み
+  してください。入力中の内容がある場合は、保存してから再読み込みしてください。」と「再読み込み」ボタンとする。
+  色だけでなく見出しの文言とinfo iconで意味を伝える
+- 支援技術へはassertiveなalertではなく `role="status"` として伝え、フォーカスを移動しない
+- 「再読み込み」を押した時だけ通常のページ再読み込みを行う。自動で再読み込みせず、通知を閉じて永続的に
+  隠す操作も提供しない。通知の表示中も画面の操作、画面遷移、入力は継続でき、通知は画面遷移後も残る
+- 「再読み込み」ボタンは44px以上の高さとし、スマートフォン幅（375px）では本文の下に全幅で置き、
+  sm以上では本文の右に置く。いずれの幅でも横スクロールを発生させず、長い本文は折り返す
+- build IDを持たないbuild（ローカル開発）や、manifestの取得に失敗した場合は通知を表示せず、エラーも表示しない
+- 確認の時機（起動時、タブ復帰時、表示中の15分ごと、60秒以内の再確認抑止）は[REQUIREMENTS.md](./REQUIREMENTS.md)
+  3.3に従い、画面ごとではなくApplication levelで1つだけ動かす
+
 ---
 
 ## 4. Home / Dashboard
@@ -2116,6 +2136,9 @@ Undoの表示文言は取り消す記録に合わせる。通常は「最後の�
 - RNG状態の特定の利用可否（5の表示ルールに従う。Identification Wizardのavailabilityに基づき、
   RngEngine capability flagへ接続しない）
 - App schemaVersion（`AppSettings.schemaVersion`。現行2）
+- ビルドID（GitHub Pages buildのbuild ID = build元のcommit SHA、[REQUIREMENTS.md](./REQUIREMENTS.md) 3.3）。
+  不具合調査時に開いているバージョンを確認するため、バージョン情報に先頭7文字で表示する（比較には常にfull SHAを
+  使う）。build IDを持たないローカル開発buildでは「なし（ローカル開発）」と表示する。外部へのlinkは置かない
 - Export
 - Import
 - 全データクリア
@@ -2514,6 +2537,11 @@ export interface SearchUiState {
   旧「素材コスト未検証」表示がCandidate Searchに残らない
 - 生産計画詳細に計画全体の必要素材・費用の目安が表示され、共有Stepを二重計上せず、
   legacy Planでは算出できない旨を表示する
+- 新しいバージョンの通知（3.6）が、最新build IDが一致する間・build IDなし・manifest取得失敗では表示されず、
+  異なる時だけ全画面共通で表示され、「再読み込み」で再読み込みを1回だけ行い、自動で再読み込みせず、
+  その後の確認失敗で消えない。確認は起動時・タブ復帰時・表示中の15分ごとに行い、60秒以内のタブ復帰や
+  React StrictModeの再mountでrequestを重複させず、非表示中とunmount後は定期確認を行わない
+- 設定画面のバージョン情報にビルドIDが短縮表示され、build IDなしでは「なし（ローカル開発）」と表示される
 
 ## 19.2 Flow Test
 

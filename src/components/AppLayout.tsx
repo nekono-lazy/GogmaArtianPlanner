@@ -18,6 +18,7 @@ import {
 import { useTheme } from '@mui/material/styles'
 import { matchPath, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useSettingsStore } from '../stores/settingsStore'
+import { AppUpdateNotice, type AppUpdateNoticeDependencies } from './appVersion/AppUpdateNotice'
 
 const drawerWidth = 240
 
@@ -129,7 +130,12 @@ function MenuIcon() {
   )
 }
 
-export function AppLayout() {
+export function AppLayout({
+  appUpdate,
+}: {
+  /** The stale client notice's checker and reload action; injectable for tests. */
+  appUpdate?: AppUpdateNoticeDependencies
+} = {}) {
   const theme = useTheme()
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'))
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -352,6 +358,9 @@ export function AppLayout() {
         sx={{ flexGrow: 1, minWidth: 0, pt: 8, px: { xs: 2, sm: 3, lg: 5 }, pb: 5, outline: 'none' }}
       >
         <Box sx={{ width: '100%', maxWidth: 1120, mx: 'auto', pt: { xs: 3, md: 4 } }}>
+          {/* Global, in-flow notice above every page (`docs/UI_FLOW.md` 3.6):
+              it pushes the page down instead of covering any control. */}
+          <AppUpdateNotice dependencies={appUpdate} />
           <Outlet />
         </Box>
       </Box>

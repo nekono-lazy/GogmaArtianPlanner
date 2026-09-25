@@ -4567,6 +4567,19 @@ When routing or Vite configuration changes:
 - Verify the production build
 - Do not rely only on the dev server
 
+Stale client detection (Issue #131, `docs/REQUIREMENTS.md` 3.3, `docs/UI_FLOW.md` 3.6 / 14):
+the deploy workflow passes `github.sha` as `VITE_APP_BUILD_ID`, and one resolved Vite env
+value feeds both the running JavaScript (`currentAppBuildId`) and `dist/version.json`
+(the `vite.config.ts` manifest plugin; the workflow verifies both match). The runtime
+checker (`src/services/appVersion/`) compares full SHAs at startup, on tab visibility
+return (skipped within 60 seconds of the last check) and every 15 minutes while visible,
+fetches with `cache: 'no-store'` plus a unique query, silently ignores every failure,
+keeps a detected update until reload, and never reloads by itself: the persistent
+AppLayout notice reloads only on 「再読み込み」. A build without the ID (local, ordinary
+CI) writes no manifest and fetches nothing. The build ID is never persisted, exported or
+used as a CalculationContext / compatibility authority, so no version moved. Do not add a
+Service Worker, PWA, automatic update or reload, or a runtime GitHub API call for it.
+
 ---
 
 ## Testing Requirements

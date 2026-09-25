@@ -194,6 +194,19 @@ describe('SettingsPage data management', () => {
     expect(screen.getByText(/データのバックアップと復元/)).toBeInTheDocument()
   })
 
+  it('shows the running build ID shortened in the version information', () => {
+    render(<SettingsPage dependencies={dependencies()} appBuildId="0123456789abcdef0123456789abcdef01234567" />)
+    const row = screen.getByText('ビルドID').parentElement as HTMLElement
+    expect(row).toHaveTextContent('0123456')
+    expect(row).not.toHaveTextContent('0123456789abcdef')
+  })
+
+  it('shows a local build without a build ID as local development', () => {
+    render(<SettingsPage dependencies={dependencies()} appBuildId={null} />)
+    const row = screen.getByText('ビルドID').parentElement as HTMLElement
+    expect(row).toHaveTextContent('なし（ローカル開発）')
+  })
+
   describe('Export', () => {
     it('serializes once and opens the Export Dialog with the exact JSON, without downloading', async () => {
       const user = setupUser()
