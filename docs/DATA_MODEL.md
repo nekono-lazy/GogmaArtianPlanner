@@ -1748,8 +1748,8 @@ Production Planner（決定的scheduler、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7
 通常Worker request、B8 constrained re-search、B9 what-if、再計画Previewのいずれの `PlannerInput` も
 `beamWidth` / `maxExpandedStates` を持たない。
 
-Beam Search oracle（test / benchmark / parity専用、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7.2.2）の
-`beamWidth` / `maxExpandedStates` は、Production persisted / runtime modelではない別のtest / benchmark
+Beam Search oracle（test / parity regression専用、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7.2.2）の
+`beamWidth` / `maxExpandedStates` は、Production persisted / runtime modelではない別のtest / parity
 contract `PlannerBeamSearchOptions`（`PlannerOptions` + 2 field、既定値
 `defaultPlannerBeamSearchOptions = { maxPlanSteps: 1000, beamWidth: 50, maxExpandedStates: 10000 }`、
 専用validation `validatePlannerBeamSearchOptions()`）と `PlannerBeamSearchInput` だけが持つ。
@@ -2093,12 +2093,11 @@ Planner warningの上限到達は次の2種を区別する。
 
 ```text
 max_steps_reached
-max_expanded_states_reached
 ```
 
-前者はmaxPlanSteps到達時だけ使用し、途中のbest Planとwarningを同時に返してよい。後者はBeam Search
-oracleの `maxExpandedStates` 到達時だけ使用し、Production Planner（決定的scheduler）とProduction UIからは
-到達しない（warning kindの型分離はIssue #103 Phase D-2bで判断する）。
+maxPlanSteps到達時だけ使用し、途中のbest Planとwarningを同時に返してよい。Beam Search oracleの
+`maxExpandedStates` 到達はwarning kindを持たず、`PlannerBeamSearchTermination.reachedLimits` の
+`max_expanded_states` だけで表す（Issue #103 Phase D-2bで `max_expanded_states_reached` を削除した）。
 
 ## 11.9 RejectedBuildListEntry
 
@@ -2821,7 +2820,7 @@ Production RNG契約切替時の互換性は次のとおりとする。
 - `status` と `executionInProgress` の変更だけでは `ownedWeaponsHash` が変わらない
 - Candidate BuildRouteを変更せず、Candidate Route内の具体的な起点OwnedWeapon IDを別武器へ差し替えない
 - 有効な競合選択だけを適用し、削除済み・staleな選択をwarningにする
-- max_steps_reachedとmax_expanded_states_reachedを別kindとして検証する
+- max_steps_reachedを検証し、Beam oracle専用だったmax_expanded_states_reachedがwarning kindに無いことを検証する
 - TargetWeapon変更で `targetWeaponsHash` が変わる
 - BuildListEntry変更で `buildListEntriesHash` が変わる
 - 同じRoute依存RNG状態から同じ `searchStateHash` が生成される

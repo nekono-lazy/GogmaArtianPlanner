@@ -240,10 +240,9 @@ describe('Planner search termination', () => {
     expect(result.termination.limits.maxExpandedStates).toBe(2)
     expect(result.termination.totalTargetCount).toBe(2)
     expect(result.termination.completedTargetCount).toBeLessThan(2)
-    // The warning stays a diagnostic saying the same thing, never the authority.
-    expect(result.warnings.map(({ kind }) => kind)).toContain(
-      'max_expanded_states_reached',
-    )
+    // The typed termination is the only authority: the oracle's bound has no
+    // warning kind (Issue #103 Phase D-2b).
+    expect(result.warnings.map(({ kind }) => kind)).not.toContain('max_steps_reached')
   })
 
   it('reports incomplete with max_plan_steps when the step bound truncates the search', async () => {
@@ -347,9 +346,7 @@ describe('Planner search termination', () => {
       reachedLimits: [],
       limits: { maxPlanSteps: 1000 },
     })
-    expect(production.warnings.map(({ kind }) => kind)).not.toContain(
-      'max_expanded_states_reached',
-    )
+    expect(production.warnings.map(({ kind }) => kind)).not.toContain('max_steps_reached')
 
     const oracle = scenario()
     const beam = await runPlannerBeamSearchOracle(

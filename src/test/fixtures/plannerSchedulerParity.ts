@@ -1,4 +1,4 @@
-import { createDeterministicPlannerDependencies } from '../../benchmarks/plannerSearchInstrumentationBenchmark'
+import { createDeterministicPlannerDependencies } from './plannerSchedulerWorkloads'
 import {
   runPlannerSchedulerParity,
   type PlannerSchedulerParityRun,

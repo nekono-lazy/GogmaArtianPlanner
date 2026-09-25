@@ -203,7 +203,6 @@ export const plannerWarningLabels: Record<PlannerWarningKind, string> = {
   all_targets_already_satisfied: 'すべての目標武器をすでに満たしています',
   invalid_conflict_resolution: '選択した競合解決を現在の状態へ適用できません',
   max_steps_reached: '計画ステップ数の上限に到達しました',
-  max_expanded_states_reached: '探索状態数の上限に到達しました',
   max_candidate_trials_per_conflict_reached:
     '1つの競合について試行できる候補数の上限に到達しました',
   max_generated_build_list_entries_reached:

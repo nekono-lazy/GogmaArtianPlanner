@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { BuildListEntryId, TargetWeaponId } from '../domain/models/publicTypes'
 import { plannerSchedulerCatalogue } from '../test/fixtures/plannerSchedulerScenarios'
 import { mandatoryParityProblems, runCatalogueParity } from '../test/fixtures/plannerSchedulerParity'
-import { createDeterministicPlannerDependencies } from './plannerSearchInstrumentationBenchmark'
-import { createPlannerSearchInstrumentationInput } from './plannerSearchInstrumentationFixtures'
+import { createDeterministicPlannerDependencies, createPlannerSchedulerWorkloadInput } from '../test/fixtures/plannerSchedulerWorkloads'
 import {
   comparePlannerStrategyRuns,
   formatPlannerSchedulerParityReport,
@@ -12,10 +11,13 @@ import {
 } from './plannerSchedulerParity'
 
 /**
- * Issue #103 Phase B parity harness: the classification itself, the fast
- * acceptance scenarios and `sanity-3`. The long acceptance scenarios and
- * `representative-12` run in their own files so the suites spread over Vitest
- * workers; `representative-35` is measured in a real Browser Worker only.
+ * Issue #103 Beam / scheduler parity regression (Phase B, retained in CI since
+ * Phase D-2b): the classification itself, the fast acceptance scenarios and
+ * `sanity-3`. The long acceptance scenarios and `representative-12` run in
+ * their own files so the suites spread over Vitest workers. `representative-35`
+ * is a scheduler-only regression (`plannerDeterministicScheduler.test.ts`); its
+ * Beam run was measured once in a real Browser Worker
+ * (`docs/ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md`) and is not repeated.
  */
 
 const entry = (value: string) => value as BuildListEntryId
@@ -453,7 +455,7 @@ describe('acceptance scenarios: fast Beam / scheduler parity', { timeout: 60_000
 
 describe('sanity-3 Beam / scheduler parity', { timeout: 60_000 }, () => {
   it('completes every Target with both searches and keeps every mandatory contract', async () => {
-    const { input, beamSearchInput, engine } = createPlannerSearchInstrumentationInput('sanity-3')
+    const { input, beamSearchInput, engine } = createPlannerSchedulerWorkloadInput('sanity-3')
     const run = await runPlannerSchedulerParity(input, {
       engine,
       createDependencies: () => createDeterministicPlannerDependencies(engine),

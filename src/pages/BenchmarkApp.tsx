@@ -4,7 +4,6 @@ import { Button, Stack } from '@mui/material'
 import { CandidateSearchBenchmarkPage } from './CandidateSearchBenchmarkPage'
 import { ConstrainedEnumerationBenchmarkPage } from './ConstrainedEnumerationBenchmarkPage'
 import { PlannerOrchestrationBenchmarkPage } from './PlannerOrchestrationBenchmarkPage'
-import { PlannerSearchInstrumentationBenchmarkPage } from './PlannerSearchInstrumentationBenchmarkPage'
 import { SkillIdentificationBenchmarkPage } from './SkillIdentificationBenchmarkPage'
 
 type BenchmarkId =
@@ -13,7 +12,6 @@ type BenchmarkId =
   | 'b8-constrained-enumeration'
   | 'b8-planner-orchestration'
   | 'b9-what-if'
-  | 'issue-103-planner-search'
 
 /**
  * Isolated benchmark shell. The C5-E2C8 Skill Identification harness stays the
@@ -21,7 +19,10 @@ type BenchmarkId =
  * harness, B8-B2 the constrained enumeration harness, and B8-E1 the Planner
  * orchestration harness beside them. None of them is reachable from the normal
  * application. B9 adds the what-if harness; the existing four stay unchanged.
- * Issue #103 adds the Planner search instrumentation harness beside them.
+ * Issue #103 Phase D-2b removed its Planner search instrumentation harness once
+ * the Planner redesign was validated; its measurements stay recorded in
+ * `docs/ISSUE_103_PLANNER_SEARCH_INSTRUMENTATION.md` and
+ * `docs/ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md`.
  */
 export function BenchmarkApp() {
   const [benchmark, setBenchmark] = useState<BenchmarkId>('c8-skill-identification')
@@ -58,17 +59,8 @@ export function BenchmarkApp() {
         >
           B9 What-if
         </Button>
-        <Button
-          variant={benchmark === 'issue-103-planner-search' ? 'contained' : 'outlined'}
-          onClick={() => setBenchmark('issue-103-planner-search')}
-        >
-          Issue 103 Planner Search
-        </Button>
       </Stack>
       {benchmark === 'b9-what-if' && <PlannerWhatIfBenchmarkPage />}
-      {benchmark === 'issue-103-planner-search' && (
-        <PlannerSearchInstrumentationBenchmarkPage />
-      )}
       {benchmark === 'c8-skill-identification' && <SkillIdentificationBenchmarkPage />}
       {benchmark === 'b5-candidate-search' && <CandidateSearchBenchmarkPage />}
       {benchmark === 'b8-constrained-enumeration' && (

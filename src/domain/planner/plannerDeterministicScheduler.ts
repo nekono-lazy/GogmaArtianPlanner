@@ -108,27 +108,20 @@ import { PERSISTED_PLANNER_BUILD_LIST_CONTEXT } from './plannerTypes'
  * Since Issue #103 Phase C this is the Production full Planner run:
  * `createProductionPlanWithObserver()` runs it for the ordinary Planner, the
  * Planner Worker, B8 / B9 and the replan Preview. The Beam Search stays a
- * test / benchmark oracle only.
+ * test / parity regression oracle only.
  */
-
-/** The scheduler's benchmark progress: the actions applied so far. */
-export interface PlannerScheduleProgress {
-  expandedStates: number
-}
 
 /**
- * The scheduler's test / benchmark hooks on top of the Production
- * `PlannerExecutionOptions` (Issue #103 Phase D-2a). The Production Worker and
- * Plan generation pass only `shouldCancel` / `yieldControl`; these two are
- * semantics-neutral and reach no Worker protocol, `PlannerResult`, or
- * persistence.
+ * The scheduler's test hook on top of the Production `PlannerExecutionOptions`
+ * (Issue #103 Phase D-2a / D-2b). The Production Worker and Plan generation
+ * pass only `shouldCancel` / `yieldControl`; the observer is semantics-neutral
+ * and reaches no Worker protocol, `PlannerResult`, or persistence.
  */
 export interface PlannerScheduleExecutionOptions extends PlannerExecutionOptions {
-  /** Benchmark-only live count of applied actions; never a Production progress. */
-  onProgress?: (progress: PlannerScheduleProgress) => void
   /**
-   * Benchmark / test-only observation of each deterministic scheduler run
-   * (Issue #103 Phase B). `undefined` runs exactly the ordinary scheduler
+   * The parity / test observer of each deterministic scheduler run: the drops
+   * and provisional outcomes that explain a completion difference against the
+   * Beam Search oracle. `undefined` runs exactly the ordinary scheduler
    * (`plannerSchedulerInstrumentation.ts`).
    */
   schedulerInstrumentation?: PlannerSchedulerInstrumentation
@@ -191,7 +184,6 @@ export class PlannerDeterministicScheduleRun {
   private readonly commitmentContext: PlannerRouteCommitmentContext
   private readonly routeActionContext: PlannerRouteActionContext
   private readonly reserveActionContext: PlannerReserveActionContext
-  private readonly executionOptions: PlannerScheduleExecutionOptions
   /** `null` unless `executionOptions.schedulerInstrumentation` was given. */
   private readonly metrics: PlannerSchedulerMetricsCollector | null
 
@@ -203,16 +195,10 @@ export class PlannerDeterministicScheduleRun {
   ) {
     this.input = input
     this.context = context
-    this.executionOptions = executionOptions
     this.state = context.initialState
     this.metrics = createPlannerSchedulerMetricsCollector(
       executionOptions.schedulerInstrumentation,
-      () => ({
-        entriesById: context.entriesById,
-        planningTargetCount: context.planningTargetIds.length,
-        searchEntryCount: context.allSearchEntries.length,
-        options: plannerRunLimits(input.options),
-      }),
+      () => ({ entriesById: context.entriesById }),
     )
     this.rejections = [...context.routePlanRejections]
     this.rejectionKeys = new Set(this.rejections.map(plannerRejectionKey))
@@ -266,7 +252,6 @@ export class PlannerDeterministicScheduleRun {
    * one that fills the trace exactly reports the bound as a diagnostic.
    */
   initialize(): string | null {
-    const startedAt = this.metrics?.mark()
     const context = this.context
     applyPlannerZeroOperationConfirms(
       this.state,
@@ -293,14 +278,10 @@ export class PlannerDeterministicScheduleRun {
       this.commitmentContext,
       this.metrics ?? undefined,
     )
-    if (commitment.status === 'invalid') {
-      this.metrics?.addPhaseTime('initialize', startedAt)
-      return commitment.message
-    }
+    if (commitment.status === 'invalid') return commitment.message
     commitment.records.forEach((record, entryId) => this.records.set(entryId, record))
     commitment.rejections.forEach((rejection) => this.recordRejection(rejection))
-    this.metrics?.initialCommitment([...commitment.records.values()], commitment.candidateCount)
-    this.metrics?.addPhaseTime('initialize', startedAt)
+    this.metrics?.initialCommitment([...commitment.records.values()])
     return null
   }
 
@@ -414,7 +395,6 @@ export class PlannerDeterministicScheduleRun {
           entry,
           committed,
           this.commitmentContext,
-          this.metrics ?? undefined,
         )
       ) {
         this.setStatus(entry.id, 'committed')
@@ -525,17 +505,6 @@ export class PlannerDeterministicScheduleRun {
    * Evaluating them builds no state: only the one returned first is applied.
    */
   safeActions(): PlannerScheduleAction[] {
-    return this.listSafeActions().actions
-  }
-
-  /**
-   * `safeActions()` plus how many stream positions (and blind forges) wait:
-   * a holding unit that is not ready, holding units that are not one physical
-   * action, or a blind forge held back by a predicted forge (7.3). The count is
-   * reported to the instrumentation only; nothing reads it to decide.
-   */
-  private listSafeActions(): { actions: PlannerScheduleAction[]; waitingStreams: number } {
-    let waitingStreams = 0
     const committed = this.committedEntries()
     const frontiers = new Map<string, FrontierUnit[]>()
     const blindUnits: FrontierUnit[] = []
@@ -582,10 +551,7 @@ export class PlannerDeterministicScheduleRun {
         // Only the one physical action that runs every holding unit here is
         // safe; a holding unit that is not ready makes the position wait.
         const primary = holdings.find(({ ready }) => ready)
-        if (!primary) {
-          waitingStreams += 1
-          continue
-        }
+        if (!primary) continue
         const progressed = mergedPlannerProgressedEntries(
           this.state,
           primary.unit,
@@ -594,8 +560,6 @@ export class PlannerDeterministicScheduleRun {
         const progressedKeys = new Set(progressed.map(plannerRouteUnitKey))
         if (holdings.every(({ unit }) => progressedKeys.has(plannerRouteUnitKey(unit)))) {
           actions.push(this.createAction('holding', streamKey, primary, progressed))
-        } else {
-          waitingStreams += 1
         }
         continue
       }
@@ -623,13 +587,10 @@ export class PlannerDeterministicScheduleRun {
       const counterId = `${operation.weaponTypeId}:${operation.rarity}`
       const counter = this.state.currentNormalCounters.find(({ id }) => id === counterId)
       const confirmed = counter !== undefined && counter.isConfirmed && counter.counter !== null
-      if (confirmed && pendingNormalCounterIds.has(counterId)) {
-        waitingStreams += 1
-        continue
-      }
+      if (confirmed && pendingNormalCounterIds.has(counterId)) continue
       actions.push(this.createAction('blind_forge', null, blind, [blind.unit]))
     }
-    return { actions: actions.sort(comparePlannerScheduleActions), waitingStreams }
+    return actions.sort(comparePlannerScheduleActions)
   }
 
   private createAction(
@@ -736,9 +697,6 @@ export class PlannerDeterministicScheduleRun {
     if (this.state.trace.length >= this.input.options.maxPlanSteps) {
       this.reachedStepLimit = true
     }
-    // Benchmark observation only: the Production Worker passes no
-    // `onProgress` and forwards no progress (Phase D-2a).
-    this.executionOptions.onProgress?.({ expandedStates: this.expandedStates })
   }
 
   private targetOf(entry: BuildListEntry): TargetWeapon | undefined {
@@ -801,7 +759,6 @@ export class PlannerDeterministicScheduleRun {
     }
     this.setStatus(entry.id, 'secured')
     this.actionApplied()
-    this.metrics?.reserveApplied()
     return true
   }
 
@@ -852,63 +809,36 @@ export class PlannerDeterministicScheduleRun {
    * action (with the reserves it makes due), or one deadlock / stall drop.
    */
   step(): PlannerScheduleStepOutcome {
-    const metrics = this.metrics
-    metrics?.beginIteration()
-    let startedAt = metrics?.mark()
+    this.metrics?.beginIteration()
     this.refreshCommitment()
-    metrics?.addPhaseTime('refreshCommitment', startedAt)
-    startedAt = metrics?.mark()
-    const reservedUnitless = this.reserveUnitlessEntries()
-    metrics?.addPhaseTime('reserve', startedAt)
-    if (!reservedUnitless) return 'bounded'
-    startedAt = metrics?.mark()
+    if (!this.reserveUnitlessEntries()) return 'bounded'
     this.refreshCommitment()
-    metrics?.addPhaseTime('refreshCommitment', startedAt)
     const pending = this.committedEntries().filter(
       (entry) => this.remainingUnitsOf(entry).length > 0,
     )
     if (this.isComplete() || pending.length === 0) return 'finished'
-    startedAt = metrics?.mark()
-    const listed = this.listSafeActions()
-    metrics?.addPhaseTime('safeActions', startedAt)
-    metrics?.safeActionsListed(listed.actions.length, listed.waitingStreams)
-    const action = listed.actions[0]
+    const action = this.safeActions()[0]
     if (action === undefined) {
       this.dropStuckEntry(pending)
       return 'dropped'
     }
     if (!this.canApplyAction()) return 'bounded'
-    startedAt = metrics?.mark()
-    // Instrumentation only: progress objects are replaced, never mutated, so a
-    // shallow copy keeps the values before the action.
-    const progressBefore = metrics === null ? null : { ...this.state.routeProgressByEntryId }
     const applied = applyPlannerRouteAction(
       this.state,
       action.primary,
       this.routeActionContext,
       { mode: 'in_place' },
     )
-    metrics?.addPhaseTime('applyAction', startedAt)
     if (applied.rejection !== null) {
       // The state was not written (Phase A0 contract); the Entry is dropped
       // and the schedule continues without it (6.8).
-      metrics?.expectDrop('action_rejected')
+      this.metrics?.expectDrop('action_rejected')
       this.setStatus(action.primary.entryId, 'dropped', applied.rejection)
       this.collectDynamicConflicts()
       return 'dropped'
     }
     this.actionApplied()
-    if (progressBefore !== null) {
-      metrics?.routeActionApplied(
-        this.state.trace.at(-1),
-        progressBefore,
-        this.state.routeProgressByEntryId,
-      )
-    }
-    startedAt = metrics?.mark()
-    const reserved = this.reserveCompletedEntries()
-    metrics?.addPhaseTime('reserve', startedAt)
-    if (!reserved) return 'bounded'
+    if (!this.reserveCompletedEntries()) return 'bounded'
     return 'applied'
   }
 
@@ -941,10 +871,8 @@ export class PlannerDeterministicScheduleRun {
 
   /** The Production run result of the schedule so far. */
   finish(cancelled: boolean): PlannerRunResult {
-    const startedAt = this.metrics?.mark()
     const result = this.buildResult(cancelled)
-    this.metrics?.addPhaseTime('finish', startedAt)
-    this.metrics?.finish(result, this.commitmentRecords())
+    this.metrics?.finish(result)
     return result
   }
 
@@ -1104,14 +1032,7 @@ export async function runPlannerDeterministicSchedule(
     buildListContext,
   )
   if (created.status === 'finished') {
-    reportUnscheduledPlannerRun(
-      executionOptions.schedulerInstrumentation,
-      {
-        maxPlanSteps: input.options.maxPlanSteps,
-        searchEntryCount: input.buildListEntries.length,
-      },
-      created.result,
-    )
+    reportUnscheduledPlannerRun(executionOptions.schedulerInstrumentation, created.result)
     return created.result
   }
   const run = created.run

@@ -34,6 +34,7 @@ import type {
 } from './plannerBeamSearchTypes'
 import {
   defaultPlannerOptions,
+  plannerWarningKinds,
 } from './plannerTypes'
 import {
   validatePlannerInput,
@@ -182,16 +183,16 @@ describe('Planner contracts', () => {
     } as typeof defaultPlannerOptions).isValid).toBe(false)
   })
 
-  it('keeps max step and max expanded state warnings distinct', () => {
-    const warnings: PlannerWarning[] = [
-      { kind: 'max_steps_reached', message: 'step bound' },
-      { kind: 'max_expanded_states_reached', message: 'state bound' },
-    ]
-    expect(warnings.every((warning) => validatePlannerWarning(warning).isValid)).toBe(true)
-    expect(warnings.map(({ kind }) => kind)).toEqual([
-      'max_steps_reached',
-      'max_expanded_states_reached',
-    ])
+  it('keeps max_steps_reached and has no Beam-only max expanded state warning', () => {
+    const step: PlannerWarning = { kind: 'max_steps_reached', message: 'step bound' }
+    expect(validatePlannerWarning(step).isValid).toBe(true)
+    // Issue #103 Phase D-2b: the Beam Search oracle's bound is reported by its
+    // typed termination only, so the former warning kind is no longer valid.
+    expect(plannerWarningKinds).not.toContain('max_expanded_states_reached')
+    expect(validatePlannerWarning({
+      kind: 'max_expanded_states_reached',
+      message: 'state bound',
+    } as unknown as PlannerWarning).isValid).toBe(false)
   })
 
   it('accepts the concrete prediction unsupported warning taxonomy', () => {

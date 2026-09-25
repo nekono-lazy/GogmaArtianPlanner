@@ -280,7 +280,6 @@ export type PlannerWarningKind =
   | "all_targets_already_satisfied"
   | "invalid_conflict_resolution"
   | "max_steps_reached"
-  | "max_expanded_states_reached"
   // B8 constrained-search orchestrationだけが返す（9.2.16）
   | "max_candidate_trials_per_conflict_reached"
   | "max_generated_build_list_entries_reached"
@@ -323,11 +322,10 @@ export interface PlannerWarning {
 - `all_targets_already_satisfied` は、計画対象Target（4.1）がすべてPlanner開始時点で
   Idealを所持していることを表す。作成リストに有効な候補が無いTargetは判定に含めない
 
-`max_steps_reached` は `maxPlanSteps`、`max_expanded_states_reached` は
-`maxExpandedStates` に到達した場合だけ使用する。両方へ到達した場合は両方を返してよい。
-通常Planner（決定的scheduler）のboundは `maxPlanSteps` だけなので `max_steps_reached` だけを返し、
-`max_expanded_states_reached` はBeam Search oracleだけが返す（7.2、Issue #103 Phase D-1 / D-2a）。
-warning kindの型分離はPhase D-2bで判断する。
+`max_steps_reached` は `maxPlanSteps` に到達した場合だけ使用する。Production Planner（決定的scheduler）の
+boundは `maxPlanSteps` だけである。Beam Search oracleの `maxExpandedStates` 到達を表すwarning kindは無い:
+Issue #103 Phase D-2bで `max_expanded_states_reached` を削除し、oracleのboundはtypedな
+`PlannerBeamSearchTermination.reachedLimits`（`max_expanded_states`）だけで表す（7.2 / 7.2.2）。
 探索途中のbest Stateが存在する場合、上限warningと `plan != null` を同時に返せる。
 
 これらのwarningは診断情報であり、UI制御authorityではない。探索が完了したかどうかは
@@ -396,11 +394,12 @@ export interface PlannerTargetSatisfaction {
 - `createProductionPlanWithSearchRunner()` はfull runだけを差し替えられる共有実装であり、後段
   （runtime-unsupported retry、Trace Replay、execution projection、`PlanningInputSnapshot`、
   checkpoint requirement defence、`rejectedBuildListEntries`、`requiredMaterials`、termination、
-  observer）は1つである。Productionは決定的schedulerだけを渡す。test / benchmark / parity harness
-  だけがBeam Searchを注入する
+  observer）は1つである。Productionは決定的schedulerだけを渡す。test / parity harnessだけが
+  Beam Searchを注入する
 - 上限付きBeam Search（`runPlannerBeamSearch()`）はPhase C以前のProduction Plannerであり、現在は
-  **test / benchmark / parity用のoracleとしてだけ残す**。Production Planを生成しない。削除・縮退は
-  Phase Dで判断する
+  **test / parity regression用のoracleとしてだけ残す**。Production Planを生成しない。Beam / scheduler
+  parity regression（acceptance catalogue、`sanity-3`、`representative-12`）はCIで維持し、Issue #103の
+  Browser benchmark / 計測基盤はPhase D-2bで削除した（7.2.2）
 
 #### 決定的schedulerの手順
 
@@ -477,7 +476,7 @@ export interface PlannerSearchState {
 なくなったため、Practical優先の進行記録も、それを使う評価項目も廃止した。
 ```
 
-旧Beam Search（Phase C以前のProduction、現在はtest / benchmark oracle）の探索手順。
+旧Beam Search（Phase C以前のProduction、現在はtest / parity regression oracle）の探索手順。
 Production（決定的scheduler）の手順は本章冒頭である。
 
 1. 現在RNG状態と在庫から初期Stateを作成する
@@ -804,8 +803,9 @@ Planner（決定的scheduler、およびBeam Search oracle）はCandidate Snapsh
 - 実行前提を満たさずsuccessor生成前にrejectした展開は数えない
 - successor PlannerSearchStateを実際に構築し、評価対象にした時点で1増やす
 - （Beam Search oracle）beamWidthによる枝刈り前でも、構築・評価したsuccessorは数える
-- `maxExpandedStates = N` の場合はN件まで許可し、N+1件目を構築しない
-- N件へ到達した場合だけ `max_expanded_states_reached` warningを返す
+- （Beam Search oracle）`maxExpandedStates = N` の場合はN件まで許可し、N+1件目を構築しない。
+  N件へ到達したことは `PlannerBeamSearchTermination.reachedLimits` の `max_expanded_states` だけで表し、
+  warningは返さない（Issue #103 Phase D-2b）
 
 決定的schedulerは各stepでsuccessor stateをちょうど1つ構築するので、`expandedStates` は
 **適用したaction数**（初期State、開始時のzero-operation confirmは含まない）、すなわち実際に構築した
@@ -829,17 +829,16 @@ schedulerは成功したactionごとに `trace.length` と `expandedStates` を�
   Beam Search oracleの開始時confirmは変更しない
 - hidden defaultの `maxExpandedStates` をProductionのboundとして残してはいけない。
   `maxPlanSteps` を大きくした計算が、ユーザーから見えない `maxExpandedStates` で止まってはならない
-- 決定的schedulerは `max_expanded_states`（`reachedLimits`）と `max_expanded_states_reached`
-  （warning）を発生させない
-- `expandedStates` の計測値は診断・instrumentation・benchmarkのため従来どおり数え、
+- 決定的schedulerは `max_expanded_states`（`reachedLimits`）を発生させない
+- `expandedStates` の計測値は診断のため従来どおり数え、
   `PlannerRunTermination.expandedStates` と `PlannerRunResult.expandedStates` で返す。
-  Production Workerは数値progressを返さない（Issue #103 Phase D-2a、14章）。benchmarkだけが
-  scheduler専用の `PlannerScheduleExecutionOptions.onProgress({ expandedStates })` を使う
+  Production Workerは数値progressを返さない（Issue #103 Phase D-2a、14章）。schedulerにも
+  Beam Search oracleにも数値progress callbackは無い（Issue #103 Phase D-2b）
 
 `maxPlanSteps = 1000` は `defaultPlannerOptions` の初期値であり、Production `PlannerOptions` の
 唯一のfieldである（Issue #103 Phase D-2a）。ユーザーがBuildList画面の詳細設定で変更できるのも
 `maxPlanSteps` だけである。`beamWidth` / `maxExpandedStates` はProductionの型・既定値・validation・
-Worker request・UIのいずれにも存在せず、Beam Search oracle（test / benchmark / parity harness）
+Worker request・UIのいずれにも存在せず、Beam Search oracle（test / parity harness）
 専用contract（7.2.2）だけが持つ。
 
 ### 7.2.1 探索上限設定と typed termination
@@ -935,10 +934,9 @@ Worker境界をそのまま通し、Worker側でwarningから再構築しない�
 
 #### warningとの役割分担
 
-`max_steps_reached` / `max_expanded_states_reached` PlannerWarningは診断情報として残す。
-決定的schedulerが返すのは `max_steps_reached` だけであり、`max_expanded_states_reached` は
-Beam Search oracleだけが返す（Phase D-1）。Production scheduler / Production UIからは到達しない。
-warning kindの型分離はPhase D-2bで判断する。
+`max_steps_reached` PlannerWarningは診断情報として残す。Beam Search oracle専用だった
+`max_expanded_states_reached` はIssue #103 Phase D-2bで削除した。oracleのboundは
+`PlannerBeamSearchTermination.reachedLimits` だけで表し、warningとの二重表現はしない。
 
 - UI / Application / PersistenceはUI制御authorityとして `termination` だけを読む
 - warning messageを文字列解析して可用性を判断してはいけない
@@ -1002,10 +1000,10 @@ Phase D-2a（Production型 / termination / Worker protocolの整理）も
 `AppSettings.schemaVersion`（1）、`PRODUCTION_RNG_ENGINE_VERSION`（`production-rng:c5-e7`）、
 Master `dataVersion`（4）も変更しない。
 
-### 7.2.2 Beam Search oracle contract（test / benchmark / parity専用）
+### 7.2.2 Beam Search oracle contract（test / parity regression専用）
 
 Beam Search（`runPlannerBeamSearch()`）はIssue #103 Phase C以降Productionでは使われず、
-test / benchmark / parity harnessのoracleとしてだけ残る。Phase D-2aでoracle固有の要素を
+test / parity regressionのoracleとしてだけ残る（Issue #103のBrowser benchmarkはPhase D-2bで削除済み）。Phase D-2aでoracle固有の要素を
 Production contractから分離し、`src/domain/planner/plannerBeamSearchTypes.ts` へ隔離した。
 Production codeはこのmoduleをimportしない。
 
@@ -1029,10 +1027,8 @@ export type PlannerBeamSearchTermination =
   PlannerTerminationOf<PlannerBeamSearchLimitKind, PlannerBeamSearchOptions>;
 export type PlannerBeamSearchResult = PlannerRunResultOf<PlannerBeamSearchTermination>;
 
-export interface PlannerBeamSearchExecutionOptions extends PlannerExecutionOptions {
-  onProgress?: (progress: { expandedStates: number; maxExpandedStates: number }) => void;
-  searchInstrumentation?: PlannerSearchInstrumentation;
-}
+// Issue #103 Phase D-2b: Productionと同じ shouldCancel / yieldControl だけ
+export type PlannerBeamSearchExecutionOptions = PlannerExecutionOptions;
 ```
 
 - oracleは `maxPlanSteps` / `beamWidth` / `maxExpandedStates` の3つを使い、Beam Searchの展開・評価・
@@ -1052,9 +1048,13 @@ export interface PlannerBeamSearchExecutionOptions extends PlannerExecutionOptio
   rejected Entry記録はterminationに依存しない `PlannerRunOutcome` を読む。
   `PlannerFullSearchRunner`、`ProductionPlanGenerationObserver`、`PlannerResult`、
   `PlannerRunTermination` はoracleに合わせて広げない
-- Beam oracle、`comparePlannerSearchStates`、semantic key、`evaluationScore`、`totalCost`、
-  `preferredSourceProgressCount`、Beam instrumentation、parity harness、Browser benchmark、
-  representative fixtureの縮退・削除はPhase D-2bで判断する
+- Issue #103 Phase D-2bの判断（`docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md` 14.6）: Beam oracle、
+  `comparePlannerSearchStates`、semantic key、`evaluationScore`、`totalCost`、
+  `preferredSourceProgressCount` はregression oracleとして保持し、Beam / scheduler parity harness、
+  acceptance catalogue、`sanity-3` / `representative-12` parityはCI regressionとして保持する。
+  Issue #103 Browser benchmark（page / Worker / controller / Node runner）、PR #107 Beam instrumentation、
+  Beamの `onProgress` は削除した。schedulerのinstrumentationは `drops` / `provisionalOutcomes` を
+  報告するparity用test observer（`PlannerScheduleExecutionOptions.schedulerInstrumentation`）へ縮退した
 
 #### Calculation compatibility（version 5、歴史的記録）
 
@@ -3808,8 +3808,9 @@ max_planner_reruns_reached
 constrained_enumeration_bound_reached
 ```
 
-既存の `max_steps_reached` / `max_expanded_states_reached` は1回のBeam Searchの
-`PlannerOptions` boundを表すものであり、意味が異なるため流用しない。
+既存の `max_steps_reached` は1回のfull Planner runの `PlannerOptions` boundを表すものであり、
+意味が異なるため流用しない（Beam oracle専用だった `max_expanded_states_reached` はIssue #103
+Phase D-2bで削除した）。
 
 `constrained_enumeration_bound_reached` は、consumer stopではなく
 `summary.stoppedByBound === true` でenumerationが終わり、かつそのworkでCandidateを
@@ -4076,7 +4077,7 @@ Stepが削除済みEntryを参照しない。表示中Planから復元するexpl
 - PlanStepは実行ナビで1つずつ確認できる粒度にする
 - 高速モード用のまとめStepは作らない
 - Plan生成時点では実際のDBを更新しない。保存は呼び出し側Repositoryが行う
-- full Planner runの打切り時は到達した上限に応じて `max_steps_reached` / `max_expanded_states_reached` を返す
+- full Planner runが `maxPlanSteps` へ到達した時は `max_steps_reached` を返す
 - 併せて `PlannerResult.termination` にtypedな終了状態を返す（7.2.1）
 - `ProductionPlan.calculationContext` はPlannerInputと一致させる
 - 同じPlannerInput、RngEngine fixture、ID Factory、Clock、Planner constantsから、採用Entry、操作列、PlanStep、score、warning、予約IDが同一になる
@@ -4604,8 +4605,9 @@ Worker adapter / Clientは暗黙適用しない（9.2.4.9）。この記述は�
 
 Issue #103 Phase CでProductionのfull Planner runを決定的schedulerへ切り替えた。Production Worker
 controllerは共有Production calculation（`createProductionPlanWithObserver()`）を呼ぶことで決定的
-schedulerになる。Worker requestへstrategyを追加しない。benchmark専用Worker（Issue #103 benchmark）の
-`strategy`（`beam` / `scheduler`）は計測用であり、Production strategy flagではない。
+schedulerになる。Worker requestへstrategyを追加しない。Phase Bの計測に使ったbenchmark専用Worker
+（Issue #103 benchmark）の `strategy` は計測用でありProduction strategy flagではなかった。このWorkerは
+Issue #103 Phase D-2bで削除した。
 
 Issue #103 Phase D-2aでProduction Worker protocolを整理した。
 
@@ -4620,11 +4622,10 @@ Issue #103 Phase D-2aでProduction Worker protocolを整理した。
   generation、`shouldCancel`、`yieldControl` で維持する
 - request / resultの `PlannerInput.options` と `termination` はProduction型（`maxPlanSteps` /
   `max_plan_steps` だけ）であり、`beamWidth` / `maxExpandedStates` を運ばない
-- benchmark / testの観測hook（schedulerの `onProgress`、`schedulerInstrumentation`、Beam oracleの
-  `onProgress` / `searchInstrumentation`）は戦略別のexecution options型
-  （`PlannerScheduleExecutionOptions` / `PlannerBeamSearchExecutionOptions`）だけにあり、Production
-  Worker protocol / Clientへ露出しない。benchmarkのためにProduction Workerのprogress responseを
-  残さない
+- testの観測hook（schedulerのparity用observer `schedulerInstrumentation`）はscheduler専用の
+  `PlannerScheduleExecutionOptions` だけにあり、Production Worker protocol / Clientへ露出しない。
+  schedulerとBeam oracleの `onProgress` とBeamの `searchInstrumentation` はIssue #103 Phase D-2bで
+  削除した。benchmarkのためにProduction Workerのprogress responseを残さない
 
 Workerを利用できない環境ではClientのversionを `production-engine-unavailable` とし、
 計画実行を明示的なunavailable errorにする。これは
