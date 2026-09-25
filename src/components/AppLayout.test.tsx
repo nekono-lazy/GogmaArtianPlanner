@@ -2,10 +2,12 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { appTheme } from '../app/theme'
+import { createAppVersionChecker } from '../services/appVersion/appVersionChecker'
 import { useSettingsStore } from '../stores/settingsStore'
 import { AppLayout } from './AppLayout'
+import type { AppUpdateNoticeDependencies } from './appVersion/AppUpdateNotice'
 
 /**
  * `useMediaQuery(theme.breakpoints.up('md'))` reads `window.matchMedia`.
@@ -38,12 +40,12 @@ const originalMatchMedia = window.matchMedia
  * not render `PageShell` or a real page here (those are covered by
  * `PageShell.test.tsx` and `src/App.test.tsx`).
  */
-function renderAppLayout(initialPath: string) {
+function renderAppLayout(initialPath: string, appUpdate?: AppUpdateNoticeDependencies) {
   return render(
     <ThemeProvider theme={appTheme}>
       <MemoryRouter initialEntries={[initialPath]}>
         <Routes>
-          <Route element={<AppLayout />}>
+          <Route element={<AppLayout appUpdate={appUpdate} />}>
             <Route index element={<div>ダッシュボード画面</div>} />
             <Route path="rng" element={<div>RNG画面</div>} />
             <Route path="normal-counters" element={<div>通常カウンター画面</div>} />
@@ -397,5 +399,48 @@ describe('AppLayout', () => {
     await waitFor(() =>
       expect(within(screen.getByRole('banner')).getByText('通常アーティアカウンター')).toBeInTheDocument(),
     )
+  })
+  describe('stale client notice (Issue #131)', () => {
+    function updatedBuild() {
+      const checker = createAppVersionChecker({
+        currentBuildId: 'a'.repeat(40),
+        fetchLatestBuildId: async () => 'b'.repeat(40),
+      })
+      return { checker, reload: vi.fn() }
+    }
+
+    it('shows no notice by default (no production build ID)', () => {
+      renderAppLayout('/')
+      expect(screen.queryByText('新しいバージョンが公開されています')).not.toBeInTheDocument()
+    })
+
+    it('shows the notice in the main content above the page, keeps navigation working and never reloads', async () => {
+      const user = userEvent.setup()
+      const appUpdate = updatedBuild()
+      renderAppLayout('/', appUpdate)
+
+      const main = screen.getByRole('main')
+      const notice = await within(main).findByRole('status')
+      expect(notice).toHaveTextContent('新しいバージョンが公開されています')
+      const page = within(main).getByText('ダッシュボード画面')
+      expect(notice.compareDocumentPosition(page) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      // The skip link and the mobile Drawer toggle are untouched.
+      expect(screen.getByRole('link', { name: 'メインコンテンツへ移動' })).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'ナビゲーションを開く' }))
+      const nav = screen.getByRole('navigation', { name: 'メインナビゲーション' })
+      await user.click(within(nav).getByRole('link', { name: '目標武器' }))
+
+      expect(screen.getByText('目標武器画面')).toBeInTheDocument()
+      // The notice stays across route changes until the user reloads. The main
+      // content is hidden from the accessibility tree while the modal Drawer is
+      // still closing, so wait for it as the AppBar test does.
+      await waitFor(() =>
+        expect(within(screen.getByRole('main')).getByRole('status')).toHaveTextContent(
+          '新しいバージョンが公開されています',
+        ),
+      )
+      expect(appUpdate.reload).not.toHaveBeenCalled()
+    })
   })
 })

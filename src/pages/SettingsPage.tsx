@@ -66,6 +66,8 @@ import {
   productionIdentificationUnavailableReasonLabels,
 } from '../services/rngIdentification/productionIdentificationAvailability'
 import { settingsRepository } from '../db/settingsRepository'
+import { formatAppBuildIdForDisplay } from '../services/appVersion/appBuildId'
+import { currentAppBuildId } from '../services/appVersion/appVersionChecker'
 import { isThemeMode } from '../app/themeModePreference'
 import { useAppearanceStore } from '../stores/appearanceStore'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -207,10 +209,13 @@ function ThemeModeSetting() {
 export function SettingsPage({
   dependencies,
   browser = defaultDataTransferBrowserAdapter,
+  appBuildId = currentAppBuildId,
 }: {
   dependencies?: SettingsPageDependencies
   /** The clipboard and clock of the Export Dialog; injectable for tests. */
   browser?: DataTransferBrowserAdapter
+  /** The running Pages build ID (`docs/UI_FLOW.md` 14); `null` for a local build. */
+  appBuildId?: string | null
 }) {
   const debugMode = useSettingsStore((state) => state.debugMode)
   const setDebugMode = useSettingsStore((state) => state.setDebugMode)
@@ -583,6 +588,12 @@ export function SettingsPage({
                 <VersionRow label="アプリスキーマバージョン" value={String(APP_SETTINGS_SCHEMA_VERSION)} />
               </>
             )}
+            {/* The commit SHA this build was deployed from, shortened for display
+                only; the stale client check compares the full ID. */}
+            <VersionRow
+              label="ビルドID"
+              value={appBuildId === null ? 'なし（ローカル開発）' : formatAppBuildIdForDisplay(appBuildId)}
+            />
             <VersionRow label="RNG予測エンジン" value={productionRngRuntime.mode} />
             <VersionRow label="Engine version" value={productionRngRuntime.version} />
             {/* RNG同定 is the Identification Wizard availability, decided at the

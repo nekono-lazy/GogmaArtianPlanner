@@ -66,6 +66,20 @@ PCブラウザとスマートフォンブラウザの双方を主要利用環境
 
 Production v1のSkill / Gogma PredictionとIdentification Wizardは、通常アーティアおよび巨戟アーティアを利用可能なゲーム進行状態のユーザーを対象とする。この製品前提により、Production runtimeはCounterのactive branchを使用する。これはユーザーのactual Counter Gate値を特定済みとみなすことを意味しない。
 
+### 3.3 公開バージョンの更新検出
+
+GitHub Pagesへ新しいbuildが公開された後も、以前に開いたページは古いJavaScriptのまま動作し続ける。修正済みの不具合が残って見えたり、仕様と挙動が一致しなかったりすることを避けるため、実行中のbuildより新しいbuildが公開されたことを検出し、ユーザーへ再読み込みを案内する（Issue #131）。
+
+- GitHub Pagesへdeployするbuildは、build元のGitHub commit SHAをbuild IDとして持つ。deploy workflowはcheckoutしたcommitの `github.sha` をbuildへ渡し、同じ値を実行中のJavaScriptと、公開物に含めるversion manifest（Viteの `base` 直下の `version.json`、内容は `{ "buildId": "<commit SHA>" }`）の両方へ埋め込む。コードが同じcommitのままworkflowを再実行しても同じbuild IDになり、新しいバージョンとは扱わない
+- 実行中のbuild IDと、公開中の最新 `version.json` のbuild IDをfull SHAのまま比較し、異なる場合だけ「新しいバージョンがある」と判定する。manifestはbrowser cacheの影響を受けないよう、cacheを使わないrequestと一意なqueryで取得する
+- 確認はアプリ起動時、タブが再び表示された時、表示中の低頻度の定期確認（15分ごと）で行う。起動時とタブ復帰時の確認は、前回の確認開始から60秒以内なら行わない。非表示のタブでは定期確認を行わない
+- manifestの取得・検証の失敗（offline、通信エラー、HTTPエラー、不正なJSON、`buildId` の欠落・空文字など）はユーザーへエラー表示せず、アプリの利用を妨げない。次回の確認で再試行する
+- 新しいバージョンを検出しても自動で再読み込みしない。全画面共通の閉じられない通知を表示し、ユーザーが「再読み込み」を押した時だけ通常のページ再読み込みを行う。通知の表示中も現在の操作は継続でき、一度検出した通知はその後の確認失敗で消えない。再読み込みはIndexedDB、AppSettings、その他の保存データを削除・初期化しない（画面の未保存の入力は保存されない）
+- build IDを持たないbuild（ローカル開発、通常のCI build）では更新検出を行わず、manifestも取得しない。架空のbuild IDを生成しない
+- build IDはApplication infrastructureの情報であり、IndexedDB、AppSettings、Export / Importのいずれにも保存しない。CalculationContextの要素でも計算結果の互換性判定のauthorityでもなく、既存のBuildCandidate / BuildListEntry / ProductionPlanをstaleにしない。`DATABASE_SCHEMA_VERSION`、`AppSettings.schemaVersion`、`ExportRoot.schemaVersion`、`CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`PRODUCTION_RNG_ENGINE_VERSION`、Master dataVersionはこの機能で変更しない
+- Service Worker、PWA化、自動更新、更新内容（リリースノート）の表示、runtimeからのGitHub API呼び出しは行わない
+- 通知と表示の詳細は[UI_FLOW.md](./UI_FLOW.md) 3.6、設定画面のビルドID表示は同14で定義する
+
 ---
 
 ## 4. 初期版の基本方針
@@ -1105,7 +1119,7 @@ Execution Navigatorの結果一致（観測値入力と操作0 Idealの完成確
 - `schemaVersion`: ユーザーデータ形式のバージョン
 - RNGアルゴリズムまたはEngineのバージョン
 
-これらをまとめたCalculationContextを定義する。BuildCandidate、BuildListEntry、ProductionPlanには生成時のCalculationContextを保存する。Master DataまたはRNG Engineの変更後、互換性が確認できないCandidate、BuildListEntry、Planをstale扱いにし、現行結果として使用しない。
+これらをまとめたCalculationContextを定義する。GitHub Pages buildのbuild ID（3.3）はこれらとは別のApplication infrastructure情報であり、CalculationContextに含めない。BuildCandidate、BuildListEntry、ProductionPlanには生成時のCalculationContextを保存する。Master DataまたはRNG Engineの変更後、互換性が確認できないCandidate、BuildListEntry、Planをstale扱いにし、現行結果として使用しない。
 
 Production v1 adapterがpersisted exact Gateを要求せずactive representativeを使用する変更はobservable Production semantics changeである。runtime実装を行うC5-E2C3で `PRODUCTION_RNG_ENGINE_VERSION` を `production-rng:c5-e2` へ更新し、既存CalculationContextを `calculation_context_changed` として無効化する。C5-E2C2は仕様改訂だけでありversionを変更しない。
 
