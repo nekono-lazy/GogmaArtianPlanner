@@ -251,9 +251,17 @@ export function createPlannerPhysicalActionIdentity(
  *   from the Skill stream position alone, so a Reset Skills directly followed
  *   by another Reset Skills is unobserved
  *
- * Every other operation is never skippable. `create_normal_artian` and
- * `convert_normal_to_gogma` carry physical or inventory side effects, and a
- * route's final operation forms the Candidate result itself.
+ * A predicted `create_normal_artian` of `count = N` is judged per unit
+ * (Issue #129): its first `N - 1` units are Counter-advance forges whose
+ * weapons the Route never uses - only the shared Normal Counter moving by one
+ * matters - so another Entry's real forge at that position passes them. Its
+ * last unit forges the production-target Normal the following conversion
+ * uses, a weapon of this Entry alone, and is never skippable. A blind creation
+ * holds no Counter position and is never skippable either.
+ *
+ * Every other operation is never skippable. `convert_normal_to_gogma` carries
+ * physical and inventory side effects, and a route's final operation forms the
+ * Candidate result itself.
  *
  * "Immediately following" is judged inside the unit's own lane
  * (`docs/PLANNER_SPEC.md` 7.0.4): a Skill amendment interleaved between two
@@ -275,9 +283,13 @@ function canSkipWhenCounterPassed(
   unitCount: number,
   selectedEndpointOperationIndexes: ReadonlySet<number>,
 ): boolean {
+  const operation = operations[operationIndex]
+  if (operation.type === 'create_normal_artian') {
+    if (isBlindCreateNormalArtianOperation(operation)) return false
+    return unitIndex < unitCount - 1
+  }
   if (unitIndex !== unitCount - 1) return false
   if (selectedEndpointOperationIndexes.has(operationIndex)) return false
-  const operation = operations[operationIndex]
   const lane = routeOperationLane(operation)
   const next = operations
     .slice(operationIndex + 1)
@@ -600,9 +612,11 @@ export function currentPlannerCounterValue(
  * the route runtime output, or any source mutation version
  * (`docs/PLANNER_SPEC.md` 7.0.2). A unit that is not
  * `canSkipWhenCounterPassed` is never passed here, so a past required unit
- * still fails closed in the ordinary counter precondition. Each stream lane is
- * passed on its own, and never beyond the Entry's checkpoint pin while the
- * other lane has not reached its own pin (7.5.2).
+ * still fails closed in the ordinary counter precondition. Each lane is passed
+ * on its own - the base lane only through the Counter-advance forges of a
+ * predicted Normal creation (Issue #129), which the checkpoint pin never gates
+ * - and a stream lane never beyond the Entry's checkpoint pin while the other
+ * lane has not reached its own pin (7.5.2).
  */
 export function fastForwardPlannerRouteProgress(
   state: PlannerSearchState,
@@ -612,7 +626,7 @@ export function fastForwardPlannerRouteProgress(
     const started = state.routeProgressByEntryId[entryId]
     if (started === undefined) return
     let progress = started
-    for (const lane of ['bonus', 'skill'] as const) {
+    for (const lane of ['base', 'bonus', 'skill'] as const) {
       while (progress[lane] < lanes[lane].length) {
         const unit = lanes[lane][progress[lane]]
         if (unit.counterBefore === null) break

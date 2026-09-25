@@ -54,7 +54,7 @@ describe('AppSettings Candidate Search defaults persistence migration (Dexie v8 
     expect(DATABASE_SCHEMA_VERSION).toBe(9)
     expect(EXPORT_SCHEMA_VERSION).toBe(12)
     expect(APP_SETTINGS_SCHEMA_VERSION).toBe(2)
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(14)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(15)
     expect(RNG_STATE_SCHEMA_VERSION).toBe(2)
     expect(PRODUCTION_RNG_ENGINE_VERSION).toBe('production-rng:c5-e7')
   })

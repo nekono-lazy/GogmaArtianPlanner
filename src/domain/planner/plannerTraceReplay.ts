@@ -28,7 +28,7 @@ import {
   advanceBlindNormalCreationCounters,
   createPlannerPhysicalActionIdentity,
 } from './plannerRouteProgress'
-import type { PlannerInput, PlannerSearchAction, PlannerSearchRngSnapshot, PlannerSearchState } from './plannerTypes'
+import type { PlannerInput, PlannerSearchAction, PlannerSearchRngSnapshot, PlannerSearchRoutePosition, PlannerSearchState } from './plannerTypes'
 
 /**
  * Non-persistent result of replaying one Search Action.
@@ -73,6 +73,17 @@ export interface PlannerPlanStepDraft {
    * no persisted PlanStep field is added.
    */
   isBlindNormalCreation: boolean
+  /**
+   * The primary Entry's Route unit position this physical action executed, or
+   * `null` for a Planner-only action. Non-persistent like the rest of this
+   * draft.
+   *
+   * A Normal creation's role is decided by it (Issue #129): a Counter-advance
+   * forge another Entry's real forge passed never reaches the trace, so the
+   * number of forges an Entry actually executed does not tell which one is its
+   * production-target Normal - the Route position does.
+   */
+  routePosition: PlannerSearchRoutePosition | null
 }
 
 export type PlannerTraceReplayIssueCode =
@@ -539,7 +550,8 @@ export function replayPlannerSearchTrace(input: PlannerInput, bestState: Planner
     applySnapshot(runtime, action.rngAfter); if (!sameSnapshot(runtime, action.rngAfter)) return fail('rng_after_mismatch', 'Replay runtime does not match Search Action rngAfter.', index)
     const normalBefore = advance.affectedNormalCounterId === null ? null : action.rngBefore.normalCounters.find(({ id }) => id === advance.affectedNormalCounterId)?.counter ?? null
     const normalAfter = advance.affectedNormalCounterId === null ? null : action.rngAfter.normalCounters.find(({ id }) => id === advance.affectedNormalCounterId)?.counter ?? null
-    drafts.push({ isBlindNormalCreation: action.kind === 'route_operation' && action.routeOperation.type === 'create_normal_artian' && isBlindCreateNormalArtianOperation(action.routeOperation), actionKind: action.kind, operationType: action.actionType, routeOperation: action.routeOperation === null ? null : structuredClone(action.routeOperation), primaryBuildListEntryId: action.primaryBuildListEntryId, progressedBuildListEntryIds: [...action.progressedBuildListEntryIds], targetWeaponId: entry.targetWeaponId, candidateId: entry.candidateSnapshot.id, ownedWeaponId: action.ownedWeaponId, expectedResult, checkpointMilestones, rngStateBefore, rngStateAfter: structuredClone(runtime.rngState), normalCountersBefore, normalCountersAfter: structuredClone(runtime.normalCounters), rngAdvance: advance, debug: { startBaseSeed: runtime.rngState.baseSeed.value, startGogmaCounter: action.rngBefore.gogmaCounter, endGogmaCounter: action.rngAfter.gogmaCounter, startSkillCounter: action.rngBefore.skillCounter, endSkillCounter: action.rngAfter.skillCounter, startNormalCounter: normalBefore, endNormalCounter: normalAfter, plannerReason: action.actionType } })
+    const routePosition = action.kind === 'route_operation' ? action.progressedRoutePositions[action.primaryBuildListEntryId] ?? null : null
+    drafts.push({ isBlindNormalCreation: action.kind === 'route_operation' && action.routeOperation.type === 'create_normal_artian' && isBlindCreateNormalArtianOperation(action.routeOperation), routePosition: routePosition === null ? null : { ...routePosition }, actionKind: action.kind, operationType: action.actionType, routeOperation: action.routeOperation === null ? null : structuredClone(action.routeOperation), primaryBuildListEntryId: action.primaryBuildListEntryId, progressedBuildListEntryIds: [...action.progressedBuildListEntryIds], targetWeaponId: entry.targetWeaponId, candidateId: entry.candidateSnapshot.id, ownedWeaponId: action.ownedWeaponId, expectedResult, checkpointMilestones, rngStateBefore, rngStateAfter: structuredClone(runtime.rngState), normalCountersBefore, normalCountersAfter: structuredClone(runtime.normalCounters), rngAdvance: advance, debug: { startBaseSeed: runtime.rngState.baseSeed.value, startGogmaCounter: action.rngBefore.gogmaCounter, endGogmaCounter: action.rngAfter.gogmaCounter, startSkillCounter: action.rngBefore.skillCounter, endSkillCounter: action.rngAfter.skillCounter, startNormalCounter: normalBefore, endNormalCounter: normalAfter, plannerReason: action.actionType } })
   }
   const matches =
     semanticRngHash(bestState.currentRngState, bestState.currentNormalCounters) === semanticRngHash(runtime.rngState, runtime.normalCounters) &&

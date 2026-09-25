@@ -633,6 +633,14 @@ Plannerが自動判断できない局所競合では、ユーザーがBuildListE
   Browser benchmark / 計測基盤はPhase D-2bで削除した
 - 通常Planner、競合解決のための制約付き再検索、比較（what-if）、実行中計画の再計画試算は、
   同じ計算方式を使う。機能ごとに別の探索方式を持たない
+- 同じ武器種の通常アーティアCounterを進める複数ルートは、Counterを進めるためだけの作成
+  （巨戟化しない途中の通常アーティア作成）を共有Counterの進行として扱う。あるルートの作成で
+  Counterが進めば、別ルートの同じ位置の途中作成は実行不要として飛ばし、競合にしない。巨戟化に使う
+  最後の1本（作成対象）は各ルート固有の武器であり、2つのルートの作成対象が同じCounter位置に重なる
+  場合だけを競合とする。作成対象と途中作成が同じ位置に重なる場合は、作成対象を先に作ってから
+  途中作成を飛ばす。途中作成を1回の作成で複数ルートの武器として共有するのではなく、飛ばしたルートの
+  操作は計画に現れない（Issue #129、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7.0.2）。Counter位置を
+  持たない通常アーティア作成（通常Counter未確定時の作成）は常に1回の操作として実行する
 - ユーザーが変更できるPlannerの設定は「最大計画ステップ数」（計画で実行する操作数の安全上限、
   既定値1000）だけとする。上限に達して計画が完成しなかった場合は、探索未完了として表示し、
   値を増やして再実行できる（Issue #103 Phase D-1）
@@ -1152,6 +1160,8 @@ Production v1 adapterがpersisted exact Gateを要求せずactive representative
 通常Plannerの計算方式を上限付きBeam Searchから「ルート確定 + 決定的scheduling」へ切り替えた変更（Issue #103 Phase C、19章 / 20章）では、同じ入力に対して未解決競合の暫定帰結、返す競合、不採用記録、操作順などが変わり、保存済みの作成プランは生成方式を記録しないため、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を14へ更新した。version 13以前の作成プランは下書き・実行中を問わず実行・比較・競合操作ができず（`calculation_context_changed`）、実行中のプランは現在地点からの再計画が必要になる。保存内容は削除・変換せず、そのまま表示できる。候補検索と作成リストの意味は変えていないため、version 12 / 13の候補と作成リスト項目は明示的な互換例外によりそのまま利用できる（version 11以前は非互換のまま）。永続形状、RNG、Masterは変えないため、Dexie `DATABASE_SCHEMA_VERSION`（8）、`ExportRoot.schemaVersion`（11）、`RngState.schemaVersion`（2）、`AppSettings.schemaVersion`（1）、`PRODUCTION_RNG_ENGINE_VERSION`、Master dataVersionは変更しない。
 
 候補検索の探索量の既定値を設定として保存できるようにした変更（Issue #125、14.1）は、AppSettingsの永続形状の変更である。AppSettingsへ `candidateSearchDefaults` を追加して `AppSettings.schemaVersion` を2、Dexie `DATABASE_SCHEMA_VERSION` を9、`ExportRoot.schemaVersion` を12へ更新した。Dexie v8 -> v9 upgradeとExport schema 11 -> 12 migrationは、旧AppSettings（version 1）へ推奨の初期値 350 / 500 / 1500 を補完し、デバッグモード・`resultPageSize`・`defaultSearchLimit`・日時は維持する。旧候補検索画面の固定値（500 / 350 / 1500）はユーザーが保存した値ではないため引き継がず、`defaultSearchLimit`（通常アーティアCounter特定の検索範囲）を探索量の既定値へ流用しない。候補検索・Planner・RNGの計算意味は変わらないため、`CURRENT_CALCULATION_APP_SCHEMA_VERSION`（14）、`PRODUCTION_RNG_ENGINE_VERSION`、`RngState.schemaVersion`（2）、Master dataVersionは変更せず、既存の候補・作成リスト項目・作成プランをstaleにしない。
+
+通常アーティア作成ルートのCounter進行用の途中作成を、別ルートの作成で通過したときに実行不要として飛ばすよう変更した（Issue #129、19章）。同じ入力に対して返す競合、採用・不採用となる作成リスト項目、操作順、完成結果が変わるため、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を15へ更新した。version 14以前の作成プランは下書き・実行中を問わず実行・比較・競合操作ができず（`calculation_context_changed`）、実行中のプランは現在地点からの再計画が必要になる。保存内容は削除・変換せず、そのまま表示できる。候補検索と作成リストの意味は変えていないため、version 12 / 13 / 14の候補と作成リスト項目は明示的な互換例外によりそのまま利用できる（version 11以前は非互換のまま）。永続形状、RNG、Masterは変えないため、Dexie `DATABASE_SCHEMA_VERSION`（9）、`ExportRoot.schemaVersion`（12）、`AppSettings.schemaVersion`（2）、`RngState.schemaVersion`（2）、`PRODUCTION_RNG_ENGINE_VERSION`、Master dataVersionは変更しない。
 
 ---
 

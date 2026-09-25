@@ -191,10 +191,11 @@ constraintを黙って捨てることになるため、旧1..10の全計算artif
 以下の2..5互換例外は歴史的契約でありversion 6以降には適用しない。Plan開始effect（version 13）は
 ProductionPlanの実行意味だけを変えたため、build結果に限りversion 12 -> 13の明示的互換例外を持つ。
 Production Plannerの決定的scheduler切替（version 14）もProductionPlanの計算意味だけを変えたため、
-build結果に限りversion 12 / 13 -> 14の明示的互換例外を持つ（本節末尾、いずれもProductionPlanには
-適用しない）。
+build結果に限りversion 12 / 13 -> 14の明示的互換例外を持つ。予測Normal creationのCounter進行用forgeの
+silent fast-forward（version 15、Issue #129）もProductionPlanの計算意味だけを変えたため、build結果に限り
+version 12 / 13 / 14 -> 15の明示的互換例外を持つ（本節末尾、いずれもProductionPlanには適用しない）。
 現行versionの単一authorityは `src/domain/models/common.ts` の
-`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 14` とし、Search、BuildList、Plannerと
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 15` とし、Search、BuildList、Plannerと
 benchmark入力のruntime creatorで共用する。永続モデル移行は独立してDexie
 `DATABASE_SCHEMA_VERSION`（現行9。14.2）で管理し、AppSettingsは独立した `schemaVersion`（現行2。13）を持つ。Calculation semantics / artifact
 validity境界とDexie schemaは別の概念であり、片方の更新はもう片方の更新を意味しない。
@@ -320,7 +321,7 @@ version 12のPlanはStepでの紐付けを前提とした期待状態を持ち�
 version 1..11のbuild結果は従来どおり非互換である。Plan開始effectは選択Entryから導出し永続fieldを追加しないため、Dexie
 `DATABASE_SCHEMA_VERSION` は6、`ExportRoot.schemaVersion` は9のままである。
 
-現行の `CURRENT_CALCULATION_APP_SCHEMA_VERSION` **14** は、通常Plannerの計算方式を上限付きBeam Searchから
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION` **14** は、通常Plannerの計算方式を上限付きBeam Searchから
 Route commitment + 決定的schedulerへ切り替えた（Issue #103 Phase C、
 [ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md) 15.2 / 15.3、
 PLANNER_SPEC 7）。同じPlannerInputに対して、未解決競合の暫定帰結、返す `conflicts`、
@@ -337,7 +338,24 @@ scheduler由来かを判別できない。
 例外は明示mapだけで表し、「12以上なら互換」のような範囲判定や将来versionへの推移的適用はしない。
 永続形状は変えないため、Dexie `DATABASE_SCHEMA_VERSION` は8、`ExportRoot.schemaVersion` は11、
 `RngState.schemaVersion` は2、`AppSettings.schemaVersion` は1、`PRODUCTION_RNG_ENGINE_VERSION`
-（`production-rng:c5-e7`）とMaster dataVersionも変更しない。migrationは追加しない。
+（`production-rng:c5-e7`）とMaster dataVersionも変更しない（いずれも当時）。migrationは追加しない。
+
+現行の `CURRENT_CALCULATION_APP_SCHEMA_VERSION` **15** は、予測 `create_normal_artian(count = N)` の
+先頭N - 1本（Counter進行用forge）を `canSkipWhenCounterPassed` にし、同じNormal Counter位置を別Entryの
+実forgeが通過したときsilent fast-forwardする（Issue #129、PLANNER_SPEC 7.0.2）。作成対象forge
+（最終unit）とblind createは引き続き必須であり、Normal creationはphysical action sharingにしない。
+同じPlannerInputに対して、`conflicts`（中間forgeを含む `same_normal_counter` が生成されなくなる）、選択・
+不採用Entry、Step列、Route progress、完成結果が変わり得る。
+
+| artifact | version 15 runtimeでの扱い |
+| --- | --- |
+| ProductionPlan version 1..14（draft / activeを問わない） | 非互換。`calculation_context_changed` でfail closedし、Worker準備、競合操作、what-if、作成開始、実行準備、実行へ進めない。exact persisted内容の表示は維持し、read migrationやversion書き換えはしない。実行中（`active`）のPlanは現在地点からの再計画（PLANNER_SPEC 16.8）が必要。Planの互換判定は従来どおり4 field完全一致で、Plan向けの例外は無い |
+| BuildCandidate / BuildListEntry version 12 / 13 / 14 | 明示的なbuild-result例外 `15 -> [12, 13, 14]` により互換。gameVersion、masterDataVersion、rngEngineVersionの一致と通常のstaleness判定は引き続き必要 |
+| BuildCandidate / BuildListEntry version 1..11 | 従来どおり非互換 |
+
+永続形状は変えないため、Dexie `DATABASE_SCHEMA_VERSION`（9）、`ExportRoot.schemaVersion`（12）、
+`AppSettings.schemaVersion`（2）、`RngState.schemaVersion`（2）、`PRODUCTION_RNG_ENGINE_VERSION`
+（`production-rng:c5-e7`）、Master dataVersionは変更しない。migrationは追加しない。
 
 ---
 

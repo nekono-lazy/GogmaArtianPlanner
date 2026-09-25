@@ -771,6 +771,7 @@ describe('Production plan generation', () => {
       },
       debug: null,
       isBlindNormalCreation: false,
+      routePosition: { operationIndex: 0, unitIndex: 0, unitCount: 1 },
       checkpointMilestones: [],
     }
     expect(() => projectProductionPlanExecution({

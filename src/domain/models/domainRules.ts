@@ -101,6 +101,16 @@ export function isCalculationContextCompatible(
  * incompatible, and the exception never reaches a ProductionPlan: every
  * version 1..13 Plan fails closed under 14.
  *
+ * App schema 15 changes only the Production Planner's handling of the
+ * Counter-advance forges of a predicted Normal creation (Issue #129,
+ * `docs/PLANNER_SPEC.md` 7.0.2): they are fast-forwarded instead of competing
+ * as `same_normal_counter` conflicts. Candidate Search, the constrained
+ * enumerator, BuildCandidate and BuildListEntry snapshot semantics and
+ * staleness are untouched, so a version 12, 13 or 14 BuildCandidate or
+ * BuildListEntry stays usable under version 15. Version 1..11 stay
+ * incompatible, and the exception never reaches a ProductionPlan: every
+ * version 1..14 Plan fails closed under 15.
+ *
  * Each exception is directional and deliberately narrow: version 1 stays
  * incompatible, it is never a general forward compatibility for future
  * versions, every other CalculationContext field must still be equal, the
@@ -114,6 +124,7 @@ const COMPATIBLE_BUILD_RESULT_APP_SCHEMA_VERSIONS: ReadonlyMap<number, readonly 
     [5, [2, 3, 4]],
     [13, [12]],
     [14, [12, 13]],
+    [15, [12, 13, 14]],
   ])
 
 export function isBuildResultCalculationContextCompatible(

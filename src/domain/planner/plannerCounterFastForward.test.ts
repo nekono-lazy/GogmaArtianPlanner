@@ -578,7 +578,7 @@ describe('Route unit skip derivation', () => {
     ).toEqual([false, false])
   })
 
-  it('never skips physical or inventory operations', () => {
+  it('skips only the Counter-advance forges of a predicted Normal creation, never its production-target forge or the conversion', () => {
     expect(
       skipFlags({
         kind: 'normal_artian_to_gogma',
@@ -612,7 +612,7 @@ describe('Route unit skip derivation', () => {
           },
         ],
       }),
-    ).toEqual([false, false, false, true, false])
+    ).toEqual([true, false, false, true, false])
   })
 })
 
