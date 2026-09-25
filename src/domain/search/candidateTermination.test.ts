@@ -338,3 +338,58 @@ describe('B4 delta scheduler: semantic work, not Prediction memo counts', () => 
     expect((all as unknown as Record<string, unknown>).isTruncated).toBeUndefined()
   })
 })
+
+describe('Phase 1-A composition seam (behavior-preserving)', () => {
+  function drive(custom: boolean) {
+    const f = fixture(true, 5)
+    const createCandidateId = vi.fn((input: { semanticHash: string }) => candidateId(input.semanticHash))
+    const now = vi.fn(() => SEARCH_FIXTURE_TIME)
+    const execution = createSearchExecutionContext({ ...options, now, createCandidateId })
+    const target = f.input.targetWeapons[0]
+    const support = createSearchPredictionSupport(f.engine, target, f.input.master)
+    const context: RouteSearchContext = { target, input: f.input, engine: f.engine, execution, predictionSupport: support,
+      skillStream: createTargetSkillStream(target, skillStreamInputForSearch(f.input), f.engine, execution, () => true),
+      bonusStream: createTargetBonusStream(target, bonusStreamInputForSearch(f.input), f.engine, execution, support),
+      normalPredictions: new Map<number, RestorationBonusSet>() }
+    const composed: { route: unknown; cost: number }[] = []
+    const scheduler = custom
+      ? new TargetSearchScheduler(context, ({ route, cost }) => composed.push({ route, cost }))
+      : new TargetSearchScheduler(context)
+    return { ...f, context, scheduler, composed, createCandidateId, now }
+  }
+
+  it('delivers exactly the Routes the ordinary exhaustive run materializes, in queue order, with no Candidate identity', async () => {
+    const materialized = vi.spyOn(routeShared, 'createBaseCandidate')
+    const ordinary = drive(false)
+    const ordinaryResults = []
+    for (const search of [searchNormalArtianRoutes, searchOwnedNormalArtianRoutes, searchExistingGogmaRoutes]) {
+      ordinaryResults.push(await search(ordinary.context, ordinary.scheduler))
+    }
+    await ordinary.scheduler.run(false)
+    const ordinaryRoutes = materialized.mock.calls.map((call) => call[5])
+    expect(ordinaryRoutes.length).toBeGreaterThan(0)
+    expect(ordinaryResults.flatMap((result) => result.candidates)).toHaveLength(ordinaryRoutes.length)
+    materialized.mockClear()
+
+    const custom = drive(true)
+    const customResults = []
+    for (const search of [searchNormalArtianRoutes, searchOwnedNormalArtianRoutes, searchExistingGogmaRoutes]) {
+      customResults.push(await search(custom.context, custom.scheduler))
+    }
+    while (await custom.scheduler.step()) { /* consumer-driven: no termination policy */ }
+    expect(await custom.scheduler.step()).toBe(false)
+    expect(custom.scheduler.queue.pendingCount).toBe(0)
+
+    expect(custom.composed.map(({ route }) => route)).toEqual(ordinaryRoutes)
+    // Costs arrive in non-decreasing lower-bound order.
+    const costs = custom.composed.map(({ cost }) => cost)
+    expect(costs).toEqual([...costs].sort((a, b) => a - b))
+    // The handler replaced the ordinary materialization entirely.
+    expect(materialized).not.toHaveBeenCalled()
+    expect(custom.createCandidateId).not.toHaveBeenCalled()
+    expect(custom.now).not.toHaveBeenCalled()
+    expect(customResults.flatMap((result) => result.candidates)).toEqual([])
+    // The seam adds no prediction call.
+    expect(custom.calls).toEqual(ordinary.calls)
+  })
+})

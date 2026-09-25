@@ -55,6 +55,55 @@ export interface ScheduledRouteBase {
   onCandidate(candidate: BuildCandidate): void
 }
 
+/**
+ * One Cross pair of a registered Route base, composed into its concrete Route
+ * and nothing more: no Candidate ID, `searchRunId`, timestamp, or Candidate
+ * evaluation has happened yet.
+ */
+export interface ScheduledComposition {
+  base: ScheduledRouteBase
+  bonus: EvaluatedBonusSolution
+  skill: EvaluatedSkillSolution
+  route: BuildRoute
+  /** The Route's own operation-unit count, i.e. the lower bound its work was queued at. */
+  cost: number
+}
+
+/**
+ * Receives each composition when its work item settles, in queue order.
+ *
+ * The scheduler's default is the ordinary Candidate Search materialization
+ * (`createBaseCandidate()`, `ScheduledRouteBase.onCandidate`, and the cost the
+ * canonical-Ideal stop of `run()` measures). A consumer that supplies its own
+ * handler replaces all three, so it drives the queue with `step()` instead of
+ * `run()`.
+ */
+export type ScheduledCompositionHandler = (composition: ScheduledComposition) => void
+
+/**
+ * The concrete Route of one composed pair (SEARCH_SPEC 5.5.4). Pure: the
+ * amendment operations of a conversion base run on the transient converted
+ * weapon (`sourceOwnedWeaponId = null`), those of an existing-Gogma base on the
+ * source weapon itself.
+ */
+function composeScheduledRoute(
+  base: ScheduledRouteBase,
+  bonus: EvaluatedBonusSolution,
+  skill: EvaluatedSkillSolution,
+): BuildRoute {
+  const kind = base.kindResolution.type === 'fixed'
+    ? base.kindResolution.kind : existingGogmaRouteKind(bonus.solution, skill.solution)
+  const bindSource = (operation: RouteOperation): RouteOperation =>
+    operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses' || operation.type === 'reset_skills'
+      ? { ...operation, sourceOwnedWeaponId: base.kindResolution.type === 'fixed' ? null : base.sourceOwnedWeaponId }
+      : operation
+  return { kind, sourceOwnedWeaponId: base.sourceOwnedWeaponId, operations: [
+    ...base.baseOperations,
+    ...bonus.solution.operations.map(bindSource),
+    ...skill.solution.operations.map(bindSource),
+  ] }
+}
+
 interface Channel<T> {
   retained: T[]
   subscribers: Array<(value: T) => void>
@@ -82,8 +131,12 @@ export class TargetSearchScheduler {
   private idealCost: number | null = null
 
   private readonly context: RouteSearchContext
+  private readonly onComposition: ScheduledCompositionHandler
 
-  constructor(context: RouteSearchContext) { this.context = context }
+  constructor(context: RouteSearchContext, onComposition?: ScheduledCompositionHandler) {
+    this.context = context
+    this.onComposition = onComposition ?? ((composition) => this.materializeCandidate(composition))
+  }
 
   addBase(base: ScheduledRouteBase): void {
     const { target, input } = this.context
@@ -92,32 +145,10 @@ export class TargetSearchScheduler {
       sourceOwnedWeaponId: base.sourceOwnedWeaponId, operations: [...base.baseOperations],
     })
     const cross = createDeltaCross((bonus, skill) => {
-      const kind = base.kindResolution.type === 'fixed'
-        ? base.kindResolution.kind : existingGogmaRouteKind(bonus.solution, skill.solution)
       const cost = baseCost + bonus.solution.gogmaAdvance + skill.solution.resetCount
       this.queue.enqueue({ lowerBound: cost, settle: async () => {
         await this.context.execution.checkpoint()
-        const bindSource = (operation: RouteOperation): RouteOperation =>
-          operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses' || operation.type === 'reset_skills'
-            ? { ...operation, sourceOwnedWeaponId: base.kindResolution.type === 'fixed' ? null : base.sourceOwnedWeaponId }
-            : operation
-        const candidate = createBaseCandidate(
-          this.context, bonus.solution.finalBonuses, bonus.solution.restorationBonusScope,
-          skill.solution.seriesSkillId, skill.solution.groupSkillId,
-          { kind, sourceOwnedWeaponId: base.sourceOwnedWeaponId, operations: [
-            ...base.baseOperations,
-            ...bonus.solution.operations.map(bindSource),
-            ...skill.solution.operations.map(bindSource),
-          ] },
-          bonus.solution.amendmentResults,
-          skill.solution.amendmentResults,
-          base.conversionSkill,
-        )
-        if (!candidate) return
-        base.onCandidate(candidate)
-        // Every composed Candidate is an Ideal Candidate, so any Candidate at
-        // all settles the cost the canonical-Ideal drain is measured against.
-        this.idealCost = Math.min(this.idealCost ?? cost, cost)
+        this.onComposition({ base, bonus, skill, route: composeScheduledRoute(base, bonus, skill), cost })
       } })
     })
 
@@ -226,11 +257,39 @@ export class TargetSearchScheduler {
   async run(stopAtIdeal = true): Promise<void> {
     while (this.queue.nextLowerBound !== null) {
       if (stopAtIdeal && this.idealCost !== null && this.queue.nextLowerBound > this.idealCost) break
-      await this.context.execution.checkpoint()
-      await this.queue.settleNext()
-      // Activity signal only. It counts settled work; it never gates, orders,
-      // or terminates the queue.
-      this.context.execution.onWorkSettled()
+      await this.step()
     }
+  }
+
+  /**
+   * Settles the one pending work item with the lowest lower bound, behind the
+   * ordinary cancellation / yield checkpoint. Returns `false`, doing nothing,
+   * when no work is pending. It applies no termination policy of its own.
+   */
+  async step(): Promise<boolean> {
+    if (this.queue.nextLowerBound === null) return false
+    await this.context.execution.checkpoint()
+    await this.queue.settleNext()
+    // Activity signal only. It counts settled work; it never gates, orders,
+    // or terminates the queue.
+    this.context.execution.onWorkSettled()
+    return true
+  }
+
+  /** The ordinary Candidate Search materialization of one composition. */
+  private materializeCandidate({ base, bonus, skill, route, cost }: ScheduledComposition): void {
+    const candidate = createBaseCandidate(
+      this.context, bonus.solution.finalBonuses, bonus.solution.restorationBonusScope,
+      skill.solution.seriesSkillId, skill.solution.groupSkillId,
+      route,
+      bonus.solution.amendmentResults,
+      skill.solution.amendmentResults,
+      base.conversionSkill,
+    )
+    if (!candidate) return
+    base.onCandidate(candidate)
+    // Every composed Candidate is an Ideal Candidate, so any Candidate at
+    // all settles the cost the canonical-Ideal drain is measured against.
+    this.idealCost = Math.min(this.idealCost ?? cost, cost)
   }
 }
