@@ -8,7 +8,8 @@ Refs #136 / #101 / #122
 
 ```text
 正式仕様への反映:        完了（本PR。下記のnormative節）
-runtime実装:             Phase 1-Bまで部分実装（Phase 1-A: #139、Phase 1-B: #140）。Phase 1-C以降は未実装
+runtime実装:             Phase 1まで実装（Phase 1-A: #139、Phase 1-B: #140、Phase 1-C: 空reservationの探索完全性）。
+                         Phase 2以降（reservation、Planner trial、what-if / repair接続、Production routing切替）は未実装
 Production behavior:     変更していない
 schema / version:        変更していない（10章）
 ```

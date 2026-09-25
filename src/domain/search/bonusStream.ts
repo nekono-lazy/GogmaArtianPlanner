@@ -131,7 +131,21 @@ export type BonusStreamBase = {
  * number of source weapons and Normal offsets.
  */
 export interface TargetBonusStream {
+  /**
+   * `exhausted` means "read no further depth", and it mixes two reasons: the
+   * stream ran out of generable states, or `maxGogmaAdvance` was reached. Only
+   * `reachesBeyondExtent()` tells them apart.
+   */
   readDepth(base: BonusStreamBase, depth: number): Promise<BonusStreamSolutionSet & { exhausted: boolean }>
+  /**
+   * Whether this stream stopped at `maxGogmaAdvance` while one more depth would
+   * still generate a state (SEARCH_SPEC 5.6.8 stopped by extent), as opposed to
+   * a natural end (no seed / capability, no generable amendment). It decides
+   * from the prediction support of the frontier the stream already holds and
+   * never predicts. Only Planner Alternative Search asks, so the ordinary Search
+   * issues no additional support query.
+   */
+  reachesBeyondExtent(base: BonusStreamBase): boolean
   /** Standalone full-prefix adapter; scheduling uses readDepth. */
   solve(base: BonusStreamBase, through?: number): Promise<BonusStreamSolutionSet>
 }
@@ -272,6 +286,8 @@ export function createTargetBonusStream(
     value: BonusStreamSolutionSet
     done: boolean
     depths: BonusStreamSolution[][]
+    /** The reduced frontier after the last generated depth. */
+    frontier: { current: readonly BonusState[] }
   }>()
 
   function predictReset(gogmaCounter: number): RestorationBonusSet {
@@ -334,7 +350,10 @@ export function createTargetBonusStream(
     }
   }
 
-  async function* build(base: BonusStreamBase): AsyncGenerator<BonusStreamSolutionSet, BonusStreamSolutionSet> {
+  async function* build(
+    base: BonusStreamBase,
+    published: { current: readonly BonusState[] },
+  ): AsyncGenerator<BonusStreamSolutionSet, BonusStreamSolutionSet> {
     if (
       input.rngState.baseSeed.value === null ||
       !engine.capabilities.supportsGogmaPrediction
@@ -443,6 +462,7 @@ export function createTargetBonusStream(
         compareStableKeys(left.familyLayoutKey, right.familyLayoutKey),
       )
       gogmaCounterBefore = gogmaCounterAfter
+      published.current = frontier
       // Suspend with the frontier intact after one complete depth.
       yield {
         startGogmaCounter: base.startGogmaCounter,
@@ -462,7 +482,8 @@ export function createTargetBonusStream(
     const key = bonusStreamBaseKey(base, input.master)
     let cached = sets.get(key)
     if (!cached) {
-      cached = { iterator: build(base), value: EMPTY_SET(base.startGogmaCounter), done: false, depths: [] }
+      const frontier = { current: [] as readonly BonusState[] }
+      cached = { iterator: build(base, frontier), value: EMPTY_SET(base.startGogmaCounter), done: false, depths: [], frontier }
       sets.set(key, cached)
     }
     const limit = Math.min(input.maxGogmaAdvance, Math.max(0, through))
@@ -485,6 +506,14 @@ export function createTargetBonusStream(
         solutions: cached.depths[depth - 1] ?? [],
         exhausted: cached.done || depth >= input.maxGogmaAdvance,
       }
+    },
+    reachesBeyondExtent: (base) => {
+      const cached = sets.get(bonusStreamBaseKey(base, input.master))
+      if (!cached || cached.done || cached.depths.length < input.maxGogmaAdvance) return false
+      // The same generation conditions the next depth would apply.
+      if (base.amendmentPolicy !== 'keep_only' && predictionSupport.gogmaReset().supported) return true
+      return engine.capabilities.supportsKeepBonusesPrediction && cached.frontier.current.some((state) =>
+        state.bonuses !== null && predictionSupport.gogmaKeep(state.bonuses).supported)
     },
     solve: async (base, through = input.maxGogmaAdvance) => {
       const cached = await ensure(base, through)

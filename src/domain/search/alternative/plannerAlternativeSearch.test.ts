@@ -34,8 +34,11 @@ import {
  * An unprotected owned Gogma whose first Reset Bonuses (Gogma 10) yields the
  * Ideal five slots and whose Skill reaches the Ideal Series Skill only at Skill
  * Counter 8, plus the fixture's confirmed Normal Counter. The canonical Ideal is
- * the existing-Gogma mixed Route (cost 3); the Normal Artian Route (cost 4) is a
- * second, strictly more expensive Ideal the initial Search never materializes.
+ * the existing-Gogma mixed Route (cost 3); the Normal Artian Routes (cost 4 for
+ * one forge, one more per extra forge) are strictly more expensive Ideals the
+ * initial Search never materializes. Every Normal offset forges the same
+ * Practical-only slots, whose families differ from the Ideal, so the initial
+ * Search's #104 reduction registers offset zero only.
  */
 function fixture(bound = 5) {
   const input = createCandidateSearchInput()
@@ -175,7 +178,8 @@ describe('Planner Alternative Search API boundary (SEARCH_SPEC 5.6.8)', () => {
       alternativeInput(f.input, { extent: { maxNormalAdvance: 5, maxGogmaAdvance: 5, maxSkillAdvance: 1 } }),
       f.engine,
     )
-    expect(candidates.map((candidate) => candidate.route.kind)).toEqual(['normal_artian_to_gogma'])
+    // Every Normal offset of the extent (no #104 reduction), nothing else.
+    expect(candidates.map((candidate) => candidate.route.kind)).toEqual(Array(5).fill('normal_artian_to_gogma'))
     expect(f.calls.filter((call) => call.startsWith('skill:')).sort()).toEqual(['skill:7', 'skill:8'])
   })
 
@@ -233,14 +237,16 @@ describe('continuation past the canonical Ideal', () => {
     const f = fixture()
     const { candidates, execution } = await collect(alternativeInput(f.input), f.engine)
     expect(candidates.map((candidate) => candidate.route.kind))
-      .toEqual(['existing_gogma_mixed', 'normal_artian_to_gogma'])
+      .toEqual(['existing_gogma_mixed', ...Array(5).fill('normal_artian_to_gogma')])
     expect(candidateStableKey(candidates[0])).toBe(candidateStableKey(canonical))
     expect(candidates[1].estimatedOperationCount).toBeGreaterThan(canonical.estimatedOperationCount)
     const costs = candidates.map((candidate) => candidate.estimatedOperationCount)
-    expect(costs).toEqual([...costs].sort((a, b) => a - b))
+    expect(costs).toEqual([3, 4, 5, 6, 7, 8])
+    // The extent, not the search space, ended it: the Normal, Gogma and Skill
+    // streams all have further reachable positions.
     expect(execution).toEqual({
       targetWeaponId: f.input.targetWeaponId,
-      summary: { deliveredCandidates: 2, excludedCandidates: 0 },
+      summary: { deliveredCandidates: 6, excludedCandidates: 0, exhausted: false, stoppedByExtent: true },
       stoppedByConsumer: false,
     })
   })
@@ -250,7 +256,7 @@ describe('continuation past the canonical Ideal', () => {
     const { candidates, execution } = await collect(alternativeInput(f.input), f.engine, 1)
     expect(candidates).toHaveLength(1)
     expect(execution.stoppedByConsumer).toBe(true)
-    expect(execution.summary).toEqual({ deliveredCandidates: 1, excludedCandidates: 0 })
+    expect(execution.summary).toEqual({ deliveredCandidates: 1, excludedCandidates: 0, exhausted: false, stoppedByExtent: false })
   })
 
   it('returns only Ideal Candidates', async () => {
@@ -352,13 +358,14 @@ describe('observation traces', () => {
     const f = fixture()
     await collect(alternativeInput(f.input), f.engine)
 
-    // The Phase 1-A seam over the same frontier with a handler that builds no
-    // Candidate and no trace at all.
+    // The Phase 1-A seam over the same Planner Alternative frontier with a
+    // handler that builds no Candidate and no trace at all.
     const bare = fixture()
     const target = bare.input.targetWeapons[0]
     const execution = createSearchExecutionContext()
     const support = createSearchPredictionSupport(bare.engine, target, bare.input.master)
     const context: RouteSearchContext = {
+      frontierPolicy: 'planner_alternative',
       target,
       input: { ...originOf(bare.input), maxNormalAdvance: 5 },
       engine: bare.engine, execution, predictionSupport: support,
@@ -385,9 +392,9 @@ describe('excludedRouteKeys', () => {
       alternativeInput(f.input, { excludedRouteKeys: [candidateStableKey(canonical)] }),
       f.engine,
     )
-    expect(candidates.map((candidate) => candidate.route.kind)).toEqual(['normal_artian_to_gogma'])
+    expect(candidates.map((candidate) => candidate.route.kind)).toEqual(Array(5).fill('normal_artian_to_gogma'))
     expect(candidates.map(candidateStableKey)).not.toContain(candidateStableKey(canonical))
-    expect(execution.summary).toEqual({ deliveredCandidates: 1, excludedCandidates: 1 })
+    expect(execution.summary).toEqual({ deliveredCandidates: 5, excludedCandidates: 1, exhausted: false, stoppedByExtent: true })
   })
 
   it('treats a key that matches nothing as no exclusion and prunes no search work', async () => {
@@ -401,7 +408,7 @@ describe('excludedRouteKeys', () => {
   })
 })
 
-describe('reservation (Phase 1-B: empty only)', () => {
+describe('reservation (Phase 1: empty only)', () => {
   const nonEmpty: Array<[string, PlannerAlternativeReservation]> = [
     ['a held Skill position', { ...emptyPlannerAlternativeReservation, skill: { held: [7], blocked: [] } }],
     ['a blocked Gogma position', { ...emptyPlannerAlternativeReservation, gogma: { held: [10], blocked: [10] } }],

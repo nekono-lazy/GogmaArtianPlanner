@@ -86,7 +86,24 @@ export interface RouteSearchInput {
   maxNormalAdvance: number
 }
 
+/**
+ * Which consumer's frontier the Route search primitives and the scheduler
+ * build over the same streams.
+ *
+ * - `initial_candidate_search`: the ordinary Candidate Search. Its initial-Search
+ *   policies apply: same-result retention (SEARCH_SPEC 5.5.2 / 5.5.3), Cross-only
+ *   composition (5.5.4) and the #104 Normal Route base reduction (6.1.2).
+ * - `planner_alternative`: Planner Alternative Search (5.6.8). None of those
+ *   three applies: every stream position is published, every Ideal Bonus x
+ *   Ideal Skill pair is composed lazily, and every predicted Normal offset of
+ *   the extent is a full Route base. The streams themselves, their prediction
+ *   memos and the B2 family-layout frontier reduction are the same.
+ */
+export type SearchFrontierPolicy = 'initial_candidate_search' | 'planner_alternative'
+
 export interface RouteSearchContext {
+  /** Absent means the ordinary `initial_candidate_search` policy. */
+  frontierPolicy?: SearchFrontierPolicy
   /** Normal predictions shared across counter records. */
   normalPredictions?: Map<number, RestorationBonusSet>
   target: TargetWeapon

@@ -80,7 +80,19 @@ export interface TargetSkillStream {
    * the same positions as the Reset Skills solutions.
    */
   predictAt(skillCounter: number): SkillPredictionResult
+  /**
+   * `exhausted` means "read no further depth", and it mixes two reasons: the
+   * stream has no further position, or `maxSkillAdvance` was reached. Only
+   * `reachesBeyondExtent()` tells them apart.
+   */
   readDepth(startSkillCounter: number, depth: number): Promise<SkillStreamSolutionSet & { exhausted: boolean }>
+  /**
+   * Whether this stream stopped at `maxSkillAdvance` with a further Reset
+   * Skills position left unread (SEARCH_SPEC 5.6.8 stopped by extent). A Skill
+   * stream is a linear scan with no natural end, so this is exactly "the
+   * extent was read". It queries and predicts nothing.
+   */
+  reachesBeyondExtent(startSkillCounter: number): boolean
   /** Standalone full-prefix adapter; scheduling uses readDepth. */
   solve(startSkillCounter: number, through?: number): Promise<SkillStreamSolutionSet>
 }
@@ -183,6 +195,8 @@ export function createTargetSkillStream(
         solutions: set.solutions[depth - 1] ? [set.solutions[depth - 1]] : [],
         exhausted: depth >= input.maxSkillAdvance }
     },
+    reachesBeyondExtent: (startSkillCounter) =>
+      (sets.get(startSkillCounter)?.steps.length ?? 0) >= input.maxSkillAdvance,
     solve: async (startSkillCounter, through = input.maxSkillAdvance) => {
       const set = await ensure(startSkillCounter, through)
       const limit = Math.min(input.maxSkillAdvance, Math.max(0, through))

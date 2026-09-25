@@ -59,7 +59,7 @@ export function isEmptyPlannerAlternativeReservation(
 
 /**
  * Fails closed on an invalid origin, Target selection or extent, refuses a
- * reservation Phase 1-B cannot search yet, and returns the searched Target.
+ * reservation Phase 1 cannot search yet, and returns the searched Target.
  *
  * A non-empty reservation is refused with `unsupported_reservation` rather than
  * searched as if it were empty: ignoring it would return Routes that use the

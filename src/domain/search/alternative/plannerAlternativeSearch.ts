@@ -42,18 +42,29 @@ export interface PlannerAlternativeSearchExecutionOptions {
  * stopping once the canonical Ideal cost is drained does not apply: the queue
  * is driven with `step()` until the consumer stops or the frontier runs out.
  *
- * Delivery order. Compositions settle in non-decreasing operation cost. The
- * compositions of one cost are buffered until no pending work can add another
- * of that cost, then delivered in the 5.6.3 six-key order
- * (`compareConstrainedCandidates()` with the Target's preferred source), so
- * with an empty reservation and the same extent the first delivered Candidate
- * is the ordinary canonical Ideal.
+ * Frontier. The context carries the `planner_alternative` frontier policy, so
+ * none of the initial Search's other policies bounds what is reachable either:
+ * every stream position is published (no same-result retention), every Ideal
+ * Bonus x Ideal Skill pair of a Route base is composed lazily, one row at a
+ * time (no Cross-only), and every predicted Normal offset of the extent is a
+ * full Route base (no #104 reduction). The streams, their prediction memos and
+ * the B2 family-layout frontier reduction are the ordinary ones, so no
+ * prediction depends on how many solutions another stream has.
  *
- * Phase 1-B limits (not the complete 5.6.8 search): the frontier is the current
- * modern one, so the initial Search's same-result retention, Cross-only
- * composition and #104 Normal Route base reduction still shape what it can
- * reach; only an empty reservation is accepted. Phase 1-C / Phase 2 complete it
- * behind this same API.
+ * Delivery order. Every work item's lower bound is a lower bound on the
+ * operation cost of every Candidate it can lead to, and compositions settle at
+ * their exact cost. The compositions of one cost are buffered until no pending
+ * work can add another of that cost, then delivered in the 5.6.3 six-key order
+ * (`compareConstrainedCandidates()` with the Target's preferred source). So the
+ * whole delivered sequence is in that order, and with an empty reservation and
+ * the same extent the first delivered Candidate is the ordinary canonical Ideal.
+ *
+ * Termination. An empty queue ends the search: `stoppedByExtent` when an extent
+ * value left reachable work unread, `exhausted` otherwise. A consumer stop sets
+ * neither, and cancellation rejects.
+ *
+ * Only an empty reservation is accepted; held / blocked positions and exclusive
+ * OwnedWeapons are Phase 2 (`docs/PLANNER_SPEC.md` 9.2.19.16).
  */
 export async function visitPlannerAlternativeCandidates(
   input: PlannerAlternativeSearchInput,
@@ -76,6 +87,7 @@ export async function visitPlannerAlternativeCandidates(
   })
   const predictionSupport = createSearchPredictionSupport(engine, target, origin.master)
   const context: RouteSearchContext = {
+    frontierPolicy: 'planner_alternative',
     target,
     input: {
       rngState: origin.rngState,
@@ -139,6 +151,8 @@ export async function visitPlannerAlternativeCandidates(
       buffered = []
       bufferedCost = null
       for (const candidate of ready) {
+        // A long equal-cost flush stays cancellable and yields like any work.
+        await execution.checkpoint()
         const key = candidateStableKey(candidate)
         // Only exact semantic duplicates collapse; this is not retention.
         if (seen.has(key)) continue
@@ -158,9 +172,17 @@ export async function visitPlannerAlternativeCandidates(
     if (!(await scheduler.step())) break
   }
 
+  // The frontier ran out unless the consumer stopped first. Whether it ran out
+  // naturally or an extent value cut reachable work is the scheduler's record.
+  const stoppedByExtent = !stoppedByConsumer && scheduler.stoppedByExtent
   return {
     targetWeaponId: target.id,
-    summary: { deliveredCandidates, excludedCandidates },
+    summary: {
+      deliveredCandidates,
+      excludedCandidates,
+      exhausted: !stoppedByConsumer && !stoppedByExtent,
+      stoppedByExtent,
+    },
     stoppedByConsumer,
   }
 }

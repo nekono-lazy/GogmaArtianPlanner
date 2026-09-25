@@ -1333,13 +1333,16 @@ identityを基点とする専用契約で `searchRunId` と `id` を決める(�
 
 ### 5.6.8 Planner Alternative Search（resource-aware alternative Ideal search）
 
-実装状態: **Phase 1-Bまで部分実装**（Issue #136 / #101）。Search Domain API
-（`visitPlannerAlternativeCandidates()`、`src/domain/search/alternative/`）と、空reservationでの基本consumer経路
-（transient semantic Candidate、観測trace、`excludedRouteKeys`、canonical Idealとのfirst-result parity、
-canonical Ideal後の現行modern Search frontier上での継続）は実装済みである。本節の探索完全性（同一結果の後続位置、
-軸外pairのlazy評価、#104を適用しないNormal列挙、extent内の完全探索、exhaustedとextent到達の区別、全frontierに
-対する6キー順序、stream solve内部のcancel / yield）はPhase 1-C、空でないreservation（held / blocked、
-`exclusiveOwnedWeaponIds`）はPhase 2で実装し、それまでは空でないreservationを明示的に拒否する。Plannerからの
+実装状態: **Phase 1まで実装**（Issue #136 / #101。Phase 1-A #139、Phase 1-B #140、Phase 1-C）。Search Domain API
+（`visitPlannerAlternativeCandidates()`、`src/domain/search/alternative/`）は、空reservationについて本節の探索を
+extent内で完全に行う。transient semantic Candidate、観測trace、`excludedRouteKeys`、canonical Idealとのfirst-result
+parityに加え、同一結果の後続Counter位置、軸外pairのlazy評価、#104を適用しないNormal列挙、extent内の完全探索、
+全frontierに対する6キー順序、exhausted / stopped by extentの区別（summaryの `exhausted` / `stoppedByExtent`）、
+stream solve内部のcancel / yieldを実装済みである。実装はmodern Searchの `TargetSearchScheduler` とRoute search
+primitivesを共有し、`RouteSearchContext.frontierPolicy = 'planner_alternative'` のときだけ初回Search policy
+（同一結果retention、Cross-only、#104）を使わない。軸外pairはRoute baseごとにIdeal Bonus解を行、Ideal Skill解を列として、
+各行が確定済みcellの次のcellだけをlower bound順にqueueへ載せる（`createLazyIdealCross()`）。空でないreservation
+（held / blocked、`exclusiveOwnedWeaponIds`）はPhase 2で実装し、それまでは明示的に拒否する。Plannerからの
 呼び出しは未接続である（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.16）。Planner側の契約は
 [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19、背景と方式選定の理由は
 [PLANNER_CONFLICT_REPAIR_DESIGN.md](./PLANNER_CONFLICT_REPAIR_DESIGN.md)（非normative）にある。
@@ -2647,14 +2650,17 @@ Skill stream側はB1で実装済み、Bonus stream側はB2で実装済みであ�
   `id` / `searchRunId` / `createdAt` / random ID / Clock / enumeration ordinalを
   結果へ含めない
 
-## 13.2.6 Planner Alternative Search Test（5.6.8、Phase 1-Bで一部実装）
+## 13.2.6 Planner Alternative Search Test（5.6.8、Phase 1まで実装）
 
-Phase 1-Bで実装済みなのは、`searchCandidates()` とは別APIであること、空reservation・空除外集合でのfirst-result
-parity、canonical Ideal後に現行frontier上で次のIdealを返す基本継続、同じ入力での決定性、観測traceとprediction
-呼び出し数、`excludedRouteKeys` と除外件数、Ideal条件だけを返すことの各testである。blocked / held位置、Normalの
-canonical表現、coverage条件、held位置を跨ぐ到達量、#104を適用しないこと、同一結果の後続位置と軸外pair、
-他streamの解の数に対するprediction呼出し回数、exhaustedとextent到達の区別とstream solve中のcancel / yieldは
-Phase 1-C / Phase 2以降で実装する。
+Phase 1（1-B / 1-C）で実装済みなのは、`searchCandidates()` とは別APIであること、空reservation・空除外集合での
+first-result parity、canonical Ideal後に次のIdealを返す継続、同じ入力での決定性、観測traceとprediction呼び出し数、
+`excludedRouteKeys` と除外件数、Ideal条件だけを返すこと、#104を適用しないこと（通常Searchでは登録されない後方
+offsetのRouteを返し、通常Searchの削減は維持される）、同一結果の後続位置と軸外pair（早期stopで直積を生成しない）、
+全frontierに対する6キー順序とsource登録順への非依存、他streamの解の数に対するprediction呼出し回数、exhaustedと
+extent到達の区別（Normal / Gogma / Skillそれぞれのextent、consumer stopではどちらも立てない）、stream solve中と
+pair処理中のcancel / yield、通常Candidate Searchのprediction呼出し列が変わらないことの各testである。blocked / held
+位置、Normalのcanonical表現、coverage条件、held位置を跨ぐ到達量、排他OwnedWeapon、Issue #101 fixtureはPhase 2で
+実装する。
 
 - `searchCandidates()` とは別のAPIであり、Conflict DTO、`PlannerConflictResolution`、Planner試行上限を受け取らない
 - 空reservation・空除外集合で、extentを同じ3値の `CandidateSearchSettings`・route filterなしの通常Candidate
