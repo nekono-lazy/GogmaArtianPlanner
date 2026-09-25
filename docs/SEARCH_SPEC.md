@@ -98,15 +98,35 @@ Candidate identityのいずれにも入らない。
 
 `BuildCandidate.finalBonusScope` と `finalBonuses` はRoute完了時の巨戟アーティアが実際に保持するscopeと5枠である。巨戟化だけなら `normal_artian` scopeの通常5枠をslot順のまま継承し、Reset / Keepを実行した後はRNG Engineが返した `gogma_artian` scopeの5枠を使う。SearchはBonus Type Mappingから巨戟Rankや完成5枠を推測しない。MappingはKeep family解決（5.9）にだけ使う。
 
-初期値。
+推奨初期値（Issue #125）。
 
 ```ts
-const defaultCandidateSearchSettings = {
-  maxNormalAdvance: 500,
-  maxGogmaAdvance: 350,
+// src/domain/models/common.ts（単一authority）
+const recommendedCandidateSearchDefaults = {
+  maxNormalAdvance: 350,
+  maxGogmaAdvance: 500,
   maxSkillAdvance: 1500,
 };
+
+// src/domain/search/searchTypes.ts
+const defaultCandidateSearchSettings = { ...recommendedCandidateSearchDefaults };
 ```
+
+Candidate Searchは呼び出し側が `CandidateSearchInput.settings` として渡した探索量だけを使い、AppSettingsや
+既定値を自分で読まない。Search Domainは永続化層（SettingsRepository）へ依存しない。
+`defaultCandidateSearchSettings` は推奨値そのものであり、候補検索画面の初期値はユーザーが設定画面で保存した
+`AppSettings.candidateSearchDefaults`（[DATA_MODEL.md](./DATA_MODEL.md) 13）とする。新規環境、全データ削除後、
+旧設定・旧バックアップの移行時は推奨値になる。画面で変更した探索量はその画面の単体検索と一括検索・追加
+（一括開始時点の画面の値を全Targetに使う）だけに使い、AppSettingsへ書き戻さない
+（[UI_FLOW.md](./UI_FLOW.md) 9 / 9.1 / 14）。
+
+復元ボーナス（`maxGogmaAdvance`）の推奨値を通常アーティア（`maxNormalAdvance`）より高くするのは、
+通常アーティアCounterが武器種ごとの固有Counterであるのに対し、Gogma Counterは複数の武器で共有され、
+ある武器にとって遠い位置でも別の武器の生産工程によって進められる可能性があるためである。
+これは推奨値であってValidation上の大小制約ではない。各値は1以上の整数であればよい。
+推奨値の変更はSearch algorithm、Candidate ranking / canonical選択、Route semantics、
+CalculationContextを変更しない。ユーザー向け表示では `maxGogmaAdvance` を「復元ボーナス最大進行量」、
+`estimatedGogmaAdvance` を「復元ボーナス進行（量）」と呼び、「巨戟進行」とは表示しない。内部名は変更しない。
 
 B6当時は `5000 / 5000 / 5000` から `1000 / 200 / 1000` へ変更した。根拠は
 `docs/B5_CANDIDATE_SEARCH_BROWSER_WORKER_BENCHMARK.md` の実Browser Worker実測である。
@@ -123,6 +143,8 @@ Gogma   200 ≈ 1961 ms
 
 #104では6.1.2の初回Normal Route base削減後、初期値を `500 / 350 / 1500` とした。
 Gogma 200とSkill 1000で届かない実使用例を踏まえ、探索範囲を拡大した。
+その後Issue #125で、Counter共有の性質を踏まえて推奨初期値を `350 / 500 / 1500` とし、
+ユーザーが保存する既定値の初期値とした（上記）。
 350 / 500比較と深いIdeal・no-Ideal・cancelの実Browser Worker測定、負荷の限界は
 [ISSUE_104_NORMAL_ROUTE_REDUCTION_BENCHMARK.md](./ISSUE_104_NORMAL_ROUTE_REDUCTION_BENCHMARK.md) に記録する。
 historical `B5_MEASUREMENT_SETTINGS` と過去の実測値は変更しない。

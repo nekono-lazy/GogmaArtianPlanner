@@ -1,6 +1,6 @@
-import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from './publicTypes'
+import { CURRENT_CALCULATION_APP_SCHEMA_VERSION, recommendedCandidateSearchDefaults } from './publicTypes'
 import { describe, expect, it } from 'vitest'
-import type { NormalArtianCounter, TargetWeapon } from './publicTypes'
+import type { AppSettings, NormalArtianCounter, TargetWeapon } from './publicTypes'
 import {
   createOwnedWeapon,
   createTargetWeapon,
@@ -213,6 +213,50 @@ describe('TargetWeapon rules', () => {
         matchMode: 'any',
       }),
     ).toBe(true)
+  })
+})
+
+describe('AppSettings record schema 2 (Issue #125)', () => {
+  const settings = () => createDefaultAppSettings(DOMAIN_FIXTURE_TIME)
+  const paths = (value: unknown) =>
+    validateAppSettings(value as AppSettings).issues.map(({ path }) => path)
+
+  it('starts a new record at record schema 2 with the recommended 350 / 500 / 1500', () => {
+    expect(settings()).toMatchObject({
+      schemaVersion: 2,
+      debugMode: false,
+      resultPageSize: 50,
+      defaultSearchLimit: 5000,
+      candidateSearchDefaults: { maxNormalAdvance: 350, maxGogmaAdvance: 500, maxSkillAdvance: 1500 },
+    })
+    // Every new record gets its own copy of the recommendation.
+    expect(settings().candidateSearchDefaults).not.toBe(recommendedCandidateSearchDefaults)
+  })
+
+  it('accepts any positive integers in any order', () => {
+    for (const candidateSearchDefaults of [
+      { maxNormalAdvance: 1000, maxGogmaAdvance: 200, maxSkillAdvance: 1500 },
+      { maxNormalAdvance: 500, maxGogmaAdvance: 1000, maxSkillAdvance: 1 },
+      { maxNormalAdvance: 1, maxGogmaAdvance: 1, maxSkillAdvance: 1 },
+    ]) {
+      expect(validateAppSettings({ ...settings(), candidateSearchDefaults }).isValid).toBe(true)
+    }
+  })
+
+  it('refuses a missing field, a non-positive, fractional or non-numeric bound, and record schema 1', () => {
+    const { candidateSearchDefaults: _removed, ...withoutDefaults } = settings()
+    void _removed
+    expect(paths(withoutDefaults)).toEqual(['candidateSearchDefaults'])
+    expect(paths({ ...settings(), candidateSearchDefaults: null })).toEqual(['candidateSearchDefaults'])
+    expect(paths({ ...settings(), candidateSearchDefaults: { maxNormalAdvance: 0, maxGogmaAdvance: -5, maxSkillAdvance: 1.5 } }))
+      .toEqual([
+        'candidateSearchDefaults.maxNormalAdvance',
+        'candidateSearchDefaults.maxGogmaAdvance',
+        'candidateSearchDefaults.maxSkillAdvance',
+      ])
+    expect(paths({ ...settings(), candidateSearchDefaults: { maxNormalAdvance: '350', maxGogmaAdvance: 500, maxSkillAdvance: 1500 } }))
+      .toEqual(['candidateSearchDefaults.maxNormalAdvance'])
+    expect(paths({ ...settings(), schemaVersion: 1 })).toEqual(['schemaVersion'])
   })
 })
 

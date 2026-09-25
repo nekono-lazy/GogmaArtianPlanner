@@ -19,6 +19,7 @@ import {
 import { createValidMasterDataFixture } from '../test/fixtures/masterData'
 import { targetEvaluationMaster } from '../test/fixtures/targetEvaluation'
 import { planBreakingApproval, planBreakingInspection } from '../test/fixtures/planBreakingInspection'
+import { recommendedCandidateSearchDefaults } from '../domain/models/publicTypes'
 import { SearchPage, type SearchPageDependencies } from './SearchPage'
 
 /**
@@ -78,6 +79,7 @@ function dependencies(client: ControlledClient, targets: TargetWeapon[], ownedWe
     getOwnedWeapons: vi.fn(async () => storedWeapons.map((value) => structuredClone(value))),
     getBuildListEntries: async () => [],
     getReidentificationReminder: async () => ({ kind: 'none' as const }),
+    getCandidateSearchDefaults: async () => ({ ...recommendedCandidateSearchDefaults }),
     createWorkerClient: () => client,
     createInput: async (options: Parameters<SearchPageDependencies['createInput']>[0]) => ({
       ...createFixtureInput(),

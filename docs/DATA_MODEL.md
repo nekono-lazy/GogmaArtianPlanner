@@ -196,7 +196,7 @@ build結果に限りversion 12 / 13 -> 14の明示的互換例外を持つ（本
 現行versionの単一authorityは `src/domain/models/common.ts` の
 `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 14` とし、Search、BuildList、Plannerと
 benchmark入力のruntime creatorで共用する。永続モデル移行は独立してDexie
-`DATABASE_SCHEMA_VERSION`（現行8。14.2）で管理し、AppSettingsは `schemaVersion = 1` のままとする。Calculation semantics / artifact
+`DATABASE_SCHEMA_VERSION`（現行9。14.2）で管理し、AppSettingsは独立した `schemaVersion`（現行2。13）を持つ。Calculation semantics / artifact
 validity境界とDexie schemaは別の概念であり、片方の更新はもう片方の更新を意味しない。
 gameVersion、Master Data versionは維持する。
 `PRODUCTION_RNG_ENGINE_VERSION` はこのcheckpoint境界では `production-rng:c5-e2` のまま維持し、
@@ -2247,12 +2247,21 @@ export interface ExecutionSavePoint {
 ## 13. 設定
 
 ```ts
+export const APP_SETTINGS_SCHEMA_VERSION = 2;
+
+export interface CandidateSearchDefaults {
+  maxNormalAdvance: number; // 通常アーティア最大進行量
+  maxGogmaAdvance: number;  // 復元ボーナス最大進行量
+  maxSkillAdvance: number;  // スキル最大進行量
+}
+
 export interface AppSettings {
   id: "settings";
-  schemaVersion: 1;
+  schemaVersion: 2;
   debugMode: boolean;
   resultPageSize: number;
   defaultSearchLimit: number;
+  candidateSearchDefaults: CandidateSearchDefaults;
   createdAt: ISODateTimeString;
   updatedAt: ISODateTimeString;
 }
@@ -2261,16 +2270,49 @@ export interface AppSettings {
 初期値。
 
 ```ts
+const recommendedCandidateSearchDefaults = {
+  maxNormalAdvance: 350,
+  maxGogmaAdvance: 500,
+  maxSkillAdvance: 1500,
+};
+
 const defaultSettings: AppSettings = {
   id: "settings",
-  schemaVersion: 1,
+  schemaVersion: 2,
   debugMode: false,
   resultPageSize: 50,
   defaultSearchLimit: 5000,
+  candidateSearchDefaults: { ...recommendedCandidateSearchDefaults },
   createdAt: now,
   updatedAt: now,
 };
 ```
+
+`candidateSearchDefaults`（Issue #125、[REQUIREMENTS.md](./REQUIREMENTS.md) 14.1）は、候補検索画面を開いたときの
+探索量の初期値としてユーザーが設定画面で保存する値である。
+
+- 各値は1以上の整数とする（`validateCandidateSearchDefaults()`、`validateAppSettings()`）。3値の大小関係は
+  検証しない。推奨値の「通常アーティア < 復元ボーナス」は、通常アーティアCounterが武器種ごとの固有Counter
+  であるのに対し、Gogma Counterは複数の武器で共有され別の武器の生産工程でも進められる可能性があることに
+  よる推奨であり、Validation上の制約ではない。上限値は設けない
+- 推奨値の単一authorityは `recommendedCandidateSearchDefaults`（`src/domain/models/common.ts`）とし、
+  新規record、全データ削除後のdefault record、AppSettings v1 -> v2 migration（Dexie v9、Export schema 12）、
+  Search Domainの `defaultCandidateSearchSettings` が共有する。Search DomainはAppSettings / SettingsRepositoryへ
+  依存しない
+- 書き込むのは設定画面の保存だけであり（`SettingsRepository.setCandidateSearchDefaults()`）、候補検索画面は
+  読み取るだけで、画面上の一時変更を書き戻さない
+- Debug Mode保存と既定値保存は、record全体ではなく変更したfieldだけを原子的に更新する
+  （Dexie `Table.update()`）。同時に保存しても、古い読み取り結果で他方のfieldを上書きしない。
+  書き込み前に更新後のrecord全体を `validateAppSettings()` で検証し、不正値は書き込まない
+- 計算意味を持たない。CalculationContext、`searchStateHash`、Candidate / Entry / Plan identity、stalenessに入らない
+- `defaultSearchLimit` は通常アーティアCounter特定の初期検索範囲の終了値であり、`candidateSearchDefaults` とは
+  別の設定である。相互に流用・再定義しない
+
+AppSettings v1（`schemaVersion = 1`、`candidateSearchDefaults` なし）はDexie v8 -> v9 upgradeとExport
+schema 11 -> 12 migrationで共通の `upgradeAppSettingsToV2()` によりv2へ変換する。旧候補検索画面の固定値
+（500 / 350 / 1500）はユーザーが保存した値ではないため、`candidateSearchDefaults` には推奨値
+350 / 500 / 1500 を設定し、`debugMode`、`resultPageSize`、`defaultSearchLimit`、日時はそのまま保持する。
+v1でないrecord（既にfieldを持つ、別versionなど）は推測変換せず、validationに判断を委ねる。
 
 ---
 
@@ -2284,7 +2326,7 @@ mh-wilds-gogma-artian-planner
 
 ## 14.2 DB schemaVersion
 
-初期作成schemaは1。現行DATABASE_SCHEMA_VERSIONは8。version(1)のstoresを保持し、
+初期作成schemaは1。現行DATABASE_SCHEMA_VERSIONは9。version(1)のstoresを保持し、
 version(2) upgradeでTarget妥協条件だけを解除する。Idealと他entityを保持し、compromiseNeedsReview=trueとする。
 旧Practical Skillも解除するため、移行直後はIdeal-onlyとなる。
 
@@ -2353,6 +2395,17 @@ NormalArtianCounterへ追加する（6.1 / 6.2）。table / indexは変更しな
 
 version(8) upgradeで `status = "draft"` のProductionPlanを全件削除する（11.1のDraft最大1件契約）。
 table / indexは変更しない。v1 -> ... -> v7 -> v8は順番に適用できること。
+
+version(9) upgradeでAppSettingsをrecord schemaVersion 2へ更新する（13、Issue #125）。
+table / indexは変更しない。v1 -> ... -> v8 -> v9は順番に適用できること。
+
+- `settings` tableのAppSettings v1 recordに `candidateSearchDefaults = { maxNormalAdvance: 350,
+  maxGogmaAdvance: 500, maxSkillAdvance: 1500 }` を補完し、`schemaVersion = 2` にする
+- `debugMode`、`resultPageSize`、`defaultSearchLimit`、`createdAt`、`updatedAt` は変更しない。旧候補検索画面の
+  固定値（500 / 350 / 1500）は保存されていなかったため引き継がず、`defaultSearchLimit` を流用しない
+- settings recordが無いDBでは何も作成しない。v1でないrecordは変更しない
+- 他のtableは変更しない。計算意味を変えないため `CURRENT_CALCULATION_APP_SCHEMA_VERSION`（14）と
+  `PRODUCTION_RNG_ENGINE_VERSION` は変更しない
 
 - 旧契約ではPlanner保存のたびにDraftが旧Draftの横へ追加され、一覧・削除UIも無かったため、Draftは
   何件でも蓄積し得た。どのDraftがユーザーの意図した「現在Draft」かを示すauthorityは永続データに
@@ -2491,7 +2544,7 @@ Planner constrained re-searchを経たPlan保存も原子的に行う。契約�
 
 ```ts
 export interface ExportRoot {
-  schemaVersion: 11;
+  schemaVersion: 12;
   appName: "mh-wilds-gogma-artian-planner";
   exportedAt: ISODateTimeString;
   rngState: RngState | null;
@@ -2573,6 +2626,17 @@ Draft lifecycle整理の実装PRで `schemaVersion` を11へ更新した。schem
   の中のPlan body、BuildListEntry（削除したDraftが参照していたEntryを含む）、その他すべてのcollectionは
   変更しない
 
+候補検索の探索量の既定値を保存できるようにした実装PR（Issue #125）で `schemaVersion` を12へ更新した。
+schema 12は `settings` がAppSettings v2（`candidateSearchDefaults` を持つ、13）である形状である。
+Import準備はschema 12をそのまま読み、schema 11を純粋関数 `migrateExportRootV11ToV12()`、schema 10..6を
+既存migrationの後に `migrateExportRootV11ToV12()` で読む。schema 11 -> 12は次だけを行い、推測をしない。
+
+- `settings` へDexie v9と同じ `upgradeAppSettingsToV2()` を適用し、`candidateSearchDefaults` に推奨値
+  350 / 500 / 1500 を補完して `settings.schemaVersion = 2` にする。その他の設定fieldは維持する
+- その他すべてのcollectionは変更しない
+- schema 11を名乗りながら `settings` がobjectでない、`candidateSearchDefaults` を既に持つ、または
+  `schemaVersion` が1でないrootは拒否する（fail closed）
+
 ## 15.2 Import方針
 
 Import時は以下の順序で検証する。
@@ -2606,11 +2670,11 @@ Import方式。
 
 ## 15.3 Migration
 
-現行ExportRootはschemaVersion=11である（schemaVersion 8はcalculation schema 12のProductionPlan形状を加えた形状、schemaVersion 9はProductionPlan lifecycle metadataとExecution Undo Snapshotを加えた形状、schemaVersion 10はRngState / NormalArtianCounterのIdentification provenance `lastIdentifiedAt` を加えた形状、schemaVersion 11はentity形状を変えずDraft最大1件のcollection契約を導入した境界）。schemaVersion 6はBuildCandidateが `intermediateStateGroups` を、
+現行ExportRootはschemaVersion=12である（schemaVersion 8はcalculation schema 12のProductionPlan形状を加えた形状、schemaVersion 9はProductionPlan lifecycle metadataとExecution Undo Snapshotを加えた形状、schemaVersion 10はRngState / NormalArtianCounterのIdentification provenance `lastIdentifiedAt` を加えた形状、schemaVersion 11はentity形状を変えずDraft最大1件のcollection契約を導入した境界、schemaVersion 12はAppSettings v2の `candidateSearchDefaults` を加えた形状）。schemaVersion 6はBuildCandidateが `intermediateStateGroups` を、
 BuildListEntryが `intermediateStateSelection` を持つ最初の形状であり（schemaVersion 5は
 旧 `checkpointGroups` / `selectedCheckpointOpportunityIds` の形状）、schemaVersion 7はそれに
 Execution lifecycleの永続状態を加えた形状である（15.1）。
-Dexie `DATABASE_SCHEMA_VERSION = 8` とは独立して更新する。
+Dexie `DATABASE_SCHEMA_VERSION = 9` とは独立して更新する。
 
 全置換Import / Export / 全データクリアのPersistence / Application Service基盤は実装済みである
 （`src/services/dataTransfer/importExportService.ts`、`importExportValidation.ts`）。Settings画面への接続
@@ -2626,14 +2690,15 @@ timestampはPresentationの責務であり、ExportRootの形状、`exportedAt`�
 hydrateし、`getOrCreateDefault()` で上書きしない。
 
 - Export（`exportRoot()` / `serializeExport()`）は全user tableを1つのread-only Dexie transactionで読み、
-  `schemaVersion = 11` / `appName` をService自身が設定し、`exportedAt` は注入したclockの時刻とする。
+  `schemaVersion = 12` / `appName` をService自身が設定し、`exportedAt` は注入したclockの時刻とする。
   top-level entity collectionだけをprimary IDで安定sortし、復元ボーナス5枠順、PlanStep順、その他のnested
   arrayの順序は永続化どおり保つ。作成したrootを後述のImport full validationに通し、Settings recordの欠落や
   Domain不変条件違反があればDBを書き換えずに `export_state_invalid` でfail closedする。旧CalculationContextの
   計算artifactは拒否しない
 - Import準備（`prepareImportJson()` / `prepareImportRoot()`）はJSON parse失敗を `invalid_json`、それ以外の
   拒否を `invalid_import` のtyped resultとして返し、untrusted inputに対してthrowしない。schema migrationは
-  既存の `prepareExportRootForImport()`（schema 6..11。10 -> 11は旧契約で蓄積したDraftを全削除する）だけを
+  既存の `prepareExportRootForImport()`（schema 6..12。10 -> 11は旧契約で蓄積したDraftを全削除し、11 -> 12は
+  AppSettingsへ推奨の探索量既定値を補完する）だけを
   使い、その成功後に全置換用のfull validation
   （`validateExportRootForFullReplacement()`）を追加で行う: BuildCandidate / BuildListEntry / AppSettingsの
   entity validation、Target Ideal ⇒ Practical containment、全top-level collectionのprimary ID一意性、

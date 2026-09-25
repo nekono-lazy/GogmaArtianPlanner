@@ -52,6 +52,7 @@ import type {
   BuildListEntry,
   BuildListEntryId,
   CalculationContext,
+  CandidateSearchDefaults,
   IntermediateStateSelection,
   OwnedGogmaArtianWeapon,
   OwnedWeapon,
@@ -78,7 +79,9 @@ import {
   ownedWeaponRepository,
   targetWeaponRepository,
 } from '../db/repositories'
+import { settingsRepository } from '../db/settingsRepository'
 import { useSettingsStore } from '../stores/settingsStore'
+import { candidateSearchLimitFields } from '../components/search/candidateSearchLimitPresentation'
 import {
   buildListService,
   type AddBuildListCandidateResult,
@@ -137,6 +140,12 @@ export interface SearchPageDependencies extends OwnedIdealCompletionApi, BuildLi
    * never a gate on the search. Read-only.
    */
   getReidentificationReminder(): Promise<PersistentReidentificationReminder>
+  /**
+   * The user's saved Candidate Search defaults (`docs/UI_FLOW.md` 9 / 14): the
+   * starting values of this screen's search bounds. Read-only - a change made
+   * on this screen applies to this screen's searches only and is never saved.
+   */
+  getCandidateSearchDefaults(): Promise<CandidateSearchDefaults>
   createWorkerClient(): SearchWorkerClient
   createInput(options: {
     searchRunId: string
@@ -173,6 +182,8 @@ const defaultDependencies: SearchPageDependencies | null = defaultMaster && defa
       getOwnedWeapons: () => ownedWeaponRepository.getAllOwnedWeapons(),
       getBuildListEntries: () => buildListEntryRepository.getAllBuildListEntries(),
       getReidentificationReminder: () => loadPersistentReidentificationReminder(),
+      getCandidateSearchDefaults: () =>
+        settingsRepository.ensureSettings().then((settings) => settings.candidateSearchDefaults),
       createWorkerClient: createProductionSearchWorkerClient,
       createInput: (options) => createCandidateSearchInput(options),
       saveCandidates: (targetId, candidates) =>
@@ -200,29 +211,6 @@ interface AddFeedback {
   message: string
   buildListLinkLabel?: string
 }
-
-/** The three user-adjustable search bounds (`docs/SEARCH_SPEC.md` 3.1). */
-const settingFields: readonly {
-  key: keyof CandidateSearchSettings
-  label: string
-  helperText: string
-}[] = [
-  {
-    key: 'maxNormalAdvance',
-    label: '通常アーティア最大進行量',
-    helperText: '通常アーティアを作成する最大本数（1以上）',
-  },
-  {
-    key: 'maxGogmaAdvance',
-    label: '巨戟最大進行量',
-    helperText: '復元ボーナスの再抽選を進める最大回数',
-  },
-  {
-    key: 'maxSkillAdvance',
-    label: 'スキル最大進行量',
-    helperText: 'スキルリセットを進める最大回数',
-  },
-]
 
 /** A Target's name with 「登録済み」 when the Build List already holds its Entry. */
 function TargetOptionLabel({ name, registered }: { name: string; registered: boolean }) {
@@ -259,7 +247,12 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
   const [intermediateSelection, setIntermediateSelection] = useState<IntermediateStateSelection>(
     defaultIntermediateStateSelection(),
   )
+  // This screen's search bounds: they start from the saved AppSettings
+  // defaults once loaded (the recommendation until then, and when the read
+  // fails), and an edit here applies to this screen's single and batch
+  // searches only - it is never written back (`docs/UI_FLOW.md` 9).
   const [settings, setSettings] = useState<CandidateSearchSettings>({ ...defaultCandidateSearchSettings })
+  const [defaultsLoadFailed, setDefaultsLoadFailed] = useState(false)
   const [result, setResult] = useState<CandidateSearchResult | null>(null)
   // Read once on mount from the persisted provenance; a search changes no
   // provenance, so the reminder stays whatever the search returns (16.15).
@@ -386,13 +379,30 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
     // The Build List is part of the screen's base data: the add state is a
     // formal display item, so a failure to read it is a load failure like any
     // other rather than a silent "not added".
+    // The saved defaults are read beside the base data, so the conditions
+    // appear already filled in. Failing to read them is reported and falls
+    // back to the recommendation; it never blocks the search.
+    const defaultsRead = dependencies
+      .getCandidateSearchDefaults()
+      .then((defaults): CandidateSearchDefaults | null => defaults)
+      .catch(() => null)
     void Promise.all([
       dependencies.getTargets(),
       dependencies.getOwnedWeapons(),
       dependencies.getBuildListEntries(),
+      defaultsRead,
     ])
-      .then(([loadedTargets, loadedWeapons, loadedEntries]) => {
+      .then(([loadedTargets, loadedWeapons, loadedEntries, loadedDefaults]) => {
         if (!active) return
+        if (loadedDefaults === null) {
+          setDefaultsLoadFailed(true)
+        } else {
+          setSettings({
+            maxNormalAdvance: loadedDefaults.maxNormalAdvance,
+            maxGogmaAdvance: loadedDefaults.maxGogmaAdvance,
+            maxSkillAdvance: loadedDefaults.maxSkillAdvance,
+          })
+        }
         setTargets(loadedTargets)
         setOwnedWeapons(loadedWeapons)
         setBuildListEntries(loadedEntries)
@@ -735,10 +745,15 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
                   disabled={planGuard.busy || completion.pending !== null || batchRunning}
                 />
               )}
+              {defaultsLoadFailed && (
+                <Alert severity="warning">
+                  保存済みの探索量の既定値を読み込めなかったため、推奨の初期値で検索します。詳細設定（探索量の上限）で値を確認してください。
+                </Alert>
+              )}
               <DisclosureAccordion title="詳細設定（探索量の上限）" headingLevel="h3">
                 <Stack spacing={1.5}>
                   <Typography variant="body2" color="text.secondary">
-                    探索する進行量の上限です。上限を上げると見つかる候補が増える場合がありますが、検索に時間がかかります。
+                    探索する進行量の上限です。上限を上げると見つかる候補が増える場合がありますが、検索に時間がかかります。初期値は設定画面で保存した既定値です。ここでの変更はこの画面での検索（未登録の一括検索・追加を含む）だけに使われ、既定値は変わりません。
                   </Typography>
                   <Box
                     sx={{
@@ -747,7 +762,7 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
                       gap: 1.5,
                     }}
                   >
-                    {settingFields.map((field) => (
+                    {candidateSearchLimitFields.map((field) => (
                       <TextField
                         key={field.key}
                         fullWidth
@@ -899,7 +914,7 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
                   Route can be an intermediate state (`docs/SEARCH_SPEC.md` 5.7). */}
               {targetResult.candidate === null && (
                 <Alert severity="info">
-                  現在の探索範囲では理想品が見つかりませんでした。探索量の上限を上げると見つかる場合があります。詳細設定の「通常アーティア最大進行量」「巨戟最大進行量」「スキル最大進行量」を見直してください。
+                  現在の探索範囲では理想品が見つかりませんでした。探索量の上限を上げると見つかる場合があります。詳細設定の「通常アーティア最大進行量」「復元ボーナス最大進行量」「スキル最大進行量」を見直してください。
                 </Alert>
               )}
               {targetResult.candidate && (

@@ -8,6 +8,7 @@ import type {
   TargetWeapon,
   TargetWeaponId,
 } from '../models/publicTypes'
+import { recommendedCandidateSearchDefaults } from '../models/common'
 import type {
   ArtianBonusTypeMapping,
   BonusTypeMaster,
@@ -35,14 +36,16 @@ export interface CandidateSearchSettings {
 }
 
 /**
- * Issue #104 defaults, measured with the real Browser Worker after Normal base
- * reduction. See docs/ISSUE_104_NORMAL_ROUTE_REDUCTION_BENCHMARK.md.
- * These are defaults, not caps; the Search UI can raise every bound.
+ * The recommended initial bounds (`docs/SEARCH_SPEC.md` 3.1), taken from the
+ * one authority `recommendedCandidateSearchDefaults` (Issue #125). The Search
+ * screen starts from the user's saved AppSettings defaults instead; this value
+ * is only the recommendation those defaults start from. Candidate Search itself
+ * never reads AppSettings or any default: it runs the `CandidateSearchSettings`
+ * its caller passes. These are defaults, not caps; the Search UI can raise
+ * every bound.
  */
 export const defaultCandidateSearchSettings: CandidateSearchSettings = {
-  maxNormalAdvance: 500,
-  maxGogmaAdvance: 350,
-  maxSkillAdvance: 1500,
+  ...recommendedCandidateSearchDefaults,
 }
 
 /**

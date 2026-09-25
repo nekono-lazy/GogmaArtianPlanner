@@ -219,7 +219,7 @@ export function CandidateCard({
           >
             <SummaryTile label="操作回数" value={`${candidate.estimatedOperationCount}回`} />
             <SummaryTile label="通常進行" value={candidate.estimatedNormalAdvance === null ? '—' : `${candidate.estimatedNormalAdvance}`} />
-            <SummaryTile label="巨戟進行" value={`${candidate.estimatedGogmaAdvance}`} />
+            <SummaryTile label="復元ボーナス進行" value={`${candidate.estimatedGogmaAdvance}`} />
             <SummaryTile label="スキル進行" value={`${candidate.estimatedSkillAdvance}`} />
           </Box>
 

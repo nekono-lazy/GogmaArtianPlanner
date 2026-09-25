@@ -28,6 +28,7 @@ import {
   dataTransferMaster,
   dataTransferRoot,
   dataTransferSettings,
+  legacyAppSettingsV1,
 } from '../../test/fixtures/dataTransfer'
 import {
   confirmCurrent,
@@ -121,13 +122,13 @@ async function expectUnchanged(database: AppDatabase, run: () => Promise<unknown
 }
 
 describe('ImportExportService export', () => {
-  it('builds the schema 11 root from every table with the service-owned version, app name and clock', () => withDatabase(async (database) => {
+  it('builds the schema 12 root from every table with the service-owned version, app name and clock', () => withDatabase(async (database) => {
     const root = dataTransferRoot()
     await seedRoot(database, root)
 
     const exported = await service(database).exportRoot()
 
-    expect(exported.schemaVersion).toBe(11)
+    expect(exported.schemaVersion).toBe(12)
     expect(exported.appName).toBe('mh-wilds-gogma-artian-planner')
     expect(exported.exportedAt).toBe(NOW)
     expect(without(exported, ['exportedAt'])).toEqual(without(root, ['exportedAt']))
@@ -235,7 +236,7 @@ describe('ImportExportService export', () => {
 
     const json = await service(database).serializeExport()
 
-    expect(json.startsWith('{\n  "schemaVersion": 11,')).toBe(true)
+    expect(json.startsWith('{\n  "schemaVersion": 12,')).toBe(true)
     expect(JSON.parse(json)).toEqual(await service(database).exportRoot())
   }))
 })
@@ -249,7 +250,7 @@ describe('ImportExportService prepare', () => {
     ['a string root', '"root"'],
     ['another app', JSON.stringify({ ...dataTransferRoot(), appName: 'other-app' })],
     ['an unsupported older schema', JSON.stringify({ ...dataTransferRoot(), schemaVersion: 5 })],
-    ['an unsupported newer schema', JSON.stringify({ ...dataTransferRoot(), schemaVersion: 12 })],
+    ['an unsupported newer schema', JSON.stringify({ ...dataTransferRoot(), schemaVersion: 13 })],
   ])('rejects %s with a typed result instead of throwing', (_label, json) => withDatabase(async (database) => {
     const result = service(database).prepareImportJson(json)
     expect(result.ok).toBe(false)
@@ -294,6 +295,7 @@ describe('ImportExportService prepare', () => {
       return {
         ...root,
         schemaVersion: 9,
+        settings: legacyAppSettingsV1(root.settings),
         rngState: stripRng(root.rngState as object),
         normalArtianCounters: stripCounters(root.normalArtianCounters),
         executionSavePoints: root.executionSavePoints.map((savePoint) => ({
@@ -350,16 +352,16 @@ describe('ImportExportService prepare', () => {
       } as unknown as ExportRootV6
     }
 
-    it('reads schema 11 as it is', () => withDatabase(async (database) => {
+    it('reads schema 12 as it is', () => withDatabase(async (database) => {
       const result = service(database).prepareImportRoot(dataTransferRoot())
       expect(result.ok).toBe(true)
     }))
 
-    it('migrates schema 9 through 10 to 11 with null provenance and record schema 2, inferring no adoption time', () => withDatabase(async (database) => {
+    it('migrates schema 9 through 10 and 11 to 12 with null provenance and record schema 2, inferring no adoption time', () => withDatabase(async (database) => {
       const result = service(database).prepareImportRoot(schema9Root())
       expect(result.ok, JSON.stringify(result)).toBe(true)
       if (!result.ok) return
-      expect(result.root.schemaVersion).toBe(11)
+      expect(result.root.schemaVersion).toBe(12)
       expect(result.root.rngState).toMatchObject({ schemaVersion: 2, lastIdentifiedAt: null })
       expect(result.root.normalArtianCounters[0].lastIdentifiedAt).toBeNull()
       expect(result.root.executionSavePoints[0].rngState.lastIdentifiedAt).toBeNull()
@@ -371,11 +373,11 @@ describe('ImportExportService prepare', () => {
       expect(nested?.normalCounters[0].lastIdentifiedAt).toBeNull()
     }))
 
-    it('migrates schema 8 through 9 and 10 to 11, filling only the non-terminal lifecycle nulls', () => withDatabase(async (database) => {
+    it('migrates schema 8 through 9, 10 and 11 to 12, filling only the non-terminal lifecycle nulls', () => withDatabase(async (database) => {
       const result = service(database).prepareImportRoot(schema8Root())
       expect(result.ok, JSON.stringify(result)).toBe(true)
       if (!result.ok) return
-      expect(result.root.schemaVersion).toBe(11)
+      expect(result.root.schemaVersion).toBe(12)
       expect(result.root.productionPlans[0]).toMatchObject({ status: 'active', abandonmentReason: null, abandonedAt: null, completedAt: null })
       expect(result.root.executionSavePoints[0].productionPlan.abandonmentReason).toBeNull()
     }))
@@ -388,11 +390,11 @@ describe('ImportExportService prepare', () => {
       expect(service(database).prepareImportRoot(withHistory)).toMatchObject({ ok: false, code: 'invalid_import' })
     }))
 
-    it('migrates schema 7 through 8, 9, 10 and 11 without adding executionEffects to its Plans', () => withDatabase(async (database) => {
+    it('migrates schema 7 through 8, 9, 10, 11 and 12 without adding executionEffects to its Plans', () => withDatabase(async (database) => {
       const result = service(database).prepareImportRoot(schema7Root())
       expect(result.ok, JSON.stringify(result)).toBe(true)
       if (!result.ok) return
-      expect(result.root.schemaVersion).toBe(11)
+      expect(result.root.schemaVersion).toBe(12)
       expect(result.root.productionPlans[0].steps[0].executionEffects).toBeUndefined()
       expect(result.root.productionPlans[0].baseSnapshot.dependentTargetDefinitionsHash).toBeUndefined()
     }))
@@ -401,11 +403,41 @@ describe('ImportExportService prepare', () => {
       const result = service(database).prepareImportRoot(schema6Root())
       expect(result.ok, JSON.stringify(result)).toBe(true)
       if (!result.ok) return
-      expect(result.root.schemaVersion).toBe(11)
+      expect(result.root.schemaVersion).toBe(12)
       expect(result.root.ownedWeapons[0].executionInProgress).toBeNull()
       expect(result.root.targetWeapons[0]).toMatchObject({ lifecycleStatus: 'active', completedAt: null, completedByProductionPlanId: null })
       expect(result.root.executionSavePoints).toEqual([])
       expect(result.root.rngState?.lastIdentifiedAt).toBeNull()
+    }))
+
+    it('migrates a schema 11 backup to 12 with the recommended Candidate Search defaults and keeps the other settings', () => withDatabase(async (database) => {
+      const current = dataTransferRoot()
+      const legacy = { ...current, schemaVersion: 11, settings: legacyAppSettingsV1(current.settings) }
+      const s = service(database)
+      const prepared = s.prepareImportRoot(legacy)
+      expect(prepared.ok, JSON.stringify(prepared)).toBe(true)
+      if (!prepared.ok) return
+      expect(prepared.root.schemaVersion).toBe(12)
+      expect(prepared.root.settings).toEqual({
+        ...current.settings,
+        candidateSearchDefaults: { maxNormalAdvance: 350, maxGogmaAdvance: 500, maxSkillAdvance: 1500 },
+      })
+      await s.applyImport(prepared.root)
+      expect(await database.settings.get('settings')).toEqual(prepared.root.settings)
+    }))
+
+    it('round-trips the user Candidate Search defaults through a current-schema Export and Import', () => withDatabase(async (database) => {
+      const root = dataTransferRoot()
+      await seedRoot(database, root)
+      const s = service(database)
+      const json = await s.serializeExport()
+      await s.clearAllData()
+      const prepared = s.prepareImportJson(json)
+      expect(prepared.ok).toBe(true)
+      if (!prepared.ok) return
+      await s.applyImport(prepared.root)
+      expect((await database.settings.get('settings'))?.candidateSearchDefaults)
+        .toEqual({ maxNormalAdvance: 1000, maxGogmaAdvance: 200, maxSkillAdvance: 2500 })
     }))
 
     it('applies a migrated root exactly as migrated', () => withDatabase(async (database) => {
@@ -528,6 +560,19 @@ describe('ImportExportService clearAllData', () => {
       expect([table, count]).toEqual([table, table === 'settings' ? 1 : 0])
     }
     expect(await database.settings.get('settings')).toEqual(createDefaultAppSettings(NOW))
+  }))
+
+  it('returns the Candidate Search defaults to the recommended 350 / 500 / 1500', () => withDatabase(async (database) => {
+    // The seeded settings carry a user choice (1000 / 200 / 2500).
+    await seedRoot(database, dataTransferRoot())
+    expect((await database.settings.get('settings'))?.candidateSearchDefaults)
+      .toEqual({ maxNormalAdvance: 1000, maxGogmaAdvance: 200, maxSkillAdvance: 2500 })
+
+    const settings = await service(database).clearAllData()
+
+    const recommended = { maxNormalAdvance: 350, maxGogmaAdvance: 500, maxSkillAdvance: 1500 }
+    expect(settings.candidateSearchDefaults).toEqual(recommended)
+    expect((await database.settings.get('settings'))?.candidateSearchDefaults).toEqual(recommended)
   }))
 
   it('keeps the previous data entirely when the clear transaction fails', () => withDatabase(async (database) => {
@@ -686,7 +731,7 @@ describe('ImportExportService Draft lifecycle (schema 11)', () => {
 
     const exported = await service(database).exportRoot()
 
-    expect(exported.schemaVersion).toBe(11)
+    expect(exported.schemaVersion).toBe(12)
     expect(exported.productionPlans.map(({ id }) => id)).toEqual(['plan.draft.divergent', 'plan.fixture.a', 'plan.fixture.abandoned'])
     expect(exported.productionPlans[0]).toEqual(divergentDraft())
     expect(exported.buildListEntries).toEqual(root.buildListEntries)
@@ -753,19 +798,20 @@ describe('ImportExportService Draft lifecycle (schema 11)', () => {
     const legacy = {
       ...current,
       schemaVersion: 10,
+      settings: legacyAppSettingsV1(current.settings),
       productionPlans: [divergentDraft('plan.draft.old.a'), active, divergentDraft('plan.draft.old.b'), abandoned],
     }
     const s = service(database)
     const prepared = s.prepareImportRoot(legacy)
     expect(prepared.ok, JSON.stringify(prepared)).toBe(true)
     if (!prepared.ok) return
-    expect(prepared.root.schemaVersion).toBe(11)
+    expect(prepared.root.schemaVersion).toBe(12)
     expect(prepared.root.productionPlans).toEqual([active, abandoned])
     expect(prepared.root.buildListEntries).toEqual(current.buildListEntries)
 
     await s.applyImport(prepared.root)
     const exported = await s.exportRoot()
-    expect(exported.schemaVersion).toBe(11)
+    expect(exported.schemaVersion).toBe(12)
     expect(exported.productionPlans.map(({ id }) => id)).toEqual(['plan.fixture.a', 'plan.fixture.abandoned'])
     expect(await database.productionPlans.where('status').equals('draft').count()).toBe(0)
   }))
@@ -789,7 +835,7 @@ describe('ImportExportService and the device-local theme preference', () => {
     expect(json).not.toContain(THEME_MODE_STORAGE_KEY)
     const root = JSON.parse(json) as ExportRoot
     expect(Object.keys(root.settings).sort()).toEqual(Object.keys(createDefaultAppSettings(NOW)).sort())
-    expect(root.schemaVersion).toBe(11)
+    expect(root.schemaVersion).toBe(12)
   }))
 
   it('leaves the stored theme untouched by an Import and by clearing all data', () => withDatabase(async (database) => {

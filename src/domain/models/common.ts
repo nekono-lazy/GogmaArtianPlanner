@@ -359,12 +359,50 @@ export interface NormalArtianCounter {
   updatedAt: ISODateTimeString
 }
 
+/**
+ * The AppSettings record shape version (`docs/DATA_MODEL.md` 13). Version 2
+ * added `candidateSearchDefaults`. It is independent of
+ * `DATABASE_SCHEMA_VERSION`, `ExportRoot.schemaVersion` and
+ * `CURRENT_CALCULATION_APP_SCHEMA_VERSION`.
+ */
+export const APP_SETTINGS_SCHEMA_VERSION = 2
+
+/**
+ * The three Candidate Search bounds the user keeps as the usual starting
+ * values of the Search screen (`docs/DATA_MODEL.md` 13, `docs/UI_FLOW.md` 9 /
+ * 14). They carry no calculation meaning of their own: the Search screen copies
+ * them into its per-search `CandidateSearchSettings`, and a change made there
+ * is never written back. Each is a positive integer; no ordering between them
+ * is required.
+ */
+export interface CandidateSearchDefaults {
+  maxNormalAdvance: number
+  maxGogmaAdvance: number
+  maxSkillAdvance: number
+}
+
+/**
+ * The recommended initial Candidate Search bounds: a new AppSettings record,
+ * the AppSettings v1 -> v2 migration and the Export schema 11 -> 12 migration
+ * use them, and `defaultCandidateSearchSettings` reuses them. The Bonus
+ * (Gogma) bound starts above the Normal Artian one because the Gogma Counter
+ * is shared by every weapon: another weapon's production can advance it, while
+ * a Normal Artian Counter belongs to one weapon type. This is a recommendation,
+ * never a validation constraint.
+ */
+export const recommendedCandidateSearchDefaults: Readonly<CandidateSearchDefaults> = Object.freeze({
+  maxNormalAdvance: 350,
+  maxGogmaAdvance: 500,
+  maxSkillAdvance: 1500,
+})
+
 export interface AppSettings {
   id: 'settings'
-  schemaVersion: 1
+  schemaVersion: typeof APP_SETTINGS_SCHEMA_VERSION
   debugMode: boolean
   resultPageSize: number
   defaultSearchLimit: number
+  candidateSearchDefaults: CandidateSearchDefaults
   createdAt: ISODateTimeString
   updatedAt: ISODateTimeString
 }

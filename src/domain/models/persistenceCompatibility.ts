@@ -1,3 +1,4 @@
+import { APP_SETTINGS_SCHEMA_VERSION, recommendedCandidateSearchDefaults } from './common'
 import type { OwnedWeapon, RestorationBonusScope } from './publicTypes'
 
 type LegacyOwnedWeapon = Omit<OwnedWeapon, 'restorationBonusScope'> & {
@@ -95,5 +96,38 @@ export function fillRngStateIdentificationProvenance(state: Record<string, unkno
 export function fillNormalCounterIdentificationProvenance(counter: Record<string, unknown>): boolean {
   if (hasIdentificationProvenanceField(counter)) return false
   counter[IDENTIFICATION_PROVENANCE_FIELD] = null
+  return true
+}
+
+/** The AppSettings record version written before `candidateSearchDefaults` existed. */
+export const LEGACY_APP_SETTINGS_SCHEMA_VERSION = 1
+export const CANDIDATE_SEARCH_DEFAULTS_FIELD = 'candidateSearchDefaults'
+
+/**
+ * Whether an untrusted AppSettings record is an AppSettings v1 record: record
+ * version 1 and no `candidateSearchDefaults` field. Anything else is not a
+ * legacy record and is never filled.
+ */
+export function isLegacyAppSettingsRecord(settings: Record<string, unknown>): boolean {
+  return settings.schemaVersion === LEGACY_APP_SETTINGS_SCHEMA_VERSION
+    && !(CANDIDATE_SEARCH_DEFAULTS_FIELD in settings)
+}
+
+/**
+ * Upgrades an AppSettings v1 record to v2 (`docs/DATA_MODEL.md` 13 / 14.2 /
+ * 15.3): `candidateSearchDefaults` becomes the recommended
+ * `recommendedCandidateSearchDefaults` and the record version becomes 2. A v1
+ * record never held user-chosen Candidate Search bounds - the Search screen's
+ * former fixed `500 / 350 / 1500` were never saved - so the recommendation is
+ * the only value it can state. `debugMode`, `resultPageSize`,
+ * `defaultSearchLimit` and the timestamps are kept exactly; in particular
+ * `defaultSearchLimit` keeps its own meaning and is never copied into the new
+ * bounds. A record that is not a v1 record is left as it is for validation to
+ * judge. Mutates and returns whether it upgraded the record.
+ */
+export function upgradeAppSettingsToV2(settings: Record<string, unknown>): boolean {
+  if (!isLegacyAppSettingsRecord(settings)) return false
+  settings[CANDIDATE_SEARCH_DEFAULTS_FIELD] = { ...recommendedCandidateSearchDefaults }
+  settings.schemaVersion = APP_SETTINGS_SCHEMA_VERSION
   return true
 }

@@ -5,6 +5,7 @@ import {
   fillNormalCounterIdentificationProvenance,
   fillRngStateIdentificationProvenance,
   isDraftProductionPlanRecord,
+  upgradeAppSettingsToV2,
 } from '../domain/models/persistenceCompatibility'
 import type {
   AppSettings,
@@ -20,7 +21,7 @@ import type {
 } from '../domain/models/publicTypes'
 
 export const DATABASE_NAME = 'mh-wilds-gogma-artian-planner'
-export const DATABASE_SCHEMA_VERSION = 8
+export const DATABASE_SCHEMA_VERSION = 9
 
 export class AppDatabase extends Dexie {
   rngState!: Table<RngState, 'current'>
@@ -217,12 +218,26 @@ export class AppDatabase extends Dexie {
     // ExecutionSavePoints, RngState, Normal Counters and Settings keep their
     // exact persisted contents. No table or index changes and no calculation
     // semantics change, so `CURRENT_CALCULATION_APP_SCHEMA_VERSION` stays 13.
-    this.version(DATABASE_SCHEMA_VERSION).stores({}).upgrade(async (transaction) => {
+    this.version(8).stores({}).upgrade(async (transaction) => {
       await transaction
         .table('productionPlans')
         .toCollection()
         .filter((plan: unknown) => isPlainRecord(plan) && isDraftProductionPlanRecord(plan))
         .delete()
+    })
+    // v9 upgrades the AppSettings record to record schema version 2
+    // (`docs/DATA_MODEL.md` 13 / 14.2): it gains `candidateSearchDefaults`,
+    // the user's usual Candidate Search bounds. A v1 record never held such a
+    // value - the Search screen's former fixed `500 / 350 / 1500` were never
+    // saved - so it gets the recommended `350 / 500 / 1500`, and every other
+    // field (`debugMode`, `resultPageSize`, `defaultSearchLimit`, timestamps)
+    // keeps its exact value. No table or index changes, no other table is
+    // touched, and no calculation semantics change, so
+    // `CURRENT_CALCULATION_APP_SCHEMA_VERSION` stays where it is.
+    this.version(DATABASE_SCHEMA_VERSION).stores({}).upgrade(async (transaction) => {
+      await transaction.table('settings').toCollection().modify((settings: Record<string, unknown>) => {
+        upgradeAppSettingsToV2(settings)
+      })
     })
   }
 }

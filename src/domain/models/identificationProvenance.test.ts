@@ -50,7 +50,7 @@ function exportRoot(): ExportRoot {
   const plan = createValidProductionPlan()
   const history = createValidExecutionHistory()
   return {
-    schemaVersion: 11,
+    schemaVersion: 12,
     appName: 'mh-wilds-gogma-artian-planner',
     exportedAt: DOMAIN_FIXTURE_TIME,
     rngState: { ...createValidRngState(), lastIdentifiedAt: IDENTIFIED_AT },
@@ -64,10 +64,11 @@ function exportRoot(): ExportRoot {
     executionSavePoints: [{ ...savePointFor(), productionPlanId: plan.id, id: executionSavePointIdForPlan(plan.id), lastExecutionHistoryId: history.id, productionPlan: { ...plan, status: 'active' } }],
     settings: {
       id: 'settings',
-      schemaVersion: 1,
+      schemaVersion: 2,
       debugMode: false,
       resultPageSize: 50,
       defaultSearchLimit: 5000,
+      candidateSearchDefaults: { maxNormalAdvance: 350, maxGogmaAdvance: 500, maxSkillAdvance: 1500 },
       createdAt: DOMAIN_FIXTURE_TIME,
       updatedAt: DOMAIN_FIXTURE_TIME,
     },
@@ -88,6 +89,11 @@ function schema9Root(): ExportRootV9 {
   return {
     ...root,
     schemaVersion: 9,
+    settings: (() => {
+      const { candidateSearchDefaults: _removed, ...rest } = root.settings
+      void _removed
+      return { ...rest, schemaVersion: 1 as const }
+    })(),
     rngState: stripProvenance(root.rngState as unknown as Record<string, unknown>, true) as never,
     normalArtianCounters: root.normalArtianCounters.map((counter) => stripProvenance(counter as unknown as Record<string, unknown>) as never),
     executionSavePoints: root.executionSavePoints.map((savePoint) => ({
@@ -221,7 +227,7 @@ describe('Export schema 9 -> 10', () => {
     const root = exportRoot()
     const imported = prepareExportRootForImport(JSON.parse(JSON.stringify(root)))
     expect(imported).toEqual({ ok: true, root })
-    expect(EXPORT_SCHEMA_VERSION).toBe(11)
+    expect(EXPORT_SCHEMA_VERSION).toBe(12)
   })
 
   it('fills null provenance and record schema 2 in the root, the save points and the Undo snapshots, and infers nothing', () => {
@@ -249,7 +255,7 @@ describe('Export schema 9 -> 10', () => {
     expect(legacy.schemaVersion).toBe(9)
     // The whole import chain accepts the schema 9 root.
     const imported = prepareExportRootForImport(JSON.parse(JSON.stringify(legacy)))
-    expect(imported.ok && imported.root.schemaVersion).toBe(11)
+    expect(imported.ok && imported.root.schemaVersion).toBe(12)
     expect(imported.ok && imported.root.rngState?.lastIdentifiedAt).toBeNull()
   })
 

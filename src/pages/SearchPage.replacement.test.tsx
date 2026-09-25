@@ -24,6 +24,7 @@ import {
 import { buildListEntryId } from '../test/fixtures/domainData'
 import { createValidMasterDataFixture } from '../test/fixtures/masterData'
 import { planBreakingApproval, planBreakingInspection } from '../test/fixtures/planBreakingInspection'
+import { recommendedCandidateSearchDefaults } from '../domain/models/publicTypes'
 import { SearchPage, type SearchPageDependencies } from './SearchPage'
 
 /**
@@ -99,6 +100,7 @@ function harness(initialEntries: BuildListEntry[], addResult: AddBuildListCandid
     getOwnedWeapons: vi.fn(async () => []),
     getBuildListEntries: vi.fn(async () => initialEntries),
     getReidentificationReminder: vi.fn(async () => ({ kind: 'none' as const })),
+    getCandidateSearchDefaults: async () => ({ ...recommendedCandidateSearchDefaults }),
     createWorkerClient: () => client,
     createInput: vi.fn(async () => createFixtureInput()),
     saveCandidates: vi.fn(async () => undefined),

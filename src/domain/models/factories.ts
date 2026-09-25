@@ -11,7 +11,11 @@ import type {
   OwnedWeapon,
   TargetWeapon,
 } from './entities'
-import { RNG_STATE_SCHEMA_VERSION } from './common'
+import {
+  APP_SETTINGS_SCHEMA_VERSION,
+  recommendedCandidateSearchDefaults,
+  RNG_STATE_SCHEMA_VERSION,
+} from './common'
 
 // `executionInProgress` is Execution-owned: a newly registered weapon is never
 // being produced, so the factory always starts it at null.
@@ -116,10 +120,11 @@ export function createDefaultAppSettings(
 ): AppSettings {
   return {
     id: 'settings',
-    schemaVersion: 1,
+    schemaVersion: APP_SETTINGS_SCHEMA_VERSION,
     debugMode: false,
     resultPageSize: 50,
     defaultSearchLimit: 5000,
+    candidateSearchDefaults: { ...recommendedCandidateSearchDefaults },
     createdAt: now,
     updatedAt: now,
   }

@@ -19,6 +19,7 @@ import {
   targetWeaponId,
 } from '../test/fixtures/domainData'
 import { createValidMasterDataFixture } from '../test/fixtures/masterData'
+import { recommendedCandidateSearchDefaults } from '../domain/models/publicTypes'
 import { SearchPage, type SearchPageDependencies } from './SearchPage'
 
 /**
@@ -87,6 +88,7 @@ function dependencies(
     getOwnedWeapons: async () => [],
     getBuildListEntries: vi.fn(async () => [...persisted.entries]),
     getReidentificationReminder: async () => ({ kind: 'none' as const }),
+    getCandidateSearchDefaults: async () => ({ ...recommendedCandidateSearchDefaults }),
     createWorkerClient: () => client,
     createInput: vi.fn(async (options) => ({ ...createFixtureInput(), ...options, targetWeapons: targets })),
     saveCandidates: vi.fn(async () => undefined),
@@ -262,5 +264,94 @@ describe('SearchPage batch search and registration', () => {
     expect(batch).toBeEnabled()
     await user.click(screen.getByRole('button', { name: '検索開始' }))
     expect(batch).toBeDisabled()
+  })
+})
+
+/**
+ * The saved Candidate Search defaults (Issue #125, `docs/UI_FLOW.md` 9): the
+ * screen starts from them, and an edit made here applies to this screen's
+ * single and batch searches only - nothing on this screen writes them.
+ */
+describe('SearchPage saved Candidate Search defaults', () => {
+  const SAVED = { maxNormalAdvance: 1000, maxGogmaAdvance: 200, maxSkillAdvance: 2500 }
+
+  async function openBounds(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(await screen.findByRole('button', { name: '詳細設定（探索量の上限）' }))
+    return {
+      normal: await screen.findByLabelText('通常アーティア最大進行量'),
+      bonus: screen.getByLabelText('復元ボーナス最大進行量'),
+      skill: screen.getByLabelText('スキル最大進行量'),
+    }
+  }
+
+  it('starts from the saved values and searches with them', async () => {
+    const user = userEvent.setup()
+    const client = new QueueClient()
+    const { deps } = dependencies(client, [target('target.a', '目標A')])
+    deps.getCandidateSearchDefaults = vi.fn(async () => ({ ...SAVED }))
+    render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
+
+    const fields = await openBounds(user)
+    expect(fields.normal).toHaveValue(1000)
+    expect(fields.bonus).toHaveValue(200)
+    expect(fields.skill).toHaveValue(2500)
+    await user.click(screen.getByRole('button', { name: '検索開始' }))
+    expect(client.last.input.settings).toEqual(SAVED)
+    expect(deps.getCandidateSearchDefaults).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses an edit for this screen only: the single search and the batch get it, and the next visit starts from the saved values again', async () => {
+    const user = userEvent.setup()
+    const client = new QueueClient()
+    const a = target('target.a', '目標A')
+    const b = target('target.b', '目標B')
+    const { deps } = dependencies(client, [a, b])
+    deps.getCandidateSearchDefaults = vi.fn(async () => ({ ...SAVED }))
+    const view = render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
+
+    const fields = await openBounds(user)
+    await user.clear(fields.bonus)
+    await user.type(fields.bonus, '750')
+    const edited = { ...SAVED, maxGogmaAdvance: 750 }
+
+    await user.click(screen.getByRole('button', { name: '検索開始' }))
+    expect(client.last.input.settings).toEqual(edited)
+    client.resolveLast(null)
+    await waitFor(() => expect(screen.getByRole('button', { name: '検索開始' })).toBeEnabled())
+
+    // The batch starts with the conditions the screen shows now, for every Target.
+    await user.click(screen.getByRole('button', { name: /未登録を一括検索・追加/ }))
+    await waitFor(() => expect(client.requests).toHaveLength(2))
+    client.resolveLast(null)
+    await waitFor(() => expect(client.requests).toHaveLength(3))
+    client.resolveLast(null)
+    await screen.findByRole('region', { name: '一括検索・追加の結果' })
+    expect(client.requests.slice(1).map(({ input }) => input.settings)).toEqual([edited, edited])
+
+    // Nothing wrote the edit back: a new visit reads the saved values again.
+    view.unmount()
+    render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
+    const again = await openBounds(user)
+    expect(again.bonus).toHaveValue(200)
+    expect(deps.getCandidateSearchDefaults).toHaveBeenCalledTimes(2)
+  })
+
+  it('falls back to the recommended 350 / 500 / 1500 with a warning when the saved values cannot be read', async () => {
+    const user = userEvent.setup()
+    const client = new QueueClient()
+    const { deps } = dependencies(client, [target('target.a', '目標A')])
+    deps.getCandidateSearchDefaults = vi.fn(async () => {
+      throw new Error('read failure')
+    })
+    render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
+
+    expect(await screen.findByText(/保存済みの探索量の既定値を読み込めなかったため、推奨の初期値で検索します/)).toBeInTheDocument()
+    const fields = await openBounds(user)
+    expect(fields.normal).toHaveValue(350)
+    expect(fields.bonus).toHaveValue(500)
+    expect(fields.skill).toHaveValue(1500)
+    // The search stays available.
+    await user.click(screen.getByRole('button', { name: '検索開始' }))
+    expect(client.last.input.settings).toEqual({ maxNormalAdvance: 350, maxGogmaAdvance: 500, maxSkillAdvance: 1500 })
   })
 })

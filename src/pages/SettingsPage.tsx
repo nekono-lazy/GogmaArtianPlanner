@@ -15,6 +15,7 @@ import {
 } from '@mui/material'
 import {
   useCallback,
+  useEffect,
   useId,
   useMemo,
   useRef,
@@ -23,6 +24,10 @@ import {
   type ReactNode,
 } from 'react'
 import { PageShell } from '../components/PageShell'
+import {
+  CandidateSearchDefaultsSetting,
+  type CandidateSearchDefaultsFeedback,
+} from '../components/settings/CandidateSearchDefaultsSetting'
 import { ClearAllDataDialog } from '../components/settings/ClearAllDataDialog'
 import { DataTransferFeedbackAlert } from '../components/settings/DataTransferFeedbackAlert'
 import { ExportDataDialog, type ExportSnapshot } from '../components/settings/ExportDataDialog'
@@ -45,7 +50,12 @@ import {
   type ImportTextSource,
 } from '../components/settings/dataTransferPresentation'
 import { loadMasterData } from '../domain/master/loadMasterData'
-import type { AppSettings, ExportRoot } from '../domain/models/publicTypes'
+import {
+  APP_SETTINGS_SCHEMA_VERSION,
+  type AppSettings,
+  type CandidateSearchDefaults,
+  type ExportRoot,
+} from '../domain/models/publicTypes'
 import { productionRngRuntime } from '../domain/rng/production/productionRngRuntime'
 import {
   createImportExportService,
@@ -74,6 +84,19 @@ export interface SettingsPageDependencies {
   applyImport(root: ExportRoot): Promise<void>
   clearAllData(): Promise<AppSettings>
   saveDebugMode(enabled: boolean): Promise<unknown>
+  /** The persisted Candidate Search defaults (`docs/DATA_MODEL.md` 13). */
+  loadCandidateSearchDefaults(): Promise<CandidateSearchDefaults>
+  /** Saves them and returns the settings as persisted. */
+  saveCandidateSearchDefaults(defaults: CandidateSearchDefaults): Promise<AppSettings>
+}
+
+type CandidateSearchDefaultsState =
+  | { status: 'loading' }
+  | { status: 'error' }
+  | { status: 'loaded'; saved: CandidateSearchDefaults; revision: number }
+
+function currentRevision(state: CandidateSearchDefaultsState): number {
+  return state.status === 'loaded' ? state.revision : 0
 }
 
 /** A titled, border-based settings section (the Dashboard / RNG Setup pattern). */
@@ -202,6 +225,9 @@ export function SettingsPage({
       applyImport: (root) => service.applyImport(root),
       clearAllData: () => service.clearAllData(),
       saveDebugMode: (enabled) => settingsRepository.setDebugMode(enabled),
+      loadCandidateSearchDefaults: () =>
+        settingsRepository.ensureSettings().then((settings) => settings.candidateSearchDefaults),
+      saveCandidateSearchDefaults: (defaults) => settingsRepository.setCandidateSearchDefaults(defaults),
     }
   }, [dependencies])
 
@@ -227,6 +253,14 @@ export function SettingsPage({
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [importDraft, setImportDraft] = useState('')
   const [importFeedback, setImportFeedback] = useState<DataTransferFeedback | null>(null)
+  // The saved Candidate Search defaults. `revision` remounts the form so its
+  // draft restarts from whatever is persisted after a save, Import or clear.
+  const [searchDefaults, setSearchDefaults] = useState<CandidateSearchDefaultsState>(
+    api === null ? { status: 'error' } : { status: 'loading' },
+  )
+  const [searchDefaultsSaving, setSearchDefaultsSaving] = useState(false)
+  const searchDefaultsSavingRef = useRef(false)
+  const [searchDefaultsFeedback, setSearchDefaultsFeedback] = useState<CandidateSearchDefaultsFeedback>(null)
   const debugHelpId = useId()
   const exportHelpId = useId()
   const importHelpId = useId()
@@ -248,6 +282,56 @@ export function SettingsPage({
     operationRef.current = null
     setOperation(null)
   }, [])
+
+  useEffect(() => {
+    if (api === null) return
+    let active = true
+    void api
+      .loadCandidateSearchDefaults()
+      .then((saved) => {
+        if (active) setSearchDefaults((current) => ({ status: 'loaded', saved, revision: currentRevision(current) + 1 }))
+      })
+      .catch(() => {
+        if (active) setSearchDefaults({ status: 'error' })
+      })
+    return () => {
+      active = false
+    }
+  }, [api])
+
+  /** The persisted defaults changed under the form (Import, clear). */
+  const replaceSearchDefaults = (saved: CandidateSearchDefaults) => {
+    setSearchDefaults((current) => ({ status: 'loaded', saved, revision: currentRevision(current) + 1 }))
+    setSearchDefaultsFeedback(null)
+  }
+
+  // Shares the pending-settings-save gate with Debug Mode, so no Data Transfer
+  // starts while it is being written and it never starts during one.
+  const handleSaveSearchDefaults = (defaults: CandidateSearchDefaults) => {
+    if (api === null || operationRef.current !== null || searchDefaultsSavingRef.current) return
+    searchDefaultsSavingRef.current = true
+    setSearchDefaultsSaving(true)
+    pendingSettingsSavesRef.current += 1
+    setPendingSettingsSaves((count) => count + 1)
+    setSearchDefaultsFeedback(null)
+    void api
+      .saveCandidateSearchDefaults(defaults)
+      .then((settings) => {
+        setSearchDefaults((current) => ({
+          status: 'loaded',
+          saved: settings.candidateSearchDefaults,
+          revision: currentRevision(current) + 1,
+        }))
+        setSearchDefaultsFeedback('saved')
+      })
+      .catch(() => setSearchDefaultsFeedback('save_failed'))
+      .finally(() => {
+        searchDefaultsSavingRef.current = false
+        setSearchDefaultsSaving(false)
+        pendingSettingsSavesRef.current -= 1
+        setPendingSettingsSaves((count) => count - 1)
+      })
+  }
 
   const handleDebugMode = (enabled: boolean) => {
     if (api === null || operationRef.current !== null) return
@@ -358,6 +442,7 @@ export function SettingsPage({
       // The imported settings are the persisted ones now; never re-read a
       // default over them.
       hydrate(root.settings)
+      replaceSearchDefaults(root.settings.candidateSearchDefaults)
       setSaveError(false)
       setPendingImport(null)
       setFeedback(importSucceededFeedback())
@@ -374,6 +459,7 @@ export function SettingsPage({
     try {
       const settings = await api.clearAllData()
       hydrate(settings)
+      replaceSearchDefaults(settings.candidateSearchDefaults)
       setSaveError(false)
       setClearDialogOpen(false)
       setFeedback(clearSucceededFeedback())
@@ -410,6 +496,27 @@ export function SettingsPage({
             <Alert severity="warning" sx={{ mt: 1.5 }}>
               設定を保存できませんでした。再読み込み後は保存済みの設定が使用され、現在の表示と異なる場合があります。再度お試しください。
             </Alert>
+          )}
+        </SettingsSection>
+        <SettingsSection title="候補検索">
+          {searchDefaults.status === 'loading' && (
+            <Typography variant="body2" color="text.secondary">探索量の既定値を読み込み中…</Typography>
+          )}
+          {searchDefaults.status === 'error' && (
+            <Alert severity="error">
+              探索量の既定値を読み込めませんでした。再読み込みしてからもう一度お試しください。
+            </Alert>
+          )}
+          {searchDefaults.status === 'loaded' && (
+            <CandidateSearchDefaultsSetting
+              key={searchDefaults.revision}
+              saved={searchDefaults.saved}
+              saving={searchDefaultsSaving}
+              disabled={api === null || dataTransferBusy}
+              feedback={searchDefaultsFeedback}
+              onSave={handleSaveSearchDefaults}
+              onDraftChange={() => setSearchDefaultsFeedback(null)}
+            />
           )}
         </SettingsSection>
         <SettingsSection title="データ管理">
@@ -473,7 +580,7 @@ export function SettingsPage({
                   value={masterData.data.manifest.gameVersion === 'unknown-initial' ? '未確認' : masterData.data.manifest.gameVersion}
                 />
                 <VersionRow label="マスターデータバージョン" value={String(masterData.data.manifest.dataVersion)} />
-                <VersionRow label="アプリスキーマバージョン" value="1" />
+                <VersionRow label="アプリスキーマバージョン" value={String(APP_SETTINGS_SCHEMA_VERSION)} />
               </>
             )}
             <VersionRow label="RNG予測エンジン" value={productionRngRuntime.mode} />
