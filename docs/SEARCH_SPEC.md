@@ -210,6 +210,11 @@ Reset上限は常にMであり、余分な1位置はconversionの初回Skill付�
 - `maxNormalAdvance` はNormal streamのforge回数上限であり、Gogma / Skillの探索量を倍加させない
 - `maxNormalAdvance` はpredicted variantのoffset列挙だけに適用する。6.1.1のblind Reset variantはforge数が常に1で固定であり、`maxNormalAdvance` のoffsetを消費しない
 - これらの上限は探索範囲の上限であり、初回検索の終了条件ではない。終了条件は5.6に定義する
+- 上記の `estimated*Advance` はoriginからの到達量である。通常Candidate SearchのRouteはstreamごとに
+  originから連続するので、operationごとの進行量の和と一致する。Planner Alternative Search（5.6.8）だけが
+  生成するheld位置を跨ぐRouteでも、値の意味はoriginからの到達量のままである
+- Planner Alternative Search（5.6.8）の探索範囲 `PlannerAlternativeSearchExtent` は、この3値と同じ意味の
+  別の値である。候補検索画面の値（`AppSettings.candidateSearchDefaults` を含む）をPlannerが読むことはない
 
 ### 3.2 検索起点
 
@@ -997,6 +1002,11 @@ B8-AでPlanner-driven constrained re-searchの正式契約を確定した。Plan
 [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2、Search Domain側のenumeration契約は5.6.7に
 定義する。実装はB8-B1以降で行う。
 
+Issue #136 / #101で、代替Ideal Routeの生成器を5.6.8のPlanner Alternative Search（resource-aware
+alternative Ideal search）へ段階的に置き換える契約を確定した（仕様確定・未実装）。「Planner制約を受け取って
+候補を順次提示できる形」は、fixed Routeのresource reservationと除外Route keyを受け取る5.6.8のAPIで具体化する。
+上記4項目の禁止事項は変わらない。
+
 ### 5.6.6 `resultFilter` の廃止
 
 `resultFilter` は存在しない。Searchが返すのはcanonical Ideal 1件以下であり、
@@ -1009,6 +1019,12 @@ B8-AでPlanner-driven constrained re-searchの正式契約を確定した。Plan
 
 B8-Aで確定した契約である。実装はB8-B1で行う。Planner側の契約は
 [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2に定義する。
+
+**legacy。** Issue #101のPR #137実測で、本節のenumeratorはupfront solveのため最初のCandidateまでにほぼ全探索
+時間を払い、巨戟化を常にorigin Skill Counterで組み立てるため共有Skill位置の競合を解決できないことが確認された。
+本節は5.6.8のPlanner Alternative Searchへ段階的に置き換える対象であり、Production routingを切り替えるまで
+（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.14のPhase 5）はlegacy implementationとしてそのまま動作する。
+本節のboundsを拡大して新機能のauthorityにしない。
 
 #### 境界
 
@@ -1314,6 +1330,186 @@ supportsSeedSearch = false
 B8 constrained materializerはこの経路を流用せず、deterministic constrained search
 identityを基点とする専用契約で `searchRunId` と `id` を決める(前掲のmaterialize契約、
 [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.13)。両者は別の境界であり矛盾しない。
+
+### 5.6.8 Planner Alternative Search（resource-aware alternative Ideal search）
+
+実装状態: **仕様確定・未実装**（Issue #136 / #101）。Planner側の契約は
+[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19、背景と方式選定の理由は
+[PLANNER_CONFLICT_REPAIR_DESIGN.md](./PLANNER_CONFLICT_REPAIR_DESIGN.md)（非normative）にある。
+
+Plannerが競合を解決するための代替Ideal Routeを求める、Planner専用のSearch Domain APIである。5.6.7の
+constrained enumerationを段階的に置き換える（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.14）。
+
+#### 境界
+
+- 通常Candidate Search（`searchCandidates()`）とは別のconsumer policyであり、Plannerから
+  `searchCandidates()` 自体を呼ぶ仕様にはしない。通常Searchには「canonical Idealを確定したら、それより
+  高costのworkを打ち切る」という初回Search policy（5.6.2）があるためである
+- 5.6.7と同じくSearch DomainのAPIであり、PlannerのConflict DTO、`PlannerConflictResolution`、Planner試行上限、
+  counter precondition / physical action identity / shareability / inventory / source version判定を受け取らない
+- 入力は次だけである（概念名。正確な型名は実装Phaseで決めてよい）
+
+```ts
+interface PlannerAlternativeSearchInput {
+  origin: ConstrainedSearchOrigin;            // 5.6.7と同じ意味。Planner計算開始時のcurrent validated snapshot
+  targetWeaponId: TargetWeaponId;
+  extent: PlannerAlternativeSearchExtent;     // PLANNER_SPEC 9.2.19.12
+  reservation: PlannerAlternativeReservation;
+  excludedRouteKeys: readonly string[];       // candidateStableKey（5.6.3）の集合
+}
+
+interface PlannerAlternativeReservation {
+  // streamごとの held 位置と blocked 位置（blocked ⊆ held）。
+  // NormalはNormalArtianCounter IDごと。Plannerが既存authorityから導出した値である
+  normal: { counterId: NormalArtianCounterId; held: readonly number[]; blocked: readonly number[] }[];
+  skill: { held: readonly number[]; blocked: readonly number[] };
+  gogma: { held: readonly number[]; blocked: readonly number[] };
+  exclusiveOwnedWeaponIds: readonly OwnedWeaponId[];
+}
+```
+
+reservationの意味（held / blocked / 排他OwnedWeapon）と導出authorityは
+[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.3に定める。Search DomainはreservationをPlanner由来の制約値として
+消費するだけで、その導出（必須 / skip可能、共有可否）を再実装しない。空のreservationは「fixed Routeなし」を
+意味する。
+
+#### held位置を跨ぐstream（coverage条件）
+
+各stream（Normal / Skill / Gogma）について、代替Routeは次を満たす。
+
+```text
+自分のoperationを blocked 位置に置かない
+  （Normalでは production-target forge を blocked 位置に置かない。Counter進行用forgeは置いてよい）
+origin から自分の最後のoperation位置までの各位置は、自分のoperation位置 または held 位置である
+held 位置で自分のoperationが無い場合、武器状態（Bonus 5枠、scope、Skill）を変えない
+```
+
+- 自分の武器がまだそのstreamに存在しない区間（新規Normal / 所持Normal Routeの巨戟化前のSkill・Gogma位置）では、
+  自分のoperationを置けないので、その区間の位置はすべてheldでなければならない。例: originのSkill 341が
+  fixedの巨戟化でheldなら、代替は342で巨戟化できる
+- held位置でも、blockedでなければ自分のoperationを置いてよい（fixed側のskip可能unitはsilent fast-forwardされる）。
+  置くかどうかは探索の選択であり、costで比較する
+- Normalの `create_normal_artian` は1つのoperationで連続forge範囲を表すので、predicted variantのcanonical表現を
+  Normal Counterごとに次とする（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.4）
+
+  ```text
+  targetPosition       = 代替のproduction target位置（blocked位置は不可）
+  skippableHeldPrefix  = origin .. targetPosition - 1 の範囲で、originから先頭連続してheldである区間
+                         （targetPosition = origin なら空）
+  normalCounterBefore  = skippableHeldPrefix の直後（空なら origin）
+  normalCounterAfter   = targetPosition + 1
+  count                = normalCounterAfter - normalCounterBefore
+  ```
+
+  production targetより前にある、originから連続したheld prefixだけを自分のforge不要区間として飛ばし、
+  その直後からproduction targetまでを自分の連続forgeとする。targetPosition以降のheld位置でprefixを伸ばさない。
+  例: Issue #101でfixed held = 0..206、production target = 0なら、prefixは空で `0 / 1 / count 1`
+  （龍のNormal 0のCounter進行用unitはsilent fast-forwardされる）。held = 0..4、production target = 10なら
+  `5 / 11 / count 6`。自分のCounter進行用forgeはblocked位置と重なってよい（Issue #129の支配関係）。
+  blind variant（6.1.1）は位置を持たないのでこの規則とreservationの対象外である。永続Route shapeは変えない
+- Reset結果は位置だけで決まり、Keep結果はfamily layoutと位置で決まる既存semanticsを変えない。heldでの状態保持は
+  新しいRNG挙動ではなく、「自分はその位置で操作しない」ことだけを表す
+- stream間の時間順序（巨戟化がGogma操作より先、fixedの操作がheld位置を実際に進める順序、循環待ち）は
+  Searchで判定しない。Plannerのfull rerunが判定する（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.6）
+- 生成されるRouteは各 `RouteOperation` の絶対Counter位置で表し、stream内のoperation位置は連続しなくてよい
+  （[DATA_MODEL.md](./DATA_MODEL.md) 9.2）
+
+#### 探索の継続（初回Searchとのpolicy差）
+
+- 返すのはTargetのIdeal条件（5.1、`gogma_artian` scope）を満たすCandidateだけである。妥協状態を独立した
+  Candidateにしない（5.6.7と同じ）
+- 決定的な順序で1件ずつ返し、consumer（Planner）が次を要求する限り継続する。canonical Ideal（5.6.3）で
+  探索を終了しない。「canonical Ideal → Plannerで使用不可 → 次のIdeal → さらに使用不可なら次」と進める
+- 除外key（`excludedRouteKeys`）と一致するCandidateは返さずに次へ進み、除外件数をsummaryへ数える
+- 終了はconsumer stop、extent内の探索完了（exhausted）、extent到達で未確認が残った（stopped by extent）、
+  cancelのいずれかであり、exhaustedとextent到達を区別する（5.6.7の `exhausted` / `stoppedByBound` と同じ原則）
+
+順序は5.6.3のcanonical orderingと同じ6キーとし、値の定義だけ次のとおりとする。
+
+```text
+1. estimatedOperationCount 昇順   代替Route自身のoperation unit数（held位置は数えない）
+2. estimatedGogmaAdvance   昇順   origin基準の到達量
+3. estimatedSkillAdvance   昇順   origin基準の到達量
+4. estimatedNormalAdvance  昇順   origin基準の到達量。null は最後
+5. preferred source（8.1）優先
+6. candidateStableKey 昇順
+```
+
+**到達量**は「originのCounterから、そのstreamにおけるRouteの最後のoperationの `counterAfter` まで」である。
+held位置を跨がない連続Route（通常Candidate Searchと5.6.7のconstrained enumerationが生成するすべてのRoute）では
+既存の `estimated*Advance`（operationごとの進行量の和）と同じ値になる。held位置を跨ぐRouteでは到達量が
+own operation数より大きくなり得る。Candidate factoryのestimate authority（`createCandidateRouteEstimates()`）は、
+実装Phaseでこの定義をoriginを受け取って計算するよう一般化し、既存Routeの値が変わらないことをテストで固定する。
+新しい距離尺度やB9専用comparatorは作らない。
+
+#### modern Candidate Searchから再利用するもの
+
+- `TargetSearchScheduler` / `SearchWorkQueue` のlower-bound順のwork処理（Route base登録、stream depth、pair）。
+  最初のCandidateまでに全Route baseのstreamを先にsolveしない（5.6.7のupfront solveを繰り返さない）
+- Bonus stream / Skill streamのprediction・memo・stream独立性（5.4 / 5.5）。Resetは位置ごと1回、Keepはfamily
+  layoutごと。held位置があっても `predictSkills` / `predictGogmaBonus` の呼出し回数が他streamの解の数で
+  増えない契約（3.1）を維持する
+- Production prediction supportとcapability判定（3章）
+- Route search primitives（Route base、Route組み立て）、Candidate factoryのestimate / material算出、
+  `candidateStableKey`、Candidate semantic identity、5.8のintermediate state抽出
+- B2のfamily-layout frontier dedup（5.5.3）。ただしheld位置の有無はstream stateの位置として扱い、代表選択が
+  held位置の違う到達を黙って同一視しないこと（同一family layoutでも位置が違えば後続が違う）
+
+held位置があるstreamではown operation数が位置の深さと一致しないので、lower boundはown operation数で定義し直す。
+具体的な実装方式は実装Phaseで決めてよいが、決定的順序と上記の再利用契約を変えない。
+
+#### 再利用しないもの（初回Search固有policy）
+
+- canonical Ideal確定による探索終了と同cost drainを終了条件とすること（5.6.2 / 5.6.3）
+- 同一結果の最小advance retention（5.5.2 / 5.5.3）による永久省略。順序付けやlazy化には使ってよいが、
+  extent内の後方位置を再要求時に返せなければならない（5.6.4、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.5）
+- Cross-only（5.5.4）を最終境界とすること。軸外pair（`i > 0` かつ `j > 0`）はlower-bound順にlazyに評価し、
+  full Cartesianを事前生成しない
+- **#104のNormal Route base削減（6.1.2）**。これは初回Search専用のdominanceであり、Planner pruningではない。
+  reservation下ではoffset 0のproduction target位置がblockedになり得るため、「offset 0が後方offsetと同じ未来へ
+  同costで到達する」という前提が成立しない。Planner Alternative Searchでも安全なdominanceを証明できる場合だけ、
+  後続実装でその証明とbenchmarkを添えて別途採用する
+- 5.6.7のupfront all-base solve
+
+#### extent
+
+`PlannerAlternativeSearchExtent` の3値は3.1の `maxNormalAdvance` / `maxGogmaAdvance` / `maxSkillAdvance` と
+同じ意味（originからのCounter位置window）を持つ（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.12）。held位置も
+windowの位置として数える。Production default値はruntime実装後のBrowser Worker benchmarkで決め、
+`CandidateSearchSettings`、`AppSettings.candidateSearchDefaults`、`defaultConstrainedEnumerationBounds` を
+authorityにしない。
+
+#### 出力とidentity
+
+- 出力は5.6.7の `ConstrainedCandidate` と同じ意味のtransient semantic resultとし、`BuildCandidate.id` /
+  `searchRunId` / `createdAt` / random ID / Clock / enumeration ordinalを含めない。`BuildCandidate` 形状への変換は
+  [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.13のdeterministic materializerが行う
+- 5.6.7の `ConstrainedCandidate` と異なり、出力は通常Candidate Searchと同じ観測trace
+  （`bonusAmendmentTrace` 5.5.3.1、`skillAmendmentTrace` 5.5.2.1、`conversionSkillTrace` 5.5.2.2）を持つ。
+  streamが既に予測した値の記録であり、追加のprediction呼び出しをしない。traceの観測契約（identity・hash・
+  順序・分類へ入らない）は通常Searchと同じである。what-ifの代替Route summary
+  （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.13）とmaterializeしたBuildCandidateはこれを使い、UIがRNGを
+  再計算しないで代替Routeを説明できるようにする
+- deterministic search identity（9.2.13）は、新kernelでは `ConstrainedEnumerationBounds` の代わりにextent、
+  正規化したreservation、正規化した `excludedRouteKeys`、新kernelであることを表すroute policy値から構成する
+  （random UUID、Clock、request UUID、enumeration ordinalを含めない）
+- `searchStateHash` / `referencedOwnedWeaponsHash` の算出authorityは変えない
+
+#### 要求
+
+- deterministicである（同じ入力から同じ順序の `candidateStableKey` 列）
+- extentで有限である
+- cancel可能で、Worker yield可能である。yield / cancel checkpointはstream solveの内部にも置き、
+  最初のCandidateまでの時間を全Route base数に比例させない
+- Production RNGのinput-level support契約を維持する
+- normal-scope Keepの扱い（5.9）とblind variantの規則（6.1.1）を維持する
+- route-history完全探索へ拡張しない
+
+#### 変更しないもの
+
+通常Candidate Searchの結果、canonical Ideal、終了条件、retention、Cross規則、`searchRunId` 契約、
+`BuildCandidate` ID生成規則、Production RNG prediction semantics、`PRODUCTION_RNG_ENGINE_VERSION` を変更しない。
+held位置を跨ぐRouteはPlanner Alternative Searchだけが生成する。
 
 ## 5.7 Candidate出力はcanonical Idealだけである
 
@@ -1670,6 +1866,8 @@ Normal復元ボーナス予測が拡張されても、このvariantは削除し�
 
 6.1の意味上のRoute baseを変更せず、canonical Idealにならないことを証明できる新規Normal
 baseの登録・購読・状態評価を省略する。Planner constrained enumerationには適用しない。
+Planner Alternative Search（5.6.8）にも適用しない。reservation下ではoffset 0のproduction target位置が
+blockedになり得て、下記の同値性の根拠が成立しないためである。
 
 - 同一Normal Counter / Search originの最小forgeCount（offset 0）のbaseは従来のReset / Keep
   streamとcanonical frontier代表選択をそのまま使う。Reset-only、Reset→Keepを含むすべての
@@ -2441,6 +2639,29 @@ Skill stream側はB1で実装済み、Bonus stream側はB2で実装済みであ�
 - enumeratorが `BuildCandidate` ではなく `ConstrainedCandidate` をyieldし、
   `id` / `searchRunId` / `createdAt` / random ID / Clock / enumeration ordinalを
   結果へ含めない
+
+## 13.2.6 Planner Alternative Search Test（5.6.8、後続Phaseで実装）
+
+- `searchCandidates()` とは別のAPIであり、Conflict DTO、`PlannerConflictResolution`、Planner試行上限を受け取らない
+- 空reservation・空除外集合で、extentを同じ3値の `CandidateSearchSettings`・route filterなしの通常Candidate
+  Searchと比べたとき、最初に返すCandidateがそのcanonical Idealと同じ `candidateStableKey` になり、その後もcanonical Idealで止まらず次のIdealを決定的順序で返す
+- 同じ入力で返す `candidateStableKey` 列が一致し、`searchRunId` / Clock / ordinalに依存しない
+- blocked位置へ自分のoperation（Normalではproduction-target forge）を置かず、Counter進行用forgeはblocked位置と
+  重なってよい
+- Normalのcanonical表現: Issue #101 fixture（fixed held = 0..206、blocked = 206）で代替のproduction target =
+  Normal 0なら `create_normal_artian` が `0 / 1 / count 1`、held = 0..4・production target = 10なら `5 / 11 / count 6`
+  になり、targetPosition以降のheld位置でprefixを伸ばさない
+- 出力が通常Searchと同じ観測traceを持ち、そのためのprediction呼び出しが増えない
+- coverage条件: originから最後のoperationまでの各位置が自分のoperation位置またはheld位置であり、held位置で
+  自分のoperationが無い間は武器状態が変わらない。巨戟化前のSkill / Gogma位置はheldでなければならない
+- held位置を跨ぐRouteの到達量がoriginから最後の `counterAfter` までであり、連続Routeでは既存の
+  `estimated*Advance` と一致する（既存Candidateの値が変わらない）
+- `excludedRouteKeys` に一致するCandidateを返さず、除外件数をsummaryへ数える
+- #104のNormal Route base削減を適用しない（offset 0のproduction targetがblockedでも後方offsetの代替を返せる）
+- 同一結果の後続位置と軸外pairを、再要求時にextent内で返せる
+- `predictSkills` / `predictGogmaBonus` の呼出し回数が他streamの解の数で増えない
+- exhaustedとextent到達を区別し、cancel / yieldがstream solve中にも効く
+- 返すCandidateがIdeal条件を満たすものだけである
 
 ## 13.3 Candidate Test
 

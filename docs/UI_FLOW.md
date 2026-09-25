@@ -1719,6 +1719,46 @@ PlanStep表示。
 - 現在CalculationContextと非互換なPlanはstaleとする
 - Debug Mode OFFではSeed / Counterを表示しない
 
+### 11.4.1 競合repairの表示契約（Issue #136 / #101、仕様確定・未実装）
+
+[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19で、「比較する」を1段previewとし、「この候補を優先」をRoute単位の
+決定と1段repairにする正式契約を確定した。**現在のUIは11.2〜11.4のままであり、本節はUIを変更しない。**
+Domain / Worker側の切替はPhase 5、表示の作り込みはIssue #122（Phase 7）で行う。本節は、それまでに
+Domainが返すtyped dataと、どの表示でも守る最低限の意味だけを定める。
+
+後続UIが使えるtyped data（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.13）。
+
+- fixed Target（優先した候補の目標武器）と、代替を探したTarget
+- 代替Routeが見つかったか。見つからない場合の理由
+  （探索範囲内に無し / 探索範囲上限で未確認 / 試行上限で未確認 / 再計算上限で未確認 / 途中採用状態の選択でblock）
+- 代替Routeの内容（`PlannerAlternativeRouteSummary`: 具体的な操作列、最終復元ボーナス / スキル、通常の候補検索と同じ
+  観測記録）。「通常アーティア1本 → 巨戟化 → Reset …」のように説明するための値であり、UIはRNGを再計算せず、
+  Routeを推測復元せず、内部keyから組み立て直さない
+- 代替Routeの操作数と、Normal / Skill（スキル）/ Gogma（復元ボーナス）の進行量
+- scenario全体の暫定計画手数（`scenarioOperationCount`）: このscenarioを1段解決したtrial計画の実際の手順数。
+  「この候補を優先した場合の計画手数」として、同じConflictの各participantの値を並べて比較できる
+- このtrial計画で完成しない目標武器
+- 代替を採用したときに残るConflictと、新しく発生するConflict（種別、関係する目標武器、選択済みかどうか）。
+  「追加競合あり / なし」の表示に使う
+- repair chainで以前外したRouteを除外したこと（件数）
+
+守る意味。
+
+- 「比較する」は1段previewであり、新しく発生するConflictをさらに解決した結果を表示しない。新しいConflictが
+  あることは表示してよい
+- `scenarioOperationCount` は暫定値である。残る / 新しく発生するConflictや完成しない目標武器がある場合は、それと
+  並べて示し、全目標武器が完成するまでの確定手数として表示しない。値が無い結果（計画ステップ上限到達、再計算上限、
+  計画なし）を0件や最小手数として表示しない。優先した候補と代替Routeの操作数を足した値を計画手数として表示しない
+- 「この候補を優先」で保存された新しい生産計画のConflict一覧は、最新状態から再生成されたものである。
+  無効化した旧Routeに由来するConflictを「未解決の判断」として表示しない。代替が見つからなかった目標武器は
+  「この計画では作成しない（理由）」として示し、そのTargetと優先した候補の間のConflictは選択済みとして表示する
+- 進行量は絶対Counter値ではなく進行量として表示し、通常表示でBase Seedや絶対Counterを出さない（11.3と同じ）。
+  held位置を跨ぐ代替では、操作数と進行量が一致しないことがある
+- 探索範囲内に無い場合と、上限で未確認の場合を「候補なし」へまとめない
+- 除外したRouteの内部key（`candidateStableKey` 等）を通常UIに出さない
+- 新kernelではno-result statusの `stopped_by_enumeration_bound` を `stopped_by_search_extent_bound` に置き換える。
+  表示する意味（探索範囲上限のため未確認）は11.3と同じである
+
 ### 11.5 生産計画一覧（/plans）
 
 目的。

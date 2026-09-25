@@ -1250,6 +1250,21 @@ export interface ResetSkillsOperation {
 - Route生成後に起点武器がprotectedへ変わった場合、Bonus / Skill amendmentを含むBuildListEntryをPlanner validationで実行不能とする
 - Route内で新規生成した武器を参照する専用型は持たず、巨戟化直後のtransient Gogmaは後続Reset / Keep / Reset Skillsの `sourceOwnedWeaponId = null` で表す
 - Plannerは `operations` を順にPlanStepへ変換し、endpointのCounter差分から操作を推測復元しない
+- 各RouteOperationは自分のCounter位置（`*CounterBefore` / `*CounterAfter`）を絶対値で持つ。同じstream内で
+  前のoperationの `counterAfter` と次のoperationの `counterBefore` が連続している必要はない（現行の
+  `validateBuildRoute()` も連続性を要求しない）。通常Candidate Searchとconstrained enumerationが生成するRouteは
+  streamごとに起点から連続するが、Planner Alternative Search（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8）は
+  fixed Routeの操作でCounterが進む位置（held位置）を跨ぐRouteを生成し得る。そのような間の位置では、
+  このRouteの武器状態は変わらず、Counterは他Entryの操作で進むことを前提にする
+  （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.4）。この表現のために永続fieldを追加しない。Plannerは
+  未到達の位置を待機し、誰も進めない位置では既存のstall dropになる
+- そのようなRouteのpredicted `create_normal_artian` も既存shapeのまま、連続forge範囲1つで表す。
+  production targetより前にある、originから先頭連続したheld位置（prefix）だけを飛ばし、
+  `normalCounterBefore` = prefixの直後（prefixが空ならorigin）、`normalCounterAfter` = production target + 1、
+  `count = normalCounterAfter - normalCounterBefore` とする（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.4）。
+  例: origin = 0でproduction target = 0なら、fixed Routeが0..206をheldにしていても `0 / 1 / count 1`。
+  held = 0..4、production target = 10なら `5 / 11 / count 6`。`normalCounterAfter = normalCounterBefore + count` は
+  従来どおり成り立つ。blind variantは対象外である
 
 ## 9.3 IdealDifference
 
@@ -1672,6 +1687,65 @@ statusの意味（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.2）。
   Planだけ、またはEntryだけが残るpartial saveを禁止する
 - Candidate SnapshotをProductionPlanへ埋め込まない。Snapshotの保持場所は
   BuildListEntryのままとする
+
+### 11.1.1 conflictRepairLineage（仕様確定・未実装、Phase 5で追加）
+
+競合repair chain（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.11）の履歴。Issue #136 / #101の正式仕様で
+field名とshapeを確定した。**現行schemaにはまだ存在しない。** 追加はactual repairを実装する
+Phase 5で行い、そのとき `DATABASE_SCHEMA_VERSION` 9 → 10、`ExportRoot.schemaVersion` 12 → 13、
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION` 15 → 16とする（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.15）。
+
+```ts
+export interface ProductionPlan {
+  // ...11.1の既存field...
+  conflictRepairLineage: PlannerConflictRepairLineage | null;
+}
+
+export interface PlannerConflictRepairLineage {
+  /** 決定順。最初の「この候補を優先」が先頭 */
+  decisions: PlannerConflictRepairDecision[];
+}
+
+export interface PlannerConflictRepairDecision {
+  conflictKind: ConflictKind;                   // 決定したConflictの種別（監査・表示用）
+  fixedBuildListEntryId: BuildListEntryId;      // ユーザーが優先したEntry
+  fixedTargetWeaponId: TargetWeaponId;
+  invalidatedRoutes: PlannerConflictRepairInvalidatedRoute[]; // 直接participant Targetごと（stable order）
+}
+
+export interface PlannerConflictRepairInvalidatedRoute {
+  targetWeaponId: TargetWeaponId;
+  invalidatedBuildListEntryId: BuildListEntryId;  // 決定で現在Routeを失ったEntry
+  invalidatedRouteKey: string;                    // そのRouteの candidateStableKey
+  replacementBuildListEntryId: BuildListEntryId | null; // 採用したreplacement（無ければnull）
+  outcome: PlannerConflictRepairOutcomeStatus;
+}
+
+export type PlannerConflictRepairOutcomeStatus =
+  | "replaced"
+  | "not_found_within_search_extent"
+  | "stopped_by_search_extent_bound"
+  | "stopped_by_candidate_trial_bound"
+  | "stopped_by_planner_rerun_bound"
+  | "blocked_by_selected_checkpoint";
+```
+
+不変条件。
+
+- `null` は「このPlanはrepair chainに属さない」を意味する。通常Planner、再計画Preview / 採用で作るPlanは `null`
+  であり、「この候補を優先」のactual repairで保存するDraftだけが、表示中Draftのlineageを引き継いで決定を
+  追記したものを持つ。what-ifは読むだけで書かない
+- `outcome = "replaced"` のときだけ `replacementBuildListEntryId` は非null
+- Targetの記録は、そのTargetの現在Build List Entryが最後に記録したEntry（`replacementBuildListEntryId`、
+  nullなら `invalidatedBuildListEntryId`）と同じIDである間だけ有効であり、そうでなくなった記録は次のrepair保存で
+  落とす（手動置換でのreset）
+- 除外に使うのは `invalidatedRouteKey` だけであり、trialで不採用になったCandidateは記録しない
+- Entry IDはどのstatusのPlanでもcurrent foreign keyとして検証しない（Draft本体と同じ。15.2）。構造、literal、
+  ID形式、`decisions` の配列形状だけを検証する
+- Candidate identity、hash、`PlanningInputSnapshot`、`ExpectedPlanState`、staleness、Execution semantics、
+  Plan-breaking判定へ入れない
+- Phase 5のmigrationは既存の全ProductionPlan本体（ゲーム内セーブ地点snapshotとUndo snapshot内のPlan本体を含む）
+  へ `conflictRepairLineage = null` だけを補い、過去の決定を推測しない
 
 ## 11.2 PlanningInputSnapshot
 
@@ -2108,6 +2182,12 @@ initial conflict preflightで `PlannerConflictResolution.conflictKey` を現在�
 全fixed constraintが一意に対応できた場合だけ完全な `PlannerConflictResolution[]` を
 再構築し、1件でも対応付けできない場合はfail closedとする。他のユーザー明示
 resolutionを黙って捨ててはならない。
+
+Issue #136 / #101の正式仕様（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19、仕様確定・未実装）では、
+「この候補を優先」はRoute単位の決定になる。保存するPlanの `conflicts` は最終full runが最新状態から検出したもの
+だけであり、旧Planの一覧から解決済みを消す方式をauthorityにしない。代替を採用できなかった無効化Entryが残る場合、
+participantがfixed Entryと今回の無効化Entryだけからなる全Conflictに `selectedBuildListEntryId = fixed Entry` を
+記録する（決定の展開）。`PlanConflict` の型と `id` の生成規則は変えない。
 
 同じ論理競合は再Plannerでも同じID、位置・参加Entry・対象資源が変われば別IDになる。
 第9の競合適用時はconflictKeyが再検出した競合と一致し、selectedBuildListEntryIdがその
