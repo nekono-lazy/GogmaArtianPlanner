@@ -1,3 +1,4 @@
+export * from './alternative'
 export * from './candidateFactory'
 export * from './candidateProcessing'
 export * from './candidateRetention'
