@@ -11,6 +11,7 @@ import { createValidTargetWeapon, targetWeaponId } from '../../test/fixtures/dom
 import {
   buildListEntriesForTarget,
   classifyBuildListCandidateAddition,
+  findBuildListRegisteredTargetIds,
   findBuildListTargetDuplicates,
   validateBuildListCardinality,
 } from './buildListCardinality'
@@ -21,6 +22,15 @@ function entryOf(id: string, targetId: string): Pick<BuildListEntry, 'id' | 'tar
 }
 
 describe('Build List cardinality collection invariant', () => {
+  it('reports a Target as registered by Entry existence alone, legacy duplicates included', () => {
+    expect(findBuildListRegisteredTargetIds([])).toEqual(new Set())
+    expect(findBuildListRegisteredTargetIds([
+      entryOf('entry.a1', 'target.a'),
+      entryOf('entry.a2', 'target.a'),
+      entryOf('entry.b1', 'target.b'),
+    ])).toEqual(new Set([targetWeaponId('target.a'), targetWeaponId('target.b')]))
+  })
+
   it('accepts no Entry, one Entry, and one Entry per Target', () => {
     expect(findBuildListTargetDuplicates([])).toEqual([])
     expect(validateBuildListCardinality([])).toEqual({ isValid: true, issues: [] })

@@ -28,6 +28,10 @@ import { OwnedIdealWeaponNotice } from '../components/target/OwnedIdealWeaponNot
 import { useOwnedIdealCompletion, type OwnedIdealCompletionApi } from '../components/target/useOwnedIdealCompletion'
 import { StatusChip } from '../components/StatusChip'
 import { CandidateCard } from '../components/search/CandidateCard'
+import {
+  BatchCandidateSearchProgressPanel,
+  BatchCandidateSearchSummaryPanel,
+} from '../components/search/BatchCandidateSearchPanels'
 import { BuildListReplacementDialog } from '../components/search/BuildListReplacementDialog'
 import {
   BUILD_LIST_CHECK_LINK_LABEL,
@@ -63,7 +67,11 @@ import type {
   CandidateSearchSettings,
 } from '../domain/search'
 import { defaultCandidateSearchSettings } from '../domain/search'
-import { defaultIntermediateStateSelection, isSameBuildListCandidate } from '../domain/buildList'
+import {
+  defaultIntermediateStateSelection,
+  findBuildListRegisteredTargetIds,
+  isSameBuildListCandidate,
+} from '../domain/buildList'
 import {
   buildCandidateRepository,
   buildListEntryRepository,
@@ -83,6 +91,13 @@ import {
   loadPersistentReidentificationReminder,
   type PersistentReidentificationReminder,
 } from '../services/execution/persistentReidentificationReminderService'
+import {
+  runBatchCandidateSearch,
+  selectBatchCandidateSearchTargets,
+  type BatchCandidateSearchProgress,
+  type BatchCandidateSearchRun,
+  type BatchCandidateSearchSummary,
+} from '../services/search/batchCandidateSearch'
 import { createCandidateSearchInput } from '../services/search/createCandidateSearchInput'
 import {
   createProductionSearchWorkerClient,
@@ -209,6 +224,22 @@ const settingFields: readonly {
   },
 ]
 
+/** A Target's name with 「登録済み」 when the Build List already holds its Entry. */
+function TargetOptionLabel({ name, registered }: { name: string; registered: boolean }) {
+  return (
+    <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, width: '100%' }}>
+      <Box component="span" sx={{ minWidth: 0, flex: '1 1 auto', overflowWrap: 'anywhere' }}>
+        {name}
+      </Box>
+      {registered && (
+        <Box component="span" sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
+          <StatusChip label="登録済み" tone="info" component="span" />
+        </Box>
+      )}
+    </Box>
+  )
+}
+
 export function SearchPage({ dependencies = defaultDependencies ?? undefined }: SearchPageProps) {
   const debugMode = useSettingsStore((state) => state.debugMode)
   const conditionsHeadingId = useId()
@@ -250,6 +281,15 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
   const [addFeedback, setAddFeedback] = useState<AddFeedback | null>(null)
   const clientRef = useRef<SearchWorkerClient | null>(null)
   const activeRequestRef = useRef<string | null>(null)
+  // 「未登録を一括検索・追加」 (`docs/UI_FLOW.md` 9.1): one batch at a time,
+  // never beside a single search. The token identifies the batch whose
+  // progress and summary may still land on this screen.
+  const batchRunRef = useRef<BatchCandidateSearchRun | null>(null)
+  const batchTokenRef = useRef<object | null>(null)
+  const [batchRunning, setBatchRunning] = useState(false)
+  const [batchCancelling, setBatchCancelling] = useState(false)
+  const [batchProgress, setBatchProgress] = useState<BatchCandidateSearchProgress | null>(null)
+  const [batchSummary, setBatchSummary] = useState<BatchCandidateSearchSummary | null>(null)
   // The owned Ideal notice and 「この武器で目標を完了にする」 (`docs/UI_FLOW.md` 8.2):
   // a preferred path beside the search, never a gate on it.
   const planGuard = usePlanBreakingChangeApproval()
@@ -367,6 +407,9 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
     return () => {
       active = false
       activeRequestRef.current = null
+      batchTokenRef.current = null
+      batchRunRef.current?.cancel()
+      batchRunRef.current = null
       clientRef.current?.dispose()
       clientRef.current = null
     }
@@ -375,6 +418,13 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
   // Completed Targets are not offered for a new search (`docs/UI_FLOW.md` 8.2).
   const enabledTargets = useMemo(() => targets.filter(isTargetWeaponPlanningEligible), [targets])
   const targetById = useMemo(() => new Map(targets.map((target) => [target.id, target])), [targets])
+  // Registered means the Build List holds an Entry for the Target - stale and
+  // legacy duplicates included - and never forbids a single re-search.
+  const registeredTargetIds = useMemo(() => findBuildListRegisteredTargetIds(buildListEntries), [buildListEntries])
+  const batchTargets = useMemo(
+    () => selectBatchCandidateSearchTargets(targets, buildListEntries),
+    [buildListEntries, targets],
+  )
   const masterForDisplay = dependencies?.master ?? defaultMaster
   const selectedTarget = targetWeaponId === '' ? null : (targetById.get(targetWeaponId) ?? null)
   // Judged by the shared Domain authority from the loaded Target and weapons
@@ -395,11 +445,12 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
   }
 
   const startSearch = async () => {
-    if (!dependencies || !clientRef.current || targetWeaponId === '') return
+    if (!dependencies || !clientRef.current || targetWeaponId === '' || batchRunning) return
     const requestId = createSearchRunId()
     const client = clientRef.current
     activeRequestRef.current = requestId
     setSearching(true)
+    setBatchSummary(null)
     setSearchError(null)
     setSearchNotice(null)
     setAddFeedback(null)
@@ -456,6 +507,74 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
     clientRef.current?.cancelSearch(requestId)
     setSearching(false)
     setSearchNotice('検索をキャンセルしました。')
+  }
+
+  const batchBlocked =
+    searching || batchRunning || adding || replacement.pending !== null || planGuard.busy || completion.pending !== null
+
+  const startBatch = () => {
+    if (!dependencies || !clientRef.current || batchBlocked || batchTargets.length === 0) return
+    const client = clientRef.current
+    const token = {}
+    batchTokenRef.current = token
+    setBatchRunning(true)
+    setBatchCancelling(false)
+    setBatchSummary(null)
+    setBatchProgress(null)
+    setResult(null)
+    setProgress(null)
+    setIntermediateSelection(defaultIntermediateStateSelection())
+    setAddFeedback(null)
+    setSearchError(null)
+    setSearchNotice(null)
+    const run = runBatchCandidateSearch(
+      {
+        targets: batchTargets,
+        // The conditions the screen shows now apply to every Target.
+        routeFilter,
+        settings: { ...settings },
+        master: dependencies.master,
+        calculationContext: {
+          gameVersion: dependencies.master.manifest.gameVersion,
+          masterDataVersion: dependencies.master.manifest.dataVersion,
+          rngEngineVersion: client.engineVersion,
+          appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
+        },
+      },
+      {
+        client,
+        createSearchRunId,
+        createInput: (options) => dependencies.createInput(options),
+        saveCandidates: (targetId, candidates) => dependencies.saveCandidates(targetId, candidates),
+        addCandidate: (candidate, target, selection) => dependencies.addCandidate(candidate, target, selection),
+      },
+      (nextProgress) => {
+        if (batchTokenRef.current === token) setBatchProgress(nextProgress)
+      },
+    )
+    batchRunRef.current = run
+    const finish = (summary: BatchCandidateSearchSummary | null, failure: string | null) => {
+      if (batchTokenRef.current !== token) return
+      batchTokenRef.current = null
+      batchRunRef.current = null
+      setBatchRunning(false)
+      setBatchCancelling(false)
+      setBatchProgress(null)
+      setBatchSummary(summary)
+      if (failure) setSearchError(failure)
+      // The 登録済み labels and the batch count follow the persisted Build List.
+      reloadBuildListEntries()
+    }
+    void run.promise.then(
+      (summary) => finish(summary, null),
+      (caught: unknown) => finish(null, caught instanceof Error ? caught.message : '一括検索に失敗しました。'),
+    )
+  }
+
+  const cancelBatch = () => {
+    if (!batchRunRef.current) return
+    setBatchCancelling(true)
+    batchRunRef.current.cancel()
   }
 
   const addToBuildList = async (candidate: BuildCandidate) => {
@@ -558,7 +677,7 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
                 {/* One Target per search: reconciling several Targets is the
                     Production Planner's job (`docs/UI_FLOW.md` 9). */}
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                  1回の検索は目標武器1件が対象です。理想品へ到達する作成ルートを探し、スキル進行と復元ボーナス進行それぞれの途中で妥協条件を満たす状態を候補として表示します。途中採用する状態を選ばなければ理想品まで進みます。
+                  1回の検索は目標武器1件が対象です。理想品へ到達する作成ルートを探し、スキル進行と復元ボーナス進行それぞれの途中で妥協条件を満たす状態を候補として表示します。途中採用する状態を選ばなければ理想品まで進みます。作成リストに登録済みの目標武器には「登録済み」を表示します。
                 </Typography>
               </Box>
               <Box
@@ -575,13 +694,19 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
                     label="検索対象の目標武器"
                     value={targetWeaponId}
                     onChange={(event) => setTargetWeaponId(event.target.value as TargetWeapon['id'])}
+                    renderValue={(value) => {
+                      const target = targetById.get(value as TargetWeapon['id'])
+                      return target ? <TargetOptionLabel name={target.name} registered={registeredTargetIds.has(target.id)} /> : ''
+                    }}
                     // A long Target name wraps inside the control instead of
                     // being clipped or widening the page.
                     sx={{ '& .MuiSelect-select': { whiteSpace: 'normal', overflowWrap: 'anywhere' } }}
                   >
+                    {/* A registered Target stays selectable: re-searching it is
+                        an ordinary single search (`docs/UI_FLOW.md` 9). */}
                     {enabledTargets.map((target) => (
                       <MenuItem value={target.id} key={target.id} sx={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }}>
-                        {target.name}
+                        <TargetOptionLabel name={target.name} registered={registeredTargetIds.has(target.id)} />
                       </MenuItem>
                     ))}
                   </Select>
@@ -607,7 +732,7 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
                   weapons={ownedIdeal.weapons}
                   master={masterForDisplay}
                   onComplete={(weapon) => completion.begin(selectedTarget, weapon)}
-                  disabled={planGuard.busy || completion.pending !== null}
+                  disabled={planGuard.busy || completion.pending !== null || batchRunning}
                 />
               )}
               <DisclosureAccordion title="詳細設定（探索量の上限）" headingLevel="h3">
@@ -637,21 +762,39 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
                   </Box>
                 </Stack>
               </DisclosureAccordion>
-              <Stack
-                direction={{ xs: 'column', sm: 'row' }}
-                spacing={1.5}
-                sx={{ alignItems: { xs: 'stretch', sm: 'center' } }}
-              >
-                <Button
-                  variant="contained"
-                  onClick={() => void startSearch()}
-                  disabled={searching || targetWeaponId === ''}
-                  sx={{ minHeight: 44, px: 3 }}
+              <Stack spacing={1}>
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  spacing={1.5}
+                  useFlexGap
+                  sx={{ alignItems: { xs: 'stretch', sm: 'center' }, flexWrap: 'wrap' }}
                 >
-                  検索開始
-                </Button>
+                  <Button
+                    variant="contained"
+                    onClick={() => void startSearch()}
+                    disabled={searching || batchRunning || targetWeaponId === ''}
+                    sx={{ minHeight: 44, px: 3 }}
+                  >
+                    検索開始
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    onClick={startBatch}
+                    disabled={batchBlocked || batchTargets.length === 0}
+                    sx={{ minHeight: 44, px: 3 }}
+                  >
+                    未登録を一括検索・追加（{batchTargets.length}件）
+                  </Button>
+                </Stack>
                 <Typography variant="body2" color="text.secondary">
                   検索中は進捗を表示し、いつでもキャンセルできます。
+                </Typography>
+                {/* The batch runs the same single search once per Target
+                    (`docs/UI_FLOW.md` 9.1); it is no multi-Target search. */}
+                <Typography variant="body2" color="text.secondary">
+                  {batchTargets.length === 0
+                    ? '作成リストに未登録の目標武器はありません。'
+                    : '一括検索・追加では、作成リストに未登録の目標武器を現在の作成ルートと探索量の上限で1件ずつ順に検索し、見つかった理想品候補を作成リストへ追加します。途中採用する状態は選ばず（理想品まで進む）、改善優先は「生産計画に任せる」で登録します。'}
                 </Typography>
               </Stack>
               {searchNotice && <Alert severity="info">{searchNotice}</Alert>}
@@ -659,6 +802,10 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
             </Stack>
           </Paper>
         )}
+        {batchRunning && batchProgress && (
+          <BatchCandidateSearchProgressPanel progress={batchProgress} cancelling={batchCancelling} onCancel={cancelBatch} />
+        )}
+        {!batchRunning && batchSummary && <BatchCandidateSearchSummaryPanel summary={batchSummary} />}
         {searching && progress && (
           <Paper
             component="section"
