@@ -4271,7 +4271,7 @@ stream別の意味。
 
 | 資源 | 規則 |
 | --- | --- |
-| Normal Counter | fixed Routeのproduction-target forge（Normal作成の最後のunit、必須）の位置はblockedである。Counter進行用forge（Issue #129で `canSkipWhenCounterPassed = true`）はheldだがblockedではない。代替Routeのproduction targetはblocked位置に置けない。代替RouteのCounter進行用forgeはblocked位置と重なってよい（必須側が先に実行され、進行用forgeはsilent fast-forwardされる。7.0.2の支配関係）。例: fixedのproduction target = Normal 206、代替のproduction target = Normal 0は両立する |
+| Normal Counter | fixed Routeのproduction-target forge（Normal作成の最後のunit、必須）の位置はblockedである。Counter進行用forge（Issue #129で `canSkipWhenCounterPassed = true`）はheldだがblockedではない。代替Routeのproduction targetはblocked位置に置けない。代替RouteのCounter進行用forgeはblocked位置と重なってよい（必須側が先に実行され、進行用forgeはsilent fast-forwardされる。7.0.2の支配関係）。例: fixedのproduction target = Normal 206、代替のproduction target = Normal 0は両立する。代替の `create_normal_artian` がどの範囲を自分でforgeするかは9.2.19.4のcanonical規則で決める。Normal Counterごとに独立に扱う |
 | Skill Counter | fixed Routeの必須Skill unit（巨戟化、最後のReset Skills等）の位置はblockedである。代替Routeの巨戟化・Reset Skillsをその位置へ置かない。代替Routeはheld位置でSkillを変えずに待ち、後続の利用可能位置（例: fixedが341で巨戟化するなら342以降）で操作できる |
 | Gogma Counter | fixed Routeの必須Reset / Keepの位置はblockedである。代替RouteのBonus streamはheld位置を跨いで後続の利用可能位置を探索でき、その間Bonus状態は保持される |
 | OwnedWeapon | 排他OwnedWeaponは代替RouteのRoute起点・amendment対象にしない（hard constraint）。これは `TargetWeapon.preferredOwnedWeaponId`（Candidate orderingのsoft preference、[SEARCH_SPEC.md](./SEARCH_SPEC.md) 8.1）とは別概念であり、互いに読み替えない。保護武器の既存規則（21章 / 8章）も変わらない |
@@ -4306,9 +4306,49 @@ reservationはSearch DomainへConflict DTO（9.2.3）ではなく、位置集合
   消えた場合、通常Plannerでは既存のstall / deadlock dropとして報告される。新しいstale理由を作らない
   （表示は [PLANNER_CONFLICT_REPAIR_DESIGN.md](./PLANNER_CONFLICT_REPAIR_DESIGN.md) 12章の未決事項）
 
-Issue #101の例（龍 = fixed、火 = 代替）では、火は「Normal 0で1本作成 → Skill 342で巨戟化 → Gogma 56以降で
-Bonus操作」のRouteを組める。Skill 341とGogma 55はheldかつblockedであり、Normal 206はblocked、Normal 0は
-龍のCounter進行用forgeなのでheldだがblockedではない。具体的なIdeal到達位置はruntime実装で確認し、
+**Normalのcanonical表現（held prefix）。** 代替Routeの予測variantの `create_normal_artian` は、Normal Counterごとに
+次で一意に表す（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8、[DATA_MODEL.md](./DATA_MODEL.md) 9.2）。
+
+```text
+origin                = Planner-start Normal Counter（そのNormalArtianCounter）
+targetPosition        = 代替のproduction target位置（blocked位置であってはならない）
+
+skippableHeldPrefix   = origin .. targetPosition - 1 の範囲で、origin から先頭連続してheldである区間
+                        （targetPosition = origin なら範囲が無いので空）
+
+normalCounterBefore   = skippableHeldPrefix の直後（空なら origin）
+normalCounterAfter    = targetPosition + 1
+count                 = normalCounterAfter - normalCounterBefore
+```
+
+- production targetより **前** にある、originから連続したheld prefixだけを、自分のforgeが不要な区間として
+  飛ばす（fixed Routeのforgeが進める）。targetPosition以降のheld位置は判定に使わない
+- prefixの直後からproduction targetまでは、自分の連続した `create_normal_artian` 1 operationとして表す。
+  `count` は既存どおり連続forge範囲を表し、最後の1本がproduction target、それ以前は自分のCounter進行用forgeである
+- 自分のCounter進行用forgeはblocked位置（fixedのproduction target）と重なってよい（7.0.2の支配関係、Issue #129）。
+  自分のproduction targetはblocked位置に置けない
+- blind variant（位置を持たない作成、[SEARCH_SPEC.md](./SEARCH_SPEC.md) 6.1.1）はこの規則の対象外である
+- 永続Route shapeは変えない
+
+例。
+
+```text
+Issue #101（龍 = fixed、火 = 代替）
+  origin = 0、fixed held = 0..206、fixed blocked = 206、代替のproduction target = 0
+  -> targetより前に位置が無いので skippableHeldPrefix = 空
+  -> normalCounterBefore = 0、normalCounterAfter = 1、count = 1
+  -> 火がNormal 0を実forgeし、龍のNormal 0のCounter進行用unitはsilent fast-forwardされ、
+     龍はその後Normal 1..206へ進む
+
+別例
+  origin = 0、held = 0..4、代替のproduction target = 10
+  -> skippableHeldPrefix = 0..4（fixed Routeが進める）
+  -> normalCounterBefore = 5、normalCounterAfter = 11、count = 6（5..10を代替が自分で進める）
+```
+
+Issue #101の例（龍 = fixed、火 = 代替）では、火は「Normal 0で1本作成（count = 1）→ Skill 342で巨戟化 →
+Gogma 56以降でBonus操作」のRouteを組める。Skill 341とGogma 55はheldかつblockedであり、Normal 206はblocked、
+Normal 0は龍のCounter進行用forgeなのでheldだがblockedではない。具体的なIdeal到達位置はruntime実装で確認し、
 本仕様では主張しない。
 
 #### 9.2.19.5 代替探索の呼び出し
@@ -4368,13 +4408,30 @@ resolutionが選択するEntryである（既存9.2.4.7の「全fixed Entry」�
 2. このconflictの直接participant Targetのうち、Aと異なるEntryかつAのTargetと異なるTargetを
    unique Targetごとに列挙する（9.2.4.4）
 3. Targetごとに独立に、9.2.19.5の代替探索と9.2.19.6のtrialを行う
-4. 最初にfoundになったCandidateについて、代替Route、操作量、進行量、残るConflictと
-   新しく発生するConflictを返す（9.2.19.13）
-5. 終了する
+4. Targetごとに、最初にfoundになったCandidateの代替Route（9.2.19.13のRoute summary）、
+   操作量、進行量を返す
+5. scenario trial: 手順4でfoundになったreplacementを、actual repairの9.2.19.8手順5〜7と同じ規則
+   （stable orderのmonotonic adoption、置換後集合での再対応付け、最終full Planner run + Trace Replay、
+   Conflict再生成と決定の展開）で合成し、scenario Planを1つ得る。そのPlanの実際のPlanStep数
+   （scenarioOperationCount）、このPlanで完成しないplanning Target、残るConflictと新しく発生する
+   Conflictを返す（9.2.19.13）
+6. 終了する
 ```
 
-- 各Targetの評価は同じ前提（Planner-start origin、fixed Route集合、その他のexplicit resolution、同じ
-  reservation）から開始し、他Targetの代替を採用した入力で測らない（9.2.4.4を維持）
+- 各Targetの代替探索とtrialは同じ前提（Planner-start origin、fixed Route集合、その他のexplicit resolution、
+  同じreservation）から開始し、他Targetの代替を採用した入力で測らない（9.2.4.4を維持）。Targetごとの
+  操作量・進行量はこの独立評価の値である
+- scenario trialは、このscenario（Aを優先）を1段repairした結果の計画全体を表す。直接participantの
+  非固定Targetが1つだけで、そのTargetのtrial Planがそのままscenario Planになる場合（replacementが1件で、
+  展開すべき決定が残らない場合）は、そのtrial Planを再利用し、full Planner runを追加しない。
+  それ以外（非固定Targetが複数、または代替が見つからないTargetがある）は、scenario Plan用のfull Planner runを
+  1回行い、`maxPlannerReruns` に数える
+- 1つのConflictの各participantで「比較する」を実行した結果を並べれば、「Aを優先した場合」と「Bを優先した場合」の
+  scenario全体の暫定Plan手数を比較できる。比較は同じ表示中Draft・同じ永続状態から得た結果どうしで行う
+- trialとscenario trialの `PlannerInput.options` は、actual repair（9.2.19.8）と同じ
+  `conflictResolutionPlannerOptions(表示中Plan)`（Issue #130）とする。scenario Planが「この候補を優先」で
+  保存されるPlanと同じ条件で計算されるようにするためであり、新kernelでは9.2.4.14の「what-ifのPlanner入力は
+  この導出の対象外」を置き換える
 - 代替を採用した結果、新しいConflict（例: B2 vs C）が発生しても、Cをさらに再検索する、Dと競合したら
   さらに…という再帰的repairをwhat-if内で行わない。新Conflictがあることをtyped resultとして返す
 - 永続化しない（9.2.4.8を維持）: BuildListEntry、ProductionPlan、`PlannerConflictResolution`、comparison
@@ -4426,6 +4483,8 @@ resolutionが選択するEntryである（既存9.2.4.7の「全fixed Entry」�
   fail closedのまま変えない。何も保存しない場合はlineageも保存しない
 - `PlannerInput.options` は9.2.4.14（Issue #130）のとおり `conflictResolutionPlannerOptions(表示中Plan)`
   で上書きする
+- actual repairも9.2.19.13と同じtyped result（Targetごとのoutcome、Route summary、`scenario`）を返す。
+  このときの `scenario` の対象は保存するPlanそのものであり、what-ifの `scenarioOperationCount` と同じ規則で数える
 
 #### 9.2.19.9 Conflict再生成と決定の展開
 
@@ -4539,7 +4598,9 @@ interface PlannerAlternativeSearchExtent {
   意味を維持し、actual repairは同じ2値の意味を持つrepair用boundsを持つ（B8の `maxGeneratedBuildListEntries`
   に相当する上限は持たない。生成Entry数は今回のConflictの直接participant Target数で自然に有限である）。いずれもcaller必須、1以上の
   整数で、Production defaultはPhase 3で決め直す。`maxPlannerReruns` はfull Planner runの開始回数だけを数え、
-  preflight・validation・Search・materializationを数えない（9.2.4.9 / 9.2.16と同じ）
+  preflight・validation・Search・materializationを数えない（9.2.4.9 / 9.2.16と同じ）。what-ifのscenario trial
+  （9.2.19.7手順5）で追加のfull runを行う場合もそれを1回と数え、予算が残っていなければ `scenario` を
+  `stopped_by_planner_rerun_bound` とする。trial Planを再利用する場合は数えない
 - 上限到達はexhaustionとして報告しない。typed statusで区別する（9.2.19.13）
 
 #### 9.2.19.13 typed result（#122へ渡す情報）
@@ -4548,6 +4609,26 @@ what-ifとactual repairは、後続UI（Issue #122）が少なくとも次を表
 field名は実装Phaseで決めてよいが、意味を変えない。
 
 ```ts
+interface PlannerAlternativeComparison {
+  conflictKey: string;
+  fixedBuildListEntryId: BuildListEntryId;
+  fixedTargetWeaponId: TargetWeaponId;
+  alternatives: PlannerAlternativeTargetOutcome[];   // Domainのstable order（9.2.4.4）
+  scenario: PlannerAlternativeScenarioOutcome;       // 1段repairしたscenario全体（9.2.19.7手順5）
+}
+
+type PlannerAlternativeScenarioOutcome =
+  | {
+      status: 'evaluated';
+      scenarioOperationCount: number;              // scenario Planの steps.length（下記）
+      unplannedTargetWeaponIds: TargetWeaponId[];  // planning TargetのうちこのPlanで完成しないもの
+      introducedConflicts: PlannerAlternativeConflictSummary[]; // 採用replacementをparticipantに含む未解決Conflict
+      remainingConflicts: PlannerAlternativeConflictSummary[];  // 採用replacementを含まない未解決Conflict
+    }
+  | { status: 'no_plan' }                          // scenario runが plan === null
+  | { status: 'stopped_by_plan_step_bound'; maxPlanSteps: number } // termination.status === 'incomplete'
+  | { status: 'stopped_by_planner_rerun_bound' }   // scenario runを開始する予算が残っていない
+
 interface PlannerAlternativeTargetOutcome {
   fixedBuildListEntryId: BuildListEntryId;
   fixedTargetWeaponId: TargetWeaponId;
@@ -4559,10 +4640,9 @@ interface PlannerAlternativeTargetOutcome {
 type PlannerAlternativeOutcome =
   | {
       status: 'found';
+      alternative: PlannerAlternativeRouteSummary;  // 代替Routeの説明（下記）
       distance: PlannerAlternativeDistance;
-      alternativeSelected: boolean;          // trial runでGがselectedか（新Conflictの暫定帰結で外れ得る）
-      introducedConflicts: PlannerAlternativeConflictSummary[]; // Gをparticipantに含むConflict
-      remainingConflicts: PlannerAlternativeConflictSummary[];  // Gを含まない未解決Conflict
+      adoptedInScenario: boolean;          // scenario Planへmonotonic adoptionで採用されたか（9.2.19.8手順5）
     }
   | { status: 'not_found_within_search_extent' }
   | { status: 'stopped_by_search_extent_bound' }
@@ -4582,7 +4662,51 @@ interface PlannerAlternativeConflictSummary {
   participantTargetWeaponIds: TargetWeaponId[];
   resolved: boolean;                      // selectedBuildListEntryId !== null
 }
+
+interface PlannerAlternativeRouteSummary {
+  route: BuildRoute;                      // 実行順の具体的なRouteOperation列（sourceOwnedWeaponIdを含む）
+  finalBonuses: RestorationBonusSet;
+  restorationBonusScope: RestorationBonusScope;
+  seriesSkillId: SeriesSkillId | null;
+  groupSkillId: GroupSkillId | null;
+  bonusAmendmentTrace: CandidateBonusAmendmentStep[];          // SEARCH_SPEC 5.5.3.1と同じ観測記録
+  skillAmendmentTrace: CandidateSkillAmendmentStep[];          // SEARCH_SPEC 5.5.2.1と同じ観測記録
+  conversionSkillTrace: CandidateConversionSkillStep | null;   // SEARCH_SPEC 5.5.2.2と同じ観測記録
+}
 ```
+
+`scenarioOperationCount` の意味（固定する）。
+
+- authorityは、代替Candidateを差し替えて実行したscenario trialのfull Plannerが生成したscenario Planの、
+  **実際のPlanStep数**（`ProductionPlan.steps.length`）である。Planner-generated Planの組み立て
+  （11章）をそのまま通したPlanの値であり、別途数え直さない
+- fixed Routeの `estimatedOperationCount` と代替Routeの `estimatedOperationCount` を足す方式にしない。
+  共有physical action、silent fast-forward（Issue #129のCounter進行用forgeを含む）、Route commitmentの暫定帰結、
+  Plannerの実行順、reserveやconfirmation（`confirm_owned_ideal`）等の扱いによって、単純合算と実PlanStep数は
+  一致しないためである。scenario Planには今回の競合に関係しないTargetのStepも含まれる（計画全体の手数である）
+- これは **この1段repairを適用したscenario trial Planの暫定PlanStep数** であり、全Targetが最終完成するまでの
+  確定総手数ではない。what-ifは新しいConflictを再帰的に解決しないので、`introducedConflicts` /
+  `remainingConflicts` に未解決Conflictが残る場合、その後のユーザー判断によって手数も完成Targetも変わり得る。
+  `scenarioOperationCount` は常に `unplannedTargetWeaponIds`、`introducedConflicts`、`remainingConflicts` と
+  合わせて読む値であり、最終完成までの保証値として扱わない
+- 未解決Conflictが残る場合、`unplannedTargetWeaponIds` が空でない場合でも、`evaluated` なら値を返してよい
+- `stopped_by_plan_step_bound`（`maxPlanSteps` 到達）のPlanStep数は途中までの値なので返さない。
+  `no_plan` と `stopped_by_planner_rerun_bound` も値を持たない
+- actual repair（9.2.19.8）でも同じ `scenario` を返す。そのときのscenario Planは保存するPlanそのものである
+
+`PlannerAlternativeRouteSummary` の意味（固定する）。
+
+- Domain / Worker resultは、後続Presentation（Issue #122）が「通常アーティア1本 → 巨戟化 → Reset …」のように
+  代替Routeを説明できるpresentation-neutralな情報を持つ。UIはRNGを再計算せず、Routeを推測復元せず、
+  technical internal key（`candidateStableKey` 等）から再構築しない
+- 中身は代替Candidateの `BuildRoute`（具体的なRouteOperation列）、最終Bonus / scope / Skill、および通常Candidate
+  Searchと同じ観測trace（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8の出力）である。traceは探索で既に得た予測値の
+  記録であり、追加のprediction呼び出しをしない。絶対Counter位置はRouteOperationに含まれるが、通常UIでは既存の
+  表示契約どおり表示しない
+- transientであり、永続化しない。BuildCandidate IDやgenerated BuildListEntry IDを必須fieldにしない
+  （9.2.4.8を維持）。具体的なfield構成は実装Phase（Phase 4）で調整してよいが、上記の説明能力を欠いてはならない
+
+その他の規則。
 
 - 距離は9.2.4.1のとおりPlanner-start origin基準である。held位置を跨ぐRouteでは、進行量は「Counterが
   どこまで進んだ時点で代替が完了するか」（到達量）であり、操作数とは一致しない。連続Routeでは既存の
@@ -4649,7 +4773,8 @@ Phase 1  modern Search基盤を使うPlanner Alternative SearchのSearch Domain 
 Phase 2  fixed Route集合とresource reservationの導出、held位置を跨ぐstream探索、
          OwnedWeapon排他、循環防止の除外、trial full rerunによるfound判定
 Phase 3  Browser Worker benchmark、extent / 試行上限のProduction default決定
-Phase 4  B9 what-if「比較する」の新kernel接続（1段preview、typed result、Worker contract）。
+Phase 4  B9 what-if「比較する」の新kernel接続（1段preview、scenario trialと
+         scenarioOperationCount、代替Route summaryを含むtyped result、Worker contract）。
          Production routingはまだ旧経路
 Phase 5  「この候補を優先」のactual repair、Conflict再生成と決定の展開、lineage永続化、
          what-if / repair両方のProduction routing切替、version更新（9.2.19.15）
@@ -5644,6 +5769,10 @@ dependencyでもrun間で一致する。
   Search側にPlannerロジックが複製されない
 - fixedのNormal production targetの位置だけがNormal Counterのblockedになり、Counter進行用forgeの位置は
   heldだがblockedにならない。fixedのproduction target = 206、代替のproduction target = 0が両立する
+- Normalのcanonical表現（9.2.19.4）: Issue #101 fixtureで代替のproduction target = Normal 0のとき
+  `create_normal_artian` が `normalCounterBefore = 0` / `normalCounterAfter = 1` / `count = 1` になり、龍のNormal 0の
+  Counter進行用unitがsilent fast-forwardされる。held = 0..4、production target = 10なら 5 / 11 / 6 になる。
+  targetPosition以降のheld位置でprefixを伸ばさず、blind variantには適用しない
 - fixedが巨戟化したSkill位置（例: 341）で代替は巨戟化せず、後続位置（342）で巨戟化する代替Routeが生成され、
   full Planner rerunで両方が完成する（Issue #101 fixture）
 - fixedのGogma必須位置（例: 55）を代替のBonus streamが跨ぎ、その間Bonus状態が変わらない
@@ -5656,6 +5785,14 @@ dependencyでもrun間で一致する。
   不採用、fixed外Entryとの新Conflictの暫定帰結で外れるだけならfoundで、新Conflictがresultに入る。lineage由来の
   以前のfixed Entryが別の競合で外れていることだけでは不採用にならない
 - what-ifが1段で終わり、新Conflictに対して再帰的な代替探索を行わず、何も永続化しない
+- `scenarioOperationCount` がscenario Planの `steps.length` と一致し、fixed Routeと代替Routeの
+  `estimatedOperationCount` の和から求めていない（共有action・silent fast-forwardがあるfixtureで両者が異なる）。
+  未解決Conflictが残る場合も `evaluated` として値と `introducedConflicts` / `remainingConflicts` を返し、
+  `maxPlanSteps` 到達では値を返さない。非固定Targetが1つでtrial Planを再利用できる場合にfull runを追加しない
+- 同じConflictの各participantで「比較する」を実行し、Issue #101 fixtureで「龍を優先」と「火を優先」の
+  `scenarioOperationCount` が得られる
+- foundの結果が代替RouteのRoute summary（`BuildRoute`、最終Bonus / scope / Skill、観測trace）を持ち、
+  そのためのprediction呼び出しが増えない
 - what-ifの各Targetが同じ前提から独立に評価され、Target順で結果が変わらない
 - 「この候補を優先」がwhat-ifと同じkernel・reservation・found判定を使い、直接participantだけを探索し、
   復元した既存resolutionを理由に新しい代替探索を始めない

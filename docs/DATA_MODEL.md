@@ -1258,6 +1258,13 @@ export interface ResetSkillsOperation {
   このRouteの武器状態は変わらず、Counterは他Entryの操作で進むことを前提にする
   （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.4）。この表現のために永続fieldを追加しない。Plannerは
   未到達の位置を待機し、誰も進めない位置では既存のstall dropになる
+- そのようなRouteのpredicted `create_normal_artian` も既存shapeのまま、連続forge範囲1つで表す。
+  production targetより前にある、originから先頭連続したheld位置（prefix）だけを飛ばし、
+  `normalCounterBefore` = prefixの直後（prefixが空ならorigin）、`normalCounterAfter` = production target + 1、
+  `count = normalCounterAfter - normalCounterBefore` とする（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.4）。
+  例: origin = 0でproduction target = 0なら、fixed Routeが0..206をheldにしていても `0 / 1 / count 1`。
+  held = 0..4、production target = 10なら `5 / 11 / count 6`。`normalCounterAfter = normalCounterBefore + count` は
+  従来どおり成り立つ。blind variantは対象外である
 
 ## 9.3 IdealDifference
 

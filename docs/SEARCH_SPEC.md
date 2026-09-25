@@ -1389,10 +1389,24 @@ held 位置で自分のoperationが無い場合、武器状態（Bonus 5枠、sc
   fixedの巨戟化でheldなら、代替は342で巨戟化できる
 - held位置でも、blockedでなければ自分のoperationを置いてよい（fixed側のskip可能unitはsilent fast-forwardされる）。
   置くかどうかは探索の選択であり、costで比較する
-- Normalの `create_normal_artian` は1つのoperationで連続範囲を表すので、canonical表現を次とする:
-  `normalCounterBefore` はoriginから連続するheld位置の直後（production targetを超えない）、
-  `normalCounterAfter = production target + 1`、`count = normalCounterAfter - normalCounterBefore`。
-  blind variant（6.1.1）は位置を持たないのでreservationの影響を受けない
+- Normalの `create_normal_artian` は1つのoperationで連続forge範囲を表すので、predicted variantのcanonical表現を
+  Normal Counterごとに次とする（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.4）
+
+  ```text
+  targetPosition       = 代替のproduction target位置（blocked位置は不可）
+  skippableHeldPrefix  = origin .. targetPosition - 1 の範囲で、originから先頭連続してheldである区間
+                         （targetPosition = origin なら空）
+  normalCounterBefore  = skippableHeldPrefix の直後（空なら origin）
+  normalCounterAfter   = targetPosition + 1
+  count                = normalCounterAfter - normalCounterBefore
+  ```
+
+  production targetより前にある、originから連続したheld prefixだけを自分のforge不要区間として飛ばし、
+  その直後からproduction targetまでを自分の連続forgeとする。targetPosition以降のheld位置でprefixを伸ばさない。
+  例: Issue #101でfixed held = 0..206、production target = 0なら、prefixは空で `0 / 1 / count 1`
+  （龍のNormal 0のCounter進行用unitはsilent fast-forwardされる）。held = 0..4、production target = 10なら
+  `5 / 11 / count 6`。自分のCounter進行用forgeはblocked位置と重なってよい（Issue #129の支配関係）。
+  blind variant（6.1.1）は位置を持たないのでこの規則とreservationの対象外である。永続Route shapeは変えない
 - Reset結果は位置だけで決まり、Keep結果はfamily layoutと位置で決まる既存semanticsを変えない。heldでの状態保持は
   新しいRNG挙動ではなく、「自分はその位置で操作しない」ことだけを表す
 - stream間の時間順序（巨戟化がGogma操作より先、fixedの操作がheld位置を実際に進める順序、循環待ち）は
@@ -1470,6 +1484,12 @@ authorityにしない。
 - 出力は5.6.7の `ConstrainedCandidate` と同じ意味のtransient semantic resultとし、`BuildCandidate.id` /
   `searchRunId` / `createdAt` / random ID / Clock / enumeration ordinalを含めない。`BuildCandidate` 形状への変換は
   [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.13のdeterministic materializerが行う
+- 5.6.7の `ConstrainedCandidate` と異なり、出力は通常Candidate Searchと同じ観測trace
+  （`bonusAmendmentTrace` 5.5.3.1、`skillAmendmentTrace` 5.5.2.1、`conversionSkillTrace` 5.5.2.2）を持つ。
+  streamが既に予測した値の記録であり、追加のprediction呼び出しをしない。traceの観測契約（identity・hash・
+  順序・分類へ入らない）は通常Searchと同じである。what-ifの代替Route summary
+  （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.13）とmaterializeしたBuildCandidateはこれを使い、UIがRNGを
+  再計算しないで代替Routeを説明できるようにする
 - deterministic search identity（9.2.13）は、新kernelでは `ConstrainedEnumerationBounds` の代わりにextent、
   正規化したreservation、正規化した `excludedRouteKeys`、新kernelであることを表すroute policy値から構成する
   （random UUID、Clock、request UUID、enumeration ordinalを含めない）
@@ -2628,6 +2648,10 @@ Skill stream側はB1で実装済み、Bonus stream側はB2で実装済みであ�
 - 同じ入力で返す `candidateStableKey` 列が一致し、`searchRunId` / Clock / ordinalに依存しない
 - blocked位置へ自分のoperation（Normalではproduction-target forge）を置かず、Counter進行用forgeはblocked位置と
   重なってよい
+- Normalのcanonical表現: Issue #101 fixture（fixed held = 0..206、blocked = 206）で代替のproduction target =
+  Normal 0なら `create_normal_artian` が `0 / 1 / count 1`、held = 0..4・production target = 10なら `5 / 11 / count 6`
+  になり、targetPosition以降のheld位置でprefixを伸ばさない
+- 出力が通常Searchと同じ観測traceを持ち、そのためのprediction呼び出しが増えない
 - coverage条件: originから最後のoperationまでの各位置が自分のoperation位置またはheld位置であり、held位置で
   自分のoperationが無い間は武器状態が変わらない。巨戟化前のSkill / Gogma位置はheldでなければならない
 - held位置を跨ぐRouteの到達量がoriginから最後の `counterAfter` までであり、連続Routeでは既存の

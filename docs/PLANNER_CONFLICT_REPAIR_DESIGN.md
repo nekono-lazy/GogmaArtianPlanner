@@ -135,6 +135,7 @@ Normal (charge_blade:8)
   held    : 0..206（龍のCounter進行用forge 0..205 + production target 206）
   blocked : 206（龍のproduction target）
   -> 火のproduction targetは0でよい（火のforgeが先。龍の0番forgeはsilent fast-forward、Issue #129）
+  -> 火の create_normal_artian は 0 / 1 / count 1（下記のheld prefix規則）
 
 Skill
   held / blocked : 341（龍の巨戟化）
@@ -147,6 +148,25 @@ Gogma
 
 結果として「Normal 0で1本作成 → Skill 342で巨戟化 → Gogma 56〜289でReset」のようなRouteが候補になる
 （具体的なIdeal位置はRuntime実装で確認する。本PRは主張しない）。
+
+Normalの `create_normal_artian` は1 operationで連続forge範囲を表すので、canonical表現を固定した
+（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.4、[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8）。production targetより
+**前** にある、originから先頭連続したheld位置だけを自分のforge不要区間として飛ばし、その直後からproduction
+targetまでを自分の連続forgeとする。
+
+```text
+skippableHeldPrefix = origin .. targetPosition - 1 のうち、originから先頭連続してheldな区間
+normalCounterBefore = prefixの直後（空ならorigin）
+normalCounterAfter  = targetPosition + 1
+count               = normalCounterAfter - normalCounterBefore
+
+Issue #101: held 0..206、target 0   -> prefix空、0 / 1 / count 1
+別例      : held 0..4、target 10   -> prefix 0..4、5 / 11 / count 6
+```
+
+初版の「originから連続するheld位置の直後（production targetを超えない）」という書き方は、Issue #101で
+「held位置の直後 = 207」と「production target = 0」の関係が曖昧だったため、PR #138のレビューで上記へ改めた。
+targetPosition以降のheld位置はprefixの判定に使わない。
 
 このRouteは各RouteOperationに絶対Counter位置を持つ既存表現のままで表せる。stream内でoperation同士の
 Counter位置が連続している必要はない（現行 `validateBuildRoute()` も連続性を要求していない）。Plannerは
@@ -193,8 +213,10 @@ Trace Replay** である（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.11）。stre
   1. Aをこのconflictのfixed側と仮定
   2. このconflictの非固定participant Targetごとに独立にalternative search
   3. 見つかったCandidateを一時的に差し替えてfull Plannerで検証
-  4. 代替Route、操作量、進行量、残る / 新しく発生するConflictをpreview
-  5. 終了（新Conflictを再帰的にrepairしない）
+  4. 代替Route、操作量、進行量をpreview
+  5. 見つかったreplacementをactual repairと同じ規則で合成したscenario Planを得て、
+     その実PlanStep数（scenarioOperationCount）、完成しないTarget、残る / 新しく発生するConflictをpreview
+  6. 終了（新Conflictを再帰的にrepairしない）
 
 「この候補を優先」（actual repair、保存）
   1. fixed Candidateをcommit（Route単位の決定）
@@ -205,6 +227,27 @@ Trace Replay** である（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.11）。stre
   6. 最新のEntry集合・fixed決定・Route commitment・実際のselected RoutesからConflictを再生成
   7. 保存。新Conflictは次の通常のユーザー判断として提示する
 ```
+
+### 6.1 scenario全体の手数比較
+
+「比較する」の主要目的の1つは、「Aを優先した場合」と「Bを優先した場合」について、直接影響を受けるTargetを
+1段repairした後の **scenario全体のPlan手数** を比べることである。Issue #101なら「龍を優先（龍: Normal 207本 →
+巨戟化 → Keep、火: Normal 1本 → 巨戟化 → Reset多数）」と「火を優先（逆）」のどちらが全体として少ないかを示す。
+
+- authorityは、代替を差し替えたscenario trialのfull Plannerが生成したPlanの実際のPlanStep数
+  （`steps.length`）である（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.13）
+- fixed Routeと代替Routeの `estimatedOperationCount` の和にしない。共有physical action、silent fast-forward、
+  Route commitment、Plannerの実行順、reserve / confirmation等で一致しないためである（Issue #101でも、火が
+  Normal 0を作ると龍のNormal 0 forgeはfast-forwardされ、龍のGogma 55 Keepの位置では火のResetが動かない）
+- what-ifは1段なので、この値は **1段repairを適用したtrial Planの暫定PlanStep数** であり、最終完成までの
+  確定総手数ではない。新しい未解決Conflictが残る場合も値は返すが、完成しないTargetと残る / 新しいConflictと
+  合わせて読む
+- scenario PlanはTargetごとの独立評価とは別に、actual repairと同じ合成規則で作る。非固定Targetが1つで、その
+  trial Planがそのままscenario Planになる場合は追加のfull runをしない
+- trial / scenarioのPlanner optionsはactual repairと同じ `conflictResolutionPlannerOptions(表示中Plan)` にし、
+  previewした手数と「この候補を優先」で保存される計画の条件を揃える
+
+### 6.2 Conflict再生成
 
 旧PlanのConflict一覧から解決済みだけを消す方式は採らない。replacement後の最新状態から再評価しない限り、
 旧Routeに由来する後続Conflict（#136のSkill 341 / Gogma 55）が残るためである。
@@ -253,8 +296,12 @@ Searchから手動置換すれば、そのTargetの履歴は失効する。恒�
 
 - fixed Target、alternative Target
 - 代替Routeが見つかったか（found / 探索範囲内に無し / 上限で未確認 / checkpointでblock）
-- 操作数、Normal / Skill / Gogmaの進行量（Planner-start基準の到達量）
-- 代替採用時に残るConflict、新しく発生するConflict
+- 代替Routeそのものの説明（`PlannerAlternativeRouteSummary`: `BuildRoute`、最終Bonus / scope / Skill、
+  通常Searchと同じ観測trace）。UIがRNGを再計算せず、Routeを推測復元せず、内部keyから再構築せずに
+  「通常1本 → 巨戟化 → Reset …」を表示できる
+- 代替Route自身の操作数、Normal / Skill / Gogmaの進行量（Planner-start基準の到達量）
+- scenario全体の暫定Plan手数（`scenarioOperationCount`、6.1）と、このPlanで完成しないTarget
+- 代替採用時に残るConflict、新しく発生するConflict（「追加競合あり / なし」の判断に使う）
 - lineageにより除外した候補があった事実（件数。technical keyは通常UIへ出さない）
 
 本PRはUIを変更しない。
@@ -314,7 +361,7 @@ Master dataVersion                      4
 | 1 | Planner Alternative SearchのSearch Domain API（modern scheduler上の別consumer policy、継続探索、extent、除外key、cancel / yield、決定的ordering）。reservation無し（空reservation）で通常Searchとの関係をテスト | なし | なし / なし |
 | 2 | Planner側のfixed Route集合・reservation導出（既存route unit plan authority）、hold付きstream探索、OwnedWeapon排他、trial full rerunのfound判定。Issue #101 fixtureで「火が342で巨戟化」する代替のfull rerun成立をテスト | 1 | なし / なし |
 | 3 | 実Browser Worker benchmark（Issue #101実ケース、no-Ideal worst case、cancel / responsiveness、time to first Candidate）。extent defaultとwhat-if / repairの試行上限default決定 | 2 | なし（benchmark専用コードのみ）/ なし |
-| 4 | B9 what-if「比較する」の新kernel接続（Domain calculation、typed result拡張、Worker protocol / Client）。Production routingはまだ旧経路 | 3 | なし / なし |
+| 4 | B9 what-if「比較する」の新kernel接続（Domain calculation、scenario trialと `scenarioOperationCount`、代替Route summaryを含むtyped result、Worker protocol / Client）。Production routingはまだ旧経路 | 3 | なし / なし |
 | 5 | 「この候補を優先」のactual repair（Route単位の決定、決定の展開、Conflict再生成、lineage永続化、migration）と、what-if / repair両方のProduction routing切替 | 4 | あり / calc 16、DB 10、Export 13 |
 | 6 | legacy constrained path（B8 enumeration / orchestration、関連bounds・warning・benchmark page）の削除またはtest oracle化 | 5 | なし / なし（永続shapeに触れる場合は別途判断） |
 | 7 | #122 Presentation改善（Conflict / what-if / repair結果の表示） | 5（4のtyped dataを使う） | UIのみ / なし |

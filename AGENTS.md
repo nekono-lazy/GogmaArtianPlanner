@@ -3524,7 +3524,13 @@ meanings, a Planner-derived resource reservation (held / blocked positions per
 stream and exclusive OwnedWeapon IDs of the fixed Route set) and excluded
 `candidateStableKey`s. A Route may leave its weapon untouched across held
 positions (absolute, non-contiguous operation Counters; no persisted shape
-change). 「この候補を優先」 becomes a Route-level decision; 「比較する」 and the
+change); a predicted `create_normal_artian` skips only the held prefix that
+starts at the origin and ends before its production target (Issue #101: target
+Normal 0 -> `0 / 1 / count 1`). 「比較する」 also returns
+`scenarioOperationCount`, the real `steps.length` of the one-step scenario trial
+Plan - never a sum of Route estimates, and a provisional value to read with the
+remaining / introduced conflicts - plus a presentation-neutral alternative Route
+summary. 「この候補を優先」 becomes a Route-level decision; 「比較する」 and the
 actual repair share one kernel and stop one step deep; the saved Plan's
 conflicts are regenerated from the final full run (never an old list minus the
 resolved one), with the decision expanded over the invalidated Entry's conflicts
