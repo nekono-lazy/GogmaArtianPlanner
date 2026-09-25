@@ -52,10 +52,7 @@ import type {
   PlannerRunTermination,
   PlannerWarning,
 } from '../domain/planner'
-import {
-  defaultPlannerOptions,
-  defaultPlannerOrchestrationBounds,
-} from '../domain/planner'
+import { defaultPlannerOrchestrationBounds } from '../domain/planner'
 import { defaultIntermediateStateSelection, findBuildListTargetDuplicates } from '../domain/buildList'
 import { plannerWarningLabels, productionPlanStatusLabels, staleReasonLabels } from '../presentation/labels'
 import { productionPlanRepository } from '../db/repositories/productionPlanRepository'
@@ -67,6 +64,7 @@ import {
   createPlannerInput,
 } from '../services/planner/createPlannerInput'
 import { plannerResultPersistenceService } from '../services/planner/plannerResultPersistenceService'
+import { recommendedBuildListMaxPlanSteps } from '../services/planner/plannerRuntimeOptions'
 import {
   createProductionPlanReplanDependencies,
   type ProductionPlanReplanDependencies,
@@ -483,9 +481,12 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
   const [loading, setLoading] = useState(dependencies !== undefined)
   const [planning, setPlanning] = useState(false)
   const [warnings, setWarnings] = useState<PlannerWarning[]>([])
-  const [optionInputs, setOptionInputs] = useState<PlannerOptionInputs>(() =>
-    createPlannerOptionInputs(defaultPlannerOptions),
-  )
+  // `null` while the user has not edited the detail settings: the field then
+  // shows the current Build List's recommended bound. Once the user edits it,
+  // that input is the authority and no refresh, re-render or save replaces it
+  // (UI_FLOW 10.0, Issue #130).
+  const [editedOptionInputs, setEditedOptionInputs] =
+    useState<PlannerOptionInputs | null>(null)
   // A search a `PlannerOptions` bound truncated. It is held separately from
   // `warnings` because it is the typed result, not a diagnostic message.
   const [incompleteSearch, setIncompleteSearch] =
@@ -536,6 +537,16 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
     new Map<BuildListEntryId, Promise<IntermediateStateSelection>>(),
   )
   const masterForDisplay = dependencies?.master ?? defaultMaster
+  const recommendedMaxPlanSteps = useMemo(
+    () => recommendedBuildListMaxPlanSteps(entries),
+    [entries],
+  )
+  const optionInputs = useMemo(
+    () =>
+      editedOptionInputs ??
+      createPlannerOptionInputs({ maxPlanSteps: recommendedMaxPlanSteps }),
+    [editedOptionInputs, recommendedMaxPlanSteps],
+  )
   const plannerOptions = useMemo(
     () => parsePlannerOptions(optionInputs),
     [optionInputs],
@@ -826,15 +837,15 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
               ? plannerOptionInvalidMessage
               : productionPlannerMaxPlanStepsField.helperText
           }
-          onChange={(event) => setOptionInputs({ maxPlanSteps: event.target.value })}
+          onChange={(event) => setEditedOptionInputs({ maxPlanSteps: event.target.value })}
           slotProps={{ htmlInput: { min: 1, step: 1 } }}
           sx={{ maxWidth: { md: 560 } }}
         />
+        {/* Back to the current Build List's recommended bound, never a fixed
+            1000: the field follows the recommendation again until edited. */}
         <Button
           variant="outlined"
-          onClick={() =>
-            setOptionInputs(createPlannerOptionInputs(defaultPlannerOptions))
-          }
+          onClick={() => setEditedOptionInputs(null)}
           sx={{ minHeight: 44, alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
         >
           既定値に戻す

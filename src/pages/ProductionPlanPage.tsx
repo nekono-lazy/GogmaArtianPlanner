@@ -18,6 +18,7 @@ import {
 } from '../components/planner/ProductionPlanContent'
 import { ProductionPlanWhatIfComparison } from '../components/planner/ProductionPlanWhatIfComparison'
 import { productionPlannerRunningTitles } from '../components/planner/productionPlannerSettingsPresentation'
+import { createConflictResolutionIncompleteMessage } from '../components/planner/plannerSearchLimitPresentation'
 import { PlanExecutionEntry, type PlanStartPreviewState } from '../components/execution/PlanExecutionEntry'
 import { executionErrorMessage, savePointPositionLabel } from '../components/execution/executionStepPresentation'
 import { PlanBreakingChangeDialog } from '../components/execution/PlanBreakingChangeDialog'
@@ -55,6 +56,7 @@ import {
   createPlannerCalculationContext,
   createPlannerInput,
 } from '../services/planner/createPlannerInput'
+import { conflictResolutionPlannerOptions } from '../services/planner/plannerRuntimeOptions'
 import {
   CHECKPOINT_CONFLICT_MESSAGE,
   createProductionPlanInteractionViewModel,
@@ -976,10 +978,17 @@ export function ProductionPlanPage({
         return
       }
 
-      const mergedInput = mergeExplicitConflictResolution(plannerInput, {
-        conflictKey: conflictId,
-        selectedBuildListEntryId: buildListEntryId,
-      })
+      // The Application caller is the Planner bound authority (PLANNER_SPEC
+      // 7.2.1): the fresh input's `defaultPlannerOptions` is replaced by a
+      // bound derived from the Plan this page shows, never from the Build List
+      // page's temporary input (Issue #130).
+      const mergedInput: PlannerInput = {
+        ...mergeExplicitConflictResolution(plannerInput, {
+          conflictKey: conflictId,
+          selectedBuildListEntryId: buildListEntryId,
+        }),
+        options: conflictResolutionPlannerOptions(displayedPlan),
+      }
       const requestId = createRequestId()
       activeWorkerRequestRef.current = requestId
       const result = await client.createConstrainedPlan(
@@ -1008,8 +1017,7 @@ export function ProductionPlanPage({
       if (result.termination.status === 'incomplete') {
         setReplanState({
           status: 'notice',
-          message:
-            '探索上限に到達したため、完成した生産計画を作成できませんでした。ビルドリスト画面の「詳細設定」で探索上限を引き上げてから、もう一度生産計画を作成してください。',
+          message: createConflictResolutionIncompleteMessage(result.termination),
         })
         return
       }

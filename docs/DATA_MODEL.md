@@ -1744,6 +1744,12 @@ Active Plan単一制約はApplication / Persistence層で扱う。
 v1のProduction `PlannerOptions` は1以上の整数 `maxPlanSteps` だけとする（Issue #103 Phase D-2a）。
 Production Planner（決定的scheduler、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7）が読むboundは
 `maxPlanSteps` だけであり、型もそれに一致させる。初期値は `defaultPlannerOptions = { maxPlanSteps: 1000 }`。
+これはDomain / Applicationのfallback既定値であり、BuildList画面の初期表示（登録Candidateの最大
+`estimatedOperationCount` にCandidate確保action `reserve_candidate` の1を加えて500刻みで切り上げ、
+最低1000）と競合解決再計算の上限（表示中Planの
+Step数を500刻みで切り上げて+500、最低1000）はApplication callerがruntimeに導出する
+（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7.2.1、Issue #130）。導出値も含め `PlannerOptions` は
+永続化しない。
 実用品優先を切り替える `preferPracticalBeforeIdeal` は持たず、渡された場合はvalidation issueとして拒否する。
 通常Worker request、B8 constrained re-search、B9 what-if、再計画Previewのいずれの `PlannerInput` も
 `beamWidth` / `maxExpandedStates` を持たない。

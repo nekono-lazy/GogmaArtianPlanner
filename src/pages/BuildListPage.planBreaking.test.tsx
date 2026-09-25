@@ -69,8 +69,9 @@ function client(): PlannerWorkerClient {
   }
 }
 
-function harness() {
+function harness(estimatedOperationCount?: number) {
   const candidate = checkpointCandidate([checkpointPracticalBonuses(), checkpointIdealBonuses()])
+  if (estimatedOperationCount !== undefined) candidate.estimatedOperationCount = estimatedOperationCount
   const source = checkpointSource()
   const target = checkpointTarget()
   let entry = createBuildListEntry(candidate, target, { id: buildListEntryId('build-list.guarded'), createdAt: '2026-09-12T00:00:00.000Z' })
@@ -148,6 +149,28 @@ describe('BuildListPage breaking-change warning', () => {
     expect(await screen.findByRole('button', { name: '生産計画を作成' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: '現在地点からの再計画' })).toBeNull()
     await waitFor(() => expect(screen.getByRole('checkbox', { name: BONUS_ONE })).toBeChecked())
+  })
+
+  it('keeps the user-edited maxPlanSteps through the Build List re-read an approved save triggers (Issue #130)', async () => {
+    const user = userEvent.setup()
+    // A large Candidate: the untouched field would show 1500.
+    const { deps, endPlan } = harness(1470)
+    const inspection = planBreakingInspection({ reasons: ['build_list_changed'] })
+    deps.inspectIntermediateStateSelectionUpdate.mockResolvedValue(inspection)
+    renderPage(deps)
+    await user.click(await screen.findByRole('button', { name: '詳細設定' }))
+    await waitFor(() => expect(screen.getByLabelText('最大計画ステップ数')).toHaveValue(1500))
+    await user.clear(screen.getByLabelText('最大計画ステップ数'))
+    await user.type(screen.getByLabelText('最大計画ステップ数'), '1234')
+
+    endPlan()
+    await user.click(await screen.findByRole('checkbox', { name: BONUS_ONE }))
+    await user.click(within(await screen.findByRole('dialog', WARNING)).getByRole('button', { name: '生産計画を破棄して保存' }))
+    await waitFor(() => expect(deps.refresh).toHaveBeenCalledTimes(2))
+    expect(await screen.findByRole('button', { name: '生産計画を作成' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: BONUS_ONE })).toBeChecked())
+
+    expect(screen.getByLabelText('最大計画ステップ数')).toHaveValue(1234)
   })
 
   it('names the save point Step from the running Plan and keeps the current state with the token', async () => {

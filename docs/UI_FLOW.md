@@ -1207,13 +1207,29 @@ Beam Search oracleの専用contractだけが扱い、それを操作する画面
 ```
 
 Accordion冒頭の説明文は「生産計画の作成に使う安全上限です。1以上の整数だけが有効で、この画面を
-再読み込みすると既定値へ戻ります。」とする。説明文に「Beam」「探索状態」「候補状態」など
-旧Plannerの概念を入れない。
+再読み込みすると既定値へ戻ります。既定値は登録候補の必要操作数に応じて500刻みで補正されます
+（最低1,000）。」とする。説明文に「Beam」「探索状態」「候補状態」など旧Plannerの概念を入れない。
 
 制約。
 
-- 初期値は `defaultPlannerOptions`（`maxPlanSteps = 1000`）だけをauthorityとする
-- 「既定値に戻す」で `defaultPlannerOptions` へ戻す
+- Domain / Applicationのfallback既定値は引き続き `defaultPlannerOptions`（`maxPlanSteps = 1000`）である
+- BuildList画面の既定値（推奨値）は `recommendedBuildListMaxPlanSteps()`
+  （`src/services/planner/plannerRuntimeOptions.ts`）だけをauthorityとし、
+  `max(defaultPlannerOptions.maxPlanSteps, ceilTo500(登録Entryの最大 candidateSnapshot.estimatedOperationCount + 1))`
+  とする（Issue #130）。500刻みは共通定数 `PLANNER_MAX_PLAN_STEPS_INCREMENT` で表す。
+  `estimatedOperationCount` はCandidate Routeのoperation unit数（`create_normal_artian.count` も1本 = 1 unit）
+  だけを数える。一方Plannerの `maxPlanSteps` はRoute actionに加えて、Route完了後にCandidateを確保する
+  内部action `reserve_candidate` も1 actionとして数える。そのため単体Candidateの完成に必要な最低action数
+  `estimatedOperationCount + 1`（`+ 1` は安全marginではなく `CANDIDATE_RESERVE_PLANNER_ACTION_COUNT`
+  = 確保action）を500刻みへ切り上げる。例: 999 → 1000、1000 → 1500、1470 → 1500、1500 → 2000、
+  2000 → 2500。staleなEntryやlegacy duplicateも
+  登録済みCandidateとして単純に最大値へ含め、cardinalityやPlanner採否の意味は変えない。
+  Entryが無い場合は1000
+- ユーザーがまだ値を編集していない間は、表示値を読み込み済みEntryの推奨値から導出する。
+  ユーザーが一度編集した後は、その入力値だけがauthorityであり、Entryの再読込・削除・途中採用状態の
+  保存・再描画などで推奨値へ書き戻さない
+- 「既定値に戻す」は現在のビルドリストの推奨値へ戻す（編集前の状態へ戻り、以後は推奨値に従う）。
+  固定の1000へは戻さない
 - 1以上の整数のみ有効とし、無効な値はfield errorを表示して
   「生産計画を作成」と「現在地点から再計画を試算」をdisabledにする
 - 無効な値をPlannerへ渡さない
@@ -1646,6 +1662,21 @@ explicit resolutionを保持してmergeし、同一 `conflictKey` は今回選�
 
 選択確定後はwhat-if resultをPlan生成へ使わず、B8 Production constrained Plannerを最初から
 再実行する。Application callerが `defaultPlannerOrchestrationBounds = 2 / 1 / 4` を明示指定する。
+
+この再計算の `PlannerInput.options` はfresh inputの `defaultPlannerOptions` のままにせず、
+Application callerが `conflictResolutionPlannerOptions(表示中Plan)`
+（`src/services/planner/plannerRuntimeOptions.ts`）で上書きする（Issue #130）。
+`maxPlanSteps = max(defaultPlannerOptions.maxPlanSteps, ceilTo500(表示中Plan.steps.length) + 500)`
+であり、例えば800 Step → 1500、1000 Step → 1500、1470 Step → 2000、1500 Step → 2000、1600 Step → 2500。
++500は競合解決で元Planより多少長くなる余裕であり、無制限にはしない。BuildList画面の一時入力値は
+参照しない。新しいDraftが保存された後の次の競合解決は、そのDraft自身のStep数から同じ規則で求める。
+what-if比較（11.2）の `defaultPlannerWhatIfBounds` と、what-ifのPlanner入力はこの導出の対象外とする。
+
+再計算の `termination.status === "incomplete"` はfail closedとし、保存せず旧Planを表示し続ける。
+案内文は「競合解決の再計算が最大計画ステップ数 N に到達したため、完成した生産計画を作成できません
+でした。この上限は表示中の生産計画のステップ数から自動で決まります。ビルドリスト画面から生産計画を
+作り直してください。」とし、BuildList画面の「詳細設定」を変更すればこの再計算へ反映されるかのような
+案内はしない（BuildList画面の通常Plannerの上限到達案内は10.1のまま）。
 
 結果のwarningsにtyped `warning.kind === 'invalid_conflict_resolution'` が1件でもあれば、
 `plan !== null` でもfail closedとする。checkpoint競合へのresolutionはDomainがこのwarningで

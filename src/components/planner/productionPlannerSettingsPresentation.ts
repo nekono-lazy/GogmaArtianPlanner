@@ -27,8 +27,13 @@ export const productionPlannerMaxPlanStepsField: ProductionPlannerOptionFieldPre
     '計画で実行する操作数の安全上限です。通常は変更不要です。上限に達して計画が完了しなかった場合は、この値を増やして再実行してください。',
 }
 
+/**
+ * The Build List's default is the recommended bound for the Entries it holds
+ * (`recommendedBuildListMaxPlanSteps()`, Issue #130), so the description says
+ * how that default is sized instead of naming a fixed number.
+ */
 export const productionPlannerDetailSettingsDescription =
-  '生産計画の作成に使う安全上限です。1以上の整数だけが有効で、この画面を再読み込みすると既定値へ戻ります。'
+  '生産計画の作成に使う安全上限です。1以上の整数だけが有効で、この画面を再読み込みすると既定値へ戻ります。既定値は登録候補の必要操作数に応じて500刻みで補正されます（最低1,000）。'
 
 export const plannerOptionInvalidMessage = '1以上の整数を入力してください。'
 
