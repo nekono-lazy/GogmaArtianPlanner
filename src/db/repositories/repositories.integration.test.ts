@@ -444,6 +444,7 @@ describe('SettingsRepository and shared transaction boundary', () => {
         get: (id) => database.settings.get(id),
         add: (settings) => database.settings.add(settings),
         put: (settings) => database.settings.put(settings),
+        update: (id, changes) => database.settings.update(id, changes),
       })
       const initial = await repository.ensureSettings(DOMAIN_FIXTURE_TIME)
       const changed = { ...initial, debugMode: true }
@@ -451,6 +452,34 @@ describe('SettingsRepository and shared transaction boundary', () => {
       expect(
         await repository.ensureSettings('2026-08-30T00:00:00.000Z'),
       ).toEqual(changed)
+    }))
+
+  it('persists the Candidate Search defaults and a concurrent Debug Mode save without either overwriting the other', () =>
+    withDatabase(async (database) => {
+      const repository = new SettingsRepository({
+        get: (id) => database.settings.get(id),
+        add: (settings) => database.settings.add(settings),
+        put: (settings) => database.settings.put(settings),
+        update: (id, changes) => database.settings.update(id, changes),
+      })
+      const initial = await repository.ensureSettings(DOMAIN_FIXTURE_TIME)
+      expect(initial.candidateSearchDefaults).toEqual({ maxNormalAdvance: 350, maxGogmaAdvance: 500, maxSkillAdvance: 1500 })
+      // Both read the same record first; a whole-record write would lose one.
+      await Promise.all([
+        repository.setCandidateSearchDefaults({ maxNormalAdvance: 1000, maxGogmaAdvance: 200, maxSkillAdvance: 3000 }),
+        repository.setDebugMode(true),
+      ])
+      const stored = await repository.getSettings()
+      expect(stored).toMatchObject({
+        debugMode: true,
+        candidateSearchDefaults: { maxNormalAdvance: 1000, maxGogmaAdvance: 200, maxSkillAdvance: 3000 },
+        resultPageSize: initial.resultPageSize,
+        defaultSearchLimit: initial.defaultSearchLimit,
+        createdAt: initial.createdAt,
+      })
+      // Saving the same values again is not a failure.
+      await expect(repository.setCandidateSearchDefaults({ maxNormalAdvance: 1000, maxGogmaAdvance: 200, maxSkillAdvance: 3000 }))
+        .resolves.toMatchObject({ candidateSearchDefaults: { maxNormalAdvance: 1000 } })
     }))
 
   it('lets multiple Repositories join one atomic transaction', () =>

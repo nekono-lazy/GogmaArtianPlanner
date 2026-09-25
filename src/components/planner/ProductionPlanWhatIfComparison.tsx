@@ -43,7 +43,7 @@ function WhatIfOutcome({ outcome }: { outcome: PlannerWhatIfOutcome }) {
             必要操作数: {outcome.distance.estimatedOperationCount}
           </Typography>
           <Typography variant="caption">
-            巨戟進行量: +{outcome.distance.estimatedGogmaAdvance}
+            復元ボーナス進行量: +{outcome.distance.estimatedGogmaAdvance}
           </Typography>
           <Typography variant="caption">
             スキル進行量: +{outcome.distance.estimatedSkillAdvance}

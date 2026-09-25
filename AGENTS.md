@@ -914,6 +914,31 @@ scheduler-only regression (398 actions under the 1000 default). The Beam-only wa
 `max_expanded_states_reached` was removed; the oracle's `max_expanded_states` stays in
 `PlannerBeamSearchTermination.reachedLimits`. The historical measurement documents stay unchanged.
 No semantics or version moved (14 / 8 / 11).
+Issue #125 (the saved Candidate Search defaults; `docs/REQUIREMENTS.md` 14.1, `docs/DATA_MODEL.md` 13,
+`docs/UI_FLOW.md` 9 / 14) added `AppSettings.candidateSearchDefaults` (`maxNormalAdvance`,
+`maxGogmaAdvance`, `maxSkillAdvance`, each a positive integer, no ordering constraint and no cap).
+The one recommendation authority is `recommendedCandidateSearchDefaults` in
+`src/domain/models/common.ts` (Normal **350** / Bonus **500** / Skill **1500**; Bonus above Normal
+because the Gogma Counter is shared across weapons, a recommendation only), shared by a new record,
+`clearAllData()`, both migrations and the Search Domain's `defaultCandidateSearchSettings`; the
+Search Domain never reads AppSettings or a repository and runs the `CandidateSearchSettings` its
+caller passes. Only the Settings screen's 「既定値を保存」 writes the defaults
+(`SettingsRepository.setCandidateSearchDefaults()`); Debug Mode and the defaults are written as a
+field-only atomic Dexie `update()` after validating the whole record, so neither overwrites the
+other, and both share the Settings screen's pending-save gate against the Data Transfer. The Search
+screen starts from the saved values (the recommendation, with a warning, when the read fails), and
+an edit there applies to that screen's single and batch searches only (the batch keeps using the
+screen's values at its start) and is never written back. User-facing wording is 「復元ボーナス最大進行量」
+/ 「復元ボーナス進行」 instead of 「巨戟最大進行量」 / 「巨戟進行」; internal names such as
+`maxGogmaAdvance` are unchanged, and 「巨戟カウンター」 (the RNG Counter name) stays. `defaultSearchLimit`
+keeps its Normal Counter Identification meaning and is never reused. The persisted shape moved
+`AppSettings.schemaVersion` to **2**, `DATABASE_SCHEMA_VERSION` to **9** (v8 -> v9 gives an AppSettings
+v1 record the recommendation and keeps every other field) and `ExportRoot.schemaVersion` to **12**
+(`migrateExportRootV11ToV12()` through the same `upgradeAppSettingsToV2()`; a schema 11 `settings` that is
+not a v1 record fails closed). The former fixed `500 / 350 / 1500` was never user data and is not carried
+over. No calculation semantics changed, so `CURRENT_CALCULATION_APP_SCHEMA_VERSION` stays 14 and
+`PRODUCTION_RNG_ENGINE_VERSION` `production-rng:c5-e7`, `RngState.schemaVersion` 2 and Master
+`dataVersion` 4 are unchanged; no Candidate, Entry or Plan goes stale.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -950,8 +975,8 @@ A version 10 `checkpointGroups` / `selectedCheckpointOpportunityIds` cannot be
 mapped onto lane pins, and reading such a selection as empty would silently
 drop a hard constraint, so version 10 artifacts fail closed like every earlier one.
 Search, BuildList, Planner, and benchmark runtime creators share this authority.
-Dexie separately moved to `DATABASE_SCHEMA_VERSION = 4` for the persisted status rename, to 5 for the Execution lifecycle persisted state, to 6 for the ProductionPlan lifecycle metadata, to 7 for the Identification provenance, and to the current 8 for the Draft lifecycle (every accumulated `draft` Plan deleted; `ExportRoot.schemaVersion` 11, `RngState.schemaVersion` 2); this is independent of
-`AppSettings.schemaVersion = 1`; gameVersion, Master Data version,
+Dexie separately moved to `DATABASE_SCHEMA_VERSION = 4` for the persisted status rename, to 5 for the Execution lifecycle persisted state, to 6 for the ProductionPlan lifecycle metadata, to 7 for the Identification provenance, to 8 for the Draft lifecycle (every accumulated `draft` Plan deleted; `ExportRoot.schemaVersion` 11, `RngState.schemaVersion` 2), and to the current 9 for the AppSettings Candidate Search defaults (Issue #125; `ExportRoot.schemaVersion` 12, `AppSettings.schemaVersion` 2); the Dexie version is independent of
+`AppSettings.schemaVersion` (current 2); gameVersion, Master Data version,
 and `CONSTRAINED_ROUTE_POLICY_VERSION`
 remain unchanged. `PRODUCTION_RNG_ENGINE_VERSION` is
 currently `production-rng:c5-e7`. The Normal Artian occurrence-limit correction
@@ -2630,7 +2655,9 @@ more for identical Bonus/Skill results. Never apply this pruning to constrained 
 owned sources or blind creation. Preserve the first base's canonical frontier and the
 lower-bound tie drain; never eagerly predict every Normal offset for classification.
 
-Current defaults are Normal 500 / Gogma 350 / Skill 1500. See
+The Issue #104 defaults were Normal 500 / Gogma 350 / Skill 1500. Issue #125 made the recommended
+initial values Normal 350 / Gogma (復元ボーナス) 500 / Skill 1500 and the Search screen's starting
+values the user's saved `AppSettings.candidateSearchDefaults`. See
 `docs/ISSUE_104_NORMAL_ROUTE_REDUCTION_BENCHMARK.md` for the Browser measurements,
 350/500 comparison and limits. B5 measurements/presets stay historical and unchanged.
 No RNG algorithm/version, calculation version, persistence or Candidate shape changes.
@@ -4873,7 +4900,9 @@ Relevant test areas include:
 - Atomic Execution transactions
 - Undo snapshot restoration
 - Worker request/response/cancellation behavior
-- `defaultCandidateSearchSettings` is `500 / 350 / 1500`; the Search page uses the same values
+- `defaultCandidateSearchSettings` equals `recommendedCandidateSearchDefaults` (`350 / 500 / 1500`); the
+  Search page starts from the saved `AppSettings.candidateSearchDefaults`, uses a screen edit for its
+  single and batch searches only and never writes it back
 - A Target reports progress at its start, reports activity before it completes,
   restarts `processedWorkItems` per Target, and ends at
   `completedTargets === totalTargets`
@@ -4937,7 +4966,9 @@ Relevant test areas include:
 - Production Plan generation, the Planner Worker, B8, B9 and the replan Preview running the
   deterministic scheduler with no injection and no strategy flag, and `beamWidth` never
   changing a Production result
-- `DATABASE_SCHEMA_VERSION = 8`, `ExportRoot.schemaVersion = 11`, `RngState.schemaVersion = 2`,
+- `DATABASE_SCHEMA_VERSION = 9`, `ExportRoot.schemaVersion = 12`, `AppSettings.schemaVersion = 2` (Dexie v8 -> v9
+  and Export 11 -> 12 filling the recommended `350 / 500 / 1500` into an AppSettings v1 record and keeping its
+  other fields), `RngState.schemaVersion = 2`,
   historically `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 13` with schema 1..12 ProductionPlans and
   schema 1..11 Candidates / BuildListEntries failing closed under version 13, schema 12
   Candidates / BuildListEntries staying usable under 13 through the explicit build-result

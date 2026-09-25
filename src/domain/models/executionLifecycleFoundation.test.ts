@@ -22,6 +22,7 @@ import {
 } from './publicTypes'
 import { createTargetDefinitionHash } from '../buildList'
 import { isTargetWeaponPlanningEligible } from './domainRules'
+import { legacyAppSettingsV1 } from '../../test/fixtures/dataTransfer'
 import {
   DOMAIN_FIXTURE_TIME,
   createValidBuildCandidate,
@@ -78,7 +79,7 @@ function savePointFor(
 function exportRoot(overrides: Partial<ExportRoot> = {}): ExportRoot {
   const plan = createValidProductionPlan()
   return {
-    schemaVersion: 11,
+    schemaVersion: 12,
     appName: 'mh-wilds-gogma-artian-planner',
     exportedAt: DOMAIN_FIXTURE_TIME,
     rngState: createValidRngState(),
@@ -95,10 +96,11 @@ function exportRoot(overrides: Partial<ExportRoot> = {}): ExportRoot {
     executionSavePoints: [savePointFor(plan.id, executionHistoryId('history.fixture.a'))],
     settings: {
       id: 'settings',
-      schemaVersion: 1,
+      schemaVersion: 2,
       debugMode: false,
       resultPageSize: 50,
       defaultSearchLimit: 5000,
+      candidateSearchDefaults: { maxNormalAdvance: 350, maxGogmaAdvance: 500, maxSkillAdvance: 1500 },
       createdAt: DOMAIN_FIXTURE_TIME,
       updatedAt: DOMAIN_FIXTURE_TIME,
     },
@@ -111,6 +113,8 @@ function schema6Root(): ExportRootV6 {
   return {
     ...without(root, ['executionSavePoints']),
     schemaVersion: 6,
+    // A schema 6 AppSettings predates the schema 12 Candidate Search defaults.
+    settings: legacyAppSettingsV1(root.settings),
     // A schema 6 RngState / Normal Counter predates the schema 10 Identification provenance.
     rngState: { ...without(root.rngState as never, ['lastIdentifiedAt']), schemaVersion: 1 },
     normalArtianCounters: root.normalArtianCounters.map((counter) => without(counter, ['lastIdentifiedAt'])),
@@ -136,7 +140,7 @@ describe('Execution lifecycle version boundaries', () => {
     // and the Execution runtime lifecycle metadata moved Export to 9. The Plan
     // start effect moved the calculation schema to 13 with no persisted shape
     // change. The Identification provenance moved Export to 10.
-    expect(EXPORT_SCHEMA_VERSION).toBe(11)
+    expect(EXPORT_SCHEMA_VERSION).toBe(12)
     expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(14)
   })
 })
@@ -314,7 +318,7 @@ describe('Export schema 10', () => {
     if (!migrated.ok) return
     expect(migrated.root.schemaVersion).toBe(7)
     const imported = prepareExportRootForImport(JSON.parse(JSON.stringify(legacy)))
-    expect(imported.ok && imported.root.schemaVersion).toBe(11)
+    expect(imported.ok && imported.root.schemaVersion).toBe(12)
     expect(migrated.root.executionSavePoints).toEqual([])
     migrated.root.targetWeapons.forEach((target) => {
       expect(target).toMatchObject({ lifecycleStatus: 'active', completedAt: null, completedByProductionPlanId: null })
@@ -344,7 +348,7 @@ describe('Export schema 10', () => {
 
   it('refuses unsupported schema versions and malformed roots', () => {
     expect(prepareExportRootForImport({ ...exportRoot(), schemaVersion: 5 }).ok).toBe(false)
-    expect(prepareExportRootForImport({ ...exportRoot(), schemaVersion: 12 }).ok).toBe(false)
+    expect(prepareExportRootForImport({ ...exportRoot(), schemaVersion: 13 }).ok).toBe(false)
     expect(prepareExportRootForImport({ ...exportRoot(), appName: 'other' }).ok).toBe(false)
     expect(prepareExportRootForImport({ ...exportRoot(), ownedWeapons: null }).ok).toBe(false)
     expect(prepareExportRootForImport(null).ok).toBe(false)

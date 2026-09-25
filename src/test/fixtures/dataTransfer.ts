@@ -1,5 +1,6 @@
 import type {
   AppSettings,
+  AppSettingsV1,
   ExecutionSavePoint,
   ExportRoot,
   ProductionPlanId,
@@ -35,14 +36,25 @@ export const DATA_TRANSFER_PLAN_ID = productionPlanId('plan.fixture.a')
 export function dataTransferSettings(overrides: Partial<AppSettings> = {}): AppSettings {
   return {
     id: 'settings',
-    schemaVersion: 1,
+    schemaVersion: 2,
     debugMode: true,
     resultPageSize: 25,
     defaultSearchLimit: 4000,
+    candidateSearchDefaults: { maxNormalAdvance: 1000, maxGogmaAdvance: 200, maxSkillAdvance: 2500 },
     createdAt: DOMAIN_FIXTURE_TIME,
     updatedAt: DOMAIN_FIXTURE_TIME,
     ...overrides,
   }
+}
+
+/**
+ * An AppSettings as an Export schema 11 (or older) root carries it: record
+ * version 1 without `candidateSearchDefaults`, every other field kept.
+ */
+export function legacyAppSettingsV1(settings: AppSettings): AppSettingsV1 {
+  const { candidateSearchDefaults: _removed, ...rest } = settings
+  void _removed
+  return { ...rest, schemaVersion: 1 }
 }
 
 export function completedFixtureTarget(
@@ -100,7 +112,7 @@ export function dataTransferRoot(overrides: Partial<ExportRoot> = {}): ExportRoo
   history.undoSnapshot.affectedTargetWeaponsBefore = [createValidTargetWeapon()]
   history.undoSnapshot.executionSavePointBefore = fixtureSavePoint(plan.id, null)
   return {
-    schemaVersion: 11,
+    schemaVersion: 12,
     appName: 'mh-wilds-gogma-artian-planner',
     exportedAt: DOMAIN_FIXTURE_TIME,
     rngState: { ...createValidRngState(), lastIdentifiedAt: '2026-08-28T12:00:00.000Z' },

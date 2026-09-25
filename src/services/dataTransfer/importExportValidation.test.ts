@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { loadMasterData } from '../../domain/master/loadMasterData'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import type {
+  AppSettings,
   ExportRoot,
   OwnedWeapon,
   RestorationBonusSet,
@@ -127,7 +128,9 @@ describe('validateExportRootForFullReplacement', () => {
       ['ProductionPlan', (root) => { (root.productionPlans[0] as { status: string }).status = 'paused' }, 'productionPlans[0].status'],
       ['ExecutionHistory', (root) => { (root.executionHistory[0] as { action: string }).action = 'guessed' }, 'executionHistory[0].action'],
       ['ExecutionSavePoint', (root) => { root.executionSavePoints[0].id = 'save-point.other' }, 'executionSavePoints[0].id'],
-      ['AppSettings', (root) => { (root.settings as { schemaVersion: number }).schemaVersion = 2 }, 'settings.schemaVersion'],
+      ['AppSettings', (root) => { (root.settings as { schemaVersion: number }).schemaVersion = 1 }, 'settings.schemaVersion'],
+      ['AppSettings without Candidate Search defaults', (root) => { delete (root.settings as Partial<AppSettings>).candidateSearchDefaults }, 'settings.candidateSearchDefaults'],
+      ['AppSettings Candidate Search default', (root) => { root.settings.candidateSearchDefaults.maxGogmaAdvance = 0 }, 'settings.candidateSearchDefaults.maxGogmaAdvance'],
     ])('rejects an invalid %s', (_entity, mutate, path) => {
       const root = dataTransferRoot()
       mutate(root)

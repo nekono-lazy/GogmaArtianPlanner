@@ -73,7 +73,7 @@ describe('ProductionPlanWhatIfComparison', () => {
     // next feasible Ideal Candidate is, with no category slots.
     expect(within(targetCards[0]!).getByText('理想候補')).toBeInTheDocument()
     expect(within(targetCards[0]!).getByText('必要操作数: 12')).toBeInTheDocument()
-    expect(within(targetCards[0]!).getByText('巨戟進行量: +4')).toBeInTheDocument()
+    expect(within(targetCards[0]!).getByText('復元ボーナス進行量: +4')).toBeInTheDocument()
     expect(within(targetCards[0]!).getByText('スキル進行量: +3')).toBeInTheDocument()
     expect(within(targetCards[0]!).getByText('通常進行量: 対象外')).toBeInTheDocument()
     expect(within(targetCards[1]!).getByText('必要操作数: 21')).toBeInTheDocument()

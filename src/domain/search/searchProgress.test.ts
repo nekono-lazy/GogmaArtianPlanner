@@ -7,6 +7,7 @@ import {
 } from '../../test/fixtures/candidateSearch'
 import type { CandidateSearchProgress } from './searchTypes'
 import { defaultCandidateSearchSettings } from './searchTypes'
+import { recommendedCandidateSearchDefaults } from '../models/common'
 import { SEARCH_ACTIVITY_PROGRESS_INTERVAL } from './searchExecution'
 import { searchCandidates } from './candidateSearch'
 
@@ -44,13 +45,16 @@ const options = { now: () => SEARCH_FIXTURE_TIME, nowMs: () => 0 }
 
 afterEach(() => vi.restoreAllMocks())
 
-describe('Issue #104 Candidate Search defaults', () => {
-  it('ships the measured Issue #104 defaults', () => {
+describe('Candidate Search recommended defaults (Issue #125)', () => {
+  it('ships the recommended 350 / 500 / 1500 from the one AppSettings recommendation authority', () => {
     expect(defaultCandidateSearchSettings).toEqual({
-      maxNormalAdvance: 500,
-      maxGogmaAdvance: 350,
+      maxNormalAdvance: 350,
+      maxGogmaAdvance: 500,
       maxSkillAdvance: 1500,
     })
+    expect(defaultCandidateSearchSettings).toEqual(recommendedCandidateSearchDefaults)
+    // A copy, so a caller changing its settings never changes the recommendation.
+    expect(defaultCandidateSearchSettings).not.toBe(recommendedCandidateSearchDefaults)
   })
 })
 

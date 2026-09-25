@@ -1,6 +1,7 @@
 import type {
   AppSettings,
   CalculationContext,
+  CandidateSearchDefaults,
   KnownValue,
   NormalArtianCounter,
   PlanStepOperationType,
@@ -8,6 +9,7 @@ import type {
   RngState,
 } from './common'
 import {
+  APP_SETTINGS_SCHEMA_VERSION,
   CURRENT_CALCULATION_APP_SCHEMA_VERSION,
   currentExecutionActions,
   legacyExecutionActions,
@@ -2203,10 +2205,47 @@ export function validateAppSettings(
   if (settings.id !== 'settings') {
     addIssue(issues, 'id', 'invalid_literal', "AppSettings id must be 'settings'.")
   }
-  if (settings.schemaVersion !== 1) {
-    addIssue(issues, 'schemaVersion', 'invalid_literal', 'AppSettings schemaVersion must be 1.')
+  if (settings.schemaVersion !== APP_SETTINGS_SCHEMA_VERSION) {
+    addIssue(
+      issues,
+      'schemaVersion',
+      'invalid_literal',
+      `AppSettings schemaVersion must be ${APP_SETTINGS_SCHEMA_VERSION}.`,
+    )
   }
   validatePositiveInteger(settings.resultPageSize, 'resultPageSize', issues)
   validatePositiveInteger(settings.defaultSearchLimit, 'defaultSearchLimit', issues)
+  const defaults: unknown = settings.candidateSearchDefaults
+  if (typeof defaults !== 'object' || defaults === null || Array.isArray(defaults)) {
+    addIssue(
+      issues,
+      'candidateSearchDefaults',
+      'invalid_structure',
+      'candidateSearchDefaults is required.',
+    )
+  } else {
+    issues.push(
+      ...validateCandidateSearchDefaults(defaults as CandidateSearchDefaults).issues.map((issue) => ({
+        ...issue,
+        path: `candidateSearchDefaults.${issue.path}`,
+      })),
+    )
+  }
+  return result(issues)
+}
+
+/**
+ * The Candidate Search defaults of AppSettings (`docs/DATA_MODEL.md` 13): each
+ * of the three bounds is a positive integer. No ordering between them is
+ * required - the recommended Bonus bound above the Normal Artian one is a
+ * recommendation, never a constraint - and no upper cap is added.
+ */
+export function validateCandidateSearchDefaults(
+  defaults: CandidateSearchDefaults,
+): DomainValidationResult {
+  const issues: DomainValidationIssue[] = []
+  validatePositiveInteger(defaults.maxNormalAdvance, 'maxNormalAdvance', issues)
+  validatePositiveInteger(defaults.maxGogmaAdvance, 'maxGogmaAdvance', issues)
+  validatePositiveInteger(defaults.maxSkillAdvance, 'maxSkillAdvance', issues)
   return result(issues)
 }

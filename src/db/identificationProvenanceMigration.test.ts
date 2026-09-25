@@ -64,8 +64,8 @@ function schema6Counter(id = 'weapon.fixture.a:8', weaponTypeId = 'weapon.fixtur
 }
 
 describe('Identification provenance persistence migration (Dexie v6 -> v7)', () => {
-  it('uses DATABASE_SCHEMA_VERSION 8 and RngState record schema 2 independently of the calculation schema', () => {
-    expect(DATABASE_SCHEMA_VERSION).toBe(8)
+  it('uses the current DATABASE_SCHEMA_VERSION 9 and RngState record schema 2 independently of the calculation schema', () => {
+    expect(DATABASE_SCHEMA_VERSION).toBe(9)
     expect(RNG_STATE_SCHEMA_VERSION).toBe(2)
     expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(14)
   })
@@ -119,7 +119,7 @@ describe('Identification provenance persistence migration (Dexie v6 -> v7)', () 
     const database = new AppDatabase(name)
     try {
       await database.open()
-      expect(database.verno).toBe(8)
+      expect(database.verno).toBe(9)
 
       const migratedState = await database.rngState.get('current')
       expect(migratedState).toEqual({ ...rngState, schemaVersion: 2, lastIdentifiedAt: null })

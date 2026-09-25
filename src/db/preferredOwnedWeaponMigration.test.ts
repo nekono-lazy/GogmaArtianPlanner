@@ -46,12 +46,12 @@ function legacyRecords() {
 
 describe('preferred owned weapon persistence migration', () => {
   it('uses the current DATABASE_SCHEMA_VERSION', () => {
-    expect(DATABASE_SCHEMA_VERSION).toBe(8)
+    expect(DATABASE_SCHEMA_VERSION).toBe(9)
   })
 
   it('declares the current Export schema version', () => {
-    const schemaVersion: ExportRoot['schemaVersion'] = 11
-    expect(schemaVersion).toBe(11)
+    const schemaVersion: ExportRoot['schemaVersion'] = 12
+    expect(schemaVersion).toBe(12)
   })
 
   it('runs v1 -> v2 -> v3 -> v4 -> v5 in order and clears every Target preference', async () => {
@@ -82,7 +82,7 @@ describe('preferred owned weapon persistence migration', () => {
     const database = new AppDatabase(name)
     try {
       await database.open()
-      expect(database.verno).toBe(8)
+      expect(database.verno).toBe(9)
 
       const migratedTarget = await database.targetWeapons.get(targetId)
       expect(migratedTarget?.preferredOwnedWeaponId).toBeNull()

@@ -402,6 +402,29 @@ UIは「現在の探索範囲では理想品が見つかりませんでした」
 
 同じ完成結果と実質的に同じ経路を持つ候補は重複排除する。検索処理は進捗表示とキャンセルに対応し、UIを長時間停止させないこと。
 
+### 14.1 探索量の上限と既定値
+
+候補検索の探索量の上限は、通常アーティア最大進行量（`maxNormalAdvance`）、復元ボーナス最大進行量
+（`maxGogmaAdvance`）、スキル最大進行量（`maxSkillAdvance`）の3つである。ユーザー向け表示では
+巨戟アーティアの復元ボーナス抽選の進行を「復元ボーナス進行」と呼び、「巨戟進行」とは表示しない
+（内部名 `maxGogmaAdvance` / Gogma Counterは変えない）。
+
+- 3つの上限の「普段使う既定値」は設定画面で変更・保存でき、AppSettingsとして永続化する
+  （[DATA_MODEL.md](./DATA_MODEL.md) 13、[UI_FLOW.md](./UI_FLOW.md) 14）。再読み込み・再起動後も保持し、
+  Export / Importの対象とする
+- 推奨の初期値は通常アーティア 350 / 復元ボーナス 500 / スキル 1500 とする。新規環境、全データ削除後、
+  旧形式の設定・バックアップからの移行時はこの値を使う
+- 復元ボーナスの初期値を通常アーティアより高くするのは、通常アーティアCounterが武器種ごとの固有Counter
+  であるのに対し、復元ボーナス（巨戟）Counterは複数の武器で共有され、ある武器にとって遠い位置でも別の
+  武器の生産工程によって進められる可能性があるためである。これは推奨値であってValidation上の大小制約では
+  ない。各値は1以上の整数であればよく、例えば通常アーティア 1000 / 復元ボーナス 200 も保存できる
+- 候補検索画面は、開いたときに保存済みの既定値を探索量の初期値とする。候補検索画面で変更した値は
+  その画面での検索（単体検索と一括検索・追加）だけに使い、保存済みの既定値へ自動保存しない
+- 一括検索・追加は、一括開始時点の候補検索画面に表示されている探索量をすべての目標武器に使う。
+  一括検索専用の既定値は持たない
+- 既定値の保存は候補検索のalgorithm、Candidate ranking / canonical選択、Route semantics、RNG semantics、
+  CalculationContextを変更しない。Candidate Searchは呼び出し側が渡した探索量だけを使う
+
 ---
 
 ## 15. 条件緩和案の廃止
@@ -488,7 +511,8 @@ BuildCandidateは検索結果、BuildListEntryはユーザーがPlannerへ渡す
 
 1回の検索が返す候補は1件以下なので、検索結果からの追加は個別追加である。これとは別に、作成リストに
 未登録の目標武器を単体検索で1件ずつ順に検索し、見つかった理想品候補を途中採用する状態なし・改善優先
-「生産計画に任せる」で作成リストへ追加する「一括検索・追加」がある。候補なし・失敗は他の目標武器の処理を
+「生産計画に任せる」で作成リストへ追加する「一括検索・追加」がある。作成ルートと探索量の上限は一括開始時点の
+候補検索画面の値をすべての目標武器に使う（14.1）。候補なし・失敗は他の目標武器の処理を
 妨げず、登録済みの項目を置き換えず、キャンセル前に追加した項目は保持する（[UI_FLOW.md](./UI_FLOW.md) 9.1）。
 
 作成リストは、目標武器ごとにユーザーが現在採用した作成ルートを1件だけ持つ（契約本文は
@@ -1019,7 +1043,7 @@ Plan開始前のBuildListEntryは検索開始RNG状態との不一致でstaleに
 - ProductionPlan
 - ExecutionHistory
 - ゲーム内セーブ地点
-- 設定
+- 設定（デバッグモード、候補検索の探索量の既定値など。14.1）
 
 データの関係、ID、トランザクション、不変条件は[DATA_MODEL.md](./DATA_MODEL.md)に従う。
 
@@ -1047,6 +1071,7 @@ Execution Navigatorの結果一致（観測値入力と操作0 Idealの完成確
 - 画面の配色は設定画面でLight / Dark themeから選択できる（既定はLight、OSの配色設定へ自動追従しない）。themeは端末・ブラウザ固有の表示設定でありユーザーデータではないため、Export / Importの対象とせず、Importやデータクリアでも変更しない（[UI_FLOW.md](./UI_FLOW.md) 3.5）
 - 作成プランのbody内にある作成リスト項目・プラン依存目標武器の参照を現在データへの参照として要求するのは、実行中（active）のプランだけとする。未開始（draft）、続行不可（stale）、完了・破棄済みのプランは、作成リストや目標武器を後から整理していてもExport / Importを拒否しない。プランの開始・再計画・復元の可否はそれぞれの実行時の検証が判断する。ゲーム内セーブ地点の復元に必要な参照は緩めない（[DATA_MODEL.md](./DATA_MODEL.md) 15.2）
 - ExportおよびImportで扱う未開始（draft）のプランは最大1件とし、2件以上を含むデータは拒否する。旧形式のExportに蓄積していたdraftは、どれが現在の下書きか判断できないため、Import時にすべて削除する
+- 設定に保存した候補検索の探索量の既定値（14.1）もExport / Importの対象とする。この値を持たない旧形式（`schemaVersion` 11以前）のバックアップは、Import時に推奨の初期値（通常アーティア 350 / 復元ボーナス 500 / スキル 1500）で補完し、デバッグモードなどその他の設定は維持する
 
 ---
 
@@ -1099,6 +1124,8 @@ Production v1 adapterがpersisted exact Gateを要求せずactive representative
 実行ナビのライフサイクル改訂（25章、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16章）は、目標武器のlifecycle、所持武器の実行時lifecycle、優先起点のstaleness semantics、PlanStepと確保（reserve）のsemantics、実行時の期待状態、Undo対象範囲を変更する。後続の実装PRではCalculationContextの `appSchemaVersion` 更新が必要になる可能性が高く、目標武器・所持武器・ゲーム内セーブ地点などの永続形状の変更によってはDexie `DATABASE_SCHEMA_VERSION` と `ExportRoot.schemaVersion` の更新も必要になる。本改訂は仕様PRであり実コードのversionを変更しない。実装PRで現行schemaとImport互換を監査し、必要なversion境界を確定する。既存データを推測migrationして意味を変えてはならない（所持している理想品から目標武器を完了済みと推測する、既存の所持武器を作成中と推測する、など）。最初の実装PR（永続Entity基盤）では目標武器lifecycle、所持武器の作成中状態、ゲーム内セーブ地点の永続形状を追加し、Dexie `DATABASE_SCHEMA_VERSION` を5、`ExportRoot.schemaVersion` を7へ更新した。計算意味はまだ切り替えないため `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は11のままとした。2番目の実装PR（Execution Plan契約）で目標定義hashの正規化、計画入力hash、Plan依存hash、実行時の期待状態、PlanStepのexecution effect、確保（reserve）の扱いを切り替え、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を12、`ExportRoot.schemaVersion` を8へ更新した（Dexieは5のまま）。3番目の実装PR（Execution runtime core）で生産計画のlifecycle metadataとUndo Snapshotの拡張を永続形状へ加え、Dexie `DATABASE_SCHEMA_VERSION` を6、`ExportRoot.schemaVersion` を9へ更新した（計算意味は変えないため `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は12のまま）。後続の実装PRで、既存の所持武器と目標武器の紐付けを作成開始時へ移し（計画内で新規作成する武器は登録時のまま）、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を13へ更新した。version 12以前の作成計画は実行できない（再計算が必要）が、候補検索と作成リストの意味は変えていないため、version 12の候補と作成リスト項目は明示的な互換例外によりそのまま利用できる（version 11以前は非互換のまま）。永続形状は変えないためDexieは6、`ExportRoot.schemaVersion` は9のままである。
 
 通常Plannerの計算方式を上限付きBeam Searchから「ルート確定 + 決定的scheduling」へ切り替えた変更（Issue #103 Phase C、19章 / 20章）では、同じ入力に対して未解決競合の暫定帰結、返す競合、不採用記録、操作順などが変わり、保存済みの作成プランは生成方式を記録しないため、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を14へ更新した。version 13以前の作成プランは下書き・実行中を問わず実行・比較・競合操作ができず（`calculation_context_changed`）、実行中のプランは現在地点からの再計画が必要になる。保存内容は削除・変換せず、そのまま表示できる。候補検索と作成リストの意味は変えていないため、version 12 / 13の候補と作成リスト項目は明示的な互換例外によりそのまま利用できる（version 11以前は非互換のまま）。永続形状、RNG、Masterは変えないため、Dexie `DATABASE_SCHEMA_VERSION`（8）、`ExportRoot.schemaVersion`（11）、`RngState.schemaVersion`（2）、`AppSettings.schemaVersion`（1）、`PRODUCTION_RNG_ENGINE_VERSION`、Master dataVersionは変更しない。
+
+候補検索の探索量の既定値を設定として保存できるようにした変更（Issue #125、14.1）は、AppSettingsの永続形状の変更である。AppSettingsへ `candidateSearchDefaults` を追加して `AppSettings.schemaVersion` を2、Dexie `DATABASE_SCHEMA_VERSION` を9、`ExportRoot.schemaVersion` を12へ更新した。Dexie v8 -> v9 upgradeとExport schema 11 -> 12 migrationは、旧AppSettings（version 1）へ推奨の初期値 350 / 500 / 1500 を補完し、デバッグモード・`resultPageSize`・`defaultSearchLimit`・日時は維持する。旧候補検索画面の固定値（500 / 350 / 1500）はユーザーが保存した値ではないため引き継がず、`defaultSearchLimit`（通常アーティアCounter特定の検索範囲）を探索量の既定値へ流用しない。候補検索・Planner・RNGの計算意味は変わらないため、`CURRENT_CALCULATION_APP_SCHEMA_VERSION`（14）、`PRODUCTION_RNG_ENGINE_VERSION`、`RngState.schemaVersion`（2）、Master dataVersionは変更せず、既存の候補・作成リスト項目・作成プランをstaleにしない。
 
 ---
 

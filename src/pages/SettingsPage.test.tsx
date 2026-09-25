@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AppSettings, ExportRoot } from '../domain/models/publicTypes'
+import type { AppSettings, CandidateSearchDefaults, ExportRoot } from '../domain/models/publicTypes'
 import { createDefaultAppSettings, EXPORT_APP_NAME, EXPORT_SCHEMA_VERSION } from '../domain/models/publicTypes'
 import type { DataTransferBrowserAdapter } from '../components/settings/dataTransferPresentation'
 import { DataTransferError, type ImportPreparationResult } from '../services/dataTransfer/importExportService'
@@ -63,6 +63,11 @@ function dependencies(overrides: Partial<SettingsPageDependencies> = {}) {
     applyImport: vi.fn(async () => undefined),
     clearAllData: vi.fn(async () => settingsWith(false)),
     saveDebugMode: vi.fn(async () => settingsWith(true)),
+    loadCandidateSearchDefaults: vi.fn(async () => ({ ...settingsWith(false).candidateSearchDefaults })),
+    saveCandidateSearchDefaults: vi.fn(async (defaults: CandidateSearchDefaults) => ({
+      ...settingsWith(false),
+      candidateSearchDefaults: { ...defaults },
+    })),
     ...overrides,
   } satisfies SettingsPageDependencies
 }
@@ -965,5 +970,192 @@ describe('SettingsPage theme', () => {
     expect(useAppearanceStore.getState().themeMode).toBe('dark')
     expect(window.localStorage.getItem(THEME_MODE_STORAGE_KEY)).toBe('dark')
     expect(themeRadio('ダーク')).toBeChecked()
+  })
+})
+
+/*
+ * The saved Candidate Search defaults (Issue #125, `docs/UI_FLOW.md` 14): the
+ * three bounds the Search screen starts from. The form is a draft until
+ * 「既定値を保存」, shares the settings-write gate with Debug Mode against the
+ * Data Transfer operations, and restarts from what is persisted after an
+ * Import or a clear.
+ */
+describe('SettingsPage Candidate Search defaults', () => {
+  const USER_CHOICE = { maxNormalAdvance: 1000, maxGogmaAdvance: 200, maxSkillAdvance: 2500 }
+  const RECOMMENDED = { maxNormalAdvance: 350, maxGogmaAdvance: 500, maxSkillAdvance: 1500 }
+  const normalField = () => screen.getByLabelText('通常アーティア最大進行量')
+  const bonusField = () => screen.getByLabelText('復元ボーナス最大進行量')
+  const skillField = () => screen.getByLabelText('スキル最大進行量')
+  const saveButton = () => screen.getByRole('button', { name: /既定値を保存|保存中…/ })
+  const resetButton = () => screen.getByRole('button', { name: '推奨値に戻す' })
+
+  beforeEach(() => useSettingsStore.getState().reset())
+
+  function defaultsDependencies(overrides: Partial<SettingsPageDependencies> = {}) {
+    return dependencies({
+      loadCandidateSearchDefaults: vi.fn(async () => ({ ...USER_CHOICE })),
+      ...overrides,
+    })
+  }
+
+  it('shows the saved values under the user-facing 復元ボーナス wording, with nothing to save yet', async () => {
+    render(<SettingsPage dependencies={defaultsDependencies()} />)
+    expect(screen.getByRole('heading', { name: '候補検索' })).toBeInTheDocument()
+    await waitFor(() => expect(normalField()).toHaveValue(1000))
+    expect(bonusField()).toHaveValue(200)
+    expect(skillField()).toHaveValue(2500)
+    expect(screen.queryByLabelText('巨戟最大進行量')).toBeNull()
+    expect(screen.getByText(/候補検索画面で値を変えても、その変更は今回の検索/)).toBeInTheDocument()
+    expect(screen.getByText(/復元ボーナスの進行は複数の武器で共有され/)).toBeInTheDocument()
+    expect(saveButton()).toBeDisabled()
+  })
+
+  it('saves the edited values once, in any order, and reports the save', async () => {
+    const user = setupUser()
+    const deps = defaultsDependencies()
+    render(<SettingsPage dependencies={deps} />)
+    await waitFor(() => expect(normalField()).toHaveValue(1000))
+    await user.clear(normalField())
+    await user.type(normalField(), '700')
+    expect(screen.getByText('変更はまだ保存されていません。「既定値を保存」で保存します。')).toBeInTheDocument()
+    await user.click(saveButton())
+    expect(deps.saveCandidateSearchDefaults).toHaveBeenCalledTimes(1)
+    // Normal above Bonus is a legal choice.
+    expect(deps.saveCandidateSearchDefaults).toHaveBeenCalledWith({ maxNormalAdvance: 700, maxGogmaAdvance: 200, maxSkillAdvance: 2500 })
+    expect(await screen.findByText('探索量の既定値を保存しました。次に候補検索画面を開いたときから使用されます。')).toBeInTheDocument()
+    expect(normalField()).toHaveValue(700)
+    expect(saveButton()).toBeDisabled()
+    expect(deps.saveDebugMode).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['empty', ''],
+    ['zero', '0'],
+    ['a negative number', '-3'],
+    ['a fraction', '1.5'],
+  ])('refuses %s with an error next to the field and saves nothing', async (_label, typed) => {
+    const user = setupUser()
+    const deps = defaultsDependencies()
+    render(<SettingsPage dependencies={deps} />)
+    await waitFor(() => expect(bonusField()).toHaveValue(200))
+    await user.clear(bonusField())
+    if (typed !== '') await user.type(bonusField(), typed)
+    expect(bonusField()).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByText('1以上の整数を入力してください')).toBeInTheDocument()
+    expect(saveButton()).toBeDisabled()
+    await user.click(saveButton())
+    expect(deps.saveCandidateSearchDefaults).not.toHaveBeenCalled()
+  })
+
+  it('refills the recommended 350 / 500 / 1500 without saving until 「既定値を保存」', async () => {
+    const user = setupUser()
+    const deps = defaultsDependencies()
+    render(<SettingsPage dependencies={deps} />)
+    await waitFor(() => expect(normalField()).toHaveValue(1000))
+    await user.click(resetButton())
+    expect(normalField()).toHaveValue(350)
+    expect(bonusField()).toHaveValue(500)
+    expect(skillField()).toHaveValue(1500)
+    expect(resetButton()).toBeDisabled()
+    expect(deps.saveCandidateSearchDefaults).not.toHaveBeenCalled()
+    await user.click(saveButton())
+    expect(deps.saveCandidateSearchDefaults).toHaveBeenCalledWith(RECOMMENDED)
+  })
+
+  it('keeps the draft and reports a failed save', async () => {
+    const user = setupUser()
+    const deps = defaultsDependencies({
+      saveCandidateSearchDefaults: vi.fn(async () => {
+        throw new Error('write failure')
+      }),
+    })
+    render(<SettingsPage dependencies={deps} />)
+    await waitFor(() => expect(skillField()).toHaveValue(2500))
+    await user.clear(skillField())
+    await user.type(skillField(), '3000')
+    await user.click(saveButton())
+    expect(await screen.findByText('探索量の既定値を保存できませんでした。保存済みの既定値は変更されていません。再度お試しください。')).toBeInTheDocument()
+    expect(skillField()).toHaveValue(3000)
+    expect(saveButton()).toBeEnabled()
+  })
+
+  it('blocks the Data Transfer while a save is pending and the save while a Data Transfer runs', async () => {
+    const user = setupUser()
+    const save = deferred<AppSettings>()
+    const exported = deferred<string>()
+    const deps = defaultsDependencies({
+      saveCandidateSearchDefaults: vi.fn(() => save.promise),
+      serializeExport: vi.fn(() => exported.promise),
+    })
+    render(<SettingsPage dependencies={deps} browser={browserAdapter()} />)
+    await waitFor(() => expect(normalField()).toHaveValue(1000))
+    await user.clear(normalField())
+    await user.type(normalField(), '800')
+    await user.click(saveButton())
+    expect(saveButton()).toHaveTextContent('保存中…')
+    expect(saveButton()).toBeDisabled()
+    expect(normalField()).toBeDisabled()
+    expect(exportButton()).toBeDisabled()
+    expect(importButton()).toBeDisabled()
+    expect(clearButton()).toBeDisabled()
+    await user.click(exportButton())
+    expect(deps.serializeExport).not.toHaveBeenCalled()
+    save.resolve({ ...settingsWith(false), candidateSearchDefaults: { ...USER_CHOICE, maxNormalAdvance: 800 } })
+    await waitFor(() => expect(exportButton()).toBeEnabled())
+
+    await user.clear(normalField())
+    await user.type(normalField(), '900')
+    await user.click(exportButton())
+    expect(normalField()).toBeDisabled()
+    expect(saveButton()).toBeDisabled()
+    expect(deps.saveCandidateSearchDefaults).toHaveBeenCalledTimes(1)
+    exported.resolve(exportedJson)
+    await exportDialog()
+  })
+
+  it('restarts the form from the imported settings after an Import', async () => {
+    const user = setupUser()
+    const imported = { maxNormalAdvance: 900, maxGogmaAdvance: 800, maxSkillAdvance: 700 }
+    const root = { ...exportRootWith(false), settings: { ...settingsWith(false), candidateSearchDefaults: imported } }
+    render(<SettingsPage dependencies={defaultsDependencies()} />)
+    await waitFor(() => expect(normalField()).toHaveValue(1000))
+    await user.clear(normalField())
+    await user.type(normalField(), '5')
+    await selectBackup(user, JSON.stringify(root))
+    await user.click(await screen.findByRole('button', { name: '現在のデータを置き換えてインポート' }))
+    await screen.findByText('データをインポートしました。')
+    await noDialog()
+    expect(normalField()).toHaveValue(900)
+    expect(bonusField()).toHaveValue(800)
+    expect(skillField()).toHaveValue(700)
+  })
+
+  it('returns the form to the recommended 350 / 500 / 1500 after clearing all data', async () => {
+    const user = setupUser()
+    render(<SettingsPage dependencies={defaultsDependencies()} />)
+    await waitFor(() => expect(normalField()).toHaveValue(1000))
+    await user.click(clearButton())
+    await user.click(await screen.findByRole('button', { name: 'すべてのデータを削除' }))
+    await screen.findByText('すべてのデータを削除し、初期状態に戻しました。')
+    await noDialog()
+    expect(normalField()).toHaveValue(350)
+    expect(bonusField()).toHaveValue(500)
+    expect(skillField()).toHaveValue(1500)
+  })
+
+  it('reports a failed read instead of showing values it does not know', async () => {
+    const deps = defaultsDependencies({
+      loadCandidateSearchDefaults: vi.fn(async () => {
+        throw new Error('read failure')
+      }),
+    })
+    render(<SettingsPage dependencies={deps} />)
+    expect(await screen.findByText('探索量の既定値を読み込めませんでした。再読み込みしてからもう一度お試しください。')).toBeInTheDocument()
+    expect(screen.queryByLabelText('通常アーティア最大進行量')).toBeNull()
+  })
+
+  it('shows the AppSettings record schema version 2', () => {
+    render(<SettingsPage dependencies={defaultsDependencies()} />)
+    expect(screen.getByText('アプリスキーマバージョン').nextElementSibling).toHaveTextContent('2')
   })
 })

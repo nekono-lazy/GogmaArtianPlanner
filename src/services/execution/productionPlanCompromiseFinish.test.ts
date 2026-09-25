@@ -504,8 +504,8 @@ describe('finish as a compromise', () => {
 
   it('keeps every schema version authority unchanged', () => {
     expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(14)
-    expect(DATABASE_SCHEMA_VERSION).toBe(8)
-    expect(EXPORT_SCHEMA_VERSION).toBe(11)
+    expect(DATABASE_SCHEMA_VERSION).toBe(9)
+    expect(EXPORT_SCHEMA_VERSION).toBe(12)
   })
 
   it('reports an unknown Plan and an unknown history ID as runtime refusals', () =>

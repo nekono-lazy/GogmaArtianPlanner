@@ -12,6 +12,7 @@ import { createValidMasterDataFixture } from '../test/fixtures/masterData'
 import { createValidBuildCandidate, createValidTargetWeapon } from '../test/fixtures/domainData'
 import { createCandidateSearchInput as createFixtureInput } from '../test/fixtures/candidateSearch'
 import type { SearchWorkerClient } from '../services/search/searchWorkerClient'
+import { recommendedCandidateSearchDefaults } from '../domain/models/publicTypes'
 import { SearchPage, type SearchPageDependencies } from './SearchPage'
 
 /**
@@ -51,6 +52,7 @@ function dependencies(
     getOwnedWeapons: async () => [],
     getBuildListEntries: async () => [],
     getReidentificationReminder: vi.fn(reminder),
+    getCandidateSearchDefaults: async () => ({ ...recommendedCandidateSearchDefaults }),
     createWorkerClient: () => client,
     createInput: async (options) => ({
       ...createFixtureInput(),

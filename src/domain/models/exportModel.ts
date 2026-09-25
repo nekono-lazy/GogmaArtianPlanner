@@ -22,8 +22,10 @@ import {
   hasIdentificationProvenanceField,
   hasProductionPlanLifecycleField,
   isDraftProductionPlanRecord,
+  isLegacyAppSettingsRecord,
   isTerminalProductionPlanRecord,
   RNG_STATE_PROVENANCE_SCHEMA_VERSION,
+  upgradeAppSettingsToV2,
 } from './persistenceCompatibility'
 import {
   EXECUTION_PLAN_CONTRACT_APP_SCHEMA_VERSION,
@@ -57,8 +59,12 @@ import {
  * (`docs/DATA_MODEL.md` 11.1 / 15.3) under which `root.productionPlans` holds at
  * most one `draft` Plan, the current one; a schema 10 root was written under the
  * old contract that accumulated Drafts, so its migration deletes them all.
+ * Version 12 carries the AppSettings record schema version 2, whose
+ * `candidateSearchDefaults` holds the user's usual Candidate Search bounds
+ * (`docs/DATA_MODEL.md` 13 / 15.3); a schema 11 root's AppSettings v1 gets the
+ * recommended `350 / 500 / 1500` on migration.
  */
-export const EXPORT_SCHEMA_VERSION = 11
+export const EXPORT_SCHEMA_VERSION = 12
 
 export const EXPORT_APP_NAME = 'mh-wilds-gogma-artian-planner'
 
@@ -89,11 +95,24 @@ type SchemaV6TargetWeapon = Omit<
   'lifecycleStatus' | 'completedAt' | 'completedByProductionPlanId'
 >
 
+/** The AppSettings v1 record shape, before `candidateSearchDefaults` existed. */
+export type AppSettingsV1 = Omit<AppSettings, 'schemaVersion' | 'candidateSearchDefaults'> & {
+  schemaVersion: 1
+}
+
+/**
+ * The shape every Export schema 6..11 root shares: the current entity types
+ * (each schema narrows them below where it differs) with an AppSettings v1.
+ */
+interface LegacySettingsExportRoot extends Omit<ExportRoot, 'schemaVersion' | 'settings'> {
+  settings: AppSettingsV1
+}
+
 /** The schema 6 Export shape, before the Execution lifecycle state existed. */
 export interface ExportRootV6
   extends Omit<
-    ExportRoot,
-    'schemaVersion' | 'ownedWeapons' | 'targetWeapons' | 'executionSavePoints'
+    LegacySettingsExportRoot,
+    'ownedWeapons' | 'targetWeapons' | 'executionSavePoints'
   > {
   schemaVersion: 6
   ownedWeapons: SchemaV6OwnedWeapon[]
@@ -105,7 +124,7 @@ export interface ExportRootV6
  * ProductionPlan it holds predates calculation schema 12, so none carries the
  * schema 8 Plan fields.
  */
-export interface ExportRootV7 extends Omit<ExportRoot, 'schemaVersion'> {
+export interface ExportRootV7 extends LegacySettingsExportRoot {
   schemaVersion: 7
 }
 
@@ -114,7 +133,7 @@ export interface ExportRootV7 extends Omit<ExportRoot, 'schemaVersion'> {
  * and its ExecutionHistory Undo snapshots no Target or save point fields; the
  * entity types are the current ones only for reading convenience.
  */
-export interface ExportRootV8 extends Omit<ExportRoot, 'schemaVersion'> {
+export interface ExportRootV8 extends LegacySettingsExportRoot {
   schemaVersion: 8
 }
 
@@ -124,7 +143,7 @@ export interface ExportRootV8 extends Omit<ExportRoot, 'schemaVersion'> {
  * `lastIdentifiedAt`; the entity types are the current ones only for reading
  * convenience.
  */
-export interface ExportRootV9 extends Omit<ExportRoot, 'schemaVersion'> {
+export interface ExportRootV9 extends LegacySettingsExportRoot {
   schemaVersion: 9
 }
 
@@ -133,8 +152,17 @@ export interface ExportRootV9 extends Omit<ExportRoot, 'schemaVersion'> {
  * written under the old Draft contract, so `productionPlans` may hold any
  * number of `draft` Plans.
  */
-export interface ExportRootV10 extends Omit<ExportRoot, 'schemaVersion'> {
+export interface ExportRootV10 extends LegacySettingsExportRoot {
   schemaVersion: 10
+}
+
+/**
+ * The schema 11 Export shape. Its entity fields are the current ones except
+ * `settings`, which is an AppSettings v1 record without
+ * `candidateSearchDefaults`.
+ */
+export interface ExportRootV11 extends LegacySettingsExportRoot {
+  schemaVersion: 11
 }
 
 export type ExportRootMigrationResult =
@@ -592,7 +620,7 @@ export function migrateExportRootV9ToV10(
  */
 export function migrateExportRootV10ToV11(
   root: ExportRootV10,
-): ExportRootMigrationResult {
+): { ok: true; root: ExportRootV11 } | { ok: false; issues: DomainValidationIssue[] } {
   if (!isRecord(root)) {
     return { ok: false, issues: [structureIssue('', 'Export root must be an object.')] }
   }
@@ -607,7 +635,61 @@ export function migrateExportRootV10ToV11(
   const productionPlans = migrated.productionPlans.filter(
     (plan) => !isDraftProductionPlanRecord(plan as unknown as Record<string, unknown>),
   )
-  return { ok: true, root: { ...migrated, productionPlans, schemaVersion: EXPORT_SCHEMA_VERSION } }
+  return {
+    ok: true,
+    root: {
+      ...migrated,
+      productionPlans,
+      schemaVersion: 11,
+    },
+  }
+}
+
+/**
+ * Pure migration from Export schema 11 to 12 (`docs/DATA_MODEL.md` 15.3): the
+ * AppSettings v1 record becomes v2 through the same `upgradeAppSettingsToV2()`
+ * the Dexie v8 -> v9 upgrade uses - `candidateSearchDefaults` is the
+ * recommended `350 / 500 / 1500` and the record version becomes 2 - and nothing
+ * else changes. A schema 11 root never held user-chosen Candidate Search bounds,
+ * so the recommendation is the only value it can state; `debugMode`,
+ * `resultPageSize`, `defaultSearchLimit` and the timestamps keep their values,
+ * and `defaultSearchLimit` is never copied into the new bounds. A schema 11
+ * `settings` that is not an AppSettings v1 record - not an object, already
+ * carrying `candidateSearchDefaults`, or at another record version - is not a
+ * schema 11 body and fails closed instead of being guessed.
+ */
+export function migrateExportRootV11ToV12(
+  root: ExportRootV11,
+): ExportRootMigrationResult {
+  if (!isRecord(root)) {
+    return { ok: false, issues: [structureIssue('', 'Export root must be an object.')] }
+  }
+  const settings = (root as unknown as Record<string, unknown>).settings
+  if (!isRecord(settings)) {
+    return { ok: false, issues: [structureIssue('settings', 'settings must be an object.')] }
+  }
+  if (!isLegacyAppSettingsRecord(settings)) {
+    return {
+      ok: false,
+      issues: [structureIssue('settings', 'A schema 11 AppSettings must be an AppSettings v1 record without candidateSearchDefaults.')],
+    }
+  }
+  let migrated: ExportRootV11
+  try {
+    migrated = structuredClone(root)
+  } catch {
+    return { ok: false, issues: [structureIssue('', 'Export root cannot be copied.')] }
+  }
+  const migratedSettings = migrated.settings as unknown as Record<string, unknown>
+  upgradeAppSettingsToV2(migratedSettings)
+  return {
+    ok: true,
+    root: {
+      ...migrated,
+      settings: migratedSettings as unknown as AppSettings,
+      schemaVersion: EXPORT_SCHEMA_VERSION,
+    },
+  }
 }
 
 function prefixed(
@@ -751,11 +833,13 @@ export function validateCurrentExportRoot(root: ExportRoot): DomainValidationRes
 /**
  * Brings a parsed Export object to the current schema and validates its
  * Execution lifecycle state and root-level RNG persistent state, failing closed
- * on anything else. Schema 11 is read as is - its Drafts are current data and
- * are never deleted; schema 10, 9, 8, 7 and 6 go through the pure migrations in
- * order (`migrateExportRootV6ToV7()`, `migrateExportRootV7ToV8()`,
+ * on anything else. Schema 12 is read as is; schema 11 goes through
+ * `migrateExportRootV11ToV12()` (its one Draft is current data and is never
+ * deleted); schema 10, 9, 8, 7 and 6 go through the pure migrations in order
+ * (`migrateExportRootV6ToV7()`, `migrateExportRootV7ToV8()`,
  * `migrateExportRootV8ToV9()`, `migrateExportRootV9ToV10()`,
- * `migrateExportRootV10ToV11()`), and every other version is refused. Nothing
+ * `migrateExportRootV10ToV11()`, `migrateExportRootV11ToV12()`), and every
+ * other version is refused. Nothing
  * is applied here: the caller replaces its data only after a successful result.
  */
 export function prepareExportRootForImport(
@@ -776,8 +860,12 @@ export function prepareExportRootForImport(
   }
   // Each step of the chain runs the pure migrations in order and stops at the
   // first refusal.
-  const fromV10 = (v10: ExportRootV10): ExportRootMigrationResult =>
-    migrateExportRootV10ToV11(v10)
+  const fromV11 = (v11: ExportRootV11): ExportRootMigrationResult =>
+    migrateExportRootV11ToV12(v11)
+  const fromV10 = (v10: ExportRootV10): ExportRootMigrationResult => {
+    const toV11 = migrateExportRootV10ToV11(v10)
+    return toV11.ok ? fromV11(toV11.root) : toV11
+  }
   const fromV9 = (v9: ExportRootV9): ExportRootMigrationResult => {
     const toV10 = migrateExportRootV9ToV10(v9)
     return toV10.ok ? fromV10(toV10.root) : toV10
@@ -805,6 +893,8 @@ export function prepareExportRootForImport(
     } catch {
       return { ok: false, issues: [structureIssue('', 'Export root cannot be copied.')] }
     }
+  } else if (candidate.schemaVersion === 11) {
+    migrated = fromV11(input as ExportRootV11)
   } else if (candidate.schemaVersion === 10) {
     migrated = fromV10(input as ExportRootV10)
   } else if (candidate.schemaVersion === 9) {

@@ -22,7 +22,7 @@ import {
   createValidTargetWeapon,
   productionPlanId,
 } from '../test/fixtures/domainData'
-import { dataTransferSettings } from '../test/fixtures/dataTransfer'
+import { dataTransferSettings, legacyAppSettingsV1 } from '../test/fixtures/dataTransfer'
 
 const V1_STORES = {
   rngState: 'id',
@@ -67,9 +67,9 @@ function plan(id: string, status: ProductionPlan['status']): ProductionPlan {
 const MISSING_ENTRY_ID = buildListEntryId('build-list.fnv1a32-7ab0e079')
 
 describe('Draft ProductionPlan persistence migration (Dexie v7 -> v8)', () => {
-  it('uses DATABASE_SCHEMA_VERSION 8 and Export schema 11 without moving any calculation authority', () => {
-    expect(DATABASE_SCHEMA_VERSION).toBe(8)
-    expect(EXPORT_SCHEMA_VERSION).toBe(11)
+  it('keeps the Draft lifecycle step at Dexie 8 below the current DATABASE_SCHEMA_VERSION 9 and Export schema 12 without moving any calculation authority', () => {
+    expect(DATABASE_SCHEMA_VERSION).toBe(9)
+    expect(EXPORT_SCHEMA_VERSION).toBe(12)
     expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(14)
     expect(RNG_STATE_SCHEMA_VERSION).toBe(2)
     expect(PRODUCTION_RNG_ENGINE_VERSION).toBe('production-rng:c5-e7')
@@ -115,7 +115,9 @@ describe('Draft ProductionPlan persistence migration (Dexie v7 -> v8)', () => {
       productionPlan: { ...active },
       recordedAt: DOMAIN_FIXTURE_TIME,
     }
-    const settings = dataTransferSettings()
+    // A schema 7 database holds an AppSettings v1 record; the later v9 step
+    // upgrades it, and the v8 step itself never touches it.
+    const settings = legacyAppSettingsV1(dataTransferSettings())
 
     await old.table('productionPlans').bulkPut([draftA, draftB, draftC, active, completed, abandoned])
     await old.table('buildListEntries').put(entry)
@@ -132,7 +134,7 @@ describe('Draft ProductionPlan persistence migration (Dexie v7 -> v8)', () => {
     const database = new AppDatabase(name)
     try {
       await database.open()
-      expect(database.verno).toBe(8)
+      expect(database.verno).toBe(9)
 
       // A: every Draft is gone, and no Draft was chosen to survive.
       expect(await database.productionPlans.where('status').equals('draft').count()).toBe(0)
@@ -157,7 +159,10 @@ describe('Draft ProductionPlan persistence migration (Dexie v7 -> v8)', () => {
       expect(await database.normalArtianCounters.get(counter.id)).toEqual(counter)
       expect(await database.executionHistory.get(history.id)).toEqual(history)
       expect(await database.executionSavePoints.get(savePoint.id)).toEqual(savePoint)
-      expect(await database.settings.get('settings')).toEqual(settings)
+      expect(await database.settings.get('settings')).toEqual({
+        ...dataTransferSettings(),
+        candidateSearchDefaults: { maxNormalAdvance: 350, maxGogmaAdvance: 500, maxSkillAdvance: 1500 },
+      })
     } finally {
       await database.delete()
     }

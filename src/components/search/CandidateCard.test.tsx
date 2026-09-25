@@ -589,7 +589,7 @@ describe('CandidateCard summary', () => {
     const summary = within(screen.getByLabelText('操作量の概要'))
     expect(summary.getByText('操作回数').nextSibling).toHaveTextContent('3回')
     expect(summary.getByText('通常進行').nextSibling).toHaveTextContent('1')
-    expect(summary.getByText('巨戟進行').nextSibling).toHaveTextContent('0')
+    expect(summary.getByText('復元ボーナス進行').nextSibling).toHaveTextContent('0')
     expect(summary.getByText('スキル進行').nextSibling).toHaveTextContent('2')
   })
 

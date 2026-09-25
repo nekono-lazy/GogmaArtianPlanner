@@ -11,7 +11,7 @@ import {
   createValidProductionPlan,
   productionPlanId,
 } from '../../test/fixtures/domainData'
-import { dataTransferRoot } from '../../test/fixtures/dataTransfer'
+import { dataTransferRoot, legacyAppSettingsV1 } from '../../test/fixtures/dataTransfer'
 
 /** The reported real case: a Draft naming a Build List Entry that no longer exists. */
 const MISSING_ENTRY_ID = buildListEntryId('build-list.fnv1a32-7ab0e079')
@@ -57,6 +57,7 @@ function schema10Root(): ExportRootV10 {
   return {
     ...current,
     schemaVersion: 10,
+    settings: legacyAppSettingsV1(current.settings),
     productionPlans: [
       divergentDraft('plan.draft.a', '2026-09-01T00:00:00.000Z', '2026-09-03T00:00:00.000Z'),
       active,
@@ -71,8 +72,8 @@ function schema10Root(): ExportRootV10 {
 const ids = (plans: readonly ProductionPlan[]) => plans.map(({ id }) => id)
 
 describe('Export schema 10 -> 11 (Draft lifecycle)', () => {
-  it('moves the Export schema to 11 as the Draft lifecycle boundary', () => {
-    expect(EXPORT_SCHEMA_VERSION).toBe(11)
+  it('keeps Export schema 11 as the Draft lifecycle boundary below the current schema 12', () => {
+    expect(EXPORT_SCHEMA_VERSION).toBe(12)
   })
 
   it('A: deletes every Draft and chooses none of them to survive', () => {
@@ -114,27 +115,28 @@ describe('Export schema 10 -> 11 (Draft lifecycle)', () => {
     expect(migrated.root.exportedAt).toBe(legacy.exportedAt)
   })
 
-  it('D: a schema 11 root keeps its one current Draft through the Import preparation', () => {
+  it('D: a current-schema root keeps its one current Draft through the Import preparation', () => {
     const current = dataTransferRoot()
     const draft = divergentDraft('plan.draft.current', DOMAIN_FIXTURE_TIME, DOMAIN_FIXTURE_TIME)
     const root: ExportRoot = { ...current, productionPlans: [draft, ...current.productionPlans] }
     const prepared = prepareExportRootForImport(JSON.parse(JSON.stringify(root)))
     expect(prepared.ok, JSON.stringify(prepared)).toBe(true)
     if (!prepared.ok) return
-    expect(prepared.root.schemaVersion).toBe(11)
+    expect(prepared.root.schemaVersion).toBe(12)
     expect(prepared.root.productionPlans).toEqual(root.productionPlans)
   })
 
-  it('E: the Import preparation runs the schema 10 root through the migration and reaches 11 without its Drafts', () => {
+  it('E: the Import preparation runs the schema 10 root through the migrations and reaches 12 without its Drafts', () => {
     const prepared = prepareExportRootForImport(JSON.parse(JSON.stringify(schema10Root())))
     expect(prepared.ok, JSON.stringify(prepared)).toBe(true)
     if (!prepared.ok) return
-    expect(prepared.root.schemaVersion).toBe(11)
+    expect(prepared.root.schemaVersion).toBe(12)
     expect(ids(prepared.root.productionPlans)).toEqual(['plan.fixture.a', 'plan.done.completed', 'plan.fixture.abandoned'])
   })
 
   it('leaves a schema 10 root without a Draft unchanged apart from the version', () => {
-    const legacy: ExportRootV10 = { ...dataTransferRoot(), schemaVersion: 10 }
+    const current = dataTransferRoot()
+    const legacy: ExportRootV10 = { ...current, schemaVersion: 10, settings: legacyAppSettingsV1(current.settings) }
     const migrated = migrateExportRootV10ToV11(legacy)
     expect(migrated).toEqual({ ok: true, root: { ...legacy, schemaVersion: 11 } })
   })

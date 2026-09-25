@@ -128,8 +128,8 @@ describe('calculation schema version boundaries', () => {
     // Production Planner to the deterministic scheduler: a calculation change
     // only (14), with no persisted shape change.
     expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(14)
-    expect(EXPORT_SCHEMA_VERSION).toBe(11)
-    expect(DATABASE_SCHEMA_VERSION).toBe(8)
+    expect(EXPORT_SCHEMA_VERSION).toBe(12)
+    expect(DATABASE_SCHEMA_VERSION).toBe(9)
   })
 
   it.each([11, 12, 13])('fails a version %i Plan closed instead of reusing it as a current Plan', (version) => {
@@ -654,7 +654,7 @@ describe('Export schema 7 -> 8', () => {
     const imported = prepareExportRootForImport(JSON.parse(JSON.stringify(schema7Root(legacy))))
     expect(imported.ok).toBe(true)
     if (!imported.ok) return
-    expect(imported.root.schemaVersion).toBe(11)
+    expect(imported.root.schemaVersion).toBe(12)
     expect(imported.root.productionPlans).toEqual([])
   })
 
