@@ -336,10 +336,8 @@ describe('ProductionPlanPage replan Preview', () => {
   it('shows an indeterminate running state and cancels through the Worker without reporting a failure', async () => {
     const plan = runningPlan()
     const pending = deferred<PlannerOrchestrationResult>()
-    const client = workerClient((_, __, ___, callbacks) => {
-      callbacks?.onProgress?.({ expandedStates: 12, maxExpandedStates: 100 })
-      return pending.promise
-    })
+    // The Production Worker reports no progress (Issue #103 Phase D-2a).
+    const client = workerClient(() => pending.promise)
     vi.mocked(client.cancelPlan).mockImplementation(() => pending.reject(new PlannerCancelledError()))
     const deps = dependencies(plan, client)
     const user = userEvent.setup()

@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { defaultPlannerOptions, type PlannerSearchTermination } from '../../domain/planner'
+import { defaultPlannerOptions, type PlannerRunTermination } from '../../domain/planner'
 import {
   createPlannerCompletedTargetsText,
   createPlannerReachedLimitMessages,
   plannerIncompleteSearchTitle,
+  plannerSearchLimitLabels,
 } from './plannerSearchLimitPresentation'
 import {
   plannerOptionInvalidMessage,
@@ -13,7 +14,7 @@ import {
   productionPlannerRunningTitles,
 } from './productionPlannerSettingsPresentation'
 
-function incomplete(reachedLimits: PlannerSearchTermination['reachedLimits']): PlannerSearchTermination {
+function incomplete(reachedLimits: PlannerRunTermination['reachedLimits']): PlannerRunTermination {
   return {
     status: 'incomplete',
     reachedLimits,
@@ -60,11 +61,11 @@ describe('incomplete Planner run presentation', () => {
     expect(createPlannerCompletedTargetsText(incomplete(['max_plan_steps']))).toBe('完成した目標武器: 1 / 2')
   })
 
-  it('keeps a Beam-oracle max_expanded_states line that points to no detail setting', () => {
-    const [line] = createPlannerReachedLimitMessages(incomplete(['max_expanded_states']))
-    expect(line).toBe(
-      '最大探索状態数 10,000 に到達しました。すべての目標武器を含む完成計画を作成できませんでした。',
-    )
-    expect(line).not.toMatch(/詳細設定/)
+  it('knows the Production max_plan_steps bound only (Phase D-2a)', () => {
+    expect(Object.keys(plannerSearchLimitLabels)).toEqual(['max_plan_steps'])
+    expect(Object.values(plannerSearchLimitLabels).join('')).not.toMatch(RETIRED_CONCEPTS)
+    // @ts-expect-error a Production termination cannot name the Beam Search oracle bound.
+    const oracleOnly = incomplete(['max_expanded_states'])
+    expect(oracleOnly.status).toBe('incomplete')
   })
 })

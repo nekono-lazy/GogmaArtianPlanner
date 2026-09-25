@@ -32,10 +32,10 @@ describe('B9 Browser harness contract', () => {
     const order: string[] = []
     const client = fakeClient()
     let settle!: (value: PlannerWhatIfCalculationResult) => void
-    client.createWhatIfComparison = vi.fn<PlannerWorkerClient['createWhatIfComparison']>((_id, _request, callbacks) => {
+    client.createWhatIfComparison = vi.fn<PlannerWorkerClient['createWhatIfComparison']>((...args) => {
       order.push('request')
-      callbacks?.onProgress?.({ expandedStates: 1, maxExpandedStates: 100 })
-      callbacks?.onProgress?.({ expandedStates: 1, maxExpandedStates: 100 })
+      // No progress callback crosses the Production Client (Issue #103 Phase D-2a).
+      expect(args).toHaveLength(2)
       return new Promise((resolve) => { settle = resolve })
     })
     client.dispose = vi.fn(() => { order.push('dispose') })
@@ -64,7 +64,7 @@ describe('B9 Browser harness contract', () => {
     expect(order.indexOf('normalize')).toBeGreaterThan(order.indexOf('dispose'))
     expect(now).toHaveBeenCalledTimes(2)
     expect(result.roundTripMs).toBe(7) // Artificial clock assertion only.
-    expect(result.progressEvents).toBe(2)
+    expect(result).not.toHaveProperty('progressEvents')
     expect(result).not.toHaveProperty('progressTrace')
     expect(client.createPlan).not.toHaveBeenCalled()
     expect(client.createConstrainedPlan).not.toHaveBeenCalled()

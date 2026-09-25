@@ -2,6 +2,7 @@ import type {
   BuildListEntry,
   BuildListEntryId,
   DomainValidationIssue,
+  DomainValidationResult,
   TargetWeapon,
   TargetWeaponId,
 } from '../models/publicTypes'
@@ -59,14 +60,14 @@ export interface PlannerInitialContext {
   warnings: PlannerWarning[]
   /** Caller-owned; the createPlannerRouteUnitPlans rejections, unchanged. */
   routePlanRejections: PlannerSearchRejection[]
-  /** Caller-owned Beam Search start state, already pruned to searchable Entries. */
+  /** Caller-owned full Planner run start state, already pruned to searchable Entries. */
   initialState: PlannerSearchState
   allSearchEntries: readonly BuildListEntry[]
   entriesById: ReadonlyMap<BuildListEntryId, BuildListEntry>
   allUnitPlans: ReadonlyMap<BuildListEntryId, readonly PlannerRouteUnit[]>
   /**
    * The same units split into their execution lanes, with each Entry's
-   * checkpoint pin (`docs/PLANNER_SPEC.md` 7.0.4 / 7.5.2). Beam Search
+   * checkpoint pin (`docs/PLANNER_SPEC.md` 7.0.4 / 7.5.2). Action
    * expansion, fast-forward and remaining-unit conflict detection all read
    * this one derivation.
    */
@@ -119,13 +120,18 @@ export type PlannerInitialContextResult =
  * It is a pure Domain calculation: no persistence, Worker, React state, Clock,
  * or ID factory access. Only PlannerDependencies.rngEngine is used, because the
  * existing validation and Route unit plan creation require it.
+ *
+ * `optionsValidation` is the Planner option validation; it defaults to the
+ * Production `validatePlannerOptions()`, and only the Beam Search oracle
+ * passes its own (`validatePlannerBeamSearchOptions()`).
  */
 export function preparePlannerInitialContext(
   input: PlannerInput,
   dependencies: PlannerDependencies,
   buildListContext: PlannerBuildListContext = PERSISTED_PLANNER_BUILD_LIST_CONTEXT,
+  optionsValidation?: DomainValidationResult,
 ): PlannerInitialContextResult {
-  const validation = validatePlannerInput(input, dependencies, buildListContext)
+  const validation = validatePlannerInput(input, dependencies, buildListContext, optionsValidation)
   const warnings = [...validation.warnings]
   if (!validation.isValid) {
     return {
@@ -216,7 +222,7 @@ export function preparePlannerInitialContext(
   })
   // Normally a no-op, because a Candidate Route starts at the current Counter.
   // A Route whose skippable prefix already sits behind the current Counter
-  // starts at the position the Beam Search would reach, so the initial conflict
+  // starts at the position a full Planner run would reach, so the initial conflict
   // detection never reports an already passed prefix.
   fastForwardPlannerRouteProgress(initialState, allLanePlans)
   const initialRelevantUnitPlans = new Map(

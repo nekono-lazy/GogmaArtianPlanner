@@ -215,8 +215,6 @@ export function fixture(
     },
     options: {
       maxPlanSteps: 300,
-      beamWidth: 50,
-      maxExpandedStates: 10_000,
     },
     master: {
       weaponBonusDefinitions: [],

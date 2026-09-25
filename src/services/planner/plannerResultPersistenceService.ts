@@ -47,7 +47,7 @@ import {
   prepareFinalReplacementBuildList,
   type PlannerOrchestrationResult,
   type PlannerResultPersistenceIssue,
-  type PlannerSearchTermination,
+  type PlannerRunTermination,
 } from '../../domain/planner'
 import { PlanBreakingChangeGuard } from '../execution/planBreakingChangeGuard'
 
@@ -92,7 +92,7 @@ import { PlanBreakingChangeGuard } from '../execution/planBreakingChangeGuard'
  * whole collection in the same transaction before any Draft is deleted
  * (`production_plan_id_conflict`).
  *
- * It re-runs nothing. Beam Search, Trace Replay, constrained enumeration and
+ * It re-runs nothing. The full Planner run, Trace Replay, constrained enumeration and
  * Candidate trials stay the Worker's authority, so no `RngEngine` is created on
  * the main thread. Save time only compares the finished Plan against current
  * persisted state.
@@ -379,7 +379,7 @@ export class PlannerResultPersistenceService {
   private assertPersistableResultShape(
     plan: ProductionPlan,
     generatedEntries: readonly BuildListEntry[],
-    termination: PlannerSearchTermination,
+    termination: PlannerRunTermination,
     replacements: readonly BuildListEntryReplacement[] | undefined,
   ): asserts replacements is readonly BuildListEntryReplacement[] {
     // PLANNER_SPEC 7.2.1 / 9.2.15 / 9.2.18, shared with the replan adoption

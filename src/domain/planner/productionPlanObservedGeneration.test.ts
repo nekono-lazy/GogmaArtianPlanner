@@ -11,7 +11,7 @@ import {
 import { createValidBuildListEntry } from '../../test/fixtures/domainData'
 import { runtimeUnsupportedFixture } from '../../test/fixtures/plannerRuntimeUnsupported'
 import {
-  createPlannerFullBeamBudget,
+  createPlannerFullRunBudget,
   PlannerOrchestrationLimitError,
 } from './constrained/plannerRerunBudget'
 import type { PlannerOrchestrationBounds } from './constrained/plannerOrchestrationBounds'
@@ -190,7 +190,7 @@ describe('Observed Production plan generation boundary', () => {
 describe('maxPlannerReruns full Planner run budget', () => {
   it('allows the initial ordinary full Planner run under a limit of 1', async () => {
     const { input, dependencies } = singleBeamFixture()
-    const budget = createPlannerFullBeamBudget(bounds(1))
+    const budget = createPlannerFullRunBudget(bounds(1))
 
     const result = await createProductionPlanWithObserver(
       input,
@@ -206,7 +206,7 @@ describe('maxPlannerReruns full Planner run budget', () => {
 
   it('rejects the retry full Planner run with a typed signal when the limit is 1', async () => {
     const { input, dependencies } = runtimeUnsupportedFixture()
-    const budget = createPlannerFullBeamBudget(bounds(1))
+    const budget = createPlannerFullRunBudget(bounds(1))
 
     const rejection = await createProductionPlanWithObserver(
       input,
@@ -230,7 +230,7 @@ describe('maxPlannerReruns full Planner run budget', () => {
 
   it('allows the same two-run fixture when the limit is 2', async () => {
     const { input, dependencies } = runtimeUnsupportedFixture()
-    const budget = createPlannerFullBeamBudget(bounds(2))
+    const budget = createPlannerFullRunBudget(bounds(2))
 
     const result = await createProductionPlanWithObserver(
       input,
@@ -244,7 +244,7 @@ describe('maxPlannerReruns full Planner run budget', () => {
   })
 
   it('counts the initial ordinary full Planner run, so a later run is rejected in isolation', () => {
-    const budget = createPlannerFullBeamBudget(bounds(2))
+    const budget = createPlannerFullRunBudget(bounds(2))
 
     expect(budget.used).toBe(0)
     budget.beforePlannerRun()
@@ -256,8 +256,8 @@ describe('maxPlannerReruns full Planner run budget', () => {
   })
 
   it('fails closed on invalid bounds instead of assuming a Production default', () => {
-    expect(() => createPlannerFullBeamBudget(bounds(0))).toThrow()
-    expect(() => createPlannerFullBeamBudget(bounds(1.5))).toThrow()
-    expect(() => createPlannerFullBeamBudget(bounds(Number.NaN))).toThrow()
+    expect(() => createPlannerFullRunBudget(bounds(0))).toThrow()
+    expect(() => createPlannerFullRunBudget(bounds(1.5))).toThrow()
+    expect(() => createPlannerFullRunBudget(bounds(Number.NaN))).toThrow()
   })
 })

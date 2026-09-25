@@ -15,7 +15,7 @@ import type {
   PlannerSearchRejection,
   PlannerSearchRejectionReason,
   PlannerSearchState,
-  PlannerSearchTerminationStatus,
+  PlannerRunTerminationStatus,
 } from './plannerTypes'
 
 /**
@@ -219,7 +219,7 @@ export interface PlannerSearchRunMetrics {
   maxExpandedStates: number
   maxPlanSteps: number
   expandedStates: number
-  terminationStatus: PlannerSearchTerminationStatus
+  terminationStatus: PlannerRunTerminationStatus
   completedTargetCount: number
   totals: {
     attemptedActions: number
@@ -733,7 +733,7 @@ export class PlannerSearchMetricsCollector {
   finish(input: {
     reachedBeamSearch: boolean
     expandedStates: number
-    terminationStatus: PlannerSearchTerminationStatus
+    terminationStatus: PlannerRunTerminationStatus
     completedTargetCount: number
     conflicts: readonly PlanConflict[]
   }): void {

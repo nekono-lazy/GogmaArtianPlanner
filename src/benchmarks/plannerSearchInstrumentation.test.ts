@@ -9,9 +9,9 @@ import type {
 } from '../domain/planner/plannerSearchInstrumentation'
 import type {
   PlannerBeamSearchResult,
-  PlannerExecutionOptions,
-  PlannerInput,
-} from '../domain/planner/plannerTypes'
+  PlannerBeamSearchExecutionOptions,
+  PlannerBeamSearchInput,
+} from '../domain/planner/plannerBeamSearchTypes'
 
 interface Observed {
   depths: PlannerSearchDepthMetrics[]
@@ -32,9 +32,9 @@ function observer(
 }
 
 async function search(
-  input: PlannerInput,
+  input: PlannerBeamSearchInput,
   engine: ReturnType<typeof createPlannerSearchInstrumentationInput>['engine'],
-  options: PlannerExecutionOptions = {},
+  options: PlannerBeamSearchExecutionOptions = {},
 ): Promise<PlannerBeamSearchResult> {
   return runPlannerBeamSearch(
     structuredClone(input),
@@ -50,17 +50,17 @@ function sum(values: readonly number[]): number {
 const sanity = createPlannerSearchInstrumentationInput('sanity-3')
 const representative = createPlannerSearchInstrumentationInput('representative-12')
 /** Truncated so a test run stays short while crossing several depths. */
-const truncatedInput: PlannerInput = {
-  ...representative.input,
+const truncatedInput: PlannerBeamSearchInput = {
+  ...representative.beamSearchInput,
   options: { maxPlanSteps: 1_000, maxExpandedStates: 300, beamWidth: 6 },
 }
 
 // Each case runs one or two real Production Beam Searches over the fixtures.
 describe('Planner search instrumentation (Issue #103)', { timeout: 20_000 }, () => {
   it('leaves a completing search exactly unchanged', async () => {
-    const plain = await search(sanity.input, sanity.engine)
+    const plain = await search(sanity.beamSearchInput, sanity.engine)
     const observed: Observed = { depths: [], runs: [] }
-    const instrumented = await search(sanity.input, sanity.engine, {
+    const instrumented = await search(sanity.beamSearchInput, sanity.engine, {
       searchInstrumentation: observer(observed, { projections: true, clock: true }),
     })
 
@@ -86,8 +86,8 @@ describe('Planner search instrumentation (Issue #103)', { timeout: 20_000 }, () 
   })
 
   it('keeps the step-limit behaviour unchanged', async () => {
-    const input: PlannerInput = {
-      ...representative.input,
+    const input: PlannerBeamSearchInput = {
+      ...representative.beamSearchInput,
       options: { maxPlanSteps: 3, maxExpandedStates: 20_000, beamWidth: 5 },
     }
     const plain = await search(input, representative.engine)
@@ -229,7 +229,7 @@ describe('Planner search instrumentation (Issue #103)', { timeout: 20_000 }, () 
 
   it('counts fast-forwarded units instead of executed ones', async () => {
     const observed: Observed = { depths: [], runs: [] }
-    await search(sanity.input, sanity.engine, {
+    await search(sanity.beamSearchInput, sanity.engine, {
       searchInstrumentation: observer(observed),
     })
     const [first] = observed.depths
@@ -244,7 +244,7 @@ describe('Planner search instrumentation (Issue #103)', { timeout: 20_000 }, () 
   it('reports a run that never reaches a Beam Search depth', async () => {
     const observed: Observed = { depths: [], runs: [] }
     const result = await search(
-      { ...sanity.input, buildListEntries: [] },
+      { ...sanity.beamSearchInput, buildListEntries: [] },
       sanity.engine,
       { searchInstrumentation: observer(observed) },
     )

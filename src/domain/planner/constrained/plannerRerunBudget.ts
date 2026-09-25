@@ -46,7 +46,7 @@ export class PlannerOrchestrationLimitError extends Error {
  * ordinary one and every runtime-unsupported retry. A rejected execution never
  * started, so it does not consume the budget.
  */
-export interface PlannerFullBeamBudget extends ProductionPlanGenerationObserver {
+export interface PlannerFullRunBudget extends ProductionPlanGenerationObserver {
   readonly limit: number
   readonly used: number
 }
@@ -60,9 +60,9 @@ export interface PlannerFullBeamBudget extends ProductionPlanGenerationObserver 
  * `createPlannerRouteUnitPlans()` / `detectPlannerConflicts()` and never starts a
  * full Planner run, so it never reaches this observer and cannot consume the budget.
  */
-export function createPlannerFullBeamBudget(
+export function createPlannerFullRunBudget(
   bounds: PlannerOrchestrationBounds,
-): PlannerFullBeamBudget {
+): PlannerFullRunBudget {
   assertPlannerOrchestrationBounds(bounds)
   const limit = bounds.maxPlannerReruns
   let used = 0

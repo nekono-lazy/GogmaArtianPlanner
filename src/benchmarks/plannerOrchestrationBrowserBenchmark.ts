@@ -97,7 +97,6 @@ export interface PlannerOrchestrationRunResult {
   readonly boundFlags: PlannerOrchestrationBoundFlags | null
   readonly generatedBuildListEntryCount: number | null
   readonly conflictCount: number | null
-  readonly progressEvents: number
   readonly engineVersion: string
   readonly error: string | null
 }
@@ -141,7 +140,6 @@ export async function runPlannerOrchestrationBenchmark(
   // PlannerInput when it asks for a Plan.
   const fixture = createFixture(options.workloadId)
   const ownedWeaponIds = fixture.input.ownedWeapons.map(({ id }) => id as string)
-  let progressEvents = 0
   // Also outside it, including the `new Worker(...)` constructor: BuildListPage
   // holds its Client from before planning starts too. Whatever Worker
   // initialization is still outstanding when the request is posted does land
@@ -150,16 +148,12 @@ export async function runPlannerOrchestrationBenchmark(
 
   const startedAt = now()
   try {
+    // The Production Worker reports no progress (Issue #103 Phase D-2a), so
+    // the harness observes only the settled result.
     const result = await client.createConstrainedPlan(
       options.requestId,
       fixture.input,
       options.orchestrationBounds,
-      {
-        // Counted only as a diagnostic: the benchmark keeps no progress trace.
-        onProgress: () => {
-          progressEvents += 1
-        },
-      },
     )
     const settledAt = now()
     client.dispose()
@@ -174,7 +168,6 @@ export async function runPlannerOrchestrationBenchmark(
       boundFlags: readPlannerOrchestrationBoundFlags(outcome.warningKinds),
       generatedBuildListEntryCount: result.generatedBuildListEntries.length,
       conflictCount: result.conflicts.length,
-      progressEvents,
       engineVersion: client.engineVersion,
       error: null,
     }
@@ -192,7 +185,6 @@ export async function runPlannerOrchestrationBenchmark(
       boundFlags: null,
       generatedBuildListEntryCount: null,
       conflictCount: null,
-      progressEvents,
       engineVersion,
       error: error instanceof Error ? error.message : String(error),
     }

@@ -1,5 +1,6 @@
 import type { BuildListEntryReplacement } from '../../domain/buildList/buildListEntryReplacement'
 import { preparePlannerInitialContext } from '../../domain/planner/plannerInitialContext'
+import type { PlannerBeamSearchOptions } from '../../domain/planner/plannerBeamSearchTypes'
 import type { PlannerRunBuildListContext } from '../../domain/planner/plannerTypes'
 import type { OrchestrationScenario } from './plannerConstrainedOrchestration'
 import { synchronizeOrchestrationEntry } from './plannerConstrainedOrchestration'
@@ -27,6 +28,12 @@ export interface PlannerSchedulerCatalogueScenario {
   readonly scenario: OrchestrationScenario
   /** `temporary_replacement` for Scenario M; the ordinary persisted input otherwise. */
   readonly buildListContext?: PlannerRunBuildListContext
+  /**
+   * The Beam Search oracle's own bounds for the parity run; the oracle
+   * defaults where omitted. The scheduler input never carries them (Issue #103
+   * Phase D-2a).
+   */
+  readonly beamSearchOptions?: Partial<Pick<PlannerBeamSearchOptions, 'beamWidth' | 'maxExpandedStates'>>
 }
 
 /** Target Ideal `index` with its Sharpness rank relaxed: a Practical match. */
@@ -511,10 +518,10 @@ export function plannerSchedulerCatalogue(): PlannerSchedulerCatalogueScenario[]
     plain('committed-only-sharing', committedOnlySharing()),
     plain('pinned-past', pinnedPast()),
     plain('pinned-past-lost-holding', pinnedPast(S0 + 2)),
-    plain('exact-bounds-expanded', scenarioA({ maxExpandedStates: 154 })),
+    { id: 'exact-bounds-expanded', scenario: scenarioA(), beamSearchOptions: { maxExpandedStates: 154 } },
     plain('exact-bounds-steps', scenarioA({ maxPlanSteps: 154 })),
     plain('bounded-max-plan-steps', scenarioB({ maxPlanSteps: 20 })),
-    plain('bounded-max-expanded-states', scenarioB({ maxExpandedStates: 20 })),
+    { id: 'bounded-max-expanded-states', scenario: scenarioB(), beamSearchOptions: { maxExpandedStates: 20 } },
     plain('malformed-legacy-duplicate', legacyDuplicate()),
     plain('empty-build-list', emptyBuildList()),
   ]

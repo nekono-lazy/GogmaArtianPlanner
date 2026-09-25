@@ -60,7 +60,7 @@ export interface PlannerOrchestrationBounds {
  * uniform latency increase.
  *
  * `4` is not an independent per-field minimum. `maxPlannerReruns` counts the
- * first ordinary Beam Search as well, so it is not comparable field-for-field
+ * first ordinary full Planner run as well, so it is not comparable field-for-field
  * with the trial count. The measured authority is the finalist tuple
  * `2 / 1 / 4` as a whole, which reached the same semantic outcome as the far
  * larger bounds on workloads B, C, D and E, and had the lowest aggregate median
@@ -99,7 +99,7 @@ function issue(
  *
  * The zero-disable semantics of `maxOffAxisPairEvaluations` are specific to
  * Search enumeration — zero off-axis evaluations is the meaningful Cross-only
- * policy — and are deliberately not carried over here: zero Beam Searches,
+ * policy — and are deliberately not carried over here: zero full Planner runs,
  * zero trials, or zero adoptable Entries would make orchestration meaningless
  * rather than configure it.
  */

@@ -21,7 +21,7 @@ import {
 } from './plannerEntryRelevance'
 import { createInitialPlannerSearchState } from './plannerInitialState'
 import { preparePlannerInitialContext } from './plannerInitialContext'
-import { runPlannerBeamSearch } from './plannerBeamSearch'
+import { runPlannerBeamSearchOracle } from '../../test/fixtures/plannerBeamOracle'
 import { scoreCandidate } from './plannerScoring'
 import { validatePlannerInput } from './plannerValidation'
 import { createProductionPlanWithObserver } from './productionPlanGeneration'
@@ -190,7 +190,7 @@ function plan(built: OrchestrationScenario) {
 }
 
 function beamSearch(built: OrchestrationScenario) {
-  return runPlannerBeamSearch(built.input, built.dependencies, {})
+  return runPlannerBeamSearchOracle(built.input, built.dependencies, {})
 }
 
 function trialValidation(built: OrchestrationScenario) {

@@ -169,7 +169,7 @@ export interface PlannerWhatIfInputNotReadyResult {
  * The scenario fixed constraint is unknown, so no comparison is started.
  *
  * No alternative fixed Entry is ever inferred from
- * `PlanConflict.recommendedBuildListEntryId`, a Beam Search bestState
+ * `PlanConflict.recommendedBuildListEntryId`, a full Planner run bestState
  * participant, Target priority, Candidate score, Candidate category, or
  * Candidate similarity (PLANNER_SPEC 9.2.7).
  *

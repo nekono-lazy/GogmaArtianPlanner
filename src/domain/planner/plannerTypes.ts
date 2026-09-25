@@ -28,97 +28,102 @@ import type {
 import type { RngEngine } from '../rng/rngEngine'
 import type { BuildListEntryReplacement } from '../buildList/buildListEntryReplacement'
 import type { PlannerLaneProgress } from './plannerRouteLanes'
-import type { PlannerSearchInstrumentation } from './plannerSearchInstrumentation'
-import type { PlannerSchedulerInstrumentation } from './plannerSchedulerInstrumentation'
 
+/**
+ * The Production Planner bounds (Issue #103 Phase D-2a, PLANNER_SPEC 7.2).
+ *
+ * The Production deterministic scheduler reads `maxPlanSteps` and nothing
+ * else, so this is the whole Production shape. The Beam Search oracle's
+ * `beamWidth` / `maxExpandedStates` live in its own `PlannerBeamSearchOptions`
+ * (`plannerBeamSearchTypes.ts`) and never enter a Production `PlannerInput`,
+ * Worker request or UI. It is runtime input only: `PlanningInputSnapshot`
+ * has never persisted it.
+ */
 export interface PlannerOptions {
   /**
-   * The one Production bound (Issue #103 Phase D-1): the safety limit of the
-   * trace length the deterministic scheduler may build, and the only Planner
-   * bound the Build List detail settings expose.
+   * The one Production bound: the safety limit of the trace length the
+   * deterministic scheduler may build, and the only Planner bound the Build
+   * List detail settings expose.
    */
   maxPlanSteps: number
-  /**
-   * Read by the Beam Search oracle only (test / benchmark). The Production
-   * deterministic scheduler never reads it, so its value never changes a
-   * Production Plan; it stays in the shape and in validation (a positive
-   * integer) until Issue #103 Phase D-2 separates the oracle options.
-   */
-  beamWidth: number
-  /**
-   * Read as a bound by the Beam Search oracle only. The Production
-   * deterministic scheduler never stops on it (Phase D-1) and still counts
-   * `expandedStates` as a diagnostic; the field stays in the shape until
-   * Phase D-2.
-   */
-  maxExpandedStates: number
 }
 
 /**
- * The initial values of the Planner bounds (PLANNER_SPEC 7.2).
+ * The initial value of the Production Planner bound (PLANNER_SPEC 7.2).
  *
- * They are the *default* the Application caller starts from, not a floor or a
+ * It is the *default* the Application caller starts from, not a floor or a
  * ceiling: the Build List detail settings let the user raise `maxPlanSteps`
  * for one calculation. `PlannerInput.options` remains the single Planner bound
- * authority, and no Worker or Domain module substitutes these values for a
- * caller-supplied one. The Production deterministic scheduler reads
- * `maxPlanSteps` only; `beamWidth` and `maxExpandedStates` are Beam Search
- * oracle values kept for the legacy shape until Phase D-2. `maxPlanSteps` is
- * 1000 because the Phase B representative fixtures need 330 / 398 actions
+ * authority, and no Worker or Domain module substitutes this value for a
+ * caller-supplied one. `maxPlanSteps` is 1000 because the Phase B
+ * representative fixtures need 330 / 398 actions
  * (`docs/ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md`).
  */
 export const defaultPlannerOptions: Readonly<PlannerOptions> = {
   maxPlanSteps: 1000,
-  beamWidth: 50,
-  maxExpandedStates: 10_000,
 }
 
-/** Which `PlannerOptions` bound the full Planner run touched. */
-export type PlannerSearchLimitKind = 'max_expanded_states' | 'max_plan_steps'
+/**
+ * Which Production bound a full Planner run touched: `max_plan_steps` only
+ * (Issue #103 Phase D-2a). The Beam Search oracle's own limit kind, which adds
+ * `max_expanded_states`, is `PlannerBeamSearchLimitKind`.
+ */
+export type PlannerRunLimitKind = 'max_plan_steps'
 
-export const plannerSearchLimitKinds: readonly PlannerSearchLimitKind[] = [
-  'max_expanded_states',
-  'max_plan_steps',
-]
+export const plannerRunLimitKinds: readonly PlannerRunLimitKind[] = ['max_plan_steps']
 
 /**
- * - `completed`  every enabled Target reached Ideal
- * - `incomplete` a `PlannerOptions` bound truncated the search first
- * - `exhausted`  the search ended on its own without completing every Target
- * - `cancelled`  the user stopped the search
+ * - `completed`  every planning Target reached Ideal
+ * - `incomplete` a bound truncated the run first
+ * - `exhausted`  the run ended on its own without completing every Target
+ * - `cancelled`  the user stopped the run
  */
-export type PlannerSearchTerminationStatus =
+export type PlannerRunTerminationStatus =
   | 'completed'
   | 'incomplete'
   | 'exhausted'
   | 'cancelled'
 
 /**
- * Typed full Planner run termination (PLANNER_SPEC 7.2.1). The Production
- * deterministic scheduler and the Beam Search oracle report it with the same
- * meaning.
+ * Typed full Planner run termination (PLANNER_SPEC 7.2.1), parameterised by
+ * the limit kinds and the bounds of the run that produced it. The Production
+ * shape (`PlannerRunTermination`) and the Beam Search oracle shape
+ * (`PlannerBeamSearchTermination`) share one meaning, while a Production value
+ * can never name a Beam-only bound.
  *
  * It is the UI, Application and Persistence control authority for whether a
  * calculation produced a usable Plan. `PlannerWarning` stays diagnostics: no
  * consumer may parse a warning message, and `reachedLimits` is not a copy of
- * the warning list either - a `completed` search can carry a reached bound, and
- * a run that never reached its search carries none.
+ * the warning list either - a `completed` run can carry a reached bound, and a
+ * run that never started carries none.
  *
  * Every field is plain structured-clone data, so it crosses the Worker boundary
  * unchanged and is never rebuilt on the other side. It is runtime result
  * metadata only: it is never persisted in `ProductionPlan`, `PlanStep`,
  * `BuildListEntry`, or the DB schema.
  */
-export interface PlannerSearchTermination {
-  status: PlannerSearchTerminationStatus
+export interface PlannerTerminationOf<TLimitKind extends string, TLimits> {
+  status: PlannerRunTerminationStatus
   /** Empty unless a bound was touched; non-empty whenever `incomplete`. */
-  reachedLimits: PlannerSearchLimitKind[]
-  /** The `PlannerInput.options` this search actually ran with. */
-  limits: PlannerOptions
+  reachedLimits: TLimitKind[]
+  /** The bounds this run actually ran with. */
+  limits: TLimits
+  /**
+   * A diagnostic count of the states the run constructed. For the Production
+   * scheduler it is the number of applied actions (the start confirmations
+   * excluded). It is never a Production bound and never a progress
+   * denominator.
+   */
   expandedStates: number
   completedTargetCount: number
   totalTargetCount: number
 }
+
+/**
+ * The Production full Planner run termination: `reachedLimits` can only name
+ * `max_plan_steps`, and `limits` is exactly the Production `PlannerOptions`.
+ */
+export type PlannerRunTermination = PlannerTerminationOf<PlannerRunLimitKind, PlannerOptions>
 
 /** Carries no `LotteryMaster`: Planner calculation and Trace Replay never read one. */
 export interface PlannerMasterSubset {
@@ -174,7 +179,7 @@ export interface TargetSatisfaction {
   idealOwnedWeaponIds: OwnedWeaponId[]
 }
 
-/** Beam-search form of Target satisfaction, indexed for direct lookup. */
+/** Planner-state form of Target satisfaction, indexed for direct lookup. */
 export interface PlannerTargetSatisfaction {
   hasPractical: boolean
   hasIdeal: boolean
@@ -269,7 +274,11 @@ export interface PlannerRouteRuntimeState {
   transientRestorationBonusScope: 'normal_artian' | 'gogma_artian' | null
 }
 
-/** Immutable Beam Search state. Trace actions are not RouteOperations or PlanSteps. */
+/**
+ * The Planner search state a full Planner run drives (the scheduler updates
+ * one in place; the Beam Search oracle keeps immutable copies). Trace actions
+ * are not RouteOperations or PlanSteps.
+ */
 export interface PlannerSearchState {
   currentRngState: RngState
   currentNormalCounters: NormalArtianCounter[]
@@ -378,7 +387,14 @@ export interface PlannerSearchRejection {
   detail: string
 }
 
-export interface PlannerBeamSearchResult {
+/**
+ * The result of one full Planner run, parameterised by its termination shape.
+ *
+ * `PlannerRunResult` is the Production (deterministic scheduler) result;
+ * `PlannerBeamSearchResult` (`plannerBeamSearchTypes.ts`) is the Beam Search
+ * oracle's. Both carry the same fields, so the shared helpers need no copy.
+ */
+export interface PlannerRunResultOf<TTermination> {
   bestState: PlannerSearchState | null
   conflicts: PlanConflict[]
   warnings: PlannerWarning[]
@@ -389,7 +405,7 @@ export interface PlannerBeamSearchResult {
   completed: boolean
   cancelled: boolean
   /**
-   * The typed termination of this search (PLANNER_SPEC 7.2.1).
+   * The typed termination of this run (PLANNER_SPEC 7.2.1).
    *
    * `completed`, `cancelled` and `expandedStates` above keep their existing
    * meaning for the Domain consumers that already read them; `termination` is
@@ -397,8 +413,15 @@ export interface PlannerBeamSearchResult {
    * which bound was touched, the bounds this run used, and how many Targets
    * were completed.
    */
-  termination: PlannerSearchTermination
+  termination: TTermination
 }
+
+/**
+ * The Production full Planner run result: the deterministic scheduler's
+ * (Issue #103 Phase C / D-2a). Trace Replay, the execution projection and Plan
+ * generation consume it, and it can never carry a Beam-only bound.
+ */
+export type PlannerRunResult = PlannerRunResultOf<PlannerRunTermination>
 
 export type PlannerWarningKind =
   | 'no_build_list_entries'
@@ -415,9 +438,10 @@ export type PlannerWarningKind =
    * B8 constrained-search orchestration only (PLANNER_SPEC 9.2.16). The four
    * kinds below report an orchestration or enumeration stop, never silent
    * exhaustion, and the ordinary `createProductionPlan()` path never produces
-   * them. They are deliberately separate from `max_steps_reached` /
-   * `max_expanded_states_reached`, which report the two `PlannerOptions`
-   * bounds of a single Beam Search and mean something else entirely.
+   * them. They are deliberately separate from `max_steps_reached` (the
+   * Production `maxPlanSteps` bound of a single full Planner run) and
+   * `max_expanded_states_reached` (the Beam Search oracle's own bound, which
+   * no Production run ever reports), and mean something else entirely.
    */
   | 'max_candidate_trials_per_conflict_reached'
   | 'max_generated_build_list_entries_reached'
@@ -504,7 +528,7 @@ export interface PlannerResult {
    * runtime-unsupported retry, or a B8 Candidate trial - this is the one whose
    * result was actually used.
    */
-  termination: PlannerSearchTermination
+  termination: PlannerRunTermination
 }
 
 export interface PlannerIdFactory {
@@ -524,11 +548,6 @@ export interface PlannerDependencies {
   clock: PlannerClock
 }
 
-export interface PlannerProgress {
-  expandedStates: number
-  maxExpandedStates: number
-}
-
 /**
  * Which Build List cardinality contract one Planner input carries
  * (`docs/DATA_MODEL.md` 9.4.1, `docs/PLANNER_SPEC.md` 4.1 / 9.2.18).
@@ -542,11 +561,11 @@ export interface PlannerProgress {
  *   Entry `O` and its temporary Entry `G` (persisted 0..1 + temporary 0..1);
  *   every other Target follows the persisted contract. `O` is there only so
  *   that the user's fixed constraints are re-associated against the conflicts
- *   it takes part in. It is never a Beam Search input: `O` is no execution
+ *   it takes part in. It is never a full Planner run input: `O` is no execution
  *   candidate of its Target, so the type of every full Planner run excludes it.
  * - `temporary_replacement`: the **replacement set** of that trial - every `O`
- *   removed, every `G` in its place. Every full Planner run of a trial (Beam
- *   Search, Trace Replay, PlanConflict, rejections, PlanningInputSnapshot)
+ *   removed, every `G` in its place. Every full Planner run of a trial (the
+ *   run itself, Trace Replay, PlanConflict, rejections, PlanningInputSnapshot)
  *   runs over it, so a Plan never records an Entry the adoption deletes.
  *
  * Which Entry is temporary is named only by `replacements`, runtime-only
@@ -576,25 +595,21 @@ export const PERSISTED_PLANNER_BUILD_LIST_CONTEXT: { readonly kind: 'persisted' 
   kind: 'persisted' as const,
 })
 
+/**
+ * The runtime hooks of a Production full Planner run: cancellation and
+ * cooperative yielding only (Issue #103 Phase D-2a). The Production Worker
+ * passes exactly these two and forwards no progress, because the Production
+ * UI shows an indeterminate running state; cancellation never depends on a
+ * progress message.
+ *
+ * Test / benchmark observation lives in the strategy-specific extensions -
+ * `PlannerScheduleExecutionOptions` (the scheduler's benchmark progress and
+ * instrumentation) and `PlannerBeamSearchExecutionOptions` (the Beam Search
+ * oracle's) - and never reaches the Production Worker protocol or client.
+ */
 export interface PlannerExecutionOptions {
   shouldCancel?: () => boolean
-  onProgress?: (progress: PlannerProgress) => void
   yieldControl?: () => Promise<void>
-  /**
-   * Benchmark / test-only observation of each Beam Search (Issue #103). It is
-   * semantics-neutral, `undefined` runs exactly the previous search, and no
-   * Worker protocol, `PlannerResult`, or persistence carries it
-   * (`plannerSearchInstrumentation.ts`).
-   */
-  searchInstrumentation?: PlannerSearchInstrumentation
-  /**
-   * Benchmark / test-only observation of each deterministic scheduler run
-   * (Issue #103 Phase B). Semantics-neutral like `searchInstrumentation`;
-   * `undefined` runs exactly the ordinary scheduler, and no Worker protocol,
-   * `PlannerResult`, or persistence carries it
-   * (`plannerSchedulerInstrumentation.ts`).
-   */
-  schedulerInstrumentation?: PlannerSchedulerInstrumentation
 }
 
 export type CreateProductionPlanCalculation = (
@@ -631,7 +646,7 @@ export interface ProductionPlanGenerationObserver {
    * conflicts and warnings with `plan: null` instead of assembling a
    * ProductionPlan from a run whose Trace Replay never succeeded.
    */
-  afterPlannerRun?(result: PlannerBeamSearchResult): void
+  afterPlannerRun?(result: PlannerRunResult): void
 }
 
 export type PlannerWorkerRequest =
@@ -650,11 +665,6 @@ export type PlannerWorkerResponse =
       type: 'create_plan_result'
       requestId: string
       result: PlannerResult
-    }
-  | {
-      type: 'progress'
-      requestId: string
-      progress: PlannerProgress
     }
   | {
       type: 'error'

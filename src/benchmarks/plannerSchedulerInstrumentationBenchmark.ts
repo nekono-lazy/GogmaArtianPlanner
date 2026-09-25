@@ -1,14 +1,14 @@
 import {
   runPlannerDeterministicSchedule,
-  type PlannerBeamSearchResult,
   type PlannerDependencies,
   type PlannerInput,
+  type PlannerRunResult,
   type PlannerSchedulerRunMetrics,
 } from '../domain/planner'
 import type { RngEngine } from '../domain/rng/rngEngine'
 import {
   createDeterministicPlannerDependencies,
-  digestPlannerBeamSearchResult,
+  digestPlannerRunResult,
   type PlannerSearchResultDigest,
 } from './plannerSearchInstrumentationBenchmark'
 
@@ -18,9 +18,10 @@ import {
  * It runs `runPlannerDeterministicSchedule()` once - directly, not through the
  * Production Planner Worker (which runs the same scheduler since Phase C) - optionally with
  * the semantics-neutral `schedulerInstrumentation`, and returns plain
- * structured-clone data. The digest is the Beam harness digest, so the two
- * strategies share one comparable shape; the metrics are the scheduler's own
- * and carry no Beam depth, trim or dedup field.
+ * structured-clone data. The digest is the one shared digest shape, so the
+ * two strategies stay comparable; the metrics are the scheduler's own and
+ * carry no Beam depth, trim or dedup field. Its input is a Production
+ * `PlannerInput` (`maxPlanSteps` only, Issue #103 Phase D-2a).
  */
 
 export interface PlannerSchedulerInstrumentationRunOptions {
@@ -29,7 +30,7 @@ export interface PlannerSchedulerInstrumentationRunOptions {
   readonly now?: () => number
   readonly shouldCancel?: () => boolean
   readonly yieldControl?: () => Promise<void>
-  /** Live forwarding of `expandedStates` (applied actions). */
+  /** Live forwarding of `expandedStates` (applied actions); benchmark-only. */
   readonly onProgress?: (expandedStates: number) => void
 }
 
@@ -48,7 +49,7 @@ export async function executePlannerSchedulerInstrumentation(
   options: PlannerSchedulerInstrumentationRunOptions,
 ): Promise<{
   run: PlannerSchedulerInstrumentationRunResult
-  result: PlannerBeamSearchResult
+  result: PlannerRunResult
   dependencies: PlannerDependencies
 }> {
   const now = options.now ?? (() => performance.now())
@@ -75,10 +76,10 @@ export async function executePlannerSchedulerInstrumentation(
   return {
     run: {
       instrumented: options.instrumented,
-      options: { ...input.options },
+      options: { maxPlanSteps: input.options.maxPlanSteps },
       elapsedMs,
       metrics,
-      digest: digestPlannerBeamSearchResult(result),
+      digest: digestPlannerRunResult(result),
     },
     result,
     dependencies,

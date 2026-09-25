@@ -28,16 +28,16 @@ import {
 import { createUnsearchedPlannerTermination } from './plannerTermination'
 import type {
   ExcludedBuildListEntry,
-  PlannerBeamSearchResult,
   PlannerConflictResolution,
-  PlannerInput,
+  PlannerRunResultOf,
   PlannerSearchRejection,
   PlannerSearchState,
+  PlannerTerminationOf,
   PlannerWarning,
 } from './plannerTypes'
 
 /**
- * Pure helpers the ordinary Beam Search and the deterministic scheduler
+ * Pure helpers the Beam Search oracle and the Production deterministic scheduler
  * (Issue #103 Phase A, `docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md` 17)
  * both use, so the two never carry two copies of one rule. None of them
  * decides a search strategy.
@@ -139,14 +139,18 @@ export function plannerConflictResolutionWarnings(
   })
 }
 
-/** The result of a Planner run whose input failed validation before any action. */
-export function createPlannerInitialFailureResult(
-  input: PlannerInput,
+/**
+ * The result of a Planner run whose input failed validation before any action.
+ * `limits` is the bounds as the caller's termination shape records them - the
+ * Production `plannerRunLimits()` or the Beam Search oracle's own.
+ */
+export function createPlannerInitialFailureResult<TLimits>(
+  limits: TLimits,
   warnings: PlannerWarning[],
   issues: DomainValidationIssue[],
   excludedBuildListEntries: ExcludedBuildListEntry[],
   planningTargetIds: readonly TargetWeaponId[],
-): PlannerBeamSearchResult {
+): PlannerRunResultOf<PlannerTerminationOf<never, TLimits>> {
   return {
     bestState: null,
     conflicts: [],
@@ -157,12 +161,9 @@ export function createPlannerInitialFailureResult(
     expandedStates: 0,
     completed: false,
     cancelled: false,
-    // No expansion ran, so no `PlannerOptions` bound was touched. The reason
-    // the input was rejected is reported by its own validation warnings.
-    termination: createUnsearchedPlannerTermination(
-      input.options,
-      planningTargetIds,
-    ),
+    // No action ran, so no bound was touched. The reason the input was
+    // rejected is reported by its own validation warnings.
+    termination: createUnsearchedPlannerTermination(limits, planningTargetIds),
   }
 }
 

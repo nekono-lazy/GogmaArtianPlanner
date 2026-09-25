@@ -929,8 +929,8 @@ what-ifのUI / Domain semantics（`scenarioResolution`、`defaultPlannerWhatIfBo
 | option | 通常scheduler | 移行方針 |
 | --- | --- | --- |
 | `maxPlanSteps` | 使う。traceの長さ（reserveを含む）の安全上限。到達で `incomplete`（`max_plan_steps`）。通常schedulerの唯一のbound | 維持。**Phase D-1で既定値を300から1000へ変更**。Build List詳細設定の唯一の項目 |
-| `maxExpandedStates` | **Phase D-1以降は使わない**（Phase Cまでは構築state数の上限として停止判定に使っていた）。`expandedStates` の計測は診断として続ける | **Phase D-1でscheduler停止判定とUIから除去**。Beam oracleのboundとして型に残り、型の分離はPhase D-2 |
-| `beamWidth` | 使わない（検証の「1以上の整数」は型互換のため維持） | Phase CはUI文言だけ修正。**Phase D-1でUIから除去**。型の分離はPhase D-2 |
+| `maxExpandedStates` | **Phase D-1以降は使わない**（Phase Cまでは構築state数の上限として停止判定に使っていた）。`expandedStates` の計測は診断として続ける | **Phase D-1でscheduler停止判定とUIから除去**。**Phase D-2aでProduction `PlannerOptions` から除去し、Beam oracle専用の `PlannerBeamSearchOptions` へ分離**（14.5） |
+| `beamWidth` | 使わない | Phase CはUI文言だけ修正。**Phase D-1でUIから除去**。**Phase D-2aでProduction型から除去し、`PlannerBeamSearchOptions` へ分離**（14.5） |
 
 - 3項目の型、`defaultPlannerOptions`、Worker protocol、UI入力検証はPhase Cでは変更しない
   （Phase D-1の変更は14.4）
@@ -986,6 +986,8 @@ Phase Dは2つのPRへ分割した。
 ```text
 Phase D-1  Production向けPlanner設定 / 進捗Presentationの整理（本節）
 Phase D-2  Beam oracle / legacy型 / naming / instrumentationの整理
+           D-2a  Production型 / termination / Worker protocolの整理（14.5）
+           D-2b  Beam oracle / instrumentation / benchmark infrastructureの縮退、Issue #103完了判断
 ```
 
 Phase D-1の確定判断。
@@ -1036,7 +1038,67 @@ Phase D-1の確定判断。
 - 正確な単一authorityを作らずに推定値をUIへ出すより、Productionが十分高速になった現状
   （representative-35でも約1.4秒）ではindeterminate表示を採る
 - 数値progress自体をWorker DTOに残す必要があるかは、Phase D-2でWorker progress型を整理するときに
-  再判断する
+  再判断する。**Phase D-2aで削除と判断した（14.5）**
+
+### 14.5 Phase D-2aの確定判断（Production型 / termination / Worker protocol）
+
+Phase D-2を2つのPRへ分割した。
+
+```text
+Phase D-2a  Production Plannerの型・Worker契約からBeam Search由来のlegacy要素を分離する（本節）
+Phase D-2b  Beam oracle / parity harness / benchmark instrumentationの縮退、Issue #103完了判断
+```
+
+Phase D-2aの確定判断と実装後の状態。
+
+- Production `PlannerOptions` は `{ maxPlanSteps }` だけにした。`defaultPlannerOptions =
+  { maxPlanSteps: 1000 }`、`validatePlannerOptions()` は `maxPlanSteps` だけを検証する。通常Worker
+  request、B8、B9、再計画Previewの `PlannerInput` は `beamWidth` / `maxExpandedStates` を持たない。
+  Production strategy flagは追加しない
+- Beam oracle専用contractを `src/domain/planner/plannerBeamSearchTypes.ts` へ分離した:
+  `PlannerBeamSearchOptions`（`PlannerOptions` + `beamWidth` / `maxExpandedStates`）、
+  `defaultPlannerBeamSearchOptions`（1000 / 50 / 10000）、`validatePlannerBeamSearchOptions()`、
+  `PlannerBeamSearchInput`、`PlannerBeamSearchLimitKind`、`PlannerBeamSearchTermination`、
+  `PlannerBeamSearchResult`、`PlannerBeamSearchProgress`、`PlannerBeamSearchExecutionOptions`
+  （`onProgress`、`searchInstrumentation`）。Production moduleはこれらをimportしない（source scan testで固定）
+- Beamの入力validationは共有 `validatePlannerInput()` / `preparePlannerInitialContext()` へ
+  `validatePlannerBeamSearchOptions()` の結果をoptions validationとして渡す。Productionのvalidationだけを
+  通って不正なoracle boundを見逃すことはなく、schedulerはoracle fieldを要求しない
+- 結果型を中立化した。共通baseは `PlannerRunResultOf<TTermination>`、Productionは `PlannerRunResult`
+  （scheduler、`createProductionPlanWithObserver()`、`PlannerFullSearchRunner`、
+  `ProductionPlanGenerationObserver.afterPlannerRun()`、B8 / B9）。Beamは `PlannerBeamSearchResult` を維持する
+- terminationを分離した。共通は `PlannerTerminationOf<TLimitKind, TLimits>`、Productionは
+  `PlannerRunTermination`（`reachedLimits: PlannerRunLimitKind[]` = `max_plan_steps` だけ、
+  `limits: PlannerOptions`）。Production terminationが `max_expanded_states` を持てないことを
+  compile-time（`@ts-expect-error` test）とruntime（stray fieldを読まず `limits` へ反映しない）で固定した。
+  status（`PlannerRunTerminationStatus`）と決定順序は不変で、導出は `createPlannerTermination()` 1つ、
+  Production用は `createPlannerRunTermination()`。旧 `PlannerSearchTermination` /
+  `PlannerSearchLimitKind` は削除した
+- `expandedStates` はrenameせず診断値として残す（schedulerでは適用action数、zero-operation confirmは含まない）
+- Production Planner Workerの `type: "progress"` responseと `PlannerProgress` を削除した。
+  `PlannerWorkerClient` の `onProgress` callback（`createPlan` / `createConstrainedPlan` /
+  `createWhatIfComparison`）も削除した。Workerがcalculationへ渡すのは `shouldCancel` / `yieldControl` だけで、
+  cancelは `cancelPlan()`、generation、`shouldCancel`、`yieldControl` で維持する（通常Planner、B8、B9、
+  再計画Previewの全経路）
+- Production `PlannerExecutionOptions` は `shouldCancel` / `yieldControl` だけにした（onProgressをbenchmark専用型へ移す方式）。
+  scheduler benchmark用の `onProgress({ expandedStates })` と `schedulerInstrumentation` はscheduler専用の
+  `PlannerScheduleExecutionOptions` へ、Beamの `onProgress` / `searchInstrumentation` は
+  `PlannerBeamSearchExecutionOptions` へ移した。D-2bでinstrumentationを整理するときに境界が明確になる
+- planner orchestration / what-if Browser benchmarkの `progressEvents` metricは削除した（偽のprogressを
+  生成しない）。Issue #103 benchmark Workerは独自のbenchmark protocolでscheduler進捗を報告し続ける
+- Production表示helper（`plannerSearchLimitPresentation.ts`）から `max_expanded_states` 分岐を除去した。
+  Persistenceのincompleteエラー文言を中立化した（拒否判断は不変）
+- parity harnessはBeam / schedulerの入力・結果型をそれぞれ明示し、Beam resultをProduction projectionへ
+  通すときはharness側adapter `projectBeamSearchResultForProduction()` を使う（statusを保ち、
+  `reachedLimits` / `limits` をProduction shapeへ射影。oracle自身のterminationはsummaryに別途記録）。
+  Production型をBeamに合わせて広げない。acceptance catalogue、sanity-3、representative-12のparityは維持
+- `max_expanded_states_reached` warning kindはBeam oracleが使うため残す（Production scheduler / UIからは
+  到達不能）。warning型の分離はD-2bへ回す
+- UIの見た目はD-1から変更しない
+- `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は14のまま。`PlannerOptions` は `PlanningInputSnapshot` に
+  保存されておらず、`ProductionPlan` / `PlanStep` / `PlanningInputSnapshot` / `CalculationContext` /
+  DB / Exportのshapeもscheduler action semanticsも変えていない。Worker protocolはアプリ内部のruntime境界で
+  ある。DB 8、Export 11、`RngState` 2、`AppSettings` 1、`production-rng:c5-e7`、Master `dataVersion` 4も不変
 
 ## 15. Version境界
 
@@ -1368,19 +1430,31 @@ Phase Dは2つのPRへ分割する（14.4）。
   （`productionPlannerSettingsPresentation.ts`）を分離した
 - `CURRENT_CALCULATION_APP_SCHEMA_VERSION` 14、DB 8、Export 11、`RngState` 2、`AppSettings` 1、
   `production-rng:c5-e7`、Master `dataVersion` はいずれも不変。Worker protocol、`PlannerOptions` /
-  `PlannerSearchTermination` / `PlannerProgress` の型、`PlannerBeamSearchResult` の名前も不変
+  `PlannerSearchTermination` / `PlannerProgress` の型、`PlannerBeamSearchResult` の名前も不変（D-1時点）
 - 仕様改訂: REQUIREMENTS 20、PLANNER_SPEC 7 / 7.2 / 7.2.1 / 15、UI_FLOW 10.0 / 10.1 / 11.2（what-if）/ 16.4、
   AGENTS.md（Planner Search Strategy）
 
-#### Phase D-2: Beam oracle / legacy型整理（未着手）
+#### Phase D-2a: Production型 / termination / Worker protocol整理（実装済み）
 
-- `PlannerOptions` / `PlannerSearchTermination.limits` / `PlannerSearchLimitKind` / `PlannerProgress` の
-  Production型とBeam oracle型の分離（`beamWidth` / `maxExpandedStates` の型レベル除去を含む）。
-  数値progressをWorker DTOに残すかの再判断
-- `PlannerBeamSearchResult` の中立名へのrename判断
+- Production `PlannerOptions` を `maxPlanSteps` だけにし、`beamWidth` / `maxExpandedStates` を
+  Beam oracle専用 `PlannerBeamSearchOptions`（既定値・validationも専用）へ分離した
+- Production結果型を中立名 `PlannerRunResult` とし、Production termination（`PlannerRunTermination`）は
+  `max_plan_steps` だけを取り得る。Beamは `PlannerBeamSearchResult` / `PlannerBeamSearchTermination`
+- Production Workerの `progress` responseと `PlannerProgress`、Worker Clientの `onProgress` callbackを削除した。
+  cancel / generationは維持
+- B8 / B9のPhase C以前の名残（`PlannerFullBeamBudget`、`lastCompletedBeam` など）を中立名へ改めた
+- `CURRENT_CALCULATION_APP_SCHEMA_VERSION` 14ほか全versionは不変（14.5）
+- 仕様改訂: DATA_MODEL 11（PlannerOptions）/ 11.8 / テスト観点、PLANNER_SPEC 3 / 4 / 5 / 7 / 7.2 / 7.2.1 /
+  7.2.2 / 14 / 15、UI_FLOW 10.0 / 10.1 / 11.2、AGENTS.md
+- 詳細は14.5
+
+#### Phase D-2b: Beam oracle / instrumentation / benchmark縮退（未着手）
+
 - Beam oracle、`comparePlannerSearchStates()`、semantic key、`evaluationScore` / `totalCost` /
-  `preferredSourceProgressCount`、PR #107 Beam instrumentation、parity harness、benchmark Workerの
-  削除または縮退
+  `preferredSourceProgressCount`、PR #107 Beam instrumentation、scheduler instrumentation、parity harness、
+  benchmark page / benchmark Worker、representative fixtureの削除または縮退の判断
+- `max_expanded_states_reached` などBeam専用warning kindの型分離
+- Issue #103完了判断
 - UI変更を含む場合はUI_FLOWを同じPRで改訂する
 
 ---
@@ -1454,7 +1528,7 @@ Beam Searchに反証された（acceptance fixture「deadlock」でBeamが両Tar
 | 置換確認Dialog / legacy duplicate案内の具体的なPresentationと文言 | Phase 0-2（`ui-ux-pro-max`） | **確定済み**（UI_FLOW 9 / 10） |
 | Phase 0のPlanner warning kind名、Search追加APIの結果型名 | Phase 0-1 | 意味論だけ確定 |
 | Build List詳細設定、`maxPlanSteps` 既定値 | Phase D-1 | **確定済み**（14.4） |
-| `PlannerOptions` / `PlannerProgress` の型移行 | Phase D-2 | Phase D-1は型不変 |
+| `PlannerOptions` / `PlannerProgress` の型移行 | Phase D-2a | **確定済み**（14.5） |
 | B8 orchestration bounds / what-if boundsの再測定 | #101と合わせて | 現行値のまま |
-| Beam oracleとBeam専用stateの削除時期 | Phase D-2 | test / benchmark用に残す |
-| scheduler結果型の改名（`PlannerBeamSearchResult` → 中立名） | Phase D-2 | 型互換のまま |
+| Beam oracleとBeam専用stateの削除時期 | Phase D-2b | test / benchmark用に残す |
+| scheduler結果型の改名（`PlannerBeamSearchResult` → 中立名） | Phase D-2a | **確定済み**（`PlannerRunResult`、14.5） |

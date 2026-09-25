@@ -11,11 +11,11 @@ import type {
   PlannerRouteCommitmentRecord,
 } from './plannerRouteCommitment'
 import type {
-  PlannerBeamSearchResult,
+  PlannerRunResult,
+  PlannerRunTerminationStatus,
   PlannerSearchAction,
   PlannerSearchRejection,
   PlannerSearchRejectionReason,
-  PlannerSearchTerminationStatus,
 } from './plannerTypes'
 
 /**
@@ -168,11 +168,10 @@ export interface PlannerSchedulerRunMetrics {
   reachedScheduler: boolean
   planningTargetCount: number
   searchEntryCount: number
-  maxExpandedStates: number
   maxPlanSteps: number
   expandedStates: number
   traceLength: number
-  terminationStatus: PlannerSearchTerminationStatus
+  terminationStatus: PlannerRunTerminationStatus
   completedTargetCount: number
   totalTargetCount: number
   counts: PlannerSchedulerCounts
@@ -237,7 +236,7 @@ export interface PlannerSchedulerMetricsContext {
   entriesById: ReadonlyMap<BuildListEntryId, BuildListEntry>
   planningTargetCount: number
   searchEntryCount: number
-  options: { maxExpandedStates: number; maxPlanSteps: number }
+  options: { maxPlanSteps: number }
 }
 
 /**
@@ -458,7 +457,7 @@ export class PlannerSchedulerMetricsCollector implements PlannerRouteCommitmentO
   }
 
   finish(
-    result: PlannerBeamSearchResult,
+    result: PlannerRunResult,
     records: readonly PlannerRouteCommitmentRecord[],
   ): void {
     const counts = this.counts
@@ -484,7 +483,6 @@ export class PlannerSchedulerMetricsCollector implements PlannerRouteCommitmentO
       reachedScheduler: true,
       planningTargetCount: this.context.planningTargetCount,
       searchEntryCount: this.context.searchEntryCount,
-      maxExpandedStates: this.context.options.maxExpandedStates,
       maxPlanSteps: this.context.options.maxPlanSteps,
       expandedStates: result.expandedStates,
       traceLength: result.bestState?.trace.length ?? 0,
@@ -520,14 +518,13 @@ export function createPlannerSchedulerMetricsCollector(
  */
 export function reportUnscheduledPlannerRun(
   instrumentation: PlannerSchedulerInstrumentation | undefined,
-  input: { maxExpandedStates: number; maxPlanSteps: number; searchEntryCount: number },
-  result: PlannerBeamSearchResult,
+  input: { maxPlanSteps: number; searchEntryCount: number },
+  result: PlannerRunResult,
 ): void {
   instrumentation?.onScheduleEnd?.({
     reachedScheduler: false,
     planningTargetCount: result.termination.totalTargetCount,
     searchEntryCount: input.searchEntryCount,
-    maxExpandedStates: input.maxExpandedStates,
     maxPlanSteps: input.maxPlanSteps,
     expandedStates: result.expandedStates,
     traceLength: result.bestState?.trace.length ?? 0,

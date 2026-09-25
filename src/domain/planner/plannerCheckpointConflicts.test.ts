@@ -26,7 +26,7 @@ import type {
 import { extractIntermediateStateGroups } from '../search'
 import { preparePlannerInitialContext } from './plannerInitialContext'
 import { arePlannerRouteUnitsShareable, createPlannerRouteUnitPlans } from './plannerRouteProgress'
-import { runPlannerBeamSearch } from './plannerBeamSearch'
+import { runPlannerBeamSearchOracle } from '../../test/fixtures/plannerBeamOracle'
 import { hasIntermediateStateSelection } from './plannerCheckpoints'
 import { conflictResolutionRefusalReason } from './plannerConflictDetection'
 import {
@@ -276,7 +276,7 @@ describe('Compromise checkpoint conflicts', () => {
         selectedBuildListEntryId: resolved.input.buildListEntries[winner].id,
       }]
 
-      const result = await runPlannerBeamSearch(resolved.input, resolved.dependencies)
+      const result = await runPlannerBeamSearchOracle(resolved.input, resolved.dependencies)
 
       expect(result.warnings).toContainEqual(
         expect.objectContaining({ kind: 'invalid_conflict_resolution' }),
@@ -331,7 +331,7 @@ describe('Compromise checkpoint conflicts', () => {
       const later = opportunityAt(probe.parts[1], 2)
       const moved = twoEntryScenario(first.id, later.id)
 
-      const result = await runPlannerBeamSearch(moved.input, moved.dependencies)
+      const result = await runPlannerBeamSearchOracle(moved.input, moved.dependencies)
 
       expect(result.completed).toBe(true)
       const state = result.bestState

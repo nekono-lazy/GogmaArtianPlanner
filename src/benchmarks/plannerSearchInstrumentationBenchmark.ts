@@ -1,11 +1,13 @@
 import {
   runPlannerBeamSearch,
   createPlannerSearchStateSemanticKey,
+  type PlannerBeamSearchInput,
   type PlannerBeamSearchResult,
   type PlannerDependencies,
-  type PlannerInput,
+  type PlannerRunResultOf,
   type PlannerSearchDepthMetrics,
   type PlannerSearchRunMetrics,
+  type PlannerTerminationOf,
 } from '../domain/planner'
 import type {
   OwnedWeaponId,
@@ -42,7 +44,7 @@ export interface PlannerSearchInstrumentationRunOptions {
   readonly onDepth?: (metrics: PlannerSearchDepthMetrics) => void
 }
 
-/** The parts of a Beam Search result the parity check compares. */
+/** The parts of a full Planner run result (either strategy) the parity check compares. */
 export interface PlannerSearchResultDigest {
   terminationStatus: PlannerBeamSearchResult['termination']['status']
   reachedLimits: string[]
@@ -63,7 +65,7 @@ export interface PlannerSearchResultDigest {
 export interface PlannerSearchInstrumentationRunResult {
   readonly instrumented: boolean
   readonly collectDiagnosticProjections: boolean
-  readonly options: PlannerInput['options']
+  readonly options: PlannerBeamSearchInput['options']
   readonly elapsedMs: number
   /** Main-clock milliseconds per depth, measured in the observer callback. */
   readonly depthElapsedMs: number[]
@@ -89,8 +91,13 @@ export function createDeterministicPlannerDependencies(
   }
 }
 
-export function digestPlannerBeamSearchResult(
-  result: PlannerBeamSearchResult,
+/**
+ * One digest shape for both strategies: the Beam Search oracle result and the
+ * scheduler's Production `PlannerRunResult` differ only in the limit kinds and
+ * bounds their termination can name, which the digest records as plain data.
+ */
+export function digestPlannerRunResult(
+  result: PlannerRunResultOf<PlannerTerminationOf<string, unknown>>,
 ): PlannerSearchResultDigest {
   const best = result.bestState
   return {
@@ -113,7 +120,7 @@ export function digestPlannerBeamSearchResult(
 }
 
 export async function runPlannerSearchInstrumentation(
-  input: PlannerInput,
+  input: PlannerBeamSearchInput,
   engine: RngEngine,
   options: PlannerSearchInstrumentationRunOptions,
 ): Promise<PlannerSearchInstrumentationRunResult> {
@@ -127,7 +134,7 @@ export async function runPlannerSearchInstrumentation(
  * the search alone.
  */
 export async function executePlannerSearchInstrumentation(
-  input: PlannerInput,
+  input: PlannerBeamSearchInput,
   engine: RngEngine,
   options: PlannerSearchInstrumentationRunOptions,
 ): Promise<{
@@ -177,7 +184,7 @@ export async function executePlannerSearchInstrumentation(
       depthElapsedMs,
       depths,
       run,
-      digest: digestPlannerBeamSearchResult(result),
+      digest: digestPlannerRunResult(result),
     },
     result,
     dependencies,

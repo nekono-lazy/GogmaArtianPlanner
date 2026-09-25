@@ -408,13 +408,13 @@ describe('BuildListPage', () => {
 
     await user.click(screen.getByRole('button', { name: '生産計画を作成' }))
     await screen.findByText(/^Plan destination:/)
-    // `beamWidth` / `maxExpandedStates` are not user input: the legacy shape
-    // still carries them from `defaultPlannerOptions` (Issue #103 Phase D-1).
+    // `maxPlanSteps` is the whole Production `PlannerOptions`: no Beam Search
+    // oracle bound reaches the Worker request (Issue #103 Phase D-2a).
     expect(vi.mocked(client.createConstrainedPlan).mock.calls[0][1].options).toEqual({
       maxPlanSteps: 1000,
-      beamWidth: 50,
-      maxExpandedStates: 10_000,
     })
+    // The Client is called with no progress callback.
+    expect(vi.mocked(client.createConstrainedPlan).mock.calls[0]).toHaveLength(3)
   })
 
   it('exposes maxPlanSteps as the only Planner bound (Issue #103 Phase D-1)', async () => {
@@ -456,12 +456,9 @@ describe('BuildListPage', () => {
   it('shows an indeterminate running state with no numeric ratio and keeps Cancel', async () => {
     const user = userEvent.setup()
     const client = createPlannerClient()
+    // The Production Worker reports no progress (Issue #103 Phase D-2a).
     client.createConstrainedPlan = vi.fn(
-      (_requestId, _input, _bounds, callbacks) => {
-        // A Worker may still report progress; the page never shows it.
-        callbacks?.onProgress?.({ expandedStates: 2_500, maxExpandedStates: 10_000 })
-        return new Promise<PlannerOrchestrationResult>(() => undefined)
-      },
+      () => new Promise<PlannerOrchestrationResult>(() => undefined),
     )
     renderPage(dependencies([], client))
     await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
@@ -835,8 +832,7 @@ describe('BuildListPage presentation', () => {
     let releasePlan: (result: PlannerOrchestrationResult) => void = () => undefined
     const client = createPlannerClient()
     client.createConstrainedPlan = vi.fn(
-      (_id, _input, _bounds, callbacks) => new Promise<PlannerOrchestrationResult>((resolve) => {
-        callbacks?.onProgress?.({ expandedStates: 2_500, maxExpandedStates: 10_000 })
+      () => new Promise<PlannerOrchestrationResult>((resolve) => {
         releasePlan = resolve
       }),
     )

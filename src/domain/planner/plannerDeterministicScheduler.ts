@@ -76,12 +76,13 @@ import {
   type PlannerReserveActionContext,
   type PlannerRouteActionContext,
 } from './plannerStateTransitions'
-import { createPlannerSearchTermination } from './plannerTermination'
+import { createPlannerRunTermination, plannerRunLimits } from './plannerTermination'
+import type { PlannerSchedulerInstrumentation } from './plannerSchedulerInstrumentation'
 import type {
-  PlannerBeamSearchResult,
   PlannerDependencies,
   PlannerExecutionOptions,
   PlannerInput,
+  PlannerRunResult,
   PlannerRunBuildListContext,
   PlannerSearchRejection,
   PlannerSearchState,
@@ -109,6 +110,29 @@ import { PERSISTED_PLANNER_BUILD_LIST_CONTEXT } from './plannerTypes'
  * Planner Worker, B8 / B9 and the replan Preview. The Beam Search stays a
  * test / benchmark oracle only.
  */
+
+/** The scheduler's benchmark progress: the actions applied so far. */
+export interface PlannerScheduleProgress {
+  expandedStates: number
+}
+
+/**
+ * The scheduler's test / benchmark hooks on top of the Production
+ * `PlannerExecutionOptions` (Issue #103 Phase D-2a). The Production Worker and
+ * Plan generation pass only `shouldCancel` / `yieldControl`; these two are
+ * semantics-neutral and reach no Worker protocol, `PlannerResult`, or
+ * persistence.
+ */
+export interface PlannerScheduleExecutionOptions extends PlannerExecutionOptions {
+  /** Benchmark-only live count of applied actions; never a Production progress. */
+  onProgress?: (progress: PlannerScheduleProgress) => void
+  /**
+   * Benchmark / test-only observation of each deterministic scheduler run
+   * (Issue #103 Phase B). `undefined` runs exactly the ordinary scheduler
+   * (`plannerSchedulerInstrumentation.ts`).
+   */
+  schedulerInstrumentation?: PlannerSchedulerInstrumentation
+}
 
 /** How many applied actions pass between two `yieldControl()` calls. */
 export const PLANNER_SCHEDULER_YIELD_INTERVAL = 64
@@ -167,7 +191,7 @@ export class PlannerDeterministicScheduleRun {
   private readonly commitmentContext: PlannerRouteCommitmentContext
   private readonly routeActionContext: PlannerRouteActionContext
   private readonly reserveActionContext: PlannerReserveActionContext
-  private readonly executionOptions: PlannerExecutionOptions
+  private readonly executionOptions: PlannerScheduleExecutionOptions
   /** `null` unless `executionOptions.schedulerInstrumentation` was given. */
   private readonly metrics: PlannerSchedulerMetricsCollector | null
 
@@ -175,7 +199,7 @@ export class PlannerDeterministicScheduleRun {
     input: PlannerInput,
     dependencies: PlannerDependencies,
     context: PlannerInitialContext,
-    executionOptions: PlannerExecutionOptions,
+    executionOptions: PlannerScheduleExecutionOptions,
   ) {
     this.input = input
     this.context = context
@@ -187,10 +211,7 @@ export class PlannerDeterministicScheduleRun {
         entriesById: context.entriesById,
         planningTargetCount: context.planningTargetIds.length,
         searchEntryCount: context.allSearchEntries.length,
-        options: {
-          maxExpandedStates: input.options.maxExpandedStates,
-          maxPlanSteps: input.options.maxPlanSteps,
-        },
+        options: plannerRunLimits(input.options),
       }),
     )
     this.rejections = [...context.routePlanRejections]
@@ -689,10 +710,9 @@ export class PlannerDeterministicScheduleRun {
    * Checks the one scheduler bound before an action is applied (14.1).
    * `false` means the schedule stops here.
    *
-   * `maxPlanSteps` alone bounds the schedule (Issue #103 Phase D-1):
-   * `PlannerOptions.maxExpandedStates` is a Beam Search oracle bound and is
-   * never read here, so a hidden default can never stop a Production run that
-   * the user allowed more Plan steps.
+   * `maxPlanSteps` alone bounds the schedule (Issue #103 Phase D-1 / D-2a):
+   * it is the whole Production `PlannerOptions`, so no hidden bound can stop a
+   * Production run that the user allowed more Plan steps.
    */
   private canApplyAction(): boolean {
     if (this.state.trace.length >= this.input.options.maxPlanSteps) {
@@ -706,7 +726,7 @@ export class PlannerDeterministicScheduleRun {
    * One applied route action or reserve (the start confirmations are not
    * counted). Besides the count, it records that a bound was reached: a
    * schedule that completes on exactly its last affordable action still
-   * reports the bound in `reachedLimits`, and `createPlannerSearchTermination()`
+   * reports the bound in `reachedLimits`, and `createPlannerRunTermination()`
    * alone decides the status (`docs/PLANNER_SPEC.md` 7.2.1).
    */
   private actionApplied() {
@@ -716,12 +736,9 @@ export class PlannerDeterministicScheduleRun {
     if (this.state.trace.length >= this.input.options.maxPlanSteps) {
       this.reachedStepLimit = true
     }
-    // The Worker DTO keeps its shape until Phase D-2; the Production UI never
-    // reads `maxExpandedStates` as a completion denominator.
-    this.executionOptions.onProgress?.({
-      expandedStates: this.expandedStates,
-      maxExpandedStates: this.input.options.maxExpandedStates,
-    })
+    // Benchmark observation only: the Production Worker passes no
+    // `onProgress` and forwards no progress (Phase D-2a).
+    this.executionOptions.onProgress?.({ expandedStates: this.expandedStates })
   }
 
   private targetOf(entry: BuildListEntry): TargetWeapon | undefined {
@@ -922,8 +939,8 @@ export class PlannerDeterministicScheduleRun {
     return sortPlannerRejections(rejections)
   }
 
-  /** The `PlannerBeamSearchResult`-compatible result of the schedule so far. */
-  finish(cancelled: boolean): PlannerBeamSearchResult {
+  /** The Production run result of the schedule so far. */
+  finish(cancelled: boolean): PlannerRunResult {
     const startedAt = this.metrics?.mark()
     const result = this.buildResult(cancelled)
     this.metrics?.addPhaseTime('finish', startedAt)
@@ -931,7 +948,7 @@ export class PlannerDeterministicScheduleRun {
     return result
   }
 
-  private buildResult(cancelled: boolean): PlannerBeamSearchResult {
+  private buildResult(cancelled: boolean): PlannerRunResult {
     const warnings = this.context.warnings
     if (this.reachedStepLimit) {
       addPlannerWarning(
@@ -972,7 +989,7 @@ export class PlannerDeterministicScheduleRun {
       expandedStates: this.expandedStates,
       completed: this.isComplete(),
       cancelled,
-      termination: createPlannerSearchTermination({
+      termination: createPlannerRunTermination({
         options: this.input.options,
         planningTargetIds: this.context.planningTargetIds,
         checkpointRequirements: this.context.checkpointRequirements,
@@ -980,8 +997,6 @@ export class PlannerDeterministicScheduleRun {
         expandedStates: this.expandedStates,
         cancelled,
         reachedStepLimit: this.reachedStepLimit,
-        // The scheduler never stops on `maxExpandedStates` (Phase D-1).
-        reachedExpandedLimit: false,
         unconfirmedTargetIds: this.unconfirmedTargetIds,
       }),
     }
@@ -990,7 +1005,7 @@ export class PlannerDeterministicScheduleRun {
 
 export type PlannerDeterministicScheduleRunResult =
   | { status: 'ready'; run: PlannerDeterministicScheduleRun }
-  | { status: 'finished'; result: PlannerBeamSearchResult }
+  | { status: 'finished'; result: PlannerRunResult }
 
 /**
  * Prepares one scheduler run: the shared initial context
@@ -1001,7 +1016,7 @@ export type PlannerDeterministicScheduleRunResult =
 export function createPlannerDeterministicScheduleRun(
   input: PlannerInput,
   dependencies: PlannerDependencies,
-  executionOptions: PlannerExecutionOptions = {},
+  executionOptions: PlannerScheduleExecutionOptions = {},
   buildListContext: PlannerRunBuildListContext = PERSISTED_PLANNER_BUILD_LIST_CONTEXT,
 ): PlannerDeterministicScheduleRunResult {
   const prepared = preparePlannerInitialContext(input, dependencies, buildListContext)
@@ -1009,7 +1024,7 @@ export function createPlannerDeterministicScheduleRun(
     return {
       status: 'finished',
       result: createPlannerInitialFailureResult(
-        input,
+        plannerRunLimits(input.options),
         prepared.warnings,
         prepared.issues,
         prepared.excludedBuildListEntries,
@@ -1033,7 +1048,7 @@ export function createPlannerDeterministicScheduleRun(
         expandedStates: 0,
         completed: false,
         cancelled: false,
-        termination: createPlannerSearchTermination({
+        termination: createPlannerRunTermination({
           options: input.options,
           planningTargetIds: context.planningTargetIds,
           checkpointRequirements: context.checkpointRequirements,
@@ -1041,7 +1056,6 @@ export function createPlannerDeterministicScheduleRun(
           expandedStates: 0,
           cancelled: false,
           reachedStepLimit: false,
-          reachedExpandedLimit: false,
         }),
       },
     }
@@ -1054,7 +1068,7 @@ export function createPlannerDeterministicScheduleRun(
     return {
       status: 'finished',
       result: createPlannerInitialFailureResult(
-        input,
+        plannerRunLimits(input.options),
         warnings,
         [{ path: 'conflictResolutions', code: 'invalid_state', message: refusal }],
         context.excludedBuildListEntries,
@@ -1068,11 +1082,11 @@ export function createPlannerDeterministicScheduleRun(
 /**
  * Runs the deterministic scheduler to the end (Issue #103 Phase A / C).
  *
- * The result is `PlannerBeamSearchResult`-compatible, so the existing Trace
- * Replay, execution projection and Plan generation consume it unchanged. It is
- * the Production full Planner run: `createProductionPlanWithObserver()` runs it
- * (Phase C). `PlannerOptions.beamWidth` and `PlannerOptions.maxExpandedStates`
- * are never read as bounds: `maxPlanSteps` is the only one (Phase D-1).
+ * The result is the Production `PlannerRunResult`, which Trace Replay, the
+ * execution projection and Plan generation consume. It is the Production full
+ * Planner run: `createProductionPlanWithObserver()` runs it (Phase C).
+ * `maxPlanSteps` is its only bound (Phase D-1), and the Production
+ * `PlannerOptions` carries nothing else (Phase D-2a).
  *
  * `buildListContext` follows the full-run contract: `persisted`, or
  * `temporary_replacement` for the replacement set of a B8 / what-if trial.
@@ -1080,9 +1094,9 @@ export function createPlannerDeterministicScheduleRun(
 export async function runPlannerDeterministicSchedule(
   input: PlannerInput,
   dependencies: PlannerDependencies,
-  executionOptions: PlannerExecutionOptions = {},
+  executionOptions: PlannerScheduleExecutionOptions = {},
   buildListContext: PlannerRunBuildListContext = PERSISTED_PLANNER_BUILD_LIST_CONTEXT,
-): Promise<PlannerBeamSearchResult> {
+): Promise<PlannerRunResult> {
   const created = createPlannerDeterministicScheduleRun(
     input,
     dependencies,
@@ -1093,7 +1107,6 @@ export async function runPlannerDeterministicSchedule(
     reportUnscheduledPlannerRun(
       executionOptions.schedulerInstrumentation,
       {
-        maxExpandedStates: input.options.maxExpandedStates,
         maxPlanSteps: input.options.maxPlanSteps,
         searchEntryCount: input.buildListEntries.length,
       },

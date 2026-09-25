@@ -25,10 +25,15 @@ import {
   createProductionPlan,
   createPlannerRouteUnitPlans,
   detectPlannerConflicts,
-  runPlannerBeamSearch,
   scoreCandidate,
 } from './index'
 import type { PlannerSearchState } from './plannerTypes'
+import {
+  createPlannerBeamSearchInput,
+  defaultPlannerBeamSearchOptions,
+  validatePlannerBeamSearchOptions,
+} from './plannerBeamSearchTypes'
+import { runPlannerBeamSearchOracle } from '../../test/fixtures/plannerBeamOracle'
 import { createInitialPlannerSearchState } from './plannerInitialState'
 import { comparePlannerSearchStates } from './plannerScoring'
 import { validatePlannerInput } from './plannerValidation'
@@ -119,7 +124,7 @@ describe('Planner Beam Search', () => {
       resetRoute(source.id),
     )
     const { input, dependencies } = fixture([goal], [entry], [source])
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.completed).toBe(true)
     expect(result.bestState?.trace.map(({ actionType }) => actionType)).toEqual([
       'reset_bonuses',
@@ -158,7 +163,7 @@ describe('Planner Beam Search', () => {
     const entry = routeEntry('entry.beam.count', goal, route)
     const { input, dependencies } = fixture([goal], [entry])
     const snapshot = structuredClone(entry.candidateSnapshot.route)
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.bestState?.trace.map(({ actionType }) => actionType)).toEqual([
       'create_normal_artian',
       'create_normal_artian',
@@ -242,7 +247,7 @@ describe('Planner Beam Search', () => {
     expect(validation.validBuildListEntries).toHaveLength(valid ? 1 : 0)
     if (!valid) return
 
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.bestState?.trace.map(({ actionType }) => actionType)).toEqual([
       'create_normal_artian',
       'convert_normal_to_gogma',
@@ -307,7 +312,7 @@ describe('Planner Beam Search', () => {
     expect(validation.validBuildListEntries).toHaveLength(valid ? 1 : 0)
     if (!valid) return
 
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.bestState?.trace.map(({ actionType }) => actionType)).toEqual([
       'convert_normal_to_gogma',
       ...amendments,
@@ -348,7 +353,7 @@ describe('Planner Beam Search', () => {
       ],
     })
     const { input, dependencies } = fixture([goal], [entry])
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.bestState?.routeRuntimeByEntryId[entry.id]).toEqual({
       hasUnregisteredGogmaOutput: true,
       transientRestorationBonusScope: 'normal_artian',
@@ -427,7 +432,7 @@ describe('Planner Beam Search', () => {
       ],
     })
     const { input, dependencies } = fixture([goal], [entry], [source])
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.bestState?.routeRuntimeByEntryId[entry.id]).toEqual({
       hasUnregisteredGogmaOutput: true,
       transientRestorationBonusScope: 'normal_artian',
@@ -467,7 +472,7 @@ describe('Planner Beam Search', () => {
     const { input, dependencies } = fixture([goal], [entry], [source])
     const validation = validatePlannerInput(input, dependencies)
     expect(validation.validBuildListEntries.map((valid) => valid.entry.id)).toEqual([entry.id])
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.bestState?.trace.map(({ actionType }) => actionType))
       .toEqual(['convert_normal_to_gogma', 'keep_bonuses', 'reserve_weapon'])
     expect(result.bestState?.routeRuntimeByEntryId[entry.id]).toEqual({
@@ -534,7 +539,7 @@ describe('Planner Beam Search', () => {
       [first, second],
       [source],
     )
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     const sharedAction = result.bestState?.trace[0]
     expect(sharedAction?.actionType).toBe('reset_bonuses')
     expect(sharedAction?.progressedBuildListEntryIds).toEqual([
@@ -616,7 +621,7 @@ describe('Planner Beam Search', () => {
       [first, second],
     )
 
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     const resetActions = result.bestState?.trace.filter(
       ({ actionType }) => actionType === 'reset_bonuses',
     ) ?? []
@@ -759,7 +764,7 @@ describe('Planner Beam Search', () => {
       [first, second],
       [source],
     )
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.bestState?.trace[0]).toMatchObject({
       actionType: 'reset_skills',
       progressedBuildListEntryIds: [first.id, second.id],
@@ -823,8 +828,10 @@ describe('Planner Beam Search', () => {
       [first, second],
     )
     input.options.maxPlanSteps = 1
-    input.options.beamWidth = 1
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(
+      createPlannerBeamSearchInput(input, { beamWidth: 1 }),
+      dependencies,
+    )
     const counters = result.bestState?.currentNormalCounters
     expect(counters?.find(({ id }) => id === 'weapon.fixture.a:8')?.counter)
       .toBe(5)
@@ -853,7 +860,7 @@ describe('Planner Beam Search', () => {
       [first, second],
       [firstSource, secondSource],
     )
-    const detected = await runPlannerBeamSearch(base.input, base.dependencies)
+    const detected = await runPlannerBeamSearchOracle(base.input, base.dependencies)
     expect(detected.conflicts).toHaveLength(1)
     expect(detected.conflicts[0]).toMatchObject({
       kind: 'same_gogma_counter',
@@ -870,7 +877,7 @@ describe('Planner Beam Search', () => {
       conflictKey: key,
       selectedBuildListEntryId: second.id,
     }]
-    const result = await runPlannerBeamSearch(
+    const result = await runPlannerBeamSearchOracle(
       resolved.input,
       resolved.dependencies,
     )
@@ -893,7 +900,7 @@ describe('Planner Beam Search', () => {
       conflictKey: key,
       selectedBuildListEntryId: third.id,
     }]
-    const nonParticipantResult = await runPlannerBeamSearch(
+    const nonParticipantResult = await runPlannerBeamSearchOracle(
       nonParticipant.input,
       nonParticipant.dependencies,
     )
@@ -917,7 +924,7 @@ describe('Planner Beam Search', () => {
       conflictKey: 'missing-conflict-key',
       selectedBuildListEntryId: entry.id,
     }]
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.warnings.some(({ kind }) =>
       kind === 'invalid_conflict_resolution',
     )).toBe(true)
@@ -984,12 +991,14 @@ describe('Planner Beam Search', () => {
       [first, second],
       [firstSource, secondSource],
     )
-    input.options.beamWidth = 1
-    input.options.maxExpandedStates = 1
     const progress: number[] = []
-    const result = await runPlannerBeamSearch(input, dependencies, {
-      onProgress: ({ expandedStates }) => progress.push(expandedStates),
-    })
+    const result = await runPlannerBeamSearchOracle(
+      createPlannerBeamSearchInput(input, { beamWidth: 1, maxExpandedStates: 1 }),
+      dependencies,
+      {
+        onProgress: ({ expandedStates }) => progress.push(expandedStates),
+      },
+    )
     expect(result.expandedStates).toBe(1)
     expect(progress).toEqual([1])
     expect(result.warnings.map(({ kind }) => kind)).toContain(
@@ -1010,7 +1019,7 @@ describe('Planner Beam Search', () => {
     )
     const { input, dependencies } = fixture([goal], [entry], [source])
     input.options.maxPlanSteps = 1
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.bestState?.trace).toHaveLength(1)
     expect(result.warnings.map(({ kind }) => kind)).toContain(
       'max_steps_reached',
@@ -1026,7 +1035,7 @@ describe('Planner Beam Search', () => {
     const entry = routeEntry('entry.partial', goal, resetRoute(source.id))
     const { input, dependencies } = fixture([goal], [entry], [source])
     input.options.maxPlanSteps = 1
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.completed).toBe(false)
     expect(result.bestState).not.toBeNull()
     expect(result.bestState?.routeProgressByEntryId[entry.id]).toEqual({ base: 0, bonus: 1, skill: 0 })
@@ -1040,7 +1049,7 @@ describe('Planner Beam Search', () => {
     const source = sourceWeapon('owned.already.ideal.source')
     const entry = routeEntry('entry.already.ideal', goal, resetRoute(source.id))
     const { input, dependencies } = fixture([goal], [entry], [ideal, source])
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.expandedStates).toBe(0)
     expect(result.completed).toBe(true)
     expect(result.bestState?.trace).toEqual([])
@@ -1063,7 +1072,7 @@ describe('Planner Beam Search', () => {
       ...createValidOwnedWeapon(ownedWeaponId('owned.already.ideal.unlisted')),
     }
     const { input, dependencies } = fixture([goal], [], [ideal])
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.expandedStates).toBe(0)
     expect(result.completed).toBe(false)
     expect(result.bestState?.targetSatisfaction).toEqual({})
@@ -1085,7 +1094,7 @@ describe('Planner Beam Search', () => {
     const before = structuredClone(input)
     let cancel = false
     const progress: number[] = []
-    const result = await runPlannerBeamSearch(input, dependencies, {
+    const result = await runPlannerBeamSearchOracle(input, dependencies, {
       shouldCancel: () => cancel,
       onProgress: ({ expandedStates }) => {
         progress.push(expandedStates)
@@ -1112,11 +1121,11 @@ describe('Planner Beam Search', () => {
       [structuredClone(entry)],
       [structuredClone(source)],
     )
-    const firstResult = await runPlannerBeamSearch(
+    const firstResult = await runPlannerBeamSearchOracle(
       first.input,
       first.dependencies,
     )
-    const secondResult = await runPlannerBeamSearch(
+    const secondResult = await runPlannerBeamSearchOracle(
       second.input,
       second.dependencies,
     )
@@ -1136,7 +1145,7 @@ describe('Planner Beam Search', () => {
       [destructive],
       [protectedSource],
     )
-    const blockedResult = await runPlannerBeamSearch(
+    const blockedResult = await runPlannerBeamSearchOracle(
       blocked.input,
       blocked.dependencies,
     )
@@ -1167,7 +1176,7 @@ describe('Planner Beam Search', () => {
       [skill],
       [practicalProtected],
     )
-    const blockedSkillResult = await runPlannerBeamSearch(
+    const blockedSkillResult = await runPlannerBeamSearchOracle(
       blockedSkill.input,
       blockedSkill.dependencies,
     )
@@ -1331,7 +1340,7 @@ describe('Planner Beam Search', () => {
       [first, second],
       [normal],
     )
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.conflicts.some(({ kind }) =>
       kind === 'same_owned_weapon_consumed',
     )).toBe(true)
@@ -1365,7 +1374,7 @@ describe('Planner Beam Search', () => {
       [first, second],
       [sharedNormal],
     )
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     // The conversion removes the source Normal from inventory exactly once, and
     // the second Route can no longer find it.
     expect(result.bestState?.simulatedInventory.consumedWeaponIds).toEqual([
@@ -1394,7 +1403,7 @@ describe('Planner Beam Search', () => {
       }],
     })
     const { input, dependencies } = fixture([goal], [entry], [source])
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.expandedStates).toBe(0)
     expect(result.rejections[0]).toMatchObject({
       buildListEntryId: entry.id,
@@ -1432,9 +1441,11 @@ describe('Planner Beam Search', () => {
       [gogma, skill],
       [gogmaSource, skillSource],
     )
-    input.options.beamWidth = 1
     input.options.maxPlanSteps = 1
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(
+      createPlannerBeamSearchInput(input, { beamWidth: 1 }),
+      dependencies,
+    )
     expect(result.expandedStates).toBe(2)
     expect(result.bestState?.trace).toHaveLength(1)
     expect(result.bestState?.trace[0].primaryBuildListEntryId).toBe(gogma.id)
@@ -1505,9 +1516,15 @@ describe('Planner Beam Search', () => {
       [uncoveredEntry, upgradeEntry],
       [uncoveredSource, upgradeSource],
     )
-    built.input.options.beamWidth = 1
     built.input.options.maxPlanSteps = 1
-    return { ...built, uncovered, upgrade, uncoveredEntry, upgradeEntry }
+    return {
+      ...built,
+      input: createPlannerBeamSearchInput(built.input, { beamWidth: 1 }),
+      uncovered,
+      upgrade,
+      uncoveredEntry,
+      upgradeEntry,
+    }
   }
 
   it('prunes the Beam by Target priority, never by Practical-first', async () => {
@@ -1525,7 +1542,7 @@ describe('Planner Beam Search', () => {
       hasIdeal: false,
     })
 
-    const result = await runPlannerBeamSearch(scenario.input, scenario.dependencies)
+    const result = await runPlannerBeamSearchOracle(scenario.input, scenario.dependencies)
     // Both Entries are executable: neither was excluded before the search.
     expect(result.excludedBuildListEntries).toEqual([])
     expect(result.expandedStates).toBe(2)
@@ -1541,7 +1558,7 @@ describe('Planner Beam Search', () => {
     // Equal priority and equal cost: the order is the stable Entry-id
     // tie-break, and it does not move when the Practical Target changes.
     const forward = practicalVersusUncoveredScenario(3, 3)
-    const forwardResult = await runPlannerBeamSearch(forward.input, forward.dependencies)
+    const forwardResult = await runPlannerBeamSearchOracle(forward.input, forward.dependencies)
 
     // The compromise weapon now belongs to the other Target: the formerly
     // uncovered Target holds a Practical, the other holds nothing.
@@ -1552,7 +1569,7 @@ describe('Planner Beam Search', () => {
     ).state
     expect(initial?.targetSatisfaction[swapped.uncovered.id]?.hasPractical).toBe(true)
     expect(initial?.targetSatisfaction[swapped.upgrade.id]?.hasPractical).toBe(false)
-    const swappedResult = await runPlannerBeamSearch(swapped.input, swapped.dependencies)
+    const swappedResult = await runPlannerBeamSearchOracle(swapped.input, swapped.dependencies)
 
     expect(swappedResult.bestState?.trace[0].primaryBuildListEntryId).toBe(
       forwardResult.bestState?.trace[0].primaryBuildListEntryId,
@@ -1586,7 +1603,7 @@ describe('Planner Beam Search', () => {
       [entry, secondEntry],
       [source, otherSource],
     )
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     const reserve = result.bestState?.trace.find(
       ({ actionType }) => actionType === 'reserve_weapon',
     )
@@ -1655,7 +1672,7 @@ describe('Planner Beam Search', () => {
       [entry, previousEntry],
       [source, otherSource],
     )
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.bestState?.targetSatisfaction[previousTarget.id]).toEqual({
       hasPractical: false,
       hasIdeal: false,
@@ -1685,7 +1702,7 @@ describe('Planner Beam Search', () => {
       [first, second],
       [source],
     )
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.rejections).toContainEqual(expect.objectContaining({
       buildListEntryId: second.id,
       actionType: 'reset_bonuses',
@@ -1760,7 +1777,7 @@ describe('Planner Beam Search', () => {
       [first, second, third],
       [sharedSource, otherSource],
     )
-    const unresolvedResult = await runPlannerBeamSearch(
+    const unresolvedResult = await runPlannerBeamSearchOracle(
       unresolved.input,
       unresolved.dependencies,
     )
@@ -1777,7 +1794,7 @@ describe('Planner Beam Search', () => {
       conflictKey: conflictKey as string,
       selectedBuildListEntryId: first.id,
     }]
-    const result = await runPlannerBeamSearch(resolved.input, resolved.dependencies)
+    const result = await runPlannerBeamSearchOracle(resolved.input, resolved.dependencies)
     expect(result.bestState?.trace[0].progressedBuildListEntryIds).toEqual([
       first.id,
       second.id,
@@ -1820,7 +1837,7 @@ describe('Planner Beam Search', () => {
       [ideal, practical, active],
       [idealSource, practicalSource, activeSource],
     )
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.conflicts).toEqual([])
   })
 
@@ -1857,7 +1874,7 @@ describe('Planner Beam Search', () => {
       const goal = target(`target.effect.${index}`)
       const entry = routeEntry(`entry.effect.${index}`, goal, item.route)
       const { input, dependencies } = fixture([goal], [entry], [item.source])
-      const result = await runPlannerBeamSearch(input, dependencies)
+      const result = await runPlannerBeamSearchOracle(input, dependencies)
       expect(result.bestState?.trace[0].inventoryEffect.updatedOwnedWeaponIds)
         .toEqual([])
     }
@@ -1921,7 +1938,7 @@ describe('Planner Beam Search', () => {
       [restorationEntry, consumingEntry],
       [onlySatisfiedWeapon],
     )
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.bestState?.trace.map(({ primaryBuildListEntryId }) =>
       primaryBuildListEntryId,
     )).toContain(restorationEntry.id)
@@ -1969,7 +1986,7 @@ describe('Planner Beam Search', () => {
       [first, second],
       [source],
     )
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.bestState?.routeSourceVersionByEntryId[first.id]).toBe(2)
     expect(result.bestState?.routeSourceVersionByEntryId[second.id]).toBe(2)
     expect(result.bestState?.sourceMutationVersionByOwnedWeaponId[source.id]).toBe(2)
@@ -2016,7 +2033,7 @@ describe('Planner Beam Search', () => {
       [source],
     )
     const before = structuredClone(input)
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     // A Route is secured only right after its own last unit (PLANNER_SPEC
     // 16.3), so the diverged Route is never secured once the shared weapon
     // moved on: it is secured directly after the shared Reset, or never.
@@ -2046,7 +2063,7 @@ describe('Planner Beam Search', () => {
       scenario.entries,
       scenario.ownedWeapons,
     )
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.conflicts).toContainEqual(expect.objectContaining({
       kind: 'same_skill_counter',
       buildListEntryIds: [scenario.consumingEntry.id, scenario.restoredEntry.id],
@@ -2060,7 +2077,7 @@ describe('Planner Beam Search', () => {
       unresolvedScenario.entries,
       unresolvedScenario.ownedWeapons,
     )
-    const unresolvedResult = await runPlannerBeamSearch(
+    const unresolvedResult = await runPlannerBeamSearchOracle(
       unresolved.input,
       unresolved.dependencies,
     )
@@ -2079,7 +2096,7 @@ describe('Planner Beam Search', () => {
       conflictKey: conflictKey as string,
       selectedBuildListEntryId: resolvedScenario.restoredEntry.id,
     }]
-    const result = await runPlannerBeamSearch(resolved.input, resolved.dependencies)
+    const result = await runPlannerBeamSearchOracle(resolved.input, resolved.dependencies)
     expect(result.warnings.some(({ kind }) =>
       kind === 'invalid_conflict_resolution',
     )).toBe(false)
@@ -2144,7 +2161,7 @@ describe('Planner Beam Search', () => {
       [entry, secondEntry],
       [initiallyPractical, candidateSource, otherSource],
     )
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.bestState?.targetSatisfaction[secondTarget.id].hasPractical)
       .toBe(true)
     // A Target's satisfaction is derived from the actual weapon it holds. The
@@ -2460,5 +2477,51 @@ describe('Planner input-level RNG support', () => {
       .mockImplementation(() => { throw failure })
 
     expect(() => validatePlannerInput(input, dependencies)).toThrow(failure)
+  })
+})
+
+/**
+ * The Beam Search oracle's own option contract (Issue #103 Phase D-2a): its
+ * two extra bounds live in `PlannerBeamSearchOptions` with their own defaults
+ * and validation, apart from the Production `PlannerOptions`.
+ */
+describe('Beam Search oracle options', () => {
+  it('keeps its own defaults, apart from the Production maxPlanSteps-only shape', () => {
+    expect(defaultPlannerBeamSearchOptions).toEqual({
+      maxPlanSteps: 1000,
+      beamWidth: 50,
+      maxExpandedStates: 10_000,
+    })
+  })
+
+  it('validates beamWidth and maxExpandedStates on top of maxPlanSteps', () => {
+    expect(validatePlannerBeamSearchOptions(defaultPlannerBeamSearchOptions).isValid).toBe(true)
+    const paths = (options: Parameters<typeof validatePlannerBeamSearchOptions>[0]) =>
+      validatePlannerBeamSearchOptions(options).issues.map(({ path }) => path)
+    expect(paths({ ...defaultPlannerBeamSearchOptions, beamWidth: 0 })).toEqual(['beamWidth'])
+    expect(paths({ ...defaultPlannerBeamSearchOptions, maxExpandedStates: 1.5 })).toEqual([
+      'maxExpandedStates',
+    ])
+    expect(paths({ ...defaultPlannerBeamSearchOptions, maxPlanSteps: -1 })).toEqual(['maxPlanSteps'])
+  })
+
+  it('fails its input closed on an invalid oracle bound the Production validation does not read', async () => {
+    const goal = target('target.beam-options.invalid')
+    const source = sourceWeapon('owned.beam-options.invalid')
+    const entry = routeEntry('entry.beam-options.invalid', goal, resetRoute(source.id))
+    const { input, dependencies } = fixture([goal], [entry], [source])
+    // The Production validation accepts this input: it reads maxPlanSteps only.
+    expect(validatePlannerInput(input, dependencies).isValid).toBe(true)
+    const result = await runPlannerBeamSearchOracle(
+      createPlannerBeamSearchInput(input, { beamWidth: 0 }),
+      dependencies,
+    )
+    expect(result.bestState).toBeNull()
+    expect(result.validationIssues.map(({ path }) => path)).toContain('beamWidth')
+    expect(result.termination).toMatchObject({
+      status: 'exhausted',
+      reachedLimits: [],
+      limits: { maxPlanSteps: input.options.maxPlanSteps, beamWidth: 0, maxExpandedStates: 10_000 },
+    })
   })
 })

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { runtimeUnsupportedFixture } from '../../test/fixtures/plannerRuntimeUnsupported'
 import { createProductionPlan } from './productionPlanGeneration'
-import type { PlannerBeamSearchResult } from './plannerTypes'
+import type { PlannerRunResult } from './plannerTypes'
 
 // Production Plan generation runs the deterministic scheduler (Issue #103
 // Phase C), so every full Planner run - the first one and the
@@ -60,7 +60,7 @@ describe('Production plan replay-time unsupported fallback', () => {
       message: expect.stringContaining(String(entries[1].id)),
     })
     const finalRunResult =
-      runCapture.calls[1].result as PlannerBeamSearchResult
+      runCapture.calls[1].result as PlannerRunResult
     expect(finalRunResult.excludedBuildListEntries).toContainEqual({
       entry: entries[1],
       reason: expect.stringContaining('reference_adapter_unsupported'),

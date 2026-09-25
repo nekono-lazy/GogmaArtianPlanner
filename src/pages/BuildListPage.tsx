@@ -49,7 +49,7 @@ import type {
   PlannerInput,
   PlannerOptions,
   PlannerOrchestrationResult,
-  PlannerSearchTermination,
+  PlannerRunTermination,
   PlannerWarning,
 } from '../domain/planner'
 import {
@@ -201,10 +201,8 @@ const unavailableReplanDependencies: ProductionPlanReplanDependencies = {
  * `maxPlanSteps` is the only Production Planner bound the user edits (Issue
  * #103 Phase D-1). A `PlannerOptions` value is only produced when it is a
  * positive integer, so `NaN`, `0`, a negative number, a fraction and an empty
- * field can never reach `PlannerInput.options` (UI_FLOW 10.0). `beamWidth` and
- * `maxExpandedStates` are not user input: the legacy `PlannerOptions` shape
- * still carries them until Phase D-2, so they come from `defaultPlannerOptions`
- * unchanged, and the Production scheduler reads neither.
+ * field can never reach `PlannerInput.options` (UI_FLOW 10.0). It is the whole
+ * Production `PlannerOptions` (Phase D-2a), so nothing else is filled in.
  */
 interface PlannerOptionInputs {
   maxPlanSteps: string
@@ -223,7 +221,7 @@ function parsePlannerOptionValue(raw: string): number | null {
 
 function parsePlannerOptions(inputs: PlannerOptionInputs): PlannerOptions | null {
   const maxPlanSteps = parsePlannerOptionValue(inputs.maxPlanSteps)
-  return maxPlanSteps === null ? null : { ...defaultPlannerOptions, maxPlanSteps }
+  return maxPlanSteps === null ? null : { maxPlanSteps }
 }
 
 /**
@@ -491,7 +489,7 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
   // A search a `PlannerOptions` bound truncated. It is held separately from
   // `warnings` because it is the typed result, not a diagnostic message.
   const [incompleteSearch, setIncompleteSearch] =
-    useState<PlannerSearchTermination | null>(null)
+    useState<PlannerRunTermination | null>(null)
   // The failure and notice sources stay separate: a load failure is never
   // shown as an empty Build List, and a Planner, selection, or remove problem
   // stays next to the control that caused it (`docs/UI_FLOW.md` 10).
@@ -631,9 +629,9 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
       }
       // B8-D2b: the Application caller is what decides to pass the Production
       // orchestration bounds. The Worker Client applies no default of its own.
-      // No progress callback: the running state is indeterminate (UI_FLOW
-      // 10.0), because `PlannerProgress.maxExpandedStates` is not a
-      // completion denominator of the Production scheduler.
+      // The running state is indeterminate (UI_FLOW 10.0): the Production
+      // Planner Worker reports no progress, only a result, an error or a
+      // cancellation.
       const result = await client.createConstrainedPlan(
         requestId,
         input,
@@ -641,7 +639,7 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
       )
       if (activeRequestRef.current !== requestId) return
       setWarnings(result.warnings)
-      // A `PlannerOptions` bound truncated the search, so its best state is a
+      // `maxPlanSteps` truncated the Planner run, so its best state is a
       // partial Planner artifact rather than a finished production plan.
       // It is never saved and never opened: the user is told which bound was
       // reached and asked to raise it (PLANNER_SPEC 7.2.1). The typed status

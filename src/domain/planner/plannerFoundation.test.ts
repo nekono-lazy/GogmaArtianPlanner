@@ -66,7 +66,7 @@ function fixture(): { input: PlannerInput; dependencies: PlannerDependencies } {
     targetWeapons: search.targetWeapons,
     buildListEntries: [entry],
     calculationContext: search.calculationContext,
-    options: { maxPlanSteps: 300, beamWidth: 50, maxExpandedStates: 10_000 },
+    options: { maxPlanSteps: 300 },
     master: {
       weaponBonusDefinitions: search.master.weaponBonusDefinitions,
       weaponTypes: search.master.weaponTypes,

@@ -12,10 +12,12 @@ import { runPlannerSchedulerParity } from './plannerSchedulerParity'
  */
 describe('representative-12 Beam / scheduler parity', { timeout: 300_000 }, () => {
   it('keeps every mandatory contract and completes at least as many Targets', async () => {
-    const { input, engine } = createPlannerSearchInstrumentationInput('representative-12')
+    const { input, beamSearchInput, engine } = createPlannerSearchInstrumentationInput('representative-12')
     const run = await runPlannerSchedulerParity(input, {
       engine,
       createDependencies: () => createDeterministicPlannerDependencies(engine),
+      // The workload's own Beam Search oracle bounds; the scheduler gets none.
+      beamSearchOptions: beamSearchInput.options,
     })
     expect(mandatoryParityProblems(run)).toEqual([])
     expect(run.report.completion.regression).toBe(false)

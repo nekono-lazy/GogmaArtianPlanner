@@ -39,7 +39,7 @@ import {
   orchestrationSource,
   orchestrationTarget,
 } from '../../test/fixtures/plannerConstrainedOrchestration'
-import { runPlannerBeamSearch } from './plannerBeamSearch'
+import { runPlannerBeamSearchOracle } from '../../test/fixtures/plannerBeamOracle'
 import { comparePlannerSearchStates } from './plannerScoring'
 import { createInitialPlannerSearchState } from './plannerInitialState'
 import { validatePlannerInput } from './plannerValidation'
@@ -255,7 +255,7 @@ describe('Lane-interleaved compromise checkpoints in a ProductionPlan', () => {
     const built = mixedScenario({ skill: true, bonus: true })
     built.input.options = { ...built.input.options, maxPlanSteps: 1 }
 
-    const result = await runPlannerBeamSearch(built.input, built.dependencies)
+    const result = await runPlannerBeamSearchOracle(built.input, built.dependencies)
 
     expect(result.completed).toBe(false)
     expect(result.bestState?.selectedBuildListEntryIds).toEqual([])
@@ -294,7 +294,7 @@ describe('Improvement preference in the Beam Search', () => {
     const entry = twoLaneEntry('entry.preference', goal, source, 10, 7, preference)
     const { input, dependencies } = plannerFixture([goal], [entry], [source])
 
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
 
     expect(result.completed).toBe(true)
     expect(actionTypesOf(result.bestState, entry.id)).toEqual(expected)
@@ -307,7 +307,7 @@ describe('Improvement preference in the Beam Search', () => {
     const entry = twoLaneEntry('entry.preference.planner', goal, source, 10, 7, 'planner')
     const { input, dependencies } = plannerFixture([goal], [entry], [source])
 
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
 
     expect(result.completed).toBe(true)
     expect(new Set(actionTypesOf(result.bestState, entry.id))).toEqual(new Set(['reset_bonuses', 'reset_skills']))
@@ -343,7 +343,7 @@ describe('Improvement preference in the Beam Search', () => {
     entryB.intermediateStateSelection = { ...defaultIntermediateStateSelection(), skillOpportunityId: currentSkills.id }
     const { input, dependencies } = plannerFixture([goalA, goalB], [entryA, entryB], [sourceA, sourceB])
 
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
 
     expect(result.completed).toBe(true)
     expect(result.conflicts).toEqual([])
@@ -369,7 +369,7 @@ describe('Improvement preference in the Beam Search', () => {
     const entryB = twoLaneEntry('entry.interleave.b', goalB, sourceB, 11, 8, 'planner')
     const { input, dependencies } = plannerFixture([goalA, goalB], [entryA, entryB], [sourceA, sourceB])
 
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
 
     expect(result.completed).toBe(true)
     expect(result.conflicts).toEqual([])
@@ -395,7 +395,7 @@ describe('Improvement preference in the Beam Search', () => {
     })
     const { input, dependencies } = plannerFixture([goal], [entry], [source])
 
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
 
     expect(result.completed).toBe(true)
     const skillActions = routeActions(result.bestState).filter(({ actionType }) => actionType === 'reset_skills')
@@ -419,7 +419,7 @@ describe('Improvement preference in the Beam Search', () => {
       improvementPreference: 'bonus_first',
     }
 
-    const result = await runPlannerBeamSearch(built.input, built.dependencies)
+    const result = await runPlannerBeamSearchOracle(built.input, built.dependencies)
 
     expect(result.completed).toBe(true)
     const types = actionTypesOf(result.bestState, built.entry.id)
@@ -506,7 +506,7 @@ describe('Soft improvement preference keeps both lane branches', () => {
     const { input, dependencies } = plannerFixture([goalA, goalB], [entryA, entryB], [sourceA, sourceB])
     expect(input.rngState.skillCounter.value).toBe(7)
 
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
 
     expect(result.completed).toBe(true)
     expect(result.conflicts).toEqual([])
@@ -557,7 +557,7 @@ describe('Soft improvement preference keeps both lane branches', () => {
     entryB.intermediateStateSelection = { ...defaultIntermediateStateSelection(), bonusOpportunityId: currentBonuses.id }
     const { input, dependencies } = plannerFixture([goalA, goalB], [entryA, entryB], [sourceA, sourceB])
 
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
 
     expect(result.completed).toBe(true)
     expect(result.conflicts).toEqual([])
@@ -714,7 +714,7 @@ describe('Existing Gogma lane starts held at Planner start', () => {
     // The Route base is a Normal weapon: its conversion Skill does not exist yet.
     expect(initial.state?.reachedCheckpointByEntryId[entry.id]).toBeUndefined()
 
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
 
     expect(result.completed).toBe(true)
     expect(actionTypesOf(result.bestState, entry.id)).toEqual(['convert_normal_to_gogma', 'reset_bonuses', 'reset_skills'])

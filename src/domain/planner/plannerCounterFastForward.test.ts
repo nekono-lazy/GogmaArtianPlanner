@@ -30,7 +30,7 @@ import {
 import { detectPlannerConflicts } from './plannerConflictDetection'
 import { createInitialPlannerSearchState } from './plannerInitialState'
 import { splitPlannerRouteUnitsByLane } from './plannerRouteLanes'
-import { runPlannerBeamSearch } from './plannerBeamSearch'
+import { runPlannerBeamSearchOracle } from '../../test/fixtures/plannerBeamOracle'
 import { createProductionPlan } from './productionPlanGeneration'
 
 /**
@@ -324,7 +324,7 @@ describe('Shared Gogma Counter Route prefix fast-forward', () => {
   it('plans both Targets without turning shared Counter positions into conflicts', async () => {
     const { input, dependencies, water, fire, waterTarget, fireTarget } =
       sharedGogmaScenario()
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
 
     expect(result.conflicts).toEqual([])
     expect(result.completed).toBe(true)
@@ -665,7 +665,7 @@ function initialStateFor(input: PlannerInput) {
 describe('Silent fast-forward in Beam Search', () => {
   it('advances Route progress only, without a Search Action or shared progress', async () => {
     const { input, dependencies, required, other } = sharedPositionScenario([10, 11])
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
 
     expect(result.completed).toBe(true)
     expect(result.conflicts).toEqual([])
@@ -697,7 +697,7 @@ describe('Silent fast-forward in Beam Search', () => {
 
   it('fails a past unit closed when it cannot be skipped', async () => {
     const { input, dependencies } = sharedPositionScenario([10])
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
 
     expect(result.completed).toBe(false)
     expect(result.rejections).toContainEqual(
@@ -808,7 +808,7 @@ describe('Silent fast-forward on an unregistered route output', () => {
       [transient, existing],
       [existingSource],
     )
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
 
     expect(result.completed).toBe(true)
     expect(result.conflicts).toEqual([])
@@ -848,7 +848,7 @@ describe('Required unit execution eligibility', () => {
    */
   it('never expands a skippable unit that would lose a required unit at the same Counter', async () => {
     const { input, dependencies, required, other } = sharedPositionScenario([10, 11])
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
 
     expect(result.completed).toBe(true)
     expect(result.conflicts).toEqual([])
@@ -892,7 +892,7 @@ describe('Required unit execution eligibility', () => {
         ({ canSkipWhenCounterPassed }) => canSkipWhenCounterPassed,
       ),
     ).toEqual([true, false])
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
 
     expect(result.conflicts).toEqual([])
     expect(result.completed).toBe(true)

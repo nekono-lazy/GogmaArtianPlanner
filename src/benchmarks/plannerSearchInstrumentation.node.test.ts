@@ -34,10 +34,10 @@ describe.skipIf(workloadId === undefined)('Issue #103 Node measurement runner', 
     const fixture = createPlannerSearchInstrumentationInput(workloadId as string)
     const maxExpanded = env.PLANNER_SEARCH_INSTRUMENTATION_MAX_EXPANDED
     const input = maxExpanded === undefined
-      ? fixture.input
+      ? fixture.beamSearchInput
       : {
-          ...fixture.input,
-          options: { ...fixture.input.options, maxExpandedStates: Number(maxExpanded) },
+          ...fixture.beamSearchInput,
+          options: { ...fixture.beamSearchInput.options, maxExpandedStates: Number(maxExpanded) },
         }
     const lines: string[] = []
     if (env.PLANNER_SEARCH_INSTRUMENTATION_OVERHEAD === '1') {

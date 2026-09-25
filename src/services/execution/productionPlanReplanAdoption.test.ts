@@ -397,7 +397,7 @@ describe('replan Preview', () => {
         ...structuredClone(preview),
         result: {
           ...structuredClone(preview.result),
-          termination: { ...preview.result.termination, status: 'incomplete', reachedLimits: ['max_expanded_states'] },
+          termination: { ...preview.result.termination, status: 'incomplete', reachedLimits: ['max_plan_steps'] },
         },
       }
       expect(describeReplanPreviewAdoptability(incomplete)).toMatchObject({ adoptable: false, reason: 'incomplete_search' })

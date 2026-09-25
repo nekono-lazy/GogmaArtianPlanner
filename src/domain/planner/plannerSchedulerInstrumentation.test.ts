@@ -2,14 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { plannerSchedulerCatalogue } from '../../test/fixtures/plannerSchedulerScenarios'
 import { createPlannerSearchInstrumentationInput } from '../../benchmarks/plannerSearchInstrumentationFixtures'
 import { createDeterministicPlannerDependencies } from '../../benchmarks/plannerSearchInstrumentationBenchmark'
-import { runPlannerDeterministicSchedule } from './plannerDeterministicScheduler'
+import {
+  runPlannerDeterministicSchedule,
+  type PlannerScheduleExecutionOptions,
+} from './plannerDeterministicScheduler'
 import type {
   PlannerSchedulerInstrumentation,
   PlannerSchedulerRunMetrics,
 } from './plannerSchedulerInstrumentation'
 import type {
-  PlannerBeamSearchResult,
-  PlannerExecutionOptions,
+  PlannerRunResult,
   PlannerInput,
   PlannerRunBuildListContext,
 } from './plannerTypes'
@@ -44,8 +46,8 @@ function workloadCase(workloadId: string): Case {
 
 async function schedule(
   target: Case,
-  options: PlannerExecutionOptions = {},
-): Promise<PlannerBeamSearchResult> {
+  options: PlannerScheduleExecutionOptions = {},
+): Promise<PlannerRunResult> {
   return runPlannerDeterministicSchedule(
     structuredClone(target.input),
     createDeterministicPlannerDependencies(target.engine),

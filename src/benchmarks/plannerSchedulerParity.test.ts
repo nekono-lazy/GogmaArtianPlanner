@@ -421,10 +421,12 @@ describe('acceptance scenarios: fast Beam / scheduler parity', { timeout: 60_000
 
 describe('sanity-3 Beam / scheduler parity', { timeout: 60_000 }, () => {
   it('completes every Target with both searches and keeps every mandatory contract', async () => {
-    const { input, engine } = createPlannerSearchInstrumentationInput('sanity-3')
+    const { input, beamSearchInput, engine } = createPlannerSearchInstrumentationInput('sanity-3')
     const run = await runPlannerSchedulerParity(input, {
       engine,
       createDependencies: () => createDeterministicPlannerDependencies(engine),
+      // The workload's own Beam Search oracle bounds; the scheduler gets none.
+      beamSearchOptions: beamSearchInput.options,
     })
     expect(mandatoryParityProblems(run)).toEqual([])
     expect(run.report.verdict).toBe('parity')

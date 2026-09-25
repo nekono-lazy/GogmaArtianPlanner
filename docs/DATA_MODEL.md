@@ -1714,10 +1714,9 @@ export interface PlannerInput {
   conflictResolutions: PlannerConflictResolution[];
 }
 
+// Issue #103 Phase D-2a: Production Plannerのboundは maxPlanSteps だけ
 export interface PlannerOptions {
   maxPlanSteps: number;
-  beamWidth: number;
-  maxExpandedStates: number;
 }
 
 export interface PlannerConflictResolution {
@@ -1742,8 +1741,23 @@ WorkerまたはApplication moduleからPlanner pure calculationへ注入するru
 ID FactoryはProductionPlan / PlanStep / future OwnedWeapon IDを、ClockはISO UTC時刻を供給する。
 Active Plan単一制約はApplication / Persistence層で扱う。
 
-v1のPlannerOptionsは3つの1以上の整数だけとし、実用品優先を切り替える
-`preferPracticalBeforeIdeal` は持たない。
+v1のProduction `PlannerOptions` は1以上の整数 `maxPlanSteps` だけとする（Issue #103 Phase D-2a）。
+Production Planner（決定的scheduler、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7）が読むboundは
+`maxPlanSteps` だけであり、型もそれに一致させる。初期値は `defaultPlannerOptions = { maxPlanSteps: 1000 }`。
+実用品優先を切り替える `preferPracticalBeforeIdeal` は持たず、渡された場合はvalidation issueとして拒否する。
+通常Worker request、B8 constrained re-search、B9 what-if、再計画Previewのいずれの `PlannerInput` も
+`beamWidth` / `maxExpandedStates` を持たない。
+
+Beam Search oracle（test / benchmark / parity専用、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7.2.2）の
+`beamWidth` / `maxExpandedStates` は、Production persisted / runtime modelではない別のtest / benchmark
+contract `PlannerBeamSearchOptions`（`PlannerOptions` + 2 field、既定値
+`defaultPlannerBeamSearchOptions = { maxPlanSteps: 1000, beamWidth: 50, maxExpandedStates: 10000 }`、
+専用validation `validatePlannerBeamSearchOptions()`）と `PlannerBeamSearchInput` だけが持つ。
+Production codeはこれらをimportしない。
+
+`PlannerOptions` は `PlanningInputSnapshot` にも他のpersisted entityにも保存されたことがない
+runtime入力である。そのためD-2aは `ProductionPlan` / `PlanStep` / `PlanningInputSnapshot` /
+`CalculationContext` / DB / Exportのshapeを変えず、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` は14のまま。
 
 Plannerは所持武器を消耗品として扱わないため、素材用武器需要を表すPlanner-only DTO
 (`PlannerMaterialRequirement` / `PlannerMaterialAssignment`)を持たない。
@@ -2075,14 +2089,16 @@ resolutionを黙って捨ててはならない。
 第9の競合適用時はconflictKeyが再検出した競合と一致し、selectedBuildListEntryIdがその
 競合のbuildListEntryIdsに含まれる場合だけresolutionを適用する。
 
-Planner warningの探索上限は次の2種を区別する。
+Planner warningの上限到達は次の2種を区別する。
 
 ```text
 max_steps_reached
 max_expanded_states_reached
 ```
 
-前者はmaxPlanSteps、後者はmaxExpandedStates到達時だけ使用し、途中のbest Planとwarningを同時に返してよい。
+前者はmaxPlanSteps到達時だけ使用し、途中のbest Planとwarningを同時に返してよい。後者はBeam Search
+oracleの `maxExpandedStates` 到達時だけ使用し、Production Planner（決定的scheduler）とProduction UIからは
+到達しない（warning kindの型分離はIssue #103 Phase D-2bで判断する）。
 
 ## 11.9 RejectedBuildListEntry
 
@@ -2795,7 +2811,8 @@ Production RNG契約切替時の互換性は次のとおりとする。
   含むPlanStepをDomain validationが拒否する
 - `recalculate_plan` がPlanStepOperationTypeとして受理されない
 - PlannerInputへRngEngine / engineCapabilities / existingActivePlanを含めずstructured cloneできる
-- PlannerOptionsはmaxPlanSteps、beamWidth、maxExpandedStatesだけを受け付け、各1以上を要求する
+- Production PlannerOptionsはmaxPlanStepsだけを持ち1以上の整数を要求する。Beam Search oracleの
+  `PlannerBeamSearchOptions` はmaxPlanSteps、beamWidth、maxExpandedStatesの各1以上を専用validationで要求する
 - normal新規では作成対象Stepだけがadd（Counter進行用Stepは登録なし）、所持Normalはconvert Stepで同一IDのkind更新、既存Gogmaは各Stepで同一ID更新になり、独立したreserve Stepを持たない
 - `targetExecutionStateHash` がPlan依存Targetだけを対象にし、Plan非依存Targetの追加・変更で変わらない
 - `targetWeaponsHash` が `preferredOwnedWeaponId` / `priority` / `isEnabled` / `lifecycleStatus` の変更で変わり、

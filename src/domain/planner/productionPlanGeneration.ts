@@ -30,7 +30,7 @@ import { PlannerPlanGenerationError } from './plannerPlanGenerationError'
 import { projectProductionPlanExecution } from './productionPlanExecutionProjection'
 import type {
   CreateProductionPlanCalculation,
-  PlannerBeamSearchResult,
+  PlannerRunResult,
   PlannerDependencies,
   PlannerRunBuildListContext,
   PlannerExecutionOptions,
@@ -352,15 +352,15 @@ function rejectedReason(
   entry: BuildListEntry,
   selectedEntryIds: ReadonlySet<BuildListEntryId>,
   input: PlannerInput,
-  beamResult: PlannerBeamSearchResult,
+  runResult: PlannerRunResult,
 ): RejectedBuildListEntry['reason'] {
-  const rejections = beamResult.rejections.filter(
+  const rejections = runResult.rejections.filter(
     (rejection) => rejection.buildListEntryId === entry.id,
   )
   if (rejections.some(({ reason }) => reason === 'protected_destructive_use')) {
     return 'requires_protected_weapon'
   }
-  if (beamResult.conflicts.some((conflict) =>
+  if (runResult.conflicts.some((conflict) =>
     conflict.buildListEntryIds.includes(entry.id) &&
     conflict.selectedBuildListEntryId !== null &&
     conflict.selectedBuildListEntryId !== entry.id &&
@@ -368,8 +368,8 @@ function rejectedReason(
   )) {
     return 'resource_conflict'
   }
-  // A deterministic scheduler result only: the Beam Search oracle never produces this
-  // reason, so the Beam Search mapping above and below is unchanged
+  // A deterministic scheduler reason only: a projected Beam Search oracle
+  // result never carries it, so the mapping above and below is unchanged
   // (`docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md` 8.4).
   if (rejections.some(({ reason }) => reason === 'conflict_not_committed')) {
     return 'resource_conflict'
@@ -399,26 +399,27 @@ const NOT_COMMITTED_DETAIL =
 
 export function createRejectedBuildListEntries(
   input: PlannerInput,
-  beamResult: PlannerBeamSearchResult,
+  runResult: PlannerRunResult,
   selectedBuildListEntryIds: readonly BuildListEntryId[],
 ): RejectedBuildListEntry[] {
   const selected = new Set(selectedBuildListEntryIds)
-  const excludedIds = new Set(beamResult.excludedBuildListEntries.map(({ entry }) => entry.id))
+  const excludedIds = new Set(runResult.excludedBuildListEntries.map(({ entry }) => entry.id))
   const rejectionsByEntryId = new Map<BuildListEntryId, PlannerSearchRejection[]>()
-  beamResult.rejections.forEach((rejection) => {
+  runResult.rejections.forEach((rejection) => {
     const entries = rejectionsByEntryId.get(rejection.buildListEntryId) ?? []
     entries.push(rejection)
     rejectionsByEntryId.set(rejection.buildListEntryId, entries)
   })
   // Deterministic scheduler results only (`conflict_not_committed`); empty for
-  // every Beam Search result, whose mapping and detail are therefore unchanged.
+  // a projected Beam Search oracle result, whose mapping and detail are
+  // therefore unchanged.
   const notCommittedIds = new Set<BuildListEntryId>(
-    beamResult.rejections
+    runResult.rejections
       .filter(({ reason }) => reason === 'conflict_not_committed')
       .map(({ buildListEntryId }) => buildListEntryId),
   )
   const traceEntryIds = new Set<BuildListEntryId>(
-    beamResult.bestState?.trace.flatMap((action) => [
+    runResult.bestState?.trace.flatMap((action) => [
       action.primaryBuildListEntryId,
       ...action.progressedBuildListEntryIds,
     ]) ?? [],
@@ -433,14 +434,14 @@ export function createRejectedBuildListEntries(
     })
     .filter((entry) => !hasOnlyNonSearchRejections(rejectionsByEntryId.get(entry.id) ?? []))
 
-  if (!beamResult.completed) {
+  if (!runResult.completed) {
     return baseRejectedEntries
       // An Entry the deterministic scheduler dropped from its commitment may
-      // already have progressed; the Beam Search never produces that reason.
+      // already have progressed; the Beam Search oracle never produces that reason.
       .filter((entry) => !traceEntryIds.has(entry.id) || notCommittedIds.has(entry.id))
       .map((entry) => ({
         entry,
-        reason: rejectedReason(entry, selected, input, beamResult),
+        reason: rejectedReason(entry, selected, input, runResult),
       }))
       .filter(({ reason }) =>
         reason === 'requires_protected_weapon' || reason === 'resource_conflict',
@@ -458,7 +459,7 @@ export function createRejectedBuildListEntries(
   return baseRejectedEntries
     .map((entry) => ({
       buildListEntryId: entry.id,
-      reason: rejectedReason(entry, selected, input, beamResult),
+      reason: rejectedReason(entry, selected, input, runResult),
       detail: notCommittedIds.has(entry.id)
         ? NOT_COMMITTED_DETAIL
         : 'Plannerの最終結果でこのBuildListEntryは採用されませんでした。',
@@ -523,9 +524,7 @@ export async function createProductionPlanWithObserver(
   buildListContext: PlannerRunBuildListContext = PERSISTED_PLANNER_BUILD_LIST_CONTEXT,
 ): Promise<PlannerResult> {
   // Production is fixed to the deterministic scheduler (Issue #103 Phase C): no
-  // caller, Worker message or setting chooses the full search. The Beam Search
-  // stays a test / benchmark oracle reached only through
-  // `createProductionPlanWithSearchRunner()`.
+  // caller, Worker message or setting chooses the full Planner run.
   return createProductionPlanWithSearchRunner(
     runPlannerDeterministicSchedule,
     input,
@@ -537,33 +536,37 @@ export async function createProductionPlanWithObserver(
 }
 
 /**
- * One full Planner search over one input: the Production deterministic
- * scheduler, or - in tests and benchmarks only - the Beam Search oracle, whose
- * result has the same shape (`docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md` 13).
+ * One full Planner run over one input, returning the Production
+ * `PlannerRunResult` (Issue #103 Phase D-2a). Production passes the
+ * deterministic scheduler; a test or benchmark may pass a runner of its own,
+ * but only one that returns the Production result shape - the Beam Search
+ * oracle's result is never accepted as it is, so a test that projects it must
+ * adapt it on its own side (`plannerSchedulerParity.ts`).
  */
 export type PlannerFullSearchRunner = (
   input: PlannerInput,
   dependencies: PlannerDependencies,
   options: PlannerExecutionOptions | undefined,
   buildListContext: PlannerRunBuildListContext,
-) => Promise<PlannerBeamSearchResult>
+) => Promise<PlannerRunResult>
 
 /**
- * `createProductionPlanWithObserver()` with the full search passed in
- * (Issue #103 Phase B / C).
+ * `createProductionPlanWithObserver()` with the full Planner run passed in
+ * (Issue #103 Phase B / C / D-2a).
  *
- * Only the full search is replaced; everything after it - the
+ * Only the full run is replaced; everything after it - the
  * runtime-unsupported retry, Trace Replay, the execution projection, the
  * `PlanningInputSnapshot`, the checkpoint requirement defence, the rejected
  * Build List record and the required materials - is this one shared
  * implementation. `observer.beforePlannerRun()` / `afterPlannerRun()` wrap
- * every full search exactly as before, so the B8 / what-if rerun budgets keep
- * counting full Planner runs whichever search runs.
+ * every full run exactly as before, so the B8 / what-if rerun budgets keep
+ * counting full Planner runs whichever runner runs.
  *
  * Production never calls this with anything but
  * `runPlannerDeterministicSchedule` (through `createProductionPlanWithObserver()`);
- * the parity harness, the Issue #103 benchmark and oracle tests inject
- * `runPlannerBeamSearch`.
+ * tests and the parity harness inject a runner returning the same Production
+ * result shape (the parity harness adapts its Beam Search oracle result on its
+ * own side).
  * It is a Domain function value, never a Worker message, a `PlannerInput`
  * field, a setting or a persisted value.
  */
@@ -576,11 +579,11 @@ export async function createProductionPlanWithSearchRunner(
   buildListContext: PlannerRunBuildListContext = PERSISTED_PLANNER_BUILD_LIST_CONTEXT,
 ): Promise<PlannerResult> {
   const runtimeUnsupported = new Map<BuildListEntryId, string>()
-  let beamResult: PlannerBeamSearchResult | null = null
+  let runResult: PlannerRunResult | null = null
   let replay: PlannerTraceReplayResult | null = null
 
   for (;;) {
-    const beamInput: PlannerInput = runtimeUnsupported.size === 0
+    const runInput: PlannerInput = runtimeUnsupported.size === 0
       ? input
       : {
           ...input,
@@ -590,7 +593,7 @@ export async function createProductionPlanWithSearchRunner(
         }
     // A temporary Entry the runtime found unsupported leaves the retry input
     // together with its replacement, so its Target then holds neither Entry.
-    const beamContext: PlannerRunBuildListContext =
+    const runContext: PlannerRunBuildListContext =
       buildListContext.kind === 'persisted' || runtimeUnsupported.size === 0
         ? buildListContext
         : {
@@ -600,17 +603,17 @@ export async function createProductionPlanWithSearchRunner(
             ),
           }
     observer?.beforePlannerRun()
-    beamResult = await searchRunner(beamInput, dependencies, options, beamContext)
-    observer?.afterPlannerRun?.(beamResult)
+    runResult = await searchRunner(runInput, dependencies, options, runContext)
+    observer?.afterPlannerRun?.(runResult)
     if (
-      beamResult.cancelled ||
-      beamResult.bestState === null ||
-      beamResult.bestState.trace.length === 0
+      runResult.cancelled ||
+      runResult.bestState === null ||
+      runResult.bestState.trace.length === 0
     ) break
 
     replay = replayPlannerSearchTrace(
-      beamInput,
-      beamResult.bestState,
+      runInput,
+      runResult.bestState,
       dependencies.rngEngine,
     )
     if (replay.unsupportedInput === null) break
@@ -628,8 +631,8 @@ export async function createProductionPlanWithSearchRunner(
     replay = null
   }
 
-  if (beamResult === null) {
-    throw new PlannerPlanGenerationError('Planner full search did not return a result.')
+  if (runResult === null) {
+    throw new PlannerPlanGenerationError('Planner full run did not return a result.')
   }
   const runtimeWarnings: PlannerWarning[] = [...runtimeUnsupported]
     .sort(([left], [right]) => compareStableStrings(left, right))
@@ -639,16 +642,16 @@ export async function createProductionPlanWithSearchRunner(
     }))
   if (runtimeUnsupported.size > 0) {
     const alreadyExcluded = new Set(
-      beamResult.excludedBuildListEntries.map(({ entry }) => entry.id),
+      runResult.excludedBuildListEntries.map(({ entry }) => entry.id),
     )
     input.buildListEntries.forEach((entry) => {
       const reason = runtimeUnsupported.get(entry.id)
       if (reason && !alreadyExcluded.has(entry.id)) {
-        beamResult?.excludedBuildListEntries.push({ entry, reason })
+        runResult?.excludedBuildListEntries.push({ entry, reason })
       }
     })
   }
-  const warnings = [...beamResult.warnings, ...runtimeWarnings]
+  const warnings = [...runResult.warnings, ...runtimeWarnings]
     .filter((warning, index, all) =>
       all.findIndex((candidate) =>
         candidate.kind === warning.kind &&
@@ -656,15 +659,15 @@ export async function createProductionPlanWithSearchRunner(
       ) === index,
     )
   if (
-    beamResult.cancelled ||
-    beamResult.bestState === null ||
-    beamResult.bestState.trace.length === 0
+    runResult.cancelled ||
+    runResult.bestState === null ||
+    runResult.bestState.trace.length === 0
   ) {
     return {
       plan: null,
-      conflicts: structuredClone(beamResult.conflicts),
+      conflicts: structuredClone(runResult.conflicts),
       warnings: structuredClone(warnings),
-      termination: structuredClone(beamResult.termination),
+      termination: structuredClone(runResult.termination),
     }
   }
   if (replay === null || !replay.isValid) {
@@ -675,13 +678,13 @@ export async function createProductionPlanWithSearchRunner(
 
   const now = dependencies.clock.now()
   const productionPlanId = dependencies.idFactory.productionPlanId()
-  const selectedBuildListEntryIds = [...new Set(beamResult.bestState.selectedBuildListEntryIds)]
+  const selectedBuildListEntryIds = [...new Set(runResult.bestState.selectedBuildListEntryIds)]
     .sort(compareStableStrings)
   const projection = projectProductionPlanExecution({
     input,
     drafts: replay.drafts,
     selectedBuildListEntryIds,
-    searchFinalOwnedWeapons: beamResult.bestState.simulatedInventory.ownedWeapons,
+    searchFinalOwnedWeapons: runResult.bestState.simulatedInventory.ownedWeapons,
     dependencies,
     productionPlanId,
     now,
@@ -693,10 +696,10 @@ export async function createProductionPlanWithSearchRunner(
     now,
   )
   assertCheckpointRequirementsSatisfied(
-    beamInputEntries(input, beamResult),
+    runInputEntries(input, runResult),
     selectedBuildListEntryIds,
     steps,
-    beamResult.termination.status === 'completed',
+    runResult.termination.status === 'completed',
   )
   const plan: ProductionPlan = {
     id: productionPlanId,
@@ -705,10 +708,10 @@ export async function createProductionPlanWithSearchRunner(
     selectedBuildListEntryIds,
     calculationContext: structuredClone(input.calculationContext),
     steps,
-    conflicts: structuredClone(beamResult.conflicts),
+    conflicts: structuredClone(runResult.conflicts),
     rejectedBuildListEntries: createRejectedBuildListEntries(
       input,
-      beamResult,
+      runResult,
       selectedBuildListEntryIds,
     ),
     requiredMaterials: collectRequiredMaterials(input, selectedBuildListEntryIds),
@@ -722,12 +725,12 @@ export async function createProductionPlanWithSearchRunner(
   }
   return {
     plan,
-    conflicts: structuredClone(beamResult.conflicts),
+    conflicts: structuredClone(runResult.conflicts),
     warnings: structuredClone(warnings),
     // The last full Planner run that actually produced this Plan, so a Plan built
-    // from a truncated search is identifiable without reading a warning
-    // message (PLANNER_SPEC 7.2.1).
-    termination: structuredClone(beamResult.termination),
+    // from a truncated run is identifiable without reading a warning message
+    // (PLANNER_SPEC 7.2.1).
+    termination: structuredClone(runResult.termination),
   }
 }
 
@@ -735,12 +738,12 @@ export async function createProductionPlanWithSearchRunner(
  * The ordinary Production Plan calculation. Its signature and result semantics
  * are unchanged; it simply runs the shared implementation with no observer.
  */
-function beamInputEntries(
+function runInputEntries(
   input: PlannerInput,
-  beamResult: PlannerBeamSearchResult,
+  runResult: PlannerRunResult,
 ): BuildListEntry[] {
   const excluded = new Set(
-    beamResult.excludedBuildListEntries.map(({ entry }) => entry.id),
+    runResult.excludedBuildListEntries.map(({ entry }) => entry.id),
   )
   return input.buildListEntries.filter(({ id }) => !excluded.has(id))
 }

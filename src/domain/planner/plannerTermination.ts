@@ -3,27 +3,33 @@ import type { PlannerCheckpointRequirements } from './plannerCheckpoints'
 import { isPlannerTargetComplete } from './plannerEntryRelevance'
 import type {
   PlannerOptions,
+  PlannerRunLimitKind,
+  PlannerRunTermination,
   PlannerSearchState,
-  PlannerSearchTermination,
-  PlannerSearchLimitKind,
+  PlannerTerminationOf,
 } from './plannerTypes'
 
 /**
- * How a bounded Beam Search ended, as typed data (PLANNER_SPEC 7.2.1).
+ * How a full Planner run ended, as typed data (PLANNER_SPEC 7.2.1).
  *
  * This module is the single place the status is derived. UI, Application and
- * Persistence read `PlannerSearchTermination`; they never parse a
+ * Persistence read `PlannerRunTermination`; they never parse a
  * `PlannerWarning.message` and never re-derive the status from a warning kind.
- * `max_steps_reached` / `max_expanded_states_reached` stay diagnostics that say
- * a bound was touched - which a *completed* search can also do, when the last
- * affordable expansion happened to be the one that completed it.
+ * `max_steps_reached` stays a diagnostic that says the bound was touched -
+ * which a *completed* run can also do, when the last affordable action
+ * happened to be the one that completed it. The Beam Search oracle derives its
+ * own termination through the same `createPlannerTermination()`, with its own
+ * limit kinds (`plannerBeamSearchTypes.ts`).
  */
 
 /** True when this full Planner run may become an executable ProductionPlan. */
-export function isPlannerSearchResultUsable(
-  termination: PlannerSearchTermination,
-): boolean {
+export function isPlannerRunResultUsable(termination: PlannerRunTermination): boolean {
   return termination.status !== 'incomplete'
+}
+
+/** The Production bounds as a termination records them: `maxPlanSteps` only. */
+export function plannerRunLimits(options: PlannerOptions): PlannerOptions {
+  return { maxPlanSteps: options.maxPlanSteps }
 }
 
 function countCompletedTargets(
@@ -33,16 +39,16 @@ function countCompletedTargets(
   unconfirmedTargetIds: ReadonlySet<TargetWeaponId>,
 ): number {
   if (bestState === null) return 0
-  // The same authority the Beam Search uses: a Target with a required
-  // checkpoint Entry counts only once that Entry itself was secured.
+  // The same authority the run uses: a Target with a required checkpoint
+  // Entry counts only once that Entry itself was secured.
   return planningTargetIds.filter((targetId) =>
     !unconfirmedTargetIds.has(targetId) &&
     isPlannerTargetComplete(bestState, targetId, checkpointRequirements),
   ).length
 }
 
-export interface PlannerSearchTerminationInput {
-  options: PlannerOptions
+/** What every full Planner run termination is derived from, whatever its bounds. */
+export interface PlannerTerminationStateInput {
   /**
    * The planning Targets of the run (`PlannerInitialContext.planningTargetIds`):
    * only Targets with a valid BuildListEntry, never every active Target.
@@ -52,8 +58,6 @@ export interface PlannerSearchTerminationInput {
   bestState: PlannerSearchState | null
   expandedStates: number
   cancelled: boolean
-  reachedStepLimit: boolean
-  reachedExpandedLimit: boolean
   /**
    * Planning Targets whose `confirm_owned_ideal` a bound withheld (the
    * deterministic scheduler's `maxPlanSteps`, Issue #103 Phase D-1). Such a
@@ -64,29 +68,30 @@ export interface PlannerSearchTerminationInput {
 }
 
 /**
- * Derives the typed termination of one Beam Search.
+ * Derives the typed termination of one full Planner run from the bounds it
+ * reached.
  *
  * Status precedence, in this order:
  *
- * - `cancelled`  the user stopped the search; nothing about the result is a
+ * - `cancelled`  the user stopped the run; nothing about the result is a
  *   statement on feasibility, and the ordinary Planner already returns a safe
  *   `plan: null` for it.
  * - `completed`  every planning Target is complete: Ideal, and its required
  *   checkpoint Entry secured (PLANNER_SPEC 7.5.6). A bound that was touched
  *   on the way stays in `reachedLimits` as a diagnostic and changes nothing.
- * - `incomplete` a `PlannerOptions` bound truncated the search before that, so
- *   the best state is a search artifact, not an answer about the input.
- * - `exhausted`  the search ended on its own without completing every Target.
+ * - `incomplete` a bound truncated the run before that, so the best state is a
+ *   run artifact, not an answer about the input.
+ * - `exhausted`  the run ended on its own without completing every Target.
  *   That is the ordinary "this input yields no better Plan" outcome, not a
  *   truncation, and it keeps its existing meaning and behaviour.
  */
-export function createPlannerSearchTermination(
-  input: PlannerSearchTerminationInput,
-): PlannerSearchTermination {
-  const reachedLimits: PlannerSearchLimitKind[] = [
-    ...(input.reachedExpandedLimit ? (['max_expanded_states'] as const) : []),
-    ...(input.reachedStepLimit ? (['max_plan_steps'] as const) : []),
-  ]
+export function createPlannerTermination<TLimitKind extends string, TLimits>(
+  input: PlannerTerminationStateInput & {
+    limits: TLimits
+    reachedLimits: readonly TLimitKind[]
+  },
+): PlannerTerminationOf<TLimitKind, TLimits> {
+  const reachedLimits = [...input.reachedLimits]
   const totalTargetCount = input.planningTargetIds.length
   const completedTargetCount = countCompletedTargets(
     input.bestState,
@@ -108,28 +113,50 @@ export function createPlannerSearchTermination(
   return {
     status,
     reachedLimits,
-    limits: { ...input.options },
+    limits: input.limits,
     expandedStates: input.expandedStates,
     completedTargetCount,
     totalTargetCount,
   }
 }
 
+export interface PlannerRunTerminationInput extends PlannerTerminationStateInput {
+  options: PlannerOptions
+  reachedStepLimit: boolean
+}
+
 /**
- * The termination of a Planner run that never reached its Beam Search, so no
- * `PlannerOptions` bound was touched. The reason it stopped - an invalid input,
- * or an orchestration bound - is reported by its own warning, never here.
- * `planningTargetIds` is the same planning Target authority a searched run
- * counts (`preparePlannerInitialContext()`), never every active Target.
+ * The Production full Planner run termination. The deterministic scheduler's
+ * one bound is `maxPlanSteps`, so `max_plan_steps` is the only limit kind it
+ * can report (Issue #103 Phase D-1 / D-2a).
  */
-export function createUnsearchedPlannerTermination(
-  options: PlannerOptions,
+export function createPlannerRunTermination(
+  input: PlannerRunTerminationInput,
+): PlannerRunTermination {
+  const reachedLimits: PlannerRunLimitKind[] = input.reachedStepLimit ? ['max_plan_steps'] : []
+  return createPlannerTermination({
+    ...input,
+    limits: plannerRunLimits(input.options),
+    reachedLimits,
+  })
+}
+
+/**
+ * The termination of a Planner run that never started, so no bound was
+ * touched. The reason it stopped - an invalid input, or an orchestration
+ * bound - is reported by its own warning, never here. `planningTargetIds` is
+ * the same planning Target authority a started run counts
+ * (`preparePlannerInitialContext()`), never every active Target. `limits` is
+ * the bounds as the caller's own termination shape records them.
+ */
+export function createUnsearchedPlannerTermination<TLimits>(
+  limits: TLimits,
   planningTargetIds: readonly TargetWeaponId[],
-): PlannerSearchTermination {
+): PlannerTerminationOf<never, TLimits> {
   return {
     status: 'exhausted',
     reachedLimits: [],
-    limits: { ...options },
+    limits,
     expandedStates: 0,
     completedTargetCount: 0,
     totalTargetCount: planningTargetIds.length,

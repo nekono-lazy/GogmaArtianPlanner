@@ -78,7 +78,7 @@ describe('forced Reset Normal Artian route, Search to ProductionPlan', () => {
       targetWeapons: [target],
       buildListEntries: [entry],
       calculationContext: { ...input.calculationContext },
-      options: { beamWidth: 50, maxExpandedStates: 10_000, maxPlanSteps: 300 },
+      options: { maxPlanSteps: 300 },
       master: input.master,
       conflictResolutions: [],
     }

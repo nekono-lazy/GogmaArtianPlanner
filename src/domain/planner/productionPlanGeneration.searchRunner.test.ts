@@ -1,24 +1,34 @@
 import { describe, expect, it, vi } from 'vitest'
 import { plannerSchedulerCatalogue } from '../../test/fixtures/plannerSchedulerScenarios'
+import { projectBeamSearchResultForProduction } from '../../benchmarks/plannerSchedulerParity'
 import { runPlannerBeamSearch } from './plannerBeamSearch'
+import { createPlannerBeamSearchInput } from './plannerBeamSearchTypes'
 import { runPlannerDeterministicSchedule } from './plannerDeterministicScheduler'
 import {
   createProductionPlan,
   createProductionPlanWithObserver,
   createProductionPlanWithSearchRunner,
+  type PlannerFullSearchRunner,
 } from './productionPlanGeneration'
-import type { PlannerResult } from './plannerTypes'
+import type { PlannerOptions, PlannerResult } from './plannerTypes'
 
 /**
  * Issue #103 Phase C: the full-search seam of Production Plan generation.
  *
  * Production runs the deterministic scheduler: `createProductionPlanWithObserver()`
  * always passes `runPlannerDeterministicSchedule`, so the ordinary Planner, the
- * Planner Worker, B8 / B9 and the replan Preview all reach it. The Beam Search
- * stays a test / benchmark oracle reached only through
- * `createProductionPlanWithSearchRunner()`, and nothing outside tests, the
- * Issue #103 benchmark and the defining modules names it.
+ * Planner Worker, B8 / B9 and the replan Preview all reach it. The seam
+ * accepts only a runner returning the Production `PlannerRunResult` (Issue
+ * #103 Phase D-2a), so the Beam Search oracle reaches it only through the
+ * parity harness's own adapter, and nothing outside tests, the Issue #103
+ * benchmark and the defining modules names it.
  */
+
+/** The Beam Search oracle adapted to the Production result shape, test-side only. */
+const beamOracleRunner: PlannerFullSearchRunner = async (input, dependencies, options, buildListContext) =>
+  projectBeamSearchResultForProduction(
+    await runPlannerBeamSearch(createPlannerBeamSearchInput(input), dependencies, options, buildListContext),
+  )
 
 const beam = vi.hoisted(() => ({ runs: 0 }))
 
@@ -113,7 +123,7 @@ describe('Production Plan generation runs the deterministic scheduler', () => {
 
     const oracle = scenario('J-same-owned-weapon')
     const beamResult = await createProductionPlanWithSearchRunner(
-      runPlannerBeamSearch,
+      beamOracleRunner,
       oracle.input,
       oracle.dependencies,
       undefined,
@@ -121,17 +131,17 @@ describe('Production Plan generation runs the deterministic scheduler', () => {
     expect(digest(beamResult)).not.toEqual(digest(result))
   })
 
-  it('never lets beamWidth change the Production result', async () => {
-    const digests = await Promise.all([1, 50, 999].map(async (beamWidth) => {
+  it('never reads or echoes a stray Beam Search oracle field (Phase D-2a)', async () => {
+    const digests = await Promise.all([1, 50, 999].map(async (value) => {
       const built = scenario('D-unresolved-conflict')
-      const input = { ...built.input, options: { ...built.input.options, beamWidth } }
-      const result = await createProductionPlan(input, built.dependencies)
-      // `termination.limits` echoes the input options, so only the value that
-      // was passed in may differ; everything the scheduler decided may not.
-      expect(result.termination.limits.beamWidth).toBe(beamWidth)
-      const { beamWidth: _echoed, ...limits } = result.termination.limits
-      void _echoed
-      return digest({ ...result, termination: { ...result.termination, limits: { ...limits, beamWidth: 0 } } })
+      // A runtime value the Production type cannot express: no caller can
+      // send it, and even if one did, it would change nothing.
+      const stray = { ...built.input.options, beamWidth: value, maxExpandedStates: value }
+      const options: PlannerOptions = stray
+      const result = await createProductionPlan({ ...built.input, options }, built.dependencies)
+      // The Production termination records the Production bound only.
+      expect(result.termination.limits).toEqual({ maxPlanSteps: built.input.options.maxPlanSteps })
+      return digest(result)
     }))
     expect(digests[0].selectedBuildListEntryIds).not.toBeNull()
     expect(digests[1]).toEqual(digests[0])
@@ -160,7 +170,7 @@ describe('Production Plan generation runs the deterministic scheduler', () => {
       /^\.\/plannerDeterministicScheduler\.ts$/,
       /^\.\/plannerSchedulerInstrumentation\.ts$/,
       /^\.\/productionPlanGeneration\.ts$/,
-      /^\.\/plannerTypes\.ts$/,
+      /^\.\/plannerBeamSearchTypes\.ts$/,
       /^\.\/index\.ts$/,
     ]
     const offenders = paths.filter(
@@ -171,6 +181,39 @@ describe('Production Plan generation runs the deterministic scheduler', () => {
         ),
     )
     expect(paths).toContain('./productionPlanGeneration.ts')
+    expect(offenders).toEqual([])
+  })
+
+  it('keeps the Beam Search oracle options, progress and defaults out of Production modules', () => {
+    const sources: Record<string, string> = {
+      ...import.meta.glob('../**/*.{ts,tsx}', { query: '?raw', import: 'default', eager: true }),
+      ...import.meta.glob('../../{app,components,db,pages,services,stores,workers}/**/*.{ts,tsx}', {
+        query: '?raw',
+        import: 'default',
+        eager: true,
+      }),
+    } as Record<string, string>
+    const allowed = [
+      /\.test\.tsx?$/,
+      /\.benchmark(\.entry)?\.ts$/,
+      /BenchmarkPage\.tsx$/,
+      // The oracle's own modules.
+      /^\.\/plannerBeamSearch\.ts$/,
+      /^\.\/plannerBeamSearchTypes\.ts$/,
+      /^\.\/plannerSearchInstrumentation\.ts$/,
+      /^\.\/index\.ts$/,
+    ]
+    // Code only: a doc comment may name the oracle types to explain the split.
+    const code = (source: string) =>
+      source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
+    const offenders = Object.keys(sources).filter(
+      (path) =>
+        !allowed.some((pattern) => pattern.test(path)) &&
+        /\b(?:PlannerBeamSearch(?:Options|Input|Result|Termination|Progress|ExecutionOptions)|defaultPlannerBeamSearchOptions|plannerBeamSearchTypes|PlannerProgress|beamWidth|maxExpandedStates)\b/.test(
+          code(sources[path]),
+        ),
+    )
+    expect(Object.keys(sources)).toContain('./plannerDeterministicScheduler.ts')
     expect(offenders).toEqual([])
   })
 

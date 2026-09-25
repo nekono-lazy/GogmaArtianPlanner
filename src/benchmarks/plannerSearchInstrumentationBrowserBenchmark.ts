@@ -1,6 +1,6 @@
 import type { MasterDataRoot } from '../domain/master/masterTypes'
 import { prepareExportRootForImport } from '../domain/models/publicTypes'
-import type { PlannerInput, PlannerOptions, PlannerSearchDepthMetrics } from '../domain/planner'
+import type { PlannerBeamSearchOptions, PlannerInput, PlannerSearchDepthMetrics } from '../domain/planner'
 import {
   createPlannerCalculationContext,
   createPlannerInput,
@@ -48,7 +48,7 @@ export function createPlannerSearchInstrumentationBenchmarkWorker(): Worker {
 export function startPlannerSearchInstrumentationBrowserRun(
   request: {
     source: PlannerSearchInstrumentationBenchmarkSource
-    options: PlannerOptions
+    options: PlannerBeamSearchOptions
     instrumented: boolean
     collectDiagnosticProjections: boolean
     strategy?: PlannerBenchmarkStrategy

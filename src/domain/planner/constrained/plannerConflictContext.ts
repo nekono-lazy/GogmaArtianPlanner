@@ -30,7 +30,7 @@ import {
  * (9.2.9), and it neither extends nor replaces `PlanConflict`,
  * `PlannerConflictResolution`, the `PlanConflict.id` generation rule,
  * `detectPlannerConflicts()` semantics, `physicalActionKey` semantics,
- * shareability semantics, or the Beam Search resolution application rule.
+ * shareability semantics, or the full Planner run resolution application rule.
  */
 
 /**
@@ -380,7 +380,7 @@ export interface PlannerFixedConstraintFailure {
 
 /**
  * All-or-nothing by contract (PLANNER_SPEC 9.2.3.1): a partially rebuilt
- * resolution array must never reach Beam Search, so a single failure yields no
+ * resolution array must never reach a full Planner run, so a single failure yields no
  * constraints at all instead of a usable subset. The caller branches on
  * `status` and `failures[].reason`, never on message text.
  */
@@ -406,7 +406,7 @@ function constraintFailure(
  * constraint.
  *
  * The only fixed authority is `PlannerConflictResolution.selectedBuildListEntryId`
- * (PLANNER_SPEC 9.2.7). `recommendedBuildListEntryId`, a Beam Search bestState
+ * (PLANNER_SPEC 9.2.7). `recommendedBuildListEntryId`, a full Planner run bestState
  * participant, Target priority, and Candidate score are never consulted, so a
  * conflict without an explicit resolution simply produces no constraint.
  *

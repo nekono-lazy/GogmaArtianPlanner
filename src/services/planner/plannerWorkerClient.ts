@@ -2,7 +2,6 @@ import type {
   PlannerInput,
   PlannerOrchestrationBounds,
   PlannerOrchestrationResult,
-  PlannerProgress,
   PlannerResult,
   PlannerWhatIfCalculationResult,
   PlannerWhatIfRequest,
@@ -55,16 +54,16 @@ export class PlannerWorkerProtocolError extends Error {
   }
 }
 
-export interface PlannerWorkerClientCallbacks {
-  onProgress?: (progress: PlannerProgress) => void
-}
-
 export interface PlannerWorkerClient {
   readonly engineVersion: string
+  /**
+   * The ordinary Production Planner run. Like every entry point below it takes
+   * no progress callback (Issue #103 Phase D-2a): the Promise settles with the
+   * result, an error, or `PlannerCancelledError` from `cancelPlan()`.
+   */
   createPlan(
     requestId: string,
     input: PlannerInput,
-    callbacks?: PlannerWorkerClientCallbacks,
   ): Promise<PlannerResult>
   /**
    * The B8-D1 Planner-driven constrained re-search entry point.
@@ -85,13 +84,11 @@ export interface PlannerWorkerClient {
     requestId: string,
     input: PlannerInput,
     orchestrationBounds: PlannerOrchestrationBounds,
-    callbacks?: PlannerWorkerClientCallbacks,
   ): Promise<PlannerOrchestrationResult>
   /** B9 transient calculation; the complete caller-required request is wired verbatim. */
   createWhatIfComparison(
     requestId: string,
     request: PlannerWhatIfRequest,
-    callbacks?: PlannerWorkerClientCallbacks,
   ): Promise<PlannerWhatIfCalculationResult>
   /** B10 current initial availability; calculation only, with no search bounds. */
   prepareInteraction(
@@ -130,7 +127,6 @@ interface PendingPlanIdentity {
   requestId: string
   generation: number
   reject: (error: Error) => void
-  onProgress?: (progress: PlannerProgress) => void
 }
 
 type PendingPlan =
@@ -167,10 +163,6 @@ export function createPlannerWorkerClient(
     // replacement task is even delivered there. Its response is stale, so it is
     // dropped here rather than treated as a wrong discriminant.
     if (data.generation !== current.generation) return
-    if (data.type === 'progress') {
-      current.onProgress?.(data.progress)
-      return
-    }
     pending.delete(data.requestId)
     if (data.type === 'error') {
       current.reject(new Error(data.message))
@@ -221,7 +213,7 @@ export function createPlannerWorkerClient(
 
   return {
     engineVersion,
-    createPlan: (requestId, input, callbacks = {}) => {
+    createPlan: (requestId, input) => {
       if (disposed) {
         return Promise.reject(new Error('Planner Worker Client is disposed.'))
       }
@@ -233,17 +225,11 @@ export function createPlannerWorkerClient(
           expectedResultType: 'create_plan_result',
           resolve,
           reject,
-          onProgress: callbacks.onProgress,
         })
         worker.postMessage({ type: 'create_plan', requestId, generation, input })
       })
     },
-    createConstrainedPlan: (
-      requestId,
-      input,
-      orchestrationBounds,
-      callbacks = {},
-    ) => {
+    createConstrainedPlan: (requestId, input, orchestrationBounds) => {
       if (disposed) {
         return Promise.reject(new Error('Planner Worker Client is disposed.'))
       }
@@ -255,7 +241,6 @@ export function createPlannerWorkerClient(
           expectedResultType: 'create_constrained_plan_result',
           resolve,
           reject,
-          onProgress: callbacks.onProgress,
         })
         worker.postMessage({
           type: 'create_constrained_plan',
@@ -265,7 +250,7 @@ export function createPlannerWorkerClient(
         })
       })
     },
-    createWhatIfComparison: (requestId, request, callbacks = {}) => {
+    createWhatIfComparison: (requestId, request) => {
       if (disposed) {
         return Promise.reject(new Error('Planner Worker Client is disposed.'))
       }
@@ -277,7 +262,6 @@ export function createPlannerWorkerClient(
           expectedResultType: 'create_what_if_comparison_result',
           resolve,
           reject,
-          onProgress: callbacks.onProgress,
         })
         worker.postMessage({
           type: 'create_what_if_comparison',

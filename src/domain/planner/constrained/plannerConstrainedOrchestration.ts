@@ -17,10 +17,10 @@ import {
   preparePlannerInitialContext,
 } from '../plannerInitialContext'
 import { createProductionPlanWithObserver } from '../productionPlanGeneration'
-import { createUnsearchedPlannerTermination } from '../plannerTermination'
+import { createUnsearchedPlannerTermination, plannerRunLimits } from '../plannerTermination'
 import type { PlannerCheckpointRequirements } from '../plannerCheckpoints'
 import type {
-  PlannerBeamSearchResult,
+  PlannerRunResult,
   PlannerDependencies,
   PlannerExecutionOptions,
   PlannerInput,
@@ -41,7 +41,7 @@ import {
 import { createConstrainedMaterializer } from './constrainedMaterializer'
 import type { PlannerOrchestrationBounds } from './plannerOrchestrationBounds'
 import {
-  createPlannerFullBeamBudget,
+  createPlannerFullRunBudget,
   PlannerOrchestrationLimitError,
 } from './plannerRerunBudget'
 
@@ -351,23 +351,23 @@ export async function createProductionPlanWithConstrainedSearch(
   // One shared budget for every full Planner run this orchestration starts:
   // the initial ordinary one, every Candidate trial, and every
   // runtime-unsupported retry inside Production Plan generation.
-  const budget = createPlannerFullBeamBudget(orchestrationBounds)
+  const budget = createPlannerFullRunBudget(orchestrationBounds)
   const orchestrationWarnings: PlannerWarning[] = []
   // Scoped to one `runFullPlanner()` call and reset at its start, so a later
   // run can never read a previous run's full Planner run result.
-  let lastCompletedBeam: PlannerBeamSearchResult | null = null
+  let lastCompletedPlannerRun: PlannerRunResult | null = null
   const observer: ProductionPlanGenerationObserver = {
     beforePlannerRun: () => budget.beforePlannerRun(),
-    afterPlannerRun: (beamResult) => {
-      lastCompletedBeam = beamResult
+    afterPlannerRun: (runResult) => {
+      lastCompletedPlannerRun = runResult
     },
   }
   /**
    * Read through a declared return type: the assignment above happens inside a
    * callback, so a direct read would be narrowed to the initial `null`.
    */
-  const readLastCompletedBeam = (): PlannerBeamSearchResult | null =>
-    lastCompletedBeam
+  const readLastCompletedPlannerRun = (): PlannerRunResult | null =>
+    lastCompletedPlannerRun
 
   /**
    * Whether every affordable full Planner run has already been started.
@@ -393,7 +393,7 @@ export async function createProductionPlanWithConstrainedSearch(
     planInput: PlannerInput,
     buildListContext: PlannerRunBuildListContext,
   ): Promise<FullPlannerRun> {
-    lastCompletedBeam = null
+    lastCompletedPlannerRun = null
     try {
       const result = await createProductionPlanWithObserver(
         planInput,
@@ -403,7 +403,7 @@ export async function createProductionPlanWithConstrainedSearch(
         buildListContext,
       )
       // This run's own last full Planner run, never a previous run's.
-      return readLastCompletedBeam()?.cancelled === true
+      return readLastCompletedPlannerRun()?.cancelled === true
         ? { status: 'cancelled', result }
         : { status: 'completed', result }
     } catch (error) {
@@ -459,22 +459,22 @@ export async function createProductionPlanWithConstrainedSearch(
     // generation. Its last completed full Planner run never passed Trace Replay, so
     // no Plan may be assembled from it; only its conflicts and warnings are
     // reported, with `plan: null`.
-    const beam = readLastCompletedBeam()
+    const lastRun = readLastCompletedPlannerRun()
     return finish(
       {
         plan: null,
-        conflicts: beam === null ? [] : structuredClone(beam.conflicts),
-        warnings: beam === null ? [] : structuredClone(beam.warnings),
+        conflicts: lastRun === null ? [] : structuredClone(lastRun.conflicts),
+        warnings: lastRun === null ? [] : structuredClone(lastRun.warnings),
         // `maxPlannerReruns` is an orchestration bound, not a `PlannerOptions`
         // bound, so it is reported by its own warning above. When no full
         // Planner run ran at all, no `PlannerOptions` bound was touched either.
         termination:
-          beam === null
+          lastRun === null
             ? createUnsearchedPlannerTermination(
-                input.options,
+                plannerRunLimits(input.options),
                 unsearchedPlanningTargetIds(input, dependencies),
               )
-            : structuredClone(beam.termination),
+            : structuredClone(lastRun.termination),
       },
       [],
       [],

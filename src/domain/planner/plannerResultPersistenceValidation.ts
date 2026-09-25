@@ -22,7 +22,7 @@ import {
   validateProductionPlan,
 } from '../models/publicTypes'
 import type { DomainValidationResult } from '../models/validation'
-import type { PlannerSearchTermination } from './plannerTypes'
+import type { PlannerRunTermination } from './plannerTypes'
 
 /**
  * The pure save-time checks a Planner orchestration result must pass before it
@@ -60,18 +60,17 @@ function resultInvalid(message: string): PlannerResultPersistenceIssue {
 export function checkPersistablePlannerResultShape(
   plan: ProductionPlan,
   generatedEntries: readonly BuildListEntry[],
-  termination: PlannerSearchTermination,
+  termination: PlannerRunTermination,
   replacements: readonly BuildListEntryReplacement[] | undefined,
 ): PlannerResultPersistenceIssue | null {
-  // PLANNER_SPEC 7.2.1: a Plan calculated from a Beam Search that a
-  // `PlannerOptions` bound truncated is a partial search artifact, not a
-  // finished production plan, so it never becomes an executable Draft. The
-  // typed termination decides this - never a `PlannerWarning` message, and
-  // never the presence of `max_expanded_states_reached`, which a completed
-  // search can carry too.
+  // PLANNER_SPEC 7.2.1: a Plan calculated from a full Planner run that its
+  // `maxPlanSteps` bound truncated is a partial run artifact, not a finished
+  // production plan, so it never becomes an executable Draft. The typed
+  // termination decides this - never a `PlannerWarning` message, and never the
+  // presence of `max_steps_reached`, which a completed run can carry too.
   if (termination.status === 'incomplete') {
     return resultInvalid(
-      `The Planner search did not complete: it reached ${termination.reachedLimits.join(', ')} after ${termination.expandedStates} expanded states with ${termination.completedTargetCount} of ${termination.totalTargetCount} target weapons completed. A truncated search result must not be saved as an executable ProductionPlan.`,
+      `The Planner run did not complete: it reached ${termination.reachedLimits.join(', ')} with ${termination.completedTargetCount} of ${termination.totalTargetCount} target weapons completed. A truncated Planner run result must not be saved as an executable ProductionPlan.`,
     )
   }
   if (plan.status !== 'draft') {

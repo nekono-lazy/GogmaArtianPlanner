@@ -18,7 +18,7 @@ import {
   createPlannerSearchStateSemanticKey,
 } from './plannerScoring'
 import { createInitialPlannerSearchState } from './plannerInitialState'
-import { runPlannerBeamSearch } from './plannerBeamSearch'
+import { runPlannerBeamSearchOracle } from '../../test/fixtures/plannerBeamOracle'
 import type { PlannerSearchState } from './plannerTypes'
 
 const PREFERRED_ENTRY = buildListEntryId('entry.preferred')
@@ -209,7 +209,7 @@ describe('Planner preferred source in Beam Search', () => {
     'selects the preferred source Entry (%i) when the two are otherwise equal',
     async (preferredWeaponIndex) => {
       const scenario = equalCostScenario(preferredWeaponIndex)
-      const result = await runPlannerBeamSearch(scenario.input, scenario.dependencies, {})
+      const result = await runPlannerBeamSearchOracle(scenario.input, scenario.dependencies, {})
       // Both Entries are equally valid and equally cheap, and only one can
       // take Gogma Counter position 10, so without the preference the stable
       // tie-break alone would decide. Flipping which Target prefers its
@@ -229,7 +229,7 @@ describe('Planner preferred source in Beam Search', () => {
     const preferenceBefore = scenario.input.targetWeapons.map(
       ({ id, preferredOwnedWeaponId }) => [id, preferredOwnedWeaponId],
     )
-    const result = await runPlannerBeamSearch(scenario.input, scenario.dependencies, {})
+    const result = await runPlannerBeamSearchOracle(scenario.input, scenario.dependencies, {})
     // reserve_weapon secures a Candidate result; it is never a licence to
     // rewrite the user's planning input (`docs/PLANNER_SPEC.md` 7.4).
     expect(
@@ -255,7 +255,7 @@ describe('Planner preferred source in Beam Search', () => {
     const { input, dependencies } = fixture([goal], [firstEntry, secondEntry], [first, second])
 
     // The ordinary persisted input fails closed on the legacy duplicate.
-    const ordinary = await runPlannerBeamSearch(input, dependencies)
+    const ordinary = await runPlannerBeamSearchOracle(input, dependencies)
     expect(ordinary.bestState).toBeNull()
     expect(ordinary.expandedStates).toBe(0)
     expect(ordinary.warnings.map(({ kind }) => kind)).toContain(
@@ -263,7 +263,7 @@ describe('Planner preferred source in Beam Search', () => {
     )
     // A trial's full run is the replacement set: the replaced Entry left
     // beside its temporary Entry is refused too (`docs/PLANNER_SPEC.md` 9.2.18).
-    const trial = await runPlannerBeamSearch(input, dependencies, {}, {
+    const trial = await runPlannerBeamSearchOracle(input, dependencies, {}, {
       kind: 'temporary_replacement',
       replacements: [{
         targetWeaponId: goal.id,

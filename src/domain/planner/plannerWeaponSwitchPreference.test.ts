@@ -18,7 +18,7 @@ import {
 } from './plannerRouteProgress'
 import { comparePlannerSearchStates } from './plannerScoring'
 import { createInitialPlannerSearchState } from './plannerInitialState'
-import { runPlannerBeamSearch } from './plannerBeamSearch'
+import { runPlannerBeamSearchOracle } from '../../test/fixtures/plannerBeamOracle'
 import type { PlannerSearchState } from './plannerTypes'
 
 const FIRST_ENTRY = buildListEntryId('entry.weapon-switch.first')
@@ -250,7 +250,7 @@ function twoWeaponScenario(): {
 describe('Planner weapon switch metric in Beam Search', () => {
   it('counts no switch for consecutive operations on one owned weapon', async () => {
     const { input, dependencies } = singleWeaponScenario()
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(
       result.bestState?.trace.filter(({ kind }) => kind === 'route_operation'),
     ).toHaveLength(3)
@@ -259,7 +259,7 @@ describe('Planner weapon switch metric in Beam Search', () => {
 
   it('counts one switch across two different owned weapons', async () => {
     const { input, dependencies } = twoWeaponScenario()
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(
       result.bestState?.trace.filter(({ kind }) => kind === 'route_operation'),
     ).toHaveLength(2)
@@ -274,7 +274,7 @@ describe('Planner weapon switch metric in Beam Search', () => {
 
   it('counts a shared physical action once instead of once per Entry', async () => {
     const { input, dependencies, first, second } = sharedActionScenario()
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     const routeActions =
       result.bestState?.trace.filter(({ kind }) => kind === 'route_operation') ??
       []

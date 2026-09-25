@@ -16,7 +16,7 @@ import {
 import { fixture, routeEntry, synchronizeEntry } from '../../test/fixtures/plannerBeam'
 import { FakeRngEngine, type FakeRngFixtures } from '../rng/fakeRngEngine'
 import type { PlannerDependencies, PlannerInput } from './plannerTypes'
-import { runPlannerBeamSearch } from './plannerBeamSearch'
+import { runPlannerBeamSearchOracle } from '../../test/fixtures/plannerBeamOracle'
 import { createProductionPlan } from './productionPlanGeneration'
 
 const WATER_FAMILY = 'bonus_type.fixture.utility'
@@ -322,7 +322,9 @@ function scenario(): {
 describe('Planner search limits on a long Bonus + Skill Route', () => {
   it('reports a typed incomplete search at the default bounds', async () => {
     const { input, dependencies, water, waterTarget, fireTarget } = scenario()
-    const result = await runPlannerBeamSearch(input, dependencies)
+    // The Beam Search oracle over its own default bounds, which the fixture's
+    // Production input (maxPlanSteps 300) does not carry (Phase D-2a).
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
 
     // The root cause is the expanded-state bound, not the step bound, not a
     // conflict, and not an inventory or source-version rejection.
@@ -348,11 +350,12 @@ describe('Planner search limits on a long Bonus + Skill Route', () => {
     expect(result.bestState?.targetSatisfaction[fireTarget.id]?.hasIdeal).toBe(false)
   }, 300_000)
 
-  it('completes both Targets once maxExpandedStates is raised', async () => {
+  it('completes both Targets through Production Plan generation', async () => {
     const { input, dependencies, water, fire, waterTarget, fireTarget } = scenario()
-    // The measured complete search costs 17,619 expanded states; 20,000 is the
-    // round value a user would enter in the detail settings.
-    input.options = { maxPlanSteps: 300, beamWidth: 50, maxExpandedStates: 20_000 }
+    // The Beam Search needed 17,619 expanded states here; Production runs the
+    // deterministic scheduler over `maxPlanSteps` alone (Issue #103 Phase C /
+    // D-2a), which completes it within the same 300 Plan steps.
+    input.options = { maxPlanSteps: 300 }
     const { plan, conflicts, warnings, termination } = await createProductionPlan(
       input,
       dependencies,

@@ -133,24 +133,23 @@ describe('PlannerWorkerClient', () => {
     }
   })
 
-  it('preserves requestId, forwards progress, and resolves a result', async () => {
+  it('preserves requestId and resolves a result with no progress callback', async () => {
     const worker = new FakeWorker()
     const client = createPlannerWorkerClient(worker, 'fixture')
     const input = plannerInput()
-    const progress = vi.fn()
-    const promise = client.createPlan('planner.request', input, { onProgress: progress })
+    // Issue #103 Phase D-2a: the Production entry points take no callbacks.
+    expect(client.createPlan).toHaveLength(2)
+    expect(client.createConstrainedPlan).toHaveLength(3)
+    expect(client.createWhatIfComparison).toHaveLength(2)
+    const promise = client.createPlan('planner.request', input)
     expect(worker.posted[0]).toEqual({
       type: 'create_plan',
       requestId: 'planner.request',
       generation: 1,
       input,
     })
-    worker.emit({
-      type: 'progress',
-      requestId: 'planner.request',
-      generation: 1,
-      progress: { expandedStates: 2, maxExpandedStates: 10 },
-    })
+    // A Production request carries the Production options only.
+    expect(Object.keys(input.options)).toEqual(['maxPlanSteps'])
     const result = {
       plan: createValidProductionPlan(),
       conflicts: [],
@@ -164,7 +163,6 @@ describe('PlannerWorkerClient', () => {
       result,
     })
     await expect(promise).resolves.toEqual(result)
-    expect(progress).toHaveBeenCalledWith({ expandedStates: 2, maxExpandedStates: 10 })
   })
 
   it('cancels locally, sends cancel, and ignores late or stale responses', async () => {
@@ -213,15 +211,13 @@ describe('PlannerWorkerClient', () => {
 })
 
 describe('PlannerWorkerClient what-if comparison (B9-C)', () => {
-  it('posts the exact request, forwards shared progress, and resolves the what-if result', async () => {
+  it('posts the exact request and resolves the what-if result', async () => {
     const worker = new FakeWorker()
     const client = createPlannerWorkerClient(worker, 'fixture')
     const request = whatIfRequest()
-    const progress = vi.fn()
     const promise = client.createWhatIfComparison(
       'planner.what-if.client',
       request,
-      { onProgress: progress },
     )
 
     expect(worker.posted[0]).toEqual({
@@ -240,12 +236,6 @@ describe('PlannerWorkerClient what-if comparison (B9-C)', () => {
     expect(request).not.toHaveProperty('enumerationBounds')
 
     worker.emit({
-      type: 'progress',
-      requestId: 'planner.what-if.client',
-      generation: 1,
-      progress: { expandedStates: 8, maxExpandedStates: 50 },
-    })
-    worker.emit({
       type: 'create_what_if_comparison_result',
       requestId: 'planner.what-if.client',
       generation: 1,
@@ -253,10 +243,6 @@ describe('PlannerWorkerClient what-if comparison (B9-C)', () => {
     })
 
     await expect(promise).resolves.toBe(whatIfResult)
-    expect(progress).toHaveBeenCalledExactlyOnceWith({
-      expandedStates: 8,
-      maxExpandedStates: 50,
-    })
   })
 
   it('uses the shared cancel and error paths', async () => {
@@ -393,12 +379,10 @@ describe('PlannerWorkerClient constrained plan (B8-D1)', () => {
     const worker = new FakeWorker()
     const client = createPlannerWorkerClient(worker, 'fixture')
     const input = plannerInput()
-    const progress = vi.fn()
     const promise = client.createConstrainedPlan(
       'planner.constrained',
       input,
       orchestrationBounds,
-      { onProgress: progress },
     )
     expect(worker.posted[0]).toEqual({
       type: 'create_constrained_plan',
@@ -411,13 +395,6 @@ describe('PlannerWorkerClient constrained plan (B8-D1)', () => {
       .toBe(orchestrationBounds)
     // Search enumeration bounds never cross this boundary.
     expect(posted).not.toHaveProperty('input.enumerationBounds')
-    // The Beam progress response is shared with the ordinary request kind.
-    worker.emit({
-      type: 'progress',
-      requestId: 'planner.constrained',
-      generation: 1,
-      progress: { expandedStates: 6, maxExpandedStates: 40 },
-    })
     const result = {
       plan: createValidProductionPlan(),
       conflicts: [],
@@ -433,7 +410,6 @@ describe('PlannerWorkerClient constrained plan (B8-D1)', () => {
       result,
     })
     await expect(promise).resolves.toEqual(result)
-    expect(progress).toHaveBeenCalledWith({ expandedStates: 6, maxExpandedStates: 40 })
   })
 
   it('resolves the typed termination unchanged instead of rebuilding it', async () => {
@@ -444,9 +420,9 @@ describe('PlannerWorkerClient constrained plan (B8-D1)', () => {
       plannerInput(),
       orchestrationBounds,
     )
-    const termination = incompletePlannerTermination(['max_expanded_states'], {
-      limits: { maxPlanSteps: 300, beamWidth: 50, maxExpandedStates: 10_000 },
-      expandedStates: 10_000,
+    const termination = incompletePlannerTermination(['max_plan_steps'], {
+      limits: { maxPlanSteps: 300 },
+      expandedStates: 300,
       completedTargetCount: 1,
       totalTargetCount: 2,
     })
@@ -460,8 +436,8 @@ describe('PlannerWorkerClient constrained plan (B8-D1)', () => {
         // The diagnostic warning travels beside the typed termination; the
         // Client reads neither and reinterprets neither (PLANNER_SPEC 7.2.1).
         warnings: [{
-          kind: 'max_expanded_states_reached',
-          message: 'Planner reached maxExpandedStates (10000).',
+          kind: 'max_steps_reached',
+          message: 'Planner reached maxPlanSteps (300).',
         }],
         termination,
         generatedBuildListEntries: [],
@@ -878,48 +854,30 @@ describe('Planner Worker / Client task generation across an asynchronous boundar
     await expect(ordinary).resolves.toEqual(ordinaryResult)
   })
 
-  it('ignores stale progress from a superseded task instance', async () => {
+  it('posts nothing but the result while a task runs, and drops a superseded result', async () => {
     const session = integration()
-    const staleProgress = vi.fn()
-    const currentProgress = vi.fn()
-    const ordinary = session.client.createPlan('planner.race.progress', plannerInput(), {
-      onProgress: staleProgress,
-    })
+    const ordinary = session.client.createPlan('planner.race.progress', plannerInput())
     const ordinaryRun = session.worker.deliverToWorker()
     const constrained = session.client.createConstrainedPlan(
       'planner.race.progress',
       plannerInput(),
       orchestrationBounds,
-      { onProgress: currentProgress },
     )
     await expect(ordinary).rejects.toBeInstanceOf(PlannerCancelledError)
 
-    // The Worker has not seen the replacement task yet, so it still forwards
-    // the superseded calculation's progress.
-    session.ordinaryCalls[0].onProgress?.({ expandedStates: 9, maxExpandedStates: 99 })
-    expect(session.worker.toClient).toEqual([
-      {
-        type: 'progress',
-        requestId: 'planner.race.progress',
-        generation: 1,
-        progress: { expandedStates: 9, maxExpandedStates: 99 },
-      },
-    ])
-    session.worker.deliverToClient()
-    expect(staleProgress).not.toHaveBeenCalled()
-    expect(currentProgress).not.toHaveBeenCalled()
+    // The calculation receives the Production hooks only; nothing it could
+    // call posts a progress message (Issue #103 Phase D-2a).
+    expect(Object.keys(session.ordinaryCalls[0]).sort()).toEqual(['shouldCancel', 'yieldControl'])
+    expect(session.worker.toClient).toEqual([])
 
     session.ordinaryResults[0].resolve(ordinaryResult)
     await ordinaryRun
+    // The superseded task's result is stale and ignored by the Client.
     session.worker.deliverToClient()
 
     const constrainedRun = session.worker.deliverToWorker()
-    session.constrainedCalls[0].onProgress?.({ expandedStates: 2, maxExpandedStates: 20 })
-    session.worker.deliverToClient()
-    expect(currentProgress).toHaveBeenCalledExactlyOnceWith({
-      expandedStates: 2,
-      maxExpandedStates: 20,
-    })
+    expect(Object.keys(session.constrainedCalls[0]).sort()).toEqual(['shouldCancel', 'yieldControl'])
+    expect(session.worker.toClient).toEqual([])
 
     session.constrainedResults[0].resolve(constrainedResult)
     await constrainedRun

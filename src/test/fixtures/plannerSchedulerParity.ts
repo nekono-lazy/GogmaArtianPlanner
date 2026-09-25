@@ -13,6 +13,7 @@ export async function runCatalogueParity(id: string): Promise<PlannerSchedulerPa
     engine: item.scenario.engine,
     createDependencies: () => createDeterministicPlannerDependencies(item.scenario.engine),
     buildListContext: item.buildListContext,
+    beamSearchOptions: item.beamSearchOptions,
   })
 }
 

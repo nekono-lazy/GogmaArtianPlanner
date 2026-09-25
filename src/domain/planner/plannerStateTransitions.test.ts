@@ -29,7 +29,8 @@ import {
 } from '../../test/fixtures/plannerConstrainedOrchestration'
 import { createPlannerSearchInstrumentationInput } from '../../benchmarks/plannerSearchInstrumentationFixtures'
 import { createDeterministicPlannerDependencies } from '../../benchmarks/plannerSearchInstrumentationBenchmark'
-import { runPlannerBeamSearch } from './plannerBeamSearch'
+import { runPlannerBeamSearchOracle } from '../../test/fixtures/plannerBeamOracle'
+import type { PlannerBeamSearchInput } from './plannerBeamSearchTypes'
 import { detectPlannerConflicts } from './plannerConflictDetection'
 import { entryIsRelevantForState } from './plannerEntryRelevance'
 import { preparePlannerInitialContext, type PlannerInitialContext } from './plannerInitialContext'
@@ -285,8 +286,11 @@ function withoutScore(state: PlannerSearchState | null): PlannerSearchState | nu
   return state === null ? null : { ...state, evaluationScore: 0 }
 }
 
-async function expectBeamTraceReplays(input: PlannerInput, dependencies: PlannerDependencies) {
-  const result = await runPlannerBeamSearch(structuredClone(input), dependencies)
+async function expectBeamTraceReplays(
+  input: PlannerInput | PlannerBeamSearchInput,
+  dependencies: PlannerDependencies,
+) {
+  const result = await runPlannerBeamSearchOracle(structuredClone(input), dependencies)
   const best = result.bestState
   if (best === null) throw new Error('The Beam Search returned no state.')
   expect(best.trace.length).toBeGreaterThan(0)
@@ -443,7 +447,7 @@ describe('Planner state transitions: Beam Search parity', { timeout: 60_000 }, (
 
   it('replays a truncated representative-12 Beam trace with detected conflicts', async () => {
     const fixtureInput = createPlannerSearchInstrumentationInput('representative-12')
-    const input: PlannerInput = {
+    const input: PlannerBeamSearchInput = {
       ...fixtureInput.input,
       options: { maxPlanSteps: 1_000, maxExpandedStates: 300, beamWidth: 6 },
     }
