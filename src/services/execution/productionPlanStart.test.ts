@@ -137,7 +137,7 @@ describe('Plan start effect', () => {
       expect((await currentPlan(database, fixture.plan)).status).toBe('draft')
     }))
 
-  it.each([12, 13])('never starts or executes a calculation schema %i Plan under the current schema 14', (appSchemaVersion) =>
+  it.each([12, 13, 14])('never starts or executes a calculation schema %i Plan under the current schema 15', (appSchemaVersion) =>
     withDatabase(async (database) => {
       const fixture = await existingGogmaFixture()
       const legacy = structuredClone(fixture.plan)
@@ -145,7 +145,7 @@ describe('Plan start effect', () => {
       legacy.baseSnapshot.calculationContext.appSchemaVersion = appSchemaVersion
       await seed(database, { ...fixture, plan: legacy })
       const service = executionService(database, fixture.built)
-      expect(fixture.built.input.calculationContext.appSchemaVersion).toBe(14)
+      expect(fixture.built.input.calculationContext.appSchemaVersion).toBe(15)
 
       await expectRefusal(() => service.startProductionPlan(legacy.id), database, 'calculation_context_changed')
       expect((await currentPlan(database, legacy)).status).toBe('draft')
@@ -159,11 +159,12 @@ describe('Plan start effect', () => {
       )
     }))
 
-  it('keeps an active schema 13 Plan with ExecutionHistory non-executable and exactly as persisted under schema 14', () =>
+  it.each([13, 14])('keeps an active schema %i Plan with ExecutionHistory non-executable and exactly as persisted under schema 15', (appSchemaVersion) =>
     withDatabase(async (database) => {
       // A Plan the user started and advanced under schema 13 (Issue #103 Phase
-      // C): the version 14 runtime reads it as calculation_context_changed and
-      // never rewrites it into schema 14 (no read migration, no status change).
+      // C) or 14 (Issue #129): the version 15 runtime reads it as
+      // calculation_context_changed and never rewrites it into schema 15 (no
+      // read migration, no status change).
       const fixture = await existingGogmaFixture()
       await seed(database, fixture)
       const service = executionService(database, fixture.built)
@@ -174,10 +175,10 @@ describe('Plan start effect', () => {
       expect(advanced.status).toBe('active')
       expect(await database.executionHistory.count()).toBe(1)
       const schema13 = structuredClone(advanced)
-      schema13.calculationContext.appSchemaVersion = 13
-      schema13.baseSnapshot.calculationContext.appSchemaVersion = 13
+      schema13.calculationContext.appSchemaVersion = appSchemaVersion
+      schema13.baseSnapshot.calculationContext.appSchemaVersion = appSchemaVersion
       await database.productionPlans.put(schema13)
-      expect(fixture.built.input.calculationContext.appSchemaVersion).toBe(14)
+      expect(fixture.built.input.calculationContext.appSchemaVersion).toBe(15)
       const stepId = schema13.currentStepId as PlanStep['id']
 
       await expectRefusal(

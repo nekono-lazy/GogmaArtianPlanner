@@ -288,7 +288,25 @@ export interface KnownValue<T> {
 // incompatible. No persisted shape changes, so `DATABASE_SCHEMA_VERSION` stays
 // 8, `ExportRoot.schemaVersion` stays 11 and `PRODUCTION_RNG_ENGINE_VERSION`
 // is unchanged.
-export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 14
+//
+// Version 15 lets the Production Planner pass the Counter-advance forges of a
+// predicted Normal creation (Issue #129, `docs/PLANNER_SPEC.md` 7.0.2): the
+// first `count - 1` units of `create_normal_artian` become
+// `canSkipWhenCounterPassed`, so another Entry's real forge at the same Normal
+// Counter position fast-forwards them instead of making them a
+// `same_normal_counter` conflict, while the production-target forge and a blind
+// creation stay required. For the same PlannerInput the `conflicts`, the
+// selected and rejected Entries, the Step order and the completion can differ,
+// so every version 1..14 Plan - Draft or active - fails closed with
+// `calculation_context_changed`; none is migrated or rewritten. Candidate
+// Search and the BuildCandidate / BuildListEntry snapshot semantics do not
+// change, so the explicit build-result exception `15 -> [12, 13, 14]` keeps
+// version 12, 13 and 14 Candidates and Build List Entries usable under 15;
+// version 1..11 stay incompatible. No persisted shape changes, so
+// `DATABASE_SCHEMA_VERSION`, `ExportRoot.schemaVersion`,
+// `AppSettings.schemaVersion`, `RngState.schemaVersion`,
+// `PRODUCTION_RNG_ENGINE_VERSION` and the Master `dataVersion` are unchanged.
+export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 15
 
 export interface CalculationContext {
   gameVersion: string

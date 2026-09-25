@@ -482,16 +482,16 @@ describe('replan adoption', () => {
       ].sort((a, b) => a.id.localeCompare(b.id)))
     }))
 
-  it('replans a running schema 13 Plan from the current state through the schema 14 scheduler', () =>
+  it.each([13, 14])('replans a running schema %i Plan from the current state through the schema 15 scheduler', (appSchemaVersion) =>
     withDatabase(async (database) => {
-      // Issue #103 Phase C: the running Plan was calculated under schema 13 and
-      // is never executed under 14; the way on is a new calculation from the
-      // current persisted state, never its baseSnapshot.
+      // Issue #103 Phase C / Issue #129: the running Plan was calculated under
+      // an older schema and is never executed under 15; the way on is a new
+      // calculation from the current persisted state, never its baseSnapshot.
       const harness = await running(database, { confirmedSteps: 1 })
       const persisted = await currentPlan(database, harness.fixture.plan)
       const schema13 = structuredClone(persisted)
-      schema13.calculationContext.appSchemaVersion = 13
-      schema13.baseSnapshot.calculationContext.appSchemaVersion = 13
+      schema13.calculationContext.appSchemaVersion = appSchemaVersion
+      schema13.baseSnapshot.calculationContext.appSchemaVersion = appSchemaVersion
       await database.productionPlans.put(schema13)
       await expectRefusal(
         () => harness.service.confirmExpectedPlanStep({ planId: schema13.id, planStepId: schema13.currentStepId as PlanStep['id'] }),
@@ -508,7 +508,7 @@ describe('replan adoption', () => {
       expect(fullRuns.scheduler).toBeGreaterThan(0)
       expect(fullRuns.beam).toBe(0)
       const draft = previewPlan(preview)
-      expect(draft.calculationContext.appSchemaVersion).toBe(14)
+      expect(draft.calculationContext.appSchemaVersion).toBe(15)
 
       const result = await adopt(harness, preview)
 
@@ -516,11 +516,11 @@ describe('replan adoption', () => {
       expect(await database.productionPlans.get(schema13.id)).toMatchObject({
         status: 'abandoned',
         abandonmentReason: 'replan_adopted',
-        calculationContext: { appSchemaVersion: 13 },
+        calculationContext: { appSchemaVersion },
       })
       expect(await database.productionPlans.get(draft.id)).toMatchObject({
         status: 'active',
-        calculationContext: { appSchemaVersion: 14 },
+        calculationContext: { appSchemaVersion: 15 },
       })
     }))
 
@@ -598,7 +598,7 @@ describe('replan adoption', () => {
     }))
 
   it('moves no version authority', () => {
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(14)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(15)
     expect(DATABASE_SCHEMA_VERSION).toBe(9)
     expect(EXPORT_SCHEMA_VERSION).toBe(12)
   })

@@ -139,9 +139,10 @@ describe('Execution lifecycle version boundaries', () => {
     // schema at 11; the Execution Plan contract then moved them to 8 and 12,
     // and the Execution runtime lifecycle metadata moved Export to 9. The Plan
     // start effect moved the calculation schema to 13 with no persisted shape
-    // change. The Identification provenance moved Export to 10.
+    // change. The Identification provenance moved Export to 10. Issue #103
+    // Phase C (14) and Issue #129 (15) moved the calculation schema alone.
     expect(EXPORT_SCHEMA_VERSION).toBe(12)
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(14)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(15)
   })
 })
 

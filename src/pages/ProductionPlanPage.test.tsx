@@ -2371,24 +2371,30 @@ describe('ProductionPlanPage Execution entry', () => {
     expect(deps.startProductionPlan).not.toHaveBeenCalled()
   })
 
-  it.each(['draft', 'active'] as const)(
-    'fails a schema 13 %s Plan closed under schema 14, keeping its persisted content readable',
-    async (status) => {
+  it.each([
+    ['draft', 13],
+    ['active', 13],
+    ['draft', 14],
+    ['active', 14],
+  ] as const)(
+    'fails a %s schema %i Plan closed under the current schema 15, keeping its persisted content readable',
+    async (status, appSchemaVersion) => {
       // Issue #103 Phase C: a version 13 Plan was calculated by the Beam Search,
-      // which a persisted Plan does not record, so it is never prepared,
-      // started, compared or executed under the scheduler runtime.
+      // and Issue #129: a version 14 Plan turned every Counter-advance Normal
+      // forge into a conflict. A persisted Plan records neither, so it is never
+      // prepared, started, compared or executed under the current runtime.
       const fixture = withStatus({ status })
-      fixture.plan.calculationContext = { ...fixture.plan.calculationContext, appSchemaVersion: 13 }
+      fixture.plan.calculationContext = { ...fixture.plan.calculationContext, appSchemaVersion }
       fixture.plan.baseSnapshot = {
         ...fixture.plan.baseSnapshot,
-        calculationContext: { ...fixture.plan.baseSnapshot.calculationContext, appSchemaVersion: 13 },
+        calculationContext: { ...fixture.plan.baseSnapshot.calculationContext, appSchemaVersion },
       }
       const deps = dependencies(fixture)
       deps.currentCalculationContext = {
         ...fixture.plan.calculationContext,
         appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
       }
-      expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(14)
+      expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(15)
       renderPage(deps, fixture.plan.id)
 
       expect(await screen.findByText(
@@ -2404,8 +2410,8 @@ describe('ProductionPlanPage Execution entry', () => {
       })
       expect(deps.createWorkerClient).not.toHaveBeenCalled()
       expect(deps.startProductionPlan).not.toHaveBeenCalled()
-      // A running schema 13 Plan is replanned from the current state; a Draft
-      // is simply recalculated from the Build List.
+      // A running older-schema Plan is replanned from the current state; a
+      // Draft is simply recalculated from the Build List.
       if (status === 'active') {
         expect(screen.getByRole('heading', { name: '現在地点からの再計画' })).toBeInTheDocument()
       } else {

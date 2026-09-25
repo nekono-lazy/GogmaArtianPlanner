@@ -564,6 +564,22 @@ version 2と3のBuildCandidate / BuildListEntryは、Searchおよびsnapshot sem
 DB schema、AppSettings schema、Production RNG Engine version、ProductionPlan persisted shapeは
 変更しない。
 
+予測Normal creationのCounter進行用forge（中間unit）をsilent fast-forward可能にした変更
+（Issue #129、7.0.2）もProductionPlanの計算semanticsを変更するため、
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を14から **15** へ更新する。同じPlannerInputでも
+`conflicts`、選択・不採用Entry、Step列、Route progress、完成結果が変わり得る。version 14
+ProductionPlanは中間forge同士・作成対象forgeと中間forgeを `same_normal_counter` 競合として保存し、
+その暫定帰結で一方のEntryをPlanから外している可能性があるため、version 15で互換とみなしてはならない。
+version 1..14 ProductionPlanは、Draft / activeを問わず、上記のfail-closed比較（CalculationContext
+4項目の完全一致）により `calculation_context_changed` とする。read migrationやin-placeのversion
+書換えは行わない。Candidate Search、BuildCandidate / BuildListEntry snapshotの意味は変わらないため、
+version 12 / 13 / 14のBuildCandidate / BuildListEntryは、他のCalculationContext 3項目
+（gameVersion、masterDataVersion、rngEngineVersion）が一致し通常のstaleness判定も通る場合に限り、
+明示的なbuild-result例外 `15 -> [12, 13, 14]` で利用できる。version 1..11は非互換のままで、
+この例外をProductionPlanへ適用しない。永続形状は変えないため、`DATABASE_SCHEMA_VERSION`、
+`ExportRoot.schemaVersion`、`AppSettings.schemaVersion`、`RngState.schemaVersion`、
+`PRODUCTION_RNG_ENGINE_VERSION`、Master `dataVersion` は変更しない。
+
 #### 7.0.2 Counter進行とRoute prefixのsilent fast-forward
 
 Counter streamの進行とphysical action sharingは別概念である。
@@ -604,6 +620,9 @@ Planner内部のRoute unit属性 `canSkipWhenCounterPassed` は、保存済みRo
 | `keep_bonuses` | `keep_bonuses` | 可 |
 | `reset_bonuses` | `keep_bonuses` | 不可 |
 | `reset_skills` | `reset_skills` | 可 |
+| predicted `create_normal_artian` の中間unit（`unitIndex < unitCount - 1`） | — | 可（Issue #129） |
+| predicted `create_normal_artian` の最終unit（`unitIndex === unitCount - 1`） | — | 不可 |
+| blind `create_normal_artian` | — | 不可 |
 | 上記以外 | — | 不可 |
 
 根拠。
@@ -618,8 +637,31 @@ Planner内部のRoute unit属性 `canSkipWhenCounterPassed` は、保存済みRo
 - Reset SkillsはSeries / Group Skillだけを書き、Skill Counter位置から位置的に予測する。
   直後がReset Skillsなら、前のReset Skillsの結果はどの操作の入力にもならない
 - Route末尾の操作はCandidate結果そのものを形成するため常に必須
-- `create_normal_artian`、`convert_normal_to_gogma`、`reserve_weapon`、在庫変化を伴う
-  操作は物理副作用を持つため常に必須
+- predicted `create_normal_artian(count = N)` はN個のRoute unitへ展開される。先頭N - 1本
+  （中間unit）はCounterを進めるためだけの中間Normal生成であり、そのforgeで作られた通常
+  アーティアはRouteの後続で利用されない。必要なのは共有Normal Counterが1進むことだけなので、
+  同じNormal Counter位置を別Entryの実forgeが通過したなら、このEntryが同じ位置でもう1本
+  作成する必要はない。したがって中間unitはskip可能である（Issue #129）
+- predicted `create_normal_artian` の最終unitは、後続の `convert_normal_to_gogma` が使う
+  実物のNormal Artian（作成対象Normal）を作る。これはTarget固有の物理武器であり、他Entryの
+  forgeでは代替できないため常に必須
+- blind `create_normal_artian`（`count = 1`、Counter位置なし）は常に必須であり、必ず1 PlanStep
+  として実行する。絶対Normal Counter位置を持たないため、この中間unitのskip semanticsを
+  適用しない
+- `convert_normal_to_gogma`、`reserve_weapon`、在庫変化を伴う操作は物理副作用を持つため
+  常に必須
+
+Normal creationの中間unitのskipはsilent fast-forwardであり、physical action sharingではない。
+`create_normal_artian` は引き続き `shareable = false` であり、そのphysical action identityを
+複数Entry共通のkeyにしない。最終unitまでphysical sharingすると「1本の物理Normal Artianを
+複数Targetが同時に巨戟化へ使う」という誤った意味になり得るためである。1回のforgeで共有
+Counterが進み、別Entryの不要なCounter進行prefixを実行不要として通過するだけである。
+fast-forwardされたEntryはそのforgeの `progressedBuildListEntryIds` に入らず、実PlanStepの
+Normal creationは常にprimary Entry 1件だけを進める（16.3）。
+
+中間unitのfast-forwardはbase laneで行う（7.0.4）。base laneのunitはcheckpoint pinに
+gateされない。skip可能unitはこの中間unitだけなので、base laneの通過は最終unitで必ず止まり、
+`convert_normal_to_gogma` より先へ進むことはない。
 
 Route末尾のunitは常にskip不可なので、Route全体がfast-forwardされることはない。Candidate
 結果を形成する最後の操作は必ず実行され、`reserve_weapon` の前提となるroute outputも必ず
@@ -722,6 +764,20 @@ skip可能unit vs skip可能unit
   -> 競合ではない
   -> どちらを先に実行してもよい（実行されなかった側はfast-forward）
 ```
+
+同じNormal Counter位置のpredicted Normal creationは、この規則により次のとおりになる
+（Issue #129）。
+
+```text
+Entry A 中間forge       vs Entry B 中間forge        -> 競合なし。一方を実行し他方はfast-forward
+Entry A 作成対象forge   vs Entry B 中間forge        -> 競合なし。Aを先に実行し、Bはfast-forward
+Entry A 作成対象forge   vs Entry B 作成対象forge    -> same_normal_counter 競合
+```
+
+1回のforgeで2本の作成対象武器は得られないため、作成対象forge同士だけがユーザー判断の必要な
+実競合である。例えば両Routeが「通常アーティアを207本作成し、207本目を巨戟化」なら、Normal
+Counterの競合は207本目の位置の1件だけになる。207本目と300本目のように作成対象の位置が
+異なれば、Normal Counter競合は生じず、両Routeが成立し得る。
 
 「競合ではない」ことと「どちらを先に実行してもよい」ことは同じではない。必須unitと
 skip可能unitの間には実行順序の支配関係がある。
@@ -5284,6 +5340,12 @@ OwnedWeaponとして永続追跡する。
 - `create_normal_artian` の `count = forgeCount` を1操作単位へ分割したStepのうち、
   最後の1本（巨戟化する作成対象）より前の各Stepは **Counter進行用** である。
   OwnedWeaponへ登録しない。各Step確定ごとにNormal Counterだけを進める
+- Counter進行用 / 作成対象の区別は、そのStepが実行したRoute unitの位置
+  （`unitIndex < unitCount - 1` なら Counter進行用、`unitIndex === unitCount - 1` なら作成対象）で
+  決める。Entryが実行済みのforge本数では決めない。別Entryの実forgeが通過したCounter進行用unitは
+  silent fast-forwardされ（7.0.2、Issue #129）Traceに現れないため、実行本数は `forgeCount` より
+  少なくなり得る。fast-forwardされたunitにはPlanStepを生成しない。Normal creationのPlanStepは
+  physical action sharingではないため、常にprimary Entry 1件だけを進める
 - 最後の1本は **作成対象** である。そのStepの確定時にOwnedWeapon（`kind = "normal"`、
   rarity 8、`normal_artian` scope、`status = null`、`isProtected = false`）として登録し、
   以後同じOwnedWeapon IDを維持する。IDはPlan生成時に `PlannerIdFactory` で予約する。
@@ -5471,7 +5533,9 @@ build-result互換判定の明示的な `13 -> [12]` 例外によりschema 13で
 CalculationContext fieldの一致と通常のstaleness判定は必要。version 1..11は非互換のまま。
 ProductionPlanには適用しない）。現行のschema 14（7章、決定的scheduler）はPlan開始effectの契約を
 変えないが、schema 13以前のProductionPlanは同じ完全一致判定でfail closedし、BuildCandidate /
-BuildListEntryだけが明示的な `14 -> [12, 13]` 例外で利用できる。
+BuildListEntryだけが明示的な `14 -> [12, 13]` 例外で利用できる。現行のschema 15（7.0.2、Issue #129）も
+Plan開始effectの契約を変えず、schema 14以前のProductionPlanは同じ完全一致判定でfail closedし、
+BuildCandidate / BuildListEntryだけが明示的な `15 -> [12, 13, 14]` 例外で利用できる。
 
 ### 16.6 Plan依存性とPlanを壊す変更
 
@@ -6466,7 +6530,8 @@ staleness semantics、PlanStep / reserve semantics、Expected execution state、
   （当時）。計算意味は変わらないため `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は13のままである。
   その後のDraft lifecycle整理でDexieを8、`ExportRoot.schemaVersion` を11へ、Issue #103 Phase C
   （Production Plannerの決定的scheduler切替、7章）で `CURRENT_CALCULATION_APP_SCHEMA_VERSION` を
-  14へ更新した（現行値。[DATA_MODEL.md](./DATA_MODEL.md) 3.5）
+  14へ、Issue #129（予測Normal creationのCounter進行用forgeのsilent fast-forward、7.0.2）で
+  15へ更新した（現行値。[DATA_MODEL.md](./DATA_MODEL.md) 3.5）
 - 既存データを推測migrationして意味を変えない。所持Ideal武器の存在からTargetを
   `completed` と推測しない。既存OwnedWeaponを作成中と推測しない
 - 旧契約のProductionPlan（独立 `reserve_weapon` Step、旧expected state）はexact persisted

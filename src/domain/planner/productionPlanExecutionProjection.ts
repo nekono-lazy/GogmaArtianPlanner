@@ -203,7 +203,7 @@ export function projectProductionPlanExecution(
     input.targetWeapons.map((target) => [target.id, structuredClone(target)]),
   )
   const trackedIdByEntry = new Map<BuildListEntryId, OwnedWeaponId>()
-  const forgeCountByEntry = new Map<BuildListEntryId, number>()
+  const forgeUnitIndexByEntry = new Map<BuildListEntryId, number>()
   const physicallyStartedEntries = new Set<BuildListEntryId>()
 
   const snapshot = (): ProjectionSnapshot => ({
@@ -318,10 +318,20 @@ export function projectProductionPlanExecution(
       if (operation.type === 'create_normal_artian') {
         if (progressedEntries.length !== 1) fail('a Normal creation is never a shared physical action.')
         const entry = progressedEntries[0]
-        const forge = (forgeCountByEntry.get(entry.id) ?? 0) + 1
-        forgeCountByEntry.set(entry.id, forge)
-        if (forge > operation.count) fail(`BuildListEntry '${entry.id}' forges more Normals than its Route.`)
-        if (forge < operation.count) {
+        // The role follows the Route unit this forge executed, never the number
+        // of forges the Entry executed so far: a Counter-advance forge another
+        // Entry's real forge passed is fast-forwarded and never reaches the
+        // trace (Issue #129, `docs/PLANNER_SPEC.md` 7.0.2).
+        const position = physical.routePosition ?? fail(`a Normal creation of BuildListEntry '${entry.id}' has no Route position.`)
+        if (position.unitCount !== operation.count || position.unitIndex < 0 || position.unitIndex >= operation.count) {
+          fail(`BuildListEntry '${entry.id}' forges a Normal outside its Route.`)
+        }
+        const previousForge = forgeUnitIndexByEntry.get(entry.id)
+        if (previousForge !== undefined && position.unitIndex <= previousForge) {
+          fail(`BuildListEntry '${entry.id}' forges the same Route Normal twice.`)
+        }
+        forgeUnitIndexByEntry.set(entry.id, position.unitIndex)
+        if (position.unitIndex < operation.count - 1) {
           effects.normalCreationRole = 'counter_advance'
         } else {
           effects.normalCreationRole = 'production_target'

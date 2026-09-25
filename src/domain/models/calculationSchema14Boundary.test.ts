@@ -13,11 +13,14 @@ import type { CalculationContext } from './publicTypes'
  * 15.2 / 15.3). Every version 1..13 ProductionPlan fails closed, while the
  * explicit build-result exception `14 -> [12, 13]` keeps version 12 / 13
  * BuildCandidates and BuildListEntries usable.
+ *
+ * Issue #129 moved the current schema to 15 (`calculationSchema15Boundary.test.ts`);
+ * this file keeps pinning the schema 14 runtime's own exception.
  */
 describe('calculation schema 14 boundary', () => {
   const current: CalculationContext = {
     ...createValidBuildCandidate().calculationContext,
-    appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
+    appSchemaVersion: 14,
   }
   const at = (appSchemaVersion: number, difference: Partial<CalculationContext> = {}) => ({
     ...current,
@@ -25,8 +28,8 @@ describe('calculation schema 14 boundary', () => {
     ...difference,
   })
 
-  it('is the current calculation schema', () => {
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(14)
+  it('was superseded by a later calculation schema', () => {
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBeGreaterThan(14)
   })
 
   it.each([12, 13, 14])('keeps a schema %i build result compatible under schema 14', (version) => {
@@ -55,16 +58,9 @@ describe('calculation schema 14 boundary', () => {
     expect(isBuildResultCalculationContextCompatible(current, at(12))).toBe(false)
   })
 
-  it('is an explicit map, never a range that a future schema would inherit', () => {
-    // A hypothetical schema 15 runtime has no exception until one is written.
-    expect(isBuildResultCalculationContextCompatible(at(14), at(15))).toBe(false)
-    expect(isBuildResultCalculationContextCompatible(at(13), at(15))).toBe(false)
-    expect(isBuildResultCalculationContextCompatible(at(12), at(15))).toBe(false)
-  })
-
   it.each([12, 13])('keeps a schema %i ProductionPlan incompatible under schema 14', (version) => {
     const plan = createValidProductionPlan()
-    const planCurrent = { ...plan.calculationContext, appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION }
+    const planCurrent = { ...plan.calculationContext, appSchemaVersion: 14 }
     expect(isCalculationContextCompatible({ ...planCurrent, appSchemaVersion: version }, planCurrent)).toBe(false)
   })
 

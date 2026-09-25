@@ -17,7 +17,7 @@ describe('Production RNG runtime authority', () => {
     const master = createValidMasterDataFixture()
     const buildList = createBuildListCalculationContext(master)
     const planner = createPlannerCalculationContext(master, productionRngRuntime.version)
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(14)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(15)
     expect(buildList.appSchemaVersion).toBe(CURRENT_CALCULATION_APP_SCHEMA_VERSION)
     expect(planner).toEqual(buildList)
     expect(isCalculationContextCompatible({ ...buildList, appSchemaVersion: 1 }, planner)).toBe(false)

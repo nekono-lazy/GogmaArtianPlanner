@@ -106,7 +106,7 @@ describe('BuildListService', () => {
     memory.entries.push(original)
 
     const refreshed = await new BuildListService(memory.repositories).refreshStaleness(current)
-    expect(current.appSchemaVersion).toBe(14)
+    expect(current.appSchemaVersion).toBe(15)
     expect(refreshed.entries[0].isStale).toBe(true)
     expect(refreshed.entries[0].staleReasons).toEqual(['calculation_context_changed'])
     expect(refreshed.entries[0].candidateSnapshot).toEqual(snapshot)
@@ -142,10 +142,10 @@ describe('BuildListService', () => {
     },
   )
 
-  it.each([12, 13])('keeps a schema %i BuildListEntry usable under schema 14 when nothing else changed', async (appSchemaVersion) => {
+  it.each([12, 13, 14])('keeps a schema %i BuildListEntry usable under schema 15 when nothing else changed', async (appSchemaVersion) => {
     const memory = memoryRepositories()
     const current = createBuildListCalculationContext(createValidMasterDataFixture())
-    expect(current.appSchemaVersion).toBe(14)
+    expect(current.appSchemaVersion).toBe(15)
     const candidate = createValidBuildCandidate()
     candidate.calculationContext = { ...current, appSchemaVersion }
     candidate.searchStateHash = createSearchStateHash(candidate.route, memory.rngState, memory.normalCounters)
@@ -156,8 +156,9 @@ describe('BuildListService', () => {
 
     // The schema 13 change is ProductionPlan execution only (PLANNER_SPEC 16.11)
     // and the schema 14 change is the Production Planner strategy only (Issue
-    // #103 Phase C), so a version 12 / 13 Entry is not stale for its
-    // calculation context.
+    // #103 Phase C), and the schema 15 change is the Normal Counter-advance
+    // fast-forward only (Issue #129), so a version 12 / 13 / 14 Entry is not
+    // stale for its calculation context.
     expect(refreshed.entries[0]).toMatchObject({ isStale: false, staleReasons: [] })
     expect(refreshed.entries[0].candidateSnapshot).toEqual(original.candidateSnapshot)
     expect(refreshed.entries[0].calculationContext.appSchemaVersion).toBe(appSchemaVersion)

@@ -939,6 +939,36 @@ not a v1 record fails closed). The former fixed `500 / 350 / 1500` was never use
 over. No calculation semantics changed, so `CURRENT_CALCULATION_APP_SCHEMA_VERSION` stays 14 and
 `PRODUCTION_RNG_ENGINE_VERSION` `production-rng:c5-e7`, `RngState.schemaVersion` 2 and Master
 `dataVersion` 4 are unchanged; no Candidate, Entry or Plan goes stale.
+Issue #129 (the Normal Counter-advance fast-forward; `docs/PLANNER_SPEC.md` 7.0.1 / 7.0.2 / 16.3,
+`docs/REQUIREMENTS.md` 19, `docs/DATA_MODEL.md` 3.5) stopped the Planner from turning every shared
+Normal Counter position into a `same_normal_counter` conflict. A predicted
+`create_normal_artian(count = N)` expands to N Route units; its first `N - 1` units (Counter-advance
+forges, whose weapons the Route never uses) are now `canSkipWhenCounterPassed`, while its last unit
+(the production-target Normal the conversion uses) and a blind creation stay required. The ordinary
+silent fast-forward (`fastForwardPlannerRouteProgress()`, now over the base lane too, which no pin
+gates) passes them once another Entry's real forge moved the Counter; the existing
+required-vs-skippable dominance runs a production-target forge before a Counter-advance forge at the
+same position; and `detectPlannerConflicts()` reports only production-target versus
+production-target. So intermediate vs intermediate and production target vs intermediate are no
+conflict, two production targets at one position are one conflict (two 207-forge Routes: 207 Normal
+conflicts before, 1 after; 207 vs 300 forges: 0 after). A Normal creation stays `shareable: false` and
+is never a shared physical action (sharing the production-target forge would let two Targets convert
+one physical Normal), so a fast-forwarded Entry is never in a forge's `progressedBuildListEntryIds`,
+`invalid_physical_action_sharing` is unchanged, and the execution projection keeps refusing a shared
+Normal creation. Because an Entry may now execute fewer forges than its `count`, the projection takes
+`normalCreationRole` from the executed unit's Route position (the non-persistent
+`PlannerPlanStepDraft.routePosition`: `unitIndex < unitCount - 1` is `counter_advance`, the last unit
+is `production_target`), never from the number of forges executed so far. B8 / B9 / B10, the
+scheduler and the Beam oracle share the unchanged conflict, fast-forward and dominance authorities; no
+Normal-specific logic was added there or to the Conflict UI. Candidate Search, BuildRoute /
+RouteOperation shapes and Normal RNG are unchanged. For the same PlannerInput the conflicts, selected
+/ rejected Entries, Step order and completion can differ, so `CURRENT_CALCULATION_APP_SCHEMA_VERSION`
+moved to **15**: every version 1..14 ProductionPlan fails closed with `calculation_context_changed`
+(no read migration, no in-place rewrite), while the explicit build-result exception `15 -> [12, 13, 14]`
+keeps version 12 / 13 / 14 Candidates and BuildListEntries usable (version 1..11 stay incompatible,
+never a Plan exception). `DATABASE_SCHEMA_VERSION` 9, `ExportRoot.schemaVersion` 12,
+`AppSettings.schemaVersion` 2, `RngState.schemaVersion` 2, `PRODUCTION_RNG_ENGINE_VERSION`
+`production-rng:c5-e7` and Master `dataVersion` 4 are unchanged.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -969,7 +999,8 @@ PlanStep `executionEffects`, reserve and zero-operation completion semantics) mo
 it to 12, the Plan start effect (existing-weapon Target links at `draft -> active`
 instead of at the first physical Step) moved it to 13, and the Production Planner
 strategy switch from the Beam Search to the deterministic scheduler (Issue #103 Phase C)
-moved it to the current **14**, defined
+moved it to 14, and the Normal Counter-advance fast-forward (Issue #129) moved it to the
+current **15**, defined
 only by `CURRENT_CALCULATION_APP_SCHEMA_VERSION` in `src/domain/models/common.ts`.
 A version 10 `checkpointGroups` / `selectedCheckpointOpportunityIds` cannot be
 mapped onto lane pins, and reading such a selection as empty would silently
@@ -1013,7 +1044,7 @@ current Candidates by searching again.
 Do not delete historical results or add a migration or Export/Import semantic
 validation change as a substitute for CalculationContext compatibility.
 
-All version 1..13 ProductionPlans are incompatible with version 14, Draft or active alike, while version 12 and 13 Candidates and BuildListEntries stay usable under 14 through the explicit build-result exception `14 -> [12, 13]` (the version 14 change is the Production Planner strategy only; version 1..11 stay incompatible; never a range check such as "12 or later", never a Plan exception, never a read migration or an in-place version rewrite of a version 13 Plan). Historically, all version 1..12 ProductionPlans are incompatible with version 13, and all version 1..11 Candidates and BuildListEntries are incompatible with version 13 (version 1..11 were already incompatible with version 12). Preserve their contents and fail closed with calculation_context_changed. The only build-result exception at this boundary is the explicit `13 -> [12]` one: the version 13 change is ProductionPlan execution only (the Plan start effect), so a version 12 Candidate or BuildListEntry stays usable under 13 when gameVersion, masterDataVersion and rngEngineVersion are equal and no ordinary stale reason applies. Never widen it to version 1..11, never apply it to a ProductionPlan, and never extend the historical 2..5 exception. Never execute a version 12 Plan under the Plan start effect: its first Step expects the pre-start state. Never convert a version 11 Plan into the version 12 PlanStep contract: no inferred `executionEffects`, no `reserve_weapon` merged into a physical Step, no inferred tracked OwnedWeapon or observation binding.
+All version 1..14 ProductionPlans are incompatible with version 15, Draft or active alike, while version 12, 13 and 14 Candidates and BuildListEntries stay usable under 15 through the explicit build-result exception `15 -> [12, 13, 14]` (the version 15 change is the Planner's Normal Counter-advance fast-forward only; version 1..11 stay incompatible; never a range check, never a Plan exception, never a read migration or an in-place version rewrite of a version 14 Plan). Historically, all version 1..13 ProductionPlans are incompatible with version 14, Draft or active alike, while version 12 and 13 Candidates and BuildListEntries stay usable under 14 through the explicit build-result exception `14 -> [12, 13]` (the version 14 change is the Production Planner strategy only; version 1..11 stay incompatible; never a range check such as "12 or later", never a Plan exception, never a read migration or an in-place version rewrite of a version 13 Plan). Historically, all version 1..12 ProductionPlans are incompatible with version 13, and all version 1..11 Candidates and BuildListEntries are incompatible with version 13 (version 1..11 were already incompatible with version 12). Preserve their contents and fail closed with calculation_context_changed. The only build-result exception at this boundary is the explicit `13 -> [12]` one: the version 13 change is ProductionPlan execution only (the Plan start effect), so a version 12 Candidate or BuildListEntry stays usable under 13 when gameVersion, masterDataVersion and rngEngineVersion are equal and no ordinary stale reason applies. Never widen it to version 1..11, never apply it to a ProductionPlan, and never extend the historical 2..5 exception. Never execute a version 12 Plan under the Plan start effect: its first Step expects the pre-start state. Never convert a version 11 Plan into the version 12 PlanStep contract: no inferred `executionEffects`, no `reserve_weapon` merged into a physical Step, no inferred tracked OwnedWeapon or observation binding.
 
 The v3 -> v4 Dexie migration converts only `OwnedGogma.status === 'material'` to
 `'unclassified'`. `practical` and `ideal` keep their values, a Normal Artian
@@ -3108,9 +3139,14 @@ displayed Step expected result changes:
   the Reset's families
 - `reset_skills` followed by `reset_skills`: skippable, because Reset Skills
   writes only the Series / Group Skill pair and predicts it positionally
+- a predicted `create_normal_artian(count = N)`: its first `N - 1` units are
+  skippable Counter-advance forges (Issue #129), because the Route never uses
+  their weapons and only the shared Normal Counter moving matters; its last unit
+  forges the production-target Normal the conversion uses and is required
+- a blind `create_normal_artian` is required
 - everything else is required, including a Route's final operation,
-  `create_normal_artian`, `convert_normal_to_gogma`, `reserve_weapon`, and any
-  concrete inventory mutation
+  `convert_normal_to_gogma`, `reserve_weapon`, and any concrete inventory
+  mutation
 
 A Route's last unit is never skippable, so a whole Route is never
 fast-forwarded and the Candidate-forming operation always runs.
@@ -3848,6 +3884,13 @@ a skippable unit at the same Counter position have an ordering dominance: the
 required one must run first, and only then can the skippable one fast-forward.
 The Planner decides that order by itself, so it never reaches conflict
 resolution or the user.
+
+For a shared Normal Counter this means (Issue #129): two Counter-advance forges,
+or a production-target forge and a Counter-advance forge, at one position are
+no conflict; only two production-target forges at one position are a
+`same_normal_counter` conflict. `same_normal_counter` stays for exactly that case.
+Never hide Counter-advance conflicts in the Conflict UI instead: the Domain
+returns only the real ones.
 
 Protected destructive use is not merely a scoring penalty or resolvable conflict.
 
@@ -4970,12 +5013,20 @@ Relevant test areas include:
   sets it to null for every Target, removes `relatedTargetWeaponIds` from every
   current OwnedWeapon, never infers a preference from the removed list, and
   rewrites no BuildCandidate, BuildListEntry, ProductionPlan, or ExecutionHistory
-- `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 14`, schema 1..13 ProductionPlans (Draft and
-  active) failing closed under 14 and a schema 13 active Plan never executed, rewritten or
-  stale-migrated, schema 12 / 13 Candidates / BuildListEntries staying usable under 14
-  through the explicit `14 -> [12, 13]` exception only while the other CalculationContext
+- `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 15`, schema 1..14 ProductionPlans (Draft and
+  active) failing closed under 15 and a schema 13 / 14 active Plan never executed, rewritten
+  or stale-migrated, schema 12 / 13 / 14 Candidates / BuildListEntries staying usable under 15
+  through the explicit `15 -> [12, 13, 14]` exception only while the other CalculationContext
   fields match, schema 1..11 build results incompatible, and a future schema never
   inheriting the exception
+- Predicted Normal creation units reading `[false]` for `count = 1`, `[true, false]` for 2
+  and `[true, true, false]` for 3, a blind creation `[false]`, a Normal creation never
+  shareable, Counter-advance vs Counter-advance and production target vs Counter-advance
+  forges at one Normal Counter position never a conflict, two production targets one
+  `same_normal_counter` conflict, the scheduler and the Beam oracle running two Routes of
+  different forge counts on one Normal Counter to completion with each forge progressing one
+  Entry, Trace Replay valid, and the projection deriving `counter_advance` /
+  `production_target` from the Route position
 - Production Plan generation, the Planner Worker, B8, B9 and the replan Preview running the
   deterministic scheduler with no injection and no strategy flag, and `beamWidth` never
   changing a Production result
