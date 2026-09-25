@@ -1640,3 +1640,33 @@ describe('Route commitment: a passed pin-blocked skippable unit', () => {
     expectReplayValid(scenario, result)
   })
 })
+
+/**
+ * Issue #103 Phase D-2a: every real scheduler result keeps the Production
+ * termination invariant - `incomplete` only through `maxPlanSteps`, named as
+ * exactly `['max_plan_steps']`, over the Production bound alone.
+ */
+describe('Production termination invariant over the acceptance catalogue', () => {
+  it.each(plannerSchedulerCatalogue().map(({ id }) => id))('%s', async (id) => {
+    const item = plannerSchedulerCatalogue().find((candidate) => candidate.id === id)!
+    const result = await runPlannerDeterministicSchedule(
+      item.scenario.input,
+      item.scenario.dependencies,
+      {},
+      item.buildListContext,
+    )
+    const { termination } = result
+    expect(termination.limits).toEqual({ maxPlanSteps: item.scenario.input.options.maxPlanSteps })
+    if (termination.status === 'incomplete') {
+      expect(termination.reachedLimits).toEqual(['max_plan_steps'])
+    } else {
+      expect(['[]', '["max_plan_steps"]']).toContain(JSON.stringify(termination.reachedLimits))
+    }
+  })
+
+  it('reaches incomplete through maxPlanSteps in the bounded scenarios', async () => {
+    const item = plannerSchedulerCatalogue().find(({ id }) => id === 'bounded-max-plan-steps')!
+    const result = await runPlannerDeterministicSchedule(item.scenario.input, item.scenario.dependencies)
+    expect(result.termination).toMatchObject({ status: 'incomplete', reachedLimits: ['max_plan_steps'] })
+  })
+})

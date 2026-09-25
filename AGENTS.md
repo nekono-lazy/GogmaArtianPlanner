@@ -886,8 +886,14 @@ the Worker hands a calculation only `shouldCancel` / `yieldControl` (the Product
 never a progress message. The scheduler's benchmark `onProgress({ expandedStates })` and
 `schedulerInstrumentation` live in `PlannerScheduleExecutionOptions`, and the planner
 orchestration / what-if browser benchmarks dropped their `progressEvents` metric. The parity
-harness types each strategy's input and result separately and projects an oracle result through
-its own `projectBeamSearchResultForProduction()` adapter, never widening a Production type; the
+harness types each strategy's input and result separately and never converts an oracle
+termination into a Production one: the shared Plan-generation tail is the termination-generic
+`generatePlanFromFullRun<T>()` (it reads only the status and returns the run's own termination,
+retrying with the same runner), Production fixes it to `PlannerRunTermination` through
+`createProductionPlanWithSearchRunner()`, and only the harness runs it with the oracle's
+`PlannerBeamSearchTermination`, so a `max_expanded_states` truncation is never rewritten as
+`max_plan_steps`, `exhausted` or `incomplete` with empty `reachedLimits` (a Production `incomplete`
+always names exactly `max_plan_steps`), and no Production type is widened; the
 Beam oracle, its instrumentation, the parity harness and the benchmarks are kept for D-2b. It
 persisted nothing new and changed no scheduler or oracle semantics: `PlannerOptions` was never in
 `PlanningInputSnapshot`, and `ProductionPlan` / `PlanStep` / `PlanningInputSnapshot` /

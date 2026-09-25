@@ -31,12 +31,14 @@ import { projectProductionPlanExecution } from './productionPlanExecutionProject
 import type {
   CreateProductionPlanCalculation,
   PlannerRunResult,
+  PlannerRunResultOf,
   PlannerDependencies,
   PlannerRunBuildListContext,
   PlannerExecutionOptions,
   PlannerInput,
   PlannerResult,
   PlannerSearchRejection,
+  PlannerTerminationOf,
   PlannerWarning,
   ProductionPlanGenerationObserver,
 } from './plannerTypes'
@@ -348,11 +350,20 @@ function replayErrorMessage(issues: readonly PlannerTraceReplayIssue[]): string 
     .join('; ')
 }
 
+/**
+ * The parts of a full Planner run result that do not depend on how the run
+ * ended: what the shared Plan-generation tail and the rejected Build List
+ * record read besides the termination. Both the Production `PlannerRunResult`
+ * and a Beam Search oracle result have them, so neither has to be converted
+ * into the other to be read here.
+ */
+export type PlannerRunOutcome = Omit<PlannerRunResultOf<unknown>, 'termination'>
+
 function rejectedReason(
   entry: BuildListEntry,
   selectedEntryIds: ReadonlySet<BuildListEntryId>,
   input: PlannerInput,
-  runResult: PlannerRunResult,
+  runResult: PlannerRunOutcome,
 ): RejectedBuildListEntry['reason'] {
   const rejections = runResult.rejections.filter(
     (rejection) => rejection.buildListEntryId === entry.id,
@@ -368,8 +379,8 @@ function rejectedReason(
   )) {
     return 'resource_conflict'
   }
-  // A deterministic scheduler reason only: a projected Beam Search oracle
-  // result never carries it, so the mapping above and below is unchanged
+  // A deterministic scheduler reason only: a Beam Search oracle result never
+  // carries it, so the mapping above and below is unchanged
   // (`docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md` 8.4).
   if (rejections.some(({ reason }) => reason === 'conflict_not_committed')) {
     return 'resource_conflict'
@@ -399,7 +410,7 @@ const NOT_COMMITTED_DETAIL =
 
 export function createRejectedBuildListEntries(
   input: PlannerInput,
-  runResult: PlannerRunResult,
+  runResult: PlannerRunOutcome,
   selectedBuildListEntryIds: readonly BuildListEntryId[],
 ): RejectedBuildListEntry[] {
   const selected = new Set(selectedBuildListEntryIds)
@@ -411,8 +422,8 @@ export function createRejectedBuildListEntries(
     rejectionsByEntryId.set(rejection.buildListEntryId, entries)
   })
   // Deterministic scheduler results only (`conflict_not_committed`); empty for
-  // a projected Beam Search oracle result, whose mapping and detail are
-  // therefore unchanged.
+  // a Beam Search oracle result, whose mapping and detail are therefore
+  // unchanged.
   const notCommittedIds = new Set<BuildListEntryId>(
     runResult.rejections
       .filter(({ reason }) => reason === 'conflict_not_committed')
@@ -538,10 +549,12 @@ export async function createProductionPlanWithObserver(
 /**
  * One full Planner run over one input, returning the Production
  * `PlannerRunResult` (Issue #103 Phase D-2a). Production passes the
- * deterministic scheduler; a test or benchmark may pass a runner of its own,
- * but only one that returns the Production result shape - the Beam Search
- * oracle's result is never accepted as it is, so a test that projects it must
- * adapt it on its own side (`plannerSchedulerParity.ts`).
+ * deterministic scheduler; a test may pass a runner of its own, but only one
+ * that returns a genuine Production result. The Beam Search oracle is never a
+ * `PlannerFullSearchRunner`: its termination can name `max_expanded_states`,
+ * which no Production termination can, so the parity harness reaches the
+ * shared tail through `generatePlanFromFullRun()` with the oracle's own
+ * termination type instead (`plannerSchedulerParity.ts`).
  */
 export type PlannerFullSearchRunner = (
   input: PlannerInput,
@@ -550,23 +563,52 @@ export type PlannerFullSearchRunner = (
   buildListContext: PlannerRunBuildListContext,
 ) => Promise<PlannerRunResult>
 
+/** Any full Planner run termination: the Production one or the Beam Search oracle's. */
+export type PlannerAnyRunTermination = PlannerTerminationOf<string, unknown>
+
+/**
+ * One full Planner run whose result carries the termination shape `T`. With
+ * `T = PlannerRunTermination` it is exactly `PlannerFullSearchRunner`.
+ */
+export type PlannerFullRunOf<T extends PlannerAnyRunTermination> = (
+  input: PlannerInput,
+  dependencies: PlannerDependencies,
+  options: PlannerExecutionOptions | undefined,
+  buildListContext: PlannerRunBuildListContext,
+) => Promise<PlannerRunResultOf<T>>
+
+/**
+ * What the shared Plan-generation tail returns for a run with termination
+ * shape `T`: the `PlannerResult` fields, with the run's own termination
+ * carried through unchanged. With `T = PlannerRunTermination` it is exactly
+ * `PlannerResult`; for the Beam Search oracle it keeps the oracle termination,
+ * `max_expanded_states` included, and is never a `PlannerResult`.
+ */
+export interface PlannerPlanGenerationOf<T extends PlannerAnyRunTermination> {
+  plan: ProductionPlan | null
+  conflicts: PlannerResult['conflicts']
+  warnings: PlannerWarning[]
+  termination: T
+}
+
+/** The observer of the shared tail, typed by the run result it observes. */
+export interface PlannerFullRunObserverOf<TResult> {
+  beforePlannerRun(): void
+  afterPlannerRun?(result: TResult): void
+}
+
 /**
  * `createProductionPlanWithObserver()` with the full Planner run passed in
  * (Issue #103 Phase B / C / D-2a).
  *
- * Only the full run is replaced; everything after it - the
- * runtime-unsupported retry, Trace Replay, the execution projection, the
- * `PlanningInputSnapshot`, the checkpoint requirement defence, the rejected
- * Build List record and the required materials - is this one shared
- * implementation. `observer.beforePlannerRun()` / `afterPlannerRun()` wrap
- * every full run exactly as before, so the B8 / what-if rerun budgets keep
- * counting full Planner runs whichever runner runs.
+ * Only the full run is replaced; everything after it is the one shared tail,
+ * `generatePlanFromFullRun()`. `observer.beforePlannerRun()` /
+ * `afterPlannerRun()` wrap every full run exactly as before, so the B8 /
+ * what-if rerun budgets keep counting full Planner runs.
  *
  * Production never calls this with anything but
  * `runPlannerDeterministicSchedule` (through `createProductionPlanWithObserver()`);
- * tests and the parity harness inject a runner returning the same Production
- * result shape (the parity harness adapts its Beam Search oracle result on its
- * own side).
+ * tests may inject another runner returning a genuine `PlannerRunResult`.
  * It is a Domain function value, never a Worker message, a `PlannerInput`
  * field, a setting or a persisted value.
  */
@@ -578,8 +620,40 @@ export async function createProductionPlanWithSearchRunner(
   observer?: ProductionPlanGenerationObserver,
   buildListContext: PlannerRunBuildListContext = PERSISTED_PLANNER_BUILD_LIST_CONTEXT,
 ): Promise<PlannerResult> {
+  return generatePlanFromFullRun(
+    searchRunner,
+    input,
+    dependencies,
+    options,
+    observer,
+    buildListContext,
+  )
+}
+
+/**
+ * The one shared Plan-generation tail after a full Planner run: the
+ * runtime-unsupported retry (which reruns the same runner), Trace Replay, the
+ * execution projection, the `PlanningInputSnapshot`, the checkpoint requirement
+ * defence, the rejected Build List record and the required materials.
+ *
+ * It is generic over the run's termination shape `T` and reads from the
+ * termination nothing but its status, so no termination is ever converted:
+ * Production (`createProductionPlanWithSearchRunner()`) fixes
+ * `T = PlannerRunTermination` and returns a `PlannerResult`, and the Issue #103
+ * parity harness alone runs it with the Beam Search oracle's own termination,
+ * which it gets back unchanged (Phase D-2a). No Production module calls it
+ * with any other `T`.
+ */
+export async function generatePlanFromFullRun<T extends PlannerAnyRunTermination>(
+  fullRun: PlannerFullRunOf<T>,
+  input: PlannerInput,
+  dependencies: PlannerDependencies,
+  options: PlannerExecutionOptions | undefined,
+  observer?: PlannerFullRunObserverOf<PlannerRunResultOf<T>>,
+  buildListContext: PlannerRunBuildListContext = PERSISTED_PLANNER_BUILD_LIST_CONTEXT,
+): Promise<PlannerPlanGenerationOf<T>> {
   const runtimeUnsupported = new Map<BuildListEntryId, string>()
-  let runResult: PlannerRunResult | null = null
+  let runResult: PlannerRunResultOf<T> | null = null
   let replay: PlannerTraceReplayResult | null = null
 
   for (;;) {
@@ -603,7 +677,7 @@ export async function createProductionPlanWithSearchRunner(
             ),
           }
     observer?.beforePlannerRun()
-    runResult = await searchRunner(runInput, dependencies, options, runContext)
+    runResult = await fullRun(runInput, dependencies, options, runContext)
     observer?.afterPlannerRun?.(runResult)
     if (
       runResult.cancelled ||
@@ -740,7 +814,7 @@ export async function createProductionPlanWithSearchRunner(
  */
 function runInputEntries(
   input: PlannerInput,
-  runResult: PlannerRunResult,
+  runResult: PlannerRunOutcome,
 ): BuildListEntry[] {
   const excluded = new Set(
     runResult.excludedBuildListEntries.map(({ entry }) => entry.id),

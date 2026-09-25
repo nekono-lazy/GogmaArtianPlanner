@@ -49,6 +49,13 @@ describe('representative-12 Beam / scheduler parity', { timeout: 300_000 }, () =
     expect(run.scheduler.expandedStates).toBe(run.scheduler.traceLength)
     expect(run.scheduler.projection).toMatchObject({ status: 'valid', expectedStateChainClosed: true })
     expect(run.beam.projection.status).toBe('valid')
+    // The projection keeps the oracle's own truncation (Issue #103 Phase D-2a):
+    // it is never rewritten into a Production termination.
+    expect(run.beam.projection).toMatchObject({
+      terminationStatus: 'incomplete',
+      terminationReachedLimits: ['max_expanded_states'],
+    })
+    expect(run.scheduler.projection.terminationReachedLimits).toEqual([])
     expect(run.beam.replay?.isValid).toBe(true)
   })
 })

@@ -17,6 +17,8 @@ import { FakeRngEngine, type FakeRngFixtures } from '../rng/fakeRngEngine'
 import type { PlannerDependencies, PlannerInput } from './plannerTypes'
 import { runPlannerBeamSearchOracle } from '../../test/fixtures/plannerBeamOracle'
 import { createProductionPlan } from './productionPlanGeneration'
+import { derivePlannerCheckpointRequirements } from './plannerCheckpoints'
+import { createPlannerRunTermination } from './plannerTermination'
 
 /**
  * Typed Beam Search termination (PLANNER_SPEC 7.2.1).
@@ -358,5 +360,40 @@ describe('Planner search termination', () => {
       status: 'incomplete',
       reachedLimits: ['max_expanded_states'],
     })
+  })
+})
+
+/**
+ * The Production termination invariant (Issue #103 Phase D-2a): the Production
+ * scheduler's one bound is `maxPlanSteps`, so an `incomplete` Production run
+ * always names exactly `max_plan_steps`. `createPlannerRunTermination()`
+ * derives both from the one `reachedStepLimit` flag, so it cannot build an
+ * `incomplete` termination with empty `reachedLimits` at all.
+ */
+describe('Production PlannerRunTermination invariant', () => {
+  it('is incomplete only with reachedLimits exactly [max_plan_steps]', () => {
+    const { requirements } = derivePlannerCheckpointRequirements([])
+    const targetId = targetWeaponId('target.invariant')
+    const seen: string[] = []
+    ;[false, true].forEach((cancelled) => {
+      ;[false, true].forEach((reachedStepLimit) => {
+        const termination = createPlannerRunTermination({
+          options: { maxPlanSteps: 7 },
+          planningTargetIds: [targetId],
+          checkpointRequirements: requirements,
+          bestState: null,
+          expandedStates: 7,
+          cancelled,
+          reachedStepLimit,
+        })
+        seen.push(termination.status)
+        expect(termination.limits).toEqual({ maxPlanSteps: 7 })
+        expect(termination.reachedLimits).toEqual(reachedStepLimit ? ['max_plan_steps'] : [])
+        if (termination.status === 'incomplete') {
+          expect(termination.reachedLimits).toEqual(['max_plan_steps'])
+        }
+      })
+    })
+    expect(seen).toEqual(['exhausted', 'incomplete', 'cancelled', 'cancelled'])
   })
 })

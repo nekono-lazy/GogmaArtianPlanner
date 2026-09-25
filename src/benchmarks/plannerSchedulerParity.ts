@@ -16,6 +16,7 @@ import {
   type PlannerBeamSearchInput,
   type PlannerBeamSearchOptions,
   type PlannerBeamSearchResult,
+  type PlannerBeamSearchTermination,
 } from '../domain/planner/plannerBeamSearchTypes'
 import { runPlannerDeterministicSchedule } from '../domain/planner/plannerDeterministicScheduler'
 import type {
@@ -25,16 +26,17 @@ import type {
 } from '../domain/planner/plannerSchedulerInstrumentation'
 import { replayPlannerSearchTrace } from '../domain/planner/plannerTraceReplay'
 import {
-  createProductionPlanWithSearchRunner,
   createRejectedBuildListEntries,
-  type PlannerFullSearchRunner,
+  generatePlanFromFullRun,
+  type PlannerAnyRunTermination,
+  type PlannerFullRunOf,
 } from '../domain/planner/productionPlanGeneration'
 import type {
   PlannerDependencies,
   PlannerInput,
   PlannerRunBuildListContext,
-  PlannerRunLimitKind,
   PlannerRunResult,
+  PlannerRunResultOf,
   PlannerSearchRejectionReason,
   PlannerRunTerminationStatus,
 } from '../domain/planner/plannerTypes'
@@ -129,6 +131,11 @@ export interface PlannerParityProjection {
   selectedBuildListEntryIds: BuildListEntryId[]
   rejectedBuildListEntries: PlannerParityRejectedEntry[]
   terminationStatus: PlannerRunTerminationStatus | null
+  /**
+   * The projected run's own `reachedLimits`, unconverted: the Beam Search
+   * oracle's may name `max_expanded_states` (Issue #103 Phase D-2a).
+   */
+  terminationReachedLimits: string[] | null
 }
 
 /** One strategy's result, reduced to the plain data the parity comparison reads. */
@@ -209,77 +216,49 @@ function summarizeConflict(conflict: PlanConflict): PlannerParityConflict {
 }
 
 /**
- * Parity-only adapter (Issue #103 Phase D-2a): a Beam Search oracle result in
- * the Production `PlannerRunResult` shape the shared projection
- * (`createProductionPlanWithSearchRunner()`) accepts.
- *
- * Only the termination differs between the two shapes. The status is kept as
- * the oracle derived it; `limits` keeps `maxPlanSteps` and `reachedLimits`
- * keeps `max_plan_steps` only, because a Production termination cannot name
- * the oracle's `max_expanded_states`. The projection reads nothing but the
- * status from it, and the parity summary records the oracle's own termination
- * separately, so no comparison loses information. It never runs in Production:
- * the Production types are not widened to fit the oracle.
+ * The Beam Search oracle as a full run of the shared Plan-generation tail
+ * (Issue #103 Phase D-2a): the Production input plus the oracle bounds it ran
+ * with. Its result keeps the oracle's own `PlannerBeamSearchTermination`,
+ * `max_expanded_states` included; it is never converted into a Production
+ * `PlannerRunTermination`, and it is never a `PlannerFullSearchRunner`.
  */
-export function projectBeamSearchResultForProduction(
-  result: PlannerBeamSearchResult,
-): PlannerRunResult {
-  const { termination } = result
-  return {
-    ...result,
-    termination: {
-      ...termination,
-      reachedLimits: termination.reachedLimits.filter(
-        (limit): limit is PlannerRunLimitKind => limit === 'max_plan_steps',
-      ),
-      limits: { maxPlanSteps: termination.limits.maxPlanSteps },
-    },
-  }
-}
-
-/**
- * The Beam Search oracle as a Production-shaped full run for the parity
- * projection: the Production input plus the oracle bounds it ran with, and the
- * result adapted by `projectBeamSearchResultForProduction()`.
- */
-function beamProjectionRunner(
+function beamOracleFullRun(
   beamOptions: Pick<PlannerBeamSearchOptions, 'beamWidth' | 'maxExpandedStates'>,
-): PlannerFullSearchRunner {
-  return async (input, dependencies, options, buildListContext) =>
-    projectBeamSearchResultForProduction(
-      await runPlannerBeamSearch(
-        createPlannerBeamSearchInput(input, beamOptions),
-        dependencies,
-        options,
-        buildListContext,
-      ),
+): PlannerFullRunOf<PlannerBeamSearchTermination> {
+  return (input, dependencies, options, buildListContext) =>
+    runPlannerBeamSearch(
+      createPlannerBeamSearchInput(input, beamOptions),
+      dependencies,
+      options,
+      buildListContext,
     )
 }
 
 /**
  * The full run the projection runs: the result already computed for the
- * first call (the same input), a real run for every runtime-unsupported
- * retry. So the Production projection is exercised through the one shared
- * `createProductionPlanWithSearchRunner()` without running twice.
+ * first call (the same input), a real run of the same strategy for every
+ * runtime-unsupported retry. So the shared Plan-generation tail
+ * (`generatePlanFromFullRun()`) is exercised without running twice, and each
+ * strategy keeps its own termination type throughout.
  */
-function replayingSearchRunner(
-  first: PlannerRunResult,
-  runner: PlannerFullSearchRunner,
-): PlannerFullSearchRunner {
+function replayingFullRun<T extends PlannerAnyRunTermination>(
+  first: PlannerRunResultOf<T>,
+  fullRun: PlannerFullRunOf<T>,
+): PlannerFullRunOf<T> {
   let used = false
   return async (input, dependencies, options, buildListContext) => {
     if (!used) {
       used = true
       return structuredClone(first)
     }
-    return runner(input, dependencies, options, buildListContext)
+    return fullRun(input, dependencies, options, buildListContext)
   }
 }
 
-async function summarizeProjection(
-  runner: PlannerFullSearchRunner,
+async function summarizeProjection<T extends PlannerAnyRunTermination>(
+  fullRun: PlannerFullRunOf<T>,
   input: PlannerInput,
-  result: PlannerRunResult,
+  result: PlannerRunResultOf<T>,
   dependencies: PlannerDependencies,
   buildListContext: PlannerRunBuildListContext,
 ): Promise<PlannerParityProjection> {
@@ -294,10 +273,11 @@ async function summarizeProjection(
     selectedBuildListEntryIds: [],
     rejectedBuildListEntries: [],
     terminationStatus: null,
+    terminationReachedLimits: null,
   }
   try {
-    const planned = await createProductionPlanWithSearchRunner(
-      replayingSearchRunner(result, runner),
+    const planned = await generatePlanFromFullRun(
+      replayingFullRun(result, fullRun),
       input,
       dependencies,
       undefined,
@@ -305,7 +285,12 @@ async function summarizeProjection(
       buildListContext,
     )
     const plan = planned.plan
-    if (plan === null) return { ...empty, terminationStatus: planned.termination.status }
+    // The run's own termination, as the strategy derived it: a Beam Search
+    // oracle truncation keeps `max_expanded_states` here.
+    const terminationReachedLimits: string[] = [...planned.termination.reachedLimits]
+    if (plan === null) {
+      return { ...empty, terminationStatus: planned.termination.status, terminationReachedLimits }
+    }
     const steps = plan.steps
     // Each After is the next Before. The first Before is deliberately not
     // compared with `baseSnapshot.initialExecutionState`: that is the pre-start
@@ -347,6 +332,7 @@ async function summarizeProjection(
         reason,
       })),
       terminationStatus: planned.termination.status,
+      terminationReachedLimits,
     }
   } catch (error) {
     return { ...empty, status: 'failed', failure: errorMessage(error) }
@@ -427,15 +413,27 @@ export async function summarizePlannerStrategyRun(
 ): Promise<PlannerStrategyRunSummary> {
   const { strategy, result, engine, dependencies } = request
   const buildListContext = request.buildListContext ?? PERSISTED_PLANNER_BUILD_LIST_CONTEXT
-  // Everything past the run itself reads the Production view: the same input
-  // with `maxPlanSteps` only, and a result the shared projection accepts.
+  // Everything past the run itself reads the Production input view (the same
+  // input with `maxPlanSteps` only). Each strategy's result keeps its own
+  // termination type: the shared tail reads it through its generic entry, so a
+  // Beam Search oracle termination is never turned into a Production one.
   const input = request.strategy === 'beam' ? plannerRunInputOf(request.input) : request.input
-  const projected =
-    request.strategy === 'beam' ? projectBeamSearchResultForProduction(request.result) : request.result
-  const runner =
+  const projection =
     request.strategy === 'beam'
-      ? beamProjectionRunner(request.input.options)
-      : runPlannerDeterministicSchedule
+      ? summarizeProjection(
+          beamOracleFullRun(request.input.options),
+          input,
+          request.result,
+          dependencies,
+          buildListContext,
+        )
+      : summarizeProjection(
+          runPlannerDeterministicSchedule,
+          input,
+          request.result,
+          dependencies,
+          buildListContext,
+        )
   const schedulerMetrics = request.strategy === 'scheduler' ? request.schedulerMetrics : null
   const prepared = preparePlannerInitialContext(input, dependencies, buildListContext)
   const planningTargetIds =
@@ -456,7 +454,7 @@ export async function summarizePlannerStrategyRun(
   const selectedBuildListEntryIds = sorted(best?.selectedBuildListEntryIds ?? [])
   const rejectedBuildListEntries = createRejectedBuildListEntries(
     input,
-    projected,
+    result,
     selectedBuildListEntryIds,
   ).map(({ buildListEntryId, reason }) => ({ buildListEntryId, reason }))
   const rejections = result.rejections.map(({ buildListEntryId, reason, actionType }) => ({
@@ -517,7 +515,7 @@ export async function summarizePlannerStrategyRun(
     preferredSourceProgressCount: best?.preferredSourceProgressCount ?? null,
     evaluationScore: best?.evaluationScore ?? null,
     replay: summarizeReplay(input, result.bestState, engine),
-    projection: await summarizeProjection(runner, input, projected, dependencies, buildListContext),
+    projection: await projection,
     schedulerDrops: schedulerMetrics?.drops.map((drop) => ({ ...drop })) ?? null,
     schedulerProvisionalOutcomes:
       schedulerMetrics?.provisionalOutcomes.map((outcome) => ({

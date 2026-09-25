@@ -1088,10 +1088,16 @@ Phase D-2aの確定判断と実装後の状態。
   生成しない）。Issue #103 benchmark Workerは独自のbenchmark protocolでscheduler進捗を報告し続ける
 - Production表示helper（`plannerSearchLimitPresentation.ts`）から `max_expanded_states` 分岐を除去した。
   Persistenceのincompleteエラー文言を中立化した（拒否判断は不変）
-- parity harnessはBeam / schedulerの入力・結果型をそれぞれ明示し、Beam resultをProduction projectionへ
-  通すときはharness側adapter `projectBeamSearchResultForProduction()` を使う（statusを保ち、
-  `reachedLimits` / `limits` をProduction shapeへ射影。oracle自身のterminationはsummaryに別途記録）。
-  Production型をBeamに合わせて広げない。acceptance catalogue、sanity-3、representative-12のparityは維持
+- parity harnessはBeam / schedulerの入力・結果型をそれぞれ明示する。Beam terminationをProduction
+  terminationへ偽変換しない（当初のharness側adapterは、Beamの `max_expanded_states` 打切りを
+  `incomplete` + 空の `reachedLimits` というProductionでは成立しない `PlannerRunTermination` にしていた
+  ため、PR #118のreviewで除去した）。共通tailをtermination型にgenericな `generatePlanFromFullRun<T>()` へ
+  分離し、parity harnessはBeam結果を `PlannerBeamSearchTermination` のまま通す（runtime-unsupported
+  retryでもBeamを再実行）。Productionの `createProductionPlanWithSearchRunner()` /
+  `PlannerFullSearchRunner` / `ProductionPlanGenerationObserver` / `PlannerResult` は
+  `PlannerRunTermination` 固定のまま。Production terminationは `incomplete` なら必ず
+  `reachedLimits = ['max_plan_steps']` であることをhelperと実scheduler結果のtestで固定した。
+  acceptance catalogue、sanity-3、representative-12のparityは維持
 - `max_expanded_states_reached` warning kindはBeam oracleが使うため残す（Production scheduler / UIからは
   到達不能）。warning型の分離はD-2bへ回す
 - UIの見た目はD-1から変更しない

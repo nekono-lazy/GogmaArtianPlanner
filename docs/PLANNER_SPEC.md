@@ -1040,10 +1040,18 @@ export interface PlannerBeamSearchExecutionOptions extends PlannerExecutionOptio
 - oracleの入力validationは `validatePlannerBeamSearchOptions()`（Production `validatePlannerOptions()`
   + `beamWidth` / `maxExpandedStates` の1以上の整数）で行い、Production validationだけを通って
   不正なoracle boundを見逃さない。Production validationはoracle fieldを要求しない
-- oracleのterminationだけが `max_expanded_states` を持てる。oracle resultをProduction型へcastしない。
-  parity harnessはoracle resultをProduction projectionへ通すとき、harness側の専用adapter
-  （`projectBeamSearchResultForProduction()`）でstatusを保ったままProduction termination shapeへ
-  射影し、oracle自身のterminationは別途summaryへ記録する。Production型をoracleに合わせて広げない
+- oracleのterminationだけが `max_expanded_states` を持てる。oracle resultをProduction型へcast・変換しない。
+  Beam terminationをProduction terminationへ偽変換せず（`max_expanded_states` を `max_plan_steps` へ
+  置き換えない、`incomplete` を `exhausted` へ変えない、`incomplete` + 空の `reachedLimits` を作らない）、
+  parity専用のprojection pathで共通tailを検証する。共通tail（runtime-unsupported retry、Trace Replay、
+  execution projection、checkpoint防御、rejected Entry記録）は termination型に対してgenericな
+  `generatePlanFromFullRun<T>()` 1つであり、terminationからはstatusだけを読み、runのterminationを
+  そのまま返す。Productionは `createProductionPlanWithSearchRunner()`（`T = PlannerRunTermination`、
+  `PlannerFullSearchRunner`、`PlannerResult`）だけを使い、parity harnessだけがoracle自身の
+  `PlannerBeamSearchTermination` で呼ぶ（retryでもoracleを再実行し、terminationはoracleのまま）。
+  rejected Entry記録はterminationに依存しない `PlannerRunOutcome` を読む。
+  `PlannerFullSearchRunner`、`ProductionPlanGenerationObserver`、`PlannerResult`、
+  `PlannerRunTermination` はoracleに合わせて広げない
 - Beam oracle、`comparePlannerSearchStates`、semantic key、`evaluationScore`、`totalCost`、
   `preferredSourceProgressCount`、Beam instrumentation、parity harness、Browser benchmark、
   representative fixtureの縮退・削除はPhase D-2bで判断する

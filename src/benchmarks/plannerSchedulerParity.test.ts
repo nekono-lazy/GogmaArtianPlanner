@@ -69,6 +69,7 @@ function summary(overrides: Partial<PlannerStrategyRunSummary>): PlannerStrategy
       selectedBuildListEntryIds: [],
       rejectedBuildListEntries: [],
       terminationStatus: 'exhausted',
+      terminationReachedLimits: [],
     },
     schedulerDrops: null,
     schedulerProvisionalOutcomes: null,
@@ -359,6 +360,37 @@ describe('acceptance scenarios: fast Beam / scheduler parity', { timeout: 60_000
     expect(run.beam.termination.status).toBe('incomplete')
     expect(run.scheduler.termination.status).toBe('completed')
     expect(run.report.completion.schedulerOnlyCompletedTargetIds).toEqual(['target.a', 'target.b'])
+  })
+
+  /**
+   * Phase D-2a: a Beam Search truncated by its own `maxExpandedStates` goes
+   * through the shared Plan-generation tail with its own termination. Nothing
+   * turns it into a Production termination - no `max_plan_steps` stands in for
+   * it, and no `incomplete` with empty `reachedLimits` is produced.
+   */
+  it.each(['bounded-max-expanded-states', 'exact-bounds-expanded'])(
+    '%s keeps the Beam Search max_expanded_states truncation through the projection',
+    async (id) => {
+      const run = await runCatalogueParity(id)
+      expect(run.beam.termination).toMatchObject({
+        status: 'incomplete',
+        reachedLimits: ['max_expanded_states'],
+      })
+      expect(run.beam.projection.status).toBe('valid')
+      expect(run.beam.projection.terminationStatus).toBe('incomplete')
+      expect(run.beam.projection.terminationReachedLimits).toEqual(['max_expanded_states'])
+      // The scheduler never sees the oracle bound.
+      expect(run.scheduler.termination.reachedLimits).not.toContain('max_expanded_states')
+      expect(mandatoryParityProblems(run)).toEqual([])
+    },
+  )
+
+  it('keeps the shared max_plan_steps truncation as max_plan_steps for both strategies', async () => {
+    const run = await runCatalogueParity('bounded-max-plan-steps')
+    expect(run.beam.termination).toMatchObject({ status: 'incomplete', reachedLimits: ['max_plan_steps'] })
+    expect(run.scheduler.termination).toMatchObject({ status: 'incomplete', reachedLimits: ['max_plan_steps'] })
+    expect(run.beam.projection.terminationReachedLimits).toEqual(['max_plan_steps'])
+    expect(run.scheduler.projection.terminationReachedLimits).toEqual(['max_plan_steps'])
   })
 
   it('fails both searches closed on the same malformed input', async () => {
