@@ -3,6 +3,7 @@ import { PlannerWhatIfBenchmarkPage } from './PlannerWhatIfBenchmarkPage'
 import { Button, Stack } from '@mui/material'
 import { CandidateSearchBenchmarkPage } from './CandidateSearchBenchmarkPage'
 import { ConstrainedEnumerationBenchmarkPage } from './ConstrainedEnumerationBenchmarkPage'
+import { Issue101ConstrainedResearchBenchmarkPage } from './Issue101ConstrainedResearchBenchmarkPage'
 import { PlannerOrchestrationBenchmarkPage } from './PlannerOrchestrationBenchmarkPage'
 import { SkillIdentificationBenchmarkPage } from './SkillIdentificationBenchmarkPage'
 
@@ -12,6 +13,7 @@ type BenchmarkId =
   | 'b8-constrained-enumeration'
   | 'b8-planner-orchestration'
   | 'b9-what-if'
+  | 'issue101-constrained-research'
 
 /**
  * Isolated benchmark shell. The C5-E2C8 Skill Identification harness stays the
@@ -23,6 +25,8 @@ type BenchmarkId =
  * the Planner redesign was validated; its measurements stay recorded in
  * `docs/ISSUE_103_PLANNER_SEARCH_INSTRUMENTATION.md` and
  * `docs/ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md`.
+ * Issue #101 adds its constrained re-search harness beside the others; none of
+ * the existing harnesses changes.
  */
 export function BenchmarkApp() {
   const [benchmark, setBenchmark] = useState<BenchmarkId>('c8-skill-identification')
@@ -59,6 +63,12 @@ export function BenchmarkApp() {
         >
           B9 What-if
         </Button>
+        <Button
+          variant={benchmark === 'issue101-constrained-research' ? 'contained' : 'outlined'}
+          onClick={() => setBenchmark('issue101-constrained-research')}
+        >
+          Issue 101 Constrained Re-search
+        </Button>
       </Stack>
       {benchmark === 'b9-what-if' && <PlannerWhatIfBenchmarkPage />}
       {benchmark === 'c8-skill-identification' && <SkillIdentificationBenchmarkPage />}
@@ -68,6 +78,9 @@ export function BenchmarkApp() {
       )}
       {benchmark === 'b8-planner-orchestration' && (
         <PlannerOrchestrationBenchmarkPage />
+      )}
+      {benchmark === 'issue101-constrained-research' && (
+        <Issue101ConstrainedResearchBenchmarkPage />
       )}
     </Stack>
   )
