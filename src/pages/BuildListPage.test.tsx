@@ -19,6 +19,7 @@ import {
   createValidRngState,
   createValidTargetWeapon,
   productionPlanId,
+  targetWeaponId,
 } from '../test/fixtures/domainData'
 import { createValidMasterDataFixture } from '../test/fixtures/masterData'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../domain/rng/production/productionRngEngine'
@@ -142,6 +143,39 @@ function dependencies(
     getDraftProductionPlan: vi.fn(async () => undefined),
     replan: unusedReplanDependencies(),
   }
+}
+
+/**
+ * One Entry per Target, each Candidate needing the given operation count, so
+ * the recommended `maxPlanSteps` of the Build List is known (Issue #130).
+ */
+function dependenciesWithOperationCounts(
+  operationCounts: readonly number[],
+  client: PlannerWorkerClient = createPlannerClient(),
+): BuildListPageDependencies {
+  const deps = dependencies([], client)
+  const pairs = operationCounts.map((operationCount, index) => {
+    const target = createValidTargetWeapon()
+    target.id = targetWeaponId(`target.operations.${index}`)
+    target.name = `Target ${operationCount}`
+    const candidate = createValidBuildCandidate()
+    candidate.id = candidateId(`candidate.operations.${index}`)
+    candidate.targetWeaponId = target.id
+    candidate.estimatedOperationCount = operationCount
+    candidate.searchStateHash = createSearchStateHash(candidate.route, createValidRngState(), [createValidNormalArtianCounter()])
+    const entry = createBuildListEntry(candidate, target, {
+      id: buildListEntryId(`build-list.operations.${index}`),
+      createdAt: '2026-08-29T03:00:00.000Z',
+    })
+    entry.targetDefinitionHash = createTargetDefinitionHash(target)
+    return { entry, target }
+  })
+  deps.refresh = vi.fn(async () => ({
+    entries: pairs.map(({ entry }) => entry),
+    targets: pairs.map(({ target }) => target),
+    ownedWeapons: [],
+  }))
+  return deps
 }
 
 /**
@@ -475,7 +509,72 @@ describe('BuildListPage', () => {
     expect(screen.queryByRole('status', { name: '生産計画を作成しています…' })).not.toBeInTheDocument()
   })
 
-  it('restores defaultPlannerOptions with the reset control', async () => {
+  it('starts at 1000 while every registered Candidate needs at most 1000 operations', async () => {
+    const user = userEvent.setup()
+    const client = createPlannerClient()
+    renderPage(dependenciesWithOperationCounts([450, 870], client))
+    await user.click(await screen.findByRole('button', { name: '詳細設定' }))
+    expect(await screen.findByLabelText('最大計画ステップ数')).toHaveValue(1000)
+    expect(screen.getByText(/既定値は登録候補の必要操作数に応じて500刻みで補正されます（最低1,000）。/)).toBeInTheDocument()
+  })
+
+  it.each([
+    [1470, 1500],
+    [1601, 2000],
+  ])('starts at the recommended bound for a %i-operation Candidate and sends it', async (operationCount, expected) => {
+    const user = userEvent.setup()
+    const client = createPlannerClient()
+    renderPage(dependenciesWithOperationCounts([300, operationCount], client))
+    await user.click(await screen.findByRole('button', { name: '詳細設定' }))
+    await waitFor(() => expect(screen.getByLabelText('最大計画ステップ数')).toHaveValue(expected))
+
+    await user.click(screen.getByRole('button', { name: '生産計画を作成' }))
+    await screen.findByText(/^Plan destination:/)
+    expect(vi.mocked(client.createConstrainedPlan).mock.calls[0][1].options).toEqual({
+      maxPlanSteps: expected,
+    })
+  })
+
+  it('never replaces a user edit when the Entries change, and the reset follows the current Build List', async () => {
+    const user = userEvent.setup()
+    const client = createPlannerClient()
+    renderPage(dependenciesWithOperationCounts([1470, 300], client))
+    await user.click(await screen.findByRole('button', { name: '詳細設定' }))
+    await waitFor(() => expect(screen.getByLabelText('最大計画ステップ数')).toHaveValue(1500))
+    await user.clear(screen.getByLabelText('最大計画ステップ数'))
+    await user.type(screen.getByLabelText('最大計画ステップ数'), '1234')
+
+    // Removing the 1470-operation Entry changes the recommendation to 1000,
+    // but the user's input stays the authority.
+    const [largest] = await screen.findAllByRole('button', { name: 'ビルドリストから削除' })
+    await user.click(largest)
+    await waitFor(() => expect(screen.queryByText('Target 1470')).not.toBeInTheDocument())
+    expect(screen.getByLabelText('最大計画ステップ数')).toHaveValue(1234)
+
+    // 「既定値に戻す」 returns to the recommendation of the Build List now shown.
+    await user.click(screen.getByRole('button', { name: '既定値に戻す' }))
+    expect(screen.getByLabelText('最大計画ステップ数')).toHaveValue(1000)
+
+    await user.click(screen.getByRole('button', { name: '生産計画を作成' }))
+    await screen.findByText(/^Plan destination:/)
+    expect(vi.mocked(client.createConstrainedPlan).mock.calls[0][1].options).toEqual({
+      maxPlanSteps: 1000,
+    })
+  })
+
+  it('resets to the recommended bound of a large Candidate, not to a fixed 1000', async () => {
+    const user = userEvent.setup()
+    renderPage(dependenciesWithOperationCounts([1470]))
+    await user.click(await screen.findByRole('button', { name: '詳細設定' }))
+    await waitFor(() => expect(screen.getByLabelText('最大計画ステップ数')).toHaveValue(1500))
+    await user.clear(screen.getByLabelText('最大計画ステップ数'))
+    await user.type(screen.getByLabelText('最大計画ステップ数'), '99')
+
+    await user.click(screen.getByRole('button', { name: '既定値に戻す' }))
+    expect(screen.getByLabelText('最大計画ステップ数')).toHaveValue(1500)
+  })
+
+  it('restores the recommended bound (defaultPlannerOptions for a small Candidate) with the reset control', async () => {
     const user = userEvent.setup()
     renderPage(dependencies())
     await user.click(await screen.findByRole('button', { name: '詳細設定' }))

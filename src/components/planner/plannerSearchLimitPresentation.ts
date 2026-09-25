@@ -41,6 +41,19 @@ export function createPlannerReachedLimitMessages(
   )
 }
 
+/**
+ * The conflict resolution recalculation on the Production Plan page runs with
+ * a bound derived from the Plan it shows (`conflictResolutionMaxPlanSteps()`,
+ * Issue #130), never with the Build List detail settings. So its truncation
+ * message names the bound it actually used and never suggests that editing
+ * the Build List input would change that recalculation.
+ */
+export function createConflictResolutionIncompleteMessage(
+  termination: PlannerRunTermination,
+): string {
+  return `競合解決の再計算が最大計画ステップ数 ${formatCount(termination.limits.maxPlanSteps)} に到達したため、完成した生産計画を作成できませんでした。この上限は表示中の生産計画のステップ数から自動で決まります。ビルドリスト画面から生産計画を作り直してください。`
+}
+
 export function createPlannerCompletedTargetsText(
   termination: PlannerRunTermination,
 ): string {

@@ -847,7 +847,8 @@ Worker request・UIのいずれにも存在せず、Beam Search oracle（test / 
 
 `PlannerInput.options` はPlanner boundの唯一のauthorityとする。
 
-- 初期値authorityは `defaultPlannerOptions` だけとする
+- fallback初期値authorityは `defaultPlannerOptions` だけとする。画面ごとのruntime導出は下記
+  「runtime `maxPlanSteps` の導出」に従う
 - BuildList画面の詳細設定でユーザーが変更できるのは `maxPlanSteps` だけとする（Issue #103
   Phase D-1）。Phase D-2a以降、Production `PlannerOptions` 自体が `maxPlanSteps` だけであり、
   Application callerが補う他のfieldは無い
@@ -856,6 +857,28 @@ Worker request・UIのいずれにも存在せず、Beam Search oracle（test / 
 - `maxPlanSteps` は1以上の整数だけを受け付け、NaN・0・負数・小数・空欄はPlannerへ渡さない
 - 推測による固定最大値は設けない。長時間化はWorker実行と既存Cancelで扱う
 - 設定値はBuildList画面のruntime UI stateであり、AppSettingsやIndexedDBへ永続化しない
+
+#### runtime `maxPlanSteps` の導出（Issue #130）
+
+`defaultPlannerOptions = { maxPlanSteps: 1000 }` はDomain / Applicationのfallback既定値として
+変更しない。各画面のApplication callerは、そのとき利用できる正式な情報から十分なruntime上限を
+pure helper（`src/services/planner/plannerRuntimeOptions.ts`）で導出し、`PlannerInput.options` へ
+明示的に書く。500刻みは共通定数 `PLANNER_MAX_PLAN_STEPS_INCREMENT = 500`、切り上げは
+`roundUpPlannerMaxPlanSteps()` だけが行う。
+
+- BuildList画面の推奨値（`recommendedBuildListMaxPlanSteps(entries)`）:
+  `max(1000, ceilTo500(登録Entryの最大 candidateSnapshot.estimatedOperationCount))`。
+  stale Entry・legacy duplicateも単純に最大値へ含める。ユーザーが編集していない間の表示値と
+  「既定値に戻す」の戻り先であり、ユーザー編集後はその入力値がauthorityになる（UI_FLOW 10.0）
+- 競合解決の再計算（`conflictResolutionMaxPlanSteps(plan)`、9.5 / UI_FLOW 11.4）:
+  `max(1000, ceilTo500(表示中Plan.steps.length) + CONFLICT_RESOLUTION_MAX_PLAN_STEPS_MARGIN)`
+  （margin = 500）。fresh `createPlannerInput()` の1000へ依存せず、BuildList画面の一時入力も
+  参照しない。保存された新Draftの次の競合解決は、そのDraft自身のStep数から導出する
+- what-if比較の `defaultPlannerWhatIfBounds` と入力はこの導出の対象外とする
+- Worker Client、Worker、Domainはこれらを適用しない（Application callerがauthority）
+- `PlannerOptions` は引き続きruntime-onlyであり、ProductionPlan、`PlanningInputSnapshot`、
+  AppSettings、IndexedDB、Export / Import、`CalculationContext` へ追加しない。Planner計算の意味は
+  変わらないため、いずれのschema / calculation versionも変更せず、既存Planをstaleにしない
 
 `PlannerOptions` はB8 orchestration bounds
 （`maxCandidateTrialsPerConflict` / `maxGeneratedBuildListEntries` /
@@ -3026,7 +3049,11 @@ resolutionを保持したうえで、同一 `conflictKey` は今回選択で置�
 Plan生成はwhat-if resultを採用せず、B8 Production constrained Plannerの
 `createConstrainedPlan()` を新規実行する。Application callerが
 `defaultPlannerOrchestrationBounds = 2 / 1 / 4` を明示的に渡す。what-if trial Entryまたは
-comparison resultを保存・採用しない。
+comparison resultを保存・採用しない。このrequestの `PlannerInput.options` は
+`conflictResolutionPlannerOptions(表示中Plan)`
+（`maxPlanSteps = max(1000, ceilTo500(plan.steps.length) + 500)`、7.2.1）でApplication callerが
+上書きし、fresh inputの `defaultPlannerOptions` のまま実行しない（Issue #130）。
+`termination.status === "incomplete"` は従来どおり保存しない。
 
 `createConstrainedPlan()` の返却warningsに
 `warning.kind === 'invalid_conflict_resolution'` が1件でもある場合はfail closedとする。

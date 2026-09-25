@@ -16,6 +16,7 @@ import type {
 import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../domain/models/publicTypes'
 import {
   defaultPlannerOptions,
+  defaultPlannerWhatIfBounds,
   type PlannerInput,
   type PlannerOrchestrationResult,
   type PlannerWhatIfCalculationResult,
@@ -46,6 +47,7 @@ import {
 } from './ProductionPlanPage'
 import {
   completedPlannerTermination,
+  incompletePlannerTermination,
 } from '../test/fixtures/plannerTermination'
 import { useSettingsStore } from '../stores/settingsStore'
 import { ExecutionRuntimeError } from '../domain/execution'
@@ -2707,5 +2709,98 @@ describe('ProductionPlanPage PlanStep Debug', () => {
     } finally {
       useSettingsStore.setState({ debugMode: false })
     }
+  })
+})
+
+/**
+ * The conflict resolution recalculation's `maxPlanSteps` (Issue #130): the
+ * page derives it from the Plan it shows -
+ * `max(1000, ceilTo500(plan.steps.length) + 500)` - and writes it over the
+ * fresh input's `defaultPlannerOptions`. It never reads the Build List page's
+ * temporary input, and the what-if comparison keeps its own bounds.
+ */
+describe('ProductionPlanPage conflict resolution maxPlanSteps', () => {
+  function withStepCount(fixture: ReturnType<typeof multiParticipantFixture>, stepCount: number) {
+    const [step] = fixture.plan.steps
+    fixture.plan.steps = Array.from({ length: stepCount }, (_, index) => ({
+      ...step,
+      id: planStepId(`plan-step.long.${index}`),
+      order: index + 1,
+    }))
+    fixture.plan.currentStepId = null
+    return fixture
+  }
+
+  it.each([
+    [1, 1000],
+    [800, 1500],
+    [1000, 1500],
+    [1470, 2000],
+    [1500, 2000],
+    [1600, 2500],
+  ])('recalculates a %i-Step Plan with maxPlanSteps %i and keeps every explicit resolution', async (stepCount, expected) => {
+    const user = userEvent.setup()
+    const fixture = withStepCount(multiParticipantFixture(), stepCount)
+    const other = { ...fixture.plan.conflicts[0], id: 'conflict.other' }
+    fixture.plan.conflicts.push(other)
+    const client = plannerClient(async () => fixture.preparation)
+    vi.mocked(client.createConstrainedPlan).mockResolvedValue(replanResult())
+    const deps = dependencies(fixture, client)
+    renderPage(deps, fixture.plan.id)
+    await clickSelection(user, 1)
+    await waitFor(() => expect(deps.savePlannerResult).toHaveBeenCalledOnce())
+
+    // The fresh input still carries the fallback default...
+    const prepared = vi.mocked(client.prepareInteraction).mock.calls[1][1]
+    expect(prepared.options).toEqual(defaultPlannerOptions)
+    expect(fixture.input.options).toEqual({ maxPlanSteps: 1000 })
+    // ...and only the recalculation request is given the derived bound.
+    const [, merged, bounds] = vi.mocked(client.createConstrainedPlan).mock.calls[0]
+    expect(merged.options).toEqual({ maxPlanSteps: expected })
+    expect(merged.conflictResolutions).toEqual([
+      { conflictKey: fixture.plan.conflicts[0].id, selectedBuildListEntryId: fixture.secondEntry.id },
+      { conflictKey: other.id, selectedBuildListEntryId: fixture.entry.id },
+    ])
+    expect(bounds).toEqual({ maxCandidateTrialsPerConflict: 2, maxGeneratedBuildListEntries: 1, maxPlannerReruns: 4 })
+  })
+
+  it('saves nothing when the derived bound truncates the recalculation, and never points at the Build List input', async () => {
+    const user = userEvent.setup()
+    const fixture = withStepCount(multiParticipantFixture(), 1470)
+    const client = plannerClient(async () => fixture.preparation)
+    vi.mocked(client.createConstrainedPlan).mockResolvedValue({
+      ...replanResult(createValidProductionPlan()),
+      termination: incompletePlannerTermination(['max_plan_steps'], {
+        limits: { maxPlanSteps: 2000 },
+      }),
+    })
+    const deps = dependencies(fixture, client)
+    const view = renderPage(deps, fixture.plan.id)
+    await clickSelection(user, 1)
+
+    expect(await screen.findByText(
+      '競合解決の再計算が最大計画ステップ数 2,000 に到達したため、完成した生産計画を作成できませんでした。この上限は表示中の生産計画のステップ数から自動で決まります。ビルドリスト画面から生産計画を作り直してください。',
+    )).toBeInTheDocument()
+    expect(screen.queryByText(/「詳細設定」で探索上限を引き上げてから/)).not.toBeInTheDocument()
+    expect(vi.mocked(client.createConstrainedPlan).mock.calls[0][1].options).toEqual({ maxPlanSteps: 2000 })
+    expect(deps.inspectPlannerResultSave).not.toHaveBeenCalled()
+    expect(deps.savePlannerResult).not.toHaveBeenCalled()
+    expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)
+  })
+
+  it('leaves the what-if comparison bounds and its input options unchanged', async () => {
+    const user = userEvent.setup()
+    const fixture = withStepCount(multiParticipantFixture(), 1470)
+    const client = plannerClient(async () => fixture.preparation)
+    const deps = dependencies(fixture, client)
+    renderPage(deps, fixture.plan.id)
+    const [compare] = await screen.findAllByRole('button', { name: '比較する' })
+    await user.click(compare)
+
+    await waitFor(() => expect(client.createWhatIfComparison).toHaveBeenCalledOnce())
+    const [, request] = vi.mocked(client.createWhatIfComparison).mock.calls[0]
+    expect(request.bounds).toEqual(defaultPlannerWhatIfBounds)
+    expect(request.plannerInput.options).toEqual(defaultPlannerOptions)
+    expect(client.createConstrainedPlan).not.toHaveBeenCalled()
   })
 })
