@@ -2078,6 +2078,12 @@ B8-Aで正式契約を確定した。実装はB8-B1以降で行う。
 B8 architecture自体はProduction RNG semantics、RouteOperationの意味、ProductionPlanの
 永続shape、PlanStepの意味、既存BuildListEntryのshapeを変更しない(9.2.17)。
 
+**Issue #136 / #101（9.2.19）。** 代替Ideal Routeの生成器をB8 constrained enumerationから
+Planner Alternative Search（resource-aware alternative Ideal search）へ段階的に置き換え、「この候補を
+優先」をRoute単位の決定とし、what-if / actual repairを1段に限る正式契約を9.2.19で確定した（仕様確定・
+未実装）。9.2.19.1の表に挙げた条項は新kernelで置き換わり、それ以外の9.2.1〜9.2.18の契約は維持する。
+Production routingを切り替えるPhase 5まで、9.2.6〜9.2.17のB8実装はlegacy implementationとしてそのまま動作する。
+
 ### 9.2.1 開始位置を後方固定しない
 
 再検索の開始位置を次のような単純な後方検索へ固定してはならない。
@@ -2423,6 +2429,12 @@ what-if比較はB9で実装する。B8では実装しない。B8のorchestration
 B9-A2で正式契約を確定した。9.2.4.1〜9.2.4.13がその契約である。上記のB0固定契約
 (距離表現、競合位置より前の位置も対象、後方固定の禁止)は変更しない。9.2.4.1以降は
 それを具体化するものであり、9.2.1〜9.2.3.1、9.2.5〜9.2.17のB8契約も変更しない。
+
+**Issue #136 / #101で「比較する」を1段previewとして再定義した（9.2.19.7）。** 新kernelでは9.2.4.3の
+ordering authority、9.2.4.7のfound判定、9.2.4.10のenumeration bounds、9.2.4.11のno-result status名の一部を
+9.2.19で置き換え、resultへ代替採用時に残る / 新しく発生するConflictを加える（9.2.19.13）。9.2.4.1の
+距離baseline、9.2.4.2、9.2.4.4〜9.2.4.6、9.2.4.8、9.2.4.12〜9.2.4.14は維持する。Phase 5のProduction
+routing切替までは、以下のB9契約がそのままProduction what-ifの契約である。
 
 B9-A2は仕様文書だけを変更した。`src/**`、テスト、Worker protocol、DB schema、
 schema version、Production RNG semantics、Candidate分類、Planner競合検出、
@@ -2836,8 +2848,7 @@ interface PlannerWhatIfComparison {
 
 interface PlannerWhatIfTargetComparison {
   targetWeaponId: TargetWeaponId;
-  practical: PlannerWhatIfOutcome;
-  ideal: PlannerWhatIfOutcome;
+  outcome: PlannerWhatIfOutcome;   // 9.2.4.2: Targetごとに理想品Candidate 1つの結果
 }
 
 interface PlannerWhatIfDistance {
@@ -2857,7 +2868,12 @@ type PlannerWhatIfOutcome =
   | { status: 'stopped_by_enumeration_bound' }
   | { status: 'stopped_by_candidate_trial_bound' }
   | { status: 'stopped_by_planner_rerun_bound' }
+  | { status: 'blocked_by_selected_checkpoint' }   // 9.5.2
 ```
+
+B9-A2当時の概念resultは `PlannerWhatIfTargetComparison` にPractical / Idealの2枠を持っていたが、Candidateが
+理想品だけになった後の契約（9.2.4.2）と実装はTargetごとに `outcome` 1つである。上の形はその現行契約に
+合わせて訂正したものであり、意味の変更ではない。新kernelのresultは9.2.19.13で拡張する。
 
 意味。
 
@@ -3081,7 +3097,8 @@ what-ifは完全にtransientなpreviewである。起動時にも完了時にも
 partial resultを表示せず、古いresultを別participantのcardへ適用しない。
 
 `comparison.alternatives` はDomainのstable orderのまま表示し、Application / UIでTargetを
-並べ替えない。各non-fixed Targetは排他的な `practical` / `ideal` の2枠を独立表示する。
+並べ替えない。各non-fixed Targetは理想品候補1件の `outcome` を表示する（9.2.4.2。Practical / Idealの
+2枠構造は存在しない。[UI_FLOW.md](./UI_FLOW.md) 11.3）。
 `found` は `estimatedOperationCount` を主距離とし、残り3つのestimateは絶対Counterではなく
 進行量として表示してよい。次のtyped statusを「候補なし」へまとめない。
 
@@ -3341,6 +3358,10 @@ PlannerConflictResolution
 - 実行不能と判定したCandidateについては、enumeratorへ次のCandidateを要求する
 - Cross規則の軸外pair(`i > 0` かつ `j > 0`)は、必要になったTarget・その競合に限って
   評価を要求してよい。full Cartesianの事前生成は要求しない
+
+新kernel（Planner Alternative Search、9.2.19.5）では、Plannerが渡すものへresource reservation
+（held / blocked位置と排他OwnedWeapon ID）と除外Route key集合を加える。これらはPlannerが既存authorityから
+導出したneutralな値であり、Conflict DTOでもPlannerロジックの複製でもない。上記の禁止事項は新kernelでも維持する。
 
 ### 9.2.10 Planner再実行
 
@@ -3847,6 +3868,11 @@ caller-supplied typeであり、invalid値をdefaultへrepair・clamp・field-wi
 どちらのboundsも、到達した場合は打ち切りをenumeration summaryまたはwarningとして
 明示する。bound到達を無言でexhaustionとして扱わない。
 
+**Issue #101（9.2.19.12）。** PR #137の実測で、`ConstrainedEnumerationBounds` の拡大ではIssue #101の
+実ケースを解決できないことが確認された。本節の2種のboundsはlegacy constrained path専用であり、新kernelの
+探索範囲は `PlannerAlternativeSearchExtent`（modern Candidate Searchの3値と同じ意味）と試行上限で決める。
+本節のdefault値を新機能のauthorityにしない。
+
 #### B8-C4b bound semantics
 
 `maxCandidateTrialsPerConflict` は、1つの元Conflictに対してorchestrationが実際に
@@ -3974,6 +4000,9 @@ B8-E   orchestration側のBrowser / Planner benchmark            実装済み
 
 boundsのProduction defaultはB8-B2とB8-Eの2回に分けて決定する。orchestration
 boundsはPlanner再実行の実コストに依存し、B8-C / B8-D実装前には測定できないためである。
+
+Issue #136 / #101の後続Phase（Planner Alternative Search、Route単位の決定、1段repair、legacy pathの
+整理）は9.2.19.16に定める。
 
 B9 what-if、B10 Conflict UIは別Phaseとする。B11として予定していたnormal-scope Keepはnormal-scope Keep仕様訂正で実装済みである([SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.9)。
 
@@ -4136,6 +4165,497 @@ Stepが削除済みEntryを参照しない。表示中Planから復元するexpl
 なるが、既存Planの互換性は壊さない。既存version 13 Draftの `conflicts` が、その後に整理された
 元Entryを参照していてB10で再現できない場合は、既存の `invalid_conflict_resolution` fail closedと
 再計算導線で扱う。
+
+### 9.2.19 Planner Alternative Searchと1段の競合repair（Issue #136 / #101）
+
+実装状態: **仕様確定・未実装**。本節はdocs-onlyのPRで確定した正式契約であり、runtime実装は
+9.2.19.16のPhase 1以降で行う。背景、方式選定の理由、Phase分割の根拠は
+[PLANNER_CONFLICT_REPAIR_DESIGN.md](./PLANNER_CONFLICT_REPAIR_DESIGN.md)（task-specific設計記録、
+非normative）にある。計測事実は
+[ISSUE_101_CONSTRAINED_RESEARCH_BENCHMARK.md](./ISSUE_101_CONSTRAINED_RESEARCH_BENCHMARK.md) にある。
+
+#### 9.2.19.1 位置づけと既存契約との関係
+
+Plannerが競合を解決するための代替Ideal Routeは、今後 **Planner Alternative Search**
+（resource-aware alternative Ideal search。Search Domain側の契約は
+[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8）で求める。B8のconstrained enumeration
+（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.7）のboundを単純に拡大する方式は採らない。PR #137の実測で、
+(1) upfront solveのため最初のCandidateまでにほぼ全探索時間を払うこと、(2) 巨戟化を常にorigin Skill
+Counterで組み立てるため、boundをいくら広げてもIssue #101の実ケース（火・龍の巨戟化がともにSkill 341）を
+解決できないことが確認されたためである。
+
+本節が **置き換える** もの。
+
+| 対象 | 旧 | 新 |
+| --- | --- | --- |
+| 代替Candidateの生成器 | B8 constrained enumeration（5.6.7、`ConstrainedEnumerationBounds`） | Planner Alternative Search（5.6.8、9.2.19.12のextent） |
+| 「この候補を優先」の決定単位 | Conflict 1件のresolution | Route単位の決定（9.2.19.2） |
+| 代替探索の制約 | 固定Candidateとの共存をtrial rerunだけで判定 | fixed Route集合のresource reservation（9.2.19.3）で生成し、trial rerunで最終判定 |
+| what-ifのfound判定とresult | 9.2.4.7 / 9.2.4.11 | 9.2.19.6 / 9.2.19.7 / 9.2.19.13 |
+| actual repairの反復単位 | 全explicit resolutionごとのconflict work（9.2.14） | 今回決定したConflictの直接participantだけ（9.2.19.8） |
+| 代替探索の範囲authority | `ConstrainedEnumerationBounds` / `PlannerOrchestrationBounds` | `PlannerAlternativeSearchExtent` と試行上限（9.2.19.12） |
+
+本節が **維持する** もの（新kernelにもそのまま適用する）。
+
+- 9.2.1: 再検索の起点はPlanner計算開始時のcurrent validated snapshotであり、競合位置より後ろへ後方固定しない
+- 9.2.2 / 9.2.11: Counter位置の一致だけで除外しない。共存可能性の最終authorityは既存Plannerのfull rerun +
+  Trace Replayであり、Search側へPlannerロジックを複製しない
+- 9.2.3.1: full runの前のinitial conflict preflightと、全explicit resolutionの再対応付け
+- 9.2.5: 初回Search用pruningを永久除外にしない
+- 9.2.7: 固定authorityはユーザーの明示選択（`PlannerConflictResolution.selectedBuildListEntryId`）だけであり、
+  `recommendedBuildListEntryId`、score、Target priorityから固定側を推論しない
+- 9.2.10: Candidateを途中Stateへinjectせず、初期Stateから完全再実行する
+- 9.2.12 / 9.2.13: Candidate semantic identity、決定的ID、deterministic materializer
+- 9.2.18: 採用したreplacementは失う側Targetの元Entryを置換する（Build List cardinality）
+- 9.5: checkpoint競合は勝者選択で解決できず、required checkpoint Entryを持つTargetは代替探索しない
+- 「比較する」と「この候補を優先」は別操作であり、what-if成功を選択のgateにしない（9.2.4.14）
+
+旧B8 constrained enumeration / orchestrationはこのPRで削除しない。9.2.19.14のとおり、Production routing切替
+（Phase 5）まではlegacy implementationとしてProductionで動作し続け、その後Phase 6で削除またはtest oracle化する。
+
+#### 9.2.19.2 決定の単位（Route単位の決定）
+
+ユーザーがConflict `X` でparticipant Entry `A` を「この候補を優先」とした場合、その意味は次とする。
+
+```text
+Conflict X の非固定participant Entry（Aと異なるEntryで、AのTargetと異なるTargetのもの）の
+現在Routeは、AのRouteと同時には実行しない。
+```
+
+AのRouteと必須physical unitが同じ位置で衝突するRouteは、その1か所でAを優先した時点でRouteとして
+成立しない。したがって決定はCounter位置1か所のpinではなく、**Entry（Route）単位** である。
+
+- この決定で現在Routeを失うEntryを **無効化Entry** と呼ぶ。無効化Entryの現在Routeを **無効化Route** と呼ぶ
+- 無効化Entryと同じTargetについて代替Ideal Routeを探す（9.2.19.8）
+- 無効化EntryとAの間の他のConflict（Issue #136のSkill 341 / Gogma 55）は、無効化Routeに由来するため
+  個別のユーザー判断として残さない（9.2.19.9）
+- 固定authorityは9.2.7のまま、この決定そのもの（fixed BuildListEntry ID）である。`conflictKey` は
+  決定をConflictへ結び付ける識別子であり、9.2.3.1の再対応付け規則は変わらない
+
+#### 9.2.19.3 fixed Route集合とresource reservation
+
+**fixed Route集合** は、1回のwhat-if / actual repairで代替探索が避けるべきRouteの集合であり、次の
+Entryの現在Routeからなる。
+
+```text
+今回の決定（what-ifではscenarioResolution）のfixed Entry
+∪ merge後のPlannerInputのvalid explicit resolution（9.2.4.14の復元分を含む）が選択するEntry
+∪ repair lineage（9.2.19.11）で以前固定されたEntryのうち、現在のBuild Listに同じIDで存在し、
+  その後の決定で無効化されていないもの
+```
+
+fixed Route集合に含まれないEntry（どの決定にも関わらないEntry）はreservationしない。代替Routeが
+それらと衝突した場合は、新しく発生するConflictとして報告する（9.2.19.6 / 9.2.19.13）。
+
+**resource reservation** は、fixed Route集合からPlanner側だけが導出するnon-persistentな値である。導出
+authorityは既存の `createPlannerRouteUnitPlans()` のRoute unit（`counterStream`、`counterId`、
+`counterBefore`、`canSkipWhenCounterPassed`、`physicalActionKey`）、`arePlannerRouteUnitsShareable()`、
+所持武器参照の既存authority（`collectReferencedOwnedWeaponIds()` と所持通常の排他消費）であり、Search側で
+再実装しない（9.2.2）。reservationは次の3種の情報だけを持つ。
+
+```text
+held位置（streamごと。NormalはNormalArtianCounter IDごと）
+  fixed Routeのunitが位置を持つCounter位置。必須unitもskip可能unitも含む。
+  fixed Route側の操作（またはそれをsilent fast-forwardさせる他Entryの実操作）によって
+  Counterが進むことを見込める位置である
+
+blocked位置（held位置の部分集合）
+  fixed Routeの必須unit（canSkipWhenCounterPassed = false）が位置を持ち、かつ
+  代替Route側のunitと1つの共有physical actionになり得ない位置
+
+排他OwnedWeapon ID
+  fixed Routeが起点として排他的に使用・消費するOwnedWeapon
+```
+
+stream別の意味。
+
+| 資源 | 規則 |
+| --- | --- |
+| Normal Counter | fixed Routeのproduction-target forge（Normal作成の最後のunit、必須）の位置はblockedである。Counter進行用forge（Issue #129で `canSkipWhenCounterPassed = true`）はheldだがblockedではない。代替Routeのproduction targetはblocked位置に置けない。代替RouteのCounter進行用forgeはblocked位置と重なってよい（必須側が先に実行され、進行用forgeはsilent fast-forwardされる。7.0.2の支配関係）。例: fixedのproduction target = Normal 206、代替のproduction target = Normal 0は両立する |
+| Skill Counter | fixed Routeの必須Skill unit（巨戟化、最後のReset Skills等）の位置はblockedである。代替Routeの巨戟化・Reset Skillsをその位置へ置かない。代替Routeはheld位置でSkillを変えずに待ち、後続の利用可能位置（例: fixedが341で巨戟化するなら342以降）で操作できる |
+| Gogma Counter | fixed Routeの必須Reset / Keepの位置はblockedである。代替RouteのBonus streamはheld位置を跨いで後続の利用可能位置を探索でき、その間Bonus状態は保持される |
+| OwnedWeapon | 排他OwnedWeaponは代替RouteのRoute起点・amendment対象にしない（hard constraint）。これは `TargetWeapon.preferredOwnedWeaponId`（Candidate orderingのsoft preference、[SEARCH_SPEC.md](./SEARCH_SPEC.md) 8.1）とは別概念であり、互いに読み替えない。保護武器の既存規則（21章 / 8章）も変わらない |
+
+physical action sharing。
+
+- 「同じCounter位置なら常に禁止」と単純化しない。blockedは必須かつ共有不可のunitだけである。
+  skip可能unitの位置は代替Routeが使ってよい（fixed側のそのunitはsilent fast-forwardされる）
+- 共有可能かどうかは既存の `physicalActionKey` / `arePlannerRouteUnitsShareable()` の意味に従う。
+  v1では代替Routeが排他OwnedWeaponを使えず、transient Gogma（`sourceOwnedWeaponId = null`）はEntryごとに
+  別physical weaponであり（[DATA_MODEL.md](./DATA_MODEL.md) 9.2）、Normal作成は `shareable: false` なので、
+  fixed Routeの必須unitが代替Routeのunitと共有になる場合は生じない。将来sharingの契約が広がっても、
+  reservationは既存authorityから導出し直し、共有可能な位置をblockedにしない
+- 外部Target（fixed Route）の操作でCounterが進んでも、代替Targetの武器状態は変化しない
+
+reservationはSearch DomainへConflict DTO（9.2.3）ではなく、位置集合とOwnedWeapon ID集合というneutralな
+値として渡す（9.2.9の「Search Domain APIへConflict DTOを渡さない」を維持する）。
+
+#### 9.2.19.4 held位置を跨ぐRouteと外部進行への依存
+
+代替Routeは、各streamでPlanner-start Counterから自分の最後の操作位置までのすべての位置が、自分の操作位置
+またはheld位置のどちらかであるように組む（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8のcoverage条件）。
+自分の操作が無いheld位置では武器状態を保持し、Counterはfixed Routeの操作で進むことを見込む。
+
+- このRouteは各 `RouteOperation` に絶対Counter位置を持つ既存表現のまま表せる。stream内でoperation同士の
+  Counter位置が連続している必要はない（[DATA_MODEL.md](./DATA_MODEL.md) 9.2）。永続shapeを追加しない
+- Plannerは既存どおり `current < counterBefore` のunitを未到達として待機し、`current > counterBefore` の
+  必須unitを `counter_before_current` で拒否する。誰も進めない位置で止まれば既存のstall drop（7章の手順5）になる
+- stream間の順序依存（代替の巨戟化がfixedの巨戟化を待ち、fixedの巨戟化がfixedのNormal作成を待つ等）と
+  循環待ちはSearchで判定しない。full Planner rerunが最終authorityである（9.2.19.6）
+- このRouteは、fixed Routeが実際に位置を進めることを前提にしている。後でfixed EntryがBuild Listから
+  消えた場合、通常Plannerでは既存のstall / deadlock dropとして報告される。新しいstale理由を作らない
+  （表示は [PLANNER_CONFLICT_REPAIR_DESIGN.md](./PLANNER_CONFLICT_REPAIR_DESIGN.md) 12章の未決事項）
+
+Issue #101の例（龍 = fixed、火 = 代替）では、火は「Normal 0で1本作成 → Skill 342で巨戟化 → Gogma 56以降で
+Bonus操作」のRouteを組める。Skill 341とGogma 55はheldかつblockedであり、Normal 206はblocked、Normal 0は
+龍のCounter進行用forgeなのでheldだがblockedではない。具体的なIdeal到達位置はruntime実装で確認し、
+本仕様では主張しない。
+
+#### 9.2.19.5 代替探索の呼び出し
+
+非固定Target Bの代替探索でPlannerがSearch Domainへ渡すものは次だけである。
+
+```text
+origin              Planner計算開始時のcurrent validated snapshot（ConstrainedSearchOrigin と同じ意味。9.2.1）
+targetWeaponId      B
+extent              PlannerAlternativeSearchExtent（9.2.19.12）
+reservation         9.2.19.3のheld / blocked位置と排他OwnedWeapon ID
+excludedRouteKeys   Bについて除外するRouteの candidateStableKey 集合（9.2.19.10）
+```
+
+- Conflict DTO、`PlannerConflictResolution`、Planner試行上限、Plannerのcounter precondition /
+  shareability判定をSearch Domainへ渡さない（9.2.9を維持）
+- 過去のUI Candidate Search request、`routeFilter`、AppSettingsの保存済み既定値を起点・filter・範囲の
+  authorityにしない
+- Search DomainはIdeal Candidateだけを、[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8の決定的順序で1件ずつ
+  返す。Plannerは次を要求するか止めるかを決め、Search側は途中で打ち切らない
+
+#### 9.2.19.6 共存可能性とfound判定
+
+代替Candidate `B'` は9.2.13のdeterministic materializerでtemporary Entry `G` にし、9.2.18の置換後集合
+（Bの元Entry `O` を `G` で置換）で、9.2.3.1のpreflightと再対応付けを経てfull Planner run + Trace Replayを
+1回行う（trial）。`B'` が **found** になる条件は次をすべて満たすことである。
+
+```text
+plan !== null かつ Trace Replayが成功している
+plan.selectedBuildListEntryIds が 明示決定Entry をすべて含む
+trial runの conflicts に、G と fixed Route集合のEntryを同時にparticipantとするものが無い
+G が plan.selectedBuildListEntryIds に含まれる、
+  または G が選ばれない理由が、fixed Route集合に属さないEntryとの未解決競合の暫定帰結
+  （selectedBuildListEntryId = null の PlanConflict の非採用側）だけである
+```
+
+**明示決定Entry** は、今回の決定（what-ifではscenarioResolution）のfixed Entryと、merge後のvalid explicit
+resolutionが選択するEntryである（既存9.2.4.7の「全fixed Entry」と同じ集合）。repair lineageだけに由来する
+以前のfixed Entryは、reservationと「Gと競合しない」条件には使うが、selectedであることは要求しない。それが
+別の未解決競合の暫定帰結で外れていても、Gの採否とは無関係だからである。
+
+- 最後の条件により、`B'` がfixed Route集合外のEntry C と新しく競合し暫定帰結でCが優先されても、`B'` は
+  foundである。その競合は「新しく発生するConflict」として報告し（9.2.19.13）、what-if / actual repairの
+  中で再帰的に解決しない（9.2.19.7 / 9.2.19.8）
+- `G` がstall / deadlock drop、validation除外、source / precondition不成立、checkpoint requirement等で
+  選ばれない場合はfoundではない。trialを不採用とし、Search Domainへ次のCandidateを要求する
+- `completed === true` は要求しない。bound到達のpartial Planでも上記を満たせばfoundとしてよい
+  （ただしactual repairの保存可否は既存のincomplete fail closed、9.2.4.14に従う）
+- 簡易競合判定（`usedCounters.has(counter)` 等）を追加しない（9.2.11）
+
+#### 9.2.19.7 「比較する」what-if（1段preview）
+
+「比較する」は **1段先まで** とする。participant Aで「比較する」を実行した場合の手順。
+
+```text
+1. Aをこのconflictのfixed側と仮定する（scenarioResolution。9.2.4.5のmerge規則）
+2. このconflictの直接participant Targetのうち、Aと異なるEntryかつAのTargetと異なるTargetを
+   unique Targetごとに列挙する（9.2.4.4）
+3. Targetごとに独立に、9.2.19.5の代替探索と9.2.19.6のtrialを行う
+4. 最初にfoundになったCandidateについて、代替Route、操作量、進行量、残るConflictと
+   新しく発生するConflictを返す（9.2.19.13）
+5. 終了する
+```
+
+- 各Targetの評価は同じ前提（Planner-start origin、fixed Route集合、その他のexplicit resolution、同じ
+  reservation）から開始し、他Targetの代替を採用した入力で測らない（9.2.4.4を維持）
+- 代替を採用した結果、新しいConflict（例: B2 vs C）が発生しても、Cをさらに再検索する、Dと競合したら
+  さらに…という再帰的repairをwhat-if内で行わない。新Conflictがあることをtyped resultとして返す
+- 永続化しない（9.2.4.8を維持）: BuildListEntry、ProductionPlan、`PlannerConflictResolution`、comparison
+  result、repair lineageのいずれも保存しない。Build ListとProductionPlanを書き換えない
+- what-ifは9.2.19.10の除外にrepair lineageを読む（表示中Draftのlineage）が、lineageを更新しない
+- 9.2.4.6（`reusedExisting` のsemantics）、9.2.4.12（B8 warning kindを生成しない、cancelはrequest単位）、
+  9.2.4.13（B9 / B10の責務分離）は維持する
+
+新kernelでは、次の既存条項を本節で置き換える。9.2.4.3（orderingは `compareConstrainedCandidates()`）→
+[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8の決定的順序。9.2.4.7（found判定）→ 9.2.19.6。9.2.4.10
+（enumeration bounds）→ 9.2.19.12のextent。9.2.4.1の距離baseline（Planner-start origin）は維持し、
+値の定義は9.2.19.13のとおり「origin基準の到達量」とする。
+
+#### 9.2.19.8 「この候補を優先」（actual repair）
+
+実際の優先確定でも、what-ifと別のSearch semanticsを持たせない。同一のPlanner Alternative Search kernel、
+同一のreservation / found判定を使う。
+
+```text
+1. 表示中Draftからfresh PlannerInputを作り、既存explicit resolutionを復元し、今回の決定をmergeする
+   （9.2.4.14。同一conflictKeyは置換）
+2. 決定を検証する（既存の invalid_conflict_resolution、checkpoint競合の拒否 9.5.1）
+3. 今回のConflictの直接participantから、9.2.19.7の手順2と同じ非固定Targetをstable orderで列挙する
+   （順序は既存 createPlannerConflictWorks() のstable key。9.2.14）。required checkpoint Entryを持つ
+   Targetは探索せず blocked_by_selected_checkpoint とする（9.5.2）
+4. 各非固定Targetについて、そのTargetの現在Entry（無効化Entry）のRouteを無効化Routeとし、
+   what-ifと同じ条件（同じfixed Route集合・reservation・除外key）で独立に代替探索とtrialを行う
+5. foundになったreplacementを、手順3のstable orderでmonotonicに採用する。
+   あるreplacementを追加したrunで、そのreplacement自身、または先に採用したreplacementが9.2.19.6の条件
+   （明示決定Entryがselected、fixed Route集合と競合しない、stall等で落ちない）を満たさなくなる場合は、
+   そのreplacementを採用しない（9.2.14のmonotonic adoptionを維持）
+6. 採用したreplacementで元Entryを置換した集合（9.2.18）で、preflightと全explicit resolutionの
+   再対応付け（9.2.3.1。「置換で充足済み」規則を含む）を行い、最終full Planner run + Trace Replayを行う
+7. 最終runの結果からConflictを再生成し、決定を展開する（9.2.19.9）
+8. repair lineageを更新する（9.2.19.11）
+9. 既存の savePlannerOrchestrationResult() で、generated Entryによる元Entry置換、新Draft、
+   lineageを1 transactionで保存する（9.2.15 / 9.2.18。Plan-breaking guardも既存どおり）
+```
+
+- replacementが別Target Cと新たに競合しても、その競合をこの操作内で再帰的に解決しない。保存された新Planで、
+  その新Conflictを次の通常のユーザー判断として提示する
+- 代替探索は今回決定したConflictの直接participantについてだけ行う。復元した既存explicit resolutionは
+  fixed Route集合とRoute commitmentの入力として保持するが、それを理由に新しい代替探索を始めない
+  （既存resolutionの代替探索は、その決定が行われた回のrepairで済んでいる）
+- 代替が見つからない（または上限で未確認の）Targetは、元EntryをBuild Listから削除しない。そのTargetは
+  このPlanでは完成せず、理由（9.2.19.13のoutcome）をlineageへ記録する
+- `plan === null`、`termination.status === "incomplete"`、`invalid_conflict_resolution`、保存時の
+  再validation失敗、Plan-breaking guardの拒否やセーブ地点復元選択時の扱いは9.2.4.14 / 9.2.18の既存
+  fail closedのまま変えない。何も保存しない場合はlineageも保存しない
+- `PlannerInput.options` は9.2.4.14（Issue #130）のとおり `conflictResolutionPlannerOptions(表示中Plan)`
+  で上書きする
+
+#### 9.2.19.9 Conflict再生成と決定の展開
+
+保存するPlanの `conflicts` は、最終full runが最新状態から検出したものだけをauthorityとする。
+
+```text
+replacement後のBuild List Entry集合
+fixed user decisions（merge後のexplicit resolution、9.2.3.1で再対応付けしたもの）
+Planner route commitment
+実際にselectされたRoute
+```
+
+- 旧PlanのConflict一覧から「解決済みのConflictだけを削除する」方式をauthorityにしない。旧Routeに由来する
+  後続Conflictが残るためである
+- replacementで元Entryを置換したTargetでは、無効化Routeに由来するConflict（Issue #136のSkill 341 /
+  Gogma 55）は最終runに存在しないので残らない
+- **決定の展開**: 代替を採用できなかった無効化Entry `O` が残る場合、最終runで検出されたConflictのうち、
+  participant集合が「今回のfixed Entry」と「今回の決定で無効化したEntry」だけからなるものすべてに、fixed Entryを
+  選択するresolutionを適用する。それらはpendingのユーザー判断ではなく「fixed側を選択済み」として保存する
+  （`selectedBuildListEntryId = fixed Entry`）。他のEntryを含むConflictには展開しない
+- 展開したresolutionは次回以降、9.2.4.14の「表示中Planのexplicit resolution復元」でそのまま復元される
+- 新たに発生したConflict（replacementと非固定Entryの競合を含む）は `selectedBuildListEntryId = null` の
+  通常のConflictであり、次の通常のユーザー判断になる
+
+#### 9.2.19.10 循環防止
+
+次のloopを禁止する。
+
+```text
+B original -> 競合でinvalidate -> B2 -> 新Conflict -> Bを再検索 -> B originalへ戻る
+B original -> B2 -> B3 -> B2
+```
+
+authority。
+
+- Route identityはrun非依存の `candidateStableKey()`（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.3）である。
+  絶対Counter位置を含むため、同じ完成結果でも位置の異なるRouteは別Routeである
+- Target Bの代替探索の除外集合 `excludedRouteKeys` は次の和集合である
+  - Bの現在Entryの現在Route（今回の決定で無効化するRoute）
+  - repair lineage（9.2.19.11）がBについて記録した無効化Routeのkey（lineageがBについて有効な間だけ）
+- 除外集合に含まれるRouteは、同じTargetの代替探索で再採用しない。Search Domainはそれを返さずに
+  次のIdealへ進み、除外した件数だけをtyped summaryで返す（9.2.19.13）
+- 1回の代替探索の中でtrial不採用になったCandidateは、その探索の中で再試行しない。trial不採用は、その時点の
+  fixed Route集合に対する判定であり決定ではないため、lineageへは記録しない。lineageへ記録するのは、
+  決定によって実際に無効化されたRoute（元Route、および以前採用したが後の決定で無効化されたreplacement）だけである
+- 除外は恒久的なCandidate Search禁止条件ではない。通常Candidate Search、Build Listへの手動追加・置換、
+  通常Plannerは除外集合を参照しない
+
+#### 9.2.19.11 repair lineageとpersistence boundary
+
+repair chainの履歴は **ProductionPlan側のrepair lineage**
+（`ProductionPlan.conflictRepairLineage`、[DATA_MODEL.md](./DATA_MODEL.md) 11.1。Phase 5で追加）に保持する。
+Worker 1 request内だけに閉じず、「この候補を優先」で保存した新Draftから次のConflict解決へ引き継ぐ。
+
+BuildListEntryの恒久semanticへ混ぜない。
+
+- 禁止はCandidate自身の意味ではなく、現在のrepair chainでの決定の履歴である
+- ユーザーが通常Candidate SearchからTargetのCandidateを手動置換した場合は、再評価できる必要がある
+- 新しいPlanを通常Plannerで作り直した場合は、過去のrepair判断を無条件に持ち越さない
+- Entryにprovenance fieldを追加しない既存契約（9.2.8、[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1）を維持する
+
+生成と引き継ぎ。
+
+| Planの生成経路 | lineage |
+| --- | --- |
+| 通常Planner（Build List画面の生産計画作成） | `null`（新しいchainの開始） |
+| 実行中Planの再計画Preview / 採用（16.8） | 新Planは `null` |
+| 「この候補を優先」のactual repair（9.2.19.8） | 表示中Draftのlineageを引き継ぎ、今回の決定を追記したもの |
+| what-if（9.2.19.7） | 生成しない（読むだけ） |
+| Plan開始（`draft -> active`）以後 | 変更しない。監査情報として残るだけで、B10操作は `draft` だけが対象（9.2.4.14） |
+
+Target単位の失効。lineageのTarget Bに関する記録は、Bの現在Build List Entryが、lineageがBについて最後に
+記録したEntry（最後の決定で採用したreplacement Entry、replacementが無ければ無効化Entry自身）と同じIDで
+ある間だけ有効である。ユーザーの手動置換・削除などでBの現在Entryが変わった場合、Bに関する記録は
+除外集合にもfixed Route集合にも使わず、次のrepair保存でlineageから落とす。
+
+fixed Entryの失効。lineageの以前の決定のfixed Entryは、現在Build Listに同じIDで存在し、その後の決定で
+無効化されていない間だけfixed Route集合に入る（9.2.19.3）。後の決定で以前のfixed Entryが負けた場合、
+最新の決定が優先し、そのEntryのRouteは無効化Routeとして記録する。
+
+lineageは保存済みPlanの監査・chain継続用の値であり、どのstatusのPlanでもcurrent foreign keyとしては
+検証しない（Draft本体と同じ扱い。[DATA_MODEL.md](./DATA_MODEL.md) 11.1 / 15.2）。構造・literal・
+ID形式のvalidationだけを行う。Candidate identity、hash、`PlanningInputSnapshot`、`ExpectedPlanState`、
+staleness、Execution semanticsへは入らない。
+
+#### 9.2.19.12 bounds / extent
+
+旧 `ConstrainedEnumerationBounds`（`maxNormalForgeCount` / `maxGogmaAdvance` / `maxSkillResetCount` /
+`maxOffAxisPairEvaluations`）をそのまま拡張する仕様にしない。新kernelの探索範囲は、modern Candidate
+Searchの3値と同じ意味を持つ **`PlannerAlternativeSearchExtent`** とする。
+
+```ts
+interface PlannerAlternativeSearchExtent {
+  maxNormalAdvance: number;  // production target offset 0 .. maxNormalAdvance - 1（Planner-start Normal Counter基準）
+  maxGogmaAdvance: number;   // Gogma Counter位置 origin .. origin + maxGogmaAdvance - 1
+  maxSkillAdvance: number;   // SEARCH_SPEC 3.1と同じSkill位置window（conversion routeはorigin .. origin + M）
+}
+```
+
+- 意味は [SEARCH_SPEC.md](./SEARCH_SPEC.md) 3.1の「探索対象とするCounter位置の範囲」と同じであり、held位置も
+  windowの位置として数える（代替Routeのown operation数ではなく、Counterがどこまで進むかを束ねる）
+- 各値は1以上の整数でcaller必須。Domainはdefault substitution、fallback、clamp、field-wise completionを
+  行わない。Production defaultはApplication callerではなくProduction Worker adapterがWorker境界内で
+  明示的に渡す（9.2.4.5 / 9.2.4.10と同じ責務分離）
+- Production default値は、runtime実装後のPhase 3 Browser Worker benchmarkで確定する。旧
+  `defaultConstrainedEnumerationBounds = 40 / 30 / 100 / 500` を新機能のauthorityにしない。Candidate Searchの
+  推奨初期値（`recommendedCandidateSearchDefaults = 350 / 500 / 1500`）とユーザー保存既定値
+  （`AppSettings.candidateSearchDefaults`）は候補検索画面のための値であり、Plannerが読むauthorityにしない
+  （benchmarkの比較基準としては使ってよい）
+- 試行上限: what-ifは既存 `PlannerWhatIfBounds`（`maxCandidateTrialsPerTarget` / `maxPlannerReruns`）の
+  意味を維持し、actual repairは同じ2値の意味を持つrepair用boundsを持つ（B8の `maxGeneratedBuildListEntries`
+  に相当する上限は持たない。生成Entry数は今回のConflictの直接participant Target数で自然に有限である）。いずれもcaller必須、1以上の
+  整数で、Production defaultはPhase 3で決め直す。`maxPlannerReruns` はfull Planner runの開始回数だけを数え、
+  preflight・validation・Search・materializationを数えない（9.2.4.9 / 9.2.16と同じ）
+- 上限到達はexhaustionとして報告しない。typed statusで区別する（9.2.19.13）
+
+#### 9.2.19.13 typed result（#122へ渡す情報）
+
+what-ifとactual repairは、後続UI（Issue #122）が少なくとも次を表示できるtyped dataを返す。正確な型名・
+field名は実装Phaseで決めてよいが、意味を変えない。
+
+```ts
+interface PlannerAlternativeTargetOutcome {
+  fixedBuildListEntryId: BuildListEntryId;
+  fixedTargetWeaponId: TargetWeaponId;
+  alternativeTargetWeaponId: TargetWeaponId;
+  outcome: PlannerAlternativeOutcome;
+  excludedByRepairLineageCount: number;   // 9.2.19.10で除外した件数。通常UIでkeyを出さない
+}
+
+type PlannerAlternativeOutcome =
+  | {
+      status: 'found';
+      distance: PlannerAlternativeDistance;
+      alternativeSelected: boolean;          // trial runでGがselectedか（新Conflictの暫定帰結で外れ得る）
+      introducedConflicts: PlannerAlternativeConflictSummary[]; // Gをparticipantに含むConflict
+      remainingConflicts: PlannerAlternativeConflictSummary[];  // Gを含まない未解決Conflict
+    }
+  | { status: 'not_found_within_search_extent' }
+  | { status: 'stopped_by_search_extent_bound' }
+  | { status: 'stopped_by_candidate_trial_bound' }
+  | { status: 'stopped_by_planner_rerun_bound' }
+  | { status: 'blocked_by_selected_checkpoint' }
+
+interface PlannerAlternativeDistance {
+  estimatedOperationCount: number;        // 代替Route自身のoperation unit数（held位置は数えない）
+  estimatedGogmaAdvance: number;          // Planner-start Gogma Counterから代替Routeの最後のGogma操作後まで
+  estimatedSkillAdvance: number;          // 同Skill
+  estimatedNormalAdvance: number | null;  // 同Normal。nullは「進行量を表現しない」（blind）
+}
+
+interface PlannerAlternativeConflictSummary {
+  kind: ConflictKind;
+  participantTargetWeaponIds: TargetWeaponId[];
+  resolved: boolean;                      // selectedBuildListEntryId !== null
+}
+```
+
+- 距離は9.2.4.1のとおりPlanner-start origin基準である。held位置を跨ぐRouteでは、進行量は「Counterが
+  どこまで進んだ時点で代替が完了するか」（到達量）であり、操作数とは一致しない。連続Routeでは既存の
+  `estimated*Advance` と同じ値になる（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8）
+- `not_found_within_search_extent` はextent内をすべて調べてfoundが無かったことだけを意味し、
+  `stopped_by_search_extent_bound` は未確認が残ったことを意味する。旧 `stopped_by_enumeration_bound` は新kernelで
+  この名前へ置き換える（表示上の意味「探索範囲上限のため未確認」は同じ）
+- actual repairは、非固定TargetごとのこのoutcomeをPlanのlineageへ要約して保存し（9.2.19.11）、Plan画面が
+  「代替が見つからなかった理由」を後から表示できるようにする
+- 除外したRouteの `candidateStableKey` など内部keyを通常UIで表示する必要はない
+- `cancelled` はoutcomeに含めない（9.2.4.12を維持）
+
+#### 9.2.19.14 legacy constrained pathの扱い
+
+- B8 constrained enumeration（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.7）、B8 orchestration（9.2.6〜9.2.16）、
+  `defaultConstrainedEnumerationBounds`、`defaultPlannerOrchestrationBounds`、関連warning kindは、Phase 5で
+  Production routingを新kernelへ切り替えるまでlegacy implementationとしてそのまま動作する。途中Phaseで
+  Production routingを一度に壊さない
+- Phase 5はwhat-if（「比較する」）とactual repair（「この候補を優先」）のProduction routingを **同じPRで**
+  切り替える。what-ifだけが新kernelでpreviewし、優先確定が旧kernelで別の結果を保存する期間を作らない
+- Production strategy flag、feature flag、AppSettings / UI / query parameterによる切替を追加しない（7章）。
+  routingはProduction Worker adapterの固定配線である
+- Phase 6でlegacy pathを削除するか、parity / regression用のtest oracleとして残すかを決める
+
+#### 9.2.19.15 version / compatibility
+
+本節を追加したPRはdocs-onlyであり、`CURRENT_CALCULATION_APP_SCHEMA_VERSION`（15）、
+`DATABASE_SCHEMA_VERSION`（9）、`ExportRoot.schemaVersion`（12）、`AppSettings.schemaVersion`（2）、
+`RngState.schemaVersion`（2）、`PRODUCTION_RNG_ENGINE_VERSION`（`production-rng:c5-e7`）、Master
+`dataVersion`（4）を変更しない。
+
+後続runtimeで必要となるversion境界を次に固定する。
+
+- **Phase 1〜4**（Search Domain API、reservation、benchmark、what-ifのDomain / Worker contract）は永続shapeも
+  Production Plan生成も変えないので、どのversionも動かさない。what-ifのresultは永続化しない
+- **Phase 5**（actual repairの新semantics、Production routing切替、lineage永続化）
+  - `CURRENT_CALCULATION_APP_SCHEMA_VERSION` を16へ上げる。同じPlannerInputと決定から保存されるPlan
+    （採用replacement、Conflict、決定の展開、不採用記録）が変わり、保存済みPlanは生成方式を記録しないため。
+    version 1..15のProductionPlanは下書き・実行中を問わず `calculation_context_changed` でfail closedし、
+    read migrationや保存済みPlanのversion書き換えをしない（Issue #103 Phase C / #129と同じ扱い）
+  - 通常Candidate Searchと既存Candidate / BuildListEntry snapshotの意味は変えないので、build-resultの明示互換
+    例外を `16 -> [12, 13, 14, 15]` とする（range checkにしない。ProductionPlanへ適用しない。version 1..11は
+    非互換のまま）。held位置を跨ぐRouteを持つgenerated Entryはversion 16で初めて生成され、既存Candidateの
+    到達量は既存 `estimated*Advance` と同じ値である（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8）
+  - `ProductionPlan.conflictRepairLineage` を追加するため、`DATABASE_SCHEMA_VERSION` を10へ上げる
+    （table / indexは変えないdata-only upgrade。全ProductionPlan本体、ゲーム内セーブ地点snapshotとUndo snapshot内の
+    Plan本体へ `conflictRepairLineage = null` を補い、過去の決定を推測しない）。`ExportRoot.schemaVersion` を13へ
+    上げ、schema 12 rootのPlan本体（snapshot内を含む）へ同じく `null` を補うpure migrationを置く
+  - `AppSettings.schemaVersion`、`RngState.schemaVersion`、`PRODUCTION_RNG_ENGINE_VERSION`、Master
+    `dataVersion` は変えない
+- **Phase 6**はlegacy pathの削除だけであれば永続shapeもProduction semanticsも変えない。永続値に触れる必要が
+  判明した場合は、推測でversionを動かさず設計レビューへ戻す
+- 実装時にここに書いた前提（例: 既存Candidateの到達量が変わる、永続shapeが増える）が崩れる場合は、
+  勝手にversionを変えず仕様を先に更新する
+
+#### 9.2.19.16 phase分割
+
+依存関係を確認したうえで、次の7 Phaseとする（理由は
+[PLANNER_CONFLICT_REPAIR_DESIGN.md](./PLANNER_CONFLICT_REPAIR_DESIGN.md) 11章）。
+
+```text
+Phase 1  modern Search基盤を使うPlanner Alternative SearchのSearch Domain API
+         （継続探索、extent、除外key、決定的順序、cancel / yield。空reservation）
+Phase 2  fixed Route集合とresource reservationの導出、held位置を跨ぐstream探索、
+         OwnedWeapon排他、循環防止の除外、trial full rerunによるfound判定
+Phase 3  Browser Worker benchmark、extent / 試行上限のProduction default決定
+Phase 4  B9 what-if「比較する」の新kernel接続（1段preview、typed result、Worker contract）。
+         Production routingはまだ旧経路
+Phase 5  「この候補を優先」のactual repair、Conflict再生成と決定の展開、lineage永続化、
+         what-if / repair両方のProduction routing切替、version更新（9.2.19.15）
+Phase 6  legacy constrained pathの削除またはtest oracle化
+Phase 7  #122 Presentation改善
+```
 
 ---
 
@@ -5116,6 +5636,44 @@ B8で緩めない。run間のhash一致を要求しないことと、run内のch
 generated BuildListEntry IDの決定性(9.2.13)はこれとは別である。generated Entry IDは
 `PlannerIdFactory` を使わず、semantic contentから安定生成するため、Production
 dependencyでもrun間で一致する。
+
+### 15.9.2 Planner Alternative Search / 1段repair Test（9.2.19、後続Phaseで実装）
+
+- reservationのheld / blocked / 排他OwnedWeaponが、fixed Route集合の既存Route unit（`canSkipWhenCounterPassed`、
+  `physicalActionKey`、`arePlannerRouteUnitsShareable()`）と既存の所持武器参照authorityだけから導出され、
+  Search側にPlannerロジックが複製されない
+- fixedのNormal production targetの位置だけがNormal Counterのblockedになり、Counter進行用forgeの位置は
+  heldだがblockedにならない。fixedのproduction target = 206、代替のproduction target = 0が両立する
+- fixedが巨戟化したSkill位置（例: 341）で代替は巨戟化せず、後続位置（342）で巨戟化する代替Routeが生成され、
+  full Planner rerunで両方が完成する（Issue #101 fixture）
+- fixedのGogma必須位置（例: 55）を代替のBonus streamが跨ぎ、その間Bonus状態が変わらない
+- fixed Routeのskip可能unitの位置を代替が使ってよく、同じ位置というだけでは除外されない
+- fixed Routeが排他使用するOwnedWeaponが代替のRoute起点にならず、`preferredOwnedWeaponId` の扱い（ordering）
+  とは独立である
+- held位置を跨ぐRouteがRoute validationを通り、Plannerが未到達unitを待機し、誰も進めない位置では既存の
+  stall dropになる
+- found判定が9.2.19.6どおりである: 明示決定Entryの非選択、fixed Route集合との競合、stall / deadlock dropは
+  不採用、fixed外Entryとの新Conflictの暫定帰結で外れるだけならfoundで、新Conflictがresultに入る。lineage由来の
+  以前のfixed Entryが別の競合で外れていることだけでは不採用にならない
+- what-ifが1段で終わり、新Conflictに対して再帰的な代替探索を行わず、何も永続化しない
+- what-ifの各Targetが同じ前提から独立に評価され、Target順で結果が変わらない
+- 「この候補を優先」がwhat-ifと同じkernel・reservation・found判定を使い、直接participantだけを探索し、
+  復元した既存resolutionを理由に新しい代替探索を始めない
+- replacement採用後のPlanのConflictが最終runから再生成され、無効化Route由来のConflict（Issue #136の
+  Skill 341 / Gogma 55）が残らない
+- 代替が見つからない場合に元Entryを削除せず、fixed Entryと無効化Entryだけからなる全Conflictが
+  fixed側選択済みとして保存され（決定の展開）、他のEntryを含むConflictへは展開されない
+- 循環防止: 無効化Route、およびlineageに記録した以前のreplacementの `candidateStableKey` が同じTargetの
+  代替探索で再採用されない（B → B2 → B、B → B2 → B3 → B2のどちらも発生しない）。trial不採用はlineageへ
+  記録されない
+- lineageが「この候補を優先」の保存でだけ引き継がれ、通常Planner・再計画Preview / 採用の新Planでは `null`
+  になり、Targetの現在Entryが手動置換で変わるとそのTargetの記録が失効する
+- lineageがCandidate identity、hash、`PlanningInputSnapshot`、`ExpectedPlanState`、stalenessへ入らない
+- extent / 試行上限が1以上の整数でcaller必須であり、Domainがdefault補完をせず、上限到達がexhaustionとして
+  報告されない
+- Phase 5のversion境界（9.2.19.15）: version 1..15のProductionPlanがversion 16で `calculation_context_changed`
+  になり、version 12..15のCandidate / BuildListEntryが明示例外 `16 -> [12, 13, 14, 15]` でだけ利用でき、
+  Dexie v9 -> v10とExport 12 -> 13がPlan本体（snapshot内を含む）へ `conflictRepairLineage = null` だけを補う
 
 ## 15.10 Execution Lifecycle Test
 

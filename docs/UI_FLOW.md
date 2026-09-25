@@ -1719,6 +1719,36 @@ PlanStep表示。
 - 現在CalculationContextと非互換なPlanはstaleとする
 - Debug Mode OFFではSeed / Counterを表示しない
 
+### 11.4.1 競合repairの表示契約（Issue #136 / #101、仕様確定・未実装）
+
+[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19で、「比較する」を1段previewとし、「この候補を優先」をRoute単位の
+決定と1段repairにする正式契約を確定した。**現在のUIは11.2〜11.4のままであり、本節はUIを変更しない。**
+Domain / Worker側の切替はPhase 5、表示の作り込みはIssue #122（Phase 7）で行う。本節は、それまでに
+Domainが返すtyped dataと、どの表示でも守る最低限の意味だけを定める。
+
+後続UIが使えるtyped data（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.13）。
+
+- fixed Target（優先した候補の目標武器）と、代替を探したTarget
+- 代替Routeが見つかったか。見つからない場合の理由
+  （探索範囲内に無し / 探索範囲上限で未確認 / 試行上限で未確認 / 再計算上限で未確認 / 途中採用状態の選択でblock）
+- 代替Routeの操作数と、Normal / Skill（スキル）/ Gogma（復元ボーナス）の進行量
+- 代替を採用したときに残るConflictと、新しく発生するConflict（種別、関係する目標武器、選択済みかどうか）
+- repair chainで以前外したRouteを除外したこと（件数）
+
+守る意味。
+
+- 「比較する」は1段previewであり、新しく発生するConflictをさらに解決した結果を表示しない。新しいConflictが
+  あることは表示してよい
+- 「この候補を優先」で保存された新しい生産計画のConflict一覧は、最新状態から再生成されたものである。
+  無効化した旧Routeに由来するConflictを「未解決の判断」として表示しない。代替が見つからなかった目標武器は
+  「この計画では作成しない（理由）」として示し、そのTargetと優先した候補の間のConflictは選択済みとして表示する
+- 進行量は絶対Counter値ではなく進行量として表示し、通常表示でBase Seedや絶対Counterを出さない（11.3と同じ）。
+  held位置を跨ぐ代替では、操作数と進行量が一致しないことがある
+- 探索範囲内に無い場合と、上限で未確認の場合を「候補なし」へまとめない
+- 除外したRouteの内部key（`candidateStableKey` 等）を通常UIに出さない
+- 新kernelではno-result statusの `stopped_by_enumeration_bound` を `stopped_by_search_extent_bound` に置き換える。
+  表示する意味（探索範囲上限のため未確認）は11.3と同じである
+
 ### 11.5 生産計画一覧（/plans）
 
 目的。
