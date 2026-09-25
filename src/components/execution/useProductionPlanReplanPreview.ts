@@ -10,7 +10,6 @@ import type { ProductionPlanId } from '../../domain/models/publicTypes'
 import {
   defaultPlannerOrchestrationBounds,
   type PlannerOptions,
-  type PlannerProgress,
 } from '../../domain/planner'
 import type { AdoptProductionPlanReplanPreviewResult } from '../../services/execution/productionPlanExecutionService'
 import type { ProductionPlanReplanDependencies } from '../../services/execution/productionPlanReplanDependencies'
@@ -28,7 +27,7 @@ import { executionErrorMessage } from './executionStepPresentation'
  */
 export type ReplanPreviewState =
   | { status: 'idle' }
-  | { status: 'loading'; runningPlanId: ProductionPlanId; progress: PlannerProgress | null }
+  | { status: 'loading'; runningPlanId: ProductionPlanId }
   | { status: 'completed'; preview: ProductionPlanReplanPreview }
   | { status: 'failure'; message: string }
   /** A Preview that ended without a result to show: cancelled, refused, or superseded by a runtime change. */
@@ -173,7 +172,7 @@ export function useProductionPlanReplanPreview(
     const isCurrent = () => aliveRef.current && generationRef.current === generation
     cancelWorkerRequest()
     setAdoption({ status: 'idle' })
-    setPreview({ status: 'loading', runningPlanId, progress: null })
+    setPreview({ status: 'loading', runningPlanId })
     const { replan, createWorkerClient } = optionsRef.current
     void (async () => {
       try {
@@ -189,17 +188,12 @@ export function useProductionPlanReplanPreview(
         clientRef.current = client
         const requestId = createRequestId()
         activeRequestRef.current = requestId
+        // No progress callback: the Preview is shown as indeterminate
+        // (UI_FLOW 10.0, Issue #103 Phase D-1).
         const result = await client.createConstrainedPlan(
           requestId,
           input,
           defaultPlannerOrchestrationBounds,
-          {
-            onProgress: (progress) => {
-              if (isCurrent() && activeRequestRef.current === requestId) {
-                setPreview({ status: 'loading', runningPlanId, progress })
-              }
-            },
-          },
         )
         if (!isCurrent() || activeRequestRef.current !== requestId) return
         activeRequestRef.current = null

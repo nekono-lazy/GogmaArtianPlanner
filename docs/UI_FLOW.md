@@ -1104,76 +1104,90 @@ Plannerに検討させる候補集合を確認・調整する。
 
 ### 10.0 Planner詳細設定
 
-Search Resultsと同じ「詳細設定」Accordionを置き、Plannerの実行上限を変更できる。
-通常Plannerは決定的scheduler（PLANNER_SPEC 7）であり、「最大計画ステップ数」と「最大探索状態数」を使う。
-「Beam幅」は現在の通常Plannerでは使用しないが、Issue #103 Phase Dで除去を判断するまで互換のため
-項目・既定値・入力検証を残す（入力は可能で、値によって計画は変わらない）。
+Search Resultsと同じ「詳細設定」Accordionを置き、Plannerの安全上限を変更できる。
+通常Plannerは決定的scheduler（PLANNER_SPEC 7）であり、停止条件は「最大計画ステップ数」だけである
+（Issue #103 Phase D-1）。「最大探索状態数」と「Beam幅」は通常Plannerが読まないため、
+詳細設定に表示しない（Beam Search oracleのbenchmark画面だけが扱う。PLANNER_SPEC 7.2）。
+項目が1つでも、通常は変更不要な安全設定なので「詳細設定」Accordionの中に置き、通常画面へ常時
+露出させない。
 
 | 表示名 | `PlannerOptions` |
 | --- | --- |
 | 最大計画ステップ数 | `maxPlanSteps` |
-| 最大探索状態数 | `maxExpandedStates` |
-| Beam幅 | `beamWidth` |
 
 説明文。
 
 ```text
 最大計画ステップ数
-作成ルートとして許可する最大ステップ数です。
-長いルートで上限に達した場合は増やしてください。
-
-最大探索状態数
-Plannerが構築する状態数の上限です。
-計画が上限に達した場合は、この値を増やして再実行してください。
-
-Beam幅
-現在の通常Plannerでは使用しません。
-互換性のため設定項目を残しています。
+計画で実行する操作数の安全上限です。
+通常は変更不要です。
+上限に達して計画が完了しなかった場合は、この値を増やして再実行してください。
 ```
 
-Accordion冒頭の説明文は「Plannerの実行上限です。3項目とも1以上の整数だけが有効で、この画面を
-再読み込みすると既定値へ戻ります。」とする。
+Accordion冒頭の説明文は「生産計画の作成に使う安全上限です。1以上の整数だけが有効で、この画面を
+再読み込みすると既定値へ戻ります。」とする。説明文に「Beam」「探索状態」「候補状態」など
+旧Plannerの概念を入れない。
 
 制約。
 
-- 初期値は `defaultPlannerOptions` だけをauthorityとする
+- 初期値は `defaultPlannerOptions`（`maxPlanSteps = 1000`）だけをauthorityとする
 - 「既定値に戻す」で `defaultPlannerOptions` へ戻す
-- 3項目とも1以上の整数のみ有効とし、無効な値はfield errorを表示して
-  「生産計画を作成」をdisabledにする
+- 1以上の整数のみ有効とし、無効な値はfield errorを表示して
+  「生産計画を作成」と「現在地点から再計画を試算」をdisabledにする
 - 無効な値をPlannerへ渡さない
 - 推測による固定最大値は設けない。長時間化は既存のWorker実行とキャンセルで扱う
-- 選択した `maxExpandedStates` が実行中progressの分母になる。決定的schedulerでは分子
-  （探索状態数）は適用した操作数である（PLANNER_SPEC 7.2）。表示名称と分母の見直しはPhase Dで行う
+- `PlannerInput.options` の `beamWidth` / `maxExpandedStates` はユーザー入力ではない。
+  型の整理（Phase D-2）までは `defaultPlannerOptions` の値をそのまま補い、通常Plannerはどちらも読まない
+- PCでは入力欄の幅を抑えて説明文を読みやすい行長に保ち、375px幅では1列で横スクロールを作らない
 - 設定はBuildList画面のruntime UI stateであり、再読み込みで既定値へ戻る
 - B8 orchestration boundsとB9 what-if boundsはこの詳細設定に出さない
 
+#### 計算中の表示
+
+通常Plannerの計算中は、完了率を推定して表示しない（Issue #103 Phase D-1）。
+
+- 「生産計画を作成しています…」の見出し、indeterminateな進捗バー、
+  「計算が終わると結果を表示します。途中で止める場合は「キャンセル」を押してください。」、
+  「キャンセル」を `role="status"` の領域に表示する
+- `PlannerProgress { expandedStates, maxExpandedStates }` をcompletion progressとして表示しない。
+  「探索状態数 x / y」「計画中 x / y」のような数値分母は表示しない。
+  `maxExpandedStates` は通常Plannerの停止条件ではなく、`expandedStates` はその分子ではない
+- commitment後の「総Step数」を分母にした推定値も表示しない。physical action sharing、silent
+  fast-forward、動的なrelease / recommit、deadlock / stallによるdropにより、Route unit数や
+  Candidateの `estimatedOperationCount` は実際のStep総数ではなく、単一のauthorityが無いためである
+- 同じ表示方針を現在地点からの再計画Preview（16.4、「再計画を試算しています…」）、
+  Production Plan画面の再計算（「再計算しています…」）、what-if比較（「比較しています…」）にも適用する
+- Worker protocolの `PlannerProgress` 型は変更しない（Phase D-2で整理する）
+
 ### 10.1 探索未完了の表示
 
-`PlannerResult.termination.status === "incomplete"` の場合は、探索上限で打ち切られ、
+`PlannerResult.termination.status === "incomplete"` の場合は、上限で打ち切られ、
 完成した生産計画を作成できなかったことを明示する（PLANNER_SPEC 7.2.1）。
+通常Plannerで `incomplete` になるのは `max_plan_steps` だけである。
 
 表示内容。
 
 ```text
 生産計画の探索が完了していません
 
-最大探索状態数 10,000 に到達しました。
+最大計画ステップ数 1,000 に到達しました。
 すべての目標武器を含む完成計画を作成できませんでした。
-「詳細設定」の「最大探索状態数」を増やして、もう一度生産計画を作成してください。
+「詳細設定」の「最大計画ステップ数」を増やして、もう一度生産計画を作成してください。
 
-探索状態数: 10,000 / 10,000
 完成した目標武器: 1 / 2
 ```
 
-`max_plan_steps` へ到達した場合は「最大計画ステップ数」の見直しを案内する。
-両方へ到達した場合は両方を表示する。
+`max_expanded_states` はBeam Search oracleだけが到達するterminationであり、通常画面の導線からは
+発生しない。互換のため文言（「最大探索状態数 N に到達しました。すべての目標武器を含む完成計画を
+作成できませんでした。」、詳細設定への案内なし）だけを残す。
 
 制約。
 
 - UIはtypedな `termination` だけを読み、`PlannerWarning.message` を解析しない
 - incompleteの場合はPersistenceを呼ばず、`/plans/:planId` へ遷移しない
 - partial Planの全Stepを表示する必要はない
-- 到達したbound、設定値、探索状態数、完成Target数、設定見直し案内を表示する
+- 到達したbound、設定値、完成Target数、設定見直し案内を表示する。
+  `探索状態数: x / y` は表示しない（`maxExpandedStates` は通常Plannerのboundではない）
 - 「完成した目標武器」の分母は `termination.totalTargetCount`（今回の計画対象Target数。作成リストに
   有効な候補がある目標武器の数であり、有効な目標武器全体の数ではない。PLANNER_SPEC 4.1）をそのまま
   表示し、UI側で再計算しない
@@ -1504,7 +1518,7 @@ trial Entryの採用
 
 ```text
 idle       未実行
-loading    比較中。進捗とキャンセルを表示
+loading    比較中。計算中表示（数値の進捗率なし、10.0）とキャンセルを表示
 completed  typed comparisonを表示
 failure    typed failureまたは予期しないerrorを表示
 ```
@@ -2318,7 +2332,7 @@ RNG状態を変更すると現在の生産計画は続行できなくなりま�
 Preview。
 
 - 入力は現在の確定済みRNG状態・通常アーティアCounter・所持武器、最新の目標武器、最新の作成リストである
-- 通常のPlanner実行と同じ進捗表示、キャンセル、探索未完了表示（10.1）を使う
+- 通常のPlanner実行と同じ計算中表示（数値の進捗率なし、10.0）、キャンセル、探索未完了表示（10.1）を使う
 - Preview中は現在のPlanを実行中のまま変更せず、Execution Navigatorの現在Step、RNG状態、所持武器、
   作成リストを変更しない。Preview結果を保存しない
 - Preview結果は通常のPlan内容確認（11.0）と同じ形式で、「再計画の試算（未採用）」と明示して表示する

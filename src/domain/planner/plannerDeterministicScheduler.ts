@@ -2,6 +2,7 @@ import type {
   BuildListEntry,
   BuildListEntryId,
   PlanConflict,
+  TargetWeaponId,
   TargetWeapon,
 } from '../models/publicTypes'
 import { isBlindCreateNormalArtianOperation } from '../models/publicTypes'
@@ -153,7 +154,11 @@ export class PlannerDeterministicScheduleRun {
   readonly state: PlannerSearchState
   expandedStates = 0
   reachedStepLimit = false
-  reachedExpandedLimit = false
+  /**
+   * Planning Targets whose `confirm_owned_ideal` `maxPlanSteps` withheld: they
+   * hold their Ideal, but their Step is missing, so they are never complete.
+   */
+  readonly unconfirmedTargetIds = new Set<TargetWeaponId>()
 
   private readonly records = new Map<BuildListEntryId, PlannerRouteCommitmentRecord>()
   private readonly rejections: PlannerSearchRejection[]
@@ -233,6 +238,11 @@ export class PlannerDeterministicScheduleRun {
   /**
    * The zero-operation confirmations and the initial Route commitment.
    * Returns the refusal message of a malformed resolution set, or `null`.
+   *
+   * A `confirm_owned_ideal` is a PlanStep like any other action, so it goes
+   * through the same `maxPlanSteps` authority (Issue #103 Phase D-1): no
+   * confirmation is applied once the trace holds `maxPlanSteps` actions, and
+   * one that fills the trace exactly reports the bound as a diagnostic.
    */
   initialize(): string | null {
     const startedAt = this.metrics?.mark()
@@ -248,7 +258,15 @@ export class PlannerDeterministicScheduleRun {
       },
       'in_place',
       (rejection) => this.recordRejection(rejection),
+      {
+        canApply: () => this.canApplyAction(),
+        onWithheld: (targetId) => this.unconfirmedTargetIds.add(targetId),
+      },
     )
+    // Exact bound, as `actionApplied()` records it for an ordinary action.
+    if (this.state.trace.length >= this.input.options.maxPlanSteps) {
+      this.reachedStepLimit = true
+    }
     const commitment = createPlannerRouteCommitment(
       this.state,
       this.commitmentContext,
@@ -277,6 +295,7 @@ export class PlannerDeterministicScheduleRun {
   }
 
   isComplete(): boolean {
+    if (this.unconfirmedTargetIds.size > 0) return false
     return isPlannerSearchStateComplete(
       this.state,
       this.context.planningTargetIds,
@@ -667,16 +686,17 @@ export class PlannerDeterministicScheduleRun {
   }
 
   /**
-   * Checks the `PlannerOptions` bounds before an action is applied (14.1).
+   * Checks the one scheduler bound before an action is applied (14.1).
    * `false` means the schedule stops here.
+   *
+   * `maxPlanSteps` alone bounds the schedule (Issue #103 Phase D-1):
+   * `PlannerOptions.maxExpandedStates` is a Beam Search oracle bound and is
+   * never read here, so a hidden default can never stop a Production run that
+   * the user allowed more Plan steps.
    */
   private canApplyAction(): boolean {
     if (this.state.trace.length >= this.input.options.maxPlanSteps) {
       this.reachedStepLimit = true
-      return false
-    }
-    if (this.expandedStates >= this.input.options.maxExpandedStates) {
-      this.reachedExpandedLimit = true
       return false
     }
     return true
@@ -691,14 +711,13 @@ export class PlannerDeterministicScheduleRun {
    */
   private actionApplied() {
     // One constructed state per applied action (14.2): the state itself,
-    // updated in place.
+    // updated in place. The count stays a diagnostic; it is never a bound.
     this.expandedStates += 1
     if (this.state.trace.length >= this.input.options.maxPlanSteps) {
       this.reachedStepLimit = true
     }
-    if (this.expandedStates >= this.input.options.maxExpandedStates) {
-      this.reachedExpandedLimit = true
-    }
+    // The Worker DTO keeps its shape until Phase D-2; the Production UI never
+    // reads `maxExpandedStates` as a completion denominator.
     this.executionOptions.onProgress?.({
       expandedStates: this.expandedStates,
       maxExpandedStates: this.input.options.maxExpandedStates,
@@ -921,13 +940,6 @@ export class PlannerDeterministicScheduleRun {
         `Planner reached maxPlanSteps (${this.input.options.maxPlanSteps}).`,
       )
     }
-    if (this.reachedExpandedLimit) {
-      addPlannerWarning(
-        warnings,
-        'max_expanded_states_reached',
-        `Planner reached maxExpandedStates (${this.input.options.maxExpandedStates}).`,
-      )
-    }
     if (this.rejections.some(({ reason }) => reason === 'protected_destructive_use')) {
       addPlannerWarning(
         warnings,
@@ -968,7 +980,9 @@ export class PlannerDeterministicScheduleRun {
         expandedStates: this.expandedStates,
         cancelled,
         reachedStepLimit: this.reachedStepLimit,
-        reachedExpandedLimit: this.reachedExpandedLimit,
+        // The scheduler never stops on `maxExpandedStates` (Phase D-1).
+        reachedExpandedLimit: false,
+        unconfirmedTargetIds: this.unconfirmedTargetIds,
       }),
     }
   }
@@ -1057,7 +1071,8 @@ export function createPlannerDeterministicScheduleRun(
  * The result is `PlannerBeamSearchResult`-compatible, so the existing Trace
  * Replay, execution projection and Plan generation consume it unchanged. It is
  * the Production full Planner run: `createProductionPlanWithObserver()` runs it
- * (Phase C). `PlannerOptions.beamWidth` is never read.
+ * (Phase C). `PlannerOptions.beamWidth` and `PlannerOptions.maxExpandedStates`
+ * are never read as bounds: `maxPlanSteps` is the only one (Phase D-1).
  *
  * `buildListContext` follows the full-run contract: `persisted`, or
  * `temporary_replacement` for the replacement set of a B8 / what-if trial.

@@ -35,10 +35,12 @@ import {
   createProductionPlanWithObserver,
   createRejectedBuildListEntries,
 } from './productionPlanGeneration'
-import type {
-  PlannerBeamSearchResult,
-  PlannerSearchAction,
-  PlannerSearchRouteAction,
+import { runPlannerBeamSearch } from './plannerBeamSearch'
+import {
+  defaultPlannerOptions,
+  type PlannerBeamSearchResult,
+  type PlannerSearchAction,
+  type PlannerSearchRouteAction,
 } from './plannerTypes'
 
 /**
@@ -811,6 +813,101 @@ describe('16.3: zero-operation confirmation before commitment', () => {
 })
 
 /**
+ * Issue #103 Phase D-1: a `confirm_owned_ideal` is one trace action and one
+ * PlanStep, so it consumes `maxPlanSteps` like any other action and is never
+ * applied past it. Two owned Gogma weapons already hold their Targets' Ideals.
+ */
+describe('16.3 / Phase D-1: zero-operation confirmations within maxPlanSteps', () => {
+  function twoConfirmations(options: { maxPlanSteps: number }) {
+    const builder = new SchedulerScenarioBuilder()
+    const ownedA = builder.gogma('owned.a', { restorationBonuses: schedulerIdeal(22) })
+    const ownedB = builder.gogma('owned.b', { restorationBonuses: schedulerIdeal(23) })
+    const entryA = builder.existingEntry('entry.a', builder.target('target.a', 22), ownedA, {})
+    const entryB = builder.existingEntry('entry.b', builder.target('target.b', 23), ownedB, {})
+    return { scenario: builder.build(options), entryA, entryB }
+  }
+
+  function confirmations(result: PlannerBeamSearchResult) {
+    return result.bestState!.trace.filter((action) => action.kind === 'reserve_candidate')
+  }
+
+  it('applies one of two confirmations at maxPlanSteps = 1 and reports an incomplete run', async () => {
+    const { scenario, entryA } = twoConfirmations({ maxPlanSteps: 1 })
+    const result = await schedule(scenario)
+
+    expect(result.bestState!.trace).toHaveLength(1)
+    // Stable Entry ID order: A is confirmed, B is left unapplied.
+    expect(confirmations(result)).toEqual([
+      expect.objectContaining({ primaryBuildListEntryId: entryA.id }),
+    ])
+    expect(result.bestState!.selectedBuildListEntryIds).toEqual([entryA.id])
+    expect(result.bestState!.targetSatisfaction[entryA.targetWeaponId]?.hasIdeal).toBe(true)
+    // A's confirmation stays applied: its weapon is protected, nothing is rolled back.
+    expect(result.bestState!.simulatedInventory.ownedWeapons.find(({ id }) => id === 'owned.a')?.isProtected).toBe(true)
+    expect(result.completed).toBe(false)
+    expect(result.termination).toMatchObject({
+      status: 'incomplete',
+      reachedLimits: ['max_plan_steps'],
+      completedTargetCount: 1,
+      totalTargetCount: 2,
+    })
+    expect(result.warnings.map(({ kind }) => kind)).toContain('max_steps_reached')
+    expect(result.bestState!.trace.length).toBeLessThanOrEqual(scenario.input.options.maxPlanSteps)
+    expectReplayValid(scenario, result)
+
+    // The Production path keeps the typed incomplete result, so Persistence refuses it.
+    const production = await createProductionPlanWithObserver(scenario.input, scenario.dependencies, undefined)
+    expect(production.termination).toMatchObject({ status: 'incomplete', reachedLimits: ['max_plan_steps'] })
+    expect(production.plan?.steps.map(({ operationType }) => operationType)).toEqual(['confirm_owned_ideal'])
+  })
+
+  it('completes on exactly maxPlanSteps = 2 and still reports the bound', async () => {
+    const { scenario, entryA, entryB } = twoConfirmations({ maxPlanSteps: 2 })
+    const result = await schedule(scenario)
+
+    expect(result.bestState!.trace).toHaveLength(2)
+    expect(confirmations(result).map(({ primaryBuildListEntryId }) => primaryBuildListEntryId))
+      .toEqual([entryA.id, entryB.id])
+    expect(result.completed).toBe(true)
+    expect(result.termination.status).toBe('completed')
+    expect(result.termination.reachedLimits).toContain('max_plan_steps')
+    expect(result.warnings.map(({ kind }) => kind)).toContain('max_steps_reached')
+    expectReplayValid(scenario, result)
+
+    const production = await createProductionPlanWithObserver(scenario.input, scenario.dependencies, undefined)
+    expect(production.termination.status).toBe('completed')
+    expect(production.plan?.steps.map(({ operationType }) => operationType))
+      .toEqual(['confirm_owned_ideal', 'confirm_owned_ideal'])
+  })
+
+  it('reports no bound when the confirmations stay below maxPlanSteps', async () => {
+    const { scenario } = twoConfirmations({ maxPlanSteps: 3 })
+    const result = await schedule(scenario)
+    expect(result.bestState!.trace).toHaveLength(2)
+    expect(result.termination).toMatchObject({ status: 'completed', reachedLimits: [] })
+    expect(result.warnings.map(({ kind }) => kind)).not.toContain('max_steps_reached')
+  })
+
+  it('completes a single confirmation on exactly maxPlanSteps = 1', async () => {
+    const builder = new SchedulerScenarioBuilder()
+    const owned = builder.gogma('owned.a', { restorationBonuses: schedulerIdeal(22) })
+    builder.existingEntry('entry.a', builder.target('target.a', 22), owned, {})
+    const scenario = builder.build({ maxPlanSteps: 1 })
+    const result = await schedule(scenario)
+    expect(result.bestState!.trace).toHaveLength(1)
+    expect(result.termination).toMatchObject({ status: 'completed', reachedLimits: ['max_plan_steps'] })
+    expectReplayValid(scenario, result)
+  })
+
+  /** The Beam Search oracle keeps its own unbounded start confirmations. */
+  it('leaves the Beam Search oracle start confirmations unchanged', async () => {
+    const { scenario } = twoConfirmations({ maxPlanSteps: 1 })
+    const beam = await runPlannerBeamSearch(scenario.input, scenario.dependencies)
+    expect(confirmations(beam)).toHaveLength(2)
+  })
+})
+
+/**
  * The former design 7.8 deadlock example. Y's Reset Skills at S0 is skippable
  * and pin-blocked (Y's Skill lane start is its selected checkpoint), and X
  * converts at S0. Phase B showed it is not a deadlock: the pin gates Y's own
@@ -1186,25 +1283,47 @@ describe('14: bounds, cancellation and determinism', () => {
     expectReplayValid(scenario, result)
   })
 
-  it('stops at maxExpandedStates as incomplete', async () => {
-    const scenario = scenarioB().builder.build({ maxExpandedStates: 20 })
+  it('stops at maxPlanSteps = 1 as incomplete', async () => {
+    const scenario = scenarioB().builder.build({ maxPlanSteps: 1 })
     const result = await schedule(scenario)
+    expect(result.completed).toBe(false)
     expect(result.termination).toMatchObject({
       status: 'incomplete',
-      reachedLimits: ['max_expanded_states'],
-      expandedStates: 20,
+      reachedLimits: ['max_plan_steps'],
+      expandedStates: 1,
     })
-    expect(result.warnings.map(({ kind }) => kind)).toContain('max_expanded_states_reached')
+    expect(result.bestState!.trace).toHaveLength(1)
+    expectReplayValid(scenario, result)
   })
 
-  it('completes on exactly maxExpandedStates and still reports the bound', async () => {
-    const scenario = scenarioA().builder.build({ maxExpandedStates: 154 })
+  /**
+   * Phase D-1: `maxPlanSteps` is the only Production bound. A hidden
+   * `maxExpandedStates` never stops the scheduler, however small it is.
+   */
+  it('never stops at maxExpandedStates (Phase D-1)', async () => {
+    const unbounded = await schedule(scenarioB().builder.build({ maxPlanSteps: 1000 }))
+    const scenario = scenarioB().builder.build({ maxPlanSteps: 1000, maxExpandedStates: 1 })
+    const result = await schedule(scenario)
+    expect(result.expandedStates).toBeGreaterThan(1)
+    expect(result.expandedStates).toBe(unbounded.expandedStates)
+    expect(result.bestState!.trace).toEqual(unbounded.bestState!.trace)
+    expect(result.termination.status).toBe(unbounded.termination.status)
+    expect(result.termination.status).not.toBe('incomplete')
+    expect(result.termination.reachedLimits).toEqual([])
+    expect(result.termination.reachedLimits).not.toContain('max_expanded_states')
+    expect(result.warnings.map(({ kind }) => kind)).not.toContain('max_expanded_states_reached')
+    // The run's options are still reported as they were supplied.
+    expect(result.termination.limits.maxExpandedStates).toBe(1)
+    expectReplayValid(scenario, result)
+  })
+
+  it('completes past maxExpandedStates and reports no bound', async () => {
+    const scenario = scenarioA().builder.build({ maxPlanSteps: 1000, maxExpandedStates: 1 })
     const result = await schedule(scenario)
     expect(result.completed).toBe(true)
     expect(result.expandedStates).toBe(154)
-    expect(result.termination.status).toBe('completed')
-    expect(result.termination.reachedLimits).toEqual(['max_expanded_states'])
-    expect(result.warnings.map(({ kind }) => kind)).toContain('max_expanded_states_reached')
+    expect(result.termination).toMatchObject({ status: 'completed', reachedLimits: [] })
+    expect(result.warnings.map(({ kind }) => kind)).not.toContain('max_expanded_states_reached')
   })
 
   it('completes on exactly maxPlanSteps and still reports the bound', async () => {
@@ -1217,17 +1336,36 @@ describe('14: bounds, cancellation and determinism', () => {
     expect(result.warnings.map(({ kind }) => kind)).toContain('max_steps_reached')
   })
 
-  it('reports both bounds when a completion reaches both exactly', async () => {
+  it('reports only maxPlanSteps when a completion reaches both values exactly', async () => {
     const scenario = scenarioA().builder.build({ maxPlanSteps: 154, maxExpandedStates: 154 })
     const result = await schedule(scenario)
     expect(result.termination.status).toBe('completed')
-    expect([...result.termination.reachedLimits].sort()).toEqual(['max_expanded_states', 'max_plan_steps'])
+    expect(result.termination.reachedLimits).toEqual(['max_plan_steps'])
   })
 
-  it('reports no bound when the completion stays below both', async () => {
+  it('reports no bound when the completion stays below maxPlanSteps', async () => {
     const scenario = scenarioA().builder.build({ maxPlanSteps: 155, maxExpandedStates: 155 })
     const result = await schedule(scenario)
     expect(result.termination).toMatchObject({ status: 'completed', reachedLimits: [] })
+  })
+
+  it('runs with the 1000 maxPlanSteps default and never reports a bound it did not reach', async () => {
+    expect(defaultPlannerOptions.maxPlanSteps).toBe(1000)
+    const scenario = scenarioA().builder.build({ ...defaultPlannerOptions })
+    const result = await schedule(scenario)
+    expect(result.termination).toMatchObject({ status: 'completed', reachedLimits: [] })
+    expect(result.termination.limits).toEqual(defaultPlannerOptions)
+  })
+
+  /** The Beam Search oracle still stops on the very same `maxExpandedStates`. */
+  it('leaves maxExpandedStates bounding the Beam Search oracle', async () => {
+    const scenario = scenarioB().builder.build({ maxPlanSteps: 1000, maxExpandedStates: 1 })
+    const beam = await runPlannerBeamSearch(scenario.input, scenario.dependencies)
+    expect(beam.termination).toMatchObject({
+      status: 'incomplete',
+      reachedLimits: ['max_expanded_states'],
+    })
+    expect(beam.warnings.map(({ kind }) => kind)).toContain('max_expanded_states_reached')
   })
 
   it('reports a cancellation as cancelled', async () => {
@@ -1355,6 +1493,39 @@ describe('Issue #103 instrumentation workloads', () => {
             expect.objectContaining({ buildListEntryId: id, reason: 'conflict_not_committed' }),
           )
         })
+    },
+    60_000,
+  )
+
+  /**
+   * Phase D-1: `representative-12` / `representative-35` need 330 / 398
+   * scheduler actions (`docs/ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md`). The
+   * former 300 default truncated both; the 1000 default does not.
+   */
+  it.each([
+    ['representative-12', 330],
+    ['representative-35', 398],
+  ])(
+    '%s needs more than the former 300 maxPlanSteps and fits the 1000 default',
+    async (workloadId, traceLength) => {
+      const { input, engine } = createPlannerSearchInstrumentationInput(workloadId)
+      const dependencies = createDeterministicPlannerDependencies(engine)
+      const defaults = await runPlannerDeterministicSchedule(
+        { ...input, options: { ...defaultPlannerOptions } },
+        dependencies,
+      )
+      expect(defaults.bestState!.trace).toHaveLength(traceLength)
+      expect(defaults.expandedStates).toBe(traceLength)
+      expect(defaults.termination.status).not.toBe('incomplete')
+      expect(defaults.termination.reachedLimits).toEqual([])
+      const former = await runPlannerDeterministicSchedule(
+        { ...input, options: { ...defaultPlannerOptions, maxPlanSteps: 300 } },
+        dependencies,
+      )
+      expect(former.termination).toMatchObject({
+        status: 'incomplete',
+        reachedLimits: ['max_plan_steps'],
+      })
     },
     60_000,
   )

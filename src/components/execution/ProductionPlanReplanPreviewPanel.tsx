@@ -22,10 +22,13 @@ import { StatusChip } from '../StatusChip'
 import { ProductionPlanContent } from '../planner/ProductionPlanContent'
 import {
   createPlannerCompletedTargetsText,
-  createPlannerExpandedStatesText,
   createPlannerReachedLimitMessages,
   plannerIncompleteSearchTitle,
 } from '../planner/plannerSearchLimitPresentation'
+import {
+  productionPlannerRunningNote,
+  productionPlannerRunningTitles,
+} from '../planner/productionPlannerSettingsPresentation'
 import { createProductionPlanSummary } from '../planner/productionPlanPresentation'
 import { savePointPositionLabel } from './executionStepPresentation'
 import { ProductionPlanReplanAdoptionDialog } from './ProductionPlanReplanAdoptionDialog'
@@ -177,9 +180,6 @@ function PreviewResult({
               <Typography variant="body2" key={message}>{message}</Typography>
             ))}
             <Typography variant="body2" className="tabular-nums">
-              {createPlannerExpandedStatesText(termination)}
-            </Typography>
-            <Typography variant="body2" className="tabular-nums">
               {createPlannerCompletedTargetsText(termination)}
             </Typography>
             <Typography variant="body2">{REPLAN_INCOMPLETE_NOT_ADOPTABLE_MESSAGE}</Typography>
@@ -258,11 +258,6 @@ export function ProductionPlanReplanPreviewPanel({
   const progressHeadingId = useId()
   const previewHeadingId = useId()
   const loading = preview.status === 'loading'
-  const progress = loading ? preview.progress : null
-  const progressRatio =
-    progress && progress.maxExpandedStates > 0
-      ? Math.min(100, (progress.expandedStates / progress.maxExpandedStates) * 100)
-      : 0
   const adoptable = preview.status === 'completed' && describeReplanPreviewAdoptability(preview.preview).adoptable
   const adoptionOptions =
     adoption.status === 'confirming' || adoption.status === 'submitting' ? adoption.options : null
@@ -295,18 +290,13 @@ export function ProductionPlanReplanPreviewPanel({
           sx={{ p: { xs: 1.5, md: 2 }, minWidth: 0 }}
         >
           <Stack spacing={1.5}>
-            <Typography id={progressHeadingId} component="h3" variant="h3" className="tabular-nums">
-              {progress
-                ? `再計画を試算しています ${progress.expandedStates} / ${progress.maxExpandedStates}`
-                : '再計画を試算しています'}
+            <Typography id={progressHeadingId} component="h3" variant="h3">
+              {productionPlannerRunningTitles.replanPreview}
             </Typography>
-            <LinearProgress
-              aria-label="再計画の試算の進捗"
-              variant={progress ? 'determinate' : 'indeterminate'}
-              value={progress ? progressRatio : undefined}
-            />
+            {/* Indeterminate like the ordinary Planner (UI_FLOW 10.0 / 16.4). */}
+            <LinearProgress aria-label="再計画の試算中" variant="indeterminate" />
             <Typography variant="caption" color="text.secondary">
-              探索状態数 / 最大探索状態数
+              {productionPlannerRunningNote}
             </Typography>
             <Button
               variant="outlined"

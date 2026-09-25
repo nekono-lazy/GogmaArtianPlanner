@@ -32,9 +32,13 @@ export function completedPlannerTermination(
   return plannerTermination({ status: 'completed', ...overrides })
 }
 
-/** A search a `PlannerOptions` bound truncated before it completed. */
+/**
+ * A search a `PlannerOptions` bound truncated before it completed. The default
+ * is `max_plan_steps`, the only bound the Production scheduler reaches (Issue
+ * #103 Phase D-1); `max_expanded_states` is a Beam Search oracle termination.
+ */
 export function incompletePlannerTermination(
-  reachedLimits: readonly PlannerSearchLimitKind[] = ['max_expanded_states'],
+  reachedLimits: readonly PlannerSearchLimitKind[] = ['max_plan_steps'],
   overrides: Partial<PlannerSearchTermination> = {},
 ): PlannerSearchTermination {
   const limits: PlannerOptions =
@@ -43,7 +47,7 @@ export function incompletePlannerTermination(
     status: 'incomplete',
     reachedLimits: [...reachedLimits],
     limits,
-    expandedStates: limits.maxExpandedStates,
+    expandedStates: limits.maxPlanSteps,
     completedTargetCount: 1,
     totalTargetCount: 2,
     ...overrides,

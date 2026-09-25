@@ -333,7 +333,7 @@ describe('ProductionPlanPage replan Preview', () => {
     expect(screen.queryByRole('heading', { name: PREVIEW_TITLE })).not.toBeInTheDocument()
   })
 
-  it('shows progress and cancels through the Worker without reporting a failure', async () => {
+  it('shows an indeterminate running state and cancels through the Worker without reporting a failure', async () => {
     const plan = runningPlan()
     const pending = deferred<PlannerOrchestrationResult>()
     const client = workerClient((_, __, ___, callbacks) => {
@@ -348,8 +348,11 @@ describe('ProductionPlanPage replan Preview', () => {
     await startPreview(user)
 
     const status = await screen.findByRole('status', { name: /再計画を試算しています/ })
-    expect(within(status).getByRole('heading', { name: '再計画を試算しています 12 / 100' })).toBeInTheDocument()
-    expect(within(status).getByRole('progressbar', { name: '再計画の試算の進捗' })).toBeInTheDocument()
+    // Indeterminate like the ordinary Planner (Issue #103 Phase D-1): the
+    // Worker progress never becomes a ratio.
+    expect(within(status).getByRole('heading', { name: '再計画を試算しています…' })).toBeInTheDocument()
+    expect(within(status).getByRole('progressbar', { name: '再計画の試算中' })).not.toHaveAttribute('aria-valuenow')
+    expect(within(status).queryByText(/12|100|探索状態数/)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: START })).toBeDisabled()
 
     await user.click(within(status).getByRole('button', { name: 'キャンセル' }))
@@ -427,8 +430,8 @@ describe('ProductionPlanPage replan Preview', () => {
 
     const section = await previewShown()
     expect(screen.getByText('生産計画の探索が完了していません')).toBeInTheDocument()
-    expect(screen.getByText(/最大探索状態数 .* に到達しました/)).toBeInTheDocument()
-    expect(screen.getByText(/^探索状態数: /)).toBeInTheDocument()
+    expect(screen.getByText(/最大計画ステップ数 1,000 に到達しました/)).toBeInTheDocument()
+    expect(screen.queryByText(/探索状態数/)).not.toBeInTheDocument()
     expect(screen.getByText(/^完成した目標武器: /)).toBeInTheDocument()
     expect(screen.getByText('探索が完了していないため、この試算は採用できません。')).toBeInTheDocument()
     expect(screen.queryByText('現在の状態から作成できる生産計画はありませんでした。現在の生産計画は変更されていません。')).not.toBeInTheDocument()
@@ -448,8 +451,8 @@ describe('ProductionPlanPage replan Preview', () => {
 
     const section = await previewShown()
     expect(screen.getByText('生産計画の探索が完了していません')).toBeInTheDocument()
-    expect(screen.getByText(/最大探索状態数 .* に到達しました/)).toBeInTheDocument()
-    expect(screen.getByText(/^探索状態数: /)).toBeInTheDocument()
+    expect(screen.getByText(/最大計画ステップ数 1,000 に到達しました/)).toBeInTheDocument()
+    expect(screen.queryByText(/探索状態数/)).not.toBeInTheDocument()
     expect(screen.getByText(/^完成した目標武器: /)).toBeInTheDocument()
     expect(screen.getByText('探索が完了していないため、この試算は採用できません。')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: ADOPT })).not.toBeInTheDocument()

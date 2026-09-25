@@ -32,30 +32,43 @@ import type { PlannerSearchInstrumentation } from './plannerSearchInstrumentatio
 import type { PlannerSchedulerInstrumentation } from './plannerSchedulerInstrumentation'
 
 export interface PlannerOptions {
+  /**
+   * The one Production bound (Issue #103 Phase D-1): the safety limit of the
+   * trace length the deterministic scheduler may build, and the only Planner
+   * bound the Build List detail settings expose.
+   */
   maxPlanSteps: number
   /**
    * Read by the Beam Search oracle only (test / benchmark). The Production
    * deterministic scheduler never reads it, so its value never changes a
    * Production Plan; it stays in the shape and in validation (a positive
-   * integer) until Issue #103 Phase D decides its removal.
+   * integer) until Issue #103 Phase D-2 separates the oracle options.
    */
   beamWidth: number
+  /**
+   * Read as a bound by the Beam Search oracle only. The Production
+   * deterministic scheduler never stops on it (Phase D-1) and still counts
+   * `expandedStates` as a diagnostic; the field stays in the shape until
+   * Phase D-2.
+   */
   maxExpandedStates: number
 }
 
 /**
- * The initial values of the three Planner bounds (PLANNER_SPEC 7.2).
+ * The initial values of the Planner bounds (PLANNER_SPEC 7.2).
  *
  * They are the *default* the Application caller starts from, not a floor or a
- * ceiling: the Build List detail settings let the user raise any of them for
- * one calculation. `PlannerInput.options` remains the single Planner bound
+ * ceiling: the Build List detail settings let the user raise `maxPlanSteps`
+ * for one calculation. `PlannerInput.options` remains the single Planner bound
  * authority, and no Worker or Domain module substitutes these values for a
  * caller-supplied one. The Production deterministic scheduler reads
- * `maxPlanSteps` and `maxExpandedStates`; `beamWidth` is read by the Beam
- * Search oracle only.
+ * `maxPlanSteps` only; `beamWidth` and `maxExpandedStates` are Beam Search
+ * oracle values kept for the legacy shape until Phase D-2. `maxPlanSteps` is
+ * 1000 because the Phase B representative fixtures need 330 / 398 actions
+ * (`docs/ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md`).
  */
 export const defaultPlannerOptions: Readonly<PlannerOptions> = {
-  maxPlanSteps: 300,
+  maxPlanSteps: 1000,
   beamWidth: 50,
   maxExpandedStates: 10_000,
 }

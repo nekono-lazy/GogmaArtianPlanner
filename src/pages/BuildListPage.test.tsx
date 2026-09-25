@@ -404,74 +404,90 @@ describe('BuildListPage', () => {
     renderPage(dependencies([], client))
     await user.click(await screen.findByRole('button', { name: '詳細設定' }))
 
-    expect(await screen.findByLabelText('最大計画ステップ数')).toHaveValue(300)
-    expect(screen.getByLabelText('Beam幅')).toHaveValue(50)
-    expect(screen.getByLabelText('最大探索状態数')).toHaveValue(10000)
+    expect(await screen.findByLabelText('最大計画ステップ数')).toHaveValue(1000)
 
     await user.click(screen.getByRole('button', { name: '生産計画を作成' }))
     await screen.findByText(/^Plan destination:/)
+    // `beamWidth` / `maxExpandedStates` are not user input: the legacy shape
+    // still carries them from `defaultPlannerOptions` (Issue #103 Phase D-1).
     expect(vi.mocked(client.createConstrainedPlan).mock.calls[0][1].options).toEqual({
-      maxPlanSteps: 300,
+      maxPlanSteps: 1000,
       beamWidth: 50,
       maxExpandedStates: 10_000,
     })
   })
 
-  it('sends the user-selected bounds as PlannerInput.options', async () => {
+  it('exposes maxPlanSteps as the only Planner bound (Issue #103 Phase D-1)', async () => {
+    const user = userEvent.setup()
+    renderPage(dependencies())
+    await user.click(await screen.findByRole('button', { name: '詳細設定' }))
+
+    expect(await screen.findByText(/^生産計画の作成に使う安全上限です。/)).toBeInTheDocument()
+    expect(screen.getByLabelText('最大計画ステップ数')).toHaveAccessibleDescription(
+      '計画で実行する操作数の安全上限です。通常は変更不要です。上限に達して計画が完了しなかった場合は、この値を増やして再実行してください。',
+    )
+    expect(screen.queryByLabelText('最大探索状態数')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Beam幅')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Beam/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/探索状態/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/3項目/)).not.toBeInTheDocument()
+  })
+
+  it('sends the user-selected maxPlanSteps as PlannerInput.options', async () => {
     const user = userEvent.setup()
     const client = createPlannerClient()
     renderPage(dependencies([], client))
     await user.click(await screen.findByRole('button', { name: '詳細設定' }))
     await user.clear(await screen.findByLabelText('最大計画ステップ数'))
-    await user.type(screen.getByLabelText('最大計画ステップ数'), '400')
-    await user.clear(screen.getByLabelText('Beam幅'))
-    await user.type(screen.getByLabelText('Beam幅'), '60')
-    await user.clear(screen.getByLabelText('最大探索状態数'))
-    await user.type(screen.getByLabelText('最大探索状態数'), '20000')
+    await user.type(screen.getByLabelText('最大計画ステップ数'), '20000')
 
     await user.click(screen.getByRole('button', { name: '生産計画を作成' }))
     await screen.findByText(/^Plan destination:/)
 
     // `PlannerInput.options` is the single Planner bound authority, so the
-    // reviewed values reach the Worker exactly (PLANNER_SPEC 7.2.1).
+    // reviewed value reaches the Worker exactly (PLANNER_SPEC 7.2.1), with no
+    // fixed upper cap.
     expect(vi.mocked(client.createConstrainedPlan).mock.calls[0][1].options).toEqual({
-      maxPlanSteps: 400,
-      beamWidth: 60,
-      maxExpandedStates: 20_000,
+      ...defaultPlannerOptions,
+      maxPlanSteps: 20_000,
     })
   })
 
-  it('shows the selected maxExpandedStates as the live progress denominator', async () => {
+  it('shows an indeterminate running state with no numeric ratio and keeps Cancel', async () => {
     const user = userEvent.setup()
-    let releasePlan: (result: PlannerOrchestrationResult) => void = () => undefined
     const client = createPlannerClient()
     client.createConstrainedPlan = vi.fn(
-      () => new Promise<PlannerOrchestrationResult>((resolve) => {
-        releasePlan = resolve
-      }),
+      (_requestId, _input, _bounds, callbacks) => {
+        // A Worker may still report progress; the page never shows it.
+        callbacks?.onProgress?.({ expandedStates: 2_500, maxExpandedStates: 10_000 })
+        return new Promise<PlannerOrchestrationResult>(() => undefined)
+      },
     )
     renderPage(dependencies([], client))
-    await user.click(await screen.findByRole('button', { name: '詳細設定' }))
-    await user.clear(await screen.findByLabelText('最大探索状態数'))
-    await user.type(screen.getByLabelText('最大探索状態数'), '20000')
-    await user.click(screen.getByRole('button', { name: '生産計画を作成' }))
+    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
 
-    expect(await screen.findByText('計画中 0 / 20000')).toBeInTheDocument()
-    releasePlan(createOrchestrationResult())
+    const status = await screen.findByRole('status', { name: '生産計画を作成しています…' })
+    expect(within(status).getByRole('progressbar', { name: '生産計画の作成中' })).not.toHaveAttribute('aria-valuenow')
+    expect(within(status).getByText(/途中で止める場合は「キャンセル」を押してください。/)).toBeInTheDocument()
+    expect(screen.queryByText(/2500|10000|10,000/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/探索状態数/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/計画中 \d/)).not.toBeInTheDocument()
+
+    await user.click(within(status).getByRole('button', { name: 'キャンセル' }))
+    expect(client.cancelPlan).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('status', { name: '生産計画を作成しています…' })).not.toBeInTheDocument()
   })
 
   it('restores defaultPlannerOptions with the reset control', async () => {
     const user = userEvent.setup()
     renderPage(dependencies())
     await user.click(await screen.findByRole('button', { name: '詳細設定' }))
-    await user.clear(await screen.findByLabelText('最大探索状態数'))
-    await user.type(screen.getByLabelText('最大探索状態数'), '99')
-    expect(screen.getByLabelText('最大探索状態数')).toHaveValue(99)
+    await user.clear(await screen.findByLabelText('最大計画ステップ数'))
+    await user.type(screen.getByLabelText('最大計画ステップ数'), '99')
+    expect(screen.getByLabelText('最大計画ステップ数')).toHaveValue(99)
 
     await user.click(screen.getByRole('button', { name: '既定値に戻す' }))
     expect(screen.getByLabelText('最大計画ステップ数')).toHaveValue(defaultPlannerOptions.maxPlanSteps)
-    expect(screen.getByLabelText('Beam幅')).toHaveValue(defaultPlannerOptions.beamWidth)
-    expect(screen.getByLabelText('最大探索状態数')).toHaveValue(defaultPlannerOptions.maxExpandedStates)
   })
 
   it.each([
@@ -484,57 +500,19 @@ describe('BuildListPage', () => {
     const client = createPlannerClient()
     renderPage(dependencies([], client))
     await user.click(await screen.findByRole('button', { name: '詳細設定' }))
-    await user.clear(await screen.findByLabelText('最大探索状態数'))
-    if (raw !== '') await user.type(screen.getByLabelText('最大探索状態数'), raw)
+    await user.clear(await screen.findByLabelText('最大計画ステップ数'))
+    if (raw !== '') await user.type(screen.getByLabelText('最大計画ステップ数'), raw)
 
     expect(await screen.findByText('1以上の整数を入力してください。')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '生産計画を作成' })).toBeDisabled()
     expect(client.createConstrainedPlan).not.toHaveBeenCalled()
   })
 
-  it('describes the bounds of the deterministic scheduler and keeps Beam幅 as an unused compatibility field', async () => {
-    const user = userEvent.setup()
-    renderPage(dependencies())
-    await user.click(await screen.findByRole('button', { name: '詳細設定' }))
-
-    expect(await screen.findByText(/^Plannerの実行上限です。/)).toBeInTheDocument()
-    expect(screen.getByLabelText('最大計画ステップ数')).toBeInTheDocument()
-    expect(screen.getByLabelText('最大探索状態数')).toHaveAccessibleDescription(
-      'Plannerが構築する状態数の上限です。計画が上限に達した場合は、この値を増やして再実行してください。',
-    )
-    // Still an editable field (Issue #103 Phase D decides its removal), but the
-    // Production Planner never reads it.
-    expect(screen.getByLabelText('Beam幅')).toBeEnabled()
-    expect(screen.getByLabelText('Beam幅')).toHaveAccessibleDescription(
-      '現在の通常Plannerでは使用しません。互換性のため設定項目を残しています。',
-    )
-    expect(screen.queryByText(/Beam Search/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/探索品質/)).not.toBeInTheDocument()
-  })
-
-  it.each([
-    ['zero', '0'],
-    ['a negative number', '-5'],
-    ['a fraction', '1.5'],
-    ['an empty field', ''],
-  ])('still refuses %s as Beam幅', async (_label, raw) => {
-    const user = userEvent.setup()
-    const client = createPlannerClient()
-    renderPage(dependencies([], client))
-    await user.click(await screen.findByRole('button', { name: '詳細設定' }))
-    await user.clear(await screen.findByLabelText('Beam幅'))
-    if (raw !== '') await user.type(screen.getByLabelText('Beam幅'), raw)
-
-    expect(await screen.findByText('1以上の整数を入力してください。')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '生産計画を作成' })).toBeDisabled()
-    expect(client.createConstrainedPlan).not.toHaveBeenCalled()
-  })
-
-  it('reports an incomplete search that reached maxExpandedStates and saves nothing', async () => {
+  it('reports an incomplete search that reached maxPlanSteps and saves nothing', async () => {
     const user = userEvent.setup()
     const deps = dependencies([], createPlannerClient(createOrchestrationResult({
-      termination: incompletePlannerTermination(['max_expanded_states'], {
-        expandedStates: 10_000,
+      termination: incompletePlannerTermination(['max_plan_steps'], {
+        expandedStates: 1_000,
         completedTargetCount: 1,
         totalTargetCount: 2,
       }),
@@ -543,41 +521,15 @@ describe('BuildListPage', () => {
     await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
 
     expect(await screen.findByText('生産計画の探索が完了していません')).toBeInTheDocument()
-    expect(screen.getByText(/最大探索状態数 10,000 に到達しました。/)).toBeInTheDocument()
-    expect(screen.getByText('探索状態数: 10,000 / 10,000')).toBeInTheDocument()
+    expect(screen.getByText(/最大計画ステップ数 1,000 に到達しました。/)).toBeInTheDocument()
     expect(screen.getByText('完成した目標武器: 1 / 2')).toBeInTheDocument()
+    // The Beam-era ratio is not a Production statistic any more.
+    expect(screen.queryByText(/探索状態数/)).not.toBeInTheDocument()
 
     // A truncated search never becomes an executable Draft, and never opens.
     expect(deps.savePlannerResult).not.toHaveBeenCalled()
     expect(view.router.state.location.pathname).toBe('/build-list')
     expect(screen.queryByText(/^Plan destination:/)).not.toBeInTheDocument()
-  })
-
-  it('reports an incomplete search that reached maxPlanSteps', async () => {
-    const user = userEvent.setup()
-    const deps = dependencies([], createPlannerClient(createOrchestrationResult({
-      termination: incompletePlannerTermination(['max_plan_steps']),
-    })))
-    renderPage(deps)
-    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
-
-    expect(await screen.findByText('生産計画の探索が完了していません')).toBeInTheDocument()
-    expect(screen.getByText(/最大計画ステップ数 300 に到達しました。/)).toBeInTheDocument()
-    expect(deps.savePlannerResult).not.toHaveBeenCalled()
-  })
-
-  it('reports both bounds when one search reached both', async () => {
-    const user = userEvent.setup()
-    renderPage(dependencies([], createPlannerClient(createOrchestrationResult({
-      termination: incompletePlannerTermination([
-        'max_expanded_states',
-        'max_plan_steps',
-      ]),
-    }))))
-    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
-
-    expect(await screen.findByText(/最大探索状態数 10,000 に到達しました。/)).toBeInTheDocument()
-    expect(screen.getByText(/最大計画ステップ数 300 に到達しました。/)).toBeInTheDocument()
   })
 
   it('still saves a completed search that happened to touch a bound', async () => {
@@ -586,12 +538,12 @@ describe('BuildListPage', () => {
     // the diagnostic warning and `reachedLimits` do not contradict `completed`.
     const deps = dependencies([], createPlannerClient(createOrchestrationResult({
       warnings: [{
-        kind: 'max_expanded_states_reached',
-        message: 'Planner reached maxExpandedStates (10000).',
+        kind: 'max_steps_reached',
+        message: 'Planner reached maxPlanSteps (1000).',
       }],
       termination: completedPlannerTermination({
-        reachedLimits: ['max_expanded_states'],
-        expandedStates: 10_000,
+        reachedLimits: ['max_plan_steps'],
+        expandedStates: 1_000,
         completedTargetCount: 2,
         totalTargetCount: 2,
       }),
@@ -891,9 +843,10 @@ describe('BuildListPage presentation', () => {
     renderPage(dependencies([], client))
     await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
 
-    expect(await screen.findByText('計画中 2500 / 10000')).toBeInTheDocument()
-    const bar = screen.getByRole('progressbar', { name: '生産計画の作成の進捗' })
-    expect(bar).toHaveAttribute('aria-valuenow', '25')
+    expect(await screen.findByRole('heading', { name: '生産計画を作成しています…' })).toBeInTheDocument()
+    const bar = screen.getByRole('progressbar', { name: '生産計画の作成中' })
+    // Indeterminate: the Worker progress is never turned into a ratio.
+    expect(bar).not.toHaveAttribute('aria-valuenow')
     expect(screen.getByRole('button', { name: 'キャンセル' })).toBeEnabled()
     expect(screen.getByRole('button', { name: '生産計画を作成' })).toBeDisabled()
     releasePlan(createOrchestrationResult())

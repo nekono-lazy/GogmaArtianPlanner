@@ -200,6 +200,17 @@ export function pendingPlannerReserveEntries(
     })
 }
 
+/**
+ * The caller's bound on the zero-operation confirmations. Each confirmation is
+ * one trace action and so one PlanStep; `canApply` is asked right before each
+ * one would be applied, and a confirmation it refuses is reported through
+ * `onWithheld` instead of being applied.
+ */
+export interface PlannerZeroOperationConfirmBound {
+  canApply(): boolean
+  onWithheld(targetId: TargetWeaponId): void
+}
+
 export interface PlannerZeroOperationConfirmContext {
   readonly allSearchEntries: readonly BuildListEntry[]
   readonly allLanePlans: ReadonlyMap<BuildListEntryId, PlannerEntryLanes>
@@ -218,12 +229,19 @@ export interface PlannerZeroOperationConfirmContext {
  * Returns the state after every confirmation: a new state in `clone` mode, the
  * given state itself in `in_place` mode. A rejected confirmation is reported
  * through `onRejection` and writes nothing.
+ *
+ * With a `bound`, a confirmation the bound refuses is withheld and reported,
+ * every one already applied is kept, and the stable order never changes: once
+ * the bound refuses, it refuses every later one too, because a withheld
+ * confirmation writes nothing. Without a `bound` every confirmation is
+ * applied, as the Beam Search oracle does.
  */
 export function applyPlannerZeroOperationConfirms(
   state: PlannerSearchState,
   context: PlannerZeroOperationConfirmContext,
   mode: PlannerStateMutationMode,
   onRejection: (rejection: PlannerSearchRejection) => void,
+  bound?: PlannerZeroOperationConfirmBound,
 ): PlannerSearchState {
   let current = state
   const confirmedTargetIds = new Set<TargetWeaponId>()
@@ -241,6 +259,11 @@ export function applyPlannerZeroOperationConfirms(
     const target = context.planningTargetsById.get(entry.targetWeaponId)
     if (!target || confirmedTargetIds.has(target.id)) continue
     if (current.targetSatisfaction[target.id]?.hasIdeal !== true) continue
+    if (bound !== undefined && !bound.canApply()) {
+      bound.onWithheld(target.id)
+      confirmedTargetIds.add(target.id)
+      continue
+    }
     const confirmed = applyPlannerReserveAction(
       current,
       entry,

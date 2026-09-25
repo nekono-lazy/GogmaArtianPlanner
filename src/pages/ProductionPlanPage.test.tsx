@@ -570,7 +570,11 @@ describe('ProductionPlanPage', () => {
       maxCandidateTrialsPerTarget: 2,
       maxPlannerReruns: 8,
     })
-    expect(screen.getByText('比較中 3 / 8')).toBeInTheDocument()
+    // Indeterminate (Issue #103 Phase D-1): the Worker progress never
+    // becomes a ratio.
+    expect(screen.getByText('比較しています…')).toBeInTheDocument()
+    expect(screen.getByRole('progressbar', { name: 'what-if比較中' })).not.toHaveAttribute('aria-valuenow')
+    expect(screen.queryByText(/比較中 3 \/ 8/)).not.toBeInTheDocument()
 
     pending.resolve(result)
     expect(await screen.findByText('必要操作数: 12')).toBeInTheDocument()
@@ -1094,7 +1098,7 @@ describe('ProductionPlanPage explicit selection', () => {
     expect(deps.savePlannerResult).not.toHaveBeenCalled()
   })
 
-  it('shows progress, blocks comparisons and selections during rerun, and ignores results/progress after cancel', async () => {
+  it('shows an indeterminate running state, blocks comparisons and selections during rerun, and ignores results/progress after cancel', async () => {
     const user = userEvent.setup()
     const fixture = pageFixture()
     const pending = deferred<PlannerOrchestrationResult>()
@@ -1106,8 +1110,9 @@ describe('ProductionPlanPage explicit selection', () => {
     const deps = dependencies(fixture, client)
     const view = renderPage(deps, fixture.plan.id)
     await clickSelection(user)
-    expect(await screen.findByText('再計算中 3 / 10')).toBeInTheDocument()
-    expect(screen.getByRole('progressbar', { name: 'Planner再計算の進捗' })).toHaveAttribute('aria-valuenow', '30')
+    expect(await screen.findByText('再計算しています…')).toBeInTheDocument()
+    expect(screen.getByRole('progressbar', { name: 'Planner再計算中' })).not.toHaveAttribute('aria-valuenow')
+    expect(screen.queryByText(/3 \/ 10/)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '比較する' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'この候補を優先' })).toBeDisabled()
     fireEvent.click(screen.getByRole('button', { name: '比較する' }))
@@ -1121,7 +1126,7 @@ describe('ProductionPlanPage explicit selection', () => {
     })
     expect(deps.savePlannerResult).not.toHaveBeenCalled()
     expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)
-    expect(screen.queryByText(/再計算中/)).not.toBeInTheDocument()
+    expect(screen.queryByText('再計算しています…')).not.toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'この候補を優先' })).toBeEnabled()
   })
@@ -1167,7 +1172,7 @@ describe('ProductionPlanPage explicit selection', () => {
     })
     expect(client.prepareInteraction).toHaveBeenCalledTimes(mode === 'input-pending' ? 2 : 3)
     expect(screen.queryByText('必要操作数: 99')).not.toBeInTheDocument()
-    expect(screen.queryByText('比較中')).not.toBeInTheDocument()
+    expect(screen.queryByText('比較しています…')).not.toBeInTheDocument()
     expect(deps.savePlannerResult).toHaveBeenCalledOnce()
   })
 
@@ -1282,7 +1287,7 @@ describe('ProductionPlanPage selection lifecycle races', () => {
     if (change !== 'unmount') {
       expect(summaryValue('計画ID')).toBe(next.plan.id)
       expect(summaryValue('計画ID')).not.toBe(fixture.plan.id)
-      expect(screen.queryByText(/再計算中/)).not.toBeInTheDocument()
+      expect(screen.queryByText('再計算しています…')).not.toBeInTheDocument()
     }
   })
 })
