@@ -1,10 +1,9 @@
-import { benchmarkPracticalBonuses } from './targetCompromiseFixture'
-import { createBuildListEntry } from '../domain/buildList'
-import { loadMasterData } from '../domain/master/loadMasterData'
+import { createBuildListEntry } from '../../domain/buildList'
+import { loadMasterData } from '../../domain/master/loadMasterData'
 import {
   CURRENT_CALCULATION_APP_SCHEMA_VERSION,
   V1_NORMAL_ARTIAN_RARITY,
-} from '../domain/models/publicTypes'
+} from '../../domain/models/publicTypes'
 import type {
   BuildListEntry,
   BuildRoute,
@@ -14,38 +13,42 @@ import type {
   OwnedGogmaArtianWeapon,
   OwnedWeapon,
   OwnedWeaponId,
+  PlanStepId,
+  PracticalBonusCondition,
+  ProductionPlanId,
   RestorationBonusSet,
   RngState,
   RouteOperation,
   TargetWeapon,
   TargetWeaponId,
   WeaponTypeId,
-} from '../domain/models/publicTypes'
+} from '../../domain/models/publicTypes'
 import type {
   PlannerBeamSearchInput,
   PlannerBeamSearchOptions,
+  PlannerDependencies,
   PlannerInput,
-} from '../domain/planner'
-import { ProductionRngEngine } from '../domain/rng/production/productionRngEngine'
+} from '../../domain/planner'
+import { ProductionRngEngine } from '../../domain/rng/production/productionRngEngine'
+import type { RngEngine } from '../../domain/rng/rngEngine'
 import {
   createCandidateFromPrediction,
   createSearchExecutionContext,
   defaultCandidateSearchSettings,
-} from '../domain/search'
-import type { CandidateSearchInput, SearchMasterSubset } from '../domain/search'
-import { validateTargetIdealImpliesPractical } from '../domain/target'
-import {
-  CONSTRAINED_BENCHMARK_BASE_SEED,
-  CONSTRAINED_BENCHMARK_GOGMA_COUNTER,
-  CONSTRAINED_BENCHMARK_NORMAL_COUNTER,
-  CONSTRAINED_BENCHMARK_SKILL_COUNTER,
-} from './constrainedEnumerationBenchmarkFixtures'
+} from '../../domain/search'
+import type { CandidateSearchInput, SearchMasterSubset } from '../../domain/search'
+import { validateTargetIdealImpliesPractical } from '../../domain/target'
 
 /**
- * Issue #103 Planner search instrumentation fixtures.
+ * Deterministic Planner scheduler workloads (Issue #103).
  *
- * These workloads exist to *observe* the ordinary Beam Search; they are not a
- * performance target and never decide a default. Every one is Production-valid:
+ * They were the Phase B instrumentation / benchmark workloads
+ * (`docs/ISSUE_103_PLANNER_SEARCH_INSTRUMENTATION.md`,
+ * `docs/ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md`); since Phase D-2b they are
+ * test fixtures only: the Beam / scheduler parity regression (`sanity-3`,
+ * `representative-12`) and the scheduler regression (`representative-35`, 398
+ * actions under the 1000 `maxPlanSteps` default). They are not a performance
+ * target and never decide a default. Every one is Production-valid:
  *
  * 1. `ProductionRngEngine` supplies each source weapon's five slots and Skills
  *    and each Route's final result. No Fake Engine, no hand-written result.
@@ -64,13 +67,17 @@ import {
  * List. No real user data is contained here.
  */
 
-export const PLANNER_SEARCH_INSTRUMENTATION_BASE_SEED = CONSTRAINED_BENCHMARK_BASE_SEED
-export const PLANNER_SEARCH_INSTRUMENTATION_GOGMA_COUNTER =
-  CONSTRAINED_BENCHMARK_GOGMA_COUNTER
-export const PLANNER_SEARCH_INSTRUMENTATION_SKILL_COUNTER =
-  CONSTRAINED_BENCHMARK_SKILL_COUNTER
-export const PLANNER_SEARCH_INSTRUMENTATION_NORMAL_COUNTER =
-  CONSTRAINED_BENCHMARK_NORMAL_COUNTER
+/*
+ * The RNG origin is the Candidate Search / constrained enumeration benchmark
+ * origin the workloads were recorded with, stated here so this test fixture
+ * depends on no benchmark module. The IDs below (`issue103`, the search run ID)
+ * are fixture identities kept as recorded: Entry IDs order the scheduler's
+ * stable tie-break, so renaming them could change the recorded outcomes.
+ */
+export const PLANNER_SCHEDULER_WORKLOAD_BASE_SEED = '51231782'
+export const PLANNER_SCHEDULER_WORKLOAD_GOGMA_COUNTER = 200
+export const PLANNER_SCHEDULER_WORKLOAD_SKILL_COUNTER = 341
+export const PLANNER_SCHEDULER_WORKLOAD_NORMAL_COUNTER = 0
 
 const FIXTURE_TIME = '2026-09-24T00:00:00.000Z'
 const FIXTURE_SEARCH_RUN_ID = 'issue-103-planner-search-instrumentation'
@@ -78,7 +85,7 @@ const FIXTURE_SEARCH_RUN_ID = 'issue-103-planner-search-instrumentation'
 const SOURCE_BONUS_OFFSET = 2_000
 const SOURCE_SKILL_OFFSET = 3_000
 
-export type PlannerSearchInstrumentationRouteShape =
+export type PlannerSchedulerWorkloadRouteShape =
   | {
       readonly kind: 'existing_gogma'
       /** Reset Bonuses operations from the current Gogma Counter. */
@@ -98,14 +105,14 @@ export type PlannerSearchInstrumentationRouteShape =
       readonly skillResets: number
     }
 
-export interface PlannerSearchInstrumentationTargetSpec {
+export interface PlannerSchedulerWorkloadTargetSpec {
   readonly key: string
   readonly weaponTypeId: WeaponTypeId
   readonly elementId: ElementId
-  readonly route: PlannerSearchInstrumentationRouteShape
+  readonly route: PlannerSchedulerWorkloadRouteShape
 }
 
-export interface PlannerSearchInstrumentationWorkload {
+export interface PlannerSchedulerWorkload {
   readonly id: string
   readonly label: string
   readonly note: string
@@ -113,10 +120,11 @@ export interface PlannerSearchInstrumentationWorkload {
    * The bounds the workload was recorded with. `maxPlanSteps` is the
    * Production bound both strategies read; `beamWidth` / `maxExpandedStates`
    * are the Beam Search oracle's own and reach only its input (Issue #103
-   * Phase D-2a).
+   * Phase D-2a). `representative-35` keeps its recorded oracle bounds for the
+   * record only: no test runs it through the Beam Search.
    */
   readonly options: PlannerBeamSearchOptions
-  readonly targets: readonly PlannerSearchInstrumentationTargetSpec[]
+  readonly targets: readonly PlannerSchedulerWorkloadTargetSpec[]
 }
 
 const WEAPON_TYPES: readonly WeaponTypeId[] = [
@@ -148,16 +156,16 @@ function existing(
   bonusResets: number,
   keepTail: number,
   skillResets: number,
-): PlannerSearchInstrumentationRouteShape {
+): PlannerSchedulerWorkloadRouteShape {
   return { kind: 'existing_gogma', bonusResets, keepTail, skillResets }
 }
 
 /**
  * A. Small sanity workload: three Targets, short Routes, and a search that
- * finishes well inside the default bounds. Tests assert metric consistency
- * and instrumentation parity on it.
+ * finishes well inside the default bounds. The Beam / scheduler parity
+ * regression runs on it.
  */
-const SANITY_TARGETS: readonly PlannerSearchInstrumentationTargetSpec[] = [
+const SANITY_TARGETS: readonly PlannerSchedulerWorkloadTargetSpec[] = [
   {
     key: 'bonus-only',
     weaponTypeId: 'weapon.long_sword' as WeaponTypeId,
@@ -192,7 +200,7 @@ const SANITY_TARGETS: readonly PlannerSearchInstrumentationTargetSpec[] = [
 function representativeTargets(
   count: number,
   newNormalEvery: number,
-): PlannerSearchInstrumentationTargetSpec[] {
+): PlannerSchedulerWorkloadTargetSpec[] {
   return Array.from({ length: count }, (_unused, index) => {
     const weaponTypeId = WEAPON_TYPES[index % WEAPON_TYPES.length]
     const elementId = ELEMENTS[(index * 3 + Math.floor(index / WEAPON_TYPES.length)) % ELEMENTS.length]
@@ -203,7 +211,7 @@ function representativeTargets(
     const bonusResets = index % 9 === 4 ? 0 : 1 + Math.floor((bonusRank * bonusRank) / 5)
     const skillResets = index % 4 === 1 ? 0 : Math.floor((skillRank * skillRank) / 7)
     const keepTail = bonusResets === 0 ? 0 : index % 5 === 0 ? 1 : index % 7 === 3 ? 2 : 0
-    const route: PlannerSearchInstrumentationRouteShape =
+    const route: PlannerSchedulerWorkloadRouteShape =
       newNormalEvery > 0 && index % newNormalEvery === newNormalEvery - 1
         ? {
             kind: 'new_normal',
@@ -222,13 +230,13 @@ function representativeTargets(
 }
 
 /** The Build List settings of the Issue #103 post-#102 baseline report. */
-export const ISSUE_103_BASELINE_PLANNER_OPTIONS: PlannerBeamSearchOptions = {
+export const ISSUE_103_BASELINE_BEAM_SEARCH_OPTIONS: PlannerBeamSearchOptions = {
   maxPlanSteps: 1_000,
   maxExpandedStates: 200_000,
   beamWidth: 50,
 }
 
-export const PLANNER_SEARCH_INSTRUMENTATION_WORKLOADS: readonly PlannerSearchInstrumentationWorkload[] = [
+export const PLANNER_SCHEDULER_WORKLOADS: readonly PlannerSchedulerWorkload[] = [
   {
     id: 'sanity-3',
     label: 'A. Sanity (3 Targets)',
@@ -239,27 +247,27 @@ export const PLANNER_SEARCH_INSTRUMENTATION_WORKLOADS: readonly PlannerSearchIns
   {
     id: 'representative-12',
     label: 'B-12. Representative (12 Targets, reduced bounds)',
-    note: 'The representative Route generator with 12 Targets and 20,000 expanded states, for quick runs and the observer overhead comparison.',
+    note: 'The representative Route generator with 12 Targets and 20,000 expanded states: the Beam / scheduler parity regression.',
     options: { maxPlanSteps: 1_000, maxExpandedStates: 20_000, beamWidth: 50 },
     targets: representativeTargets(12, 6),
   },
   {
     id: 'representative-35',
     label: 'B-35. Representative (35 Targets, Issue #103 baseline bounds)',
-    note: '35 Production-valid Build List Entries sharing one RNG origin, measured with the post-#102 baseline bounds 1000 / 200000 / 50.',
-    options: ISSUE_103_BASELINE_PLANNER_OPTIONS,
+    note: '35 Production-valid Build List Entries sharing one RNG origin, measured with the post-#102 baseline bounds 1000 / 200000 / 50; a scheduler-only regression since Phase D-2b.',
+    options: ISSUE_103_BASELINE_BEAM_SEARCH_OPTIONS,
     targets: representativeTargets(35, 6),
   },
 ]
 
-export function plannerSearchInstrumentationWorkload(
+export function plannerSchedulerWorkload(
   workloadId: string,
-): PlannerSearchInstrumentationWorkload {
-  const workload = PLANNER_SEARCH_INSTRUMENTATION_WORKLOADS.find(
+): PlannerSchedulerWorkload {
+  const workload = PLANNER_SCHEDULER_WORKLOADS.find(
     ({ id }) => id === workloadId,
   )
   if (!workload) {
-    throw new Error(`Unknown Planner search instrumentation workload '${workloadId}'.`)
+    throw new Error(`Unknown Planner scheduler workload '${workloadId}'.`)
   }
   return workload
 }
@@ -310,7 +318,7 @@ class Predictions {
 
   reset(weaponTypeId: WeaponTypeId, elementId: ElementId, gogmaCounter: number) {
     return this.engine.predictGogmaBonus({
-      baseSeed: PLANNER_SEARCH_INSTRUMENTATION_BASE_SEED,
+      baseSeed: PLANNER_SCHEDULER_WORKLOAD_BASE_SEED,
       weaponTypeId,
       elementId,
       gogmaCounter,
@@ -326,7 +334,7 @@ class Predictions {
     currentBonuses: RestorationBonusSet,
   ) {
     return this.engine.predictGogmaBonus({
-      baseSeed: PLANNER_SEARCH_INSTRUMENTATION_BASE_SEED,
+      baseSeed: PLANNER_SCHEDULER_WORKLOAD_BASE_SEED,
       weaponTypeId,
       elementId,
       gogmaCounter,
@@ -337,7 +345,7 @@ class Predictions {
 
   skills(weaponTypeId: WeaponTypeId, elementId: ElementId, skillCounter: number): Skills {
     const predicted = this.engine.predictSkills({
-      baseSeed: PLANNER_SEARCH_INSTRUMENTATION_BASE_SEED,
+      baseSeed: PLANNER_SCHEDULER_WORKLOAD_BASE_SEED,
       weaponTypeId,
       elementId,
       skillCounter,
@@ -355,17 +363,17 @@ function fixtureRngState(): RngState {
     id: 'current',
     schemaVersion: 2,
     baseSeed: {
-      value: PLANNER_SEARCH_INSTRUMENTATION_BASE_SEED,
+      value: PLANNER_SCHEDULER_WORKLOAD_BASE_SEED,
       isConfirmed: true,
       source: 'observation',
     },
     gogmaCounter: {
-      value: PLANNER_SEARCH_INSTRUMENTATION_GOGMA_COUNTER,
+      value: PLANNER_SCHEDULER_WORKLOAD_GOGMA_COUNTER,
       isConfirmed: true,
       source: 'observation',
     },
     skillCounter: {
-      value: PLANNER_SEARCH_INSTRUMENTATION_SKILL_COUNTER,
+      value: PLANNER_SCHEDULER_WORKLOAD_SKILL_COUNTER,
       isConfirmed: true,
       source: 'observation',
     },
@@ -382,7 +390,7 @@ function fixtureNormalCounter(weaponTypeId: WeaponTypeId): NormalArtianCounter {
     id: `${weaponTypeId}:${V1_NORMAL_ARTIAN_RARITY}`,
     weaponTypeId,
     rarity: V1_NORMAL_ARTIAN_RARITY,
-    counter: PLANNER_SEARCH_INSTRUMENTATION_NORMAL_COUNTER,
+    counter: PLANNER_SCHEDULER_WORKLOAD_NORMAL_COUNTER,
     isConfirmed: true,
     observationCount: 1,
     lastObservedAt: FIXTURE_TIME,
@@ -402,7 +410,7 @@ interface RouteResult {
 }
 
 function bonusLane(
-  spec: PlannerSearchInstrumentationTargetSpec,
+  spec: PlannerSchedulerWorkloadTargetSpec,
   sourceId: OwnedWeaponId | null,
   resets: number,
   keeps: number,
@@ -411,7 +419,7 @@ function bonusLane(
 ): { operations: RouteOperation[]; bonuses: RestorationBonusSet } {
   const operations: RouteOperation[] = []
   let bonuses: RestorationBonusSet | null = startBonuses
-  let counter = PLANNER_SEARCH_INSTRUMENTATION_GOGMA_COUNTER
+  let counter = PLANNER_SCHEDULER_WORKLOAD_GOGMA_COUNTER
   for (let index = 0; index < resets; index += 1) {
     operations.push({
       type: 'reset_bonuses',
@@ -451,14 +459,14 @@ function skillLane(
 }
 
 function createRouteResult(
-  spec: PlannerSearchInstrumentationTargetSpec,
+  spec: PlannerSchedulerWorkloadTargetSpec,
   index: number,
   predictions: Predictions,
 ): RouteResult {
-  const skillCounter = PLANNER_SEARCH_INSTRUMENTATION_SKILL_COUNTER
+  const skillCounter = PLANNER_SCHEDULER_WORKLOAD_SKILL_COUNTER
   if (spec.route.kind === 'new_normal') {
     const { forgeCount, bonusResets, skillResets } = spec.route
-    const normal = PLANNER_SEARCH_INSTRUMENTATION_NORMAL_COUNTER
+    const normal = PLANNER_SCHEDULER_WORKLOAD_NORMAL_COUNTER
     const bonus = bonusLane(spec, null, Math.max(bonusResets, 1), 0, predictions, null)
     const skills = predictions.skills(
       spec.weaponTypeId,
@@ -498,7 +506,7 @@ function createRouteResult(
   const sourceBonuses = predictions.reset(
     spec.weaponTypeId,
     spec.elementId,
-    PLANNER_SEARCH_INSTRUMENTATION_GOGMA_COUNTER + SOURCE_BONUS_OFFSET + index,
+    PLANNER_SCHEDULER_WORKLOAD_GOGMA_COUNTER + SOURCE_BONUS_OFFSET + index,
   )
   const sourceSkills = predictions.skills(
     spec.weaponTypeId,
@@ -546,8 +554,18 @@ function createRouteResult(
   }
 }
 
+/** Explicit rank compromises for the fixed Production layout; never a type wildcard. */
+function explicitRankPracticalBonuses(ideal: RestorationBonusSet): PracticalBonusCondition[] {
+  return [...new Set(ideal.map(({ bonusTypeId }) => bonusTypeId))].map((bonusTypeId) => ({
+    id: 'benchmark.practical.' + bonusTypeId,
+    bonusTypeId,
+    minimumRankId: 'bonus_rank.base',
+    requiredExCount: 0,
+  }))
+}
+
 function createTarget(
-  spec: PlannerSearchInstrumentationTargetSpec,
+  spec: PlannerSchedulerWorkloadTargetSpec,
   result: RouteResult,
 ): TargetWeapon {
   const idealBonuses = structuredClone(result.finalBonuses)
@@ -563,7 +581,7 @@ function createTarget(
     lifecycleStatus: 'active',
     completedAt: null,
     completedByProductionPlanId: null,
-    practicalBonusConditions: benchmarkPracticalBonuses(idealBonuses),
+    practicalBonusConditions: explicitRankPracticalBonuses(idealBonuses),
     alternativeBonusRules: [],
     idealSkillCondition: {
       seriesSkillId: result.seriesSkillId,
@@ -581,8 +599,8 @@ function compareStableStrings(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
 }
 
-export interface PlannerSearchInstrumentationFixture {
-  readonly workload: PlannerSearchInstrumentationWorkload
+export interface PlannerSchedulerWorkloadFixture {
+  readonly workload: PlannerSchedulerWorkload
   /** The Production input: `maxPlanSteps` is its only option. */
   readonly input: PlannerInput
   /** The same input with the workload's Beam Search oracle bounds added. */
@@ -594,10 +612,10 @@ export interface PlannerSearchInstrumentationFixture {
  * Builds one deterministic, Production-valid PlannerInput. Synchronous and
  * side-effect free: no Worker, no persistence, no Clock.
  */
-export function createPlannerSearchInstrumentationInput(
+export function createPlannerSchedulerWorkloadInput(
   workloadId: string,
-): PlannerSearchInstrumentationFixture {
-  const workload = plannerSearchInstrumentationWorkload(workloadId)
+): PlannerSchedulerWorkloadFixture {
+  const workload = plannerSchedulerWorkload(workloadId)
   const { master, context } = fixtureMaster()
   const engine = new ProductionRngEngine()
   const predictions = new Predictions(engine, master)
@@ -678,5 +696,28 @@ export function createPlannerSearchInstrumentationInput(
     engine,
     input,
     beamSearchInput: { ...input, options: { ...workload.options } },
+  }
+}
+
+/**
+ * Deterministic Planner runtime dependencies for the scheduler and Beam Search
+ * oracle tests: sequential IDs and a fixed Clock, so two runs of one input can
+ * be compared field by field. Neither strategy reads a reserved ID or the Clock
+ * to decide anything; only Plan generation reads the Clock.
+ */
+export function createDeterministicPlannerDependencies(
+  rngEngine: RngEngine,
+): PlannerDependencies {
+  let plan = 0
+  let step = 0
+  let weapon = 0
+  return {
+    rngEngine,
+    idFactory: {
+      productionPlanId: () => `plan.issue103.${++plan}` as ProductionPlanId,
+      planStepId: () => `step.issue103.${++step}` as PlanStepId,
+      ownedWeaponId: () => `owned.issue103.reserved.${++weapon}` as OwnedWeaponId,
+    },
+    clock: { now: () => FIXTURE_TIME },
   }
 }

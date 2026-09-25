@@ -57,14 +57,19 @@ import type { RngEngine } from '../domain/rng/rngEngine'
  * - **mandatory**: a contract both must keep - Trace Replay validity, the
  *   planning Target set, the completion / termination meaning, required
  *   checkpoint semantics, a valid Production projection, and the same
- *   fail-closed input validation. A violation blocks Phase C.
+ *   fail-closed input validation. A violation blocked Phase C and is a
+ *   regression now.
  * - **completion regression**: the scheduler completes fewer Targets than the
  *   Beam Search. It is reported with the data needed to classify it; it is
  *   never concluded to be a scheduler bug automatically.
  * - **allowed differences**: recorded values, never a failure.
  *
- * Every value returned is plain structured-clone data, so a Browser benchmark
- * Worker can post a strategy summary back unchanged.
+ * Every value returned is plain structured-clone data.
+ *
+ * Since Issue #103 Phase D-2b this is the retained Beam Search oracle
+ * regression, run by Vitest only (the acceptance catalogue, `sanity-3`,
+ * `representative-12`); the Phase B Browser benchmark harness that also ran it
+ * was removed after the redesign was validated.
  */
 
 export type PlannerBenchmarkStrategy = 'beam' | 'scheduler'
@@ -179,7 +184,7 @@ export interface PlannerStrategyRunSummary {
   evaluationScore: number | null
   replay: PlannerParityReplay | null
   projection: PlannerParityProjection
-  /** Scheduler only, from `PlannerSchedulerInstrumentation`; `null` for the Beam Search. */
+  /** Scheduler only, from its parity observer (`PlannerSchedulerInstrumentation`); `null` for the Beam Search. */
   schedulerDrops: PlannerSchedulerDropRecord[] | null
   schedulerProvisionalOutcomes: PlannerSchedulerProvisionalOutcome[] | null
 }
@@ -755,10 +760,8 @@ function checkInputValidation(
       hasBestState: summary.hasBestState,
       validationIssues: summary.validationIssues,
       status: summary.termination.status,
-      // Scheduler-only diagnostics are not part of the fail-closed contract.
-      warningKinds: summary.warningKinds.filter(
-        (kind) => kind !== 'max_steps_reached' && kind !== 'max_expanded_states_reached',
-      ),
+      // Bound diagnostics are not part of the fail-closed contract.
+      warningKinds: summary.warningKinds.filter((kind) => kind !== 'max_steps_reached'),
     })
   if (shape(beam) !== shape(scheduler)) {
     violations.push({
@@ -1001,7 +1004,7 @@ export interface PlannerSchedulerParityRun {
  * Runs `runPlannerBeamSearch()` and `runPlannerDeterministicSchedule()` once
  * each over the same Production input, engine and fresh deterministic
  * dependencies, and compares them. The oracle alone also gets its own bounds
- * (`beamSearchOptions`). The scheduler runs with its instrumentation, which is
+ * (`beamSearchOptions`). The scheduler runs with its parity observer, which is
  * semantics-neutral, so its drops can explain a completion difference.
  */
 export async function runPlannerSchedulerParity(
@@ -1051,7 +1054,7 @@ export async function runPlannerSchedulerParity(
   return { beam, scheduler, schedulerMetrics, report: comparePlannerStrategyRuns(beam, scheduler) }
 }
 
-/** A short text rendering of a parity report, for the benchmark page and the record. */
+/** A short text rendering of a parity report, for a failing test's output and the record. */
 export function formatPlannerSchedulerParityReport(report: PlannerSchedulerParityReport): string {
   const { completion, conflicts, allowedDifferences: allowed } = report
   const lines = [

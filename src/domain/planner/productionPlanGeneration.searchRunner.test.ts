@@ -230,7 +230,6 @@ describe('Production Plan generation runs the deterministic scheduler', () => {
       /BenchmarkPage\.tsx$/,
       // The defining modules; a glob key of this directory reads `./name.ts`.
       /^\.\/plannerBeamSearch\.ts$/,
-      /^\.\/plannerSearchInstrumentation\.ts$/,
       /^\.\/plannerDeterministicScheduler\.ts$/,
       /^\.\/plannerSchedulerInstrumentation\.ts$/,
       /^\.\/productionPlanGeneration\.ts$/,
@@ -264,7 +263,6 @@ describe('Production Plan generation runs the deterministic scheduler', () => {
       // The oracle's own modules.
       /^\.\/plannerBeamSearch\.ts$/,
       /^\.\/plannerBeamSearchTypes\.ts$/,
-      /^\.\/plannerSearchInstrumentation\.ts$/,
       /^\.\/index\.ts$/,
     ]
     // Code only: a doc comment may name the oracle types to explain the split.

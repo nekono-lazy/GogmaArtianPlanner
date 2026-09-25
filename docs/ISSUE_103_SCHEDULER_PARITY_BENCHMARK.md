@@ -8,6 +8,12 @@ branch: `test/planner-scheduler-parity-benchmark`（計測はこのbranchの作�
 17章 Phase B の記録である。**仕様authorityではない**。Production Plannerは引き続き Beam Search であり、
 本Phaseで Production routing、Worker protocol、UI、schema / version は変更していない。
 
+> **Issue #103 Phase D-2bでの扱い。** 本書が使った実行用のbenchmark harness（Issue #103 benchmark page、
+> benchmark Worker、Browser controller、Node計測runner、PR #107 Beam instrumentation、scheduler benchmark
+> wrapper）はPhase D-2bで削除済みである。本書は当時の測定記録として保持し、記載したファイル名・数値・手順は
+> 当時のまま書き換えない（現在の構成は
+> [ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md) 14.6）。
+
 > **履歴の読み方。** 1〜10章はPhase B初回（PR #114）の記録で、そのまま残している。初回はacceptance
 > fixture `deadlock` のcompletion regressionを発見し、Phase C readinessを NOT READY とした（3.2 / 8章）。
 > その後のsemantic fix（pin-blockedのskip可能unitをholdingとして扱わない）と再検証・readiness再判定は

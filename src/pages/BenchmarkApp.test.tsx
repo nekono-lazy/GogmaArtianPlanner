@@ -24,4 +24,10 @@ describe('BenchmarkApp', () => {
       expect(screen.getByText(content)).toBeInTheDocument()
     }
   })
+
+  it('no longer offers the removed Issue 103 Planner Search harness', () => {
+    render(<BenchmarkApp />)
+    expect(screen.queryByRole('button', { name: 'Issue 103 Planner Search' })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button')).toHaveLength(5)
+  })
 })

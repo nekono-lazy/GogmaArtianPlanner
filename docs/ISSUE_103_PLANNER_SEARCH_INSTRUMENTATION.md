@@ -4,6 +4,12 @@
 この文書は **計測フェーズの記録** であり、仕様ではない。Planner semanticsの正本は
 `docs/PLANNER_SPEC.md`（7 / 7.2 / 7.0.2 / 9）で、本PRはそれを変更しない。
 
+> **Issue #103 Phase D-2bでの扱い。** 本書が使った実行用のbenchmark harness（Issue #103 benchmark page、
+> benchmark Worker、Browser controller、Node計測runner、PR #107 Beam instrumentation、scheduler benchmark
+> wrapper）はPhase D-2bで削除済みである。本書は当時の測定記録として保持し、記載したファイル名・数値・手順は
+> 当時のまま書き換えない（現在の構成は
+> [ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md) 14.6）。
+
 ## 1. 目的
 
 Issue #103（大量Build List時のPlanner探索戦略）の本実装前に、通常PlannerのBeam Searchが

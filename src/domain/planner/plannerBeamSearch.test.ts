@@ -991,19 +991,17 @@ describe('Planner Beam Search', () => {
       [first, second],
       [firstSource, secondSource],
     )
-    const progress: number[] = []
     const result = await runPlannerBeamSearchOracle(
       createPlannerBeamSearchInput(input, { beamWidth: 1, maxExpandedStates: 1 }),
       dependencies,
-      {
-        onProgress: ({ expandedStates }) => progress.push(expandedStates),
-      },
     )
     expect(result.expandedStates).toBe(1)
-    expect(progress).toEqual([1])
-    expect(result.warnings.map(({ kind }) => kind)).toContain(
-      'max_expanded_states_reached',
-    )
+    // The oracle's own bound is reported by its typed termination alone; no
+    // warning kind duplicates it (Issue #103 Phase D-2b).
+    expect(result.termination).toMatchObject({
+      status: 'incomplete',
+      reachedLimits: ['max_expanded_states'],
+    })
     expect(result.warnings.map(({ kind }) => kind)).not.toContain(
       'max_steps_reached',
     )
@@ -1024,9 +1022,7 @@ describe('Planner Beam Search', () => {
     expect(result.warnings.map(({ kind }) => kind)).toContain(
       'max_steps_reached',
     )
-    expect(result.warnings.map(({ kind }) => kind)).not.toContain(
-      'max_expanded_states_reached',
-    )
+    expect(result.termination.reachedLimits).toEqual(['max_plan_steps'])
   })
 
   it('returns the best partial state when no complete state is reachable', async () => {
@@ -1092,18 +1088,15 @@ describe('Planner Beam Search', () => {
     const entry = routeEntry('entry.cancel', goal, resetRoute(source.id))
     const { input, dependencies } = fixture([goal], [entry], [source])
     const before = structuredClone(input)
-    let cancel = false
-    const progress: number[] = []
+    // The first check runs before the first beam state, the second right after
+    // the first constructed successor: cancelling there stops after exactly one.
+    let checks = 0
     const result = await runPlannerBeamSearchOracle(input, dependencies, {
-      shouldCancel: () => cancel,
-      onProgress: ({ expandedStates }) => {
-        progress.push(expandedStates)
-        cancel = true
-      },
+      shouldCancel: () => ++checks > 1,
     })
     expect(result.cancelled).toBe(true)
+    expect(result.termination.status).toBe('cancelled')
     expect(result.expandedStates).toBe(1)
-    expect(progress).toEqual([1])
     expect(input).toEqual(before)
   })
 

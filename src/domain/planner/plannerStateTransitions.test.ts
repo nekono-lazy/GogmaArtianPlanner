@@ -27,8 +27,7 @@ import {
   orchestrationSource,
   orchestrationTarget,
 } from '../../test/fixtures/plannerConstrainedOrchestration'
-import { createPlannerSearchInstrumentationInput } from '../../benchmarks/plannerSearchInstrumentationFixtures'
-import { createDeterministicPlannerDependencies } from '../../benchmarks/plannerSearchInstrumentationBenchmark'
+import { createDeterministicPlannerDependencies, createPlannerSchedulerWorkloadInput } from '../../test/fixtures/plannerSchedulerWorkloads'
 import { runPlannerBeamSearchOracle } from '../../test/fixtures/plannerBeamOracle'
 import type { PlannerBeamSearchInput } from './plannerBeamSearchTypes'
 import { detectPlannerConflicts } from './plannerConflictDetection'
@@ -437,7 +436,7 @@ function zeroOperationScenario() {
 
 describe('Planner state transitions: Beam Search parity', { timeout: 60_000 }, () => {
   it('replays the Production sanity-3 Beam trace in both modes', async () => {
-    const fixtureInput = createPlannerSearchInstrumentationInput('sanity-3')
+    const fixtureInput = createPlannerSchedulerWorkloadInput('sanity-3')
     const result = await expectBeamTraceReplays(
       fixtureInput.input,
       createDeterministicPlannerDependencies(fixtureInput.engine),
@@ -446,7 +445,7 @@ describe('Planner state transitions: Beam Search parity', { timeout: 60_000 }, (
   })
 
   it('replays a truncated representative-12 Beam trace with detected conflicts', async () => {
-    const fixtureInput = createPlannerSearchInstrumentationInput('representative-12')
+    const fixtureInput = createPlannerSchedulerWorkloadInput('representative-12')
     const input: PlannerBeamSearchInput = {
       ...fixtureInput.input,
       options: { maxPlanSteps: 1_000, maxExpandedStates: 300, beamWidth: 6 },

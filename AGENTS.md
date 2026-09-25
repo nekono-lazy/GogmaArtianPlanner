@@ -901,6 +901,19 @@ persisted nothing new and changed no scheduler or oracle semantics: `PlannerOpti
 stays 14 and the versions stay 14 / 8 / 11 (`RngState.schemaVersion` 2,
 `AppSettings.schemaVersion` 1, `PRODUCTION_RNG_ENGINE_VERSION` `production-rng:c5-e7` and Master
 `dataVersion` 4 unchanged).
+Issue #103 Phase D-2b (the final Phase; `docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md` 14.6)
+removed the Phase B measurement infrastructure and kept the regression oracle: Production is the
+deterministic scheduler, the Beam Search is a regression oracle only, the Beam / scheduler parity
+tests (acceptance catalogue, `sanity-3`, `representative-12`) stay in CI, and the Issue #103
+instrumentation Browser harness (benchmark page and Worker, Browser controller, Node runner, the
+PR #107 Beam instrumentation and both `onProgress` hooks) was removed after the redesign was
+validated. The scheduler instrumentation survives only as the parity test observer
+(`drops` / `provisionalOutcomes`). The workloads and `createDeterministicPlannerDependencies()`
+moved to `src/test/fixtures/plannerSchedulerWorkloads.ts`; `representative-35` stays a
+scheduler-only regression (398 actions under the 1000 default). The Beam-only warning
+`max_expanded_states_reached` was removed; the oracle's `max_expanded_states` stays in
+`PlannerBeamSearchTermination.reachedLimits`. The historical measurement documents stay unchanged.
+No semantics or version moved (14 / 8 / 11).
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -3467,11 +3480,12 @@ The Production Planner is **Route commitment plus the deterministic scheduler**
   runtime-unsupported retry share it. Never add a Production strategy flag
 
 The bounded Beam Search below (`runPlannerBeamSearch()`) was the Production Planner up
-to Phase B. It stays, unchanged, as a test / benchmark / parity oracle - reached only
-by a direct call over its own `PlannerBeamSearchInput` (Issue #103 Phase D-2a) -
-together with its semantic key, `comparePlannerSearchStates()`, `evaluationScore`,
-`preferredSourceProgressCount` and the PR #107 instrumentation, until Phase D-2b decides
-their removal. The rest of this section describes that oracle where it speaks of beams,
+to Phase B. It stays, unchanged, as a regression oracle only - reached only by a direct
+call over its own `PlannerBeamSearchInput` (Issue #103 Phase D-2a) from tests and the
+Beam / scheduler parity harness, which stay in CI - together with its semantic key,
+`comparePlannerSearchStates()`, `evaluationScore` and `preferredSourceProgressCount`.
+The Issue #103 instrumentation Browser harness and the PR #107 instrumentation were
+removed after the redesign was validated (Phase D-2b). The rest of this section describes that oracle where it speaks of beams,
 branches, scores or pruning; its state transition, sharing, fast-forward, checkpoint,
 conflict, Trace Replay and termination contracts are the shared ones the scheduler uses.
 
@@ -3487,8 +3501,8 @@ default since Phase D-1. `beamWidth` and `maxExpandedStates` are not Production
 options at all: they exist only in the Beam Search oracle's
 `PlannerBeamSearchOptions` (`defaultPlannerBeamSearchOptions` = 1000 / 50 / 10000,
 validated by `validatePlannerBeamSearchOptions()`), which no Production module imports,
-and `max_expanded_states` / `max_expanded_states_reached` never come from the
-scheduler. Never reintroduce either field into `PlannerOptions`, a Production Worker
+and `max_expanded_states` never comes from the scheduler (the oracle reports it in
+its typed termination only; no warning kind exists for it since Phase D-2b). Never reintroduce either field into `PlannerOptions`, a Production Worker
 request or the UI, and never turn `maxExpandedStates` back into a Production bound.
 `preferPracticalBeforeIdeal` belongs to a legacy Planner contract and is
 unsupported: the Planner has no Practical-first priority, and an input carrying
@@ -3531,7 +3545,8 @@ Status precedence is `cancelled`, then `completed` (every enabled Target reached
 Ideal), then `incomplete` (a `PlannerOptions` bound truncated the search first),
 then `exhausted` (the search ended on its own without completing every Target).
 
-`max_steps_reached` and `max_expanded_states_reached` stay diagnostics. They do
+`max_steps_reached` stays a diagnostic (the Beam-only `max_expanded_states_reached`
+was removed in Issue #103 Phase D-2b). It does
 not contradict the status and are never its source: a `completed` search can
 carry a reached bound, because the last affordable expansion may be the one that
 completed it, and a run that never reached its Beam Search carries none.
@@ -3827,8 +3842,8 @@ participant in that conflict.
 
 Planner results are deterministic for the same PlannerInput, Engine fixture, ID
 factory, clock, and Planner constants. `max_steps_reached` reports only the
-maxPlanSteps bound; `max_expanded_states_reached` reports only the
-maxExpandedStates bound. A best partial Plan may be returned with either warning.
+maxPlanSteps bound; the Beam oracle's maxExpandedStates bound has no warning, only its
+typed `reachedLimits`. A best partial Plan may be returned with the warning.
 
 Active Plan existence is not a pure Planner input. Planner calculates a new
 Draft without merging an existing Active Plan into search state. Active Plan

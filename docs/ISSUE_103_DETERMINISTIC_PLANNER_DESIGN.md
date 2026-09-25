@@ -22,7 +22,14 @@ Phase C以前（旧Production）
 現行Production（Phase 0 / Phase C実装済み）
   - 永続Build Listは1 Targetにつき最大1 Entry（Build List cardinality契約）
   - 通常Plannerは「Route commitment + 決定的scheduling」（REQUIREMENTS 19 / 20、PLANNER_SPEC 7）
-  - Beam Searchはtest / benchmark / parity oracleとしてだけ残す（Phase Dで整理）
+  - Beam Searchはtest / parity regression oracleとしてだけ残す（Phase D-2bで縮退、14.6）
+
+Issue #103完了（Phase D-2b）
+  - Production: 決定的scheduler
+  - Beam Search: test oracleとして保持（Productionから隔離）
+  - Beam / scheduler parity: CI regressionとして保持
+  - Issue #103 Browser benchmark / Worker / Phase B専用instrumentation: 削除
+  - Phase Bの計測記録文書: 歴史的記録として保持
 ```
 
 authorityの配置:
@@ -32,7 +39,7 @@ authorityの配置:
 | 永続Build Listの1 Target = 最大1 Entry、Candidate追加時の置換、legacy duplicateのfail closed | [REQUIREMENTS.md](./REQUIREMENTS.md) 18、[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1 | **実装済み**（Phase 0-1: Domain / Service基盤、通常Planner入力のfail closed、Import / Exportの保持。Phase 0-2: Search画面の置換確認、Build Listのlegacy duplicate案内。Phase 0-3: constrained re-search / what-if / 再計画の置換） |
 | Search画面からの追加 / 置換 | [SEARCH_SPEC.md](./SEARCH_SPEC.md) 10.1、[UI_FLOW.md](./UI_FLOW.md) 9 / 10 | **実装済み**（Phase 0-1: Service結果型と置換API、Phase 0-2: 画面の置換確認Dialog / 案内） |
 | constrained re-search / what-if / 再計画とBuild List cardinality | [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18 | **実装済み**（Phase 0-3） |
-| 決定的scheduler（Route commitment、scheduling、termination、schema境界） | 本書、[REQUIREMENTS.md](./REQUIREMENTS.md) 19 / 20、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7 | **Production実装済み**（Phase A: Domain、Phase B: parity / instrumentation / 実Browser計測・semantic fix、Phase C: Production routing切替・Calculation schema 14・正式仕様改訂）。次はPhase D（UI / legacy / Beam oracle整理） |
+| 決定的scheduler（Route commitment、scheduling、termination、schema境界） | 本書、[REQUIREMENTS.md](./REQUIREMENTS.md) 19 / 20、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7 | **Production実装済み・Issue #103完了**（Phase A: Domain、Phase B: parity / instrumentation / 実Browser計測・semantic fix、Phase C: Production routing切替・Calculation schema 14・正式仕様改訂、Phase D-1: Production設定 / 進捗Presentation、Phase D-2a: Production型 / Worker protocol、Phase D-2b: Beam oracle / 計測基盤の縮退） |
 
 - 本書の追加時点で `src/**`、テスト、schema version、Worker protocol、UIは一切変更していない
 - Build List cardinalityは **Build List自体の契約** であり、Plannerの都合ではない。したがって
@@ -1099,12 +1106,91 @@ Phase D-2aの確定判断と実装後の状態。
   `reachedLimits = ['max_plan_steps']` であることをhelperと実scheduler結果のtestで固定した。
   acceptance catalogue、sanity-3、representative-12のparityは維持
 - `max_expanded_states_reached` warning kindはBeam oracleが使うため残す（Production scheduler / UIからは
-  到達不能）。warning型の分離はD-2bへ回す
+  到達不能）。warning型の分離はD-2bへ回す（**D-2bでwarning kindごと削除した、14.6**）
 - UIの見た目はD-1から変更しない
 - `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は14のまま。`PlannerOptions` は `PlanningInputSnapshot` に
   保存されておらず、`ProductionPlan` / `PlanStep` / `PlanningInputSnapshot` / `CalculationContext` /
   DB / Exportのshapeもscheduler action semanticsも変えていない。Worker protocolはアプリ内部のruntime境界で
   ある。DB 8、Export 11、`RngState` 2、`AppSettings` 1、`production-rng:c5-e7`、Master `dataVersion` 4も不変
+
+### 14.6 Phase D-2bの確定判断（Beam oracle / instrumentation / benchmark基盤の縮退、Issue #103完了）
+
+Phase D-2bはIssue #103の最終Phaseである。Phase Bの計測専用だった重いbenchmark / instrumentation基盤を
+削除し、今後も価値のあるBeam oracle + parity regressionだけを残した。Planner algorithmは変えていない。
+
+最終判断。
+
+```text
+Production                  決定的scheduler（Route commitment + deterministic scheduling）
+Beam Search                 test / parity regression oracleとして保持（Productionから隔離）
+Beam / scheduler parity     CI regressionとして保持
+Issue #103 Browser benchmark / benchmark Worker / Phase B専用instrumentation   削除
+Phase Bの計測記録文書       歴史的記録として保持（数値・手順は書き換えない）
+```
+
+- **Beam oracleを残す理由**: Phase Bのparity比較が、pin-blockedのskip可能unitをholdingとして扱う
+  schedulerのsemantic blockerを実際に検出した（19.1、[ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md](./ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md)
+  11章）。oracle本体を消すより、Productionから完全に隔離したままCIのregression oracleとして保持する方が
+  価値がある。`runPlannerBeamSearch()`、`plannerBeamSearchTypes.ts`、`comparePlannerSearchStates()`、
+  semantic key、`evaluationScore` / `totalCost` / `preferredSourceProgressCount`、Trace Replay、
+  Production projection parityは不変
+- **保持したparity regression**: `src/benchmarks/plannerSchedulerParity.ts`（mandatory violation、
+  completion regression、scheduler-only conflict、Trace Replay、Production projection、checkpoint、
+  rejected entry mappingの判定は不変）、acceptance catalogue（fast / long / conflicts）、`sanity-3`、
+  `representative-12`（Beam側は数十秒かかるが実データに近いoracle regressionとしてCIに残す）
+- **representative-35**: Beam 35-target benchmark（Beam 200,000 states、25分級）の再実行基盤は削除した。
+  実Browser計測はPR #114 / #115で記録済みである。scheduler側の軽量regression（398 action、既定
+  `maxPlanSteps` 1000で上限未到達、300では `max_plan_steps` で `incomplete`）は維持する
+- **削除したbenchmark surface**: Issue #103 benchmark page（`PlannerSearchInstrumentationBenchmarkPage.tsx`、
+  `BenchmarkApp` の「Issue 103 Planner Search」）、benchmark Worker（`plannerSearchInstrumentation.worker.benchmark*.ts`）、
+  Browser benchmark controller（`plannerSearchInstrumentationBrowserBenchmark.ts`）、Node計測runner
+  （`plannerSearchInstrumentation.node.test.ts`）、Beam計測harness（`plannerSearchInstrumentationBenchmark.ts`）、
+  計測summary（`plannerSearchInstrumentationSummary.ts`）、scheduler benchmark wrapper
+  （`plannerSchedulerInstrumentationBenchmark.ts`）。他のbenchmark（C5-E2C8、B5、B8 enumeration、
+  B8 orchestration、B9）と `vite.benchmark.config.ts` / `benchmark.html` は不変
+- **PR #107 Beam instrumentation**（`plannerSearchInstrumentation.ts`: depth metrics、successor / dedup /
+  trim counts、phase timing、diagnostic projection）はPhase Bの役割を終えたので、Beam Search内のhookごと
+  削除した。Beamの `onProgress` / `PlannerBeamSearchProgress` もbenchmark UI以外に利用者が無いので削除した。
+  `PlannerBeamSearchExecutionOptions` はProductionと同じ `shouldCancel` / `yieldControl` だけである
+- **scheduler instrumentationは縮退して残す**: `plannerSchedulerInstrumentation.ts` はperformance
+  instrumentationではなく、parityでcompletion差の理由を説明するための **test observer** である。
+  parity harnessが読む `drops`（drop cause / reason / iteration / provisional winner）と
+  `provisionalOutcomes` と実行の要約（reached / status / completed / total / expandedStates / trace長）だけを
+  報告する。Phase B性能計測専用だった `phaseMs`（clock）、詳細counter集計、schedulerの `onProgress`
+  （`PlannerScheduleProgress`）、Browser表示用formatは削除した。これに伴いRoute commitmentのobserverは
+  `provisionalOutcome()` だけになり、scheduler内の計測専用hook（phase計時、safe action / waiting stream数、
+  fast-forward数の差分計算）を除いた。action選択・commitment判定・stop条件は一切変えていない
+- **fixture**: `sanity-3` / `representative-12` / `representative-35` と
+  `createDeterministicPlannerDependencies()` をbenchmark moduleからtest fixture
+  `src/test/fixtures/plannerSchedulerWorkloads.ts` へ移した（`createPlannerSchedulerWorkloadInput()`）。
+  RNG originとIDは記録時のままで、benchmark moduleへ依存しない。Domain testとtest fixtureは
+  Issue #103のbenchmark moduleをimportしない
+- **warning**: Beam専用の `max_expanded_states_reached` を `PlannerWarningKind` / `plannerWarningKinds` /
+  `plannerWarningLabels` から削除した。oracleのbound authorityは `PlannerBeamSearchTermination.reachedLimits`
+  （`max_expanded_states`）であり、warningとの二重表現は不要である。terminationの意味（exact boundで完成 →
+  `completed` + `reachedLimits`、boundで未完成 → `incomplete` + `reachedLimits`）は不変。
+  `max_steps_reached` は残る
+- versionはすべて不変: `CURRENT_CALCULATION_APP_SCHEMA_VERSION` 14、DB 8、Export 11、`RngState` 2、
+  `AppSettings` 1、`production-rng:c5-e7`、Master `dataVersion` 4。Production Planner semantics、Plan
+  projection、Persistence、`PlannerOptions`、Worker protocolを変えておらず、削除対象はtest / benchmark
+  infrastructureである。`max_expanded_states_reached` はProduction Plannerが一度も返さない値で、
+  ProductionPlanにwarningは永続化されない
+
+Issue #103の完了条件（すべて成立）。
+
+```text
+通常PlannerはBeam Searchを使用しない
+大量Build Listでも順序branchを生成しない
+Route commitment + deterministic scheduling
+競合は明示的に検出
+B8 constrained re-searchで競合Targetだけ代替探索可能
+Trace Replay / projection維持
+Production設定はmaxPlanStepsのみ
+Worker progress legacy除去
+Beam専用型はProductionから隔離
+Beam oracle + parity regressionを保持
+Phase B専用benchmark infrastructure整理済み
+```
 
 ## 15. Version境界
 
@@ -1454,14 +1540,21 @@ Phase Dは2つのPRへ分割する（14.4）。
   7.2.2 / 14 / 15、UI_FLOW 10.0 / 10.1 / 11.2、AGENTS.md
 - 詳細は14.5
 
-#### Phase D-2b: Beam oracle / instrumentation / benchmark縮退（未着手）
+#### Phase D-2b: Beam oracle / instrumentation / benchmark縮退（実装済み、Issue #103完了）
 
 - Beam oracle、`comparePlannerSearchStates()`、semantic key、`evaluationScore` / `totalCost` /
-  `preferredSourceProgressCount`、PR #107 Beam instrumentation、scheduler instrumentation、parity harness、
-  benchmark page / benchmark Worker、representative fixtureの削除または縮退の判断
-- `max_expanded_states_reached` などBeam専用warning kindの型分離
-- Issue #103完了判断
-- UI変更を含む場合はUI_FLOWを同じPRで改訂する
+  `preferredSourceProgressCount`、Trace Replay、Production projection parityは保持
+- parity harness、acceptance catalogue、`sanity-3`、`representative-12` parityをCI regressionとして保持。
+  `representative-35` はscheduler regression（398 action / 既定1000）だけを保持
+- Issue #103 benchmark page / Worker / Browser controller / Node runner、PR #107 Beam instrumentation、
+  Beamの `onProgress`、scheduler benchmark wrapperを削除。scheduler instrumentationは `drops` /
+  `provisionalOutcomes` 中心のparity用test observerへ縮退
+- fixtureと `createDeterministicPlannerDependencies()` を `src/test/fixtures/plannerSchedulerWorkloads.ts` へ移設
+- `max_expanded_states_reached` warning kind / labelを削除（Beam terminationの `max_expanded_states` は維持）
+- 通常UIの変更なし。benchmark shellから「Issue 103 Planner Search」だけを除去
+- versionはすべて不変
+- 仕様改訂: PLANNER_SPEC 7.2 / 7.2.1 / 14、DATA_MODEL（PlannerWarningKind）、AGENTS.md（Planner Search Strategy）
+- 詳細は14.6。**Issue #103はこのPhaseで完了した**
 
 ---
 
@@ -1536,5 +1629,5 @@ Beam Searchに反証された（acceptance fixture「deadlock」でBeamが両Tar
 | Build List詳細設定、`maxPlanSteps` 既定値 | Phase D-1 | **確定済み**（14.4） |
 | `PlannerOptions` / `PlannerProgress` の型移行 | Phase D-2a | **確定済み**（14.5） |
 | B8 orchestration bounds / what-if boundsの再測定 | #101と合わせて | 現行値のまま |
-| Beam oracleとBeam専用stateの削除時期 | Phase D-2b | test / benchmark用に残す |
+| Beam oracleとBeam専用stateの削除時期 | Phase D-2b | **確定済み**（regression oracleとして保持、計測基盤は削除、14.6） |
 | scheduler結果型の改名（`PlannerBeamSearchResult` → 中立名） | Phase D-2a | **確定済み**（`PlannerRunResult`、14.5） |

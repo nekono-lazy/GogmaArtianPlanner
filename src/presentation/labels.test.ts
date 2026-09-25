@@ -25,7 +25,8 @@ describe('presentation labels', () => {
     expect(routeKindLabels.existing_gogma_reset_skills).toContain('スキル再抽選')
     expect(planStepOperationLabels.reserve_weapon).toBe('目標武器として確保')
     expect(plannerWarningLabels.max_steps_reached).toContain('ステップ数')
-    expect(plannerWarningLabels.max_expanded_states_reached).toContain('探索状態数')
+    // The Beam Search oracle's bound has no warning kind and so no label (Issue #103 Phase D-2b).
+    expect(plannerWarningLabels).not.toHaveProperty('max_expanded_states_reached')
     expect(plannerWarningLabels.rng_prediction_unsupported).toContain('予測入力')
     // A completed Target is excluded, not broken: its label never asks for a
     // re-search or calls the Entry stale.

@@ -433,15 +433,15 @@ export type PlannerWarningKind =
   | 'all_targets_already_satisfied'
   | 'invalid_conflict_resolution'
   | 'max_steps_reached'
-  | 'max_expanded_states_reached'
   /**
    * B8 constrained-search orchestration only (PLANNER_SPEC 9.2.16). The four
    * kinds below report an orchestration or enumeration stop, never silent
    * exhaustion, and the ordinary `createProductionPlan()` path never produces
    * them. They are deliberately separate from `max_steps_reached` (the
-   * Production `maxPlanSteps` bound of a single full Planner run) and
-   * `max_expanded_states_reached` (the Beam Search oracle's own bound, which
-   * no Production run ever reports), and mean something else entirely.
+   * Production `maxPlanSteps` bound of a single full Planner run) and mean
+   * something else entirely. The Beam Search oracle's own `maxExpandedStates`
+   * bound has no warning kind: its typed `reachedLimits` alone reports it
+   * (Issue #103 Phase D-2b).
    */
   | 'max_candidate_trials_per_conflict_reached'
   | 'max_generated_build_list_entries_reached'
@@ -495,7 +495,6 @@ export const plannerWarningKinds: readonly PlannerWarningKind[] = [
   'all_targets_already_satisfied',
   'invalid_conflict_resolution',
   'max_steps_reached',
-  'max_expanded_states_reached',
   'max_candidate_trials_per_conflict_reached',
   'max_generated_build_list_entries_reached',
   'max_planner_reruns_reached',
@@ -602,10 +601,9 @@ export const PERSISTED_PLANNER_BUILD_LIST_CONTEXT: { readonly kind: 'persisted' 
  * UI shows an indeterminate running state; cancellation never depends on a
  * progress message.
  *
- * Test / benchmark observation lives in the strategy-specific extensions -
- * `PlannerScheduleExecutionOptions` (the scheduler's benchmark progress and
- * instrumentation) and `PlannerBeamSearchExecutionOptions` (the Beam Search
- * oracle's) - and never reaches the Production Worker protocol or client.
+ * Test observation lives in `PlannerScheduleExecutionOptions` (the
+ * scheduler's parity observer) and never reaches the Production Worker
+ * protocol or client; the Beam Search oracle takes exactly these two hooks.
  */
 export interface PlannerExecutionOptions {
   shouldCancel?: () => boolean

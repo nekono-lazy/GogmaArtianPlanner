@@ -1,5 +1,4 @@
 import type { DomainValidationIssue, DomainValidationResult } from '../models/publicTypes'
-import type { PlannerSearchInstrumentation } from './plannerSearchInstrumentation'
 import {
   plannerPositiveIntegerOptionIssue,
   validatePlannerOptions,
@@ -17,11 +16,14 @@ import type {
  * The Beam Search oracle's own contract (Issue #103 Phase D-2a).
  *
  * The bounded Beam Search stopped being the Production Planner in Phase C and
- * stays a test / benchmark / parity oracle only. Everything it needs beyond the
- * Production contract - its two extra bounds, its limit kind, its termination,
- * its numeric progress and its instrumentation hook - lives here, so none of
- * it can reach a Production `PlannerInput`, `PlannerResult`, Worker request,
- * Worker response or UI. Production code never imports this module.
+ * stays a test / parity regression oracle only. Everything it needs beyond the
+ * Production contract - its two extra bounds, its limit kind and its
+ * termination - lives here, so none of it can reach a Production
+ * `PlannerInput`, `PlannerResult`, Worker request, Worker response or UI.
+ * Production code never imports this module. Issue #103 Phase D-2b removed
+ * its numeric progress and its PR #107 search instrumentation with the
+ * Phase B benchmark harness; a bound it reaches is reported by
+ * `PlannerBeamSearchTermination.reachedLimits` alone, never by a warning.
  */
 
 /** The Beam Search oracle bounds: the Production bound plus its own two. */
@@ -34,7 +36,7 @@ export interface PlannerBeamSearchOptions extends PlannerOptions {
 
 /**
  * The oracle's own defaults, independent of `defaultPlannerOptions`: a test or
- * benchmark that runs the Beam Search states its bounds from here, and no
+ * the parity harness that runs the Beam Search states its bounds from here, and no
  * Production module reads them.
  */
 export const defaultPlannerBeamSearchOptions: Readonly<PlannerBeamSearchOptions> = {
@@ -65,23 +67,11 @@ export type PlannerBeamSearchTermination = PlannerTerminationOf<
 /** The Beam Search oracle result; the fields are the Production run's. */
 export type PlannerBeamSearchResult = PlannerRunResultOf<PlannerBeamSearchTermination>
 
-/** The oracle's numeric progress: successors constructed over its bound. */
-export interface PlannerBeamSearchProgress {
-  expandedStates: number
-  maxExpandedStates: number
-}
-
-/** The Beam Search oracle's test / benchmark hooks on top of the Production ones. */
-export interface PlannerBeamSearchExecutionOptions extends PlannerExecutionOptions {
-  onProgress?: (progress: PlannerBeamSearchProgress) => void
-  /**
-   * Benchmark / test-only observation of each Beam Search (Issue #103). It is
-   * semantics-neutral, `undefined` runs exactly the previous search, and no
-   * Worker protocol, `PlannerResult`, or persistence carries it
-   * (`plannerSearchInstrumentation.ts`).
-   */
-  searchInstrumentation?: PlannerSearchInstrumentation
-}
+/**
+ * The Beam Search oracle's execution hooks: exactly the Production ones
+ * (`shouldCancel` / `yieldControl`).
+ */
+export type PlannerBeamSearchExecutionOptions = PlannerExecutionOptions
 
 /**
  * The Beam Search oracle options: the Production `validatePlannerOptions()`

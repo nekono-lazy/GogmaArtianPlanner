@@ -14,8 +14,7 @@ import {
   synchronizeOrchestrationEntry,
   type OrchestrationScenario,
 } from '../../test/fixtures/plannerConstrainedOrchestration'
-import { createPlannerSearchInstrumentationInput } from '../../benchmarks/plannerSearchInstrumentationFixtures'
-import { createDeterministicPlannerDependencies } from '../../benchmarks/plannerSearchInstrumentationBenchmark'
+import { createDeterministicPlannerDependencies, createPlannerSchedulerWorkloadInput } from '../../test/fixtures/plannerSchedulerWorkloads'
 import {
   createPlannerDeterministicScheduleRun,
   runPlannerDeterministicSchedule,
@@ -1314,7 +1313,7 @@ describe('14: bounds, cancellation and determinism', () => {
     expect(result.termination.status).toBe(unbounded.termination.status)
     expect(result.termination.status).not.toBe('incomplete')
     expect(result.termination.reachedLimits).toEqual([])
-    expect(result.warnings.map(({ kind }) => kind)).not.toContain('max_expanded_states_reached')
+    expect(result.warnings.map(({ kind }) => kind)).not.toContain('max_steps_reached')
     // The Production termination records exactly the Production bound.
     expect(result.termination.limits).toEqual({ maxPlanSteps: 1000 })
     expectReplayValid(scenario, result)
@@ -1367,7 +1366,6 @@ describe('14: bounds, cancellation and determinism', () => {
       status: 'incomplete',
       reachedLimits: ['max_expanded_states'],
     })
-    expect(beam.warnings.map(({ kind }) => kind)).toContain('max_expanded_states_reached')
   })
 
   it('reports a cancellation as cancelled', async () => {
@@ -1381,17 +1379,15 @@ describe('14: bounds, cancellation and determinism', () => {
     expect(result.bestState!.trace).toHaveLength(5)
   })
 
-  it('reports benchmark progress per applied action and yields while it runs', async () => {
+  it('yields while it runs and reports no progress', async () => {
     const scenario = scenarioB().builder.build()
-    const progress: number[] = []
     let yields = 0
     const result = await runPlannerDeterministicSchedule(scenario.input, scenario.dependencies, {
-      onProgress: ({ expandedStates }) => progress.push(expandedStates),
       yieldControl: async () => {
         yields += 1
       },
     })
-    expect(progress).toEqual(Array.from({ length: result.expandedStates }, (_unused, index) => index + 1))
+    expect(result.expandedStates).toBeGreaterThan(0)
     expect(yields).toBeGreaterThan(0)
   })
 
@@ -1476,7 +1472,7 @@ describe('Issue #103 instrumentation workloads', () => {
   it.each(['sanity-3', 'representative-12'])(
     'schedules %s with one state and a Trace-Replay-valid trace',
     async (workloadId) => {
-      const { input, engine } = createPlannerSearchInstrumentationInput(workloadId)
+      const { input, engine } = createPlannerSchedulerWorkloadInput(workloadId)
       const result = await runPlannerDeterministicSchedule(
         input,
         createDeterministicPlannerDependencies(engine),
@@ -1510,7 +1506,7 @@ describe('Issue #103 instrumentation workloads', () => {
   ])(
     '%s needs more than the former 300 maxPlanSteps and fits the 1000 default',
     async (workloadId, traceLength) => {
-      const { input, engine } = createPlannerSearchInstrumentationInput(workloadId)
+      const { input, engine } = createPlannerSchedulerWorkloadInput(workloadId)
       const dependencies = createDeterministicPlannerDependencies(engine)
       const defaults = await runPlannerDeterministicSchedule(
         { ...input, options: { ...defaultPlannerOptions } },

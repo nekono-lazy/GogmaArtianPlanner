@@ -1,18 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import { mandatoryParityProblems } from '../test/fixtures/plannerSchedulerParity'
-import { createDeterministicPlannerDependencies } from './plannerSearchInstrumentationBenchmark'
-import { createPlannerSearchInstrumentationInput } from './plannerSearchInstrumentationFixtures'
+import { createDeterministicPlannerDependencies, createPlannerSchedulerWorkloadInput } from '../test/fixtures/plannerSchedulerWorkloads'
 import { runPlannerSchedulerParity } from './plannerSchedulerParity'
 
 /**
- * Issue #103 Phase B parity on `representative-12` with its PR #107 bounds
- * (`1000 / 20000 / 50`). The Beam Search part takes tens of seconds in Node,
- * so it has a file of its own. `representative-35` is measured in a real
- * Browser Worker only (`docs/ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md`).
+ * Issue #103 parity on `representative-12` with its PR #107 bounds
+ * (`1000 / 20000 / 50`), retained as a CI oracle regression since Phase D-2b.
+ * The Beam Search part takes tens of seconds in Node, so it has a file of its
+ * own. `representative-35` is a scheduler-only regression; its Beam run was
+ * measured once in a real Browser Worker
+ * (`docs/ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md`) and is not repeated.
  */
 describe('representative-12 Beam / scheduler parity', { timeout: 300_000 }, () => {
   it('keeps every mandatory contract and completes at least as many Targets', async () => {
-    const { input, beamSearchInput, engine } = createPlannerSearchInstrumentationInput('representative-12')
+    const { input, beamSearchInput, engine } = createPlannerSchedulerWorkloadInput('representative-12')
     const run = await runPlannerSchedulerParity(input, {
       engine,
       createDependencies: () => createDeterministicPlannerDependencies(engine),
